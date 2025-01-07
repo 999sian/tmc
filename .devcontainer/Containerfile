@@ -1,0 +1,21 @@
+FROM debian
+
+RUN apt update && apt upgrade && apt install -y --no-install-recommends \
+    cmake \
+    g++ \
+    gcc \
+    gcc-arm-none-eabi \
+    libpng-dev \
+    make \
+    python3 \
+    python3-pycparser \
+    && rm -rf /var/lib/apt/lists/*
+
+ADD https://github.com/pret/agbcc.git /agbcc
+
+RUN cd /agbcc && \
+    ./build.sh && \
+    mkdir -p /agbcc-install && \
+    ./install.sh /agbcc-install
+
+ENV AGBCC_PATH=/agbcc-install/tools/agbcc
