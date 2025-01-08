@@ -1,10 +1,12 @@
 FROM debian
 
 RUN apt update && apt upgrade && apt install -y --no-install-recommends \
+    ca-certificates \
     cmake \
     g++ \
     gcc \
     gcc-arm-none-eabi \
+    git \
     libpng-dev \
     make \
     python3 \
