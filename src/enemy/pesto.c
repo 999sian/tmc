@@ -45,8 +45,6 @@ u32 sub_08024E34(void);
 void sub_08024E4C(PestoEntity*);
 void sub_08024F50(PestoEntity*);
 
-extern Entity* gUnk_020000B0;
-
 extern void (*const Pesto_Functions[])(PestoEntity*);
 extern void (*const gUnk_080CBEDC[])(PestoEntity*);
 extern void (*const gUnk_080CBEF8[])(PestoEntity*);
@@ -238,7 +236,7 @@ void sub_080242A0(PestoEntity* this) {
     sub_08024940(this);
     if (sub_08024CC0(this)) {
         if (--super->timer == 0) {
-            super->direction = GetFacingDirection(super, gUnk_020000B0);
+            super->direction = GetFacingDirection(super, gEnemyTarget);
             sub_08024E00(this, 1);
             if (super->speed != 0) {
                 super->speed = 0;
@@ -249,7 +247,7 @@ void sub_080242A0(PestoEntity* this) {
             sub_08024A14(this, 3, 10);
         }
 
-        if (sub_08049F1C(super, gUnk_020000B0, 0x20) && sub_08049FDC(super, 3)) {
+        if (sub_08049F1C(super, gEnemyTarget, 0x20) && sub_08049FDC(super, 3)) {
             super->action = 4;
             this->unk_80 = 0;
             super->timer = 16;
@@ -294,7 +292,7 @@ void sub_080243B8(PestoEntity* this) {
                     super->timer = 32;
                     super->speed = 0x80;
                     this->unk_83 = 0x80;
-                } else if (sub_08049F1C(super, gUnk_020000B0, 0xe)) {
+                } else if (sub_08049F1C(super, gEnemyTarget, 0xe)) {
                     this->unk_80++;
                     super->timer = 30;
                     super->speed = 0x100;
@@ -600,13 +598,13 @@ void sub_08024A14(PestoEntity* this, u32 param_2, u32 param_3) {
             break;
         case 2:
             if (sub_08024C48(this, TRUE)) {
-                sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+                sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
                 unk = TRUE;
             }
             break;
         case 3:
             if (sub_08024C48(this, TRUE)) {
-                super->direction = GetFacingDirection(super, gUnk_020000B0);
+                super->direction = GetFacingDirection(super, gEnemyTarget);
                 unk = TRUE;
             }
             break;
@@ -662,9 +660,9 @@ bool32 sub_08024B38(PestoEntity* this) {
             }
         }
         if (gPlayerState.hurtBlinkSpeed != 0) {
-            if (sub_08024C48(this, 1) && sub_08049F1C(super, gUnk_020000B0, 0xa0)) {
+            if (sub_08024C48(this, 1) && sub_08049F1C(super, gEnemyTarget, 0xa0)) {
                 iVar4 = 1;
-                super->child = gUnk_020000B0;
+                super->child = gEnemyTarget;
                 this->unk_83 |= 3;
                 this->unk_83 &= ~0x40;
             }
@@ -761,7 +759,7 @@ bool32 sub_08024CC0(PestoEntity* this) {
     uVar2 = TRUE;
     if (!sub_08024C48(this, 1)) {
         uVar2 = FALSE;
-    } else if (!sub_08049F1C(super, gUnk_020000B0, 0x50) || !sub_08049FDC(super, 3)) {
+    } else if (!sub_08049F1C(super, gEnemyTarget, 0x50) || !sub_08049FDC(super, 3)) {
         uVar2 = FALSE;
         sub_08024C7C(this);
     }

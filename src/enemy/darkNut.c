@@ -46,8 +46,6 @@ void sub_08021644(DarkNutEntity*);
 u32 sub_08021664(DarkNutEntity*, Entity*);
 u32 sub_0802169C(DarkNutEntity*, Entity*);
 
-extern Entity* gUnk_020000B0;
-
 extern void (*const DarkNut_Functions[])(DarkNutEntity*);
 extern void (*const gUnk_080CAAB0[])(DarkNutEntity*);
 
@@ -197,11 +195,11 @@ void sub_08020E78(DarkNutEntity* this) {
 
 void sub_08020E98(DarkNutEntity* this) {
     if (PlayerInRange(super, 1, 56)) {
-        if (sub_0802169C(this, gUnk_020000B0)) {
+        if (sub_0802169C(this, gEnemyTarget)) {
             super->action = 8;
             sub_08021218(this, 7, super->animationState);
         } else {
-            super->direction = GetFacingDirection(gUnk_020000B0, super);
+            super->direction = GetFacingDirection(gEnemyTarget, super);
             if (ProcessMovement0(super) == 0) {
                 super->action = 8;
                 sub_08021218(this, 7, super->animationState);
@@ -212,10 +210,10 @@ void sub_08020E98(DarkNutEntity* this) {
             }
         }
     } else {
-        if (gUnk_020000B0 == NULL) {
+        if (gEnemyTarget == NULL) {
             sub_08021414(this);
         } else {
-            super->direction = GetFacingDirection(super, gUnk_020000B0);
+            super->direction = GetFacingDirection(super, gEnemyTarget);
             ProcessMovement0(super);
             sub_0802124C(this);
             sub_08021644(this);
@@ -231,8 +229,8 @@ void sub_08020F28(DarkNutEntity* this) {
 
 void sub_08020F48(DarkNutEntity* this) {
     if (PlayerInRange(super, 1, 0x48)) {
-        if (sub_08021664(this, gUnk_020000B0)) {
-            u32 uVar2 = sub_0804A044(super, gUnk_020000B0, 9);
+        if (sub_08021664(this, gEnemyTarget)) {
+            u32 uVar2 = sub_0804A044(super, gEnemyTarget, 9);
             if (uVar2 == 0xff) {
                 sub_08021424(this);
             } else {
@@ -510,7 +508,7 @@ void sub_08021424(DarkNutEntity* this) {
     s32 x, y;
     u32 tmp;
 
-    u32 dir = GetFacingDirection(super, gUnk_020000B0);
+    u32 dir = GetFacingDirection(super, gEnemyTarget);
     tmp = sub_08021274(super->animationState, dir);
     if (tmp != 0xff) {
         sub_08021218(this, this->unk_74, tmp);
@@ -520,20 +518,20 @@ void sub_08021424(DarkNutEntity* this) {
 
     switch (tmp) {
         case 0:
-            x = gUnk_020000B0->x.HALF.HI;
-            y = gUnk_020000B0->y.HALF.HI + 0x2c;
+            x = gEnemyTarget->x.HALF.HI;
+            y = gEnemyTarget->y.HALF.HI + 0x2c;
             break;
         case 1:
-            x = gUnk_020000B0->x.HALF.HI - 0x24;
-            y = gUnk_020000B0->y.HALF.HI;
+            x = gEnemyTarget->x.HALF.HI - 0x24;
+            y = gEnemyTarget->y.HALF.HI;
             break;
         case 2:
-            x = gUnk_020000B0->x.HALF.HI;
-            y = gUnk_020000B0->y.HALF.HI - 0x1d;
+            x = gEnemyTarget->x.HALF.HI;
+            y = gEnemyTarget->y.HALF.HI - 0x1d;
             break;
         default:
-            x = gUnk_020000B0->x.HALF.HI + 0x24;
-            y = gUnk_020000B0->y.HALF.HI;
+            x = gEnemyTarget->x.HALF.HI + 0x24;
+            y = gEnemyTarget->y.HALF.HI;
             break;
     }
 
@@ -555,7 +553,7 @@ u32 sub_080214FC(DarkNutEntity* this) {
     if (!sub_08049FDC(super, 1))
         return 0;
 
-    direction = GetFacingDirection(super, gUnk_020000B0);
+    direction = GetFacingDirection(super, gEnemyTarget);
     if (4 < (direction - (super->frame & 0x1f)) - 2)
         return 0;
 

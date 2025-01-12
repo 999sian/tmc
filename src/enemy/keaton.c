@@ -17,7 +17,6 @@ typedef struct {
     /*0x7b*/ u8 unk_7b;
 } KeatonEntity;
 
-extern Entity* gUnk_020000B0;
 void Keaton_OnTick(KeatonEntity*);
 void Keaton_OnCollision(KeatonEntity*);
 void Keaton_OnGrabbed(KeatonEntity*);
@@ -167,9 +166,8 @@ void Keaton_Action5(KeatonEntity* this) {
 }
 
 u32 sub_080325E8(KeatonEntity* this) {
-    if ((sub_08049FA0(super) && sub_08049FDC(super, 1)) &&
-        (EntityInRectRadius(super, gUnk_020000B0, 0x68, 0x40) != 0)) {
-        if (((GetFacingDirection(super, gUnk_020000B0) - (DirectionRound(super->frame)) + 2) & 0x1F) < 5) {
+    if ((sub_08049FA0(super) && sub_08049FDC(super, 1)) && (EntityInRectRadius(super, gEnemyTarget, 0x68, 0x40) != 0)) {
+        if (((GetFacingDirection(super, gEnemyTarget) - (DirectionRound(super->frame)) + 2) & 0x1F) < 5) {
             super->action = 3;
             super->timer = 12;
             super->direction = DirectionRound(super->frame);

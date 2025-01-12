@@ -167,14 +167,12 @@ void sub_08023E54(Entity* this) {
     }
 }
 
-extern Entity* gUnk_020000B0;
-
 void sub_08023E9C(Entity* this) {
     u32 uVar3 = Random();
     if (!sub_08049FA0(this) && (uVar3 & 1)) {
         this->direction = DirectionRoundUp(sub_08049EE4(this));
     } else if (sub_08049FDC(this, 1) && (uVar3 & 6)) {
-        u32 uVar3 = GetFacingDirection(this, gUnk_020000B0) - this->direction;
+        u32 uVar3 = GetFacingDirection(this, gEnemyTarget) - this->direction;
         if (uVar3 != 0 && ((uVar3 + 4) & 0x1f) > 8) {
             if ((uVar3 & 0x1f) < 0x10) {
                 this->direction = DirectionRound(this->direction + 8);

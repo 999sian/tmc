@@ -33,8 +33,6 @@ typedef struct {
 extern void sub_0803E9A4(Entity*);      // ballChainSoldier
 extern void sub_0803E94C(Entity*, u32); // ballChainSoldier
 
-extern Entity* gUnk_020000B0;
-
 void sub_0803EE8C(Enemy4DEntity*);
 bool32 sub_0803EF20(Enemy4DEntity*);
 bool32 sub_0803EEA4(Enemy4DEntity*);
@@ -120,7 +118,7 @@ void Enemy4D_Init(Enemy4DEntity* this) {
 void Enemy4D_Action1(Enemy4DEntity* this) {
     this->unk_7c -= 0xa;
     if (sub_08049DF4(1)) {
-        super->direction = DirectionRoundUp(GetFacingDirection(super, gUnk_020000B0));
+        super->direction = DirectionRoundUp(GetFacingDirection(super, gEnemyTarget));
         sub_0803E94C(super, 0);
     }
     sub_0803E9A4(super);
@@ -268,7 +266,7 @@ bool32 sub_0803EEA4(Enemy4DEntity* this) {
     s32 tmp;
     if (sub_08049FDC(super, 1)) {
         if (sub_0803EF04(this, 0x4e) != 0) {
-            tmp = sub_0804A044(super, gUnk_020000B0, 0x12);
+            tmp = sub_0804A044(super, gEnemyTarget, 0x12);
             if (tmp != 0xff) {
                 if (--this->unk_7a == 0) {
                     super->action = 5;
@@ -285,7 +283,7 @@ bool32 sub_0803EEA4(Enemy4DEntity* this) {
 }
 
 bool32 sub_0803EF04(Enemy4DEntity* this, u32 distance) {
-    return EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI - 4, distance);
+    return EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI - 4, distance);
 }
 
 bool32 sub_0803EF20(Enemy4DEntity* this) {

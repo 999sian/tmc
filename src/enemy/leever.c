@@ -15,8 +15,6 @@ typedef struct {
     /*0x74*/ u16 unk_74;
 } LeeverEntity;
 
-extern Entity* gUnk_020000B0;
-
 bool32 Leever_PlayerInRange(Entity*, s32);
 void Leever_Move(LeeverEntity*);
 
@@ -78,7 +76,7 @@ void Leever_Idle(LeeverEntity* this) {
             super->action = 2;
             super->spriteSettings.draw = TRUE;
             super->direction =
-                (GetFacingDirection(super, gUnk_020000B0) + gLeeverDrift[Random() & 1]) & (0x3 | DirectionNorthWest);
+                (GetFacingDirection(super, gEnemyTarget) + gLeeverDrift[Random() & 1]) & (0x3 | DirectionNorthWest);
             InitializeAnimation(super, LeeverAnimation_DigUp);
             UpdateSpriteForCollisionLayer(super);
         } else {
@@ -129,15 +127,15 @@ bool32 sub_0801FDE4(Entity* entity, s32 x, s32 y) {
     u32 actTile;
     const u16* puVar4;
 
-    if (GetCollisionDataAtWorldCoords(x, y, gUnk_020000B0->collisionLayer) != 0) {
+    if (GetCollisionDataAtWorldCoords(x, y, gEnemyTarget->collisionLayer) != 0) {
         return FALSE;
     } else {
-        actTile = GetActTileAtWorldCoords(x, y, gUnk_020000B0->collisionLayer);
+        actTile = GetActTileAtWorldCoords(x, y, gEnemyTarget->collisionLayer);
         for (puVar4 = gUnk_080CA4CA; *puVar4 != (u16)-1;) {
             if (*puVar4++ == actTile) {
                 entity->x.HALF.HI = (x & 0xfff0) + 8;
                 entity->y.HALF.HI = (y & 0xfff0) + 8;
-                entity->collisionLayer = gUnk_020000B0->collisionLayer;
+                entity->collisionLayer = gEnemyTarget->collisionLayer;
                 return TRUE;
             }
         }
@@ -153,8 +151,8 @@ bool32 Leever_PlayerInRange(Entity* entity, s32 arg2) {
     if (sub_08049FDC(entity, 1) == 0) {
         return 0;
     } else {
-        x = gUnk_020000B0->x.WORD;
-        y = gUnk_020000B0->y.WORD;
+        x = gEnemyTarget->x.WORD;
+        y = gEnemyTarget->y.WORD;
         sin = gSineTable[arg2 * 8] << 11;
         cos = gSineTable[arg2 * 8 + 0x40] << 11;
         for (i = 0; i < 8; i++) {
@@ -176,12 +174,12 @@ void Leever_Move(LeeverEntity* this) {
     super->speed = (super->frame & 0xf) * 0x20;
     if (super->type == LeeverForm_Red) {
         if ((super->subtimer++ & 0xf) == 0) {
-            sub_08004596(super, sub_0800132C(super, gUnk_020000B0));
+            sub_08004596(super, sub_0800132C(super, gEnemyTarget));
         }
     } else {
         super->speed += 0x40;
         if ((super->subtimer++ & 0x7) == 0) {
-            sub_08004596(super, sub_0800132C(super, gUnk_020000B0));
+            sub_08004596(super, sub_0800132C(super, gEnemyTarget));
         }
     }
 

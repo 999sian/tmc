@@ -28,8 +28,6 @@ extern const s8 gUnk_080CA5D4[];
 void sub_080205F8(PeahatEntity* this);
 void sub_08020604(PeahatEntity* this);
 
-extern Entity* gUnk_020000B0;
-
 enum {
     PeahatForm_Torso,
     PeahatForm_Propeller,
@@ -161,7 +159,7 @@ void Peahat_Fly(PeahatEntity* this) {
         this->unk_83--;
 
     if (sub_08049FDC(super, 1)) {
-        if (this->unk_83 == 0 && (super->subtimer & 0xf) == 0 && sub_08049F1C(super, gUnk_020000B0, 0x30)) {
+        if (this->unk_83 == 0 && (super->subtimer & 0xf) == 0 && sub_08049F1C(super, gEnemyTarget, 0x30)) {
             super->action = 2;
             super->subAction = Random() & 3;
             super->timer = 60;
@@ -191,7 +189,7 @@ void Peahat_ChargeStart(PeahatEntity* this) {
             super->timer = 120;
             super->speed = 192;
             super->direction =
-                (GetFacingDirection(super, gUnk_020000B0) + gUnk_080CA5D4[Random() & 1]) & (0x3 | DirectionNorthWest);
+                (GetFacingDirection(super, gEnemyTarget) + gUnk_080CA5D4[Random() & 1]) & (0x3 | DirectionNorthWest);
         }
     } else {
         sub_080205F8(this);
@@ -210,7 +208,7 @@ void Peahat_ChargeTarget(PeahatEntity* this) {
                 super->speed += 4;
 
             if ((gRoomTransition.frameCount & 3) == 0)
-                sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+                sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
         }
         ProcessMovement2(super);
     } else {

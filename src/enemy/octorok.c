@@ -15,7 +15,6 @@ extern void (*const Octorok_Functions[6])(Entity*);
 extern void (*const gOctorokActions[4])(Entity*);
 extern void (*const gUnk_080CA158[6])(Entity*);
 
-extern Entity* gUnk_020000B0;
 extern const u8 gOctorokWalkDuration[4];
 extern const u8 gOctorokSpitChanceModifier[2];
 extern const u8 gOctorokNutOffset[8];
@@ -153,7 +152,7 @@ void Octorok_Turn(Entity* this) {
     if (this->type != 2) {
         if (sub_08049FA0(this)) {
             if (this->type == 1 && (Random() & 3) == 0 && sub_08049FDC(this, 1)) {
-                this->direction = DirectionRoundUp(GetFacingDirection(this, gUnk_020000B0));
+                this->direction = DirectionRoundUp(GetFacingDirection(this, gEnemyTarget));
             } else {
                 this->direction = DirectionRound(Random());
             }
@@ -169,10 +168,10 @@ void Octorok_Turn(Entity* this) {
             } else if (Random() & 3) {
                 this->direction = DirectionRound(sub_08049EE4(this) + gUnk_080CA17E[Random() & 1]);
             } else {
-                this->direction = DirectionRoundUp(GetFacingDirection(this, gUnk_020000B0));
+                this->direction = DirectionRoundUp(GetFacingDirection(this, gEnemyTarget));
             }
         } else {
-            this->direction = DirectionRoundUp(GetFacingDirection(this, gUnk_020000B0));
+            this->direction = DirectionRoundUp(GetFacingDirection(this, gEnemyTarget));
         }
     }
 

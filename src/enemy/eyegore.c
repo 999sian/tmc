@@ -33,7 +33,6 @@ typedef struct {
 
 extern Entity* sub_08017A90(Entity*, Entity*);
 
-extern Entity* gUnk_020000B0;
 extern const u8 gMapTileTypeToCollisionData[];
 
 void sub_08031344(EyegoreEntity*);
@@ -175,7 +174,7 @@ void Eyegore_Action2(EyegoreEntity* this) {
             super->timer = 60;
             super->direction = (CalculateDirectionTo(super->x.HALF.HI + super->hitbox->offset_x,
                                                      super->y.HALF.HI + super->hitbox->offset_y,
-                                                     gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI) +
+                                                     gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI) +
                                 4) &
                                0x18;
             InitializeAnimation(super, 10);
@@ -364,8 +363,8 @@ void sub_08031024(EyegoreEntity* this) {
     if (this->unk_79 == 0) {
         if (boolresult != 0) {
             super->direction = CalculateDirectionTo(super->x.HALF.HI + super->hitbox->offset_x,
-                                                    super->y.HALF.HI + super->hitbox->offset_y,
-                                                    gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI);
+                                                    super->y.HALF.HI + super->hitbox->offset_y, gEnemyTarget->x.HALF.HI,
+                                                    gEnemyTarget->y.HALF.HI);
         } else {
             this->unk_79 = 1;
             this->unk_78 = boolresult != 0;
