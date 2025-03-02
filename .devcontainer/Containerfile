@@ -1,6 +1,6 @@
 FROM debian
 
-RUN apt update && apt upgrade && apt install -y --no-install-recommends \
+RUN apt update && apt upgrade -y && apt install -y --no-install-recommends \
     ca-certificates \
     cmake \
     g++ \
