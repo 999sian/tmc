@@ -18,8 +18,8 @@ typedef struct {
     s16 unk_36;
     s16 unk_38;
     s16 unk_3a;
-    u16 unk_3c;
-    u16 unk_3e; // used
+    u16 flag;
+    u16 localFlag; // used
 } TempleOfDropletsManager;
 
 #endif // TEMPLEOFDROPLETSMANAGER_H

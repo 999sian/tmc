@@ -189,7 +189,7 @@ Entity* CreateGroundItemWithFlags(Entity* parent, u32 form, u32 subtype, u32 fla
     if (ent != NULL) {
         ItemOnGroundEntity* this = (ItemOnGroundEntity*)ent;
         ent->timer = 5;
-        this->unk_86 = flags;
+        this->flag = flags;
     }
     return ent;
 }

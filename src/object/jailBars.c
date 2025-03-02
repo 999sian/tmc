@@ -14,7 +14,7 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[30];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } JailBarsEntity;
 
 static void SetJailBarTiles(JailBarsEntity* this, u32);
@@ -34,7 +34,7 @@ void JailBars(JailBarsEntity* this) {
 }
 
 void JailBars_Init(JailBarsEntity* this) {
-    if (CheckFlags(this->unk_86) == 0) {
+    if (CheckFlags(this->flag) == 0) {
         super->action = 1;
         SetJailBarTiles(this, 0);
     } else {
@@ -48,7 +48,7 @@ void JailBars_Init(JailBarsEntity* this) {
 }
 
 void JailBars_Action1(JailBarsEntity* this) {
-    if (CheckFlags(this->unk_86) != 0) {
+    if (CheckFlags(this->flag) != 0) {
         super->action = 2;
         SetJailBarTiles(this, 1);
         SoundReq(SFX_10B);

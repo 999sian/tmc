@@ -8,8 +8,8 @@ typedef struct {
     u8 unk_20[0x18];
     s16 x;
     s16 y;
-    u16 unk_3c;
-    u16 flags;
+    u16 flag1;
+    u16 flag2;
 } MiscManager;
 
 #endif // MISCMANAGER_H

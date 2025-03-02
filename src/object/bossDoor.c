@@ -20,8 +20,8 @@ typedef struct {
     /*0x7a*/ u16 unk_7a;
     /*0x7c*/ u16 unk_7c;
     /*0x7e*/ u8 unk_7e[6];
-    /*0x84*/ u16 unk_84;
-    /*0x86*/ u16 unk_86;
+    /*0x84*/ u16 flags2;
+    /*0x86*/ u16 flag;
 } BossDoorEntity;
 
 extern bool32 gUnk_02036BB8;
@@ -47,10 +47,10 @@ void BossDoor(BossDoorEntity* this) {
 }
 
 void BossDoor_Init(BossDoorEntity* this) {
-    if ((this->unk_84 != 0xffff) && CheckFlags(this->unk_84)) {
+    if ((this->flags2 != 0xffff) && CheckFlags(this->flags2)) {
         DeleteThisEntity();
     }
-    if ((this->unk_86 != BEGIN) && CheckFlags(this->unk_86)) {
+    if ((this->flag != BEGIN) && CheckFlags(this->flag)) {
         DeleteThisEntity();
     }
     super->type2 = super->type >> 2;
@@ -86,7 +86,7 @@ void BossDoor_Action1(BossDoorEntity* this) {
     if (super->interactType != INTERACTION_NONE) {
         super->action = 2;
         RemoveInteractableObject(super);
-        SetFlag(this->unk_86);
+        SetFlag(this->flag);
     }
 }
 
@@ -155,7 +155,7 @@ void BossDoor_Action5(BossDoorEntity* this) {
 }
 
 void BossDoor_Action6(BossDoorEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         super->action = 2;
     }
 }

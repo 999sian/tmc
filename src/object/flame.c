@@ -12,7 +12,7 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[30];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } FlameEntity;
 
 extern void sub_0807AB44(Entity*, s32, s32);
@@ -43,7 +43,7 @@ void Flame_Init(FlameEntity* this) {
             CopyPosition(super->parent, super);
             break;
         case 4:
-            if (!CheckFlags(this->unk_86)) {
+            if (!CheckFlags(this->flag)) {
                 super->spriteSettings.draw = FALSE;
                 super->subAction = 1;
                 return;
@@ -85,7 +85,7 @@ void Flame_Action1(FlameEntity* this) {
             CopyPosition(super->parent, super);
             break;
         case 4:
-            val = CheckFlags(this->unk_86);
+            val = CheckFlags(this->flag);
             if (super->subAction == 0) {
                 if (val)
                     return;

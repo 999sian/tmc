@@ -12,7 +12,7 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[0x1e];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } UnusedSkullEntity;
 
 void UnusedSkull_Init(UnusedSkullEntity*);
@@ -40,9 +40,9 @@ void UnusedSkull_Init(UnusedSkullEntity* this) {
     super->collisionMask = 2;
     super->hitbox = (Hitbox*)&gHitbox_4;
     SetTile(SPECIAL_TILE_80, COORD_TO_TILE(super), super->collisionLayer);
-    if (super->type == 1 || CheckFlags(this->unk_86)) {
+    if (super->type == 1 || CheckFlags(this->flag)) {
         super->action = 3;
-        SetFlag(this->unk_86);
+        SetFlag(this->flag);
         InitializeAnimation(super, 1);
     } else {
         InitializeAnimation(super, super->type);
@@ -62,7 +62,7 @@ void UnusedSkull_Action2(UnusedSkullEntity* this) {
     GetNextFrame(super);
     if ((super->frame & 1) != 0) {
         super->action = 3;
-        SetFlag(this->unk_86);
+        SetFlag(this->flag);
         EnqueueSFX(SFX_BUTTON_PRESS);
     }
 }

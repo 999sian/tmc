@@ -16,7 +16,7 @@ typedef struct {
     /*0x74*/ u16 tilePos;
     /*0x76*/ u8 unused2[14];
     /*0x84*/ u16 unk_84;
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } ButtonEntity;
 
 void Button_Init(ButtonEntity* this);
@@ -45,7 +45,7 @@ void Button_Init(ButtonEntity* this) {
     this->tilePos = (((super->x.HALF.HI - gRoomControls.origin_x) >> 4) & 0x3F) |
                     ((((super->y.HALF.HI - gRoomControls.origin_y) >> 4) & 0x3F) << 6);
     this->unk_72 = GetTileTypeAtTilePos(this->tilePos, super->collisionLayer);
-    if (super->type == 0 && CheckFlags(this->unk_86)) {
+    if (super->type == 0 && CheckFlags(this->flag)) {
         super->action = 5;
         SetTileType(TILE_TYPE_122, this->tilePos, super->collisionLayer);
     } else {
@@ -114,7 +114,7 @@ void Button_Action4(ButtonEntity* this) {
         }
     } else {
         super->action = 2;
-        ClearFlag(this->unk_86);
+        ClearFlag(this->flag);
         SetTileType(TILE_TYPE_119, this->tilePos, super->collisionLayer);
         SoundReq(SFX_BUTTON_PRESS);
     }
@@ -276,7 +276,7 @@ bool32 sub_08081F7C(ButtonEntity* this, u32 tileType) {
             super->child->spriteOffsetY = -4;
     } else {
         if (super->timer == 6) {
-            SetFlag(this->unk_86);
+            SetFlag(this->flag);
             SetTileType(tileType, this->tilePos, super->collisionLayer);
             sub_08081F24(super);
             SoundReq(SFX_BUTTON_PRESS);

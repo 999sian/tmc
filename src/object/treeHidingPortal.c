@@ -17,7 +17,7 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[30];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } TreeHidingPortalEntity;
 
 extern const s16 gUnk_080B4468[];
@@ -42,7 +42,7 @@ void TreeHidingPortal(TreeHidingPortalEntity* this) {
 }
 
 void TreeHidingPortal_Init(TreeHidingPortalEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         sub_0809E96C(this);
         DeleteThisEntity();
     }
@@ -79,7 +79,7 @@ void TreeHidingPortal_Action2(TreeHidingPortalEntity* this) {
 
 void TreeHidingPortal_Action3(TreeHidingPortalEntity* this) {
     if (--super->timer == 0) {
-        SetFlag(this->unk_86);
+        SetFlag(this->flag);
         SetPlayerControl(0);
         SoundReq(SFX_SECRET_BIG);
         DeleteThisEntity();

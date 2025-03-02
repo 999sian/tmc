@@ -33,7 +33,7 @@ void Fairy_SubAction0(FairyEntity*);
 void Fairy_SubAction1(FairyEntity*);
 void Fairy_SubAction2(FairyEntity*);
 
-extern void sub_08081404(Entity*, u32);
+extern void ItemOnGround_SetFlagAndDelete(Entity*, u32);
 
 void Fairy(FairyEntity* this) {
     static void (*const Fairy_Actions[])(FairyEntity*) = {
@@ -167,7 +167,7 @@ void Fairy_Action2(FairyEntity* this) {
     ProcessMovement1(super);
     if ((AnyPrioritySet() == 0) && (super->type2 == 0)) {
         if (--this->unk_78 == 0) {
-            sub_08081404(super, 0);
+            ItemOnGround_SetFlagAndDelete(super, FALSE);
         }
         if (this->unk_78 < 0x78) {
             super->spriteSettings.draw ^= 1;
@@ -177,7 +177,7 @@ void Fairy_Action2(FairyEntity* this) {
 
 void Fairy_Action3(FairyEntity* this) {
     if (*(u16*)&super->child->kind != 0x308) {
-        sub_08081404(super, 0);
+        ItemOnGround_SetFlagAndDelete(super, FALSE);
     } else {
         CopyPosition(super->child, super);
         super->z.HALF.HI--;
@@ -214,7 +214,7 @@ void Fairy_Action4(FairyEntity* this) {
     if (--super->subtimer == 0) {
         super->subtimer = 6;
         if (--super->spriteOffsetY < -0x16) {
-            sub_08081404(super, 1);
+            ItemOnGround_SetFlagAndDelete(super, TRUE);
         }
     }
     if (super->spriteOffsetY < -0x11) {

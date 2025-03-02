@@ -22,7 +22,7 @@ typedef struct {
     /*0x79*/ u8 unk_79;
     /*0x7a*/ u8 unk_7a;
     /*0x7b*/ u8 unk_7b;
-    /*0x7c*/ u16 unk_7c;
+    /*0x7c*/ u16 flag;
     /*0x7e*/ u8 unk_7e;
     /*0x7f*/ u8 unk_7f;
     /*0x80*/ u16 tileIndex1;
@@ -152,7 +152,7 @@ void Eyegore_Init(EyegoreEntity* this) {
     this->unk_76 = super->y.HALF.HI;
     this->unk_7e = 0x3c;
     sub_08030F00(this);
-    if (this->unk_7c != 0) {
+    if (this->flag != 0) {
         super->flags &= ~ENT_COLLIDE;
         InitializeAnimation(super, 10);
     } else {
@@ -161,7 +161,7 @@ void Eyegore_Init(EyegoreEntity* this) {
 }
 
 void Eyegore_Action1(EyegoreEntity* this) {
-    if ((this->unk_7c != 0) && CheckFlags(this->unk_7c)) {
+    if ((this->flag != 0) && CheckFlags(this->flag)) {
         sub_08031320(this);
     }
 }

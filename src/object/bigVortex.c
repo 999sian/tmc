@@ -12,7 +12,7 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[30];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } BigVortexEntity;
 
 void sub_08098E3C(Entity*);
@@ -39,7 +39,7 @@ void BigVortex_Init(BigVortexEntity* this) {
     super->action = 1;
     super->z.HALF.HI = -0x10;
 
-    temp = this->unk_86;
+    temp = this->flag;
 
     if ((temp != 0) && !CheckFlags(temp)) {
         super->action = 1;
@@ -55,7 +55,7 @@ void BigVortex_Init(BigVortexEntity* this) {
 void BigVortex_Action1(BigVortexEntity* this) {
     Entity* fx;
 
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         super->action = 2;
         super->timer = 45;
         fx = CreateFx(super, FX_BIG_EXPLOSION2, 0);

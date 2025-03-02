@@ -60,7 +60,7 @@ void TempleOfDropletsManager_Main(TempleOfDropletsManager* this) {
 void TempleOfDropletsManager_Type0(TempleOfDropletsManager* this) {
     if (super->action == 0) {
         sub_0805A89C(this);
-        if (!CheckLocalFlag(this->unk_3e)) {
+        if (!CheckLocalFlag(this->localFlag)) {
             this->unk_23 = 1;
         } else {
             this->unk_23 = 2;
@@ -83,7 +83,7 @@ void TempleOfDropletsManager_Type1(TempleOfDropletsManager* this) {
         sub_0805A89C(this);
         this->unk_23 = 1;
         sub_0805AAF0(1);
-        if (!CheckLocalFlag(this->unk_3e)) {
+        if (!CheckLocalFlag(this->localFlag)) {
             super->action = 1;
             gScreen.lcd.displayControl &= 0xB7FF;
         } else {
@@ -144,12 +144,12 @@ void TempleOfDropletsManager_Type2(TempleOfDropletsManager* this) {
             this->unk_23 = 1;
         }
         sub_0805AAF0(this->unk_23);
-        if (!CheckLocalFlag(this->unk_3e)) {
-            ClearFlag(this->unk_3c);
+        if (!CheckLocalFlag(this->localFlag)) {
+            ClearFlag(this->flag);
             super->action = 1;
             gScreen.lcd.displayControl &= ~(DISPCNT_WIN1_ON | DISPCNT_BG3_ON);
         } else {
-            SetFlag(this->unk_3c);
+            SetFlag(this->flag);
             super->action = 3;
             gScreen.lcd.displayControl |= DISPCNT_WIN1_ON | DISPCNT_BG3_ON;
         }
@@ -162,7 +162,7 @@ void TempleOfDropletsManager_Type2(TempleOfDropletsManager* this) {
 void sub_0805A4CC(TempleOfDropletsManager*, u32);
 
 void TempleOfDropletsManager_Type1_Action1(TempleOfDropletsManager* this) {
-    if (CheckLocalFlag(this->unk_3e)) {
+    if (CheckLocalFlag(this->localFlag)) {
         super->action = 2;
         sub_0805A4CC(this, 0);
     }
@@ -171,12 +171,12 @@ void TempleOfDropletsManager_Type1_Action1(TempleOfDropletsManager* this) {
 void TempleOfDropletsManager_Type2_Action2(TempleOfDropletsManager* this) {
     if (super->subAction != 0) {
         super->action = 3;
-        SetFlag(this->unk_3c);
+        SetFlag(this->flag);
     }
 }
 
 void TempleOfDropletsManager_Type2_Action3(TempleOfDropletsManager* this) {
-    if (!CheckLocalFlag(this->unk_3e)) {
+    if (!CheckLocalFlag(this->localFlag)) {
         super->action = 4;
         sub_0805A4CC(this, 1);
     }
@@ -185,7 +185,7 @@ void TempleOfDropletsManager_Type2_Action3(TempleOfDropletsManager* this) {
 void TempleOfDropletsManager_Type2_Action4(TempleOfDropletsManager* this) {
     if (super->subAction != 0) {
         super->action = 1;
-        ClearFlag(this->unk_3c);
+        ClearFlag(this->flag);
     }
 }
 
@@ -363,7 +363,7 @@ void TempleOfDropletsManager_Type6_Action3(TempleOfDropletsManager* this) {
 void TempleOfDropletsManager_Type7(TempleOfDropletsManager* this) {
     switch (super->action) {
         case 0:
-            if (CheckLocalFlag(this->unk_3e)) {
+            if (CheckLocalFlag(this->localFlag)) {
                 super->action = 1;
             } else {
                 super->action = 2;
@@ -373,7 +373,7 @@ void TempleOfDropletsManager_Type7(TempleOfDropletsManager* this) {
             SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
             break;
         case 1:
-            if (CheckLocalFlag(this->unk_3e))
+            if (CheckLocalFlag(this->localFlag))
                 break;
             super->action = 2;
             sub_0805A4CC(this, 4);
@@ -384,7 +384,7 @@ void TempleOfDropletsManager_Type7(TempleOfDropletsManager* this) {
             }
             break;
         case 3:
-            if (!CheckLocalFlag(this->unk_3e))
+            if (!CheckLocalFlag(this->localFlag))
                 break;
             super->action = 4;
             sub_0805A4CC(this, 4);

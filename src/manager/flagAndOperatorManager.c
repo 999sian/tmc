@@ -10,12 +10,12 @@
 void FlagAndOperatorManager_Main(FlagAndOperatorManager* this) {
     if (super->action == 0) {
         super->action = 1;
-        if (CheckFlags(this->unk_3c)) {
+        if (CheckFlags(this->setFlag)) {
             DeleteThisEntity();
         }
     } else {
-        if (CheckFlags(this->unk_3e)) {
-            SetFlag(this->unk_3c);
+        if (CheckFlags(this->checkFlags)) {
+            SetFlag(this->setFlag);
             DeleteThisEntity();
         }
     }

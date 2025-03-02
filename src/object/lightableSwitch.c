@@ -19,8 +19,8 @@ typedef struct {
     /*0x68*/ u8 unused1[12];
     /*0x74*/ u16 unk_74;
     /*0x76*/ u8 unused2[14];
-    /*0x84*/ u16 unk_84;
-    /*0x86*/ u16 unk_86;
+    /*0x84*/ u16 flag1;
+    /*0x86*/ u16 flag2;
 } LightableSwitchEntity;
 
 static void sub_0809EB30(LightableSwitchEntity* this);
@@ -69,10 +69,10 @@ void LightableSwitch_Type0_Init(LightableSwitchEntity* this) {
 void LightableSwitch_Type0_Action1(LightableSwitchEntity* this) {
 
     if ((super->contactFlags & CONTACT_NOW) != 0) {
-        if (CheckFlags(this->unk_86) != 0) {
-            ClearFlag(this->unk_86);
+        if (CheckFlags(this->flag2) != 0) {
+            ClearFlag(this->flag2);
         } else {
-            SetFlag(this->unk_86);
+            SetFlag(this->flag2);
         }
         EnqueueSFX(SFX_110);
     }
@@ -82,7 +82,7 @@ void LightableSwitch_Type0_Action1(LightableSwitchEntity* this) {
 static void sub_0809EABC(LightableSwitchEntity* this) {
     bool32 anySet = 0;
 
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag2)) {
         anySet = 1;
     }
     if (super->frameIndex != anySet) {
@@ -141,7 +141,7 @@ void LightableSwitch_Type1_Init(LightableSwitchEntity* this) {
     super->hitbox = (Hitbox*)&gHitbox_0;
     sub_0809EAD8(this);
     UpdateSpriteForCollisionLayer(super);
-    if (CheckFlags(this->unk_84)) {
+    if (CheckFlags(this->flag1)) {
         super->action = 3;
         super->frameIndex = 2;
     }
@@ -152,21 +152,21 @@ void LightableSwitch_Type1_Action1(LightableSwitchEntity* this) {
         super->action = 2;
         super->timer = 16;
         super->frameIndex = 2;
-        SetFlag(this->unk_86);
+        SetFlag(this->flag2);
         EnqueueSFX(SFX_110);
     }
 }
 
 void LightableSwitch_Type1_Action2(LightableSwitchEntity* this) {
 
-    if (CheckFlags(this->unk_84)) {
+    if (CheckFlags(this->flag1)) {
         super->action = 3;
 
     } else {
         if (--super->timer == 0) {
             super->action = 1;
             super->frameIndex = 3;
-            ClearFlag(this->unk_86);
+            ClearFlag(this->flag2);
             EnqueueSFX(SFX_110);
         }
     }

@@ -18,7 +18,7 @@ typedef struct {
     /*0x6e*/ u8 unk_6e[0x2];
     /*0x70*/ u16 tilePos;
     /*0x72*/ u8 unk_72[0x14];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } SmallIceBlockEntity;
 
 extern const s16 gUnk_080B4488[];
@@ -51,7 +51,7 @@ void SmallIceBlock_Init(SmallIceBlockEntity* this) {
         case 0:
         case 1:
         case 2:
-            if (CheckFlags(this->unk_86)) {
+            if (CheckFlags(this->flag)) {
                 DeleteThisEntity();
             }
     }
@@ -81,7 +81,7 @@ void SmallIceBlock_Action1(SmallIceBlockEntity* this) {
         EnqueueSFX(SFX_ICE_BLOCK_MELT);
         SmallIceBlock_Action3(this);
         if (super->type == 0) {
-            SetFlag(this->unk_86);
+            SetFlag(this->flag);
         }
     } else {
         if (!sub_0800442E(super)) {
@@ -138,10 +138,10 @@ void SmallIceBlock_Action3(SmallIceBlockEntity* this) {
     }
     SetAffineInfo(super, 0x100, gUnk_08123748[super->timer >> 5], 0);
     if (super->type == 1) {
-        CreateGroundItemWithFlags(super, ITEM_SMALL_KEY, 0, this->unk_86);
+        CreateGroundItemWithFlags(super, ITEM_SMALL_KEY, 0, this->flag);
         SoundReq(SFX_SECRET);
     } else if (super->type == 2) {
-        CreateGroundItemWithFlags(super, ITEM_BIG_KEY, 0, this->unk_86);
+        CreateGroundItemWithFlags(super, ITEM_BIG_KEY, 0, this->flag);
         SoundReq(SFX_SECRET);
     }
     super->action = 4;

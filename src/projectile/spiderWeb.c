@@ -16,7 +16,7 @@ typedef struct {
     /*0x68*/ u8 unused1[28];
     /*0x84*/ u8 unk_84;
     /*0x85*/ u8 unused2;
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } SpiderWebEntity;
 
 typedef struct {
@@ -134,7 +134,7 @@ void SpiderWeb_Init(SpiderWebEntity* this) {
         &gUnk_080FD42C,
         &gUnk_080FD434,
     };
-    if (CheckFlags(this->unk_86) != 0) {
+    if (CheckFlags(this->flag) != 0) {
         DeleteThisEntity();
     }
     super->action = 1;
@@ -251,7 +251,7 @@ void sub_080AAA68(Entity* this) {
 }
 
 void sub_080AAAA8(SpiderWebEntity* this) {
-    SetFlag(this->unk_86);
+    SetFlag(this->flag);
     RestorePrevTileEntity(TILE(super->x.HALF.HI, super->y.HALF.HI), super->collisionLayer);
     DeleteThisEntity();
 }

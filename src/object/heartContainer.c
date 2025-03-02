@@ -14,8 +14,8 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[28];
-    /*0x84*/ u16 unk_84;
-    /*0x86*/ u16 unk_86;
+    /*0x84*/ u16 flag;
+    /*0x86*/ u16 flag2;
 } HeartContainerEntity;
 
 static void HeartContainer_Init(HeartContainerEntity* this);
@@ -37,7 +37,7 @@ void HeartContainer(HeartContainerEntity* this) {
 }
 
 static void HeartContainer_Init(HeartContainerEntity* this) {
-    if (CheckFlags(this->unk_84)) {
+    if (CheckFlags(this->flag)) {
         DeleteThisEntity();
     }
     super->action = 1;
@@ -49,7 +49,7 @@ static void HeartContainer_Init(HeartContainerEntity* this) {
 }
 
 static void HeartContainer_Action1(HeartContainerEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag2)) {
         super->action = 2;
         super->spriteSettings.draw = 1;
         super->spriteRendering.b0 = 3;
@@ -74,7 +74,7 @@ static void HeartContainer_Action2(HeartContainerEntity* this) {
 static void HeartContainer_Action3(HeartContainerEntity* this) {
     sub_08080CB4(super);
     if (!(gPlayerState.flags & PL_MINISH) && IsCollidingPlayer(super)) {
-        SetFlag(this->unk_84);
+        SetFlag(this->flag);
         CreateItemEntity(ITEM_HEART_CONTAINER, 0, 0);
         DeleteThisEntity();
     }
