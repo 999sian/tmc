@@ -14,7 +14,7 @@ RUN apt update && apt upgrade && apt install -y --no-install-recommends \
     ssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-ADD https://github.com/pret/agbcc.git /agbcc
+RUN git clone https://github.com/pret/agbcc.git /agbcc
 
 RUN cd /agbcc && \
     ./build.sh && \
