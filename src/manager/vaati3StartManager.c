@@ -154,5 +154,5 @@ void Vaati3StartManager_Type1_Action1(Vaati3StartManager* this) {
 
 void sub_0805E094(void) {
     SetInitializationPriority();
-    sub_0808091C(&gUnk_0813AC34, TRANSITION_7);
+    DoExitTransitionWithType(&gUnk_0813AC34, TRANSITION_7);
 }

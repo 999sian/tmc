@@ -7,8 +7,8 @@
 typedef enum {
     WARP_TYPE_BORDER,
     WARP_TYPE_AREA,
-    WARP_TYPE_UNK2,
-    WARP_TYPE_UNK3,
+    WARP_TYPE_BORDER2,
+    WARP_TYPE_AREA2,
     WARP_TYPE_END_OF_LIST = 0xffff,
 } WarpType;
 

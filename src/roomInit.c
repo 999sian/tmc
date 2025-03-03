@@ -713,7 +713,7 @@ void sub_StateChange_HyruleCastle_4(void) {
 }
 
 void sub_0804BCDC(void) {
-    sub_0808091C(&gUnk_0813AB80, TRANSITION_FADE_BLACK_SLOW);
+    DoExitTransitionWithType(&gUnk_0813AB80, TRANSITION_FADE_BLACK_SLOW);
 }
 
 u32 sub_unk3_HyruleCastle_5(void) {

@@ -57,10 +57,10 @@ void sub_08080368();
 void FillActTileForLayer(MapLayer* mapLayer);
 bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 param_2, u32 param_3, u32 facing_direction);
 bool32 IsPosInTransitionRect(const Transition* transition, u32 param_2, u32 param_3, u32 facing_direction);
-void sub_080808D8(s32);
-void sub_080808E4(s32);
-void sub_08080904(s32);
-void sub_08080910(s32);
+void SetRoomTransitionTypeForAreaWarp(s32);
+void SetRoomTransitionTypeForBorderWarp(s32);
+void SetRoomTransitionTypeForArea2Warp(s32);
+void SetRoomTransitionTypeForBorder2Warp(s32);
 
 extern const s8 gShakeOffsets[];
 
@@ -482,89 +482,90 @@ void sub_08080368(void) {
 }
 
 u32 sub_080803D0(void) {
-    s32 sp00, sp04, sp08, sp0c, sp10, sp14, sp18, sp1c;
-    s32 r2, r4, r7, r8, r9, r10;
+    s32 delta_x, delta_y, dd_x, dd_y, pos_x, pos_y, scroll_x, scroll_y;
+    s32 xy49, r4, r7, r8, delta_yy, delta_xx;
 
-    sp18 = gRoomControls.scroll_x - gRoomControls.origin_x;
-    sp10 = gRoomControls.camera_target->x.HALF.HI - gRoomControls.origin_x;
-    sp1c = gRoomControls.scroll_y - gRoomControls.origin_y;
-    sp14 = gRoomControls.camera_target->y.HALF.HI - gRoomControls.origin_y;
-    sp08 = 0x3c;
+    scroll_x = gRoomControls.scroll_x - gRoomControls.origin_x;
+    pos_x = gRoomControls.camera_target->x.HALF.HI - gRoomControls.origin_x;
+    scroll_y = gRoomControls.scroll_y - gRoomControls.origin_y;
+    pos_y = gRoomControls.camera_target->y.HALF.HI - gRoomControls.origin_y;
+    dd_x = 0x3c;
+
     do {
         r7 = 0;
-        sp08 += 6;
-        r10 = sp08 * sp08;
-        sp0c = sp08 * 2 / 3;
-        r9 = sp0c * sp0c;
+        dd_x += 6;
+        delta_xx = dd_x * dd_x;
+        dd_y = dd_x * 2 / 3;
+        delta_yy = dd_y * dd_y;
 
-        sp00 = sp08;
-        sp04 = 0;
-        r4 = (-(sp08 * 2) + 1) * r9 + r10 * 2;
-        r2 = sp00 * r9 / r10;
-        while (sp04 <= r2) {
+        delta_x = dd_x;
+        delta_y = 0;
+        r4 = (-(dd_x * 2) + 1) * delta_yy + delta_xx * 2;
+        xy49 = delta_x * delta_yy / delta_xx; // = x * 4/9
+        while (delta_y <= xy49) {
 
-            if ((sp1c + 0xa8) > sp14 + sp04) {
-                if (sp18 + 0xf8 > sp00 + sp10) {
+            if (scroll_y + 0xa8 > pos_y + delta_y) {
+                if (scroll_x + 0xf8 > delta_x + pos_x) {
                     r7 |= 1;
                 }
-                if (sp18 < sp10 - sp00 + 8) {
+                if (scroll_x < pos_x - delta_x + 8) {
                     r7 |= 2;
                 }
             }
-            if (sp1c < (sp14 - sp04) + 8) {
-                if (sp18 + 0xf8 > sp00 + sp10) {
+            if (scroll_y < pos_y - delta_y + 8) {
+                if (scroll_x + 0xf8 > delta_x + pos_x) {
                     r7 |= 4;
                 }
-                if (sp18 < sp10 - sp00 + 8) {
+                if (scroll_x < pos_x - delta_x + 8) {
                     r7 |= 8;
                 }
             }
 
             if (r4 > 0) {
-                r4 += ((-(sp00 << 0x2) + 4) * r9) + (r10 * (6 + 4 * sp04));
-                sp00--;
-                r2 = sp00 * r9 / r10;
+                r4 += ((-(delta_x << 0x2) + 4) * delta_yy) + (delta_xx * (6 + 4 * delta_y));
+                delta_x--;
+                xy49 = delta_x * delta_yy / delta_xx;
             } else {
-                r4 += (r10 * (6 + 4 * sp04));
+                r4 += (delta_xx * (6 + 4 * delta_y));
             }
 
-            sp04++;
+            delta_y++;
         }
 
-        sp00 = 0;
-        sp04 = sp0c;
-        r4 = r9 * 2 + (sp04 * -2 + 1) * r10;
-        r2 = sp04 * r10 / r9;
-        while (sp00 <= r2) {
-            if (sp1c + 0xa8 > sp14 + sp04) {
-                if (sp18 + 0xf8 > sp10 + sp00) {
+        delta_x = 0;
+        delta_y = dd_y;
+        r4 = delta_yy * 2 + (delta_y * -2 + 1) * delta_xx;
+        xy49 = delta_y * delta_xx / delta_yy; // y * 9 / 4
+        while (delta_x <= xy49) {
+            if (scroll_y + 0xa8 > pos_y + delta_y) {
+                if (scroll_x + 0xf8 > pos_x + delta_x) {
                     r7 |= 0x10;
                 }
-                if (sp18 < sp10 + 8 - sp00) {
+                if (scroll_x < pos_x + 8 - delta_x) {
                     r7 |= 0x20;
                 }
             }
-            if (sp1c < (sp14 - sp04) + 8) {
-                if (sp18 + 0xf8 > sp10 + sp00) {
+            if (scroll_y < pos_y - delta_y + 8) {
+                if (scroll_x + 0xf8 > pos_x + delta_x) {
                     r7 |= 0x40;
                 }
-                if (sp18 < sp10 + 8 - sp00) {
+                if (scroll_x < pos_x + 8 - delta_x) {
                     r7 |= 0x80;
                 }
             }
 
             if (r4 > 0) {
-                r4 += r9 * (6 + (4 * sp00)) + (sp04 * -4 + 4) * r10;
-                sp04--;
-                r2 = sp04 * r10 / r9;
+                r4 += delta_yy * (6 + (4 * delta_x)) + (delta_y * -4 + 4) * delta_xx;
+                delta_y--;
+                xy49 = delta_y * delta_xx / delta_yy;
             } else {
-                r4 += r9 * (6 + (4 * sp00));
+                r4 += delta_yy * (6 + (4 * delta_x));
             }
-            sp00++;
+            delta_x++;
         }
     } while (r7 != 0);
 
-    return sp08;
+    return dd_x;
 }
 
 void UpdateIsDiggingCave(void) {
@@ -592,7 +593,7 @@ void ClearTileMaps(void) {
     MemClear(&gMapDataTopSpecial, 0x8000);
 }
 
-bool32 sub_080806BC(u32 x, u32 y, u32 direction, u32 warp_types) {
+bool32 DoApplicableTransition(u32 x, u32 y, u32 direction, u32 warp_types) {
     static bool32 (*const gUnk_0811E7AC[])(const Transition*, u32, u32, u32) = {
         IsPosInBorderTransitionRegion,
         IsPosInTransitionRect,
@@ -612,12 +613,12 @@ bool32 sub_080806BC(u32 x, u32 y, u32 direction, u32 warp_types) {
     return 0;
 }
 
-const Transition* sub_08080734(u32 param_1, u32 param_2) {
+const Transition* FindApplicableAreaTransition(u32 pos_x, u32 pos_y) {
     const Transition* transition = gArea.pCurrentRoomInfo->exits;
     u32 warp_types = 0xa;
     while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
         if (((1 << transition->warp_type) & warp_types) != 0 &&
-            IsPosInTransitionRect(transition, param_1, param_2, 0)) {
+            IsPosInTransitionRect(transition, pos_x, pos_y, 0)) {
             return transition;
         }
         transition++;
@@ -688,24 +689,24 @@ bool32 IsPosInTransitionRect(const Transition* transition, u32 pos_x, u32 pos_y,
 }
 
 void DoExitTransition(const Transition* data) {
-    static void (*const gUnk_0811E7C4[])(s32) = {
-        sub_080808D8,
-        sub_080808E4,
-        sub_08080904,
-        sub_08080910,
+    static void (*const sSetRoomTransitionTypes[])(s32) = {
+        SetRoomTransitionTypeForAreaWarp,
+        SetRoomTransitionTypeForBorderWarp,
+        SetRoomTransitionTypeForArea2Warp,
+        SetRoomTransitionTypeForBorder2Warp,
     };
     PlayerRoomStatus* status;
     gRoomTransition.transitioningOut = 1;
     status = &gRoomTransition.player_status;
-    if ((u16)data->endX <= 0x3ff) {
+    if (data->endX <= 0x3ff) {
         status->start_pos_x = data->endX;
     } else {
-        status->start_pos_x = (gRoomControls.camera_target)->x.HALF.HI | 0x8000;
+        status->start_pos_x = gRoomControls.camera_target->x.HALF.HI | 0x8000;
     }
-    if ((u16)data->endY <= 0x3ff) {
+    if (data->endY <= 0x3ff) {
         status->start_pos_y = data->endY;
     } else {
-        status->start_pos_y = (gRoomControls.camera_target)->y.HALF.HI | 0x8000;
+        status->start_pos_y = gRoomControls.camera_target->y.HALF.HI | 0x8000;
     }
     status->area_next = data->area;
     status->room_next = data->room;
@@ -715,14 +716,14 @@ void DoExitTransition(const Transition* data) {
     if (data->transitionSFX != SFX_NONE) {
         SoundReq(data->transitionSFX);
     }
-    gUnk_0811E7C4[data->warp_type](data->shape);
+    sSetRoomTransitionTypes[data->warp_type](data->shape);
 }
 
-void sub_080808D8(s32 param_1) {
+void SetRoomTransitionTypeForAreaWarp(s32 param_1) {
     gRoomTransition.type = TRANSITION_DEFAULT;
 }
 
-void sub_080808E4(s32 param_1) {
+void SetRoomTransitionTypeForBorderWarp(s32 param_1) {
     if (CheckAreaOverworld(gRoomTransition.player_status.area_next)) {
         gRoomTransition.type = TRANSITION_DEFAULT;
     } else {
@@ -730,15 +731,15 @@ void sub_080808E4(s32 param_1) {
     }
 }
 
-void sub_08080904(s32 param_1) {
+void SetRoomTransitionTypeForArea2Warp(s32 param_1) {
     gRoomTransition.type = TRANSITION_CUT;
 }
 
-void sub_08080910(s32 param_1) {
+void SetRoomTransitionTypeForBorder2Warp(s32 param_1) {
     gRoomTransition.type = TRANSITION_CUT;
 }
 
-void sub_0808091C(const Transition* screenTransition, u32 transitionType) {
+void DoExitTransitionWithType(const Transition* screenTransition, u32 transitionType) {
     DoExitTransition(screenTransition);
     gRoomTransition.type = transitionType;
 }
@@ -864,7 +865,7 @@ void UpdateDoorTransition() {
                 case ACT_TILE_241:
                 case ACT_TILE_40:
                 case ACT_TILE_41:
-                    sub_080806BC(x, y, 0xff, 10);
+                    DoApplicableTransition(x, y, 0xff, 10);
                     break;
             }
     }

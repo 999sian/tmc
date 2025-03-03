@@ -355,7 +355,7 @@ void MiscManager_TypeA(MiscManager* this) {
 void MiscManager_TypeB(MiscManager* this) {
     if (sub_080593CC(this)) {
         if (++super->timer >= 8) {
-            sub_080806BC(this->x - gRoomControls.origin_x, this->y - gRoomControls.origin_y, 0xFF, 0xA);
+            DoApplicableTransition(this->x - gRoomControls.origin_x, this->y - gRoomControls.origin_y, 0xFF, 0xA);
         }
     } else {
         super->timer = 0;

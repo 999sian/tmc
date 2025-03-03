@@ -62,7 +62,7 @@ void NPC4E_ChangeInteractableHitbox(Entity* this, ScriptExecutionContext* contex
 }
 
 void NPC4E_DoScreenTransition(Entity* this, ScriptExecutionContext* context) {
-    sub_0808091C(gNpc4ETransitions[context->intVariable], gNpc4ETransitionTypes[context->intVariable]);
+    DoExitTransitionWithType(gNpc4ETransitions[context->intVariable], gNpc4ETransitionTypes[context->intVariable]);
 }
 
 u8 NPC4E_GetKinstoneId(Entity* this) {

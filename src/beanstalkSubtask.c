@@ -63,7 +63,7 @@ extern void sub_0804B388(u32 a1, u32 a2);
 extern u32 sub_080A7CFC(u32 a1, u32 tmp); // TODO does this really have a second param?
 extern void OpenSmallChest(u32 pos, u32 layer);
 extern bool32 sub_08079778();
-extern Transition* sub_08080734(u32, u32);
+extern Transition* FindApplicableAreaTransition(u32, u32);
 
 extern const s16 gUnk_080B4490[];
 extern const s16 gUnk_080B4468[];
@@ -206,7 +206,7 @@ u32 UpdatePlayerCollision(void) {
                                           gPlayerEntity.base.collisionLayer) == COLLISION_DATA_255) {
                 if ((((gPlayerState.flags & (PL_FLAGS10000 | PL_FLAGS2)) != 0) ||
                      ((gPlayerState.sword_state & 0x10) != 0)) ||
-                    ((sub_080806BC(gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x,
+                    ((DoApplicableTransition(gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x,
                                    gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y, index, 5) == 0 &&
                       (((gPlayerState.heldObject != 0 || ((gPlayerState.gustJarState & 0xf) != 0)) ||
                         (sub_0807BD14(&gPlayerEntity.base, index) == 0)))))) {
@@ -269,7 +269,7 @@ u32 UpdatePlayerCollision(void) {
             }
 
             ptr1 = &gUnk_080B4478[gPlayerEntity.base.animationState & 6];
-            transition = sub_08080734((gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x) + ptr1[0],
+            transition = FindApplicableAreaTransition((gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x) + ptr1[0],
                                       (gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y) + ptr1[1]);
             if (transition == NULL) {
                 return 0;

@@ -251,7 +251,7 @@ void GyorgBossObject_FightEnd(GyorgBossObjectEntity* this) {
         sub_080A1E54(this);
         if (--super->subtimer == 0) {
             SetFlag(0x7B);
-            sub_0808091C(&gUnk_0813ABD0, 8);
+            DoExitTransitionWithType(&gUnk_0813ABD0, 8);
             return;
         }
         if (super->subtimer == 0x3C) {

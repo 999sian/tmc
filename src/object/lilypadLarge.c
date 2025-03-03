@@ -498,7 +498,7 @@ void sub_08085D60(LilypadLargeEntity* this) {
                     tmpY = gUnk_08120638[tmp + 1];
                     if (GetCollisionDataRelativeTo(super, tmpX, tmpY) == COLLISION_DATA_255) {
 
-                        if (sub_080806BC((super->x.HALF.HI - gRoomControls.origin_x) + tmpX,
+                        if (DoApplicableTransition((super->x.HALF.HI - gRoomControls.origin_x) + tmpX,
                                          (super->y.HALF.HI - gRoomControls.origin_y) + tmpY, r4, 5) == 0) {
                             if (sub_0807BD14(&gPlayerEntity.base, r4 >> 3) != 0) {
                                 super->direction = r4;
