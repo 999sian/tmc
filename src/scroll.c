@@ -55,8 +55,8 @@ u32 sub_08080278();
 void sub_08080C80(MapDataDefinition*);
 void sub_08080368();
 void FillActTileForLayer(MapLayer* mapLayer);
-bool32 sub_08080794(const Transition* transition, u32 param_2, u32 param_3, u32 param_4);
-bool32 sub_08080808(const Transition* transition, u32 param_2, u32 param_3, u32 param_4);
+bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 param_2, u32 param_3, u32 direction);
+bool32 IsPosInTransitionRect(const Transition* transition, u32 param_2, u32 param_3, u32 unused);
 void sub_080808D8(s32);
 void sub_080808E4(s32);
 void sub_08080904(s32);
@@ -592,37 +592,31 @@ void ClearTileMaps(void) {
     MemClear(&gMapDataTopSpecial, 0x8000);
 }
 
-bool32 sub_080806BC(u32 x, u32 y, u32 param_3, u32 param_4) {
+bool32 sub_080806BC(u32 x, u32 y, u32 direction, u32 warp_types) {
     static bool32 (*const gUnk_0811E7AC[])(const Transition*, u32, u32, u32) = {
-        sub_08080794,
-        sub_08080808,
-        sub_08080794,
-        sub_08080808,
+        IsPosInBorderTransitionRegion,
+        IsPosInTransitionRect,
+        IsPosInBorderTransitionRegion,
+        IsPosInTransitionRect,
     };
-    u32 uVar1;
-    s32 iVar2;
-    const Transition* puVar3;
 
-    puVar3 = (gArea.pCurrentRoomInfo->exits);
-    while (*(u16*)puVar3 != 0xffff) {
-        u32 uVar3 = *(u16*)puVar3;
-        if ((((1 << uVar3) & param_4) != 0) && (gUnk_0811E7AC[uVar3](puVar3, x, y, param_3))) {
-            DoExitTransition((const Transition*)puVar3);
+    const Transition* transition = gArea.pCurrentRoomInfo->exits;
+    while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
+        if (((1 << transition->warp_type) & warp_types) != 0 &&
+            gUnk_0811E7AC[transition->warp_type](transition, x, y, direction)) {
+            DoExitTransition(transition);
             return 1;
         }
-        puVar3++;
+        transition++;
     }
     return 0;
 }
 
 const Transition* sub_08080734(u32 param_1, u32 param_2) {
-    u32 uVar4;
-    const Transition* transition;
-
-    transition = gArea.pCurrentRoomInfo->exits;
-    uVar4 = 0xa;
-    while (*(u16*)transition != 0xffff) {
-        if ((((1 << *(u16*)transition) & uVar4) != 0) && sub_08080808(transition, param_1, param_2, 0)) {
+    const Transition* transition = gArea.pCurrentRoomInfo->exits;
+    u32 warp_types = 0xa;
+    while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
+        if (((1 << transition->warp_type) & warp_types) != 0 && IsPosInTransitionRect(transition, param_1, param_2, 0)) {
             return transition;
         }
         transition++;
@@ -630,35 +624,35 @@ const Transition* sub_08080734(u32 param_1, u32 param_2) {
     return NULL;
 }
 
-bool32 sub_08080794(const Transition* transition, u32 x, u32 y, u32 param_4) {
+bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 pos_x, u32 pos_y, u32 direction) {
     u32 shapeBitmask;
 
-    switch (param_4) {
+    switch (direction) {
         default:
             return 0;
         case 0:
-            if (gRoomControls.width / 2 < x) {
+            if (gRoomControls.width / 2 < pos_x) {
                 shapeBitmask = 2;
             } else {
                 shapeBitmask = 1;
             }
             break;
         case 1:
-            if (gRoomControls.height / 2 < y) {
+            if (gRoomControls.height / 2 < pos_y) {
                 shapeBitmask = 8;
             } else {
                 shapeBitmask = 4;
             }
             break;
         case 2:
-            if (gRoomControls.width / 2 < x) {
+            if (gRoomControls.width / 2 < pos_x) {
                 shapeBitmask = 0x20;
             } else {
                 shapeBitmask = 0x10;
             }
             break;
         case 3:
-            if (gRoomControls.height / 2 < y) {
+            if (gRoomControls.height / 2 < pos_y) {
                 shapeBitmask = 0x80;
             } else {
                 shapeBitmask = 0x40;
@@ -672,27 +666,24 @@ bool32 sub_08080794(const Transition* transition, u32 x, u32 y, u32 param_4) {
     return FALSE;
 }
 
-bool32 sub_08080808(const Transition* param_1, u32 x, u32 y, u32 param_4) {
-    static const u8 gUnk_0811E7BC[] = { 6, 6, 6, 14, 14, 6, 22, 6 };
-    const u8* ptr;
-    u32 temp;
-    u32 temp2;
-    u32 temp3;
-    u32 temp4;
-    ptr = &gUnk_0811E7BC[param_1->shape * 2];
-    temp = ptr[0];
-    temp2 = x - param_1->startX;
-    if ((temp2 + temp <= ptr[0] * 2)) {
-        temp3 = ptr[1];
-        temp4 = y - param_1->startY;
-        if (temp4 + temp3 <= ptr[1] * 2) {
+bool32 IsPosInTransitionRect(const Transition* transition, u32 pos_x, u32 pos_y, u32 unused) {
+    static const u8 gShapeDimensions[] = { 6, 6, 6, 14, 14, 6, 22, 6 };
+    const u8* shape;
+    u32 shape_x;
+    u32 delta_x;
+    u32 shape_y;
+    u32 delta_y;
+    shape = &gShapeDimensions[transition->shape * 2];
+    shape_x = shape[0];
+    delta_x = pos_x - transition->startX;
+    if (delta_x + shape_x <= shape_x * 2) {
+        shape_y = shape[1];
+        delta_y = pos_y - transition->startY;
+        if (delta_y + shape_y <= shape_y * 2) {
             return TRUE;
-        } else {
-            return FALSE;
         }
-    } else {
-        return FALSE;
     }
+    return FALSE;
 }
 
 void DoExitTransition(const Transition* data) {
