@@ -55,8 +55,8 @@ u32 sub_08080278();
 void sub_08080C80(MapDataDefinition*);
 void sub_08080368();
 void FillActTileForLayer(MapLayer* mapLayer);
-bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 param_2, u32 param_3, u32 direction);
-bool32 IsPosInTransitionRect(const Transition* transition, u32 param_2, u32 param_3, u32 unused);
+bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 param_2, u32 param_3, u32 facing_direction);
+bool32 IsPosInTransitionRect(const Transition* transition, u32 param_2, u32 param_3, u32 facing_direction);
 void sub_080808D8(s32);
 void sub_080808E4(s32);
 void sub_08080904(s32);
@@ -616,7 +616,8 @@ const Transition* sub_08080734(u32 param_1, u32 param_2) {
     const Transition* transition = gArea.pCurrentRoomInfo->exits;
     u32 warp_types = 0xa;
     while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
-        if (((1 << transition->warp_type) & warp_types) != 0 && IsPosInTransitionRect(transition, param_1, param_2, 0)) {
+        if (((1 << transition->warp_type) & warp_types) != 0 &&
+            IsPosInTransitionRect(transition, param_1, param_2, 0)) {
             return transition;
         }
         transition++;
@@ -624,38 +625,38 @@ const Transition* sub_08080734(u32 param_1, u32 param_2) {
     return NULL;
 }
 
-bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 pos_x, u32 pos_y, u32 direction) {
+bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 pos_x, u32 pos_y, u32 facing_direction) {
     u32 shapeBitmask;
 
-    switch (direction) {
+    switch (facing_direction) {
         default:
-            return 0;
+            return FALSE;
         case 0:
             if (gRoomControls.width / 2 < pos_x) {
-                shapeBitmask = 2;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_NORTH_EAST;
             } else {
-                shapeBitmask = 1;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_NORTH_WEST;
             }
             break;
         case 1:
             if (gRoomControls.height / 2 < pos_y) {
-                shapeBitmask = 8;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_EAST_SOUTH;
             } else {
-                shapeBitmask = 4;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_EAST_NORTH;
             }
             break;
         case 2:
             if (gRoomControls.width / 2 < pos_x) {
-                shapeBitmask = 0x20;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_SOUTH_EAST;
             } else {
-                shapeBitmask = 0x10;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_SOUTH_WEST;
             }
             break;
         case 3:
             if (gRoomControls.height / 2 < pos_y) {
-                shapeBitmask = 0x80;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_WEST_SOUTH;
             } else {
-                shapeBitmask = 0x40;
+                shapeBitmask = TRANSITION_SHAPE_BORDER_WEST_NORTH;
             }
             break;
     }
@@ -666,7 +667,7 @@ bool32 IsPosInBorderTransitionRegion(const Transition* transition, u32 pos_x, u3
     return FALSE;
 }
 
-bool32 IsPosInTransitionRect(const Transition* transition, u32 pos_x, u32 pos_y, u32 unused) {
+bool32 IsPosInTransitionRect(const Transition* transition, u32 pos_x, u32 pos_y, u32 facing_direction) {
     static const u8 gShapeDimensions[] = { 6, 6, 6, 14, 14, 6, 22, 6 };
     const u8* shape;
     u32 shape_x;
