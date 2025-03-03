@@ -36,7 +36,12 @@ void FrameObjListsAsset::convertToHumanReadable(const std::vector<char>& baserom
         fmt::print(file.get(), "\t.4byte {:#x}\n", pointer);
     }
 
-    u32 max_second_level = *std::max_element(second_level.begin(), second_level.end());
+    auto max_second_level_it = std::max_element(second_level.begin(), second_level.end());
+    if (max_second_level_it == second_level.end()) {
+        fmt::print(stderr, "no second level (unreachable)");
+        exit(1);
+    }
+    u32 max_second_level = *max_second_level_it;
 
     while (reader.cursor < size) {
         if (static_cast<u32>(reader.cursor) > max_second_level) {
