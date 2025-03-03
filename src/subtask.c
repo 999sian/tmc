@@ -188,7 +188,7 @@ void Subtask_Exit(void) {
 }
 
 // Used by Subtask_FastTravel and EnterPortalSubtask?
-void sub_080A71F4(const ScreenTransitionData* exitTransition) {
+void sub_080A71F4(const Transition* exitTransition) {
     if (exitTransition != NULL) {
         DoExitTransition(exitTransition);
     }

@@ -17,7 +17,7 @@ void sub_080A6E70(void);
 u32 sub_080A6D74(u32);
 void sub_080A6EE0(u32 param_1);
 
-extern const ScreenTransitionData gUnk_08128024[];
+extern const Transition gUnk_08128024[];
 
 void Subtask_FastTravel(void) {
     FlushSprites();
@@ -179,10 +179,10 @@ void sub_080A6EE0(u32 param_1) {
     u32 x;
     u32 y;
     RoomHeader* roomHeader;
-    const ScreenTransitionData* ptr = &gUnk_08128024[param_1];
+    const Transition* ptr = &gUnk_08128024[param_1];
 
-    x = (u16)ptr->playerXPos;
-    y = (u16)ptr->playerYPos;
+    x = (u16)ptr->endX;
+    y = (u16)ptr->endY;
     roomHeader = &gAreaRoomHeaders[ptr->area][ptr->room];
     x += roomHeader->map_x;
     y += roomHeader->map_y;

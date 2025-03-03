@@ -95,7 +95,7 @@ u32 sub_080A6F40();
 s32 sub_080A69E0();
 const OverworldLocation* GetOverworldLocation(u32 x, u32 y);
 void sub_080A6498(void);
-void sub_080A71F4(const ScreenTransitionData* exitTransition);
+void sub_080A71F4(const Transition* exitTransition);
 void sub_080A6F6C(u32 textIndexOrPtr);
 
 typedef struct {

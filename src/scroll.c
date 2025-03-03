@@ -607,7 +607,7 @@ bool32 sub_080806BC(u32 x, u32 y, u32 param_3, u32 param_4) {
     while (*(u16*)puVar3 != 0xffff) {
         u32 uVar3 = *(u16*)puVar3;
         if ((((1 << uVar3) & param_4) != 0) && (gUnk_0811E7AC[uVar3](puVar3, x, y, param_3))) {
-            DoExitTransition((const ScreenTransitionData*)puVar3);
+            DoExitTransition((const Transition*)puVar3);
             return 1;
         }
         puVar3++;
@@ -616,18 +616,16 @@ bool32 sub_080806BC(u32 x, u32 y, u32 param_3, u32 param_4) {
 }
 
 const Transition* sub_08080734(u32 param_1, u32 param_2) {
-    u32 warpType;
-    s32 iVar2;
     u32 uVar4;
-    const Transition* puVar3;
+    const Transition* transition;
 
-    puVar3 = (gArea.pCurrentRoomInfo->exits);
-    uVar4 = 10;
-    while (*(u16*)puVar3 != 0xffff) {
-        if ((((1 << *(u16*)puVar3) & uVar4) != 0) && (sub_08080808(puVar3, param_1, param_2, 0))) {
-            return puVar3;
+    transition = gArea.pCurrentRoomInfo->exits;
+    uVar4 = 0xa;
+    while (*(u16*)transition != 0xffff) {
+        if ((((1 << *(u16*)transition) & uVar4) != 0) && sub_08080808(transition, param_1, param_2, 0)) {
+            return transition;
         }
-        puVar3++;
+        transition++;
     }
     return NULL;
 }
@@ -697,7 +695,7 @@ bool32 sub_08080808(const Transition* param_1, u32 x, u32 y, u32 param_4) {
     }
 }
 
-void DoExitTransition(const ScreenTransitionData* data) {
+void DoExitTransition(const Transition* data) {
     static void (*const gUnk_0811E7C4[])(s32) = {
         sub_080808D8,
         sub_080808E4,
@@ -707,25 +705,25 @@ void DoExitTransition(const ScreenTransitionData* data) {
     PlayerRoomStatus* status;
     gRoomTransition.transitioningOut = 1;
     status = &gRoomTransition.player_status;
-    if ((u16)data->playerXPos <= 0x3ff) {
-        status->start_pos_x = data->playerXPos;
+    if ((u16)data->endX <= 0x3ff) {
+        status->start_pos_x = data->endX;
     } else {
         status->start_pos_x = (gRoomControls.camera_target)->x.HALF.HI | 0x8000;
     }
-    if ((u16)data->playerYPos <= 0x3ff) {
-        status->start_pos_y = data->playerYPos;
+    if ((u16)data->endY <= 0x3ff) {
+        status->start_pos_y = data->endY;
     } else {
         status->start_pos_y = (gRoomControls.camera_target)->y.HALF.HI | 0x8000;
     }
     status->area_next = data->area;
     status->room_next = data->room;
-    status->layer = data->playerLayer;
-    status->spawn_type = data->spawn_type;
-    status->start_anim = data->playerState;
+    status->layer = data->layer;
+    status->spawn_type = data->transition_type;
+    status->start_anim = data->facing_direction;
     if (data->transitionSFX != SFX_NONE) {
         SoundReq(data->transitionSFX);
     }
-    gUnk_0811E7C4[data->type](data->field_0xa);
+    gUnk_0811E7C4[data->warp_type](data->shape);
 }
 
 void sub_080808D8(s32 param_1) {
@@ -748,7 +746,7 @@ void sub_08080910(s32 param_1) {
     gRoomTransition.type = TRANSITION_CUT;
 }
 
-void sub_0808091C(const ScreenTransitionData* screenTransition, u32 transitionType) {
+void sub_0808091C(const Transition* screenTransition, u32 transitionType) {
     DoExitTransition(screenTransition);
     gRoomTransition.type = transitionType;
 }

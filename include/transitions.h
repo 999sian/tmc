@@ -7,7 +7,9 @@
 typedef enum {
     WARP_TYPE_BORDER,
     WARP_TYPE_AREA,
-    WARP_TYPE_END_OF_LIST = -1,
+    WARP_TYPE_UNK2,
+    WARP_TYPE_UNK3,
+    WARP_TYPE_END_OF_LIST = 0xffff,
 } WarpType;
 
 typedef enum {
@@ -27,8 +29,7 @@ typedef enum {
 } TransitionType;
 
 typedef struct Transition {
-    WarpType warp_type : 8;
-    u8 subtype;
+    u16 warp_type; /**< @see WarpType */
     u16 startX;
     u16 startY;
     u16 endX;
@@ -36,11 +37,10 @@ typedef struct Transition {
     u8 shape;
     u8 area;
     RoomID room : 8;
-    u8 height;
+    u8 layer;
     TransitionType transition_type : 8;
     u8 facing_direction; // 0-4
-    u8 unk0;
-    u8 unk1;
+    u16 transitionSFX;
     u8 unk2;
     u8 unk3;
 } Transition;

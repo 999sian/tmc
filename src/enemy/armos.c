@@ -18,7 +18,7 @@ typedef struct {
     /*0x68*/ u8 unk_68[0x10];
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
-    /*0x7c*/ ScreenTransitionData* unk_7c;
+    /*0x7c*/ Transition* unk_7c;
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
@@ -134,7 +134,7 @@ void sub_0803026C(ArmosEntity* this) {
         this->unk_84 = (0x47d >> this->unk_80) & 1;
     }
     if (super->type2 != 0) {
-        this->unk_7c = (ScreenTransitionData*)GetCurrentRoomProperty(super->type2);
+        this->unk_7c = (Transition*)GetCurrentRoomProperty(super->type2);
     }
     this->unk_81 = super->health;
     sub_08030580(this);
