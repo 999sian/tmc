@@ -186,7 +186,7 @@ s32 sub_0805BC04(void) {
     return iVar1;
 }
 
-void sub_0805BC4C() {
+void UnDarkRoom() {
     if (gArea.lightType != 0) {
         gArea.lightType = 0;
         gScreen.lcd.displayControl &= ~(DISPCNT_BG3_ON | DISPCNT_WIN0_ON);

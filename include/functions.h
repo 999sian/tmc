@@ -85,7 +85,6 @@ extern void sub_080580B0(u32);
 extern void sub_08058324(u32);
 extern void sub_08059278(void);
 extern void LoadStaticBackground(u32);
-extern void sub_0805BC4C(void);
 extern void sub_0805EC60(Entity*);
 extern void InitPlayerMacro(PlayerMacroEntry*);
 extern u32* sub_0805F25C(u32);

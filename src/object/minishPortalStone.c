@@ -4,9 +4,10 @@
  *
  * @brief Minish Portal Stone object
  */
-#include "functions.h"
 #include "object.h"
 #include "screen.h"
+#include "manager/lightManager.h"
+#include "functions.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -42,7 +43,7 @@ void MinishPortalStone_Init(MinishPortalStoneEntity* this) {
         super->action = 4;
         sub_08097CFC(this);
     } else {
-        sub_0805BC4C();
+        UnDarkRoom();
     }
 }
 

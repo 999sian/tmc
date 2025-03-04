@@ -4,12 +4,13 @@
  *
  * @brief Chest Spawner object
  */
-#include "functions.h"
 #include "item.h"
 #include "object.h"
 #include "screen.h"
-#include "structures.h"
 #include "tiles.h"
+#include "manager/lightManager.h"
+#include "structures.h"
+#include "functions.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -104,7 +105,7 @@ void ChestSpawner_Type2Action1(ChestSpawnerEntity* this) {
         super->spriteSettings.draw = 1;
         super->spriteRendering.alphaBlend = 1;
         RequestPriorityDuration(super, 30);
-        sub_0805BC4C();
+        UnDarkRoom();
     }
 }
 

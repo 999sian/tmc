@@ -8,4 +8,6 @@ typedef struct {
     s32 unk20;
 } LightManager;
 
+extern void UnDarkRoom(void);
+
 #endif // LIGHTMANAGER_H

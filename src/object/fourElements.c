@@ -5,11 +5,12 @@
  * @brief Four Elements object
  */
 #include "collision.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "message.h"
 #include "object.h"
 #include "screen.h"
+#include "manager/lightManager.h"
+#include "functions.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -63,7 +64,7 @@ void FourElements_Init(FourElementsEntity* this) {
     StartPlayerScript(script_PlayerGetElement);
     gScreen.controls.layerFXControl = 0x640;
     gScreen.controls.alphaBlend = 0x1000;
-    sub_0805BC4C();
+    UnDarkRoom();
     elementsBackground = CreateObjectWithParent(super, ELEMENTS_BACKGROUND, super->type - 0x40, 0);
     if (elementsBackground != NULL) {
         elementsBackground->parent = super;

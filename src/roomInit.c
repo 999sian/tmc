@@ -2,12 +2,10 @@
 #include "common.h"
 #include "effects.h"
 #include "flags.h"
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "kinstone.h"
 #include "main.h"
-#include "npc.h"
 #include "object.h"
 #include "save.h"
 #include "screen.h"
@@ -15,6 +13,8 @@
 #include "sound.h"
 #include "tiles.h"
 #include "windcrest.h"
+#include "manager/lightManager.h"
+#include "functions.h"
 
 extern u32 sub_08060354(void);
 extern void sub_08057E64(void);
@@ -861,7 +861,7 @@ void sub_StateChange_Dojos_Grimblade(void) {
     if (!CheckLocalFlag(3)) {
         LoadRoomEntityList(&gUnk_080D827C);
     } else {
-        sub_0805BC4C();
+        UnDarkRoom();
         SetTileType(TILE_TYPE_118, TILE_POS(2, 2), LAYER_TOP);
         SetTileType(TILE_TYPE_118, TILE_POS(12, 2), LAYER_TOP);
     }
