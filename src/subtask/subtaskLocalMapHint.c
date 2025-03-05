@@ -7,10 +7,12 @@
 #include "menu.h"
 #include "subtask.h"
 #include "kinstone.h"
-#include "functions.h"
+#include "player.h"
 #include "screen.h"
 #include "sound.h"
 #include "common.h"
+#include "affine.h"
+#include "structures.h"
 
 void Subtask_LocalMapHint() {
     extern void (*const gUnk_08128F1C[])(void);

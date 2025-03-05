@@ -6,8 +6,11 @@
  */
 #include "enemy/wizzrobe.h"
 #include "enemy.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "effects.h"
+#include "player.h"
 
 extern void (*const WizzrobeIce_Functions[])(WizzrobeEntity*);
 extern void (*const WizzrobeIce_Actions[])(WizzrobeEntity*);

@@ -5,7 +5,13 @@
  * @brief Sitting Person NPC
  */
 #include "npc.h"
-#include "functions.h"
+#include "save.h"
+#include "flags.h"
+#include "asm.h"
+#include "message.h"
+#include "script.h"
+#include "physics.h"
+#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;

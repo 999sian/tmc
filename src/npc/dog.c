@@ -6,10 +6,17 @@
  */
 #include "collision.h"
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
 #include "npc.h"
 #include "tiles.h"
+#include "sound.h"
+#include "flags.h"
+#include "save.h"
+#include "message.h"
+#include "script.h"
+#include "asm.h"
+#include "physics.h"
+#include "manager.h"
 
 typedef struct {
     /*0x00*/ Entity base;

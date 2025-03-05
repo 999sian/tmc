@@ -4,16 +4,19 @@
  *
  * @brief Looked Door object
  */
+#include "object/lockedDoor.h"
 #include "asm.h"
-#include "common.h"
+#include "room.h"
 #include "effects.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "game.h"
 #include "hitbox.h"
 #include "sound.h"
 #include "tiles.h"
+#include "vram.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -8,7 +8,7 @@
 #include "player.h"
 #include "physics.h"
 
-extern void sub_0803C0AC(Entity*);
+extern void StealRupees(Entity*);
 
 extern const Hitbox* const gUnk_08129998[];
 
@@ -21,7 +21,7 @@ void KeatonDagger(Entity* this) {
     parent = this->parent;
     if (((parent == NULL) || (parent->health == 0)) || (parent->next == NULL)) {
         if (((this->contactFlags & CONTACT_NOW) != 0) && (this->contactedEntity == &gPlayerEntity.base)) {
-            sub_0803C0AC(this);
+            StealRupees(this);
         }
         DeleteEntity(this);
     } else {

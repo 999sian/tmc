@@ -2,13 +2,16 @@
 #include "enemy.h"
 #include "definitions.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
 #include "object/deathFx.h"
 #include "projectile.h"
 #include "save.h"
+#include "vram.h"
 
-extern void EnemyDisableRespawn(Entity*);
 extern void ReplaceMonitoredEntity(Entity*, Entity*);
 
 extern EnemyDefinition gEnemyDefinitions[];
@@ -210,7 +213,7 @@ void EnemyCreateDeathFX(Enemy* parent, u32 parentId, u32 fixedItem) {
     } else {
         int tmp = parent->base.gustJarState & 2;
         if (tmp == 0) {
-            EnemyDisableRespawn(&(parent->base));
+            EnemyDisableRespawn((Enemy*)&(parent->base));
             gSave.enemies_killed++;
             parent->base.gustJarState |= 2;
             parent->base.timer = 255;

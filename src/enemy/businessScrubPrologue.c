@@ -4,9 +4,13 @@
  *
  * @brief Business Scrub Prologue enemy
  */
+#include "object/cutsceneMiscObject.h"
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
+#include "script.h"
+#include "physics.h"
+#include "room.h"
+#include "player.h"
 
 typedef struct {
     Entity base;

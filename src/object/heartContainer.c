@@ -10,6 +10,7 @@
 #include "functions.h"
 #include "item.h"
 #include "sound.h"
+#include "scroll.h"
 
 typedef struct {
     /*0x00*/ Entity base;

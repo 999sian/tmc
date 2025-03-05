@@ -9,6 +9,7 @@
 #include "manager/moveableObjectManager.h"
 #include "flags.h"
 #include "room.h"
+#include "object.h"
 
 void MoveableObjectManager_Main(MoveableObjectManager* this) {
     Entity* object = CreateObject(super->timer, super->type, super->type2);

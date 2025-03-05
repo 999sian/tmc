@@ -5,9 +5,16 @@
  * @brief Minish Portal Stone object
  */
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
+#include "beanstalkSubtask.h"
 #include "manager/lightManager.h"
-#include "functions.h"
+#include "effects.h"
+#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -68,7 +75,7 @@ void MinishPortalStone_Action3(MinishPortalStoneEntity* this) {
     u32 tmp;
     SetPriorityTimer(30);
     sub_0800445C(super);
-    CreateMagicSparkles(super->x.HALF.HI, super->y.HALF.HI, super->collisionLayer);
+    CreateMagicSparklesFxAt(super->x.HALF.HI, super->y.HALF.HI, super->collisionLayer);
     if (--super->timer == 0) {
         super->timer = 8;
         tmp = ++super->subtimer;

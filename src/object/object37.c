@@ -4,8 +4,10 @@
  *
  * @brief Object37 object
  */
-#include "entity.h"
-#include "functions.h"
+#include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
 #include "item.h"
 #include "save.h"
 

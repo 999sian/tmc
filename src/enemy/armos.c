@@ -4,14 +4,17 @@
  *
  * @brief Armos enemy
  */
+#include "enemy/armos.h"
 #include "collision.h"
 #include "common.h"
 #include "enemy.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "global.h"
 #include "hitbox.h"
 #include "tiles.h"
+#include "room.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -68,11 +71,11 @@ void sub_080300E8(void) {
     }
 }
 
-void sub_08030118(u32 armosId) {
+void Armos_SetFlagFromTransition(u32 armosId) {
     if (((gRoomTransition.armos_data.field_0xac >> armosId) & 1) != 0) {
-        SetLocalFlagByBank(FLAG_BANK_3, armosId + 0x67);
+        SetLocalFlagByBank(FLAG_BANK_3, armosId + AMOS_00_00);
     } else {
-        ClearLocalFlagByBank(FLAG_BANK_3, armosId + 0x67);
+        ClearLocalFlagByBank(FLAG_BANK_3, armosId + AMOS_00_00);
     }
 }
 

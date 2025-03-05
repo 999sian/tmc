@@ -2,12 +2,13 @@
 #include "asm.h"
 #include "color.h"
 #include "common.h"
-#include "functions.h"
+#include "structures.h"
 #include "physics.h"
 #include "player.h"
 #include "playeritem.h"
 #include "room.h"
 #include "sound.h"
+#include "vram.h"
 
 const u8 gSpriteSortAboveTable[];
 const u8 gSpriteSortBelowTable[];

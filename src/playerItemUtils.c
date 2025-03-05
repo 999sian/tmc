@@ -1,10 +1,10 @@
 #include "common.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
+#include "room.h"
 #include "player.h"
 #include "save.h"
 #include "sound.h"
@@ -12,7 +12,6 @@
 static Entity* GiveItemWithCutscene(u32, u32, u32);
 static void InitTileMessage(u32, u32);
 
-Entity* CreateLinkAnimation(Entity*, u32, u32);
 void SetPlayerItemGetState(Entity*, u32, u32);
 
 void CreateItemEntity(u32 type, u32 type2, u32 delay) {

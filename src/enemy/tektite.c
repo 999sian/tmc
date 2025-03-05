@@ -6,7 +6,6 @@
  */
 #include "collision.h"
 #include "enemy.h"
-#include "functions.h"
 
 typedef struct {
     /*0x00*/ Entity base;

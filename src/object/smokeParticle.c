@@ -4,8 +4,11 @@
  *
  * @brief Smoke Particle object
  */
-#include "functions.h"
+#include "collision.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "room.h"
 #include "tiles.h"
 
 void SmokeParticle_Init(Entity*);

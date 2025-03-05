@@ -10,4 +10,6 @@ typedef struct {
     u8 gfxGroup2;
 } HyruleTownTileSetManager;
 
+extern void TryLoadPrologueHyruleTown(void);
+
 #endif // HYRULETOWNTILESETMANAGER_H

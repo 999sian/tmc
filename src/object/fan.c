@@ -7,10 +7,12 @@
 #include "collision.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "asm.h"
 #include "object.h"
-#include "player.h"
 #include "sound.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     Entity base;

@@ -10,9 +10,10 @@
 #include "manager/tilePuzzleManager.h"
 #include "asm.h"
 #include "flags.h"
-#include "functions.h"
 #include "sound.h"
 #include "tiles.h"
+#include "room.h"
+#include "player.h"
 
 enum { INIT, IN_PROGRESS, FAILED, SUCCEEDED };
 

@@ -4,12 +4,21 @@
  *
  * @brief Cutscene Misc object
  */
+#include "object/cutsceneMiscObject.h"
 #include "area.h"
-#include "functions.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "screen.h"
+#include "scroll.h"
 #include "script.h"
 #include "tiles.h"
 
@@ -188,7 +197,7 @@ void sub_08094B94(CutsceneMiscObjectEntity* this) {
         CopyPosition(&gPlayerEntity.base, e);
         e->z.HALF.HI = -48;
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, &script_CutsceneMiscObjectTheLittleHat);
-        CreateDust(e);
+        CreateDeathFx(e);
         e->z.HALF.HI += 16;
         e->y.HALF.HI++;
     }

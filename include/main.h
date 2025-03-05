@@ -2,10 +2,10 @@
 #define MAIN_H
 
 #include "global.h"
-#include "structures.h"
 #include "room.h"
 #include "script.h"
 #include "screen.h"
+#include "vram.h"
 
 /** File signature */
 #define SIGNATURE 'MCZ3'
@@ -158,6 +158,7 @@ extern void DemoTask(void);
 extern u8 gUnk_03003DE4[0xC];
 extern u16 gPaletteBuffer[];
 
+extern u32 CheckRegionOnScreen(u32, u32, u32, u32);
 extern u32 CheckRegionsOnScreen(const u16* arr);
 
 #endif // MAIN_H

@@ -2,36 +2,8 @@
 #define OBJECT_H
 
 #include "global.h"
-#include "asm.h"
-#include "common.h"
-
-#include "sound.h"
-#include "flags.h"
-#include "effects.h"
-#include "room.h"
-#include "physics.h"
-
+#include "definitions.h"
 #include "entity.h"
-#include "player.h"
-
-void AddInteractablePedestal(Entity*);
-void AddInteractableCheckableObject(Entity*);
-void sub_0808C650(Entity*, u32);
-u32 sub_0808C67C(void);
-void sub_0808C688(void);
-void SyncPlayerToPlatform(Entity*, bool32);
-void UpdateRailMovement(Entity*, u16**, u16*);
-void sub_080A2AF4(Entity*, s32, s32);
-Entity* CreateLargeWaterTrace(Entity*);
-void CreateSparkle(Entity*);
-
-void CreateDust(Entity* parent);
-void CreateDustAt(s32, s32, u32);
-void CreateDustSmall(Entity* parent);
-Entity* CreateWaterTrace(Entity*);
-Entity* CreateSpeechBubbleQuestionMark(Entity*, s32, s32);
-Entity* CreateSpeechBubbleExclamationMark(Entity*, s32, s32);
-Entity* CreateSpeechBubbleSleep(Entity*, s32, s32);
 
 typedef enum {
     GROUND_ITEM,
@@ -229,6 +201,27 @@ typedef enum {
     ENEMY_ITEM,
     LINK_ANIMATION,
 } Object;
+
+
+Entity* CreateLinkAnimation(Entity* parent, u32 type, u32 type2);
+void ObjectInit(Entity* this);
+u32 LoadObjectSprite(Entity* this, s32 type, const ObjectDefinition* definition);
+Entity* CreateObject(Object id, u32 type, u32 type2);
+Entity* CreateObjectWithParent(Entity* parent, Object id, u32 type, u32 type2);
+extern Entity* CreateGroundItem(Entity*, u32 item, u32 subvalue);
+extern Entity* CreateGroundItemWithFlags(Entity*, u32 item, u32 subvalue, u32 flags);
+void SyncPlayerToPlatform(Entity* this, bool32 param_2);
+void UpdateRailMovement(Entity* this, u16** param_2, u16* param_3);
+Entity* CreateSpeechBubbleExclamationMark(Entity* parent, s32 offsetX, s32 offsetY);
+Entity* CreateSpeechBubbleQuestionMark(Entity* parent, s32 offsetX, s32 offsetY);
+Entity* CreateSpeechBubbleSleep(Entity* parent, s32 offsetX, s32 offsetY);
+
+void AddInteractablePedestal(Entity*);
+void AddInteractableCheckableObject(Entity*);
+void sub_0808C650(Entity*, u32);
+u32 sub_0808C67C(void);
+void sub_0808C688(void);
+
 
 void ItemOnGround();
 void DeathFx();

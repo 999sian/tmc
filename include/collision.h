@@ -67,4 +67,6 @@ u32 sub_080176E4(Entity*);
 
 extern const u8 gMapTileTypeToActTile[]; // actTile for tileType?
 
+extern u32 sub_0801766C(Entity*);
+
 #endif // COLLISION_H

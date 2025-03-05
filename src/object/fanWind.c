@@ -6,7 +6,8 @@
  */
 #include "collision.h"
 #include "entity.h"
-#include "functions.h"
+#include "room.h"
+#include "physics.h"
 
 void FanWind(Entity* this) {
     u8* collisionData;

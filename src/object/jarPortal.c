@@ -5,9 +5,15 @@
  * @brief Jar Portal object
  */
 #include "area.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "tiles.h"
+#include "effects.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -134,7 +140,7 @@ void sub_0808C01C(JarPortalEntity* this, u32 r1) {
                     gArea.portal_mode = 3;
                 }
             }
-            CreateMagicSparkles(super->x.HALF.HI, super->y.HALF.HI, super->collisionLayer);
+            CreateMagicSparklesFxAt(super->x.HALF.HI, super->y.HALF.HI, super->collisionLayer);
             if (super->subtimer == 0) {
                 super->subtimer = 1;
                 SoundReq(SFX_NEAR_PORTAL);

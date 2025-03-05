@@ -4,8 +4,11 @@
  *
  * @brief Object on Spiny Beetle object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;

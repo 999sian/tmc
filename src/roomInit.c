@@ -7,14 +7,28 @@
 #include "kinstone.h"
 #include "main.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
+#include "physics.h"
 #include "save.h"
 #include "screen.h"
 #include "screenTransitions.h"
 #include "sound.h"
 #include "tiles.h"
 #include "windcrest.h"
+#include "enemy/armos.h"
 #include "manager/lightManager.h"
-#include "functions.h"
+#include "manager/hyruleTownTileSetManager.h"
+#include "manager/staticBackgroundManager.h"
+#include "manager/verticalMinishPathBackgroundManager.h"
+#include "manager/horizontalMinishPathBackgroundManager.h"
+#include "manager/minishRaftersBackgroundManager.h"
+#include "manager/miscManager.h"
+#include "npc/bigGoron.h"
+#include "scroll.h"
+#include "subtask.h"
+#include "beanstalkSubtask.h"
 
 extern u32 sub_08060354(void);
 extern void MinishVillageTileSetManger_LoadInitialGfxGroup(void);
@@ -46,7 +60,7 @@ u32 sub_unk3_ArmosInteriors_RuinsEntranceNorth(u32 arg0) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsEntranceNorth(void) {
-    sub_08030118(0);
+    Armos_SetFlagFromTransition(0);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsEntranceSouth(void) {
@@ -54,7 +68,7 @@ u32 sub_unk3_ArmosInteriors_RuinsEntranceSouth(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsEntranceSouth(void) {
-    sub_08030118(1);
+    Armos_SetFlagFromTransition(1);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsLeft(void) {
@@ -62,7 +76,7 @@ u32 sub_unk3_ArmosInteriors_RuinsLeft(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsLeft(void) {
-    sub_08030118(2);
+    Armos_SetFlagFromTransition(2);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsMiddleLeft(void) {
@@ -70,7 +84,7 @@ u32 sub_unk3_ArmosInteriors_RuinsMiddleLeft(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsMiddleLeft(void) {
-    sub_08030118(3);
+    Armos_SetFlagFromTransition(3);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsMiddleRight(void) {
@@ -78,7 +92,7 @@ u32 sub_unk3_ArmosInteriors_RuinsMiddleRight(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsMiddleRight(void) {
-    sub_08030118(4);
+    Armos_SetFlagFromTransition(4);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsRight(void) {
@@ -86,7 +100,7 @@ u32 sub_unk3_ArmosInteriors_RuinsRight(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsRight(void) {
-    sub_08030118(5);
+    Armos_SetFlagFromTransition(5);
 }
 
 u32 sub_unk3_ArmosInteriors_6(void) {
@@ -94,7 +108,7 @@ u32 sub_unk3_ArmosInteriors_6(void) {
 }
 
 void sub_StateChange_ArmosInteriors_6(void) {
-    sub_08030118(6);
+    Armos_SetFlagFromTransition(6);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsGrassPath(void) {
@@ -102,7 +116,7 @@ u32 sub_unk3_ArmosInteriors_RuinsGrassPath(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsGrassPath(void) {
-    sub_08030118(7);
+    Armos_SetFlagFromTransition(7);
 }
 
 u32 sub_unk3_ArmosInteriors_8(void) {
@@ -110,7 +124,7 @@ u32 sub_unk3_ArmosInteriors_8(void) {
 }
 
 void sub_StateChange_ArmosInteriors_8(void) {
-    sub_08030118(8);
+    Armos_SetFlagFromTransition(8);
 }
 
 u32 sub_unk3_ArmosInteriors_FortressOfWindsLeft(void) {
@@ -118,7 +132,7 @@ u32 sub_unk3_ArmosInteriors_FortressOfWindsLeft(void) {
 }
 
 void sub_StateChange_ArmosInteriors_FortressOfWindsLeft(void) {
-    sub_08030118(9);
+    Armos_SetFlagFromTransition(9);
     gArea.dungeon_idx = 3;
     gArea.areaMetadata = AR_HAS_NO_ENEMIES | AR_HAS_MAP | AR_IS_DUNGEON | AR_HAS_KEYS;
 }
@@ -128,7 +142,7 @@ u32 sub_unk3_ArmosInteriors_FortressOfWindsRight(void) {
 }
 
 void sub_StateChange_ArmosInteriors_FortressOfWindsRight(void) {
-    sub_08030118(10);
+    Armos_SetFlagFromTransition(10);
     gArea.dungeon_idx = 3;
     gArea.areaMetadata = AR_HAS_NO_ENEMIES | AR_HAS_MAP | AR_IS_DUNGEON | AR_HAS_KEYS;
 }

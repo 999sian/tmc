@@ -4,7 +4,6 @@
 #include "collision.h"
 #include "common.h"
 #include "fade.h"
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "main.h"
@@ -12,10 +11,16 @@
 #include "manager/diggingCaveEntranceManager.h"
 #include "menu.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
 #include "scroll.h"
 #include "structures.h"
 #include "tiles.h"
+#include "affine.h"
+#include "subtask.h"
 
 extern void sub_0807C898(void);
 extern void sub_0805BB74(s32);

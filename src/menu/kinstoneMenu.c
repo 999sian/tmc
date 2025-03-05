@@ -8,13 +8,15 @@
 #include "common.h"
 #include "enemy.h"
 #include "flags.h"
-#include "functions.h"
+#include "structures.h"
 #include "kinstone.h"
 #include "main.h"
 #include "menu.h"
 #include "message.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
 #include "room.h"
 #include "roomid.h"
 #include "save.h"
@@ -22,6 +24,7 @@
 #include "sound.h"
 #include "subtask.h"
 #include "ui.h"
+#include "affine.h"
 
 extern u32 sub_08000E44(u32);
 extern void sub_080A3B74(void);

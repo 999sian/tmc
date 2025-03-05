@@ -7,8 +7,14 @@
 #include "collision.h"
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+
+#include "sound.h"
+#include "effects.h"
+#include "physics.h"
+
+#include "player.h"
 
 extern void (*const ArrowProjectile_Functions[])(Entity*);
 extern void (*const ArrowProjectile_Actions[])(Entity*);
@@ -95,7 +101,7 @@ void ArrowProjectile_Action3(Entity* this) {
 
 void ArrowProjectile_Action4(Entity* this) {
     if (GravityUpdate(this, Q_8_8(40.0)) == 0) {
-        CreateDust(this);
+        CreateDeathFx(this);
         DeleteThisEntity();
     } else {
         if (--this->timer == 0) {

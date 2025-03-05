@@ -6,10 +6,12 @@
  */
 #include "effects.h"
 #include "entity.h"
-#include "functions.h"
 #include "kinstone.h"
 #include "message.h"
 #include "npc.h"
+#include "common.h"
+#include "script.h"
+#include "player.h"
 
 void sub_08062CA4(Entity*);
 void sub_08062BD4(Entity*);

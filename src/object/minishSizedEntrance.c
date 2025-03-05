@@ -4,9 +4,12 @@
  *
  * @brief MinishSizedEntrance object
  */
-#include "functions.h"
 #include "game.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
+#include "vram.h"
 
 void MinishSizedEntrance_Action1(Entity*);
 void MinishSizedEntrance_Init(Entity*);

@@ -8,14 +8,22 @@
 #include "enemy.h"
 #include "fade.h"
 #include "fileselect.h"
-#include "functions.h"
+#include "structures.h"
 #include "game.h"
 #include "main.h"
 #include "menu.h"
 #include "npc.h"
 #include "object.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
 #include "screen.h"
+#include "subtask.h"
+#include "beanstalkSubtask.h"
 #include "tiles.h"
+#include "backgroundAnimations.h"
+#include "manager/staticBackgroundManager.h"
 
 void sub_08051F78(void);
 void sub_08051FF0(void);

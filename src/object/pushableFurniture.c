@@ -6,8 +6,13 @@
  */
 #include "object/pushableFurniture.h"
 
-#include "functions.h"
 #include "tiles.h"
+#include "flags.h"
+#include "sound.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
+#include "physics.h"
 
 extern const s16 gUnk_080B4488[];
 

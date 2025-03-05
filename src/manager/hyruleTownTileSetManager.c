@@ -13,7 +13,7 @@
 #include "tiles.h"
 #include "game.h"
 #include "assets/gfx_offsets.h"
-#include "functions.h"
+#include "player.h"
 
 void HyruleTownTileSetManager_UpdateLoadGfxGroups(HyruleTownTileSetManager*);
 void HyruleTownTileSetManager_OnEnterRoom(HyruleTownTileSetManager*);

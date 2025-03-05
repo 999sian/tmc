@@ -3,7 +3,7 @@
 
 #include "global.h"
 #include "area.h"
-#include "structures.h"
+#include "message.h"
 
 /**
  * Change the light level of the room.

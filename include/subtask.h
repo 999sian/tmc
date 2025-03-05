@@ -117,4 +117,7 @@ extern const struct_gUnk_08128E94 gUnk_08128E94[];
 #define DRAW_DIRECT_SPRITE_INDEX 0x1fb
 #endif
 
+extern void MenuFadeIn(u32, u32);
+extern void sub_080A71C4(u32, u32, u32, u32);
+
 #endif // SUBTASK_H

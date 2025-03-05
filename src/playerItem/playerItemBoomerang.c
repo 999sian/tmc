@@ -6,9 +6,12 @@
  */
 #include "asm.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 #include "item.h"
+#include "room.h"
 #include "sound.h"
+#include "vram.h"
+#include "collision.h"
 
 typedef struct {
     /*0x00*/ Entity base;

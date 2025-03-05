@@ -5,9 +5,14 @@
  * @brief Postman NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "npc.h"
 #include "sound.h"
+#include "effects.h"
+#include "save.h"
+#include "script.h"
+#include "asm.h"
+#include "message.h"
+#include "physics.h"
 #include "structures.h"
 
 typedef struct {

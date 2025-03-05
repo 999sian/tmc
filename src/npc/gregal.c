@@ -5,9 +5,10 @@
  * @brief Gregal NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "npc.h"
 #include "script.h"
+#include "player.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

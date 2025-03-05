@@ -4,9 +4,12 @@
  *
  * @brief Cucco NPC
  */
-#include "functions.h"
+#include "message.h"
 #include "kinstone.h"
 #include "npc.h"
+#include "sound.h"
+#include "save.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

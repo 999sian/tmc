@@ -6,8 +6,11 @@
  */
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "effects.h"
+#include "physics.h"
 #include "player.h"
 
 typedef struct {
@@ -72,7 +75,7 @@ void VaatiBall(VaatiBallEntity* this) {
             COLLISION_OFF(super);
             super->health = -1;
             ((VaatiBallEntity*)parent)->unk_80--;
-            CreateDust(super);
+            CreateDeathFx(super);
             SoundReq(SFX_1C3);
         }
     }

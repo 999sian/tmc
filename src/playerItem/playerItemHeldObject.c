@@ -4,10 +4,11 @@
  *
  * @brief Held Object Player Item
  */
+#include "object.h"
 #include "asm.h"
 #include "effects.h"
-#include "entity.h"
-#include "functions.h"
+#include "physics.h"
+#include "collision.h"
 #include "player.h"
 #include "sound.h"
 #include "tiles.h"

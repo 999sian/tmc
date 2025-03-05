@@ -1,6 +1,5 @@
 #include "asm.h"
 #include "effects.h"
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "playeritem.h"

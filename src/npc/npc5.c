@@ -5,11 +5,16 @@
  * @brief Unused Zelda follower NPC.
  */
 #include "collision.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "message.h"
 #include "npc.h"
 #include "tiles.h"
+#include "flags.h"
+#include "common.h"
+#include "physics.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
 
 #define kFollowDistance 32 // distance to follow player
 #define kPoiDistance 4     // point of interest distance

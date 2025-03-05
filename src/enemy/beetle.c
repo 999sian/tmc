@@ -5,7 +5,8 @@
  * @brief Beetle enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "player.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

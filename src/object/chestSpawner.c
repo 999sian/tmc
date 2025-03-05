@@ -6,11 +6,17 @@
  */
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
 #include "tiles.h"
 #include "manager/lightManager.h"
 #include "structures.h"
-#include "functions.h"
+#include "beanstalkSubtask.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -131,7 +137,7 @@ void ChestSpawner_Type2Action2(ChestSpawnerEntity* this) {
             break;
         default:
             sub_0800445C(super);
-            CreateMagicSparkles(super->x.HALF.HI, super->y.HALF.HI, 2);
+            CreateMagicSparklesFxAt(super->x.HALF.HI, super->y.HALF.HI, 2);
             if (--super->timer == 0) {
                 super->timer = 8;
                 tmp = ++super->subtimer;
@@ -260,7 +266,7 @@ void ChestSpawner_Type0Action2(ChestSpawnerEntity* this) {
             break;
         default:
             SoundReq(SFX_SECRET);
-            CreateDust(super);
+            CreateDeathFx(super);
             break;
     }
     super->action = 3;
@@ -281,7 +287,7 @@ void ChestSpawner_Type0Action3(ChestSpawnerEntity* this) {
                 } else {
                     super->action = 1;
                     RestorePrevTileEntity(this->tilePos, super->collisionLayer);
-                    CreateDust(super);
+                    CreateDeathFx(super);
                 }
             }
         }

@@ -1,7 +1,6 @@
 #include "global.h"
 #include "common.h"
 #include "structures.h"
-#include "functions.h"
 #include "asm.h"
 #include "enemy.h"
 #include "message.h"

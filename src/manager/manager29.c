@@ -7,7 +7,8 @@
 #include "manager/manager29.h"
 #include "asm.h"
 #include "flags.h"
-#include "functions.h"
+#include "room.h"
+#include "player.h"
 
 bool32 sub_0805CF80(Manager29* this);
 void sub_0805CBD0(Manager29* this);

@@ -17,14 +17,19 @@
 #include "main.h"
 #include "message.h"
 #include "object.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
 #include "player.h"
 #include "playeritem.h"
 #include "playerItem/playerItemBottle.h"
 #include "save.h"
 #include "screen.h"
 #include "screenTransitions.h"
+#include "scroll.h"
 #include "sound.h"
 #include "tiles.h"
+#include "structures.h"
 
 #define kGravityRate Q_8_8(32)
 #define kWalkSpeedSlopeSubtractor Q_8_8(0.3125)
@@ -559,7 +564,7 @@ static void PlayerNormal(PlayerEntity* this) {
         if (gPlayerState.item == NULL)
             UpdateAnimationSingleFrame(super);
         if (gPlayerState.swim_state != 0 && (gRoomTransition.frameCount & 7) == 0)
-            CreateWaterTrace(super);
+            CreateRippleFx(super);
         return;
     }
 }

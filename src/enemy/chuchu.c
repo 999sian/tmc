@@ -6,7 +6,7 @@
  */
 #include "asm.h"
 #include "enemy.h"
-#include "functions.h"
+#include "physics.h"
 #include "tiles.h"
 
 typedef struct {
@@ -73,7 +73,7 @@ void Chuchu(ChuchuEntity* this) {
                         /* ... */
                         break;
                     case 2:
-                        CreateDrownFX(super);
+                        CreateDrownFx(super);
                         return;
                 }
             }

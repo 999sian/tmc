@@ -7,6 +7,8 @@
 #include "entity.h"
 #include "map.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
 #include "physics.h"
 #include "tiles.h"
 

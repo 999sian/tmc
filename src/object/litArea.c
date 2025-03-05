@@ -6,7 +6,6 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "room.h"
 #include "screen.h"
 

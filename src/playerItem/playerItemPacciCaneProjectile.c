@@ -4,10 +4,14 @@
  *
  * @brief Pacci Cane Projectile Player Item
  */
+#include "playeritem.h"
 #include "asm.h"
 #include "entity.h"
-#include "functions.h"
+#include "collision.h"
 #include "object.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "sound.h"
 #include "tiles.h"
 

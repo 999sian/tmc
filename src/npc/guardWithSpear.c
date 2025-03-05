@@ -5,12 +5,18 @@
  * @brief Guard with Spear NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
 #include "player.h"
 #include "script.h"
+#include "save.h"
+#include "message.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -132,7 +138,7 @@ void sub_08064198(GuardWithSpearEntity* this) {
         ProcessMovement0(super);
         if (sVar1 != super->y.HALF.HI) {
             if (0x140 < gPlayerEntity.base.speed && gRoomTransition.frameCount % 6 == 0) {
-                CreateDustSmall(super);
+                CreateDashFx(super);
             }
             this->unk_71 = 10;
             animationState = super->animationState = GetAnimationStateForDirection8(super->direction);
@@ -154,7 +160,7 @@ void sub_08064198(GuardWithSpearEntity* this) {
     sVar1 = super->z.HALF.HI;
     super->z.HALF.HI = gPlayerEntity.base.z.HALF.HI;
     if (sVar1 < 0 && gPlayerEntity.base.z.HALF.HI == 0) {
-        CreateDustSmall(super);
+        CreateDashFx(super);
     }
 }
 
@@ -189,7 +195,7 @@ void sub_080642B8(GuardWithSpearEntity* this) {
         ProcessMovement0(super);
         if (sVar1 != super->x.HALF.HI) {
             if (0x140 < gPlayerEntity.base.speed && gRoomTransition.frameCount % 6 == 0) {
-                CreateDustSmall(super);
+                CreateDashFx(super);
             }
             this->unk_71 = 10;
             animationState = super->animationState = GetAnimationStateForDirection8(super->direction);
@@ -211,7 +217,7 @@ void sub_080642B8(GuardWithSpearEntity* this) {
     sVar1 = super->z.HALF.HI;
     super->z.HALF.HI = gPlayerEntity.base.z.HALF.HI;
     if (sVar1 < 0 && gPlayerEntity.base.z.HALF.HI == 0) {
-        CreateDustSmall(super);
+        CreateDashFx(super);
     }
 }
 

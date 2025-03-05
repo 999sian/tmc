@@ -115,4 +115,23 @@ typedef enum {
     FX_6C
 } Effect;
 
+Entity* CreateFx(Entity* parent, Effect type, u32 type2);
+void CreateDeathFx(Entity* parent);
+void CreateDeathFxAt(s32 xOff, s32 yOff, u32 layer);
+void CreateDashFx(Entity* parent);
+void CreateExplosionBrokenFx(Entity* parent);
+void CreateWaterSplashFx(Entity* parent);
+Entity* CreateRippleFx(Entity* parent);
+void CreateRippleFxRandom(Entity* parent, s32 range);
+Entity* CreateLargeRippleFx(Entity* parent);
+void CreateLargeRippleFxRandom(Entity* parent, s32 minDistance, s32 maxDistance);
+void CreateSparkleFx(Entity* parent);
+
+extern void CreateDrownFx(Entity*);
+extern void CreateLavaDrownFx(Entity* parent);
+extern void CreateSwampDrownFx(Entity* parent);
+extern void CreatePitFallFx(Entity* parent);
+
+void CreateMagicSparklesFxAt(u32 baseX, u32 baseY, u32 layer);
+
 #endif // EFFECTS_H

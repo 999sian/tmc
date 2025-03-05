@@ -6,9 +6,10 @@
  */
 #include "manager/verticalMinishPathBackgroundManager.h"
 #include "common.h"
-#include "functions.h"
 #include "game.h"
 #include "screen.h"
+#include "room.h"
+
 extern void VerticalMinishPathBackgroundManager_OnEnterRoom(void*);
 extern void sub_0805754C(VerticalMinishPathBackgroundManager*);
 

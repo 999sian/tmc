@@ -5,9 +5,9 @@
  * @brief Stone Tablet object
  */
 #include "entity.h"
-#include "functions.h"
 #include "room.h"
 #include "tiles.h"
+#include "beanstalkSubtask.h"
 
 void StoneTablet_Init(Entity*);
 void StoneTablet_Action1(Entity*);

@@ -5,9 +5,10 @@
  * @brief Vaati Projectile enemy
  */
 #include "enemy.h"
-#include "functions.h"
 #include "screenTransitions.h"
 #include "tiles.h"
+#include "player.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

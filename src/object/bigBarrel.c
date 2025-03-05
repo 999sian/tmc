@@ -10,9 +10,9 @@
 #include "flags.h"
 #include "map.h"
 #include "object.h"
+#include "sound.h"
 #include "room.h"
 #include "save.h"
-#include "sound.h"
 #include "tiles.h"
 
 typedef struct {

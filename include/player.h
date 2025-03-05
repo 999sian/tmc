@@ -609,6 +609,17 @@ typedef struct {
     /*0x18*/ Entity* field_0x18;
 } ItemBehavior;
 
+typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN, MAX_ACTIVE_ITEMS } ActiveItemIndex;
+/**
+ * Currently active items.
+ * 0: Active items?
+ * 1: Boots, Cape
+ * 2: would be used by CreateItem1 if gActiveItems[1] was already filled
+ * 3: Lamp
+ */
+extern ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
+static_assert(sizeof(gActiveItems) == 0x70);
+
 extern void (*const gPlayerItemFunctions[])(Entity*);
 
 typedef struct {
@@ -778,6 +789,8 @@ bool32 HasSwordEquipped();
 u32 GetPlayerPalette(bool32 use);
 void PlayerShrinkByRay(void);
 
+extern void InitPlayerMacro(PlayerMacroEntry*);
+
 // player.s
 extern u32 PlayerCheckNEastTile();
 extern u32* DoTileInteractionHere(Entity*, u32);
@@ -786,6 +799,7 @@ extern void sub_08008AC6(Entity*);
 extern void sub_08008926(Entity*);
 extern void sub_08008AC6(Entity*);
 extern void sub_08008AA0(Entity*);
+extern void sub_080085B0(Entity*);
 
 // zelda.c
 void SetZeldaFollowTarget(Entity* target);

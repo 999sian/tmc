@@ -5,13 +5,21 @@
  * @brief Bird object
  */
 #include "collision.h"
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "object/cutsceneOrchestrator.h"
 #include "save.h"
+#include "subtask.h"
+#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;

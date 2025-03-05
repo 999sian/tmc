@@ -5,9 +5,16 @@
  * @brief Frozen Octorok object
  */
 #include "enemy/octorokBoss.h"
-#include "functions.h"
 #include "message.h"
 #include "object.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
+#include "vram.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -219,7 +226,7 @@ void FrozenOctorok_Action1(FrozenOctorokEntity* this) {
             FrozenOctorok_Action1SubActions[super->subAction](this);
             if (super->subtimer != 0) {
                 if ((gRoomTransition.frameCount & 7) == 0) {
-                    CreateSparkle(super->child);
+                    CreateSparkleFx(super->child);
                 }
                 if (this->unk_7e != 0) {
                     super->child->zVelocity = super->child->zVelocity - (s16)this->unk_7e;

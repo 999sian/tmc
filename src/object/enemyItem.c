@@ -4,8 +4,11 @@
  *
  * @brief Enemy Item object
  */
-#include "functions.h"
+#include "scroll.h"
 #include "object.h"
+#include "flags.h"
+#include "physics.h"
+#include "item.h"
 
 typedef struct {
     /*0x00*/ Entity base;

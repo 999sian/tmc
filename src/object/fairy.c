@@ -5,10 +5,13 @@
  * @brief Fairy object
  */
 #include "collision.h"
-#include "functions.h"
 #include "hitbox.h"
-#include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "physics.h"
+#include "player.h"
+#include "scroll.h"
 
 typedef struct {
     /*0x00*/ Entity base;

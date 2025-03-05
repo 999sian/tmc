@@ -5,9 +5,10 @@
  * @brief Bombarossa enemy
  */
 #include "enemy.h"
-#include "entity.h"
 #include "object.h"
+#include "asm.h"
 #include "room.h"
+#include "physics.h"
 
 typedef struct {
     Entity base;

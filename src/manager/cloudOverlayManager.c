@@ -8,7 +8,7 @@
 #include "area.h"
 #include "screen.h"
 #include "game.h"
-#include "functions.h"
+#include "room.h"
 
 void CloudOverlayManager_OnEnterRoom(CloudOverlayManager*);
 void CloudOverlayManager_OnExitRoom(CloudOverlayManager*);

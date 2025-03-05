@@ -6,6 +6,8 @@
  */
 #include "map.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
 #include "tiles.h"
 #include "game.h"
 

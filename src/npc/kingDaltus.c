@@ -5,10 +5,12 @@
  * @brief King Daltus NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
 #include "npc.h"
 #include "script.h"
+#include "message.h"
+#include "flags.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

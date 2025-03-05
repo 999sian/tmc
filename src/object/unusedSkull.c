@@ -4,9 +4,13 @@
  *
  * @brief Unused Skull object
  */
-#include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
 #include "tiles.h"
 
 typedef struct {

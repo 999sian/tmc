@@ -5,11 +5,14 @@
  * @brief Pina NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "message.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
+#include "script.h"
 
 typedef struct {
     /*0x00*/ Entity base;

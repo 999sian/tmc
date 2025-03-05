@@ -5,7 +5,7 @@
  * @brief Farmers NPC
  */
 #include "entity.h"
-#include "functions.h"
+#include "message.h"
 #include "npc.h"
 #include "script.h"
 

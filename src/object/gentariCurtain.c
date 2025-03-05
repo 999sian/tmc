@@ -7,7 +7,6 @@
 #include "asm.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "object.h"
 #include "room.h"
 #include "tiles.h"

@@ -6,9 +6,10 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "player.h"
 #include "npc.h"
 #include "sound.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

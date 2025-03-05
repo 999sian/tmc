@@ -7,6 +7,11 @@
 #include "entity.h"
 #include "npc.h"
 #include "sound.h"
+#include "script.h"
+#include "message.h"
+#include "flags.h"
+#include "save.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;

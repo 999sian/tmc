@@ -1,6 +1,5 @@
 #include "area.h"
 #include "common.h"
-#include "functions.h"
 #include "game.h"
 #include "global.h"
 #include "item.h"
@@ -9,6 +8,7 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
+#include "affine.h"
 #include "structures.h"
 
 extern void sub_0805ECEC(u32, u32, u32, u32);

@@ -9,7 +9,6 @@
  */
 #include "manager/tileChangeObserveManager.h"
 #include "flags.h"
-#include "functions.h"
 #include "room.h"
 
 void TileChangeObserveManager_Init(TileChangeObserveManager*);

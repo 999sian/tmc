@@ -6,13 +6,23 @@
  */
 #include "figurineMenu.h"
 #include "fileselect.h"
-#include "functions.h"
 #include "item.h"
 #include "kinstone.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "screen.h"
 #include "tiles.h"
+#include "subtask.h"
+#ifndef EU
+#include "script.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -596,8 +606,8 @@ void sub_080882A8(FigurineDeviceEntity* this) {
     static const u16 gUnk_08120AE4[] = { TEXT_INDEX(TEXT_CARLOV, 0x18), TEXT_INDEX(TEXT_CARLOV, 0x19) };
     u8* ptr;
     sub_08050384();
-    sub_08057044(this->shells, gUnk_020227E8, 0x202020);
-    sub_08057044(this->chance, &gUnk_020227E8[1], 0x202020);
+    NumberToAsciiPad3Digits(this->shells, &gUnk_020227E8[0], 0x202020);
+    NumberToAsciiPad3Digits(this->chance, &gUnk_020227E8[1], 0x202020);
     ptr = (u8*)0x02000000;
     if (ptr[7] == 0) {
         ShowTextBox(gUnk_08120AE4[super->type2], (Font*)&gUnk_08120AB4); // TODO convert data

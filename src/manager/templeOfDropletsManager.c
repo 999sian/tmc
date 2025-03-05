@@ -8,10 +8,12 @@
 #include "enemy.h"
 #include "flags.h"
 #include "object.h"
+#include "common.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
 #include "sound.h"
 #include "game.h"
-#include "functions.h"
 #include "structures.h"
 
 static const u16 gUnk_081085B8[] = { 0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009,

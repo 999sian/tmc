@@ -6,11 +6,12 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "game.h"
 #include "hitbox.h"
 #include "object.h"
+#include "effects.h"
 #include "room.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {
@@ -47,7 +48,7 @@ void ObjectA(ObjectAEntity* this) {
     } else if (super->interactType != INTERACTION_NONE) {
         SetTileType(this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
         SetFlag(this->flag);
-        CreateDust(super);
+        CreateDeathFx(super);
         ModDungeonKeys(-1);
         DeleteThisEntity();
     }

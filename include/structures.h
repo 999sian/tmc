@@ -3,19 +3,6 @@
 
 #include "global.h"
 #include "entity.h"
-#include "player.h"
-
-typedef struct {
-    int signature;
-    u8 saveFileId;
-    u8 msg_speed;
-    u8 brightness;
-    u8 language;
-    u8 name[6];
-    u8 invalid;
-    u8 initialized;
-} SaveHeader;
-#define gSaveHeader ((SaveHeader*)(0x2000000))
 
 typedef struct {
     u8 unk_00;
@@ -141,47 +128,6 @@ typedef struct {
 } HUD;
 extern HUD gHUD;
 
-#define MAX_GFX_SLOTS 44
-
-typedef enum {
-    GFX_SLOT_FREE,
-    GFX_SLOT_UNLOADED, // some sort of free? no longer in use?
-    GFX_SLOT_STATUS2,  // some sort of free?
-    GFX_SLOT_FOLLOWER, // Set by SetGFXSlotStatus for the following slots
-    GFX_SLOT_RESERVED, // maybe ready to be loaded?
-    GFX_SLOT_GFX,
-    GFX_SLOT_PALETTE
-} GfxSlotStatus;
-
-typedef enum {
-    GFX_VRAM_0,
-    GFX_VRAM_1, // uploaded to vram?
-    GFX_VRAM_2,
-    GFX_VRAM_3, // not yet uploaded to vram?
-} GfxSlotVramStatus;
-
-typedef struct {
-    /*0x00*/ u8 status : 4;
-    /*0x00*/ u8 vramStatus : 4; // Whether the gfx was uploaded to the vram?
-    /*0x01*/ u8 slotCount;
-    /*0x02*/ u8 referenceCount; /**< How many entities use this gfx slot */
-    /*0x03*/ u8 unk_3;
-    /*0x04*/ u16 gfxIndex;
-    /*0x06*/ u16 paletteIndex;
-    /*0x08*/ const void* palettePointer;
-} GfxSlot;
-
-typedef struct {
-    /*0x00*/ u8 unk0;
-    /*0x01*/ u8 unk_1;
-    /*0x02*/ u8 unk_2;
-    /*0x03*/ u8 unk_3;
-    /*0x04*/ GfxSlot slots[MAX_GFX_SLOTS];
-} GfxSlotList;
-extern GfxSlotList gGFXSlots;
-
-static_assert(sizeof(GfxSlotList) == 0x214);
-
 typedef struct {
     u16 unk_00;
     u8 unk_02[0xE];
@@ -193,16 +139,6 @@ extern u16 gBG1Buffer[0x400];
 extern u16 gBG2Buffer[0x400];
 extern u16 gBG3Buffer[0x800];
 
-typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN, MAX_ACTIVE_ITEMS } ActiveItemIndex;
-/**
- * Currently active items.
- * 0: Active items?
- * 1: Boots, Cape
- * 2: would be used by CreateItem1 if gActiveItems[1] was already filled
- * 3: Lamp
- */
-extern ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
-static_assert(sizeof(gActiveItems) == 0x70);
 
 typedef struct {
     u8 event_priority; // system requested priority
@@ -231,20 +167,6 @@ extern PauseMenuOptions gPauseMenuOptions;
 static_assert(sizeof(PauseMenuOptions) == 0x18);
 
 typedef struct {
-    u8 unk00 : 1;
-    u8 unk01 : 3;
-    u8 unk04 : 4;
-    u8 unk1;
-    u8 charColor;
-    u8 bgColor;
-    u16 unk4;
-    u16 unk6;
-    void* unk8;
-} WStruct;
-
-static_assert(sizeof(WStruct) == 12);
-
-typedef struct {
     u8 unk0;
     u8 unk1;
     u16 unk2;
@@ -266,11 +188,6 @@ typedef struct {
     OAMObj unk[0xA0]; /* todo: affine */
 } OAMControls;
 extern OAMControls gOAMControls;
-
-typedef struct {
-    union SplitWord _0;
-    union SplitWord _4;
-} struct_020227E8;
 
 typedef struct {
     s8 x;
@@ -319,24 +236,6 @@ typedef struct {
 extern SpritePtr gSpritePtrs[];
 
 typedef struct {
-    u16* dest;
-    void* gfx_dest;
-    void* buffer_loc;
-    u32 _c;
-    u16 gfx_src;
-    u8 width;
-    u8 right_align : 1;
-    u8 sm_border : 1;
-    u8 unused : 1;
-    u8 draw_border : 1;
-    u8 border_type : 4;
-    u8 fill_type;
-    u8 charColor;
-    u8 _16;
-    u8 stylized;
-} Font;
-
-typedef struct {
     u8 unk_0;
     u8 unk_1;
     u8 unk_2[2];
@@ -350,11 +249,6 @@ typedef struct {
 } struct_02018EB0;
 
 extern struct_02018EB0 gUnk_02018EB0;
-
-typedef struct {
-    s16 tileIndex;
-    s16 tilePosOffset;
-} TileData;
 
 typedef struct {
     /*0x00*/ bool8 isOnlyActiveFirstFrame; /**< Is the behavior for this item only created on the first frame */

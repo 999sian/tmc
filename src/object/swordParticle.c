@@ -4,9 +4,13 @@
  *
  * @brief Sword Particle object
  */
-#include "functions.h"
 #include "item.h"
 #include "object.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;

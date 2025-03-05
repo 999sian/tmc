@@ -5,7 +5,6 @@
  * @brief Water Drop object
  */
 #include "entity.h"
-#include "functions.h"
 
 void WaterDropObject(Entity* this) {
     u32 iVar2;

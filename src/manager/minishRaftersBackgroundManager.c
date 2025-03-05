@@ -8,7 +8,7 @@
 #include "common.h"
 #include "room.h"
 #include "game.h"
-#include "functions.h"
+#include "structures.h"
 
 void MinishRaftersBackgroundManager_OnEnterRoom(MinishRaftersBackgroundManager*);
 void sub_08058210(MinishRaftersBackgroundManager*);

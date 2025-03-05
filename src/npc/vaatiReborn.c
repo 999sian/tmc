@@ -4,8 +4,11 @@
  *
  * @brief Vaati Reborn NPC
  */
-#include "functions.h"
 #include "npc.h"
+#include "sound.h"
+#include "flags.h"
+#include "message.h"
+#include "physics.h"
 
 void VaatiRebornAction0(Entity* this);
 void VaatiRebornAction1(Entity* this);

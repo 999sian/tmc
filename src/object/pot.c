@@ -6,9 +6,12 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "object/pot.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
 #include "object/itemOnGround.h"
 #include "player.h"
 #include "room.h"

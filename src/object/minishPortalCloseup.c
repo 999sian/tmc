@@ -5,9 +5,10 @@
  * @brief Minish Portal Closeup object
  */
 #include "area.h"
-#include "functions.h"
 #include "main.h"
 #include "object.h"
+#include "common.h"
+#include "room.h"
 #include "screen.h"
 #include "structures.h"
 

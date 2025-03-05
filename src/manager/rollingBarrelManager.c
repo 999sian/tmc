@@ -15,7 +15,7 @@
 #include "screen.h"
 #include "sound.h"
 #include "game.h"
-#include "functions.h"
+#include "asm.h"
 
 extern struct BgAffineDstData gUnk_02017AA0[];
 extern struct BgAffineDstData gUnk_02017BA0[];

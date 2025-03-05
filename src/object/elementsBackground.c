@@ -5,7 +5,6 @@
  * @brief Elements Background object
  */
 #include "entity.h"
-#include "functions.h"
 #include "screen.h"
 
 void ElementsBackground_Init(Entity*);

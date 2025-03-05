@@ -77,6 +77,11 @@ bool32 PlayerInRange(Entity*, u32, s32);
 void EnemyCopyParams(Entity*, Entity*);
 void GenericKnockback2(Entity*);
 
+extern void sub_08001318(Entity*);
+
+extern void StealRupees(Entity*);
+extern void EnemyDisableRespawn(Enemy*);
+
 enum {
     /*0x00*/ OCTOROK,
     /*0x01*/ CHUCHU,

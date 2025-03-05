@@ -28,4 +28,21 @@ void LoadMapData(MapDataDefinition* dataDefinition);
  */
 void RenderMapLayerToSubTileMap(u16* tileMap, MapLayer* mapLayer);
 
+extern void sub_0801AFE4(void);
+extern void SetBGDefaults(void);
+
+typedef struct {
+    s16 tileIndex;
+    s16 tilePosOffset;
+} TileData;
+
+/**
+ * @brief Sets multiple tiles at once
+ *
+ * @param tileData [u16 tileIndex, s16 positionOffset], ends with 0xffff
+ * @param basePosition the position the offsets in tileData are based on
+ * @param layer the tile layer
+ */
+extern void SetMultipleTiles(const TileData* tileData, u32 basePosition, u32 layer);
+
 #endif // BEANSTALKSUBTASK_H

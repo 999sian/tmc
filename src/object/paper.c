@@ -4,9 +4,11 @@
  *
  * @brief Paper object
  */
-#include "functions.h"
 #include "map.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
 #include "tiles.h"
 
 void Paper_Init(Entity*);

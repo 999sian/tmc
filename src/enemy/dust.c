@@ -9,9 +9,13 @@
 #include "entity.h"
 #include "hitbox.h"
 #include "object.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
 #include "physics.h"
 #include "player.h"
-#include "room.h"
 
 typedef struct {
     Entity base;

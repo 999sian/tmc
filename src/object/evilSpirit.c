@@ -1,7 +1,9 @@
 #include "entity.h"
-#include "functions.h"
 #include "flags.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     Entity base;

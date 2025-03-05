@@ -1,6 +1,6 @@
 #include "global.h"
+#include "save.h"
 #include "structures.h"
-#include "functions.h"
 #include "screen.h"
 #include "common.h"
 

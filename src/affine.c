@@ -1,3 +1,4 @@
+#include "affine.h"
 #include "global.h"
 #include "structures.h"
 #include "main.h"

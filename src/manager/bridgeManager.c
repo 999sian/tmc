@@ -6,8 +6,8 @@
  */
 #include "manager/bridgeManager.h"
 #include "flags.h"
-#include "functions.h"
 #include "sound.h"
+#include "player.h"
 
 void BridgeManager_Init(BridgeManager*);
 void BridgeManager_Action1(BridgeManager*);

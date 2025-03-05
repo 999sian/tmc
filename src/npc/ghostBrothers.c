@@ -5,11 +5,13 @@
  * @brief Ghost Brothers NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "message.h"
 #include "npc.h"
 #include "save.h"
+#include "script.h"
 #include "screen.h"
+#include "structures.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

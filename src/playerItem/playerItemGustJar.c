@@ -5,9 +5,10 @@
  * @brief Gust Jar Player Item
  */
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
 #include "sound.h"
+#include "vram.h"
+#include "asm.h"
 
 extern const u8* gUnk_08132714[]; // Anim index lists?
 // TODO spriteAnimations in here

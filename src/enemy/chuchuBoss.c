@@ -5,9 +5,19 @@
  * @brief Chuchu Boss enemy
  */
 #include "enemy.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "structures.h"
+#ifndef EU
+#include "vram.h"
+#endif
 
 typedef struct {
     u8 unk_00;

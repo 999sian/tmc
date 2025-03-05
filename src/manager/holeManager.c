@@ -8,12 +8,14 @@
 #include "common.h"
 #include "flags.h"
 #include "object.h"
+#include "asm.h"
+#include "player.h"
 #include "room.h"
 #include "screen.h"
 #include "game.h"
 #include "manager/lightManager.h"
 #include "assets/gfx_offsets.h"
-#include "functions.h"
+#include "structures.h"
 
 typedef enum {
     HOLE_TRANSITION_ABSOLUTE,

@@ -6,7 +6,7 @@
  */
 #include "collision.h"
 #include "enemy.h"
-#include "functions.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "tiles.h"

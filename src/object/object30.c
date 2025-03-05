@@ -5,9 +5,11 @@
  * @brief Object30 object
  */
 #include "collision.h"
-#include "functions.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "scroll.h"
 
 typedef struct {
     /*0x00*/ Entity base;

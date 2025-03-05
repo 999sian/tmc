@@ -4,9 +4,14 @@
  *
  * @brief Button object
  */
-#include "functions.h"
 #include "tiles.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -4,8 +4,15 @@
  *
  * @brief Carlov Object object
  */
-#include "functions.h"
+#include "object/lockedDoor.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {
@@ -168,7 +175,7 @@ void CarlovObject_Type2Init(CarlovObjectEntity* this) {
             super->frameIndex = 1;
         }
     }
-    CreateDust(super);
+    CreateDeathFx(super);
 }
 
 void CarlovObject_Type2Action1(CarlovObjectEntity* this) {

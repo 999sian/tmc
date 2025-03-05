@@ -7,9 +7,11 @@
 #include "asm.h"
 #include "collision.h"
 #include "enemy.h"
-#include "functions.h"
 #include "object.h"
 #include "sound.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -177,7 +179,7 @@ void sub_0802C91C(BobombEntity* this) {
             sub_0802CBC4(this);
         } else {
             if ((super->timer & 0xf) == 8) {
-                CreateDustSmall(super);
+                CreateDashFx(super);
             }
             sub_0802CC18(this);
         }

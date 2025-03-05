@@ -6,6 +6,8 @@
  */
 #include "enemy.h"
 #include "functions.h"
+#include "player.h"
+#include "physics.h"
 
 extern void (*const Chaser_Functions[])(Entity*);
 extern void (*const gUnk_080CD298[])(Entity*);

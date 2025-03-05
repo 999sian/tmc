@@ -5,7 +5,9 @@
  * @brief Falling Boulder enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "room.h"
+#include "player.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

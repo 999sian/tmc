@@ -3,10 +3,10 @@
 #include "asm.h"
 #include "room.h"
 #include "common.h"
-#include "functions.h"
 #include "message.h"
 #include "save.h"
 #include "ui.h"
+#include "structures.h"
 
 #define MESSAGE_ADVANCE_KEYS (A_BUTTON | B_BUTTON | DPAD_ANY | R_BUTTON)
 #define MESSAGE_PRESS_ANY_ADVANCE_KEYS ((gInput.newKeys & MESSAGE_ADVANCE_KEYS) != 0)
@@ -34,9 +34,8 @@ enum {
 extern void WriteBit(u32*, u32);
 extern bool32 sub_0805EF40(Token* tok, const u8*);
 extern void sub_0805F918(u32, u32, void*);
-extern u32 DecToHex(u32, u8*, u32);
+extern u32 EncodeBCD(u32);
 
-u32 sub_08056FEC(u32, u8*);
 u32 GetCharacter(Token* tok);
 extern void sub_0805EEB4(Token* tok, u32 textIdx);
 u32 sub_0805F7DC(u32, WStruct*);
@@ -221,9 +220,9 @@ static u32 MsgIdle(void) {
     return 0;
 }
 
-extern u8 gUnk_020227DC, gUnk_020227E8, gUnk_020227F0, gUnk_020227F8, gUnk_02022800;
+extern u8 gUnk_020227DC, gUnk_020227F0, gUnk_020227F8, gUnk_02022800;
 u8* const gUnk_08107BE0[] = {
-    &gUnk_020227DC, &gUnk_020227E8, &gUnk_020227F0, &gUnk_020227F8, &gUnk_02022800,
+    &gUnk_020227DC, (void*)&gUnk_020227E8, &gUnk_020227F0, &gUnk_020227F8, &gUnk_02022800,
 };
 
 u32 MsgInit(void) {
@@ -830,37 +829,52 @@ void sub_08056F88(u32 unk_1, u32 unk_2) {
 }
 
 static void sub_08056FBC(TextRender* ctb) {
-    sub_08056FEC(ctb->message.rupees, &ctb->_66[0x2]);
-    sub_08056FEC(ctb->message.field_0x14, &ctb->_66[0xa]);
-    sub_08056FEC(ctb->message.field_0x18, &ctb->_77[0x1]);
-    sub_08056FEC(ctb->message.field_0x1c, &ctb->_77[0x9]);
+    NumberToAscii(ctb->message.rupees, &ctb->_68);
+    NumberToAscii(ctb->message.field_0x14, &ctb->_70);
+    NumberToAscii(ctb->message.field_0x18, &ctb->_78);
+    NumberToAscii(ctb->message.field_0x1c, &ctb->_80);
 }
 
-u32 sub_08056FEC(u32 this, u8* param_2) {
-    u32 uVar1;
-    int iVar2;
-    int iVar3;
-    int iVar4;
-    u8 local_1c[8];
+/**
+ * convert number to ascii string
+ *
+ * @param number number to convert
+ * @param string output string buffer (at least 8 bytes in size)
+ * @return number of character written (NOT including null terminator)
+*/
+u32 NumberToAscii(u32 number, String8* string) {
+    int j;
+    int i;
+    int length;
+    u8 buffer[8];
+    char * const output = string->s;
 
-    uVar1 = DecToHex(this, param_2, this);
-    uVar1 = uVar1 & 0xfffffff;
-    iVar4 = 0;
+    number = EncodeBCD(number) & 0xfffffff;
+    length = 0;
     do {
-        local_1c[iVar4++] = uVar1 & 0xf;
-        uVar1 = uVar1 / 16;
-    } while (uVar1 != 0);
-    for (iVar3 = 0, iVar2 = iVar4 - 1; iVar2 >= 0; iVar3++, iVar2--) {
-        param_2[iVar3] = local_1c[iVar2] | 0x30;
+        buffer[length++] = number & 0xf;
+        number = number >> 4;
+    } while (number != 0);
+    for (i = 0, j = length - 1; j >= 0; i++, j--) {
+        output[i] = buffer[j] | '0';
     }
-    param_2[iVar3] = 0;
-    return iVar4;
+    output[i] = '\0';
+    return length;
 }
 
-void sub_08057044(u32 a1, struct_020227E8* a2, u32 a3) {
-    u32 z[2];
-    u32 tmp = sub_08056FEC(a1, (u8*)z);
-    u32 first = z[0];
+/**
+ * converts number to ascii string, padding to 3 characters with specified filler
+ * filler will break if not '0' of ' '
+ * filler should include no more than 3 characters and might break on small number with less
+ *
+ * @param number number to convert
+ * @param string output string buffer
+ * @param filler filler characters
+ */
+void NumberToAsciiPad3Digits(u32 number, String8* string, u32 filler) {
+    String8 z;
+    u32 tmp = NumberToAscii(number, &z);
+    u32 first = z.w[0];
     first <<= 8 * (3 - tmp);
-    a2->_0.WORD = first | a3;
+    string->w[0] = first | filler;
 }

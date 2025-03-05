@@ -7,9 +7,10 @@
 #include "asm.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "player.h"
 #include "npc.h"
 #include "tiles.h"
+#include "room.h"
 
 typedef struct {
     Entity base;

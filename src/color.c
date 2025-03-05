@@ -7,6 +7,7 @@
 #include "fileselect.h"
 #include "main.h"
 #include "physics.h"
+#include "structures.h"
 
 extern Palette gUnk_02001A3C;
 

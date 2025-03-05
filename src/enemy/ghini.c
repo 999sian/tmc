@@ -6,7 +6,7 @@
  */
 #include "area.h"
 #include "enemy.h"
-#include "functions.h"
+#include "player.h"
 #include "physics.h"
 
 typedef struct {

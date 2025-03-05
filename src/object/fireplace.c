@@ -4,8 +4,11 @@
  *
  * @brief Fireplace object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {

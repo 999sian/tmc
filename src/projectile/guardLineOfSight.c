@@ -7,7 +7,7 @@
 #include "asm.h"
 #include "collision.h"
 #include "entity.h"
-#include "functions.h"
+#include "room.h"
 #include "hitbox.h"
 #include "physics.h"
 #include "projectile.h"

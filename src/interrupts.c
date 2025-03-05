@@ -1,16 +1,18 @@
-#include "functions.h"
 #include "gba/m4a.h"
 #include "global.h"
 #include "main.h"
 #include "message.h"
 #include "object.h"
+#include "common.h"
+#include "effects.h"
+#include "room.h"
 #include "player.h"
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
 #include "structures.h"
 #include "ui.h"
-#include "collision.h"
+#include "asm.h"
 
 extern u8 gUnk_03003DE0;
 extern u8 gUnk_03000C30;
@@ -304,7 +306,7 @@ static void HandlePlayerLife(Entity* this) {
         gSave.stats.picolyteType = 0;
         SoundReq(SFX_140);
     } else if ((gSave.stats.picolyteTimer & 0xf) == 0) {
-        CreateSparkle(this);
+        CreateSparkleFx(this);
     }
 
     if (gSave.stats.effect == 0) {

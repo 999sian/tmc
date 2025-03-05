@@ -8,8 +8,8 @@
 #include "common.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "sound.h"
+#include "room.h"
 
 bool32 sub_0805C920(ArmosInteriorManager*);
 void ArmosInteriorManager_Init(ArmosInteriorManager*);

@@ -7,10 +7,12 @@
 #include "subtask.h"
 #include "common.h"
 #include "menu.h"
-#include "functions.h"
 #include "message.h"
 #include "sound.h"
 #include "save.h"
+#include "affine.h"
+#include "asm.h"
+#include "structures.h"
 
 extern void (*const Subtask_FastTravel_Functions[])(void);
 void sub_080A6E70(void);

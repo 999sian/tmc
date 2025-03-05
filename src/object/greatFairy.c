@@ -6,6 +6,12 @@
  */
 #include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
 #include "screen.h"
 #include "script.h"

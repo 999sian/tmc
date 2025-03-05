@@ -325,10 +325,7 @@ bool32 ProcessMovement0(Entity*);
 Entity* GetEmptyEntity(void);
 Entity* CreateEnemy(u32 id, u32 type);
 Entity* CreateNPC(u32 id, u32 type, u32 type2);
-Entity* CreateObject(u32 id, u32 type, u32 type2);
-Entity* CreateObjectWithParent(Entity* parent, u32 id, u32 type, u32 type2);
 Entity* CreateAuxPlayerEntity(void);
-Entity* CreateFx(Entity* parent, u32 type, u32 type2);
 /// @}
 
 /**

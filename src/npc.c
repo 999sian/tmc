@@ -2,6 +2,7 @@
 #include "entity.h"
 #include "room.h"
 #include "npc.h"
+#include "flags.h"
 
 extern u32 gUnk_020342F8;
 

@@ -10,7 +10,6 @@
 #include "room.h"
 #include "screen.h"
 #include "game.h"
-#include "functions.h"
 
 void Vaati3BackgroundManager_OnEnterRoom(Vaati3BackgroundManager*);
 

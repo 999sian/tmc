@@ -7,7 +7,6 @@
 #include "pauseMenu.h"
 
 #include "common.h"
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "itemMetaData.h"
@@ -21,6 +20,7 @@
 #include "structures.h"
 #include "subtask.h"
 #include "ui.h"
+#include "affine.h"
 
 extern void sub_080A4DB8(u32);
 
@@ -28,6 +28,7 @@ void sub_080A5128(void);
 void sub_080A51D4(void);
 bool32 sub_080A51F4(void);
 void sub_080A5F48(u32, u32);
+void sub_080A57F4(void);
 
 void Subtask_PauseMenu(void) {
     static Subtask* const pauseMenu_Variants[] = {

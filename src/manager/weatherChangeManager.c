@@ -13,7 +13,9 @@
 #include "screen.h"
 #include "sound.h"
 #include "game.h"
-#include "functions.h"
+#include "manager/staticBackgroundManager.h"
+#include "player.h"
+#include "structures.h"
 
 void WeatherChangeManager_OnEnterRoom(WeatherChangeManager*);
 void sub_08059608(WeatherChangeManager*);

@@ -4,9 +4,13 @@
  *
  * @brief Syrup NPC
  */
-#include "functions.h"
+#include "script.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

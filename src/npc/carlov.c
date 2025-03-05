@@ -8,6 +8,7 @@
 #include "npc.h"
 #include "room.h"
 #include "sound.h"
+#include "script.h"
 
 void Carlov(Entity* this) {
     if (this->action == 0) {

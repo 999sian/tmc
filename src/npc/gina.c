@@ -7,6 +7,11 @@
 #include "entity.h"
 #include "npc.h"
 #include "player.h"
+#include "script.h"
+#include "physics.h"
+#if defined(USA) || defined(DEMO_USA)
+#include "flags.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;

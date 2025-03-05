@@ -6,7 +6,7 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "beanstalkSubtask.h"
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"

@@ -5,7 +5,7 @@
  * @brief Cucco Chick Aggr enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "player.h"
 
 void sub_08022A88(Entity*);
 void sub_08022AA4(Entity*);

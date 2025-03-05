@@ -6,10 +6,11 @@
  */
 #include "collision.h"
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
 #include "playeritem.h"
 #include "sound.h"
+#include "vram.h"
+#include "asm.h"
 
 const Hitbox gUnk_081271CC = { 0, 0, { 1, 0, 0, 1 }, 8, 8 };
 

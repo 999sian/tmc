@@ -7,7 +7,8 @@
 #include "manager/cloudStaircaseTransitionManager.h"
 #include "asm.h"
 #include "common.h"
-#include "functions.h"
+#include "room.h"
+#include "player.h"
 
 void CloudStaircaseTransitionManager_Main(CloudStaircaseTransitionManager* this) {
     if (super->action == 0) {

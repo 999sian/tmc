@@ -4,7 +4,6 @@
  *
  * @brief Water Element object
  */
-#include "functions.h"
 #include "object.h"
 
 void WaterElement_Init(Entity*);

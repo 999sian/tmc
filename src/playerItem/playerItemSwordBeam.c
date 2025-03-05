@@ -4,14 +4,16 @@
  *
  * @brief Sword Beam Player Item
  */
+#include "playeritem.h"
 #include "asm.h"
-#include "common.h"
 #include "effects.h"
 #include "entity.h"
-#include "functions.h"
+#include "collision.h"
 #include "physics.h"
 #include "player.h"
 #include "sound.h"
+#include "object.h"
+#include "room.h"
 
 typedef struct {
     /*0x00*/ Entity base;

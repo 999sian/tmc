@@ -5,6 +5,8 @@
  * @brief Mineral Water Source object
  */
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
 
 void MineralWaterSource_Init(Entity*);
 void MineralWaterSource_Action1(Entity*);

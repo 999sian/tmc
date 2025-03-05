@@ -6,10 +6,13 @@
  */
 #include "effects.h"
 #include "entity.h"
-#include "functions.h"
 #include "kinstone.h"
 #include "message.h"
+#include "script.h"
 #include "npc.h"
+#include "common.h"
+#include "player.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -6,10 +6,17 @@
  */
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
 #include "player.h"
 #include "screen.h"
+#include "structures.h"
 
 typedef struct {
     union SplitHWord unk0;

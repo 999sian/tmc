@@ -1,0 +1,53 @@
+#ifndef VRAM_H
+#define VRAM_H
+
+#include "global.h"
+#include "entity.h"
+
+#define MAX_GFX_SLOTS 44
+
+typedef enum {
+    GFX_SLOT_FREE,
+    GFX_SLOT_UNLOADED, // some sort of free? no longer in use?
+    GFX_SLOT_STATUS2,  // some sort of free?
+    GFX_SLOT_FOLLOWER, // Set by SetGFXSlotStatus for the following slots
+    GFX_SLOT_RESERVED, // maybe ready to be loaded?
+    GFX_SLOT_GFX,
+    GFX_SLOT_PALETTE
+} GfxSlotStatus;
+
+typedef enum {
+    GFX_VRAM_0,
+    GFX_VRAM_1, // uploaded to vram?
+    GFX_VRAM_2,
+    GFX_VRAM_3, // not yet uploaded to vram?
+} GfxSlotVramStatus;
+
+typedef struct {
+    /*0x00*/ u8 status : 4;
+    /*0x00*/ u8 vramStatus : 4; // Whether the gfx was uploaded to the vram?
+    /*0x01*/ u8 slotCount;
+    /*0x02*/ u8 referenceCount; /**< How many entities use this gfx slot */
+    /*0x03*/ u8 unk_3;
+    /*0x04*/ u16 gfxIndex;
+    /*0x06*/ u16 paletteIndex;
+    /*0x08*/ const void* palettePointer;
+} GfxSlot;
+
+typedef struct {
+    /*0x00*/ u8 unk0;
+    /*0x01*/ u8 unk_1;
+    /*0x02*/ u8 unk_2;
+    /*0x03*/ u8 unk_3;
+    /*0x04*/ GfxSlot slots[MAX_GFX_SLOTS];
+} GfxSlotList;
+extern GfxSlotList gGFXSlots;
+
+static_assert(sizeof(GfxSlotList) == 0x214);
+
+extern bool32 LoadFixedGFX(Entity*, u32);
+extern bool32 LoadSwapGFX(Entity*, u32, u32);
+extern void UnloadGFXSlots(Entity*);
+extern void sub_080ADD70(void);
+
+#endif //VRAM_H

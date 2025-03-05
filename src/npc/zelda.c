@@ -7,10 +7,14 @@
 #include "npc/zelda.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "script.h"
+#include "physics.h"
 #include "npc.h"
 #include "sound.h"
 #include "tiles.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
 
 void ZeldaFollower_Hide(Entity*, Entity*);
 void ZeldaFollower_Show(Entity*, Entity*);

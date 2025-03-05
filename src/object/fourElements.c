@@ -8,9 +8,13 @@
 #include "hitbox.h"
 #include "message.h"
 #include "object.h"
+#include "sound.h"
+#include "flags.h"
+#include "player.h"
 #include "screen.h"
+#include "scroll.h"
 #include "manager/lightManager.h"
-#include "functions.h"
+#include "script.h"
 
 typedef struct {
     /*0x00*/ Entity base;

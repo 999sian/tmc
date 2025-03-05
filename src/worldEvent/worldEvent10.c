@@ -7,6 +7,9 @@
 #include "fade.h"
 #include "menu.h"
 #include "object.h"
+#include "common.h"
+#include "flags.h"
+#include "room.h"
 #include "subtask.h"
 
 void WorldEvent_Beanstalk_0(void);

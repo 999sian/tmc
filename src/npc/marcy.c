@@ -6,7 +6,7 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "script.h"
 #include "item.h"
 #include "message.h"
 

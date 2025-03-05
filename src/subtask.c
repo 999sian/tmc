@@ -1,11 +1,6 @@
 #include "common.h"
 #include "fileselect.h"
-#include "flags.h"
-#include "functions.h"
 #include "game.h"
-#include "item.h"
-#include "itemMetaData.h"
-#include "kinstone.h"
 #include "main.h"
 #include "menu.h"
 #include "message.h"
@@ -14,6 +9,8 @@
 #include "subtask.h"
 #include "ui.h"
 #include "windcrest.h"
+#include "affine.h"
+#include "structures.h"
 
 extern Screen gUnk_03001020;
 extern u8 gPaletteBufferBackup[];

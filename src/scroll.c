@@ -6,12 +6,15 @@
 #include "common.h"
 #include "effects.h"
 #include "entity.h"
-#include "functions.h"
 #include "game.h"
 #include "kinstone.h"
 #include "manager/diggingCaveEntranceManager.h"
 #include "map.h"
 #include "object.h"
+#include "sound.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "screen.h"
 #include "structures.h"
 #include "tileMap.h"
@@ -964,7 +967,7 @@ void sub_08080CB4(Entity* this) {
                 case 0x5c:
                 case 0x62:
                     if ((gRoomTransition.frameCount & 0xf) == 0) {
-                        CreateSparkle(this);
+                        CreateSparkleFx(this);
                     }
                     break;
             }

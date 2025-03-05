@@ -32,4 +32,7 @@ extern BgAnimation gBgAnimations[MAX_BG_ANIMATIONS];
 extern const u16* const gUnk_080B755C[];
 extern const u16 gUnk_080B77C0[];
 
+extern void LoadBgAnimations(u16*);
+extern void ClearBgAnimations(void);
+
 #endif // BACKGROUNDANIMATIONS_H

@@ -4,11 +4,12 @@
  *
  * @brief Metal Door object
  */
+#include "object/lockedDoor.h"
 #include "asm.h"
 #include "effects.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "hitbox.h"
 #include "room.h"
 #include "sound.h"
@@ -28,7 +29,6 @@ typedef struct {
     /*0x86*/ u16 flag2;
 } MetalDoorEntity;
 
-extern u32 sub_08083734(Entity*, u32);
 void sub_080A080C(MetalDoorEntity* this);
 void sub_080A0870(MetalDoorEntity* this);
 void MetalDoor_Init(MetalDoorEntity* this);

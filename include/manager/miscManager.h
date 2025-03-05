@@ -12,4 +12,7 @@ typedef struct {
     u16 flag2;
 } MiscManager;
 
+extern void sub_08059278(void);
+extern void SetDirtTile(u32);
+
 #endif // MISCMANAGER_H

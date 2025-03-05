@@ -8,4 +8,6 @@ typedef struct {
     u32 field_0x20;
 } StaticBackgroundManager;
 
+extern void LoadStaticBackground(u32);
+
 #endif // STATICBACKGROUNDMANAGER_H

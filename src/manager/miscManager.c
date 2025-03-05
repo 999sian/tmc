@@ -6,16 +6,23 @@
  */
 #include "manager/miscManager.h"
 #include "area.h"
-#include "common.h"
 #include "flags.h"
-#include "functions.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
+#include "script.h"
 #include "sound.h"
 #include "tiles.h"
+#include "scroll.h"
+#include "subtask.h"
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
+#include "common.h"
+#endif
 
 void MiscManager_Type0(MiscManager*);
 void MiscManager_Type1(MiscManager*);
@@ -229,7 +236,7 @@ void MiscManager_Type5(MiscManager* this) {
     switch (super->action) {
         default:
             if (!--super->timer) {
-                CreateDustAt(this->x, this->y, super->type2);
+                CreateDeathFxAt(this->x, this->y, super->type2);
                 RestorePrevTileEntity(TILE_LOCAL(this->x, this->y), super->type2);
                 SoundReq(SFX_TASK_COMPLETE);
                 DeleteThisEntity();

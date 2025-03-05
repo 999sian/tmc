@@ -5,9 +5,9 @@
  * @brief Ball and Chain Projectile
  */
 #include "entity.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "projectile.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

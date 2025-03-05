@@ -6,6 +6,9 @@
  */
 #include "npc.h"
 #include "tiles.h"
+#include "room.h"
+#include "flags.h"
+#include "asm.h"
 
 void sub_0806DD90(Entity*);
 void sub_0806DEC8(Entity*);

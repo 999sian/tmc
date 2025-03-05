@@ -5,7 +5,6 @@
  * @brief Map Hint Subtask
  */
 #include "menu.h"
-#include "functions.h"
 #include "subtask.h"
 #include "common.h"
 #include "main.h"
@@ -15,6 +14,7 @@
 #include "fileselect.h"
 #include "kinstone.h"
 #include "game.h"
+#include "affine.h"
 
 void sub_080A6438();
 

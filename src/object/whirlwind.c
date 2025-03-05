@@ -5,9 +5,14 @@
  * @brief Whirlwind object
  */
 #include "area.h"
-#include "functions.h"
+#include "script.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "physics.h"
+#include "player.h"
 
 void Whirlwind_Init(Entity*);
 void Whirlwind_Action1(Entity*);

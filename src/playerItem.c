@@ -1,5 +1,4 @@
 #include "global.h"
-#include "functions.h"
 #include "player.h"
 #include "playeritem.h"
 

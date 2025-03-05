@@ -14,6 +14,8 @@
 #include "save.h"
 #include "screen.h"
 #include "subtask.h"
+#include "sound.h"
+#include "structures.h"
 
 typedef struct {
     /*0x00*/ Menu base;

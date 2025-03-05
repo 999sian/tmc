@@ -7,10 +7,11 @@
 #include "manager/bombableWallManager.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "game.h"
 #include "object.h"
+#include "asm.h"
 #include "sound.h"
+#include "room.h"
 #include "tiles.h"
 
 u32 BombableWallManager_GetBombableType(u32 tilePos, u32 layer);

@@ -6,8 +6,11 @@
  */
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "flags.h"
+#include "player.h"
 #include "physics.h"
 #include "room.h"
 #include "tiles.h"

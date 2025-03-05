@@ -8,7 +8,7 @@
 #include "enemy.h"
 #include "enemy/gyorg.h"
 #include "fileselect.h"
-#include "functions.h"
+#include "physics.h"
 #include "player.h"
 
 // todo: wrong types

@@ -6,9 +6,7 @@
 #include "area.h"
 #include "asm.h"
 #include "common.h"
-#include "fileselect.h"
-#include "flags.h"
-#include "functions.h"
+#include "structures.h"
 #include "game.h"
 #include "main.h"
 #include "menu.h"
@@ -17,6 +15,7 @@
 #include "screen.h"
 #include "sound.h"
 #include "subtask.h"
+#include "affine.h"
 
 typedef void(AuxCutsceneState)(void);
 typedef void(CutsceneMainState)(void);

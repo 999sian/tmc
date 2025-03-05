@@ -5,8 +5,8 @@
  * @brief Spiny Chuchu enemy
  */
 #include "enemy.h"
-#include "functions.h"
 #include "hitbox.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

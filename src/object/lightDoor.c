@@ -4,8 +4,11 @@
  *
  * @brief Light Door object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
 #include "screen.h"
 #include "tiles.h"
 

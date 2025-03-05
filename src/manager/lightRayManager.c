@@ -9,10 +9,12 @@
  */
 #include "manager/lightRayManager.h"
 #include "common.h"
-#include "functions.h"
 #include "main.h"
 #include "screen.h"
 #include "game.h"
+#include "structures.h"
+#include "player.h"
+#include "physics.h"
 
 extern void DisableVBlankDMA(void);
 

@@ -233,8 +233,6 @@ Entity* LoadRoomEntity(const EntityData*);
 void LoadRoomEntityList(const EntityData* listPtr);
 void* GetRoomProperty(u32 area, u32 room, u32 property);
 
-bool32 LoadFixedGFX(Entity*, u32);
-void UnloadGFXSlots(Entity*);
 void LoadSmallChestTile2(TileEntity*);
 void sub_0804B0B0(u32 arg0, u32 arg1);
 

@@ -5,23 +5,25 @@
  */
 #include "area.h"
 #include "backgroundAnimations.h"
-#include "enemy.h"
 #include "entity.h"
 #include "fade.h"
 #include "fileselect.h"
-#include "functions.h"
+#include "manager.h"
 #include "game.h"
 #include "item.h"
-#include "itemMetaData.h"
 #include "main.h"
-#include "menu.h"
-#include "npc.h"
 #include "object.h"
+#include "common.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "save.h"
 #include "screen.h"
-#include "script.h"
 #include "sound.h"
 #include "ui.h"
+#include "subtask.h"
+#include "beanstalkSubtask.h"
+#include "structures.h"
 
 u32 StairsAreValid(void);
 void ClearFlagArray(const u16*);
@@ -76,11 +78,11 @@ void SetPopupState(u32 type, u32 choice_idx) {
     u32 fakematch;
 
     MemClear(gBG1Buffer, sizeof gBG1Buffer);
-    gUnk_020227E8[0]._0.WORD = 0xf;
-    gUnk_020227E8[1]._0.WORD = 0xf;
-    gUnk_020227E8[2]._0.WORD = 0xf;
-    gUnk_020227E8[3]._0.WORD = 0xf;
-    *(&gUnk_020227E8[choice_idx]._0.BYTES.byte0 + 1) = fakematch = 1;
+    gUnk_020227E8[0].w[0] = 0xf;
+    gUnk_020227E8[1].w[0] = 0xf;
+    gUnk_020227E8[2].w[0] = 0xf;
+    gUnk_020227E8[3].w[0] = 0xf;
+    *(gUnk_020227E8[choice_idx].s + 1) = fakematch = 1;
 
     MemCopy(&sDefaultFont, &font, sizeof font);
     opt = &sPopupOptions[type];

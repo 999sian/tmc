@@ -9,6 +9,7 @@
 #include "enemy.h"
 #include "entity.h"
 #include "object.h"
+#include "sound.h"
 #include "physics.h"
 #include "player.h"
 #include "room.h"

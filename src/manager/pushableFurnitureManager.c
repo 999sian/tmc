@@ -8,6 +8,7 @@
 
 #include "flags.h"
 #include "object.h"
+#include "player.h"
 #include "object/pushableFurniture.h"
 #include "room.h"
 

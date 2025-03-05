@@ -8,7 +8,11 @@
 #include "room.h"
 #include "npc.h"
 #include "area.h"
+#include "flags.h"
+#include "script.h"
+#include "save.h"
 #include "asm.h"
+#include "object.h"
 
 typedef struct {
     Manager base;

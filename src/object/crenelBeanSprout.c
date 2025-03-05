@@ -5,10 +5,16 @@
  * @brief Crenel Bean Sprout object
  */
 #include "asm.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -241,7 +247,7 @@ void CrenelBeanSprout_Action4(CrenelBeanSproutEntity* this) {
         if (--super->timer == 0) {
             super->action = 6;
             super->subAction = 0;
-            CreateDust(super);
+            CreateDeathFx(super);
         }
     } else {
         super->timer = 192;

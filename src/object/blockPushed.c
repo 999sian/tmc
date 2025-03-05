@@ -5,9 +5,14 @@
  * @brief Block Pushed object
  */
 #include "area.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "vram.h"
 
 typedef struct {
     /*0x00*/ Entity base;

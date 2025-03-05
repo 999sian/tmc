@@ -6,11 +6,14 @@
  */
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
-#include "game.h"
+#include "room.h"
 #include "hitbox.h"
 #include "physics.h"
 #include "tiles.h"
+#include "player.h"
+#ifndef EU
+#include "game.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;

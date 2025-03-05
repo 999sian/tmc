@@ -6,7 +6,8 @@
  */
 #include "manager/specialWarpManager.h"
 #include "asm.h"
-#include "functions.h"
+#include "room.h"
+#include "player.h"
 
 void SpecialWarpManager_Main(SpecialWarpManager* this) {
     u32 collisionLayer;

@@ -6,7 +6,6 @@
  */
 #include "fade.h"
 #include "flags.h"
-#include "functions.h"
 #include "menu.h"
 #include "subtask.h"
 

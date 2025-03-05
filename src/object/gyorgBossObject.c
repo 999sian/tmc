@@ -4,14 +4,23 @@
  *
  * @brief Gyorg Boss object
  */
-#include "area.h"
 #include "enemy/gyorg.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
 #include "room.h"
 #include "screen.h"
 #include "screenTransitions.h"
+#include "scroll.h"
+#ifndef EU
+#include "area.h"
+#endif
 
 struct GyorgChildSpawns {
     s16 offsetX;

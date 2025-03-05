@@ -4,8 +4,12 @@
  *
  * @brief Minish Village Object object
  */
-#include "functions.h"
+#include "script.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
 #include "screen.h"
 #include "tiles.h"
 

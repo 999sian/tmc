@@ -12,7 +12,8 @@
 #include "sound.h"
 #include "assets/map_offsets.h"
 #include "game.h"
-#include "functions.h"
+#include "player.h"
+#include "room.h"
 
 extern u8 gEntCount;
 extern u8 gMapDataTopSpecial[];

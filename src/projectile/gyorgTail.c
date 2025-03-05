@@ -6,7 +6,6 @@
  */
 #include "asm.h"
 #include "entity.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "physics.h"
 #include "projectile.h"

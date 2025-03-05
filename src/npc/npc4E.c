@@ -6,17 +6,23 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "structures.h"
 #include "game.h"
 #include "hitbox.h"
 #include "item.h"
 #include "kinstone.h"
 #include "npc.h"
 #include "object.h"
+#include "common.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
 #include "screenTransitions.h"
 #include "sound.h"
 #include "tiles.h"
+#include "scroll.h"
+#include "script.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -76,17 +76,6 @@ typedef struct {
     // /*0x78*/ u32 _78;
 } Screen;
 
-typedef struct {
-    s16 x;
-    s16 y;
-    u16 _4;
-    u16 _6;
-    u16 _8;
-} OAMCommand;
-
 extern Screen gScreen;
-extern OAMCommand gOamCmd;
-
-extern void sub_080ADA04(OAMCommand*, void*);
 
 #endif // SCREEN_H

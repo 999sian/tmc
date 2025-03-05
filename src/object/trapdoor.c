@@ -6,6 +6,10 @@
  */
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "physics.h"
+#include "player.h"
 
 void sub_08099ECC(Entity*);
 void Trapdoor_Init(Entity*);

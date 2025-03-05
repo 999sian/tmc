@@ -5,10 +5,12 @@
  * @brief Cow NPC
  */
 #include "entity.h"
-#include "functions.h"
+#include "message.h"
 #include "npc.h"
 #include "player.h"
 #include "sound.h"
+#include "asm.h"
+#include "manager.h"
 
 typedef struct {
     /*0x00*/ Entity base;

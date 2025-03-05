@@ -7,7 +7,6 @@
 #include "manager/lightManager.h"
 #include "area.h"
 #include "common.h"
-#include "functions.h"
 #include "game.h"
 #include "main.h"
 #include "physics.h"

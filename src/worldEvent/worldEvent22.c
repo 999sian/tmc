@@ -4,7 +4,7 @@
  *
  * @brief World Event 22
  */
-#include "functions.h"
+#include "script.h"
 #include "menu.h"
 #include "npc.h"
 #include "room.h"

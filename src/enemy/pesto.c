@@ -8,6 +8,12 @@
 #include "enemy.h"
 #include "game.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "playeritem.h"
 #include "save.h"
 
@@ -139,7 +145,7 @@ void nullsub_138(PestoEntity* this) {
 void sub_0802409C(PestoEntity* this) {
     super->health = 0;
     InitializeAnimation(super, super->animationState);
-    CreateDust(super);
+    CreateDeathFx(super);
 }
 
 void sub_080240B8(PestoEntity* this) {

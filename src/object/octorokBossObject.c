@@ -4,9 +4,16 @@
  *
  * @brief Octorok Boss Object object
  */
-#include "functions.h"
 #include "game.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct HelperStruct {
     u8 field_0x0; // [0,1,2,4]  is later stored in super->subtimer

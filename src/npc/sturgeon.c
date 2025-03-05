@@ -5,10 +5,16 @@
  * @brief Sturgeon NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
 #include "npc.h"
 #include "object.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
+#include "message.h"
+#include "script.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -148,7 +154,7 @@ void Sturgeon_Head(Entity* this) {
 
 void sub_08064C9C(Entity* this) {
     if ((this->timer != 0) && ((gRoomTransition.frameCount & 3U) == 0)) {
-        CreateDust(this);
+        CreateDeathFx(this);
     }
 }
 

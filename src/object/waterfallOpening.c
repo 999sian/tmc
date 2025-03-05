@@ -6,11 +6,11 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "menu.h"
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"
+#include "vram.h"
 
 typedef struct {
     Entity base;

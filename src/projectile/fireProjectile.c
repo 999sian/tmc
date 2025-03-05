@@ -6,7 +6,7 @@
  */
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 
 extern void (*const FireProjectile_Actions[])(Entity*);
 

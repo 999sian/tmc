@@ -11,4 +11,6 @@ typedef struct {
     u32 unk_3c;
 } HorizontalMinishPathBackgroundManager;
 
+extern void sub_080580B0(u32);
+
 #endif // HORIZONTALMINISHPATHBACKGROUNDMANAGER_H

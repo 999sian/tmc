@@ -6,7 +6,7 @@ SCRIPT_START script_CutsceneMiscObjectOctorok2
 	SetAnimation 0x0002
 	EndBlock
 	WaitForSyncFlagAndClear 0x00000002
-	Call CreateDust
+	Call CreateDeathFx
 	DoPostScriptAction 0x0006
 SCRIPT_END
 	.2byte 0x0000

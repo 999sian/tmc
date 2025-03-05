@@ -9,13 +9,17 @@
 #include "area.h"
 #include "common.h"
 #include "entity.h"
-#include "fileselect.h"
-#include "functions.h"
+#include "structures.h"
 #include "game.h"
 #include "main.h"
 #include "object.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
 #include "subtask.h"
+#include "affine.h"
 
 extern void ClearArmosData(void);
 extern void sub_080300C4(void);

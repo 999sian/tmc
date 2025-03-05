@@ -6,8 +6,8 @@
  * screen.
  */
 #include "manager/minishSizedEntranceManager.h"
-#include "functions.h"
 #include "object.h"
+#include "flags.h"
 #include "room.h"
 #include "asm.h"
 

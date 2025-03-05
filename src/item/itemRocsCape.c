@@ -1,4 +1,3 @@
-#include "functions.h"
 #include "item.h"
 #include "sound.h"
 

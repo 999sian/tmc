@@ -1,7 +1,7 @@
 #include "asm.h"
 #include "global.h"
 #include "entity.h"
-#include "functions.h"
+
 #include "map.h"
 #include "player.h"
 #include "room.h"

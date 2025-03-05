@@ -1,7 +1,7 @@
 #include "global.h"
 #include "entity.h"
 #include "item.h"
-#include "functions.h"
+#include "physics.h"
 #include "playeritem.h"
 
 void sub_08076C98(ItemBehavior*, u32);

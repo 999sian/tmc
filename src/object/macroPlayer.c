@@ -8,8 +8,10 @@
 #include "entity.h"
 #include "functions.h"
 #include "object.h"
+#include "asm.h"
 #include "physics.h"
 #include "player.h"
+#include "structures.h"
 
 typedef struct {
     Entity base;

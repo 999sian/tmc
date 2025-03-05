@@ -6,14 +6,13 @@
  */
 #include "asm.h"
 #include "enemy.h"
-#include "functions.h"
-#include "game.h"
 #include "item.h"
 #include "kinstone.h"
 #include "message.h"
 #include "npc.h"
 #include "save.h"
 #include "tiles.h"
+#include "vram.h"
 
 struct SalesOffering {
     u8 field_0x0;

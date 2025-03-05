@@ -5,7 +5,7 @@
  * @brief Spiked Rollers Projectile
  */
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

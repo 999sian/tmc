@@ -5,9 +5,11 @@
  * @brief Tree Item enemy
  */
 #include "enemy.h"
-#include "functions.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -73,7 +75,7 @@ void TreeItem(TreeItemEntity* this) {
             break;
     }
 
-    EnemyDisableRespawn(super);
+    EnemyDisableRespawn((Enemy*)super);
     DeleteThisEntity();
 }
 

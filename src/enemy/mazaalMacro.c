@@ -5,11 +5,12 @@
  * @brief Mazaal Macro enemy
  */
 #include "enemy.h"
-#include "functions.h"
 #include "screenTransitions.h"
 #include "script.h"
 #include "structures.h"
 #include "tiles.h"
+#include "player.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

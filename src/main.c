@@ -6,13 +6,13 @@
 #include "main.h"
 
 #include "common.h"
-#include "functions.h"
 #include "game.h"
 #include "interrupts.h"
 #include "message.h"
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
+#include "structures.h"
 
 extern u32 gRand;
 

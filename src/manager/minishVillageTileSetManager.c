@@ -10,7 +10,7 @@
 #include "main.h"
 #include "game.h"
 #include "assets/gfx_offsets.h"
-#include "functions.h"
+#include "structures.h"
 
 void MinishVillageTileSetManager_OnEnterRoom(void*);
 bool32 MinishVillageTileSetManager_UpdateRoomGfxGroup(MinishVillageTileSetManager*);

@@ -8,7 +8,7 @@
 #include "common.h"
 #include "screen.h"
 #include "game.h"
-#include "functions.h"
+#include "room.h"
 
 void StaticBackgroundManager_OnEnterRoom(StaticBackgroundManager*);
 void sub_0805B448(StaticBackgroundManager*);

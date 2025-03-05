@@ -106,4 +106,18 @@ typedef struct {
  */
 extern u32 FindValueForKey(u32 key, const KeyValuePair* keyValuePairList);
 
+extern u32 GetTileIndex(u32 tilePos, u32 layer);
+extern void LinearMoveDirectionOLD(struct Entity_*, u32, u32);
+extern u16* DoTileInteraction(struct Entity_*, u32, u32, u32);
+extern void UpdateCollisionLayer(struct Entity_*);
+extern void sub_080028E0(struct Entity_*);
+extern void SnapToTile(struct Entity_*);
+extern u32 sub_0800419C(struct Entity_*, struct Entity_*, u32, u32);
+extern u32 sub_080041DC(struct Entity_*, u32, u32);
+extern void sub_080042BA(struct Entity_*, u32);
+extern void sub_080042D0(struct Entity_*, u32, u16);
+extern void sub_080044AE(struct Entity_*, u32, u32);
+extern void sub_0800451C(struct Entity_*);
+extern void sub_08004542(struct Entity_*);
+
 #endif // ASM_H

@@ -7,12 +7,13 @@
 #include "effects.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
 #include "player.h"
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"
+#include "kinstone.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -56,7 +57,7 @@ void TreeHidingPortal_Action1(TreeHidingPortalEntity* this) {
     if (sub_0800419C(super, &gPlayerEntity.base, 0x30, 0x30)) {
         if (CheckGlobalFlag(EZERO_1ST)) {
             if (((gRoomTransition.frameCount & 3) == 0)) {
-                CreateSparkle(super);
+                CreateSparkleFx(super);
             }
         }
     }

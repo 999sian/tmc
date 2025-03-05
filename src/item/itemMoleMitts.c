@@ -1,8 +1,9 @@
-
 #include "effects.h"
-#include "functions.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
 #include "sound.h"
 #include "tiles.h"
 

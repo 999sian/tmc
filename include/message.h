@@ -3,9 +3,53 @@
 
 #include "global.h"
 #include "entity.h"
-#include "structures.h"
 
 #define MESSAGE_ACTIVE 0x7f
+
+typedef struct {
+    u8 unk00 : 1;
+    u8 unk01 : 3;
+    u8 unk04 : 4;
+    u8 unk1;
+    u8 charColor;
+    u8 bgColor;
+    u16 unk4;
+    u16 unk6;
+    void* unk8;
+} WStruct;
+
+static_assert(sizeof(WStruct) == 12);
+
+typedef union {
+    char s[8];
+    u32 w[2];
+} String8;
+
+extern String8 gUnk_020227E8[];
+extern u32 NumberToAscii(u32, String8*);
+extern WStruct* sub_0805F2C8(void);
+extern u32 sub_0805F7DC(u32, WStruct*);
+extern void sub_0805F300(WStruct*);
+extern void sub_0805F8E4(u32 r0, WStruct* r1);
+extern s32 sub_08056338(void);
+
+typedef struct {
+    u16* dest;
+    void* gfx_dest;
+    void* buffer_loc;
+    u32 _c;
+    u16 gfx_src;
+    u8 width;
+    u8 right_align : 1;
+    u8 sm_border : 1;
+    u8 unused : 1;
+    u8 draw_border : 1;
+    u8 border_type : 4;
+    u8 fill_type;
+    u8 charColor;
+    u8 _16;
+    u8 stylized;
+} Font;
 
 typedef struct {
     u8 state;
@@ -45,9 +89,11 @@ typedef struct {
     Token curToken;
     WStruct _50;
     char player_name[10];
-    u8 _66[0x10];
-    u8 _76;
-    u8 _77[0x11];
+    u8 _66[2];
+    String8 _68;
+    String8 _70;
+    String8 _78;
+    String8 _80;
     u8 msgStatus;
     u8 renderStatus;
     u8 newlineDelay;
@@ -138,7 +184,7 @@ void MessageClose(void);
 
 void DispMessageFrame(u16*, s32, s32, u32);
 
-void sub_08057044(u32, struct_020227E8*, u32);
+void NumberToAsciiPad3Digits(u32, String8*, u32);
 
 typedef enum {
     TEXT_SAVE,

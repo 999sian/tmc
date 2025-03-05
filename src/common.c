@@ -4,7 +4,7 @@
 #include "area.h"
 #include "asm.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "game.h"
 #include "global.h"
 #include "item.h"
@@ -15,6 +15,7 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
+#include "subtask.h"
 #include "structures.h"
 
 extern u8 gUnk_03003DE0;
@@ -97,9 +98,8 @@ typedef struct {
     u8 y;
 } PACKED DungeonMapObject;
 
-// More like PrepareTileEntitesForDungeonMap or so
 
-u32 DecToHex(u32 value) {
+u32 EncodeBCD(u32 value) {
     u32 result;
     FORCE_REGISTER(u32 r1, r1);
 

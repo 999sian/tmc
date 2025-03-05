@@ -5,11 +5,12 @@
  * @brief NPC 23
  */
 #include "entity.h"
-#include "functions.h"
 #include "message.h"
 #include "npc.h"
 #include "player.h"
 #include "structures.h"
+#include "room.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

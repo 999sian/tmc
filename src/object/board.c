@@ -6,7 +6,6 @@
  */
 #include "asm.h"
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
 #include "room.h"
 #include "tiles.h"

@@ -6,8 +6,8 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "object.h"
+#include "effects.h"
 #include "room.h"
 #include "screen.h"
 #include "screenTransitions.h"

@@ -4,9 +4,9 @@
  *
  * @brief Japanese Subtitle object
  */
-#include "entity.h"
 #include "menu.h"
 #include "object.h"
+#include "asm.h"
 #include "physics.h"
 
 extern void sub_0806FB00(Entity*, u32, u32, u32);

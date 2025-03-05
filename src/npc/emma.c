@@ -5,7 +5,6 @@
  * @brief Emma NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "screenTransitions.h"
 #include "script.h"
 

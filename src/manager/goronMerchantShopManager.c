@@ -10,6 +10,7 @@
 #include "flags.h"
 #include "item.h"
 #include "object.h"
+#include "room.h"
 #include "object/itemForSale.h"
 
 typedef struct {
