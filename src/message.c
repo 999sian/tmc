@@ -813,7 +813,7 @@ static void DispCursor(void) {
 }
 
 static void DrawCanvasLine(void) {
-    LoadResourceAsync(gTextGfxBuffer, 0x0600D040, sizeof(gTextGfxBuffer));
+    LoadResourceAsync(gTextGfxBuffer, BG_SCREEN_ADDR(26) + 0x40, sizeof(gTextGfxBuffer));
 }
 
 void sub_08056F88(u32 unk_1, u32 unk_2) {

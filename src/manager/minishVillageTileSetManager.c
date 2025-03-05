@@ -7,85 +7,148 @@
 #include "manager/minishVillageTileSetManager.h"
 #include "asm.h"
 #include "common.h"
-#include "functions.h"
 #include "main.h"
+#include "assets/gfx_offsets.h"
+#include "functions.h"
 
-void sub_08057E30(void*);
-bool32 sub_08057E40(MinishVillageTileSetManager*);
-void sub_08057E7C(u32);
+void MinishVillageTileSetManager_LoadRoomGfxGroup(void*);
+bool32 MinishVillageTileSetManager_UpdateRoomGfxGroup(MinishVillageTileSetManager*);
+void MinishVillageTileSetManager_LoadGfxGroup(u32);
 
-extern const u8 gGlobalGfxAndPalettes[];
-
-const u16 gUnk_08108050[0x2A] = {
+// clang-format off
+const u16 gMinishVillageTileSetManagerRegions[] = {
+    0, 0x000, 0x020, 0x0E0, 0x0E0,
 #ifdef EU
-    0,     0,     0x20, 0xE0,  0xE0,  1,     0x28,  0x1C8, 0x60,  0x80,  2,
-    0x188, 0x278, 0xE0, 0xA0,  3,     0x310, 0x178, 0xC0,  0x150, 3,     0x340,
+    1, 0x028, 0x1C8, 0x060, 0x080,
+    2, 0x188, 0x278, 0x0E0, 0x0A0,
 #else
-    0,     0,     0x20, 0xE0,  0xE0,  1,     0,     0x1D0, 0x80,  0x60,  2,
-    0x170, 0x278, 0xF8, 0xA0,  3,     0x310, 0x178, 0xC0,  0x150, 3,     0x340,
+    1, 0x000, 0x1D0, 0x080, 0x060,
+    2, 0x170, 0x278, 0x0F8, 0x0A0,
 #endif
-    0x2C8, 0x60,  0x90, 4,     0x1D0, 0,     0x200, 0xE0,  1,     0x108, 0x188,
-    0xD0,  0x80,  2,    0x1E8, 0x338, 0x50,  0xC0,  0xFF,  0
+    3, 0x310, 0x178, 0x0C0, 0x150,
+    3, 0x340, 0x2C8, 0x060, 0x090,
+    4, 0x1D0, 0x000, 0x200, 0x0E0,
+    1, 0x108, 0x188, 0x0D0, 0x080,
+    2, 0x1E8, 0x338, 0x050, 0x0C0,
+    0xFF,
+};
+// clang-format on
+
+typedef struct {
+    u32 gfx;
+    void* dest;
+} MinishVillageTileSetManagerGfxInfo;
+
+const MinishVillageTileSetManagerGfxInfo gMinishVillageTileSetManagerGfxInfos[][8] = {
+    {
+        { offset_gUnk_086AAEE0 + 0x1580, BG_SCREEN_ADDR(0) },
+        { offset_gUnk_086AAEE0 + 0x2580, BG_SCREEN_ADDR(2) },
+        { offset_gUnk_086AAEE0 + 0x3580, BG_SCREEN_ADDR(4) },
+        { offset_gUnk_086AAEE0 + 0x4580, BG_SCREEN_ADDR(6) },
+        { offset_gUnk_086AAEE0 + 0x5580, BG_SCREEN_ADDR(16) },
+        { offset_gUnk_086AAEE0 + 0x6580, BG_SCREEN_ADDR(18) },
+        { offset_gUnk_086AAEE0 + 0x7580, BG_SCREEN_ADDR(20) },
+        { offset_gUnk_086AAEE0 + 0x8580, BG_SCREEN_ADDR(22) },
+    },
+    {
+        { offset_gUnk_086AAEE0 + 0x9580, BG_SCREEN_ADDR(0) },
+        { offset_gUnk_086AAEE0 + 0xA580, BG_SCREEN_ADDR(2) },
+        { offset_gUnk_086AAEE0 + 0xB580, BG_SCREEN_ADDR(4) },
+        { offset_gUnk_086AAEE0 + 0xC580, BG_SCREEN_ADDR(6) },
+        { offset_gUnk_086AAEE0 + 0xD580, BG_SCREEN_ADDR(16) },
+        { offset_gUnk_086AAEE0 + 0xE580, BG_SCREEN_ADDR(18) },
+        { offset_gUnk_086AAEE0 + 0xF580, BG_SCREEN_ADDR(20) },
+        { offset_gUnk_086AAEE0 + 0x10580, BG_SCREEN_ADDR(22) },
+    },
+    {
+        { offset_gUnk_086AAEE0 + 0x11580, BG_SCREEN_ADDR(0) },
+        { offset_gUnk_086AAEE0 + 0x12580, BG_SCREEN_ADDR(2) },
+        { offset_gUnk_086AAEE0 + 0x13580, BG_SCREEN_ADDR(4) },
+        { offset_gUnk_086AAEE0 + 0x14580, BG_SCREEN_ADDR(6) },
+        { offset_gUnk_086AAEE0 + 0x15580, BG_SCREEN_ADDR(16) },
+        { offset_gUnk_086AAEE0 + 0x16580, BG_SCREEN_ADDR(18) },
+        { offset_gUnk_086AAEE0 + 0x17580, BG_SCREEN_ADDR(20) },
+        { offset_gUnk_086AAEE0 + 0x18580, BG_SCREEN_ADDR(22) },
+    },
+    {
+        { offset_gUnk_086AAEE0 + 0x19580, BG_SCREEN_ADDR(0) },
+        { offset_gUnk_086AAEE0 + 0x1A580, BG_SCREEN_ADDR(2) },
+        { offset_gUnk_086AAEE0 + 0x1B580, BG_SCREEN_ADDR(4) },
+        { offset_gUnk_086AAEE0 + 0x1C580, BG_SCREEN_ADDR(6) },
+        { offset_gUnk_086AAEE0 + 0x1D580, BG_SCREEN_ADDR(16) },
+        { offset_gUnk_086AAEE0 + 0x1E580, BG_SCREEN_ADDR(18) },
+        { offset_gUnk_086AAEE0 + 0x1F580, BG_SCREEN_ADDR(20) },
+        { offset_gUnk_086AAEE0 + 0x20580, BG_SCREEN_ADDR(22) },
+    },
+    {
+        { offset_gUnk_086AAEE0 + 0x21580, BG_SCREEN_ADDR(0) },
+        { offset_gUnk_086AAEE0 + 0x22580, BG_SCREEN_ADDR(2) },
+        { offset_gUnk_086AAEE0 + 0x23580, BG_SCREEN_ADDR(4) },
+        { offset_gUnk_086AAEE0 + 0x24580, BG_SCREEN_ADDR(6) },
+        { offset_gUnk_086AAEE0 + 0x25580, BG_SCREEN_ADDR(16) },
+        { offset_gUnk_086AAEE0 + 0x26580, BG_SCREEN_ADDR(18) },
+        { offset_gUnk_086AAEE0 + 0x27580, BG_SCREEN_ADDR(20) },
+        { offset_gUnk_086AAEE0 + 0x28580, BG_SCREEN_ADDR(22) },
+    },
 };
 
-const u32 gUnk_081080A4[0x50] = {
-#ifdef EU
-    0x109860, 0x6000000, 0x10a860, 0x6001000, 0x10b860, 0x6002000, 0x10c860, 0x6003000, 0x10d860, 0x6008000,
-    0x10e860, 0x6009000, 0x10f860, 0x600a000, 0x110860, 0x600b000, 0x111860, 0x6000000, 0x112860, 0x6001000,
-    0x113860, 0x6002000, 0x114860, 0x6003000, 0x115860, 0x6008000, 0x116860, 0x6009000, 0x117860, 0x600a000,
-    0x118860, 0x600b000, 0x119860, 0x6000000, 0x11a860, 0x6001000, 0x11b860, 0x6002000, 0x11c860, 0x6003000,
-    0x11d860, 0x6008000, 0x11e860, 0x6009000, 0x11f860, 0x600a000, 0x120860, 0x600b000, 0x121860, 0x6000000,
-    0x122860, 0x6001000, 0x123860, 0x6002000, 0x124860, 0x6003000, 0x125860, 0x6008000, 0x126860, 0x6009000,
-    0x127860, 0x600a000, 0x128860, 0x600b000, 0x129860, 0x6000000, 0x12a860, 0x6001000, 0x12b860, 0x6002000,
-    0x12c860, 0x6003000, 0x12d860, 0x6008000, 0x12e860, 0x6009000, 0x12f860, 0x600a000, 0x130860, 0x600b000
-#else
-    0x001095E0, 0x06000000, 0x0010A5E0, 0x06001000, 0x0010B5E0, 0x06002000, 0x0010C5E0, 0x06003000, 0x0010D5E0,
-    0x06008000, 0x0010E5E0, 0x06009000, 0x0010F5E0, 0x0600A000, 0x001105E0, 0x0600B000, 0x001115E0, 0x06000000,
-    0x001125E0, 0x06001000, 0x001135E0, 0x06002000, 0x001145E0, 0x06003000, 0x001155E0, 0x06008000, 0x001165E0,
-    0x06009000, 0x001175E0, 0x0600A000, 0x001185E0, 0x0600B000, 0x001195E0, 0x06000000, 0x0011A5E0, 0x06001000,
-    0x0011B5E0, 0x06002000, 0x0011C5E0, 0x06003000, 0x0011D5E0, 0x06008000, 0x0011E5E0, 0x06009000, 0x0011F5E0,
-    0x0600A000, 0x001205E0, 0x0600B000, 0x001215E0, 0x06000000, 0x001225E0, 0x06001000, 0x001235E0, 0x06002000,
-    0x001245E0, 0x06003000, 0x001255E0, 0x06008000, 0x001265E0, 0x06009000, 0x001275E0, 0x0600A000, 0x001285E0,
-    0x0600B000, 0x001295E0, 0x06000000, 0x0012A5E0, 0x06001000, 0x0012B5E0, 0x06002000, 0x0012C5E0, 0x06003000,
-    0x0012D5E0, 0x06008000, 0x0012E5E0, 0x06009000, 0x0012F5E0, 0x0600A000, 0x001305E0, 0x0600B000
-#endif
-};
+const u8 gMinishVillateTileSetManagerPaletteGroups[] = { 0x16, 0x17, 0x17, 0x18, 0x18 };
 
-const u8 gUnk_081081E4[] = { 0x16, 0x17, 0x17, 0x18, 0x18 };
-
-#ifdef EU
 void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
-    u32 tmp;
-    const u32* tmp2;
-    s32 tmp3;
+    u32 gfxGroup;
+    const MinishVillageTileSetManagerGfxInfo* gfxInfo;
+    s32 super_timer;
     if (super->action == 0) {
         super->action = 1;
         super->timer = 8;
         this->unk_20 = 0xFF;
 
-        RegisterTransitionManager(this, sub_08057E30, 0);
+#ifndef EU
+        SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
+#endif
+        RegisterTransitionManager(this, MinishVillageTileSetManager_LoadRoomGfxGroup, 0);
     }
+#ifdef EU
     if (gRoomControls.reload_flags)
         return;
+#endif
 
-    if (sub_08057E40(this)) {
-        tmp = (u32)gRoomVars.graphicsGroups[0];
-        if (this->unk_20 != tmp) {
-            this->unk_20 = tmp;
+    if (MinishVillageTileSetManager_UpdateRoomGfxGroup(this)) {
+        gfxGroup = (u32)gRoomVars.graphicsGroups[0];
+        if (this->unk_20 != gfxGroup) {
+            this->unk_20 = gfxGroup;
             super->timer = 0;
         }
     }
+#ifndef EU
+    if (gRoomControls.reload_flags)
+        return;
+#endif
+#ifndef JP
+#ifndef EU
+    gfxGroup = this->unk_20;
+#endif
+#endif
 
-    tmp2 = &gUnk_081080A4[tmp << 4];
-    tmp3 = super->timer;
-    if (tmp3 == 0) {
+    gfxInfo = gMinishVillageTileSetManagerGfxInfos[gfxGroup];
+#ifdef EU
+    super_timer = super->timer;
+    if (super_timer == 0) {
+#else
+    switch (super->timer) {
+        case 0:
+#endif
         gPauseMenuOptions.disabled = 1;
-        LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], tmp2[1], 0x1000);
-        LoadPaletteGroup(gUnk_081081E4[tmp]);
+        LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo->gfx], gfxInfo->dest, BG_SCREEN_SIZE * 2);
+        LoadPaletteGroup(gMinishVillateTileSetManagerPaletteGroups[gfxGroup]);
         super->timer++;
+#ifdef EU
     } else {
-        switch (tmp3) {
+        switch (super_timer) {
             case 0:
+#else
+            break;
+#endif
             case 1:
             case 2:
             case 3:
@@ -93,99 +156,58 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
             case 5:
             case 6:
             case 7:
-                LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]], tmp2[(super->timer << 1) + 1],
-                                  0x1000);
+                LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo[super->timer].gfx], gfxInfo[super->timer].dest,
+                                  BG_SCREEN_SIZE * 2);
                 super->timer++;
+#ifdef EU
                 gPauseMenuOptions.disabled = 0;
+#endif
+                break;
             case 8:
+#ifndef EU
+                gPauseMenuOptions.disabled = 0;
+                super->timer++;
+#endif
                 break;
         }
+#ifdef EU
     }
-}
-#else
-void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
-    u32 tmp;
-    const u32* tmp2;
-    if (super->action == 0) {
-        super->action = 1;
-        super->timer = 8;
-        this->unk_20 = 0xFF;
-
-        SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
-        RegisterTransitionManager(this, sub_08057E30, 0);
-    }
-    if (sub_08057E40(this)) {
-        tmp = (u32)gRoomVars.graphicsGroups[0];
-        if (this->unk_20 != tmp) {
-            this->unk_20 = tmp;
-            super->timer = 0;
-        }
-    }
-    if (gRoomControls.reload_flags)
-        return;
-#ifndef JP
-    tmp = this->unk_20;
 #endif
-    tmp2 = &gUnk_081080A4[tmp << 4];
-    switch (super->timer) {
-        case 0:
-            gPauseMenuOptions.disabled = 1;
-            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], tmp2[1], 0x1000);
-            LoadPaletteGroup(gUnk_081081E4[tmp]);
-            super->timer++;
-            break;
-        case 1:
-        case 2:
-        case 3:
-        case 4:
-        case 5:
-        case 6:
-        case 7:
-            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]], tmp2[(super->timer << 1) + 1], 0x1000);
-            super->timer++;
-            break;
-        case 8:
-            gPauseMenuOptions.disabled = 0;
-            super->timer++;
-            break;
-    }
-}
-#endif
-
-void sub_08057E30(void* this) {
-    sub_08057E7C(gRoomVars.graphicsGroups[0]);
 }
 
-bool32 sub_08057E40(MinishVillageTileSetManager* this) {
-    u32 tmp = CheckRegionsOnScreen(gUnk_08108050);
-    if (tmp != 0xFF) {
-        gRoomVars.graphicsGroups[0] = tmp;
+void MinishVillageTileSetManager_LoadRoomGfxGroup(void* this) {
+    MinishVillageTileSetManager_LoadGfxGroup(gRoomVars.graphicsGroups[0]);
+}
+
+bool32 MinishVillageTileSetManager_UpdateRoomGfxGroup(MinishVillageTileSetManager* this) {
+    u32 gfxGroup = CheckRegionsOnScreen(gMinishVillageTileSetManagerRegions);
+    if (gfxGroup != 0xFF) {
+        gRoomVars.graphicsGroups[0] = gfxGroup;
         return TRUE;
-    } else {
-        return FALSE;
+    }
+    return FALSE;
+}
+
+void MinishVillageTileSetManger_LoadInitialGfxGroup(void) {
+    u32 gfxGroup = CheckRegionsOnScreen(gMinishVillageTileSetManagerRegions);
+    if (gfxGroup != 0xFF) {
+        MinishVillageTileSetManager_LoadGfxGroup(gfxGroup);
     }
 }
 
-void sub_08057E64(void) {
-    u32 tmp = CheckRegionsOnScreen(gUnk_08108050);
-    if (tmp != 0xFF) {
-        sub_08057E7C(tmp);
-    }
-}
-
-void sub_08057E7C(u32 unk1) {
-    u32 tmp;
-    const u32* tmp2;
+void MinishVillageTileSetManager_LoadGfxGroup(u32 gfxGroup) {
+    u32 i;
+    const MinishVillageTileSetManagerGfxInfo* gfxInfo;
 
 #ifndef EU
-    if (unk1 > 4)
+    if (gfxGroup >= ARRAY_COUNT(gMinishVillageTileSetManagerGfxInfos))
         return;
 #endif
 
-    LoadPaletteGroup(gUnk_081081E4[unk1]);
-    tmp2 = &gUnk_081080A4[unk1 << 4];
-    for (tmp = 0; tmp < 8; tmp++, tmp2 += 2) {
-        DmaCopy32(3, &gGlobalGfxAndPalettes[tmp2[0]], tmp2[1], 0x400 * 4);
+    LoadPaletteGroup(gMinishVillateTileSetManagerPaletteGroups[gfxGroup]);
+    gfxInfo = gMinishVillageTileSetManagerGfxInfos[gfxGroup];
+    for (i = 0; i < ARRAY_COUNT(gMinishVillageTileSetManagerGfxInfos[0]); i++, gfxInfo++) {
+        DmaCopy32(3, &gGlobalGfxAndPalettes[gfxInfo->gfx], gfxInfo->dest, BG_SCREEN_SIZE * 2);
     }
-    gRoomVars.graphicsGroups[0] = unk1;
+    gRoomVars.graphicsGroups[0] = gfxGroup;
 }

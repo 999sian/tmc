@@ -5,9 +5,9 @@
 
 typedef struct {
     Manager base;
-    u8 field_0x20;
-    u8 field_0x21;
-    u8 field_0x22;
+    u8 gfxGroup0;
+    u8 gfxGroup1;
+    u8 gfxGroup2;
 } HyruleTownTileSetManager;
 
 #endif // HYRULETOWNTILESETMANAGER_H

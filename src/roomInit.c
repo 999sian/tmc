@@ -17,7 +17,7 @@
 #include "functions.h"
 
 extern u32 sub_08060354(void);
-extern void sub_08057E64(void);
+extern void MinishVillageTileSetManger_LoadInitialGfxGroup(void);
 extern void sub_0809F814(u32);
 extern void sub_080300E8(void);
 extern void sub_08058D34(void);
@@ -1796,7 +1796,7 @@ void sub_StateChange_MinishVillage_Main(void) {
     if (!CheckLocalFlag(KOBITO_MORI_1ST)) {
         LoadRoomEntityList(&gUnk_080DC4C0);
     }
-    sub_08057E64();
+    MinishVillageTileSetManger_LoadInitialGfxGroup();
 }
 
 u32 sub_unk3_MinishVillage_SideHouse(void) {
@@ -1814,8 +1814,8 @@ typedef struct {
 extern struct_086D4460 gUnk_086D4460;
 
 void sub_unk2_MinishVillage_SideHouse(void) {
-    LoadResourceAsync(&gUnk_086D4460.LO, 0x6000000, 0x4000);
-    LoadResourceAsync(&gUnk_086D4460.HI, 0x6008000, 0x4000);
+    LoadResourceAsync(&gUnk_086D4460.LO, BG_SCREEN_ADDR(0), BG_SCREEN_SIZE * 8);
+    LoadResourceAsync(&gUnk_086D4460.HI, BG_SCREEN_ADDR(16), BG_SCREEN_SIZE * 8);
     LoadPaletteGroup(0x19);
 }
 

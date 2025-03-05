@@ -140,7 +140,7 @@ void sub_080596E0(WeatherChangeManager* this) {
                 break;
             case 4:
                 MemClear(gBG3Buffer, 0x800);
-                LoadResourceAsync(gBG3Buffer, 0x600e800, 0x800);
+                LoadResourceAsync(gBG3Buffer, BG_SCREEN_ADDR(29), BG_SCREEN_SIZE);
                 break;
             case 5:
                 gMapTop.bgSettings = &gScreen.bg1;

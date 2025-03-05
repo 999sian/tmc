@@ -560,7 +560,7 @@ extern u8 gManagerCount;
 #define TILE(x, y) (((((x)-gRoomControls.origin_x) >> 4) & 0x3F) | ((((y)-gRoomControls.origin_y) >> 4) & 0x3F) << 6)
 // Calculate tilePos from x and y coordinates where x and y are already relative to the current room.
 #define TILE_LOCAL(x, y) ((((x) >> 4) & 0x3F) | (((y) >> 4) & 0x3F) << 6)
-#define TILE_POS(x, y) (x + (y << 6))
+#define TILE_POS(x, y) ((x) + ((y) << 6))
 #define TILE_POS_X_COMPONENT 0x3f
 #define TILE_POS_Y_COMPONENT 0xfc0
 #define COORD_TO_TILE(entity) TILE((entity)->x.HALF.HI, (entity)->y.HALF.HI)

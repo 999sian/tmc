@@ -302,7 +302,7 @@ void HoleManager_InitParallaxBackground(HoleManager* this) {
     if (!super->type2)
         return;
     transition = &gHoleTransitions[super->type];
-    LoadResourceAsync(&gGlobalGfxAndPalettes[transition->parallax_background->gfx], 0x0600F000, 0x800);
+    LoadResourceAsync(&gGlobalGfxAndPalettes[transition->parallax_background->gfx], BG_SCREEN_ADDR(30), BG_SCREEN_SIZE);
     gScreen.bg3.control = 0x1E07;
     gScreen.lcd.displayControl |= DISPCNT_BG3_ON;
     gScreen.bg3.xOffset = gRoomControls.bg3OffsetX.HALF.HI;

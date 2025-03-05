@@ -380,9 +380,9 @@ void FigurineMenu_080A4978(void) {
                 LoadPalettes(fig->pal, 0x16, 9);
                 gfx = fig->gfx;
                 if (fig->size < 0) {
-                    LZ77UnCompVram(gfx, (void*)0x6014000);
+                    LZ77UnCompVram(gfx, OBJ_VRAM0 + 0x4000);
                 } else {
-                    LoadResourceAsync(gfx, 0x6014000, fig->size);
+                    LoadResourceAsync(gfx, OBJ_VRAM0 + 0x4000, fig->size);
                 }
             }
         }
