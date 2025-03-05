@@ -10,6 +10,7 @@
 #include "object.h"
 #include "room.h"
 #include "screen.h"
+#include "game.h"
 #include "manager/lightManager.h"
 #include "assets/gfx_offsets.h"
 #include "functions.h"
@@ -155,7 +156,7 @@ void HoleManager_Main(HoleManager* this) {
 bool32 IsPlayerOnHole(HoleManager*);
 void DoHoleTransition(HoleManager*);
 void HoleManager_UpdateParallaxBackground(HoleManager*);
-void HoleManager_InitParallaxBackground(HoleManager*);
+void HoleManager_OnEnterRoom(HoleManager*);
 
 void HoleManager_Init(HoleManager* this) {
     const HoleTransition* transition;
@@ -185,8 +186,8 @@ void HoleManager_Init(HoleManager* this) {
         this->persistance_y = transition->parallax_background->y;
         UnDarkRoom();
         HoleManager_UpdateParallaxBackground(this);
-        HoleManager_InitParallaxBackground(this);
-        RegisterTransitionManager(this, HoleManager_InitParallaxBackground, NULL);
+        HoleManager_OnEnterRoom(this);
+        RegisterTransitionHandler(this, HoleManager_OnEnterRoom, NULL);
     }
     if (!transition->parallax_entity)
         return;
@@ -297,7 +298,7 @@ void HoleManager_UpdateParallaxBackground(HoleManager* this) {
     gScreen.bg3.yOffset = gRoomControls.bg3OffsetY.HALF.HI = gRoomControls.scroll_y + this->persistance_offset_y + y;
 }
 
-void HoleManager_InitParallaxBackground(HoleManager* this) {
+void HoleManager_OnEnterRoom(HoleManager* this) {
     const HoleTransition* transition;
     if (!super->type2)
         return;

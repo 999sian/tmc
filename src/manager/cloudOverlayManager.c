@@ -6,19 +6,20 @@
  */
 #include "manager/cloudOverlayManager.h"
 #include "area.h"
-#include "functions.h"
 #include "screen.h"
+#include "game.h"
+#include "functions.h"
 
-void sub_0805AEDC(CloudOverlayManager*);
-void sub_0805AF3C(CloudOverlayManager*);
+void CloudOverlayManager_OnEnterRoom(CloudOverlayManager*);
+void CloudOverlayManager_OnExitRoom(CloudOverlayManager*);
 
 void CloudOverlayManager_Main(CloudOverlayManager* this) {
     static const u16 gUnk_0810865C[] = {
         0xf01, 0xe02, 0xe03, 0xe04, 0, 0,
     };
     if (this == NULL) {
-        if (gArea.onEnter != sub_0805AEDC) {
-            sub_0805AEDC(NULL);
+        if (gArea.onEnter != CloudOverlayManager_OnEnterRoom) {
+            CloudOverlayManager_OnEnterRoom(NULL);
         }
     } else {
         if (super->action == 0) {
@@ -29,7 +30,7 @@ void CloudOverlayManager_Main(CloudOverlayManager* this) {
             this->field_0x20 = gUnk_0810865C[0];
             SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
             if (gArea.onEnter == NULL) {
-                RegisterTransitionManager(this, sub_0805AEDC, sub_0805AF3C);
+                RegisterTransitionHandler(this, CloudOverlayManager_OnEnterRoom, CloudOverlayManager_OnExitRoom);
             } else {
                 DeleteThisEntity();
             }
@@ -49,7 +50,7 @@ void CloudOverlayManager_Main(CloudOverlayManager* this) {
     }
 }
 
-void sub_0805AEDC(CloudOverlayManager* this) {
+void CloudOverlayManager_OnEnterRoom(CloudOverlayManager* this) {
     gScreen.bg3.control = BGCNT_SCREENBASE(30) | BGCNT_PRIORITY(1) | BGCNT_CHARBASE(1);
     gScreen.lcd.displayControl |= DISPCNT_BG3_ON;
     gScreen.controls.layerFXControl =
@@ -62,7 +63,7 @@ void sub_0805AEDC(CloudOverlayManager* this) {
     }
 }
 
-void sub_0805AF3C(CloudOverlayManager* this) {
+void CloudOverlayManager_OnExitRoom(CloudOverlayManager* this) {
     super->flags &= ~ENT_PERSIST;
     gScreen.lcd.displayControl &= ~DISPCNT_BG3_ON;
     gScreen.controls.layerFXControl = 0;

@@ -6,10 +6,11 @@
  */
 #include "manager/staticBackgroundManager.h"
 #include "common.h"
-#include "functions.h"
 #include "screen.h"
+#include "game.h"
+#include "functions.h"
 
-void sub_0805B4B4(StaticBackgroundManager*);
+void StaticBackgroundManager_OnEnterRoom(StaticBackgroundManager*);
 void sub_0805B448(StaticBackgroundManager*);
 void sub_0805B474(StaticBackgroundManager*);
 
@@ -37,7 +38,7 @@ void StaticBackgroundManager_Main(StaticBackgroundManager* this) {
         super->flags |= ENT_PERSIST;
         SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
         if (super->type != 0) {
-            RegisterTransitionManager(this, sub_0805B4B4, NULL);
+            RegisterTransitionHandler(this, StaticBackgroundManager_OnEnterRoom, NULL);
         }
         iVar3 = 0x100 - (u32)gRoomControls.height;
         if (iVar3 < 0) {
@@ -62,7 +63,7 @@ void sub_0805B474(StaticBackgroundManager* this) {
     gScreen.bg3.xOffset = gRoomControls.scroll_x - ((gRoomControls.width - 0x100) / 2);
 }
 
-void sub_0805B4B4(StaticBackgroundManager* this) {
+void StaticBackgroundManager_OnEnterRoom(StaticBackgroundManager* this) {
     LoadStaticBackground(super->type);
     if (super->type == 2) {
         sub_0806D0F8();

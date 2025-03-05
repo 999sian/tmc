@@ -8,10 +8,11 @@
 #include "asm.h"
 #include "common.h"
 #include "main.h"
+#include "game.h"
 #include "assets/gfx_offsets.h"
 #include "functions.h"
 
-void MinishVillageTileSetManager_LoadRoomGfxGroup(void*);
+void MinishVillageTileSetManager_OnEnterRoom(void*);
 bool32 MinishVillageTileSetManager_UpdateRoomGfxGroup(MinishVillageTileSetManager*);
 void MinishVillageTileSetManager_LoadGfxGroup(u32);
 
@@ -106,7 +107,7 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
 #ifndef EU
         SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
 #endif
-        RegisterTransitionManager(this, MinishVillageTileSetManager_LoadRoomGfxGroup, 0);
+        RegisterTransitionHandler(this, MinishVillageTileSetManager_OnEnterRoom, NULL);
     }
 #ifdef EU
     if (gRoomControls.reload_flags)
@@ -175,7 +176,7 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
 #endif
 }
 
-void MinishVillageTileSetManager_LoadRoomGfxGroup(void* this) {
+void MinishVillageTileSetManager_OnEnterRoom(void* this) {
     MinishVillageTileSetManager_LoadGfxGroup(gRoomVars.graphicsGroups[0]);
 }
 

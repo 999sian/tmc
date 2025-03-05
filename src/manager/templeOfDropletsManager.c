@@ -7,10 +7,11 @@
 #include "manager/templeOfDropletsManager.h"
 #include "enemy.h"
 #include "flags.h"
-#include "functions.h"
 #include "object.h"
 #include "screen.h"
 #include "sound.h"
+#include "game.h"
+#include "functions.h"
 #include "structures.h"
 
 static const u16 gUnk_081085B8[] = { 0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009,
@@ -399,7 +400,7 @@ void TempleOfDropletsManager_Type7(TempleOfDropletsManager* this) {
     }
 }
 
-void sub_0805AAC8(TempleOfDropletsManager*);
+void TempleOfDropletsManager_OnEnterRoom(TempleOfDropletsManager*);
 
 void sub_0805A89C(TempleOfDropletsManager* this) {
     SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
@@ -412,7 +413,7 @@ void sub_0805A89C(TempleOfDropletsManager* this) {
     this->unk_20 = gRoomControls.room;
     this->unk_24 = gRoomControls.origin_x;
     this->unk_26 = gRoomControls.origin_y;
-    RegisterTransitionManager(this, sub_0805AAC8, 0);
+    RegisterTransitionHandler(this, TempleOfDropletsManager_OnEnterRoom, NULL);
 }
 
 void sub_0805A94C(TempleOfDropletsManager* this);
@@ -505,7 +506,7 @@ void sub_0805AA58(TempleOfDropletsManager* this) {
     }
 }
 
-void sub_0805AAC8(TempleOfDropletsManager* this) {
+void TempleOfDropletsManager_OnEnterRoom(TempleOfDropletsManager* this) {
     sub_0805AAF0(this->unk_23);
     TempleOfDropletsManager_Main(this);
 }

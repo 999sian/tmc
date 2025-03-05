@@ -9,7 +9,7 @@
 #include "functions.h"
 #include "game.h"
 #include "screen.h"
-extern void sub_080576A0(void*);
+extern void VerticalMinishPathBackgroundManager_OnEnterRoom(void*);
 extern void sub_0805754C(VerticalMinishPathBackgroundManager*);
 
 extern u8 gMapDataTopSpecial[];
@@ -19,7 +19,7 @@ void VerticalMinishPathBackgroundManager_Main(VerticalMinishPathBackgroundManage
         super->action = 1;
         gScreen.bg3.updated = 0;
         gScreen.bg1.updated = 0;
-        RegisterTransitionManager(this, sub_080576A0, NULL);
+        RegisterTransitionHandler(this, VerticalMinishPathBackgroundManager_OnEnterRoom, NULL);
     }
     sub_0805754C(this);
 }
@@ -79,7 +79,7 @@ void sub_08057688(void) {
     gScreen.bg1.control = BGCNT_SCREENBASE(30) | BGCNT_CHARBASE(2) | BGCNT_MOSAIC;
 }
 
-void sub_080576A0(void* this) {
+void VerticalMinishPathBackgroundManager_OnEnterRoom(void* this) {
     LoadGfxGroup(gRoomVars.graphicsGroups[0]);
     ((VerticalMinishPathBackgroundManager*)this)->field_0x38 = NULL;
     ((VerticalMinishPathBackgroundManager*)this)->field_0x3c = NULL;

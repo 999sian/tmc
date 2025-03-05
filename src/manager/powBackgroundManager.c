@@ -8,13 +8,14 @@
 #include "area.h"
 #include "room.h"
 #include "screen.h"
+#include "game.h"
 
-void sub_0805AFFC(PowBackgroundManager*);
+void PowBackgroundManager_OnEnterRoom(PowBackgroundManager*);
 
 void PowBackgroundManager_Main(PowBackgroundManager* this) {
     if (this == NULL) {
-        if ((void*)gArea.onEnter != sub_0805AFFC) {
-            sub_0805AFFC(this);
+        if ((void*)gArea.onEnter != PowBackgroundManager_OnEnterRoom) {
+            PowBackgroundManager_OnEnterRoom(this);
         }
     } else {
         if (super->action == 0) {
@@ -22,7 +23,7 @@ void PowBackgroundManager_Main(PowBackgroundManager* this) {
             super->flags |= ENT_PERSIST;
             SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
             if (gArea.onEnter == NULL) {
-                RegisterTransitionManager(this, sub_0805AFFC, NULL);
+                RegisterTransitionHandler(this, PowBackgroundManager_OnEnterRoom, NULL);
             } else {
                 DeleteThisEntity();
             }
@@ -34,7 +35,7 @@ void PowBackgroundManager_Main(PowBackgroundManager* this) {
     }
 }
 
-void sub_0805AFFC(PowBackgroundManager* this) {
+void PowBackgroundManager_OnEnterRoom(PowBackgroundManager* this) {
     gScreen.bg3.control = BGCNT_PRIORITY(3) | BGCNT_SCREENBASE(30);
     gScreen.lcd.displayControl |= DISPCNT_BG3_ON;
     gScreen.bg3.xOffset = gRoomControls.scroll_x + gRoomControls.bg3OffsetX.HALF.HI;

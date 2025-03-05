@@ -4,10 +4,10 @@
  *
  * @brief Giant Book Ladder object
  */
-#include "manager.h"
 #include "map.h"
 #include "object.h"
 #include "tiles.h"
+#include "game.h"
 
 typedef struct {
     Entity base;
@@ -16,7 +16,7 @@ typedef struct {
     u16 unk76;
 } GiantBookLadderEntity;
 
-void sub_0808E55C(GiantBookLadderEntity*);
+void GiantBookLadder_OnEnterRoom(GiantBookLadderEntity*);
 u32 sub_0808E670(GiantBookLadderEntity*);
 
 void GiantBookLadder(Entity* this) {
@@ -33,14 +33,14 @@ void GiantBookLadder(Entity* this) {
         this->spritePriority.b0 = spriteDefPtr[1];
         ((GiantBookLadderEntity*)this)->unk76 = 0;
         ((GiantBookLadderEntity*)this)->unk74 = COORD_TO_TILE(this);
-        sub_0808E55C((GiantBookLadderEntity*)this);
-        RegisterTransitionManager(this, sub_0808E55C, 0);
+        GiantBookLadder_OnEnterRoom((GiantBookLadderEntity*)this);
+        RegisterTransitionHandler(this, GiantBookLadder_OnEnterRoom, NULL);
     } else if ((this->type & 1) == 0) {
         sub_0808E670((GiantBookLadderEntity*)this);
     }
 }
 
-void sub_0808E55C(GiantBookLadderEntity* this) {
+void GiantBookLadder_OnEnterRoom(GiantBookLadderEntity* this) {
     u32 type;
     u32 uVar4;
     u32 unaff_r9;

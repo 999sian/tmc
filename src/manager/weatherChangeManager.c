@@ -8,14 +8,14 @@
 #include "area.h"
 #include "asm.h"
 #include "common.h"
-#include "fileselect.h"
-#include "functions.h"
 #include "main.h"
 #include "room.h"
 #include "screen.h"
 #include "sound.h"
+#include "game.h"
+#include "functions.h"
 
-void sub_080595E4(WeatherChangeManager*);
+void WeatherChangeManager_OnEnterRoom(WeatherChangeManager*);
 void sub_08059608(WeatherChangeManager*);
 void sub_08059690(WeatherChangeManager*);
 void sub_080596E0(WeatherChangeManager*);
@@ -45,14 +45,14 @@ void WeatherChangeManager_Main(WeatherChangeManager* this) {
             this->unk_22 = 5;
         }
         gRoomVars.graphicsGroups[0] = 0xFF;
-        RegisterTransitionManager(this, sub_080595E4, 0);
+        RegisterTransitionHandler(this, WeatherChangeManager_OnEnterRoom, NULL);
     }
     sub_08059608(this);
     sub_08059690(this);
     sub_080596E0(this);
 }
 
-void sub_080595E4(WeatherChangeManager* this) {
+void WeatherChangeManager_OnEnterRoom(WeatherChangeManager* this) {
     gRoomVars.graphicsGroups[0] = 0xFF;
     sub_08059690(this);
     sub_080596E0(this);

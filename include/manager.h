@@ -152,11 +152,6 @@ extern void (*const gMiscManagerunctions[58])();
 
 Manager* GetEmptyManager(void);
 
-/**
- * @brief Set manager responsible for handling room changes
- */
-extern void RegisterTransitionManager(void* mgr, void (*onEnter)(), void (*onExit)());
-
 extern u32 sub_0805ACC0(Entity*);
 extern void sub_0801855C(void);
 extern void SetNextAreaHint(u32 textId);

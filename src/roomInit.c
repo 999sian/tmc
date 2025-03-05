@@ -20,7 +20,7 @@ extern u32 sub_08060354(void);
 extern void MinishVillageTileSetManger_LoadInitialGfxGroup(void);
 extern void sub_0809F814(u32);
 extern void sub_080300E8(void);
-extern void sub_08058D34(void);
+extern void RollingBarrelManager_OnEnterRoom(void);
 extern void sub_0807BB98(u32, u32, u32, u32);
 extern void sub_080AF2E4(void);
 extern void sub_08059994(void);
@@ -2342,7 +2342,7 @@ u32 sub_unk3_DeepwoodShrine_InsideBarrel(void) {
 }
 
 void sub_StateChange_DeepwoodShrine_InsideBarrel(void) {
-    sub_08058D34();
+    RollingBarrelManager_OnEnterRoom();
     gArea.areaMetadata |= AR_HAS_NO_ENEMIES;
     gMain.substate = GAMEMAIN_BARRELUPDATE;
 }

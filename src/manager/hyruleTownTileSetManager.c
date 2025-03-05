@@ -11,11 +11,12 @@
 #include "main.h"
 #include "room.h"
 #include "tiles.h"
+#include "game.h"
 #include "assets/gfx_offsets.h"
 #include "functions.h"
 
 void HyruleTownTileSetManager_UpdateLoadGfxGroups(HyruleTownTileSetManager*);
-void HyruleTownTileSetManager_Reset(HyruleTownTileSetManager*);
+void HyruleTownTileSetManager_OnEnterRoom(HyruleTownTileSetManager*);
 
 // clang-format off
 static const u16 gHyruleTownTileSetManager_regions0[] = {
@@ -86,13 +87,13 @@ void HyruleTownTileSetManager_Main(HyruleTownTileSetManager* this) {
         this->gfxGroup2 = 0xff;
         this->gfxGroup1 = 0xff;
         this->gfxGroup0 = 0xff;
-        RegisterTransitionManager(this, HyruleTownTileSetManager_Reset, NULL);
+        RegisterTransitionHandler(this, HyruleTownTileSetManager_OnEnterRoom, NULL);
         SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
     }
     HyruleTownTileSetManager_UpdateLoadGfxGroups(this);
 }
 
-void HyruleTownTileSetManager_Reset(HyruleTownTileSetManager* this) {
+void HyruleTownTileSetManager_OnEnterRoom(HyruleTownTileSetManager* this) {
     gRoomVars.graphicsGroups[2] = 0xff;
     gRoomVars.graphicsGroups[1] = 0xff;
     gRoomVars.graphicsGroups[0] = 0xff;

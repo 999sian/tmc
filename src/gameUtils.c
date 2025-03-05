@@ -531,7 +531,7 @@ u32 GetFlagBankOffset(u32 idx) {
     return gLocalFlagBanks[a_hdr->flag_bank];
 }
 
-void RegisterTransitionManager(void* mgr, void (*onEnter)(), void (*onExit)()) {
+void RegisterTransitionHandler(void* mgr, void (*onEnter)(), void (*onExit)()) {
     if (gMain.substate != GAMEMAIN_SUBTASK) {
         gArea.transitionManager = mgr;
         gArea.onEnter = onEnter;
