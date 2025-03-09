@@ -265,7 +265,7 @@ void Peahat_Stunned(PeahatEntity* this) {
                 super->hitType = 0x71;
             }
             break;
-    };
+    }
 }
 
 void Peahat_RepairPropeller(PeahatEntity* this) {

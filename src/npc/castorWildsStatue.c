@@ -167,7 +167,7 @@ void sub_080675D4(Entity* this) {
             ent->spriteRendering.b3 = this->spriteRendering.b3;
             SortEntityAbove(this, ent);
         }
-    };
+    }
     gUnk = gUnk_08110E8A;
     for (i = 0; i < 4; i++, gUnk++) {
         Entity* ent = CreateFx(this, FX_ROCK, 0);
@@ -180,7 +180,7 @@ void sub_080675D4(Entity* this) {
             ent->spriteRendering.b3 = this->spriteRendering.b3;
             SortEntityAbove(this, ent);
         }
-    };
+    }
     if (this->subAction > 2) {
         this->spriteSettings.draw = 0;
     }

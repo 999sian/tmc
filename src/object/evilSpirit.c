@@ -104,7 +104,6 @@ void EvilSpirit_Action1(EvilSpiritEntity* this) {
             } else {
                 this->unk76 = this->unk7c - 0x20;
                 this->unk7a = this->unk7c + 0x50;
-                ;
             }
         }
         super->x = super->parent->x;

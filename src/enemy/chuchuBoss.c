@@ -1105,7 +1105,6 @@ void sub_08026E1C(ChuchuBossEntity* this) {
             COLLISION_ON(super);
             if (sub_08027C54(this)) {
                 this->unk_84->unk_04++;
-                ;
                 super->child->health = 0xff;
             }
             if (this->unk_84->unk_04 == 3) {

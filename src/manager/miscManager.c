@@ -75,7 +75,7 @@ typedef struct {
     u16 width;
     u16 height;
     u16 unk_08;
-} PACKED __attribute__((aligned(2))) MiscManager_HelperStruct;
+} PACKED ALIGNED(2) MiscManager_HelperStruct;
 
 const MiscManager_HelperStruct gUnk_08108354[] = {
     { 0xF0, 0xB0, 0xF0, 0xB0, 0x100 },
