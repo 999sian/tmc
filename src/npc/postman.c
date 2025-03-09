@@ -13,7 +13,6 @@
 #include "asm.h"
 #include "message.h"
 #include "physics.h"
-#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;

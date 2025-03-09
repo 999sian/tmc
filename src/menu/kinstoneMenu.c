@@ -8,7 +8,6 @@
 #include "common.h"
 #include "enemy.h"
 #include "flags.h"
-#include "structures.h"
 #include "kinstone.h"
 #include "main.h"
 #include "menu.h"

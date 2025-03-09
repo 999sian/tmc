@@ -10,7 +10,6 @@
 #include "entity.h"
 #include "flags.h"
 #include "sound.h"
-#include "structures.h"
 
 void SecretManager_Type0_Action2(SecretManager*);
 void SecretManager_Type0(SecretManager*);

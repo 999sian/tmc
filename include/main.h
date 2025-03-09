@@ -101,6 +101,18 @@ static_assert(sizeof(UI) == 0x3b4);
 extern Main gMain; /**< Main instance. */
 extern UI gUI;     /**< UI instance. */
 
+typedef struct {
+    s32 signature;
+    u8 field_0x4;
+    u8 listenForKeyPresses;
+    u8 field_0x6;
+    u8 field_0x7;
+    u8 pad[24];
+} struct_02000010;
+static_assert(sizeof(struct_02000010) == 0x20);
+
+extern struct_02000010 gUnk_02000010;
+
 /**
  * Program entry point.
  */

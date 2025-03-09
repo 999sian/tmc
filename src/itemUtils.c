@@ -16,7 +16,7 @@
 #include "player.h"
 #include "enemy.h"
 #include "message.h"
-#include "structures.h"
+#include "ui.h"
 
 const Wallet gWalletSizes[] = {
     { 100, 0xf060 },

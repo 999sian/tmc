@@ -24,7 +24,7 @@
 #include "subtask.h"
 #include "ui.h"
 #include "affine.h"
-#include "structures.h"
+#include "gfx.h"
 
 // copy, erase, start
 #define NUM_FILE_OPERATIONS 3

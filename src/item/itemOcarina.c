@@ -1,4 +1,4 @@
-#include "structures.h"
+#include "pauseMenu.h"
 #include "item.h"
 #include "sound.h"
 

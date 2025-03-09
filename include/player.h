@@ -676,6 +676,37 @@ typedef enum {
     INTERACTION_NULL = 0xFF,
 } InteractionType;
 
+typedef struct {
+    s8 x;
+    s8 y;
+    s8 width;
+    s8 height;
+} Rect;
+
+typedef struct {
+    /*0x00*/ u8 ignoreLayer; /* if bit 0 set, skip layer check for collision */
+    /*0x01*/ u8 type;
+    /*0x02*/ u8 interactDirections; /* lower 4 bits determine Link's allowed facing directions to interact, 0 to allow
+                                       (0000WSEN) */
+    /*0x03*/ u8 kinstoneId;
+    /*0x04*/ const Rect* customHitbox; /* optional custom rectangle */
+    /*0x08*/ Entity* entity;
+} InteractableObject;
+
+typedef struct {
+    /*0x00*/ u8 isUpdated;
+    /*0x01*/ u8 unused;
+    /*0x02*/ u8 kinstoneId;
+    /*0x03*/ u8 currentIndex; /* index of currentObject in candidate list, or 0xFF */
+    /*0x04*/ InteractableObject* currentObject;
+    /*0x08*/ InteractableObject
+        candidates[0x20]; /* contains the loaded NPCs, key doors, windcrests and other objects */
+} PossibleInteraction;
+
+static_assert(sizeof(PossibleInteraction) == 0x188);
+
+extern PossibleInteraction gPossibleInteraction;
+
 typedef enum {
     R_ACTION_NONE,
     R_ACTION_CANCEL,

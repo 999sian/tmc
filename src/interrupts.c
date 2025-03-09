@@ -10,7 +10,6 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
-#include "structures.h"
 #include "ui.h"
 #include "asm.h"
 

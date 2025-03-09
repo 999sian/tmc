@@ -19,7 +19,7 @@
 #include "object/cutsceneOrchestrator.h"
 #include "save.h"
 #include "subtask.h"
-#include "structures.h"
+#include "pauseMenu.h"
 
 typedef struct {
     /*0x00*/ Entity base;

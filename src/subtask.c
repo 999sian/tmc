@@ -10,7 +10,7 @@
 #include "ui.h"
 #include "windcrest.h"
 #include "affine.h"
-#include "structures.h"
+#include "beanstalkSubtask.h"
 
 extern Screen gUnk_03001020;
 extern u8 gPaletteBufferBackup[];

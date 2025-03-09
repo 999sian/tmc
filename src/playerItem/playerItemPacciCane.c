@@ -8,7 +8,7 @@
 #include "entity.h"
 #include "save.h"
 #include "sound.h"
-#include "structures.h"
+#include "pauseMenu.h"
 #include "vram.h"
 #include "asm.h"
 

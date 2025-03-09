@@ -14,7 +14,7 @@
 #include "physics.h"
 #include "player.h"
 #include "tiles.h"
-#include "structures.h"
+#include "ui.h"
 
 typedef struct {
     /*0x00*/ Entity base;

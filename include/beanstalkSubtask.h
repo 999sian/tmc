@@ -45,4 +45,19 @@ typedef struct {
  */
 extern void SetMultipleTiles(const TileData* tileData, u32 basePosition, u32 layer);
 
+typedef struct {
+    u8 unk_0;
+    u8 unk_1;
+    u8 unk_2[2];
+    u16 unk_4;
+    u8 filler[12];
+    struct Entity_* unk_14;
+    u8 unk_18;
+    u8 unk_19;
+    u8 unk_1a;
+    u8 unk_1b;
+} struct_02018EB0;
+
+extern struct_02018EB0 gUnk_02018EB0;
+
 #endif // BEANSTALKSUBTASK_H

@@ -10,7 +10,7 @@
 #include "save.h"
 #include "script.h"
 #include "screen.h"
-#include "structures.h"
+#include "beanstalkSubtask.h"
 #include "physics.h"
 
 typedef struct {

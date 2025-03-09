@@ -13,7 +13,6 @@
 #include "save.h"
 #include "screen.h"
 #include "affine.h"
-#include "structures.h"
 
 typedef struct {
     u8 unk0;

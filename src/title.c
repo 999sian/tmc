@@ -14,7 +14,6 @@
 #include "room.h"
 #include "player.h"
 #include "message.h"
-#include "structures.h"
 #include "save.h"
 #include "game.h"
 #include "affine.h"

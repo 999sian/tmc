@@ -14,7 +14,8 @@
 #include "screen.h"
 #include "sound.h"
 #include "game.h"
-#include "structures.h"
+#include "vram.h"
+#include "pauseMenu.h"
 
 static const u16 gUnk_081085B8[] = { 0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009,
                                      0x1008, 0x1007, 0x1006, 0x1005, 0x1006, 0x1007, 0x1008, 0x1009 };

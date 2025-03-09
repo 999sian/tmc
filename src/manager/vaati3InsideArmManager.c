@@ -7,7 +7,6 @@
 #include "manager/vaati3InsideArmManager.h"
 #include "screenTransitions.h"
 #include "sound.h"
-#include "structures.h"
 
 void sub_0805DBF0(Vaati3InsideArmManager*);
 void Vaati3InsideArmManager_Init(Vaati3InsideArmManager*);

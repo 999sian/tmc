@@ -12,7 +12,6 @@
 #include "save.h"
 #include "script.h"
 #include "asm.h"
-#include "structures.h"
 
 void sub_0806BFD8(Entity* this);
 

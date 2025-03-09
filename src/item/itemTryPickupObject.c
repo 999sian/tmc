@@ -2,7 +2,7 @@
 #include "item.h"
 #include "playeritem.h"
 #include "sound.h"
-#include "structures.h"
+#include "ui.h"
 #include "room.h"
 
 u32 sub_08077F64(ItemBehavior* arg0, u32 index);

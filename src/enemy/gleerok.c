@@ -16,7 +16,7 @@
 #include "physics.h"
 #include "player.h"
 #include "screen.h"
-#include "structures.h"
+#include "pauseMenu.h"
 
 typedef struct {
     union SplitHWord unk0;

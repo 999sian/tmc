@@ -50,4 +50,32 @@ extern bool32 LoadSwapGFX(Entity*, u32, u32);
 extern void UnloadGFXSlots(Entity*);
 extern void sub_080ADD70(void);
 
+extern u16 gBG0Buffer[0x400];
+extern u16 gBG1Buffer[0x400];
+extern u16 gBG2Buffer[0x400];
+extern u16 gBG3Buffer[0x800];
+
+typedef struct {
+    u8 unk0;
+    u8 unk1;
+    u16 unk2;
+    u8 unk4;
+    u8 unk5;
+    u8 unk6;
+    u8 unk7;
+} OAMObj;
+
+typedef struct {
+    u8 field_0x0;
+    u8 field_0x1;
+    u8 spritesOffset;
+    u8 updated;
+    u16 _4;
+    u16 _6;
+    u8 _0[0x18];
+    struct OamData oam[0x80];
+    OAMObj unk[0xA0]; /* todo: affine */
+} OAMControls;
+extern OAMControls gOAMControls;
+
 #endif //VRAM_H

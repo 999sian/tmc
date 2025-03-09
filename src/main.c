@@ -12,7 +12,6 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
-#include "structures.h"
 
 extern u32 gRand;
 

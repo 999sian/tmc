@@ -10,7 +10,6 @@
 #include "kinstone.h"
 #include "message.h"
 #include "vram.h"
-#include "structures.h"
 
 // typedef struct {
 //     Entity base;

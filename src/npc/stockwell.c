@@ -18,7 +18,6 @@
 #include "save.h"
 #include "subtask.h"
 #ifndef EU
-#include "structures.h"
 #endif
 
 #ifndef EU

@@ -7,7 +7,6 @@
 #include "enemy.h"
 #include "screenTransitions.h"
 #include "script.h"
-#include "structures.h"
 #include "tiles.h"
 #include "player.h"
 #include "physics.h"

@@ -15,7 +15,7 @@
 #include "screen.h"
 #include "tiles.h"
 #include "manager/lightManager.h"
-#include "structures.h"
+#include "pauseMenu.h"
 #include "beanstalkSubtask.h"
 
 typedef struct {

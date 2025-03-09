@@ -13,7 +13,6 @@
 #include "message.h"
 #include "script.h"
 #include "asm.h"
-#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;

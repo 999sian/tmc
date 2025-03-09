@@ -8,7 +8,7 @@
 #include "asm.h"
 #include "assets/gfx_offsets.h"
 #include "common.h"
-#include "structures.h"
+#include "gfx.h"
 #include "room.h"
 
 void LoadBgAnimationGfx(const BgAnimationGfx*);

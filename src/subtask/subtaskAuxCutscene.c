@@ -6,7 +6,6 @@
 #include "area.h"
 #include "asm.h"
 #include "common.h"
-#include "structures.h"
 #include "game.h"
 #include "main.h"
 #include "menu.h"

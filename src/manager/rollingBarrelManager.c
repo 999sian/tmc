@@ -261,7 +261,7 @@ void RollingBarrelManager_OnEnterRoom(void) {
     u32 tmp2;
     LoadPaletteGroup(0x28);
     MemCopy(gPaletteBuffer + 3 * 16, gPaletteBuffer + 21 * 16, 16 * 2);
-    gUsedPalettes |= 1 << 21;
+    USE_PALETTE(21);
     LoadGfxGroup(0x16);
     tmp = gScreen.lcd.displayControl;
     tmp2 = 0;

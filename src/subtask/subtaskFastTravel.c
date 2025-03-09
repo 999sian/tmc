@@ -12,7 +12,7 @@
 #include "save.h"
 #include "affine.h"
 #include "asm.h"
-#include "structures.h"
+#include "pauseMenu.h"
 
 extern void (*const Subtask_FastTravel_Functions[])(void);
 void sub_080A6E70(void);

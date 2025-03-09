@@ -40,4 +40,20 @@ typedef enum {
     PauseMenuScreen_19,
 } PauseMenuScreen;
 
+typedef struct {
+    u8 disabled;
+    u8 screen;
+    u8 unk2[0xf]; // cursor positions on the different screens
+    u8 unk11;
+    u8 unk12;
+    u8 unk13;
+    s8 screen2;
+    u8 unk15;
+    s8 unk16;
+    u8 unk17;
+} PauseMenuOptions;
+
+extern PauseMenuOptions gPauseMenuOptions;
+static_assert(sizeof(PauseMenuOptions) == 0x18);
+
 #endif // PAUSEMENU_H

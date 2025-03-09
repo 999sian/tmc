@@ -6,7 +6,6 @@
  */
 #include "effects.h"
 #include "entity.h"
-#include "structures.h"
 #include "save.h"
 #include "script.h"
 #include "sound.h"

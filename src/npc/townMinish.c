@@ -14,7 +14,6 @@
 #include "message.h"
 #include "save.h"
 #include "script.h"
-#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;

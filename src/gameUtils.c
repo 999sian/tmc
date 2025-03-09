@@ -23,7 +23,7 @@
 #include "ui.h"
 #include "subtask.h"
 #include "beanstalkSubtask.h"
-#include "structures.h"
+#include "pauseMenu.h"
 
 u32 StairsAreValid(void);
 void ClearFlagArray(const u16*);
@@ -828,7 +828,7 @@ void sub_080533CC(void) {
     *p2++ = *p1++;
     *p2++ = *p1++;
     *p2++ = *p1++;
-    gUsedPalettes |= 1 << 3;
+    USE_PALETTE(3);
 }
 
 void UpdateTimerCallbacks(void) {

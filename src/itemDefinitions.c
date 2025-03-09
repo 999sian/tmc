@@ -1,6 +1,6 @@
+#include "itemDefinitions.h"
 #include "item.h"
 #include "playeritem.h"
-#include "structures.h"
 
 const ItemDefinition gItemDefinitions[] = {
     [ITEM_NONE] = { TRUE, 1, CREATE_ITEM_0, PLAYER_ITEM_NONE, 0, 0, FALSE, FALSE },

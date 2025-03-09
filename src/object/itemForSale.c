@@ -10,7 +10,7 @@
 #include "message.h"
 #include "scroll.h"
 #include "asm.h"
-#include "structures.h"
+#include "ui.h"
 #include "room.h"
 #include "player.h"
 

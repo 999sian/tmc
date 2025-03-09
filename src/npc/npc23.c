@@ -8,7 +8,7 @@
 #include "message.h"
 #include "npc.h"
 #include "player.h"
-#include "structures.h"
+#include "pauseMenu.h"
 #include "room.h"
 #include "physics.h"
 

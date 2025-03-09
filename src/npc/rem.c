@@ -12,7 +12,6 @@
 #include "message.h"
 #include "script.h"
 #include "asm.h"
-#include "structures.h"
 #include "room.h"
 
 typedef struct {

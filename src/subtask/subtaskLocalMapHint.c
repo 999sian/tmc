@@ -12,7 +12,7 @@
 #include "sound.h"
 #include "common.h"
 #include "affine.h"
-#include "structures.h"
+#include "vram.h"
 
 void Subtask_LocalMapHint() {
     extern void (*const gUnk_08128F1C[])(void);

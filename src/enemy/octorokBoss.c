@@ -6,7 +6,7 @@
  */
 #include "enemy/octorokBoss.h"
 #include "collision.h"
-#include "structures.h"
+#include "pauseMenu.h"
 #include "game.h"
 #include "object.h"
 #include "asm.h"

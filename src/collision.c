@@ -3,7 +3,6 @@
 #include "common.h"
 #include "enemy.h"
 #include "entity.h"
-#include "structures.h"
 #include "global.h"
 #include "item.h"
 #include "object.h"

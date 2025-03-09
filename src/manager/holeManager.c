@@ -15,7 +15,7 @@
 #include "game.h"
 #include "manager/lightManager.h"
 #include "assets/gfx_offsets.h"
-#include "structures.h"
+#include "gfx.h"
 
 typedef enum {
     HOLE_TRANSITION_ABSOLUTE,

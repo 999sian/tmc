@@ -12,7 +12,6 @@
 #include "scroll.h"
 #include "tiles.h"
 #ifndef  EU
-#include "structures.h"
 #endif
 
 void DiggingCaveEntranceManager_Main(DiggingCaveEntranceManager*);

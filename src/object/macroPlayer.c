@@ -11,7 +11,7 @@
 #include "asm.h"
 #include "physics.h"
 #include "player.h"
-#include "structures.h"
+#include "beanstalkSubtask.h"
 
 typedef struct {
     Entity base;

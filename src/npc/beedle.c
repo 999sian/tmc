@@ -11,7 +11,6 @@
 #include "npc.h"
 #include "room.h"
 #include "script.h"
-#include "structures.h"
 
 typedef struct {
     Rect customHitbox;

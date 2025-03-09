@@ -12,7 +12,6 @@
 #include "common.h"
 #include "entity.h"
 #include "fileselect.h"
-#include "structures.h"
 #include "main.h"
 #include "manager/diggingCaveEntranceManager.h"
 #include "message.h"
@@ -23,6 +22,7 @@
 #include "sound.h"
 #include "ui.h"
 #include "beanstalkSubtask.h"
+#include "pauseMenu.h"
 
 // Game task
 

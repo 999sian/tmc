@@ -3,15 +3,12 @@
 #include "common.h"
 #include "color.h"
 #include "room.h"
-#include "global.h"
-#include "fileselect.h"
 #include "main.h"
-#include "physics.h"
-#include "structures.h"
+#include "gfx.h"
 
 extern Palette gUnk_02001A3C;
 
-void LoadObjPaletteAtIndex(u32 a1, u32 a2);
+void LoadObjPaletteAtIndex(u32 a1, u32 paletteIndex);
 void CleanUpObjPalettes();
 u32 FindFreeObjPalette(u32);
 void SetEntityObjPalette(Entity*, s32);
@@ -238,21 +235,21 @@ void ChangeObjPalette(Entity* entity, u32 objPaletteId) {
     LoadObjPalette(entity, objPaletteId);
 }
 
-void LoadObjPaletteAtIndex(u32 objPaletteId, u32 a2) {
+void LoadObjPaletteAtIndex(u32 objPaletteId, u32 paletteIndex) {
     u16* buffer;
 
-    gUsedPalettes |= 1 << (a2 + 16);
+    USE_PALETTE(paletteIndex + 16);
     if (objPaletteId > 5) {
         if (objPaletteId == 0x15) {
             buffer = gPaletteBuffer;
-            MemFill16(buffer[0x3C], buffer + (a2 + 16) * 16, 0x20);
+            MemFill16(buffer[0x3C], buffer + (paletteIndex + 16) * 16, 0x20);
         } else if (objPaletteId < 0x15) {
-            LoadPalettes((u8*)(gPaletteBuffer + (objPaletteId - 6) * 16), a2 + 16, 1);
+            LoadPalettes((u8*)(gPaletteBuffer + (objPaletteId - 6) * 16), paletteIndex + 16, 1);
         } else {
             u32 offset = gUnk_08133368[(objPaletteId - 0x16)].WORD_U;
             u32 numPalettes = (offset >> 0x18) & 0xf;
             offset &= 0xffffff;
-            LoadPalettes(gGlobalGfxAndPalettes + offset, a2 + 16, numPalettes);
+            LoadPalettes(&gGlobalGfxAndPalettes[offset], paletteIndex + 16, numPalettes);
         }
     }
 }

@@ -11,7 +11,6 @@
 #include "player.h"
 #include "save.h"
 #include "script.h"
-#include "structures.h"
 
 void SmallTownMinish(Entity* this) {
     static const Hitbox gUnk_081142FC = { -2, 1, { 0, 0, 0, 0 }, 6, 6 };

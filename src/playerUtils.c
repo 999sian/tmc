@@ -26,6 +26,8 @@
 #include "tileMap.h"
 #include "tiles.h"
 #include "backgroundAnimations.h"
+#include "itemDefinitions.h"
+#include "ui.h"
 
 static void sub_08077E54(ItemBehavior* this);
 
@@ -3817,18 +3819,18 @@ void LoadRoomTileSet(void) {
     MemFill16(0xffff, gMapTop.tileTypes, 0x1000);
     gMapTop.tileTypes[0] = 0;
 
-    if ((void*)gRoomControls.tileSet != (gArea.pCurrentRoomInfo)->tileSet) {
-        gRoomControls.tileSet = (u32)(gArea.pCurrentRoomInfo)->tileSet;
-        LoadMapData((gArea.pCurrentRoomInfo)->tileSet);
+    if ((void*)gRoomControls.tileSet != gArea.pCurrentRoomInfo->tileSet) {
+        gRoomControls.tileSet = (u32)gArea.pCurrentRoomInfo->tileSet;
+        LoadMapData(gArea.pCurrentRoomInfo->tileSet);
     }
 
-    LoadMapData((gArea.pCurrentRoomInfo)->tiles);
+    LoadMapData(gArea.pCurrentRoomInfo->tiles);
     paletteBuffer = gPaletteBuffer;
     MemCopy(&paletteBuffer[0x30], &paletteBuffer[0x150], 0x20);
-    gUsedPalettes |= 0x200000;
+    USE_PALETTE(21);
 
-    if ((gArea.pCurrentRoomInfo)->bg_anim != NULL) {
-        LoadBgAnimations((gArea.pCurrentRoomInfo)->bg_anim);
+    if (gArea.pCurrentRoomInfo->bg_anim != NULL) {
+        LoadBgAnimations(gArea.pCurrentRoomInfo->bg_anim);
     }
 
     tileTypes = gMapBottom.tileTypes;

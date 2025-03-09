@@ -8,7 +8,6 @@
 #include "enemy.h"
 #include "fade.h"
 #include "fileselect.h"
-#include "structures.h"
 #include "game.h"
 #include "main.h"
 #include "menu.h"

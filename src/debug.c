@@ -13,7 +13,6 @@
 #include "screen.h"
 #include "sound.h"
 #include "save.h"
-#include "structures.h"
 
 void sub_0805FA04(void);
 void sub_0805FA98(void);

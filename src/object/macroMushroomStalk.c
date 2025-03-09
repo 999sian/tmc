@@ -9,7 +9,7 @@
 #include "object.h"
 #include "room.h"
 #include "sound.h"
-#include "structures.h"
+#include "beanstalkSubtask.h"
 
 void MacroMushroomStalk_Init(Entity*);
 void MacroMushroomStalk_Action1(Entity*);

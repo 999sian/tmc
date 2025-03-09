@@ -13,7 +13,7 @@
 #include "flags.h"
 #include "physics.h"
 #include "player.h"
-#include "structures.h"
+#include "gfx.h"
 
 typedef struct {
     /*0x00*/ Entity base;

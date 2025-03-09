@@ -6,7 +6,6 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "structures.h"
 #include "game.h"
 #include "hitbox.h"
 #include "item.h"

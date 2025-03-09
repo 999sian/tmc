@@ -12,7 +12,6 @@
 #include "main.h"
 #include "screen.h"
 #include "game.h"
-#include "structures.h"
 #include "player.h"
 #include "physics.h"
 

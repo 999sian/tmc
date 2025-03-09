@@ -8,7 +8,7 @@
 #include "common.h"
 #include "screen.h"
 #include "game.h"
-#include "structures.h"
+#include "vram.h"
 #include "room.h"
 
 void sub_08057F20(HorizontalMinishPathBackgroundManager*);

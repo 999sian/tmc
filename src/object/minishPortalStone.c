@@ -14,7 +14,7 @@
 #include "beanstalkSubtask.h"
 #include "manager/lightManager.h"
 #include "effects.h"
-#include "structures.h"
+#include "pauseMenu.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -11,7 +11,7 @@
 #include "player.h"
 #include "object/linkAnimation.h"
 #include "item.h"
-#include "structures.h"
+#include "pauseMenu.h"
 
 typedef enum {
     ITEMGET_INIT,

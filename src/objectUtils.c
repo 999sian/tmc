@@ -5,7 +5,7 @@
 #include "asm.h"
 #include "effects.h"
 #include "player.h"
-#include "structures.h"
+#include "pauseMenu.h"
 #include "definitions.h"
 #include "vram.h"
 #include "object/linkAnimation.h"

@@ -6,7 +6,6 @@
 #include "npc.h"
 #include "vram.h"
 #include "script.h"
-#include "structures.h"
 #include "room.h"
 #include "player.h"
 #include "physics.h"

@@ -14,7 +14,7 @@
 #include "physics.h"
 #include "player.h"
 #include "tiles.h"
-#include "structures.h"
+#include "pauseMenu.h"
 #ifndef EU
 #include "vram.h"
 #endif

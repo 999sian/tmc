@@ -16,7 +16,6 @@
 #include "physics.h"
 #include "player.h"
 #include "screen.h"
-#include "structures.h"
 #include "tileMap.h"
 #include "tiles.h"
 

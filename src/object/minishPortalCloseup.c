@@ -10,7 +10,6 @@
 #include "common.h"
 #include "room.h"
 #include "screen.h"
-#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;

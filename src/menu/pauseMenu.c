@@ -17,7 +17,6 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
-#include "structures.h"
 #include "subtask.h"
 #include "ui.h"
 #include "affine.h"
@@ -1074,7 +1073,7 @@ void PauseMenu_Screen_5(void) {
         paletteColor = *gUnk_02017830;
         MemCopy(gUnk_02017830 + 1, gUnk_02017830, 7 * 2);
         gUnk_02017830[7] = paletteColor;
-        gUsedPalettes |= 1 << 12;
+        USE_PALETTE(12);
     }
 }
 

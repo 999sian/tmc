@@ -19,7 +19,7 @@
 #include "ui.h"
 #include "save.h"
 #include "subtask.h"
-#include "structures.h"
+#include "pauseMenu.h"
 
 void InitScriptExecutionContext(ScriptExecutionContext* context, Script* script);
 void sub_0807DE80(Entity*);
