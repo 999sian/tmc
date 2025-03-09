@@ -212,7 +212,7 @@ u32 UpdatePlayerCollision(void) {
                 if ((((gPlayerState.flags & (PL_FLAGS10000 | PL_FLAGS2)) != 0) ||
                      ((gPlayerState.sword_state & 0x10) != 0)) ||
                     ((DoApplicableTransition(gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x,
-                                   gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y, index, 5) == 0 &&
+                                             gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y, index, 5) == 0 &&
                       (((gPlayerState.heldObject != 0 || ((gPlayerState.gustJarState & 0xf) != 0)) ||
                         (sub_0807BD14(&gPlayerEntity.base, index) == 0)))))) {
                     return 3;
@@ -274,8 +274,9 @@ u32 UpdatePlayerCollision(void) {
             }
 
             ptr1 = &gUnk_080B4478[gPlayerEntity.base.animationState & 6];
-            transition = FindApplicableAreaTransition((gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x) + ptr1[0],
-                                      (gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y) + ptr1[1]);
+            transition =
+                FindApplicableAreaTransition((gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x) + ptr1[0],
+                                             (gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y) + ptr1[1]);
             if (transition == NULL) {
                 return 0;
             }

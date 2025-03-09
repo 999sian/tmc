@@ -18,4 +18,4 @@ extern void DrawEntities(void);
 extern void sub_080ADA04(OAMCommand*, void*);
 extern void DrawDirect(u32 spriteIndex, u32 frameIndex);
 
-#endif //AFFINE_H
+#endif // AFFINE_H

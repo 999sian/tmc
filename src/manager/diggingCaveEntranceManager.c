@@ -11,7 +11,7 @@
 #include "room.h"
 #include "scroll.h"
 #include "tiles.h"
-#ifndef  EU
+#ifndef EU
 #endif
 
 void DiggingCaveEntranceManager_Main(DiggingCaveEntranceManager*);

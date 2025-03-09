@@ -841,13 +841,13 @@ static void sub_08056FBC(TextRender* ctb) {
  * @param number number to convert
  * @param string output string buffer (at least 8 bytes in size)
  * @return number of character written (NOT including null terminator)
-*/
+ */
 u32 NumberToAscii(u32 number, String8* string) {
     int j;
     int i;
     int length;
     u8 buffer[8];
-    char * const output = string->s;
+    char* const output = string->s;
 
     number = EncodeBCD(number) & 0xfffffff;
     length = 0;

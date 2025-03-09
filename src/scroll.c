@@ -619,8 +619,7 @@ const Transition* FindApplicableAreaTransition(u32 pos_x, u32 pos_y) {
     const Transition* transition = gArea.pCurrentRoomInfo->exits;
     u32 warp_types = 0xa;
     while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
-        if (((1 << transition->warp_type) & warp_types) != 0 &&
-            IsPosInTransitionRect(transition, pos_x, pos_y, 0)) {
+        if (((1 << transition->warp_type) & warp_types) != 0 && IsPosInTransitionRect(transition, pos_x, pos_y, 0)) {
             return transition;
         }
         transition++;

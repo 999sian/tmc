@@ -78,4 +78,4 @@ typedef struct {
 } OAMControls;
 extern OAMControls gOAMControls;
 
-#endif //VRAM_H
+#endif // VRAM_H

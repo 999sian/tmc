@@ -201,7 +201,6 @@ typedef enum {
     LINK_ANIMATION,
 } Object;
 
-
 Entity* CreateLinkAnimation(Entity* parent, u32 type, u32 type2);
 void ObjectInit(Entity* this);
 u32 LoadObjectSprite(Entity* this, s32 type, const ObjectDefinition* definition);
@@ -220,7 +219,6 @@ void AddInteractableCheckableObject(Entity*);
 void sub_0808C650(Entity*, u32);
 u32 sub_0808C67C(void);
 void sub_0808C688(void);
-
 
 void ItemOnGround();
 void DeathFx();

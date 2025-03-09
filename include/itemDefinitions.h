@@ -17,4 +17,4 @@ typedef struct {
 
 static_assert(sizeof(ItemDefinition) == 0xc);
 
-#endif //ITEMDEFINITIONS_H
+#endif // ITEMDEFINITIONS_H

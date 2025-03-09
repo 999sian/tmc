@@ -5,4 +5,4 @@
 
 void Armos_SetFlagFromTransition(u32 armosId);
 
-#endif //ARMOS_H
+#endif // ARMOS_H

@@ -5,4 +5,4 @@
 
 extern bool32 sub_08083734(struct Entity_*, u32);
 
-#endif //LOCKEDDOOR_H
+#endif // LOCKEDDOOR_H

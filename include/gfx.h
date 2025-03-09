@@ -5,4 +5,4 @@
 
 extern const u8 gGlobalGfxAndPalettes[];
 
-#endif //GFX_H
+#endif // GFX_H

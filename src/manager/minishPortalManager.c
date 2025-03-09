@@ -45,7 +45,7 @@ void MinishPortalManager_Main(MinishPortalManager* this) {
             }
             if (GetActTileAtRoomCoords(this->unk_38, this->unk_3a, super->timer) == ACT_TILE_61) {
                 CreateMagicSparklesFxAt(this->unk_38 + gRoomControls.origin_x, this->unk_3a + gRoomControls.origin_y,
-                                    super->timer);
+                                        super->timer);
                 if (super->subtimer == 0) {
                     super->subtimer = 1;
                     SoundReq(SFX_NEAR_PORTAL);

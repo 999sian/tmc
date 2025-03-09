@@ -101,6 +101,9 @@ void FadeVBlank(void);
 void ResetFadeMask(void);
 
 extern u32 gUsedPalettes;
-#define USE_PALETTE(i) do { gUsedPalettes |= 1 << (i); } while(0)
+#define USE_PALETTE(i)             \
+    do {                           \
+        gUsedPalettes |= 1 << (i); \
+    } while (0)
 
 #endif // FADE_H
