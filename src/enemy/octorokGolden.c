@@ -9,6 +9,7 @@
 #include "map.h"
 #include "player.h"
 #include "item.h"
+#include "asm.h"
 
 void (*const OctorokGolden_Functions[])(Entity*);
 void (*const gUnk_080CF484[])(Entity*);

@@ -8,6 +8,7 @@
 #include "enemy.h"
 #include "entity.h"
 #include "physics.h"
+#include "asm.h"
 
 extern void (*const CannonballProjectile_Functions[])(Entity*);
 extern void (*const CannonballProjectile_Actions[])(Entity*);

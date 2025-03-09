@@ -6,6 +6,7 @@
  */
 #include "enemy.h"
 #include "physics.h"
+#include "asm.h"
 #include "room.h"
 
 typedef struct {

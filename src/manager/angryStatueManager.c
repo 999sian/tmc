@@ -7,7 +7,7 @@
 #include "manager/angryStatueManager.h"
 #include "flags.h"
 #include "object.h"
-#include "asm.h"
+#include "script.h"
 
 #include "sound.h"
 #include "room.h"

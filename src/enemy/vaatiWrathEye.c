@@ -7,6 +7,7 @@
 #include "enemy/vaatiWrath.h"
 #include "room.h"
 #include "physics.h"
+#include "asm.h"
 
 void sub_080485D8(Entity*);
 void sub_080485FC(Entity*);

@@ -10,6 +10,7 @@
 #include "fileselect.h"
 #include "physics.h"
 #include "player.h"
+#include "asm.h"
 
 // todo: wrong types
 extern void sub_080A1D70(Entity*, u32);

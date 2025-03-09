@@ -13,6 +13,7 @@
 #include "tiles.h"
 #include "room.h"
 #include "player.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

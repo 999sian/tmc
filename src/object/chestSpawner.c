@@ -13,6 +13,7 @@
 #include "room.h"
 #include "player.h"
 #include "screen.h"
+#include "script.h"
 #include "tiles.h"
 #include "manager/lightManager.h"
 #include "pauseMenu.h"

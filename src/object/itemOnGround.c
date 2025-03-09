@@ -17,6 +17,7 @@
 #include "room.h"
 #include "physics.h"
 #include "player.h"
+#include "script.h"
 #include "sound.h"
 #include "tiles.h"
 

@@ -64,4 +64,7 @@ void ExecuteScriptAndHandleAnimation(Entity* entity, void (*postScriptCallback)(
 ScriptExecutionContext* CreateScriptExecutionContext(void);
 void InitScriptForEntity(Entity* entity, ScriptExecutionContext* context, Script* script);
 
+extern u32 ResolveCollisionLayer(struct Entity_*);
+extern void UpdateCollisionLayer(struct Entity_*);
+
 #endif // SCRIPT_H

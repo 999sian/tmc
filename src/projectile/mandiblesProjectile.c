@@ -11,6 +11,7 @@
 #include "physics.h"
 #include "tiles.h"
 #include "player.h"
+#include "asm.h"
 #ifndef EU
 #include "game.h"
 #endif

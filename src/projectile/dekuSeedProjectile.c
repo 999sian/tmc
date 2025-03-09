@@ -8,6 +8,8 @@
 #include "enemy.h"
 #include "entity.h"
 #include "physics.h"
+#include "script.h"
+#include "asm.h"
 
 extern void (*const DekuSeedProjectile_Functions[])(Entity*);
 extern void (*const DekuSeedProjectile_Actions[])(Entity*);

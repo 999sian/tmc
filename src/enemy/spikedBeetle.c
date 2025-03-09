@@ -7,6 +7,7 @@
 #include "enemy.h"
 #include "player.h"
 #include "physics.h"
+#include "asm.h"
 
 extern u32 sub_0804A024(Entity*, u32, u32);
 

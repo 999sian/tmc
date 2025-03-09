@@ -7,6 +7,7 @@
 #include "enemy.h"
 #include "entity.h"
 #include "physics.h"
+#include "asm.h"
 
 extern void (*const StalfosProjectile_Functions[])(Entity*);
 extern void (*const StalfosProjectile_Actions[])(Entity*);

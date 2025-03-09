@@ -8,6 +8,8 @@
 #include "object.h"
 #include "asm.h"
 #include "sound.h"
+#include "script.h"
+#include "player.h"
 #include "room.h"
 #include "tiles.h"
 

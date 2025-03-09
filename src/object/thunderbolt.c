@@ -6,6 +6,7 @@
  */
 #include "object.h"
 #include "asm.h"
+#include "script.h"
 #include "sound.h"
 #include "physics.h"
 #include "player.h"

@@ -9,6 +9,7 @@
 #include "physics.h"
 #include "player.h"
 #include "sound.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

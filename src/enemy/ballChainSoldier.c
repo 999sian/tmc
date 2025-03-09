@@ -8,6 +8,7 @@
 #include "entity.h"
 #include "room.h"
 #include "physics.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

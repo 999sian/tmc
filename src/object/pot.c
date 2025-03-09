@@ -15,6 +15,7 @@
 #include "object/itemOnGround.h"
 #include "player.h"
 #include "room.h"
+#include "script.h"
 #include "sound.h"
 #include "tiles.h"
 

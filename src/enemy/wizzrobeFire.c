@@ -7,6 +7,7 @@
 #include "enemy/wizzrobe.h"
 #include "enemy.h"
 #include "player.h"
+#include "asm.h"
 
 extern void (*const WizzrobeFire_Functions[])(WizzrobeEntity*);
 extern void (*const WizzrobeFire_Actions[])(WizzrobeEntity*);

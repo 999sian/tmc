@@ -7,6 +7,7 @@
 #include "enemy.h"
 #include "entity.h"
 #include "physics.h"
+#include "script.h"
 
 extern void (*const WindProjectile_Actions[])(Entity*);
 

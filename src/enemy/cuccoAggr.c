@@ -9,6 +9,7 @@
 #include "room.h"
 #include "player.h"
 #include "physics.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

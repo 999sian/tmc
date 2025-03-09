@@ -7,6 +7,7 @@
 #include "enemy.h"
 #include "entity.h"
 #include "physics.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

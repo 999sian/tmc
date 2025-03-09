@@ -831,6 +831,8 @@ extern void sub_08008926(Entity*);
 extern void sub_08008AC6(Entity*);
 extern void sub_08008AA0(Entity*);
 extern void sub_080085B0(Entity*);
+extern u32 sub_080086B4(u32, u32, const u8*);
+extern u16* DoTileInteraction(struct Entity_*, u32, u32, u32);
 
 // zelda.c
 void SetZeldaFollowTarget(Entity* target);

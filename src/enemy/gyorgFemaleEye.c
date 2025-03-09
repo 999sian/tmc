@@ -9,6 +9,7 @@
 #include "entity.h"
 #include "player.h"
 #include "room.h"
+#include "asm.h"
 
 void GyorgFemaleEye_OnTick(GyorgFemaleEyeEntity*);
 void GyorgFemaleEye_OnCollision(GyorgFemaleEyeEntity*);

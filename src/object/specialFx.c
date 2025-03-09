@@ -7,6 +7,7 @@
 #include "entity.h"
 #include "object.h"
 #include "asm.h"
+#include "script.h"
 #include "sound.h"
 #include "effects.h"
 #include "room.h"

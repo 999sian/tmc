@@ -7,6 +7,8 @@
 #include "enemy.h"
 #include "entity.h"
 #include "physics.h"
+#include "script.h"
+#include "asm.h"
 
 extern void (*const RockProjectile_Functions[])(Entity*);
 extern void (*const RockProjectile_Actions[])(Entity*);

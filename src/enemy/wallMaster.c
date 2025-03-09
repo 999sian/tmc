@@ -8,6 +8,7 @@
 #include "enemy.h"
 #include "player.h"
 #include "screenTransitions.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

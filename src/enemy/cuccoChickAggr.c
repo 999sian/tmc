@@ -6,6 +6,7 @@
  */
 #include "enemy.h"
 #include "player.h"
+#include "asm.h"
 
 void sub_08022A88(Entity*);
 void sub_08022AA4(Entity*);

@@ -14,6 +14,7 @@
 #include "effects.h"
 #include "room.h"
 #include "physics.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {

@@ -2,7 +2,6 @@
 #define ENEMY_H
 
 #include "global.h"
-#include "asm.h"
 
 #include "sound.h"
 #include "effects.h"
@@ -76,8 +75,11 @@ bool32 sub_08049F1C(Entity*, Entity*, s32);
 bool32 PlayerInRange(Entity*, u32, s32);
 void EnemyCopyParams(Entity*, Entity*);
 void GenericKnockback2(Entity*);
+extern void GenericConfused(struct Entity_*);
 
 extern void sub_08001318(Entity*);
+extern void sub_08001290(Entity*, u32);
+extern u32 sub_0800132C(struct Entity_*, struct Entity_*);
 
 extern void StealRupees(Entity*);
 extern void EnemyDisableRespawn(Enemy*);
