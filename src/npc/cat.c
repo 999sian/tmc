@@ -5,6 +5,7 @@
  * @brief Cat NPC
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "message.h"
 #include "npc.h"

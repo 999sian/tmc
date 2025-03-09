@@ -1,7 +1,6 @@
 #ifndef OBJECT_H
 #define OBJECT_H
 
-#include "global.h"
 #include "definitions.h"
 #include "entity.h"
 

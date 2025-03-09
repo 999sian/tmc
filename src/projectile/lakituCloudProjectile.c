@@ -5,6 +5,9 @@
  * @brief Lakitu Cloud Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "entity.h"
 #include "player.h"
 #include "physics.h"

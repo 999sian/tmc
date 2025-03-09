@@ -5,6 +5,8 @@
  * @brief Cucco Chick Aggr enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "player.h"
 #include "asm.h"
 

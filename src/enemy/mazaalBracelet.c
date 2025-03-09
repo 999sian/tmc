@@ -5,15 +5,16 @@
  * @brief Mazaal Bracelet enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "hitbox.h"
 #include "object.h"
 #include "asm.h"
 #include "script.h"
-#include "sound.h"
-#include "effects.h"
 #include "room.h"
 #include "physics.h"
 #include "player.h"
+#include "color.h"
 
 typedef struct MazaalBraceletEntity_ {
     /*0x00*/ Entity base;

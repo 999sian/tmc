@@ -13,6 +13,7 @@
 #include "player.h"
 #include "tiles.h"
 #include "item.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -11,6 +11,7 @@
 #include "windcrest.h"
 #include "affine.h"
 #include "beanstalkSubtask.h"
+#include "fade.h"
 
 extern Screen gUnk_03001020;
 extern u8 gPaletteBufferBackup[];

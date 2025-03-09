@@ -7,10 +7,10 @@
 #include "asm.h"
 #include "collision.h"
 #include "entity.h"
-#include "room.h"
 #include "hitbox.h"
 #include "physics.h"
 #include "projectile.h"
+#include "map.h"
 
 extern u32 sub_080644C8(Entity*);
 

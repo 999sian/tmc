@@ -10,7 +10,10 @@
 #include "sound.h"
 #include "effects.h"
 #include "physics.h"
+#include "color.h"
+#ifndef EU
 #include "save.h"
+#endif
 
 void ObjectA2_Init(Entity*);
 void ObjectA2_Action1(Entity*);

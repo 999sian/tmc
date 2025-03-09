@@ -6,9 +6,8 @@
  */
 #include "collision.h"
 #include "enemy.h"
-#include "object.h"
-#include "asm.h"
 #include "effects.h"
+#include "object.h"
 #include "physics.h"
 
 extern void (*const Spark_Functions[])(Entity*);

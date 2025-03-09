@@ -15,6 +15,7 @@
 #include "asm.h"
 #include "room.h"
 #include "player.h"
+#include "map.h"
 
 #define kFollowDistance 32 // distance to follow player
 #define kPoiDistance 4     // point of interest distance

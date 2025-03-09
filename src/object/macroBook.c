@@ -11,6 +11,7 @@
 #include "npc.h"
 #include "tiles.h"
 #include "room.h"
+#include "map.h"
 
 typedef struct {
     Entity base;

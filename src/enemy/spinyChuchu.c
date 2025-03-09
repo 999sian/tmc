@@ -5,6 +5,8 @@
  * @brief Spiny Chuchu enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "hitbox.h"
 #include "physics.h"
 #include "asm.h"

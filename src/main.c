@@ -12,6 +12,7 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
+#include "fade.h"
 
 extern u32 gRand;
 

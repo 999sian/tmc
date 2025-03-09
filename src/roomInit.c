@@ -29,6 +29,7 @@
 #include "scroll.h"
 #include "subtask.h"
 #include "beanstalkSubtask.h"
+#include "fade.h"
 
 extern u32 sub_08060354(void);
 extern void MinishVillageTileSetManger_LoadInitialGfxGroup(void);

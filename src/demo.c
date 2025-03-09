@@ -13,9 +13,9 @@
 #include "menu.h"
 #include "message.h"
 #include "screen.h"
-#include "menu.h"
 #include "sound.h"
 #include "affine.h"
+#include "fade.h"
 
 void sub_080A30AC(void);
 void sub_080A2E40(void);

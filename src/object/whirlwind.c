@@ -13,6 +13,7 @@
 #include "flags.h"
 #include "physics.h"
 #include "player.h"
+#include "color.h"
 
 void Whirlwind_Init(Entity*);
 void Whirlwind_Action1(Entity*);

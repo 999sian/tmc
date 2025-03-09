@@ -7,6 +7,8 @@
 #include "area.h"
 #include "common.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "flags.h"
 #include "kinstone.h"
 #include "main.h"
@@ -20,10 +22,10 @@
 #include "roomid.h"
 #include "save.h"
 #include "screen.h"
-#include "sound.h"
 #include "subtask.h"
 #include "ui.h"
 #include "affine.h"
+#include "fade.h"
 
 extern u32 sub_08000E44(u32);
 extern void sub_080A3B74(void);

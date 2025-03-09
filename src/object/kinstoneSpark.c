@@ -9,6 +9,7 @@
 #include "object.h"
 #include "asm.h"
 #include "sound.h"
+#include "color.h"
 
 void sub_080A0ADC(Entity*);
 void sub_080A0AF0(Entity*);

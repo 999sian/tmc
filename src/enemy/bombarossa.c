@@ -5,6 +5,8 @@
  * @brief Bombarossa enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "object.h"
 #include "asm.h"
 #include "room.h"

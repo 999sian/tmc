@@ -10,6 +10,7 @@
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

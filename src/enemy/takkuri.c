@@ -5,6 +5,7 @@
  * @brief Takkuri enemy
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "item.h"
 #include "object.h"

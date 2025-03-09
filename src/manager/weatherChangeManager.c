@@ -15,6 +15,7 @@
 #include "game.h"
 #include "manager/staticBackgroundManager.h"
 #include "player.h"
+#include "fade.h"
 
 void WeatherChangeManager_OnEnterRoom(WeatherChangeManager*);
 void sub_08059608(WeatherChangeManager*);

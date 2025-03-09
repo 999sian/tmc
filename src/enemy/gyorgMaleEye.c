@@ -5,7 +5,8 @@
  * @brief GyorgMaleEye enemy
  */
 #include "enemy.h"
-#include "fade.h"
+#include "sound.h"
+#include "effects.h"
 #include "physics.h"
 #include "room.h"
 

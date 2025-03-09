@@ -11,6 +11,7 @@
 #include "room.h"
 #include "tiles.h"
 #include "player.h"
+#include "map.h"
 
 void FlameManager_Main(FlameManager* this) {
     if (super->action == 0) {

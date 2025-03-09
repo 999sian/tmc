@@ -7,9 +7,9 @@
 #include "asm.h"
 #include "collision.h"
 #include "enemy.h"
-#include "object.h"
 #include "sound.h"
 #include "effects.h"
+#include "object.h"
 #include "physics.h"
 #include "player.h"
 

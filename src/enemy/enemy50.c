@@ -6,6 +6,7 @@
  */
 #include "area.h"
 #include "enemy.h"
+#include "effects.h"
 #include "physics.h"
 #include "player.h"
 #include "room.h"

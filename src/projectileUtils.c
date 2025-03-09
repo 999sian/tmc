@@ -2,6 +2,7 @@
 #include "definitions.h"
 #include "vram.h"
 #include "room.h"
+#include "color.h"
 
 extern const ProjectileDefinition gProjectileDefinitions[];
 

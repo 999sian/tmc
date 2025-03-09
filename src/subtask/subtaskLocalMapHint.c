@@ -13,6 +13,7 @@
 #include "common.h"
 #include "affine.h"
 #include "vram.h"
+#include "fade.h"
 
 void Subtask_LocalMapHint() {
     extern void (*const gUnk_08128F1C[])(void);

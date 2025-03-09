@@ -2,6 +2,7 @@
 #include "common.h"
 #include "asm.h"
 #include "enemy.h"
+#include "effects.h"
 #include "message.h"
 #include "fileselect.h"
 

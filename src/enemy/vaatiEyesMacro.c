@@ -5,6 +5,8 @@
  * @brief Vaati Eyes Macro enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "room.h"
 #include "player.h"
 #include "physics.h"

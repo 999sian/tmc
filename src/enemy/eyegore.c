@@ -5,13 +5,12 @@
  * @brief Eyegore enemy
  */
 #include "enemy.h"
-#include "fade.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
 #include "hitbox.h"
 #include "object.h"
 #include "asm.h"
-#include "sound.h"
-#include "flags.h"
-#include "effects.h"
 #include "room.h"
 #include "physics.h"
 #include "player.h"

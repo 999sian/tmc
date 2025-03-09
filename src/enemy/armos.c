@@ -8,6 +8,7 @@
 #include "collision.h"
 #include "common.h"
 #include "enemy.h"
+#include "sound.h"
 #include "flags.h"
 #include "physics.h"
 #include "global.h"
@@ -16,6 +17,7 @@
 #include "room.h"
 #include "player.h"
 #include "asm.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

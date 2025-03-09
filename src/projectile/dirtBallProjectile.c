@@ -5,10 +5,12 @@
  * @brief Dirt Ball Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "entity.h"
 #include "physics.h"
 #include "player.h"
-#include "sound.h"
 #include "asm.h"
 
 typedef struct {

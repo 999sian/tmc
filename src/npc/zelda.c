@@ -15,6 +15,7 @@
 #include "asm.h"
 #include "room.h"
 #include "player.h"
+#include "map.h"
 
 void ZeldaFollower_Hide(Entity*, Entity*);
 void ZeldaFollower_Show(Entity*, Entity*);

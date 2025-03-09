@@ -13,6 +13,7 @@
 #include "room.h"
 #include "player.h"
 #include "physics.h"
+#include "map.h"
 
 extern const s16 gUnk_080B4488[];
 

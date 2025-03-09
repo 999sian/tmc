@@ -6,6 +6,7 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "effects.h"
 #include "asm.h"
 
 typedef struct {

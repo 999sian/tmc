@@ -3,7 +3,6 @@
 
 #include "entity.h"
 #include "droptables.h"
-#include "map.h"
 #include "transitions.h"
 
 enum RoomTransition {

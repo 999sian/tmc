@@ -6,11 +6,11 @@
  */
 #include "enemy.h"
 #include "sound.h"
+#include "effects.h"
+#include "common.h"
 #include "tiles.h"
 #include "object.h"
 #include "asm.h"
-#include "common.h"
-#include "effects.h"
 #include "room.h"
 
 typedef struct {

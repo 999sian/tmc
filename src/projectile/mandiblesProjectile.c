@@ -5,6 +5,7 @@
  * @brief Mandibles Projectile
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "room.h"
 #include "hitbox.h"

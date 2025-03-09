@@ -6,14 +6,13 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "entity.h"
 #include "object.h"
 #include "asm.h"
-
-#include "sound.h"
-#include "effects.h"
 #include "physics.h"
-
 #include "player.h"
 
 extern void (*const ArrowProjectile_Functions[])(Entity*);

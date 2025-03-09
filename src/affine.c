@@ -2,7 +2,6 @@
 #include "global.h"
 #include "main.h"
 #include "room.h"
-#include "screen.h"
 
 extern u32 gFrameObjLists[];
 

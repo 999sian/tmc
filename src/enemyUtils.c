@@ -1,16 +1,17 @@
 #include "enemyUtils.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "definitions.h"
 #include "entity.h"
 #include "object.h"
-#include "sound.h"
-#include "effects.h"
 #include "room.h"
 #include "physics.h"
 #include "object/deathFx.h"
-#include "projectile.h"
 #include "save.h"
 #include "vram.h"
+#include "color.h"
 
 extern void ReplaceMonitoredEntity(Entity*, Entity*);
 

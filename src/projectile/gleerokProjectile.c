@@ -5,6 +5,8 @@
  * @brief Gleerok Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "entity.h"
 #include "player.h"
 #include "room.h"

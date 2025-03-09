@@ -8,6 +8,7 @@
 
 #include "collision.h"
 #include "enemy.h"
+#include "projectile.h"
 #include "object.h"
 #include "asm.h"
 #include "sound.h"

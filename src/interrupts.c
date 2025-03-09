@@ -12,6 +12,8 @@
 #include "sound.h"
 #include "ui.h"
 #include "asm.h"
+#include "map.h"
+#include "fade.h"
 
 extern u8 gUnk_03003DE0;
 extern u8 gUnk_03000C30;

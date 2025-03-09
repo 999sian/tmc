@@ -18,6 +18,7 @@
 #include "player.h"
 #include "projectile.h"
 #include "vram.h"
+#include "color.h"
 
 #define IS_FROZEN(this) ((this)->bossPhase & 1)
 

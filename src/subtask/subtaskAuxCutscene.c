@@ -15,6 +15,7 @@
 #include "sound.h"
 #include "subtask.h"
 #include "affine.h"
+#include "fade.h"
 
 typedef void(AuxCutsceneState)(void);
 typedef void(CutsceneMainState)(void);

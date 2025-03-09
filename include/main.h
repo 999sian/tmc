@@ -6,6 +6,7 @@
 #include "script.h"
 #include "screen.h"
 #include "vram.h"
+#include "color.h"
 
 /** File signature */
 #define SIGNATURE 'MCZ3'

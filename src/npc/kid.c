@@ -14,6 +14,7 @@
 #include "manager.h"
 #include "structures.h"
 #include "physics.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

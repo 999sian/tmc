@@ -18,6 +18,7 @@
 #include "screen.h"
 #include "screenTransitions.h"
 #include "scroll.h"
+#include "fade.h"
 #ifndef EU
 #include "area.h"
 #endif

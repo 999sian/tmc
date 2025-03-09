@@ -1,4 +1,3 @@
-#include "entity.h"
 #include "definitions.h"
 
 #define MULTI_FORM(index, unk) \

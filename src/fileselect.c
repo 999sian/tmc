@@ -25,6 +25,7 @@
 #include "ui.h"
 #include "affine.h"
 #include "gfx.h"
+#include "fade.h"
 
 // copy, erase, start
 #define NUM_FILE_OPERATIONS 3

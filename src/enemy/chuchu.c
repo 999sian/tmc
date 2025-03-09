@@ -6,6 +6,8 @@
  */
 #include "asm.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "physics.h"
 #include "tiles.h"
 

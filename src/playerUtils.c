@@ -28,6 +28,7 @@
 #include "backgroundAnimations.h"
 #include "itemDefinitions.h"
 #include "ui.h"
+#include "fade.h"
 
 static void sub_08077E54(ItemBehavior* this);
 

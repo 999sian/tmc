@@ -5,6 +5,8 @@
  * @brief Gyorg Female Eye enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "enemy/gyorg.h"
 #include "entity.h"
 #include "player.h"

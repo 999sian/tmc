@@ -12,10 +12,10 @@
 #include "object.h"
 #include "room.h"
 #include "player.h"
-#include "screen.h"
 #include "screenTransitions.h"
 #include "sound.h"
 #include "scroll.h"
+#include "fade.h"
 #if !defined(EU) && !defined(JP)
 #include "save.h"
 #endif

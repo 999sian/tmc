@@ -9,11 +9,11 @@
 #include "object.h"
 #include "effects.h"
 #include "room.h"
-#include "screen.h"
 #include "screenTransitions.h"
 #include "script.h"
 #include "sound.h"
 #include "tiles.h"
+#include "fade.h"
 
 typedef struct {
     u8 filler[4];

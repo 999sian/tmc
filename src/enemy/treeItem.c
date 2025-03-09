@@ -5,6 +5,8 @@
  * @brief Tree Item enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "item.h"
 #include "object.h"
 #include "asm.h"

@@ -6,10 +6,10 @@
  */
 #include "object.h"
 #include "asm.h"
-#include "room.h"
 #include "player.h"
 #include "item.h"
 #include "save.h"
+#include "map.h"
 
 typedef struct {
     Entity base;

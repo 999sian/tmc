@@ -15,6 +15,7 @@
 #include "screen.h"
 #include "subtask.h"
 #include "sound.h"
+#include "fade.h"
 
 typedef struct {
     /*0x00*/ Menu base;

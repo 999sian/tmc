@@ -6,7 +6,6 @@
  */
 #include "manager/armosInteriorManager.h"
 #include "common.h"
-#include "entity.h"
 #include "flags.h"
 #include "sound.h"
 #include "room.h"

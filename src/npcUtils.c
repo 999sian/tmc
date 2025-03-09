@@ -11,6 +11,7 @@
 #include "flags.h"
 #include "common.h"
 #include "vram.h"
+#include "color.h"
 
 extern const NPCDefinition gNPCDefinitions[];
 

@@ -6,6 +6,8 @@
  */
 #include "effects.h"
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "enemy/gyorg.h"
 #include "fileselect.h"
 #include "physics.h"

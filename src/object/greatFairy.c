@@ -15,6 +15,7 @@
 #include "save.h"
 #include "screen.h"
 #include "script.h"
+#include "fade.h"
 
 typedef struct {
     /*0x00*/ Entity base;

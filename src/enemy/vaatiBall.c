@@ -5,6 +5,7 @@
  * @brief Vaati Ball enemy
  */
 #include "enemy.h"
+#include "projectile.h"
 #include "entity.h"
 #include "object.h"
 #include "asm.h"

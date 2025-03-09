@@ -10,6 +10,7 @@
 #include "vram.h"
 #include "object/linkAnimation.h"
 #include "object/itemOnGround.h"
+#include "color.h"
 
 extern const Hitbox* const gObjectHitboxes[];
 

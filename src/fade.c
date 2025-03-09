@@ -1,3 +1,4 @@
+#include "fade.h"
 #include "global.h"
 #include "save.h"
 #include "vram.h"

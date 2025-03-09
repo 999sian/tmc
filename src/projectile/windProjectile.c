@@ -5,6 +5,8 @@
  * @brief Wind Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "entity.h"
 #include "physics.h"
 #include "script.h"

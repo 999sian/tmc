@@ -5,6 +5,10 @@
  * @brief Enemy64 enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
+#include "projectile.h"
 #include "fade.h"
 #include "scroll.h"
 #include "physics.h"
@@ -12,6 +16,7 @@
 #include "room.h"
 #include "player.h"
 #include "asm.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

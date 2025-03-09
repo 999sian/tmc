@@ -1,7 +1,7 @@
 #ifndef SCREENTRANSITIONS_H
 #define SCREENTRANSITIONS_H
 
-#include "room.h"
+#include "transitions.h"
 
 extern const Transition* const gWallMasterScreenTransitions[];
 extern const Transition gUnk_0813AB58;

@@ -11,6 +11,7 @@
 #include "sound.h"
 #include "tiles.h"
 #include "vram.h"
+#include "map.h"
 
 typedef struct {
     Entity base;

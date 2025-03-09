@@ -5,6 +5,7 @@
  * @brief Vaati Reborn NPC
  */
 #include "npc.h"
+#include "color.h"
 #include "sound.h"
 #include "flags.h"
 #include "message.h"

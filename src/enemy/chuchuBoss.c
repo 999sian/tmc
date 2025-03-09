@@ -5,11 +5,11 @@
  * @brief Chuchu Boss enemy
  */
 #include "enemy.h"
-#include "object.h"
-#include "asm.h"
-#include "common.h"
 #include "sound.h"
 #include "effects.h"
+#include "common.h"
+#include "object.h"
+#include "asm.h"
 #include "room.h"
 #include "physics.h"
 #include "player.h"
@@ -17,6 +17,7 @@
 #include "pauseMenu.h"
 #ifndef EU
 #include "vram.h"
+#include "color.h"
 #endif
 
 typedef struct {

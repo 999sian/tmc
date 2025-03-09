@@ -6,6 +6,7 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "projectile.h"
 #include "physics.h"
 
 extern void (*const TorchTrapProjectile_Functions[])(Entity*);

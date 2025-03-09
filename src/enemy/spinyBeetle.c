@@ -5,6 +5,7 @@
  * @brief Spiny Beetle enemy
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "object.h"
 #include "asm.h"

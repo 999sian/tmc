@@ -20,6 +20,7 @@
 #include "screen.h"
 #include "tiles.h"
 #include "subtask.h"
+#include "color.h"
 #ifndef EU
 #include "script.h"
 #endif

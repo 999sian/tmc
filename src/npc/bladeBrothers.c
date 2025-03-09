@@ -17,6 +17,7 @@
 #include "script.h"
 #include "sound.h"
 #include "effects.h"
+#include "color.h"
 
 typedef struct {
     /*0x00*/ Entity base;

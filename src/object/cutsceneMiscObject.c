@@ -17,10 +17,11 @@
 #include "room.h"
 #include "physics.h"
 #include "player.h"
-#include "screen.h"
 #include "scroll.h"
 #include "script.h"
 #include "tiles.h"
+#include "color.h"
+#include "fade.h"
 
 extern u8 gUnk_08122AE0[];
 extern u16 gUnk_08122AE8[];

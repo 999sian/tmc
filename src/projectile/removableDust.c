@@ -5,11 +5,12 @@
  * @brief Removable Dust Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "flags.h"
+#include "common.h"
 #include "entity.h"
 #include "object.h"
 #include "asm.h"
-#include "common.h"
-#include "flags.h"
 #include "player.h"
 #include "physics.h"
 #include "room.h"

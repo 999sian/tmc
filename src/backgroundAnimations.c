@@ -9,7 +9,7 @@
 #include "assets/gfx_offsets.h"
 #include "common.h"
 #include "gfx.h"
-#include "room.h"
+#include "fade.h"
 
 void LoadBgAnimationGfx(const BgAnimationGfx*);
 u32 GetBgAnimationTimer(const s32*);

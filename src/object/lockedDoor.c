@@ -17,6 +17,7 @@
 #include "tiles.h"
 #include "vram.h"
 #include "player.h"
+#include "color.h"
 
 typedef struct {
     /*0x00*/ Entity base;

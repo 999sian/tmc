@@ -13,6 +13,7 @@
 #include "affine.h"
 #include "asm.h"
 #include "pauseMenu.h"
+#include "fade.h"
 
 extern void (*const Subtask_FastTravel_Functions[])(void);
 void sub_080A6E70(void);

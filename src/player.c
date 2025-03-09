@@ -24,13 +24,13 @@
 #include "playeritem.h"
 #include "playerItem/playerItemBottle.h"
 #include "save.h"
-#include "screen.h"
 #include "screenTransitions.h"
 #include "scroll.h"
 #include "sound.h"
 #include "tiles.h"
 #include "ui.h"
 #include "pauseMenu.h"
+#include "fade.h"
 
 #define kGravityRate Q_8_8(32)
 #define kWalkSpeedSlopeSubtractor Q_8_8(0.3125)

@@ -2,14 +2,7 @@
 #define ENEMY_H
 
 #include "global.h"
-
-#include "sound.h"
-#include "effects.h"
-#include "flags.h"
-#include "common.h"
-
 #include "entity.h"
-#include "projectile.h"
 
 #define EM_FLAG_BOSS (1 << 0)
 #define EM_FLAG_BOSS_KILLED (1 << 1)

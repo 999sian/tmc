@@ -6,6 +6,9 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "sound.h"
+#include "flags.h"
+#include "projectile.h"
 #include "entity.h"
 #include "physics.h"
 #include "script.h"

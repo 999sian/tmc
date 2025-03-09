@@ -10,6 +10,7 @@
 #include "room.h"
 #include "player.h"
 #include "screen.h"
+#include "fade.h"
 
 typedef struct {
     /*0x00*/ Entity base;

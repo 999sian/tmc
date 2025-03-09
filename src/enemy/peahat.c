@@ -5,6 +5,8 @@
  * @brief Peahat enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "physics.h"
 #include "asm.h"
 #include "room.h"

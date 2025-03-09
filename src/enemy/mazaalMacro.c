@@ -5,7 +5,10 @@
  * @brief Mazaal Macro enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "screenTransitions.h"
+#include "room.h"
 #include "script.h"
 #include "tiles.h"
 #include "player.h"

@@ -16,6 +16,7 @@
 #include "sound.h"
 #include "game.h"
 #include "asm.h"
+#include "fade.h"
 
 extern struct BgAffineDstData gUnk_02017AA0[];
 extern struct BgAffineDstData gUnk_02017BA0[];

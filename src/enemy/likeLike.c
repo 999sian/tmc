@@ -5,12 +5,12 @@
  * @brief Like Like enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
 #include "asm.h"
-#include "sound.h"
-#include "effects.h"
 #include "physics.h"
 #include "player.h"
 #include "save.h"

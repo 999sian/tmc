@@ -6,11 +6,11 @@
  */
 #include "object/deathFx.h"
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "item.h"
 #include "physics.h"
 #include "global.h"
-#include "sound.h"
 #include "vram.h"
 
 void sub_08081790(DeathFxObject* this);

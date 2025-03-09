@@ -10,9 +10,9 @@
 #include "asm.h"
 #include "object.h"
 #include "sound.h"
-#include "room.h"
 #include "physics.h"
 #include "player.h"
+#include "map.h"
 
 typedef struct {
     Entity base;

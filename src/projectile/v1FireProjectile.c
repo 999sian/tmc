@@ -5,6 +5,7 @@
  * @brief V1 Fire Projectile
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "player.h"
 #include "room.h"

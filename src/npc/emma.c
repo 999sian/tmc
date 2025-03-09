@@ -6,6 +6,7 @@
  */
 #include "entity.h"
 #include "screenTransitions.h"
+#include "room.h"
 #include "script.h"
 
 void Emma(Entity* this) {

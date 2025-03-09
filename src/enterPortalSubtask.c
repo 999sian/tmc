@@ -20,6 +20,7 @@
 #include "screen.h"
 #include "subtask.h"
 #include "affine.h"
+#include "fade.h"
 
 extern void ClearArmosData(void);
 extern void sub_080300C4(void);

@@ -6,6 +6,7 @@
  */
 #include "manager/vaati3InsideArmManager.h"
 #include "screenTransitions.h"
+#include "room.h"
 #include "sound.h"
 
 void sub_0805DBF0(Vaati3InsideArmManager*);

@@ -20,6 +20,7 @@
 #include "subtask.h"
 #include "ui.h"
 #include "affine.h"
+#include "fade.h"
 
 extern void sub_080A4DB8(u32);
 

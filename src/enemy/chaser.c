@@ -5,6 +5,8 @@
  * @brief Chaser enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "functions.h"
 #include "player.h"
 #include "physics.h"

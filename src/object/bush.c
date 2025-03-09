@@ -4,7 +4,6 @@
  *
  * @brief Bush object
  */
-#include "hitbox.h"
 #include "object.h"
 #include "asm.h"
 #include "effects.h"

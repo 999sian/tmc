@@ -11,6 +11,8 @@
 #include "physics.h"
 #include "player.h"
 #include "tiles.h"
+#include "color.h"
+#include "map.h"
 
 enum {
     FURNITURE_INIT,

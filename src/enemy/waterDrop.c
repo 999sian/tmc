@@ -5,6 +5,7 @@
  * @brief Water Drop enemy
  */
 #include "enemy.h"
+#include "effects.h"
 #include "object.h"
 #include "asm.h"
 #include "sound.h"

@@ -5,10 +5,10 @@
  * @brief Gibdo enemy
  */
 #include "enemy.h"
-#include "object.h"
-#include "asm.h"
 #include "sound.h"
 #include "effects.h"
+#include "object.h"
+#include "asm.h"
 #include "physics.h"
 #include "player.h"
 

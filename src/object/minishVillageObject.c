@@ -12,6 +12,8 @@
 #include "room.h"
 #include "screen.h"
 #include "tiles.h"
+#include "color.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

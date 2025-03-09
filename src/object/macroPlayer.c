@@ -12,6 +12,7 @@
 #include "physics.h"
 #include "player.h"
 #include "beanstalkSubtask.h"
+#include "color.h"
 
 typedef struct {
     Entity base;

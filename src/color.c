@@ -5,6 +5,7 @@
 #include "room.h"
 #include "main.h"
 #include "gfx.h"
+#include "fade.h"
 
 extern Palette gUnk_02001A3C;
 

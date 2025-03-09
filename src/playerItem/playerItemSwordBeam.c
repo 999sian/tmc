@@ -14,6 +14,7 @@
 #include "sound.h"
 #include "object.h"
 #include "room.h"
+#include "color.h"
 
 typedef struct {
     /*0x00*/ Entity base;

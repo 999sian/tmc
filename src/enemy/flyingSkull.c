@@ -7,6 +7,7 @@
 #include "object/pot.h"
 #include "collision.h"
 #include "enemy.h"
+#include "effects.h"
 #include "entity.h"
 #include "physics.h"
 #include "hitbox.h"

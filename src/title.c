@@ -17,6 +17,7 @@
 #include "save.h"
 #include "game.h"
 #include "affine.h"
+#include "fade.h"
 #ifdef DEMO_JP
 #include "item.h"
 #include "flags.h"

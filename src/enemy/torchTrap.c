@@ -5,6 +5,9 @@
  * @brief Torch Trap enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "flags.h"
+#include "projectile.h"
 #include "entity.h"
 #include "physics.h"
 #include "player.h"

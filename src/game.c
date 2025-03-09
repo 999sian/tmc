@@ -23,6 +23,7 @@
 #include "ui.h"
 #include "beanstalkSubtask.h"
 #include "pauseMenu.h"
+#include "fade.h"
 
 // Game task
 

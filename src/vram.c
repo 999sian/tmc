@@ -2,6 +2,7 @@
 #include "fileselect.h"
 #include "vram.h"
 #include "gfx.h"
+#include "color.h"
 
 extern u32 gFixedTypeGfxData[];
 

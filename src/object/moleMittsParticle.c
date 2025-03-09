@@ -9,6 +9,7 @@
 #include "room.h"
 #include "player.h"
 #include "item.h"
+#include "color.h"
 
 void MoleMittsParticle_Init(Entity*);
 void MoleMittsParticle_Action1(Entity*);

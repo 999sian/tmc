@@ -16,6 +16,8 @@
 #include "vram.h"
 #include "room.h"
 #include "player.h"
+#include "color.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

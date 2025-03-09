@@ -5,6 +5,8 @@
  * @brief Beetle enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "player.h"
 #include "physics.h"
 #include "asm.h"

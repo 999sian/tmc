@@ -17,6 +17,7 @@
 #include "screen.h"
 #include "subtask.h"
 #include "affine.h"
+#include "fade.h"
 
 void Subtask_WorldEvent_Update(void);
 

@@ -16,9 +16,11 @@
 #include "room.h"
 #include "physics.h"
 #include "player.h"
-#include "screen.h"
 #include "vram.h"
 #include "scroll.h"
+#include "color.h"
+#include "fade.h"
+#include "projectile.h"
 #if defined USA || defined DEMO_USA || defined DEMO_JP
 #include "save.h"
 #endif

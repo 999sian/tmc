@@ -5,6 +5,7 @@
  * @brief Crow enemy
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "physics.h"
 #include "asm.h"

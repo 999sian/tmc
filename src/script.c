@@ -13,13 +13,13 @@
 #include "room.h"
 #include "physics.h"
 #include "player.h"
-#include "screen.h"
 #include "scroll.h"
 #include "script.h"
 #include "ui.h"
 #include "save.h"
 #include "subtask.h"
 #include "pauseMenu.h"
+#include "fade.h"
 
 void InitScriptExecutionContext(ScriptExecutionContext* context, Script* script);
 void sub_0807DE80(Entity*);

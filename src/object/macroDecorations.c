@@ -9,6 +9,7 @@
 #include "map.h"
 #include "room.h"
 #include "tiles.h"
+#include "color.h"
 
 typedef struct {
     Entity base;
