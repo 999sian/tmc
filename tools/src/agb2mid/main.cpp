@@ -18,18 +18,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+#include "main.h"
+#include "agb.h"
+#include "error.h"
+#include "midi.h"
+#include <cassert>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cctype>
-#include <cassert>
-#include <string>
 #include <set>
+#include <string>
 #include <vector>
-#include "main.h"
-#include "error.h"
-#include "midi.h"
-#include "agb.h"
 
 FILE* g_inputFile = nullptr;
 FILE* g_outputFile = nullptr;
@@ -276,7 +276,7 @@ int main(int argc, char** argv) {
     if (g_inputFile == nullptr)
         RaiseError("failed to open \"%s\" for reading", inputFilename.c_str());
 
-    g_outputFile = std::fopen(outputFilename.c_str(), "w");
+    g_outputFile = std::fopen(outputFilename.c_str(), "wb");
 
     if (g_outputFile == nullptr)
         RaiseError("failed to open \"%s\" for writing", outputFilename.c_str());

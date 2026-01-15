@@ -6,7 +6,7 @@
 void AnimationAsset::convertToHumanReadable(const std::vector<char>& baserom) {
     Reader reader(baserom, start, size);
     bool end_of_animation = false;
-    auto file = util::open_file(assetPath, "w");
+    auto file = util::open_file(assetPath.string(), "w");
     while (!end_of_animation && reader.cursor + 3 < size) {
         u8 frame_index = reader.read_u8();
         u8 keyframe_duration = reader.read_u8();

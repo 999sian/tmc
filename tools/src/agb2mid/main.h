@@ -23,6 +23,7 @@
 
 #include <cstdio>
 #include <string>
+#include <vector>
 
 extern FILE* g_inputFile;
 extern FILE* g_outputFile;

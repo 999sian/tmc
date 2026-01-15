@@ -470,7 +470,7 @@ void PackStringTable(const std::string& src_path, const std::string& dst_path, c
         }
     }
 
-    std::ofstream ofs(dst_path);
+    std::ofstream ofs(dst_path, std::ios::binary);
     ofs.write(buffer.data(), table_size);
 }
 

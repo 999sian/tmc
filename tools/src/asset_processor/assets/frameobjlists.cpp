@@ -10,7 +10,7 @@ void FrameObjListsAsset::convertToHumanReadable(const std::vector<char>& baserom
     std::vector<u32> first_level;
     std::vector<u32> second_level;
 
-    auto file = util::open_file(assetPath, "w");
+    auto file = util::open_file(assetPath.string(), "w");
     std::fputs("@ First level of offsets\n", file.get());
 
     while (reader.cursor < size) {

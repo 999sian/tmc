@@ -5,7 +5,7 @@
 
 void SpriteFrameAsset::convertToHumanReadable(const std::vector<char>& baserom) {
     Reader reader(baserom, start, size);
-    auto file = util::open_file(assetPath, "w");
+    auto file = util::open_file(assetPath.string(), "w");
     while (reader.cursor < size) {
         u8 num_gfx_tiles = reader.read_u8();
         u8 unk = reader.read_u8();

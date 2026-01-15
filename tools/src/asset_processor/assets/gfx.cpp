@@ -22,16 +22,16 @@ void GfxAsset::convertToHumanReadable(const std::vector<char>& baserom) {
     if (isCompressed()) {
         // First decompress.
         decompressedPath.replace_extension("");
-        cmd.push_back(toolsPath / "bin" / "gbagfx");
-        cmd.push_back(path);
-        cmd.push_back(decompressedPath);
+        cmd.push_back((toolsPath / "bin" / "gbagfx").string());
+        cmd.push_back(path.string());
+        cmd.push_back(decompressedPath.string());
         check_call(cmd);
         cmd.clear();
     }
 
-    cmd.push_back(toolsPath / "bin" / "gbagfx");
-    cmd.push_back(decompressedPath);
-    cmd.push_back(assetPath);
+    cmd.push_back((toolsPath / "bin" / "gbagfx").string());
+    cmd.push_back(decompressedPath.string());
+    cmd.push_back(assetPath.string());
     if (asset.contains("options")) {
         for (const auto& it : asset["options"].items()) {
             cmd.push_back("-" + it.key());
@@ -50,17 +50,17 @@ void GfxAsset::buildToBinary() {
         decompressedPath.replace_extension("");
     }
 
-    cmd.push_back(toolsPath / "bin" / "gbagfx");
-    cmd.push_back(assetPath);
-    cmd.push_back(decompressedPath);
+    cmd.push_back((toolsPath / "bin" / "gbagfx").string());
+    cmd.push_back(assetPath.string());
+    cmd.push_back(decompressedPath.string());
     check_call(cmd);
 
     if (isCompressed()) {
         cmd.clear();
         // Compress.
-        cmd.push_back(toolsPath / "bin" / "gbagfx");
-        cmd.push_back(decompressedPath);
-        cmd.push_back(path);
+        cmd.push_back((toolsPath / "bin" / "gbagfx").string());
+        cmd.push_back(decompressedPath.string());
+        cmd.push_back(path.string());
         check_call(cmd);
     }
 }

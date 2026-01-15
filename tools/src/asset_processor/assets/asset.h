@@ -3,9 +3,9 @@
 
 #include "util.h"
 #include <filesystem>
+#include <iostream>
 #include <nlohmann/json_fwd.hpp>
 #include <string>
-#include <iostream>
 #include <utility>
 
 class BaseAsset {
@@ -51,7 +51,7 @@ class BaseAsset {
     // Returns the base of the filename of the asset.
     [[nodiscard]] virtual std::string getSymbol() const {
         // Need to get the stem twice to remove both of the .4bpp.lz extensions.
-        return (path.stem()).stem();
+        return (path.stem()).stem().string();
     }
 
     // Returns the start address of this asset.

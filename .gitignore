@@ -89,3 +89,7 @@ __pycache__
 Info.plist
 ctx.c
 !doxygen_config.py
+
+.xmake
+build/
+.vscode/

@@ -15,6 +15,6 @@ std::filesystem::path BaseMacroAsmAsset::generateBuildPath() {
 void BaseMacroAsmAsset::extractBinary(const std::vector<char>& baserom) {
     BaseAsset::extractBinary(baserom);
     // Create dummy .s file that just incbins the .bin file.
-    auto file = util::open_file(assetPath, "w");
-    fmt::print(file.get(), "\t.incbin \"{}\"\n", path.native());
+    auto file = util::open_file(assetPath.string(), "wb");
+    fmt::print(file.get(), "\t.incbin \"{}\"\n", path.generic_string());
 }

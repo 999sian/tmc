@@ -13,7 +13,7 @@ std::filesystem::path DungeonMapAsset::generateAssetPath() {
 
 void DungeonMapAsset::convertToHumanReadable(const std::vector<char>& baserom) {
     (void)baserom;
-    const char characters[] = {' ', '#', '.', '-'};
+    const char characters[] = { ' ', '#', '.', '-' };
 
     std::ifstream file(path.string(), std::ios::binary | std::ios::ate);
     auto fileSize = file.tellg();
@@ -26,7 +26,7 @@ void DungeonMapAsset::convertToHumanReadable(const std::vector<char>& baserom) {
     }
     file.close();
 
-    auto output_file = util::open_file(assetPath, "w");
+    auto output_file = util::open_file(assetPath.string(), "w");
 
     size_t width = asset["options"]["width"];
     width *= 4;
@@ -34,11 +34,11 @@ void DungeonMapAsset::convertToHumanReadable(const std::vector<char>& baserom) {
     size_t bytesPerRow = (width + 3) / 4;
 
     for (size_t y = 0; y < height; y++) {
-        for (size_t x = 0; x < width; x +=4) {
+        for (size_t x = 0; x < width; x += 4) {
             size_t offset = y * bytesPerRow + x / 4;
             char byte = data[offset];
             for (size_t i = 0; i < 4; i++) {
-                int color = (byte >> (6 - i*2)) & 3;
+                int color = (byte >> (6 - i * 2)) & 3;
                 std::fputc(characters[color], output_file.get());
             }
         }
@@ -58,7 +58,7 @@ void DungeonMapAsset::buildToBinary() {
     }
     file.close();
 
-    auto output_file = util::open_file(buildPath, "w");
+    auto output_file = util::open_file(buildPath.string(), "w");
     int byte = 0;
     size_t pixels = 0;
     for (size_t i = 0; i < static_cast<size_t>(fileSize); i++) {

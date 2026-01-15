@@ -11,17 +11,17 @@ void PaletteAsset::convertToHumanReadable(const std::vector<char>& baserom) {
 
     std::filesystem::path toolsPath = "tools";
     std::vector<std::string> cmd;
-    cmd.push_back(toolsPath / "bin" / "gbagfx");
-    cmd.push_back(path);
-    cmd.push_back(assetPath);
+    cmd.push_back((toolsPath / "bin" / "gbagfx").string());
+    cmd.push_back(path.string());
+    cmd.push_back(assetPath.string());
     check_call(cmd);
 }
 
 void PaletteAsset::buildToBinary() {
     std::filesystem::path toolsPath = "tools";
     std::vector<std::string> cmd;
-    cmd.push_back(toolsPath / "bin" / "gbagfx");
-    cmd.push_back(assetPath);
-    cmd.push_back(path);
+    cmd.push_back((toolsPath / "bin" / "gbagfx").string());
+    cmd.push_back(assetPath.string());
+    cmd.push_back(path.string());
     check_call(cmd);
 }
