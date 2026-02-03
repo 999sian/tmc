@@ -29,7 +29,7 @@ typedef struct {
     const Transition* exits;
     void** properties;
 } RoomResInfo;
-static_assert(sizeof(RoomResInfo) == 0x20);
+static_assert(sizeof(RoomResInfo) == 0x20, "RoomResInfo size incorrect");
 
 typedef struct {
     u8 textBaseIndex;
@@ -74,7 +74,7 @@ typedef struct {
     void (*onEnter)();
     void (*onExit)();
 } Area;
-static_assert(sizeof(Area) == 0x894);
+static_assert(sizeof(Area) == 0x894, "Area size incorrect");
 extern Area gArea;
 
 typedef struct {
@@ -84,7 +84,7 @@ typedef struct {
     u16 pixel_height;
     u16 tileSet_id;
 } FORCE_WORD_ALIGNED RoomHeader;
-static_assert(sizeof(RoomHeader) == 0xa);
+static_assert(sizeof(RoomHeader) == 0xa, "RoomHeader size incorrect");
 extern RoomHeader* gAreaRoomHeaders[];
 
 typedef struct {

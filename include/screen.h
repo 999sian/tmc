@@ -1,8 +1,8 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
-#include "global.h"
 #include "fade.h"
+#include "global.h"
 
 typedef struct {
     /*0x00*/ u16 displayControl;

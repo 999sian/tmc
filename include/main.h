@@ -2,10 +2,10 @@
 #define MAIN_H
 
 #include "global.h"
-#include "structures.h"
 #include "room.h"
-#include "script.h"
 #include "screen.h"
+#include "script.h"
+#include "structures.h"
 
 /** File signature */
 #define SIGNATURE 'MCZ3'
@@ -96,7 +96,7 @@ typedef struct {
     /*0x2A8*/ u8 unk_2a8[0x100];
     /*0x3A8*/ ActiveScriptInfo activeScriptInfo;
 } UI;
-static_assert(sizeof(UI) == 0x3b4);
+static_assert(sizeof(UI) == 0x3b4, "UI size incorrect");
 
 extern Main gMain; /**< Main instance. */
 extern UI gUI;     /**< UI instance. */

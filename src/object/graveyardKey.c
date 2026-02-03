@@ -34,7 +34,7 @@ typedef struct _struct_gUnk_08123FB0 {
     u8 unk1f;
 } struct_gUnk_08123FB0;
 
-static_assert(sizeof(struct_gUnk_08123FB0) == 0x20);
+static_assert(sizeof(struct_gUnk_08123FB0) == 0x20, "struct_gUnk_08123FB0 size incorrect");
 
 void sub_0809D91C(Entity*);
 bool32 sub_0809D93C(Entity*, const struct_gUnk_08123FB0*);

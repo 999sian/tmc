@@ -23,7 +23,7 @@ typedef struct {
     u8 unk_0x84;
 } TakkuriEntity;
 
-static_assert(sizeof(TakkuriEntity) == 0x88);
+static_assert(sizeof(TakkuriEntity) == 0x88, "TakkuriEntity size incorrect");
 
 extern Entity* gUnk_020000B0;
 

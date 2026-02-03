@@ -1,3 +1,4 @@
+#include "collision.h"
 #include "functions.h"
 #include "gba/m4a.h"
 #include "global.h"
@@ -10,7 +11,6 @@
 #include "sound.h"
 #include "structures.h"
 #include "ui.h"
-#include "collision.h"
 
 extern u8 gUnk_03003DE0;
 extern u8 gUnk_03000C30;
@@ -34,10 +34,12 @@ void DummyIntr(void) {
 }
 
 void EnableVBlankIntr(void) {
+#ifndef PC_PORT
     INTR_VECTOR = ram_IntrMain;
-    REG_DISPSTAT = DISPSTAT_VCOUNT_INTR | DISPSTAT_VBLANK_INTR | (80 << 8);
-    REG_IE = INTR_FLAG_VBLANK | INTR_FLAG_VCOUNT | INTR_FLAG_GAMEPAK;
-    REG_IME = 1;
+#endif
+    gba_write16(REG_ADDR_DISPSTAT, DISPSTAT_VCOUNT_INTR | DISPSTAT_VBLANK_INTR | (80 << 8));
+    gba_write16(REG_ADDR_IE, INTR_FLAG_VBLANK | INTR_FLAG_VCOUNT | INTR_FLAG_GAMEPAK);
+    gba_write16(REG_ADDR_IME, 1);
 }
 
 void VBlankIntr(void) {

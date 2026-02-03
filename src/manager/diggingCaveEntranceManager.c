@@ -137,8 +137,7 @@ const DiggingCaveEntrance* GetDiggingCaveEntranceForRoom(const DiggingCaveEntran
     return 0;
 }
 
-#define END_OF_LIST \
-    { 0xffff, 0, 0, 0, 0 }
+#define END_OF_LIST { 0xffff, 0, 0, 0, 0 }
 
 static const DiggingCaveEntrance diggingCaveEntrancesEmpty[] = { END_OF_LIST };
 static const DiggingCaveEntrance diggingCaveEntrancesMinishWoods[] = {
@@ -234,7 +233,7 @@ static const DiggingCaveEntrance diggingCaveEntrancesHyliaDigCaves[] = {
 };
 
 /** Holds the lists of DiggingCaveEntrances indexed by area id. */
-static const DiggingCaveEntrance* const diggingCaveEntrances[] = {
+const DiggingCaveEntrance* const diggingCaveEntrances[] = {
     diggingCaveEntrancesMinishWoods,
     diggingCaveEntrancesEmpty,
     diggingCaveEntrancesHyruleTown,

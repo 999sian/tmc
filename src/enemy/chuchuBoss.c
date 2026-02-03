@@ -24,7 +24,7 @@ typedef struct {
     u16 unk_0e;
 } Helper;
 
-static_assert(sizeof(Helper) == 0x10);
+static_assert(sizeof(Helper) == 0x10, "Helper size incorrect");
 
 typedef struct _ChuchuBossEntity {
     Entity base;

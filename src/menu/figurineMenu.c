@@ -415,7 +415,7 @@ typedef struct {
     u8 filler12[2];
     u8 unk14;
 } struct_0812816C;
-static_assert(sizeof(struct_0812816C) == 0x18);
+static_assert(sizeof(struct_0812816C) == 0x18, "struct_0812816C size incorrect");
 const struct_0812816C gUnk_0812816C = {
     (u16*)0x02001b40,
     0x0600a000,
@@ -434,7 +434,7 @@ typedef struct {
     u8 unk8;
     u8 unk9;
 } struct_08128184;
-static_assert(sizeof(struct_08128184) == 0xc);
+static_assert(sizeof(struct_08128184) == 0xc, "struct_08128184 size incorrect");
 const struct_08128184 gUnk_08128184 = {
     0x01061504,
     0x073a1404,

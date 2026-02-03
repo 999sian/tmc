@@ -24,7 +24,7 @@ typedef union {
     } s;
     s16 a[16];
 } Droptable;
-static_assert(sizeof(Droptable) == 0x20);
+static_assert(sizeof(Droptable) == 0x20, "Droptable size incorrect");
 
 extern const Droptable gEnemyDroptables[];
 extern const Droptable gAreaDroptables[];

@@ -1,9 +1,9 @@
 #ifndef FILESELECT_H
 #define FILESELECT_H
 
-#include "sound.h"
 #include "global.h"
 #include "save.h"
+#include "sound.h"
 
 typedef struct {
     /*0x00*/ u8 unk_0x0;
@@ -18,7 +18,7 @@ typedef struct {
     /*0x20*/ s8 unk_0x20;
     /*0x21*/ u8 fillerC[0xF];
 } ChooseFileState;
-static_assert(sizeof(ChooseFileState) == 0x30);
+static_assert(sizeof(ChooseFileState) == 0x30, "ChooseFileState size incorrect");
 
 // TODO: This occupies the same memory region as gMenu
 extern ChooseFileState gChooseFileState;

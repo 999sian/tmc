@@ -44,11 +44,63 @@ typedef struct {
 
 Obj11* DoTileInteractionOffset(Entity*, u32, u32, u32);
 
-extern const s8* const sOffsets[];
-extern const s8 gUnk_0812AABC[];
-extern const Hitbox* const sHitboxes[];
-extern const u8 gUnk_0812AAE8[];
+// extern const s8* const sOffsets[];
+// extern const s8 gUnk_0812AABC[];
+// extern const Hitbox* const sHitboxes[];
+// extern const u8 gUnk_0812AAE8[];
 extern const s8 gUnk_08126EE4[];
+
+static const s8 sOffsets0[] = {
+    -4, -4, 4, -4, -4, 4, 4, 4, 0,
+};
+
+static const s8 sOffsets1And2[] = {
+    -5, -5, 5, -5, -5, 5, 5, 5, 0,
+};
+
+static const s8 sOffsets3[] = {
+    -9, -9, 1, -9, 9, -9, -9, 1, 9, 1, -9, 9, 1, 9, 9, 9, 0, 0,
+};
+
+static const s8* const sOffsets[] = {
+    sOffsets0,
+    sOffsets1And2,
+    sOffsets1And2,
+    sOffsets3,
+};
+
+static const s8 gUnk_0812AABC[] = {
+    120,
+    80,
+    40,
+    4,
+};
+
+static const Hitbox sHitbox0 = {
+    0, 0, 4, 2, 2, 4, 4, 4,
+};
+
+static const Hitbox sHitbox1And2 = {
+    0, 0, 4, 3, 3, 4, 9, 9,
+};
+
+static const Hitbox sHitbox3 = {
+    0, 0, 8, 7, 7, 8, 14, 14,
+};
+
+static const Hitbox* const sHitboxes[] = {
+    &sHitbox0,
+    &sHitbox1And2,
+    &sHitbox1And2,
+    &sHitbox3,
+};
+
+static const u8 gUnk_0812AAE8[] = {
+    0,
+    12,
+    16,
+    16,
+};
 
 // specifically, the little gusts that come out while the item is active
 // type 0: stays close to jar?
@@ -236,55 +288,3 @@ static void sub_080ACECC(PlayerItemGustEntity* this) {
         }
     }
 }
-
-static const s8 sOffsets0[] = {
-    -4, -4, 4, -4, -4, 4, 4, 4, 0,
-};
-
-static const s8 sOffsets1And2[] = {
-    -5, -5, 5, -5, -5, 5, 5, 5, 0,
-};
-
-static const s8 sOffsets3[] = {
-    -9, -9, 1, -9, 9, -9, -9, 1, 9, 1, -9, 9, 1, 9, 9, 9, 0, 0,
-};
-
-static const s8* const sOffsets[] = {
-    sOffsets0,
-    sOffsets1And2,
-    sOffsets1And2,
-    sOffsets3,
-};
-
-static const s8 gUnk_0812AABC[] = {
-    120,
-    80,
-    40,
-    4,
-};
-
-static const Hitbox sHitbox0 = {
-    0, 0, 4, 2, 2, 4, 4, 4,
-};
-
-static const Hitbox sHitbox1And2 = {
-    0, 0, 4, 3, 3, 4, 9, 9,
-};
-
-static const Hitbox sHitbox3 = {
-    0, 0, 8, 7, 7, 8, 14, 14,
-};
-
-static const Hitbox* const sHitboxes[] = {
-    &sHitbox0,
-    &sHitbox1And2,
-    &sHitbox1And2,
-    &sHitbox3,
-};
-
-static const u8 gUnk_0812AAE8[] = {
-    0,
-    12,
-    16,
-    16,
-};

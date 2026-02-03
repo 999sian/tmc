@@ -1,8 +1,8 @@
 #ifndef ROOM_H
 #define ROOM_H
 
-#include "entity.h"
 #include "droptables.h"
+#include "entity.h"
 #include "map.h"
 
 enum RoomTransition {
@@ -82,7 +82,7 @@ typedef struct {
     /* 0x8c */ void* entityRails[8];
     /* 0xac */ Entity* puzzleEntities[8];
 } RoomVars;
-static_assert(sizeof(RoomVars) == 0xCC);
+static_assert(sizeof(RoomVars) == 0xCC, "RoomVars size incorrect");
 extern RoomVars gRoomVars;
 
 typedef struct {
@@ -143,7 +143,7 @@ typedef struct {
     /* 0x16 */ u16 overworld_map_y;
     /* 0x18 */ u8 filler18[8];
 } PlayerRoomStatus;
-static_assert(sizeof(PlayerRoomStatus) == 0x20);
+static_assert(sizeof(PlayerRoomStatus) == 0x20, "PlayerRoomStatus size incorrect");
 
 typedef struct {
     /* 0x00 */ s32 frameCount; // regular frame count? does anything reset it?
@@ -185,7 +185,7 @@ typedef struct {
     /* 0x4c */ MinecartData minecart_data[4];
     /* 0x6c */ ArmosData armos_data;
 } RoomTransition;
-static_assert(sizeof(RoomTransition) == 0xB0);
+static_assert(sizeof(RoomTransition) == 0xB0, "RoomTransition size incorrect");
 extern RoomTransition gRoomTransition;
 
 typedef struct {

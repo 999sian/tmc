@@ -1,5 +1,6 @@
 #ifndef MACRO_H
 #define MACRO_H
+#include <stdio.h>
 
 #define CPU_FILL(value, dest, size, bit)                                                                       \
     {                                                                                                          \
@@ -28,13 +29,12 @@
 
 #define CpuFastCopy(src, dest, size) CpuFastSet(src, dest, ((size) / (32 / 8) & 0x1FFFFF))
 
-#define DmaSet(dmaNum, src, dest, control)           \
-    {                                                \
-        vu32* dmaRegs = (vu32*)REG_ADDR_DMA##dmaNum; \
-        dmaRegs[0] = (vu32)(src);                    \
-        dmaRegs[1] = (vu32)(dest);                   \
-        dmaRegs[2] = (vu32)(control);                \
-        dmaRegs[2];                                  \
+#define DmaSet(dmaNum, src, dest, control)                      \
+    {                                                           \
+        vu32* dmaRegs = (vu32*)REG_ADDR_DMA##dmaNum;            \
+        gba_write32(REG_ADDR_DMA##dmaNum, (vu32)(src));         \
+        gba_write32(REG_ADDR_DMA##dmaNum + 4, (vu32)(dest));    \
+        gba_write32(REG_ADDR_DMA##dmaNum + 8, (vu32)(control)); \
     }
 
 #define DMA_FILL(dmaNum, value, dest, size, bit)                                                    \
@@ -70,12 +70,14 @@
 #define DmaCopy16(dmaNum, src, dest, size) DMA_COPY(dmaNum, src, dest, size, 16)
 #define DmaCopy32(dmaNum, src, dest, size) DMA_COPY(dmaNum, src, dest, size, 32)
 
-#define DmaStop(dmaNum)                                             \
-    {                                                               \
-        vu16* dmaRegs = (vu16*)REG_ADDR_DMA##dmaNum;                \
-        dmaRegs[5] &= ~(DMA_START_MASK | DMA_DREQ_ON | DMA_REPEAT); \
-        dmaRegs[5] &= ~DMA_ENABLE;                                  \
-        dmaRegs[5];                                                 \
+#define DmaStop(dmaNum)                                                       \
+    {                                                                         \
+        vu16 control = gba_read16(REG_ADDR_DMA##dmaNum + 4);                  \
+        control &= ~(DMA_ENABLE | DMA_START_MASK | DMA_DREQ_ON | DMA_REPEAT); \
+        gba_write16(REG_ADDR_DMA##dmaNum + 4, control);                       \
+        control = gba_read16(REG_ADDR_DMA##dmaNum + 4);                       \
+        control &= ~DMA_ENABLE;                                               \
+        gba_write16(REG_ADDR_DMA##dmaNum + 4, control);                       \
     }
 
 #define DmaCopyLarge(dmaNum, src, dest, size, block, bit) \
@@ -167,11 +169,11 @@
 #define DmaClear16Defvars(dmaNum, dest, size) DmaClearDefvars(dmaNum, dest, size, 16)
 #define DmaClear32Defvars(dmaNum, dest, size) DmaClearDefvars(dmaNum, dest, size, 32)
 
-#define DmaWait(DmaNo)                               \
-    {                                                \
-        vu32*(DmaCntp) = (vu32*)REG_ADDR_DMA##DmaNo; \
-        while (DmaCntp[2] & (DMA_ENABLE << 16))      \
-            ;                                        \
+#define DmaWait(DmaNo)                                           \
+    {                                                            \
+        vu32*(DmaCntp) = (vu32*)REG_ADDR_DMA##DmaNo;             \
+        while (gba_read16(REG_ADDR_DMA##DmaNo + 4) & DMA_ENABLE) \
+            ;                                                    \
     }
 
 #define IntrEnable(flags)  \

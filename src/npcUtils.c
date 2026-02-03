@@ -1,12 +1,12 @@
-#include "global.h"
 #include "asm.h"
+#include "definitions.h"
 #include "entity.h"
 #include "functions.h"
-#include "definitions.h"
-#include "save.h"
-#include "npc.h"
-#include "kinstone.h"
+#include "global.h"
 #include "hitbox.h"
+#include "kinstone.h"
+#include "npc.h"
+#include "save.h"
 
 extern const NPCDefinition gNPCDefinitions[];
 
@@ -274,7 +274,7 @@ u32 sub_0806F048(Entity* ent, u16* a2) {
 }
 
 u32 sub_0806F050(Entity* ent, u16* a2) {
-    (u16*)ent->child = a2 + 1;
+    ent->child = (Entity*)(a2 + 1);
     ent->hitType = 0;
     return sub_0806EF88(ent);
 }

@@ -30,7 +30,7 @@ typedef struct {
     struct_gUnk_020000C0_1 unk_00[4];
 } struct_gUnk_020000C0;
 
-static_assert(sizeof(struct_gUnk_020000C0) == 0x40);
+static_assert(sizeof(struct_gUnk_020000C0) == 0x40, "struct_gUnk_020000C0 size incorrect");
 
 extern struct_gUnk_020000C0 gUnk_020000C0[0x30];
 

@@ -1,8 +1,8 @@
 #ifndef MESSAGE_H
 #define MESSAGE_H
 
-#include "global.h"
 #include "entity.h"
+#include "global.h"
 #include "structures.h"
 
 #define MESSAGE_ACTIVE 0x7f
@@ -79,7 +79,7 @@ typedef struct {
     u16 _a6;
 } TextRender;
 extern TextRender gTextRender;
-static_assert(sizeof(TextRender) == 0xa8);
+static_assert(sizeof(TextRender) == 0xa8, "TextRender size incorrect");
 
 /**
  * @brief Initialize the message system.

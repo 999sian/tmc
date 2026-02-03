@@ -1,8 +1,8 @@
 #ifndef STRUCTURES_H
 #define STRUCTURES_H
 
-#include "global.h"
 #include "entity.h"
+#include "global.h"
 #include "player.h"
 
 typedef struct {
@@ -15,7 +15,7 @@ typedef struct {
     u8 invalid;
     u8 initialized;
 } SaveHeader;
-#define gSaveHeader ((SaveHeader*)(0x2000000))
+#define gSaveHeader ((SaveHeader*)gba_MemPtr(0x02000000u))
 
 typedef struct {
     u8 unk_00;
@@ -33,7 +33,7 @@ typedef struct {
     u8 field_0x7;
     u8 pad[24];
 } struct_02000010;
-static_assert(sizeof(struct_02000010) == 0x20);
+static_assert(sizeof(struct_02000010) == 0x20, "struct_02000010 size incorrect");
 
 extern struct_02000010 gUnk_02000010;
 
@@ -180,7 +180,7 @@ typedef struct {
 } GfxSlotList;
 extern GfxSlotList gGFXSlots;
 
-static_assert(sizeof(GfxSlotList) == 0x214);
+static_assert(sizeof(GfxSlotList) == 0x214, "GfxSlotList size incorrect");
 
 typedef struct {
     u16 unk_00;
@@ -202,7 +202,7 @@ typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN,
  * 3: Lamp
  */
 extern ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
-static_assert(sizeof(gActiveItems) == 0x70);
+static_assert(sizeof(gActiveItems) == 0x70, "gActiveItems size incorrect");
 
 typedef struct {
     u8 event_priority; // system requested priority
@@ -228,7 +228,7 @@ typedef struct {
 } PauseMenuOptions;
 
 extern PauseMenuOptions gPauseMenuOptions;
-static_assert(sizeof(PauseMenuOptions) == 0x18);
+static_assert(sizeof(PauseMenuOptions) == 0x18, "PauseMenuOptions size incorrect");
 
 typedef struct {
     u8 unk00 : 1;
@@ -242,7 +242,7 @@ typedef struct {
     void* unk8;
 } WStruct;
 
-static_assert(sizeof(WStruct) == 12);
+static_assert(sizeof(WStruct) == 12, "WStruct size incorrect");
 
 typedef struct {
     u8 unk0;
@@ -299,7 +299,7 @@ typedef struct {
         candidates[0x20]; /* contains the loaded NPCs, key doors, windcrests and other objects */
 } PossibleInteraction;
 
-static_assert(sizeof(PossibleInteraction) == 0x188);
+static_assert(sizeof(PossibleInteraction) == 0x188, "PossibleInteraction size incorrect");
 
 extern PossibleInteraction gPossibleInteraction;
 
@@ -368,7 +368,7 @@ typedef struct {
     /*0x09*/ u8 pad[3];
 } ItemDefinition;
 
-static_assert(sizeof(ItemDefinition) == 0xc);
+static_assert(sizeof(ItemDefinition) == 0xc, "ItemDefinition size incorrect");
 
 typedef struct {
     u8 frame;
@@ -385,7 +385,7 @@ typedef struct {
     /*0xa*/ u16 sm_unk_14;
 } PACKED StaffrollEntry;
 
-static_assert(sizeof(StaffrollEntry) == 0xc);
+static_assert(sizeof(StaffrollEntry) == 0xc, "StaffrollEntry size incorrect");
 
 typedef struct {
     u8 paletteGroup;

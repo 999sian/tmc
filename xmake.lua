@@ -29,6 +29,7 @@ add_requires("nlohmann_json", {configs = {cmake = false}})
 add_requires("fmt", {configs = {header_only = true}})
 add_requires("libpng")
 add_requires("zlib")
+add_requires('libsdl3')
 
 -- ====================
 -- Tools
@@ -247,6 +248,139 @@ task("build_assets")
         options = {}
     }
 task_end()
+
+-- ====================
+-- PC Port Target
+-- ====================
+target("tmc_pc")
+    set_kind("binary")
+    set_languages("c11", "cxx17")
+    set_targetdir("build/pc")
+    
+    -- Define PC_PORT, NON_MATCHING and game version
+    add_defines("PC_PORT", "NON_MATCHING", "USA", "ENGLISH", "REVISION=0")
+    
+    -- Include directories
+    add_includedirs("include", "libs")
+    add_includedirs("port")
+    add_includedirs(".")
+    add_includedirs("build/pc/assets")  -- PC port assets stubs
+    add_includedirs("build/USA")        -- For assets/map_offsets.h etc
+
+    
+    
+
+    add_files("port/port_main.c")
+        -- PC port stubs for undefined symbols
+    add_files("port/port_stubs.c")
+    add_files("port/stubs_autogen.c")
+    add_files("port/data_stubs_autogen.c")
+    add_files("port/port_bios.c")
+    add_files("port/port_linked_stubs.c")
+    add_files("port/port_gba_mem.c")
+    
+    -- Game source files - Main game code
+    add_files("src/main.c")
+    add_files("src/common.c")
+    add_files("src/interrupts.c")
+    add_files("src/game.c")
+    add_files("src/title.c")
+    add_files("src/fileselect.c")
+    add_files("src/flags.c")
+    add_files("src/save.c")
+    add_files("src/fade.c")
+    add_files("src/color.c")
+    add_files("src/vram.c")
+    add_files("src/screen*.c")
+    add_files("src/message.c")
+    add_files("src/text.c")
+    add_files("src/sound.c")
+    add_files("src/script.c")
+    add_files("src/scroll.c")
+    add_files("src/room.c")
+    add_files("src/roomInit.c")
+    add_files("src/entity.c")
+    add_files("src/physics.c")
+    add_files("src/collision.c")
+    add_files("src/movement.c")
+    add_files("src/affine.c")
+    add_files("src/sineTable.c")
+    add_files("src/ui.c")
+    
+    -- Player
+    add_files("src/player.c")
+    add_files("src/playerUtils.c")
+    add_files("src/playerHitbox.c")
+    add_files("src/playerItem.c")
+    add_files("src/playerItemUtils.c")
+    add_files("src/playerItemDefinitions.c")
+    add_files("src/playerItem/*.c")
+    
+    -- Entities
+    add_files("src/enemy.c")
+    add_files("src/enemyUtils.c")
+    add_files("src/enemy/*.c")
+    add_files("src/npc.c")
+    add_files("src/npcUtils.c")
+    add_files("src/npcFunctions.c")
+    add_files("src/npcDefinitions.c")
+    add_files("src/npc/*.c")
+    add_files("src/object.c")
+    add_files("src/objectUtils.c")
+    add_files("src/objectDefinitions.c")
+    add_files("src/object/*.c")
+    add_files("src/projectile.c")
+    add_files("src/projectileUtils.c")
+    add_files("src/projectile/*.c")
+    add_files("src/manager.c")
+    add_files("src/manager/*.c")
+    add_files("src/item.c")
+    add_files("src/itemUtils.c")
+    add_files("src/itemDefinitions.c")
+    add_files("src/itemMetaData.c")
+    add_files("src/item/*.c")
+    
+    -- Other game systems
+    add_files("src/subtask.c")
+    add_files("src/subtask/*.c")
+    -- add_files("src/cutscene.c")  -- FIXME: pointer casts in EntityData
+    add_files("src/backgroundAnimations.c")
+    add_files("src/beanstalkSubtask.c")
+    add_files("src/enterPortalSubtask.c")
+    add_files("src/gameOverTask.c")
+    add_files("src/gameUtils.c")
+    add_files("src/gameData.c")
+    add_files("src/kinstone.c")
+    add_files("src/droptables.c")
+    add_files("src/demo.c")
+    add_files("src/debug.c")
+    add_files("src/flagDebug.c")
+    add_files("src/staffroll.c")
+    add_files("src/menu/*.c")
+    -- add_files("src/worldEvent/*.c")  -- FIXME: pointer casts in EntityData
+    
+    -- Code stubs (functions that need decompilation)
+    add_files("src/code_08049CD4.c")
+    add_files("src/code_08049DF4.c")
+    add_files("src/code_0805EC04.c")
+    
+
+    
+    -- GBA library (m4a sound) - skipped for PC, using stubs
+    -- add_files("src/gba/m4a.c")
+    
+    -- SDL3 for UltrAGB
+    add_packages("libsdl3")
+    
+    -- Math library
+    if is_plat("linux", "macosx") then
+        add_links("m")
+    end
+    
+    -- Compiler flags
+    add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers", "-O0", "-g")
+    add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-O2", "-g")
+target_end()
 
 
 -- ====================

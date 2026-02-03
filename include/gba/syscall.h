@@ -12,7 +12,11 @@
 #define RESET_SOUND_REGS 0x40
 #define RESET_REGS 0x80
 #define RESET_ALL 0xFF
-
+#ifdef PC_PORT
+// TODO: Implement Stop for PC port
+#define Stop() \
+    {}
+#else
 #define SystemCall(x) \
     { asm("svc " #x); }
 
@@ -25,6 +29,7 @@ extern void SoundBiasSet();
         SystemCall(3);    \
         SoundBiasSet();   \
     }
+#endif
 
 void SoftReset(u32 resetFlags);
 

@@ -13,6 +13,7 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
+#include <stdio.h>
 
 extern u32 gRand;
 
@@ -36,20 +37,32 @@ void (*const sTaskHandlers[])(void) = {
 void AgbMain(void) {
     // Initialization
     InitOverlays();
+    printf("Overlays initialized.\n");
     InitSound();
+    printf("Sound initialized.\n");
     InitDMA();
+    printf("DMA initialized.\n");
     InitSaveData();
+    printf("Save data initialized.\n");
     InitSaveHeader();
+    printf("Save header initialized.\n");
     InitVBlankDMA();
+    printf("VBlank DMA initialized.\n");
     gUnk_02000010.field_0x4 = 0xc1;
     InitFade();
+    printf("Fade initialized.\n");
     DmaCopy32(3, BG_PLTT, gPaletteBuffer, BG_PLTT_SIZE);
+    printf("Palette buffer initialized.\n");
     SetBrightness(1);
+    printf("Brightness set.\n");
     MessageInitialize();
+    printf("Message system initialized.\n");
     ResetPalettes();
+    printf("Palettes reset.\n");
     gRand = 0x1234567;
     MemClear(&gMain, sizeof(gMain));
     SetTask(TASK_TITLE);
+    printf("Initial task set.\n");
 
     // Game Loop
     while (TRUE) {
@@ -105,8 +118,11 @@ static void InitOverlays(void) {
 
     DisableInterruptsAndDMA();
     RegisterRamReset(RESET_ALL & ~RESET_EWRAM);
-    *(vu16*)BG_PLTT = 0x7FFF;
-    REG_WAITCNT = WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3;
+    //*(vu16*)BG_PLTT = 0x7FFF;
+    gba_write16(BG_PLTT, 0x7FFF);
+
+    // REG_WAITCNT = WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3;
+    gba_write16(REG_ADDR_WAITCNT, WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3);
     size = 0x3FFD0;
     MemClear(gUnk_02000030, size);
     size = (u32)RAMFUNCS_END - (u32)sub_080B197C;
@@ -136,11 +152,11 @@ void SetTask(u32 task) {
 }
 
 void DisableInterruptsAndDMA(void) {
-    REG_IME = 0;
-    REG_IE = 0;
-    REG_DISPSTAT = 0;
-    REG_IF = 0;
-    REG_IME = 0;
+    gba_write16(REG_ADDR_IME, 0);
+    gba_write16(REG_ADDR_IE, 0);
+    gba_write16(REG_ADDR_DISPSTAT, 0);
+    gba_write16(REG_ADDR_IF, 0);
+    gba_write16(REG_ADDR_IME, 0);
 
     DmaStop(0);
     DmaStop(1);
@@ -195,13 +211,14 @@ void InitSaveHeader(void) {
         b = TRUE;
     }
     if (b) {
-        FORCE_REGISTER(struct_02000010 * ptr, r4) = &gUnk_02000010;
+        struct_02000010* ptr = &gUnk_02000010;
         MemClear(ptr, sizeof gUnk_02000010);
         ptr->signature = SIGNATURE;
     }
 }
 
 /*static*/ u32 CheckHeaderValid(void) {
+
     if ((gSaveHeader->signature != SIGNATURE) || (gSaveHeader->saveFileId >= NUM_SAVE_SLOTS) ||
         (gSaveHeader->msg_speed >= MAX_MSG_SPEED) || (gSaveHeader->brightness >= MAX_BRIGHTNESS)
 #ifdef EU

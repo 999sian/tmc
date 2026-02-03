@@ -1,8 +1,8 @@
 #ifndef KINSTONE_H
 #define KINSTONE_H
 
-#include "global.h"
 #include "entity.h"
+#include "global.h"
 
 extern void sub_08018C58(u32);
 
@@ -28,7 +28,7 @@ typedef struct {
     u16 fusingTextIndex;
     Entity* entity;
 } FuseInfo;
-static_assert(sizeof(FuseInfo) == 0x10);
+static_assert(sizeof(FuseInfo) == 0x10, "FuseInfo size incorrect");
 extern FuseInfo gFuseInfo;
 
 typedef struct {

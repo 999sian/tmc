@@ -1,8 +1,8 @@
 #include "common.h"
 
-#include "assets/map_offsets.h"
 #include "area.h"
 #include "asm.h"
+#include "assets/map_offsets.h"
 #include "flags.h"
 #include "functions.h"
 #include "game.h"
@@ -164,40 +164,12 @@ void MemFill32(u32 value, void* dest, u32 size) {
 }
 
 void MemClear(void* dest, u32 size) {
-    u32 zero = 0;
-
-    // alignment check
-    switch (((uintptr_t)dest | size) % 4) {
-        case 0:
-            MemFill32(0, dest, size);
-            break;
-        case 2:
-            MemFill16(0, dest, size);
-            break;
-        default:
-            do {
-                *(u8*)dest = zero;
-                dest++;
-                size--;
-            } while (size != 0);
-    }
+    gba_MemClear((u32)dest, size);
 }
 
 void MemCopy(const void* src, void* dest, u32 size) {
-    switch (((uintptr_t)src | (uintptr_t)dest | size) % 4) {
-        case 0:
-            DmaCopy32(3, src, dest, size);
-            break;
-        case 2:
-            DmaCopy16(3, src, dest, size);
-            break;
-        default:
-            do {
-                *(u8*)dest = *(u8*)src;
-                src++;
-                dest++;
-            } while (--size);
-    }
+    gba_MemCopy((u32)src, (u32)dest, size);
+    printf("MemCopy: src=0x%08X dest=0x%08X size=%d\n", (u32)src, (u32)dest, size);
 }
 
 void ReadKeyInput(void) {
@@ -481,7 +453,7 @@ void DispReset(bool32 refresh) {
     gScreen.vBlankDMA.readyBackup = FALSE;
     gScreen.vBlankDMA.ready = FALSE;
     DmaStop(0);
-    REG_DISPCNT = 0;
+    gba_write16(REG_ADDR_DISPCNT, 0);
     ClearOAM();
     ResetScreenRegs();
     MemClear((void*)0x600C000, 0x20);
@@ -496,7 +468,7 @@ void ClearOAM(void) {
     for (i = 128; i != 0; --i) {
         *(u16*)d = 0x2A0;
         d += 8;
-        *(u16*)mem = 0x2A0;
+        gba_write16((uint32_t)mem, 0x2A0);
         mem += 8;
     }
 }

@@ -80,7 +80,7 @@ typedef struct {
     /*0x2d*/ u8 unk2d;
     /*0x2e*/ union SplitHWord unk2e;
 } GenericMenu;
-static_assert(sizeof(GenericMenu) == 0x30);
+static_assert(sizeof(GenericMenu) == 0x30, "GenericMenu size incorrect");
 
 typedef struct {
     /*0x00*/ Menu base;
