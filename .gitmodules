@@ -1,0 +1,3 @@
+[submodule "libs/ViruaPPU"]
+	path = libs/ViruaPPU
+	url = https://github.com/MatheoVignaud/ViruaPPU.git
