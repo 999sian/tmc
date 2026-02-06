@@ -103,8 +103,13 @@ typedef struct Window {
     u8 width;
     u8 height;
 } Window;
+#ifdef PC_PORT
+Window gCurrentWindow;
+Window gNewWindow;
+#else
 extern Window gCurrentWindow;
 extern Window gNewWindow;
+#endif
 
 extern struct {
     u8 unk_00;

@@ -1,5 +1,8 @@
 #include "common.h"
 
+#ifdef PC_PORT
+#include <string.h>
+#endif
 #include "area.h"
 #include "asm.h"
 #include "assets/map_offsets.h"
@@ -156,20 +159,43 @@ u32 ClearBit(void* src, u32 bit) {
 }
 
 void MemFill16(u32 value, void* dest, u32 size) {
+#ifdef PC_PORT
+    u16* d = (u16*)dest;
+    u32 i;
+    for (i = 0; i < size / 2; i++) {
+        d[i] = (u16)value;
+    }
+#else
     DmaFill16(3, value, dest, size);
+#endif
 }
 
 void MemFill32(u32 value, void* dest, u32 size) {
+#ifdef PC_PORT
+    u32* d = (u32*)dest;
+    u32 i;
+    for (i = 0; i < size / 4; i++) {
+        d[i] = value;
+    }
+#else
     DmaFill32(3, value, dest, size);
+#endif
 }
 
 void MemClear(void* dest, u32 size) {
+#ifdef PC_PORT
+    memset(dest, 0, size);
+#else
     gba_MemClear((u32)dest, size);
+#endif
 }
 
 void MemCopy(const void* src, void* dest, u32 size) {
+#ifdef PC_PORT
+    memcpy(dest, src, size);
+#else
     gba_MemCopy((u32)src, (u32)dest, size);
-    printf("MemCopy: src=0x%08X dest=0x%08X size=%d\n", (u32)src, (u32)dest, size);
+#endif
 }
 
 void ReadKeyInput(void) {
@@ -456,7 +482,11 @@ void DispReset(bool32 refresh) {
     gba_write16(REG_ADDR_DISPCNT, 0);
     ClearOAM();
     ResetScreenRegs();
+#ifdef PC_PORT
+    gba_MemClear(0x0600C000, 0x20);
+#else
     MemClear((void*)0x600C000, 0x20);
+#endif
     MemClear(gBG0Buffer, sizeof(gBG0Buffer));
     gScreen.bg0.updated = refresh;
 }

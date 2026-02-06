@@ -625,9 +625,6 @@ u32 gAreaTiles(...) {
 u32 gAuxPlayerEntities(...) {
     return 0;
 }
-u32 gBG0Buffer(...) {
-    return 0;
-}
 u32 gBG1Buffer(...) {
     return 0;
 }
@@ -665,9 +662,6 @@ u32 gCurrentRoomMemory(...) {
     return 0;
 }
 u32 gCurrentRoomProperties(...) {
-    return 0;
-}
-u32 gCurrentWindow(...) {
     return 0;
 }
 u32 gDiggingCaveEntranceTransition(...) {
@@ -713,9 +707,6 @@ u32 gFrameObjLists(...) {
     return 0;
 }
 u32 gFuseInfo(...) {
-    return 0;
-}
-u32 gGFXSlots(...) {
     return 0;
 }
 u32 gGfxGroups(...) {
@@ -826,9 +817,6 @@ u32 gHitbox_8(...) {
 u32 gHitbox_9(...) {
     return 0;
 }
-u32 gInput(...) {
-    return 0;
-}
 u32 gInteractableObjects(...) {
     return 0;
 }
@@ -872,9 +860,6 @@ u32 gMapTop(...) {
 u32 gMenu(...) {
     return 0;
 }
-u32 gMessage(...) {
-    return 0;
-}
 u32 gMessageChoices(...) {
     return 0;
 }
@@ -884,13 +869,7 @@ u32 gMoreSpritePtrs(...) {
 u32 gNPCData(...) {
     return 0;
 }
-u32 gNewWindow(...) {
-    return 0;
-}
 u32 gOverworldLocations(...) {
-    return 0;
-}
-u32 gPaletteBuffer(...) {
     return 0;
 }
 u32 gPaletteBufferBackup(...) {
@@ -950,9 +929,6 @@ u32 gPossibleInteraction(...) {
 u32 gPriorityHandler(...) {
     return 0;
 }
-u32 gRand(...) {
-    return 0;
-}
 u32 gRoomControls(...) {
     return 0;
 }
@@ -992,9 +968,6 @@ u32 gSubtasks(...) {
 u32 gTextGfxBuffer(...) {
     return 0;
 }
-u32 gTextRender(...) {
-    return 0;
-}
 u32 gTilesForSpecialTiles(...) {
     return 0;
 }
@@ -1020,9 +993,7 @@ u32 gUnk_03003C70(...) {
     return 0;
 }
 u8 gUnk_03003DE0;
-u32 gUnk_03003DE4(...) {
-    return 0;
-}
+u8 gUnk_03003DE4[0xC];
 u32 gUnk_additional_8_DeepwoodShrine_StairsToB1(...) {
     return 0;
 }
@@ -1078,9 +1049,6 @@ u32 gUpdateContext(...) {
     return 0;
 }
 u32 gUpdateVisibleTiles(...) {
-    return 0;
-}
-u32 gUsedPalettes(...) {
     return 0;
 }
 u32 gVBlankDMA(...) {

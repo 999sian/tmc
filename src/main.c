@@ -114,6 +114,14 @@ extern u8 gCopyToEndOfEwram_End[];
 extern u8 gEndOfEwram[];
 
 static void InitOverlays(void) {
+#ifdef PC_PORT
+    // On PC, skip linker-symbol EWRAM/RAM copies (not applicable)
+    DisableInterruptsAndDMA();
+    gba_write16(BG_PLTT, 0x7FFF);
+    gba_write16(REG_ADDR_WAITCNT, WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3);
+    DispReset(0);
+    EnableVBlankIntr();
+#else
     u32 size;
 
     DisableInterruptsAndDMA();
@@ -137,6 +145,7 @@ static void InitOverlays(void) {
 
     DispReset(0);
     EnableVBlankIntr();
+#endif
 }
 
 #define SOFT_RESET_KEYS (A_BUTTON | B_BUTTON | SELECT_BUTTON | START_BUTTON)

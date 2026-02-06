@@ -25,6 +25,21 @@ static inline void* gba_MemPtr(uint32_t addr) {
     if (addr >= 0x04000000u && addr < 0x04000400u) {
         return &gIoMem[addr - 0x04000000u];
     }
+    if (addr >= 0x05000000u && addr < 0x05000200u) {
+        return &gBgPltt[(addr - 0x05000000u) >> 1];
+    }
+    // OBJ palette
+    if (addr >= 0x05000200u && addr < 0x05000400u) {
+        return &gObjPltt[(addr - 0x05000200u) >> 1];
+    }
+    // VRAM
+    if (addr >= 0x06000000u && addr < 0x06018000u) {
+        return &gVram[addr - 0x06000000u];
+    }
+    // OAM
+    if (addr >= 0x07000000u && addr < 0x07000400u) {
+        return &gOamMem[(addr - 0x07000000u) >> 1];
+    }
 
     printf("gba_MemPtr: unimplemented for address 0x%08X\n", addr);
     return NULL;
