@@ -4,6 +4,8 @@
 
 #include <stdint.h>
 typedef uint8_t u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
 
 /*
  * Data stubs: temporary placeholders for assets (SFX/MUS/ROM tables).
@@ -25,7 +27,8 @@ const u8 gUnk_0800845C[1] = { 0 };
 const u8 gUnk_080084BC[1] = { 0 };
 const u8 gUnk_0800851C[1] = { 0 };
 const u8 gUnk_08016984[1] = { 0 };
-const u8 gUnk_080B2CD8[1] = { 0 };
+/* BG tilemap DMA size table (u16[4]): sizes for screen sizes 0-3 */
+const u16 gUnk_080B2CD8[4] = { 0x0800, 0x1000, 0x1000, 0x2000 };
 const u8 gUnk_080B4410[1] = { 0 };
 const u8 gUnk_080B4458[1] = { 0 };
 const u8 gUnk_080B4468[1] = { 0 };
@@ -529,7 +532,9 @@ const u8 gUnk_08129004[1] = { 0 };
 const u8 gUnk_0812901C[1] = { 0 };
 const u8 gUnk_08132714[1] = { 0 };
 const u8 gUnk_08132B28[1] = { 0 };
-const u8 gUnk_08133368[1] = { 0 };
+/* gUnk_08133368 is the OBJ palette offset table (360 entries @ 4 bytes each)
+ * Loaded from ROM at offset 0x133368 in port_rom.c */
+u32 gUnk_08133368[360] = { 0 };
 const u8 gUnk_08134FBC[1] = { 0 };
 const u8 gUnk_08135048[1] = { 0 };
 const u8 gUnk_08135190[1] = { 0 };

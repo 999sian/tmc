@@ -1,5 +1,5 @@
-#include "entity.h"
 #include "object.h"
+#include "entity.h"
 
 void (*const gObjectFunctions[])(Entity*) = {
     [GROUND_ITEM] = ItemOnGround,

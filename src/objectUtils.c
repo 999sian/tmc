@@ -1,13 +1,13 @@
 
-#include "global.h"
+#include "definitions.h"
 #include "entity.h"
+#include "functions.h"
+#include "global.h"
+#include "object.h"
+#include "object/itemOnGround.h"
+#include "object/linkAnimation.h"
 #include "physics.h"
 #include "room.h"
-#include "object.h"
-#include "functions.h"
-#include "definitions.h"
-#include "object/linkAnimation.h"
-#include "object/itemOnGround.h"
 
 extern const Hitbox* const gObjectHitboxes[];
 

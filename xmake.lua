@@ -266,18 +266,22 @@ target("tmc_pc")
     add_includedirs(".")
     add_includedirs("build/pc/assets")  -- PC port assets stubs
     add_includedirs("build/USA")        -- For assets/map_offsets.h etc
+    add_includedirs("libs/ViruaPPU/include") -- ViruaPPU PPU renderer
 
-    
     
 
     add_files("port/port_main.c")
+    add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
+    add_files("port/port_rom.c")        -- ROM loading & symbol resolution
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")
     add_files("port/stubs_autogen.c")
     add_files("port/data_stubs_autogen.c")
     add_files("port/port_bios.c")
     add_files("port/port_linked_stubs.c")
+    add_files("port/port_draw.c")
     add_files("port/port_gba_mem.c")
+    add_files("port/port_save.c")        -- EEPROM save emulation
     
     -- Game source files - Main game code
     add_files("src/main.c")

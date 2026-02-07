@@ -48,7 +48,11 @@ typedef struct {
 #define DMA3 ((volatile DMARegisters*)REG_ADDR_DMA3SAD)
 
 extern const u32 gUnk_080CA06C[];
+#ifdef PC_PORT
+extern const u8* gGlobalGfxAndPalettes;
+#else
 extern const u8 gGlobalGfxAndPalettes[];
+#endif
 extern u8 gTextGfxBuffer[];
 
 u32 sub_080A44E0(WStruct*, u8*, u32);

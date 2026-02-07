@@ -2,11 +2,122 @@
 #define MACRO_H
 #include <stdio.h>
 
-#define CPU_FILL(value, dest, size, bit)                                                                       \
-    {                                                                                                          \
-        vu##bit tmp = (vu##bit)(value);                                                                        \
-        CpuSet((void*)&tmp, dest, CPU_SET_##bit##BIT | CPU_SET_SRC_FIXED | ((size) / ((bit) / 8) & 0x1FFFFF)); \
+#ifdef PC_PORT
+/*
+ * ======== PC Port DMA / CPU overrides ========
+ * On GBA, DMA writes go to hardware registers. On PC we emulate
+ * them with plain memcpy / memset, resolving GBA addresses to the
+ * emulated memory arrays via port_resolve_addr().
+ */
+#include "port_gba_mem.h"
+#include <string.h>
+
+/* ---- DmaSet: raw DMA register write emulation ---- */
+static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32 control) {
+    u16 cnt = (u16)(control >> 16);
+    u32 units = control & 0xFFFF;
+    if (!(cnt & 0x8000))
+        return;                         /* DMA_ENABLE not set */
+    int is32 = (cnt & 0x0400) != 0;     /* DMA_32BIT */
+    int srcFixed = (cnt & 0x0100) != 0; /* DMA_SRC_FIXED */
+    int unitSize = is32 ? 4 : 2;
+    u32 totalBytes = units * unitSize;
+
+    const void* src = port_resolve_addr((uintptr_t)src_raw);
+    void* dest = port_resolve_addr(dest_raw);
+    if (!src || !dest)
+        return;
+
+    if (srcFixed) {
+        /* Fill mode */
+        if (is32) {
+            u32 val = *(const u32*)src;
+            u32* d = (u32*)dest;
+            for (u32 i = 0; i < units; i++)
+                d[i] = val;
+        } else {
+            u16 val = *(const u16*)src;
+            u16* d = (u16*)dest;
+            for (u32 i = 0; i < units; i++)
+                d[i] = val;
+        }
+    } else {
+        /* Copy mode */
+        memcpy(dest, src, totalBytes);
     }
+}
+
+#define DmaSet(dmaNum, src, dest, control) port_DmaTransfer((const void*)(src), (uintptr_t)(dest), (u32)(control))
+
+#define DMA_FILL(dmaNum, value, dest, size, bit)                                                              \
+    {                                                                                                         \
+        vu##bit tmp = (vu##bit)(value);                                                                       \
+        port_DmaTransfer(&tmp, (uintptr_t)(dest),                                                             \
+                         (0x8000 | 0x0100 | ((bit) == 32 ? 0x0400 : 0)) << 16 | ((u32)(size) / ((bit) / 8))); \
+    }
+
+#define DMA_COPY(dmaNum, src, dest, size, bit)              \
+    port_DmaTransfer((const void*)(src), (uintptr_t)(dest), \
+                     (0x8000 | ((bit) == 32 ? 0x0400 : 0)) << 16 | ((u32)(size) / ((bit) / 8)))
+
+#define DmaFill16(dmaNum, value, dest, size) DMA_FILL(dmaNum, value, dest, size, 16)
+#define DmaFill32(dmaNum, value, dest, size) DMA_FILL(dmaNum, value, dest, size, 32)
+#define DmaCopy16(dmaNum, src, dest, size) DMA_COPY(dmaNum, src, dest, size, 16)
+#define DmaCopy32(dmaNum, src, dest, size) DMA_COPY(dmaNum, src, dest, size, 32)
+
+#define DmaStop(dmaNum) ((void)0)
+#define DmaWait(dmaNum) ((void)0)
+
+#define DMA_CLEAR(dmaNum, dest, size, bit)     \
+    {                                          \
+        vu##bit* _dest = (vu##bit*)(dest);     \
+        u32 _size = size;                      \
+        DmaFill##bit(dmaNum, 0, _dest, _size); \
+    }
+#define DmaClear16(dmaNum, dest, size) DMA_CLEAR(dmaNum, dest, size, 16)
+#define DmaClear32(dmaNum, dest, size) DMA_CLEAR(dmaNum, dest, size, 32)
+
+#define DmaCopyLarge(dmaNum, src, dest, size, block, bit)   \
+    port_DmaTransfer((const void*)(src), (uintptr_t)(dest), \
+                     (0x8000 | ((bit) == 32 ? 0x0400 : 0)) << 16 | ((u32)(size) / ((bit) / 8)))
+
+#define DmaCopyLarge16(dmaNum, src, dest, size, block) DmaCopyLarge(dmaNum, src, dest, size, block, 16)
+#define DmaCopyLarge32(dmaNum, src, dest, size, block) DmaCopyLarge(dmaNum, src, dest, size, block, 32)
+
+#define DmaClearLarge(dmaNum, dest, size, block, bit) DMA_CLEAR(dmaNum, dest, size, bit)
+#define DmaClearLarge16(dmaNum, dest, size, block) DmaClearLarge(dmaNum, dest, size, block, 16)
+#define DmaClearLarge32(dmaNum, dest, size, block) DmaClearLarge(dmaNum, dest, size, block, 32)
+
+#define DmaFillLarge(dmaNum, value, dest, size, block, bit) DMA_FILL(dmaNum, value, dest, size, bit)
+#define DmaFillLarge16(dmaNum, value, dest, size, block) DmaFillLarge(dmaNum, value, dest, size, block, 16)
+#define DmaFillLarge32(dmaNum, value, dest, size, block) DmaFillLarge(dmaNum, value, dest, size, block, 32)
+
+#define DmaCopyDefvars(dmaNum, src, dest, size, bit) DMA_COPY(dmaNum, src, dest, size, bit)
+#define DmaCopy16Defvars(dmaNum, src, dest, size) DmaCopyDefvars(dmaNum, src, dest, size, 16)
+#define DmaCopy32Defvars(dmaNum, src, dest, size) DmaCopyDefvars(dmaNum, src, dest, size, 32)
+
+#define DmaFillDefvars(dmaNum, value, dest, size, bit) DMA_FILL(dmaNum, value, dest, size, bit)
+#define DmaFill16Defvars(dmaNum, value, dest, size) DmaFillDefvars(dmaNum, value, dest, size, 16)
+#define DmaFill32Defvars(dmaNum, value, dest, size) DmaFillDefvars(dmaNum, value, dest, size, 32)
+
+#define DmaClearDefvars(dmaNum, dest, size, bit) DMA_CLEAR(dmaNum, dest, size, bit)
+#define DmaClear16Defvars(dmaNum, dest, size) DmaClearDefvars(dmaNum, dest, size, 16)
+#define DmaClear32Defvars(dmaNum, dest, size) DmaClearDefvars(dmaNum, dest, size, 32)
+
+#define IntrEnable(flags)  \
+    {                      \
+        u16 imeTemp;       \
+        imeTemp = REG_IME; \
+        REG_IME = 0;       \
+        REG_IE |= (flags); \
+        REG_IME = imeTemp; \
+    }
+
+#else /* !PC_PORT — original GBA DMA macros */
+{
+    vu##bit tmp = (vu##bit)(value);
+    CpuSet((void*)&tmp, dest, CPU_SET_##bit##BIT | CPU_SET_SRC_FIXED | ((size) / ((bit) / 8) & 0x1FFFFF));
+}
 
 #define CpuFill16(value, dest, size) CPU_FILL(value, dest, size, 16)
 #define CpuFill32(value, dest, size) CPU_FILL(value, dest, size, 32)
@@ -185,5 +296,7 @@
         REG_IE |= (flags); \
         REG_IME = imeTemp; \
     }
+
+#endif /* PC_PORT */
 
 #endif // MACRO_H

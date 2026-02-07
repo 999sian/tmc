@@ -33,14 +33,19 @@ void TitleScreenObject(Entity* this) {
 }
 
 void TitleScreenObject_Type0(Entity* this) {
-    u32 addr;
     u32 type;
 
     if (this->action == 0) {
         sub_080A2340(this);
         CreateObject(TITLE_SCREEN_OBJECT, 1, 0);
-        addr = 0x02000000; // TODO write to 0x2000007
-        if (*(u8*)(addr + 7) == 1) {
+#ifdef PC_PORT
+        /* On PC, use gEwram for emulated EWRAM access */
+        extern u8 gEwram[];
+        if (gEwram[7] == 1) {
+#else
+        // TODO write to 0x2000007
+        if (*(u8*)(0x02000000 + 7) == 1) {
+#endif
             type = 2;
         } else {
             type = 3;

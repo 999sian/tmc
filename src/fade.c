@@ -1,8 +1,14 @@
-#include "global.h"
-#include "structures.h"
-#include "functions.h"
-#include "screen.h"
 #include "common.h"
+#include "functions.h"
+#include "global.h"
+#include "screen.h"
+#include "structures.h"
+
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#include "port_rom.h"
+#include <stdio.h>
+#endif
 
 static u32 sub_080501C0(FadeControl* ctl);
 static u32 sub_08050230(FadeControl* ctl);
@@ -15,6 +21,56 @@ extern u16 gUnk_080FC3C4[];
 // function pointer to overlay (0x03005e98) in ram calls rom function MakeFadeBuff256
 extern u32 ram_MakeFadeBuff256;
 typedef void (*fptrMakeFadeBuff256)(u8*, u8*, u16, u8);
+
+#ifdef PC_PORT
+/**
+ * C reimplementation of arm_MakeFadeBuff256 (ROM 0x080B2124).
+ * Applies brightness+fade to 16 palette entries.
+ *
+ * @param src      Pointer to 16 source palette entries (gPaletteBuffer)
+ * @param dest     Pointer to 16 destination entries (PAL_RAM, a GBA address on GBA but resolved here)
+ * @param intensity Fade intensity (ptrUnk->unk2)
+ * @param color    Fade color/mode (ptrUnk->unk1)
+ */
+static void Port_MakeFadeBuff256(u8* src, u8* dest, u16 intensity, u8 color) {
+    u32 bias = (u32)intensity * (u32)color;
+    u32 factor = 0x400 - (u32)intensity * 4;
+
+    /* Brightness preference from EWRAM offset 6 */
+    u8 brightness = gEwram[6];
+
+    /* gUnk_08000F54 is at ROM offset 0xF54: array of {ptrR, ptrG, ptrB, pad} per brightness level.
+       Each pointer is a GBA ROM address (0x08XXXXXX). */
+    u32* tableBase = (u32*)(gRomData + 0xF54 + brightness * 16);
+    u16* tableR = (u16*)(gRomData + (tableBase[0] - 0x08000000));
+    u16* tableG = (u16*)(gRomData + (tableBase[1] - 0x08000000));
+    u16* tableB = (u16*)(gRomData + (tableBase[2] - 0x08000000));
+
+    u16* srcPtr = (u16*)src;
+    /* dest is a GBA palette RAM address — resolve it */
+    u16* dstPtr = (u16*)port_resolve_addr((uintptr_t)dest);
+
+    if (!dstPtr)
+        return; // Safety check
+
+    for (int i = 0; i < 16; i++) {
+        u16 col = srcPtr[i];
+        u32 shifted = (u32)col << 1;
+
+        u32 r = shifted & 0x3E;
+        u32 g = (shifted >> 5) & 0x3E;
+        u32 b = (shifted >> 10) & 0x3E;
+
+        r = ((factor * r + bias) >> 10) & 0x3E;
+        g = ((factor * g + bias) >> 10) & 0x3E;
+        b = ((factor * b + bias) >> 10) & 0x3E;
+
+        /* Tables are indexed by byte offset (each entry is u16 = 2 bytes),
+           so r/2 gives the array index. ARM uses ldrh [base, r] with r as byte offset. */
+        dstPtr[i] = tableR[r >> 1] | tableG[g >> 1] | tableB[b >> 1];
+    }
+}
+#endif
 
 void SetBrightness(u32 brightness) {
     gSaveHeader->brightness = brightness;
@@ -32,8 +88,12 @@ void FadeVBlank(void) {
 
     while (usedPalettesTmp != 0) {
         if ((usedPalettesTmp & 1) == 1) {
+#ifdef PC_PORT
+            Port_MakeFadeBuff256(&((u8*)gPaletteBuffer)[palIdx], &PAL_RAM[palIdx], ptrUnk->unk2, ptrUnk->unk1);
+#else
             func = (fptrMakeFadeBuff256)&ram_MakeFadeBuff256;
             func(&((u8*)gPaletteBuffer)[palIdx], &PAL_RAM[palIdx], ptrUnk->unk2, ptrUnk->unk1);
+#endif
         }
         palIdx += 0x20;
 

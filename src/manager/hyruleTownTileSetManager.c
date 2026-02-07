@@ -58,7 +58,11 @@ static const Unknown gUnk_08108468[] = {
     { 0x147de0, 0x6002000, 0x14dde0, 0x600a000 }, { 0x14ade0, 0x6002000, 0x150de0, 0x600a000 },
 #endif
 };
+#ifdef PC_PORT
+extern const u8* gGlobalGfxAndPalettes;
+#else
 extern const u8 gGlobalGfxAndPalettes[];
+#endif
 
 void HyruleTownTileSetManager_Main(HyruleTownTileSetManager* this) {
     if (super->action == 0) {

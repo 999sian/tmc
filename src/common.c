@@ -62,7 +62,11 @@ typedef struct {
 extern struct_02017AA0 gUnk_02017AA0[];
 
 extern const PaletteGroup* gPaletteGroups[];
+#ifdef PC_PORT
+extern const u8* gGlobalGfxAndPalettes;
+#else
 extern const u8 gGlobalGfxAndPalettes[];
+#endif
 extern u32 gUsedPalettes;
 extern u16 gPaletteBuffer[];
 extern const GfxItem* gGfxGroups[];

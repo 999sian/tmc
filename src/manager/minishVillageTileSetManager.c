@@ -14,7 +14,11 @@ void sub_08057E30(void*);
 bool32 sub_08057E40(MinishVillageTileSetManager*);
 void sub_08057E7C(u32);
 
+#ifdef PC_PORT
+extern const u8* gGlobalGfxAndPalettes;
+#else
 extern const u8 gGlobalGfxAndPalettes[];
+#endif
 
 const u16 gUnk_08108050[0x2A] = {
 #ifdef EU

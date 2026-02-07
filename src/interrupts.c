@@ -11,6 +11,9 @@
 #include "sound.h"
 #include "structures.h"
 #include "ui.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 extern u8 gUnk_03003DE0;
 extern u8 gUnk_03000C30;

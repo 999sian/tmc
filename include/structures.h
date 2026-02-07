@@ -392,7 +392,11 @@ typedef struct {
     u8 gfxGroup;
 } PACKED StaffrollGfxEntry;
 
+#ifdef PC_PORT
+extern const u8* gGlobalGfxAndPalettes;
+#else
 extern const u8 gGlobalGfxAndPalettes[];
+#endif
 extern u32 gUsedPalettes;
 
 #endif // STRUCTURES_H

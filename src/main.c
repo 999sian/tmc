@@ -37,32 +37,32 @@ void (*const sTaskHandlers[])(void) = {
 void AgbMain(void) {
     // Initialization
     InitOverlays();
-    printf("Overlays initialized.\n");
+    fprintf(stderr, "Overlays initialized.\n");
     InitSound();
-    printf("Sound initialized.\n");
+    fprintf(stderr, "Sound initialized.\n");
     InitDMA();
-    printf("DMA initialized.\n");
+    fprintf(stderr, "DMA initialized.\n");
     InitSaveData();
-    printf("Save data initialized.\n");
+    fprintf(stderr, "Save data initialized.\n");
     InitSaveHeader();
-    printf("Save header initialized.\n");
+    fprintf(stderr, "Save header initialized.\n");
     InitVBlankDMA();
-    printf("VBlank DMA initialized.\n");
+    fprintf(stderr, "VBlank DMA initialized.\n");
     gUnk_02000010.field_0x4 = 0xc1;
     InitFade();
-    printf("Fade initialized.\n");
+    fprintf(stderr, "Fade initialized.\n");
     DmaCopy32(3, BG_PLTT, gPaletteBuffer, BG_PLTT_SIZE);
-    printf("Palette buffer initialized.\n");
+    fprintf(stderr, "Palette buffer initialized.\n");
     SetBrightness(1);
-    printf("Brightness set.\n");
+    fprintf(stderr, "Brightness set.\n");
     MessageInitialize();
-    printf("Message system initialized.\n");
+    fprintf(stderr, "Message system initialized.\n");
     ResetPalettes();
-    printf("Palettes reset.\n");
+    fprintf(stderr, "Palettes reset.\n");
     gRand = 0x1234567;
     MemClear(&gMain, sizeof(gMain));
     SetTask(TASK_TITLE);
-    printf("Initial task set.\n");
+    fprintf(stderr, "Initial task set.\n");
 
     // Game Loop
     while (TRUE) {
@@ -70,7 +70,8 @@ void AgbMain(void) {
         if (SoftResetKeysPressed()) {
             DoSoftReset();
         }
-
+        if (gMain.ticks % 500 == 0)
+            fprintf(stderr, "Tick: %u, Task: %u\n", gMain.ticks, gMain.task);
         switch (gMain.sleepStatus) {
             case SLEEP:
                 SetSleepMode();

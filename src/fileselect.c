@@ -19,6 +19,9 @@
 #include "screen.h"
 #include "subtask.h"
 #include "ui.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 // copy, erase, start
 #define NUM_FILE_OPERATIONS 3
@@ -397,7 +400,7 @@ static void HandleFileScreenEnter(void) {
 
     DispReset(1);
     InitSoundPlayingInfo();
-    MemClear((void*)VRAM, 0x80); // clear palettes
+    gba_MemClear(VRAM, 0x80); // clear palettes
     MessageInitialize();
     EraseAllEntities();
     ClearTileMaps();
@@ -510,7 +513,12 @@ void sub_0805070C(void) {
                 sub_0805F7DC(name[j], var0);
             }
             // i is a struct of size 0x200
-            MemCopy(var0->unk8, (void*)(OBJ_VRAM0 + 0x4000 + i * 0x200), 0x200);
+#ifdef PC_PORT
+            // Use native-to-GBA copy since var0->unk8 is a native pointer
+            port_MemCopyToGBA(var0->unk8, 0x06014000 + i * 0x200, 0x200);
+#else
+            gba_MemCopy((u32)var0->unk8, (u32)(OBJ_VRAM0 + 0x4000 + i * 0x200), 0x200);
+#endif
         }
         sub_0805F300(var0);
     }

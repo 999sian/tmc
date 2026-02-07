@@ -27,7 +27,11 @@ extern void gMapData;
 extern u8 gUpdateVisibleTiles;
 extern u16 gMapDataTopSpecial[];
 extern u16 gMapDataBottomSpecial[];
+#ifdef PC_PORT
+extern const u8* gGlobalGfxAndPalettes;
+#else
 extern const u8 gGlobalGfxAndPalettes[];
+#endif
 extern const u8 gEntityListLUT[];
 
 typedef struct {
@@ -991,7 +995,7 @@ bool32 sub_0801AA58(Entity* this, u32 param_2, u32 param_3) {
         object = CreateObject(PUSHED_BLOCK, 0, 0);
         if (object != NULL) {
             object->direction = param_3;
-            object->x.HALF.HI = ((((param_2)&0x3f) << 4) + 8) + gRoomControls.origin_x;
+            object->x.HALF.HI = ((((param_2) & 0x3f) << 4) + 8) + gRoomControls.origin_x;
             object->y.HALF.HI = (((param_2 & 0xfc0) >> 2) + 8) + gRoomControls.origin_y;
             object->collisionLayer = this->collisionLayer;
             gPlayerState.pushedObject = 0xa0;

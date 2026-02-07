@@ -598,7 +598,12 @@ void sub_080882A8(FigurineDeviceEntity* this) {
     sub_08050384();
     sub_08057044(this->shells, gUnk_020227E8, 0x202020);
     sub_08057044(this->chance, &gUnk_020227E8[1], 0x202020);
+#ifdef PC_PORT
+    extern u8 gEwram[];
+    ptr = &gEwram[0];
+#else
     ptr = (u8*)0x02000000;
+#endif
     if (ptr[7] == 0) {
         ShowTextBox(gUnk_08120AE4[super->type2], (Font*)&gUnk_08120AB4); // TODO convert data
     } else {

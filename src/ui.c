@@ -62,7 +62,10 @@ void UpdateUIElements(void) {
         element = &gHUD.elements[index];
         if (element->used != 0) {
             definition = &gUIElementDefinitions[element->type];
-            definition->updateFunction(element);
+#ifdef PC_PORT
+            if (definition->updateFunction != NULL)
+#endif
+                definition->updateFunction(element);
         }
     }
 }

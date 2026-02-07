@@ -5,18 +5,18 @@
  * @brief Title task
  */
 
-#include "sound.h"
-#include "main.h"
-#include "entity.h"
-#include "common.h"
-#include "screen.h"
-#include "object.h"
-#include "message.h"
-#include "functions.h"
-#include "save.h"
 #include "area.h"
-#include "item.h"
+#include "common.h"
+#include "entity.h"
+#include "functions.h"
 #include "game.h"
+#include "item.h"
+#include "main.h"
+#include "message.h"
+#include "object.h"
+#include "save.h"
+#include "screen.h"
+#include "sound.h"
 
 typedef struct {
     u8 filler0[0x4];
@@ -64,7 +64,7 @@ static const u16 sLightRaysAlphaBlends[] = {
 };
 
 #define FLAG_BYTE(bank, flag) (((bank) + (flag)) >> 3)
-#define FLAG_X(flag) (1 << ((flag)&7))
+#define FLAG_X(flag) (1 << ((flag) & 7))
 
 #ifdef DEMO_JP
 static const SaveFile gDemoSave = {
@@ -249,6 +249,7 @@ static void HandleTitlescreen(void) {
             SetFade(FADE_BLACK_WHITE | FADE_INSTANT, 8);
             break;
         case 1:
+
             if (gFadeControl.active) {
                 return;
             }
