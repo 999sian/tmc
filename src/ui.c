@@ -61,11 +61,14 @@ void UpdateUIElements(void) {
     for (index = 0; index < MAX_UI_ELEMENTS; index++) {
         element = &gHUD.elements[index];
         if (element->used != 0) {
-            definition = &gUIElementDefinitions[element->type];
 #ifdef PC_PORT
-            if (definition->updateFunction != NULL)
+            if (element->type > UI_ELEMENT_TEXT_B) {
+                element->used = 0;
+                continue;
+            }
 #endif
-                definition->updateFunction(element);
+            definition = &gUIElementDefinitions[element->type];
+            definition->updateFunction(element);
         }
     }
 }
@@ -78,6 +81,11 @@ void DrawUIElements(void) {
     for (index = 0; index < MAX_UI_ELEMENTS; index++) {
         element = &gHUD.elements[index];
         if (element->used == 1 && element->unk_0_1 == 1) {
+#ifdef PC_PORT
+            if (element->type > UI_ELEMENT_TEXT_B) {
+                continue;
+            }
+#endif
             gOamCmd.x = element->x;
             gOamCmd.y = element->y;
             definition = &gUIElementDefinitions[element->type];
@@ -785,7 +793,7 @@ void TextUIElement(UIElement* element) {
     frameIndex = gHUD.buttonText[element->buttonElementId];
     element->unk_0_1 = 0;
     if (frameIndex != 0) {
-        frameIndex += gUnk_080C9044[((SaveHeader*)0x2000000)->language];
+        frameIndex += gUnk_080C9044[gSaveHeader->language];
         sub_0801CAFC(element, frameIndex);
         buttonUIElement = FindUIElement(element->buttonElementId);
         if (buttonUIElement != NULL) {
@@ -878,3 +886,47 @@ void EzloNagUIElement_Action2(UIElement* element) {
         gHUD.ezloNagFuncIndex = 4;
     }
 }
+
+#ifdef PC_PORT
+/*
+ * PC_PORT: UI element definitions use native function pointers,
+ * initialized at runtime to avoid being clobbered by MemClear.
+ */
+UIElementDefinition gUIElementDefinitions[11];
+
+void Port_InitUIElementDefinitions(void) {
+    /* [0] UI_ELEMENT_BUTTON_A */
+    gUIElementDefinitions[0] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 0, 14, 1, 0 };
+    /* [1] UI_ELEMENT_BUTTON_B */
+    gUIElementDefinitions[1] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 1, 14, 1, 0 };
+    /* [2] UI_ELEMENT_BUTTON_R */
+    gUIElementDefinitions[2] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 2, 14, 1, 0 };
+    /* [3] UI_ELEMENT_ITEM_A */
+    gUIElementDefinitions[3] = (UIElementDefinition){ 0x0000, 0x0000, 0x011A, 322, ItemUIElement, 0, 8, 0, 0 };
+    /* [4] UI_ELEMENT_ITEM_B */
+    gUIElementDefinitions[4] = (UIElementDefinition){ 0x0000, 0x0000, 0x0126, 322, ItemUIElement, 1, 8, 0, 0 };
+    /* [5] UI_ELEMENT_TEXT_R */
+    gUIElementDefinitions[5] = (UIElementDefinition){ 0x0000, 0x0000, 0x010E, 322, TextUIElement, 2, 12, 0, 0 };
+    /* [6] UI_ELEMENT_HEART */
+    gUIElementDefinitions[6] = (UIElementDefinition){ 0x0000, 0x0000, 0x0122, 322, HeartUIElement, 0, 4, 0, 0 };
+    /* [7] UI_ELEMENT_EZLONAGSTART */
+    gUIElementDefinitions[7] = (UIElementDefinition){ 0x0300, 0x0000, 0x012E, 322, EzloNagUIElement, 0, 8, 0, 0 };
+    /* [8] UI_ELEMENT_EZLONAGACTIVE */
+    gUIElementDefinitions[8] = (UIElementDefinition){ 0x0000, 0x0000, 0x012E, 322, EzloNagUIElement, 0, 8, 0, 0 };
+    /* [9] UI_ELEMENT_TEXT_A */
+    gUIElementDefinitions[9] = (UIElementDefinition){ 0x0000, 0x0000, 0x011A, 322, TextUIElement, 0, 12, 0, 0 };
+    /* [10] UI_ELEMENT_TEXT_B */
+    gUIElementDefinitions[10] = (UIElementDefinition){ 0x0000, 0x0000, 0x0126, 322, TextUIElement, 1, 12, 0, 0 };
+}
+
+void (*const ButtonUIElement_Actions[])(UIElement*) = {
+    ButtonUIElement_Action0,
+    ButtonUIElement_Action1,
+};
+
+void (*const EzloNagUIElement_Actions[])(UIElement*) = {
+    EzloNagUIElement_Action0,
+    EzloNagUIElement_Action1,
+    EzloNagUIElement_Action2,
+};
+#endif

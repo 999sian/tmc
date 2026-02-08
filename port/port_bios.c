@@ -21,9 +21,10 @@ static void Port_UpdateInput(void) {
     const bool* keys = SDL_GetKeyboardState(NULL);
     u16 keyinput = 0x03FF;
 
-    if (keys[SDL_SCANCODE_A])
+    /* Layout-aware key mapping (QWERTY/AZERTY/etc.) */
+    if (keys[SDL_GetScancodeFromKey(SDLK_X, NULL)])
         keyinput &= ~A_BUTTON;
-    if (keys[SDL_SCANCODE_Z])
+    if (keys[SDL_GetScancodeFromKey(SDLK_Z, NULL)])
         keyinput &= ~B_BUTTON;
     if (keys[SDL_SCANCODE_BACKSPACE])
         keyinput &= ~SELECT_BUTTON;
@@ -37,9 +38,9 @@ static void Port_UpdateInput(void) {
         keyinput &= ~DPAD_UP;
     if (keys[SDL_SCANCODE_DOWN])
         keyinput &= ~DPAD_DOWN;
-    if (keys[SDL_SCANCODE_S])
+    if (keys[SDL_GetScancodeFromKey(SDLK_S, NULL)])
         keyinput &= ~R_BUTTON;
-    if (keys[SDL_SCANCODE_Q])
+    if (keys[SDL_GetScancodeFromKey(SDLK_A, NULL)])
         keyinput &= ~L_BUTTON;
 
     *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
@@ -78,15 +79,9 @@ void VBlankIntrWait(void) {
     }
 }
 
-/* ======== BIOS function implementations ======== */
+/* ---- BIOS functions ---- */
 
-/*
- * LZ77UnCompWram / LZ77UnCompVram — GBA BIOS LZ77 decompressor (SWI 0x11/0x12).
- *
- * Header (4 bytes): bits 7-4 = type (1=LZ77), bits 3-0 = reserved,
- *                   bits 31-8 = uncompressed size.
- * Then a stream of flag bytes + data.
- */
+/* LZ77 decompressor (SWI 0x11/0x12) */
 static void lz77_decomp(const u8* src, u8* dst) {
     u32 header = src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
     u32 decompSize = header >> 8;
@@ -116,7 +111,6 @@ static void lz77_decomp(const u8* src, u8* dst) {
 }
 
 void LZ77UnCompVram(const void* src, void* dst) {
-    /* dst may be a GBA address (e.g. VRAM) — resolve it */
     void* resolved = port_resolve_addr((uintptr_t)dst);
     extern u8 gVram[];
     int tile522_was_nz = gVram[0x14140] != 0 || gVram[0x14141] != 0;
@@ -131,12 +125,7 @@ void LZ77UnCompWram(const void* src, void* dst) {
     lz77_decomp((const u8*)src, (u8*)resolved);
 }
 
-/*
- * CpuSet — GBA BIOS SWI 0x0B.
- * Copies or fills memory in 16- or 32-bit units.
- * cnt bits:  0-20 = word count, bit 24 = fixed source (fill mode),
- *            bit 26 = 32-bit mode (else 16-bit).
- */
+/* CpuSet (SWI 0x0B) */
 void CpuSet(const void* src, void* dst, u32 cnt) {
     u32 wordCount = cnt & 0x1FFFFF;
     int fill = (cnt >> 24) & 1;
@@ -169,10 +158,7 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
     }
 }
 
-/*
- * CpuFastSet — GBA BIOS SWI 0x0C.
- * Like CpuSet but always 32-bit and transfers in 8-word blocks.
- */
+/* CpuFastSet (SWI 0x0C) */
 void CpuFastSet(const void* src, void* dst, u32 cnt) {
     u32 wordCount = cnt & 0x1FFFFF;
     int fill = (cnt >> 24) & 1;
@@ -199,12 +185,12 @@ void CpuFastSet(const void* src, void* dst, u32 cnt) {
     }
 }
 
-/* RegisterRamReset — no-op on PC */
+/* RegisterRamReset — stub */
 void RegisterRamReset(u32 flags) {
     (void)flags;
 }
 
-/* Sqrt — GBA BIOS SWI 0x08: integer square root */
+/* Sqrt (SWI 0x08) */
 u16 Sqrt(u32 num) {
     if (num == 0)
         return 0;
@@ -214,21 +200,21 @@ u16 Sqrt(u32 num) {
     return (u16)(r - 1);
 }
 
-/* Div — GBA BIOS SWI 0x06: signed integer division */
+/* Div (SWI 0x06) */
 s32 Div(s32 num, s32 denom) {
     if (denom == 0)
         return 0;
     return num / denom;
 }
 
-/* SoftReset — exit on PC */
+/* SoftReset — just exit */
 void SoftReset(u32 flags) {
     (void)flags;
     printf("SoftReset called — exiting.\n");
     exit(0);
 }
 
-/* BgAffineSet — GBA BIOS SWI 0x0E */
+/* BgAffineSet (SWI 0x0E) */
 void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 count) {
     for (s32 i = 0; i < count; i++) {
         dst[i].pa = src[i].sx;
@@ -240,7 +226,7 @@ void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 c
     }
 }
 
-/* ObjAffineSet — GBA BIOS SWI 0x0F */
+/* ObjAffineSet (SWI 0x0F) */
 void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset) {
     s16* d = (s16*)dst;
     for (s32 i = 0; i < count; i++) {

@@ -4,6 +4,9 @@
 #include "manager/diggingCaveEntranceManager.h"
 #include "message.h"
 #include "npc.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 typedef struct Temp {
     void* prev;

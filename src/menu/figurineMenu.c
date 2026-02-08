@@ -29,6 +29,16 @@ u32 sub_080A4CBC(u32);
 void sub_080A4BA0(u32, u32);
 void sub_080A4DB8(u32);
 
+#ifdef PC_PORT
+/* PC_PORT: GCC drops zero-length flexible array initializers.
+ * Raw byte array keeps settingDict data contiguous. */
+static const u8 gUnk_0812813C_raw[] = {
+    0xFF, 0xD8, 0x00, 0xD0, 0x10, 0x0E, 0xFF, 0xD8, 0x00, /* struct fields */
+    0x0A, 0x00, 0x01, 0x01, 0xFF, 0x00, 0x00,             /* settingDict */
+};
+const KeyButtonLayout* const gUnk_0812813C_ptr = (const KeyButtonLayout*)gUnk_0812813C_raw;
+#define gUnk_0812813C (*gUnk_0812813C_ptr)
+#else
 const KeyButtonLayout gUnk_0812813C = {
     0xffu,
     0xd8u,
@@ -49,6 +59,7 @@ const KeyButtonLayout gUnk_0812813C = {
         0u,
     },
 };
+#endif
 
 extern u8 gUnk_020344A0[8];
 

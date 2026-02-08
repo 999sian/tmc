@@ -1,17 +1,9 @@
 /*
- * port_rom.c — Load baserom.gba and resolve ROM-backed data symbols.
+ * port_rom.c — Load baserom.gba and resolve ROM data symbols.
  *
- * GBA ROM lives at 0x08000000. All ROM data pointers in the original
- * binary are GBA addresses.  We load the ROM into gRomData[] and
- * translate pointer tables (gGfxGroups, gPaletteGroups) into native
- * pointers so that the decompiled C code can use them directly.
- *
- * ROM page extraction:
- *   At runtime, every ROM access goes through Port_LogRomAccess() which
- *   extracts the touched 4 KB page to rom_data/XXXXXXXX.bin.  On startup
- *   Port_LoadRom() first tries to reconstruct gRomData entirely from the
- *   extracted pages; if that fails it falls back to baserom.gba and then
- *   extracts the known data blocks immediately.
+ * GBA ROM at 0x08000000. Pointer tables (gGfxGroups, gPaletteGroups, etc.)
+ * are translated to native pointers. ROM pages (4 KB) are extracted to
+ * rom_data/ so the game can run without the full ROM after first boot.
  */
 
 #include "port_rom.h"
@@ -238,16 +230,35 @@ void Port_PrintRomAccessSummary(void) {
 #define ROM_OFF_SPRITE_PTRS 0x0029B4 /* gSpritePtrs, 329 entries × 16 bytes */
 #define SPRITE_PTRS_COUNT 329
 
+/* Font/text data offsets (data/const/text.s) */
+#define ROM_OFF_TRANSLATIONS 0x109214
+#define ROM_OFF_TEXT_09230 0x109230
+#define ROM_OFF_TEXT_09244 0x109244
+#define ROM_OFF_TEXT_09248 0x109248
+#define ROM_OFF_TEXT_0926C 0x10926C
+#define ROM_OFF_TEXT_092AC 0x1092AC
+#define ROM_OFF_TEXT_092D4 0x1092D4
+#define ROM_OFF_TEXT_0942E 0x10942E
+#define ROM_OFF_TEXT_094CE 0x1094CE
+
 extern u32 gFrameObjLists[];
 extern u32 gUnk_08133368[];
 extern SpritePtr gSpritePtrs[];
 extern u32 gFixedTypeGfxData[];
 extern void Port_LoadOverlayData(const u8* romData, u32 romSize);
 
-/* Resolved pointer tables — defined as arrays to match extern declarations
- * in common.c:  extern const GfxItem* gGfxGroups[];
- *               extern const PaletteGroup* gPaletteGroups[];
- * Using void* element type since PaletteGroup/GfxItem are file-local typedefs. */
+/* Font data tables (data_stubs_autogen.c) */
+extern void* gUnk_08109230[];
+extern u8 gUnk_08109244[];
+extern void* gTranslations[];
+extern void* gUnk_08109248[];
+extern u8 gUnk_0810926C[];
+extern void* gUnk_081092AC[];
+extern u8 gUnk_081092D4[];
+extern u8 gUnk_0810942E[];
+extern u8 gUnk_081094CE[];
+
+/* Resolved pointer tables */
 const u8* gGlobalGfxAndPalettes = NULL;
 const void* gGfxGroups[GFX_GROUPS_COUNT];
 const void* gPaletteGroups[PALETTE_GROUPS_COUNT];
@@ -365,6 +376,56 @@ void Port_LoadRom(const char* path) {
                 ROM_OFF_SPRITE_PTRS);
     }
 
+    /* Font/text data tables */
+    memcpy(gUnk_08109244, &gRomData[ROM_OFF_TEXT_09244], 4);
+    memcpy(gUnk_0810926C, &gRomData[ROM_OFF_TEXT_0926C], 64);
+    memcpy(gUnk_081092D4, &gRomData[ROM_OFF_TEXT_092D4], 346);
+    memcpy(gUnk_0810942E, &gRomData[ROM_OFF_TEXT_0942E], 160);
+    memcpy(gUnk_081094CE, &gRomData[ROM_OFF_TEXT_094CE], 1378);
+
+    /* UI data */
+    {
+        extern u8 gUnk_080C9044[];
+        memcpy(gUnk_080C9044, &gRomData[0x0C9044], 8);
+    }
+
+    /* UI element definitions (native function pointers) */
+    {
+        extern void Port_InitUIElementDefinitions(void);
+        Port_InitUIElementDefinitions();
+    }
+
+    /* gTranslations — 7 ROM pointers */
+    for (int i = 0; i < 7; i++) {
+        u32 ptr;
+        memcpy(&ptr, &gRomData[ROM_OFF_TRANSLATIONS + i * 4], 4);
+        gTranslations[i] = ResolveRomPtr(ptr);
+    }
+    fprintf(stderr, "gTranslations loaded (7 entries, pointers resolved).\n");
+
+    /* gUnk_08109230 — 5 ROM pointers */
+    for (int i = 0; i < 5; i++) {
+        u32 ptr;
+        memcpy(&ptr, &gRomData[ROM_OFF_TEXT_09230 + i * 4], 4);
+        gUnk_08109230[i] = ResolveRomPtr(ptr);
+    }
+
+    /* gUnk_08109248 — 9 ROM pointers (font glyph data) */
+    for (int i = 0; i < 9; i++) {
+        u32 ptr;
+        memcpy(&ptr, &gRomData[ROM_OFF_TEXT_09248 + i * 4], 4);
+        gUnk_08109248[i] = ResolveRomPtr(ptr);
+    }
+    fprintf(stderr, "gUnk_08109248 font tables loaded (9 entries, pointers resolved).\n");
+
+    /* gUnk_081092AC — 10 ROM pointers (border glyphs) */
+    for (int i = 0; i < 10; i++) {
+        u32 ptr;
+        memcpy(&ptr, &gRomData[ROM_OFF_TEXT_092AC + i * 4], 4);
+        gUnk_081092AC[i] = ResolveRomPtr(ptr);
+    }
+    fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries, pointers resolved).\n");
+
     /* Load overlay data tables (size/clipping table etc.) */
     Port_LoadOverlayData(gRomData, gRomSize);
 
@@ -385,22 +446,21 @@ void Port_LoadRom(const char* path) {
     ExtractRegion(ROM_OFF_OBJ_PALETTES, OBJ_PALETTES_COUNT * 4);
     ExtractRegion(ROM_OFF_FRAME_OBJ_LISTS, FRAME_OBJ_LISTS_SIZE);
 
-    /* Global gfx+palette blob — can be very large, extract all of it
-     * (from 0x5A2E80 to end of ROM, or a reasonable chunk). */
+    /* Gfx+palette blob */
     if (gRomSize > ROM_OFF_GFX_AND_PALETTES)
         ExtractRegion(ROM_OFF_GFX_AND_PALETTES, gRomSize - ROM_OFF_GFX_AND_PALETTES);
 
     /* Overlay size table */
     ExtractRegion(0x0B2BE8, 240);
 
-    /* Follow all pointers in gGfxGroups and gPaletteGroups to extract
-     * the data they reference as well */
+    /* Font/text data region */
+    ExtractRegion(ROM_OFF_TRANSLATIONS, 0x109A2E - ROM_OFF_TRANSLATIONS);
+
+    /* Extract gGfxGroups / gPaletteGroups referenced data */
     for (int i = 0; i < GFX_GROUPS_COUNT; i++) {
         u32 ptr;
         memcpy(&ptr, &gRomData[ROM_OFF_GFX_GROUPS + i * 4], 4);
         if (ptr >= 0x08000000u && ptr < 0x08000000u + gRomSize) {
-            /* Extract a generous region — GfxItem arrays vary in size,
-             * but 4 KB pages will cover them. */
             ExtractRegion(ptr - 0x08000000u, ROM_PAGE_SIZE);
         }
     }

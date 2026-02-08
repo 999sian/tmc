@@ -284,6 +284,15 @@ void PauseMenu_ItemMenu(void) {
 }
 
 void PauseMenu_ItemMenu_Init(void) {
+#ifdef PC_PORT
+    /* PC_PORT: GCC drops zero-length flexible array initializers.
+     * Raw byte array keeps settingDict data contiguous. */
+    static const u8 gUnk_08128B50_raw[] = {
+        0xD0, 0x10, 0x00, 0xB8, 0x10, 0x00, 0xFF, 0xD8, 0x00,             /* struct fields */
+        0x03, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00, 0xFF, 0x00, 0x00, /* settingDict */
+    };
+#define gUnk_08128B50 (*(const KeyButtonLayout*)gUnk_08128B50_raw)
+#else
     static const KeyButtonLayout gUnk_08128B50 = {
         0xd0u,
         0x10u,
@@ -308,6 +317,7 @@ void PauseMenu_ItemMenu_Init(void) {
             0u,
         },
     };
+#endif
 
     u32 uVar1;
     u32 i;

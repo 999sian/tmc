@@ -506,9 +506,9 @@ void FileScreenObjects_Type21(FileScreenObjectsEntity* this) {
     } else {
         super->spriteSettings.draw = 2;
         if (super->type == 21) {
-            var0 = ((SaveHeader*)0x2000000)->msg_speed;
+            var0 = gSaveHeader->msg_speed;
         } else {
-            var0 = ((SaveHeader*)0x2000000)->brightness;
+            var0 = gSaveHeader->brightness;
         }
         super->frameIndex = super->lastFrameIndex + var0;
     }

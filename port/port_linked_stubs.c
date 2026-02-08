@@ -76,15 +76,17 @@ u32 gUnk_020344A0 = 0x020344A0;
 struct_020354C0 gUnk_020354C0[32];
 u32 gUnk_02035542 = 0x02035542;
 u32 gUnk_02036540 = 0x02036540;
-/* gUnk_02036A58 — aliased into gEwram[0x36A58] (128-byte text pixel buffer, see text.c) */
-/* gUnk_02036AD8 — aliased into gEwram[0x36AD8] (224-byte text tile buffer, see text.c) */
+/* Aliased to gEwram[0x36A58] in text.c */
+u32 gUnk_02036A58_storage = 0x02036A58;
+/* Aliased to gEwram[0x36AD8] in text.c */
+u32 gUnk_02036AD8_storage = 0x02036AD8;
 u32 gUnk_02036BB8 = 0x02036BB8;
-// ========== Global data (converted from function stubs) ==========
+// ========== Global data ==========
 
 // Core systems
 UI gUI;
 HUD gHUD;
-// gMenu / gChooseFileState / gIntroState share memory (GBA EWRAM 0x02000080)
+// gMenu / gChooseFileState / gIntroState share memory (EWRAM 0x02000080)
 u8 _gMenuSharedStorage[0x40] __attribute__((aligned(8))) = { 0 };
 Area gArea;
 SaveFile gSave;
@@ -115,7 +117,7 @@ MapLayer gMapBottom;
 MapLayer gMapTop;
 RoomTransition gRoomTransition;
 RoomVars gRoomVars;
-RoomMemory gRoomMemory[4]; // sized to 4 entries (typical for GBA)
+RoomMemory gRoomMemory[4];
 RoomMemory* gCurrentRoomMemory;
 void** gCurrentRoomProperties;
 
@@ -126,35 +128,26 @@ ScriptExecutionContext gScriptExecutionContextArray[0x20];
 // Misc
 BgAnimation gBgAnimations[MAX_BG_ANIMATIONS];
 u8 gTextGfxBuffer[0xD00];
-u8 gPaletteBufferBackup[0x400]; // BG+OBJ palettes backup
+u8 gPaletteBufferBackup[0x400];
 u8 gCollidableCount;
 
-// gFrameObjLists — sprite frame data loaded from ROM (200KB)
-// Uses self-relative u32 offsets internally.
+// gFrameObjLists — sprite frame data (200KB, self-relative offsets)
 u32 gFrameObjLists[50016];
 
 // gMapData — generic map data buffer
 u8 gMapData[0x4000];
 
-// gSubtasks — see subtask.c for actual pointer table; stub as NULL-terminated
-// (This is actually const data from ROM, not a writable variable.
-//  It will be populated properly once subtask data is loaded.)
+// gCollisionMtx
+u8 gCollisionMtx[173 * 34];
 
-// gCollisionMtx — collision matrix
-u8 gCollisionMtx[173 * 34]; // ColSettings is file-local, using u8
-
-// gUpdateContext — file-local type in entity.c; placeholder buffer
 u8 gUpdateContext[64] __attribute__((aligned(4)));
 
-// gInteractableObjects — file-local type; placeholder buffer
 u8 gInteractableObjects[0x200] __attribute__((aligned(4)));
 
-// === Additional data stubs (converted from function stubs) ===
+// === Additional data stubs ===
 
-// Color / Palette
 Palette gPaletteList[0x10];
 
-// Hitbox data — these are const ROM data; zero-init is safe (never matched on title screen)
 const Hitbox gHitbox_0, gHitbox_1, gHitbox_2, gHitbox_3, gHitbox_4, gHitbox_5;
 const Hitbox gHitbox_6, gHitbox_7, gHitbox_8, gHitbox_9, gHitbox_10, gHitbox_11;
 const Hitbox gHitbox_12, gHitbox_13, gHitbox_14, gHitbox_15, gHitbox_16, gHitbox_17;
@@ -168,14 +161,10 @@ NPCStruct gNPCData[50];
 // Pause menu
 PauseMenuOptions gPauseMenuOptions;
 
-// Sprite data (pointer table — will be loaded from ROM later)
-SpritePtr gSpritePtrs[512]; // sized generously
+SpritePtr gSpritePtrs[512];
 
-// Map data — NOTE: gMapDataBottomSpecial is declared differently in
-// tileMap.h (u16[0x4000]) vs fileselect.h (struct_02019EE0). We use
-// the struct_02019EE0 type since fileselect.h is included.
+// Map data
 struct_02019EE0 gMapDataBottomSpecial;
-// gMapDataTopSpecial — same size (0x8000 bytes)
 u8 gMapDataTopSpecial[0x8000] __attribute__((aligned(4)));
 u32 gDungeonMap[0x800];
 
@@ -189,7 +178,7 @@ FuseInfo gFuseInfo;
 TileEntity gSmallChests[8];
 SpecialTileEntry gTilesForSpecialTiles[MAX_SPECIAL_TILES];
 
-// Collision — LinkedList2 is file-local in collision.c (5 fields, ~20 bytes each)
+// Collision
 u8 gUnk_03003C70[16 * 20] __attribute__((aligned(4)));
 
 // IWRAM scratch
@@ -197,14 +186,12 @@ u8 gUnk_03000420[0x800] __attribute__((aligned(4)));
 u8 gUnk_03000C30;
 u8 gUnk_03001020[sizeof(Screen)] __attribute__((aligned(4)));
 
-// Sound player data — MusicPlayerInfo/Track types from m4a
-// These are complex structs; we provide byte buffers matching expected sizes
-u8 gMPlayInfos[0x1C * 0x50] __attribute__((aligned(4))); // MusicPlayerInfo is ~0x50 bytes each
+// Sound player data
+u8 gMPlayInfos[0x1C * 0x50] __attribute__((aligned(4)));
 u8 gMPlayInfos2[0x4 * 0x50] __attribute__((aligned(4)));
-u8 gMPlayTracks[0x50 * 16] __attribute__((aligned(4))); // MusicPlayerTrack ~0x50 bytes each
+u8 gMPlayTracks[0x50 * 16] __attribute__((aligned(4)));
 
-// BGM song headers — ROM data, zero-init stubs
-// These would normally come from the sound data in ROM.
+// BGM song headers (ROM data stubs)
 u8 bgmBeanstalk[0x10], bgmBeatVaati[0x10], bgmBossTheme[0x10], bgmCastleCollapse[0x10];
 u8 bgmCastleMotif[0x10], bgmCastleTournament[0x10], bgmCastorWilds[0x10], bgmCaveOfFlames[0x10];
 u8 bgmCloudTops[0x10], bgmCredits[0x10], bgmCrenelStorm[0x10], bgmCuccoMinigame[0x10];
@@ -222,7 +209,7 @@ u8 bgmTempleOfDroplets[0x10], bgmTitleScreen[0x10], bgmUnused[0x10], bgmVaatiMot
 u8 bgmVaatiReborn[0x10], bgmVaatiTheme[0x10], bgmVaatiTransfigured[0x10], bgmVaatiWrath[0x10];
 u8 bgmWindRuins[0x10];
 
-// Linker symbols (RAM function boundaries — unused on PC)
+// Linker symbols (unused on PC)
 u8 RAMFUNCS_END[4];
 u8 gCopyToEndOfEwram_End[4];
 u8 gCopyToEndOfEwram_Start[4];
@@ -231,7 +218,7 @@ u8 sub_080B197C[4];
 u8 ram_sub_080B197C[4];
 u32 ram_MakeFadeBuff256;
 
-// Area / room data — these are ROM pointer tables, zero-init for now
+// Area / room data
 const AreaHeader gAreaMetadata[256];
 RoomHeader* gAreaRoomHeaders[256];
 void* gAreaRoomMaps[256];
@@ -239,12 +226,12 @@ void* gAreaTable[256];
 void* gAreaTileSets[256];
 void* gAreaTiles[256];
 
-// Function pointer tables — zero-init means they'll be NULL (safe as long as not called)
+// Function pointer tables
 void* gSubtasks[64];
-void* ButtonUIElement_Actions[16];
-void* EzloNagUIElement_Actions[16];
+// ButtonUIElement_Actions — defined in ui.c with proper function pointers
+// EzloNagUIElement_Actions — defined in ui.c with proper function pointers
 void* HoleManager_Actions[16];
-u8 gUIElementDefinitions[256] __attribute__((aligned(4)));
+// gUIElementDefinitions — defined in ui.c with proper UIElementDefinition type
 void* Subtask_FastTravel_Functions[16];
 void* Subtask_MapHint_Functions[16];
 
@@ -253,7 +240,7 @@ const Transition* const* const gExitLists[256];
 const Transition gExitList_RoyalValley_ForestMaze[4];
 
 // Various game data
-u32 gFixedTypeGfxData[528]; // 527 entries in ROM + 1 safety margin
+u32 gFixedTypeGfxData[528];
 void* gCaveBorderMapData[16];
 u8 gMessageChoices[32] __attribute__((aligned(4)));
 u8 gOverworldLocations[256] __attribute__((aligned(4)));

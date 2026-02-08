@@ -284,6 +284,7 @@ target("tmc_pc")
     add_files("port/port_save.c")        -- EEPROM save emulation
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)
     add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
+    add_files("port/port_text_render.c") -- Text rendering (UnpackTextNibbles, glyph pixel writers)
     
     -- Game source files - Main game code
     add_files("src/main.c")

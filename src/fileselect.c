@@ -251,6 +251,15 @@ static void (*const sFileScreenSubHandlers[])(void) = {
     HandleFileView,   HandleFileCopy, HandleFileDelete,         HandleFileStart,
 };
 
+#ifdef PC_PORT
+/* PC_PORT: GCC drops zero-length flexible array initializers.
+ * Raw byte array keeps settingDict data contiguous. */
+static const u8 gUnk_080FC8D0_raw[] = {
+    0xFF, 0xD8, 0x00, 0xFF, 0xD8, 0x00, 0xE0, 0x10, 0x0F, /* struct fields */
+    0x05, 0x00, 0x02, 0x00, 0xFF,                         /* settingDict */
+};
+#define gUnk_080FC8D0 (*(const KeyButtonLayout*)gUnk_080FC8D0_raw)
+#else
 static const KeyButtonLayout gUnk_080FC8D0 = {
     .aButtonX = 0xFF,
     .aButtonY = 0xD8,
@@ -263,6 +272,7 @@ static const KeyButtonLayout gUnk_080FC8D0 = {
     .rButtonText = 0xF,
     .settingDict = { 0x5, 0x0, 0x2, 0x0, 0xFF },
 };
+#endif
 
 static const u16 gUnk_080FC8DE[] = {
     0x01, 0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0, 0xe0, 0xc0, 0xa0, 0x80, 0x60, 0x40, 0x20,

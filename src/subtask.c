@@ -1,3 +1,4 @@
+#include "subtask.h"
 #include "common.h"
 #include "fileselect.h"
 #include "flags.h"
@@ -11,7 +12,6 @@
 #include "message.h"
 #include "save.h"
 #include "screen.h"
-#include "subtask.h"
 #include "ui.h"
 #include "windcrest.h"
 
