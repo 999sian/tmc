@@ -83,7 +83,7 @@ typedef struct {
     u16 pixel_width;
     u16 pixel_height;
     u16 tileSet_id;
-} FORCE_WORD_ALIGNED RoomHeader;
+} PACKED ALIGNED(2) RoomHeader;
 static_assert(sizeof(RoomHeader) == 0xa);
 extern RoomHeader* gAreaRoomHeaders[];
 

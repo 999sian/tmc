@@ -5,8 +5,10 @@
  * @brief Dash Sword Player Item
  */
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
+#include "vram.h"
+#include "collision.h"
+#include "asm.h"
 
 extern Entity* DoTileInteractionOffset(Entity*, u32, s32, s32);
 

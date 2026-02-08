@@ -5,7 +5,10 @@
  * @brief Small Pesto enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "physics.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

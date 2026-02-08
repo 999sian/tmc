@@ -1,8 +1,7 @@
 #include "global.h"
-#include "entity.h"
 #include "item.h"
 #include "sound.h"
-#include "functions.h"
+#include "physics.h"
 
 void sub_08076D04(ItemBehavior*, u32);
 void sub_08076D34(ItemBehavior*, u32);

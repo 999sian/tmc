@@ -5,6 +5,8 @@
  * @brief Wheaton NPC
  */
 #include "npc.h"
+#include "physics.h"
+#include "script.h"
 
 void Wheaton(Entity* this) {
     static const Hitbox gUnk_0810C3C0 = { 0, 4, { 0, 0, 0, 0 }, 6, 12 };

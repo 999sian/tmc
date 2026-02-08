@@ -5,10 +5,9 @@
  * @brief Manages the inside of the arms of Vaati3.
  */
 #include "manager/vaati3InsideArmManager.h"
-#include "functions.h"
 #include "screenTransitions.h"
+#include "room.h"
 #include "sound.h"
-#include "structures.h"
 
 void sub_0805DBF0(Vaati3InsideArmManager*);
 void Vaati3InsideArmManager_Init(Vaati3InsideArmManager*);

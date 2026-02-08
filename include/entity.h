@@ -3,7 +3,6 @@
 #define ENTITY_H
 
 #include "global.h"
-#include "color.h"
 #include "sprite.h"
 
 #define MAX_ENTITIES 72
@@ -325,10 +324,7 @@ bool32 ProcessMovement0(Entity*);
 Entity* GetEmptyEntity(void);
 Entity* CreateEnemy(u32 id, u32 type);
 Entity* CreateNPC(u32 id, u32 type, u32 type2);
-Entity* CreateObject(u32 id, u32 type, u32 type2);
-Entity* CreateObjectWithParent(Entity* parent, u32 id, u32 type, u32 type2);
 Entity* CreateAuxPlayerEntity(void);
-Entity* CreateFx(Entity* parent, u32 type, u32 type2);
 /// @}
 
 /**
@@ -540,6 +536,16 @@ typedef struct {
 } CarriedEntity;
 extern CarriedEntity gCarriedEntity;
 
+typedef struct {
+    u8 event_priority;        /**< system requested priority @see Priority */
+    u8 ent_priority;          /**< entity requested priority @see Priority */
+    u8 queued_priority;       /**< @see Priority */
+    u8 queued_priority_reset; /**< @see Priority */
+    Entity* requester;
+    u16 priority_timer;
+} PriorityHandler;
+extern PriorityHandler gPriorityHandler;
+
 /**
  * Current number of entities.
  * @see Entity
@@ -560,7 +566,7 @@ extern u8 gManagerCount;
 #define TILE(x, y) (((((x)-gRoomControls.origin_x) >> 4) & 0x3F) | ((((y)-gRoomControls.origin_y) >> 4) & 0x3F) << 6)
 // Calculate tilePos from x and y coordinates where x and y are already relative to the current room.
 #define TILE_LOCAL(x, y) ((((x) >> 4) & 0x3F) | (((y) >> 4) & 0x3F) << 6)
-#define TILE_POS(x, y) (x + (y << 6))
+#define TILE_POS(x, y) ((x) + ((y) << 6))
 #define TILE_POS_X_COMPONENT 0x3f
 #define TILE_POS_Y_COMPONENT 0xfc0
 #define COORD_TO_TILE(entity) TILE((entity)->x.HALF.HI, (entity)->y.HALF.HI)

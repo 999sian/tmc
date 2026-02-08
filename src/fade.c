@@ -1,6 +1,7 @@
+#include "fade.h"
 #include "global.h"
-#include "structures.h"
-#include "functions.h"
+#include "save.h"
+#include "vram.h"
 #include "screen.h"
 #include "common.h"
 
@@ -8,7 +9,13 @@ static u32 sub_080501C0(FadeControl* ctl);
 static u32 sub_08050230(FadeControl* ctl);
 static u32 sub_080502A4(FadeControl* ctl);
 
-extern u32 gUsedPalettes;
+typedef struct {
+    u8 unk0;
+    u8 unk1;
+    u16 unk2;
+} struct_020354C0;
+extern struct_020354C0 gUnk_020354C0[0x20];
+
 extern u16 gPaletteBuffer[];
 extern u16 gUnk_080FC3C4[];
 

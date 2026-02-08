@@ -5,7 +5,11 @@
  * @brief Octorok enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "physics.h"
+#include "asm.h"
 
 void Octorok_Pause(Entity*);
 bool32 Octorok_FacesPlayer(Entity*);

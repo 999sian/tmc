@@ -5,10 +5,13 @@
  * @brief Link Animation object. This is used during "item get" sequences and
  * replaces the player entity for the duration.
  */
-#include "functions.h"
 #include "message.h"
 #include "object.h"
+#include "physics.h"
+#include "player.h"
 #include "object/linkAnimation.h"
+#include "item.h"
+#include "pauseMenu.h"
 
 typedef enum {
     ITEMGET_INIT,

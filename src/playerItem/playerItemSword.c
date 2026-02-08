@@ -7,10 +7,14 @@
 #include "asm.h"
 #include "effects.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "sound.h"
 #include "tiles.h"
+#include "vram.h"
+#include "collision.h"
 
 typedef struct {
     /*0x00*/ Entity base;

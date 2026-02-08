@@ -6,14 +6,19 @@
  * @brief Cucco Minigame object
  */
 #include "enemy.h"
+#include "sound.h"
+#include "flags.h"
+#include "common.h"
 #include "entity.h"
 #include "fileselect.h"
-#include "functions.h"
 #include "item.h"
 #include "npc.h"
 #include "object.h"
+#include "room.h"
+#include "player.h"
 #include "script.h"
 #include "tiles.h"
+#include "map.h"
 
 typedef struct {
     Entity base;

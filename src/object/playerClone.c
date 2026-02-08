@@ -8,7 +8,7 @@
 #include "collision.h"
 #include "effects.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "sound.h"

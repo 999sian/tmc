@@ -4,10 +4,9 @@
  *
  * @brief Object63 object
  */
-#include "asm.h"
-#include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "physics.h"
+#include "item.h"
 
 void Object63_Init(Entity*);
 void Object63_Action1(Entity*);

@@ -5,10 +5,14 @@
  * @brief Takkuri enemy
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
 
 typedef struct {
@@ -47,7 +51,7 @@ void Takkuri_OnCollision(TakkuriEntity* this) {
     if (super->contactFlags & CONTACT_NOW) {
         if ((super->contactFlags & 0x7f) == 0) {
             u32 direction;
-            sub_0803C0AC(super);
+            StealRupees(super);
             COLLISION_OFF(super);
             direction = super->direction;
             if (!DirectionIsHorizontal(DirectionRoundUp(direction))) {
@@ -305,8 +309,8 @@ void sub_0803BF70(TakkuriEntity* this) {
     GetNextFrame(super);
 }
 
-void sub_0803C0AC(Entity* this) {
-    u32 index, rupeeType, rupees;
+void StealRupees(Entity* this) {
+    u32 rupeeCount, rupeeType, rupees;
     Entity* entity;
     entity = sub_08049DF4(1);
     if (entity == NULL)
@@ -315,22 +319,22 @@ void sub_0803C0AC(Entity* this) {
     rupees = gSave.stats.rupees;
     if (rupees >= 500) {
         rupeeType = ITEM_RUPEE20;
-        index = 5;
+        rupeeCount = 5;
         ModRupees(-100);
     } else if (rupees >= 100) {
         rupeeType = ITEM_RUPEE5;
-        index = 5;
+        rupeeCount = 5;
         ModRupees(-25);
     } else {
         rupeeType = ITEM_RUPEE1;
-        index = rupees;
+        rupeeCount = rupees;
         if (rupees >= 0x5) {
-            index = 5;
+            rupeeCount = 5;
         }
-        ModRupees(-index);
+        ModRupees(-rupeeCount);
     }
 
-    for (; index != 0; index--) {
+    for (; rupeeCount != 0; rupeeCount--) {
         Entity* obj = CreateObject(RUPEE_OBJECT, rupeeType, 0);
 
         if (obj) {

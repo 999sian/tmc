@@ -621,23 +621,23 @@ _0800439C: .4byte gSpritePtrs
 _080043A0: .4byte gSpritePtrs
 _080043A4: .4byte gGFXSlots+4
 
-	thumb_func_start CreateDrownFX
-CreateDrownFX: @ 0x080043A8
+	thumb_func_start CreateDrownFx
+CreateDrownFx: @ 0x080043A8
 	movs r1, #0xb // FX_WATER_SPLASH
 	b create_fx
 
-	thumb_func_start CreateLavaDrownFX
-CreateLavaDrownFX: @ 0x080043AC
+	thumb_func_start CreateLavaDrownFx
+CreateLavaDrownFx: @ 0x080043AC
 	movs r1, #0xc // FX_LAVA_SPLASH
 	b create_fx
 
-	thumb_func_start CreateSwampDrownFX
-CreateSwampDrownFX: @ 0x080043AC
+	thumb_func_start CreateSwampDrownFx
+CreateSwampDrownFx: @ 0x080043AC
 	movs r1, #0x52 // FX_GREEN_SPLASH
 	b create_fx
 
-	thumb_func_start CreatePitFallFX
-CreatePitFallFX: @ 0x080043B4
+	thumb_func_start CreatePitFallFx
+CreatePitFallFx: @ 0x080043B4
 	movs r1, #0 // FX_FALL_DOWN
 
 create_fx:

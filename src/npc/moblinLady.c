@@ -6,6 +6,7 @@
  */
 #include "entity.h"
 #include "npc.h"
+#include "script.h"
 
 void MoblinLady(Entity* this) {
     if (this->action == 0) {

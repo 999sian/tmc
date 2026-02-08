@@ -5,7 +5,7 @@
  * @brief Cutscene Orchestrator object
  */
 #include "entity.h"
-#include "functions.h"
+#include "script.h"
 #include "hitbox.h"
 
 void CutsceneOrchestrator(Entity* this) {

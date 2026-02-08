@@ -5,9 +5,12 @@
  * @brief V1 Fire Projectile
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
+#include "room.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

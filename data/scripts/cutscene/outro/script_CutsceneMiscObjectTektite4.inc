@@ -6,7 +6,7 @@ SCRIPT_START script_CutsceneMiscObjectTektite4
 	SetAnimation 0x0000
 	EndBlock
 	WaitForSyncFlagAndClear 0x00000008
-	Call CreateDust
+	Call CreateDeathFx
 	DoPostScriptAction 0x0006
 SCRIPT_END
 	.2byte 0x0000

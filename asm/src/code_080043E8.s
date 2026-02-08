@@ -62,10 +62,10 @@ sub_0800442E: @ 0x0800442E
 not_hazard:
 	movs r0, #0
 	pop {r1, pc}
-_0800444C: .4byte CreatePitFallFX
-_08004450: .4byte CreateDrownFX
-_08004454: .4byte CreateLavaDrownFX
-_08004458: .4byte CreateSwampDrownFX
+_0800444C: .4byte CreatePitFallFx
+_08004450: .4byte CreateDrownFx
+_08004454: .4byte CreateLavaDrownFx
+_08004458: .4byte CreateSwampDrownFx
 
 	thumb_func_start sub_0800445C
 sub_0800445C: @ 0x0800445C

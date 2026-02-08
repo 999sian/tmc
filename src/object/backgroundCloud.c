@@ -5,6 +5,9 @@
  * @brief BackgroundCloud object
  */
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -6,8 +6,8 @@
 typedef struct FlagAndOperatorManager {
     Manager base;
     u8 unk_20[0x1C];
-    u16 unk_3c;
-    u16 unk_3e;
+    u16 setFlag;
+    u16 checkFlags;
 } FlagAndOperatorManager;
 
 #endif // FLAGANDOPERATORMANAGER_H

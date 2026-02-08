@@ -6,6 +6,7 @@
  */
 #include "entity.h"
 #include "message.h"
+#include "player.h"
 
 extern void AddInteractableCheckableObject(Entity*);
 void SwordsmanNewsletter_Init(Entity*);

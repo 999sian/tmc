@@ -1,9 +1,7 @@
 #include "item.h"
 #include "physics.h"
 #include "sound.h"
-#include "functions.h"
 #include "playeritem.h"
-#include "functions.h"
 
 void sub_08075FF8(ItemBehavior*, u32);
 void sub_08076488(ItemBehavior*, u32);

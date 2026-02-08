@@ -11,12 +11,17 @@
 #include "common.h"
 #include "screen.h"
 #include "object.h"
+#include "room.h"
+#include "player.h"
 #include "message.h"
-#include "functions.h"
 #include "save.h"
-#include "area.h"
-#include "item.h"
 #include "game.h"
+#include "affine.h"
+#include "fade.h"
+#ifdef DEMO_JP
+#include "item.h"
+#include "flags.h"
+#endif
 
 typedef struct {
     u8 filler0[0x4];

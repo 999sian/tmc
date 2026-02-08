@@ -9,13 +9,18 @@
 #include "area.h"
 #include "common.h"
 #include "entity.h"
-#include "fileselect.h"
-#include "functions.h"
+#include "beanstalkSubtask.h"
 #include "game.h"
 #include "main.h"
 #include "object.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
 #include "subtask.h"
+#include "affine.h"
+#include "fade.h"
 
 extern void ClearArmosData(void);
 extern void sub_080300C4(void);
@@ -184,7 +189,7 @@ void Subtask_PortalCutscene_0(void) {
     LoadPaletteGroup(ptr->paletteGroup);
     LoadGfxGroup(ptr->gfxGroup);
     MemCopy(gPaletteBuffer + 3 * 16, gPaletteBuffer + 21 * 16, 16 * 2);
-    gUsedPalettes |= 1 << 21;
+    USE_PALETTE(21);
     EraseAllEntities();
     LoadRoomEntityList(gUnk_080D4110[portalId]);
     ClearEventPriority();

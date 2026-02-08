@@ -1,5 +1,5 @@
 #include "item.h"
-#include "functions.h"
+#include "physics.h"
 
 void sub_08075D2C(ItemBehavior*, u32);
 void sub_08075D88(ItemBehavior*, u32);

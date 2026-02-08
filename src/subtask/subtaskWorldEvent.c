@@ -7,7 +7,7 @@
 #include "asm.h"
 #include "common.h"
 #include "flags.h"
-#include "functions.h"
+#include "manager/hyruleTownTileSetManager.h"
 #include "game.h"
 #include "kinstone.h"
 #include "main.h"
@@ -16,6 +16,8 @@
 #include "room.h"
 #include "screen.h"
 #include "subtask.h"
+#include "affine.h"
+#include "fade.h"
 
 void Subtask_WorldEvent_Update(void);
 

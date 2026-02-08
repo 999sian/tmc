@@ -12,7 +12,7 @@ typedef struct {
     /*0x6c*/ u16 unk_6c;
     /*0x6e*/ u16 unk_6e;
     /*0x70*/ u8 unused2[22];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } ItemOnGroundEntity;
 
 #endif // ITEMONGROUND_H

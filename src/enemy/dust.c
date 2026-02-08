@@ -6,12 +6,16 @@
  */
 #include "asm.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
+#include "common.h"
 #include "entity.h"
 #include "hitbox.h"
 #include "object.h"
+#include "room.h"
 #include "physics.h"
 #include "player.h"
-#include "room.h"
 
 typedef struct {
     Entity base;

@@ -7,6 +7,7 @@
 #include "fade.h"
 #include "menu.h"
 #include "object.h"
+#include "room.h"
 #include "script.h"
 #include "subtask.h"
 

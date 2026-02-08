@@ -55,8 +55,11 @@ extern bool32 ProcessMovement4(Entity*);
 extern bool32 ProcessMovement5(Entity*);
 extern bool32 ProcessMovement6(Entity*);
 extern bool32 ProcessMovementInternal(Entity*, s32, s32, u32);
+extern void sub_080AF284(void);
 
 extern const s16 gSineTable[64];
 extern const s16 gCosineTable[256];
+
+extern u32 BounceUpdate(Entity*, u32);
 
 #endif // PHYSICS_H

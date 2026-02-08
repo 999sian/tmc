@@ -6,8 +6,9 @@
  */
 #include "collision.h"
 #include "enemy.h"
-#include "entity.h"
-#include "functions.h"
+#include "sound.h"
+#include "projectile.h"
+#include "physics.h"
 #include "player.h"
 
 extern void (*const V3HandProjectile_Functions[])(Entity*);

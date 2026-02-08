@@ -198,8 +198,6 @@ void (*const gObjectFunctions[])(Entity*) = {
     [LINK_ANIMATION] = LinkAnimation,
 };
 
-void ObjectInit(Entity*);
-
 void ObjectUpdate(Entity* this) {
     if ((this->flags & ENT_DID_INIT) == 0 && this->action == 0)
         ObjectInit(this);

@@ -4,11 +4,12 @@
  *
  * @brief Metal Door object
  */
+#include "object/lockedDoor.h"
 #include "asm.h"
 #include "effects.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "hitbox.h"
 #include "room.h"
 #include "sound.h"
@@ -24,11 +25,10 @@ typedef struct {
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
     /*0x7c*/ u8 unused2[8];
-    /*0x84*/ u16 unk_84;
-    /*0x86*/ u16 unk_86;
+    /*0x84*/ u16 flag1;
+    /*0x86*/ u16 flag2;
 } MetalDoorEntity;
 
-extern u32 sub_08083734(Entity*, u32);
 void sub_080A080C(MetalDoorEntity* this);
 void sub_080A0870(MetalDoorEntity* this);
 void MetalDoor_Init(MetalDoorEntity* this);
@@ -45,7 +45,7 @@ void MetalDoor(MetalDoorEntity* this) {
 }
 
 void MetalDoor_Init(MetalDoorEntity* this) {
-    if ((this->unk_84 != 0xffff) && CheckFlags(this->unk_84)) {
+    if ((this->flag1 != 0xffff) && CheckFlags(this->flag1)) {
         DeleteThisEntity();
     }
     super->action = 1;
@@ -97,7 +97,7 @@ void MetalDoor_Action2(MetalDoorEntity* this) {
 }
 
 void MetalDoor_Action3(MetalDoorEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag2)) {
         super->action = 4;
         super->timer = 12;
         super->direction = 0x10;

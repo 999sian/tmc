@@ -39,7 +39,7 @@ SCRIPT_START script_MinishEzloGoodbye
 	Wait 0x001e
 	SetSyncFlag 0x00000020
 	StopBgm
-	Call CreateDust
+	Call CreateDeathFx
 	Call sub_0806305C
 	Call sub_080630A4
 	_0807EF3C 0x0000, 0x0020

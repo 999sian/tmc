@@ -4,14 +4,17 @@
  *
  * @brief Fireplace object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[30];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } FireplaceEntity;
 
 void Fireplace_Action1(FireplaceEntity* this);
@@ -31,7 +34,7 @@ void Fireplace_Init(FireplaceEntity* this) {
     super->action = 1;
     super->spriteSettings.draw = 1;
     super->speed = 0x80;
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         sub_0809B7DC(this);
         DeleteThisEntity();
     } else {
@@ -44,7 +47,7 @@ void Fireplace_Init(FireplaceEntity* this) {
 void Fireplace_Action1(FireplaceEntity* this) {
     sub_0809B7C0(this);
     if (super->timer) {
-        SetFlag(this->unk_86);
+        SetFlag(this->flag);
         DeleteThisEntity();
     }
 }

@@ -7,21 +7,25 @@
 #include "area.h"
 #include "common.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "flags.h"
-#include "functions.h"
 #include "kinstone.h"
 #include "main.h"
 #include "menu.h"
 #include "message.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
 #include "room.h"
 #include "roomid.h"
 #include "save.h"
 #include "screen.h"
-#include "sound.h"
 #include "subtask.h"
 #include "ui.h"
+#include "affine.h"
+#include "fade.h"
 
 extern u32 sub_08000E44(u32);
 extern void sub_080A3B74(void);
@@ -72,15 +76,15 @@ Subtask KinstoneMenu_Type4;
 Subtask KinstoneMenu_Type5;
 
 // Belongs to subtask2.c
-const ScreenTransitionData gUnk_08128024[] = {
-    { 1, { 0, 0, 0, 0 }, 0x98, 0xf8, 0, AREA_MT_CRENEL, ROOM_MT_CRENEL_CAVERN_OF_FLAMES_ENTRANCE, 1, 12, 4, 0 },
-    { 1, { 0, 0, 0, 0 }, 0xf8, 0xf8, 0, AREA_VEIL_FALLS, ROOM_VEIL_FALLS_MAIN, 1, 12, 4, 0 },
-    { 1, { 0, 0, 0, 0 }, 0x1e8, 0x1a8, 0, AREA_CLOUD_TOPS, ROOM_CLOUD_TOPS_CLOUD_TOPS, 1, 12, 4, 0 },
-    { 1, { 0, 0, 0, 0 }, 0x278, 0x58, 0, AREA_HYRULE_TOWN, ROOM_HYRULE_TOWN_MAIN, 1, 12, 4, 0 },
-    { 1, { 0, 0, 0, 0 }, 0xa8, 0x1b8, 0, AREA_LAKE_HYLIA, ROOM_LAKE_HYLIA_MAIN, 1, 12, 4, 0 },
-    { 1, { 0, 0, 0, 0 }, 0x228, 0x398, 0, AREA_CASTOR_WILDS, ROOM_CASTOR_WILDS_MAIN, 1, 12, 4, 0 },
-    { 1, { 0, 0, 0, 0 }, 0x2c8, 0x128, 0, AREA_HYRULE_FIELD, ROOM_HYRULE_FIELD_SOUTH_HYRULE_FIELD, 1, 12, 4, 0 },
-    { 1, { 0, 0, 0, 0 }, 0x128, 0x2a8, 0, AREA_MINISH_WOODS, ROOM_MINISH_WOODS_MAIN, 1, 12, 4, 0 },
+const Transition gUnk_08128024[] = {
+    { 1, 0, 0, 0x98, 0xf8, 0, AREA_MT_CRENEL, ROOM_MT_CRENEL_CAVERN_OF_FLAMES_ENTRANCE, 1, 12, 4, 0 },
+    { 1, 0, 0, 0xf8, 0xf8, 0, AREA_VEIL_FALLS, ROOM_VEIL_FALLS_MAIN, 1, 12, 4, 0 },
+    { 1, 0, 0, 0x1e8, 0x1a8, 0, AREA_CLOUD_TOPS, ROOM_CLOUD_TOPS_CLOUD_TOPS, 1, 12, 4, 0 },
+    { 1, 0, 0, 0x278, 0x58, 0, AREA_HYRULE_TOWN, ROOM_HYRULE_TOWN_MAIN, 1, 12, 4, 0 },
+    { 1, 0, 0, 0xa8, 0x1b8, 0, AREA_LAKE_HYLIA, ROOM_LAKE_HYLIA_MAIN, 1, 12, 4, 0 },
+    { 1, 0, 0, 0x228, 0x398, 0, AREA_CASTOR_WILDS, ROOM_CASTOR_WILDS_MAIN, 1, 12, 4, 0 },
+    { 1, 0, 0, 0x2c8, 0x128, 0, AREA_HYRULE_FIELD, ROOM_HYRULE_FIELD_SOUTH_HYRULE_FIELD, 1, 12, 4, 0 },
+    { 1, 0, 0, 0x128, 0x2a8, 0, AREA_MINISH_WOODS, ROOM_MINISH_WOODS_MAIN, 1, 12, 4, 0 },
 };
 
 u32 sub_080A3B48(void) {

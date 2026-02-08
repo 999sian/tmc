@@ -5,6 +5,12 @@
 #include "entity.h"
 #include "player.h"
 
+extern u32 GiveItem(u32, u32);
+extern u32 CreateRandomItemDrop(Entity*, u32);
+extern void DisableRandomDrops();
+extern void EnableRandomDrops(void);
+extern u32 IsMinishItem(u32);
+
 void CreateItemEntity(u32, u32, u32);
 extern void ExecuteItemFunction(ItemBehavior* this, u32 index);
 
@@ -153,7 +159,11 @@ typedef enum {
 } Item;
 
 /** Slot that the item is equipped in. */
-typedef enum { EQUIP_SLOT_A, EQUIP_SLOT_B, EQUIP_SLOT_NONE } EquipSlot;
+typedef enum {
+    EQUIP_SLOT_A,
+    EQUIP_SLOT_B,
+    EQUIP_SLOT_NONE,
+} EquipSlot;
 
 /** Function used to create the item. */
 typedef enum {

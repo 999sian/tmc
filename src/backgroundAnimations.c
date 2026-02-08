@@ -8,7 +8,8 @@
 #include "asm.h"
 #include "assets/gfx_offsets.h"
 #include "common.h"
-#include "functions.h"
+#include "gfx.h"
+#include "fade.h"
 
 void LoadBgAnimationGfx(const BgAnimationGfx*);
 u32 GetBgAnimationTimer(const s32*);

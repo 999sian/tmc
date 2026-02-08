@@ -1,6 +1,5 @@
 // TODO belongs to game.c, but spriteAnimations332.s is before.
 // maybe also signals code that no longer belongs to game.c?
-#include "common.h"
 #include "flags.h"
 #include "game.h"
 #include "item.h"

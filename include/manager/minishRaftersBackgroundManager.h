@@ -9,4 +9,6 @@ typedef struct {
     u32 unk_3c;
 } MinishRaftersBackgroundManager;
 
+extern void sub_08058324(u32);
+
 #endif // MINISHRAFTERSBACKGROUNDMANAGER_H

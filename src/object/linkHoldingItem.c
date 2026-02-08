@@ -4,12 +4,14 @@
  *
  * @brief Link Holding Item object
  */
-#include "functions.h"
+#include "scroll.h"
 #include "game.h"
 #include "item.h"
 #include "itemMetaData.h"
 #include "message.h"
 #include "object.h"
+#include "sound.h"
+#include "player.h"
 #include "save.h"
 
 typedef struct {

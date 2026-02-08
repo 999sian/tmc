@@ -5,7 +5,7 @@
  * @brief Fireball Chain object
  */
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 #include "global.h"
 #include "projectile.h"
 #include "projectile/winder.h"

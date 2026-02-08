@@ -5,9 +5,13 @@
  * @brief Door Mimic enemy
  */
 #include "enemy.h"
-#include "functions.h"
 #include "sound.h"
+#include "effects.h"
+#include "common.h"
 #include "tiles.h"
+#include "object.h"
+#include "asm.h"
+#include "room.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -51,7 +55,7 @@ void DoorMimic_OnCollision(DoorMimicEntity* this) {
 void DoorMimic_OnDeath(DoorMimicEntity* this) {
     SetTile(this->unk_7c, this->unk_7e, super->collisionLayer);
     CreateFx(super, FX_POT_SHATTER, 0);
-    EnemyDisableRespawn(super);
+    EnemyDisableRespawn((Enemy*)super);
     DeleteThisEntity();
 }
 

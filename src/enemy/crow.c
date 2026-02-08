@@ -5,8 +5,10 @@
  * @brief Crow enemy
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

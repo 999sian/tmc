@@ -5,9 +5,15 @@
  * @brief Water Drop enemy
  */
 #include "enemy.h"
+#include "effects.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "screen.h"
-#include "structures.h"
+#include "vram.h"
 
 void sub_0802A39C(Entity*);
 void sub_0802A334(Entity*);

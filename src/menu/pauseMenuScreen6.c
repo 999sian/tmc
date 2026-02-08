@@ -6,13 +6,13 @@
 #include "common.h"
 #include "fileselect.h"
 #include "flags.h"
-#include "functions.h"
 #include "kinstone.h"
 #include "main.h"
 #include "menu.h"
 #include "pauseMenu.h"
 #include "save.h"
 #include "screen.h"
+#include "affine.h"
 
 typedef struct {
     u8 unk0;

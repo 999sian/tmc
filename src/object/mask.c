@@ -4,9 +4,16 @@
  *
  * @brief Mask object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "player.h"
 #include "tiles.h"
+#include "item.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -16,7 +23,7 @@ typedef struct {
     /*0x7c*/ u16 unk_7c;
     /*0x7e*/ u16 unk_7e;
     /*0x80*/ u8 unused2[6];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } MaskEntity;
 
 void Mask_Init(MaskEntity* this);
@@ -36,7 +43,7 @@ void Mask(MaskEntity* this) {
 
 void Mask_Init(MaskEntity* this) {
     if (super->type2 & 0xC0) {
-        if (CheckFlags(this->unk_86)) {
+        if (CheckFlags(this->flag)) {
             s32 field_0x0a;
 
             switch (super->type2 & 0xC0) {
@@ -49,7 +56,7 @@ void Mask_Init(MaskEntity* this) {
                             DeleteThisEntity();
                             break;
                         default:
-                            ClearFlag(this->unk_86);
+                            ClearFlag(this->flag);
                     }
 
                     break;
@@ -122,7 +129,7 @@ void Mask_Action2(MaskEntity* this) {
             case 0x80:
                 EnqueueSFX(SFX_SECRET);
             case 0x40:
-                SetFlag(this->unk_86);
+                SetFlag(this->flag);
                 break;
         }
 

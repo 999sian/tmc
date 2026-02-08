@@ -8,21 +8,22 @@
 #include "area.h"
 #include "common.h"
 #include "flags.h"
-#include "functions.h"
 #include "main.h"
 #include "physics.h"
 #include "room.h"
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
-#include "structures.h"
+#include "game.h"
+#include "asm.h"
+#include "fade.h"
 
 extern struct BgAffineDstData gUnk_02017AA0[];
 extern struct BgAffineDstData gUnk_02017BA0[];
 extern u8 gUpdateVisibleTiles;
 extern u32 gUsedPalettes;
 
-void sub_08058D34(void);
+void RollingBarrelManager_OnEnterRoom(void);
 void sub_08058BC8(RollingBarrelManager*);
 void sub_08058CB0(RollingBarrelManager*);
 void sub_08058CFC(void);
@@ -52,7 +53,7 @@ void RollingBarrelManager_Init(RollingBarrelManager* this) {
     this->unk_28 = 0x1234;
     super->timer = CheckLocalFlags(0x15, 0x2) != 0;
     sub_08058CB0(this);
-    RegisterTransitionManager(this, sub_08058D34, 0);
+    RegisterTransitionHandler(this, RollingBarrelManager_OnEnterRoom, NULL);
 }
 
 void RollingBarrelManager_Action1(RollingBarrelManager* this) {
@@ -256,12 +257,12 @@ void sub_08058CFC(void) {
     }
 }
 
-void sub_08058D34(void) {
+void RollingBarrelManager_OnEnterRoom(void) {
     u16 tmp;
     u32 tmp2;
     LoadPaletteGroup(0x28);
     MemCopy(gPaletteBuffer + 3 * 16, gPaletteBuffer + 21 * 16, 16 * 2);
-    gUsedPalettes |= 1 << 21;
+    USE_PALETTE(21);
     LoadGfxGroup(0x16);
     tmp = gScreen.lcd.displayControl;
     tmp2 = 0;

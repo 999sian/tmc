@@ -5,11 +5,15 @@
  * @brief Torch Trap enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "flags.h"
+#include "projectile.h"
 #include "entity.h"
 #include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "tiles.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;
@@ -18,9 +22,9 @@ typedef struct {
     u16 filler2;
     u16 unk_78;
     u16 projectileTimer;
-    u16 unk_7c;
+    u16 flag1;
     u8 filler3[0x2];
-    u16 unk_80;
+    u16 flag2;
     u16 unk_82;
     u16 unk_84;
 } TorchTrapEntity;
@@ -75,35 +79,35 @@ void sub_0803CF38(TorchTrapEntity* this) {
 
 void sub_0803CF94(TorchTrapEntity* this) {
     if (GetTileTypeAtTilePos(this->tilePos, super->collisionLayer) == TILE_TYPE_118) {
-        this->unk_80 = 0;
+        this->flag2 = 0;
         TorchTrap_Reset(this);
-    } else if (this->unk_7c && sub_0803CFD8(this)) {
+    } else if (this->flag1 && sub_0803CFD8(this)) {
         TorchTrap_Reset(this);
     }
 }
 
 bool32 sub_0803CFD8(TorchTrapEntity* this) {
     u32 result;
-    if (this->unk_7c == 0) {
+    if (this->flag1 == 0) {
         result = TRUE;
     } else {
-        result = CheckFlags(this->unk_7c);
+        result = CheckFlags(this->flag1);
     }
     return result;
 }
 
 bool32 sub_0803CFF0(TorchTrapEntity* this) {
     u32 result;
-    if (this->unk_80 != 0) {
-        if (this->unk_80 == this->unk_7c) {
-            u32 val = CheckFlags(this->unk_80);
+    if (this->flag2 != 0) {
+        if (this->flag2 == this->flag1) {
+            u32 val = CheckFlags(this->flag2);
             result = FALSE;
             if (val == 0) {
                 result = TRUE;
             }
             return result;
         } else {
-            return CheckFlags(this->unk_80);
+            return CheckFlags(this->flag2);
         }
     }
 

@@ -1,6 +1,6 @@
+#include "ui.h"
 #include "area.h"
 #include "common.h"
-#include "functions.h"
 #include "game.h"
 #include "global.h"
 #include "item.h"
@@ -9,6 +9,8 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
+#include "affine.h"
+#include "vram.h"
 #include "structures.h"
 
 extern void sub_0805ECEC(u32, u32, u32, u32);
@@ -609,7 +611,7 @@ void sub_0801CAFC(UIElement* element, u32 frameIndex) {
 
 void sub_0801CB20(UIElement* element, UIElementDefinition* definition) {
     if (definition->unk_e == 0) {
-        SpritePtr* ptr = &gSpritePtrs[definition->spriteIndex];
+        const SpritePtr* ptr = &gSpritePtrs[definition->spriteIndex];
         SpriteFrame* frame = &ptr->frames[element->frameIndex];
         u32* firstTile = (u32*)(ptr->ptr + frame->firstTileIndex * 0x20);
         u8 numTiles = frame->numTiles;

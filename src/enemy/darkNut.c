@@ -5,7 +5,10 @@
  * @brief Dark Nut enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

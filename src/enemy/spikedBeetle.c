@@ -5,7 +5,11 @@
  * @brief Spiked Beetle enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "player.h"
+#include "physics.h"
+#include "asm.h"
 
 extern u32 sub_0804A024(Entity*, u32, u32);
 

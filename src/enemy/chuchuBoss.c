@@ -5,9 +5,20 @@
  * @brief Chuchu Boss enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "common.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "pauseMenu.h"
+#ifndef EU
+#include "vram.h"
+#include "color.h"
+#endif
 
 typedef struct {
     u8 unk_00;
@@ -1094,7 +1105,6 @@ void sub_08026E1C(ChuchuBossEntity* this) {
             COLLISION_ON(super);
             if (sub_08027C54(this)) {
                 this->unk_84->unk_04++;
-                ;
                 super->child->health = 0xff;
             }
             if (this->unk_84->unk_04 == 3) {

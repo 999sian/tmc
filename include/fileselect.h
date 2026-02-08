@@ -1,9 +1,9 @@
 #ifndef FILESELECT_H
 #define FILESELECT_H
 
-#include "sound.h"
 #include "global.h"
 #include "save.h"
+#include "message.h"
 
 typedef struct {
     /*0x00*/ u8 unk_0x0;
@@ -23,19 +23,6 @@ static_assert(sizeof(ChooseFileState) == 0x30);
 // TODO: This occupies the same memory region as gMenu
 extern ChooseFileState gChooseFileState;
 
-// typedef struct {
-//     u8 unk00 : 4;
-//     u8 unk04 : 4;
-//     u8 unk1;
-//     u8 charColor;
-//     u8 bgColor;
-//     u16 unk4;
-//     u16 unk6;
-//     u8* unk8;
-// } struct_02036540;
-
-extern struct_020227E8 gUnk_020227E8[];
-
 typedef struct {
     /*0x00*/ u8 isTransitioning;
     /*0x01*/ u8 unk1;
@@ -51,13 +38,9 @@ typedef struct {
 extern struct_02019EE0 gMapDataBottomSpecial;
 // TODO size: 0x8000 from ClearTileMaps?
 
-extern void sub_08056FEC(u32, struct_020227E8*);
 extern u32 ShowTextBox(u32 textIndexOrPtr, const Font* font);
 extern void ClearTileMaps(void);
 extern void ResetSaveFile(u32);
-extern WStruct* sub_0805F2C8(void);
-extern u32 sub_0805F7DC(u32, WStruct*);
-extern void sub_0805F300(WStruct*);
 extern void sub_08050A64(u32);
 extern void sub_08050AFC(u32);
 extern void sub_08050384();

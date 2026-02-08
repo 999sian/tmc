@@ -5,7 +5,10 @@
  * @brief Peahat enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "physics.h"
+#include "asm.h"
 #include "room.h"
 
 typedef struct {
@@ -286,7 +289,7 @@ void Peahat_Stunned(PeahatEntity* this) {
                 super->hitType = 0x71;
             }
             break;
-    };
+    }
 }
 
 void Peahat_RepairPropeller(PeahatEntity* this) {

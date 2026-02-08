@@ -3,7 +3,7 @@
 
 #include "global.h"
 #include "area.h"
-#include "structures.h"
+#include "message.h"
 
 /**
  * Change the light level of the room.
@@ -200,7 +200,7 @@ void InitParachuteRoom(void);
  * @param onEnter Room enter callback.
  * @param onExit Room exit callback.
  */
-void RegisterTransitionManager(void* mgr, void (*onEnter)(void*), void (*onExit)(void*));
+void RegisterTransitionHandler(void* mgr, void (*onEnter)(), void (*onExit)());
 
 /**
  * Call the room exit callback.

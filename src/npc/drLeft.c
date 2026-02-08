@@ -4,9 +4,14 @@
  *
  * @brief Dr Left NPC
  */
-#include "functions.h"
+#include "physics.h"
 #include "item.h"
+#include "message.h"
 #include "npc.h"
+#include "flags.h"
+#include "save.h"
+#include "script.h"
+#include "asm.h"
 
 void sub_0806BFD8(Entity* this);
 

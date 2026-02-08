@@ -7,6 +7,8 @@
 #include "entity.h"
 #include "npc.h"
 #include "player.h"
+#include "script.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

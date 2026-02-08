@@ -4,8 +4,15 @@
  *
  * @brief Smith NPC
  */
-#include "functions.h"
+#include "physics.h"
 #include "npc.h"
+#include "sound.h"
+#include "save.h"
+#include "flags.h"
+#include "effects.h"
+#include "message.h"
+#include "script.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

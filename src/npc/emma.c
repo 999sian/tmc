@@ -5,8 +5,8 @@
  * @brief Emma NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "screenTransitions.h"
+#include "room.h"
 #include "script.h"
 
 void Emma(Entity* this) {

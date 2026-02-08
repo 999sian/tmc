@@ -5,8 +5,9 @@
  * @brief Hanging Seed enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "entity.h"
-#include "functions.h"
 
 extern void (*const HangingSeed_Functions[])(Entity*);
 extern void (*const gUnk_080CB588[])(Entity*);

@@ -16,9 +16,13 @@
 
 #define NAKED __attribute__((naked))
 #define UNUSED __attribute__((unused))
+#ifdef __CLION_IDE__
+#define PACKED
+#define ALIGNED(n)
+#else
 #define PACKED __attribute__((packed))
-
 #define ALIGNED(n) __attribute__((aligned(n)))
+#endif
 
 #define SOUND_INFO_PTR (*(struct SoundInfo**)0x3007FF0)
 #define INTR_CHECK (*(u16*)0x3007FF8)

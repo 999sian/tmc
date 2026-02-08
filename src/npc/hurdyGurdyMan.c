@@ -5,9 +5,13 @@
  * @brief Hurdy Gurdy Man NPC
  */
 #include "entity.h"
-#include "functions.h"
+#include "message.h"
 #include "npc.h"
 #include "save.h"
+#include "script.h"
+#include "common.h"
+#include "asm.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

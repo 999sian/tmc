@@ -2,12 +2,13 @@
 #include "asm.h"
 #include "color.h"
 #include "common.h"
-#include "functions.h"
+#include "structures.h"
 #include "physics.h"
 #include "player.h"
 #include "playeritem.h"
 #include "room.h"
 #include "sound.h"
+#include "vram.h"
 
 const u8 gSpriteSortAboveTable[];
 const u8 gSpriteSortBelowTable[];
@@ -556,7 +557,7 @@ void sub_0806FEBC(Entity* ent, u32 param_2, Entity* param_3) {
     *((u32*)ptr) = 0;
     ptr->unk_04.WORD = 0;
     ptr->unk_08.WORD = 0;
-    ptr->unk_0C = (u32)param_3;
+    ptr->unk_0C = param_3;
     ptr->unk_00.unk0 = 1;
     ptr->unk_00.unk1 = 1;
 }
@@ -646,9 +647,9 @@ void sub_0807000C(Entity* this) {
 }
 
 static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
-    u8* ptr2;
-    u8* ptr3;
-    u32* spritePtr;
+    SpriteFrame* frames;
+    SpriteFrame* frame;
+    const SpritePtr* spritePtr;
     struct_gUnk_020000C0_1* ptr1 = &this->unk_00[param_2];
     if ((ptr1->unk_00.unk3) == 0)
         return 0;
@@ -657,14 +658,14 @@ static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
     if (ptr1->unk_01 == 0xff)
         return 0;
 
-    spritePtr = &((u32*)gSpritePtrs)[ptr1->unk_02 * 4];
-    ptr2 = (u8*)(spritePtr[1]);
-    if (ptr2 == 0)
+    spritePtr = &gSpritePtrs[ptr1->unk_02];
+    frames = spritePtr->frames;
+    if (frames == 0)
         return 0;
 
-    ptr3 = &ptr2[ptr1->unk_01 * 4];
-    ptr1->unk_08.BYTES.byte1 = *ptr3;
-    ptr1->unk_0C = spritePtr[2] + ((*(u16*)&ptr3[2]) << 5);
+    frame = &frames[ptr1->unk_01];
+    ptr1->unk_08.BYTES.byte1 = frame->numTiles;
+    ptr1->unk_0C = spritePtr->ptr + (frame->firstTileIndex << 5);
     return 1;
 }
 

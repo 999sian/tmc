@@ -5,8 +5,11 @@
  * @brief Mole Mitts Particle object
  */
 #include "area.h"
-#include "functions.h"
 #include "object.h"
+#include "room.h"
+#include "player.h"
+#include "item.h"
+#include "color.h"
 
 void MoleMittsParticle_Init(Entity*);
 void MoleMittsParticle_Action1(Entity*);

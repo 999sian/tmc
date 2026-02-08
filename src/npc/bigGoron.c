@@ -4,11 +4,20 @@
  *
  * @brief BigGoron NPC
  */
-#include "functions.h"
+#include "npc/bigGoron.h"
 #include "hitbox.h"
 #include "item.h"
+#include "message.h"
+#include "script.h"
 #include "npc.h"
 #include "screen.h"
+#include "effects.h"
+#include "save.h"
+#include "common.h"
+#include "sound.h"
+#include "asm.h"
+#include "physics.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

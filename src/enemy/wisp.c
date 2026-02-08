@@ -6,8 +6,11 @@
  */
 #include "collision.h"
 #include "enemy.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
 
 typedef struct {
@@ -147,7 +150,7 @@ void sub_080336DC(WispEntity* this) {
             super->y.HALF.HI = this->unk_82;
             break;
         case 0x18:
-            CreateDust(super);
+            CreateDeathFx(super);
             break;
         case 0xc:
             super->spriteSettings.draw = TRUE;

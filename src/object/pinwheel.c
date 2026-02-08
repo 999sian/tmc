@@ -7,13 +7,14 @@
 #include "entity.h"
 #include "flags.h"
 #include "object.h"
+#include "effects.h"
 
 typedef struct {
     /*0x00*/ Entity base;
-    /*0x68*/ u16 unk_68;
+    /*0x68*/ u16 flag;
 } PinwheelEntity;
 
-static const u16 gUnk_08125050[] = {
+static const u16 gPinwheelFlags[] = {
     KUMOUE_02_AWASE_01, KUMOUE_02_AWASE_02, KUMOUE_02_AWASE_03, KUMOUE_02_AWASE_04, KUMOUE_02_AWASE_05, BEGIN_1,
 };
 extern u32 gUnk_020342F8;
@@ -38,9 +39,9 @@ void Pinwheel(PinwheelEntity* this) {
 }
 
 void Pinwheel_Init(PinwheelEntity* this) {
-    this->unk_68 = gUnk_08125050[super->type2];
+    this->flag = gPinwheelFlags[super->type2];
     super->spritePriority.b0 = 7;
-    if (CheckLocalFlag(this->unk_68) != 0) {
+    if (CheckLocalFlag(this->flag) != 0) {
         super->action = 2;
     } else {
         super->action = 1;
@@ -49,9 +50,9 @@ void Pinwheel_Init(PinwheelEntity* this) {
 }
 
 void Pinwheel_Action1(PinwheelEntity* this) {
-    if (CheckLocalFlag(this->unk_68) != 0) {
+    if (CheckLocalFlag(this->flag) != 0) {
         super->action = 2;
-        CreateDust(super);
+        CreateDeathFx(super);
     }
 }
 void Pinwheel_Action2(PinwheelEntity* this) {

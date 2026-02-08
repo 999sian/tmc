@@ -5,14 +5,20 @@
  * @brief Stockwell NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "message.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "player.h"
 #include "room.h"
 #include "script.h"
+#include "save.h"
+#include "subtask.h"
+#ifndef EU
+#endif
 
 #ifndef EU
 static const Rect gUnk_0810FDA0 = { 0, 8, 10, 16 };

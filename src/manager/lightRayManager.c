@@ -9,9 +9,11 @@
  */
 #include "manager/lightRayManager.h"
 #include "common.h"
-#include "functions.h"
 #include "main.h"
 #include "screen.h"
+#include "game.h"
+#include "player.h"
+#include "physics.h"
 
 extern void DisableVBlankDMA(void);
 
@@ -47,7 +49,7 @@ void LightRayManager_Main(LightRayManager* this) {
     }
 }
 
-static void LightRayManager_EnterRoom(LightRayManager* this) {
+static void LightRayManager_OnEnterRoom(LightRayManager* this) {
     u8* pbVar1;
 
     LoadGfxGroup(this->gfxGroup);
@@ -60,7 +62,7 @@ static void LightRayManager_EnterRoom(LightRayManager* this) {
     }
 }
 
-static void LightRayManager_ExitRoom(void) {
+static void LightRayManager_OnExitRoom(void) {
     gScreen.lcd.displayControl &= ~DISPCNT_BG3_ON;
     gScreen.controls.layerFXControl = 0;
     DisableVBlankDMA();
@@ -76,7 +78,7 @@ void LightRayManager_Init(LightRayManager* this) {
     gScreen.lcd.displayControl |= DISPCNT_BG3_ON;
     gScreen.controls.layerFXControl = 0x3648;
     gScreen.controls.alphaBlend = 0x1000;
-    RegisterTransitionManager(this, LightRayManager_EnterRoom, LightRayManager_ExitRoom);
+    RegisterTransitionHandler(this, LightRayManager_OnEnterRoom, LightRayManager_OnExitRoom);
 }
 
 void LightRayManager_Action1(LightRayManager* this) {

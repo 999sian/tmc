@@ -3,10 +3,21 @@
 
 #include "global.h"
 #include "player.h"
-#include "structures.h"
 #include "room.h"
 
 #define FILENAME_LENGTH 6
+
+typedef struct {
+    int signature;
+    u8 saveFileId;
+    u8 msg_speed;
+    u8 brightness;
+    u8 language;
+    u8 name[6];
+    u8 invalid;
+    u8 initialized;
+} SaveHeader;
+#define gSaveHeader ((SaveHeader*)(0x2000000))
 
 typedef enum {
     SAVE_BUSY = 0,

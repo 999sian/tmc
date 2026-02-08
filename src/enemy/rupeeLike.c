@@ -8,7 +8,12 @@
 #include "entity.h"
 #include "hitbox.h"
 #include "object.h"
-#include "room.h"
+#include "asm.h"
+#include "sound.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
+#include "vram.h"
 #include "save.h"
 
 typedef struct {
@@ -275,7 +280,7 @@ void sub_08029770(RupeeLikeEntity* this) {
         InitializeAnimation(super, 2);
         super->child->spriteSettings.draw = TRUE;
         InitializeAnimation(super->child, 6);
-        CreateDust(super);
+        CreateDeathFx(super);
     }
 }
 

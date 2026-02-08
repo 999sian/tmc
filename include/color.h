@@ -23,7 +23,7 @@ typedef struct {
     u16 unk_02;
     union SplitWord unk_04;
     union SplitWord unk_08;
-    u32 unk_0C;
+    void* unk_0C;
 } struct_gUnk_020000C0_1;
 
 typedef struct {

@@ -7,6 +7,7 @@
 #include "entity.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
 #include "physics.h"
 #include "room.h"
 #include "tiles.h"

@@ -1,6 +1,8 @@
 #include "common.h"
 #include "fileselect.h"
-#include "structures.h"
+#include "vram.h"
+#include "gfx.h"
+#include "color.h"
 
 extern u32 gFixedTypeGfxData[];
 

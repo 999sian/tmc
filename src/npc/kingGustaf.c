@@ -5,8 +5,8 @@
  * @brief King Gustaf NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "screen.h"
+#include "script.h"
 
 void KingGustaf(Entity* this) {
     s32 speed;

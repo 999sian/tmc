@@ -4,14 +4,24 @@
  *
  * @brief Gyorg Boss object
  */
-#include "area.h"
 #include "enemy/gyorg.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
 #include "room.h"
 #include "screen.h"
 #include "screenTransitions.h"
+#include "scroll.h"
+#include "fade.h"
+#ifndef EU
+#include "area.h"
+#endif
 
 struct GyorgChildSpawns {
     s16 offsetX;
@@ -251,7 +261,7 @@ void GyorgBossObject_FightEnd(GyorgBossObjectEntity* this) {
         sub_080A1E54(this);
         if (--super->subtimer == 0) {
             SetFlag(0x7B);
-            sub_0808091C(&gUnk_0813ABD0, 8);
+            DoExitTransitionWithType(&gUnk_0813ABD0, 8);
             return;
         }
         if (super->subtimer == 0x3C) {

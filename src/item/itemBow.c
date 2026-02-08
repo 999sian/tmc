@@ -1,6 +1,6 @@
 #include "item.h"
-#include "functions.h"
 #include "save.h"
+#include "physics.h"
 
 void sub_08075DF4(ItemBehavior*, u32);
 void sub_08075E40(ItemBehavior*, u32);

@@ -4,7 +4,7 @@
 #include "collision.h"
 #include "common.h"
 #include "entity.h"
-#include "functions.h"
+#include "structures.h"
 #include "game.h"
 #include "global.h"
 #include "item.h"
@@ -13,15 +13,24 @@
 #include "manager/diggingCaveEntranceManager.h"
 #include "message.h"
 #include "object.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "save.h"
 #include "screen.h"
 #include "screenTransitions.h"
+#include "scroll.h"
 #include "tileMap.h"
 #include "tiles.h"
+#include "backgroundAnimations.h"
+#include "itemDefinitions.h"
+#include "ui.h"
+#include "fade.h"
 
-static void sub_08077E54(ItemBehavior* beh);
+static void sub_08077E54(ItemBehavior* this);
 
 extern void sub_0800857C(Entity*);
 extern void InitDefaultPriority(Entity*);
@@ -46,14 +55,10 @@ bool32 IsTryingToPickupObject(void);
 ItemBehavior* CreateItem(u32);
 u32 sub_080789A8(void);
 ItemBehavior* CreateItem1(u32);
-void DeleteItemBehavior(ItemBehavior*, u32);
 bool32 sub_08079E90(u32);
-void PlayerMinishSetNormalAndCollide(void);
-void sub_08078D60(void);
 void* CreateItemGetPlayerItemWithParent(ItemBehavior*);
 u32 sub_08079FD4(Entity*, u32);
 void LoadRoomGfx(void);
-SurfaceType GetSurfaceCalcType(Entity*, s32, s32);
 void sub_0807AAF8(Entity*, u32);
 void sub_0807A750(u32, u32, const u8*, u32);
 
@@ -63,15 +68,12 @@ extern ItemBehavior* (*const gCreateItemsFuncs[])(Item);
 
 extern void UnregisterInteractTile(u32, u32);
 
-extern const u8 gMapTileTypeToCollisionData[]; // collisionData for tileType?
-
 extern u8 gUpdateVisibleTiles;
 
 bool32 sub_0807BF88(u32, u32, RoomResInfo*);
 
 void LoadRoomTileSet(void);
 
-void ForceSetPlayerState(u32 framestate);
 InteractableObject* sub_080784E4(void);
 
 u32 sub_08079778(void);
@@ -81,33 +83,26 @@ extern const KeyValuePair gMapActTileToSurfaceType[];
 
 u32 sub_0807BEEC(u32 param_1, u32 param_2, u32 param_3);
 
-bool32 sub_0807B434(u32 position, u32 layer);
+bool32 sub_0807B434(u32 tilePos, u32 layer);
 
 void sub_0807B820(u32);
 void sub_0807B8A8(u32);
 void sub_0807B930(u32);
-bool32 sub_0807B464(u32 param_1, u32 param_2);
+bool32 sub_0807B464(u32 tilePos, u32 layer);
 void sub_0807B55C(u32, u32, u16*);
 void sub_0807B480(u32, u32);
 
 bool32 sub_0807B600(u32);
 
-bool32 sub_0807B464(u32 tilePos, u32 param_2);
-
-bool32 sub_0807B464(u32 param_1, u32 param_2);
-
-extern void CreateRandomWaterTrace(Entity* parent, int range);
 void sub_08079520(Entity* this);
 
 bool32 ToggleDiving(Entity*);
 
 extern const u16* sub_0806FC50(u32 param_1, u32 param_2);
 
-bool32 sub_08079F48(u32 param_1, u32 param_2);
+bool32 sub_08079F48(u32 direction, u32 collisionData);
 
 extern void FillActTileForLayer(MapLayer* mapLayer);
-
-extern u16 gUnk_080B77C0[];
 
 void sub_0807BFA8(void);
 void sub_0807C8B0(u16*, u32, u32);
@@ -123,18 +118,7 @@ extern const u8 gMapTileTypeToCollisionData[];
 // collisions for tiles > 0x4000
 extern const u8 gMapSpecialTileToCollisionData[];
 
-extern u16 gUnk_080B77C0[];
-
-void sub_0807BFA8(void);
-void sub_0807C8B0(u16*, u32, u32);
-void sub_0807C69C(u8*, u32, u32);
-void sub_0807C460(void);
-void sub_0807BBE4(void);
-void CreateCollisionDataBorderAroundRoom(void);
-void sub_0807C5F4(u16*, u16*);
-void sub_0807C5B0(void);
-
-extern u8 gUnk_080082DC[];
+extern const u8 gUnk_080082DC[];
 extern u32 sub_08004202(Entity*, u8*, u32);
 
 // This just reuses the first 12 bytes of gUnk_02022830 to store a MapDataDefinition there temporarily.
@@ -153,9 +137,6 @@ extern InteractableObject gInteractableObjects[];
 u32 sub_0807A180(Entity*, Entity*, u32, u32);
 
 extern u32 gUsedPalettes;
-
-extern void ClearBgAnimations(void);
-extern void LoadBgAnimations(u16*);
 
 void sub_0807BFA8(void);
 
@@ -3090,11 +3071,11 @@ void PlayerUpdateSwimming(Entity* this) {
     }
     if (this->direction & DIR_NOT_MOVING_CHECK) {
         if ((gRoomTransition.frameCount & 0xf) == 0) {
-            CreateRandomWaterTrace(this, 4);
+            CreateRippleFxRandom(this, 4);
         }
     } else {
         if ((gRoomTransition.frameCount & 7) == 0) {
-            CreateWaterTrace(this);
+            CreateRippleFx(this);
         }
     }
 }
@@ -3228,7 +3209,7 @@ void sub_0807B178(PlayerEntity* this) {
 void sub_0807B1A8(PlayerEntity* this) {
     gUnk_0811C298[this->unk_6e](this);
     if ((gRoomTransition.frameCount & 7) == 0) {
-        CreateSparkle(super);
+        CreateSparkleFx(super);
     }
 }
 
@@ -3839,18 +3820,18 @@ void LoadRoomTileSet(void) {
     MemFill16(0xffff, gMapTop.tileTypes, 0x1000);
     gMapTop.tileTypes[0] = 0;
 
-    if ((void*)gRoomControls.tileSet != (gArea.pCurrentRoomInfo)->tileSet) {
-        gRoomControls.tileSet = (u32)(gArea.pCurrentRoomInfo)->tileSet;
-        LoadMapData((gArea.pCurrentRoomInfo)->tileSet);
+    if ((void*)gRoomControls.tileSet != gArea.pCurrentRoomInfo->tileSet) {
+        gRoomControls.tileSet = (u32)gArea.pCurrentRoomInfo->tileSet;
+        LoadMapData(gArea.pCurrentRoomInfo->tileSet);
     }
 
-    LoadMapData((gArea.pCurrentRoomInfo)->tiles);
+    LoadMapData(gArea.pCurrentRoomInfo->tiles);
     paletteBuffer = gPaletteBuffer;
     MemCopy(&paletteBuffer[0x30], &paletteBuffer[0x150], 0x20);
-    gUsedPalettes |= 0x200000;
+    USE_PALETTE(21);
 
-    if ((gArea.pCurrentRoomInfo)->bg_anim != NULL) {
-        LoadBgAnimations((gArea.pCurrentRoomInfo)->bg_anim);
+    if (gArea.pCurrentRoomInfo->bg_anim != NULL) {
+        LoadBgAnimations(gArea.pCurrentRoomInfo->bg_anim);
     }
 
     tileTypes = gMapBottom.tileTypes;

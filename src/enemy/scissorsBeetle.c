@@ -6,7 +6,11 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "entity.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

@@ -1,8 +1,7 @@
+#include "affine.h"
 #include "global.h"
-#include "structures.h"
 #include "main.h"
 #include "room.h"
-#include "screen.h"
 
 extern u32 gFrameObjLists[];
 

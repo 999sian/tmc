@@ -1,9 +1,8 @@
 #include "global.h"
 #include "common.h"
-#include "structures.h"
-#include "functions.h"
 #include "asm.h"
 #include "enemy.h"
+#include "effects.h"
 #include "message.h"
 #include "fileselect.h"
 
@@ -741,7 +740,7 @@ void sub_0805F918(u32 idx, u32 idx2, void* dest) {
             idx3++;
         }
     }
-    LoadResourceAsync((const void*)&gUnk_02036AD8, (u32)dest, 0xe0);
+    LoadResourceAsync(&gUnk_02036AD8, dest, 0xe0);
 }
 
 u32 sub_0805F9A0(u32 r0) {

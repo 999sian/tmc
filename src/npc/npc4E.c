@@ -6,17 +6,22 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "game.h"
 #include "hitbox.h"
 #include "item.h"
 #include "kinstone.h"
 #include "npc.h"
 #include "object.h"
+#include "common.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
 #include "screenTransitions.h"
 #include "sound.h"
 #include "tiles.h"
+#include "scroll.h"
+#include "script.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -35,7 +40,7 @@ extern void script_MinishVillageObjectRightStoneOpening; // Cutscene data type?
 
 const Hitbox gUnk_08114154;
 const InteractCollisionData gNpc4ECollisionData[];
-const ScreenTransitionData* const gNpc4ETransitions[];
+const Transition* const gNpc4ETransitions[];
 const u8 gNpc4ETransitionTypes[];
 const u16 gUnk_081141F4[];
 
@@ -62,7 +67,7 @@ void NPC4E_ChangeInteractableHitbox(Entity* this, ScriptExecutionContext* contex
 }
 
 void NPC4E_DoScreenTransition(Entity* this, ScriptExecutionContext* context) {
-    sub_0808091C(gNpc4ETransitions[context->intVariable], gNpc4ETransitionTypes[context->intVariable]);
+    DoExitTransitionWithType(gNpc4ETransitions[context->intVariable], gNpc4ETransitionTypes[context->intVariable]);
 }
 
 u8 NPC4E_GetKinstoneId(Entity* this) {
@@ -255,8 +260,8 @@ const InteractCollisionData gNpc4ECollisionData[] = { //
 #endif
 };
 
-// Array of pointers to ScreenTransitionData
-const ScreenTransitionData* const gNpc4ETransitions[] = { //
+// Array of pointers to Transition
+const Transition* const gNpc4ETransitions[] = { //
     &gUnk_0813AB6C, &gUnk_0813ABBC, &gUnk_0813ABE4, &gUnk_0813ABF8, &gUnk_0813AC0C, &gUnk_0813AC20,
     &gUnk_0813AC5C, &gUnk_0813AC70, &gUnk_0813AC84, &gUnk_0813AC98, &gUnk_0813ACAC, &gUnk_0813ACC0,
     &gUnk_0813ACD4, &gUnk_0813ACE8, &gUnk_0813AC5C, &gUnk_0813ACFC

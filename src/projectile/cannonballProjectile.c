@@ -6,8 +6,11 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "effects.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
+#include "asm.h"
 
 extern void (*const CannonballProjectile_Functions[])(Entity*);
 extern void (*const CannonballProjectile_Actions[])(Entity*);
@@ -65,13 +68,13 @@ void CannonballProjectile_Action2(Entity* this) {
 bool32 sub_080AB5F4(Entity* this) {
     switch (GetTileHazardType(this)) {
         case 1:
-            CreatePitFallFX(this);
+            CreatePitFallFx(this);
             return TRUE;
         case 2:
-            CreateDrownFX(this);
+            CreateDrownFx(this);
             return TRUE;
         case 3:
-            CreateLavaDrownFX(this);
+            CreateLavaDrownFx(this);
             return TRUE;
     }
     return FALSE;

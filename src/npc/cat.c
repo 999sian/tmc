@@ -5,11 +5,14 @@
  * @brief Cat NPC
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
-#include "functions.h"
 #include "message.h"
 #include "npc.h"
 #include "save.h"
+#include "physics.h"
+#include "manager.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

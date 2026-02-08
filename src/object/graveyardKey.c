@@ -9,10 +9,11 @@
 #include "effects.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "item.h"
 #include "player.h"
 #include "sound.h"
+#include "scroll.h"
 
 typedef struct _struct_gUnk_08123FB0 {
     void (*const funcEnt)(Entity*);

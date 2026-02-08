@@ -6,8 +6,14 @@
  */
 #include "object/pushableFurniture.h"
 
-#include "functions.h"
 #include "tiles.h"
+#include "flags.h"
+#include "sound.h"
+#include "asm.h"
+#include "room.h"
+#include "player.h"
+#include "physics.h"
+#include "map.h"
 
 extern const s16 gUnk_080B4488[];
 
@@ -73,7 +79,7 @@ void PushableFurniture_Init(PushableFurnitureEntity* this) {
                     this->unk_7e = (s8)super->subtimer + super->x.HALF_U.HI;
                 }
                 if (super->parent == NULL) {
-                    if (CheckFlags(this->unk_86)) {
+                    if (CheckFlags(this->flag)) {
                         condition++;
                     }
                 } else {
@@ -228,7 +234,7 @@ bool32 sub_0808FC5C(PushableFurnitureEntity* this) {
 
         this->unk_81 = 1;
         if (super->parent == NULL) {
-            SetFlag((u32)this->unk_86);
+            SetFlag((u32)this->flag);
         } else {
             if ((this->unk_82 & 0x80) != 0) {
                 puVar5 = super->parent->spriteAnimation + 2;

@@ -6,8 +6,14 @@
  */
 #include "area.h"
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "roomid.h"
 #include "screen.h"
 
@@ -118,12 +124,8 @@ void (*const gUnk_080CED74[])(MazaalHeadEntity*) = {
     sub_08034BA0,
 };
 const s8 gUnk_080CED84[] = { 0x0d, 0x10, -0xd, 0x10 };
-const ScreenTransitionData gUnk_080CED88 = {
-    1, { 0, 0, 0, 0 }, 0x88, 0xf8, 0, AREA_INNER_MAZAAL, ROOM_INNER_MAZAAL_PHASE_1, 1, 0, 0, 0
-};
-const ScreenTransitionData gUnk_080CED9C = {
-    1, { 0, 0, 0, 0 }, 0x88, 0xf8, 0, AREA_INNER_MAZAAL, ROOM_INNER_MAZAAL_MAIN, 1, 0, 0, 0
-};
+const Transition gUnk_080CED88 = { 1, 0, 0, 0x88, 0xf8, 0, AREA_INNER_MAZAAL, ROOM_INNER_MAZAAL_PHASE_1, 1, 0, 0, 0 };
+const Transition gUnk_080CED9C = { 1, 0, 0, 0x88, 0xf8, 0, AREA_INNER_MAZAAL, ROOM_INNER_MAZAAL_MAIN, 1, 0, 0, 0 };
 
 void MazaalHead(MazaalHeadEntity* this) {
     MazaalHead_Functions[GetNextFunction(super)](this);

@@ -5,8 +5,12 @@
  * @brief Ball Chain Soldier enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
+#include "room.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

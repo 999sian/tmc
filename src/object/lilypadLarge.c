@@ -6,12 +6,19 @@
  */
 #include "object/lilypadLarge.h"
 #include "area.h"
-#include "functions.h"
 #include "item.h"
 #include "object.h"
-#include "map.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "scroll.h"
 
+extern u32 sub_080040A2(Entity*);
 extern s8 gUnk_08126EE4[];
 
 void LilypadLarge_Action1(LilypadLargeEntity*);
@@ -119,7 +126,7 @@ void LilypadLarge_Action1(LilypadLargeEntity* this) {
             if (super->subtimer == 0) {
                 super->subtimer = 4;
                 while (super->subtimer != 0) {
-                    sub_080A2AF4(super, 8, 10);
+                    CreateLargeRippleFxRandom(super, 8, 10);
                     super->subtimer--;
                 }
                 super->subtimer = 1;
@@ -194,7 +201,7 @@ void LilypadLarge_Action1(LilypadLargeEntity* this) {
         }
 
         if ((gRoomTransition.frameCount & 0xfU) == 0) {
-            CreateLargeWaterTrace(super);
+            CreateLargeRippleFx(super);
         }
         sVar10 = super->x.WORD + this->unk_6c;
         uVar4 = super->y.WORD + this->unk_70;
@@ -312,7 +319,7 @@ void LilypadLarge_Action1(LilypadLargeEntity* this) {
     } else {
     end:
         if ((gRoomTransition.frameCount & 0x1fU) == 0) {
-            sub_080A2AF4(super, 8, 10);
+            CreateLargeRippleFxRandom(super, 8, 10);
         }
     }
     sub_08085F48(this);
@@ -403,7 +410,7 @@ void sub_08085B40(LilypadLargeEntity* this) {
             super->action = 1;
             super->subtimer = 4;
             while (super->subtimer != 0) {
-                sub_080A2AF4(super, 8, 10);
+                CreateLargeRippleFxRandom(super, 8, 10);
                 super->subtimer--;
             }
             super->subtimer = 1;
@@ -498,8 +505,8 @@ void sub_08085D60(LilypadLargeEntity* this) {
                     tmpY = gUnk_08120638[tmp + 1];
                     if (GetCollisionDataRelativeTo(super, tmpX, tmpY) == COLLISION_DATA_255) {
 
-                        if (sub_080806BC((super->x.HALF.HI - gRoomControls.origin_x) + tmpX,
-                                         (super->y.HALF.HI - gRoomControls.origin_y) + tmpY, r4, 5) == 0) {
+                        if (DoApplicableTransition((super->x.HALF.HI - gRoomControls.origin_x) + tmpX,
+                                                   (super->y.HALF.HI - gRoomControls.origin_y) + tmpY, r4, 5) == 0) {
                             if (sub_0807BD14(&gPlayerEntity.base, r4 >> 3) != 0) {
                                 super->direction = r4;
                                 sub_08085E74(this);

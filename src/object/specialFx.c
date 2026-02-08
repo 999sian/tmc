@@ -5,8 +5,15 @@
  * @brief Special FX object
  */
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "script.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
+#include "item.h"
 
 typedef struct {
     Entity base;

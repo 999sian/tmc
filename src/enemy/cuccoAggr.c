@@ -5,8 +5,14 @@
  * @brief Cucco Aggr enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
 #include "entity.h"
-#include "functions.h"
+#include "room.h"
+#include "player.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

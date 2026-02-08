@@ -7,11 +7,12 @@
 #include "manager/diggingCaveEntranceManager.h"
 #include "area.h"
 #include "asm.h"
-#include "functions.h"
 #include "player.h"
 #include "room.h"
 #include "scroll.h"
 #include "tiles.h"
+#ifndef EU
+#endif
 
 void DiggingCaveEntranceManager_Main(DiggingCaveEntranceManager*);
 void DiggingCaveEntranceManager_Init(DiggingCaveEntranceManager*);

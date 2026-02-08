@@ -5,8 +5,12 @@
  * @brief Gibdo enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     Entity base;

@@ -4,9 +4,17 @@
  *
  * @brief Barrel Spiderweb object
  */
-#include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+
+#include "player.h"
 
 void BarrelSpiderweb_Init(Entity*);
 void BarrelSpiderweb_Action1(Entity*);

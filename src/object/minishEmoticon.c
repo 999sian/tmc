@@ -5,7 +5,8 @@
  * @brief Minish Emoticon object
  */
 #include "entity.h"
-#include "functions.h"
+#include "vram.h"
+#include "player.h"
 
 void MinishEmoticon_Init(Entity*);
 void MinishEmoticon_Action1(Entity*);

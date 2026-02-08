@@ -143,4 +143,6 @@ typedef struct {
     u32 mapDataOffset;
 } DungeonLayout;
 
+extern void sub_0801E104(void);
+
 #endif // COMMON_H

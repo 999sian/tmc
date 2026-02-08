@@ -8,14 +8,16 @@
 #include "area.h"
 #include "asm.h"
 #include "common.h"
-#include "fileselect.h"
-#include "functions.h"
 #include "main.h"
 #include "room.h"
 #include "screen.h"
 #include "sound.h"
+#include "game.h"
+#include "manager/staticBackgroundManager.h"
+#include "player.h"
+#include "fade.h"
 
-void sub_080595E4(WeatherChangeManager*);
+void WeatherChangeManager_OnEnterRoom(WeatherChangeManager*);
 void sub_08059608(WeatherChangeManager*);
 void sub_08059690(WeatherChangeManager*);
 void sub_080596E0(WeatherChangeManager*);
@@ -45,14 +47,14 @@ void WeatherChangeManager_Main(WeatherChangeManager* this) {
             this->unk_22 = 5;
         }
         gRoomVars.graphicsGroups[0] = 0xFF;
-        RegisterTransitionManager(this, sub_080595E4, 0);
+        RegisterTransitionHandler(this, WeatherChangeManager_OnEnterRoom, NULL);
     }
     sub_08059608(this);
     sub_08059690(this);
     sub_080596E0(this);
 }
 
-void sub_080595E4(WeatherChangeManager* this) {
+void WeatherChangeManager_OnEnterRoom(WeatherChangeManager* this) {
     gRoomVars.graphicsGroups[0] = 0xFF;
     sub_08059690(this);
     sub_080596E0(this);
@@ -140,7 +142,7 @@ void sub_080596E0(WeatherChangeManager* this) {
                 break;
             case 4:
                 MemClear(gBG3Buffer, 0x800);
-                LoadResourceAsync(gBG3Buffer, 0x600e800, 0x800);
+                LoadResourceAsync(gBG3Buffer, BG_SCREEN_ADDR(29), BG_SCREEN_SIZE);
                 break;
             case 5:
                 gMapTop.bgSettings = &gScreen.bg1;

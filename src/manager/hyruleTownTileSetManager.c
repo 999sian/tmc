@@ -8,106 +8,131 @@
 #include "area.h"
 #include "asm.h"
 #include "flags.h"
-#include "functions.h"
 #include "main.h"
 #include "room.h"
 #include "tiles.h"
+#include "game.h"
+#include "assets/gfx_offsets.h"
+#include "player.h"
 
-void sub_08059A58(HyruleTownTileSetManager*);
-void sub_08059A2C(HyruleTownTileSetManager*);
+void HyruleTownTileSetManager_UpdateLoadGfxGroups(HyruleTownTileSetManager*);
+void HyruleTownTileSetManager_OnEnterRoom(HyruleTownTileSetManager*);
 
-static const u16 gUnk_08108398[] = { 0x0, 0x0, 0x0, 0x3f0, 0x200, 0x1, 0x0, 0x280, 0x3f0, 0x140, 0xff };
-static const u16 gUnk_081083AE[] = { 0x2, 0x0, 0x0, 0x180, 0x3c0, 0x3, 0x280, 0x0, 0x170, 0x3c0, 0xff };
-static const u16 gUnk_081083C4[] = { 0x5, 0x130, 0x1b0, 0x190, 0x140, 0x4, 0x0, 0x0, 0x3f0, 0x3c0, 0xff };
-static const u16 gUnk_081083DA[] = { 0x0, 0x0, 0x0, 0x190, 0x1d0, 0x1, 0x0, 0x2a0, 0x190, 0x120, 0xff, 0xff };
-static const u16 gUnk_081083F2[] = { 0x5, 0x0, 0x1b0, 0x190, 0x140, 0x4, 0x0, 0x0, 0x190, 0x3c0, 0xff };
+// clang-format off
+static const u16 gHyruleTownTileSetManager_regions0[] = {
+    0, 0x000, 0x000, 0x3f0, 0x200,
+    1, 0x000, 0x280, 0x3f0, 0x140,
+    0xff
+};
+static const u16 gHyruleTownTileSetManager_regions1[] = {
+    2, 0x000, 0x000, 0x180, 0x3c0,
+    3, 0x280, 0x000, 0x170, 0x3c0,
+    0xff
+};
+static const u16 gHyruleTownTileSetManager_regions2[] = {
+    5, 0x130, 0x1b0, 0x190, 0x140,
+    4, 0x000, 0x000, 0x3f0, 0x3c0,
+    0xff
+};
+static const u16 gHyruleTownTileSetManager_festivalRegions0[] = {
+    0, 0x000, 0x000, 0x190, 0x1d0,
+    1, 0x000, 0x2a0, 0x190, 0x120,
+    0xff
+};
+static const u16 gHyruleTownTileSetManager_festivalRegions1[] = {
+    0xff
+};
+static const u16 gHyruleTownTileSetManager_festivalRegions2[] = {
+    5, 0x000, 0x1b0, 0x190, 0x140,
+    4, 0x000, 0x000, 0x190, 0x3c0,
+    0xff
+};
+// clang-format on
 
-void sub_08059CC0(u32, u32);
-void sub_08059B18(void);
+void HyruleTownTileSetManager_LoadGfxGroup(u32, u32);
+void HyruleTownTileSetManager_BuildSecondOracleHouse(void);
 
-bool32 sub_08059C8C(HyruleTownTileSetManager*, u32, u8*, const u16*);
+bool32 HyruleTownTileSetManager_UpdateRoomGfxGroup(HyruleTownTileSetManager*, u32, u8*, const u16*);
 
 extern u32 gUnk_086E8460;
 
 typedef struct {
-    u32 field_0x0;
-    u32 field_0x4;
-    u32 field_0x8;
-    u32 field_0xc;
-} Unknown;
+    u32 gfx1;
+    void* dest1;
+    u32 gfx2;
+    void* dest2;
+} HyruleTownTileSetManagerGfxInfo;
 
-static const Unknown gUnk_08108408[] = {
-#ifdef EU
-    { 0x139860, 0x6000000, 0x13f860, 0x6008000 }, { 0x13c860, 0x6000000, 0x142860, 0x6008000 },
-    { 0x13a860, 0x6001000, 0x140860, 0x6009000 }, { 0x13d860, 0x6001000, 0x143860, 0x6009000 },
-    { 0x13b860, 0x6002000, 0x141860, 0x600a000 }, { 0x13e860, 0x6002000, 0x144860, 0x600a000 }
-#else
-    { 0x1395e0, 0x6000000, 0x13f5e0, 0x6008000 }, { 0x13c5e0, 0x6000000, 0x1425e0, 0x6008000 },
-    { 0x13a5e0, 0x6001000, 0x1405e0, 0x6009000 }, { 0x13d5e0, 0x6001000, 0x1435e0, 0x6009000 },
-    { 0x13b5e0, 0x6002000, 0x1415e0, 0x600a000 }, { 0x13e5e0, 0x6002000, 0x1445e0, 0x600a000 }
-#endif
+static const HyruleTownTileSetManagerGfxInfo gHyruleTownTileSetManagerGfxInfos[] = {
+    { offset_gUnk_086D4460 + 0x8000, BG_SCREEN_ADDR(0), offset_gUnk_086D4460 + 0xE000, BG_SCREEN_ADDR(16) },
+    { offset_gUnk_086D4460 + 0xB000, BG_SCREEN_ADDR(0), offset_gUnk_086D4460 + 0x11000, BG_SCREEN_ADDR(16) },
+    { offset_gUnk_086D4460 + 0x9000, BG_SCREEN_ADDR(2), offset_gUnk_086D4460 + 0xF000, BG_SCREEN_ADDR(18) },
+    { offset_gUnk_086D4460 + 0xC000, BG_SCREEN_ADDR(2), offset_gUnk_086D4460 + 0x12000, BG_SCREEN_ADDR(18) },
+    { offset_gUnk_086D4460 + 0xA000, BG_SCREEN_ADDR(4), offset_gUnk_086D4460 + 0x10000, BG_SCREEN_ADDR(20) },
+    { offset_gUnk_086D4460 + 0xD000, BG_SCREEN_ADDR(4), offset_gUnk_086D4460 + 0x13000, BG_SCREEN_ADDR(20) }
 };
-static const Unknown gUnk_08108468[] = {
-#ifdef EU
-    { 0x146060, 0x6000000, 0x14c060, 0x6008000 }, { 0x149060, 0x6000000, 0x14f060, 0x6008000 },
-    { 0x147060, 0x6001000, 0x14d060, 0x6009000 }, { 0x14a060, 0x6001000, 0x150060, 0x6009000 },
-    { 0x148060, 0x6002000, 0x14e060, 0x600a000 }, { 0x14b060, 0x6002000, 0x151060, 0x600a000 },
-#else
-    { 0x145de0, 0x6000000, 0x14bde0, 0x6008000 }, { 0x148de0, 0x6000000, 0x14ede0, 0x6008000 },
-    { 0x146de0, 0x6001000, 0x14cde0, 0x6009000 }, { 0x149de0, 0x6001000, 0x14fde0, 0x6009000 },
-    { 0x147de0, 0x6002000, 0x14dde0, 0x600a000 }, { 0x14ade0, 0x6002000, 0x150de0, 0x600a000 },
-#endif
+static const HyruleTownTileSetManagerGfxInfo gHyruleTownTileSetManagerGfxInfosFestival[] = {
+    { offset_gUnk_086E8460 + 0x800, BG_SCREEN_ADDR(0), offset_gUnk_086E8460 + 0x6800, BG_SCREEN_ADDR(16) },
+    { offset_gUnk_086E8460 + 0x3800, BG_SCREEN_ADDR(0), offset_gUnk_086E8460 + 0x9800, BG_SCREEN_ADDR(16) },
+    { offset_gUnk_086E8460 + 0x1800, BG_SCREEN_ADDR(2), offset_gUnk_086E8460 + 0x7800, BG_SCREEN_ADDR(18) },
+    { offset_gUnk_086E8460 + 0x4800, BG_SCREEN_ADDR(2), offset_gUnk_086E8460 + 0xA800, BG_SCREEN_ADDR(18) },
+    { offset_gUnk_086E8460 + 0x2800, BG_SCREEN_ADDR(4), offset_gUnk_086E8460 + 0x8800, BG_SCREEN_ADDR(20) },
+    { offset_gUnk_086E8460 + 0x5800, BG_SCREEN_ADDR(4), offset_gUnk_086E8460 + 0xB800, BG_SCREEN_ADDR(20) },
 };
 extern const u8 gGlobalGfxAndPalettes[];
 
 void HyruleTownTileSetManager_Main(HyruleTownTileSetManager* this) {
     if (super->action == 0) {
         super->action = 1;
-        this->field_0x22 = 0xff;
-        this->field_0x21 = 0xff;
-        this->field_0x20 = 0xff;
-        RegisterTransitionManager(this, sub_08059A2C, NULL);
+        this->gfxGroup2 = 0xff;
+        this->gfxGroup1 = 0xff;
+        this->gfxGroup0 = 0xff;
+        RegisterTransitionHandler(this, HyruleTownTileSetManager_OnEnterRoom, NULL);
         SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
     }
-    sub_08059A58(this);
+    HyruleTownTileSetManager_UpdateLoadGfxGroups(this);
 }
 
-void sub_08059A2C(HyruleTownTileSetManager* this) {
+void HyruleTownTileSetManager_OnEnterRoom(HyruleTownTileSetManager* this) {
     gRoomVars.graphicsGroups[2] = 0xff;
     gRoomVars.graphicsGroups[1] = 0xff;
     gRoomVars.graphicsGroups[0] = 0xff;
-    this->field_0x22 = 0xff;
-    this->field_0x21 = 0xff;
-    this->field_0x20 = 0xff;
-    sub_08059A58(this);
+    this->gfxGroup2 = 0xff;
+    this->gfxGroup1 = 0xff;
+    this->gfxGroup0 = 0xff;
+    HyruleTownTileSetManager_UpdateLoadGfxGroups(this);
 }
 
-void sub_08059A58(HyruleTownTileSetManager* this) {
+void HyruleTownTileSetManager_UpdateLoadGfxGroups(HyruleTownTileSetManager* this) {
     if (gRoomControls.area != AREA_FESTIVAL_TOWN) {
-        if (sub_08059C8C(this, 0, &this->field_0x20, gUnk_08108398) != 0) {
-            sub_08059CC0(0, (u32)this->field_0x20);
+        if (HyruleTownTileSetManager_UpdateRoomGfxGroup(this, 0, &this->gfxGroup0,
+                                                        gHyruleTownTileSetManager_regions0) != 0) {
+            HyruleTownTileSetManager_LoadGfxGroup(0, this->gfxGroup0);
         }
-        if (sub_08059C8C(this, 1, &this->field_0x21, gUnk_081083AE) != 0) {
-            sub_08059CC0(1, this->field_0x21);
-            if (this->field_0x21 == 2) {
-                sub_08059B18();
+        if (HyruleTownTileSetManager_UpdateRoomGfxGroup(this, 1, &this->gfxGroup1,
+                                                        gHyruleTownTileSetManager_regions1) != 0) {
+            HyruleTownTileSetManager_LoadGfxGroup(1, this->gfxGroup1);
+            if (this->gfxGroup1 == 2) {
+                HyruleTownTileSetManager_BuildSecondOracleHouse();
             }
         }
-        if (sub_08059C8C(this, 2, &this->field_0x22, gUnk_081083C4) != 0) {
-            sub_08059CC0(2, (u32)this->field_0x22);
+        if (HyruleTownTileSetManager_UpdateRoomGfxGroup(this, 2, &this->gfxGroup2,
+                                                        gHyruleTownTileSetManager_regions2) != 0) {
+            HyruleTownTileSetManager_LoadGfxGroup(2, this->gfxGroup2);
         }
     } else {
-        if (sub_08059C8C(this, 0, &this->field_0x20, gUnk_081083DA) != 0) {
-            sub_08059CC0(0, (u32)this->field_0x20);
+        if (HyruleTownTileSetManager_UpdateRoomGfxGroup(this, 0, &this->gfxGroup0,
+                                                        gHyruleTownTileSetManager_festivalRegions0) != 0) {
+            HyruleTownTileSetManager_LoadGfxGroup(0, this->gfxGroup0);
         }
-        if (sub_08059C8C(this, 2, &this->field_0x22, gUnk_081083F2) != 0) {
-            sub_08059CC0(2, (u32)this->field_0x22);
+        if (HyruleTownTileSetManager_UpdateRoomGfxGroup(this, 2, &this->gfxGroup2,
+                                                        gHyruleTownTileSetManager_festivalRegions2) != 0) {
+            HyruleTownTileSetManager_LoadGfxGroup(2, this->gfxGroup2);
         }
     }
 }
 
-#define COMMON(tmp2, tmp1) (((tmp2) >> 4 & 0x3f) | (((tmp1) + 0x188U) >> 4 & 0x3f) << 6)
-void sub_08059B18(void) {
+void HyruleTownTileSetManager_BuildSecondOracleHouse(void) {
     u32 loopVar;
     u32 innerLoopVar;
 
@@ -115,25 +140,25 @@ void sub_08059B18(void) {
         for (loopVar = 0; loopVar < 4; ++loopVar) {
             for (innerLoopVar = 0; innerLoopVar < 4; ++innerLoopVar) {
                 SetTileByIndex(loopVar * 0x10 + TILE_TYPE_1195 + innerLoopVar,
-                               COMMON(0x28 + 0x10 * innerLoopVar, loopVar * 0x10), 1);
+                               TILE_LOCAL(0x28 + innerLoopVar * 0x10, 0x188 + loopVar * 0x10), 1);
             }
         }
 
         for (loopVar = 0; loopVar < 3; ++loopVar) {
             for (innerLoopVar = 0; innerLoopVar < 4; ++innerLoopVar) {
                 SetTileByIndex(loopVar * 0x10 + TILE_TYPE_1088 + innerLoopVar,
-                               COMMON(0x28 + 0x10 * innerLoopVar, loopVar * 0x10), 2);
+                               TILE_LOCAL(0x28 + innerLoopVar * 0x10, 0x188 + loopVar * 0x10), 2);
             }
         }
         SetTileByIndex(TILE_TYPE_214, TILE_POS(2, 23), LAYER_TOP);
         SetTileByIndex(TILE_TYPE_215, TILE_POS(3, 23), LAYER_TOP);
-        LoadResourceAsync(&gUnk_086E8460, 0x6001800, 0x800);
+        LoadResourceAsync(&gUnk_086E8460, BG_SCREEN_ADDR(3), BG_SCREEN_SIZE);
     } else {
         if (CheckGlobalFlag(TATEKAKE_TOCHU) != 0) {
             for (loopVar = 0; loopVar < 5; ++loopVar) {
                 for (innerLoopVar = 0; innerLoopVar < 4; ++innerLoopVar) {
                     SetTileByIndex(loopVar * 0x10 + TILE_TYPE_1190 + innerLoopVar,
-                                   COMMON(0x28 + 0x10 * innerLoopVar, loopVar * 0x10), 1);
+                                   TILE_LOCAL(0x28 + innerLoopVar * 0x10, 0x188 + loopVar * 0x10), 1);
                 }
             }
             SetTileByIndex(TILE_TYPE_1092, TILE_POS(2, 24), LAYER_TOP);
@@ -144,55 +169,56 @@ void sub_08059B18(void) {
     }
 }
 
-bool32 sub_08059C8C(HyruleTownTileSetManager* this, u32 param_2, u8* param_3, const u16* param_4) {
-    bool32 bVar2;
-
-    *param_3 = CheckRegionsOnScreen(param_4);
-    if ((*param_3 != 0xff) && (gRoomVars.graphicsGroups[param_2] != *param_3)) {
-        gRoomVars.graphicsGroups[param_2] = *param_3;
+bool32 HyruleTownTileSetManager_UpdateRoomGfxGroup(HyruleTownTileSetManager* this, u32 gfxIndex, u8* pGfxGroup,
+                                                   const u16* regions) {
+    *pGfxGroup = CheckRegionsOnScreen(regions);
+    if ((*pGfxGroup != 0xff) && (gRoomVars.graphicsGroups[gfxIndex] != *pGfxGroup)) {
+        gRoomVars.graphicsGroups[gfxIndex] = *pGfxGroup;
         return TRUE;
-    } else {
-        return FALSE;
     }
+    return FALSE;
 }
 
-void sub_08059CC0(u32 param_1, u32 param_2) {
-    const Unknown* unknown;
+void HyruleTownTileSetManager_LoadGfxGroup(u32 gfxIndex, u32 gfxGroup) {
+    const HyruleTownTileSetManagerGfxInfo* gfxInfo;
 
-    gRoomVars.graphicsGroups[param_1] = param_2;
+    gRoomVars.graphicsGroups[gfxIndex] = gfxGroup;
     if (gRoomControls.area != AREA_FESTIVAL_TOWN) {
-        unknown = &gUnk_08108408[param_2];
+        gfxInfo = &gHyruleTownTileSetManagerGfxInfos[gfxGroup];
     } else {
-        unknown = &gUnk_08108468[param_2];
+        gfxInfo = &gHyruleTownTileSetManagerGfxInfosFestival[gfxGroup];
     }
-    LoadResourceAsync((void*)&gGlobalGfxAndPalettes + unknown->field_0x0, unknown->field_0x4, 0x1000);
-    LoadResourceAsync((void*)&gGlobalGfxAndPalettes + unknown->field_0x8, unknown->field_0xc, 0x1000);
+    LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo->gfx1], gfxInfo->dest1, BG_SCREEN_SIZE * 2);
+    LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo->gfx2], gfxInfo->dest2, BG_SCREEN_SIZE * 2);
 }
 
 void TryLoadPrologueHyruleTown(void) {
-    u32 tmp;
+    u32 gfxGroup;
 
     if (gRoomControls.area != AREA_FESTIVAL_TOWN) {
-        tmp = CheckRegionsOnScreen(gUnk_08108398);
-        if (tmp != 0xff) {
-            sub_08059CC0(0, tmp);
+        gfxGroup = CheckRegionsOnScreen(gHyruleTownTileSetManager_regions0);
+        if (gfxGroup != 0xff) {
+            HyruleTownTileSetManager_LoadGfxGroup(0, gfxGroup);
         }
-        tmp = CheckRegionsOnScreen(gUnk_081083AE);
-        if ((tmp != 0xff) && (sub_08059CC0(1, tmp), tmp == 2)) {
-            sub_08059B18();
+        gfxGroup = CheckRegionsOnScreen(gHyruleTownTileSetManager_regions1);
+        if (gfxGroup != 0xff) {
+            HyruleTownTileSetManager_LoadGfxGroup(1, gfxGroup);
+            if (gfxGroup == 2) {
+                HyruleTownTileSetManager_BuildSecondOracleHouse();
+            }
         }
-        tmp = CheckRegionsOnScreen(gUnk_081083C4);
-        if (tmp != 0xff) {
-            sub_08059CC0(2, tmp);
+        gfxGroup = CheckRegionsOnScreen(gHyruleTownTileSetManager_regions2);
+        if (gfxGroup != 0xff) {
+            HyruleTownTileSetManager_LoadGfxGroup(2, gfxGroup);
         }
     } else {
-        tmp = CheckRegionsOnScreen(gUnk_081083DA);
-        if (tmp != 0xff) {
-            sub_08059CC0(0, tmp);
+        gfxGroup = CheckRegionsOnScreen(gHyruleTownTileSetManager_festivalRegions0);
+        if (gfxGroup != 0xff) {
+            HyruleTownTileSetManager_LoadGfxGroup(0, gfxGroup);
         }
-        tmp = CheckRegionsOnScreen(gUnk_081083F2);
-        if (tmp != 0xff) {
-            sub_08059CC0(2, tmp);
+        gfxGroup = CheckRegionsOnScreen(gHyruleTownTileSetManager_festivalRegions2);
+        if (gfxGroup != 0xff) {
+            HyruleTownTileSetManager_LoadGfxGroup(2, gfxGroup);
         }
     }
 }

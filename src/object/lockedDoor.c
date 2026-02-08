@@ -4,16 +4,20 @@
  *
  * @brief Looked Door object
  */
+#include "object/lockedDoor.h"
 #include "asm.h"
-#include "common.h"
+#include "room.h"
 #include "effects.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "game.h"
 #include "hitbox.h"
 #include "sound.h"
 #include "tiles.h"
+#include "vram.h"
+#include "player.h"
+#include "color.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -25,8 +29,8 @@ typedef struct {
     /*0x78*/ u8 unused2[6];
     /*0x7e*/ u8 unk_7e;
     /*0x7f*/ u8 unused3[5];
-    /*0x84*/ u16 unk_84;
-    /*0x86*/ u16 unk_86;
+    /*0x84*/ u16 flags;
+    /*0x86*/ u16 flag;
 } LockedDoorEntity;
 
 void LockedDoor_Init(LockedDoorEntity* this);
@@ -102,7 +106,7 @@ const u8 gLockedDoorInteractDirections[] = {
 };
 
 void LockedDoor_Init(LockedDoorEntity* this) {
-    if (this->unk_84 != 0xFFFF && CheckFlags(this->unk_84)) {
+    if (this->flags != 0xFFFF && CheckFlags(this->flags)) {
         DeleteThisEntity();
     }
     if (!sub_080837B0(this))
@@ -120,7 +124,7 @@ void LockedDoor_Init(LockedDoorEntity* this) {
     this->unk_74 = GetTileIndex(this->unk_76, super->collisionLayer);
     switch (super->type2) {
         case 0:
-            if (!CheckFlags(this->unk_86)) {
+            if (!CheckFlags(this->flag)) {
                 if (super->type & 0x10) {
                     super->action = 3;
                 } else {
@@ -132,14 +136,14 @@ void LockedDoor_Init(LockedDoorEntity* this) {
             }
             break;
         case 1:
-            if (!CheckFlags(this->unk_86)) {
+            if (!CheckFlags(this->flag)) {
                 sub_08083638(this);
             } else {
                 sub_080836A0(this);
             }
             break;
         case 2:
-            if (!CheckFlags(this->unk_86)) {
+            if (!CheckFlags(this->flag)) {
                 super->frameIndex |= 4;
                 sub_080836DC(super, this->unk_7e, this->unk_76);
                 if (!AreaIsDungeon()) {
@@ -209,10 +213,10 @@ void LockedDoor_Action5(LockedDoorEntity* this) {
 
 void LockedDoor_Action6(LockedDoorEntity* this) {
     if (super->type2 == 0) {
-        if (!CheckFlags(this->unk_86))
+        if (!CheckFlags(this->flag))
             return;
     } else {
-        if (CheckFlags(this->unk_86))
+        if (CheckFlags(this->flag))
             return;
     }
     sub_08083658(this);
@@ -220,22 +224,22 @@ void LockedDoor_Action6(LockedDoorEntity* this) {
 
 void LockedDoor_Action7(LockedDoorEntity* this) {
     if (super->type2 == 0) {
-        if (CheckFlags(this->unk_86))
+        if (CheckFlags(this->flag))
             return;
     } else {
-        if (!CheckFlags(this->unk_86))
+        if (!CheckFlags(this->flag))
             return;
     }
     super->action = 3;
 }
 
 void LockedDoor_Action8(LockedDoorEntity* this) {
-    if (super->interactType == INTERACTION_NONE && !CheckFlags(this->unk_86))
+    if (super->interactType == INTERACTION_NONE && !CheckFlags(this->flag))
         return;
     super->action = 1;
     super->timer = 20;
     sub_08083658(this);
-    SetFlag(this->unk_86);
+    SetFlag(this->flag);
     ModDungeonKeys(-1);
 }
 

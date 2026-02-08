@@ -9,8 +9,10 @@
 #include "collision.h"
 #include "common.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 #include "projectile.h"
+#include "room.h"
+#include "map.h"
 
 extern s16 gUnk_080B4488[];
 

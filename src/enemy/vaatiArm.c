@@ -6,9 +6,16 @@
  */
 #include "area.h"
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "common.h"
+#include "projectile.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "roomid.h"
 
 typedef struct {
@@ -185,9 +192,7 @@ const Coords gUnk_080D13D8[] = { { .HALF = { -0x60, 0x80 } }, { .HALF = { 0x60, 
 const u8 gUnk_080D13E0[] = { 0xc, 0xe, 0x10 };
 const u8 gUnk_080D13E3[] = { 8, 9, 10, 4, 4, 5 };
 const s8 gUnk_080D13E9[] = { -8, 8 };
-const ScreenTransitionData gUnk_080D13EC = {
-    1, { 0, 0, 0, 0 }, 0x98, 0xb8, 0, AREA_VAATIS_ARMS, ROOM_VAATIS_ARMS_FIRST, 1, 0, 0, 0
-};
+const Transition gUnk_080D13EC = { 1, 0, 0, 0x98, 0xb8, 0, AREA_VAATIS_ARMS, ROOM_VAATIS_ARMS_FIRST, 1, 0, 0, 0 };
 const u16 gUnk_080D1400[][5] = {
     { 0x8000, 0x7000, 0x6000, 0x5000, 0x4000 },
     { 0x8000, -0x7000, -0x6000, -0x5000, -0x4000 },

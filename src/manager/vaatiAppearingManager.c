@@ -7,11 +7,11 @@
 #include "manager/vaatiAppearingManager.h"
 #include "area.h"
 #include "common.h"
-#include "functions.h"
 #include "game.h"
 #include "main.h"
 #include "room.h"
 #include "screen.h"
+#include "physics.h"
 
 void sub_0805D9D8(VaatiAppearingManager*);
 void VaatiAppearingManager_Action3(VaatiAppearingManager*);

@@ -4,9 +4,9 @@
  *
  * @brief Object53 object
  */
+#include "object.h"
 #include "asm.h"
-#include "entity.h"
-#include "functions.h"
+#include "effects.h"
 
 void Object53_Init(Entity*);
 void Object53_Action1(Entity*);

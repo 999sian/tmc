@@ -5,8 +5,8 @@
  * @brief Small Town Minish NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
+#include "message.h"
 #include "npc.h"
 #include "player.h"
 #include "save.h"

@@ -9,8 +9,14 @@
 #include "sound.h"
 #include "save.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "enemy.h"
 #include "message.h"
+#include "ui.h"
 
 const Wallet gWalletSizes[] = {
     { 100, 0xf060 },

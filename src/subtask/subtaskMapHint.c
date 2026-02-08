@@ -5,16 +5,13 @@
  * @brief Map Hint Subtask
  */
 #include "menu.h"
-#include "functions.h"
 #include "subtask.h"
 #include "common.h"
 #include "main.h"
 #include "sound.h"
 #include "save.h"
-#include "flags.h"
-#include "fileselect.h"
-#include "kinstone.h"
-#include "game.h"
+#include "affine.h"
+#include "fade.h"
 
 void sub_080A6438();
 

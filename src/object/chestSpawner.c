@@ -4,12 +4,20 @@
  *
  * @brief Chest Spawner object
  */
-#include "functions.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
-#include "structures.h"
+#include "script.h"
 #include "tiles.h"
+#include "manager/lightManager.h"
+#include "pauseMenu.h"
+#include "beanstalkSubtask.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -17,7 +25,7 @@ typedef struct {
     /*0x70*/ u16 tilePos;
     /*0x72*/ u16 unk_72;
     /*0x74*/ u8 unk_74[0x12];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } ChestSpawnerEntity;
 
 extern const Hitbox gUnk_0811F8A8;
@@ -84,7 +92,7 @@ void ChestSpawner_Type2Init(ChestSpawnerEntity* this) {
         sub_080842D8(this);
         InitializeAnimation(super, 1);
     } else {
-        if (CheckFlags(this->unk_86) || super->type == 4) {
+        if (CheckFlags(this->flag) || super->type == 4) {
             sub_08083E20(this);
         } else {
             super->action = 1;
@@ -94,7 +102,7 @@ void ChestSpawner_Type2Init(ChestSpawnerEntity* this) {
 }
 
 void ChestSpawner_Type2Action1(ChestSpawnerEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         gScreen.controls.layerFXControl = 0xf40;
         gScreen.controls.alphaBlend = 0x1000;
         gPauseMenuOptions.disabled = 1;
@@ -104,7 +112,7 @@ void ChestSpawner_Type2Action1(ChestSpawnerEntity* this) {
         super->spriteSettings.draw = 1;
         super->spriteRendering.alphaBlend = 1;
         RequestPriorityDuration(super, 30);
-        sub_0805BC4C();
+        UnDarkRoom();
     }
 }
 
@@ -130,7 +138,7 @@ void ChestSpawner_Type2Action2(ChestSpawnerEntity* this) {
             break;
         default:
             sub_0800445C(super);
-            CreateMagicSparkles(super->x.HALF.HI, super->y.HALF.HI, 2);
+            CreateMagicSparklesFxAt(super->x.HALF.HI, super->y.HALF.HI, 2);
             if (--super->timer == 0) {
                 super->timer = 8;
                 tmp = ++super->subtimer;
@@ -235,7 +243,7 @@ void ChestSpawner_Type0Init(ChestSpawnerEntity* this) {
     if (GetTileTypeAtEntity(super) == TILE_TYPE_116) {
         DeleteThisEntity();
     }
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         super->action = 3;
         sub_0807B7D8(0x73, this->tilePos, super->collisionLayer);
         if ((super->type & 1) == 0) {
@@ -245,7 +253,7 @@ void ChestSpawner_Type0Init(ChestSpawnerEntity* this) {
 }
 
 void ChestSpawner_Type0Action1(ChestSpawnerEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         super->action = 2;
     }
 }
@@ -259,7 +267,7 @@ void ChestSpawner_Type0Action2(ChestSpawnerEntity* this) {
             break;
         default:
             SoundReq(SFX_SECRET);
-            CreateDust(super);
+            CreateDeathFx(super);
             break;
     }
     super->action = 3;
@@ -274,13 +282,13 @@ void ChestSpawner_Type0Action3(ChestSpawnerEntity* this) {
         if (GetTileTypeAtEntity(super) == TILE_TYPE_116) {
             DeleteEntity(super);
         } else {
-            if (!CheckFlags(this->unk_86)) {
+            if (!CheckFlags(this->flag)) {
                 if (this->unk_72 != 0) {
                     this->unk_72--;
                 } else {
                     super->action = 1;
                     RestorePrevTileEntity(this->tilePos, super->collisionLayer);
-                    CreateDust(super);
+                    CreateDeathFx(super);
                 }
             }
         }

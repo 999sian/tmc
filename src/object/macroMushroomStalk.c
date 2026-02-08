@@ -5,10 +5,11 @@
  * @brief Macro Mushroom Stalk object
  */
 #include "area.h"
-#include "entity.h"
 #include "main.h"
 #include "object.h"
+#include "room.h"
 #include "sound.h"
+#include "beanstalkSubtask.h"
 
 void MacroMushroomStalk_Init(Entity*);
 void MacroMushroomStalk_Action1(Entity*);

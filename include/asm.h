@@ -11,10 +11,7 @@ extern void SetTile(u32 tileIndex, u32 tilePos, u32 layer);
 
 extern void UpdateScrollVram(void);
 extern u32 sub_080B1BA4(u32, u32, u32);
-extern void LoadResourceAsync(const void* src, u32 dest, u32 size);
-extern void GenericConfused(struct Entity_*);
-extern void sub_08001290(struct Entity_*, u32);
-extern void GenericKnockback(struct Entity_*);
+extern void LoadResourceAsync(const void* src, void* dest, u32 size);
 extern u32 GetFuserId(struct Entity_*);
 #define GetFuserIdAndFuserTextId(ent) ((union SplitDWord)(*(MultiReturnTypeSingleEntityArg)(&GetFuserId))(ent))
 extern u32 CheckPlayerInRegion(u32 centerX, u32 centerY, u32 radiusX, u32 radiusY);
@@ -39,12 +36,9 @@ extern void sub_08004596(struct Entity_*, u32);
 extern u32 sub_080045B4(struct Entity_*, u32, u32);
 extern u32 CalculateDirectionTo(u32, u32, u32, u32);
 extern u32 CalculateDirectionFromOffsets(s32, s32);
-extern u32 sub_080086B4(u32, u32, const u8*);
-extern u32 ResolveCollisionLayer(struct Entity_*);
 extern void sub_0800417E(struct Entity_*, u32);
 extern u32 sub_0800442E(struct Entity_*);
 extern void SoundReqClipped(struct Entity_*, u32);
-extern u32 sub_0800132C(struct Entity_*, struct Entity_*);
 
 extern u32 sub_0800445C(struct Entity_*);
 extern u32 CheckRectOnScreen(s32, s32, u32, u32);
@@ -105,5 +99,17 @@ typedef struct {
  * Returns 0 if the key is not found.
  */
 extern u32 FindValueForKey(u32 key, const KeyValuePair* keyValuePairList);
+
+extern u32 GetTileIndex(u32 tilePos, u32 layer);
+extern void LinearMoveDirectionOLD(struct Entity_*, u32, u32);
+extern void sub_080028E0(struct Entity_*);
+extern void SnapToTile(struct Entity_*);
+extern u32 sub_0800419C(struct Entity_*, struct Entity_*, u32, u32);
+extern u32 sub_080041DC(struct Entity_*, u32, u32);
+extern void sub_080042BA(struct Entity_*, u32);
+extern void sub_080042D0(struct Entity_*, u32, u16);
+extern void sub_080044AE(struct Entity_*, u32, u32);
+extern void sub_0800451C(struct Entity_*);
+extern void sub_08004542(struct Entity_*);
 
 #endif // ASM_H

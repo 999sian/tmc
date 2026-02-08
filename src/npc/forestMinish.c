@@ -4,13 +4,22 @@
  *
  * @brief Forest Minish NPC
  */
-#include "functions.h"
 #include "item.h"
 #include "kinstone.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "flags.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
 #include "playeritem.h"
+#include "save.h"
+#include "message.h"
+#include "script.h"
 #include "structures.h"
+
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 fusionOffer;
@@ -715,7 +724,7 @@ void sub_08060318(void) {
     for (i = 2; i >= 0; i--) {
         ent = FindEntityByID(PLAYER_ITEM, PLAYER_ITEM_BOMB, 2);
         if (ent != NULL) {
-            CreateDust(ent);
+            CreateDeathFx(ent);
             DeleteEntity(ent);
         }
     }

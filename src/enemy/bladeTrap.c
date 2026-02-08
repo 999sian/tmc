@@ -4,10 +4,10 @@
  *
  * @brief Blade Trap enemy
  */
-#include "entity.h"
 #include "object.h"
-#include "room.h"
 #include "sound.h"
+#include "room.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

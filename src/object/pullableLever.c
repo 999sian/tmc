@@ -4,9 +4,12 @@
  *
  * @brief Pullable Lever object
  */
-#include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "physics.h"
+#include "player.h"
 #include "sound.h"
 
 typedef struct {

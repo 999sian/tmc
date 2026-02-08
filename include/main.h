@@ -2,10 +2,11 @@
 #define MAIN_H
 
 #include "global.h"
-#include "structures.h"
 #include "room.h"
 #include "script.h"
 #include "screen.h"
+#include "vram.h"
+#include "color.h"
 
 /** File signature */
 #define SIGNATURE 'MCZ3'
@@ -101,6 +102,18 @@ static_assert(sizeof(UI) == 0x3b4);
 extern Main gMain; /**< Main instance. */
 extern UI gUI;     /**< UI instance. */
 
+typedef struct {
+    s32 signature;
+    u8 field_0x4;
+    u8 listenForKeyPresses;
+    u8 field_0x6;
+    u8 field_0x7;
+    u8 pad[24];
+} struct_02000010;
+static_assert(sizeof(struct_02000010) == 0x20);
+
+extern struct_02000010 gUnk_02000010;
+
 /**
  * Program entry point.
  */
@@ -158,6 +171,7 @@ extern void DemoTask(void);
 extern u8 gUnk_03003DE4[0xC];
 extern u16 gPaletteBuffer[];
 
+extern u32 CheckRegionOnScreen(u32, u32, u32, u32);
 extern u32 CheckRegionsOnScreen(const u16* arr);
 
 #endif // MAIN_H

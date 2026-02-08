@@ -3,7 +3,7 @@
 
 #include "entity.h"
 #include "droptables.h"
-#include "map.h"
+#include "transitions.h"
 
 enum RoomTransition {
     TRANSITION_DEFAULT,
@@ -189,20 +189,6 @@ static_assert(sizeof(RoomTransition) == 0xB0);
 extern RoomTransition gRoomTransition;
 
 typedef struct {
-    u16 type;
-    u8 field_0x2[4];
-    s16 playerXPos;
-    s16 playerYPos;
-    u8 field_0xa;
-    u8 area;
-    u8 room;
-    u8 playerLayer;
-    u8 spawn_type;
-    u8 playerState;
-    u16 transitionSFX;
-} ScreenTransitionData;
-
-typedef struct {
     u8 type;
     u8 localFlag;
     u8 _2;
@@ -246,11 +232,9 @@ Entity* LoadRoomEntity(const EntityData*);
 void LoadRoomEntityList(const EntityData* listPtr);
 void* GetRoomProperty(u32 area, u32 room, u32 property);
 
-bool32 LoadFixedGFX(Entity*, u32);
-void UnloadGFXSlots(Entity*);
 void LoadSmallChestTile2(TileEntity*);
 void sub_0804B0B0(u32 arg0, u32 arg1);
 
-void DoExitTransition(const ScreenTransitionData* data);
+void DoExitTransition(const Transition* data);
 
 #endif // ROOM_H

@@ -6,7 +6,14 @@
  */
 #include "area.h"
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
+#include "projectile.h"
+#include "physics.h"
+#include "room.h"
+#include "player.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

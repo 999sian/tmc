@@ -4,9 +4,12 @@
  *
  * @brief Chuchu Boss Cutscene object
  */
-#include "functions.h"
 #include "menu.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "room.h"
+#include "physics.h"
 
 void ChuchuBossCutscene_Init(Entity*);
 void ChuchuBossCutscene_Action1(Entity*);

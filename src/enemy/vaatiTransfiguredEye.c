@@ -5,10 +5,11 @@
  * @brief Vaati Transfigured Eye enemy
  */
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
-#include "functions.h"
 #include "message.h"
 #include "physics.h"
+#include "color.h"
 
 typedef struct {
     /*0x00*/ Entity base;

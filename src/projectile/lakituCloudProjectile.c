@@ -5,8 +5,12 @@
  * @brief Lakitu Cloud Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
+#include "player.h"
+#include "physics.h"
 
 extern void SoundReqClipped(Entity*, u32);
 extern void sub_08079D84(void);

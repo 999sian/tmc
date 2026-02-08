@@ -4,9 +4,10 @@
  *
  * @brief Rupee object
  */
-#include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
 
 void sub_08086A6C(Entity*);
 void Rupee_Init(Entity*);

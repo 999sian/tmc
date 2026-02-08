@@ -3,8 +3,6 @@
 #include "sound.h"
 #include "menu.h"
 #include "main.h"
-#include "functions.h"
-#include "game.h"
 #include "fileselect.h"
 
 typedef struct SaveFileStatus {

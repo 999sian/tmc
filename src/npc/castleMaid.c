@@ -6,12 +6,13 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "manager.h"
 #include "message.h"
 #include "npc.h"
 #include "save.h"
 #include "script.h"
+#include "asm.h"
+#include "physics.h"
 
 typedef struct {
     Entity base;

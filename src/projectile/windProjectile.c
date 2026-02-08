@@ -5,8 +5,11 @@
  * @brief Wind Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
+#include "script.h"
 
 extern void (*const WindProjectile_Actions[])(Entity*);
 

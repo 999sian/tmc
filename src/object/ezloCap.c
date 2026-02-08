@@ -4,9 +4,13 @@
  *
  * @brief Ezlo Cap object
  */
-#include "functions.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "script.h"
+#include "player.h"
+#include "vram.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -5,10 +5,15 @@
  * @brief Wind Tribe Teleporter object
  */
 #include "collision.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "sound.h"
+#include "room.h"
+#include "player.h"
 #include "screenTransitions.h"
+#if defined(DEMO_JP) || defined(USA) || defined(DEMO_USA)
+#include "flags.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -6,11 +6,24 @@
  */
 #include "enemy/vaatiWrath.h"
 
-#include "functions.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
+#include "vram.h"
+#include "scroll.h"
+#include "color.h"
+#include "fade.h"
+#include "projectile.h"
+#if defined USA || defined DEMO_USA || defined DEMO_JP
 #include "save.h"
-#include "screen.h"
+#endif
 
 void VaatiWrathType0PreAction(VaatiWrathEntity*);
 u32 sub_08041FCC(VaatiWrathEntity*);

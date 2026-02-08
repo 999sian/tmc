@@ -5,18 +5,24 @@
  * @brief Book object
  */
 #include "collision.h"
-#include "functions.h"
 #include "item.h"
 #include "message.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[24];
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unused2[5];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } BookEntity;
 
 extern void (*const Book_Actions[])(BookEntity*);
@@ -46,7 +52,7 @@ void Book_Init(BookEntity* this) {
     }
 
     super->spriteOffsetY = 3;
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         if (super->type2 == 0) {
             super->y.HALF.HI += 48;
         }
@@ -145,7 +151,7 @@ void Book_Action3(BookEntity* this) {
     super->action = 4;
     super->spritePriority.b0 = 4;
 
-    SetFlag(this->unk_86);
+    SetFlag(this->flag);
 
     fx = CreateFx(super, FX_DEATH, 0);
     if (fx != NULL) {

@@ -5,6 +5,8 @@
  * @brief Palace Archway object
  */
 #include "object.h"
+#include "asm.h"
+#include "room.h"
 #include "tiles.h"
 
 void PalaceArchway_Init(Entity*);

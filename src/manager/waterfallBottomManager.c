@@ -7,8 +7,10 @@
 #include "manager/waterfallBottomManager.h"
 #include "asm.h"
 #include "entity.h"
-#include "functions.h"
+#include "player.h"
 #include "tiles.h"
+#include "room.h"
+#include "map.h"
 
 void WaterfallBottomManager_Main(WaterfallBottomManager* this) {
     SetTile(SPECIAL_TILE_20, TILE_POS(3, 23), LAYER_BOTTOM);

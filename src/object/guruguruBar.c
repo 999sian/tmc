@@ -4,9 +4,8 @@
  *
  * @brief Guruguru Bar object
  */
-#include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "physics.h"
 #include "projectile.h"
 #include "room.h"
 

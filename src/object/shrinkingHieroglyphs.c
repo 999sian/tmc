@@ -5,9 +5,10 @@
  * @brief Shrinking Hieroglyphs object
  */
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
 #include "sound.h"
+#include "vram.h"
+#include "physics.h"
 
 typedef struct {
     Entity base;

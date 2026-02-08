@@ -4,9 +4,15 @@
  *
  * @brief Double Bookshelf object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -15,7 +21,7 @@ typedef struct {
     /*0x82*/ u16 unk_82;
     /*0x84*/ u8 unk_84;
     /*0x85*/ u8 unk_85;
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } DoubleBookshelfEntity;
 
 void sub_0809B334(DoubleBookshelfEntity*);
@@ -59,7 +65,7 @@ void DoubleBookshelf_Init(DoubleBookshelfEntity* this) {
         if (child != NULL) {
             (child->base).parent = super;
             super->child = &child->base;
-            if (CheckFlags(this->unk_86) == 0) {
+            if (CheckFlags(this->flag) == 0) {
                 PositionRelative(super, &child->base, 0x100000, 0x100000);
                 child->unk_84 = 0;
             } else {
@@ -118,7 +124,7 @@ void sub_0809B0B0(DoubleBookshelfEntity* this) {
             SetTile(SPECIAL_TILE_130, tilePos + 3, layer);
             SetTile(SPECIAL_TILE_34, tilePos + 2, layer);
             SetTile(SPECIAL_TILE_95, tilePos, layer);
-            SetFlag(((DoubleBookshelfEntity*)super->parent)->unk_86);
+            SetFlag(((DoubleBookshelfEntity*)super->parent)->flag);
             break;
         case 3:
             this->unk_84 = 0;
@@ -126,7 +132,7 @@ void sub_0809B0B0(DoubleBookshelfEntity* this) {
             SetTile(SPECIAL_TILE_130, tilePos - 1, layer);
             SetTile(SPECIAL_TILE_34, tilePos, layer);
             SetTile(SPECIAL_TILE_95, tilePos + 2, layer);
-            ClearFlag(((DoubleBookshelfEntity*)super->parent)->unk_86);
+            ClearFlag(((DoubleBookshelfEntity*)super->parent)->flag);
             break;
         case 4:
             SetTile(SPECIAL_TILE_34, tilePos, layer);

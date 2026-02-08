@@ -8,11 +8,15 @@
 #include "beanstalkSubtask.h"
 #include "collision.h"
 #include "enemy.h"
-#include "enemy/gyorg.h"
-#include "entity.h"
-#include "functions.h"
 #include "sound.h"
+#include "effects.h"
+#include "common.h"
+#include "projectile.h"
+#include "enemy/gyorg.h"
 #include "assets/map_offsets.h"
+#include "game.h"
+#include "player.h"
+#include "room.h"
 
 extern u8 gEntCount;
 extern u8 gMapDataTopSpecial[];
@@ -20,11 +24,10 @@ extern u8 gMapDataTopSpecial[];
 extern u16 gMapDataBottomSpecial[];
 
 extern u32 sub_08000E62(u32);
-extern void RegisterTransitionManager(void*, void (*)(), void (*)());
 
-void sub_08046498();
+void GyorgFemale_OnEnterRoom();
 void sub_0804660C(GyorgFemaleEntity*, u32);
-void sub_080464C0(GyorgFemaleEntity*);
+void GyorgFemale_Reset(GyorgFemaleEntity*);
 void GyorgFemale_SpawnChildren(GyorgFemaleEntity* this, bool32 unlimit_tmp);
 void sub_080465C8(void);
 void GyorgFemale_ProcessEyeHit(GyorgFemaleEntity* this);
@@ -92,13 +95,13 @@ void GyorgFemale_Setup(GyorgFemaleEntity* this) {
     MemClear(&gMapDataBottomSpecial, 0x8000);
     MemClear(&gMapDataTopSpecial, 0x8000);
     sub_0804660C(this, 0);
-    sub_080464C0(this);
+    GyorgFemale_Reset(this);
     gPlayerEntity.base.collisionLayer = 2;
     UpdateSpriteForCollisionLayer(&gPlayerEntity.base);
 #ifndef EU
-    RegisterTransitionManager(this, sub_08046498, 0);
+    RegisterTransitionHandler(this, GyorgFemale_OnEnterRoom, NULL);
 #else
-    RegisterTransitionManager(this, sub_080464C0, 0);
+    RegisterTransitionHandler(this, GyorgFemale_Reset, NULL);
 #endif
 }
 
@@ -110,7 +113,7 @@ void GyorgFemale_Action1(GyorgFemaleEntity* this) {
     } else {
         if (this->unk_79 & 0x40) {
             this->unk_79 &= ~0x40;
-            sub_080464C0(this);
+            GyorgFemale_Reset(this);
         }
     }
     sub_080465C8();
@@ -217,14 +220,14 @@ void GyorgFemale_Action3(GyorgFemaleEntity* this) {
 }
 
 #ifndef EU
-void sub_08046498(GyorgFemaleEntity* this) {
+void GyorgFemale_OnEnterRoom(GyorgFemaleEntity* this) {
     MemClear(&gMapDataBottomSpecial, 0x8000);
     MemClear(&gMapDataTopSpecial, 0x8000);
-    sub_080464C0(this);
+    GyorgFemale_Reset(this);
 }
 #endif
 
-void sub_080464C0(GyorgFemaleEntity* this) {
+void GyorgFemale_Reset(GyorgFemaleEntity* this) {
     static const MapDataDefinition* const gyorgMappings[] = {
         gGyorgMapping0,
         gGyorgMapping1,

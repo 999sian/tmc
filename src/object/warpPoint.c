@@ -4,10 +4,15 @@
  *
  * @brief Warp Point object
  */
-#include "functions.h"
 #include "game.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -18,7 +23,7 @@ typedef struct {
     /*0x7d*/ u8 unk_7d;
     /*0x7e*/ u8 unused3[6];
     /*0x84*/ u16 unk_84;
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } WarpPointEntity;
 
 extern void EnableDungeonWarp(u32);
@@ -58,7 +63,7 @@ void WarpPoint_Init(WarpPointEntity* this) {
     super->hitbox = (Hitbox*)&gHitbox_1;
     super->updatePriority = PRIO_NO_BLOCK;
     InitializeAnimation(super, 0);
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         sub_0808B830(this);
     } else {
         if (AreaIsDungeon() && IsDungeonWarpActive(super->type)) {
@@ -77,7 +82,7 @@ void WarpPoint_Init(WarpPointEntity* this) {
 }
 
 void WarpPoint_Action1(WarpPointEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         sub_0808B830(this);
         if (AreaIsDungeon()) {
             EnableDungeonWarp(super->type);

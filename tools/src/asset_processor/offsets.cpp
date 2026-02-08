@@ -5,6 +5,6 @@ OffsetCalculator::OffsetCalculator(const std::filesystem::path& asmOutputFile, c
 }
 
 void OffsetCalculator::addAsset(int start, const std::string& symbol) {
-    asmOutput << "\t.equiv offset_" << symbol << ", " << start - baseOffset << std::endl;
-    cOutput << "#define offset_" << symbol << " " << start - baseOffset << std::endl;
+    asmOutput << "\t.equiv offset_" << symbol << ", 0x" << std::hex << start - baseOffset << std::endl;
+    cOutput << "#define offset_" << symbol << " 0x" << std::hex << start - baseOffset << std::endl;
 }

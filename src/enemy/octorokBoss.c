@@ -6,10 +6,19 @@
  */
 #include "enemy/octorokBoss.h"
 #include "collision.h"
-#include "functions.h"
+#include "pauseMenu.h"
 #include "game.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "projectile.h"
+#include "vram.h"
+#include "color.h"
 
 #define IS_FROZEN(this) ((this)->bossPhase & 1)
 

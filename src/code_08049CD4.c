@@ -1,6 +1,7 @@
 #include "global.h"
 #include "room.h"
 #include "enemy.h"
+#include "common.h"
 
 extern void MemFill32(u32, void*, u32);
 

@@ -1,17 +1,19 @@
-
-#include "global.h"
 #include "entity.h"
 #include "physics.h"
 #include "room.h"
 #include "object.h"
-#include "functions.h"
+#include "asm.h"
+#include "effects.h"
+#include "player.h"
+#include "pauseMenu.h"
 #include "definitions.h"
+#include "vram.h"
 #include "object/linkAnimation.h"
 #include "object/itemOnGround.h"
+#include "color.h"
 
 extern const Hitbox* const gObjectHitboxes[];
 
-u32 LoadObjectSprite(Entity* this, s32 type, const ObjectDefinition* definition);
 extern const ObjectDefinition gObjectDefinitions[];
 
 static Entity* CreateSpeechBubble(Entity*, u32, s32, s32);
@@ -119,20 +121,20 @@ u32 LoadObjectSprite(Entity* this, s32 type, const ObjectDefinition* definition)
     return 2;
 }
 
-Entity* CreateObject(u32 subtype, u32 form, u32 type2) {
+Entity* CreateObject(Object id, u32 type, u32 type2) {
     Entity* entity = GetEmptyEntity();
     if (entity != NULL) {
         entity->kind = OBJECT;
-        entity->id = subtype;
-        entity->type = form;
+        entity->id = id;
+        entity->type = type;
         entity->type2 = type2;
         AppendEntityToList(entity, 6);
     }
     return entity;
 }
 
-Entity* CreateObjectWithParent(Entity* parent, u32 subtype, u32 form, u32 type2) {
-    Entity* entity = CreateObject(subtype, form, type2);
+Entity* CreateObjectWithParent(Entity* parent, Object id, u32 type, u32 type2) {
+    Entity* entity = CreateObject(id, type, type2);
     if (entity != NULL) {
         entity->parent = parent;
         CopyPosition(parent, entity);
@@ -141,15 +143,15 @@ Entity* CreateObjectWithParent(Entity* parent, u32 subtype, u32 form, u32 type2)
     return entity;
 }
 
-Entity* CreateFx(Entity* parentEnt, u32 form, u32 parameter) {
-    return CreateObjectWithParent(parentEnt, SPECIAL_FX, form, parameter);
+Entity* CreateFx(Entity* parentEnt, Effect type, u32 type2) {
+    return CreateObjectWithParent(parentEnt, SPECIAL_FX, type, type2);
 }
 
-void CreateDust(Entity* parent) {
+void CreateDeathFx(Entity* parent) {
     CreateFx(parent, FX_DEATH, 0);
 }
 
-void CreateDustAt(s32 xOff, s32 yOff, u32 layer) {
+void CreateDeathFxAt(s32 xOff, s32 yOff, u32 layer) {
     Entity* ent;
 
     ent = CreateObject(SPECIAL_FX, FX_DEATH, 0);
@@ -160,41 +162,41 @@ void CreateDustAt(s32 xOff, s32 yOff, u32 layer) {
     }
 }
 
-void CreateDustSmall(Entity* parent) {
+void CreateDashFx(Entity* parent) {
     CreateFx(parent, FX_DASH, 0);
 }
 
-void CreateExplosionBroken(Entity* parent) {
+void CreateExplosionBrokenFx(Entity* parent) {
     CreateFx(parent, FX_6, 0);
 }
 
-void CreateWaterSplash(Entity* parent) {
+void CreateWaterSplashFx(Entity* parent) {
     CreateFx(parent, FX_WATER_SPLASH, 0);
 }
 
-Entity* CreateGroundItem(Entity* parent, u32 form, u32 subtype) {
+Entity* CreateGroundItem(Entity* parent, u32 item, u32 subvalue) {
     Entity* ent;
 
-    ent = CreateObjectWithParent(parent, GROUND_ITEM, form, subtype);
+    ent = CreateObjectWithParent(parent, GROUND_ITEM, item, subvalue);
     if (ent != NULL) {
         ent->timer = 5;
     }
     return ent;
 }
 
-Entity* CreateGroundItemWithFlags(Entity* parent, u32 form, u32 subtype, u32 flags) {
+Entity* CreateGroundItemWithFlags(Entity* parent, u32 item, u32 subvalue, u32 flags) {
     Entity* ent;
 
-    ent = CreateObjectWithParent(parent, GROUND_ITEM, form, subtype);
+    ent = CreateObjectWithParent(parent, GROUND_ITEM, item, subvalue);
     if (ent != NULL) {
         ItemOnGroundEntity* this = (ItemOnGroundEntity*)ent;
         ent->timer = 5;
-        this->unk_86 = flags;
+        this->flag = flags;
     }
     return ent;
 }
 
-Entity* CreateWaterTrace(Entity* parent) {
+Entity* CreateRippleFx(Entity* parent) {
     Entity* ent;
 
     ent = CreateFx(parent, FX_RIPPLE, 0);
@@ -204,12 +206,12 @@ Entity* CreateWaterTrace(Entity* parent) {
     return ent;
 }
 
-void CreateRandomWaterTrace(Entity* parent, int range) {
-    s32 sVar1, sVar2, sVar3;
+void CreateRippleFxRandom(Entity* parent, s32 range) {
+    s32 sVar1, sVar2;
     Entity* ent;
     u32 uVar3;
 
-    ent = CreateWaterTrace(parent);
+    ent = CreateRippleFx(parent);
     if (ent != NULL) {
         uVar3 = Random();
         sVar1 = (int)uVar3 % (++range);
@@ -228,7 +230,7 @@ void CreateRandomWaterTrace(Entity* parent, int range) {
     }
 }
 
-Entity* CreateLargeWaterTrace(Entity* parent) {
+Entity* CreateLargeRippleFx(Entity* parent) {
     Entity* ent = CreateFx(parent, FX_RIPPLE_LARGE, 0);
     if (ent != NULL) {
         ent->spritePriority.b0 = 7;
@@ -236,22 +238,22 @@ Entity* CreateLargeWaterTrace(Entity* parent) {
     return ent;
 }
 
-void sub_080A2AF4(Entity* parent, s32 param_2, s32 param_3) {
+void CreateLargeRippleFxRandom(Entity* parent, s32 minDistance, s32 maxDistance) {
     Entity* entity;
     s32 radius;
     s32 angle;
 
-    entity = CreateLargeWaterTrace(parent);
+    entity = CreateLargeRippleFx(parent);
     if (entity != NULL) {
         angle = Random();
-        radius = (angle % (param_3 - param_2 + 1)) + param_2;
+        radius = (angle % (maxDistance - minDistance + 1)) + minDistance;
         angle = angle >> 0x10 & 0xff;
         entity->x.WORD += FixedDiv(FixedMul(gSineTable[angle], radius << 8), 0x100) << 8;
         entity->y.WORD -= FixedDiv(FixedMul(gSineTable[angle + 0x40], radius << 8), 0x100) << 8;
     }
 }
 
-void CreateSparkle(Entity* entity) {
+void CreateSparkleFx(Entity* parent) {
     Entity* sparkle;
     u32 rand;
     s32 y;
@@ -268,10 +270,10 @@ void CreateSparkle(Entity* entity) {
         if (4 < y) {
             y = -y;
         }
-        PositionRelative(entity, sparkle, x << 0x10, y << 0x10);
-        SortEntityAbove(entity, sparkle);
-        sparkle->spriteOffsetX = entity->spriteOffsetX;
-        sparkle->spriteOffsetY = entity->spriteOffsetY;
+        PositionRelative(parent, sparkle, x << 0x10, y << 0x10);
+        SortEntityAbove(parent, sparkle);
+        sparkle->spriteOffsetX = parent->spriteOffsetX;
+        sparkle->spriteOffsetY = parent->spriteOffsetY;
     }
 }
 

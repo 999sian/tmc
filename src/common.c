@@ -1,10 +1,11 @@
 #include "common.h"
 
 #include "assets/map_offsets.h"
+#include "assets/gfx_offsets.h"
 #include "area.h"
 #include "asm.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "game.h"
 #include "global.h"
 #include "item.h"
@@ -15,7 +16,8 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
-#include "structures.h"
+#include "subtask.h"
+#include "fade.h"
 
 extern u8 gUnk_03003DE0;
 extern u8 gzHeap[0x1000];
@@ -97,9 +99,7 @@ typedef struct {
     u8 y;
 } PACKED DungeonMapObject;
 
-// More like PrepareTileEntitesForDungeonMap or so
-
-u32 DecToHex(u32 value) {
+u32 EncodeBCD(u32 value) {
     u32 result;
     FORCE_REGISTER(u32 r1, r1);
 
@@ -244,7 +244,7 @@ void LoadPalettes(const u8* src, s32 destPaletteNum, s32 numPalettes) {
     u32 size = numPalettes * 32;
     u32 usedPalettesMask = 1 << destPaletteNum;
     while (--numPalettes > 0) {
-        usedPalettesMask |= (usedPalettesMask << 1);
+        usedPalettesMask |= usedPalettesMask << 1;
     }
     gUsedPalettes |= usedPalettesMask;
     dest = &gPaletteBuffer[destPaletteNum * 16];
@@ -253,7 +253,7 @@ void LoadPalettes(const u8* src, s32 destPaletteNum, s32 numPalettes) {
 
 void SetColor(u32 colorIndex, u32 color) {
     gPaletteBuffer[colorIndex] = color;
-    gUsedPalettes |= 1 << (colorIndex / 16);
+    USE_PALETTE(colorIndex / 16);
 }
 
 void SetFillColor(u32 color, u32 disable_layers) {
@@ -596,7 +596,7 @@ void sub_0801DD58(u32 area, u32 room) {
 }
 
 void LoadDungeonMap(void) {
-    LoadResourceAsync(gDungeonMap, 0x6006000, sizeof(gDungeonMap));
+    LoadResourceAsync(gDungeonMap, BG_SCREEN_ADDR(12), sizeof(gDungeonMap));
 }
 
 void DrawDungeonFeatures(u32 floor, void* data, u32 size) {
@@ -1923,19 +1923,23 @@ const KinstoneWorldEvent gKinstoneWorldEvents[] = {
 #endif
 
 // For sub_080A4418
-// TODO these are gGlobalGfxAndPalettes offsets with the size of 0x80
-#ifdef EU
-const u32 gUnk_080CA06C[] = { 139744, 139744, 140256, 140768, 141280, 141792, 142304, 142816, 143840, 144864, 145888,
-                              146912, 147936, 148960, 149984, 151008, 152032, 153056, 154080, 155104, 156128, 157152,
-                              158176, 159200, 160224, 161248, 143328, 144352, 145376, 146400, 147424, 148448, 149472,
-                              150496, 151520, 152544, 153568, 154592, 155616, 156640, 157664, 158688, 159712, 160736 };
-#else
-const u32 gUnk_080CA06C[] = { 139808, 139808, 140320, 140832, 141344, 141856, 142368, 142880, 143904, 144928, 145952,
-                              146976, 148000, 149024, 150048, 151072, 152096, 153120, 154144, 155168, 156192, 157216,
-                              158240, 159264, 160288, 161312, 143392, 144416, 145440, 146464, 147488, 148512, 149536,
-                              150560, 151584, 152608, 153632, 154656, 155680, 156704, 157728, 158752, 159776, 160800 };
-#endif
-
+const u32 gUnk_080CA06C[] = {
+    offset_gUnk_data3_085C4FE0 + 0xC0,   offset_gUnk_data3_085C4FE0 + 0xC0,   offset_gUnk_data3_085C4FE0 + 0x2C0,
+    offset_gUnk_data3_085C4FE0 + 0x4C0,  offset_gUnk_data3_085C4FE0 + 0x6C0,  offset_gUnk_data3_085C4FE0 + 0x8C0,
+    offset_gUnk_data3_085C4FE0 + 0xAC0,  offset_gUnk_data3_085C4FE0 + 0xCC0,  offset_gUnk_data3_085C4FE0 + 0x10C0,
+    offset_gUnk_data3_085C4FE0 + 0x14C0, offset_gUnk_data3_085C4FE0 + 0x18C0, offset_gUnk_data3_085C4FE0 + 0x1CC0,
+    offset_gUnk_data3_085C4FE0 + 0x20C0, offset_gUnk_data3_085C4FE0 + 0x24C0, offset_gUnk_data3_085C4FE0 + 0x28C0,
+    offset_gUnk_data3_085C4FE0 + 0x2CC0, offset_gUnk_data3_085C4FE0 + 0x30C0, offset_gUnk_data3_085C4FE0 + 0x34C0,
+    offset_gUnk_data3_085C4FE0 + 0x38C0, offset_gUnk_data3_085C4FE0 + 0x3CC0, offset_gUnk_data3_085C4FE0 + 0x40C0,
+    offset_gUnk_data3_085C4FE0 + 0x44C0, offset_gUnk_data3_085C4FE0 + 0x48C0, offset_gUnk_data3_085C4FE0 + 0x4CC0,
+    offset_gUnk_data3_085C4FE0 + 0x50C0, offset_gUnk_data3_085C4FE0 + 0x54C0, offset_gUnk_data3_085C4FE0 + 0xEC0,
+    offset_gUnk_data3_085C4FE0 + 0x12C0, offset_gUnk_data3_085C4FE0 + 0x16C0, offset_gUnk_data3_085C4FE0 + 0x1AC0,
+    offset_gUnk_data3_085C4FE0 + 0x1EC0, offset_gUnk_data3_085C4FE0 + 0x22C0, offset_gUnk_data3_085C4FE0 + 0x26C0,
+    offset_gUnk_data3_085C4FE0 + 0x2AC0, offset_gUnk_data3_085C4FE0 + 0x2EC0, offset_gUnk_data3_085C4FE0 + 0x32C0,
+    offset_gUnk_data3_085C4FE0 + 0x36C0, offset_gUnk_data3_085C4FE0 + 0x3AC0, offset_gUnk_data3_085C4FE0 + 0x3EC0,
+    offset_gUnk_data3_085C4FE0 + 0x42C0, offset_gUnk_data3_085C4FE0 + 0x46C0, offset_gUnk_data3_085C4FE0 + 0x4AC0,
+    offset_gUnk_data3_085C4FE0 + 0x4EC0, offset_gUnk_data3_085C4FE0 + 0x52C0,
+};
 const u8 SharedFusions[] = {
     0x18, 0x2D, 0x35, 0x36, 0x37, 0x39, 0x3C, 0x44, 0x46, 0x47, 0x4E, 0x50, 0x53, 0x55, 0x56, 0x58, 0x5F, 0x60, 0, 0,
 };

@@ -7,13 +7,13 @@
 #include "common.h"
 #include "fade.h"
 #include "fileselect.h"
-#include "functions.h"
 #include "game.h"
 #include "main.h"
 #include "menu.h"
 #include "save.h"
 #include "sound.h"
 #include "subtask.h"
+#include "affine.h"
 
 typedef void(GameOverState)(void);
 

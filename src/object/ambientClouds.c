@@ -7,8 +7,10 @@
 #include "asm.h"
 #include "effects.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "player.h"
+#include "script.h"
+#include "color.h"
 
 void AmbientClouds_Init(Entity* this);
 void AmbientClouds_Action1(Entity* this);

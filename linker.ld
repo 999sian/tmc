@@ -1145,6 +1145,7 @@ SECTIONS {
         src/manager/templeOfDropletsManager.o(.rodata);
         src/manager/fallingItemManager.o(.rodata);
         src/manager/cloudOverlayManager.o(.rodata);
+        src/manager/holeManager.o(.rodata);
         data/const/manager/holeManager.o(.rodata);
         src/manager/staticBackgroundManager.o(.rodata);
         src/manager/rainfallManager.o(.rodata);
