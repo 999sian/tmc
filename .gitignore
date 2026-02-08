@@ -93,3 +93,4 @@ ctx.c
 .xmake
 build/
 .vscode/
+rom_data/

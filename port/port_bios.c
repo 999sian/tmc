@@ -118,7 +118,12 @@ static void lz77_decomp(const u8* src, u8* dst) {
 void LZ77UnCompVram(const void* src, void* dst) {
     /* dst may be a GBA address (e.g. VRAM) — resolve it */
     void* resolved = port_resolve_addr((uintptr_t)dst);
+    extern u8 gVram[];
+    int tile522_was_nz = gVram[0x14140] != 0 || gVram[0x14141] != 0;
     lz77_decomp((const u8*)src, (u8*)resolved);
+    if (tile522_was_nz && gVram[0x14140] == 0 && gVram[0x14141] == 0) {
+        fprintf(stderr, "[WATCH] tile522 CLOBBERED by LZ77UnCompVram dst=0x%08X\n", (u32)(uintptr_t)dst);
+    }
 }
 
 void LZ77UnCompWram(const void* src, void* dst) {
@@ -140,6 +145,9 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
     const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
 
+    extern u8 gVram[];
+    int tile522_was_nz = gVram[0x14140] != 0 || gVram[0x14141] != 0;
+
     if (is32) {
         const u32* s = (const u32*)resolvedSrc;
         u32* d = (u32*)resolvedDst;
@@ -155,6 +163,10 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
             d[i] = fill ? val : s[i];
         }
     }
+
+    if (tile522_was_nz && gVram[0x14140] == 0 && gVram[0x14141] == 0) {
+        fprintf(stderr, "[WATCH] tile522 CLOBBERED by CpuSet dst=0x%08X cnt=0x%08X\n", (u32)(uintptr_t)dst, cnt);
+    }
 }
 
 /*
@@ -168,6 +180,9 @@ void CpuFastSet(const void* src, void* dst, u32 cnt) {
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
     const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
 
+    extern u8 gVram[];
+    int tile522_was_nz = gVram[0x14140] != 0 || gVram[0x14141] != 0;
+
     const u32* s = (const u32*)resolvedSrc;
     u32* d = (u32*)resolvedDst;
 
@@ -178,11 +193,32 @@ void CpuFastSet(const void* src, void* dst, u32 cnt) {
     } else {
         memcpy(d, s, wordCount * 4);
     }
+
+    if (tile522_was_nz && gVram[0x14140] == 0 && gVram[0x14141] == 0) {
+        fprintf(stderr, "[WATCH] tile522 CLOBBERED by CpuFastSet dst=0x%08X cnt=0x%08X\n", (u32)(uintptr_t)dst, cnt);
+    }
 }
 
 /* RegisterRamReset — no-op on PC */
 void RegisterRamReset(u32 flags) {
     (void)flags;
+}
+
+/* Sqrt — GBA BIOS SWI 0x08: integer square root */
+u16 Sqrt(u32 num) {
+    if (num == 0)
+        return 0;
+    u32 r = 1;
+    while (r * r <= num)
+        r++;
+    return (u16)(r - 1);
+}
+
+/* Div — GBA BIOS SWI 0x06: signed integer division */
+s32 Div(s32 num, s32 denom) {
+    if (denom == 0)
+        return 0;
+    return num / denom;
 }
 
 /* SoftReset — exit on PC */

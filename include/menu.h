@@ -80,7 +80,9 @@ typedef struct {
     /*0x2d*/ u8 unk2d;
     /*0x2e*/ union SplitHWord unk2e;
 } GenericMenu;
+#ifndef PC_PORT
 static_assert(sizeof(GenericMenu) == 0x30, "GenericMenu size incorrect");
+#endif
 
 typedef struct {
     /*0x00*/ Menu base;
@@ -120,7 +122,12 @@ typedef struct {
     /*0x10*/ u8 items[17]; // unsure about size
 } PauseMenu;
 
+#ifdef PC_PORT
+extern u8 _gMenuSharedStorage[0x40];
+#define gMenu (*(Menu*)_gMenuSharedStorage)
+#else
 extern Menu gMenu;
+#endif
 #define gGenericMenu (*(GenericMenu*)&gMenu)
 #define gKinstoneMenu (*(KinstoneMenu*)&gMenu)
 #define gFigurineMenu (*(FigurineMenu*)&gMenu)

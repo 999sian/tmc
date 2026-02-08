@@ -9,8 +9,14 @@
 
 extern void UnpackTextNibbles(void*, u8*);
 
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#define gUnk_02036AD8 (*(u8*)&gEwram[0x36AD8])
+#define gUnk_02036A58 (*(u8*)&gEwram[0x36A58])
+#else
 extern u8 gUnk_02036AD8;
 extern u8 gUnk_02036A58;
+#endif
 
 extern u32* Translations[];
 typedef struct {

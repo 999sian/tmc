@@ -20,8 +20,12 @@ typedef struct {
 } ChooseFileState;
 static_assert(sizeof(ChooseFileState) == 0x30, "ChooseFileState size incorrect");
 
-// TODO: This occupies the same memory region as gMenu
+#ifdef PC_PORT
+extern u8 _gMenuSharedStorage[0x40];
+#define gChooseFileState (*(ChooseFileState*)_gMenuSharedStorage)
+#else
 extern ChooseFileState gChooseFileState;
+#endif
 
 // typedef struct {
 //     u8 unk00 : 4;

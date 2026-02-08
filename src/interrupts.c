@@ -189,6 +189,22 @@ void WaitForNextFrame(void) {
     } while (gMain.interruptFlag == 0);
 
     sub_080ADD70();
+
+    // DEBUG
+    {
+        static int tile522_prev = 0;
+        extern u8 gVram[];
+        int nz = 0;
+        for (int b = 0; b < 32; b++) {
+            if (gVram[0x14140 + b])
+                nz++;
+        }
+        if (nz != tile522_prev) {
+            fprintf(stderr, "[T522] ticks=%u tile522 changed: %d -> %d non-zero bytes (after GFX upload)\n",
+                    (u32)gMain.ticks, tile522_prev, nz);
+            tile522_prev = nz;
+        }
+    }
     sub_0801C25C();
     UpdateDisplayControls();
     LoadResources();

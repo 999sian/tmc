@@ -28,6 +28,10 @@ static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32
     if (!src || !dest)
         return;
 
+    /* DEBUG: watch for writes that clobber tile 522 at gVram[0x14140] */
+    extern u8 gVram[];
+    int tile522_was_nz = gVram[0x14140] != 0 || gVram[0x14141] != 0;
+
     if (srcFixed) {
         /* Fill mode */
         if (is32) {
@@ -44,6 +48,12 @@ static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32
     } else {
         /* Copy mode */
         memcpy(dest, src, totalBytes);
+    }
+
+    /* DEBUG: detect tile 522 clobbering */
+    if (tile522_was_nz && gVram[0x14140] == 0 && gVram[0x14141] == 0) {
+        fprintf(stderr, "[WATCH] tile522 CLOBBERED by DMA! dest_raw=0x%08X size=%u srcFixed=%d\n", (u32)dest_raw,
+                totalBytes, srcFixed);
     }
 }
 

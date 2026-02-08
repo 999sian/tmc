@@ -188,7 +188,12 @@ void MemFill32(u32 value, void* dest, u32 size) {
 
 void MemClear(void* dest, u32 size) {
 #ifdef PC_PORT
+    extern u8 gVram[];
+    int tile522_was_nz = gVram[0x14140] != 0 || gVram[0x14141] != 0;
     memset(dest, 0, size);
+    if (tile522_was_nz && gVram[0x14140] == 0 && gVram[0x14141] == 0) {
+        fprintf(stderr, "[WATCH] tile522 CLOBBERED by MemClear dest=%p size=%u\n", dest, size);
+    }
 #else
     gba_MemClear((u32)dest, size);
 #endif

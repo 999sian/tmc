@@ -20,15 +20,9 @@ u32 BounceUpdate(...) {
 u32 CalcCollisionStaticEntity(...) {
     return 0;
 }
-u32 CalcDistance(...) {
-    return 0;
-}
-u32 CalculateDirectionFromOffsets(...) {
-    return 0;
-}
-u32 CalculateDirectionTo(...) {
-    return 0;
-}
+/* CalcDistance -- implemented in port_math.c */
+/* CalculateDirectionFromOffsets -- implemented in port_math.c */
+/* CalculateDirectionTo -- implemented in port_math.c */
 u32 CheckBits(...) {
     return 0;
 }
@@ -63,9 +57,7 @@ u32 CutsceneMain_Init(...) {
 u32 CutsceneMain_Update(...) {
     return 0;
 }
-u32 Div(...) {
-    return 0;
-}
+/* Div -- implemented in port_bios.c */
 u32 DoItemTileInteraction(...) {
     return 0;
 }
@@ -144,9 +136,7 @@ u32 GetFacingDirection(...) {
 u32 GetFuserId(...) {
     return 0;
 }
-u32 GetNextFrame(...) {
-    return 0;
-}
+/* GetNextFrame — implemented in port_animation.c */
 u32 GetNextFunction(...) {
     return 0;
 }
@@ -190,12 +180,8 @@ u32 GravityUpdate(...) {
     return 0;
 }
 /* HoleManager_Actions -- defined in port_linked_stubs.c */
-u32 InitAnimationForceUpdate(...) {
-    return 0;
-}
-u32 InitializeAnimation(...) {
-    return 0;
-}
+/* InitAnimationForceUpdate — implemented in port_animation.c */
+/* InitializeAnimation — implemented in port_animation.c */
 u32 LinearMoveDirectionOLD(...) {
     return 0;
 }
@@ -255,15 +241,9 @@ u32 SumDropProbabilities(...) {
 u32 SumDropProbabilities2(...) {
     return 0;
 }
-u32 UnpackTextNibbles(...) {
-    return 0;
-}
-u32 UpdateAnimationSingleFrame(...) {
-    return 0;
-}
-u32 UpdateAnimationVariableFrames(...) {
-    return 0;
-}
+/* UnpackTextNibbles — implemented in port_text_render.c */
+/* UpdateAnimationSingleFrame — implemented in port_animation.c */
+/* UpdateAnimationVariableFrames — implemented in port_animation.c */
 void UpdateCollision(Entity* entity) {
     /* Stub: collision handling not implemented yet */
 }
@@ -684,12 +664,8 @@ u32 sub_08001318(...) {
 u32 sub_0800132C(...) {
     return 0;
 }
-u32 sub_080026C4(...) {
-    return 0;
-}
-u32 sub_080026F2(...) {
-    return 0;
-}
+/* sub_080026C4 — implemented in port_text_render.c */
+/* sub_080026F2 — implemented in port_text_render.c */
 u32 sub_080028E0(...) {
     return 0;
 }
@@ -720,12 +696,8 @@ u32 sub_080041E8(...) {
 u32 sub_08004202(...) {
     return 0;
 }
-u32 sub_080042BA(...) {
-    return 0;
-}
-u32 sub_080042D0(...) {
-    return 0;
-}
+/* sub_080042BA — implemented in port_animation.c */
+/* sub_080042D0 — implemented in port_animation.c */
 u32 sub_0800442E(...) {
     return 0;
 }

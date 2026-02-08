@@ -31,7 +31,6 @@ struct SoundInfo* gPortSoundInfoPtr;
 GfxSlotList gGFXSlots;
 Message gMessage;
 TextRender gTextRender;
-u16 gBG0Buffer[0x400];
 u16 gPaletteBuffer[0x200];
 Input gInput;
 u32 gRand;
@@ -77,15 +76,16 @@ u32 gUnk_020344A0 = 0x020344A0;
 struct_020354C0 gUnk_020354C0[32];
 u32 gUnk_02035542 = 0x02035542;
 u32 gUnk_02036540 = 0x02036540;
-u32 gUnk_02036A58 = 0x02036A58;
-u32 gUnk_02036AD8 = 0x02036AD8;
+/* gUnk_02036A58 — aliased into gEwram[0x36A58] (128-byte text pixel buffer, see text.c) */
+/* gUnk_02036AD8 — aliased into gEwram[0x36AD8] (224-byte text tile buffer, see text.c) */
 u32 gUnk_02036BB8 = 0x02036BB8;
 // ========== Global data (converted from function stubs) ==========
 
 // Core systems
 UI gUI;
 HUD gHUD;
-Menu gMenu;
+// gMenu / gChooseFileState / gIntroState share memory (GBA EWRAM 0x02000080)
+u8 _gMenuSharedStorage[0x40] __attribute__((aligned(8))) = { 0 };
 Area gArea;
 SaveFile gSave;
 VBlankDMA gVBlankDMA;
@@ -119,25 +119,15 @@ RoomMemory gRoomMemory[4]; // sized to 4 entries (typical for GBA)
 RoomMemory* gCurrentRoomMemory;
 void** gCurrentRoomProperties;
 
-// BG Buffers
-u16 gBG1Buffer[0x400];
-u16 gBG2Buffer[0x400];
-u16 gBG3Buffer[0x800];
-
 // Script
 ActiveScriptInfo gActiveScriptInfo;
 ScriptExecutionContext gScriptExecutionContextArray[0x20];
 
 // Misc
 BgAnimation gBgAnimations[MAX_BG_ANIMATIONS];
-ChooseFileState gChooseFileState;
 u8 gTextGfxBuffer[0xD00];
 u8 gPaletteBufferBackup[0x400]; // BG+OBJ palettes backup
 u8 gCollidableCount;
-
-// gIntroState aliases gMenu (they share the same memory region on GBA)
-// IntroState is a file-local type in title.c -- we provide a byte alias here
-u8 gIntroState[0x40] __attribute__((aligned(4)));
 
 // gFrameObjLists — sprite frame data loaded from ROM (200KB)
 // Uses self-relative u32 offsets internally.
@@ -263,7 +253,7 @@ const Transition* const* const gExitLists[256];
 const Transition gExitList_RoyalValley_ForestMaze[4];
 
 // Various game data
-u32 gFixedTypeGfxData[256];
+u32 gFixedTypeGfxData[528]; // 527 entries in ROM + 1 safety margin
 void* gCaveBorderMapData[16];
 u8 gMessageChoices[32] __attribute__((aligned(4)));
 u8 gOverworldLocations[256] __attribute__((aligned(4)));

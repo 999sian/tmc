@@ -33,8 +33,13 @@ typedef struct {
     int swordBgScaleRatio;
 } IntroState;
 
+#ifdef PC_PORT
+extern u8 _gMenuSharedStorage[0x40];
+#define gIntroState (*(IntroState*)_gMenuSharedStorage)
+#else
 // TODO: This occupies the same memory region as gMenu
 extern IntroState gIntroState;
+#endif
 
 enum {
     ADVANCE_NONE,

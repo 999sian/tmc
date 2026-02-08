@@ -169,7 +169,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
         // Wait 60 frames into file select for graphics to load
         static int fileSelectFrames = 0;
         fileSelectFrames++;
-        if (fileSelectFrames >= 60) {
+        if (fileSelectFrames >= 120) {
             DumpFrameBMP("fileselect_frame.bmp");
             sDumpedFileSelect = true;
 
@@ -247,9 +247,9 @@ extern "C" void Port_PPU_PresentFrame(void) {
                         visibleOBJ++;
                 }
                 fprintf(diag, "OAM: visible=%d affine=%d hidden=%d\n", visibleOBJ, affineOBJ, hiddenOBJ);
-                // List first 10 visible OBJs
+                // List evry visible OBJs
                 int shown = 0;
-                for (int i = 0; i < 128 && shown < 10; i++) {
+                for (int i = 0; i < 128; i++) {
                     uint16_t a0 = gOamMem[i * 4];
                     uint16_t a1 = gOamMem[i * 4 + 1];
                     uint16_t a2 = gOamMem[i * 4 + 2];
@@ -278,9 +278,9 @@ extern "C" void Port_PPU_PresentFrame(void) {
                     }
                     fprintf(diag, "\n");
                 }
-                // Tile data hex dump for first 8 visible OBJs
+                // Tile data hex dump for evry visible OBJs
                 shown = 0;
-                for (int i = 0; i < 128 && shown < 8; i++) {
+                for (int i = 0; i < 128; i++) {
                     uint16_t a0 = gOamMem[i * 4];
                     uint16_t a2 = gOamMem[i * 4 + 2];
                     bool isAffine = (a0 >> 8) & 1;

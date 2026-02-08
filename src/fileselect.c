@@ -19,9 +19,6 @@
 #include "screen.h"
 #include "subtask.h"
 #include "ui.h"
-#ifdef PC_PORT
-#include <stdio.h>
-#endif
 
 // copy, erase, start
 #define NUM_FILE_OPERATIONS 3
@@ -543,7 +540,11 @@ void sub_08050790(void) {
                 sub_0805F7DC(var1, var0);
                 var1++;
             }
+#ifdef PC_PORT
+            port_MemCopyToGBA(gTextGfxBuffer, BG_VRAM + i * 0x400, 0x400);
+#else
             MemCopy(gTextGfxBuffer, (void*)(BG_VRAM + i * 0x400), 0x400);
+#endif
         }
         sub_0805F300(var0);
     }

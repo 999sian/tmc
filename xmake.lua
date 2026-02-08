@@ -282,6 +282,8 @@ target("tmc_pc")
     add_files("port/port_draw.c")
     add_files("port/port_gba_mem.c")
     add_files("port/port_save.c")        -- EEPROM save emulation
+    add_files("port/port_animation.c")   -- Animation system (ported from ASM)
+    add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
     
     -- Game source files - Main game code
     add_files("src/main.c")

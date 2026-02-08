@@ -15,6 +15,7 @@
  */
 
 #include "port_rom.h"
+#include "structures.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -231,8 +232,16 @@ void Port_PrintRomAccessSummary(void) {
 #define ROM_OFF_FRAME_OBJ_LISTS 0x2F3D74 /* gFrameObjLists, 200045 bytes */
 #define FRAME_OBJ_LISTS_SIZE 200045
 
+#define ROM_OFF_FIXED_TYPE_GFX 0x132B30 /* gFixedTypeGfxData, 527 entries × 4 bytes */
+#define FIXED_TYPE_GFX_COUNT 527
+
+#define ROM_OFF_SPRITE_PTRS 0x0029B4 /* gSpritePtrs, 329 entries × 16 bytes */
+#define SPRITE_PTRS_COUNT 329
+
 extern u32 gFrameObjLists[];
 extern u32 gUnk_08133368[];
+extern SpritePtr gSpritePtrs[];
+extern u32 gFixedTypeGfxData[];
 extern void Port_LoadOverlayData(const u8* romData, u32 romSize);
 
 /* Resolved pointer tables — defined as arrays to match extern declarations
@@ -331,6 +340,30 @@ void Port_LoadRom(const char* path) {
     memcpy(gUnk_08133368, &gRomData[ROM_OFF_OBJ_PALETTES], OBJ_PALETTES_COUNT * 4);
     fprintf(stderr, "gUnk_08133368 loaded (%d entries from ROM offset 0x%X).\n", OBJ_PALETTES_COUNT,
             ROM_OFF_OBJ_PALETTES);
+
+    /* gFixedTypeGfxData — offset+size table for fixed-type gfx (not pointers, just encoded u32 values) */
+    memcpy(gFixedTypeGfxData, &gRomData[ROM_OFF_FIXED_TYPE_GFX], FIXED_TYPE_GFX_COUNT * 4);
+    fprintf(stderr, "gFixedTypeGfxData loaded (%d entries from ROM offset 0x%X).\n", FIXED_TYPE_GFX_COUNT,
+            ROM_OFF_FIXED_TYPE_GFX);
+
+    /* gSpritePtrs — array of SpritePtr {animations*, frames*, ptr*, pad}
+     * Each pointer field is a GBA ROM address that needs resolution. */
+    {
+        const u8* src = &gRomData[ROM_OFF_SPRITE_PTRS];
+        for (int i = 0; i < SPRITE_PTRS_COUNT; i++) {
+            u32 anim, frames, ptr, pad;
+            memcpy(&anim, src + i * 16 + 0, 4);
+            memcpy(&frames, src + i * 16 + 4, 4);
+            memcpy(&ptr, src + i * 16 + 8, 4);
+            memcpy(&pad, src + i * 16 + 12, 4);
+            gSpritePtrs[i].animations = ResolveRomPtr(anim);
+            gSpritePtrs[i].frames = (SpriteFrame*)ResolveRomPtr(frames);
+            gSpritePtrs[i].ptr = ResolveRomPtr(ptr);
+            gSpritePtrs[i].pad = pad;
+        }
+        fprintf(stderr, "gSpritePtrs loaded (%d entries from ROM offset 0x%X, pointers resolved).\n", SPRITE_PTRS_COUNT,
+                ROM_OFF_SPRITE_PTRS);
+    }
 
     /* Load overlay data tables (size/clipping table etc.) */
     Port_LoadOverlayData(gRomData, gRomSize);

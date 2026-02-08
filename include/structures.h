@@ -188,10 +188,18 @@ typedef struct {
 } struct_02034480;
 extern struct_02034480 gUnk_02034480;
 
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#define gBG0Buffer (*(u16(*)[0x400]) & gEwram[0x34CB0])
+#define gBG1Buffer (*(u16(*)[0x400]) & gEwram[0x21F30])
+#define gBG2Buffer (*(u16(*)[0x400]) & gEwram[0x344B0])
+#define gBG3Buffer (*(u16(*)[0x800]) & gEwram[0x1A40])
+#else
 extern u16 gBG0Buffer[0x400];
 extern u16 gBG1Buffer[0x400];
 extern u16 gBG2Buffer[0x400];
 extern u16 gBG3Buffer[0x800];
+#endif
 
 typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN, MAX_ACTIVE_ITEMS } ActiveItemIndex;
 /**
