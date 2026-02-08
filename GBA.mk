@@ -95,7 +95,7 @@ $(BUILD_DIR)/%.o: %.s $$(deps) $(ENUM_ASM_HEADERS)
 
 $(BUILD_DIR)/enum_include/%.inc: include/%.h
 	@mkdir -p $(dir $@)
-	$(ENUM_PROCESSOR) $< $(CC) "-D__attribute__(x)=" "-D$(GAME_VERSION)" "-E" "-nostdinc" "-Itools/agbcc" "-Itools/agbcc/include" "-iquote include" > $@
+	$(ENUM_PROCESSOR) $< $(CC) "-D__attribute__(x)=" "-D$(GAME_VERSION)" "-E" "-nostdinc" "-I$(AGBCC_PATH)" "-I$(AGBCC_PATH)/include" "-iquote include" > $@
 
 # =============
 # build C files
@@ -103,7 +103,7 @@ $(BUILD_DIR)/enum_include/%.inc: include/%.h
 
 # agbcc includes are separate because we don't want dependency scanning on them
 CINCLUDE := -I include -I $(BUILD_DIR)
-CPPFLAGS := -I tools/agbcc -I tools/agbcc/include $(CINCLUDE) -nostdinc -undef -D$(GAME_VERSION) -DREVISION=$(REVISION) -D$(GAME_LANGUAGE)
+CPPFLAGS := -I $(AGBCC_PATH) -I $(AGBCC_PATH)/include $(CINCLUDE) -nostdinc -undef -D$(GAME_VERSION) -DREVISION=$(REVISION) -D$(GAME_LANGUAGE)
 CFLAGS := -O2 -Wimplicit -Wparentheses -Werror -Wno-multichar -g3
 
 interwork := $(BUILD_DIR)/src/interrupts.o \
@@ -131,7 +131,7 @@ $(BUILD_DIR)/%.o : %.c $$(deps)
 # ==============
 
 LDFLAGS = -Map ../../$(BUILD_DIR)/$(BUILD_NAME).map
-LIB := -L ../../tools/agbcc/lib -lc
+LIB := -L $(AGBCC_PATH)/lib -lc
 
 $(ROM): $(ELF)
 	$(OBJCOPY) -O binary --gap-fill 0xFF --pad-to 0x9000000 $< $@
