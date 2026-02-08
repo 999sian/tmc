@@ -15,8 +15,6 @@ typedef struct {
     /*0x78*/ u16 unk_78;
 } VaatiProjectileEntity;
 
-extern Entity* gUnk_020000B0;
-
 bool32 sub_0803E4A0(VaatiProjectileEntity*);
 void VaatiProjectile_OnTick(VaatiProjectileEntity*);
 void VaatiProjectile_OnCollision(VaatiProjectileEntity*);
@@ -142,8 +140,8 @@ void VaatiProjectileFunction0Action1(VaatiProjectileEntity* this) {
         super->timer = 10;
         InitializeAnimation(super->child, 2);
     } else {
-        if (gUnk_020000B0 != NULL) {
-            sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+        if (gEnemyTarget != NULL) {
+            sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
             LinearMoveUpdate(super);
         }
     }

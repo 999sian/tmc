@@ -25,8 +25,6 @@ typedef struct {
 
 static_assert(sizeof(TakkuriEntity) == 0x88);
 
-extern Entity* gUnk_020000B0;
-
 void (*const Takkuri_Functions[])(Entity*);
 void (*const gUnk_080CFF54[])(TakkuriEntity*);
 void (*const gUnk_080CFF6C[])(TakkuriEntity*);
@@ -138,8 +136,8 @@ void sub_0803BD08(TakkuriEntity* this) {
     GetNextFrame(super);
     entity = sub_08049DF4(1);
     if (entity != NULL) {
-        if (EntityInRectRadius(super, gUnk_020000B0, 0x88, 0x50)) {
-            if (gUnk_020000B0->y.HALF.HI > super->y.HALF.HI + 8) {
+        if (EntityInRectRadius(super, gEnemyTarget, 0x88, 0x50)) {
+            if (gEnemyTarget->y.HALF.HI > super->y.HALF.HI + 8) {
                 super->action = 2;
                 this->unk_0x84 = 0;
                 super->timer = 16;

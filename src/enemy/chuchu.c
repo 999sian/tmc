@@ -21,8 +21,6 @@ typedef struct {
     /*0x83*/ u8 unk_83;
 } ChuchuEntity;
 
-extern Entity* gUnk_020000B0;
-
 void sub_0801F328(ChuchuEntity* this);
 void sub_0801F340(ChuchuEntity* this);
 void sub_0801F360(ChuchuEntity* this);
@@ -579,12 +577,12 @@ void sub_0801F8C0(ChuchuEntity* this) {
         sub_0801F730(this);
     } else {
         u8 tmp = ++super->timer & 7;
-        if (tmp == 0 && sub_08049F1C(super, gUnk_020000B0, 0x38)) {
+        if (tmp == 0 && sub_08049F1C(super, gEnemyTarget, 0x38)) {
             super->action = 5;
             Chuchu_JumpAtPlayer(this);
         } else {
             if (tmp == 4) {
-                super->direction = GetFacingDirection(super, gUnk_020000B0);
+                super->direction = GetFacingDirection(super, gEnemyTarget);
             }
             ProcessMovement0(super);
             GetNextFrame(super);

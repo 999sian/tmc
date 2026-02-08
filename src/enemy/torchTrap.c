@@ -29,8 +29,6 @@ void (*const gTorchTrapActions[])(TorchTrapEntity*);
 const u16 gTorchTrapTimerLengths[];
 const u16 gTorchTrapProjectileSpeeds[];
 
-extern Entity* gUnk_020000B0;
-
 bool32 sub_0803CFF0(TorchTrapEntity*);
 bool32 sub_0803CFD8(TorchTrapEntity*);
 void sub_0803D0B0(TorchTrapEntity*);
@@ -66,7 +64,7 @@ void sub_0803CF38(TorchTrapEntity* this) {
     if (sub_0803CFF0(this)) {
         sub_0803D0B0(this);
     } else if (sub_08049FDC(super, 0)) {
-        if (EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI, 0x20) == 0) {
+        if (EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI, 0x20) == 0) {
             if (--this->projectileTimer == 0) {
                 TorchTrap_CreateProjectile(this);
                 TorchTrap_Reset(this);
@@ -132,7 +130,7 @@ void TorchTrap_CreateProjectile(TorchTrapEntity* this) {
         }
 
         if (super->direction & 0x20) {
-            proj->direction = GetFacingDirection(super, gUnk_020000B0);
+            proj->direction = GetFacingDirection(super, gEnemyTarget);
         } else {
             proj->direction = super->direction;
         }

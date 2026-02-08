@@ -40,7 +40,6 @@ void sub_08037A14(GibdoEntity*);
 
 void (*const Gibdo_Functions[6])(Entity*);
 void (*const gUnk_080CF2AC[9])(GibdoEntity*);
-extern Entity* gUnk_020000B0;
 
 void Gibdo(Entity* this) {
     EnemyFunctionHandler(this, Gibdo_Functions);
@@ -230,18 +229,18 @@ bool32 sub_08037810(GibdoEntity* this) {
 
     if (this->field_0x76 == 0) {
         if (sub_08049FDC(super, 1) &&
-            EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI, 0x40)) {
-            dir = GetFacingDirection(super, gUnk_020000B0);
+            EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI, 0x40)) {
+            dir = GetFacingDirection(super, gEnemyTarget);
             if (((dir - super->direction + 6) & 0x1f) <= 0xc) {
                 super->action = 3;
                 super->timer = 24;
                 super->subtimer = 8;
                 super->speed = 0xc0;
-                super->direction = DirectionRoundUp(GetFacingDirection(super, gUnk_020000B0));
+                super->direction = DirectionRoundUp(GetFacingDirection(super, gEnemyTarget));
                 super->animationState = super->direction >> 3;
                 this->field_0x74 = 300;
-                this->field_0x78 = gUnk_020000B0->x.HALF.HI;
-                this->field_0x7a = gUnk_020000B0->y.HALF.HI;
+                this->field_0x78 = gEnemyTarget->x.HALF.HI;
+                this->field_0x7a = gEnemyTarget->y.HALF.HI;
                 InitAnimationForceUpdate(super, super->animationState);
                 return TRUE;
             }
@@ -255,8 +254,8 @@ bool32 sub_08037810(GibdoEntity* this) {
 bool32 sub_080378B0(GibdoEntity* this) {
     if (this->field_0x77 == 0) {
         if (sub_08049DF4(1) != NULL) {
-            if (sub_0804A044(super, gUnk_020000B0, 0xa) == super->direction)
-                if (EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI, 0x18)) {
+            if (sub_0804A044(super, gEnemyTarget, 0xa) == super->direction)
+                if (EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI, 0x18)) {
                     super->action = 5;
                     super->speed = 0x100;
                     InitAnimationForceUpdate(super, super->animationState + 8);
@@ -271,9 +270,9 @@ bool32 sub_080378B0(GibdoEntity* this) {
 
 bool32 sub_08037914(GibdoEntity* this) {
     if (sub_08049FDC(super, 1)) {
-        if (!EntityWithinDistance(gUnk_020000B0, this->field_0x78, this->field_0x7a, 0x28)) {
-            this->field_0x78 = gUnk_020000B0->x.HALF_U.HI;
-            this->field_0x7a = gUnk_020000B0->y.HALF_U.HI;
+        if (!EntityWithinDistance(gEnemyTarget, this->field_0x78, this->field_0x7a, 0x28)) {
+            this->field_0x78 = gEnemyTarget->x.HALF_U.HI;
+            this->field_0x7a = gEnemyTarget->y.HALF_U.HI;
             sub_0803797C(this);
             return FALSE;
         }

@@ -23,7 +23,6 @@ typedef struct {
 void (*const Crow_Functions[])(Entity*);
 void (*const gUnk_080CE990[])(CrowEntity*);
 void (*const gUnk_080CE9A4[])(CrowEntity*);
-extern Entity* gUnk_020000B0;
 
 void sub_08032AF4(CrowEntity* this);
 void sub_08032AB0(CrowEntity* this);
@@ -123,9 +122,9 @@ void sub_0803298C(CrowEntity* this) {
 
     if (sub_08049DF4(1) == NULL)
         return;
-    if (EntityInRectRadius(super, gUnk_020000B0, 0x88, 0x50) == 0)
+    if (EntityInRectRadius(super, gEnemyTarget, 0x88, 0x50) == 0)
         return;
-    if (gUnk_020000B0->y.HALF.HI <= super->y.HALF.HI + 8)
+    if (gEnemyTarget->y.HALF.HI <= super->y.HALF.HI + 8)
         return;
 
     super->action = 2;

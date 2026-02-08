@@ -4,8 +4,8 @@
 	.section .rodata
 	.align 2
 
-gUnk_080CA5D4:: @ 080CA5D4
-	.incbin "peahat/gUnk_080CA5D4.bin"
+gPeahatChargeDirectionOffsets:: @ 080CA5D4
+	.incbin "peahat/gPeahatChargeDirectionOffsets.bin"
 
 gSpriteAnimations_Peahat_0:: @ 080CA5D6
 	.include "animations/gSpriteAnimations_Peahat_0.s"

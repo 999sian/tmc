@@ -11,24 +11,49 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[24];
-    /*0x80*/ u8 unk_80;
-    /*0x81*/ u8 unk_81;
-    /*0x82*/ u8 unk_82;
-    /*0x83*/ u8 unk_83;
+    /**
+     * While flying around the Peahat will gradually change direction using this value.
+     * Changes between 2 and -2 at
+     * random intervals.
+     */
+    /*0x80*/ u8 directionDelta;
+    /**
+     * Controls if the Peahat will move up and down while flying.
+     */
+    /*0x81*/ bool8 moveUpAnDown;
+    /**
+     * The Peahat is currently flying.
+     */
+    /*0x82*/ bool8 flying;
+    /**
+     * The Peahat will continue flying around for this period before considering to charge again.
+     */
+    /*0x83*/ u8 flyTimer;
 } PeahatEntity;
+
+enum PeahatActions {
+    PeahatActionInitialize,
+    PeahatActionFly,
+    PeahatActionChargeStart,
+    PeahatActionChargeTarget,
+    PeahatActionChargeEnd,
+    PeahatActionStunned,
+    PeahatActionRepairPropeller,
+    PeahatActionRecover,
+    PeahatActionHop,
+    PeahatActionTakeoff,
+};
 
 extern void (*const Peahat_Functions[])(PeahatEntity*);
 extern void (*const gPeahatPropellerFunctions[])(PeahatEntity*);
 extern void (*const gPeahatActions[])(PeahatEntity*);
-extern void (*const gUnk_080CA5BC[])(PeahatEntity*);
+extern void (*const gPeahatOnGrabbedSubactions[])(PeahatEntity*);
 
 extern const s8 gPeahatFlightHeights[];
-extern const s8 gUnk_080CA5D4[];
+extern const s8 gPeahatChargeDirectionOffsets[];
 
-void sub_080205F8(PeahatEntity* this);
-void sub_08020604(PeahatEntity* this);
-
-extern Entity* gUnk_020000B0;
+void Peahat_EndCharge(PeahatEntity* this);
+void Peahat_UpdateDirection(PeahatEntity* this);
 
 enum {
     PeahatForm_Torso,
@@ -55,39 +80,39 @@ void Peahat(PeahatEntity* this) {
 
 void Peahat_OnTick(PeahatEntity* this) {
     gPeahatActions[super->action](this);
-    if (this->unk_81)
+    if (this->moveUpAnDown)
         super->z.HALF.HI = gPeahatFlightHeights[(super->subtimer++ & 0x30) >> 4];
 }
 
 void Peahat_OnCollision(PeahatEntity* this) {
-    if (this->unk_82) {
+    if (this->flying) {
         if (super->contactFlags == (CONTACT_NOW | 0x14)) {
             Entity* entity = CreateEnemy(PEAHAT, PeahatForm_Propeller);
             if (entity != NULL) {
                 CopyPosition(super, entity);
                 entity->z.HALF.HI -= 8;
             }
-            this->unk_82 = 0;
+            this->flying = FALSE;
             super->animationState = PeahatAnimation_SlicedPropeller;
-            super->action = 5;
+            super->action = PeahatActionStunned;
             super->speed = 0x80;
             super->iframes = -30;
-            this->unk_81 = 0;
+            this->moveUpAnDown = FALSE;
             InitializeAnimation(super, super->animationState);
         } else if (super->contactFlags == (CONTACT_NOW | 0x1b)) {
             super->animationState = PeahatAnimation_BrokenPropeller;
-            super->action = 5;
+            super->action = PeahatActionStunned;
             super->speed = 0x80;
             super->iframes = -30;
-            this->unk_81 = 0;
+            this->moveUpAnDown = FALSE;
             InitializeAnimation(super, super->animationState);
         } else if (super->contactFlags == CONTACT_NOW) {
             if (super->animationState == PeahatAnimation_Flying) {
-                super->action = 1;
+                super->action = PeahatActionFly;
                 super->timer = 30;
                 super->speed = 0x80;
                 super->direction = -1;
-                this->unk_83 = 0x78;
+                this->flyTimer = 120;
                 GetNextFrame(super);
             }
         }
@@ -103,37 +128,37 @@ void Peahat_OnGrabbed(PeahatEntity* this) {
     if (2 >= super->subAction && !sub_0806F520(super))
         return;
 
-    gUnk_080CA5BC[super->subAction](this);
+    gPeahatOnGrabbedSubactions[super->subAction](this);
 }
 
-void sub_080200B4(PeahatEntity* this) {
+void Peahat_OnGrabbed_Subaction0(PeahatEntity* this) {
     super->subAction = 1;
     super->gustJarTolerance = 60;
     if (super->animationState == PeahatAnimation_Flying) {
         super->animationState = PeahatAnimation_BrokenPropeller;
-        super->action = 5;
+        super->action = PeahatActionStunned;
         super->hitType = 0x71;
-        this->unk_81 = 0;
+        this->moveUpAnDown = FALSE;
         InitializeAnimation(super, super->animationState);
     }
 }
 
-void sub_080200E4(PeahatEntity* this) {
+void Peahat_OnGrabbed_Subaction1(PeahatEntity* this) {
     sub_0806F4E8(super);
 }
 
-void sub_080200EC(PeahatEntity* this) {
+void Peahat_OnGrabbed_Subaction2(PeahatEntity* this) {
     sub_0806F3E4(super);
 }
 
-void sub_080200F4(PeahatEntity* this) {
+void Peahat_OnGrabbed_Subaction3(PeahatEntity* this) {
     COLLISION_OFF(super);
 }
 
-void nullsub_5(PeahatEntity* this) {
+void Peahat_OnGrabbed_Subaction4(PeahatEntity* this) {
 }
 
-void sub_08020104(PeahatEntity* this) {
+void Peahat_OnGrabbed_Subaction5(PeahatEntity* this) {
     if (super->flags & ENT_COLLIDE) {
         COLLISION_ON(super);
         super->gustJarState &= 0xfb;
@@ -144,25 +169,25 @@ void sub_08020104(PeahatEntity* this) {
 
 void Peahat_Initialize(PeahatEntity* this) {
     sub_0804A720(super);
-    super->action = 1;
+    super->action = PeahatActionFly;
     super->timer = 16;
     super->subtimer = Random();
     super->direction = Random() & 0x1f;
     super->gustJarFlags = 18;
-    this->unk_80 = (Random() & 1) ? 2 : -2;
-    this->unk_81 = 1;
-    this->unk_82 = 1;
+    this->directionDelta = (Random() & 1) ? 2 : -2;
+    this->moveUpAnDown = TRUE;
+    this->flying = TRUE;
     super->animationState = PeahatAnimation_Flying;
     InitializeAnimation(super, super->animationState);
 }
 
 void Peahat_Fly(PeahatEntity* this) {
-    if (this->unk_83)
-        this->unk_83--;
+    if (this->flyTimer)
+        this->flyTimer--;
 
     if (sub_08049FDC(super, 1)) {
-        if (this->unk_83 == 0 && (super->subtimer & 0xf) == 0 && sub_08049F1C(super, gUnk_020000B0, 0x30)) {
-            super->action = 2;
+        if (this->flyTimer == 0 && (super->subtimer & 0xf) == 0 && sub_08049F1C(super, gEnemyTarget, 0x30)) {
+            super->action = PeahatActionChargeStart;
             super->subAction = Random() & 3;
             super->timer = 60;
             super->speed = 160;
@@ -171,9 +196,9 @@ void Peahat_Fly(PeahatEntity* this) {
 
     if (--super->timer == 0) {
         super->timer = 16;
-        sub_08020604(this);
+        Peahat_UpdateDirection(this);
         if ((Random() & 3) == 0) {
-            this->unk_80 = (Random() & 1) ? 2 : -2;
+            this->directionDelta = (Random() & 1) ? 2 : -2;
         }
     }
 
@@ -186,15 +211,14 @@ void Peahat_ChargeStart(PeahatEntity* this) {
         if (--super->timer) {
             UpdateAnimationVariableFrames(super, 4 - ((super->timer >> 4) & 0x3));
             return;
-        } else {
-            super->action = 3;
-            super->timer = 120;
-            super->speed = 192;
-            super->direction =
-                (GetFacingDirection(super, gUnk_020000B0) + gUnk_080CA5D4[Random() & 1]) & (0x3 | DirectionNorthWest);
         }
+        super->action = PeahatActionChargeTarget;
+        super->timer = 120;
+        super->speed = 192;
+        super->direction = (GetFacingDirection(super, gEnemyTarget) + gPeahatChargeDirectionOffsets[Random() & 1]) &
+                           (0x3 | DirectionNorthWest);
     } else {
-        sub_080205F8(this);
+        Peahat_EndCharge(this);
     }
 
     UpdateAnimationVariableFrames(super, 4);
@@ -203,28 +227,28 @@ void Peahat_ChargeStart(PeahatEntity* this) {
 void Peahat_ChargeTarget(PeahatEntity* this) {
     if (sub_08049FDC(super, 1)) {
         if (--super->timer == 0) {
-            sub_080205F8(this);
+            Peahat_EndCharge(this);
         }
         if (super->timer > 60) {
             if (super->timer & 1)
                 super->speed += 4;
 
             if ((gRoomTransition.frameCount & 3) == 0)
-                sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+                sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
         }
         ProcessMovement2(super);
     } else {
-        sub_080205F8(this);
+        Peahat_EndCharge(this);
     }
     UpdateAnimationVariableFrames(super, 4);
 }
 
 void Peahat_ChargeEnd(PeahatEntity* this) {
     if (--super->timer == 0) {
-        super->action = 1;
+        super->action = PeahatActionFly;
         super->timer = 1;
         super->speed = 128;
-        this->unk_83 = 120;
+        this->flyTimer = 120;
         GetNextFrame(super);
     } else {
         if (super->timer & 1)
@@ -241,7 +265,7 @@ void Peahat_Stunned(PeahatEntity* this) {
     switch (super->animationState) {
         default:
             if (BounceUpdate(super, Q_8_8(24.0)) == BOUNCE_DONE_ALL) {
-                super->action = 6;
+                super->action = PeahatActionRepairPropeller;
                 super->timer = 240;
                 super->subtimer = 10;
                 super->hitType = 0x71;
@@ -256,7 +280,7 @@ void Peahat_Stunned(PeahatEntity* this) {
         case PeahatAnimation_SlicedPropeller:
             GravityUpdate(super, Q_8_8(28.0));
             if (super->z.HALF.HI == 0) {
-                super->action = 7;
+                super->action = PeahatActionRecover;
                 super->timer = 150;
                 super->subtimer = 10;
                 super->hitType = 0x71;
@@ -271,7 +295,7 @@ void Peahat_RepairPropeller(PeahatEntity* this) {
     }
 
     if (sub_0800442E(super) || (--super->timer == 0)) {
-        super->action = 9;
+        super->action = PeahatActionTakeoff;
         super->zVelocity = Q_16_16(1.5);
         super->direction = Random() & 0x1f;
         EnemyDetachFX(super);
@@ -286,7 +310,7 @@ void Peahat_Recover(PeahatEntity* this) {
     }
 
     if (sub_0800442E(super) || (--super->timer == 0)) {
-        super->action = 8;
+        super->action = PeahatActionHop;
         super->timer = 240;
         super->direction = Random() & 0x1f;
         EnemyDetachFX(super);
@@ -297,7 +321,7 @@ void Peahat_Hop(PeahatEntity* this) {
     GetNextFrame(super);
     if (--super->timer == 0) {
         if (super->frame & ANIM_DONE) {
-            super->action = 9;
+            super->action = PeahatActionTakeoff;
             super->zVelocity = Q_16_16(1.5);
             super->animationState = PeahatAnimation_NewPropeller;
             InitializeAnimation(super, super->animationState);
@@ -321,10 +345,10 @@ void Peahat_Hop(PeahatEntity* this) {
 void Peahat_Takeoff(PeahatEntity* this) {
     GetNextFrame(super);
     if (super->frame & ANIM_DONE) {
-        super->action = 1;
+        super->action = PeahatActionFly;
         super->hitType = 0x70;
-        this->unk_82 = 1;
-        this->unk_81 = 1;
+        this->flying = TRUE;
+        this->moveUpAnDown = TRUE;
         super->animationState = PeahatAnimation_Flying;
         InitializeAnimation(super, super->animationState);
     } else if (super->frame & 1) {
@@ -336,7 +360,7 @@ void Peahat_Takeoff(PeahatEntity* this) {
 }
 
 void PeahatPropeller_Initialize(PeahatEntity* this) {
-    super->action = 1;
+    super->action = PeahatActionFly;
     super->timer = 240;
     super->subtimer = 40;
     super->spriteSettings.draw = 1;
@@ -365,16 +389,16 @@ void PeahatPropeller_Fly(PeahatEntity* this) {
     }
 }
 
-void sub_080205F8(PeahatEntity* this) {
-    super->action = 4;
+void Peahat_EndCharge(PeahatEntity* this) {
+    super->action = PeahatActionChargeEnd;
     super->timer = 60;
 }
 
-void sub_08020604(PeahatEntity* this) {
+void Peahat_UpdateDirection(PeahatEntity* this) {
     if (!sub_08049FA0(super) && (Random() & 3)) {
         super->direction = sub_08049EE4(super);
     } else {
-        super->direction += this->unk_80;
+        super->direction += this->directionDelta;
         super->direction &= (0x3 | DirectionNorthWest);
     }
 }
@@ -411,17 +435,17 @@ const s8 gPeahatFlightHeights[] = {
     -5, -6, -7, -6,
 };
 
-void (*const gUnk_080CA5BC[])(PeahatEntity*) = {
-    sub_080200B4,
-    sub_080200E4,
-    sub_080200EC,
-    sub_080200F4,
-    nullsub_5,
-    sub_08020104,
+void (*const gPeahatOnGrabbedSubactions[])(PeahatEntity*) = {
+    Peahat_OnGrabbed_Subaction0,
+    Peahat_OnGrabbed_Subaction1,
+    Peahat_OnGrabbed_Subaction2,
+    Peahat_OnGrabbed_Subaction3,
+    Peahat_OnGrabbed_Subaction4,
+    Peahat_OnGrabbed_Subaction5,
 };
 
 /* Alignment issue
-const s8 gUnk_080CA5D4[] = {
+const s8 gPeahatChargeDirectionOffsets[] = {
     4, -4,
 };
 */

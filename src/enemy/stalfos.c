@@ -19,8 +19,6 @@ typedef struct {
     /*0x7d*/ u8 unk_7d;
 } StalfosEntity;
 
-extern Entity* gUnk_020000B0;
-
 extern void (*const Stalfos_Functions[])(StalfosEntity*);
 extern void (*const Stalfos_Actions[])(StalfosEntity*);
 extern void (*const Stalfos_SubActions[])(StalfosEntity*);
@@ -291,10 +289,10 @@ bool32 sub_08039758(StalfosEntity* this) {
     }
     if (sub_08049FDC(super, 1) && (this->unk_7a == 0)) {
         if (super->type == 0) {
-            if (EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI, 0x24)) {
+            if (EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI, 0x24)) {
                 super->action = 5;
                 super->speed = 0x180;
-                super->direction = GetFacingDirection(super, gUnk_020000B0);
+                super->direction = GetFacingDirection(super, gEnemyTarget);
                 super->animationState = (((super->direction + 4) & 0x18) >> 3);
                 sub_0803981C(this);
                 super->hitType = 0x46;
@@ -303,10 +301,10 @@ bool32 sub_08039758(StalfosEntity* this) {
                 return TRUE;
             }
         } else {
-            if (EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI, 0x48)) {
+            if (EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI, 0x48)) {
                 super->action = 8;
                 super->timer = 60;
-                super->direction = GetFacingDirection(super, gUnk_020000B0);
+                super->direction = GetFacingDirection(super, gEnemyTarget);
                 InitAnimationForceUpdate(super, super->animationState + 0xc);
                 return TRUE;
             }
@@ -347,7 +345,7 @@ void sub_08039858(StalfosEntity* this) {
 u32 sub_080398C0(StalfosEntity* this) {
     u32 rand = Random();
     if ((super->type == 0) && sub_08049FDC(super, 1) &&
-        (EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI, 0x58) != 0)) {
+        (EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI, 0x58) != 0)) {
         return GetFacingDirection(super, &gPlayerEntity.base);
     } else {
         if ((sub_08049FA0(super) == 0) && ((rand & 7) != 0)) {

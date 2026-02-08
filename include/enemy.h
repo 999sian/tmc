@@ -288,4 +288,10 @@ void Enemy66();
 
 extern void (*const gUnk_080012C8[])(Entity*);
 
+/**
+ * The Entity targeted by enemies.
+ * This is usually the player.
+ */
+extern Entity* gEnemyTarget;
+
 #endif // ENEMY_H

@@ -26,8 +26,6 @@ typedef struct {
     /*0x84*/ u32 unk_84;
 } ArmosEntity;
 
-extern Entity* gUnk_020000B0;
-
 extern void (*const gUnk_080CE124[])(ArmosEntity*);
 extern void (*const gUnk_080CE13C[])(ArmosEntity*);
 extern const u8 gUnk_080CE160[];
@@ -343,7 +341,7 @@ bool32 sub_08030650(ArmosEntity* this) {
             return 1;
         }
     } else if (this->unk_80 != 2) {
-        if (!sub_08049FDC(super, 1) || (0x20 < (gUnk_020000B0->x.HALF.HI - super->x.HALF.HI) + 0x10U)) {
+        if (!sub_08049FDC(super, 1) || (0x20 < (gEnemyTarget->x.HALF.HI - super->x.HALF.HI) + 0x10U)) {
             return FALSE;
         }
         return TRUE;
@@ -351,7 +349,7 @@ bool32 sub_08030650(ArmosEntity* this) {
         if (!sub_08049FDC(super, 1)) {
             return FALSE;
         }
-        if (gUnk_020000B0->x.HALF.HI >= (s32)(gRoomControls.origin_x + 0xa8)) {
+        if (gEnemyTarget->x.HALF.HI >= (s32)(gRoomControls.origin_x + 0xa8)) {
             return FALSE;
         }
         return TRUE;
@@ -367,7 +365,7 @@ void sub_080306C4(ArmosEntity* this) {
     if (sub_08049FDC(super, 1) && this->unk_7a != 0) {
 
         super->timer = 24;
-        uVar3 = sub_0800132C(super, gUnk_020000B0);
+        uVar3 = sub_0800132C(super, gEnemyTarget);
         if (uVar3 != 0xff) {
             var = 0;
             if ((((Random() & 7) != 0) || (super->animationState == 0xff)) && ((this->unk_82 & 3) != 3)) {

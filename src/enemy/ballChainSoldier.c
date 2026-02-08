@@ -20,8 +20,6 @@ typedef struct {
     u8 unk_7f;
 } BallChainSoldierEntity;
 
-extern Entity* gUnk_020000B0;
-
 void (*const BallChainSoldier_Functions[])(BallChainSoldierEntity*);
 void (*const gUnk_080D06F8[])(BallChainSoldierEntity*);
 const u8 gUnk_080D0724[];
@@ -210,7 +208,7 @@ void sub_0803E818(BallChainSoldierEntity* this) {
 
 void sub_0803E86C(BallChainSoldierEntity* this) {
     if (sub_08049FDC(super, 1) && sub_0803EAD0(this, 0x50)) {
-        super->direction = DirectionRoundUp(GetFacingDirection(super, gUnk_020000B0));
+        super->direction = DirectionRoundUp(GetFacingDirection(super, gEnemyTarget));
     }
 
     super->action = 1;
@@ -276,12 +274,12 @@ bool32 sub_0803E9D4(BallChainSoldierEntity* this) {
     if (sub_08049FDC(super, 1)) {
         if (sub_0803EAD0(this, 0x38)) {
             super->action = 3;
-            super->direction = DirectionRoundUp(GetFacingDirection(super, gUnk_020000B0));
+            super->direction = DirectionRoundUp(GetFacingDirection(super, gEnemyTarget));
             this->unk_7b = 1;
             sub_0803E94C(this, 0);
             return 1;
         } else if (sub_0803EAD0(this, 0x4e)) {
-            dir = sub_0804A044(super, gUnk_020000B0, 0x12);
+            dir = sub_0804A044(super, gEnemyTarget, 0x12);
             if (dir != 0xff) {
                 if (--this->unk_7a != 0)
                     return 0;
@@ -302,7 +300,7 @@ bool32 sub_0803EA64(BallChainSoldierEntity* this) {
     u32 dir;
     if (sub_08049FDC(super, 1)) {
         if (sub_0803EAD0(this, 0x4e)) {
-            dir = sub_0804A044(super, gUnk_020000B0, 0x12);
+            dir = sub_0804A044(super, gEnemyTarget, 0x12);
             if (dir != 0xff) {
                 if (--this->unk_7a != 0)
                     return 1;
@@ -322,7 +320,7 @@ bool32 sub_0803EA64(BallChainSoldierEntity* this) {
 }
 
 bool32 sub_0803EAD0(BallChainSoldierEntity* this, u32 distance) {
-    return EntityWithinDistance(super, gUnk_020000B0->x.HALF.HI, gUnk_020000B0->y.HALF.HI - 4, distance);
+    return EntityWithinDistance(super, gEnemyTarget->x.HALF.HI, gEnemyTarget->y.HALF.HI - 4, distance);
 }
 
 void (*const BallChainSoldier_Functions[])(BallChainSoldierEntity*) = {

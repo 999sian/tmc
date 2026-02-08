@@ -18,8 +18,6 @@ typedef struct {
     /*0x7c*/ u16 unk_7c;
 } GhiniEntity;
 
-extern Entity* gUnk_020000B0;
-
 extern void (*const Ghini_Functions[])(GhiniEntity*);
 extern void (*const Ghini_Actions[])(GhiniEntity*);
 extern void (*const Ghini_SubActions[])(GhiniEntity*);
@@ -173,7 +171,7 @@ void Ghini_Action2(GhiniEntity* this) {
         super->action = 3;
         super->timer = 30;
         if (sub_08049DF4(1) != NULL) {
-            super->direction = GetFacingDirection(super, gUnk_020000B0);
+            super->direction = GetFacingDirection(super, gEnemyTarget);
         } else {
             super->direction = Random() & 0x1f;
         }
@@ -222,7 +220,7 @@ void Ghini_Action6(GhiniEntity* this) {
         tmp = super->timer + 1;
         super->timer = tmp;
         if ((tmp & gUnk_080D0970[tmp * 0x1000000 >> 0x1e]) == 0) {
-            sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+            sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
         }
         sub_0803F66C(this);
         ProcessMovement1(super);
@@ -326,7 +324,7 @@ bool32 sub_0803F5D4(GhiniEntity* this) {
         this->unk_7c--;
     } else if ((sub_08049FDC(super, 1)) &&
                ((sub_0806FD54(super) ||
-                 ((0xf < (s16)gArea.lightLevel && (EntityInRectRadius(super, gUnk_020000B0, 0x70, 0x48))))))) {
+                 ((0xf < (s16)gArea.lightLevel && (EntityInRectRadius(super, gEnemyTarget, 0x70, 0x48))))))) {
         sub_0803F630(this);
         return TRUE;
     }
