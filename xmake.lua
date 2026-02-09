@@ -257,16 +257,24 @@ target("tmc_pc")
     set_languages("c11", "cxx17")
     set_targetdir("build/pc")
     
+    -- PC port version configurations
+    local pc_versions = {
+        USA = { region = "USA", language = "ENGLISH" },
+        EU  = { region = "EU",  language = "ENGLISH" },
+    }
+    local pc_game_version = get_config("game_version") or "USA"
+    local pc_ver = pc_versions[pc_game_version] or pc_versions["USA"]
+    
     -- Define PC_PORT, NON_MATCHING and game version
-    add_defines("PC_PORT", "NON_MATCHING", "USA", "ENGLISH", "REVISION=0")
+    add_defines("PC_PORT", "NON_MATCHING", pc_ver.region, pc_ver.language, "REVISION=0")
     
     -- Include directories
     add_includedirs("include", "libs")
     add_includedirs("port")
     add_includedirs(".")
-    add_includedirs("build/pc/assets")  -- PC port assets stubs
-    add_includedirs("build/USA")        -- For assets/map_offsets.h etc
-    add_includedirs("libs/ViruaPPU/include") -- ViruaPPU PPU renderer
+    add_includedirs("build/pc/assets")          -- PC port assets stubs
+    add_includedirs("build/" .. pc_game_version) -- For assets/map_offsets.h etc (USA or EU)
+    add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
 
     
 

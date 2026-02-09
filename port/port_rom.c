@@ -7,6 +7,7 @@
  */
 
 #include "port_rom.h"
+#include "port_config.h"
 #include "structures.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -210,42 +211,105 @@ void Port_PrintRomAccessSummary(void) {
     fflush(stderr);
 }
 
-/* ---- USA ROM symbol offsets (addr - 0x08000000) ---- */
-#define ROM_OFF_GFX_AND_PALETTES 0x5A2E80
-#define ROM_OFF_GFX_GROUPS 0x100AA8     /* pointer table, 133 entries */
-#define ROM_OFF_PALETTE_GROUPS 0x0FF850 /* pointer table, 208 entries */
+/* ------------------------------------------------------------------ */
+/*  ROM region detection & offset tables (USA / EU)                   */
+/* ------------------------------------------------------------------ */
+RomRegion gRomRegion = ROM_REGION_UNKNOWN;
+const RomOffsets* gRomOffsets = NULL;
 
-#define GFX_GROUPS_COUNT 133
-#define PALETTE_GROUPS_COUNT 208
+/* USA offsets (from build/USA/tmc.map) */
+const RomOffsets kRomOffsets_USA = {
+    .gfxAndPalettes = 0x5A2E80,
+    .gfxGroups = 0x100AA8,
+    .paletteGroups = 0x0FF850,
+    .objPalettes = 0x133368,
+    .frameObjLists = 0x2F3D74,
+    .fixedTypeGfx = 0x132B30,
+    .spritePtrs = 0x0029B4,
+    .translations = 0x109214,
+    .text09230 = 0x109230,
+    .text09244 = 0x109244,
+    .text09248 = 0x109248,
+    .text0926C = 0x10926C,
+    .text092AC = 0x1092AC,
+    .text092D4 = 0x1092D4,
+    .text0942E = 0x10942E,
+    .text094CE = 0x1094CE,
+    .uiData = 0x0C9044,
+    .fadeData = 0x000F54,
+    .overlaySizeTable = 0x0B2BE8,
+    .mapDataBase = 0x324AE4,
+    .gfxGroupsCount = 133,
+    .paletteGroupsCount = 208,
+    .objPalettesCount = 360,
+    .frameObjListsSize = 200045,
+    .fixedTypeGfxCount = 527,
+    .spritePtrsCount = 329,
+    .expectedRomSize = 0x1000000,
+    .gameCode = "BZME",
+};
 
-#define ROM_OFF_OBJ_PALETTES 0x133368 /* gUnk_08133368, OBJ palette offset table */
-#define OBJ_PALETTES_COUNT 360
+/* EU offsets (from build/EU/tmc_eu.map) */
+const RomOffsets kRomOffsets_EU = {
+    .gfxAndPalettes = 0x5A23D0,
+    .gfxGroups = 0x100204,
+    .paletteGroups = 0x0FED88,
+    .objPalettes = 0x1329B4,
+    .frameObjLists = 0x2F3460,
+    .fixedTypeGfx = 0x132180,
+    .spritePtrs = 0x002A5C,
+    .translations = 0x108968,
+    .text09230 = 0x108984,
+    .text09244 = 0x108998,
+    .text09248 = 0x10899C,
+    .text0926C = 0x1089C0,
+    .text092AC = 0x108A00,
+    .text092D4 = 0x108A28,
+    .text0942E = 0x108B82,
+    .text094CE = 0x108C22,
+    .uiData = 0x0C876C,
+    .fadeData = 0x000F9C,
+    .overlaySizeTable = 0x0B25E8, /* EU overlay size table (shifted) */
+    .mapDataBase = 0x323FEC,
+    .gfxGroupsCount = 133,
+    .paletteGroupsCount = 208,
+    .objPalettesCount = 360,
+    .frameObjListsSize = 200045,
+    .fixedTypeGfxCount = 527,
+    .spritePtrsCount = 329,
+    .expectedRomSize = 0x1000000,
+    .gameCode = "BZMP",
+};
 
-#define ROM_OFF_FRAME_OBJ_LISTS 0x2F3D74 /* gFrameObjLists, 200045 bytes */
-#define FRAME_OBJ_LISTS_SIZE 200045
+RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
+    if (!romData || romSize < 0xB0)
+        return ROM_REGION_UNKNOWN;
 
-#define ROM_OFF_FIXED_TYPE_GFX 0x132B30 /* gFixedTypeGfxData, 527 entries × 4 bytes */
-#define FIXED_TYPE_GFX_COUNT 527
+    if (memcmp(&romData[0xAC], "BZME", 4) == 0) {
+        gRomRegion = ROM_REGION_USA;
+        gRomOffsets = &kRomOffsets_USA;
+        fprintf(stderr, "ROM region detected: USA (BZME)\n");
+    } else if (memcmp(&romData[0xAC], "BZMP", 4) == 0) {
+        gRomRegion = ROM_REGION_EU;
+        gRomOffsets = &kRomOffsets_EU;
+        fprintf(stderr, "ROM region detected: EU (BZMP)\n");
+    } else {
+        fprintf(stderr, "WARNING: Unknown ROM game code '%.4s'. Defaulting to USA offsets.\n", &romData[0xAC]);
+        gRomRegion = ROM_REGION_USA;
+        gRomOffsets = &kRomOffsets_USA;
+    }
+    return gRomRegion;
+}
 
-#define ROM_OFF_SPRITE_PTRS 0x0029B4 /* gSpritePtrs, 329 entries × 16 bytes */
-#define SPRITE_PTRS_COUNT 329
-
-/* Font/text data offsets (data/const/text.s) */
-#define ROM_OFF_TRANSLATIONS 0x109214
-#define ROM_OFF_TEXT_09230 0x109230
-#define ROM_OFF_TEXT_09244 0x109244
-#define ROM_OFF_TEXT_09248 0x109248
-#define ROM_OFF_TEXT_0926C 0x10926C
-#define ROM_OFF_TEXT_092AC 0x1092AC
-#define ROM_OFF_TEXT_092D4 0x1092D4
-#define ROM_OFF_TEXT_0942E 0x10942E
-#define ROM_OFF_TEXT_094CE 0x1094CE
+/* Max table sizes (for static arrays) */
+#define GFX_GROUPS_COUNT_MAX 133
+#define PALETTE_GROUPS_COUNT_MAX 208
 
 extern u32 gFrameObjLists[];
 extern u32 gUnk_08133368[];
 extern SpritePtr gSpritePtrs[];
 extern u32 gFixedTypeGfxData[];
-extern void Port_LoadOverlayData(const u8* romData, u32 romSize);
+extern void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset);
 
 /* Font data tables (data_stubs_autogen.c) */
 extern void* gUnk_08109230[];
@@ -260,8 +324,8 @@ extern u8 gUnk_081094CE[];
 
 /* Resolved pointer tables */
 const u8* gGlobalGfxAndPalettes = NULL;
-const void* gGfxGroups[GFX_GROUPS_COUNT];
-const void* gPaletteGroups[PALETTE_GROUPS_COUNT];
+const void* gGfxGroups[GFX_GROUPS_COUNT_MAX];
+const void* gPaletteGroups[PALETTE_GROUPS_COUNT_MAX];
 
 /* Helper: resolve a 32-bit GBA ROM pointer to native */
 static inline void* ResolveRomPtr(u32 gba_addr) {
@@ -270,6 +334,19 @@ static inline void* ResolveRomPtr(u32 gba_addr) {
     if (gba_addr >= 0x08000000u && gba_addr < 0x08000000u + gRomSize)
         return &gRomData[gba_addr - 0x08000000u];
     fprintf(stderr, "ResolveRomPtr: address 0x%08X is outside ROM\n", gba_addr);
+    return NULL;
+}
+
+/* ---- Helper: try to open a ROM from a list of candidate paths ---- */
+static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foundPathLen) {
+    for (int i = 0; i < count; i++) {
+        FILE* f = fopen(paths[i], "rb");
+        if (f) {
+            if (foundPath)
+                snprintf(foundPath, foundPathLen, "%s", paths[i]);
+            return f;
+        }
+    }
     return NULL;
 }
 
@@ -282,8 +359,20 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "ROM data: loaded %d extracted pages from " ROM_EXTRACT_DIR "/\n", pagesLoaded);
     }
 
-    /* ---- Step 2: try baserom.gba to fill in gaps / verify ---- */
-    FILE* f = fopen(path, "rb");
+    /* ---- Step 2: try ROM files (USA first, then EU) ---- */
+    const char* romCandidates[] = {
+        path,                   /* user-provided path */
+        "baserom.gba",          /* USA default */
+        "baserom_eu.gba",       /* EU default */
+        "build/pc/baserom.gba", /* copied to build dir */
+        "build/pc/baserom_eu.gba",
+        "tmc.gba", /* common names */
+        "tmc_eu.gba",
+    };
+    int numCandidates = sizeof(romCandidates) / sizeof(romCandidates[0]);
+    char usedPath[256] = { 0 };
+
+    FILE* f = TryOpenRom(romCandidates, numCandidates, usedPath, sizeof(usedPath));
     if (f) {
         fseek(f, 0, SEEK_END);
         u32 fileSize = (u32)ftell(f);
@@ -302,12 +391,12 @@ void Port_LoadRom(const char* path) {
             gRomSize = fileSize;
         }
         fclose(f);
-        fprintf(stderr, "ROM loaded: %u bytes (0x%X) from %s\n", gRomSize, gRomSize, path);
+        fprintf(stderr, "ROM loaded: %u bytes (0x%X) from %s\n", gRomSize, gRomSize, usedPath);
     } else if (pagesLoaded > 0) {
-        fprintf(stderr, "ROM file '%s' not found, using %d extracted pages.\n", path, pagesLoaded);
+        fprintf(stderr, "No ROM file found, using %d extracted pages.\n", pagesLoaded);
     } else {
-        fprintf(stderr, "ERROR: Cannot open ROM file: %s\n", path);
-        fprintf(stderr, "  Place baserom.gba (USA) in the working directory,\n");
+        fprintf(stderr, "ERROR: Cannot open any ROM file.\n");
+        fprintf(stderr, "  Place baserom.gba (USA) or baserom_eu.gba (EU) in the working directory,\n");
         fprintf(stderr, "  or provide extracted pages in " ROM_EXTRACT_DIR "/\n");
         abort();
     }
@@ -317,25 +406,29 @@ void Port_LoadRom(const char* path) {
         abort();
     }
 
-    /* Verify game code (only if we have the header) */
-    if (gRomSize > 0xB0 && memcmp(&gRomData[0xAC], "BZME", 4) != 0) {
-        fprintf(stderr, "WARNING: ROM game code is not 'BZME' (USA). Got '%.4s'\n", &gRomData[0xAC]);
-    }
+    /* ---- Step 3: auto-detect ROM region ---- */
+    Port_DetectRomRegion(gRomData, gRomSize);
+    const RomOffsets* R = gRomOffsets;
+
+    fprintf(stderr, "Using offsets for %s (game code: %.4s)\n", gRomRegion == ROM_REGION_EU ? "EU" : "USA",
+            R->gameCode);
+
+    /* ---- Step 4: resolve ROM symbols using detected offsets ---- */
 
     /* gGlobalGfxAndPalettes — huge palette/gfx blob */
-    gGlobalGfxAndPalettes = &gRomData[ROM_OFF_GFX_AND_PALETTES];
+    gGlobalGfxAndPalettes = &gRomData[R->gfxAndPalettes];
 
     /* gGfxGroups — array of ROM pointers → native pointers to GfxItem arrays */
-    for (int i = 0; i < GFX_GROUPS_COUNT; i++) {
+    for (u32 i = 0; i < R->gfxGroupsCount; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_GFX_GROUPS + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->gfxGroups + i * 4], 4);
         ((const void**)gGfxGroups)[i] = ResolveRomPtr(ptr);
     }
 
     /* gPaletteGroups — array of ROM pointers → native PaletteGroup arrays */
-    for (int i = 0; i < PALETTE_GROUPS_COUNT; i++) {
+    for (u32 i = 0; i < R->paletteGroupsCount; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_PALETTE_GROUPS + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->paletteGroups + i * 4], 4);
         ((const void**)gPaletteGroups)[i] = ResolveRomPtr(ptr);
         if (i < 10) {
             fprintf(stderr, "  PaletteGroup[%d]: ROM ptr = 0x%08X -> native %p\n", i, ptr, gPaletteGroups[i]);
@@ -343,25 +436,23 @@ void Port_LoadRom(const char* path) {
     }
 
     /* gFrameObjLists — sprite frame data (self-relative offset table + data) */
-    memcpy(gFrameObjLists, &gRomData[ROM_OFF_FRAME_OBJ_LISTS], FRAME_OBJ_LISTS_SIZE);
-    fprintf(stderr, "gFrameObjLists loaded (%d bytes from ROM offset 0x%X).\n", FRAME_OBJ_LISTS_SIZE,
-            ROM_OFF_FRAME_OBJ_LISTS);
+    memcpy(gFrameObjLists, &gRomData[R->frameObjLists], R->frameObjListsSize);
+    fprintf(stderr, "gFrameObjLists loaded (%u bytes from ROM offset 0x%X).\n", R->frameObjListsSize, R->frameObjLists);
 
-    /* gUnk_08133368 — OBJ palette offset table (used by LoadObjPalette) */
-    memcpy(gUnk_08133368, &gRomData[ROM_OFF_OBJ_PALETTES], OBJ_PALETTES_COUNT * 4);
-    fprintf(stderr, "gUnk_08133368 loaded (%d entries from ROM offset 0x%X).\n", OBJ_PALETTES_COUNT,
-            ROM_OFF_OBJ_PALETTES);
+    /* OBJ palette offset table (used by LoadObjPalette) */
+    memcpy(gUnk_08133368, &gRomData[R->objPalettes], R->objPalettesCount * 4);
+    fprintf(stderr, "OBJ palettes loaded (%u entries from ROM offset 0x%X).\n", R->objPalettesCount, R->objPalettes);
 
-    /* gFixedTypeGfxData — offset+size table for fixed-type gfx (not pointers, just encoded u32 values) */
-    memcpy(gFixedTypeGfxData, &gRomData[ROM_OFF_FIXED_TYPE_GFX], FIXED_TYPE_GFX_COUNT * 4);
-    fprintf(stderr, "gFixedTypeGfxData loaded (%d entries from ROM offset 0x%X).\n", FIXED_TYPE_GFX_COUNT,
-            ROM_OFF_FIXED_TYPE_GFX);
+    /* gFixedTypeGfxData — offset+size table for fixed-type gfx */
+    memcpy(gFixedTypeGfxData, &gRomData[R->fixedTypeGfx], R->fixedTypeGfxCount * 4);
+    fprintf(stderr, "gFixedTypeGfxData loaded (%u entries from ROM offset 0x%X).\n", R->fixedTypeGfxCount,
+            R->fixedTypeGfx);
 
     /* gSpritePtrs — array of SpritePtr {animations*, frames*, ptr*, pad}
      * Each pointer field is a GBA ROM address that needs resolution. */
     {
-        const u8* src = &gRomData[ROM_OFF_SPRITE_PTRS];
-        for (int i = 0; i < SPRITE_PTRS_COUNT; i++) {
+        const u8* src = &gRomData[R->spritePtrs];
+        for (u32 i = 0; i < R->spritePtrsCount; i++) {
             u32 anim, frames, ptr, pad;
             memcpy(&anim, src + i * 16 + 0, 4);
             memcpy(&frames, src + i * 16 + 4, 4);
@@ -372,21 +463,21 @@ void Port_LoadRom(const char* path) {
             gSpritePtrs[i].ptr = ResolveRomPtr(ptr);
             gSpritePtrs[i].pad = pad;
         }
-        fprintf(stderr, "gSpritePtrs loaded (%d entries from ROM offset 0x%X, pointers resolved).\n", SPRITE_PTRS_COUNT,
-                ROM_OFF_SPRITE_PTRS);
+        fprintf(stderr, "gSpritePtrs loaded (%u entries from ROM offset 0x%X, pointers resolved).\n",
+                R->spritePtrsCount, R->spritePtrs);
     }
 
     /* Font/text data tables */
-    memcpy(gUnk_08109244, &gRomData[ROM_OFF_TEXT_09244], 4);
-    memcpy(gUnk_0810926C, &gRomData[ROM_OFF_TEXT_0926C], 64);
-    memcpy(gUnk_081092D4, &gRomData[ROM_OFF_TEXT_092D4], 346);
-    memcpy(gUnk_0810942E, &gRomData[ROM_OFF_TEXT_0942E], 160);
-    memcpy(gUnk_081094CE, &gRomData[ROM_OFF_TEXT_094CE], 1378);
+    memcpy(gUnk_08109244, &gRomData[R->text09244], 4);
+    memcpy(gUnk_0810926C, &gRomData[R->text0926C], 64);
+    memcpy(gUnk_081092D4, &gRomData[R->text092D4], 346);
+    memcpy(gUnk_0810942E, &gRomData[R->text0942E], 160);
+    memcpy(gUnk_081094CE, &gRomData[R->text094CE], 1378);
 
     /* UI data */
     {
         extern u8 gUnk_080C9044[];
-        memcpy(gUnk_080C9044, &gRomData[0x0C9044], 8);
+        memcpy(gUnk_080C9044, &gRomData[R->uiData], 8);
     }
 
     /* UI element definitions (native function pointers) */
@@ -398,7 +489,7 @@ void Port_LoadRom(const char* path) {
     /* gTranslations — 7 ROM pointers */
     for (int i = 0; i < 7; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_TRANSLATIONS + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->translations + i * 4], 4);
         gTranslations[i] = ResolveRomPtr(ptr);
     }
     fprintf(stderr, "gTranslations loaded (7 entries, pointers resolved).\n");
@@ -406,14 +497,14 @@ void Port_LoadRom(const char* path) {
     /* gUnk_08109230 — 5 ROM pointers */
     for (int i = 0; i < 5; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_TEXT_09230 + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->text09230 + i * 4], 4);
         gUnk_08109230[i] = ResolveRomPtr(ptr);
     }
 
     /* gUnk_08109248 — 9 ROM pointers (font glyph data) */
     for (int i = 0; i < 9; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_TEXT_09248 + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->text09248 + i * 4], 4);
         gUnk_08109248[i] = ResolveRomPtr(ptr);
     }
     fprintf(stderr, "gUnk_08109248 font tables loaded (9 entries, pointers resolved).\n");
@@ -421,15 +512,16 @@ void Port_LoadRom(const char* path) {
     /* gUnk_081092AC — 10 ROM pointers (border glyphs) */
     for (int i = 0; i < 10; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_TEXT_092AC + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->text092AC + i * 4], 4);
         gUnk_081092AC[i] = ResolveRomPtr(ptr);
     }
     fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries, pointers resolved).\n");
 
     /* Load overlay data tables (size/clipping table etc.) */
-    Port_LoadOverlayData(gRomData, gRomSize);
+    Port_LoadOverlayData(gRomData, gRomSize, R->overlaySizeTable);
 
-    fprintf(stderr, "ROM symbols resolved (gGlobalGfxAndPalettes, gGfxGroups, gPaletteGroups, gFrameObjLists).\n");
+    fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gGfxGroups, gPaletteGroups, gFrameObjLists).\n",
+            gRomRegion == ROM_REGION_EU ? "EU" : "USA");
 
     /* ---- Extract all known ROM regions to rom_data/ ---- */
     EnsureExtractDir();
@@ -437,36 +529,39 @@ void Port_LoadRom(const char* path) {
     /* ROM header (for game code verification) */
     ExtractRegion(0, 0x200);
 
-    /* Brightness/fade tables (gUnk_08000F54, used by Port_MakeFadeBuff256) */
-    ExtractRegion(0x000F54, 0x1200 - 0x0F54);
+    /* Brightness/fade tables */
+    ExtractRegion(R->fadeData, 0x1200 - R->fadeData);
 
     /* Pointer tables themselves */
-    ExtractRegion(ROM_OFF_GFX_GROUPS, GFX_GROUPS_COUNT * 4);
-    ExtractRegion(ROM_OFF_PALETTE_GROUPS, PALETTE_GROUPS_COUNT * 4);
-    ExtractRegion(ROM_OFF_OBJ_PALETTES, OBJ_PALETTES_COUNT * 4);
-    ExtractRegion(ROM_OFF_FRAME_OBJ_LISTS, FRAME_OBJ_LISTS_SIZE);
+    ExtractRegion(R->gfxGroups, R->gfxGroupsCount * 4);
+    ExtractRegion(R->paletteGroups, R->paletteGroupsCount * 4);
+    ExtractRegion(R->objPalettes, R->objPalettesCount * 4);
+    ExtractRegion(R->frameObjLists, R->frameObjListsSize);
 
     /* Gfx+palette blob */
-    if (gRomSize > ROM_OFF_GFX_AND_PALETTES)
-        ExtractRegion(ROM_OFF_GFX_AND_PALETTES, gRomSize - ROM_OFF_GFX_AND_PALETTES);
+    if (gRomSize > R->gfxAndPalettes)
+        ExtractRegion(R->gfxAndPalettes, gRomSize - R->gfxAndPalettes);
 
     /* Overlay size table */
-    ExtractRegion(0x0B2BE8, 240);
+    ExtractRegion(R->overlaySizeTable, 240);
 
     /* Font/text data region */
-    ExtractRegion(ROM_OFF_TRANSLATIONS, 0x109A2E - ROM_OFF_TRANSLATIONS);
+    {
+        u32 textEnd = R->translations + 0x800; /* conservative region */
+        ExtractRegion(R->translations, textEnd - R->translations);
+    }
 
     /* Extract gGfxGroups / gPaletteGroups referenced data */
-    for (int i = 0; i < GFX_GROUPS_COUNT; i++) {
+    for (u32 i = 0; i < R->gfxGroupsCount; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_GFX_GROUPS + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->gfxGroups + i * 4], 4);
         if (ptr >= 0x08000000u && ptr < 0x08000000u + gRomSize) {
             ExtractRegion(ptr - 0x08000000u, ROM_PAGE_SIZE);
         }
     }
-    for (int i = 0; i < PALETTE_GROUPS_COUNT; i++) {
+    for (u32 i = 0; i < R->paletteGroupsCount; i++) {
         u32 ptr;
-        memcpy(&ptr, &gRomData[ROM_OFF_PALETTE_GROUPS + i * 4], 4);
+        memcpy(&ptr, &gRomData[R->paletteGroups + i * 4], 4);
         if (ptr >= 0x08000000u && ptr < 0x08000000u + gRomSize) {
             ExtractRegion(ptr - 0x08000000u, ROM_PAGE_SIZE);
         }
