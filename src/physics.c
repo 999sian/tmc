@@ -1,9 +1,9 @@
+#include "physics.h"
 #include "area.h"
 #include "asm.h"
 #include "color.h"
 #include "common.h"
 #include "functions.h"
-#include "physics.h"
 #include "player.h"
 #include "playeritem.h"
 #include "room.h"
@@ -556,7 +556,7 @@ void sub_0806FEBC(Entity* ent, u32 param_2, Entity* param_3) {
     *((u32*)ptr) = 0;
     ptr->unk_04.WORD = 0;
     ptr->unk_08.WORD = 0;
-    ptr->unk_0C = (u32)param_3;
+    ptr->unk_0C = (uintptr_t)param_3;
     ptr->unk_00.unk0 = 1;
     ptr->unk_00.unk1 = 1;
 }
@@ -669,12 +669,12 @@ static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
 }
 
 u8* GetSpriteSubEntryOffsetDataPointer(u32 param_1, u32 param_2) {
-    u32 val;
-    u32 val2;
+    uintptr_t val;
+    uintptr_t val2;
     val = ((u16*)(((u8*)gExtraFrameOffsets) + 0x10))[param_1];
-    val += (u32)gExtraFrameOffsets;
+    val += (uintptr_t)gExtraFrameOffsets;
     val2 = *(u8*)(val + param_2) * 4;
-    val2 += (u32)gExtraFrameOffsets;
+    val2 += (uintptr_t)gExtraFrameOffsets;
     val = *((u32*)gExtraFrameOffsets) + val2;
     return (u8*)val;
 }

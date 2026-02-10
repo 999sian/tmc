@@ -34,6 +34,12 @@ extern const u8 gGlobalGfxAndPalettes[];
 #endif
 extern const u8 gEntityListLUT[];
 
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#include "port_rom.h"
+#include <string.h>
+#endif
+
 typedef struct {
     u16 tileType;
     u16 kind;
@@ -141,6 +147,72 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
     u8* src;
     void* dest;
 
+#ifdef PC_PORT
+    /*
+     * On GBA, MapDataDefinition is {u32 src, void* dest, u32 size} = 12 bytes.
+     * On 64-bit PC, sizeof(void*)==8 → struct is 24 bytes with padding.
+     *
+     * ROM data stores packed 12-byte entries with raw GBA addresses.
+     * PC-compiled data (e.g. caveBorderMapData.c) stores native 24-byte structs
+     * with valid 64-bit pointers.  We must detect which case we're in.
+     */
+    bool isPackedRomData = ((u8*)dataDefinition >= gRomData && (u8*)dataDefinition < gRomData + gRomSize);
+
+    if (isPackedRomData) {
+        /* --- Packed 12-byte ROM entries --- */
+        u8* raw = (u8*)dataDefinition;
+        do {
+            u32 field_src, field_dest_gba, field_size;
+            memcpy(&field_src, raw + 0, 4);
+            memcpy(&field_dest_gba, raw + 4, 4);
+            memcpy(&field_size, raw + 8, 4);
+
+            if (field_dest_gba != 0) {
+                dest = Port_ResolveEwramPtr(field_dest_gba);
+                if (!dest) {
+                    fprintf(stderr, "LoadMapData: unmapped GBA dest 0x%08X, skipping\n", field_dest_gba);
+                    raw += 12;
+                    continue;
+                }
+                src = (u8*)&gMapData + (field_src & 0x7fffffff);
+                if ((field_size & MAP_COMPRESSED) != 0) {
+                    if ((field_dest_gba >> 0x18) == 6) {
+                        LZ77UnCompVram(src, dest);
+                    } else {
+                        LZ77UnCompWram(src, dest);
+                    }
+                } else {
+                    MemCopy(src, dest, field_size);
+                }
+            } else {
+                LoadPaletteGroup(*(u16*)raw);
+                sub_080533CC();
+            }
+            raw += 12;
+        } while (((*(u32*)(raw - 12)) & MAP_MULTIPLE) != 0);
+    } else {
+        /* --- Native PC-compiled MapDataDefinition structs (24 bytes) --- */
+        do {
+            dest = dataDefinition->dest;
+            if (dest != NULL) {
+                src = (u8*)&gMapData + (dataDefinition->src & 0x7fffffff);
+                if ((dataDefinition->size & MAP_COMPRESSED) != 0) {
+                    if ((uintptr_t)dest >> 0x18 == 6) {
+                        LZ77UnCompVram(src, dest);
+                    } else {
+                        LZ77UnCompWram(src, dest);
+                    }
+                } else {
+                    MemCopy(src, dest, dataDefinition->size);
+                }
+            } else {
+                LoadPaletteGroup(*(u16*)dataDefinition);
+                sub_080533CC();
+            }
+            dataDefinition++;
+        } while (((dataDefinition - 1)->src & MAP_MULTIPLE) != 0);
+    }
+#else
     do {
         dest = dataDefinition->dest;
         if (dest != NULL) {
@@ -160,6 +232,7 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
         }
         dataDefinition++;
     } while (((dataDefinition - 1)->src & MAP_MULTIPLE) != 0);
+#endif
 }
 
 // Has ifdefs for other variants

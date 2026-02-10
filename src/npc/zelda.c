@@ -11,6 +11,9 @@
 #include "npc.h"
 #include "sound.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 void ZeldaFollower_Hide(Entity*, Entity*);
 void ZeldaFollower_Show(Entity*, Entity*);
@@ -20,7 +23,7 @@ void sub_08066CCC(Entity*);
 void sub_08066CF8(Entity*);
 
 void Zelda(Entity* this) {
-    static void (*const gUnk_08110BD8[])(Entity * ent) = {
+    static void (*const gUnk_08110BD8[])(Entity* ent) = {
         sub_08066CCC,
         sub_08066CF8,
     };

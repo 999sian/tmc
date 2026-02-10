@@ -293,6 +293,8 @@ target("tmc_pc")
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)
     add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
     add_files("port/port_text_render.c") -- Text rendering (UnpackTextNibbles, glyph pixel writers)
+    add_files("port/port_room_funcs.c") -- Room function pointer lookup table (generated)
+    add_files("port/port_script_funcs.c") -- Script Call/CallWithArg function lookup (generated)
     
     -- Game source files - Main game code
     add_files("src/main.c")
@@ -358,7 +360,7 @@ target("tmc_pc")
     -- Other game systems
     add_files("src/subtask.c")
     add_files("src/subtask/*.c")
-    -- add_files("src/cutscene.c")  -- FIXME: pointer casts in EntityData
+    add_files("src/cutscene.c")  -- re-enabled for PC port
     add_files("src/backgroundAnimations.c")
     add_files("src/beanstalkSubtask.c")
     add_files("src/enterPortalSubtask.c")

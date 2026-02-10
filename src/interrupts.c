@@ -11,9 +11,6 @@
 #include "sound.h"
 #include "structures.h"
 #include "ui.h"
-#ifdef PC_PORT
-#include <stdio.h>
-#endif
 
 extern u8 gUnk_03003DE0;
 extern u8 gUnk_03000C30;
@@ -190,21 +187,6 @@ void WaitForNextFrame(void) {
 
     sub_080ADD70();
 
-    // DEBUG
-    {
-        static int tile522_prev = 0;
-        extern u8 gVram[];
-        int nz = 0;
-        for (int b = 0; b < 32; b++) {
-            if (gVram[0x14140 + b])
-                nz++;
-        }
-        if (nz != tile522_prev) {
-            fprintf(stderr, "[T522] ticks=%u tile522 changed: %d -> %d non-zero bytes (after GFX upload)\n",
-                    (u32)gMain.ticks, tile522_prev, nz);
-            tile522_prev = nz;
-        }
-    }
     sub_0801C25C();
     UpdateDisplayControls();
     LoadResources();

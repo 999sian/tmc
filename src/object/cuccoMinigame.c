@@ -14,6 +14,9 @@
 #include "object.h"
 #include "script.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 
 typedef struct {
     Entity base;
@@ -327,8 +330,12 @@ void CuccoMinigame_Init(Entity* this, ScriptExecutionContext* context) {
         if (pEnt->myHeap == NULL) {
             DeleteEntityAny(pEnt);
         } else {
+#ifdef PC_PORT
+            Port_SetEntityScriptCtx(pEnt, (ScriptExecutionContext*)StartCutscene(pEnt, (u16*)context->intVariable));
+#else
             *(ScriptExecutionContext**)&((GenericEntity*)pEnt)->cutsceneBeh =
                 (ScriptExecutionContext*)StartCutscene(pEnt, (u16*)context->intVariable);
+#endif
             pCuccoMinigameDef = pCuccoMinigame_MinigameCuccoDefs[CuccoMinigame_GetLevel()];
             ppEVar5 = (Entity**)pEnt->myHeap;
             room = &gRoomControls;

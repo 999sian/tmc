@@ -18,7 +18,6 @@
 #include "functions.h"
 #include "item.h"
 #include "itemMetaData.h"
-#include "itemMetaData.h"
 #include "kinstone.h"
 #include "main.h"
 #include "manager/diggingCaveEntranceManager.h"
@@ -26,7 +25,6 @@
 #include "message.h"
 #include "npc.h"
 #include "object.h"
-#include "player.h"
 #include "player.h"
 #include "room.h"
 #include "roomid.h"
@@ -204,8 +202,9 @@ static void GameMain_ChangeRoom(void) {
 
     DeleteSleepingEntities();
 
-    if (sub_0805BC04())
+    if (sub_0805BC04()) {
         return;
+    }
 
     UpdatePlayerMapCoords();
     ClearEventPriority();

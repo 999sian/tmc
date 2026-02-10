@@ -1,9 +1,9 @@
+#include "kinstone.h"
 #include "area.h"
 #include "asm.h"
 #include "common.h"
 #include "flags.h"
 #include "item.h"
-#include "kinstone.h"
 #include "manager.h"
 #include "message.h"
 #include "player.h"
@@ -208,12 +208,12 @@ void ShuffleEzloHints(int count, u16* basePtr) {
 
     uVar4 = count - 1;
     if (uVar4 != 0) {
-        puVar5 = (u16*)(uVar4 * 2 + (int)basePtr);
+        puVar5 = basePtr + uVar4;
         do {
             uVar2 = Random();
             iVar3 = uVar2 % (uVar4 + 1);
             uVar1 = *puVar5;
-            puVar4 = (u16*)(iVar3 * 2 + (int)basePtr);
+            puVar4 = basePtr + iVar3;
             *puVar5 = *puVar4;
             *puVar4 = uVar1;
             puVar5--;

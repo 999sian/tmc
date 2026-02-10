@@ -332,12 +332,6 @@ u32* sub_0805F25C(u32 param_1) {
     }
     {
         u32* result = gUnk_08109248[uVar1] + param_1 * 0x10;
-#ifdef PC_PORT
-        if (result == NULL || gUnk_08109248[uVar1] == NULL) {
-            fprintf(stderr, "[TEXT] sub_0805F25C: NULL! fontSet=%d charIdx=%d base=%p\n", uVar1, param_1,
-                    (void*)gUnk_08109248[uVar1]);
-        }
-#endif
         return result;
     }
 }

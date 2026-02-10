@@ -37,9 +37,15 @@ const u8 gUnk_080B4488[1] = { 0 };
 const u8 gUnk_080B4490[1] = { 0 };
 const u8 gUnk_080B44A0[1] = { 0 };
 const u8 gUnk_080B44A8[1] = { 0 };
-const u8 gUnk_080B44B8[1] = { 0 };
-const u8 gUnk_080B44C0[1] = { 0 };
-const u8 gUnk_080B44C2[1] = { 0 };
+/* gUnk_080B44B8: function pointer table for tile entity condition checks.
+   On GBA these are sub_0801AE30 (always TRUE) and sub_0801AE34 (scroll_flags check).
+   Using non-zero values so the != 0 check passes. */
+const u32 gUnk_080B44B8[2] = { 1, 1 };
+/* gUnk_080B44C0: tile entity table for layer 1 — empty (just terminator 0xFFFF) */
+const u16 gUnk_080B44C0[] = { 0xFFFF };
+/* gUnk_080B44C2: tile entity table for layer 2 — 1 entry + terminator
+   Data { tileType=0x75, kind=9, id=0x25, type=0, type2=0, unk_a=1 } */
+const u16 gUnk_080B44C2[] = { 0x0075, 0x0009, 0x0025, 0x0000, 0x0000, 0x0001, 0xFFFF };
 const u8 gUnk_080C8F2C[1] = { 0 };
 const u8 gUnk_080C8F54[1] = { 0 };
 const u8 gUnk_080C8F7C[1] = { 0 };
@@ -530,7 +536,7 @@ const u8 gUnk_08128FA8[1] = { 0 };
 const u8 gUnk_08128FC0[1] = { 0 };
 const u8 gUnk_08128FD8[1] = { 0 };
 const u8 gUnk_08129004[1] = { 0 };
-const u8 gUnk_0812901C[1] = { 0 };
+/* gUnk_0812901C -- defined in port_stubs.c as proper function pointer table */
 const u8 gUnk_08132714[1] = { 0 };
 const u8 gUnk_08132B28[1] = { 0 };
 /* gUnk_08133368 is the OBJ palette offset table (360 entries @ 4 bytes each)

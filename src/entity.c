@@ -5,7 +5,7 @@
 #include "message.h"
 #include "npc.h"
 #ifdef PC_PORT
-#include <stdio.h>
+#include "port_entity_ctx.h"
 #endif
 
 typedef struct Temp {
@@ -245,7 +245,16 @@ void UpdateManagers(void) {
 void EraseAllEntities(void) {
     DeleteAllEntities();
     MemClear(&gPriorityHandler, sizeof(PriorityHandler));
+#ifdef PC_PORT
+    /* On PC these are separate globals, not contiguous like GBA EWRAM. */
+    MemClear(&gPlayerEntity, sizeof(gPlayerEntity));
+    MemClear(gAuxPlayerEntities, sizeof(gAuxPlayerEntities));
+    MemClear(gEntities, sizeof(gEntities));
+    /* Clear the 64-bit script context side table to prevent stale pointers */
+    MemClear(gEntityScriptCtxTable, sizeof(gEntityScriptCtxTable));
+#else
     MemClear(&gPlayerEntity.base, 10880);
+#endif
     MemClear(&gUnk_02033290, 2048);
     sub_0805E98C();
     gEntCount = 0;
@@ -276,15 +285,45 @@ Entity* GetEmptyEntity() {
         } while (++currentEnt < end);
     }
 
+#ifdef PC_PORT
+    /* On PC, scan each array separately (not contiguous). */
+    {
+        int i;
+        Entity* ent;
+        ent = &gPlayerEntity.base;
+        if ((intptr_t)ent->prev < 0 && (ent->flags & (ENT_UNUSED1 | ENT_UNUSED2)) &&
+            ent != gUpdateContext.current_entity) {
+            ClearDeletedEntity(ent);
+            return ent;
+        }
+        for (i = 0; i < MAX_AUX_PLAYER_ENTITIES; i++) {
+            ent = &gAuxPlayerEntities[i].base;
+            if ((intptr_t)ent->prev < 0 && (ent->flags & (ENT_UNUSED1 | ENT_UNUSED2)) &&
+                ent != gUpdateContext.current_entity) {
+                ClearDeletedEntity(ent);
+                return ent;
+            }
+        }
+        for (i = 0; i < MAX_ENTITIES; i++) {
+            ent = &gEntities[i].base;
+            if ((intptr_t)ent->prev < 0 && (ent->flags & (ENT_UNUSED1 | ENT_UNUSED2)) &&
+                ent != gUpdateContext.current_entity) {
+                ClearDeletedEntity(ent);
+                return ent;
+            }
+        }
+    }
+#else
     currentEnt = (GenericEntity*)&gPlayerEntity.base;
 
     do {
-        if ((s32)currentEnt->base.prev < 0 && (currentEnt->base.flags & (ENT_UNUSED1 | ENT_UNUSED2)) &&
+        if ((intptr_t)currentEnt->base.prev < 0 && (currentEnt->base.flags & (ENT_UNUSED1 | ENT_UNUSED2)) &&
             (Entity*)currentEnt != gUpdateContext.current_entity) {
             ClearDeletedEntity(&currentEnt->base);
             return &currentEnt->base;
         }
     } while (++currentEnt < (GenericEntity*)&gCarriedEntity);
+#endif
 
     flags_ip = 0;
     rv = NULL;
@@ -294,7 +333,7 @@ Entity* GetEmptyEntity() {
     do {
         currentEnt = (GenericEntity*)listPtr->first;
         nextList = listPtr + 1;
-        while ((u32)currentEnt != (u32)listPtr) {
+        while ((intptr_t)currentEnt != (intptr_t)listPtr) {
             if (currentEnt->base.kind != MANAGER &&
                 flags_ip < (currentEnt->base.flags & (ENT_UNUSED1 | ENT_UNUSED2 | ENT_DELETED)) &&
                 gUpdateContext.current_entity != &currentEnt->base) {
@@ -383,22 +422,42 @@ void DeleteEntity(Entity* ent) {
         ent->health = 0;
         UnlinkEntity(ent);
         ent->next = NULL;
-        ent->prev = (Entity*)0xffffffff;
+        ent->prev = (Entity*)(intptr_t)-1;
     }
 }
 
 void ClearAllDeletedEntities(void) {
+#ifdef PC_PORT
+    /* On PC, gPlayerEntity/gAuxPlayerEntities/gEntities are separate globals. */
+    int i;
+    if ((intptr_t)gPlayerEntity.base.prev < 0)
+        ClearDeletedEntity(&gPlayerEntity.base);
+    for (i = 0; i < MAX_AUX_PLAYER_ENTITIES; i++) {
+        if ((intptr_t)gAuxPlayerEntities[i].base.prev < 0)
+            ClearDeletedEntity(&gAuxPlayerEntities[i].base);
+    }
+    for (i = 0; i < MAX_ENTITIES; i++) {
+        if ((intptr_t)gEntities[i].base.prev < 0)
+            ClearDeletedEntity(&gEntities[i].base);
+    }
+#else
     GenericEntity* ent = (GenericEntity*)&gPlayerEntity.base;
     do {
         //! @bug if prev pointed to a VALID location higher than a signed int, would still be deleted
-        if ((int)ent->base.prev < 0) {
+        if ((intptr_t)ent->base.prev < 0) {
             ClearDeletedEntity(&ent->base);
         }
     } while (ent++, ent < (((GenericEntity*)&gPlayerEntity.base) + 80));
+#endif
 }
 
 void ClearDeletedEntity(Entity* ent) {
+#ifdef PC_PORT
+    /* Use memset directly — DmaClear32 uses port_DmaTransfer which may not work for native pointers */
+    memset(ent, 0, sizeof(GenericEntity));
+#else
     DmaClear32(3, ent, sizeof(GenericEntity));
+#endif
     gEntCount--;
 }
 
@@ -410,7 +469,7 @@ void DeleteAllEntities(void) {
     it = &gEntityLists[0];
     if (it->first) {
         do {
-            for (ent = it->first; (u32)ent != (u32)it; ent = next) {
+            for (ent = it->first; (intptr_t)ent != (intptr_t)it; ent = next) {
                 next = ent->next;
                 DeleteEntityAny(ent);
             }
@@ -450,15 +509,15 @@ void ReleaseTransitionManager(void* mgr) {
     }
 }
 
-extern LinkedList gEntityListsBackup;
+extern LinkedList gEntityListsBackup[9];
 
 void sub_0805E958(void) {
-    MemCopy(&gEntityLists, &gEntityListsBackup, 0x48);
+    MemCopy(gEntityLists, gEntityListsBackup, sizeof(gEntityLists));
     sub_0805E98C();
 }
 
 void sub_0805E974(void) {
-    MemCopy(&gEntityListsBackup, &gEntityLists, 0x48);
+    MemCopy(gEntityListsBackup, gEntityLists, sizeof(gEntityLists));
 }
 
 void sub_0805E98C(void) {
@@ -476,7 +535,7 @@ void RecycleEntities(void) {
 
     list = &gEntityLists[0];
     do {
-        for (i = list->first; (u32)i != (u32)list; i = i->next) {
+        for (i = list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
             i->flags &= ~ENT_SCRIPTED;
             if ((i->flags & ENT_PERSIST) == 0) {
                 i->flags |= ENT_DELETED;
@@ -542,8 +601,8 @@ bool32 EntityHasDuplicateID(Entity* ent) {
 
     list = &gEntityLists[0];
     do {
-        for (i = list->first; (u32)i != (u32)list; i = i->next) {
-            if ((u32)i != (u32)ent && i->kind == ent->kind && i->id == ent->id) {
+        for (i = list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
+            if (i != ent && i->kind == ent->kind && i->id == ent->id) {
                 return TRUE;
             }
         }
@@ -557,7 +616,7 @@ Entity* FindEntityByID(u32 kind, u32 id, u32 listIndex) {
     LinkedList* list;
 
     list = &gEntityLists[listIndex];
-    for (it = list->first; (u32)it != (u32)list; it = it->next) {
+    for (it = list->first; (intptr_t)it != (intptr_t)list; it = it->next) {
         if (kind == it->kind && id == it->id)
             return it;
     }
@@ -569,7 +628,7 @@ Entity* FindEntity(u32 kind, u32 id, u32 listIndex, u32 type, u32 type2) {
     LinkedList* list;
 
     list = &gEntityLists[listIndex];
-    for (i = list->first; (u32)i != (u32)list; i = i->next) {
+    for (i = list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
         if (kind == i->kind && id == i->id && type == i->type && type2 == i->type2)
             return i;
     }
@@ -581,7 +640,7 @@ Entity* FindNextDuplicateID(Entity* ent, int listIndex) {
     LinkedList* list;
 
     list = &gEntityLists[listIndex];
-    for (i = ent->next; (u32)i != (u32)list; i = i->next) {
+    for (i = ent->next; (intptr_t)i != (intptr_t)list; i = i->next) {
         if (i->kind == ent->kind && i->id == ent->id)
             return i;
     }
@@ -594,7 +653,7 @@ Entity* DeepFindEntityByID(u32 kind, u32 id) {
 
     list = &gEntityLists[0];
     do {
-        for (i = (Entity*)list->first; (u32)i != (u32)list; i = i->next) {
+        for (i = (Entity*)list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
             if (kind == i->kind && (id == i->id))
                 return i;
         }
@@ -610,7 +669,7 @@ void DeleteAllEnemies(void) {
 
     list = &gEntityLists[0];
     do {
-        for (ent = list->first; (u32)ent != (u32)list; ent = next) {
+        for (ent = list->first; (intptr_t)ent != (intptr_t)list; ent = next) {
             next = ent->next;
             if (ent->kind == ENEMY)
                 DeleteEntity(ent);

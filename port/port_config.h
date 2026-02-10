@@ -39,6 +39,17 @@ typedef struct {
     u32 overlaySizeTable; /* OBJ size/clipping table */
     u32 mapDataBase;      /* gAreaRoomMap_None — base of map/asset data section */
 
+    /* Area data tables (pointer tables indexed by area ID) */
+    u32 areaRoomHeaders;   /* gAreaRoomHeaders — pointer table to RoomHeader arrays (0x90 entries) */
+    u32 areaTileSets;      /* gAreaTileSets — pointer table (ptr → ptr) (0x40 entries) */
+    u32 areaTileSetsCount; /* number of entries in gAreaTileSets (0x40 for both regions) */
+    u32 areaRoomMaps;      /* gAreaRoomMaps — pointer table (ptr → ptr) (0x90 entries) */
+    u32 areaTable;         /* gAreaTable — pointer table (ptr → ptr) (0x90 entries) */
+    u32 areaTiles;         /* gAreaTiles — pointer table (ptr) (0x90 entries) */
+    u32 exitLists;         /* gExitLists — pointer table (ptr → ptr) (0x90 entries) */
+    u32 bgAnimTable;       /* gUnk_080B755C — pointer table (ptr) */
+    u32 localFlagBanks;    /* gLocalFlagBanks — u16 array (raw data) */
+
     /* Table counts (same for both regions, but kept per-region for safety) */
     u32 gfxGroupsCount;
     u32 paletteGroupsCount;

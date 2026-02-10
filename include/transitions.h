@@ -50,6 +50,10 @@ extern const Transition gUnk_08134FBC[];
 extern const Transition gUnk_08135048[];
 extern const Transition gUnk_08135190[];
 extern const Transition gUnk_0813A76C[];
+#ifdef PC_PORT
+extern const Transition* const* gExitLists[];
+#else
 extern const Transition* const* const gExitLists[];
+#endif
 
 #endif // TRANSITIONS_H

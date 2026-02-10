@@ -1,5 +1,6 @@
 // TODO: original name is probably floor.c
 
+#include "room.h"
 #include "area.h"
 #include "common.h"
 #include "enemy.h"
@@ -9,8 +10,10 @@
 #include "manager/bombableWallManager.h"
 #include "map.h"
 #include "object.h"
-#include "room.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 static void sub_0804B058(EntityData* dat);
 extern void sub_0801AC98(void);
@@ -18,6 +21,10 @@ extern u32 EnemyEnableRespawn(u32);
 
 extern void** gCurrentRoomProperties;
 extern void*** gAreaTable[];
+#ifdef PC_PORT
+extern void* Port_ReadPackedRomPtr(const void* base, u32 index);
+extern void* Port_GetRoomFuncProp(u32 area, u32 room, u32 prop_idx);
+#endif
 extern u8 gEntityListLUT[];
 
 extern void sub_080186EC(void);
@@ -133,8 +140,16 @@ void sub_0804AF0C(Entity* ent, const EntityData* dat) {
         case 0x40:
             ent->x.HALF.HI = dat->xPos + gRoomControls.origin_x;
             ent->y.HALF.HI = dat->yPos + gRoomControls.origin_y;
+#ifdef PC_PORT
+            {
+                void* resolved = (void*)Port_ResolveRomData(dat->spritePtr);
+                if (!StartCutscene(ent, (u16*)resolved))
+                    DeleteEntity(ent);
+            }
+#else
             if (!StartCutscene(ent, (u16*)dat->spritePtr))
                 DeleteEntity(ent);
+#endif
             break;
     }
 }
@@ -149,7 +164,15 @@ void sub_0804AFB0(void** properties) {
 
     gCurrentRoomProperties = properties;
     for (i = 0; i < 8; ++i) {
+#ifdef PC_PORT
+        if (i >= 4) {
+            gRoomVars.properties[i] = Port_GetRoomFuncProp(gRoomControls.area, gRoomControls.room, i);
+        } else {
+            gRoomVars.properties[i] = Port_ReadPackedRomPtr(properties, i);
+        }
+#else
         gRoomVars.properties[i] = gCurrentRoomProperties[i];
+#endif
     }
 }
 
@@ -158,7 +181,7 @@ u32 CallRoomProp6(void) {
     u32 (*func)(void);
 
     result = 1;
-    func = (u32(*)())GetCurrentRoomProperty(6);
+    func = (u32 (*)())GetCurrentRoomProperty(6);
     if (func != NULL)
         result = func();
     return result;
@@ -183,8 +206,9 @@ void LoadRoom(void) {
     LoadRoomEntityList(GetCurrentRoomProperty(1));
     LoadRoomEntityList(GetCurrentRoomProperty(0));
 
-    if (CheckGlobalFlag(TABIDACHI))
+    if (CheckGlobalFlag(TABIDACHI)) {
         sub_0804B058(GetCurrentRoomProperty(2));
+    }
 
     LoadRoomTileEntities(GetCurrentRoomProperty(3));
     sub_0801AC98();
@@ -241,7 +265,11 @@ void* GetRoomProperty(u32 area, u32 room, u32 property) {
     if (gAreaTable[area] != NULL) {
         temp = gAreaTable[area][room];
         if (temp != NULL) {
+#ifdef PC_PORT
+            return Port_ReadPackedRomPtr(temp, property);
+#else
             temp = temp[property];
+#endif
         }
     }
     return temp;
@@ -256,7 +284,11 @@ void* GetCurrentRoomProperty(u32 idx) {
     } else if (idx <= 7) {
         return gRoomVars.properties[idx];
     } else {
+#ifdef PC_PORT
+        return Port_ReadPackedRomPtr(gCurrentRoomProperties, idx);
+#else
         return gCurrentRoomProperties[idx];
+#endif
     }
 }
 

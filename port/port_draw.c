@@ -17,6 +17,7 @@
 #include "color.h"
 #include "entity.h"
 #include "global.h"
+#include "main.h"
 #include "room.h"
 #include "screen.h"
 #include "structures.h"
@@ -586,7 +587,7 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
 
             if (*(u8*)&sub->unk_00 & 2) {
                 /* Sub-entity mode — entity pointer at offset 0x0C */
-                Entity* subEntity = (Entity*)(uintptr_t)sub->unk_0C;
+                Entity* subEntity = (Entity*)sub->unk_0C;
                 if (subEntity) {
                     s32 sx, sy;
                     u32 sf;

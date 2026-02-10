@@ -163,8 +163,10 @@ typedef struct {
     /*0x7c*/ union SplitWord field_0x7c;   \
     /*0x80*/ union SplitHWord field_0x80;  \
     /*0x82*/ union SplitHWord field_0x82;  \
-    /*0x84*/ union SplitHWord cutsceneBeh; \
-    /*0x86*/ union SplitHWord field_0x86;
+    union { \
+        struct { union SplitHWord cutsceneBeh; union SplitHWord field_0x86; }; \
+        void* scriptContext; /* PC: 8 bytes for 64-bit pointers */ \
+    };
 
 /**
  * Container for instantiable behavior.

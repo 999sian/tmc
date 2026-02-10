@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file cutscene.c
  *
  * @brief Cutscenes
@@ -14,6 +14,7 @@
 #include "menu.h"
 #include "npc.h"
 #include "object.h"
+#include "port_scripts.h"
 #include "screen.h"
 #include "tiles.h"
 
@@ -108,10 +109,10 @@ extern Script script_HouseDoorIntro;
 extern Script script_CutsceneOrchestratorIntro2;
 
 const EntityData gUnk_080FCBC4[] = {
-    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x230, 0x1a8, (u32)&script_IntroCameraTarget },
-    { NPC, 79, ZELDA, 0, 0, 0x230, 0x1a8, (u32)&script_ZeldaMoveToLinksHouse },
-    { OBJECT, 79, HOUSE_DOOR_EXT, 3, 3, 0x290, 0x193, (u32)&script_HouseDoorIntro },
-    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x2d0, 0x1a8, (u32)&script_CutsceneOrchestratorIntro2 },
+    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x230, 0x1a8, ENTITY_SCRIPT(script_IntroCameraTarget) },
+    { NPC, 79, ZELDA, 0, 0, 0x230, 0x1a8, ENTITY_SCRIPT(script_ZeldaMoveToLinksHouse) },
+    { OBJECT, 79, HOUSE_DOOR_EXT, 3, 3, 0x290, 0x193, ENTITY_SCRIPT(script_HouseDoorIntro) },
+    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x2d0, 0x1a8, ENTITY_SCRIPT(script_CutsceneOrchestratorIntro2) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 
@@ -119,15 +120,15 @@ extern Script script_CutsceneOrchestratorIntro;
 extern Script script_SmithIntro;
 extern Script script_ZeldaIntro;
 const EntityData gUnk_080FCC14[] = {
-    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x0, 0x0, (u32)&script_CutsceneOrchestratorIntro },
-    { NPC, 79, SMITH, 0, 0, 0xb8, 0x60, (u32)&script_SmithIntro },
-    { NPC, 79, ZELDA, 0, 0, 0x8, 0x5e, (u32)&script_ZeldaIntro },
+    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x0, 0x0, ENTITY_SCRIPT(script_CutsceneOrchestratorIntro) },
+    { NPC, 79, SMITH, 0, 0, 0xb8, 0x60, ENTITY_SCRIPT(script_SmithIntro) },
+    { NPC, 79, ZELDA, 0, 0, 0x8, 0x5e, ENTITY_SCRIPT(script_ZeldaIntro) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 
 extern Script script_ZeldaLeaveLinksHouse;
 const EntityData gUnk_080FCC54[] = {
-    { NPC, 79, ZELDA, 0, 0, 0xa0, 0x5d, (u32)&script_ZeldaLeaveLinksHouse },
+    { NPC, 79, ZELDA, 0, 0, 0xa0, 0x5d, ENTITY_SCRIPT(script_ZeldaLeaveLinksHouse) },
     { OBJECT, 15, HOUSE_DOOR_INT, 4, 256, 0x78, 0x88, 0 },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
@@ -364,10 +365,10 @@ extern Script script_CutsceneMiscObjectMinishCap;
 extern Script script_Vaati;
 
 const EntityData gUnk_080FCD84[] = {
-    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x0, 0x0, (u32)&script_CutsceneOrchestratorMinishVaati },
-    { NPC, 79, MINISH_EZLO, 0, 0, 0x78, 0xd8, (u32)&script_MinishEzlo },
-    { OBJECT, 79, CUTSCENE_MISC_OBJECT, 1, 0, 0x78, 0x58, (u32)&script_CutsceneMiscObjectMinishCap },
-    { NPC, 79, VAATI, 1, 0, 0x78, 0x68, (u32)&script_Vaati },
+    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x0, 0x0, ENTITY_SCRIPT(script_CutsceneOrchestratorMinishVaati) },
+    { NPC, 79, MINISH_EZLO, 0, 0, 0x78, 0xd8, ENTITY_SCRIPT(script_MinishEzlo) },
+    { OBJECT, 79, CUTSCENE_MISC_OBJECT, 1, 0, 0x78, 0x58, ENTITY_SCRIPT(script_CutsceneMiscObjectMinishCap) },
+    { NPC, 79, VAATI, 1, 0, 0x78, 0x68, ENTITY_SCRIPT(script_Vaati) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 
@@ -414,10 +415,10 @@ extern Script script_KingDaltusTakeover;
 extern Script script_VaatiTakeover;
 extern Script script_ZeldaStoneTakeover;
 const EntityData gUnk_080FCDE0[] = {
-    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x0, 0x0, (u32)&script_CutsceneOrchestratorTakeoverCutscene },
-    { NPC, 79, KING_DALTUS, 0, 0, 0x88, 0x58, (u32)&script_KingDaltusTakeover },
-    { NPC, 79, VAATI, 1, 0, 0x88, 0xe0, (u32)&script_VaatiTakeover },
-    { NPC, 79, ZELDA, 0, 0, 0xb8, 0x58, (u32)&script_ZeldaStoneTakeover },
+    { OBJECT, 79, CUTSCENE_ORCHESTRATOR, 0, 0, 0x0, 0x0, ENTITY_SCRIPT(script_CutsceneOrchestratorTakeoverCutscene) },
+    { NPC, 79, KING_DALTUS, 0, 0, 0x88, 0x58, ENTITY_SCRIPT(script_KingDaltusTakeover) },
+    { NPC, 79, VAATI, 1, 0, 0x88, 0xe0, ENTITY_SCRIPT(script_VaatiTakeover) },
+    { NPC, 79, ZELDA, 0, 0, 0xb8, 0x58, ENTITY_SCRIPT(script_ZeldaStoneTakeover) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 
@@ -425,13 +426,13 @@ extern Script script_MinisterPothoTakeover;
 extern Script script_GuardTakeover;
 extern Script script_GuardTakeover;
 const EntityData gUnk_080FCE30[] = {
-    { NPC, 79, MINISTER_POTHO, 0, 0, 0x68, 0x58, (u32)&script_MinisterPothoTakeover },
-    { NPC, 79, GUARD_1, 0, 0, 0x78, 0xe8, (u32)&script_GuardTakeover },
-    { NPC, 79, GUARD_1, 1, 0, 0x78, 0x108, (u32)&script_GuardTakeover },
-    { NPC, 79, GUARD_1, 2, 0, 0x78, 0x128, (u32)&script_GuardTakeover },
-    { NPC, 79, GUARD_1, 3, 0, 0x98, 0xe8, (u32)&script_GuardTakeover },
-    { NPC, 79, GUARD_1, 4, 0, 0x98, 0x108, (u32)&script_GuardTakeover },
-    { NPC, 79, GUARD_1, 5, 0, 0x98, 0x128, (u32)&script_GuardTakeover },
+    { NPC, 79, MINISTER_POTHO, 0, 0, 0x68, 0x58, ENTITY_SCRIPT(script_MinisterPothoTakeover) },
+    { NPC, 79, GUARD_1, 0, 0, 0x78, 0xe8, ENTITY_SCRIPT(script_GuardTakeover) },
+    { NPC, 79, GUARD_1, 1, 0, 0x78, 0x108, ENTITY_SCRIPT(script_GuardTakeover) },
+    { NPC, 79, GUARD_1, 2, 0, 0x78, 0x128, ENTITY_SCRIPT(script_GuardTakeover) },
+    { NPC, 79, GUARD_1, 3, 0, 0x98, 0xe8, ENTITY_SCRIPT(script_GuardTakeover) },
+    { NPC, 79, GUARD_1, 4, 0, 0x98, 0x108, ENTITY_SCRIPT(script_GuardTakeover) },
+    { NPC, 79, GUARD_1, 5, 0, 0x98, 0x128, ENTITY_SCRIPT(script_GuardTakeover) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 
@@ -477,8 +478,8 @@ void sub_08053BE8(void) {
 extern Script script_ZeldaStoneInDHC;
 extern Script script_ZeldaStoneDHC;
 const EntityData gUnk_080FCEBC[] = {
-    { NPC, 79, ZELDA, 0, 0, 0x78, 0x68, (u32)&script_ZeldaStoneInDHC },
-    { NPC, 79, VAATI, 1, 0, 0x78, 0x98, (u32)&script_ZeldaStoneDHC },
+    { NPC, 79, ZELDA, 0, 0, 0x78, 0x68, ENTITY_SCRIPT(script_ZeldaStoneInDHC) },
+    { NPC, 79, VAATI, 1, 0, 0x78, 0x98, ENTITY_SCRIPT(script_ZeldaStoneDHC) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 void sub_08053C20(void);

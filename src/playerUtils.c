@@ -21,6 +21,12 @@
 #include "tileMap.h"
 #include "tiles.h"
 
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#include "port_rom.h"
+#include <string.h>
+#endif
+
 static void sub_08077E54(ItemBehavior* beh);
 
 extern void sub_0800857C(Entity*);
@@ -579,7 +585,7 @@ static void sub_08077E54(ItemBehavior* this) {
 }
 
 void DeleteItemBehavior(ItemBehavior* this, u32 index) {
-    u32 not ;
+    u32 not;
 
     if (index == 0) {
         if (gPlayerState.item != NULL) {
@@ -590,11 +596,11 @@ void DeleteItemBehavior(ItemBehavior* this, u32 index) {
         }
     }
 
-    not = (8 >> index);
-    gPlayerState.attack_status &= ~((u8)((8 >> index) << 4) | not );
-    not = ~not ;
-    gPlayerState.field_0xa &= not ;
-    gPlayerState.keepFacing &= not ;
+    not= (8 >> index);
+    gPlayerState.attack_status &= ~((u8)((8 >> index) << 4) | not);
+    not= ~not;
+    gPlayerState.field_0xa &= not;
+    gPlayerState.keepFacing &= not;
     MemClear(this, sizeof(ItemBehavior));
 }
 
@@ -1031,7 +1037,7 @@ void DetermineRButtonInteraction(void) {
                 rAction = gHUD.rActionInteractTile;
             } else {
                 interaction = sub_080784E4();
-                if (interaction->entity->interactType == INTERACTION_NONE) {
+                if (interaction->entity == NULL || interaction->entity->interactType == INTERACTION_NONE) {
 
                     switch (interaction->type) {
                         case INTERACTION_TALK:
@@ -4017,6 +4023,32 @@ void sub_0807C4F8(void) {
     if (gRoomControls.area != AREA_PALACE_OF_WINDS_BOSS) {
         MemClear(gMapDataBottomSpecial, 0x8000);
         MemClear(gMapDataTopSpecial, 0x8000);
+#ifdef PC_PORT
+        /*
+         * (gArea.pCurrentRoomInfo)->map points into ROM data with packed 12-byte
+         * MapDataDefinition entries.  We iterate manually and compare the packed
+         * dest field (GBA address) against the known GBA addresses for
+         * gMapDataBottomSpecial (0x02019EE0) and gMapDataTopSpecial (0x02002F00).
+         */
+        {
+            u8* raw = (u8*)(gArea.pCurrentRoomInfo)->map;
+            MapDataDefinition temp;
+            do {
+                u32 field_src, field_dest_gba, field_size;
+                memcpy(&field_src, raw + 0, 4);
+                memcpy(&field_dest_gba, raw + 4, 4);
+                memcpy(&field_size, raw + 8, 4);
+
+                if (field_dest_gba == 0x02019EE0u || field_dest_gba == 0x02002F00u) {
+                    temp.src = field_src & 0x7FFFFFFFu;
+                    temp.dest = Port_ResolveEwramPtr(field_dest_gba);
+                    temp.size = field_size;
+                    LoadMapData(&temp);
+                }
+                raw += 12;
+            } while ((s32)(*(u32*)(raw - 12)) < 0);
+        }
+#else
         ptr1 = &gUnk_02022830;
         ptr2 = (MapDataDefinition*)(gArea.pCurrentRoomInfo)->map;
         ptr2 -= 1;
@@ -4032,6 +4064,7 @@ void sub_0807C4F8(void) {
                 LoadMapData(ptr1);
             }
         } while ((s32)ptr2->src < 0);
+#endif
         MemCopy(gMapDataBottomSpecial, gMapDataBottomSpecial + 0x2000, 0x4000);
         sub_0807C5F4(gMapDataBottomSpecial, gMapDataBottomSpecial + 0x2000);
 
@@ -4133,7 +4166,11 @@ void sub_0807C69C(u8* data, u32 width, u32 height) {
 
     for (index = 0; index < height; index++) {
         for (innerIndex = 0; innerIndex < width; innerIndex++) {
+#ifdef PC_PORT
+            ptr1[-(s32)innerIndex] = ptr2[-(s32)innerIndex];
+#else
             ptr1[-innerIndex] = ptr2[-innerIndex];
+#endif
         }
         ptr1 -= 0x40;
         ptr2 -= width;
@@ -4267,7 +4304,13 @@ void sub_0807C8B0(u16* data, u32 width, u32 height) {
         src_ptr_cpy = src_ptr; //[index * -width];
         dst_ptr_cpy = dst_ptr; //[index * -0x40];
         for (innerIndex = 0; innerIndex < width; innerIndex++) {
+#ifdef PC_PORT
+            /* On GBA (32-bit), ptr[-(u32)n] wraps correctly. On 64-bit,
+             * -(u32)n = 0xFFFFFFFF..., a huge positive offset. Cast to signed. */
+            dst_ptr_cpy[-(s32)innerIndex] = src_ptr_cpy[-(s32)innerIndex];
+#else
             dst_ptr_cpy[-innerIndex] = src_ptr_cpy[-innerIndex];
+#endif
         }
         dst_ptr -= 0x40;
         src_ptr -= width;
@@ -4275,7 +4318,11 @@ void sub_0807C8B0(u16* data, u32 width, u32 height) {
 
     diff = 0x40 - width;
     for (index = 0; index < 0x40; index++) {
+#ifdef PC_PORT
+        dst_ptr = data + width + (s32)index * 0x40;
+#else
         dst_ptr = data + width - index * -0x40;
+#endif
 
         for (innerIndex = 0; innerIndex < diff; innerIndex++) {
             dst_ptr[innerIndex] = 0;
@@ -4294,8 +4341,8 @@ void LoadCompressedMapData(void* dest, u32 offset) {
     void* src;
 
     if (offset != -1) {
-        src = &gMapData + (offset & 0x7fffffff);
-        if ((u32)dest >> 0x18 == 6) {
+        src = (u8*)&gMapData + (offset & 0x7fffffff);
+        if ((uintptr_t)dest >> 0x18 == 6) {
             LZ77UnCompVram(src, (void*)dest);
         } else {
             LZ77UnCompWram(src, (void*)dest);
@@ -4322,7 +4369,9 @@ void sub_0807C9D8(u32* a1) {
 }
 
 u32 FinalizeSave(void) {
+    fprintf(stderr, "[FINALIZE] invalid=%u initialized=%u\n", gSave.invalid, gSave.initialized);
     if (gSave.invalid || gSave.initialized != 1) {
+        fprintf(stderr, "[FINALIZE] Setting up new game: area=0x22, room=0x15\n");
         gSave.invalid = 0;
         gSave.initialized = 1;
         gSave.global_progress = 1;

@@ -4,6 +4,7 @@
  *
  * @brief Player entity
  */
+#include "player.h"
 #include "area.h"
 #include "asm.h"
 #include "collision.h"
@@ -17,14 +18,17 @@
 #include "main.h"
 #include "message.h"
 #include "object.h"
-#include "player.h"
-#include "playeritem.h"
 #include "playerItem/playerItemBottle.h"
+#include "playeritem.h"
+#include "port_scripts.h"
 #include "save.h"
 #include "screen.h"
 #include "screenTransitions.h"
 #include "sound.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 
 #define kGravityRate Q_8_8(32)
 #define kWalkSpeedSlopeSubtractor Q_8_8(0.3125)
@@ -3817,7 +3821,13 @@ static void PlayerSleep(PlayerEntity* this) {
 static void sub_08074C68(PlayerEntity* this) {
     this->unk_68.BYTES.byte0 = 0;
     if (gPlayerState.field_0x38 != 1) {
-        if (*(ScriptExecutionContext**)&this->unk_84.WORD == &gPlayerScriptExecutionContext) {
+        if (
+#ifdef PC_PORT
+            Port_GetEntityScriptCtx(super)
+#else
+            *(ScriptExecutionContext**)&this->unk_84.WORD
+#endif
+            == &gPlayerScriptExecutionContext) {
             super->subAction = 1;
             sub_0807DD64(super);
             sub_08074CF8(this);
@@ -3841,8 +3851,16 @@ static void sub_08074CF8(PlayerEntity* this) {
     u32 v3;
 
     v3 = super->animationState;
+#ifdef PC_PORT
+    {
+        ScriptExecutionContext* ctx = Port_GetEntityScriptCtx(super);
+        ExecuteScript(super, ctx);
+        sub_08074D34(this, ctx);
+    }
+#else
     ExecuteScript(super, *(ScriptExecutionContext**)&this->unk_84.WORD);
     sub_08074D34(this, *(ScriptExecutionContext**)&this->unk_84.WORD);
+#endif
     if ((this->unk_80.HALF.HI & 1) != 0)
         super->animationState = v3;
     GravityUpdate(super, kGravityRate);
@@ -3933,8 +3951,16 @@ void sub_08074F1C(PlayerEntity* this) {
 }
 
 void sub_08074F2C(PlayerEntity* this) {
+#ifdef PC_PORT
+    {
+        ScriptExecutionContext* ctx = Port_GetEntityScriptCtx(super);
+        ExecuteScript(super, ctx);
+        sub_08074D34(this, ctx);
+    }
+#else
     ExecuteScript(super, *(ScriptExecutionContext**)&this->unk_84.WORD);
     sub_08074D34(this, *(ScriptExecutionContext**)&this->unk_84.WORD);
+#endif
 }
 
 void sub_08074F44(PlayerEntity* this) {
@@ -4082,7 +4108,11 @@ void sub_080751E8(u32 a1, u32 a2, void* script) {
 
     MemClear(&gPlayerScriptExecutionContext, sizeof(ScriptExecutionContext));
     gPlayerScriptExecutionContext.scriptInstructionPointer = script;
+#ifdef PC_PORT
+    Port_SetEntityScriptCtx(&gPlayerEntity.base, &gPlayerScriptExecutionContext);
+#else
     ((fixme*)&gPlayerEntity.base)->ctx = &gPlayerScriptExecutionContext;
+#endif
     gPlayerState.queued_action = PLAYER_SLEEP;
     gPlayerState.field_0x38 = 1;
     gPlayerState.field_0x39 = 0;
@@ -4090,10 +4120,10 @@ void sub_080751E8(u32 a1, u32 a2, void* script) {
     gPlayerState.flags |= PL_NO_CAP;
     if (!a1) {
         gPlayerState.field_0x39 = 0;
-        script = &script_BedInLinksRoom;
+        script = PORT_SCRIPT(script_BedInLinksRoom);
     } else {
         gPlayerState.field_0x39 = 1;
-        script = &script_BedAtSimons;
+        script = PORT_SCRIPT(script_BedAtSimons);
     }
     e = CreateObject(BED_COVER, !gPlayerState.field_0x39 ? 2 : 0, 0);
     if (e != NULL) {

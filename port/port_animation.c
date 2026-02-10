@@ -65,6 +65,8 @@ static void FrameZero(Entity* entity) {
     entity->lastFrameIndex = entity->frameIndex;
 
     u8* p = (u8*)entity->animPtr;
+    if (!p)
+        return; /* Safety: no animation data */
     entity->frameIndex = p[0];
     entity->frameDuration = p[1];
     entity->frameSpriteSettings = p[2];
@@ -104,6 +106,8 @@ void InitializeAnimation(Entity* entity, u32 animIndex) {
 /* UpdateAnimationVariableFrames — advance animation by N ticks        */
 /* ------------------------------------------------------------------ */
 void UpdateAnimationVariableFrames(Entity* entity, u32 amount) {
+    if (!entity->animPtr)
+        return; /* Safety: no animation data */
     int remaining = (int)entity->frameDuration - (int)amount;
 
     if (remaining > 0) {

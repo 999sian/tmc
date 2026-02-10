@@ -129,6 +129,13 @@ u32 ReadBit(void* src, u32 bit) {
 }
 
 u32 WriteBit(void* src, u32 bit) {
+#ifdef PC_PORT
+    u8* p = (u8*)src + bit / 8;
+    u32 mask = 1 << (bit & 7);
+    u32 orig = *p & mask;
+    *p |= mask;
+    return orig;
+#else
     u32 b;
     u32 mask;
     u32 orig;
@@ -143,9 +150,17 @@ u32 WriteBit(void* src, u32 bit) {
 
     orig &= mask;
     return orig;
+#endif
 }
 
 u32 ClearBit(void* src, u32 bit) {
+#ifdef PC_PORT
+    u8* p = (u8*)src + bit / 8;
+    u32 mask = 1 << (bit & 7);
+    u32 orig = *p & mask;
+    *p &= ~mask;
+    return orig;
+#else
     u32 b;
     u32 mask;
     u32 orig;
@@ -160,6 +175,7 @@ u32 ClearBit(void* src, u32 bit) {
 
     orig &= mask;
     return orig;
+#endif
 }
 
 void MemFill16(u32 value, void* dest, u32 size) {
@@ -176,7 +192,7 @@ void MemFill16(u32 value, void* dest, u32 size) {
 
 void MemFill32(u32 value, void* dest, u32 size) {
 #ifdef PC_PORT
-    u32* d = (u32*)dest;
+    u32* d = (u32*)port_resolve_addr((uintptr_t)dest);
     u32 i;
     for (i = 0; i < size / 4; i++) {
         d[i] = value;
@@ -188,7 +204,7 @@ void MemFill32(u32 value, void* dest, u32 size) {
 
 void MemClear(void* dest, u32 size) {
 #ifdef PC_PORT
-    memset(dest, 0, size);
+    memset(port_resolve_addr((uintptr_t)dest), 0, size);
 #else
     gba_MemClear((u32)dest, size);
 #endif
@@ -196,7 +212,9 @@ void MemClear(void* dest, u32 size) {
 
 void MemCopy(const void* src, void* dest, u32 size) {
 #ifdef PC_PORT
-    memcpy(dest, src, size);
+    void* resolvedDest = port_resolve_addr((uintptr_t)dest);
+    const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
+    memcpy(resolvedDest, resolvedSrc, size);
 #else
     gba_MemCopy((u32)src, (u32)dest, size);
 #endif

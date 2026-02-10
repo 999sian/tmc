@@ -112,7 +112,7 @@ Entity* EnemyInteractionManager_FindMatchingEntity(EntityData* unk1) {
     x = unk1->xPos + gRoomControls.origin_x;
     y = unk1->yPos + gRoomControls.origin_y;
     tmp = &gEntityLists[4];
-    for (i = tmp->first; (u32)i != (u32)tmp; i = i->next) {
+    for (i = tmp->first; (intptr_t)i != (intptr_t)tmp; i = i->next) {
         if (x == i->x.HALF.HI && y == i->y.HALF.HI && unk1->id == i->id && ENEMY == i->kind && unk1->type == i->type) {
             return i;
         }

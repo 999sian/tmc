@@ -48,15 +48,9 @@ u32 CreateLavaDrownFX(...) {
 u32 CreatePitFallFX(...) {
     return 0;
 }
-u32 CutsceneMain_Exit(...) {
-    return 0;
-}
-u32 CutsceneMain_Init(...) {
-    return 0;
-}
-u32 CutsceneMain_Update(...) {
-    return 0;
-}
+/* CutsceneMain_Exit -- real implementation in src/cutscene.c */
+/* CutsceneMain_Init -- real implementation in src/cutscene.c */
+/* CutsceneMain_Update -- real implementation in src/cutscene.c */
 /* Div -- implemented in port_bios.c */
 u32 DoItemTileInteraction(...) {
     return 0;
@@ -140,18 +134,10 @@ u32 GetFuserId(...) {
 u32 GetNextFunction(...) {
     return 0;
 }
-u32 GetNextScriptCommandHalfword(...) {
-    return 0;
-}
-u32 GetNextScriptCommandHalfwordAfterCommandMetadata(...) {
-    return 0;
-}
-u32 GetNextScriptCommandWord(...) {
-    return 0;
-}
-u32 GetNextScriptCommandWordAfterCommandMetadata(...) {
-    return 0;
-}
+/* GetNextScriptCommandHalfword — implemented in port_stubs.c */
+/* GetNextScriptCommandHalfwordAfterCommandMetadata — implemented in port_stubs.c */
+/* GetNextScriptCommandWord — implemented in port_stubs.c */
+/* GetNextScriptCommandWordAfterCommandMetadata — implemented in port_stubs.c */
 u32 GetRandomByWeight(...) {
     return 0;
 }

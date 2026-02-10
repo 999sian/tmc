@@ -29,7 +29,6 @@ extern struct Main gMain;
 static SDL_Renderer* sRenderer = nullptr;
 static SDL_Texture* sTexture = nullptr;
 static int sFrameCount = 0;
-static int sLastTask = -1;
 static bool sDumpedFileSelect = false;
 
 // Dump framebuffer to BMP
@@ -111,44 +110,6 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
     sFrameCount++;
 
-    // Log task transitions
-    int curTask = gMain.task;
-    if (curTask != sLastTask) {
-        fprintf(stderr, "[PPU] Task changed: %d -> %d at frame %d\n", sLastTask, curTask, sFrameCount);
-        sLastTask = curTask;
-    }
-
-    if (sFrameCount % 120 == 1) {
-        uint16_t bg0cnt = gIoMem[0x08] | (gIoMem[0x09] << 8);
-        uint16_t bg1cnt = gIoMem[0x0A] | (gIoMem[0x0B] << 8);
-        uint16_t bg2cnt = gIoMem[0x0C] | (gIoMem[0x0D] << 8);
-        uint16_t bg3cnt = gIoMem[0x0E] | (gIoMem[0x0F] << 8);
-        uint16_t bldcnt = gIoMem[0x50] | (gIoMem[0x51] << 8);
-        uint16_t bldalpha = gIoMem[0x52] | (gIoMem[0x53] << 8);
-        uint16_t bldy = gIoMem[0x54] | (gIoMem[0x55] << 8);
-        // Count non-zero pixels in VRAM for each BG screenbase
-        int vramNonZero = 0;
-        for (int i = 0; i < 0x18000; i += 2) {
-            uint16_t v = gVram[i / 2];
-            if (v != 0)
-                vramNonZero++;
-        }
-        int palNonZero = 0;
-        for (int i = 0; i < 256; i++) {
-            if (gBgPltt[i] != 0)
-                palNonZero++;
-        }
-        int objPalNonZero = 0;
-        for (int i = 0; i < 256; i++) {
-            if (gObjPltt[i] != 0)
-                objPalNonZero++;
-        }
-        fprintf(stderr, "[PPU] frame=%d DISPCNT=%04X mode=%d BG0=%04X BG1=%04X BG2=%04X BG3=%04X\n", sFrameCount,
-                dispcnt, gbaMode, bg0cnt, bg1cnt, bg2cnt, bg3cnt);
-        fprintf(stderr, "[PPU] BLDCNT=%04X BLDALPHA=%04X BLDY=%04X vramWords=%d bgPal=%d objPal=%d\n", bldcnt, bldalpha,
-                bldy, vramNonZero, palNonZero, objPalNonZero);
-    }
-
     switch (gbaMode) {
         case 0:
             global_Registers.mode = 1;
@@ -165,7 +126,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
     RenderFrame();
 
     // Dump first file select frame to BMP
-    if (curTask == 1 && !sDumpedFileSelect) {
+    if (gMain.task == 1 && !sDumpedFileSelect) {
         // Wait 60 frames into file select for graphics to load
         static int fileSelectFrames = 0;
         fileSelectFrames++;

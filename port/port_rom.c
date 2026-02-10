@@ -7,8 +7,12 @@
  */
 
 #include "port_rom.h"
+#include "area.h"
+#include "map.h"
 #include "port_config.h"
+#include "port_gba_mem.h"
 #include "structures.h"
+#include "tileMap.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -239,6 +243,15 @@ const RomOffsets kRomOffsets_USA = {
     .fadeData = 0x000F54,
     .overlaySizeTable = 0x0B2BE8,
     .mapDataBase = 0x324AE4,
+    .areaRoomHeaders = 0x11E214,
+    .areaTileSets = 0x10246C,
+    .areaTileSetsCount = 0x40,
+    .areaRoomMaps = 0x107988,
+    .areaTable = 0x0D50FC,
+    .areaTiles = 0x10309C,
+    .exitLists = 0x13A7F0,
+    .bgAnimTable = 0x0B755C,
+    .localFlagBanks = 0x11E454,
     .gfxGroupsCount = 133,
     .paletteGroupsCount = 208,
     .objPalettesCount = 360,
@@ -271,6 +284,15 @@ const RomOffsets kRomOffsets_EU = {
     .fadeData = 0x000F9C,
     .overlaySizeTable = 0x0B25E8, /* EU overlay size table (shifted) */
     .mapDataBase = 0x323FEC,
+    .areaRoomHeaders = 0x11D95C,
+    .areaTileSets = 0x101BC8,
+    .areaTileSetsCount = 0x40,
+    .areaRoomMaps = 0x1070E4,
+    .areaTable = 0x0D4828,
+    .areaTiles = 0x1027F8,
+    .exitLists = 0x139EDC,
+    .bgAnimTable = 0x0B6C84,
+    .localFlagBanks = 0x11DB9C,
     .gfxGroupsCount = 133,
     .paletteGroupsCount = 208,
     .objPalettesCount = 360,
@@ -304,12 +326,59 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
 /* Max table sizes (for static arrays) */
 #define GFX_GROUPS_COUNT_MAX 133
 #define PALETTE_GROUPS_COUNT_MAX 208
+#define AREA_COUNT 0x90 /* 144 areas (0x00..0x8F) */
 
 extern u32 gFrameObjLists[];
 extern u32 gUnk_08133368[];
 extern SpritePtr gSpritePtrs[];
 extern u32 gFixedTypeGfxData[];
 extern void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset);
+
+/* Area / room data tables (port_linked_stubs.c) */
+extern RoomHeader* gAreaRoomHeaders[];
+extern void* gAreaRoomMaps[];
+extern void* gAreaTable[];
+extern void* gAreaTileSets[];
+extern void* gAreaTiles[];
+extern const Transition* const* gExitLists[]; /* PC_PORT: non-const outer for ROM loading */
+
+/*
+ * Shadow arrays for second-level ROM pointer resolution.
+ * On GBA, sub-arrays inside gAreaTileSets[area], gAreaRoomMaps[area],
+ * gAreaTable[area], and gExitLists[area] contain packed 32-bit GBA ROM
+ * pointers. On 64-bit PC, sizeof(void*)==8, so we can't dereference them
+ * directly. These shadow arrays hold pre-resolved native pointers.
+ */
+static void* sTileSetsResolved[AREA_COUNT][MAX_ROOMS];
+static void* sRoomMapsResolved[AREA_COUNT][MAX_ROOMS];
+static void* sAreaTableResolved[AREA_COUNT][MAX_ROOMS];
+static void* sExitListsResolved[AREA_COUNT][MAX_ROOMS];
+
+/* Forward declaration */
+static inline void* ResolveRomPtr(u32 gba_addr);
+
+/* Count rooms for an area from its RoomHeader array (sentinel = first u16 == 0xFFFF). */
+static u32 CountRoomsForArea(u32 area) {
+    RoomHeader* rh = gAreaRoomHeaders[area];
+    u32 n = 0;
+    if (rh) {
+        while (n < MAX_ROOMS && *(u16*)rh != 0xFFFF) {
+            n++;
+            rh++;
+        }
+    }
+    return n;
+}
+
+/* Resolve a ROM sub-table of 32-bit GBA pointers into a native pointer array. */
+static void ResolveSubTable(void* romBase, void** dest, u32 count) {
+    u8* base = (u8*)romBase;
+    for (u32 j = 0; j < count; j++) {
+        u32 ptr;
+        memcpy(&ptr, base + j * 4, 4);
+        dest[j] = ResolveRomPtr(ptr);
+    }
+}
 
 /* Font data tables (data_stubs_autogen.c) */
 extern void* gUnk_08109230[];
@@ -337,7 +406,77 @@ static inline void* ResolveRomPtr(u32 gba_addr) {
     return NULL;
 }
 
-/* ---- Helper: try to open a ROM from a list of candidate paths ---- */
+/* Read a packed 32-bit GBA ROM pointer at base + index*4.
+ * Returns resolved native pointer for data, NULL for function pointers. */
+void* Port_ReadPackedRomPtr(const void* base, u32 index) {
+    u32 raw;
+    memcpy(&raw, (const u8*)base + index * 4, 4);
+    if (raw == 0)
+        return NULL;
+    /* GBA Thumb function pointers have bit 0 set (Thumb indicator).
+     * These point to GBA code and can't be called on PC. */
+    if (raw & 1)
+        return NULL;
+    return ResolveRomPtr(raw);
+}
+
+/*
+ * Port_ResolveEwramPtr — resolve a GBA EWRAM address to a native PC pointer.
+ *
+ * On GBA, MapLayer (gMapBottom/gMapTop) starts with a 4-byte pointer bgSettings,
+ * so mapData is at offset +4.  On 64-bit PC, bgSettings is 8 bytes, shifting all
+ * subsequent fields by +4.  We compensate by adding that delta when the GBA
+ * address falls within a MapLayer.
+ *
+ * Known EWRAM globals (same addresses for USA and EU):
+ *   0x02025EB0  gMapBottom      (MapLayer, ~0xC010 bytes)
+ *   0x0200B650  gMapTop         (MapLayer, ~0xC010 bytes)
+ *   0x02019EE0  gMapDataBottomSpecial
+ *   0x02002F00  gMapDataTopSpecial
+ */
+void* Port_ResolveEwramPtr(u32 gba_addr) {
+    /* --- gMapBottom (MapLayer at GBA 0x02025EB0) --- */
+    {
+        const u32 GBA_BASE = 0x02025EB0u;
+        const u32 GBA_SIZE = 0xC010u; /* sizeof(MapLayer) on GBA: 4 + 0xC00C = 0xC010 */
+        if (gba_addr >= GBA_BASE && gba_addr < GBA_BASE + GBA_SIZE) {
+            u32 gba_off = gba_addr - GBA_BASE;
+            /*
+             * GBA layout:  bgSettings(4)  mapData(0x2000)  collisionData(0x1000) ...
+             * PC  layout:  bgSettings(8)  mapData(0x2000)  collisionData(0x1000) ...
+             * All fields after bgSettings are shifted by +4 on PC.
+             */
+            u32 pc_off = (gba_off < 4) ? gba_off : gba_off + 4;
+            return (u8*)&gMapBottom + pc_off;
+        }
+    }
+    /* --- gMapTop (MapLayer at GBA 0x0200B650) --- */
+    {
+        const u32 GBA_BASE = 0x0200B650u;
+        const u32 GBA_SIZE = 0xC010u;
+        if (gba_addr >= GBA_BASE && gba_addr < GBA_BASE + GBA_SIZE) {
+            u32 gba_off = gba_addr - GBA_BASE;
+            u32 pc_off = (gba_off < 4) ? gba_off : gba_off + 4;
+            return (u8*)&gMapTop + pc_off;
+        }
+    }
+    /* --- gMapDataBottomSpecial at GBA 0x02019EE0 --- */
+    {
+        const u32 GBA_BASE = 0x02019EE0u;
+        if (gba_addr >= GBA_BASE && gba_addr < GBA_BASE + sizeof(gMapDataBottomSpecial)) {
+            return (u8*)&gMapDataBottomSpecial + (gba_addr - GBA_BASE);
+        }
+    }
+    /* --- gMapDataTopSpecial at GBA 0x02002F00 --- */
+    {
+        const u32 GBA_BASE = 0x02002F00u;
+        if (gba_addr >= GBA_BASE && gba_addr < GBA_BASE + sizeof(gMapDataTopSpecial)) {
+            return (u8*)&gMapDataTopSpecial + (gba_addr - GBA_BASE);
+        }
+    }
+    /* Fallback to generic gba_TryMemPtr for other EWRAM or non-EWRAM addresses */
+    return gba_TryMemPtr(gba_addr);
+}
 static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foundPathLen) {
     for (int i = 0; i < count; i++) {
         FILE* f = fopen(paths[i], "rb");
@@ -520,6 +659,117 @@ void Port_LoadRom(const char* path) {
     /* Load overlay data tables (size/clipping table etc.) */
     Port_LoadOverlayData(gRomData, gRomSize, R->overlaySizeTable);
 
+    /* gMapData — copy map data blob from ROM into the PC buffer.
+     * On GBA, gMapData is a ROM label; on PC it's a large u8 array.
+     * Source files compute &gMapData + offset, so we fill the buffer. */
+    {
+        extern u8 gMapData[];
+        u32 mapDataSize = gRomSize - R->mapDataBase;
+        if (mapDataSize > 0xE00000u)
+            mapDataSize = 0xE00000u;
+        memcpy(gMapData, &gRomData[R->mapDataBase], mapDataSize);
+        fprintf(stderr, "gMapData loaded (%u bytes from ROM offset 0x%X).\n", mapDataSize, R->mapDataBase);
+    }
+
+    /* ---- Area / room data tables (0x90 entries each) ---- */
+    {
+        /* gAreaRoomHeaders — pointer to RoomHeader array per area.
+         * RoomHeader contains only u16 fields (no pointers), so we can
+         * point directly into gRomData. */
+        for (u32 i = 0; i < AREA_COUNT; i++) {
+            u32 ptr;
+            memcpy(&ptr, &gRomData[R->areaRoomHeaders + i * 4], 4);
+            gAreaRoomHeaders[i] = (RoomHeader*)ResolveRomPtr(ptr);
+        }
+        fprintf(stderr, "gAreaRoomHeaders loaded (0x%X entries, pointers resolved).\n", AREA_COUNT);
+
+        /* First pass: resolve first-level pointers (GBA ptr → native ptr into gRomData).
+         * NOTE: gAreaTileSets has only R->areaTileSetsCount (0x40) entries,
+         *       while the other tables have AREA_COUNT (0x90) entries. */
+        u32 tsCount = R->areaTileSetsCount < AREA_COUNT ? R->areaTileSetsCount : AREA_COUNT;
+        for (u32 i = 0; i < AREA_COUNT; i++) {
+            u32 ptr;
+            if (i < tsCount) {
+                memcpy(&ptr, &gRomData[R->areaTileSets + i * 4], 4);
+                gAreaTileSets[i] = ResolveRomPtr(ptr);
+            }
+            memcpy(&ptr, &gRomData[R->areaRoomMaps + i * 4], 4);
+            gAreaRoomMaps[i] = ResolveRomPtr(ptr);
+            memcpy(&ptr, &gRomData[R->areaTable + i * 4], 4);
+            gAreaTable[i] = ResolveRomPtr(ptr);
+            memcpy(&ptr, &gRomData[R->areaTiles + i * 4], 4);
+            gAreaTiles[i] = ResolveRomPtr(ptr);
+            memcpy(&ptr, &gRomData[R->exitLists + i * 4], 4);
+            ((void**)gExitLists)[i] = ResolveRomPtr(ptr);
+        }
+
+        /* Second pass: resolve sub-arrays of 32-bit GBA pointers.
+         * On GBA, sizeof(void*)==4 and these arrays are read directly.
+         * On 64-bit PC, sizeof(void*)==8, so we must pre-resolve into
+         * shadow arrays with native-width pointers.
+         *
+         * Instead of relying on room counts (which can reference garbage
+         * tileSet_id values like 0xFFF3), we scan each sub-array to
+         * determine its actual length: stop at the first entry that is
+         * neither NULL nor a valid ROM pointer. */
+        for (u32 i = 0; i < AREA_COUNT; i++) {
+/* Helper: scan sub-array of packed 32-bit values at 'base',
+ * counting entries that are 0 or valid ROM pointers.
+ * Stops at first entry that is neither. Caps at MAX_ROOMS. */
+#define SCAN_SUB_ARRAY(base, out_count)                                        \
+    do {                                                                       \
+        u8* _b = (u8*)(base);                                                  \
+        (out_count) = 0;                                                       \
+        for (u32 _j = 0; _j < MAX_ROOMS; _j++) {                               \
+            u32 _v;                                                            \
+            memcpy(&_v, _b + _j * 4, 4);                                       \
+            if (_v == 0 || (_v >= 0x08000000u && _v < 0x08000000u + gRomSize)) \
+                (out_count) = _j + 1;                                          \
+            else                                                               \
+                break;                                                         \
+        }                                                                      \
+    } while (0)
+
+            u32 subCount;
+
+            if (gAreaTileSets[i]) {
+                SCAN_SUB_ARRAY(gAreaTileSets[i], subCount);
+                if (subCount > 0) {
+                    ResolveSubTable(gAreaTileSets[i], sTileSetsResolved[i], subCount);
+                    gAreaTileSets[i] = (void*)sTileSetsResolved[i];
+                }
+            }
+
+            if (gAreaRoomMaps[i]) {
+                SCAN_SUB_ARRAY(gAreaRoomMaps[i], subCount);
+                if (subCount > 0) {
+                    ResolveSubTable(gAreaRoomMaps[i], sRoomMapsResolved[i], subCount);
+                    gAreaRoomMaps[i] = (void*)sRoomMapsResolved[i];
+                }
+            }
+
+            if (gAreaTable[i]) {
+                SCAN_SUB_ARRAY(gAreaTable[i], subCount);
+                if (subCount > 0) {
+                    ResolveSubTable(gAreaTable[i], sAreaTableResolved[i], subCount);
+                    gAreaTable[i] = (void*)sAreaTableResolved[i];
+                }
+            }
+
+            if (gExitLists[i]) {
+                SCAN_SUB_ARRAY(gExitLists[i], subCount);
+                if (subCount > 0) {
+                    ResolveSubTable((void*)gExitLists[i], sExitListsResolved[i], subCount);
+                    gExitLists[i] = (const Transition* const*)sExitListsResolved[i];
+                }
+            }
+
+#undef SCAN_SUB_ARRAY
+        }
+
+        fprintf(stderr, "Area data tables loaded (0x%X areas, 2-level pointers resolved).\n", AREA_COUNT);
+    }
+
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gGfxGroups, gPaletteGroups, gFrameObjLists).\n",
             gRomRegion == ROM_REGION_EU ? "EU" : "USA");
 
@@ -544,6 +794,14 @@ void Port_LoadRom(const char* path) {
 
     /* Overlay size table */
     ExtractRegion(R->overlaySizeTable, 240);
+
+    /* Area data pointer tables */
+    ExtractRegion(R->areaRoomHeaders, AREA_COUNT * 4);
+    ExtractRegion(R->areaTileSets, R->areaTileSetsCount * 4);
+    ExtractRegion(R->areaRoomMaps, AREA_COUNT * 4);
+    ExtractRegion(R->areaTable, AREA_COUNT * 4);
+    ExtractRegion(R->areaTiles, AREA_COUNT * 4);
+    ExtractRegion(R->exitLists, AREA_COUNT * 4);
 
     /* Font/text data region */
     {

@@ -17,6 +17,9 @@
 #include "screenTransitions.h"
 #include "sound.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -149,14 +152,22 @@ void sub_0806DB84(Entity* this, ScriptExecutionContext* context) {
     ent = (GenericEntity*)CreateObject(MINISH_VILLAGE_OBJECT, 4, 0);
     if (ent != NULL) {
         PositionRelative(this, &ent->base, Q_16_16(-8.0), 0);
+#ifdef PC_PORT
+        Port_SetEntityScriptCtx(&ent->base, StartCutscene(&ent->base, &script_MinishVillageObjectLeftStoneOpening));
+#else
         *(ScriptExecutionContext**)&ent->cutsceneBeh =
             StartCutscene(&ent->base, &script_MinishVillageObjectLeftStoneOpening);
+#endif
     }
     ent = (GenericEntity*)CreateObject(MINISH_VILLAGE_OBJECT, 5, 0);
     if (ent != NULL) {
         PositionRelative(this, &ent->base, Q_16_16(8.0), 0);
+#ifdef PC_PORT
+        Port_SetEntityScriptCtx(&ent->base, StartCutscene(&ent->base, &script_MinishVillageObjectRightStoneOpening));
+#else
         *(ScriptExecutionContext**)&ent->cutsceneBeh =
             StartCutscene(&ent->base, &script_MinishVillageObjectRightStoneOpening);
+#endif
     }
 }
 

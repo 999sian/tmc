@@ -1,3 +1,4 @@
+#include "script.h"
 #include "area.h"
 #include "functions.h"
 #include "game.h"
@@ -7,8 +8,12 @@
 #include "npc.h"
 #include "object.h"
 #include "screen.h"
-#include "script.h"
 #include "ui.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#include "port_rom.h"
+extern void* Port_LookupScriptFunc(u32 gba_addr);
+#endif
 
 void InitScriptExecutionContext(ScriptExecutionContext* context, Script* script);
 void sub_0807DE80(Entity*);
@@ -197,15 +202,24 @@ ScriptExecutionContext* StartCutscene(Entity* entity, Script* script) {
 
 void InitScriptForEntity(Entity* entity, ScriptExecutionContext* context, Script* script) {
     entity->flags |= ENT_SCRIPTED;
+#ifdef PC_PORT
+    Port_SetEntityScriptCtx(entity, context);
+#else
     *(ScriptExecutionContext**)&((GenericEntity*)entity)->cutsceneBeh = context;
+#endif
     InitScriptExecutionContext(context, script);
 }
 
 void UnloadCutsceneData(Entity* entity) {
     if (entity->flags & ENT_SCRIPTED) {
         entity->flags &= ~ENT_SCRIPTED;
+#ifdef PC_PORT
+        DestroyScriptExecutionContext(Port_GetEntityScriptCtx(entity));
+        Port_SetEntityScriptCtx(entity, NULL);
+#else
         DestroyScriptExecutionContext(*(ScriptExecutionContext**)&((GenericEntity*)entity)->cutsceneBeh);
         *(ScriptExecutionContext**)&((GenericEntity*)entity)->cutsceneBeh = NULL;
+#endif
     }
 }
 
@@ -215,7 +229,11 @@ void StartPlayerScript(Script* script) {
     MemClear(&gPlayerScriptExecutionContext, sizeof(gPlayerScriptExecutionContext));
     gPlayerScriptExecutionContext.scriptInstructionPointer = script;
     player = &gPlayerEntity.base;
+#ifdef PC_PORT
+    Port_SetEntityScriptCtx(player, &gPlayerScriptExecutionContext);
+#else
     *(ScriptExecutionContext**)&((GenericEntity*)player)->cutsceneBeh = &gPlayerScriptExecutionContext;
+#endif
     gPlayerState.queued_action = PLAYER_SLEEP;
     gPlayerState.field_0x3a = 0;
     gPlayerState.field_0x39 = 0;
@@ -327,7 +345,11 @@ void sub_0807DD64(Entity* entity) {
 }
 
 void sub_0807DD80(Entity* entity, Script* script) {
+#ifdef PC_PORT
+    InitScriptExecutionContext(Port_GetEntityScriptCtx(entity), script);
+#else
     InitScriptExecutionContext(*(ScriptExecutionContext**)&((GenericEntity*)entity)->cutsceneBeh, script);
+#endif
     sub_0807DD64(entity);
 }
 
@@ -338,6 +360,20 @@ void ExecuteScriptAndHandleAnimation(Entity* entity, void (*postScriptCallback)(
 }
 
 void ExecuteScriptForEntity(Entity* entity, void (*postScriptCallback)(Entity*, ScriptExecutionContext*)) {
+#ifdef PC_PORT
+    ScriptExecutionContext* ctx = Port_GetEntityScriptCtx(entity);
+    if (ctx) {
+        ExecuteScript(entity, ctx);
+        if (postScriptCallback) {
+            postScriptCallback(entity, ctx);
+        } else {
+            HandlePostScriptActions(entity, ctx);
+        }
+        if (entity->next == NULL) {
+            DeleteThisEntity();
+        }
+    }
+#else
     ScriptExecutionContext** piVar1;
 
     piVar1 = (ScriptExecutionContext**)&((GenericEntity*)entity)->cutsceneBeh;
@@ -352,6 +388,7 @@ void ExecuteScriptForEntity(Entity* entity, void (*postScriptCallback)(Entity*, 
             DeleteThisEntity();
         }
     }
+#endif
 }
 
 void HandleEntity0x82Actions(Entity* entity) {
@@ -617,6 +654,11 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
                 return;
             activeScriptInfo->commandSize = cmd >> 0xA;
             activeScriptInfo->commandIndex = cmd & 0x3FF;
+#ifdef PC_PORT
+            if (activeScriptInfo->commandIndex >= sizeof(gScriptCommands) / sizeof(gScriptCommands[0])) {
+                return;
+            }
+#endif
             lastInstruction = context->scriptInstructionPointer;
             activeScriptInfo->flags &= ~1;
             gScriptCommands[activeScriptInfo->commandIndex](entity, context);
@@ -669,8 +711,13 @@ void ScriptCommand_JumpTable(Entity* entity, ScriptExecutionContext* context) {
 }
 
 void ScriptCommand_JumpAbsolute(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    u32 gba_addr = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    context->scriptInstructionPointer = (u16*)Port_ResolveRomData(gba_addr);
+#else
     context->scriptInstructionPointer =
         (u16*)GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+#endif
     gActiveScriptInfo.commandSize = 0;
 }
 
@@ -694,18 +741,44 @@ void ScriptCommand_JumpAbsoluteTable(Entity* entity, ScriptExecutionContext* con
 }
 
 void ScriptCommand_Call(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    u32 gba_addr = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    ScriptCommand func = (ScriptCommand)Port_LookupScriptFunc(gba_addr);
+    if (func) {
+        func(entity, context);
+    } else {
+        fprintf(stderr, "[SCRIPT] Call: unknown GBA func 0x%08X\n", gba_addr);
+    }
+#else
     ((ScriptCommand)GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer))(entity, context);
+#endif
 }
 
 // the called function can read an argument from context->intVariable
 void ScriptCommand_CallWithArg(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    u32 gba_func = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    ScriptCommand func = (ScriptCommand)Port_LookupScriptFunc(gba_func);
+    context->intVariable = GetNextScriptCommandWord(context->scriptInstructionPointer + 3);
+    if (func) {
+        func(entity, context);
+    } else {
+        fprintf(stderr, "[SCRIPT] CallWithArg: unknown GBA func 0x%08X\n", gba_func);
+    }
+#else
     ScriptCommand tmp = (ScriptCommand)GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
     context->intVariable = GetNextScriptCommandWord(context->scriptInstructionPointer + 3);
     tmp(entity, context);
+#endif
 }
 
 void ScriptCommand_LoadRoomEntityList(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    u32 gba_addr = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    LoadRoomEntityList((EntityData*)Port_ResolveRomData(gba_addr));
+#else
     LoadRoomEntityList((EntityData*)GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer));
+#endif
 }
 
 void ScriptCommand_CheckSyncFlagAndClear(Entity* entity, ScriptExecutionContext* context) {
@@ -1074,7 +1147,12 @@ void ScriptCommand_SetPlayerAction(Entity* entity, ScriptExecutionContext* conte
 }
 
 void ScriptCommand_StartPlayerScript(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    u32 gba_addr = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    StartPlayerScript((u16*)Port_ResolveRomData(gba_addr));
+#else
     StartPlayerScript((u16*)GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer));
+#endif
 }
 
 void ScriptCommand_SetPlayerAnimation(Entity* entity, ScriptExecutionContext* context) {

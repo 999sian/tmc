@@ -13,7 +13,6 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
-#include <stdio.h>
 
 extern u32 gRand;
 
@@ -37,32 +36,20 @@ void (*const sTaskHandlers[])(void) = {
 void AgbMain(void) {
     // Initialization
     InitOverlays();
-    fprintf(stderr, "Overlays initialized.\n");
     InitSound();
-    fprintf(stderr, "Sound initialized.\n");
     InitDMA();
-    fprintf(stderr, "DMA initialized.\n");
     InitSaveData();
-    fprintf(stderr, "Save data initialized.\n");
     InitSaveHeader();
-    fprintf(stderr, "Save header initialized.\n");
     InitVBlankDMA();
-    fprintf(stderr, "VBlank DMA initialized.\n");
     gUnk_02000010.field_0x4 = 0xc1;
     InitFade();
-    fprintf(stderr, "Fade initialized.\n");
     DmaCopy32(3, BG_PLTT, gPaletteBuffer, BG_PLTT_SIZE);
-    fprintf(stderr, "Palette buffer initialized.\n");
     SetBrightness(1);
-    fprintf(stderr, "Brightness set.\n");
     MessageInitialize();
-    fprintf(stderr, "Message system initialized.\n");
     ResetPalettes();
-    fprintf(stderr, "Palettes reset.\n");
     gRand = 0x1234567;
     MemClear(&gMain, sizeof(gMain));
     SetTask(TASK_TITLE);
-    fprintf(stderr, "Initial task set.\n");
 
     // Game Loop
     while (TRUE) {
@@ -70,8 +57,6 @@ void AgbMain(void) {
         if (SoftResetKeysPressed()) {
             DoSoftReset();
         }
-        if (gMain.ticks % 500 == 0)
-            fprintf(stderr, "Tick: %u, Task: %u\n", gMain.ticks, gMain.task);
         switch (gMain.sleepStatus) {
             case SLEEP:
                 SetSleepMode();

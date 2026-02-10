@@ -9,6 +9,7 @@
 #include "main.h"
 #include "npc.h"
 #include "object.h"
+#include "port_scripts.h"
 #include "save.h"
 #include "screen.h"
 #include "screenTransitions.h"
@@ -412,7 +413,7 @@ void sub_StateChange_HouseInteriors1_InnWestRoom(void) {
         SetFade(FADE_IN_OUT | FADE_INSTANT, 256);
         gPlayerEntity.base.x.HALF.HI = gRoomControls.origin_x + 0x50;
         gPlayerEntity.base.y.HALF.HI = gRoomControls.origin_y + 0x38;
-        sub_080751E8(1, 2, &script_PlayerSleepingInn);
+        sub_080751E8(1, 2, PORT_SCRIPT(script_PlayerSleepingInn));
     }
 }
 
@@ -438,7 +439,7 @@ void sub_StateChange_HouseInteriors1_InnMiddleRoom(void) {
         SetFade(FADE_IN_OUT | FADE_INSTANT, 256);
         gPlayerEntity.base.x.HALF.HI = gRoomControls.origin_x + 0x50;
         gPlayerEntity.base.y.HALF.HI = gRoomControls.origin_y + 0x38;
-        sub_080751E8(1, 2, &script_PlayerSleepingInn);
+        sub_080751E8(1, 2, PORT_SCRIPT(script_PlayerSleepingInn));
     }
 }
 
@@ -464,7 +465,7 @@ void sub_StateChange_HouseInteriors1_InnEastRoom(void) {
         SetFade(FADE_IN_OUT | FADE_INSTANT, 256);
         gPlayerEntity.base.x.HALF.HI = gRoomControls.origin_x + 0x60;
         gPlayerEntity.base.y.HALF.HI = gRoomControls.origin_y + 0x38;
-        sub_080751E8(1, 2, &script_PlayerSleepingInn);
+        sub_080751E8(1, 2, PORT_SCRIPT(script_PlayerSleepingInn));
     }
 }
 
@@ -684,7 +685,7 @@ void sub_StateChange_HyruleCastle_4(void) {
         SetFade(FADE_IN_OUT | FADE_INSTANT, 256);
         gPlayerEntity.base.x.HALF.HI = gRoomControls.origin_x + 0xb0;
         gPlayerEntity.base.y.HALF.HI = gRoomControls.origin_y + 0x40;
-        sub_080751E8(0, 6, &script_PlayerWakingUpInHyruleCastle);
+        sub_080751E8(0, 6, PORT_SCRIPT(script_PlayerWakingUpInHyruleCastle));
 #ifdef EU
         SoundReq(SONG_STOP_ALL);
         gArea.bgm = gArea.queued_bgm;
@@ -4926,7 +4927,7 @@ void sub_StateChange_HouseInteriors2_LinksHouseBedroom(void) {
         sub_080A71C4(5, 1, FADE_INSTANT, 4);
         gUpdateVisibleTiles = 0;
         SetFade(FADE_IN_OUT | FADE_INSTANT, 256);
-        sub_080751E8(0, 6, &script_PlayerIntro);
+        sub_080751E8(0, 6, PORT_SCRIPT(script_PlayerIntro));
     }
     if (!CheckGlobalFlag(OUTDOOR)) {
         gArea.bgm = gArea.queued_bgm;
@@ -4942,7 +4943,7 @@ extern u32 script_PlayerWakeAfterRest;
 void sub_0804E864(void) {
     gPlayerEntity.base.x.HALF.HI = gRoomControls.origin_x + 0x90;
     gPlayerEntity.base.y.HALF.HI = gRoomControls.origin_y + 0x38;
-    sub_080751E8(1, 6, &script_PlayerWakeAfterRest);
+    sub_080751E8(1, 6, PORT_SCRIPT(script_PlayerWakeAfterRest));
     ModHealth(0xa0);
 }
 
@@ -5427,7 +5428,7 @@ void sub_StateChange_HouseInteriors3_Simon(void) {
         LoadRoomEntityList(&gUnk_080F5DD0);
     }
     if (CheckGlobalFlag(MAROYA_WAKEUP)) {
-        sub_080751E8(1, 2, &script_PlayerWakingUpAtSimons);
+        sub_080751E8(1, 2, PORT_SCRIPT(script_PlayerWakingUpAtSimons));
     }
 }
 

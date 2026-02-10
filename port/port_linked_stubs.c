@@ -23,6 +23,8 @@
 #include "sound.h"
 #include "structures.h"
 
+#include "port_entity_ctx.h"
+
 uint16_t gPortIntrCheck;
 void* gPortIntrVector;
 struct SoundInfo* gPortSoundInfoPtr;
@@ -64,18 +66,18 @@ struct_020227E8 gUnk_020227E8[16];
 u32 gUnk_020227F0 = 0x020227F0;
 u32 gUnk_020227F8 = 0x020227F8;
 u32 gUnk_02022800 = 0x02022800;
-u32 gUnk_02022830 = 0x02022830;
-u8 gUnk_02024048 = 0; /* pending sound count (used by DrawEntity) */
-u32 gUnk_020246B0 = 0x020246B0;
-u32 gUnk_02033290 = 0x02033290;
-u32 gUnk_020342F8 = 0x020342F8;
-u32 gUnk_02034330 = 0x02034330;
+u8 gUnk_02022830[0x1800] __attribute__((aligned(4))); /* u16[0xc00] on GBA; also reused as temp MapDataDefinition */
+u8 gUnk_02024048 = 0;                                 /* pending sound count (used by DrawEntity) */
+u8 gUnk_020246B0[0x1800] __attribute__((aligned(4))); /* u16[0xc00] scroll tilemap buffer */
+u8 gUnk_02033290[0x800] __attribute__((aligned(4)));  /* Manager + 32 Temp structs (2048 bytes) */
+u8 gUnk_020342F8[0x100] __attribute__((aligned(4)));  /* delayedEntityLoad array */
+u8 gUnk_02034330[0x20] __attribute__((aligned(4)));   /* struct_gUnk_02034330 (24 bytes) */
 struct_02034480 gUnk_02034480;
-u32 gUnk_02034492 = 0x02034492;
-u32 gUnk_020344A0 = 0x020344A0;
+u8 gUnk_02034492[0x10] __attribute__((aligned(4))); /* u8 array (pauseMenu) */
+u8 gUnk_020344A0[0x10] __attribute__((aligned(4))); /* u8[8] (figurineMenu) */
 struct_020354C0 gUnk_020354C0[32];
-u32 gUnk_02035542 = 0x02035542;
-u32 gUnk_02036540 = 0x02036540;
+u8 gUnk_02035542[0x200] __attribute__((aligned(4))); /* u8 array (entity tile storage) */
+u8 gUnk_02036540[0x80] __attribute__((aligned(8)));  /* WStruct[4] (text slot pool, 64 bytes on 64-bit) */
 /* Aliased to gEwram[0x36A58] in text.c */
 u32 gUnk_02036A58_storage = 0x02036A58;
 /* Aliased to gEwram[0x36AD8] in text.c */
@@ -103,9 +105,13 @@ ScriptExecutionContext gPlayerScriptExecutionContext;
 GenericEntity gEntities[MAX_ENTITIES];
 GenericEntity gAuxPlayerEntities[MAX_AUX_PLAYER_ENTITIES];
 LinkedList gEntityLists[9];
-LinkedList gEntityListsBackup;
+LinkedList gEntityListsBackup[9];
 u8 gEntCount;
 u8 gManagerCount;
+
+// Side table for 64-bit ScriptExecutionContext pointers
+// (avoids overflowing PlayerEntity's 4-byte unk_84 field with 8-byte pointers)
+ScriptExecutionContext* gEntityScriptCtxTable[PC_MAX_ENTITY_SLOTS] = { 0 };
 CarriedEntity gCarriedEntity;
 ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
 PriorityHandler gPriorityHandler;
@@ -134,15 +140,19 @@ u8 gCollidableCount;
 // gFrameObjLists — sprite frame data (200KB, self-relative offsets)
 u32 gFrameObjLists[50016];
 
-// gMapData — generic map data buffer
-u8 gMapData[0x4000];
+// gMapData — map data blob, backed by ROM data.
+// On GBA this is a label in .rodata at gAreaRoomMap_None (~14MB region).
+// On PC, we use a large buffer filled from ROM in Port_LoadRom().
+// Source files use &gMapData + offset, so this must be an array (not a pointer).
+u8 gMapData[0xE00000] __attribute__((aligned(4))); /* ~14 MB */
 
 // gCollisionMtx
 u8 gCollisionMtx[173 * 34];
 
 u8 gUpdateContext[64] __attribute__((aligned(4)));
 
-u8 gInteractableObjects[0x200] __attribute__((aligned(4)));
+u8 gInteractableObjects[0x300]
+    __attribute__((aligned(8))); /* 32 InteractableObject entries * 24 bytes on 64-bit = 768 = 0x300 */
 
 // === Additional data stubs ===
 
@@ -227,7 +237,7 @@ void* gAreaTileSets[256];
 void* gAreaTiles[256];
 
 // Function pointer tables
-void* gSubtasks[64];
+/* gSubtasks -- defined in port_stubs.c as proper function pointer table */
 // ButtonUIElement_Actions — defined in ui.c with proper function pointers
 // EzloNagUIElement_Actions — defined in ui.c with proper function pointers
 void* HoleManager_Actions[16];
@@ -235,8 +245,8 @@ void* HoleManager_Actions[16];
 void* Subtask_FastTravel_Functions[16];
 void* Subtask_MapHint_Functions[16];
 
-// Exit lists / transitions
-const Transition* const* const gExitLists[256];
+// Exit lists / transitions (populated from ROM at load time)
+const Transition* const* gExitLists[256];
 const Transition gExitList_RoyalValley_ForestMaze[4];
 
 // Various game data

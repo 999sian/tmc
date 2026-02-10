@@ -9,6 +9,9 @@
 #include "assets/gfx_offsets.h"
 #include "common.h"
 #include "functions.h"
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#endif
 
 void LoadBgAnimationGfx(const BgAnimationGfx*);
 u32 GetBgAnimationTimer(const s32*);
@@ -2427,7 +2430,11 @@ void LoadBgAnimationGfx(const BgAnimationGfx* param_1) {
         if ((*(u32*)param_1 >> 0x1c & 1) != 0) {
             LoadPalettes(src, vramOffset >> 5, size);
         } else {
+#ifdef PC_PORT
+            MemCopy(src, &gVram[vramOffset], size << 5);
+#else
             MemCopy(src, (void*)(vramOffset + 0x6000000), size << 5);
+#endif
         }
         if (*(int*)param_1 >= 0) {
             return;

@@ -94,13 +94,8 @@ static inline void* port_resolve_addr(uintptr_t val) {
 static inline void gba_MemClear(u32 addr, u32 size) {
     void* ptr = gba_MemPtr(addr);
     if (ptr != NULL) {
-        // DEBUG
-        int tile522_was_nz = gVram[0x14140] != 0 || gVram[0x14141] != 0;
         for (u32 i = 0; i < size; i++) {
             ((u8*)ptr)[i] = 0;
-        }
-        if (tile522_was_nz && gVram[0x14140] == 0 && gVram[0x14141] == 0) {
-            fprintf(stderr, "[WATCH] tile522 CLOBBERED by gba_MemClear(0x%08X, %u)\n", addr, size);
         }
     }
 }
