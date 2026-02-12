@@ -4286,6 +4286,9 @@ void sub_StateChange_Ruins_Beanstalk4(void) {
 }
 
 extern u32 Area_HyruleTown[];
+#ifdef PC_PORT
+extern void** gAreaTable[];
+#endif
 
 u32 sub_unk3_HyruleTown_0(void) {
     u32 uVar1;
@@ -4305,9 +4308,19 @@ u32 sub_unk3_HyruleTown_0(void) {
             }
         }
     }
-    sub_0804AFB0((void**)(Area_HyruleTown[gSave.global_progress]));
+    sub_0804AFB0(
+#ifdef PC_PORT
+        (void**)(((void**)gAreaTable[2])[gSave.global_progress])
+#else
+        (void**)(Area_HyruleTown[gSave.global_progress])
+#endif
+    );
     if (gSave.global_progress != 1) {
+#ifdef PC_PORT
+        gCurrentRoomProperties = (void**)(((void**)gAreaTable[2])[0]);
+#else
         gCurrentRoomProperties = (void**)*Area_HyruleTown;
+#endif
     } else {
         SetGlobalFlag(ZELDA_CHASE);
         uVar1 = gArea.pCurrentRoomInfo->map_x;

@@ -274,12 +274,14 @@ static void GameMain_Update(void) {
     CopyOAM();
     switch (gRoomControls.reload_flags) {
         case RELOAD_ALL:
+
             gPlayerState.queued_action = PLAYER_ROOMTRANSITION;
             gMain.substate = GAMEMAIN_CHANGEROOM;
             SetRoomReloadPriority();
             sub_08051D98();
             break;
         case RELOAD_ENTITIES:
+
             gPlayerState.queued_action = PLAYER_ROOMTRANSITION;
             gMain.substate = GAMEMAIN_CHANGEROOM;
             SetRoomReloadPriority();

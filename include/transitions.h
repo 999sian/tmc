@@ -27,7 +27,11 @@ typedef enum {
 } TransitionType;
 
 typedef struct Transition {
+#ifdef PC_PORT
+    s8 warp_type;
+#else
     WarpType warp_type : 8;
+#endif
     u8 subtype;
     u16 startX;
     u16 startY;
@@ -35,9 +39,17 @@ typedef struct Transition {
     u16 endY;
     u8 shape;
     u8 area;
+#ifdef PC_PORT
+    u8 room;
+#else
     RoomID room : 8;
+#endif
     u8 height;
+#ifdef PC_PORT
+    u8 transition_type;
+#else
     TransitionType transition_type : 8;
+#endif
     u8 facing_direction; // 0-4
     u8 unk0;
     u8 unk1;
