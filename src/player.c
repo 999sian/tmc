@@ -283,6 +283,10 @@ extern u16 script_BedAtSimons;
 
 extern ScriptExecutionContext gPlayerScriptExecutionContext;
 
+#ifdef PC_PORT
+static Entity* gSleepBubbleEntity = NULL;
+#endif
+
 bool32 CheckInitPauseMenu(void) {
     u32 framestate;
     if (((gInput.newKeys & START_BUTTON) == 0 || gFadeControl.active || gPauseMenuOptions.disabled ||
@@ -3964,14 +3968,22 @@ void sub_08074F2C(PlayerEntity* this) {
 }
 
 void sub_08074F44(PlayerEntity* this) {
-    typedef struct {
-        u8 fill[0x6c];
-        Entity* e;
-    } fixme;
-
     this->unk_68.BYTES.byte0++;
-    if (((fixme*)&gPlayerEntity.base)->e)
-        DeleteEntity(((fixme*)&gPlayerEntity.base)->e);
+#ifdef PC_PORT
+    if (gSleepBubbleEntity) {
+        DeleteEntity(gSleepBubbleEntity);
+        gSleepBubbleEntity = NULL;
+    }
+#else
+    {
+        typedef struct {
+            u8 fill[0x6c];
+            Entity* e;
+        } fixme;
+        if (((fixme*)&gPlayerEntity.base)->e)
+            DeleteEntity(((fixme*)&gPlayerEntity.base)->e);
+    }
+#endif
     if (!gPlayerState.field_0x39) {
         gPlayerState.animation = ANIM_WAKEUP_NOCAP;
         gPlayerState.flags |= PL_NO_CAP;
@@ -4131,7 +4143,11 @@ void sub_080751E8(u32 a1, u32 a2, void* script) {
         StartCutscene(e, script);
     }
     e2 = CreateSpeechBubbleSleep(&gPlayerEntity.base, -14, -28);
+#ifdef PC_PORT
+    gSleepBubbleEntity = e2;
+#else
     *(Entity**)&gPlayerEntity.unk_6c = e2;
+#endif
     if (e2 != NULL) {
         SetEntityPriority(e2, PRIO_NO_BLOCK);
     }
