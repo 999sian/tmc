@@ -22,6 +22,7 @@
 #include "screen.h"
 #include "structures.h"
 
+#include <setjmp.h>
 #include <string.h>
 
 /* Forward declaration of RenderSpritePieces (defined below) */
@@ -109,6 +110,9 @@ extern void UpdateCollision(Entity* entity);
 static int sUpdateEntitiesCalls = 0;
 static int sEntitiesUpdated = 0;
 
+static jmp_buf sEntityUpdateJmpBuf;
+static int sEntityUpdateJmpBufValid = 0;
+
 void ram_UpdateEntities(u32 mode) {
     sUpdateEntitiesCalls++;
 
@@ -144,7 +148,13 @@ void ram_UpdateEntities(u32 mode) {
             sEntitiesUpdated++;
 
             if (kind < 10) {
-                sEntityUpdateFuncs[kind](entity);
+
+                sEntityUpdateJmpBufValid = 1;
+                if (setjmp(sEntityUpdateJmpBuf) == 0) {
+                    /* Normal path: call entity update */
+                    sEntityUpdateFuncs[kind](entity);
+                }
+                sEntityUpdateJmpBufValid = 0;
             }
 
             /* Update collision if entity is still alive (same as original) */
@@ -159,6 +169,13 @@ void ram_UpdateEntities(u32 mode) {
 
     /* Clear current entity context */
     gUpdateContext.current_entity = NULL;
+}
+
+void ram_ClearAndUpdateEntities(void) {
+    if (sEntityUpdateJmpBufValid) {
+        longjmp(sEntityUpdateJmpBuf, 1);
+    }
+    /* If not in an entity update context, just return (shouldn't happen normaly ( I hope :-) ) */
 }
 
 /* ---- Core sprite piece renderer (port of sub_080B2874) ----

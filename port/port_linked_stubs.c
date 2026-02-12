@@ -7,7 +7,10 @@
 #include "common.h"
 #include "entity.h"
 #include "fade.h"
+
+#define gMapDataBottomSpecial gMapDataBottomSpecial_HIDDEN
 #include "fileselect.h"
+#undef gMapDataBottomSpecial
 #include "hitbox.h"
 #include "kinstone.h"
 #include "main.h"
@@ -24,6 +27,7 @@
 #include "structures.h"
 
 #include "port_entity_ctx.h"
+#include "port_gba_mem.h"
 
 uint16_t gPortIntrCheck;
 void* gPortIntrVector;
@@ -47,25 +51,26 @@ u32 gUsedPalettes;
 
 // Pointers
 struct_02000010 gUnk_02000010;
-u32 gUnk_02000030 = 0x02000030;
+u8 gUnk_02000030[0x10]; /* EWRAM marker, 16 bytes gap */
 struct_02000040 gUnk_02000040;
-u32 gUnk_020000B0 = 0x020000B0;
+void* gUnk_020000B0 = NULL; /* Entity* pointer (8 bytes on 64-bit) */
 struct_gUnk_020000C0 gUnk_020000C0[0x30];
 Palette gUnk_02001A3C;
-u32 gUnk_02006F00 = 0x02006F00;
-u32 gUnk_0200B640 = 0x0200B640;
-u32 gUnk_02017830 = 0x02017830;
-u32 gUnk_02017AA0 = 0x02017AA0;
-u32 gUnk_02017BA0 = 0x02017BA0;
-u32 gUnk_02018EA0 = 0x02018EA0;
+u8 gUnk_02006F00[0x4000] __attribute__((aligned(4))); /* BG tilemap buffer (16 KB) */
+u16 gUnk_0200B640;                                    /* scroll state scalar */
+u16 gUnk_02017830[0x138] __attribute__((aligned(4))); /* palette rotation buffer (624 bytes) */
+u8 gUnk_02017AA0[0x1400] __attribute__((aligned(4))); /* HBlank DMA double buffer, 2×0xA00 */
+u8 gUnk_02017BA0[0x1400]
+    __attribute__((aligned(4))); /* BG2 affine ref lines (TODO: aliases gUnk_02017AA0+0x100 on GBA) */
+void* gUnk_02018EA0 = NULL;      /* LinkedList2* pointer */
 struct_02018EB0 gUnk_02018EB0;
-u32 gUnk_02018EE0 = 0x02018EE0;
-u32 gUnk_02021F00 = 0x02021F00;
-u32 gUnk_020227DC = 0x020227DC;
-struct_020227E8 gUnk_020227E8[16];
-u32 gUnk_020227F0 = 0x020227F0;
-u32 gUnk_020227F8 = 0x020227F8;
-u32 gUnk_02022800 = 0x02022800;
+u8 gUnk_02018EE0[0x1000] __attribute__((aligned(4))); /* window rasterization scratch (s16[], 0x780 used, 0x1000 gap) */
+u16 gUnk_02021F00[0x10];                              /* lever timer→length map (32 bytes) */
+u8 gUnk_020227DC[0xC];                                /* text number buffer slot 0 */
+struct_020227E8 gUnk_020227E8[1];                     /* text struct (8 bytes, was [16] = overflow) */
+u8 gUnk_020227F0[0x8];                                /* text number buffer slot 2 */
+u8 gUnk_020227F8[0x8];                                /* text number buffer slot 3 */
+u8 gUnk_02022800[0x20] __attribute__((aligned(4)));   /* text number buffer slot 4 (29+ bytes) */
 u8 gUnk_02022830[0x1800] __attribute__((aligned(4))); /* u16[0xc00] on GBA; also reused as temp MapDataDefinition */
 u8 gUnk_02024048 = 0;                                 /* pending sound count (used by DrawEntity) */
 u8 gUnk_020246B0[0x1800] __attribute__((aligned(4))); /* u16[0xc00] scroll tilemap buffer */
@@ -173,9 +178,9 @@ PauseMenuOptions gPauseMenuOptions;
 
 SpritePtr gSpritePtrs[512];
 
-// Map data
-struct_02019EE0 gMapDataBottomSpecial;
-u8 gMapDataTopSpecial[0x8000] __attribute__((aligned(4)));
+// Map data — both are u16[0x4000] tilemaps (0x8000 bytes) reused for file-select overlay
+u16 gMapDataBottomSpecial[0x4000] __attribute__((aligned(4)));
+u16 gMapDataTopSpecial[0x4000] __attribute__((aligned(4)));
 u32 gDungeonMap[0x800];
 
 // Heap
@@ -228,8 +233,874 @@ u8 sub_080B197C[4];
 u8 ram_sub_080B197C[4];
 u32 ram_MakeFadeBuff256;
 
+/*
+ * C reimplementation of ram_sub_080B197C (ARM IWRAM function).
+ * Called when gUpdateVisibleTiles == 1 (initial full-screen tile fill).
+ * Copies a 32×23 tile region from mapSpecial to the BG buffer.
+ *
+ * mapSpecial: u16 tilemap with 128 entries per row (8×8 pixel tiles).
+ * bgBuffer:   passed as gBGxBuffer + 0x20 (u16 units, +0x40 bytes).
+ *             The GBA code subtracts 0x40 bytes to start writing from row 0.
+ */
+static void ram_sub_080B197C_c(u16* mapSpecial, u16* bgBuffer) {
+    u16 xdiff = gRoomControls.scroll_x - gRoomControls.origin_x;
+    u16 ydiff = gRoomControls.scroll_y - gRoomControls.origin_y;
+
+    /* Tile position in 16×16 units → each maps to 2×2 sub-tiles of 8×8.
+     * Byte offset = (col16 + row16 * 128) * 4, because each 16×16 tile
+     * is 2 sub-tile columns (×2 bytes each = 4 bytes) and each 16×16 row
+     * spans 2 sub-tile rows (128 entries × 2 bytes × 2 = 512 bytes). */
+    u32 col16 = xdiff >> 4;
+    u32 row16 = ydiff >> 4;
+    u8* src = (u8*)mapSpecial + (col16 + row16 * 128) * 4;
+
+    /* bgBuffer was passed as gBGxBuffer + 0x20 (in u16 units).
+     * The original code does "subs r1, #0x40" to get to row 0. */
+    u16* dst = bgBuffer - 0x20;
+
+    if (ydiff < 8) {
+        /* First row: copy without advancing src */
+        memcpy(dst, src, 64); /* 32 u16 = 64 bytes */
+        dst += 32;
+        /* 22 more rows: first reuses same src, then advances */
+        for (int i = 0; i < 22; i++) {
+            memcpy(dst, src, 64);
+            src += 0x100; /* next 8×8 map row = 128 u16 = 256 bytes */
+            dst += 32;
+        }
+    } else {
+        /* Start one map row earlier */
+        src -= 0x100;
+        /* 23 consecutive rows */
+        for (int i = 0; i < 23; i++) {
+            memcpy(dst, src, 64);
+            src += 0x100;
+            dst += 32;
+        }
+    }
+}
+
+/* Declared in screenTileMap.c (already compiled as C on PC) */
+extern void sub_0807D280(u16* mapSpecial, u16* bgBuffer);
+extern void sub_0807D46C(u16* mapSpecial, u16* bgBuffer);
+extern void sub_0807D6D8(u16* mapSpecial, u16* bgBuffer);
+
+/*
+ * Collision direction masks from gUnk_0800275C (now in data_stubs_autogen.c)
+ * Local alias for convenient u16 access.
+ */
+extern const u8 gUnk_0800275C[64];
+#define gCollisionDirectionMasks ((const u16*)gUnk_0800275C)
+
+/* Collision parameter tables (extended tile types, stubbed for now) */
+extern const u8 gUnk_080082DC[];
+extern const u8 gUnk_0800833C[];
+extern const u8 gUnk_0800839C[];
+extern const u8 gUnk_080083FC[];
+extern const u8 gUnk_0800845C[];
+extern const u8 gUnk_080084BC[];
+extern const u8 gUnk_0800851C[];
+
+/*
+ * TileCollisionLookup — core tile collision lookup (port of sub_080086D8).
+ *
+ * Takes pixel coordinates (room-relative), looks up the collision data
+ * for the tile at that position, and returns 0 (passable) or 1 (blocked).
+ *
+ * For tile collision types 0x00–0x0F: 2×2 sub-tile collision pattern.
+ *   Bit 0 = bottom-right, bit 1 = bottom-left, bit 2 = top-right, bit 3 = top-left.
+ *   The sub-tile quadrant is selected by bits 3 of x and y.
+ *
+ * For tile collision type 0xFF: always blocked.
+ * For tile collision types 0x10–0xFE: extended pixel-level collision
+ *   (returns 0/passable for now since lookup tables are stubbed).
+ */
+static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
+    u32 maskedX = px & 0x3F0u;
+    u32 maskedY = py & 0x3F0u;
+    u32 tileX = maskedX >> 4;
+    u32 tileY = maskedY >> 4;
+    u32 index = tileX + tileY * 64;
+
+    /* Get collision data for the entity's layer */
+    u8* collisionData;
+    u8 layer = entity->collisionLayer;
+    if (layer == 2)
+        collisionData = gMapTop.collisionData;
+    else
+        collisionData = gMapBottom.collisionData;
+
+    u8 tileType = collisionData[index];
+
+    /* Swimming check: if swimming and not in deep water, force block non-water tiles */
+    if (gPlayerState.swim_state != 0 && gPlayerState.floor_type != 0x18) {
+        if (tileType >= 0x10)
+            goto extended;
+        tileType = 0x0F; /* all quadrants blocked */
+    }
+
+    if (tileType < 0x10) {
+        /* Simple 2×2 sub-tile collision.
+         * Top half (y&8 == 0) → use bits 2-3 (>>2); bottom half → bits 0-1.
+         * Left half (x&8 == 0) → >>1 additionally. */
+        u32 result = tileType;
+        if (!(py & 8))
+            result >>= 2;
+        if (!(px & 8))
+            result >>= 1;
+        return result & 1;
+    }
+
+extended:
+    if (tileType == 0xFF)
+        return 1; /* always blocked */
+
+    /* Extended collision types (0x10–0xFE) — requires param tables from ROM.
+     * Treat as passable for now. */
+    return 0;
+}
+
+/*
+ * sub_080085CC — fill entity->collisions by probing 8 points around entity hitbox.
+ * (from Thumb asm at 0x080085CC)
+ *
+ * Probes are placed on the 4 edges of the collision box:
+ *   Right edge:  (baseX + halfW, baseY ± vStep)
+ *   Left edge:   (baseX - halfW, baseY ± vStep)
+ *   Bottom edge: (baseX ± hStep, baseY + halfH)
+ *   Top edge:    (baseX ± hStep, baseY - halfH)
+ *
+ * Hitbox layout (bytes 2–5 of Hitbox struct = unk2[0..3]):
+ *   unk2[0] = halfW  (half-width for collision)
+ *   unk2[1] = vStep  (vertical probe step)
+ *   unk2[2] = hStep  (horizontal probe step)
+ *   unk2[3] = halfH  (half-height for collision)
+ *
+ * Result is a 16-bit mask stored in entity->collisions:
+ *   Bit 14: right edge, south probe
+ *   Bit 13: right edge, north probe
+ *   Bit 10: left edge, south probe
+ *   Bit  9: left edge, north probe
+ *   Bit  6: bottom edge, east probe
+ *   Bit  5: bottom edge, west probe
+ *   Bit  2: top edge, east probe
+ *   Bit  1: top edge, west probe
+ */
+void sub_080085CC(Entity* ent) {
+    /* Null hitbox guard */
+    Hitbox* hb = ent->hitbox;
+    if (hb == NULL) {
+        ent->collisions = 0;
+        return;
+    }
+
+    /* Get entity position relative to room origin */
+    s32 relX = (s32)(u16)ent->x.HALF.HI - (s32)gRoomControls.origin_x;
+    s32 relY = (s32)(u16)ent->y.HALF.HI - (s32)gRoomControls.origin_y;
+
+    /* Hitbox offsets */
+    s32 baseX = relX + hb->offset_x;
+    s32 baseY = relY + hb->offset_y;
+
+    u8 halfW = hb->unk2[0];
+    u8 vStep = hb->unk2[1];
+    u8 hStep = hb->unk2[2];
+    u8 halfH = hb->unk2[3];
+
+    s32 rightX = baseX + halfW;
+    s32 leftX = baseX - halfW;
+    s32 bottomY = baseY + halfH;
+    s32 topY = baseY - halfH;
+
+    u16 col = 0;
+
+    /* Right edge: south & north */
+    col |= TileCollisionLookup((u32)rightX, (u32)(baseY + vStep), ent) << 14;
+    col |= TileCollisionLookup((u32)rightX, (u32)(baseY - vStep), ent) << 13;
+
+    /* Left edge: south & north */
+    col |= TileCollisionLookup((u32)leftX, (u32)(baseY + vStep), ent) << 10;
+    col |= TileCollisionLookup((u32)leftX, (u32)(baseY - vStep), ent) << 9;
+
+    /* Bottom edge: east & west */
+    col |= TileCollisionLookup((u32)(baseX + hStep), (u32)bottomY, ent) << 6;
+    col |= TileCollisionLookup((u32)(baseX - hStep), (u32)bottomY, ent) << 5;
+
+    /* Top edge: east & west */
+    col |= TileCollisionLookup((u32)(baseX + hStep), (u32)topY, ent) << 2;
+    col |= TileCollisionLookup((u32)(baseX - hStep), (u32)topY, ent) << 1;
+
+    ent->collisions = col;
+}
+
+/*
+ * CalcCollisionDirectionOLD — adjust movement direction based on collision data
+ * When an entity is moving in a cardinal direction and hitting a wall,
+ * this returns a perpendicular direction to slide along the wall.
+ * (from Thumb asm at 0x08002864)
+ *
+ * r0 = direction (0–31), r1 = collisions (entity->collisions)
+ * Returns adjusted direction or original if no slide.
+ */
+static u32 CalcCollisionDirectionOLD(u32 direction, u32 collisions) {
+    u32 quadrant = direction >> 3; /* 0=N, 1=E, 2=S, 3=W */
+
+    switch (quadrant) {
+        case 0: /* North */
+            if (!(collisions & 0x000E))
+                return direction;
+            if (!(collisions & 0xE004))
+                return 0x08; /* East */
+            if (!(collisions & 0x0E02))
+                return 0x18; /* West */
+            return direction;
+
+        case 1: /* East */
+            if (!(collisions & 0xE000))
+                return direction;
+            if (!(collisions & 0x200E))
+                return 0x00; /* North */
+            if (!(collisions & 0x40E0))
+                return 0x10; /* South */
+            return direction;
+
+        case 2: /* South */
+            if (!(collisions & 0x00E0))
+                return direction;
+            if (!(collisions & 0xE040))
+                return 0x08; /* East */
+            if (!(collisions & 0x0E20))
+                return 0x18; /* West */
+            return direction;
+
+        case 3: /* West */
+            if (!(collisions & 0x0E00))
+                return direction;
+            if (!(collisions & 0x020E))
+                return 0x00; /* North */
+            if (!(collisions & 0x04E0))
+                return 0x10; /* South */
+            return direction;
+
+        default:
+            return direction;
+    }
+}
+
+/*
+ * LinearMoveDirectionOLD — move entity by speed in given direction, checking collisions.
+ * (from Thumb asm at 0x080027EA)
+ *
+ * Updates entity->x.WORD and entity->y.WORD using sine table lookup.
+ * Returns bitmask: bit 0 = X moved, bit 1 = Y moved.
+ */
+u32 LinearMoveDirectionOLD(Entity* ent, u32 speed, u32 direction) {
+    u32 moved = 0;
+
+    if (direction & 0x80)
+        return 0; /* DIR_NOT_MOVING */
+
+    u16 collisions = ent->collisions;
+
+    /* If direction is exactly cardinal (no sub-cardinal bits), try wall sliding */
+    if ((direction & 7) == 0) {
+        u32 adjusted = CalcCollisionDirectionOLD(direction, collisions);
+        if (adjusted != direction) {
+            direction = adjusted;
+            speed = 0x100; /* slow down when sliding */
+        }
+    }
+
+    /* Look up collision mask for this direction */
+    u16 colMask = gCollisionDirectionMasks[direction & 0x1F];
+    u16 masked = collisions & colMask;
+
+    /* X movement */
+    if (!(masked & 0xEE00)) {
+        s16 sinVal = gSineTable[direction * 8];
+        if (sinVal != 0) {
+            moved |= 1;
+            s32 dx = FixedMul(sinVal, (s16)speed) << 8;
+            ent->x.WORD += dx;
+        }
+    }
+
+    /* Y movement */
+    if (!(masked & 0x00EE)) {
+        s16 cosVal = gSineTable[direction * 8 + 64];
+        if (cosVal != 0) {
+            moved |= 2;
+            s32 dy = FixedMul(cosVal, (s16)speed) << 8;
+            ent->y.WORD -= dy;
+        }
+    }
+
+    return moved;
+}
+
+/*
+ * sub_0800857C — player movement wrapper.
+ * Calls sub_080085CC (collision tile update) then LinearMoveDirectionOLD.
+ * (from Thumb asm at 0x0800857C)
+ */
+void sub_0800857C(Entity* ent) {
+    sub_080085CC(ent);
+    LinearMoveDirectionOLD(ent, ent->speed, ent->direction);
+}
+
+/*
+ * sub_080085B0 — collision tile update wrapper.
+ * (from Thumb asm at 0x080085B0)
+ * Calls sub_080085CC — tile collision detection for the player.
+ */
+void sub_080085B0(Entity* ent) {
+    sub_080085CC(ent);
+}
+
+/*
+ * sub_08008AA0 — set player velocity direction from sine table.
+ * (from Thumb asm at 0x08008AA0)
+ *   Reads gPlayerState.direction, looks up sin/cos, stores in vel_x/vel_y.
+ */
+void sub_08008AA0(Entity* ent) {
+    (void)ent;
+    if (gPlayerState.floor_type == 1) /* SURFACE_AUTO */
+        return;
+    u8 dir = gPlayerState.direction;
+    if (dir == 0xFF)
+        return;
+    gPlayerState.vel_x = gSineTable[dir * 8];
+    gPlayerState.vel_y = -gSineTable[dir * 8 + 64];
+}
+
+/*
+ * sub_08008AC6 — check if player should respawn (fallen off edge, etc.)
+ * (from Thumb asm at 0x08008AC6)
+ * Simplified stub: just check swim state and collision for respawn.
+ */
+void sub_08008AC6(Entity* ent) {
+    /* Simplified: skip respawn check since it depends on GetNonCollidedSide
+     * and RespawnPlayer which would need more infrastructure */
+    (void)ent;
+}
+
+/*
+ * GetNextFunction — entity state machine dispatcher
+ * Returns 0-5 based on entity combat/action state.
+ * (from Thumb asm at 0x0800279C)
+ */
+u32 GetNextFunction(Entity* this) {
+    u8 gustJarState = this->gustJarState;
+    u8 contactFlags = this->contactFlags;
+
+    if (!(gustJarState & 4) && (contactFlags >> 7))
+        return 1; /* contact initiated */
+
+    if (this->knockbackDuration != 0)
+        return 2; /* knockback active */
+
+    if (this->health == 0) {
+        if (this->action == 0 && this->subAction == 0)
+            return 0; /* dead but not initialized */
+        if (gustJarState & 8)
+            return 5; /* gust jar captured and dead */
+        if (this->confusedTime != 0)
+            return 4; /* confused */
+        return 3;     /* dying */
+    }
+
+    if (this->action == 0 && this->subAction == 0)
+        return 0; /* not initialized */
+
+    return 0; /* normal update */
+}
+
+/*
+ * Random — simple 32-bit PRNG (from ARM asm at 0x08000E50)
+ *   state = ROR(state * 3, 13);  return state >> 1;
+ */
+u32 Random(void) {
+    gRand = gRand * 3;
+    gRand = (gRand >> 13) | (gRand << 19); /* rotate right by 13 */
+    return gRand >> 1;
+}
+
+/*
+ * CheckBits — test whether `count` consecutive bits starting at `bitIndex`
+ *             are all set in the byte array `base`.  (from ARM asm at 0x080B20EC)
+ *   Returns 1 if ALL bits set, 0 if any bit is clear.
+ */
+u32 CheckBits(void* base, u32 bitIndex, u32 count) {
+    const u8* ptr = (const u8*)base + (bitIndex / 8);
+    u32 bit = bitIndex % 8;
+    for (u32 i = 0; i < count; i++) {
+        if (!(ptr[0] & (1u << bit)))
+            return 0;
+        bit++;
+        if (bit >= 8) {
+            bit = 0;
+            ptr++;
+        }
+    }
+    return 1;
+}
+
+/*
+ * Mod — modulo (SWI 0x06 wrapper): returns num % denom
+ */
+s32 Mod(s32 num, s32 denom) {
+    if (denom == 0)
+        return 0;
+    return num % denom;
+}
+
+/*
+ * SumDropProbabilities — vector add 3 arrays of 16 s16 values.
+ *   out[i] = a[i] + b[i] + c[i]   for i = 0..15
+ */
+void SumDropProbabilities(s16* out, const s16* a, const s16* b, const s16* c) {
+    for (int i = 0; i < 16; i++) {
+        out[i] = a[i] + b[i] + c[i];
+    }
+}
+
+/*
+ * SumDropProbabilities2 — vector add, clamp each to >= 0, return scalar sum.
+ *   out[i] = max(0, a[i] + b[i] + c[i])   for i = 0..15
+ *   returns sum of all out[i]
+ */
+u32 SumDropProbabilities2(s16* out, const s16* a, const s16* b, const s16* c) {
+    u32 sum = 0;
+    for (int i = 0; i < 16; i++) {
+        s16 val = a[i] + b[i] + c[i];
+        if (val < 0)
+            val = 0;
+        out[i] = val;
+        sum += val;
+    }
+    return sum;
+}
+
+/*
+ * UpdateScrollVram — copies map tile data from gMapDataBottomSpecial / gMapDataTopSpecial
+ * into gBG1Buffer / gBG2Buffer depending on gUpdateVisibleTiles.
+ *
+ * Replaces the ARM veneer at 0x08000108 and the IWRAM sub_080B197C.
+ */
+void UpdateScrollVram(void) {
+    typedef void (*ScrollVramFunc)(u16*, u16*);
+    static const ScrollVramFunc funcs[] = {
+        NULL,               /* 0: unused (returns immediately) */
+        ram_sub_080B197C_c, /* 1: initial full-screen fill */
+        sub_0807D280,       /* 2: scroll update mode */
+        sub_0807D46C,       /* 3: scroll update mode */
+        sub_0807D6D8,       /* 4: scroll update mode */
+    };
+
+    u8 mode = gUpdateVisibleTiles;
+    if (mode == 0 || mode > 4)
+        return;
+
+    ScrollVramFunc func = funcs[mode];
+
+    /* Bottom layer → BG1 */
+    if (gMapBottom.bgSettings != NULL) {
+        func(gMapDataBottomSpecial, &gBG1Buffer[0x20]);
+    }
+
+    /* Top layer → BG2 */
+    if (gMapTop.bgSettings != NULL) {
+        func(gMapDataTopSpecial, &gBG2Buffer[0x20]);
+    }
+}
+
+/*
+ * UpdateSpriteForCollisionLayer — sets OBJ priority bits based on entity's collision layer.
+ * (from Thumb asm at 0x08016A04)
+ *
+ * Table embedded in ROM:
+ *   Layer 0: spriteRendering b3=0x80 (priority 2), spriteOrientation flipY=0x80 (priority 2)
+ *   Layer 1: same as layer 0
+ *   Layer 2: spriteRendering b3=0x40 (priority 1), spriteOrientation flipY=0x40 (priority 1)
+ *   Layer 3: same as layer 2
+ *
+ * This ensures entities on the bottom layer render behind the top BG layer (tree canopy, roofs)
+ * and entities on the top layer render in front of the top BG layer.
+ */
+void UpdateSpriteForCollisionLayer(Entity* entity) {
+    static const u8 sCollisionLayerPriorityTable[8] = {
+        0x80, 0x80, /* layer 0: priority 2 */
+        0x80, 0x80, /* layer 1: priority 2 */
+        0x40, 0x40, /* layer 2: priority 1 */
+        0x40, 0x40, /* layer 3: priority 1 */
+    };
+
+    u8 layer = entity->collisionLayer;
+    if (layer > 3)
+        layer = 0;
+    const u8* entry = &sCollisionLayerPriorityTable[layer * 2];
+
+    /* Set bits 6-7 of spriteRendering (offset 0x19) */
+    u8* renderByte = (u8*)&entity->spriteRendering;
+    *renderByte = (*renderByte & ~0xC0) | entry[0];
+
+    /* Set bits 6-7 of spriteOrientation (offset 0x1b) */
+    u8* orientByte = (u8*)&entity->spriteOrientation;
+    *orientByte = (*orientByte & ~0xC0) | entry[1];
+}
+
 // Area / room data
 const AreaHeader gAreaMetadata[256];
+/**
+ * GravityUpdate — port of ARM thumb routine at 0x08003FC4.
+ * Applies gravity to an entity's z-axis each frame.
+ */
+u32 GravityUpdate(Entity* entity, u32 gravity) {
+    s32 z = (s32)entity->z.WORD - (s32)entity->zVelocity;
+    if (z < 0) {
+        entity->z.WORD = (u32)z;
+        entity->zVelocity = (s32)entity->zVelocity - (s32)gravity;
+        return (u32)z;
+    } else {
+        entity->z.WORD = 0;
+        entity->zVelocity = 0;
+        return 0;
+    }
+}
+
+/**
+ * BounceUpdate — port of Thumb routine at 0x080044EC.
+ * Like GravityUpdate but with bouncing: when entity hits ground,
+ * calculates a reduced bounce velocity.
+ *
+ * Returns: 2 = airborne, 1 = just bounced, 0 = done bouncing
+ */
+u32 BounceUpdate(Entity* entity, u32 acceleration) {
+    s32 z = (s32)entity->z.WORD - (s32)entity->zVelocity;
+    if (z < 0) {
+        /* Still airborne */
+        entity->z.WORD = (u32)z;
+        entity->zVelocity = (s32)entity->zVelocity - (s32)acceleration;
+        return 2;
+    }
+    /* Hit ground — calculate bounce */
+    entity->z.WORD = 1; /* z=1 signals "just landed" (player can't do certain actions at z!=0) */
+    s32 vel = (s32)entity->zVelocity - (s32)acceleration;
+    vel = -vel;
+    vel >>= 1;
+    u32 uvel = (u32)vel;
+    uvel = uvel + (uvel >> 2); /* vel * 1.25 — damped bounce */
+    u32 result;
+    if ((uvel >> 12) >= 0xC) {
+        result = 1; /* Still has enough energy to bounce */
+    } else {
+        result = 0; /* Done bouncing */
+        uvel = 0;
+    }
+    entity->zVelocity = uvel;
+    return result;
+}
+
+/**
+ * GetFacingDirection — port of Thumb routine at 0x080045C4.
+ * Calculates direction (0-31 in 5-bit system) from entity A to entity B.
+ * Falls through to CalculateDirectionTo in ASM.
+ */
+u32 GetFacingDirection(Entity* from, Entity* to) {
+    return CalculateDirectionTo((s16)from->x.HALF.HI, (s16)from->y.HALF.HI, (s16)to->x.HALF.HI, (s16)to->y.HALF.HI);
+}
+
+/**
+ * sub_080045B4 — port of Thumb routine at 0x080045B4.
+ * Calculates direction from entity position to absolute (targetX, targetY).
+ * In ASM: shuffles args then tail-calls ram_CalcCollisionDirection.
+ */
+u32 sub_080045B4(Entity* entity, u32 targetX, u32 targetY) {
+    return CalculateDirectionTo((s16)entity->x.HALF.HI, (s16)entity->y.HALF.HI, (s16)targetX, (s16)targetY);
+}
+
+/**
+ * EntityInRectRadius — port of Thumb routine at 0x080041A0.
+ * Checks if two entities are within rectangular proximity AND share collision layers.
+ *
+ * Returns 1 if both axis-distance checks pass and entities share layer bits 0-1.
+ * A radius of 0 on an axis skips that axis check (always passes).
+ */
+u32 EntityInRectRadius(Entity* a, Entity* b, u32 xRadius, u32 yRadius) {
+    /* Collision layer check: both must share bits 0-1 */
+    u8 sharedLayers = a->collisionLayer & b->collisionLayer;
+    if ((sharedLayers & 3) == 0)
+        return 0;
+
+    /* X axis check */
+    if (xRadius != 0) {
+        s32 deltaX = (s16)a->x.HALF.HI - (s16)b->x.HALF.HI;
+        u32 offsetX = (u32)(deltaX + (s32)xRadius);
+        if (offsetX > xRadius * 2)
+            return 0;
+    }
+
+    /* Y axis check */
+    if (yRadius != 0) {
+        s32 deltaY = (s16)a->y.HALF.HI - (s16)b->y.HALF.HI;
+        u32 offsetY = (u32)(deltaY + (s32)yRadius);
+        if (offsetY > yRadius * 2)
+            return 0;
+    }
+
+    return 1;
+}
+
+/**
+ * CheckPlayerInRegion — port of Thumb routine at 0x0800293E.
+ * Checks whether the player entity is within a room-relative rectangle.
+ *
+ * The rectangle is centered at (x, y) with half-extents (halfWidth, halfHeight),
+ * all relative to the room origin (gRoomControls.origin_x/y).
+ */
+u32 CheckPlayerInRegion(u32 x, u32 y, u32 halfWidth, u32 halfHeight) {
+    s32 playerRelX = (s32)gPlayerEntity.base.x.HALF.HI - (s32)gRoomControls.origin_x;
+    s32 playerRelY = (s32)gPlayerEntity.base.y.HALF.HI - (s32)gRoomControls.origin_y;
+
+    /* Unsigned range check: (x - (playerRelX - halfWidth)) must be < 2*halfWidth */
+    u32 offsetX = (u32)((s32)x - (playerRelX - (s32)halfWidth));
+    if (offsetX >= halfWidth * 2)
+        return 0;
+
+    u32 offsetY = (u32)((s32)y - (playerRelY - (s32)halfHeight));
+    if (offsetY >= halfHeight * 2)
+        return 0;
+
+    return 1;
+}
+
+/* ================================================================
+ * Tile lookup functions — port of ARM routines in intr.s
+ *
+ * On GBA these use indirection tables (gActTilePtrs, gMapDataPtrs,
+ * gCollisionDataPtrs) that point into gMapBottom / gMapTop fields.
+ * On PC we can access the struct fields directly.
+ *
+ * Layer mapping:
+ *   0, 1, 3 → gMapBottom
+ *   2       → gMapTop
+ *
+ * Coordinate conversion (ARM shifts):
+ *   lsl #22, lsr #26  ≡  (x & 0x3FF) >> 4  →  tile index 0..63
+ * ================================================================ */
+
+static inline MapLayer* GetMapLayerForLayer(u32 layer) {
+    return (layer == 2) ? &gMapTop : &gMapBottom;
+}
+
+/* World pixel → room-relative tile position */
+static inline u32 WorldToTilePos(u32 worldX, u32 worldY) {
+    u32 roomX = worldX - gRoomControls.origin_x;
+    u32 roomY = worldY - gRoomControls.origin_y;
+    u32 tileX = ((roomX << 22) >> 26); /* (roomX & 0x3FF) >> 4 */
+    u32 tileY = ((roomY << 22) >> 26);
+    return tileX + (tileY << 6); /* tileX + tileY * 64 */
+}
+
+/* Room pixel → tile position */
+static inline u32 RoomToTilePos(u32 roomX, u32 roomY) {
+    u32 tileX = ((roomX << 22) >> 26);
+    u32 tileY = ((roomY << 22) >> 26);
+    return tileX + (tileY << 6);
+}
+
+/* ---------- ActTile family ---------- */
+
+/**
+ * GetActTileAtTilePos — get act tile at a raw tile position.
+ * (port of arm_GetActTileAtTilePos at 0x080B1AE0)
+ */
+u32 GetActTileAtTilePos(u16 tilePos, u8 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->actTiles[tilePos];
+}
+
+/**
+ * GetActTileAtRoomTile — get act tile at room tile coordinates.
+ * (port of arm_GetActTileAtRoomTile)
+ */
+u32 GetActTileAtRoomTile(u32 roomTileX, u32 roomTileY, u32 layer) {
+    u32 tilePos = roomTileX + (roomTileY << 6);
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->actTiles[tilePos];
+}
+
+/**
+ * GetActTileAtRoomCoords — get act tile at room pixel coordinates.
+ * (port of arm_GetActTileAtRoomCoords)
+ */
+u32 GetActTileAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
+    u32 tilePos = RoomToTilePos(roomX, roomY);
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->actTiles[tilePos];
+}
+
+/**
+ * GetActTileAtWorldCoords — get act tile at world pixel coordinates.
+ * (port of arm_GetActTileAtWorldCoords)
+ */
+u32 GetActTileAtWorldCoords(u32 worldX, u32 worldY, u32 layer) {
+    u32 tilePos = WorldToTilePos(worldX, worldY);
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->actTiles[tilePos];
+}
+
+/**
+ * GetActTileAtEntity — get act tile under an entity.
+ * (port of arm_GetActTileAtEntity)
+ */
+u32 GetActTileAtEntity(Entity* entity) {
+    u32 tilePos = WorldToTilePos(entity->x.HALF.HI, entity->y.HALF.HI);
+    MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
+    return ml->actTiles[tilePos];
+}
+
+/**
+ * GetActTileRelativeToEntity — get act tile at entity position + offset.
+ * (port of arm_GetActTileRelativeToEntity)
+ */
+u32 GetActTileRelativeToEntity(Entity* entity, s32 xOffset, s32 yOffset) {
+    u32 worldX = (u16)entity->x.HALF.HI + xOffset;
+    u32 worldY = (u16)entity->y.HALF.HI + yOffset;
+    u32 tilePos = WorldToTilePos(worldX, worldY);
+    MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
+    return ml->actTiles[tilePos];
+}
+
+/**
+ * GetActTileForTileType — convert a tileType to its act tile value.
+ * (port of arm_GetActTileForTileType at 0x080B1B54)
+ *
+ * tileType < 0x4000 → gMapTileTypeToActTile[tileType]
+ * tileType >= 0x4000 → gMapSpecialTileToActTile[tileType - 0x4000]
+ */
+extern const u8 gMapTileTypeToActTile[];
+extern const u16 gUnk_080B7A3E[]; /* gMapSpecialTileToActTile */
+u32 GetActTileForTileType(u32 tileType) {
+    if (tileType < 0x4000)
+        return gMapTileTypeToActTile[tileType];
+    else
+        return ((const u8*)gUnk_080B7A3E)[tileType - 0x4000];
+}
+
+/* ---------- CollisionData family ---------- */
+
+/**
+ * GetCollisionDataAtTilePos — get collision byte at a raw tile position.
+ * (port of arm_GetCollisionDataAtTilePos)
+ */
+u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->collisionData[tilePos];
+}
+
+u32 GetCollisionDataAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
+    u32 tilePos = RoomToTilePos(roomX, roomY);
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->collisionData[tilePos];
+}
+
+u32 GetCollisionDataAtWorldCoords(u32 worldX, u32 worldY, u32 layer) {
+    u32 tilePos = WorldToTilePos(worldX, worldY);
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->collisionData[tilePos];
+}
+
+u32 GetCollisionDataAtEntity(Entity* entity) {
+    u32 tilePos = WorldToTilePos(entity->x.HALF.HI, entity->y.HALF.HI);
+    MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
+    return ml->collisionData[tilePos];
+}
+
+u32 GetCollisionDataRelativeTo(Entity* entity, s32 xOffset, s32 yOffset) {
+    u32 worldX = (u16)entity->x.HALF.HI + xOffset;
+    u32 worldY = (u16)entity->y.HALF.HI + yOffset;
+    u32 tilePos = WorldToTilePos(worldX, worldY);
+    MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
+    return ml->collisionData[tilePos];
+}
+
+/* ---------- TileType family ---------- */
+
+/**
+ * GetTileTypeAtTilePos — get tile type at a raw tile position.
+ * (port of arm_GetTileTypeAtTilePos at 0x080B1A60)
+ *
+ * Reads mapData[tilePos] → tileIndex.
+ * If tileIndex >= 0x4000 → return tileIndex (special tile reference).
+ * Otherwise → return tileTypes[tileIndex].
+ */
+u32 GetTileTypeAtTilePos(u32 tilePos, u32 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    u16 tileIndex = ml->mapData[tilePos];
+    if (tileIndex >= 0x4000)
+        return tileIndex;
+    return ml->tileTypes[tileIndex];
+}
+
+u32 GetTileTypeAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
+    u32 tilePos = RoomToTilePos(roomX, roomY);
+    return GetTileTypeAtTilePos(tilePos, layer);
+}
+
+u32 GetTileTypeAtWorldCoords(s32 worldX, s32 worldY, u32 layer) {
+    u32 tilePos = WorldToTilePos((u32)worldX, (u32)worldY);
+    return GetTileTypeAtTilePos(tilePos, layer);
+}
+
+u32 GetTileTypeAtEntity(Entity* entity) {
+    u32 tilePos = WorldToTilePos(entity->x.HALF.HI, entity->y.HALF.HI);
+    return GetTileTypeAtTilePos(tilePos, entity->collisionLayer);
+}
+
+u32 GetTileTypeRelativeToEntity(Entity* entity, s32 xOffset, s32 yOffset) {
+    u32 worldX = (u16)entity->x.HALF.HI + xOffset;
+    u32 worldY = (u16)entity->y.HALF.HI + yOffset;
+    u32 tilePos = WorldToTilePos(worldX, worldY);
+    return GetTileTypeAtTilePos(tilePos, entity->collisionLayer);
+}
+
+/* ---------- sub_080B1B84 / sub_080B1BA4 — tile data lookup ---------- */
+
+/**
+ * sub_080B1B84 — look up tile property data (u16) from gUnk_08000360 table.
+ * (port of arm_sub_080B1B84 at 0x080B1B84)
+ *
+ * Calls GetTileTypeAtTilePos, then indexes into gUnk_08000360 or gUnk_080B7A3E
+ * (based on whether tileType < 0x4000 or not) as a u16 array.
+ */
+u32 sub_080B1B84(u32 tilePos, u32 layer) {
+    u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
+    const u16* table;
+    if (tileType < 0x4000) {
+        /* gUnk_08000360 is at ROM offset 0x360 */
+        table = (const u16*)&gRomData[0x360];
+    } else {
+        table = gUnk_080B7A3E;
+    }
+    return table[tileType & 0x3FFF];
+}
+
+/**
+ * sub_080B1BA4 — like sub_080B1B84 but AND result with a mask (r2).
+ * (port of arm_sub_080B1BA4 at 0x080B1BA4)
+ */
+u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
+    u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
+    const u16* table;
+    if (tileType < 0x4000) {
+        table = (const u16*)&gRomData[0x360];
+    } else {
+        table = gUnk_080B7A3E;
+    }
+    return table[tileType & 0x3FFF] & mask;
+}
+
 RoomHeader* gAreaRoomHeaders[256];
 void* gAreaRoomMaps[256];
 void* gAreaTable[256];

@@ -13,9 +13,7 @@ typedef struct Entity_ Entity;
 
 /* Area_HyruleTown -- defined in port_linked_stubs.c */
 
-u32 BounceUpdate(...) {
-    return 0;
-}
+/* BounceUpdate -- implemented in port_linked_stubs.c */
 /* ButtonUIElement_Actions -- defined in port_linked_stubs.c */
 u32 CalcCollisionStaticEntity(...) {
     return 0;
@@ -23,16 +21,12 @@ u32 CalcCollisionStaticEntity(...) {
 /* CalcDistance -- implemented in port_math.c */
 /* CalculateDirectionFromOffsets -- implemented in port_math.c */
 /* CalculateDirectionTo -- implemented in port_math.c */
-u32 CheckBits(...) {
-    return 0;
-}
+/* CheckBits — implemented in port_linked_stubs.c */
 u32 CheckOnLayerTransition(...) {
     return 0;
 }
 /* CheckOnScreen -- defined in port_draw.c */
-u32 CheckPlayerInRegion(...) {
-    return 0;
-}
+/* CheckPlayerInRegion -- implemented in port_linked_stubs.c */
 u32 CheckRectOnScreen(...) {
     return 0;
 }
@@ -78,9 +72,7 @@ u32 EnqueueSFX(...) {
 }
 /* Entities_HouseInteriors1_Mayor_080D6210 -- defined in port_linked_stubs.c */
 /* Entities_MinishPaths_MayorsCabin_gUnk_080D6138 -- defined in port_linked_stubs.c */
-u32 EntityInRectRadius(...) {
-    return 0;
-}
+/* EntityInRectRadius -- implemented in port_linked_stubs.c */
 /* EzloNagUIElement_Actions -- defined in port_linked_stubs.c */
 u32 FindValueForKey(...) {
     return 0;
@@ -94,46 +86,22 @@ u32 GenericKnockback(...) {
 u32 GenericKnockback2(...) {
     return 0;
 }
-u32 GetActTileAtEntity(...) {
-    return 0;
-}
-u32 GetActTileAtRoomCoords(...) {
-    return 0;
-}
-u32 GetActTileAtTilePos(...) {
-    return 0;
-}
-u32 GetActTileAtWorldCoords(...) {
-    return 0;
-}
-u32 GetActTileForTileType(...) {
-    return 0;
-}
-u32 GetActTileRelativeToEntity(...) {
-    return 0;
-}
-u32 GetCollisionDataAtEntity(...) {
-    return 0;
-}
-u32 GetCollisionDataAtTilePos(...) {
-    return 0;
-}
-u32 GetCollisionDataAtWorldCoords(...) {
-    return 0;
-}
-u32 GetCollisionDataRelativeTo(...) {
-    return 0;
-}
-u32 GetFacingDirection(...) {
-    return 0;
-}
+/* GetActTileAtEntity -- implemented in port_linked_stubs.c */
+/* GetActTileAtRoomCoords -- implemented in port_linked_stubs.c */
+/* GetActTileAtTilePos -- implemented in port_linked_stubs.c */
+/* GetActTileAtWorldCoords -- implemented in port_linked_stubs.c */
+/* GetActTileForTileType -- implemented in port_linked_stubs.c */
+/* GetActTileRelativeToEntity -- implemented in port_linked_stubs.c */
+/* GetCollisionDataAtEntity -- implemented in port_linked_stubs.c */
+/* GetCollisionDataAtTilePos -- implemented in port_linked_stubs.c */
+/* GetCollisionDataAtWorldCoords -- implemented in port_linked_stubs.c */
+/* GetCollisionDataRelativeTo -- implemented in port_linked_stubs.c */
+/* GetFacingDirection -- implemented in port_linked_stubs.c */
 u32 GetFuserId(...) {
     return 0;
 }
 /* GetNextFrame — implemented in port_animation.c */
-u32 GetNextFunction(...) {
-    return 0;
-}
+/* GetNextFunction — implemented in port_linked_stubs.c */
 /* GetNextScriptCommandHalfword — implemented in port_stubs.c */
 /* GetNextScriptCommandHalfwordAfterCommandMetadata — implemented in port_stubs.c */
 /* GetNextScriptCommandWord — implemented in port_stubs.c */
@@ -147,30 +115,16 @@ u32 GetTileHazardType(...) {
 u32 GetTileIndex(...) {
     return 0;
 }
-u32 GetTileTypeAtEntity(...) {
-    return 0;
-}
-u32 GetTileTypeAtRoomCoords(...) {
-    return 0;
-}
-u32 GetTileTypeAtTilePos(...) {
-    return 0;
-}
-u32 GetTileTypeAtWorldCoords(...) {
-    return 0;
-}
-u32 GetTileTypeRelativeToEntity(...) {
-    return 0;
-}
-u32 GravityUpdate(...) {
-    return 0;
-}
+/* GetTileTypeAtEntity -- implemented in port_linked_stubs.c */
+/* GetTileTypeAtRoomCoords -- implemented in port_linked_stubs.c */
+/* GetTileTypeAtTilePos -- implemented in port_linked_stubs.c */
+/* GetTileTypeAtWorldCoords -- implemented in port_linked_stubs.c */
+/* GetTileTypeRelativeToEntity -- implemented in port_linked_stubs.c */
+/* GravityUpdate -- implemented in port_linked_stubs.c */
 /* HoleManager_Actions -- defined in port_linked_stubs.c */
 /* InitAnimationForceUpdate — implemented in port_animation.c */
 /* InitializeAnimation — implemented in port_animation.c */
-u32 LinearMoveDirectionOLD(...) {
-    return 0;
-}
+/* LinearMoveDirectionOLD — implemented in port_linked_stubs.c */
 u32 LoadResourceAsync(const void* src, u32 dest, u32 size) {
     /*
      * PC port: perform the copy immediately instead of queuing for VBlank.
@@ -184,9 +138,7 @@ u32 LoadResourceAsync(const void* src, u32 dest, u32 size) {
     }
     return 0;
 }
-u32 Mod(...) {
-    return 0;
-}
+/* Mod — implemented in port_linked_stubs.c */
 u32 PlayerCheckNEastTile(...) {
     return 0;
 }
@@ -194,9 +146,7 @@ void ProjectileUpdate(Entity* entity) {
     /* Stub: projectile update not implemented yet */
 }
 /* RAMFUNCS_END -- defined in port_linked_stubs.c */
-u32 Random(...) {
-    return 0;
-}
+/* Random — implemented in port_linked_stubs.c */
 u32 ResetCollisionLayer(...) {
     return 0;
 }
@@ -221,12 +171,8 @@ u32 SoundReqClipped(...) {
 }
 /* Subtask_FastTravel_Functions -- defined in port_linked_stubs.c */
 /* Subtask_MapHint_Functions -- defined in port_linked_stubs.c */
-u32 SumDropProbabilities(...) {
-    return 0;
-}
-u32 SumDropProbabilities2(...) {
-    return 0;
-}
+/* SumDropProbabilities — implemented in port_linked_stubs.c */
+/* SumDropProbabilities2 — implemented in port_linked_stubs.c */
 /* UnpackTextNibbles — implemented in port_text_render.c */
 /* UpdateAnimationSingleFrame — implemented in port_animation.c */
 /* UpdateAnimationVariableFrames — implemented in port_animation.c */
@@ -239,12 +185,8 @@ u32 UpdateCollisionLayer(...) {
 u32 UpdateIcePlayerVelocity(...) {
     return 0;
 }
-u32 UpdateScrollVram(...) {
-    return 0;
-}
-u32 UpdateSpriteForCollisionLayer(...) {
-    return 0;
-}
+/* UpdateScrollVram — implemented in port_linked_stubs.c */
+/* UpdateSpriteForCollisionLayer — implemented in port_linked_stubs.c */
 /* UpperInn_Din -- defined in port_linked_stubs.c */
 /* UpperInn_Farore -- defined in port_linked_stubs.c */
 /* UpperInn_Nayru -- defined in port_linked_stubs.c */
@@ -565,9 +507,7 @@ u32 m4aSoundVSyncOff(...) {
 u32 m4aSoundVSyncOn(...) {
     return 0;
 }
-u32 ram_ClearAndUpdateEntities(...) {
-    return 0;
-}
+/* ram_ClearAndUpdateEntities -- defined in port_draw.c */
 u32 ram_CollideAll(...) {
     return 0;
 }
@@ -702,31 +642,17 @@ u32 sub_08004542(...) {
 u32 sub_08004596(...) {
     return 0;
 }
-u32 sub_080045B4(...) {
-    return 0;
-}
-u32 sub_0800857C(...) {
-    return 0;
-}
-u32 sub_080085B0(...) {
-    return 0;
-}
+/* sub_080045B4 — implemented in port_linked_stubs.c */
+/* sub_0800857C — implemented in port_linked_stubs.c */
+/* sub_080085B0 — implemented in port_linked_stubs.c */
 u32 sub_080086B4(...) {
     return 0;
 }
 u32 sub_08008926(...) {
     return 0;
 }
-u32 sub_08008AA0(...) {
-    return 0;
-}
-u32 sub_08008AC6(...) {
-    return 0;
-}
+/* sub_08008AA0 — implemented in port_linked_stubs.c */
+/* sub_08008AC6 — implemented in port_linked_stubs.c */
 /* sub_080B197C -- defined in port_linked_stubs.c */
-u32 sub_080B1B84(...) {
-    return 0;
-}
-u32 sub_080B1BA4(...) {
-    return 0;
-}
+/* sub_080B1B84 -- implemented in port_linked_stubs.c */
+/* sub_080B1BA4 -- implemented in port_linked_stubs.c */

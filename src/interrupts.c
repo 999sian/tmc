@@ -61,6 +61,9 @@ void HBlankIntr(void) {
 
 void PerformVBlankDMA(void) {
     if (gVBlankDMA.ready) {
+#ifdef PC_PORT
+        DmaSet(0, gVBlankDMA.src, gVBlankDMA.dest, gVBlankDMA.size);
+#else
         const u16* src = gVBlankDMA.src;
         u16* dest = gVBlankDMA.dest;
         s32 size, i = size = gVBlankDMA.size;
@@ -74,6 +77,7 @@ void PerformVBlankDMA(void) {
         do {
             *dest++ = *src++;
         } while (--i > 0);
+#endif
     }
 }
 

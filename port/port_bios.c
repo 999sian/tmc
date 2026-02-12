@@ -61,22 +61,22 @@ static void Port_PumpEvents(void) {
 }
 
 void VBlankIntrWait(void) {
-    Port_PumpEvents();
-    Port_UpdateInput();
-
-    VBlankIntr();
-
     Port_PPU_PresentFrame();
 
 #ifdef _WIN32
-    Sleep(16);
+    Sleep(1);
 #else
-    SDL_Delay(16);
+    SDL_Delay(1);
 #endif
 
     if (gQuitRequested) {
         exit(0);
     }
+
+    Port_PumpEvents();
+    Port_UpdateInput();
+
+    VBlankIntr();
 }
 
 /* ---- BIOS functions ---- */
