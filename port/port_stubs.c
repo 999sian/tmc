@@ -6,6 +6,7 @@
  */
 
 #include "global.h"
+#include "port_rom.h"
 #include "script.h"
 
 /*
@@ -19,18 +20,63 @@
  */
 
 u32 GetNextScriptCommandHalfword(u16* ptr) {
+#ifdef PC_PORT
+    if (!ptr) {
+        fprintf(stderr, "[SCRIPT] FATAL: GetNextScriptCommandHalfword called with NULL ptr\n");
+        return 0xFFFF;
+    }
+    {
+        uintptr_t addr = (uintptr_t)ptr;
+        /* Check if ptr is a small/garbage value (not a real heap/data pointer) */
+        if (addr < 0x10000u) {
+            fprintf(stderr, "[SCRIPT] FATAL: GetNextScriptCommandHalfword bad ptr %p (too small)\n", (void*)ptr);
+            return 0xFFFF;
+        }
+        if (addr >= 0x08000000u && addr < 0x0A000000u) {
+            fprintf(stderr, "[SCRIPT] FATAL: GetNextScriptCommandHalfword called with unresolved GBA addr 0x%08X\n",
+                    (unsigned)addr);
+            return 0xFFFF;
+        }
+        /* Check: if ptr is inside gRomData, make sure it's within bounds */
+        if (gRomData && addr >= (uintptr_t)gRomData && addr < (uintptr_t)(gRomData + gRomSize)) {
+            /* Valid ROM pointer — OK */
+        } else {
+            /* Not in ROM — check if it's a plausible native pointer.
+             * On 64-bit Windows, user-mode addresses have upper 16+ bits zero.
+             * If upper 32 bits are non-zero and it's not a valid heap/stack range, reject it. */
+            if ((addr >> 48) != 0) {
+                fprintf(stderr,
+                        "[SCRIPT] FATAL: GetNextScriptCommandHalfword corrupted ptr=%p entity context corrupted\n",
+                        (void*)ptr);
+                return 0xFFFF;
+            }
+        }
+    }
+#endif
     return ptr[0];
 }
 
 u32 GetNextScriptCommandHalfwordAfterCommandMetadata(u16* ptr) {
+#ifdef PC_PORT
+    if (!ptr)
+        return 0xFFFF;
+#endif
     return ptr[1];
 }
 
 u32 GetNextScriptCommandWord(u16* ptr) {
+#ifdef PC_PORT
+    if (!ptr)
+        return 0xFFFFFFFF;
+#endif
     return (u32)ptr[0] | ((u32)ptr[1] << 16);
 }
 
 u32 GetNextScriptCommandWordAfterCommandMetadata(u16* ptr) {
+#ifdef PC_PORT
+    if (!ptr)
+        return 0xFFFFFFFF;
+#endif
     return (u32)ptr[1] | ((u32)ptr[2] << 16);
 }
 

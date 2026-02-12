@@ -11,7 +11,11 @@
 typedef struct Temp {
     void* prev;
     void* next;
+#ifdef PC_PORT
+    u8 _0[0x50]; /* 80 bytes: 64-bit Manager base (56) + derived fields (up to 32) with room to spare */
+#else
     u8 _0[0x38];
+#endif
 } Temp;
 #include "tiles.h"
 
@@ -255,7 +259,11 @@ void EraseAllEntities(void) {
 #else
     MemClear(&gPlayerEntity.base, 10880);
 #endif
+#ifdef PC_PORT
+    MemClear(&gUnk_02033290, 0xC00); /* 32 * sizeof(Temp) on 64-bit = 32 * 96 = 3072 */
+#else
     MemClear(&gUnk_02033290, 2048);
+#endif
     sub_0805E98C();
     gEntCount = 0;
     gManagerCount = 0;

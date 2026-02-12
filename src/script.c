@@ -642,6 +642,25 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
 
     if (!context->scriptInstructionPointer)
         return;
+#ifdef PC_PORT
+    {
+        uintptr_t addr = (uintptr_t)context->scriptInstructionPointer;
+        if (addr >= 0x08000000u && addr < 0x0A000000u) {
+            fprintf(stderr,
+                    "[SCRIPT] ERROR: scriptInstructionPointer is unresolved GBA address 0x%08X! entity kind=%d id=%d "
+                    "type=%d\n",
+                    (u32)addr, entity->kind, entity->id, entity->type);
+            void* resolved = (void*)Port_ResolveRomData((u32)addr);
+            if (resolved) {
+                context->scriptInstructionPointer = (u16*)resolved;
+                fprintf(stderr, "[SCRIPT]   -> auto-resolved to %p\n", resolved);
+            } else {
+                context->scriptInstructionPointer = NULL;
+                return;
+            }
+        }
+    }
+#endif
     if (context->wait) {
         context->wait--;
     } else {
@@ -662,6 +681,10 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
             lastInstruction = context->scriptInstructionPointer;
             activeScriptInfo->flags &= ~1;
             gScriptCommands[activeScriptInfo->commandIndex](entity, context);
+#ifdef PC_PORT
+            if (!context->scriptInstructionPointer)
+                return;
+#endif
             context->scriptInstructionPointer += activeScriptInfo->commandSize;
             if (lastInstruction != context->scriptInstructionPointer) {
                 context->unk_18 = 0;
@@ -713,7 +736,12 @@ void ScriptCommand_JumpTable(Entity* entity, ScriptExecutionContext* context) {
 void ScriptCommand_JumpAbsolute(Entity* entity, ScriptExecutionContext* context) {
 #ifdef PC_PORT
     u32 gba_addr = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
-    context->scriptInstructionPointer = (u16*)Port_ResolveRomData(gba_addr);
+    void* resolved = Port_ResolveRomData(gba_addr);
+    if (!resolved) {
+        fprintf(stderr, "[SCRIPT] JumpAbsolute: failed to resolve GBA addr 0x%08X, entity kind=%d id=%d type=%d\n",
+                gba_addr, entity->kind, entity->id, entity->type);
+    }
+    context->scriptInstructionPointer = (u16*)resolved;
 #else
     context->scriptInstructionPointer =
         (u16*)GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
