@@ -1,11 +1,11 @@
-#include "global.h"
-#include "sound.h"
+#include "message.h"
 #include "asm.h"
-#include "room.h"
 #include "common.h"
 #include "functions.h"
-#include "message.h"
+#include "global.h"
+#include "room.h"
 #include "save.h"
+#include "sound.h"
 #include "ui.h"
 
 #define MESSAGE_ADVANCE_KEYS (A_BUTTON | B_BUTTON | DPAD_ANY | R_BUTTON)
@@ -226,10 +226,21 @@ static u32 MsgIdle(void) {
     return 0;
 }
 
+#ifdef PC_PORT
+extern u8 gUnk_020227E8, gUnk_020227F0, gUnk_020227F8, gUnk_02022800;
+u8* const gUnk_08107BE0[] = {
+    ((u8*)&gTextRender) + offsetof(TextRender, player_name), /* player_name */
+    &gUnk_020227E8,
+    &gUnk_020227F0,
+    &gUnk_020227F8,
+    &gUnk_02022800,
+};
+#else
 extern u8 gUnk_020227DC, gUnk_020227E8, gUnk_020227F0, gUnk_020227F8, gUnk_02022800;
 u8* const gUnk_08107BE0[] = {
     &gUnk_020227DC, &gUnk_020227E8, &gUnk_020227F0, &gUnk_020227F8, &gUnk_02022800,
 };
+#endif
 
 u32 MsgInit(void) {
     char* dest;
