@@ -17,6 +17,9 @@
 #include "tiles.h"
 #include "windcrest.h"
 
+#ifdef PC_PORT
+extern void* Port_ReadPackedRomPtr(const void* base, u32 index);
+#endif
 extern u32 sub_08060354(void);
 extern void sub_08057E64(void);
 extern void sub_0809F814(u32);
@@ -401,7 +404,11 @@ u32 sub_unk3_HouseInteriors1_InnWestRoom(void) {
         index = 0;
         SetLocalFlag(BILL05_YADO1F_MATSU_T0);
     }
+#ifdef PC_PORT
+    gRoomVars.properties[3] = Port_ReadPackedRomPtr(gUnk_080D6A74, index);
+#else
     gRoomVars.properties[3] = gUnk_080D6A74[index];
+#endif
     return 1;
 }
 
@@ -429,7 +436,11 @@ u32 sub_unk3_HouseInteriors1_InnMiddleRoom(void) {
         index = 0;
         SetLocalFlag(BILL06_YADO1F_TAKE_T0);
     }
+#ifdef PC_PORT
+    gRoomVars.properties[3] = Port_ReadPackedRomPtr(gUnk_080D6B18, index);
+#else
     gRoomVars.properties[3] = gUnk_080D6B18[index];
+#endif
     return 1;
 }
 
@@ -455,7 +466,11 @@ u32 sub_unk3_HouseInteriors1_InnEastRoom(void) {
         index = 0;
         SetLocalFlag(BILL07_YADO1F_UME_T0);
     }
+#ifdef PC_PORT
+    gRoomVars.properties[3] = Port_ReadPackedRomPtr(gUnk_080D6BB8, index);
+#else
     gRoomVars.properties[3] = gUnk_080D6BB8[index];
+#endif
     return 1;
 }
 
@@ -4664,11 +4679,19 @@ void sub_StateChange_SimonsSimulation_Main(void) {
         index = 3;
     }
     r = Random();
+#ifdef PC_PORT
+    index = ((u8*)Port_ReadPackedRomPtr(gUnk_080F0D58, index))[r & 0x1f];
+    LoadRoomEntityList((EntityData*)Port_ReadPackedRomPtr(gUnk_080F0CB8, index & 0xF));
+    index >>= 4;
+    r >>= 8;
+    index = ((u8*)Port_ReadPackedRomPtr(gUnk_080F0E08, index))[r & 0x1F];
+#else
     index = gUnk_080F0D58[index][r & 0x1f];
     LoadRoomEntityList((EntityData*)gUnk_080F0CB8[index & 0xF]);
     index >>= 4;
     r >>= 8;
     index = gUnk_080F0E08[index][r & 0x1F];
+#endif
     if (!CheckLocalFlag(0xC6)) {
         SetLocalFlag(0xC6);
         index = 0xE;

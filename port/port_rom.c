@@ -773,6 +773,12 @@ void Port_LoadRom(const char* path) {
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gGfxGroups, gPaletteGroups, gFrameObjLists).\n",
             gRomRegion == ROM_REGION_EU ? "EU" : "USA");
 
+    /* Initialize data stubs with ROM datas */
+    {
+        extern void Port_InitDataStubs(void);
+        Port_InitDataStubs();
+    }
+
     /* ---- Extract all known ROM regions to rom_data/ ---- */
     EnsureExtractDir();
 

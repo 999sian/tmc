@@ -13,9 +13,9 @@ typedef uint32_t u32;
  * Replace with real ROM mapping / asset loading later.
  */
 
-const u8 gUnk_080012C8[1] = { 0 };
-const u8 gUnk_08001A7C[1] = { 0 };
-const u8 gUnk_08001DCC[1] = { 0 };
+u8 gUnk_080012C8[1024];
+u8 gUnk_08001A7C[1024];
+u8 gUnk_08001DCC[1024];
 /* gUnk_0800275C — collision direction masks (u16[32]) from ROM 0x0800275C */
 const u8 gUnk_0800275C[64] = {
     0x06, 0x00, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60,
@@ -23,23 +23,23 @@ const u8 gUnk_0800275C[64] = {
     0x60, 0x00, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06, 0x60, 0x06,
     0x00, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06,
 };
-const u8 gUnk_08003E44[1] = { 0 };
-const u8 gUnk_080046A4[1] = { 0 };
-const u8 gUnk_080047F6[1] = { 0 };
-const u8 gUnk_08007DF4[1] = { 0 };
-const u8 gUnk_0800823C[1] = { 0 };
-const u8 gUnk_080082DC[1] = { 0 };
-const u8 gUnk_0800833C[1] = { 0 };
-const u8 gUnk_0800839C[1] = { 0 };
-const u8 gUnk_080083FC[1] = { 0 };
-const u8 gUnk_0800845C[1] = { 0 };
-const u8 gUnk_080084BC[1] = { 0 };
-const u8 gUnk_0800851C[1] = { 0 };
-const u8 gUnk_08016984[1] = { 0 };
+u8 gUnk_08003E44[1024];
+u8 gUnk_080046A4[1024];
+u8 gUnk_080047F6[1024];
+u8 gUnk_08007DF4[1024];
+u8 gUnk_0800823C[1024];
+u8 gUnk_080082DC[1024];
+u8 gUnk_0800833C[1024];
+u8 gUnk_0800839C[1024];
+u8 gUnk_080083FC[1024];
+u8 gUnk_0800845C[1024];
+u8 gUnk_080084BC[1024];
+u8 gUnk_0800851C[1024];
+u8 gUnk_08016984[1024];
 /* BG tilemap DMA size table (u16[4]): sizes for screen sizes 0-3 */
 const u16 gUnk_080B2CD8[4] = { 0x0800, 0x1000, 0x1000, 0x2000 };
-const u8 gUnk_080B4410[1] = { 0 };
-const u8 gUnk_080B4458[1] = { 0 };
+u8 gUnk_080B4410[1024];
+u8 gUnk_080B4458[1024];
 /* Direction offset table (s16 xy pairs, indexed by animationState & 6).
    Used by UpdatePlayerCollision to check the tile AHEAD of the player. */
 const s16 gUnk_080B4468[8] = {
@@ -83,417 +83,417 @@ const u16 gUnk_080B44C0[] = { 0xFFFF };
 /* gUnk_080B44C2: tile entity table for layer 2 — 1 entry + terminator
    Data { tileType=0x75, kind=9, id=0x25, type=0, type2=0, unk_a=1 } */
 const u16 gUnk_080B44C2[] = { 0x0075, 0x0009, 0x0025, 0x0000, 0x0000, 0x0001, 0xFFFF };
-const u8 gUnk_080C8F2C[1] = { 0 };
-const u8 gUnk_080C8F54[1] = { 0 };
-const u8 gUnk_080C8F7C[1] = { 0 };
+u8 gUnk_080C8F2C[1024];
+u8 gUnk_080C8F54[1024];
+u8 gUnk_080C8F7C[1024];
 u8 gUnk_080C9044[8] = { 0 };
-const u8 gUnk_080C9058[1] = { 0 };
-const u8 gUnk_080C9094[1] = { 0 };
-const u8 gUnk_080CA2B4[1] = { 0 };
-const u8 gUnk_080CA5D4[1] = { 0 };
-const u8 gUnk_080CA6D4[1] = { 0 };
-const u8 gUnk_080CC944[1] = { 0 };
-const u8 gUnk_080CD7C4[1] = { 0 };
-const u8 gUnk_080CD7E4[1] = { 0 };
-const u8 gUnk_080CD7F8[1] = { 0 };
-const u8 gUnk_080CD810[1] = { 0 };
-const u8 gUnk_080CD828[1] = { 0 };
-const u8 gUnk_080CD840[1] = { 0 };
-const u8 gUnk_080CD844[1] = { 0 };
-const u8 gUnk_080CD848[1] = { 0 };
-const u8 gUnk_080CD850[1] = { 0 };
-const u8 gUnk_080CD854[1] = { 0 };
-const u8 gUnk_080CD86C[1] = { 0 };
-const u8 gUnk_080CD878[1] = { 0 };
-const u8 gUnk_080CD884[1] = { 0 };
-const u8 gUnk_080D15B4[1] = { 0 };
-const u8 gUnk_080D6340[1] = { 0 };
-const u8 gUnk_080D6360[1] = { 0 };
-const u8 gUnk_080D6380[1] = { 0 };
-const u8 gUnk_080D63A0[1] = { 0 };
-const u8 gUnk_080D63C0[1] = { 0 };
-const u8 gUnk_080D63E0[1] = { 0 };
-const u8 gUnk_080D6400[1] = { 0 };
-const u8 gUnk_080D6420[1] = { 0 };
-const u8 gUnk_080D6440[1] = { 0 };
-const u8 gUnk_080D64F8[1] = { 0 };
-const u8 gUnk_080D6508[1] = { 0 };
-const u8 gUnk_080D6558[1] = { 0 };
-const u8 gUnk_080D6578[1] = { 0 };
-const u8 gUnk_080D6618[1] = { 0 };
-const u8 gUnk_080D6638[1] = { 0 };
-const u8 gUnk_080D6714[1] = { 0 };
-const u8 gUnk_080D6924[1] = { 0 };
-const u8 gUnk_080D6A74[1] = { 0 };
-const u8 gUnk_080D6B18[1] = { 0 };
-const u8 gUnk_080D6BB8[1] = { 0 };
-const u8 gUnk_080D7038[1] = { 0 };
-const u8 gUnk_080D7140[1] = { 0 };
-const u8 gUnk_080D7170[1] = { 0 };
-const u8 gUnk_080D71A0[1] = { 0 };
-const u8 gUnk_080D71D0[1] = { 0 };
-const u8 gUnk_080D71F0[1] = { 0 };
-const u8 gUnk_080D7328[1] = { 0 };
-const u8 gUnk_080D7348[1] = { 0 };
-const u8 gUnk_080D73B0[1] = { 0 };
-const u8 gUnk_080D73E0[1] = { 0 };
-const u8 gUnk_080D7410[1] = { 0 };
-const u8 gUnk_080D74C8[1] = { 0 };
-const u8 gUnk_080D7588[1] = { 0 };
-const u8 gUnk_080D75D8[1] = { 0 };
-const u8 gUnk_080D7618[1] = { 0 };
-const u8 gUnk_080D7D34[1] = { 0 };
-const u8 gUnk_080D827C[1] = { 0 };
-const u8 gUnk_080D89E4[1] = { 0 };
-const u8 gUnk_080D8A04[1] = { 0 };
-const u8 gUnk_080D8A34[1] = { 0 };
-const u8 gUnk_080D8A74[1] = { 0 };
-const u8 gUnk_080D8AC4[1] = { 0 };
-const u8 gUnk_080D8B24[1] = { 0 };
-const u8 gUnk_080D8BBC[1] = { 0 };
-const u8 gUnk_080D8BFA[1] = { 0 };
-const u8 gUnk_080D8C68[1] = { 0 };
-const u8 gUnk_080D8E50[1] = { 0 };
-const u8 gUnk_080D9098[1] = { 0 };
-const u8 gUnk_080D90C8[1] = { 0 };
-const u8 gUnk_080D9108[1] = { 0 };
-const u8 gUnk_080D9328[1] = { 0 };
-const u8 gUnk_080D9338[1] = { 0 };
-const u8 gUnk_080D9340[1] = { 0 };
-const u8 gUnk_080D9348[1] = { 0 };
-const u8 gUnk_080D9800[1] = { 0 };
-const u8 gUnk_080D9C38[1] = { 0 };
-const u8 gUnk_080D9CC8[1] = { 0 };
-const u8 gUnk_080D9CE8[1] = { 0 };
-const u8 gUnk_080DA230[1] = { 0 };
-const u8 gUnk_080DAB44[1] = { 0 };
-const u8 gUnk_080DAB64[1] = { 0 };
-const u8 gUnk_080DAB84[1] = { 0 };
-const u8 gUnk_080DABC4[1] = { 0 };
-const u8 gUnk_080DAC04[1] = { 0 };
-const u8 gUnk_080DAC54[1] = { 0 };
-const u8 gUnk_080DAC94[1] = { 0 };
-const u8 gUnk_080DACD4[1] = { 0 };
-const u8 gUnk_080DAD24[1] = { 0 };
-const u8 gUnk_080DAD64[1] = { 0 };
-const u8 gUnk_080DADA4[1] = { 0 };
-const u8 gUnk_080DAEE8[1] = { 0 };
-const u8 gUnk_080DAF80[1] = { 0 };
-const u8 gUnk_080DB018[1] = { 0 };
-const u8 gUnk_080DB238[1] = { 0 };
-const u8 gUnk_080DB4A0[1] = { 0 };
-const u8 gUnk_080DB4D0[1] = { 0 };
-const u8 gUnk_080DB8F0[1] = { 0 };
-const u8 gUnk_080DB910[1] = { 0 };
-const u8 gUnk_080DBA08[1] = { 0 };
-const u8 gUnk_080DBAD0[1] = { 0 };
-const u8 gUnk_080DBB10[1] = { 0 };
-const u8 gUnk_080DBB50[1] = { 0 };
-const u8 gUnk_080DBB70[1] = { 0 };
-const u8 gUnk_080DBB90[1] = { 0 };
-const u8 gUnk_080DC390[1] = { 0 };
-const u8 gUnk_080DC3F0[1] = { 0 };
-const u8 gUnk_080DC430[1] = { 0 };
-const u8 gUnk_080DC470[1] = { 0 };
-const u8 gUnk_080DC4C0[1] = { 0 };
-const u8 gUnk_080DC530[1] = { 0 };
-const u8 gUnk_080DCB10[1] = { 0 };
-const u8 gUnk_080DD294[1] = { 0 };
-const u8 gUnk_080DD364[1] = { 0 };
-const u8 gUnk_080DD750[1] = { 0 };
-const u8 gUnk_080DD7E0[1] = { 0 };
-const u8 gUnk_080DD840[1] = { 0 };
-const u8 gUnk_080DDE88[1] = { 0 };
-const u8 gUnk_080DE008[1] = { 0 };
-const u8 gUnk_080DE1E0[1] = { 0 };
-const u8 gUnk_080DE200[1] = { 0 };
-const u8 gUnk_080DE4C8[1] = { 0 };
-const u8 gUnk_080DE814[1] = { 0 };
-const u8 gUnk_080DFB78[1] = { 0 };
-const u8 gUnk_080E103C[1] = { 0 };
-const u8 gUnk_080E3850[1] = { 0 };
-const u8 gUnk_080E4BD8[1] = { 0 };
-const u8 gUnk_080E4C08[1] = { 0 };
-const u8 gUnk_080E4CD8[1] = { 0 };
-const u8 gUnk_080E4CF8[1] = { 0 };
-const u8 gUnk_080E5660[1] = { 0 };
-const u8 gUnk_080E5680[1] = { 0 };
-const u8 gUnk_080E5E3C[1] = { 0 };
-const u8 gUnk_080E5E5C[1] = { 0 };
-const u8 gUnk_080E693C[1] = { 0 };
-const u8 gUnk_080E718C[1] = { 0 };
-const u8 gUnk_080E71AC[1] = { 0 };
-const u8 gUnk_080E72C4[1] = { 0 };
-const u8 gUnk_080EA09C[1] = { 0 };
-const u8 gUnk_080EAD68[1] = { 0 };
-const u8 gUnk_080EADB8[1] = { 0 };
-const u8 gUnk_080EAE00[1] = { 0 };
-const u8 gUnk_080EAE60[1] = { 0 };
-const u8 gUnk_080EAEC0[1] = { 0 };
-const u8 gUnk_080EAF20[1] = { 0 };
-const u8 gUnk_080EB5D4[1] = { 0 };
-const u8 gUnk_080EB604[1] = { 0 };
-const u8 gUnk_080EB684[1] = { 0 };
-const u8 gUnk_080EB9F4[1] = { 0 };
-const u8 gUnk_080EBAA4[1] = { 0 };
-const u8 gUnk_080EBAF4[1] = { 0 };
-const u8 gUnk_080EC2CC[1] = { 0 };
-const u8 gUnk_080EC4E8[1] = { 0 };
-const u8 gUnk_080EC820[1] = { 0 };
-const u8 gUnk_080ECA60[1] = { 0 };
-const u8 gUnk_080ECFCC[1] = { 0 };
-const u8 gUnk_080ED1E4[1] = { 0 };
-const u8 gUnk_080EE314[1] = { 0 };
-const u8 gUnk_080EE5DC[1] = { 0 };
-const u8 gUnk_080EE71C[1] = { 0 };
-const u8 gUnk_080EE88C[1] = { 0 };
-const u8 gUnk_080EE8FC[1] = { 0 };
-const u8 gUnk_080EE91C[1] = { 0 };
-const u8 gUnk_080EE93C[1] = { 0 };
-const u8 gUnk_080EE95C[1] = { 0 };
-const u8 gUnk_080EE97C[1] = { 0 };
-const u8 gUnk_080EE99C[1] = { 0 };
-const u8 gUnk_080EE9BC[1] = { 0 };
-const u8 gUnk_080EE9DC[1] = { 0 };
-const u8 gUnk_080EE9FC[1] = { 0 };
-const u8 gUnk_080EEA1C[1] = { 0 };
-const u8 gUnk_080EEA3C[1] = { 0 };
-const u8 gUnk_080EEA5C[1] = { 0 };
-const u8 gUnk_080EEA7C[1] = { 0 };
-const u8 gUnk_080EEA9C[1] = { 0 };
-const u8 gUnk_080EEABC[1] = { 0 };
-const u8 gUnk_080EEB6C[1] = { 0 };
-const u8 gUnk_080EEB8C[1] = { 0 };
-const u8 gUnk_080EEBAC[1] = { 0 };
-const u8 gUnk_080EECBC[1] = { 0 };
-const u8 gUnk_080EED2C[1] = { 0 };
-const u8 gUnk_080EED7A[1] = { 0 };
-const u8 gUnk_080EED8C[1] = { 0 };
-const u8 gUnk_080F0650[1] = { 0xFF };
-const u8 gUnk_080F0800[1] = { 0xFF };
-const u8 gUnk_080F0850[1] = { 0xFF };
-const u8 gUnk_080F0870[1] = { 0xFF };
-const u8 gUnk_080F0890[1] = { 0xFF };
-const u8 gUnk_080F08F0[1] = { 0xFF };
-const u8 gUnk_080F0920[1] = { 0xFF };
-const u8 gUnk_080F09A0[1] = { 0xFF };
-const u8 gUnk_080F0CB8[1] = { 0 };
-const u8 gUnk_080F0D58[1] = { 0 };
-const u8 gUnk_080F0E08[1] = { 0 };
-const u8 gUnk_080F0E1C[1] = { 0xFF };
-const u8 gUnk_080F1C68[1] = { 0xFF };
-const u8 gUnk_080F1C88[1] = { 0xFF };
-const u8 gUnk_080F1D90[1] = { 0xFF };
-const u8 gUnk_080F1DB0[1] = { 0xFF };
-const u8 gUnk_080F1DD0[1] = { 0xFF };
-const u8 gUnk_080F2174[1] = { 0xFF };
-const u8 gUnk_080F2194[1] = { 0xFF };
-const u8 gUnk_080F21B4[1] = { 0xFF };
-const u8 gUnk_080F238C[1] = { 0xFF };
-const u8 gUnk_080F23BC[1] = { 0xFF };
-const u8 gUnk_080F2570[1] = { 0xFF };
-const u8 gUnk_080F2590[1] = { 0xFF };
-const u8 gUnk_080F25C0[1] = { 0xFF };
-const u8 gUnk_080F2600[1] = { 0xFF };
-const u8 gUnk_080F2798[1] = { 0xFF };
-const u8 gUnk_080F27D8[1] = { 0xFF };
-const u8 gUnk_080F2860[1] = { 0xFF };
-const u8 gUnk_080F28D4[1] = { 0xFF };
-const u8 gUnk_080F28F4[1] = { 0xFF };
-const u8 gUnk_080F2914[1] = { 0xFF };
-const u8 gUnk_080F2E2C[1] = { 0xFF };
-const u8 gUnk_080F2E94[1] = { 0xFF };
-const u8 gUnk_080F2EC4[1] = { 0xFF };
-const u8 gUnk_080F2FD4[1] = { 0xFF };
-const u8 gUnk_080F30CC[1] = { 0xFF };
-const u8 gUnk_080F31D8[1] = { 0xFF };
-const u8 gUnk_080F3260[1] = { 0xFF };
-const u8 gUnk_080F3494[1] = { 0xFF };
-const u8 gUnk_080F3604[1] = { 0xFF };
-const u8 gUnk_080F36FC[1] = { 0xFF };
-const u8 gUnk_080F37D0[1] = { 0xFF };
-const u8 gUnk_080F3A48[1] = { 0xFF };
-const u8 gUnk_080F3C44[1] = { 0xFF };
-const u8 gUnk_080F3C64[1] = { 0xFF };
-const u8 gUnk_080F3C94[1] = { 0xFF };
-const u8 gUnk_080F3EA4[1] = { 0xFF };
-const u8 gUnk_080F4B88[1] = { 0xFF };
-const u8 gUnk_080F4D50[1] = { 0xFF };
-const u8 gUnk_080F4DB0[1] = { 0xFF };
-const u8 gUnk_080F4DD0[1] = { 0xFF };
-const u8 gUnk_080F4DF0[1] = { 0xFF };
-const u8 gUnk_080F4E10[1] = { 0xFF };
-const u8 gUnk_080F4EB0[1] = { 0xFF };
-const u8 gUnk_080F4F10[1] = { 0xFF };
-const u8 gUnk_080F5308[1] = { 0xFF };
-const u8 gUnk_080F5328[1] = { 0xFF };
-const u8 gUnk_080F5348[1] = { 0xFF };
-const u8 gUnk_080F54E8[1] = { 0xFF };
-const u8 gUnk_080F5508[1] = { 0xFF };
-const u8 gUnk_080F5528[1] = { 0xFF };
-const u8 gUnk_080F5558[1] = { 0xFF };
-const u8 gUnk_080F5578[1] = { 0xFF };
-const u8 gUnk_080F5598[1] = { 0xFF };
-const u8 gUnk_080F55B8[1] = { 0xFF };
-const u8 gUnk_080F55D8[1] = { 0xFF };
-const u8 gUnk_080F5660[1] = { 0xFF };
-const u8 gUnk_080F5758[1] = { 0xFF };
-const u8 gUnk_080F5788[1] = { 0xFF };
-const u8 gUnk_080F57A8[1] = { 0xFF };
-const u8 gUnk_080F57C8[1] = { 0xFF };
-const u8 gUnk_080F57E8[1] = { 0xFF };
-const u8 gUnk_080F5828[1] = { 0xFF };
-const u8 gUnk_080F5848[1] = { 0xFF };
-const u8 gUnk_080F5868[1] = { 0xFF };
-const u8 gUnk_080F5888[1] = { 0xFF };
-const u8 gUnk_080F58A8[1] = { 0xFF };
-const u8 gUnk_080F5B3C[1] = { 0xFF };
-const u8 gUnk_080F5DD0[1] = { 0xFF };
-const u8 gUnk_080F5E68[1] = { 0xFF };
-const u8 gUnk_080F61BC[1] = { 0xFF };
-const u8 gUnk_080F62E4[1] = { 0xFF };
-const u8 gUnk_080F6324[1] = { 0xFF };
-const u8 gUnk_080F6564[1] = { 0xFF };
-const u8 gUnk_080F6584[1] = { 0xFF };
-const u8 gUnk_080F66AC[1] = { 0xFF };
-const u8 gUnk_080F7088[1] = { 0xFF };
-const u8 gUnk_080F70A8[1] = { 0xFF };
-const u8 gUnk_080F70D8[1] = { 0xFF };
-const u8 gUnk_080F7500[1] = { 0xFF };
-const u8 gUnk_080F7550[1] = { 0xFF };
-const u8 gUnk_080F7680[1] = { 0xFF };
-const u8 gUnk_080F77C0[1] = { 0xFF };
-const u8 gUnk_080F77F0[1] = { 0xFF };
-const u8 gUnk_080F7810[1] = { 0xFF };
-const u8 gUnk_080F7860[1] = { 0xFF };
-const u8 gUnk_080F78A0[1] = { 0xFF };
-const u8 gUnk_080F7C80[1] = { 0xFF };
-const u8 gUnk_080F7CD0[1] = { 0xFF };
-const u8 gUnk_080F7D70[1] = { 0xFF };
-const u8 gUnk_080F7DC0[1] = { 0xFF };
-const u8 gUnk_080F806C[1] = { 0xFF };
-const u8 gUnk_080F82E0[1] = { 0xFF };
-const u8 gUnk_080F8430[1] = { 0xFF };
-const u8 gUnk_080F85D8[1] = { 0xFF };
-const u8 gUnk_080F85F8[1] = { 0xFF };
-const u8 gUnk_080F9304[1] = { 0xFF };
-const u8 gUnk_080F9BF8[1] = { 0xFF };
-const u8 gUnk_080F9F88[1] = { 0xFF };
-const u8 gUnk_080F9FA8[1] = { 0xFF };
-const u8 gUnk_080FA5D0[1] = { 0xFF };
-const u8 gUnk_080FACB8[1] = { 0xFF };
-const u8 gUnk_080FAD48[1] = { 0xFF };
-const u8 gUnk_080FAFE4[1] = { 0xFF };
-const u8 gUnk_080FB004[1] = { 0xFF };
-const u8 gUnk_080FD178[1] = { 0xFF };
-const u8 gUnk_080FD190[1] = { 0xFF };
-const u8 gUnk_080FD1A8[1] = { 0xFF };
-const u8 gUnk_080FD1B4[1] = { 0xFF };
-const u8 gUnk_080FD1D4[1] = { 0xFF };
-const u8 gUnk_080FD1DC[1] = { 0xFF };
-const u8 gUnk_080FD1E4[1] = { 0xFF };
-const u8 gUnk_080FD1EC[1] = { 0xFF };
-const u8 gUnk_080FD1F4[1] = { 0xFF };
-const u8 gUnk_080FD1FC[1] = { 0xFF };
-const u8 gUnk_080FD204[1] = { 0xFF };
-const u8 gUnk_080FD20C[1] = { 0xFF };
-const u8 gUnk_080FD214[1] = { 0xFF };
-const u8 gUnk_080FD21C[1] = { 0xFF };
-const u8 gUnk_080FD224[1] = { 0xFF };
-const u8 gUnk_080FD22C[1] = { 0xFF };
-const u8 gUnk_080FD238[1] = { 0xFF };
-const u8 gUnk_080FD240[1] = { 0xFF };
-const u8 gUnk_080FD248[1] = { 0xFF };
-const u8 gUnk_080FD258[1] = { 0xFF };
-const u8 gUnk_080FD260[1] = { 0xFF };
-const u8 gUnk_080FD270[1] = { 0xFF };
-const u8 gUnk_080FD278[1] = { 0xFF };
-const u8 gUnk_080FD280[1] = { 0xFF };
-const u8 gUnk_080FD288[1] = { 0xFF };
-const u8 gUnk_080FD290[1] = { 0xFF };
-const u8 gUnk_080FD298[1] = { 0xFF };
-const u8 gUnk_080FD2A0[1] = { 0xFF };
-const u8 gUnk_080FD2A8[1] = { 0xFF };
-const u8 gUnk_080FD2D0[1] = { 0xFF };
-const u8 gUnk_080FD2D8[1] = { 0xFF };
-const u8 gUnk_080FD2E0[1] = { 0xFF };
-const u8 gUnk_080FD2E8[1] = { 0xFF };
-const u8 gUnk_080FD2F0[1] = { 0xFF };
-const u8 gUnk_080FD308[1] = { 0xFF };
-const u8 gUnk_080FD310[1] = { 0xFF };
-const u8 gUnk_080FD320[1] = { 0xFF };
-const u8 gUnk_080FD328[1] = { 0xFF };
-const u8 gUnk_080FD330[1] = { 0xFF };
-const u8 gUnk_080FD340[1] = { 0xFF };
-const u8 gUnk_080FD34C[1] = { 0xFF };
-const u8 gUnk_080FD354[1] = { 0xFF };
-const u8 gUnk_080FD35C[1] = { 0xFF };
-const u8 gUnk_080FD364[1] = { 0xFF };
-const u8 gUnk_080FD36C[1] = { 0xFF };
-const u8 gUnk_080FD374[1] = { 0xFF };
-const u8 gUnk_080FD37C[1] = { 0xFF };
-const u8 gUnk_080FD384[1] = { 0xFF };
-const u8 gUnk_080FD38C[1] = { 0xFF };
-const u8 gUnk_080FD394[1] = { 0xFF };
-const u8 gUnk_080FD39C[1] = { 0xFF };
-const u8 gUnk_080FD3A4[1] = { 0xFF };
-const u8 gUnk_080FD3AC[1] = { 0xFF };
-const u8 gUnk_080FD3B4[1] = { 0xFF };
-const u8 gUnk_080FD3BC[1] = { 0xFF };
-const u8 gUnk_080FD3C4[1] = { 0xFF };
-const u8 gUnk_080FD3CC[1] = { 0xFF };
-const u8 gUnk_080FD3DC[1] = { 0xFF };
-const u8 gUnk_080FD3E4[1] = { 0xFF };
-const u8 gUnk_080FD3EC[1] = { 0xFF };
-const u8 gUnk_080FD3F4[1] = { 0xFF };
-const u8 gUnk_080FD3FC[1] = { 0xFF };
-const u8 gUnk_080FD408[1] = { 0xFF };
-const u8 gUnk_080FD41C[1] = { 0xFF };
-const u8 gUnk_080FD424[1] = { 0xFF };
-const u8 gUnk_080FD42C[1] = { 0xFF };
-const u8 gUnk_080FD434[1] = { 0xFF };
-const u8 gUnk_080FD43C[1] = { 0xFF };
-const u8 gUnk_080FD450[1] = { 0xFF };
-const u8 gUnk_080FD488[1] = { 0xFF };
-const u8 gUnk_080FD490[1] = { 0xFF };
-const u8 gUnk_080FD4B8[1] = { 0xFF };
-const u8 gUnk_080FD4C0[1] = { 0xFF };
-const u8 gUnk_080FD4C8[1] = { 0xFF };
-const u8 gUnk_080FD4D0[1] = { 0xFF };
-const u8 gUnk_080FD4D8[1] = { 0xFF };
-const u8 gUnk_080FD4E0[1] = { 0xFF };
-const u8 gUnk_080FD4E8[1] = { 0xFF };
-const u8 gUnk_080FD4F0[1] = { 0xFF };
-const u8 gUnk_080FD4F8[1] = { 0xFF };
-const u8 gUnk_080FD500[1] = { 0xFF };
-const u8 gUnk_080FD508[1] = { 0xFF };
-const u8 gUnk_080FD510[1] = { 0xFF };
-const u8 gUnk_080FD518[1] = { 0xFF };
-const u8 gUnk_080FD520[1] = { 0xFF };
-const u8 gUnk_080FD530[1] = { 0xFF };
-const u8 gUnk_080FD538[1] = { 0xFF };
-const u8 gUnk_080FD544[1] = { 0xFF };
-const u8 gUnk_080FD558[1] = { 0xFF };
-const u8 gUnk_080FD560[1] = { 0xFF };
-const u8 gUnk_080FD570[1] = { 0xFF };
-const u8 gUnk_080FD578[1] = { 0xFF };
-const u8 gUnk_080FD580[1] = { 0xFF };
-const u8 gUnk_080FD588[1] = { 0xFF };
-const u8 gUnk_080FEAC8[1] = { 0xFF };
-const u8 gUnk_080FEBE8[1] = { 0xFF };
-const u8 gUnk_080FEC28[1] = { 0xFF };
-const u8 gUnk_080FECC8[1] = { 0xFF };
-const u8 gUnk_080FED18[1] = { 0xFF };
-const u8 gUnk_080FED58[1] = { 0xFF };
-const u8 gUnk_080FEE18[1] = { 0xFF };
-const u8 gUnk_080FEE38[1] = { 0xFF };
-const u8 gUnk_080FEE48[1] = { 0xFF };
-const u8 gUnk_080FEE58[1] = { 0xFF };
-const u8 gUnk_080FEE78[1] = { 0xFF };
-const u8 gUnk_08108764[1] = { 0 };
-const u8 gUnk_08108E30[1] = { 0 };
-const u8 gUnk_08108E48[1] = { 0 };
-const u8 gUnk_08108E60[1] = { 0 };
+u8 gUnk_080C9058[1024];
+u8 gUnk_080C9094[1024];
+u8 gUnk_080CA2B4[1024];
+u8 gUnk_080CA5D4[1024];
+u8 gUnk_080CA6D4[1024];
+u8 gUnk_080CC944[1024];
+u8 gUnk_080CD7C4[1024];
+u8 gUnk_080CD7E4[1024];
+u8 gUnk_080CD7F8[1024];
+u8 gUnk_080CD810[1024];
+u8 gUnk_080CD828[1024];
+u8 gUnk_080CD840[1024];
+u8 gUnk_080CD844[1024];
+u8 gUnk_080CD848[1024];
+u8 gUnk_080CD850[1024];
+u8 gUnk_080CD854[1024];
+u8 gUnk_080CD86C[1024];
+u8 gUnk_080CD878[1024];
+u8 gUnk_080CD884[1024];
+u8 gUnk_080D15B4[1024];
+u8 gUnk_080D6340[1024];
+u8 gUnk_080D6360[1024];
+u8 gUnk_080D6380[1024];
+u8 gUnk_080D63A0[1024];
+u8 gUnk_080D63C0[1024];
+u8 gUnk_080D63E0[1024];
+u8 gUnk_080D6400[1024];
+u8 gUnk_080D6420[1024];
+u8 gUnk_080D6440[1024];
+u8 gUnk_080D64F8[1024];
+u8 gUnk_080D6508[1024];
+u8 gUnk_080D6558[1024];
+u8 gUnk_080D6578[1024];
+u8 gUnk_080D6618[1024];
+u8 gUnk_080D6638[1024];
+u8 gUnk_080D6714[1024];
+u8 gUnk_080D6924[1024];
+u8 gUnk_080D6A74[1024];
+u8 gUnk_080D6B18[1024];
+u8 gUnk_080D6BB8[1024];
+u8 gUnk_080D7038[1024];
+u8 gUnk_080D7140[1024];
+u8 gUnk_080D7170[1024];
+u8 gUnk_080D71A0[1024];
+u8 gUnk_080D71D0[1024];
+u8 gUnk_080D71F0[1024];
+u8 gUnk_080D7328[1024];
+u8 gUnk_080D7348[1024];
+u8 gUnk_080D73B0[1024];
+u8 gUnk_080D73E0[1024];
+u8 gUnk_080D7410[1024];
+u8 gUnk_080D74C8[1024];
+u8 gUnk_080D7588[1024];
+u8 gUnk_080D75D8[1024];
+u8 gUnk_080D7618[1024];
+u8 gUnk_080D7D34[1024];
+u8 gUnk_080D827C[1024];
+u8 gUnk_080D89E4[1024];
+u8 gUnk_080D8A04[1024];
+u8 gUnk_080D8A34[1024];
+u8 gUnk_080D8A74[1024];
+u8 gUnk_080D8AC4[1024];
+u8 gUnk_080D8B24[1024];
+u8 gUnk_080D8BBC[1024];
+u8 gUnk_080D8BFA[1024];
+u8 gUnk_080D8C68[1024];
+u8 gUnk_080D8E50[1024];
+u8 gUnk_080D9098[1024];
+u8 gUnk_080D90C8[1024];
+u8 gUnk_080D9108[1024];
+u8 gUnk_080D9328[1024];
+u8 gUnk_080D9338[1024];
+u8 gUnk_080D9340[1024];
+u8 gUnk_080D9348[1024];
+u8 gUnk_080D9800[1024];
+u8 gUnk_080D9C38[1024];
+u8 gUnk_080D9CC8[1024];
+u8 gUnk_080D9CE8[1024];
+u8 gUnk_080DA230[1024];
+u8 gUnk_080DAB44[1024];
+u8 gUnk_080DAB64[1024];
+u8 gUnk_080DAB84[1024];
+u8 gUnk_080DABC4[1024];
+u8 gUnk_080DAC04[1024];
+u8 gUnk_080DAC54[1024];
+u8 gUnk_080DAC94[1024];
+u8 gUnk_080DACD4[1024];
+u8 gUnk_080DAD24[1024];
+u8 gUnk_080DAD64[1024];
+u8 gUnk_080DADA4[1024];
+u8 gUnk_080DAEE8[1024];
+u8 gUnk_080DAF80[1024];
+u8 gUnk_080DB018[1024];
+u8 gUnk_080DB238[1024];
+u8 gUnk_080DB4A0[1024];
+u8 gUnk_080DB4D0[1024];
+u8 gUnk_080DB8F0[1024];
+u8 gUnk_080DB910[1024];
+u8 gUnk_080DBA08[1024];
+u8 gUnk_080DBAD0[1024];
+u8 gUnk_080DBB10[1024];
+u8 gUnk_080DBB50[1024];
+u8 gUnk_080DBB70[1024];
+u8 gUnk_080DBB90[1024];
+u8 gUnk_080DC390[1024];
+u8 gUnk_080DC3F0[1024];
+u8 gUnk_080DC430[1024];
+u8 gUnk_080DC470[1024];
+u8 gUnk_080DC4C0[1024];
+u8 gUnk_080DC530[1024];
+u8 gUnk_080DCB10[1024];
+u8 gUnk_080DD294[1024];
+u8 gUnk_080DD364[1024];
+u8 gUnk_080DD750[1024];
+u8 gUnk_080DD7E0[1024];
+u8 gUnk_080DD840[1024];
+u8 gUnk_080DDE88[1024];
+u8 gUnk_080DE008[1024];
+u8 gUnk_080DE1E0[1024];
+u8 gUnk_080DE200[1024];
+u8 gUnk_080DE4C8[1024];
+u8 gUnk_080DE814[1024];
+u8 gUnk_080DFB78[1024];
+u8 gUnk_080E103C[1024];
+u8 gUnk_080E3850[1024];
+u8 gUnk_080E4BD8[1024];
+u8 gUnk_080E4C08[1024];
+u8 gUnk_080E4CD8[1024];
+u8 gUnk_080E4CF8[1024];
+u8 gUnk_080E5660[1024];
+u8 gUnk_080E5680[1024];
+u8 gUnk_080E5E3C[1024];
+u8 gUnk_080E5E5C[1024];
+u8 gUnk_080E693C[1024];
+u8 gUnk_080E718C[1024];
+u8 gUnk_080E71AC[1024];
+u8 gUnk_080E72C4[1024];
+u8 gUnk_080EA09C[1024];
+u8 gUnk_080EAD68[1024];
+u8 gUnk_080EADB8[1024];
+u8 gUnk_080EAE00[1024];
+u8 gUnk_080EAE60[1024];
+u8 gUnk_080EAEC0[1024];
+u8 gUnk_080EAF20[1024];
+u8 gUnk_080EB5D4[1024];
+u8 gUnk_080EB604[1024];
+u8 gUnk_080EB684[1024];
+u8 gUnk_080EB9F4[1024];
+u8 gUnk_080EBAA4[1024];
+u8 gUnk_080EBAF4[1024];
+u8 gUnk_080EC2CC[1024];
+u8 gUnk_080EC4E8[1024];
+u8 gUnk_080EC820[1024];
+u8 gUnk_080ECA60[1024];
+u8 gUnk_080ECFCC[1024];
+u8 gUnk_080ED1E4[1024];
+u8 gUnk_080EE314[1024];
+u8 gUnk_080EE5DC[1024];
+u8 gUnk_080EE71C[1024];
+u8 gUnk_080EE88C[1024];
+u8 gUnk_080EE8FC[1024];
+u8 gUnk_080EE91C[1024];
+u8 gUnk_080EE93C[1024];
+u8 gUnk_080EE95C[1024];
+u8 gUnk_080EE97C[1024];
+u8 gUnk_080EE99C[1024];
+u8 gUnk_080EE9BC[1024];
+u8 gUnk_080EE9DC[1024];
+u8 gUnk_080EE9FC[1024];
+u8 gUnk_080EEA1C[1024];
+u8 gUnk_080EEA3C[1024];
+u8 gUnk_080EEA5C[1024];
+u8 gUnk_080EEA7C[1024];
+u8 gUnk_080EEA9C[1024];
+u8 gUnk_080EEABC[1024];
+u8 gUnk_080EEB6C[1024];
+u8 gUnk_080EEB8C[1024];
+u8 gUnk_080EEBAC[1024];
+u8 gUnk_080EECBC[1024];
+u8 gUnk_080EED2C[1024];
+u8 gUnk_080EED7A[1024];
+u8 gUnk_080EED8C[1024];
+u8 gUnk_080F0650[1024];
+u8 gUnk_080F0800[1024];
+u8 gUnk_080F0850[1024];
+u8 gUnk_080F0870[1024];
+u8 gUnk_080F0890[1024];
+u8 gUnk_080F08F0[1024];
+u8 gUnk_080F0920[1024];
+u8 gUnk_080F09A0[1024];
+u8 gUnk_080F0CB8[1024];
+u8 gUnk_080F0D58[1024];
+u8 gUnk_080F0E08[1024];
+u8 gUnk_080F0E1C[1024];
+u8 gUnk_080F1C68[1024];
+u8 gUnk_080F1C88[1024];
+u8 gUnk_080F1D90[1024];
+u8 gUnk_080F1DB0[1024];
+u8 gUnk_080F1DD0[1024];
+u8 gUnk_080F2174[1024];
+u8 gUnk_080F2194[1024];
+u8 gUnk_080F21B4[1024];
+u8 gUnk_080F238C[1024];
+u8 gUnk_080F23BC[1024];
+u8 gUnk_080F2570[1024];
+u8 gUnk_080F2590[1024];
+u8 gUnk_080F25C0[1024];
+u8 gUnk_080F2600[1024];
+u8 gUnk_080F2798[1024];
+u8 gUnk_080F27D8[1024];
+u8 gUnk_080F2860[1024];
+u8 gUnk_080F28D4[1024];
+u8 gUnk_080F28F4[1024];
+u8 gUnk_080F2914[1024];
+u8 gUnk_080F2E2C[1024];
+u8 gUnk_080F2E94[1024];
+u8 gUnk_080F2EC4[1024];
+u8 gUnk_080F2FD4[1024];
+u8 gUnk_080F30CC[1024];
+u8 gUnk_080F31D8[1024];
+u8 gUnk_080F3260[1024];
+u8 gUnk_080F3494[1024];
+u8 gUnk_080F3604[1024];
+u8 gUnk_080F36FC[1024];
+u8 gUnk_080F37D0[1024];
+u8 gUnk_080F3A48[1024];
+u8 gUnk_080F3C44[1024];
+u8 gUnk_080F3C64[1024];
+u8 gUnk_080F3C94[1024];
+u8 gUnk_080F3EA4[1024];
+u8 gUnk_080F4B88[1024];
+u8 gUnk_080F4D50[1024];
+u8 gUnk_080F4DB0[1024];
+u8 gUnk_080F4DD0[1024];
+u8 gUnk_080F4DF0[1024];
+u8 gUnk_080F4E10[1024];
+u8 gUnk_080F4EB0[1024];
+u8 gUnk_080F4F10[1024];
+u8 gUnk_080F5308[1024];
+u8 gUnk_080F5328[1024];
+u8 gUnk_080F5348[1024];
+u8 gUnk_080F54E8[1024];
+u8 gUnk_080F5508[1024];
+u8 gUnk_080F5528[1024];
+u8 gUnk_080F5558[1024];
+u8 gUnk_080F5578[1024];
+u8 gUnk_080F5598[1024];
+u8 gUnk_080F55B8[1024];
+u8 gUnk_080F55D8[1024];
+u8 gUnk_080F5660[1024];
+u8 gUnk_080F5758[1024];
+u8 gUnk_080F5788[1024];
+u8 gUnk_080F57A8[1024];
+u8 gUnk_080F57C8[1024];
+u8 gUnk_080F57E8[1024];
+u8 gUnk_080F5828[1024];
+u8 gUnk_080F5848[1024];
+u8 gUnk_080F5868[1024];
+u8 gUnk_080F5888[1024];
+u8 gUnk_080F58A8[1024];
+u8 gUnk_080F5B3C[1024];
+u8 gUnk_080F5DD0[1024];
+u8 gUnk_080F5E68[1024];
+u8 gUnk_080F61BC[1024];
+u8 gUnk_080F62E4[1024];
+u8 gUnk_080F6324[1024];
+u8 gUnk_080F6564[1024];
+u8 gUnk_080F6584[1024];
+u8 gUnk_080F66AC[1024];
+u8 gUnk_080F7088[1024];
+u8 gUnk_080F70A8[1024];
+u8 gUnk_080F70D8[1024];
+u8 gUnk_080F7500[1024];
+u8 gUnk_080F7550[1024];
+u8 gUnk_080F7680[1024];
+u8 gUnk_080F77C0[1024];
+u8 gUnk_080F77F0[1024];
+u8 gUnk_080F7810[1024];
+u8 gUnk_080F7860[1024];
+u8 gUnk_080F78A0[1024];
+u8 gUnk_080F7C80[1024];
+u8 gUnk_080F7CD0[1024];
+u8 gUnk_080F7D70[1024];
+u8 gUnk_080F7DC0[1024];
+u8 gUnk_080F806C[1024];
+u8 gUnk_080F82E0[1024];
+u8 gUnk_080F8430[1024];
+u8 gUnk_080F85D8[1024];
+u8 gUnk_080F85F8[1024];
+u8 gUnk_080F9304[1024];
+u8 gUnk_080F9BF8[1024];
+u8 gUnk_080F9F88[1024];
+u8 gUnk_080F9FA8[1024];
+u8 gUnk_080FA5D0[1024];
+u8 gUnk_080FACB8[1024];
+u8 gUnk_080FAD48[1024];
+u8 gUnk_080FAFE4[1024];
+u8 gUnk_080FB004[1024];
+u8 gUnk_080FD178[1024];
+u8 gUnk_080FD190[1024];
+u8 gUnk_080FD1A8[1024];
+u8 gUnk_080FD1B4[1024];
+u8 gUnk_080FD1D4[1024];
+u8 gUnk_080FD1DC[1024];
+u8 gUnk_080FD1E4[1024];
+u8 gUnk_080FD1EC[1024];
+u8 gUnk_080FD1F4[1024];
+u8 gUnk_080FD1FC[1024];
+u8 gUnk_080FD204[1024];
+u8 gUnk_080FD20C[1024];
+u8 gUnk_080FD214[1024];
+u8 gUnk_080FD21C[1024];
+u8 gUnk_080FD224[1024];
+u8 gUnk_080FD22C[1024];
+u8 gUnk_080FD238[1024];
+u8 gUnk_080FD240[1024];
+u8 gUnk_080FD248[1024];
+u8 gUnk_080FD258[1024];
+u8 gUnk_080FD260[1024];
+u8 gUnk_080FD270[1024];
+u8 gUnk_080FD278[1024];
+u8 gUnk_080FD280[1024];
+u8 gUnk_080FD288[1024];
+u8 gUnk_080FD290[1024];
+u8 gUnk_080FD298[1024];
+u8 gUnk_080FD2A0[1024];
+u8 gUnk_080FD2A8[1024];
+u8 gUnk_080FD2D0[1024];
+u8 gUnk_080FD2D8[1024];
+u8 gUnk_080FD2E0[1024];
+u8 gUnk_080FD2E8[1024];
+u8 gUnk_080FD2F0[1024];
+u8 gUnk_080FD308[1024];
+u8 gUnk_080FD310[1024];
+u8 gUnk_080FD320[1024];
+u8 gUnk_080FD328[1024];
+u8 gUnk_080FD330[1024];
+u8 gUnk_080FD340[1024];
+u8 gUnk_080FD34C[1024];
+u8 gUnk_080FD354[1024];
+u8 gUnk_080FD35C[1024];
+u8 gUnk_080FD364[1024];
+u8 gUnk_080FD36C[1024];
+u8 gUnk_080FD374[1024];
+u8 gUnk_080FD37C[1024];
+u8 gUnk_080FD384[1024];
+u8 gUnk_080FD38C[1024];
+u8 gUnk_080FD394[1024];
+u8 gUnk_080FD39C[1024];
+u8 gUnk_080FD3A4[1024];
+u8 gUnk_080FD3AC[1024];
+u8 gUnk_080FD3B4[1024];
+u8 gUnk_080FD3BC[1024];
+u8 gUnk_080FD3C4[1024];
+u8 gUnk_080FD3CC[1024];
+u8 gUnk_080FD3DC[1024];
+u8 gUnk_080FD3E4[1024];
+u8 gUnk_080FD3EC[1024];
+u8 gUnk_080FD3F4[1024];
+u8 gUnk_080FD3FC[1024];
+u8 gUnk_080FD408[1024];
+u8 gUnk_080FD41C[1024];
+u8 gUnk_080FD424[1024];
+u8 gUnk_080FD42C[1024];
+u8 gUnk_080FD434[1024];
+u8 gUnk_080FD43C[1024];
+u8 gUnk_080FD450[1024];
+u8 gUnk_080FD488[1024];
+u8 gUnk_080FD490[1024];
+u8 gUnk_080FD4B8[1024];
+u8 gUnk_080FD4C0[1024];
+u8 gUnk_080FD4C8[1024];
+u8 gUnk_080FD4D0[1024];
+u8 gUnk_080FD4D8[1024];
+u8 gUnk_080FD4E0[1024];
+u8 gUnk_080FD4E8[1024];
+u8 gUnk_080FD4F0[1024];
+u8 gUnk_080FD4F8[1024];
+u8 gUnk_080FD500[1024];
+u8 gUnk_080FD508[1024];
+u8 gUnk_080FD510[1024];
+u8 gUnk_080FD518[1024];
+u8 gUnk_080FD520[1024];
+u8 gUnk_080FD530[1024];
+u8 gUnk_080FD538[1024];
+u8 gUnk_080FD544[1024];
+u8 gUnk_080FD558[1024];
+u8 gUnk_080FD560[1024];
+u8 gUnk_080FD570[1024];
+u8 gUnk_080FD578[1024];
+u8 gUnk_080FD580[1024];
+u8 gUnk_080FD588[1024];
+u8 gUnk_080FEAC8[1024];
+u8 gUnk_080FEBE8[1024];
+u8 gUnk_080FEC28[1024];
+u8 gUnk_080FECC8[1024];
+u8 gUnk_080FED18[1024];
+u8 gUnk_080FED58[1024];
+u8 gUnk_080FEE18[1024];
+u8 gUnk_080FEE38[1024];
+u8 gUnk_080FEE48[1024];
+u8 gUnk_080FEE58[1024];
+u8 gUnk_080FEE78[1024];
+u8 gUnk_08108764[1024];
+u8 gUnk_08108E30[1024];
+u8 gUnk_08108E48[1024];
+u8 gUnk_08108E60[1024];
 /* Font/text data — loaded from ROM by Port_LoadRom */
 void* gUnk_08109230[5];
 u8 gUnk_08109244[4] __attribute__((aligned(4)));
@@ -503,125 +503,125 @@ void* gUnk_081092AC[10];
 u8 gUnk_081092D4[346] __attribute__((aligned(4)));
 u8 gUnk_0810942E[160] __attribute__((aligned(4)));
 u8 gUnk_081094CE[1378] __attribute__((aligned(4)));
-const u8 gUnk_0810B680[1] = { 0 };
-const u8 gUnk_0810B6EC[1] = { 0 };
-const u8 gUnk_0810B740[1] = { 0 };
-const u8 gUnk_0810B748[1] = { 0 };
-const u8 gUnk_0810B74A[1] = { 0 };
-const u8 gUnk_0810B774[1] = { 0 };
-const u8 gUnk_0810B77C[1] = { 0 };
-const u8 gUnk_0810B78C[1] = { 0 };
-const u8 gUnk_0810B790[1] = { 0 };
-const u8 gUnk_0810B7BA[1] = { 0 };
-const u8 gUnk_0810B7C0[1] = { 0 };
-const u8 gUnk_0810C268[1] = { 0 };
-const u8 gUnk_0810F6BC[1] = { 0 };
-const u8 gUnk_0810FA54[1] = { 0 };
-const u8 gUnk_0810FA5A[1] = { 0 };
-const u8 gUnk_08111154[1] = { 0 };
-const u8 gUnk_0811BE38[1] = { 0 };
-const u8 gUnk_0811BE40[1] = { 0 };
-const u8 gUnk_0812079C[1] = { 0 };
-const u8 gUnk_081207A4[1] = { 0 };
-const u8 gUnk_081207AC[1] = { 0 };
-const u8 gUnk_08122AE0[1] = { 0 };
-const u8 gUnk_08122AE8[1] = { 0 };
-const u8 gUnk_08122AF8[1] = { 0 };
-const u8 gUnk_08122B00[1] = { 0 };
-const u8 gUnk_08122B0E[1] = { 0 };
-const u8 gUnk_08122B1E[1] = { 0 };
-const u8 gUnk_08122B2E[1] = { 0 };
-const u8 gUnk_08122B3C[1] = { 0 };
-const u8 gUnk_081272F0[1] = { 0 };
-const u8 gUnk_08127644[1] = { 0 };
-const u8 gUnk_08127998[1] = { 0 };
-const u8 gUnk_08127CEC[1] = { 0 };
-const u8 gUnk_08127D00[1] = { 0 };
-const u8 gUnk_08127D10[1] = { 0 };
-const u8 gUnk_08128A38[1] = { 0 };
-const u8 gUnk_08128AD8[1] = { 0 };
-const u8 gUnk_08128C00[1] = { 0 };
-const u8 gUnk_08128C04[1] = { 0 };
-const u8 gUnk_08128C14[1] = { 0 };
-const u8 gUnk_08128C94[1] = { 0 };
-const u8 gUnk_08128D14[1] = { 0 };
-const u8 gUnk_08128D24[1] = { 0 };
-const u8 gUnk_08128D30[1] = { 0 };
-const u8 gUnk_08128D38[1] = { 0 };
-const u8 gUnk_08128D3C[1] = { 0 };
-const u8 gUnk_08128D43[1] = { 0 };
-const u8 gUnk_08128D51[1] = { 0 };
-const u8 gUnk_08128D58[1] = { 0 };
-const u8 gUnk_08128D60[1] = { 0 };
-const u8 gUnk_08128D70[1] = { 0 };
-const u8 gUnk_08128DB0[1] = { 0 };
-const u8 gUnk_08128DB8[1] = { 0 };
-const u8 gUnk_08128DBC[1] = { 0 };
-const u8 gUnk_08128DCC[1] = { 0 };
-const u8 gUnk_08128DD4[1] = { 0 };
-const u8 gUnk_08128DD8[1] = { 0 };
-const u8 gUnk_08128DE8[1] = { 0 };
-const u8 gUnk_08128E78[1] = { 0 };
-const u8 gUnk_08128E80[1] = { 0 };
-const u8 gUnk_08128E84[1] = { 0 };
-const u8 gUnk_08128E94[1] = { 0 };
-const u8 gUnk_08128F1C[1] = { 0 };
-const u8 gUnk_08128F38[1] = { 0 };
-const u8 gUnk_08128F4C[1] = { 0 };
-const u8 gUnk_08128F58[1] = { 0 };
-const u8 gUnk_08128FA8[1] = { 0 };
-const u8 gUnk_08128FC0[1] = { 0 };
-const u8 gUnk_08128FD8[1] = { 0 };
-const u8 gUnk_08129004[1] = { 0 };
+u8 gUnk_0810B680[1024];
+u8 gUnk_0810B6EC[1024];
+u8 gUnk_0810B740[1024];
+u8 gUnk_0810B748[1024];
+u8 gUnk_0810B74A[1024];
+u8 gUnk_0810B774[1024];
+u8 gUnk_0810B77C[1024];
+u8 gUnk_0810B78C[1024];
+u8 gUnk_0810B790[1024];
+u8 gUnk_0810B7BA[1024];
+u8 gUnk_0810B7C0[1024];
+u8 gUnk_0810C268[1024];
+u8 gUnk_0810F6BC[1024];
+u8 gUnk_0810FA54[1024];
+u8 gUnk_0810FA5A[1024];
+u8 gUnk_08111154[1024];
+u8 gUnk_0811BE38[1024];
+u8 gUnk_0811BE40[1024];
+u8 gUnk_0812079C[1024];
+u8 gUnk_081207A4[1024];
+u8 gUnk_081207AC[1024];
+u8 gUnk_08122AE0[1024];
+u8 gUnk_08122AE8[1024];
+u8 gUnk_08122AF8[1024];
+u8 gUnk_08122B00[1024];
+u8 gUnk_08122B0E[1024];
+u8 gUnk_08122B1E[1024];
+u8 gUnk_08122B2E[1024];
+u8 gUnk_08122B3C[1024];
+u8 gUnk_081272F0[1024];
+u8 gUnk_08127644[1024];
+u8 gUnk_08127998[1024];
+u8 gUnk_08127CEC[1024];
+u8 gUnk_08127D00[1024];
+u8 gUnk_08127D10[1024];
+u8 gUnk_08128A38[1024];
+u8 gUnk_08128AD8[1024];
+u8 gUnk_08128C00[1024];
+u8 gUnk_08128C04[1024];
+u8 gUnk_08128C14[1024];
+u8 gUnk_08128C94[1024];
+u8 gUnk_08128D14[1024];
+u8 gUnk_08128D24[1024];
+u8 gUnk_08128D30[1024];
+u8 gUnk_08128D38[1024];
+u8 gUnk_08128D3C[1024];
+u8 gUnk_08128D43[1024];
+u8 gUnk_08128D51[1024];
+u8 gUnk_08128D58[1024];
+u8 gUnk_08128D60[1024];
+u8 gUnk_08128D70[1024];
+u8 gUnk_08128DB0[1024];
+u8 gUnk_08128DB8[1024];
+u8 gUnk_08128DBC[1024];
+u8 gUnk_08128DCC[1024];
+u8 gUnk_08128DD4[1024];
+u8 gUnk_08128DD8[1024];
+u8 gUnk_08128DE8[1024];
+u8 gUnk_08128E78[1024];
+u8 gUnk_08128E80[1024];
+u8 gUnk_08128E84[1024];
+u8 gUnk_08128E94[1024];
+u8 gUnk_08128F1C[1024];
+u8 gUnk_08128F38[1024];
+u8 gUnk_08128F4C[1024];
+u8 gUnk_08128F58[1024];
+u8 gUnk_08128FA8[1024];
+u8 gUnk_08128FC0[1024];
+u8 gUnk_08128FD8[1024];
+u8 gUnk_08129004[1024];
 /* gUnk_0812901C -- defined in port_stubs.c as proper function pointer table */
-const u8 gUnk_08132714[1] = { 0 };
-const u8 gUnk_08132B28[1] = { 0 };
+u8 gUnk_08132714[1024];
+u8 gUnk_08132B28[1024];
 /* gUnk_08133368 is the OBJ palette offset table (360 entries @ 4 bytes each)
  * Loaded from ROM at offset 0x133368 in port_rom.c */
 u32 gUnk_08133368[360] = { 0 };
-const u8 gUnk_08134FBC[1] = { 0 };
-const u8 gUnk_08135048[1] = { 0 };
-const u8 gUnk_08135190[1] = { 0 };
-const u8 gUnk_0813A76C[1] = { 0 };
-const u8 gUnk_0813AB58[1] = { 0 };
-const u8 gUnk_0813AB6C[1] = { 0 };
-const u8 gUnk_0813AB80[1] = { 0 };
-const u8 gUnk_0813AB94[1] = { 0 };
-const u8 gUnk_0813ABA8[1] = { 0 };
-const u8 gUnk_0813ABBC[1] = { 0 };
-const u8 gUnk_0813ABD0[1] = { 0 };
-const u8 gUnk_0813ABE4[1] = { 0 };
-const u8 gUnk_0813ABF8[1] = { 0 };
-const u8 gUnk_0813AC0C[1] = { 0 };
-const u8 gUnk_0813AC20[1] = { 0 };
-const u8 gUnk_0813AC34[1] = { 0 };
-const u8 gUnk_0813AC48[1] = { 0 };
-const u8 gUnk_0813AC5C[1] = { 0 };
-const u8 gUnk_0813AC70[1] = { 0 };
-const u8 gUnk_0813AC84[1] = { 0 };
-const u8 gUnk_0813AC98[1] = { 0 };
-const u8 gUnk_0813ACAC[1] = { 0 };
-const u8 gUnk_0813ACC0[1] = { 0 };
-const u8 gUnk_0813ACD4[1] = { 0 };
-const u8 gUnk_0813ACE8[1] = { 0 };
-const u8 gUnk_0813ACFC[1] = { 0 };
-const u8 gUnk_0813AD10[1] = { 0 };
-const u8 gUnk_0813AD24[1] = { 0 };
-const u8 gUnk_0813AD38[1] = { 0 };
-const u8 gUnk_0813AD4C[1] = { 0 };
-const u8 gUnk_0813AD60[1] = { 0 };
-const u8 gUnk_0813AD74[1] = { 0 };
-const u8 gUnk_0813AD88[1] = { 0 };
-const u8 gUnk_0813ADEC[1] = { 0 };
-const u8 gUnk_085A97A0[1] = { 0 };
-const u8 gUnk_085B4180[1] = { 0 };
-const u8 gUnk_085C4620[1] = { 0 };
-const u8 gUnk_086D4460[1] = { 0 };
-const u8 gUnk_086E8460[1] = { 0 };
-const u8 gUnk_089FD1B4[1] = { 0 };
-const u8 gUnk_089FD2F4[1] = { 0 };
-const u8 gUnk_08A05751[1] = { 0 };
-const u8 gUnk_08A068BF[1] = { 0 };
+u8 gUnk_08134FBC[1024];
+u8 gUnk_08135048[1024];
+u8 gUnk_08135190[1024];
+u8 gUnk_0813A76C[1024];
+u8 gUnk_0813AB58[1024];
+u8 gUnk_0813AB6C[1024];
+u8 gUnk_0813AB80[1024];
+u8 gUnk_0813AB94[1024];
+u8 gUnk_0813ABA8[1024];
+u8 gUnk_0813ABBC[1024];
+u8 gUnk_0813ABD0[1024];
+u8 gUnk_0813ABE4[1024];
+u8 gUnk_0813ABF8[1024];
+u8 gUnk_0813AC0C[1024];
+u8 gUnk_0813AC20[1024];
+u8 gUnk_0813AC34[1024];
+u8 gUnk_0813AC48[1024];
+u8 gUnk_0813AC5C[1024];
+u8 gUnk_0813AC70[1024];
+u8 gUnk_0813AC84[1024];
+u8 gUnk_0813AC98[1024];
+u8 gUnk_0813ACAC[1024];
+u8 gUnk_0813ACC0[1024];
+u8 gUnk_0813ACD4[1024];
+u8 gUnk_0813ACE8[1024];
+u8 gUnk_0813ACFC[1024];
+u8 gUnk_0813AD10[1024];
+u8 gUnk_0813AD24[1024];
+u8 gUnk_0813AD38[1024];
+u8 gUnk_0813AD4C[1024];
+u8 gUnk_0813AD60[1024];
+u8 gUnk_0813AD74[1024];
+u8 gUnk_0813AD88[1024];
+u8 gUnk_0813ADEC[1024];
+u8 gUnk_085A97A0[1024];
+u8 gUnk_085B4180[1024];
+u8 gUnk_085C4620[1024];
+u8 gUnk_086D4460[1024];
+u8 gUnk_086E8460[1024];
+u8 gUnk_089FD1B4[1024];
+u8 gUnk_089FD2F4[1024];
+u8 gUnk_08A05751[1024];
+u8 gUnk_08A068BF[1024];
 const u8 sfx100[1] = { 0 };
 const u8 sfx101[1] = { 0 };
 const u8 sfx102[1] = { 0 };
@@ -1070,3 +1070,3259 @@ const u8 sfxWind1[1] = { 0 };
 const u8 sfxWind2[1] = { 0 };
 const u8 sfxWind3[1] = { 0 };
 const u8 gUnk_additional_a_TownMinishHoles_LibraryBookshelf[1] = { 0 };
+/* ---- ROM data stub initialization ---- */
+#include <string.h>
+#include <stdio.h>
+extern u8* gRomData;
+extern u32 gRomSize;
+
+#define PORT_DATA_STUB_SIZE 1024
+
+void Port_InitDataStubs(void) {
+    if (!gRomData || gRomSize == 0) {
+        fprintf(stderr, "Port_InitDataStubs: ROM not loaded yet!\n");
+        return;
+    }
+    u32 count = 0;
+    /* gUnk_080012C8 @ 0x080012C8 */
+    {
+        u32 off = 0x0012C8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080012C8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08001A7C @ 0x08001A7C */
+    {
+        u32 off = 0x001A7Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08001A7C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08001DCC @ 0x08001DCC */
+    {
+        u32 off = 0x001DCCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08001DCC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08003E44 @ 0x08003E44 */
+    {
+        u32 off = 0x003E44u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08003E44, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080046A4 @ 0x080046A4 */
+    {
+        u32 off = 0x0046A4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080046A4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080047F6 @ 0x080047F6 */
+    {
+        u32 off = 0x0047F6u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080047F6, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08007DF4 @ 0x08007DF4 */
+    {
+        u32 off = 0x007DF4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08007DF4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0800823C @ 0x0800823C */
+    {
+        u32 off = 0x00823Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0800823C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080082DC @ 0x080082DC */
+    {
+        u32 off = 0x0082DCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080082DC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0800833C @ 0x0800833C */
+    {
+        u32 off = 0x00833Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0800833C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0800839C @ 0x0800839C */
+    {
+        u32 off = 0x00839Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0800839C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080083FC @ 0x080083FC */
+    {
+        u32 off = 0x0083FCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080083FC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0800845C @ 0x0800845C */
+    {
+        u32 off = 0x00845Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0800845C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080084BC @ 0x080084BC */
+    {
+        u32 off = 0x0084BCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080084BC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0800851C @ 0x0800851C */
+    {
+        u32 off = 0x00851Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0800851C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08016984 @ 0x08016984 */
+    {
+        u32 off = 0x016984u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08016984, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080B4410 @ 0x080B4410 */
+    {
+        u32 off = 0x0B4410u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080B4410, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080B4458 @ 0x080B4458 */
+    {
+        u32 off = 0x0B4458u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080B4458, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080C8F2C @ 0x080C8F2C */
+    {
+        u32 off = 0x0C8F2Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080C8F2C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080C8F54 @ 0x080C8F54 */
+    {
+        u32 off = 0x0C8F54u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080C8F54, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080C8F7C @ 0x080C8F7C */
+    {
+        u32 off = 0x0C8F7Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080C8F7C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080C9058 @ 0x080C9058 */
+    {
+        u32 off = 0x0C9058u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080C9058, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080C9094 @ 0x080C9094 */
+    {
+        u32 off = 0x0C9094u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080C9094, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CA2B4 @ 0x080CA2B4 */
+    {
+        u32 off = 0x0CA2B4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CA2B4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CA5D4 @ 0x080CA5D4 */
+    {
+        u32 off = 0x0CA5D4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CA5D4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CA6D4 @ 0x080CA6D4 */
+    {
+        u32 off = 0x0CA6D4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CA6D4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CC944 @ 0x080CC944 */
+    {
+        u32 off = 0x0CC944u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CC944, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD7C4 @ 0x080CD7C4 */
+    {
+        u32 off = 0x0CD7C4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD7C4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD7E4 @ 0x080CD7E4 */
+    {
+        u32 off = 0x0CD7E4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD7E4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD7F8 @ 0x080CD7F8 */
+    {
+        u32 off = 0x0CD7F8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD7F8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD810 @ 0x080CD810 */
+    {
+        u32 off = 0x0CD810u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD810, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD828 @ 0x080CD828 */
+    {
+        u32 off = 0x0CD828u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD828, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD840 @ 0x080CD840 */
+    {
+        u32 off = 0x0CD840u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD840, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD844 @ 0x080CD844 */
+    {
+        u32 off = 0x0CD844u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD844, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD848 @ 0x080CD848 */
+    {
+        u32 off = 0x0CD848u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD848, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD850 @ 0x080CD850 */
+    {
+        u32 off = 0x0CD850u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD850, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD854 @ 0x080CD854 */
+    {
+        u32 off = 0x0CD854u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD854, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD86C @ 0x080CD86C */
+    {
+        u32 off = 0x0CD86Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD86C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD878 @ 0x080CD878 */
+    {
+        u32 off = 0x0CD878u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD878, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080CD884 @ 0x080CD884 */
+    {
+        u32 off = 0x0CD884u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080CD884, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D15B4 @ 0x080D15B4 */
+    {
+        u32 off = 0x0D15B4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D15B4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6340 @ 0x080D6340 */
+    {
+        u32 off = 0x0D6340u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6340, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6360 @ 0x080D6360 */
+    {
+        u32 off = 0x0D6360u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6360, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6380 @ 0x080D6380 */
+    {
+        u32 off = 0x0D6380u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6380, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D63A0 @ 0x080D63A0 */
+    {
+        u32 off = 0x0D63A0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D63A0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D63C0 @ 0x080D63C0 */
+    {
+        u32 off = 0x0D63C0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D63C0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D63E0 @ 0x080D63E0 */
+    {
+        u32 off = 0x0D63E0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D63E0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6400 @ 0x080D6400 */
+    {
+        u32 off = 0x0D6400u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6400, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6420 @ 0x080D6420 */
+    {
+        u32 off = 0x0D6420u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6420, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6440 @ 0x080D6440 */
+    {
+        u32 off = 0x0D6440u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6440, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D64F8 @ 0x080D64F8 */
+    {
+        u32 off = 0x0D64F8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D64F8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6508 @ 0x080D6508 */
+    {
+        u32 off = 0x0D6508u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6508, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6558 @ 0x080D6558 */
+    {
+        u32 off = 0x0D6558u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6558, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6578 @ 0x080D6578 */
+    {
+        u32 off = 0x0D6578u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6578, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6618 @ 0x080D6618 */
+    {
+        u32 off = 0x0D6618u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6618, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6638 @ 0x080D6638 */
+    {
+        u32 off = 0x0D6638u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6638, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6714 @ 0x080D6714 */
+    {
+        u32 off = 0x0D6714u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6714, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6924 @ 0x080D6924 */
+    {
+        u32 off = 0x0D6924u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6924, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6A74 @ 0x080D6A74 */
+    {
+        u32 off = 0x0D6A74u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6A74, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6B18 @ 0x080D6B18 */
+    {
+        u32 off = 0x0D6B18u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6B18, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D6BB8 @ 0x080D6BB8 */
+    {
+        u32 off = 0x0D6BB8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D6BB8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7038 @ 0x080D7038 */
+    {
+        u32 off = 0x0D7038u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7038, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7140 @ 0x080D7140 */
+    {
+        u32 off = 0x0D7140u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7140, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7170 @ 0x080D7170 */
+    {
+        u32 off = 0x0D7170u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7170, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D71A0 @ 0x080D71A0 */
+    {
+        u32 off = 0x0D71A0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D71A0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D71D0 @ 0x080D71D0 */
+    {
+        u32 off = 0x0D71D0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D71D0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D71F0 @ 0x080D71F0 */
+    {
+        u32 off = 0x0D71F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D71F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7328 @ 0x080D7328 */
+    {
+        u32 off = 0x0D7328u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7328, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7348 @ 0x080D7348 */
+    {
+        u32 off = 0x0D7348u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7348, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D73B0 @ 0x080D73B0 */
+    {
+        u32 off = 0x0D73B0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D73B0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D73E0 @ 0x080D73E0 */
+    {
+        u32 off = 0x0D73E0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D73E0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7410 @ 0x080D7410 */
+    {
+        u32 off = 0x0D7410u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7410, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D74C8 @ 0x080D74C8 */
+    {
+        u32 off = 0x0D74C8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D74C8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7588 @ 0x080D7588 */
+    {
+        u32 off = 0x0D7588u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7588, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D75D8 @ 0x080D75D8 */
+    {
+        u32 off = 0x0D75D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D75D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7618 @ 0x080D7618 */
+    {
+        u32 off = 0x0D7618u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7618, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D7D34 @ 0x080D7D34 */
+    {
+        u32 off = 0x0D7D34u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D7D34, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D827C @ 0x080D827C */
+    {
+        u32 off = 0x0D827Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D827C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D89E4 @ 0x080D89E4 */
+    {
+        u32 off = 0x0D89E4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D89E4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8A04 @ 0x080D8A04 */
+    {
+        u32 off = 0x0D8A04u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8A04, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8A34 @ 0x080D8A34 */
+    {
+        u32 off = 0x0D8A34u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8A34, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8A74 @ 0x080D8A74 */
+    {
+        u32 off = 0x0D8A74u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8A74, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8AC4 @ 0x080D8AC4 */
+    {
+        u32 off = 0x0D8AC4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8AC4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8B24 @ 0x080D8B24 */
+    {
+        u32 off = 0x0D8B24u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8B24, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8BBC @ 0x080D8BBC */
+    {
+        u32 off = 0x0D8BBCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8BBC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8BFA @ 0x080D8BFA */
+    {
+        u32 off = 0x0D8BFAu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8BFA, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8C68 @ 0x080D8C68 */
+    {
+        u32 off = 0x0D8C68u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8C68, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D8E50 @ 0x080D8E50 */
+    {
+        u32 off = 0x0D8E50u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D8E50, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9098 @ 0x080D9098 */
+    {
+        u32 off = 0x0D9098u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9098, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D90C8 @ 0x080D90C8 */
+    {
+        u32 off = 0x0D90C8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D90C8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9108 @ 0x080D9108 */
+    {
+        u32 off = 0x0D9108u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9108, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9328 @ 0x080D9328 */
+    {
+        u32 off = 0x0D9328u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9328, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9338 @ 0x080D9338 */
+    {
+        u32 off = 0x0D9338u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9338, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9340 @ 0x080D9340 */
+    {
+        u32 off = 0x0D9340u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9340, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9348 @ 0x080D9348 */
+    {
+        u32 off = 0x0D9348u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9348, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9800 @ 0x080D9800 */
+    {
+        u32 off = 0x0D9800u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9800, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9C38 @ 0x080D9C38 */
+    {
+        u32 off = 0x0D9C38u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9C38, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9CC8 @ 0x080D9CC8 */
+    {
+        u32 off = 0x0D9CC8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9CC8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080D9CE8 @ 0x080D9CE8 */
+    {
+        u32 off = 0x0D9CE8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080D9CE8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DA230 @ 0x080DA230 */
+    {
+        u32 off = 0x0DA230u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DA230, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAB44 @ 0x080DAB44 */
+    {
+        u32 off = 0x0DAB44u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAB44, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAB64 @ 0x080DAB64 */
+    {
+        u32 off = 0x0DAB64u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAB64, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAB84 @ 0x080DAB84 */
+    {
+        u32 off = 0x0DAB84u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAB84, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DABC4 @ 0x080DABC4 */
+    {
+        u32 off = 0x0DABC4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DABC4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAC04 @ 0x080DAC04 */
+    {
+        u32 off = 0x0DAC04u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAC04, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAC54 @ 0x080DAC54 */
+    {
+        u32 off = 0x0DAC54u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAC54, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAC94 @ 0x080DAC94 */
+    {
+        u32 off = 0x0DAC94u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAC94, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DACD4 @ 0x080DACD4 */
+    {
+        u32 off = 0x0DACD4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DACD4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAD24 @ 0x080DAD24 */
+    {
+        u32 off = 0x0DAD24u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAD24, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAD64 @ 0x080DAD64 */
+    {
+        u32 off = 0x0DAD64u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAD64, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DADA4 @ 0x080DADA4 */
+    {
+        u32 off = 0x0DADA4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DADA4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAEE8 @ 0x080DAEE8 */
+    {
+        u32 off = 0x0DAEE8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAEE8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DAF80 @ 0x080DAF80 */
+    {
+        u32 off = 0x0DAF80u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DAF80, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DB018 @ 0x080DB018 */
+    {
+        u32 off = 0x0DB018u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DB018, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DB238 @ 0x080DB238 */
+    {
+        u32 off = 0x0DB238u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DB238, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DB4A0 @ 0x080DB4A0 */
+    {
+        u32 off = 0x0DB4A0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DB4A0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DB4D0 @ 0x080DB4D0 */
+    {
+        u32 off = 0x0DB4D0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DB4D0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DB8F0 @ 0x080DB8F0 */
+    {
+        u32 off = 0x0DB8F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DB8F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DB910 @ 0x080DB910 */
+    {
+        u32 off = 0x0DB910u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DB910, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DBA08 @ 0x080DBA08 */
+    {
+        u32 off = 0x0DBA08u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DBA08, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DBAD0 @ 0x080DBAD0 */
+    {
+        u32 off = 0x0DBAD0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DBAD0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DBB10 @ 0x080DBB10 */
+    {
+        u32 off = 0x0DBB10u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DBB10, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DBB50 @ 0x080DBB50 */
+    {
+        u32 off = 0x0DBB50u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DBB50, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DBB70 @ 0x080DBB70 */
+    {
+        u32 off = 0x0DBB70u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DBB70, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DBB90 @ 0x080DBB90 */
+    {
+        u32 off = 0x0DBB90u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DBB90, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DC390 @ 0x080DC390 */
+    {
+        u32 off = 0x0DC390u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DC390, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DC3F0 @ 0x080DC3F0 */
+    {
+        u32 off = 0x0DC3F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DC3F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DC430 @ 0x080DC430 */
+    {
+        u32 off = 0x0DC430u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DC430, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DC470 @ 0x080DC470 */
+    {
+        u32 off = 0x0DC470u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DC470, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DC4C0 @ 0x080DC4C0 */
+    {
+        u32 off = 0x0DC4C0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DC4C0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DC530 @ 0x080DC530 */
+    {
+        u32 off = 0x0DC530u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DC530, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DCB10 @ 0x080DCB10 */
+    {
+        u32 off = 0x0DCB10u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DCB10, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DD294 @ 0x080DD294 */
+    {
+        u32 off = 0x0DD294u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DD294, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DD364 @ 0x080DD364 */
+    {
+        u32 off = 0x0DD364u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DD364, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DD750 @ 0x080DD750 */
+    {
+        u32 off = 0x0DD750u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DD750, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DD7E0 @ 0x080DD7E0 */
+    {
+        u32 off = 0x0DD7E0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DD7E0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DD840 @ 0x080DD840 */
+    {
+        u32 off = 0x0DD840u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DD840, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DDE88 @ 0x080DDE88 */
+    {
+        u32 off = 0x0DDE88u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DDE88, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DE008 @ 0x080DE008 */
+    {
+        u32 off = 0x0DE008u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DE008, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DE1E0 @ 0x080DE1E0 */
+    {
+        u32 off = 0x0DE1E0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DE1E0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DE200 @ 0x080DE200 */
+    {
+        u32 off = 0x0DE200u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DE200, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DE4C8 @ 0x080DE4C8 */
+    {
+        u32 off = 0x0DE4C8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DE4C8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DE814 @ 0x080DE814 */
+    {
+        u32 off = 0x0DE814u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DE814, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080DFB78 @ 0x080DFB78 */
+    {
+        u32 off = 0x0DFB78u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080DFB78, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E103C @ 0x080E103C */
+    {
+        u32 off = 0x0E103Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E103C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E3850 @ 0x080E3850 */
+    {
+        u32 off = 0x0E3850u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E3850, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E4BD8 @ 0x080E4BD8 */
+    {
+        u32 off = 0x0E4BD8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E4BD8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E4C08 @ 0x080E4C08 */
+    {
+        u32 off = 0x0E4C08u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E4C08, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E4CD8 @ 0x080E4CD8 */
+    {
+        u32 off = 0x0E4CD8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E4CD8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E4CF8 @ 0x080E4CF8 */
+    {
+        u32 off = 0x0E4CF8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E4CF8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E5660 @ 0x080E5660 */
+    {
+        u32 off = 0x0E5660u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E5660, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E5680 @ 0x080E5680 */
+    {
+        u32 off = 0x0E5680u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E5680, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E5E3C @ 0x080E5E3C */
+    {
+        u32 off = 0x0E5E3Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E5E3C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E5E5C @ 0x080E5E5C */
+    {
+        u32 off = 0x0E5E5Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E5E5C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E693C @ 0x080E693C */
+    {
+        u32 off = 0x0E693Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E693C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E718C @ 0x080E718C */
+    {
+        u32 off = 0x0E718Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E718C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E71AC @ 0x080E71AC */
+    {
+        u32 off = 0x0E71ACu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E71AC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080E72C4 @ 0x080E72C4 */
+    {
+        u32 off = 0x0E72C4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080E72C4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EA09C @ 0x080EA09C */
+    {
+        u32 off = 0x0EA09Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EA09C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EAD68 @ 0x080EAD68 */
+    {
+        u32 off = 0x0EAD68u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EAD68, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EADB8 @ 0x080EADB8 */
+    {
+        u32 off = 0x0EADB8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EADB8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EAE00 @ 0x080EAE00 */
+    {
+        u32 off = 0x0EAE00u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EAE00, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EAE60 @ 0x080EAE60 */
+    {
+        u32 off = 0x0EAE60u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EAE60, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EAEC0 @ 0x080EAEC0 */
+    {
+        u32 off = 0x0EAEC0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EAEC0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EAF20 @ 0x080EAF20 */
+    {
+        u32 off = 0x0EAF20u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EAF20, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EB5D4 @ 0x080EB5D4 */
+    {
+        u32 off = 0x0EB5D4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EB5D4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EB604 @ 0x080EB604 */
+    {
+        u32 off = 0x0EB604u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EB604, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EB684 @ 0x080EB684 */
+    {
+        u32 off = 0x0EB684u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EB684, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EB9F4 @ 0x080EB9F4 */
+    {
+        u32 off = 0x0EB9F4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EB9F4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EBAA4 @ 0x080EBAA4 */
+    {
+        u32 off = 0x0EBAA4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EBAA4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EBAF4 @ 0x080EBAF4 */
+    {
+        u32 off = 0x0EBAF4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EBAF4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EC2CC @ 0x080EC2CC */
+    {
+        u32 off = 0x0EC2CCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EC2CC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EC4E8 @ 0x080EC4E8 */
+    {
+        u32 off = 0x0EC4E8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EC4E8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EC820 @ 0x080EC820 */
+    {
+        u32 off = 0x0EC820u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EC820, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080ECA60 @ 0x080ECA60 */
+    {
+        u32 off = 0x0ECA60u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080ECA60, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080ECFCC @ 0x080ECFCC */
+    {
+        u32 off = 0x0ECFCCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080ECFCC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080ED1E4 @ 0x080ED1E4 */
+    {
+        u32 off = 0x0ED1E4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080ED1E4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE314 @ 0x080EE314 */
+    {
+        u32 off = 0x0EE314u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE314, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE5DC @ 0x080EE5DC */
+    {
+        u32 off = 0x0EE5DCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE5DC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE71C @ 0x080EE71C */
+    {
+        u32 off = 0x0EE71Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE71C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE88C @ 0x080EE88C */
+    {
+        u32 off = 0x0EE88Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE88C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE8FC @ 0x080EE8FC */
+    {
+        u32 off = 0x0EE8FCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE8FC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE91C @ 0x080EE91C */
+    {
+        u32 off = 0x0EE91Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE91C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE93C @ 0x080EE93C */
+    {
+        u32 off = 0x0EE93Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE93C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE95C @ 0x080EE95C */
+    {
+        u32 off = 0x0EE95Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE95C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE97C @ 0x080EE97C */
+    {
+        u32 off = 0x0EE97Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE97C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE99C @ 0x080EE99C */
+    {
+        u32 off = 0x0EE99Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE99C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE9BC @ 0x080EE9BC */
+    {
+        u32 off = 0x0EE9BCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE9BC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE9DC @ 0x080EE9DC */
+    {
+        u32 off = 0x0EE9DCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE9DC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EE9FC @ 0x080EE9FC */
+    {
+        u32 off = 0x0EE9FCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EE9FC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEA1C @ 0x080EEA1C */
+    {
+        u32 off = 0x0EEA1Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEA1C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEA3C @ 0x080EEA3C */
+    {
+        u32 off = 0x0EEA3Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEA3C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEA5C @ 0x080EEA5C */
+    {
+        u32 off = 0x0EEA5Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEA5C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEA7C @ 0x080EEA7C */
+    {
+        u32 off = 0x0EEA7Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEA7C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEA9C @ 0x080EEA9C */
+    {
+        u32 off = 0x0EEA9Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEA9C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEABC @ 0x080EEABC */
+    {
+        u32 off = 0x0EEABCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEABC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEB6C @ 0x080EEB6C */
+    {
+        u32 off = 0x0EEB6Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEB6C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEB8C @ 0x080EEB8C */
+    {
+        u32 off = 0x0EEB8Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEB8C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EEBAC @ 0x080EEBAC */
+    {
+        u32 off = 0x0EEBACu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EEBAC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EECBC @ 0x080EECBC */
+    {
+        u32 off = 0x0EECBCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EECBC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EED2C @ 0x080EED2C */
+    {
+        u32 off = 0x0EED2Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EED2C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EED7A @ 0x080EED7A */
+    {
+        u32 off = 0x0EED7Au;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EED7A, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080EED8C @ 0x080EED8C */
+    {
+        u32 off = 0x0EED8Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080EED8C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F0650 @ 0x080F0650 */
+    {
+        u32 off = 0x0F0650u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F0650, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F0800 @ 0x080F0800 */
+    {
+        u32 off = 0x0F0800u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F0800, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F0850 @ 0x080F0850 */
+    {
+        u32 off = 0x0F0850u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F0850, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F0870 @ 0x080F0870 */
+    {
+        u32 off = 0x0F0870u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F0870, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F0890 @ 0x080F0890 */
+    {
+        u32 off = 0x0F0890u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F0890, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F08F0 @ 0x080F08F0 */
+    {
+        u32 off = 0x0F08F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F08F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F0920 @ 0x080F0920 */
+    {
+        u32 off = 0x0F0920u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F0920, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F09A0 @ 0x080F09A0 */
+    {
+        u32 off = 0x0F09A0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F09A0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F0E1C @ 0x080F0E1C */
+    {
+        u32 off = 0x0F0E1Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F0E1C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F1C68 @ 0x080F1C68 */
+    {
+        u32 off = 0x0F1C68u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F1C68, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F1C88 @ 0x080F1C88 */
+    {
+        u32 off = 0x0F1C88u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F1C88, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F1D90 @ 0x080F1D90 */
+    {
+        u32 off = 0x0F1D90u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F1D90, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F1DB0 @ 0x080F1DB0 */
+    {
+        u32 off = 0x0F1DB0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F1DB0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F1DD0 @ 0x080F1DD0 */
+    {
+        u32 off = 0x0F1DD0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F1DD0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2174 @ 0x080F2174 */
+    {
+        u32 off = 0x0F2174u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2174, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2194 @ 0x080F2194 */
+    {
+        u32 off = 0x0F2194u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2194, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F21B4 @ 0x080F21B4 */
+    {
+        u32 off = 0x0F21B4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F21B4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F238C @ 0x080F238C */
+    {
+        u32 off = 0x0F238Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F238C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F23BC @ 0x080F23BC */
+    {
+        u32 off = 0x0F23BCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F23BC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2570 @ 0x080F2570 */
+    {
+        u32 off = 0x0F2570u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2570, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2590 @ 0x080F2590 */
+    {
+        u32 off = 0x0F2590u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2590, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F25C0 @ 0x080F25C0 */
+    {
+        u32 off = 0x0F25C0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F25C0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2600 @ 0x080F2600 */
+    {
+        u32 off = 0x0F2600u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2600, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2798 @ 0x080F2798 */
+    {
+        u32 off = 0x0F2798u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2798, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F27D8 @ 0x080F27D8 */
+    {
+        u32 off = 0x0F27D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F27D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2860 @ 0x080F2860 */
+    {
+        u32 off = 0x0F2860u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2860, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F28D4 @ 0x080F28D4 */
+    {
+        u32 off = 0x0F28D4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F28D4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F28F4 @ 0x080F28F4 */
+    {
+        u32 off = 0x0F28F4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F28F4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2914 @ 0x080F2914 */
+    {
+        u32 off = 0x0F2914u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2914, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2E2C @ 0x080F2E2C */
+    {
+        u32 off = 0x0F2E2Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2E2C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2E94 @ 0x080F2E94 */
+    {
+        u32 off = 0x0F2E94u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2E94, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2EC4 @ 0x080F2EC4 */
+    {
+        u32 off = 0x0F2EC4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2EC4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F2FD4 @ 0x080F2FD4 */
+    {
+        u32 off = 0x0F2FD4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F2FD4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F30CC @ 0x080F30CC */
+    {
+        u32 off = 0x0F30CCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F30CC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F31D8 @ 0x080F31D8 */
+    {
+        u32 off = 0x0F31D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F31D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3260 @ 0x080F3260 */
+    {
+        u32 off = 0x0F3260u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3260, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3494 @ 0x080F3494 */
+    {
+        u32 off = 0x0F3494u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3494, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3604 @ 0x080F3604 */
+    {
+        u32 off = 0x0F3604u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3604, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F36FC @ 0x080F36FC */
+    {
+        u32 off = 0x0F36FCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F36FC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F37D0 @ 0x080F37D0 */
+    {
+        u32 off = 0x0F37D0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F37D0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3A48 @ 0x080F3A48 */
+    {
+        u32 off = 0x0F3A48u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3A48, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3C44 @ 0x080F3C44 */
+    {
+        u32 off = 0x0F3C44u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3C44, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3C64 @ 0x080F3C64 */
+    {
+        u32 off = 0x0F3C64u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3C64, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3C94 @ 0x080F3C94 */
+    {
+        u32 off = 0x0F3C94u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3C94, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F3EA4 @ 0x080F3EA4 */
+    {
+        u32 off = 0x0F3EA4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F3EA4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4B88 @ 0x080F4B88 */
+    {
+        u32 off = 0x0F4B88u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4B88, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4D50 @ 0x080F4D50 */
+    {
+        u32 off = 0x0F4D50u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4D50, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4DB0 @ 0x080F4DB0 */
+    {
+        u32 off = 0x0F4DB0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4DB0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4DD0 @ 0x080F4DD0 */
+    {
+        u32 off = 0x0F4DD0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4DD0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4DF0 @ 0x080F4DF0 */
+    {
+        u32 off = 0x0F4DF0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4DF0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4E10 @ 0x080F4E10 */
+    {
+        u32 off = 0x0F4E10u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4E10, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4EB0 @ 0x080F4EB0 */
+    {
+        u32 off = 0x0F4EB0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4EB0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F4F10 @ 0x080F4F10 */
+    {
+        u32 off = 0x0F4F10u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F4F10, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5308 @ 0x080F5308 */
+    {
+        u32 off = 0x0F5308u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5308, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5328 @ 0x080F5328 */
+    {
+        u32 off = 0x0F5328u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5328, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5348 @ 0x080F5348 */
+    {
+        u32 off = 0x0F5348u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5348, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F54E8 @ 0x080F54E8 */
+    {
+        u32 off = 0x0F54E8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F54E8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5508 @ 0x080F5508 */
+    {
+        u32 off = 0x0F5508u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5508, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5528 @ 0x080F5528 */
+    {
+        u32 off = 0x0F5528u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5528, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5558 @ 0x080F5558 */
+    {
+        u32 off = 0x0F5558u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5558, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5578 @ 0x080F5578 */
+    {
+        u32 off = 0x0F5578u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5578, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5598 @ 0x080F5598 */
+    {
+        u32 off = 0x0F5598u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5598, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F55B8 @ 0x080F55B8 */
+    {
+        u32 off = 0x0F55B8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F55B8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F55D8 @ 0x080F55D8 */
+    {
+        u32 off = 0x0F55D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F55D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5660 @ 0x080F5660 */
+    {
+        u32 off = 0x0F5660u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5660, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5758 @ 0x080F5758 */
+    {
+        u32 off = 0x0F5758u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5758, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5788 @ 0x080F5788 */
+    {
+        u32 off = 0x0F5788u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5788, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F57A8 @ 0x080F57A8 */
+    {
+        u32 off = 0x0F57A8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F57A8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F57C8 @ 0x080F57C8 */
+    {
+        u32 off = 0x0F57C8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F57C8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F57E8 @ 0x080F57E8 */
+    {
+        u32 off = 0x0F57E8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F57E8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5828 @ 0x080F5828 */
+    {
+        u32 off = 0x0F5828u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5828, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5848 @ 0x080F5848 */
+    {
+        u32 off = 0x0F5848u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5848, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5868 @ 0x080F5868 */
+    {
+        u32 off = 0x0F5868u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5868, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5888 @ 0x080F5888 */
+    {
+        u32 off = 0x0F5888u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5888, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F58A8 @ 0x080F58A8 */
+    {
+        u32 off = 0x0F58A8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F58A8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5B3C @ 0x080F5B3C */
+    {
+        u32 off = 0x0F5B3Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5B3C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5DD0 @ 0x080F5DD0 */
+    {
+        u32 off = 0x0F5DD0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5DD0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F5E68 @ 0x080F5E68 */
+    {
+        u32 off = 0x0F5E68u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F5E68, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F61BC @ 0x080F61BC */
+    {
+        u32 off = 0x0F61BCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F61BC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F62E4 @ 0x080F62E4 */
+    {
+        u32 off = 0x0F62E4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F62E4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F6324 @ 0x080F6324 */
+    {
+        u32 off = 0x0F6324u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F6324, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F6564 @ 0x080F6564 */
+    {
+        u32 off = 0x0F6564u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F6564, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F6584 @ 0x080F6584 */
+    {
+        u32 off = 0x0F6584u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F6584, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F66AC @ 0x080F66AC */
+    {
+        u32 off = 0x0F66ACu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F66AC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7088 @ 0x080F7088 */
+    {
+        u32 off = 0x0F7088u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7088, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F70A8 @ 0x080F70A8 */
+    {
+        u32 off = 0x0F70A8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F70A8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F70D8 @ 0x080F70D8 */
+    {
+        u32 off = 0x0F70D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F70D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7500 @ 0x080F7500 */
+    {
+        u32 off = 0x0F7500u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7500, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7550 @ 0x080F7550 */
+    {
+        u32 off = 0x0F7550u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7550, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7680 @ 0x080F7680 */
+    {
+        u32 off = 0x0F7680u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7680, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F77C0 @ 0x080F77C0 */
+    {
+        u32 off = 0x0F77C0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F77C0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F77F0 @ 0x080F77F0 */
+    {
+        u32 off = 0x0F77F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F77F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7810 @ 0x080F7810 */
+    {
+        u32 off = 0x0F7810u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7810, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7860 @ 0x080F7860 */
+    {
+        u32 off = 0x0F7860u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7860, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F78A0 @ 0x080F78A0 */
+    {
+        u32 off = 0x0F78A0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F78A0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7C80 @ 0x080F7C80 */
+    {
+        u32 off = 0x0F7C80u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7C80, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7CD0 @ 0x080F7CD0 */
+    {
+        u32 off = 0x0F7CD0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7CD0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7D70 @ 0x080F7D70 */
+    {
+        u32 off = 0x0F7D70u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7D70, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F7DC0 @ 0x080F7DC0 */
+    {
+        u32 off = 0x0F7DC0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F7DC0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F806C @ 0x080F806C */
+    {
+        u32 off = 0x0F806Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F806C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F82E0 @ 0x080F82E0 */
+    {
+        u32 off = 0x0F82E0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F82E0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F8430 @ 0x080F8430 */
+    {
+        u32 off = 0x0F8430u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F8430, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F85D8 @ 0x080F85D8 */
+    {
+        u32 off = 0x0F85D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F85D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F85F8 @ 0x080F85F8 */
+    {
+        u32 off = 0x0F85F8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F85F8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F9304 @ 0x080F9304 */
+    {
+        u32 off = 0x0F9304u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F9304, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F9BF8 @ 0x080F9BF8 */
+    {
+        u32 off = 0x0F9BF8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F9BF8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F9F88 @ 0x080F9F88 */
+    {
+        u32 off = 0x0F9F88u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F9F88, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080F9FA8 @ 0x080F9FA8 */
+    {
+        u32 off = 0x0F9FA8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080F9FA8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FA5D0 @ 0x080FA5D0 */
+    {
+        u32 off = 0x0FA5D0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FA5D0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FACB8 @ 0x080FACB8 */
+    {
+        u32 off = 0x0FACB8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FACB8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FAD48 @ 0x080FAD48 */
+    {
+        u32 off = 0x0FAD48u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FAD48, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FAFE4 @ 0x080FAFE4 */
+    {
+        u32 off = 0x0FAFE4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FAFE4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FB004 @ 0x080FB004 */
+    {
+        u32 off = 0x0FB004u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FB004, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD178 @ 0x080FD178 */
+    {
+        u32 off = 0x0FD178u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD178, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD190 @ 0x080FD190 */
+    {
+        u32 off = 0x0FD190u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD190, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1A8 @ 0x080FD1A8 */
+    {
+        u32 off = 0x0FD1A8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1A8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1B4 @ 0x080FD1B4 */
+    {
+        u32 off = 0x0FD1B4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1B4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1D4 @ 0x080FD1D4 */
+    {
+        u32 off = 0x0FD1D4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1D4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1DC @ 0x080FD1DC */
+    {
+        u32 off = 0x0FD1DCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1DC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1E4 @ 0x080FD1E4 */
+    {
+        u32 off = 0x0FD1E4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1E4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1EC @ 0x080FD1EC */
+    {
+        u32 off = 0x0FD1ECu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1EC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1F4 @ 0x080FD1F4 */
+    {
+        u32 off = 0x0FD1F4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1F4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD1FC @ 0x080FD1FC */
+    {
+        u32 off = 0x0FD1FCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD1FC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD204 @ 0x080FD204 */
+    {
+        u32 off = 0x0FD204u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD204, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD20C @ 0x080FD20C */
+    {
+        u32 off = 0x0FD20Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD20C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD214 @ 0x080FD214 */
+    {
+        u32 off = 0x0FD214u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD214, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD21C @ 0x080FD21C */
+    {
+        u32 off = 0x0FD21Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD21C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD224 @ 0x080FD224 */
+    {
+        u32 off = 0x0FD224u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD224, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD22C @ 0x080FD22C */
+    {
+        u32 off = 0x0FD22Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD22C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD238 @ 0x080FD238 */
+    {
+        u32 off = 0x0FD238u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD238, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD240 @ 0x080FD240 */
+    {
+        u32 off = 0x0FD240u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD240, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD248 @ 0x080FD248 */
+    {
+        u32 off = 0x0FD248u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD248, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD258 @ 0x080FD258 */
+    {
+        u32 off = 0x0FD258u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD258, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD260 @ 0x080FD260 */
+    {
+        u32 off = 0x0FD260u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD260, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD270 @ 0x080FD270 */
+    {
+        u32 off = 0x0FD270u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD270, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD278 @ 0x080FD278 */
+    {
+        u32 off = 0x0FD278u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD278, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD280 @ 0x080FD280 */
+    {
+        u32 off = 0x0FD280u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD280, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD288 @ 0x080FD288 */
+    {
+        u32 off = 0x0FD288u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD288, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD290 @ 0x080FD290 */
+    {
+        u32 off = 0x0FD290u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD290, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD298 @ 0x080FD298 */
+    {
+        u32 off = 0x0FD298u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD298, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD2A0 @ 0x080FD2A0 */
+    {
+        u32 off = 0x0FD2A0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD2A0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD2A8 @ 0x080FD2A8 */
+    {
+        u32 off = 0x0FD2A8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD2A8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD2D0 @ 0x080FD2D0 */
+    {
+        u32 off = 0x0FD2D0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD2D0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD2D8 @ 0x080FD2D8 */
+    {
+        u32 off = 0x0FD2D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD2D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD2E0 @ 0x080FD2E0 */
+    {
+        u32 off = 0x0FD2E0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD2E0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD2E8 @ 0x080FD2E8 */
+    {
+        u32 off = 0x0FD2E8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD2E8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD2F0 @ 0x080FD2F0 */
+    {
+        u32 off = 0x0FD2F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD2F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD308 @ 0x080FD308 */
+    {
+        u32 off = 0x0FD308u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD308, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD310 @ 0x080FD310 */
+    {
+        u32 off = 0x0FD310u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD310, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD320 @ 0x080FD320 */
+    {
+        u32 off = 0x0FD320u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD320, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD328 @ 0x080FD328 */
+    {
+        u32 off = 0x0FD328u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD328, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD330 @ 0x080FD330 */
+    {
+        u32 off = 0x0FD330u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD330, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD340 @ 0x080FD340 */
+    {
+        u32 off = 0x0FD340u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD340, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD34C @ 0x080FD34C */
+    {
+        u32 off = 0x0FD34Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD34C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD354 @ 0x080FD354 */
+    {
+        u32 off = 0x0FD354u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD354, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD35C @ 0x080FD35C */
+    {
+        u32 off = 0x0FD35Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD35C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD364 @ 0x080FD364 */
+    {
+        u32 off = 0x0FD364u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD364, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD36C @ 0x080FD36C */
+    {
+        u32 off = 0x0FD36Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD36C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD374 @ 0x080FD374 */
+    {
+        u32 off = 0x0FD374u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD374, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD37C @ 0x080FD37C */
+    {
+        u32 off = 0x0FD37Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD37C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD384 @ 0x080FD384 */
+    {
+        u32 off = 0x0FD384u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD384, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD38C @ 0x080FD38C */
+    {
+        u32 off = 0x0FD38Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD38C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD394 @ 0x080FD394 */
+    {
+        u32 off = 0x0FD394u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD394, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD39C @ 0x080FD39C */
+    {
+        u32 off = 0x0FD39Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD39C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3A4 @ 0x080FD3A4 */
+    {
+        u32 off = 0x0FD3A4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3A4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3AC @ 0x080FD3AC */
+    {
+        u32 off = 0x0FD3ACu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3AC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3B4 @ 0x080FD3B4 */
+    {
+        u32 off = 0x0FD3B4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3B4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3BC @ 0x080FD3BC */
+    {
+        u32 off = 0x0FD3BCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3BC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3C4 @ 0x080FD3C4 */
+    {
+        u32 off = 0x0FD3C4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3C4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3CC @ 0x080FD3CC */
+    {
+        u32 off = 0x0FD3CCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3CC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3DC @ 0x080FD3DC */
+    {
+        u32 off = 0x0FD3DCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3DC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3E4 @ 0x080FD3E4 */
+    {
+        u32 off = 0x0FD3E4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3E4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3EC @ 0x080FD3EC */
+    {
+        u32 off = 0x0FD3ECu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3EC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3F4 @ 0x080FD3F4 */
+    {
+        u32 off = 0x0FD3F4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3F4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD3FC @ 0x080FD3FC */
+    {
+        u32 off = 0x0FD3FCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD3FC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD408 @ 0x080FD408 */
+    {
+        u32 off = 0x0FD408u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD408, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD41C @ 0x080FD41C */
+    {
+        u32 off = 0x0FD41Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD41C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD424 @ 0x080FD424 */
+    {
+        u32 off = 0x0FD424u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD424, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD42C @ 0x080FD42C */
+    {
+        u32 off = 0x0FD42Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD42C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD434 @ 0x080FD434 */
+    {
+        u32 off = 0x0FD434u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD434, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD43C @ 0x080FD43C */
+    {
+        u32 off = 0x0FD43Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD43C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD450 @ 0x080FD450 */
+    {
+        u32 off = 0x0FD450u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD450, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD488 @ 0x080FD488 */
+    {
+        u32 off = 0x0FD488u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD488, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD490 @ 0x080FD490 */
+    {
+        u32 off = 0x0FD490u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD490, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4B8 @ 0x080FD4B8 */
+    {
+        u32 off = 0x0FD4B8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4B8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4C0 @ 0x080FD4C0 */
+    {
+        u32 off = 0x0FD4C0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4C0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4C8 @ 0x080FD4C8 */
+    {
+        u32 off = 0x0FD4C8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4C8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4D0 @ 0x080FD4D0 */
+    {
+        u32 off = 0x0FD4D0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4D0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4D8 @ 0x080FD4D8 */
+    {
+        u32 off = 0x0FD4D8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4D8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4E0 @ 0x080FD4E0 */
+    {
+        u32 off = 0x0FD4E0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4E0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4E8 @ 0x080FD4E8 */
+    {
+        u32 off = 0x0FD4E8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4E8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4F0 @ 0x080FD4F0 */
+    {
+        u32 off = 0x0FD4F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD4F8 @ 0x080FD4F8 */
+    {
+        u32 off = 0x0FD4F8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD4F8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD500 @ 0x080FD500 */
+    {
+        u32 off = 0x0FD500u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD500, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD508 @ 0x080FD508 */
+    {
+        u32 off = 0x0FD508u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD508, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD510 @ 0x080FD510 */
+    {
+        u32 off = 0x0FD510u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD510, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD518 @ 0x080FD518 */
+    {
+        u32 off = 0x0FD518u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD518, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD520 @ 0x080FD520 */
+    {
+        u32 off = 0x0FD520u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD520, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD530 @ 0x080FD530 */
+    {
+        u32 off = 0x0FD530u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD530, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD538 @ 0x080FD538 */
+    {
+        u32 off = 0x0FD538u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD538, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD544 @ 0x080FD544 */
+    {
+        u32 off = 0x0FD544u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD544, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD558 @ 0x080FD558 */
+    {
+        u32 off = 0x0FD558u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD558, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD560 @ 0x080FD560 */
+    {
+        u32 off = 0x0FD560u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD560, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD570 @ 0x080FD570 */
+    {
+        u32 off = 0x0FD570u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD570, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD578 @ 0x080FD578 */
+    {
+        u32 off = 0x0FD578u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD578, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD580 @ 0x080FD580 */
+    {
+        u32 off = 0x0FD580u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD580, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FD588 @ 0x080FD588 */
+    {
+        u32 off = 0x0FD588u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FD588, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEAC8 @ 0x080FEAC8 */
+    {
+        u32 off = 0x0FEAC8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEAC8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEBE8 @ 0x080FEBE8 */
+    {
+        u32 off = 0x0FEBE8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEBE8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEC28 @ 0x080FEC28 */
+    {
+        u32 off = 0x0FEC28u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEC28, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FECC8 @ 0x080FECC8 */
+    {
+        u32 off = 0x0FECC8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FECC8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FED18 @ 0x080FED18 */
+    {
+        u32 off = 0x0FED18u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FED18, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FED58 @ 0x080FED58 */
+    {
+        u32 off = 0x0FED58u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FED58, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEE18 @ 0x080FEE18 */
+    {
+        u32 off = 0x0FEE18u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEE18, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEE38 @ 0x080FEE38 */
+    {
+        u32 off = 0x0FEE38u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEE38, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEE48 @ 0x080FEE48 */
+    {
+        u32 off = 0x0FEE48u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEE48, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEE58 @ 0x080FEE58 */
+    {
+        u32 off = 0x0FEE58u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEE58, &gRomData[off], len); count++; }
+    }
+    /* gUnk_080FEE78 @ 0x080FEE78 */
+    {
+        u32 off = 0x0FEE78u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_080FEE78, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08108764 @ 0x08108764 */
+    {
+        u32 off = 0x108764u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08108764, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08108E30 @ 0x08108E30 */
+    {
+        u32 off = 0x108E30u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08108E30, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08108E48 @ 0x08108E48 */
+    {
+        u32 off = 0x108E48u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08108E48, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08108E60 @ 0x08108E60 */
+    {
+        u32 off = 0x108E60u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08108E60, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B680 @ 0x0810B680 */
+    {
+        u32 off = 0x10B680u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B680, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B6EC @ 0x0810B6EC */
+    {
+        u32 off = 0x10B6ECu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B6EC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B740 @ 0x0810B740 */
+    {
+        u32 off = 0x10B740u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B740, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B748 @ 0x0810B748 */
+    {
+        u32 off = 0x10B748u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B748, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B74A @ 0x0810B74A */
+    {
+        u32 off = 0x10B74Au;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B74A, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B774 @ 0x0810B774 */
+    {
+        u32 off = 0x10B774u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B774, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B77C @ 0x0810B77C */
+    {
+        u32 off = 0x10B77Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B77C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B78C @ 0x0810B78C */
+    {
+        u32 off = 0x10B78Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B78C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B790 @ 0x0810B790 */
+    {
+        u32 off = 0x10B790u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B790, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B7BA @ 0x0810B7BA */
+    {
+        u32 off = 0x10B7BAu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B7BA, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810B7C0 @ 0x0810B7C0 */
+    {
+        u32 off = 0x10B7C0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810B7C0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810C268 @ 0x0810C268 */
+    {
+        u32 off = 0x10C268u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810C268, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810F6BC @ 0x0810F6BC */
+    {
+        u32 off = 0x10F6BCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810F6BC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810FA54 @ 0x0810FA54 */
+    {
+        u32 off = 0x10FA54u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810FA54, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0810FA5A @ 0x0810FA5A */
+    {
+        u32 off = 0x10FA5Au;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0810FA5A, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08111154 @ 0x08111154 */
+    {
+        u32 off = 0x111154u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08111154, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0811BE38 @ 0x0811BE38 */
+    {
+        u32 off = 0x11BE38u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0811BE38, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0811BE40 @ 0x0811BE40 */
+    {
+        u32 off = 0x11BE40u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0811BE40, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0812079C @ 0x0812079C */
+    {
+        u32 off = 0x12079Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0812079C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_081207A4 @ 0x081207A4 */
+    {
+        u32 off = 0x1207A4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_081207A4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_081207AC @ 0x081207AC */
+    {
+        u32 off = 0x1207ACu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_081207AC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122AE0 @ 0x08122AE0 */
+    {
+        u32 off = 0x122AE0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122AE0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122AE8 @ 0x08122AE8 */
+    {
+        u32 off = 0x122AE8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122AE8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122AF8 @ 0x08122AF8 */
+    {
+        u32 off = 0x122AF8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122AF8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122B00 @ 0x08122B00 */
+    {
+        u32 off = 0x122B00u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122B00, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122B0E @ 0x08122B0E */
+    {
+        u32 off = 0x122B0Eu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122B0E, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122B1E @ 0x08122B1E */
+    {
+        u32 off = 0x122B1Eu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122B1E, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122B2E @ 0x08122B2E */
+    {
+        u32 off = 0x122B2Eu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122B2E, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08122B3C @ 0x08122B3C */
+    {
+        u32 off = 0x122B3Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08122B3C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_081272F0 @ 0x081272F0 */
+    {
+        u32 off = 0x1272F0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_081272F0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08127644 @ 0x08127644 */
+    {
+        u32 off = 0x127644u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08127644, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08127998 @ 0x08127998 */
+    {
+        u32 off = 0x127998u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08127998, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08127CEC @ 0x08127CEC */
+    {
+        u32 off = 0x127CECu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08127CEC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08127D00 @ 0x08127D00 */
+    {
+        u32 off = 0x127D00u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08127D00, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08127D10 @ 0x08127D10 */
+    {
+        u32 off = 0x127D10u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08127D10, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128A38 @ 0x08128A38 */
+    {
+        u32 off = 0x128A38u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128A38, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128AD8 @ 0x08128AD8 */
+    {
+        u32 off = 0x128AD8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128AD8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128C00 @ 0x08128C00 */
+    {
+        u32 off = 0x128C00u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128C00, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128C04 @ 0x08128C04 */
+    {
+        u32 off = 0x128C04u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128C04, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128C14 @ 0x08128C14 */
+    {
+        u32 off = 0x128C14u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128C14, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128C94 @ 0x08128C94 */
+    {
+        u32 off = 0x128C94u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128C94, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D14 @ 0x08128D14 */
+    {
+        u32 off = 0x128D14u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D14, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D24 @ 0x08128D24 */
+    {
+        u32 off = 0x128D24u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D24, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D30 @ 0x08128D30 */
+    {
+        u32 off = 0x128D30u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D30, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D38 @ 0x08128D38 */
+    {
+        u32 off = 0x128D38u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D38, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D3C @ 0x08128D3C */
+    {
+        u32 off = 0x128D3Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D3C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D43 @ 0x08128D43 */
+    {
+        u32 off = 0x128D43u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D43, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D51 @ 0x08128D51 */
+    {
+        u32 off = 0x128D51u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D51, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D58 @ 0x08128D58 */
+    {
+        u32 off = 0x128D58u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D58, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D60 @ 0x08128D60 */
+    {
+        u32 off = 0x128D60u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D60, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128D70 @ 0x08128D70 */
+    {
+        u32 off = 0x128D70u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128D70, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128DB0 @ 0x08128DB0 */
+    {
+        u32 off = 0x128DB0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128DB0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128DB8 @ 0x08128DB8 */
+    {
+        u32 off = 0x128DB8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128DB8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128DBC @ 0x08128DBC */
+    {
+        u32 off = 0x128DBCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128DBC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128DCC @ 0x08128DCC */
+    {
+        u32 off = 0x128DCCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128DCC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128DD4 @ 0x08128DD4 */
+    {
+        u32 off = 0x128DD4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128DD4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128DD8 @ 0x08128DD8 */
+    {
+        u32 off = 0x128DD8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128DD8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128DE8 @ 0x08128DE8 */
+    {
+        u32 off = 0x128DE8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128DE8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128E78 @ 0x08128E78 */
+    {
+        u32 off = 0x128E78u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128E78, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128E80 @ 0x08128E80 */
+    {
+        u32 off = 0x128E80u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128E80, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128E84 @ 0x08128E84 */
+    {
+        u32 off = 0x128E84u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128E84, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128E94 @ 0x08128E94 */
+    {
+        u32 off = 0x128E94u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128E94, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128F1C @ 0x08128F1C */
+    {
+        u32 off = 0x128F1Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128F1C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128F38 @ 0x08128F38 */
+    {
+        u32 off = 0x128F38u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128F38, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128F4C @ 0x08128F4C */
+    {
+        u32 off = 0x128F4Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128F4C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128F58 @ 0x08128F58 */
+    {
+        u32 off = 0x128F58u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128F58, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128FA8 @ 0x08128FA8 */
+    {
+        u32 off = 0x128FA8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128FA8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128FC0 @ 0x08128FC0 */
+    {
+        u32 off = 0x128FC0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128FC0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08128FD8 @ 0x08128FD8 */
+    {
+        u32 off = 0x128FD8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08128FD8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08129004 @ 0x08129004 */
+    {
+        u32 off = 0x129004u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08129004, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08132714 @ 0x08132714 */
+    {
+        u32 off = 0x132714u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08132714, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08132B28 @ 0x08132B28 */
+    {
+        u32 off = 0x132B28u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08132B28, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08134FBC @ 0x08134FBC */
+    {
+        u32 off = 0x134FBCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08134FBC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08135048 @ 0x08135048 */
+    {
+        u32 off = 0x135048u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08135048, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08135190 @ 0x08135190 */
+    {
+        u32 off = 0x135190u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08135190, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813A76C @ 0x0813A76C */
+    {
+        u32 off = 0x13A76Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813A76C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AB58 @ 0x0813AB58 */
+    {
+        u32 off = 0x13AB58u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AB58, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AB6C @ 0x0813AB6C */
+    {
+        u32 off = 0x13AB6Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AB6C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AB80 @ 0x0813AB80 */
+    {
+        u32 off = 0x13AB80u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AB80, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AB94 @ 0x0813AB94 */
+    {
+        u32 off = 0x13AB94u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AB94, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ABA8 @ 0x0813ABA8 */
+    {
+        u32 off = 0x13ABA8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ABA8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ABBC @ 0x0813ABBC */
+    {
+        u32 off = 0x13ABBCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ABBC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ABD0 @ 0x0813ABD0 */
+    {
+        u32 off = 0x13ABD0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ABD0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ABE4 @ 0x0813ABE4 */
+    {
+        u32 off = 0x13ABE4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ABE4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ABF8 @ 0x0813ABF8 */
+    {
+        u32 off = 0x13ABF8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ABF8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC0C @ 0x0813AC0C */
+    {
+        u32 off = 0x13AC0Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC0C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC20 @ 0x0813AC20 */
+    {
+        u32 off = 0x13AC20u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC20, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC34 @ 0x0813AC34 */
+    {
+        u32 off = 0x13AC34u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC34, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC48 @ 0x0813AC48 */
+    {
+        u32 off = 0x13AC48u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC48, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC5C @ 0x0813AC5C */
+    {
+        u32 off = 0x13AC5Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC5C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC70 @ 0x0813AC70 */
+    {
+        u32 off = 0x13AC70u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC70, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC84 @ 0x0813AC84 */
+    {
+        u32 off = 0x13AC84u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC84, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AC98 @ 0x0813AC98 */
+    {
+        u32 off = 0x13AC98u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AC98, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ACAC @ 0x0813ACAC */
+    {
+        u32 off = 0x13ACACu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ACAC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ACC0 @ 0x0813ACC0 */
+    {
+        u32 off = 0x13ACC0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ACC0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ACD4 @ 0x0813ACD4 */
+    {
+        u32 off = 0x13ACD4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ACD4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ACE8 @ 0x0813ACE8 */
+    {
+        u32 off = 0x13ACE8u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ACE8, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ACFC @ 0x0813ACFC */
+    {
+        u32 off = 0x13ACFCu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ACFC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AD10 @ 0x0813AD10 */
+    {
+        u32 off = 0x13AD10u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AD10, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AD24 @ 0x0813AD24 */
+    {
+        u32 off = 0x13AD24u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AD24, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AD38 @ 0x0813AD38 */
+    {
+        u32 off = 0x13AD38u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AD38, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AD4C @ 0x0813AD4C */
+    {
+        u32 off = 0x13AD4Cu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AD4C, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AD60 @ 0x0813AD60 */
+    {
+        u32 off = 0x13AD60u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AD60, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AD74 @ 0x0813AD74 */
+    {
+        u32 off = 0x13AD74u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AD74, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813AD88 @ 0x0813AD88 */
+    {
+        u32 off = 0x13AD88u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813AD88, &gRomData[off], len); count++; }
+    }
+    /* gUnk_0813ADEC @ 0x0813ADEC */
+    {
+        u32 off = 0x13ADECu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_0813ADEC, &gRomData[off], len); count++; }
+    }
+    /* gUnk_085A97A0 @ 0x085A97A0 */
+    {
+        u32 off = 0x5A97A0u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_085A97A0, &gRomData[off], len); count++; }
+    }
+    /* gUnk_085B4180 @ 0x085B4180 */
+    {
+        u32 off = 0x5B4180u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_085B4180, &gRomData[off], len); count++; }
+    }
+    /* gUnk_085C4620 @ 0x085C4620 */
+    {
+        u32 off = 0x5C4620u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_085C4620, &gRomData[off], len); count++; }
+    }
+    /* gUnk_086D4460 @ 0x086D4460 */
+    {
+        u32 off = 0x6D4460u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_086D4460, &gRomData[off], len); count++; }
+    }
+    /* gUnk_086E8460 @ 0x086E8460 */
+    {
+        u32 off = 0x6E8460u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_086E8460, &gRomData[off], len); count++; }
+    }
+    /* gUnk_089FD1B4 @ 0x089FD1B4 */
+    {
+        u32 off = 0x9FD1B4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_089FD1B4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_089FD2F4 @ 0x089FD2F4 */
+    {
+        u32 off = 0x9FD2F4u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_089FD2F4, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08A05751 @ 0x08A05751 */
+    {
+        u32 off = 0xA05751u;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08A05751, &gRomData[off], len); count++; }
+    }
+    /* gUnk_08A068BF @ 0x08A068BF */
+    {
+        u32 off = 0xA068BFu;
+        u32 len = (off + PORT_DATA_STUB_SIZE <= gRomSize) ? PORT_DATA_STUB_SIZE : (gRomSize > off ? gRomSize - off : 0);
+        if (len > 0) { memcpy(gUnk_08A068BF, &gRomData[off], len); count++; }
+    }
+    fprintf(stderr, "Port_InitDataStubs: initialized %u data stubs from ROM.\n", count);
+}
