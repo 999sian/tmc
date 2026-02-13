@@ -8,7 +8,6 @@
 #include "item.h"
 #include "physics.h"
 #include "transitions.h"
-#include "functions.h"
 
 bool32 sub_080AF0C8(Entity*);
 

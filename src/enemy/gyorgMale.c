@@ -6,10 +6,13 @@
  */
 #include "effects.h"
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "enemy/gyorg.h"
 #include "fileselect.h"
-#include "functions.h"
+#include "physics.h"
 #include "player.h"
+#include "asm.h"
 
 // todo: wrong types
 extern void sub_080A1D70(Entity*, u32);

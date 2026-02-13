@@ -5,8 +5,9 @@
  * @brief Gyorg Male Energy Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
 #include "physics.h"
 #include "player.h"
 

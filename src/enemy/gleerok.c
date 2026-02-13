@@ -5,11 +5,21 @@
  * @brief Gleerok enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
+#include "common.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
 #include "player.h"
 #include "screen.h"
+#include "pauseMenu.h"
+#include "color.h"
+#include "fade.h"
 
 typedef struct {
     union SplitHWord unk0;

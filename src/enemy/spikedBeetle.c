@@ -5,11 +5,13 @@
  * @brief Spiked Beetle enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "player.h"
+#include "physics.h"
+#include "asm.h"
 
 extern u32 sub_0804A024(Entity*, u32, u32);
-
-extern Entity* gUnk_020000B0;
 
 void sub_0802B9B4(Entity*);
 void sub_0802B7A4(Entity*);
@@ -134,7 +136,7 @@ void sub_0802B820(Entity* this) {
         sub_0802B9B4(this);
     } else if (sub_08049FDC(this, 1)) {
         if ((this->timer & 0xf) == 0) {
-            sub_08004596(this, GetFacingDirection(this, gUnk_020000B0));
+            sub_08004596(this, GetFacingDirection(this, gEnemyTarget));
         }
     } else {
         sub_0802B9B4(this);

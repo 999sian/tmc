@@ -6,8 +6,11 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
+#include "script.h"
+#include "asm.h"
 
 extern void (*const BoneProjectile_Functions[])(Entity*);
 extern void (*const BoneProjectile_Actions[])(Entity*);

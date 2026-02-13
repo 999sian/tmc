@@ -4,8 +4,9 @@
  *
  * @brief White Triangle Effect object
  */
-#include "functions.h"
 #include "object.h"
+#include "common.h"
+#include "room.h"
 #include "screen.h"
 
 typedef struct {

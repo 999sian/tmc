@@ -4,8 +4,9 @@
  *
  * @brief Link Fire object
  */
-#include "functions.h"
 #include "object.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;

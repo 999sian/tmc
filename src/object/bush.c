@@ -4,9 +4,12 @@
  *
  * @brief Bush object
  */
-#include "functions.h"
-#include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {

@@ -5,9 +5,12 @@
  * @brief Pressure Plate object
  */
 #include "collision.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 
 typedef struct {
     Entity base;

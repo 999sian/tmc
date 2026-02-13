@@ -7,7 +7,9 @@
 #include "manager/manager29.h"
 #include "asm.h"
 #include "flags.h"
-#include "functions.h"
+#include "room.h"
+#include "player.h"
+#include "map.h"
 
 bool32 sub_0805CF80(Manager29* this);
 void sub_0805CBD0(Manager29* this);
@@ -16,12 +18,12 @@ void sub_0805CC3C(Manager29* this);
 void Manager29_Main(Manager29* this) {
     if (super->action == 0) {
         sub_0805CBD0(this);
-        if (CheckFlags(this->unk_3e)) {
+        if (CheckFlags(this->flag)) {
             sub_0805CC3C(this);
             DeleteManager(this);
         }
     } else if (sub_0805CF80(this)) {
-        SetFlag(this->unk_3e);
+        SetFlag(this->flag);
         DeleteManager(this);
     }
 }

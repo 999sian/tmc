@@ -6,8 +6,10 @@
  */
 #include "asm.h"
 #include "enemy/gyorg.h"
-#include "functions.h"
 #include "room.h"
+#include "player.h"
+#include "physics.h"
+#include "sound.h"
 
 void GyorgChild_OnTick(GyorgChildEntity*);
 void GyorgChild_OnCollision(GyorgChildEntity*);

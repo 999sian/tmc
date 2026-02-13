@@ -5,6 +5,8 @@
  * @brief Curtain enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "flags.h"
 #include "entity.h"
 
 void (*const Curtain_Functions[])(Entity*);

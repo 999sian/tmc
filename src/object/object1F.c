@@ -4,10 +4,10 @@
  *
  * @brief Object1F object
  */
+#include "object.h"
 #include "asm.h"
 #include "effects.h"
-#include "entity.h"
-#include "functions.h"
+#include "physics.h"
 #include "player.h"
 #include "tiles.h"
 

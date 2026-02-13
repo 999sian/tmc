@@ -28,7 +28,9 @@ OBJCOPY := $(TOOLCHAIN_PATH)arm-none-eabi-objcopy
 # custom tools
 # ============
 
-CC1 := tools/agbcc/bin/agbcc
+AGBCC_PATH ?= $(shell pwd)/tools/agbcc
+
+CC1 := $(AGBCC_PATH)/bin/agbcc
 SHA1 := $(shell { command -v sha1sum || command -v shasum; } 2>/dev/null) -c
 
 SCANINC := tools/bin/scaninc

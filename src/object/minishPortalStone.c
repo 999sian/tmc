@@ -4,14 +4,22 @@
  *
  * @brief Minish Portal Stone object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "player.h"
 #include "screen.h"
+#include "beanstalkSubtask.h"
+#include "manager/lightManager.h"
+#include "effects.h"
+#include "pauseMenu.h"
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[0x1e];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } MinishPortalStoneEntity;
 
 void MinishPortalStone_Init(MinishPortalStoneEntity* this);
@@ -37,17 +45,17 @@ void MinishPortalStone_Init(MinishPortalStoneEntity* this) {
     super->action = 1;
     super->spritePriority.b0 = 7;
     super->hitbox = (Hitbox*)&gUnk_08123328;
-    if ((this->unk_86 == 0xffff) || (CheckFlags(this->unk_86))) {
+    if ((this->flag == 0xffff) || CheckFlags(this->flag)) {
         super->spriteSettings.draw = 1;
         super->action = 4;
         sub_08097CFC(this);
     } else {
-        sub_0805BC4C();
+        UnDarkRoom();
     }
 }
 
 void MinishPortalStone_Action1(MinishPortalStoneEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         SetPlayerControl(CONTROL_1);
         gPauseMenuOptions.disabled = 1;
         RequestPriorityDuration(super, 30);
@@ -67,7 +75,7 @@ void MinishPortalStone_Action3(MinishPortalStoneEntity* this) {
     u32 tmp;
     SetPriorityTimer(30);
     sub_0800445C(super);
-    CreateMagicSparkles(super->x.HALF.HI, super->y.HALF.HI, super->collisionLayer);
+    CreateMagicSparklesFxAt(super->x.HALF.HI, super->y.HALF.HI, super->collisionLayer);
     if (--super->timer == 0) {
         super->timer = 8;
         tmp = ++super->subtimer;

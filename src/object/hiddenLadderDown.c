@@ -7,7 +7,7 @@
 #include "asm.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "room.h"
 #include "tiles.h"
 
 typedef struct {
@@ -15,7 +15,7 @@ typedef struct {
     /*0x68*/ u8 unused1[8];
     /*0x70*/ u16 unk_70;
     /*0x72*/ u8 unused2[20];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } HiddenLadderDownEntity;
 
 void HiddenLadderDown_Init(HiddenLadderDownEntity* this);
@@ -39,7 +39,7 @@ void HiddenLadderDown_Init(HiddenLadderDownEntity* this) {
     super->animIndex = 0;
     this->unk_70 = COORD_TO_TILE(super);
     puVar3 = &this->unk_70;
-    if (CheckFlags(this->unk_86) != 0) {
+    if (CheckFlags(this->flag) != 0) {
         super->action = 2;
         super->spriteSettings.draw = TRUE;
         SetTileType(TILE_TYPE_418, *puVar3 + TILE_POS(-1, -1), super->collisionLayer);
@@ -58,6 +58,6 @@ void HiddenLadderDown_Action1(HiddenLadderDownEntity* this) {
     if (GetTileTypeAtTilePos(this->unk_70, super->collisionLayer) == 0x1a6) {
         super->action = 2;
         super->spriteSettings.draw = TRUE;
-        SetFlag(this->unk_86);
+        SetFlag(this->flag);
     }
 }

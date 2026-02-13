@@ -6,9 +6,11 @@
  */
 #include "manager/lightLevelSetManager.h"
 #include "flags.h"
-#include "functions.h"
 #include "game.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "player.h"
 #include "room.h"
 #include "tiles.h"
 
@@ -115,7 +117,7 @@ void LightLevelSetManager_Type3(LightLevelSetManager* this) {
 
         default:
             if (--this->field_0x22 == 0) {
-                CreateDustAt(*(s16*)&this->field_0x38, *(s16*)&this->field_0x3a, super->type2);
+                CreateDeathFxAt(*(s16*)&this->field_0x38, *(s16*)&this->field_0x3a, super->type2);
                 ClearFlag(this->field_0x3e);
                 RestorePrevTileEntity(this->field_0x20, super->type2);
                 ChangeLightLevel(-super->timer);

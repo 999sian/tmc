@@ -6,11 +6,13 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "manager.h"
 #include "item.h"
 #include "message.h"
 #include "npc.h"
 #include "save.h"
+#include "script.h"
+#include "physics.h"
 
 static u32 GoronMerchant_GetSalePrice(Entity*);
 

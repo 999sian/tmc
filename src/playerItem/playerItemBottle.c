@@ -6,12 +6,16 @@
  */
 #include "playerItem/playerItemBottle.h"
 
-#include "functions.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
 #include "sound.h"
 #include "tiles.h"
+#include "vram.h"
+#include "collision.h"
 
 void PlayerItemBottle_UseEmptyBottle(Entity*);
 void PlayerItemBottle_Action1(PlayerItemBottleEntity*);

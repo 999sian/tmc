@@ -21,7 +21,7 @@ SECTIONS {
         . = 0x00000080; gIntroState = .;
         . = 0x00000080; gChooseFileState = .;
         . = 0x00000090; gUnk_02000090 = .;
-        . = 0x000000B0; gUnk_020000B0 = .;
+        . = 0x000000B0; gEnemyTarget = .;
         . = 0x000000C0; gUnk_020000C0 = .;
         . = 0x00000CC0; gBgAnimations = .;
         . = 0x00000D00; gTextGfxBuffer = .;
@@ -1145,6 +1145,7 @@ SECTIONS {
         src/manager/templeOfDropletsManager.o(.rodata);
         src/manager/fallingItemManager.o(.rodata);
         src/manager/cloudOverlayManager.o(.rodata);
+        src/manager/holeManager.o(.rodata);
         data/const/manager/holeManager.o(.rodata);
         src/manager/staticBackgroundManager.o(.rodata);
         src/manager/rainfallManager.o(.rodata);

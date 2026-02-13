@@ -4,8 +4,8 @@
  *
  * @brief Title Screen object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
 
 void TitleScreenObject_Type0(Entity*);
 void TitleScreenObject_Type1(Entity*);

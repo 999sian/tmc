@@ -5,9 +5,13 @@
  * @brief Gleerok Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
+#include "room.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

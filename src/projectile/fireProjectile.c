@@ -5,8 +5,11 @@
  * @brief Fire Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
+#include "script.h"
 
 extern void (*const FireProjectile_Actions[])(Entity*);
 

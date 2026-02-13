@@ -40,7 +40,7 @@ void FallingItemManager_Action1(FallingItemManager* this) {
             object->base.collisionLayer = this->field_0x36;
             object->base.x.HALF.HI = this->field_0x38 + gRoomControls.origin_x;
             object->base.y.HALF.HI = this->field_0x3a + gRoomControls.origin_y;
-            object->unk_86 = this->field_0x3c;
+            object->flag = this->field_0x3c;
         }
         DeleteThisEntity();
     }

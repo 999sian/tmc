@@ -7,7 +7,9 @@
 #include "npc/zelda.h"
 #include "common.h"
 #include "entity.h"
-#include "functions.h"
+#include "asm.h"
+#include "physics.h"
+#include "player.h"
 
 extern s32 sub_080041E8(s32 x1, s32 y1, s32 x2, s32 y2);
 

@@ -5,6 +5,11 @@
  * @brief Ezlo NPC
  */
 #include "npc.h"
+#include "physics.h"
+#include "effects.h"
+#include "player.h"
+#include "script.h"
+#include "asm.h"
 
 const u8 gUnk_08114134[];
 const u8 gUnk_08114144[];

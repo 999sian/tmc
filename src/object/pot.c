@@ -6,12 +6,16 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "object/pot.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
 #include "object/itemOnGround.h"
 #include "player.h"
 #include "room.h"
+#include "script.h"
 #include "sound.h"
 #include "tiles.h"
 
@@ -22,7 +26,7 @@ typedef struct {
     /*0x72*/ u8 unused2[11];
     /*0x7d*/ u8 unk_7d;
     /*0x7e*/ u8 unused3[8];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } PotEntity;
 
 void Pot_Action5(PotEntity*);
@@ -60,7 +64,7 @@ void Pot(PotEntity* this) {
 }
 
 void Pot_Init(PotEntity* this) {
-    if (super->type2 == 1 && CheckFlags(this->unk_86)) {
+    if (super->type2 == 1 && CheckFlags(this->flag)) {
         DeleteThisEntity();
     }
 
@@ -306,7 +310,7 @@ static void BreakPot(PotEntity* this, Entity* parent) {
     }
 
     if (super->type2 == 1) {
-        SetFlag(this->unk_86);
+        SetFlag(this->flag);
     }
 
     DeleteThisEntity();
@@ -327,7 +331,7 @@ u32 sub_0808288C(Entity* this, u32 form, u32 arg2, u32 arg3) {
             if (entity != NULL) {
                 if (arg3 == 2) {
                     entity->base.timer = 5;
-                    entity->unk_86 = ((PotEntity*)this)->unk_86; // This function is also used by flyingSkull.
+                    entity->flag = ((PotEntity*)this)->flag; // This function is also used by flyingSkull.
                 } else {
                     entity->base.timer = 0;
                 }

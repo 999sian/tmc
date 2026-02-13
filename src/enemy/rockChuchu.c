@@ -5,7 +5,10 @@
  * @brief Rock Chuchu enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "player.h"
+#include "asm.h"
 
 extern void (*const RockChuchu_Functions[])(Entity*);
 extern void (*const gUnk_080CB960[])(Entity*);

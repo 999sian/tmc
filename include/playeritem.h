@@ -1,6 +1,8 @@
 #ifndef PLAYERITEM_H
 #define PLAYERITEM_H
 
+#include "global.h"
+
 typedef enum {
     PLAYER_ITEM_NONE,
     PLAYER_ITEM_SWORD,
@@ -28,5 +30,7 @@ typedef enum {
     PLAYER_ITEM_NULLED2,
     PLAYER_ITEM_CELL_OVERWRITE_SET2,
 } PlayerItem;
+
+extern u32 sub_080040D8(struct Entity_*, u8*, s32, s32);
 
 #endif // PLAYERITEM_H

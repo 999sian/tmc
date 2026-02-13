@@ -5,8 +5,12 @@
  * @brief Rock Projectile
  */
 #include "enemy.h"
+#include "sound.h"
+#include "projectile.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
+#include "script.h"
+#include "asm.h"
 
 extern void (*const RockProjectile_Functions[])(Entity*);
 extern void (*const RockProjectile_Actions[])(Entity*);

@@ -6,7 +6,6 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "room.h"
 #include "screen.h"
 
@@ -15,12 +14,12 @@ typedef struct {
     /*0x68*/ u16 unk_68;
     /*0x6a*/ u16 unk_6a;
     /*0x6c*/ u8 unused1[26];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } LitAreaEntity;
 
 void LitArea(LitAreaEntity* this) {
     if (super->action == 0) {
-        if (this->unk_86 != 0 && CheckFlags(this->unk_86) == 0) {
+        if (this->flag != 0 && CheckFlags(this->flag) == 0) {
             return;
         }
         super->spriteSettings.draw = 1;

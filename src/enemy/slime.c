@@ -5,8 +5,11 @@
  * @brief Slime enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "physics.h"
 #include "room.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

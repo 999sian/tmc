@@ -6,11 +6,13 @@
  */
 #include "manager/horizontalMinishPathBackgroundManager.h"
 #include "common.h"
-#include "functions.h"
 #include "screen.h"
+#include "game.h"
+#include "vram.h"
+#include "room.h"
 
 void sub_08057F20(HorizontalMinishPathBackgroundManager*);
-void sub_08057EFC(void*);
+void HorizontalMinishPathBackgroundManager_OnEnterRoom(HorizontalMinishPathBackgroundManager*);
 void sub_08058034(void);
 void sub_08058084(u16*, u16*);
 void sub_08058004(u32, void*, void*);
@@ -24,38 +26,38 @@ void HorizontalMinishPathBackgroundManager_Main(HorizontalMinishPathBackgroundMa
         super->action = 1;
         gScreen.bg1.updated = 0;
         gScreen.bg3.updated = 0;
-        RegisterTransitionManager(this, sub_08057EFC, NULL);
+        RegisterTransitionHandler(this, HorizontalMinishPathBackgroundManager_OnEnterRoom, NULL);
     }
 }
 
-void sub_08057EFC(void* this) {
-    LoadGfxGroup((u32)gRoomVars.graphicsGroups[0]);
+void HorizontalMinishPathBackgroundManager_OnEnterRoom(HorizontalMinishPathBackgroundManager* this) {
+    LoadGfxGroup(gRoomVars.graphicsGroups[0]);
     sub_08058034();
-    ((HorizontalMinishPathBackgroundManager*)this)->unk_3c = 0;
-    ((HorizontalMinishPathBackgroundManager*)this)->unk_38 = 0;
-    sub_08057F20(((HorizontalMinishPathBackgroundManager*)this));
+    this->unk_3c = 0;
+    this->unk_38 = 0;
+    sub_08057F20(this);
 }
 
 void sub_08057F20(HorizontalMinishPathBackgroundManager* this) {
     u32 tmp;
     tmp = gRoomControls.scroll_x - gRoomControls.origin_x;
-    tmp = tmp + (tmp >> 3) + ((0x400 - gRoomControls.width) / 2);
+    tmp = tmp + (tmp >> 3) + (0x400 - gRoomControls.width) / 2;
     gScreen.bg3.xOffset = tmp & 0xF;
     gScreen.bg3.yOffset = 0x30 - ((0x30 - (gRoomControls.scroll_y - gRoomControls.origin_y)) >> 2);
     gScreen.bg3.subTileMap = gBG3Buffer;
     sub_08058004(tmp, gUnk_02006F00, gBG3Buffer);
-    tmp = ((tmp >> 4) << 1);
+    tmp = (tmp >> 4) << 1;
     if (this->unk_38 != tmp) {
         this->unk_38 = tmp;
         gScreen.bg3.updated = 1;
     }
-    tmp = (gRoomControls.scroll_x - gRoomControls.origin_x);
-    tmp = tmp + (tmp >> 2) + ((0x400 - gRoomControls.width) / 2);
+    tmp = gRoomControls.scroll_x - gRoomControls.origin_x;
+    tmp = tmp + (tmp >> 2) + (0x400 - gRoomControls.width) / 2;
     gScreen.bg1.xOffset = tmp & 0xF;
     gScreen.bg1.yOffset = 0x30 - ((0x30 - (gRoomControls.scroll_y - gRoomControls.origin_y)) >> 1);
     gScreen.bg1.subTileMap = gBG3Buffer + 0x400;
     sub_08058004(tmp, gUnk_02006F00 + 0x2000, gBG3Buffer + 0x400);
-    tmp = ((tmp >> 4) << 1);
+    tmp = (tmp >> 4) << 1;
     if (this->unk_3c != tmp) {
         this->unk_3c = tmp;
         gScreen.bg1.updated = 1;

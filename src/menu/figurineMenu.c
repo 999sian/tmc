@@ -8,19 +8,22 @@
 
 #include "common.h"
 #include "flags.h"
-#include "functions.h"
 #include "game.h"
 #include "main.h"
 #include "menu.h"
 #include "message.h"
 #include "object.h"
-#include "pauseMenu.h"
+#include "asm.h"
+#include "sound.h"
+#include "room.h"
+#include "player.h"
 #include "save.h"
 #include "screen.h"
-#include "sound.h"
 #include "subtask.h"
-#include "subtask2.h"
 #include "ui.h"
+#include "affine.h"
+#include "pauseMenu.h"
+#include "fade.h"
 
 void sub_080A4DA8(u32);
 void sub_080A4B44(void);
@@ -391,9 +394,9 @@ void FigurineMenu_080A4978(void) {
                 LoadPalettes(fig->pal, 0x16, 9);
                 gfx = fig->gfx;
                 if (fig->size < 0) {
-                    LZ77UnCompVram(gfx, (void*)0x6014000);
+                    LZ77UnCompVram(gfx, OBJ_VRAM0 + 0x4000);
                 } else {
-                    LoadResourceAsync(gfx, 0x6014000, fig->size);
+                    LoadResourceAsync(gfx, OBJ_VRAM0 + 0x4000, fig->size);
                 }
             }
         }
@@ -453,7 +456,6 @@ const struct_08128184 gUnk_08128184 = {
     0xffu,
 };
 
-extern struct_020227E8 gUnk_020227E8[];
 extern void ShowTextBox(u32, const struct_0812816C*);
 
 void sub_080A4BA0(u32 arg1, u32 arg2) {
@@ -481,7 +483,7 @@ void sub_080A4BA0(u32 arg1, u32 arg2) {
     if (r5 <= 0 || maxFigurines < r5) {
         r5 = -1;
     } else {
-        sub_08057044(r5, gUnk_020227E8, 0x303030);
+        NumberToAsciiPad3Digits(r5, &gUnk_020227E8[0], 0x303030);
         if (FigurineMenu_isFigurineOwned(r5) == 0) {
             r5 += 0x8000;
         } else {

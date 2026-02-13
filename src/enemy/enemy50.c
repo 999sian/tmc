@@ -6,8 +6,12 @@
  */
 #include "area.h"
 #include "enemy.h"
-#include "functions.h"
+#include "effects.h"
+#include "physics.h"
 #include "player.h"
+#include "room.h"
+#include "script.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -25,8 +29,6 @@ typedef struct {
     /*0x7e*/ u16 unk_7e;
     /*0x80*/ u8 unk_80;
 } Enemy50Entity;
-
-extern Entity* gUnk_020000B0;
 
 extern void sub_0803F58C(Enemy50Entity*);
 extern void sub_0803F6EC(Enemy50Entity*);
@@ -265,7 +267,7 @@ void Enemy50_Action6(Enemy50Entity* this) {
             tmp = super->timer + 1;
             super->timer = tmp;
             if ((tmp & gUnk_080D0E14[tmp * 0x1000000 >> 0x1e]) == 0) {
-                sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+                sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
             }
             sub_0803F66C(this);
             ProcessMovement1(super);
@@ -350,7 +352,7 @@ bool32 sub_08041170(Enemy50Entity* this) {
     } else {
         if ((sub_08049FDC(super, 1)) &&
             ((sub_0806FD54(super) ||
-              ((0xf < (s16)gArea.lightLevel && (EntityInRectRadius(super, gUnk_020000B0, 0x70, 0x48))))))) {
+              ((0xf < (s16)gArea.lightLevel && (EntityInRectRadius(super, gEnemyTarget, 0x70, 0x48))))))) {
             sub_08041134(this);
             return TRUE;
         }

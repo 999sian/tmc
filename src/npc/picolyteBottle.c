@@ -5,15 +5,19 @@
  * @brief Picolyte Bottle NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "kinstone.h"
 #include "message.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "screenTransitions.h"
 #include "script.h"
-#include "structures.h"
 
 typedef struct {
     /*0x00*/ Entity base;

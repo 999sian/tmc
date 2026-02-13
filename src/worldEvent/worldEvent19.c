@@ -5,12 +5,13 @@
  * @brief World Event 19
  */
 #include "fade.h"
-#include "functions.h"
 #include "menu.h"
 #include "npc.h"
 #include "room.h"
 #include "script.h"
 #include "subtask.h"
+#include "manager/staticBackgroundManager.h"
+#include "npc/bigGoron.h"
 
 extern Script script_BigGoronKinstone1;
 extern Script script_BigGoronKinstone2;

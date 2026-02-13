@@ -4,13 +4,15 @@
  *
  * @brief Gust Big Player Item
  */
+#include "playeritem.h"
 #include "asm.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 #include "global.h"
 #include "player.h"
 #include "sound.h"
 #include "tiles.h"
+#include "collision.h"
 
 typedef struct {
     /*0x00*/ Entity base;

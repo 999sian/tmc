@@ -1,4 +1,3 @@
-#include "entity.h"
 #include "definitions.h"
 
 // TODO deduplicate using sprite indices enum

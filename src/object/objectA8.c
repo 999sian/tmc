@@ -5,10 +5,15 @@
  * @brief ObjectA8 object
  */
 #include "collision.h"
-#include "functions.h"
 #include "hitbox.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "scroll.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -32,7 +37,7 @@ void ObjectA8_Action2Subaction0(ObjectA8Entity*);
 void ObjectA8_Action2Subaction1(ObjectA8Entity*);
 void ObjectA8_Action2Subaction2(ObjectA8Entity*);
 
-extern void sub_08081404(Entity*, u32);
+extern void ItemOnGround_SetFlagAndDelete(Entity*, u32);
 
 void ObjectA8(ObjectA8Entity* this) {
     static void (*const ObjectA8_Actions[])(ObjectA8Entity*) = {
@@ -160,7 +165,7 @@ void ObjectA8_Action3(ObjectA8Entity* this) {
     ProcessMovement1(super);
     if ((AnyPrioritySet() == 0) && (super->type == 0)) {
         if (((gRoomTransition.frameCount & 1) != 0) && (--super->timer == 0)) {
-            sub_08081404(super, 0);
+            ItemOnGround_SetFlagAndDelete(super, FALSE);
         }
         if (super->timer < 0x3c) {
             super->spriteSettings.draw ^= 1;
@@ -170,7 +175,7 @@ void ObjectA8_Action3(ObjectA8Entity* this) {
 
 void ObjectA8_Action4(ObjectA8Entity* this) {
     if (*(u16*)&super->child->kind != 0xb08) {
-        sub_08081404(super, 0);
+        ItemOnGround_SetFlagAndDelete(super, FALSE);
     } else {
         CopyPosition(super->child, super);
         super->z.HALF.HI--;
@@ -217,7 +222,7 @@ void ObjectA8_Action6(ObjectA8Entity* this) {
     if (--super->subtimer == 0) {
         super->subtimer = 6;
         if (--super->spriteOffsetY < -0x16) {
-            sub_08081404(super, 1);
+            ItemOnGround_SetFlagAndDelete(super, TRUE);
         }
     }
     if (super->spriteOffsetY < -0x11) {

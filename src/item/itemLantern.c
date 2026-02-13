@@ -1,7 +1,10 @@
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "sound.h"
 
 extern s8 gUnk_08126EEC[];

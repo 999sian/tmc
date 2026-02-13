@@ -4,14 +4,10 @@
  *
  * @brief World Event 1
  */
-#include "asm.h"
 #include "fade.h"
 #include "flags.h"
 #include "menu.h"
-#include "physics.h"
 #include "room.h"
-#include "script.h"
-#include "sound.h"
 #include "subtask.h"
 
 void WorldEvent_1_0(void);

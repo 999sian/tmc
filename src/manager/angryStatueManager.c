@@ -6,9 +6,13 @@
  */
 #include "manager/angryStatueManager.h"
 #include "flags.h"
-#include "functions.h"
 #include "object.h"
+#include "script.h"
+
+#include "sound.h"
 #include "room.h"
+
+#include "player.h"
 
 void sub_0805D11C(AngryStatueManager*);
 void AngryStatueManager_Init(AngryStatueManager*);

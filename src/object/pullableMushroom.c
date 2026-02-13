@@ -4,11 +4,16 @@
  *
  * @brief Pullable Mushroom object
  */
-#include "functions.h"
 #include "game.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "color.h"
 
 typedef struct {
     /*0x00*/ Entity base;

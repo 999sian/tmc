@@ -9,9 +9,9 @@
 #include "manager/entitySpawnManager.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "room.h"
 #include "sound.h"
+#include "player.h"
 
 void EntitySpawnManager_Main(EntitySpawnManager* this) {
     if (super->action == 0) {

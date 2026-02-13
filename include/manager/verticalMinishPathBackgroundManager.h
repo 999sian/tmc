@@ -10,4 +10,7 @@ typedef struct {
     void* field_0x3c;
 } VerticalMinishPathBackgroundManager;
 
+extern void sub_080575C8(u32);
+extern void sub_08057688(void);
+
 #endif // VERTICALMINISHPATHBACKGROUNDMANAGER_H

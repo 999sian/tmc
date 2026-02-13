@@ -4,9 +4,12 @@
  *
  * @brief Talon NPC
  */
-#include "functions.h"
+#include "physics.h"
 #include "item.h"
 #include "npc.h"
+#include "script.h"
+#include "message.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -8,6 +8,7 @@
 #include "entity.h"
 #include "message.h"
 #include "npc.h"
+#include "player.h"
 
 void sub_08063280(Entity*);
 void sub_08063210(Entity*);

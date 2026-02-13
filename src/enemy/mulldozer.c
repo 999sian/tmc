@@ -6,6 +6,9 @@
  */
 #include "collision.h"
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -15,8 +18,6 @@ typedef struct {
     /*0x82*/ u8 unk_82;
     /*0x83*/ u8 unk_83;
 } MulldozerEntity;
-
-extern Entity* gUnk_020000B0;
 
 extern void (*const Mulldozer_Functions[])(MulldozerEntity*);
 extern void (*const Mulldozer_Actions[])(MulldozerEntity*);
@@ -449,7 +450,7 @@ bool32 sub_08033364(MulldozerEntity* this) {
             if (super->type != 0) {
                 return TRUE;
             }
-            tmp = GetFacingDirection(super, gUnk_020000B0);
+            tmp = GetFacingDirection(super, gEnemyTarget);
             tmp = Direction8RoundUp(tmp);
             tmp = Direction8ToAnimationState(tmp);
             if (super->animationState == tmp) {

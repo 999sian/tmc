@@ -4,9 +4,14 @@
  *
  * @brief Cloud object
  */
-#include "functions.h"
 #include "object.h"
-#include "structures.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
+#include "pauseMenu.h"
 
 typedef struct {
     /*0x00*/ Entity base;

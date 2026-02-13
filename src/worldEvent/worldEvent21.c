@@ -9,6 +9,7 @@
 #include "npc.h"
 #include "room.h"
 #include "subtask.h"
+#include "script.h"
 
 extern Script script_CarlovKinstone;
 const EntityData gUnk_080FF264[] = {

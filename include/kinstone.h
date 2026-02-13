@@ -4,6 +4,7 @@
 #include "entity.h"
 #include "global.h"
 
+extern void CreateMinishEntrance(u32 tile);
 extern void sub_08018C58(u32);
 
 typedef enum {

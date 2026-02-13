@@ -5,7 +5,11 @@
  * @brief Acro Bandits enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "player.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -24,8 +28,6 @@ typedef struct {
     /*0x7b*/ u8 unused6[1];
     /*0x7c*/ Entity* unk_7c;
 } AcroBanditEntity;
-
-extern Entity* gUnk_020000B0;
 
 static void sub_08031E48(AcroBanditEntity* this, AcroBanditEntity* child);
 static void sub_08032290(AcroBanditEntity* this);
@@ -224,7 +226,7 @@ void AcroBandit_Type0Action2(AcroBanditEntity* this) {
 void AcroBandit_Type0Action3(AcroBanditEntity* this) {
     if (sub_08031E04(this)) {
         super->action = 5;
-        if (super->x.HALF.HI > gUnk_020000B0->x.HALF.HI) {
+        if (super->x.HALF.HI > gEnemyTarget->x.HALF.HI) {
             super->spriteSettings.flipX = 0;
         } else {
             super->spriteSettings.flipX = 1;
@@ -447,7 +449,7 @@ void AcroBandit_Type1Action4(AcroBanditEntity* this) {
         if (parent == NULL) {
             if (sub_08049FDC(super, 1)) {
                 if ((++this->unk_79 & 7) == 0) {
-                    sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+                    sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
                 }
                 this->unk_76.HALF.LO = 0;
             } else {

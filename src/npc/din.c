@@ -4,9 +4,12 @@
  *
  * @brief Din NPC
  */
-#include "entity.h"
-#include "kinstone.h"
 #include "npc.h"
+#include "kinstone.h"
+#include "save.h"
+#include "script.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

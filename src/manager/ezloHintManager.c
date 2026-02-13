@@ -9,7 +9,7 @@
 #include "asm.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "player.h"
 
 static void EzloHintManager_Init(EzloHintManager*);
 static void EzloHintManager_Action1(EzloHintManager*);

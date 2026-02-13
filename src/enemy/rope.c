@@ -5,8 +5,11 @@
  * @brief Rope enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "physics.h"
 #include "tiles.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -35,8 +38,6 @@ static void (*const Rope_Functions[6])(RopeEntity*) = {
     (void (*)(RopeEntity*))GenericConfused,
     Rope_OnGrabbed,
 };
-
-extern Entity* gUnk_020000B0;
 
 void sub_08031600(RopeEntity* this);
 u32 sub_0803163C(RopeEntity* this);
@@ -147,7 +148,7 @@ void sub_080314FC(RopeEntity* this) {
         if (sub_08049FA0(super)) {
             if (!(this->unk_78)) {
                 if (sub_08049FDC(super, 1)) {
-                    u = sub_0804A044(super, gUnk_020000B0, 0xc);
+                    u = sub_0804A044(super, gEnemyTarget, 0xc);
                     if (u != 0xff) {
                         super->action = 3;
                         super->timer = 30;

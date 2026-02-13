@@ -6,10 +6,12 @@
  */
 #include "object/deathFx.h"
 #include "enemy.h"
-#include "entity.h"
-#include "functions.h"
-#include "global.h"
 #include "sound.h"
+#include "entity.h"
+#include "item.h"
+#include "physics.h"
+#include "global.h"
+#include "vram.h"
 
 void sub_08081790(DeathFxObject* this);
 void DeathFx_Delete(DeathFxObject* this);

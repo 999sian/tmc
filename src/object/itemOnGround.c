@@ -8,12 +8,16 @@
 #include "collision.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "scroll.h"
 #include "hitbox.h"
 #include "item.h"
 #include "itemMetaData.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
+#include "physics.h"
 #include "player.h"
+#include "script.h"
 #include "sound.h"
 #include "tiles.h"
 
@@ -51,7 +55,7 @@ void sub_080813D4(ItemOnGroundEntity* this);
 void sub_080813E8(ItemOnGroundEntity* this);
 void sub_080813F0(ItemOnGroundEntity* this);
 bool32 CheckShouldPlayItemGetCutscene(ItemOnGroundEntity* this);
-void sub_08081404(ItemOnGroundEntity*, u32);
+void ItemOnGround_SetFlagAndDelete(ItemOnGroundEntity*, u32);
 
 typedef struct {
     u8 unk0[2];
@@ -107,7 +111,7 @@ void ItemOnGround_Init(ItemOnGroundEntity* this) {
         sub_080810A8, sub_080810FC, sub_08081150, sub_08081134, sub_08081188, sub_080810A8,
         sub_080810A8, sub_080811AC, sub_080811C8, sub_080811D8, sub_080810A8,
     };
-    if (this->unk_86 && CheckFlags(this->unk_86)) {
+    if (this->flag && CheckFlags(this->flag)) {
         DeleteThisEntity();
     }
 
@@ -257,7 +261,7 @@ void ItemOnGround_Action2(ItemOnGroundEntity* this) {
 void sub_08081248(ItemOnGroundEntity* this) {
     sub_08081500(this);
     if (sub_080814C0(this)) {
-        sub_08081404(this, 0);
+        ItemOnGround_SetFlagAndDelete(this, FALSE);
     } else {
         sub_0800442E(super);
     }
@@ -270,7 +274,7 @@ void sub_0808126C(ItemOnGroundEntity* this) {
 
 void sub_0808127C(ItemOnGroundEntity* this) {
     if (sub_080814C0(this)) {
-        sub_08081404(this, 0);
+        ItemOnGround_SetFlagAndDelete(this, FALSE);
     } else {
         sub_0808153C(this);
     }
@@ -311,7 +315,7 @@ void nullsub_510(ItemOnGroundEntity* this) {
 void ItemOnGround_Action3(ItemOnGroundEntity* this) {
     Entity* other = super->child;
     if (!(other->kind == PLAYER_ITEM && other->id == 3)) {
-        sub_08081404(this, 0);
+        ItemOnGround_SetFlagAndDelete(this, FALSE);
     } else {
         CopyPosition(other, super);
         super->z.HALF.HI--;
@@ -331,7 +335,7 @@ void ItemOnGround_Action4(ItemOnGroundEntity* this) {
         super->spriteRendering.b3 = other->spriteRendering.b3;
         GravityUpdate(super, Q_8_8(40.0));
     } else {
-        sub_08081404(this, 1);
+        ItemOnGround_SetFlagAndDelete(this, TRUE);
     }
 }
 
@@ -360,9 +364,9 @@ void sub_080813F0(ItemOnGroundEntity* this) {
     }
 }
 
-void sub_08081404(ItemOnGroundEntity* this, u32 arg1) {
-    if (arg1 && this->unk_86) {
-        SetFlag(this->unk_86);
+void ItemOnGround_SetFlagAndDelete(ItemOnGroundEntity* this, bool32 doSetFlag) {
+    if (doSetFlag && this->flag) {
+        SetFlag(this->flag);
     }
 
     DeleteThisEntity();
@@ -472,7 +476,7 @@ void sub_0808153C(ItemOnGroundEntity* this) {
 
 void sub_08081598(ItemOnGroundEntity* this) {
     if (super->health == 0) {
-        sub_08081404(this, 1);
+        ItemOnGround_SetFlagAndDelete(this, 1);
     }
 
     COLLISION_OFF(super);
@@ -486,6 +490,6 @@ void sub_08081598(ItemOnGroundEntity* this) {
     CopyPosition(super->child, super);
     super->z.HALF.HI -= 4;
     if (super->type != 0x5F && sub_08081420(this)) {
-        sub_08081404(this, 1);
+        ItemOnGround_SetFlagAndDelete(this, 1);
     }
 }

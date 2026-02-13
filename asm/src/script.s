@@ -15,22 +15,26 @@
 gUnk_08016984:: @ 08016984
 	.incbin "code_08016984/gUnk_08016984.bin"
 
-GetNextScriptCommandHalfword::
+    non_word_aligned_thumb_func_start GetNextScriptCommandHalfword
+GetNextScriptCommandHalfword:
 	ldrh r0, [r0]
 	bx lr
 
-GetNextScriptCommandHalfwordAfterCommandMetadata::
+    non_word_aligned_thumb_func_start GetNextScriptCommandHalfwordAfterCommandMetadata
+GetNextScriptCommandHalfwordAfterCommandMetadata:
 	ldrh r0, [r0, #2]
 	bx lr
 
-GetNextScriptCommandWord::
+    non_word_aligned_thumb_func_start GetNextScriptCommandWord
+GetNextScriptCommandWord:
 	ldrh r1, [r0]
 	ldrh r0, [r0, #2]
 	lsls r0, r0, #0x10
 	orrs r0, r1
 	bx lr
 
-GetNextScriptCommandWordAfterCommandMetadata::
+    non_word_aligned_thumb_func_start GetNextScriptCommandWordAfterCommandMetadata
+GetNextScriptCommandWordAfterCommandMetadata:
 	ldrh r1, [r0, #2]
 	ldrh r0, [r0, #4]
 	lsls r0, r0, #0x10
@@ -46,7 +50,8 @@ gShakeOffsets::
 	.byte 0, -1, 0, -2, 0, -1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 1
 	.byte 2, 0, 1, 0, 0, 0, -1, 0, -1, 0, -1, 0, 0, 0, 1, 0
 
-UpdateSpriteForCollisionLayer:: @ 0x08016A04
+    non_word_aligned_thumb_func_start UpdateSpriteForCollisionLayer
+UpdateSpriteForCollisionLayer: @ 0x08016A04
 	movs r1, #0x38
 	ldrb r1, [r0, r1]
 	lsls r1, r1, #1
@@ -68,7 +73,8 @@ UpdateSpriteForCollisionLayer:: @ 0x08016A04
 _08016A28:
 	.byte 0x80, 0x80, 0x80, 0x80, 0x40, 0x40, 0x40, 0x40
 
-ResolveCollisionLayer::
+    non_word_aligned_thumb_func_start ResolveCollisionLayer
+ResolveCollisionLayer:
 	push {r4, r5, lr}
 	adds r4, r0, #0
 	movs r5, #0x38
@@ -100,7 +106,8 @@ _08016A64:
 	bl UpdateSpriteForCollisionLayer
 	pop {r4, r5, pc}
 
-CheckOnLayerTransition::
+    non_word_aligned_thumb_func_start CheckOnLayerTransition
+CheckOnLayerTransition:
 	push {r4, r5, lr}
 	adds r4, r0, #0
 	bl GetActTileAtEntity // tile under me
@@ -141,7 +148,8 @@ gTransitionTiles:
 	transition_tile 0x26, 3, 3
 	.short 0x0000
 
-UpdateCollisionLayer::
+    non_word_aligned_thumb_func_start UpdateCollisionLayer
+UpdateCollisionLayer:
 	push {r4, lr}
 	adds r4, r0, #0
 	bl CheckOnLayerTransition

@@ -2,7 +2,7 @@
 #include "entity.h"
 #include "player.h"
 #include "room.h"
-#include "structures.h"
+#include "vram.h"
 
 const u8 gUnk_08109202[] = {
     255, 8, 24, 255, 0, 4, 28, 255, 16, 12, 20, 255, 255, 255, 255, 255, 0, 0,

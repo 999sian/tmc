@@ -1,5 +1,4 @@
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
 #include "playeritem.h"
 #include "tiles.h"

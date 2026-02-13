@@ -9,7 +9,6 @@
 #include "manager/secretManager.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "sound.h"
 
 void SecretManager_Type0_Action2(SecretManager*);

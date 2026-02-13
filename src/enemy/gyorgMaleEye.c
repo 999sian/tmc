@@ -5,8 +5,10 @@
  * @brief GyorgMaleEye enemy
  */
 #include "enemy.h"
-#include "fade.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "physics.h"
+#include "room.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -6,10 +6,12 @@
  */
 #include "collision.h"
 #include "enemy.h"
-#include "functions.h"
+#include "effects.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "tiles.h"
+#include "asm.h"
 
 extern Hitbox gUnk_080FD34C;
 

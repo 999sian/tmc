@@ -4,8 +4,12 @@
  *
  * @brief Thunderbolt object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "script.h"
+#include "sound.h"
+#include "physics.h"
+#include "player.h"
 
 typedef struct {
     /*0x00*/ Entity base;

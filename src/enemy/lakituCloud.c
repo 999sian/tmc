@@ -7,6 +7,7 @@
 #include "asm.h"
 #include "effects.h"
 #include "enemy.h"
+#include "sound.h"
 #include "entity.h"
 #include "object.h"
 #include "physics.h"

@@ -8,14 +8,17 @@
 #include "area.h"
 #include "enemy.h"
 #include "flags.h"
-#include "functions.h"
 #include "message.h"
 #include "object.h"
-#include "save.h"
-#include "screen.h"
+#include "room.h"
+#include "player.h"
 #include "screenTransitions.h"
 #include "sound.h"
-#include "structures.h"
+#include "scroll.h"
+#include "fade.h"
+#if !defined(EU) && !defined(JP)
+#include "save.h"
+#endif
 
 void sub_0805E094(void);
 void Vaati3StartManager_Type0(Vaati3StartManager*);
@@ -154,5 +157,5 @@ void Vaati3StartManager_Type1_Action1(Vaati3StartManager* this) {
 
 void sub_0805E094(void) {
     SetInitializationPriority();
-    sub_0808091C(&gUnk_0813AC34, TRANSITION_7);
+    DoExitTransitionWithType(&gUnk_0813AC34, TRANSITION_7);
 }

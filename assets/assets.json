@@ -3931,7 +3931,7 @@
     "type": "animation"
   },
   {
-    "path": "peahat/gUnk_080CA5D4.bin",
+    "path": "peahat/gPeahatChargeDirectionOffsets.bin",
     "start": 828884,
     "size": 2
   },
@@ -13037,137 +13037,137 @@
     "size": 8
   },
   {
-    "path": "holeManager/gUnk_08108764.bin",
+    "path": "holeManager/gHoleTransitions.bin",
     "start": 1083236,
     "size": 32
   },
   {
-    "path": "holeManager/gUnk_08108764_1.bin",
+    "path": "holeManager/gHoleTransitions_1.bin",
     "start": 1083272,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_2.bin",
+    "path": "holeManager/gHoleTransitions_2.bin",
     "start": 1083292,
     "size": 20
   },
   {
-    "path": "holeManager/gUnk_08108764_3.bin",
+    "path": "holeManager/gHoleTransitions_3.bin",
     "start": 1083316,
     "size": 12
   },
   {
-    "path": "holeManager/gUnk_08108764_4.bin",
+    "path": "holeManager/gHoleTransitions_4.bin",
     "start": 1083332,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_5.bin",
+    "path": "holeManager/gHoleTransitions_5.bin",
     "start": 1083352,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_6.bin",
+    "path": "holeManager/gHoleTransitions_6.bin",
     "start": 1083372,
     "size": 40
   },
   {
-    "path": "holeManager/gUnk_08108764_7.bin",
+    "path": "holeManager/gHoleTransitions_7.bin",
     "start": 1083416,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_8.bin",
+    "path": "holeManager/gHoleTransitions_8.bin",
     "start": 1083436,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_9.bin",
+    "path": "holeManager/gHoleTransitions_9.bin",
     "start": 1083456,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_10.bin",
+    "path": "holeManager/gHoleTransitions_10.bin",
     "start": 1083476,
     "size": 32
   },
   {
-    "path": "holeManager/gUnk_08108764_11.bin",
+    "path": "holeManager/gHoleTransitions_11.bin",
     "start": 1083512,
     "size": 440
   },
   {
-    "path": "holeManager/gUnk_08108764_12.bin",
+    "path": "holeManager/gHoleTransitions_12.bin",
     "start": 1083956,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_13.bin",
+    "path": "holeManager/gHoleTransitions_13.bin",
     "start": 1083976,
     "size": 36
   },
   {
-    "path": "holeManager/gUnk_08108764_14.bin",
+    "path": "holeManager/gHoleTransitions_14.bin",
     "start": 1084016,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_15.bin",
+    "path": "holeManager/gHoleTransitions_15.bin",
     "start": 1084036,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_16.bin",
+    "path": "holeManager/gHoleTransitions_16.bin",
     "start": 1084056,
     "size": 36
   },
   {
-    "path": "holeManager/gUnk_08108764_17.bin",
+    "path": "holeManager/gHoleTransitions_17.bin",
     "start": 1084096,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_18.bin",
+    "path": "holeManager/gHoleTransitions_18.bin",
     "start": 1084116,
     "size": 36
   },
   {
-    "path": "holeManager/gUnk_08108764_19.bin",
+    "path": "holeManager/gHoleTransitions_19.bin",
     "start": 1084156,
     "size": 36
   },
   {
-    "path": "holeManager/gUnk_08108764_20.bin",
+    "path": "holeManager/gHoleTransitions_20.bin",
     "start": 1084196,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_21.bin",
+    "path": "holeManager/gHoleTransitions_21.bin",
     "start": 1084216,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_22.bin",
+    "path": "holeManager/gHoleTransitions_22.bin",
     "start": 1084236,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_23.bin",
+    "path": "holeManager/gHoleTransitions_23.bin",
     "start": 1084256,
     "size": 32
   },
   {
-    "path": "holeManager/gUnk_08108764_24.bin",
+    "path": "holeManager/gHoleTransitions_24.bin",
     "start": 1084292,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_25.bin",
+    "path": "holeManager/gHoleTransitions_25.bin",
     "start": 1084312,
     "size": 16
   },
   {
-    "path": "holeManager/gUnk_08108764_26.bin",
+    "path": "holeManager/gHoleTransitions_26.bin",
     "start": 1084332,
     "size": 124
   },

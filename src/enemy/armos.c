@@ -4,29 +4,33 @@
  *
  * @brief Armos enemy
  */
+#include "enemy/armos.h"
 #include "collision.h"
 #include "common.h"
 #include "enemy.h"
+#include "sound.h"
 #include "flags.h"
-#include "functions.h"
+#include "physics.h"
 #include "global.h"
 #include "hitbox.h"
 #include "tiles.h"
+#include "room.h"
+#include "player.h"
+#include "asm.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[0x10];
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
-    /*0x7c*/ ScreenTransitionData* unk_7c;
+    /*0x7c*/ Transition* unk_7c;
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
     /*0x83*/ u8 unk_83;
     /*0x84*/ u32 unk_84;
 } ArmosEntity;
-
-extern Entity* gUnk_020000B0;
 
 extern void (*const gUnk_080CE124[])(ArmosEntity*);
 extern void (*const gUnk_080CE13C[])(ArmosEntity*);
@@ -68,11 +72,11 @@ void sub_080300E8(void) {
     }
 }
 
-void sub_08030118(u32 armosId) {
+void Armos_SetFlagFromTransition(u32 armosId) {
     if (((gRoomTransition.armos_data.field_0xac >> armosId) & 1) != 0) {
-        SetLocalFlagByBank(FLAG_BANK_3, armosId + 0x67);
+        SetLocalFlagByBank(FLAG_BANK_3, armosId + AMOS_00_00);
     } else {
-        ClearLocalFlagByBank(FLAG_BANK_3, armosId + 0x67);
+        ClearLocalFlagByBank(FLAG_BANK_3, armosId + AMOS_00_00);
     }
 }
 
@@ -134,7 +138,7 @@ void sub_0803026C(ArmosEntity* this) {
         this->unk_84 = (0x47d >> this->unk_80) & 1;
     }
     if (super->type2 != 0) {
-        this->unk_7c = (ScreenTransitionData*)GetCurrentRoomProperty(super->type2);
+        this->unk_7c = (Transition*)GetCurrentRoomProperty(super->type2);
     }
     this->unk_81 = super->health;
     sub_08030580(this);
@@ -343,7 +347,7 @@ bool32 sub_08030650(ArmosEntity* this) {
             return 1;
         }
     } else if (this->unk_80 != 2) {
-        if (!sub_08049FDC(super, 1) || (0x20 < (gUnk_020000B0->x.HALF.HI - super->x.HALF.HI) + 0x10U)) {
+        if (!sub_08049FDC(super, 1) || (0x20 < (gEnemyTarget->x.HALF.HI - super->x.HALF.HI) + 0x10U)) {
             return FALSE;
         }
         return TRUE;
@@ -351,7 +355,7 @@ bool32 sub_08030650(ArmosEntity* this) {
         if (!sub_08049FDC(super, 1)) {
             return FALSE;
         }
-        if (gUnk_020000B0->x.HALF.HI >= (s32)(gRoomControls.origin_x + 0xa8)) {
+        if (gEnemyTarget->x.HALF.HI >= (s32)(gRoomControls.origin_x + 0xa8)) {
             return FALSE;
         }
         return TRUE;
@@ -367,7 +371,7 @@ void sub_080306C4(ArmosEntity* this) {
     if (sub_08049FDC(super, 1) && this->unk_7a != 0) {
 
         super->timer = 24;
-        uVar3 = sub_0800132C(super, gUnk_020000B0);
+        uVar3 = sub_0800132C(super, gEnemyTarget);
         if (uVar3 != 0xff) {
             var = 0;
             if ((((Random() & 7) != 0) || (super->animationState == 0xff)) && ((this->unk_82 & 3) != 3)) {

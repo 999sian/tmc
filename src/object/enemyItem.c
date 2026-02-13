@@ -4,13 +4,16 @@
  *
  * @brief Enemy Item object
  */
-#include "functions.h"
+#include "scroll.h"
 #include "object.h"
+#include "flags.h"
+#include "physics.h"
+#include "item.h"
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[0x1e];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } EnemyItemEntity;
 
 void sub_080A2500(EnemyItemEntity*);
@@ -21,7 +24,7 @@ void EnemyItem(EnemyItemEntity* this) {
     Entity* entity;
     LinkedList* list;
 
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         sub_080A2500(this);
     }
     if (super->action == 0) {
@@ -63,7 +66,7 @@ void sub_080A2508(EnemyItemEntity* this) {
     entity = (EnemyItemEntity*)CreateObjectWithParent(super, GROUND_ITEM, super->type, 0);
     if (entity != NULL) {
         (entity->base).timer = 5;
-        entity->unk_86 = this->unk_86;
+        entity->flag = this->flag;
     }
     sub_080A2500(this);
 }
@@ -74,7 +77,7 @@ void sub_080A2534(EnemyItemEntity* this) {
     entity = (EnemyItemEntity*)CreateObjectWithParent(super, GROUND_ITEM, super->type, 0);
     if (entity != NULL) {
         (entity->base).timer = 4;
-        entity->unk_86 = this->unk_86;
+        entity->flag = this->flag;
     }
     sub_080A2500(this);
 }

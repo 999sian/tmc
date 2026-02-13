@@ -7,10 +7,10 @@
 #include "asm.h"
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -19,10 +19,10 @@ typedef struct {
     /*0x74*/ u16 unk_74;
     /*0x76*/ u16 unk_76;
     /*0x78*/ u16 unk_78;
-    /*0x7a*/ u16 unk_7a;
+    /*0x7a*/ u16 flagValue;
     /*0x7c*/ union SplitHWord unk_7c;
     /*0x7e*/ u8 unused2[8];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } RailtrackEntity;
 
 void sub_08085394(RailtrackEntity* this);
@@ -58,8 +58,8 @@ void Railtrack_Init(RailtrackEntity* this) {
     }
     super->animationState = super->type2 & 2;
     if (super->type == 3) {
-        uVar1 = CheckFlags(this->unk_86);
-        this->unk_7a = uVar1;
+        uVar1 = CheckFlags(this->flag);
+        this->flagValue = uVar1;
         if ((u16)(uVar1 & -1) != 0) {
             super->animationState = (super->animationState + 2) & 3;
             super->action = 3;
@@ -71,11 +71,11 @@ void Railtrack_Init(RailtrackEntity* this) {
 }
 
 void Railtrack_Action1(RailtrackEntity* this) {
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         super->action = 2;
         super->subtimer = 8;
         if (super->type == 1) {
-            ClearFlag(this->unk_86);
+            ClearFlag(this->flag);
         }
         super->animationState = (super->animationState + this->unk_7c.HALF.LO) & 3;
         InitializeAnimation(super, super->animationState);
@@ -88,7 +88,7 @@ void Railtrack_Action2(RailtrackEntity* this) {
     if (--super->subtimer == 0) {
         super->action = 3;
         super->subtimer = super->timer;
-        this->unk_7a = CheckFlags(this->unk_86);
+        this->flagValue = CheckFlags(this->flag);
         super->animationState = (super->animationState + this->unk_7c.HALF.LO) & 3;
         InitializeAnimation(super, super->animationState);
         sub_08085394(this);
@@ -103,13 +103,13 @@ void Railtrack_Action3(RailtrackEntity* this) {
             case 1:
                 break;
             case 2:
-                if (CheckFlags(this->unk_86) == 0) {
+                if (CheckFlags(this->flag) == 0) {
                     super->action = 1;
                     return;
                 }
                 break;
             case 3:
-                if (CheckFlags(this->unk_86) == this->unk_7a) {
+                if (CheckFlags(this->flag) == this->flagValue) {
                     super->subtimer = 255;
                 } else {
                     super->subtimer = 1;

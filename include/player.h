@@ -609,6 +609,17 @@ typedef struct {
     /*0x18*/ Entity* field_0x18;
 } ItemBehavior;
 
+typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN, MAX_ACTIVE_ITEMS } ActiveItemIndex;
+/**
+ * Currently active items.
+ * 0: Active items?
+ * 1: Boots, Cape
+ * 2: would be used by CreateItem1 if gActiveItems[1] was already filled
+ * 3: Lamp
+ */
+extern ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
+static_assert(sizeof(gActiveItems) == 0x70);
+
 extern void (*const gPlayerItemFunctions[])(Entity*);
 
 typedef struct {
@@ -664,6 +675,37 @@ typedef enum {
     INTERACTION_DROP_PEDESTAL,
     INTERACTION_NULL = 0xFF,
 } InteractionType;
+
+typedef struct {
+    s8 x;
+    s8 y;
+    s8 width;
+    s8 height;
+} Rect;
+
+typedef struct {
+    /*0x00*/ u8 ignoreLayer; /* if bit 0 set, skip layer check for collision */
+    /*0x01*/ u8 type;
+    /*0x02*/ u8 interactDirections; /* lower 4 bits determine Link's allowed facing directions to interact, 0 to allow
+                                       (0000WSEN) */
+    /*0x03*/ u8 kinstoneId;
+    /*0x04*/ const Rect* customHitbox; /* optional custom rectangle */
+    /*0x08*/ Entity* entity;
+} InteractableObject;
+
+typedef struct {
+    /*0x00*/ u8 isUpdated;
+    /*0x01*/ u8 unused;
+    /*0x02*/ u8 kinstoneId;
+    /*0x03*/ u8 currentIndex; /* index of currentObject in candidate list, or 0xFF */
+    /*0x04*/ InteractableObject* currentObject;
+    /*0x08*/ InteractableObject
+        candidates[0x20]; /* contains the loaded NPCs, key doors, windcrests and other objects */
+} PossibleInteraction;
+
+static_assert(sizeof(PossibleInteraction) == 0x188);
+
+extern PossibleInteraction gPossibleInteraction;
 
 typedef enum {
     R_ACTION_NONE,
@@ -778,6 +820,8 @@ bool32 HasSwordEquipped();
 u32 GetPlayerPalette(bool32 use);
 void PlayerShrinkByRay(void);
 
+extern void InitPlayerMacro(PlayerMacroEntry*);
+
 // player.s
 extern u32 PlayerCheckNEastTile();
 extern u32* DoTileInteractionHere(Entity*, u32);
@@ -786,6 +830,9 @@ extern void sub_08008AC6(Entity*);
 extern void sub_08008926(Entity*);
 extern void sub_08008AC6(Entity*);
 extern void sub_08008AA0(Entity*);
+extern void sub_080085B0(Entity*);
+extern u32 sub_080086B4(u32, u32, const u8*);
+extern u16* DoTileInteraction(struct Entity_*, u32, u32, u32);
 
 // zelda.c
 void SetZeldaFollowTarget(Entity* target);

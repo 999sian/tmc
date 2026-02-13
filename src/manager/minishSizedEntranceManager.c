@@ -6,9 +6,10 @@
  * screen.
  */
 #include "manager/minishSizedEntranceManager.h"
-#include "functions.h"
 #include "object.h"
+#include "flags.h"
 #include "room.h"
+#include "script.h"
 #include "asm.h"
 
 typedef struct {

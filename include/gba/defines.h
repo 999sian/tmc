@@ -16,9 +16,13 @@
 
 #define NAKED __attribute__((naked))
 #define UNUSED __attribute__((unused))
+#ifdef __CLION_IDE__
+#define PACKED
+#define ALIGNED(n)
+#else
 #define PACKED __attribute__((packed))
-
 #define ALIGNED(n) __attribute__((aligned(n)))
+#endif
 
 #ifdef PC_PORT
 #include <stdint.h>

@@ -7,16 +7,16 @@
 #include "manager/vaati3BackgroundManager.h"
 #include "area.h"
 #include "common.h"
-#include "functions.h"
 #include "room.h"
 #include "screen.h"
+#include "game.h"
 
-void sub_0805D470(Vaati3BackgroundManager*);
+void Vaati3BackgroundManager_OnEnterRoom(Vaati3BackgroundManager*);
 
 void Vaati3BackgroundManager_Main(Vaati3BackgroundManager* this) {
     if (this == NULL) {
-        if (gArea.onEnter != sub_0805D470) {
-            sub_0805D470(NULL);
+        if (gArea.onEnter != Vaati3BackgroundManager_OnEnterRoom) {
+            Vaati3BackgroundManager_OnEnterRoom(NULL);
         }
     } else {
         if (super->action == 0) {
@@ -24,7 +24,7 @@ void Vaati3BackgroundManager_Main(Vaati3BackgroundManager* this) {
             super->flags |= ENT_PERSIST;
             SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
             if (gArea.onEnter == NULL) {
-                RegisterTransitionManager(this, sub_0805D470, NULL);
+                RegisterTransitionHandler(this, Vaati3BackgroundManager_OnEnterRoom, NULL);
             } else {
                 DeleteThisEntity();
             }
@@ -37,7 +37,7 @@ void Vaati3BackgroundManager_Main(Vaati3BackgroundManager* this) {
     }
 }
 
-void sub_0805D470(Vaati3BackgroundManager* this) {
+void Vaati3BackgroundManager_OnEnterRoom(Vaati3BackgroundManager* this) {
     LoadGfxGroup(0x4c);
     gScreen.bg3.control = 0x1e07;
     gScreen.lcd.displayControl |= DISPCNT_BG3_ON;

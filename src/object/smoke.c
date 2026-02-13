@@ -5,6 +5,8 @@
  * @brief Smoke object
  */
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
 
 void Smoke_Type0(Entity*);
 void Smoke_Type1(Entity*);

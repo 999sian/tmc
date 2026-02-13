@@ -5,11 +5,15 @@
  * @brief File Screen Objects object
  */
 #include "fileselect.h"
-#include "functions.h"
 #include "main.h"
 #include "menu.h"
 #include "object.h"
+#include "asm.h"
+#include "common.h"
+#include "flags.h"
+#include "physics.h"
 #include "player.h"
+#include "gfx.h"
 
 typedef struct {
     /*0x00*/ Entity base;

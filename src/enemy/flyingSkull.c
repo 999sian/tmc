@@ -4,12 +4,17 @@
  *
  * @brief Flying Skull enemy
  */
+#include "object/pot.h"
 #include "collision.h"
 #include "enemy.h"
+#include "effects.h"
 #include "entity.h"
-#include "functions.h"
+#include "physics.h"
 #include "hitbox.h"
 #include "tiles.h"
+#include "room.h"
+#include "player.h"
+#include "asm.h"
 
 typedef struct {
     Entity base;

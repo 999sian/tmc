@@ -13,6 +13,11 @@
 #include "subtask.h"
 #include "manager/bombableWallManager.h"
 #include "tiles.h"
+#include "flags.h"
+#include "sound.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
 
 // Called Goron Kinstone Fusion Script
 void sub_08054EB8(Entity* this, ScriptExecutionContext* context) {

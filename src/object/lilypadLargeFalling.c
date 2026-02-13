@@ -5,7 +5,6 @@
  * @brief LilypadLargeFalling object
  */
 #include "entity.h"
-#include "functions.h"
 #include "object/lilypadLarge.h"
 
 void LilypadLargeFalling(Entity* this) {

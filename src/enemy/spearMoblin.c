@@ -5,7 +5,12 @@
  * @brief Spear Moblin enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
+#include "object.h"
+#include "asm.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

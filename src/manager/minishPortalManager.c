@@ -8,8 +8,9 @@
 #include "area.h"
 #include "asm.h"
 #include "flags.h"
-#include "functions.h"
 #include "object.h"
+#include "common.h"
+#include "effects.h"
 #include "player.h"
 #include "room.h"
 #include "sound.h"
@@ -43,8 +44,8 @@ void MinishPortalManager_Main(MinishPortalManager* this) {
                 }
             }
             if (GetActTileAtRoomCoords(this->unk_38, this->unk_3a, super->timer) == ACT_TILE_61) {
-                CreateMagicSparkles(this->unk_38 + gRoomControls.origin_x, this->unk_3a + gRoomControls.origin_y,
-                                    super->timer);
+                CreateMagicSparklesFxAt(this->unk_38 + gRoomControls.origin_x, this->unk_3a + gRoomControls.origin_y,
+                                        super->timer);
                 if (super->subtimer == 0) {
                     super->subtimer = 1;
                     SoundReq(SFX_NEAR_PORTAL);
@@ -57,7 +58,7 @@ void MinishPortalManager_Main(MinishPortalManager* this) {
     }
 }
 
-void CreateMagicSparkles(u32 baseX, u32 baseY, u32 layer) {
+void CreateMagicSparklesFxAt(u32 baseX, u32 baseY, u32 layer) {
     u32 r;
     int offsetX, offsetY;
     Entity* spark;

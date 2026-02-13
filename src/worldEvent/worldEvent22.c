@@ -4,11 +4,11 @@
  *
  * @brief World Event 22
  */
-#include "functions.h"
+#include "script.h"
 #include "menu.h"
 #include "npc.h"
 #include "room.h"
-#include "screen.h"
+#include "fade.h"
 
 extern void sub_0804B0B0(u32, u32);
 extern void sub_08055B70(u32, u32, u32, u32);

@@ -2,22 +2,7 @@
 #define NPC_H
 
 #include "global.h"
-#include "asm.h"
-#include "common.h"
-
-#include "sound.h"
-#include "effects.h"
-#include "room.h"
-#include "flags.h"
-#include "physics.h"
-#include "message.h"
-#include "script.h"
-#include "save.h"
-
 #include "entity.h"
-#include "player.h"
-
-#include "structures.h"
 
 typedef enum {
     DIALOG_ROOM_FLAG,

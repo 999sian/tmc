@@ -5,7 +5,12 @@
  * @brief Vaati Wrath Eye enemy
  */
 #include "enemy/vaatiWrath.h"
-#include "functions.h"
+#include "room.h"
+#include "physics.h"
+#include "asm.h"
+#include "sound.h"
+#include "effects.h"
+#include "projectile.h"
 
 void sub_080485D8(Entity*);
 void sub_080485FC(Entity*);

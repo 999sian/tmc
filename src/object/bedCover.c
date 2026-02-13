@@ -4,7 +4,7 @@
  *
  * @brief Bed Cover object
  */
-#include "functions.h"
+#include "script.h"
 #include "object.h"
 
 typedef struct {

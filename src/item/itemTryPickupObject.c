@@ -1,7 +1,9 @@
-#include "functions.h"
+#include "physics.h"
 #include "item.h"
 #include "playeritem.h"
 #include "sound.h"
+#include "ui.h"
+#include "room.h"
 
 u32 sub_08077F64(ItemBehavior* arg0, u32 index);
 u32 sub_080789A8(void);

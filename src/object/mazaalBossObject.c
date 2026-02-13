@@ -5,14 +5,17 @@
  * @brief Mazaal Boss object
  */
 #include "enemy.h"
-#include "entity.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
 #include "item.h"
 #include "object.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "screen.h"
-#include "sound.h"
+#include "scroll.h"
+#include "script.h"
 
 extern u16 script_MazaalBossObjectMazaal[];
 

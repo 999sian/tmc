@@ -5,8 +5,11 @@
  * @brief Spiny Chuchu enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
 #include "hitbox.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -22,8 +25,6 @@ extern void (*const SpinyChuchu_Functions[])(SpinyChuchuEntity*);
 extern void (*const gUnk_080CBA40[])(SpinyChuchuEntity*);
 
 extern const u8 gUnk_080CBA60[];
-
-extern Entity* gUnk_020000B0;
 
 void SpinyChuchu(SpinyChuchuEntity* this) {
     EnemyFunctionHandler(super, (EntityActionArray)SpinyChuchu_Functions);
@@ -164,7 +165,7 @@ void sub_080226EC(SpinyChuchuEntity* this) {
             super->action = 6;
             super->zVelocity = Q_16_16(1.125);
             super->speed = 0x140;
-            super->direction = GetFacingDirection(super, gUnk_020000B0);
+            super->direction = GetFacingDirection(super, gEnemyTarget);
             super->hitType = 0x5a;
             InitializeAnimation(super, 4);
             return;

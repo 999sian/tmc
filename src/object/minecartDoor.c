@@ -4,8 +4,14 @@
  *
  * @brief Minecart Door object
  */
-#include "functions.h"
+#include "object/lockedDoor.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {
@@ -18,7 +24,7 @@ typedef struct {
     /*0x78*/ u8 unk_78[0x6];
     /*0x7e*/ u8 unk_7e;
     /*0x7f*/ u8 unk_7f[0x7];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } MinecartDoorEntity;
 
 extern bool32 sub_080837B0(Entity*);         // lockedDoor
@@ -95,7 +101,7 @@ void MinecartDoor_Action2(MinecartDoorEntity* this) {
 void MinecartDoor_Action3(MinecartDoorEntity* this) {
     bool32 bVar3;
 
-    if ((this->unk_7e != 0) && (CheckFlags(this->unk_86))) {
+    if ((this->unk_7e != 0) && CheckFlags(this->flag)) {
         return;
     }
     if ((gPlayerState.flags & PL_IN_MINECART) != 0) {
@@ -128,7 +134,7 @@ void MinecartDoor_Action4(MinecartDoorEntity* this) {
 }
 
 bool32 sub_08096CEC(MinecartDoorEntity* this) {
-    if (this->unk_7e != 0 && CheckFlags(this->unk_86)) {
+    if (this->unk_7e != 0 && CheckFlags(this->flag)) {
         return TRUE;
     } else {
         if ((gPlayerState.flags & PL_IN_MINECART) != 0) {

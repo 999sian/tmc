@@ -19,7 +19,7 @@ typedef struct {
     /*0x82*/ u8 unk_82;
     /*0x83*/ u8 unk_83;
     /*0x84*/ u8 unk_84[0x2];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } PushableFurnitureEntity;
 
 #endif // PUSHABLEFURNITURE_H

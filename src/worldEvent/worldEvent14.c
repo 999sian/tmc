@@ -12,6 +12,7 @@
 #include "room.h"
 #include "script.h"
 #include "subtask.h"
+#include "save.h"
 
 extern Script script_GhostBrotherKinstone;
 const EntityData gUnk_080FF17C[] = {

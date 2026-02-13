@@ -5,17 +5,20 @@
  * @brief Vaati Projectile enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "sound.h"
+#include "effects.h"
 #include "screenTransitions.h"
+#include "room.h"
 #include "tiles.h"
+#include "player.h"
+#include "physics.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[16];
     /*0x78*/ u16 unk_78;
 } VaatiProjectileEntity;
-
-extern Entity* gUnk_020000B0;
 
 bool32 sub_0803E4A0(VaatiProjectileEntity*);
 void VaatiProjectile_OnTick(VaatiProjectileEntity*);
@@ -142,8 +145,8 @@ void VaatiProjectileFunction0Action1(VaatiProjectileEntity* this) {
         super->timer = 10;
         InitializeAnimation(super->child, 2);
     } else {
-        if (gUnk_020000B0 != NULL) {
-            sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+        if (gEnemyTarget != NULL) {
+            sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
             LinearMoveUpdate(super);
         }
     }

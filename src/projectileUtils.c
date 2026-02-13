@@ -1,6 +1,8 @@
 #include "entity.h"
 #include "definitions.h"
-#include "functions.h"
+#include "vram.h"
+#include "room.h"
+#include "color.h"
 
 extern const ProjectileDefinition gProjectileDefinitions[];
 

@@ -5,10 +5,13 @@
  * @brief Gyorg Female Eye enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "enemy/gyorg.h"
 #include "entity.h"
-#include "functions.h"
 #include "player.h"
+#include "room.h"
+#include "asm.h"
 
 void GyorgFemaleEye_OnTick(GyorgFemaleEyeEntity*);
 void GyorgFemaleEye_OnCollision(GyorgFemaleEyeEntity*);

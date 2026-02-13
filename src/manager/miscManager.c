@@ -6,16 +6,23 @@
  */
 #include "manager/miscManager.h"
 #include "area.h"
-#include "common.h"
 #include "flags.h"
-#include "functions.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
+#include "script.h"
 #include "sound.h"
 #include "tiles.h"
+#include "scroll.h"
+#include "subtask.h"
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
+#include "common.h"
+#endif
 
 void MiscManager_Type0(MiscManager*);
 void MiscManager_Type1(MiscManager*);
@@ -68,7 +75,7 @@ typedef struct {
     u16 width;
     u16 height;
     u16 unk_08;
-} PACKED __attribute__((aligned(2))) MiscManager_HelperStruct;
+} PACKED ALIGNED(2) MiscManager_HelperStruct;
 
 const MiscManager_HelperStruct gUnk_08108354[] = {
     { 0xF0, 0xB0, 0xF0, 0xB0, 0x100 },
@@ -146,12 +153,12 @@ void MiscManager_Type1(MiscManager* this) {
                 super->subAction = 8;
                 super->subtimer = 2;
             }
-            if (CheckFlags(this->flags)) {
+            if (CheckFlags(this->flag2)) {
                 DeleteManager(super);
             }
             break;
         case 1:
-            if (CheckFlags(this->flags)) {
+            if (CheckFlags(this->flag2)) {
                 super->action = 2;
                 super->timer = 120;
                 RequestPriorityDuration((Entity*)this, 240);
@@ -172,7 +179,7 @@ void MiscManager_Type1(MiscManager* this) {
             }
             break;
         default:
-            SetFlag(this->flags);
+            SetFlag(this->flag2);
             SetPlayerControl(1);
             DeleteThisEntity();
     }
@@ -229,21 +236,21 @@ void MiscManager_Type5(MiscManager* this) {
     switch (super->action) {
         default:
             if (!--super->timer) {
-                CreateDustAt(this->x, this->y, super->type2);
+                CreateDeathFxAt(this->x, this->y, super->type2);
                 RestorePrevTileEntity(TILE_LOCAL(this->x, this->y), super->type2);
                 SoundReq(SFX_TASK_COMPLETE);
                 DeleteThisEntity();
             }
             break;
         case 0:
-            if (CheckFlags(this->flags)) {
+            if (CheckFlags(this->flag2)) {
                 DeleteThisEntity();
             }
             super->action = 1;
             SetTileType(TILE_TYPE_869, TILE_LOCAL(this->x, this->y), super->type2);
             break;
         case 1:
-            if (CheckFlags(this->flags)) {
+            if (CheckFlags(this->flag2)) {
                 RequestPriorityDuration((Entity*)this, 75);
                 super->timer = 45;
                 super->action++;
@@ -254,14 +261,14 @@ void MiscManager_Type5(MiscManager* this) {
 void MiscManager_Type6(MiscManager* this) {
     if (super->action == 0) {
         super->action = 1;
-        super->type2 = CheckFlags(this->flags);
+        super->type2 = CheckFlags(this->flag2);
         if (super->type2) {
             gRoomVars.lightLevel = this->y;
         } else {
             gRoomVars.lightLevel = this->x;
         }
     } else {
-        u32 tmp = CheckFlags(this->flags);
+        u32 tmp = CheckFlags(this->flag2);
         if (super->type2 != tmp) {
             super->type2 = tmp;
             if (tmp) {
@@ -304,12 +311,12 @@ void MiscManager_Type8(MiscManager* this) {
 void MiscManager_Type9(MiscManager* this) {
     if (super->action == 0) {
         super->action = 1;
-        if (CheckFlags(this->flags)) {
+        if (CheckFlags(this->flag2)) {
             sub_080592EC(this);
             DeleteThisEntity();
         }
     } else {
-        if (CheckFlags(this->flags)) {
+        if (CheckFlags(this->flag2)) {
             sub_080592EC(this);
             sub_0805930C(this);
 #ifndef EU
@@ -346,8 +353,8 @@ void SetDirtTile(u32 tilePos) {
 
 void MiscManager_TypeA(MiscManager* this) {
     super->action = 1;
-    if (this->unk_3c == gTextRender.curToken.textIndex) {
-        SetFlag(this->flags);
+    if (this->flag1 == gTextRender.curToken.textIndex) {
+        SetFlag(this->flag2);
         DeleteThisEntity();
     }
 }
@@ -355,7 +362,7 @@ void MiscManager_TypeA(MiscManager* this) {
 void MiscManager_TypeB(MiscManager* this) {
     if (sub_080593CC(this)) {
         if (++super->timer >= 8) {
-            sub_080806BC(this->x - gRoomControls.origin_x, this->y - gRoomControls.origin_y, 0xFF, 0xA);
+            DoApplicableTransition(this->x - gRoomControls.origin_x, this->y - gRoomControls.origin_y, 0xFF, 0xA);
         }
     } else {
         super->timer = 0;
@@ -372,10 +379,10 @@ bool32 sub_080593CC(MiscManager* this) {
 
 void MiscManager_TypeC(MiscManager* this) {
     Entity* tmp;
-    if (CheckFlags(this->flags)) {
+    if (CheckFlags(this->flag2)) {
         DeleteThisEntity();
     }
-    if (!CheckFlags(this->unk_3c))
+    if (!CheckFlags(this->flag1))
         return;
     tmp = CreateObject(SPECIAL_FX, FX_BIG_EXPLOSION, 0);
     if (!tmp)
@@ -388,7 +395,7 @@ void MiscManager_TypeC(MiscManager* this) {
 }
 
 void MiscManager_TypeD(MiscManager* this) {
-    if (!CheckFlags(this->flags)) {
+    if (!CheckFlags(this->flag2)) {
         SetPlayerControl(3);
         if (gRoomControls.reload_flags)
             return;

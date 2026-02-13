@@ -7,7 +7,10 @@
 #include "entity.h"
 #include "message.h"
 #include "npc.h"
+#include "physics.h"
 #include "save.h"
+#include "script.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

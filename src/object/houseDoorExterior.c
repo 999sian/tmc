@@ -6,9 +6,11 @@
  */
 #include "entity.h"
 #include "flags.h"
-#include "functions.h"
+#include "main.h"
 #include "npc.h"
 #include "object.h"
+#include "asm.h"
+#include "player.h"
 #include "room.h"
 #include "script.h"
 #include "sound.h"

@@ -7,6 +7,7 @@
 #include "fade.h"
 #include "menu.h"
 #include "object.h"
+#include "flags.h"
 #include "sound.h"
 #include "subtask.h"
 

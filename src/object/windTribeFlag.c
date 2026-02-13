@@ -5,6 +5,7 @@
  * @brief Wind Tribe Flag object
  */
 #include "object.h"
+#include "asm.h"
 
 void WindTribeFlag(Entity* this) {
     if (this->action == 0) {

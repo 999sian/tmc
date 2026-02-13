@@ -6,10 +6,13 @@
  */
 #include "object/itemForSale.h"
 
-#include "functions.h"
 #include "hitbox.h"
-#include "kinstone.h"
 #include "message.h"
+#include "scroll.h"
+#include "asm.h"
+#include "ui.h"
+#include "room.h"
+#include "player.h"
 
 typedef struct {
     u8 before[0x20];

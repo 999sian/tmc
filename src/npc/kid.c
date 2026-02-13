@@ -4,10 +4,17 @@
  *
  * @brief Kid NPC
  */
-#include "functions.h"
 #include "message.h"
 #include "npc.h"
 #include "tiles.h"
+#include "save.h"
+#include "common.h"
+#include "asm.h"
+#include "script.h"
+#include "manager.h"
+#include "structures.h"
+#include "physics.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;

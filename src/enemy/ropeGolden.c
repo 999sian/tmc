@@ -5,10 +5,14 @@
  * @brief Golden Rope enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
 #include "entity.h"
 #include "physics.h"
 #include "player.h"
 #include "item.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;

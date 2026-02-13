@@ -6,8 +6,12 @@
  */
 #include "area.h"
 #include "enemy.h"
-#include "functions.h"
+#include "effects.h"
+#include "physics.h"
 #include "screenTransitions.h"
+#include "room.h"
+#include "player.h"
+#include "asm.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -19,8 +23,6 @@ typedef struct {
     /*0x7b*/ u8 unk_7b;
     /*0x7c*/ u16 unk_7c;
 } WallMaster2Entity;
-
-extern Entity* gUnk_020000B0;
 
 void sub_0802CF64(WallMaster2Entity*);
 void sub_0802CF8C(WallMaster2Entity*);
@@ -113,7 +115,7 @@ void sub_0802CD54(WallMaster2Entity* this) {
 void sub_0802CDE8(WallMaster2Entity* this) {
     if (--this->unk_78 && sub_08049FDC(super, 1)) {
         if ((super->timer++ & 3) == 0) {
-            sub_08004596(super, GetFacingDirection(super, gUnk_020000B0));
+            sub_08004596(super, GetFacingDirection(super, gEnemyTarget));
             sub_0802CF8C(this);
         }
         LinearMoveUpdate(super);

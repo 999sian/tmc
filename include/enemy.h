@@ -2,15 +2,7 @@
 #define ENEMY_H
 
 #include "global.h"
-#include "asm.h"
-
-#include "sound.h"
-#include "effects.h"
-#include "flags.h"
-#include "common.h"
-
 #include "entity.h"
-#include "projectile.h"
 
 #define EM_FLAG_BOSS (1 << 0)
 #define EM_FLAG_BOSS_KILLED (1 << 1)
@@ -76,6 +68,14 @@ bool32 sub_08049F1C(Entity*, Entity*, s32);
 bool32 PlayerInRange(Entity*, u32, s32);
 void EnemyCopyParams(Entity*, Entity*);
 void GenericKnockback2(Entity*);
+extern void GenericConfused(struct Entity_*);
+
+extern void sub_08001318(Entity*);
+extern void sub_08001290(Entity*, u32);
+extern u32 sub_0800132C(struct Entity_*, struct Entity_*);
+
+extern void StealRupees(Entity*);
+extern void EnemyDisableRespawn(Enemy*);
 
 enum {
     /*0x00*/ OCTOROK,
@@ -287,5 +287,11 @@ void TreeItem();
 void Enemy66();
 
 extern void (*const gUnk_080012C8[])(Entity*);
+
+/**
+ * The Entity targeted by enemies.
+ * This is usually the player.
+ */
+extern Entity* gEnemyTarget;
 
 #endif // ENEMY_H

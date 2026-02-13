@@ -6,14 +6,18 @@
  */
 #include "asm.h"
 #include "enemy.h"
-#include "functions.h"
-#include "game.h"
+#include "sound.h"
+#include "effects.h"
+#include "flags.h"
+#include "projectile.h"
 #include "item.h"
 #include "kinstone.h"
 #include "message.h"
 #include "npc.h"
 #include "save.h"
 #include "tiles.h"
+#include "vram.h"
+#include "color.h"
 
 struct SalesOffering {
     u8 field_0x0;
@@ -37,7 +41,7 @@ typedef struct {
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unused2[4];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } BusinessScrubEntity;
 
 void sub_08028E9C(BusinessScrubEntity*);
@@ -95,7 +99,7 @@ void BusinessScrub_Action0(BusinessScrubEntity* this) {
     super->animationState = 0;
     super->direction = DirectionSouth;
     sub_08028E9C(this);
-    if ((*(u8*)this->unk_7c & 1) || CheckFlags(this->unk_86)) {
+    if ((*(u8*)this->unk_7c & 1) || CheckFlags(this->flag)) {
         super->action = 4;
         super->timer = 120;
         super->spritePriority.b1 = 1;
@@ -227,7 +231,7 @@ void BusinessScrub_Action3(BusinessScrubEntity* this) {
                     iVar1->z.HALF.HI -= 12;
                     SetEntityPriority(iVar1, PRIO_MESSAGE);
                 }
-                SetFlag(this->unk_86);
+                SetFlag(this->flag);
                 sub_0802925C(this);
             }
             break;

@@ -16,7 +16,7 @@ typedef struct {
     s16 unk_38;
     u16 unk_3a;
     u16 unk_3c;
-    u16 unk_3e;
+    u16 flag;
 } Manager29;
 
 #endif // MANAGER29_H

@@ -4,9 +4,15 @@
  *
  * @brief Rem NPC
  */
-#include "functions.h"
+#include "physics.h"
 #include "item.h"
 #include "npc.h"
+#include "flags.h"
+#include "sound.h"
+#include "message.h"
+#include "script.h"
+#include "asm.h"
+#include "room.h"
 
 typedef struct {
     /*0x00*/ Entity base;

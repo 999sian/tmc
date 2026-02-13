@@ -6,10 +6,11 @@
  */
 #include "manager/minishRaftersBackgroundManager.h"
 #include "common.h"
-#include "functions.h"
 #include "room.h"
+#include "game.h"
+#include "vram.h"
 
-void sub_08058204(MinishRaftersBackgroundManager*);
+void MinishRaftersBackgroundManager_OnEnterRoom(MinishRaftersBackgroundManager*);
 void sub_08058210(MinishRaftersBackgroundManager*);
 u32 sub_08058244(int);
 void sub_080582A0(u32, u32*, u16*);
@@ -23,11 +24,11 @@ void MinishRaftersBackgroundManager_Main(MinishRaftersBackgroundManager* this) {
     if (super->action == 0) {
         super->action = 1;
         gScreen.bg1.updated = 0;
-        RegisterTransitionManager(this, sub_08058204, NULL);
+        RegisterTransitionHandler(this, MinishRaftersBackgroundManager_OnEnterRoom, NULL);
     }
 }
 
-void sub_08058204(MinishRaftersBackgroundManager* this) {
+void MinishRaftersBackgroundManager_OnEnterRoom(MinishRaftersBackgroundManager* this) {
     sub_08058324(super->type);
 }
 

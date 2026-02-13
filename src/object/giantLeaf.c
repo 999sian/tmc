@@ -6,6 +6,8 @@
  */
 #include "map.h"
 #include "object.h"
+#include "asm.h"
+#include "room.h"
 
 void sub_0808D618(Entity* this);
 

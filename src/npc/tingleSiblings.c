@@ -5,10 +5,17 @@
  * @brief Tingle Siblings NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "item.h"
 #include "kinstone.h"
 #include "npc.h"
+#include "flags.h"
+#include "save.h"
+#include "effects.h"
+#include "common.h"
+#include "message.h"
+#include "script.h"
+#include "asm.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

@@ -4,9 +4,12 @@
  *
  * @brief Kinstone Fusion Particle object
  */
-#include "functions.h"
+#include "script.h"
 #include "kinstone.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "color.h"
 
 void sub_080A0ADC(Entity*);
 void sub_080A0AF0(Entity*);

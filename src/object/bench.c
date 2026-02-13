@@ -6,9 +6,8 @@
  */
 #include "asm.h"
 #include "entity.h"
-#include "functions.h"
+#include "room.h"
 #include "player.h"
-#include "sound.h"
 
 typedef struct {
     Entity base;

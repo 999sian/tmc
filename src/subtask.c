@@ -1,12 +1,7 @@
 #include "subtask.h"
 #include "common.h"
 #include "fileselect.h"
-#include "flags.h"
-#include "functions.h"
 #include "game.h"
-#include "item.h"
-#include "itemMetaData.h"
-#include "kinstone.h"
 #include "main.h"
 #include "menu.h"
 #include "message.h"
@@ -14,6 +9,9 @@
 #include "screen.h"
 #include "ui.h"
 #include "windcrest.h"
+#include "affine.h"
+#include "beanstalkSubtask.h"
+#include "fade.h"
 
 extern Screen gUnk_03001020;
 extern u8 gPaletteBufferBackup[];
@@ -188,7 +186,7 @@ void Subtask_Exit(void) {
 }
 
 // Used by Subtask_FastTravel and EnterPortalSubtask?
-void sub_080A71F4(const ScreenTransitionData* exitTransition) {
+void sub_080A71F4(const Transition* exitTransition) {
     if (exitTransition != NULL) {
         DoExitTransition(exitTransition);
     }

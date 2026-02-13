@@ -5,6 +5,7 @@
  * @brief NPC 4F
  */
 #include "npc.h"
+#include "asm.h"
 
 void NPC4F(Entity* this) {
     if (this->action == 0) {

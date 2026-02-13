@@ -6,9 +6,16 @@
  */
 #include "enemy.h"
 #include "entity.h"
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
+#include "color.h"
+#include "map.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -56,7 +63,7 @@ void V2Projectile_OnCollision(V2ProjectileEntity* this) {
                 }
                 case 3:
                 case 0x14: {
-                    CreateDust(super);
+                    CreateDeathFx(super);
                     DeleteThisEntity();
                     break;
                 }

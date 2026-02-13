@@ -5,9 +5,14 @@
  * @brief Like Like enemy
  */
 #include "enemy.h"
+#include "sound.h"
+#include "effects.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
+#include "asm.h"
+#include "physics.h"
+#include "player.h"
 #include "save.h"
 
 typedef struct {
@@ -145,7 +150,7 @@ void sub_08027F84(LikeLikeEntity* this) {
         super->action = 5;
         super->spriteSettings.draw = 1;
         InitializeAnimation(super, 0);
-        CreateDust(super);
+        CreateDeathFx(super);
     }
 }
 
@@ -177,7 +182,7 @@ void sub_0802802C(LikeLikeEntity* this) {
         super->spriteSettings.draw = 0;
         super->direction = 0;
         super->timer = 0;
-        CreateDust(super);
+        CreateDeathFx(super);
     }
 }
 

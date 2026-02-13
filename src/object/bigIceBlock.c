@@ -8,6 +8,13 @@
 #include "hitbox.h"
 #include "item.h"
 #include "object.h"
+#include "asm.h"
+#include "sound.h"
+#include "flags.h"
+#include "effects.h"
+#include "room.h"
+#include "physics.h"
+#include "player.h"
 #include "tiles.h"
 
 typedef struct {
@@ -16,7 +23,7 @@ typedef struct {
     /*0x6c*/ u16 unk_6c;
     /*0x6e*/ u16 unk_6e;
     /*0x70*/ u8 unk_70[0x16];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } BigIceBlockEntity;
 
 extern void (*const BigIceBlock_Actions[])(BigIceBlockEntity*);
@@ -40,7 +47,7 @@ void BigIceBlock(BigIceBlockEntity* this) {
 void BigIceBlock_Init(BigIceBlockEntity* this) {
     Entity* obj;
 
-    if (CheckFlags(this->unk_86)) {
+    if (CheckFlags(this->flag)) {
         DeleteThisEntity();
     }
     super->action = 1;
@@ -88,9 +95,9 @@ void BigIceBlock_Action2(BigIceBlockEntity* this) {
     SetAffineInfo(super, 0x100, tmp, 0);
     if (super->type != 1) {
         if (super->type != 2) {
-            SetFlag(this->unk_86);
+            SetFlag(this->flag);
         } else {
-            CreateGroundItemWithFlags(super, ITEM_SMALL_KEY, 0, this->unk_86);
+            CreateGroundItemWithFlags(super, ITEM_SMALL_KEY, 0, this->flag);
         }
     }
     super->action = 3;

@@ -4,8 +4,10 @@
  *
  * @brief Object70 object
  */
-#include "functions.h"
+#include "asm.h"
 #include "object.h"
+#include "effects.h"
+#include "player.h"
 
 void Object70_Init(Entity*);
 void Object70_Action1(Entity*);

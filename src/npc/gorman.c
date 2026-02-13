@@ -4,8 +4,13 @@
  *
  * @brief Gorman NPC
  */
-#include "functions.h"
+#include "player.h"
 #include "npc.h"
+#include "asm.h"
+#include "message.h"
+#include "script.h"
+#include "flags.h"
+#include "room.h"
 
 typedef struct {
     /*0x00*/ Entity base;

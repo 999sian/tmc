@@ -9,6 +9,8 @@
 #include "player.h"
 #include "save.h"
 #include "script.h"
+#include "message.h"
+#include "physics.h"
 
 typedef struct {
     /*0x00*/ Entity base;

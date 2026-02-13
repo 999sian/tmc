@@ -1,8 +1,7 @@
-#include "functions.h"
+#include "pauseMenu.h"
 #include "item.h"
 #include "sound.h"
 
-extern void ResetPlayerVelocity(void);
 extern void CreateBird(Entity*);
 void OcarinaUse(ItemBehavior*, u32);
 void OcarinaUpdate(ItemBehavior*, u32);

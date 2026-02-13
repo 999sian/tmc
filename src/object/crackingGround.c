@@ -4,8 +4,12 @@
  *
  * @brief Cracking Ground object
  */
-#include "functions.h"
+#include "asm.h"
 #include "object.h"
+#include "sound.h"
+#include "effects.h"
+#include "room.h"
+#include "player.h"
 
 void CrackingGround(Entity* this) {
     if (this->action == 0) {

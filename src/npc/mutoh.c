@@ -11,6 +11,9 @@
 #include "message.h"
 #include "npc.h"
 #include "player.h"
+#include "save.h"
+#include "physics.h"
+#include "script.h"
 
 typedef struct {
     /*0x00*/ Entity base;

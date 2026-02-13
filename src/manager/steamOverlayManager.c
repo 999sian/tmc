@@ -10,6 +10,7 @@
 #include "physics.h"
 #include "room.h"
 #include "screen.h"
+#include "game.h"
 
 const u16 gUnk_08108588[] = { 0x1000, 0xF01, 0xE02, 0xD03, 0xC04, 0xB05, 0xA06, 0x907, 0x808 };
 
@@ -26,8 +27,8 @@ void sub_0805A098(SteamOverlayManager*);
 void SteamOverlayManager_Action3(SteamOverlayManager*);
 void sub_0805A114(u32, u32);
 void sub_0805A1D8(SteamOverlayManager*);
-void nullsub_495(void*);
-void sub_0805A25C(void*);
+void SteamOverlayManager_OnEnterRoom(void*);
+void SteamOverlayManager_OnExitRoom(void*);
 
 void SteamOverlayManager_Main(SteamOverlayManager* this) {
     static void (*const SteamOverlayManager_Actions[])(SteamOverlayManager*) = {
@@ -55,7 +56,7 @@ void SteamOverlayManager_Init(SteamOverlayManager* this) {
     gScreen.controls.alphaBlend = 0x1000;
     gScreen.bg3.xOffset = 0x80;
     gScreen.bg3.yOffset = 0;
-    RegisterTransitionManager(this, nullsub_495, sub_0805A25C);
+    RegisterTransitionHandler(this, SteamOverlayManager_OnEnterRoom, SteamOverlayManager_OnExitRoom);
 }
 
 void SteamOverlayManager_Action4(SteamOverlayManager* this) {
@@ -85,11 +86,11 @@ u32 sub_08059F9C(SteamOverlayManager* this) {
             if (CheckLocalFlag(0x16)) {
                 return 0;
             }
-            sub_0805A25C(this);
+            SteamOverlayManager_OnExitRoom(this);
             DeleteThisEntity();
             break;
         case 7:
-            sub_0805A25C(this);
+            SteamOverlayManager_OnExitRoom(this);
             DeleteThisEntity();
             break;
         case 0:
@@ -185,10 +186,10 @@ void sub_0805A1D8(SteamOverlayManager* this) {
     }
 }
 
-void nullsub_495(void* this) {
+void SteamOverlayManager_OnEnterRoom(void* this) {
 }
 
-void sub_0805A25C(void* this) {
+void SteamOverlayManager_OnExitRoom(void* this) {
     gScreen.controls.layerFXControl = 0;
     gScreen.lcd.displayControl &= ~DISPCNT_BG3_ON;
     DisableVBlankDMA();

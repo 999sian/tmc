@@ -8,6 +8,7 @@
 #include "entity.h"
 #include "player.h"
 #include "room.h"
+#include "script.h"
 #include "screen.h"
 
 const u8 gUnk_08123484[];

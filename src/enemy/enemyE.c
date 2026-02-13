@@ -5,7 +5,7 @@
  * @brief EnemyE enemy
  */
 #include "enemy.h"
-#include "functions.h"
+#include "effects.h"
 
 void sub_08023000(Entity*, int);
 

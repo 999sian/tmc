@@ -4,15 +4,18 @@
  *
  * @brief Light Door object
  */
-#include "functions.h"
 #include "object.h"
+#include "asm.h"
+#include "flags.h"
+#include "room.h"
+#include "physics.h"
 #include "screen.h"
 #include "tiles.h"
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[30];
-    /*0x86*/ u16 unk_86;
+    /*0x86*/ u16 flag;
 } LightDoorEntity;
 
 void LightDoor_Init(LightDoorEntity*);
@@ -31,7 +34,7 @@ void LightDoor(LightDoorEntity* this) {
 
 void LightDoor_Init(LightDoorEntity* this) {
     if (super->type == 0) {
-        if (CheckFlags(this->unk_86)) {
+        if (CheckFlags(this->flag)) {
             DeleteThisEntity();
         }
         super->action = 1;

@@ -5,7 +5,6 @@
  * @brief Beedle NPC
  */
 #include "entity.h"
-#include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "message.h"
