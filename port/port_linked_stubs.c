@@ -173,6 +173,100 @@ const Hitbox3D gHitbox_19, gHitbox_25, gHitbox_26, gHitbox_28;
 // NPC data
 NPCStruct gNPCData[50];
 
+/* ---------- Townsperson NPC function pointer tables ---------- */
+/* These were .4byte tables in ROM pointing to Thumb function addresses.
+ * On PC we define them as proper C function pointer arrays. */
+extern void sub_08061BC8(Entity*);
+extern void sub_08061C00(Entity*);
+extern void sub_08061CEC(/* TownspersonEntity* */ Entity*);
+extern void sub_08061D64(/* TownspersonEntity* */ Entity*);
+extern void sub_08061E24(/* TownspersonEntity* */ Entity*);
+extern void sub_08061E50(/* TownspersonEntity* */ Entity*);
+
+void (*const gUnk_0810B774[])(Entity*) = {
+    sub_08061BC8,
+    sub_08061C00,
+};
+void (*const gUnk_0810B77C[])(Entity*) = {
+    sub_08061CEC,
+    sub_08061D64,
+    sub_08061E24,
+    sub_08061E50,
+};
+
+/* ---------- Pause menu / subtask function pointer tables ---------- */
+/* From data/const/subtask.s — .4byte tables referencing C functions. */
+
+/* PauseMenu_Screen_10 dispatch (pauseMenu.c) */
+extern void sub_080A59AC(void);
+extern void sub_080A59C8(void);
+extern void sub_080A5A54(void);
+extern void sub_080A5A90(void);
+void (*const gUnk_08128D14[])(void) = {
+    sub_080A59AC,
+    sub_080A59C8,
+    sub_080A5A54,
+    sub_080A5A90,
+};
+
+/* PauseMenu_Screen_9 dispatch (pauseMenu.c) */
+extern void sub_080A5AF4(void);
+extern void sub_080A5B34(void);
+extern void sub_080A5BB8(void);
+void (*const gUnk_08128D24[])(void) = {
+    sub_080A5AF4,
+    sub_080A5B34,
+    sub_080A5BB8,
+};
+
+/* PauseMenu_Screen_5 dispatch (pauseMenu.c) */
+extern void sub_080A5C44(u32, u32, u32); /* actual signature, but called as void(void) from dispatch */
+extern void sub_080A5C9C(void);
+void (*const gUnk_08128D30[])(void) = {
+    (void (*)(void))sub_080A5C44,
+    sub_080A5C9C,
+};
+
+/* PauseMenu_Screen_7 dispatch (pauseMenu.c) */
+extern void sub_080A6024(void);
+extern void sub_080A6044(void);
+void (*const gUnk_08128D58[])(void) = {
+    sub_080A6024,
+    sub_080A6044,
+};
+
+/* PauseMenu_Screen_8 dispatch (pauseMenu.c) */
+extern void sub_080A6108(void);
+extern void sub_080A612C(void);
+void (*const gUnk_08128DB0[])(void) = {
+    sub_080A6108,
+    sub_080A612C,
+};
+
+/* PauseMenu_Screen_4 dispatch (pauseMenu.c) */
+extern void sub_080A6290(void);
+extern void sub_080A62E0(void);
+void (*const gUnk_08128DCC[])(void) = {
+    sub_080A6290,
+    sub_080A62E0,
+};
+
+/* PauseMenu_Screen_6 dispatch (pauseMenuScreen6.c) */
+extern void sub_080A6650(void);
+extern void sub_080A667C(void);
+void (*const gUnk_08128E78[])(void) = {
+    sub_080A6650,
+    sub_080A667C,
+};
+
+/* Subtask local map hint dispatch (subtaskLocalMapHint.c) */
+extern void sub_080A6B04(void);
+extern void sub_080A6C1C(void);
+void (*const gUnk_08128F1C[])(void) = {
+    sub_080A6B04,
+    sub_080A6C1C,
+};
+
 // Pause menu
 PauseMenuOptions gPauseMenuOptions;
 
@@ -1101,6 +1195,226 @@ u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
     return table[tileType & 0x3FFF] & mask;
 }
 
+/* ---------- SetCollisionData, SetActTileAtTilePos, GetTileIndex, SetTile, CloneTile ---------- */
+
+extern const u8 gMapSpecialTileToActTile[];
+extern const u8 gMapSpecialTileToCollisionData[];
+extern const u8 gMapTileTypeToCollisionData[];
+extern void UnregisterInteractTile(u32, u32);
+extern void RegisterInteractTile(u32, u32, u32);
+
+/**
+ * SetCollisionData — set collision data at a tile position.
+ * (port of Thumb veneer at 0x08000148)
+ *
+ * gCollisionDataPtrs layout (by layer):
+ *   0 → gMapBottom.collisionData
+ *   1 → gMapBottom.collisionData
+ *   2 → gMapTop.collisionData
+ *   3 → gMapBottom.collisionData
+ */
+void SetCollisionData(u32 collisionData, u32 tilePos, u32 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    ml->collisionData[tilePos] = collisionData;
+}
+
+/**
+ * SetActTileAtTilePos — set act tile at a tile position.
+ * (port of Thumb veneer at 0x080001D0)
+ *
+ * gActTilePtrs layout (by layer):
+ *   0 → gMapBottom.actTiles
+ *   1 → gMapBottom.actTiles
+ *   2 → gMapTop.actTiles
+ *   3 → gMapBottom.actTiles
+ */
+void SetActTileAtTilePos(u32 actTile, u32 tilePos, u32 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    ml->actTiles[tilePos] = actTile;
+}
+
+/**
+ * GetTileIndex — get the tile index (mapData value) at a tile position.
+ * (port of Thumb veneer at 0x080001DA)
+ *
+ * Returns mapData[tilePos] for the specified layer.
+ */
+u32 GetTileIndex(u32 tilePos, u32 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    return ml->mapData[tilePos];
+}
+
+/**
+ * SetTile — set a tile at a position and update collision/actTile data.
+ * (port of Thumb veneer at 0x0800015C)
+ *
+ * If tileIndex >= 0x4000 (special tile):
+ *   - Uses gMapSpecialTileToActTile / gMapSpecialTileToCollisionData
+ *   - Calls UnregisterInteractTile + RegisterInteractTile for tile entity management
+ * Else (normal tile):
+ *   - Looks up tileType from tileTypes[tileIndex]
+ *   - Uses gMapTileTypeToActTile / gMapTileTypeToCollisionData
+ *   - Calls UnregisterInteractTile
+ */
+void SetTile(u32 tileIndex, u32 tilePos, u32 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    u16 oldTile = ml->mapData[tilePos];
+    ml->mapData[tilePos] = (u16)tileIndex;
+
+    if (tileIndex >= 0x4000) {
+        /* Special tile */
+        u32 specialIdx = tileIndex - 0x4000;
+        SetActTileAtTilePos(gMapSpecialTileToActTile[specialIdx], tilePos, layer);
+        SetCollisionData(gMapSpecialTileToCollisionData[specialIdx], tilePos, layer);
+        UnregisterInteractTile(tilePos, layer);
+        RegisterInteractTile(oldTile, tilePos, layer);
+    } else {
+        /* Normal tile — look up tile type from tileTypes table */
+        u16 tileType = ml->tileTypes[tileIndex];
+        SetActTileAtTilePos(gMapTileTypeToActTile[tileType], tilePos, layer);
+        SetCollisionData(gMapTileTypeToCollisionData[tileType], tilePos, layer);
+        UnregisterInteractTile(tilePos, layer);
+    }
+}
+
+/**
+ * CloneTile — look up the tile index from a tile type and call SetTile.
+ * (port of Thumb veneer at 0x08000152)
+ *
+ * Looks up tileIndices[tileType] for the given layer to get the actual tile index,
+ * then falls through to SetTile(tileIndex, tilePos, layer).
+ */
+void CloneTile(u32 tileType, u32 tilePos, u32 layer) {
+    MapLayer* ml = GetMapLayerForLayer(layer);
+    u16 tileIndex = ml->tileIndices[tileType];
+    SetTile(tileIndex, tilePos, layer);
+}
+
+/* ---------- ResolveCollisionLayer, CheckOnLayerTransition, UpdateCollisionLayer ---------- */
+
+/**
+ * Transition tile table entry for layer transitions.
+ * (from ARM asm at 0x08016A90 / gTransitionTiles)
+ */
+typedef struct {
+    u16 actTile;
+    u8 fromLayer;
+    u8 toLayer;
+} TransitionTileEntry;
+
+static const TransitionTileEntry sTransitionTiles[] = {
+    { 0x0A, 2, 1 }, { 0x09, 2, 1 }, { 0x0C, 1, 2 }, { 0x0B, 1, 2 },
+    { 0x52, 3, 3 }, { 0x27, 3, 3 }, { 0x26, 3, 3 }, { 0x0000, 0, 0 }, /* terminator */
+};
+
+/**
+ * Table of act tiles to check for ResolveCollisionLayer.
+ * (from ARM asm above gTransitionTiles)
+ */
+static const TransitionTileEntry sResolveCollisionLayerTiles[] = {
+    { 0x2A, 3, 3 }, { 0x2D, 3, 3 }, { 0x2B, 3, 3 }, { 0x2C, 3, 3 },   { 0x4C, 3, 3 },
+    { 0x4E, 3, 3 }, { 0x4D, 3, 3 }, { 0x4F, 3, 3 }, { 0x0000, 0, 0 }, /* terminator */
+};
+
+/**
+ * ResolveCollisionLayer — determine which collision layer an entity should be on
+ * based on the tile under it.
+ * (port of ARM asm at 0x08016A30)
+ */
+u32 ResolveCollisionLayer(Entity* entity) {
+    if (entity->collisionLayer == 0) {
+        u32 tileType = GetTileTypeAtWorldCoords(entity->x.HALF.HI, entity->y.HALF.HI, 2);
+        u8 newLayer = 1;
+        if (tileType != 0) {
+            u32 actTile = GetActTileForTileType(tileType);
+            newLayer = 2;
+            /* Check against the resolve table */
+            const TransitionTileEntry* p = sResolveCollisionLayerTiles;
+            while (p->actTile != 0) {
+                if (actTile == p->actTile) {
+                    newLayer = p->toLayer;
+                    break;
+                }
+                p++;
+            }
+        }
+        entity->collisionLayer = newLayer;
+    }
+    UpdateSpriteForCollisionLayer(entity);
+    return 0;
+}
+
+/**
+ * CheckOnLayerTransition — check if entity is standing on a layer-transition tile.
+ * (port of ARM asm at 0x08016A68)
+ *
+ * Returns the act tile at the entity's position (preserved in r0 in ARM code).
+ */
+u32 CheckOnLayerTransition(Entity* entity) {
+    u32 actTile = GetActTileAtEntity(entity);
+    const TransitionTileEntry* p = sTransitionTiles;
+    while (p->actTile != 0) {
+        if (p->actTile == actTile) {
+            if (entity->collisionLayer != p->fromLayer) {
+                entity->collisionLayer = p->toLayer;
+            }
+            return actTile;
+        }
+        p++;
+    }
+    return actTile;
+}
+
+/**
+ * UpdateCollisionLayer — check layer transition and update sprite priority.
+ * (port of ARM asm at 0x08016AB4)
+ */
+void UpdateCollisionLayer(Entity* entity) {
+    CheckOnLayerTransition(entity);
+    UpdateSpriteForCollisionLayer(entity);
+}
+
+/**
+ * GetTileHazardType — check if the entity is standing on a hazardous tile.
+ * (port of ARM asm at 0x080043E8)
+ *
+ * Hazard list:
+ *   0x0D → 1 (hole)
+ *   0x10 → 2 (lava)
+ *   0x11 → 2 (lava)
+ *   0x5A → 3 (swamp)
+ *   0x13 → 4 (water/drown)
+ *
+ * Returns 0 if entity has no action, is in air (z < 0), or not on a hazard tile.
+ */
+u32 GetTileHazardType(Entity* entity) {
+    static const struct {
+        u16 actTile;
+        u16 hazardType;
+    } sHazardList[] = {
+        { 0x0D, 1 }, { 0x10, 2 }, { 0x11, 2 }, { 0x5A, 3 }, { 0x13, 4 }, { 0x00, 0 }, /* terminator */
+    };
+
+    if (entity->action == 0)
+        return 0;
+
+    UpdateCollisionLayer(entity);
+    u32 actTile = GetActTileAtEntity(entity);
+
+    /* Check z position — if entity is in the air, no hazard */
+    if ((s16)entity->z.HALF.HI < 0)
+        return 0;
+
+    if (actTile == 0)
+        return 0;
+
+    for (int i = 0; sHazardList[i].actTile != 0; i++) {
+        if (actTile == sHazardList[i].actTile)
+            return sHazardList[i].hazardType;
+    }
+    return 0;
+}
+
 RoomHeader* gAreaRoomHeaders[256];
 void* gAreaRoomMaps[256];
 void* gAreaTable[256];
@@ -1210,3 +1524,287 @@ u16 script_WindTribespeople6;
 u16 script_ZeldaMagic;
 
 // Unk_08133368 — already defined in data_stubs_autogen.c
+
+/* ================================================================
+ * Enemy update system — ported from ARM Thumb assembly (enemy.s,
+ * code_08001A7C.s, code_080043E8.s)
+ * ================================================================ */
+
+extern void DeleteThisEntity(void);
+extern u32 EnemyInit(Entity*);
+extern u32 EntityDisabled(Entity*);
+extern void DrawEntity(Entity*);
+extern void Knockback1(Entity*);
+extern void Knockback2(Entity*);
+extern void EnemyDetachFX(Entity*);
+extern void UpdateAnimationVariableFrames(Entity*, u32);
+extern void CreatePitFallFX(Entity*);
+extern void CreateDrownFX(Entity*);
+extern void CreateLavaDrownFX(Entity*);
+extern void CreateSwampDrownFX(Entity*);
+extern u32 Random(void);
+extern void (*gEnemyFunctions[])(Entity*);
+
+/*
+ * sub_080028E0 — Decrement iframes towards zero.
+ * Port of 0x080028E0 from code_08001A7C.s.
+ */
+void sub_080028E0(Entity* entity) {
+    if (entity->iframes > 0)
+        entity->iframes--;
+    else if (entity->iframes < 0)
+        entity->iframes++;
+}
+
+/*
+ * GetRandomByWeight — pick a random index from a probability table.
+ * Port of 0x080028F4 from code_08001A7C.s.
+ */
+u32 GetRandomByWeight(const u8* weights) {
+    u32 r = Random() & 0xFF;
+    u32 i = 0;
+    for (;;) {
+        r -= weights[i];
+        i++;
+        if ((s32)r < 0)
+            break;
+    }
+    return i - 1;
+}
+
+/*
+ * CheckRectOnScreen — test if a rectangle (centred at x,y with
+ * half-extents halfW, halfH) overlaps the visible screen.
+ * Port of 0x0800290E from code_08001A7C.s.
+ */
+u32 CheckRectOnScreen(s32 x, s32 y, u32 halfW, u32 halfH) {
+    s32 sx = gRoomControls.scroll_x - gRoomControls.origin_x;
+    u32 dx = (u32)(x - sx + halfW);
+    if (dx >= halfW * 2 + 0xF0)
+        return 0;
+    s32 sy = gRoomControls.scroll_y - gRoomControls.origin_y;
+    u32 dy = (u32)(y - sy + halfH);
+    if (dy >= halfH * 2 + 0xA0)
+        return 0;
+    return 1;
+}
+
+/*
+ * sub_080012DC — Check whether the enemy stands on a tile hazard.
+ * Port of 0x080012DC from enemy.s.
+ * Returns: 0 = no hazard (or filtered), 1 = hole, 2 = lava, 3 = swamp.
+ * Drown (4) is filtered to 0.
+ */
+s32 sub_080012DC(Entity* entity) {
+    /* If gustJarState bit 2 is set (grabbed/held), skip hazard check */
+    if (entity->gustJarState & 4)
+        return 0;
+
+    u32 hazard = GetTileHazardType(entity);
+
+    if (hazard == 4) /* drown → ignore */
+        return 0;
+
+    if (hazard == 0) {
+        /* No hazard, but if gustJarState bit 0 is set, mark flag */
+        if (entity->gustJarState & 1)
+            entity->flags |= 0x80;
+        return 0;
+    }
+
+    /* hazard 1 = hole → return directly */
+    if (hazard == 1)
+        return 1;
+
+    /* hazard 2 (lava) or 3 (swamp): set timer and gustJarState bit 0 */
+    entity->timer = 1;
+    entity->gustJarState |= 1;
+    return (s32)hazard;
+}
+
+/*
+ * Hazard handler function table — gUnk_080012C8.
+ * Index 0 = NULL (unused), 1 = hole, 2 = drown, 3 = lava, 4 = swamp.
+ */
+typedef void (*HazardFn)(Entity*);
+static void HazardNull(Entity* e) {
+    (void)e;
+}
+
+static HazardFn sHazardTable[5];
+static int sHazardTableInit = 0;
+
+static void InitHazardTable(void) {
+    if (sHazardTableInit)
+        return;
+    sHazardTableInit = 1;
+    sHazardTable[0] = HazardNull;
+    /* sub_08001214 is defined below — forward-declare */
+    extern void sub_08001214(Entity*);
+    sHazardTable[1] = sub_08001214;
+    sHazardTable[2] = CreateDrownFX;
+    sHazardTable[3] = CreateLavaDrownFX;
+    sHazardTable[4] = CreateSwampDrownFX;
+}
+
+/*
+ * sub_08001290 — dispatch to hazard handler table.
+ * Port of 0x08001290 from enemy.s.
+ */
+void sub_08001290(Entity* entity, u32 hazardType) {
+    if (hazardType == 0)
+        return;
+    InitHazardTable();
+    sHazardTable[hazardType](entity);
+}
+
+/*
+ * sub_08001214 — Hole / pit fall handler.
+ * Port of 0x08001214 from enemy.s.
+ * Called each frame while an enemy is standing on a hole tile.
+ */
+void sub_08001214(Entity* entity) {
+    if (!(entity->gustJarState & 1)) {
+        /* First frame: initialise gustJarState and timer */
+        entity->gustJarState = 1;
+        u8 t = 1;
+        if (entity->frame & 0x40) /* if frame bit 6 set → longer timer */
+            t = 0x20;
+        entity->timer = t;
+    }
+    /* Decrement timer each frame */
+    entity->timer--;
+    if (entity->timer == 0) {
+        CreatePitFallFX(entity);
+        return;
+    }
+    UpdateAnimationVariableFrames(entity, 4);
+}
+
+/*
+ * EnemyFunctionHandler — main enemy action dispatcher with hazard check.
+ * Port of 0x0800129E from enemy.s.
+ *
+ * Called by individual enemy functions to advance their state machine.
+ *   entity  — the enemy being updated
+ *   actions — pointer to the enemy's function table
+ */
+void EnemyFunctionHandler(Entity* entity, EntityActionArray actions) {
+    s32 hazard = sub_080012DC(entity);
+    void (*fn)(Entity*);
+
+    if (hazard != 0) {
+        InitHazardTable();
+        fn = sHazardTable[hazard];
+    } else {
+        u32 idx = GetNextFunction(entity);
+        fn = actions[idx];
+    }
+    fn(entity);
+}
+
+/*
+ * GenericConfused — confusion state handler.
+ * Port of 0x08001242 from enemy.s.
+ * Called each frame by enemies when confused (stunned by Gust Jar, etc.).
+ */
+static const s8 sConfusedOffsets[] = { 0, 1, 0, -1 };
+
+void GenericConfused(Entity* entity) {
+    entity->confusedTime--;
+    if (entity->confusedTime < 0x3C) {
+        u8 phase = entity->confusedTime & 3;
+        entity->spriteOffsetX = sConfusedOffsets[phase];
+        if (entity->confusedTime == 0) {
+            /* On GBA, a linked FX entity pointer is stored at offset 0x68
+               (spanning field_0x68 + field_0x6a as 4 bytes). On 64-bit this
+               doesn't work (pointer is 8 bytes), but the child field serves
+               the same purpose in many cases. Check child for the confusion
+               FX entity (kind=6, id=0xF, type=0x1C) and detach it. */
+            Entity* fx = entity->child;
+            if (fx != NULL && fx->kind == 6 && fx->id == 0xF && fx->type == 0x1C) {
+                EnemyDetachFX(entity);
+            }
+        }
+    }
+    GravityUpdate(entity, 0x1800);
+}
+
+/*
+ * GenericKnockback — trampoline to Knockback1.
+ * Port of 0x08001324 from enemy.s.
+ */
+void GenericKnockback(Entity* entity) {
+    Knockback1(entity);
+}
+
+/*
+ * GenericKnockback2 — trampoline to Knockback2.
+ * Port of 0x08001328 from enemy.s.
+ */
+void GenericKnockback2(Entity* entity) {
+    Knockback2(entity);
+}
+
+/*
+ * sub_08001318 — check health, then knockback.
+ * Port of 0x08001318 from enemy.s.
+ */
+void sub_08001318(Entity* entity) {
+    if (entity->z.HALF.HI < 0)
+        entity->direction = 0xFF;
+    Knockback1(entity);
+}
+
+/*
+ * sub_0800132C — entity proximity check.
+ * Port of 0x0800132C from enemy.s.
+ * Returns the facing direction of entity toward target, or 0xFF if not close.
+ */
+extern u32 GetFacingDirection(Entity*, Entity*);
+
+u32 sub_0800132C(Entity* entity, Entity* target) {
+    /* Both must share at least one collision layer bit */
+    if (!(entity->collisionLayer & target->collisionLayer))
+        return 0xFF;
+    /* Check distance: if either axis > 8px apart, return facing direction.
+       If both axes within 8px (overlapping), return 0xFF (too close). */
+    s32 dx = entity->x.HALF.HI - target->x.HALF.HI + 8;
+    if ((u32)dx >= 0x11)
+        return GetFacingDirection(entity, target);
+    s32 dy = entity->y.HALF.HI - target->y.HALF.HI + 8;
+    if ((u32)dy < 0x11)
+        return 0xFF; /* overlapping — no direction */
+    return GetFacingDirection(entity, target);
+}
+
+/*
+ * EnemyUpdate — per-frame update for all enemies.
+ * Port of 0x080011C4 from enemy.s.
+ */
+void EnemyUpdate(Entity* entity) {
+    if (entity->action == 0) {
+        if (!EnemyInit(entity)) {
+            DeleteThisEntity();
+            return; /* DeleteThisEntity may not return */
+        }
+        /* EnemyInit succeeded — fall through to function dispatch */
+    } else {
+        if (EntityDisabled(entity))
+            goto draw;
+        sub_080028E0(entity);
+    }
+
+    /* Function dispatch: check bit 4 of extended field at GBA offset 0x6D */
+    {
+        GenericEntity* ge = (GenericEntity*)entity;
+        u8 f6d = ge->field_0x6c.HALF.HI;
+        if (!(f6d & 0x10)) {
+            gEnemyFunctions[entity->id](entity);
+            entity->contactFlags &= ~CONTACT_NOW;
+        }
+    }
+
+draw:
+    DrawEntity(entity);
+}

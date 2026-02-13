@@ -620,7 +620,7 @@ void sub_08053D90(void) {
 void sub_08053DB4(void) {
     if (gFadeControl.active == 0) {
         struct_080FCF04* ptr = (struct_080FCF04*)gMenu.field_0xc;
-        sub_08052FF4(gMenu.field_0xc[4], gMenu.field_0xc[5]);
+        sub_08052FF4(ptr->area, ptr->room);
         InitializeCamera();
         gUpdateVisibleTiles = 1;
         gRoomControls.scroll_x = (s8)ptr->scrollX + gRoomControls.scroll_x;
@@ -725,11 +725,10 @@ void sub_08053E74(void) {
 }
 
 void sub_08053EC4(void) {
-    EntityData** data;
     if ((gFadeControl.active == 0) && (--gMenu.field_0xa == 0)) {
-        data = (EntityData**)(gMenu.field_0xc + 4); // TODO entityData2 of struct_080FCFB8
-        gMenu.field_0xc += 0xc;
-        LoadRoomEntityList(*data);
+        struct_080FCFB8* ptr = (struct_080FCFB8*)gMenu.field_0xc;
+        gMenu.field_0xc += sizeof(struct_080FCFB8);
+        LoadRoomEntityList(ptr->entityData2);
         gMenu.overlayType++;
     }
 }

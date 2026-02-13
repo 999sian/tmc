@@ -645,6 +645,20 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
 #ifdef PC_PORT
     {
         uintptr_t addr = (uintptr_t)context->scriptInstructionPointer;
+        if ((addr >> 48) != 0) {
+            fprintf(stderr,
+                    "[SCRIPT] ENTRY CORRUPTION: ptr=%p before any command. entity kind=%d id=%d type=%d "
+                    "context=%p (offset=%td in pool)\n",
+                    (void*)context->scriptInstructionPointer, entity->kind, entity->id, entity->type, (void*)context,
+                    (const u8*)context - (const u8*)&gScriptExecutionContextArray[0]);
+            const u8* raw = (const u8*)context;
+            fprintf(stderr, "[SCRIPT]   raw bytes: ");
+            for (int i = 0; i < 16; i++)
+                fprintf(stderr, "%02X ", raw[i]);
+            fprintf(stderr, "\n");
+            context->scriptInstructionPointer = NULL;
+            return;
+        }
         if (addr >= 0x08000000u && addr < 0x0A000000u) {
             fprintf(stderr,
                     "[SCRIPT] ERROR: scriptInstructionPointer is unresolved GBA address 0x%08X! entity kind=%d id=%d "
@@ -684,6 +698,24 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
 #ifdef PC_PORT
             if (!context->scriptInstructionPointer)
                 return;
+            {
+                uintptr_t _chk = (uintptr_t)context->scriptInstructionPointer;
+                if ((_chk >> 48) != 0) {
+                    fprintf(stderr, "[SCRIPT] CORRUPTION after cmd %d (size %d): ptr=%p entity kind=%d id=%d type=%d\n",
+                            activeScriptInfo->commandIndex, activeScriptInfo->commandSize,
+                            (void*)context->scriptInstructionPointer, entity->kind, entity->id, entity->type);
+                    /* Dump the raw bytes of the context struct */
+                    {
+                        const u8* raw = (const u8*)context;
+                        fprintf(stderr, "[SCRIPT]   context bytes: ");
+                        for (int i = 0; i < 16; i++)
+                            fprintf(stderr, "%02X ", raw[i]);
+                        fprintf(stderr, "\n");
+                    }
+                    context->scriptInstructionPointer = NULL;
+                    return;
+                }
+            }
 #endif
             context->scriptInstructionPointer += activeScriptInfo->commandSize;
             if (lastInstruction != context->scriptInstructionPointer) {
@@ -1748,7 +1780,11 @@ void EquipItem(Entity* entity, ScriptExecutionContext* context) {
 }
 
 void SetPlayerMacro(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    InitPlayerMacro((PlayerMacroEntry*)Port_ResolveRomData(context->intVariable));
+#else
     InitPlayerMacro((PlayerMacroEntry*)context->intVariable);
+#endif
 }
 
 void WaitForPlayerMacro(Entity* entity, ScriptExecutionContext* context) {
@@ -1930,7 +1966,11 @@ void WaitForCameraTouchRoomBorder(Entity* entity, ScriptExecutionContext* contex
 }
 
 void sub_0807F634(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    u16* textIndices = (u16*)Port_ResolveRomData(context->intVariable);
+#else
     u16* textIndices = (u16*)context->intVariable;
+#endif
     InitializeFuseInfo(entity, textIndices[0], textIndices[1], textIndices[2]);
     gPlayerState.controlMode = CONTROL_DISABLED;
 }
@@ -1960,7 +2000,25 @@ void ResetPlayerFlag(Entity* entity, ScriptExecutionContext* context) {
 }
 
 void ScriptCommand_ShowNPCDialogue(Entity* entity, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    /* intVariable holds a GBA ROM address to Dialog data in GBA layout.
+     * On 64-bit, sizeof(Dialog) changes due to the function pointer union member,
+     * so we must unpack the GBA layout (8 bytes) into a native Dialog struct. */
+    const u8* rawDia = (const u8*)Port_ResolveRomData(context->intVariable);
+    if (!rawDia)
+        return;
+    Dialog dia;
+    *(u32*)&dia = *(const u32*)rawDia;              /* bitfield: flag, flagType, type, fromSelf */
+    dia.data.indices.a = *(const u16*)(rawDia + 4); /* first data halfword */
+    dia.data.indices.b = *(const u16*)(rawDia + 6); /* second data halfword */
+    /* Note: if type == DIALOG_CALL_FUNC, dia.data.func is a GBA address that
+     * needs resolution.  ShowNPCDialogue currently reads it as a native pointer.
+     * For now, we handle the indices case; func-type dialogs from ROM will need
+     * further work if they arise. */
+    ShowNPCDialogue(entity, &dia);
+#else
     ShowNPCDialogue(entity, (Dialog*)context->intVariable);
+#endif
 }
 
 void sub_0807F714(Entity* entity, ScriptExecutionContext* context) {

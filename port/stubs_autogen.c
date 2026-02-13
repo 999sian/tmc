@@ -22,25 +22,26 @@ u32 CalcCollisionStaticEntity(...) {
 /* CalculateDirectionFromOffsets -- implemented in port_math.c */
 /* CalculateDirectionTo -- implemented in port_math.c */
 /* CheckBits — implemented in port_linked_stubs.c */
-u32 CheckOnLayerTransition(...) {
-    return 0;
-}
+/* CheckOnLayerTransition -- implemented in port_linked_stubs.c */
 /* CheckOnScreen -- defined in port_draw.c */
 /* CheckPlayerInRegion -- implemented in port_linked_stubs.c */
-u32 CheckRectOnScreen(...) {
-    return 0;
+/* CheckRectOnScreen -- implemented in port_linked_stubs.c */
+/* CloneTile -- implemented in port_linked_stubs.c */
+void CreateDrownFX(Entity* entity) {
+    /* Stub: drown FX not yet implemented */
+    (void)entity;
 }
-u32 CloneTile(...) {
-    return 0;
+void CreateLavaDrownFX(Entity* entity) {
+    /* Stub: lava drown FX not yet implemented */
+    (void)entity;
 }
-u32 CreateDrownFX(...) {
-    return 0;
+void CreateSwampDrownFX(Entity* entity) {
+    /* Stub: swamp drown FX not yet implemented */
+    (void)entity;
 }
-u32 CreateLavaDrownFX(...) {
-    return 0;
-}
-u32 CreatePitFallFX(...) {
-    return 0;
+void CreatePitFallFX(Entity* entity) {
+    /* Stub: pit fall FX not yet implemented */
+    (void)entity;
 }
 /* CutsceneMain_Exit -- real implementation in src/cutscene.c */
 /* CutsceneMain_Init -- real implementation in src/cutscene.c */
@@ -61,12 +62,8 @@ u32 DoTileInteractionOffset(...) {
 /* DrawEntity -- defined in port_draw.c */
 /* EEPROM functions -- defined in port_save.c */
 /* Enemies_LakeHylia_Main -- defined in port_linked_stubs.c */
-u32 EnemyFunctionHandler(...) {
-    return 0;
-}
-void EnemyUpdate(Entity* entity) {
-    /* Stub: enemy update not implemented yet */
-}
+/* EnemyFunctionHandler -- implemented in port_linked_stubs.c */
+/* EnemyUpdate -- implemented in port_linked_stubs.c */
 u32 EnqueueSFX(...) {
     return 0;
 }
@@ -77,15 +74,9 @@ u32 EnqueueSFX(...) {
 u32 FindValueForKey(...) {
     return 0;
 }
-u32 GenericConfused(...) {
-    return 0;
-}
-u32 GenericKnockback(...) {
-    return 0;
-}
-u32 GenericKnockback2(...) {
-    return 0;
-}
+/* GenericConfused -- implemented in port_linked_stubs.c */
+/* GenericKnockback -- implemented in port_linked_stubs.c */
+/* GenericKnockback2 -- implemented in port_linked_stubs.c */
 /* GetActTileAtEntity -- implemented in port_linked_stubs.c */
 /* GetActTileAtRoomCoords -- implemented in port_linked_stubs.c */
 /* GetActTileAtTilePos -- implemented in port_linked_stubs.c */
@@ -106,15 +97,9 @@ u32 GetFuserId(...) {
 /* GetNextScriptCommandHalfwordAfterCommandMetadata — implemented in port_stubs.c */
 /* GetNextScriptCommandWord — implemented in port_stubs.c */
 /* GetNextScriptCommandWordAfterCommandMetadata — implemented in port_stubs.c */
-u32 GetRandomByWeight(...) {
-    return 0;
-}
-u32 GetTileHazardType(...) {
-    return 0;
-}
-u32 GetTileIndex(...) {
-    return 0;
-}
+/* GetRandomByWeight -- implemented in port_linked_stubs.c */
+/* GetTileHazardType -- implemented in port_linked_stubs.c */
+/* GetTileIndex -- implemented in port_linked_stubs.c */
 /* GetTileTypeAtEntity -- implemented in port_linked_stubs.c */
 /* GetTileTypeAtRoomCoords -- implemented in port_linked_stubs.c */
 /* GetTileTypeAtTilePos -- implemented in port_linked_stubs.c */
@@ -150,19 +135,11 @@ void ProjectileUpdate(Entity* entity) {
 u32 ResetCollisionLayer(...) {
     return 0;
 }
-u32 ResolveCollisionLayer(...) {
-    return 0;
-}
+/* ResolveCollisionLayer -- implemented in port_linked_stubs.c */
 /* RupeeKeyDigits -- defined in port_linked_stubs.c */
-u32 SetActTileAtTilePos(...) {
-    return 0;
-}
-u32 SetCollisionData(...) {
-    return 0;
-}
-u32 SetTile(...) {
-    return 0;
-}
+/* SetActTileAtTilePos -- implemented in port_linked_stubs.c */
+/* SetCollisionData -- implemented in port_linked_stubs.c */
+/* SetTile -- implemented in port_linked_stubs.c */
 u32 SnapToTile(...) {
     return 0;
 }
@@ -179,9 +156,7 @@ u32 SoundReqClipped(...) {
 void UpdateCollision(Entity* entity) {
     /* Stub: collision handling not implemented yet */
 }
-u32 UpdateCollisionLayer(...) {
-    return 0;
-}
+/* UpdateCollisionLayer -- implemented in port_linked_stubs.c */
 u32 UpdateIcePlayerVelocity(...) {
     return 0;
 }
@@ -578,23 +553,13 @@ u32 sub_08000E44(...) {
 u32 sub_08000E62(...) {
     return 0;
 }
-u32 sub_08001290(...) {
-    return 0;
-}
-u32 sub_080012DC(...) {
-    return 0;
-}
-u32 sub_08001318(...) {
-    return 0;
-}
-u32 sub_0800132C(...) {
-    return 0;
-}
+/* sub_08001290 -- implemented in port_linked_stubs.c */
+/* sub_080012DC -- implemented in port_linked_stubs.c */
+/* sub_08001318 -- implemented in port_linked_stubs.c */
+/* sub_0800132C -- implemented in port_linked_stubs.c */
 /* sub_080026C4 — implemented in port_text_render.c */
 /* sub_080026F2 — implemented in port_text_render.c */
-u32 sub_080028E0(...) {
-    return 0;
-}
+/* sub_080028E0 -- implemented in port_linked_stubs.c */
 u32 sub_08003FDE(...) {
     return 0;
 }

@@ -18,6 +18,7 @@
 #include "windcrest.h"
 
 #ifdef PC_PORT
+#include "port_rom.h"
 extern void* Port_ReadPackedRomPtr(const void* base, u32 index);
 #endif
 extern u32 sub_08060354(void);
@@ -1008,6 +1009,42 @@ void sub_0804BF38(Entity* this, ScriptExecutionContext* context) {
     u16* a;
 
     iVar2 = context->intVariable;
+#ifdef PC_PORT
+    /* ROM struct_080D8E54 data: 16 bytes on GBA (u16* a = 4 bytes pointer).
+     * On 64-bit, native sizeof = 24. Index and read with GBA stride of 16. */
+    {
+        const u8* raw = (const u8*)gUnk_080D8E50 + iVar2 * 16;
+        u32 gba_a = *(const u32*)(raw + 0);
+        a = gba_a ? (u16*)Port_ResolveRomData(gba_a) : NULL;
+        u16 p_x = *(const u16*)(raw + 4);
+        u16 p_y = *(const u16*)(raw + 6);
+        numEnts = *(const u16*)(raw + 8);
+        u16 p_shakeTime = *(const u16*)(raw + 10);
+        u16 p_shakeMag = *(const u16*)(raw + 12);
+        u16 p_sfx = *(const u16*)(raw + 14);
+        xtile = (p_x >> 4) & 0x3f;
+        ytile = ((p_y >> 4) & 0x3f) << 6;
+        sub_0807BB68(a, xtile | ytile, 1);
+
+        for (entCnt = 0; entCnt < numEnts; entCnt++) {
+            fx = CreateObject(SPECIAL_FX, FX_ROCK_SMALL, 0);
+            if (fx != NULL) {
+                fx->x.HALF.HI = p_x + gRoomControls.origin_x + entCnt * 0x10;
+                fx->y.HALF.HI = p_y + gRoomControls.origin_y + (entCnt & 1) * 8;
+            }
+            fx = CreateObject(SPECIAL_FX, FX_WHITE_PUFF, 0);
+            if (fx != NULL) {
+                fx->x.HALF.HI = p_x + gRoomControls.origin_x + entCnt * 0x10;
+                fx->y.HALF.HI = p_y + gRoomControls.origin_y + -0xc + (entCnt & 1) * 8;
+                fx->direction = 0;
+                fx->speed = 0x100;
+            }
+        }
+
+        InitScreenShake(p_shakeTime, p_shakeMag);
+        SoundReq(p_sfx);
+    }
+#else
     ptr = &gUnk_080D8E50[iVar2];
     a = ptr->a;
     xtile = (ptr->x >> 4) & 0x3f;
@@ -1032,6 +1069,7 @@ void sub_0804BF38(Entity* this, ScriptExecutionContext* context) {
 
     InitScreenShake(ptr->shakeTime, ptr->shakeMag);
     SoundReq(ptr->sfx);
+#endif
 }
 
 u32 sub_unk3_EzloAuxCutscene_Main(void) {

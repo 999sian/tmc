@@ -601,6 +601,10 @@ void Port_LoadRom(const char* path) {
             gSpritePtrs[i].frames = (SpriteFrame*)ResolveRomPtr(frames);
             gSpritePtrs[i].ptr = ResolveRomPtr(ptr);
             gSpritePtrs[i].pad = pad;
+            if (i == 59) {
+                fprintf(stderr, "[SPRITE59] init: anim=0x%08X → %p, frames=0x%08X, ptr=0x%08X, pad=0x%08X\n", anim,
+                        gSpritePtrs[59].animations, frames, ptr, pad);
+            }
         }
         fprintf(stderr, "gSpritePtrs loaded (%u entries from ROM offset 0x%X, pointers resolved).\n",
                 R->spritePtrsCount, R->spritePtrs);

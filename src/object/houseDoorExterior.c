@@ -12,6 +12,9 @@
 #include "room.h"
 #include "script.h"
 #include "sound.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -53,7 +56,6 @@ void HouseDoorExterior(HouseDoorExteriorEntity* this) {
 }
 
 void HouseDoorExterior_Type0(HouseDoorExteriorEntity* this) {
-    unk_DoorProperty* prop;
     HouseDoorExteriorEntity* entity;
     u32 i;
 
@@ -64,29 +66,73 @@ void HouseDoorExterior_Type0(HouseDoorExteriorEntity* this) {
         SetEntityPriority(super, PRIO_PLAYER_EVENT);
     }
 
-    prop = GetCurrentRoomProperty(this->unk_6c);
-    for (i = 0; prop->unk0 != 0xFFFF && i < 32; prop++, i++) {
-        int mask = 1 << i;
-        if ((*((u32*)(&this->unk_68)) & mask) == 0 && sub_080867CC(prop->unk5) &&
-            CheckRegionOnScreen(prop->unk0, prop->unk2, 32, 32)) {
-            entity = (HouseDoorExteriorEntity*)CreateObject(HOUSE_DOOR_EXT, prop->unk7, prop->unk6);
-            if (entity != NULL) {
-                entity->unk_6c = i;
-                entity->base.x.HALF.HI = gRoomControls.origin_x + prop->unk0 + 16;
-                entity->base.y.HALF.HI = gRoomControls.origin_y + prop->unk2 + 32;
-                entity->base.parent = super;
-                entity->unk_68 = prop->unk0;
-                entity->unk_6a = prop->unk2;
-                entity->base.collisionLayer = prop->unk4;
-                entity->base.subAction = prop->unk5;
-                UpdateSpriteForCollisionLayer(&entity->base);
-                *((u32*)(&this->unk_68)) |= mask;
-                if (prop->unk8) {
-                    entity->context = StartCutscene(&entity->base, (u16*)prop->unk8);
+#ifdef PC_PORT
+    {
+        const u8* raw = (const u8*)GetCurrentRoomProperty(this->unk_6c);
+        if (!raw)
+            return;
+        for (i = 0; i < 32; i++, raw += 12) {
+            u16 p_unk0 = *(const u16*)(raw + 0);
+            if (p_unk0 == 0xFFFF)
+                break;
+            u16 p_unk2 = *(const u16*)(raw + 2);
+            u8 p_unk4 = raw[4];
+            u8 p_unk5 = raw[5];
+            u8 p_unk6 = raw[6];
+            u8 p_unk7 = raw[7];
+            u32 p_unk8 = *(const u32*)(raw + 8); /* GBA script pointer (4 bytes) */
+            int mask = 1 << i;
+            if ((*((u32*)(&this->unk_68)) & mask) == 0 && sub_080867CC(p_unk5) &&
+                CheckRegionOnScreen(p_unk0, p_unk2, 32, 32)) {
+                entity = (HouseDoorExteriorEntity*)CreateObject(HOUSE_DOOR_EXT, p_unk7, p_unk6);
+                if (entity != NULL) {
+                    entity->unk_6c = i;
+                    entity->base.x.HALF.HI = gRoomControls.origin_x + p_unk0 + 16;
+                    entity->base.y.HALF.HI = gRoomControls.origin_y + p_unk2 + 32;
+                    entity->base.parent = super;
+                    entity->unk_68 = p_unk0;
+                    entity->unk_6a = p_unk2;
+                    entity->base.collisionLayer = p_unk4;
+                    entity->base.subAction = p_unk5;
+                    UpdateSpriteForCollisionLayer(&entity->base);
+                    *((u32*)(&this->unk_68)) |= mask;
+                    if (p_unk8) {
+                        u16* script = (u16*)Port_ResolveRomData(p_unk8);
+                        if (script)
+                            entity->context = StartCutscene(&entity->base, script);
+                    }
                 }
             }
         }
     }
+#else
+    {
+        unk_DoorProperty* prop;
+        prop = GetCurrentRoomProperty(this->unk_6c);
+        for (i = 0; prop->unk0 != 0xFFFF && i < 32; prop++, i++) {
+            int mask = 1 << i;
+            if ((*((u32*)(&this->unk_68)) & mask) == 0 && sub_080867CC(prop->unk5) &&
+                CheckRegionOnScreen(prop->unk0, prop->unk2, 32, 32)) {
+                entity = (HouseDoorExteriorEntity*)CreateObject(HOUSE_DOOR_EXT, prop->unk7, prop->unk6);
+                if (entity != NULL) {
+                    entity->unk_6c = i;
+                    entity->base.x.HALF.HI = gRoomControls.origin_x + prop->unk0 + 16;
+                    entity->base.y.HALF.HI = gRoomControls.origin_y + prop->unk2 + 32;
+                    entity->base.parent = super;
+                    entity->unk_68 = prop->unk0;
+                    entity->unk_6a = prop->unk2;
+                    entity->base.collisionLayer = prop->unk4;
+                    entity->base.subAction = prop->unk5;
+                    UpdateSpriteForCollisionLayer(&entity->base);
+                    *((u32*)(&this->unk_68)) |= mask;
+                    if (prop->unk8) {
+                        entity->context = StartCutscene(&entity->base, (u16*)prop->unk8);
+                    }
+                }
+            }
+        }
+    }
+#endif
 }
 
 static bool32 sub_080867CC(u32 arg0) {

@@ -5,10 +5,13 @@
  * @brief Delayed entity loader.
  */
 #include "manager/delayedEntityLoadManager.h"
-#include "room.h"
-#include "npc.h"
 #include "area.h"
 #include "asm.h"
+#include "npc.h"
+#include "room.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 typedef struct {
     Manager base;
@@ -41,12 +44,35 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
         npcPtr = gNPCData;
         npcPtr += (super->type2 + this->unk_20);
         index1 = 0;
+#ifdef PC_PORT
+        {
+            const u8* raw = (const u8*)properties;
+            while (raw[0] != 0xff) { /* raw[0] = id */
+                npcPtr->id = raw[0];
+                npcPtr->type = raw[1];
+                npcPtr->type2 = raw[2];
+                npcPtr->collisionLayer = raw[3];
+                npcPtr->x = *(const u16*)(raw + 4);
+                npcPtr->y = *(const u16*)(raw + 6);
+                {
+                    u32 gba_script = *(const u32*)(raw + 8);
+                    npcPtr->script = gba_script ? (u16*)Port_ResolveRomData(gba_script) : NULL;
+                }
+                npcPtr->timer = *(const u16*)(raw + 12);
+                npcPtr->progressBitfield = *(const u16*)(raw + 14);
+                index1++;
+                raw += 16; /* GBA sizeof(NPCStruct) */
+                npcPtr++;
+            }
+        }
+#else
         while (properties->id != 0xff) {
             *npcPtr = *properties;
             index1++;
             properties++;
             npcPtr++;
         }
+#endif
         npcPtr->id = 0xff;
         this->spawnedCount = index1;
     }
@@ -94,7 +120,7 @@ u32 sub_0805ACC0(Entity* param_1) {
 
     for (entity = gEntityLists[6].first; entity != list; entity = entity->next) {
         if ((entity->kind == 9 && entity->id == 0x16) && entity->type2 <= tmp &&
-            (entity->type2 + *(u8*)((u32)&entity->zVelocity + 1)) > tmp) {
+            (entity->type2 + *(u8*)((uintptr_t)&entity->zVelocity + 1)) > tmp) {
 
             ptr = (u16*)GetCurrentRoomProperty(entity->type);
             if (ptr != NULL) {

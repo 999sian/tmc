@@ -7,6 +7,9 @@
 #include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -229,6 +232,35 @@ void LavaPlatform_Type1Action7(LavaPlatformEntity* this) {
 }
 
 void LavaPlatform_SpawnPlatforms(LavaPlatformEntity* this) {
+#ifdef PC_PORT
+    const u8* raw = (const u8*)GetCurrentRoomProperty(super->type2);
+    if (!raw)
+        return;
+    while (raw[9] != 0xff) { /* offset 9 = type2 */
+        u32 gba_ptr = *(const u32*)(raw + 0);
+        s16 e_x = *(const s16*)(raw + 4);
+        s16 e_y = *(const s16*)(raw + 6);
+        u8 e_colLyr = raw[8];
+        u8 e_type2 = raw[9];
+        u16 e_wobble = *(const u16*)(raw + 10);
+        u16 e_respawn = *(const u16*)(raw + 12);
+        LavaPlatformEntity* platform = (LavaPlatformEntity*)CreateObject(LAVA_PLATFORM, 1, e_type2);
+        if (platform != NULL) {
+            (platform->base).direction = 0xff;
+            (platform->base).speed = 0;
+            (platform->base).parent = super;
+            (platform->base).x.HALF.HI = e_x + gRoomControls.origin_x;
+            (platform->base).y.HALF.HI = e_y + gRoomControls.origin_y;
+            (platform->base).collisionLayer = e_colLyr;
+            platform->wobbleTime = e_wobble;
+            platform->respawnTime = e_respawn;
+            platform->unk_78 = gba_ptr ? (Entity*)Port_ResolveRomData(gba_ptr) : NULL;
+            UpdateSpriteForCollisionLayer((Entity*)platform);
+            UpdateRailMovement(&platform->base, (u16**)&platform->unk_78, &platform->unk_76);
+        }
+        raw += 16; /* GBA sizeof(LavaPlatformEntry) */
+    }
+#else
     LavaPlatformEntry* entry = (LavaPlatformEntry*)GetCurrentRoomProperty(super->type2);
     while (entry->type2 != 0xff) {
         LavaPlatformEntity* platform = (LavaPlatformEntity*)CreateObject(LAVA_PLATFORM, 1, entry->type2);
@@ -247,6 +279,7 @@ void LavaPlatform_SpawnPlatforms(LavaPlatformEntity* this) {
         }
         entry++;
     }
+#endif
 }
 
 void sub_08092620(LavaPlatformEntity* this) {

@@ -18,7 +18,11 @@
 #include "entity.h"
 #include "port_gba_mem.h"
 #include "structures.h"
+#include <stdio.h>
 #include <string.h>
+
+extern u8* gRomData;
+extern u32 gRomSize;
 
 /* ------------------------------------------------------------------ */
 /* sub_080042D0 — Update GFX slot with new frame tile data             */
@@ -88,12 +92,34 @@ void InitializeAnimation(Entity* entity, u32 animIndex) {
     entity->animIndex = (u8)animIndex;
 
     u16 spriteIdx = (u16)entity->spriteIndex;
+
+    /* Bounds check: gSpritePtrs only has 329 initialized entries */
+    if (spriteIdx >= 512) {
+        fprintf(stderr, "InitializeAnimation: spriteIndex %u out of range!\n", spriteIdx);
+        return;
+    }
+
     SpritePtr* spr = &gSpritePtrs[spriteIdx];
 
     /* animations is a native pointer to an array of u32 (GBA ROM addresses) */
     u32* animTable = (u32*)spr->animations;
     if (!animTable)
         return;
+
+    /* Validate animTable points within ROM data */
+    u8* at = (u8*)animTable;
+    if (at < gRomData || at >= gRomData + gRomSize) {
+        fprintf(stderr, "InitializeAnimation: animations ptr %p outside ROM for sprite %u!\n", (void*)animTable,
+                spriteIdx);
+        return;
+    }
+
+    /* Validate animIndex won't read past ROM data */
+    if ((u32)(at - gRomData) + (animIndex + 1) * 4 > gRomSize) {
+        fprintf(stderr, "InitializeAnimation: animIndex %u out of bounds for sprite %u (ROM offset 0x%X)!\n", animIndex,
+                spriteIdx, (u32)(at - gRomData));
+        return;
+    }
 
     u32 animGbaAddr = animTable[animIndex];
     /* Resolve GBA ROM address to native pointer */
@@ -122,7 +148,13 @@ void UpdateAnimationVariableFrames(Entity* entity, u32 amount) {
 
     /* FrameNeg: skip through frames until remaining > 0 */
     u8* p = (u8*)entity->animPtr;
+    int maxIter = 256; /* safety limit to prevent infinite loops on corrupt data */
     for (;;) {
+        if (--maxIter <= 0) {
+            fprintf(stderr, "UpdateAnimationVariableFrames: infinite loop detected, sprite %u anim %u\n",
+                    entity->spriteIndex, entity->animIndex);
+            return;
+        }
         remaining += p[1]; /* add this frame's duration */
         if (remaining > 0) {
             /* Found the right frame — process it, then fix up duration */

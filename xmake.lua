@@ -374,6 +374,7 @@ target("tmc_pc")
     add_files("src/flagDebug.c")
     add_files("src/staffroll.c")
     add_files("src/menu/*.c")
+    add_files("src/data/figurineMenuData.c")
     -- add_files("src/worldEvent/*.c")  -- FIXME: pointer casts in EntityData
     
     -- Code stubs (functions that need decompilation)
