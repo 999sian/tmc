@@ -361,6 +361,55 @@ void sub_080AE218(u32 param1, u32 param2) {
     r3 = (param1 << 4) + 0x140;
     r7 = r3 + ((u32)gGFXSlots.slots[param1].slotCount << 4);
 
+#ifdef PC_PORT
+    {
+        Entity* ent;
+        u32 i;
+
+        ent = &gPlayerEntity.base;
+        if (ent->next != NULL) {
+            if (param1 == ent->spriteAnimation[0]) {
+                ent->spriteAnimation[0] = param2;
+            }
+            r0 = ent->spriteVramOffset;
+            if ((r3 <= r0) && (r7 > r0)) {
+                r0 = (r0 - r3);
+                r1 = r0 + r12;
+                ent->spriteVramOffset = r1;
+            }
+        }
+
+        for (i = 0; i < ARRAY_COUNT(gAuxPlayerEntities); i++) {
+            ent = &gAuxPlayerEntities[i].base;
+            if (ent->next != NULL) {
+                if (param1 == ent->spriteAnimation[0]) {
+                    ent->spriteAnimation[0] = param2;
+                }
+                r0 = ent->spriteVramOffset;
+                if ((r3 <= r0) && (r7 > r0)) {
+                    r0 = (r0 - r3);
+                    r1 = r0 + r12;
+                    ent->spriteVramOffset = r1;
+                }
+            }
+        }
+
+        for (i = 0; i < ARRAY_COUNT(gEntities); i++) {
+            ent = &gEntities[i].base;
+            if (ent->next != NULL) {
+                if (param1 == ent->spriteAnimation[0]) {
+                    ent->spriteAnimation[0] = param2;
+                }
+                r0 = ent->spriteVramOffset;
+                if ((r3 <= r0) && (r7 > r0)) {
+                    r0 = (r0 - r3);
+                    r1 = r0 + r12;
+                    ent->spriteVramOffset = r1;
+                }
+            }
+        }
+    }
+#else
     for (index1 = 0; index1 < 0x50; index1++) {
         Entity* ent = (Entity*)&(&gPlayerEntity)[index1];
         if (ent->next != NULL) {
@@ -375,6 +424,7 @@ void sub_080AE218(u32 param1, u32 param2) {
             }
         }
     }
+#endif
 
     for (index2 = 0; index2 < ARRAY_COUNT(gUnk_020000C0); index2++) {
         for (index1 = 0; index1 < 4; index1++) {

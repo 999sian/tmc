@@ -387,7 +387,6 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    -- SDL3 for UltrAGB
     add_packages("libsdl3")
     
     -- Math library

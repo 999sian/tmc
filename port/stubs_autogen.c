@@ -4,19 +4,93 @@
 
 #include "port_gba_mem.h"
 #include "port_types.h"
+#include "entity.h"
 #include <stdint.h>
 #include <string.h>
 
-/* Forward declaration for Entity* stubs */
-struct Entity_;
-typedef struct Entity_ Entity;
+typedef struct {
+    Entity base;
+} PlayerEntity;
+
+extern PlayerEntity gPlayerEntity;
+extern u32 PlayerCanBeMoved(void);
+extern u32 GetTileHazardType(Entity* entity);
+extern u32 GetActTileAtEntity(Entity* entity);
+extern void CalculateEntityTileCollisions(Entity* entity, u32 direction, u32 collisionType);
+extern u32 ProcessMovementInternal(Entity* entity, s32 speed, s32 direction, u32 collisionType);
+extern void sub_08079E58(s32 speed, u32 direction);
+void sub_080044AE(Entity* entity, u32 speed, u32 direction);
+void sub_08004542(Entity* entity);
 
 /* Area_HyruleTown -- defined in port_linked_stubs.c */
 
 /* BounceUpdate -- implemented in port_linked_stubs.c */
 /* ButtonUIElement_Actions -- defined in port_linked_stubs.c */
-u32 CalcCollisionStaticEntity(...) {
-    return 0;
+u32 CalcCollisionStaticEntity(Entity* target, Entity* origin) {
+    const Hitbox* hbTarget;
+    const Hitbox* hbOrigin;
+    s32 dx, dy;
+    s32 sumW, sumH;
+    s32 overlapX, overlapY;
+    u32 directionX, directionY, direction;
+    s32 overlap;
+
+    if (target == NULL || origin == NULL) {
+        return 0;
+    }
+
+    hbTarget = (const Hitbox*)port_resolve_addr((uintptr_t)target->hitbox);
+    if (hbTarget == NULL)
+        return 0;
+    hbOrigin = (const Hitbox*)port_resolve_addr((uintptr_t)origin->hitbox);
+    if (hbOrigin == NULL)
+        return 0;
+
+    /* X overlap */
+    dx = (s32)origin->x.HALF.HI + hbOrigin->offset_x;
+    dx -= (s32)target->x.HALF.HI + hbTarget->offset_x;
+    sumW = (s32)hbTarget->width + (s32)hbOrigin->width;
+    if ((u32)(dx + sumW) > (u32)(sumW * 2)) {
+        return 0;
+    }
+    if (dx >= 0) {
+        directionX = 0x08;
+    } else {
+        directionX = 0x18;
+        dx = -dx;
+    }
+    overlapX = sumW - dx;
+
+    /* Y overlap */
+    dy = (s32)origin->y.HALF.HI + hbOrigin->offset_y;
+    dy -= (s32)target->y.HALF.HI + hbTarget->offset_y;
+    sumH = (s32)hbTarget->height + (s32)hbOrigin->height;
+    if ((u32)(dy + sumH) > (u32)(sumH * 2)) {
+        return 0;
+    }
+    if (dy >= 0) {
+        directionY = 0x10;
+    } else {
+        directionY = 0x00;
+        dy = -dy;
+    }
+    overlapY = sumH - dy;
+
+    overlap = overlapY;
+    direction = directionY;
+    if (overlapY >= overlapX) {
+        overlap = overlapX;
+        direction = directionX;
+    }
+    if (overlap == 0) {
+        return 0;
+    }
+    if (overlap >= 5) {
+        overlap = 4;
+    }
+
+    sub_080044AE(origin, (u32)(overlap << 8), direction);
+    return 1;
 }
 /* CalcDistance -- implemented in port_math.c */
 /* CalculateDirectionFromOffsets -- implemented in port_math.c */
@@ -110,7 +184,7 @@ u32 GetFuserId(...) {
 /* InitAnimationForceUpdate — implemented in port_animation.c */
 /* InitializeAnimation — implemented in port_animation.c */
 /* LinearMoveDirectionOLD — implemented in port_linked_stubs.c */
-u32 LoadResourceAsync(const void* src, u32 dest, u32 size) {
+void LoadResourceAsync(const void* src, void* dest, u32 size) {
     /*
      * PC port: perform the copy immediately instead of queuing for VBlank.
      * On GBA this queues into gUnk_03000C30 for later processing by LoadResources(),
@@ -121,7 +195,6 @@ u32 LoadResourceAsync(const void* src, u32 dest, u32 size) {
     if (resolvedDest && src && size > 0) {
         memcpy(resolvedDest, src, size);
     }
-    return 0;
 }
 /* Mod — implemented in port_linked_stubs.c */
 u32 PlayerCheckNEastTile(...) {
@@ -132,8 +205,13 @@ void ProjectileUpdate(Entity* entity) {
 }
 /* RAMFUNCS_END -- defined in port_linked_stubs.c */
 /* Random — implemented in port_linked_stubs.c */
-u32 ResetCollisionLayer(...) {
-    return 0;
+void ResetCollisionLayer(Entity* entity) {
+    if (entity == NULL) {
+        return;
+    }
+    entity->collisionLayer = 1;
+    entity->spriteOrientation.flipY = 2;
+    entity->spriteRendering.b3 = 2;
 }
 /* ResolveCollisionLayer -- implemented in port_linked_stubs.c */
 /* RupeeKeyDigits -- defined in port_linked_stubs.c */
@@ -589,23 +667,93 @@ u32 sub_08004202(...) {
 }
 /* sub_080042BA — implemented in port_animation.c */
 /* sub_080042D0 — implemented in port_animation.c */
-u32 sub_0800442E(...) {
-    return 0;
+u32 sub_0800442E(Entity* entity) {
+    u32 hazard = GetTileHazardType(entity);
+    if (hazard == 0) {
+        return 0;
+    }
+    switch (hazard) {
+        case 1:
+            CreatePitFallFX(entity);
+            break;
+        case 2:
+            CreateDrownFX(entity);
+            break;
+        case 3:
+            CreateLavaDrownFX(entity);
+            break;
+        case 4:
+            CreateSwampDrownFX(entity);
+            break;
+        default:
+            break;
+    }
+    return 1;
 }
-u32 sub_0800445C(...) {
-    return 0;
+u32 sub_0800445C(Entity* entity) {
+    if (!PlayerCanBeMoved()) {
+        return 0;
+    }
+    if (!CalcCollisionStaticEntity(entity, &gPlayerEntity.base)) {
+        return 0;
+    }
+    if (gPlayerEntity.base.action == 2) {
+        gPlayerEntity.base.subAction = 3;
+    }
+    return 1;
 }
-u32 sub_080044AE(...) {
-    return 0;
+void sub_080044AE(Entity* entity, u32 speed, u32 direction) {
+    if (entity != &gPlayerEntity.base) {
+        CalculateEntityTileCollisions(entity, direction, 2);
+        ProcessMovementInternal(entity, (s32)speed, (s32)direction, 2);
+    } else {
+        sub_08079E58(speed, direction);
+    }
 }
-u32 sub_0800451C(...) {
-    return 0;
+void sub_0800451C(Entity* entity) {
+    u32 actTile = GetActTileAtEntity(entity);
+    switch (actTile) {
+        case 0x0b:
+        case 0x0c:
+            sub_08004542(entity);
+            break;
+        case 0x09:
+        case 0x0a:
+            ResetCollisionLayer(entity);
+            break;
+        case 0x26:
+        case 0x27:
+            entity->collisionLayer = 3;
+            entity->spriteOrientation.flipY = 1;
+            entity->spriteRendering.b3 = 1;
+            break;
+        default:
+            break;
+    }
 }
-u32 sub_08004542(...) {
-    return 0;
+void sub_08004542(Entity* entity) {
+    if (entity == NULL) {
+        return;
+    }
+    entity->collisionLayer = 2;
+    entity->spriteOrientation.flipY = 1;
+    entity->spriteRendering.b3 = 1;
 }
-u32 sub_08004596(...) {
-    return 0;
+void sub_08004596(Entity* entity, u32 targetDirection) {
+    u32 direction = entity->direction;
+    if (direction < 0x20) {
+        s32 delta = ((s32)targetDirection - (s32)direction) & 0x1f;
+        if (delta != 0) {
+            if (delta < 0x10) {
+                direction = (direction + 1) & 0x1f;
+            } else {
+                direction = (direction - 1) & 0x1f;
+            }
+        }
+    } else {
+        direction = targetDirection & 0x1f;
+    }
+    entity->direction = (u8)direction;
 }
 /* sub_080045B4 — implemented in port_linked_stubs.c */
 /* sub_0800857C — implemented in port_linked_stubs.c */

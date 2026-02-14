@@ -64,7 +64,7 @@ void VBlankIntrWait(void) {
     Port_PPU_PresentFrame();
 
 #ifdef _WIN32
-    Sleep(1);
+    // Sleep(1);
 #else
     SDL_Delay(1);
 #endif
