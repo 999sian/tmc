@@ -21,13 +21,16 @@
 #include "ui.h"
 #include "affine.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#endif
 
 extern void sub_080A4DB8(u32);
 
 void sub_080A5128(void);
 void sub_080A51D4(void);
 bool32 sub_080A51F4(void);
-void sub_080A5F48(u32, u32);
+void sub_080A5F48(Item, u32);
 void sub_080A57F4(void);
 
 void Subtask_PauseMenu(void) {
@@ -459,6 +462,28 @@ u32 GetMenuSlotForItem(u32 item);
 
 extern Frame* gSpriteAnimations_322[];
 
+#define SPRITE_ANIM_322_COUNT 128
+
+static Frame* GetSpriteAnimation322(u32 item) {
+#ifdef PC_PORT
+    if (item >= SPRITE_ANIM_322_COUNT) {
+        return NULL;
+    }
+    return (Frame*)port_resolve_addr((uintptr_t)gSpriteAnimations_322[item]);
+#else
+    return gSpriteAnimations_322[item];
+#endif
+}
+
+static bool32 GetSpriteAnimation322Index(u32 item, u32* outIndex) {
+    Frame* animation = GetSpriteAnimation322(item);
+    if (animation == NULL) {
+        return FALSE;
+    }
+    *outIndex = animation->index;
+    return TRUE;
+}
+
 #ifdef EU
 #define sub_080A5384_draw_constant0 0x1fa
 #define sub_080A5384_draw_constant1 0x141
@@ -510,7 +535,12 @@ void PauseMenu_ItemMenu_Draw(void) {
                     break;
             }
             gOamCmd._8 = 0x800 | color << 0xc | ((i * 8) + 0x360);
-            DrawDirect(sub_080A5384_draw_constant1, gSpriteAnimations_322[item]->index);
+            {
+                u32 frameIndex;
+                if (GetSpriteAnimation322Index(item, &frameIndex)) {
+                    DrawDirect(sub_080A5384_draw_constant1, frameIndex);
+                }
+            }
         }
     }
     gOamCmd._8 = 0x800;
@@ -867,7 +897,9 @@ void sub_080A57F4(void) {
                         break;
                 }
 
-                uVar5 = gSpriteAnimations_322[uVar5]->index;
+                if (!GetSpriteAnimation322Index(uVar5, &uVar5)) {
+                    continue;
+                }
 #ifdef EU
                 spriteIndex = 0x141;
 #else
@@ -1165,20 +1197,26 @@ void DrawDungeonMapActually(void) {
     gOamCmd.y = 0x7e;
     gOamCmd._8 = 0x4380;
     if (HasDungeonMap()) {
+        u32 spriteFrameIndex;
         gOamCmd.x = 0x18;
-        frameIndex = gSpriteAnimations_322[0x50]->index;
-        DrawDirect(SUB_080A5D1C_SPRITE_INDEX, frameIndex);
+        if (GetSpriteAnimation322Index(0x50, &spriteFrameIndex)) {
+            DrawDirect(SUB_080A5D1C_SPRITE_INDEX, spriteFrameIndex);
+        }
     }
     if (HasDungeonBigKey()) {
+        u32 spriteFrameIndex;
         gOamCmd.x = 0x2e;
-        frameIndex = gSpriteAnimations_322[0x52]->index;
-        DrawDirect(SUB_080A5D1C_SPRITE_INDEX, frameIndex);
+        if (GetSpriteAnimation322Index(0x52, &spriteFrameIndex)) {
+            DrawDirect(SUB_080A5D1C_SPRITE_INDEX, spriteFrameIndex);
+        }
     }
     if (HasDungeonCompass()) {
+        u32 spriteFrameIndex;
         gOamCmd.x = 0x45;
         gOamCmd._8 = 0x380;
-        frameIndex = gSpriteAnimations_322[0x51]->index;
-        DrawDirect(SUB_080A5D1C_SPRITE_INDEX, frameIndex);
+        if (GetSpriteAnimation322Index(0x51, &spriteFrameIndex)) {
+            DrawDirect(SUB_080A5D1C_SPRITE_INDEX, spriteFrameIndex);
+        }
         if (sub_080A5F24()) {
             gOamCmd._8 = 0;
             gOamCmd.x = 0x46;
@@ -1248,6 +1286,8 @@ void sub_080A5F48(Item item, u32 offset) {
     s32 onesDigit;
     s32 tensDigit;
     void* dest;
+    u16* frames322;
+    u16* tiles322;
     u16* temp2;
     u32 index;
     union SplitDWord divRem;
@@ -1258,12 +1298,30 @@ void sub_080A5F48(Item item, u32 offset) {
         case ITEM_BOTTLE3:
         case ITEM_BOTTLE4:
             item = gSave.stats.bottles[item - ITEM_BOTTLE1];
+            break;
+        default:
+            break;
     }
 
     dest = OBJ_VRAM0 + (offset * 0x20);
-    index = gSpriteAnimations_322[item]->index;
-    temp2 = &gMoreSpritePtrs[1][index * 2];
-    DmaCopy32(3, &gMoreSpritePtrs[2][temp2[1] * 0x10], dest, 0x40 * 4);
+    if (!GetSpriteAnimation322Index(item, &index)) {
+        return;
+    }
+#ifdef PC_PORT
+    frames322 = (u16*)port_resolve_addr((uintptr_t)gMoreSpritePtrs[1]);
+    tiles322 = (u16*)port_resolve_addr((uintptr_t)gMoreSpritePtrs[2]);
+#else
+    frames322 = gMoreSpritePtrs[1];
+    tiles322 = gMoreSpritePtrs[2];
+#endif
+    if ((frames322 == NULL) || (tiles322 == NULL) || (index >= 0x200)) {
+        return;
+    }
+    temp2 = &frames322[index * 2];
+    if (temp2[1] >= 0x4000) {
+        return;
+    }
+    DmaCopy32(3, &tiles322[temp2[1] * 0x10], dest, 0x40 * 4);
 
     ammoCount = -1;
     switch (item) {
@@ -1274,6 +1332,8 @@ void sub_080A5F48(Item item, u32 offset) {
         case 9:
         case 10:
             ammoCount = gSave.stats.arrowCount;
+            break;
+        default:
             break;
     }
 

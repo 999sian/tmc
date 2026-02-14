@@ -91,6 +91,12 @@ bool32 sub_0801A458(MapLayer* mapLayer, u32 position, u32 collisionType);
 bool32 sub_0801A370(MapLayer* mapLayer, u32 position);
 u32 sub_0801A8D0(Entity* this, u32 param_2);
 
+typedef struct {
+    Entity base;
+    u8 filler[0x4];
+    u32 unk6c;
+} BeanstalkPlayerCloneEntity;
+
 void sub_0801967C(void) {
     gUnk_080B4458[gMenu.overlayType]();
 }
@@ -532,12 +538,18 @@ u32 UpdatePlayerCollision(void) {
             // TODO convert to for loop?
             index = 0;
             tmp3 = 0;
+            if (gPlayerClones[0] == NULL) {
+                return 0;
+            }
+            {
+                u32 cloneMask = ((BeanstalkPlayerCloneEntity*)gPlayerClones[0])->unk6c;
             while (index < 3) {
-                if ((((*(u32*)(&(((GenericEntity*)gPlayerClones[0]))->field_0x6c)) & (1 << index)) != 0) &&
+                if ((gPlayerClones[index] != NULL) && ((cloneMask & (1 << index)) != 0) &&
                     (sub_0801A570(gPlayerClones[index], 0) == position)) {
                     tmp3++;
                 }
                 index++;
+            }
             }
             if (tmp3 < tmp2) {
                 return 0;
@@ -613,7 +625,7 @@ u32 UpdatePlayerCollision(void) {
                 return 0;
             }
             for (index = 0; index < 3; index++) {
-                if (sub_0801A8D0(gPlayerClones[index], 0) == position) {
+                if ((gPlayerClones[index] != NULL) && (sub_0801A8D0(gPlayerClones[index], 0) == position)) {
                     SetTile(SPECIAL_TILE_89, position, gPlayerEntity.base.collisionLayer);
                     return 4;
                 }
@@ -630,7 +642,7 @@ u32 UpdatePlayerCollision(void) {
                 return 0;
             }
             for (index = 0; index < 3; index++) {
-                if (sub_0801A8D0(gPlayerClones[index], 6) == position) {
+                if ((gPlayerClones[index] != NULL) && (sub_0801A8D0(gPlayerClones[index], 6) == position)) {
                     SetTile(SPECIAL_TILE_89, position, gPlayerEntity.base.collisionLayer);
                     return 4;
                 }

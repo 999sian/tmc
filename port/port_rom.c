@@ -328,11 +328,15 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
 #define GFX_GROUPS_COUNT_MAX 133
 #define PALETTE_GROUPS_COUNT_MAX 208
 #define AREA_COUNT 0x90 /* 144 areas (0x00..0x8F) */
+#define MORE_SPRITE_PTRS_COUNT 16
+#define SPRITE_ANIM_322_COUNT 128
 
 extern u32 gFrameObjLists[];
 extern u32 gUnk_08133368[];
 extern SpritePtr gSpritePtrs[];
 extern u32 gFixedTypeGfxData[];
+extern u16* gMoreSpritePtrs[MORE_SPRITE_PTRS_COUNT];
+extern Frame* gSpriteAnimations_322[SPRITE_ANIM_322_COUNT];
 extern void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset);
 
 /* Area / room data tables (port_linked_stubs.c) */
@@ -620,6 +624,39 @@ void Port_LoadRom(const char* path) {
         }
         fprintf(stderr, "gSpritePtrs loaded (%u entries from ROM offset 0x%X, pointers resolved).\n",
                 R->spritePtrsCount, R->spritePtrs);
+    }
+
+    /* gMoreSpritePtrs / gSpriteAnimations_322
+     * On GBA, these are packed 32-bit pointer tables. On PC/64-bit we materialize
+     * native pointers to avoid invalid indexing with sizeof(void*) == 8. */
+    {
+        memset(gMoreSpritePtrs, 0, sizeof(gMoreSpritePtrs));
+        memset(gSpriteAnimations_322, 0, sizeof(gSpriteAnimations_322));
+
+        if (R->spritePtrsCount > 322) {
+            const SpritePtr* sp322 = &gSpritePtrs[322];
+            gMoreSpritePtrs[0] = (u16*)sp322->animations;
+            gMoreSpritePtrs[1] = (u16*)sp322->frames;
+            gMoreSpritePtrs[2] = (u16*)sp322->ptr;
+
+            if (sp322->animations != NULL) {
+                const u8* animTable = (const u8*)sp322->animations;
+                u32 resolvedCount = 0;
+                for (u32 i = 0; i < SPRITE_ANIM_322_COUNT; i++) {
+                    u32 gbaPtr;
+                    memcpy(&gbaPtr, animTable + i * 4, 4);
+                    if (gbaPtr == 0) {
+                        break;
+                    }
+                    gSpriteAnimations_322[i] = (Frame*)ResolveRomPtr(gbaPtr);
+                    if (gSpriteAnimations_322[i] == NULL) {
+                        break;
+                    }
+                    resolvedCount++;
+                }
+                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[322]).\n", resolvedCount);
+            }
+        }
     }
 
     /* Font/text data tables */

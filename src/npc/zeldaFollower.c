@@ -44,6 +44,23 @@ typedef union {
 void sub_08068318(ZeldaFollowerEntity*);
 void sub_0806854C(ZeldaFollowerEntity*, u32*);
 void sub_08068578(ZeldaFollowerEntity* this);
+static bool32 EnsureZeldaFollowerHeap(ZeldaFollowerEntity* this);
+
+static bool32 EnsureZeldaFollowerHeap(ZeldaFollowerEntity* this) {
+    if (super->myHeap != NULL) {
+        return TRUE;
+    }
+    super->myHeap = zMalloc(sizeof(ZeldaFollowerItem[ZELDA_FOLLOWER_HEAP_LEN]));
+    if (super->myHeap == NULL) {
+        this->unk_68 = 0;
+        super->spriteSettings.draw = FALSE;
+        return FALSE;
+    }
+    this->unk_68 = 1;
+    RemoveInteractableObject(super);
+    super->hitbox = NULL;
+    return TRUE;
+}
 
 void ZeldaFollower(ZeldaFollowerEntity* this) {
     if (super->action == 0) {
@@ -79,6 +96,9 @@ void sub_08068318(ZeldaFollowerEntity* this) {
     item.FIELDS.animationState = gPlayerEntity.base.animationState;
     item.FIELDS.collisionLayer = gPlayerEntity.base.collisionLayer;
 
+    if (!EnsureZeldaFollowerHeap(this)) {
+        return;
+    }
     heapPtr = super->myHeap;
 
     if ((heapPtr->FIELDS.framestate == 0xa && item.FIELDS.framestate != 0xa) ||
@@ -149,11 +169,7 @@ void sub_08068318(ZeldaFollowerEntity* this) {
 }
 
 void sub_0806854C(ZeldaFollowerEntity* this, u32* none) {
-    super->myHeap = zMalloc(sizeof(ZeldaFollowerItem[ZELDA_FOLLOWER_HEAP_LEN]));
-    if (super->myHeap != NULL) {
-        this->unk_68 = 1;
-        RemoveInteractableObject(super);
-        super->hitbox = NULL;
+    if (EnsureZeldaFollowerHeap(this)) {
         sub_08068578(this);
     }
 }
@@ -163,6 +179,10 @@ void sub_08068578(ZeldaFollowerEntity* this) {
     s32 i;
 
     ZeldaFollowerItem *heapPtr, item;
+
+    if (!EnsureZeldaFollowerHeap(this)) {
+        return;
+    }
 
     // Copy from the player's position/state.
     item.FIELDS.x = gPlayerEntity.base.x.HALF_U.HI;
