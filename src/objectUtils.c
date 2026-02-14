@@ -1,13 +1,19 @@
 
+#include "asm.h"
 #include "definitions.h"
 #include "entity.h"
+#include "effects.h"
 #include "functions.h"
 #include "global.h"
 #include "object.h"
 #include "object/itemOnGround.h"
 #include "object/linkAnimation.h"
+#include "pauseMenu.h"
 #include "physics.h"
+#include "player.h"
 #include "room.h"
+#include "vram.h"
+#include "color.h"
 
 extern const Hitbox* const gObjectHitboxes[];
 
@@ -149,6 +155,10 @@ void CreateDust(Entity* parent) {
     CreateFx(parent, FX_DEATH, 0);
 }
 
+void CreateDeathFx(Entity* parent) {
+    CreateDust(parent);
+}
+
 void CreateDustAt(s32 xOff, s32 yOff, u32 layer) {
     Entity* ent;
 
@@ -160,8 +170,16 @@ void CreateDustAt(s32 xOff, s32 yOff, u32 layer) {
     }
 }
 
+void CreateDeathFxAt(s32 xOff, s32 yOff, u32 layer) {
+    CreateDustAt(xOff, yOff, layer);
+}
+
 void CreateDustSmall(Entity* parent) {
     CreateFx(parent, FX_DASH, 0);
+}
+
+void CreateDashFx(Entity* parent) {
+    CreateDustSmall(parent);
 }
 
 void CreateExplosionBroken(Entity* parent) {
@@ -189,7 +207,7 @@ Entity* CreateGroundItemWithFlags(Entity* parent, u32 form, u32 subtype, u32 fla
     if (ent != NULL) {
         ItemOnGroundEntity* this = (ItemOnGroundEntity*)ent;
         ent->timer = 5;
-        this->unk_86 = flags;
+        this->flag = flags;
     }
     return ent;
 }
@@ -202,6 +220,10 @@ Entity* CreateWaterTrace(Entity* parent) {
         ent->spritePriority.b0 = 7;
     }
     return ent;
+}
+
+Entity* CreateRippleFx(Entity* parent) {
+    return CreateWaterTrace(parent);
 }
 
 void CreateRandomWaterTrace(Entity* parent, int range) {
@@ -228,12 +250,20 @@ void CreateRandomWaterTrace(Entity* parent, int range) {
     }
 }
 
+void CreateRippleFxRandom(Entity* parent, s32 range) {
+    CreateRandomWaterTrace(parent, range);
+}
+
 Entity* CreateLargeWaterTrace(Entity* parent) {
     Entity* ent = CreateFx(parent, FX_RIPPLE_LARGE, 0);
     if (ent != NULL) {
         ent->spritePriority.b0 = 7;
     }
     return ent;
+}
+
+Entity* CreateLargeRippleFx(Entity* parent) {
+    return CreateLargeWaterTrace(parent);
 }
 
 void sub_080A2AF4(Entity* parent, s32 param_2, s32 param_3) {
@@ -249,6 +279,31 @@ void sub_080A2AF4(Entity* parent, s32 param_2, s32 param_3) {
         entity->x.WORD += FixedDiv(FixedMul(gSineTable[angle], radius << 8), 0x100) << 8;
         entity->y.WORD -= FixedDiv(FixedMul(gSineTable[angle + 0x40], radius << 8), 0x100) << 8;
     }
+}
+
+void CreateLargeRippleFxRandom(Entity* parent, s32 minDistance, s32 maxDistance) {
+    sub_080A2AF4(parent, minDistance, maxDistance);
+}
+
+extern void CreateDrownFX(Entity*);
+extern void CreateLavaDrownFX(Entity*);
+extern void CreateSwampDrownFX(Entity*);
+extern void CreatePitFallFX(Entity*);
+
+void CreateDrownFx(Entity* parent) {
+    CreateDrownFX(parent);
+}
+
+void CreateLavaDrownFx(Entity* parent) {
+    CreateLavaDrownFX(parent);
+}
+
+void CreateSwampDrownFx(Entity* parent) {
+    CreateSwampDrownFX(parent);
+}
+
+void CreatePitFallFx(Entity* parent) {
+    CreatePitFallFX(parent);
 }
 
 void CreateSparkle(Entity* entity) {
@@ -273,6 +328,10 @@ void CreateSparkle(Entity* entity) {
         sparkle->spriteOffsetX = entity->spriteOffsetX;
         sparkle->spriteOffsetY = entity->spriteOffsetY;
     }
+}
+
+void CreateSparkleFx(Entity* parent) {
+    CreateSparkle(parent);
 }
 
 void SyncPlayerToPlatform(Entity* this, bool32 param_2) {

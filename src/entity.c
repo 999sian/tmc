@@ -1,9 +1,12 @@
 #include "area.h"
 #include "common.h"
+#include "color.h"
 #include "functions.h"
 #include "manager/diggingCaveEntranceManager.h"
 #include "message.h"
 #include "npc.h"
+#include "physics.h"
+#include "room.h"
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
 #endif

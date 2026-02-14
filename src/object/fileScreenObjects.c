@@ -14,6 +14,7 @@
 #include "physics.h"
 #include "player.h"
 #include "gfx.h"
+#include "vram.h"
 
 typedef struct {
     /*0x00*/ Entity base;

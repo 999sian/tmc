@@ -7,6 +7,8 @@
 
 #define FILENAME_LENGTH 6
 
+#ifndef SAVE_HEADER_DEFINED
+#define SAVE_HEADER_DEFINED
 typedef struct {
     int signature;
     u8 saveFileId;
@@ -17,7 +19,15 @@ typedef struct {
     u8 invalid;
     u8 initialized;
 } SaveHeader;
+#endif
+#ifndef gSaveHeader
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#define gSaveHeader ((SaveHeader*)gba_MemPtr(0x02000000u))
+#else
 #define gSaveHeader ((SaveHeader*)(0x2000000))
+#endif
+#endif
 
 typedef enum {
     SAVE_BUSY = 0,

@@ -18,6 +18,11 @@
 #include "screen.h"
 #include "sound.h"
 
+extern void FlushSprites(void);
+extern void CopyOAM(void);
+extern void DrawDirect(u32 spriteIndex, u32 frameIndex);
+extern void DrawEntities(void);
+
 typedef struct {
     u8 filler0[0x4];
     u8 language;

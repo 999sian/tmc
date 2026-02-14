@@ -40,6 +40,8 @@ typedef enum {
     PauseMenuScreen_19,
 } PauseMenuScreen;
 
+#ifndef PAUSE_MENU_OPTIONS_DEFINED
+#define PAUSE_MENU_OPTIONS_DEFINED
 typedef struct {
     u8 disabled;
     u8 screen;
@@ -55,5 +57,6 @@ typedef struct {
 
 extern PauseMenuOptions gPauseMenuOptions;
 static_assert(sizeof(PauseMenuOptions) == 0x18);
+#endif
 
 #endif // PAUSEMENU_H

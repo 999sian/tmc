@@ -18,6 +18,7 @@
 #include "menu.h"
 #include "message.h"
 #include "npc.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "save.h"
@@ -28,6 +29,8 @@
 
 #include "port_entity_ctx.h"
 #include "port_gba_mem.h"
+
+extern u32 CalculateDirectionTo(u32, u32, u32, u32);
 
 uint16_t gPortIntrCheck;
 void* gPortIntrVector;
@@ -1425,13 +1428,12 @@ void* gAreaTiles[256];
 /* gSubtasks -- defined in port_stubs.c as proper function pointer table */
 // ButtonUIElement_Actions — defined in ui.c with proper function pointers
 // EzloNagUIElement_Actions — defined in ui.c with proper function pointers
-void* HoleManager_Actions[16];
 // gUIElementDefinitions — defined in ui.c with proper UIElementDefinition type
 void* Subtask_FastTravel_Functions[16];
 void* Subtask_MapHint_Functions[16];
 
 // Exit lists / transitions (populated from ROM at load time)
-const Transition* const* gExitLists[256];
+const Transition* const* gExitLists[256] = { 0 };
 const Transition gExitList_RoyalValley_ForestMaze[4];
 
 // Various game data

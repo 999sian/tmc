@@ -4,6 +4,7 @@
 #include "fileselect.h"
 #include "functions.h"
 #include "global.h"
+#include "main.h"
 #include "message.h"
 #include "structures.h"
 
@@ -26,7 +27,7 @@ typedef struct {
 
 void sub_0805F820(WStruct* r0, u32* r1);
 bool32 sub_0805EF40(Token* tok, const u8*);
-void InitToken(Token* token, u32 textIndexOrPtr);
+void InitToken(Token* token, uintptr_t textIndexOrPtr);
 u32 sub_0805F6A4(Token*, WStruct*);
 u32 GetCharacter(Token* tok);
 u32 GetFontStrWith(Token*, u32);
@@ -77,6 +78,9 @@ void sub_0805EEB4(Token* token, u32 textIndex) {
 
     token->textIndex = (u16)textIndex;
     langIndex = gSaveHeader->language;
+    if (langIndex >= NUM_LANGUAGES || gTranslations[langIndex] == NULL) {
+        langIndex = GAME_LANGUAGE;
+    }
     if (((1 < langIndex) && (textIndex >> 8 == 1)) && (textIndex < 0x119)) {
         langIndex = 3;
     }
@@ -119,6 +123,11 @@ bool32 sub_0805EF40(Token* token, const u8* param_2) {
 
 u32 sub_0805EF8C(Token* token) {
     if (token->unk00 == 0) {
+        return 0;
+    }
+    if (token->unk01 >= ARRAY_COUNT(token->buf) || token->buf[token->unk01] == NULL) {
+        token->unk00 = 0;
+        token->unk01 = 0;
         return 0;
     }
     return (token->buf[token->unk01]++)[0];
@@ -308,13 +317,18 @@ u32 GetCharacter(Token* token) {
 
 u32* sub_0805F25C(u32 param_1) {
     u32 uVar1;
+    u32 lang = gSaveHeader->language;
+
+    if (lang >= NUM_LANGUAGES) {
+        lang = GAME_LANGUAGE;
+    }
 
     uVar1 = param_1 >> 8 & 0xf;
     param_1 = param_1 & 0xff;
     switch (uVar1) {
         case 0:
         case 1:
-            if (0x7f < param_1 && gSaveHeader->language != 0) {
+            if (0x7f < param_1 && lang != 0) {
                 param_1 = param_1 - 0x80;
                 uVar1 = 2;
             }
@@ -433,7 +447,7 @@ u32 GetFontStrWith(Token* param_1, u32 param_2) {
     return rv;
 }
 
-void InitToken(Token* token, u32 textIndexOrPtr) {
+void InitToken(Token* token, uintptr_t textIndexOrPtr) {
     MemClear(token, sizeof(Token));
     if (textIndexOrPtr >= 0x10000) {
         sub_0805EF40(token, (u8*)textIndexOrPtr);
@@ -442,7 +456,7 @@ void InitToken(Token* token, u32 textIndexOrPtr) {
     }
 }
 
-u32 ShowTextBox(u32 textIndexOrPtr, const Font* paramFont) {
+u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
     u32 uVar1;
     WStruct* pWVar4;
     u32 uVar5;
@@ -611,7 +625,7 @@ u32 sub_0805F6A4(Token* param_1, WStruct* param_2) {
     return iVar4;
 }
 
-u32 sub_0805F76C(u32 textIdOrPtr, WStruct* param_2) {
+u32 sub_0805F76C(uintptr_t textIdOrPtr, WStruct* param_2) {
     Token stackToken;
 
     InitToken(&stackToken, textIdOrPtr);
@@ -750,7 +764,7 @@ void sub_0805F918(u32 idx, u32 idx2, void* dest) {
             idx3++;
         }
     }
-    LoadResourceAsync((const void*)&gUnk_02036AD8, (u32)dest, 0xe0);
+    LoadResourceAsync((const void*)&gUnk_02036AD8, (void*)(uintptr_t)dest, 0xe0);
 }
 
 u32 sub_0805F9A0(u32 r0) {

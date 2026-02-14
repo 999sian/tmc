@@ -8,7 +8,9 @@
 #include "asm.h"
 #include "assets/gfx_offsets.h"
 #include "common.h"
+#include "fade.h"
 #include "functions.h"
+#include "gfx.h"
 #ifdef PC_PORT
 #include "port_gba_mem.h"
 #endif

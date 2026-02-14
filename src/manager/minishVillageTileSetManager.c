@@ -8,6 +8,7 @@
 #include "asm.h"
 #include "common.h"
 #include "functions.h"
+#include "game.h"
 #include "main.h"
 
 void sub_08057E30(void*);
@@ -67,7 +68,7 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
         super->timer = 8;
         this->unk_20 = 0xFF;
 
-        RegisterTransitionManager(this, sub_08057E30, 0);
+        RegisterTransitionHandler(this, sub_08057E30, NULL);
     }
     if (gRoomControls.reload_flags)
         return;
@@ -84,7 +85,7 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
     tmp3 = super->timer;
     if (tmp3 == 0) {
         gPauseMenuOptions.disabled = 1;
-        LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], tmp2[1], 0x1000);
+        LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], (void*)(uintptr_t)tmp2[1], 0x1000);
         LoadPaletteGroup(gUnk_081081E4[tmp]);
         super->timer++;
     } else {
@@ -97,8 +98,8 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
             case 5:
             case 6:
             case 7:
-                LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]], tmp2[(super->timer << 1) + 1],
-                                  0x1000);
+                LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]],
+                                  (void*)(uintptr_t)tmp2[(super->timer << 1) + 1], 0x1000);
                 super->timer++;
                 gPauseMenuOptions.disabled = 0;
             case 8:
@@ -116,7 +117,7 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
         this->unk_20 = 0xFF;
 
         SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
-        RegisterTransitionManager(this, sub_08057E30, 0);
+        RegisterTransitionHandler(this, sub_08057E30, NULL);
     }
     if (sub_08057E40(this)) {
         tmp = (u32)gRoomVars.graphicsGroups[0];
@@ -134,7 +135,7 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
     switch (super->timer) {
         case 0:
             gPauseMenuOptions.disabled = 1;
-            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], tmp2[1], 0x1000);
+            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], (void*)(uintptr_t)tmp2[1], 0x1000);
             LoadPaletteGroup(gUnk_081081E4[tmp]);
             super->timer++;
             break;
@@ -145,7 +146,8 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
         case 5:
         case 6:
         case 7:
-            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]], tmp2[(super->timer << 1) + 1], 0x1000);
+            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]],
+                              (void*)(uintptr_t)tmp2[(super->timer << 1) + 1], 0x1000);
             super->timer++;
             break;
         case 8:

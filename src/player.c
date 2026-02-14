@@ -10,6 +10,7 @@
 #include "collision.h"
 #include "common.h"
 #include "entity.h"
+#include "effects.h"
 #include "functions.h"
 #include "game.h"
 #include "global.h"
@@ -18,14 +19,17 @@
 #include "main.h"
 #include "message.h"
 #include "object.h"
+#include "physics.h"
 #include "playerItem/playerItemBottle.h"
 #include "playeritem.h"
 #include "port_scripts.h"
 #include "save.h"
+#include "scroll.h"
 #include "screen.h"
 #include "screenTransitions.h"
 #include "sound.h"
 #include "tiles.h"
+#include "vram.h"
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
 #endif
@@ -275,6 +279,7 @@ void SurfaceAction_AutoLadder(PlayerEntity*);
 
 extern void InitPauseMenu(void);
 extern u32 UpdatePlayerCollision(void);
+extern Entity* CreateWaterTrace(Entity* parent);
 
 extern u8 gUnk_080082DC[];
 

@@ -7,9 +7,12 @@
  */
 #include "enemy.h"
 #include "entity.h"
+#include "common.h"
+#include "flags.h"
 #include "fileselect.h"
 #include "functions.h"
 #include "item.h"
+#include "message.h"
 #include "npc.h"
 #include "object.h"
 #include "script.h"

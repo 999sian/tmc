@@ -7,8 +7,12 @@
 #include "manager/delayedEntityLoadManager.h"
 #include "area.h"
 #include "asm.h"
+#include "flags.h"
 #include "npc.h"
+#include "object.h"
 #include "room.h"
+#include "save.h"
+#include "script.h"
 #ifdef PC_PORT
 #include "port_rom.h"
 #endif

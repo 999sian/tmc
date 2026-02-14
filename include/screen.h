@@ -76,6 +76,8 @@ typedef struct {
     // /*0x78*/ u32 _78;
 } Screen;
 
+#ifndef OAM_COMMAND_DEFINED
+#define OAM_COMMAND_DEFINED
 typedef struct {
     s16 x;
     s16 y;
@@ -83,6 +85,7 @@ typedef struct {
     u16 _6;
     u16 _8;
 } OAMCommand;
+#endif
 
 extern Screen gScreen;
 extern OAMCommand gOamCmd;

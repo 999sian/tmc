@@ -1,5 +1,8 @@
 #include "area.h"
+#include "asm.h"
+#include "beanstalkSubtask.h"
 #include "common.h"
+#include "enemy/armos.h"
 #include "effects.h"
 #include "flags.h"
 #include "functions.h"
@@ -7,13 +10,24 @@
 #include "item.h"
 #include "kinstone.h"
 #include "main.h"
+#include "manager/horizontalMinishPathBackgroundManager.h"
+#include "manager/hyruleTownTileSetManager.h"
+#include "manager/lightManager.h"
+#include "manager/minishRaftersBackgroundManager.h"
+#include "manager/miscManager.h"
+#include "manager/staticBackgroundManager.h"
+#include "manager/verticalMinishPathBackgroundManager.h"
 #include "npc.h"
+#include "npc/bigGoron.h"
 #include "object.h"
+#include "physics.h"
 #include "port_scripts.h"
 #include "save.h"
+#include "scroll.h"
 #include "screen.h"
 #include "screenTransitions.h"
 #include "sound.h"
+#include "subtask.h"
 #include "tiles.h"
 #include "windcrest.h"
 
@@ -25,7 +39,7 @@ extern u32 sub_08060354(void);
 extern void sub_08057E64(void);
 extern void sub_0809F814(u32);
 extern void sub_080300E8(void);
-extern void sub_08058D34(void);
+extern void RollingBarrelManager_OnEnterRoom(void);
 extern void sub_0807BB98(u32, u32, u32, u32);
 extern void sub_080AF2E4(void);
 extern void sub_08059994(void);
@@ -51,7 +65,7 @@ u32 sub_unk3_ArmosInteriors_RuinsEntranceNorth(u32 arg0) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsEntranceNorth(void) {
-    sub_08030118(0);
+    Armos_SetFlagFromTransition(0);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsEntranceSouth(void) {
@@ -59,7 +73,7 @@ u32 sub_unk3_ArmosInteriors_RuinsEntranceSouth(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsEntranceSouth(void) {
-    sub_08030118(1);
+    Armos_SetFlagFromTransition(1);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsLeft(void) {
@@ -67,7 +81,7 @@ u32 sub_unk3_ArmosInteriors_RuinsLeft(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsLeft(void) {
-    sub_08030118(2);
+    Armos_SetFlagFromTransition(2);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsMiddleLeft(void) {
@@ -75,7 +89,7 @@ u32 sub_unk3_ArmosInteriors_RuinsMiddleLeft(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsMiddleLeft(void) {
-    sub_08030118(3);
+    Armos_SetFlagFromTransition(3);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsMiddleRight(void) {
@@ -83,7 +97,7 @@ u32 sub_unk3_ArmosInteriors_RuinsMiddleRight(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsMiddleRight(void) {
-    sub_08030118(4);
+    Armos_SetFlagFromTransition(4);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsRight(void) {
@@ -91,7 +105,7 @@ u32 sub_unk3_ArmosInteriors_RuinsRight(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsRight(void) {
-    sub_08030118(5);
+    Armos_SetFlagFromTransition(5);
 }
 
 u32 sub_unk3_ArmosInteriors_6(void) {
@@ -99,7 +113,7 @@ u32 sub_unk3_ArmosInteriors_6(void) {
 }
 
 void sub_StateChange_ArmosInteriors_6(void) {
-    sub_08030118(6);
+    Armos_SetFlagFromTransition(6);
 }
 
 u32 sub_unk3_ArmosInteriors_RuinsGrassPath(void) {
@@ -107,7 +121,7 @@ u32 sub_unk3_ArmosInteriors_RuinsGrassPath(void) {
 }
 
 void sub_StateChange_ArmosInteriors_RuinsGrassPath(void) {
-    sub_08030118(7);
+    Armos_SetFlagFromTransition(7);
 }
 
 u32 sub_unk3_ArmosInteriors_8(void) {
@@ -115,7 +129,7 @@ u32 sub_unk3_ArmosInteriors_8(void) {
 }
 
 void sub_StateChange_ArmosInteriors_8(void) {
-    sub_08030118(8);
+    Armos_SetFlagFromTransition(8);
 }
 
 u32 sub_unk3_ArmosInteriors_FortressOfWindsLeft(void) {
@@ -123,7 +137,7 @@ u32 sub_unk3_ArmosInteriors_FortressOfWindsLeft(void) {
 }
 
 void sub_StateChange_ArmosInteriors_FortressOfWindsLeft(void) {
-    sub_08030118(9);
+    Armos_SetFlagFromTransition(9);
     gArea.dungeon_idx = 3;
     gArea.areaMetadata = AR_HAS_NO_ENEMIES | AR_HAS_MAP | AR_IS_DUNGEON | AR_HAS_KEYS;
 }
@@ -133,7 +147,7 @@ u32 sub_unk3_ArmosInteriors_FortressOfWindsRight(void) {
 }
 
 void sub_StateChange_ArmosInteriors_FortressOfWindsRight(void) {
-    sub_08030118(10);
+    Armos_SetFlagFromTransition(10);
     gArea.dungeon_idx = 3;
     gArea.areaMetadata = AR_HAS_NO_ENEMIES | AR_HAS_MAP | AR_IS_DUNGEON | AR_HAS_KEYS;
 }
@@ -730,7 +744,7 @@ void sub_StateChange_HyruleCastle_4(void) {
 }
 
 void sub_0804BCDC(void) {
-    sub_0808091C(&gUnk_0813AB80, TRANSITION_FADE_BLACK_SLOW);
+    DoExitTransitionWithType(&gUnk_0813AB80, TRANSITION_FADE_BLACK_SLOW);
 }
 
 u32 sub_unk3_HyruleCastle_5(void) {
@@ -878,7 +892,7 @@ void sub_StateChange_Dojos_Grimblade(void) {
     if (!CheckLocalFlag(3)) {
         LoadRoomEntityList(&gUnk_080D827C);
     } else {
-        sub_0805BC4C();
+        UnDarkRoom();
         SetTileType(TILE_TYPE_118, TILE_POS(2, 2), LAYER_TOP);
         SetTileType(TILE_TYPE_118, TILE_POS(12, 2), LAYER_TOP);
     }
@@ -1868,8 +1882,8 @@ typedef struct {
 extern struct_086D4460 gUnk_086D4460;
 
 void sub_unk2_MinishVillage_SideHouse(void) {
-    LoadResourceAsync(&gUnk_086D4460.LO, 0x6000000, 0x4000);
-    LoadResourceAsync(&gUnk_086D4460.HI, 0x6008000, 0x4000);
+    LoadResourceAsync(&gUnk_086D4460.LO, (void*)(uintptr_t)0x6000000, 0x4000);
+    LoadResourceAsync(&gUnk_086D4460.HI, (void*)(uintptr_t)0x6008000, 0x4000);
     LoadPaletteGroup(0x19);
 }
 
@@ -2396,7 +2410,7 @@ u32 sub_unk3_DeepwoodShrine_InsideBarrel(void) {
 }
 
 void sub_StateChange_DeepwoodShrine_InsideBarrel(void) {
-    sub_08058D34();
+    RollingBarrelManager_OnEnterRoom();
     gArea.areaMetadata |= AR_HAS_NO_ENEMIES;
     gMain.substate = GAMEMAIN_BARRELUPDATE;
 }
@@ -6339,7 +6353,7 @@ u32 sub_unk3_VeilFallsTop_Main(void) {
 
 void sub_StateChange_VeilFallsTop_Main(void) {
     LoadStaticBackground(2);
-    sub_0806D0B0(0);
+    sub_0806D0B0(NULL);
 }
 
 u32 sub_unk3_47_0(void) {

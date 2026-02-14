@@ -609,7 +609,10 @@ typedef struct {
     /*0x18*/ Entity* field_0x18;
 } ItemBehavior;
 
+#ifndef ACTIVE_ITEM_INDEX_DEFINED
+#define ACTIVE_ITEM_INDEX_DEFINED
 typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN, MAX_ACTIVE_ITEMS } ActiveItemIndex;
+#endif
 /**
  * Currently active items.
  * 0: Active items?
@@ -676,6 +679,8 @@ typedef enum {
     INTERACTION_NULL = 0xFF,
 } InteractionType;
 
+#ifndef INTERACTION_TYPES_DEFINED
+#define INTERACTION_TYPES_DEFINED
 typedef struct {
     s8 x;
     s8 y;
@@ -706,6 +711,7 @@ typedef struct {
 static_assert(sizeof(PossibleInteraction) == 0x188);
 
 extern PossibleInteraction gPossibleInteraction;
+#endif
 
 typedef enum {
     R_ACTION_NONE,

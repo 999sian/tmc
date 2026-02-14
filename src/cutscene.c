@@ -5,17 +5,23 @@
  */
 #include "cutscene.h"
 
+#include "backgroundAnimations.h"
+#include "beanstalkSubtask.h"
+#include "common.h"
 #include "enemy.h"
 #include "fade.h"
 #include "fileselect.h"
+#include "flags.h"
 #include "functions.h"
 #include "game.h"
 #include "main.h"
 #include "menu.h"
+#include "manager/staticBackgroundManager.h"
 #include "npc.h"
 #include "object.h"
 #include "port_scripts.h"
 #include "screen.h"
+#include "subtask.h"
 #include "tiles.h"
 
 void sub_08051F78(void);

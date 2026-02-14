@@ -70,7 +70,7 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) >= (b) ? (a) : (b))
 
-#define static_assert(cond, msg) //_Static_assert(cond, msg)
+#define static_assert(...) //_Static_assert(__VA_ARGS__)
 
 #define super (&this->base)
 

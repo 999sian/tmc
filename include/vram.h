@@ -4,6 +4,8 @@
 #include "global.h"
 #include "entity.h"
 
+#ifndef GFX_TYPES_DEFINED
+#define GFX_TYPES_DEFINED
 #define MAX_GFX_SLOTS 44
 
 typedef enum {
@@ -44,17 +46,30 @@ typedef struct {
 extern GfxSlotList gGFXSlots;
 
 static_assert(sizeof(GfxSlotList) == 0x214);
+#endif
 
 extern bool32 LoadFixedGFX(Entity*, u32);
 extern bool32 LoadSwapGFX(Entity*, u32, u32);
 extern void UnloadGFXSlots(Entity*);
 extern void sub_080ADD70(void);
 
+#ifdef PC_PORT
+#include "port_gba_mem.h"
+#ifndef gBG0Buffer
+#define gBG0Buffer (*(u16(*)[0x400]) & gEwram[0x34CB0])
+#define gBG1Buffer (*(u16(*)[0x400]) & gEwram[0x21F30])
+#define gBG2Buffer (*(u16(*)[0x400]) & gEwram[0x344B0])
+#define gBG3Buffer (*(u16(*)[0x800]) & gEwram[0x1A40])
+#endif
+#else
 extern u16 gBG0Buffer[0x400];
 extern u16 gBG1Buffer[0x400];
 extern u16 gBG2Buffer[0x400];
 extern u16 gBG3Buffer[0x800];
+#endif
 
+#ifndef OAM_TYPES_DEFINED
+#define OAM_TYPES_DEFINED
 typedef struct {
     u8 unk0;
     u8 unk1;
@@ -77,5 +92,6 @@ typedef struct {
     OAMObj unk[0xA0]; /* todo: affine */
 } OAMControls;
 extern OAMControls gOAMControls;
+#endif
 
 #endif // VRAM_H

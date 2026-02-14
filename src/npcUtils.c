@@ -1,12 +1,18 @@
 #include "asm.h"
+#include "common.h"
 #include "definitions.h"
 #include "entity.h"
+#include "flags.h"
 #include "functions.h"
 #include "global.h"
 #include "hitbox.h"
 #include "kinstone.h"
+#include "message.h"
 #include "npc.h"
+#include "physics.h"
 #include "save.h"
+#include "vram.h"
+#include "color.h"
 
 extern const NPCDefinition gNPCDefinitions[];
 

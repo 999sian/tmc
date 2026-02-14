@@ -7,6 +7,7 @@
 #include "figurineMenu.h"
 
 #include "common.h"
+#include "fileselect.h"
 #include "flags.h"
 #include "game.h"
 #include "main.h"
@@ -456,8 +457,6 @@ const struct_08128184 gUnk_08128184 = {
     0xffu,
 };
 
-extern void ShowTextBox(u32, const struct_0812816C*);
-
 void sub_080A4BA0(u32 arg1, u32 arg2) {
     int r0, r5, r6;
     int maxFigurines;
@@ -483,7 +482,7 @@ void sub_080A4BA0(u32 arg1, u32 arg2) {
     if (r5 <= 0 || maxFigurines < r5) {
         r5 = -1;
     } else {
-        NumberToAsciiPad3Digits(r5, &gUnk_020227E8[0], 0x303030);
+        sub_08057044(r5, &gUnk_020227E8[0], 0x303030);
         if (FigurineMenu_isFigurineOwned(r5) == 0) {
             r5 += 0x8000;
         } else {
@@ -509,9 +508,9 @@ void sub_080A4BA0(u32 arg1, u32 arg2) {
             s2.unk9 = r5;
             s0.unk0 += 0xb;
             if (gSaveHeader->language == 0) {
-                ShowTextBox((u32)&s2, &s0);
+                ShowTextBox((uintptr_t)&s2, (const Font*)&s0);
             } else {
-                ShowTextBox(r5, &s0);
+                ShowTextBox(r5, (const Font*)&s0);
             }
         }
         gScreen.bg3.updated = 1;
@@ -550,7 +549,7 @@ u32 sub_080A4CBC(u32 figurineIndex) {
         MemCopy(&gBG1Buffer, (void*)0x600e000, sizeof(gBG1Buffer));
         ownsFigurine = FigurineMenu_isFigurineOwned(figurineIndex);
         if (ownsFigurine != 0) {
-            ShowTextBox(figurineIndex + 0x900, &gUnk_08128190);
+            ShowTextBox(figurineIndex + 0x900, (const Font*)&gUnk_08128190);
         }
         gScreen.bg1.updated = 1;
     }

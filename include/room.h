@@ -4,6 +4,7 @@
 #include "droptables.h"
 #include "entity.h"
 #include "map.h"
+#include "transitions.h"
 
 enum RoomTransition {
     TRANSITION_DEFAULT,
@@ -251,6 +252,6 @@ void UnloadGFXSlots(Entity*);
 void LoadSmallChestTile2(TileEntity*);
 void sub_0804B0B0(u32 arg0, u32 arg1);
 
-void DoExitTransition(const ScreenTransitionData* data);
+void DoExitTransition(const Transition* data);
 
 #endif // ROOM_H

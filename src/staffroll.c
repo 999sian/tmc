@@ -32,23 +32,6 @@ typedef struct {
 } StaffrollMenu;
 #define gStaffrollMenu (*(StaffrollMenu*)&gMenu)
 
-typedef struct {
-    /*0x0*/ u8 menuType;
-    /*0x1*/ u16 font;
-    /*0x3*/ u8 unk_3; // TODO padding?
-    /*0x4*/ u16 transitionTimer;
-    /*0x6*/ u16 gfxEntry;
-    /*0x8*/ u16 bg2XOffset;
-    /*0xa*/ u16 sm_unk_14;
-} PACKED StaffrollEntry;
-
-static_assert(sizeof(StaffrollEntry) == 0xc);
-
-typedef struct {
-    u8 paletteGroup;
-    u8 gfxGroup;
-} PACKED StaffrollGfxEntry;
-
 const Font gUnk_08127280 = {
     &gBG1Buffer[0x21], BG_TILE_ADDR(0x188), gTextGfxBuffer, 0, 61472, 240, 0, 0, 0, 0, 0, 5, 0, 1, 0
 };

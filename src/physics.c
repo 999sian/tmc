@@ -8,6 +8,7 @@
 #include "playeritem.h"
 #include "room.h"
 #include "sound.h"
+#include "structures.h"
 
 const u8 gSpriteSortAboveTable[];
 const u8 gSpriteSortBelowTable[];

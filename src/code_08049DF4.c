@@ -8,6 +8,7 @@
 #include "enemy.h"
 
 extern Entity* (*const gUnk_080D3BE8[])(void);
+Entity* gEnemyTarget;
 
 Entity* sub_08049DF4(u32 arg0) {
     if (gEnemyTarget != NULL) {

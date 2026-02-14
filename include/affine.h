@@ -3,6 +3,8 @@
 
 #include "gba/types.h"
 
+#ifndef OAM_COMMAND_DEFINED
+#define OAM_COMMAND_DEFINED
 typedef struct {
     s16 x;
     s16 y;
@@ -10,6 +12,7 @@ typedef struct {
     u16 _6;
     u16 _8;
 } OAMCommand;
+#endif
 extern OAMCommand gOamCmd;
 
 extern void FlushSprites(void);

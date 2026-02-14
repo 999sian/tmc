@@ -604,9 +604,13 @@ bool32 DoApplicableTransition(u32 x, u32 y, u32 direction, u32 warp_types) {
     };
 
     const Transition* transition = gArea.pCurrentRoomInfo->exits;
+    if (transition == NULL) {
+        return FALSE;
+    }
     while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
-        if (((1 << transition->warp_type) & warp_types) != 0 &&
-            gUnk_0811E7AC[transition->warp_type](transition, x, y, direction)) {
+        u32 warpType = transition->warp_type;
+        if (warpType < (sizeof(gUnk_0811E7AC) / sizeof(gUnk_0811E7AC[0])) && ((1U << warpType) & warp_types) != 0 &&
+            gUnk_0811E7AC[warpType](transition, x, y, direction)) {
             DoExitTransition(transition);
             return 1;
         }
@@ -618,8 +622,12 @@ bool32 DoApplicableTransition(u32 x, u32 y, u32 direction, u32 warp_types) {
 const Transition* FindApplicableAreaTransition(u32 pos_x, u32 pos_y) {
     const Transition* transition = gArea.pCurrentRoomInfo->exits;
     u32 warp_types = 0xa;
+    if (transition == NULL) {
+        return NULL;
+    }
     while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
-        if (((1 << transition->warp_type) & warp_types) != 0 && IsPosInTransitionRect(transition, pos_x, pos_y, 0)) {
+        u32 warpType = transition->warp_type;
+        if (warpType < 32 && ((1U << warpType) & warp_types) != 0 && IsPosInTransitionRect(transition, pos_x, pos_y, 0)) {
             return transition;
         }
         transition++;
@@ -717,7 +725,11 @@ void DoExitTransition(const Transition* data) {
     if (data->transitionSFX != SFX_NONE) {
         SoundReq(data->transitionSFX);
     }
-    sSetRoomTransitionTypes[data->warp_type](data->shape);
+    if (data->warp_type < (sizeof(sSetRoomTransitionTypes) / sizeof(sSetRoomTransitionTypes[0]))) {
+        sSetRoomTransitionTypes[data->warp_type](data->shape);
+    } else {
+        gRoomTransition.type = TRANSITION_DEFAULT;
+    }
 }
 
 void SetRoomTransitionTypeForAreaWarp(s32 param_1) {

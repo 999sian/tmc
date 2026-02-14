@@ -6,6 +6,8 @@
 
 #define MAX_UI_ELEMENTS 24
 
+#ifndef UI_TYPES_DEFINED
+#define UI_TYPES_DEFINED
 typedef enum {
     UI_ELEMENT_BUTTON_A,
     UI_ELEMENT_BUTTON_B,
@@ -100,6 +102,7 @@ typedef struct {
     UIElement elements[MAX_UI_ELEMENTS];
 } HUD;
 extern HUD gHUD;
+#endif
 
 extern void DrawUIElements(void);
 extern void UpdateUIElements(void);

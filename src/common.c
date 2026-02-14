@@ -14,11 +14,13 @@
 #include "kinstone.h"
 #include "main.h"
 #include "message.h"
+#include "physics.h"
 #include "room.h"
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
 #include "structures.h"
+#include "subtask.h"
 
 extern u8 gUnk_03003DE0;
 extern u8 gzHeap[0x1000];
@@ -620,7 +622,7 @@ void sub_0801DD58(u32 area, u32 room) {
 }
 
 void LoadDungeonMap(void) {
-    LoadResourceAsync(gDungeonMap, 0x6006000, sizeof(gDungeonMap));
+    LoadResourceAsync(gDungeonMap, (void*)(uintptr_t)0x6006000, sizeof(gDungeonMap));
 }
 
 void DrawDungeonFeatures(u32 floor, void* data, u32 size) {

@@ -1,4 +1,7 @@
+#include "asm.h"
 #include "collision.h"
+#include "common.h"
+#include "effects.h"
 #include "functions.h"
 #include "gba/m4a.h"
 #include "global.h"
@@ -11,6 +14,9 @@
 #include "sound.h"
 #include "structures.h"
 #include "ui.h"
+
+extern void CreateSparkle(Entity* entity);
+extern void sub_080ADD70(void);
 
 extern u8 gUnk_03003DE0;
 extern u8 gUnk_03000C30;

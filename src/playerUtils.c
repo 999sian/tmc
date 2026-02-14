@@ -4,6 +4,7 @@
 #include "collision.h"
 #include "common.h"
 #include "entity.h"
+#include "effects.h"
 #include "functions.h"
 #include "game.h"
 #include "global.h"
@@ -13,13 +14,17 @@
 #include "manager/diggingCaveEntranceManager.h"
 #include "message.h"
 #include "object.h"
+#include "physics.h"
 #include "player.h"
 #include "room.h"
 #include "save.h"
+#include "scroll.h"
 #include "screen.h"
 #include "screenTransitions.h"
+#include "sound.h"
 #include "tileMap.h"
 #include "tiles.h"
+#include "flags.h"
 
 #ifdef PC_PORT
 #include "port_gba_mem.h"
@@ -3096,11 +3101,11 @@ void PlayerUpdateSwimming(Entity* this) {
     }
     if (this->direction & DIR_NOT_MOVING_CHECK) {
         if ((gRoomTransition.frameCount & 0xf) == 0) {
-            CreateRandomWaterTrace(this, 4);
+            CreateRippleFxRandom(this, 4);
         }
     } else {
         if ((gRoomTransition.frameCount & 7) == 0) {
-            CreateWaterTrace(this);
+            CreateRippleFx(this);
         }
     }
 }
@@ -3234,7 +3239,7 @@ void sub_0807B178(PlayerEntity* this) {
 void sub_0807B1A8(PlayerEntity* this) {
     gUnk_0811C298[this->unk_6e](this);
     if ((gRoomTransition.frameCount & 7) == 0) {
-        CreateSparkle(super);
+        CreateSparkleFx(super);
     }
 }
 

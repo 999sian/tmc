@@ -205,14 +205,14 @@ const static Font gUnk_081146B8 = {
 #ifdef EU
 void sub_0806EABC(PhonographEntity* this) {
     sub_08050384();
-    NumberToAsciiPad3Digits(this->unk_68, gUnk_020227E8, 0x202020);
+    sub_08057044(this->unk_68, gUnk_020227E8, 0x202020);
     ShowTextBox(0x3302, &gUnk_081146B8);
     gScreen.bg0.updated = 1;
 }
 #else
 void sub_0806EABC(Entity* this, u32 param) {
     sub_08050384();
-    NumberToAsciiPad3Digits(param, &gUnk_020227E8[0], 0x202020);
+    sub_08057044(param, &gUnk_020227E8[0], 0x202020);
     ShowTextBox(0x3302, &gUnk_081146B8);
     gScreen.bg0.updated = 1;
 }

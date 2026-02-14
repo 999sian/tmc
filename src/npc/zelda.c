@@ -5,10 +5,16 @@
  * @brief Zelda NPC
  */
 #include "npc/zelda.h"
+#include "asm.h"
 #include "entity.h"
 #include "flags.h"
 #include "functions.h"
 #include "npc.h"
+#include "physics.h"
+#include "player.h"
+#include "room.h"
+#include "screen.h"
+#include "script.h"
 #include "sound.h"
 #include "tiles.h"
 #ifdef PC_PORT

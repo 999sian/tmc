@@ -86,6 +86,6 @@ void sub_0805E1F8(u32 unk0, bool32 isDungeon) {
     font = &gUnk_08108E48;
     if (!isDungeon)
         font = &gUnk_08108E30;
-    ShowTextBox((u32)&tmp, font);
+    ShowTextBox((uintptr_t)&tmp, font);
     gScreen.bg0.updated = 1;
 }

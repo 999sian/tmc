@@ -9,6 +9,7 @@
 #include "area.h"
 #include "asm.h"
 #include "backgroundAnimations.h"
+#include "beanstalkSubtask.h"
 #include "common.h"
 #include "droptables.h"
 #include "enemy.h"
@@ -68,6 +69,9 @@ extern void DeleteSleepingEntities(void);
 extern bool32 UpdateLightLevel(void);
 extern void sub_080185F8(void);
 extern void UpdateDoorTransition(void);
+extern void FlushSprites(void);
+extern void DrawEntities(void);
+extern void CopyOAM(void);
 extern bool32 CheckInitPortal(void);
 extern void UpdateCarriedObject(void);
 extern void CollisionMain(void);

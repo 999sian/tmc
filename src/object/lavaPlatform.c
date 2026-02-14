@@ -7,6 +7,12 @@
 #include "functions.h"
 #include "hitbox.h"
 #include "object.h"
+#include "asm.h"
+#include "effects.h"
+#include "physics.h"
+#include "player.h"
+#include "room.h"
+#include "sound.h"
 #ifdef PC_PORT
 #include "port_rom.h"
 #endif

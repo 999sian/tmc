@@ -447,9 +447,8 @@ void (*const gPeahatOnGrabbedSubactions[])(PeahatEntity*) = {
     Peahat_OnGrabbed_Subaction5,
 };
 
-/* Alignment issue
 const s8 gPeahatChargeDirectionOffsets[] = {
-    4, -4,
+    4,
+    -4,
 };
-*/
 // clang-format on

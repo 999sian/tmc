@@ -39,6 +39,7 @@ extern u32 DecToHex(u32, u8*, u32);
 u32 sub_08056FEC(u32, u8*);
 u32 GetCharacter(Token* tok);
 extern void sub_0805EEB4(Token* tok, u32 textIdx);
+extern void sub_0805F8E4(u32 idx, WStruct* data);
 u32 sub_0805F7DC(u32, WStruct*);
 u32 GetFontStrWith(Token*, u32);
 
@@ -829,7 +830,7 @@ static void DispCursor(void) {
 }
 
 static void DrawCanvasLine(void) {
-    LoadResourceAsync(gTextGfxBuffer, 0x0600D040, sizeof(gTextGfxBuffer));
+    LoadResourceAsync(gTextGfxBuffer, (void*)(uintptr_t)0x0600D040, sizeof(gTextGfxBuffer));
 }
 
 void sub_08056F88(u32 unk_1, u32 unk_2) {

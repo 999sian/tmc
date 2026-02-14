@@ -7,7 +7,9 @@
 typedef enum {
     WARP_TYPE_BORDER,
     WARP_TYPE_AREA,
-    WARP_TYPE_END_OF_LIST = -1,
+    WARP_TYPE_BORDER2,
+    WARP_TYPE_AREA2,
+    WARP_TYPE_END_OF_LIST = 0xffff,
 } WarpType;
 
 typedef enum {
@@ -26,13 +28,28 @@ typedef enum {
     TRANSITION_TYPE_FLY_IN,
 } TransitionType;
 
+typedef enum {
+    TRANSITION_SHAPE_AREA_12x12,
+    TRANSITION_SHAPE_AREA_12x28,
+    TRANSITION_SHAPE_AREA_28x12,
+    TRANSITION_SHAPE_AREA_44x12,
+
+    TRANSITION_SHAPE_BORDER_NORTH_WEST = 0x01,
+    TRANSITION_SHAPE_BORDER_NORTH_EAST = 0x02,
+    TRANSITION_SHAPE_BORDER_NORTH = 0x03,
+    TRANSITION_SHAPE_BORDER_EAST_NORTH = 0x04,
+    TRANSITION_SHAPE_BORDER_EAST_SOUTH = 0x08,
+    TRANSITION_SHAPE_BORDER_EAST = 0x0c,
+    TRANSITION_SHAPE_BORDER_SOUTH_WEST = 0x10,
+    TRANSITION_SHAPE_BORDER_SOUTH_EAST = 0x20,
+    TRANSITION_SHAPE_BORDER_SOUTH = 0x30,
+    TRANSITION_SHAPE_BORDER_WEST_NORTH = 0x40,
+    TRANSITION_SHAPE_BORDER_WEST_SOUTH = 0x80,
+    TRANSITION_SHAPE_BORDER_WEST = 0xc0,
+} TransitionShape;
+
 typedef struct Transition {
-#ifdef PC_PORT
-    s8 warp_type;
-#else
-    WarpType warp_type : 8;
-#endif
-    u8 subtype;
+    u16 warp_type; /**< @see WarpType */
     u16 startX;
     u16 startY;
     u16 endX;
@@ -41,21 +58,20 @@ typedef struct Transition {
     u8 area;
 #ifdef PC_PORT
     u8 room;
+    u8 layer;
+    u8 transition_type;
+    u8 facing_direction; // 0-4
 #else
     RoomID room : 8;
-#endif
-    u8 height;
-#ifdef PC_PORT
-    u8 transition_type;
-#else
+    u8 layer;
     TransitionType transition_type : 8;
-#endif
     u8 facing_direction; // 0-4
-    u8 unk0;
-    u8 unk1;
+#endif
+    u16 transitionSFX;
     u8 unk2;
     u8 unk3;
 } Transition;
+static_assert(sizeof(Transition) == 20, "Transition size incorrect");
 
 extern const Transition gExitList_RoyalValley_ForestMaze[];
 extern const Transition gUnk_08134FBC[];

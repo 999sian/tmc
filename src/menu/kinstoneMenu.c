@@ -35,7 +35,7 @@ extern void NotifyFusersOnFusionDone(u32);
 extern void RemoveKinstoneFromBag(u32);
 extern WStruct* sub_0805F2C8(void);
 extern void sub_0805F300(WStruct*);
-extern u32 sub_0805F76C(u8*, WStruct*);
+extern u32 sub_0805F76C(uintptr_t, WStruct*);
 
 typedef struct {
     void* sourceAddress;
@@ -668,7 +668,7 @@ u32 sub_080A44E0(WStruct* param_1, u8* param_2, u32 param_3) {
     param_1->unk4 = 0x60;
     size = 0x300;
     MemClear(param_1->unk8, size);
-    uVar1 = sub_0805F76C(param_2, param_1);
+    uVar1 = sub_0805F76C((uintptr_t)param_2, param_1);
     MemCopy(param_1->unk8, (void*)(param_3 * 0x20 + 0x6010000), size);
     return uVar1;
 }

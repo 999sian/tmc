@@ -538,6 +538,8 @@ typedef struct {
 } CarriedEntity;
 extern CarriedEntity gCarriedEntity;
 
+#ifndef PRIORITY_HANDLER_DEFINED
+#define PRIORITY_HANDLER_DEFINED
 typedef struct {
     u8 event_priority;        /**< system requested priority @see Priority */
     u8 ent_priority;          /**< entity requested priority @see Priority */
@@ -547,6 +549,7 @@ typedef struct {
     u16 priority_timer;
 } PriorityHandler;
 extern PriorityHandler gPriorityHandler;
+#endif
 
 /**
  * Current number of entities.

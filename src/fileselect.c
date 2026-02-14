@@ -323,7 +323,7 @@ void CreateDialogBox(u32 arg0, u32 arg1) {
 
     sub_08050384();
     MemCopy(&gUnk_080FC844, &var0, sizeof(gUnk_080FC844));
-    NumberToAscii(arg1, &gUnk_020227E8[0]);
+    sub_08056FEC(arg1, &gUnk_020227E8[0]);
     var0.gfx_src |= gUnk_080FC85C[arg0][0] << 0xC;
     ShowTextBox(gUnk_080FC85C[arg0][1], &var0);
     sfx = gUnk_080FC85C[arg0][2];

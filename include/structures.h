@@ -5,6 +5,8 @@
 #include "global.h"
 #include "player.h"
 
+#ifndef SAVE_HEADER_DEFINED
+#define SAVE_HEADER_DEFINED
 typedef struct {
     int signature;
     u8 saveFileId;
@@ -15,7 +17,10 @@ typedef struct {
     u8 invalid;
     u8 initialized;
 } SaveHeader;
+#ifndef gSaveHeader
 #define gSaveHeader ((SaveHeader*)gba_MemPtr(0x02000000u))
+#endif
+#endif
 
 typedef struct {
     u8 unk_00;
@@ -46,6 +51,8 @@ extern struct_020354C0 gUnk_020354C0[0x20];
 
 #define MAX_UI_ELEMENTS 24
 
+#ifndef UI_TYPES_DEFINED
+#define UI_TYPES_DEFINED
 typedef enum {
     UI_ELEMENT_BUTTON_A,
     UI_ELEMENT_BUTTON_B,
@@ -140,7 +147,10 @@ typedef struct {
     UIElement elements[MAX_UI_ELEMENTS];
 } HUD;
 extern HUD gHUD;
+#endif
 
+#ifndef GFX_TYPES_DEFINED
+#define GFX_TYPES_DEFINED
 #define MAX_GFX_SLOTS 44
 
 typedef enum {
@@ -181,12 +191,16 @@ typedef struct {
 extern GfxSlotList gGFXSlots;
 
 static_assert(sizeof(GfxSlotList) == 0x214, "GfxSlotList size incorrect");
+#endif
 
+#ifndef STRUCT_02034480_DEFINED
+#define STRUCT_02034480_DEFINED
 typedef struct {
     u16 unk_00;
     u8 unk_02[0xE];
 } struct_02034480;
 extern struct_02034480 gUnk_02034480;
+#endif
 
 #ifdef PC_PORT
 #include "port_gba_mem.h"
@@ -201,7 +215,10 @@ extern u16 gBG2Buffer[0x400];
 extern u16 gBG3Buffer[0x800];
 #endif
 
+#ifndef ACTIVE_ITEM_INDEX_DEFINED
+#define ACTIVE_ITEM_INDEX_DEFINED
 typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN, MAX_ACTIVE_ITEMS } ActiveItemIndex;
+#endif
 /**
  * Currently active items.
  * 0: Active items?
@@ -212,6 +229,8 @@ typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN,
 extern ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
 static_assert(sizeof(gActiveItems) == 0x70, "gActiveItems size incorrect");
 
+#ifndef PRIORITY_HANDLER_DEFINED
+#define PRIORITY_HANDLER_DEFINED
 typedef struct {
     u8 event_priority; // system requested priority
     u8 ent_priority;   // entity requested priority
@@ -221,7 +240,10 @@ typedef struct {
     u16 priority_timer;
 } PriorityHandler;
 extern PriorityHandler gPriorityHandler;
+#endif
 
+#ifndef PAUSE_MENU_OPTIONS_DEFINED
+#define PAUSE_MENU_OPTIONS_DEFINED
 typedef struct {
     u8 disabled;
     u8 screen;
@@ -237,6 +259,7 @@ typedef struct {
 
 extern PauseMenuOptions gPauseMenuOptions;
 static_assert(sizeof(PauseMenuOptions) == 0x18, "PauseMenuOptions size incorrect");
+#endif
 
 typedef struct {
     u8 unk00 : 1;
@@ -252,6 +275,8 @@ typedef struct {
 
 static_assert(sizeof(WStruct) == 12, "WStruct size incorrect");
 
+#ifndef OAM_TYPES_DEFINED
+#define OAM_TYPES_DEFINED
 typedef struct {
     u8 unk0;
     u8 unk1;
@@ -274,12 +299,15 @@ typedef struct {
     OAMObj unk[0xA0]; /* todo: affine */
 } OAMControls;
 extern OAMControls gOAMControls;
+#endif
 
 typedef struct {
     union SplitWord _0;
     union SplitWord _4;
 } struct_020227E8;
 
+#ifndef INTERACTION_TYPES_DEFINED
+#define INTERACTION_TYPES_DEFINED
 typedef struct {
     s8 x;
     s8 y;
@@ -310,6 +338,7 @@ typedef struct {
 static_assert(sizeof(PossibleInteraction) == 0x188, "PossibleInteraction size incorrect");
 
 extern PossibleInteraction gPossibleInteraction;
+#endif
 
 typedef struct {
     u8 numTiles;
@@ -344,6 +373,8 @@ typedef struct {
     u8 stylized;
 } Font;
 
+#ifndef STRUCT_02018EB0_DEFINED
+#define STRUCT_02018EB0_DEFINED
 typedef struct {
     u8 unk_0;
     u8 unk_1;
@@ -358,11 +389,15 @@ typedef struct {
 } struct_02018EB0;
 
 extern struct_02018EB0 gUnk_02018EB0;
+#endif
 
+#ifndef TILE_DATA_DEFINED
+#define TILE_DATA_DEFINED
 typedef struct {
     s16 tileIndex;
     s16 tilePosOffset;
 } TileData;
+#endif
 
 typedef struct {
     /*0x00*/ bool8 isOnlyActiveFirstFrame; /**< Is the behavior for this item only created on the first frame */

@@ -31,10 +31,13 @@ void RenderMapLayerToSubTileMap(u16* tileMap, MapLayer* mapLayer);
 extern void sub_0801AFE4(void);
 extern void SetBGDefaults(void);
 
+#ifndef TILE_DATA_DEFINED
+#define TILE_DATA_DEFINED
 typedef struct {
     s16 tileIndex;
     s16 tilePosOffset;
 } TileData;
+#endif
 
 /**
  * @brief Sets multiple tiles at once
@@ -45,6 +48,8 @@ typedef struct {
  */
 extern void SetMultipleTiles(const TileData* tileData, u32 basePosition, u32 layer);
 
+#ifndef STRUCT_02018EB0_DEFINED
+#define STRUCT_02018EB0_DEFINED
 typedef struct {
     u8 unk_0;
     u8 unk_1;
@@ -59,5 +64,6 @@ typedef struct {
 } struct_02018EB0;
 
 extern struct_02018EB0 gUnk_02018EB0;
+#endif
 
 #endif // BEANSTALKSUBTASK_H

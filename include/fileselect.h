@@ -4,6 +4,7 @@
 #include "global.h"
 #include "save.h"
 #include "sound.h"
+#include "structures.h"
 
 typedef struct {
     /*0x00*/ u8 unk_0x0;
@@ -56,7 +57,7 @@ extern struct_02019EE0 gMapDataBottomSpecial;
 // TODO size: 0x8000 from ClearTileMaps?
 
 extern void sub_08056FEC(u32, struct_020227E8*);
-extern u32 ShowTextBox(u32 textIndexOrPtr, const Font* font);
+extern u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* font);
 extern void ClearTileMaps(void);
 extern void ResetSaveFile(u32);
 extern WStruct* sub_0805F2C8(void);

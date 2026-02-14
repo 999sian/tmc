@@ -5,13 +5,20 @@
  * @brief Figurine Device object
  */
 #include "figurineMenu.h"
+#include "asm.h"
+#include "color.h"
+#include "common.h"
+#include "flags.h"
 #include "fileselect.h"
 #include "functions.h"
 #include "item.h"
 #include "kinstone.h"
 #include "message.h"
 #include "object.h"
+#include "physics.h"
 #include "screen.h"
+#include "script.h"
+#include "subtask.h"
 #include "tiles.h"
 
 typedef struct {
