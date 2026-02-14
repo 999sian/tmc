@@ -10,6 +10,7 @@
 #include "npc.h"
 #include "room.h"
 #include "script.h"
+#include "port_scripts.h"
 #include "subtask.h"
 #include "manager/bombableWallManager.h"
 #include "tiles.h"
@@ -63,7 +64,7 @@ void sub_08054F64(Entity* this, ScriptExecutionContext* context) {
 
 extern Script script_GoronKinstone;
 const EntityData gUnk_080FEF48[] = {
-    { NPC, 79, GORON, 0, 0, 0x88, 0x368, (u32)&script_GoronKinstone },
+    { NPC, 79, GORON, 0, 0, 0x88, 0x368, ENTITY_SCRIPT(script_GoronKinstone) },
 #if defined(USA) || defined(DEMO_USA)
     // TODO 0x7c is a flag?
     { MANAGER, 15, MOVEABLE_OBJECT_MANAGER, 0, 0x10e82e00, 0xd8, 0x388, 0x7c1388 },
@@ -76,8 +77,8 @@ const EntityData gUnk_080FEF48[] = {
 extern Script script_Goron1Kinstone2;
 extern Script script_Goron2Kinstone2;
 const EntityData gUnk_080FEF78[] = {
-    { NPC, 79, GORON, 0, 0, 0x68, 0x228, (u32)&script_Goron1Kinstone2 },
-    { NPC, 79, GORON, 0, 0, 0x88, 0x288, (u32)&script_Goron2Kinstone2 },
+    { NPC, 79, GORON, 0, 0, 0x68, 0x228, ENTITY_SCRIPT(script_Goron1Kinstone2) },
+    { NPC, 79, GORON, 0, 0, 0x88, 0x288, ENTITY_SCRIPT(script_Goron2Kinstone2) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 
@@ -85,42 +86,42 @@ extern Script script_Goron1Kinstone3;
 extern Script script_Goron2Kinstone3;
 extern Script script_Goron3Kinstone3;
 const EntityData gUnk_080FEFA8[] = {
-    { NPC, 79, GORON, 0, 4, 0x48, 0x178, (u32)&script_Goron1Kinstone3 },
-    { NPC, 79, GORON, 0, 8, 0x68, 0x178, (u32)&script_Goron2Kinstone3 },
-    { NPC, 79, GORON, 0, 2, 0x88, 0x1e8, (u32)&script_Goron3Kinstone3 },
+    { NPC, 79, GORON, 0, 4, 0x48, 0x178, ENTITY_SCRIPT(script_Goron1Kinstone3) },
+    { NPC, 79, GORON, 0, 8, 0x68, 0x178, ENTITY_SCRIPT(script_Goron2Kinstone3) },
+    { NPC, 79, GORON, 0, 2, 0x88, 0x1e8, ENTITY_SCRIPT(script_Goron3Kinstone3) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 extern Script script_Goron1Kinstone4;
 extern Script script_Goron2Kinstone4;
 extern Script script_Goron4Kinstone4;
 const EntityData gUnk_080FEFE8[] = {
-    { NPC, 79, GORON, 0, 4, 0x48, 0x178, (u32)&script_Goron1Kinstone4 },
-    { NPC, 79, GORON, 0, 8, 0x68, 0x178, (u32)&script_Goron2Kinstone4 },
-    { NPC, 79, GORON, 0, 16, 0x88, 0x178, (u32)&script_Goron2Kinstone4 },
-    { NPC, 79, GORON, 0, 2, 0x88, 0x1e8, (u32)&script_Goron4Kinstone4 },
+    { NPC, 79, GORON, 0, 4, 0x48, 0x178, ENTITY_SCRIPT(script_Goron1Kinstone4) },
+    { NPC, 79, GORON, 0, 8, 0x68, 0x178, ENTITY_SCRIPT(script_Goron2Kinstone4) },
+    { NPC, 79, GORON, 0, 16, 0x88, 0x178, ENTITY_SCRIPT(script_Goron2Kinstone4) },
+    { NPC, 79, GORON, 0, 2, 0x88, 0x1e8, ENTITY_SCRIPT(script_Goron4Kinstone4) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 extern Script script_Goron1Kinstone5;
 extern Script script_Goron2Kinstone5;
 extern Script script_Goron5Kinstone5;
 const EntityData gUnk_080FF038[] = {
-    { NPC, 79, GORON, 0, 4, 0x28, 0xd8, (u32)&script_Goron1Kinstone5 },
-    { NPC, 79, GORON, 0, 8, 0x48, 0xd8, (u32)&script_Goron2Kinstone5 },
-    { NPC, 79, GORON, 0, 16, 0x68, 0xd8, (u32)&script_Goron2Kinstone5 },
-    { NPC, 79, GORON, 0, 32, 0x88, 0xd8, (u32)&script_Goron2Kinstone5 },
-    { NPC, 79, GORON, 0, 2, 0x98, 0x178, (u32)&script_Goron5Kinstone5 },
+    { NPC, 79, GORON, 0, 4, 0x28, 0xd8, ENTITY_SCRIPT(script_Goron1Kinstone5) },
+    { NPC, 79, GORON, 0, 8, 0x48, 0xd8, ENTITY_SCRIPT(script_Goron2Kinstone5) },
+    { NPC, 79, GORON, 0, 16, 0x68, 0xd8, ENTITY_SCRIPT(script_Goron2Kinstone5) },
+    { NPC, 79, GORON, 0, 32, 0x88, 0xd8, ENTITY_SCRIPT(script_Goron2Kinstone5) },
+    { NPC, 79, GORON, 0, 2, 0x98, 0x178, ENTITY_SCRIPT(script_Goron5Kinstone5) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 extern Script script_Goron1Kinstone6;
 extern Script script_Goron2Kinstone6;
 extern Script script_Goron6Kindstone6;
 const EntityData gUnk_080FF098[] = {
-    { NPC, 79, GORON, 0, 4, 0x28, 0xd8, (u32)&script_Goron1Kinstone6 },
-    { NPC, 79, GORON, 0, 8, 0x48, 0xd8, (u32)&script_Goron2Kinstone6 },
-    { NPC, 79, GORON, 0, 16, 0x68, 0xd8, (u32)&script_Goron2Kinstone6 },
-    { NPC, 79, GORON, 0, 32, 0x88, 0xd8, (u32)&script_Goron2Kinstone6 },
-    { NPC, 79, GORON, 0, 64, 0xa8, 0xd8, (u32)&script_Goron2Kinstone6 },
-    { NPC, 79, GORON, 0, 2, 0x98, 0x178, (u32)&script_Goron6Kindstone6 },
+    { NPC, 79, GORON, 0, 4, 0x28, 0xd8, ENTITY_SCRIPT(script_Goron1Kinstone6) },
+    { NPC, 79, GORON, 0, 8, 0x48, 0xd8, ENTITY_SCRIPT(script_Goron2Kinstone6) },
+    { NPC, 79, GORON, 0, 16, 0x68, 0xd8, ENTITY_SCRIPT(script_Goron2Kinstone6) },
+    { NPC, 79, GORON, 0, 32, 0x88, 0xd8, ENTITY_SCRIPT(script_Goron2Kinstone6) },
+    { NPC, 79, GORON, 0, 64, 0xa8, 0xd8, ENTITY_SCRIPT(script_Goron2Kinstone6) },
+    { NPC, 79, GORON, 0, 2, 0x98, 0x178, ENTITY_SCRIPT(script_Goron6Kindstone6) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 const EntityData* const gUnk_080FF108[] = {

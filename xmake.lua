@@ -272,7 +272,6 @@ target("tmc_pc")
     add_includedirs("include", "libs")
     add_includedirs("port")
     add_includedirs(".")
-    add_includedirs("build/pc/assets")          -- PC port assets stubs
     add_includedirs("build/" .. pc_game_version) -- For assets/map_offsets.h etc (USA or EU)
     add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
 
@@ -375,7 +374,7 @@ target("tmc_pc")
     add_files("src/staffroll.c")
     add_files("src/menu/*.c")
     add_files("src/data/figurineMenuData.c")
-    -- add_files("src/worldEvent/*.c")  -- FIXME: pointer casts in EntityData
+    add_files("src/worldEvent/*.c")
     
     -- Code stubs (functions that need decompilation)
     add_files("src/code_08049CD4.c")

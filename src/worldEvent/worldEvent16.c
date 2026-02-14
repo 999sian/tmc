@@ -9,11 +9,12 @@
 #include "npc.h"
 #include "room.h"
 #include "script.h"
+#include "port_scripts.h"
 #include "subtask.h"
 
 extern Script script_GoronMerchantArriving;
 const EntityData gUnk_080FF128[] = {
-    { NPC, 79, GORON_MERCHANT, 0, 0, 0x410, 0xf8, (u32)&script_GoronMerchantArriving },
+    { NPC, 79, GORON_MERCHANT, 0, 0, 0x410, 0xf8, ENTITY_SCRIPT(script_GoronMerchantArriving) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 void WorldEvent_16_0(void);

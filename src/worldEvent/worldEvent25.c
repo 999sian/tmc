@@ -9,6 +9,7 @@
 #include "object.h"
 #include "room.h"
 #include "script.h"
+#include "port_scripts.h"
 #include "subtask.h"
 
 void WorldEvent_25_0(void);
@@ -25,10 +26,10 @@ extern Script script_KinstoneSparkKinstoneSparkFromBottom;
 extern Script script_KinstoneSparkKinstoneSparkGoronMerchang;
 extern Script script_KinstoneSparkKinstoneSparkGoron;
 const EntityData gUnk_080FF378[] = {
-    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, (u32)&script_KinstoneSparkKinstoneSpark },
-    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, (u32)&script_KinstoneSparkKinstoneSparkFromBottom },
-    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, (u32)&script_KinstoneSparkKinstoneSparkGoronMerchang },
-    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, (u32)&script_KinstoneSparkKinstoneSparkGoron },
+    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, ENTITY_SCRIPT(script_KinstoneSparkKinstoneSpark) },
+    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, ENTITY_SCRIPT(script_KinstoneSparkKinstoneSparkFromBottom) },
+    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, ENTITY_SCRIPT(script_KinstoneSparkKinstoneSparkGoronMerchang) },
+    { OBJECT, 79, KINSTONE_SPARK, 0, 0, 0x0, 0x0, ENTITY_SCRIPT(script_KinstoneSparkKinstoneSparkGoron) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 

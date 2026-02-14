@@ -9,6 +9,7 @@
 #include "npc.h"
 #include "room.h"
 #include "script.h"
+#include "port_scripts.h"
 #include "subtask.h"
 #include "manager/staticBackgroundManager.h"
 #include "npc/bigGoron.h"
@@ -17,9 +18,9 @@ extern Script script_BigGoronKinstone1;
 extern Script script_BigGoronKinstone2;
 extern Script script_BigGoronKinstone3;
 const EntityData gUnk_080FEED4[] = {
-    { NPC, 79, BIG_GORON, 0, 0, 0x140, 0xf8, (u32)&script_BigGoronKinstone1 },
-    { NPC, 79, BIG_GORON, 5, 0, 0xd0, 0xc8, (u32)&script_BigGoronKinstone2 },
-    { NPC, 79, BIG_GORON, 10, 0, 0x1b0, 0x108, (u32)&script_BigGoronKinstone3 },
+    { NPC, 79, BIG_GORON, 0, 0, 0x140, 0xf8, ENTITY_SCRIPT(script_BigGoronKinstone1) },
+    { NPC, 79, BIG_GORON, 5, 0, 0xd0, 0xc8, ENTITY_SCRIPT(script_BigGoronKinstone2) },
+    { NPC, 79, BIG_GORON, 10, 0, 0x1b0, 0x108, ENTITY_SCRIPT(script_BigGoronKinstone3) },
     { NPC, 15, BIG_GORON, 1, 0, 0x108, 0x88, 0 },
     { NPC, 15, BIG_GORON, 2, 0, 0x108, 0x88, 0 },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },

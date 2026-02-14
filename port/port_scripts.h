@@ -47,6 +47,37 @@
 #define GBA_script_ZeldaStoneInDHC 0x0800DB18
 #define GBA_script_ZeldaStoneDHC 0x0800E58C
 
+/* GBA ROM addresses of kinstone fusion scripts (used in worldEvent files EntityData tables) */
+#define GBA_script_GormanFirstAppearance 0x0800BA78
+#define GBA_script_MutohKinstone 0x0800BACC
+#define GBA_script_SyrupKinstone 0x0800BB00
+#define GBA_script_GoronMerchantArriving 0x0800BB64
+#define GBA_script_StampKinstone 0x0800BBA4
+#define GBA_script_CarlovKinstone 0x0800BBDC
+#define GBA_script_GhostBrotherKinstone 0x0800BC08
+#define GBA_script_GoronKinstone 0x0800BC50
+#define GBA_script_Goron1Kinstone2 0x0800BCE8
+#define GBA_script_Goron2Kinstone2 0x0800BD78
+#define GBA_script_Goron1Kinstone3 0x0800BE1C
+#define GBA_script_Goron2Kinstone3 0x0800BE54
+#define GBA_script_Goron3Kinstone3 0x0800BECC
+#define GBA_script_Goron1Kinstone4 0x0800BF38
+#define GBA_script_Goron2Kinstone4 0x0800BF70
+#define GBA_script_Goron4Kinstone4 0x0800C004
+#define GBA_script_Goron1Kinstone5 0x0800C0B0
+#define GBA_script_Goron2Kinstone5 0x0800C0E8
+#define GBA_script_Goron5Kinstone5 0x0800C160
+#define GBA_script_Goron1Kinstone6 0x0800C1D8
+#define GBA_script_Goron2Kinstone6 0x0800C210
+#define GBA_script_Goron6Kindstone6 0x0800C2A4
+#define GBA_script_BigGoronKinstone1 0x0800C350
+#define GBA_script_BigGoronKinstone2 0x0800C3CC
+#define GBA_script_BigGoronKinstone3 0x0800C410
+#define GBA_script_KinstoneSparkKinstoneSpark 0x0800C45C
+#define GBA_script_KinstoneSparkKinstoneSparkFromBottom 0x0800C494
+#define GBA_script_KinstoneSparkKinstoneSparkGoronMerchang 0x0800C4D0
+#define GBA_script_KinstoneSparkKinstoneSparkGoron 0x0800C50C
+
 /**
  * Resolve a script's GBA ROM address to a native PC pointer.
  * Usage: PORT_SCRIPT(script_PlayerIntro) instead of &script_PlayerIntro

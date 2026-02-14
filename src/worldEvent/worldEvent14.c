@@ -11,12 +11,13 @@
 #include "object.h"
 #include "room.h"
 #include "script.h"
+#include "port_scripts.h"
 #include "subtask.h"
 #include "save.h"
 
 extern Script script_GhostBrotherKinstone;
 const EntityData gUnk_080FF17C[] = {
-    { NPC, 79, GHOST_BROTHERS, 1, 0, 0x388, 0x338, (u32)&script_GhostBrotherKinstone },
+    { NPC, 79, GHOST_BROTHERS, 1, 0, 0x388, 0x338, ENTITY_SCRIPT(script_GhostBrotherKinstone) },
     // TODO what are these kinds?
     { 0x10 + OBJECT, 15, HOUSE_DOOR_EXT, 0, 2, 0x348, 0x303, 0 },
     { 0x10 + OBJECT, 15, HOUSE_DOOR_EXT, 0, 2, 0x3b8, 0x363, 0 },

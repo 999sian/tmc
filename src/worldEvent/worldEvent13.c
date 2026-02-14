@@ -9,11 +9,12 @@
 #include "npc.h"
 #include "room.h"
 #include "script.h"
+#include "port_scripts.h"
 #include "subtask.h"
 
 extern Script script_MutohKinstone;
 const EntityData gUnk_080FF154[] = {
-    { NPC, 79, MUTOH, 0, 0, 0x78, 0x70, (u32)&script_MutohKinstone },
+    { NPC, 79, MUTOH, 0, 0, 0x78, 0x70, ENTITY_SCRIPT(script_MutohKinstone) },
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
 void WorldEvent_13_0(void);
