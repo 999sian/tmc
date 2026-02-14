@@ -4,6 +4,7 @@
 
 u8 gIoMem[0x400];
 u8 gEwram[0x40000];
+u8 gIwram[0x8000];
 u16 gBgPltt[256];
 u16 gObjPltt[256];
 u16 gOamMem[0x400 / 2];
@@ -12,6 +13,10 @@ u8 gVram[0x18000];
 void gba_write8(uint32_t addr, uint8_t v) {
     if (addr >= 0x02000000u && addr < 0x02040000u) {
         gEwram[addr - 0x02000000u] = v;
+        return;
+    }
+    if (addr >= 0x03000000u && addr < 0x03008000u) {
+        gIwram[addr - 0x03000000u] = v;
         return;
     }
     if (addr >= 0x04000000u && addr < 0x04000400u) {
@@ -29,6 +34,8 @@ void gba_write8(uint32_t addr, uint8_t v) {
 u8 gba_read8(uint32_t addr) {
     if (addr >= 0x02000000u && addr < 0x02040000u)
         return gEwram[addr - 0x02000000u];
+    if (addr >= 0x03000000u && addr < 0x03008000u)
+        return gIwram[addr - 0x03000000u];
     if (addr >= 0x04000000u && addr < 0x04000400u)
         return gIoMem[addr - 0x04000000u];
     if (addr >= 0x06000000u && addr < 0x06018000u)
@@ -51,6 +58,11 @@ void gba_write16(uint32_t addr, uint16_t v) {
     if (addr >= 0x02000000u && addr < 0x0203FFFFu) {
         gEwram[addr - 0x02000000u] = v & 0xFF;
         gEwram[addr - 0x02000000u + 1] = (v >> 8) & 0xFF;
+        return;
+    }
+    if (addr >= 0x03000000u && addr < 0x03007FFFu) {
+        gIwram[addr - 0x03000000u] = v & 0xFF;
+        gIwram[addr - 0x03000000u + 1] = (v >> 8) & 0xFF;
         return;
     }
     // BG palette
@@ -93,6 +105,8 @@ u16 gba_read16(uint32_t addr) {
         return gOamMem[(addr - 0x07000000u) >> 1];
     if (addr >= 0x02000000u && addr < 0x0203FFFFu)
         return gEwram[addr - 0x02000000u] | (gEwram[addr - 0x02000000u + 1] << 8);
+    if (addr >= 0x03000000u && addr < 0x03007FFFu)
+        return gIwram[addr - 0x03000000u] | (gIwram[addr - 0x03000000u + 1] << 8);
     if (gRomData && addr >= 0x08000000u) {
         Port_LogRomAccess(addr, "gba_read16");
         u32 off = addr - 0x08000000u;
@@ -152,6 +166,14 @@ void gba_write32(uint32_t addr, uint32_t v) {
         gEwram[off + 3] = (v >> 24) & 0xFF;
         return;
     }
+    if (addr >= 0x03000000u && addr < 0x03007FFDu) {
+        u32 off = addr - 0x03000000u;
+        gIwram[off] = v & 0xFF;
+        gIwram[off + 1] = (v >> 8) & 0xFF;
+        gIwram[off + 2] = (v >> 16) & 0xFF;
+        gIwram[off + 3] = (v >> 24) & 0xFF;
+        return;
+    }
     printf("gba_write32: unimplemented for address 0x%08X\n", addr);
 }
 
@@ -172,6 +194,10 @@ u32 gba_read32(uint32_t addr) {
     if (addr >= 0x02000000u && addr < 0x0203FFFDu) {
         u32 off = addr - 0x02000000u;
         return gEwram[off] | (gEwram[off + 1] << 8) | (gEwram[off + 2] << 16) | (gEwram[off + 3] << 24);
+    }
+    if (addr >= 0x03000000u && addr < 0x03007FFDu) {
+        u32 off = addr - 0x03000000u;
+        return gIwram[off] | (gIwram[off + 1] << 8) | (gIwram[off + 2] << 16) | (gIwram[off + 3] << 24);
     }
     if (gRomData && addr >= 0x08000000u) {
         Port_LogRomAccess(addr, "gba_read32");

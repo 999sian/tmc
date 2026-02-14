@@ -182,7 +182,7 @@ u32 ClearBit(void* src, u32 bit) {
 
 void MemFill16(u32 value, void* dest, u32 size) {
 #ifdef PC_PORT
-    u16* d = (u16*)dest;
+    u16* d = (u16*)port_resolve_addr((uintptr_t)dest);
     u32 i;
     for (i = 0; i < size / 2; i++) {
         d[i] = (u16)value;

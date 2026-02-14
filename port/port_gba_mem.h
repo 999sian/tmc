@@ -10,6 +10,7 @@
 
 extern u8 gIoMem[0x400];       // I/O Memory (0x04000000-0x040003FF)
 extern u8 gEwram[0x40000];     // EWRAM (0x02000000-0x0203FFFF)
+extern u8 gIwram[0x8000];      // IWRAM (0x03000000-0x03007FFF)
 extern u16 gBgPltt[256];       // 0x200 bytes
 extern u16 gObjPltt[256];      // 0x200 bytes
 extern u16 gOamMem[0x400 / 2]; // 0x400 bytes (OAM)
@@ -36,6 +37,8 @@ u32 gba_read32(uint32_t addr);
 static inline void* gba_TryMemPtr(uint32_t addr) {
     if (addr >= 0x02000000u && addr < 0x02040000u)
         return &gEwram[addr - 0x02000000u];
+    if (addr >= 0x03000000u && addr < 0x03008000u)
+        return &gIwram[addr - 0x03000000u];
     if (addr >= 0x04000000u && addr < 0x04000400u)
         return &gIoMem[addr - 0x04000000u];
     if (addr >= 0x05000000u && addr < 0x05000200u)

@@ -20,6 +20,28 @@ extern s8 gUnk_08126EE4[];
 extern const KeyValuePair gUnk_080046A4[];
 extern const u16 gUnk_080047F6[];
 
+#ifdef PC_PORT
+extern u8* gRomData;
+extern u32 gRomSize;
+
+static bool32 Port_RomHasBytes(const void* ptr, u32 count) {
+    uintptr_t start;
+    uintptr_t end;
+    uintptr_t p;
+
+    if (!gRomData)
+        return FALSE;
+
+    start = (uintptr_t)gRomData;
+    end = start + (uintptr_t)gRomSize;
+    p = (uintptr_t)ptr;
+    if (p < start || p > end)
+        return FALSE;
+
+    return (uintptr_t)count <= (end - p);
+}
+#endif
+
 static void sub_0806FEE8(struct_gUnk_020000C0_1*, u32, u32, u32);
 static void sub_0806FEFC(struct_gUnk_020000C0_1*, Entity*);
 static bool32 sub_0807007C(struct_gUnk_020000C0*, u32);
@@ -640,16 +662,18 @@ void sub_0807000C(Entity* this) {
     val |= sub_0807007C(ptr, 3);
 
     if (val) {
-        u8* ptr2 = (u8*)&gGFXSlots;
-        ptr2[this->spriteAnimation[0] * 12 + 7] = this->spriteAnimation[2];
-        ptr2[this->spriteAnimation[0] * 12 + 4] = (ptr2[this->spriteAnimation[0] * 12 + 4] & 0xf) | 0x30;
+        GfxSlot* slot = &gGFXSlots.slots[this->spriteAnimation[0]];
+        slot->unk_3 = this->spriteAnimation[2];
+        slot->vramStatus = GFX_VRAM_3;
     }
 }
 
 static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
-    u8* ptr2;
     u8* ptr3;
+#ifndef PC_PORT
+    u8* ptr2;
     u32* spritePtr;
+#endif
     struct_gUnk_020000C0_1* ptr1 = &this->unk_00[param_2];
     if ((ptr1->unk_00.unk3) == 0)
         return 0;
@@ -657,7 +681,31 @@ static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
         return 0;
     if (ptr1->unk_01 == 0xff)
         return 0;
+    if (ptr1->unk_02 >= 512)
+        return 0;
 
+#ifdef PC_PORT
+    {
+        const SpritePtr* spr = &gSpritePtrs[ptr1->unk_02];
+        const u8* frames = (const u8*)spr->frames;
+        const u8* tileBase = (const u8*)spr->ptr;
+        u32 frameOffset = (u32)ptr1->unk_01 * 4;
+        u16 firstTileIndex;
+
+        if (!frames || !tileBase)
+            return 0;
+        if (!Port_RomHasBytes(frames, frameOffset + 4))
+            return 0;
+
+        ptr3 = (u8*)&frames[frameOffset];
+        ptr1->unk_08.BYTES.byte1 = *ptr3;
+        firstTileIndex = (u16)ptr3[2] | ((u16)ptr3[3] << 8);
+        if (!Port_RomHasBytes(tileBase + ((u32)firstTileIndex << 5), 32))
+            return 0;
+        ptr1->unk_0C = (uintptr_t)(tileBase + ((u32)firstTileIndex << 5));
+        return 1;
+    }
+#else
     spritePtr = &((u32*)gSpritePtrs)[ptr1->unk_02 * 4];
     ptr2 = (u8*)(spritePtr[1]);
     if (ptr2 == 0)
@@ -667,6 +715,7 @@ static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
     ptr1->unk_08.BYTES.byte1 = *ptr3;
     ptr1->unk_0C = spritePtr[2] + ((*(u16*)&ptr3[2]) << 5);
     return 1;
+#endif
 }
 
 u8* GetSpriteSubEntryOffsetDataPointer(u32 param_1, u32 param_2) {
