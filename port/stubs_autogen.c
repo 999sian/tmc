@@ -19,6 +19,10 @@ extern u32 GetActTileAtEntity(Entity* entity);
 extern void CalculateEntityTileCollisions(Entity* entity, u32 direction, u32 collisionType);
 extern u32 ProcessMovementInternal(Entity* entity, s32 speed, s32 direction, u32 collisionType);
 extern void sub_08079E58(s32 speed, u32 direction);
+extern void CreateDrownFX(Entity* entity);
+extern void CreateLavaDrownFX(Entity* entity);
+extern void CreateSwampDrownFX(Entity* entity);
+extern void CreatePitFallFX(Entity* entity);
 void sub_080044AE(Entity* entity, u32 speed, u32 direction);
 void sub_08004542(Entity* entity);
 
@@ -101,22 +105,10 @@ u32 CalcCollisionStaticEntity(Entity* target, Entity* origin) {
 /* CheckPlayerInRegion -- implemented in port_linked_stubs.c */
 /* CheckRectOnScreen -- implemented in port_linked_stubs.c */
 /* CloneTile -- implemented in port_linked_stubs.c */
-void CreateDrownFX(Entity* entity) {
-    /* Stub: drown FX not yet implemented */
-    (void)entity;
-}
-void CreateLavaDrownFX(Entity* entity) {
-    /* Stub: lava drown FX not yet implemented */
-    (void)entity;
-}
-void CreateSwampDrownFX(Entity* entity) {
-    /* Stub: swamp drown FX not yet implemented */
-    (void)entity;
-}
-void CreatePitFallFX(Entity* entity) {
-    /* Stub: pit fall FX not yet implemented */
-    (void)entity;
-}
+/* CreateDrownFX -- implemented in port_gameplay_stubs.c */
+/* CreateLavaDrownFX -- implemented in port_gameplay_stubs.c */
+/* CreateSwampDrownFX -- implemented in port_gameplay_stubs.c */
+/* CreatePitFallFX -- implemented in port_gameplay_stubs.c */
 /* CutsceneMain_Exit -- real implementation in src/cutscene.c */
 /* CutsceneMain_Init -- real implementation in src/cutscene.c */
 /* CutsceneMain_Update -- real implementation in src/cutscene.c */
@@ -213,9 +205,7 @@ void ResetCollisionLayer(Entity* entity) {
 /* UnpackTextNibbles — implemented in port_text_render.c */
 /* UpdateAnimationSingleFrame — implemented in port_animation.c */
 /* UpdateAnimationVariableFrames — implemented in port_animation.c */
-void UpdateCollision(Entity* entity) {
-    /* Stub: collision handling not implemented yet */
-}
+/* UpdateCollision -- implemented in port_gameplay_stubs.c */
 /* UpdateCollisionLayer -- implemented in port_linked_stubs.c */
 /* UpdateIcePlayerVelocity -- implemented in port_gameplay_stubs.c */
 /* UpdateScrollVram — implemented in port_linked_stubs.c */
@@ -539,9 +529,7 @@ u32 ram_IntrMain(...) {
 /* sub_080026C4 — implemented in port_text_render.c */
 /* sub_080026F2 — implemented in port_text_render.c */
 /* sub_080028E0 -- implemented in port_linked_stubs.c */
-u32 sub_08003FDE(...) {
-    return 0;
-}
+/* sub_08003FDE -- implemented in port_gameplay_stubs.c */
 /* sub_080040A2 -- implemented in port_gameplay_stubs.c */
 /* sub_080040D8 -- implemented in port_gameplay_stubs.c */
 /* sub_080040E2 -- implemented in port_gameplay_stubs.c */
@@ -549,9 +537,7 @@ u32 sub_08003FDE(...) {
 /* sub_0800419C -- implemented in port_gameplay_stubs.c */
 /* sub_080041DC -- implemented in port_gameplay_stubs.c */
 /* sub_080041E8 -- implemented in port_gameplay_stubs.c */
-u32 sub_08004202(...) {
-    return 0;
-}
+/* sub_08004202 -- implemented in port_gameplay_stubs.c */
 /* sub_080042BA — implemented in port_animation.c */
 /* sub_080042D0 — implemented in port_animation.c */
 u32 sub_0800442E(Entity* entity) {
@@ -645,9 +631,7 @@ void sub_08004596(Entity* entity, u32 targetDirection) {
 /* sub_080045B4 — implemented in port_linked_stubs.c */
 /* sub_0800857C — implemented in port_linked_stubs.c */
 /* sub_080085B0 — implemented in port_linked_stubs.c */
-u32 sub_080086B4(...) {
-    return 0;
-}
+/* sub_080086B4 -- implemented in port_linked_stubs.c */
 /* sub_08008926 -- implemented in port_gameplay_stubs.c */
 /* sub_08008AA0 — implemented in port_linked_stubs.c */
 /* sub_08008AC6 — implemented in port_linked_stubs.c */

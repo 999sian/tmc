@@ -30,6 +30,8 @@
 #include "port_entity_ctx.h"
 #include "port_gba_mem.h"
 
+#include <string.h>
+
 extern u32 CalculateDirectionTo(u32, u32, u32, u32);
 
 uint16_t gPortIntrCheck;
@@ -144,6 +146,8 @@ BgAnimation gBgAnimations[MAX_BG_ANIMATIONS];
 u8 gTextGfxBuffer[0xD00];
 u8 gPaletteBufferBackup[0x400];
 u8 gCollidableCount;
+Entity* gCollidableList[MAX_ENTITIES];
+u32 gUnk_02000020;
 
 // gFrameObjLists — sprite frame data (200KB, self-relative offsets)
 u32 gFrameObjLists[50016];
@@ -397,6 +401,40 @@ extern const u8 gUnk_080083FC[];
 extern const u8 gUnk_0800845C[];
 extern const u8 gUnk_080084BC[];
 extern const u8 gUnk_0800851C[];
+extern u8 gUnk_0800823C[];
+
+static const u8* sActiveCollisionParams = gUnk_080082DC;
+u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer);
+
+static const u8* SelectPlayerCollisionTable(void) {
+    const u8* table = gUnk_080083FC;
+    if (gPlayerState.swim_state != 0) {
+        if (gPlayerState.flags & PL_MINISH) {
+            table = gUnk_0800839C;
+        }
+        return table;
+    }
+
+    table = gUnk_0800845C;
+    if (gPlayerState.jump_status != 0) {
+        return table;
+    }
+    if (gPlayerState.flags & PL_PARACHUTE) {
+        return table;
+    }
+    if (gPlayerState.flags & PL_MINISH) {
+        return gUnk_0800833C;
+    }
+
+    table = gUnk_080084BC;
+    if (gPlayerState.gustJarState == 0 && gPlayerState.heldObject == 0) {
+        table = gUnk_0800851C;
+        if (gPlayerState.attachedBeetleCount == 0) {
+            table = gUnk_080082DC;
+        }
+    }
+    return table;
+}
 
 /*
  * TileCollisionLookup — core tile collision lookup (port of sub_080086D8).
@@ -413,48 +451,39 @@ extern const u8 gUnk_0800851C[];
  *   (returns 0/passable for now since lookup tables are stubbed).
  */
 static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
-    u32 maskedX = px & 0x3F0u;
-    u32 maskedY = py & 0x3F0u;
-    u32 tileX = maskedX >> 4;
-    u32 tileY = maskedY >> 4;
-    u32 index = tileX + tileY * 64;
+    u32 tilePos = ((px & 0x3F0) >> 4) + ((py & 0x3F0) << 2);
+    u8 tileType = (u8)GetCollisionDataAtTilePos(tilePos, entity->collisionLayer);
 
-    /* Get collision data for the entity's layer */
-    u8* collisionData;
-    u8 layer = entity->collisionLayer;
-    if (layer == 2)
-        collisionData = gMapTop.collisionData;
-    else
-        collisionData = gMapBottom.collisionData;
-
-    u8 tileType = collisionData[index];
-
-    /* Swimming check: if swimming and not in deep water, force block non-water tiles */
-    if (gPlayerState.swim_state != 0 && gPlayerState.floor_type != 0x18) {
-        if (tileType >= 0x10)
-            goto extended;
-        tileType = 0x0F; /* all quadrants blocked */
+    if (gPlayerState.swim_state != 0 && gPlayerState.floor_type != 0x18 && tileType < 0x10) {
+        tileType = 0x0F;
     }
 
     if (tileType < 0x10) {
-        /* Simple 2×2 sub-tile collision.
-         * Top half (y&8 == 0) → use bits 2-3 (>>2); bottom half → bits 0-1.
-         * Left half (x&8 == 0) → >>1 additionally. */
-        u32 result = tileType;
-        if (!(py & 8))
-            result >>= 2;
-        if (!(px & 8))
-            result >>= 1;
-        return result & 1;
+        u8 bits = tileType;
+        if ((py & 8) == 0) {
+            bits >>= 2;
+        }
+        if ((px & 8) == 0) {
+            bits >>= 1;
+        }
+        return bits & 1;
     }
 
-extended:
-    if (tileType == 0xFF)
-        return 1; /* always blocked */
+    if (tileType == 0xFF) {
+        return 1;
+    }
 
-    /* Extended collision types (0x10–0xFE) — requires param tables from ROM.
-     * Treat as passable for now. */
-    return 0;
+    u8 idx = sActiveCollisionParams[tileType - 0x10];
+    u32 gbaAddr;
+    memcpy(&gbaAddr, &gUnk_0800823C[(u32)idx << 2], sizeof(gbaAddr));
+    const u16* table = (const u16*)port_resolve_addr((uintptr_t)gbaAddr);
+    if (table == NULL) {
+        return 0;
+    }
+
+    u16 row = table[py & 0x0F];
+    row >>= (0x0F ^ (px & 0x0F));
+    return row & 1;
 }
 
 /*
@@ -484,50 +513,41 @@ extended:
  *   Bit  1: top edge, west probe
  */
 void sub_080085CC(Entity* ent) {
-    /* Null hitbox guard */
     Hitbox* hb = (Hitbox*)port_resolve_addr((uintptr_t)ent->hitbox);
     if (hb == NULL) {
         ent->collisions = 0;
         return;
     }
 
-    /* Get entity position relative to room origin */
-    s32 relX = (s32)(u16)ent->x.HALF.HI - (s32)gRoomControls.origin_x;
-    s32 relY = (s32)(u16)ent->y.HALF.HI - (s32)gRoomControls.origin_y;
+    sActiveCollisionParams = SelectPlayerCollisionTable();
 
-    /* Hitbox offsets */
-    s32 baseX = relX + hb->offset_x;
-    s32 baseY = relY + hb->offset_y;
+    s32 baseX = (s32)(u16)ent->x.HALF.HI - (s32)gRoomControls.origin_x + hb->offset_x;
+    s32 baseY = (s32)(u16)ent->y.HALF.HI - (s32)gRoomControls.origin_y + hb->offset_y;
 
-    u8 halfW = hb->unk2[0];
-    u8 vStep = hb->unk2[1];
-    u8 hStep = hb->unk2[2];
-    u8 halfH = hb->unk2[3];
+    u32 sideX = (u8)hb->unk2[0];
+    u32 sideY = (u8)hb->unk2[1];
+    u32 innerX = (u8)hb->unk2[2];
+    u32 innerY = (u8)hb->unk2[3];
 
-    s32 rightX = baseX + halfW;
-    s32 leftX = baseX - halfW;
-    s32 bottomY = baseY + halfH;
-    s32 topY = baseY - halfH;
+    u16 collisions = 0;
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX + (s32)sideX), (u32)(baseY + (s32)sideY), ent) << 14);
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX + (s32)sideX), (u32)(baseY - (s32)sideY), ent) << 13);
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX - (s32)sideX), (u32)(baseY + (s32)sideY), ent) << 10);
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX - (s32)sideX), (u32)(baseY - (s32)sideY), ent) << 9);
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX + (s32)innerX), (u32)(baseY + (s32)innerY), ent) << 6);
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX - (s32)innerX), (u32)(baseY + (s32)innerY), ent) << 5);
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX + (s32)innerX), (u32)(baseY - (s32)innerY), ent) << 2);
+    collisions |= (u16)(TileCollisionLookup((u32)(baseX - (s32)innerX), (u32)(baseY - (s32)innerY), ent) << 1);
+    ent->collisions = collisions;
+}
 
-    u16 col = 0;
+u32 sub_080086D8(u32 roomX, u32 roomY, const u8* params) {
+    sActiveCollisionParams = params;
+    return TileCollisionLookup(roomX, roomY, &gPlayerEntity.base);
+}
 
-    /* Right edge: south & north */
-    col |= TileCollisionLookup((u32)rightX, (u32)(baseY + vStep), ent) << 14;
-    col |= TileCollisionLookup((u32)rightX, (u32)(baseY - vStep), ent) << 13;
-
-    /* Left edge: south & north */
-    col |= TileCollisionLookup((u32)leftX, (u32)(baseY + vStep), ent) << 10;
-    col |= TileCollisionLookup((u32)leftX, (u32)(baseY - vStep), ent) << 9;
-
-    /* Bottom edge: east & west */
-    col |= TileCollisionLookup((u32)(baseX + hStep), (u32)bottomY, ent) << 6;
-    col |= TileCollisionLookup((u32)(baseX - hStep), (u32)bottomY, ent) << 5;
-
-    /* Top edge: east & west */
-    col |= TileCollisionLookup((u32)(baseX + hStep), (u32)topY, ent) << 2;
-    col |= TileCollisionLookup((u32)(baseX - hStep), (u32)topY, ent) << 1;
-
-    ent->collisions = col;
+u32 sub_080086B4(u32 roomX, u32 roomY, const u8* params) {
+    return sub_080086D8(roomX, roomY, params);
 }
 
 /*
@@ -641,7 +661,9 @@ u32 LinearMoveDirectionOLD(Entity* ent, u32 speed, u32 direction) {
  * (from Thumb asm at 0x0800857C)
  */
 void sub_0800857C(Entity* ent) {
-    sub_080085CC(ent);
+    if (((u8)ent->type2 & 0x80) == 0 && (gPlayerState.jump_status & 0x80) == 0) {
+        sub_080085CC(ent);
+    }
     LinearMoveDirectionOLD(ent, ent->speed, ent->direction);
 }
 
@@ -661,7 +683,7 @@ void sub_080085B0(Entity* ent) {
  */
 void sub_08008AA0(Entity* ent) {
     (void)ent;
-    if (gPlayerState.floor_type == 1) /* SURFACE_AUTO */
+    if (gPlayerState.floor_type == 1)
         return;
     u8 dir = gPlayerState.direction;
     if (dir == 0xFF)
@@ -675,10 +697,28 @@ void sub_08008AA0(Entity* ent) {
  * (from Thumb asm at 0x08008AC6)
  * Simplified stub: just check swim state and collision for respawn.
  */
+static u32 GetNonCollidedSide(Entity* ent) {
+    u16 c = ent->collisions;
+    for (int i = 0; i < 4; i++) {
+        if ((c & 0x000E) == 0) {
+            return 0;
+        }
+        c >>= 4;
+    }
+    return 1;
+}
+
 void sub_08008AC6(Entity* ent) {
-    /* Simplified: skip respawn check since it depends on GetNonCollidedSide
-     * and RespawnPlayer which would need more infrastructure */
-    (void)ent;
+    if ((gPlayerState.swim_state & 0x0F) != 0) {
+        return;
+    }
+    if ((gPlayerState.flags & gUnk_02000020) != 0) {
+        return;
+    }
+    if (GetNonCollidedSide(ent) != 0) {
+        ent->iframes = (s8)0xE2;
+        RespawnPlayer();
+    }
 }
 
 /*
@@ -1096,6 +1136,10 @@ u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer) {
     return ml->collisionData[tilePos];
 }
 
+u32 GetCollisionDataAtRoomTile(u32 roomTileX, u32 roomTileY, u32 layer) {
+    return GetCollisionDataAtTilePos(roomTileX + (roomTileY << 6), layer);
+}
+
 u32 GetCollisionDataAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
     u32 tilePos = RoomToTilePos(roomX, roomY);
     MapLayer* ml = GetMapLayerForLayer(layer);
@@ -1138,6 +1182,10 @@ u32 GetTileTypeAtTilePos(u32 tilePos, u32 layer) {
     if (tileIndex >= 0x4000)
         return tileIndex;
     return ml->tileTypes[tileIndex];
+}
+
+u32 GetTileTypeAtRoomTile(u32 roomTileX, u32 roomTileY, u32 layer) {
+    return GetTileTypeAtTilePos(roomTileX + (roomTileY << 6), layer);
 }
 
 u32 GetTileTypeAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {

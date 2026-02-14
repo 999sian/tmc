@@ -150,7 +150,11 @@ extern u32 sub_08004202(Entity*, u8*, u32);
 
 // This just reuses the first 12 bytes of gUnk_02022830 to store a MapDataDefinition there temporarily.
 extern MapDataDefinition gUnk_02022830;
+#ifdef PC_PORT
+extern u8 gUnk_0800823C[];
+#else
 extern u16* gUnk_0800823C[];
+#endif
 
 extern bool32 sub_0806FC24(u32, u32);
 
@@ -2821,7 +2825,7 @@ void sub_0807A5B8(u32 direction) {
 
 void sub_0807A750(u32 param_1, u32 param_2, const u8* param_3, u32 param_4) {
     u32 uVar2;
-    u16* ptr;
+    const u16* ptr;
     u32 uVar5;
     s32 index;
 
@@ -2840,7 +2844,18 @@ void sub_0807A750(u32 param_1, u32 param_2, const u8* param_3, u32 param_4) {
                 uVar2 = 0xf;
             }
         }
+#ifdef PC_PORT
+        {
+            u32 gbaAddr;
+            memcpy(&gbaAddr, &gUnk_0800823C[uVar2 * 4], sizeof(gbaAddr));
+            ptr = (const u16*)port_resolve_addr((uintptr_t)gbaAddr);
+        }
+#else
         ptr = gUnk_0800823C[uVar2];
+#endif
+        if (ptr == NULL) {
+            return;
+        }
         if ((param_4 & 1) == 0) {
             uVar5 = 0x8000 >> (param_1 % 16);
             if (param_4 == 0) {

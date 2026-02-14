@@ -17,6 +17,9 @@ extern const KeyValuePair gUnk_080046A4[];
 extern const u16 gUnk_080047F6[];
 extern const KeyValuePair gMapActTileToSurfaceType[];
 extern u32 CalcDistance(s32 x, s32 y);
+extern u32 sub_0806F58C(Entity* a, Entity* b);
+extern Entity* gCollidableList[];
+extern u8 gCollidableCount;
 
 u8* DoTileInteractionOffset(Entity* entity, u32 interaction, s32 xOffset, s32 yOffset);
 
@@ -198,6 +201,111 @@ u32 sub_080041E8(s32 x1, s32 y1, s32 x2, s32 y2) {
     return CalcDistance(x1 - x2, y1 - y2);
 }
 
+static u32 CheckEntityPickup(Entity* source, Entity* target, u32 xRange, u32 yRange) {
+    Hitbox* hb = (Hitbox*)port_resolve_addr((uintptr_t)target->hitbox);
+    if (hb == NULL) {
+        return 0;
+    }
+
+    u32 rangeX = xRange + (u8)hb->width;
+    u32 rangeY = yRange + (u8)hb->height;
+
+    s32 targetX = (s32)(u16)target->x.HALF.HI + hb->offset_x;
+    if ((*(u8*)&target->spriteSettings & 0x4) != 0) {
+        targetX = (s32)(u16)target->x.HALF.HI - hb->offset_x;
+    }
+    s32 targetY = (s32)(u16)target->y.HALF.HI + hb->offset_y;
+
+    if ((source->collisionLayer & target->collisionLayer) != 3) {
+        if (rangeX != 0) {
+            u32 xDelta = (u32)((s32)(u16)source->x.HALF.HI - targetX + (s32)rangeX);
+            if ((rangeX << 1) < xDelta) {
+                return 0;
+            }
+        }
+        if (rangeY != 0) {
+            u32 yDelta = (u32)((s32)(u16)source->y.HALF.HI - targetY + (s32)rangeY);
+            if ((rangeY << 1) < yDelta) {
+                return 0;
+            }
+        }
+    }
+
+    return 1;
+}
+
+u32 sub_08003FDE(Entity* source, Entity* target, u32 xRange, u32 yRange) {
+    u32 picked = CheckEntityPickup(source, target, xRange, yRange);
+    if (picked) {
+        sub_0806F58C(source, target);
+    }
+    return picked;
+}
+
+u32 sub_08004212(Entity* entity, u32 animationState, u32 tilePos) {
+    if ((animationState & 3) != 0) {
+        tilePos += (animationState & 4) ? (u32)-2 : 2;
+    }
+
+    if ((animationState & 3) != 2) {
+        tilePos += (((animationState + 1) & 4) != 0) ? 0x80 : (u32)-0x80;
+    }
+
+    tilePos &= 0x1FFF;
+
+    MapLayer* layer = GetLayerByIndex(entity->collisionLayer);
+    u16 tile = layer->mapData[tilePos];
+    if ((tile & 0x4000) == 0) {
+        tile = layer->tileTypes[tile];
+    }
+    return tile;
+}
+
+u32 sub_08004202(Entity* entity, u8* outTileType, u32 tilePos) {
+    u32 tileType = sub_08004212(entity, entity->animationState, tilePos);
+    *(u32*)outTileType = tileType;
+    return tilePos;
+}
+
+static void CreateHazardFX(Entity* entity, u32 fxType) {
+    Entity* fx = CreateObject(SPECIAL_FX, fxType, 0);
+    if (fx != NULL) {
+        fx->x.HALF.HI = entity->x.HALF.HI;
+        fx->y.HALF.HI = entity->y.HALF.HI;
+        fx->z.HALF.HI = entity->z.HALF.HI;
+        if (entity->kind == ENEMY) {
+            fx->type2 = 1;
+        }
+    }
+    DeleteEntity(entity);
+}
+
+void CreateDrownFX(Entity* entity) {
+    CreateHazardFX(entity, FX_WATER_SPLASH);
+}
+
+void CreateLavaDrownFX(Entity* entity) {
+    CreateHazardFX(entity, FX_LAVA_SPLASH);
+}
+
+void CreateSwampDrownFX(Entity* entity) {
+    CreateHazardFX(entity, FX_GREEN_SPLASH);
+}
+
+void CreatePitFallFX(Entity* entity) {
+    CreateHazardFX(entity, FX_FALL_DOWN);
+}
+
+void UpdateCollision(Entity* entity) {
+    if ((entity->flags & ENT_COLLIDE) == 0) {
+        return;
+    }
+    if (gCollidableCount < MAX_ENTITIES) {
+        gCollidableList[gCollidableCount] = entity;
+        gCollidableCount++;
+    }
+}
+
 s32 DoItemTileInteraction(Entity* entity, u32 interaction, ItemBehavior* behavior) {
     const s8* offs = (const s8*)&gUnk_08007DF4[entity->animationState & 6];
     u8* entry = (u8*)DoTileInteractionOffset(entity, interaction, offs[0], offs[1]);
@@ -281,8 +389,8 @@ u16* DoTileInteraction(Entity* entity, u32 interaction, u32 worldX, u32 worldY) 
     return (u16*)entry;
 }
 
-u32 PlayerCheckNEastTile(void) {
-    u32 actTile = GetActTileRelativeToEntity(&gPlayerEntity.base, 0, 0);
+u32 CheckNEastTile(Entity* entity) {
+    u32 actTile = GetActTileRelativeToEntity(entity, 0, 0);
     if (actTile & 0x4000) {
         return 0;
     }
@@ -293,6 +401,10 @@ u32 PlayerCheckNEastTile(void) {
     }
 
     return (surfaceType == 1) ? 1 : 0;
+}
+
+u32 PlayerCheckNEastTile(void) {
+    return CheckNEastTile(&gPlayerEntity.base);
 }
 
 static const s8 sVelocities1[] = { 0, -3, 3, -3, 3, 0, 3, 3, 0, 3, -3, 3, -3, 0, -3, -3 };
