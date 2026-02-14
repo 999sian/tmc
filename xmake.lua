@@ -395,8 +395,10 @@ target("tmc_pc")
     end
     
     -- Compiler flags
-    add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers", "-O0", "-g")
-    add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-O2", "-g")
+    add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
+               "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g")
+    add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
+                 "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
 target_end()
 
 

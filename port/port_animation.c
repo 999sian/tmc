@@ -24,6 +24,16 @@
 extern u8* gRomData;
 extern u32 gRomSize;
 
+static int RomRangeHasBytes(const void* ptr, size_t count) {
+    uintptr_t start = (uintptr_t)gRomData;
+    uintptr_t end = start + (uintptr_t)gRomSize;
+    uintptr_t p = (uintptr_t)ptr;
+    if (p < start || p > end) {
+        return 0;
+    }
+    return count <= (size_t)(end - p);
+}
+
 /* ------------------------------------------------------------------ */
 /* sub_080042D0 — Update GFX slot with new frame tile data             */
 /* ------------------------------------------------------------------ */
@@ -41,6 +51,8 @@ static void UpdateSpriteGfxSlot(Entity* entity, u8 frameIdx, u16 spriteIdx) {
         return;
 
     u8 slotIdx = entity->spriteAnimation[0];
+    if (slotIdx >= MAX_GFX_SLOTS)
+        return;
     GfxSlot* slot = &gGFXSlots.slots[slotIdx];
 
     /* status is the low 4 bits */
@@ -71,6 +83,10 @@ static void FrameZero(Entity* entity) {
     u8* p = (u8*)entity->animPtr;
     if (!p)
         return; /* Safety: no animation data */
+    if (!RomRangeHasBytes(p, 4)) {
+        fprintf(stderr, "FrameZero: animPtr %p outside/overruns ROM\n", (void*)p);
+        return;
+    }
     entity->frameIndex = p[0];
     entity->frameDuration = p[1];
     entity->frameSpriteSettings = p[2];
@@ -79,6 +95,10 @@ static void FrameZero(Entity* entity) {
     p += 4;
     /* Check loop flag: bit 7 of frame byte */
     if (entity->frame & 0x80) {
+        if (!RomRangeHasBytes(p, 1)) {
+            fprintf(stderr, "FrameZero: loop byte out of ROM at %p\n", (void*)p);
+            return;
+        }
         u8 loopBack = p[0]; /* next byte = backwards distance in 4-byte frames */
         p -= (u32)loopBack * 4;
     }
@@ -107,21 +127,26 @@ void InitializeAnimation(Entity* entity, u32 animIndex) {
         return;
 
     /* Validate animTable points within ROM data */
-    u8* at = (u8*)animTable;
-    if (at < gRomData || at >= gRomData + gRomSize) {
+    uintptr_t at = (uintptr_t)animTable;
+    uintptr_t romStart = (uintptr_t)gRomData;
+    uintptr_t romEnd = romStart + (uintptr_t)gRomSize;
+    if (gRomData == NULL || at < romStart || at >= romEnd) {
         fprintf(stderr, "InitializeAnimation: animations ptr %p outside ROM for sprite %u!\n", (void*)animTable,
                 spriteIdx);
         return;
     }
 
     /* Validate animIndex won't read past ROM data */
-    if ((u32)(at - gRomData) + (animIndex + 1) * 4 > gRomSize) {
+    size_t atOff = (size_t)(at - romStart);
+    size_t needed = ((size_t)animIndex + 1u) * 4u;
+    if (atOff > gRomSize || needed > gRomSize - atOff) {
         fprintf(stderr, "InitializeAnimation: animIndex %u out of bounds for sprite %u (ROM offset 0x%X)!\n", animIndex,
-                spriteIdx, (u32)(at - gRomData));
+                spriteIdx, (u32)atOff);
         return;
     }
 
-    u32 animGbaAddr = animTable[animIndex];
+    u32 animGbaAddr = 0;
+    memcpy(&animGbaAddr, (const u8*)animTable + (size_t)animIndex * 4u, sizeof(animGbaAddr));
     /* Resolve GBA ROM address to native pointer */
     entity->animPtr = port_resolve_addr(animGbaAddr);
 
@@ -150,6 +175,10 @@ void UpdateAnimationVariableFrames(Entity* entity, u32 amount) {
     u8* p = (u8*)entity->animPtr;
     int maxIter = 256; /* safety limit to prevent infinite loops on corrupt data */
     for (;;) {
+        if (!RomRangeHasBytes(p, 4)) {
+            fprintf(stderr, "UpdateAnimationVariableFrames: anim ptr %p outside/overruns ROM\n", (void*)p);
+            return;
+        }
         if (--maxIter <= 0) {
             fprintf(stderr, "UpdateAnimationVariableFrames: infinite loop detected, sprite %u anim %u\n",
                     entity->spriteIndex, entity->animIndex);
@@ -167,6 +196,10 @@ void UpdateAnimationVariableFrames(Entity* entity, u32 amount) {
         u8 frameByte = p[3];
         p += 4;
         if (frameByte & 0x80) {
+            if (!RomRangeHasBytes(p, 1)) {
+                fprintf(stderr, "UpdateAnimationVariableFrames: loop byte out of ROM at %p\n", (void*)p);
+                return;
+            }
             u8 loopBack = p[0];
             p -= (u32)loopBack * 4;
         }

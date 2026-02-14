@@ -27,6 +27,13 @@
 
 /* Forward declaration of RenderSpritePieces (defined below) */
 static void RenderSpritePieces(const u8* data, s16 baseX, s16 baseY, u32 flags, u16 extra);
+extern u32 gFrameObjLists[50016];
+
+static inline u32 ReadU32Unaligned(const void* p) {
+    u32 v;
+    memcpy(&v, p, sizeof(v));
+    return v;
+}
 
 /* ---- Size/clipping table from ROM overlay (ram_0x80b2be8) ----
  * 60 entries × 4 bytes = 240 bytes.
@@ -178,6 +185,32 @@ void ram_ClearAndUpdateEntities(void) {
     /* If not in an entity update context, just return (shouldn't happen normaly ( I hope :-) ) */
 }
 
+static const u8* LookupFrameData(u16 spriteIndex, u8 frameIndex) {
+    const size_t frameObjSize = sizeof(gFrameObjLists);
+    const u8* base = (const u8*)gFrameObjLists;
+
+    if ((size_t)spriteIndex >= (frameObjSize / sizeof(u32))) {
+        return NULL;
+    }
+
+    u32 off1 = gFrameObjLists[spriteIndex];
+    if ((size_t)off1 > frameObjSize - sizeof(u32)) {
+        return NULL;
+    }
+
+    size_t frameEntry = (size_t)off1 + (size_t)frameIndex * sizeof(u32);
+    if (frameEntry > frameObjSize - sizeof(u32)) {
+        return NULL;
+    }
+
+    u32 off2 = ReadU32Unaligned(base + frameEntry);
+    if ((size_t)off2 >= frameObjSize) {
+        return NULL;
+    }
+
+    return base + off2;
+}
+
 /* ---- Core sprite piece renderer (port of sub_080B2874) ----
  *
  * Frame data format:
@@ -254,6 +287,9 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
 
         /* Size table lookup for clipping */
         u32 sizeIdx = (shapeInfo & 0xF0) >> 2; /* 4-byte entries */
+        if ((size_t)tableOff + sizeIdx + 3 >= sizeof(sSizeTable)) {
+            continue;
+        }
         const u8* se = sizeTab + sizeIdx;
 
         /* Clipping */
@@ -287,7 +323,7 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
         oamWord |= (u32)(shapeInfo & 0xC0) << 8;  /* shape → attr0 bits 14-15 */
         oamWord ^= (u32)(shapeInfo & 0x3C) << 26; /* flip/size → attr1 bits 12-15 */
 
-        *(u32*)ip = oamWord;
+        memcpy(ip, &oamWord, sizeof(oamWord));
         ip += 4;
 
         /* Build attr2: tile number + priority + palette */
@@ -297,7 +333,7 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
         }
         attr2 += (u16)tileHigh << 8;
 
-        *(u16*)ip = attr2;
+        memcpy(ip, &attr2, sizeof(attr2));
         ip += 4; /* skip affineParam (2 bytes attr2 + 2 bytes padding) */
 
         updated++;
@@ -313,8 +349,6 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
  * Looks up sprite frame data from gFrameObjLists using self-relative
  * offset chains, then renders sprite pieces into gOAMControls.oam[].
  */
-extern u32 gFrameObjLists[];
-
 void ram_DrawDirect(OAMCommand* cmd, u32 spriteIndex, u32 frameIndex) {
     if (frameIndex == 0xFF)
         return;
@@ -324,10 +358,10 @@ void ram_DrawDirect(OAMCommand* cmd, u32 spriteIndex, u32 frameIndex) {
      * 2. At that offset + frameIndex*4, read another u32 → byte offset to data
      * 3. base + that offset → frame data pointer
      */
-    u8* base = (u8*)gFrameObjLists;
-    u32 off1 = gFrameObjLists[spriteIndex];           /* byte offset to frame table */
-    u32 off2 = *(u32*)(base + off1 + frameIndex * 4); /* byte offset to frame data */
-    const u8* frameData = base + off2;
+    const u8* frameData = LookupFrameData((u16)spriteIndex, (u8)frameIndex);
+    if (!frameData) {
+        return;
+    }
 
     u8 count = frameData[0];
     if (count == 0)
@@ -338,7 +372,8 @@ void ram_DrawDirect(OAMCommand* cmd, u32 spriteIndex, u32 frameIndex) {
     /* Extract OAMCommand fields */
     s16 baseX = cmd->x;
     s16 baseY = cmd->y;
-    u32 cmdFlags = *(u32*)&cmd->_4; /* _4 | (_6 << 16) */
+    u32 cmdFlags = 0;
+    memcpy(&cmdFlags, &cmd->_4, sizeof(cmdFlags)); /* _4 | (_6 << 16) */
     u16 cmdExtra = cmd->_8;
 
     RenderSpritePieces(frameData, baseX, baseY, cmdFlags, cmdExtra);
@@ -361,7 +396,8 @@ void ram_sub_080ADA04(OAMCommand* cmd, void* frameDataPtr) {
 
     s16 baseX = cmd->x;
     s16 baseY = cmd->y;
-    u32 cmdFlags = *(u32*)&cmd->_4;
+    u32 cmdFlags = 0;
+    memcpy(&cmdFlags, &cmd->_4, sizeof(cmdFlags));
     u16 cmdExtra = cmd->_8;
 
     RenderSpritePieces(frameData, baseX, baseY, cmdFlags, cmdExtra);
@@ -518,7 +554,8 @@ static void ResolveEntitySpriteParams(Entity* entity, s32* outX, s32* outY, u32*
     }
 
     /* Load 32-bit word at offset 0x18: spriteSettings|spriteRendering|palette|spriteOrientation */
-    u32 ip = *(u32*)&entity->spriteSettings;
+    u32 ip = 0;
+    memcpy(&ip, &entity->spriteSettings, sizeof(ip));
 
     /* Build attr2 base (extra): tile + priority + palette */
     u16 sb = entity->spriteVramOffset;
@@ -563,10 +600,10 @@ static void LookupAndRenderNormal(Entity* entity, s32 x, s32 y, u32 flags, u16 e
         return;
 
     u16 sprIdx = (u16)entity->spriteIndex;
-    u8* base = (u8*)gFrameObjLists;
-    u32 off1 = gFrameObjLists[sprIdx];
-    u32 off2 = *(u32*)(base + off1 + (u32)frameIdx * 4);
-    const u8* frameData = base + off2;
+    const u8* frameData = LookupFrameData(sprIdx, frameIdx);
+    if (!frameData) {
+        return;
+    }
 
     RenderSpritePieces(frameData, (s16)x, (s16)y, flags, extra);
 }
@@ -597,8 +634,6 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
 
         for (int part = 0; part < 4; part++) {
             struct_gUnk_020000C0_1* sub = &slot->unk_00[part];
-            u8 subFlags = sub->unk_00.unk0; /* bit 0-1 flags (raw struct) */
-
             if (!(*(u8*)&sub->unk_00 & 1)) /* not active */
                 return;
 
@@ -652,11 +687,10 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
                 /* Look up and render */
                 u8 fIdx = entity->frameIndex;
                 if (fIdx != 0xFF) {
-                    u8* base = (u8*)gFrameObjLists;
-                    u32 off1 = gFrameObjLists[sprIdx];
-                    u32 off2 = *(u32*)(base + off1 + (u32)fIdx * 4);
-                    const u8* frameData = base + off2;
-                    RenderSpritePieces(frameData, (s16)partX, (s16)partY, partFlags, partExtra);
+                    const u8* frameData = LookupFrameData(sprIdx, fIdx);
+                    if (frameData) {
+                        RenderSpritePieces(frameData, (s16)partX, (s16)partY, partFlags, partExtra);
+                    }
                 }
             }
         }
@@ -714,9 +748,9 @@ static void ProcessEntityForDraw(Entity* entity) {
     sDeferredList.count++;
     DeferredEntry* de = &sDeferredList.entries[sDeferredList.count - 1];
     u16 prioBits = (extra >> 10) & 3;
-    de->packed1 = (s16)((deferY << 6) | prioBits);
+    de->packed1 = (s16)(u16)(((u32)(u16)deferY << 6) | (u32)prioBits);
     u8 shadowType = (*(u8*)&entity->spriteSettings & 0x30) >> 4;
-    de->packed0 = (s16)((x << 6) | shadowType);
+    de->packed0 = (s16)(u16)(((u32)(u16)x << 6) | (u32)shadowType);
 }
 
 /* ---- ProcessDrawList (port of sub_080B2534) ---- */
@@ -752,6 +786,10 @@ static void ProcessDeferredList(void) {
         s32 screenY = de->packed1 >> 6;
         u32 prioBits = de->packed1 & 3;
         u16 extra = (u16)(prioBits << 10);
+
+        if (listType >= 4) {
+            continue;
+        }
 
         u32* shadowPtrs = (u32*)sShadowFrameTable;
         const u8* frameData = (const u8*)(uintptr_t)shadowPtrs[listType];

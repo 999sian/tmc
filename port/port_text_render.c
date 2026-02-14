@@ -13,7 +13,10 @@ void UnpackTextNibbles(void* src_ptr, u8* dest) {
     {
         extern u8* gRomData;
         extern u32 gRomSize;
-        if (!(src >= gRomData && src < gRomData + gRomSize)) {
+        uintptr_t srcAddr = (uintptr_t)src;
+        uintptr_t romStart = (uintptr_t)gRomData;
+        uintptr_t romEnd = romStart + (uintptr_t)gRomSize;
+        if (!(srcAddr >= romStart && srcAddr < romEnd)) {
             fprintf(stderr, "[TEXT] UnpackTextNibbles: src=%p outside ROM [%p..%p)\n", (void*)src, (void*)gRomData,
                     (void*)(gRomData + gRomSize));
         }

@@ -485,7 +485,7 @@ extended:
  */
 void sub_080085CC(Entity* ent) {
     /* Null hitbox guard */
-    Hitbox* hb = ent->hitbox;
+    Hitbox* hb = (Hitbox*)port_resolve_addr((uintptr_t)ent->hitbox);
     if (hb == NULL) {
         ent->collisions = 0;
         return;
