@@ -121,33 +121,21 @@ void CreatePitFallFX(Entity* entity) {
 /* CutsceneMain_Init -- real implementation in src/cutscene.c */
 /* CutsceneMain_Update -- real implementation in src/cutscene.c */
 /* Div -- implemented in port_bios.c */
-u32 DoItemTileInteraction(...) {
-    return 0;
-}
-u32 DoTileInteraction(...) {
-    return 0;
-}
-u32 DoTileInteractionHere(...) {
-    return 0;
-}
-u32 DoTileInteractionOffset(...) {
-    return 0;
-}
+/* DoItemTileInteraction -- implemented in port_gameplay_stubs.c */
+/* DoTileInteraction -- implemented in port_gameplay_stubs.c */
+/* DoTileInteractionHere -- implemented in port_gameplay_stubs.c */
+/* DoTileInteractionOffset -- implemented in port_gameplay_stubs.c */
 /* DrawEntity -- defined in port_draw.c */
 /* EEPROM functions -- defined in port_save.c */
 /* Enemies_LakeHylia_Main -- defined in port_linked_stubs.c */
 /* EnemyFunctionHandler -- implemented in port_linked_stubs.c */
 /* EnemyUpdate -- implemented in port_linked_stubs.c */
-u32 EnqueueSFX(...) {
-    return 0;
-}
+/* EnqueueSFX -- implemented in port_gameplay_stubs.c */
 /* Entities_HouseInteriors1_Mayor_080D6210 -- defined in port_linked_stubs.c */
 /* Entities_MinishPaths_MayorsCabin_gUnk_080D6138 -- defined in port_linked_stubs.c */
 /* EntityInRectRadius -- implemented in port_linked_stubs.c */
 /* EzloNagUIElement_Actions -- defined in port_linked_stubs.c */
-u32 FindValueForKey(...) {
-    return 0;
-}
+/* FindValueForKey -- implemented in port_gameplay_stubs.c */
 /* GenericConfused -- implemented in port_linked_stubs.c */
 /* GenericKnockback -- implemented in port_linked_stubs.c */
 /* GenericKnockback2 -- implemented in port_linked_stubs.c */
@@ -197,9 +185,7 @@ void LoadResourceAsync(const void* src, void* dest, u32 size) {
     }
 }
 /* Mod — implemented in port_linked_stubs.c */
-u32 PlayerCheckNEastTile(...) {
-    return 0;
-}
+/* PlayerCheckNEastTile -- implemented in port_gameplay_stubs.c */
 void ProjectileUpdate(Entity* entity) {
     /* Stub: projectile update not implemented yet */
 }
@@ -218,12 +204,8 @@ void ResetCollisionLayer(Entity* entity) {
 /* SetActTileAtTilePos -- implemented in port_linked_stubs.c */
 /* SetCollisionData -- implemented in port_linked_stubs.c */
 /* SetTile -- implemented in port_linked_stubs.c */
-u32 SnapToTile(...) {
-    return 0;
-}
-u32 SoundReqClipped(...) {
-    return 0;
-}
+/* SnapToTile -- implemented in port_gameplay_stubs.c */
+/* SoundReqClipped -- implemented in port_gameplay_stubs.c */
 /* Subtask_FastTravel_Functions -- defined in port_linked_stubs.c */
 /* Subtask_MapHint_Functions -- defined in port_linked_stubs.c */
 /* SumDropProbabilities — implemented in port_linked_stubs.c */
@@ -235,9 +217,7 @@ void UpdateCollision(Entity* entity) {
     /* Stub: collision handling not implemented yet */
 }
 /* UpdateCollisionLayer -- implemented in port_linked_stubs.c */
-u32 UpdateIcePlayerVelocity(...) {
-    return 0;
-}
+/* UpdateIcePlayerVelocity -- implemented in port_gameplay_stubs.c */
 /* UpdateScrollVram — implemented in port_linked_stubs.c */
 /* UpdateSpriteForCollisionLayer — implemented in port_linked_stubs.c */
 /* UpperInn_Din -- defined in port_linked_stubs.c */
@@ -550,12 +530,8 @@ u32 ram_IntrMain(...) {
 /* script_TalonGotKey -- defined in port_linked_stubs.c */
 /* script_WindTribespeople6 -- defined in port_linked_stubs.c */
 /* script_ZeldaMagic -- defined in port_linked_stubs.c */
-u32 sub_08000E44(...) {
-    return 0;
-}
-u32 sub_08000E62(...) {
-    return 0;
-}
+/* sub_08000E44 -- implemented in port_gameplay_stubs.c */
+/* sub_08000E62 -- implemented in port_gameplay_stubs.c */
 /* sub_08001290 -- implemented in port_linked_stubs.c */
 /* sub_080012DC -- implemented in port_linked_stubs.c */
 /* sub_08001318 -- implemented in port_linked_stubs.c */
@@ -566,27 +542,13 @@ u32 sub_08000E62(...) {
 u32 sub_08003FDE(...) {
     return 0;
 }
-u32 sub_080040A2(...) {
-    return 0;
-}
-u32 sub_080040D8(...) {
-    return 0;
-}
-u32 sub_080040E2(...) {
-    return 0;
-}
-u32 sub_0800417E(...) {
-    return 0;
-}
-u32 sub_0800419C(...) {
-    return 0;
-}
-u32 sub_080041DC(...) {
-    return 0;
-}
-u32 sub_080041E8(...) {
-    return 0;
-}
+/* sub_080040A2 -- implemented in port_gameplay_stubs.c */
+/* sub_080040D8 -- implemented in port_gameplay_stubs.c */
+/* sub_080040E2 -- implemented in port_gameplay_stubs.c */
+/* sub_0800417E -- implemented in port_gameplay_stubs.c */
+/* sub_0800419C -- implemented in port_gameplay_stubs.c */
+/* sub_080041DC -- implemented in port_gameplay_stubs.c */
+/* sub_080041E8 -- implemented in port_gameplay_stubs.c */
 u32 sub_08004202(...) {
     return 0;
 }
@@ -686,9 +648,7 @@ void sub_08004596(Entity* entity, u32 targetDirection) {
 u32 sub_080086B4(...) {
     return 0;
 }
-u32 sub_08008926(...) {
-    return 0;
-}
+/* sub_08008926 -- implemented in port_gameplay_stubs.c */
 /* sub_08008AA0 — implemented in port_linked_stubs.c */
 /* sub_08008AC6 — implemented in port_linked_stubs.c */
 /* sub_080B197C -- defined in port_linked_stubs.c */

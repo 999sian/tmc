@@ -20,6 +20,7 @@
 #include "main.h"
 #include "room.h"
 #include "screen.h"
+#include "sound.h"
 #include "structures.h"
 
 #include <setjmp.h>
@@ -461,6 +462,7 @@ u32 CheckOnScreen(Entity* entity) {
  * Checks visibility, then adds the entity to the appropriate draw list.
  */
 extern u8 gUnk_02024048; /* pending sound count */
+extern u16 gUnk_02021F20[8];
 
 void DrawEntity(Entity* entity) {
     u8 draw = *(u8*)&entity->spriteSettings & 3; /* bits 0-1 */
@@ -492,8 +494,15 @@ void DrawEntity(Entity* entity) {
         list->count++;
     }
 
-    /* Clear pending sound counter (sound is handled elsewhere on PC) */
-    gUnk_02024048 = 0;
+    /* Flush pending SFX queue (matches the original DrawEntity behavior). */
+    {
+        u8 pending = gUnk_02024048;
+        gUnk_02024048 = 0;
+        while (pending != 0) {
+            pending--;
+            SoundReq(gUnk_02021F20[pending]);
+        }
+    }
 }
 
 /* ---- ResolveOamDrawPriority (port of ASM at 0x080B2478) ----
