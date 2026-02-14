@@ -17,6 +17,7 @@
 
 #include "entity.h"
 #include "port_gba_mem.h"
+#include "port_rom.h"
 #include "structures.h"
 #include <stdio.h>
 #include <string.h>
@@ -34,6 +35,7 @@ static int RomRangeHasBytes(const void* ptr, size_t count) {
     return count <= (size_t)(end - p);
 }
 
+
 /* ------------------------------------------------------------------ */
 /* sub_080042D0 — Update GFX slot with new frame tile data             */
 /* ------------------------------------------------------------------ */
@@ -41,7 +43,9 @@ static void UpdateSpriteGfxSlot(Entity* entity, u8 frameIdx, u16 spriteIdx) {
     if (frameIdx == 0xFF)
         return;
 
-    SpritePtr* spr = &gSpritePtrs[spriteIdx];
+    const SpritePtr* spr = Port_GetSpritePtr(spriteIdx);
+    if (!spr)
+        return;
     SpriteFrame* frames = spr->frames;
     if (!frames)
         return;
@@ -113,16 +117,17 @@ void InitializeAnimation(Entity* entity, u32 animIndex) {
 
     u16 spriteIdx = (u16)entity->spriteIndex;
 
-    /* Bounds check: gSpritePtrs only has 329 initialized entries */
+    /* Bounds check for sprite table entries */
     if (spriteIdx >= 512) {
         fprintf(stderr, "InitializeAnimation: spriteIndex %u out of range!\n", spriteIdx);
         return;
     }
-
-    SpritePtr* spr = &gSpritePtrs[spriteIdx];
+    const SpritePtr* spr = Port_GetSpritePtr(spriteIdx);
+    if (!spr)
+        return;
 
     /* animations is a native pointer to an array of u32 (GBA ROM addresses) */
-    u32* animTable = (u32*)spr->animations;
+    const u32* animTable = (const u32*)spr->animations;
     if (!animTable)
         return;
 
@@ -131,8 +136,6 @@ void InitializeAnimation(Entity* entity, u32 animIndex) {
     uintptr_t romStart = (uintptr_t)gRomData;
     uintptr_t romEnd = romStart + (uintptr_t)gRomSize;
     if (gRomData == NULL || at < romStart || at >= romEnd) {
-        fprintf(stderr, "InitializeAnimation: animations ptr %p outside ROM for sprite %u!\n", (void*)animTable,
-                spriteIdx);
         return;
     }
 

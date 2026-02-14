@@ -21,6 +21,7 @@ extern const KeyValuePair gUnk_080046A4[];
 extern const u16 gUnk_080047F6[];
 
 #ifdef PC_PORT
+#include "port_rom.h"
 extern u8* gRomData;
 extern u32 gRomSize;
 
@@ -45,6 +46,7 @@ static bool32 Port_RomHasBytes(const void* ptr, u32 count) {
 static void sub_0806FEE8(struct_gUnk_020000C0_1*, u32, u32, u32);
 static void sub_0806FEFC(struct_gUnk_020000C0_1*, Entity*);
 static bool32 sub_0807007C(struct_gUnk_020000C0*, u32);
+static struct_gUnk_020000C0* GetExtraSpriteStorage(Entity* this);
 
 void sub_0806F364(void) {
     gArea.filler[1] ^= 0x80;
@@ -563,7 +565,7 @@ void UnloadOBJPalette2(Entity* ent) {
     u32 spriteAnimation = ent->spriteAnimation[2];
     ent->spriteAnimation[2] = 0;
 
-    if (spriteAnimation > 0 && spriteAnimation < 0x80) {
+    if (spriteAnimation > 0 && spriteAnimation < ARRAY_COUNT(gUnk_020000C0)) {
         struct_gUnk_020000C0_1* startptr = gUnk_020000C0[spriteAnimation].unk_00;
 
         for (index = 0; index <= 3; index++) {
@@ -575,7 +577,11 @@ void UnloadOBJPalette2(Entity* ent) {
 }
 
 void sub_0806FEBC(Entity* ent, u32 param_2, Entity* param_3) {
-    struct_gUnk_020000C0_1* ptr = &gUnk_020000C0[ent->spriteAnimation[2]].unk_00[param_2];
+    struct_gUnk_020000C0* ex = GetExtraSpriteStorage(ent);
+    struct_gUnk_020000C0_1* ptr;
+    if (ex == NULL || param_2 >= 4)
+        return;
+    ptr = &ex->unk_00[param_2];
     *((u32*)ptr) = 0;
     ptr->unk_04.WORD = 0;
     ptr->unk_08.WORD = 0;
@@ -598,8 +604,12 @@ static void sub_0806FEFC(struct_gUnk_020000C0_1* this, Entity* ent) {
 }
 
 void sub_0806FF10(Entity* this, u32 param_2, u32 param_3) {
-    struct_gUnk_020000C0_1* ptr = &gUnk_020000C0[this->spriteAnimation[2]].unk_00[param_2];
+    struct_gUnk_020000C0* ex = GetExtraSpriteStorage(this);
+    struct_gUnk_020000C0_1* ptr;
     s32 pallete = FindPalette(param_3);
+    if (ex == NULL || param_2 >= 4)
+        return;
+    ptr = &ex->unk_00[param_2];
     if (ptr->unk_04.BYTES.byte1 != pallete) {
         sub_0801D244(ptr->unk_04.BYTES.byte1);
         ptr->unk_04.BYTES.byte1 = LoadObjPalette(this, param_3);
@@ -607,12 +617,18 @@ void sub_0806FF10(Entity* this, u32 param_2, u32 param_3) {
 }
 
 void sub_0806FF48(Entity* this, u32 param_2, u32 param_3) {
-    struct_gUnk_020000C0_1* ptr = &gUnk_020000C0[this->spriteAnimation[2]].unk_00[param_2];
+    struct_gUnk_020000C0* ex = GetExtraSpriteStorage(this);
+    struct_gUnk_020000C0_1* ptr;
+    if (ex == NULL || param_2 >= 4)
+        return;
+    ptr = &ex->unk_00[param_2];
     ptr->unk_04.BYTES.byte0 = param_3;
 }
 
 void SetExtraSpriteFrame(Entity* this, u32 param_2, u32 param_3) {
-    struct_gUnk_020000C0* ptr1 = &gUnk_020000C0[this->spriteAnimation[2]];
+    struct_gUnk_020000C0* ptr1 = GetExtraSpriteStorage(this);
+    if (ptr1 == NULL || param_2 >= 4)
+        return;
     struct_gUnk_020000C0_1* ptr2 = &ptr1->unk_00[param_2];
     if (ptr2->unk_01 != param_3) {
         ptr2->unk_01 = param_3;
@@ -621,7 +637,9 @@ void SetExtraSpriteFrame(Entity* this, u32 param_2, u32 param_3) {
 }
 
 void SetSpriteSubEntryOffsetData1(Entity* this, u32 param_2, u32 param_3) {
-    struct_gUnk_020000C0* ptr1 = &gUnk_020000C0[this->spriteAnimation[2]];
+    struct_gUnk_020000C0* ptr1 = GetExtraSpriteStorage(this);
+    if (ptr1 == NULL || param_2 >= 4 || param_3 >= 4)
+        return;
     struct_gUnk_020000C0_1* ptr2 = &ptr1->unk_00[param_2];
     struct_gUnk_020000C0_1* ptr3 = &ptr1->unk_00[param_3];
 
@@ -635,13 +653,19 @@ void SetSpriteSubEntryOffsetData1(Entity* this, u32 param_2, u32 param_3) {
 }
 
 void sub_0806FFBC(Entity* this, u32 param_2, u32 param_3, u32 param_4) {
-    struct_gUnk_020000C0_1* ptr = &gUnk_020000C0[this->spriteAnimation[2]].unk_00[param_2];
+    struct_gUnk_020000C0* ex = GetExtraSpriteStorage(this);
+    struct_gUnk_020000C0_1* ptr;
+    if (ex == NULL || param_2 >= 4)
+        return;
+    ptr = &ex->unk_00[param_2];
     ptr->unk_04.BYTES.byte2 = param_3;
     ptr->unk_04.BYTES.byte3 = param_4;
 }
 
 void SetSpriteSubEntryOffsetData2(Entity* this, u32 param_2, u32 param_3) {
-    struct_gUnk_020000C0* ptr1 = &gUnk_020000C0[this->spriteAnimation[2]];
+    struct_gUnk_020000C0* ptr1 = GetExtraSpriteStorage(this);
+    if (ptr1 == NULL || param_2 >= 4 || param_3 >= 4)
+        return;
     struct_gUnk_020000C0_1* ptr2 = &ptr1->unk_00[param_2];
     struct_gUnk_020000C0_1* ptr3 = &ptr1->unk_00[param_3];
 
@@ -655,7 +679,9 @@ void SetSpriteSubEntryOffsetData2(Entity* this, u32 param_2, u32 param_3) {
 }
 
 void sub_0807000C(Entity* this) {
-    struct_gUnk_020000C0* ptr = &gUnk_020000C0[this->spriteAnimation[2]];
+    struct_gUnk_020000C0* ptr = GetExtraSpriteStorage(this);
+    if (ptr == NULL)
+        return;
     u32 val = sub_0807007C(ptr, 0);
     val |= sub_0807007C(ptr, 1);
     val |= sub_0807007C(ptr, 2);
@@ -666,6 +692,13 @@ void sub_0807000C(Entity* this) {
         slot->unk_3 = this->spriteAnimation[2];
         slot->vramStatus = GFX_VRAM_3;
     }
+}
+
+static struct_gUnk_020000C0* GetExtraSpriteStorage(Entity* this) {
+    u32 idx = this->spriteAnimation[2];
+    if (idx == 0 || idx >= ARRAY_COUNT(gUnk_020000C0))
+        return NULL;
+    return &gUnk_020000C0[idx];
 }
 
 static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
@@ -686,12 +719,16 @@ static bool32 sub_0807007C(struct_gUnk_020000C0* this, u32 param_2) {
 
 #ifdef PC_PORT
     {
-        const SpritePtr* spr = &gSpritePtrs[ptr1->unk_02];
-        const u8* frames = (const u8*)spr->frames;
-        const u8* tileBase = (const u8*)spr->ptr;
+        const SpritePtr* spr = Port_GetSpritePtr((u16)ptr1->unk_02);
+        const u8* frames;
+        const u8* tileBase;
         u32 frameOffset = (u32)ptr1->unk_01 * 4;
         u16 firstTileIndex;
 
+        if (!spr)
+            return 0;
+        frames = (const u8*)spr->frames;
+        tileBase = (const u8*)spr->ptr;
         if (!frames || !tileBase)
             return 0;
         if (!Port_RomHasBytes(frames, frameOffset + 4))

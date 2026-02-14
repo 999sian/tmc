@@ -1690,7 +1690,17 @@ void sub_08078E84(Entity* param_1, Entity* param_2) {
         param_1->spriteOffsetX = gPlayerEntity.base.spriteOffsetX;
         param_1->spriteOffsetY = gPlayerEntity.base.spriteOffsetY;
     }
+#ifdef PC_PORT
+    {
+        const SpritePtr* spr = Port_GetSpritePtr((u16)param_2->spriteIndex);
+        if (spr == NULL || spr->frames == NULL) {
+            return;
+        }
+        frame = &spr->frames[param_2->frameIndex];
+    }
+#else
     frame = &gSpritePtrs[(u16)param_2->spriteIndex].frames[param_2->frameIndex];
+#endif
     if (frame->unk_1 != 0) {
         sub_0806FEBC(param_2, 1, param_1);
     } else {

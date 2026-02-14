@@ -1,5 +1,6 @@
 #pragma once
 #include "port_types.h"
+#include "structures.h"
 
 // ROM data buffer
 extern u8* gRomData;
@@ -43,3 +44,9 @@ static inline void* Port_ResolveRomData(u32 gba_addr) {
  * GBA but 8 on 64-bit PC). Falls back to gba_TryMemPtr for unknown addresses.
  */
 void* Port_ResolveEwramPtr(u32 gba_addr);
+
+/*
+ * Return a stable, ROM-resolved SpritePtr entry for the given sprite index.
+ * Returns NULL if the index is outside the loaded sprite table.
+ */
+const SpritePtr* Port_GetSpritePtr(u16 sprite_idx);

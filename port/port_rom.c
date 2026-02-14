@@ -29,6 +29,7 @@
 
 u8* gRomData = NULL;
 u32 gRomSize = 0;
+static SpritePtr sSpritePtrsStable[512];
 
 /* ------------------------------------------------------------------ */
 /*  ROM page extraction (4 KB pages)                                  */
@@ -477,6 +478,15 @@ void* Port_ResolveEwramPtr(u32 gba_addr) {
     /* Fallback to generic gba_TryMemPtr for other EWRAM or non-EWRAM addresses */
     return gba_TryMemPtr(gba_addr);
 }
+
+const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
+    if (!gRomOffsets)
+        return NULL;
+    if (sprite_idx >= gRomOffsets->spritePtrsCount)
+        return NULL;
+    return &sSpritePtrsStable[sprite_idx];
+}
+
 static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foundPathLen) {
     for (int i = 0; i < count; i++) {
         FILE* f = fopen(paths[i], "rb");
@@ -591,6 +601,7 @@ void Port_LoadRom(const char* path) {
      * Each pointer field is a GBA ROM address that needs resolution. */
     {
         const u8* src = &gRomData[R->spritePtrs];
+        memset(sSpritePtrsStable, 0, sizeof(sSpritePtrsStable));
         for (u32 i = 0; i < R->spritePtrsCount; i++) {
             u32 anim, frames, ptr, pad;
             memcpy(&anim, src + i * 16 + 0, 4);
@@ -601,6 +612,7 @@ void Port_LoadRom(const char* path) {
             gSpritePtrs[i].frames = (SpriteFrame*)ResolveRomPtr(frames);
             gSpritePtrs[i].ptr = ResolveRomPtr(ptr);
             gSpritePtrs[i].pad = pad;
+            sSpritePtrsStable[i] = gSpritePtrs[i];
             if (i == 59) {
                 fprintf(stderr, "[SPRITE59] init: anim=0x%08X → %p, frames=0x%08X, ptr=0x%08X, pad=0x%08X\n", anim,
                         gSpritePtrs[59].animations, frames, ptr, pad);

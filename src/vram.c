@@ -112,6 +112,9 @@ void sub_080ADE74(u32 index) {
     slot = gGFXSlots.slots + index;
     if (slot->vramStatus != 0) {
         slot->vramStatus = 1;
+        if (slot->unk_3 >= ARRAY_COUNT(gUnk_020000C0)) {
+            slot->unk_3 = 0;
+        }
         if (((slot->paletteIndex != 0xffff) && (slot->unk_3 != 0))) {
             ptr1 = (struct_gUnk_020000C0_1*)(gUnk_020000C0 + slot->unk_3);
             for (loopIndex = 4; loopIndex > 0; loopIndex--) {
