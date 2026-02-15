@@ -1256,7 +1256,8 @@ InteractableObject* sub_080784E4(void) {
     interactY = gPlayerEntity.base.y.HALF.HI + interactOffsets[1];
 
     for (index = 0; index < 0x20; index++) {
-        iObject = gInteractableObjects + index;
+        // The interactable list is populated through gPossibleInteraction.candidates.
+        iObject = &gPossibleInteraction.candidates[index];
         entity = iObject->entity;
         if (entity == NULL)
             continue;

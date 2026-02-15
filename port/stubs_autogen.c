@@ -5,6 +5,7 @@
 #include "port_gba_mem.h"
 #include "port_types.h"
 #include "entity.h"
+#include "projectile.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -23,6 +24,10 @@ extern void CreateDrownFX(Entity* entity);
 extern void CreateLavaDrownFX(Entity* entity);
 extern void CreateSwampDrownFX(Entity* entity);
 extern void CreatePitFallFX(Entity* entity);
+extern bool32 IsColliding(Entity* this, Entity* that);
+extern Entity* gCollidableList[];
+extern u8 gCollidableCount;
+extern void UpdateSpriteForCollisionLayer(Entity* entity);
 void sub_080044AE(Entity* entity, u32 speed, u32 direction);
 void sub_08004542(Entity* entity);
 
@@ -142,7 +147,48 @@ u32 CalcCollisionStaticEntity(Entity* target, Entity* origin) {
 /* GetCollisionDataAtWorldCoords -- implemented in port_linked_stubs.c */
 /* GetCollisionDataRelativeTo -- implemented in port_linked_stubs.c */
 /* GetFacingDirection -- implemented in port_linked_stubs.c */
-u32 GetFuserId(...) {
+u64 GetFuserId(Entity* entity) {
+    static const u32 sEntityTypeBitmasks[4] = {
+        0x00FFFFFF, /* id + type + type2 must match */
+        0x00FFFF00, /* id + type must match */
+        0x00FF00FF, /* id + type2 must match */
+        0x00FF0000, /* id only */
+    };
+    const u8* table;
+    const u8* entry;
+    u32 key;
+
+    if (entity == NULL) {
+        return 0;
+    }
+
+    if (entity->kind == ENEMY) {
+        table = (const u8*)port_resolve_addr(0x0800232E);
+    } else if (entity->kind == NPC) {
+        table = (const u8*)port_resolve_addr(0x08002342);
+    } else {
+        return 0;
+    }
+
+    if (table == NULL) {
+        return 0;
+    }
+
+    key = ((u32)entity->id << 16) | ((u32)entity->type << 8) | entity->type2;
+    entry = table + 6; /* asm starts by pre-incrementing to the first real entry */
+
+    while (entry[0] != 0) {
+        u32 entryKey = ((u32)entry[0] << 16) | ((u32)entry[1] << 8) | entry[2];
+        u32 maskIndex = ((entry[1] == 0xFF) ? 2 : 0) | ((entry[2] == 0xFF) ? 1 : 0);
+        u32 mask = sEntityTypeBitmasks[maskIndex];
+        if ((key & mask) == (entryKey & mask)) {
+            u32 fuserId = entry[3];
+            u32 textId = (u32)entry[4] | ((u32)entry[5] << 8);
+            return ((u64)textId << 32) | fuserId;
+        }
+        entry += 6;
+    }
+
     return 0;
 }
 /* GetNextFrame — implemented in port_animation.c */
@@ -179,7 +225,29 @@ void LoadResourceAsync(const void* src, void* dest, u32 size) {
 /* Mod — implemented in port_linked_stubs.c */
 /* PlayerCheckNEastTile -- implemented in port_gameplay_stubs.c */
 void ProjectileUpdate(Entity* entity) {
-    /* Stub: projectile update not implemented yet */
+    typedef void (*ProjectileFn)(Entity*);
+    static const ProjectileFn sProjectileFns[] = {
+        DarkNutSwordSlash,      RockProjectile,           BoneProjectile,            MoblinSpear,
+        DekuSeedProjectile,     Projectile5,              DirtBallProjectile,        WindProjectile,
+        FireProjectile,         IceProjectile,            (ProjectileFn)GleerokProjectile,
+        KeatonDagger,           GuardLineOfSight,         ArrowProjectile,           (ProjectileFn)MazaalEnergyBeam,
+        (ProjectileFn)OctorokBossProjectile, StalfosProjectile, LakituCloudProjectile, (ProjectileFn)LakituLightning,
+        (ProjectileFn)MandiblesProjectile,   (ProjectileFn)RemovableDust, (ProjectileFn)SpiderWeb,
+        TorchTrapProjectile,    GuruguruBarProjectile,    (ProjectileFn)V1DarkMagicProjectile,
+        (ProjectileFn)BallAndChain,         (ProjectileFn)V1FireProjectile, CannonballProjectile,
+        (ProjectileFn)V1EyeLaser,           Winder,                    SpikedRollers,
+        (ProjectileFn)V2Projectile,         V3HandProjectile,          (ProjectileFn)V3ElectricProjectile,
+        (ProjectileFn)GyorgTail,            GyorgMaleEnergyProjectile, V3TennisBallProjectile,
+    };
+
+    if (entity == NULL) {
+        return;
+    }
+    if (entity->id < (sizeof(sProjectileFns) / sizeof(sProjectileFns[0]))) {
+        sProjectileFns[entity->id](entity);
+    } else {
+        DeleteEntity(entity);
+    }
 }
 /* RAMFUNCS_END -- defined in port_linked_stubs.c */
 /* Random — implemented in port_linked_stubs.c */
@@ -188,8 +256,7 @@ void ResetCollisionLayer(Entity* entity) {
         return;
     }
     entity->collisionLayer = 1;
-    entity->spriteOrientation.flipY = 2;
-    entity->spriteRendering.b3 = 2;
+    UpdateSpriteForCollisionLayer(entity);
 }
 /* ResolveCollisionLayer -- implemented in port_linked_stubs.c */
 /* RupeeKeyDigits -- defined in port_linked_stubs.c */
@@ -457,6 +524,64 @@ u32 m4aSoundVSyncOn(...) {
 }
 /* ram_ClearAndUpdateEntities -- defined in port_draw.c */
 u32 ram_CollideAll(...) {
+    s32 i;
+    s32 j;
+
+    for (i = 0; i < (s32)gCollidableCount; i++) {
+        Entity* thisEntity = gCollidableList[i];
+        u32 collideMask;
+        s8 thisIFrames;
+        u8 thisCollisionFlags;
+
+        if (thisEntity == NULL) {
+            continue;
+        }
+        if ((thisEntity->flags & 0x80) == 0) {
+            continue;
+        }
+
+        thisCollisionFlags = thisEntity->collisionFlags;
+        collideMask = 1u << (thisCollisionFlags & 7);
+        thisIFrames = thisEntity->iframes;
+
+        for (j = (s32)gCollidableCount - 1; j >= 0; j--) {
+            Entity* other = gCollidableList[j];
+
+            if (other == NULL || other == thisEntity) {
+                continue;
+            }
+            if ((other->collisionMask & collideMask) == 0) {
+                continue;
+            }
+            if ((other->flags & 0x80) == 0) {
+                continue;
+            }
+            if ((thisEntity->collisionLayer & other->collisionLayer) == 0) {
+                continue;
+            }
+
+            /* Match GBA behavior: if neither side has no-iframes flag, skip while either has iframes. */
+            if (((other->collisionFlags | thisCollisionFlags) & 0x80) == 0) {
+                if ((other->iframes | thisIFrames) != 0) {
+                    continue;
+                }
+            }
+
+            if (!IsColliding(thisEntity, other)) {
+                continue;
+            }
+
+            if ((other->contactFlags & 0x80) == 0) {
+                other->contactedEntity = thisEntity;
+                other->contactFlags = thisEntity->hurtType | 0x80;
+            }
+            if ((thisEntity->contactFlags & 0x80) == 0) {
+                thisEntity->contactedEntity = other;
+                thisEntity->contactFlags = other->hurtType | 0x80;
+            }
+        }
+    }
+
     return 0;
 }
 /* ram_DrawDirect -- defined in port_draw.c */
@@ -597,8 +722,7 @@ void sub_0800451C(Entity* entity) {
         case 0x26:
         case 0x27:
             entity->collisionLayer = 3;
-            entity->spriteOrientation.flipY = 1;
-            entity->spriteRendering.b3 = 1;
+            UpdateSpriteForCollisionLayer(entity);
             break;
         default:
             break;
@@ -609,8 +733,7 @@ void sub_08004542(Entity* entity) {
         return;
     }
     entity->collisionLayer = 2;
-    entity->spriteOrientation.flipY = 1;
-    entity->spriteRendering.b3 = 1;
+    UpdateSpriteForCollisionLayer(entity);
 }
 void sub_08004596(Entity* entity, u32 targetDirection) {
     u32 direction = entity->direction;

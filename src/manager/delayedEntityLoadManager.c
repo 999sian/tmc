@@ -34,24 +34,32 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
     u32 index2;
     u32 tmp;
     u32 progressMask;
+    u32 startIndex;
+    u32 maxEntries;
     u8* bitfield;
     ScriptExecutionContext* context;
 
     properties = GetCurrentRoomProperty(super->type);
     if (properties == NULL) {
         DeleteThisEntity();
+        return;
     }
     if (super->action == 0) {
         super->action++;
         this->unk_20 = gArea.filler[1];
         SetEntityPriority((Entity*)this, 6);
-        npcPtr = gNPCData;
-        npcPtr += (super->type2 + this->unk_20);
+        startIndex = (u32)super->type2 + (u32)this->unk_20;
+        if (startIndex >= NPC_DATA_CAPACITY) {
+            DeleteThisEntity();
+            return;
+        }
+        npcPtr = &gNPCData[startIndex];
+        maxEntries = NPC_DATA_CAPACITY - startIndex - 1; /* keep room for sentinel */
         index1 = 0;
 #ifdef PC_PORT
         {
             const u8* raw = (const u8*)properties;
-            while (raw[0] != 0xff) { /* raw[0] = id */
+            while (raw[0] != 0xff && index1 < maxEntries) { /* raw[0] = id */
                 npcPtr->id = raw[0];
                 npcPtr->type = raw[1];
                 npcPtr->type2 = raw[2];
@@ -70,7 +78,7 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
             }
         }
 #else
-        while (properties->id != 0xff) {
+        while (properties->id != 0xff && index1 < maxEntries) {
             *npcPtr = *properties;
             index1++;
             properties++;
@@ -95,14 +103,19 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
             } else {
                 entity = CreateObject(npcPtr2->id, npcPtr2->type, npcPtr2->type2);
             }
-            tmp = this->unk_20 + 1;
-            entity->health = index2 + tmp;
-            entity->timer = npcPtr2->timer;
-            entity->x.HALF.HI = npcPtr2->x + gRoomControls.origin_x;
-            entity->y.HALF.HI = npcPtr2->y + gRoomControls.origin_y;
-            entity->collisionLayer = npcPtr2->collisionLayer;
-            if (npcPtr2->script != NULL) {
-                InitScriptForEntity(entity, context, npcPtr2->script);
+            if (entity != NULL) {
+                tmp = this->unk_20 + 1;
+                entity->health = index2 + tmp;
+                entity->timer = npcPtr2->timer;
+                entity->x.HALF.HI = npcPtr2->x + gRoomControls.origin_x;
+                entity->y.HALF.HI = npcPtr2->y + gRoomControls.origin_y;
+                entity->collisionLayer = npcPtr2->collisionLayer;
+                if (npcPtr2->script != NULL) {
+                    InitScriptForEntity(entity, context, npcPtr2->script);
+                }
+            } else {
+                /* Retry spawn later if allocation failed this frame. */
+                ClearBit(bitfield, index2);
             }
         }
         npcPtr2++;
@@ -124,7 +137,7 @@ u32 sub_0805ACC0(Entity* param_1) {
 
     for (entity = gEntityLists[6].first; entity != list; entity = entity->next) {
         if ((entity->kind == 9 && entity->id == 0x16) && entity->type2 <= tmp &&
-            (entity->type2 + *(u8*)((uintptr_t)&entity->zVelocity + 1)) > tmp) {
+            (entity->type2 + ((DelayedEntityLoadManager*)entity)->spawnedCount) > tmp) {
 
             ptr = (u16*)GetCurrentRoomProperty(entity->type);
             if (ptr != NULL) {

@@ -47,7 +47,14 @@ typedef struct {
     /*0x0c*/ u16 timer;
     /*0x0e*/ u16 progressBitfield; /**< For which gSave.global_process this NPC should appear. */
 } NPCStruct;
-extern NPCStruct gNPCData[50];
+
+/*
+ * DelayedEntityLoadManager indexes this table with:
+ *   slot = manager->type2 + gArea.filler[1]   (gArea.filler[1] toggles 0x00/0x80)
+ * so we need two 0x80-slot banks.
+ */
+#define NPC_DATA_CAPACITY 0x100
+extern NPCStruct gNPCData[NPC_DATA_CAPACITY];
 
 void sub_0806EC20(Entity* ent);
 void sub_0806EC38(void);

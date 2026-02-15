@@ -108,7 +108,6 @@ Entity* LoadRoomEntity(const EntityData* dat) {
 void RegisterRoomEntity(Entity* ent, const EntityData* dat) {
     u32 list;
     u32 kind;
-    void* offset;
 
     list = dat->flags & 0xF;
     kind = dat->kind & 0xF;
@@ -121,10 +120,28 @@ void RegisterRoomEntity(Entity* ent, const EntityData* dat) {
             AppendEntityToList(ent, list);
         }
     }
-    offset = &((GenericEntity*)ent)->field_0x78;
-    if (kind == MANAGER)
-        offset = &ent->y;
-    MemCopy(dat, offset, sizeof(EntityData));
+    if (kind == MANAGER) {
+        MemCopy(dat, &ent->y, sizeof(EntityData));
+    } else {
+        /*
+         * On 64-bit PC, GenericEntity has different padding/alignment than GBA.
+         * Writing EntityData as a raw 16-byte blob can place spritePtr/paramC
+         * into padding instead of cutsceneBeh/field_0x86.
+         * Store each field explicitly in the legacy slots.
+         */
+        GenericEntity* gen = (GenericEntity*)ent;
+        u32 spritePtr = dat->spritePtr;
+
+        gen->field_0x78.HALF.LO = dat->kind;
+        gen->field_0x78.HALF.HI = dat->flags;
+        gen->field_0x7a.HALF.LO = dat->id;
+        gen->field_0x7a.HALF.HI = dat->type;
+        gen->field_0x7c.WORD_U = dat->type2;
+        gen->field_0x80.HWORD = dat->xPos;
+        gen->field_0x82.HWORD = dat->yPos;
+        gen->cutsceneBeh.HWORD = (u16)(spritePtr & 0xFFFF);
+        gen->field_0x86.HWORD = (u16)(spritePtr >> 16);
+    }
 }
 
 void sub_0804AF0C(Entity* ent, const EntityData* dat) {

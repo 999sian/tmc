@@ -178,7 +178,7 @@ const Hitbox gHitbox_27, gHitbox_29, gHitbox_30, gHitbox_31, gHitbox_32;
 const Hitbox3D gHitbox_19, gHitbox_25, gHitbox_26, gHitbox_28;
 
 // NPC data
-NPCStruct gNPCData[50];
+NPCStruct gNPCData[NPC_DATA_CAPACITY];
 
 /* ---------- Townsperson NPC function pointer tables ---------- */
 /* These were .4byte tables in ROM pointing to Thumb function addresses.
@@ -865,25 +865,18 @@ void UpdateScrollVram(void) {
  * and entities on the top layer render in front of the top BG layer.
  */
 void UpdateSpriteForCollisionLayer(Entity* entity) {
-    static const u8 sCollisionLayerPriorityTable[8] = {
-        0x80, 0x80, /* layer 0: priority 2 */
-        0x80, 0x80, /* layer 1: priority 2 */
-        0x40, 0x40, /* layer 2: priority 1 */
-        0x40, 0x40, /* layer 3: priority 1 */
-    };
+    if (entity == NULL) {
+        return;
+    }
 
-    u8 layer = entity->collisionLayer;
-    if (layer > 3)
-        layer = 0;
-    const u8* entry = &sCollisionLayerPriorityTable[layer * 2];
-
-    /* Set bits 6-7 of spriteRendering (offset 0x19) */
-    u8* renderByte = (u8*)&entity->spriteRendering;
-    *renderByte = (*renderByte & ~0xC0) | entry[0];
-
-    /* Set bits 6-7 of spriteOrientation (offset 0x1b) */
-    u8* orientByte = (u8*)&entity->spriteOrientation;
-    *orientByte = (*orientByte & ~0xC0) | entry[1];
+    /* On this engine, b3/flipY are 2-bit fields (0..3), not raw bit masks. */
+    if (entity->collisionLayer == 2 || entity->collisionLayer == 3) {
+        entity->spriteRendering.b3 = 1;
+        entity->spriteOrientation.flipY = 1;
+    } else {
+        entity->spriteRendering.b3 = 2;
+        entity->spriteOrientation.flipY = 2;
+    }
 }
 
 // Area / room data
@@ -1030,6 +1023,14 @@ static inline MapLayer* GetMapLayerForLayer(u32 layer) {
     return (layer == 2) ? &gMapTop : &gMapBottom;
 }
 
+static inline u32 NormalizeTilePos(u32 tilePos) {
+    return tilePos & 0x0FFF; /* 64x64 tilemap */
+}
+
+static inline u32 TilePosFromRoomTile(u32 roomTileX, u32 roomTileY) {
+    return (roomTileX & 0x3F) | ((roomTileY & 0x3F) << 6);
+}
+
 /* World pixel → room-relative tile position */
 static inline u32 WorldToTilePos(u32 worldX, u32 worldY) {
     u32 roomX = worldX - gRoomControls.origin_x;
@@ -1054,7 +1055,9 @@ static inline u32 RoomToTilePos(u32 roomX, u32 roomY) {
  */
 u32 GetActTileAtTilePos(u16 tilePos, u8 layer) {
     MapLayer* ml = GetMapLayerForLayer(layer);
-    return ml->actTiles[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->actTiles[NormalizeTilePos(tilePos)];
 }
 
 /**
@@ -1062,8 +1065,10 @@ u32 GetActTileAtTilePos(u16 tilePos, u8 layer) {
  * (port of arm_GetActTileAtRoomTile)
  */
 u32 GetActTileAtRoomTile(u32 roomTileX, u32 roomTileY, u32 layer) {
-    u32 tilePos = roomTileX + (roomTileY << 6);
+    u32 tilePos = TilePosFromRoomTile(roomTileX, roomTileY);
     MapLayer* ml = GetMapLayerForLayer(layer);
+    if (ml == NULL)
+        return 0;
     return ml->actTiles[tilePos];
 }
 
@@ -1074,7 +1079,9 @@ u32 GetActTileAtRoomTile(u32 roomTileX, u32 roomTileY, u32 layer) {
 u32 GetActTileAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
     u32 tilePos = RoomToTilePos(roomX, roomY);
     MapLayer* ml = GetMapLayerForLayer(layer);
-    return ml->actTiles[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->actTiles[NormalizeTilePos(tilePos)];
 }
 
 /**
@@ -1084,7 +1091,9 @@ u32 GetActTileAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
 u32 GetActTileAtWorldCoords(u32 worldX, u32 worldY, u32 layer) {
     u32 tilePos = WorldToTilePos(worldX, worldY);
     MapLayer* ml = GetMapLayerForLayer(layer);
-    return ml->actTiles[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->actTiles[NormalizeTilePos(tilePos)];
 }
 
 /**
@@ -1094,7 +1103,9 @@ u32 GetActTileAtWorldCoords(u32 worldX, u32 worldY, u32 layer) {
 u32 GetActTileAtEntity(Entity* entity) {
     u32 tilePos = WorldToTilePos(entity->x.HALF.HI, entity->y.HALF.HI);
     MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
-    return ml->actTiles[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->actTiles[NormalizeTilePos(tilePos)];
 }
 
 /**
@@ -1106,7 +1117,9 @@ u32 GetActTileRelativeToEntity(Entity* entity, s32 xOffset, s32 yOffset) {
     u32 worldY = (u16)entity->y.HALF.HI + yOffset;
     u32 tilePos = WorldToTilePos(worldX, worldY);
     MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
-    return ml->actTiles[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->actTiles[NormalizeTilePos(tilePos)];
 }
 
 /**
@@ -1133,29 +1146,37 @@ u32 GetActTileForTileType(u32 tileType) {
  */
 u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer) {
     MapLayer* ml = GetMapLayerForLayer(layer);
-    return ml->collisionData[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->collisionData[NormalizeTilePos(tilePos)];
 }
 
 u32 GetCollisionDataAtRoomTile(u32 roomTileX, u32 roomTileY, u32 layer) {
-    return GetCollisionDataAtTilePos(roomTileX + (roomTileY << 6), layer);
+    return GetCollisionDataAtTilePos(TilePosFromRoomTile(roomTileX, roomTileY), layer);
 }
 
 u32 GetCollisionDataAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
     u32 tilePos = RoomToTilePos(roomX, roomY);
     MapLayer* ml = GetMapLayerForLayer(layer);
-    return ml->collisionData[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->collisionData[NormalizeTilePos(tilePos)];
 }
 
 u32 GetCollisionDataAtWorldCoords(u32 worldX, u32 worldY, u32 layer) {
     u32 tilePos = WorldToTilePos(worldX, worldY);
     MapLayer* ml = GetMapLayerForLayer(layer);
-    return ml->collisionData[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->collisionData[NormalizeTilePos(tilePos)];
 }
 
 u32 GetCollisionDataAtEntity(Entity* entity) {
     u32 tilePos = WorldToTilePos(entity->x.HALF.HI, entity->y.HALF.HI);
     MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
-    return ml->collisionData[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->collisionData[NormalizeTilePos(tilePos)];
 }
 
 u32 GetCollisionDataRelativeTo(Entity* entity, s32 xOffset, s32 yOffset) {
@@ -1163,7 +1184,9 @@ u32 GetCollisionDataRelativeTo(Entity* entity, s32 xOffset, s32 yOffset) {
     u32 worldY = (u16)entity->y.HALF.HI + yOffset;
     u32 tilePos = WorldToTilePos(worldX, worldY);
     MapLayer* ml = GetMapLayerForLayer(entity->collisionLayer);
-    return ml->collisionData[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->collisionData[NormalizeTilePos(tilePos)];
 }
 
 /* ---------- TileType family ---------- */
@@ -1178,14 +1201,16 @@ u32 GetCollisionDataRelativeTo(Entity* entity, s32 xOffset, s32 yOffset) {
  */
 u32 GetTileTypeAtTilePos(u32 tilePos, u32 layer) {
     MapLayer* ml = GetMapLayerForLayer(layer);
-    u16 tileIndex = ml->mapData[tilePos];
+    if (ml == NULL)
+        return 0;
+    u16 tileIndex = ml->mapData[NormalizeTilePos(tilePos)];
     if (tileIndex >= 0x4000)
         return tileIndex;
     return ml->tileTypes[tileIndex];
 }
 
 u32 GetTileTypeAtRoomTile(u32 roomTileX, u32 roomTileY, u32 layer) {
-    return GetTileTypeAtTilePos(roomTileX + (roomTileY << 6), layer);
+    return GetTileTypeAtTilePos(TilePosFromRoomTile(roomTileX, roomTileY), layer);
 }
 
 u32 GetTileTypeAtRoomCoords(u32 roomX, u32 roomY, u32 layer) {
@@ -1266,7 +1291,9 @@ extern void RegisterInteractTile(u32, u32, u32);
  */
 void SetCollisionData(u32 collisionData, u32 tilePos, u32 layer) {
     MapLayer* ml = GetMapLayerForLayer(layer);
-    ml->collisionData[tilePos] = collisionData;
+    if (ml == NULL)
+        return;
+    ml->collisionData[NormalizeTilePos(tilePos)] = collisionData;
 }
 
 /**
@@ -1281,7 +1308,9 @@ void SetCollisionData(u32 collisionData, u32 tilePos, u32 layer) {
  */
 void SetActTileAtTilePos(u32 actTile, u32 tilePos, u32 layer) {
     MapLayer* ml = GetMapLayerForLayer(layer);
-    ml->actTiles[tilePos] = actTile;
+    if (ml == NULL)
+        return;
+    ml->actTiles[NormalizeTilePos(tilePos)] = actTile;
 }
 
 /**
@@ -1292,7 +1321,9 @@ void SetActTileAtTilePos(u32 actTile, u32 tilePos, u32 layer) {
  */
 u32 GetTileIndex(u32 tilePos, u32 layer) {
     MapLayer* ml = GetMapLayerForLayer(layer);
-    return ml->mapData[tilePos];
+    if (ml == NULL)
+        return 0;
+    return ml->mapData[NormalizeTilePos(tilePos)];
 }
 
 /**
@@ -1309,22 +1340,28 @@ u32 GetTileIndex(u32 tilePos, u32 layer) {
  */
 void SetTile(u32 tileIndex, u32 tilePos, u32 layer) {
     MapLayer* ml = GetMapLayerForLayer(layer);
-    u16 oldTile = ml->mapData[tilePos];
-    ml->mapData[tilePos] = (u16)tileIndex;
+    u32 pos = NormalizeTilePos(tilePos);
+    u16 oldTile;
+
+    if (ml == NULL)
+        return;
+
+    oldTile = ml->mapData[pos];
+    ml->mapData[pos] = (u16)tileIndex;
 
     if (tileIndex >= 0x4000) {
         /* Special tile */
         u32 specialIdx = tileIndex - 0x4000;
-        SetActTileAtTilePos(gMapSpecialTileToActTile[specialIdx], tilePos, layer);
-        SetCollisionData(gMapSpecialTileToCollisionData[specialIdx], tilePos, layer);
-        UnregisterInteractTile(tilePos, layer);
-        RegisterInteractTile(oldTile, tilePos, layer);
+        SetActTileAtTilePos(gMapSpecialTileToActTile[specialIdx], pos, layer);
+        SetCollisionData(gMapSpecialTileToCollisionData[specialIdx], pos, layer);
+        UnregisterInteractTile(pos, layer);
+        RegisterInteractTile(oldTile, pos, layer);
     } else {
         /* Normal tile — look up tile type from tileTypes table */
         u16 tileType = ml->tileTypes[tileIndex];
-        SetActTileAtTilePos(gMapTileTypeToActTile[tileType], tilePos, layer);
-        SetCollisionData(gMapTileTypeToCollisionData[tileType], tilePos, layer);
-        UnregisterInteractTile(tilePos, layer);
+        SetActTileAtTilePos(gMapTileTypeToActTile[tileType], pos, layer);
+        SetCollisionData(gMapTileTypeToCollisionData[tileType], pos, layer);
+        UnregisterInteractTile(pos, layer);
     }
 }
 
@@ -1406,7 +1443,7 @@ u32 CheckOnLayerTransition(Entity* entity) {
     const TransitionTileEntry* p = sTransitionTiles;
     while (p->actTile != 0) {
         if (p->actTile == actTile) {
-            if (entity->collisionLayer != p->fromLayer) {
+            if (entity->collisionLayer == p->fromLayer) {
                 entity->collisionLayer = p->toLayer;
             }
             return actTile;
