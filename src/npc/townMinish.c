@@ -37,6 +37,11 @@ void sub_0806B098(Entity*, ScriptExecutionContext*);
 void sub_0806B0E0(Entity*, ScriptExecutionContext*);
 void sub_0806B064(Entity*, ScriptExecutionContext*);
 void sub_0806B134(Entity*, ScriptExecutionContext*);
+static void sub_0806B004_Dialog(Entity*);
+static void sub_0806B064_Dialog(Entity*);
+static void sub_0806B098_Dialog(Entity*);
+static void sub_0806B0E0_Dialog(Entity*);
+static void sub_0806B134_Dialog(Entity*);
 
 static const u8 gUnk_081125F4[][0x10][2] = {
     {
@@ -374,25 +379,25 @@ void sub_0806AFA0(Entity* this) {
 }
 
 void sub_0806AFBC(Entity* this, ScriptExecutionContext* context) {
-    //! @bug sub_0806B004 uses context but ShowNPCDialogue doesn't pass it.
-    // In fact r1 contains sub_0806B004's address.
+    // DIALOG_CALL_FUNC callbacks are Entity* only; wrappers below bridge to the
+    // (Entity*, ScriptExecutionContext*) helpers used by script opcode paths.
     static const Dialog dialogs[][8] = {
-        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B004 } } },
-        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B064 } } },
+        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B004_Dialog } } },
+        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B064_Dialog } } },
         { { ITEM_FLIPPERS,
             DIALOG_INVENTORY,
             DIALOG_CHECK_FLAG,
@@ -537,38 +542,38 @@ void sub_0806AFBC(Entity* this, ScriptExecutionContext* context) {
           { 0x0, 0x0, DIALOG_NORMAL, 1, { 0x0, TEXT_INDEX(TEXT_HAGEN, 0x6) } },
           { 0x0, 0x0, DIALOG_NORMAL, 1, { 0x0, TEXT_INDEX(TEXT_HAGEN, 0x6) } },
           { 0x0, 0x0, DIALOG_NORMAL, 1, { 0x0, TEXT_INDEX(TEXT_HAGEN, 0x6) } } },
-        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } } },
-        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B098 } } },
-        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B0E0 } } },
-        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } },
-          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = (EntityActionPtr)sub_0806B134 } } },
+        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } } },
+        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B098_Dialog } } },
+        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B0E0_Dialog } } },
+        { { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } },
+          { 0x0, 0x0, DIALOG_CALL_FUNC, 0, { .func = sub_0806B134_Dialog } } },
         { { 0x0, 0x0, DIALOG_NORMAL, 1, { 0x0, TEXT_INDEX(TEXT_TOWN8, 0x2f) } },
           { 0x0, 0x0, DIALOG_NORMAL, 1, { 0x0, TEXT_INDEX(TEXT_TOWN8, 0x2f) } },
           { 0x0, 0x0, DIALOG_NORMAL, 1, { 0x0, TEXT_INDEX(TEXT_TOWN8, 0x2f) } },
@@ -747,6 +752,26 @@ void sub_0806AFE8(Entity* this, ScriptExecutionContext* context) {
     typeFuncs[this->type2](this, context);
 }
 
+static void sub_0806B004_Dialog(Entity* this) {
+    sub_0806B004(this, NULL);
+}
+
+static void sub_0806B064_Dialog(Entity* this) {
+    sub_0806B064(this, NULL);
+}
+
+static void sub_0806B098_Dialog(Entity* this) {
+    sub_0806B098(this, NULL);
+}
+
+static void sub_0806B0E0_Dialog(Entity* this) {
+    sub_0806B0E0(this, NULL);
+}
+
+static void sub_0806B134_Dialog(Entity* this) {
+    sub_0806B134(this, NULL);
+}
+
 void sub_0806B004(Entity* this, ScriptExecutionContext* context) {
     static const u16 messageIndices[5] = { TEXT_INDEX(TEXT_TOWN_MINISH1, 0x11), TEXT_INDEX(TEXT_TOWN_MINISH1, 0x01),
                                            TEXT_INDEX(TEXT_TOWN_MINISH1, 0x03), TEXT_INDEX(TEXT_TOWN_MINISH1, 0x05),
@@ -759,7 +784,9 @@ void sub_0806B004(Entity* this, ScriptExecutionContext* context) {
                 idx = 3;
                 if (CheckLocalFlag(KHOUSE51_00) == 0) {
                     idx = 2;
-                    context->condition = 1;
+                    if (context != NULL) {
+                        context->condition = 1;
+                    }
                     SetLocalFlag(KHOUSE51_00);
                 }
             } else {
@@ -855,3 +882,4 @@ void TownMinish_Fusion(Entity* this) {
         GetNextFrame(this);
     }
 }
+

@@ -486,42 +486,18 @@ u8 gUnk_03003DE4[0xC];
 /* gWallMasterScreenTransitions -- defined in port_linked_stubs.c */
 /* gZeldaFollowerText -- defined in port_linked_stubs.c */
 /* gzHeap -- defined in port_linked_stubs.c */
-u32 m4aMPlayAllStop(...) {
-    return 0;
-}
-u32 m4aMPlayImmInit(...) {
-    return 0;
-}
-u32 m4aMPlayTempoControl(...) {
-    return 0;
-}
-u32 m4aMPlayVolumeControl(...) {
-    return 0;
-}
-u32 m4aSongNumStart(...) {
-    return 0;
-}
-u32 m4aSongNumStartOrContinue(...) {
-    return 0;
-}
-u32 m4aSongNumStop(...) {
-    return 0;
-}
-u32 m4aSoundInit(...) {
-    return 0;
-}
-u32 m4aSoundMain(...) {
-    return 0;
-}
-u32 m4aSoundVSync(...) {
-    return 0;
-}
-u32 m4aSoundVSyncOff(...) {
-    return 0;
-}
-u32 m4aSoundVSyncOn(...) {
-    return 0;
-}
+/* m4aMPlayAllStop -- implemented in port_m4a_stubs.c */
+/* m4aMPlayImmInit -- implemented in port_m4a_stubs.c */
+/* m4aMPlayTempoControl -- implemented in port_m4a_stubs.c */
+/* m4aMPlayVolumeControl -- implemented in port_m4a_stubs.c */
+/* m4aSongNumStart -- implemented in port_m4a_stubs.c */
+/* m4aSongNumStartOrContinue -- implemented in port_m4a_stubs.c */
+/* m4aSongNumStop -- implemented in port_m4a_stubs.c */
+/* m4aSoundInit -- implemented in port_m4a_stubs.c */
+/* m4aSoundMain -- implemented in port_m4a_stubs.c */
+/* m4aSoundVSync -- implemented in port_m4a_stubs.c */
+/* m4aSoundVSyncOff -- implemented in port_m4a_stubs.c */
+/* m4aSoundVSyncOn -- implemented in port_m4a_stubs.c */
 /* ram_ClearAndUpdateEntities -- defined in port_draw.c */
 u32 ram_CollideAll(...) {
     s32 i;

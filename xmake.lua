@@ -293,6 +293,7 @@ target("tmc_pc")
     add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
     add_files("port/port_text_render.c") -- Text rendering (UnpackTextNibbles, glyph pixel writers)
     add_files("port/port_gameplay_stubs.c") -- Ported gameplay helpers from ASM (tile interaction, ice movement, SFX queue)
+    add_files("port/port_m4a_stubs.c") -- Ported m4a API stubs with typed behavior for PC
     add_files("port/port_room_funcs.c") -- Room function pointer lookup table (generated)
     add_files("port/port_script_funcs.c") -- Script Call/CallWithArg function lookup (generated)
     

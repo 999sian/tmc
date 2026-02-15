@@ -228,8 +228,7 @@ void ZeldaIdleAction(NPC5Entity* this) {
 }
 
 void ZeldaFollowAction(NPC5Entity* this) {
-    Entity* r5;
-    //! @bug: r5 is uninitialized
+    Entity* r5 = &gPlayerEntity.base;
 
     if (CheckIsFlinching(this)) {
         return;
@@ -613,7 +612,7 @@ void ZeldaDoLostAnim(NPC5Entity* this) {
         0x30, 0x31, 0x38, 0x39, 0x32, 0x33, 0x3a, 0x3b, 0x34, 0x35, 0x3c, 0x3d, 0x36, 0x37, 0x3e, 0x3f, 0x0, 0x0, 0x0,
     };
     u32 uVar2;
-    u32 bVar4;
+    u32 bVar4 = 0;
 
     switch (super->subAction) {
         case 0:
@@ -647,7 +646,8 @@ void ZeldaDoLostAnim(NPC5Entity* this) {
                 return;
             }
             super->animationState = ((super->frame & 0x18) >> 2);
-            if ((Random() & 1)) {
+            bVar4 = Random();
+            if (bVar4 & 1) {
                 super->subAction = 3;
                 super->timer = (bVar4 & 0x18) + 30;
                 ZeldaSetAnim(this, 4);
@@ -659,9 +659,8 @@ void ZeldaDoLostAnim(NPC5Entity* this) {
         case 3:
             if (ZeldaProcessMovement(this) == 0) {
                 super->subAction = 2;
-
-                //! @bug bVar4 (r6) is uninitialized.
-                InitAnimationForceUpdate(super, gUnk_0810AC5D[super->animationState * 2 + (bVar4 >> 4 & 3)]);
+                bVar4 = Random();
+                InitAnimationForceUpdate(super, gUnk_0810AC5D[super->animationState * 2 + ((bVar4 >> 4) & 3)]);
                 return;
             }
             if (--super->timer != 0) {

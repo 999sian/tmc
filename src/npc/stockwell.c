@@ -78,7 +78,7 @@ void sub_080650CC(StockwellEntity* this) {
     static const u8 gUnk_0810FDB8[] = { 4, 6, 6, 5, 6, 6, 6, 5, 6, 6, 6, 5, 6, 6, 6, 5 };
     u32 bVar2;
     u32 confirmMsgId;
-    u32 itemPrice;
+    u32 itemPrice = 0;
 
     if ((gRoomVars.animFlags & 1)) {
         super->action = 4;
@@ -101,7 +101,6 @@ void sub_080650CC(StockwellEntity* this) {
             }
             MessageNoOverlap(confirmMsgId, super);
 
-            //! @bug itemPrice (r8) is not initialized if gRoomVars.shopItemType == 0
             gMessage.rupees = (u16)itemPrice;
         } else if ((super->frame & 0x40)) {
             InitializeAnimation(super, gUnk_0810FDB8[Random() & 0xf]);

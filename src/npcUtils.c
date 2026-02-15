@@ -188,7 +188,7 @@ u32 sub_0806EE70(Entity* ent) {
     tmp2 = ent->speed;
     if (tmp2 < 0)
         tmp2 = -tmp2;
-    if ((u32)tmp2 / 8 <= tmp1)
+    if ((u32)tmp2 / 8 <= (u32)tmp1)
         result = 0;
     else
         result = sub_0806EF74(ent, 3);
@@ -351,6 +351,9 @@ u32 UpdateFuseInteraction(Entity* entity) {
         case FUSION_STATE_2:
             gPlayerState.controlMode = CONTROL_DISABLED;
             result = 1;
+            PlayerResetStateFromFusion();
+            gPlayerState.controlMode = CONTROL_1;
+            break;
         case FUSION_STATE_1:
             PlayerResetStateFromFusion();
             gPlayerState.controlMode = CONTROL_1;
@@ -370,7 +373,6 @@ void ShowNPCDialogue(Entity* ent, const Dialog* dia) {
     s32 temp;
     u32 uVar2;
     u32 uVar3;
-    u32 flagType;
     s32 uVar4;
     bool32 isFlagSet;
 
@@ -480,6 +482,8 @@ void ShowNPCDialogue(Entity* ent, const Dialog* dia) {
                 dia->data.func(ent);
                 return;
             }
+            uVar2 = 0;
+            break;
         default:
         case DIALOG_NONE:
             uVar2 = 0;

@@ -89,7 +89,8 @@ void Townsperson_Head(Entity* this) {
     u32 tmp = this->animIndex & 3;
     u32 tmp2 = gUnk_0810B78C[tmp];
     u32 tmp3;
-    tmp3 = tmp2 + (tmp3 = gUnk_0810B680[this->type].frame1);
+    tmp3 = gUnk_0810B680[this->type].frame1;
+    tmp3 += tmp2;
     SetExtraSpriteFrame(this, 0, tmp3);
     tmp3 = this->frameIndex;
     tmp3 += gUnk_0810B680[this->type].frame2;

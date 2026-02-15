@@ -53,13 +53,12 @@ void RemoveAllBakedGoods(void) {
 }
 
 bool32 sub_08062EDC(Entity* this, ScriptExecutionContext* context) {
-    u32 tmp;
+    u32 tmp = 0;
     u32 kinstoneId;
     static const u8 chanceForPrize[] = { 0x20, 0x40, 0x60, 0x80, 0xFF };
     static const u8 chancesPerType[] = { 0x10, 0x10, 0x10, 0x20, 0x20, 0x30, 0x30, 0x30 };
     static const u8 kinstoneTypes[] = { 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75 };
 
-    //! @bug: tmp is uninitialized, in practice player must have an item here
     if (GetInventoryValue(ITEM_BRIOCHE) != 0) {
         tmp = 0;
     }
