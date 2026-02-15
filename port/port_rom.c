@@ -332,7 +332,7 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
 #define SPRITE_ANIM_322_COUNT 128
 
 extern u32 gFrameObjLists[];
-extern u32 gUnk_08133368[];
+/* gUnk_08133368 now const — provided by src/data/objPalettes.c */
 extern SpritePtr gSpritePtrs[];
 extern u32 gFixedTypeGfxData[];
 extern u16* gMoreSpritePtrs[MORE_SPRITE_PTRS_COUNT];
@@ -345,7 +345,7 @@ extern void* gAreaRoomMaps[];
 extern void* gAreaTable[];
 extern void* gAreaTileSets[];
 extern void* gAreaTiles[];
-extern const Transition* const* gExitLists[]; /* PC_PORT: non-const outer for ROM loading */
+/* gExitLists now const — provided by src/data/transitions.c */
 
 /*
  * Shadow arrays for second-level ROM pointer resolution.
@@ -357,7 +357,7 @@ extern const Transition* const* gExitLists[]; /* PC_PORT: non-const outer for RO
 static void* sTileSetsResolved[AREA_COUNT][MAX_ROOMS];
 static void* sRoomMapsResolved[AREA_COUNT][MAX_ROOMS];
 static void* sAreaTableResolved[AREA_COUNT][MAX_ROOMS];
-static void* sExitListsResolved[AREA_COUNT][MAX_ROOMS];
+/* sExitListsResolved removed — gExitLists now compile-time const from transitions.c */
 
 /* Forward declaration */
 static inline void* ResolveRomPtr(u32 gba_addr);
@@ -592,9 +592,7 @@ void Port_LoadRom(const char* path) {
     memcpy(gFrameObjLists, &gRomData[R->frameObjLists], R->frameObjListsSize);
     fprintf(stderr, "gFrameObjLists loaded (%u bytes from ROM offset 0x%X).\n", R->frameObjListsSize, R->frameObjLists);
 
-    /* OBJ palette offset table (used by LoadObjPalette) */
-    memcpy(gUnk_08133368, &gRomData[R->objPalettes], R->objPalettesCount * 4);
-    fprintf(stderr, "OBJ palettes loaded (%u entries from ROM offset 0x%X).\n", R->objPalettesCount, R->objPalettes);
+    /* OBJ palette offset table — now compile-time const from src/data/objPalettes.c */
 
     /* gFixedTypeGfxData — offset+size table for fixed-type gfx */
     memcpy(gFixedTypeGfxData, &gRomData[R->fixedTypeGfx], R->fixedTypeGfxCount * 4);
@@ -752,8 +750,7 @@ void Port_LoadRom(const char* path) {
             gAreaTable[i] = ResolveRomPtr(ptr);
             memcpy(&ptr, &gRomData[R->areaTiles + i * 4], 4);
             gAreaTiles[i] = ResolveRomPtr(ptr);
-            memcpy(&ptr, &gRomData[R->exitLists + i * 4], 4);
-            ((void**)gExitLists)[i] = ResolveRomPtr(ptr);
+            /* gExitLists — now compile-time const from src/data/transitions.c, no ROM loading needed */
         }
 
         /* Second pass: resolve sub-arrays of 32-bit GBA pointers.
@@ -809,13 +806,7 @@ void Port_LoadRom(const char* path) {
                 }
             }
 
-            if (gExitLists[i]) {
-                SCAN_SUB_ARRAY(gExitLists[i], subCount);
-                if (subCount > 0) {
-                    ResolveSubTable((void*)gExitLists[i], sExitListsResolved[i], subCount);
-                    gExitLists[i] = (const Transition* const*)sExitListsResolved[i];
-                }
-            }
+            /* gExitLists — compile-time const, no resolution needed */
 
 #undef SCAN_SUB_ARRAY
         }

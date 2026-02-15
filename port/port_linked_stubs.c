@@ -874,8 +874,8 @@ void UpdateSpriteForCollisionLayer(Entity* entity) {
     }
 }
 
-// Area / room data
-const AreaHeader gAreaMetadata[256];
+// Area / room data — now provided by src/data/areaMetadata.c
+// const AreaHeader gAreaMetadata[256]; // removed: real data in areaMetadata.c
 /**
  * GravityUpdate — port of ARM thumb routine at 0x08003FC4.
  * Applies gravity to an entity's z-axis each frame.
@@ -1512,36 +1512,31 @@ void* gAreaTiles[256];
 void* Subtask_FastTravel_Functions[16];
 void* Subtask_MapHint_Functions[16];
 
-// Exit lists / transitions (populated from ROM at load time)
-const Transition* const* gExitLists[256] = { 0 };
-const Transition gExitList_RoyalValley_ForestMaze[4];
+// Exit lists / transitions — now provided by src/data/transitions.c
+// gExitLists and gExitList_RoyalValley_ForestMaze removed
 
 // Various game data
 u32 gFixedTypeGfxData[528];
-void* gCaveBorderMapData[16];
+// gCaveBorderMapData — now provided by src/data/caveBorderMapData.c
 u8 gMessageChoices[32] __attribute__((aligned(4)));
-u8 gOverworldLocations[256] __attribute__((aligned(4)));
+// gOverworldLocations — now provided by src/data/areaMetadata.c
 u16* gMoreSpritePtrs[16];
 u8 gExtraFrameOffsets[256];
 u8 gShakeOffsets[256];
 u16 gDungeonNames[64];
 u8 gFigurines[512] __attribute__((aligned(4)));
 void* gLilypadRails[32];
-u8 gMapActTileToSurfaceType[256] __attribute__((aligned(4)));
+// gMapActTileToSurfaceType — now provided by src/data/mapActTileToSurfaceType.c
 u8 gPalette_549[32];
 void* gTranslations[16];
-void* gWallMasterScreenTransitions[16];
+// gWallMasterScreenTransitions — now provided by src/data/screenTransitions.c
 void* gZeldaFollowerText[8];
 Frame* gSpriteAnimations_322[128];
 u32 gSpriteAnimations_GhostBrothers[64];
 u8 gDiggingCaveEntranceTransition[32] __attribute__((aligned(4)));
 u8 RupeeKeyDigits[16];
 
-// Player macros
-u8 gPlayerMacroBladeBrothers0[16], gPlayerMacroBladeBrothers1[16];
-u8 gPlayerMacroBladeBrothers2[16], gPlayerMacroBladeBrothers3[16];
-u8 gPlayerMacroBladeBrothers4[16], gPlayerMacroBladeBrothers5[16];
-u8 gPlayerMacroBladeBrothers6[16], gPlayerMacroBladeBrothers7[16];
+// Player macros — now provided by src/data/data_080046A4.c
 
 // Entity data (ROM data — all zero-init stubs)
 u8 Entities_HouseInteriors1_Mayor_080D6210[64];
