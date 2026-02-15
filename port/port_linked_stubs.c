@@ -170,12 +170,7 @@ u8 gInteractableObjects[0x300]
 
 Palette gPaletteList[0x10];
 
-const Hitbox gHitbox_0, gHitbox_1, gHitbox_2, gHitbox_3, gHitbox_4, gHitbox_5;
-const Hitbox gHitbox_6, gHitbox_7, gHitbox_8, gHitbox_9, gHitbox_10, gHitbox_11;
-const Hitbox gHitbox_12, gHitbox_13, gHitbox_14, gHitbox_15, gHitbox_16, gHitbox_17;
-const Hitbox gHitbox_18, gHitbox_20, gHitbox_21, gHitbox_22, gHitbox_23, gHitbox_24;
-const Hitbox gHitbox_27, gHitbox_29, gHitbox_30, gHitbox_31, gHitbox_32;
-const Hitbox3D gHitbox_19, gHitbox_25, gHitbox_26, gHitbox_28;
+// Hitbox data is now provided by src/data/hitbox.c (properly initialized)
 
 // NPC data
 NPCStruct gNPCData[NPC_DATA_CAPACITY];

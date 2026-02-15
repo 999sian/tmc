@@ -376,6 +376,7 @@ target("tmc_pc")
     add_files("src/staffroll.c")
     add_files("src/menu/*.c")
     add_files("src/data/figurineMenuData.c")
+    add_files("src/data/hitbox.c")
     add_files("src/worldEvent/*.c")
     
     -- Code stubs (functions that need decompilation)
