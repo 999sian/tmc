@@ -895,6 +895,36 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
     u32 uVar7;
     u32 index;
     u32 x;
+#ifdef PC_PORT
+    /* On GBA, pointer arithmetic wraps at 32 bits, so starting from filler[-2]
+     * (param_2=0xFFFFFFFF) works. On 64-bit, that produces an invalid address.
+     * Use index-based access instead of pointer incrementing. */
+    u8* base = gUnk_02017AA0[gUnk_03003DE4[0]].filler;
+    uVar5 = uVar7 = param_2;
+    puVar6 = gUnk_02018EE0;
+
+    while (count-- > 0) {
+        uVar1 = *puVar6++;
+        iVar2 = param_1 - uVar1;
+        iVar4 = param_1 + uVar1;
+        if (iVar2 < 0) {
+            iVar2 = 0;
+        }
+        if (iVar4 > 0xef) {
+            iVar4 = 0xf0;
+        }
+        if (((u16)uVar5 & 0xffff) < 0xa0) {
+            base[uVar5 * 2]     = iVar4;
+            base[uVar5 * 2 + 1] = iVar2;
+        }
+        if (((u16)uVar7 & 0xffff) < 0xa0) {
+            base[uVar7 * 2]     = iVar4;
+            base[uVar7 * 2 + 1] = iVar2;
+        }
+        uVar5--;
+        uVar7++;
+    }
+#else
     forwardAccess = &gUnk_02017AA0[gUnk_03003DE4[0]].filler[param_2 * 2];
     backwardAccess = forwardAccess;
     uVar5 = uVar7 = param_2;
@@ -923,6 +953,7 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
         uVar5--;
         uVar7++;
     }
+#endif
 }
 
 void sub_0801E31C(u32 sp00, u32 sp04, s32 r10, s32 r9) {

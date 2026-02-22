@@ -532,6 +532,46 @@ void* Port_ResolveEwramPtr(u32 gba_addr) {
     return gba_TryMemPtr(gba_addr);
 }
 
+/*
+ * Port_DecodeFontGBA — decode a 24-byte GBA Font blob into a native Font struct.
+ */
+extern u8 gTextGfxBuffer[];
+
+void Port_DecodeFontGBA(const void* gba_data, Font* out) {
+    const u8* r = (const u8*)gba_data;
+
+    /* Read 32-bit little-endian GBA pointer values */
+    u32 dest_gba       = r[0]  | (r[1]  << 8) | (r[2]  << 16) | (r[3]  << 24);
+    u32 gfx_dest_gba   = r[4]  | (r[5]  << 8) | (r[6]  << 16) | (r[7]  << 24);
+    u32 buffer_loc_gba = r[8]  | (r[9]  << 8) | (r[10] << 16) | (r[11] << 24);
+
+    /* Resolve pointer fields to native addresses */
+    out->dest       = (u16*)gba_TryMemPtr(dest_gba);
+    out->gfx_dest   = gba_TryMemPtr(gfx_dest_gba);
+
+    /* gTextGfxBuffer is a standalone array on PC, not inside gEwram.
+     * GBA address 0x02000D00 = EWRAM offset 0xD00 = gTextGfxBuffer on GBA. */
+    if (buffer_loc_gba == 0x02000D00u) {
+        out->buffer_loc = gTextGfxBuffer;
+    } else {
+        out->buffer_loc = gba_TryMemPtr(buffer_loc_gba);
+    }
+
+    /* Non-pointer fields: read from their 32-bit layout offsets */
+    out->_c         = r[12] | (r[13] << 8) | (r[14] << 16) | (r[15] << 24);
+    out->gfx_src    = r[16] | (r[17] << 8);
+    out->width      = r[18];
+    out->right_align = (r[19] >> 0) & 1;
+    out->sm_border   = (r[19] >> 1) & 1;
+    out->unused      = (r[19] >> 2) & 1;
+    out->draw_border = (r[19] >> 3) & 1;
+    out->border_type = (r[19] >> 4) & 0xF;
+    out->fill_type  = r[20];
+    out->charColor  = r[21];
+    out->_16        = r[22];
+    out->stylized   = r[23];
+}
+
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
     if (!gRomOffsets)
         return NULL;

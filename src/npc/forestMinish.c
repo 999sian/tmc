@@ -10,6 +10,9 @@
 #include "object.h"
 #include "asm.h"
 #include "common.h"
+#ifdef PC_PORT
+#include "port_scripts.h"
+#endif
 #include "flags.h"
 #include "effects.h"
 #include "physics.h"
@@ -76,6 +79,23 @@ Script* const gUnk_08109D18[] = {
     &script_ForestMinish11, &script_ForestMinish11,     &script_ForestMinish11, &script_ForestMinish5,
     &script_ForestMinish6,  &script_ForestMinish7,      &script_ForestMinish8,  &script_ForestMinish9,
 };
+
+#ifdef PC_PORT
+/* GBA ROM address table mirroring gUnk_08109D18 — used to resolve script stubs to ROM data */
+static const u32 gForestMinishScriptGBAAddrs[] = {
+    GBA_script_BombMinish,     GBA_script_BombMinishKinstone, GBA_script_ForestMinish12, GBA_script_ForestMinish13,
+    GBA_script_ForestMinish14, GBA_script_ForestMinish15,     GBA_script_ForestMinish16, GBA_script_ForestMinish17,
+    GBA_script_ForestMinish18, GBA_script_ForestMinish19,     GBA_script_ForestMinish20, GBA_script_ForestMinish21,
+    GBA_script_ForestMinish1,  GBA_script_ForestMinish1,      GBA_script_ForestMinish1,  GBA_script_ForestMinish2,
+    GBA_script_ForestMinish3,  GBA_script_ForestMinish1,      GBA_script_ForestMinish1,  GBA_script_ForestMinish1,
+    GBA_script_ForestMinish1,  GBA_script_ForestMinish1,      GBA_script_ForestMinish10, GBA_script_ForestMinish4,
+    GBA_script_ForestMinish4,  GBA_script_ForestMinish4,      GBA_script_ForestMinish4,  GBA_script_ForestMinish4,
+    GBA_script_ForestMinish4,  GBA_script_ForestMinish4,      GBA_script_ForestMinish4,  GBA_script_ForestMinish4,
+    GBA_script_ForestMinish4,  GBA_script_ForestMinish4,      GBA_script_ForestMinish4,  GBA_script_ForestMinish4,
+    GBA_script_ForestMinish11, GBA_script_ForestMinish11,     GBA_script_ForestMinish11, GBA_script_ForestMinish5,
+    GBA_script_ForestMinish6,  GBA_script_ForestMinish7,      GBA_script_ForestMinish8,  GBA_script_ForestMinish9,
+};
+#endif
 
 void sub_080601D4(Entity*);
 const Dialog gUnk_08109DC8[][4] = {
@@ -535,7 +555,11 @@ void ForestMinish(ForestMinishEntity* this) {
                 this->animIndex = super->animationState = super->timer << 1;
                 super->timer = 0;
                 SetEntityPriority(super, PRIO_MESSAGE);
+#ifdef PC_PORT
+                StartCutscene(super, (u16*)Port_ResolveRomData(gForestMinishScriptGBAAddrs[super->type2]));
+#else
                 StartCutscene(super, (u16*)gUnk_08109D18[super->type2]);
+#endif
                 InitScriptForNPC(super);
             }
             break;

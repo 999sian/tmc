@@ -12,6 +12,7 @@ extern void UnpackTextNibbles(void*, u8*);
 
 #ifdef PC_PORT
 #include "port_gba_mem.h"
+#include "port_rom.h"
 #define gUnk_02036AD8 (*(u8*)&gEwram[0x36AD8])
 #define gUnk_02036A58 (*(u8*)&gEwram[0x36A58])
 #else
@@ -473,8 +474,17 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
 
     pWVar4 = sub_0805F2C8();
     if (pWVar4 != NULL) {
+#ifdef PC_PORT
+        /* Many callers pass 24-byte GBA Font blobs (raw ROM data with 32-bit pointers).
+         * On 64-bit, the C Font struct has 8-byte pointers — detect and decode. */
+        if (Port_IsFontGBAEncoded(paramFont)) {
+            Port_DecodeFontGBA(paramFont, &font);
+        } else {
+            MemCopy(paramFont, &font, sizeof(Font));
+        }
+#else
         MemCopy(paramFont, &font, sizeof(Font));
-        InitToken(&token, textIndexOrPtr);
+#endif        InitToken(&token, textIndexOrPtr);
         token.unk05 = font.stylized & 3;
         pWVar4->unk04 = font.stylized;
         pWVar4->unk4 = font.width;

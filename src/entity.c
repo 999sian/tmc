@@ -15,7 +15,13 @@ typedef struct Temp {
     void* prev;
     void* next;
 #ifdef PC_PORT
-    u8 _0[0x50]; /* 80 bytes: 64-bit Manager base (56) + derived fields (up to 32) with room to spare */
+    /*
+     * 64-bit: Must be large enough for the biggest manager struct.
+     * FightManagerHelper / EnemyInteractionManager have Entity* enemies[8]
+     * which makes them 120 bytes total (56 base + 64 pointer array).
+     * 120 − 16 (prev+next) = 104 = 0x68, rounded up to 0x70 for safety.
+     */
+    u8 _0[0x70];
 #else
     u8 _0[0x38];
 #endif
@@ -263,7 +269,7 @@ void EraseAllEntities(void) {
     MemClear(&gPlayerEntity.base, 10880);
 #endif
 #ifdef PC_PORT
-    MemClear(&gUnk_02033290, 0xC00); /* 32 * sizeof(Temp) on 64-bit = 32 * 96 = 3072 */
+    MemClear(&gUnk_02033290, 32 * sizeof(Temp)); /* 32 * 128 = 4096 on 64-bit */
 #else
     MemClear(&gUnk_02033290, 2048);
 #endif

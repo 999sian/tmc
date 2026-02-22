@@ -242,7 +242,12 @@ u32 sub_08003FDE(Entity* source, Entity* target, u32 xRange, u32 yRange) {
     return picked;
 }
 
-u32 sub_08004212(Entity* entity, u32 animationState, u32 tilePos) {
+// Advance tilePos by one tile in the direction given by animationState,
+// then look up the tile type at that position.
+// tilePos is a BYTE offset into the mapData u16 array (i.e. element_index * 2).
+// On GBA, sub_08004212 leaves the modified tilePos in r2 and the tile in r1.
+// sub_08004202 returns the modified tilePos (r2) and writes the tile to *outTileType.
+static u32 AdvanceTilePos(u32 animationState, u32 tilePos) {
     if ((animationState & 3) != 0) {
         tilePos += (animationState & 4) ? (u32)-2 : 2;
     }
@@ -251,20 +256,28 @@ u32 sub_08004212(Entity* entity, u32 animationState, u32 tilePos) {
         tilePos += (((animationState + 1) & 4) != 0) ? 0x80 : (u32)-0x80;
     }
 
-    tilePos &= 0x1FFF;
+    return tilePos & 0x1FFF;
+}
 
+static u16 LookupTileType(Entity* entity, u32 tilePos) {
     MapLayer* layer = GetLayerByIndex(entity->collisionLayer);
-    u16 tile = layer->mapData[tilePos];
+    u16 tile = layer->mapData[tilePos >> 1]; // tilePos is byte offset, convert to element index
     if ((tile & 0x4000) == 0) {
         tile = layer->tileTypes[tile];
     }
     return tile;
 }
 
+u32 sub_08004212(Entity* entity, u32 animationState, u32 tilePos) {
+    tilePos = AdvanceTilePos(animationState, tilePos);
+    return LookupTileType(entity, tilePos);
+}
+
 u32 sub_08004202(Entity* entity, u8* outTileType, u32 tilePos) {
-    u32 tileType = sub_08004212(entity, entity->animationState, tilePos);
+    tilePos = AdvanceTilePos(entity->animationState, tilePos);
+    u32 tileType = LookupTileType(entity, tilePos);
     *(u32*)outTileType = tileType;
-    return tilePos;
+    return tilePos; // Return modified tilePos (matches GBA r2 behavior)
 }
 
 static void CreateHazardFX(Entity* entity, u32 fxType) {

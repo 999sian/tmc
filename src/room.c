@@ -124,7 +124,12 @@ void RegisterRoomEntity(Entity* ent, const EntityData* dat) {
         }
     }
     if (kind == MANAGER) {
+#ifdef PC_PORT
+
+        MemCopy(dat, (u8*)ent + sizeof(Manager) + 0x10, sizeof(EntityData));
+#else
         MemCopy(dat, &ent->y, sizeof(EntityData));
+#endif
     } else {
         /*
          * On 64-bit PC, entity subtypes (Enemy, Player) have pointer fields

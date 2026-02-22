@@ -80,6 +80,31 @@
 #define GBA_script_KinstoneSparkKinstoneSparkGoronMerchang 0x0800C4D0
 #define GBA_script_KinstoneSparkKinstoneSparkGoron 0x0800C50C
 
+/* GBA ROM addresses of ForestMinish/BombMinish scripts (used in forestMinish.c table) */
+#define GBA_script_BombMinish 0x08009F14
+#define GBA_script_BombMinishKinstone 0x0800BB30
+#define GBA_script_ForestMinish1 0x0800C550
+#define GBA_script_ForestMinish2 0x0800C584
+#define GBA_script_ForestMinish3 0x0800C5C8
+#define GBA_script_ForestMinish4 0x0800C5FC
+#define GBA_script_ForestMinish5 0x0800CABC
+#define GBA_script_ForestMinish6 0x0800CB54
+#define GBA_script_ForestMinish7 0x0800CBD4
+#define GBA_script_ForestMinish8 0x0800CC6C
+#define GBA_script_ForestMinish9 0x0800CD04
+#define GBA_script_ForestMinish10 0x0800CD7C
+#define GBA_script_ForestMinish11 0x0800E6B0
+#define GBA_script_ForestMinish12 0x080165F8
+#define GBA_script_ForestMinish13 0x0801660C
+#define GBA_script_ForestMinish14 0x08016628
+#define GBA_script_ForestMinish15 0x08016644
+#define GBA_script_ForestMinish16 0x0801666C
+#define GBA_script_ForestMinish17 0x080166B8
+#define GBA_script_ForestMinish18 0x080166FC
+#define GBA_script_ForestMinish19 0x08016798
+#define GBA_script_ForestMinish20 0x08016844
+#define GBA_script_ForestMinish21 0x080168E0
+
 /* GBA ROM addresses of scripts used via &script_xxx (stub on PC, must resolve from ROM) */
 #define GBA_script_CutsceneMiscObjectTheLittleHat 0x0800AEDC
 #define GBA_script_CutsceneMiscObjectSwordInChest 0x0801183C

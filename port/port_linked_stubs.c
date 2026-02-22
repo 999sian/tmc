@@ -80,7 +80,7 @@ u8 gUnk_02022800[0x20] __attribute__((aligned(4)));   /* text number buffer slot
 u8 gUnk_02022830[0x1800] __attribute__((aligned(4))); /* u16[0xc00] on GBA; also reused as temp MapDataDefinition */
 u8 gUnk_02024048 = 0;                                 /* pending sound count (used by DrawEntity) */
 u8 gUnk_020246B0[0x1800] __attribute__((aligned(4))); /* u16[0xc00] scroll tilemap buffer */
-u8 gUnk_02033290[0xC00] __attribute__((aligned(8)));  /* Manager pool: 32 Temp structs (96 bytes each on 64-bit) */
+u8 gUnk_02033290[0x1000] __attribute__((aligned(8))); /* Manager pool: 32 Temp structs (128 bytes each on 64-bit) */
 u8 gUnk_020342F8[0x100] __attribute__((aligned(4)));  /* delayedEntityLoad array */
 u8 gUnk_02034330[0x20] __attribute__((aligned(4)));   /* struct_gUnk_02034330 (24 bytes) */
 struct_02034480 gUnk_02034480;
