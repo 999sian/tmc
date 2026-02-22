@@ -6,6 +6,7 @@
 #include "color.h"
 #include "common.h"
 #include "entity.h"
+#include "enemy.h"
 #include "fade.h"
 
 #define gMapDataBottomSpecial gMapDataBottomSpecial_HIDDEN
@@ -86,8 +87,8 @@ struct_02034480 gUnk_02034480;
 u8 gUnk_02034492[0x10] __attribute__((aligned(4))); /* u8 array (pauseMenu) */
 u8 gUnk_020344A0[0x10] __attribute__((aligned(4))); /* u8[8] (figurineMenu) */
 struct_020354C0 gUnk_020354C0[32];
-u8 gUnk_02035542[0x200] __attribute__((aligned(4))); /* u8 array (entity tile storage) */
-u8 gUnk_02036540[0x80] __attribute__((aligned(8)));  /* WStruct[4] (text slot pool, 64 bytes on 64-bit) */
+/* gUnk_02035542 is aliased to gzHeap+2 via macro in common.c (PC_PORT) */
+u8 gUnk_02036540[0x80] __attribute__((aligned(8))); /* WStruct[4] (text slot pool, 64 bytes on 64-bit) */
 /* Aliased to gEwram[0x36A58] in text.c */
 u32 gUnk_02036A58_storage = 0x02036A58;
 /* Aliased to gEwram[0x36AD8] in text.c */
@@ -158,8 +159,14 @@ u32 gFrameObjLists[50016];
 // Source files use &gMapData + offset, so this must be an array (not a pointer).
 u8 gMapData[0xE00000] __attribute__((aligned(4))); /* ~14 MB */
 
-// gCollisionMtx
-u8 gCollisionMtx[173 * 34];
+// gCollisionMtx — On GBA, the collision matrix label sits at 0x080B7B74 with
+// only 1210 bytes of named data, but collision.c declares it as
+// `extern ColSettings gCollisionMtx[173*34]` (each ColSettings = 12 bytes).
+// Code in collision.c redirect-handlers indexing at e.g. 0x11AA accesses
+// byte offset 0x11AA*12 = 54264 — way beyond 1210 bytes.  On GBA this
+// reads ROM data that follows the label.  We allocate the full 173*34*12
+// bytes and copy from ROM during Port_InitCollisionMtx().
+u8 gCollisionMtx[173 * 34 * 12];
 
 u8 gUpdateContext[64] __attribute__((aligned(4)));
 
@@ -1521,7 +1528,7 @@ u32 gFixedTypeGfxData[528];
 u8 gMessageChoices[32] __attribute__((aligned(4)));
 // gOverworldLocations — now provided by src/data/areaMetadata.c
 u16* gMoreSpritePtrs[16];
-u8 gExtraFrameOffsets[256];
+u8 gExtraFrameOffsets[4352];
 u8 gShakeOffsets[256];
 u16 gDungeonNames[64];
 u8 gFigurines[512] __attribute__((aligned(4)));
@@ -1608,7 +1615,6 @@ u16 script_ZeldaMagic;
  * ================================================================ */
 
 extern void DeleteThisEntity(void);
-extern u32 EnemyInit(Entity*);
 extern u32 EntityDisabled(Entity*);
 extern void DrawEntity(Entity*);
 extern void Knockback1(Entity*);
@@ -1861,22 +1867,25 @@ u32 sub_0800132C(Entity* entity, Entity* target) {
  */
 void EnemyUpdate(Entity* entity) {
     if (entity->action == 0) {
-        if (!EnemyInit(entity)) {
+        if (!EnemyInit((Enemy*)entity)) {
             DeleteThisEntity();
             return; /* DeleteThisEntity may not return */
         }
         /* EnemyInit succeeded — fall through to function dispatch */
     } else {
-        if (EntityDisabled(entity))
+        if (EntityDisabled(entity)) {
             goto draw;
+        }
         sub_080028E0(entity);
     }
 
-    /* Function dispatch: check bit 4 of extended field at GBA offset 0x6D */
+    /* Function dispatch: check EM_FLAG_SUPPORT (bit 4) of enemyFlags (GBA offset 0x6D).
+     * On 64-bit, we must read from Enemy->enemyFlags, not GenericEntity->field_0x6c.HALF.HI,
+     * because the 8-byte child pointer shifts the field layout vs GBA's 4-byte pointer. */
     {
-        GenericEntity* ge = (GenericEntity*)entity;
-        u8 f6d = ge->field_0x6c.HALF.HI;
-        if (!(f6d & 0x10)) {
+        Enemy* enemy = (Enemy*)entity;
+        u8 eflags = enemy->enemyFlags;
+        if (!(eflags & EM_FLAG_SUPPORT)) {
             gEnemyFunctions[entity->id](entity);
             entity->contactFlags &= ~CONTACT_NOW;
         }

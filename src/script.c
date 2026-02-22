@@ -3,16 +3,16 @@
 #include "asm.h"
 #include "common.h"
 #include "effects.h"
+#include "flags.h"
 #include "functions.h"
 #include "game.h"
 #include "item.h"
 #include "kinstone.h"
-#include "flags.h"
 #include "main.h"
 #include "npc.h"
 #include "object.h"
-#include "player.h"
 #include "physics.h"
+#include "player.h"
 #include "save.h"
 #include "screen.h"
 #include "scroll.h"
@@ -22,7 +22,10 @@
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
 #include "port_rom.h"
+#include "port/port_generic_entity.h"
 extern void* Port_LookupScriptFunc(u32 gba_addr);
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
 #endif
 
 void InitScriptExecutionContext(ScriptExecutionContext* context, Script* script);
@@ -275,10 +278,10 @@ void HandlePostScriptActions(Entity* entity, ScriptExecutionContext* context) {
         context->postScriptActions ^= bit;
         switch (bit) {
             case 1 << 0x00:
-                ((GenericEntity*)entity)->field_0x80.HWORD = 0;
+                GE_FIELD(entity, field_0x80)->HWORD = 0;
                 break;
             case 1 << 0x01:
-                ((GenericEntity*)entity)->field_0x80.HWORD = 4;
+                GE_FIELD(entity, field_0x80)->HWORD = 4;
                 break;
             case 1 << 0x02:
                 break;
@@ -303,37 +306,37 @@ void HandlePostScriptActions(Entity* entity, ScriptExecutionContext* context) {
             case 1 << 0x09:
                 entity->spriteOffsetY = 0;
                 entity->spriteOffsetX = 0;
-                ((GenericEntity*)entity)->field_0x82.HWORD = 0;
+                GE_FIELD(entity, field_0x82)->HWORD = 0;
                 break;
             case 1 << 0x0a:
-                ((GenericEntity*)entity)->field_0x82.HWORD |= 2;
+                GE_FIELD(entity, field_0x82)->HWORD |= 2;
                 break;
             case 1 << 0x0b:
-                ((GenericEntity*)entity)->field_0x82.HWORD &= ~2;
+                GE_FIELD(entity, field_0x82)->HWORD &= ~2;
                 break;
             case 1 << 0x0c:
-                ((GenericEntity*)entity)->field_0x82.HWORD &= ~1;
+                GE_FIELD(entity, field_0x82)->HWORD &= ~1;
                 break;
             case 1 << 0x0d:
-                ((GenericEntity*)entity)->field_0x82.HWORD |= 1;
+                GE_FIELD(entity, field_0x82)->HWORD |= 1;
                 break;
             case 1 << 0x0e:
-                ((GenericEntity*)entity)->field_0x82.HWORD |= 8;
+                GE_FIELD(entity, field_0x82)->HWORD |= 8;
                 break;
             case 1 << 0x0f:
-                ((GenericEntity*)entity)->field_0x82.HWORD ^= 4;
+                GE_FIELD(entity, field_0x82)->HWORD ^= 4;
                 break;
             case 1 << 0x10:
-                ((GenericEntity*)entity)->field_0x82.HWORD ^= 0x10;
+                GE_FIELD(entity, field_0x82)->HWORD ^= 0x10;
                 break;
             case 1 << 0x11:
                 entity->spriteSettings.flipX ^= 1;
                 break;
             case 1 << 0x12:
-                ((GenericEntity*)entity)->field_0x82.HWORD |= 0x20;
+                GE_FIELD(entity, field_0x82)->HWORD |= 0x20;
                 break;
             case 1 << 0x13:
-                ((GenericEntity*)entity)->field_0x82.HWORD &= ~0x20;
+                GE_FIELD(entity, field_0x82)->HWORD &= ~0x20;
                 break;
             default:
                 break;
@@ -350,8 +353,8 @@ void InitScriptForNPC(Entity* entity) {
 void sub_0807DD64(Entity* entity) {
     entity->subtimer = entity->animationState;
     entity->animIndex = 0xff;
-    ((GenericEntity*)entity)->field_0x80.HWORD = 0;
-    ((GenericEntity*)entity)->field_0x82.HWORD = 0;
+    GE_FIELD(entity, field_0x80)->HWORD = 0;
+    GE_FIELD(entity, field_0x82)->HWORD = 0;
 }
 
 void sub_0807DD80(Entity* entity, Script* script) {
@@ -406,7 +409,7 @@ void HandleEntity0x82Actions(Entity* entity) {
     u32 bit;
     u32 loopVar;
 
-    loopVar = ((GenericEntity*)entity)->field_0x82.HWORD;
+    loopVar = GE_FIELD(entity, field_0x82)->HWORD;
     while (loopVar) {
         bit = (~loopVar + 1) & loopVar;
         loopVar = loopVar ^ bit;
@@ -445,9 +448,9 @@ void sub_0807DE80(Entity* entity) {
 
     u32 temp;
 
-    local2 = ((GenericEntity*)entity)->field_0x80.HWORD;
+    local2 = GE_FIELD(entity, field_0x80)->HWORD;
     if (local2 < 8) {
-        if (((GenericEntity*)entity)->field_0x82.HWORD & 1) {
+        if (GE_FIELD(entity, field_0x82)->HWORD & 1) {
             u32 t1, t2;
             t1 = local2 & 0xfc;
             t2 = entity->subtimer >> 1;
@@ -463,7 +466,7 @@ void sub_0807DE80(Entity* entity) {
     if (local2 != entity->animIndex) {
         InitAnimationForceUpdate(entity, local2);
     }
-    temp = ((GenericEntity*)entity)->field_0x82.HWORD & 4;
+    temp = GE_FIELD(entity, field_0x82)->HWORD & 4;
     local1 = 1;
     if (temp) {
         local1 = 2;
@@ -695,6 +698,24 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
             u16* lastInstruction;
             if (cmd == 0xFFFF)
                 return;
+#ifdef PC_PORT
+            /* A command word of 0x0000 means commandSize=0, commandIndex=0 (NOP)
+             * which creates an infinite loop since the instruction pointer never advances.
+             * This only happens with zero-initialized script stubs (no real script data).
+             * Valid NOPs are encoded as 0x0400 (size=1). Treat 0x0000 as SCRIPT_END. */
+            if (cmd == 0x0000) {
+                static u16* lastWarnedPtr = NULL;
+                if (lastWarnedPtr != context->scriptInstructionPointer) {
+                    lastWarnedPtr = context->scriptInstructionPointer;
+                    fprintf(stderr,
+                            "[SCRIPT] WARNING: zero command word (stub script?) at ptr=%p, "
+                            "entity kind=%d id=%d type=%d, area=%d room=%d — treating as SCRIPT_END\n",
+                            (void*)context->scriptInstructionPointer, entity->kind, entity->id, entity->type,
+                            gRoomControls.area, gRoomControls.room);
+                }
+                return;
+            }
+#endif
             activeScriptInfo->commandSize = cmd >> 0xA;
             activeScriptInfo->commandIndex = cmd & 0x3FF;
 #ifdef PC_PORT
@@ -1250,7 +1271,7 @@ void ScriptCommand_SetVariableToFrame(Entity* entity, ScriptExecutionContext* co
 }
 
 void ScriptCommand_SetAnimation(Entity* entity, ScriptExecutionContext* context) {
-    ((GenericEntity*)entity)->field_0x80.HWORD = context->scriptInstructionPointer[1];
+    GE_FIELD(entity, field_0x80)->HWORD = context->scriptInstructionPointer[1];
     InitAnimationForceUpdate(entity, context->scriptInstructionPointer[1]);
 }
 
@@ -1858,7 +1879,7 @@ void sub_0807F3C8(Entity* entity, ScriptExecutionContext* context) {
 
 void sub_0807F3D8(Entity* entity, ScriptExecutionContext* context) {
     InitAnimationForceUpdate(entity, context->intVariable + (entity->animationState >> 1));
-    ((GenericEntity*)entity)->field_0x80.HWORD = entity->animIndex;
+    GE_FIELD(entity, field_0x80)->HWORD = entity->animIndex;
 }
 
 void CreatePlayerExclamationMark(Entity* entity, ScriptExecutionContext* context) {
@@ -2140,7 +2161,7 @@ void sub_0807F8E8(Entity* entity, ScriptExecutionContext* context) {
     Entity* stoneTablet = CreateObjectWithParent(entity, SANCTUARY_STONE_TABLET, 0, 0);
     if (stoneTablet != NULL) {
         stoneTablet->parent = entity;
-        ((GenericEntity*)stoneTablet)->field_0x86.HWORD = (context->intVariable & 0x3ff) | 0x8000;
+        GE_FIELD(stoneTablet, field_0x86)->HWORD = (context->intVariable & 0x3ff) | 0x8000;
     }
 }
 

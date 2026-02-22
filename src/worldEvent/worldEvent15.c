@@ -9,6 +9,11 @@
 #include "menu.h"
 #include "room.h"
 #include "subtask.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
+#endif
 
 extern void sub_08054A14(u32);
 extern const EntityData gUnk_080FEE48[];
@@ -33,7 +38,7 @@ void WorldEvent_15_0(void) {
     entity = LoadRoomEntity((EntityData*)gUnk_080FEE48);
     if (entity != NULL) {
         entity->type2 = 2;
-        ((GenericEntity*)entity)->field_0x86.HWORD = 0x80ff;
+        GE_FIELD(entity, field_0x86)->HWORD = 0x80ff;
     }
     sub_08054A14(gMenu.field_0x4);
     sub_08055B70(gMenu.field_0x4, 0, 0, 0);

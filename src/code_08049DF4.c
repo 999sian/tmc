@@ -57,11 +57,11 @@ Entity* sub_08049EB0(void) {
 }
 
 u32 sub_08049EE4(Entity* ent) {
-    GenericEntity* genEnt = (GenericEntity*)ent;
-    u16 tempLO = genEnt->field_0x70.HALF.LO + 4 * genEnt->field_0x6e.HALF.LO;
-    u16 tempHI = genEnt->field_0x70.HALF.HI + 4 * genEnt->field_0x6e.HALF.HI;
+    Enemy* enemy = (Enemy*)ent;
+    u16 tempLO = enemy->homeX + 4 * enemy->rangeX;
+    u16 tempHI = enemy->homeY + 4 * enemy->rangeY;
 
-    return CalculateDirectionTo(genEnt->base.x.HALF.HI, genEnt->base.y.HALF.HI, tempLO, tempHI);
+    return CalculateDirectionTo(ent->x.HALF.HI, ent->y.HALF.HI, tempLO, tempHI);
 }
 
 bool32 sub_08049F1C(Entity* entA, Entity* entB, s32 maxDist) {
@@ -98,12 +98,12 @@ u32 sub_08049F84(Entity* ent, s32 arg2) {
 }
 
 bool32 sub_08049FA0(Entity* ent) {
-    GenericEntity* genEnt = (GenericEntity*)ent;
-    u32 temp = 8 * genEnt->field_0x6e.HALF.LO;
+    Enemy* enemy = (Enemy*)ent;
+    u32 temp = 8 * enemy->rangeX;
 
-    if (temp >= genEnt->base.x.HALF.HI - genEnt->field_0x70.HALF_U.LO) {
-        temp = 8 * genEnt->field_0x6e.HALF.HI;
-        if (temp >= genEnt->base.y.HALF.HI - genEnt->field_0x70.HALF_U.HI) {
+    if (temp >= ent->x.HALF.HI - (u16)enemy->homeX) {
+        temp = 8 * enemy->rangeY;
+        if (temp >= ent->y.HALF.HI - (u16)enemy->homeY) {
             return TRUE;
         }
     }
@@ -112,14 +112,14 @@ bool32 sub_08049FA0(Entity* ent) {
 
 bool32 sub_08049FDC(Entity* ent, u32 arg1) {
     u32 temp;
-    GenericEntity* genEnt = (GenericEntity*)ent;
-    GenericEntity* tempEnt = (GenericEntity*)sub_08049DF4(arg1);
+    Enemy* enemy = (Enemy*)ent;
+    Entity* tempEnt = sub_08049DF4(arg1);
 
     if (tempEnt != NULL) {
-        temp = 8 * genEnt->field_0x6e.HALF.LO;
-        if (temp >= tempEnt->base.x.HALF.HI - genEnt->field_0x70.HALF_U.LO) {
-            temp = 8 * genEnt->field_0x6e.HALF.HI;
-            if (temp >= tempEnt->base.y.HALF.HI - genEnt->field_0x70.HALF_U.HI) {
+        temp = 8 * enemy->rangeX;
+        if (temp >= tempEnt->x.HALF.HI - (u16)enemy->homeX) {
+            temp = 8 * enemy->rangeY;
+            if (temp >= tempEnt->y.HALF.HI - (u16)enemy->homeY) {
                 return TRUE;
             }
         }

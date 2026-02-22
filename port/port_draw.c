@@ -22,8 +22,10 @@
 #include "screen.h"
 #include "sound.h"
 #include "structures.h"
+#include "vram.h"
 
 #include <setjmp.h>
+#include <stdio.h>
 #include <string.h>
 
 /* Forward declaration of RenderSpritePieces (defined below) */
@@ -34,6 +36,27 @@ static inline u32 ReadU32Unaligned(const void* p) {
     u32 v;
     memcpy(&v, p, sizeof(v));
     return v;
+}
+
+/* ---- Struct layout diagnostic (one-time) ---- */
+static void Port_CheckStructLayouts(void) {
+    static int done = 0;
+    if (done) return;
+    done = 1;
+
+    /* Verify the 4 sprite fields at offset 0x18 (GBA) are contiguous.
+     * This is critical: ResolveEntitySpriteParams reads them as a single u32.
+     * If any padding exists between them, sprite rendering breaks completely. */
+    Entity e;
+    ptrdiff_t ssOff = (char*)&e.spriteSettings - (char*)&e;
+    ptrdiff_t srOff = (char*)&e.spriteRendering - (char*)&e;
+    ptrdiff_t palOff = (char*)&e.palette - (char*)&e;
+    ptrdiff_t soOff = (char*)&e.spriteOrientation - (char*)&e;
+    if (srOff != ssOff + 1 || palOff != ssOff + 2 || soOff != ssOff + 3) {
+        fprintf(stderr, "FATAL: Entity spriteSettings block not contiguous! "
+                "offsets: ss=%td sr=%td pal=%td so=%td (expected +1,+2,+3)\n",
+                ssOff, srOff, palOff, soOff);
+    }
 }
 
 /* ---- Size/clipping table from ROM overlay (ram_0x80b2be8) ----
@@ -51,6 +74,14 @@ void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset) {
     /* Size table at region-specific ROM offset, 240 bytes */
     if (romSize > overlayOffset + 240) {
         memcpy(sSizeTable, &romData[overlayOffset], 240);
+        sSizeTableLoaded = 1;
+    }
+}
+
+/* Called from port_rom.c — load overlay data from compile-time const blob */
+void Port_LoadOverlayDataFromConst(const u8* data, u32 size) {
+    if (data && size >= 240) {
+        memcpy(sSizeTable, data, 240);
         sSizeTableLoaded = 1;
     }
 }
@@ -123,6 +154,9 @@ static int sEntityUpdateJmpBufValid = 0;
 
 void ram_UpdateEntities(u32 mode) {
     sUpdateEntitiesCalls++;
+
+    /* One-time struct layout check */
+    Port_CheckStructLayouts();
 
     /* Initialize function table on first call */
     InitEntityUpdateFuncs();
@@ -670,7 +704,7 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
                 s32 partY = y;
                 u16 partExtra = cleanExtra;
 
-                u8 flipOverride = (u8)((sub->unk_02 >> 8) & 0xFF); /* byte at +4 in GBA layout */
+                u8 flipOverride = sub->unk_04.BYTES.byte0; /* GBA: LDRB r2, [r4, #4] */
                 partFlags ^= (u32)flipOverride << 28;
 
                 s8 xOff = (s8)((sub->unk_04.WORD >> 16) & 0xFF); /* byte at +6 */
@@ -693,10 +727,10 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
 
                 u16 sprIdx = sub->unk_02 & 0xFFFF;
 
-                /* Look up and render */
-                u8 fIdx = entity->frameIndex;
-                if (fIdx != 0xFF) {
-                    const u8* frameData = LookupFrameData(sprIdx, fIdx);
+                /* Look up and render — GBA uses sub-part's own frame index
+                 * (r0 = sub->unk_01, loaded at 080B2754), NOT entity->frameIndex */
+                if (subSprSlot != 0xFF) {
+                    const u8* frameData = LookupFrameData(sprIdx, subSprSlot);
                     if (frameData) {
                         RenderSpritePieces(frameData, (s16)partX, (s16)partY, partFlags, partExtra);
                     }

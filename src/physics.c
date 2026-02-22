@@ -10,6 +10,12 @@
 #include "sound.h"
 #include "structures.h"
 
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
+#endif
+
 const u8 gSpriteSortAboveTable[];
 const u8 gSpriteSortBelowTable[];
 const u8 gMapDirectionToAnimationState8[];
@@ -363,38 +369,38 @@ void SortEntityBelow(Entity* above_ent, Entity* below_ent) {
     below_ent->spritePriority.b0 = gSpriteSortBelowTable[above_ent->spritePriority.b0];
 }
 
-void sub_0806FB00(GenericEntity* ent, u32 param_1, u32 param_2, u32 param_3) {
+void sub_0806FB00(Entity* ent, u32 param_1, u32 param_2, u32 param_3) {
     if (param_3 == 0) {
         param_3 = 1;
     }
 
-    ent->field_0x7c.BYTES.byte2 = 0;
-    ent->field_0x7c.BYTES.byte3 = param_3;
-    ent->field_0x80.HWORD = ent->base.x.HALF.HI;
-    ent->field_0x82.HWORD = ent->base.y.HALF.HI;
-    ent->cutsceneBeh.HWORD = param_1;
-    ent->field_0x86.HWORD = param_2;
+    GE_FIELD(ent, field_0x7c)->BYTES.byte2 = 0;
+    GE_FIELD(ent, field_0x7c)->BYTES.byte3 = param_3;
+    GE_FIELD(ent, field_0x80)->HWORD = ent->x.HALF.HI;
+    GE_FIELD(ent, field_0x82)->HWORD = ent->y.HALF.HI;
+    GE_FIELD(ent, cutsceneBeh)->HWORD = param_1;
+    GE_FIELD(ent, field_0x86)->HWORD = param_2;
 }
 
-bool32 sub_0806FB38(GenericEntity* ent) {
+bool32 sub_0806FB38(Entity* ent) {
     s32 val;
     u32 rv;
-    if (ent->field_0x7c.BYTES.byte2 < ent->field_0x7c.BYTES.byte3) {
-        ent->field_0x7c.BYTES.byte2++;
-        ent->base.x.HALF.HI =
-            ((((((s16)ent->cutsceneBeh.HWORD - (s16)ent->field_0x80.HWORD) * ent->field_0x7c.BYTES.byte2) << 8) /
-              ent->field_0x7c.BYTES.byte3) >>
+    if (GE_FIELD(ent, field_0x7c)->BYTES.byte2 < GE_FIELD(ent, field_0x7c)->BYTES.byte3) {
+        GE_FIELD(ent, field_0x7c)->BYTES.byte2++;
+        ent->x.HALF.HI =
+            ((((((s16)GE_FIELD(ent, cutsceneBeh)->HWORD - (s16)GE_FIELD(ent, field_0x80)->HWORD) * GE_FIELD(ent, field_0x7c)->BYTES.byte2) << 8) /
+              GE_FIELD(ent, field_0x7c)->BYTES.byte3) >>
              8) +
-            ent->field_0x80.HWORD;
-        ent->base.y.HALF.HI =
-            (((((((s16)ent->field_0x86.HWORD - (s16)ent->field_0x82.HWORD) * ent->field_0x7c.BYTES.byte2) << 8) /
-               ent->field_0x7c.BYTES.byte3) >>
+            GE_FIELD(ent, field_0x80)->HWORD;
+        ent->y.HALF.HI =
+            (((((((s16)GE_FIELD(ent, field_0x86)->HWORD - (s16)GE_FIELD(ent, field_0x82)->HWORD) * GE_FIELD(ent, field_0x7c)->BYTES.byte2) << 8) /
+               GE_FIELD(ent, field_0x7c)->BYTES.byte3) >>
               8)) +
-            ent->field_0x82.HWORD;
+            GE_FIELD(ent, field_0x82)->HWORD;
         rv = 0;
     } else {
-        ent->base.x.HALF.HI = ent->cutsceneBeh.HWORD;
-        ent->base.y.HALF.HI = ent->field_0x86.HWORD;
+        ent->x.HALF.HI = GE_FIELD(ent, cutsceneBeh)->HWORD;
+        ent->y.HALF.HI = GE_FIELD(ent, field_0x86)->HWORD;
         rv = 1;
     }
     return rv;

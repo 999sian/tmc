@@ -4,17 +4,18 @@
  *
  * @brief Business Scrub Prologue enemy
  */
-#include "object/cutsceneMiscObject.h"
-#include "enemy.h"
-#include "sound.h"
-#include "effects.h"
-#include "projectile.h"
-#include "entity.h"
-#include "script.h"
-#include "physics.h"
-#include "room.h"
-#include "player.h"
 #include "asm.h"
+#include "effects.h"
+#include "enemy.h"
+#include "entity.h"
+#include "object/cutsceneMiscObject.h"
+#include "physics.h"
+#include "player.h"
+#include "port_scripts.h"
+#include "projectile.h"
+#include "room.h"
+#include "script.h"
+#include "sound.h"
 
 typedef struct {
     Entity base;
@@ -87,7 +88,7 @@ void sub_08045C3C(BusinessScrubPrologueEntity* this) {
     super->spriteSettings.draw = 1;
     sub_08046030(this, 0);
     sub_08095C48(super);
-    StartCutscene(super, script_BusinessScrubIntro);
+    StartCutscene(super, PORT_SCRIPT(script_BusinessScrubIntro));
     InitScriptForNPC(super);
 }
 

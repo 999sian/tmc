@@ -14,6 +14,9 @@
 #include "tiles.h"
 #ifdef PC_PORT
 #include "port_rom.h"
+#include "port/port_generic_entity.h"
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
 #endif
 
 static void sub_0804B058(EntityData* dat);
@@ -124,23 +127,21 @@ void RegisterRoomEntity(Entity* ent, const EntityData* dat) {
         MemCopy(dat, &ent->y, sizeof(EntityData));
     } else {
         /*
-         * On 64-bit PC, GenericEntity has different padding/alignment than GBA.
-         * Writing EntityData as a raw 16-byte blob can place spritePtr/paramC
-         * into padding instead of cutsceneBeh/field_0x86.
-         * Store each field explicitly in the legacy slots.
+         * On 64-bit PC, entity subtypes (Enemy, Player) have pointer fields
+         * that shift the extra area layout relative to GenericEntity.
+         * Use GE_FIELD accessor to compute correct byte offset per entity kind.
          */
-        GenericEntity* gen = (GenericEntity*)ent;
         u32 spritePtr = dat->spritePtr;
 
-        gen->field_0x78.HALF.LO = dat->kind;
-        gen->field_0x78.HALF.HI = dat->flags;
-        gen->field_0x7a.HALF.LO = dat->id;
-        gen->field_0x7a.HALF.HI = dat->type;
-        gen->field_0x7c.WORD_U = dat->type2;
-        gen->field_0x80.HWORD = dat->xPos;
-        gen->field_0x82.HWORD = dat->yPos;
-        gen->cutsceneBeh.HWORD = (u16)(spritePtr & 0xFFFF);
-        gen->field_0x86.HWORD = (u16)(spritePtr >> 16);
+        GE_FIELD(ent, field_0x78)->HALF.LO = dat->kind;
+        GE_FIELD(ent, field_0x78)->HALF.HI = dat->flags;
+        GE_FIELD(ent, field_0x7a)->HALF.LO = dat->id;
+        GE_FIELD(ent, field_0x7a)->HALF.HI = dat->type;
+        GE_FIELD(ent, field_0x7c)->WORD_U = dat->type2;
+        GE_FIELD(ent, field_0x80)->HWORD = dat->xPos;
+        GE_FIELD(ent, field_0x82)->HWORD = dat->yPos;
+        GE_FIELD(ent, cutsceneBeh)->HWORD = (u16)(spritePtr & 0xFFFF);
+        GE_FIELD(ent, field_0x86)->HWORD = (u16)(spritePtr >> 16);
     }
 }
 

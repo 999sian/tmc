@@ -84,7 +84,7 @@ void sub_0808D030(void) {
 
     ptr = gOAMControls.oam;
     index = ARRAY_COUNT(gOAMControls.oam);
-    MemClear(&gOAMControls, 0xb74);
+    MemClear(&gOAMControls, sizeof(gOAMControls));
     while (index != 0) {
         // TODO split up into bitfield writes?
         *(u16*)ptr = 0x2a0;

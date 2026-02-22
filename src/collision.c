@@ -13,6 +13,12 @@
 #include "save.h"
 #include "tiles.h"
 
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
+#endif
+
 extern u8 gCollidableCount;
 extern u8 gUnk_080B3740[];
 
@@ -465,7 +471,7 @@ CollisionResult sub_08017CBC(Entity* org, Entity* tgt, u32 direction, ColSetting
 
 CollisionResult sub_08017D28(Entity* org, Entity* tgt, u32 direction, ColSettings* settings) {
     gPlayerState.mobility = 1;
-    ((GenericEntity*)org)->field_0x7a.HWORD = 600;
+    GE_FIELD(org, field_0x7a)->HWORD = 600;
     org->knockbackDuration = 12;
     org->iframes = 16;
     org->knockbackSpeed = 640;
@@ -485,7 +491,7 @@ CollisionResult sub_08017D6C(Entity* org, Entity* tgt, u32 direction, ColSetting
         y = 0xac2;
     } else {
         tgt->contactFlags = 0xcb;
-        ((GenericEntity*)tgt)->field_0x78.HALF.HI = org->hurtType;
+        GE_FIELD(tgt, field_0x78)->HALF.HI = org->hurtType;
         x = org->hurtType;
         y = 0xae4;
     }

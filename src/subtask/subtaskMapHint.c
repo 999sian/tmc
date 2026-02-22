@@ -15,8 +15,14 @@
 
 void sub_080A6438();
 
+void Subtask_MapHint_0(void);
+void Subtask_MapHint_1(void);
+
 void Subtask_MapHint(void) {
-    extern void (*const Subtask_MapHint_Functions[])(void);
+    static void (*const Subtask_MapHint_Functions[])(void) = {
+        Subtask_MapHint_0,
+        Subtask_MapHint_1,
+    };
     FlushSprites();
     Subtask_MapHint_Functions[gMenu.menuType]();
     if ((gGenericMenu.unk2c & 0x20) != 0) {

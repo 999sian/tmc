@@ -42,7 +42,7 @@ typedef struct {
     /* Area data tables (pointer tables indexed by area ID) */
     u32 areaRoomHeaders;   /* gAreaRoomHeaders — pointer table to RoomHeader arrays (0x90 entries) */
     u32 areaTileSets;      /* gAreaTileSets — pointer table (ptr → ptr) (0x40 entries) */
-    u32 areaTileSetsCount; /* number of entries in gAreaTileSets (0x40 for both regions) */
+    u32 areaTileSetsCount; /* number of entries in gAreaTileSets (0x90 for both regions) */
     u32 areaRoomMaps;      /* gAreaRoomMaps — pointer table (ptr → ptr) (0x90 entries) */
     u32 areaTable;         /* gAreaTable — pointer table (ptr → ptr) (0x90 entries) */
     u32 areaTiles;         /* gAreaTiles — pointer table (ptr) (0x90 entries) */

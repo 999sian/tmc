@@ -1,6 +1,6 @@
 #include "area.h"
-#include "common.h"
 #include "color.h"
+#include "common.h"
 #include "functions.h"
 #include "manager/diggingCaveEntranceManager.h"
 #include "message.h"
@@ -370,6 +370,9 @@ Entity* CreateAuxPlayerEntity(void) {
 
     do {
         if (ent->base.prev == NULL) {
+#ifdef PC_PORT
+            memset(ent, 0, sizeof(GenericEntity));
+#endif
             return &ent->base;
         }
     } while (++ent < &gAuxPlayerEntities[7]);

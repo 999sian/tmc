@@ -6,22 +6,23 @@
  */
 #include "object/cutsceneMiscObject.h"
 #include "area.h"
+#include "asm.h"
+#include "color.h"
+#include "common.h"
+#include "effects.h"
+#include "fade.h"
+#include "flags.h"
 #include "item.h"
 #include "message.h"
 #include "object.h"
-#include "asm.h"
-#include "common.h"
-#include "sound.h"
-#include "flags.h"
-#include "effects.h"
-#include "room.h"
 #include "physics.h"
 #include "player.h"
-#include "scroll.h"
+#include "port_scripts.h"
+#include "room.h"
 #include "script.h"
+#include "scroll.h"
+#include "sound.h"
 #include "tiles.h"
-#include "color.h"
-#include "fade.h"
 
 extern u8 gUnk_08122AE0[];
 extern u16 gUnk_08122AE8[];
@@ -165,7 +166,11 @@ void CutsceneMiscObject_Type1(CutsceneMiscObjectEntity* this) {
 void sub_08094AE8(Entity* this, ScriptExecutionContext* ctx) {
     CutsceneMiscObjectEntity* e = (CutsceneMiscObjectEntity*)CreateObject(CUTSCENE_MISC_OBJECT, 1, 0);
     if (e != NULL) {
+#ifdef PC_PORT
+        e->ctx = StartCutscene(&e->base, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         e->ctx = StartCutscene(&e->base, (void*)ctx->intVariable);
+#endif
     }
 }
 
@@ -197,7 +202,11 @@ void sub_08094B94(CutsceneMiscObjectEntity* this) {
     if (e != NULL) {
         CopyPosition(&gPlayerEntity.base, e);
         e->z.HALF.HI = -48;
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, PORT_SCRIPT(script_CutsceneMiscObjectTheLittleHat));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, &script_CutsceneMiscObjectTheLittleHat);
+#endif
         CreateDeathFx(e);
         e->z.HALF.HI += 16;
         e->y.HALF.HI++;
@@ -546,7 +555,11 @@ void sub_08095244(CutsceneMiscObjectEntity* this) {
         if (e != NULL) {
             e->parent = super;
             PositionRelative(super, e, Q_16_16(16.0), -Q_16_16(16.0));
+#ifdef PC_PORT
+            ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, PORT_SCRIPT(script_CutsceneMiscObjectSwordInChest));
+#else
             ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, &script_CutsceneMiscObjectSwordInChest);
+#endif
         }
     }
 }
@@ -636,7 +649,11 @@ void sub_08095420(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
     Entity* e = CreateObject(CUTSCENE_MISC_OBJECT, 0xC, 0);
     if (e != NULL) {
         PositionRelative(super, e, 0, Q_16_16(-16));
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)ctx->intVariable);
+#endif
     }
 }
 
@@ -648,7 +665,11 @@ void sub_0809545C(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
     Entity* e;
     if (p != NULL) {
         PositionRelative(super, p, 0, Q_16_16(-16));
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)p)->ctx = StartCutscene(p, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)p)->ctx = StartCutscene(p, (u16*)ctx->intVariable);
+#endif
         e = CreateObject(CUTSCENE_MISC_OBJECT, 2, 0);
         if (e != NULL) {
             CopyPosition(p, e);
@@ -661,7 +682,7 @@ void sub_080954AC(CutsceneMiscObjectEntity* this, u32 arg2) {
     Entity* e = CreateObject(CUTSCENE_MISC_OBJECT, 0x1A, 0);
     if (e != NULL) {
         CopyPosition(super, e);
-        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, &script_08015B14);
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, PORT_SCRIPT(script_08015B14));
     }
 }
 
@@ -813,7 +834,11 @@ void sub_08095810(CutsceneMiscObjectEntity* this) {
         e->parent = super;
         CopyPosition(super, e);
         SortEntityAbove(super, e);
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, PORT_SCRIPT(script_ZeldaMagic));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, &script_ZeldaMagic);
+#endif
     }
 }
 
@@ -878,7 +903,11 @@ void sub_08095954(CutsceneMiscObjectEntity* this) {
         y = ((s8XY*)(&gUnk_08122AF8[tmp]))->y << 16;
         PositionRelative(super, e, x, y);
         e->z.HALF.HI = -3;
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, PORT_SCRIPT(script_08012C48));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, &script_08012C48);
+#endif
         EnqueueSFX(SFX_124);
         super->frame &= ~1;
     } else {
@@ -906,7 +935,11 @@ void sub_08095A1C(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
         e->y.HALF.HI = gRoomControls.origin_y + 312;
         e->z.HALF.HI = -4;
         e->collisionLayer = 2;
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)ctx->intVariable);
+#endif
     }
 }
 
@@ -1065,7 +1098,11 @@ void sub_08095D54(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
     if (e != NULL) {
         CopyPosition(&gPlayerEntity.base, e);
         e->collisionLayer = 2;
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)ctx->intVariable);
+#endif
     }
 }
 
@@ -1073,7 +1110,11 @@ void sub_08095D8C(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
     Entity* e = CreateObject(CUTSCENE_MISC_OBJECT, 0x1D, 0);
     if (e != NULL) {
         CopyPosition(super, e);
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)ctx->intVariable);
+#endif
     }
 }
 
@@ -1110,7 +1151,11 @@ void sub_08095E7C(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
     Entity* e = CreateObject(CUTSCENE_MISC_OBJECT, 0x1E, 0);
     if (e != NULL) {
         CopyPosition(super, e);
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)ctx->intVariable);
+#endif
     }
 }
 
@@ -1229,7 +1274,11 @@ void sub_080960C4(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
         CopyPosition(super, e);
         e->spriteRendering.b3 = gUnk_08114F34[super->spriteRendering.b3];
         SortEntityBelow(super, e);
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)ctx->intVariable);
+#endif
     }
     e = CreateObject(CUTSCENE_MISC_OBJECT, 0x24, 0x4A);
     if (e != NULL) {
@@ -1238,7 +1287,11 @@ void sub_080960C4(CutsceneMiscObjectEntity* this, ScriptExecutionContext* ctx) {
         e->spriteRendering.b3 = gUnk_08114F30[super->spriteRendering.b3];
         SortEntityAbove(super, e);
         e->collisionLayer = 2;
+#ifdef PC_PORT
+        ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)Port_ResolveRomData(ctx->intVariable));
+#else
         ((CutsceneMiscObjectEntity*)e)->ctx = StartCutscene(e, (u16*)ctx->intVariable);
+#endif
     }
 }
 

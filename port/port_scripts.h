@@ -44,6 +44,8 @@
 #define GBA_script_ZeldaStoneTakeover 0x08015FA4
 #define GBA_script_MinisterPothoTakeover 0x08015F08
 #define GBA_script_GuardTakeover 0x08015F3C
+#define GBA_script_BusinessScrubIntro 0x08015AC4
+#define GBA_script_08015B14 0x08015B14
 #define GBA_script_ZeldaStoneInDHC 0x0800DB18
 #define GBA_script_ZeldaStoneDHC 0x0800E58C
 
@@ -77,6 +79,16 @@
 #define GBA_script_KinstoneSparkKinstoneSparkFromBottom 0x0800C494
 #define GBA_script_KinstoneSparkKinstoneSparkGoronMerchang 0x0800C4D0
 #define GBA_script_KinstoneSparkKinstoneSparkGoron 0x0800C50C
+
+/* GBA ROM addresses of scripts used via &script_xxx (stub on PC, must resolve from ROM) */
+#define GBA_script_CutsceneMiscObjectTheLittleHat 0x0800AEDC
+#define GBA_script_CutsceneMiscObjectSwordInChest 0x0801183C
+#define GBA_script_ZeldaMagic 0x08011940
+#define GBA_script_08012C48 0x08012C48
+#define GBA_script_Rem 0x08012F0C
+#define GBA_script_Stockwell 0x080142B0
+#define GBA_script_MinishVillageObjectLeftStoneOpening 0x08016030
+#define GBA_script_MinishVillageObjectRightStoneOpening 0x0801606C
 
 /**
  * Resolve a script's GBA ROM address to a native PC pointer.

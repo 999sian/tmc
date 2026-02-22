@@ -4,14 +4,14 @@
  *
  * @brief Lantern Player Item
  */
+#include "asm.h"
+#include "collision.h"
 #include "entity.h"
 #include "item.h"
 #include "object.h"
 #include "physics.h"
 #include "player.h"
 #include "vram.h"
-#include "asm.h"
-#include "collision.h"
 
 void PlayerItemLantern_Init(Entity* this);
 void PlayerItemLantern_Action1(Entity* this);

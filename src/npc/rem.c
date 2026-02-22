@@ -12,6 +12,7 @@
 #include "message.h"
 #include "script.h"
 #include "asm.h"
+#include "port_scripts.h"
 #include "room.h"
 
 typedef struct {
@@ -83,7 +84,11 @@ void sub_0806A3D8(RemEntity* this) {
     super->timer = 180;
     SetEntityPriority(super, PRIO_MESSAGE);
     sub_0806A8C8(super);
+#ifdef PC_PORT
+    this->context = StartCutscene(super, PORT_SCRIPT(script_Rem));
+#else
     this->context = StartCutscene(super, &script_Rem);
+#endif
     ExecuteScriptAndHandleAnimation(super, NULL);
 }
 

@@ -5,11 +5,11 @@
  *
  * @brief Cucco Minigame object
  */
+#include "common.h"
 #include "enemy.h"
 #include "entity.h"
-#include "common.h"
-#include "flags.h"
 #include "fileselect.h"
+#include "flags.h"
 #include "functions.h"
 #include "item.h"
 #include "message.h"
@@ -19,6 +19,7 @@
 #include "tiles.h"
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
+#include "port_rom.h"
 #endif
 
 typedef struct {
@@ -334,7 +335,8 @@ void CuccoMinigame_Init(Entity* this, ScriptExecutionContext* context) {
             DeleteEntityAny(pEnt);
         } else {
 #ifdef PC_PORT
-            Port_SetEntityScriptCtx(pEnt, (ScriptExecutionContext*)StartCutscene(pEnt, (u16*)context->intVariable));
+            Port_SetEntityScriptCtx(
+                pEnt, (ScriptExecutionContext*)StartCutscene(pEnt, (u16*)Port_ResolveRomData(context->intVariable)));
 #else
             *(ScriptExecutionContext**)&((GenericEntity*)pEnt)->cutsceneBeh =
                 (ScriptExecutionContext*)StartCutscene(pEnt, (u16*)context->intVariable);

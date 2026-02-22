@@ -16,6 +16,7 @@
 #include "room.h"
 #include "script.h"
 #include "save.h"
+#include "port_scripts.h"
 #include "subtask.h"
 #ifndef EU
 #endif
@@ -70,7 +71,11 @@ void sub_08065080(StockwellEntity* this) {
 #ifndef EU
     SetInteractableObjectCollision(super, 0, 0, &gUnk_0810FDA0);
 #endif
+#ifdef PC_PORT
+    context = StartCutscene(super, PORT_SCRIPT(script_Stockwell));
+#else
     context = StartCutscene(super, &script_Stockwell);
+#endif
     this->context = context;
 }
 

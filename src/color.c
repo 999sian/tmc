@@ -73,6 +73,17 @@ u32 LoadObjPalette(Entity* entity, u32 objPaletteId) {
     u32 uVar3;
     u32 uVar4;
 
+#ifdef PC_PORT
+    {
+        static int _palLog = 0;
+        if (_palLog < 200) {
+            fprintf(stderr, "[PAL] LoadObjPalette: kind=%d id=%d type=%d objPaletteId=%u\n",
+                    entity->kind, entity->id, entity->type, objPaletteId);
+            _palLog++;
+        }
+    }
+#endif
+
     slot = FindPalette(objPaletteId);
     if (slot < 0) {
         if (objPaletteId < 0x16) {
@@ -103,6 +114,12 @@ u32 LoadObjPalette(Entity* entity, u32 objPaletteId) {
         }
     }
     SetEntityObjPalette(entity, slot);
+#ifdef PC_PORT
+    if (slot == 3 && objPaletteId != 3) {
+        fprintf(stderr, "[PAL] WARNING: slot=3 but objPaletteId=%u for kind=%d id=%d type=%d\n",
+                objPaletteId, entity->kind, entity->id, entity->type);
+    }
+#endif
     return slot;
 }
 

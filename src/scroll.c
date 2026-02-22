@@ -19,6 +19,12 @@
 #include "tileMap.h"
 #include "tiles.h"
 
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
+#endif
+
 extern void UpdateScreenShake(void);
 extern void sub_0807C8B0(u16*, u32, u32);
 extern void sub_0807C810();
@@ -958,10 +964,10 @@ void sub_08080CB4(Entity* this) {
         if (this->spriteSettings.draw != 0) {
             switch (this->type) {
                 case 0x60:
-                    if (((GenericEntity*)this)->field_0x6a.HALF.LO != 0) {
-                        ((GenericEntity*)this)->field_0x6a.HALF.LO--;
+                    if (GE_FIELD(this, field_0x6a)->HALF.LO != 0) {
+                        GE_FIELD(this, field_0x6a)->HALF.LO--;
                     } else {
-                        ((GenericEntity*)this)->field_0x6a.HALF.LO = (Random() & 0x1f) + 10;
+                        GE_FIELD(this, field_0x6a)->HALF.LO = (Random() & 0x1f) + 10;
                         effect = CreateFx(this, FX_SPARKLE, 0);
                         if (effect != NULL) {
                             effect->spriteOffsetX = this->spriteOffsetX;

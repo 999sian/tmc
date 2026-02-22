@@ -13,6 +13,12 @@
 #include "room.h"
 #include "physics.h"
 #include "player.h"
+
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
+#endif
 #include "item.h"
 
 typedef struct {
@@ -217,9 +223,9 @@ void sub_08084630(SpecialFxObject* this) {
     GetNextFrame(super);
     if (super->frame & ANIM_DONE) {
         if ((super->type2 & 1) && (super->child != 0)) {
-            ((GenericEntity*)super->child)->field_0x6a.HWORD--;
+            GE_FIELD(super->child, field_0x6a)->HWORD--;
             if (this->unk_68 != 0) {
-                ((GenericEntity*)super->child)->field_0x6c.HWORD &= ~(1 << ((this->unk_68 - 1) & 0x1F));
+                GE_FIELD(super->child, field_0x6c)->HWORD &= ~(1 << ((this->unk_68 - 1) & 0x1F));
             }
         }
         DeleteThisEntity();

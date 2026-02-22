@@ -3,8 +3,9 @@
 #include "beanstalkSubtask.h"
 #include "collision.h"
 #include "common.h"
-#include "entity.h"
 #include "effects.h"
+#include "entity.h"
+#include "flags.h"
 #include "functions.h"
 #include "game.h"
 #include "global.h"
@@ -18,13 +19,12 @@
 #include "player.h"
 #include "room.h"
 #include "save.h"
-#include "scroll.h"
 #include "screen.h"
 #include "screenTransitions.h"
+#include "scroll.h"
 #include "sound.h"
 #include "tileMap.h"
 #include "tiles.h"
-#include "flags.h"
 
 #ifdef PC_PORT
 #include "port_gba_mem.h"
@@ -598,7 +598,11 @@ void DeleteItemBehavior(ItemBehavior* this, u32 index) {
 
     if (index == 0) {
         if (gPlayerState.item != NULL) {
+#ifdef PC_PORT
+            gPlayerState.item->updatePriority = 6;
+#else
             ((Unk_bitfield*)gPlayerState.item)[0x11].b0 = 6;
+#endif
             gPlayerState.item = NULL;
         } else {
             gPlayerState.item = NULL;

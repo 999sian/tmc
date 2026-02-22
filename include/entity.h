@@ -189,32 +189,32 @@ typedef struct Entity_ {
     /*0x15*/ u8 direction;      /**< Facing direction. @see Direction */
     /*0x16*/ u8 carryFlags;     /**< Flags for carrying this Entity. */
     /*0x17*/ u8 followerFlag;   /**< Controls collisions between followers, unused. */
-    /*0x18*/ struct SpriteSettings {
-    /*    */     u32 draw        : 2; /**< Draw type. 0 = disabled, 1 = clip to screen, 3 = draw always */ /* 0x2 */ 
-    /*    */     u32 ss2         : 1; /*   4 */
-    /*    */     u32 ss3         : 1; /*   8 */
-    /*    */     u32 shadow      : 2; /* 0x10-0x20 */
-    /*    */     u32 flipX       : 1; /**< Flip sprite horizontally. */ /* 0x40 */ 
-    /*    */     u32 flipY       : 1; /**< Flip sprite vertically. */ /* 0x80 */ 
-    /*    */ } PACKED spriteSettings;
-    /*0x19*/ struct SpriteRendering {
-    /*    */     u32 b0         : 2; /* 1-2 */
-    /*    */     u32 alphaBlend : 2; /* 4-8 */
-    /*    */     u32 b2         : 2; /* 0x10 */
-    /*    */     u32 b3         : 2; /* 0x40 */
-    /*    */ } PACKED spriteRendering;
-    /*0x1a*/ union Palette {
+    /*0x18*/ struct PACKED SpriteSettings {
+    /*    */     u8 draw        : 2; /**< Draw type. 0 = disabled, 1 = clip to screen, 3 = draw always */ /* 0x2 */ 
+    /*    */     u8 ss2         : 1; /*   4 */
+    /*    */     u8 ss3         : 1; /*   8 */
+    /*    */     u8 shadow      : 2; /* 0x10-0x20 */
+    /*    */     u8 flipX       : 1; /**< Flip sprite horizontally. */ /* 0x40 */ 
+    /*    */     u8 flipY       : 1; /**< Flip sprite vertically. */ /* 0x80 */ 
+    /*    */ } spriteSettings;
+    /*0x19*/ struct PACKED SpriteRendering {
+    /*    */     u8 b0         : 2; /* 1-2 */
+    /*    */     u8 alphaBlend : 2; /* 4-8 */
+    /*    */     u8 b2         : 2; /* 0x10 */
+    /*    */     u8 b3         : 2; /* 0x40 */
+    /*    */ } spriteRendering;
+    /*0x1a*/ union PACKED Palette {
     /*    */    u8 raw;
-    /*    */    struct PaletteB {
+    /*    */    struct PACKED PaletteB {
     /*    */        u8 b0 : 4;
     /*    */        u8 b4 : 4;
-    /*    */    } PACKED b;
-    /*    */ } PACKED palette;
-    /*0x1b*/ struct SpriteOrientation {
-    /*    */     u32 b0    : 1; /* 1  */
-    /*    */     u32 b1    : 5; /* 0x2-0x10 */
-    /*    */     u32 flipY : 2; /* 0x20-0x40 */
-    /*    */ } PACKED spriteOrientation;
+    /*    */    } b;
+    /*    */ } palette;
+    /*0x1b*/ struct PACKED SpriteOrientation {
+    /*    */     u8 b0    : 1; /* 1  */
+    /*    */     u8 b1    : 5; /* 0x2-0x10 */
+    /*    */     u8 flipY : 2; /* 0x20-0x40 */
+    /*    */ } spriteOrientation;
     /*0x1c*/ u8 gustJarFlags; /**< Controls sfx and other things */
     /*0x1d*/ u8 gustJarTolerance; /**< Frames needed to pull off ground. */
     /*0x1e*/ u8 frameIndex;

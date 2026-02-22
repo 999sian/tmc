@@ -24,7 +24,13 @@
 
 extern u8 gUnk_03003DE0;
 extern u8 gzHeap[0x1000];
+#ifdef PC_PORT
+/* On GBA, the linker places gUnk_02035542 at gzHeap+2 (overlapping).
+ * On PC they are separate arrays, so alias it with a macro. */
+#define gUnk_02035542 (gzHeap + 2)
+#else
 extern u8 gUnk_02035542[];
+#endif
 extern u32 gDungeonMap[0x800];
 extern s16 gUnk_02018EE0[];
 
@@ -480,7 +486,12 @@ void zFree(void* ptr) {
 
         for (i = 0; i < numEntries; entryPtr += 2, i++) {
             if (*entryPtr == uVar1) {
+#ifdef PC_PORT
+                /* Avoid UB from gzHeap-2 pointer arithmetic */
+                lastEntryPtr = (u16*)(gzHeap + numEntries * 4 - 2);
+#else
                 lastEntryPtr = &((u16*)(gzHeap - 2))[numEntries * 2];
+#endif
                 *entryPtr = *lastEntryPtr;
                 *lastEntryPtr++ = 0;
                 *(entryPtr + 1) = *lastEntryPtr;

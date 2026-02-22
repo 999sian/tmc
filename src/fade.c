@@ -32,19 +32,30 @@ typedef void (*fptrMakeFadeBuff256)(u8*, u8*, u16, u8);
  * @param intensity Fade intensity (ptrUnk->unk2)
  * @param color    Fade color/mode (ptrUnk->unk1)
  */
+
+/* Compile-time fade lookup table offsets (from data_08000F54.s).
+ * 3 brightness levels, each with {R_offset, G_offset, B_offset} into gRomData. */
+#define NUM_FADE_BRIGHTNESS 3
+static const u32 sFadeTableOffsets[NUM_FADE_BRIGHTNESS][3] = {
+    { 0x0F84, 0x0FC4, 0x1004 }, /* brightness 0 */
+    { 0x1044, 0x1084, 0x10C4 }, /* brightness 1 */
+    { 0x1104, 0x1144, 0x1184 }, /* brightness 2 */
+};
+
 static void Port_MakeFadeBuff256(u8* src, u8* dest, u16 intensity, u8 color) {
     u32 bias = (u32)intensity * (u32)color;
     u32 factor = 0x400 - (u32)intensity * 4;
 
     /* Brightness preference from EWRAM offset 6 */
     u8 brightness = gEwram[6];
+    if (brightness >= NUM_FADE_BRIGHTNESS)
+        brightness = 0;
 
-    /* gUnk_08000F54 is at ROM offset 0xF54: array of {ptrR, ptrG, ptrB, pad} per brightness level.
-       Each pointer is a GBA ROM address (0x08XXXXXX). */
-    u32* tableBase = (u32*)(gRomData + 0xF54 + brightness * 16);
-    u16* tableR = (u16*)(gRomData + (tableBase[0] - 0x08000000));
-    u16* tableG = (u16*)(gRomData + (tableBase[1] - 0x08000000));
-    u16* tableB = (u16*)(gRomData + (tableBase[2] - 0x08000000));
+    /* Resolve fade lookup tables directly from known ROM offsets
+     * (avoids chasing GBA ROM pointers in the pointer table at 0xF54). */
+    u16* tableR = (u16*)(gRomData + sFadeTableOffsets[brightness][0]);
+    u16* tableG = (u16*)(gRomData + sFadeTableOffsets[brightness][1]);
+    u16* tableB = (u16*)(gRomData + sFadeTableOffsets[brightness][2]);
 
     u16* srcPtr = (u16*)src;
     /* dest is a GBA palette RAM address — resolve it */

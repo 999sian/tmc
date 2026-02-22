@@ -22,6 +22,8 @@ typedef struct {
 } CastleMaidEntity;
 
 void sub_08064570(CastleMaidEntity* this);
+void sub_0806464C(Entity* this);
+void sub_08064688(Entity* this);
 
 void Maid(Entity* this) {
     if ((this->flags & ENT_SCRIPTED) != 0) {
@@ -95,7 +97,11 @@ void sub_08064570(CastleMaidEntity* this) {
                 InitializeAnimation(super,
                                     GetAnimationStateForDirection4(GetFacingDirection(super, &gPlayerEntity.base)));
                 if (this->dialogFunc != NULL) {
+#ifdef PC_PORT
+                    ((void(*)(Entity*))this->dialogFunc)(super);
+#else
                     this->dialogFunc();
+#endif
                 }
             }
             break;
@@ -109,7 +115,20 @@ void sub_08064570(CastleMaidEntity* this) {
 }
 
 void CastleMaid_SetDialogFunc(CastleMaidEntity* this, ScriptExecutionContext* context) {
+#ifdef PC_PORT
+    /* intVariable holds a raw GBA Thumb address; resolve to native function pointer */
+    u32 gba_addr = context->intVariable & ~1u;
+    switch (gba_addr) {
+        case 0x0806464C: this->dialogFunc = (void(*)())sub_0806464C; break;
+        case 0x08064688: this->dialogFunc = (void(*)())sub_08064688; break;
+        default:
+            fprintf(stderr, "[CastleMaid] Unknown dialogFunc GBA addr: 0x%08X\n", context->intVariable);
+            this->dialogFunc = NULL;
+            break;
+    }
+#else
     this->dialogFunc = (void*)context->intVariable;
+#endif
 }
 
 void sub_0806464C(Entity* this) {

@@ -13,6 +13,27 @@
 #include "vram.h"
 #include "color.h"
 
+#ifdef PC_PORT
+/*
+ * On 64-bit, Enemy::child (Entity*, 8 bytes) overlaps more GenericEntity extra-area
+ * bytes than on GBA (4 bytes).  Enemies that never create FX but use the overlapping
+ * generic fields (field_0x68..field_0x6e) end up with a non-NULL but invalid child.
+ * On GBA the hardware silently ignored writes through such bogus pointers; on PC we
+ * must validate before dereferencing.
+ */
+static int Port_IsEntityInPool(const Entity* ptr) {
+    const u8* p = (const u8*)ptr;
+    if (p >= (const u8*)&gPlayerEntity && p < (const u8*)(&gPlayerEntity + 1))
+        return 1;
+    if (p >= (const u8*)gAuxPlayerEntities &&
+        p < (const u8*)(gAuxPlayerEntities + MAX_AUX_PLAYER_ENTITIES))
+        return 1;
+    if (p >= (const u8*)gEntities && p < (const u8*)(gEntities + MAX_ENTITIES))
+        return 1;
+    return 0;
+}
+#endif
+
 extern void ReplaceMonitoredEntity(Entity*, Entity*);
 
 extern EnemyDefinition gEnemyDefinitions[];
@@ -286,6 +307,10 @@ void EnemySetFXOffset(Entity* entity, s32 xOffset, s32 yOffset, s32 zOffset) {
 
     other = this->child;
     if (other != NULL) {
+#ifdef PC_PORT
+        if (!Port_IsEntityInPool(other))
+            return;
+#endif
         other->spriteRendering.b3 = super->spriteRendering.b3;
         other->spriteOrientation.flipY = super->spriteOrientation.flipY;
         other->x.HALF.HI = super->x.HALF.HI + xOffset;
@@ -310,6 +335,12 @@ Entity* EnemyCreateFX(Entity* parent, u32 fxType) {
 void EnemyDetachFX(Entity* entity) {
     Enemy* this = (Enemy*)entity;
     if (this->child != NULL) {
+#ifdef PC_PORT
+        if (!Port_IsEntityInPool(this->child)) {
+            this->child = NULL;
+            return;
+        }
+#endif
         this->child->parent = NULL;
         this->child = NULL;
     }

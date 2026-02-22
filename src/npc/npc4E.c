@@ -22,6 +22,7 @@
 #include "common.h"
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
+#include "port_scripts.h"
 #endif
 
 typedef struct {
@@ -156,7 +157,7 @@ void sub_0806DB84(Entity* this, ScriptExecutionContext* context) {
     if (ent != NULL) {
         PositionRelative(this, &ent->base, Q_16_16(-8.0), 0);
 #ifdef PC_PORT
-        Port_SetEntityScriptCtx(&ent->base, StartCutscene(&ent->base, &script_MinishVillageObjectLeftStoneOpening));
+        Port_SetEntityScriptCtx(&ent->base, StartCutscene(&ent->base, PORT_SCRIPT(script_MinishVillageObjectLeftStoneOpening)));
 #else
         *(ScriptExecutionContext**)&ent->cutsceneBeh =
             StartCutscene(&ent->base, &script_MinishVillageObjectLeftStoneOpening);
@@ -166,7 +167,7 @@ void sub_0806DB84(Entity* this, ScriptExecutionContext* context) {
     if (ent != NULL) {
         PositionRelative(this, &ent->base, Q_16_16(8.0), 0);
 #ifdef PC_PORT
-        Port_SetEntityScriptCtx(&ent->base, StartCutscene(&ent->base, &script_MinishVillageObjectRightStoneOpening));
+        Port_SetEntityScriptCtx(&ent->base, StartCutscene(&ent->base, PORT_SCRIPT(script_MinishVillageObjectRightStoneOpening)));
 #else
         *(ScriptExecutionContext**)&ent->cutsceneBeh =
             StartCutscene(&ent->base, &script_MinishVillageObjectRightStoneOpening);

@@ -136,7 +136,7 @@ static void GameTask_Transition(void) {
 static void GameTask_Init(void) {
     DispReset(1);
     gFadeControl.mask = 0xffffffff;
-    MemClear(&gOAMControls, 0xB74);
+    MemClear(&gOAMControls, sizeof(gOAMControls));
     MemClear(&gUI, sizeof(gUI));
     EraseAllEntities();
     SetBGDefaults();

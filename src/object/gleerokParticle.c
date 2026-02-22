@@ -13,6 +13,12 @@
 #include "player.h"
 #include "room.h"
 
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#else
+#define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
+#endif
+
 typedef struct {
     Entity base;
     u8 filler[0xC];
@@ -186,7 +192,7 @@ void GleerokParticle_Action1(GleerokParticleEntity* this) {
                 }
                 SetAffineInfo(super, this->unk80.HALF_U.HI, this->unk84.HALF_U.HI, 0);
             } else {
-                if ((((GenericEntity*)super->child)->field_0x78.HALF.HI & 0x80) == 0) {
+                if ((GE_FIELD(super->child, field_0x78)->HALF.HI & 0x80) == 0) {
                     DeleteThisEntity();
                 }
                 sub_08094660(this);
@@ -253,8 +259,8 @@ void GleerokParticle_Action4(GleerokParticleEntity* this) {
 
     if ((this->unk80.HALF_U.HI == 0x100) || (this->unk80.HALF.HI == -0x100)) {
         if (this->unk7c == 0) {
-            ((GenericEntity*)super->parent)->field_0x7c.HALF.LO = 0;
-            if ((((GenericEntity*)super->parent)->field_0x78.HALF.HI & 0x80) == 0) {
+            GE_FIELD(super->parent, field_0x7c)->HALF.LO = 0;
+            if ((GE_FIELD(super->parent, field_0x78)->HALF.HI & 0x80) == 0) {
                 DeleteThisEntity();
             }
         } else {
