@@ -37,6 +37,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
     // Read GBA DISPCNT to pick the right PPU mode
     uint16_t dispcnt = gIoMem[0x00] | (gIoMem[0x01] << 8);
+
     uint8_t gbaMode = dispcnt & 0x07;
 
     switch (gbaMode) {

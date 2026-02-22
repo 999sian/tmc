@@ -57,6 +57,7 @@ void DrawEntities(void) {
     gOAMControls._4 = gRoomControls.aff_x + gRoomControls.scroll_x;
     gOAMControls._6 = gRoomControls.aff_y + gRoomControls.scroll_y;
     gOAMControls.field_0x1++;
+
     fn = &ram_DrawEntities;
     fn();
 }

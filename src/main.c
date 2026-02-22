@@ -80,8 +80,11 @@ void AgbMain(void) {
 
                 gMain.ticks++;
                 sTaskHandlers[gMain.task]();
+
                 MessageMain();
+
                 FadeMain();
+
                 AudioMain();
                 break;
         }

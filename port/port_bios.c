@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include <windows.h>
 
@@ -207,14 +208,42 @@ void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 c
     }
 }
 
-/* ObjAffineSet (SWI 0x0F) */
+/* ObjAffineSet (SWI 0x0F)
+ *
+ * Computes 2x2 affine matrices (pa, pb, pc, pd) from rotation+scale
+ * parameters and writes them at `offset`-byte intervals.
+ *
+ * When used with OAM (offset=8), each parameter goes into the
+ * affineParam field of consecutive OAM entries (4 entries per matrix).
+ *
+ * GBA BIOS writes ONE s16 per destination, not 4 consecutive.
+ */
 void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset) {
-    s16* d = (s16*)dst;
+    u8* d = (u8*)dst;
     for (s32 i = 0; i < count; i++) {
-        d[0] = src[i].xScale; /* pa */
-        d[1] = 0;             /* pb */
-        d[2] = 0;             /* pc */
-        d[3] = src[i].yScale; /* pd */
-        d = (s16*)((u8*)d + offset);
+        s32 sx = src[i].xScale;
+        s32 sy = src[i].yScale;
+        u16 theta = src[i].rotation;
+
+        /* GBA angle (0-0xFFFF = 0-360°) → radians */
+        double angle = (double)theta * 3.14159265358979323846 * 2.0 / 65536.0;
+        double cosA = cos(angle);
+        double sinA = sin(angle);
+
+        /* sx, sy are 8.8 fixed point; multiply by cos/sin (float) → 8.8 result */
+        s16 pa = (s16)(sx * cosA);
+        s16 pb = (s16)(-sx * sinA);
+        s16 pc = (s16)(sy * sinA);
+        s16 pd = (s16)(sy * cosA);
+
+        /* Write ONE s16 per destination, spaced by `offset` bytes.
+         * For OAM (offset=8), this writes to the affineParam field
+         * of 4 consecutive OAM entries without touching other fields. */
+        *(s16*)(d + 0 * offset) = pa;
+        *(s16*)(d + 1 * offset) = pb;
+        *(s16*)(d + 2 * offset) = pc;
+        *(s16*)(d + 3 * offset) = pd;
+
+        d += 4 * offset; /* advance to start of next matrix */
     }
 }
