@@ -81,7 +81,7 @@ void Chuchu(ChuchuEntity* this) {
     }
     this->unk_81 = index;
     Chuchu_Functions[GetNextFunction(super)](this);
-    if (this->unk_68->type == 0x1c) {
+    if (this->unk_68 != NULL && this->unk_68->type == 0x1c) {
         EnemySetFXOffset(super, 0, 1, -0x10);
     } else if (super->type == 2) {
         sub_0801FB34(this);
