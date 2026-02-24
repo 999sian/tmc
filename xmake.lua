@@ -29,7 +29,7 @@ add_requires("nlohmann_json", {configs = {cmake = false}})
 add_requires("fmt", {configs = {header_only = true}})
 add_requires("libpng")
 add_requires("zlib")
-add_requires('libsdl3')
+add_requires("libsdl3", {configs = {shared = false}})
 
 -- ====================
 -- Tools
@@ -400,6 +400,11 @@ target("tmc_pc")
     -- add_files("src/gba/m4a.c")
     
     add_packages("libsdl3")
+
+    -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
+    if is_plat("windows", "mingw") then
+        add_ldflags("-static", "-static-libgcc", "-static-libstdc++", {force = true})
+    end
     
     -- Math library
     if is_plat("linux", "macosx") then

@@ -13,6 +13,7 @@ extern void UnpackTextNibbles(void*, u8*);
 #ifdef PC_PORT
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include <stdio.h>
 #define gUnk_02036AD8 (*(u8*)&gEwram[0x36AD8])
 #define gUnk_02036A58 (*(u8*)&gEwram[0x36A58])
 #else
@@ -111,6 +112,12 @@ void sub_0805EEB4(Token* token, u32 textIndex) {
 }
 
 bool32 sub_0805EF40(Token* token, const u8* param_2) {
+#ifdef PC_PORT
+    fprintf(stderr, "[TEXT] sub_0805EF40: pushing ptr=%p to buf[%d] (unk00=%d, textIndex=0x%04X)\n",
+            (void*)param_2, token->unk00 ? token->unk01 + 1 : token->unk01,
+            token->unk00, token->textIndex);
+    fflush(stderr);
+#endif
     if (token->unk00 != 0) {
         if (6 < token->unk01) {
             return 0;
@@ -131,6 +138,15 @@ u32 sub_0805EF8C(Token* token) {
         token->unk01 = 0;
         return 0;
     }
+#ifdef PC_PORT
+    {
+        const u8* ptr = token->buf[token->unk01];
+        /* Log pointer value (NOT dereferencing) + flush to survive crash */
+        fprintf(stderr, "[TEXT] sub_0805EF8C: buf[%d]=%p textIndex=0x%04X unk00=%d\n",
+                token->unk01, (void*)ptr, token->textIndex, token->unk00);
+        fflush(stderr);
+    }
+#endif
     return (token->buf[token->unk01]++)[0];
 }
 
