@@ -73,10 +73,10 @@ struct_02018EB0 gUnk_02018EB0;
 u8 gUnk_02018EE0[0x1000] __attribute__((aligned(4))); /* window rasterization scratch (s16[], 0x780 used, 0x1000 gap) */
 u16 gUnk_02021F00[0x10];                              /* lever timer→length map (32 bytes) */
 u8 gUnk_020227DC[0xC];                                /* text number buffer slot 0 */
-struct_020227E8 gUnk_020227E8[1];                     /* text struct (8 bytes, was [16] = overflow) */
-u8 gUnk_020227F0[0x8];                                /* text number buffer slot 2 */
-u8 gUnk_020227F8[0x8];                                /* text number buffer slot 3 */
-u8 gUnk_02022800[0x20] __attribute__((aligned(4)));   /* text number buffer slot 4 (29+ bytes) */
+struct_020227E8 gUnk_020227E8[1];                     /* text variable slot 1 (8 bytes) */
+u8 gUnk_020227F0[0x8];                                /* text variable slot 2 (8 bytes) */
+u8 gUnk_020227F8[0x8];                                /* text variable slot 3 (8 bytes) */
+u8 gUnk_02022800[0x20] __attribute__((aligned(4)));   /* text variable slot 4 (larger backing buffer) */
 u8 gUnk_02022830[0x1800] __attribute__((aligned(4))); /* u16[0xc00] on GBA; also reused as temp MapDataDefinition */
 u8 gUnk_02024048 = 0;                                 /* pending sound count (used by DrawEntity) */
 u8 gUnk_020246B0[0x1800] __attribute__((aligned(4))); /* u16[0xc00] scroll tilemap buffer */

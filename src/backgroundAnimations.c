@@ -2429,7 +2429,7 @@ void LoadBgAnimationGfx(const BgAnimationGfx* param_1) {
         src = &gGlobalGfxAndPalettes[param_1->gfxOffset];
         size = param_1->gfxSize;
         vramOffset = param_1->vramOffset;
-        if ((*(u32*)param_1 >> 0x1c & 1) != 0) {
+        if ((param_1->flags & BG_ANIM_PALETTE) != 0) {
             LoadPalettes(src, vramOffset >> 5, size);
         } else {
 #ifdef PC_PORT
@@ -2438,7 +2438,7 @@ void LoadBgAnimationGfx(const BgAnimationGfx* param_1) {
             MemCopy(src, (void*)(vramOffset + 0x6000000), size << 5);
 #endif
         }
-        if (*(int*)param_1 >= 0) {
+        if ((param_1->flags & BG_ANIM_MULTIPLE) == 0) {
             return;
         }
         param_1++;

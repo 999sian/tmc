@@ -7,8 +7,10 @@
 
 static SDL_Renderer* sRenderer = nullptr;
 static SDL_Texture* sTexture = nullptr;
+static SDL_Window* sWindow = nullptr;
 
 extern "C" void Port_PPU_Init(SDL_Window* window) {
+    sWindow = window;
     sRenderer = SDL_CreateRenderer(window, nullptr);
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
@@ -63,6 +65,12 @@ extern "C" void Port_PPU_PresentFrame(void) {
     SDL_RenderPresent(sRenderer);
 }
 
+extern "C" void Port_PPU_SetWindowTitle(const char* title) {
+    if (!sWindow || !title)
+        return;
+    SDL_SetWindowTitle(sWindow, title);
+}
+
 extern "C" void Port_PPU_Shutdown(void) {
     if (sTexture) {
         SDL_DestroyTexture(sTexture);
@@ -72,4 +80,5 @@ extern "C" void Port_PPU_Shutdown(void) {
         SDL_DestroyRenderer(sRenderer);
         sRenderer = nullptr;
     }
+    sWindow = nullptr;
 }

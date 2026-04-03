@@ -1074,6 +1074,21 @@ void DetermineRButtonInteraction(void) {
                             rAction = R_ACTION_DROP;
                             break;
                     }
+                    if (interaction->type == INTERACTION_NULL) {
+                        if (sub_080789A8()) {
+                            if (((gPlayerState.framestate != PL_STATE_USEPORTAL))) {
+                                if ((gCarriedEntity.unk_1 == 2) && ((gCarriedEntity.unk_8)->carryFlags == 1)) {
+                                    rAction = R_ACTION_GRAB;
+                                } else {
+                                    rAction = R_ACTION_LIFT;
+                                }
+                            } else {
+                                return;
+                            }
+                        } else if ((gPlayerState.framestate == PL_STATE_WALK) && (gPlayerState.mobility == 0)) {
+                            rAction = R_ACTION_ROLL;
+                        }
+                    }
                 } else {
                     if (sub_080789A8()) {
                         if (((gPlayerState.framestate != PL_STATE_USEPORTAL))) {

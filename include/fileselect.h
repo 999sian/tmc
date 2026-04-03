@@ -40,6 +40,32 @@ extern ChooseFileState gChooseFileState;
 // } struct_02036540;
 
 extern struct_020227E8 gUnk_020227E8[];
+static_assert(sizeof(struct_020227E8) == 8, "struct_020227E8 size incorrect");
+
+#ifdef PC_PORT
+extern u8 gUnk_020227F0[];
+extern u8 gUnk_020227F8[];
+extern u8 gUnk_02022800[];
+
+static inline struct_020227E8* GetTextVariableSlot(u32 idx) {
+    switch (idx) {
+        case 0:
+            return &gUnk_020227E8[0];
+        case 1:
+            return (struct_020227E8*)gUnk_020227F0;
+        case 2:
+            return (struct_020227E8*)gUnk_020227F8;
+        case 3:
+            return (struct_020227E8*)gUnk_02022800;
+        default:
+            return &gUnk_020227E8[0];
+    }
+}
+#else
+static inline struct_020227E8* GetTextVariableSlot(u32 idx) {
+    return &gUnk_020227E8[idx];
+}
+#endif
 
 typedef struct {
     /*0x00*/ u8 isTransitioning;

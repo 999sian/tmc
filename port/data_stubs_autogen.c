@@ -69,7 +69,7 @@ const u16 gUnk_080B44C2[] = { 0x0075, 0x0009, 0x0025, 0x0000, 0x0000, 0x0001, 0x
 u8 gUnk_080C9044[8] = { 0 };
 /* Hitbox data (gUnk_080FD178 through gUnk_080FD588) is now provided by src/data/hitbox.c */
 /* Font/text data â€” loaded from ROM by Port_LoadRom */
-void* gUnk_08109230[5];
+void* gTextVariableSources[5];
 u8 gUnk_08109244[4] __attribute__((aligned(4)));
 void* gUnk_08109248[9];
 u8 gUnk_0810926C[64] __attribute__((aligned(4)));

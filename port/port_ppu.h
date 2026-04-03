@@ -14,6 +14,9 @@ void Port_PPU_Init(SDL_Window* window);
 // then present it to the SDL window. Call once per VBlank.
 void Port_PPU_PresentFrame(void);
 
+// Update the SDL window title used by the port.
+void Port_PPU_SetWindowTitle(const char* title);
+
 // Cleanup
 void Port_PPU_Shutdown(void);
 

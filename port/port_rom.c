@@ -425,7 +425,7 @@ static void ResolveSubTable(void* romBase, void** dest, u32 count) {
 }
 
 /* Font data tables (data_stubs_autogen.c) */
-extern void* gUnk_08109230[];
+extern void* gTextVariableSources[];
 extern u8 gUnk_08109244[];
 extern void* gTranslations[];
 extern void* gUnk_08109248[];
@@ -434,6 +434,13 @@ extern void* gUnk_081092AC[];
 extern u8 gUnk_081092D4[];
 extern u8 gUnk_0810942E[];
 extern u8 gUnk_081094CE[];
+#ifdef PC_PORT
+extern u8 gUnk_020227DC[];
+extern u8 gUnk_020227F0[];
+extern u8 gUnk_020227F8[];
+extern u8 gUnk_02022800[];
+extern struct_020227E8 gUnk_020227E8[];
+#endif
 
 /* Resolved pointer tables */
 const u8* gGlobalGfxAndPalettes = NULL;
@@ -891,9 +898,17 @@ void Port_LoadRom(const char* path) {
     fprintf(stderr, "gTranslations loaded (7 entries from compile-time offsets).\n");
 
     /* gUnk_08109230 — resolved from compile-time offset table */
+#ifdef PC_PORT
+    gTextVariableSources[0] = gUnk_020227DC;
+    gTextVariableSources[1] = &gUnk_020227E8[0];
+    gTextVariableSources[2] = gUnk_020227F0;
+    gTextVariableSources[3] = gUnk_020227F8;
+    gTextVariableSources[4] = gUnk_02022800;
+#else
     for (int i = 0; i < 5; i++) {
-        gUnk_08109230[i] = ResolveTableOffset(kUnk09230Offsets[i]);
+        gTextVariableSources[i] = ResolveTableOffset(kUnk09230Offsets[i]);
     }
+#endif
 
     /* gUnk_08109248 — resolved from compile-time offset table */
     for (int i = 0; i < 9; i++) {

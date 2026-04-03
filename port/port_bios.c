@@ -73,14 +73,41 @@ static void Port_PumpEvents(void) {
     }
 }
 
+
+static u64 lastFrameNs = 0;
+static u64 sFpsWindowStartNs = 0;
+static u32 sFpsFrameCount = 0;
+
 void VBlankIntrWait(void) {
+    u64 nowNs;
+
     Port_PPU_PresentFrame();
 
-#ifdef _WIN32
-    Sleep(1);
-#else
-    SDL_Delay(1);
-#endif
+    while (SDL_GetTicksNS() - lastFrameNs < 16666667 / 3) {
+    }
+
+    nowNs = SDL_GetTicksNS();
+    lastFrameNs = nowNs;
+
+    if (sFpsWindowStartNs == 0) {
+        sFpsWindowStartNs = nowNs;
+    }
+
+    sFpsFrameCount++;
+
+    if (nowNs - sFpsWindowStartNs >= 1000000000ULL) {
+        double elapsedSec = (double)(nowNs - sFpsWindowStartNs) / 1000000000.0;
+        double fps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
+        char title[64];
+
+        SDL_snprintf(title, sizeof(title), "The Minish Cap - %.1f FPS", fps);
+        Port_PPU_SetWindowTitle(title);
+
+        sFpsWindowStartNs = nowNs;
+        sFpsFrameCount = 0;
+    }
+
+
 
     if (gQuitRequested) {
         exit(0);
@@ -161,7 +188,8 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
 
 /* CpuFastSet (SWI 0x0C) */
 void CpuFastSet(const void* src, void* dst, u32 cnt) {
-    u32 wordCount = cnt & 0x1FFFFF;
+    u32 blockCount = cnt & 0x1FFFFF;
+    u32 wordCount = blockCount * 8;
     int fill = (cnt >> 24) & 1;
 
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
@@ -181,7 +209,43 @@ void CpuFastSet(const void* src, void* dst, u32 cnt) {
 
 /* RegisterRamReset — stub */
 void RegisterRamReset(u32 flags) {
-    (void)flags;
+    if (flags & RESET_EWRAM) {
+        memset(gEwram, 0, sizeof(gEwram));
+    }
+
+    if (flags & RESET_IWRAM) {
+        memset(gIwram, 0, sizeof(gIwram));
+    }
+
+    if (flags & RESET_PALETTE) {
+        memset(gBgPltt, 0, sizeof(gBgPltt));
+        memset(gObjPltt, 0, sizeof(gObjPltt));
+    }
+
+    if (flags & RESET_VRAM) {
+        memset(gVram, 0, sizeof(gVram));
+    }
+
+    if (flags & RESET_OAM) {
+        memset(gOamMem, 0, sizeof(gOamMem));
+    }
+
+    if (flags & RESET_SIO_REGS) {
+        // SIO register range (subset in IO space): 0x120-0x12A.
+        memset(gIoMem + 0x120, 0, 0x0C);
+    }
+
+    if (flags & RESET_SOUND_REGS) {
+        // Sound register blocks in IO space.
+        memset(gIoMem + 0x060, 0, 0x28);
+        memset(gIoMem + 0x090, 0, 0x18);
+    }
+
+    if (flags & RESET_REGS) {
+        memset(gIoMem, 0, sizeof(gIoMem));
+        // GBA KEYINPUT idle state: all keys released.
+        *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
+    }
 }
 
 /* Sqrt (SWI 0x08) */

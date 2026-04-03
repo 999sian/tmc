@@ -11,6 +11,9 @@
 #include "physics.h"
 #include "player.h"
 #include "sound.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -28,6 +31,14 @@ typedef struct {
     /*0x84*/ u8 unk_84[2];
     /*0x86*/ u16 pulledFlag;
 } PullableLeverEntity;
+
+static u16 PullableLever_GetPulledFlag(PullableLeverEntity* this) {
+#ifdef PC_PORT
+    return GE_FIELD(&this->base, field_0x86)->HWORD;
+#else
+    return this->pulledFlag;
+#endif
+}
 
 enum PullableLeverPart { HANDLE, MIDDLE, SOCKET };
 
@@ -226,7 +237,7 @@ void sub_0809153C(PullableLeverEntity* this) {
     PullableLever_UpdateLength(this);
     if (this->necessaryPullLength <= this->pullLength) {
         EnqueueSFX(SFX_BUTTON_PRESS);
-        SetFlag(this->pulledFlag);
+        SetFlag(PullableLever_GetPulledFlag(this));
     } else {
         if (--super->subtimer == 0) {
             super->subtimer = 16;
@@ -251,8 +262,8 @@ void PullableLever_UpdateLength(PullableLeverEntity* this) {
             break;
     }
 
-    if (CheckFlags(this->pulledFlag) && (this->pullLength == 0)) {
-        ClearFlag(this->pulledFlag);
+    if (CheckFlags(PullableLever_GetPulledFlag(this)) && (this->pullLength == 0)) {
+        ClearFlag(PullableLever_GetPulledFlag(this));
     }
 }
 

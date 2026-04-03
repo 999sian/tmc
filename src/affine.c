@@ -4,6 +4,8 @@
 #include "screen.h"
 #include "structures.h"
 
+#include <string.h>
+
 #ifdef PC_PORT
 #include "port_rom.h"
 extern u32 gFrameObjLists[50016];
@@ -79,7 +81,17 @@ void CopyOAM(void) {
     }
     if (gOAMControls.unk[0].unk7) {
         gOAMControls.unk[0].unk7 = 0;
+#ifdef PC_PORT
+        struct ObjAffineSrcData affineSrc[32];
+        u32 i;
+
+        for (i = 0; i < ARRAY_COUNT(affineSrc); i++) {
+            memcpy(&affineSrc[i], &gOAMControls.unk[i].unk0, sizeof(affineSrc[i]));
+        }
+        ObjAffineSet(affineSrc, &gOAMControls.oam[0].affineParam, 32, 8);
+#else
         ObjAffineSet((struct ObjAffineSrcData*)gOAMControls.unk, &gOAMControls.oam[0].affineParam, 32, 8);
+#endif
     }
     gOAMControls.field_0x0 = 1;
 }

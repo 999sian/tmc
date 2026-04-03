@@ -47,6 +47,55 @@ typedef struct ProjectileDefinition {
 } ProjectileDefinition;
 
 // Sprite data definition for objects and npcs
+#ifdef PC_PORT
+typedef struct ObjectDefinition {
+    struct {
+        u8 type;
+        u8 flags;
+        u8 unk;
+        u8 hitbox;
+        u16 gfx;
+        u16 gfx_type;
+        u16 unk2;
+    } bitfield;
+    union {
+        struct {
+            u16 paletteIndex;
+            u16 unk;
+            u16 shadow;
+            u16 unk2;
+            u16 spriteIndex;
+            u16 spritePriority;
+            u16 draw;
+        } sprite;
+        const struct ObjectDefinition* definition;
+    } data;
+} ObjectDefinition;
+
+typedef struct NPCDefinition {
+    struct {
+        u8 type;
+        u8 flags;
+        u8 unk;
+        u8 hitbox;
+        u16 gfx;
+        u16 gfx_type;
+        u16 unk2;
+    } bitfield;
+    union {
+        struct {
+            u16 paletteIndex;
+            u16 unk;
+            u16 shadow;
+            u16 unk2;
+            u16 spriteIndex;
+            u16 spritePriority;
+            u16 draw;
+        } sprite;
+        const struct NPCDefinition* definition;
+    } data;
+} NPCDefinition;
+#else
 typedef struct ObjectDefinition {
     struct {
         u8 type : 2;
@@ -94,6 +143,7 @@ typedef struct NPCDefinition {
         const struct NPCDefinition* definition;
     } data;
 } NPCDefinition;
+#endif
 
 // Sprite data definition for player items
 typedef struct SpriteDataC {

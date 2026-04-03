@@ -57,7 +57,7 @@ extern struct_gUnk_02034330 gUnk_02034330;
 extern WStruct gUnk_02036540[4];
 
 extern u32* gTranslations[];
-extern u8* gUnk_08109230[]; // TODO needs to be u8, but then is not passed correctly?
+extern u8* gTextVariableSources[];
 extern u32 gUnk_08109244;   // TODO structure?
 extern u32* gUnk_08109248[];
 extern u32 gUnk_0810926C[];
@@ -300,7 +300,7 @@ u32 GetCharacter(Token* token) {
                     case 0 ... 4:
                         ppuVar7 = (u8**)token->_c;
                         if (ppuVar7 == NULL) {
-                            ppuVar7 = gUnk_08109230;
+                            ppuVar7 = gTextVariableSources;
                         }
                         sub_0805EF40(token, ppuVar7[uVar6]);
                         break;

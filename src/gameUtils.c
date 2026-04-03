@@ -78,14 +78,18 @@ void SetPopupState(u32 type, u32 choice_idx) {
 
     Font font;
     const PopupOption* opt;
+    struct_020227E8* slot;
+    u32 i;
     u32 fakematch;
 
     MemClear(gBG1Buffer, sizeof gBG1Buffer);
-    gUnk_020227E8[0]._0.BYTES.byte0 = 0xf;
-    gUnk_020227E8[1]._0.BYTES.byte0 = 0xf;
-    gUnk_020227E8[2]._0.BYTES.byte0 = 0xf;
-    gUnk_020227E8[3]._0.BYTES.byte0 = 0xf;
-    gUnk_020227E8[choice_idx]._0.HALF.HI = (fakematch = 1);
+    for (i = 0; i < 4; i++) {
+        slot = GetTextVariableSlot(i);
+        slot->_0.WORD = 0;
+        slot->_4.WORD = 0;
+        slot->_0.BYTES.byte0 = 0xf;
+    }
+    GetTextVariableSlot(choice_idx)->_0.BYTES.byte1 = (fakematch = 1);
 
     MemCopy(&sDefaultFont, &font, sizeof font);
     opt = &sPopupOptions[type];

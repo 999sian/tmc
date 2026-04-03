@@ -13,6 +13,7 @@
 #include "screen.h"
 #include "sound.h"
 #include "fade.h"
+#include "gba/io_reg.h"
 
 extern u32 gRand;
 
@@ -106,6 +107,7 @@ static void InitOverlays(void) {
 #ifdef PC_PORT
     // On PC, skip linker-symbol EWRAM/RAM copies (not applicable)
     DisableInterruptsAndDMA();
+    RegisterRamReset(RESET_ALL & ~RESET_EWRAM);
     gba_write16(BG_PLTT, 0x7FFF);
     gba_write16(REG_ADDR_WAITCNT, WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3);
     DispReset(0);
@@ -262,22 +264,23 @@ void DisableVBlankDMA(void) {
 }
 
 void SetSleepMode(void) {
-    u32 restore;
+    //simulate a sleep
     Main* main;
 
     REG_DISPCNT = DISPCNT_FORCED_BLANK;
-    REG_KEYCNT = KEY_AND_INTR | L_BUTTON | R_BUTTON | SELECT_BUTTON;
-    REG_IME = 0;
-    restore = REG_IE;
-    REG_IE = INTR_FLAG_KEYPAD | INTR_FLAG_GAMEPAK;
-    REG_IME = 1;
-    Stop();
-    REG_IME = 0;
-    REG_IE = restore;
-    REG_IME = 1;
+
+    do {
+        VBlankIntrWait();
+    } while (REG_KEYINPUT != 0x03FF);
+
+    do {
+        VBlankIntrWait();
+    } while (REG_KEYINPUT == 0x03FF);
+
     main = &gMain;
-    *(vu8*)&main->sleepStatus; // force a read
-    main->sleepStatus = 0;
+    *(vu8*)&main->sleepStatus; 
+    main->sleepStatus = DEFAULT;
+    return;
 }
 
 // Convert AABB to screen coordinates and check if it's within the viewport

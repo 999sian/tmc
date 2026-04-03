@@ -49,7 +49,6 @@ typedef struct {
 } FigurineDeviceEntity;
 
 extern void ModShells(s32);
-extern u8 gUnk_020227F0;
 
 void sub_0808804C(FigurineDeviceEntity*);
 void sub_08087F58(FigurineDeviceEntity*);
@@ -603,8 +602,8 @@ void sub_080882A8(FigurineDeviceEntity* this) {
     static const u16 gUnk_08120AE4[] = { TEXT_INDEX(TEXT_CARLOV, 0x18), TEXT_INDEX(TEXT_CARLOV, 0x19) };
     u8* ptr;
     sub_08050384();
-    sub_08057044(this->shells, gUnk_020227E8, 0x202020);
-    sub_08057044(this->chance, &gUnk_020227E8[1], 0x202020);
+    sub_08057044(this->shells, GetTextVariableSlot(0), 0x202020);
+    sub_08057044(this->chance, GetTextVariableSlot(1), 0x202020);
 #ifdef PC_PORT
     extern u8 gEwram[];
     ptr = &gEwram[0];
