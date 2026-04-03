@@ -18,6 +18,18 @@ static int sFrameNum = 0;
 extern Main gMain;
 extern void VBlankIntr(void);
 
+u64 DivAndModCombined(s32 num, s32 denom) {
+    s32 quotient;
+    s32 remainder;
+
+    if (denom == 0)
+        return 0;
+
+    quotient = num / denom;
+    remainder = num % denom;
+    return ((u64)(u32)remainder << 32) | (u32)quotient;
+}
+
 static void Port_UpdateInput(void) {
     const bool* keys = SDL_GetKeyboardState(NULL);
     u16 keyinput = 0x03FF;

@@ -308,6 +308,9 @@ void RenderDigits(u32 iconVramIndex, u32 count, u32 isTextYellow, u32 digits) {
 #endif
 
     puVar4 = RupeeKeyDigits;
+#ifdef PC_PORT
+    puVar4 = (u8*)((const u8*)gUnk_085C4620 + 0x500);
+#endif
     if (isTextYellow == 0) {
         puVar4 -= 0x280;
     }

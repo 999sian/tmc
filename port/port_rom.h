@@ -32,6 +32,16 @@ static inline void* Port_ResolveRomData(u32 gba_addr) {
     return NULL;
 }
 
+static inline u16 Port_ReadU16(const void* data) {
+    const u8* raw = (const u8*)data;
+    return (u16)(raw[0] | (raw[1] << 8));
+}
+
+static inline u32 Port_ReadU32(const void* data) {
+    const u8* raw = (const u8*)data;
+    return (u32)raw[0] | ((u32)raw[1] << 8) | ((u32)raw[2] << 16) | ((u32)raw[3] << 24);
+}
+
 /*
  * Resolve a raw GBA EWRAM address (0x02xxxxxx) to a native PC pointer.
  *

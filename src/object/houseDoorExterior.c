@@ -74,15 +74,15 @@ void HouseDoorExterior_Type0(HouseDoorExteriorEntity* this) {
         if (!raw)
             return;
         for (i = 0; i < 32; i++, raw += 12) {
-            u16 p_unk0 = *(const u16*)(raw + 0);
+            u16 p_unk0 = Port_ReadU16(raw + 0);
             if (p_unk0 == 0xFFFF)
                 break;
-            u16 p_unk2 = *(const u16*)(raw + 2);
+            u16 p_unk2 = Port_ReadU16(raw + 2);
             u8 p_unk4 = raw[4];
             u8 p_unk5 = raw[5];
             u8 p_unk6 = raw[6];
             u8 p_unk7 = raw[7];
-            u32 p_unk8 = *(const u32*)(raw + 8); /* GBA script pointer (4 bytes) */
+            u32 p_unk8 = Port_ReadU32(raw + 8); /* GBA script pointer (4 bytes) */
             int mask = 1 << i;
             if ((*((u32*)(&this->unk_68)) & mask) == 0 && sub_080867CC(p_unk5) &&
                 CheckRegionOnScreen(p_unk0, p_unk2, 32, 32)) {

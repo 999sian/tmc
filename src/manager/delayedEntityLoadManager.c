@@ -64,14 +64,14 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
                 npcPtr->type = raw[1];
                 npcPtr->type2 = raw[2];
                 npcPtr->collisionLayer = raw[3];
-                npcPtr->x = *(const u16*)(raw + 4);
-                npcPtr->y = *(const u16*)(raw + 6);
+                npcPtr->x = Port_ReadU16(raw + 4);
+                npcPtr->y = Port_ReadU16(raw + 6);
                 {
-                    u32 gba_script = *(const u32*)(raw + 8);
+                    u32 gba_script = Port_ReadU32(raw + 8);
                     npcPtr->script = gba_script ? (u16*)Port_ResolveRomData(gba_script) : NULL;
                 }
-                npcPtr->timer = *(const u16*)(raw + 12);
-                npcPtr->progressBitfield = *(const u16*)(raw + 14);
+                npcPtr->timer = Port_ReadU16(raw + 12);
+                npcPtr->progressBitfield = Port_ReadU16(raw + 14);
                 index1++;
                 raw += 16; /* GBA sizeof(NPCStruct) */
                 npcPtr++;

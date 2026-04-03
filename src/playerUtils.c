@@ -4069,10 +4069,9 @@ void sub_0807C4F8(void) {
             u8* raw = (u8*)(gArea.pCurrentRoomInfo)->map;
             MapDataDefinition temp;
             do {
-                u32 field_src, field_dest_gba, field_size;
-                memcpy(&field_src, raw + 0, 4);
-                memcpy(&field_dest_gba, raw + 4, 4);
-                memcpy(&field_size, raw + 8, 4);
+                u32 field_src = Port_ReadU32(raw + 0);
+                u32 field_dest_gba = Port_ReadU32(raw + 4);
+                u32 field_size = Port_ReadU32(raw + 8);
 
                 if (field_dest_gba == 0x02019EE0u || field_dest_gba == 0x02002F00u) {
                     temp.src = field_src & 0x7FFFFFFFu;
@@ -4081,7 +4080,7 @@ void sub_0807C4F8(void) {
                     LoadMapData(&temp);
                 }
                 raw += 12;
-            } while ((s32)(*(u32*)(raw - 12)) < 0);
+            } while ((s32)Port_ReadU32(raw - 12) < 0);
         }
 #else
         ptr1 = &gUnk_02022830;

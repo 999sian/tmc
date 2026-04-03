@@ -243,13 +243,13 @@ void LavaPlatform_SpawnPlatforms(LavaPlatformEntity* this) {
     if (!raw)
         return;
     while (raw[9] != 0xff) { /* offset 9 = type2 */
-        u32 gba_ptr = *(const u32*)(raw + 0);
-        s16 e_x = *(const s16*)(raw + 4);
-        s16 e_y = *(const s16*)(raw + 6);
+        u32 gba_ptr = Port_ReadU32(raw + 0);
+        s16 e_x = (s16)Port_ReadU16(raw + 4);
+        s16 e_y = (s16)Port_ReadU16(raw + 6);
         u8 e_colLyr = raw[8];
         u8 e_type2 = raw[9];
-        u16 e_wobble = *(const u16*)(raw + 10);
-        u16 e_respawn = *(const u16*)(raw + 12);
+        u16 e_wobble = Port_ReadU16(raw + 10);
+        u16 e_respawn = Port_ReadU16(raw + 12);
         LavaPlatformEntity* platform = (LavaPlatformEntity*)CreateObject(LAVA_PLATFORM, 1, e_type2);
         if (platform != NULL) {
             (platform->base).direction = 0xff;

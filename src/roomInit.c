@@ -1028,14 +1028,14 @@ void sub_0804BF38(Entity* this, ScriptExecutionContext* context) {
      * On 64-bit, native sizeof = 24. Index and read with GBA stride of 16. */
     {
         const u8* raw = (const u8*)gUnk_080D8E50 + iVar2 * 16;
-        u32 gba_a = *(const u32*)(raw + 0);
+        u32 gba_a = Port_ReadU32(raw + 0);
         a = gba_a ? (u16*)Port_ResolveRomData(gba_a) : NULL;
-        u16 p_x = *(const u16*)(raw + 4);
-        u16 p_y = *(const u16*)(raw + 6);
-        numEnts = *(const u16*)(raw + 8);
-        u16 p_shakeTime = *(const u16*)(raw + 10);
-        u16 p_shakeMag = *(const u16*)(raw + 12);
-        u16 p_sfx = *(const u16*)(raw + 14);
+        u16 p_x = Port_ReadU16(raw + 4);
+        u16 p_y = Port_ReadU16(raw + 6);
+        numEnts = Port_ReadU16(raw + 8);
+        u16 p_shakeTime = Port_ReadU16(raw + 10);
+        u16 p_shakeMag = Port_ReadU16(raw + 12);
+        u16 p_sfx = Port_ReadU16(raw + 14);
         xtile = (p_x >> 4) & 0x3f;
         ytile = ((p_y >> 4) & 0x3f) << 6;
         sub_0807BB68(a, xtile | ytile, 1);

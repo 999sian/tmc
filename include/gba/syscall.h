@@ -67,6 +67,11 @@ int MultiBoot(struct MultiBootParam* mp);
 
 s32 Div(s32 num, s32 denom);
 
+#ifdef PC_PORT
+u64 DivAndModCombined(s32 num, s32 denom);
+#define DivAndMod(num, denom) ((union SplitDWord){ .DWORD_U = DivAndModCombined((num), (denom)) })
+#else
 #define DivAndMod(num, denom) ((union SplitDWord)(*(MultiReturnTypeTwoS32Arg)(&Div))(num, denom))
+#endif
 
 #endif // SYSCALL_H

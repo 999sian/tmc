@@ -173,10 +173,9 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
         /* --- Packed 12-byte ROM entries --- */
         u8* raw = (u8*)dataDefinition;
         do {
-            u32 field_src, field_dest_gba, field_size;
-            memcpy(&field_src, raw + 0, 4);
-            memcpy(&field_dest_gba, raw + 4, 4);
-            memcpy(&field_size, raw + 8, 4);
+            u32 field_src = Port_ReadU32(raw + 0);
+            u32 field_dest_gba = Port_ReadU32(raw + 4);
+            u32 field_size = Port_ReadU32(raw + 8);
 
             if (field_dest_gba != 0) {
                 dest = Port_ResolveEwramPtr(field_dest_gba);
@@ -196,11 +195,11 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
                     MemCopy(src, dest, field_size);
                 }
             } else {
-                LoadPaletteGroup(*(u16*)raw);
+                LoadPaletteGroup(Port_ReadU16(raw));
                 sub_080533CC();
             }
             raw += 12;
-        } while (((*(u32*)(raw - 12)) & MAP_MULTIPLE) != 0);
+        } while ((Port_ReadU32(raw - 12) & MAP_MULTIPLE) != 0);
     } else {
         /* --- Native PC-compiled MapDataDefinition structs (24 bytes) --- */
         do {
