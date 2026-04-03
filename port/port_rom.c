@@ -444,6 +444,7 @@ const void* gPaletteGroups[PALETTE_GROUPS_COUNT_MAX];
 static inline void* ResolveRomPtr(u32 gba_addr) {
     if (gba_addr == 0)
         return NULL;
+    gba_addr &= ~1u;
     if (gba_addr >= 0x08000000u && gba_addr < 0x08000000u + gRomSize)
         return &gRomData[gba_addr - 0x08000000u];
     fprintf(stderr, "ResolveRomPtr: address 0x%08X is outside ROM\n", gba_addr);
@@ -467,10 +468,7 @@ void* Port_ReadPackedRomPtr(const void* base, u32 index) {
     memcpy(&raw, (const u8*)base + index * 4, 4);
     if (raw == 0)
         return NULL;
-    /* GBA Thumb function pointers have bit 0 set (Thumb indicator).
-     * These point to GBA code and can't be called on PC. */
-    if (raw & 1)
-        return NULL;
+    raw &= ~1u;
     return ResolveRomPtr(raw);
 }
 

@@ -18,6 +18,9 @@
 #include "vram.h"
 #include "player.h"
 #include "color.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -32,6 +35,24 @@ typedef struct {
     /*0x84*/ u16 flags;
     /*0x86*/ u16 flag;
 } LockedDoorEntity;
+
+#ifdef PC_PORT
+#define LD_UNK70(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
+#define LD_UNK72(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.HI)
+#define LD_UNK74(this) (GE_FIELD(&((this)->base), field_0x74)->HWORD)
+#define LD_UNK76(this) (GE_FIELD(&((this)->base), field_0x76)->HWORD)
+#define LD_UNK7E(this) (GE_FIELD(&((this)->base), field_0x7c)->BYTES.byte2)
+#define LD_FLAGS(this) (GE_FIELD(&((this)->base), cutsceneBeh)->HWORD)
+#define LD_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define LD_UNK70(this) ((this)->unk_70)
+#define LD_UNK72(this) ((this)->unk_72)
+#define LD_UNK74(this) ((this)->unk_74)
+#define LD_UNK76(this) ((this)->unk_76)
+#define LD_UNK7E(this) ((this)->unk_7e)
+#define LD_FLAGS(this) ((this)->flags)
+#define LD_FLAG(this) ((this)->flag)
+#endif
 
 void LockedDoor_Init(LockedDoorEntity* this);
 void LockedDoor_Action1(LockedDoorEntity* this);
@@ -106,7 +127,7 @@ const u8 gLockedDoorInteractDirections[] = {
 };
 
 void LockedDoor_Init(LockedDoorEntity* this) {
-    if (this->flags != 0xFFFF && CheckFlags(this->flags)) {
+    if (LD_FLAGS(this) != 0xFFFF && CheckFlags(LD_FLAGS(this))) {
         DeleteThisEntity();
     }
     if (!sub_080837B0(this))
@@ -114,17 +135,17 @@ void LockedDoor_Init(LockedDoorEntity* this) {
     super->type2 = (super->type >> 2) & 3;
     super->frameIndex = super->type & 3;
     super->speed = 0x300;
-    this->unk_70 = super->x.HALF.HI;
-    this->unk_72 = super->y.HALF.HI;
-    this->unk_7e = super->type & 3;
+    LD_UNK70(this) = super->x.HALF.HI;
+    LD_UNK72(this) = super->y.HALF.HI;
+    LD_UNK7E(this) = super->type & 3;
     super->hitbox = (Hitbox*)&gHitbox_2;
     super->spritePriority.b0 = 5;
     super->frame = super->type & 0xF;
-    this->unk_76 = TILE(super->x.HALF.HI, super->y.HALF.HI);
-    this->unk_74 = GetTileIndex(this->unk_76, super->collisionLayer);
+    LD_UNK76(this) = TILE(super->x.HALF.HI, super->y.HALF.HI);
+    LD_UNK74(this) = GetTileIndex(LD_UNK76(this), super->collisionLayer);
     switch (super->type2) {
         case 0:
-            if (!CheckFlags(this->flag)) {
+            if (!CheckFlags(LD_FLAG(this))) {
                 if (super->type & 0x10) {
                     super->action = 3;
                 } else {
@@ -136,22 +157,22 @@ void LockedDoor_Init(LockedDoorEntity* this) {
             }
             break;
         case 1:
-            if (!CheckFlags(this->flag)) {
+            if (!CheckFlags(LD_FLAG(this))) {
                 sub_08083638(this);
             } else {
                 sub_080836A0(this);
             }
             break;
         case 2:
-            if (!CheckFlags(this->flag)) {
+            if (!CheckFlags(LD_FLAG(this))) {
                 super->frameIndex |= 4;
-                sub_080836DC(super, this->unk_7e, this->unk_76);
+                sub_080836DC(super, LD_UNK7E(this), LD_UNK76(this));
                 if (!AreaIsDungeon()) {
                     super->action = 5;
                 } else {
                     super->action = 8;
                     AddInteractableSmallKeyLock(super);
-                    SetInteractableObjectCollision(super, 0, gLockedDoorInteractDirections[this->unk_7e], NULL);
+                    SetInteractableObjectCollision(super, 0, gLockedDoorInteractDirections[LD_UNK7E(this)], NULL);
                 }
             } else {
                 DeleteThisEntity();
@@ -167,7 +188,7 @@ void LockedDoor_Action1(LockedDoorEntity* this) {
     if (--super->timer == 0) {
         super->action = 2;
         super->timer = 7;
-        SetTile(this->unk_74, this->unk_76, super->collisionLayer);
+        SetTile(LD_UNK74(this), LD_UNK76(this), super->collisionLayer);
         EnqueueSFX(SFX_10B);
     }
 }
@@ -184,9 +205,9 @@ void LockedDoor_Action2(LockedDoorEntity* this) {
 }
 
 void LockedDoor_Action3(LockedDoorEntity* this) {
-    if (sub_08083734(super, this->unk_7e)) {
+    if (sub_08083734(super, LD_UNK7E(this))) {
         super->action = 4;
-        sub_080836DC(super, this->unk_7e, this->unk_76);
+        sub_080836DC(super, LD_UNK7E(this), LD_UNK76(this));
     }
 }
 
@@ -203,7 +224,7 @@ void LockedDoor_Action4(LockedDoorEntity* this) {
                 super->action = 5;
             }
         }
-        sub_08083814(this, this->unk_7e);
+        sub_08083814(this, LD_UNK7E(this));
         EnqueueSFX(SFX_10B);
     }
 }
@@ -213,10 +234,10 @@ void LockedDoor_Action5(LockedDoorEntity* this) {
 
 void LockedDoor_Action6(LockedDoorEntity* this) {
     if (super->type2 == 0) {
-        if (!CheckFlags(this->flag))
+        if (!CheckFlags(LD_FLAG(this)))
             return;
     } else {
-        if (CheckFlags(this->flag))
+        if (CheckFlags(LD_FLAG(this)))
             return;
     }
     sub_08083658(this);
@@ -224,38 +245,38 @@ void LockedDoor_Action6(LockedDoorEntity* this) {
 
 void LockedDoor_Action7(LockedDoorEntity* this) {
     if (super->type2 == 0) {
-        if (CheckFlags(this->flag))
+        if (CheckFlags(LD_FLAG(this)))
             return;
     } else {
-        if (!CheckFlags(this->flag))
+        if (!CheckFlags(LD_FLAG(this)))
             return;
     }
     super->action = 3;
 }
 
 void LockedDoor_Action8(LockedDoorEntity* this) {
-    if (super->interactType == INTERACTION_NONE && !CheckFlags(this->flag))
+    if (super->interactType == INTERACTION_NONE && !CheckFlags(LD_FLAG(this)))
         return;
     super->action = 1;
     super->timer = 20;
     sub_08083658(this);
-    SetFlag(this->flag);
+    SetFlag(LD_FLAG(this));
     ModDungeonKeys(-1);
 }
 
 void sub_08083638(LockedDoorEntity* this) {
     super->action = 7;
     super->spriteSettings.draw = 0;
-    super->x.HALF.HI = this->unk_70;
-    super->y.HALF.HI = this->unk_72;
+    super->x.HALF.HI = LD_UNK70(this);
+    super->y.HALF.HI = LD_UNK72(this);
 }
 
 void sub_08083658(LockedDoorEntity* this) {
     const struct_0811F680* tmp;
     super->action = 1;
     super->timer = 20;
-    super->direction = this->unk_7e << 3;
-    tmp = &gUnk_0811F680[this->unk_7e];
+    super->direction = LD_UNK7E(this) << 3;
+    tmp = &gUnk_0811F680[LD_UNK7E(this)];
     super->x.HALF.HI += tmp->x;
     super->y.HALF.HI += tmp->y;
     RequestPriorityDuration(super, 60);
@@ -265,9 +286,9 @@ void sub_08083658(LockedDoorEntity* this) {
 void sub_080836A0(LockedDoorEntity* this) {
     super->action = 6;
     super->spriteSettings.draw = 1;
-    super->x.HALF.HI = this->unk_70;
-    super->y.HALF.HI = this->unk_72;
-    SetTile(SPECIAL_TILE_34, this->unk_76, super->collisionLayer);
+    super->x.HALF.HI = LD_UNK70(this);
+    super->y.HALF.HI = LD_UNK72(this);
+    SetTile(SPECIAL_TILE_34, LD_UNK76(this), super->collisionLayer);
 }
 
 void sub_080836DC(Entity* this, u32 unk_0, u32 unk_1) {
@@ -288,19 +309,19 @@ u32 sub_08083734(Entity* this, u32 unk0) {
     // struct?
     switch (unk0) {
         case 0:
-            if (((LockedDoorEntity*)this)->unk_72 + 0xd - gPlayerEntity.base.y.HALF.HI < 0)
+            if (LD_UNK72((LockedDoorEntity*)this) + 0xd - gPlayerEntity.base.y.HALF.HI < 0)
                 return 1;
             break;
         case 1:
-            if (gPlayerEntity.base.x.HALF.HI - (((LockedDoorEntity*)this)->unk_70 - 0xb) < 0)
+            if (gPlayerEntity.base.x.HALF.HI - (LD_UNK70((LockedDoorEntity*)this) - 0xb) < 0)
                 return 1;
             break;
         case 2:
-            if (gPlayerEntity.base.y.HALF.HI - (((LockedDoorEntity*)this)->unk_72 - 0x8) < 0)
+            if (gPlayerEntity.base.y.HALF.HI - (LD_UNK72((LockedDoorEntity*)this) - 0x8) < 0)
                 return 1;
             break;
         case 3:
-            if (((LockedDoorEntity*)this)->unk_70 + 0xa - gPlayerEntity.base.x.HALF.HI < 0)
+            if (LD_UNK70((LockedDoorEntity*)this) + 0xa - gPlayerEntity.base.x.HALF.HI < 0)
                 return 1;
             break;
     }

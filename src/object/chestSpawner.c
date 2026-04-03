@@ -5,6 +5,7 @@
  * @brief Chest Spawner object
  */
 #include "item.h"
+#include "area.h"
 #include "object.h"
 #include "asm.h"
 #include "sound.h"
@@ -18,6 +19,11 @@
 #include "manager/lightManager.h"
 #include "pauseMenu.h"
 #include "beanstalkSubtask.h"
+#include "roomid.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -27,6 +33,16 @@ typedef struct {
     /*0x74*/ u8 unk_74[0x12];
     /*0x86*/ u16 flag;
 } ChestSpawnerEntity;
+
+#ifdef PC_PORT
+#define CS_TILEPOS(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
+#define CS_UNK72(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.HI)
+#define CS_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define CS_TILEPOS(this) ((this)->tilePos)
+#define CS_UNK72(this) ((this)->unk_72)
+#define CS_FLAG(this) ((this)->flag)
+#endif
 
 extern const Hitbox gUnk_0811F8A8;
 extern const Hitbox gUnk_0811F8B0;
@@ -86,13 +102,20 @@ void sub_08083E20(ChestSpawnerEntity* this) {
 }
 void ChestSpawner_Type2Init(ChestSpawnerEntity* this) {
     super->hitbox = (Hitbox*)&gUnk_0811F8B0;
+#ifdef PC_PORT
+    if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
+        fprintf(stderr,
+                "[CHEST] Type2Init flag=0x%04X local=%u layer=%u\n",
+                CS_FLAG(this), super->type2, super->collisionLayer);
+    }
+#endif
     if (CheckLocalFlag(super->type2)) {
         super->spriteSettings.draw = 1;
         super->action = 5;
         sub_080842D8(this);
         InitializeAnimation(super, 1);
     } else {
-        if (CheckFlags(this->flag) || super->type == 4) {
+        if (CheckFlags(CS_FLAG(this)) || super->type == 4) {
             sub_08083E20(this);
         } else {
             super->action = 1;
@@ -102,7 +125,12 @@ void ChestSpawner_Type2Init(ChestSpawnerEntity* this) {
 }
 
 void ChestSpawner_Type2Action1(ChestSpawnerEntity* this) {
-    if (CheckFlags(this->flag)) {
+    if (CheckFlags(CS_FLAG(this))) {
+#ifdef PC_PORT
+        if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
+            fprintf(stderr, "[CHEST] Type2Action1 flag=0x%04X triggered\n", CS_FLAG(this));
+        }
+#endif
         gScreen.controls.layerFXControl = 0xf40;
         gScreen.controls.alphaBlend = 0x1000;
         gPauseMenuOptions.disabled = 1;
@@ -157,6 +185,13 @@ void ChestSpawner_Type2Action2(ChestSpawnerEntity* this) {
 void ChestSpawner_Type2Action3(ChestSpawnerEntity* this) {
     sub_0800445C(super);
     if (super->interactType != INTERACTION_NONE) {
+#ifdef PC_PORT
+        if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
+            fprintf(stderr,
+                    "[CHEST] Type2Action3 interact flag=0x%04X local=%u interactType=%u\n",
+                        CS_FLAG(this), super->type2, super->interactType);
+        }
+#endif
         super->action = 4;
         super->subtimer = 30;
         RemoveInteractableObject(super);
@@ -238,14 +273,14 @@ void ChestSpawner_Type2Action7(ChestSpawnerEntity* this) {
 
 void ChestSpawner_Type0Init(ChestSpawnerEntity* this) {
     super->action++;
-    this->tilePos = COORD_TO_TILE(super);
+    CS_TILEPOS(this) = COORD_TO_TILE(super);
     super->hitbox = (Hitbox*)&gUnk_0811F8A8;
     if (GetTileTypeAtEntity(super) == TILE_TYPE_116) {
         DeleteThisEntity();
     }
-    if (CheckFlags(this->flag)) {
+    if (CheckFlags(CS_FLAG(this))) {
         super->action = 3;
-        sub_0807B7D8(0x73, this->tilePos, super->collisionLayer);
+        sub_0807B7D8(0x73, CS_TILEPOS(this), super->collisionLayer);
         if ((super->type & 1) == 0) {
             DeleteThisEntity();
         }
@@ -253,13 +288,13 @@ void ChestSpawner_Type0Init(ChestSpawnerEntity* this) {
 }
 
 void ChestSpawner_Type0Action1(ChestSpawnerEntity* this) {
-    if (CheckFlags(this->flag)) {
+    if (CheckFlags(CS_FLAG(this))) {
         super->action = 2;
     }
 }
 
 void ChestSpawner_Type0Action2(ChestSpawnerEntity* this) {
-    sub_0807B7D8(0x73, this->tilePos, super->collisionLayer);
+    sub_0807B7D8(0x73, CS_TILEPOS(this), super->collisionLayer);
     switch (super->type) {
         case 6:
         case 7:
@@ -271,7 +306,7 @@ void ChestSpawner_Type0Action2(ChestSpawnerEntity* this) {
             break;
     }
     super->action = 3;
-    this->unk_72 = super->timer * 0x3c;
+    CS_UNK72(this) = super->timer * 0x3c;
     if ((super->type & 1) == 0) {
         DeleteThisEntity();
     }
@@ -282,12 +317,12 @@ void ChestSpawner_Type0Action3(ChestSpawnerEntity* this) {
         if (GetTileTypeAtEntity(super) == TILE_TYPE_116) {
             DeleteEntity(super);
         } else {
-            if (!CheckFlags(this->flag)) {
-                if (this->unk_72 != 0) {
-                    this->unk_72--;
+            if (!CheckFlags(CS_FLAG(this))) {
+                if (CS_UNK72(this) != 0) {
+                    CS_UNK72(this)--;
                 } else {
                     super->action = 1;
-                    RestorePrevTileEntity(this->tilePos, super->collisionLayer);
+                    RestorePrevTileEntity(CS_TILEPOS(this), super->collisionLayer);
                     CreateDeathFx(super);
                 }
             }

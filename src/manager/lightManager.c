@@ -14,6 +14,9 @@
 #include "room.h"
 #include "screen.h"
 #include "asm.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 extern void sub_0801E120(void);
 extern void sub_0801E154(u32);
@@ -25,6 +28,15 @@ void UpdateLightAlpha();
 void LightManager_Main(LightManager* this) {
     s32 sVar1;
     u32 uVar3;
+#ifdef PC_PORT
+    static u8 sLogged = 0;
+    if (!sLogged) {
+        sLogged = 1;
+        fprintf(stderr,
+                "[LIGHT] manager active area=%u room=%u lightType=%u\n",
+                gRoomControls.area, gRoomControls.room, gArea.lightType);
+    }
+#endif
 
     if (gArea.lightType == 0) {
         sub_0801E104();
@@ -48,12 +60,16 @@ void LightManager_Main(LightManager* this) {
     if (gArea.lightType == 2) {
         gScreen.lcd.displayControl &= ~DISPCNT_WIN0_ON;
     } else {
+#ifdef PC_PORT
+        gScreen.lcd.displayControl |= DISPCNT_WIN0_ON;
+#else
         if (CheckRectOnScreen(gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x,
                               gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y, 0, 0)) {
             gScreen.lcd.displayControl |= DISPCNT_WIN0_ON;
         } else {
             gScreen.lcd.displayControl &= ~DISPCNT_WIN0_ON;
         }
+#endif
         uVar3 = super->timer;
         if (((gPlayerState.flags & PL_USE_LANTERN)) && (gArea.lightType)) {
             if (uVar3 < 0x48) {
@@ -121,6 +137,11 @@ void UpdateLightAlpha() {
 }
 
 void sub_0805BB00(s32 lightLevel, s32 param_2) {
+#ifdef PC_PORT
+    fprintf(stderr,
+            "[LIGHT] setup area=%u room=%u lightLevel=%d mode=%d prevType=%u\n",
+            gRoomControls.area, gRoomControls.room, lightLevel, param_2, gArea.lightType);
+#endif
     if (gArea.lightType == 0) {
         Manager* pManager = GetEmptyManager();
         if (pManager != 0) {

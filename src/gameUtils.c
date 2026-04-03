@@ -24,6 +24,9 @@
 #include "subtask.h"
 #include "beanstalkSubtask.h"
 #include "pauseMenu.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 u32 StairsAreValid(void);
 void ClearFlagArray(const u16*);
@@ -716,13 +719,15 @@ u32 sub_08053144(void) {
 }
 
 void CheckAreaDiscovery(void) {
-    if (!sub_08053144())
+    if (!sub_08053144()) {
+#ifdef PC_PORT
+        fprintf(stderr, "[AREA] no-change area=%u room=%u loc=%u prevLoc=%u\n", gRoomControls.area,
+                gRoomControls.room, gArea.locationIndex, gRoomTransition.location);
+#endif
         return;
+    }
 
     gRoomTransition.location = gArea.locationIndex;
-
-    if (!CheckGlobalFlag(TABIDACHI))
-        return;
 
     if (!CheckGlobalFlag(ENDING)) {
         Entity* e = (Entity*)GetEmptyManager();
@@ -730,6 +735,12 @@ void CheckAreaDiscovery(void) {
             e->kind = MANAGER;
             e->id = ENTER_ROOM_TEXTBOX_MANAGER;
             AppendEntityToList(e, 8);
+#ifdef PC_PORT
+            fprintf(stderr,
+                    "[AREA] spawn textbox area=%u room=%u loc=%u visited=%u scrolling=%u\n",
+                    gRoomControls.area, gRoomControls.room, gArea.locationIndex,
+                    ReadBit(gSave.areaVisitFlags, gArea.locationIndex), gRoomVars.didEnterScrolling);
+#endif
             if (!gRoomVars.didEnterScrolling && !ReadBit(gSave.areaVisitFlags, gArea.locationIndex)) {
                 e->type2 = 1;
                 SetPlayerControl(3);

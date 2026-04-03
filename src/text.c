@@ -140,14 +140,31 @@ u32 sub_0805EF8C(Token* token) {
     }
 #ifdef PC_PORT
     {
-        const u8* ptr = token->buf[token->unk01];
+        const u8* rawPtr = token->buf[token->unk01];
+        const u8* ptr = (const u8*)port_resolve_addr((uintptr_t)rawPtr);
+
+        if (ptr == NULL || (uintptr_t)ptr < 0x10000) {
+            fprintf(stderr, "[TEXT] sub_0805EF8C: invalid buf[%d]=%p resolved=%p textIndex=0x%04X unk00=%d\n",
+                    token->unk01, (void*)rawPtr, (void*)ptr, token->textIndex, token->unk00);
+            fflush(stderr);
+            token->unk00 = 0;
+            token->unk01 = 0;
+            return 0;
+        }
+
+        token->buf[token->unk01] = ptr;
         /* Log pointer value (NOT dereferencing) + flush to survive crash */
-        fprintf(stderr, "[TEXT] sub_0805EF8C: buf[%d]=%p textIndex=0x%04X unk00=%d\n",
-                token->unk01, (void*)ptr, token->textIndex, token->unk00);
+        fprintf(stderr, "[TEXT] sub_0805EF8C: buf[%d]=%p resolved=%p textIndex=0x%04X unk00=%d\n",
+                token->unk01, (void*)rawPtr, (void*)ptr, token->textIndex, token->unk00);
         fflush(stderr);
     }
 #endif
-    return (token->buf[token->unk01]++)[0];
+    {
+        const u8* ptr = token->buf[token->unk01];
+        u32 value = ptr[0];
+        token->buf[token->unk01] = ptr + 1;
+        return value;
+    }
 }
 
 u32 sub_0805EFB4(Token* token) {
@@ -489,6 +506,10 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
     u32 temp3;
 
     pWVar4 = sub_0805F2C8();
+#ifdef PC_PORT
+    fprintf(stderr, "[TEXTBOX] ShowTextBox ptr=0x%lX pWVar4=%s\n",
+            (unsigned long)textIndexOrPtr, pWVar4 ? "ok" : "NULL");
+#endif
     if (pWVar4 != NULL) {
 #ifdef PC_PORT
         /* Many callers pass 24-byte GBA Font blobs (raw ROM data with 32-bit pointers).

@@ -18,6 +18,9 @@
 #include "script.h"
 #include "sound.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -95,6 +98,14 @@ void Pot_Init(PotEntity* this) {
 void Pot_Action1(PotEntity* this) {
     u32 tileType;
     u32 var0 = super->contactFlags & 0x7F;
+#ifdef PC_PORT
+    if (super->contactFlags != 0) {
+        fprintf(stderr,
+                "[POT] contact=0x%02X type=%u type2=%u tile=0x%X act=0x%X base=0x%X pos=0x%03X layer=%u\n",
+                super->contactFlags, super->type, super->type2, GetTileTypeAtEntity(super), GetActTileAtEntity(super),
+                this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
+    }
+#endif
     switch (var0) {
         case 0x13:
             super->action = 3;
@@ -109,6 +120,29 @@ void Pot_Action1(PotEntity* this) {
             super->spritePriority.b1 = 3;
             COLLISION_OFF(super);
             Pot_Action5(this);
+            break;
+        case 0x8:
+        case 0x9:
+        case 0xA:
+        case 0xB:
+        case 0xC:
+        case 0xD:
+        case 0x18:
+        case 0x19:
+        case 0x1A:
+            tileType = GetTileTypeAtEntity(super);
+            if (GetActTileAtEntity(super) == ACT_TILE_13) {
+                CreateFx(super, FX_FALL_DOWN, 0);
+            } else {
+                gPlayerState.lastSwordMove = SWORD_MOVE_BREAK_POT;
+                if (tileType == SPECIAL_TILE_5) {
+                    SetTile((u16)this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
+                }
+#ifdef PC_PORT
+                fprintf(stderr, "[POT] sword-hit tile=0x%X restore=%u\n", tileType, tileType == SPECIAL_TILE_5);
+#endif
+            }
+            BreakPot(this, NULL);
             break;
         default:
             tileType = GetTileTypeAtEntity(super);
@@ -139,6 +173,10 @@ void Pot_Action1(PotEntity* this) {
                             gPlayerState.lastSwordMove = SWORD_MOVE_BREAK_POT;
                             SetTile((u16)this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
                         }
+#ifdef PC_PORT
+                        fprintf(stderr, "[POT] default-break tile=0x%X restore=%u\n", tileType,
+                                tileType == SPECIAL_TILE_5);
+#endif
                         BreakPot(this, NULL);
                         break;
                 }

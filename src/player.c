@@ -13,6 +13,9 @@
 #include "effects.h"
 #include "functions.h"
 #include "game.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 #include "global.h"
 #include "hitbox.h"
 #include "item.h"
@@ -297,6 +300,15 @@ bool32 CheckInitPauseMenu(void) {
     if (((gInput.newKeys & START_BUTTON) == 0 || gFadeControl.active || gPauseMenuOptions.disabled ||
          (gMessage.state & MESSAGE_ACTIVE) || gSave.stats.health == 0 || !gSave.inventory[0] ||
          gPlayerState.controlMode != 0 || gPriorityHandler.priority_timer != 0)) {
+#ifdef PC_PORT
+        if (gInput.newKeys & START_BUTTON) {
+            fprintf(stderr, "[MENU] blocked: fade=%d disabled=%d msgActive=%d health=%d inv=%d ctrl=%d ptimer=%u\n",
+                    gFadeControl.active, gPauseMenuOptions.disabled,
+                    (gMessage.state & MESSAGE_ACTIVE) ? 1 : 0,
+                    gSave.stats.health, gSave.inventory[0],
+                    gPlayerState.controlMode, gPriorityHandler.priority_timer);
+        }
+#endif
         return FALSE;
     }
 

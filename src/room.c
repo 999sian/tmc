@@ -15,6 +15,7 @@
 #ifdef PC_PORT
 #include "port_rom.h"
 #include "port/port_generic_entity.h"
+#include <stdio.h>
 #else
 #define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
 #endif
@@ -346,6 +347,11 @@ void LoadRoomTileEntities(TileEntity* list) {
                 gArea.queued_bgm = t->_3;
                 break;
             case DARKNESS:
+#ifdef PC_PORT
+                fprintf(stderr,
+                        "[ROOM] DARKNESS area=%u room=%u light=%u tilePos=0x%03X layer=%u\n",
+                        gRoomControls.area, gRoomControls.room, t->_3, t->tilePos, t->_2);
+#endif
                 LoadDarknessTile(t);
                 break;
             case DESTRUCTIBLE_TILE:
@@ -355,6 +361,11 @@ void LoadRoomTileEntities(TileEntity* list) {
                 LoadGrassDropTile(t);
                 break;
             case LOCATION_CHANGER:
+#ifdef PC_PORT
+                fprintf(stderr,
+                        "[ROOM] LOCATION_CHANGER area=%u room=%u -> location=%u\n",
+                        gRoomControls.area, gRoomControls.room, t->localFlag);
+#endif
                 LoadLocationTile(t);
                 break;
             case TILE_ENTITY_D:

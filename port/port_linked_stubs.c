@@ -134,7 +134,7 @@ MapLayer gMapBottom;
 MapLayer gMapTop;
 RoomTransition gRoomTransition;
 RoomVars gRoomVars;
-RoomMemory gRoomMemory[4];
+RoomMemory gRoomMemory[8];
 RoomMemory* gCurrentRoomMemory;
 void** gCurrentRoomProperties;
 

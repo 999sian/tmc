@@ -587,6 +587,8 @@ void sub_080A4D34(void) {
 
 void InitPauseMenu(void) {
     MemClear(gUnk_020344A0, sizeof(gUnk_020344A0));
+    gPauseMenuOptions.unk16 = 0;
+    sub_080A4E90(0);
     MenuFadeIn(1, 0);
     SetBgmVolume(0x80);
 }

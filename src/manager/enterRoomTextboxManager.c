@@ -13,6 +13,9 @@
 #include "screen.h"
 #include "vram.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 const u16 gUnk_08108DE8[] = { 0,     0x70b, 0x70c, 0x70d, 0x70e, 0x70f, 0x710, 0x711, 0x712, 0x713, 0x714,
                               0x715, 0x716, 0x717, 0x718, 0x719, 0x71a, 0x71b, 0x71c, 0x71d, 0x71e, 0x71f,
@@ -35,9 +38,17 @@ void sub_0805E1F8(u32, bool32);
 
 void EnterRoomTextboxManager_Main(EnterRoomTextboxManager* this) {
     EnterRoomTextboxManager_Actions[super->action](this);
+#ifdef PC_PORT
+    if (gRoomControls.room != this->unk_20) {
+        fprintf(stderr, "[AREA] textbox kill: cur_room=%u saved_room=%u area=%u timer=%u\n",
+                gRoomControls.room, this->unk_20, gRoomControls.area, super->timer);
+        sub_0805E1D8(this);
+    }
+#else
     if ((gRoomControls.room != this->unk_20) || (gMessage.state & MESSAGE_ACTIVE)) {
         sub_0805E1D8(this);
     }
+#endif
 }
 
 void sub_0805E140(EnterRoomTextboxManager* this) {
@@ -47,6 +58,12 @@ void sub_0805E140(EnterRoomTextboxManager* this) {
     super->timer = 120;
     super->subtimer = 60;
     SetEntityPriority((Entity*)this, PRIO_HIGHEST);
+#ifdef PC_PORT
+    fprintf(stderr,
+            "[AREA] textbox init area=%u room=%u loc=%u text=0x%03X dungeon=%u\n",
+            gRoomControls.area, gRoomControls.room, gArea.locationIndex,
+            gUnk_08108DE8[gArea.locationIndex], AreaIsDungeon());
+#endif
     sub_0805E1F8(gUnk_08108DE8[gArea.locationIndex], AreaIsDungeon());
 }
 

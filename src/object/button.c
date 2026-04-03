@@ -5,14 +5,20 @@
  * @brief Button object
  */
 #include "tiles.h"
+#include "area.h"
 #include "object.h"
 #include "asm.h"
 #include "sound.h"
 #include "flags.h"
 #include "effects.h"
 #include "room.h"
+#include "roomid.h"
 #include "player.h"
 #include "map.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -24,6 +30,20 @@ typedef struct {
     /*0x84*/ u16 unk_84;
     /*0x86*/ u16 flag;
 } ButtonEntity;
+
+#ifdef PC_PORT
+#define BTN_UNK70(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
+#define BTN_UNK72(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.HI)
+#define BTN_TILEPOS(this) (GE_FIELD(&((this)->base), field_0x74)->HWORD)
+#define BTN_UNK84(this) (GE_FIELD(&((this)->base), cutsceneBeh)->HWORD)
+#define BTN_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define BTN_UNK70(this) ((this)->unk_70)
+#define BTN_UNK72(this) ((this)->unk_72)
+#define BTN_TILEPOS(this) ((this)->tilePos)
+#define BTN_UNK84(this) ((this)->unk_84)
+#define BTN_FLAG(this) ((this)->flag)
+#endif
 
 void Button_Init(ButtonEntity* this);
 void Button_Action1(ButtonEntity* this);
@@ -45,15 +65,22 @@ void Button_Init(ButtonEntity* this) {
     COLLISION_OFF(super);
     super->updatePriority = PRIO_NO_BLOCK;
     super->y.HALF.HI++;
-    if (this->unk_84 != 0) {
-        super->collisionLayer = this->unk_84;
+    if (BTN_UNK84(this) != 0) {
+        super->collisionLayer = BTN_UNK84(this);
     }
-    this->tilePos = (((super->x.HALF.HI - gRoomControls.origin_x) >> 4) & 0x3F) |
-                    ((((super->y.HALF.HI - gRoomControls.origin_y) >> 4) & 0x3F) << 6);
-    this->unk_72 = GetTileTypeAtTilePos(this->tilePos, super->collisionLayer);
-    if (super->type == 0 && CheckFlags(this->flag)) {
+    BTN_TILEPOS(this) = (((super->x.HALF.HI - gRoomControls.origin_x) >> 4) & 0x3F) |
+                       ((((super->y.HALF.HI - gRoomControls.origin_y) >> 4) & 0x3F) << 6);
+    BTN_UNK72(this) = GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer);
+#ifdef PC_PORT
+    if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
+        fprintf(stderr,
+                "[TORCH] Button_Init flag=0x%04X type=%u tilePos=0x%03X layer=%u tileType=0x%X\n",
+                BTN_FLAG(this), super->type, BTN_TILEPOS(this), super->collisionLayer, BTN_UNK72(this));
+    }
+#endif
+    if (super->type == 0 && CheckFlags(BTN_FLAG(this))) {
         super->action = 5;
-        SetTileType(TILE_TYPE_122, this->tilePos, super->collisionLayer);
+        SetTileType(TILE_TYPE_122, BTN_TILEPOS(this), super->collisionLayer);
     } else {
         if (sub_08081E3C(this)) {
             super->action = 2;
@@ -66,7 +93,7 @@ void Button_Init(ButtonEntity* this) {
 void Button_Action1(ButtonEntity* this) {
     if (sub_08081E3C(this)) {
         super->action = 2;
-        this->unk_72 = GetTileTypeAtTilePos(this->tilePos, super->collisionLayer);
+        BTN_UNK72(this) = GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer);
     }
 }
 
@@ -75,6 +102,14 @@ void sub_08081FF8(Entity*);
 
 void Button_Action2(ButtonEntity* this) {
     if (sub_08081CB0(this)) {
+#ifdef PC_PORT
+        if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
+            fprintf(stderr,
+                    "[TORCH] Button_Action2 trigger flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X\n",
+                    BTN_FLAG(this), BTN_TILEPOS(this), super->collisionLayer,
+                    GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer));
+        }
+#endif
         super->subAction = 0;
         super->timer = 10;
         RequestPriorityDuration(super, 10);
@@ -112,7 +147,7 @@ void Button_Action4(ButtonEntity* this) {
         super->timer--;
         if (super->subtimer != 0) {
             super->subtimer = 0;
-            SetTile(SPECIAL_TILE_53, this->tilePos, super->collisionLayer);
+            SetTile(SPECIAL_TILE_53, BTN_TILEPOS(this), super->collisionLayer);
         }
         if (sub_08081CB0(this)) {
             super->action = 3;
@@ -120,8 +155,8 @@ void Button_Action4(ButtonEntity* this) {
         }
     } else {
         super->action = 2;
-        ClearFlag(this->flag);
-        SetTileType(TILE_TYPE_119, this->tilePos, super->collisionLayer);
+        ClearFlag(BTN_FLAG(this));
+        SetTileType(TILE_TYPE_119, BTN_TILEPOS(this), super->collisionLayer);
         SoundReq(SFX_BUTTON_PRESS);
     }
 }
@@ -138,14 +173,14 @@ bool32 sub_08081CB0(ButtonEntity* this) {
     u16 tileType;
     if (sub_08081D74(this)) {
         this->unk_70 = -1;
-        if (GetTileTypeAtTilePos(this->tilePos, super->collisionLayer) == SPECIAL_TILE_53) {
-            sub_0807B7D8(0x78, this->tilePos, super->collisionLayer);
+        if (GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer) == SPECIAL_TILE_53) {
+            sub_0807B7D8(0x78, BTN_TILEPOS(this), super->collisionLayer);
         }
         return TRUE;
     } else {
-        tileType = GetTileTypeAtTilePos(this->tilePos, super->collisionLayer);
+        tileType = GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer);
         if (tileType != 0x77 && tileType != 0x79 && tileType != SPECIAL_TILE_53) {
-            this->unk_70 = GetTileIndex(this->tilePos, super->collisionLayer);
+            BTN_UNK70(this) = GetTileIndex(BTN_TILEPOS(this), super->collisionLayer);
             return TRUE;
         }
     }
@@ -154,13 +189,13 @@ bool32 sub_08081CB0(ButtonEntity* this) {
 
 bool32 sub_08081D28(ButtonEntity* this) {
     if (sub_08081D74(this)) {
-        this->unk_70 = 0xFFFF;
+        BTN_UNK70(this) = 0xFFFF;
         return TRUE;
     } else {
-        if (this->unk_70 == 0xFFFF) {
+        if (BTN_UNK70(this) == 0xFFFF) {
             return FALSE;
         }
-        if (GetTileIndex(this->tilePos, super->collisionLayer) != this->unk_70) {
+        if (GetTileIndex(BTN_TILEPOS(this), super->collisionLayer) != BTN_UNK70(this)) {
             return FALSE;
         }
     }
@@ -172,7 +207,7 @@ u32 sub_08081E0C(Entity*);
 
 Entity* sub_08081D74(ButtonEntity* this) {
     Entity* ent;
-    if (GetCollisionDataAtTilePos(this->tilePos, super->collisionLayer) == COLLISION_DATA_15) {
+    if (GetCollisionDataAtTilePos(BTN_TILEPOS(this), super->collisionLayer) == COLLISION_DATA_15) {
         return NULL;
     }
     ent = 0;
@@ -231,7 +266,7 @@ void sub_08081E6C(ButtonEntity* this) {
     u16* tmp2;
     u16* subTiles;
     u16* tmp3;
-    u32 tilePos = this->tilePos;
+    u32 tilePos = BTN_TILEPOS(this);
     u32 layer = super->collisionLayer;
     u32 specialTile = GetTileTypeAtTilePos(tilePos, layer);
 
@@ -282,12 +317,19 @@ bool32 sub_08081F7C(ButtonEntity* this, u32 tileType) {
             super->child->spriteOffsetY = -4;
     } else {
         if (super->timer == 6) {
-            SetFlag(this->flag);
-            SetTileType(tileType, this->tilePos, super->collisionLayer);
+            SetFlag(BTN_FLAG(this));
+#ifdef PC_PORT
+            if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
+                fprintf(stderr,
+                        "[TORCH] Button_SetFlag flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X\n",
+                        BTN_FLAG(this), BTN_TILEPOS(this), super->collisionLayer, tileType);
+            }
+#endif
+            SetTileType(tileType, BTN_TILEPOS(this), super->collisionLayer);
             sub_08081F24(super);
             SoundReq(SFX_BUTTON_PRESS);
-            if (this->unk_70 != 0xFFFF)
-                SetTile(this->unk_70, this->tilePos, super->collisionLayer);
+            if (BTN_UNK70(this) != 0xFFFF)
+                SetTile(BTN_UNK70(this), BTN_TILEPOS(this), super->collisionLayer);
             return FALSE;
         }
     }
