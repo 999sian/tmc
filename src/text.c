@@ -66,8 +66,33 @@ extern u16 gUnk_081092D4;     // TODO array?
 typedef struct {
     u8 filler0[12][16];
 } VStruct;
+#ifdef PC_PORT
+extern u8 gUnk_0810942E[];
+extern u8 gUnk_081094CE[];
+
+enum {
+    TEXT_COLOR_TABLE_HEAD_SIZE = 160,
+    TEXT_COLOR_TABLE_TAIL_SIZE = 1378,
+    TEXT_COLOR_TABLE_STRIDE = 0xC0,
+    TEXT_COLOR_TABLE_HEAD_SENTINEL_OFFSET = 0xAA,
+};
+
+static u8* GetTextColorTablePtr(u32 logicalOffset) {
+    if (logicalOffset < TEXT_COLOR_TABLE_HEAD_SIZE) {
+        return &gUnk_0810942E[logicalOffset];
+    }
+
+    logicalOffset -= TEXT_COLOR_TABLE_HEAD_SIZE;
+    if (logicalOffset < TEXT_COLOR_TABLE_TAIL_SIZE) {
+        return &gUnk_081094CE[logicalOffset];
+    }
+
+    return &gUnk_081094CE[0];
+}
+#else
 extern VStruct gUnk_0810942E[]; // TODO structure?
 extern u8 gUnk_081094CE;        // TODO structure? array?
+#endif
 
 void sub_0805EEB4(Token* token, u32 textIndex) {
     u32 langIndex;
@@ -521,7 +546,8 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
         }
 #else
         MemCopy(paramFont, &font, sizeof(Font));
-#endif        InitToken(&token, textIndexOrPtr);
+#endif
+        InitToken(&token, textIndexOrPtr);
         token.unk05 = font.stylized & 3;
         pWVar4->unk04 = font.stylized;
         pWVar4->unk4 = font.width;
@@ -753,7 +779,11 @@ void sub_0805F820(WStruct* r0, u32* r1) {
 
         puVar8 = &gUnk_02036A58 + uVar6;
         buffer_loc = r0->unk8;
+#ifdef PC_PORT
+        temp = GetTextColorTablePtr(r0->bgColor * TEXT_COLOR_TABLE_STRIDE + r0->charColor * 0x20);
+#else
         temp = gUnk_0810942E[r0->bgColor].filler0[r0->charColor * 2];
+#endif
         uVar7 = r0->unk6;
         r0->unk6 += uVar3;
 
@@ -782,7 +812,12 @@ void sub_0805F8E4(u32 r0, WStruct* r1) {
 }
 
 static u32 sub_0805F8F8(u32 idx) {
-    u8* temp = &gUnk_0810942E[idx].filler0[10][10];
+    u8* temp;
+#ifdef PC_PORT
+    temp = GetTextColorTablePtr(idx * TEXT_COLOR_TABLE_STRIDE + TEXT_COLOR_TABLE_HEAD_SENTINEL_OFFSET);
+#else
+    temp = &gUnk_0810942E[idx].filler0[10][10];
+#endif
     return gUnk_0810926C[*temp];
 }
 
@@ -798,7 +833,11 @@ void sub_0805F918(u32 idx, u32 idx2, void* dest) {
     MemFill32(sub_0805F8F8(idx2), &gUnk_02036AD8, 0xe0);
     puVar1 = gUnk_081092AC[idx];
 
+#ifdef PC_PORT
+    temp = gUnk_081094CE + idx2 * 0xc0;
+#else
     temp = &gUnk_081094CE + idx2 * 0xc0;
+#endif
     idx3 = 0;
     for (i = 0; i < 3; i++) {
         puVar2 = &gUnk_02036A58;
