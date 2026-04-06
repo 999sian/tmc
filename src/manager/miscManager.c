@@ -20,6 +20,7 @@
 #include "tiles.h"
 #include "scroll.h"
 #include "subtask.h"
+#include "port_scripts.h"
 #if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
 #include "common.h"
 #endif
@@ -91,12 +92,18 @@ extern u16 script_PlayerAtDarkNut2[];
 extern u16 script_PlayerAtDarkNut3[];
 extern u16 script_PlayerAtMadderpillar[];
 
-u16* const gUnk_08108380[] = {
-    script_PlayerAtDarkNut1,
-    script_PlayerAtDarkNut2,
-    script_PlayerAtDarkNut3,
-    script_PlayerAtMadderpillar,
-};
+static Script* GetTypeDScript(u32 index) {
+    switch (index) {
+        case 0:
+            return PORT_SCRIPT(script_PlayerAtDarkNut1);
+        case 1:
+            return PORT_SCRIPT(script_PlayerAtDarkNut2);
+        case 2:
+            return PORT_SCRIPT(script_PlayerAtDarkNut3);
+        default:
+            return PORT_SCRIPT(script_PlayerAtMadderpillar);
+    }
+}
 
 void sub_08058F44(u32, u32, u32);
 void sub_08058F84(u32, u32);
@@ -400,9 +407,9 @@ void MiscManager_TypeD(MiscManager* this) {
         if (gRoomControls.reload_flags)
             return;
         if (gRoomVars.didEnterScrolling) {
-            StartPlayerScript(gUnk_08108380[gRoomControls.scroll_direction]);
+            StartPlayerScript(GetTypeDScript(gRoomControls.scroll_direction));
         } else {
-            StartPlayerScript(gUnk_08108380[gPlayerEntity.base.animationState >> 1]);
+            StartPlayerScript(GetTypeDScript(gPlayerEntity.base.animationState >> 1));
         }
     }
     DeleteThisEntity();

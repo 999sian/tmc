@@ -20,6 +20,7 @@
 #include "save.h"
 #include "subtask.h"
 #include "pauseMenu.h"
+#include "port_scripts.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -347,7 +348,7 @@ void Bird_Type9(BirdEntity* this) {
                 CutsceneOrchestratorEntity* orchestrator =
                     (CutsceneOrchestratorEntity*)CreateObject(CUTSCENE_ORCHESTRATOR, 0, 0);
                 if (orchestrator != NULL) {
-                    orchestrator->context = StartCutscene(&orchestrator->base, script_EzloTalkOcarina);
+                    orchestrator->context = StartCutscene(&orchestrator->base, PORT_SCRIPT(script_EzloTalkOcarina));
                     SetGlobalFlag(WARP_1ST);
                 }
             }

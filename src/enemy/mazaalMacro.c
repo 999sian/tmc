@@ -14,6 +14,7 @@
 #include "player.h"
 #include "physics.h"
 #include "asm.h"
+#include "port_scripts.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -163,7 +164,7 @@ void sub_08034E68(MazaalMacroEntity* this) {
         if (gRoomTransition.field_0x39 == 0) {
             if (PlayerCanBeMoved()) {
                 super->action = 3;
-                scriptExecutionContext = StartCutscene(super, (u16*)script_MazaalMacroDefeated);
+                scriptExecutionContext = StartCutscene(super, PORT_SCRIPT(script_MazaalMacroDefeated));
                 this->context = scriptExecutionContext;
             }
         } else {

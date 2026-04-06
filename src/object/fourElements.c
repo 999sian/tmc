@@ -16,6 +16,7 @@
 #include "manager/lightManager.h"
 #include "script.h"
 #include "fade.h"
+#include "port_scripts.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -66,7 +67,7 @@ void FourElements_Init(FourElementsEntity* this) {
         case 0x43:
             break;
     }
-    StartPlayerScript(script_PlayerGetElement);
+    StartPlayerScript(PORT_SCRIPT(script_PlayerGetElement));
     gScreen.controls.layerFXControl = 0x640;
     gScreen.controls.alphaBlend = 0x1000;
     UnDarkRoom();

@@ -88,7 +88,7 @@ void sub_080650CC(StockwellEntity* this) {
     if ((gRoomVars.animFlags & 1)) {
         super->action = 4;
         super->subAction = 0;
-        InitScriptExecutionContext(this->context, script_StockwellDogFood);
+        InitScriptExecutionContext(this->context, PORT_SCRIPT(script_StockwellDogFood));
     } else {
         bVar2 = super->frame & 0x20;
         if ((bVar2 == 0) && (super->interactType != INTERACTION_NONE)) {
@@ -102,7 +102,7 @@ void sub_080650CC(StockwellEntity* this) {
                 itemPrice = GetItemPrice(gRoomVars.shopItemType);
                 super->action = 4;
                 super->subAction = bVar2;
-                InitScriptExecutionContext(this->context, script_StockwellBuy);
+                InitScriptExecutionContext(this->context, PORT_SCRIPT(script_StockwellBuy));
             }
             MessageNoOverlap(confirmMsgId, super);
 

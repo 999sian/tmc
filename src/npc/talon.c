@@ -10,6 +10,7 @@
 #include "script.h"
 #include "message.h"
 #include "asm.h"
+#include "port_scripts.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -138,7 +139,7 @@ void sub_080656D4(TalonEntity* this) {
     } else {
         if (super->interactType != INTERACTION_NONE) {
             if (GetInventoryValue(ITEM_QST_LONLON_KEY) != 0) {
-                StartCutscene(super, (u16*)&script_TalonGotKey);
+                StartCutscene(super, PORT_SCRIPT(script_TalonGotKey));
             } else {
                 this->unk_69 = super->action;
                 super->action = 3;

@@ -16,6 +16,7 @@
 #include "screen.h"
 #include "scroll.h"
 #include "script.h"
+#include "port_scripts.h"
 
 extern u16 script_MazaalBossObjectMazaal[];
 
@@ -92,7 +93,7 @@ void MazaalBossObject_Action0(MazaalBossObjectEntity* this) {
         super->spritePriority.b0 = 7;
         super->spriteOffsetY = 0x20;
 
-        this->cutsceneBeh = StartCutscene(super, script_MazaalBossObjectMazaal);
+        this->cutsceneBeh = StartCutscene(super, PORT_SCRIPT(script_MazaalBossObjectMazaal));
     }
 }
 

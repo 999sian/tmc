@@ -24,6 +24,17 @@
 #define GBA_script_PlayerSleepingInn 0x08010A5C
 #define GBA_script_BedInLinksRoom 0x08009ECC
 #define GBA_script_BedAtSimons 0x08009EF0
+#define GBA_script_PlayerGetElement 0x0800A0B4
+#define GBA_script_EzloTalkOcarina 0x0800B0AC
+#define GBA_script_TalonGotKey 0x0800B41C
+#define GBA_script_PlayerAtDarkNut1 0x0800E600
+#define GBA_script_PlayerAtDarkNut2 0x0800E62C
+#define GBA_script_PlayerAtDarkNut3 0x0800E658
+#define GBA_script_PlayerAtMadderpillar 0x0800E684
+#define GBA_script_MazaalBossObjectMazaal 0x08012DD8
+#define GBA_script_MazaalMacroDefeated 0x08012E20
+#define GBA_script_StockwellBuy 0x08014384
+#define GBA_script_StockwellDogFood 0x080143C0
 
 /* GBA ROM addresses of cutscene scripts (used in cutscene.c EntityData tables) */
 #define GBA_script_IntroCameraTarget 0x08009A50
