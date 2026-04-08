@@ -138,10 +138,10 @@ void sub_0805EEB4(Token* token, u32 textIndex) {
 
 bool32 sub_0805EF40(Token* token, const u8* param_2) {
 #ifdef PC_PORT
-    fprintf(stderr, "[TEXT] sub_0805EF40: pushing ptr=%p to buf[%d] (unk00=%d, textIndex=0x%04X)\n",
+    /*fprintf(stderr, "[TEXT] sub_0805EF40: pushing ptr=%p to buf[%d] (unk00=%d, textIndex=0x%04X)\n",
             (void*)param_2, token->unk00 ? token->unk01 + 1 : token->unk01,
             token->unk00, token->textIndex);
-    fflush(stderr);
+    fflush(stderr);*/
 #endif
     if (token->unk00 != 0) {
         if (6 < token->unk01) {
@@ -169,8 +169,9 @@ u32 sub_0805EF8C(Token* token) {
         const u8* ptr = (const u8*)port_resolve_addr((uintptr_t)rawPtr);
 
         if (ptr == NULL || (uintptr_t)ptr < 0x10000) {
-            fprintf(stderr, "[TEXT] sub_0805EF8C: invalid buf[%d]=%p resolved=%p textIndex=0x%04X unk00=%d\n",
-                    token->unk01, (void*)rawPtr, (void*)ptr, token->textIndex, token->unk00);
+            /*fprintf(stderr, "[TEXT] sub_0805EF8C: invalid buf[%d]=%p resolved=%p textIndex=0x%04X unk00=%d\n",
+                    token->unk01, (void*)rawPtr, (void*)ptr, token->textIndex, token->unk00);*/
+
             fflush(stderr);
             token->unk00 = 0;
             token->unk01 = 0;
@@ -179,8 +180,8 @@ u32 sub_0805EF8C(Token* token) {
 
         token->buf[token->unk01] = ptr;
         /* Log pointer value (NOT dereferencing) + flush to survive crash */
-        fprintf(stderr, "[TEXT] sub_0805EF8C: buf[%d]=%p resolved=%p textIndex=0x%04X unk00=%d\n",
-                token->unk01, (void*)rawPtr, (void*)ptr, token->textIndex, token->unk00);
+        /*fprintf(stderr, "[TEXT] sub_0805EF8C: buf[%d]=%p resolved=%p textIndex=0x%04X unk00=%d\n",
+                token->unk01, (void*)rawPtr, (void*)ptr, token->textIndex, token->unk00);*/
         fflush(stderr);
     }
 #endif

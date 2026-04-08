@@ -32,6 +32,17 @@ typedef struct {
     /*0x86*/ union SplitHWord field_0x86;
 } Enemy;
 
+PORT_STATIC_ASSERT_SIZE(Enemy, 0x88, 0xB8, "Enemy size incorrect");
+PORT_STATIC_ASSERT_OFFSET(Enemy, child, 0x68, 0x90, "Enemy child offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Enemy, homeX, 0x70, 0x9c, "Enemy homeX offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Enemy, field_0x74, 0x74, 0xA0, "Enemy field_0x74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Enemy, field_0x7c, 0x7c, 0xA8, "Enemy field_0x7c offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Enemy, field_0x86, 0x86, 0xB2, "Enemy field_0x86 offset incorrect");
+PORT_STATIC_ASSERT_EXPR(offsetof(Enemy, field_0x74) - offsetof(GenericEntity, field_0x74), 0, 4,
+                        "Enemy extra-field shift incorrect");
+PORT_STATIC_ASSERT_EXPR(offsetof(Enemy, cutsceneBeh) - offsetof(GenericEntity, cutsceneBeh), 0, 0,
+                        "Enemy cutscene-field shift incorrect");
+
 bool32 EnemyInit(Enemy* this);
 /**
  * 0: _OnTick

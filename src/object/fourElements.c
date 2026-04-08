@@ -10,9 +10,12 @@
 #include "object.h"
 #include "sound.h"
 #include "flags.h"
+#include "item.h"
 #include "player.h"
+#include "room.h"
 #include "screen.h"
 #include "scroll.h"
+#include "manager.h"
 #include "manager/lightManager.h"
 #include "script.h"
 #include "fade.h"
@@ -38,6 +41,71 @@ void FourElements_Action5(FourElementsEntity*);
 void FourElements_Action6(FourElementsEntity*);
 void sub_080A0424(FourElementsEntity*);
 void sub_080A0444(FourElementsEntity*);
+
+static void FourElements_SetDungeonClearFlag(u32 itemType) {
+    switch (itemType) {
+        case ITEM_EARTH_ELEMENT:
+            SetGlobalFlag(LV1_CLEAR);
+            break;
+        case ITEM_FIRE_ELEMENT:
+            SetGlobalFlag(LV2_CLEAR);
+            break;
+        case ITEM_WATER_ELEMENT:
+            SetGlobalFlag(LV4_CLEAR);
+            break;
+        case ITEM_WIND_ELEMENT:
+            SetGlobalFlag(LV5_CLEAR);
+            break;
+        default:
+            break;
+    }
+}
+
+static void FourElements_SpawnBossRewardsIfNeeded(void) {
+    Entity* spawnManager;
+
+    void* roomProp10 = GetCurrentRoomProperty(10);
+    if (roomProp10 == NULL) {
+        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: GetCurrentRoomProperty(10) returned NULL - creating entities manually\n");
+        
+        // Create boss rewards manually if room property 10 is NULL
+        Entity* heartContainer = CreateObject(HEART_CONTAINER, 0, 0);
+        if (heartContainer) {
+            heartContainer->x.HALF.HI = gPlayerEntity.x.HALF.HI;
+            heartContainer->y.HALF.HI = gPlayerEntity.y.HALF.HI - 32; // Place above player
+            fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Created heart container at (%d, %d)\n", 
+                    heartContainer->x.HALF.HI, heartContainer->y.HALF.HI);
+        }
+        
+        Entity* warpPoint = CreateObject(WARP_POINT, 0, 0);
+        if (warpPoint) {
+            warpPoint->x.HALF.HI = gPlayerEntity.x.HALF.HI;
+            warpPoint->y.HALF.HI = gPlayerEntity.y.HALF.HI + 32; // Place below player
+            fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Created warp point at (%d, %d)\n", 
+                    warpPoint->x.HALF.HI, warpPoint->y.HALF.HI);
+        }
+        return;
+    }
+    
+    Entity* existingHeart = FindEntityByID(OBJECT, HEART_CONTAINER, 6);
+    Entity* existingWarp = FindEntityByID(OBJECT, WARP_POINT, 6);
+    if (existingHeart != NULL || existingWarp != NULL) {
+        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: rewards already exist (heart=%p warp=%p)\n", 
+                (void*)existingHeart, (void*)existingWarp);
+        return;
+    }
+
+    fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Loading room entity list from %p\n", roomProp10);
+    LoadRoomEntityList((EntityData*)roomProp10);
+
+    spawnManager = FindEntity(MANAGER, ENTITY_SPAWN_MANAGER, 8, 10, 0);
+    if (spawnManager != NULL) {
+        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Deleting spawn manager %p\n", (void*)spawnManager);
+        DeleteManager(spawnManager);
+    } else {
+        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: No spawn manager found to delete\n");
+    }
+}
 
 void FourElements(FourElementsEntity* this) {
     static void (*const FourElements_Actions[])(FourElementsEntity*) = {
@@ -148,7 +216,9 @@ void FourElements_Action6(FourElementsEntity* this) {
         SetPriorityTimer(90);
         gPlayerState.controlMode = 1;
         EnablePauseMenu();
+        FourElements_SetDungeonClearFlag(super->type);
         SetRoomFlag(0);
+        FourElements_SpawnBossRewardsIfNeeded();
         DeleteThisEntity();
     }
 }

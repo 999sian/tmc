@@ -9,11 +9,44 @@
 #include "sound.h"
 #include "vram.h"
 #include "asm.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
+#ifdef PC_PORT
+enum {
+    GUST_JAR_ANIM_TABLE_GBA = 0x08132714u,
+    GUST_JAR_HITBOX_GBA = 0x08132B28u,
+};
+#else
 extern const u8* gUnk_08132714[]; // Anim index lists?
+extern const Hitbox gUnk_08132B28;
+#endif
 // TODO spriteAnimations in here
 // TODO sprite frame in here
-extern Hitbox gUnk_08132B28;
+
+static Hitbox sGustJarHitbox;
+
+static const u8* GetGustJarAnimData(u32 index) {
+#ifdef PC_PORT
+    const void* base;
+    if (index >= 8) {
+        return NULL;
+    }
+    base = Port_ResolveRomData(GUST_JAR_ANIM_TABLE_GBA);
+    return (const u8*)Port_ReadPackedRomPtr(base, index);
+#else
+    return gUnk_08132714[index];
+#endif
+}
+
+static const Hitbox* GetGustJarHitboxTemplate(void) {
+#ifdef PC_PORT
+    return (const Hitbox*)Port_ResolveRomData(GUST_JAR_HITBOX_GBA);
+#else
+    return &gUnk_08132B28;
+#endif
+}
 
 void sub_080ADC84(Entity*);
 void PlayerItemGustJar_Init(Entity*);
@@ -38,9 +71,17 @@ void PlayerItemGustJar(Entity* this) {
 }
 
 void PlayerItemGustJar_Init(Entity* this) {
+    const Hitbox* hitboxTemplate;
+
     this->action = 1;
     this->subtimer = 15;
-    this->hitbox = &gUnk_08132B28;
+    hitboxTemplate = GetGustJarHitboxTemplate();
+    if (hitboxTemplate == NULL) {
+        DeleteThisEntity();
+        return;
+    }
+    sGustJarHitbox = *hitboxTemplate;
+    this->hitbox = &sGustJarHitbox;
     this->hitbox->unk2[2] = 3;
     this->hitbox->unk2[1] = 3;
     this->hitbox->unk2[3] = 6;
@@ -155,9 +196,16 @@ void sub_080ADC84(Entity* this) {
 }
 
 void sub_080ADCA0(Entity* this, u32 param_2) {
-    const u8* pFVar1 = gUnk_08132714[(param_2 + (gPlayerEntity.base.animationState >> 1))];
+    const u8* pFVar1 = GetGustJarAnimData(param_2 + (gPlayerEntity.base.animationState >> 1));
     const u8* pFVar2;
 
+    if (pFVar1 == NULL) {
+        this->spriteSettings.draw = 0;
+        this->animPtr = NULL;
+        return;
+    }
+
+    this->spriteSettings.draw = 1;
     this->animPtr = (void*)pFVar1;
     this->animIndex = *pFVar1;
     pFVar2 = pFVar1 + 1;
@@ -170,6 +218,11 @@ void sub_080ADCA0(Entity* this, u32 param_2) {
 void sub_080ADCDC(Entity* this, u32 param_2) {
     u32 bVar1;
     u8* pFVar3;
+
+    if (this->animPtr == NULL) {
+        this->spriteSettings.draw = 0;
+        return;
+    }
 
     bVar1 = this->frameDuration;
     this->frameDuration = (u8)(bVar1 - param_2);

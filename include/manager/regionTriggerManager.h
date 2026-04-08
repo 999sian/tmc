@@ -14,4 +14,10 @@ typedef struct {
     u16 playerInRegionFlag;
 } RegionTriggerManager;
 
+PORT_STATIC_ASSERT_SIZE(RegionTriggerManager, 0x40, 0x58, "RegionTriggerManager size incorrect");
+PORT_STATIC_ASSERT_OFFSET(RegionTriggerManager, radiusX, 0x34, 0x4c, "RegionTriggerManager radiusX offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(RegionTriggerManager, posX, 0x38, 0x50, "RegionTriggerManager posX offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(RegionTriggerManager, playerInRegionFlag, 0x3e, 0x56,
+                          "RegionTriggerManager flag offset incorrect");
+
 #endif // REGIONTRIGGERMANAGER_H

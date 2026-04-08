@@ -254,7 +254,7 @@ task_end()
 -- ====================
 target("tmc_pc")
     set_kind("binary")
-    set_languages("c11", "cxx17")
+    set_languages("c11", "cxx20")
     set_targetdir("build/pc")
     
     -- PC port version configurations
@@ -274,10 +274,14 @@ target("tmc_pc")
     add_includedirs(".")
     add_includedirs("build/" .. pc_game_version) -- For assets/map_offsets.h etc (USA or EU)
     add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
+    add_includedirs("libs/VirtuaAPU/include")
+    add_includedirs("libs/agbplay_core")
 
     
 
     add_files("port/port_main.c")
+    add_files("port/port_audio.c")
+    add_files("port/port_m4a_backend.cpp")
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
         -- PC port stubs for undefined symbols
@@ -299,6 +303,9 @@ target("tmc_pc")
     add_files("port/port_m4a_stubs.c") -- Ported m4a API stubs with typed behavior for PC
     add_files("port/port_room_funcs.c") -- Room function pointer lookup table (generated)
     add_files("port/port_script_funcs.c") -- Script Call/CallWithArg function lookup (generated)
+    add_files("libs/ViruaPPU/src/*.c")
+    add_files("libs/VirtuaAPU/src/*.c")
+    add_files("libs/agbplay_core/*.cpp")
     
     -- Game source files - Main game code
     add_files("src/main.c")
@@ -399,7 +406,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3")
+    add_packages("libsdl3", "fmt")
 
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then

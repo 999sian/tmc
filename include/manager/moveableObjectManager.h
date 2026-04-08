@@ -16,4 +16,10 @@ typedef struct {
     u16 flags;
 } MoveableObjectManager;
 
+PORT_STATIC_ASSERT_SIZE(MoveableObjectManager, 0x40, 0x58, "MoveableObjectManager size incorrect");
+PORT_STATIC_ASSERT_OFFSET(MoveableObjectManager, unk_36, 0x36, 0x4e, "MoveableObjectManager unk_36 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(MoveableObjectManager, unk_38, 0x38, 0x50, "MoveableObjectManager unk_38 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(MoveableObjectManager, unk_3c, 0x3c, 0x54, "MoveableObjectManager unk_3c offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(MoveableObjectManager, flags, 0x3e, 0x56, "MoveableObjectManager flags offset incorrect");
+
 #endif // MOVEABLEOBJECTMANAGER_H

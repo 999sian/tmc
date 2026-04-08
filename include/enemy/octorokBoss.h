@@ -17,7 +17,7 @@ typedef struct {
     /*0x0c*/ OctorokBossEntity* tailObjects[5];
     /*0x20*/ OctorokBossEntity* legObjects[4];
 } OctorokBossHeap;
-static_assert(sizeof(OctorokBossHeap) == 0x30, "OctorokBossHeap size incorrect");
+PORT_STATIC_ASSERT_SIZE(OctorokBossHeap, 0x30, 0x58, "OctorokBossHeap size incorrect");
 
 struct OctorokBossEntity {
     /*0x00*/ Entity base;

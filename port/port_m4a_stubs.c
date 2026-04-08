@@ -1,4 +1,7 @@
 #include "gba/m4a.h"
+#include "port_m4a_backend.h"
+#include "sound.h"
+
 #include <stdbool.h>
 #include <string.h>
 
@@ -12,9 +15,20 @@
 #define TEMPORARY_FADE 0x0001
 #define FADE_IN 0x0002
 
+#define SOUND_MODE_FREQ_15768 0x00050000
+#define SOUND_MODE_DA_BIT_8 0x00900000
+#define SOUND_MODE_MASVOL_SHIFT 12
+#define SOUND_MODE_MAXCHN_SHIFT 8
+
+extern u8 gMPlayMemAccArea[0x10];
+
 static bool sM4aInitialized;
 static bool sM4aVsyncEnabled = true;
 static u32 sM4aSoundMode;
+
+static const char* const sSongLabels[] = {
+#include "port_song_midi_table.inc"
+};
 
 static inline u8 ClampU8(u32 value) {
     return (value > 0xff) ? 0xff : (u8)value;
@@ -30,25 +44,61 @@ static inline u32 BuildTrackMask(u32 trackCount) {
     return (1u << trackCount) - 1u;
 }
 
-static MusicPlayerInfo* ResolveSongPlayer(u16 songId, const SongHeader** outHeader) {
-    const Song* song = &gSongTable[songId];
-    u16 playerIndex = song->musicPlayerIndex;
+const char* Port_GetSongLabel(uint16_t songId) {
+    if (songId >= ARRAY_COUNT(sSongLabels)) {
+        return NULL;
+    }
+
+    return sSongLabels[songId];
+}
+
+static int FindPlayerIndexByInfo(MusicPlayerInfo* mplayInfo) {
+    u32 i;
+
+    if (mplayInfo == NULL) {
+        return -1;
+    }
+
+    for (i = 0; i < M4A_PLAYER_COUNT; i++) {
+        if (gMusicPlayers[i].info == mplayInfo) {
+            return (int)i;
+        }
+    }
+
+    return -1;
+}
+
+static MusicPlayerInfo* ResolveSongPlayer(u16 songId, const SongHeader** outHeader, u16* outPlayerIndex) {
+    const Song* song;
+    u16 playerIndex;
+
+    if (songId > SFX_221) {
+        return NULL;
+    }
+
+    song = &gSongTable[songId];
+    playerIndex = song->musicPlayerIndex;
     if (playerIndex >= M4A_PLAYER_COUNT) {
         return NULL;
     }
 
-    const MusicPlayer* player = &gMusicPlayers[playerIndex];
     if (outHeader != NULL) {
         *outHeader = song->header;
     }
-    return player->info;
+    if (outPlayerIndex != NULL) {
+        *outPlayerIndex = playerIndex;
+    }
+
+    return gMusicPlayers[playerIndex].info;
 }
 
 static void ForEachTrackedPlayer(void (*cb)(MusicPlayerInfo*)) {
     u32 i;
+
     if (cb == NULL) {
         return;
     }
+
     for (i = 0; i < M4A_PLAYER_COUNT; i++) {
         MusicPlayerInfo* info = gMusicPlayers[i].info;
         if (info != NULL) {
@@ -57,29 +107,11 @@ static void ForEachTrackedPlayer(void (*cb)(MusicPlayerInfo*)) {
     }
 }
 
-static void StopPlayer(MusicPlayerInfo* mplayInfo) {
+static void ResetPlayerInfo(MusicPlayerInfo* mplayInfo) {
     if (mplayInfo == NULL) {
         return;
     }
-    mplayInfo->status = 0;
-    mplayInfo->songHeader = NULL;
-    mplayInfo->clock = 0;
-}
 
-static void ContinuePlayer(MusicPlayerInfo* mplayInfo) {
-    if (mplayInfo == NULL) {
-        return;
-    }
-    mplayInfo->status &= ~MUSICPLAYER_STATUS_PAUSE;
-}
-
-void MPlayOpen(MusicPlayerInfo* mplayInfo, MusicPlayerTrack* tracks, u8 trackCount) {
-    if (mplayInfo == NULL || tracks == NULL || trackCount == 0) {
-        return;
-    }
-
-    mplayInfo->tracks = tracks;
-    mplayInfo->trackCount = trackCount;
     mplayInfo->songHeader = NULL;
     mplayInfo->status = 0;
     mplayInfo->clock = 0;
@@ -93,16 +125,82 @@ void MPlayOpen(MusicPlayerInfo* mplayInfo, MusicPlayerTrack* tracks, u8 trackCou
     mplayInfo->fadeOV = 0;
 }
 
-void MPlayStart(MusicPlayerInfo* mplayInfo, const SongHeader* songHeader) {
+static void StopPlayer(MusicPlayerInfo* mplayInfo) {
+    int playerIndex;
+
     if (mplayInfo == NULL) {
         return;
     }
 
+    playerIndex = FindPlayerIndexByInfo(mplayInfo);
+    if (playerIndex >= 0) {
+        Port_M4A_Backend_StopPlayer((u8)playerIndex);
+    }
+
+    mplayInfo->status &= ~(MUSICPLAYER_STATUS_TRACK | MUSICPLAYER_STATUS_PAUSE);
+}
+
+static void ContinuePlayer(MusicPlayerInfo* mplayInfo) {
+    int playerIndex;
+
+    if (mplayInfo == NULL) {
+        return;
+    }
+
+    playerIndex = FindPlayerIndexByInfo(mplayInfo);
+    if (playerIndex >= 0) {
+        Port_M4A_Backend_ContinuePlayer((u8)playerIndex);
+    }
+
+    mplayInfo->status &= ~MUSICPLAYER_STATUS_PAUSE;
+    mplayInfo->status |= BuildTrackMask(mplayInfo->trackCount);
+}
+
+void MPlayOpen(MusicPlayerInfo* mplayInfo, MusicPlayerTrack* tracks, u8 trackCount) {
+    u32 i;
+
+    if (mplayInfo == NULL || tracks == NULL) {
+        return;
+    }
+
+    memset(mplayInfo, 0, sizeof(*mplayInfo));
+    mplayInfo->tracks = tracks;
+    mplayInfo->trackCount = trackCount;
+    mplayInfo->memAccArea = gMPlayMemAccArea;
+    mplayInfo->tempoD = 0x100;
+    mplayInfo->tempoU = 0x100;
+    mplayInfo->tempoI = 0x100;
+
+    for (i = 0; i < M4A_MAX_TRACKS; i++) {
+        MusicPlayerTrack* track = &tracks[i];
+        memset(track, 0, sizeof(*track));
+        if (i < trackCount) {
+            track->flags = MPT_FLG_EXIST;
+            track->bendRange = 2;
+            track->volX = 64;
+            track->lfoSpeed = 22;
+            track->lfoSpeedC = 22;
+            track->tone.type = 1;
+        }
+    }
+}
+
+void MPlayStart(MusicPlayerInfo* mplayInfo, const SongHeader* songHeader) {
+    int playerIndex;
+
+    if (mplayInfo == NULL) {
+        return;
+    }
+
+    playerIndex = FindPlayerIndexByInfo(mplayInfo);
     mplayInfo->songHeader = songHeader;
     mplayInfo->clock = 0;
     mplayInfo->cmd = 0;
     if (songHeader == NULL) {
         mplayInfo->status = 0;
+        if (playerIndex >= 0) {
+            Port_M4A_Backend_StopPlayer((u8)playerIndex);
+        }
         return;
     }
 
@@ -122,6 +220,7 @@ void MPlayFadeOut(MusicPlayerInfo* mplayInfo, u16 speed) {
     if (mplayInfo == NULL) {
         return;
     }
+
     mplayInfo->fadeOC = speed;
     mplayInfo->fadeOI = speed;
     mplayInfo->fadeOV = (64u << FADE_VOL_SHIFT);
@@ -133,27 +232,38 @@ void SoundClear(void) {
 
 void m4aSoundInit(void) {
     u32 i;
+
+    sM4aSoundMode =
+        SOUND_MODE_DA_BIT_8 | SOUND_MODE_FREQ_15768 | (0xf << SOUND_MODE_MASVOL_SHIFT) | (8 << SOUND_MODE_MAXCHN_SHIFT);
+
     for (i = 0; i < M4A_PLAYER_COUNT; i++) {
         MusicPlayerInfo* info = gMusicPlayers[i].info;
         MusicPlayerTrack* tracks = gMusicPlayers[i].tracks;
         u8 trackCount = gMusicPlayers[i].nTracks;
+
         if (info == NULL || tracks == NULL || trackCount == 0) {
             continue;
         }
+
         MPlayOpen(info, tracks, trackCount);
         info->unk_B = gMusicPlayers[i].unk_A;
     }
+
+    Port_M4A_Backend_SoundInit(sM4aSoundMode);
     sM4aInitialized = true;
     sM4aVsyncEnabled = true;
 }
 
 void m4aSoundMain(void) {
     u32 i;
+
     if (!sM4aInitialized) {
         return;
     }
+
     for (i = 0; i < M4A_PLAYER_COUNT; i++) {
         MusicPlayerInfo* info = gMusicPlayers[i].info;
+
         if (info == NULL) {
             continue;
         }
@@ -163,21 +273,24 @@ void m4aSoundMain(void) {
         if ((info->status & MUSICPLAYER_STATUS_PAUSE) != 0) {
             continue;
         }
+
         info->clock++;
     }
 }
 
 void m4aSoundMode(u32 mode) {
     sM4aSoundMode = mode;
-    (void)sM4aSoundMode;
+    Port_M4A_Backend_SetSoundMode(mode);
 }
 
 void m4aSoundVSyncOff(void) {
     sM4aVsyncEnabled = false;
+    Port_M4A_Backend_SetVSyncEnabled(false);
 }
 
 void m4aSoundVSyncOn(void) {
     sM4aVsyncEnabled = true;
+    Port_M4A_Backend_SetVSyncEnabled(true);
 }
 
 void m4aSoundVSync(void) {
@@ -188,32 +301,53 @@ void m4aSoundVSync(void) {
 
 void m4aSongNumStart(u16 songId) {
     const SongHeader* header = NULL;
-    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header);
+    u16 playerIndex = 0;
+    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header, &playerIndex);
+
+    if (mplayInfo == NULL) {
+        return;
+    }
+
     MPlayStart(mplayInfo, header);
+    if (!Port_M4A_Backend_StartSongById((u8)playerIndex, songId)) {
+        MPlayStop(mplayInfo);
+    }
 }
 
 void m4aSongNumStartOrChange(u16 songId) {
     const SongHeader* header = NULL;
-    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header);
+    u16 playerIndex = 0;
+    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header, &playerIndex);
+
+    (void)playerIndex;
     if (mplayInfo == NULL) {
         return;
     }
-    if (mplayInfo->songHeader != header) {
+
+    if (mplayInfo->songHeader != header || (mplayInfo->status & MUSICPLAYER_STATUS_TRACK) == 0 ||
+        (mplayInfo->status & MUSICPLAYER_STATUS_PAUSE) != 0) {
         MPlayStart(mplayInfo, header);
-    } else if ((mplayInfo->status & MUSICPLAYER_STATUS_TRACK) == 0 ||
-               (mplayInfo->status & MUSICPLAYER_STATUS_PAUSE) != 0) {
-        MPlayStart(mplayInfo, header);
+        if (!Port_M4A_Backend_StartSongById((u8)playerIndex, songId)) {
+            MPlayStop(mplayInfo);
+        }
     }
 }
 
 void m4aSongNumStartOrContinue(u16 songId) {
     const SongHeader* header = NULL;
-    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header);
+    u16 playerIndex = 0;
+    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header, &playerIndex);
+
+    (void)playerIndex;
     if (mplayInfo == NULL) {
         return;
     }
+
     if (mplayInfo->songHeader != header || (mplayInfo->status & MUSICPLAYER_STATUS_TRACK) == 0) {
         MPlayStart(mplayInfo, header);
+        if (!Port_M4A_Backend_StartSongById((u8)playerIndex, songId)) {
+            MPlayStop(mplayInfo);
+        }
     } else if ((mplayInfo->status & MUSICPLAYER_STATUS_PAUSE) != 0) {
         MPlayContinue(mplayInfo);
     }
@@ -221,10 +355,14 @@ void m4aSongNumStartOrContinue(u16 songId) {
 
 void m4aSongNumStop(u16 songId) {
     const SongHeader* header = NULL;
-    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header);
+    u16 playerIndex = 0;
+    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header, &playerIndex);
+
+    (void)playerIndex;
     if (mplayInfo == NULL) {
         return;
     }
+
     if (mplayInfo->songHeader == header) {
         MPlayStop(mplayInfo);
     }
@@ -232,10 +370,14 @@ void m4aSongNumStop(u16 songId) {
 
 void m4aSongNumContinue(u16 songId) {
     const SongHeader* header = NULL;
-    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header);
+    u16 playerIndex = 0;
+    MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header, &playerIndex);
+
+    (void)playerIndex;
     if (mplayInfo == NULL) {
         return;
     }
+
     if (mplayInfo->songHeader == header) {
         MPlayContinue(mplayInfo);
     }
@@ -247,9 +389,11 @@ void m4aMPlayAllStop(void) {
 
 void m4aMPlayImmInit(MusicPlayerInfo* mplayInfo) {
     u32 i;
+
     if (mplayInfo == NULL || mplayInfo->tracks == NULL) {
         return;
     }
+
     for (i = 0; i < mplayInfo->trackCount && i < M4A_MAX_TRACKS; i++) {
         MusicPlayerTrack* track = &mplayInfo->tracks[i];
         if (track->flags & MPT_FLG_EXIST) {
@@ -258,6 +402,7 @@ void m4aMPlayImmInit(MusicPlayerInfo* mplayInfo) {
             track->bendRange = 2;
             track->volX = 64;
             track->lfoSpeed = 22;
+            track->lfoSpeedC = 22;
             track->tone.type = 1;
         }
     }
@@ -267,15 +412,19 @@ void m4aMPlayTempoControl(MusicPlayerInfo* mplayInfo, u16 tempo) {
     if (mplayInfo == NULL) {
         return;
     }
+
     mplayInfo->tempoD = tempo;
     mplayInfo->tempoU = tempo;
 }
 
 void m4aMPlayVolumeControl(MusicPlayerInfo* mplayInfo, u16 trackBits, u16 volume) {
+    int playerIndex;
     u32 i;
+
     if (mplayInfo == NULL || mplayInfo->tracks == NULL) {
         return;
     }
+
     for (i = 0; i < mplayInfo->trackCount && i < M4A_MAX_TRACKS; i++) {
         if (((trackBits >> i) & 1u) == 0) {
             continue;
@@ -283,13 +432,20 @@ void m4aMPlayVolumeControl(MusicPlayerInfo* mplayInfo, u16 trackBits, u16 volume
         mplayInfo->tracks[i].volX = ClampU8(volume);
         mplayInfo->tracks[i].flags |= MPT_FLG_VOLCHG;
     }
+
+    playerIndex = FindPlayerIndexByInfo(mplayInfo);
+    if (playerIndex >= 0) {
+        Port_M4A_Backend_SetTrackVolume((u8)playerIndex, trackBits, volume);
+    }
 }
 
 void m4aMPlayPitchControl(MusicPlayerInfo* mplayInfo, u16 trackBits, s16 pitch) {
     u32 i;
+
     if (mplayInfo == NULL || mplayInfo->tracks == NULL) {
         return;
     }
+
     for (i = 0; i < mplayInfo->trackCount && i < M4A_MAX_TRACKS; i++) {
         if (((trackBits >> i) & 1u) == 0) {
             continue;
@@ -300,10 +456,13 @@ void m4aMPlayPitchControl(MusicPlayerInfo* mplayInfo, u16 trackBits, s16 pitch) 
 }
 
 void m4aMPlayPanpotControl(MusicPlayerInfo* mplayInfo, u16 trackBits, s8 pan) {
+    int playerIndex;
     u32 i;
+
     if (mplayInfo == NULL || mplayInfo->tracks == NULL) {
         return;
     }
+
     for (i = 0; i < mplayInfo->trackCount && i < M4A_MAX_TRACKS; i++) {
         if (((trackBits >> i) & 1u) == 0) {
             continue;
@@ -311,13 +470,20 @@ void m4aMPlayPanpotControl(MusicPlayerInfo* mplayInfo, u16 trackBits, s8 pan) {
         mplayInfo->tracks[i].pan = pan;
         mplayInfo->tracks[i].flags |= MPT_FLG_VOLCHG;
     }
+
+    playerIndex = FindPlayerIndexByInfo(mplayInfo);
+    if (playerIndex >= 0) {
+        Port_M4A_Backend_SetTrackPan((u8)playerIndex, trackBits, pan);
+    }
 }
 
 void m4aMPlayModDepthSet(MusicPlayerInfo* mplayInfo, u16 trackBits, u8 modDepth) {
     u32 i;
+
     if (mplayInfo == NULL || mplayInfo->tracks == NULL) {
         return;
     }
+
     for (i = 0; i < mplayInfo->trackCount && i < M4A_MAX_TRACKS; i++) {
         if (((trackBits >> i) & 1u) == 0) {
             continue;
@@ -328,9 +494,11 @@ void m4aMPlayModDepthSet(MusicPlayerInfo* mplayInfo, u16 trackBits, u8 modDepth)
 
 void m4aMPlayLFOSpeedSet(MusicPlayerInfo* mplayInfo, u16 trackBits, u8 lfoSpeed) {
     u32 i;
+
     if (mplayInfo == NULL || mplayInfo->tracks == NULL) {
         return;
     }
+
     for (i = 0; i < mplayInfo->trackCount && i < M4A_MAX_TRACKS; i++) {
         if (((trackBits >> i) & 1u) == 0) {
             continue;
@@ -356,6 +524,7 @@ void m4aMPlayFadeOutTemporarily(MusicPlayerInfo* mplayInfo, u16 speed) {
     if (mplayInfo == NULL) {
         return;
     }
+
     mplayInfo->fadeOC = speed;
     mplayInfo->fadeOI = speed;
     mplayInfo->fadeOV = (64u << FADE_VOL_SHIFT) | TEMPORARY_FADE;
@@ -365,8 +534,9 @@ void m4aMPlayFadeIn(MusicPlayerInfo* mplayInfo, u16 speed) {
     if (mplayInfo == NULL) {
         return;
     }
+
     mplayInfo->fadeOC = speed;
     mplayInfo->fadeOI = speed;
-    mplayInfo->fadeOV = (0u << FADE_VOL_SHIFT) | FADE_IN;
+    mplayInfo->fadeOV = FADE_IN;
     mplayInfo->status &= ~MUSICPLAYER_STATUS_PAUSE;
 }

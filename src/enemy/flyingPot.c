@@ -78,7 +78,7 @@ void FlyingPot(Entity* thisx) {
     s32 index = sub_080012DC(thisx);
 
     if (index != 0) {
-        gUnk_080012C8[index](thisx);
+        sub_08001290(thisx, index);
     } else {
         FlyingPot_Functions[GetNextFunction(thisx)](thisx);
     }

@@ -17,6 +17,10 @@ typedef struct {
     /*0x86*/ u16 flag;
 } JailBarsEntity;
 
+PORT_STATIC_ASSERT_SIZE(JailBarsEntity, 0x88, 0xB0, "JailBarsEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(JailBarsEntity, flag, 0x86, 0xAE,
+                        "JailBarsEntity flag offset incorrect");
+
 static void SetJailBarTiles(JailBarsEntity* this, u32);
 void JailBars_Init(JailBarsEntity* this);
 void JailBars_Action1(JailBarsEntity* this);

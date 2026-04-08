@@ -1,5 +1,6 @@
 #include "gba/io_reg.h"
 #include "main.h"
+#include "port_audio.h"
 #include "port_gba_mem.h"
 #include "port_ppu.h"
 #include "port_types.h"
@@ -9,8 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-
-#include <windows.h>
 
 static bool gQuitRequested = false;
 static int sFrameNum = 0;
@@ -83,7 +82,7 @@ void VBlankIntrWait(void) {
 
     Port_PPU_PresentFrame();
 
-    while (SDL_GetTicksNS() - lastFrameNs < 16666667 / 3) {
+    while (SDL_GetTicksNS() - lastFrameNs < 16666667 ) {
     }
 
     nowNs = SDL_GetTicksNS();
@@ -239,12 +238,14 @@ void RegisterRamReset(u32 flags) {
         // Sound register blocks in IO space.
         memset(gIoMem + 0x060, 0, 0x28);
         memset(gIoMem + 0x090, 0, 0x18);
+        Port_Audio_Reset();
     }
 
     if (flags & RESET_REGS) {
         memset(gIoMem, 0, sizeof(gIoMem));
         // GBA KEYINPUT idle state: all keys released.
         *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
+        Port_Audio_Reset();
     }
 }
 

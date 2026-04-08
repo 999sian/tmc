@@ -33,6 +33,7 @@
 
 #ifdef PC_PORT
 #include "port_rom.h"
+#include "port_gba_mem.h"
 extern void* Port_ReadPackedRomPtr(const void* base, u32 index);
 #endif
 extern u32 sub_08060354(void);
@@ -2387,7 +2388,11 @@ void sub_StateChange_DeepwoodShrineBoss_Main(void) {
         gUpdateVisibleTiles = 0;
         gFadeControl.active = 0;
         gUsedPalettes = 0;
+#ifdef PC_PORT
+        gba_write16(0x05000000u, 0x7fff);
+#else
         *(u16*)0x5000000 = 0x7fff;
+#endif
         DispReset(1);
     }
     if (CheckGlobalFlag(LV1_CLEAR)) {

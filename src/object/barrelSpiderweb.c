@@ -5,6 +5,7 @@
  * @brief Barrel Spiderweb object
  */
 #include "hitbox.h"
+#include "collision.h"
 #include "object.h"
 #include "asm.h"
 #include "common.h"
@@ -13,8 +14,10 @@
 #include "flags.h"
 #include "room.h"
 #include "physics.h"
+#include "manager/rollingBarrelManager.h"
 
 #include "player.h"
+#include "playeritem.h"
 
 void BarrelSpiderweb_Init(Entity*);
 void BarrelSpiderweb_Action1(Entity*);
@@ -22,6 +25,8 @@ void BarrelSpiderweb_Action2(Entity*);
 void sub_0808BDB0(Entity*);
 void sub_0808BBE0(Entity*);
 void sub_0808BD00(Entity*);
+static bool32 BarrelSpiderweb_HasJarContact(Entity*);
+static s32 BarrelSpiderweb_GetBarrelAngle(Entity*);
 
 void BarrelSpiderweb(Entity* this) {
     static void (*const BarrelSpiderweb_Actions[])(Entity*) = {
@@ -30,6 +35,49 @@ void BarrelSpiderweb(Entity* this) {
         BarrelSpiderweb_Action2,
     };
     BarrelSpiderweb_Actions[this->action](this);
+}
+
+static bool32 BarrelSpiderweb_HasJarContact(Entity* this) {
+    if ((this->contactFlags & CONTACT_NOW) && ((this->contactFlags & 0x7f) == 0x13)) {
+        return TRUE;
+    }
+
+#ifdef PC_PORT
+    if ((gPlayerState.gustJarState & 0xF) != PL_JAR_SUCK) {
+        return FALSE;
+    }
+
+    {
+        LinkedList* list = &gEntityLists[2];
+        Entity* it = list->first;
+
+        for (; it != (Entity*)list; it = it->next) {
+            if (it->kind != PLAYER_ITEM || it->id != PLAYER_ITEM_GUST) {
+                continue;
+            }
+            if ((it->flags & ENT_COLLIDE) == 0 || it->hitbox == NULL) {
+                continue;
+            }
+            if (IsColliding(this, it)) {
+                this->contactedEntity = it;
+                this->contactFlags = CONTACT_NOW | 0x13;
+                return TRUE;
+            }
+        }
+    }
+#endif
+
+    return FALSE;
+}
+
+static s32 BarrelSpiderweb_GetBarrelAngle(Entity* this) {
+    RollingBarrelManager* manager = (RollingBarrelManager*)this->parent;
+
+    if (manager == NULL || manager->base.kind != MANAGER || manager->base.id != ROLLING_BARREL_MANAGER) {
+        return 0;
+    }
+
+    return manager->unk_20;
 }
 
 void BarrelSpiderweb_Init(Entity* this) {
@@ -49,11 +97,12 @@ void BarrelSpiderweb_Init(Entity* this) {
         this->collisionFlags = 7;
         this->hurtType = 0x48;
         this->collisionMask = 4;
+        this->gustJarFlags = 1;
         this->hitbox = (Hitbox*)&gHitbox_0;
         this->frameIndex = 2;
         this->collisionLayer = gPlayerEntity.base.collisionLayer;
         sub_0808BDB0(this);
-        this->y.HALF.HI = 0x170 - (this->parent)->zVelocity;
+        this->y.HALF.HI = 0x170 - BarrelSpiderweb_GetBarrelAngle(this);
         sub_0808BBE0(this);
     }
 }
@@ -80,9 +129,9 @@ void BarrelSpiderweb_Action1(Entity* this) {
     s32 tmp;
     this->x.HALF.HI = gRoomControls.origin_x + 0x78;
     tmp = -0x170;
-    this->y.HALF.HI = gRoomControls.origin_y - ((this->parent)->zVelocity + tmp);
+    this->y.HALF.HI = gRoomControls.origin_y - (BarrelSpiderweb_GetBarrelAngle(this) + tmp);
     sub_0808BBE0(this);
-    if (this->contactFlags == (CONTACT_NOW | 0x13)) {
+    if (BarrelSpiderweb_HasJarContact(this)) {
         this->timer--;
         this->spriteSettings.draw = 1;
         if (this->timer == 0) {
@@ -122,7 +171,7 @@ void BarrelSpiderweb_Action2(Entity* this) {
         this->subtimer -= 8;
         SetAffineInfo(this, 0x200 - this->subtimer, 0x200 - this->subtimer, 0);
     }
-    if (this->contactFlags == (CONTACT_NOW | 0x13)) {
+    if (BarrelSpiderweb_HasJarContact(this)) {
         this->direction = GetFacingDirection(this, &gPlayerEntity.base);
         LinearMoveUpdate(this);
         if (EntityWithinDistance(this, gPlayerEntity.base.x.HALF.HI, gPlayerEntity.base.y.HALF.HI - 6, 0x1c)) {

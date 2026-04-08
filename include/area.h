@@ -29,7 +29,7 @@ typedef struct {
     const Transition* exits;
     void** properties;
 } RoomResInfo;
-static_assert(sizeof(RoomResInfo) == 0x20, "RoomResInfo size incorrect");
+PORT_STATIC_ASSERT_SIZE(RoomResInfo, 0x20, 0x38, "RoomResInfo size incorrect");
 
 typedef struct {
     u8 textBaseIndex;
@@ -74,7 +74,7 @@ typedef struct {
     void (*onEnter)();
     void (*onExit)();
 } Area;
-static_assert(sizeof(Area) == 0x894, "Area size incorrect");
+PORT_STATIC_ASSERT_SIZE(Area, 0x894, 0xEC0, "Area size incorrect");
 extern Area gArea;
 
 typedef struct {

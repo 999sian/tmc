@@ -29,6 +29,10 @@ typedef struct Manager {
     /*0x1c*/ u8 unused2[0x4];      /**< Not used by any manager. */
 } Manager;
 
+PORT_STATIC_ASSERT_SIZE(Manager, 0x20, 0x38, "Manager size incorrect");
+PORT_STATIC_ASSERT_OFFSET(Manager, parent, 0x14, 0x20, "Manager parent offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Manager, child, 0x18, 0x28, "Manager child offset incorrect");
+
 typedef enum {
     MANAGER_NONE,
     LIGHT_RAY_MANAGER,

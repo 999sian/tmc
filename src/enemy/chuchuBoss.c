@@ -15,6 +15,9 @@
 #include "player.h"
 #include "tiles.h"
 #include "pauseMenu.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 #ifndef EU
 #include "vram.h"
 #include "color.h"
@@ -58,6 +61,16 @@ typedef struct _ChuchuBossEntity {
     Helper* unk_84;
 } ChuchuBossEntity;
 
+#ifdef PC_PORT
+#define CHB_STATE84(ent) (GE_FIELD(&((ent)->base), cutsceneBeh)->HALF.LO)
+#define CHB_STATE85(ent) (GE_FIELD(&((ent)->base), cutsceneBeh)->HALF.HI)
+#define CHB_STATE86(ent) (GE_FIELD(&((ent)->base), field_0x86)->HWORD)
+#else
+#define CHB_STATE84(ent) (*(u8*)&((ent)->unk_84))
+#define CHB_STATE85(ent) (((u8*)&((ent)->unk_84))[1])
+#define CHB_STATE86(ent) (*(u16*)(((u8*)(ent)) + 0x86))
+#endif
+
 extern void (*const ChuchuBoss_Functions[])(ChuchuBossEntity*);
 extern void (*const gUnk_080CC1B0[])(ChuchuBossEntity*);
 typedef struct {
@@ -83,7 +96,50 @@ extern const ChuchuStruct gUnk_080CC27C[];
 extern const ChuchuStruct gUnk_080CC29C[];
 extern const ChuchuStruct gUnk_080CC2BC[];
 extern const s8 gUnk_080CC2DC[];
-extern Hitbox gUnk_080FD238;
+extern const Hitbox gHitbox_0;
+extern const Hitbox gUnk_080FD238;
+extern const Hitbox gUnk_080FD240;
+extern const Hitbox gUnk_080FD248;
+
+static const Hitbox* GetChuchuBossDefaultHitbox(u32 type) {
+    switch (type & 3) {
+        default:
+        case 0:
+            return &gUnk_080FD238;
+        case 1:
+            return &gUnk_080FD240;
+        case 2:
+            return &gUnk_080FD248;
+        case 3:
+            return &gHitbox_0;
+    }
+}
+
+static bool32 RestoreChuchuBossHitbox(Entity* ent) {
+    const Hitbox* template;
+
+    if (ent == NULL) {
+        return FALSE;
+    }
+    if (ent->hitbox != NULL) {
+        return TRUE;
+    }
+
+    template = GetChuchuBossDefaultHitbox(ent->type);
+    if (AllocMutableHitbox(ent) == NULL) {
+        return FALSE;
+    }
+
+    ent->hitbox->offset_x = template->offset_x;
+    ent->hitbox->offset_y = template->offset_y;
+    ent->hitbox->unk2[0] = template->unk2[0];
+    ent->hitbox->unk2[1] = template->unk2[1];
+    ent->hitbox->unk2[2] = template->unk2[2];
+    ent->hitbox->unk2[3] = template->unk2[3];
+    ent->hitbox->width = template->width;
+    ent->hitbox->height = template->height;
+    return TRUE;
+}
 
 void ChuchuBoss(Entity* this);
 void ChuchuBoss_OnKnockback(ChuchuBossEntity* this);
@@ -967,9 +1023,9 @@ void sub_080269CC(ChuchuBossEntity* this) {
         }
         pEVar6 = (ChuchuBossEntity*)super->parent;
         pEVar5 = (ChuchuBossEntity*)super->child;
-        *(u8*)&this->unk_68->unk_84 = 1;
-        *(u8*)&pEVar5->unk_84 = 1;
-        *(u8*)&pEVar6->unk_84 = 1;
+        CHB_STATE84(this->unk_68) = 1;
+        CHB_STATE84(pEVar5) = 1;
+        CHB_STATE84(pEVar6) = 1;
         pEVar4->unk_78.HALF.HI = 0x98;
         pEVar2->unk_78.HALF.HI = 0x98;
         pEVar7->unk_78.HALF.HI = 0x98;
@@ -1081,9 +1137,9 @@ void sub_08026C40(ChuchuBossEntity* this) {
         sub_080276F4(this, 3, 0);
         pEVar6->unk_7d = 0;
         if (DirectionIsVertical(super->direction)) {
-            *(u8*)((int)pEVar7 + 0x85) = 1;
-            *(u8*)((int)pEVar8 + 0x85) = 1;
-            *(u8*)((int)pEVar6 + 0x85) = 1;
+            CHB_STATE85(pEVar7) = 1;
+            CHB_STATE85(pEVar8) = 1;
+            CHB_STATE85(pEVar6) = 1;
         }
         super->subAction = 8;
         this->unk_7c = 4;
@@ -1224,7 +1280,7 @@ void sub_08027064(ChuchuBossEntity* this) {
             ProcessMovement0(super);
         }
     }
-    if (*(char*)((int)pEVar10 + 0x85) == 1) {
+    if (CHB_STATE85(pEVar10) == 1) {
         if ((s8)pEVar10->unk_82.HALF.HI < 1) {
             super->direction = 24;
         } else {
@@ -1239,9 +1295,9 @@ void sub_08027064(ChuchuBossEntity* this) {
     }
     if (this->unk_84->unk_03 == 0) {
         if (super->x.HALF.HI == this->unk_84->unk_0e) {
-            *(char*)((int)pEVar7 + 0x84) = 1;
-            *(char*)((int)pEVar5 + 0x84) = 1;
-            *(char*)((int)pEVar10 + 0x84) = 1;
+            CHB_STATE84(pEVar7) = 1;
+            CHB_STATE84(pEVar5) = 1;
+            CHB_STATE84(pEVar10) = 1;
             this->unk_7c = 0x1e;
             this->unk_84->unk_03++;
         } else {
@@ -1249,9 +1305,9 @@ void sub_08027064(ChuchuBossEntity* this) {
         }
     } else if (pEVar10->unk_7d != 0 && pEVar5->unk_7d != 0 && pEVar7->unk_7d != 0) {
         if (this->unk_7c-- == 0) {
-            *(char*)((int)pEVar7 + 0x84) = 1;
-            *(char*)((int)pEVar5 + 0x84) = 1;
-            *(char*)((int)pEVar10 + 0x84) = 1;
+            CHB_STATE84(pEVar7) = 1;
+            CHB_STATE84(pEVar5) = 1;
+            CHB_STATE84(pEVar10) = 1;
             uVar2 = 0;
             if (this->unk_84->unk_03 > 1) {
                 if (super->x.HALF.HI > gPlayerEntity.base.x.HALF.HI) {
@@ -1312,9 +1368,9 @@ void sub_0802720C(ChuchuBossEntity* this) {
                     sub_0802757C(this);
                     break;
             } else {
-                if (*(char*)&this->unk_84 != 0) {
+                if (CHB_STATE84(this) != 0) {
                     this->unk_7d = 0;
-                    *(char*)&this->unk_84 = 0;
+                    CHB_STATE84(this) = 0;
                 }
                 break;
             }
@@ -1355,7 +1411,7 @@ void sub_080272D4(ChuchuBossEntity* this) {
         case 6:
             super->hitbox->width = (u32)((0x10000 / this->unk_78.HALF_U.HI) * 9) >> 7;
             super->hitbox->height = (u32)((0x10000 / this->unk_74.HALF_U.HI) * 5) >> 6;
-            if (*(char*)&this->unk_84 == 0)
+            if (CHB_STATE84(this) == 0)
                 break;
             if (super->contactFlags & CONTACT_NOW) {
                 if (super->iframes != 0) {
@@ -1391,9 +1447,9 @@ void sub_080272D4(ChuchuBossEntity* this) {
         case 10:
             if (this->unk_7d == 0) {
                 sub_0802757C(this);
-            } else if (*(char*)&this->unk_84 != 0) {
+            } else if (CHB_STATE84(this) != 0) {
                 this->unk_7d = 0;
-                *(char*)&this->unk_84 = 0;
+                CHB_STATE84(this) = 0;
             }
             temp = this->unk_82.HALF.HI + (this->unk_81 / 2);
             if ((temp) > (u32)this->unk_81) {
@@ -1443,26 +1499,28 @@ void sub_0802757C(ChuchuBossEntity* this) {
             this->unk_7d--;
         }
     } else {
-        if (*(u8*)((int)this + 0x85) == 1) {
-            this->unk_82.HWORD += *(u16*)((int)this + 0x86);
+        if (CHB_STATE85(this) == 1) {
+            this->unk_82.HWORD += CHB_STATE86(this);
             if ((s8)this->unk_82.HALF.HI >= (s8)this->unk_81) {
-                *(u8*)((int)this + 0x85) = 0;
+                CHB_STATE85(this) = 0;
                 if (super->type == 1) {
-                    this->unk_7d =
-                        (((ChuchuBossEntity*)super->parent)->unk_81 << 8) / *(u16*)((int)super->parent + 0x86) + 1;
+                    this->unk_7d = (((ChuchuBossEntity*)super->parent)->unk_81 << 8) /
+                                       CHB_STATE86((ChuchuBossEntity*)super->parent) +
+                                   1;
                 } else {
                     this->unk_7d = 1;
                 }
                 this->unk_82.HWORD = this->unk_81 << 8;
             }
         } else {
-            this->unk_82.HWORD -= *(u16*)((int)this + 0x86);
+            this->unk_82.HWORD -= CHB_STATE86(this);
             if ((s8)this->unk_82.HALF.HI <= -this->unk_81) {
                 cVar2 = 1;
-                *(u8*)((int)this + 0x85) = cVar2;
+                CHB_STATE85(this) = cVar2;
                 if (super->type == 1) {
-                    this->unk_7d =
-                        (((ChuchuBossEntity*)super->parent)->unk_81 << 8) / *(u16*)((int)super->parent + 0x86) + 1;
+                    this->unk_7d = (((ChuchuBossEntity*)super->parent)->unk_81 << 8) /
+                                       CHB_STATE86((ChuchuBossEntity*)super->parent) +
+                                   1;
                 } else {
                     this->unk_7d = 1;
                 }
@@ -1498,9 +1556,9 @@ void sub_080276F4(ChuchuBossEntity* this, u32 param_2, u32 param_3) {
     pEVar6 = (ChuchuBossEntity*)super->child;
     pEVar5 = this->unk_68;
     pEVar2 = (ChuchuBossEntity*)super->parent;
-    *(u8*)((int)pEVar2 + 0x84) = tempzero = 0;
-    *(u8*)((int)pEVar5 + 0x84) = 0;
-    *(u8*)((int)pEVar6 + 0x84) = 0;
+    CHB_STATE84(pEVar2) = tempzero = 0;
+    CHB_STATE84(pEVar5) = 0;
+    CHB_STATE84(pEVar6) = 0;
     pEVar2->unk_7e.HWORD = tempzero;
     pEVar5->unk_7e.HWORD = 0;
     pEVar6->unk_7e.HWORD = 0;
@@ -1509,25 +1567,25 @@ void sub_080276F4(ChuchuBossEntity* this, u32 param_2, u32 param_3) {
     ptr = gUnk_080CC27C;
     ptr += param_2;
     iVar3 = ptr->unk0;
-    *(u16*)((int)pEVar6 + 0x86) = iVar3;
+    CHB_STATE86(pEVar6) = iVar3;
     pEVar6->unk_81 = ptr->unk2;
     ptr2 = gUnk_080CC2BC;
     ptr2 += param_2;
     iVar4 = ptr2->unk0;
-    *(u16*)((int)pEVar5 + 0x86) = iVar4;
+    CHB_STATE86(pEVar5) = iVar4;
     pEVar5->unk_81 = ptr2->unk2;
     ptr3 = (ChuchuStruct*)gUnk_080CC29C;
     iVar5 = ptr3[param_2].unk0;
-    *(u16*)((int)pEVar2 + 0x86) = iVar5;
+    CHB_STATE86(pEVar2) = iVar5;
     pEVar2->unk_81 = ptr3[param_2].unk2;
     if (param_3 == 0) {
-        *(u8*)((int)pEVar2 + 0x85) = 0;
-        *(u8*)((int)pEVar5 + 0x85) = 0;
-        *(u8*)((int)pEVar6 + 0x85) = 0;
+        CHB_STATE85(pEVar2) = 0;
+        CHB_STATE85(pEVar5) = 0;
+        CHB_STATE85(pEVar6) = 0;
         pEVar2->unk_82.HWORD = 0;
         pEVar5->unk_82.HWORD = 0;
         pEVar6->unk_82.HWORD = 0;
-        pEVar6->unk_7d = (pEVar2->unk_81 << 7) / (*(u16*)((int)pEVar2 + 0x86)) + 1;
+        pEVar6->unk_7d = (pEVar2->unk_81 << 7) / CHB_STATE86(pEVar2) + 1;
     }
 }
 
@@ -1649,6 +1707,10 @@ void sub_08027984(ChuchuBossEntity* this) {
 
 void sub_080279AC(ChuchuBossEntity* this, Entity* param_2, s32 param_3) {
     s32 temp;
+
+    if (!RestoreChuchuBossHitbox(param_2)) {
+        return;
+    }
 
     temp = 4 - param_3;
     param_2->spriteOffsetX = param_2->x.HALF_U.HI - super->x.HALF_U.HI;
@@ -1784,16 +1846,16 @@ void sub_08027BBC(ChuchuBossEntity* this) {
         super->direction = 0x18;
         pEVar5 = (ChuchuBossEntity*)super->child;
         pEVar3 = (ChuchuBossEntity*)super->parent;
-        *(u8*)((int)this->unk_68 + 0x85) = 0;
-        *(u8*)((int)pEVar3 + 0x85) = 0;
-        *(u8*)((int)pEVar5 + 0x85) = 0;
+        CHB_STATE85(this->unk_68) = 0;
+        CHB_STATE85(pEVar3) = 0;
+        CHB_STATE85(pEVar5) = 0;
     } else {
         super->direction = 8;
         pEVar6 = (ChuchuBossEntity*)super->child;
         pEVar7 = (ChuchuBossEntity*)super->parent;
-        *(u8*)((int)this->unk_68 + 0x85) = 1;
-        *(u8*)((int)pEVar7 + 0x85) = 1;
-        *(u8*)((int)pEVar6 + 0x85) = 1;
+        CHB_STATE85(this->unk_68) = 1;
+        CHB_STATE85(pEVar7) = 1;
+        CHB_STATE85(pEVar6) = 1;
     }
     super->animationState = super->direction >> 2;
     if (super->y.HALF.HI != gPlayerEntity.base.y.HALF.HI) {

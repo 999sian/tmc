@@ -31,7 +31,7 @@ void Sluggula(Entity* this) {
         if (this->z.HALF.HI == 0) {
             u32 idx = sub_080012DC(this);
             if (idx != 0) {
-                gUnk_080012C8[idx](this);
+                sub_08001290(this, idx);
                 return;
             }
         }

@@ -97,7 +97,7 @@ typedef struct {
     /*0x2A8*/ u8 unk_2a8[0x100];
     /*0x3A8*/ ActiveScriptInfo activeScriptInfo;
 } UI;
-static_assert(sizeof(UI) == 0x3b4, "UI size incorrect");
+PORT_STATIC_ASSERT_SIZE(UI, 0x3b4, 0x480, "UI size incorrect");
 
 extern Main gMain; /**< Main instance. */
 extern UI gUI;     /**< UI instance. */

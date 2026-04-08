@@ -15,13 +15,28 @@
 #include "physics.h"
 #include "room.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
-    /*0x68*/ EntityData* unk_68;
-    /*0x6c*/ u8 unused[26];
+    /*0x68*/ EntityData entityData;
+    /*0x78*/ u8 unused[14];
     /*0x86*/ u16 unk_86;
 } RemovableDustEntity;
+
+PORT_STATIC_ASSERT_SIZE(RemovableDustEntity, 0x88, 0xB0, "RemovableDustEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(RemovableDustEntity, entityData, 0x68, 0x90,
+                        "RemovableDustEntity entityData offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(RemovableDustEntity, unk_86, 0x86, 0xAE,
+                        "RemovableDustEntity flag offset incorrect");
+
+#ifdef PC_PORT
+#define DUST_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define DUST_FLAG(this) ((this)->unk_86)
+#endif
 
 extern void (*const RemovableDust_Functions[])(RemovableDustEntity*);
 extern const u16 gUnk_08129FD0[];
@@ -44,7 +59,7 @@ void RemovableDust_OnTick(RemovableDustEntity* this) {
         super->action = 1;
         super->frameIndex = super->type;
         super->gustJarFlags = 1;
-        super->speed = this->unk_86;
+        super->speed = DUST_FLAG(this);
         if (super->type == 0) {
             sub_080AA494(this);
         } else {
@@ -145,7 +160,7 @@ void sub_080AA544(RemovableDustEntity* this) {
 
 void sub_080AA654(RemovableDustEntity* this, u32 param) {
     EntityData* entityData;
-    entityData = (EntityData*)&this->unk_68;
+    entityData = &this->entityData;
 
     MemCopy(&gUnk_0812A004, entityData, 0x10);
 

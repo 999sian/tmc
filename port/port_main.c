@@ -1,6 +1,7 @@
 #include "gba/io_reg.h"
 #include "main.h"
 #include "port_config.h"
+#include "port_audio.h"
 #include "port_gba_mem.h"
 #include "port_ppu.h"
 #include "port_rom.h"
@@ -61,11 +62,15 @@ int main() {
 
     // Initialize PPU renderer
     Port_PPU_Init(window);
+    if (!Port_Audio_Init()) {
+        fprintf(stderr, "Port_Audio_Init failed: %s\n", SDL_GetError());
+    }
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
     AgbMain();
 
+    Port_Audio_Shutdown();
     Port_PPU_Shutdown();
     SDL_DestroyWindow(window);
     SDL_Quit();

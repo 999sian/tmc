@@ -607,6 +607,27 @@ void PauseMenu2(void) {
     sub_080A57F4();
 }
 
+static u8* GetPauseMenu2ItemSlots(void) {
+    return (u8*)&gGenericMenu.unk10;
+}
+
+static u8 GetPauseMenu2ItemSlot(u32 index) {
+    if (index >= 0x10) {
+        return 0;
+    }
+    return GetPauseMenu2ItemSlots()[index];
+}
+
+static void SetPauseMenu2ItemSlot(u32 index, u8 value) {
+    if (index < 0x10) {
+        GetPauseMenu2ItemSlots()[index] = value;
+    }
+}
+
+static void ClearPauseMenu2ItemSlots(void) {
+    MemClear(GetPauseMenu2ItemSlots(), 0x10);
+}
+
 //// TODO Moved here from subtask2.c
 // Probably could split the different screens of the pause menu.
 #include "fileselect.h"
@@ -670,7 +691,6 @@ extern gUnk_08128DE8_struct gUnk_08128DE8[];
 
 void sub_080A5594(void) {
     extern KeyButtonLayout gUnk_08128C04;
-    int iVar1;
     u32 uVar2;
     u32 skillCount;
     u32 item;
@@ -680,12 +700,13 @@ void sub_080A5594(void) {
 
     gMenu.field_0xc = gUnk_08128C00;
     sub_080A70AC(&gUnk_08128C04);
+    ClearPauseMenu2ItemSlots();
     uVar7 = 6;
 
     for (item = ITEM_QST_SWORD; item <= ITEM_FLIPPERS; item++) {
         if (GetInventoryValue(item) == 1) {
             uVar2 = gItemMetaData[item].menuSlot;
-            if (uVar2 == 3 && gGenericMenu.unk10.a[3] != 0) {
+            if (uVar2 == 3 && GetPauseMenu2ItemSlot(3) != 0) {
                 uVar2 = 99;
             }
             if (uVar2 != 99) {
@@ -695,7 +716,7 @@ void sub_080A5594(void) {
                         uVar7 = uVar2 + 1;
                     }
                 }
-                gGenericMenu.unk10.a[uVar2] = item;
+                SetPauseMenu2ItemSlot(uVar2, item);
                 sub_080A5F48(item, uVar2 * 8 + 0x380);
             }
         }
@@ -717,9 +738,9 @@ void sub_080A5594(void) {
                 iVar5 = 1;
             }
         }
-        gGenericMenu.unk10.a[0] = iVar5;
+        SetPauseMenu2ItemSlot(0, iVar5);
     }
-    gGenericMenu.unk10.a[1] = gSave.stats.heartPieces + 1;
+    SetPauseMenu2ItemSlot(1, gSave.stats.heartPieces + 1);
     skillCount = 0;
 
     for (i = ITEM_SKILL_SPIN_ATTACK; i <= ITEM_SKILL_PERIL_BEAM; i++) {
@@ -727,9 +748,15 @@ void sub_080A5594(void) {
             skillCount++;
         }
     }
-    gGenericMenu.unk10.a[2] = skillCount;
+    SetPauseMenu2ItemSlot(2, skillCount);
     if (GetInventoryValue(ITEM_QST_CARLOV_MEDAL) == 0 && GetInventoryValue(ITEM_SHELLS) != 0) {
-        gGenericMenu.unk10.a[3] = ITEM_SHELLS;
+        SetPauseMenu2ItemSlot(3, ITEM_SHELLS);
+    }
+    for (i = 0; i < 0x10; i++) {
+        item = GetPauseMenu2ItemSlot(i);
+        if (item >= ITEM_QST_SWORD) {
+            sub_080A5F48(item, i * 8 + 0x380);
+        }
     }
     gGenericMenu.unk14 = 1;
     gGenericMenu.unk15 = 1;
@@ -772,7 +799,7 @@ void sub_080A56A0(void) {
         switch (uVar2) {
             case 0:
             case 2:
-                if (gGenericMenu.unk10.a[uVar2] != 0) {
+                if (GetPauseMenu2ItemSlot(uVar2) != 0) {
                     iVar1 = 8;
                     if (uVar2 == 0) {
                         iVar1 = 7;
@@ -803,7 +830,7 @@ void sub_080A56A0(void) {
     switch (gMenu.field_0x3) {
         case 0:
         case 2:
-            if (gGenericMenu.unk10.a[gMenu.field_0x3] != 0) {
+            if (GetPauseMenu2ItemSlot(gMenu.field_0x3) != 0) {
                 gHUD.buttonY[0] = 0x10;
             } else {
                 gHUD.buttonY[0] = 0xfff0;
@@ -815,7 +842,7 @@ void sub_080A56A0(void) {
     }
 
     uVar2 = gMenu.field_0x3;
-    item = gGenericMenu.unk10.a[uVar2];
+    item = GetPauseMenu2ItemSlot(uVar2);
     if (item != 0) {
         switch (uVar2) {
             case 0:
@@ -870,7 +897,7 @@ void sub_080A57F4(void) {
     DrawDirect(DRAW_DIRECT_SPRITE_INDEX, frameIndex);
 
     for (index = 0, pbVar6 = (struct_gUnk_08128C14*)((u8*)puVar8 + 5); index < 0x10; pbVar6++, index++) {
-        uVar5 = gGenericMenu.unk10.a[index];
+        uVar5 = GetPauseMenu2ItemSlot(index);
         if (uVar5 != 0) {
             puVar10 = &puVar8[index];
             gOamCmd.x = pbVar6->unk1;
@@ -882,7 +909,7 @@ void sub_080A57F4(void) {
                     uVar5 = pbVar6->unk0 + 10;
                     spriteIndex = DRAW_DIRECT_SPRITE_INDEX;
                 } else {
-                    uVar5 = gGenericMenu.unk10.a[index] + 9;
+                    uVar5 = GetPauseMenu2ItemSlot(index) + 9;
                     uVar5 += puVar10->unk5;
                     spriteIndex = DRAW_DIRECT_SPRITE_INDEX;
                 }
@@ -910,15 +937,15 @@ void sub_080A57F4(void) {
         }
     }
 
-    if (gGenericMenu.unk10.a[2] != 0) {
-        gOamCmd._8 = gGenericMenu.unk10.a[2] + 0x800;
+    if (GetPauseMenu2ItemSlot(2) != 0) {
+        gOamCmd._8 = GetPauseMenu2ItemSlot(2) + 0x800;
         puVar10 = puVar8 + 2;
         gOamCmd.x = puVar10->unk6 + 9;
         gOamCmd.y = puVar10->unk7 + 7;
         DrawDirect(0, 1);
     }
 
-    if (gGenericMenu.unk10.a[3] == 0x3f) {
+    if (GetPauseMenu2ItemSlot(3) == 0x3f) {
         puVar10 = puVar8 + 3;
         gOamCmd.x = puVar10->unk6 + 8;
         gOamCmd.y = puVar10->unk7 + 8;

@@ -29,7 +29,7 @@ typedef struct {
     u16 fusingTextIndex;
     Entity* entity;
 } FuseInfo;
-static_assert(sizeof(FuseInfo) == 0x10, "FuseInfo size incorrect");
+PORT_STATIC_ASSERT_SIZE(FuseInfo, 0x10, 0x18, "FuseInfo size incorrect");
 extern FuseInfo gFuseInfo;
 
 typedef struct {

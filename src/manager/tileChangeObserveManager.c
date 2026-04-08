@@ -11,6 +11,19 @@
 #include "flags.h"
 #include "room.h"
 #include "map.h"
+#ifdef PC_PORT
+#include <stdint.h>
+#endif
+
+#ifdef PC_PORT
+#define TCOM_TILEPOS(this) (*(u16*)((u8*)(this) + sizeof(Manager) + 0x18))
+#define TCOM_LAYER(this) (*(u16*)((u8*)(this) + sizeof(Manager) + 0x1A))
+#define TCOM_FLAG(this) (*(u16*)((u8*)(this) + sizeof(Manager) + 0x1E))
+#else
+#define TCOM_TILEPOS(this) ((this)->tilePos)
+#define TCOM_LAYER(this) ((this)->field_0x3a)
+#define TCOM_FLAG(this) ((this)->flag)
+#endif
 
 void TileChangeObserveManager_Init(TileChangeObserveManager*);
 void TileChangeObserveManager_Action1(TileChangeObserveManager*);
@@ -27,11 +40,11 @@ void TileChangeObserveManager_Main(TileChangeObserveManager* this) {
 
 void TileChangeObserveManager_Init(TileChangeObserveManager* this) {
     u16* tileIndex;
-    if (CheckFlags(this->flag) != 0) {
+    if (CheckFlags(TCOM_FLAG(this)) != 0) {
         DeleteThisEntity();
     } else {
         super->action = 1;
-        tileIndex = &GetLayerByIndex(this->field_0x3a)->mapData[this->tilePos];
+        tileIndex = &GetLayerByIndex(TCOM_LAYER(this))->mapData[TCOM_TILEPOS(this)];
         this->observedTile = tileIndex;
         this->initialTile = tileIndex[0];
     }
@@ -46,7 +59,7 @@ void TileChangeObserveManager_Action1(TileChangeObserveManager* this) {
 
 void TileChangeObserveManager_Action2(TileChangeObserveManager* this) {
     if (--super->timer == 0) {
-        SetFlag(this->flag);
+        SetFlag(TCOM_FLAG(this));
         if (super->type != 0) {
             LoadRoomEntityList((EntityData*)GetCurrentRoomProperty(super->type));
         }

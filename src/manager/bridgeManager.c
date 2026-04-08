@@ -8,6 +8,14 @@
 #include "flags.h"
 #include "sound.h"
 #include "player.h"
+#include "room.h"
+#include "map.h"
+#include "asm.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#include "area.h"
+#include "roomid.h"
+#endif
 
 void BridgeManager_Init(BridgeManager*);
 void BridgeManager_Action1(BridgeManager*);
@@ -43,6 +51,20 @@ void BridgeManager_Init(BridgeManager* this) {
     super->timer = 28;
     super->subtimer = 0;
     super->action = (super->type2 & 0x80) ? 2 : 1;
+#ifdef PC_PORT
+    if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_BUTTON) {
+        fprintf(stderr,
+                "[BRIDGE7] Init flag=0x%04X x=%d y=%d layer=%u len=%u type2=0x%02X action=%u check=%u\n",
+                this->flags, this->x, this->y, this->unk_3c, this->unk_32, super->type2, super->action,
+                CheckFlags(this->flags));
+    }
+    if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_POT_BRIDGE) {
+        fprintf(stderr,
+                "[POTBRIDGE] Bridge_Init flag=0x%04X x=%d y=%d layer=%u len=%u type2=0x%02X action=%u check=%u\n",
+                this->flags, this->x, this->y, this->unk_3c, this->unk_32, super->type2, super->action,
+                CheckFlags(this->flags));
+    }
+#endif
     if (super->action != 2 || !CheckFlags(this->flags))
         return;
     for (; this->unk_32; this->unk_32--) {
@@ -56,12 +78,32 @@ void BridgeManager_Action1(BridgeManager* this) {
     if (--super->timer)
         return;
     super->timer = 8;
+#ifdef PC_PORT
+    if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_BUTTON) {
+        fprintf(stderr, "[BRIDGE7] Tick flag=0x%04X check=%u progress=%u/%u tilePos=0x%03X layer=%u\n", this->flags,
+                CheckFlags(this->flags), super->subtimer, this->unk_32, this->x | (this->y << 6), this->unk_3c);
+    }
+    if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_POT_BRIDGE) {
+        fprintf(stderr,
+                "[POTBRIDGE] Bridge_Tick flag=0x%04X check=%u progress=%u/%u tilePos=0x%03X layer=%u tile=0x%X\n",
+                this->flags, CheckFlags(this->flags), super->subtimer, this->unk_32, this->x | (this->y << 6),
+                this->unk_3c, GetTileTypeAtTilePos(this->x | (this->y << 6), this->unk_3c));
+    }
+#endif
     if (CheckFlags(this->flags)) {
         if (this->unk_32 == super->subtimer)
             return;
         sub_08057CA4(this, this->unk_28, this->unk_2a);
         sub_0807B7D8(this->unk_30, this->x | (this->y << 6), this->unk_3c);
         super->subtimer++;
+#ifdef PC_PORT
+        if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_POT_BRIDGE) {
+            fprintf(stderr,
+                    "[POTBRIDGE] Bridge_Set step=%u tilePos=0x%03X layer=%u tile=0x%X setType=0x%X\n",
+                    super->subtimer, this->x | (this->y << 6), this->unk_3c,
+                    GetTileTypeAtTilePos(this->x | (this->y << 6), this->unk_3c), this->unk_30);
+        }
+#endif
         SoundReq(SFX_HEART_GET);
     } else {
         if (!super->subtimer)
@@ -69,6 +111,13 @@ void BridgeManager_Action1(BridgeManager* this) {
         RestorePrevTileEntity(this->x | (this->y << 6), this->unk_3c);
         sub_08057CA4(this, this->unk_2c, this->unk_2e);
         super->subtimer--;
+#ifdef PC_PORT
+        if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_POT_BRIDGE) {
+            fprintf(stderr, "[POTBRIDGE] Bridge_Clear step=%u tilePos=0x%03X layer=%u tile=0x%X\n", super->subtimer,
+                    this->x | (this->y << 6), this->unk_3c,
+                    GetTileTypeAtTilePos(this->x | (this->y << 6), this->unk_3c));
+        }
+#endif
         SoundReq(SFX_HEART_GET);
     }
 }

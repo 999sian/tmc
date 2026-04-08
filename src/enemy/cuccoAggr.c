@@ -53,7 +53,7 @@ bool32 CuccoAggr_IsOutsideScroll(CuccoAggrEntity* this);
 void CuccoAggr(Entity* this) {
     u32 index = sub_080012DC(this);
     if (index) {
-        gUnk_080012C8[index](this);
+        sub_08001290(this, index);
     } else {
         CuccoAggr_Functions[GetNextFunction(this)](this);
         EnemySetFXOffset(this, 0, 1, -0x10);

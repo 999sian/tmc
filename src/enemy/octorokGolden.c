@@ -26,9 +26,9 @@ static void sub_08037D54(Entity* this);
 
 void OctorokGolden(Entity* this) {
     u32 index;
-    if (sub_080012DC(this)) {
-        //! @bug index (r4) is uninitialized
-        gUnk_080012C8[index](this);
+    index = sub_080012DC(this);
+    if (index) {
+        sub_08001290(this, index);
     } else {
         OctorokGolden_Functions[GetNextFunction(this)](this);
         EnemySetFXOffset(this, 0, 1, -0x10);

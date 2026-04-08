@@ -184,6 +184,28 @@ void sub_0804AF90(void) {
     ClearSmallChests();
 }
 
+#ifdef PC_PORT
+static void** GetAreaRoomPropertyList(u32 area, u32 room) {
+    void*** areaTable = gAreaTable[area];
+    const u8* ptr = (const u8*)areaTable;
+
+    if (areaTable == NULL) {
+        Port_RefreshAreaData(area);
+        areaTable = gAreaTable[area];
+        ptr = (const u8*)areaTable;
+        if (areaTable == NULL) {
+            return NULL;
+        }
+    }
+
+    if (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize) {
+        return Port_ReadPackedRomPtr(areaTable, room);
+    }
+
+    return areaTable[room];
+}
+#endif
+
 void sub_0804AFB0(void** properties) {
     u32 i;
 
@@ -270,7 +292,11 @@ void sub_0804B0B0(u32 area, u32 room) {
 void SetCurrentRoomPropertyList(u32 area, u32 room) {
     gCurrentRoomProperties = NULL;
     if (gAreaTable[area] != NULL) {
+#ifdef PC_PORT
+        gCurrentRoomProperties = GetAreaRoomPropertyList(area, room);
+#else
         gCurrentRoomProperties = gAreaTable[area][room];
+#endif
     }
 }
 
@@ -288,7 +314,11 @@ void* GetRoomProperty(u32 area, u32 room, u32 property) {
     void** temp;
     temp = NULL;
     if (gAreaTable[area] != NULL) {
+#ifdef PC_PORT
+        temp = GetAreaRoomPropertyList(area, room);
+#else
         temp = gAreaTable[area][room];
+#endif
         if (temp != NULL) {
 #ifdef PC_PORT
             return Port_ReadPackedRomPtr(temp, property);
@@ -310,7 +340,12 @@ void* GetCurrentRoomProperty(u32 idx) {
         return gRoomVars.properties[idx];
     } else {
 #ifdef PC_PORT
-        return Port_ReadPackedRomPtr(gCurrentRoomProperties, idx);
+        void* result = Port_ReadPackedRomPtr(gCurrentRoomProperties, idx);
+        if (idx == 10) {
+            fprintf(stderr, "GetCurrentRoomProperty(10): base=%p result=%p\n", 
+                    (void*)gCurrentRoomProperties, result);
+        }
+        return result;
 #else
         return gCurrentRoomProperties[idx];
 #endif

@@ -26,6 +26,7 @@
 ///@}
 
 #include "gba/gba.h"
+#include <stddef.h>
 #include <string.h>
 
 // Prevent cross-jump optimization.
@@ -70,7 +71,27 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) >= (b) ? (a) : (b))
 
+#if defined(PORT_IGNORE_STATIC_ASSERTS)
+#define static_assert(...)
+#elif defined(PC_PORT)
+#if defined(__cplusplus)
+/* Use the built-in C++11 keyword on the PC port. */
+#else
+#define static_assert(...) _Static_assert(__VA_ARGS__)
+#endif
+#else
 #define static_assert(...) //_Static_assert(__VA_ARGS__)
+#endif
+
+#ifdef PC_PORT
+#define PORT_STATIC_ASSERT_SIZE(type, gba_size, pc_size, msg) static_assert(sizeof(type) == (pc_size), msg)
+#define PORT_STATIC_ASSERT_EXPR(expr, gba_size, pc_size, msg) static_assert((expr) == (pc_size), msg)
+#define PORT_STATIC_ASSERT_OFFSET(type, field, gba_off, pc_off, msg) static_assert(offsetof(type, field) == (pc_off), msg)
+#else
+#define PORT_STATIC_ASSERT_SIZE(type, gba_size, pc_size, msg) static_assert(sizeof(type) == (gba_size), msg)
+#define PORT_STATIC_ASSERT_EXPR(expr, gba_size, pc_size, msg) static_assert((expr) == (gba_size), msg)
+#define PORT_STATIC_ASSERT_OFFSET(type, field, gba_off, pc_off, msg) static_assert(offsetof(type, field) == (gba_off), msg)
+#endif
 
 #define super (&this->base)
 

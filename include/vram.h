@@ -45,7 +45,7 @@ typedef struct {
 } GfxSlotList;
 extern GfxSlotList gGFXSlots;
 
-static_assert(sizeof(GfxSlotList) == 0x214);
+PORT_STATIC_ASSERT_SIZE(GfxSlotList, 0x214, 0x2C8, "GfxSlotList size incorrect");
 #endif
 
 extern bool32 LoadFixedGFX(Entity*, u32);

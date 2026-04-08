@@ -27,7 +27,7 @@ typedef struct {
     u8 unk_0x84;
 } TakkuriEntity;
 
-static_assert(sizeof(TakkuriEntity) == 0x88, "TakkuriEntity size incorrect");
+PORT_STATIC_ASSERT_SIZE(TakkuriEntity, 0x88, 0xB0, "TakkuriEntity size incorrect");
 
 void (*const Takkuri_Functions[])(Entity*);
 void (*const gUnk_080CFF54[])(TakkuriEntity*);

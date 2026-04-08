@@ -11,7 +11,11 @@
 #include "physics.h"
 #include "player.h"
 #include "color.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
+#ifndef PC_PORT
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[5];
@@ -25,6 +29,31 @@ typedef struct {
     /*0x80*/ u8 unused4[4];
     /*0x84*/ u32 unk_84;
 } ChuchuBossStartParticleEntity;
+#else
+typedef struct {
+    Entity base;
+} ChuchuBossStartParticleEntity;
+
+static inline u32* ChuchuBossStartParticle_U32Field(ChuchuBossStartParticleEntity* this, size_t geFieldOffset) {
+    return (u32*)Port_GEFieldAddr(&this->base, geFieldOffset);
+}
+
+#define CBSP_UNK_6D(this) (GE_FIELD(&((this)->base), field_0x6c)->HALF.HI)
+#define CBSP_UNK_70(this) (GE_FIELD(&((this)->base), field_0x70)->WORD_U)
+#define CBSP_UNK_74(this) (*ChuchuBossStartParticle_U32Field((this), offsetof(GenericEntity, field_0x74)))
+#define CBSP_UNK_78(this) (*ChuchuBossStartParticle_U32Field((this), offsetof(GenericEntity, field_0x78)))
+#define CBSP_UNK_7F(this) (GE_FIELD(&((this)->base), field_0x7c)->BYTES.byte3)
+#define CBSP_UNK_84(this) (*ChuchuBossStartParticle_U32Field((this), offsetof(GenericEntity, cutsceneBeh)))
+#endif
+
+#ifndef PC_PORT
+#define CBSP_UNK_6D(this) ((this)->unk_6d)
+#define CBSP_UNK_70(this) ((this)->unk_70)
+#define CBSP_UNK_74(this) ((this)->unk_74)
+#define CBSP_UNK_78(this) ((this)->unk_78)
+#define CBSP_UNK_7F(this) ((this)->unk_7f)
+#define CBSP_UNK_84(this) ((this)->unk_84)
+#endif
 
 static void sub_0808F2B0(ChuchuBossStartParticleEntity* this);
 void ChuchuBossStartParticle_Type0_Action1(ChuchuBossStartParticleEntity* this);
@@ -86,8 +115,8 @@ void ChuchuBossStartParticle_Type0_Init(ChuchuBossStartParticleEntity* this) {
         offsetY = -offsetY;
     }
     super->y.HALF.HI = super->parent->y.HALF.HI + offsetY;
-    this->unk_74 = 0x240;
-    this->unk_78 = 0x140;
+    CBSP_UNK_74(this) = 0x240;
+    CBSP_UNK_78(this) = 0x140;
     InitializeAnimation(super, 3);
     ChuchuBossStartParticle_Type0_Action1(this);
 }
@@ -101,20 +130,20 @@ void ChuchuBossStartParticle_Type0_Action1(ChuchuBossStartParticleEntity* this) 
 }
 
 void ChuchuBossStartParticle_Type0_Action2(ChuchuBossStartParticleEntity* this) {
-    this->unk_74 -= 0x20;
-    this->unk_78 += 0x20;
-    sub_0806FCF4(super, this->unk_78, 8, 2);
-    if (this->unk_78 > 0x1ff) {
+    CBSP_UNK_74(this) -= 0x20;
+    CBSP_UNK_78(this) += 0x20;
+    sub_0806FCF4(super, CBSP_UNK_78(this), 8, 2);
+    if (CBSP_UNK_78(this) > 0x1ff) {
         super->action++;
     }
     sub_0808F2B0(this);
 }
 
 void ChuchuBossStartParticle_Type0_Action3(ChuchuBossStartParticleEntity* this) {
-    this->unk_78 += 0x10;
-    this->unk_74 += 0x10;
-    sub_0806FCF4(super, this->unk_78, 8, 2);
-    if (this->unk_78 > 0x3ff) {
+    CBSP_UNK_78(this) += 0x10;
+    CBSP_UNK_74(this) += 0x10;
+    sub_0806FCF4(super, CBSP_UNK_78(this), 8, 2);
+    if (CBSP_UNK_78(this) > 0x3ff) {
         super->child->action = 0xff;
         DeleteThisEntity();
     } else {
@@ -148,17 +177,17 @@ void sub_0808F244(ChuchuBossStartParticleEntity* this) {
     super->y.HALF.HI = super->parent->y.HALF.HI + 3;
     super->x.HALF.HI = (*(s8*)&super->child->spriteOffsetX + super->child->x.HALF.HI);
     super->z.WORD = 0;
-    this->unk_74 = 0x80 - super->parent->z.HALF.HI;
-    this->unk_78 = 0x100 - super->parent->z.HALF.HI;
-    this->unk_70 = ((ChuchuBossStartParticleEntity*)super->parent)->unk_7f;
+    CBSP_UNK_74(this) = 0x80 - super->parent->z.HALF.HI;
+    CBSP_UNK_78(this) = 0x100 - super->parent->z.HALF.HI;
+    CBSP_UNK_70(this) = CBSP_UNK_7F((ChuchuBossStartParticleEntity*)super->parent);
     sub_0808F2B0(this);
-    if ((((ChuchuBossStartParticleEntity*)super->parent)->unk_6d & 2) != 0) {
+    if ((CBSP_UNK_6D((ChuchuBossStartParticleEntity*)super->parent) & 2) != 0) {
         DeleteThisEntity();
     }
 }
 
 static void sub_0808F2B0(ChuchuBossStartParticleEntity* this) {
-    SetAffineInfo(super, this->unk_74, this->unk_78, this->unk_70);
+    SetAffineInfo(super, CBSP_UNK_74(this), CBSP_UNK_78(this), CBSP_UNK_70(this));
 }
 
 void ChuchuBossStartParticle_Type2(ChuchuBossStartParticleEntity* this) {
@@ -175,15 +204,15 @@ void ChuchuBossStartParticle_Type2(ChuchuBossStartParticleEntity* this) {
         InitializeAnimation(super, 3);
     }
     if (super->parent->z.HALF.HI == 0) {
-        this->unk_74 = ((ChuchuBossStartParticleEntity*)super->parent)->unk_74;
-        this->unk_78 = ((ChuchuBossStartParticleEntity*)super->parent)->unk_78;
+        CBSP_UNK_74(this) = CBSP_UNK_74((ChuchuBossStartParticleEntity*)super->parent);
+        CBSP_UNK_78(this) = CBSP_UNK_78((ChuchuBossStartParticleEntity*)super->parent);
     } else {
-        this->unk_74 = 0x200 - super->parent->z.HALF.HI;
-        this->unk_78 = super->parent->z.HALF.HI * -2 + 0x300;
+        CBSP_UNK_74(this) = 0x200 - super->parent->z.HALF.HI;
+        CBSP_UNK_78(this) = super->parent->z.HALF.HI * -2 + 0x300;
     }
-    this->unk_70 = 0;
+    CBSP_UNK_70(this) = 0;
     sub_0808F2B0(this);
-    sub_0806FCF4(super, this->unk_78, 8, 2);
+    sub_0806FCF4(super, CBSP_UNK_78(this), 8, 2);
     if (super->action == 0xff) {
         DeleteThisEntity();
     }
@@ -194,24 +223,24 @@ void ChuchuBossStartParticle_Type3(ChuchuBossStartParticleEntity* this) {
     if (super->action == 0) {
         if (super->parent->subAction == 1) {
             super->action = 1;
-            this->unk_70 = 0;
+            CBSP_UNK_70(this) = 0;
             sub_0808F5EC(this);
         }
     } else {
         u8 flag = super->parent->subAction - 1;
         if (flag < 5) {
-            if (this->unk_70 == 0) {
-                if (--(this->unk_74) == -1) {
-                    this->unk_70 = gUnk_08121EA0[Random() & 1];
+            if (CBSP_UNK_70(this) == 0) {
+                if (--CBSP_UNK_74(this) == (u32)-1) {
+                    CBSP_UNK_70(this) = gUnk_08121EA0[Random() & 1];
                 }
             } else {
-                if (--this->unk_70 == 0) {
+                if (--CBSP_UNK_70(this) == 0) {
                     sub_0808F5EC(this);
                 }
             }
         } else {
             super->action = 0;
-            this->unk_74 = 0;
+            CBSP_UNK_74(this) = 0;
         }
     }
 }
@@ -234,7 +263,7 @@ void ChuchuBossStartParticle_Type5(ChuchuBossStartParticleEntity* this) {
         }
         SortEntityAbove(super->child, super);
     } else {
-        if (((ChuchuBossStartParticleEntity*)super->parent)->unk_74 == 0) {
+        if (CBSP_UNK_74((ChuchuBossStartParticleEntity*)super->parent) == 0) {
             if (super->type == 8) {
                 super->child->hitType = super->hitType;
             }
@@ -293,8 +322,8 @@ void ChuchuBossStartParticle_Type10(ChuchuBossStartParticleEntity* this) {
     }
 
     if (super->action != 0) {
-        if (this->unk_84) {
-            if (--(this->unk_84) == 0) {
+        if (CBSP_UNK_84(this)) {
+            if (--CBSP_UNK_84(this) == 0) {
                 DeleteThisEntity();
             }
         }
@@ -327,5 +356,5 @@ void sub_0808F5EC(ChuchuBossStartParticleEntity* this) {
         entity->child = super->child;
     }
 
-    this->unk_74 = 600;
+    CBSP_UNK_74(this) = 600;
 }

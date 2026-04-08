@@ -38,7 +38,7 @@ void sub_0803A0E0(FlyingSkullEntity* this);
 void FlyingSkull(Entity* this) {
     u32 index = sub_080012DC(this);
     if (index) {
-        gUnk_080012C8[index](this);
+        sub_08001290(this, index);
     } else {
         FlyingSkull_Functions[GetNextFunction(this)](this);
     }

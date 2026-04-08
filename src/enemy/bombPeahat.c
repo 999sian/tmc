@@ -51,7 +51,7 @@ void BombPeahat(BombPeahatEntity* this) {
     s32 iVar1;
 
     if ((super->type == 2) && (iVar1 = sub_080012DC(super), iVar1)) {
-        gUnk_080012C8[iVar1](super);
+        sub_08001290(super, iVar1);
     } else {
         BombPeahat_Functions[GetNextFunction(super)](this);
     }

@@ -25,7 +25,10 @@
 #include "beanstalkSubtask.h"
 #include "pauseMenu.h"
 #ifdef PC_PORT
+#include "port_rom.h"
+#include "port_gba_mem.h"
 #include <stdio.h>
+#include <stdint.h>
 #endif
 
 u32 StairsAreValid(void);
@@ -51,6 +54,78 @@ typedef struct {
 } PopupOption;
 
 extern u8 gUnk_0200AF14;
+
+#define AREA_TABLE_COUNT 0x90
+
+#ifdef PC_PORT
+static bool32 IsRoomHeaderPtrInRom(const RoomHeader* ptr) {
+    uintptr_t start;
+    uintptr_t end;
+    uintptr_t at;
+
+    if (ptr == NULL || gRomData == NULL || gRomSize < sizeof(RoomHeader)) {
+        return FALSE;
+    }
+
+    start = (uintptr_t)gRomData;
+    end = start + (uintptr_t)gRomSize;
+    at = (uintptr_t)ptr;
+
+    return at >= start && at <= end - sizeof(RoomHeader);
+}
+#endif
+
+static RoomHeader* GetAreaRoomHeaderTable(u32 area) {
+#ifdef PC_PORT
+    RoomHeader* table;
+#endif
+
+    if (area >= AREA_TABLE_COUNT) {
+        return NULL;
+    }
+
+#ifdef PC_PORT
+    table = gAreaRoomHeaders[area];
+    if (!IsRoomHeaderPtrInRom(table)) {
+        Port_RefreshAreaData(area);
+        table = gAreaRoomHeaders[area];
+    }
+    if (!IsRoomHeaderPtrInRom(table)) {
+        fprintf(stderr, "[AREA] invalid room header table area=%u ptr=%p rom=[%p..%p)\n", area, (void*)table,
+                (void*)gRomData, (void*)(gRomData + gRomSize));
+        return NULL;
+    }
+    return table;
+#else
+    return gAreaRoomHeaders[area];
+#endif
+}
+
+static RoomHeader* GetAreaRoomHeaderSafe(u32 area, u32 room) {
+    RoomHeader* table = GetAreaRoomHeaderTable(area);
+
+    if (table == NULL || room >= MAX_ROOMS) {
+        return NULL;
+    }
+
+    return table + room;
+}
+
+#ifdef PC_PORT
+static void* ReadAreaSubTableEntry(void** table, u32 index) {
+    const u8* ptr = (const u8*)table;
+
+    if (table == NULL) {
+        return NULL;
+    }
+
+    if (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize) {
+        return Port_ReadPackedRomPtr(table, index);
+    }
+
+    return table[index];
+}
+#endif
 
 void SetPopupState(u32 type, u32 choice_idx) {
     static const Font sDefaultFont = {
@@ -508,13 +583,23 @@ void UpdatePlayerMapCoords(void) {
 }
 
 void SetWorldMapPos(u32 area, u32 room, u32 x, u32 y) {
-    RoomHeader* hdr = gAreaRoomHeaders[area] + room;
+    RoomHeader* hdr = GetAreaRoomHeaderSafe(area, room);
+
+    if (hdr == NULL) {
+        return;
+    }
+
     gRoomTransition.player_status.overworld_map_x = hdr->map_x + x;
     gRoomTransition.player_status.overworld_map_y = hdr->map_y + y;
 }
 
 void SetDungeonMapPos(u32 area, u32 room, u32 x, u32 y) {
-    RoomHeader* hdr = gAreaRoomHeaders[area] + room;
+    RoomHeader* hdr = GetAreaRoomHeaderSafe(area, room);
+
+    if (hdr == NULL) {
+        return;
+    }
+
     gRoomTransition.player_status.dungeon_map_x = hdr->map_x + x;
     gRoomTransition.player_status.dungeon_map_y = hdr->map_y + y;
 }
@@ -549,10 +634,30 @@ void RegisterTransitionHandler(void* mgr, void (*onEnter)(), void (*onExit)()) {
 }
 
 void InitAllRoomResInfo(void) {
-    RoomHeader* r_hdr = gAreaRoomHeaders[gRoomControls.area];
+    RoomHeader* r_hdr = GetAreaRoomHeaderTable(gRoomControls.area);
     RoomResInfo* info = gArea.roomResInfos;
     u32 i;
-    for (i = 0; i < MAX_ROOMS && *(u16*)r_hdr != 0xFFFF; i++, r_hdr++) {
+
+    if (r_hdr == NULL) {
+        MemClear(gArea.roomResInfos, sizeof(gArea.roomResInfos));
+        gArea.pCurrentRoomInfo = GetCurrentRoomInfo();
+#ifdef PC_PORT
+        fprintf(stderr, "[AREA] missing room header table for area=%u\n", gRoomControls.area);
+#endif
+        return;
+    }
+
+    for (i = 0; i < MAX_ROOMS; i++, r_hdr++) {
+#ifdef PC_PORT
+        if (!IsRoomHeaderPtrInRom(r_hdr)) {
+            fprintf(stderr, "[AREA] room header walk escaped rom area=%u room=%u ptr=%p\n", gRoomControls.area, i,
+                    (void*)r_hdr);
+            break;
+        }
+#endif
+        if (*(u16*)r_hdr == 0xFFFF) {
+            break;
+        }
         if (r_hdr->tileSet_id != 0xFFFF)
             InitRoomResInfo(info, r_hdr, gRoomControls.area, i);
         info++;
@@ -565,13 +670,25 @@ void InitRoomResInfo(RoomResInfo* info, RoomHeader* r_hdr, u32 area, u32 room) {
     info->map_y = r_hdr->map_y;
     info->pixel_width = r_hdr->pixel_width;
     info->pixel_height = r_hdr->pixel_height;
+#ifdef PC_PORT
+    if (gAreaTileSets[area] == NULL || gAreaRoomMaps[area] == NULL || gAreaTiles[area] == NULL) {
+        Port_RefreshAreaData(area);
+    }
+    info->tileSet = ReadAreaSubTableEntry(gAreaTileSets[area], r_hdr->tileSet_id);
+    info->map = ReadAreaSubTableEntry(gAreaRoomMaps[area], room);
+#else
     info->tileSet = *(gAreaTileSets[area] + r_hdr->tileSet_id);
     info->map = *(gAreaRoomMaps[area] + room);
+#endif
     info->tiles = gAreaTiles[area];
     info->bg_anim = (void*)gUnk_080B755C[area];
     info->exits = gExitLists[area][room];
     if (gAreaTable[area] != NULL) {
+#ifdef PC_PORT
+        info->properties = ReadAreaSubTableEntry(gAreaTable[area], room);
+#else
         info->properties = *(gAreaTable[area] + room);
+#endif
     }
 }
 
@@ -664,13 +781,28 @@ void sub_08052FF4(u32 area, u32 room) {
     gScreen.lcd.displayControl = 0x1740;
     MemClear(&gArea.currentRoomInfo, sizeof gArea.currentRoomInfo);
     gArea.pCurrentRoomInfo = &gArea.currentRoomInfo;
-    r_hdr = gAreaRoomHeaders[area] + room;
+    r_hdr = GetAreaRoomHeaderSafe(area, room);
+    if (r_hdr == NULL) {
+#ifdef PC_PORT
+        fprintf(stderr, "[AREA] missing room header area=%u room=%u\n", area, room);
+#endif
+        return;
+    }
+
     gArea.currentRoomInfo.map_x = r_hdr->map_x;
     gArea.currentRoomInfo.map_y = r_hdr->map_y;
     gArea.currentRoomInfo.pixel_width = r_hdr->pixel_width;
     gArea.currentRoomInfo.pixel_height = r_hdr->pixel_height;
+#ifdef PC_PORT
+    if (gAreaTileSets[area] == NULL || gAreaRoomMaps[area] == NULL || gAreaTiles[area] == NULL) {
+        Port_RefreshAreaData(area);
+    }
+    gArea.currentRoomInfo.tileSet = ReadAreaSubTableEntry(gAreaTileSets[area], r_hdr->tileSet_id);
+    gArea.currentRoomInfo.map = ReadAreaSubTableEntry(gAreaRoomMaps[area], room);
+#else
     gArea.currentRoomInfo.tileSet = *(gAreaTileSets[area] + r_hdr->tileSet_id);
     gArea.currentRoomInfo.map = *(gAreaRoomMaps[area] + room);
+#endif
     gArea.currentRoomInfo.tiles = gAreaTiles[area];
     gArea.currentRoomInfo.bg_anim = (void*)gUnk_080B755C[area];
 }
@@ -802,7 +934,11 @@ void sub_0805329C(void) {
 void sub_080532E4(void) {
     s32 x, y;
 
-    RoomHeader* r_hdr = gAreaRoomHeaders[AREA_FORTRESS_OF_WINDS] + 33;
+    RoomHeader* r_hdr = GetAreaRoomHeaderSafe(AREA_FORTRESS_OF_WINDS, 33);
+
+    if (r_hdr == NULL) {
+        return;
+    }
 
     gRoomTransition.player_status.dungeon_area = AREA_FORTRESS_OF_WINDS;
     gRoomTransition.player_status.dungeon_room = 33;

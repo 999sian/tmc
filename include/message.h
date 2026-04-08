@@ -79,7 +79,7 @@ typedef struct {
     u16 _a6;
 } TextRender;
 extern TextRender gTextRender;
-static_assert(sizeof(TextRender) == 0xa8, "TextRender size incorrect");
+PORT_STATIC_ASSERT_SIZE(TextRender, 0xa8, 0xD8, "TextRender size incorrect");
 
 /**
  * @brief Initialize the message system.

@@ -46,7 +46,7 @@ void RopeGolden(RopeGoldenEntity* this) {
     u32 x;
     x = sub_080012DC(super);
     if (x != 0) {
-        gUnk_080012C8[x](super);
+        sub_08001290(super, x);
     } else {
         RopeGolden_Functions[GetNextFunction(super)](this);
         EnemySetFXOffset(super, 0, 1, -0x10);

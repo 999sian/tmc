@@ -5,6 +5,7 @@
  * @brief Pot object
  */
 #include "entity.h"
+#include "collision.h"
 #include "flags.h"
 #include "object/pot.h"
 #include "hitbox.h"
@@ -14,12 +15,14 @@
 #include "physics.h"
 #include "object/itemOnGround.h"
 #include "player.h"
+#include "playeritem.h"
 #include "room.h"
 #include "script.h"
 #include "sound.h"
 #include "tiles.h"
 #ifdef PC_PORT
 #include <stdio.h>
+#include "port/port_generic_entity.h"
 #endif
 
 typedef struct {
@@ -31,6 +34,24 @@ typedef struct {
     /*0x7e*/ u8 unused3[8];
     /*0x86*/ u16 flag;
 } PotEntity;
+
+PORT_STATIC_ASSERT_SIZE(PotEntity, 0x88, 0xB0, "PotEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(PotEntity, unk_70, 0x70, 0x98,
+                        "PotEntity unk_70 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PotEntity, unk_7d, 0x7d, 0xA5,
+                        "PotEntity unk_7d offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PotEntity, flag, 0x86, 0xAE,
+                        "PotEntity flag offset incorrect");
+
+#ifdef PC_PORT
+#define POT_TILE_INDEX(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
+#define POT_DROP_ARG(this) (GE_FIELD(&((this)->base), field_0x7c)->BYTES.byte1)
+#define POT_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define POT_TILE_INDEX(this) ((this)->unk_70)
+#define POT_DROP_ARG(this) ((this)->unk_7d)
+#define POT_FLAG(this) ((this)->flag)
+#endif
 
 void Pot_Action5(PotEntity*);
 static void BreakPot(PotEntity*, Entity*);
@@ -54,6 +75,7 @@ void sub_080827F8(PotEntity* this);
 void sub_08082778(PotEntity* this);
 void sub_0808270C(PotEntity* this);
 void sub_080826FC(PotEntity* this);
+static bool32 Pot_HasJarContact(PotEntity* this);
 
 extern void RegisterCarryEntity(Entity*);
 extern void CheckOnLayerTransition(Entity*);
@@ -66,8 +88,41 @@ void Pot(PotEntity* this) {
     super->contactFlags = 0;
 }
 
+static bool32 Pot_HasJarContact(PotEntity* this) {
+    if ((super->contactFlags & CONTACT_NOW) && ((super->contactFlags & 0x7F) == 0x13)) {
+        return TRUE;
+    }
+
+#ifdef PC_PORT
+    if ((gPlayerState.gustJarState & 0xF) != PL_JAR_SUCK) {
+        return FALSE;
+    }
+
+    {
+        LinkedList* list = &gEntityLists[2];
+        Entity* it = list->first;
+
+        for (; it != (Entity*)list; it = it->next) {
+            if (it->kind != PLAYER_ITEM || it->id != PLAYER_ITEM_GUST) {
+                continue;
+            }
+            if ((it->flags & ENT_COLLIDE) == 0 || it->hitbox == NULL) {
+                continue;
+            }
+            if (IsColliding(super, it)) {
+                super->contactedEntity = it;
+                super->contactFlags = CONTACT_NOW | 0x13;
+                return TRUE;
+            }
+        }
+    }
+#endif
+
+    return FALSE;
+}
+
 void Pot_Init(PotEntity* this) {
-    if (super->type2 == 1 && CheckFlags(this->flag)) {
+    if (super->type2 == 1 && CheckFlags(POT_FLAG(this))) {
         DeleteThisEntity();
     }
 
@@ -86,8 +141,8 @@ void Pot_Init(PotEntity* this) {
         ResolveCollisionLayer(super);
     }
 
-    this->unk_70 = GetTileIndex(COORD_TO_TILE(super), super->collisionLayer);
-    if (this->unk_70 == SPECIAL_TILE_0) {
+    POT_TILE_INDEX(this) = GetTileIndex(COORD_TO_TILE(super), super->collisionLayer);
+    if (POT_TILE_INDEX(this) == SPECIAL_TILE_0) {
         DeleteThisEntity();
     }
 
@@ -98,6 +153,10 @@ void Pot_Init(PotEntity* this) {
 void Pot_Action1(PotEntity* this) {
     u32 tileType;
     u32 var0 = super->contactFlags & 0x7F;
+
+    if (var0 == 0 && Pot_HasJarContact(this)) {
+        var0 = 0x13;
+    }
 #ifdef PC_PORT
     if (super->contactFlags != 0) {
         fprintf(stderr,
@@ -108,11 +167,11 @@ void Pot_Action1(PotEntity* this) {
 #endif
     switch (var0) {
         case 0x13:
-            super->action = 3;
-            super->subAction = 0;
-            break;
+                super->action = 3;
+                super->subAction = 0;
+                break;
         case 0x1D:
-            SetTile((u16)this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
+            SetTile(POT_TILE_INDEX(this), COORD_TO_TILE(super), super->collisionLayer);
             super->action = 5;
             super->zVelocity = Q_16_16(2.625);
             super->spriteOffsetY = 0;
@@ -136,7 +195,7 @@ void Pot_Action1(PotEntity* this) {
             } else {
                 gPlayerState.lastSwordMove = SWORD_MOVE_BREAK_POT;
                 if (tileType == SPECIAL_TILE_5) {
-                    SetTile((u16)this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
+                    SetTile(POT_TILE_INDEX(this), COORD_TO_TILE(super), super->collisionLayer);
                 }
 #ifdef PC_PORT
                 fprintf(stderr, "[POT] sword-hit tile=0x%X restore=%u\n", tileType, tileType == SPECIAL_TILE_5);
@@ -171,7 +230,7 @@ void Pot_Action1(PotEntity* this) {
                             CreateFx(super, FX_FALL_DOWN, 0);
                         } else if (tileType == SPECIAL_TILE_5) {
                             gPlayerState.lastSwordMove = SWORD_MOVE_BREAK_POT;
-                            SetTile((u16)this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
+                            SetTile(POT_TILE_INDEX(this), COORD_TO_TILE(super), super->collisionLayer);
                         }
 #ifdef PC_PORT
                         fprintf(stderr, "[POT] default-break tile=0x%X restore=%u\n", tileType,
@@ -201,7 +260,7 @@ void sub_08082510(PotEntity* this) {
     super->hitType = 1;
     super->collisionMask = gPlayerEntity.base.collisionMask;
     super->spriteOffsetY = 0;
-    SetTile((u16)this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
+    SetTile(POT_TILE_INDEX(this), COORD_TO_TILE(super), super->collisionLayer);
     super->subAction++;
 }
 
@@ -265,7 +324,7 @@ void Pot_Action4(PotEntity* this) {
         super->speed <<= 1;
     }
 
-    this->unk_70 = GetTileIndex(COORD_TO_TILE(super), super->collisionLayer);
+    POT_TILE_INDEX(this) = GetTileIndex(COORD_TO_TILE(super), super->collisionLayer);
     tileType = GetTileTypeAtEntity(super);
     switch (tileType) {
         case 0x71:
@@ -293,7 +352,7 @@ void sub_080826FC(PotEntity* this) {
 }
 
 void sub_0808270C(PotEntity* this) {
-    if ((gPlayerState.gustJarState & 0xF) != 0x1 || (super->contactFlags & 0x7F) != 0x13) {
+    if ((gPlayerState.gustJarState & 0xF) != 0x1 || !Pot_HasJarContact(this)) {
         super->spriteOffsetX = 0;
         super->action = 1;
         SetTile(SPECIAL_TILE_0, COORD_TO_TILE(super), super->collisionLayer);
@@ -307,10 +366,10 @@ void sub_08082778(PotEntity* this) {
         super->timer = 1;
         super->spriteOffsetX = 0;
         super->spriteOffsetY = -2;
-        SetTile((u16)this->unk_70, COORD_TO_TILE(super), super->collisionLayer);
+        SetTile(POT_TILE_INDEX(this), COORD_TO_TILE(super), super->collisionLayer);
     }
 
-    if ((gPlayerState.gustJarState & 0xF) != 0x1 || (super->contactFlags & 0x7F) != 0x13) {
+    if ((gPlayerState.gustJarState & 0xF) != 0x1 || !Pot_HasJarContact(this)) {
         BreakPot(this, NULL);
     } else {
         sub_0806F3E4(super);
@@ -341,14 +400,14 @@ void Pot_Action5(PotEntity* this) {
 }
 
 static void BreakPot(PotEntity* this, Entity* parent) {
-    u32 parameter = sub_0808288C(super, super->type, this->unk_7d, super->type2);
+    u32 parameter = sub_0808288C(super, super->type, POT_DROP_ARG(this), super->type2);
     Entity* fxEntity = CreateFx(super, FX_POT_SHATTER, parameter);
     if (fxEntity) {
         fxEntity->parent = parent;
     }
 
     if (super->type2 == 1) {
-        SetFlag(this->flag);
+        SetFlag(POT_FLAG(this));
     }
 
     DeleteThisEntity();
@@ -369,7 +428,7 @@ u32 sub_0808288C(Entity* this, u32 form, u32 arg2, u32 arg3) {
             if (entity != NULL) {
                 if (arg3 == 2) {
                     entity->base.timer = 5;
-                    entity->flag = ((PotEntity*)this)->flag; // This function is also used by flyingSkull.
+                    entity->flag = POT_FLAG((PotEntity*)this); // This function is also used by flyingSkull.
                 } else {
                     entity->base.timer = 0;
                 }

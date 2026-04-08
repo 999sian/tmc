@@ -12,6 +12,10 @@ typedef struct {
     u8 unk_30[0x10];
 } RollingBarrelManager;
 
+PORT_STATIC_ASSERT_SIZE(RollingBarrelManager, 0x40, 0x58, "RollingBarrelManager size incorrect");
+PORT_STATIC_ASSERT_OFFSET(RollingBarrelManager, unk_20, 0x20, 0x38, "RollingBarrelManager unk_20 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(RollingBarrelManager, unk_24, 0x24, 0x3c, "RollingBarrelManager unk_24 offset incorrect");
+
 typedef struct {
     u16 unk_0;
     u16 unk_2;

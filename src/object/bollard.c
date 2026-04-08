@@ -10,6 +10,9 @@
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     Entity base;
@@ -21,6 +24,28 @@ typedef struct {
     u8 filler2[0x10];
     u16 flags;
 } BollardEntity;
+
+PORT_STATIC_ASSERT_SIZE(BollardEntity, 0x88, 0xB0, "BollardEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(BollardEntity, tilePos, 0x70, 0x98,
+                        "BollardEntity tilePos offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BollardEntity, tileIndex, 0x72, 0x9A,
+                        "BollardEntity tileIndex offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BollardEntity, collisionData, 0x74, 0x9C,
+                        "BollardEntity collisionData offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BollardEntity, flags, 0x86, 0xAE,
+                        "BollardEntity flags offset incorrect");
+
+#ifdef PC_PORT
+#define BOLLARD_TILEPOS(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
+#define BOLLARD_TILEINDEX(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.HI)
+#define BOLLARD_COLLISION(this) (GE_FIELD(&((this)->base), field_0x74)->HALF.LO)
+#define BOLLARD_FLAGS(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define BOLLARD_TILEPOS(this) ((this)->tilePos)
+#define BOLLARD_TILEINDEX(this) ((this)->tileIndex)
+#define BOLLARD_COLLISION(this) ((this)->collisionData)
+#define BOLLARD_FLAGS(this) ((this)->flags)
+#endif
 
 void Bollard_Init(BollardEntity*);
 void Bollard_Action1(BollardEntity*);
@@ -50,15 +75,15 @@ void Bollard_Init(BollardEntity* this) {
 
 void Bollard_Action1(BollardEntity* this) {
     if (super->type2 == 0) {
-        if (CheckFlags(this->flags) == 0) {
+        if (CheckFlags(BOLLARD_FLAGS(this)) == 0) {
             return;
         }
-    } else if (CheckFlags(this->flags) != 0) {
+    } else if (CheckFlags(BOLLARD_FLAGS(this)) != 0) {
         return;
     }
     super->action = 2;
     InitializeAnimation(super, 3);
-    SetTile(this->tileIndex, this->tilePos, super->collisionLayer);
+    SetTile(BOLLARD_TILEINDEX(this), BOLLARD_TILEPOS(this), super->collisionLayer);
     EnqueueSFX(SFX_1A5);
 }
 
@@ -71,10 +96,10 @@ void Bollard_Action2(BollardEntity* this) {
 
 void Bollard_Action3(BollardEntity* this) {
     if (super->type2 == 0) {
-        if (CheckFlags(this->flags) != 0) {
+        if (CheckFlags(BOLLARD_FLAGS(this)) != 0) {
             return;
         }
-    } else if (CheckFlags(this->flags) == 0) {
+    } else if (CheckFlags(BOLLARD_FLAGS(this)) == 0) {
         return;
     }
     super->action = 4;
@@ -92,10 +117,10 @@ void Bollard_Action4(BollardEntity* this) {
 
 void sub_0808B3AC(BollardEntity* this) {
     super->spritePriority.b0 = 4;
-    this->tilePos = COORD_TO_TILE(super);
-    this->tileIndex = GetTileIndex(this->tilePos, super->collisionLayer);
-    this->collisionData = GetCollisionDataAtTilePos(this->tilePos, super->collisionLayer);
-    SetTile(SPECIAL_TILE_11, this->tilePos, super->collisionLayer);
+    BOLLARD_TILEPOS(this) = COORD_TO_TILE(super);
+    BOLLARD_TILEINDEX(this) = GetTileIndex(BOLLARD_TILEPOS(this), super->collisionLayer);
+    BOLLARD_COLLISION(this) = GetCollisionDataAtTilePos(BOLLARD_TILEPOS(this), super->collisionLayer);
+    SetTile(SPECIAL_TILE_11, BOLLARD_TILEPOS(this), super->collisionLayer);
 }
 
 void sub_0808B41C(BollardEntity* this) {

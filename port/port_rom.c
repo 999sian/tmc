@@ -424,6 +424,71 @@ static void ResolveSubTable(void* romBase, void** dest, u32 count) {
     }
 }
 
+static u32 ScanSubArrayCount(const void* base) {
+    const u8* bytes = (const u8*)base;
+    u32 count = 0;
+
+    if (bytes == NULL) {
+        return 0;
+    }
+
+    for (u32 i = 0; i < MAX_ROOMS; i++) {
+        u32 value;
+        memcpy(&value, bytes + i * 4, 4);
+        if (value == 0 || (value >= 0x08000000u && value < 0x08000000u + gRomSize)) {
+            count = i + 1;
+        } else {
+            break;
+        }
+    }
+
+    return count;
+}
+
+void Port_RefreshAreaData(u32 area) {
+    void* tileSetBase;
+    void* roomMapBase;
+    void* areaTableBase;
+    u32 subCount;
+
+    if (area >= AREA_COUNT || gRomData == NULL) {
+        return;
+    }
+
+    gAreaRoomHeaders[area] = (RoomHeader*)ResolveTableOffset(kAreaRoomHeaderOffsets[area]);
+    gAreaTiles[area] = ResolveTableOffset(kAreaTilesOffsets[area]);
+
+    tileSetBase = ResolveTableOffset(kAreaTileSetOffsets[area]);
+    gAreaTileSets[area] = tileSetBase;
+    memset(sTileSetsResolved[area], 0, sizeof(sTileSetsResolved[area]));
+    subCount = ScanSubArrayCount(tileSetBase);
+    if (subCount > 0) {
+        ResolveSubTable(tileSetBase, sTileSetsResolved[area], subCount);
+        gAreaTileSets[area] = sTileSetsResolved[area];
+    }
+
+    roomMapBase = ResolveTableOffset(kAreaRoomMapOffsets[area]);
+    gAreaRoomMaps[area] = roomMapBase;
+    memset(sRoomMapsResolved[area], 0, sizeof(sRoomMapsResolved[area]));
+    subCount = ScanSubArrayCount(roomMapBase);
+    if (subCount > 0) {
+        ResolveSubTable(roomMapBase, sRoomMapsResolved[area], subCount);
+        gAreaRoomMaps[area] = sRoomMapsResolved[area];
+    }
+
+    areaTableBase = ResolveTableOffset(kAreaTableOffsets[area]);
+    gAreaTable[area] = areaTableBase;
+    memset(sAreaTableResolved[area], 0, sizeof(sAreaTableResolved[area]));
+    subCount = ScanSubArrayCount(areaTableBase);
+    if (subCount > 0) {
+        ResolveSubTable(areaTableBase, sAreaTableResolved[area], subCount);
+        gAreaTable[area] = sAreaTableResolved[area];
+    }
+
+    fprintf(stderr, "[AREA] refreshed area data area=%u headers=%p tilesets=%p roomMaps=%p table=%p tiles=%p\n", area,
+            (void*)gAreaRoomHeaders[area], gAreaTileSets[area], gAreaRoomMaps[area], gAreaTable[area], gAreaTiles[area]);
+}
+
 /* Font data tables (data_stubs_autogen.c) */
 extern void* gTextVariableSources[];
 extern u8 gUnk_08109244[];
@@ -451,7 +516,6 @@ const void* gPaletteGroups[PALETTE_GROUPS_COUNT_MAX];
 static inline void* ResolveRomPtr(u32 gba_addr) {
     if (gba_addr == 0)
         return NULL;
-    gba_addr &= ~1u;
     if (gba_addr >= 0x08000000u && gba_addr < 0x08000000u + gRomSize)
         return &gRomData[gba_addr - 0x08000000u];
     fprintf(stderr, "ResolveRomPtr: address 0x%08X is outside ROM\n", gba_addr);
@@ -471,8 +535,17 @@ void* Port_ReadPackedRomPtr(const void* base, u32 index) {
                 (void*)gRomData, (void*)(gRomData + gRomSize), index);
         return NULL;
     }
+    
+    /* Check bounds: ensure we don't read past the end of ROM data */
+    const u8* readPtr = (const u8*)base + index * 4;
+    if (gRomData && (readPtr + 4 > gRomData + gRomSize)) {
+        fprintf(stderr, "Port_ReadPackedRomPtr: read at %p+%u*4 would exceed ROM bounds [%p..%p] (index=%u)\n", 
+                base, index, (void*)gRomData, (void*)(gRomData + gRomSize), index);
+        return NULL;
+    }
+    
     u32 raw;
-    memcpy(&raw, (const u8*)base + index * 4, 4);
+    memcpy(&raw, readPtr, 4);
     if (raw == 0)
         return NULL;
     raw &= ~1u;

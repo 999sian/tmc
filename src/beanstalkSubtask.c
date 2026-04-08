@@ -159,6 +159,13 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
     void* dest;
 
 #ifdef PC_PORT
+    if (dataDefinition == NULL) {
+        fprintf(stderr, "LoadMapData: NULL definition area=%u room=%u\n", gRoomControls.area, gRoomControls.room);
+        return;
+    }
+#endif
+
+#ifdef PC_PORT
     /*
      * On GBA, MapDataDefinition is {u32 src, void* dest, u32 size} = 12 bytes.
      * On 64-bit PC, sizeof(void*)==8 → struct is 24 bytes with padding.

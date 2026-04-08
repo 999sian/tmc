@@ -83,7 +83,7 @@ typedef struct {
     /* 0x8c */ void* entityRails[8];
     /* 0xac */ Entity* puzzleEntities[8];
 } RoomVars;
-static_assert(sizeof(RoomVars) == 0xCC, "RoomVars size incorrect");
+PORT_STATIC_ASSERT_SIZE(RoomVars, 0xCC, 0x130, "RoomVars size incorrect");
 extern RoomVars gRoomVars;
 
 typedef struct {

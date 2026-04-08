@@ -430,7 +430,7 @@ typedef struct {
     u8 filler12[2];
     u8 unk14;
 } struct_0812816C;
-static_assert(sizeof(struct_0812816C) == 0x18, "struct_0812816C size incorrect");
+PORT_STATIC_ASSERT_SIZE(struct_0812816C, 0x18, 0x20, "struct_0812816C size incorrect");
 const struct_0812816C gUnk_0812816C = {
     (u16*)0x02001b40,
     0x0600a000,

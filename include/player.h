@@ -21,6 +21,16 @@ typedef struct {
     /*0x84*/ union SplitWord unk_84;
 } PlayerEntity;
 
+PORT_STATIC_ASSERT_SIZE(PlayerEntity, 0x88, 0xB8, "PlayerEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(PlayerEntity, unk_68, 0x68, 0x90, "PlayerEntity unk_68 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PlayerEntity, pulledJarEntity, 0x70, 0x98, "PlayerEntity pulledJarEntity offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PlayerEntity, carriedEntity, 0x74, 0xA0, "PlayerEntity carriedEntity offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PlayerEntity, unk_7a, 0x7a, 0xAA, "PlayerEntity unk_7a offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PlayerEntity, unk_7c, 0x7c, 0xAC, "PlayerEntity unk_7c offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PlayerEntity, unk_84, 0x84, 0xB4, "PlayerEntity unk_84 offset incorrect");
+PORT_STATIC_ASSERT_EXPR(offsetof(PlayerEntity, unk_7c) - offsetof(GenericEntity, field_0x7c), 0, 8,
+                        "PlayerEntity extra-field shift incorrect");
+
 enum PlayerActions {
     PLAYER_INIT,
     PLAYER_NORMAL,
@@ -621,7 +631,7 @@ typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN,
  * 3: Lamp
  */
 extern ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
-static_assert(sizeof(gActiveItems) == 0x70);
+PORT_STATIC_ASSERT_EXPR(sizeof(gActiveItems), 0x70, 0x80, "gActiveItems size incorrect");
 
 extern void (*const gPlayerItemFunctions[])(Entity*);
 
@@ -708,8 +718,7 @@ typedef struct {
         candidates[0x20]; /* contains the loaded NPCs, key doors, windcrests and other objects */
 } PossibleInteraction;
 
-static_assert(sizeof(PossibleInteraction) == 0x188);
-
+PORT_STATIC_ASSERT_SIZE(PossibleInteraction, 0x188, 0x310, "PossibleInteraction size incorrect");
 extern PossibleInteraction gPossibleInteraction;
 #endif
 

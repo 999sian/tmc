@@ -190,7 +190,7 @@ typedef struct {
 } GfxSlotList;
 extern GfxSlotList gGFXSlots;
 
-static_assert(sizeof(GfxSlotList) == 0x214, "GfxSlotList size incorrect");
+PORT_STATIC_ASSERT_SIZE(GfxSlotList, 0x214, 0x2C8, "GfxSlotList size incorrect");
 #endif
 
 #ifndef STRUCT_02034480_DEFINED
@@ -227,7 +227,7 @@ typedef enum { ACTIVE_ITEM_0, ACTIVE_ITEM_1, ACTIVE_ITEM_2, ACTIVE_ITEM_LANTERN,
  * 3: Lamp
  */
 extern ItemBehavior gActiveItems[MAX_ACTIVE_ITEMS];
-static_assert(sizeof(gActiveItems) == 0x70, "gActiveItems size incorrect");
+PORT_STATIC_ASSERT_EXPR(sizeof(gActiveItems), 0x70, 0x80, "gActiveItems size incorrect");
 
 #ifndef PRIORITY_HANDLER_DEFINED
 #define PRIORITY_HANDLER_DEFINED
@@ -273,7 +273,7 @@ typedef struct {
     void* unk8;
 } WStruct;
 
-static_assert(sizeof(WStruct) == 12, "WStruct size incorrect");
+PORT_STATIC_ASSERT_SIZE(WStruct, 12, 0x10, "WStruct size incorrect");
 
 #ifndef OAM_TYPES_DEFINED
 #define OAM_TYPES_DEFINED
@@ -335,7 +335,7 @@ typedef struct {
         candidates[0x20]; /* contains the loaded NPCs, key doors, windcrests and other objects */
 } PossibleInteraction;
 
-static_assert(sizeof(PossibleInteraction) == 0x188, "PossibleInteraction size incorrect");
+PORT_STATIC_ASSERT_SIZE(PossibleInteraction, 0x188, 0x310, "PossibleInteraction size incorrect");
 
 extern PossibleInteraction gPossibleInteraction;
 #endif

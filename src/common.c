@@ -2,6 +2,9 @@
 
 #ifdef PC_PORT
 #include <string.h>
+#include <stdint.h>
+#include <stdio.h>
+#include "port_rom.h"
 #endif
 #include "area.h"
 #include "asm.h"
@@ -111,6 +114,50 @@ typedef struct {
     u8 x;
     u8 y;
 } PACKED DungeonMapObject;
+
+#ifdef PC_PORT
+#define COMMON_AREA_TABLE_COUNT 0x90
+
+static bool32 Common_IsRoomHeaderPtrInRom(const RoomHeader* ptr) {
+    uintptr_t start;
+    uintptr_t end;
+    uintptr_t at;
+
+    if (ptr == NULL || gRomData == NULL || gRomSize < sizeof(RoomHeader)) {
+        return FALSE;
+    }
+
+    start = (uintptr_t)gRomData;
+    end = start + (uintptr_t)gRomSize;
+    at = (uintptr_t)ptr;
+    return at >= start && at <= end - sizeof(RoomHeader);
+}
+
+static RoomHeader* Common_GetAreaRoomHeaderSafe(u32 area, u32 room) {
+    RoomHeader* table;
+
+    if (area >= COMMON_AREA_TABLE_COUNT || room >= MAX_ROOMS) {
+        return NULL;
+    }
+
+    table = gAreaRoomHeaders[area];
+    if (!Common_IsRoomHeaderPtrInRom(table)) {
+        Port_RefreshAreaData(area);
+        table = gAreaRoomHeaders[area];
+    }
+
+    if (!Common_IsRoomHeaderPtrInRom(table)) {
+        fprintf(stderr, "[AREA] common invalid room header table area=%u ptr=%p\n", area, (void*)table);
+        return NULL;
+    }
+
+    return table + room;
+}
+#else
+static RoomHeader* Common_GetAreaRoomHeaderSafe(u32 area, u32 room) {
+    return gAreaRoomHeaders[area] + room;
+}
+#endif
 
 // More like PrepareTileEntitesForDungeonMap or so
 
@@ -582,7 +629,10 @@ void DrawDungeonMap(u32 floor, DungeonMapObject* specialData, u32 size) {
                         case SMALL_CHEST:
                         case BIG_CHEST:
                             if (!CheckLocalFlagByBank(flagBankOffset, tileEntity->localFlag)) {
-                                roomHeader = gAreaRoomHeaders[floorMapData->area] + floorMapData->room;
+                                roomHeader = Common_GetAreaRoomHeaderSafe(floorMapData->area, floorMapData->room);
+                                if (roomHeader == NULL) {
+                                    break;
+                                }
                                 specialData->type = DMO_TYPE_CHEST;
                                 if (tileEntity->type == SMALL_CHEST) {
                                     specialData->x =
@@ -602,16 +652,18 @@ void DrawDungeonMap(u32 floor, DungeonMapObject* specialData, u32 size) {
             }
             if ((HasDungeonCompass() && ((floorMapData->unk_2 & 2) != 0)) &&
                 (!CheckGlobalFlag(gArea.dungeon_idx + 1))) {
-                roomHeader = gAreaRoomHeaders[floorMapData->area] + floorMapData->room;
-                specialData->type = DMO_TYPE_BOSS;
-                tmp1 = ((roomHeader->pixel_width / 2) + roomHeader->map_x) / 16;
-                if (tmp1 < 0) {
-                    tmp1 = tmp1 + 0x7f;
+                roomHeader = Common_GetAreaRoomHeaderSafe(floorMapData->area, floorMapData->room);
+                if (roomHeader != NULL) {
+                    specialData->type = DMO_TYPE_BOSS;
+                    tmp1 = ((roomHeader->pixel_width / 2) + roomHeader->map_x) / 16;
+                    if (tmp1 < 0) {
+                        tmp1 = tmp1 + 0x7f;
+                    }
+                    specialData->x = tmp1 + (tmp1 / 128) * -128;
+                    tmp3 = ((roomHeader->pixel_height / 2) + roomHeader->map_y) / 16;
+                    specialData->y = tmp3 + (tmp3 / 128) * -128;
+                    specialData++;
                 }
-                specialData->x = tmp1 + (tmp1 / 128) * -128;
-                tmp3 = ((roomHeader->pixel_height / 2) + roomHeader->map_y) / 16;
-                specialData->y = tmp3 + (tmp3 / 128) * -128;
-                specialData++;
             }
             if (floorMapData->area == gRoomTransition.player_status.dungeon_area &&
                 floorMapData->room == gRoomTransition.player_status.dungeon_room) {
@@ -627,7 +679,10 @@ void DrawDungeonMap(u32 floor, DungeonMapObject* specialData, u32 size) {
 }
 
 void sub_0801DD58(u32 area, u32 room) {
-    RoomHeader* hdr = gAreaRoomHeaders[area] + room;
+    RoomHeader* hdr = Common_GetAreaRoomHeaderSafe(area, room);
+    if (hdr == NULL) {
+        return;
+    }
     gArea.pCurrentRoomInfo->map_x = hdr->map_x;
     gArea.pCurrentRoomInfo->map_y = hdr->map_y;
 }
@@ -684,7 +739,11 @@ void DrawDungeonFeatures(u32 floor, void* data, u32 size) {
             // Copies 0x400 bytes even though the data is less most of the time.
             DmaCopy32(3, &gMapData + layout->mapDataOffset, &gMapDataBottomSpecial, 0x400);
 
-            roomHeader = gAreaRoomHeaders[layout->area] + layout->room;
+            roomHeader = Common_GetAreaRoomHeaderSafe(layout->area, layout->room);
+            if (roomHeader == NULL) {
+                layout = nextLayout;
+                continue;
+            }
             mapX = roomHeader->map_x / 0x10;
             tmp3 = roomHeader->map_y;
             tmp4 = 0x7ff;

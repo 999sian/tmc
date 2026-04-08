@@ -15,6 +15,9 @@
 #include "physics.h"
 #include "player.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -28,6 +31,23 @@ typedef struct {
     u8 b0;
     u8 direction;
 } PACKED Struct_0812A074;
+
+#ifdef PC_PORT
+#define WEB_UNK84(this) (GE_FIELD(&((this)->base), cutsceneBeh)->HALF.LO)
+#define WEB_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define WEB_UNK84(this) ((this)->unk_84)
+#define WEB_FLAG(this) ((this)->flag)
+#endif
+
+static bool32 SpiderWeb_IsJarContact(Entity* this) {
+    if ((this->contactFlags & CONTACT_NOW) && ((this->contactFlags & 0x7f) == 0x13)) {
+        return TRUE;
+    }
+    this->gustJarState &= ~4;
+    this->spriteOffsetY = 0;
+    return FALSE;
+}
 
 void SpiderWeb_OnTick(SpiderWebEntity*);
 void SpiderWeb_OnCollision(SpiderWebEntity*);
@@ -114,7 +134,7 @@ void SpiderWeb_OnGrabbed(SpiderWebEntity* this) {
         super->subAction = 1;
         InitAnimationForceUpdate(super, animationState + 8);
     }
-    if (sub_0806F520(super)) {
+    if (SpiderWeb_IsJarContact(super)) {
         UpdateAnimationSingleFrame(super);
         if ((super->frame & 0x10) != 0) {
             super->frame &= ~0x10;
@@ -139,14 +159,14 @@ void SpiderWeb_Init(SpiderWebEntity* this) {
         &gUnk_080FD42C,
         &gUnk_080FD434,
     };
-    if (CheckFlags(this->flag) != 0) {
+    if (CheckFlags(WEB_FLAG(this)) != 0) {
         DeleteThisEntity();
     }
     super->action = 1;
     super->gustJarFlags = 1;
     super->carryFlags = 1;
     super->hitbox = (Hitbox*)typeHitboxes[super->type];
-    this->unk_84 = 0;
+    WEB_UNK84(this) = 0;
     InitAnimationForceUpdate(super, super->type);
     sub_080AAA68(super);
 }
@@ -178,7 +198,7 @@ void SpiderWeb_SubAction0(SpiderWebEntity* this) {
 
     entity = &gPlayerEntity.base;
 
-    if (this->unk_84 == 0) {
+    if (WEB_UNK84(this) == 0) {
         tmp = super->type;
         if (tmp * 2 - entity->animationState == 0) {
             x = gUnk_0812A064[tmp * 2] + super->x.HALF.HI;
@@ -188,7 +208,7 @@ void SpiderWeb_SubAction0(SpiderWebEntity* this) {
                 entity->y.HALF.HI = y;
             }
         }
-        this->unk_84 = 1;
+        WEB_UNK84(this) = 1;
         super->subtimer = 2;
         InitAnimationForceUpdate(super, super->type + 4);
     }
@@ -206,7 +226,7 @@ void SpiderWeb_SubAction0(SpiderWebEntity* this) {
 
 void SpiderWeb_SubAction1(SpiderWebEntity* this) {
     super->action = 1;
-    this->unk_84 = 0;
+    WEB_UNK84(this) = 0;
     InitAnimationForceUpdate(super, super->type + 0xc);
 }
 
@@ -256,7 +276,7 @@ void sub_080AAA68(Entity* this) {
 }
 
 void sub_080AAAA8(SpiderWebEntity* this) {
-    SetFlag(this->flag);
+    SetFlag(WEB_FLAG(this));
     RestorePrevTileEntity(TILE(super->x.HALF.HI, super->y.HALF.HI), super->collisionLayer);
     DeleteThisEntity();
 }

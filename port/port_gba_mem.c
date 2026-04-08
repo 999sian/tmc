@@ -1,4 +1,6 @@
+#include "gba/io_reg.h"
 #include "port_gba_mem.h"
+#include "port_audio.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -21,6 +23,9 @@ void gba_write8(uint32_t addr, uint8_t v) {
     }
     if (addr >= 0x04000000u && addr < 0x04000400u) {
         gIoMem[addr - 0x04000000u] = v;
+        if (addr == REG_ADDR_FIFO_A || addr == REG_ADDR_FIFO_B) {
+            Port_Audio_OnFifoWrite(addr, v);
+        }
         return;
     }
     if (addr >= 0x06000000u && addr < 0x06018000u) {
@@ -125,6 +130,9 @@ void gba_write32(uint32_t addr, uint32_t v) {
         gIoMem[addr - 0x04000000u + 1] = (v >> 8) & 0xFF;
         gIoMem[addr - 0x04000000u + 2] = (v >> 16) & 0xFF;
         gIoMem[addr - 0x04000000u + 3] = (v >> 24) & 0xFF;
+        if (addr == REG_ADDR_FIFO_A || addr == REG_ADDR_FIFO_B) {
+            Port_Audio_OnFifoWrite(addr, v);
+        }
         return;
     }
     // BG palette (0x05000000 - 0x050001FF)

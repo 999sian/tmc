@@ -17,7 +17,7 @@ extern void (*const gUnk_080CD298[])(Entity*);
 void Chaser(Entity* this) {
     u32 idx = sub_080012DC(this);
     if (idx) {
-        gUnk_080012C8[idx](this);
+        sub_08001290(this, idx);
     } else {
         Chaser_Functions[GetNextFunction(this)](this);
     }

@@ -64,6 +64,7 @@ void sub_08078D60(void);
 void* CreateItemGetPlayerItemWithParent(ItemBehavior*);
 u32 sub_08079FD4(Entity*, u32);
 void LoadRoomGfx(void);
+void InitRoomResInfo(RoomResInfo* info, RoomHeader* hdr, u32 area, u32 room);
 SurfaceType GetSurfaceCalcType(Entity*, s32, s32);
 void sub_0807AAF8(Entity*, u32);
 void sub_0807A750(u32, u32, const u8*, u32);
@@ -77,6 +78,58 @@ extern void UnregisterInteractTile(u32, u32);
 extern const u8 gMapTileTypeToCollisionData[]; // collisionData for tileType?
 
 extern u8 gUpdateVisibleTiles;
+
+#ifdef PC_PORT
+static bool32 Port_IsRoomHeaderReadable(const RoomHeader* hdr) {
+    uintptr_t start;
+    uintptr_t end;
+    uintptr_t at;
+
+    if (hdr == NULL || gRomData == NULL || gRomSize < sizeof(RoomHeader)) {
+        return FALSE;
+    }
+
+    start = (uintptr_t)gRomData;
+    end = start + (uintptr_t)gRomSize;
+    at = (uintptr_t)hdr;
+    return at >= start && at <= end - sizeof(RoomHeader);
+}
+
+static void Port_RepairCurrentRoomInfo(void) {
+    RoomResInfo* info = gArea.pCurrentRoomInfo;
+    RoomHeader* table;
+    RoomHeader* hdr;
+
+    if (info == NULL) {
+        return;
+    }
+    if (info->tileSet != NULL && info->tiles != NULL && info->map != NULL) {
+        return;
+    }
+
+    table = gAreaRoomHeaders[gRoomControls.area];
+    if (!Port_IsRoomHeaderReadable(table)) {
+        Port_RefreshAreaData(gRoomControls.area);
+        table = gAreaRoomHeaders[gRoomControls.area];
+    }
+    if (!Port_IsRoomHeaderReadable(table) || gRoomControls.room >= MAX_ROOMS) {
+        fprintf(stderr, "[ROOM] unable to repair room info area=%u room=%u table=%p\n", gRoomControls.area,
+                gRoomControls.room, (void*)table);
+        return;
+    }
+
+    hdr = table + gRoomControls.room;
+    if (!Port_IsRoomHeaderReadable(hdr) || *(u16*)hdr == 0xFFFF) {
+        fprintf(stderr, "[ROOM] invalid room header during repair area=%u room=%u hdr=%p\n", gRoomControls.area,
+                gRoomControls.room, (void*)hdr);
+        return;
+    }
+
+    InitRoomResInfo(info, hdr, gRoomControls.area, gRoomControls.room);
+    fprintf(stderr, "[ROOM] repaired room info area=%u room=%u tileSet=%p tiles=%p map=%p\n", gRoomControls.area,
+            gRoomControls.room, info->tileSet, info->tiles, info->map);
+}
+#endif
 
 bool32 sub_0807BF88(u32, u32, RoomResInfo*);
 
@@ -1644,6 +1697,9 @@ void sub_08078CD0(PlayerEntity* this) {
     const s8* ptr;
 
     entity = this->pulledJarEntity;
+    if (entity == NULL || gPlayerState.item == NULL) {
+        return;
+    }
     entity->z.HALF.HI = super->z.HALF.HI - 1;
     entity->spriteOrientation.flipY = super->spriteOrientation.flipY;
     entity->collisionLayer = super->collisionLayer;
@@ -3889,6 +3945,9 @@ void LoadRoomTileSet(void) {
     u16* paletteBuffer;
 
     ClearBgAnimations();
+#ifdef PC_PORT
+    Port_RepairCurrentRoomInfo();
+#endif
     sub_0807BFA8();
     MemFill16(0xffff, gMapBottom.tileTypes, 0x1000);
     gMapBottom.tileTypes[0] = 0;
@@ -3937,6 +3996,9 @@ void LoadRoomGfx(void) {
     // Or is it used anywhere else?
     // Probaby rather is some sort of different scroll mode where only a small part of the map is used?
 
+#ifdef PC_PORT
+    Port_RepairCurrentRoomInfo();
+#endif
     sub_0807BFA8();
     roomControls = &gRoomControls;
     roomControls->scroll_flags &= 0xfc;

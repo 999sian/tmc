@@ -266,6 +266,22 @@ typedef struct {
     GENERIC_ENTITY_FIELDS
 } GenericEntity;
 
+PORT_STATIC_ASSERT_SIZE(Entity, 0x68, 0x90, "Entity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(Entity, hitbox, 0x48, 0x50, "Entity hitbox offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Entity, parent, 0x50, 0x60, "Entity parent offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Entity, child, 0x54, 0x68, "Entity child offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Entity, animPtr, 0x5c, 0x78, "Entity animPtr offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(Entity, myHeap, 0x64, 0x88, "Entity myHeap offset incorrect");
+
+PORT_STATIC_ASSERT_SIZE(GenericEntity, 0x88, 0xB8, "GenericEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(GenericEntity, field_0x68, 0x68, 0x90, "GenericEntity field_0x68 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(GenericEntity, field_0x70, 0x70, 0x98, "GenericEntity field_0x70 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(GenericEntity, field_0x74, 0x74, 0x9c, "GenericEntity field_0x74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(GenericEntity, field_0x7c, 0x7c, 0xA4, "GenericEntity field_0x7c offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(GenericEntity, field_0x80, 0x80, 0xA8, "GenericEntity field_0x80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(GenericEntity, cutsceneBeh, 0x84, 0xB0, "GenericEntity cutsceneBeh offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(GenericEntity, field_0x86, 0x86, 0xB2, "GenericEntity field_0x86 offset incorrect");
+
 /**
  * Entity linked list structure.
  */

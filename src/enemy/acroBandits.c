@@ -80,7 +80,7 @@ void AcroBandit(AcroBanditEntity* this) {
         if ((super->gustJarState & 1) == 0)
             sub_08032338(this);
 
-        gUnk_080012C8[index](super);
+        sub_08001290(super, index);
     } else {
         AcroBandit_Functions[GetNextFunction(super)](this);
         EnemySetFXOffset(super, 0, 1, -0x10);

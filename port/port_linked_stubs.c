@@ -308,6 +308,7 @@ u8 gUnk_03001020[sizeof(Screen)] __attribute__((aligned(4)));
 u8 gMPlayInfos[0x1C * 0x50] __attribute__((aligned(4)));
 u8 gMPlayInfos2[0x4 * 0x50] __attribute__((aligned(4)));
 u8 gMPlayTracks[0x50 * 16] __attribute__((aligned(4)));
+u8 gMPlayMemAccArea[0x10] __attribute__((aligned(4)));
 
 // BGM song headers (ROM data stubs)
 u8 bgmBeanstalk[0x10], bgmBeatVaati[0x10], bgmBossTheme[0x10], bgmCastleCollapse[0x10];
@@ -731,6 +732,9 @@ void sub_08008AC6(Entity* ent) {
 u32 GetNextFunction(Entity* this) {
     u8 gustJarState = this->gustJarState;
     u8 contactFlags = this->contactFlags;
+
+    if (gustJarState & 4)
+        return 5; /* grabbed by Gust Jar */
 
     if (!(gustJarState & 4) && (contactFlags >> 7))
         return 1; /* contact initiated */
@@ -1714,6 +1718,14 @@ static void HazardNull(Entity* e) {
     (void)e;
 }
 
+void sub_08001214(Entity*);
+void (*const gUnk_080012C8[])(Entity*) = {
+    HazardNull,
+    sub_08001214,
+    CreateDrownFX,
+    CreateLavaDrownFX,
+    CreateSwampDrownFX,
+};
 static HazardFn sHazardTable[5];
 static int sHazardTableInit = 0;
 

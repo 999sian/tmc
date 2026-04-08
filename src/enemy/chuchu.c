@@ -51,7 +51,7 @@ void Chuchu(ChuchuEntity* this) {
     index = sub_080012DC(super);
     switch (index) {
         default:
-            gUnk_080012C8[index](super);
+            sub_08001290(super, index);
             return;
         case 0:
             /* ... */

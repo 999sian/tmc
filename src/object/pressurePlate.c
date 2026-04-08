@@ -11,6 +11,9 @@
 #include "flags.h"
 #include "room.h"
 #include "player.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     Entity base;
@@ -23,6 +26,24 @@ typedef struct {
     /*0x73*/ u8 filler73[0x86 - 0x73];
     /*0x86*/ u16 flag;
 } PressurePlateEntity;
+
+PORT_STATIC_ASSERT_SIZE(PressurePlateEntity, 0x88, 0xB0, "PressurePlateEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(PressurePlateEntity, canToggle, 0x70, 0x98,
+                        "PressurePlateEntity canToggle offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PressurePlateEntity, dir, 0x72, 0x9A,
+                        "PressurePlateEntity dir offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PressurePlateEntity, flag, 0x86, 0xAE,
+                        "PressurePlateEntity flag offset incorrect");
+
+#ifdef PC_PORT
+#define PLATE_CAN_TOGGLE(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
+#define PLATE_DIR(this) (GE_FIELD(&((this)->base), field_0x70)->BYTES.byte2)
+#define PLATE_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define PLATE_CAN_TOGGLE(this) ((this)->canToggle)
+#define PLATE_DIR(this) ((this)->dir)
+#define PLATE_FLAG(this) ((this)->flag)
+#endif
 
 typedef void(PressurePlateAction)(PressurePlateEntity*);
 
@@ -44,7 +65,7 @@ void PressurePlate(PressurePlateEntity* this) {
 
     if (super->subtimer) {
         if (--super->subtimer == 0) {
-            this->dir = super->animationState;
+            PLATE_DIR(this) = super->animationState;
             InitializeAnimation(super, super->animationState);
         }
     }
@@ -57,7 +78,7 @@ void PressurePlate_Init(PressurePlateEntity* this) {
     super->spriteSettings.draw = 1;
     super->spritePriority.b0 = 7;
     super->hitbox = (Hitbox*)&gUnk_080FD1D4;
-    this->dir = super->animationState;
+    PLATE_DIR(this) = super->animationState;
 }
 
 void PressurePlate_Action1(PressurePlateEntity* this) {
@@ -68,7 +89,7 @@ void PressurePlate_Action1(PressurePlateEntity* this) {
         super->animationState = 4;
         super->z.HALF.HI = 0;
         InitializeAnimation(super, 4);
-        SetFlag(this->flag);
+        SetFlag(PLATE_FLAG(this));
         EnqueueSFX(SFX_PRESSURE_PLATE);
     } else {
         if (weight > super->animationState) {
@@ -87,12 +108,12 @@ void PressurePlate_Action1(PressurePlateEntity* this) {
 }
 
 void PressurePlate_Action2(PressurePlateEntity* this) {
-    if (this->canToggle) {
+    if (PLATE_CAN_TOGGLE(this)) {
         u8 weight = sub_08088938(this) + get_standing_count(this);
         if (super->type + 2 > weight) {
             super->action = 1;
             super->animationState = weight;
-            ClearFlag(this->flag);
+            ClearFlag(PLATE_FLAG(this));
             InitializeAnimation(super, weight);
         }
     }
@@ -110,7 +131,7 @@ static u32 sub_08088938(PressurePlateEntity* this) {
         Entity* e = gRoomVars.puzzleEntities[i];
         if (e != NULL) {
             if ((u16)(e->x.HALF.HI - x) < 0x11 && ((u16)(e->y.HALF_U.HI - y) < 0x11)) {
-                e->spriteOffsetY = sSpriteOffsets[this->dir];
+                e->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
                 num++;
             }
         }
@@ -123,20 +144,20 @@ static u32 get_standing_count(PressurePlateEntity* this) {
 
     num = 0;
     if (IsCollidingPlayer(super) != 0) {
-        gPlayerEntity.base.spriteOffsetY = sSpriteOffsets[this->dir];
+        gPlayerEntity.base.spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
         num = 1;
     }
     if ((gPlayerState.flags & PL_CLONING) != 0) {
         if (IsColliding(super, gPlayerClones[0]) != 0) {
-            gPlayerClones[0]->spriteOffsetY = sSpriteOffsets[this->dir];
+            gPlayerClones[0]->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
             num++;
         }
         if (IsColliding(super, gPlayerClones[1]) != 0) {
-            gPlayerClones[1]->spriteOffsetY = sSpriteOffsets[this->dir];
+            gPlayerClones[1]->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
             num++;
         }
         if (IsColliding(super, gPlayerClones[2]) != 0) {
-            gPlayerClones[2]->spriteOffsetY = sSpriteOffsets[this->dir];
+            gPlayerClones[2]->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
             num++;
         }
     }

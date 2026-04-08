@@ -880,4 +880,5 @@ void sub_08057044(u32 a1, struct_020227E8* a2, u32 a3) {
     u32 first = z[0];
     first <<= 8 * (3 - tmp);
     a2->_0.WORD = first | a3;
+    a2->_4.WORD = 0;
 }

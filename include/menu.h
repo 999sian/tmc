@@ -81,7 +81,7 @@ typedef struct {
     /*0x2e*/ union SplitHWord unk2e;
 } GenericMenu;
 #ifndef PC_PORT
-static_assert(sizeof(GenericMenu) == 0x30, "GenericMenu size incorrect");
+PORT_STATIC_ASSERT_SIZE(GenericMenu, 0x30, 0x38, "GenericMenu size incorrect");
 #endif
 
 typedef struct {
