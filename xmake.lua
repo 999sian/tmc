@@ -9,7 +9,7 @@ add_rules("mode.debug", "mode.release")
 set_defaultmode("release")
 
 -- Force MinGW toolchain
-set_toolchains("mingw")
+-- set_toolchains("mingw")
 
 -- Game version options
 option("game_version")
@@ -25,11 +25,20 @@ local tools_bin = "tools/bin"
 -- ====================
 -- Third-party packages
 -- ====================
-add_requires("nlohmann_json", {configs = {cmake = false}})
-add_requires("fmt", {configs = {header_only = true}})
-add_requires("libpng")
-add_requires("zlib")
-add_requires("libsdl3", {configs = {shared = false}})
+local use_system_packages = is_host("linux") and (os.getenv("XMAKE_USE_SYSTEM_SDL3") or os.getenv("IN_NIX_SHELL"))
+if use_system_packages then
+    add_requires("nlohmann_json", {system = true, configs = {cmake = false}})
+    add_requires("fmt", {system = true, configs = {header_only = true}})
+    add_requires("libpng", {system = true})
+    add_requires("zlib", {system = true})
+    add_requires("libsdl3", {system = true})
+else
+    add_requires("nlohmann_json", {configs = {cmake = false}})
+    add_requires("fmt", {configs = {header_only = true}})
+    add_requires("libpng")
+    add_requires("zlib")
+    add_requires("libsdl3", {configs = {shared = false}})
+end
 
 -- ====================
 -- Tools

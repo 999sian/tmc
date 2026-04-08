@@ -26,6 +26,10 @@ typedef struct MusicPlayer {
 extern const MusicPlayer gMusicPlayers[];
 }
 
+#ifdef PACKED
+#undef PACKED
+#endif
+
 #include "AgbTypes.hpp"
 #include "MP2KContext.hpp"
 #include "Rom.hpp"

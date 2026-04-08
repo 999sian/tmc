@@ -71,16 +71,16 @@ static void FourElements_SpawnBossRewardsIfNeeded(void) {
         // Create boss rewards manually if room property 10 is NULL
         Entity* heartContainer = CreateObject(HEART_CONTAINER, 0, 0);
         if (heartContainer) {
-            heartContainer->x.HALF.HI = gPlayerEntity.x.HALF.HI;
-            heartContainer->y.HALF.HI = gPlayerEntity.y.HALF.HI - 32; // Place above player
+            heartContainer->x.HALF.HI = gPlayerEntity.base.x.HALF.HI;
+            heartContainer->y.HALF.HI = gPlayerEntity.base.y.HALF.HI - 32; // Place above player
             fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Created heart container at (%d, %d)\n", 
                     heartContainer->x.HALF.HI, heartContainer->y.HALF.HI);
         }
         
         Entity* warpPoint = CreateObject(WARP_POINT, 0, 0);
         if (warpPoint) {
-            warpPoint->x.HALF.HI = gPlayerEntity.x.HALF.HI;
-            warpPoint->y.HALF.HI = gPlayerEntity.y.HALF.HI + 32; // Place below player
+            warpPoint->x.HALF.HI = gPlayerEntity.base.x.HALF.HI;
+            warpPoint->y.HALF.HI = gPlayerEntity.base.y.HALF.HI + 32; // Place below player
             fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Created warp point at (%d, %d)\n", 
                     warpPoint->x.HALF.HI, warpPoint->y.HALF.HI);
         }

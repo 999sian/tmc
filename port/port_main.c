@@ -6,6 +6,7 @@
 #include "port_ppu.h"
 #include "port_rom.h"
 #include "port_types.h"
+#include <stdlib.h>
 #include "stdio.h"
 #include <SDL3/SDL.h>
 
@@ -18,6 +19,118 @@
 #else
 #include "port_offset_USA.h"
 #endif
+
+static bool Port_TryInitVideo(const char* videoDriver, const char* renderDriver, bool headless) {
+    if (videoDriver) {
+        SDL_SetHint(SDL_HINT_VIDEO_DRIVER, videoDriver);
+    } else {
+        SDL_ResetHint(SDL_HINT_VIDEO_DRIVER);
+    }
+
+    if (renderDriver) {
+        SDL_SetHint(SDL_HINT_RENDER_DRIVER, renderDriver);
+    } else {
+        SDL_ResetHint(SDL_HINT_RENDER_DRIVER);
+    }
+
+    if (SDL_Init(SDL_INIT_VIDEO)) {
+        const char* currentDriver = SDL_GetCurrentVideoDriver();
+
+        fprintf(stderr, "SDL video driver: %s\n", currentDriver ? currentDriver : "unknown");
+        if (headless) {
+            fprintf(stderr, "SDL initialized with headless video driver '%s'.\n", videoDriver);
+        }
+        return true;
+    }
+
+    return false;
+}
+
+static void Port_LogVideoDiagnostics(void) {
+    int driverCount = SDL_GetNumVideoDrivers();
+
+    fprintf(stderr,
+            "Video env: DISPLAY='%s' WAYLAND_DISPLAY='%s' XDG_SESSION_TYPE='%s'\n",
+            getenv("DISPLAY") ? getenv("DISPLAY") : "",
+            getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY") : "",
+            getenv("XDG_SESSION_TYPE") ? getenv("XDG_SESSION_TYPE") : "");
+
+    fprintf(stderr, "SDL compiled video drivers:");
+    for (int i = 0; i < driverCount; i++) {
+        fprintf(stderr, " %s", SDL_GetVideoDriver(i));
+    }
+    fprintf(stderr, "\n");
+}
+
+static bool Port_InitVideo(void) {
+    const char* err = NULL;
+    const char* forcedDriver = getenv("SDL_VIDEODRIVER");
+    const char* display = getenv("DISPLAY");
+    const char* waylandDisplay = getenv("WAYLAND_DISPLAY");
+
+    if (forcedDriver && forcedDriver[0] != '\0') {
+        if (Port_TryInitVideo(NULL, NULL, false)) {
+            return true;
+        }
+        err = SDL_GetError();
+        SDL_Quit();
+    }
+
+    if (display && display[0] != '\0') {
+        if (Port_TryInitVideo("x11", NULL, false)) {
+            return true;
+        }
+        err = SDL_GetError();
+        SDL_Quit();
+    }
+
+    if (waylandDisplay && waylandDisplay[0] != '\0') {
+        if (Port_TryInitVideo("wayland", NULL, false)) {
+            return true;
+        }
+        err = SDL_GetError();
+        SDL_Quit();
+    }
+
+    if (Port_TryInitVideo(NULL, NULL, false)) {
+        return true;
+    }
+    err = SDL_GetError();
+
+    SDL_Quit();
+    if (Port_TryInitVideo("dummy", "software", true)) {
+        fprintf(stderr, "Initial SDL error: %s\n", err ? err : "unknown error");
+        return true;
+    }
+
+    Port_LogVideoDiagnostics();
+    fprintf(stderr, "SDL video init failed: normal='%s', fallback='%s'\n", err ? err : "unknown error", SDL_GetError());
+    return false;
+}
+
+static void Port_InitAudio(void) {
+    const char* err = NULL;
+
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
+        return;
+    }
+
+    err = SDL_GetError();
+    Port_Audio_Shutdown();
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+
+    SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
+        fprintf(stderr, "Audio device unavailable, using SDL dummy audio driver.\n");
+        gMain.muteAudio = 1;
+        return;
+    }
+
+    fprintf(stderr, "Audio disabled: normal='%s', fallback='%s'\n", err ? err : "unknown error", SDL_GetError());
+    Port_Audio_Shutdown();
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    gMain.muteAudio = 1;
+}
 
 int main() {
 
@@ -46,9 +159,8 @@ int main() {
     }
 #endif
 
-    // Initialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != true) {
-        fprintf(stderr, "SDL_Init Error: %s\n", SDL_GetError());
+    // Initialize SDL video first. Audio is optional and handled separately.
+    if (!Port_InitVideo()) {
         return 1;
     }
 
@@ -60,11 +172,13 @@ int main() {
         return 1;
     }
 
+    SDL_ShowWindow(window);
+    SDL_RaiseWindow(window);
+    SDL_SyncWindow(window);
+
     // Initialize PPU renderer
     Port_PPU_Init(window);
-    if (!Port_Audio_Init()) {
-        fprintf(stderr, "Port_Audio_Init failed: %s\n", SDL_GetError());
-    }
+    Port_InitAudio();
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
