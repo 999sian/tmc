@@ -32,12 +32,14 @@ if use_system_packages then
     add_requires("libpng", {system = true})
     add_requires("zlib", {system = true})
     add_requires("libsdl3", {system = true})
+    add_requires("nlohmann_json", {configs = {cmake = false}})
 else
     add_requires("nlohmann_json", {configs = {cmake = false}})
     add_requires("fmt", {configs = {header_only = true}})
     add_requires("libpng")
     add_requires("zlib")
     add_requires("libsdl3", {configs = {shared = false}})
+    add_requires("nlohmann_json", {configs = {cmake = false}})
 end
 
 -- ====================
@@ -71,6 +73,16 @@ target("asset_processor")
     add_files("tools/src/asset_processor/assets/*.cpp")
     add_includedirs("tools/src/asset_processor")
     add_includedirs("tools/src/util")
+    add_packages("nlohmann_json", "fmt")
+target_end()
+
+-- asset_extractor
+target("asset_extractor")
+    set_kind("binary")
+    set_languages("cxx17")
+    set_targetdir("build/pc")
+    add_files("tools/src/assets_extractor/*.cpp")
+    add_includedirs("tools/src/assets_extractor")
     add_packages("nlohmann_json", "fmt")
 target_end()
 
@@ -143,7 +155,7 @@ target_end()
 -- Group all tools
 target("tools")
     set_kind("phony")
-    add_deps("agb2mid", "aif2pcm", "asset_processor", "bin2c", "gbafix", "gbagfx", "mid2agb", "preproc", "scaninc", "tmc_strings")
+    add_deps("agb2mid", "aif2pcm", "asset_processor", "asset_extractor", "bin2c", "gbafix", "gbagfx", "mid2agb", "preproc", "scaninc", "tmc_strings")
 target_end()
 
 -- ====================
