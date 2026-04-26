@@ -95,6 +95,11 @@ extern MapLayer* GetLayerByIndex(u32 layer);
 
 // There is another map data definition following.
 #define MAP_MULTIPLE 0x80000000
+#ifdef PC_PORT
+#define MAP_SRC_FILE 0x40000000
+#else
+#define MAP_SRC_FILE 0
+#endif
 // The src is compressed.
 #define MAP_COMPRESSED 0x80000000
 

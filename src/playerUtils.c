@@ -27,6 +27,7 @@
 #include "tiles.h"
 
 #ifdef PC_PORT
+#include "port_asset_loader.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
 #include <string.h>
@@ -81,18 +82,7 @@ extern u8 gUpdateVisibleTiles;
 
 #ifdef PC_PORT
 static bool32 Port_IsRoomHeaderReadable(const RoomHeader* hdr) {
-    uintptr_t start;
-    uintptr_t end;
-    uintptr_t at;
-
-    if (hdr == NULL || gRomData == NULL || gRomSize < sizeof(RoomHeader)) {
-        return FALSE;
-    }
-
-    start = (uintptr_t)gRomData;
-    end = start + (uintptr_t)gRomSize;
-    at = (uintptr_t)hdr;
-    return at >= start && at <= end - sizeof(RoomHeader);
+    return Port_IsRoomHeaderPtrReadable(hdr);
 }
 
 static void Port_RepairCurrentRoomInfo(void) {

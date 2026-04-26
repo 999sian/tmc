@@ -1,7 +1,8 @@
 /*
  * port_rom.c — Load baserom.gba and resolve ROM data symbols.
  *
- * GBA ROM at 0x08000000. Pointer tables (gGfxGroups, gPaletteGroups, etc.)
+ * GBA ROM at 0x08000000. Pointer tables and data blobs are translated
+ * or copied as needed for the PC port.
  * are translated to native pointers. ROM pages (4 KB) are extracted to
  * rom_data/ so the game can run without the full ROM after first boot.
  */
@@ -9,6 +10,7 @@
 #include "port_rom.h"
 #include "area.h"
 #include "map.h"
+#include "port_asset_loader.h"
 #include "port_config.h"
 #include "port_gba_mem.h"
 #include "structures.h"
@@ -368,8 +370,6 @@ extern const u8 kFontText092D4Data[];
 extern const u8 kFontText0942EData[];
 extern const u8 kFontText094CEData[];
 extern const u8 kUiInitData[];
-extern const u32 kGfxGroupOffsets[];
-extern const u32 kPaletteGroupOffsets[];
 extern const u32 kSpritePtrEntries[][4];
 extern const u32 kAreaRoomHeaderOffsets[];
 extern const u32 kAreaTileSetOffsets[];
@@ -451,7 +451,15 @@ void Port_RefreshAreaData(u32 area) {
     void* areaTableBase;
     u32 subCount;
 
-    if (area >= AREA_COUNT || gRomData == NULL) {
+    if (area >= AREA_COUNT) {
+        return;
+    }
+
+    if (Port_RefreshAreaDataFromAssets(area)) {
+        return;
+    }
+
+    if (gRomData == NULL) {
         return;
     }
 
@@ -651,6 +659,11 @@ void Port_DecodeFontGBA(const void* gba_data, Font* out) {
 }
 
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
+    if (Port_AreSpritePtrsLoadedFromAssets()) {
+        if (!gRomOffsets || sprite_idx >= gRomOffsets->spritePtrsCount)
+            return NULL;
+        return &gSpritePtrs[sprite_idx];
+    }
     if (!gRomOffsets)
         return NULL;
     if (sprite_idx >= gRomOffsets->spritePtrsCount)
@@ -802,7 +815,7 @@ void Port_LoadRom(const char* path) {
         }
     }
 
-    /* ---- Step 3: overlay assets on top of ROM data ---- */
+    /* ---- Step 3: load gap data (assembled tables not in assets) ---- */
     /*
      * Assets cover .incbin binary blobs. If a ROM was loaded, the .incbin
      * regions already have correct data and this is a harmless overwrite.
@@ -810,24 +823,7 @@ void Port_LoadRom(const char* path) {
      * NOTE: assembled pointer tables (gGfxGroups, gPaletteGroups, area
      * tables, etc.) are NOT in assets — they require a ROM file.
      */
-    extern int Port_LoadFromAssets(const char* assetsDir);
-    const char* assetDirs[] = {
-        "build/USA/assets",      "build/EU/assets",
-        "../build/USA/assets",   "../../build/USA/assets", /* project root from build/pc/ */
-        "../../build/EU/assets",
-    };
-    int assetsLoaded = 0;
-    for (int i = 0; i < (int)(sizeof(assetDirs) / sizeof(assetDirs[0])); i++) {
-        if (Port_LoadFromAssets(assetDirs[i])) {
-            assetsLoaded = 1;
-            break;
-        }
-    }
-    if (assetsLoaded) {
-        fprintf(stderr, "Asset data overlaid on ROM buffer.\n");
-    }
 
-    /* ---- Step 4: load gap data (assembled tables not in assets) ---- */
     /*
      * rom_gaps.bin contains ROM data from regions NOT covered by .incbin
      * asset files: pointer tables, GfxItem arrays, PaletteGroup structs,
@@ -840,17 +836,14 @@ void Port_LoadRom(const char* path) {
     }
 
     /* ---- Check that we have some data ---- */
-    if (!romLoaded && !assetsLoaded && !gapsLoaded && pagesLoaded == 0) {
+    if (!romLoaded && !gapsLoaded && pagesLoaded == 0) {
         fprintf(stderr, "ERROR: Cannot open any ROM file.\n");
         fprintf(stderr, "  Place baserom.gba (USA) or baserom_eu.gba (EU) in the working directory,\n");
         fprintf(stderr, "  or provide extracted pages in " ROM_EXTRACT_DIR "/\n");
-        fprintf(stderr, "  or provide asset files in build/USA/assets/\n");
         abort();
     }
-    if (!romLoaded && assetsLoaded && !gapsLoaded) {
-        fprintf(stderr, "WARNING: No ROM file or rom_gaps.bin found. Assembled data tables\n");
-        fprintf(stderr, "  (pointer tables, GfxGroups, PaletteGroups, area tables) may be missing.\n");
-        fprintf(stderr, "  Run: python tools/generate_rom_gaps.py\n");
+    if (!romLoaded && !gapsLoaded && pagesLoaded > 0) {
+        fprintf(stderr, "WARNING: Running from extracted ROM pages without a full ROM file.\n");
     }
 
     if (!gRomData || gRomSize == 0) {
@@ -869,16 +862,6 @@ void Port_LoadRom(const char* path) {
 
     /* gGlobalGfxAndPalettes — huge palette/gfx blob (still points into gRomData) */
     gGlobalGfxAndPalettes = &gRomData[R->gfxAndPalettes];
-
-    /* gGfxGroups — resolved from compile-time offset table */
-    for (u32 i = 0; i < R->gfxGroupsCount; i++) {
-        ((const void**)gGfxGroups)[i] = ResolveTableOffset(kGfxGroupOffsets[i]);
-    }
-
-    /* gPaletteGroups — resolved from compile-time offset table */
-    for (u32 i = 0; i < R->paletteGroupsCount; i++) {
-        ((const void**)gPaletteGroups)[i] = ResolveTableOffset(kPaletteGroupOffsets[i]);
-    }
 
     /* gFrameObjLists — from compile-time const data (no ROM read needed) */
     memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
@@ -1099,7 +1082,21 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "Area data tables loaded (0x%X areas, 2-level pointers resolved).\n", AREA_COUNT);
     }
 
-    fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gGfxGroups, gPaletteGroups, gFrameObjLists).\n",
+    Port_LogAssetLoaderStatus();
+
+    if (Port_LoadTextsFromAssets()) {
+        fprintf(stderr, "gTranslations overridden from extracted assets.\n");
+    }
+
+    if (Port_LoadSpritePtrsFromAssets()) {
+        fprintf(stderr, "gSpritePtrs overridden from extracted assets.\n");
+    }
+
+    if (Port_LoadAreaTablesFromAssets()) {
+        fprintf(stderr, "Area data tables overridden from extracted assets.\n");
+    }
+
+    fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gFrameObjLists).\n",
             gRomRegion == ROM_REGION_EU ? "EU" : "USA");
 
     /* Initialize data stubs with ROM datas */
@@ -1147,22 +1144,6 @@ void Port_LoadRom(const char* path) {
         u32 textStart = R->translations;
         u32 textEnd = R->text094CE + 1378 + 0x100; /* conservative region */
         ExtractRegion(textStart, textEnd - textStart);
-    }
-
-    /* Extract gGfxGroups / gPaletteGroups referenced data */
-    for (u32 i = 0; i < R->gfxGroupsCount; i++) {
-        u32 ptr;
-        memcpy(&ptr, &gRomData[R->gfxGroups + i * 4], 4);
-        if (ptr >= 0x08000000u && ptr < 0x08000000u + gRomSize) {
-            ExtractRegion(ptr - 0x08000000u, ROM_PAGE_SIZE);
-        }
-    }
-    for (u32 i = 0; i < R->paletteGroupsCount; i++) {
-        u32 ptr;
-        memcpy(&ptr, &gRomData[R->paletteGroups + i * 4], 4);
-        if (ptr >= 0x08000000u && ptr < 0x08000000u + gRomSize) {
-            ExtractRegion(ptr - 0x08000000u, ROM_PAGE_SIZE);
-        }
     }
 
     /* Extract area sub-table data (referenced by pointer tables) */

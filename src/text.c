@@ -13,6 +13,7 @@ extern void UnpackTextNibbles(void*, u8*);
 #ifdef PC_PORT
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include "port_asset_loader.h"
 #include <stdio.h>
 #define gUnk_02036AD8 (*(u8*)&gEwram[0x36AD8])
 #define gUnk_02036A58 (*(u8*)&gEwram[0x36A58])
@@ -132,6 +133,9 @@ void sub_0805EEB4(Token* token, u32 textIndex) {
             iVar3 = 0;
             break;
     }
+#ifdef PC_PORT
+    Port_LogTextLookup(langIndex, textIndex);
+#endif
     puVar2 = (u32*)((uintptr_t)puVar2 + iVar3);
     sub_0805EF40(token, (u8*)puVar2);
 }

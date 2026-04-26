@@ -9,6 +9,7 @@ cmake-build-*
 *.o
 *.map
 *.pcm
+*.log
 sound/**/*.bin
 sound/songs/midi/*.s
 translations/*.bin

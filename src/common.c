@@ -4,6 +4,8 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include "port_asset_loader.h"
 #include "port_rom.h"
 #endif
 #include "area.h"
@@ -118,19 +120,14 @@ typedef struct {
 #ifdef PC_PORT
 #define COMMON_AREA_TABLE_COUNT 0x90
 
+static void Common_AbortMissingAssetGroup(const char* kind, u32 group) {
+    fprintf(stderr, "[ASSET] Failed to load %s group %u from extracted assets.\n", kind, group);
+    fprintf(stderr, "[ASSET] ROM fallback is disabled for %s groups on PC.\n", kind);
+    abort();
+}
+
 static bool32 Common_IsRoomHeaderPtrInRom(const RoomHeader* ptr) {
-    uintptr_t start;
-    uintptr_t end;
-    uintptr_t at;
-
-    if (ptr == NULL || gRomData == NULL || gRomSize < sizeof(RoomHeader)) {
-        return FALSE;
-    }
-
-    start = (uintptr_t)gRomData;
-    end = start + (uintptr_t)gRomSize;
-    at = (uintptr_t)ptr;
-    return at >= start && at <= end - sizeof(RoomHeader);
+    return Port_IsRoomHeaderPtrReadable(ptr);
 }
 
 static RoomHeader* Common_GetAreaRoomHeaderSafe(u32 area, u32 room) {
@@ -299,6 +296,12 @@ static void StoreKeyInput(Input* input, u32 keyInput) {
 }
 
 void LoadPaletteGroup(u32 group) {
+#ifdef PC_PORT
+    if (Port_LoadPaletteGroupFromAssets(group)) {
+        return;
+    }
+    Common_AbortMissingAssetGroup("palette", group);
+#endif
     const PaletteGroup* paletteGroup = gPaletteGroups[group];
     while (1) {
         u32 destPaletteNum = paletteGroup->destPaletteNum;
@@ -341,6 +344,12 @@ void SetFillColor(u32 color, u32 disable_layers) {
 }
 
 void LoadGfxGroup(u32 group) {
+#ifdef PC_PORT
+    if (Port_LoadGfxGroupFromAssets(group)) {
+        return;
+    }
+    Common_AbortMissingAssetGroup("gfx", group);
+#endif
     u32 terminator;
     u32 dmaCtrl;
     int gfxOffset;

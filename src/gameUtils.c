@@ -25,6 +25,7 @@
 #include "beanstalkSubtask.h"
 #include "pauseMenu.h"
 #ifdef PC_PORT
+#include "port_asset_loader.h"
 #include "port_rom.h"
 #include "port_gba_mem.h"
 #include <stdio.h>
@@ -59,19 +60,7 @@ extern u8 gUnk_0200AF14;
 
 #ifdef PC_PORT
 static bool32 IsRoomHeaderPtrInRom(const RoomHeader* ptr) {
-    uintptr_t start;
-    uintptr_t end;
-    uintptr_t at;
-
-    if (ptr == NULL || gRomData == NULL || gRomSize < sizeof(RoomHeader)) {
-        return FALSE;
-    }
-
-    start = (uintptr_t)gRomData;
-    end = start + (uintptr_t)gRomSize;
-    at = (uintptr_t)ptr;
-
-    return at >= start && at <= end - sizeof(RoomHeader);
+    return Port_IsRoomHeaderPtrReadable(ptr);
 }
 #endif
 
@@ -885,6 +874,10 @@ void CheckAreaDiscovery(void) {
         }
     }
     WriteBit(gSave.areaVisitFlags, gArea.locationIndex);
+#ifdef PC_PORT
+    fprintf(stderr, "[AREA] wrote visit flag area=%u room=%u loc=%u\n", gRoomControls.area, gRoomControls.room,
+            gArea.locationIndex);
+#endif
 }
 
 void UpdatePlayerRoomStatus(void) {

@@ -16,6 +16,7 @@
  */
 
 #include "entity.h"
+#include "port_asset_loader.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
 #include "structures.h"
@@ -25,14 +26,17 @@
 extern u8* gRomData;
 extern u32 gRomSize;
 
-static int RomRangeHasBytes(const void* ptr, size_t count) {
+static int AnimRangeHasBytes(const void* ptr, size_t count) {
     uintptr_t start = (uintptr_t)gRomData;
     uintptr_t end = start + (uintptr_t)gRomSize;
     uintptr_t p = (uintptr_t)ptr;
-    if (p < start || p > end) {
+    if (ptr == NULL) {
         return 0;
     }
-    return count <= (size_t)(end - p);
+    if (gRomData != NULL && p >= start && p <= end) {
+        return count <= (size_t)(end - p);
+    }
+    return Port_IsLoadedAssetBytes(ptr, (u32)count);
 }
 
 
@@ -87,7 +91,7 @@ static void FrameZero(Entity* entity) {
     u8* p = (u8*)entity->animPtr;
     if (!p)
         return; /* Safety: no animation data */
-    if (!RomRangeHasBytes(p, 4)) {
+    if (!AnimRangeHasBytes(p, 4)) {
         fprintf(stderr, "FrameZero: animPtr %p outside/overruns ROM\n", (void*)p);
         return;
     }
@@ -99,7 +103,7 @@ static void FrameZero(Entity* entity) {
     p += 4;
     /* Check loop flag: bit 7 of frame byte */
     if (entity->frame & 0x80) {
-        if (!RomRangeHasBytes(p, 1)) {
+        if (!AnimRangeHasBytes(p, 1)) {
             fprintf(stderr, "FrameZero: loop byte out of ROM at %p\n", (void*)p);
             return;
         }
@@ -126,32 +130,10 @@ void InitializeAnimation(Entity* entity, u32 animIndex) {
     if (!spr)
         return;
 
-    /* animations is a native pointer to an array of u32 (GBA ROM addresses) */
-    const u32* animTable = (const u32*)spr->animations;
-    if (!animTable)
-        return;
-
-    /* Validate animTable points within ROM data */
-    uintptr_t at = (uintptr_t)animTable;
-    uintptr_t romStart = (uintptr_t)gRomData;
-    uintptr_t romEnd = romStart + (uintptr_t)gRomSize;
-    if (gRomData == NULL || at < romStart || at >= romEnd) {
+    entity->animPtr = (u8*)Port_GetSpriteAnimationData(spriteIdx, animIndex);
+    if (!entity->animPtr) {
         return;
     }
-
-    /* Validate animIndex won't read past ROM data */
-    size_t atOff = (size_t)(at - romStart);
-    size_t needed = ((size_t)animIndex + 1u) * 4u;
-    if (atOff > gRomSize || needed > gRomSize - atOff) {
-        fprintf(stderr, "InitializeAnimation: animIndex %u out of bounds for sprite %u (ROM offset 0x%X)!\n", animIndex,
-                spriteIdx, (u32)atOff);
-        return;
-    }
-
-    u32 animGbaAddr = 0;
-    memcpy(&animGbaAddr, (const u8*)animTable + (size_t)animIndex * 4u, sizeof(animGbaAddr));
-    /* Resolve GBA ROM address to native pointer */
-    entity->animPtr = port_resolve_addr(animGbaAddr);
 
     FrameZero(entity);
 }
@@ -178,7 +160,7 @@ void UpdateAnimationVariableFrames(Entity* entity, u32 amount) {
     u8* p = (u8*)entity->animPtr;
     int maxIter = 256; /* safety limit to prevent infinite loops on corrupt data */
     for (;;) {
-        if (!RomRangeHasBytes(p, 4)) {
+        if (!AnimRangeHasBytes(p, 4)) {
             fprintf(stderr, "UpdateAnimationVariableFrames: anim ptr %p outside/overruns ROM\n", (void*)p);
             return;
         }
@@ -199,7 +181,7 @@ void UpdateAnimationVariableFrames(Entity* entity, u32 amount) {
         u8 frameByte = p[3];
         p += 4;
         if (frameByte & 0x80) {
-            if (!RomRangeHasBytes(p, 1)) {
+            if (!AnimRangeHasBytes(p, 1)) {
                 fprintf(stderr, "UpdateAnimationVariableFrames: loop byte out of ROM at %p\n", (void*)p);
                 return;
             }

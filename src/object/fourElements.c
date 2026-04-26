@@ -64,46 +64,25 @@ static void FourElements_SetDungeonClearFlag(u32 itemType) {
 static void FourElements_SpawnBossRewardsIfNeeded(void) {
     Entity* spawnManager;
 
-    void* roomProp10 = GetCurrentRoomProperty(10);
+    EntityData* roomProp10 = (EntityData*)GetRoomProperty(gRoomControls.area, gRoomControls.room, 10);
     if (roomProp10 == NULL) {
-        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: GetCurrentRoomProperty(10) returned NULL - creating entities manually\n");
-        
-        // Create boss rewards manually if room property 10 is NULL
-        Entity* heartContainer = CreateObject(HEART_CONTAINER, 0, 0);
-        if (heartContainer) {
-            heartContainer->x.HALF.HI = gPlayerEntity.base.x.HALF.HI;
-            heartContainer->y.HALF.HI = gPlayerEntity.base.y.HALF.HI - 32; // Place above player
-            fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Created heart container at (%d, %d)\n", 
-                    heartContainer->x.HALF.HI, heartContainer->y.HALF.HI);
-        }
-        
-        Entity* warpPoint = CreateObject(WARP_POINT, 0, 0);
-        if (warpPoint) {
-            warpPoint->x.HALF.HI = gPlayerEntity.base.x.HALF.HI;
-            warpPoint->y.HALF.HI = gPlayerEntity.base.y.HALF.HI + 32; // Place below player
-            fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Created warp point at (%d, %d)\n", 
-                    warpPoint->x.HALF.HI, warpPoint->y.HALF.HI);
-        }
+        roomProp10 = (EntityData*)GetCurrentRoomProperty(10);
+    }
+    if (roomProp10 == NULL) {
         return;
     }
-    
+
     Entity* existingHeart = FindEntityByID(OBJECT, HEART_CONTAINER, 6);
     Entity* existingWarp = FindEntityByID(OBJECT, WARP_POINT, 6);
     if (existingHeart != NULL || existingWarp != NULL) {
-        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: rewards already exist (heart=%p warp=%p)\n", 
-                (void*)existingHeart, (void*)existingWarp);
         return;
     }
 
-    fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Loading room entity list from %p\n", roomProp10);
-    LoadRoomEntityList((EntityData*)roomProp10);
+    LoadRoomEntityList(roomProp10);
 
     spawnManager = FindEntity(MANAGER, ENTITY_SPAWN_MANAGER, 8, 10, 0);
     if (spawnManager != NULL) {
-        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: Deleting spawn manager %p\n", (void*)spawnManager);
         DeleteManager(spawnManager);
-    } else {
-        fprintf(stderr, "FourElements_SpawnBossRewardsIfNeeded: No spawn manager found to delete\n");
     }
 }
 

@@ -77,8 +77,8 @@ u32 LoadObjPalette(Entity* entity, u32 objPaletteId) {
     {
         static int _palLog = 0;
         if (_palLog < 200) {
-            fprintf(stderr, "[PAL] LoadObjPalette: kind=%d id=%d type=%d objPaletteId=%u\n",
-                    entity->kind, entity->id, entity->type, objPaletteId);
+            /*fprintf(stderr, "[PAL] LoadObjPalette: kind=%d id=%d type=%d objPaletteId=%u\n",
+                    entity->kind, entity->id, entity->type, objPaletteId); */
             _palLog++;
         }
     }

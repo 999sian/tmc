@@ -178,6 +178,14 @@ void ram_UpdateEntities(u32 mode) {
         Entity* entity = list->first;
 
         while (entity != NULL && entity != (Entity*)list) {
+#ifdef PC_PORT
+            if (mode == 1) {
+                fprintf(stderr,
+                        "[MANAGER-LOOP] list=%d entity=%p prev=%p next=%p kind=%u id=%u action=%u type=%u type2=%u\n",
+                        listIdx, (void*)entity, (void*)entity->prev, (void*)entity->next, entity->kind, entity->id,
+                        entity->action, entity->type, entity->type2);
+            }
+#endif
             /* Save current entity in context */
             gUpdateContext.current_entity = entity;
 

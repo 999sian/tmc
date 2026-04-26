@@ -6,6 +6,7 @@
  */
 
 #include "common.h"
+#include "port_asset_index.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,13 +14,7 @@
 #define ROM_IMAGE_SIZE 0x1000000 /* 16 MB */
 #define ASSET_ENTRY_COUNT 9968
 
-typedef struct {
-    u32 offset;
-    u32 size;
-    const char* path;
-} AssetEntry;
-
-static const AssetEntry sAssetIndex[ASSET_ENTRY_COUNT] = {
+static const EmbeddedAssetEntry sAssetIndex[ASSET_ENTRY_COUNT] = {
     { 0x00000360, 0x0AE4, "data_08000360/gUnk_08000360.bin" },
     { 0x00000F84, 0x0040, "data_08000F54/gUnk_08000F84.bin" },
     { 0x00000FC4, 0x0040, "data_08000F54/gUnk_08000FC4.bin" },
@@ -11244,9 +11239,6 @@ static const AssetEntry sAssetIndex[ASSET_ENTRY_COUNT] = {
 /* ROM header bytes for region detection */
 static const u8 kRomHeaderGameCode[4] = { 0x42, 0x5A, 0x4D, 0x45 };
 
-extern u8* gRomData;
-extern u32 gRomSize;
-
 /*
  * Port_LoadFromAssets — reconstruct gRomData from build/<REGION>/assets/ files.
  * Returns 1 on success (at least 50% of assets loaded), 0 on failure.
@@ -11276,7 +11268,7 @@ int Port_LoadFromAssets(const char* assetsDir) {
     char pathBuf[512];
 
     for (u32 i = 0; i < ASSET_ENTRY_COUNT; i++) {
-        const AssetEntry* e = &sAssetIndex[i];
+        const EmbeddedAssetEntry* e = &sAssetIndex[i];
         if (e->offset + e->size > gRomSize)
             continue;
 
@@ -11299,4 +11291,12 @@ int Port_LoadFromAssets(const char* assetsDir) {
 
     /* Consider success if at least half loaded */
     return loaded > ASSET_ENTRY_COUNT / 2;
+}
+
+const EmbeddedAssetEntry* EmbeddedAssetIndex_Get(void) {
+    return sAssetIndex;
+}
+
+u32 EmbeddedAssetIndex_Count(void) {
+    return ASSET_ENTRY_COUNT;
 }

@@ -37,6 +37,10 @@ void sub_0805E1D8(EnterRoomTextboxManager*);
 void sub_0805E1F8(u32, bool32);
 
 void EnterRoomTextboxManager_Main(EnterRoomTextboxManager* this) {
+#ifdef PC_PORT
+    fprintf(stderr, "[AREA] textbox main ptr=%p action=%u room=%u saved_room=%u msg=0x%X\n", (void*)this,
+            super->action, gRoomControls.room, this->unk_20, gMessage.state);
+#endif
     EnterRoomTextboxManager_Actions[super->action](this);
 #ifdef PC_PORT
     if (gRoomControls.room != this->unk_20) {

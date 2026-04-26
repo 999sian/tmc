@@ -14,6 +14,9 @@
 #include "game.h"
 #include "player.h"
 #include "physics.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 extern void DisableVBlankDMA(void);
 
@@ -25,6 +28,10 @@ const u8 gLightRayManagerGfxGroups[];
 
 extern u16 gUnk_02017AA0[];
 extern u16 gUnk_085B4180[];
+
+#define LIGHT_RAY_ACTION_COUNT 4
+#define LIGHT_RAY_STATE_COUNT 5
+#define LIGHT_RAY_GFX_GROUP_COUNT 8
 
 typedef struct {
     u8 unk0;
@@ -40,7 +47,28 @@ void LightRayManager_Main(LightRayManager* this) {
     u8 gfxGroup;
     u8* pbVar2;
 
+    if (super->action >= LIGHT_RAY_ACTION_COUNT) {
+#ifdef PC_PORT
+        fprintf(stderr,
+                "[LIGHT] invalid action=%u type=%u area=%u room=%u prop10=%p unk21=%u\n",
+                super->action, super->type, gRoomControls.area, gRoomControls.room, GetCurrentRoomProperty(super->type),
+                this->unk_21);
+#endif
+        super->action = 1;
+        return;
+    }
+
     LightRayManager_Actions[super->action](this);
+    if (this->unk_21 >= LIGHT_RAY_STATE_COUNT || this->unk_21 >= LIGHT_RAY_GFX_GROUP_COUNT) {
+#ifdef PC_PORT
+        fprintf(stderr,
+                "[LIGHT] invalid state after action action=%u unk21=%u type=%u area=%u room=%u prop10=%p\n",
+                super->action, this->unk_21, super->type, gRoomControls.area, gRoomControls.room,
+                GetCurrentRoomProperty(super->type));
+#endif
+        this->unk_21 = 0;
+        return;
+    }
     gUnk_08107C48[this->unk_21](this);
     gfxGroup = gLightRayManagerGfxGroups[this->unk_21];
     if ((gfxGroup != 0) && (this->gfxGroup != gfxGroup)) {
@@ -86,6 +114,14 @@ void LightRayManager_Action1(LightRayManager* this) {
     s32 temp;
     s32 x;
     s32 y;
+
+    if (prop == NULL) {
+#ifdef PC_PORT
+        fprintf(stderr, "[LIGHT] missing property list type=%u area=%u room=%u\n", super->type, gRoomControls.area,
+                gRoomControls.room);
+#endif
+        return;
+    }
 
     if (prop->unk0 == 0xff)
         return;

@@ -40,6 +40,7 @@ extern const u8 gGlobalGfxAndPalettes[];
 extern const u8 gEntityListLUT[];
 
 #ifdef PC_PORT
+#include "port_asset_loader.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
 #include <string.h>
@@ -210,11 +211,26 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
     } else {
         /* --- Native PC-compiled MapDataDefinition structs (24 bytes) --- */
         do {
-            dest = dataDefinition->dest;
+            uintptr_t rawDestValue = (uintptr_t)dataDefinition->dest;
+            bool useGbaDest = rawDestValue >= 0x02000000u && rawDestValue < 0x08000000u;
+            bool destIsVram = rawDestValue >= 0x06000000u && rawDestValue < 0x06018000u;
+            dest = useGbaDest ? Port_ResolveEwramPtr((u32)rawDestValue) : dataDefinition->dest;
             if (dest != NULL) {
-                src = (u8*)&gMapData + (dataDefinition->src & 0x7fffffff);
+                if ((dataDefinition->src & MAP_SRC_FILE) != 0) {
+                    u32 assetSize = 0;
+                    src = (u8*)Port_GetMapAssetDataByIndex(dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE), &assetSize);
+                    if (src == NULL) {
+                        fprintf(stderr, "LoadMapData: missing map asset index %u area=%u room=%u\n",
+                                dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE), gRoomControls.area,
+                                gRoomControls.room);
+                        dataDefinition++;
+                        continue;
+                    }
+                } else {
+                    src = (u8*)&gMapData + (dataDefinition->src & 0x7fffffff);
+                }
                 if ((dataDefinition->size & MAP_COMPRESSED) != 0) {
-                    if ((uintptr_t)dest >> 0x18 == 6) {
+                    if (destIsVram) {
                         LZ77UnCompVram(src, dest);
                     } else {
                         LZ77UnCompWram(src, dest);
