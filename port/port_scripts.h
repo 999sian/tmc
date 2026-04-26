@@ -59,6 +59,7 @@
 #define GBA_script_08015B14 0x08015B14
 #define GBA_script_ZeldaStoneInDHC 0x0800DB18
 #define GBA_script_ZeldaStoneDHC 0x0800E58C
+#define GBA_script_TownMinish1 0x0800E6E8
 
 /* GBA ROM addresses of kinstone fusion scripts (used in worldEvent files EntityData tables) */
 #define GBA_script_GormanFirstAppearance 0x0800BA78

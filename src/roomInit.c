@@ -1708,13 +1708,18 @@ u32 sub_unk3_TownMinishHoles_LibraryBookshelf(void) {
     return 1;
 }
 
+EntityData gUnk_additional_a_TownMinishHoles_LibraryBookshelf[] = {
+    { NPC, 15, TOWN_MINISH, 2, 0x200, 0x80, 0x158, ENTITY_SCRIPT(script_TownMinish1) },
+    { 0xFF, 0, 0, 0, 0, 0, 0, 0 },
+};
+
 extern EntityData gUnk_080DB8F0;
-extern EntityData gUnk_additional_a_TownMinishHoles_LibraryBookshelf;
+extern EntityData gUnk_additional_a_TownMinishHoles_LibraryBookshelf[];
 
 void sub_StateChange_TownMinishHoles_LibraryBookshelf(void) {
     LoadRoomEntityList(&gUnk_080DB8F0);
     if (!GetInventoryValue(ITEM_FLIPPERS) && CheckGlobalFlag(MIZUKAKI_START)) {
-        LoadRoomEntityList(&gUnk_additional_a_TownMinishHoles_LibraryBookshelf);
+        LoadRoomEntityList(gUnk_additional_a_TownMinishHoles_LibraryBookshelf);
     }
     sub_0801AFE4();
 }

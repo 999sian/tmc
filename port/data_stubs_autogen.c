@@ -538,7 +538,6 @@ const u8 sfxWaterWalk[1] = { 0 };
 const u8 sfxWind1[1] = { 0 };
 const u8 sfxWind2[1] = { 0 };
 const u8 sfxWind3[1] = { 0 };
-const u8 gUnk_additional_a_TownMinishHoles_LibraryBookshelf[1] = { 0 };
 /* ---- ROM data stub initialization ---- */
 #include <stdio.h>
 #include <string.h>
