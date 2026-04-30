@@ -19,7 +19,7 @@ static std::filesystem::path find_project_root(const std::filesystem::path& star
     }
 
     while (!current.empty()) {
-        if (std::filesystem::exists(current / "xmake.lua") && std::filesystem::exists(current / "baserom.gba")) {
+        if (std::filesystem::exists(current / "xmake.lua")) {
             return current;
         }
 
@@ -33,19 +33,47 @@ static std::filesystem::path find_project_root(const std::filesystem::path& star
     return {};
 }
 
+static std::filesystem::path find_executable_directory(const std::filesystem::path& executable_path)
+{
+    if (executable_path.empty()) {
+        return {};
+    }
+
+    std::error_code ec;
+    std::filesystem::path absolute_path = std::filesystem::absolute(executable_path, ec);
+    if (ec) {
+        absolute_path = executable_path;
+    }
+
+    if (std::filesystem::is_directory(absolute_path, ec)) {
+        return absolute_path;
+    }
+
+    return absolute_path.parent_path();
+}
+
 int main(int argc, char* argv[])
 {
+    std::filesystem::path executable_dir;
+    if (argc > 0) {
+        executable_dir = find_executable_directory(argv[0]);
+    }
+    if (executable_dir.empty()) {
+        executable_dir = std::filesystem::current_path();
+    }
+
     std::filesystem::path project_root = find_project_root(std::filesystem::current_path());
-    if (project_root.empty() && argc > 0) {
-        project_root = find_project_root(argv[0]);
+    if (project_root.empty()) {
+        project_root = find_project_root(executable_dir);
     }
     if (project_root.empty()) {
         std::cerr << "Failed to locate project root." << std::endl;
         return 1;
     }
 
-    if (!load_rom(project_root / "baserom.gba")) {
-        std::cerr << "Failed to load ROM." << std::endl;
+    const std::filesystem::path rom_path = executable_dir / "baserom.gba";
+    if (!load_rom(rom_path)) {
+        std::cerr << "Failed to load ROM from " << rom_path << std::endl;
         return 1;
     }
     gRomData = Rom.data();
