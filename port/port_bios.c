@@ -3,6 +3,7 @@
 #include "port_audio.h"
 #include "port_gba_mem.h"
 #include "port_ppu.h"
+#include "port_runtime_config.h"
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
@@ -13,6 +14,24 @@
 
 static bool gQuitRequested = false;
 static int sFrameNum = 0;
+
+typedef struct {
+    PortInput input;
+    u16 gbaMask;
+} PortInputMapEntry;
+
+static const PortInputMapEntry sInputMap[] = {
+    { PORT_INPUT_A, A_BUTTON },
+    { PORT_INPUT_B, B_BUTTON },
+    { PORT_INPUT_SELECT, SELECT_BUTTON },
+    { PORT_INPUT_START, START_BUTTON },
+    { PORT_INPUT_RIGHT, DPAD_RIGHT },
+    { PORT_INPUT_LEFT, DPAD_LEFT },
+    { PORT_INPUT_UP, DPAD_UP },
+    { PORT_INPUT_DOWN, DPAD_DOWN },
+    { PORT_INPUT_R, R_BUTTON },
+    { PORT_INPUT_L, L_BUTTON },
+};
 
 extern Main gMain;
 extern void VBlankIntr(void);
@@ -30,30 +49,13 @@ u64 DivAndModCombined(s32 num, s32 denom) {
 }
 
 static void Port_UpdateInput(void) {
-    const bool* keys = SDL_GetKeyboardState(NULL);
     u16 keyinput = 0x03FF;
 
-    /* Layout-aware key mapping (QWERTY/AZERTY/etc.) */
-    if (keys[SDL_GetScancodeFromKey(SDLK_X, NULL)])
-        keyinput &= ~A_BUTTON;
-    if (keys[SDL_GetScancodeFromKey(SDLK_Z, NULL)])
-        keyinput &= ~B_BUTTON;
-    if (keys[SDL_SCANCODE_BACKSPACE])
-        keyinput &= ~SELECT_BUTTON;
-    if (keys[SDL_SCANCODE_RETURN])
-        keyinput &= ~START_BUTTON;
-    if (keys[SDL_SCANCODE_RIGHT])
-        keyinput &= ~DPAD_RIGHT;
-    if (keys[SDL_SCANCODE_LEFT])
-        keyinput &= ~DPAD_LEFT;
-    if (keys[SDL_SCANCODE_UP])
-        keyinput &= ~DPAD_UP;
-    if (keys[SDL_SCANCODE_DOWN])
-        keyinput &= ~DPAD_DOWN;
-    if (keys[SDL_GetScancodeFromKey(SDLK_S, NULL)])
-        keyinput &= ~R_BUTTON;
-    if (keys[SDL_GetScancodeFromKey(SDLK_A, NULL)])
-        keyinput &= ~L_BUTTON;
+    for (size_t i = 0; i < sizeof(sInputMap) / sizeof(sInputMap[0]); i++) {
+        if (Port_Config_InputPressed(sInputMap[i].input)) {
+            keyinput &= ~sInputMap[i].gbaMask;
+        }
+    }
 
     *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
 
@@ -68,6 +70,8 @@ static void Port_PumpEvents(void) {
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_EVENT_QUIT) {
             gQuitRequested = true;
+        } else {
+            Port_Config_HandleEvent(&e);
         }
     }
 }

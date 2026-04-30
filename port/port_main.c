@@ -5,9 +5,11 @@
 #include "port_gba_mem.h"
 #include "port_ppu.h"
 #include "port_rom.h"
+#include "port_runtime_config.h"
 #include "port_types.h"
 #include <stdlib.h>
-#include "stdio.h"
+#include <stdio.h>
+#include <string.h>
 #include <SDL3/SDL.h>
 
 /*
@@ -142,7 +144,9 @@ int main(int argc, char* argv[]) {
     // Load ROM data (auto-detects USA/EU from game code)
     Port_LoadRom("baserom.gba");
 
-    uint8_t window_scale = 3;
+    Port_Config_Load("config.json");
+
+    u8 window_scale = Port_Config_WindowScale();
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--window_scale=") == 0 || strncmp(argv[i], "--window_scale=", 15) == 0) {
@@ -157,6 +161,7 @@ int main(int argc, char* argv[]) {
             else if (strcmp(argv[i], "--help") == 0) {
                 fprintf(stderr, "Usage: %s [--window_scale=<value>]\n", argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
+                fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
             }
             else {
@@ -164,7 +169,6 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-
 
     // Verify ROM region matches compiled region
 #ifdef EU
@@ -188,7 +192,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // GBA resolution × 3
+    Port_Config_OpenGamepads();
+
     SDL_Window* window = SDL_CreateWindow("The Minish Cap", 240 * window_scale, 160 * window_scale, 0);
     if (window == NULL) {
         fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
@@ -210,6 +215,7 @@ int main(int argc, char* argv[]) {
 
     Port_Audio_Shutdown();
     Port_PPU_Shutdown();
+    Port_Config_CloseGamepads();
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;
