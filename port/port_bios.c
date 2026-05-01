@@ -99,7 +99,7 @@ void VBlankIntrWait(void) {
     Port_PPU_PresentFrame();
     port_hdma_vblank_reset();
 
-    while (SDL_GetTicksNS() - lastFrameNs < 16666667 ) {
+    while (SDL_GetTicksNS() - lastFrameNs < Port_Config_FrameTimeNs()) {
     }
 
     nowNs = SDL_GetTicksNS();

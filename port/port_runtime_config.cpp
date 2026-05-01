@@ -37,11 +37,12 @@ const std::array<Def, PORT_INPUT_COUNT> kDefaults = {{
 
 u8 sScale = 3;
 std::string sUpscaleMethod = "nearest";
+u64 sFrameTimeNs = 16666667;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 std::vector<SDL_Gamepad*> sPads;
 
 nlohmann::json DefaultsJson(void) {
-    nlohmann::json j = { { "window_scale", 3 }, { "upscale_method", "nearest" }, { "bindings", nlohmann::json::object() } };
+    nlohmann::json j = { { "window_scale", 3 }, { "upscale_method", "nearest" }, { "frame_time_ns", 16666667 }, { "bindings", nlohmann::json::object() } };
     for (const auto& d : kDefaults) {
         j["bindings"][d.name] = nlohmann::json::array();
         for (const char* bind : d.binds) {
@@ -121,7 +122,11 @@ extern "C" void Port_Config_Load(const char* path) {
 
     int scale = j.value("window_scale", 3);
     sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
-    sUpscaleMethod = j.value("upscale_method", "xbrz_linear");
+    sUpscaleMethod = j.value("upscale_method", "nearest");
+    sFrameTimeNs = j.value("frame_time_ns", 16666667ULL);
+    if (sFrameTimeNs < 1000000) {
+        sFrameTimeNs = 1000000;
+    }
 
     for (auto& v : sBinds) {
         v.clear();
@@ -139,6 +144,10 @@ extern "C" u8 Port_Config_WindowScale(void) {
 
 extern "C" const char* Port_Config_UpscaleMethod(void) {
     return sUpscaleMethod.c_str();
+}
+
+extern "C" u64 Port_Config_FrameTimeNs(void) {
+    return sFrameTimeNs;
 }
 
 extern "C" void Port_Config_OpenGamepads(void) {
