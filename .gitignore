@@ -101,3 +101,5 @@ rom_data/
 baserom.gba
 *.sav
 run/
+config.json
+release/
