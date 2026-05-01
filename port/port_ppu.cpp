@@ -2,6 +2,8 @@
 #include "port_gba_mem.h"
 #include "port_hdma.h"
 #include "port_upscale.h"
+#include "port_runtime_config.h"
+
 
 #include <cpu/mode1.h>
 #include <virtuappu.h>
@@ -9,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 enum class RenderBackend {
     None,
@@ -37,6 +40,19 @@ static SDL_Surface* sFrameSurface = nullptr;
 static PresentMode sPresentMode = PresentMode::XbrzLinear;
 static uint32_t* sUpscale2xBuf = nullptr;       /* 480x320 intermediate */
 static uint32_t* sUpscale4xBuf = nullptr;       /* 960x640 final        */
+
+static void Port_PPU_LoadConfig(void) {
+    const char* method = Port_Config_UpscaleMethod();
+    if (std::strcmp(method, "nearest") == 0) {
+        sPresentMode = PresentMode::NearestRaw;
+    } else if (std::strcmp(method, "linear") == 0) {
+        sPresentMode = PresentMode::LinearRaw;
+    } else if (std::strcmp(method, "xbrz_nearest") == 0) {
+        sPresentMode = PresentMode::XbrzNearest;
+    } else {
+        sPresentMode = PresentMode::XbrzLinear;
+    }
+}
 
 // Largest 240:160 (3:2) rect fitting inside (w, h), centered.
 static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* outW, int* outH) {
@@ -76,6 +92,7 @@ static void Port_PPU_PresentSurfaceFrame(void) {
 
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
+    Port_PPU_LoadConfig();
 
     sRenderer = SDL_CreateRenderer(window, nullptr);
     if (!sRenderer) {

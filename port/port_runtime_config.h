@@ -24,6 +24,7 @@ typedef enum {
 
 void Port_Config_Load(const char* path);
 u8 Port_Config_WindowScale(void);
+const char* Port_Config_UpscaleMethod(void);
 void Port_Config_OpenGamepads(void);
 void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);
