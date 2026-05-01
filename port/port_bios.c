@@ -93,6 +93,11 @@ static void Port_PumpEvents(void) {
             sFastForward = false;
             continue;
         }
+        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+            e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+            sFastForward = e.gaxis.value > 16384;
+            continue;
+        }
         Port_Config_HandleEvent(&e);
     }
 }
