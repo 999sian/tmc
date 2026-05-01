@@ -78,16 +78,16 @@ static bool Port_InitVideo(void) {
         SDL_Quit();
     }
 
-    if (display && display[0] != '\0') {
-        if (Port_TryInitVideo("x11", NULL, false)) {
+    if (waylandDisplay && waylandDisplay[0] != '\0') {
+        if (Port_TryInitVideo("wayland", NULL, false)) {
             return true;
         }
         err = SDL_GetError();
         SDL_Quit();
     }
 
-    if (waylandDisplay && waylandDisplay[0] != '\0') {
-        if (Port_TryInitVideo("wayland", NULL, false)) {
+    if (display && display[0] != '\0') {
+        if (Port_TryInitVideo("x11", NULL, false)) {
             return true;
         }
         err = SDL_GetError();
