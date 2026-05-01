@@ -311,7 +311,27 @@ target("tmc_pc")
     set_kind("binary")
     set_languages("c11", "cxx20")
     set_targetdir("build/pc")
-    
+
+    -- Apply the ViruaPPU HBlank-DMA callback patch before compilation.
+    -- The submodule is intentionally pinned at upstream; this patch adds
+    -- the virtuappu_mode1_pre_line_callback hook that port_hdma needs.
+    -- Idempotent: skipped if the marker symbol is already in mode1.h.
+    before_build(function (target)
+        local sub = path.join(os.projectdir(), "libs", "ViruaPPU")
+        local marker_file = path.join(sub, "include", "cpu", "mode1.h")
+        local patch_file = path.join(os.projectdir(), "port", "patches",
+                                     "viruappu-hdma-hook.patch")
+        if not os.isfile(marker_file) or not os.isfile(patch_file) then
+            return
+        end
+        local content = io.readfile(marker_file)
+        if content and content:find("virtuappu_mode1_pre_line_callback", 1, true) then
+            return
+        end
+        print("[viruappu] applying %s", path.relative(patch_file, os.projectdir()))
+        os.execv("git", {"-C", sub, "apply", patch_file})
+    end)
+
     -- PC port version configurations
     local pc_versions = {
         USA = { region = "USA", language = "ENGLISH" },
