@@ -98,6 +98,9 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
     } else {
+        if (!SDL_SetRenderVSync(sRenderer, 1)) {
+            printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
+        }
         sLowResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
                                            SDL_TEXTUREACCESS_STREAMING, 240, 160);
         sHiResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
@@ -170,9 +173,9 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
     switch (gbaMode) {
         case 0:
+        case 1:
             virtuappu_registers.mode = 1;
             break;
-        case 1:
         case 2:
             virtuappu_registers.mode = 2;
             break;

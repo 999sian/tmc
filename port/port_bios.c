@@ -1,4 +1,5 @@
 #include "gba/io_reg.h"
+#include "gba/types.h"
 #include "main.h"
 #include "port_audio.h"
 #include "port_gba_mem.h"
@@ -14,6 +15,13 @@
 #include <math.h>
 
 static bool gQuitRequested = false;
+static bool sFastForward = false;
+/* Experimental: render-rate interpolation between game ticks. Disabled by
+ * default; toggle at runtime with F10. F8 cycles steps per tick, F9 toggles
+ * BG scroll lerp. Pixel-art on a non-integer monitor:tick ratio can shimmer. */
+static bool sInterpEnabled = false;
+static bool sInterpScroll = true;
+static int sInterpStepsPerTick = 3; /* default for 180 Hz monitor */
 static int sFrameNum = 0;
 
 typedef struct {
@@ -83,56 +91,186 @@ static void Port_PumpEvents(void) {
                 Port_PPU_ToggleSmoothing();
                 continue;
             }
+            if (e.key.key == SDLK_TAB) {
+                sFastForward = true;
+                continue;
+            }
+            if (e.key.key == SDLK_F10) {
+                sInterpEnabled = !sInterpEnabled;
+                printf("[interp] %s\n", sInterpEnabled ? "on" : "off");
+                continue;
+            }
+            if (e.key.key == SDLK_F9) {
+                sInterpScroll = !sInterpScroll;
+                printf("[interp] BG scroll lerp %s\n", sInterpScroll ? "on" : "off");
+                continue;
+            }
+            if (e.key.key == SDLK_F8) {
+                sInterpStepsPerTick++;
+                if (sInterpStepsPerTick > 6) sInterpStepsPerTick = 1;
+                printf("[interp] %d steps per tick\n", sInterpStepsPerTick);
+                continue;
+            }
+        }
+        if (e.type == SDL_EVENT_KEY_UP && e.key.key == SDLK_TAB) {
+            sFastForward = false;
+            continue;
         }
         Port_Config_HandleEvent(&e);
     }
 }
 
 
-static u64 lastFrameNs = 0;
 static u64 sFpsWindowStartNs = 0;
 static u32 sFpsFrameCount = 0;
+static u64 sLastTickNs = 0;
 
-void VBlankIntrWait(void) {
-    u64 nowNs;
+/* ---- Phase 1 interpolation: lerp OAM positions and BG scroll between
+ * consecutive game ticks so motion looks smooth at monitor refresh. ---- */
+static struct OamData sPrevOam[128];
+static struct OamData sCurrOam[128];
+static u16 sPrevScroll[8];
+static u16 sCurrScroll[8];
+static bool sHaveSnapshot = false;
 
-    Port_PPU_PresentFrame();
-    port_hdma_vblank_reset();
-
-    while (SDL_GetTicksNS() - lastFrameNs < Port_Config_FrameTimeNs()) {
+static void Interp_Capture(void) {
+    if (sHaveSnapshot) {
+        memcpy(sPrevOam, sCurrOam, sizeof(sPrevOam));
+        memcpy(sPrevScroll, sCurrScroll, sizeof(sPrevScroll));
     }
-
-    nowNs = SDL_GetTicksNS();
-    lastFrameNs = nowNs;
-
-    if (sFpsWindowStartNs == 0) {
-        sFpsWindowStartNs = nowNs;
+    memcpy(sCurrOam, gOamMem, sizeof(sCurrOam));
+    for (int i = 0; i < 8; i++) {
+        sCurrScroll[i] = ((u16*)(gIoMem + REG_OFFSET_BG0HOFS))[i];
     }
+    if (!sHaveSnapshot) {
+        memcpy(sPrevOam, sCurrOam, sizeof(sPrevOam));
+        memcpy(sPrevScroll, sCurrScroll, sizeof(sPrevScroll));
+        sHaveSnapshot = true;
+    }
+}
 
+static int WrapSigned(int d, int range) {
+    int half = range / 2;
+    if (d > half) d -= range;
+    else if (d < -half) d += range;
+    return d;
+}
+
+static int RoundLerp(int a, int delta, float t) {
+    float v = (float)a + (float)delta * t;
+    return (int)floorf(v + 0.5f);
+}
+
+static void Interp_Apply(float t) {
+    struct OamData *live = (struct OamData *)gOamMem;
+    for (int i = 0; i < 128; i++) {
+        const struct OamData *p = &sPrevOam[i];
+        const struct OamData *c = &sCurrOam[i];
+        live[i] = *c;
+        if (c->affineMode == ST_OAM_AFFINE_ERASE) continue;
+        if (p->affineMode == ST_OAM_AFFINE_ERASE) continue;
+        /* Identity check: only lerp if the slot likely holds the same sprite.
+         * Tile number is allowed to change so animation cels still interpolate. */
+        if (p->paletteNum != c->paletteNum) continue;
+        if (p->shape != c->shape || p->size != c->size) continue;
+        if (p->bpp != c->bpp) continue;
+        if (p->affineMode != c->affineMode) continue;
+        if (p->priority != c->priority) continue;
+        int dy = WrapSigned((int)c->y - (int)p->y, 256);
+        int dx = WrapSigned((int)c->x - (int)p->x, 512);
+        if (dx > 32 || dx < -32 || dy > 32 || dy < -32) continue;
+        live[i].y = (u32)(RoundLerp((int)p->y, dy, t) & 0xFF);
+        live[i].x = (u32)(RoundLerp((int)p->x, dx, t) & 0x1FF);
+    }
+    if (!sInterpScroll) return;
+    u16 *liveScroll = (u16*)(gIoMem + REG_OFFSET_BG0HOFS);
+    for (int i = 0; i < 8; i++) {
+        int p = (int)sPrevScroll[i];
+        int c = (int)sCurrScroll[i];
+        int d = WrapSigned(c - p, 65536);
+        if (d > 64 || d < -64) {
+            liveScroll[i] = sCurrScroll[i];
+        } else {
+            liveScroll[i] = (u16)(RoundLerp(p, d, t) & 0xFFFF);
+        }
+    }
+}
+
+static void Interp_Restore(void) {
+    memcpy(gOamMem, sCurrOam, sizeof(sCurrOam));
+    u16 *liveScroll = (u16*)(gIoMem + REG_OFFSET_BG0HOFS);
+    for (int i = 0; i < 8; i++) liveScroll[i] = sCurrScroll[i];
+}
+
+static void UpdateFpsTitle(u64 nowNs) {
+    if (sFpsWindowStartNs == 0) sFpsWindowStartNs = nowNs;
     sFpsFrameCount++;
-
     if (nowNs - sFpsWindowStartNs >= 1000000000ULL) {
         double elapsedSec = (double)(nowNs - sFpsWindowStartNs) / 1000000000.0;
         double fps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
         char title[64];
-
         SDL_snprintf(title, sizeof(title), "The Minish Cap - %.1f FPS", fps);
         Port_PPU_SetWindowTitle(title);
-
         sFpsWindowStartNs = nowNs;
         sFpsFrameCount = 0;
     }
+}
 
-
-
+void VBlankIntrWait(void) {
     if (gQuitRequested) {
         exit(0);
     }
 
     Port_PumpEvents();
     Port_UpdateInput();
-
     VBlankIntr();
+    port_hdma_vblank_reset();
+
+    Interp_Capture();
+
+    u64 nowNs = SDL_GetTicksNS();
+    if (sLastTickNs == 0) sLastTickNs = nowNs;
+
+    if (sFastForward) {
+        Port_PPU_PresentFrame();
+        UpdateFpsTitle(SDL_GetTicksNS());
+        sLastTickNs = SDL_GetTicksNS();
+        return;
+    }
+
+    u64 tickNs = Port_Config_FrameTimeNs();
+
+    if (!sInterpEnabled) {
+        Port_PPU_PresentFrame();
+        UpdateFpsTitle(SDL_GetTicksNS());
+        while (SDL_GetTicksNS() - sLastTickNs < tickNs) { }
+        sLastTickNs += tickNs;
+        return;
+    }
+
+    u64 nextTickNs = sLastTickNs + tickNs;
+    /* If wall-clock has fallen far behind, snap forward to avoid spiral-of-death. */
+    if (nowNs > nextTickNs + tickNs) {
+        sLastTickNs = nowNs;
+        nextTickNs = nowNs + tickNs;
+    }
+
+    /* Quantized t: fixed sub-pixel positions per tick avoid shimmer when render
+     * rate jitters around the monitor:tick ratio. Loop still capped by wall-clock
+     * so a slow tick won't drag the game off 60 Hz. */
+    int step = 0;
+    int maxStep = sInterpStepsPerTick > 0 ? sInterpStepsPerTick : 1;
+    do {
+        int qstep = step < maxStep ? step : (maxStep - 1);
+        float t = (maxStep > 1) ? (float)qstep / (float)maxStep : 0.0f;
+        Interp_Apply(t);
+        Port_PPU_PresentFrame();
+        Interp_Restore();
+        UpdateFpsTitle(SDL_GetTicksNS());
+        step++;
+    } while (SDL_GetTicksNS() < nextTickNs);
+
+    sLastTickNs = nextTickNs;
 }
 
 /* ---- BIOS functions ---- */
