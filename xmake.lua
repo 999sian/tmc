@@ -312,28 +312,34 @@ target("tmc_pc")
     set_languages("c11", "cxx20")
     set_targetdir("build/pc")
 
-    -- Apply the ViruaPPU HBlank-DMA callback patch before compilation.
-    -- The submodule is intentionally pinned at upstream; this patch adds
-    -- the virtuappu_mode1_pre_line_callback hook that port_hdma needs to
-    -- both mode1.c and mode2.c render loops.
-    -- Idempotent: skipped if the mode2.c hook is already present. If the
-    -- patch was applied with an older revision (mode1 only), reset the
-    -- submodule (`git -C libs/ViruaPPU checkout -- .`) so the new combined
-    -- patch can apply cleanly.
+    -- Apply the ViruaPPU patches before compilation. The submodule is
+    -- intentionally pinned at upstream; each patch is idempotent and
+    -- skipped when its marker symbol is already present in the target file.
+    -- If a patch was applied with an older revision, reset the submodule
+    -- (`git -C libs/ViruaPPU checkout -- .`) so the patches reapply cleanly.
     before_build(function (target)
         local sub = path.join(os.projectdir(), "libs", "ViruaPPU")
-        local marker_file = path.join(sub, "src", "mode2.c")
-        local patch_file = path.join(os.projectdir(), "port", "patches",
-                                     "viruappu-hdma-hook.patch")
-        if not os.isfile(marker_file) or not os.isfile(patch_file) then
-            return
+        local patches_dir = path.join(os.projectdir(), "port", "patches")
+        local patches = {
+            -- HDMA per-line callback hook in mode1.c and mode2.c render loops.
+            { patch = "viruappu-hdma-hook.patch",
+              marker_file = path.join(sub, "src", "mode2.c"),
+              marker = "virtuappu_mode1_pre_line_callback" },
+            -- BG mosaic support: BGCNT bit 6 + REG_MOSAIC quantize sample coords.
+            { patch = "viruappu-mosaic.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "MODE1_IO_MOSAIC" },
+        }
+        for _, p in ipairs(patches) do
+            local patch_file = path.join(patches_dir, p.patch)
+            if os.isfile(p.marker_file) and os.isfile(patch_file) then
+                local content = io.readfile(p.marker_file)
+                if not (content and content:find(p.marker, 1, true)) then
+                    print("[viruappu] applying %s", path.relative(patch_file, os.projectdir()))
+                    os.execv("git", {"-C", sub, "apply", patch_file})
+                end
+            end
         end
-        local content = io.readfile(marker_file)
-        if content and content:find("virtuappu_mode1_pre_line_callback", 1, true) then
-            return
-        end
-        print("[viruappu] applying %s", path.relative(patch_file, os.projectdir()))
-        os.execv("git", {"-C", sub, "apply", patch_file})
     end)
 
     -- PC port version configurations
