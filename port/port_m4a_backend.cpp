@@ -142,6 +142,7 @@ static std::string LoadSoundsJson(void) {
         }
     }
 
+    std::fprintf(stderr, "[AUDIO] sounds.json not found — songs will be silent\n");
     return {};
 }
 
