@@ -170,9 +170,10 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
     switch (gbaMode) {
         case 0:
+        case 1:
             virtuappu_registers.mode = 1;
             break;
-        case 1:
+        
         case 2:
             virtuappu_registers.mode = 2;
             break;
