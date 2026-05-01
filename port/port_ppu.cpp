@@ -37,7 +37,7 @@ static SDL_Texture* sLowResTexture = nullptr;   /* 240x160 raw upload */
 static SDL_Texture* sHiResTexture = nullptr;    /* 960x640 upscaled  */
 static SDL_Window* sWindow = nullptr;
 static SDL_Surface* sFrameSurface = nullptr;
-static PresentMode sPresentMode = PresentMode::XbrzLinear;
+static PresentMode sPresentMode = PresentMode::NearestRaw;
 static uint32_t* sUpscale2xBuf = nullptr;       /* 480x320 intermediate */
 static uint32_t* sUpscale4xBuf = nullptr;       /* 960x640 final        */
 
