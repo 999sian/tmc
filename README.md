@@ -44,6 +44,34 @@ Discord: <https://discord.zelda64.dev>
 
 Documentation: <https://zeldaret.github.io/tmc>
 
+## PC port (work in progress)
+
+This fork includes an experimental PC build target (`tmc_pc`) that runs the
+decompiled game natively via SDL3 + a software PPU (`libs/ViruaPPU`). The port
+is **WIP** — many rendering and gameplay paths are still rough.
+
+Tested platforms:
+
+* Linux (Wayland preferred, X11 fallback)
+* Windows via MinGW static link
+
+macOS may build (the xmake config sets up the toolchain) but is not regularly
+tested.
+
+Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. Run it from
+that directory so it finds the extracted assets in `build/pc/assets/`.
+
+### Controls
+
+| Action               | Keyboard            | Gamepad                |
+|----------------------|---------------------|------------------------|
+| Fast-forward (hold)  | Tab                 | Right trigger          |
+| Toggle fullscreen    | F11 / Alt+Enter     | —                      |
+| Cycle upscaler       | F12                 | —                      |
+
+Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
+xBRZ 4× and linear modes.
+
 ## Installation
 
 To set up the repository, see [INSTALL.md](INSTALL.md).
