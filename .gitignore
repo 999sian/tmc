@@ -95,3 +95,9 @@ ctx.c
 build/
 .vscode/
 rom_data/
+
+# Copyrighted ROM, extracted assets, and per-user runtime state.
+# These must NOT be committed to the public repository.
+baserom.gba
+*.sav
+run/

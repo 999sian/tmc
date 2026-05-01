@@ -17,6 +17,12 @@ void Port_PPU_PresentFrame(void);
 // Update the SDL window title used by the port.
 void Port_PPU_SetWindowTitle(const char* title);
 
+// Toggle borderless desktop fullscreen on the SDL window.
+void Port_PPU_ToggleFullscreen(void);
+
+// Toggle nearest-neighbor (sharp pixels) ↔ linear (smooth) upscale filter.
+void Port_PPU_ToggleSmoothing(void);
+
 // Cleanup
 void Port_PPU_Shutdown(void);
 

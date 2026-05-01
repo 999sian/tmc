@@ -194,7 +194,8 @@ int main(int argc, char* argv[]) {
 
     Port_Config_OpenGamepads();
 
-    SDL_Window* window = SDL_CreateWindow("The Minish Cap", 240 * window_scale, 160 * window_scale, 0);
+    SDL_Window* window = SDL_CreateWindow(
+        "The Minish Cap", 240 * window_scale, 160 * window_scale, SDL_WINDOW_RESIZABLE);
     if (window == NULL) {
         fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
         SDL_Quit();
