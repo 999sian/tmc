@@ -62,13 +62,25 @@ int main(int argc, char* argv[])
         executable_dir = std::filesystem::current_path();
     }
 
+    // Locate output base. Two layouts are supported:
+    //  - Developer tree: first ancestor with xmake.lua → write under <root>/build/pc/.
+    //  - Release tarball (no xmake.lua anywhere): write directly next to the
+    //    binary, so tmc_pc (which looks for ./assets[_src] beside the exe) finds them.
     std::filesystem::path project_root = find_project_root(std::filesystem::current_path());
     if (project_root.empty()) {
         project_root = find_project_root(executable_dir);
     }
-    if (project_root.empty()) {
-        std::cerr << "Failed to locate project root." << std::endl;
-        return 1;
+
+    std::filesystem::path editable_assets_folder;
+    std::filesystem::path runtime_assets_folder;
+    if (!project_root.empty()) {
+        editable_assets_folder = project_root / "build/pc/assets_src";
+        runtime_assets_folder  = project_root / "build/pc/assets";
+    } else {
+        editable_assets_folder = executable_dir / "assets_src";
+        runtime_assets_folder  = executable_dir / "assets";
+        std::cout << "No xmake.lua found; running in release mode, output beside the executable: "
+                  << executable_dir << std::endl;
     }
 
     const std::filesystem::path rom_path = executable_dir / "baserom.gba";
@@ -79,8 +91,6 @@ int main(int argc, char* argv[])
     gRomData = Rom.data();
     gRomSize = static_cast<u32>(Rom.size());
 
-    // create output folder if it doesn't exist
-    std::filesystem::path editable_assets_folder = project_root / "build/pc/assets_src";
     if (!std::filesystem::exists(editable_assets_folder)) {
         std::filesystem::create_directories(editable_assets_folder);
     }
@@ -105,7 +115,6 @@ int main(int argc, char* argv[])
     config.outputRoot = editable_assets_folder;
     extract_assets(config);
 
-    const std::filesystem::path runtime_assets_folder = project_root / "build/pc/assets";
     std::string build_error;
     if (!PortAssetPipeline::BuildRuntimeAssets(editable_assets_folder, runtime_assets_folder, &build_error)) {
         std::cerr << "Failed to build runtime assets: " << build_error << std::endl;
