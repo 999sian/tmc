@@ -382,6 +382,13 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     else:
         warn("assets/sounds.json not found — songs will be silent")
 
+    sounds_src = REPO_ROOT / "assets" / "sounds.json"
+    if sounds_src.exists():
+        shutil.copy2(sounds_src, dist_dir / "sounds.json")
+        ok(f"sounds.json →  dist/{version}/sounds.json")
+    else:
+        warn("assets/sounds.json not found — songs will be silent")
+
     return dst_bin
 
 # ── Main ──────────────────────────────────────────────────────────────────────
