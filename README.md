@@ -119,6 +119,10 @@ Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. As of
 trees relative to its own path (and falls back to cwd in dev), so it
 works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
+### What's fixed and what's still broken
+
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.2-experimental** lands a USA-playthrough bug-fix pass (door-cutscene crash, post-map-hint black BG, lily pads, prologue BGM, location textbox, magic-stump animation) plus an asset-extraction fix that was silently dropping `data_*/` subtrees from release tarballs. Known-still-open issues at 0.1.2 include the Deepwood Shrine rolling-barrel BG (per-scanline affine-DMA not applied), festival-house facades, doorway sprite glitches, Minish Woods fog, and a handful of other renderer-heavy artifacts — all listed at the bottom of the changelog entry.
+
 ### Controls
 
 | Action               | Keyboard            | Gamepad                |

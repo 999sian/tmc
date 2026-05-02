@@ -1,5 +1,5 @@
 set_project("tmc")
-set_version("0.1.1")
+set_version("0.1.2")
 set_xmakever("2.7.0")
 
 -- ====================
