@@ -45,6 +45,12 @@ extern Frame* gSpriteAnimations_322[];
 
 #ifdef _WIN32
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <climits>
+#include <mach-o/dyld.h>
+#else
+#include <climits>
+#include <unistd.h>
 #endif
 
 namespace {
@@ -155,28 +161,53 @@ void AssetLogOnce(const std::string& key, const char* fmt, ...) {
     va_end(args);
 }
 
-std::optional<std::filesystem::path> FindEditableAssetsRoot() {
-    const std::optional<std::filesystem::path> exeDir = []() -> std::optional<std::filesystem::path> {
+// Returns the directory containing the running executable, or — only as a
+// last resort — std::filesystem::current_path(). The release tarball ships
+// `tmc_pc` and `assets[_src]/` as siblings, so the exe directory is the
+// authoritative answer; cwd just happens to coincide with it when launched
+// from a terminal in the same dir.
+std::optional<std::filesystem::path> GetExecutableDirectory() {
 #ifdef _WIN32
-        std::wstring buffer(MAX_PATH, L'\0');
-        DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    std::wstring buffer(MAX_PATH, L'\0');
+    DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (len == 0) {
+        return std::nullopt;
+    }
+    while (len >= buffer.size() - 1) {
+        buffer.resize(buffer.size() * 2);
+        len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
         if (len == 0) {
             return std::nullopt;
         }
-        while (len >= buffer.size() - 1) {
-            buffer.resize(buffer.size() * 2);
-            len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-            if (len == 0) {
-                return std::nullopt;
-            }
+    }
+    buffer.resize(len);
+    return std::filesystem::path(buffer).parent_path();
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buffer(size, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
+        std::error_code ec;
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(buffer.c_str(), ec);
+        if (!ec) {
+            return canonical.parent_path();
         }
-        buffer.resize(len);
-        return std::filesystem::path(buffer).parent_path();
+    }
+    std::error_code ec;
+    return std::filesystem::current_path(ec);
 #else
-        return std::filesystem::current_path();
+    char buffer[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer));
+    if (len > 0 && static_cast<size_t>(len) < sizeof(buffer)) {
+        return std::filesystem::path(std::string(buffer, static_cast<size_t>(len))).parent_path();
+    }
+    std::error_code ec;
+    return std::filesystem::current_path(ec);
 #endif
-    }();
+}
 
+std::optional<std::filesystem::path> FindEditableAssetsRoot() {
+    const std::optional<std::filesystem::path> exeDir = GetExecutableDirectory();
     if (!exeDir.has_value()) {
         return std::nullopt;
     }
@@ -192,27 +223,7 @@ std::optional<std::filesystem::path> FindEditableAssetsRoot() {
 }
 
 std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
-    const std::optional<std::filesystem::path> exeDir = []() -> std::optional<std::filesystem::path> {
-#ifdef _WIN32
-        std::wstring buffer(MAX_PATH, L'\0');
-        DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-        if (len == 0) {
-            return std::nullopt;
-        }
-        while (len >= buffer.size() - 1) {
-            buffer.resize(buffer.size() * 2);
-            len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-            if (len == 0) {
-                return std::nullopt;
-            }
-        }
-        buffer.resize(len);
-        return std::filesystem::path(buffer).parent_path();
-#else
-        return std::filesystem::current_path();
-#endif
-    }();
-
+    const std::optional<std::filesystem::path> exeDir = GetExecutableDirectory();
     if (!exeDir.has_value()) {
         return std::nullopt;
     }
