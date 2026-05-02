@@ -195,6 +195,15 @@ void HouseDoorExterior_Type3(HouseDoorExteriorEntity* this) {
         super->hitbox = (Hitbox*)&gUnk_081206AC;
         super->timer = 8;
     }
+#ifdef PC_PORT
+    /* On the port, Port_ResolveRomData can return NULL for door scripts whose
+     * GBA address isn't backed by the loaded ROM (or whose asset is missing),
+     * leaving entity->context unset by the spawner. The GBA original always
+     * had valid pointers; here we skip the script path instead of crashing. */
+    if (this->context == NULL) {
+        return;
+    }
+#endif
     ExecuteScript(super, this->context);
     sub_080868EC(super, this->context);
 }
