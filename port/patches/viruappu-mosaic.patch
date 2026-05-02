@@ -22,12 +22,13 @@ index ccccccc..ddddddd 100644
      bool bpp8 = ((bgcnt >> 7u) & 1u) != 0u;
      uint32_t screen_base = (uint32_t)((bgcnt >> 8u) & 0x1Fu) * 0x800u;
      uint16_t size_flag = (uint16_t)((bgcnt >> 14u) & 3u);
-@@ -300,13 +301,18 @@
+@@ -300,13 +301,19 @@
      int map_height_tiles = (size_flag & 2u) ? 64 : 32;
      int scroll_x = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0HOFS + bg_index * 4)) & 0x1FF;
      int scroll_y = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0VOFS + bg_index * 4)) & 0x1FF;
 -    int src_y = (line + scroll_y) % (map_height_tiles * 8);
 +    uint16_t mosaic_reg = virtuappu_mode1_io_read16(MODE1_IO_MOSAIC);
++    if (getenv("TMC_NO_MOSAIC")) mosaic_on = false;
 +    int mosaic_h = mosaic_on ? (int)((mosaic_reg & 0x0Fu) + 1u) : 1;
 +    int mosaic_v = mosaic_on ? (int)(((mosaic_reg >> 4u) & 0x0Fu) + 1u) : 1;
 +    int eff_line = (line / mosaic_v) * mosaic_v;
@@ -43,7 +44,7 @@ index ccccccc..ddddddd 100644
          int tile_col = src_x / 8;
          int pixel_x = src_x % 8;
          int screen_block_x = tile_col / 32;
-@@ -410,6 +416,7 @@
+@@ -410,6 +417,7 @@
      bgcnt = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0CNT + bg_index * 2));
      priority = (uint8_t)(bgcnt & 3u);
      char_base = (uint32_t)((bgcnt >> 2u) & 3u) * 0x4000u;
@@ -51,7 +52,7 @@ index ccccccc..ddddddd 100644
      map_base = (uint32_t)((bgcnt >> 8u) & 0x1Fu) * 0x800u;
      wrap = ((bgcnt >> 13u) & 1u) != 0u;
      map_tiles = k_affine_tiles[(bgcnt >> 14u) & 3u];
-@@ -429,12 +436,18 @@
+@@ -429,12 +437,19 @@
          ref_y |= (int32_t)0xF8000000;
      }
  
@@ -63,6 +64,7 @@ index ccccccc..ddddddd 100644
 -        int32_t tex_y_fp = start_y + (int32_t)pc * x;
 +    {
 +        uint16_t mosaic_reg = virtuappu_mode1_io_read16(MODE1_IO_MOSAIC);
++        if (getenv("TMC_NO_MOSAIC")) mosaic_on = false;
 +        int mosaic_h = mosaic_on ? (int)((mosaic_reg & 0x0Fu) + 1u) : 1;
 +        int mosaic_v = mosaic_on ? (int)(((mosaic_reg >> 4u) & 0x0Fu) + 1u) : 1;
 +        int eff_line = (line / mosaic_v) * mosaic_v;
@@ -76,7 +78,7 @@ index ccccccc..ddddddd 100644
          int32_t src_x = tex_x_fp >> 8;
          int32_t src_y = tex_y_fp >> 8;
          int tile_col;
-@@ -470,6 +483,7 @@
+@@ -470,6 +485,7 @@
          rgb555 = mode1_memory.bg_palette[color_index];
          line_buffer[x] = virtuappu_mode1_rgb555_to_abgr8888(rgb555);
          priority_buffer[x] = priority;
