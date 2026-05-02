@@ -4672,7 +4672,12 @@ extern EntityData gUnk_080F0920;
 void sub_StateChange_CastleGarden_Main(void) {
     if (!CheckGlobalFlag(TABIDACHI)) {
         LoadRoomEntityList(&gUnk_080F0650);
-#ifdef EU
+#if defined(EU) || defined(PC_PORT)
+        /* PC port follows EU behaviour: prologue Castle Garden continues the
+         * toned-down Picori Festival theme (BGM_FESTIVAL_APPROACH). The USA
+         * GBA original incorrectly substituted BGM_BEANSTALK ("Climbing the
+         * Beanstalk") here — confirmed wrong against the canonical festival
+         * track. */
         gArea.queued_bgm = BGM_FESTIVAL_APPROACH;
 #else
         gArea.queued_bgm = BGM_BEANSTALK;
@@ -5882,7 +5887,8 @@ void sub_StateChange_HyruleField_OutsideCastle(void) {
         SetTileType(TILE_TYPE_372, TILE_POS(39, 30), LAYER_BOTTOM);
     }
     if (!CheckGlobalFlag(TABIDACHI)) {
-#ifdef EU
+#if defined(EU) || defined(PC_PORT)
+        /* See sub_StateChange_CastleGarden_Main — port follows EU. */
         gArea.queued_bgm = BGM_FESTIVAL_APPROACH;
 #else
         gArea.queued_bgm = BGM_BEANSTALK;
