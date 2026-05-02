@@ -239,32 +239,67 @@ void LavaPlatform_Type1Action7(LavaPlatformEntity* this) {
 
 void LavaPlatform_SpawnPlatforms(LavaPlatformEntity* this) {
 #ifdef PC_PORT
+    /* Property data may live in ROM as GBA-packed 16-byte entries (Entity*=u32,
+     * 12 bytes of fields) or on the heap as native LavaPlatformEntry structs
+     * (24 bytes on 64-bit due to 8-byte Entity*). Detect via gRomData range. */
     const u8* raw = (const u8*)GetCurrentRoomProperty(super->type2);
+    bool isPackedRomData = raw != NULL && gRomData != NULL &&
+                           raw >= gRomData && raw < gRomData + gRomSize;
     if (!raw)
         return;
-    while (raw[9] != 0xff) { /* offset 9 = type2 */
-        u32 gba_ptr = Port_ReadU32(raw + 0);
-        s16 e_x = (s16)Port_ReadU16(raw + 4);
-        s16 e_y = (s16)Port_ReadU16(raw + 6);
-        u8 e_colLyr = raw[8];
-        u8 e_type2 = raw[9];
-        u16 e_wobble = Port_ReadU16(raw + 10);
-        u16 e_respawn = Port_ReadU16(raw + 12);
-        LavaPlatformEntity* platform = (LavaPlatformEntity*)CreateObject(LAVA_PLATFORM, 1, e_type2);
-        if (platform != NULL) {
-            (platform->base).direction = 0xff;
-            (platform->base).speed = 0;
-            (platform->base).parent = super;
-            (platform->base).x.HALF.HI = e_x + gRoomControls.origin_x;
-            (platform->base).y.HALF.HI = e_y + gRoomControls.origin_y;
-            (platform->base).collisionLayer = e_colLyr;
-            platform->wobbleTime = e_wobble;
-            platform->respawnTime = e_respawn;
-            platform->unk_78 = gba_ptr ? (Entity*)Port_ResolveRomData(gba_ptr) : NULL;
-            UpdateSpriteForCollisionLayer((Entity*)platform);
-            UpdateRailMovement(&platform->base, (u16**)&platform->unk_78, &platform->unk_76);
+    if (isPackedRomData) {
+        while (raw[9] != 0xff) { /* offset 9 = type2 */
+            u32 gba_ptr = Port_ReadU32(raw + 0);
+            s16 e_x = (s16)Port_ReadU16(raw + 4);
+            s16 e_y = (s16)Port_ReadU16(raw + 6);
+            u8 e_colLyr = raw[8];
+            u8 e_type2 = raw[9];
+            u16 e_wobble = Port_ReadU16(raw + 10);
+            u16 e_respawn = Port_ReadU16(raw + 12);
+            LavaPlatformEntity* platform = (LavaPlatformEntity*)CreateObject(LAVA_PLATFORM, 1, e_type2);
+            if (platform != NULL) {
+                (platform->base).direction = 0xff;
+                (platform->base).speed = 0;
+                (platform->base).parent = super;
+                (platform->base).x.HALF.HI = e_x + gRoomControls.origin_x;
+                (platform->base).y.HALF.HI = e_y + gRoomControls.origin_y;
+                (platform->base).collisionLayer = e_colLyr;
+                platform->wobbleTime = e_wobble;
+                platform->respawnTime = e_respawn;
+                platform->unk_78 = gba_ptr ? (Entity*)Port_ResolveRomData(gba_ptr) : NULL;
+                UpdateSpriteForCollisionLayer((Entity*)platform);
+                UpdateRailMovement(&platform->base, (u16**)&platform->unk_78, &platform->unk_76);
+            }
+            raw += 16; /* GBA sizeof(LavaPlatformEntry) */
         }
-        raw += 16; /* GBA sizeof(LavaPlatformEntry) */
+    } else {
+        LavaPlatformEntry* entry = (LavaPlatformEntry*)raw;
+        while (entry->type2 != 0xff) {
+            LavaPlatformEntity* platform = (LavaPlatformEntity*)CreateObject(LAVA_PLATFORM, 1, entry->type2);
+            if (platform != NULL) {
+                (platform->base).direction = 0xff;
+                (platform->base).speed = 0;
+                (platform->base).parent = super;
+                (platform->base).x.HALF.HI = entry->x + gRoomControls.origin_x;
+                (platform->base).y.HALF.HI = entry->y + gRoomControls.origin_y;
+                (platform->base).collisionLayer = entry->collisionLayer;
+                platform->wobbleTime = entry->wobbleTime;
+                platform->respawnTime = entry->respawnTime;
+                /* unk_78 may be a heap pointer or a GBA address sign-extended
+                 * into the low 32 bits of the pointer slot. */
+                {
+                    uintptr_t addr = (uintptr_t)entry->unk_78;
+                    if (addr != 0 && addr < 0x10000000u) {
+                        platform->unk_78 = (Entity*)Port_ResolveRomData((u32)addr);
+                    } else {
+                        platform->unk_78 = entry->unk_78;
+                    }
+                }
+                UpdateSpriteForCollisionLayer((Entity*)platform);
+                UpdateRailMovement(&platform->base, (u16**)&platform->unk_78, &platform->unk_76);
+            }
+            entry++;
+        }
     }
 #else
     LavaPlatformEntry* entry = (LavaPlatformEntry*)GetCurrentRoomProperty(super->type2);
