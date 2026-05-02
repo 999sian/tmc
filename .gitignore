@@ -91,10 +91,12 @@ Info.plist
 ctx.c
 !doxygen_config.py
 
+!build.py
 .xmake
 build/
 .vscode/
 rom_data/
+dist/
 
 # Copyrighted ROM, extracted assets, and per-user runtime state.
 # These must NOT be committed to the public repository.

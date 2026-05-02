@@ -1,0 +1,120 @@
+name: _build
+
+on:
+  workflow_call:
+    inputs:
+      publish_mode:
+        description: "artifact for CI artifacts, release for tag artifacts"
+        required: true
+        type: string
+      version_label:
+        description: "Date+SHA label (CI) or tag name (release)"
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.region }} on ${{ matrix.os_name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os_name: linux
+            region: usa
+            flag: --usa
+            exe_name: tmc_pc
+            extractor_name: asset_extractor
+          - runner: ubuntu-latest
+            os_name: linux
+            region: eur
+            flag: --eur
+            exe_name: tmc_pc
+            extractor_name: asset_extractor
+          - runner: windows-latest
+            os_name: windows
+            region: usa
+            flag: --usa
+            exe_name: tmc_pc.exe
+            extractor_name: asset_extractor.exe
+          - runner: windows-latest
+            os_name: windows
+            region: eur
+            flag: --eur
+            exe_name: tmc_pc.exe
+            extractor_name: asset_extractor.exe
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: matrix.os_name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libpng-dev libfmt-dev nlohmann-json3-dev \
+            libx11-dev libxext-dev libxrender-dev libxcursor-dev \
+            xutils-dev xorg-dev autoconf automake libtool meson ninja-build
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+
+
+      - name: Install LLVM (Windows)
+        if: matrix.os_name == 'windows'
+        run: choco install llvm -y
+
+      - name: Checkout private assets repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.ASSETS_REPO }}
+          token: ${{ secrets.ASSETS_TOKEN }}
+          path: _assets
+
+      - name: Copy ROMs into workspace
+        shell: bash
+        run: |
+          cp _assets/baserom.gba ./baserom.gba
+          cp _assets/baserom_eu.gba ./baserom_eu.gba
+
+      - name: Build selected region (non-interactive, Linux)
+        if: matrix.os_name == 'linux'
+        run: python build.py ${{ matrix.flag }}
+
+      - name: Build selected region (non-interactive, Windows)
+        if: matrix.os_name == 'windows'
+        env:
+          TMC_XMAKE_TOOLCHAIN: clang
+        run: python build.py ${{ matrix.flag }}
+
+      - name: Prepare artifact payload
+        shell: bash
+        run: |
+          DIST_REGION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
+          BIN_PATH="dist/${DIST_REGION}/${{ matrix.exe_name }}"
+          EXTRACTOR_PATH="build/pc/${{ matrix.extractor_name }}"
+          test -f "$BIN_PATH"
+          test -f "$EXTRACTOR_PATH"
+
+          OUTDIR="artifact"
+          mkdir -p "$OUTDIR"
+          cp "$BIN_PATH" "$OUTDIR/${{ matrix.exe_name }}"
+          cp "$EXTRACTOR_PATH" "$OUTDIR/${{ matrix.extractor_name }}"
+
+      - name: Create archive
+        shell: bash
+        run: |
+          ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${{ inputs.version_label }}"
+          tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact .
+          echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.archive_name }}
+          path: ${{ env.archive_name }}
+          if-no-files-found: error
