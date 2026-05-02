@@ -1,5 +1,5 @@
 set_project("tmc")
-set_version("0.1.0")
+set_version("0.1.1")
 set_xmakever("2.7.0")
 
 -- ====================
@@ -526,6 +526,7 @@ target("tmc_pc")
     -- Compiler flags
     add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
                "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g")
+
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
 target_end()

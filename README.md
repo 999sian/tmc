@@ -30,7 +30,37 @@ A copy of the original game is required to build either the ROM or the PC port.
 
 The PC port currently supports **USA** and **EU**.
 
-## PC Port — Quick Start
+## PC Port — Pre-built releases (recommended)
+
+Pre-built tarballs are published on the [Releases page](https://github.com/999sian/tmc/releases). They contain just two binaries plus the audio metadata file:
+
+```
+asset_extractor      sounds.json      tmc_pc
+```
+
+Setup, once:
+
+1. Download `tmc-usa-{linux,windows}-<version>.tar.gz` and unpack it anywhere.
+2. Drop your own `baserom.gba` next to the binaries (this repo does **not** ship the ROM).
+3. Run the extractor once. It writes `assets/` and `assets_src/` next to itself:
+
+   ```sh
+   ./asset_extractor          # Linux
+   asset_extractor.exe        # Windows
+   ```
+
+4. Run the game:
+
+   ```sh
+   ./tmc_pc                   # Linux
+   tmc_pc.exe                 # Windows (double-click works)
+   ```
+
+The binaries resolve `baserom.gba`, `sounds.json`, and the extracted asset
+trees relative to their own location, so the install directory can be
+anywhere — no `cd` dance required.
+
+## PC Port — Build from source
 
 Place your ROM in the repository root, then run:
 
@@ -84,8 +114,10 @@ Tested platforms:
 macOS may build (the xmake config sets up the toolchain) but is not regularly
 tested.
 
-Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. Run it from
-that directory so it finds the extracted assets in `build/pc/assets/`.
+Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. As of
+0.1.1 the binary resolves `baserom.gba`, `sounds.json`, and the asset
+trees relative to its own path (and falls back to cwd in dev), so it
+works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### Controls
 
