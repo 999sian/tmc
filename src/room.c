@@ -222,12 +222,22 @@ void sub_0804AFB0(void** properties) {
     gCurrentRoomProperties = properties;
     for (i = 0; i < 8; ++i) {
 #ifdef PC_PORT
+        void* val = NULL;
         if (i >= 4) {
-            gRoomVars.properties[i] = Port_GetRoomFuncProp(gRoomControls.area, gRoomControls.room, i);
-        } else {
-            gRoomVars.properties[i] = IsRoomPropertyListInRom(properties) ? Port_ReadPackedRomPtr(properties, i)
-                                                                          : properties[i];
+            /* Properties 4..7 are usually room callback functions (init / enter
+             * / update / exit). The port keeps those in a hand-built function
+             * table because raw GBA function pointers can't survive ROM
+             * relocation. But some rooms put DATA pointers here too — e.g.
+             * Minish Forest lily pads index a rail array via type2 in 4..7.
+             * Try the func table first, then fall back to a packed ROM read
+             * so non-callback rooms still get their data. */
+            val = Port_GetRoomFuncProp(gRoomControls.area, gRoomControls.room, i);
         }
+        if (val == NULL) {
+            val = IsRoomPropertyListInRom(properties) ? Port_ReadPackedRomPtr(properties, i)
+                                                      : properties[i];
+        }
+        gRoomVars.properties[i] = val;
 #else
         gRoomVars.properties[i] = gCurrentRoomProperties[i];
 #endif
@@ -332,10 +342,14 @@ void* GetRoomProperty(u32 area, u32 room, u32 property) {
 #endif
         if (temp != NULL) {
 #ifdef PC_PORT
+            void* val = NULL;
             if (property >= 4 && property <= 7) {
-                return Port_GetRoomFuncProp(area, room, property);
+                val = Port_GetRoomFuncProp(area, room, property);
             }
-            return IsRoomPropertyListInRom(temp) ? Port_ReadPackedRomPtr(temp, property) : temp[property];
+            if (val == NULL) {
+                val = IsRoomPropertyListInRom(temp) ? Port_ReadPackedRomPtr(temp, property) : temp[property];
+            }
+            return val;
 #else
             temp = temp[property];
 #endif

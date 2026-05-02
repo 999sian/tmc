@@ -291,8 +291,8 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     if toolchain:
         configure_cmd.append(f"--toolchain={toolchain}")
 
-    assets_dir = REPO_ROOT / "build" / "pc" / "assets"
-    assets_src_dir = REPO_ROOT / "build" / "pc" / "assets_src"
+    assets_dir = REPO_ROOT / "build" / version / "assets"
+    assets_src_dir = REPO_ROOT / "build" / version / "assets_src"
     assets_ready = assets_dir.exists() and assets_src_dir.exists()
 
     steps = [
@@ -343,9 +343,9 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
         dst_bin.chmod(dst_bin.stat().st_mode | 0o111)
     ok(f"Binary    →  dist/{version}/{EXE_NAME}")
 
-    # Runtime assets (build/pc/assets/) and editable assets (build/pc/assets_src/)
+    # Runtime assets (build/<version>/assets/) and editable assets (build/<version>/assets_src/)
     for src_name in ("assets", "assets_src"):
-        src = REPO_ROOT / "build" / "pc" / src_name
+        src = REPO_ROOT / "build" / version / src_name
         dst = dist_dir / src_name
         if src.exists():
             if dst.exists():
@@ -353,7 +353,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
             shutil.copytree(src, dst)
             ok(f"{src_name}/  →  dist/{version}/{src_name}/")
         else:
-            warn(f"build/pc/{src_name}/ not found — skipping")
+            warn(f"build/{version}/{src_name}/ not found — skipping")
 
     sounds_src = REPO_ROOT / "assets" / "sounds.json"
     if sounds_src.exists():
