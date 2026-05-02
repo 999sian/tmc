@@ -70,38 +70,78 @@ void HouseDoorExterior_Type0(HouseDoorExteriorEntity* this) {
 
 #ifdef PC_PORT
     {
+        /* Property data may live in ROM as GBA-packed 12-byte entries, or on
+         * the heap as native 16-byte unk_DoorProperty structs (asset loader).
+         * Detect via gRomData range and iterate accordingly. */
         const u8* raw = (const u8*)GetCurrentRoomProperty(this->unk_6c);
+        bool isPackedRomData = raw != NULL && gRomData != NULL &&
+                               raw >= gRomData && raw < gRomData + gRomSize;
         if (!raw)
             return;
-        for (i = 0; i < 32; i++, raw += 12) {
-            u16 p_unk0 = Port_ReadU16(raw + 0);
-            if (p_unk0 == 0xFFFF)
-                break;
-            u16 p_unk2 = Port_ReadU16(raw + 2);
-            u8 p_unk4 = raw[4];
-            u8 p_unk5 = raw[5];
-            u8 p_unk6 = raw[6];
-            u8 p_unk7 = raw[7];
-            u32 p_unk8 = Port_ReadU32(raw + 8); /* GBA script pointer (4 bytes) */
-            int mask = 1 << i;
-            if ((*((u32*)(&this->unk_68)) & mask) == 0 && sub_080867CC(p_unk5) &&
-                CheckRegionOnScreen(p_unk0, p_unk2, 32, 32)) {
-                entity = (HouseDoorExteriorEntity*)CreateObject(HOUSE_DOOR_EXT, p_unk7, p_unk6);
-                if (entity != NULL) {
-                    entity->unk_6c = i;
-                    entity->base.x.HALF.HI = gRoomControls.origin_x + p_unk0 + 16;
-                    entity->base.y.HALF.HI = gRoomControls.origin_y + p_unk2 + 32;
-                    entity->base.parent = super;
-                    entity->unk_68 = p_unk0;
-                    entity->unk_6a = p_unk2;
-                    entity->base.collisionLayer = p_unk4;
-                    entity->base.subAction = p_unk5;
-                    UpdateSpriteForCollisionLayer(&entity->base);
-                    *((u32*)(&this->unk_68)) |= mask;
-                    if (p_unk8) {
-                        u16* script = (u16*)Port_ResolveRomData(p_unk8);
-                        if (script)
-                            entity->context = StartCutscene(&entity->base, script);
+        if (isPackedRomData) {
+            for (i = 0; i < 32; i++, raw += 12) {
+                u16 p_unk0 = Port_ReadU16(raw + 0);
+                if (p_unk0 == 0xFFFF)
+                    break;
+                u16 p_unk2 = Port_ReadU16(raw + 2);
+                u8 p_unk4 = raw[4];
+                u8 p_unk5 = raw[5];
+                u8 p_unk6 = raw[6];
+                u8 p_unk7 = raw[7];
+                u32 p_unk8 = Port_ReadU32(raw + 8); /* GBA script pointer (4 bytes) */
+                int mask = 1 << i;
+                if ((*((u32*)(&this->unk_68)) & mask) == 0 && sub_080867CC(p_unk5) &&
+                    CheckRegionOnScreen(p_unk0, p_unk2, 32, 32)) {
+                    entity = (HouseDoorExteriorEntity*)CreateObject(HOUSE_DOOR_EXT, p_unk7, p_unk6);
+                    if (entity != NULL) {
+                        entity->unk_6c = i;
+                        entity->base.x.HALF.HI = gRoomControls.origin_x + p_unk0 + 16;
+                        entity->base.y.HALF.HI = gRoomControls.origin_y + p_unk2 + 32;
+                        entity->base.parent = super;
+                        entity->unk_68 = p_unk0;
+                        entity->unk_6a = p_unk2;
+                        entity->base.collisionLayer = p_unk4;
+                        entity->base.subAction = p_unk5;
+                        UpdateSpriteForCollisionLayer(&entity->base);
+                        *((u32*)(&this->unk_68)) |= mask;
+                        if (p_unk8) {
+                            u16* script = (u16*)Port_ResolveRomData(p_unk8);
+                            if (script)
+                                entity->context = StartCutscene(&entity->base, script);
+                        }
+                    }
+                }
+            }
+        } else {
+            /* Native unk_DoorProperty[] on heap: 16 bytes per entry on 64-bit
+             * (2+2+1+1+1+1 = 8 bytes for header + 8-byte u8* unk8 = 16). */
+            unk_DoorProperty* prop = (unk_DoorProperty*)raw;
+            for (i = 0; prop->unk0 != 0xFFFF && i < 32; prop++, i++) {
+                int mask = 1 << i;
+                if ((*((u32*)(&this->unk_68)) & mask) == 0 && sub_080867CC(prop->unk5) &&
+                    CheckRegionOnScreen(prop->unk0, prop->unk2, 32, 32)) {
+                    entity = (HouseDoorExteriorEntity*)CreateObject(HOUSE_DOOR_EXT, prop->unk7, prop->unk6);
+                    if (entity != NULL) {
+                        entity->unk_6c = i;
+                        entity->base.x.HALF.HI = gRoomControls.origin_x + prop->unk0 + 16;
+                        entity->base.y.HALF.HI = gRoomControls.origin_y + prop->unk2 + 32;
+                        entity->base.parent = super;
+                        entity->unk_68 = prop->unk0;
+                        entity->unk_6a = prop->unk2;
+                        entity->base.collisionLayer = prop->unk4;
+                        entity->base.subAction = prop->unk5;
+                        UpdateSpriteForCollisionLayer(&entity->base);
+                        *((u32*)(&this->unk_68)) |= mask;
+                        if (prop->unk8) {
+                            /* unk8 may be a GBA address stored in low 32 bits
+                             * of the pointer, or a real heap pointer. */
+                            uintptr_t scriptAddr = (uintptr_t)prop->unk8;
+                            u16* script = (scriptAddr < 0x10000000u)
+                                ? (u16*)Port_ResolveRomData((u32)scriptAddr)
+                                : (u16*)prop->unk8;
+                            if (script)
+                                entity->context = StartCutscene(&entity->base, script);
+                        }
                     }
                 }
             }
