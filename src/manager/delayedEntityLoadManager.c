@@ -58,46 +58,23 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
         index1 = 0;
 #ifdef PC_PORT
         {
-            /* Property data may live in ROM as GBA-packed 16-byte NPCStruct
-             * entries, or on the heap as native 24-byte structs (with 8-byte
-             * u16* script). Detect via gRomData range. */
             const u8* raw = (const u8*)properties;
-            bool isPackedRomData = raw != NULL && gRomData != NULL &&
-                                   raw >= gRomData && raw < gRomData + gRomSize;
-            if (isPackedRomData) {
-                while (raw[0] != 0xff && index1 < maxEntries) { /* raw[0] = id */
-                    npcPtr->id = raw[0];
-                    npcPtr->type = raw[1];
-                    npcPtr->type2 = raw[2];
-                    npcPtr->collisionLayer = raw[3];
-                    npcPtr->x = Port_ReadU16(raw + 4);
-                    npcPtr->y = Port_ReadU16(raw + 6);
-                    {
-                        u32 gba_script = Port_ReadU32(raw + 8);
-                        npcPtr->script = gba_script ? (u16*)Port_ResolveRomData(gba_script) : NULL;
-                    }
-                    npcPtr->timer = Port_ReadU16(raw + 12);
-                    npcPtr->progressBitfield = Port_ReadU16(raw + 14);
-                    index1++;
-                    raw += 16; /* GBA sizeof(NPCStruct) */
-                    npcPtr++;
+            while (raw[0] != 0xff && index1 < maxEntries) { /* raw[0] = id */
+                npcPtr->id = raw[0];
+                npcPtr->type = raw[1];
+                npcPtr->type2 = raw[2];
+                npcPtr->collisionLayer = raw[3];
+                npcPtr->x = Port_ReadU16(raw + 4);
+                npcPtr->y = Port_ReadU16(raw + 6);
+                {
+                    u32 gba_script = Port_ReadU32(raw + 8);
+                    npcPtr->script = gba_script ? (u16*)Port_ResolveRomData(gba_script) : NULL;
                 }
-            } else {
-                NPCStruct* nprop = (NPCStruct*)raw;
-                while (nprop->id != 0xff && index1 < maxEntries) {
-                    *npcPtr = *nprop;
-                    /* If script is a sign-extended GBA address rather than a
-                     * heap pointer, resolve it. */
-                    if (nprop->script != NULL) {
-                        uintptr_t saddr = (uintptr_t)nprop->script;
-                        if (saddr < 0x10000000u) {
-                            npcPtr->script = (u16*)Port_ResolveRomData((u32)saddr);
-                        }
-                    }
-                    index1++;
-                    nprop++;
-                    npcPtr++;
-                }
+                npcPtr->timer = Port_ReadU16(raw + 12);
+                npcPtr->progressBitfield = Port_ReadU16(raw + 14);
+                index1++;
+                raw += 16; /* GBA sizeof(NPCStruct) */
+                npcPtr++;
             }
         }
 #else
