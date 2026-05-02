@@ -121,8 +121,16 @@ typedef struct {
 #define COMMON_AREA_TABLE_COUNT 0x90
 
 static void Common_AbortMissingAssetGroup(const char* kind, u32 group) {
-    fprintf(stderr, "[ASSET] Failed to load %s group %u from extracted assets.\n", kind, group);
-    fprintf(stderr, "[ASSET] ROM fallback is disabled for %s groups on PC.\n", kind);
+    fprintf(stderr, "\n[FATAL] %s group %u not found.\n", kind, group);
+    fprintf(stderr, "\n  The PC port reads tile graphics, palettes and music\n");
+    fprintf(stderr, "  from an `assets/` tree that you produce once by running\n");
+    fprintf(stderr, "  the extractor:\n\n");
+    fprintf(stderr, "      ./asset_extractor          (Linux/macOS)\n");
+    fprintf(stderr, "      asset_extractor.exe        (Windows)\n\n");
+    fprintf(stderr, "  Run it in the same directory as `tmc_pc` (or `cd` into\n");
+    fprintf(stderr, "  that directory before running tmc_pc) — it needs to find\n");
+    fprintf(stderr, "  baserom.gba next to itself, then writes assets/ and\n");
+    fprintf(stderr, "  assets_src/ alongside the binary.\n\n");
     abort();
 }
 

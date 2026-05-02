@@ -206,34 +206,45 @@ std::optional<std::filesystem::path> GetExecutableDirectory() {
 #endif
 }
 
+/* Build the search list once: exe-dir first (typical install layout), then
+ * cwd (works around users who launch via a custom dynamic loader, e.g.
+ * `$HOME/glibc/ld-linux.so.2 ./tmc_pc`, in which case /proc/self/exe points
+ * at the loader rather than tmc_pc — issue #2). Caller filters by which
+ * candidate actually contains the expected JSON manifest. */
+static std::vector<std::filesystem::path> AssetSearchRoots() {
+    std::vector<std::filesystem::path> roots;
+    const auto exeDir = GetExecutableDirectory();
+    if (exeDir.has_value()) {
+        roots.push_back(*exeDir);
+    }
+    std::error_code ec;
+    const auto cwd = std::filesystem::current_path(ec);
+    if (!ec && (!exeDir.has_value() || *exeDir != cwd)) {
+        roots.push_back(cwd);
+    }
+    return roots;
+}
+
 std::optional<std::filesystem::path> FindEditableAssetsRoot() {
-    const std::optional<std::filesystem::path> exeDir = GetExecutableDirectory();
-    if (!exeDir.has_value()) {
-        return std::nullopt;
+    for (const auto& root : AssetSearchRoots()) {
+        const std::filesystem::path candidate = root / "assets_src";
+        if (std::filesystem::exists(candidate / "gfx_groups.json") &&
+            std::filesystem::exists(candidate / "palette_groups.json") &&
+            std::filesystem::exists(candidate / "palettes.json")) {
+            return candidate;
+        }
     }
-
-    const std::filesystem::path candidate = *exeDir / "assets_src";
-    if (std::filesystem::exists(candidate / "gfx_groups.json") &&
-        std::filesystem::exists(candidate / "palette_groups.json") &&
-        std::filesystem::exists(candidate / "palettes.json")) {
-        return candidate;
-    }
-
     return std::nullopt;
 }
 
 std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
-    const std::optional<std::filesystem::path> exeDir = GetExecutableDirectory();
-    if (!exeDir.has_value()) {
-        return std::nullopt;
+    for (const auto& root : AssetSearchRoots()) {
+        const std::filesystem::path candidate = root / "assets";
+        if (std::filesystem::exists(candidate / "gfx_groups.json") &&
+            std::filesystem::exists(candidate / "palette_groups.json")) {
+            return candidate;
+        }
     }
-
-    const std::filesystem::path candidate = *exeDir / "assets";
-    if (std::filesystem::exists(candidate / "gfx_groups.json") &&
-        std::filesystem::exists(candidate / "palette_groups.json")) {
-        return candidate;
-    }
-
     return std::nullopt;
 }
 
