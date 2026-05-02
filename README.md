@@ -96,6 +96,21 @@ xmake rom
 
 All contributions are welcome — decompilation, port improvements, tools, and documentation.
 
-Discussions happen on the [Discord server](https://discord.zelda64.dev).
-Decompilation progress is tracked at [zelda64.dev](https://zelda64.dev/games/tmc).
-Documentation lives at [zeldaret.github.io/tmc](https://zeldaret.github.io/tmc).
+Most discussions happen on our [Discord Server](https://discord.zelda64.dev), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
+
+
+
+# Third-party notice: agbplay
+
+`libs/agbplay_core` contains code derived from:
+
+- Project: agbplay
+- Repository: https://github.com/ipatix/agbplay
+- Author: ipatix and contributors
+- License: GNU Lesser General Public License v3.0
+
+The original agbplay project is licensed under the LGPL-3.0. The copied and
+modified files in this directory remain under that license.
+
+The rest of this repository is not automatically relicensed as LGPL-3.0 solely
+because it links to or uses this LGPL component.
