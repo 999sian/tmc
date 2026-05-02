@@ -150,30 +150,58 @@ extern "C" u64 Port_Config_FrameTimeNs(void) {
     return sFrameTimeNs;
 }
 
-extern "C" void Port_Config_OpenGamepads(void) {
+/* Make sure every connected gamepad has an open SDL_Gamepad handle.
+ * Called from both Port_Config_OpenGamepads() at startup and re-tried
+ * lazily in Port_Config_InputPressed() so a controller that's plugged
+ * in (or recognised by SDL) AFTER startup still gets picked up without
+ * needing the GAMEPAD_ADDED event to flow through the poll loop. */
+static void Port_Config_RescanGamepads(bool verbose) {
     int count = 0;
-    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
-        SDL_Log("SDL gamepad init failed: %s", SDL_GetError());
-        return;
-    }
     SDL_JoystickID* ids = SDL_GetGamepads(&count);
-    SDL_Log("SDL gamepads found: %d", count);
+    if (verbose) {
+        SDL_Log("SDL gamepads found: %d", count);
+    }
     for (int i = 0; i < count; i++) {
         OpenGamepad(ids[i]);
     }
     SDL_free(ids);
 }
 
+extern "C" void Port_Config_OpenGamepads(void) {
+    /* Hint nudges to make SDL3 see more devices on Linux/wine where the
+     * default backend selection sometimes misses Xinput-shaped pads. */
+    SDL_SetHint("SDL_JOYSTICK_HIDAPI", "1");
+    SDL_SetHint("SDL_GAMECONTROLLER_USE_BUTTON_LABELS", "1");
+
+    if (!SDL_InitSubSystem(SDL_INIT_JOYSTICK)) {
+        SDL_Log("SDL joystick init failed: %s", SDL_GetError());
+    }
+    if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {
+        SDL_Log("SDL gamepad init failed: %s", SDL_GetError());
+        return;
+    }
+    Port_Config_RescanGamepads(true);
+}
+
 extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
-    if (e->type == SDL_EVENT_GAMEPAD_ADDED) {
+    if (e->type == SDL_EVENT_GAMEPAD_ADDED || e->type == SDL_EVENT_JOYSTICK_ADDED) {
         OpenGamepad(e->gdevice.which);
-    } else if (e->type == SDL_EVENT_GAMEPAD_REMOVED) {
+    } else if (e->type == SDL_EVENT_GAMEPAD_REMOVED || e->type == SDL_EVENT_JOYSTICK_REMOVED) {
         CloseGamepad(e->gdevice.which);
     }
 }
 
 extern "C" bool Port_Config_InputPressed(PortInput input) {
     SDL_UpdateGamepads();
+    /* Re-scan every ~1s so a hot-plugged pad starts working even if its
+     * GAMEPAD_ADDED event somehow didn't reach the poll loop. */
+    static uint32_t sNextRescanAt = 0;
+    uint32_t now = SDL_GetTicks();
+    if (now >= sNextRescanAt) {
+        Port_Config_RescanGamepads(false);
+        sNextRescanAt = now + 1000;
+    }
+
     int count = 0;
     const bool* keys = SDL_GetKeyboardState(&count);
     for (const Bind& b : sBinds[input]) {
