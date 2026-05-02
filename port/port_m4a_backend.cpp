@@ -81,6 +81,11 @@ struct BackendState {
     std::array<size_t, kSongCount> songHeaderOffsets;
     uint8_t trackVolumes[kPlayerCount][kMaxTracks];
     int8_t trackPans[kPlayerCount][kMaxTracks];
+    /* Track the currently-playing song per player so room transitions that
+     * re-issue the same songId can be no-ops (real GBA's MPlayStart was
+     * effectively idempotent for repeated calls; agbplay's m4aMPlayStart
+     * restarts unconditionally and that's audible as music resetting). */
+    uint16_t currentSongId[kPlayerCount];
 };
 
 BackendState sState;
@@ -382,6 +387,7 @@ static size_t SongIdToRomPosLocked(uint16_t songId) {
 
 static void ResetTrackMixControlsLocked(void) {
     for (uint32_t i = 0; i < kPlayerCount; i++) {
+        sState.currentSongId[i] = 0;
         for (uint32_t j = 0; j < kMaxTracks; j++) {
             sState.trackVolumes[i][j] = 0xff;
             sState.trackPans[i][j] = 0;
@@ -561,10 +567,22 @@ bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId) {
     }
     if (songPos == 0 || songPos >= gRomSize) {
         sState.ctx->m4aMPlayStop(playerIndex);
+        if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
         return false;
     }
 
+    /* Idempotent restart for BGM only (song IDs 1..99): if this player is
+     * already running this exact BGM, leave it alone. The engine commonly
+     * re-issues the room BGM on every room transition; restarting the
+     * playback is audible as music resetting between rooms. SFX (>=100)
+     * legitimately re-trigger the same id and must NOT be skipped. */
+    if (songId >= 1 && songId <= 99 && playerIndex < kPlayerCount &&
+        sState.currentSongId[playerIndex] == songId) {
+        return true;
+    }
+
     sState.ctx->m4aMPlayStart(playerIndex, songPos);
+    if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = songId;
     return true;
 }
 
@@ -592,6 +610,7 @@ void Port_M4A_Backend_StopPlayer(uint8_t playerIndex) {
     }
 
     sState.ctx->m4aMPlayStop(playerIndex);
+    if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
 }
 
 void Port_M4A_Backend_ContinuePlayer(uint8_t playerIndex) {
