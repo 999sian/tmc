@@ -11,6 +11,9 @@ on:
         description: "Date+SHA label (CI) or tag name (release)"
         required: true
         type: string
+    secrets:
+      ASSETS_TOKEN:
+        required: true
 
 jobs:
   build:
