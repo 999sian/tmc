@@ -1,10 +1,6 @@
 # The Legend of Zelda: The Minish Cap
 
-
-[![Build Status][jenkins-badge]][jenkins] [![Decompilation Progress][progress-badge]][progress] [![Contributors][contributors-badge]][contributors] [![Discord Channel][discord-badge]][discord]
-
-[jenkins]: https://jenkins.deco.mp/job/TMC/job/master
-[jenkins-badge]: https://img.shields.io/jenkins/build?jobUrl=https%3A%2F%2Fjenkins.deco.mp%2Fjob%2FTMC%2Fjob%2Fmaster
+[![Decompilation Progress][progress-badge]][progress] [![Contributors][contributors-badge]][contributors] [![Discord Channel][discord-badge]][discord]
 
 [progress]: https://zelda64.dev/games/tmc
 [progress-badge]: https://img.shields.io/endpoint?url=https://zelda64.dev/assets/csv/progress-tmc-shield.json
@@ -15,43 +11,90 @@
 [discord]: https://discord.zelda64.dev
 [discord-badge]: https://img.shields.io/discord/688807550715560050?color=%237289DA&logo=discord&logoColor=%23FFFFFF
 
-```diff
-- WARNING! -
+A decompilation of The Legend of Zelda: The Minish Cap (GBA, 2004) — and a work-in-progress native PC port built on top of it.
 
-This repository is a work in progress, and while it can be used to make certain changes, it's still
-constantly evolving. If you use it for modding purposes in its current state, please be aware that
-the codebase can drastically change at any time. Also note that some parts of the ROM may not be
-'shiftable' yet, so modifying them could be difficult at this point.
+The decompilation reconstructs the original C source from the GBA ROM using static and dynamic analysis.
+The PC port compiles that source for x86-64 Linux and Windows, replacing GBA hardware with SDL3, a software PPU renderer, and the agbplay audio engine.
+
+## Supported ROMs
+
+A copy of the original game is required to build either the ROM or the PC port.
+
+| Version  | Filename         | SHA1                                       |
+|----------|------------------|--------------------------------------------|
+| USA      | `baserom.gba`    | `b4bd50e4131b027c334547b4524e2dbbd4227130` |
+| EU       | `baserom_eu.gba` | `cff199b36ff173fb6faf152653d1bccf87c26fb7` |
+| JP       | `baserom_jp.gba` | `6c5404a1effb17f481f352181d0f1c61a2765c5d` |
+| USA Demo | `baserom_demo_usa.gba` | `63fcad218f9047b6a9edbb68c98bd0dec322d7a1` |
+| JP Demo  | `baserom_demo_jp.gba`  | `9cdb56fa79bba13158b81925c1f3641251326412` |
+
+The PC port currently supports **USA** and **EU**.
+
+## PC Port — Quick Start
+
+Place your ROM in the repository root, then run:
+
+```sh
+python3 build.py
 ```
 
-This is a WIP decompilation of The Legend of Zelda: The Minish Cap.
-The purpose of the project is to recreate a source code base for the game from scratch, using information found inside the game along with static and/or dynamic analysis.
+The script will:
+- Check and prompt to install missing dependencies (xmake, SDL3, libpng, fmt, nlohmann-json)
+- Initialize git submodules automatically
+- Scan for ROM files and verify their checksums
+- Let you choose USA, EU, or both
+- Extract and convert assets from your ROM
+- Compile the native binary for your platform
+- Place everything under `dist/<VERSION>/`
 
-It can target the following ROMs:
+Run the result:
 
-* [**tmc.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=1841) `sha1: b4bd50e4131b027c334547b4524e2dbbd4227130`
-* [**tmc_jp.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=1719) `sha1: 6c5404a1effb17f481f352181d0f1c61a2765c5d`
-* [**tmc_eu.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=1734) `sha1: cff199b36ff173fb6faf152653d1bccf87c26fb7`
-* [**tmc_demo_usa.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=x051) `sha1: 63fcad218f9047b6a9edbb68c98bd0dec322d7a1`
-* [**tmc_demo_jp.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=x430) `sha1: 9cdb56fa79bba13158b81925c1f3641251326412`
+```sh
+cd dist/USA
+./tmc_pc
+```
 
-**Note:** This repository does not include any of the assets necessary to build the ROM.
-A prior copy of the game is required to extract the needed assets.
+Saves are written to `tmc.sav` in the working directory.
 
-Website: <https://zelda64.dev>
+### Dependencies
 
-Discord: <https://discord.zelda64.dev>
+**Linux (Arch / CachyOS):**
+```sh
+sudo pacman -S xmake sdl3 libpng fmt nlohmann-json git
+```
 
-Documentation: <https://zeldaret.github.io/tmc>
+**Linux (Ubuntu / Debian):**
+```sh
+sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git
+```
 
-## Installation
+**Windows:** Install [xmake](https://xmake.io) and [git](https://git-scm.com). SDL3 and other libraries are downloaded automatically by xmake.
 
-To set up the repository, see [INSTALL.md](INSTALL.md).
+### Nix
+
+A `flake.nix` is provided with all dependencies. Run the port directly with:
+
+```sh
+nix run
+```
+
+Or enter a development shell:
+
+```sh
+nix develop
+```
+
+## ROM Build (GBA)
+
+To rebuild the original GBA ROM you also need the `arm-none-eabi` toolchain and [agbcc](https://github.com/pret/agbcc). See [INSTALL.md](INSTALL.md) for full instructions.
+
+```sh
+xmake rom
+```
 
 ## Contributing
 
-All contributions are welcome. This is a group effort, and even small contributions can make a difference.
-Some tasks also don't require much knowledge to get started.
+All contributions are welcome — decompilation, port improvements, tools, and documentation.
 
 Most discussions happen on our [Discord Server](https://discord.zelda64.dev), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
 

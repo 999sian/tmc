@@ -430,15 +430,19 @@ extern void sub_0807FBB4();
 extern void sub_0807FBC4();
 extern void sub_0807FBCC();
 extern void sub_0807FBD4();
+#ifndef EU
 extern void sub_0807FBFC();
 extern void sub_0807FC24();
+#endif
 extern void sub_0808692C();
 extern void sub_080869A4();
 extern void sub_080873FC();
 extern void sub_08087424();
 extern void sub_0808747C();
+#ifndef EU
 extern void sub_0808861C();
 extern void sub_08088658();
+#endif
 extern void sub_0808D280();
 extern void sub_0808D2CC();
 extern void sub_08094AE8();
@@ -889,8 +893,10 @@ static const ScriptFuncEntry sScriptFuncTable[] = {
     { 0x0807FBC5, (void(*)(void))sub_0807FBC4 },
     { 0x0807FBCD, (void(*)(void))sub_0807FBCC },
     { 0x0807FBD5, (void(*)(void))sub_0807FBD4 },
+#ifndef EU
     { 0x0807FBFD, (void(*)(void))sub_0807FBFC },
     { 0x0807FC25, (void(*)(void))sub_0807FC24 },
+#endif
     { 0x0808692D, (void(*)(void))sub_0808692C },
     { 0x080869A5, (void(*)(void))sub_080869A4 },
     { 0x080873FD, (void(*)(void))sub_080873FC },
@@ -901,8 +907,10 @@ static const ScriptFuncEntry sScriptFuncTable[] = {
     { 0x08088545, (void(*)(void))FigurineDevice_NewFigurinesMessage },
     { 0x08088575, (void(*)(void))FigurineDevice_TryAgainMessage },
     { 0x080885B1, (void(*)(void))FigurineDevice_LostOrFinishedMessage },
+#ifndef EU
     { 0x0808861D, (void(*)(void))sub_0808861C },
     { 0x08088659, (void(*)(void))sub_08088658 },
+#endif
     { 0x0808D281, (void(*)(void))sub_0808D280 },
     { 0x0808D2CD, (void(*)(void))sub_0808D2CC },
     { 0x08094AE9, (void(*)(void))sub_08094AE8 },
