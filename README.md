@@ -54,3 +54,20 @@ All contributions are welcome. This is a group effort, and even small contributi
 Some tasks also don't require much knowledge to get started.
 
 Most discussions happen on our [Discord Server](https://discord.zelda64.dev), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
+
+
+
+# Third-party notice: agbplay
+
+`libs/agbplay_core` contains code derived from:
+
+- Project: agbplay
+- Repository: https://github.com/ipatix/agbplay
+- Author: ipatix and contributors
+- License: GNU Lesser General Public License v3.0
+
+The original agbplay project is licensed under the LGPL-3.0. The copied and
+modified files in this directory remain under that license.
+
+The rest of this repository is not automatically relicensed as LGPL-3.0 solely
+because it links to or uses this LGPL component.
