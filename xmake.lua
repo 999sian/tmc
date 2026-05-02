@@ -335,8 +335,21 @@ target("tmc_pc")
             if os.isfile(p.marker_file) and os.isfile(patch_file) then
                 local content = io.readfile(p.marker_file)
                 if not (content and content:find(p.marker, 1, true)) then
-                    print("[viruappu] applying %s", path.relative(patch_file, os.projectdir()))
-                    os.execv("git", {"-C", sub, "apply", patch_file})
+                    -- -3 falls back to a 3-way merge when surrounding lines
+                    -- have drifted (some hunks already in upstream), so the
+                    -- step stays self-healing instead of silently no-oping.
+                    local rel = path.relative(patch_file, os.projectdir())
+                    local applied = try {
+                        function ()
+                            os.execv("git", {"-C", sub, "apply", "-3", patch_file})
+                            return true
+                        end
+                    }
+                    if applied then
+                        print("[viruappu] applied %s", rel)
+                    else
+                        print("[viruappu] WARN: %s did not apply (drift?); continuing without it", rel)
+                    end
                 end
             end
         end
