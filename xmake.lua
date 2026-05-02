@@ -325,13 +325,9 @@ target("tmc_pc")
             { patch = "viruappu-hdma-hook.patch",
               marker_file = path.join(sub, "src", "mode2.c"),
               marker = "virtuappu_mode1_pre_line_callback" },
-            -- Mosaic patch intentionally disabled: it's drifted from upstream
-            -- mode1.c and the implementation has known bugs. The TMC_NO_MOSAIC
-            -- kill-switch (commit ea33eb71) covers the gameplay paths that
-            -- would otherwise rely on it.
-            -- { patch = "viruappu-mosaic.patch",
-            --   marker_file = path.join(sub, "include", "cpu", "mode1.h"),
-            --   marker = "MODE1_IO_MOSAIC" },
+            { patch = "viruappu-mosaic.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "MODE1_IO_MOSAIC" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
