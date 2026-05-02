@@ -171,11 +171,16 @@ extern "C" void Port_PPU_PresentFrame(void) {
     dispcnt = (uint16_t)(gIoMem[0x00] | (gIoMem[0x01] << 8));
     gbaMode = (uint8_t)(dispcnt & 0x07);
 
+    /* GBA mode 1 = BG0/BG1 text + BG2 affine + OBJ. VirtuaPPU's mode 2
+     * matches that hardware behaviour; routing GBA mode 1 to VirtuaPPU mode
+     * 1 reads BG2 with text-BG indexing and the title-screen affine sword
+     * comes out as garbage tiles. Keep GBA mode 0 on VirtuaPPU mode 1.
+     * (Originally fixed in ad9b4d94, regressed in matheo merge dec390c2.) */
     switch (gbaMode) {
         case 0:
-        case 1:
             virtuappu_registers.mode = 1;
             break;
+        case 1:
         case 2:
             virtuappu_registers.mode = 2;
             break;
