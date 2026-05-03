@@ -318,6 +318,11 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
             err(str(exc))
             return None
 
+    # Copy ROM so the runtime asset extractor can find it
+    import shutil
+    shutil.copy2("baserom.gba", "build/pc/baserom.gba")
+    print("✓  Copied baserom.gba → build/pc/")
+    
     # asset_extractor: generates build/pc/assets/ + build/pc/assets_src/
     extractor = REPO_ROOT / "build" / "pc" / (
         "asset_extractor.exe" if PLATFORM == "Windows" else "asset_extractor"
