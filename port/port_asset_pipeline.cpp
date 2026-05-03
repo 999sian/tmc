@@ -1002,7 +1002,35 @@ bool BuildRuntimeSpritePtrs(const std::filesystem::path& sourceRoot, const std::
 
                 const std::string sourceFile = animRef.get<std::string>();
                 const std::filesystem::path sourcePath = sourceFile;
+                /* The extractor writes a `.bin` fallback when an animation
+                 * fails the JSON parser ("Animation loop byte missing" or
+                 * "trailing bytes" — see WriteEditableAnimation). Without
+                 * this passthrough the raw bin was silently dropped here
+                 * and the runtime sprite ended up with zeroed animation
+                 * data → blank/static sprites for ~900 entries (#4 mushroom
+                 * held, #11 boss frames, #8 teleport icons, etc.). Just
+                 * copy the .bin straight to the runtime tree. */
                 if (sourcePath.extension() != ".json") {
+                    if (sourcePath.extension() == ".bin") {
+                        auto found = compiledAnimations.find(sourceFile);
+                        if (found == compiledAnimations.end()) {
+                            std::error_code ec;
+                            std::filesystem::path src = sourceRoot / sourcePath;
+                            std::filesystem::path dst = outputRoot / sourcePath;
+                            std::filesystem::create_directories(dst.parent_path(), ec);
+                            std::filesystem::copy_file(
+                                src, dst,
+                                std::filesystem::copy_options::overwrite_existing, ec);
+                            if (ec) {
+                                SetError(error,
+                                         "Failed to copy raw animation: " + sourcePath.string() +
+                                             " (" + ec.message() + ")");
+                                return false;
+                            }
+                            found = compiledAnimations.emplace(sourceFile, sourceFile).first;
+                        }
+                        animRef = found->second;
+                    }
                     continue;
                 }
 
@@ -1607,21 +1635,32 @@ bool WriteEditableAnimation(const std::filesystem::path& outputPath, const std::
 
         offset += 4;
         if ((animationData[offset - 1] & 0x80) != 0) {
-            if (offset >= animationData.size()) {
-                SetError(error, "Animation loop byte missing.");
-                return false;
-            }
             frame["loop"] = true;
-            frame["loop_back"] = animationData[offset];
-            ++offset;
+            if (offset >= animationData.size()) {
+                /* `infer_asset_size` sometimes truncates the animation
+                 * blob by one byte for loop-terminated frames. Synthesize
+                 * loop_back = 0 instead of failing the whole entry —
+                 * dropping the JSON forced ~900 sprites to fall back to
+                 * zeroed data (#4 mushroom held, #11 boss, #8 teleports). */
+                frame["loop_back"] = 0;
+            } else {
+                frame["loop_back"] = animationData[offset];
+                ++offset;
+            }
         }
 
         root["frames"].push_back(frame);
     }
 
     if (offset != animationData.size()) {
-        SetError(error, "Animation data has trailing bytes.");
-        return false;
+        /* Trailing bytes after the last complete frame (almost always 1-3
+         * bytes of alignment padding from the inferred-size heuristic).
+         * Drop them rather than failing the JSON write. */
+        size_t trailing = animationData.size() - offset;
+        if (trailing > 3) {
+            SetError(error, "Animation data has " + std::to_string(trailing) + " trailing bytes.");
+            return false;
+        }
     }
 
     return WriteJsonFile(outputPath, root, error);
