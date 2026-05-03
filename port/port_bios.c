@@ -110,6 +110,18 @@ static u32 sFpsFrameCount = 0;
 void VBlankIntrWait(void) {
     u64 nowNs;
 
+    /* Toggle VSync based on whether we're trying to run faster than the
+     * display refresh: fast-forward, or a target FPS preset > 60. With
+     * VSync on, SDL_RenderPresent caps us at the display rate regardless
+     * of the busy-wait timer below — so #26 reports of fast-forward and
+     * the FPS preset menu having no effect on Windows are actually the
+     * display refresh holding us. */
+    {
+        u32 targetFps = Port_Config_TargetFps();
+        bool wantVsync = !sFastForward && targetFps != 0 && targetFps <= 60;
+        Port_PPU_SetVSync(wantVsync);
+    }
+
     Port_PPU_PresentFrame();
     port_hdma_vblank_reset();
 
