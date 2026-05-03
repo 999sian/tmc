@@ -121,7 +121,7 @@ works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### What's fixed and what's still broken
 
-See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.3-experimental** clears the Deepwood Shrine playthrough through to the post-boss warp, adds the universal x86-64 struct-alignment fix that catches a class of ~30 entity subclasses (warps, heart containers, the Minish elder's curtain, locked doors, boss doors, lever switches, …), restores drop shadows, fixes the rupee/shell number variables in textboxes, and routes the Minish Village vegetation gfx group through the right resolver. Known-still-open issues at 0.1.3: the inside-barrel cylindrical-affine BG, festival house facades, doorway sprite glitches, mushroom held-pose extraction, Minish Woods fog, the Fedora-43 `libfmt.so.12` packaging mismatch, and several issues from the GitHub tracker that need retesting — all listed at the bottom of the changelog entry.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.4-experimental** clears the Hyrule Town + South Hyrule Field playthrough — kinstone-bag interaction (5-bug crash chain), spear moblin loading-zone crash (read-only ROM hitbox + packed-pointer-table), and the peahat "corpse never despawns" gust-jar-state bug all closed. CI now builds on `ubuntu-22.04` so the Linux tarball runs on every distro from glibc 2.35 onwards. Known-still-open issues at 0.1.4: door-priority glitches, Item-Get BGM ducking, mushroom held-pose extraction, blue/red teleport icons, mosaic effect, festival house facades — all listed at the bottom of the changelog entry.
 
 ### Controls
 
