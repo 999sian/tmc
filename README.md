@@ -32,7 +32,7 @@ The PC port currently supports **USA** and **EU**.
 
 ## PC Port — Pre-built releases (recommended)
 
-Pre-built tarballs are published on the [Releases page](https://github.com/999sian/tmc/releases). They contain just two binaries plus the audio metadata file:
+Pre-built tarballs are published on the [Releases page](https://github.com/MatheoVignaud/tmc/releases). They contain just two binaries plus the audio metadata file:
 
 ```
 asset_extractor      sounds.json      tmc_pc
@@ -90,12 +90,12 @@ Saves are written to `tmc.sav` in the working directory.
 
 **Linux (Arch / CachyOS):**
 ```sh
-sudo pacman -S xmake sdl3 libpng fmt nlohmann-json git
+sudo pacman -S xmake sdl3 libpng fmt nlohmann-json git curl
 ```
 
 **Linux (Ubuntu / Debian):**
 ```sh
-sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git
+sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git curl
 ```
 
 **Windows:** Install [xmake](https://xmake.io) and [git](https://git-scm.com). SDL3 and other libraries are downloaded automatically by xmake.

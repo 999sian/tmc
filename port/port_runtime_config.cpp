@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include <array>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -38,11 +39,21 @@ const std::array<Def, PORT_INPUT_COUNT> kDefaults = {{
 u8 sScale = 3;
 std::string sUpscaleMethod = "nearest";
 u64 sFrameTimeNs = 16666667;
+bool sPortSettingsMenuEnabled = true;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 std::vector<SDL_Gamepad*> sPads;
+std::filesystem::path sConfigPath = "config.json";
+nlohmann::json sConfigJson;
+const std::array<u32, 8> kFpsPresets = { 30, 60, 75, 90, 120, 144, 150, 240 };
 
 nlohmann::json DefaultsJson(void) {
-    nlohmann::json j = { { "window_scale", 3 }, { "upscale_method", "nearest" }, { "frame_time_ns", 16666667 }, { "bindings", nlohmann::json::object() } };
+    nlohmann::json j = {
+        { "window_scale", 3 },
+        { "upscale_method", "nearest" },
+        { "frame_time_ns", 16666667 },
+        { "port_settings_menu", true },
+        { "bindings", nlohmann::json::object() },
+    };
     for (const auto& d : kDefaults) {
         j["bindings"][d.name] = nlohmann::json::array();
         for (const char* bind : d.binds) {
@@ -73,6 +84,22 @@ void LoadBinds(PortInput input, const nlohmann::json& v) {
             }
         }
     }
+}
+
+void SaveConfig(void) {
+    try {
+        std::ofstream(sConfigPath) << sConfigJson.dump(4) << '\n';
+    } catch (...) {
+    }
+}
+
+u64 FrameTimeForFps(u32 fps) {
+    if (fps < 1) {
+        fps = 1;
+    } else if (fps > 1000) {
+        fps = 1000;
+    }
+    return 1000000000ULL / fps;
 }
 
 } 
@@ -109,6 +136,7 @@ static void CloseGamepad(SDL_JoystickID id) {
 extern "C" void Port_Config_Load(const char* path) {
     nlohmann::json j = DefaultsJson();
     const std::filesystem::path p = path ? path : "config.json";
+    sConfigPath = p;
 
     if (std::filesystem::exists(p)) {
         try {
@@ -120,10 +148,13 @@ extern "C" void Port_Config_Load(const char* path) {
         std::ofstream(p) << j.dump(4) << '\n';
     }
 
+    sConfigJson = j;
+
     int scale = j.value("window_scale", 3);
     sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
     sUpscaleMethod = j.value("upscale_method", "nearest");
     sFrameTimeNs = j.value("frame_time_ns", 16666667ULL);
+    sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
     if (sFrameTimeNs < 1000000) {
         sFrameTimeNs = 1000000;
     }
@@ -148,6 +179,66 @@ extern "C" const char* Port_Config_UpscaleMethod(void) {
 
 extern "C" u64 Port_Config_FrameTimeNs(void) {
     return sFrameTimeNs;
+}
+
+extern "C" u32 Port_Config_TargetFps(void) {
+    if (sFrameTimeNs == 0) {
+        return 0;
+    }
+    return (u32)((1000000000ULL + (sFrameTimeNs / 2)) / sFrameTimeNs);
+}
+
+extern "C" bool Port_Config_PortSettingsMenuEnabled(void) {
+    return sPortSettingsMenuEnabled;
+}
+
+extern "C" void Port_Config_SetWindowScale(u8 scale) {
+    if (scale < 1) {
+        scale = 1;
+    } else if (scale > 10) {
+        scale = 10;
+    }
+    sScale = scale;
+    sConfigJson["window_scale"] = static_cast<int>(scale);
+    SaveConfig();
+}
+
+extern "C" void Port_Config_SetUpscaleMethod(const char* method) {
+    if (method == nullptr || method[0] == '\0') {
+        method = "nearest";
+    }
+    sUpscaleMethod = method;
+    sConfigJson["upscale_method"] = sUpscaleMethod;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_SetTargetFps(u32 fps) {
+    sFrameTimeNs = FrameTimeForFps(fps);
+    sConfigJson["frame_time_ns"] = sFrameTimeNs;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_CycleTargetFps(int direction) {
+    const u32 current = Port_Config_TargetFps();
+    size_t index = 0;
+    u32 bestDistance = UINT32_MAX;
+
+    for (size_t i = 0; i < kFpsPresets.size(); i++) {
+        const u32 preset = kFpsPresets[i];
+        const u32 distance = current > preset ? current - preset : preset - current;
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            index = i;
+        }
+    }
+
+    if (direction < 0) {
+        index = index == 0 ? kFpsPresets.size() - 1 : index - 1;
+    } else {
+        index = index + 1 >= kFpsPresets.size() ? 0 : index + 1;
+    }
+
+    Port_Config_SetTargetFps(kFpsPresets[index]);
 }
 
 /* Make sure every connected gamepad has an open SDL_Gamepad handle.

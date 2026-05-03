@@ -26,6 +26,10 @@
 #include "affine.h"
 #include "gfx.h"
 #include "fade.h"
+#include "port_ppu.h"
+#include "port_runtime_config.h"
+#include <stdio.h>
+
 
 // copy, erase, start
 #define NUM_FILE_OPERATIONS 3
@@ -285,9 +289,20 @@ static const u16 gUnk_080FC8DE[] = {
     0x01, 0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0, 0xe0, 0xc0, 0xa0, 0x80, 0x60, 0x40, 0x20,
 };
 
+
+#define PORT_SETTINGS_OPEN gChooseFileState.unk_0x0
+#define PORT_SETTINGS_DIRTY gChooseFileState.unk_0x10
+#define PORT_SETTINGS_ROW gChooseFileState.unk_0x20
+
+
 static void sub_08050848(void);
 static void sub_0805086C(void);
 static void sub_08050940(void);
+
+static void DrawFileSelectSettingsHint(void);
+static void HandlePortSettingsMenu(void);
+static void DrawPortSettingsMenu(void);
+
 void sub_08051358(void);
 void sub_08051574(u32);
 void sub_08051480(u32);
@@ -578,8 +593,17 @@ static void ShowButtonR(void) {
 }
 
 static void HandleFileSelect(void) {
+
+    if (Port_Config_PortSettingsMenuEnabled() && PORT_SETTINGS_OPEN) {
+        HandlePortSettingsMenu();
+        return;
+    }
+
     sFileSelectDefaultHandlers[gChooseFileState.state]();
     sub_08050A64(gMapDataBottomSpecial.unk6);
+    if (Port_Config_PortSettingsMenuEnabled()) {
+        DrawFileSelectSettingsHint();
+    }
 }
 
 void sub_08050848(void) {
@@ -668,8 +692,17 @@ void sub_08050940(void) {
                 row_idx++;
             break;
         case R_BUTTON:
-            if (gMapDataBottomSpecial.saveStatus[row_idx] == SAVE_VALID)
+            if (row_idx < NUM_SAVE_SLOTS && gMapDataBottomSpecial.saveStatus[row_idx] == SAVE_VALID)
                 mode = STATE_OPTIONS;
+            break;
+        case L_BUTTON:
+            if (Port_Config_PortSettingsMenuEnabled()) {
+                PORT_SETTINGS_OPEN = TRUE;
+                PORT_SETTINGS_DIRTY = TRUE;
+                PORT_SETTINGS_ROW = 0;
+                gChooseFileState.unk_0x12 = 0;
+                SoundReq(SFX_TEXTBOX_SELECT);
+            }
             break;
         case A_BUTTON:
         case START_BUTTON:
@@ -705,8 +738,121 @@ void sub_08050940(void) {
     }
 }
 
+
+static void DrawFileSelectSettingsHint(void) {
+    static const u8 sSettingsHintText[] = "L Settings";
+    Font font;
+
+    gChooseFileState.unk_0x12 = 1;
+    MemClear(&gBG0Buffer[0x221], 0x80);
+    gScreen.bg0.updated = 1;
+
+    MemCopy(&gUnk_080FC844, &font, sizeof(font));
+    font.dest = &gBG0Buffer[0x221];
+    font.width = 0x60;
+    font.right_align = 0;
+    font.sm_border = 0;
+    font.draw_border = 0;
+    ShowTextBox((uintptr_t)sSettingsHintText, &font);
+    gScreen.bg0.updated = 1;
+}
+
+static void HandlePortSettingsMenu(void) {
+    s32 row;
+
+    row = PORT_SETTINGS_ROW;
+    switch (gInput.newKeys) {
+        case DPAD_UP:
+            row--;
+            SoundReq(SFX_TEXTBOX_CHOICE);
+            break;
+        case DPAD_DOWN:
+            row++;
+            SoundReq(SFX_TEXTBOX_CHOICE);
+            break;
+        case DPAD_LEFT:
+            if (row == 0) {
+                Port_PPU_CycleWindowScale(-1);
+            } else if (row == 1) {
+                Port_PPU_CyclePresentationMode(-1);
+            } else if (row == 2) {
+                Port_Config_CycleTargetFps(-1);
+            } else {
+                Port_PPU_ToggleFullscreen();
+            }
+            PORT_SETTINGS_DIRTY = TRUE;
+            SoundReq(SFX_TEXTBOX_CHOICE);
+            break;
+        case DPAD_RIGHT:
+        case A_BUTTON:
+        case START_BUTTON:
+            if (row == 0) {
+                Port_PPU_CycleWindowScale(1);
+            } else if (row == 1) {
+                Port_PPU_CyclePresentationMode(1);
+            } else if (row == 2) {
+                Port_Config_CycleTargetFps(1);
+            } else {
+                Port_PPU_ToggleFullscreen();
+            }
+            PORT_SETTINGS_DIRTY = TRUE;
+            SoundReq(SFX_TEXTBOX_CHOICE);
+            break;
+        case B_BUTTON:
+        case L_BUTTON:
+            PORT_SETTINGS_OPEN = FALSE;
+            PORT_SETTINGS_DIRTY = FALSE;
+            gChooseFileState.unk_0x12 = 0;
+            MemClear(&gBG0Buffer, sizeof(gBG0Buffer));
+            gScreen.bg0.updated = 1;
+            SoundReq(SFX_MENU_CANCEL);
+            return;
+    }
+
+    row = (row + 4) % 4;
+    if (PORT_SETTINGS_ROW != row) {
+        PORT_SETTINGS_ROW = row;
+        PORT_SETTINGS_DIRTY = TRUE;
+    }
+
+    if (PORT_SETTINGS_DIRTY) {
+        DrawPortSettingsMenu();
+        PORT_SETTINGS_DIRTY = FALSE;
+    }
+}
+
+static void DrawPortSettingsMenu(void) {
+    static char sPortSettingsText[224];
+    Font font;
+    s32 row;
+
+    row = PORT_SETTINGS_ROW;
+    snprintf(sPortSettingsText, sizeof(sPortSettingsText),
+             "PORT SETTINGS\n\n"
+             "%c Scale %ux\n"
+             "%c Filter %s\n"
+             "%c FPS %u\n"
+             "%c Fullscreen %s\n\n"
+             "A Change  B Back",
+             row == 0 ? '>' : ' ', (unsigned)Port_PPU_WindowScale(),
+             row == 1 ? '>' : ' ', Port_PPU_PresentationModeName(),
+             row == 2 ? '>' : ' ', (unsigned)Port_Config_TargetFps(),
+             row == 3 ? '>' : ' ', Port_PPU_IsFullscreen() ? "on" : "off");
+
+    MemClear(&gBG0Buffer, sizeof(gBG0Buffer));
+    MemCopy(&gUnk_080FC844, &font, sizeof(font));
+    font.dest = &gBG0Buffer[0x85];
+    font.width = 0xB0;
+    font.right_align = 0;
+    font.sm_border = 1;
+    font.draw_border = 1;
+    ShowTextBox((uintptr_t)sPortSettingsText, &font);
+    gScreen.bg0.updated = 1;
+}
+
+
 void sub_08050A64(u32 idx) {
-    if (gMapDataBottomSpecial.saveStatus[idx] != SAVE_VALID) {
+    if (idx >= NUM_SAVE_SLOTS || gMapDataBottomSpecial.saveStatus[idx] != SAVE_VALID) {
         return;
     }
 

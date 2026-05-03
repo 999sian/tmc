@@ -7,6 +7,7 @@
 #include "port_rom.h"
 #include "port_runtime_config.h"
 #include "port_types.h"
+#include "port_update_check.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -247,6 +248,7 @@ int main(int argc, char* argv[]) {
     SDL_ShowWindow(window);
     SDL_RaiseWindow(window);
     SDL_SyncWindow(window);
+    Port_CheckForUpdates(window);
 
     // Initialize PPU renderer
     Port_PPU_Init(window);
