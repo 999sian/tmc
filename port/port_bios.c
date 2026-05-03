@@ -342,8 +342,6 @@ void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset
         double angle;
         double cosA;
         double sinA;
-        double sxF;
-        double syF;
         s16 pa;
         s16 pb;
         s16 pc;
@@ -356,13 +354,10 @@ void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset
         angle = (double)theta * 3.14159265358979323846 * 2.0 / 65536.0;
         cosA = cos(angle);
         sinA = sin(angle);
-        sxF = (double)sx / 256.0;
-        syF = (double)sy / 256.0;
-
-        pa = (s16)( cosA / sxF * 256.0);
-        pb = (s16)(-sinA / syF * 256.0);
-        pc = (s16)( sinA / sxF * 256.0);
-        pd = (s16)( cosA / syF * 256.0);
+        pa = (s16)(sx * cosA);
+        pb = (s16)(-sx * sinA);
+        pc = (s16)(sy * sinA);
+        pd = (s16)(sy * cosA);
 
         *(s16*)(d + 0 * offset) = pa;
         *(s16*)(d + 1 * offset) = pb;
