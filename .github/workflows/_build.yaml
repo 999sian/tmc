@@ -20,7 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: ubuntu-latest
+          # Use Ubuntu 22.04 (glibc 2.35) so the Linux binary runs on
+          # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
+          # on ubuntu-latest pins glibc 2.43+ which excludes most users.
+          - runner: ubuntu-22.04
             os_name: linux
             region: usa
             flag: --usa
