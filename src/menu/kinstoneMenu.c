@@ -624,16 +624,45 @@ u32 sub_080A4418(u32 param_1, u32 param_2) {
     if (t2) {
         LZ77UnCompVram(src, dest);
     } else {
+#ifdef PC_PORT
+        /* Original triggered a DMA3 transfer of 0x80 longwords (0x200 bytes)
+         * from src (PC pointer into gGlobalGfxAndPalettes) to dest (GBA VRAM
+         * address). On PC, raw DMA3 register access via REG_ADDR_DMA3SAD
+         * dereferences address 0x040000D4 directly which lives in unmapped
+         * memory and SIGSEGVs (#16, kinstone-bag fusion path). Translate
+         * the GBA VRAM destination to gVram and just memcpy. */
+        extern u8 gVram[];
+        u8* destPC = &gVram[(uintptr_t)dest - 0x06000000u];
+        memcpy(destPC, src, 0x200);
+        return 0;
+#else
         DMA3->sourceAddress = src;
         DMA3->destinationAddress = dest;
         DMA3->control.word = ((DMA_ENABLE | DMA_START_NOW | DMA_32BIT | DMA_SRC_INC | DMA_DEST_INC) << 16) + 0x80;
         return DMA3->control.word;
+#endif
     }
 }
 
 void KinstoneMenu_080A4468(void) {
     gPossibleInteraction.kinstoneId = KINSTONE_NONE;
+#ifdef PC_PORT
+    /* Original assumed currentObject is non-NULL and points inside the
+     * candidates array. On the port currentObject can hold a stale or
+     * NULL value when the kinstone-bag get triggers this without a real
+     * active fuser. Validate the pointer lies inside candidates[] before
+     * dereferencing. (#16) */
+    {
+        InteractableObject* cur = gPossibleInteraction.currentObject;
+        InteractableObject* lo = &gPossibleInteraction.candidates[0];
+        InteractableObject* hi = &gPossibleInteraction.candidates[0x20];
+        if (cur >= lo && cur < hi) {
+            cur->kinstoneId = KINSTONE_NONE;
+        }
+    }
+#else
     gPossibleInteraction.currentObject->kinstoneId = KINSTONE_NONE;
+#endif
     NotifyFusersOnFusionDone(gFuseInfo.kinstoneId);
     RemoveKinstoneFromBag(gKinstoneMenu.unk2a);
 }
