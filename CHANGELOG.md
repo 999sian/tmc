@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.4-experimental — 2026-05-03
+
+Hyrule Town + South Hyrule field playthrough fixes, driven by a live GDB-under-the-game session against the issue tracker. Three crashes and one stuck-state bug closed; CI build stability improvements; matheo upstream merged.
+
+### Fixed (issue tracker)
+
+- **#16 Hyrule Town kinstone-bag crash chain.** Five layered bugs all on the kinstone-fusion path that compound after picking up the bag: (1) `gUnk_08001A7C` and `gUnk_08001DCC` are packed 4-byte GBA-pointer tables but were declared as `T*[]` so `arr[idx]` read 8 bytes on x86-64 → garbage pointer → SIGSEGV the moment a kinstone fuser scripted up; (2) `(u8*)(fuserProgress + (u32)fuserData)` truncated a 64-bit pointer in `common.c::GetFusionToOffer`; (3) `TextDispEnquiry`'s post-A_BUTTON modulo divided by zero on x86 (ARM silently returns garbage) after MemClear zeroed `gMessageChoices.choiceCount`; (4) `kinstoneMenu.c::sub_080A4418` wrote to `DMA3->sourceAddress` (raw GBA hardware register address 0x040000D4, unmapped on PC); (5) `KinstoneMenu_080A4468` dereferenced `gPossibleInteraction.currentObject` without checking it pointed inside `candidates[]`. Fixed each + added `Port_PackedRomEntry()` helper for the ~5 packed-pointer-table call sites. (commit `b825b5fd`)
+- **#19 South Hyrule field loading-zone crash.** Two bugs on the spear moblin: (a) `gUnk_080CC944` was the same packed-pointer-table pattern as #16, handing out garbage Hitbox pointers on x86-64; (b) `definition->ptr.hitbox` lives in read-only mmap'd ROM (gRomData), but the spear moblin's action routines write `hitbox->offset_x/y/width/height` every frame. Allocate a mutable `Hitbox3D` copy at init (`AllocMutableHitbox()` would `zFree` the const ROM pointer, so do it manually). (commit `c749c609`)
+- **#20 Peahat (and other gust-jar-killable enemies) corpse never despawns.** `GetNextFunction()` returned 5 (OnGrabbed) for any entity with `gustJarState & 4` set, before the `health == 0` check. When a peahat is killed by gust jar, `Peahat_OnGrabbed_Subaction5` sets `health=0` but `gj=0x04` stays set until ENT_COLLIDE toggles, which doesn't happen in that subaction's else branch. Result: dead-while-grabbed enemies loop in OnGrabbed forever — corpse stays, no death animation. PC port now prefers the `health==0` dispatch so dead-while-grabbed enemies flow into GenericDeath → DEATH_FX → DeleteThisEntity. (commit `c708678a`)
+
+### Build / CI
+
+- **Linux runner pinned to `ubuntu-22.04`** (glibc 2.35) so the prebuilt tarball runs on Nobara 43, Fedora 43, Kubuntu 25.10, and any other distro that lags behind the Arch host's glibc 2.43. Addresses #2's class plus #17. (commits `91b5c9fd`, `a5f546da`)
+- **Pre-generated USA `map_offsets.h` + `gfx_offsets.h` committed** under a `.gitignore` exception so CI can build without needing a private ROM repository. Drops `python build.py` from the workflow in favour of direct `xmake build tmc_pc` + `xmake build asset_extractor`, which don't need a ROM at compile time. (commit `fb36e928`)
+- **Merged matheo/master twice today**: ubuntu fmt12 build fix (#15 root cause); update-check infrastructure (`port/port_update_check.{c,h}`); Minish Woods Ezlo fight + lilypad rail data fallbacks; bootstrap-based asset management (`port/port_asset_bootstrap.cpp`); affineSet cleanup. (commits `b5cf8067`, `d37edeb3`)
+
+### Implicit fixes confirmed
+
+- **#23 Broken map (grey tiles)** — works locally on the post-merge branch; one of the struct-alignment / BG-flush fixes resolved it. Awaiting Proton/Bazzite retest on this tarball.
+
+### Known issues (still open)
+
+- **#4 Pulled mushroom**, **#5 backflip at walls**, **#8 blue/red teleport icons**, **#9 Steam Deck packages**, **#11 boss asset rendering** (deferred to next sprite-extraction pass).
+- **#21 Link's house glitched doors** — likely same class as the door-priority issue carried from 0.1.2.
+- **#22 BGM doesn't mute on item-get** — audio priority/ducking, same area as the festival-house BGM-reset fix in 0.1.2 but with a different interaction.
+- **#24 Tall-grass shoes overlay** — known carry-forward.
+- **Inside-the-rolling-barrel scene**, **festival house facades**, **Minish Woods fog**, **mosaic effect** — renderer-iteration deferred from 0.1.2.
+
 ## 0.1.3-experimental — 2026-05-03
 
 Bug-fix pass on top of 0.1.2 driven by the GitHub issue tracker — Deepwood Shrine playthrough now reaches the boss-clear warp, and a class of x86-64 struct-alignment bugs that was silently breaking ~30 entity subclasses is fixed at the source.
