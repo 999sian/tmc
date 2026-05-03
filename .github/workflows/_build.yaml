@@ -68,34 +68,28 @@ jobs:
         if: matrix.os_name == 'windows'
         run: choco install llvm -y
 
-      - name: Checkout private assets repository
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.ASSETS_REPO }}
-          token: ${{ secrets.ASSETS_TOKEN }}
-          path: _assets
+      - name: Configure xmake (no ROM needed for binaries)
+        shell: bash
+        env:
+          TMC_XMAKE_TOOLCHAIN: ${{ matrix.os_name == 'windows' && 'clang' || '' }}
+        run: |
+          GAME_VERSION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
+          if [ -n "$TMC_XMAKE_TOOLCHAIN" ]; then
+            xmake f -y --game_version="$GAME_VERSION" --toolchain="$TMC_XMAKE_TOOLCHAIN"
+          else
+            xmake f -y --game_version="$GAME_VERSION"
+          fi
 
-      - name: Copy ROMs into workspace
+      - name: Build tmc_pc and asset_extractor
         shell: bash
         run: |
-          cp _assets/baserom.gba ./baserom.gba
-          cp _assets/baserom_eu.gba ./baserom_eu.gba
-
-      - name: Build selected region (non-interactive, Linux)
-        if: matrix.os_name == 'linux'
-        run: python build.py ${{ matrix.flag }}
-
-      - name: Build selected region (non-interactive, Windows)
-        if: matrix.os_name == 'windows'
-        env:
-          TMC_XMAKE_TOOLCHAIN: clang
-        run: python build.py ${{ matrix.flag }}
+          xmake build -y tmc_pc
+          xmake build -y asset_extractor
 
       - name: Prepare artifact payload
         shell: bash
         run: |
-          DIST_REGION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
-          BIN_PATH="dist/${DIST_REGION}/${{ matrix.exe_name }}"
+          BIN_PATH="build/pc/${{ matrix.exe_name }}"
           EXTRACTOR_PATH="build/pc/${{ matrix.extractor_name }}"
           test -f "$BIN_PATH"
           test -f "$EXTRACTOR_PATH"
@@ -104,6 +98,9 @@ jobs:
           mkdir -p "$OUTDIR"
           cp "$BIN_PATH" "$OUTDIR/${{ matrix.exe_name }}"
           cp "$EXTRACTOR_PATH" "$OUTDIR/${{ matrix.extractor_name }}"
+          if [ -f "assets/sounds.json" ]; then
+            cp assets/sounds.json "$OUTDIR/sounds.json"
+          fi
 
       - name: Create archive
         shell: bash
