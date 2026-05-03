@@ -811,14 +811,59 @@ static void ProcessDrawList(EntityDrawList* list) {
  * Uses ram_0x80b2bd8 (shadow frame data table) which needs
  * to be loaded from ROM overlay data.
  */
-static u8 sShadowFrameTable[16 * 4]; /* ram_0x80b2bd8: 4 pointers (frame data) */
+/* GBA-original keeps a 4-pointer table at ROM 0x080B2BD8 that maps each
+ * shadow type (small / medium / large / special) to sprite-frame-data
+ * blobs. The pointers in the table are IWRAM addresses (0x0300xxxx) into
+ * the runtime-copied overlay region. The PC port skips the IWRAM overlay
+ * copy (see InitOverlays), so those IWRAM addresses point at
+ * uninitialized memory — shadows silently disappeared (issue #10).
+ *
+ * Translate IWRAM ↔ ROM via the linker-derived delta: a known anchor is
+ * `ram_sub_080B2248` at IWRAM 0x03005FBC, ROM 0x080B2248
+ * → delta = 0x080B2248 - 0x03005FBC = 0x050AC28C.
+ *
+ * This delta is region-specific (works for USA; EU/JP may differ). */
+static const u8* sShadowFramePtrs[4] = { NULL, NULL, NULL, NULL };
 static int sShadowTableLoaded = 0;
+
+static void LoadShadowTableFromRom(void) {
+    extern u8* gRomData;
+    extern u32 gRomSize;
+    static const u32 kShadowTableRomOffset = 0xB2BD8u;
+    static const u32 kIwramToRomDeltaUSA = 0x050AC28Cu;
+
+    if (sShadowTableLoaded || gRomData == NULL || gRomSize <= kShadowTableRomOffset + 16u) {
+        sShadowTableLoaded = 1;
+        return;
+    }
+    for (int i = 0; i < 4; i++) {
+        u32 ptr = (u32)gRomData[kShadowTableRomOffset + i * 4 + 0]
+                | ((u32)gRomData[kShadowTableRomOffset + i * 4 + 1] << 8)
+                | ((u32)gRomData[kShadowTableRomOffset + i * 4 + 2] << 16)
+                | ((u32)gRomData[kShadowTableRomOffset + i * 4 + 3] << 24);
+        if (ptr >= 0x03000000u && ptr < 0x03008000u) {
+            /* IWRAM address — translate to ROM source. */
+            u32 romFull = ptr + kIwramToRomDeltaUSA;
+            if (romFull >= 0x08000000u && romFull < 0x08000000u + gRomSize) {
+                sShadowFramePtrs[i] = gRomData + (romFull - 0x08000000u);
+            } else {
+                sShadowFramePtrs[i] = NULL;
+            }
+        } else if (ptr >= 0x08000000u && ptr < 0x08000000u + gRomSize) {
+            /* Direct ROM pointer */
+            sShadowFramePtrs[i] = gRomData + (ptr - 0x08000000u);
+        } else {
+            sShadowFramePtrs[i] = NULL;
+        }
+    }
+    sShadowTableLoaded = 1;
+}
 
 static void ProcessDeferredList(void) {
     if (sDeferredList.count == 0)
         return;
     if (!sShadowTableLoaded)
-        return; /* Can't render shadows without table */
+        LoadShadowTableFromRom();
 
     for (u32 i = 0; i < sDeferredList.count; i++) {
         if (gOAMControls.updated >= 0x80)
@@ -834,8 +879,7 @@ static void ProcessDeferredList(void) {
             continue;
         }
 
-        u32* shadowPtrs = (u32*)sShadowFrameTable;
-        const u8* frameData = (const u8*)(uintptr_t)shadowPtrs[listType];
+        const u8* frameData = sShadowFramePtrs[listType];
         if (frameData == NULL)
             continue;
 
