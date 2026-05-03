@@ -1,51 +1,10 @@
-diff --git a/include/cpu/mode1.h b/include/cpu/mode1.h
-index 77abf82..8e91619 100644
---- a/include/cpu/mode1.h
-+++ b/include/cpu/mode1.h
-@@ -9,6 +9,9 @@
- extern "C" {
- #endif
-
-+typedef void (*virtuappu_mode1_pre_line_fn)(int line);
-+extern virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback;
-+
- enum {
-     MODE1_GBA_WIDTH = 240,
-     MODE1_GBA_HEIGHT = 160,
-diff --git a/src/mode1.c b/src/mode1.c
-index c4bfe70..fb6cbca 100644
---- a/src/mode1.c
-+++ b/src/mode1.c
-@@ -1,9 +1,12 @@
- #include "cpu/mode1.h"
-
-+#include <stddef.h>
- #include <string.h>
-
- #include "virtuappu.h"
-
-+virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback = NULL;
-+
- typedef struct Mode1TilemapEntry {
-     uint16_t raw;
- } Mode1TilemapEntry;
-@@ -695,6 +698,9 @@ void virtuappu_mode1_render_frame(const PPUMemory *ppu)
-     }
-
-     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
-+        if (virtuappu_mode1_pre_line_callback != NULL) {
-+            virtuappu_mode1_pre_line_callback(line);
-+        }
-         uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
-         uint8_t bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
-         uint32_t obj_layer[MODE1_GBA_WIDTH];
 diff --git a/src/mode2.c b/src/mode2.c
 index 0b6daf7..189c580 100644
 --- a/src/mode2.c
 +++ b/src/mode2.c
-@@ -20,6 +20,9 @@ void virtuappu_mode2_render_frame(const PPUMemory *ppu)
+@@ -17,6 +17,9 @@ void virtuappu_mode2_render_frame(const PPUMemory *ppu)
      }
-
+ 
      for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
 +        if (virtuappu_mode1_pre_line_callback != NULL) {
 +            virtuappu_mode1_pre_line_callback(line);

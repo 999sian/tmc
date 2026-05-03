@@ -54,6 +54,30 @@ static void Port_PPU_LoadConfig(void) {
     }
 }
 
+static const char* Port_PPU_MethodForMode(PresentMode mode) {
+    switch (mode) {
+        case PresentMode::NearestRaw:
+            return "nearest";
+        case PresentMode::LinearRaw:
+            return "linear";
+        case PresentMode::XbrzNearest:
+            return "xbrz_nearest";
+        case PresentMode::XbrzLinear:
+        default:
+            return "xbrz_linear";
+    }
+}
+
+extern "C" const char* Port_PPU_PresentationModeName(void) {
+    static const char* const kNames[] = {
+        "nearest",
+        "xBRZ smooth",
+        "xBRZ sharp",
+        "linear",
+    };
+    return kNames[(int)sPresentMode];
+}
+
 // Largest 240:160 (3:2) rect fitting inside (w, h), centered.
 static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* outW, int* outH) {
     int rw;
@@ -257,16 +281,45 @@ extern "C" void Port_PPU_ToggleFullscreen(void) {
     SDL_SyncWindow(sWindow);
 }
 
-extern "C" void Port_PPU_ToggleSmoothing(void) {
-    static const char* const kNames[] = {
-        "nearest (sharp pixels)",
-        "xBRZ 4x + linear (smooth, default)",
-        "xBRZ 4x + nearest (crisp upscale)",
-        "linear (blurry stretch)",
-    };
-    int next = ((int)sPresentMode + 1) % (int)PresentMode::Count;
+extern "C" bool Port_PPU_IsFullscreen(void) {
+    if (!sWindow) {
+        return false;
+    }
+    return (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+extern "C" unsigned char Port_PPU_WindowScale(void) {
+    return Port_Config_WindowScale();
+}
+
+extern "C" void Port_PPU_CycleWindowScale(int direction) {
+    u8 scale = Port_Config_WindowScale();
+    if (direction < 0) {
+        scale = scale <= 1 ? 10 : (u8)(scale - 1);
+    } else {
+        scale = scale >= 10 ? 1 : (u8)(scale + 1);
+    }
+    Port_Config_SetWindowScale(scale);
+    if (sWindow && !Port_PPU_IsFullscreen()) {
+        SDL_SetWindowSize(sWindow, 240 * scale, 160 * scale);
+        SDL_SyncWindow(sWindow);
+    }
+}
+
+extern "C" void Port_PPU_CyclePresentationMode(int direction) {
+    int next = (int)sPresentMode + (direction < 0 ? -1 : 1);
+    if (next < 0) {
+        next = (int)PresentMode::Count - 1;
+    } else if (next >= (int)PresentMode::Count) {
+        next = 0;
+    }
     sPresentMode = (PresentMode)next;
-    fprintf(stderr, "PPU upscale: %s\n", kNames[next]);
+    Port_Config_SetUpscaleMethod(Port_PPU_MethodForMode(sPresentMode));
+    fprintf(stderr, "PPU upscale: %s\n", Port_PPU_PresentationModeName());
+}
+
+extern "C" void Port_PPU_ToggleSmoothing(void) {
+    Port_PPU_CyclePresentationMode(1);
 }
 
 extern "C" void Port_PPU_Shutdown(void) {

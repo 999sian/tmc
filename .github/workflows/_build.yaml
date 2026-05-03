@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libpng-dev libfmt-dev nlohmann-json3-dev \
+            curl libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
             xutils-dev xorg-dev autoconf automake libtool meson ninja-build
 
