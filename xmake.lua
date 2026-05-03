@@ -50,11 +50,31 @@ if use_system_packages then
     add_requires("nlohmann_json", {configs = {cmake = false}})
 else
     add_requires("nlohmann_json", {configs = {cmake = false}})
-    add_requires("fmt", {configs = {header_only = true}})
+    -- #15: passing system=false makes xmake ignore the host's
+    -- pacman::fmt / apt::libfmt-dev package (which is always shared)
+    -- and build fmt from source as a header-only target. Without
+    -- this, header_only=true was silently ignored and the binary
+    -- recorded a NEEDED dep on libfmt.so.12, which broke on Fedora 43
+    -- (ships fmt 11.x).
+    add_requires("fmt", {system = false, configs = {header_only = true}})
     add_requires("libpng")
     add_requires("zlib")
     add_requires("libsdl3", {configs = {shared = false}})
     add_requires("nlohmann_json", {configs = {cmake = false}})
+end
+
+-- #15: even with `header_only = true` requested above, the xmake fmt
+-- package still links the system libfmt.so when one happens to be
+-- installed on the build host (Arch ships fmt 12.x; Fedora 43 ships
+-- 11.x, so the resulting binary ImportError'd on Fedora).  Force the
+-- header-only path everywhere by defining FMT_HEADER_ONLY globally;
+-- fmt's headers then inline all the formatting code and the binary
+-- needs no libfmt at runtime.  --as-needed drops the now-unused
+-- `-lfmt` xmake still passes on the link line so the binary stops
+-- recording libfmt.so as a runtime dependency.
+add_defines("FMT_HEADER_ONLY=1")
+if is_plat("linux") then
+    add_ldflags("-Wl,--as-needed", {force = true})
 end
 
 -- ====================
