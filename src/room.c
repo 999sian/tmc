@@ -148,6 +148,22 @@ void RegisterRoomEntity(Entity* ent, const EntityData* dat) {
         GE_FIELD(ent, field_0x82)->HWORD = dat->yPos;
         GE_FIELD(ent, cutsceneBeh)->HWORD = (u16)(spritePtr & 0xFFFF);
         GE_FIELD(ent, field_0x86)->HWORD = (u16)(spritePtr >> 16);
+#ifdef PC_PORT
+        /* GenericEntity's cutsceneBeh/field_0x86 union is void*-aligned,
+         * so it sits at PC offset 0xB0/0xB2 — but most entity subclass
+         * structs (WarpPointEntity, HeartContainerEntity, GentariCurtain,
+         * lots of others) lay out a `flag` field at GBA 0x86 without
+         * the void* trick, landing at PC 0xAE. Mirror the spritePtr
+         * halves to those natural-aligned bytes too so subclass reads
+         * pick up the right value. The mirrored bytes lie in
+         * GenericEntity's pre-union padding (0xAC-0xAF), so cutscene
+         * entities are unaffected — StartCutscene's later 8-byte
+         * scriptContext write at 0xB0 supersedes it. */
+        if (kind != ENEMY) {
+            *(u16*)((u8*)ent + 0xAC) = (u16)(spritePtr & 0xFFFF);
+            *(u16*)((u8*)ent + 0xAE) = (u16)(spritePtr >> 16);
+        }
+#endif
     }
 }
 
