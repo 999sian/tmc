@@ -1044,8 +1044,22 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
             AssetLogOnce("gfx-file:" + std::to_string(group) + ":" + entry.file + ":" + std::to_string(entry.dest),
                          "gfx group %u -> %s (dest=0x%08X, %u bytes)", group, entry.file.c_str(), entry.dest,
                          static_cast<u32>(fileData->size()));
-            MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
-                    static_cast<u32>(fileData->size()));
+            /* MemCopy resolves dest via port_resolve_addr (raw gEwram[N] for
+             * EWRAM addresses), but the port has heap-allocated stand-in
+             * arrays for gMapDataBottomSpecial / gMapDataTopSpecial / gMapTop
+             * etc. that live OUTSIDE gEwram. Use Port_ResolveEwramPtr for
+             * EWRAM destinations so writes hit the actual game variables;
+             * fall back to MemCopy's generic path for VRAM/IWRAM. */
+            void* resolvedDest = nullptr;
+            if (entry.dest >= 0x02000000u && entry.dest < 0x02040000u) {
+                resolvedDest = Port_ResolveEwramPtr(entry.dest);
+            }
+            if (resolvedDest != nullptr) {
+                std::memcpy(resolvedDest, fileData->data(), fileData->size());
+            } else {
+                MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
+                        static_cast<u32>(fileData->size()));
+            }
         }
 
         if (entry.terminator) {
