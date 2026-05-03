@@ -1,3 +1,3 @@
 #pragma once
 
-#define TMC_PC_VERSION "0.1.0"
+#define TMC_PC_VERSION "0.1.1"

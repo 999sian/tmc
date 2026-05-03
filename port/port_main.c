@@ -1,6 +1,7 @@
 #include "gba/io_reg.h"
 #include "main.h"
 #include "port_config.h"
+#include "port_asset_bootstrap.h"
 #include "port_audio.h"
 #include "port_gba_mem.h"
 #include "port_ppu.h"
@@ -184,9 +185,6 @@ int main(int argc, char* argv[]) {
     // Initialize REG_KEYINPUT to all-keys-released (GBA: 1=not pressed)
     *(u16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
 
-    // Load ROM data (auto-detects USA/EU from game code)
-    Port_LoadRom("baserom.gba");
-
     Port_Config_Load("config.json");
 
     u8 window_scale = Port_Config_WindowScale();
@@ -213,23 +211,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Verify ROM region matches compiled region
-#ifdef EU
-    if (gRomRegion != ROM_REGION_EU) {
-        fprintf(stderr,
-                "WARNING: This binary was compiled for EU but the ROM is %s.\n"
-                "         Asset offsets may be incorrect. Rebuild with the correct --game_version.\n",
-                gRomRegion == ROM_REGION_USA ? "USA" : "UNKNOWN");
-    }
-#else
-    if (gRomRegion != ROM_REGION_USA) {
-        fprintf(stderr,
-                "WARNING: This binary was compiled for USA but the ROM is %s.\n"
-                "         Asset offsets may be incorrect. Rebuild with: xmake f --game_version=EU\n",
-                gRomRegion == ROM_REGION_EU ? "EU" : "UNKNOWN");
-    }
-#endif
-
     // Initialize SDL video first. Audio is optional and handled separately.
     if (!Port_InitVideo()) {
         return 1;
@@ -248,7 +229,27 @@ int main(int argc, char* argv[]) {
     SDL_ShowWindow(window);
     SDL_RaiseWindow(window);
     SDL_SyncWindow(window);
+    Port_EnsureAssetsReadyWithDisplay(window);
     Port_CheckForUpdates(window);
+
+    Port_LoadRom("baserom.gba");
+
+    // Verify ROM region matches compiled region
+#ifdef EU
+    if (gRomRegion != ROM_REGION_EU) {
+        fprintf(stderr,
+                "WARNING: This binary was compiled for EU but the ROM is %s.\n"
+                "         Asset offsets may be incorrect. Rebuild with the correct --game_version.\n",
+                gRomRegion == ROM_REGION_USA ? "USA" : "UNKNOWN");
+    }
+#else
+    if (gRomRegion != ROM_REGION_USA) {
+        fprintf(stderr,
+                "WARNING: This binary was compiled for USA but the ROM is %s.\n"
+                "         Asset offsets may be incorrect. Rebuild with: xmake f --game_version=EU\n",
+                gRomRegion == ROM_REGION_EU ? "EU" : "UNKNOWN");
+    }
+#endif
 
     // Initialize PPU renderer
     Port_PPU_Init(window);
