@@ -6,8 +6,38 @@
  */
 #include "object.h"
 #include "asm.h"
+#include "area.h"
 #include "room.h"
+#include "roomid.h"
 #include "player.h"
+
+#ifdef PC_PORT
+#include <stdio.h>
+#include <stdlib.h>
+#endif
+
+extern const void* gLilypadRails[];
+
+static const u16 sMinishWoodsLilypadRail0[] = {
+    0x18, 0xa0, 0x80,
+    0x00, 0x40, 0x80,
+    0x08, 0xa0, 0x80,
+    0x10, 0x40, 0x80,
+    0xfe, 0x04, 0x00,
+};
+
+static const u16 sMinishWoodsLilypadRail1[] = {
+    0x08, 0xa0, 0x80,
+    0x10, 0x40, 0x80,
+    0x18, 0xa0, 0x80,
+    0x00, 0x40, 0x80,
+    0xfe, 0x04, 0x00,
+};
+
+static const u16* const sMinishWoodsLilypadRails[] = {
+    sMinishWoodsLilypadRail0,
+    sMinishWoodsLilypadRail1,
+};
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -30,7 +60,14 @@ void LilypadSmall(LilypadSmallEntity* this) {
         super->frameIndex = (rand >> 0x10) & 3;
         super->spriteSettings.draw = TRUE;
         super->spritePriority.b0 = 7;
-        super->child = GetCurrentRoomProperty(super->type2);
+        if (gRoomControls.area == AREA_MINISH_WOODS && gRoomControls.room == ROOM_MINISH_WOODS_MAIN &&
+            super->type2 >= 0x12 && super->type2 <= 0x13) {
+            super->child = (Entity*)sMinishWoodsLilypadRails[super->type2 - 0x12];
+        } else if (super->type2 >= 0x80 && (super->type2 & 7) < 3) {
+            super->child = (Entity*)gLilypadRails[super->type2 & 7];
+        } else {
+            super->child = GetCurrentRoomProperty(super->type2);
+        }
         UpdateRailMovement(super, (u16**)&super->child, &this->unk_70);
     }
     SyncPlayerToPlatform(super, CheckMovePlayer(this));

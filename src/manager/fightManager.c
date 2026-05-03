@@ -15,6 +15,7 @@
 #include "flags.h"
 #include "message.h"
 #include "room.h"
+#include "roomid.h"
 #include "sound.h"
 #include "enemy.h"
 
@@ -28,6 +29,12 @@ void FightManager_WaitForFlag(FightManager*);
 void FightManager_WaitForDone(FightManager*);
 void FightManager_Main2(FightManager*);
 void FightManagerHelper_Main(FightManagerHelper*);
+
+static const EntityData sMinishWoodsEzloFightEnemies[] = {
+    { ENEMY, 0xf, 0x55, 2, 0x14100000, 0x358, 0x168, 0x01400350 },
+    { ENEMY, 0xf, 0x55, 2, 0x14100000, 0x3b8, 0x168, 0x01400350 },
+    { 0xff },
+};
 
 void FightManager_Main(Manager* this) {
     static void (*const FightManager_ActionFuncs[])(Manager*) = {
@@ -109,6 +116,10 @@ void FightManager_LoadFight(FightManager* this) {
     }
 
     prop = (EntityData*)GetCurrentRoomProperty(super->type2);
+    if (prop == NULL && gRoomControls.area == AREA_MINISH_WOODS && gRoomControls.room == ROOM_MINISH_WOODS_MAIN &&
+        super->type2 == 0x10) {
+        prop = (EntityData*)sMinishWoodsEzloFightEnemies;
+    }
     if (prop != NULL) {
         while (prop->kind != 0xFF) {
             ent = LoadRoomEntity(prop++);
