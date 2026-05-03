@@ -270,8 +270,14 @@ def ensure_roms(selected: list, found: dict, non_interactive: bool = False) -> d
 def make_env() -> dict:
     env = os.environ.copy()
     env["XMAKE_ROOT"] = "y"
+
+    if PLATFORM == "Windows":
+        env.setdefault("TMC_XMAKE_PLATFORM", "mingw")
+        env.setdefault("TMC_XMAKE_TOOLCHAIN", "mingw")
+
     if PLATFORM == "Linux" and pkg_config_ok("sdl3"):
         env["XMAKE_USE_SYSTEM_SDL3"] = "1"
+
     return env
 
 def build_version(version: str, env: dict, non_interactive: bool = False) -> Optional[Path]:
@@ -287,6 +293,11 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     dist_dir.mkdir(parents=True, exist_ok=True)
 
     configure_cmd = ["xmake", "f", "-y", f"--game_version={version}"]
+
+    xmake_platform = env.get("TMC_XMAKE_PLATFORM", "").strip()
+    if xmake_platform:
+        configure_cmd.append(f"--plat={xmake_platform}")
+
     toolchain = env.get("TMC_XMAKE_TOOLCHAIN", "").strip()
     if toolchain:
         configure_cmd.append(f"--toolchain={toolchain}")
@@ -296,7 +307,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     assets_ready = assets_dir.exists() and assets_src_dir.exists()
 
     steps = [
-        (f"Configure ({version})",      configure_cmd),
+        (f"Configure ({version})", configure_cmd),
     ]
 
     if assets_ready:
@@ -365,7 +376,6 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     return dst_bin
 
 # ── Main ──────────────────────────────────────────────────────────────────────
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="TMC PC Port build helper")
