@@ -14,6 +14,7 @@
 #include <math.h>
 
 static bool gQuitRequested = false;
+static bool sFastForward = false;
 static int sFrameNum = 0;
 
 typedef struct {
@@ -83,6 +84,19 @@ static void Port_PumpEvents(void) {
                 Port_PPU_ToggleSmoothing();
                 continue;
             }
+            if (e.key.key == SDLK_TAB) {
+                sFastForward = true;
+                continue;
+            }
+        }
+        if (e.type == SDL_EVENT_KEY_UP && e.key.key == SDLK_TAB) {
+            sFastForward = false;
+            continue;
+        }
+        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+            e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+            sFastForward = e.gaxis.value > 16384;
+            continue;
         }
         Port_Config_HandleEvent(&e);
     }
@@ -99,7 +113,9 @@ void VBlankIntrWait(void) {
     Port_PPU_PresentFrame();
     port_hdma_vblank_reset();
 
-    while (SDL_GetTicksNS() - lastFrameNs < Port_Config_FrameTimeNs()) {
+    if (!sFastForward) {
+        while (SDL_GetTicksNS() - lastFrameNs < Port_Config_FrameTimeNs()) {
+        }
     }
 
     nowNs = SDL_GetTicksNS();
@@ -122,8 +138,6 @@ void VBlankIntrWait(void) {
         sFpsWindowStartNs = nowNs;
         sFpsFrameCount = 0;
     }
-
-
 
     if (gQuitRequested) {
         exit(0);

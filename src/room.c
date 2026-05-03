@@ -148,6 +148,22 @@ void RegisterRoomEntity(Entity* ent, const EntityData* dat) {
         GE_FIELD(ent, field_0x82)->HWORD = dat->yPos;
         GE_FIELD(ent, cutsceneBeh)->HWORD = (u16)(spritePtr & 0xFFFF);
         GE_FIELD(ent, field_0x86)->HWORD = (u16)(spritePtr >> 16);
+#ifdef PC_PORT
+        /* GenericEntity's cutsceneBeh/field_0x86 union is void*-aligned,
+         * so it sits at PC offset 0xB0/0xB2 — but most entity subclass
+         * structs (WarpPointEntity, HeartContainerEntity, GentariCurtain,
+         * lots of others) lay out a `flag` field at GBA 0x86 without
+         * the void* trick, landing at PC 0xAE. Mirror the spritePtr
+         * halves to those natural-aligned bytes too so subclass reads
+         * pick up the right value. The mirrored bytes lie in
+         * GenericEntity's pre-union padding (0xAC-0xAF), so cutscene
+         * entities are unaffected — StartCutscene's later 8-byte
+         * scriptContext write at 0xB0 supersedes it. */
+        if (kind != ENEMY) {
+            *(u16*)((u8*)ent + 0xAC) = (u16)(spritePtr & 0xFFFF);
+            *(u16*)((u8*)ent + 0xAE) = (u16)(spritePtr >> 16);
+        }
+#endif
     }
 }
 
@@ -222,12 +238,22 @@ void sub_0804AFB0(void** properties) {
     gCurrentRoomProperties = properties;
     for (i = 0; i < 8; ++i) {
 #ifdef PC_PORT
+        void* val = NULL;
         if (i >= 4) {
-            gRoomVars.properties[i] = Port_GetRoomFuncProp(gRoomControls.area, gRoomControls.room, i);
-        } else {
-            gRoomVars.properties[i] = IsRoomPropertyListInRom(properties) ? Port_ReadPackedRomPtr(properties, i)
-                                                                          : properties[i];
+            /* Properties 4..7 are usually room callback functions (init / enter
+             * / update / exit). The port keeps those in a hand-built function
+             * table because raw GBA function pointers can't survive ROM
+             * relocation. But some rooms put DATA pointers here too — e.g.
+             * Minish Forest lily pads index a rail array via type2 in 4..7.
+             * Try the func table first, then fall back to a packed ROM read
+             * so non-callback rooms still get their data. */
+            val = Port_GetRoomFuncProp(gRoomControls.area, gRoomControls.room, i);
         }
+        if (val == NULL) {
+            val = IsRoomPropertyListInRom(properties) ? Port_ReadPackedRomPtr(properties, i)
+                                                      : properties[i];
+        }
+        gRoomVars.properties[i] = val;
 #else
         gRoomVars.properties[i] = gCurrentRoomProperties[i];
 #endif
@@ -332,10 +358,14 @@ void* GetRoomProperty(u32 area, u32 room, u32 property) {
 #endif
         if (temp != NULL) {
 #ifdef PC_PORT
+            void* val = NULL;
             if (property >= 4 && property <= 7) {
-                return Port_GetRoomFuncProp(area, room, property);
+                val = Port_GetRoomFuncProp(area, room, property);
             }
-            return IsRoomPropertyListInRom(temp) ? Port_ReadPackedRomPtr(temp, property) : temp[property];
+            if (val == NULL) {
+                val = IsRoomPropertyListInRom(temp) ? Port_ReadPackedRomPtr(temp, property) : temp[property];
+            }
+            return val;
 #else
             temp = temp[property];
 #endif
@@ -354,14 +384,8 @@ void* GetCurrentRoomProperty(u32 idx) {
         return gRoomVars.properties[idx];
     } else {
 #ifdef PC_PORT
-        void* result =
-            IsRoomPropertyListInRom(gCurrentRoomProperties) ? Port_ReadPackedRomPtr(gCurrentRoomProperties, idx)
-                                                            : gCurrentRoomProperties[idx];
-        if (idx == 10) {
-            fprintf(stderr, "GetCurrentRoomProperty(10): base=%p result=%p\n", 
-                    (void*)gCurrentRoomProperties, result);
-        }
-        return result;
+        return IsRoomPropertyListInRom(gCurrentRoomProperties) ? Port_ReadPackedRomPtr(gCurrentRoomProperties, idx)
+                                                                : gCurrentRoomProperties[idx];
 #else
         return gCurrentRoomProperties[idx];
 #endif

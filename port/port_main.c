@@ -78,16 +78,16 @@ static bool Port_InitVideo(void) {
         SDL_Quit();
     }
 
-    if (display && display[0] != '\0') {
-        if (Port_TryInitVideo("x11", NULL, false)) {
+    if (waylandDisplay && waylandDisplay[0] != '\0') {
+        if (Port_TryInitVideo("wayland", NULL, false)) {
             return true;
         }
         err = SDL_GetError();
         SDL_Quit();
     }
 
-    if (waylandDisplay && waylandDisplay[0] != '\0') {
-        if (Port_TryInitVideo("wayland", NULL, false)) {
+    if (display && display[0] != '\0') {
+        if (Port_TryInitVideo("x11", NULL, false)) {
             return true;
         }
         err = SDL_GetError();
@@ -134,7 +134,49 @@ static void Port_InitAudio(void) {
     gMain.muteAudio = 1;
 }
 
+/*
+ * On Windows mingw, the heap allocator hands out addresses inside the
+ * 0x02000000-0x0A000000 range — the same range port_resolve_addr treats
+ * as GBA addresses. Heap pointers passed to DmaCopy* (palette/gfx loads
+ * from std::vector buffers) get mistranslated to gEwram[] / gVram[] etc,
+ * silently reading zeros and stalling the title-screen palette. Reserve
+ * the GBA address window before any heap is opened so the OS allocator
+ * can't place anything there. Linux glibc keeps malloc above 0x55... so
+ * this is a no-op there; the call is Windows-only.
+ */
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+static void Port_ReserveGbaAddressSpace(void) {
+    static const struct { uintptr_t base; size_t size; } regions[] = {
+        { 0x02000000u, 0x08000000u }, /* covers EWRAM, IWRAM, IO, palette, VRAM, OAM, ROM mirror */
+    };
+    for (size_t i = 0; i < sizeof(regions)/sizeof(regions[0]); ++i) {
+        LPVOID p = VirtualAlloc((LPVOID)regions[i].base, regions[i].size,
+                                MEM_RESERVE, PAGE_NOACCESS);
+        if (p == NULL) {
+            fprintf(stderr, "WARN: Could not reserve GBA address window 0x%zx-0x%zx; "
+                            "DmaCopy may misbehave.\n",
+                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+        } else {
+            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n",
+                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+        }
+    }
+}
+#else
+static void Port_ReserveGbaAddressSpace(void) { /* not needed on Linux/macOS */ }
+#endif
+
 int main(int argc, char* argv[]) {
+
+    /* Must run before any std::vector / new / malloc that could land in
+     * the GBA window. Static initializers in C++ files are constructed
+     * before main, so even this is technically not early enough — but
+     * the affected allocations (Port_LoadPaletteGroupFromAssets cache)
+     * happen later, after EnsureAssetGroupCache(), so reserving here is
+     * sufficient in practice. */
+    Port_ReserveGbaAddressSpace();
 
     fprintf(stderr, "Initializing port layer...\n");
 
