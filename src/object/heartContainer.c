@@ -14,7 +14,14 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* +4 bytes to mirror GenericEntity's void*-aligned layout on x86-64
+     * so cutsceneBeh/field_0x86 (where RegisterRoomEntity writes the
+     * spritePtr halves) lines up with flag/flag2 here. */
+    /*0x68*/ u8 unused1[32];
+#else
     /*0x68*/ u8 unused1[28];
+#endif
     /*0x84*/ u16 flag;
     /*0x86*/ u16 flag2;
 } HeartContainerEntity;
