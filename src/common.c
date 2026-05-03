@@ -1395,7 +1395,13 @@ void UpdateVisibleFusionMapMarkers(void) {
     }
 }
 
+#ifdef PC_PORT
+/* See Port_PackedRomEntry doc — this table is packed 4-byte GBA pointers,
+ * so `gUnk_08001DCC[idx]` is wrong on x86-64 (reads 8 bytes). */
+extern const u8 gUnk_08001DCC[];
+#else
 extern u8* gUnk_08001DCC[];
+#endif
 
 KinstoneId GetFusionToOffer(Entity* entity) {
     u8* fuserData;
@@ -1406,13 +1412,26 @@ KinstoneId GetFusionToOffer(Entity* entity) {
     s32 randomMood;
     u32 fuserStability;
     fuserId = GetFuserId(entity);
+#ifdef PC_PORT
+    fuserData = (u8*)Port_PackedRomEntry(gUnk_08001DCC, fuserId);
+    if (fuserData == NULL) {
+        return KINSTONE_NONE;
+    }
+#else
     fuserData = gUnk_08001DCC[fuserId];
+#endif
     if (GetInventoryValue(ITEM_KINSTONE_BAG) == 0 || fuserData[0] > gSave.global_progress) {
         return KINSTONE_NONE;
     }
     offeredFusion = gSave.kinstones.fuserOffers[fuserId];
     fuserProgress = gSave.kinstones.fuserProgress[fuserId];
+#ifdef PC_PORT
+    /* GBA cast `(u8*)(fuserProgress + (u32)fuserData)` truncates the
+     * 64-bit pointer; use plain pointer arithmetic on PC. */
+    fuserFusionData = fuserData + fuserProgress;
+#else
     fuserFusionData = (u8*)(fuserProgress + (u32)fuserData);
+#endif
     while (TRUE) { // loop through fusions for this fuser
         switch (offeredFusion) {
             case KINSTONE_NEEDS_REPLACEMENT: // offered fusion completed with someone else
