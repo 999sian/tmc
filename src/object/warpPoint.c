@@ -21,14 +21,7 @@ typedef struct {
     /*0x71*/ u8 unused2[11];
     /*0x7c*/ u8 unk_7c;
     /*0x7d*/ u8 unk_7d;
-#ifdef PC_PORT
-    /* +4 bytes to mirror GenericEntity's void*-aligned layout on x86-64
-     * so cutsceneBeh/field_0x86 (where RegisterRoomEntity writes the
-     * spritePtr halves) lines up with unk_84/flag here. */
-    /*0x7e*/ u8 unused3[10];
-#else
     /*0x7e*/ u8 unused3[6];
-#endif
     /*0x84*/ u16 unk_84;
     /*0x86*/ u16 flag;
 } WarpPointEntity;
