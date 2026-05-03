@@ -109,22 +109,6 @@ void AcroBandit_OnCollision(AcroBanditEntity* this) {
                         brother->spritePriority.b1 = 1;
                         if (brother->iframes == 0)
                             brother->iframes = -12;
-#ifdef PC_PORT
-                        /* #35 — only the first child's parent was being
-                         * re-pointed past the dying bandit. Grandchildren
-                         * deeper in the chain kept `parent = super` (the
-                         * dying entity); after `ClearDeletedEntity` zeros
-                         * super on PC, their Action4 chase reads
-                         * parent->x = parent->y = 0 and they walk into
-                         * the top-left corner of the room.
-                         * GBA tolerated this because the deleted slot
-                         * wasn't zeroed before the chase ran the next
-                         * frame. Keep the chain consistent by re-pointing
-                         * each brother's parent past super as we walk. */
-                        if (brother->child != NULL && brother->child->parent == super) {
-                            brother->child->parent = super->parent;
-                        }
-#endif
                     } while (brother = brother->child, brother != NULL);
                 }
                 if (super->parent != NULL) {
