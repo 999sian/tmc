@@ -121,7 +121,7 @@ works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### What's fixed and what's still broken
 
-See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.2-experimental** lands a USA-playthrough bug-fix pass (door-cutscene crash, post-map-hint black BG, lily pads, prologue BGM, location textbox, magic-stump animation) plus an asset-extraction fix that was silently dropping `data_*/` subtrees from release tarballs. Known-still-open issues at 0.1.2 include the Deepwood Shrine rolling-barrel BG (per-scanline affine-DMA not applied), festival-house facades, doorway sprite glitches, Minish Woods fog, and a handful of other renderer-heavy artifacts — all listed at the bottom of the changelog entry.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.3-experimental** clears the Deepwood Shrine playthrough through to the post-boss warp, adds the universal x86-64 struct-alignment fix that catches a class of ~30 entity subclasses (warps, heart containers, the Minish elder's curtain, locked doors, boss doors, lever switches, …), restores drop shadows, fixes the rupee/shell number variables in textboxes, and routes the Minish Village vegetation gfx group through the right resolver. Known-still-open issues at 0.1.3: the inside-barrel cylindrical-affine BG, festival house facades, doorway sprite glitches, mushroom held-pose extraction, Minish Woods fog, the Fedora-43 `libfmt.so.12` packaging mismatch, and several issues from the GitHub tracker that need retesting — all listed at the bottom of the changelog entry.
 
 ### Controls
 
