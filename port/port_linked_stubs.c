@@ -733,29 +733,47 @@ u32 GetNextFunction(Entity* this) {
     u8 gustJarState = this->gustJarState;
     u8 contactFlags = this->contactFlags;
 
+#ifdef PC_PORT
+    /* Peahat (and other gust-jar-killable enemies) reach Subaction5 with
+     * health=0 + gustJarState=0x04 + ENT_COLLIDE clear, expecting the
+     * death sequence to take over. The gj=0x04 short-circuit at top sends
+     * them right back to OnGrabbed forever — corpse never despawns (#20).
+     * If the entity is dead, prefer the health==0 dispatch so GenericDeath
+     * runs and the DEATH_FX cleanup chain fires. */
+    if (this->health == 0) {
+        if (this->action == 0 && this->subAction == 0)
+            return 0;
+        if (gustJarState & 8)
+            return 5;
+        if (this->confusedTime != 0)
+            return 4;
+        return 3;
+    }
+#endif
+
     if (gustJarState & 4)
-        return 5; /* grabbed by Gust Jar */
+        return 5;
 
     if (!(gustJarState & 4) && (contactFlags >> 7))
-        return 1; /* contact initiated */
+        return 1;
 
     if (this->knockbackDuration != 0)
-        return 2; /* knockback active */
+        return 2;
 
     if (this->health == 0) {
         if (this->action == 0 && this->subAction == 0)
-            return 0; /* dead but not initialized */
+            return 0;
         if (gustJarState & 8)
-            return 5; /* gust jar captured and dead */
+            return 5;
         if (this->confusedTime != 0)
-            return 4; /* confused */
-        return 3;     /* dying */
+            return 4;
+        return 3;
     }
 
     if (this->action == 0 && this->subAction == 0)
-        return 0; /* not initialized */
+        return 0;
 
-    return 0; /* normal update */
+    return 0;
 }
 
 /*
