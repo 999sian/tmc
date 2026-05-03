@@ -11,6 +11,9 @@ on:
         description: "Date+SHA label (CI) or tag name (release)"
         required: true
         type: string
+    secrets:
+      ASSETS_TOKEN:
+        required: true
 
 jobs:
   build:
@@ -32,7 +35,6 @@ jobs:
             flag: --usa
             exe_name: tmc_pc.exe
             extractor_name: asset_extractor.exe
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -48,31 +50,78 @@ jobs:
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
             xutils-dev xorg-dev autoconf automake libtool meson ninja-build
 
+      - name: Install MinGW Windows
+        if: matrix.os_name == 'windows'
+        shell: powershell
+        run: |
+          choco install mingw -y --no-progress
+
+          $candidates = @(
+            "C:\ProgramData\mingw64\mingw64\bin",
+            "C:\ProgramData\mingw64\bin",
+            "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\mingw64\bin",
+            "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin",
+            "C:\tools\mingw64\bin"
+          )
+
+          $mingw = $null
+          foreach ($path in $candidates) {
+            if (Test-Path "$path\gcc.exe") {
+              $mingw = $path
+              break
+            }
+          }
+
+          if ($null -eq $mingw) {
+            Write-Host "Known MinGW paths not found, searching gcc.exe..."
+            $gcc = Get-ChildItem -Path "C:\ProgramData" -Filter gcc.exe -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match "mingw.*\\bin\\gcc\.exe$" } |
+              Select-Object -First 1
+
+            if ($null -ne $gcc) {
+              $mingw = Split-Path $gcc.FullName
+            }
+          }
+
+          if ($null -eq $mingw) {
+            Write-Error "MinGW gcc.exe not found"
+            exit 1
+          }
+
+          Write-Host "Using MinGW from: $mingw"
+          echo $mingw | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$mingw;$env:PATH"
+
+          gcc --version
+          g++ --version
+
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
 
+      - name: Checkout private assets repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.ASSETS_REPO }}
+          token: ${{ secrets.ASSETS_TOKEN }}
+          path: _assets
 
-      - name: Install LLVM (Windows)
+      - name: Copy ROMs into workspace
+        shell: bash
+        run: |
+          cp _assets/baserom.gba ./baserom.gba
+          cp _assets/baserom_eu.gba ./baserom_eu.gba
+
+      - name: Build selected region (non-interactive, Linux)
+        if: matrix.os_name == 'linux'
+        run: python build.py ${{ matrix.flag }}
+
+      - name: Build selected region (non-interactive, Windows MinGW)
         if: matrix.os_name == 'windows'
-        run: choco install llvm -y
-
-      - name: Configure xmake (no ROM needed for binaries)
-        shell: bash
         env:
-          TMC_XMAKE_TOOLCHAIN: ${{ matrix.os_name == 'windows' && 'clang' || '' }}
-        run: |
-          GAME_VERSION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
-          if [ -n "$TMC_XMAKE_TOOLCHAIN" ]; then
-            xmake f -y --game_version="$GAME_VERSION" --toolchain="$TMC_XMAKE_TOOLCHAIN"
-          else
-            xmake f -y --game_version="$GAME_VERSION"
-          fi
-
-      - name: Build tmc_pc and asset_extractor
-        shell: bash
-        run: |
-          xmake build -y tmc_pc
-          xmake build -y asset_extractor
+          TMC_XMAKE_TOOLCHAIN: mingw
+        run: python build.py ${{ matrix.flag }}
 
       - name: Prepare artifact payload
         shell: bash
