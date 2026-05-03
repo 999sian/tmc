@@ -61,31 +61,6 @@ static void FourElements_SetDungeonClearFlag(u32 itemType) {
     }
 }
 
-static void FourElements_SpawnBossRewardsIfNeeded(void) {
-    Entity* spawnManager;
-
-    EntityData* roomProp10 = (EntityData*)GetRoomProperty(gRoomControls.area, gRoomControls.room, 10);
-    if (roomProp10 == NULL) {
-        roomProp10 = (EntityData*)GetCurrentRoomProperty(10);
-    }
-    if (roomProp10 == NULL) {
-        return;
-    }
-
-    Entity* existingHeart = FindEntityByID(OBJECT, HEART_CONTAINER, 6);
-    Entity* existingWarp = FindEntityByID(OBJECT, WARP_POINT, 6);
-    if (existingHeart != NULL || existingWarp != NULL) {
-        return;
-    }
-
-    LoadRoomEntityList(roomProp10);
-
-    spawnManager = FindEntity(MANAGER, ENTITY_SPAWN_MANAGER, 8, 10, 0);
-    if (spawnManager != NULL) {
-        DeleteManager(spawnManager);
-    }
-}
-
 void FourElements(FourElementsEntity* this) {
     static void (*const FourElements_Actions[])(FourElementsEntity*) = {
         FourElements_Init,    FourElements_Action1, FourElements_Action2, FourElements_Action3,
@@ -197,7 +172,6 @@ void FourElements_Action6(FourElementsEntity* this) {
         EnablePauseMenu();
         FourElements_SetDungeonClearFlag(super->type);
         SetRoomFlag(0);
-        FourElements_SpawnBossRewardsIfNeeded();
         DeleteThisEntity();
     }
 }

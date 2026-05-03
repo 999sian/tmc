@@ -10,6 +10,19 @@
 #define DMA_CNT_SRC_FIXED   0x0100
 #define DMA_CNT_32BIT       0x0400
 
+/* Three GBA destination-increment modes per scanline:
+ *   FIXED:  no increment during transfer, no reload between transfers
+ *   INC:    increment during transfer, no reload between transfers
+ *   RELOAD: increment during transfer, *do* reload between transfers
+ * The previous implementation conflated FIXED and RELOAD, which made the
+ * 8-u16 affine-matrix HBlank-DMA used by the rolling barrel and similar
+ * scenes write all 8 values to BG2PA, leaving BG2PB..Y_H untouched. */
+typedef enum {
+    DEST_INC = 0,
+    DEST_FIXED,
+    DEST_RELOAD,
+} HdmaDestMode;
+
 typedef struct {
     int active;
     const uint8_t* src_orig;
@@ -19,7 +32,7 @@ typedef struct {
     uint16_t count;     // units per HBlank transfer
     uint8_t  unit;      // 2 or 4 bytes
     uint8_t  src_fixed;
-    uint8_t  dest_reload; // 0 = increment, 1 = reset to dest_orig after each HBlank
+    uint8_t  dest_mode; // HdmaDestMode
 } HdmaChannel;
 
 static HdmaChannel s_channels[HDMA_CHANNELS];
@@ -41,7 +54,13 @@ void port_hdma_register(int channel, const void* src, void* dest,
     c->unit = (cnt_h & DMA_CNT_32BIT) ? 4 : 2;
     c->src_fixed = (cnt_h & DMA_CNT_SRC_FIXED) ? 1 : 0;
     dm = cnt_h & DMA_CNT_DEST_MASK;
-    c->dest_reload = (dm == DMA_CNT_DEST_FIXED || dm == DMA_CNT_DEST_RELOAD) ? 1 : 0;
+    if (dm == DMA_CNT_DEST_FIXED) {
+        c->dest_mode = DEST_FIXED;
+    } else if (dm == DMA_CNT_DEST_RELOAD) {
+        c->dest_mode = DEST_RELOAD;
+    } else {
+        c->dest_mode = DEST_INC;
+    }
 }
 
 void port_hdma_unregister(int channel)
@@ -71,11 +90,14 @@ void port_hdma_step_line(int line)
             if (!c->src_fixed) {
                 c->src += c->unit;
             }
-            if (!c->dest_reload) {
+            /* DEST_FIXED never advances within a transfer; INC and RELOAD do. */
+            if (c->dest_mode != DEST_FIXED) {
                 d += c->unit;
             }
         }
-        c->dest = c->dest_reload ? c->dest_orig : d;
+        /* Between scanlines: RELOAD rewinds to dest_orig; INC keeps the
+         * advanced pointer; FIXED stayed put anyway. */
+        c->dest = (c->dest_mode == DEST_RELOAD) ? c->dest_orig : d;
     }
 }
 

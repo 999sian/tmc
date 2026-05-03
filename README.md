@@ -30,7 +30,37 @@ A copy of the original game is required to build either the ROM or the PC port.
 
 The PC port currently supports **USA** and **EU**.
 
-## PC Port — Quick Start
+## PC Port — Pre-built releases (recommended)
+
+Pre-built tarballs are published on the [Releases page](https://github.com/999sian/tmc/releases). They contain just two binaries plus the audio metadata file:
+
+```
+asset_extractor      sounds.json      tmc_pc
+```
+
+Setup, once:
+
+1. Download `tmc-usa-{linux,windows}-<version>.tar.gz` and unpack it anywhere.
+2. Drop your own `baserom.gba` next to the binaries (this repo does **not** ship the ROM).
+3. Run the extractor once. It writes `assets/` and `assets_src/` next to itself:
+
+   ```sh
+   ./asset_extractor          # Linux
+   asset_extractor.exe        # Windows
+   ```
+
+4. Run the game:
+
+   ```sh
+   ./tmc_pc                   # Linux
+   tmc_pc.exe                 # Windows (double-click works)
+   ```
+
+The binaries resolve `baserom.gba`, `sounds.json`, and the extracted asset
+trees relative to their own location, so the install directory can be
+anywhere — no `cd` dance required.
+
+## PC Port — Build from source
 
 Place your ROM in the repository root, then run:
 
@@ -69,6 +99,40 @@ sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git
 ```
 
 **Windows:** Install [xmake](https://xmake.io) and [git](https://git-scm.com). SDL3 and other libraries are downloaded automatically by xmake.
+
+## PC port (work in progress)
+
+This fork includes an experimental PC build target (`tmc_pc`) that runs the
+decompiled game natively via SDL3 + a software PPU (`libs/ViruaPPU`). The port
+is **WIP** — many rendering and gameplay paths are still rough.
+
+Tested platforms:
+
+* Linux (Wayland preferred, X11 fallback)
+* Windows via MinGW static link
+
+macOS may build (the xmake config sets up the toolchain) but is not regularly
+tested.
+
+Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. As of
+0.1.1 the binary resolves `baserom.gba`, `sounds.json`, and the asset
+trees relative to its own path (and falls back to cwd in dev), so it
+works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
+
+### What's fixed and what's still broken
+
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.3-experimental** clears the Deepwood Shrine playthrough through to the post-boss warp, adds the universal x86-64 struct-alignment fix that catches a class of ~30 entity subclasses (warps, heart containers, the Minish elder's curtain, locked doors, boss doors, lever switches, …), restores drop shadows, fixes the rupee/shell number variables in textboxes, and routes the Minish Village vegetation gfx group through the right resolver. Known-still-open issues at 0.1.3: the inside-barrel cylindrical-affine BG, festival house facades, doorway sprite glitches, mushroom held-pose extraction, Minish Woods fog, the Fedora-43 `libfmt.so.12` packaging mismatch, and several issues from the GitHub tracker that need retesting — all listed at the bottom of the changelog entry.
+
+### Controls
+
+| Action               | Keyboard            | Gamepad                |
+|----------------------|---------------------|------------------------|
+| Fast-forward (hold)  | Tab                 | Right trigger          |
+| Toggle fullscreen    | F11 / Alt+Enter     | —                      |
+| Cycle upscaler       | F12                 | —                      |
+
+Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
+xBRZ 4× and linear modes.
 
 ### Nix
 

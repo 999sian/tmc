@@ -1,5 +1,5 @@
 set_project("tmc")
-set_version("0.1.0")
+set_version("0.1.2")
 set_xmakever("2.7.0")
 
 -- ====================
@@ -312,24 +312,46 @@ target("tmc_pc")
     set_languages("c11", "cxx20")
     set_targetdir("build/pc")
 
-    -- Apply the ViruaPPU HBlank-DMA callback patch before compilation.
-    -- The submodule is intentionally pinned at upstream; this patch adds
-    -- the virtuappu_mode1_pre_line_callback hook that port_hdma needs.
-    -- Idempotent: skipped if the marker symbol is already in mode1.h.
+    -- Apply the ViruaPPU patches before compilation. The submodule is
+    -- intentionally pinned at upstream; each patch is idempotent and
+    -- skipped when its marker symbol is already present in the target file.
+    -- If a patch was applied with an older revision, reset the submodule
+    -- (`git -C libs/ViruaPPU checkout -- .`) so the patches reapply cleanly.
     before_build(function (target)
         local sub = path.join(os.projectdir(), "libs", "ViruaPPU")
-        local marker_file = path.join(sub, "include", "cpu", "mode1.h")
-        local patch_file = path.join(os.projectdir(), "port", "patches",
-                                     "viruappu-hdma-hook.patch")
-        if not os.isfile(marker_file) or not os.isfile(patch_file) then
-            return
+        local patches_dir = path.join(os.projectdir(), "port", "patches")
+        local patches = {
+            -- HDMA per-line callback hook in mode1.c and mode2.c render loops.
+            { patch = "viruappu-hdma-hook.patch",
+              marker_file = path.join(sub, "src", "mode2.c"),
+              marker = "virtuappu_mode1_pre_line_callback" },
+            { patch = "viruappu-mosaic.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "MODE1_IO_MOSAIC" },
+        }
+        for _, p in ipairs(patches) do
+            local patch_file = path.join(patches_dir, p.patch)
+            if os.isfile(p.marker_file) and os.isfile(patch_file) then
+                local content = io.readfile(p.marker_file)
+                if not (content and content:find(p.marker, 1, true)) then
+                    -- -3 falls back to a 3-way merge when surrounding lines
+                    -- have drifted (some hunks already in upstream), so the
+                    -- step stays self-healing instead of silently no-oping.
+                    local rel = path.relative(patch_file, os.projectdir())
+                    local applied = try {
+                        function ()
+                            os.execv("git", {"-C", sub, "apply", "-3", patch_file})
+                            return true
+                        end
+                    }
+                    if applied then
+                        print("[viruappu] applied %s", rel)
+                    else
+                        print("[viruappu] WARN: %s did not apply (drift?); continuing without it", rel)
+                    end
+                end
+            end
         end
-        local content = io.readfile(marker_file)
-        if content and content:find("virtuappu_mode1_pre_line_callback", 1, true) then
-            return
-        end
-        print("[viruappu] applying %s", path.relative(patch_file, os.projectdir()))
-        os.execv("git", {"-C", sub, "apply", patch_file})
     end)
 
     -- PC port version configurations
@@ -500,6 +522,7 @@ target("tmc_pc")
     -- Compiler flags
     add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
                "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g")
+
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
 target_end()

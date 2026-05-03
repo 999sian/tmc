@@ -6,33 +6,6 @@ u8* gRomData = nullptr;
 u32 gRomSize = 0;
 }
 
-static std::filesystem::path find_project_root(const std::filesystem::path& start_path)
-{
-    std::error_code ec;
-    std::filesystem::path current = std::filesystem::absolute(start_path, ec);
-    if (ec) {
-        current = start_path;
-    }
-
-    if (!std::filesystem::is_directory(current, ec)) {
-        current = current.parent_path();
-    }
-
-    while (!current.empty()) {
-        if (std::filesystem::exists(current / "xmake.lua")) {
-            return current;
-        }
-
-        const std::filesystem::path parent = current.parent_path();
-        if (parent == current) {
-            break;
-        }
-        current = parent;
-    }
-
-    return {};
-}
-
 static std::filesystem::path find_executable_directory(const std::filesystem::path& executable_path)
 {
     if (executable_path.empty()) {
@@ -62,14 +35,13 @@ int main(int argc, char* argv[])
         executable_dir = std::filesystem::current_path();
     }
 
-    std::filesystem::path project_root = find_project_root(std::filesystem::current_path());
-    if (project_root.empty()) {
-        project_root = find_project_root(executable_dir);
-    }
-    if (project_root.empty()) {
-        std::cerr << "Failed to locate project root." << std::endl;
-        return 1;
-    }
+    // Always write next to the binary. In dev mode the binary lives at
+    // <repo>/build/pc/asset_extractor, so this lands under build/pc/ as
+    // before. In a release tarball, this lands beside the unpacked binary.
+    // tmc_pc looks for ./assets[_src] next to its own exe (same directory
+    // as asset_extractor in both flows), so a single rule covers both.
+    const std::filesystem::path editable_assets_folder = executable_dir / "assets_src";
+    const std::filesystem::path runtime_assets_folder  = executable_dir / "assets";
 
     const std::filesystem::path rom_path = executable_dir / "baserom.gba";
     if (!load_rom(rom_path)) {
@@ -79,8 +51,6 @@ int main(int argc, char* argv[])
     gRomData = Rom.data();
     gRomSize = static_cast<u32>(Rom.size());
 
-    // create output folder if it doesn't exist
-    std::filesystem::path editable_assets_folder = project_root / "build/pc/assets_src";
     if (!std::filesystem::exists(editable_assets_folder)) {
         std::filesystem::create_directories(editable_assets_folder);
     }
@@ -105,7 +75,6 @@ int main(int argc, char* argv[])
     config.outputRoot = editable_assets_folder;
     extract_assets(config);
 
-    const std::filesystem::path runtime_assets_folder = project_root / "build/pc/assets";
     std::string build_error;
     if (!PortAssetPipeline::BuildRuntimeAssets(editable_assets_folder, runtime_assets_folder, &build_error)) {
         std::cerr << "Failed to build runtime assets: " << build_error << std::endl;

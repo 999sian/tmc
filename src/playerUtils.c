@@ -4126,28 +4126,49 @@ void sub_0807C4F8(void) {
         MemClear(gMapDataBottomSpecial, 0x8000);
         MemClear(gMapDataTopSpecial, 0x8000);
 #ifdef PC_PORT
-        /*
-         * (gArea.pCurrentRoomInfo)->map points into ROM data with packed 12-byte
-         * MapDataDefinition entries.  We iterate manually and compare the packed
-         * dest field (GBA address) against the known GBA addresses for
-         * gMapDataBottomSpecial (0x02019EE0) and gMapDataTopSpecial (0x02002F00).
-         */
+        /* (gArea.pCurrentRoomInfo)->map can be either ROM-packed 12-byte entries
+         * (raw points into gRomData; dest is a GBA address u32 at bytes 4..7) or
+         * native 24-byte MapDataDefinition structs from the asset loader (dest
+         * is a void* whose low 32 bits are the GBA address). In both cases the
+         * dest is the GBA address — compare against gMapDataBottomSpecial
+         * (0x02019EE0) and gMapDataTopSpecial (0x02002F00). */
         {
-            u8* raw = (u8*)(gArea.pCurrentRoomInfo)->map;
+            void* mapPtr = (void*)(gArea.pCurrentRoomInfo)->map;
+            bool isPackedRomData = mapPtr != NULL && gRomData != NULL &&
+                                   (u8*)mapPtr >= gRomData && (u8*)mapPtr < gRomData + gRomSize;
             MapDataDefinition temp;
-            do {
-                u32 field_src = Port_ReadU32(raw + 0);
-                u32 field_dest_gba = Port_ReadU32(raw + 4);
-                u32 field_size = Port_ReadU32(raw + 8);
+            int iter = 0;
 
-                if (field_dest_gba == 0x02019EE0u || field_dest_gba == 0x02002F00u) {
-                    temp.src = field_src & 0x7FFFFFFFu;
-                    temp.dest = Port_ResolveEwramPtr(field_dest_gba);
-                    temp.size = field_size;
-                    LoadMapData(&temp);
-                }
-                raw += 12;
-            } while ((s32)Port_ReadU32(raw - 12) < 0);
+            if (mapPtr != NULL && isPackedRomData) {
+                u8* raw = (u8*)mapPtr;
+                do {
+                    u32 field_src = Port_ReadU32(raw + 0);
+                    u32 field_dest_gba = Port_ReadU32(raw + 4);
+                    u32 field_size = Port_ReadU32(raw + 8);
+
+                    if (field_dest_gba == 0x02019EE0u || field_dest_gba == 0x02002F00u) {
+                        temp.src = field_src & 0x7FFFFFFFu;
+                        temp.dest = Port_ResolveEwramPtr(field_dest_gba);
+                        temp.size = field_size;
+                        LoadMapData(&temp);
+                    }
+                    raw += 12;
+                    if (++iter > 32) break;
+                } while ((s32)Port_ReadU32(raw - 12) < 0);
+            } else if (mapPtr != NULL) {
+                MapDataDefinition* nptr = (MapDataDefinition*)mapPtr;
+                do {
+                    uintptr_t destAddr = (uintptr_t)nptr->dest;
+                    if (destAddr == 0x02019EE0u || destAddr == 0x02002F00u) {
+                        temp.src = nptr->src & 0x7FFFFFFFu;
+                        temp.dest = Port_ResolveEwramPtr((u32)destAddr);
+                        temp.size = nptr->size;
+                        LoadMapData(&temp);
+                    }
+                    nptr++;
+                    if (++iter > 32) break;
+                } while ((s32)(nptr - 1)->src < 0);
+            }
         }
 #else
         ptr1 = &gUnk_02022830;
