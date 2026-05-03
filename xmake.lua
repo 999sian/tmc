@@ -1,3 +1,6 @@
+add_links("fmt")
+add_linkdirs("/usr/lib")
+add_links("fmt")
 set_project("tmc")
 -- Keep in sync with port/port_version.h.
 local TMC_PC_VERSION = "0.1.0"
@@ -44,6 +47,7 @@ local use_system_packages = is_host("linux") and (os.getenv("XMAKE_USE_SYSTEM_SD
 if use_system_packages then
     add_requires("nlohmann_json", {system = true, configs = {cmake = false}})
     add_requires("fmt", {system = true})
+    add_links("fmt")
     add_requires("libpng", {system = true})
     add_requires("zlib", {system = true})
     add_requires("libsdl3", {system = true})
@@ -51,6 +55,7 @@ if use_system_packages then
 else
     add_requires("nlohmann_json", {configs = {cmake = false}})
     add_requires("fmt", {configs = {header_only = true}})
+    add_links("fmt")
     add_requires("libpng")
     add_requires("zlib")
     add_requires("libsdl3", {configs = {shared = false}})
@@ -91,6 +96,7 @@ target("asset_processor")
     add_includedirs("tools/src/asset_processor")
     add_includedirs("tools/src/util")
     add_packages("nlohmann_json", "fmt")
+    add_links("fmt")
     add_mingw_static_cpp_runtime()
 target_end()
 
@@ -106,6 +112,7 @@ target("asset_extractor")
     add_includedirs("tools/src/assets_extractor")
     add_includedirs("include", "port", ".")
     add_packages("nlohmann_json", "fmt")
+    add_links("fmt")
     add_mingw_static_cpp_runtime()
     after_build(function (target)
         local mirrored_exe = path.join(tools_bin, path.filename(target:targetfile()))
@@ -174,6 +181,7 @@ target("scaninc")
     add_files("tools/src/scaninc/*.cpp")
     add_includedirs("tools/src/scaninc")
     add_packages("fmt")
+    add_syslinks("fmt")
     add_mingw_static_cpp_runtime()
 target_end()
 
