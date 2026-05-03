@@ -26,22 +26,10 @@ jobs:
             flag: --usa
             exe_name: tmc_pc
             extractor_name: asset_extractor
-          - runner: ubuntu-latest
-            os_name: linux
-            region: eur
-            flag: --eur
-            exe_name: tmc_pc
-            extractor_name: asset_extractor
           - runner: windows-latest
             os_name: windows
             region: usa
             flag: --usa
-            exe_name: tmc_pc.exe
-            extractor_name: asset_extractor.exe
-          - runner: windows-latest
-            os_name: windows
-            region: eur
-            flag: --eur
             exe_name: tmc_pc.exe
             extractor_name: asset_extractor.exe
 

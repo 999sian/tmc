@@ -1,6 +1,12 @@
 # build artifacts
 src/*.s
-build/
+build/*
+!build/USA/
+build/USA/*
+!build/USA/assets/
+build/USA/assets/*
+!build/USA/assets/map_offsets.h
+!build/USA/assets/gfx_offsets.h
 cmake-build-*
 *.elf
 *.exe
@@ -93,7 +99,6 @@ ctx.c
 
 !build.py
 .xmake
-build/
 .vscode/
 rom_data/
 dist/
