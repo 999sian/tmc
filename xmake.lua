@@ -552,6 +552,10 @@ target("tmc_pc")
 
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
+    -- Keep symbols even in release mode so SIGSEGV traces are useful
+    -- locally (CI release tarballs may strip later). The xmake mode.release
+    -- rule adds -s/--strip-all by default which makes addr2line useless.
+    set_strip("none")
 target_end()
 
 
