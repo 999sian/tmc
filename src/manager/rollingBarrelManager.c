@@ -136,7 +136,20 @@ void sub_08058A04(RollingBarrelManager* this) {
 
     s32 tmp = gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x;
     s32 tmp2 = gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y;
-    if ((this->unk_20 - 0x118 < 0xDu) && CheckGlobalFlag(LV1TARU_OPEN) && (tmp - 0x6d < 0x17u) &&
+    /* GBA-original trigger gates by barrel angle (unk_20 in 0x118..0x124)
+     * because the cobweb-hole physically rotates with the barrel. On the
+     * port, players struggle to land the angle (60Hz frame timing + 13-
+     * step window + barrel rest at 0xF0 right before the trigger).
+     * Drop the angle gate entirely on PC — once the cobweb is removed
+     * and the player is standing in the hole position with z=0, fall.
+     * Reasonable: the player has walked to the visible exit. */
+    bool32 angleOk;
+#ifdef PC_PORT
+    angleOk = TRUE;
+#else
+    angleOk = (this->unk_20 - 0x118 < 0xDu);
+#endif
+    if (angleOk && CheckGlobalFlag(LV1TARU_OPEN) && (tmp - 0x6d < 0x17u) &&
         (tmp2 - 0x45 < 0x17u) && (gPlayerEntity.base.z.HALF.HI == 0)) {
         gPlayerState.queued_action = PLAYER_FALL;
         gPlayerState.field_0x38 = 0;
