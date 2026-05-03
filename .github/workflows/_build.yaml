@@ -29,25 +29,12 @@ jobs:
             flag: --usa
             exe_name: tmc_pc
             extractor_name: asset_extractor
-          - runner: ubuntu-latest
-            os_name: linux
-            region: eur
-            flag: --eur
-            exe_name: tmc_pc
-            extractor_name: asset_extractor
           - runner: windows-latest
             os_name: windows
             region: usa
             flag: --usa
             exe_name: tmc_pc.exe
             extractor_name: asset_extractor.exe
-          - runner: windows-latest
-            os_name: windows
-            region: eur
-            flag: --eur
-            exe_name: tmc_pc.exe
-            extractor_name: asset_extractor.exe
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -63,13 +50,55 @@ jobs:
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
             xutils-dev xorg-dev autoconf automake libtool meson ninja-build
 
+      - name: Install MinGW Windows
+        if: matrix.os_name == 'windows'
+        shell: powershell
+        run: |
+          choco install mingw -y --no-progress
+
+          $candidates = @(
+            "C:\ProgramData\mingw64\mingw64\bin",
+            "C:\ProgramData\mingw64\bin",
+            "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\mingw64\bin",
+            "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin",
+            "C:\tools\mingw64\bin"
+          )
+
+          $mingw = $null
+          foreach ($path in $candidates) {
+            if (Test-Path "$path\gcc.exe") {
+              $mingw = $path
+              break
+            }
+          }
+
+          if ($null -eq $mingw) {
+            Write-Host "Known MinGW paths not found, searching gcc.exe..."
+            $gcc = Get-ChildItem -Path "C:\ProgramData" -Filter gcc.exe -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match "mingw.*\\bin\\gcc\.exe$" } |
+              Select-Object -First 1
+
+            if ($null -ne $gcc) {
+              $mingw = Split-Path $gcc.FullName
+            }
+          }
+
+          if ($null -eq $mingw) {
+            Write-Error "MinGW gcc.exe not found"
+            exit 1
+          }
+
+          Write-Host "Using MinGW from: $mingw"
+          echo $mingw | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$mingw;$env:PATH"
+
+          gcc --version
+          g++ --version
+
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
-
-
-      - name: Install LLVM (Windows)
-        if: matrix.os_name == 'windows'
-        run: choco install llvm -y
+        with:
+          xmake-version: latest
 
       - name: Checkout private assets repository
         uses: actions/checkout@v4
@@ -88,10 +117,10 @@ jobs:
         if: matrix.os_name == 'linux'
         run: python build.py ${{ matrix.flag }}
 
-      - name: Build selected region (non-interactive, Windows)
+      - name: Build selected region (non-interactive, Windows MinGW)
         if: matrix.os_name == 'windows'
         env:
-          TMC_XMAKE_TOOLCHAIN: clang
+          TMC_XMAKE_TOOLCHAIN: mingw
         run: python build.py ${{ matrix.flag }}
 
       - name: Prepare artifact payload
