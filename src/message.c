@@ -228,14 +228,33 @@ static u32 MsgIdle(void) {
 }
 
 #ifdef PC_PORT
-extern u8 gUnk_020227E8, gUnk_020227F0, gUnk_020227F8, gUnk_02022800;
-u8* const gUnk_08107BE0[] = {
-    ((u8*)&gTextRender) + offsetof(TextRender, player_name), /* player_name */
-    &gUnk_020227E8,
-    &gUnk_020227F0,
-    &gUnk_020227F8,
-    &gUnk_02022800,
+/* GBA-original gTextRender lived at EWRAM 0x02022780, so the variable-
+ * substitution buffers gUnk_020227E8/F0/F8/0x02022800 happened to alias
+ * the rupees / field_0x14 / field_0x18 / field_0x1c slots inside
+ * gTextRender's _66/_77 fields (populated by sub_08056FBC). On the
+ * port, gTextRender is heap-allocated, so those raw GBA addresses
+ * resolve to unrelated gEwram[] bytes that nothing ever writes —
+ * "You got X items!" textboxes printed with no number visible (or
+ * garbage with the broken-DecToHex bug). Make the buf-source array
+ * point at the actual fields inside gTextRender. */
+u8* gUnk_08107BE0[] = {
+    NULL, /* player_name — set at runtime, see SyncTextVariableSlots */
+    NULL, /* rupees      */
+    NULL, /* field_0x14  */
+    NULL, /* field_0x18  */
+    NULL, /* field_0x1c  */
 };
+
+static void SyncTextVariableSlots(void) {
+    if (gUnk_08107BE0[0] != NULL) {
+        return; /* already initialized */
+    }
+    gUnk_08107BE0[0] = ((u8*)&gTextRender) + offsetof(TextRender, player_name);
+    gUnk_08107BE0[1] = ((u8*)&gTextRender) + offsetof(TextRender, _66) + 0x02;
+    gUnk_08107BE0[2] = ((u8*)&gTextRender) + offsetof(TextRender, _66) + 0x0a;
+    gUnk_08107BE0[3] = ((u8*)&gTextRender) + offsetof(TextRender, _77) + 0x01;
+    gUnk_08107BE0[4] = ((u8*)&gTextRender) + offsetof(TextRender, _77) + 0x09;
+}
 #else
 extern u8 gUnk_020227DC, gUnk_020227E8, gUnk_020227F0, gUnk_020227F8, gUnk_02022800;
 u8* const gUnk_08107BE0[] = {
@@ -247,6 +266,9 @@ u32 MsgInit(void) {
     char* dest;
     u32 i;
 
+#ifdef PC_PORT
+    SyncTextVariableSlots();
+#endif
     MemClear((void*)&gNewWindow, sizeof(gNewWindow));
     MemClear((void*)&gMessageChoices, sizeof(gMessageChoices));
     MemClear((void*)&gTextRender, sizeof(gTextRender));
