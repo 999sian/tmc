@@ -121,8 +121,16 @@ typedef struct {
 #define COMMON_AREA_TABLE_COUNT 0x90
 
 static void Common_AbortMissingAssetGroup(const char* kind, u32 group) {
-    fprintf(stderr, "[ASSET] Failed to load %s group %u from extracted assets.\n", kind, group);
-    fprintf(stderr, "[ASSET] ROM fallback is disabled for %s groups on PC.\n", kind);
+    fprintf(stderr, "\n[FATAL] %s group %u not found.\n", kind, group);
+    fprintf(stderr, "\n  The PC port reads tile graphics, palettes and music\n");
+    fprintf(stderr, "  from an `assets/` tree that you produce once by running\n");
+    fprintf(stderr, "  the extractor:\n\n");
+    fprintf(stderr, "      ./asset_extractor          (Linux/macOS)\n");
+    fprintf(stderr, "      asset_extractor.exe        (Windows)\n\n");
+    fprintf(stderr, "  Run it in the same directory as `tmc_pc` (or `cd` into\n");
+    fprintf(stderr, "  that directory before running tmc_pc) — it needs to find\n");
+    fprintf(stderr, "  baserom.gba next to itself, then writes assets/ and\n");
+    fprintf(stderr, "  assets_src/ alongside the binary.\n\n");
     abort();
 }
 
@@ -159,6 +167,34 @@ static RoomHeader* Common_GetAreaRoomHeaderSafe(u32 area, u32 room) {
 // More like PrepareTileEntitesForDungeonMap or so
 
 u32 DecToHex(u32 value) {
+#ifdef PC_PORT
+    /* GBA-original abuses Div (SWI 0x06) which returns the quotient in r0
+     * and the remainder in r1 as a side effect, then reads `r1` between
+     * Div calls. On the port, Div is plain `num / denom` and r1 stays
+     * uninitialized — every digit past the first comes out as garbage,
+     * which is why "You got X items!" textboxes always rendered nonsense.
+     * Compute BCD digits cleanly here. */
+    u32 result = 0;
+    u32 remainder;
+    u32 divisor;
+
+    if (value >= 100000000u) {
+        return 0x99999999u;
+    }
+
+    remainder = value;
+    divisor = 10000000u;
+    /* Pack 8 BCD digits, MSB first, into result. */
+    for (int shift = 28; shift >= 0; shift -= 4) {
+        u32 digit = remainder / divisor;
+        remainder = remainder % divisor;
+        result |= (digit & 0xFu) << shift;
+        if (divisor != 1u) {
+            divisor /= 10u;
+        }
+    }
+    return result;
+#else
     u32 result;
     FORCE_REGISTER(u32 r1, r1);
 
@@ -174,6 +210,7 @@ u32 DecToHex(u32 value) {
     result += Div(r1, 100) * 0x100;
     result += Div(r1, 10) * 0x10;
     return result + r1;
+#endif
 }
 
 u32 ReadBit(void* src, u32 bit) {

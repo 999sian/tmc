@@ -1,0 +1,51 @@
+diff --git a/include/cpu/mode1.h b/include/cpu/mode1.h
+--- a/include/cpu/mode1.h
++++ b/include/cpu/mode1.h
+@@ -44,5 +44,6 @@
+     MODE1_IO_WININ = 0x48,
+     MODE1_IO_WINOUT = 0x4A,
++    MODE1_IO_MOSAIC = 0x4C,
+     MODE1_IO_BLDCNT = 0x50,
+     MODE1_IO_BLDALPHA = 0x52,
+     MODE1_IO_BLDY = 0x54
+diff --git a/src/mode1.c b/src/mode1.c
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -1,6 +1,7 @@
+ #include "cpu/mode1.h"
+
+ #include <stddef.h>
++#include <stdlib.h>
+ #include <string.h>
+
+ #include "virtuappu.h"
+@@ -264,6 +264,7 @@
+     uint16_t bgcnt = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0CNT + bg_index * 2));
+     uint8_t priority = (uint8_t)(bgcnt & 3u);
+     uint32_t char_base = (uint32_t)((bgcnt >> 2u) & 3u) * 0x4000u;
++    bool mosaic_on = ((bgcnt >> 6u) & 1u) != 0u;
+     bool bpp8 = ((bgcnt >> 7u) & 1u) != 0u;
+     uint32_t screen_base = (uint32_t)((bgcnt >> 8u) & 0x1Fu) * 0x800u;
+     uint16_t size_flag = (uint16_t)((bgcnt >> 14u) & 3u);
+@@ -271,13 +272,19 @@
+     int map_height_tiles = (size_flag & 2u) ? 64 : 32;
+     int scroll_x = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0HOFS + bg_index * 4)) & 0x1FF;
+     int scroll_y = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0VOFS + bg_index * 4)) & 0x1FF;
+-    int src_y = (line + scroll_y) % (map_height_tiles * 8);
++    uint16_t mosaic_reg = virtuappu_mode1_io_read16(MODE1_IO_MOSAIC);
++    if (getenv("TMC_NO_MOSAIC")) mosaic_on = false;
++    int mosaic_h = mosaic_on ? (int)((mosaic_reg & 0x0Fu) + 1u) : 1;
++    int mosaic_v = mosaic_on ? (int)(((mosaic_reg >> 4u) & 0x0Fu) + 1u) : 1;
++    int eff_line = (line / mosaic_v) * mosaic_v;
++    int src_y = (eff_line + scroll_y) % (map_height_tiles * 8);
+     int tile_row = src_y / 8;
+     int pixel_y = src_y % 8;
+     int x;
+
+     for (x = 0; x < MODE1_GBA_WIDTH; ++x) {
+-        int src_x = (x + scroll_x) % (map_width_tiles * 8);
++        int eff_x = (x / mosaic_h) * mosaic_h;
++        int src_x = (eff_x + scroll_x) % (map_width_tiles * 8);
+         int tile_col = src_x / 8;
+         int pixel_x = src_x % 8;
+         int screen_block_x = tile_col / 32;

@@ -12,6 +12,20 @@
 #undef Stop
 #endif
 
+#include <filesystem>
+#include <optional>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <climits>
+#include <mach-o/dyld.h>
+#else
+#include <climits>
+#include <unistd.h>
+#endif
+
 extern "C" {
 typedef struct SongHeader SongHeader;
 typedef struct MusicPlayerInfo MusicPlayerInfo;
@@ -67,6 +81,11 @@ struct BackendState {
     std::array<size_t, kSongCount> songHeaderOffsets;
     uint8_t trackVolumes[kPlayerCount][kMaxTracks];
     int8_t trackPans[kPlayerCount][kMaxTracks];
+    /* Track the currently-playing song per player so room transitions that
+     * re-issue the same songId can be no-ops (real GBA's MPlayStart was
+     * effectively idempotent for repeated calls; agbplay's m4aMPlayStart
+     * restarts unconditionally and that's audible as music resetting). */
+    uint16_t currentSongId[kPlayerCount];
 };
 
 BackendState sState;
@@ -128,16 +147,56 @@ static std::string LoadTextFile(const char* path) {
     return std::string((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
 }
 
-static std::string LoadSoundsJson(void) {
-    static const char* const kPaths[] = {
-        "assets/sounds.json",
-        "../assets/sounds.json",
-        "../../assets/sounds.json",
-    };
+static std::optional<std::filesystem::path> ExeDirForSounds() {
+#ifdef _WIN32
+    std::wstring buf(MAX_PATH, L'\0');
+    DWORD len = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+    if (len == 0) return std::nullopt;
+    while (len >= buf.size() - 1) {
+        buf.resize(buf.size() * 2);
+        len = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
+        if (len == 0) return std::nullopt;
+    }
+    buf.resize(len);
+    return std::filesystem::path(buf).parent_path();
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buf(size, '\0');
+    if (_NSGetExecutablePath(buf.data(), &size) == 0) {
+        std::error_code ec;
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(buf.c_str(), ec);
+        if (!ec) return canonical.parent_path();
+    }
+    return std::nullopt;
+#else
+    char buf[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf));
+    if (len > 0 && static_cast<size_t>(len) < sizeof(buf)) {
+        return std::filesystem::path(std::string(buf, static_cast<size_t>(len))).parent_path();
+    }
+    return std::nullopt;
+#endif
+}
 
-    for (const char* path : kPaths) {
-        std::string text = LoadTextFile(path);
+static std::string LoadSoundsJson(void) {
+    /* Search beside the binary first (release-tarball layout), then walk a
+     * couple of cwd-relative dev locations. Mirrors the asset loader's
+     * lookup pattern so the release zip's sounds.json is found regardless
+     * of the user's current directory. */
+    std::vector<std::string> paths;
+    if (auto dir = ExeDirForSounds(); dir.has_value()) {
+        paths.push_back((*dir / "sounds.json").string());
+        paths.push_back((*dir / "assets" / "sounds.json").string());
+    }
+    paths.push_back("assets/sounds.json");
+    paths.push_back("../assets/sounds.json");
+    paths.push_back("../../assets/sounds.json");
+
+    for (const std::string& path : paths) {
+        std::string text = LoadTextFile(path.c_str());
         if (!text.empty()) {
+            std::fprintf(stderr, "[AUDIO] loaded %s\n", path.c_str());
             return text;
         }
     }
@@ -328,6 +387,7 @@ static size_t SongIdToRomPosLocked(uint16_t songId) {
 
 static void ResetTrackMixControlsLocked(void) {
     for (uint32_t i = 0; i < kPlayerCount; i++) {
+        sState.currentSongId[i] = 0;
         for (uint32_t j = 0; j < kMaxTracks; j++) {
             sState.trackVolumes[i][j] = 0xff;
             sState.trackPans[i][j] = 0;
@@ -507,10 +567,22 @@ bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId) {
     }
     if (songPos == 0 || songPos >= gRomSize) {
         sState.ctx->m4aMPlayStop(playerIndex);
+        if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
         return false;
     }
 
+    /* Idempotent restart for BGM only (song IDs 1..99): if this player is
+     * already running this exact BGM, leave it alone. The engine commonly
+     * re-issues the room BGM on every room transition; restarting the
+     * playback is audible as music resetting between rooms. SFX (>=100)
+     * legitimately re-trigger the same id and must NOT be skipped. */
+    if (songId >= 1 && songId <= 99 && playerIndex < kPlayerCount &&
+        sState.currentSongId[playerIndex] == songId) {
+        return true;
+    }
+
     sState.ctx->m4aMPlayStart(playerIndex, songPos);
+    if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = songId;
     return true;
 }
 
@@ -538,6 +610,7 @@ void Port_M4A_Backend_StopPlayer(uint8_t playerIndex) {
     }
 
     sState.ctx->m4aMPlayStop(playerIndex);
+    if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
 }
 
 void Port_M4A_Backend_ContinuePlayer(uint8_t playerIndex) {

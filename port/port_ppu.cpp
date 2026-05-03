@@ -37,7 +37,7 @@ static SDL_Texture* sLowResTexture = nullptr;   /* 240x160 raw upload */
 static SDL_Texture* sHiResTexture = nullptr;    /* 960x640 upscaled  */
 static SDL_Window* sWindow = nullptr;
 static SDL_Surface* sFrameSurface = nullptr;
-static PresentMode sPresentMode = PresentMode::XbrzLinear;
+static PresentMode sPresentMode = PresentMode::NearestRaw;
 static uint32_t* sUpscale2xBuf = nullptr;       /* 480x320 intermediate */
 static uint32_t* sUpscale4xBuf = nullptr;       /* 960x640 final        */
 
@@ -98,6 +98,9 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
     } else {
+        if (!SDL_SetRenderVSync(sRenderer, 1)) {
+            printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
+        }
         sLowResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
                                            SDL_TEXTUREACCESS_STREAMING, 240, 160);
         sHiResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
@@ -168,6 +171,11 @@ extern "C" void Port_PPU_PresentFrame(void) {
     dispcnt = (uint16_t)(gIoMem[0x00] | (gIoMem[0x01] << 8));
     gbaMode = (uint8_t)(dispcnt & 0x07);
 
+    /* GBA mode 1 = BG0/BG1 text + BG2 affine + OBJ. VirtuaPPU's mode 2
+     * matches that hardware behaviour; routing GBA mode 1 to VirtuaPPU mode
+     * 1 reads BG2 with text-BG indexing and the title-screen affine sword
+     * comes out as garbage tiles. Keep GBA mode 0 on VirtuaPPU mode 1.
+     * (Originally fixed in ad9b4d94, regressed in matheo merge dec390c2.) */
     switch (gbaMode) {
         case 0:
             virtuappu_registers.mode = 1;

@@ -120,8 +120,10 @@ int main(int argc, char** argv) {
     file.close();
 
     // Gather all json configs from assets folder.
+    // Create the folder first so extract mode doesn't crash on a fresh run.
     std::vector<std::filesystem::path> configs;
     std::string configFolder = "assets";
+    std::filesystem::create_directories(configFolder);
     for (const auto& entry : std::filesystem::directory_iterator(configFolder)) {
         const auto& path = entry.path();
         if (path.extension() == ".json") {

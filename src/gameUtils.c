@@ -346,6 +346,9 @@ bool32 HasDungeonMap(void) {
 }
 
 extern u8 gPaletteBufferBackup[];
+#ifdef PC_PORT
+extern void sub_08016CA8(BgSettings* bg);
+#endif
 void RestoreGameTask(bool32 loadGfx) {
     LoadGfxGroups();
 #ifndef EU
@@ -356,6 +359,18 @@ void RestoreGameTask(bool32 loadGfx) {
     sub_0801AE44(loadGfx);
     MemCopy(gPaletteBufferBackup, gPaletteBuffer, 1024);
     gUsedPalettes = 0xffffffff;
+#ifdef PC_PORT
+    /* sub_0801AE44 fills gBG1Buffer/gBG2Buffer from the room tilemap, but the
+     * GBA-original mechanism that gets those into VRAM after a map subtask
+     * doesn't fire on the port. Raise the per-layer updated flag and run the
+     * buffer→VRAM copy immediately so the room reappears instead of black. */
+    gScreen.bg0.updated = 1;
+    gScreen.bg1.updated = 1;
+    gScreen.bg2.updated = 1;
+    sub_08016CA8(&gScreen.bg0);
+    sub_08016CA8(&gScreen.bg1);
+    sub_08016CA8((BgSettings*)&gScreen.bg2);
+#endif
 }
 
 void LoadRoomBgm(void) {
