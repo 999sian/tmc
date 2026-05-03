@@ -114,6 +114,20 @@ static void Port_PPU_PresentSurfaceFrame(void) {
     SDL_UpdateWindowSurface(sWindow);
 }
 
+static bool sVSyncEnabled = true;
+
+extern "C" void Port_PPU_SetVSync(bool enabled) {
+    if (sRenderer == nullptr) {
+        sVSyncEnabled = enabled;
+        return;
+    }
+    if (sVSyncEnabled == enabled) {
+        return;
+    }
+    sVSyncEnabled = enabled;
+    SDL_SetRenderVSync(sRenderer, enabled ? 1 : 0);
+}
+
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
     Port_PPU_LoadConfig();
@@ -125,6 +139,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         if (!SDL_SetRenderVSync(sRenderer, 1)) {
             printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
         }
+        sVSyncEnabled = true;
         sLowResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
                                            SDL_TEXTUREACCESS_STREAMING, 240, 160);
         sHiResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
