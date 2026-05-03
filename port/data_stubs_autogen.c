@@ -596,5 +596,26 @@ void Port_InitDataStubs(void) {
         }
         count++;
     }
+    /* Per-room "additional entity list" data — most are dropped from
+     * port_asset_index.c and the corresponding port_linked_stubs.c arrays
+     * are zero. The C code at sub_StateChange_DeepwoodShrineBoss_Main does
+     * `LoadRoomEntityList(&gUnk_additional_a_DeepwoodShrineBoss_Main)` to
+     * spawn the heart container + warp after the boss dies, so without this
+     * copy the rewards never appear (issue #12). USA addresses; EU/JP would
+     * need different offsets. */
+    {
+        extern u8 gUnk_additional_a_DeepwoodShrineBoss_Main[];
+        struct PerRoomEntityListInit { const char* name; u32 rom_offset; u32 size; u8* dest; };
+        struct PerRoomEntityListInit entries[] = {
+            { "gUnk_additional_a_DeepwoodShrineBoss_Main", 0xDF94Cu, 0x30u,
+              gUnk_additional_a_DeepwoodShrineBoss_Main },
+        };
+        for (size_t i = 0; i < sizeof(entries)/sizeof(entries[0]); i++) {
+            if (entries[i].rom_offset + entries[i].size <= gRomSize) {
+                memcpy(entries[i].dest, &gRomData[entries[i].rom_offset], entries[i].size);
+                count++;
+            }
+        }
+    }
     fprintf(stderr, "Port_InitDataStubs: initialized %u data stubs from ROM.\n", count);
 }
