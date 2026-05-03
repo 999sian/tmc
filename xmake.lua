@@ -389,6 +389,7 @@ target("tmc_pc")
     add_files("port/port_m4a_backend.cpp")
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
+    add_files("port/port_asset_index.c")  -- Asset offset index (path → ROM offset map)
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")
     add_files("port/stubs_autogen.c")

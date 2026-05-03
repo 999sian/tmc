@@ -6,6 +6,7 @@ extern "C" {
 #include "common.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include "port_asset_index.h"
 #include "structures.h"
 #include "area.h"
 #undef this
@@ -693,6 +694,41 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     return result;
 }
 
+/* Look up a property's ROM offset by file path so we can serve it directly
+ * from gRomData. Some additional_X room properties (HouseDoor data tables,
+ * for example) span multiple consecutive `_N.bin` chunks with inline 4-byte
+ * GBA script pointers between them. The asset extractor splits those chunks
+ * into separate files and area_tables.json references only the first chunk,
+ * so iteration past the first file's bytes hits past-end memory and reads
+ * a garbage 4th door. Pointing at gRomData (already populated by both the
+ * baserom.gba load and the .bin overwrites) gives the contiguous, correctly-
+ * terminated layout instead. (#28 root cause.) */
+extern "C" const EmbeddedAssetEntry* EmbeddedAssetIndex_Get(void);
+extern "C" u32 EmbeddedAssetIndex_Count(void);
+static u8* RomBackedPointerForAssetFile(const std::string& relativePath) {
+    if (gRomData == nullptr) {
+        return nullptr;
+    }
+    static std::unordered_map<std::string, u32> sFileToRomOffset = []() {
+        std::unordered_map<std::string, u32> map;
+        const EmbeddedAssetEntry* entries = EmbeddedAssetIndex_Get();
+        const u32 count = EmbeddedAssetIndex_Count();
+        map.reserve(count);
+        for (u32 i = 0; i < count; ++i) {
+            map.emplace(entries[i].path, entries[i].offset);
+        }
+        return map;
+    }();
+    auto it = sFileToRomOffset.find(relativePath);
+    if (it == sFileToRomOffset.end()) {
+        return nullptr;
+    }
+    if (it->second >= gRomSize) {
+        return nullptr;
+    }
+    return gRomData + it->second;
+}
+
 u32 RegisterMapAssetFile(const std::string& relativePath) {
     auto found = gAssetGroupCache.mapAssetFileToIndex.find(relativePath);
     if (found != gAssetGroupCache.mapAssetFileToIndex.end()) {
@@ -787,9 +823,15 @@ bool BuildAreaFromAssets(u32 area) {
                 continue;
             }
 
-            const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
-            if (fileData != nullptr && !fileData->empty()) {
-                props[i] = const_cast<u8*>(fileData->data());
+            /* Prefer pointing into gRomData when the file is a ROM-backed
+             * asset — fixes split additional_* property tables (#28). */
+            if (u8* romPtr = RomBackedPointerForAssetFile(roomEntry.files[i])) {
+                props[i] = romPtr;
+            } else {
+                const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
+                if (fileData != nullptr && !fileData->empty()) {
+                    props[i] = const_cast<u8*>(fileData->data());
+                }
             }
         }
 
