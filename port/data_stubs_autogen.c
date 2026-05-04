@@ -605,10 +605,24 @@ void Port_InitDataStubs(void) {
      * need different offsets. */
     {
         extern u8 gUnk_additional_a_DeepwoodShrineBoss_Main[];
+        extern u8 gUnk_additional_8_MelarisMine_Main[];
+        extern u8 gUnk_additional_9_MelarisMine_Main[];
         struct PerRoomEntityListInit { const char* name; u32 rom_offset; u32 size; u8* dest; };
         struct PerRoomEntityListInit entries[] = {
             { "gUnk_additional_a_DeepwoodShrineBoss_Main", 0xDF94Cu, 0x30u,
               gUnk_additional_a_DeepwoodShrineBoss_Main },
+            /* Melari's Mines main room: state-change loads the additional_8
+             * NPC list (2 minishes + Melari + 2 cutscene swords) and the
+             * additional_9 helper-minish list. With zeroed stubs the
+             * runtime parses 16-byte chunks of zeros as GROUND_ITEM kind=0
+             * entities — visible as duplicate heart containers + green
+             * warp tile in the room (#42), and Melari himself + his crew
+             * never appear (#43). USA addresses; EU/JP would need different
+             * offsets. */
+            { "gUnk_additional_8_MelarisMine_Main", 0xDD214u, 0x60u,
+              gUnk_additional_8_MelarisMine_Main },
+            { "gUnk_additional_9_MelarisMine_Main", 0xDD274u, 0x20u,
+              gUnk_additional_9_MelarisMine_Main },
         };
         for (size_t i = 0; i < sizeof(entries)/sizeof(entries[0]); i++) {
             if (entries[i].rom_offset + entries[i].size <= gRomSize) {

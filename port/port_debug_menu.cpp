@@ -159,7 +159,9 @@ MenuPage BuildWarpPage(void) {
     p.items.push_back({ "Minish Woods",                 []() { DoWarp(AREA_MINISH_WOODS, 0x00, 0x80, 0xC0, 1); } });
     p.items.push_back({ "Minish Village",               []() { DoWarp(AREA_MINISH_VILLAGE, 0x00, 0x80, 0xC0, 1); } });
     p.items.push_back({ "Mt Crenel",                    []() { DoWarp(AREA_MT_CRENEL,    0x00, 0x80, 0xC0, 1); } });
-    p.items.push_back({ "Melari's Mines",               []() { DoWarp(AREA_MELARIS_MINE, 0x00, 0x80, 0xC0, 1); } });
+    /* Spawn at Mountain Minish 4's coordinates from gUnk_additional_9 — a
+     * known-walkable spot near the room's left side (#42/#43 repro). */
+    p.items.push_back({ "Melari's Mines",               []() { DoWarp(AREA_MELARIS_MINE, 0x00, 0x80, 0x130, 1); } });
     p.items.push_back({ "Deepwood Shrine",              []() { DoWarp(AREA_DEEPWOOD_SHRINE,    0x0B, 0xa8, 0xb8, 1); } });
     p.items.push_back({ "Deepwood Shrine - boss",       []() { DoWarp(AREA_DEEPWOOD_SHRINE_BOSS, 0x00, 0x80, 0x80, 1); } });
     p.items.push_back({ "Cave of Flames",               []() { DoWarp(AREA_CAVE_OF_FLAMES,     0x04, 0x98, 0xa8, 1); } });
