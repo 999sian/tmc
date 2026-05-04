@@ -1,0 +1,14 @@
+diff --git a/src/mode2.c b/src/mode2.c
+index 0b6daf7..189c580 100644
+--- a/src/mode2.c
++++ b/src/mode2.c
+@@ -17,6 +17,9 @@ void virtuappu_mode2_render_frame(const PPUMemory *ppu)
+     }
+ 
+     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
++        if (virtuappu_mode1_pre_line_callback != NULL) {
++            virtuappu_mode1_pre_line_callback(line);
++        }
+         uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
+         uint8_t bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
+         uint32_t obj_layer[MODE1_GBA_WIDTH];

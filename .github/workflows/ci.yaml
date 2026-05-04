@@ -1,0 +1,28 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      stamp: ${{ steps.stamp.outputs.value }}
+    steps:
+      - name: Compute build stamp
+        id: stamp
+        run: echo "value=$(date -u +'%Y%m%d-%H%M')-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: meta
+    uses: ./.github/workflows/_build.yaml
+    with:
+      publish_mode: artifact
+      version_label: ${{ needs.meta.outputs.stamp }}
+    secrets: inherit

@@ -27,6 +27,9 @@
 #else
 #include <dirent.h>
 #include <sys/stat.h>
+/* Forward-declare readlink to avoid pulling in _POSIX_C_SOURCE feature test
+ * macros, which the c11 build mode otherwise hides. */
+extern long readlink(const char* path, char* buf, unsigned long bufsiz);
 #endif
 
 u8* gRomData = NULL;
@@ -671,7 +674,71 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
     return &sSpritePtrsStable[sprite_idx];
 }
 
+/*
+ * Resolve the directory containing the running executable. Lets us look for
+ * baserom.gba next to tmc_pc, which is how the release tarball is laid out.
+ * Falls back to "" on failure (caller skips exe-dir candidates).
+ */
+static int GetExeDir(char* out, size_t n) {
+    if (!out || n == 0)
+        return 0;
+    out[0] = '\0';
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    DWORD len = GetModuleFileNameA(NULL, buf, sizeof(buf));
+    if (len == 0 || len >= sizeof(buf))
+        return 0;
+    char* slash = strrchr(buf, '\\');
+    if (!slash)
+        slash = strrchr(buf, '/');
+    if (!slash)
+        return 0;
+    *slash = '\0';
+    snprintf(out, n, "%s", buf);
+    return 1;
+#elif defined(__APPLE__)
+    /* macOS: _NSGetExecutablePath. Best-effort, fallback below if unavailable. */
+    return 0;
+#else
+    char buf[4096];
+    long len = readlink("/proc/self/exe", buf, (unsigned long)(sizeof(buf) - 1));
+    if (len <= 0)
+        return 0;
+    buf[(size_t)len] = '\0';
+    char* slash = strrchr(buf, '/');
+    if (!slash)
+        return 0;
+    *slash = '\0';
+    snprintf(out, n, "%s", buf);
+    return 1;
+#endif
+}
+
 static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foundPathLen) {
+    /* Pass 1: exe_dir/<basename> for any candidate that's a bare filename. */
+    char exeDir[4096];
+    if (GetExeDir(exeDir, sizeof(exeDir))) {
+        for (int i = 0; i < count; i++) {
+            const char* p = paths[i];
+            if (!p)
+                continue;
+            /* Only try exe-dir prefix for plain filenames (no path separators).
+             * Directory-prefixed candidates ("build/pc/..", "../..") are
+             * developer-tree paths and don't make sense beside the binary. */
+            if (strchr(p, '/') || strchr(p, '\\'))
+                continue;
+            char prefixed[4096 + 256];
+            snprintf(prefixed, sizeof(prefixed), "%s/%s", exeDir, p);
+            FILE* f = fopen(prefixed, "rb");
+            if (f) {
+                if (foundPath)
+                    snprintf(foundPath, foundPathLen, "%s", prefixed);
+                return f;
+            }
+        }
+    }
+
+    /* Pass 2: original cwd-relative candidates. */
     for (int i = 0; i < count; i++) {
         FILE* f = fopen(paths[i], "rb");
         if (f) {
@@ -862,6 +929,16 @@ void Port_LoadRom(const char* path) {
 
     /* gGlobalGfxAndPalettes — huge palette/gfx blob (still points into gRomData) */
     gGlobalGfxAndPalettes = &gRomData[R->gfxAndPalettes];
+
+    /* gPalette_549 — Mt Crenel weather-change reads a 26-palette contiguous
+     * block starting here. Copy it out of gGlobalGfxAndPalettes (offset 0x44A0
+     * — same relative position on USA and EU because the palette ordering in
+     * gfx_and_palettes.s is identical). Without this, the +0xD0 indexing in
+     * sub_08059894 reads garbage and the mountaintop renders pink/cyan (#34). */
+    {
+        extern u16 gPalette_549[0x1A0];
+        memcpy(gPalette_549, gGlobalGfxAndPalettes + 0x44A0, sizeof(gPalette_549));
+    }
 
     /* gFrameObjLists — from compile-time const data (no ROM read needed) */
     memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
