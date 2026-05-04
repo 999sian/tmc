@@ -4,6 +4,10 @@
 #include "sound.h"
 #include "common.h"
 
+#ifdef PC_PORT
+#include "port_m4a_backend.h"
+#endif
+
 #define IS_BGM(song) ((song)-1 <= NUM_BGM - 1)
 #define IS_SFX(song) ((song)-1 > NUM_BGM - 1)
 
@@ -12,6 +16,21 @@ static void doPlaySound(u32 sound);
 static void PlayFadeIn(u32 sound);
 static void PlayFadeOut(u32 sound);
 static void InitVolume(void);
+
+#ifdef PC_PORT
+/* Tracks BGM ducking for high-priority jingles (e.g. SFX_ITEM_GET).
+ * On GBA the m4a engine's per-channel priority allocation made the SFX
+ * player's tracks steal channels from the BGM player, naturally muting it
+ * while the jingle plays. The PC backend renders all players independently,
+ * so we duck explicitly via the existing volumeBgmTarget fade and restore
+ * once the SFX player finishes (#22). */
+static u8 sBgmDuckActive;
+static u8 sBgmDuckPlayer;
+
+static bool32 IsDuckingSfx(u32 song) {
+    return song == SFX_ITEM_GET;
+}
+#endif
 
 void InitSound(void) {
     InitSoundPlayingInfo();
@@ -137,6 +156,13 @@ void SoundReq(u32 sound) {
                     m4aSongNumStart(song);
                 }
                 doPlaySound(song);
+#ifdef PC_PORT
+                if (IsDuckingSfx(song)) {
+                    sBgmDuckActive = 1;
+                    sBgmDuckPlayer = (u8)gSongTable[song].musicPlayerIndex;
+                    ptr->volumeBgmTarget = 0;
+                }
+#endif
             }
             return;
     }
@@ -145,6 +171,13 @@ void SoundReq(u32 sound) {
 void AudioMain(void) {
     s32 fadeValue;
     SoundPlayingInfo* ptr = &gSoundPlayingInfo;
+
+#ifdef PC_PORT
+    if (sBgmDuckActive && !Port_M4A_Backend_IsPlayerActive(sBgmDuckPlayer)) {
+        sBgmDuckActive = 0;
+        ptr->volumeBgmTarget = 0x100;
+    }
+#endif
 
     if (ptr->volumeMasterTarget != ptr->volumeMaster) {
         fadeValue = fade(ptr->volumeMasterTarget, ptr->volumeMaster);
