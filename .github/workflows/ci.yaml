@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'master'
+      - 'CI-Test'
   pull_request:
 
 permissions:
