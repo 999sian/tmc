@@ -53,6 +53,18 @@ u64 DivAndModCombined(s32 num, s32 denom) {
 static void Port_UpdateInput(void) {
     u16 keyinput = 0x03FF;
 
+    {
+        extern bool Port_DebugMenu_IsOpen(void);
+        if (Port_DebugMenu_IsOpen()) {
+            /* While the debug menu is open, hold all GBA buttons released
+             * so the game doesn't observe stray input from key presses we
+             * routed to the menu. */
+            *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
+            sFrameNum++;
+            return;
+        }
+    }
+
     for (size_t i = 0; i < sizeof(sInputMap) / sizeof(sInputMap[0]); i++) {
         if (Port_Config_InputPressed(sInputMap[i].input)) {
             keyinput &= ~sInputMap[i].gbaMask;
@@ -94,6 +106,21 @@ static void Port_PumpEvents(void) {
                     free(dir);
                 }
                 continue;
+            }
+            if (e.key.key == SDLK_F8) {
+                extern void Port_DebugMenu_Toggle(void);
+                Port_DebugMenu_Toggle();
+                continue;
+            }
+            /* When the debug menu is open, route key presses to it and
+             * suppress further handling so the game itself doesn't see
+             * the keystroke. */
+            {
+                extern bool Port_DebugMenu_IsOpen(void);
+                extern bool Port_DebugMenu_HandleKey(int sdlKey);
+                if (Port_DebugMenu_IsOpen() && Port_DebugMenu_HandleKey((int)e.key.key)) {
+                    continue;
+                }
             }
             if (e.key.key == SDLK_TAB) {
                 sFastForward = true;
