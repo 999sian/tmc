@@ -121,7 +121,7 @@ works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### What's fixed and what's still broken
 
-See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.5-experimental** is a multi-fix pass driven by the issue tracker: AcroBandit stack drift after attack (#35), Cave-of-Flames map crash on B3 (#39), Mt Crenel pink/cyan terrain (#34), Item-Get BGM ducking (#22), tall-grass / shallow-water shoes overlay (#24), Deepwood Shrine "vault off solid wall" (#5), and the cloud-shadow overlay breaking after a Hyrule Castle visit (#25) all closed. New `GetNextFunction` dispatch fix unlocks chain-unwind and death-fall paths that were silently skipped on PC. Window title now surfaces the port version, and **F9 captures a bug-report bundle** (screenshot + save + game state) for testers.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.6-experimental** closes five tracker entries: cucco-minigame reward crash (#46), chuchu freeze-on-loop-frame (#45), Cave-of-Flames moving lava platforms missing + boss-room SIGSEGV (#36), and the Melari's Mines pair (Melari + crew missing #43, spurious heart containers + green warp tile #42). Also picks up matheo/master ×2 (cleaner `Port_UnpackRomDataPtr` helper, AVX2 build option) and ships an in-game **F8 debug menu** + **F5/F6 quicksave/quickload** so playtesters can jump straight to bug repros. Reverted PR #48 (skip-cutscene) — it broke audio sync.
 
 The window title shows the running port version — please include it when filing issues.
 
@@ -133,6 +133,9 @@ The window title shows the running port version — please include it when filin
 | Toggle fullscreen     | F11 / Alt+Enter     | —                      |
 | Cycle upscaler        | F12                 | —                      |
 | Capture bug report    | F9                  | —                      |
+| Open debug menu       | F8                  | —                      |
+| Quicksave             | F5                  | —                      |
+| Quickload             | F6                  | —                      |
 
 Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
 xBRZ 4× and linear modes.
