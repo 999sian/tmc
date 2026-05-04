@@ -121,18 +121,26 @@ works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### What's fixed and what's still broken
 
-See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.4-experimental** clears the Hyrule Town + South Hyrule Field playthrough — kinstone-bag interaction (5-bug crash chain), spear moblin loading-zone crash (read-only ROM hitbox + packed-pointer-table), and the peahat "corpse never despawns" gust-jar-state bug all closed. CI now builds on `ubuntu-22.04` so the Linux tarball runs on every distro from glibc 2.35 onwards. Known-still-open issues at 0.1.4: door-priority glitches, Item-Get BGM ducking, mushroom held-pose extraction, blue/red teleport icons, mosaic effect, festival house facades — all listed at the bottom of the changelog entry.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.5-experimental** is a multi-fix pass driven by the issue tracker: AcroBandit stack drift after attack (#35), Cave-of-Flames map crash on B3 (#39), Mt Crenel pink/cyan terrain (#34), Item-Get BGM ducking (#22), tall-grass / shallow-water shoes overlay (#24), Deepwood Shrine "vault off solid wall" (#5), and the cloud-shadow overlay breaking after a Hyrule Castle visit (#25) all closed. New `GetNextFunction` dispatch fix unlocks chain-unwind and death-fall paths that were silently skipped on PC. Window title now surfaces the port version, and **F9 captures a bug-report bundle** (screenshot + save + game state) for testers.
+
+The window title shows the running port version — please include it when filing issues.
 
 ### Controls
 
-| Action               | Keyboard            | Gamepad                |
-|----------------------|---------------------|------------------------|
-| Fast-forward (hold)  | Tab                 | Right trigger          |
-| Toggle fullscreen    | F11 / Alt+Enter     | —                      |
-| Cycle upscaler       | F12                 | —                      |
+| Action                | Keyboard            | Gamepad                |
+|-----------------------|---------------------|------------------------|
+| Fast-forward (hold)   | Tab                 | Right trigger          |
+| Toggle fullscreen     | F11 / Alt+Enter     | —                      |
+| Cycle upscaler        | F12                 | —                      |
+| Capture bug report    | F9                  | —                      |
 
 Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
 xBRZ 4× and linear modes.
+
+**Bug-report capture (F9)** — writes a `bugreport_YYYYMMDD_HHMMSS/` folder
+next to the binary containing `screenshot.bmp`, `save.bin` (your current
+EEPROM dump), and `state.txt` (area / room / coords / hp). Attach the
+folder to a GitHub issue and we have everything we need to reproduce.
 
 ### Nix
 
