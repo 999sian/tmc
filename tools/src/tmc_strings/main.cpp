@@ -488,6 +488,8 @@ const std::vector<LanguageTable> LanguageTableEU = {
 };
 // clang-format on
 
+#include <getopt.h>
+
 const char* progname;
 
 void usage() {
@@ -506,7 +508,17 @@ void usage() {
                progname);
 }
 
-
+// clang-format off
+constexpr const struct option long_options[] = {
+    {"extract", no_argument,        nullptr, 'x'},
+    {"pack",    no_argument,        nullptr, 'p'},
+    {"region",  required_argument,  nullptr, 0},
+    {"source",  required_argument,  nullptr, 1},
+    {"dest",    required_argument,  nullptr, 2},
+    {"size",    required_argument,  nullptr, 3},
+    {},
+};
+// clang-format on
 
 int main(int argc, char** argv) {
     std::string src_path;
@@ -526,42 +538,43 @@ int main(int argc, char** argv) {
         Region_EU,
     } region = Region_USA;
 
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        auto require_value = [&](const char* name) -> const char* {
-            if (i + 1 >= argc) {
-                fmt::print("Missing value for {}\n\n", name);
-                usage();
-                exit(EXIT_FAILURE);
-            }
-            return argv[++i];
-        };
+    while (true) {
+        int opt_index;
+        int c = getopt_long(argc, argv, "xp", long_options, &opt_index);
+        if (c == -1)
+            break;
 
-        if (arg == "-x" || arg == "--extract") {
-            mode = Mode_Extract;
-        } else if (arg == "-p" || arg == "--pack") {
-            mode = Mode_Pack;
-        } else if (arg == "--region") {
-            const char* value = require_value("--region");
-            if (strcmp(value, "USA") == 0) {
-                region = Region_USA;
-            } else if (strcmp(value, "EU") == 0) {
-                region = Region_EU;
-            } else if (strcmp(value, "JAPAN") == 0) {
-                region = Region_JAPAN;
-                fmt::print("Region unsupported\n\n");
+        switch (c) {
+            case 'x':
+                mode = Mode_Extract;
+                break;
+            case 'p':
+                mode = Mode_Pack;
+                break;
+            case 0:
+                if (strcmp(optarg, "USA") == 0) {
+                    region = Region_USA;
+                } else if (strcmp(optarg, "EU") == 0) {
+                    region = Region_EU;
+                } else if (strcmp(optarg, "JAPAN") == 0) {
+                    region = Region_JAPAN;
+                    fmt::print("Region unsupported\n\n");
+                    usage();
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            case 1:
+                src_path = optarg;
+                break;
+            case 2:
+                dst_path = optarg;
+                break;
+            case 3:
+                max_size = std::strtoul(optarg, nullptr, 0);
+                break;
+            default:
                 usage();
                 exit(EXIT_FAILURE);
-            }
-        } else if (arg == "--source") {
-            src_path = require_value("--source");
-        } else if (arg == "--dest") {
-            dst_path = require_value("--dest");
-        } else if (arg == "--size") {
-            max_size = std::strtoul(require_value("--size"), nullptr, 0);
-        } else {
-            usage();
-            exit(EXIT_FAILURE);
         }
     }
 

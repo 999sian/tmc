@@ -21,7 +21,6 @@
       ninja
       pkg-config
       git
-      curl
       gnumake
       gcc
       python
