@@ -739,8 +739,21 @@ u32 GetNextFunction(Entity* this) {
      * death sequence to take over. The gj=0x04 short-circuit at top sends
      * them right back to OnGrabbed forever — corpse never despawns (#20).
      * If the entity is dead, prefer the health==0 dispatch so GenericDeath
-     * runs and the DEATH_FX cleanup chain fires. */
+     * runs and the DEATH_FX cleanup chain fires.
+     *
+     * BUT: AcroBandit's chain unwind lives in OnCollision and only runs on
+     * the death frame (when contactFlags has bit 7 + health hits 0). If we
+     * short-circuit straight to OnDeath here, the unwind never fires and the
+     * surviving bandits in a stack stay stuck in Action4 with stale parent
+     * pointers (#35). Likewise, the death-fall animation runs via
+     * OnKnockback while knockbackDuration is nonzero, so we need to keep
+     * dispatching OnKnockback during the dying frames too. Only fall through
+     * to OnDeath when neither of those is active. */
     if (this->health == 0) {
+        if (!(gustJarState & 4) && (contactFlags >> 7))
+            return 1; /* OnCollision: chain unwind + death-state setup */
+        if (this->knockbackDuration != 0)
+            return 2; /* OnKnockback: death-fall animation */
         if (this->action == 0 && this->subAction == 0)
             return 0;
         if (gustJarState & 8)
