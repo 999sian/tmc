@@ -1176,6 +1176,16 @@ void Port_LoadRom(const char* path) {
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gFrameObjLists).\n",
             gRomRegion == ROM_REGION_EU ? "EU" : "USA");
 
+    /* Patch inline rail pointers that the asset extractor leaves out of
+     * any .bin (the bytes between adjacent .incbin chunks in
+     * gUnk_additional_* tables). Without this, rooms that use those
+     * tables — Cave-of-Flames Rollobite, BossDoor, etc. — see NULL
+     * rail pointers and entities like lava platforms don't move (#36). */
+    {
+        extern void Port_PatchInlinePtrs(void);
+        Port_PatchInlinePtrs();
+    }
+
     /* Initialize data stubs with ROM datas */
     {
         extern void Port_InitDataStubs(void);
