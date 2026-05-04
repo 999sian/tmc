@@ -138,6 +138,11 @@ struct AssetGroupCache {
     std::array<std::vector<std::unique_ptr<void*[]>>, kAreaCount> areaPropertyStorage;
     std::array<std::vector<std::unique_ptr<MapDataDefinition[]>>, kAreaCount> mapDefStorage;
     std::vector<std::vector<const u8*>> spriteAnimationPtrs;
+    /* Padded copies of animation .bin files that ended on a loop frame
+     * without a trailing loop_back byte. On GBA the byte happens to be the
+     * first byte of the next animation in ROM; the extracted .bins truncate
+     * at exact ROM size. We rebuild the missing trailing byte here. */
+    std::vector<std::unique_ptr<std::vector<u8>>> animPaddedBuffers;
     std::array<std::vector<u8>, 7> translationBuffers;
     std::array<std::unordered_map<u32, std::string>, 7> textFilesById;
 };
@@ -1163,17 +1168,59 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
         auto& animPtrs = newAnimationPtrs[i];
         animPtrs.clear();
         animPtrs.reserve(entry.animations.size());
+        std::vector<const std::vector<u8>*> rawAnims;
+        rawAnims.reserve(entry.animations.size());
         for (const std::string& animFile : entry.animations) {
             if (animFile.empty()) {
-                animPtrs.push_back(nullptr);
+                rawAnims.push_back(nullptr);
                 continue;
             }
-
             const std::vector<u8>* animData = LoadBinaryFileCached(animFile);
             if (animData == nullptr) {
                 return FALSE;
             }
-            animPtrs.push_back(animData->data());
+            rawAnims.push_back(animData);
+        }
+        for (size_t a = 0; a < rawAnims.size(); ++a) {
+            const std::vector<u8>* animData = rawAnims[a];
+            if (animData == nullptr) {
+                animPtrs.push_back(nullptr);
+                continue;
+            }
+            const u8* dataPtr = animData->data();
+            const size_t dataSize = animData->size();
+            /* If the last 4-byte frame's bit-7 is set, the runtime expects a
+             * trailing loop_back byte. On GBA that byte is the first byte
+             * of the next animation in ROM (which the assets extractor drops
+             * because it sizes each anim by ROM offset diff). Reconstruct
+             * by copying the .bin and appending the next animation's first
+             * byte (or 0 if there isn't one). See port_animation.c FrameZero. */
+            if (dataSize >= 4 && (dataSize % 4u) == 0u && (dataPtr[dataSize - 1] & 0x80u)) {
+                /* Default: loop to the start of this animation (= numFrames).
+                 * If the next animation's first byte falls within this anim's
+                 * frame count, prefer that — it matches the byte the GBA
+                 * reads from the adjacent ROM region. Out-of-range values
+                 * (which happen because not every anim was meant to loop
+                 * naturally — actions transition out before the loop fires)
+                 * fall back to the safe "loop to start". */
+                const size_t numFrames = dataSize / 4u;
+                u8 loopBack = static_cast<u8>(std::min<size_t>(numFrames, 0xFFu));
+                if (a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr && !rawAnims[a + 1]->empty()) {
+                    u8 nextByte = (*rawAnims[a + 1])[0];
+                    if (nextByte > 0 && nextByte <= numFrames) {
+                        loopBack = nextByte;
+                    }
+                }
+                auto buf = std::make_unique<std::vector<u8>>();
+                buf->reserve(dataSize + 1);
+                buf->assign(dataPtr, dataPtr + dataSize);
+                buf->push_back(loopBack);
+                const u8* paddedPtr = buf->data();
+                gAssetGroupCache.animPaddedBuffers.push_back(std::move(buf));
+                animPtrs.push_back(paddedPtr);
+            } else {
+                animPtrs.push_back(dataPtr);
+            }
         }
 
         sprite.animations = animPtrs.empty() ? nullptr : (void*)animPtrs.data();
