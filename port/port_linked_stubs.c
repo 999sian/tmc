@@ -1569,7 +1569,16 @@ u16 gDungeonNames[64];
 u8 gFigurines[512] __attribute__((aligned(4)));
 void* gLilypadRails[32];
 // gMapActTileToSurfaceType — now provided by src/data/mapActTileToSurfaceType.c
-u8 gPalette_549[32];
+/* gPalette_549 is the start of a 26-palette contiguous block in the GBA
+ * `gfxAndPalettes` blob. Mt Crenel's weather-change manager reads
+ * `gPalette_549 + 0xD0` (i.e., 13 palettes past the start) as `palette2`
+ * for cross-fade — which only works because the GBA linker placed
+ * gPalette_549..gPalette_574 sequentially. The PC port previously stubbed
+ * this as a single 32-byte buffer, so the +0xD0 read walked off into garbage
+ * and the Mt Crenel mountaintop terrain rendered with random colors (#34).
+ * Allocate the full 416-color (832-byte) block; port_rom.c populates it
+ * from gGlobalGfxAndPalettes after ROM load. */
+u16 gPalette_549[0x1A0];
 void* gTranslations[16];
 // gWallMasterScreenTransitions — now provided by src/data/screenTransitions.c
 void* gZeldaFollowerText[8];
