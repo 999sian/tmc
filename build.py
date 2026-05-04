@@ -102,6 +102,15 @@ def dir_populated(d: Path) -> bool:
     except OSError:
         return False
 
+def replace_file_atomically(src: Path, dst: Path) -> None:
+    """Copy src to a temp file beside dst, then atomically replace dst.
+
+    This avoids ETXTBSY on Linux when dst is a currently running executable.
+    """
+    tmp = dst.with_name(dst.name + ".tmp")
+    shutil.copy2(src, tmp)
+    os.replace(tmp, dst)
+
 # ── Dependency detection ──────────────────────────────────────────────────────
 
 def detect_distro() -> str:
@@ -302,8 +311,8 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     if toolchain:
         configure_cmd.append(f"--toolchain={toolchain}")
 
-    assets_dir = REPO_ROOT / "build" / version / "assets"
-    assets_src_dir = REPO_ROOT / "build" / version / "assets_src"
+    assets_dir = REPO_ROOT / "build" / "pc" / "assets"
+    assets_src_dir = REPO_ROOT / "build" / "pc" / "assets_src"
     assets_ready = assets_dir.exists() and assets_src_dir.exists()
 
     steps = [
@@ -354,14 +363,15 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
         err(f"Binary not found: {src_bin}")
         return None
 
-    shutil.copy2(src_bin, dst_bin)
+    replace_file_atomically(src_bin, dst_bin)
     if PLATFORM != "Windows":
         dst_bin.chmod(dst_bin.stat().st_mode | 0o111)
     ok(f"Binary    →  dist/{version}/{EXE_NAME}")
 
-    # Runtime assets (build/<version>/assets/) and editable assets (build/<version>/assets_src/)
+    # Runtime assets consumed by the PC port live under build/pc/.
+    # build/<version>/assets only contains the intermediate extraction tree.
     for src_name in ("assets", "assets_src"):
-        src = REPO_ROOT / "build" / version / src_name
+        src = REPO_ROOT / "build" / "pc" / src_name
         dst = dist_dir / src_name
         if src.exists():
             if dst.exists():
