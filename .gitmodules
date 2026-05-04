@@ -1,6 +1,6 @@
 [submodule "libs/ViruaPPU"]
 	path = libs/ViruaPPU
-	url = https://github.com/MatheoVignaud/VirtuaPPU-experimental.git
+	url = https://github.com/MatheoVignaud/ViruaPPU.git
 [submodule "libs/VirtuaAPU"]
 	path = libs/VirtuaAPU
 	url = https://github.com/MatheoVignaud/VirtuaAPU.git
