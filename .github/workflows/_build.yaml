@@ -11,6 +11,11 @@ on:
         description: "Date+SHA label (CI) or tag name (release)"
         required: true
         type: string
+    secrets:
+      ASSETS_TOKEN:
+        required: true
+      PRIVATE_SUBMODULES_TOKEN:
+        required: true
 
 jobs:
   build:
@@ -39,7 +44,13 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+      - name: Checkout private submodules
+        shell: bash
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.PRIVATE_SUBMODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git submodule sync --recursive
+          git submodule update --init --recursive
 
       - name: Install Linux dependencies
         if: matrix.os_name == 'linux'
@@ -114,6 +125,9 @@ jobs:
 
       - name: Build tmc_pc and asset_extractor
         shell: bash
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
         run: |
           xmake build -y tmc_pc
           xmake build -y asset_extractor

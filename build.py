@@ -57,16 +57,16 @@ def hr(ch=None):
 def blank():       print()
 def header(t):     hr(_ui_char("═", "=")); print(f"  {t}"); hr(_ui_char("═", "="))
 def section(t):    blank(); hr(); print(f"  {t}"); hr()
-def ok(m):         print(f"  \033[32m{_ui_char('✓', 'OK')}\033[0m  {m}")
-def warn(m):       print(f"  \033[33m{_ui_char('!', 'WARN')}\033[0m  {m}")
-def err(m):        print(f"  \033[31m{_ui_char('✗', 'ERR')}\033[0m  {m}")
+def ok(m):         print(f"  \033[32m{_ui_char('', 'OK')}\033[0m  {m}")
+def warn(m):       print(f"  \033[33m{_ui_char('', 'WARN')}\033[0m  {m}")
+def err(m):        print(f"  \033[31m{_ui_char('', 'ERR')}\033[0m  {m}")
 def info(m):       print(f"     {m}")
 
 def prompt(msg: str, choices=None) -> str:
     suffix = f" [{'/'.join(choices)}]" if choices else ""
     while True:
         try:
-            ans = input(f"  → {msg}{suffix}: ").strip().lower()
+            ans = input(f"  -> {msg}{suffix}: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             blank(); sys.exit(0)
         if not choices or ans in choices:
@@ -258,7 +258,7 @@ def ensure_roms(selected: list, found: dict, non_interactive: bool = False) -> d
                 result[v] = True
                 continue
             info(f"Copy  {src}")
-            info(f"  →   {target}")
+            info(f"  ->   {target}")
             if non_interactive or prompt("Proceed?", ["y", "n"]) == "y":
                 shutil.copy2(src, target)
                 ok(f"Copied {target.name}")
@@ -311,8 +311,8 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     if toolchain:
         configure_cmd.append(f"--toolchain={toolchain}")
 
-    assets_dir = REPO_ROOT / "build" / "pc" / "assets"
-    assets_src_dir = REPO_ROOT / "build" / "pc" / "assets_src"
+    assets_dir = REPO_ROOT / "build" / version / "assets"
+    assets_src_dir = REPO_ROOT / "build" / version / "assets_src"
     assets_ready = assets_dir.exists() and assets_src_dir.exists()
 
     steps = [
@@ -323,10 +323,14 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
         info("Assets already exist in build/pc/assets and build/pc/assets_src — skipping extract/convert/build_assets.")
     else:
         steps.extend([
-            ("Extract assets",              ["xmake", "extract_assets"]),
-            ("Convert assets",              ["xmake", "convert_assets"]),
-            ("Build assets",                ["xmake", "build_assets"]),
+            ("Extract assets", ["xmake", "extract_assets"]),
+            ("Convert assets", ["xmake", "convert_assets"]),
         ])
+
+        if PLATFORM == "Windows":
+            info("Windows MinGW build detected — skipping xmake build_assets for PC release.")
+        else:
+            steps.append(("Build assets", ["xmake", "build_assets"]))
 
     steps.append((f"Compile tmc_pc ({version})", ["xmake", "build", "-y", "tmc_pc"]))
 
@@ -341,7 +345,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     # Copy ROM so the runtime asset extractor can find it
     import shutil
     shutil.copy2("baserom.gba", "build/pc/baserom.gba")
-    print("✓  Copied baserom.gba → build/pc/")
+    print("  Copied baserom.gba -> build/pc/")
     
     # asset_extractor: generates build/pc/assets/ + build/pc/assets_src/
     extractor = REPO_ROOT / "build" / "pc" / (
@@ -366,25 +370,26 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
     replace_file_atomically(src_bin, dst_bin)
     if PLATFORM != "Windows":
         dst_bin.chmod(dst_bin.stat().st_mode | 0o111)
-    ok(f"Binary    →  dist/{version}/{EXE_NAME}")
+    ok(f"Binary    ->  dist/{version}/{EXE_NAME}")
 
     # Runtime assets consumed by the PC port live under build/pc/.
     # build/<version>/assets only contains the intermediate extraction tree.
+    # Runtime assets (build/<version>/assets/) and editable assets (build/<version>/assets_src/)
     for src_name in ("assets", "assets_src"):
-        src = REPO_ROOT / "build" / "pc" / src_name
+        src = REPO_ROOT / "build" / version / src_name
         dst = dist_dir / src_name
         if src.exists():
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(src, dst)
-            ok(f"{src_name}/  →  dist/{version}/{src_name}/")
+            ok(f"{src_name}/  ->  dist/{version}/{src_name}/")
         else:
             warn(f"build/{version}/{src_name}/ not found — skipping")
 
     sounds_src = REPO_ROOT / "assets" / "sounds.json"
     if sounds_src.exists():
         shutil.copy2(sounds_src, dist_dir / "sounds.json")
-        ok(f"sounds.json →  dist/{version}/sounds.json")
+        ok(f"sounds.json ->  dist/{version}/sounds.json")
     else:
         warn("assets/sounds.json not found — songs will be silent")
 

@@ -136,7 +136,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
     } else {
-        if (!SDL_SetRenderVSync(sRenderer, 1)) {
+        if (!SDL_SetRenderVSync(sRenderer, 0)) {
             printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
         }
         sVSyncEnabled = true;
@@ -184,7 +184,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
             return;
         }
 
-        if (!SDL_SetWindowSurfaceVSync(window, 1)) {
+        if (!SDL_SetWindowSurfaceVSync(window, 0)) {
             printf("Port_PPU_Init: SDL_SetWindowSurfaceVSync failed: %s\n", SDL_GetError());
         }
 

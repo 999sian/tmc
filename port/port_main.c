@@ -219,19 +219,34 @@ static void Port_InitAudio(void) {
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 static void Port_ReserveGbaAddressSpace(void) {
-    static const struct { uintptr_t base; size_t size; } regions[] = {
-        { 0x02000000u, 0x08000000u }, /* covers EWRAM, IWRAM, IO, palette, VRAM, OAM, ROM mirror */
+    static const struct {
+        uintptr_t base;
+        size_t size;
+        const char* name;
+    } regions[] = {
+        { 0x02000000u, 0x00040000u, "EWRAM" },
+        { 0x03000000u, 0x00008000u, "IWRAM" },
+        { 0x04000000u, 0x00000400u, "IO" },
+        { 0x05000000u, 0x00000400u, "palette" },
+        { 0x06000000u, 0x00018000u, "VRAM" },
+        { 0x07000000u, 0x00000400u, "OAM" },
+        { 0x08000000u, 0x02000000u, "ROM window" },
     };
-    for (size_t i = 0; i < sizeof(regions)/sizeof(regions[0]); ++i) {
-        LPVOID p = VirtualAlloc((LPVOID)regions[i].base, regions[i].size,
-                                MEM_RESERVE, PAGE_NOACCESS);
+    for (size_t i = 0; i < sizeof(regions) / sizeof(regions[0]); ++i) {
+        LPVOID p = VirtualAlloc((LPVOID)regions[i].base, regions[i].size, MEM_RESERVE, PAGE_NOACCESS);
         if (p == NULL) {
-            fprintf(stderr, "WARN: Could not reserve GBA address window 0x%zx-0x%zx; "
-                            "DmaCopy may misbehave.\n",
-                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+            MEMORY_BASIC_INFORMATION mbi;
+            SIZE_T querySize = VirtualQuery((LPCVOID)regions[i].base, &mbi, sizeof(mbi));
+            if (querySize == sizeof(mbi) && mbi.State != MEM_FREE) {
+                fprintf(stderr, "Skipped %s window 0x%zx-0x%zx (already occupied).\n", regions[i].name,
+                        (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+            } else {
+                fprintf(stderr, "Skipped %s window 0x%zx-0x%zx (guard unavailable).\n",
+                        regions[i].name, (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+            }
         } else {
-            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n",
-                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+            fprintf(stderr, "Reserved %s window 0x%zx-0x%zx.\n", regions[i].name, (size_t)regions[i].base,
+                    (size_t)(regions[i].base + regions[i].size));
         }
     }
 }
