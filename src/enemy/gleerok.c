@@ -64,10 +64,28 @@ typedef struct {
 extern void (*const Gleerok_Functions[])(GleerokEntity*);
 extern void (*const gUnk_080CD75C[])(GleerokEntity*);
 extern void (*const gUnk_080CD7B8[])(GleerokEntity*);
+
+#ifdef PC_PORT
+/* gUnk_080CD7E4, _D810, _D828, _D848 are packed 4-byte GBA function-
+ * pointer tables that ship in port/data_const_stubs.c as `const u8[]`.
+ * Declaring them as `void (*const [])(...)` on x86-64 strides 8 bytes
+ * per index, reads two GBA addresses concatenated, and calls a garbage
+ * function pointer — Cave-of-Flames boss SIGSEGVs in sub_0802D650 the
+ * moment the fight starts. Treat as raw u8 arrays and unpack each entry
+ * via Port_PackedRomEntry (same approach as gUnk_080CD86C/878 above). */
+extern const u8 gUnk_080CD7E4[];
+extern const u8 gUnk_080CD810[];
+extern const u8 gUnk_080CD828[];
+extern const u8 gUnk_080CD848[];
+#define GLEEROK_FN(table, idx) \
+    ((void (*)(GleerokEntity*))Port_PackedRomEntry((table), (idx)))
+#else
 extern void (*const gUnk_080CD7E4[])(GleerokEntity*);
 extern void (*const gUnk_080CD810[])(GleerokEntity*);
 extern void (*const gUnk_080CD828[])(GleerokEntity*);
 extern void (*const gUnk_080CD848[])(GleerokEntity*);
+#define GLEEROK_FN(table, idx) (table)[(idx)]
+#endif
 
 extern Gleerok_HeapStruct2 gUnk_080CD7C4[];
 extern u8 gUnk_080CD884[];
@@ -455,7 +473,7 @@ void sub_0802D650(GleerokEntity* this) {
     PausePlayer();
 #endif
 
-    gUnk_080CD7E4[super->subAction](this);
+    GLEEROK_FN(gUnk_080CD7E4, super->subAction)(this);
     sub_0802E7E4(this->unk_84);
 }
 
@@ -729,7 +747,7 @@ void sub_0802D86C(GleerokEntity* this) {
 
             break;
         case 0:
-            gUnk_080CD810[super->subAction](this);
+            GLEEROK_FN(gUnk_080CD810, super->subAction)(this);
             sub_0802E7E4(this->unk_84);
             break;
     }
@@ -968,7 +986,7 @@ void sub_0802DDD8(GleerokEntity* this) {
 }
 
 void sub_0802DFA8(GleerokEntity* this) {
-    gUnk_080CD828[super->type2](this);
+    GLEEROK_FN(gUnk_080CD828, super->type2)(this);
 }
 
 void sub_0802DFC0(GleerokEntity* this) {
@@ -1195,7 +1213,7 @@ void sub_0802E300(GleerokEntity* this) {
 }
 
 void sub_0802E430(GleerokEntity* this) {
-    gUnk_080CD848[super->type2](this);
+    GLEEROK_FN(gUnk_080CD848, super->type2)(this);
 }
 
 void sub_0802E448(GleerokEntity* this) {
