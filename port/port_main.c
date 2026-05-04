@@ -66,6 +66,54 @@ static void Port_LogVideoDiagnostics(void) {
     fprintf(stderr, "\n");
 }
 
+static void Port_LogAudioDiagnostics(void) {
+    int driverCount = SDL_GetNumAudioDrivers();
+
+    fprintf(stderr,
+            "Audio env: SDL_AUDIODRIVER='%s' XDG_RUNTIME_DIR='%s' PULSE_SERVER='%s' PIPEWIRE_REMOTE='%s'\n",
+            getenv("SDL_AUDIODRIVER") ? getenv("SDL_AUDIODRIVER") : "",
+            getenv("XDG_RUNTIME_DIR") ? getenv("XDG_RUNTIME_DIR") : "",
+            getenv("PULSE_SERVER") ? getenv("PULSE_SERVER") : "",
+            getenv("PIPEWIRE_REMOTE") ? getenv("PIPEWIRE_REMOTE") : "");
+
+    fprintf(stderr, "SDL compiled audio drivers:");
+    for (int i = 0; i < driverCount; i++) {
+        fprintf(stderr, " %s", SDL_GetAudioDriver(i));
+    }
+    fprintf(stderr, "\n");
+}
+
+static bool Port_TryInitAudioDriver(const char* audioDriver, bool muteOnSuccess, const char** outError) {
+    if (audioDriver && audioDriver[0] != '\0') {
+        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, audioDriver);
+    } else {
+        SDL_ResetHint(SDL_HINT_AUDIO_DRIVER);
+    }
+
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        if (outError) {
+            *outError = SDL_GetError();
+        }
+        return false;
+    }
+
+    if (!Port_Audio_Init()) {
+        if (outError) {
+            *outError = SDL_GetError();
+        }
+        Port_Audio_Shutdown();
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+        return false;
+    }
+
+    fprintf(stderr,
+            "SDL audio driver: %s%s\n",
+            SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "unknown",
+            muteOnSuccess ? " (muted dummy backend)" : "");
+    gMain.muteAudio = muteOnSuccess ? 1 : 0;
+    return true;
+}
+
 static bool Port_InitVideo(void) {
     const char* err = NULL;
     const char* forcedDriver = getenv("SDL_VIDEODRIVER");
@@ -114,25 +162,46 @@ static bool Port_InitVideo(void) {
 
 static void Port_InitAudio(void) {
     const char* err = NULL;
+    const char* forcedDriver = getenv("SDL_AUDIODRIVER");
+    static const char* const kPreferredDrivers[] = {
+        "pipewire",
+        "pulseaudio",
+        "alsa",
+        "sndio",
+    };
 
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
+    if (forcedDriver && forcedDriver[0] != '\0') {
+        if (Port_TryInitAudioDriver(forcedDriver, false, &err)) {
+            return;
+        }
+        fprintf(stderr, "SDL forced audio driver '%s' failed: %s\n", forcedDriver, err ? err : "unknown error");
+    }
+
+    if (Port_TryInitAudioDriver(NULL, false, &err)) {
         return;
     }
 
-    err = SDL_GetError();
-    Port_Audio_Shutdown();
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    fprintf(stderr, "SDL default audio init failed: %s\n", err ? err : "unknown error");
 
-    SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
+    for (size_t i = 0; i < sizeof(kPreferredDrivers) / sizeof(kPreferredDrivers[0]); i++) {
+        const char* driver = kPreferredDrivers[i];
+        if (forcedDriver && strcmp(forcedDriver, driver) == 0) {
+            continue;
+        }
+        if (Port_TryInitAudioDriver(driver, false, &err)) {
+            fprintf(stderr, "SDL audio recovered by forcing '%s'.\n", driver);
+            return;
+        }
+        fprintf(stderr, "SDL audio driver '%s' failed: %s\n", driver, err ? err : "unknown error");
+    }
+
+    if (Port_TryInitAudioDriver("dummy", true, &err)) {
         fprintf(stderr, "Audio device unavailable, using SDL dummy audio driver.\n");
-        gMain.muteAudio = 1;
         return;
     }
 
-    fprintf(stderr, "Audio disabled: normal='%s', fallback='%s'\n", err ? err : "unknown error", SDL_GetError());
-    Port_Audio_Shutdown();
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    Port_LogAudioDiagnostics();
+    fprintf(stderr, "Audio disabled: final fallback failed: %s\n", err ? err : "unknown error");
     gMain.muteAudio = 1;
 }
 
@@ -226,13 +295,21 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    fprintf(stderr, "SDL window created.\n");
     SDL_ShowWindow(window);
+    fprintf(stderr, "SDL window shown.\n");
     SDL_RaiseWindow(window);
-    SDL_SyncWindow(window);
+    fprintf(stderr, "SDL window raised.\n");
+    /* SDL_SyncWindow is a convenience flush, not required for correctness.
+     * Some packaged Linux/X11 environments have been seen to fault here
+     * before any port-side diagnostics are emitted, so avoid it at startup. */
     Port_EnsureAssetsReadyWithDisplay(window);
+    fprintf(stderr, "Asset bootstrap complete.\n");
     Port_CheckForUpdates(window);
+    fprintf(stderr, "Update check complete.\n");
 
     Port_LoadRom("baserom.gba");
+    fprintf(stderr, "ROM load complete.\n");
 
     // Verify ROM region matches compiled region
 #ifdef EU
@@ -253,7 +330,9 @@ int main(int argc, char* argv[]) {
 
     // Initialize PPU renderer
     Port_PPU_Init(window);
+    fprintf(stderr, "PPU init complete.\n");
     Port_InitAudio();
+    fprintf(stderr, "Audio init complete.\n");
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
