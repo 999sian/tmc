@@ -214,8 +214,27 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
         }
     }
 
-    if (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize) {
-        return Port_ReadPackedRomPtr(areaTable, room);
+    /* Sanity check: a valid areaTable must either point into gRomData (raw
+     * GBA pointer table) or at native heap/data memory below the canonical
+     * x86-64 user-space ceiling. Anything else is corruption — most often a
+     * stale 4-byte ROM pointer that was sign/zero-extended into a 64-bit slot
+     * before Port_RefreshAreaData ran. Force a refresh in that case so the
+     * map menu doesn't crash when it walks unvisited dungeon floors (#39). */
+    {
+        bool32 inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
+        bool32 plausible = ((uintptr_t)ptr < (uintptr_t)0x0000800000000000ULL);
+        if (!inRom && !plausible) {
+            Port_RefreshAreaData(area);
+            areaTable = gAreaTable[area];
+            ptr = (const u8*)areaTable;
+            if (areaTable == NULL) {
+                return NULL;
+            }
+            inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
+        }
+        if (inRom) {
+            return Port_ReadPackedRomPtr(areaTable, room);
+        }
     }
 
     return areaTable[room];
