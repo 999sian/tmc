@@ -54,6 +54,9 @@ void HouseDoorExterior(HouseDoorExteriorEntity* this) {
         HouseDoorExterior_Type2,
         HouseDoorExterior_Type3,
     };
+    if (super->type2 >= (sizeof(HouseDoorExterior_Types) / sizeof(HouseDoorExterior_Types[0]))) {
+        return;
+    }
     HouseDoorExterior_Types[super->type2](this);
 }
 
@@ -66,6 +69,10 @@ void HouseDoorExterior_Type0(HouseDoorExteriorEntity* this) {
         *((u32*)(&this->unk_68)) = 0;
         this->unk_6c = super->timer;
         SetEntityPriority(super, PRIO_PLAYER_EVENT);
+    }
+
+    if (this->unk_6c < 8) {
+        return;
     }
 
 #ifdef PC_PORT

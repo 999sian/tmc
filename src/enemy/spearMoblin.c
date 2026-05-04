@@ -4,6 +4,7 @@
  *
  * @brief Spear Moblin enemy
  */
+#include "common.h"
 #include "enemy.h"
 #include "sound.h"
 #include "effects.h"
@@ -11,6 +12,7 @@
 #include "object.h"
 #include "asm.h"
 #include "physics.h"
+#include "port_rom.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -42,8 +44,35 @@ extern const u8 gUnk_080CC7BC[];
 extern const s8 gUnk_080CC7C0[];
 extern const s8 gUnk_080CC7D0[];
 extern const u16 gUnk_080CC7D8[];
+extern const u8 gUnk_080CC944[];
 
-extern const Hitbox* const gUnk_080CC944[];
+static const Hitbox* SpearMoblin_ReadHitboxTemplate(u32 index) {
+    return (const Hitbox*)Port_UnpackRomDataPtr(gUnk_080CC944, index);
+}
+
+static void SpearMoblin_CloneHitbox(SpearMoblinEntity* this) {
+    Hitbox3D* writable;
+    const Hitbox* source = super->hitbox;
+
+    if (source == NULL) {
+        return;
+    }
+
+    writable = (Hitbox3D*)zMalloc(sizeof(Hitbox3D));
+    if (writable == NULL) {
+        return;
+    }
+
+    ((Hitbox*)writable)->offset_x = source->offset_x;
+    ((Hitbox*)writable)->offset_y = source->offset_y;
+    ((Hitbox*)writable)->unk2[0] = source->unk2[0];
+    ((Hitbox*)writable)->unk2[1] = source->unk2[1];
+    ((Hitbox*)writable)->unk2[2] = source->unk2[2];
+    ((Hitbox*)writable)->unk2[3] = source->unk2[3];
+    ((Hitbox*)writable)->width = source->width;
+    ((Hitbox*)writable)->height = source->height;
+    super->hitbox = (Hitbox*)writable;
+}
 
 void SpearMoblin(SpearMoblinEntity* this) {
     EnemyFunctionHandler(super, (EntityActionArray)SpearMoblin_Functions);
@@ -91,6 +120,7 @@ void SpearMoblin_OnGrabbed(SpearMoblinEntity* this) {
 void sub_08028314(SpearMoblinEntity* this) {
     Entity* pEVar2;
 
+    SpearMoblin_CloneHitbox(this);
     sub_0804A720(super);
     super->action = 1;
     super->animationState = 0;
@@ -220,7 +250,7 @@ void sub_08028528(SpearMoblinEntity* this) {
         sub_08028728(this);
     } else {
         sub_080288C0(this);
-        box = gUnk_080CC944[super->animationState >> 1];
+        box = SpearMoblin_ReadHitboxTemplate(super->animationState >> 1);
         super->hitbox->offset_x = box->offset_x;
         super->hitbox->offset_y = box->offset_y;
         super->hitbox->width = box->width;
@@ -383,7 +413,7 @@ void sub_08028858(SpearMoblinEntity* this) {
     const Hitbox* box;
 
     sub_080288C0(this);
-    box = gUnk_080CC944[super->animationState >> 1];
+    box = SpearMoblin_ReadHitboxTemplate(super->animationState >> 1);
     super->hitbox->offset_x = box->offset_x;
     super->hitbox->offset_y = box->offset_y;
     super->hitbox->width = box->width;

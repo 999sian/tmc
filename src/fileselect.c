@@ -743,10 +743,6 @@ static void DrawFileSelectSettingsHint(void) {
     static const u8 sSettingsHintText[] = "L Settings";
     Font font;
 
-    if (gChooseFileState.unk_0x12 != 0) {
-        return;
-    }
-
     gChooseFileState.unk_0x12 = 1;
     MemClear(&gBG0Buffer[0x221], 0x80);
     gScreen.bg0.updated = 1;

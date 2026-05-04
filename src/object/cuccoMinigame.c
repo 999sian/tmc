@@ -245,19 +245,17 @@ void CuccoMinigame_WinRupees(CuccoMinigameEntity* this) {
     s8* cuccoTypes;
     int index;
     s32 rupees;
-    const u8* rupeeValues;
+    s32 cuccoType;
 
     CuccoMinigame_GetLevel(); // Rupees previously dependent on level?
     cuccoTypes = this->returnedCuccoTypes;
     rupees = 0;
-    rupeeValues = CuccoMinigameRupees;
 
     for (index = 9; index >= 0; index--) { // Only first 10 count?
-        // Weird register addition
-        // rupeeValues[*cuccoTypes] translates to add r0,r3,r0 but should be add r0,r3
-        u32 temp = *cuccoTypes;
-        temp += (int)rupeeValues;
-        rupees += *(u8*)temp;
+        cuccoType = *cuccoTypes;
+        if ((u32)cuccoType < sizeof(CuccoMinigameRupees)) {
+            rupees += CuccoMinigameRupees[cuccoType];
+        }
         cuccoTypes++;
     }
     ModRupees(rupees);

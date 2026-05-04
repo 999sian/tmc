@@ -733,16 +733,11 @@ u32 GetNextFunction(Entity* this) {
     u8 gustJarState = this->gustJarState;
     u8 contactFlags = this->contactFlags;
 
-    if (gustJarState & 4)
-        return 5; /* grabbed by Gust Jar */
-
-    if (!(gustJarState & 4) && (contactFlags >> 7))
-        return 1; /* contact initiated */
-
-    if (this->knockbackDuration != 0)
-        return 2; /* knockback active */
-
     if (this->health == 0) {
+        if (!(gustJarState & 4) && (contactFlags & 0x80))
+            return 1; 
+        if (this->knockbackDuration != 0)
+            return 2; 
         if (this->action == 0 && this->subAction == 0)
             return 0; /* dead but not initialized */
         if (gustJarState & 8)
@@ -751,6 +746,15 @@ u32 GetNextFunction(Entity* this) {
             return 4; /* confused */
         return 3;     /* dying */
     }
+
+    if (this->knockbackDuration != 0)
+        return 2; /* knockback active */
+
+    if (gustJarState & 4)
+        return 5; /* grabbed by Gust Jar */
+
+    if (contactFlags & 0x80)
+        return 1; /* contact initiated */
 
     if (this->action == 0 && this->subAction == 0)
         return 0; /* not initialized */
