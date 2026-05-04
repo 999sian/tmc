@@ -314,10 +314,14 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
         info("Assets already exist in build/pc/assets and build/pc/assets_src — skipping extract/convert/build_assets.")
     else:
         steps.extend([
-            ("Extract assets",              ["xmake", "extract_assets"]),
-            ("Convert assets",              ["xmake", "convert_assets"]),
-            ("Build assets",                ["xmake", "build_assets"]),
+            ("Extract assets", ["xmake", "extract_assets"]),
+            ("Convert assets", ["xmake", "convert_assets"]),
         ])
+
+        if PLATFORM == "Windows":
+            info("Windows MinGW build detected — skipping xmake build_assets for PC release.")
+        else:
+            steps.append(("Build assets", ["xmake", "build_assets"]))
 
     steps.append((f"Compile tmc_pc ({version})", ["xmake", "build", "-y", "tmc_pc"]))
 
