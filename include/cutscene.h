@@ -20,4 +20,8 @@ typedef struct {
     s8 scrollY;
 } struct_080FCFB8;
 
+void RequestCutsceneDialogueSkip(void);
+void ClearCutsceneDialogueSkip(void);
+bool32 IsCutsceneDialogueSkipPending(void);
+
 #endif // CUTSCENE_H

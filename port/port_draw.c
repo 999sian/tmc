@@ -30,6 +30,12 @@
 
 /* Forward declaration of RenderSpritePieces (defined below) */
 static void RenderSpritePieces(const u8* data, s16 baseX, s16 baseY, u32 flags, u16 extra);
+/* Shoes-overlay frame table (loaded from ROM 0x080B2B58, see comment below
+ * the table definition). Forward-declared here because ProcessEntityForDraw
+ * uses them and is defined above the loader. */
+static const u8* sShoesOverlayPtrs[16];
+static int sShoesOverlayTableLoaded;
+static void LoadShoesOverlayTableFromRom(void);
 extern u32 gFrameObjLists[50016];
 
 static inline u32 ReadU32Unaligned(const void* p) {
@@ -178,14 +184,6 @@ void ram_UpdateEntities(u32 mode) {
         Entity* entity = list->first;
 
         while (entity != NULL && entity != (Entity*)list) {
-#ifdef PC_PORT
-            if (mode == 1) {
-                fprintf(stderr,
-                        "[MANAGER-LOOP] list=%d entity=%p prev=%p next=%p kind=%u id=%u action=%u type=%u type2=%u\n",
-                        listIdx, (void*)entity, (void*)entity->prev, (void*)entity->next, entity->kind, entity->id,
-                        entity->action, entity->type, entity->type2);
-            }
-#endif
             /* Save current entity in context */
             gUpdateContext.current_entity = entity;
 
@@ -773,9 +771,46 @@ static void ProcessEntityForDraw(Entity* entity) {
         /* z < 0: skip shadow sprite, just draw entity */
         DrawEntitySprites(entity, x, y, flags, extra);
     } else {
-        /* z >= 0: would draw shadow sprite first, then entity.
-         * Shadow rendering uses ram_0x80b2b58 lookup tables which
-         * aren't loaded yet. For now, just draw the entity. */
+        /* z >= 0: GBA renders a "shoes overlay" sprite over the entity's
+         * feet when standing on shallow water (act_tile 0x0F) or tall
+         * grass (act_tile 0x2F) — covers Link's lower body so he visually
+         * "wades" through the surface (#24). Use ram_0x80b2b58 frame data
+         * indexed by spriteSettings shadow bits + an animation frame.
+         * For other act_tiles the overlay is skipped (just regular draw). */
+        if (!sShoesOverlayTableLoaded)
+            LoadShoesOverlayTableFromRom();
+
+        extern u32 GetActTileAtTilePos(u16 tilePos, u8 layer);
+        s32 ex = (s32)entity->x.HALF.HI - (s32)gRoomControls.origin_x;
+        s32 ey = (s32)entity->y.HALF.HI - (s32)gRoomControls.origin_y;
+        u32 tilePos = ((u32)ex & 0x3F0u) | ((((u32)ey & 0x3F0u)) << 6);
+        u32 actTile = GetActTileAtTilePos((u16)(tilePos >> 4), entity->collisionLayer);
+
+        if (actTile == 0x0Fu || actTile == 0x2Fu) {
+            u8 ssRaw = *(u8*)&entity->spriteSettings;
+            u8 row = (u8)((ssRaw & 0x30u) >> 2); /* 0x00, 0x04, 0x08, 0x0C */
+            u8 frame;
+            s32 overlayY = y;
+            if (actTile == 0x0Fu) {
+                /* Shallow water — animate on global frame counter (gOAMControls
+                 * field_0x1 holds an animation tick on GBA). Bias overlay 2px
+                 * lower like GBA does. */
+                u8 fld1 = ((u8*)&gOAMControls)[1];
+                frame = (u8)(((fld1 & 0x18u) + 0x80u) >> 2);
+                overlayY += 2;
+            } else {
+                /* Tall grass — position-derived "random" frame so neighbouring
+                 * patches don't all wave in sync. */
+                u8 xb = (u8)(entity->x.HALF.LO >> 8);
+                u8 yb = (u8)(entity->y.HALF.LO >> 8);
+                frame = (u8)((xb ^ yb) & 6u);
+            }
+            u32 idx = (u32)(row + (frame << 1));
+            if (idx < 16u && sShoesOverlayPtrs[idx] != NULL) {
+                u16 overlayExtra = (u16)(extra & 0x0C00u); /* keep priority bits only */
+                RenderSpritePieces(sShoesOverlayPtrs[idx], (s16)x, (s16)overlayY, 0, overlayExtra);
+            }
+        }
         DrawEntitySprites(entity, x, y, flags, extra);
     }
 
@@ -819,14 +854,92 @@ static void ProcessDrawList(EntityDrawList* list) {
  * Uses ram_0x80b2bd8 (shadow frame data table) which needs
  * to be loaded from ROM overlay data.
  */
-static u8 sShadowFrameTable[16 * 4]; /* ram_0x80b2bd8: 4 pointers (frame data) */
+/* GBA-original keeps a 4-pointer table at ROM 0x080B2BD8 that maps each
+ * shadow type (small / medium / large / special) to sprite-frame-data
+ * blobs. The pointers in the table are IWRAM addresses (0x0300xxxx) into
+ * the runtime-copied overlay region. The PC port skips the IWRAM overlay
+ * copy (see InitOverlays), so those IWRAM addresses point at
+ * uninitialized memory — shadows silently disappeared (issue #10).
+ *
+ * Translate IWRAM ↔ ROM via the linker-derived delta: a known anchor is
+ * `ram_sub_080B2248` at IWRAM 0x03005FBC, ROM 0x080B2248
+ * → delta = 0x080B2248 - 0x03005FBC = 0x050AC28C.
+ *
+ * This delta is region-specific (works for USA; EU/JP may differ). */
+static const u8* sShadowFramePtrs[4] = { NULL, NULL, NULL, NULL };
 static int sShadowTableLoaded = 0;
+
+/* Companion table at ROM 0x080B2B58 (16 IWRAM-relative pointers, same
+ * relocation delta) — sprite-frame data for the "shoes overlay" the GBA
+ * draws over Link's feet when he steps onto shallow water (act-tile 0x0F)
+ * or tall grass (act-tile 0x2F). Without it, Link's shoes don't get
+ * obscured by water/grass and the effect is invisible (#24).
+ *
+ * Layout: 4 rows × 4 frames. Row = (entity->spriteSettings & 0x30) >> 2,
+ * frame index within the row is animated:
+ *   - shallow water (0x0F): based on gOAMControls field_0x1 (frame counter)
+ *   - tall grass    (0x2F): position-derived (entity x byte ^ y byte) & 6 */
+/* Definitions for the forward-declared shoes-overlay table above. */
+static const u8* sShoesOverlayPtrs[16] = { NULL };
+static int sShoesOverlayTableLoaded = 0;
+
+static const u8* TranslateIwramOrRomPointer(u32 ptr) {
+    extern u8* gRomData;
+    extern u32 gRomSize;
+    static const u32 kIwramToRomDeltaUSA = 0x050AC28Cu;
+    if (ptr >= 0x03000000u && ptr < 0x03008000u) {
+        u32 romFull = ptr + kIwramToRomDeltaUSA;
+        if (romFull >= 0x08000000u && romFull < 0x08000000u + gRomSize) {
+            return gRomData + (romFull - 0x08000000u);
+        }
+    } else if (ptr >= 0x08000000u && ptr < 0x08000000u + gRomSize) {
+        return gRomData + (ptr - 0x08000000u);
+    }
+    return NULL;
+}
+
+static u32 ReadRomU32LE(u32 offset) {
+    extern u8* gRomData;
+    return (u32)gRomData[offset]
+         | ((u32)gRomData[offset + 1] << 8)
+         | ((u32)gRomData[offset + 2] << 16)
+         | ((u32)gRomData[offset + 3] << 24);
+}
+
+static void LoadShadowTableFromRom(void) {
+    extern u8* gRomData;
+    extern u32 gRomSize;
+    static const u32 kShadowTableRomOffset = 0xB2BD8u;
+
+    if (sShadowTableLoaded || gRomData == NULL || gRomSize <= kShadowTableRomOffset + 16u) {
+        sShadowTableLoaded = 1;
+        return;
+    }
+    for (int i = 0; i < 4; i++) {
+        sShadowFramePtrs[i] = TranslateIwramOrRomPointer(ReadRomU32LE(kShadowTableRomOffset + i * 4));
+    }
+    sShadowTableLoaded = 1;
+}
+
+static void LoadShoesOverlayTableFromRom(void) {
+    extern u8* gRomData;
+    extern u32 gRomSize;
+    static const u32 kShoesTableRomOffset = 0xB2B58u;
+    if (sShoesOverlayTableLoaded || gRomData == NULL || gRomSize <= kShoesTableRomOffset + 64u) {
+        sShoesOverlayTableLoaded = 1;
+        return;
+    }
+    for (int i = 0; i < 16; i++) {
+        sShoesOverlayPtrs[i] = TranslateIwramOrRomPointer(ReadRomU32LE(kShoesTableRomOffset + i * 4));
+    }
+    sShoesOverlayTableLoaded = 1;
+}
 
 static void ProcessDeferredList(void) {
     if (sDeferredList.count == 0)
         return;
     if (!sShadowTableLoaded)
-        return; /* Can't render shadows without table */
+        LoadShadowTableFromRom();
 
     for (u32 i = 0; i < sDeferredList.count; i++) {
         if (gOAMControls.updated >= 0x80)
@@ -842,8 +955,7 @@ static void ProcessDeferredList(void) {
             continue;
         }
 
-        u32* shadowPtrs = (u32*)sShadowFrameTable;
-        const u8* frameData = (const u8*)(uintptr_t)shadowPtrs[listType];
+        const u8* frameData = sShadowFramePtrs[listType];
         if (frameData == NULL)
             continue;
 
