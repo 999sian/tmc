@@ -882,23 +882,34 @@ const KeyValuePair* const gUnk_0811C1E8[] = {
     gUnk_0811C22E,
 };
 
-const KeyValuePair gUnk_0811C1F8[] = { { 43, 1 }, { 65, 1 }, { 78, 8 }, { 76, 2 } };
+/* Each KeyValuePair list is iterated until `key == 0`. On GBA the assembler
+ * placed the matching `gUnk_..End = 0` u16 immediately after each array so
+ * that scan terminated naturally. On PC the C linker is free to reorder
+ * `const` definitions across translation units (and even within a TU when
+ * `-fdata-sections` is in play), so the terminator can land elsewhere and
+ * iteration falls through into the next array — making FindValueForKey
+ * return the FIRST entry of the wrong table. That manifested as Link
+ * back-flipping off solid Deepwood Shrine walls (#5): scanning the
+ * animState=0 vault table (gUnk_0811C1F8) walked into gUnk_0811C21C and
+ * matched its first entry `{42, 5}`. Inline a sentinel `{0, 0}` so each
+ * array self-terminates regardless of layout. */
+const KeyValuePair gUnk_0811C1F8[] = { { 43, 1 }, { 65, 1 }, { 78, 8 }, { 76, 2 }, { 0, 0 } };
 const u16 gUnk_0811C1F8End = 0;
-const KeyValuePair gUnk_0811C20A[] = { { 44, 3 }, { 66, 3 }, { 76, 2 }, { 77, 4 } };
+const KeyValuePair gUnk_0811C20A[] = { { 44, 3 }, { 66, 3 }, { 76, 2 }, { 77, 4 }, { 0, 0 } };
 const u16 gUnk_0811C20AEnd = 0;
-const KeyValuePair gUnk_0811C21C[] = { { 42, 5 }, { 64, 5 }, { 79, 6 }, { 77, 4 } };
+const KeyValuePair gUnk_0811C21C[] = { { 42, 5 }, { 64, 5 }, { 79, 6 }, { 77, 4 }, { 0, 0 } };
 const u16 gUnk_0811C21CEnd = 0;
-const KeyValuePair gUnk_0811C22E[] = { { 45, 7 }, { 67, 7 }, { 78, 8 }, { 79, 6 } };
+const KeyValuePair gUnk_0811C22E[] = { { 45, 7 }, { 67, 7 }, { 78, 8 }, { 79, 6 }, { 0, 0 } };
 const u16 gUnk_0811C22EEnd = 0;
-const KeyValuePair gUnk_0811C240[] = { { 42, 1 }, { 38, 1 } };
+const KeyValuePair gUnk_0811C240[] = { { 42, 1 }, { 38, 1 }, { 0, 0 } };
 const u16 gUnk_0811C240End = 0;
-const KeyValuePair gUnk_0811C24A[] = { { 45, 1 }, { 39, 1 } };
+const KeyValuePair gUnk_0811C24A[] = { { 45, 1 }, { 39, 1 }, { 0, 0 } };
 const u16 gUnk_0811C24AEnd = 0;
-const KeyValuePair gUnk_0811C254[] = { { 43, 1 }, { 38, 1 } };
+const KeyValuePair gUnk_0811C254[] = { { 43, 1 }, { 38, 1 }, { 0, 0 } };
 const u16 gUnk_0811C254End = 0;
-const KeyValuePair gUnk_0811C25E[] = { { 44, 1 }, { 39, 1 } };
+const KeyValuePair gUnk_0811C25E[] = { { 44, 1 }, { 39, 1 }, { 0, 0 } };
 const u16 gUnk_0811C25EEnd = 0;
-const KeyValuePair gUnk_0811C268[] = { { ACT_TILE_16, 1 }, { ACT_TILE_90, 1 }, { ACT_TILE_17, 1 }, { ACT_TILE_19, 1 } };
+const KeyValuePair gUnk_0811C268[] = { { ACT_TILE_16, 1 }, { ACT_TILE_90, 1 }, { ACT_TILE_17, 1 }, { ACT_TILE_19, 1 }, { 0, 0 } };
 const u16 gUnk_0811C268EEnd = 0;
 
 void sub_0807B114(PlayerEntity*);
