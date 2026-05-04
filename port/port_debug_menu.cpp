@@ -313,4 +313,6 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
     y += 4.0f;
     SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
     SDL_RenderDebugText(renderer, box.x + 8.0f, y, "Up/Down move  Enter select  Esc back");
+    y += charW + 4.0f;
+    SDL_RenderDebugText(renderer, box.x + 8.0f, y, "F5 quicksave   F6 quickload");
 }
