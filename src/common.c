@@ -303,7 +303,7 @@ void MemCopy(const void* src, void* dest, u32 size) {
 #ifdef PC_PORT
     void* resolvedDest = port_resolve_addr((uintptr_t)dest);
     const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
-    memcpy(resolvedDest, resolvedSrc, size);
+    memmove(resolvedDest, resolvedSrc, size);
 #else
     gba_MemCopy((u32)src, (u32)dest, size);
 #endif
@@ -1242,7 +1242,10 @@ void AddKinstoneToBag(KinstoneId kinstoneId) {
     s32 tmp;
 
     SortKinstoneBag(); // sometimes called just for this function
-    if (kinstoneId - 0x65 < 0x11) {
+    if (kinstoneId == KINSTONE_NONE) {
+        return;
+    }
+    if ((u32)(kinstoneId - 0x65) < 0x11) {
         index = GetIndexInKinstoneBag(kinstoneId);
         if (index < 0) {
             index = 0;
@@ -1395,7 +1398,11 @@ void UpdateVisibleFusionMapMarkers(void) {
     }
 }
 
+#ifdef PC_PORT
+extern const u8 gUnk_08001DCC[];
+#else
 extern u8* gUnk_08001DCC[];
+#endif
 
 KinstoneId GetFusionToOffer(Entity* entity) {
     u8* fuserData;
@@ -1406,13 +1413,17 @@ KinstoneId GetFusionToOffer(Entity* entity) {
     s32 randomMood;
     u32 fuserStability;
     fuserId = GetFuserId(entity);
-    fuserData = gUnk_08001DCC[fuserId];
+
+    fuserData = (u8*)Port_UnpackRomDataPtr(gUnk_08001DCC, fuserId);
+    if (fuserData == NULL) {
+        return KINSTONE_NONE;
+    }
     if (GetInventoryValue(ITEM_KINSTONE_BAG) == 0 || fuserData[0] > gSave.global_progress) {
         return KINSTONE_NONE;
     }
     offeredFusion = gSave.kinstones.fuserOffers[fuserId];
     fuserProgress = gSave.kinstones.fuserProgress[fuserId];
-    fuserFusionData = (u8*)(fuserProgress + (u32)fuserData);
+    fuserFusionData = fuserData + fuserProgress;
     while (TRUE) { // loop through fusions for this fuser
         switch (offeredFusion) {
             case KINSTONE_NEEDS_REPLACEMENT: // offered fusion completed with someone else

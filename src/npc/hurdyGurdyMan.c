@@ -12,6 +12,7 @@
 #include "common.h"
 #include "asm.h"
 #include "physics.h"
+#include "port_rom.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -21,7 +22,7 @@ typedef struct {
 
 static const SpriteLoadData gUnk_081144F0[] = { { 0x163, 0x59, 0x4 }, { 0x4163, 0x59, 0x4 }, { 0, 0, 0 } };
 
-extern u16* gUnk_08001A7C[];
+extern const u8 gUnk_08001A7C[];
 
 void HurdyGurdyMan(HurdyGurdyManEntity* this) {
     u32 index;
@@ -44,7 +45,12 @@ void HurdyGurdyMan(HurdyGurdyManEntity* this) {
                 InitializeAnimation(super,
                                     GetAnimationStateForDirection4(GetFacingDirection(super, &gPlayerEntity.base)));
                 index = GetFuserId(super);
-                pointerToArray = gUnk_08001A7C[index];
+
+                pointerToArray = (u16*)Port_UnpackRomDataPtr(gUnk_08001A7C, index);
+                if (pointerToArray == NULL) {
+                    super->action = 1;
+                    break;
+                }
                 if (this->fusionOffer == 0x32) {
                     pointerToArray = pointerToArray + 3;
                 }

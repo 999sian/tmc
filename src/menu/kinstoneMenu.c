@@ -36,6 +36,7 @@ extern void RemoveKinstoneFromBag(u32);
 extern WStruct* sub_0805F2C8(void);
 extern void sub_0805F300(WStruct*);
 extern u32 sub_0805F76C(uintptr_t, WStruct*);
+extern const InteractableObject gNoInteraction;
 
 typedef struct {
     void* sourceAddress;
@@ -134,7 +135,13 @@ void KinstoneMenu_Type0(void) {
     s32 iVar2;
 
     gMenu.column_idx = 1;
+    gKinstoneMenu.unk10.WORD = 0;
+    gGenericMenu.unk28 = 0;
+    gGenericMenu.unk29 = 0;
     gKinstoneMenu.unk2a = 0;
+    gKinstoneMenu.unk18 = 0;
+    gKinstoneMenu.unk1a = 0;
+    gKinstoneMenu.unk2c = 0;
     sub_080A4D34();
     LoadPaletteGroup(0xcb);
     LoadGfxGroup(0x75);
@@ -624,16 +631,20 @@ u32 sub_080A4418(u32 param_1, u32 param_2) {
     if (t2) {
         LZ77UnCompVram(src, dest);
     } else {
-        DMA3->sourceAddress = src;
-        DMA3->destinationAddress = dest;
-        DMA3->control.word = ((DMA_ENABLE | DMA_START_NOW | DMA_32BIT | DMA_SRC_INC | DMA_DEST_INC) << 16) + 0x80;
-        return DMA3->control.word;
+        DmaCopy32(3, src, dest, 0x80 * sizeof(u32));
+        return 0;
     }
 }
 
 void KinstoneMenu_080A4468(void) {
     gPossibleInteraction.kinstoneId = KINSTONE_NONE;
-    gPossibleInteraction.currentObject->kinstoneId = KINSTONE_NONE;
+    if (gPossibleInteraction.currentIndex < ARRAY_COUNT(gPossibleInteraction.candidates)) {
+        gPossibleInteraction.candidates[gPossibleInteraction.currentIndex].kinstoneId = KINSTONE_NONE;
+        gPossibleInteraction.currentObject = &gPossibleInteraction.candidates[gPossibleInteraction.currentIndex];
+    } else {
+        gPossibleInteraction.currentIndex = 0xFF;
+        gPossibleInteraction.currentObject = (InteractableObject*)&gNoInteraction;
+    }
     NotifyFusersOnFusionDone(gFuseInfo.kinstoneId);
     RemoveKinstoneFromBag(gKinstoneMenu.unk2a);
 }

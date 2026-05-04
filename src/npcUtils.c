@@ -13,6 +13,7 @@
 #include "save.h"
 #include "vram.h"
 #include "color.h"
+#include "port_rom.h"
 
 extern const NPCDefinition gNPCDefinitions[];
 
@@ -21,7 +22,12 @@ typedef struct {
     u16 cancelledTextIndex;
     u16 fusingTextIndex;
 } NPCData;
-extern NPCData* gUnk_08001A7C[];
+extern const u8 gUnk_08001A7C[];
+
+static NPCData* GetFusionNpcData(u32 fuserId) {
+    return (NPCData*)Port_UnpackRomDataPtr(gUnk_08001A7C, fuserId);
+}
+
 
 u32 sub_0806EF88(Entity*);
 u32 sub_0806EE70(Entity*);
@@ -334,7 +340,10 @@ void CollideFollowers(void) {
 
 void InitializeNPCFusion(Entity* entity) {
     u32 fuserId = GetFuserId(entity);
-    NPCData* data = gUnk_08001A7C[fuserId];
+    NPCData* data = GetFusionNpcData(fuserId);
+    if (data == NULL) {
+        return;
+    }
     InitializeFuseInfo(entity, data->textIndex, data->cancelledTextIndex, data->fusingTextIndex);
     gPlayerState.controlMode = CONTROL_DISABLED;
 }

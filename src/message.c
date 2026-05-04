@@ -567,7 +567,7 @@ void TextDispEnquiry(TextRender* this) {
             MemClear(&gMessageChoices, sizeof(gMessageChoices));
             SoundReq(SFX_TEXTBOX_SELECT);
             this->renderStatus = RENDER_UPDATE;
-            break;
+            return;
         case DPAD_LEFT:
             choiceIdx--;
             break;
@@ -576,6 +576,9 @@ void TextDispEnquiry(TextRender* this) {
             break;
         default:
             break;
+    }
+    if (gMessageChoices.choiceCount <= 0) {
+        return;
     }
     choiceIdx = (choiceIdx + gMessageChoices.choiceCount) % gMessageChoices.choiceCount;
     lastChoice = gMessageChoices.currentChoice;

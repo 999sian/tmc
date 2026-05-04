@@ -45,6 +45,11 @@ static inline u32 Port_ReadU32(const void* data) {
     return (u32)raw[0] | ((u32)raw[1] << 8) | ((u32)raw[2] << 16) | ((u32)raw[3] << 24);
 }
 
+
+static inline void* Port_UnpackRomDataPtr(const void* table, u32 index) {
+    return Port_ResolveRomData(Port_ReadU32((const u8*)table + index * 4));
+}
+
 /*
  * Resolve a raw GBA EWRAM address (0x02xxxxxx) to a native PC pointer.
  *

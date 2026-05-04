@@ -16,6 +16,7 @@
 #include "effects.h"
 #include "flags.h"
 #include "physics.h"
+#include "port_rom.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -35,7 +36,7 @@ void sub_0806B3CC(Entity*);
 void sub_0806B504(Entity*);
 void sub_0806B540(Entity*);
 
-extern u16* gUnk_08001A7C[40];
+extern const u8 gUnk_08001A7C[];
 
 void Percy_Head(Entity* this) {
     SetExtraSpriteFrame(this, 0, (this->frameSpriteSettings & 0x3f) + 0x13);
@@ -93,7 +94,11 @@ void sub_0806B41C(PercyEntity* this) {
                 InitializeAnimation(super,
                                     GetAnimationStateForDirection4(GetFacingDirection(super, &gPlayerEntity.base)) + 4);
                 idx = GetFuserId(super);
-                tmp = gUnk_08001A7C[idx];
+                tmp = (u16*)Port_UnpackRomDataPtr(gUnk_08001A7C, idx);
+                if (tmp == NULL) {
+                    super->action = 1;
+                    break;
+                }
                 if (this->fusionOffer == 33)
                     tmp += 3;
                 InitializeFuseInfo(super, tmp[0], tmp[1], tmp[2]);
