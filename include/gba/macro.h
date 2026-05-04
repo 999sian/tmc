@@ -10,6 +10,7 @@
  * emulated memory arrays via port_resolve_addr().
  */
 #include "port_gba_mem.h"
+#include "port_hdma.h"
 #include <string.h>
 
 /* ---- DmaSet: raw DMA register write emulation ---- */
@@ -27,6 +28,15 @@ static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32
     void* dest = port_resolve_addr(dest_raw);
     if (!src || !dest)
         return;
+
+    /*
+     * HBlank-triggered DMA: register with the per-scanline simulator instead
+     * of doing the transfer immediately. Drives the iris/circle WIN0H effect.
+     */
+    if ((cnt & 0x2000) != 0) {
+        port_hdma_register(0, src, dest, cnt, (u16)units);
+        return;
+    }
 
     if (srcFixed) {
         /* Fill mode */

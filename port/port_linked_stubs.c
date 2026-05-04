@@ -733,29 +733,60 @@ u32 GetNextFunction(Entity* this) {
     u8 gustJarState = this->gustJarState;
     u8 contactFlags = this->contactFlags;
 
+#ifdef PC_PORT
+    /* Peahat (and other gust-jar-killable enemies) reach Subaction5 with
+     * health=0 + gustJarState=0x04 + ENT_COLLIDE clear, expecting the
+     * death sequence to take over. The gj=0x04 short-circuit at top sends
+     * them right back to OnGrabbed forever — corpse never despawns (#20).
+     * If the entity is dead, prefer the health==0 dispatch so GenericDeath
+     * runs and the DEATH_FX cleanup chain fires.
+     *
+     * BUT: AcroBandit's chain unwind lives in OnCollision and only runs on
+     * the death frame (when contactFlags has bit 7 + health hits 0). If we
+     * short-circuit straight to OnDeath here, the unwind never fires and the
+     * surviving bandits in a stack stay stuck in Action4 with stale parent
+     * pointers (#35). Likewise, the death-fall animation runs via
+     * OnKnockback while knockbackDuration is nonzero, so we need to keep
+     * dispatching OnKnockback during the dying frames too. Only fall through
+     * to OnDeath when neither of those is active. */
+    if (this->health == 0) {
+        if (!(gustJarState & 4) && (contactFlags >> 7))
+            return 1; /* OnCollision: chain unwind + death-state setup */
+        if (this->knockbackDuration != 0)
+            return 2; /* OnKnockback: death-fall animation */
+        if (this->action == 0 && this->subAction == 0)
+            return 0;
+        if (gustJarState & 8)
+            return 5;
+        if (this->confusedTime != 0)
+            return 4;
+        return 3;
+    }
+#endif
+
     if (gustJarState & 4)
-        return 5; /* grabbed by Gust Jar */
+        return 5;
 
     if (!(gustJarState & 4) && (contactFlags >> 7))
-        return 1; /* contact initiated */
+        return 1;
 
     if (this->knockbackDuration != 0)
-        return 2; /* knockback active */
+        return 2;
 
     if (this->health == 0) {
         if (this->action == 0 && this->subAction == 0)
-            return 0; /* dead but not initialized */
+            return 0;
         if (gustJarState & 8)
-            return 5; /* gust jar captured and dead */
+            return 5;
         if (this->confusedTime != 0)
-            return 4; /* confused */
-        return 3;     /* dying */
+            return 4;
+        return 3;
     }
 
     if (this->action == 0 && this->subAction == 0)
-        return 0; /* not initialized */
+        return 0;
 
-    return 0; /* normal update */
+    return 0;
 }
 
 /*
@@ -1538,7 +1569,16 @@ u16 gDungeonNames[64];
 u8 gFigurines[512] __attribute__((aligned(4)));
 void* gLilypadRails[32];
 // gMapActTileToSurfaceType — now provided by src/data/mapActTileToSurfaceType.c
-u8 gPalette_549[32];
+/* gPalette_549 is the start of a 26-palette contiguous block in the GBA
+ * `gfxAndPalettes` blob. Mt Crenel's weather-change manager reads
+ * `gPalette_549 + 0xD0` (i.e., 13 palettes past the start) as `palette2`
+ * for cross-fade — which only works because the GBA linker placed
+ * gPalette_549..gPalette_574 sequentially. The PC port previously stubbed
+ * this as a single 32-byte buffer, so the +0xD0 read walked off into garbage
+ * and the Mt Crenel mountaintop terrain rendered with random colors (#34).
+ * Allocate the full 416-color (832-byte) block; port_rom.c populates it
+ * from gGlobalGfxAndPalettes after ROM load. */
+u16 gPalette_549[0x1A0];
 void* gTranslations[16];
 // gWallMasterScreenTransitions — now provided by src/data/screenTransitions.c
 void* gZeldaFollowerText[8];

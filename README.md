@@ -1,10 +1,6 @@
 # The Legend of Zelda: The Minish Cap
 
-
-[![Build Status][jenkins-badge]][jenkins] [![Decompilation Progress][progress-badge]][progress] [![Contributors][contributors-badge]][contributors] [![Discord Channel][discord-badge]][discord]
-
-[jenkins]: https://jenkins.deco.mp/job/TMC/job/master
-[jenkins-badge]: https://img.shields.io/jenkins/build?jobUrl=https%3A%2F%2Fjenkins.deco.mp%2Fjob%2FTMC%2Fjob%2Fmaster
+[![Decompilation Progress][progress-badge]][progress] [![Contributors][contributors-badge]][contributors] [![Discord Channel][discord-badge]][discord]
 
 [progress]: https://zelda64.dev/games/tmc
 [progress-badge]: https://img.shields.io/endpoint?url=https://zelda64.dev/assets/csv/progress-tmc-shield.json
@@ -15,42 +11,178 @@
 [discord]: https://discord.zelda64.dev
 [discord-badge]: https://img.shields.io/discord/688807550715560050?color=%237289DA&logo=discord&logoColor=%23FFFFFF
 
-```diff
-- WARNING! -
+A decompilation of The Legend of Zelda: The Minish Cap (GBA, 2004) — and a work-in-progress native PC port built on top of it.
 
-This repository is a work in progress, and while it can be used to make certain changes, it's still
-constantly evolving. If you use it for modding purposes in its current state, please be aware that
-the codebase can drastically change at any time. Also note that some parts of the ROM may not be
-'shiftable' yet, so modifying them could be difficult at this point.
+The decompilation reconstructs the original C source from the GBA ROM using static and dynamic analysis.
+The PC port compiles that source for x86-64 Linux and Windows, replacing GBA hardware with SDL3, a software PPU renderer, and the agbplay audio engine.
+
+## Supported ROMs
+
+A copy of the original game is required to build either the ROM or the PC port.
+
+| Version  | Filename         | SHA1                                       |
+|----------|------------------|--------------------------------------------|
+| USA      | `baserom.gba`    | `b4bd50e4131b027c334547b4524e2dbbd4227130` |
+| EU       | `baserom_eu.gba` | `cff199b36ff173fb6faf152653d1bccf87c26fb7` |
+| JP       | `baserom_jp.gba` | `6c5404a1effb17f481f352181d0f1c61a2765c5d` |
+| USA Demo | `baserom_demo_usa.gba` | `63fcad218f9047b6a9edbb68c98bd0dec322d7a1` |
+| JP Demo  | `baserom_demo_jp.gba`  | `9cdb56fa79bba13158b81925c1f3641251326412` |
+
+The PC port currently supports **USA** and **EU**.
+
+## PC Port — Pre-built releases (recommended)
+
+Pre-built tarballs are published on the [Releases page](https://github.com/MatheoVignaud/tmc/releases). They contain just two binaries plus the audio metadata file:
+
+```
+asset_extractor      sounds.json      tmc_pc
 ```
 
-This is a WIP decompilation of The Legend of Zelda: The Minish Cap.
-The purpose of the project is to recreate a source code base for the game from scratch, using information found inside the game along with static and/or dynamic analysis.
+Setup, once:
 
-It can target the following ROMs:
+1. Download `tmc-usa-{linux,windows}-<version>.tar.gz` and unpack it anywhere.
+2. Drop your own `baserom.gba` next to the binaries (this repo does **not** ship the ROM).
+3. Run the extractor once. It writes `assets/` and `assets_src/` next to itself:
 
-* [**tmc.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=1841) `sha1: b4bd50e4131b027c334547b4524e2dbbd4227130`
-* [**tmc_jp.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=1719) `sha1: 6c5404a1effb17f481f352181d0f1c61a2765c5d`
-* [**tmc_eu.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=1734) `sha1: cff199b36ff173fb6faf152653d1bccf87c26fb7`
-* [**tmc_demo_usa.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=x051) `sha1: 63fcad218f9047b6a9edbb68c98bd0dec322d7a1`
-* [**tmc_demo_jp.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=x430) `sha1: 9cdb56fa79bba13158b81925c1f3641251326412`
+   ```sh
+   ./asset_extractor          # Linux
+   asset_extractor.exe        # Windows
+   ```
 
-**Note:** This repository does not include any of the assets necessary to build the ROM.
-A prior copy of the game is required to extract the needed assets.
+4. Run the game:
 
-Website: <https://zelda64.dev>
+   ```sh
+   ./tmc_pc                   # Linux
+   tmc_pc.exe                 # Windows (double-click works)
+   ```
 
-Discord: <https://discord.zelda64.dev>
+The binaries resolve `baserom.gba`, `sounds.json`, and the extracted asset
+trees relative to their own location, so the install directory can be
+anywhere — no `cd` dance required.
 
-Documentation: <https://zeldaret.github.io/tmc>
+## PC Port — Build from source
 
-## Installation
+Place your ROM in the repository root, then run:
 
-To set up the repository, see [INSTALL.md](INSTALL.md).
+```sh
+python3 build.py
+```
+
+The script will:
+- Check and prompt to install missing dependencies (xmake, SDL3, libpng, fmt, nlohmann-json)
+- Initialize git submodules automatically
+- Scan for ROM files and verify their checksums
+- Let you choose USA, EU, or both
+- Extract and convert assets from your ROM
+- Compile the native binary for your platform
+- Place everything under `dist/<VERSION>/`
+
+Run the result:
+
+```sh
+cd dist/USA
+./tmc_pc
+```
+
+Saves are written to `tmc.sav` in the working directory.
+
+### Dependencies
+
+**Linux (Arch / CachyOS):**
+```sh
+sudo pacman -S xmake sdl3 libpng fmt nlohmann-json git curl
+```
+
+**Linux (Ubuntu / Debian):**
+```sh
+sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git curl
+```
+
+**Windows:** Install [xmake](https://xmake.io) and [git](https://git-scm.com). SDL3 and other libraries are downloaded automatically by xmake.
+
+## PC port (work in progress)
+
+This fork includes an experimental PC build target (`tmc_pc`) that runs the
+decompiled game natively via SDL3 + a software PPU (`libs/ViruaPPU`). The port
+is **WIP** — many rendering and gameplay paths are still rough.
+
+Tested platforms:
+
+* Linux (Wayland preferred, X11 fallback)
+* Windows via MinGW static link
+
+macOS may build (the xmake config sets up the toolchain) but is not regularly
+tested.
+
+Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. As of
+0.1.1 the binary resolves `baserom.gba`, `sounds.json`, and the asset
+trees relative to its own path (and falls back to cwd in dev), so it
+works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
+
+### What's fixed and what's still broken
+
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.5-experimental** is a multi-fix pass driven by the issue tracker: AcroBandit stack drift after attack (#35), Cave-of-Flames map crash on B3 (#39), Mt Crenel pink/cyan terrain (#34), Item-Get BGM ducking (#22), tall-grass / shallow-water shoes overlay (#24), Deepwood Shrine "vault off solid wall" (#5), and the cloud-shadow overlay breaking after a Hyrule Castle visit (#25) all closed. New `GetNextFunction` dispatch fix unlocks chain-unwind and death-fall paths that were silently skipped on PC. Window title now surfaces the port version, and **F9 captures a bug-report bundle** (screenshot + save + game state) for testers.
+
+The window title shows the running port version — please include it when filing issues.
+
+### Controls
+
+| Action                | Keyboard            | Gamepad                |
+|-----------------------|---------------------|------------------------|
+| Fast-forward (hold)   | Tab                 | Right trigger          |
+| Toggle fullscreen     | F11 / Alt+Enter     | —                      |
+| Cycle upscaler        | F12                 | —                      |
+| Capture bug report    | F9                  | —                      |
+
+Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
+xBRZ 4× and linear modes.
+
+**Bug-report capture (F9)** — writes a `bugreport_YYYYMMDD_HHMMSS/` folder
+next to the binary containing `screenshot.bmp`, `save.bin` (your current
+EEPROM dump), and `state.txt` (area / room / coords / hp). Attach the
+folder to a GitHub issue and we have everything we need to reproduce.
+
+### Nix
+
+A `flake.nix` is provided with all dependencies. Run the port directly with:
+
+```sh
+nix run
+```
+
+Or enter a development shell:
+
+```sh
+nix develop
+```
+
+## ROM Build (GBA)
+
+To rebuild the original GBA ROM you also need the `arm-none-eabi` toolchain and [agbcc](https://github.com/pret/agbcc). See [INSTALL.md](INSTALL.md) for full instructions.
+
+```sh
+xmake rom
+```
 
 ## Contributing
 
-All contributions are welcome. This is a group effort, and even small contributions can make a difference.
-Some tasks also don't require much knowledge to get started.
+All contributions are welcome — decompilation, port improvements, tools, and documentation.
 
 Most discussions happen on our [Discord Server](https://discord.zelda64.dev), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
+
+
+
+# Third-party notice: agbplay
+
+`libs/agbplay_core` contains code derived from:
+
+- Project: agbplay
+- Repository: https://github.com/ipatix/agbplay
+- Author: ipatix and contributors
+- License: GNU Lesser General Public License v3.0
+
+The original agbplay project is licensed under the LGPL-3.0. The copied and
+modified files in this directory remain under that license.
+
+The rest of this repository is not automatically relicensed as LGPL-3.0 solely
+because it links to or uses this LGPL component.

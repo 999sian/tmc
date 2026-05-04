@@ -75,6 +75,16 @@ void LikeLike_OnCollision(LikeLikeEntity* this) {
 }
 
 void LikeLike_OnDeath(LikeLikeEntity* this) {
+#ifdef PC_PORT
+    /* Same soft-lock pattern as rupee-like: if Link was being absorbed
+     * (action=7) when the LikeLike dies from a bomb / arrow, the regular
+     * release path in LikeLike_ReleasePlayer never runs — gPlayerState
+     * keeps PL_CAPTURED + locked mobility and Link is frozen. Release him
+     * before the death FX. */
+    if (super->action == 7) {
+        LikeLike_ReleasePlayer(this);
+    }
+#endif
     if (super->timer == 2 && this->stolenItem != 0xff) {
         SetEntityPriority(super, PRIO_NO_BLOCK);
         LikeLike_ReturnStolenItem(this->stolenItem);

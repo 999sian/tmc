@@ -1115,6 +1115,22 @@ bool CopyRuntimePassthroughAssets(const std::filesystem::path& sourceRoot, const
         "sprites",
         "room_properties",
         "generated",
+        /* data_* trees hold raw GBA data referenced indirectly by compiled
+         * code (e.g. data_080D5360/gUnk_additional_*.bin is the room-property
+         * data that LonLonRanch doors and Minish Forest lily pads index into).
+         * Without these, rooms silently misbehave. */
+        "data_08000360",
+        "data_08000F54",
+        "data_080029B4",
+        "data_08007DF4",
+        "data_080B2A70",
+        "data_080B4410",
+        "data_080B7B74",
+        "data_080D5360",
+        "data_080FC8A4",
+        "data_08108E6C",
+        "data_0811BE38",
+        "data_08127280",
     };
     static const std::filesystem::path kFiles[] = {
         "tilemaps.json",

@@ -1,12 +1,14 @@
 #include "gba/io_reg.h"
 #include "main.h"
 #include "port_config.h"
+#include "port_asset_bootstrap.h"
 #include "port_audio.h"
 #include "port_gba_mem.h"
 #include "port_ppu.h"
 #include "port_rom.h"
 #include "port_runtime_config.h"
 #include "port_types.h"
+#include "port_update_check.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -64,6 +66,54 @@ static void Port_LogVideoDiagnostics(void) {
     fprintf(stderr, "\n");
 }
 
+static void Port_LogAudioDiagnostics(void) {
+    int driverCount = SDL_GetNumAudioDrivers();
+
+    fprintf(stderr,
+            "Audio env: SDL_AUDIODRIVER='%s' XDG_RUNTIME_DIR='%s' PULSE_SERVER='%s' PIPEWIRE_REMOTE='%s'\n",
+            getenv("SDL_AUDIODRIVER") ? getenv("SDL_AUDIODRIVER") : "",
+            getenv("XDG_RUNTIME_DIR") ? getenv("XDG_RUNTIME_DIR") : "",
+            getenv("PULSE_SERVER") ? getenv("PULSE_SERVER") : "",
+            getenv("PIPEWIRE_REMOTE") ? getenv("PIPEWIRE_REMOTE") : "");
+
+    fprintf(stderr, "SDL compiled audio drivers:");
+    for (int i = 0; i < driverCount; i++) {
+        fprintf(stderr, " %s", SDL_GetAudioDriver(i));
+    }
+    fprintf(stderr, "\n");
+}
+
+static bool Port_TryInitAudioDriver(const char* audioDriver, bool muteOnSuccess, const char** outError) {
+    if (audioDriver && audioDriver[0] != '\0') {
+        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, audioDriver);
+    } else {
+        SDL_ResetHint(SDL_HINT_AUDIO_DRIVER);
+    }
+
+    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
+        if (outError) {
+            *outError = SDL_GetError();
+        }
+        return false;
+    }
+
+    if (!Port_Audio_Init()) {
+        if (outError) {
+            *outError = SDL_GetError();
+        }
+        Port_Audio_Shutdown();
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+        return false;
+    }
+
+    fprintf(stderr,
+            "SDL audio driver: %s%s\n",
+            SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "unknown",
+            muteOnSuccess ? " (muted dummy backend)" : "");
+    gMain.muteAudio = muteOnSuccess ? 1 : 0;
+    return true;
+}
+
 static bool Port_InitVideo(void) {
     const char* err = NULL;
     const char* forcedDriver = getenv("SDL_VIDEODRIVER");
@@ -78,16 +128,16 @@ static bool Port_InitVideo(void) {
         SDL_Quit();
     }
 
-    if (display && display[0] != '\0') {
-        if (Port_TryInitVideo("x11", NULL, false)) {
+    if (waylandDisplay && waylandDisplay[0] != '\0') {
+        if (Port_TryInitVideo("wayland", NULL, false)) {
             return true;
         }
         err = SDL_GetError();
         SDL_Quit();
     }
 
-    if (waylandDisplay && waylandDisplay[0] != '\0') {
-        if (Port_TryInitVideo("wayland", NULL, false)) {
+    if (display && display[0] != '\0') {
+        if (Port_TryInitVideo("x11", NULL, false)) {
             return true;
         }
         err = SDL_GetError();
@@ -112,37 +162,97 @@ static bool Port_InitVideo(void) {
 
 static void Port_InitAudio(void) {
     const char* err = NULL;
+    const char* forcedDriver = getenv("SDL_AUDIODRIVER");
+    static const char* const kPreferredDrivers[] = {
+        "pipewire",
+        "pulseaudio",
+        "alsa",
+        "sndio",
+    };
 
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
+    if (forcedDriver && forcedDriver[0] != '\0') {
+        if (Port_TryInitAudioDriver(forcedDriver, false, &err)) {
+            return;
+        }
+        fprintf(stderr, "SDL forced audio driver '%s' failed: %s\n", forcedDriver, err ? err : "unknown error");
+    }
+
+    if (Port_TryInitAudioDriver(NULL, false, &err)) {
         return;
     }
 
-    err = SDL_GetError();
-    Port_Audio_Shutdown();
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    fprintf(stderr, "SDL default audio init failed: %s\n", err ? err : "unknown error");
 
-    SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
-    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
+    for (size_t i = 0; i < sizeof(kPreferredDrivers) / sizeof(kPreferredDrivers[0]); i++) {
+        const char* driver = kPreferredDrivers[i];
+        if (forcedDriver && strcmp(forcedDriver, driver) == 0) {
+            continue;
+        }
+        if (Port_TryInitAudioDriver(driver, false, &err)) {
+            fprintf(stderr, "SDL audio recovered by forcing '%s'.\n", driver);
+            return;
+        }
+        fprintf(stderr, "SDL audio driver '%s' failed: %s\n", driver, err ? err : "unknown error");
+    }
+
+    if (Port_TryInitAudioDriver("dummy", true, &err)) {
         fprintf(stderr, "Audio device unavailable, using SDL dummy audio driver.\n");
-        gMain.muteAudio = 1;
         return;
     }
 
-    fprintf(stderr, "Audio disabled: normal='%s', fallback='%s'\n", err ? err : "unknown error", SDL_GetError());
-    Port_Audio_Shutdown();
-    SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    Port_LogAudioDiagnostics();
+    fprintf(stderr, "Audio disabled: final fallback failed: %s\n", err ? err : "unknown error");
     gMain.muteAudio = 1;
 }
 
+/*
+ * On Windows mingw, the heap allocator hands out addresses inside the
+ * 0x02000000-0x0A000000 range — the same range port_resolve_addr treats
+ * as GBA addresses. Heap pointers passed to DmaCopy* (palette/gfx loads
+ * from std::vector buffers) get mistranslated to gEwram[] / gVram[] etc,
+ * silently reading zeros and stalling the title-screen palette. Reserve
+ * the GBA address window before any heap is opened so the OS allocator
+ * can't place anything there. Linux glibc keeps malloc above 0x55... so
+ * this is a no-op there; the call is Windows-only.
+ */
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+static void Port_ReserveGbaAddressSpace(void) {
+    static const struct { uintptr_t base; size_t size; } regions[] = {
+        { 0x02000000u, 0x08000000u }, /* covers EWRAM, IWRAM, IO, palette, VRAM, OAM, ROM mirror */
+    };
+    for (size_t i = 0; i < sizeof(regions)/sizeof(regions[0]); ++i) {
+        LPVOID p = VirtualAlloc((LPVOID)regions[i].base, regions[i].size,
+                                MEM_RESERVE, PAGE_NOACCESS);
+        if (p == NULL) {
+            fprintf(stderr, "WARN: Could not reserve GBA address window 0x%zx-0x%zx; "
+                            "DmaCopy may misbehave.\n",
+                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+        } else {
+            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n",
+                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
+        }
+    }
+}
+#else
+static void Port_ReserveGbaAddressSpace(void) { /* not needed on Linux/macOS */ }
+#endif
+
 int main(int argc, char* argv[]) {
+
+    /* Must run before any std::vector / new / malloc that could land in
+     * the GBA window. Static initializers in C++ files are constructed
+     * before main, so even this is technically not early enough — but
+     * the affected allocations (Port_LoadPaletteGroupFromAssets cache)
+     * happen later, after EnsureAssetGroupCache(), so reserving here is
+     * sufficient in practice. */
+    Port_ReserveGbaAddressSpace();
 
     fprintf(stderr, "Initializing port layer...\n");
 
     // Initialize REG_KEYINPUT to all-keys-released (GBA: 1=not pressed)
     *(u16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
-
-    // Load ROM data (auto-detects USA/EU from game code)
-    Port_LoadRom("baserom.gba");
 
     Port_Config_Load("config.json");
 
@@ -170,6 +280,37 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // Initialize SDL video first. Audio is optional and handled separately.
+    if (!Port_InitVideo()) {
+        return 1;
+    }
+
+    Port_Config_OpenGamepads();
+
+    SDL_Window* window = SDL_CreateWindow(
+        "The Minish Cap", 240 * window_scale, 160 * window_scale, SDL_WINDOW_RESIZABLE);
+    if (window == NULL) {
+        fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+
+    fprintf(stderr, "SDL window created.\n");
+    SDL_ShowWindow(window);
+    fprintf(stderr, "SDL window shown.\n");
+    SDL_RaiseWindow(window);
+    fprintf(stderr, "SDL window raised.\n");
+    /* SDL_SyncWindow is a convenience flush, not required for correctness.
+     * Some packaged Linux/X11 environments have been seen to fault here
+     * before any port-side diagnostics are emitted, so avoid it at startup. */
+    Port_EnsureAssetsReadyWithDisplay(window);
+    fprintf(stderr, "Asset bootstrap complete.\n");
+    Port_CheckForUpdates(window);
+    fprintf(stderr, "Update check complete.\n");
+
+    Port_LoadRom("baserom.gba");
+    fprintf(stderr, "ROM load complete.\n");
+
     // Verify ROM region matches compiled region
 #ifdef EU
     if (gRomRegion != ROM_REGION_EU) {
@@ -187,27 +328,11 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    // Initialize SDL video first. Audio is optional and handled separately.
-    if (!Port_InitVideo()) {
-        return 1;
-    }
-
-    Port_Config_OpenGamepads();
-
-    SDL_Window* window = SDL_CreateWindow("The Minish Cap", 240 * window_scale, 160 * window_scale, 0);
-    if (window == NULL) {
-        fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
-
-    SDL_ShowWindow(window);
-    SDL_RaiseWindow(window);
-    SDL_SyncWindow(window);
-
     // Initialize PPU renderer
     Port_PPU_Init(window);
+    fprintf(stderr, "PPU init complete.\n");
     Port_InitAudio();
+    fprintf(stderr, "Audio init complete.\n");
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 

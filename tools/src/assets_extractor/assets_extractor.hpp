@@ -1132,12 +1132,27 @@ inline bool extract_area_tables(const Config& config, const std::unordered_map<u
                             break;
                         }
 
-                        if (value == 0 || (idx >= 4 && idx <= 7) || !is_valid_rom_pointer(value)) {
+                        if (value == 0 || !is_valid_rom_pointer(value)) {
                             json_room.push_back(nullptr);
                             continue;
                         }
 
                         const uint32_t data_offset = to_rom_address(value);
+
+                        /* Properties at idx 4..7 are usually room callback functions
+                         * that the port resolves via Port_GetRoomFuncProp. But some
+                         * rooms (e.g. Minish Forest lily pads, doorway data tables)
+                         * put real data pointers there. The asset index distinguishes
+                         * code from data: if the ROM offset has an indexed asset entry
+                         * (e.g. data_080D5360/...), treat it as data and extract it.
+                         * Otherwise it's code — skip. */
+                        if (idx >= 4 && idx <= 7) {
+                            if (lookup.find(data_offset) == lookup.end()) {
+                                json_room.push_back(nullptr);
+                                continue;
+                            }
+                        }
+
                         const uint32_t data_size = infer_asset_size(data_offset, lookup, boundaries, 4);
                         const std::filesystem::path relative_path = extract_asset_or_raw(
                             data_offset, data_size, lookup, config.outputRoot, "room_properties");
@@ -1485,5 +1500,28 @@ inline bool extract_assets(const Config& config)
     extract_area_tables(config, lookup, boundaries);
     extract_sprite_ptrs(config, lookup, boundaries);
     extract_texts(config);
+
+    /* Final sweep: extract everything in the embedded asset index that the
+     * specialized passes above didn't already produce. This covers data that's
+     * referenced indirectly (e.g. data_080D5360/* room-property data pointed
+     * at by gUnk_additional_* offsets reached from compiled code rather than
+     * from area tables). Without this, release tarballs miss those subtrees
+     * and rooms that depend on them silently misbehave (lily pads stationary,
+     * doors not appearing, etc.). */
+    const EmbeddedAssetEntry* idx = EmbeddedAssetIndex_Get();
+    const u32 idx_count = EmbeddedAssetIndex_Count();
+    uint32_t extracted_count = 0;
+    for (u32 i = 0; i < idx_count; ++i) {
+        const EmbeddedAssetEntry& entry = idx[i];
+        const std::filesystem::path full_path = config.outputRoot / entry.path;
+        if (std::filesystem::exists(full_path)) {
+            continue; /* already extracted by a specialized pass */
+        }
+        const std::vector<uint8_t> data = extract_bytes(entry.offset, entry.size);
+        if (write_binary_file(full_path, data)) {
+            ++extracted_count;
+        }
+    }
+    std::cout << "Final sweep: extracted " << extracted_count << " additional indexed assets" << std::endl;
     return true;
 }
