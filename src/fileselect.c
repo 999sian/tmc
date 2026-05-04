@@ -743,6 +743,10 @@ static void DrawFileSelectSettingsHint(void) {
     static const u8 sSettingsHintText[] = "L Settings";
     Font font;
 
+    if (gChooseFileState.unk_0x12 != 0) {
+        return;
+    }
+
     gChooseFileState.unk_0x12 = 1;
     MemClear(&gBG0Buffer[0x221], 0x80);
     gScreen.bg0.updated = 1;
@@ -823,20 +827,28 @@ static void HandlePortSettingsMenu(void) {
 
 static void DrawPortSettingsMenu(void) {
     static char sPortSettingsText[224];
+    static char sFpsText[16];
     Font font;
     s32 row;
+    u32 fps;
 
     row = PORT_SETTINGS_ROW;
+    fps = Port_Config_TargetFps();
+    if (fps == 0) {
+        strcpy(sFpsText, "uncapped");
+    } else {
+        snprintf(sFpsText, sizeof(sFpsText), "%u", (unsigned)fps);
+    }
     snprintf(sPortSettingsText, sizeof(sPortSettingsText),
              "PORT SETTINGS\n\n"
              "%c Scale %ux\n"
              "%c Filter %s\n"
-             "%c FPS %u\n"
+             "%c FPS %s\n"
              "%c Fullscreen %s\n\n"
              "A Change  B Back",
              row == 0 ? '>' : ' ', (unsigned)Port_PPU_WindowScale(),
              row == 1 ? '>' : ' ', Port_PPU_PresentationModeName(),
-             row == 2 ? '>' : ' ', (unsigned)Port_Config_TargetFps(),
+             row == 2 ? '>' : ' ', sFpsText,
              row == 3 ? '>' : ' ', Port_PPU_IsFullscreen() ? "on" : "off");
 
     MemClear(&gBG0Buffer, sizeof(gBG0Buffer));
