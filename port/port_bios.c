@@ -84,6 +84,17 @@ static void Port_PumpEvents(void) {
                 Port_PPU_ToggleSmoothing();
                 continue;
             }
+            if (e.key.key == SDLK_F9) {
+                /* Capture a bug-report bundle for playtesters: screenshot
+                 * + save copy + game-state text. Lands in a timestamped
+                 * directory next to the binary. */
+                extern char* Port_BugReport_Capture(void);
+                char* dir = Port_BugReport_Capture();
+                if (dir) {
+                    free(dir);
+                }
+                continue;
+            }
             if (e.key.key == SDLK_TAB) {
                 sFastForward = true;
                 continue;
@@ -142,9 +153,12 @@ void VBlankIntrWait(void) {
     if (nowNs - sFpsWindowStartNs >= 1000000000ULL) {
         double elapsedSec = (double)(nowNs - sFpsWindowStartNs) / 1000000000.0;
         double fps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
-        char title[64];
+        char title[96];
 
-        SDL_snprintf(title, sizeof(title), "The Minish Cap - %.1f FPS", fps);
+#ifndef TMC_PORT_VERSION
+#define TMC_PORT_VERSION "0.1.5-experimental"
+#endif
+        SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
         Port_PPU_SetWindowTitle(title);
 
         sFpsWindowStartNs = nowNs;
