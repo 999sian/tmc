@@ -112,6 +112,16 @@ static void Port_PumpEvents(void) {
                 Port_DebugMenu_Toggle();
                 continue;
             }
+            if (e.key.key == SDLK_F5) {
+                extern int Port_QuickSave(void);
+                Port_QuickSave();
+                continue;
+            }
+            if (e.key.key == SDLK_F6) {
+                extern int Port_QuickLoad(void);
+                Port_QuickLoad();
+                continue;
+            }
             /* When the debug menu is open, route key presses to it and
              * suppress further handling so the game itself doesn't see
              * the keystroke. */
