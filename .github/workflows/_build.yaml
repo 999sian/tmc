@@ -121,6 +121,8 @@ jobs:
         if: matrix.os_name == 'windows'
         env:
           TMC_XMAKE_TOOLCHAIN: mingw
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
         run: python build.py ${{ matrix.flag }}
 
       - name: Prepare artifact payload
