@@ -137,7 +137,8 @@ void VBlankIntrWait(void) {
     port_hdma_vblank_reset();
 
     if (!sFastForward) {
-        while (SDL_GetTicksNS() - lastFrameNs < Port_Config_FrameTimeNs()) {
+        const u64 frameTimeNs = Port_Config_FrameTimeNs();
+        while (frameTimeNs != 0 && SDL_GetTicksNS() - lastFrameNs < frameTimeNs) {
         }
     }
 

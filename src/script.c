@@ -172,12 +172,12 @@ void ScriptCommand_0807F0C8(Entity* entity, ScriptExecutionContext* context);
 
 typedef void (*ScriptCommand)(Entity*, ScriptExecutionContext*);
 
-#ifdef PC_PORT
 #include "port_rom.h"
 extern const u8 gUnk_08001A7C[];
-#else
-extern u16* gUnk_08001A7C[];
-#endif
+
+static u16* GetFusionTextIndices(u32 fuserId) {
+    return (u16*)Port_UnpackRomDataPtr(gUnk_08001A7C, fuserId);
+}
 extern u8 gUnk_08114F30[];
 extern u8 gUnk_08114F34[];
 extern const u16 gUnk_08016984;
@@ -2013,13 +2013,12 @@ void sub_0807F634(Entity* entity, ScriptExecutionContext* context) {
 
 void sub_0807F650(Entity* entity, ScriptExecutionContext* context) {
     u32 fuserId = GetFuserId(entity);
-#ifdef PC_PORT
-    u16* p = (u16*)Port_PackedRomEntry(gUnk_08001A7C, fuserId);
-    if (p == NULL) return;
-    InitializeFuseInfo(entity, p[0], p[1], p[2]);
-#else
-    InitializeFuseInfo(entity, gUnk_08001A7C[fuserId][0], gUnk_08001A7C[fuserId][1], gUnk_08001A7C[fuserId][2]);
-#endif
+    u16* textIndices;
+    textIndices = GetFusionTextIndices(fuserId);
+    if (textIndices == NULL) {
+        return;
+    }
+    InitializeFuseInfo(entity, textIndices[0], textIndices[1], textIndices[2]);
     gPlayerState.controlMode = CONTROL_DISABLED;
 }
 

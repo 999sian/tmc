@@ -536,10 +536,6 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
     u32 temp3;
 
     pWVar4 = sub_0805F2C8();
-#ifdef PC_PORT
-    fprintf(stderr, "[TEXTBOX] ShowTextBox ptr=0x%lX pWVar4=%s\n",
-            (unsigned long)textIndexOrPtr, pWVar4 ? "ok" : "NULL");
-#endif
     if (pWVar4 != NULL) {
 #ifdef PC_PORT
         /* Many callers pass 24-byte GBA Font blobs (raw ROM data with 32-bit pointers).

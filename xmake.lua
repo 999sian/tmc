@@ -1,6 +1,6 @@
 set_project("tmc")
 -- Keep in sync with port/port_version.h.
-local TMC_PC_VERSION = "0.1.1"
+local TMC_PC_VERSION = "0.1.5-experimental"
 set_version(TMC_PC_VERSION)
 set_xmakever("2.7.0")
 
@@ -386,7 +386,7 @@ target("tmc_pc")
     local pc_ver = pc_versions[pc_game_version] or pc_versions["USA"]
     
     -- Define PC_PORT, NON_MATCHING and game version
-    add_defines("PC_PORT", "NON_MATCHING", pc_ver.region, pc_ver.language, "REVISION=0")
+    add_defines("PC_PORT", "NON_MATCHING", "USE_OPENMP", pc_ver.region, pc_ver.language, "REVISION=0")
     
     -- Include directories
     add_includedirs("include", "libs")
@@ -538,10 +538,16 @@ target("tmc_pc")
     
     add_packages("libsdl3", "fmt", "nlohmann_json")
 
+    -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
+    add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
+    add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
+    add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
+    add_syslinks("gomp")
+
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then
         add_ldflags("-static", "-static-libgcc", "-static-libstdc++", {force = true})
-        add_syslinks("winhttp")
+        add_syslinks("winhttp", "winpthread")
     end
     
     -- Math library
