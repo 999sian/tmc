@@ -1598,7 +1598,13 @@ u8 gUnk_additional_8_DeepwoodShrine_StairsToB1[64];
 u8 gUnk_additional_8_HouseInteriors1_Library1F[64];
 u8 gUnk_additional_8_HouseInteriors3_BorlovEntrance[64];
 u8 gUnk_additional_8_HyruleCastle_3[64];
-u8 gUnk_additional_8_MelarisMine_Main[64];
+/* gUnk_additional_8_MelarisMine_Main needs at least 96 bytes for the
+ * post-state-change entity list (2 mountain minishes + Melari himself
+ * + 2 cutscene-sword objects + terminator). The smaller default size
+ * truncated past Melari, leaving the room with garbage entities the
+ * runtime parsed as kind=GROUND_ITEM (visible as the "double heart
+ * containers" in #42). */
+u8 gUnk_additional_8_MelarisMine_Main[128];
 u8 gUnk_additional_8_PalaceOfWinds_GyorgTornado[64];
 u8 gUnk_additional_9_HouseInteriors1_Library1F[64];
 u8 gUnk_additional_9_HouseInteriors2_Percy[64];
