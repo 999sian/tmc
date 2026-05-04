@@ -253,12 +253,25 @@ void CuccoMinigame_WinRupees(CuccoMinigameEntity* this) {
     rupeeValues = CuccoMinigameRupees;
 
     for (index = 9; index >= 0; index--) { // Only first 10 count?
+#ifdef PC_PORT
+        /* GBA original truncated rupeeValues to 32-bit and re-cast to a
+         * pointer; on 64-bit hosts that drops the upper address bits and
+         * dereferences invalid memory. cuccoType is in {-1, 0, 1, 2}
+         * (see sub_080A1270): -1 means the cucco died, 0 means not saved,
+         * 1/2 mean saved type 0/1. Treat anything outside the table as 0. */
+        s8 idx = (s8)*cuccoTypes;
+        if (idx >= 0 && (u32)idx < sizeof(CuccoMinigameRupees)) {
+            rupees += rupeeValues[idx];
+        }
+        cuccoTypes++;
+#else
         // Weird register addition
         // rupeeValues[*cuccoTypes] translates to add r0,r3,r0 but should be add r0,r3
         u32 temp = *cuccoTypes;
         temp += (int)rupeeValues;
         rupees += *(u8*)temp;
         cuccoTypes++;
+#endif
     }
     ModRupees(rupees);
     MessageNoOverlap(TEXT_INDEX(TEXT_ANJU, 0x7), super);
