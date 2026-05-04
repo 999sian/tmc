@@ -23,17 +23,23 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include <stdarg.h>
+#ifdef _MSC_VER
 
-static void fatal_error_impl(const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    exit(1);
-}
+#define FATAL_ERROR(format, ...)              \
+    do {                                      \
+        fprintf(stderr, format, __VA_ARGS__); \
+        exit(1);                              \
+    } while (0)
 
-#define FATAL_ERROR(...) fatal_error_impl(__VA_ARGS__)
+#else
+
+#define FATAL_ERROR(format, ...)                \
+    do {                                        \
+        fprintf(stderr, format, ##__VA_ARGS__); \
+        exit(1);                                \
+    } while (0)
+
+#endif // _MSC_VER
 
 unsigned char* ReadWholeFile(char* path, int* size) {
     FILE* fp = fopen(path, "rb");

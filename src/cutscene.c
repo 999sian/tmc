@@ -8,8 +8,6 @@
 #include "backgroundAnimations.h"
 #include "beanstalkSubtask.h"
 #include "common.h"
-#include "configs/runtime.h"
-
 #include "enemy.h"
 #include "fade.h"
 #include "fileselect.h"
@@ -784,9 +782,5 @@ void (*const gUnk_080FD138[])(void) = {
 };
 
 void CutsceneMain_Update(void) {
-    if (gRuntimeConfig.skipCutscenesWithSelect && (gInput.newKeys & SELECT_BUTTON) != 0) {
-        sub_08052004();
-        return;
-    }
     gUnk_080FD138[gMenu.field_0x3]();
 }

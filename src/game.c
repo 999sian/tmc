@@ -245,6 +245,10 @@ static void GameMain_ChangeRoom(void) {
 }
 
 static void GameMain_Update(void) {
+#ifdef PC_PORT
+    fprintf(stderr, "[FRAME] GameMain_Update begin area=%u room=%u substate=%u msg=0x%X\n", gRoomControls.area,
+            gRoomControls.room, gMain.substate, gMessage.state);
+#endif
     if (CheckInitPauseMenu() || CheckInitPortal()) {
         return;
     }
@@ -258,16 +262,34 @@ static void GameMain_Update(void) {
     if ((gMessage.state & MESSAGE_ACTIVE) || gPriorityHandler.priority_timer != 0)
         PausePlayer();
 
+#ifdef PC_PORT
+    fprintf(stderr, "[FRAME] UpdateEntities\n");
+#endif
     FlushSprites();
     UpdateEntities();
+#ifdef PC_PORT
+    fprintf(stderr, "[FRAME] UpdateDoorTransition\n");
+#endif
     UpdateDoorTransition();
+#ifdef PC_PORT
+    fprintf(stderr, "[FRAME] CollisionMain\n");
+#endif
     CollisionMain();
+#ifdef PC_PORT
+    fprintf(stderr, "[FRAME] UpdateScroll\n");
+#endif
     UpdateScroll();
     UpdateBgAnimations();
     UpdateScrollVram();
     DecreasePortalTimer();
     DrawUI();
+#ifdef PC_PORT
+    fprintf(stderr, "[FRAME] UpdateManagers\n");
+#endif
     UpdateManagers();
+#ifdef PC_PORT
+    fprintf(stderr, "[FRAME] DrawUIElements\n");
+#endif
     DrawUIElements();
     UpdateCarriedObject();
     DrawEntities();
