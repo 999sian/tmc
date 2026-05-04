@@ -12,6 +12,7 @@
 #include "object.h"
 #include "asm.h"
 #include "physics.h"
+#include "port_rom.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -43,15 +44,47 @@ extern const u8 gUnk_080CC7BC[];
 extern const s8 gUnk_080CC7C0[];
 extern const s8 gUnk_080CC7D0[];
 extern const u16 gUnk_080CC7D8[];
-
-#ifdef PC_PORT
-#include "port_rom.h"
 extern const u8 gUnk_080CC944[];
-#define GUNK_080CC944_PTR(idx) ((const Hitbox*)Port_PackedRomEntry(gUnk_080CC944, (idx)))
-#else
-extern const Hitbox* const gUnk_080CC944[];
-#define GUNK_080CC944_PTR(idx) gUnk_080CC944[(idx)]
-#endif
+
+#include "port_rom.h"
+
+/* gUnk_080CC944 is a packed table of 4-byte GBA Hitbox pointers; on
+ * x86-64 reading it as `const Hitbox* const[]` reads 8 bytes per slot
+ * and produces garbage. Unpack one entry at a time via the ROM resolver. */
+static const Hitbox* SpearMoblin_ReadHitboxTemplate(u32 index) {
+    return (const Hitbox*)Port_UnpackRomDataPtr(gUnk_080CC944, index);
+}
+
+/* The enemy initializer sets super->hitbox to definition->ptr.hitbox,
+ * which lives in read-only mmap'd ROM (gRomData) on PC. Action routines
+ * write to hitbox->offset_x/y/width/height per frame, which traps SIGSEGV
+ * the first time the player approaches a spear moblin (#19, South Hyrule
+ * field loading-zone crash). Allocate a mutable Hitbox3D copy.
+ * AllocMutableHitbox() can't be used because UnloadHitbox() would zFree
+ * the const ROM pointer. */
+static void SpearMoblin_CloneHitbox(SpearMoblinEntity* this) {
+    Hitbox3D* writable;
+    const Hitbox* source = super->hitbox;
+
+    if (source == NULL) {
+        return;
+    }
+
+    writable = (Hitbox3D*)zMalloc(sizeof(Hitbox3D));
+    if (writable == NULL) {
+        return;
+    }
+
+    ((Hitbox*)writable)->offset_x = source->offset_x;
+    ((Hitbox*)writable)->offset_y = source->offset_y;
+    ((Hitbox*)writable)->unk2[0] = source->unk2[0];
+    ((Hitbox*)writable)->unk2[1] = source->unk2[1];
+    ((Hitbox*)writable)->unk2[2] = source->unk2[2];
+    ((Hitbox*)writable)->unk2[3] = source->unk2[3];
+    ((Hitbox*)writable)->width = source->width;
+    ((Hitbox*)writable)->height = source->height;
+    super->hitbox = (Hitbox*)writable;
+}
 
 void SpearMoblin(SpearMoblinEntity* this) {
     EnemyFunctionHandler(super, (EntityActionArray)SpearMoblin_Functions);
@@ -99,29 +132,7 @@ void SpearMoblin_OnGrabbed(SpearMoblinEntity* this) {
 void sub_08028314(SpearMoblinEntity* this) {
     Entity* pEVar2;
 
-#ifdef PC_PORT
-    /* The enemy initializer set super->hitbox to definition->ptr.hitbox,
-     * which lives in read-only mmap'd ROM (gRomData) on PC. The action
-     * routines write to hitbox->offset_x/y/width/height per frame, which
-     * traps SIGSEGV the first time the player approaches a spear moblin
-     * (#19, South Hyrule field loading-zone crash). Allocate a mutable
-     * Hitbox3D copy. AllocMutableHitbox() can't be used because its
-     * UnloadHitbox() would zFree the const ROM pointer. */
-    {
-        const Hitbox* src = super->hitbox;
-        Hitbox3D* dst = (Hitbox3D*)zMalloc(sizeof(Hitbox3D));
-        if (dst != NULL) {
-            if (src != NULL) {
-                ((Hitbox*)dst)->offset_x = src->offset_x;
-                ((Hitbox*)dst)->offset_y = src->offset_y;
-                ((Hitbox*)dst)->width = src->width;
-                ((Hitbox*)dst)->height = src->height;
-            }
-            super->hitbox = (Hitbox*)dst;
-        }
-    }
-#endif
-
+    SpearMoblin_CloneHitbox(this);
     sub_0804A720(super);
     super->action = 1;
     super->animationState = 0;
@@ -251,7 +262,7 @@ void sub_08028528(SpearMoblinEntity* this) {
         sub_08028728(this);
     } else {
         sub_080288C0(this);
-        box = GUNK_080CC944_PTR(super->animationState >> 1);
+        box = SpearMoblin_ReadHitboxTemplate(super->animationState >> 1);
         super->hitbox->offset_x = box->offset_x;
         super->hitbox->offset_y = box->offset_y;
         super->hitbox->width = box->width;
@@ -414,7 +425,7 @@ void sub_08028858(SpearMoblinEntity* this) {
     const Hitbox* box;
 
     sub_080288C0(this);
-    box = GUNK_080CC944_PTR(super->animationState >> 1);
+    box = SpearMoblin_ReadHitboxTemplate(super->animationState >> 1);
     super->hitbox->offset_x = box->offset_x;
     super->hitbox->offset_y = box->offset_y;
     super->hitbox->width = box->width;

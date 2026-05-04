@@ -733,24 +733,22 @@ u32 GetNextFunction(Entity* this) {
     u8 gustJarState = this->gustJarState;
     u8 contactFlags = this->contactFlags;
 
-#ifdef PC_PORT
     /* Peahat (and other gust-jar-killable enemies) reach Subaction5 with
      * health=0 + gustJarState=0x04 + ENT_COLLIDE clear, expecting the
-     * death sequence to take over. The gj=0x04 short-circuit at top sends
-     * them right back to OnGrabbed forever — corpse never despawns (#20).
-     * If the entity is dead, prefer the health==0 dispatch so GenericDeath
+     * death sequence to take over. The gj=0x04 short-circuit at top would
+     * send them right back to OnGrabbed forever — corpse never despawns
+     * (#20). When dead, prefer the death-cascade dispatch so GenericDeath
      * runs and the DEATH_FX cleanup chain fires.
      *
-     * BUT: AcroBandit's chain unwind lives in OnCollision and only runs on
-     * the death frame (when contactFlags has bit 7 + health hits 0). If we
-     * short-circuit straight to OnDeath here, the unwind never fires and the
-     * surviving bandits in a stack stay stuck in Action4 with stale parent
-     * pointers (#35). Likewise, the death-fall animation runs via
-     * OnKnockback while knockbackDuration is nonzero, so we need to keep
-     * dispatching OnKnockback during the dying frames too. Only fall through
-     * to OnDeath when neither of those is active. */
+     * AcroBandit's chain unwind lives in OnCollision and only runs on the
+     * death frame (contactFlags bit 7 + health hits 0); short-circuiting
+     * straight to OnDeath would leave the surviving bandits stuck in
+     * Action4 with stale parent pointers (#35). Death-fall animation runs
+     * via OnKnockback while knockbackDuration is nonzero, so OnKnockback
+     * needs to keep dispatching during dying frames too. Fall through to
+     * OnDeath only when neither is active. */
     if (this->health == 0) {
-        if (!(gustJarState & 4) && (contactFlags >> 7))
+        if (!(gustJarState & 4) && (contactFlags & 0x80))
             return 1; /* OnCollision: chain unwind + death-state setup */
         if (this->knockbackDuration != 0)
             return 2; /* OnKnockback: death-fall animation */
@@ -760,28 +758,19 @@ u32 GetNextFunction(Entity* this) {
             return 5;
         if (this->confusedTime != 0)
             return 4;
-        return 3;
+        return 3; /* OnDeath */
     }
-#endif
 
+    /* GBA-original alive dispatch order: gust-jar grab > contact >
+     * knockback > tick. Matches the Thumb asm at 0x0800279C. */
     if (gustJarState & 4)
         return 5;
 
-    if (!(gustJarState & 4) && (contactFlags >> 7))
+    if (contactFlags & 0x80)
         return 1;
 
     if (this->knockbackDuration != 0)
         return 2;
-
-    if (this->health == 0) {
-        if (this->action == 0 && this->subAction == 0)
-            return 0;
-        if (gustJarState & 8)
-            return 5;
-        if (this->confusedTime != 0)
-            return 4;
-        return 3;
-    }
 
     if (this->action == 0 && this->subAction == 0)
         return 0;

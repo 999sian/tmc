@@ -245,33 +245,25 @@ void CuccoMinigame_WinRupees(CuccoMinigameEntity* this) {
     s8* cuccoTypes;
     int index;
     s32 rupees;
-    const u8* rupeeValues;
+    s32 cuccoType;
 
     CuccoMinigame_GetLevel(); // Rupees previously dependent on level?
     cuccoTypes = this->returnedCuccoTypes;
     rupees = 0;
-    rupeeValues = CuccoMinigameRupees;
 
     for (index = 9; index >= 0; index--) { // Only first 10 count?
-#ifdef PC_PORT
-        /* GBA original truncated rupeeValues to 32-bit and re-cast to a
-         * pointer; on 64-bit hosts that drops the upper address bits and
-         * dereferences invalid memory. cuccoType is in {-1, 0, 1, 2}
-         * (see sub_080A1270): -1 means the cucco died, 0 means not saved,
-         * 1/2 mean saved type 0/1. Treat anything outside the table as 0. */
-        s8 idx = (s8)*cuccoTypes;
-        if (idx >= 0 && (u32)idx < sizeof(CuccoMinigameRupees)) {
-            rupees += rupeeValues[idx];
+        /* GBA original mimicked an ARM register-add by casting CuccoMinigameRupees
+         * to int and adding the index, then re-casting to u8* and dereferencing.
+         * On 64-bit hosts that truncates the upper bits of the pointer and
+         * SIGSEGVs at the end of the cucco minigame (#46). Just bounds-check
+         * and index normally. cuccoType is in {-1, 0, 1, 2} (see
+         * sub_080A1270): the (u32) cast turns -1 into a huge value that
+         * fails the bounds check, the same as a signed `>= 0` guard. */
+        cuccoType = *cuccoTypes;
+        if ((u32)cuccoType < sizeof(CuccoMinigameRupees)) {
+            rupees += CuccoMinigameRupees[cuccoType];
         }
         cuccoTypes++;
-#else
-        // Weird register addition
-        // rupeeValues[*cuccoTypes] translates to add r0,r3,r0 but should be add r0,r3
-        u32 temp = *cuccoTypes;
-        temp += (int)rupeeValues;
-        rupees += *(u8*)temp;
-        cuccoTypes++;
-#endif
     }
     ModRupees(rupees);
     MessageNoOverlap(TEXT_INDEX(TEXT_ANJU, 0x7), super);

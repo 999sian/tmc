@@ -54,18 +54,16 @@ void HouseDoorExterior(HouseDoorExteriorEntity* this) {
         HouseDoorExterior_Type2,
         HouseDoorExterior_Type3,
     };
-#ifdef PC_PORT
-    /* Defensive: in some cases a child door entity gets spawned with
-     * type2 > 3 (parent's room-property iteration reading garbage bytes
-     * — see #29, #30, the bridge/Trilby random crashes). The dispatch
-     * runs off the end of the table and calls a random function pointer.
-     * Skip the dispatch if out of range so the bad child stays inert
-     * instead of crashing. The root cause (wrong room-property index)
-     * needs separate investigation. */
-    if (super->type2 >= 4) {
+    /* Defensive: a child door entity can get spawned with type2 > 3 when
+     * the parent's room-property iteration reads garbage bytes (see #29,
+     * #30 — bridge/Trilby random crashes). The dispatch would run off the
+     * end of the table and call a random function pointer. Skip the
+     * dispatch if out of range so the bad child stays inert instead of
+     * crashing. The root cause (wrong room-property index) needs separate
+     * investigation. */
+    if (super->type2 >= (sizeof(HouseDoorExterior_Types) / sizeof(HouseDoorExterior_Types[0]))) {
         return;
     }
-#endif
     HouseDoorExterior_Types[super->type2](this);
 }
 
@@ -78,6 +76,10 @@ void HouseDoorExterior_Type0(HouseDoorExteriorEntity* this) {
         *((u32*)(&this->unk_68)) = 0;
         this->unk_6c = super->timer;
         SetEntityPriority(super, PRIO_PLAYER_EVENT);
+    }
+
+    if (this->unk_6c < 8) {
+        return;
     }
 
 #ifdef PC_PORT

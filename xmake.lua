@@ -20,6 +20,12 @@ option("game_version")
     set_description("Game version to build", "USA", "EU", "JP", "DEMO_USA", "DEMO_JP")
 option_end()
 
+option("pc_avx2")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Enable AVX2 optimizations for tmc_pc when supported")
+option_end()
+
 -- Build directories
 local build_dir = "build/$(plat)"
 local tools_bin = "tools/bin"
@@ -335,6 +341,17 @@ target("tmc_pc")
     set_targetdir("build/pc")
     add_deps("asset_extractor")
 
+    local use_avx2 = get_config("pc_avx2")
+    if use_avx2 == nil then
+        use_avx2 = true
+    end
+    local target_arch = get_config("arch") or ""
+    local arch_supports_avx2 = is_arch("x86", "x64", "x86_64", "amd64")
+    if not arch_supports_avx2 and target_arch ~= "" then
+        local arch_l = target_arch:lower()
+        arch_supports_avx2 = (arch_l == "x64" or arch_l == "x86_64" or arch_l == "amd64")
+    end
+
     -- Apply the ViruaPPU patches before compilation. The submodule is
     -- intentionally pinned at upstream; each patch is idempotent and
     -- skipped when its marker symbol is already present in the target file.
@@ -375,6 +392,15 @@ target("tmc_pc")
                 end
             end
         end
+
+        print("[tmc_pc] arch=%s pc_avx2=%s", target_arch ~= "" and target_arch or "auto", use_avx2 and "on" or "off")
+        if use_avx2 and arch_supports_avx2 then
+            print("[tmc_pc] AVX2: enabled")
+        elseif not use_avx2 then
+            print("[tmc_pc] AVX2: disabled (pc_avx2 option is off)")
+        else
+            print("[tmc_pc] AVX2: disabled (unsupported target arch)")
+        end
     end)
 
     -- PC port version configurations
@@ -387,6 +413,13 @@ target("tmc_pc")
     
     -- Define PC_PORT, NON_MATCHING and game version
     add_defines("PC_PORT", "NON_MATCHING", "USE_OPENMP", pc_ver.region, pc_ver.language, "REVISION=0")
+    if use_avx2 and arch_supports_avx2 then
+        add_defines("USE_AVX2")
+        add_cflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})
+        add_cxxflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})
+        add_cflags("/arch:AVX2", {tools = {"cl"}})
+        add_cxxflags("/arch:AVX2", {tools = {"cl"}})
+    end
     
     -- Include directories
     add_includedirs("include", "libs")
