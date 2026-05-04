@@ -21,7 +21,12 @@ typedef struct {
     u16 cancelledTextIndex;
     u16 fusingTextIndex;
 } NPCData;
+#ifdef PC_PORT
+#include "port_rom.h"
+extern const u8 gUnk_08001A7C[];
+#else
 extern NPCData* gUnk_08001A7C[];
+#endif
 
 u32 sub_0806EF88(Entity*);
 u32 sub_0806EE70(Entity*);
@@ -334,7 +339,12 @@ void CollideFollowers(void) {
 
 void InitializeNPCFusion(Entity* entity) {
     u32 fuserId = GetFuserId(entity);
+#ifdef PC_PORT
+    NPCData* data = (NPCData*)Port_PackedRomEntry(gUnk_08001A7C, fuserId);
+    if (data == NULL) return;
+#else
     NPCData* data = gUnk_08001A7C[fuserId];
+#endif
     InitializeFuseInfo(entity, data->textIndex, data->cancelledTextIndex, data->fusingTextIndex);
     gPlayerState.controlMode = CONTROL_DISABLED;
 }

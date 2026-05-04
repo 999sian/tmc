@@ -1,8 +1,5 @@
 #include "manager.h"
 #include "room.h"
-#ifdef PC_PORT
-#include <stdio.h>
-#endif
 
 // TODO: change all manager arguments to be Entity* and cast to specific type later.
 void (*const gMiscManagerunctions[])() = {
@@ -72,18 +69,8 @@ void ManagerUpdate(Entity* this) {
     }
 
     if (this->id >= ARRAY_COUNT(gMiscManagerunctions) || gMiscManagerunctions[this->id] == NULL) {
-#ifdef PC_PORT
-        fprintf(stderr, "[MANAGER] invalid id=%u ptr=%p type=%u type2=%u action=%u\n", this->id, (void*)this,
-                this->type, this->type2, this->action);
-#endif
         return;
     }
 
-#ifdef PC_PORT
-    if (this->id == ENTER_ROOM_TEXTBOX_MANAGER) {
-        fprintf(stderr, "[MANAGER] dispatch ENTER_ROOM_TEXTBOX_MANAGER ptr=%p type=%u type2=%u action=%u room=%u area=%u\n",
-                (void*)this, this->type, this->type2, this->action, gRoomControls.room, gRoomControls.area);
-    }
-#endif
     gMiscManagerunctions[this->id](this);
 }

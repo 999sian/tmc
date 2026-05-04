@@ -2,6 +2,7 @@
 #include "asm.h"
 #include "beanstalkSubtask.h"
 #include "common.h"
+#include "room.h"
 #include "enemy/armos.h"
 #include "effects.h"
 #include "flags.h"
@@ -389,11 +390,27 @@ void sub_StateChange_HouseInteriors1_Library1F(void) {
     if (gSave.global_progress > 4) {
         LoadRoomEntityList(&gUnk_080D6714);
     }
+#ifdef PC_PORT
+    /* The C-side `gUnk_additional_8/9_HouseInteriors1_Library1F` symbols are
+     * zeroed BSS stubs (port_linked_stubs.c) — no real data is linked into
+     * the PC build for these named-symbol additional entity lists. Without
+     * a fix the librarian on the left never spawns (zero data → bogus
+     * entities) and #31 sees wrong/missing dialogue. The same data IS
+     * available via the area table at room property slots 8/9 (loaded from
+     * room_properties/offset_d66f4.bin and offset_d6734.bin), so go through
+     * GetCurrentRoomProperty instead. */
+    if (!GetInventoryValue(ITEM_FLIPPERS) && CheckGlobalFlag(MIZUKAKI_START) && CheckLocalFlag(MIZUKAKI_KOBITO)) {
+        LoadRoomEntityList((const EntityData*)GetCurrentRoomProperty(9));
+    } else {
+        LoadRoomEntityList((const EntityData*)GetCurrentRoomProperty(8));
+    }
+#else
     if (!GetInventoryValue(ITEM_FLIPPERS) && CheckGlobalFlag(MIZUKAKI_START) && CheckLocalFlag(MIZUKAKI_KOBITO)) {
         LoadRoomEntityList(&gUnk_additional_9_HouseInteriors1_Library1F);
     } else {
         LoadRoomEntityList(&gUnk_additional_8_HouseInteriors1_Library1F);
     }
+#endif
 }
 
 u32 sub_unk3_HouseInteriors1_Inn1F(void) {
@@ -4672,7 +4689,12 @@ extern EntityData gUnk_080F0920;
 void sub_StateChange_CastleGarden_Main(void) {
     if (!CheckGlobalFlag(TABIDACHI)) {
         LoadRoomEntityList(&gUnk_080F0650);
-#ifdef EU
+#if defined(EU) || defined(PC_PORT)
+        /* PC port follows EU behaviour: prologue Castle Garden continues the
+         * toned-down Picori Festival theme (BGM_FESTIVAL_APPROACH). The USA
+         * GBA original incorrectly substituted BGM_BEANSTALK ("Climbing the
+         * Beanstalk") here — confirmed wrong against the canonical festival
+         * track. */
         gArea.queued_bgm = BGM_FESTIVAL_APPROACH;
 #else
         gArea.queued_bgm = BGM_BEANSTALK;
@@ -5882,7 +5904,8 @@ void sub_StateChange_HyruleField_OutsideCastle(void) {
         SetTileType(TILE_TYPE_372, TILE_POS(39, 30), LAYER_BOTTOM);
     }
     if (!CheckGlobalFlag(TABIDACHI)) {
-#ifdef EU
+#if defined(EU) || defined(PC_PORT)
+        /* See sub_StateChange_CastleGarden_Main — port follows EU. */
         gArea.queued_bgm = BGM_FESTIVAL_APPROACH;
 #else
         gArea.queued_bgm = BGM_BEANSTALK;

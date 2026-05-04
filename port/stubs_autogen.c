@@ -678,7 +678,7 @@ u8 gUnk_03003DE4[0xC];
 /* m4aSoundVSyncOff -- implemented in port_m4a_stubs.c */
 /* m4aSoundVSyncOn -- implemented in port_m4a_stubs.c */
 /* ram_ClearAndUpdateEntities -- defined in port_draw.c */
-u32 ram_CollideAll(...) {
+u32 ram_CollideAll(void) {
     s32 i;
     s32 j;
 
@@ -791,7 +791,7 @@ u32 ram_CollideAll(...) {
 }
 /* ram_DrawDirect -- defined in port_draw.c */
 /* ram_DrawEntities -- defined in port_draw.c */
-u32 ram_IntrMain(...) {
+u32 ram_IntrMain(void) {
     return 0;
 }
 /* ram_MakeFadeBuff256 -- defined in port_linked_stubs.c */

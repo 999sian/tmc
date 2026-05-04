@@ -6,6 +6,7 @@ extern "C" {
 #include "common.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include "port_asset_index.h"
 #include "structures.h"
 #include "area.h"
 #undef this
@@ -45,6 +46,12 @@ extern Frame* gSpriteAnimations_322[];
 
 #ifdef _WIN32
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <climits>
+#include <mach-o/dyld.h>
+#else
+#include <climits>
+#include <unistd.h>
 #endif
 
 namespace {
@@ -155,74 +162,90 @@ void AssetLogOnce(const std::string& key, const char* fmt, ...) {
     va_end(args);
 }
 
-std::optional<std::filesystem::path> FindEditableAssetsRoot() {
-    const std::optional<std::filesystem::path> exeDir = []() -> std::optional<std::filesystem::path> {
+// Returns the directory containing the running executable, or — only as a
+// last resort — std::filesystem::current_path(). The release tarball ships
+// `tmc_pc` and `assets[_src]/` as siblings, so the exe directory is the
+// authoritative answer; cwd just happens to coincide with it when launched
+// from a terminal in the same dir.
+std::optional<std::filesystem::path> GetExecutableDirectory() {
 #ifdef _WIN32
-        std::wstring buffer(MAX_PATH, L'\0');
-        DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    std::wstring buffer(MAX_PATH, L'\0');
+    DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (len == 0) {
+        return std::nullopt;
+    }
+    while (len >= buffer.size() - 1) {
+        buffer.resize(buffer.size() * 2);
+        len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
         if (len == 0) {
             return std::nullopt;
         }
-        while (len >= buffer.size() - 1) {
-            buffer.resize(buffer.size() * 2);
-            len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-            if (len == 0) {
-                return std::nullopt;
-            }
+    }
+    buffer.resize(len);
+    return std::filesystem::path(buffer).parent_path();
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buffer(size, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
+        std::error_code ec;
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(buffer.c_str(), ec);
+        if (!ec) {
+            return canonical.parent_path();
         }
-        buffer.resize(len);
-        return std::filesystem::path(buffer).parent_path();
+    }
+    std::error_code ec;
+    return std::filesystem::current_path(ec);
 #else
-        return std::filesystem::current_path();
+    char buffer[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer));
+    if (len > 0 && static_cast<size_t>(len) < sizeof(buffer)) {
+        return std::filesystem::path(std::string(buffer, static_cast<size_t>(len))).parent_path();
+    }
+    std::error_code ec;
+    return std::filesystem::current_path(ec);
 #endif
-    }();
+}
 
-    if (!exeDir.has_value()) {
-        return std::nullopt;
+/* Build the search list once: exe-dir first (typical install layout), then
+ * cwd (works around users who launch via a custom dynamic loader, e.g.
+ * `$HOME/glibc/ld-linux.so.2 ./tmc_pc`, in which case /proc/self/exe points
+ * at the loader rather than tmc_pc — issue #2). Caller filters by which
+ * candidate actually contains the expected JSON manifest. */
+static std::vector<std::filesystem::path> AssetSearchRoots() {
+    std::vector<std::filesystem::path> roots;
+    const auto exeDir = GetExecutableDirectory();
+    if (exeDir.has_value()) {
+        roots.push_back(*exeDir);
     }
-
-    const std::filesystem::path candidate = *exeDir / "assets_src";
-    if (std::filesystem::exists(candidate / "gfx_groups.json") &&
-        std::filesystem::exists(candidate / "palette_groups.json") &&
-        std::filesystem::exists(candidate / "palettes.json")) {
-        return candidate;
+    std::error_code ec;
+    const auto cwd = std::filesystem::current_path(ec);
+    if (!ec && (!exeDir.has_value() || *exeDir != cwd)) {
+        roots.push_back(cwd);
     }
+    return roots;
+}
 
+std::optional<std::filesystem::path> FindEditableAssetsRoot() {
+    for (const auto& root : AssetSearchRoots()) {
+        const std::filesystem::path candidate = root / "assets_src";
+        if (std::filesystem::exists(candidate / "gfx_groups.json") &&
+            std::filesystem::exists(candidate / "palette_groups.json") &&
+            std::filesystem::exists(candidate / "palettes.json")) {
+            return candidate;
+        }
+    }
     return std::nullopt;
 }
 
 std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
-    const std::optional<std::filesystem::path> exeDir = []() -> std::optional<std::filesystem::path> {
-#ifdef _WIN32
-        std::wstring buffer(MAX_PATH, L'\0');
-        DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-        if (len == 0) {
-            return std::nullopt;
+    for (const auto& root : AssetSearchRoots()) {
+        const std::filesystem::path candidate = root / "assets";
+        if (std::filesystem::exists(candidate / "gfx_groups.json") &&
+            std::filesystem::exists(candidate / "palette_groups.json")) {
+            return candidate;
         }
-        while (len >= buffer.size() - 1) {
-            buffer.resize(buffer.size() * 2);
-            len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-            if (len == 0) {
-                return std::nullopt;
-            }
-        }
-        buffer.resize(len);
-        return std::filesystem::path(buffer).parent_path();
-#else
-        return std::filesystem::current_path();
-#endif
-    }();
-
-    if (!exeDir.has_value()) {
-        return std::nullopt;
     }
-
-    const std::filesystem::path candidate = *exeDir / "assets";
-    if (std::filesystem::exists(candidate / "gfx_groups.json") &&
-        std::filesystem::exists(candidate / "palette_groups.json")) {
-        return candidate;
-    }
-
     return std::nullopt;
 }
 
@@ -671,6 +694,41 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     return result;
 }
 
+/* Look up a property's ROM offset by file path so we can serve it directly
+ * from gRomData. Some additional_X room properties (HouseDoor data tables,
+ * for example) span multiple consecutive `_N.bin` chunks with inline 4-byte
+ * GBA script pointers between them. The asset extractor splits those chunks
+ * into separate files and area_tables.json references only the first chunk,
+ * so iteration past the first file's bytes hits past-end memory and reads
+ * a garbage 4th door. Pointing at gRomData (already populated by both the
+ * baserom.gba load and the .bin overwrites) gives the contiguous, correctly-
+ * terminated layout instead. (#28 root cause.) */
+extern "C" const EmbeddedAssetEntry* EmbeddedAssetIndex_Get(void);
+extern "C" u32 EmbeddedAssetIndex_Count(void);
+static u8* RomBackedPointerForAssetFile(const std::string& relativePath) {
+    if (gRomData == nullptr) {
+        return nullptr;
+    }
+    static std::unordered_map<std::string, u32> sFileToRomOffset = []() {
+        std::unordered_map<std::string, u32> map;
+        const EmbeddedAssetEntry* entries = EmbeddedAssetIndex_Get();
+        const u32 count = EmbeddedAssetIndex_Count();
+        map.reserve(count);
+        for (u32 i = 0; i < count; ++i) {
+            map.emplace(entries[i].path, entries[i].offset);
+        }
+        return map;
+    }();
+    auto it = sFileToRomOffset.find(relativePath);
+    if (it == sFileToRomOffset.end()) {
+        return nullptr;
+    }
+    if (it->second >= gRomSize) {
+        return nullptr;
+    }
+    return gRomData + it->second;
+}
+
 u32 RegisterMapAssetFile(const std::string& relativePath) {
     auto found = gAssetGroupCache.mapAssetFileToIndex.find(relativePath);
     if (found != gAssetGroupCache.mapAssetFileToIndex.end()) {
@@ -765,9 +823,15 @@ bool BuildAreaFromAssets(u32 area) {
                 continue;
             }
 
-            const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
-            if (fileData != nullptr && !fileData->empty()) {
-                props[i] = const_cast<u8*>(fileData->data());
+            /* Prefer pointing into gRomData when the file is a ROM-backed
+             * asset — fixes split additional_* property tables (#28). */
+            if (u8* romPtr = RomBackedPointerForAssetFile(roomEntry.files[i])) {
+                props[i] = romPtr;
+            } else {
+                const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
+                if (fileData != nullptr && !fileData->empty()) {
+                    props[i] = const_cast<u8*>(fileData->data());
+                }
             }
         }
 
@@ -1022,8 +1086,22 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
             AssetLogOnce("gfx-file:" + std::to_string(group) + ":" + entry.file + ":" + std::to_string(entry.dest),
                          "gfx group %u -> %s (dest=0x%08X, %u bytes)", group, entry.file.c_str(), entry.dest,
                          static_cast<u32>(fileData->size()));
-            MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
-                    static_cast<u32>(fileData->size()));
+            /* MemCopy resolves dest via port_resolve_addr (raw gEwram[N] for
+             * EWRAM addresses), but the port has heap-allocated stand-in
+             * arrays for gMapDataBottomSpecial / gMapDataTopSpecial / gMapTop
+             * etc. that live OUTSIDE gEwram. Use Port_ResolveEwramPtr for
+             * EWRAM destinations so writes hit the actual game variables;
+             * fall back to MemCopy's generic path for VRAM/IWRAM. */
+            void* resolvedDest = nullptr;
+            if (entry.dest >= 0x02000000u && entry.dest < 0x02040000u) {
+                resolvedDest = Port_ResolveEwramPtr(entry.dest);
+            }
+            if (resolvedDest != nullptr) {
+                std::memcpy(resolvedDest, fileData->data(), fileData->size());
+            } else {
+                MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
+                        static_cast<u32>(fileData->size()));
+            }
         }
 
         if (entry.terminator) {

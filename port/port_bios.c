@@ -2,6 +2,7 @@
 #include "main.h"
 #include "port_audio.h"
 #include "port_gba_mem.h"
+#include "port_hdma.h"
 #include "port_ppu.h"
 #include "port_runtime_config.h"
 #include "port_types.h"
@@ -13,6 +14,7 @@
 #include <math.h>
 
 static bool gQuitRequested = false;
+static bool sFastForward = false;
 static int sFrameNum = 0;
 
 typedef struct {
@@ -70,9 +72,44 @@ static void Port_PumpEvents(void) {
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_EVENT_QUIT) {
             gQuitRequested = true;
-        } else {
-            Port_Config_HandleEvent(&e);
+            continue;
         }
+        if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+            bool altHeld = (e.key.mod & SDL_KMOD_ALT) != 0;
+            if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && altHeld)) {
+                Port_PPU_ToggleFullscreen();
+                continue;
+            }
+            if (e.key.key == SDLK_F12) {
+                Port_PPU_ToggleSmoothing();
+                continue;
+            }
+            if (e.key.key == SDLK_F9) {
+                /* Capture a bug-report bundle for playtesters: screenshot
+                 * + save copy + game-state text. Lands in a timestamped
+                 * directory next to the binary. */
+                extern char* Port_BugReport_Capture(void);
+                char* dir = Port_BugReport_Capture();
+                if (dir) {
+                    free(dir);
+                }
+                continue;
+            }
+            if (e.key.key == SDLK_TAB) {
+                sFastForward = true;
+                continue;
+            }
+        }
+        if (e.type == SDL_EVENT_KEY_UP && e.key.key == SDLK_TAB) {
+            sFastForward = false;
+            continue;
+        }
+        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+            e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
+            sFastForward = e.gaxis.value > 16384;
+            continue;
+        }
+        Port_Config_HandleEvent(&e);
     }
 }
 
@@ -84,9 +121,24 @@ static u32 sFpsFrameCount = 0;
 void VBlankIntrWait(void) {
     u64 nowNs;
 
-    Port_PPU_PresentFrame();
+    /* Toggle VSync based on whether we're trying to run faster than the
+     * display refresh: fast-forward, or a target FPS preset > 60. With
+     * VSync on, SDL_RenderPresent caps us at the display rate regardless
+     * of the busy-wait timer below — so #26 reports of fast-forward and
+     * the FPS preset menu having no effect on Windows are actually the
+     * display refresh holding us. */
+    {
+        u32 targetFps = Port_Config_TargetFps();
+        bool wantVsync = !sFastForward && targetFps != 0 && targetFps <= 60;
+        Port_PPU_SetVSync(wantVsync);
+    }
 
-    while (SDL_GetTicksNS() - lastFrameNs < 16666667 ) {
+    Port_PPU_PresentFrame();
+    port_hdma_vblank_reset();
+
+    if (!sFastForward) {
+        while (SDL_GetTicksNS() - lastFrameNs < Port_Config_FrameTimeNs()) {
+        }
     }
 
     nowNs = SDL_GetTicksNS();
@@ -101,16 +153,17 @@ void VBlankIntrWait(void) {
     if (nowNs - sFpsWindowStartNs >= 1000000000ULL) {
         double elapsedSec = (double)(nowNs - sFpsWindowStartNs) / 1000000000.0;
         double fps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
-        char title[64];
+        char title[96];
 
-        SDL_snprintf(title, sizeof(title), "The Minish Cap - %.1f FPS", fps);
+#ifndef TMC_PORT_VERSION
+#define TMC_PORT_VERSION "0.1.5-experimental"
+#endif
+        SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
         Port_PPU_SetWindowTitle(title);
 
         sFpsWindowStartNs = nowNs;
         sFpsFrameCount = 0;
     }
-
-
 
     if (gQuitRequested) {
         exit(0);
@@ -291,13 +344,20 @@ void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 c
 
 /* ObjAffineSet (SWI 0x0F)
  *
- * Computes 2x2 affine matrices (pa, pb, pc, pd) from rotation+scale
- * parameters and writes them at `offset`-byte intervals.
+ * GBA BIOS computes the *inverse* texture-mapping matrix: hardware applies
+ * pa/pb/pc/pd to screen-relative coordinates to produce texture coordinates.
+ * For a visible scale of sx, the matrix uses 1/sx — so doubling sx halves
+ * the sampled-texture step per screen pixel and the sprite *grows*.
  *
- * When used with OAM (offset=8), each parameter goes into the
- * affineParam field of consecutive OAM entries (4 entries per matrix).
+ *   pa =  cos(θ) / sx
+ *   pb = -sin(θ) / sy
+ *   pc =  sin(θ) / sx
+ *   pd =  cos(θ) / sy
  *
- * GBA BIOS writes ONE s16 per destination, not 4 consecutive.
+ * Inputs sx/sy are 8.8 fixed point (0x100 = 1.0). Output pa/pb/pc/pd are
+ * also 8.8 fixed point. Each is written as one s16 at `offset`-byte
+ * intervals — for OAM (offset=8), that puts the four values in the
+ * affineParam field of 4 consecutive OAM entries.
  */
 void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset) {
     u8* d = (u8*)dst;
@@ -305,26 +365,31 @@ void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset
         s32 sx = src[i].xScale;
         s32 sy = src[i].yScale;
         u16 theta = src[i].rotation;
+        double angle;
+        double cosA;
+        double sinA;
+        s16 pa;
+        s16 pb;
+        s16 pc;
+        s16 pd;
+
+        if (sx == 0) sx = 1;
+        if (sy == 0) sy = 1;
 
         /* GBA angle (0-0xFFFF = 0-360°) → radians */
-        double angle = (double)theta * 3.14159265358979323846 * 2.0 / 65536.0;
-        double cosA = cos(angle);
-        double sinA = sin(angle);
+        angle = (double)theta * 3.14159265358979323846 * 2.0 / 65536.0;
+        cosA = cos(angle);
+        sinA = sin(angle);
+        pa = (s16)(sx * cosA);
+        pb = (s16)(-sx * sinA);
+        pc = (s16)(sy * sinA);
+        pd = (s16)(sy * cosA);
 
-        /* sx, sy are 8.8 fixed point; multiply by cos/sin (float) → 8.8 result */
-        s16 pa = (s16)(sx * cosA);
-        s16 pb = (s16)(-sx * sinA);
-        s16 pc = (s16)(sy * sinA);
-        s16 pd = (s16)(sy * cosA);
-
-        /* Write ONE s16 per destination, spaced by `offset` bytes.
-         * For OAM (offset=8), this writes to the affineParam field
-         * of 4 consecutive OAM entries without touching other fields. */
         *(s16*)(d + 0 * offset) = pa;
         *(s16*)(d + 1 * offset) = pb;
         *(s16*)(d + 2 * offset) = pc;
         *(s16*)(d + 3 * offset) = pd;
 
-        d += 4 * offset; /* advance to start of next matrix */
+        d += 4 * offset;
     }
 }

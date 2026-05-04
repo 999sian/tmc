@@ -54,6 +54,18 @@ void HouseDoorExterior(HouseDoorExteriorEntity* this) {
         HouseDoorExterior_Type2,
         HouseDoorExterior_Type3,
     };
+#ifdef PC_PORT
+    /* Defensive: in some cases a child door entity gets spawned with
+     * type2 > 3 (parent's room-property iteration reading garbage bytes
+     * — see #29, #30, the bridge/Trilby random crashes). The dispatch
+     * runs off the end of the table and calls a random function pointer.
+     * Skip the dispatch if out of range so the bad child stays inert
+     * instead of crashing. The root cause (wrong room-property index)
+     * needs separate investigation. */
+    if (super->type2 >= 4) {
+        return;
+    }
+#endif
     HouseDoorExterior_Types[super->type2](this);
 }
 
@@ -69,6 +81,17 @@ void HouseDoorExterior_Type0(HouseDoorExteriorEntity* this) {
     }
 
 #ifdef PC_PORT
+    /* Property indices 0..7 are reserved for the standard room
+     * functions/lists (entities, tile entities, room init/update, etc.).
+     * Door property data lives at index 8+ (additional). If a parent
+     * door's super->timer somehow lands at a reserved index — usually
+     * because EntityData read the wrong byte for type2's high half — we'd
+     * read e.g. the entity list as 12-byte door property records and
+     * spawn dozens of garbage children (#28, #29, #30 root cause).
+     * Bail out instead. */
+    if (this->unk_6c < 8) {
+        return;
+    }
     {
         const u8* raw = (const u8*)GetCurrentRoomProperty(this->unk_6c);
         if (!raw)
@@ -195,6 +218,15 @@ void HouseDoorExterior_Type3(HouseDoorExteriorEntity* this) {
         super->hitbox = (Hitbox*)&gUnk_081206AC;
         super->timer = 8;
     }
+#ifdef PC_PORT
+    /* On the port, Port_ResolveRomData can return NULL for door scripts whose
+     * GBA address isn't backed by the loaded ROM (or whose asset is missing),
+     * leaving entity->context unset by the spawner. The GBA original always
+     * had valid pointers; here we skip the script path instead of crashing. */
+    if (this->context == NULL) {
+        return;
+    }
+#endif
     ExecuteScript(super, this->context);
     sub_080868EC(super, this->context);
 }

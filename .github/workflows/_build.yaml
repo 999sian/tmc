@@ -1,0 +1,149 @@
+name: _build
+
+on:
+  workflow_call:
+    inputs:
+      publish_mode:
+        description: "artifact for CI artifacts, release for tag artifacts"
+        required: true
+        type: string
+      version_label:
+        description: "Date+SHA label (CI) or tag name (release)"
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.region }} on ${{ matrix.os_name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Use Ubuntu 22.04 (glibc 2.35) so the Linux binary runs on
+          # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
+          # on ubuntu-latest pins glibc 2.43+ which excludes most users.
+          - runner: ubuntu-22.04
+            os_name: linux
+            region: usa
+            flag: --usa
+            exe_name: tmc_pc
+            extractor_name: asset_extractor
+          - runner: windows-latest
+            os_name: windows
+            region: usa
+            flag: --usa
+            exe_name: tmc_pc.exe
+            extractor_name: asset_extractor.exe
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: matrix.os_name == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            curl libpng-dev libfmt-dev nlohmann-json3-dev \
+            libx11-dev libxext-dev libxrender-dev libxcursor-dev \
+            xutils-dev xorg-dev autoconf automake libtool meson ninja-build
+
+      - name: Install MinGW Windows
+        if: matrix.os_name == 'windows'
+        shell: powershell
+        run: |
+          choco install mingw -y --no-progress
+
+          $candidates = @(
+            "C:\ProgramData\mingw64\mingw64\bin",
+            "C:\ProgramData\mingw64\bin",
+            "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\mingw64\bin",
+            "C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw64\bin",
+            "C:\tools\mingw64\bin"
+          )
+
+          $mingw = $null
+          foreach ($path in $candidates) {
+            if (Test-Path "$path\gcc.exe") {
+              $mingw = $path
+              break
+            }
+          }
+
+          if ($null -eq $mingw) {
+            Write-Host "Known MinGW paths not found, searching gcc.exe..."
+            $gcc = Get-ChildItem -Path "C:\ProgramData" -Filter gcc.exe -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match "mingw.*\\bin\\gcc\.exe$" } |
+              Select-Object -First 1
+
+            if ($null -ne $gcc) {
+              $mingw = Split-Path $gcc.FullName
+            }
+          }
+
+          if ($null -eq $mingw) {
+            Write-Error "MinGW gcc.exe not found"
+            exit 1
+          }
+
+          Write-Host "Using MinGW from: $mingw"
+          echo $mingw | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$mingw;$env:PATH"
+
+          gcc --version
+          g++ --version
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+
+      - name: Configure xmake (no ROM needed for binaries)
+        shell: bash
+        env:
+          TMC_XMAKE_TOOLCHAIN: ${{ matrix.os_name == 'windows' && 'mingw' || '' }}
+        run: |
+          GAME_VERSION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
+          if [ -n "$TMC_XMAKE_TOOLCHAIN" ]; then
+            xmake f -y --game_version="$GAME_VERSION" --toolchain="$TMC_XMAKE_TOOLCHAIN"
+          else
+            xmake f -y --game_version="$GAME_VERSION"
+          fi
+
+      - name: Build tmc_pc and asset_extractor
+        shell: bash
+        run: |
+          xmake build -y tmc_pc
+          xmake build -y asset_extractor
+
+      - name: Prepare artifact payload
+        shell: bash
+        run: |
+          BIN_PATH="build/pc/${{ matrix.exe_name }}"
+          EXTRACTOR_PATH="build/pc/${{ matrix.extractor_name }}"
+          test -f "$BIN_PATH"
+          test -f "$EXTRACTOR_PATH"
+
+          OUTDIR="artifact"
+          mkdir -p "$OUTDIR"
+          cp "$BIN_PATH" "$OUTDIR/${{ matrix.exe_name }}"
+          cp "$EXTRACTOR_PATH" "$OUTDIR/${{ matrix.extractor_name }}"
+          if [ -f "assets/sounds.json" ]; then
+            cp assets/sounds.json "$OUTDIR/sounds.json"
+          fi
+
+      - name: Create archive
+        shell: bash
+        run: |
+          ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${{ inputs.version_label }}"
+          tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact .
+          echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.archive_name }}
+          path: ${{ env.archive_name }}
+          if-no-files-found: error

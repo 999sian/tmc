@@ -1,5 +1,7 @@
 set_project("tmc")
-set_version("0.1.0")
+-- Keep in sync with port/port_version.h.
+local TMC_PC_VERSION = "0.1.1"
+set_version(TMC_PC_VERSION)
 set_xmakever("2.7.0")
 
 -- ====================
@@ -41,18 +43,38 @@ end
 local use_system_packages = is_host("linux") and (os.getenv("XMAKE_USE_SYSTEM_SDL3") or os.getenv("IN_NIX_SHELL"))
 if use_system_packages then
     add_requires("nlohmann_json", {system = true, configs = {cmake = false}})
-    add_requires("fmt", {system = true, configs = {header_only = true}})
+    add_requires("fmt", {system = true})
     add_requires("libpng", {system = true})
     add_requires("zlib", {system = true})
     add_requires("libsdl3", {system = true})
     add_requires("nlohmann_json", {configs = {cmake = false}})
 else
     add_requires("nlohmann_json", {configs = {cmake = false}})
-    add_requires("fmt", {configs = {header_only = true}})
+    -- #15: passing system=false makes xmake ignore the host's
+    -- pacman::fmt / apt::libfmt-dev package (which is always shared)
+    -- and build fmt from source as a header-only target. Without
+    -- this, header_only=true was silently ignored and the binary
+    -- recorded a NEEDED dep on libfmt.so.12, which broke on Fedora 43
+    -- (ships fmt 11.x).
+    add_requires("fmt", {system = false, configs = {header_only = true}})
     add_requires("libpng")
     add_requires("zlib")
     add_requires("libsdl3", {configs = {shared = false}})
     add_requires("nlohmann_json", {configs = {cmake = false}})
+end
+
+-- #15: even with `header_only = true` requested above, the xmake fmt
+-- package still links the system libfmt.so when one happens to be
+-- installed on the build host (Arch ships fmt 12.x; Fedora 43 ships
+-- 11.x, so the resulting binary ImportError'd on Fedora).  Force the
+-- header-only path everywhere by defining FMT_HEADER_ONLY globally;
+-- fmt's headers then inline all the formatting code and the binary
+-- needs no libfmt at runtime.  --as-needed drops the now-unused
+-- `-lfmt` xmake still passes on the link line so the binary stops
+-- recording libfmt.so as a runtime dependency.
+add_defines("FMT_HEADER_ONLY=1")
+if is_plat("linux") then
+    add_ldflags("-Wl,--as-needed", {force = true})
 end
 
 -- ====================
@@ -311,7 +333,50 @@ target("tmc_pc")
     set_kind("binary")
     set_languages("c11", "cxx20")
     set_targetdir("build/pc")
-    
+    add_deps("asset_extractor")
+
+    -- Apply the ViruaPPU patches before compilation. The submodule is
+    -- intentionally pinned at upstream; each patch is idempotent and
+    -- skipped when its marker symbol is already present in the target file.
+    -- If a patch was applied with an older revision, reset the submodule
+    -- (`git -C libs/ViruaPPU checkout -- .`) so the patches reapply cleanly.
+    before_build(function (target)
+        local sub = path.join(os.projectdir(), "libs", "ViruaPPU")
+        local patches_dir = path.join(os.projectdir(), "port", "patches")
+        local patches = {
+            -- HDMA per-line callback hook in mode1.c and mode2.c render loops.
+            { patch = "viruappu-hdma-hook.patch",
+              marker_file = path.join(sub, "src", "mode2.c"),
+              marker = "virtuappu_mode1_pre_line_callback" },
+            { patch = "viruappu-mosaic.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "MODE1_IO_MOSAIC" },
+        }
+        for _, p in ipairs(patches) do
+            local patch_file = path.join(patches_dir, p.patch)
+            if os.isfile(p.marker_file) and os.isfile(patch_file) then
+                local content = io.readfile(p.marker_file)
+                if not (content and content:find(p.marker, 1, true)) then
+                    -- -3 falls back to a 3-way merge when surrounding lines
+                    -- have drifted (some hunks already in upstream), so the
+                    -- step stays self-healing instead of silently no-oping.
+                    local rel = path.relative(patch_file, os.projectdir())
+                    local applied = try {
+                        function ()
+                            os.execv("git", {"-C", sub, "apply", "-3", patch_file})
+                            return true
+                        end
+                    }
+                    if applied then
+                        print("[viruappu] applied %s", rel)
+                    else
+                        print("[viruappu] WARN: %s did not apply (drift?); continuing without it", rel)
+                    end
+                end
+            end
+        end
+    end)
+
     -- PC port version configurations
     local pc_versions = {
         USA = { region = "USA", language = "ENGLISH" },
@@ -337,11 +402,14 @@ target("tmc_pc")
     add_files("port/port_main.c")
     add_files("port/port_audio.c")
     add_files("port/port_runtime_config.cpp")
+    add_files("port/port_asset_bootstrap.cpp")
+    add_files("port/port_update_check.c")
     add_files("port/port_asset_loader.cpp")
     add_files("port/port_asset_pipeline.cpp")
     add_files("port/port_m4a_backend.cpp")
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
+    add_files("port/port_asset_index.c")  -- Asset offset index (path → ROM offset map)
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")
     add_files("port/stubs_autogen.c")
@@ -349,9 +417,13 @@ target("tmc_pc")
     add_files("port/data_const_stubs.c")  -- Const ROM data (generated by tools/generate_const_data.py)
     add_files("port/port_rom_tables.c")   -- Compile-time ROM offset tables (generated by tools/generate_rom_tables.py)
     add_files("port/port_bios.c")
+    add_files("port/port_bugreport.cpp")
+    add_files("port/port_bugreport_state.c")
     add_files("port/port_linked_stubs.c")
     add_files("port/port_draw.c")
     add_files("port/port_gba_mem.c")
+    add_files("port/port_hdma.c")    -- HBlank-DMA simulation (iris/circle WIN0H)
+    add_files("port/port_upscale.c") -- xBRZ-style pixel-art upscaler
     add_files("port/port_save.c")        -- EEPROM save emulation
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)
     add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
@@ -468,6 +540,7 @@ target("tmc_pc")
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then
         add_ldflags("-static", "-static-libgcc", "-static-libstdc++", {force = true})
+        add_syslinks("winhttp")
     end
     
     -- Math library
@@ -478,8 +551,13 @@ target("tmc_pc")
     -- Compiler flags
     add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
                "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g")
+
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
+    -- Keep symbols even in release mode so SIGSEGV traces are useful
+    -- locally (CI release tarballs may strip later). The xmake mode.release
+    -- rule adds -s/--strip-all by default which makes addr2line useless.
+    set_strip("none")
 target_end()
 
 

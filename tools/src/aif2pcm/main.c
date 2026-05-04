@@ -209,7 +209,7 @@ void read_aif(struct Bytes* aif, AifData* aif_data) {
             num_markers |= (uint8_t)aif->data[pos++];
 
             if (markers) {
-                FATAL_ERROR("More than one MARK Chunk in file!\n");
+                FATAL_ERROR("%s", "More than one MARK Chunk in file!\n");
             }
 
             markers = calloc(num_markers, sizeof(struct Marker));

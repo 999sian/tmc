@@ -116,10 +116,6 @@ void LightRayManager_Action1(LightRayManager* this) {
     s32 y;
 
     if (prop == NULL) {
-#ifdef PC_PORT
-        fprintf(stderr, "[LIGHT] missing property list type=%u area=%u room=%u\n", super->type, gRoomControls.area,
-                gRoomControls.room);
-#endif
         return;
     }
 

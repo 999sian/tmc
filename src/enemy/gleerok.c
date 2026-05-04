@@ -20,6 +20,9 @@
 #include "pauseMenu.h"
 #include "color.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 typedef struct {
     union SplitHWord unk0;
@@ -73,8 +76,22 @@ extern u8 gUnk_080CD840[];
 extern u8 gUnk_080CD844[];
 extern u8 gUnk_080CD850[];
 extern u8 gUnk_080CD854[];
+#ifdef PC_PORT
+/* gUnk_080CD86C / gUnk_080CD878 are GBA-pointer tables (4 packed
+ * u32 entries each) defined in port/data_const_stubs.c as `const u8[]`.
+ * Declaring them as `const u8*[]` on x86-64 strides 8 bytes per index
+ * and reads two GBA addresses concatenated — garbage. Treat as raw u8
+ * arrays and unpack each entry via Port_PackedRomEntry. */
+extern const u8 gUnk_080CD86C[];
+extern const u8 gUnk_080CD878[];
+#define GUNK_080CD86C_PTR(idx) ((const u8*)Port_PackedRomEntry(gUnk_080CD86C, (idx)))
+#define GUNK_080CD878_PTR(idx) ((const u8*)Port_PackedRomEntry(gUnk_080CD878, (idx)))
+#else
 extern const u8* gUnk_080CD86C[];
 extern const u8* gUnk_080CD878[];
+#define GUNK_080CD86C_PTR(idx) gUnk_080CD86C[(idx)]
+#define GUNK_080CD878_PTR(idx) gUnk_080CD878[(idx)]
+#endif
 
 extern u32 sub_0806FC80(Entity*, Entity*, s32);
 
@@ -1558,8 +1575,8 @@ void sub_0802EBC4(GleerokEntity* this) {
     s32 iVar4;
 
     if (this->unk_74 == 0) {
-        iVar4 = GetRandomByWeight(gUnk_080CD86C[this->unk_79]);
-        if (gUnk_080CD878[this->unk_79][iVar4] < this->unk_75) {
+        iVar4 = GetRandomByWeight(GUNK_080CD86C_PTR(this->unk_79));
+        if (GUNK_080CD878_PTR(this->unk_79)[iVar4] < this->unk_75) {
             this->unk_75 = 0;
             if (this->unk_79 == 0) {
                 this->unk_76 = 0;
