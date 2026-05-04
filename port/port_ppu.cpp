@@ -272,6 +272,10 @@ extern "C" void Port_PPU_PresentFrame(void) {
         SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);
         SDL_RenderClear(sRenderer);
         SDL_RenderTexture(sRenderer, tex, nullptr, &dst);
+        {
+            extern void Port_DebugMenu_Render(SDL_Renderer*, int, int);
+            Port_DebugMenu_Render(sRenderer, outW, outH);
+        }
         SDL_RenderPresent(sRenderer);
         return;
     }

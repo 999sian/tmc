@@ -577,6 +577,15 @@ void sub_08077D38(ItemBehavior* this, u32 index) {
     ptr = &gItemDefinitions[this->behaviorId];
     if (ptr->frameIndex) {
         if ((gPlayerState.flags & PL_NO_CAP)) {
+            /* GBA original: switch fell through to SetItemAnim with `anim`
+             * left in whatever register state the previous code used —
+             * normally the upper bits of behaviorId. Items without a
+             * no-cap form (boomerang, gust jar, cane, etc.) ended up
+             * passing 0x7FFF on x86-64 (uninitialized stack), and Link
+             * rendered as sprite 127 / SPRITE_JARPORTAL while using them
+             * (the F8 debug-menu unlock landed players in this exact
+             * state). Default to the regular animation. */
+            anim = ptr->frameIndex;
             switch (this->behaviorId) {
                 case 0x1b:
                     anim = ANIM_GRAB_NOCAP;
