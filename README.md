@@ -8,7 +8,7 @@
 [contributors]: https://github.com/zeldaret/tmc/graphs/contributors
 [contributors-badge]: https://img.shields.io/github/contributors/zeldaret/tmc
 
-[discord]: https://discord.zelda64.dev
+[discord]: https://discord.gg/y9GvbTYkzk
 [discord-badge]: https://img.shields.io/discord/688807550715560050?color=%237289DA&logo=discord&logoColor=%23FFFFFF
 
 A decompilation of The Legend of Zelda: The Minish Cap (GBA, 2004) — and a work-in-progress native PC port built on top of it.
@@ -32,7 +32,7 @@ The PC port currently supports **USA** and **EU**.
 
 ## PC Port — Pre-built releases (recommended)
 
-Pre-built tarballs are published on the [Releases page](https://github.com/MatheoVignaud/tmc/releases). They contain just two binaries plus the audio metadata file:
+Pre-built tarballs are published on the [Releases page](https://github.com/999sian/tmc/releases). They contain just two binaries plus the audio metadata file:
 
 ```
 asset_extractor      sounds.json      tmc_pc
@@ -171,7 +171,7 @@ xmake rom
 
 All contributions are welcome — decompilation, port improvements, tools, and documentation.
 
-Most discussions happen on our [Discord Server](https://discord.zelda64.dev), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
+Most discussions happen on our [Discord Server](https://discord.gg/y9GvbTYkzk), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
 
 
 
