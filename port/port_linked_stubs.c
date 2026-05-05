@@ -762,7 +762,19 @@ u32 GetNextFunction(Entity* this) {
     }
 
     /* GBA-original alive dispatch order: gust-jar grab > contact >
-     * knockback > tick. Matches the Thumb asm at 0x0800279C. */
+     * knockback > tick. Matches the Thumb asm at 0x0800279C.
+     *
+     * NOTE for issue #54 follow-up: the original asm probably also
+     * routed confusedTime>0 to OnConfused (action 4) here, mirroring
+     * the dead-path branch above. Adding `if (confusedTime!=0) return 4;`
+     * does dispatch GenericConfused correctly, but #54's user-visible
+     * symptom is that dizzy stars persist — and they persist because the
+     * FX_STARS object isn't stored in entity->child for several enemies
+     * (e.g. OCTOROK2). So that dispatch fix alone doesn't clear the FX;
+     * landing it without the FX-storage fix would change behaviour
+     * (gravity ticks via GenericConfused) without solving the bug.
+     * Leaving the alive-dispatch unchanged until the FX-storage path is
+     * tracked down. */
     if (gustJarState & 4)
         return 5;
 

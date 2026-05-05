@@ -184,6 +184,17 @@ bool CopySaveFile(const std::filesystem::path& dest) {
     return true;
 }
 
+bool CopyProcMaps(const std::filesystem::path& dest) {
+    /* Snapshot /proc/self/maps so the crash IP in backtrace.txt can be
+     * resolved offline (subtract binary load base, then addr2line on the
+     * offset). The handler can't safely call dladdr to do this online —
+     * /proc reads are async-signal-safe via plain syscalls. */
+    std::error_code ec;
+    std::filesystem::copy_file("/proc/self/maps", dest,
+                               std::filesystem::copy_options::overwrite_existing, ec);
+    return !ec;
+}
+
 bool WriteStateText(const std::filesystem::path& path,
                     const PortBugReportState& s,
                     const char* reason) {
@@ -292,50 +303,73 @@ void WriteBacktracePosix(const std::filesystem::path& path,
         return;
     }
 
-    /* Crash IP first — backtrace() captures the handler's own stack, not
-     * the faulting one, so glibc's view leaves out the actual crash site.
-     * RIP==0 means the program dispatched through a NULL function pointer;
-     * the caller is recoverable from *RSP because `call` had already pushed
-     * the return address before the CPU jumped to NULL. */
+    /* Stage 1 — write raw hex addresses with fflush BEFORE *any* call
+     * that's not async-signal-safe (no dladdr, no malloc, no anything
+     * that might lock libc internals). Past attempts at "hardening"
+     * still kicked off with a dladdr() to get the binary base for
+     * offset reporting; that itself crashes inside SIGSEGV handling
+     * and leaves the file empty. Skip offsets entirely in Stage 1 —
+     * the absolute IP is enough for `addr2line -e tmc_pc <ip>` since
+     * the binary is the only thing in the address range we care about. */
     if (regs.ip) {
-        WriteResolvedAddr(fp, "Crash IP:    ", regs.ip);
+        std::fprintf(fp, "Crash IP:    0x%lx\n",
+                     static_cast<unsigned long>(reinterpret_cast<uintptr_t>(regs.ip)));
     } else {
         std::fprintf(fp, "Crash IP:    0x0 (program jumped to NULL — likely a NULL function-pointer call)\n");
     }
     std::fprintf(fp, "Fault addr:  0x%lx\n",
                  static_cast<unsigned long>(reinterpret_cast<uintptr_t>(fault_addr)));
+    std::fflush(fp); /* CHECKPOINT 1 */
 
 #if defined(__x86_64__) || defined(_M_X64)
-    /* x86-64: the return address pushed by `call` is at *RSP at fault time. */
-    void* caller = SafeReadPointer(regs.sp);
-    if (caller) {
-        WriteResolvedAddr(fp, "Caller (*sp):", caller);
-    }
-    /* If frame pointers are kept (-fno-omit-frame-pointer or -O0), RBP+8
-     * points to the caller's caller. Walk a few links to surface the call
-     * chain that backtrace() refuses to. */
-    void* fp_link = regs.bp;
-    for (int i = 0; i < 16 && fp_link; i++) {
-        void* saved_rbp  = SafeReadPointer(fp_link);
-        void* saved_ret  = SafeReadPointer(static_cast<char*>(fp_link) + 8);
-        if (!saved_ret) break;
-        char label[24];
-        std::snprintf(label, sizeof(label), "fp[%d]:       ", i);
-        WriteResolvedAddr(fp, label, saved_ret);
-        if (saved_rbp == fp_link) break; /* defensive: cycle */
-        fp_link = saved_rbp;
+    {
+        void* caller = SafeReadPointer(regs.sp);
+        if (caller) {
+            std::fprintf(fp, "Caller (*sp):0x%lx\n",
+                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(caller)));
+        }
+        void* fp_link = regs.bp;
+        for (int i = 0; i < 16 && fp_link; i++) {
+            void* saved_rbp = SafeReadPointer(fp_link);
+            void* saved_ret = SafeReadPointer(static_cast<char*>(fp_link) + 8);
+            if (!saved_ret) break;
+            std::fprintf(fp, "fp[%d]:       0x%lx\n", i,
+                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(saved_ret)));
+            if (saved_rbp == fp_link) break;
+            fp_link = saved_rbp;
+        }
     }
 #elif defined(__aarch64__)
     if (regs.lr) {
-        WriteResolvedAddr(fp, "Caller (lr): ", regs.lr);
+        std::fprintf(fp, "Caller (lr): 0x%lx\n",
+                     static_cast<unsigned long>(reinterpret_cast<uintptr_t>(regs.lr)));
     }
 #endif
+    std::fflush(fp); /* CHECKPOINT 2 — raw frame chain durable */
 
-    std::fprintf(fp, "Resolve:     addr2line -e tmc_pc -fp <hex>\n\n");
-    std::fprintf(fp, "Handler stack (backtrace() — does not cross the signal frame):\n");
-    /* fflush before backtrace_symbols_fd: that helper writes raw to the fd,
-     * bypassing stdio buffers; without flushing, the lines above end up
-     * *after* the unbuffered output in the file. */
+    /* Stage 2 — try to resolve via dladdr to add a binary-base line and
+     * symbol names. dladdr is NOT signal-safe and can deadlock or fault
+     * if the signal interrupted code that already held the linker lock.
+     * If it crashes us we still have the absolute IPs from above. */
+    {
+        Dl_info self_info{};
+        if (dladdr(reinterpret_cast<void*>(&WriteBacktracePosix), &self_info) && self_info.dli_fbase) {
+            std::fprintf(fp, "\nBinary base: 0x%lx  (subtract from above for offsets)\n",
+                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(self_info.dli_fbase)));
+            std::fprintf(fp, "Resolve:     addr2line -e tmc_pc -fp <offset>\n");
+        }
+    }
+    std::fflush(fp);
+
+    std::fprintf(fp, "\n--- symbolicated (best-effort) ---\n");
+    if (regs.ip) WriteResolvedAddr(fp, "Crash IP:    ", regs.ip);
+#if defined(__x86_64__) || defined(_M_X64)
+    {
+        void* caller = SafeReadPointer(regs.sp);
+        if (caller) WriteResolvedAddr(fp, "Caller (*sp):", caller);
+    }
+#endif
+    std::fprintf(fp, "\nHandler stack (backtrace() — does not cross the signal frame):\n");
     std::fflush(fp);
     void* frames[64];
     int n = backtrace(frames, 64);
@@ -414,6 +448,12 @@ extern "C" char* Port_BugReport_Capture(const char* reason) {
     ok &= WriteScreenshotPNG(std::filesystem::path(dirname) / "screenshot.png");
     ok &= CopySaveFile(std::filesystem::path(dirname) / "save.bin");
     ok &= WriteStateText(std::filesystem::path(dirname) / "state.txt", s, reason);
+#if defined(__linux__)
+    /* Snapshot /proc/self/maps too. Best-effort — failure doesn't taint
+     * the bundle's `ok` flag because crash reports without maps are
+     * still useful (just harder to addr2line). */
+    CopyProcMaps(std::filesystem::path(dirname) / "maps.txt");
+#endif
 
     std::fprintf(stderr, "[BUG] Captured %s (ok=%d, reason=%s)\n",
                  dirname.c_str(), ok ? 1 : 0, reason ? reason : "user");
