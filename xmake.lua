@@ -123,11 +123,13 @@ target_end()
 -- asset_extractor
 target("asset_extractor")
     set_kind("binary")
-    set_languages("cxx17")
+    set_languages("cxx20")
     set_targetdir("build/pc")
     add_defines("PC_PORT", "NON_MATCHING", "USA", "ENGLISH", "REVISION=0")
     add_files("tools/src/assets_extractor/*.cpp")
     add_files("port/port_asset_pipeline.cpp")
+    add_files("port/port_asset_log.cpp")
+    add_files("port/port_asset_pak.cpp")
     add_files("port/port_asset_index.c")
     add_includedirs("tools/src/assets_extractor")
     add_includedirs("include", "port", ".")
@@ -358,6 +360,36 @@ target("tmc_pc")
     -- If a patch was applied with an older revision, reset the submodule
     -- (`git -C libs/ViruaPPU checkout -- .`) so the patches reapply cleanly.
     before_build(function (target)
+        -- Regenerate port/generated_sounds_embed.cpp from
+        -- assets/sounds.json so the binary always carries an
+        -- up-to-date fallback. The Python helper no-ops when the
+        -- output is already byte-identical, so xmake's incremental
+        -- cache stays warm. Missing input -> empty fallback (the
+        -- audio backend logs "songs will be silent" in that case).
+        do
+            local script = path.join(os.projectdir(), "tools", "generate_sounds_embed.py")
+            local input  = path.join(os.projectdir(), "assets", "sounds.json")
+            local output = path.join(os.projectdir(), "port", "generated_sounds_embed.cpp")
+            if os.isfile(script) then
+                local ok = try {
+                    function ()
+                        os.execv("python3", {script, input, output})
+                        return true
+                    end
+                }
+                if not ok then
+                    -- Fall back to `python` (Windows installs without
+                    -- the python3 shim).
+                    try {
+                        function ()
+                            os.execv("python", {script, input, output})
+                            return true
+                        end
+                    }
+                end
+            end
+        end
+
         local sub = path.join(os.projectdir(), "libs", "ViruaPPU")
         local patches_dir = path.join(os.projectdir(), "port", "patches")
         local patches = {
@@ -411,8 +443,10 @@ target("tmc_pc")
     local pc_game_version = get_config("game_version") or "USA"
     local pc_ver = pc_versions[pc_game_version] or pc_versions["USA"]
     
-    -- Define PC_PORT, NON_MATCHING and game version
-    add_defines("PC_PORT", "NON_MATCHING", "USE_OPENMP", pc_ver.region, pc_ver.language, "REVISION=0")
+    -- Define PC_PORT, NON_MATCHING and game version. USE_OPENMP is added
+    -- below alongside the matching `-fopenmp` toolchain flags, since on
+    -- macOS we may have to disable it when libomp isn't installed.
+    add_defines("PC_PORT", "NON_MATCHING", pc_ver.region, pc_ver.language, "REVISION=0")
     if use_avx2 and arch_supports_avx2 then
         add_defines("USE_AVX2")
         add_cflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})
@@ -420,7 +454,7 @@ target("tmc_pc")
         add_cflags("/arch:AVX2", {tools = {"cl"}})
         add_cxxflags("/arch:AVX2", {tools = {"cl"}})
     end
-    
+
     -- Include directories
     add_includedirs("include", "libs")
     add_includedirs("port")
@@ -429,6 +463,7 @@ target("tmc_pc")
     add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
     add_includedirs("libs/VirtuaAPU/include")
     add_includedirs("libs/agbplay_core")
+    add_includedirs("tools/src/assets_extractor") -- AssetExtractorApi linked in-process
 
     
 
@@ -443,7 +478,16 @@ target("tmc_pc")
     add_files("port/port_update_check.c")
     add_files("port/port_asset_loader.cpp")
     add_files("port/port_asset_pipeline.cpp")
+    add_files("port/port_asset_log.cpp")
+    add_files("port/port_asset_pak.cpp")
+    add_files("port/port_asset_pak_loader.cpp")
+    -- Link the asset extractor implementation directly so tmc_pc can
+    -- run extraction in-process at startup (no shell-out) and share
+    -- the engine's already-loaded ROM buffer.
+    add_files("tools/src/assets_extractor/assets_extractor_api.cpp")
+    add_files("port/port_asset_index.c")
     add_files("port/port_m4a_backend.cpp")
+    add_files("port/generated_sounds_embed.cpp")  -- compile-time sounds.json fallback
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
     add_files("port/port_asset_index.c")  -- Asset offset index (path → ROM offset map)
@@ -575,10 +619,54 @@ target("tmc_pc")
     add_packages("libsdl3", "fmt", "nlohmann_json")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
-    add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
-    add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
-    add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
-    add_syslinks("gomp")
+    -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.
+    -- Apple Clang on macOS does NOT bundle an OpenMP runtime, so `-fopenmp`
+    -- is rejected outright. Use Homebrew's libomp via the standard
+    -- `-Xpreprocessor -fopenmp -lomp` recipe. If libomp isn't installed
+    -- we drop USE_OPENMP and fall back to the single-threaded path
+    -- guarded by `#ifdef USE_OPENMP` in mode0.c so the build still
+    -- succeeds (the `#pragma omp` lines are no-ops without the define).
+    if is_plat("macosx") then
+        -- xmake's description-scope sandbox strips pcall/try, so we can't
+        -- shell out to `brew --prefix libomp` here. Probe the standard
+        -- Homebrew prefixes (arm64 -> /opt/homebrew, x86_64 -> /usr/local)
+        -- and honour LIBOMP_PREFIX as an escape hatch for non-standard
+        -- layouts (MacPorts, custom prefix, etc.).
+        local libomp_prefix = nil
+        -- Build the candidate list defensively: ipairs() stops at the
+        -- first nil hole, so an unset LIBOMP_PREFIX would otherwise
+        -- short-circuit the whole probe and we'd never reach the
+        -- Homebrew defaults below.
+        local candidates = {}
+        local env_override = os.getenv("LIBOMP_PREFIX")
+        if env_override and env_override ~= "" then
+            table.insert(candidates, env_override)
+        end
+        table.insert(candidates, "/opt/homebrew/opt/libomp")
+        table.insert(candidates, "/usr/local/opt/libomp")
+        for _, candidate in ipairs(candidates) do
+            if os.isdir(candidate) then
+                libomp_prefix = candidate
+                break
+            end
+        end
+        if libomp_prefix then
+            add_defines("USE_OPENMP")
+            add_includedirs(path.join(libomp_prefix, "include"))
+            add_linkdirs(path.join(libomp_prefix, "lib"))
+            add_cflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
+            add_cxxflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
+            add_syslinks("omp")
+        else
+            print("[tmc_pc] libomp not found — building without OpenMP. Install with: brew install libomp")
+        end
+    else
+        add_defines("USE_OPENMP")
+        add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
+        add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
+        add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
+        add_syslinks("gomp")
+    end
 
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then
@@ -597,6 +685,7 @@ target("tmc_pc")
 
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
+
     -- Keep symbols even in release mode so SIGSEGV traces are useful
     -- locally (CI release tarballs may strip later). The xmake mode.release
     -- rule adds -s/--strip-all by default which makes addr2line useless.

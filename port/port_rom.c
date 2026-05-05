@@ -15,6 +15,7 @@
 #include "port_gba_mem.h"
 #include "structures.h"
 #include "tileMap.h"
+#include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,11 @@
 #include <io.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <dirent.h>
+#include <mach-o/dyld.h>
+#include <stdlib.h>      /* realpath */
+#include <sys/stat.h>
 #else
 #include <dirent.h>
 #include <sys/stat.h>
@@ -35,6 +41,55 @@ extern long readlink(const char* path, char* buf, unsigned long bufsiz);
 u8* gRomData = NULL;
 u32 gRomSize = 0;
 static SpritePtr sSpritePtrsStable[512];
+
+/* Single source of truth for "what counts as a baserom file".
+ * Probed in order — the first hit wins, both by Port_FindBaseRomPath
+ * (the pre-window check in port_main.c) and by Port_LoadRom below.
+ * Bare filenames are also probed under the binary's own directory so
+ * release-tarball layouts work regardless of the user's cwd. */
+static const char* kRomCandidates[] = {
+    "baserom.gba",            /* USA default */
+    "baserom_eu.gba",         /* EU default */
+    "synthetic_baserom.gba",  /* generated from extracted assets */
+    "build/pc/baserom.gba",   /* copied to build dir */
+    "build/pc/baserom_eu.gba",
+    "tmc.gba",                /* common alternate names */
+    "tmc_eu.gba",
+    /* Developer-tree fallbacks for `cd build/pc && ./tmc_pc`. */
+    "../../baserom.gba",
+    "../../baserom_eu.gba",
+    "../../tmc.gba",
+    "../../tmc_eu.gba",
+};
+#define ROM_CANDIDATE_COUNT ((int)(sizeof(kRomCandidates) / sizeof(kRomCandidates[0])))
+
+/* Forward declaration so FatalRomError + Port_FindBaseRomPath can
+ * sit at the top of the file alongside the candidate list while
+ * TryOpenRom keeps its existing position lower down. */
+static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foundPathLen);
+
+/* Surface a fatal ROM-loading failure as both a stderr line and an
+ * SDL message box, then exit. Replaces the bare abort() calls that
+ * previously left the user with a black screen and no UI feedback.
+ * Safe to call before SDL_CreateWindow — SDL_ShowSimpleMessageBox
+ * accepts a NULL parent. */
+static void FatalRomError(const char* title, const char* message) {
+    fprintf(stderr, "ERROR: %s\n", message);
+    fflush(stderr);
+    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
+    SDL_Quit();
+    exit(1);
+}
+
+const char* Port_FindBaseRomPath(void) {
+    static char sFoundPath[4096];
+    sFoundPath[0] = '\0';
+    FILE* f = TryOpenRom(kRomCandidates, ROM_CANDIDATE_COUNT, sFoundPath, (int)sizeof(sFoundPath));
+    if (!f)
+        return NULL;
+    fclose(f);
+    return sFoundPath;
+}
 
 /* ------------------------------------------------------------------ */
 /*  ROM page extraction (4 KB pages)                                  */
@@ -697,8 +752,29 @@ static int GetExeDir(char* out, size_t n) {
     snprintf(out, n, "%s", buf);
     return 1;
 #elif defined(__APPLE__)
-    /* macOS: _NSGetExecutablePath. Best-effort, fallback below if unavailable. */
-    return 0;
+    /* macOS: ask once for required size, allocate, then resolve symlinks via
+     * realpath() so a tmc_pc.app bundle launch points at the actual binary's
+     * directory rather than the launcher symlink. */
+    uint32_t size = 0;
+    _NSGetExecutablePath(NULL, &size);
+    char* raw = (char*)malloc(size);
+    if (!raw)
+        return 0;
+    if (_NSGetExecutablePath(raw, &size) != 0) {
+        free(raw);
+        return 0;
+    }
+    char resolved[4096];
+    char* canonical = realpath(raw, resolved);
+    free(raw);
+    if (!canonical)
+        return 0;
+    char* slash = strrchr(canonical, '/');
+    if (!slash)
+        return 0;
+    *slash = '\0';
+    snprintf(out, n, "%s", canonical);
+    return 1;
 #else
     char buf[4096];
     long len = readlink("/proc/self/exe", buf, (unsigned long)(sizeof(buf) - 1));
@@ -840,25 +916,17 @@ void Port_LoadRom(const char* path) {
      */
     int romLoaded = 0;
     {
-        const char* romCandidates[] = {
-            path,                    /* user-provided path */
-            "baserom.gba",           /* USA default */
-            "baserom_eu.gba",        /* EU default */
-            "synthetic_baserom.gba", /* generated from extracted assets */
-            "build/pc/baserom.gba",  /* copied to build dir */
-            "build/pc/baserom_eu.gba",
-            "tmc.gba", /* common names */
-            "tmc_eu.gba",
-            /* When running from build/pc/, look up to project root */
-            "../../baserom.gba",
-            "../../baserom_eu.gba",
-            "../../tmc.gba",
-            "../../tmc_eu.gba",
-        };
-        int numCandidates = sizeof(romCandidates) / sizeof(romCandidates[0]);
-        char usedPath[256] = { 0 };
+        /* Prepend the caller-supplied path to the shared kRomCandidates
+         * list so a user-provided argument still wins over the defaults
+         * but the rest of the probe order matches Port_FindBaseRomPath. */
+        const char* romCandidates[ROM_CANDIDATE_COUNT + 1];
+        romCandidates[0] = path;
+        for (int i = 0; i < ROM_CANDIDATE_COUNT; i++)
+            romCandidates[i + 1] = kRomCandidates[i];
+        int numCandidates = ROM_CANDIDATE_COUNT + 1;
+        char usedPath[4096] = { 0 };
 
-        FILE* f = TryOpenRom(romCandidates, numCandidates, usedPath, sizeof(usedPath));
+        FILE* f = TryOpenRom(romCandidates, numCandidates, usedPath, (int)sizeof(usedPath));
         if (f) {
             fseek(f, 0, SEEK_END);
             u32 fileSize = (u32)ftell(f);
@@ -868,8 +936,12 @@ void Port_LoadRom(const char* path) {
                 gRomSize = fileSize;
                 gRomData = (u8*)malloc(gRomSize);
                 if (!gRomData) {
-                    fprintf(stderr, "ERROR: Failed to allocate %u bytes for ROM\n", gRomSize);
-                    abort();
+                    char msg[160];
+                    snprintf(msg, sizeof(msg),
+                             "Failed to allocate %u bytes for ROM.\n\n"
+                             "The system is out of memory.",
+                             gRomSize);
+                    FatalRomError("Minish Cap PC Port - ROM allocation failed", msg);
                 }
             }
             if (fileSize <= gRomSize) {
@@ -903,19 +975,24 @@ void Port_LoadRom(const char* path) {
     }
 
     /* ---- Check that we have some data ---- */
-    if (!romLoaded && !gapsLoaded && pagesLoaded == 0) {
-        fprintf(stderr, "ERROR: Cannot open any ROM file.\n");
-        fprintf(stderr, "  Place baserom.gba (USA) or baserom_eu.gba (EU) in the working directory,\n");
-        fprintf(stderr, "  or provide extracted pages in " ROM_EXTRACT_DIR "/\n");
-        abort();
-    }
-    if (!romLoaded && !gapsLoaded && pagesLoaded > 0) {
-        fprintf(stderr, "WARNING: Running from extracted ROM pages without a full ROM file.\n");
+    /* A full ROM file is required for normal play; extracted pages
+     * (rom_data/) and rom_gaps.bin are only useful as supplemental
+     * sources alongside a real ROM. Surface every "no real ROM" case
+     * as a fatal dialog rather than letting the engine boot into a
+     * black screen. */
+    if (!romLoaded) {
+        FatalRomError(
+            "Minish Cap PC Port - ROM not found",
+            "Could not load baserom.gba.\n\n"
+            "Place baserom.gba (USA) or baserom_eu.gba (EU) next to tmc_pc and try again.\n"
+            "Supported names: baserom.gba, baserom_eu.gba, tmc.gba, tmc_eu.gba.");
     }
 
     if (!gRomData || gRomSize == 0) {
-        fprintf(stderr, "ERROR: No ROM data available.\n");
-        abort();
+        FatalRomError(
+            "Minish Cap PC Port - ROM load failed",
+            "No ROM data available after loading.\n\n"
+            "The ROM file may be empty or unreadable.");
     }
 
     /* ---- Step 3: auto-detect ROM region ---- */
@@ -929,16 +1006,6 @@ void Port_LoadRom(const char* path) {
 
     /* gGlobalGfxAndPalettes — huge palette/gfx blob (still points into gRomData) */
     gGlobalGfxAndPalettes = &gRomData[R->gfxAndPalettes];
-
-    /* gPalette_549 — Mt Crenel weather-change reads a 26-palette contiguous
-     * block starting here. Copy it out of gGlobalGfxAndPalettes (offset 0x44A0
-     * — same relative position on USA and EU because the palette ordering in
-     * gfx_and_palettes.s is identical). Without this, the +0xD0 indexing in
-     * sub_08059894 reads garbage and the mountaintop renders pink/cyan (#34). */
-    {
-        extern u16 gPalette_549[0x1A0];
-        memcpy(gPalette_549, gGlobalGfxAndPalettes + 0x44A0, sizeof(gPalette_549));
-    }
 
     /* gFrameObjLists — from compile-time const data (no ROM read needed) */
     memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
@@ -1175,16 +1242,6 @@ void Port_LoadRom(const char* path) {
 
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gFrameObjLists).\n",
             gRomRegion == ROM_REGION_EU ? "EU" : "USA");
-
-    /* Patch inline rail pointers that the asset extractor leaves out of
-     * any .bin (the bytes between adjacent .incbin chunks in
-     * gUnk_additional_* tables). Without this, rooms that use those
-     * tables — Cave-of-Flames Rollobite, BossDoor, etc. — see NULL
-     * rail pointers and entities like lava platforms don't move (#36). */
-    {
-        extern void Port_PatchInlinePtrs(void);
-        Port_PatchInlinePtrs();
-    }
 
     /* Initialize data stubs with ROM datas */
     {

@@ -1,5 +1,6 @@
 #include "port_m4a_backend.h"
 #include "port_config.h"
+#include "port_sounds_embed.hpp"
 #include "sound.h"
 
 #ifdef min
@@ -199,6 +200,19 @@ static std::string LoadSoundsJson(void) {
             std::fprintf(stderr, "[AUDIO] loaded %s\n", path.c_str());
             return text;
         }
+    }
+
+    /* Compile-time fallback: every tmc_pc build embeds a copy of
+     * assets/sounds.json so a bare `tmc_pc + baserom.gba` install
+     * still has audio. kSize is 0 only when assets/sounds.json was
+     * missing at build time (in which case we fall through to the
+     * silent-songs warning below). */
+    if (PortSoundsEmbed::kSize > 0) {
+        std::fprintf(stderr,
+                     "[AUDIO] using embedded sounds.json (%zu bytes)\n",
+                     PortSoundsEmbed::kSize);
+        return std::string(reinterpret_cast<const char*>(PortSoundsEmbed::kData),
+                           PortSoundsEmbed::kSize);
     }
 
     std::fprintf(stderr, "[AUDIO] sounds.json not found — songs will be silent\n");
