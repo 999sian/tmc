@@ -24,6 +24,11 @@
 #include <io.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <dirent.h>
+#include <mach-o/dyld.h>
+#include <stdlib.h>     /* realpath */
+#include <sys/stat.h>
 #else
 #include <dirent.h>
 #include <sys/stat.h>
@@ -697,8 +702,29 @@ static int GetExeDir(char* out, size_t n) {
     snprintf(out, n, "%s", buf);
     return 1;
 #elif defined(__APPLE__)
-    /* macOS: _NSGetExecutablePath. Best-effort, fallback below if unavailable. */
-    return 0;
+    /* macOS: ask once for required size, allocate, then resolve symlinks
+     * via realpath() so a tmc_pc.app bundle launch points at the actual
+     * binary's directory rather than the launcher symlink. */
+    u32 size = 0;
+    _NSGetExecutablePath(NULL, &size);
+    char* raw = (char*)malloc(size);
+    if (!raw)
+        return 0;
+    if (_NSGetExecutablePath(raw, &size) != 0) {
+        free(raw);
+        return 0;
+    }
+    char resolved[4096];
+    char* canonical = realpath(raw, resolved);
+    free(raw);
+    if (!canonical)
+        return 0;
+    char* slash = strrchr(canonical, '/');
+    if (!slash)
+        return 0;
+    *slash = '\0';
+    snprintf(out, n, "%s", canonical);
+    return 1;
 #else
     char buf[4096];
     long len = readlink("/proc/self/exe", buf, (unsigned long)(sizeof(buf) - 1));

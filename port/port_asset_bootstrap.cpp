@@ -44,6 +44,21 @@ std::optional<std::filesystem::path> GetExecutableDirectory() {
     }
     buffer.resize(len);
     return std::filesystem::path(buffer).parent_path();
+#elif defined(__APPLE__)
+    /* macOS: ask once for size, then resolve symlinks via weakly_canonical
+     * so a tmc_pc.app bundle launch points at the actual binary's directory
+     * rather than a launcher symlink. */
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buffer(size, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
+        std::error_code ec;
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(buffer.c_str(), ec);
+        if (!ec) {
+            return canonical.parent_path();
+        }
+    }
+    return std::nullopt;
 #else
     char buffer[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer));
