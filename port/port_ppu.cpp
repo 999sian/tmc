@@ -132,14 +132,24 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
     Port_PPU_LoadConfig();
 
-    sRenderer = SDL_CreateRenderer(window, nullptr);
+    /* Reuse the renderer the bootstrap progress UI created (if any)
+     * instead of destroying it and making a new one. SDL only allows
+     * one renderer per window, and recreating it on the same window
+     * causes a visible compositor flash on most platforms — exactly
+     * what made the asset-extractor screen look like a separate
+     * window from the game. SDL_GetRenderer returns NULL when no
+     * renderer has been associated with the window, in which case we
+     * fall back to creating one ourselves. */
+    sRenderer = SDL_GetRenderer(window);
+    if (!sRenderer) {
+        sRenderer = SDL_CreateRenderer(window, nullptr);
+    }
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
     } else {
-        if (!SDL_SetRenderVSync(sRenderer, 0)) {
+        if (!SDL_SetRenderVSync(sRenderer, 1)) {
             printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
         }
-        sVSyncEnabled = true;
         sLowResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
                                            SDL_TEXTUREACCESS_STREAMING, 240, 160);
         sHiResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
@@ -184,7 +194,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
             return;
         }
 
-        if (!SDL_SetWindowSurfaceVSync(window, 0)) {
+        if (!SDL_SetWindowSurfaceVSync(window, 1)) {
             printf("Port_PPU_Init: SDL_SetWindowSurfaceVSync failed: %s\n", SDL_GetError());
         }
 

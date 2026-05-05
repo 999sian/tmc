@@ -12,10 +12,19 @@
 #include <cstdint>
 #include <optional>
 #include <functional>
+#include <array>
+#include <atomic>
+#include <cstring>
+#include <mutex>
+#include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <nlohmann/json.hpp>
+#include <fmt/format.h>
 #include "port_asset_pipeline.hpp"
+#include "port_asset_log.hpp"
+#include "port_asset_pak.hpp"
 
 extern "C" {
 #include "port_asset_index.h"
@@ -39,13 +48,77 @@ struct Config
     uint32_t translationsTableOffset;
     uint8_t language;
     std::string variant;
-    std::filesystem::path outputRoot;
+    std::filesystem::path outputRoot;         // assets_src/ (editable, human-friendly)
+    std::filesystem::path runtimeOutputRoot;  // assets/    (engine-loadable, raw bytes)
+
+    /* When packRuntime is true, runtime-side binary writes (pal/bin
+     * blobs, gfx blobs, animations, frames, room data, and the final
+     * passthrough sweep) are routed into pakBuilders[routeFor(path)]
+     * instead of being written as loose files. Aggregate JSONs
+     * (gfx_groups.json, palettes.json, sprite_ptrs.json, etc.) are
+     * still written loose so the engine can parse them at startup
+     * without paying mmap/Lookup cost on tiny files. */
+    bool packRuntime{false};
+    /* Pointer rather than embedded value so Config stays trivially
+     * copyable for the existing call sites and so the lifetime is
+     * controlled by the caller (typically main, which constructs a
+     * std::array<PakBuilder, kPakCategoryCount> on the stack and
+     * writes them out after extract_assets returns). */
+    void* pakBuilders{nullptr};  // points to PakBuilderArray; see below
 };
 
+/* Per-category route assignment for a runtime-relative path. Order
+ * matches kPakNames below; keep them in sync. */
+enum class PakCategory : uint32_t {
+    Gfx = 0,
+    Palettes,
+    Animations,
+    Sprites,
+    Tilemaps,
+    Maps,
+    RoomProps,
+    Data,
+    Misc,
+    Count,
+};
 
-std::vector<uint8_t> Rom;
+constexpr std::size_t kPakCategoryCount = static_cast<std::size_t>(PakCategory::Count);
 
-bool load_rom(const std::filesystem::path& rom_path)
+inline const std::array<const char*, kPakCategoryCount>& pak_category_names()
+{
+    static const std::array<const char*, kPakCategoryCount> names = {
+        "gfx.pak",        "palettes.pak", "animations.pak", "sprites.pak",  "tilemaps.pak",
+        "maps.pak",       "room_props.pak", "data.pak",     "misc.pak",
+    };
+    return names;
+}
+
+inline PakCategory pak_route_for(const std::string& relative_path)
+{
+    /* Order matters: longer prefixes first so generated/animations/
+     * doesn't get caught by a shorter generated/ fallback that we
+     * don't have but might add later. */
+    auto starts_with = [&](const char* prefix) { return relative_path.rfind(prefix, 0) == 0; };
+    if (starts_with("gfx/")) return PakCategory::Gfx;
+    if (starts_with("palettes/")) return PakCategory::Palettes;
+    if (starts_with("animations/") || starts_with("generated/animations/")) return PakCategory::Animations;
+    if (starts_with("sprites/") || starts_with("generated/sprites/")) return PakCategory::Sprites;
+    if (starts_with("tilemaps/")) return PakCategory::Tilemaps;
+    if (starts_with("maps/")) return PakCategory::Maps;
+    if (starts_with("room_properties/") || starts_with("generated/mapdata/")) return PakCategory::RoomProps;
+    if (starts_with("data_") || starts_with("data/")) return PakCategory::Data;
+    return PakCategory::Misc;
+}
+
+using PakBuilderArray = std::array<PortAssetPak::PakBuilder, kPakCategoryCount>;
+
+
+/* `inline` so the header can be included by both the standalone
+ * extractor binary and the in-process API used by tmc_pc without
+ * triggering a multiple-definition link error. */
+inline std::vector<uint8_t> Rom;
+
+inline bool load_rom(const std::filesystem::path& rom_path)
 {
     std::ifstream file(rom_path, std::ios::binary);
     if (!file) {
@@ -55,12 +128,30 @@ bool load_rom(const std::filesystem::path& rom_path)
     return true;
 }
 
-std::vector<uint8_t> extract_bytes(uint32_t offset, uint32_t length)
+/* Replace the in-memory ROM with a copy of `bytes`. Used when the
+ * engine has already mapped baserom.gba and wants to hand the buffer
+ * to the extractor without paying for a second 16 MB read. */
+inline bool load_rom_from_buffer(std::span<const uint8_t> bytes)
 {
-    if (offset + length > Rom.size()) {
+    if (bytes.empty()) {
+        return false;
+    }
+    Rom.assign(bytes.begin(), bytes.end());
+    return true;
+}
+
+/* Zero-copy view of the ROM. The ROM buffer is loaded once into the
+ * static `Rom` vector at startup and lives for the duration of the
+ * extractor process; every span returned here points into that buffer
+ * directly. Callers must not retain spans past Rom destruction (which
+ * happens at process exit, so in practice never matters). Returns an
+ * empty span on out-of-range reads, matching the previous semantics. */
+inline std::span<const uint8_t> extract_bytes(uint32_t offset, uint32_t length)
+{
+    if (length == 0 || offset > Rom.size() || offset + length > Rom.size()) {
         return {};
     }
-    return std::vector<uint8_t>(Rom.begin() + offset, Rom.begin() + offset + length);
+    return std::span<const uint8_t>(Rom.data() + offset, length);
 }
 
 inline uint32_t to_gba_address(uint32_t offset)
@@ -81,7 +172,7 @@ inline uint32_t read_pointer(uint32_t offset)
     return Rom[offset] | (Rom[offset + 1] << 8) | (Rom[offset + 2] << 16) | (Rom[offset + 3] << 24);
 }
 
-inline bool lz77_uncompress(const std::vector<uint8_t>& compressed_data, std::vector<uint8_t>& uncompressed_data)
+inline bool lz77_uncompress(std::span<const uint8_t> compressed_data, std::vector<uint8_t>& uncompressed_data)
 {
     if (compressed_data.size() < 4 || compressed_data[0] != 0x10) {
         return false;
@@ -299,26 +390,80 @@ inline std::string json_path_string(const std::filesystem::path& path)
     return path.generic_string();
 }
 
-struct ExtractedPaletteRecord
-{
-    AssetRecord asset;
-    std::filesystem::path relative_output_path;
-    uint32_t first_palette_id;
-    uint32_t palette_count;
-};
-
 struct GfxExtractionResult
 {
-    std::filesystem::path relative_bmp_output;
+    std::filesystem::path relative_bmp_output;   // assets_src/ path (editable .bmp)
+    std::filesystem::path relative_runtime_path; // assets/ path (raw .bin)
     uint32_t output_size;
     uint16_t width;
     uint16_t height;
     uint8_t bpp;
 };
 
+// Thread-safe set of relative output paths that the specialised passes have
+// already written. The final sweep consults these to avoid double-writing
+// the same path (which is what the old code's per-entry
+// std::filesystem::exists() check did, just much faster).
+//
+// Per-tree because the editable and runtime trees diverge: a pass can write
+// to one tree and not the other (e.g. extract_all_palettes writes
+// assets_src/palettes/foo.json + assets/palettes/foo.pal — the asset-index
+// entry path "palettes/foo.bin" is in NEITHER set so the sweep still writes
+// the raw .bin to assets_src/, matching the old extractor's tree shape).
+struct ConsumedPaths {
+    std::mutex mu;
+    std::unordered_set<std::string> set;
+
+    void Mark(const std::filesystem::path& relative_path) {
+        std::lock_guard<std::mutex> lk(mu);
+        set.insert(relative_path.generic_string());
+    }
+
+    bool Contains(const std::filesystem::path& relative_path) {
+        std::lock_guard<std::mutex> lk(mu);
+        return set.count(relative_path.generic_string()) != 0;
+    }
+};
+
+inline ConsumedPaths& g_consumed_editable() {
+    static ConsumedPaths instance;
+    return instance;
+}
+
+inline ConsumedPaths& g_consumed_runtime() {
+    static ConsumedPaths instance;
+    return instance;
+}
+
+// Mirrors the kDirectories list in PortAssetPipeline::CopyRuntimePassthroughAssets.
+// Only entries under one of these prefixes get a runtime-tree (assets/) copy
+// during the final sweep — everything else is editable-tree only, matching
+// the old extractor + pipeline behaviour exactly.
+inline bool is_runtime_passthrough_path(const std::string& relative_path)
+{
+    /* Keep this list in lockstep with kDirectories in
+     * PortAssetPipeline::CopyRuntimePassthroughAssets — anything else lives
+     * editable-only and must not appear in assets/. */
+    static const char* const kPrefixes[] = {
+        "tilemaps/", "maps/", "assets/", "animations/", "sprites/",
+        "room_properties/", "generated/",
+        "data_08000360/", "data_08000F54/", "data_080029B4/", "data_08007DF4/",
+        "data_080B2A70/", "data_080B4410/", "data_080B7B74/",
+        "data_080D5360/", "data_080FC8A4/", "data_08108E6C/", "data_0811BE38/",
+        "data_08127280/",
+    };
+    for (const char* p : kPrefixes) {
+        const std::size_t n = std::strlen(p);
+        if (relative_path.compare(0, n, p) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 inline bool write_binary_file(const std::filesystem::path& output_path, const std::vector<uint8_t>& data)
 {
-    std::filesystem::create_directories(output_path.parent_path());
+    PortAssetLog::EnsureDir(output_path.parent_path());
     std::ofstream output(output_path, std::ios::binary);
     if (!output) {
         return false;
@@ -326,6 +471,97 @@ inline bool write_binary_file(const std::filesystem::path& output_path, const st
 
     output.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
     return true;
+}
+
+inline bool write_binary_file(const std::filesystem::path& output_path, const uint8_t* data, std::size_t size)
+{
+    PortAssetLog::EnsureDir(output_path.parent_path());
+    std::ofstream output(output_path, std::ios::binary);
+    if (!output) {
+        return false;
+    }
+    if (size > 0 && data != nullptr) {
+        output.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+    }
+    return static_cast<bool>(output);
+}
+
+/* Single-shot text dump with a fat (256 KiB) buffer behind it. The default
+ * std::ofstream buffer is BUFSIZ (≈8 KiB on glibc, 4 KiB on MSVC), which
+ * means a multi-megabyte texts.json or sprite_ptrs.json turns into hundreds
+ * of write() syscalls. A 256 KiB buffer collapses those into a handful of
+ * larger writes, ~2-4× faster on every platform and dramatically faster on
+ * Windows where the per-call overhead is highest. */
+inline bool write_text_buffered(const std::filesystem::path& output_path, const std::string& contents)
+{
+    PortAssetLog::EnsureDir(output_path.parent_path());
+    static constexpr std::streamsize kBuf = 256 * 1024;
+    /* CRITICAL: declare the backing buffer BEFORE the ofstream so it
+     * outlives the stream's destructor flush (locals destroy in reverse
+     * declaration order). Earlier version flipped this and produced a
+     * use-after-free that silently corrupted the trailing ~few KiB of
+     * every aggregate JSON. */
+    std::vector<char> buf(static_cast<size_t>(kBuf));
+    std::ofstream f;
+    f.rdbuf()->pubsetbuf(buf.data(), kBuf);
+    f.open(output_path, std::ios::binary);
+    if (!f) {
+        return false;
+    }
+    f.write(contents.data(), static_cast<std::streamsize>(contents.size()));
+    return static_cast<bool>(f);
+}
+
+/* Mirror an already-written editable file into the runtime tree. Tries
+ * std::filesystem::create_hard_link first (one inode write, no data copy —
+ * essentially free on every modern FS we target: ext4/btrfs/xfs/apfs/NTFS).
+ * Falls back to a real write if hardlink fails (cross-filesystem, sandbox
+ * restrictions, ReFS-without-CreateHardLink, etc.).
+ *
+ * Both paths must be on the same filesystem for the link to succeed; in
+ * our case assets/ and assets_src/ live as siblings under build/pc/, so
+ * this holds. */
+inline bool mirror_to_runtime(const std::filesystem::path& editable_path,
+                              const std::filesystem::path& runtime_path,
+                              const uint8_t* data, std::size_t size)
+{
+    PortAssetLog::EnsureDir(runtime_path.parent_path());
+    std::error_code ec;
+    /* Hard link can't replace an existing target; remove first.
+     * remove() is a no-op + benign error if the file doesn't exist. */
+    std::filesystem::remove(runtime_path, ec);
+    ec.clear();
+    std::filesystem::create_hard_link(editable_path, runtime_path, ec);
+    if (!ec) {
+        return true;
+    }
+    return write_binary_file(runtime_path, data, size);
+}
+
+/* Single chokepoint for runtime-side binary writes. When packRuntime
+ * is enabled, the bytes are forwarded to the appropriate PakBuilder
+ * (selected by pak_route_for); otherwise we fall through to the
+ * existing mirror_to_runtime hardlink-or-copy path. The relative_path
+ * is the path under assets/ (e.g. "gfx/foo.bin"). */
+inline bool write_runtime_asset(const Config& config,
+                                const std::filesystem::path& editable_path,
+                                const std::filesystem::path& relative_path,
+                                const uint8_t* data, std::size_t size)
+{
+    if (config.runtimeOutputRoot.empty()) {
+        return false;
+    }
+    if (config.packRuntime && config.pakBuilders != nullptr) {
+        auto* builders = static_cast<PakBuilderArray*>(config.pakBuilders);
+        const std::string rel = relative_path.generic_string();
+        const auto idx = static_cast<std::size_t>(pak_route_for(rel));
+        (*builders)[idx].Add(rel, data, size);
+        return true;
+    }
+    if (!editable_path.empty()) {
+        return mirror_to_runtime(editable_path, config.runtimeOutputRoot / relative_path, data, size);
+    }
+    return write_binary_file(config.runtimeOutputRoot / relative_path, data, size);
 }
 
 inline std::vector<uint8_t> gba_palette_to_rgba(const std::vector<uint8_t>& palette_data)
@@ -347,29 +583,34 @@ inline std::vector<uint8_t> gba_palette_to_rgba(const std::vector<uint8_t>& pale
     return rgba;
 }
 
-std::vector<uint32_t> extract_gfx_group_addresses(uint32_t gfxGroupsTableOffset, uint32_t gfxGroupsTableLength)
+inline std::vector<uint32_t> extract_gfx_group_addresses(uint32_t gfxGroupsTableOffset, uint32_t gfxGroupsTableLength)
 {
     std::vector<uint32_t> gfx_group_addresses;
+    auto& reporter = PortAssetLog::Reporter::Instance();
     for (uint32_t i = 1; i < gfxGroupsTableLength; i += 1) {
         uint32_t address = to_rom_address(read_pointer(gfxGroupsTableOffset + i*4));
         if (address != 0) {
             gfx_group_addresses.push_back(address);
-            std::cout << "Found gfx group at index " << i << ": 0x" << std::hex << address << std::dec << std::endl;
-        }
-        else {
-            std::cout << "Warning: Null pointer at gfx group index " << i << std::endl;
+            if (reporter.Verbose()) {
+                reporter.Note(fmt::format("gfx group {}: 0x{:X}", i, address));
+            }
+        } else if (reporter.Verbose()) {
+            reporter.Warn(fmt::format("null pointer at gfx group index {}", i));
         }
     }
     return gfx_group_addresses;
 }
 
-std::vector<uint32_t> extract_palette_group_addresses(uint32_t paletteGroupsTableOffset, uint32_t paletteGroupsTableLength)
+inline std::vector<uint32_t> extract_palette_group_addresses(uint32_t paletteGroupsTableOffset, uint32_t paletteGroupsTableLength)
 {
     std::vector<uint32_t> palette_group_addresses;
+    auto& reporter = PortAssetLog::Reporter::Instance();
     for (uint32_t i = 1; i < paletteGroupsTableLength; i += 1) {
         const uint32_t raw_pointer = read_pointer(paletteGroupsTableOffset + i * 4);
         if (raw_pointer == 0) {
-            std::cout << "Warning: Null pointer at palette group index " << i << std::endl;
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("null pointer at palette group index {}", i));
+            }
             continue;
         }
 
@@ -388,7 +629,7 @@ struct PaletteGroupElement
 
 typedef std::vector<PaletteGroupElement> PaletteGroup;
 
-inline PaletteGroupElement parse_palette_group_element(const std::vector<uint8_t>& data, uint32_t offset)
+inline PaletteGroupElement parse_palette_group_element(std::span<const uint8_t> data, uint32_t offset)
 {
     PaletteGroupElement element;
     element.paletteId = data[offset] | (data[offset + 1] << 8);
@@ -406,11 +647,13 @@ inline PaletteGroup extract_palette_group(uint32_t palette_group_address)
     constexpr uint32_t kPaletteGroupEntrySize = 4;
     constexpr uint32_t kMaxEntriesPerGroup = 64;
 
-    std::vector<uint8_t> palette_group_data =
+    std::span<const uint8_t> palette_group_data =
         extract_bytes(palette_group_address, kPaletteGroupEntrySize * kMaxEntriesPerGroup);
     if (palette_group_data.size() < kPaletteGroupEntrySize) {
-        std::cout << "Warning: palette group out of ROM range at 0x" << std::hex << palette_group_address << std::dec
-                  << std::endl;
+        auto& reporter = PortAssetLog::Reporter::Instance();
+        if (reporter.Verbose()) {
+            reporter.Warn(fmt::format("palette group out of ROM range at 0x{:X}", palette_group_address));
+        }
         return {};
     }
 
@@ -457,7 +700,7 @@ inline bool should_extract_gfx_element(const GfxGroupElement& element, uint8_t l
     }
 }
 
-GfxGroupElement parse_gfx_group_element(const std::vector<uint8_t>& data, uint32_t offset)
+GfxGroupElement parse_gfx_group_element(std::span<const uint8_t> data, uint32_t offset)
 {
     GfxGroupElement element;
     uint32_t raw0 = data[offset] | (data[offset + 1] << 8) | (data[offset + 2] << 16) | (data[offset + 3] << 24);
@@ -471,14 +714,18 @@ GfxGroupElement parse_gfx_group_element(const std::vector<uint8_t>& data, uint32
     return element;
 }
  
-GfxGroup extract_gfx_group(uint32_t gfx_group_address)
+inline GfxGroup extract_gfx_group(uint32_t gfx_group_address)
 {
     constexpr uint32_t kGfxGroupEntrySize = 12;
     constexpr uint32_t kMaxEntriesPerGroup = 256;
 
-    std::vector<uint8_t> gfx_group_data = extract_bytes(gfx_group_address, kGfxGroupEntrySize * kMaxEntriesPerGroup);
+    auto& reporter = PortAssetLog::Reporter::Instance();
+    std::span<const uint8_t> gfx_group_data =
+        extract_bytes(gfx_group_address, kGfxGroupEntrySize * kMaxEntriesPerGroup);
     if (gfx_group_data.size() < kGfxGroupEntrySize) {
-        std::cout << "Warning: gfx group out of ROM range at 0x" << std::hex << gfx_group_address << std::dec << std::endl;
+        if (reporter.Verbose()) {
+            reporter.Warn(fmt::format("gfx group out of ROM range at 0x{:X}", gfx_group_address));
+        }
         return GfxGroup();
     }
 
@@ -488,18 +735,17 @@ GfxGroup extract_gfx_group(uint32_t gfx_group_address)
         gfx_group.push_back(element);
 
         if (element.terminator) {
-            std::cout << "Reached terminator for gfx group at address 0x" << std::hex << gfx_group_address << std::dec << std::endl;
             break;
         }
 
-        if (i + kGfxGroupEntrySize >= gfx_group_data.size()) {
-            std::cout << "Warning: No terminator found for gfx group at 0x" << std::hex << gfx_group_address << std::dec << std::endl;
+        if (i + kGfxGroupEntrySize >= gfx_group_data.size() && reporter.Verbose()) {
+            reporter.Warn(fmt::format("no terminator found for gfx group at 0x{:X}", gfx_group_address));
         }
     }
     return gfx_group;
 }
 
-inline bool bin_to_bmp(const std::vector<uint8_t>& gfx_data, const std::string& output_path, uint16_t width,
+inline bool bin_to_bmp(std::span<const uint8_t> gfx_data, const std::string& output_path, uint16_t width,
                        uint16_t height, uint8_t bpp = 4)
 {
     std::string error;
@@ -515,25 +761,29 @@ struct GfxMetadata
     bool is_indexed;   // true for palette-based, false for truecolor
 };
 
-GfxMetadata detect_gfx_metadata(uint32_t src, uint32_t size, uint8_t bpp = 4)
+inline GfxMetadata detect_gfx_metadata(uint32_t src, uint32_t size, uint8_t bpp = 4)
 {
+    auto& reporter = PortAssetLog::Reporter::Instance();
     GfxMetadata meta;
     meta.bpp = bpp;
     meta.is_indexed = (bpp <= 8);
-    
-    // Validation: ensure bpp is valid
+
     if (bpp == 0 || bpp > 8) {
-        std::cout << "Warning: Invalid bpp " << (int)bpp << " for gfx at 0x" << std::hex << src << ", using 4" << std::dec << std::endl;
+        if (reporter.Verbose()) {
+            reporter.Warn(fmt::format("invalid bpp {} for gfx at 0x{:X}, using 4", (int)bpp, src));
+        }
         meta.bpp = 4;
     }
-    
+
     const uint32_t bytes_per_tile = (meta.bpp == 8) ? 64 : 32;
     const uint32_t total_tiles = std::max<uint32_t>(1, size / bytes_per_tile);
 
     if (total_tiles == 0) {
         meta.width = 8;
         meta.height = 8;
-        std::cout << "Warning: Empty/tiny gfx data at 0x" << std::hex << src << ", using 8x8" << std::dec << std::endl;
+        if (reporter.Verbose()) {
+            reporter.Warn(fmt::format("empty/tiny gfx data at 0x{:X}, using 8x8", src));
+        }
         return meta;
     }
 
@@ -545,28 +795,40 @@ GfxMetadata detect_gfx_metadata(uint32_t src, uint32_t size, uint8_t bpp = 4)
     return meta;
 }
 
-std::optional<GfxExtractionResult> extract_gfx(uint32_t src, uint32_t size, bool compressed,
-                                               uint32_t global_gfx_base_offset, uint8_t bpp = 4,
-                                               uint16_t width = 0, uint16_t height = 0,
-                                               const std::filesystem::path& output_root = "assets")
+inline std::optional<GfxExtractionResult> extract_gfx(uint32_t src, uint32_t size, bool compressed,
+                                                      uint32_t global_gfx_base_offset, uint8_t bpp,
+                                                      uint16_t width, uint16_t height,
+                                                      const std::filesystem::path& editable_root,
+                                                      const std::filesystem::path& runtime_root,
+                                                      const Config* config_for_runtime = nullptr)
 {
+    auto& reporter = PortAssetLog::Reporter::Instance();
     const uint32_t rom_src = global_gfx_base_offset + src;
-    std::vector<uint8_t> gfx_data = extract_bytes(rom_src, size);
-    if (gfx_data.empty()) {
-        std::cout << "Error: Failed to read gfx data at ROM offset 0x" << std::hex << rom_src << std::dec << std::endl;
+    std::span<const uint8_t> raw_view = extract_bytes(rom_src, size);
+    if (raw_view.empty()) {
+        if (reporter.Verbose()) {
+            reporter.Warn(fmt::format("failed to read gfx data at ROM 0x{:X}", rom_src));
+        }
         return std::nullopt;
     }
+
+    /* When compressed, lz77_uncompress fills a local vector and gfx_data
+     * views into it. When not compressed, gfx_data is a zero-copy view
+     * into the ROM buffer itself. */
+    std::vector<uint8_t> uncompressed_storage;
+    std::span<const uint8_t> gfx_data;
     if (compressed) {
-        std::vector<uint8_t> uncompressed_data;
-        if (!lz77_uncompress(gfx_data, uncompressed_data)) {
-            std::cout << "Error: Failed to uncompress gfx data at 0x" << std::hex << src << " (ROM 0x" << rom_src << ")"
-                      << std::dec << std::endl;
+        if (!lz77_uncompress(raw_view, uncompressed_storage)) {
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("failed to uncompress gfx at 0x{:X} (ROM 0x{:X})", src, rom_src));
+            }
             return std::nullopt;
         }
-        gfx_data = std::move(uncompressed_data);
+        gfx_data = uncompressed_storage;
+    } else {
+        gfx_data = raw_view;
     }
-    
-    // Auto-detect metadata if not provided
+
     GfxMetadata meta;
     if (width == 0 || height == 0) {
         meta = detect_gfx_metadata(src, gfx_data.size(), bpp);
@@ -576,89 +838,167 @@ std::optional<GfxExtractionResult> extract_gfx(uint32_t src, uint32_t size, bool
         meta.bpp = bpp;
         meta.is_indexed = (bpp <= 8);
     }
-    
-    // Create output folder
-    std::filesystem::path gfx_folder = output_root / "gfx";
-    if (!std::filesystem::exists(gfx_folder)) {
-        std::filesystem::create_directories(gfx_folder);
-    }
-    
-    // Write binary file with metadata in filename
-    std::stringstream ss;
-    ss << std::hex << src;
-    std::string hex_src = ss.str();
-    const std::filesystem::path relative_bmp_output = std::filesystem::path("gfx") /
-        ("gfx_" + hex_src + "_" + std::to_string(meta.width) + "x" + std::to_string(meta.height) + "_" +
-         std::to_string(meta.bpp) + "bpp" + (compressed ? "_compressed" : "_uncompressed") + ".bmp");
-    std::filesystem::path bmp_output = output_root / relative_bmp_output;
-    if (!bin_to_bmp(gfx_data, bmp_output.string(), meta.width, meta.height, meta.bpp)) {
-        std::cout << "Error: Failed to generate editable BMP for gfx at 0x" << std::hex << src << std::dec << std::endl;
-        return std::nullopt;
+
+    const std::string base_name = fmt::format("gfx_{:x}_{}x{}_{}bpp{}", src, meta.width, meta.height, (int)meta.bpp,
+                                              compressed ? "_compressed" : "_uncompressed");
+    const std::filesystem::path relative_bmp = std::filesystem::path("gfx") / (base_name + ".bmp");
+    const std::filesystem::path relative_runtime = std::filesystem::path("gfx") / (base_name + ".bin");
+
+    if (!editable_root.empty()) {
+        const std::filesystem::path bmp_output = editable_root / relative_bmp;
+        if (!bin_to_bmp(gfx_data, bmp_output.string(), meta.width, meta.height, meta.bpp)) {
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("failed to write editable BMP for gfx 0x{:X}", src));
+            }
+            return std::nullopt;
+        }
     }
 
-    std::cout << "Extracted gfx: src=0x" << std::hex << src << " rom=0x" << rom_src << std::dec << " " << meta.width
-              << "x" << meta.height << " @ " << (int)meta.bpp << "bpp to " << bmp_output << std::endl;
+    if (!runtime_root.empty()) {
+        if (config_for_runtime != nullptr && config_for_runtime->packRuntime &&
+            config_for_runtime->pakBuilders != nullptr) {
+            auto* builders = static_cast<PakBuilderArray*>(config_for_runtime->pakBuilders);
+            const std::string rel = relative_runtime.generic_string();
+            const auto idx = static_cast<std::size_t>(pak_route_for(rel));
+            (*builders)[idx].Add(rel, gfx_data.data(), gfx_data.size());
+        } else {
+            const std::filesystem::path runtime_output = runtime_root / relative_runtime;
+            if (!write_binary_file(runtime_output, gfx_data.data(), gfx_data.size())) {
+                if (reporter.Verbose()) {
+                    reporter.Warn(fmt::format("failed to write runtime gfx for 0x{:X}", src));
+                }
+                return std::nullopt;
+            }
+        }
+    }
 
-    return GfxExtractionResult{relative_bmp_output, static_cast<uint32_t>(gfx_data.size()), meta.width, meta.height,
-                               meta.bpp};
+    return GfxExtractionResult{relative_bmp, relative_runtime, static_cast<uint32_t>(gfx_data.size()), meta.width,
+                               meta.height, meta.bpp};
 }
 
 
 
-inline bool extract_all_gfx(uint32_t gfx_group_address, uint32_t gfx_group_table_length, uint32_t global_gfx_base_offset,
-                            uint8_t language, const std::filesystem::path& output_root)
+inline bool extract_all_gfx(const Config& config)
 {
-    std::vector<uint32_t> gfx_group_addresses = extract_gfx_group_addresses(gfx_group_address, gfx_group_table_length);
-    std::cout << "Found " << gfx_group_addresses.size() << " gfx groups." << std::endl;
+    auto& reporter = PortAssetLog::Reporter::Instance();
+
+    std::vector<uint32_t> gfx_group_addresses =
+        extract_gfx_group_addresses(config.gfxGroupsTableOffset, config.gfxGroupsTableLength);
+
     std::vector<GfxGroup> gfx_groups;
+    gfx_groups.reserve(gfx_group_addresses.size());
     for (uint32_t address : gfx_group_addresses) {
-        GfxGroup gfx_group = extract_gfx_group(address);
-        gfx_groups.push_back(gfx_group);
+        gfx_groups.push_back(extract_gfx_group(address));
     }
 
-    std::cout << "Extracting gfx and writing gfx_groups.json..." << std::endl;
-    nlohmann::json json_gfx_groups;
+    // Flatten (group_index, element_index) pairs so we can parallelise across all
+    // elements at once, not just within a group.
+    struct WorkItem {
+        size_t group_index;
+        size_t element_index;
+    };
+    std::vector<WorkItem> work;
+    size_t total_elements = 0;
     for (size_t i = 0; i < gfx_groups.size(); ++i) {
-        const GfxGroup& group = gfx_groups[i];
-        nlohmann::json json_group;
-        for (const auto& element : group) {
-            nlohmann::json json_element;
-            json_element["unknown"] = element.unknown;
-            json_element["dest"] = element.dest;
-            json_element["compressed"] = element.compressed;
-            json_element["terminator"] = element.terminator;
-
-            if (should_extract_gfx_element(element, language)) {
-                const std::optional<GfxExtractionResult> extracted =
-                    extract_gfx(element.src, element.size, element.compressed, global_gfx_base_offset, 4, 0, 0,
-                                output_root);
-                if (extracted.has_value()) {
-                    json_element["file"] = json_path_string(extracted->relative_bmp_output);
-                    json_element["size"] = extracted->output_size;
-                    json_element["width"] = extracted->width;
-                    json_element["height"] = extracted->height;
-                    json_element["bpp"] = extracted->bpp;
-                } else {
-                    std::cout << "Error: Failed to extract gfx data for element with src 0x" << std::hex << element.src
-                              << std::dec << std::endl;
-                }
-            } else {
-                json_element["file"] = nullptr;
-                json_element["size"] = 0;
-            }
-
-            json_group.push_back(json_element);
-        }
-        json_gfx_groups[std::to_string(i + 1)] = json_group;
+        total_elements += gfx_groups[i].size();
     }
-    std::ofstream json_file(output_root / "gfx_groups.json");
-    json_file << json_gfx_groups.dump(4);
-    std::cout << "Finished writing gfx groups to JSON file." << std::endl;
+    work.reserve(total_elements);
+    for (size_t i = 0; i < gfx_groups.size(); ++i) {
+        for (size_t j = 0; j < gfx_groups[i].size(); ++j) {
+            work.push_back({i, j});
+        }
+    }
+
+    // Pre-size per-element JSON results so workers can fill their slot without locks.
+    std::vector<std::vector<nlohmann::json>> editable_results(gfx_groups.size());
+    std::vector<std::vector<nlohmann::json>> runtime_results(gfx_groups.size());
+    for (size_t i = 0; i < gfx_groups.size(); ++i) {
+        editable_results[i].resize(gfx_groups[i].size());
+        runtime_results[i].resize(gfx_groups[i].size());
+    }
+
+    reporter.BeginPhase("gfx", total_elements);
+
+    PortAssetLog::ParallelFor<size_t>(0, work.size(), [&](size_t k) {
+        const WorkItem item = work[k];
+        const GfxGroupElement& element = gfx_groups[item.group_index][item.element_index];
+
+        nlohmann::json editable;
+        editable["unknown"] = element.unknown;
+        editable["dest"] = element.dest;
+        editable["compressed"] = element.compressed;
+        editable["terminator"] = element.terminator;
+
+        nlohmann::json runtime;
+        runtime["unknown"] = element.unknown;
+        runtime["dest"] = element.dest;
+        runtime["terminator"] = element.terminator;
+
+        if (should_extract_gfx_element(element, config.language)) {
+            const std::optional<GfxExtractionResult> extracted = extract_gfx(
+                element.src, element.size, element.compressed, config.globalGfxAndPalettesOffset, 4, 0, 0,
+                config.outputRoot, config.runtimeOutputRoot, &config);
+            if (extracted.has_value()) {
+                editable["file"] = json_path_string(extracted->relative_bmp_output);
+                editable["size"] = extracted->output_size;
+                editable["width"] = extracted->width;
+                editable["height"] = extracted->height;
+                editable["bpp"] = extracted->bpp;
+
+                runtime["file"] = json_path_string(extracted->relative_runtime_path);
+                runtime["size"] = extracted->output_size;
+            } else {
+                editable["file"] = nullptr;
+                editable["size"] = 0;
+                runtime["file"] = nullptr;
+                runtime["size"] = 0;
+            }
+        } else {
+            editable["file"] = nullptr;
+            editable["size"] = 0;
+            runtime["file"] = nullptr;
+            runtime["size"] = 0;
+        }
+
+        editable_results[item.group_index][item.element_index] = std::move(editable);
+        runtime_results[item.group_index][item.element_index] = std::move(runtime);
+        reporter.Tick();
+    });
+
+    nlohmann::json json_editable;
+    nlohmann::json json_runtime;
+    for (size_t i = 0; i < gfx_groups.size(); ++i) {
+        nlohmann::json group_editable = nlohmann::json::array();
+        nlohmann::json group_runtime = nlohmann::json::array();
+        for (size_t j = 0; j < gfx_groups[i].size(); ++j) {
+            group_editable.push_back(std::move(editable_results[i][j]));
+            group_runtime.push_back(std::move(runtime_results[i][j]));
+        }
+        json_editable[std::to_string(i + 1)] = std::move(group_editable);
+        json_runtime[std::to_string(i + 1)] = std::move(group_runtime);
+    }
+
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "gfx_groups.json",
+                                                      std::move(json_editable), 4);
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / "gfx_groups.json",
+                                                          std::move(json_runtime), 0);
+    }
+
+    reporter.EndPhase();
     return true;
 }
 
-inline nlohmann::json build_palette_file_refs(const std::vector<ExtractedPaletteRecord>& palette_records,
-                                              uint32_t palette_id, uint32_t num_palettes)
+struct PaletteRefRecord {
+    std::filesystem::path editable_relative;  // assets_src/palettes/<name>.json
+    std::filesystem::path runtime_relative;   // assets/palettes/<name>.pal
+    std::filesystem::path source_asset;
+    uint32_t first_palette_id;
+    uint32_t palette_count;
+};
+
+inline nlohmann::json build_palette_file_refs(const std::vector<PaletteRefRecord>& palette_records,
+                                              uint32_t palette_id, uint32_t num_palettes, bool runtime)
 {
     nlohmann::json refs = nlohmann::json::array();
     uint32_t next_palette_id = palette_id;
@@ -666,7 +1006,7 @@ inline nlohmann::json build_palette_file_refs(const std::vector<ExtractedPalette
 
     while (remaining_palettes > 0) {
         bool found_segment = false;
-        for (const ExtractedPaletteRecord& record : palette_records) {
+        for (const PaletteRefRecord& record : palette_records) {
             const uint32_t record_end = record.first_palette_id + record.palette_count;
             if (next_palette_id < record.first_palette_id || next_palette_id >= record_end) {
                 continue;
@@ -677,8 +1017,8 @@ inline nlohmann::json build_palette_file_refs(const std::vector<ExtractedPalette
                 std::min<uint32_t>(remaining_palettes, record.palette_count - palette_offset);
 
             nlohmann::json ref;
-            ref["asset"] = json_path_string(record.asset.source_path);
-            ref["file"] = json_path_string(record.relative_output_path);
+            ref["asset"] = json_path_string(record.source_asset);
+            ref["file"] = json_path_string(runtime ? record.runtime_relative : record.editable_relative);
             ref["palette_offset"] = palette_offset;
             ref["num_palettes"] = palettes_in_segment;
             ref["byte_offset"] = palette_offset * 32;
@@ -699,143 +1039,261 @@ inline nlohmann::json build_palette_file_refs(const std::vector<ExtractedPalette
     return refs;
 }
 
-inline std::vector<ExtractedPaletteRecord> extract_all_palettes(const Config& config)
+inline std::vector<PaletteRefRecord> extract_all_palettes(const Config& config)
 {
+    auto& reporter = PortAssetLog::Reporter::Instance();
     const std::vector<AssetRecord> palette_records = collect_embedded_asset_records(
         config, [](const std::string& path) { return path.rfind("palettes/", 0) == 0 && !path.empty(); });
-    std::cout << "Found " << palette_records.size() << " palette assets." << std::endl;
 
-    std::vector<ExtractedPaletteRecord> extracted_palettes;
-    nlohmann::json json_palettes = nlohmann::json::array();
-    for (const AssetRecord& record : palette_records) {
-        const std::vector<uint8_t> palette_data = extract_bytes(record.rom_start, record.size);
+    reporter.BeginPhase("palettes", palette_records.size());
+
+    std::vector<std::optional<PaletteRefRecord>> records_out(palette_records.size());
+    std::vector<std::optional<nlohmann::json>> editable_json(palette_records.size());
+    std::vector<std::optional<nlohmann::json>> runtime_json(palette_records.size());
+
+    PortAssetLog::ParallelFor<size_t>(0, palette_records.size(), [&](size_t i) {
+        const AssetRecord& record = palette_records[i];
+        const std::span<const uint8_t> palette_data = extract_bytes(record.rom_start, record.size);
         if (palette_data.empty()) {
-            std::cout << "Warning: Failed to read palette at ROM offset 0x" << std::hex << record.rom_start << std::dec
-                      << std::endl;
-            continue;
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("failed to read palette at 0x{:X}", record.rom_start));
+            }
+            reporter.Tick();
+            return;
         }
 
-        std::filesystem::path output_path = config.outputRoot / "palettes" / record.source_path.filename();
-        output_path.replace_extension(".json");
-        std::string palette_error;
-        if (!PortAssetPipeline::WritePaletteJson(output_path, palette_data, &palette_error)) {
-            std::cout << "Warning: Failed to write palette " << output_path << std::endl;
-            continue;
+        std::filesystem::path filename = record.source_path.filename();
+        std::filesystem::path editable_relative = std::filesystem::path("palettes") / filename;
+        editable_relative.replace_extension(".json");
+        std::filesystem::path runtime_relative = std::filesystem::path("palettes") / filename;
+        runtime_relative.replace_extension(".pal");
+
+        std::string err;
+        if (!PortAssetPipeline::WritePaletteJson(config.outputRoot / editable_relative, palette_data, &err)) {
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("failed to write palette JSON {}: {}", editable_relative.generic_string(), err));
+            }
+            reporter.Tick();
+            return;
+        }
+        if (!config.runtimeOutputRoot.empty()) {
+            if (!write_runtime_asset(config, /*editable_path=*/{}, runtime_relative,
+                                     palette_data.data(), palette_data.size())) {
+                if (reporter.Verbose()) {
+                    reporter.Warn(fmt::format("failed to write runtime palette {}", runtime_relative.generic_string()));
+                }
+            }
         }
 
-        std::filesystem::path relative_output_path = std::filesystem::path("palettes") / record.source_path.filename();
-        relative_output_path.replace_extension(".json");
         const uint32_t first_palette_id =
             (record.rom_start >= config.globalGfxAndPalettesOffset)
                 ? ((record.rom_start - config.globalGfxAndPalettesOffset) / 32)
                 : 0;
         const uint32_t palette_count = record.size / 32;
-        extracted_palettes.push_back({record, relative_output_path, first_palette_id, palette_count});
+        records_out[i] = PaletteRefRecord{editable_relative, runtime_relative, record.source_path, first_palette_id,
+                                          palette_count};
 
-        nlohmann::json json_palette;
-        json_palette["asset"] = json_path_string(record.source_path);
-        json_palette["file"] = json_path_string(relative_output_path);
-        json_palette["size"] = record.size;
+        nlohmann::json editable;
+        editable["asset"] = json_path_string(record.source_path);
+        editable["file"] = json_path_string(editable_relative);
+        editable["size"] = record.size;
         if (record.size % 32 == 0 && record.rom_start >= config.globalGfxAndPalettesOffset) {
-            json_palette["palette_id"] = first_palette_id;
-            json_palette["num_palettes"] = palette_count;
+            editable["palette_id"] = first_palette_id;
+            editable["num_palettes"] = palette_count;
         }
-        json_palettes.push_back(json_palette);
+        editable_json[i] = std::move(editable);
+
+        nlohmann::json runtime = editable_json[i].value();
+        runtime["file"] = json_path_string(runtime_relative);
+        runtime_json[i] = std::move(runtime);
+
+        /* Pass writes "palettes/foo.json" + "palettes/foo.pal", neither of which
+         * matches the asset-index entry path "palettes/foo.bin"; the sweep needs
+         * to write that raw .bin too (matches old extractor's assets_src/ shape).
+         * "palettes/" is not a runtime-passthrough prefix, so the sweep skips
+         * the runtime side. No consumed marks needed here. */
+        reporter.Tick();
+    });
+
+    nlohmann::json editable_array = nlohmann::json::array();
+    nlohmann::json runtime_array = nlohmann::json::array();
+    std::vector<PaletteRefRecord> result;
+    result.reserve(palette_records.size());
+    for (size_t i = 0; i < palette_records.size(); ++i) {
+        if (editable_json[i].has_value()) {
+            editable_array.push_back(std::move(*editable_json[i]));
+        }
+        if (runtime_json[i].has_value()) {
+            runtime_array.push_back(std::move(*runtime_json[i]));
+        }
+        if (records_out[i].has_value()) {
+            result.push_back(std::move(*records_out[i]));
+        }
     }
 
-    std::ofstream json_file(config.outputRoot / "palettes.json");
-    json_file << json_palettes.dump(4);
-    std::cout << "Finished writing palettes.json" << std::endl;
-    return extracted_palettes;
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "palettes.json",
+                                                      std::move(editable_array), 4);
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / "palettes.json",
+                                                          std::move(runtime_array), 0);
+    }
+
+    reporter.EndPhase();
+    return result;
 }
 
-inline bool extract_all_palette_groups(const Config& config, const std::vector<ExtractedPaletteRecord>& palette_records)
+inline bool extract_all_palette_groups(const Config& config, const std::vector<PaletteRefRecord>& palette_records)
 {
+    auto& reporter = PortAssetLog::Reporter::Instance();
     const std::vector<uint32_t> palette_group_addresses =
         extract_palette_group_addresses(config.paletteGroupsTableOffset, config.paletteGroupsTableLength);
-    std::cout << "Found " << palette_group_addresses.size() << " palette groups." << std::endl;
 
-    nlohmann::json json_palette_groups;
-    for (size_t i = 0; i < palette_group_addresses.size(); ++i) {
-        const uint32_t group_index = static_cast<uint32_t>(i + 1);
+    reporter.BeginPhase("palette_groups", palette_group_addresses.size());
+
+    std::vector<nlohmann::json> editable_groups(palette_group_addresses.size());
+    std::vector<nlohmann::json> runtime_groups(palette_group_addresses.size());
+
+    PortAssetLog::ParallelFor<size_t>(0, palette_group_addresses.size(), [&](size_t i) {
         const PaletteGroup group = extract_palette_group(palette_group_addresses[i]);
 
-        nlohmann::json json_group;
+        nlohmann::json editable_entries = nlohmann::json::array();
+        nlohmann::json runtime_entries = nlohmann::json::array();
         for (const PaletteGroupElement& element : group) {
-            nlohmann::json json_element;
-            json_element["palette_id"] = element.paletteId;
-            json_element["dest_palette_num"] = element.destPaletteNum;
-            json_element["num_palettes"] = element.numPalettes;
-            json_element["terminator"] = element.terminator;
-            json_element["palette_files"] =
-                build_palette_file_refs(palette_records, element.paletteId, element.numPalettes);
-            json_element["size"] = element.numPalettes * 32;
-            json_group.push_back(json_element);
+            nlohmann::json shared;
+            shared["palette_id"] = element.paletteId;
+            shared["dest_palette_num"] = element.destPaletteNum;
+            shared["num_palettes"] = element.numPalettes;
+            shared["terminator"] = element.terminator;
+            shared["size"] = element.numPalettes * 32;
+
+            nlohmann::json editable = shared;
+            editable["palette_files"] =
+                build_palette_file_refs(palette_records, element.paletteId, element.numPalettes, false);
+            editable_entries.push_back(std::move(editable));
+
+            nlohmann::json runtime = shared;
+            runtime["palette_files"] =
+                build_palette_file_refs(palette_records, element.paletteId, element.numPalettes, true);
+            runtime_entries.push_back(std::move(runtime));
         }
 
-        nlohmann::json json_group_root;
-        json_group_root["entries"] = json_group;
-        json_palette_groups[std::to_string(group_index)] = json_group_root;
+        nlohmann::json editable_root;
+        editable_root["entries"] = std::move(editable_entries);
+        editable_groups[i] = std::move(editable_root);
+
+        nlohmann::json runtime_root;
+        runtime_root["entries"] = std::move(runtime_entries);
+        runtime_groups[i] = std::move(runtime_root);
+
+        reporter.Tick();
+    });
+
+    nlohmann::json editable_obj = nlohmann::json::object();
+    nlohmann::json runtime_obj = nlohmann::json::object();
+    for (size_t i = 0; i < palette_group_addresses.size(); ++i) {
+        const std::string key = std::to_string(i + 1);
+        editable_obj[key] = std::move(editable_groups[i]);
+        runtime_obj[key] = std::move(runtime_groups[i]);
     }
 
-    std::ofstream json_file(config.outputRoot / "palette_groups.json");
-    json_file << json_palette_groups.dump(4);
-    std::cout << "Finished writing palette_groups.json" << std::endl;
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "palette_groups.json",
+                                                      std::move(editable_obj), 4);
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / "palette_groups.json",
+                                                          std::move(runtime_obj), 0);
+    }
+
+    reporter.EndPhase();
     return true;
 }
 
 inline bool extract_all_tilemaps(const Config& config)
 {
+    auto& reporter = PortAssetLog::Reporter::Instance();
     const std::vector<AssetRecord> tilemap_records = collect_embedded_asset_records(config, [](const std::string& path) {
         return (path.find("/rooms/") != std::string::npos && path_has_suffix(path, ".bin.lz")) ||
                path.rfind("assets/gAreaRoomMap_", 0) == 0;
     });
-    std::cout << "Found " << tilemap_records.size() << " tilemaps." << std::endl;
 
-    nlohmann::json json_tilemaps = nlohmann::json::array();
-    for (const AssetRecord& record : tilemap_records) {
-        const std::vector<uint8_t> tilemap_data = extract_bytes(record.rom_start, record.size);
+    reporter.BeginPhase("tilemaps", tilemap_records.size());
+
+    std::vector<std::optional<nlohmann::json>> results(tilemap_records.size());
+
+    PortAssetLog::ParallelFor<size_t>(0, tilemap_records.size(), [&](size_t i) {
+        const AssetRecord& record = tilemap_records[i];
+        const std::span<const uint8_t> tilemap_data = extract_bytes(record.rom_start, record.size);
         if (tilemap_data.empty()) {
-            std::cout << "Warning: Failed to read tilemap at ROM offset 0x" << std::hex << record.rom_start << std::dec
-                      << std::endl;
-            continue;
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("failed to read tilemap at 0x{:X}", record.rom_start));
+            }
+            reporter.Tick();
+            return;
         }
 
-        const std::filesystem::path raw_output = config.outputRoot / "tilemaps" / record.source_path;
-        if (!write_binary_file(raw_output, tilemap_data)) {
-            std::cout << "Warning: Failed to write tilemap " << raw_output << std::endl;
-            continue;
+        const std::filesystem::path raw_relative = std::filesystem::path("tilemaps") / record.source_path;
+        if (!write_binary_file(config.outputRoot / raw_relative, tilemap_data.data(), tilemap_data.size())) {
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("failed to write tilemap {}", raw_relative.generic_string()));
+            }
+            reporter.Tick();
+            return;
+        }
+        if (!config.runtimeOutputRoot.empty()) {
+            write_runtime_asset(config, config.outputRoot / raw_relative, raw_relative,
+                                tilemap_data.data(), tilemap_data.size());
         }
 
-        const std::filesystem::path relative_raw_output = std::filesystem::path("tilemaps") / record.source_path;
         nlohmann::json json_tilemap;
         json_tilemap["asset"] = json_path_string(record.source_path);
-        json_tilemap["file"] = json_path_string(relative_raw_output);
+        json_tilemap["file"] = json_path_string(raw_relative);
         json_tilemap["size"] = record.size;
         json_tilemap["compressed"] = record.compressed;
 
         if (record.compressed) {
             std::vector<uint8_t> decompressed_data;
             if (lz77_uncompress(tilemap_data, decompressed_data)) {
-                std::filesystem::path decompressed_output = raw_output;
-                decompressed_output.replace_extension("");
-                if (write_binary_file(decompressed_output, decompressed_data)) {
-                    std::filesystem::path relative_decompressed_output = relative_raw_output;
-                    relative_decompressed_output.replace_extension("");
-                    json_tilemap["decompressed_file"] = json_path_string(relative_decompressed_output);
+                std::filesystem::path decompressed_relative = raw_relative;
+                decompressed_relative.replace_extension("");
+                if (write_binary_file(config.outputRoot / decompressed_relative, decompressed_data.data(),
+                                      decompressed_data.size())) {
+                    if (!config.runtimeOutputRoot.empty()) {
+                        write_runtime_asset(config, config.outputRoot / decompressed_relative, decompressed_relative,
+                                            decompressed_data.data(), decompressed_data.size());
+                    }
+                    json_tilemap["decompressed_file"] = json_path_string(decompressed_relative);
                     json_tilemap["decompressed_size"] = decompressed_data.size();
                 }
-            } else {
-                std::cout << "Warning: Failed to uncompress tilemap " << record.source_path << std::endl;
+            } else if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("failed to uncompress tilemap {}", record.source_path.generic_string()));
             }
         }
 
-        json_tilemaps.push_back(json_tilemap);
+        /* Pass writes the raw bytes under "tilemaps/<source_path>"; the
+         * asset-index entry path is just "<source_path>" (e.g.
+         * "assets/gAreaRoomMap_*.bin.lz"), so the sweep still needs to write
+         * the entry path itself. No consumed marks. */
+        results[i] = std::move(json_tilemap);
+        reporter.Tick();
+    });
+
+    nlohmann::json editable_array = nlohmann::json::array();
+    for (auto& r : results) {
+        if (r.has_value()) {
+            editable_array.push_back(std::move(*r));
+        }
     }
 
-    std::ofstream json_file(config.outputRoot / "tilemaps.json");
-    json_file << json_tilemaps.dump(4);
-    std::cout << "Finished writing tilemaps.json" << std::endl;
+    if (!config.runtimeOutputRoot.empty()) {
+        /* Both trees write the same JSON shape; submit a copy for the
+         * runtime side first so the original can be moved into the
+         * editable submit. */
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / "tilemaps.json",
+                                                          editable_array, 0);
+    }
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "tilemaps.json",
+                                                      std::move(editable_array), 4);
+
+    reporter.EndPhase();
     return true;
 }
 
@@ -926,7 +1384,9 @@ inline uint32_t infer_asset_size(uint32_t offset, const std::unordered_map<uint3
 inline std::filesystem::path extract_asset_or_raw(uint32_t rom_offset, uint32_t size,
                                                   const std::unordered_map<uint32_t, IndexedAssetInfo>& lookup,
                                                   const std::filesystem::path& output_root,
-                                                  const std::filesystem::path& generated_prefix)
+                                                  const std::filesystem::path& runtime_output_root,
+                                                  const std::filesystem::path& generated_prefix,
+                                                  const Config* active_pak_config = nullptr)
 {
     auto found = lookup.find(rom_offset);
     std::filesystem::path relative_path;
@@ -937,8 +1397,22 @@ inline std::filesystem::path extract_asset_or_raw(uint32_t rom_offset, uint32_t 
         relative_path = generated_prefix / ("offset_" + hex_offset_string(rom_offset) + ".bin");
     }
 
-    const std::vector<uint8_t> data = extract_bytes(rom_offset, size);
-    write_binary_file(output_root / relative_path, data);
+    const std::span<const uint8_t> data = extract_bytes(rom_offset, size);
+    const std::filesystem::path editable_path = output_root / relative_path;
+    write_binary_file(editable_path, data.data(), data.size());
+    g_consumed_editable().Mark(relative_path);
+    if (!runtime_output_root.empty()) {
+        if (active_pak_config != nullptr && active_pak_config->packRuntime &&
+            active_pak_config->pakBuilders != nullptr) {
+            auto* builders = static_cast<PakBuilderArray*>(active_pak_config->pakBuilders);
+            const std::string rel = relative_path.generic_string();
+            const auto idx = static_cast<std::size_t>(pak_route_for(rel));
+            (*builders)[idx].Add(rel, data.data(), data.size());
+        } else {
+            mirror_to_runtime(editable_path, runtime_output_root / relative_path, data.data(), data.size());
+        }
+        g_consumed_runtime().Mark(relative_path);
+    }
     return relative_path;
 }
 
@@ -968,7 +1442,8 @@ inline nlohmann::json extract_map_definition_sequence(
             const uint32_t data_size = size & 0x7FFFFFFF;
             const uint32_t file_size = compressed ? infer_asset_size(data_offset, lookup, boundaries, data_size) : data_size;
             const std::filesystem::path relative_path =
-                extract_asset_or_raw(data_offset, file_size, lookup, config.outputRoot, generated_prefix);
+                extract_asset_or_raw(data_offset, file_size, lookup, config.outputRoot, config.runtimeOutputRoot,
+                                     generated_prefix, &config);
             json_entry["file"] = json_path_string(relative_path);
             json_entry["dest"] = dest;
             json_entry["size"] = data_size;
@@ -1033,8 +1508,13 @@ inline std::vector<uint32_t> collect_sprite_animation_table_offsets(const Config
 
 inline bool extract_area_room_headers(const Config& config)
 {
-    nlohmann::json json_headers = nlohmann::json::object();
-    for (uint32_t area = 0; area < 0x90; ++area) {
+    /* Pure CPU work over 144 independent areas. Each area writes a JSON
+     * fragment into a pre-sized slot so the merged document is deterministic
+     * regardless of execution order. */
+    constexpr uint32_t kAreaCount = 0x90;
+    std::vector<nlohmann::json> per_area(kAreaCount);
+
+    PortAssetLog::ParallelFor<uint32_t>(0, kAreaCount, [&](uint32_t area) {
         const uint32_t room_headers_ptr = read_pointer(config.areaRoomHeadersTableOffset + area * 4);
         nlohmann::json json_area = nlohmann::json::array();
         if (is_valid_rom_pointer(room_headers_ptr)) {
@@ -1044,11 +1524,9 @@ inline bool extract_area_room_headers(const Config& config)
                 if (sentinel == 0xFFFF) {
                     break;
                 }
-
                 if (room_offset + 10 > Rom.size()) {
                     break;
                 }
-
                 nlohmann::json json_room;
                 json_room["map_x"] = Rom[room_offset + 0] | (Rom[room_offset + 1] << 8);
                 json_room["map_y"] = Rom[room_offset + 2] | (Rom[room_offset + 3] << 8);
@@ -1059,12 +1537,20 @@ inline bool extract_area_room_headers(const Config& config)
                 room_offset += 10;
             }
         }
-        json_headers[std::to_string(area)] = json_area;
+        per_area[area] = std::move(json_area);
+    });
+
+    nlohmann::json json_headers = nlohmann::json::object();
+    for (uint32_t area = 0; area < kAreaCount; ++area) {
+        json_headers[std::to_string(area)] = std::move(per_area[area]);
     }
 
-    std::ofstream json_file(config.outputRoot / "area_room_headers.json");
-    json_file << json_headers.dump(4);
-    std::cout << "Finished writing area_room_headers.json" << std::endl;
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(
+            config.runtimeOutputRoot / "area_room_headers.json", json_headers, 0);
+    }
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "area_room_headers.json",
+                                                      std::move(json_headers), 4);
     return true;
 }
 
@@ -1073,9 +1559,14 @@ inline bool extract_area_map_table(const Config& config, uint32_t table_offset,
                                    const std::vector<uint32_t>& boundaries, const char* json_name,
                                    const std::filesystem::path& generated_prefix, bool direct_sequences)
 {
-    nlohmann::json json_root = nlohmann::json::object();
+    /* Each area's body calls extract_map_definition_sequence ->
+     * extract_asset_or_raw, which writes files to disk. Those writers are
+     * thread-safe (write_binary_file uses EnsureDir + per-file open; the
+     * consumed-paths sets are mutex-protected). 144 areas in parallel. */
+    constexpr uint32_t kAreaCount = 0x90;
+    std::vector<nlohmann::json> per_area(kAreaCount);
 
-    for (uint32_t area = 0; area < 0x90; ++area) {
+    PortAssetLog::ParallelFor<uint32_t>(0, kAreaCount, [&](uint32_t area) {
         const uint32_t area_ptr = read_pointer(table_offset + area * 4);
         nlohmann::json json_area = nlohmann::json::array();
 
@@ -1098,21 +1589,33 @@ inline bool extract_area_map_table(const Config& config, uint32_t table_offset,
             }
         }
 
-        json_root[std::to_string(area)] = json_area;
+        per_area[area] = std::move(json_area);
+    });
+
+    nlohmann::json json_root = nlohmann::json::object();
+    for (uint32_t area = 0; area < kAreaCount; ++area) {
+        json_root[std::to_string(area)] = std::move(per_area[area]);
     }
 
-    std::ofstream json_file(config.outputRoot / json_name);
-    json_file << json_root.dump(4);
-    std::cout << "Finished writing " << json_name << std::endl;
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / json_name,
+                                                          json_root, 0);
+    }
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / json_name,
+                                                      std::move(json_root), 4);
     return true;
 }
 
 inline bool extract_area_tables(const Config& config, const std::unordered_map<uint32_t, IndexedAssetInfo>& lookup,
                                 const std::vector<uint32_t>& boundaries)
 {
-    nlohmann::json json_root = nlohmann::json::object();
+    /* Largest of the area passes — each area can fan out to dozens of rooms,
+     * each of which calls extract_asset_or_raw (which writes to both trees).
+     * Pre-size and fill in parallel. */
+    constexpr uint32_t kAreaCount = 0x90;
+    std::vector<nlohmann::json> per_area(kAreaCount);
 
-    for (uint32_t area = 0; area < 0x90; ++area) {
+    PortAssetLog::ParallelFor<uint32_t>(0, kAreaCount, [&](uint32_t area) {
         const uint32_t area_ptr = read_pointer(config.areaTableTableOffset + area * 4);
         nlohmann::json json_area = nlohmann::json::array();
 
@@ -1155,7 +1658,8 @@ inline bool extract_area_tables(const Config& config, const std::unordered_map<u
 
                         const uint32_t data_size = infer_asset_size(data_offset, lookup, boundaries, 4);
                         const std::filesystem::path relative_path = extract_asset_or_raw(
-                            data_offset, data_size, lookup, config.outputRoot, "room_properties");
+                            data_offset, data_size, lookup, config.outputRoot, config.runtimeOutputRoot,
+                            "room_properties", &config);
                         json_room.push_back(json_path_string(relative_path));
                     }
                 }
@@ -1163,22 +1667,37 @@ inline bool extract_area_tables(const Config& config, const std::unordered_map<u
             }
         }
 
-        json_root[std::to_string(area)] = json_area;
+        per_area[area] = std::move(json_area);
+    });
+
+    nlohmann::json json_root = nlohmann::json::object();
+    for (uint32_t area = 0; area < kAreaCount; ++area) {
+        json_root[std::to_string(area)] = std::move(per_area[area]);
     }
 
-    std::ofstream json_file(config.outputRoot / "area_tables.json");
-    json_file << json_root.dump(4);
-    std::cout << "Finished writing area_tables.json" << std::endl;
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / "area_tables.json",
+                                                          json_root, 0);
+    }
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "area_tables.json",
+                                                      std::move(json_root), 4);
     return true;
 }
+
+struct SpritePtrPaths {
+    std::filesystem::path editable;  // .json (animations/frames) or .bmp (4bpp gfx)
+    std::filesystem::path runtime;   // .bin (animations/frames) or .4bpp (gfx)
+};
 
 inline bool extract_sprite_ptrs(const Config& config, const std::unordered_map<uint32_t, IndexedAssetInfo>& lookup,
                                 const std::vector<uint32_t>& boundaries)
 {
-    std::unordered_map<std::string, std::filesystem::path> editable_animation_paths;
-    std::unordered_map<std::string, std::filesystem::path> editable_frame_paths;
-    std::unordered_map<std::string, std::filesystem::path> editable_ptr_paths;
-    nlohmann::json json_root = nlohmann::json::array();
+    auto& reporter = PortAssetLog::Reporter::Instance();
+
+    std::mutex animation_mu, frames_mu, ptr_mu;
+    std::unordered_map<std::string, SpritePtrPaths> editable_animation_paths;
+    std::unordered_map<std::string, SpritePtrPaths> editable_frame_paths;
+    std::unordered_map<std::string, SpritePtrPaths> editable_ptr_paths;
 
     auto source_path_for = [&](uint32_t rom_offset, const std::filesystem::path& generated_prefix) {
         const auto found = lookup.find(rom_offset);
@@ -1188,82 +1707,132 @@ inline bool extract_sprite_ptrs(const Config& config, const std::unordered_map<u
         return generated_prefix / ("offset_" + hex_offset_string(rom_offset) + ".bin");
     };
 
-    auto convert_animation = [&](uint32_t rom_offset, uint32_t size) -> std::filesystem::path {
+    auto convert_animation = [&](uint32_t rom_offset, uint32_t size) -> SpritePtrPaths {
         const std::filesystem::path raw_relative_path = source_path_for(rom_offset, "generated/animations");
         const std::string cache_key = raw_relative_path.generic_string();
-        const auto found = editable_animation_paths.find(cache_key);
-        if (found != editable_animation_paths.end()) {
-            return found->second;
+        {
+            std::lock_guard<std::mutex> lk(animation_mu);
+            auto found = editable_animation_paths.find(cache_key);
+            if (found != editable_animation_paths.end()) {
+                return found->second;
+            }
         }
 
-        const std::vector<uint8_t> data = extract_bytes(rom_offset, size);
+        const std::span<const uint8_t> data = extract_bytes(rom_offset, size);
         std::filesystem::path editable_path = raw_relative_path;
         editable_path.replace_extension(".json");
+        std::filesystem::path runtime_path = raw_relative_path;
+        runtime_path.replace_extension(".bin");
         std::error_code ec;
         std::filesystem::remove(config.outputRoot / raw_relative_path, ec);
 
         std::string write_error;
+        SpritePtrPaths paths;
         if (!PortAssetPipeline::WriteEditableAnimation(config.outputRoot / editable_path, data, &write_error)) {
-            std::cout << "Warning: Failed to write editable animation " << editable_path << ": " << write_error
-                      << std::endl;
-            write_binary_file(config.outputRoot / raw_relative_path, data);
-            editable_animation_paths[cache_key] = raw_relative_path;
-            return raw_relative_path;
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("editable animation {}: {}", editable_path.generic_string(), write_error));
+            }
+            write_binary_file(config.outputRoot / raw_relative_path, data.data(), data.size());
+            paths.editable = raw_relative_path;
+        } else {
+            paths.editable = editable_path;
         }
 
-        editable_animation_paths[cache_key] = editable_path;
-        return editable_path;
+        if (!config.runtimeOutputRoot.empty()) {
+            write_runtime_asset(config, /*editable_path=*/{}, runtime_path, data.data(), data.size());
+            /* runtime_path = raw_relative_path with .bin extension, which IS
+             * the asset-index entry path for this offset; mark it so the
+             * passthrough sweep doesn't re-write the same bytes. The editable
+             * .json lives at a different path so the sweep should still write
+             * the raw .bin to assets_src/, matching the old extractor. */
+            g_consumed_runtime().Mark(runtime_path);
+        }
+        paths.runtime = runtime_path;
+
+        {
+            std::lock_guard<std::mutex> lk(animation_mu);
+            editable_animation_paths.emplace(cache_key, paths);
+        }
+        return paths;
     };
 
-    auto convert_frames = [&](uint32_t rom_offset, uint32_t size) -> std::filesystem::path {
+    auto convert_frames = [&](uint32_t rom_offset, uint32_t size) -> SpritePtrPaths {
         const std::filesystem::path raw_relative_path = source_path_for(rom_offset, "generated/sprites");
         const std::string cache_key = raw_relative_path.generic_string();
-        const auto found = editable_frame_paths.find(cache_key);
-        if (found != editable_frame_paths.end()) {
-            return found->second;
+        {
+            std::lock_guard<std::mutex> lk(frames_mu);
+            auto found = editable_frame_paths.find(cache_key);
+            if (found != editable_frame_paths.end()) {
+                return found->second;
+            }
         }
 
-        const std::vector<uint8_t> data = extract_bytes(rom_offset, size);
+        const std::span<const uint8_t> data = extract_bytes(rom_offset, size);
         std::filesystem::path editable_path = raw_relative_path;
         editable_path.replace_extension(".json");
+        std::filesystem::path runtime_path = raw_relative_path;
+        runtime_path.replace_extension(".bin");
         std::error_code ec;
         std::filesystem::remove(config.outputRoot / raw_relative_path, ec);
 
         std::string write_error;
+        SpritePtrPaths paths;
         if (!PortAssetPipeline::WriteEditableSpriteFrames(config.outputRoot / editable_path, data, &write_error)) {
-            std::cout << "Warning: Failed to write editable sprite frames " << editable_path << ": " << write_error
-                      << std::endl;
-            write_binary_file(config.outputRoot / raw_relative_path, data);
-            editable_frame_paths[cache_key] = raw_relative_path;
-            return raw_relative_path;
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("editable sprite frames {}: {}", editable_path.generic_string(), write_error));
+            }
+            write_binary_file(config.outputRoot / raw_relative_path, data.data(), data.size());
+            paths.editable = raw_relative_path;
+        } else {
+            paths.editable = editable_path;
         }
 
-        editable_frame_paths[cache_key] = editable_path;
-        return editable_path;
+        if (!config.runtimeOutputRoot.empty()) {
+            write_runtime_asset(config, /*editable_path=*/{}, runtime_path, data.data(), data.size());
+            g_consumed_runtime().Mark(runtime_path);
+        }
+        paths.runtime = runtime_path;
+
+        {
+            std::lock_guard<std::mutex> lk(frames_mu);
+            editable_frame_paths.emplace(cache_key, paths);
+        }
+        return paths;
     };
 
-    auto convert_ptr_gfx = [&](uint32_t rom_offset, uint32_t size, nlohmann::json& json_entry) -> std::filesystem::path {
+    auto convert_ptr_gfx = [&](uint32_t rom_offset, uint32_t size, nlohmann::json& editable_entry,
+                               nlohmann::json& runtime_entry) -> SpritePtrPaths {
         const std::filesystem::path raw_relative_path = source_path_for(rom_offset, "generated/sprites");
         if (raw_relative_path.extension() != ".4bpp") {
-            const std::vector<uint8_t> data = extract_bytes(rom_offset, size);
-            write_binary_file(config.outputRoot / raw_relative_path, data);
-            return raw_relative_path;
+            const std::span<const uint8_t> data = extract_bytes(rom_offset, size);
+            const std::filesystem::path editable_path = config.outputRoot / raw_relative_path;
+            write_binary_file(editable_path, data.data(), data.size());
+            g_consumed_editable().Mark(raw_relative_path);
+            if (!config.runtimeOutputRoot.empty()) {
+                write_runtime_asset(config, editable_path, raw_relative_path, data.data(), data.size());
+                g_consumed_runtime().Mark(raw_relative_path);
+            }
+            return SpritePtrPaths{raw_relative_path, raw_relative_path};
         }
 
         const GfxMetadata meta = detect_gfx_metadata(rom_offset, size, 4);
-        json_entry["ptr_runtime_file"] = raw_relative_path.generic_string();
-        json_entry["ptr_width"] = meta.width;
-        json_entry["ptr_height"] = meta.height;
-        json_entry["ptr_bpp"] = meta.bpp;
-        json_entry["ptr_size"] = size;
+        editable_entry["ptr_runtime_file"] = raw_relative_path.generic_string();
+        editable_entry["ptr_width"] = meta.width;
+        editable_entry["ptr_height"] = meta.height;
+        editable_entry["ptr_bpp"] = meta.bpp;
+        editable_entry["ptr_size"] = size;
+        runtime_entry["ptr_size"] = size;
 
         const std::string cache_key = raw_relative_path.generic_string();
-        const auto found = editable_ptr_paths.find(cache_key);
-        if (found != editable_ptr_paths.end()) {
-            return found->second;
+        {
+            std::lock_guard<std::mutex> lk(ptr_mu);
+            auto found = editable_ptr_paths.find(cache_key);
+            if (found != editable_ptr_paths.end()) {
+                return found->second;
+            }
         }
 
-        const std::vector<uint8_t> data = extract_bytes(rom_offset, size);
+        const std::span<const uint8_t> data = extract_bytes(rom_offset, size);
         const std::vector<uint8_t> pixels =
             PortAssetPipeline::DecodeGbaTiledGfx(data, meta.width, meta.height, meta.bpp);
 
@@ -1273,32 +1842,60 @@ inline bool extract_sprite_ptrs(const Config& config, const std::unordered_map<u
         std::filesystem::remove(config.outputRoot / raw_relative_path, ec);
 
         std::string write_error;
+        SpritePtrPaths paths;
         if (pixels.empty() ||
             !PortAssetPipeline::WriteIndexedBmp(config.outputRoot / editable_path, pixels, meta.width, meta.height,
                                                 meta.bpp, &write_error)) {
-            std::cout << "Warning: Failed to write editable sprite gfx " << editable_path << ": " << write_error
-                      << std::endl;
-            write_binary_file(config.outputRoot / raw_relative_path, data);
-            editable_ptr_paths[cache_key] = raw_relative_path;
-            return raw_relative_path;
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("editable sprite gfx {}: {}", editable_path.generic_string(), write_error));
+            }
+            write_binary_file(config.outputRoot / raw_relative_path, data.data(), data.size());
+            paths.editable = raw_relative_path;
+        } else {
+            paths.editable = editable_path;
         }
 
-        editable_ptr_paths[cache_key] = editable_path;
-        return editable_path;
+        if (!config.runtimeOutputRoot.empty()) {
+            write_runtime_asset(config, /*editable_path=*/{}, raw_relative_path, data.data(), data.size());
+            /* raw_relative_path here is "sprites/foo.4bpp" — i.e. the
+             * asset-index path for this 4bpp gfx blob. Mark runtime so the
+             * sweep doesn't re-write. Editable lives at .bmp (different
+             * path), so the sweep should still write the raw .4bpp to
+             * assets_src/, matching old behaviour. */
+            g_consumed_runtime().Mark(raw_relative_path);
+        }
+        paths.runtime = raw_relative_path;
+
+        {
+            std::lock_guard<std::mutex> lk(ptr_mu);
+            editable_ptr_paths.emplace(cache_key, paths);
+        }
+        return paths;
     };
 
-    for (uint32_t i = 0; i < config.spritePtrsCount; ++i) {
+    reporter.BeginPhase("sprites", config.spritePtrsCount);
+
+    std::vector<nlohmann::json> editable_entries(config.spritePtrsCount);
+    std::vector<nlohmann::json> runtime_entries(config.spritePtrsCount);
+
+    PortAssetLog::ParallelFor<uint32_t>(0, config.spritePtrsCount, [&](uint32_t i) {
         const uint32_t base = config.spritePtrsTableOffset + i * 16;
         const uint32_t animations_ptr = read_pointer(base + 0);
         const uint32_t frames_ptr = read_pointer(base + 4);
         const uint32_t ptr_ptr = read_pointer(base + 8);
         const uint32_t pad = read_pointer(base + 12);
 
-        nlohmann::json json_entry;
-        json_entry["animations"] = nlohmann::json::array();
-        json_entry["frames_file"] = nullptr;
-        json_entry["ptr_file"] = nullptr;
-        json_entry["pad"] = pad;
+        nlohmann::json editable_entry;
+        editable_entry["animations"] = nlohmann::json::array();
+        editable_entry["frames_file"] = nullptr;
+        editable_entry["ptr_file"] = nullptr;
+        editable_entry["pad"] = pad;
+
+        nlohmann::json runtime_entry;
+        runtime_entry["animations"] = nlohmann::json::array();
+        runtime_entry["frames_file"] = nullptr;
+        runtime_entry["ptr_file"] = nullptr;
+        runtime_entry["pad"] = pad;
 
         if (is_valid_rom_pointer(animations_ptr) && (animations_ptr & 1) == 0) {
             const uint32_t table_offset = to_rom_address(animations_ptr);
@@ -1309,42 +1906,63 @@ inline bool extract_sprite_ptrs(const Config& config, const std::unordered_map<u
                 if (!is_valid_rom_pointer(anim_ptr)) {
                     break;
                 }
-
                 const uint32_t anim_offset = to_rom_address(anim_ptr);
                 const uint32_t anim_size = infer_asset_size(anim_offset, lookup, boundaries, 4);
-                const std::filesystem::path relative_path = convert_animation(anim_offset, anim_size);
-                json_entry["animations"].push_back(json_path_string(relative_path));
+                const SpritePtrPaths paths = convert_animation(anim_offset, anim_size);
+                editable_entry["animations"].push_back(json_path_string(paths.editable));
+                runtime_entry["animations"].push_back(json_path_string(paths.runtime));
             }
         }
 
         if (is_valid_rom_pointer(frames_ptr) && (frames_ptr & 1) == 0) {
             const uint32_t frames_offset = to_rom_address(frames_ptr);
             const uint32_t frames_size = infer_asset_size(frames_offset, lookup, boundaries, 4);
-            const std::filesystem::path relative_path = convert_frames(frames_offset, frames_size);
-            json_entry["frames_file"] = json_path_string(relative_path);
+            const SpritePtrPaths paths = convert_frames(frames_offset, frames_size);
+            editable_entry["frames_file"] = json_path_string(paths.editable);
+            runtime_entry["frames_file"] = json_path_string(paths.runtime);
         }
 
         if (is_valid_rom_pointer(ptr_ptr) && (ptr_ptr & 1) == 0) {
             const uint32_t ptr_offset = to_rom_address(ptr_ptr);
             const uint32_t ptr_size = infer_asset_size(ptr_offset, lookup, boundaries, 4);
-            const std::filesystem::path relative_path = convert_ptr_gfx(ptr_offset, ptr_size, json_entry);
-            json_entry["ptr_file"] = json_path_string(relative_path);
+            const SpritePtrPaths paths = convert_ptr_gfx(ptr_offset, ptr_size, editable_entry, runtime_entry);
+            editable_entry["ptr_file"] = json_path_string(paths.editable);
+            runtime_entry["ptr_file"] = json_path_string(paths.runtime);
         }
 
-        json_root.push_back(json_entry);
+        editable_entries[i] = std::move(editable_entry);
+        runtime_entries[i] = std::move(runtime_entry);
+        reporter.Tick();
+    });
+
+    nlohmann::json editable_root = nlohmann::json::array();
+    nlohmann::json runtime_root = nlohmann::json::array();
+    for (auto& e : editable_entries) {
+        editable_root.push_back(std::move(e));
+    }
+    for (auto& e : runtime_entries) {
+        runtime_root.push_back(std::move(e));
     }
 
-    std::ofstream json_file(config.outputRoot / "sprite_ptrs.json");
-    json_file << json_root.dump(4);
-    std::cout << "Finished writing sprite_ptrs.json" << std::endl;
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "sprite_ptrs.json",
+                                                      std::move(editable_root), 4);
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / "sprite_ptrs.json",
+                                                          std::move(runtime_root), 0);
+    }
+
+    reporter.EndPhase();
     return true;
 }
 
 inline bool extract_texts(const Config& config)
 {
-    nlohmann::json json_root = nlohmann::json::object();
+    auto& reporter = PortAssetLog::Reporter::Instance();
     std::error_code ec;
     std::filesystem::remove_all(config.outputRoot / "texts", ec);
+    if (!config.runtimeOutputRoot.empty()) {
+        std::filesystem::remove_all(config.runtimeOutputRoot / "texts", ec);
+    }
 
     struct LanguageGroup {
         uint32_t representative_language;
@@ -1369,159 +1987,390 @@ inline bool extract_texts(const Config& config)
         }
     }
 
-    for (const LanguageGroup& group : groups) {
-        const uint32_t language = group.representative_language;
-        const uint32_t root_ptr = group.root_ptr;
-        nlohmann::json json_language;
-        const std::string language_name = text_language_display_name(config, language);
-        json_language["name"] = language_name;
-        json_language["engine_slots"] = nlohmann::json::array();
-        for (uint32_t slot : group.engine_slots) {
-            json_language["engine_slots"].push_back(slot);
-        }
+    auto write_le32 = [](std::vector<uint8_t>& buffer, size_t offset, uint32_t value) {
+        buffer[offset + 0] = static_cast<uint8_t>(value & 0xFF);
+        buffer[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xFF);
+        buffer[offset + 2] = static_cast<uint8_t>((value >> 16) & 0xFF);
+        buffer[offset + 3] = static_cast<uint8_t>((value >> 24) & 0xFF);
+    };
 
-        if (root_ptr < 0x08000000u || root_ptr >= 0x08000000u + Rom.size()) {
-            json_language["valid"] = false;
-            json_root[std::to_string(language)] = json_language;
+    struct PreparedMessage {
+        uint32_t index;
+        uint32_t text_id;
+        uint32_t rom_offset;
+        std::filesystem::path editable_relative;
+        std::filesystem::path runtime_relative;
+        std::vector<uint8_t> bytes;
+        std::string preview;
+    };
+
+    struct PreparedCategory {
+        uint32_t category;
+        uint32_t table_rom_offset;
+        uint32_t message_count;
+        std::string name;
+        std::vector<PreparedMessage> messages;
+    };
+
+    struct PreparedLanguage {
+        uint32_t language;
+        uint32_t root_ptr;
+        std::string display_name;
+        std::vector<uint32_t> engine_slots;
+        bool valid;
+        uint32_t root_offset;
+        uint32_t category_count;
+        std::vector<PreparedCategory> categories;
+    };
+
+    // First pass (single-threaded, no I/O): parse the ROM tables and collect
+    // every (language, category, message) triple into a flat list so we can
+    // parallelise the actual decode/write in one ParallelFor.
+    std::vector<PreparedLanguage> prepared(groups.size());
+    struct WorkItem { size_t lang; size_t cat; size_t msg; };
+    std::vector<WorkItem> work;
+
+    for (size_t li = 0; li < groups.size(); ++li) {
+        const LanguageGroup& group = groups[li];
+        PreparedLanguage& pl = prepared[li];
+        pl.language = group.representative_language;
+        pl.root_ptr = group.root_ptr;
+        pl.display_name = text_language_display_name(config, group.representative_language);
+        pl.engine_slots = group.engine_slots;
+        pl.valid = false;
+        pl.root_offset = 0;
+        pl.category_count = 0;
+
+        if (group.root_ptr < 0x08000000u || group.root_ptr >= 0x08000000u + Rom.size()) {
             continue;
         }
-
-        const uint32_t root_offset = to_rom_address(root_ptr);
+        const uint32_t root_offset = to_rom_address(group.root_ptr);
         if (root_offset + 4 > Rom.size()) {
-            json_language["valid"] = false;
-            json_root[std::to_string(language)] = json_language;
             continue;
         }
 
-        const uint32_t category_count = read_pointer(root_offset) / 4;
-        json_language["valid"] = true;
-        json_language["table_rom_offset"] = root_offset;
-        json_language["category_count"] = category_count;
+        pl.valid = true;
+        pl.root_offset = root_offset;
+        pl.category_count = read_pointer(root_offset) / 4;
 
-        nlohmann::json json_categories = nlohmann::json::object();
-        for (uint32_t category = 0; category < category_count; ++category) {
+        for (uint32_t category = 0; category < pl.category_count; ++category) {
             const uint32_t category_table_relative = read_pointer(root_offset + category * 4);
             if (category_table_relative == 0) {
                 continue;
             }
-
             const uint32_t category_table_offset = root_offset + category_table_relative;
             if (category_table_offset + 4 > Rom.size()) {
                 continue;
             }
 
-            const uint32_t message_count = read_pointer(category_table_offset) / 4;
-            nlohmann::json json_category;
-            json_category["name"] = text_category_name(category);
-            json_category["table_rom_offset"] = category_table_offset;
-            json_category["message_count"] = message_count;
+            PreparedCategory pc;
+            pc.category = category;
+            pc.table_rom_offset = category_table_offset;
+            pc.message_count = read_pointer(category_table_offset) / 4;
+            pc.name = text_category_name(category);
 
-            nlohmann::json json_messages = nlohmann::json::array();
-            for (uint32_t message = 0; message < message_count; ++message) {
+            for (uint32_t message = 0; message < pc.message_count; ++message) {
                 const uint32_t message_relative = read_pointer(category_table_offset + message * 4);
                 const uint32_t message_offset = category_table_offset + message_relative;
                 if (message_relative == 0 || message_offset >= Rom.size()) {
                     continue;
                 }
-
-                std::string symbolic_text;
-                size_t consumed_bytes = 0;
-                std::string text_error;
-                if (!PortAssetPipeline::DecodeTmcText(Rom.data() + message_offset, Rom.size() - message_offset,
-                                                     symbolic_text, &consumed_bytes, &text_error)) {
-                    std::cout << "Error: Failed to decode text at 0x" << std::hex << std::uppercase << message_offset
-                              << std::dec << ": " << text_error << std::endl;
-                    continue;
-                }
-
-                const std::vector<uint8_t> message_bytes(
-                    Rom.begin() + message_offset, Rom.begin() + message_offset + consumed_bytes);
-                if (message_bytes.empty()) {
-                    continue;
-                }
-
-                std::ostringstream message_name_stream;
-                message_name_stream << std::uppercase << std::hex << std::setw(2) << std::setfill('0') << message;
-                const std::string message_name = message_name_stream.str();
-                const std::filesystem::path relative_path =
-                    std::filesystem::path("texts") / language_name / text_category_name(category) /
-                    ("message_" + message_name + ".json");
-                if (!PortAssetPipeline::WriteEditableText(config.outputRoot / relative_path, message_bytes, &text_error)) {
-                    std::cout << "Error: Failed to write editable text " << relative_path << ": " << text_error
-                              << std::endl;
-                    continue;
-                }
-
-                nlohmann::json json_message;
-                json_message["index"] = message;
-                json_message["text_id"] = (category << 8) | message;
-                json_message["rom_offset"] = message_offset;
-                json_message["file"] = json_path_string(relative_path);
-                json_message["size"] = message_bytes.size();
-                json_message["preview"] = symbolic_text;
-                json_messages.push_back(std::move(json_message));
+                PreparedMessage pm;
+                pm.index = message;
+                pm.text_id = (category << 8) | message;
+                pm.rom_offset = message_offset;
+                pc.messages.push_back(std::move(pm));
             }
-
-            json_category["messages"] = std::move(json_messages);
-            json_categories[std::to_string(category)] = std::move(json_category);
+            const size_t cat_index = pl.categories.size();
+            pl.categories.push_back(std::move(pc));
+            for (size_t mi = 0; mi < pl.categories[cat_index].messages.size(); ++mi) {
+                work.push_back({li, cat_index, mi});
+            }
         }
-
-        json_language["categories"] = std::move(json_categories);
-        json_root[std::to_string(language)] = std::move(json_language);
     }
 
-    std::ofstream json_file(config.outputRoot / "texts.json");
-    json_file << json_root.dump(4);
-    std::cout << "Finished writing texts.json" << std::endl;
+    reporter.BeginPhase("texts", work.size());
+
+    PortAssetLog::ParallelFor<size_t>(0, work.size(), [&](size_t k) {
+        const WorkItem& item = work[k];
+        PreparedLanguage& pl = prepared[item.lang];
+        PreparedCategory& pc = pl.categories[item.cat];
+        PreparedMessage& pm = pc.messages[item.msg];
+
+        std::string symbolic_text;
+        size_t consumed_bytes = 0;
+        std::string err;
+        if (!PortAssetPipeline::DecodeTmcText(Rom.data() + pm.rom_offset, Rom.size() - pm.rom_offset, symbolic_text,
+                                              &consumed_bytes, &err)) {
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("decode text 0x{:X}: {}", pm.rom_offset, err));
+            }
+            reporter.Tick();
+            return;
+        }
+
+        pm.bytes.assign(Rom.begin() + pm.rom_offset, Rom.begin() + pm.rom_offset + consumed_bytes);
+        pm.preview = std::move(symbolic_text);
+
+        const std::string message_name = fmt::format("{:02X}", pm.index);
+        pm.editable_relative = std::filesystem::path("texts") / pl.display_name / pc.name /
+                               ("message_" + message_name + ".json");
+        pm.runtime_relative = std::filesystem::path("texts") / pl.display_name / pc.name /
+                              ("message_" + message_name + ".bin");
+
+        std::string write_err;
+        if (!PortAssetPipeline::WriteEditableText(config.outputRoot / pm.editable_relative, pm.bytes, &write_err)) {
+            if (reporter.Verbose()) {
+                reporter.Warn(fmt::format("editable text {}: {}", pm.editable_relative.generic_string(), write_err));
+            }
+        }
+        if (!config.runtimeOutputRoot.empty()) {
+            /* texts/ is one of the passthrough prefixes — route the
+             * runtime mirror through the pak builder when --pak is
+             * active, otherwise write loose. */
+            if (config.packRuntime && config.pakBuilders != nullptr) {
+                auto* builders = static_cast<PakBuilderArray*>(config.pakBuilders);
+                const std::string rel = pm.runtime_relative.generic_string();
+                const auto idx = static_cast<std::size_t>(pak_route_for(rel));
+                (*builders)[idx].Add(rel, pm.bytes.data(), pm.bytes.size());
+            } else {
+                write_binary_file(config.runtimeOutputRoot / pm.runtime_relative, pm.bytes.data(), pm.bytes.size());
+            }
+        }
+        reporter.Tick();
+    });
+
+    // Build editable + runtime JSON manifests; build packed translation tables.
+    nlohmann::json editable_root = nlohmann::json::object();
+    nlohmann::json runtime_root = nlohmann::json::object();
+
+    for (PreparedLanguage& pl : prepared) {
+        nlohmann::json language;
+        language["name"] = pl.display_name;
+        language["engine_slots"] = nlohmann::json::array();
+        for (uint32_t slot : pl.engine_slots) {
+            language["engine_slots"].push_back(slot);
+        }
+
+        if (!pl.valid) {
+            language["valid"] = false;
+            editable_root[std::to_string(pl.language)] = language;
+            for (uint32_t slot : pl.engine_slots) {
+                nlohmann::json copy = language;
+                copy.erase("engine_slots");
+                runtime_root[std::to_string(slot)] = std::move(copy);
+            }
+            continue;
+        }
+
+        language["valid"] = true;
+        language["table_rom_offset"] = pl.root_offset;
+        language["category_count"] = pl.category_count;
+
+        nlohmann::json editable_categories = nlohmann::json::object();
+        nlohmann::json runtime_categories = nlohmann::json::object();
+        for (PreparedCategory& pc : pl.categories) {
+            nlohmann::json editable_category;
+            editable_category["name"] = pc.name;
+            editable_category["table_rom_offset"] = pc.table_rom_offset;
+            editable_category["message_count"] = pc.message_count;
+            nlohmann::json editable_messages = nlohmann::json::array();
+            nlohmann::json runtime_messages = nlohmann::json::array();
+            for (PreparedMessage& pm : pc.messages) {
+                if (pm.bytes.empty()) {
+                    continue;
+                }
+                nlohmann::json em;
+                em["index"] = pm.index;
+                em["text_id"] = pm.text_id;
+                em["rom_offset"] = pm.rom_offset;
+                em["file"] = json_path_string(pm.editable_relative);
+                em["size"] = pm.bytes.size();
+                em["preview"] = pm.preview;
+                editable_messages.push_back(em);
+
+                nlohmann::json rm = em;
+                rm["file"] = json_path_string(pm.runtime_relative);
+                runtime_messages.push_back(std::move(rm));
+            }
+            editable_category["messages"] = editable_messages;
+            editable_categories[std::to_string(pc.category)] = editable_category;
+
+            nlohmann::json runtime_category = editable_category;
+            runtime_category["messages"] = std::move(runtime_messages);
+            runtime_categories[std::to_string(pc.category)] = std::move(runtime_category);
+        }
+
+        nlohmann::json editable_lang = language;
+        editable_lang["categories"] = std::move(editable_categories);
+        editable_root[std::to_string(pl.language)] = std::move(editable_lang);
+
+        // Build packed runtime translation table for this language and write
+        // it to runtime root. Mirrors PortAssetPipeline::buildPackedTranslationTable.
+        std::vector<uint8_t> packed(static_cast<size_t>(pl.category_count) * 4, 0);
+        for (PreparedCategory& pc : pl.categories) {
+            if (pc.category >= pl.category_count) {
+                continue;
+            }
+            std::vector<uint8_t> categoryData(static_cast<size_t>(pc.message_count) * 4, 0);
+            size_t writePos = categoryData.size();
+            for (PreparedMessage& pm : pc.messages) {
+                if (pm.index >= pc.message_count || pm.bytes.empty()) {
+                    continue;
+                }
+                write_le32(categoryData, static_cast<size_t>(pm.index) * 4, static_cast<uint32_t>(writePos));
+                categoryData.insert(categoryData.end(), pm.bytes.begin(), pm.bytes.end());
+                writePos += pm.bytes.size();
+            }
+            while ((categoryData.size() & 0xF) != 0) {
+                categoryData.push_back(0xFF);
+            }
+            write_le32(packed, static_cast<size_t>(pc.category) * 4, static_cast<uint32_t>(packed.size()));
+            packed.insert(packed.end(), categoryData.begin(), categoryData.end());
+        }
+        while ((packed.size() & 0xF) != 0) {
+            packed.push_back(0xFF);
+        }
+
+        // Mirrors PortAssetPipeline::BuildRuntimeTexts: one packed table file
+        // per representative language, named after the representative language
+        // key, then replicated across every engine slot in the runtime JSON.
+        const std::filesystem::path table_relative =
+            std::filesystem::path("texts") / "tables" / fmt::format("language_{}.bin", pl.language);
+        if (!config.runtimeOutputRoot.empty()) {
+            write_runtime_asset(config, /*editable_path=*/{}, table_relative,
+                                packed.data(), packed.size());
+        }
+
+        nlohmann::json runtime_lang;
+        runtime_lang["name"] = pl.display_name;
+        runtime_lang["valid"] = true;
+        runtime_lang["table_rom_offset"] = pl.root_offset;
+        runtime_lang["category_count"] = pl.category_count;
+        runtime_lang["categories"] = std::move(runtime_categories);
+        runtime_lang["table_size"] = packed.size();
+        runtime_lang["table_file"] = table_relative.generic_string();
+
+        for (uint32_t slot : pl.engine_slots) {
+            runtime_root[std::to_string(slot)] = runtime_lang;
+        }
+    }
+
+    PortAssetLog::BackgroundWriter::Instance().Submit(config.outputRoot / "texts.json",
+                                                      std::move(editable_root), 4);
+    if (!config.runtimeOutputRoot.empty()) {
+        PortAssetLog::BackgroundWriter::Instance().Submit(config.runtimeOutputRoot / "texts.json",
+                                                          std::move(runtime_root), 0);
+    }
+
+    reporter.EndPhase();
     return true;
 }
 
 
 inline bool extract_assets(const Config& config)
 {
+    auto& reporter = PortAssetLog::Reporter::Instance();
+
     const auto lookup = build_embedded_asset_lookup();
     std::vector<uint32_t> extra_boundaries = collect_area_table_data_offsets(config);
     const std::vector<uint32_t> sprite_animation_tables = collect_sprite_animation_table_offsets(config);
     extra_boundaries.insert(extra_boundaries.end(), sprite_animation_tables.begin(), sprite_animation_tables.end());
     const std::vector<uint32_t> boundaries = build_inference_boundaries(lookup, extra_boundaries);
 
-    const std::vector<ExtractedPaletteRecord> extracted_palettes = extract_all_palettes(config);
+    const std::vector<PaletteRefRecord> extracted_palettes = extract_all_palettes(config);
     extract_all_palette_groups(config, extracted_palettes);
-    extract_all_gfx(config.gfxGroupsTableOffset, config.gfxGroupsTableLength, config.globalGfxAndPalettesOffset,
-                    config.language, config.outputRoot);
+    extract_all_gfx(config);
     extract_all_tilemaps(config);
-    extract_area_room_headers(config);
-    extract_area_map_table(config, config.areaTileSetsTableOffset, lookup, boundaries, "area_tile_sets.json",
-                           "generated/mapdata", false);
-    extract_area_map_table(config, config.areaRoomMapsTableOffset, lookup, boundaries, "area_room_maps.json",
-                           "generated/mapdata", false);
-    extract_area_map_table(config, config.areaTilesTableOffset, lookup, boundaries, "area_tiles.json",
-                           "generated/mapdata", true);
-    extract_area_tables(config, lookup, boundaries);
+
+    /* Five passes share the same shape (loop over 144 areas, write JSON +
+     * referenced raw assets). Group them under one progress phase so their
+     * cost is visible. The passes are themselves parallel-over-areas. */
+    {
+        reporter.BeginPhase("areas", 5);
+        extract_area_room_headers(config);
+        reporter.Tick();
+        extract_area_map_table(config, config.areaTileSetsTableOffset, lookup, boundaries, "area_tile_sets.json",
+                               "generated/mapdata", false);
+        reporter.Tick();
+        extract_area_map_table(config, config.areaRoomMapsTableOffset, lookup, boundaries, "area_room_maps.json",
+                               "generated/mapdata", false);
+        reporter.Tick();
+        extract_area_map_table(config, config.areaTilesTableOffset, lookup, boundaries, "area_tiles.json",
+                               "generated/mapdata", true);
+        reporter.Tick();
+        extract_area_tables(config, lookup, boundaries);
+        reporter.Tick();
+        reporter.EndPhase();
+    }
+
     extract_sprite_ptrs(config, lookup, boundaries);
     extract_texts(config);
 
     /* Final sweep: extract everything in the embedded asset index that the
-     * specialized passes above didn't already produce. This covers data that's
-     * referenced indirectly (e.g. data_080D5360/* room-property data pointed
+     * specialised passes above didn't already produce. This covers data that's
+     * referenced indirectly (e.g. data_080D5360/ * room-property data pointed
      * at by gUnk_additional_* offsets reached from compiled code rather than
      * from area tables). Without this, release tarballs miss those subtrees
      * and rooms that depend on them silently misbehave (lily pads stationary,
-     * doors not appearing, etc.). */
+     * doors not appearing, etc.).
+     *
+     * We use per-tree consumed-paths sets populated by the specialised passes
+     * instead of std::filesystem::exists, which on Windows is one
+     * GetFileAttributesW per entry and dominates wall time. The runtime
+     * branch additionally honours the passthrough-prefix list so assets/
+     * tracks the old CopyRuntimePassthroughAssets shape exactly (palettes,
+     * code_*, etc. live editable-only). */
     const EmbeddedAssetEntry* idx = EmbeddedAssetIndex_Get();
     const u32 idx_count = EmbeddedAssetIndex_Count();
-    uint32_t extracted_count = 0;
-    for (u32 i = 0; i < idx_count; ++i) {
-        const EmbeddedAssetEntry& entry = idx[i];
-        const std::filesystem::path full_path = config.outputRoot / entry.path;
-        if (std::filesystem::exists(full_path)) {
-            continue; /* already extracted by a specialized pass */
+
+    reporter.BeginPhase("sweep", idx_count);
+    std::atomic<uint32_t> extracted_count{0};
+    PortAssetLog::ParallelFor<size_t>(0, idx_count, [&](size_t k) {
+        const EmbeddedAssetEntry& entry = idx[k];
+        const std::filesystem::path entry_path = entry.path;
+        const std::string entry_path_str = entry_path.generic_string();
+
+        const bool need_editable = !g_consumed_editable().Contains(entry_path);
+        const bool need_runtime = !config.runtimeOutputRoot.empty() &&
+                                  is_runtime_passthrough_path(entry_path_str) &&
+                                  !g_consumed_runtime().Contains(entry_path);
+
+        if (!need_editable && !need_runtime) {
+            reporter.Tick();
+            return;
         }
-        const std::vector<uint8_t> data = extract_bytes(entry.offset, entry.size);
-        if (write_binary_file(full_path, data)) {
-            ++extracted_count;
+
+        const std::span<const uint8_t> data = extract_bytes(entry.offset, entry.size);
+        const std::filesystem::path editable_full = config.outputRoot / entry_path;
+        bool wrote_any = false;
+        if (need_editable && write_binary_file(editable_full, data.data(), data.size())) {
+            wrote_any = true;
         }
+        if (need_runtime) {
+            /* If we just wrote the editable copy this tick, hardlink the
+             * runtime side to it (one syscall, zero data bytes) instead of
+             * paying a second open+write+close. Falls back to a real write
+             * if hardlinking isn't available. If we DIDN'T write editable
+             * this tick (consumed by a special pass), do a normal write.
+             * In pak mode write_runtime_asset routes to the appropriate
+             * PakBuilder regardless of whether editable was written. */
+            const bool ok =
+                write_runtime_asset(config, need_editable ? editable_full : std::filesystem::path{},
+                                    entry_path, data.data(), data.size());
+            if (ok) {
+                wrote_any = true;
+            }
+        }
+        if (wrote_any) {
+            extracted_count.fetch_add(1, std::memory_order_relaxed);
+        }
+        reporter.Tick();
+    });
+    reporter.EndPhase();
+
+    if (reporter.Verbose()) {
+        reporter.Note(fmt::format("final sweep: {} additional indexed assets", extracted_count.load()));
     }
-    std::cout << "Final sweep: extracted " << extracted_count << " additional indexed assets" << std::endl;
     return true;
 }

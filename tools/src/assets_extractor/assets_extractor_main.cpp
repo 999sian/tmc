@@ -1,85 +1,68 @@
-#include <assets_extractor.hpp>
-#include "port_asset_pipeline.hpp"
+#include "assets_extractor_api.hpp"
+#include "port_asset_log.hpp"
+#include "global.h"
 
-extern "C" {
+#include <fmt/format.h>
+
+#include <filesystem>
+#include <string>
+#include <string_view>
+
+/* Standalone binary owns these globals; in tmc_pc they're defined in
+ * port_rom.c and the API simply mirrors Rom.data()/.size() into them.
+ * port_gba_mem.h declares them with C++ linkage when compiled from a
+ * .cpp TU, so match that here rather than re-introducing extern "C". */
 u8* gRomData = nullptr;
 u32 gRomSize = 0;
-}
-
-static std::filesystem::path find_executable_directory(const std::filesystem::path& executable_path)
-{
-    if (executable_path.empty()) {
-        return {};
-    }
-
-    std::error_code ec;
-    std::filesystem::path absolute_path = std::filesystem::absolute(executable_path, ec);
-    if (ec) {
-        absolute_path = executable_path;
-    }
-
-    if (std::filesystem::is_directory(absolute_path, ec)) {
-        return absolute_path;
-    }
-
-    return absolute_path.parent_path();
-}
 
 int main(int argc, char* argv[])
 {
+    bool verbose = false;
+    bool runtime_only = false;
+    bool force = false;
+    bool pack_runtime = false;
+    for (int i = 1; i < argc; ++i) {
+        const std::string_view arg(argv[i]);
+        if (arg == "--verbose" || arg == "-v") {
+            verbose = true;
+        } else if (arg == "--runtime-only") {
+            runtime_only = true;
+        } else if (arg == "--force" || arg == "-f") {
+            force = true;
+        } else if (arg == "--pak") {
+            pack_runtime = true;
+        } else if (arg == "--help" || arg == "-h") {
+            fmt::print("Usage: asset_extractor [--verbose] [--runtime-only] [--force] [--pak]\n"
+                       "  --verbose       Print per-asset notes/warnings.\n"
+                       "  --runtime-only  Skip writing the editable assets_src/ tree.\n"
+                       "  --force         Re-extract even if assets/ are already up to date.\n"
+                       "  --pak           Pack runtime assets into per-category .pak archives\n"
+                       "                  instead of writing thousands of loose files.\n");
+            return 0;
+        }
+    }
+
     std::filesystem::path executable_dir;
     if (argc > 0) {
-        executable_dir = find_executable_directory(argv[0]);
+        executable_dir = AssetExtractorApi::FindExecutableDirectory(argv[0]);
     }
     if (executable_dir.empty()) {
         executable_dir = std::filesystem::current_path();
     }
 
-    // Always write next to the binary. In dev mode the binary lives at
-    // <repo>/build/pc/asset_extractor, so this lands under build/pc/ as
-    // before. In a release tarball, this lands beside the unpacked binary.
-    // tmc_pc looks for ./assets[_src] next to its own exe (same directory
-    // as asset_extractor in both flows), so a single rule covers both.
-    const std::filesystem::path editable_assets_folder = executable_dir / "assets_src";
-    const std::filesystem::path runtime_assets_folder  = executable_dir / "assets";
+    AssetExtractorApi::Options opt;
+    opt.rom_path = executable_dir / "baserom.gba";
+    opt.editable_root = executable_dir / "assets_src";
+    opt.runtime_root = executable_dir / "assets";
+    opt.runtime_only = runtime_only;
+    opt.pack_runtime = pack_runtime;
+    opt.force = force;
+    opt.verbose = verbose;
 
-    const std::filesystem::path rom_path = executable_dir / "baserom.gba";
-    if (!load_rom(rom_path)) {
-        std::cerr << "Failed to load ROM from " << rom_path << std::endl;
+    std::string err;
+    if (!AssetExtractorApi::ExtractAssets(opt, &err)) {
+        PortAssetLog::Reporter::Instance().Error(err);
         return 1;
     }
-    gRomData = Rom.data();
-    gRomSize = static_cast<u32>(Rom.size());
-
-    if (!std::filesystem::exists(editable_assets_folder)) {
-        std::filesystem::create_directories(editable_assets_folder);
-    }
-
-    Config config;
-    config.gfxGroupsTableOffset = 0x100AA8;
-    config.gfxGroupsTableLength = 133;
-    config.paletteGroupsTableOffset = 0x0FF850;
-    config.paletteGroupsTableLength = 208;
-    config.globalGfxAndPalettesOffset = 0x5A2E80;
-    config.mapDataOffset = 0x324AE4;
-    config.areaRoomHeadersTableOffset = 0x11E214;
-    config.areaTileSetsTableOffset = 0x10246C;
-    config.areaRoomMapsTableOffset = 0x107988;
-    config.areaTableTableOffset = 0x0D50FC;
-    config.areaTilesTableOffset = 0x10309C;
-    config.spritePtrsTableOffset = 0x0029B4;
-    config.spritePtrsCount = 329;
-    config.translationsTableOffset = 0x109214;
-    config.language = 1;
-    config.variant = "USA";
-    config.outputRoot = editable_assets_folder;
-    extract_assets(config);
-
-    std::string build_error;
-    if (!PortAssetPipeline::BuildRuntimeAssets(editable_assets_folder, runtime_assets_folder, &build_error)) {
-        std::cerr << "Failed to build runtime assets: " << build_error << std::endl;
-        return 1;
-    }
-
     return 0;
 }

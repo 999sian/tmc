@@ -66,6 +66,7 @@ static void Port_LogVideoDiagnostics(void) {
     fprintf(stderr, "\n");
 }
 
+
 static void Port_LogAudioDiagnostics(void) {
     int driverCount = SDL_GetNumAudioDrivers();
 
@@ -162,46 +163,25 @@ static bool Port_InitVideo(void) {
 
 static void Port_InitAudio(void) {
     const char* err = NULL;
-    const char* forcedDriver = getenv("SDL_AUDIODRIVER");
-    static const char* const kPreferredDrivers[] = {
-        "pipewire",
-        "pulseaudio",
-        "alsa",
-        "sndio",
-    };
 
-    if (forcedDriver && forcedDriver[0] != '\0') {
-        if (Port_TryInitAudioDriver(forcedDriver, false, &err)) {
-            return;
-        }
-        fprintf(stderr, "SDL forced audio driver '%s' failed: %s\n", forcedDriver, err ? err : "unknown error");
-    }
-
-    if (Port_TryInitAudioDriver(NULL, false, &err)) {
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
         return;
     }
 
-    fprintf(stderr, "SDL default audio init failed: %s\n", err ? err : "unknown error");
+    err = SDL_GetError();
+    Port_Audio_Shutdown();
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
 
-    for (size_t i = 0; i < sizeof(kPreferredDrivers) / sizeof(kPreferredDrivers[0]); i++) {
-        const char* driver = kPreferredDrivers[i];
-        if (forcedDriver && strcmp(forcedDriver, driver) == 0) {
-            continue;
-        }
-        if (Port_TryInitAudioDriver(driver, false, &err)) {
-            fprintf(stderr, "SDL audio recovered by forcing '%s'.\n", driver);
-            return;
-        }
-        fprintf(stderr, "SDL audio driver '%s' failed: %s\n", driver, err ? err : "unknown error");
-    }
-
-    if (Port_TryInitAudioDriver("dummy", true, &err)) {
+    SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy");
+    if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
         fprintf(stderr, "Audio device unavailable, using SDL dummy audio driver.\n");
+        gMain.muteAudio = 1;
         return;
     }
 
-    Port_LogAudioDiagnostics();
-    fprintf(stderr, "Audio disabled: final fallback failed: %s\n", err ? err : "unknown error");
+    fprintf(stderr, "Audio disabled: normal='%s', fallback='%s'\n", err ? err : "unknown error", SDL_GetError());
+    Port_Audio_Shutdown();
+    SDL_QuitSubSystem(SDL_INIT_AUDIO);
     gMain.muteAudio = 1;
 }
 
@@ -219,34 +199,19 @@ static void Port_InitAudio(void) {
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 static void Port_ReserveGbaAddressSpace(void) {
-    static const struct {
-        uintptr_t base;
-        size_t size;
-        const char* name;
-    } regions[] = {
-        { 0x02000000u, 0x00040000u, "EWRAM" },
-        { 0x03000000u, 0x00008000u, "IWRAM" },
-        { 0x04000000u, 0x00000400u, "IO" },
-        { 0x05000000u, 0x00000400u, "palette" },
-        { 0x06000000u, 0x00018000u, "VRAM" },
-        { 0x07000000u, 0x00000400u, "OAM" },
-        { 0x08000000u, 0x02000000u, "ROM window" },
+    static const struct { uintptr_t base; size_t size; } regions[] = {
+        { 0x02000000u, 0x08000000u }, /* covers EWRAM, IWRAM, IO, palette, VRAM, OAM, ROM mirror */
     };
-    for (size_t i = 0; i < sizeof(regions) / sizeof(regions[0]); ++i) {
-        LPVOID p = VirtualAlloc((LPVOID)regions[i].base, regions[i].size, MEM_RESERVE, PAGE_NOACCESS);
+    for (size_t i = 0; i < sizeof(regions)/sizeof(regions[0]); ++i) {
+        LPVOID p = VirtualAlloc((LPVOID)regions[i].base, regions[i].size,
+                                MEM_RESERVE, PAGE_NOACCESS);
         if (p == NULL) {
-            MEMORY_BASIC_INFORMATION mbi;
-            SIZE_T querySize = VirtualQuery((LPCVOID)regions[i].base, &mbi, sizeof(mbi));
-            if (querySize == sizeof(mbi) && mbi.State != MEM_FREE) {
-                fprintf(stderr, "Skipped %s window 0x%zx-0x%zx (already occupied).\n", regions[i].name,
-                        (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
-            } else {
-                fprintf(stderr, "Skipped %s window 0x%zx-0x%zx (guard unavailable).\n",
-                        regions[i].name, (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
-            }
+            fprintf(stderr, "WARN: Could not reserve GBA address window 0x%zx-0x%zx; "
+                            "DmaCopy may misbehave.\n",
+                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
         } else {
-            fprintf(stderr, "Reserved %s window 0x%zx-0x%zx.\n", regions[i].name, (size_t)regions[i].base,
-                    (size_t)(regions[i].base + regions[i].size));
+            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n",
+                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
         }
     }
 }
@@ -283,9 +248,13 @@ int main(int argc, char* argv[]) {
                     fprintf(stderr, "Invalid window scale '%s'. Must be an integer between 1 and 10.\n", valueStr);
                 }
             }
+            else if (strcmp(argv[i], "--loose-assets") == 0) {
+                Port_LooseAssetsRequested = 1;
+            }
             else if (strcmp(argv[i], "--help") == 0) {
-                fprintf(stderr, "Usage: %s [--window_scale=<value>]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets]\n", argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
+                fprintf(stderr, "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
                 fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
             }
@@ -302,29 +271,70 @@ int main(int argc, char* argv[]) {
 
     Port_Config_OpenGamepads();
 
-    SDL_Window* window = SDL_CreateWindow(
-        "The Minish Cap", 240 * window_scale, 160 * window_scale, SDL_WINDOW_RESIZABLE);
-    if (window == NULL) {
-        fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
+    /* Pre-window ROM presence check: bail out with a message box BEFORE
+     * creating any window so the user gets clear feedback instead of a
+     * black-screen launch. SDL_ShowSimpleMessageBox accepts NULL as
+     * parent, so this is safe pre-window. */
+    const char* romPath = Port_FindBaseRomPath();
+    if (romPath == NULL) {
+        static const char kMsg[] =
+            "Could not find baserom.gba.\n\n"
+            "Place baserom.gba next to tmc_pc and try again.\n"
+            "Supported names: baserom.gba (USA), baserom_eu.gba (EU),\n"
+            "tmc.gba, tmc_eu.gba.";
+        fprintf(stderr, "%s\n", kMsg);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                                 "Minish Cap PC Port - ROM not found",
+                                 kMsg, NULL);
         SDL_Quit();
         return 1;
     }
 
-    fprintf(stderr, "SDL window created.\n");
-    SDL_ShowWindow(window);
-    fprintf(stderr, "SDL window shown.\n");
-    SDL_RaiseWindow(window);
-    fprintf(stderr, "SDL window raised.\n");
-    /* SDL_SyncWindow is a convenience flush, not required for correctness.
-     * Some packaged Linux/X11 environments have been seen to fault here
-     * before any port-side diagnostics are emitted, so avoid it at startup. */
-    Port_EnsureAssetsReadyWithDisplay(window);
-    fprintf(stderr, "Asset bootstrap complete.\n");
-    Port_CheckForUpdates(window);
-    fprintf(stderr, "Update check complete.\n");
+    /* Use SDL_CreateWindowAndRenderer so SDL picks the renderer
+     * driver (opengl/vulkan/...) and creates the window with the
+     * matching visual flags atomically. Calling SDL_CreateRenderer
+     * AFTER SDL_CreateWindow on Linux/X11 forces SDL to internally
+     * destroy and recreate the X11 window to add SDL_WINDOW_OPENGL,
+     * which the user sees as "first window opens, goes black,
+     * closes, then second window opens." Confirmed by H9 logs:
+     * window flags went from 0x220 → 0x222 across the first
+     * SDL_CreateRenderer call, with driver=opengl. */
+    SDL_Window* window = NULL;
+    SDL_Renderer* prerenderer = NULL;
+    if (!SDL_CreateWindowAndRenderer(
+            "The Minish Cap",
+            240 * window_scale, 160 * window_scale,
+            SDL_WINDOW_RESIZABLE,
+            &window, &prerenderer)) {
+        fprintf(stderr, "SDL_CreateWindowAndRenderer Error: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+    (void)prerenderer; /* Owned by the window; retrieved via SDL_GetRenderer(window) later. */
 
-    Port_LoadRom("baserom.gba");
-    fprintf(stderr, "ROM load complete.\n");
+    SDL_ShowWindow(window);
+    SDL_RaiseWindow(window);
+    SDL_SyncWindow(window);
+
+    /* Paint a "LOADING" splash IMMEDIATELY so the window never
+     * shows a blank black rectangle. Without this, ROM load + asset
+     * check + update check + PPU init add up to ~1.4 s of unpainted
+     * window before the first SDL_RenderPresent, which the user
+     * perceives as "black screen, then the game relaunches". The
+     * SDL_Renderer was already created atomically with the window
+     * by SDL_CreateWindowAndRenderer above, so this call just
+     * fetches it via SDL_GetRenderer(window) and presents on it. */
+    Port_PaintBootSplash(window, "LOADING");
+
+    /* Load the ROM before showing the progress bar so the extractor
+     * can reuse the in-memory buffer (skip a second 16 MB read) AND
+     * so we can validate the region BEFORE extracting. Previously the
+     * order was reversed and a wrong-region ROM would happily extract
+     * 3-4 seconds of bad assets before we noticed. Use the path the
+     * pre-window probe just resolved so we don't re-walk candidates. */
+    Port_LoadRom(romPath);
+    Port_EnsureAssetsReadyWithDisplay(window, gRomData, gRomSize);
+    Port_CheckForUpdates(window);
 
     // Verify ROM region matches compiled region
 #ifdef EU
@@ -345,9 +355,19 @@ int main(int argc, char* argv[]) {
 
     // Initialize PPU renderer
     Port_PPU_Init(window);
-    fprintf(stderr, "PPU init complete.\n");
+
+    /* Bridge frame: between the progress bar reaching 100% and
+     * AgbMain producing its first GBA frame, audio init and AgbMain
+     * warmup take long enough to leave the window blank. Paint a
+     * single "Starting..." card on the same renderer so the user
+     * sees one continuous experience instead of an extractor screen
+     * followed by a blank window followed by the title screen. */
+    /* Repaint the same "LOADING" card on each transition so the
+     * user sees one continuous splash from window-open to first
+     * GBA frame instead of multiple flickering states. */
+    Port_PaintBootSplash(window, "LOADING");
     Port_InitAudio();
-    fprintf(stderr, "Audio init complete.\n");
+    Port_PaintBootSplash(window, "LOADING");
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 

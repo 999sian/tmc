@@ -47,6 +47,9 @@ typedef enum {
 } EntityFlags;
 
 /** Priority level to determine what events will block an Entity from updating. */
+#ifdef PRIO_MIN
+#undef PRIO_MIN
+#endif
 typedef enum {
     PRIO_MIN,          /**< Default priority. */
     PRIO_PLAYER,       /**< Default priority for player. */

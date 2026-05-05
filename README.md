@@ -14,7 +14,7 @@
 A decompilation of The Legend of Zelda: The Minish Cap (GBA, 2004) — and a work-in-progress native PC port built on top of it.
 
 The decompilation reconstructs the original C source from the GBA ROM using static and dynamic analysis.
-The PC port compiles that source for x86-64 Linux and Windows, replacing GBA hardware with SDL3, a software PPU renderer, and the agbplay audio engine.
+The PC port compiles that source for x86-64 Linux, Windows, and macOS (Apple Silicon and Intel), replacing GBA hardware with SDL3, a software PPU renderer, and the agbplay audio engine.
 
 ## Supported ROMs
 
@@ -32,7 +32,7 @@ The PC port currently supports **USA** and **EU**.
 
 ## PC Port — Pre-built releases (recommended)
 
-Pre-built tarballs are published on the [Releases page](https://github.com/MatheoVignaud/tmc/releases). They contain just two binaries plus the audio metadata file:
+Pre-built tarballs are published on the [Releases page](https://github.com/MatheoVignaud/tmc/releases) for Linux and Windows. macOS users should use the "Build from source" path below — pre-built Mac tarballs are not currently published. They contain just two binaries plus the audio metadata file:
 
 ```
 asset_extractor      sounds.json      tmc_pc
@@ -98,6 +98,23 @@ sudo pacman -S xmake sdl3 libpng fmt nlohmann-json git curl
 sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git curl
 ```
 
+**macOS (Apple Silicon or Intel):**
+```sh
+xcode-select --install                                                                            # Apple's compiler + git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"   # Homebrew, if you don't have it
+brew install xmake pkg-config fmt nlohmann-json libpng libomp
+```
+
+What each piece does, in plain English:
+- **Xcode Command Line Tools** — Apple's C/C++ compiler (`clang`), linker, and `git`. You can't build any native code on a Mac without them, and Homebrew won't install them for you.
+- **Homebrew** — the package manager that fetches everything else. If you've never used a Mac for development, this is the one prerequisite you'll always end up installing.
+- **xmake** — the build system that drives the whole compile (think `make`/`cmake`, but it auto-downloads any C/C++ libraries that aren't already on your system).
+- **pkg-config** — a tiny tool xmake uses to ask "where did Homebrew put libpng?". Without it, xmake can't find the brew-installed libraries and will rebuild them itself (slow and sometimes broken).
+- **fmt** and **nlohmann-json** — small C++ helper libraries the asset tools and game code use for text formatting and JSON parsing.
+- **libpng** — needed by the GBA graphics tools to read and write PNG sprite sheets.
+- **libomp** — Apple Clang doesn't ship with an OpenMP runtime, so VirtuaPPU's parallel scanline renderer needs Homebrew's `libomp`. If it's missing, the build still works but falls back to a single-threaded path.
+- **SDL3** — the cross-platform window/input/audio layer. Not in the brew list because xmake builds its own copy automatically on macOS (the Linux path uses the system one when available, but on macOS the bundled build is the default and Just Works).
+
 **Windows:** Install [xmake](https://xmake.io) and [git](https://git-scm.com). SDL3 and other libraries are downloaded automatically by xmake.
 
 ## PC port (work in progress)
@@ -110,9 +127,9 @@ Tested platforms:
 
 * Linux (Wayland preferred, X11 fallback)
 * Windows via MinGW static link
-
-macOS may build (the xmake config sets up the toolchain) but is not regularly
-tested.
+* macOS (Apple Silicon and Intel) via `python3 build.py` — builds cleanly with
+  Homebrew + Xcode Command Line Tools; lightly tested compared to Linux/Windows,
+  so please file issues if you hit anything.
 
 Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. As of
 0.1.1 the binary resolves `baserom.gba`, `sounds.json`, and the asset
@@ -121,26 +138,18 @@ works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### What's fixed and what's still broken
 
-See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.5-experimental** is a multi-fix pass driven by the issue tracker: AcroBandit stack drift after attack (#35), Cave-of-Flames map crash on B3 (#39), Mt Crenel pink/cyan terrain (#34), Item-Get BGM ducking (#22), tall-grass / shallow-water shoes overlay (#24), Deepwood Shrine "vault off solid wall" (#5), and the cloud-shadow overlay breaking after a Hyrule Castle visit (#25) all closed. New `GetNextFunction` dispatch fix unlocks chain-unwind and death-fall paths that were silently skipped on PC. Window title now surfaces the port version, and **F9 captures a bug-report bundle** (screenshot + save + game state) for testers.
-
-The window title shows the running port version — please include it when filing issues.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.4-experimental** clears the Hyrule Town + South Hyrule Field playthrough — kinstone-bag interaction (5-bug crash chain), spear moblin loading-zone crash (read-only ROM hitbox + packed-pointer-table), and the peahat "corpse never despawns" gust-jar-state bug all closed. CI now builds on `ubuntu-22.04` so the Linux tarball runs on every distro from glibc 2.35 onwards. Known-still-open issues at 0.1.4: door-priority glitches, Item-Get BGM ducking, mushroom held-pose extraction, blue/red teleport icons, mosaic effect, festival house facades — all listed at the bottom of the changelog entry.
 
 ### Controls
 
-| Action                | Keyboard            | Gamepad                |
-|-----------------------|---------------------|------------------------|
-| Fast-forward (hold)   | Tab                 | Right trigger          |
-| Toggle fullscreen     | F11 / Alt+Enter     | —                      |
-| Cycle upscaler        | F12                 | —                      |
-| Capture bug report    | F9                  | —                      |
+| Action               | Keyboard            | Gamepad                |
+|----------------------|---------------------|------------------------|
+| Fast-forward (hold)  | Tab                 | Right trigger          |
+| Toggle fullscreen    | F11 / Alt+Enter     | —                      |
+| Cycle upscaler       | F12                 | —                      |
 
 Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
 xBRZ 4× and linear modes.
-
-**Bug-report capture (F9)** — writes a `bugreport_YYYYMMDD_HHMMSS/` folder
-next to the binary containing `screenshot.bmp`, `save.bin` (your current
-EEPROM dump), and `state.txt` (area / room / coords / hp). Attach the
-folder to a GitHub issue and we have everything we need to reproduce.
 
 ### Nix
 
