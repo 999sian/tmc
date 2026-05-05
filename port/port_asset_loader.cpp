@@ -1053,6 +1053,29 @@ GfxLoadDecision EvaluateGfxControl(u8 unknown) {
 
 } // namespace
 
+/* gPaletteBuffer lives in port_linked_stubs.c; declare it locally rather
+ * than pulling all of main.h into this translation unit. */
+extern "C" u16 gPaletteBuffer[];
+
+/* Equivalent to common.c's LoadPalettes() but uses std::memcpy instead of
+ * DmaCopy32 to avoid running the source pointer through port_resolve_addr.
+ * The src here is a heap pointer (std::vector<u8>::data()) which on Windows
+ * MinGW can land inside the GBA address window [0x02000000, 0x0A000000) and
+ * get silently misrouted to gEwram[]/gVram[]/gRomData[] — same #61 mechanism
+ * documented in Port_LoadGfxGroupFromAssets below. */
+static void LoadPalettesNative(const u8* src, s32 destPaletteNum, s32 numPalettes) {
+    if (numPalettes <= 0) {
+        return;
+    }
+    const u32 size = static_cast<u32>(numPalettes) * 32u;
+    u32 mask = 1u << destPaletteNum;
+    for (s32 i = 1; i < numPalettes; ++i) {
+        mask |= mask << 1;
+    }
+    gUsedPalettes |= mask;
+    std::memcpy(&gPaletteBuffer[destPaletteNum * 16], src, size);
+}
+
 extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
     if (!EnsureAssetGroupCache()) {
         return FALSE;
@@ -1078,7 +1101,9 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
             AssetLogOnce("palette-file:" + std::to_string(group) + ":" + std::to_string(entry.destPaletteNum + copiedPalettes) +
                              ":" + ref.file,
                          "palette group %u slot %u <- %s", group, entry.destPaletteNum + copiedPalettes, ref.file.c_str());
-            LoadPalettes(fileData->data() + ref.byteOffset, entry.destPaletteNum + copiedPalettes, ref.numPalettes);
+            LoadPalettesNative(fileData->data() + ref.byteOffset,
+                               static_cast<s32>(entry.destPaletteNum + copiedPalettes),
+                               static_cast<s32>(ref.numPalettes));
             copiedPalettes += ref.numPalettes;
         }
 
@@ -1123,21 +1148,33 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
             AssetLogOnce("gfx-file:" + std::to_string(group) + ":" + entry.file + ":" + std::to_string(entry.dest),
                          "gfx group %u -> %s (dest=0x%08X, %u bytes)", group, entry.file.c_str(), entry.dest,
                          static_cast<u32>(fileData->size()));
-            /* MemCopy resolves dest via port_resolve_addr (raw gEwram[N] for
-             * EWRAM addresses), but the port has heap-allocated stand-in
-             * arrays for gMapDataBottomSpecial / gMapDataTopSpecial / gMapTop
-             * etc. that live OUTSIDE gEwram. Use Port_ResolveEwramPtr for
-             * EWRAM destinations so writes hit the actual game variables;
-             * fall back to MemCopy's generic path for VRAM/IWRAM. */
+            /* Resolve the destination ourselves and std::memcpy directly so
+             * the source pointer (a heap-allocated std::vector<u8> from
+             * LoadBinaryFileCached) is NEVER passed through port_resolve_addr.
+             *
+             * On Windows MinGW, malloc can return addresses inside the
+             * GBA address window [0x02000000, 0x0A000000). MemCopy and
+             * DmaCopy32 both call port_resolve_addr on their source — when
+             * a heap pointer happens to fall inside that window, the resolver
+             * remaps it to gEwram[]/gVram[]/gRomData[] and the copy reads
+             * whatever the game has stored there (usually zeros) instead
+             * of the actual gfx bytes. Result on the user's machine:
+             * Deepwood Shrine barrels invisible (#61), title-screen palette
+             * stalls, etc. Linux glibc never allocates in that window so
+             * the bug never fires there.
+             *
+             * EWRAM still needs Port_ResolveEwramPtr because the port has
+             * heap-allocated stand-in arrays for gMapDataBottomSpecial /
+             * gMapDataTopSpecial / gMapTop etc. that live OUTSIDE gEwram[]. */
             void* resolvedDest = nullptr;
             if (entry.dest >= 0x02000000u && entry.dest < 0x02040000u) {
                 resolvedDest = Port_ResolveEwramPtr(entry.dest);
             }
+            if (resolvedDest == nullptr) {
+                resolvedDest = gba_TryMemPtr(entry.dest);
+            }
             if (resolvedDest != nullptr) {
                 std::memcpy(resolvedDest, fileData->data(), fileData->size());
-            } else {
-                MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
-                        static_cast<u32>(fileData->size()));
             }
         }
 
