@@ -138,15 +138,21 @@ works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### What's fixed and what's still broken
 
-See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.4-experimental** clears the Hyrule Town + South Hyrule Field playthrough — kinstone-bag interaction (5-bug crash chain), spear moblin loading-zone crash (read-only ROM hitbox + packed-pointer-table), and the peahat "corpse never despawns" gust-jar-state bug all closed. CI now builds on `ubuntu-22.04` so the Linux tarball runs on every distro from glibc 2.35 onwards. Known-still-open issues at 0.1.4: door-priority glitches, Item-Get BGM ducking, mushroom held-pose extraction, blue/red teleport icons, mosaic effect, festival house facades — all listed at the bottom of the changelog entry.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.6-experimental** closes five tracker entries: cucco-minigame reward crash (#46), chuchu freeze-on-loop-frame (#45), Cave-of-Flames moving lava platforms missing + boss-room SIGSEGV (#36), and the Melari's Mines pair (Melari + crew missing #43, spurious heart containers + green warp tile #42). Also picks up matheo/master ×2 (cleaner `Port_UnpackRomDataPtr` helper, AVX2 build option) and ships an in-game **F8 debug menu** + **F5/F6 quicksave/quickload** so playtesters can jump straight to bug repros. Reverted PR #48 (skip-cutscene) — it broke audio sync.
+
+The window title shows the running port version — please include it when filing issues.
 
 ### Controls
 
-| Action               | Keyboard            | Gamepad                |
-|----------------------|---------------------|------------------------|
-| Fast-forward (hold)  | Tab                 | Right trigger          |
-| Toggle fullscreen    | F11 / Alt+Enter     | —                      |
-| Cycle upscaler       | F12                 | —                      |
+| Action                | Keyboard            | Gamepad                |
+|-----------------------|---------------------|------------------------|
+| Fast-forward (hold)   | Tab                 | Right trigger          |
+| Toggle fullscreen     | F11 / Alt+Enter     | —                      |
+| Cycle upscaler        | F12                 | —                      |
+| Capture bug report    | F9                  | —                      |
+| Open debug menu       | F8                  | —                      |
+| Quicksave             | F5                  | —                      |
+| Quickload             | F6                  | —                      |
 
 Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
 xBRZ 4× and linear modes.

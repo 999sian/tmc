@@ -66,19 +66,48 @@ extern void (*const gUnk_080CD75C[])(GleerokEntity*);
 extern void (*const gUnk_080CD7B8[])(GleerokEntity*);
 
 #ifdef PC_PORT
-/* gUnk_080CD7E4, _D810, _D828, _D848 are packed 4-byte GBA function-
- * pointer tables that ship in port/data_const_stubs.c as `const u8[]`.
- * Declaring them as `void (*const [])(...)` on x86-64 strides 8 bytes
- * per index, reads two GBA addresses concatenated, and calls a garbage
- * function pointer — Cave-of-Flames boss SIGSEGVs in sub_0802D650 the
- * moment the fight starts. Treat as raw u8 arrays and unpack each entry
- * via Port_PackedRomEntry (same approach as gUnk_080CD86C/878 above). */
-extern const u8 gUnk_080CD7E4[];
-extern const u8 gUnk_080CD810[];
-extern const u8 gUnk_080CD828[];
-extern const u8 gUnk_080CD848[];
-#define GLEEROK_FN(table, idx) \
-    ((void (*)(GleerokEntity*))Port_PackedRomEntry((table), (idx)))
+/* gUnk_080CD7E4, _D810, _D828, _D848 ship in port/data_const_stubs.c
+ * as `const u8[]` packed 4-byte GBA function-pointer tables. The C
+ * runtime needs *native* function pointers, not GBA Thumb addresses, so
+ * a `void (*const [])(...)` view of the same bytes calls into mmap'd
+ * ROM memory and SIGSEGVs as soon as Gleerok's fight script starts
+ * (Cave-of-Flames boss, #36).
+ *
+ * Define native shadow tables here with the actual decompiled C
+ * functions. Each entry below mirrors a `.4byte sub_080XXXXX + 1`
+ * directive in data/const/enemy/gleerok.s. The original `const u8[]`
+ * symbols stay defined in data_const_stubs.c for any downstream use. */
+extern void sub_0802D674(GleerokEntity* this);
+extern void sub_0802D6F0(GleerokEntity* this);
+extern void sub_0802D714(GleerokEntity* this);
+extern void sub_0802D77C(GleerokEntity* this);
+extern void sub_0802D7B4(GleerokEntity* this);
+extern void sub_0802DB84(GleerokEntity* this);
+extern void sub_0802DC1C(GleerokEntity* this);
+extern void sub_0802DCE0(GleerokEntity* this);
+extern void sub_0802DDD8(GleerokEntity* this);
+extern void sub_0802DFA8(GleerokEntity* this);
+extern void sub_0802DFC0(GleerokEntity* this);
+extern void sub_0802E034(GleerokEntity* this);
+extern void sub_0802E0B8(GleerokEntity* this);
+extern void sub_0802E1D0(GleerokEntity* this);
+extern void sub_0802E300(GleerokEntity* this);
+extern void sub_0802E430(GleerokEntity* this);
+extern void sub_0802E448(GleerokEntity* this);
+extern void sub_0802E4C0(GleerokEntity* this);
+static void (*const gleerok_subactions_gUnk_080CD7E4[])(GleerokEntity*) = {
+    sub_0802D674, sub_0802D6F0, sub_0802D714, sub_0802D77C, sub_0802D7B4,
+};
+static void (*const gleerok_subactions_gUnk_080CD810[])(GleerokEntity*) = {
+    sub_0802DB84, sub_0802DC1C, sub_0802DCE0, sub_0802DDD8, sub_0802DFA8, sub_0802E430,
+};
+static void (*const gleerok_subactions_gUnk_080CD828[])(GleerokEntity*) = {
+    sub_0802DFC0, sub_0802E034, sub_0802E034, sub_0802E0B8, sub_0802E1D0, sub_0802E300,
+};
+static void (*const gleerok_subactions_gUnk_080CD848[])(GleerokEntity*) = {
+    sub_0802E448, sub_0802E4C0,
+};
+#define GLEEROK_FN(table, idx) (gleerok_subactions_##table[(idx)])
 #else
 extern void (*const gUnk_080CD7E4[])(GleerokEntity*);
 extern void (*const gUnk_080CD810[])(GleerokEntity*);
@@ -1418,7 +1447,13 @@ void sub_0802E7E4(Gleerok_HeapStruct* this) {
                 this->entities[i + 1]->spritePriority.b0 = bVar6;
             }
         }
-        this->entity1->spritePriority.b0 = 0;
+        /* heap->entity1 is null-initialised at room entry and is only set
+         * once sub_0802D6F0 (subAction 1) creates the 6th child mid-fight.
+         * The GBA build silently wrote to BIOS at 0x00000000 + offset; on
+         * PC that's a SIGSEGV. Guard until the entity exists. (#36, Cave
+         * of Flames boss) */
+        if (this->entity1)
+            this->entity1->spritePriority.b0 = 0;
     } else {
         bVar6 = 5;
 
@@ -1438,7 +1473,8 @@ void sub_0802E7E4(Gleerok_HeapStruct* this) {
                 this->entities[i + 1]->spritePriority.b0 = bVar6;
             }
         }
-        this->entity1->spritePriority.b0 = 6;
+        if (this->entity1)
+            this->entity1->spritePriority.b0 = 6;
     }
 }
 
