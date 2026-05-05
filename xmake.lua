@@ -133,6 +133,13 @@ target("asset_extractor")
     add_includedirs("include", "port", ".")
     add_packages("nlohmann_json", "fmt")
     add_mingw_static_cpp_runtime()
+    -- Embed assets/sounds.json into the binary so the extractor can guarantee
+    -- it appears next to itself even when a release tarball forgets to ship
+    -- the file (the v0.1.6 packaging bug behind issue #50). xmake's bin2c
+    -- rule writes a raw "0xNN, 0xNN, ..." byte sequence to a header that we
+    -- #include inside a C array initializer (see embedded_sounds_json.cpp).
+    add_rules("utils.bin2c", {extensions = {".json"}})
+    add_files("assets/sounds.json", {rule = "utils.bin2c", nozeroend = true})
     after_build(function (target)
         local mirrored_exe = path.join(tools_bin, path.filename(target:targetfile()))
         if mirrored_exe ~= target:targetfile() then
