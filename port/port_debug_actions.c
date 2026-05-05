@@ -146,7 +146,13 @@ int Port_DebugAction_Warp(unsigned char area, unsigned char room,
     t.area = area;
     t.room = room;
     t.layer = layer;
-    t.transition_type = 2; /* matches wallmaster table - PL_SPAWN_DOOR-ish */
+    /* TRANSITION_TYPE_NORMAL — most overworld-edge transitions use this.
+     * Earlier value (DROP_IN=2) was wallmaster-pickup-shaped which left
+     * Link mid-fall on rooms that don't have a hole-receiving anim, so
+     * he ended up invisible/off-camera. Issue #56 (Lake Hylia entry
+     * crash) needs us to drive the same code path the in-game border
+     * crossings hit. */
+    t.transition_type = 0;
     t.facing_direction = 0; /* face down on arrival */
     t.transitionSFX = 0;    /* SFX_NONE */
     t.unk2 = 0;
