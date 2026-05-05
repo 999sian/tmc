@@ -1592,7 +1592,9 @@ u16* gMoreSpritePtrs[16];
 u8 gExtraFrameOffsets[4352];
 u8 gShakeOffsets[256];
 u16 gDungeonNames[64];
-u8 gFigurines[512] __attribute__((aligned(4)));
+/* gFigurines — now provided by port/port_figurines.c (Figurine[137] table,
+ * resolved from ROM after Port_LoadRom). The 512-byte stub here used to
+ * SEGV the figurine viewer (#57): every fig->pal / fig->gfx was NULL. */
 void* gLilypadRails[32];
 // gMapActTileToSurfaceType — now provided by src/data/mapActTileToSurfaceType.c
 /* gPalette_549 is the start of a 26-palette contiguous block in the GBA
