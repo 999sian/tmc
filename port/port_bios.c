@@ -100,8 +100,8 @@ static void Port_PumpEvents(void) {
                 /* Capture a bug-report bundle for playtesters: screenshot
                  * + save copy + game-state text. Lands in a timestamped
                  * directory next to the binary. */
-                extern char* Port_BugReport_Capture(void);
-                char* dir = Port_BugReport_Capture();
+                extern char* Port_BugReport_Capture(const char* reason);
+                char* dir = Port_BugReport_Capture("user");
                 if (dir) {
                     free(dir);
                 }
