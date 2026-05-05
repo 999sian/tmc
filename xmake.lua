@@ -63,8 +63,13 @@ else
     -- recorded a NEEDED dep on libfmt.so.12, which broke on Fedora 43
     -- (ships fmt 11.x).
     add_requires("fmt", {system = false, configs = {header_only = true}})
-    add_requires("libpng")
-    add_requires("zlib")
+    -- libpng + zlib are only used by gbagfx (a build-time tool, not the
+    -- engine). Mark them optional so a CI runner that can't build libpng
+    -- from source (Windows MinGW v1.6.58 source build is flaky on the
+    -- GHA runner) still produces tmc_pc/asset_extractor — gbagfx silently
+    -- skips when libpng isn't available and we don't ship it in releases.
+    add_requires("libpng", {optional = true})
+    add_requires("zlib", {optional = true})
     add_requires("libsdl3", {configs = {shared = false}})
     add_requires("nlohmann_json", {configs = {cmake = false}})
 end
