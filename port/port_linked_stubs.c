@@ -1540,7 +1540,32 @@ void* gAreaTiles[256];
 // ButtonUIElement_Actions — defined in ui.c with proper function pointers
 // EzloNagUIElement_Actions — defined in ui.c with proper function pointers
 // gUIElementDefinitions — defined in ui.c with proper UIElementDefinition type
-void* Subtask_FastTravel_Functions[16];
+
+/* Native function-pointer tables — the original `void*[16]` zero-stubs were
+ * an unfinished placeholder. On GBA the table is 5 packed 4-byte function
+ * pointers in ROM; the C dispatcher (`Subtask_FastTravel_Functions[idx]()`)
+ * strides 8 bytes per index on x86-64 and a NULL stub array means every
+ * dispatch hits NULL → SIGSEGV with RIP=0. The fix mirrors gleerok 9d5f55a5
+ * — a real native array of decompiled C functions.
+ *
+ * Caught by the auto-bug-report crash handler (Subtask_FastTravel+0x2e). */
+extern void Subtask_FastTravel_0(void);
+extern void Subtask_FastTravel_1(void);
+extern void Subtask_FastTravel_2(void);
+extern void Subtask_FastTravel_3(void);
+extern void Subtask_FastTravel_4(void);
+void (*const Subtask_FastTravel_Functions[])(void) = {
+    Subtask_FastTravel_0,
+    Subtask_FastTravel_1,
+    Subtask_FastTravel_2,
+    Subtask_FastTravel_3,
+    Subtask_FastTravel_4,
+};
+/* Subtask_MapHint_Functions — the matching usage in src/subtask/subtaskMapHint.c
+ * defines a *static local* array of the same name with proper native
+ * function pointers, so this global is dead code. Kept only because
+ * stubs_autogen.c still mentions the symbol; once stubs_autogen is
+ * regenerated the entire `void* []` line below can go away. */
 void* Subtask_MapHint_Functions[16];
 
 // Exit lists / transitions — now provided by src/data/transitions.c
