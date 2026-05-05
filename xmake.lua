@@ -579,7 +579,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3", "fmt", "nlohmann_json")
+    add_packages("libsdl3", "fmt", "nlohmann_json", "libpng", "zlib")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
@@ -597,13 +597,27 @@ target("tmc_pc")
     if is_plat("linux", "macosx") then
         add_links("m")
     end
+
+    -- -rdynamic exports defined symbols into the dynamic symbol table so
+    -- backtrace_symbols() in the crash handler can name them. Without it
+    -- bug-report backtraces are just hex offsets the user has to addr2line
+    -- themselves. Linux + macOS only; MinGW uses dbghelp instead.
+    if is_plat("linux") then
+        add_ldflags("-rdynamic", {force = true})
+    end
     
     -- Compiler flags
+    -- -fvisibility=default overrides xmake's release-mode default of
+    -- -fvisibility=hidden. Hidden visibility makes every defined function
+    -- LOCAL in .symtab, which means -rdynamic exports nothing and the
+    -- crash-handler backtrace shows bare offsets instead of names.
     add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
-               "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g")
+               "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g",
+               "-fvisibility=default")
 
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
-                 "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
+                 "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g",
+                 "-fvisibility=default")
     -- Keep symbols even in release mode so SIGSEGV traces are useful
     -- locally (CI release tarballs may strip later). The xmake mode.release
     -- rule adds -s/--strip-all by default which makes addr2line useless.

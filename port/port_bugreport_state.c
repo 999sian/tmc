@@ -6,6 +6,7 @@
 
 #include "structures.h"
 #include "save.h"
+#include "room.h"
 
 struct PortBugReportState {
     unsigned char area;
@@ -15,6 +16,7 @@ struct PortBugReportState {
     short playerZ;
     unsigned char playerHealth;
     unsigned char playerMaxHealth;
+    int frameCount;
 };
 
 extern struct PortBugReportState Port_BugReport_GetGameState(void);
@@ -28,5 +30,6 @@ struct PortBugReportState Port_BugReport_GetGameState(void) {
     s.playerZ = (short)gPlayerEntity.base.z.HALF.HI;
     s.playerHealth = (unsigned char)gSave.stats.health;
     s.playerMaxHealth = (unsigned char)gSave.stats.maxHealth;
+    s.frameCount = (int)gRoomTransition.frameCount;
     return s;
 }
