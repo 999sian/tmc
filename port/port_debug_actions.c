@@ -83,8 +83,11 @@ void Port_DebugAction_GiveAllItems(void) {
 }
 
 void Port_DebugAction_MaxHearts(void) {
-    /* health/maxHealth are stored in quarter-hearts; 20 hearts = 80 = 0x50. */
-    gSave.stats.maxHealth = 80;
+    /* health/maxHealth are stored in eighths-of-hearts (each heart-container
+     * pickup in script.c:1663 adds 8 and caps at 0xA0). 20 hearts = 160 = 0xA0.
+     * The previous value (80) silently set 10 hearts and matched the in-game
+     * cap that fileselect/ui paths special-case at 10 — see #52. */
+    gSave.stats.maxHealth = 0xA0;
     gSave.stats.health = gSave.stats.maxHealth;
 }
 
