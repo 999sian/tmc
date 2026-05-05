@@ -35,6 +35,12 @@ jobs:
             flag: --usa
             exe_name: tmc_pc.exe
             extractor_name: asset_extractor.exe
+          - runner: macos-latest
+            os_name: macos
+            region: usa
+            flag: --usa
+            exe_name: tmc_pc
+            extractor_name: asset_extractor
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -49,6 +55,12 @@ jobs:
             curl libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
             xutils-dev xorg-dev autoconf automake libtool meson ninja-build
+
+      - name: Install macOS dependencies
+        if: matrix.os_name == 'macos'
+        run: |
+          brew update
+          brew install pkg-config fmt nlohmann-json libpng libomp ninja
 
       - name: Install MinGW Windows
         if: matrix.os_name == 'windows'
@@ -135,6 +147,41 @@ jobs:
           cp "$EXTRACTOR_PATH" "$OUTDIR/${{ matrix.extractor_name }}"
           if [ -f "assets/sounds.json" ]; then
             cp assets/sounds.json "$OUTDIR/sounds.json"
+          fi
+
+          # Linux: bundle libSDL3 + libgomp so Steam Deck (and any distro
+          # without SDL3 yet) can launch the binary. The build links with
+          # -Wl,-rpath,$ORIGIN so the runtime finds them next to tmc_pc.
+          if [ "${{ matrix.os_name }}" = "linux" ]; then
+            for lib in libSDL3.so.0 libgomp.so.1; do
+              src="$(ldd "$BIN_PATH" 2>/dev/null | awk -v l="$lib" '$1==l{print $3}')"
+              if [ -n "$src" ] && [ -f "$src" ]; then
+                cp -aP "$src" "$OUTDIR/"
+                # Also copy the resolved versioned file (e.g. libSDL3.so.0.4.4)
+                resolved="$(readlink -f "$src")"
+                if [ "$resolved" != "$src" ] && [ -f "$resolved" ]; then
+                  cp -aP "$resolved" "$OUTDIR/"
+                fi
+              fi
+            done
+          fi
+
+          # macOS: bundle SDL3 + libomp via install_name_tool so the binary
+          # finds them next to itself. Apple's loader uses @executable_path,
+          # not $ORIGIN. xmake's libsdl3 package builds a static archive so
+          # it should already be inside tmc_pc; libomp from brew is the only
+          # dylib we expect to need bundling.
+          if [ "${{ matrix.os_name }}" = "macos" ]; then
+            mkdir -p "$OUTDIR"
+            for lib in $(otool -L "$BIN_PATH" | awk 'NR>1 {print $1}' | grep -E "(libomp|libSDL3|libpng|libfmt)" || true); do
+              if [ -f "$lib" ]; then
+                base="$(basename "$lib")"
+                cp -a "$lib" "$OUTDIR/$base"
+                chmod u+w "$OUTDIR/$base"
+                install_name_tool -id "@executable_path/$base" "$OUTDIR/$base" || true
+                install_name_tool -change "$lib" "@executable_path/$base" "$OUTDIR/${{ matrix.exe_name }}" || true
+              fi
+            done
           fi
 
       - name: Create archive
