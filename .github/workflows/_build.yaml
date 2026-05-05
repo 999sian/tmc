@@ -11,30 +11,47 @@ on:
         description: "Date+SHA label (CI) or tag name (release)"
         required: true
         type: string
+      os_filter:
+        description: "all | linux | windows — restrict build matrix to one platform"
+        required: false
+        type: string
+        default: all
 
 jobs:
-  build:
-    name: Build ${{ matrix.region }} on ${{ matrix.os_name }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
+  # Compute the build matrix dynamically so callers can opt into a Linux-only
+  # or Windows-only release without redefining the runner list. Keeps the
+  # matrix definition in one place (this job's shell) instead of forcing
+  # every consumer to know the matrix shape.
+  set-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+    steps:
+      - id: compute
+        shell: bash
+        env:
+          OS_FILTER: ${{ inputs.os_filter }}
+        run: |
           # Use Ubuntu 22.04 (glibc 2.35) so the Linux binary runs on
           # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
           # on ubuntu-latest pins glibc 2.43+ which excludes most users.
-          - runner: ubuntu-22.04
-            os_name: linux
-            region: usa
-            flag: --usa
-            exe_name: tmc_pc
-            extractor_name: asset_extractor
-          - runner: windows-latest
-            os_name: windows
-            region: usa
-            flag: --usa
-            exe_name: tmc_pc.exe
-            extractor_name: asset_extractor.exe
+          linux='{"runner":"ubuntu-22.04","os_name":"linux","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          windows='{"runner":"windows-latest","os_name":"windows","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          case "${OS_FILTER:-all}" in
+            linux)   matrix="{\"include\":[$linux]}" ;;
+            windows) matrix="{\"include\":[$windows]}" ;;
+            all|"")  matrix="{\"include\":[$linux,$windows]}" ;;
+            *)       echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows)"; exit 1 ;;
+          esac
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.region }} on ${{ matrix.os_name }}
+    needs: set-matrix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -45,10 +62,17 @@ jobs:
         if: matrix.os_name == 'linux'
         run: |
           sudo apt-get update
+          # Audio dev headers MUST be present before xmake builds SDL3 from
+          # source. SDL3's configure probes each backend's headers and silently
+          # omits any that are missing, so a runner without these would ship a
+          # statically-linked SDL3 with no Linux audio output (this is exactly
+          # what happened to the 0.1.6.1 release).
           sudo apt-get install -y \
             curl libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
-            xutils-dev xorg-dev autoconf automake libtool meson ninja-build
+            xutils-dev xorg-dev autoconf automake libtool meson ninja-build \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libsndio-dev \
+            libjack-jackd2-dev
 
       - name: Install MinGW Windows
         if: matrix.os_name == 'windows'
@@ -100,6 +124,18 @@ jobs:
         with:
           xmake-version: latest
 
+      - name: Force libsdl3 rebuild (Linux)
+        if: matrix.os_name == 'linux'
+        shell: bash
+        # xmake caches built packages keyed only on package version + configs,
+        # not on the host's apt-package state. A previously-cached SDL3 built
+        # on a runner without audio dev headers would otherwise persist into
+        # this run and ship a silent binary. Drop the cached build so the
+        # next `xmake f` rebuilds SDL3 against the freshly-installed
+        # libasound/libpulse/libpipewire/libsndio/libjack headers.
+        run: |
+          xmake require --uninstall libsdl3 || true
+
       - name: Configure xmake (no ROM needed for binaries)
         shell: bash
         env:
@@ -120,6 +156,31 @@ jobs:
         run: |
           xmake build -y tmc_pc
           xmake build -y asset_extractor
+
+      - name: Verify SDL3 audio backends linked into tmc_pc (Linux)
+        if: matrix.os_name == 'linux'
+        shell: bash
+        # SDL3's compiled-in audio backends each leave their driver-name as
+        # a literal string in the binary (alsa, pulseaudio, pipewire, sndio,
+        # jack — same strings the runtime probes via SDL_GetAudioDriver).
+        # If any of the three universal Linux backends is missing, the
+        # release will be silent for that user-base, so fail the build now
+        # rather than after release.
+        run: |
+          BIN="build/pc/${{ matrix.exe_name }}"
+          test -f "$BIN"
+          missing=()
+          for backend in alsa pulseaudio pipewire; do
+            if ! strings "$BIN" | grep -qx "$backend"; then
+              missing+=("$backend")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::SDL3 in $BIN missing audio backends: ${missing[*]}"
+            echo "Install libasound2-dev / libpulse-dev / libpipewire-0.3-dev before xmake build."
+            exit 1
+          fi
+          echo "OK: SDL3 has alsa + pulseaudio + pipewire compiled in."
 
       - name: Prepare artifact payload
         shell: bash
