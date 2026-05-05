@@ -22,6 +22,8 @@
 #include "fade.h"
 #ifdef PC_PORT
 #include "port_rom.h"
+#include <stdio.h>
+#include <stdlib.h>
 #endif
 
 typedef struct {
@@ -351,12 +353,18 @@ void sub_0802D258(GleerokEntity* this) {
     }
 
     if ((gRoomTransition.frameCount & 0xf) == 0) {
-        Entity* fx;
+        /* Issue #51: original GBA code did raw offset arithmetic
+         * `(u8*)heap + 0x3c + rand*4` to pick a random spawn entity from
+         * the 5-platform entities[] array (with OOB rand==5 spilling into
+         * ent2 — the GBA pattern). On x86-64 the struct layout differs
+         * (Entity* is 8 bytes vs 4), so 0x3c lands inside entity1 and the
+         * resulting CreateFx() argument is garbage. Crash on boss death.
+         * Replace with proper field access keeping the same sparse {0,1,4,5}
+         * sample distribution. */
         u32 rand = Random() & 5;
-        u8* ptr = (u8*)this->unk_84;
-        rand *= 4;
-        ptr += 0x3c;
-        fx = CreateFx(*(Entity**)(ptr + rand), FX_GIANT_EXPLOSION3, 0);
+        Entity* target = (rand == 5) ? this->unk_84->ent2
+                                     : this->unk_84->entities[rand];
+        Entity* fx = target ? CreateFx(target, FX_GIANT_EXPLOSION3, 0) : NULL;
         if (fx) {
             fx->spritePriority.b0 = 0;
         }
@@ -370,14 +378,23 @@ void sub_0802D33C(GleerokEntity* this) {
     u32 i;
 
     for (i = 0; i < 4; i++) {
-        DeleteEntity(unk_84->entities[i]);
+        if (unk_84->entities[i]) {
+            DeleteEntity(unk_84->entities[i]);
+        }
     }
 
-    unk_84->entities[i]->health = 0;
-    ((Enemy*)(unk_84->entities[i]))->enemyFlags |= EM_FLAG_BOSS;
-    unk_84->ent2->health = 0;
-    unk_84->ent2->type2 = 0;
-    unk_84->ent2->spriteSettings.draw &= ~1;
+    /* The 5th platform entity stays alive after the others are deleted
+     * (it's the death-flash anchor). DeleteEntity is null-safe but the
+     * field accesses below aren't — guard each pointer. Issue #51. */
+    if (unk_84->entities[i]) {
+        unk_84->entities[i]->health = 0;
+        ((Enemy*)(unk_84->entities[i]))->enemyFlags |= EM_FLAG_BOSS;
+    }
+    if (unk_84->ent2) {
+        unk_84->ent2->health = 0;
+        unk_84->ent2->type2 = 0;
+        unk_84->ent2->spriteSettings.draw &= ~1;
+    }
     DeleteThisEntity();
 }
 
@@ -1157,6 +1174,10 @@ void sub_0802E1D0(GleerokEntity* this) {
                             this->unk_74 = 0;
                             this->unk_75 = 0x10;
                             this->unk_7c.HALF_U.LO = 0xB;
+                            /* Issue #51: explicitly start the fade in fade-out
+                             * direction. sub_0802E300 reads unk_83 to drive
+                             * the alpha transitions. */
+                            this->unk_83 = 0;
                             gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
                             gScreen.controls.layerFXControl = 0x240;
                             InitScreenShake(30, 0);
@@ -1178,24 +1199,53 @@ void sub_0802E300(GleerokEntity* this) {
     u8* ptr2;
     Entity* entity;
     Gleerok_HeapStruct* heap;
+
+    /* Issue #51 — Cave-of-Flames boss "doesn't resurface for round 3".
+     *
+     * The original decompiled structure was:
+     *
+     *   if (!(u79 & 0x80))      u7c--;
+     *   else if (u74 != 0x10)   { decrement u7c; on 0, reset u7c=0xb,
+     *                             u74++, u75--; }
+     *   if (u7c == 0) { fade-in step (u74--, u75++); }
+     *
+     * which can never enter the fade-in branch in practice: while u74<0x10
+     * Phase B keeps re-resetting u7c to 0xb whenever it hits 0, so the
+     * fade-in `if (u7c == 0)` test is always false. Once u74 reaches 0x10
+     * Phase B is gated off and nothing decrements u7c — it stays at 0xb
+     * forever. The fade-out completes visually (lava fills the room and
+     * sits there), but the boss never resurfaces. Confirmed by tick-by-
+     * tick trace of (u79, u74, u75, u7c) on Linux: state freezes at
+     * (0x81, 0x10, 0x00, 0x0b).
+     *
+     * Fix: track fade direction explicitly in unk_83 (otherwise unused on
+     * GleerokEntity), and always decrement u7c while submerged so Phase C
+     * can drive both the fade-out bump and the fade-in bump on the same
+     * 11-tick cadence.
+     *   unk_83 = 0  →  fade-out (lava rising, u74 climbing to 0x10)
+     *   unk_83 = 1  →  fade-in  (lava receding, u75 climbing to 0x10)
+     * sub_0802E1D0 sets unk_83=0 when entering the submerged splash path. */
     if ((this->unk_79 & 0x80) == 0) {
         this->unk_7c.HALF.LO--;
-    } else {
-        if (this->unk_74 != 0x10) {
-            if (this->unk_7c.HALF_U.LO) {
-                --this->unk_7c.HALF_U.LO;
-                if (this->unk_7c.HALF_U.LO == 0) {
-                    this->unk_7c.HALF_U.LO = 0xb;
-                    this->unk_75--;
-                    this->unk_74++;
-                    gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
-                }
-            }
-        }
+    } else if (this->unk_7c.HALF_U.LO) {
+        --this->unk_7c.HALF_U.LO;
     }
 
     if (this->unk_7c.HALF_U.LO == 0) {
         if (this->unk_79 & 0x80) {
+            if (this->unk_83 == 0) {
+                /* Fade-out cadence: u74 0→0x10, u75 0x10→0. When u74
+                 * tops out, flip into fade-in mode. */
+                if (this->unk_74 != 0x10) {
+                    this->unk_7c.HALF_U.LO = 0xb;
+                    this->unk_75--;
+                    this->unk_74++;
+                    gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
+                    return;
+                }
+                this->unk_83 = 1;
+                /* Fall through into fade-in branch this same tick. */
+            }
             if (this->unk_75 != 0x10) {
                 this->unk_7c.HALF_U.LO = 0xb;
                 this->unk_75++;
@@ -1203,6 +1253,9 @@ void sub_0802E300(GleerokEntity* this) {
                 gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
                 return;
             }
+            /* Fade-in done. Reset the phase flag so the next round's
+             * submerge starts clean. */
+            this->unk_83 = 0;
         }
 
         this->unk_79 &= ~0x80;
