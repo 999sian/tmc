@@ -34,6 +34,10 @@ void Port_DebugAction_AllKinstones(void);
 int Port_DebugAction_Warp(unsigned char area, unsigned char room,
                           unsigned short x, unsigned short y,
                           unsigned char layer);
+int Port_DebugQuery_AreaRoomCount(unsigned char area);
+int Port_DebugQuery_RoomDimensions(unsigned char area, unsigned char room,
+                                   unsigned short* w, unsigned short* h);
+const char* Port_DebugQuery_AreaName(unsigned char area);
 }
 
 namespace {
@@ -67,7 +71,14 @@ struct MenuPage {
     std::string title;
     std::vector<MenuItem> items;
     int cursor = 0;
+    /* Viewport: index of the topmost visible item. Renderer + key handler
+     * together keep `cursor` inside [viewportTop, viewportTop + visible). */
+    int viewportTop = 0;
 };
+
+/* Maximum number of items shown at once on a page. Larger pages scroll —
+ * cursor still walks every item, but only a window of this many is drawn. */
+constexpr int kVisibleItemsMax = 18;
 
 std::vector<MenuPage> sPageStack;
 std::string sToast;            /* Temporary message shown at bottom of screen. */
@@ -90,6 +101,8 @@ void Toast(const std::string& msg) {
 /* ------- Page builders (forward-declared so actions can push pages) ------- */
 MenuPage BuildItemsPage(void);
 MenuPage BuildWarpPage(void);
+MenuPage BuildAllAreasPage(void);
+MenuPage BuildAreaRoomsPage(unsigned char area);
 MenuPage BuildMainPage(void);
 
 void Push(MenuPage page) {
@@ -174,7 +187,60 @@ MenuPage BuildWarpPage(void) {
     p.items.push_back({ "Temple of Droplets",           []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x03, 0x108, 0xf8, 1); } });
     p.items.push_back({ "Royal Crypt",                  []() { DoWarp(AREA_ROYAL_CRYPT,        0x08, 0x88, 0x78, 1); } });
     p.items.push_back({ "Palace of Winds",              []() { DoWarp(AREA_PALACE_OF_WINDS,    0x31, 0x238, 0x58, 1); } });
+    p.items.push_back({ "All areas (raw, by index) ->", []() { Push(BuildAllAreasPage()); } });
     p.items.push_back({ "<- Back",                      []() { Pop(); } });
+    return p;
+}
+
+/* Iterate every area slot and add an entry per area that has at least one
+ * mapped room. The room headers come from the asset pipeline, so areas
+ * with no extracted data (NULL_xx slots in include/area.h) won't appear.
+ * Selecting an area pushes a per-area submenu listing its rooms. */
+MenuPage BuildAllAreasPage(void) {
+    MenuPage p;
+    p.title = "WARP - all areas";
+    for (unsigned int area = 0; area < 0x90; ++area) {
+        unsigned char a = static_cast<unsigned char>(area);
+        int count = Port_DebugQuery_AreaRoomCount(a);
+        if (count <= 0) {
+            continue;
+        }
+        const char* name = Port_DebugQuery_AreaName(a);
+        char buf[80];
+        if (name) {
+            std::snprintf(buf, sizeof(buf), "0x%02X %s (%d)", area, name, count);
+        } else {
+            std::snprintf(buf, sizeof(buf), "0x%02X Area (%d rooms)", area, count);
+        }
+        p.items.push_back({ buf, [a]() { Push(BuildAreaRoomsPage(a)); } });
+    }
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
+/* Per-area room list. Each entry warps to the room with x = pixel_width/2,
+ * y = pixel_height/2 — geometric centre. Not guaranteed walkable (could
+ * spawn inside an obstacle) but good enough for debug; if you land on a
+ * wall, just F8 → warp again to a different room. Layer defaults to 1. */
+MenuPage BuildAreaRoomsPage(unsigned char area) {
+    MenuPage p;
+    char title[48];
+    std::snprintf(title, sizeof(title), "WARP - area 0x%02X rooms", area);
+    p.title = title;
+    int count = Port_DebugQuery_AreaRoomCount(area);
+    for (int r = 0; r < count; ++r) {
+        unsigned short w = 0, h = 0;
+        if (!Port_DebugQuery_RoomDimensions(area, static_cast<unsigned char>(r), &w, &h)) {
+            continue;
+        }
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "Room 0x%02X (%ux%u px)", r, w, h);
+        unsigned char rr = static_cast<unsigned char>(r);
+        unsigned short cx = static_cast<unsigned short>(w / 2);
+        unsigned short cy = static_cast<unsigned short>(h / 2);
+        p.items.push_back({ buf, [area, rr, cx, cy]() { DoWarp(area, rr, cx, cy, 1); } });
+    }
+    p.items.push_back({ "<- Back", []() { Pop(); } });
     return p;
 }
 
@@ -218,16 +284,61 @@ extern "C" bool Port_DebugMenu_HandleKey(int sdlKey) {
         MenuPage& page = sPageStack.back();
         int n = static_cast<int>(page.items.size());
 
+        auto clampViewport = [&]() {
+            int visible = std::min(n, kVisibleItemsMax);
+            if (page.cursor < page.viewportTop) {
+                page.viewportTop = page.cursor;
+            } else if (page.cursor >= page.viewportTop + visible) {
+                page.viewportTop = page.cursor - visible + 1;
+            }
+            if (page.viewportTop < 0) {
+                page.viewportTop = 0;
+            }
+            if (page.viewportTop + visible > n) {
+                page.viewportTop = std::max(0, n - visible);
+            }
+        };
+
         switch (sdlKey) {
             case SDLK_UP:
                 if (n > 0) {
                     page.cursor = (page.cursor - 1 + n) % n;
+                    clampViewport();
                 }
                 consumed = true;
                 break;
             case SDLK_DOWN:
                 if (n > 0) {
                     page.cursor = (page.cursor + 1) % n;
+                    clampViewport();
+                }
+                consumed = true;
+                break;
+            case SDLK_PAGEUP:
+                if (n > 0) {
+                    page.cursor = std::max(0, page.cursor - kVisibleItemsMax);
+                    clampViewport();
+                }
+                consumed = true;
+                break;
+            case SDLK_PAGEDOWN:
+                if (n > 0) {
+                    page.cursor = std::min(n - 1, page.cursor + kVisibleItemsMax);
+                    clampViewport();
+                }
+                consumed = true;
+                break;
+            case SDLK_HOME:
+                if (n > 0) {
+                    page.cursor = 0;
+                    clampViewport();
+                }
+                consumed = true;
+                break;
+            case SDLK_END:
+                if (n > 0) {
+                    page.cursor = n - 1;
+                    clampViewport();
                 }
                 consumed = true;
                 break;
@@ -282,12 +393,28 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
     const MenuPage& page = sPageStack.back();
     const int charW = SDL_DEBUG_TEXT_FONT_CHARACTER_SIZE;
 
-    int rows = 2 + static_cast<int>(page.items.size()) + 2;
-    int cols = static_cast<int>(page.title.size());
-    for (const auto& it : page.items) {
-        cols = std::max(cols, static_cast<int>(it.label.size()) + 4);
+    /* Scroll viewport: clamp to a window of kVisibleItemsMax items. The
+     * key handler keeps page.cursor inside [viewportTop, viewportTop + visible). */
+    const int total = static_cast<int>(page.items.size());
+    const int visible = std::min(total, kVisibleItemsMax);
+    int top = page.viewportTop;
+    if (top < 0) {
+        top = 0;
     }
-    cols = std::max(cols, 30);
+    if (top + visible > total) {
+        top = std::max(0, total - visible);
+    }
+    const bool moreAbove = top > 0;
+    const bool moreBelow = (top + visible) < total;
+
+    /* Reserve up to 4 extra rows for: title, "..." above, "..." below,
+     * blank, and 2 hint lines at the bottom. */
+    int rows = 2 + visible + (moreAbove ? 1 : 0) + (moreBelow ? 1 : 0) + 3;
+    int cols = static_cast<int>(page.title.size());
+    for (int i = top; i < top + visible; ++i) {
+        cols = std::max(cols, static_cast<int>(page.items[i].label.size()) + 4);
+    }
+    cols = std::max(cols, 36);
 
     float boxW = static_cast<float>(cols * charW + 16);
     float boxH = static_cast<float>(rows * (charW + 4) + 12);
@@ -301,11 +428,24 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
 
     float y = box.y + 8.0f;
     SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
-    SDL_RenderDebugText(renderer, box.x + 8.0f, y, page.title.c_str());
+    char titleBuf[160];
+    if (total > kVisibleItemsMax) {
+        std::snprintf(titleBuf, sizeof(titleBuf), "%s  [%d/%d]",
+                      page.title.c_str(), page.cursor + 1, total);
+    } else {
+        std::snprintf(titleBuf, sizeof(titleBuf), "%s", page.title.c_str());
+    }
+    SDL_RenderDebugText(renderer, box.x + 8.0f, y, titleBuf);
     y += charW + 8.0f;
 
-    for (size_t i = 0; i < page.items.size(); ++i) {
-        bool sel = static_cast<int>(i) == page.cursor;
+    if (moreAbove) {
+        SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+        SDL_RenderDebugText(renderer, box.x + 8.0f, y, "  ^ ^ ^");
+        y += charW + 4.0f;
+    }
+
+    for (int i = top; i < top + visible && i < total; ++i) {
+        bool sel = i == page.cursor;
         std::string line = (sel ? "> " : "  ") + page.items[i].label;
         if (sel) {
             SDL_SetRenderDrawColor(renderer, 255, 240, 64, 255);
@@ -316,9 +456,15 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
         y += charW + 4.0f;
     }
 
+    if (moreBelow) {
+        SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
+        SDL_RenderDebugText(renderer, box.x + 8.0f, y, "  v v v");
+        y += charW + 4.0f;
+    }
+
     y += 4.0f;
     SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
-    SDL_RenderDebugText(renderer, box.x + 8.0f, y, "Up/Down move  Enter select  Esc back");
+    SDL_RenderDebugText(renderer, box.x + 8.0f, y, "Up/Dn move  PgUp/PgDn page  Home/End ends");
     y += charW + 4.0f;
-    SDL_RenderDebugText(renderer, box.x + 8.0f, y, "F5 quicksave   F6 quickload");
+    SDL_RenderDebugText(renderer, box.x + 8.0f, y, "Enter select  Esc back  F5 save  F6 load");
 }
