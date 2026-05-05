@@ -38,6 +38,19 @@ int Port_DebugQuery_AreaRoomCount(unsigned char area);
 int Port_DebugQuery_RoomDimensions(unsigned char area, unsigned char room,
                                    unsigned short* w, unsigned short* h);
 const char* Port_DebugQuery_AreaName(unsigned char area);
+
+/* Display / runtime-config knobs — same set the file-select "L Settings"
+ * panel exposes, so the F8 menu can drive them mid-game. */
+void          Port_PPU_ToggleFullscreen(void);
+bool          Port_PPU_IsFullscreen(void);
+void          Port_PPU_CycleWindowScale(int direction);
+unsigned char Port_PPU_WindowScale(void);
+void          Port_PPU_CyclePresentationMode(int direction);
+const char*   Port_PPU_PresentationModeName(void);
+unsigned int  Port_Config_TargetFps(void);
+void          Port_Config_CycleTargetFps(int direction);
+unsigned char Port_Config_InternalScale(void);
+void          Port_Config_CycleInternalScale(int direction);
 }
 
 namespace {
@@ -65,6 +78,12 @@ bool sOpen = false;
 struct MenuItem {
     std::string label;
     std::function<void()> action;
+    /* Optional cycle handlers for value-toggle items (Display settings page).
+     * When set, Left/Right invoke them and the renderer prefers labelFn over
+     * the static label so the visible row updates with the current value. */
+    std::function<void()> cycleLeft;
+    std::function<void()> cycleRight;
+    std::function<std::string()> labelFn;
 };
 
 struct MenuPage {
@@ -103,6 +122,7 @@ MenuPage BuildItemsPage(void);
 MenuPage BuildWarpPage(void);
 MenuPage BuildAllAreasPage(void);
 MenuPage BuildAreaRoomsPage(unsigned char area);
+MenuPage BuildDisplaySettingsPage(void);
 MenuPage BuildMainPage(void);
 
 void Push(MenuPage page) {
@@ -244,11 +264,88 @@ MenuPage BuildAreaRoomsPage(unsigned char area) {
     return p;
 }
 
+MenuPage BuildDisplaySettingsPage(void) {
+    /* Mirrors the file-select "L Settings" panel (src/fileselect.c
+     * HandlePortSettingsMenu): same four knobs, same Left/Right ergonomics,
+     * but reachable mid-game via F8 instead of only on the title screen.
+     * Each item has a labelFn that re-reads the current value every frame
+     * so the row updates immediately as you cycle. */
+    MenuPage p;
+    p.title = "DISPLAY SETTINGS";
+
+    MenuItem scale;
+    scale.cycleLeft  = []() { Port_PPU_CycleWindowScale(-1); };
+    scale.cycleRight = []() { Port_PPU_CycleWindowScale(+1); };
+    scale.labelFn = []() {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "Scale       %ux", (unsigned)Port_PPU_WindowScale());
+        return std::string(buf);
+    };
+    p.items.push_back(std::move(scale));
+
+    MenuItem filter;
+    filter.cycleLeft  = []() { Port_PPU_CyclePresentationMode(-1); };
+    filter.cycleRight = []() { Port_PPU_CyclePresentationMode(+1); };
+    filter.labelFn = []() {
+        const char* name = Port_PPU_PresentationModeName();
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "Filter      %s", name ? name : "?");
+        return std::string(buf);
+    };
+    p.items.push_back(std::move(filter));
+
+    MenuItem fps;
+    fps.cycleLeft  = []() { Port_Config_CycleTargetFps(-1); };
+    fps.cycleRight = []() { Port_Config_CycleTargetFps(+1); };
+    fps.labelFn = []() {
+        unsigned int v = Port_Config_TargetFps();
+        char buf[32];
+        if (v == 0) {
+            std::snprintf(buf, sizeof(buf), "FPS         uncapped");
+        } else {
+            std::snprintf(buf, sizeof(buf), "FPS         %u", v);
+        }
+        return std::string(buf);
+    };
+    p.items.push_back(std::move(fps));
+
+    MenuItem fs;
+    /* Fullscreen is binary, so left/right both toggle. */
+    fs.cycleLeft  = []() { Port_PPU_ToggleFullscreen(); };
+    fs.cycleRight = []() { Port_PPU_ToggleFullscreen(); };
+    fs.labelFn = []() {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "Fullscreen  %s", Port_PPU_IsFullscreen() ? "on" : "off");
+        return std::string(buf);
+    };
+    p.items.push_back(std::move(fs));
+
+    MenuItem internalScale;
+    internalScale.cycleLeft  = []() { Port_Config_CycleInternalScale(-1); };
+    internalScale.cycleRight = []() { Port_Config_CycleInternalScale(+1); };
+    internalScale.labelFn = []() {
+        char buf[64];
+        unsigned s = (unsigned)Port_Config_InternalScale();
+        /* Affine OAM is sub-pixel at scale > 1; everything else is S*S
+         * replicate. Affine BG2 / mode 7 are still TODO. */
+        std::snprintf(buf, sizeof(buf),
+                      s == 1 ? "Internal    %ux  (off)"
+                             : "Internal    %ux  (affine OBJ sub-pixel)",
+                      s);
+        return std::string(buf);
+    };
+    p.items.push_back(std::move(internalScale));
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
     p.items.push_back({ "Items / progress",  []() { Push(BuildItemsPage()); } });
     p.items.push_back({ "Warp",              []() { Push(BuildWarpPage());  } });
+    p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
     p.items.push_back({ "Close menu",        []() { Pop(); } });
     return p;
@@ -346,10 +443,26 @@ extern "C" bool Port_DebugMenu_HandleKey(int sdlKey) {
             case SDLK_KP_ENTER:
             case SDLK_SPACE:
                 if (page.cursor >= 0 && page.cursor < n) {
-                    /* Copy the action so the std::function we're calling
+                    /* Copy the function so the std::function we're calling
                      * stays alive even if the page (and its items) get
-                     * popped/cleared inside the lambda. */
-                    auto fn = page.items[page.cursor].action;
+                     * popped/cleared inside the lambda. For cycle items,
+                     * Enter behaves like Right (forward cycle). */
+                    auto& it = page.items[page.cursor];
+                    auto fn = it.action ? it.action : it.cycleRight;
+                    if (fn) fn();
+                }
+                consumed = true;
+                break;
+            case SDLK_LEFT:
+                if (page.cursor >= 0 && page.cursor < n) {
+                    auto fn = page.items[page.cursor].cycleLeft;
+                    if (fn) fn();
+                }
+                consumed = true;
+                break;
+            case SDLK_RIGHT:
+                if (page.cursor >= 0 && page.cursor < n) {
+                    auto fn = page.items[page.cursor].cycleRight;
                     if (fn) fn();
                 }
                 consumed = true;
@@ -407,12 +520,22 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
     const bool moreAbove = top > 0;
     const bool moreBelow = (top + visible) < total;
 
+    /* Materialize each visible label up-front: cycle items reconstruct a
+     * fresh string from labelFn() each frame, and we need the same value
+     * for both column-width sizing and rendering below. */
+    std::vector<std::string> visibleLabels;
+    visibleLabels.reserve(static_cast<size_t>(visible));
+    for (int i = top; i < top + visible && i < total; ++i) {
+        const MenuItem& it = page.items[i];
+        visibleLabels.push_back(it.labelFn ? it.labelFn() : it.label);
+    }
+
     /* Reserve up to 4 extra rows for: title, "..." above, "..." below,
      * blank, and 2 hint lines at the bottom. */
     int rows = 2 + visible + (moreAbove ? 1 : 0) + (moreBelow ? 1 : 0) + 3;
     int cols = static_cast<int>(page.title.size());
-    for (int i = top; i < top + visible; ++i) {
-        cols = std::max(cols, static_cast<int>(page.items[i].label.size()) + 4);
+    for (const auto& lbl : visibleLabels) {
+        cols = std::max(cols, static_cast<int>(lbl.size()) + 4);
     }
     cols = std::max(cols, 36);
 
@@ -446,7 +569,8 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
 
     for (int i = top; i < top + visible && i < total; ++i) {
         bool sel = i == page.cursor;
-        std::string line = (sel ? "> " : "  ") + page.items[i].label;
+        const std::string& lbl = visibleLabels[static_cast<size_t>(i - top)];
+        std::string line = (sel ? "> " : "  ") + lbl;
         if (sel) {
             SDL_SetRenderDrawColor(renderer, 255, 240, 64, 255);
         } else {
@@ -466,5 +590,5 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
     SDL_SetRenderDrawColor(renderer, 150, 150, 150, 255);
     SDL_RenderDebugText(renderer, box.x + 8.0f, y, "Up/Dn move  PgUp/PgDn page  Home/End ends");
     y += charW + 4.0f;
-    SDL_RenderDebugText(renderer, box.x + 8.0f, y, "Enter select  Esc back  F5 save  F6 load");
+    SDL_RenderDebugText(renderer, box.x + 8.0f, y, "Enter select  L/R cycle  Esc back  F5/F6 save/load");
 }

@@ -375,6 +375,11 @@ target("tmc_pc")
             { patch = "viruappu-mosaic.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "MODE1_IO_MOSAIC" },
+            -- Sub-pixel OAM affine overlay used by the internal-render-scale
+            -- path in port_ppu.cpp.
+            { patch = "viruappu-internal-scale.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "virtuappu_mode1_render_affine_obj_overlay" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
@@ -615,7 +620,7 @@ target("tmc_pc")
                "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g",
                "-fvisibility=default")
 
-    add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
+    add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g",
                  "-fvisibility=default")
     -- Keep symbols even in release mode so SIGSEGV traces are useful
