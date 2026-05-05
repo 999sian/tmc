@@ -1,6 +1,6 @@
 [submodule "libs/ViruaPPU"]
 	path = libs/ViruaPPU
-	url = https://github.com/MatheoVignaud/VirtuaPPU-experimental.git
+	url = https://github.com/MatheoVignaud/VirtuaPPU.git
 	# The xmake build auto-applies port/patches/viruappu-*.patch into
 	# this submodule (HDMA per-line hook + mosaic register), which
 	# permanently dirties the working tree. Ignore the dirty state here

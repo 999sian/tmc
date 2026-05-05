@@ -1,6 +1,6 @@
 set_project("tmc")
 -- Keep in sync with port/port_version.h.
-local TMC_PC_VERSION = "0.1.5-experimental"
+local TMC_PC_VERSION = "0.1.6-experimental"
 set_version(TMC_PC_VERSION)
 set_xmakever("2.7.0")
 
