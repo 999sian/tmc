@@ -194,7 +194,7 @@ void VBlankIntrWait(void) {
         char title[96];
 
 #ifndef TMC_PORT_VERSION
-#define TMC_PORT_VERSION "0.1.6-experimental"
+#define TMC_PORT_VERSION "0.1.6.2-experimental"
 #endif
         SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
         Port_PPU_SetWindowTitle(title);
