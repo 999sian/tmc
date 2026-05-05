@@ -70,9 +70,13 @@ jobs:
           sudo apt-get install -y \
             curl libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
-            xutils-dev xorg-dev autoconf automake libtool meson ninja-build \
+            xutils-dev xorg-dev autoconf automake libtool ninja-build python3-pip \
             libasound2-dev libpulse-dev libpipewire-0.3-dev libsndio-dev \
             libjack-jackd2-dev
+          # ubuntu-22.04 ships meson 0.61.2 but Wayland 1.25.0 (pulled in
+          # by xmake's SDL3 source build) requires meson >= 0.64.0. Use
+          # pip to grab a current meson without dragging in 24.04's libc.
+          sudo pip3 install --upgrade 'meson>=1.6'
 
       - name: Install MinGW Windows
         if: matrix.os_name == 'windows'
