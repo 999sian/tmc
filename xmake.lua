@@ -63,7 +63,12 @@ else
     -- recorded a NEEDED dep on libfmt.so.12, which broke on Fedora 43
     -- (ships fmt 11.x).
     add_requires("fmt", {system = false, configs = {header_only = true}})
-    add_requires("libpng")
+    -- Pin libpng: xmake-repo's v1.6.58 install fails on MinGW (recent
+    -- xmake-repo update; v0.1.6.x Windows builds succeeded with the
+    -- prior pin). v1.6.43 is the long-running stable that built cleanly
+    -- across MinGW + glibc. Linux/macOS take libpng from apt/brew so
+    -- this pin only affects the Windows xmake-fetched copy.
+    add_requires("libpng v1.6.43")
     add_requires("zlib")
     add_requires("libsdl3", {configs = {shared = false}})
     add_requires("nlohmann_json", {configs = {cmake = false}})
