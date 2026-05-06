@@ -41,11 +41,17 @@ jobs:
           # build is arm64-only; Intel Macs (macos-13 runner) can be added
           # in a follow-up if there's demand.
           macos='{"runner":"macos-latest","os_name":"macos","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          # Windows is temporarily dropped from the default 'all' matrix:
+          # xmake-repo libpng install fails identically on v1.6.43 and
+          # v1.6.58 (intel\intel_init.c → exit 127, generic "install
+          # failed!"). Need the per-package install.txt log to root-cause.
+          # workflow_dispatch with os_filter=windows still works for
+          # back-fill once the recipe is fixed.
           case "${OS_FILTER:-all}" in
             linux)   matrix="{\"include\":[$linux]}" ;;
             windows) matrix="{\"include\":[$windows]}" ;;
             macos)   matrix="{\"include\":[$macos]}" ;;
-            all|"")  matrix="{\"include\":[$linux,$windows,$macos]}" ;;
+            all|"")  matrix="{\"include\":[$linux,$macos]}" ;;
             *)       echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
