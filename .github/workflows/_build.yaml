@@ -36,22 +36,20 @@ jobs:
           # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
           # on ubuntu-latest pins glibc 2.43+ which excludes most users.
           linux='{"runner":"ubuntu-22.04","os_name":"linux","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
-          windows='{"runner":"windows-latest","os_name":"windows","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          # Pin to windows-2022: GitHub rolled `windows-latest` to Server
+          # 2025 with a different VS/MinGW tooling layout, which broke
+          # xmake-repo's libpng install step (exit 127 at the post-compile
+          # install). The v0.1.6.x release built fine on windows-2022.
+          windows='{"runner":"windows-2022","os_name":"windows","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
           # macos-latest = macos-14 = Apple Silicon arm64. First-pass macOS
           # build is arm64-only; Intel Macs (macos-13 runner) can be added
           # in a follow-up if there's demand.
           macos='{"runner":"macos-latest","os_name":"macos","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
-          # Windows is temporarily dropped from the default 'all' matrix:
-          # xmake-repo libpng install fails identically on v1.6.43 and
-          # v1.6.58 (intel\intel_init.c → exit 127, generic "install
-          # failed!"). Need the per-package install.txt log to root-cause.
-          # workflow_dispatch with os_filter=windows still works for
-          # back-fill once the recipe is fixed.
           case "${OS_FILTER:-all}" in
             linux)   matrix="{\"include\":[$linux]}" ;;
             windows) matrix="{\"include\":[$windows]}" ;;
             macos)   matrix="{\"include\":[$macos]}" ;;
-            all|"")  matrix="{\"include\":[$linux,$macos]}" ;;
+            all|"")  matrix="{\"include\":[$linux,$windows,$macos]}" ;;
             *)       echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
