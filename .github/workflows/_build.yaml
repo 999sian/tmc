@@ -155,7 +155,7 @@ jobs:
           if (Test-Path "$mingw\ar.exe") {
             Write-Host "OK: ar.exe found at $mingw\ar.exe"
           } else {
-            Write-Host "WARN: ar.exe NOT found in $mingw — listing ar* binaries:"
+            Write-Host "WARN: ar.exe NOT found in $mingw - listing ar* binaries:"
             Get-ChildItem $mingw -Filter "ar*" -ErrorAction SilentlyContinue
           }
 
