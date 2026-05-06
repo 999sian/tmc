@@ -190,7 +190,11 @@ MenuPage BuildWarpPage(void) {
      * — area, room, endX, endY, layer — so the warp goes through DoExitTransition
      * exactly the way a wallmaster pickup does. Layer=1 across all dungeons. */
     p.items.push_back({ "Hyrule Town",                  []() { DoWarp(AREA_HYRULE_TOWN, 0x00, 0x80, 0xC0, 1); } });
-    p.items.push_back({ "Hyrule Field - Link's house",  []() { DoWarp(AREA_HYRULE_FIELD, 0x00, 0x80, 0xC0, 1); } });
+    /* #65 fix: Link's house lives in SOUTH_HYRULE_FIELD (room 0x01),
+     * not Western_Woods_South (room 0x00). Local coords come from the
+     * exit list in src/data/transitions.c (gExitList_HouseInteriors2_-
+     * LinksHouseEntrance: WARP_TYPE_BORDER -> 0x290, 0x19c). */
+    p.items.push_back({ "Hyrule Field - Link's house",  []() { DoWarp(AREA_HYRULE_FIELD, 0x01, 0x290, 0x19C, 1); } });
     p.items.push_back({ "Minish Woods",                 []() { DoWarp(AREA_MINISH_WOODS, 0x00, 0x80, 0xC0, 1); } });
     p.items.push_back({ "Minish Village",               []() { DoWarp(AREA_MINISH_VILLAGE, 0x00, 0x80, 0xC0, 1); } });
     p.items.push_back({ "Mt Crenel",                    []() { DoWarp(AREA_MT_CRENEL,    0x00, 0x80, 0xC0, 1); } });
