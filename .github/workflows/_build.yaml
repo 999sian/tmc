@@ -172,6 +172,15 @@ jobs:
             xmake f -y --game_version="$GAME_VERSION"
           fi
 
+      - name: Build tmc_pc and asset_extractor
+        shell: bash
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: |
+          xmake build -y tmc_pc
+          xmake build -y asset_extractor
+
       - name: Dump xmake package install logs on failure
         if: failure() && matrix.os_name == 'windows'
         shell: bash
@@ -194,15 +203,6 @@ jobs:
             echo "===== end ====="
           done
           true
-
-      - name: Build tmc_pc and asset_extractor
-        shell: bash
-        env:
-          PYTHONUTF8: "1"
-          PYTHONIOENCODING: "utf-8"
-        run: |
-          xmake build -y tmc_pc
-          xmake build -y asset_extractor
 
       - name: Verify SDL3 audio backends linked into tmc_pc (Linux)
         if: matrix.os_name == 'linux'
