@@ -172,6 +172,31 @@ jobs:
             xmake f -y --game_version="$GAME_VERSION"
           fi
 
+      - name: Dump xmake package install logs (Windows, always)
+        if: always() && matrix.os_name == 'windows'
+        shell: bash
+        # The libpng install bombs with a generic "install failed!" exit 127;
+        # the actual error lives in installdir.failed/logs/install.txt under
+        # the xmake package cache and never reaches the workflow output.
+        # Run this AFTER configure (which is where the install fires) and
+        # BEFORE build, with `if: always()` so it fires on success, failure,
+        # AND cancellation — earlier `failure()` gating skipped on cancel.
+        run: |
+          set +e
+          base="$LOCALAPPDATA/.xmake/cache/packages"
+          if [ ! -d "$base" ]; then base="$HOME/AppData/Local/.xmake/cache/packages"; fi
+          if [ ! -d "$base" ]; then base="/c/Users/runneradmin/AppData/Local/.xmake/cache/packages"; fi
+          echo "Scanning for install logs under $base"
+          count=0
+          find "$base" -path '*installdir.failed/logs/install.txt' 2>/dev/null | while read log; do
+            echo
+            echo "===== $log ====="
+            cat "$log"
+            echo "===== end ====="
+            count=$((count+1))
+          done
+          true
+
       - name: Build tmc_pc and asset_extractor
         shell: bash
         env:
@@ -180,29 +205,6 @@ jobs:
         run: |
           xmake build -y tmc_pc
           xmake build -y asset_extractor
-
-      - name: Dump xmake package install logs on failure
-        if: failure() && matrix.os_name == 'windows'
-        shell: bash
-        # The Windows libpng install bombs with a generic "install failed!"
-        # exit 127; the actual error is in
-        # ~/AppData/Local/.xmake/cache/packages/.../installdir.failed/logs/install.txt
-        # which never makes it to the workflow log. Walk the failed package
-        # dirs and dump every install.txt so the next iteration has the real
-        # error to work from.
-        run: |
-          set +e
-          base="$LOCALAPPDATA/.xmake/cache/packages"
-          if [ ! -d "$base" ]; then base="$HOME/AppData/Local/.xmake/cache/packages"; fi
-          if [ ! -d "$base" ]; then base="/c/Users/runneradmin/AppData/Local/.xmake/cache/packages"; fi
-          echo "Scanning for install logs under $base"
-          find "$base" -path '*installdir.failed/logs/install.txt' 2>/dev/null | while read log; do
-            echo
-            echo "===== $log ====="
-            cat "$log"
-            echo "===== end ====="
-          done
-          true
 
       - name: Verify SDL3 audio backends linked into tmc_pc (Linux)
         if: matrix.os_name == 'linux'
