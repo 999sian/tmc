@@ -140,6 +140,25 @@ jobs:
           echo $mingw | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:PATH = "$mingw;$env:PATH"
 
+          # Save the MinGW *root* (parent of bin) for the Configure step.
+          # xmake's mingw SDK auto-detection otherwise picks up
+          # `C:\Program Files\Git\mingw64`, which is Git-for-Windows's stripped
+          # bundled MinGW: ships gcc but no binutils (`ar.exe` missing). Result
+          # was libpng install failing at the archive step with
+          # "cannot get program for ar". Pin via --mingw=<root> in xmake f.
+          $mingwRoot = Split-Path $mingw
+          Write-Host "MinGW root: $mingwRoot"
+          "MINGW_HOME=$mingwRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Verify ar.exe is actually present so the next CI iteration has
+          # an unambiguous yes/no signal if this assumption ever breaks.
+          if (Test-Path "$mingw\ar.exe") {
+            Write-Host "OK: ar.exe found at $mingw\ar.exe"
+          } else {
+            Write-Host "WARN: ar.exe NOT found in $mingw — listing ar* binaries:"
+            Get-ChildItem $mingw -Filter "ar*" -ErrorAction SilentlyContinue
+          }
+
           gcc --version
           g++ --version
 
@@ -167,7 +186,17 @@ jobs:
         run: |
           GAME_VERSION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
           if [ -n "$TMC_XMAKE_TOOLCHAIN" ]; then
-            xmake f -y --game_version="$GAME_VERSION" --toolchain="$TMC_XMAKE_TOOLCHAIN"
+            # On Windows, force the chocolatey-installed MinGW root.
+            # Without --mingw, xmake auto-detects Git for Windows's bundled
+            # MinGW (no `ar`, libpng install fails with "cannot get program
+            # for ar"). MINGW_HOME is exported by the "Install MinGW Windows"
+            # step using a Git-Bash POSIX path conversion below.
+            MINGW_FLAG=""
+            if [ -n "$MINGW_HOME" ]; then
+              MINGW_POSIX=$(cygpath -u "$MINGW_HOME" 2>/dev/null || echo "$MINGW_HOME")
+              MINGW_FLAG="--mingw=$MINGW_POSIX"
+            fi
+            xmake f -y --game_version="$GAME_VERSION" --toolchain="$TMC_XMAKE_TOOLCHAIN" $MINGW_FLAG
           else
             xmake f -y --game_version="$GAME_VERSION"
           fi
