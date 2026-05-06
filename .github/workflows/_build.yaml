@@ -193,11 +193,30 @@ jobs:
           fi
           echo "Scanning for install logs under $base"
           if [ ! -d "$base" ]; then echo "(directory does not exist)"; exit 0; fi
-          find "$base" -path '*installdir.failed/logs/install.txt' 2>/dev/null | while read -r log; do
+          # Walk every failed package dir; install.txt was empty in the prior
+          # iteration so dump every file under logs/, list the dir tree, and
+          # also dump xmake's own session log if present.
+          find "$base" -name 'installdir.failed' -type d 2>/dev/null | while read -r faildir; do
             echo
-            echo "===== $log ====="
-            cat "$log"
-            echo "===== end ====="
+            echo "===== TREE $faildir ====="
+            ls -la "$faildir/" 2>/dev/null
+            ls -la "$faildir/logs/" 2>/dev/null
+            for f in "$faildir"/logs/*; do
+              [ -e "$f" ] || continue
+              echo
+              echo "----- $f (size=$(stat -c%s "$f" 2>/dev/null || echo ?)) -----"
+              cat "$f" 2>/dev/null || true
+            done
+            echo "===== END $faildir ====="
+          done
+          # Plus xmake's repo-level session log (also useful when build/install
+          # bails before writing the package log)
+          for sess in "$HOME/.xmake/buildinfo.txt" "$base/../../../buildinfo.txt"; do
+            [ -e "$sess" ] || continue
+            echo
+            echo "===== SESSION $sess ====="
+            cat "$sess"
+            echo "===== END SESSION ====="
           done
           true
 
