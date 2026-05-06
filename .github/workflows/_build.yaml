@@ -172,6 +172,29 @@ jobs:
             xmake f -y --game_version="$GAME_VERSION"
           fi
 
+      - name: Dump xmake package install logs on failure
+        if: failure() && matrix.os_name == 'windows'
+        shell: bash
+        # The Windows libpng install bombs with a generic "install failed!"
+        # exit 127; the actual error is in
+        # ~/AppData/Local/.xmake/cache/packages/.../installdir.failed/logs/install.txt
+        # which never makes it to the workflow log. Walk the failed package
+        # dirs and dump every install.txt so the next iteration has the real
+        # error to work from.
+        run: |
+          set +e
+          base="$LOCALAPPDATA/.xmake/cache/packages"
+          if [ ! -d "$base" ]; then base="$HOME/AppData/Local/.xmake/cache/packages"; fi
+          if [ ! -d "$base" ]; then base="/c/Users/runneradmin/AppData/Local/.xmake/cache/packages"; fi
+          echo "Scanning for install logs under $base"
+          find "$base" -path '*installdir.failed/logs/install.txt' 2>/dev/null | while read log; do
+            echo
+            echo "===== $log ====="
+            cat "$log"
+            echo "===== end ====="
+          done
+          true
+
       - name: Build tmc_pc and asset_extractor
         shell: bash
         env:
