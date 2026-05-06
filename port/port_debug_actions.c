@@ -104,6 +104,10 @@ void Port_DebugAction_MaxRupees(void) {
     gSave.stats.rupees = 999;
 }
 
+void Port_DebugAction_MaxShells(void) {
+    gSave.stats.shells = 999;
+}
+
 void Port_DebugAction_AllKinstones(void) {
     int i;
     for (i = 0; i < (int)sizeof(gSave.kinstones.fuserOffers); i++) {

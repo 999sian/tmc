@@ -30,6 +30,7 @@ void Port_DebugAction_GiveAllItems(void);
 void Port_DebugAction_MaxHearts(void);
 void Port_DebugAction_HealFull(void);
 void Port_DebugAction_MaxRupees(void);
+void Port_DebugAction_MaxShells(void);
 void Port_DebugAction_AllKinstones(void);
 int Port_DebugAction_Warp(unsigned char area, unsigned char room,
                           unsigned short x, unsigned short y,
@@ -175,6 +176,7 @@ MenuPage BuildItemsPage(void) {
     p.items.push_back({ "Max heart containers",  []() { Port_DebugAction_MaxHearts();    Toast("Hearts maxed");      } });
     p.items.push_back({ "Heal to full",          []() { Port_DebugAction_HealFull();     Toast("Healed");            } });
     p.items.push_back({ "999 rupees",            []() { Port_DebugAction_MaxRupees();    Toast("999 rupees");        } });
+    p.items.push_back({ "999 mysterious shells", []() { Port_DebugAction_MaxShells();    Toast("999 shells");        } });
     p.items.push_back({ "All kinstones fused",   []() { Port_DebugAction_AllKinstones(); Toast("All kinstones");     } });
     p.items.push_back({ "<- Back",               []() { Pop(); } });
     return p;
@@ -212,6 +214,16 @@ MenuPage BuildWarpPage(void) {
     p.items.push_back({ "Temple of Droplets",           []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x03, 0x108, 0xf8, 1); } });
     p.items.push_back({ "Royal Crypt",                  []() { DoWarp(AREA_ROYAL_CRYPT,        0x08, 0x88, 0x78, 1); } });
     p.items.push_back({ "Palace of Winds",              []() { DoWarp(AREA_PALACE_OF_WINDS,    0x31, 0x238, 0x58, 1); } });
+    /* #58 repro: bakery rafters at the reporter's exact spot. World pos
+     * (1864, 117); room 3 origin map_x=0x60 << 4 = 0x600 → local (0x148, 0x75).
+     * Area + room constants hardcoded — not yet mirrored above. */
+    p.items.push_back({ "MinishRafters Bakery (#58 repro)",
+                        []() { DoWarp(0x2E, 0x03, 0x148, 0x75, 1); } });
+    /* #57 repro: Carlov's figurine shop. Area 0x23 = HouseInteriors3,
+     * room 7 = Carlov, room header (0x00, 0x0E, 0xF0, 0xA0) → local centre
+     * (0x78, 0x50). Walk into the device + insert shells to draw. */
+    p.items.push_back({ "Carlov figurine shop (#57 repro)",
+                        []() { DoWarp(0x23, 0x07, 0x78, 0x50, 1); } });
     p.items.push_back({ "All areas (raw, by index) ->", []() { Push(BuildAllAreasPage()); } });
     p.items.push_back({ "<- Back",                      []() { Pop(); } });
     return p;

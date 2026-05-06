@@ -40,7 +40,11 @@ typedef struct {
 
 /* Addresses + sizes pulled from port_asset_index.c (gFigurinePalN.gbapal,
  * gFigurineGfxN.4bpp). Sizes match data/gfx/figurines.s. Identical on USA
- * and EU — figurines.s has no #ifdef. */
+ * and EU — figurines.s has no #ifdef.
+ *
+ * Stored as ROM-relative offsets (matching port_asset_index.c convention);
+ * the populator OR's in 0x08000000 to form the GBA address that
+ * Port_ResolveRomData expects. */
 static const FigurineRomEntry kFigurineEntries[137] = {
     [1] = { 0x005B5EC0, 0x0083FB00, 0x0580 },
     [2] = { 0x005B5FA0, 0x00840080, 0x05E0 },
@@ -185,8 +189,8 @@ static const FigurineRomEntry kFigurineEntries[137] = {
 void Port_PopulateFigurines(void) {
     memset(gFigurines, 0, sizeof(gFigurines));
     for (u32 i = 1; i <= 136; i++) {
-        gFigurines[i].pal = (u8*)Port_ResolveRomData(kFigurineEntries[i].palAddr);
-        gFigurines[i].gfx = (u8*)Port_ResolveRomData(kFigurineEntries[i].gfxAddr);
+        gFigurines[i].pal = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].palAddr);
+        gFigurines[i].gfx = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].gfxAddr);
         gFigurines[i].size = (int)kFigurineEntries[i].size;
         gFigurines[i].zero = 0;
     }
