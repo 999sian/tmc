@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       os_filter:
-        description: "all | linux | windows — restrict build matrix to one platform"
+        description: "all | linux | windows | macos — restrict build matrix to one platform"
         required: false
         type: string
         default: all
@@ -37,11 +37,16 @@ jobs:
           # on ubuntu-latest pins glibc 2.43+ which excludes most users.
           linux='{"runner":"ubuntu-22.04","os_name":"linux","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           windows='{"runner":"windows-latest","os_name":"windows","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          # macos-latest = macos-14 = Apple Silicon arm64. First-pass macOS
+          # build is arm64-only; Intel Macs (macos-13 runner) can be added
+          # in a follow-up if there's demand.
+          macos='{"runner":"macos-latest","os_name":"macos","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           case "${OS_FILTER:-all}" in
             linux)   matrix="{\"include\":[$linux]}" ;;
             windows) matrix="{\"include\":[$windows]}" ;;
-            all|"")  matrix="{\"include\":[$linux,$windows]}" ;;
-            *)       echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows)"; exit 1 ;;
+            macos)   matrix="{\"include\":[$macos]}" ;;
+            all|"")  matrix="{\"include\":[$linux,$windows,$macos]}" ;;
+            *)       echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -77,6 +82,17 @@ jobs:
           # by xmake's SDL3 source build) requires meson >= 0.64.0. Use
           # pip to grab a current meson without dragging in 24.04's libc.
           sudo pip3 install --upgrade 'meson>=1.6'
+
+      - name: Install macOS dependencies
+        if: matrix.os_name == 'macos'
+        # xmake-managed packages (SDL3 etc.) build from source via Xcode's
+        # clang and need ninja + meson present. The system pieces (libpng,
+        # fmt, nlohmann-json) come from brew so xmake's `find_package` can
+        # pick them up instead of compiling each from source. CoreAudio
+        # ships with the OS, so SDL3's audio backend needs no extra deps.
+        run: |
+          brew update
+          brew install ninja meson libpng fmt nlohmann-json
 
       - name: Install MinGW Windows
         if: matrix.os_name == 'windows'
