@@ -1,0 +1,162 @@
+diff --git a/include/cpu/mode1.h b/include/cpu/mode1.h
+--- a/include/cpu/mode1.h
++++ b/include/cpu/mode1.h
+@@ -84,6 +84,10 @@ void virtuappu_mode1_composite_line(
+     uint8_t obj_priority[MODE1_GBA_WIDTH],
+     uint16_t dispcnt);
+ void virtuappu_mode1_render_frame(const PPUMemory *ppu);
++/* Sub-pixel re-render of OAM affine sprites into a (240*scale x 160*scale)
++ * buffer. Called by the PC port at internal-render-scale > 1 after the
++ * standard frame has been S*S nearest-replicated into `dst`. */
++void virtuappu_mode1_render_affine_obj_overlay(uint32_t *dst, int dst_w, int dst_h, int scale);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/src/mode1.c b/src/mode1.c
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -693,2 +693,144 @@
+ 
++/* Sub-pixel overlay for OAM affine sprites at internal-render-scale > 1.
++ *
++ * Called by the PC port AFTER the standard 240x160 render has already been
++ * S*S nearest-replicated into `dst` (a 240*S by 160*S buffer). For each
++ * affine OAM entry we re-run the matrix at sub-pixel density and write
++ * straight to `dst`, which produces visibly smoother diagonals on rotated
++ * sprites (Vaati's tornado, screen-shrink cinematic, every spinning enemy).
++ *
++ * Caveats:
++ *   * No priority/blend layering — affine pixels overwrite whatever's at
++ *     the target. Acceptable for a first pass because the affine sprite
++ *     was already top-of-stack at scale 1; in TMC there are very few
++ *     scenes where a non-affine sprite occludes an affine one.
++ *   * Source texture is still 1x pixel art — no information to "recover".
++ *     What you gain is sub-pixel sampling at the screen-space rotation,
++ *     which trades the 240-grid staircase for an S*240-grid one.
++ */
++void virtuappu_mode1_render_affine_obj_overlay(uint32_t *dst, int dst_w, int dst_h, int scale)
++{
++    if (dst == NULL || scale <= 1) {
++        return;
++    }
++    if (dst_w != MODE1_GBA_WIDTH * scale || dst_h != MODE1_GBA_HEIGHT * scale) {
++        return;
++    }
++
++    uint16_t dispcnt = virtuappu_mode1_io_read16(MODE1_IO_DISPCNT);
++    if ((dispcnt & MODE1_DISP_FORCED_BLANK) != 0u) {
++        return;
++    }
++    if ((dispcnt & MODE1_DISP_OBJ_ON) == 0u) {
++        return;
++    }
++    bool obj_1d = (dispcnt & MODE1_DISP_OBJ_1D) != 0u;
++    const uint32_t obj_tile_base = 0x10000u;
++
++    /* OAM is iterated lowest-priority-first so higher-priority entries
++     * overwrite — same convention as virtuappu_mode1_render_obj_line, just
++     * applied at sub-pixel resolution. */
++    for (int i = MODE1_GBA_OAM_COUNT - 1; i >= 0; --i) {
++        Mode1OAMAttr attr;
++        attr.attr0 = mode1_memory.oam_mem[i * 4];
++        attr.attr1 = mode1_memory.oam_mem[i * 4 + 1];
++        attr.attr2 = mode1_memory.oam_mem[i * 4 + 2];
++
++        if (!mode1_oam_affine(attr)) continue;
++        if (mode1_oam_hidden(attr))  continue;
++
++        uint8_t shape = mode1_oam_shape(attr);
++        uint8_t size  = mode1_oam_size(attr);
++        int obj_width  = mode1_obj_widths [shape][size];
++        int obj_height = mode1_obj_heights[shape][size];
++        int bounds_width  = obj_width;
++        int bounds_height = obj_height;
++        if (mode1_oam_double_size(attr)) {
++            bounds_width  *= 2;
++            bounds_height *= 2;
++        }
++
++        int obj_y = mode1_oam_y(attr);
++        if (obj_y >= MODE1_GBA_HEIGHT) obj_y -= 256;
++        int obj_x = mode1_oam_x(attr);
++        if (obj_x >= MODE1_GBA_WIDTH)  obj_x -= 512;
++
++        bool bpp8 = mode1_oam_bpp8(attr);
++        uint16_t base_tile = mode1_oam_tile_index(attr);
++        int tiles_w = obj_width / 8;
++
++        int affine_group = mode1_oam_affine_index(attr);
++        int16_t pa = (int16_t)mode1_memory.oam_mem[affine_group * 16 + 3];
++        int16_t pb = (int16_t)mode1_memory.oam_mem[affine_group * 16 + 7];
++        int16_t pc = (int16_t)mode1_memory.oam_mem[affine_group * 16 + 11];
++        int16_t pd = (int16_t)mode1_memory.oam_mem[affine_group * 16 + 15];
++
++        int half_width        = bounds_width  / 2;
++        int half_height       = bounds_height / 2;
++        int sprite_half_w     = obj_width  / 2;
++        int sprite_half_h     = obj_height / 2;
++
++        /* Iterate output sub-pixels. (sx_sub, sy_sub) are in 1/scale source-
++         * pixel units; the matrix math at scale=1 reproduces the integer
++         * mode1_render_obj_line behaviour exactly. */
++        for (int sy_sub = 0; sy_sub < bounds_height * scale; ++sy_sub) {
++            /* line_sub = output row = sprite-top output row + sub-row within sprite. */
++            int line_sub = obj_y * scale + sy_sub;
++            if (line_sub < 0 || line_sub >= MODE1_GBA_HEIGHT * scale) continue;
++
++            /* input_rel_y in (1/scale) source-pixel units. */
++            int input_rel_y_subS = sy_sub - half_height * scale;
++
++            for (int sx_sub = 0; sx_sub < bounds_width * scale; ++sx_sub) {
++                int screen_x_sub = obj_x * scale + sx_sub;
++                if (screen_x_sub < 0 || screen_x_sub >= MODE1_GBA_WIDTH * scale) continue;
++
++                int input_rel_x_subS = sx_sub - half_width * scale;
++                /* tex_x / tex_y in source-pixel units. pa is 8.8 fixed,
++                 * input_rel_*_subS is 1/scale source-pixels, so the product
++                 * is (8.8 / scale) source-pixel units. >>8 trims the fixed
++                 * fraction; / scale converts back to integer source-pixels. */
++                int tex_x = (((int)pa * input_rel_x_subS + (int)pb * input_rel_y_subS) >> 8) / scale + sprite_half_w;
++                int tex_y = (((int)pc * input_rel_x_subS + (int)pd * input_rel_y_subS) >> 8) / scale + sprite_half_h;
++                if (tex_x < 0 || tex_x >= obj_width)  continue;
++                if (tex_y < 0 || tex_y >= obj_height) continue;
++
++                int tile_row = tex_y / 8;
++                int pixel_y  = tex_y % 8;
++                int tile_col = tex_x / 8;
++                int pixel_x  = tex_x % 8;
++
++                uint16_t tile_index;
++                if (obj_1d) {
++                    tile_index = (uint16_t)(base_tile + tile_row * tiles_w + tile_col);
++                    if (bpp8) tile_index = (uint16_t)(base_tile + (tile_row * tiles_w + tile_col) * 2);
++                } else {
++                    tile_index = (uint16_t)(base_tile + tile_row * 32 + tile_col);
++                    if (bpp8) tile_index = (uint16_t)(base_tile + tile_row * 32 + tile_col * 2);
++                }
++
++                uint8_t color_index;
++                if (bpp8) {
++                    uint32_t addr = obj_tile_base + (uint32_t)tile_index * 32u + (uint32_t)pixel_y * 8u + (uint32_t)pixel_x;
++                    color_index = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;
++                } else {
++                    uint32_t addr = obj_tile_base + (uint32_t)tile_index * 32u + (uint32_t)pixel_y * 4u + (uint32_t)(pixel_x / 2);
++                    uint8_t packed = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;
++                    color_index = (pixel_x & 1) ? (packed >> 4u) : (packed & 0x0Fu);
++                }
++                if (color_index == 0u) continue;
++
++                uint16_t rgb555;
++                if (bpp8) {
++                    rgb555 = mode1_memory.obj_palette[color_index];
++                } else {
++                    rgb555 = mode1_memory.obj_palette[(size_t)mode1_oam_palette(attr) * 16u + color_index];
++                }
++
++                dst[(size_t)line_sub * (size_t)dst_w + (size_t)screen_x_sub] =
++                    virtuappu_mode1_rgb555_to_abgr8888(rgb555);
++            }
++        }
++    }
++}
+ void virtuappu_mode1_render_frame(const PPUMemory *ppu)

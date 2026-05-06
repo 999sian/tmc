@@ -35,6 +35,14 @@ static RenderBackend sBackend = RenderBackend::None;
 static SDL_Renderer* sRenderer = nullptr;
 static SDL_Texture* sLowResTexture = nullptr;   /* 240x160 raw upload */
 static SDL_Texture* sHiResTexture = nullptr;    /* 960x640 upscaled  */
+/* Internal-render-scale streaming texture: re-sized lazily when scale
+ * changes (240*S x 160*S). Used when Port_Config_InternalScale() > 1
+ * and the user has chosen a non-xBRZ presentation mode — the framebuffer
+ * is S*S nearest-replicated into sScaledBuf and uploaded here. */
+static SDL_Texture* sScaledTexture = nullptr;
+static int sScaledTextureScale = 0;
+static uint32_t* sScaledBuf = nullptr;
+static int sScaledBufScale = 0;
 static SDL_Window* sWindow = nullptr;
 static SDL_Surface* sFrameSurface = nullptr;
 static PresentMode sPresentMode = PresentMode::NearestRaw;
@@ -93,6 +101,82 @@ static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* out
     *outY = (h - rh) / 2;
     *outW = rw;
     *outH = rh;
+}
+
+/* Build (or reuse) sScaledBuf at scale S and S*S-replicate the 240x160
+ * framebuffer into it. Returns the buffer + dims via out-params; returns
+ * nullptr if S<=1. The buffer survives across frames so we don't realloc
+ * unless the scale changes.
+ *
+ * This is the Stage-1 shape of internal-render-scale: pure post-process
+ * nearest-replicate on the CPU. By itself it produces visually the same
+ * result as SDL_SCALEMODE_NEAREST presentation, but it puts the scaled
+ * framebuffer in the pipeline so future PPU patches can render affine
+ * paths directly at sub-pixel density and the rest of the path doesn't
+ * need to change. */
+static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
+    if (S <= 1) {
+        if (outW) *outW = 0;
+        if (outH) *outH = 0;
+        return nullptr;
+    }
+    const int w = 240 * S;
+    const int h = 160 * S;
+    if (sScaledBuf == nullptr || sScaledBufScale != S) {
+        std::free(sScaledBuf);
+        sScaledBuf = (uint32_t*)std::malloc((size_t)w * (size_t)h * sizeof(uint32_t));
+        sScaledBufScale = S;
+        if (sScaledBuf == nullptr) {
+            sScaledBufScale = 0;
+            if (outW) *outW = 0;
+            if (outH) *outH = 0;
+            return nullptr;
+        }
+    }
+    /* Nearest-replicate: each src pixel writes to an SxS block. Loop
+     * order is src-major so the source line stays cache-resident while
+     * we scatter S output rows. */
+    for (int sy = 0; sy < 160; ++sy) {
+        const uint32_t* src = &virtuappu_frame_buffer[sy * 240];
+        for (int dy = 0; dy < S; ++dy) {
+            uint32_t* dst = &sScaledBuf[(sy * S + dy) * w];
+            for (int sx = 0; sx < 240; ++sx) {
+                uint32_t c = src[sx];
+                uint32_t* d = &dst[sx * S];
+                for (int dx = 0; dx < S; ++dx) {
+                    d[dx] = c;
+                }
+            }
+        }
+    }
+
+    /* Sub-pixel overlay for OAM affine sprites. Most TMC frames have no
+     * affine OAM and this is a no-op; when there is one (Vaati tornado,
+     * world-shrink cinematic, every spinning enemy) it overwrites the
+     * 1x-replicated pixels with sub-pixel-accurate ones. */
+    virtuappu_mode1_render_affine_obj_overlay(sScaledBuf, w, h, S);
+
+    if (outW) *outW = w;
+    if (outH) *outH = h;
+    return sScaledBuf;
+}
+
+static SDL_Texture* Port_PPU_EnsureScaledTexture(int S) {
+    if (S <= 1) return nullptr;
+    if (sScaledTexture != nullptr && sScaledTextureScale == S) {
+        return sScaledTexture;
+    }
+    if (sScaledTexture != nullptr) {
+        SDL_DestroyTexture(sScaledTexture);
+        sScaledTexture = nullptr;
+        sScaledTextureScale = 0;
+    }
+    sScaledTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
+                                       SDL_TEXTUREACCESS_STREAMING, 240 * S, 160 * S);
+    if (sScaledTexture) {
+        sScaledTextureScale = S;
+    }
+    return sScaledTexture;
 }
 
 static void Port_PPU_PresentSurfaceFrame(void) {
@@ -253,9 +337,13 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
         SDL_Texture* tex;
         SDL_ScaleMode scale;
+        const int internalS = (int)Port_Config_InternalScale();
         switch (sPresentMode) {
             case PresentMode::XbrzLinear:
             case PresentMode::XbrzNearest:
+                /* xBRZ owns its own 4x upscaler — internal-render-scale
+                 * is mutually exclusive with it. The xBRZ path always
+                 * consumes the unscaled 240x160 framebuffer. */
                 Port_Upscale_xBRZ_4x(virtuappu_frame_buffer, 240, 160,
                                      sUpscale2xBuf, sUpscale4xBuf);
                 SDL_UpdateTexture(sHiResTexture, nullptr, sUpscale4xBuf,
@@ -265,18 +353,23 @@ extern "C" void Port_PPU_PresentFrame(void) {
                             ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
                 break;
             case PresentMode::LinearRaw:
-                SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
-                                  240 * (int)sizeof(uint32_t));
-                tex = sLowResTexture;
-                scale = SDL_SCALEMODE_LINEAR;
-                break;
             case PresentMode::NearestRaw:
-            default:
-                SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
-                                  240 * (int)sizeof(uint32_t));
-                tex = sLowResTexture;
-                scale = SDL_SCALEMODE_NEAREST;
+            default: {
+                int sw = 0, sh = 0;
+                uint32_t* scaled = Port_PPU_BuildScaledFrame(internalS, &sw, &sh);
+                SDL_Texture* scaledTex = Port_PPU_EnsureScaledTexture(internalS);
+                if (scaled && scaledTex) {
+                    SDL_UpdateTexture(scaledTex, nullptr, scaled, sw * (int)sizeof(uint32_t));
+                    tex = scaledTex;
+                } else {
+                    SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
+                                      240 * (int)sizeof(uint32_t));
+                    tex = sLowResTexture;
+                }
+                scale = (sPresentMode == PresentMode::LinearRaw)
+                            ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
                 break;
+            }
         }
         SDL_SetTextureScaleMode(tex, scale);
         SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);

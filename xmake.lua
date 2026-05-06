@@ -1,6 +1,6 @@
 set_project("tmc")
 -- Keep in sync with port/port_version.h.
-local TMC_PC_VERSION = "0.1.6-experimental"
+local TMC_PC_VERSION = "0.2.0-experimental"
 set_version(TMC_PC_VERSION)
 set_xmakever("2.7.0")
 
@@ -63,7 +63,12 @@ else
     -- recorded a NEEDED dep on libfmt.so.12, which broke on Fedora 43
     -- (ships fmt 11.x).
     add_requires("fmt", {system = false, configs = {header_only = true}})
-    add_requires("libpng")
+    -- Pin libpng: xmake-repo's v1.6.58 install fails on MinGW (recent
+    -- xmake-repo update; v0.1.6.x Windows builds succeeded with the
+    -- prior pin). v1.6.43 is the long-running stable that built cleanly
+    -- across MinGW + glibc. Linux/macOS take libpng from apt/brew so
+    -- this pin only affects the Windows xmake-fetched copy.
+    add_requires("libpng v1.6.43")
     add_requires("zlib")
     add_requires("libsdl3", {configs = {shared = false}})
     add_requires("nlohmann_json", {configs = {cmake = false}})
@@ -135,6 +140,13 @@ target("asset_extractor")
     add_includedirs("include", "port", ".")
     add_packages("nlohmann_json", "fmt")
     add_mingw_static_cpp_runtime()
+    -- Embed assets/sounds.json into the binary so the extractor can guarantee
+    -- it appears next to itself even when a release tarball forgets to ship
+    -- the file (the v0.1.6 packaging bug behind issue #50). xmake's bin2c
+    -- rule writes a raw "0xNN, 0xNN, ..." byte sequence to a header that we
+    -- #include inside a C array initializer (see embedded_sounds_json.cpp).
+    add_rules("utils.bin2c", {extensions = {".json"}})
+    add_files("assets/sounds.json", {rule = "utils.bin2c", nozeroend = true})
     after_build(function (target)
         local mirrored_exe = path.join(tools_bin, path.filename(target:targetfile()))
         if mirrored_exe ~= target:targetfile() then
@@ -400,6 +412,11 @@ target("tmc_pc")
             { patch = "viruappu-mosaic.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "MODE1_IO_MOSAIC" },
+            -- Sub-pixel OAM affine overlay used by the internal-render-scale
+            -- path in port_ppu.cpp.
+            { patch = "viruappu-internal-scale.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "virtuappu_mode1_render_affine_obj_overlay" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
@@ -447,6 +464,13 @@ target("tmc_pc")
     -- below alongside the matching `-fopenmp` toolchain flags, since on
     -- macOS we may have to disable it when libomp isn't installed.
     add_defines("PC_PORT", "NON_MATCHING", pc_ver.region, pc_ver.language, "REVISION=0")
+    -- Inject the version string from the top-of-file constant so the
+    -- window title (port_bios.c), bug-report payload (port_bugreport.cpp),
+    -- and update-check User-Agent (port_update_check.c) all read the same
+    -- value. Wrap in escaped quotes so the macro expands to a string
+    -- literal at the use site.
+    add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
+    add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
     if use_avx2 and arch_supports_avx2 then
         add_defines("USE_AVX2")
         add_cflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})
@@ -501,6 +525,7 @@ target("tmc_pc")
     add_files("port/port_bugreport.cpp")
     add_files("port/port_bugreport_state.c")
     add_files("port/port_linked_stubs.c")
+    add_files("port/port_figurines.c")  -- gFigurines[] resolved from ROM (#57)
     add_files("port/port_draw.c")
     add_files("port/port_gba_mem.c")
     add_files("port/port_hdma.c")    -- HBlank-DMA simulation (iris/circle WIN0H)
@@ -616,7 +641,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3", "fmt", "nlohmann_json")
+    add_packages("libsdl3", "fmt", "nlohmann_json", "libpng", "zlib")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.
@@ -671,17 +696,32 @@ target("tmc_pc")
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then
         add_ldflags("-static", "-static-libgcc", "-static-libstdc++", {force = true})
-        add_syslinks("winhttp", "winpthread")
+        -- dbghelp: SymInitialize / SymFromAddr used by port_bugreport.cpp's
+        -- WriteBacktraceWindows() for symbol resolution in the crash handler.
+        add_syslinks("winhttp", "winpthread", "dbghelp")
     end
     
     -- Math library
     if is_plat("linux", "macosx") then
         add_links("m")
     end
+
+    -- -rdynamic exports defined symbols into the dynamic symbol table so
+    -- backtrace_symbols() in the crash handler can name them. Without it
+    -- bug-report backtraces are just hex offsets the user has to addr2line
+    -- themselves. Linux + macOS only; MinGW uses dbghelp instead.
+    if is_plat("linux") then
+        add_ldflags("-rdynamic", {force = true})
+    end
     
     -- Compiler flags
+    -- -fvisibility=default overrides xmake's release-mode default of
+    -- -fvisibility=hidden. Hidden visibility makes every defined function
+    -- LOCAL in .symtab, which means -rdynamic exports nothing and the
+    -- crash-handler backtrace shows bare offsets instead of names.
     add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
-               "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g")
+               "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g",
+               "-fvisibility=default")
 
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")

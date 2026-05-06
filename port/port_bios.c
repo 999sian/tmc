@@ -100,8 +100,8 @@ static void Port_PumpEvents(void) {
                 /* Capture a bug-report bundle for playtesters: screenshot
                  * + save copy + game-state text. Lands in a timestamped
                  * directory next to the binary. */
-                extern char* Port_BugReport_Capture(void);
-                char* dir = Port_BugReport_Capture();
+                extern char* Port_BugReport_Capture(const char* reason);
+                char* dir = Port_BugReport_Capture("user");
                 if (dir) {
                     free(dir);
                 }
@@ -193,8 +193,10 @@ void VBlankIntrWait(void) {
         double fps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
         char title[96];
 
+/* TMC_PORT_VERSION is set by xmake.lua's add_defines; the fallback below
+ * is just for IDE indexers that don't see the build flags. */
 #ifndef TMC_PORT_VERSION
-#define TMC_PORT_VERSION "0.1.6-experimental"
+#define TMC_PORT_VERSION "0.2.0-experimental"
 #endif
         SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
         Port_PPU_SetWindowTitle(title);

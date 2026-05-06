@@ -229,6 +229,11 @@ int main(int argc, char* argv[]) {
      * sufficient in practice. */
     Port_ReserveGbaAddressSpace();
 
+    /* Install crash handlers as early as possible so even faults during
+     * startup (asset bootstrap, ROM load) auto-capture a bug report. */
+    extern void Port_BugReport_InstallCrashHandlers(void);
+    Port_BugReport_InstallCrashHandlers();
+
     fprintf(stderr, "Initializing port layer...\n");
 
     // Initialize REG_KEYINPUT to all-keys-released (GBA: 1=not pressed)

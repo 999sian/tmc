@@ -4,6 +4,27 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual trigger so we can cut a Linux-only or Windows-only release
+  # (e.g. v0.1.6.2 fixed Linux audio without re-shipping Windows). For a
+  # full multi-platform release, just push the tag normally — this
+  # dispatch path doesn't push a git tag, so the auto-trigger above
+  # won't fire when this is used.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag name to attach the release to (e.g. v0.1.6.2-experimental). Will be created at HEAD if missing."
+        required: true
+        type: string
+      os_filter:
+        description: "Which platform to build for"
+        required: true
+        type: choice
+        default: all
+        options:
+          - all
+          - linux
+          - windows
+          - macos
 
 permissions:
   contents: write
@@ -13,7 +34,11 @@ jobs:
     uses: ./.github/workflows/_build.yaml
     with:
       publish_mode: release
-      version_label: ${{ github.ref_name }}
+      # workflow_dispatch supplies inputs.tag; tag-push uses github.ref_name.
+      version_label: ${{ inputs.tag || github.ref_name }}
+      # tag-push always builds the full matrix (inputs.os_filter is empty
+      # under push triggers, _build.yaml's default 'all' kicks in).
+      os_filter: ${{ inputs.os_filter || 'all' }}
 
   create-release:
     runs-on: ubuntu-latest
@@ -33,7 +58,8 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          name: "TMC ${{ github.ref_name }}"
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: "TMC ${{ inputs.tag || github.ref_name }}"
           files: uploads/*.tar.gz
           generate_release_notes: true
           fail_on_unmatched_files: true

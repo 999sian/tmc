@@ -1091,6 +1091,13 @@ void Port_LoadRom(const char* path) {
         Port_InitUIElementDefinitions();
     }
 
+    /* gFigurines[1..136] — Figurine viewer table; each entry's pal/gfx
+     * resolved from gRomData. See port/port_figurines.c (#57). */
+    {
+        extern void Port_PopulateFigurines(void);
+        Port_PopulateFigurines();
+    }
+
     /* gTranslations — resolved from compile-time offset table */
     for (int i = 0; i < 7; i++) {
         gTranslations[i] = ResolveTableOffset(kTranslationOffsets[i]);
