@@ -607,7 +607,9 @@ target("tmc_pc")
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then
         add_ldflags("-static", "-static-libgcc", "-static-libstdc++", {force = true})
-        add_syslinks("winhttp", "winpthread")
+        -- dbghelp: SymInitialize / SymFromAddr used by port_bugreport.cpp's
+        -- WriteBacktraceWindows() for symbol resolution in the crash handler.
+        add_syslinks("winhttp", "winpthread", "dbghelp")
     end
     
     -- Math library
