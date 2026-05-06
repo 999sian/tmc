@@ -62,27 +62,23 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
+      - name: Force LF line endings (Windows)
+        if: matrix.os_name == 'windows'
+        shell: bash
+        # Git for Windows defaults `core.autocrlf=true`. The ViruaPPU
+        # submodule then gets CRLF, but our port/patches/*.patch were
+        # generated on Linux (LF). `git apply -3` fails with "repository
+        # lacks the necessary blob to perform 3-way merge" because the
+        # working-tree blob hashes don't match. Set autocrlf globally
+        # before checkout so the parent + submodules clone with LF.
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Normalize submodule line endings (Windows)
-        if: matrix.os_name == 'windows'
-        shell: bash
-        # Git for Windows defaults `core.autocrlf=true`, so the ViruaPPU
-        # submodule checkout gets CRLF line endings. Our patches in
-        # port/patches/ were generated on Linux (LF) and `git apply -3`
-        # fails with "repository lacks the necessary blob to perform 3-way
-        # merge" because the blob hashes don't match the working tree.
-        # Disable autocrlf for the submodule and re-checkout so files are
-        # back to LF before xmake's before_build patch step runs.
-        run: |
-          for sub in libs/ViruaPPU libs/VirtuaAPU; do
-            git -C "$sub" config core.autocrlf false
-            git -C "$sub" rm --cached -r . >/dev/null
-            git -C "$sub" checkout -- .
-          done
 
       - name: Install Linux dependencies
         if: matrix.os_name == 'linux'
