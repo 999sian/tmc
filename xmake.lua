@@ -430,6 +430,13 @@ target("tmc_pc")
     
     -- Define PC_PORT, NON_MATCHING and game version
     add_defines("PC_PORT", "NON_MATCHING", "USE_OPENMP", pc_ver.region, pc_ver.language, "REVISION=0")
+    -- Inject the version string from the top-of-file constant so the
+    -- window title (port_bios.c), bug-report payload (port_bugreport.cpp),
+    -- and update-check User-Agent (port_update_check.c) all read the same
+    -- value. Wrap in escaped quotes so the macro expands to a string
+    -- literal at the use site.
+    add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
+    add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
     if use_avx2 and arch_supports_avx2 then
         add_defines("USE_AVX2")
         add_cflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})
