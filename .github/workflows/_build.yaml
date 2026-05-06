@@ -67,6 +67,23 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Normalize submodule line endings (Windows)
+        if: matrix.os_name == 'windows'
+        shell: bash
+        # Git for Windows defaults `core.autocrlf=true`, so the ViruaPPU
+        # submodule checkout gets CRLF line endings. Our patches in
+        # port/patches/ were generated on Linux (LF) and `git apply -3`
+        # fails with "repository lacks the necessary blob to perform 3-way
+        # merge" because the blob hashes don't match the working tree.
+        # Disable autocrlf for the submodule and re-checkout so files are
+        # back to LF before xmake's before_build patch step runs.
+        run: |
+          for sub in libs/ViruaPPU libs/VirtuaAPU; do
+            git -C "$sub" config core.autocrlf false
+            git -C "$sub" rm --cached -r . >/dev/null
+            git -C "$sub" checkout -- .
+          done
+
       - name: Install Linux dependencies
         if: matrix.os_name == 'linux'
         run: |
