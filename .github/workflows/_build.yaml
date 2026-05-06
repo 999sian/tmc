@@ -183,17 +183,21 @@ jobs:
         # AND cancellation — earlier `failure()` gating skipped on cancel.
         run: |
           set +e
-          base="$LOCALAPPDATA/.xmake/cache/packages"
-          if [ ! -d "$base" ]; then base="$HOME/AppData/Local/.xmake/cache/packages"; fi
-          if [ ! -d "$base" ]; then base="/c/Users/runneradmin/AppData/Local/.xmake/cache/packages"; fi
+          # Hardcoded Git-Bash POSIX path — $LOCALAPPDATA contains backslashes
+          # that bash eats during word expansion ("C:\Users\..." becomes
+          # "C:Users..." with no separators), so find returns mangled paths
+          # and cat fails. The previous version got that exact error.
+          base="/c/Users/runneradmin/AppData/Local/.xmake/cache/packages"
+          if [ ! -d "$base" ] && command -v cygpath >/dev/null 2>&1; then
+            base=$(cygpath -u "$LOCALAPPDATA")/.xmake/cache/packages
+          fi
           echo "Scanning for install logs under $base"
-          count=0
-          find "$base" -path '*installdir.failed/logs/install.txt' 2>/dev/null | while read log; do
+          if [ ! -d "$base" ]; then echo "(directory does not exist)"; exit 0; fi
+          find "$base" -path '*installdir.failed/logs/install.txt' 2>/dev/null | while read -r log; do
             echo
             echo "===== $log ====="
             cat "$log"
             echo "===== end ====="
-            count=$((count+1))
           done
           true
 
