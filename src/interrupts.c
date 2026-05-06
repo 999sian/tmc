@@ -361,8 +361,20 @@ static void sub_080171F0(void) {
     gPlayerState.spriteOffsetY = 0;
     sub_0807B0C8();
 
-    if (gPlayerState.flags & PL_CLONING)
-        gPlayerClones[0]->spriteOffsetY = gPlayerClones[1]->spriteOffsetY = gPlayerClones[2]->spriteOffsetY = 0;
+    if (gPlayerState.flags & PL_CLONING) {
+        /* GBA original blindly dereferenced all three gPlayerClones[] entries.
+         * Only the Four Sword fills all three slots; lower-tier swords (Red = 1
+         * clone, Blue = 2 clones) leave the trailing entries NULL. On GBA the
+         * NULL writes targeted the read-only BIOS region (spriteOffsetY sits
+         * at a small Entity offset) and were silently dropped, but on x86-64
+         * the zero page is unmapped and the write SIGSEGVs (#67, Elemental
+         * Sanctuary clone crash). Guard each pointer individually. */
+        u32 i;
+        for (i = 0; i < 3; ++i) {
+            if (gPlayerClones[i] != NULL)
+                gPlayerClones[i]->spriteOffsetY = 0;
+        }
+    }
 
     if (gPlayerEntity.base.action == PLAYER_CLIMB)
         gPlayerState.flags |= PL_CLIMBING;
