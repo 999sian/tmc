@@ -230,13 +230,24 @@ bool ExtractAssets(const Options& opt, std::string* error)
             return fail(fmt::format("failed to load ROM from {}", opt.rom_path.string()));
         }
     }
-    /* Mirror to the C globals so legacy code paths inside the
-     * extractor (and the engine, when this runs in-process) see the
-     * same ROM bytes. The standalone binary defines these in main;
-     * tmc_pc has its own definition in port_rom.c. Both port_gba_mem.h
-     * declarations were already pulled in by assets_extractor.hpp. */
-    gRomData = Rom.data();
-    gRomSize = static_cast<u32>(Rom.size());
+    /* Do NOT touch the C globals (gRomData / gRomSize) here. In the
+     * in-process path (tmc_pc) Port_LoadRom has already populated
+     * gRomData with its own malloc'd 16 MB buffer and resolved every
+     * ROM-derived pointer table (gUnk_08109248[], gSpriteAnimations_322[],
+     * gSpritePtrs[].animations, gGlobalGfxAndPalettes, ...) against
+     * THAT pointer. Reassigning gRomData to point at our `Rom` view
+     * silently invalidates those tables and produces the
+     * "[TEXT] UnpackTextNibbles: src=... outside ROM" + sprite-anim
+     * stalls reported during the asset-pipeline-rewrite branch.
+     *
+     * `Rom` is a std::span (see assets_extractor.hpp). When called
+     * via load_rom_from_buffer (the engine path) it aliases the
+     * engine's gRomData allocation directly, so extract_bytes(...) and
+     * the engine's gRomData are looking at the same backing memory
+     * with no second allocation.
+     *
+     * The standalone asset_extractor binary mirrors Rom into gRomData
+     * itself in assets_extractor_main.cpp after this call returns. */
 
     if (!std::filesystem::exists(opt.editable_root)) {
         std::filesystem::create_directories(opt.editable_root);
@@ -331,6 +342,11 @@ bool ExtractAssets(const Options& opt, std::string* error)
     reporter.Finish(fmt::format("asset extraction complete in {}ms", elapsed_ms));
 
     return true;
+}
+
+std::span<const uint8_t> LoadedRomBytes()
+{
+    return Rom;
 }
 
 }  // namespace AssetExtractorApi

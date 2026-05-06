@@ -48,9 +48,9 @@ struct Options {
 
     /* Phase-complete hook fired from worker threads. tmc_pc uses
      * this to flip per-phase ready flags so the title screen can
-     * render before the entire extraction is done (Phase 7 of the
-     * embed-extractor plan). May be null. The string view is the
-     * same name passed to PortAssetLog::Reporter::BeginPhase. */
+     * render before the entire extraction is done. May be null. 
+     * The string view is the same name passed to 
+     * PortAssetLog::Reporter::BeginPhase. */
     std::function<void(std::string_view phase)> phase_done;
 };
 
@@ -71,5 +71,16 @@ bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
  * argv[0]. Used by both binaries to locate baserom.gba and the
  * assets/ tree relative to the binary instead of the cwd. */
 std::filesystem::path FindExecutableDirectory(const std::filesystem::path& argv0);
+
+/* Read-only views of the bytes the most recent ExtractAssets() call
+ * processed. Backed by the extractor's internal Rom span, which
+ * either aliases the engine's gRomData (in-process path) or owns a
+ * disk-loaded copy (standalone path). Empty before the first
+ * ExtractAssets call. Provided so the standalone binary can mirror
+ * the bytes into its gRomData / gRomSize globals without including
+ * the full assets_extractor.hpp (which defines a forest of non-inline
+ * helpers that would multiply-define if pulled into more than one
+ * TU). */
+std::span<const uint8_t> LoadedRomBytes();
 
 }  // namespace AssetExtractorApi
