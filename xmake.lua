@@ -588,10 +588,16 @@ target("tmc_pc")
     add_packages("libsdl3", "fmt", "nlohmann_json", "libpng", "zlib")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
-    add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
-    add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
-    add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
-    add_syslinks("gomp")
+    -- Apple clang ships without OpenMP support and rejects -fopenmp outright;
+    -- using libomp via brew needs `-Xpreprocessor -fopenmp` + `-lomp` instead.
+    -- For the first-pass macOS build we just leave OpenMP off — VirtuaPPU
+    -- still works, just single-threaded for the parallel render paths.
+    if not is_plat("macosx") then
+        add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
+        add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
+        add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
+        add_syslinks("gomp")
+    end
 
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then
