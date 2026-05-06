@@ -333,6 +333,51 @@ def ensure_roms(selected: list, found: dict, non_interactive: bool = False) -> d
 
 # ── Build pipeline ────────────────────────────────────────────────────────────
 
+def ensure_sounds_embed() -> None:
+    """Generate port/generated_sounds_embed.cpp from assets/sounds.json.
+
+    xmake.lua references the file as a static input via add_files(...),
+    which is processed during the configure pass - BEFORE xmake's
+    before_build hook runs. On a clean checkout the file doesn't exist
+    yet and configure prints
+
+        warning: ./xmake.lua:NNN: cannot match add_files("port/generated_sounds_embed.cpp")
+
+    followed by an undefined-reference link error for
+    PortSoundsEmbed::kData / kSize. Running the generator here, before
+    invoking xmake, sidesteps the ordering issue regardless of whether
+    the user passed --slim. The generator is deterministic and no-ops
+    when the on-disk output already matches the input, so this is safe
+    to run unconditionally without busting xmake's incremental cache.
+    The xmake before_build hook is left in place as a safety net for
+    direct `xmake build` invocations.
+    """
+    script = REPO_ROOT / "tools" / "generate_sounds_embed.py"
+    sounds = REPO_ROOT / "assets" / "sounds.json"
+    output = REPO_ROOT / "port" / "generated_sounds_embed.cpp"
+    if not script.exists():
+        warn(f"generator missing: {script.relative_to(REPO_ROOT)} - relying on xmake before_build hook")
+        return
+
+    # Prefer python3 (matches xmake.lua), fall back to python (Windows
+    # installs without the python3 shim).
+    last_err: Optional[str] = None
+    for interp in ("python3", "python"):
+        if not shutil.which(interp):
+            continue
+        result = subprocess.run(
+            [interp, str(script), str(sounds), str(output)],
+            cwd=str(REPO_ROOT),
+        )
+        if result.returncode == 0:
+            ok(f"generated_sounds_embed.cpp ({sounds.name} -> {output.relative_to(REPO_ROOT)})")
+            return
+        last_err = f"{interp} exited {result.returncode}"
+
+    warn(f"sounds embed generator failed ({last_err or 'no python interpreter found'})")
+    info("Build will continue; xmake's before_build hook will retry.")
+
+
 def make_env() -> dict:
     env = os.environ.copy()
     env["XMAKE_ROOT"] = "y"
@@ -576,6 +621,14 @@ def main():
     env     = make_env()
     if slim:
         info("Slim mode — dist will contain only tmc_pc (assets self-extract on first run).")
+
+    """Generate port/generated_sounds_embed.cpp before xmake's configure
+    pass reads it via add_files. xmake.lua keeps a before_build hook
+    as a safety net, but that fires AFTER configure, so a clean
+    checkout would otherwise warn + fail to link with undefined
+    references to PortSoundsEmbed::kData/kSize."""
+    ensure_sounds_embed()
+
     results = {}
     for v in buildable:
         section(f"Building {v}")

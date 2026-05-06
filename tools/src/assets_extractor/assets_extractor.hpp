@@ -115,8 +115,23 @@ using PakBuilderArray = std::array<PortAssetPak::PakBuilder, kPakCategoryCount>;
 
 /* `inline` so the header can be included by both the standalone
  * extractor binary and the in-process API used by tmc_pc without
- * triggering a multiple-definition link error. */
-inline std::vector<uint8_t> Rom;
+ * triggering a multiple-definition link error.
+ *
+ * Two-tier design:
+ *   - RomOwned holds bytes when we read them off disk in
+ *     load_rom(path). Empty otherwise.
+ *   - Rom is a non-owning std::span that views either RomOwned (disk
+ *     path) or the caller's buffer (in-process path, where tmc_pc has
+ *     already mapped baserom.gba into gRomData and we don't want to
+ *     pay for a second 16 MB allocation OR — more importantly —
+ *     orphan the engine's existing pointer tables that were resolved
+ *     against gRomData).
+ *
+ * Every read site inside the extractor uses Rom (size/data/[]/begin),
+ * so swapping the backing storage is transparent to extract_bytes,
+ * read_u32, etc. */
+inline std::vector<uint8_t> RomOwned;
+inline std::span<const uint8_t> Rom;
 
 inline bool load_rom(const std::filesystem::path& rom_path)
 {
@@ -124,19 +139,29 @@ inline bool load_rom(const std::filesystem::path& rom_path)
     if (!file) {
         return false;
     }
-    Rom = std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {});
-    return true;
+    RomOwned.assign(std::istreambuf_iterator<char>(file), {});
+    Rom = std::span<const uint8_t>(RomOwned.data(), RomOwned.size());
+    return !RomOwned.empty();
 }
 
-/* Replace the in-memory ROM with a copy of `bytes`. Used when the
- * engine has already mapped baserom.gba and wants to hand the buffer
- * to the extractor without paying for a second 16 MB read. */
+/* Alias the caller's buffer instead of copying. Used when the engine
+ * has already mapped baserom.gba and wants to hand the buffer to the
+ * extractor without (a) paying for a second 16 MB read and (b)
+ * silently orphaning the original gRomData allocation that
+ * Port_LoadRom resolved every ROM-derived pointer table against. The
+ * caller must keep `bytes` alive for the duration of the extraction
+ * call (tmc_pc holds gRomData for the entire process lifetime). */
 inline bool load_rom_from_buffer(std::span<const uint8_t> bytes)
 {
     if (bytes.empty()) {
         return false;
     }
-    Rom.assign(bytes.begin(), bytes.end());
+    /* Drop any prior owned bytes so we don't keep 16 MB live forever
+     * after a switch from disk-load to buffer-load (does not affect
+     * tmc_pc, which only ever calls load_rom_from_buffer). */
+    RomOwned.clear();
+    RomOwned.shrink_to_fit();
+    Rom = bytes;
     return true;
 }
 

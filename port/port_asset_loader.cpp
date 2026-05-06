@@ -154,7 +154,7 @@ struct AssetGroupCache {
     bool paksEnabled = false;
 
 #ifdef TMC_OVERLAP_EXTRACT_INIT
-    /* Phase 7: per-pak-category gates so the engine can run
+    /* Per-pak-category gates so the engine can run
      * Port_PPU_Init and AgbMain title-screen rendering in parallel
      * with extraction. Each gate starts "open" (done=true) for the
      * common warm-launch case; cold-launch flips them shut at the
@@ -1195,38 +1195,136 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
 
     for (size_t i = 0; i < gAssetGroupCache.spritePtrs.size() && i < kSpritePtrMax; ++i) {
         const SpritePtrEntryData& entry = gAssetGroupCache.spritePtrs[i];
-        SpritePtr sprite = {};
 
-        if (!entry.framesFile.empty()) {
-            const std::vector<u8>* framesData = LoadBinaryFileCached(entry.framesFile);
-            if (framesData == nullptr) {
-                return FALSE;
-            }
-            sprite.frames = reinterpret_cast<SpriteFrame*>(const_cast<u8*>(framesData->data()));
-        }
-
-        if (!entry.ptrFile.empty()) {
-            const std::vector<u8>* ptrData = LoadBinaryFileCached(entry.ptrFile);
-            if (ptrData == nullptr) {
-                return FALSE;
-            }
-            sprite.ptr = const_cast<u8*>(ptrData->data());
-        }
+        /* Seed from the ROM-resolved compile-time table. The
+         * asset-pipeline-rewrite extractor emits per-sprite tile
+         * (.ptr) and frame-table (.frames) bin files, but it slices
+         * each one at the GBA-ROM offset of the next sprite kind —
+         * which is the wrong size for sprites whose frames address
+         * tiles beyond that boundary. Example: sprite 42 (Npc5/Zelda)
+         * extracts to a 1600-byte tile buffer (50 tiles) but
+         * gSpriteFrames_Npc5's firstTileIndex values reach 0x88 (136
+         * tiles, 4352 bytes) — the engine reads heap garbage past end
+         * of the extracted buffer and the visible regression is
+         * scrambled NPC tiles in the Smith / Zelda / Picori scenes.
+         *
+         * In slim mode the ROM is mapped and `kSpritePtrEntries[i]`
+         * already gave us a correctly-sized in-ROM pointer, so we
+         * keep that and only refresh .animations / .pad below. The
+         * extracted ptr/frames bins remain available via the JSON if
+         * a future ROM-less path needs them, but we deliberately do
+         * not consume them here. */
+        SpritePtr sprite = (i < kSpritePtrMax) ? gSpritePtrs[i] : SpritePtr{};
+        sprite.animations = nullptr;
 
         auto& animPtrs = newAnimationPtrs[i];
         animPtrs.clear();
         animPtrs.reserve(entry.animations.size());
+
+        /* Two-pass walk so we can read the next animation's leading
+         * byte (the loop-back distance the GBA would have read off the
+         * end of this animation's bytes when bit-7 of the trailing
+         * frame is set). The asset extractor sizes each .bin by ROM
+         * offset diff and therefore truncates the loop-back byte that
+         * lives at the start of the adjacent ROM region. Without
+         * synthesising it back, FrameZero / UpdateAnimationVariableFrames
+         * read past end-of-buffer and the engine logs
+         *
+         *   FrameZero: loop byte out of ROM at <padded-end-pointer>
+         *
+         * Visible regression: garbled Zelda sprite during the file /
+         * intro screens, plus eventual segfault when a downstream
+         * reader keeps walking. Mirrors the logic that was previously
+         * in this function on origin/sync-matheo-release. */
+        std::vector<const std::vector<u8>*> rawAnims;
+        rawAnims.reserve(entry.animations.size());
         for (const std::string& animFile : entry.animations) {
             if (animFile.empty()) {
-                animPtrs.push_back(nullptr);
+                rawAnims.push_back(nullptr);
                 continue;
             }
-
             const std::vector<u8>* animData = LoadBinaryFileCached(animFile);
             if (animData == nullptr) {
                 return FALSE;
             }
-            animPtrs.push_back(animData->data());
+            rawAnims.push_back(animData);
+        }
+
+        for (size_t a = 0; a < rawAnims.size(); ++a) {
+            const std::vector<u8>* animData = rawAnims[a];
+            if (animData == nullptr) {
+                animPtrs.push_back(nullptr);
+                continue;
+            }
+            const u8* dataPtr = animData->data();
+            const size_t dataSize = animData->size();
+            if (dataSize < 4 || (dataSize % 4u) != 0u) {
+                animPtrs.push_back(dataPtr);
+                continue;
+            }
+
+            /* Every well-formed animation buffer (multiple of 4 bytes)
+             * gets a padded copy with the trailing loop_back byte the
+             * engine reads when bit-7 is set on a frame's third byte.
+             *
+             * On GBA, that byte was the first byte of the next animation
+             * in ROM; the assets extractor sizes each .bin by ROM offset
+             * diff, so the byte is missing from extracted .bins.
+             *
+             * For animations whose last frame already had bit-7 set we
+             * preserve the data and only append the loop_back byte.
+             *
+             * For animations whose last frame did NOT have bit-7 (the
+             * GBA original would have walked past end into adjacent ROM
+             * bytes), we OR-in 0x80 on the last frame's third byte and
+             * append a loop_back so the engine re-enters this animation
+             * from the start instead of reading heap garbage. The
+             * visible difference vs the GBA original is "frozen on the
+             * last frame replayed" instead of "garbled garbage from
+             * adjacent ROM region," which is what the asset-pipeline
+             * rewrite users observed as the mangled-NPC regression. */
+            const size_t numFrames = dataSize / 4u;
+            const bool lastFrameLoops = (dataPtr[dataSize - 1] & 0x80u) != 0u;
+
+            u8 loopBack = static_cast<u8>(std::min<size_t>(numFrames, 0xFFu));
+            if (lastFrameLoops && a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr &&
+                !rawAnims[a + 1]->empty()) {
+                u8 nextByte = (*rawAnims[a + 1])[0];
+                if (nextByte > 0 && nextByte <= numFrames) {
+                    loopBack = nextByte;
+                }
+            }
+
+            /* Stash the padded copy in binaryFiles under a synthetic
+             * key (the original .bin is already cached under its real
+             * relative path, so this never collides). Anchoring the
+             * padded buffer in binaryFiles is what lets
+             * Port_IsLoadedAssetBytes succeed for the AnimRangeHasBytes
+             * range check the engine's trailing reads need. */
+            const std::string& sourceKey = entry.animations[a];
+            std::string paddedKey;
+            paddedKey.reserve(sourceKey.size() + 32);
+            paddedKey.append("__padded__/");
+            paddedKey.append(std::to_string(i));
+            paddedKey.push_back('/');
+            paddedKey.append(std::to_string(a));
+            paddedKey.push_back('/');
+            paddedKey.append(sourceKey);
+
+            auto buf = std::make_unique<std::vector<u8>>();
+            buf->reserve(dataSize + 1);
+            buf->assign(dataPtr, dataPtr + dataSize);
+            if (!lastFrameLoops) {
+                /* Force the last frame into a loop frame. The other
+                 * three bytes (frameIndex, frameDuration, settings)
+                 * keep the anim visually identical right up to the
+                 * loop point. */
+                buf->back() |= 0x80u;
+            }
+            buf->push_back(loopBack);
+            const u8* paddedPtr = buf->data();
+            gAssetGroupCache.binaryFiles.emplace(std::move(paddedKey), std::move(buf));
+            animPtrs.push_back(paddedPtr);
         }
 
         sprite.animations = animPtrs.empty() ? nullptr : (void*)animPtrs.data();
@@ -1235,8 +1333,14 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
     }
 
     gAssetGroupCache.spriteAnimationPtrs = std::move(newAnimationPtrs);
-    memset(gSpritePtrs, 0, sizeof(SpritePtr) * kSpritePtrMax);
-    for (size_t i = 0; i < newSpritePtrs.size(); ++i) {
+    /* Don't memset(gSpritePtrs, 0, ...) — sprite entries that the JSON
+     * doesn't override (which is all of them: ptr_file/frames_file are
+     * null in the extractor output) need to keep their ROM-resolved
+     * .ptr / .frames pointers from `gSpritePtrs loaded (... pointers
+     * resolved)` startup. We seed each `sprite` from the live entry
+     * above and only replace .animations / explicit .ptr / .frames /
+     * .pad here. */
+    for (size_t i = 0; i < newSpritePtrs.size() && i < kSpritePtrMax; ++i) {
         gSpritePtrs[i] = newSpritePtrs[i];
     }
 
