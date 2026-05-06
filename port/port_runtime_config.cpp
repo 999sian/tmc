@@ -37,6 +37,7 @@ const std::array<Def, PORT_INPUT_COUNT> kDefaults = {{
 }};
 
 u8 sScale = 3;
+u8 sInternalScale = 1;
 std::string sUpscaleMethod = "nearest";
 u64 sFrameTimeNs = 0;
 bool sPortSettingsMenuEnabled = true;
@@ -49,6 +50,7 @@ const std::array<u32, 9> kFpsPresets = { 0, 30, 60, 75, 90, 120, 144, 150, 240 }
 nlohmann::json DefaultsJson(void) {
     nlohmann::json j = {
         { "window_scale", 3 },
+        { "internal_scale", 1 },
         { "upscale_method", "nearest" },
         { "frame_time_ns", 0 },
         { "port_settings_menu", true },
@@ -153,6 +155,8 @@ extern "C" void Port_Config_Load(const char* path) {
 
     int scale = j.value("window_scale", 3);
     sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
+    int iscale = j.value("internal_scale", 1);
+    sInternalScale = iscale >= 1 && iscale <= 4 ? (u8)iscale : 1;
     sUpscaleMethod = j.value("upscale_method", "nearest");
     sFrameTimeNs = j.value("frame_time_ns", 0ULL);
     sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
@@ -206,6 +210,26 @@ extern "C" void Port_Config_SetWindowScale(u8 scale) {
     sScale = scale;
     sConfigJson["window_scale"] = static_cast<int>(scale);
     SaveConfig();
+}
+
+extern "C" u8 Port_Config_InternalScale(void) {
+    return sInternalScale;
+}
+
+extern "C" void Port_Config_SetInternalScale(u8 scale) {
+    /* Cap at 4: PPU framebuffer is 1280x640 max (160*4 = 640). */
+    if (scale < 1) scale = 1;
+    if (scale > 4) scale = 4;
+    sInternalScale = scale;
+    sConfigJson["internal_scale"] = static_cast<int>(scale);
+    SaveConfig();
+}
+
+extern "C" void Port_Config_CycleInternalScale(int direction) {
+    int next = (int)sInternalScale + (direction < 0 ? -1 : 1);
+    if (next < 1) next = 4;
+    if (next > 4) next = 1;
+    Port_Config_SetInternalScale((u8)next);
 }
 
 extern "C" void Port_Config_SetUpscaleMethod(const char* method) {

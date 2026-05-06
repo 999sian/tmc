@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.2.0-experimental — 2026-05-06
+
+Two-day bug-fix and tooling pass on top of 0.1.6.x. Six tracker issues closed (cucco round 9, figurine minigame, Deepwood barrels, max-hearts, Cave of Flames boss round 3, Link's house warp); F8 internal-render-scale page + sub-pixel OAM affine added; bug-report capture upgraded to PNG with auto-on-crash trigger and raw-IP/maps emit before unsafe calls; F8 "All areas (raw, by index)" warp submenu so any room is one keystroke away.
+
+### Fixed (issue tracker)
+
+- **#46 Hyrule Town: cucco minigame round-9 SEGV.** Levels 8 and 9 only define 2-3 cuccos; the remaining heap slots are NULL. `sub_080A1270` evaluated `pEnt->next != NULL && pEnt != NULL` — wrong order, dereferences `pEnt->next` before the NULL guard fires. Harmless on GBA (NULL reads return BIOS data) but SEGVs on the PC port at the start of round 9. Swap the operand order so short-circuit evaluation actually gates the deref. (commit `868159bd`)
+- **#51 Cave of Flames: boss round-transition hang + death-path SEGV.** Two-part Gleerok fix. (a) The round-3 transition stuck because `Gleerok_KnockBack` ran the round-bump path even after death; gate on `super->action != ACTION_DEATH` to keep the death sequence linear. (b) `sub_0802E7E4` deref'd `heap->entity1` unconditionally on death; the heap entry was NULL on PC where GBA hardware silently returned BIOS data. Added the same NULL guard pattern as the rest of the gleerok work. (commit `2c9f0a60`)
+- **#52 Debug menu: max-hearts sets 20, not 10.** `Port_DebugAction_MaxHearts` set `maxHealth = 80` (10 hearts in eighths) where the player's actual cap is `0xA0` (20 hearts). The previous value matched the fileselect/UI's silent 10-cap special-case. Fixed to `0xA0`. (commit `1045174f`)
+- **#57 Figurine viewer: SEGV the moment you owned a figurine + glitched sprite.** Three layered bugs. (a) `gFigurines` was a 512-byte zeroed stub in `port_linked_stubs.c`; the menu deref'd `fig->pal` / `fig->gfx` and crashed. New `port/port_figurines.c` defines a real `Figurine[137]`, populated from a compile-time table of 136 GBA ROM addresses + sizes resolved via `Port_ResolveRomData` after `gRomData` is mapped (same pattern as `gPalette_549` / `gSpritePtrs`). (commit `0114e8bf`) (b) The first table version stored ROM-relative offsets (`0x005B5EC0`) but `Port_ResolveRomData` requires `>= 0x08000000`; every entry resolved to NULL, `port_DmaTransfer` early-returned on `!src`, and the viewer rendered with stale palette/VRAM ("glitched"). OR-in `0x08000000` when calling. (c) `sub_080A4CBC` deref'd `(u16*)0x02021f72 + 0x80` — a hardcoded GBA EWRAM scan address — bypassing the `ShowTextBox` write path's `Port_ResolveEwramPtr` routing. Resolve through `Port_ResolveEwramPtr` inside the PC_PORT guard before the scan. (commit `1599a004`)
+- **#61 Deepwood barrels invisible on Windows.** `Port_LoadGfxGroupFromAssets` and `Port_LoadPaletteGroupFromAssets` ran heap-allocated `std::vector::data()` source pointers through `port_resolve_addr`. On Windows MinGW, malloc occasionally hands out addresses inside `[0x02000000, 0x0A000000)` which the resolver remaps to `gEwram[]` — the gfx/palette never reaches its destination. Linux glibc never allocates in that window so the bug never fires there. Resolve the destination ourselves in both loaders and use plain `std::memcpy`; source pointer never touches the resolver. (commit `8f15a9e3`)
+- **#65 Debug menu: Link's house warp lands a mile off.** Entry warped to area 3 room 0 (Western_Woods_South) instead of room 1 (SOUTH_HYRULE_FIELD). Updated the coords to match `gExitList_HouseInteriors2_LinksHouseEntrance` (`0x290, 0x19c, layer 1`). (commit `89a575a1`)
+
+### Fixed (other)
+
+- **Ocarina-of-Wind / windcrest fast-travel SIGSEGV.** `Subtask_FastTravel_Functions` was an unpopulated function-pointer stub. Filled in the table from the decompiled fast-travel state machine. (commit `bb962804`)
+- **#50 asset extractor missing sounds.json.** `sounds.json` wasn't being embedded into the extractor binary (the v0.1.6 packaging bug). Added it via xmake's `bin2c` rule. (commit `8dfb6a72`)
+
+### Tooling / new features
+
+- **F8 → Display settings page + internal-render-scale.** New display submenu lets you switch render scale (1x..4x) at runtime. Includes a sub-pixel OAM affine overlay path so rotated sprites (Vaati's tornado, screen-shrink cinematic, every spinning enemy) sample at the upscaled grid instead of nearest-neighbouring the 240-pixel staircase. (commit `dcde8415`)
+- **F9 bug-report capture: PNG output + auto-capture on crash.** Replaces the BMP screenshot with PNG. SIGSEGV/SIGABRT/SIGBUS handlers (POSIX) and `SetUnhandledExceptionFilter` (Windows) snapshot the same bug-report directory automatically with `reason=crash:<sig>@<addr> ip=<rip>` so post-mortem reports include the fault site even if the user couldn't press F9. The handler now emits raw IPs and `/proc/self/maps` *before* any unsafe call so the report survives even when the crash came from the handler's own stack. (commits `cb4cc0ca`, `8fa93717`)
+- **F8 → "All areas (raw, by index)" warp submenu.** Iterates every area slot with at least one mapped room, opens a per-area room list. Pages scroll if the list overflows. Spawn coord is geometric centre — re-warp if you land in a wall. (commit `628b8c49`)
+- **F8 → ITEMS → "999 mysterious shells".** Companion to the existing 999-rupees / max-hearts / all-kinstones actions; needed for figurine-minigame repros. (commit `1599a004`)
+- **F8 → WARP → repro shortcuts.** "Carlov figurine shop (#57 repro)", "MinishRafters Bakery (#58 repro)" — direct warps to the bug-report coordinates so repros don't need a save run. (commits `1599a004`, `89a575a1`)
+
+### Build / CI
+
+- **CI: install Linux audio dev libs.** Was failing to find ALSA/PulseAudio headers on the new runner. (commit `69c448d5`)
+- **CI: upgrade meson via pip so Wayland 1.25.0 builds.** Distro meson was too old. (commit `d6252a06`)
+- **Updater + Discord links repoint at this fork.** (commits `fdfb5aac`, `2be226ff`)
+
+### Known issues (still open)
+
+- **#9 Steam Deck packages**, **#11 boss asset rendering**, **#15 libfmt.so.12 on Fedora 43**, **#17 GLIBC_2.43 on Nobara/Fedora 43**, **#21 Link's house glitched doors**, **#26 fast-forward not working on Windows**, **#28 random door above staircase**, **#32 shop top textures**, **#37 Lon Lon Ranch shrink/door**, **#40 Hyrule Town door texture**, **#41 EU text extract**, **#44 map grey blocks**, **#47 Mt Crenel background texture**, **#54 boomerang dizzy stars sprite**, **#55 Palace of Winds idle softlock**, **#56 Lake Hylia entry crash**, **#58 bakery attic missing texture** (Windows-only, likely covered by #61 fix — needs reporter retest), **#63 West Hyrule Cave Moldorm sprite chunks**, **#64 Temple of Droplets big-key door crash** — open at the time of this build.
+
 ## 0.1.6-experimental — 2026-05-04
 
 Bug-fix + tooling pass on top of 0.1.5. Five open tracker issues closed (cucco crash, chuchu freeze, two Melari's Mines bugs, two Cave-of-Flames bugs); F8 in-game debug menu + F5/F6 quicksave/quickload added for bug-repro work. Picked up matheo/master twice (fileselect / spear-moblin / cucco refactors + AVX2 build option).

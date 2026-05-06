@@ -148,17 +148,15 @@ static u32 get_standing_count(PressurePlateEntity* this) {
         num = 1;
     }
     if ((gPlayerState.flags & PL_CLONING) != 0) {
-        if (IsColliding(super, gPlayerClones[0]) != 0) {
-            gPlayerClones[0]->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
-            num++;
-        }
-        if (IsColliding(super, gPlayerClones[1]) != 0) {
-            gPlayerClones[1]->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
-            num++;
-        }
-        if (IsColliding(super, gPlayerClones[2]) != 0) {
-            gPlayerClones[2]->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
-            num++;
+        /* NULL-clone hazard (same family as #67). Lower-tier swords leave
+         * trailing gPlayerClones[] slots NULL and IsColliding derefs its
+         * second arg's collisionLayer at the entry, SIGSEGV'ing on x86-64. */
+        u32 i;
+        for (i = 0; i < 3; ++i) {
+            if (gPlayerClones[i] != NULL && IsColliding(super, gPlayerClones[i]) != 0) {
+                gPlayerClones[i]->spriteOffsetY = sSpriteOffsets[PLATE_DIR(this)];
+                num++;
+            }
         }
     }
     return num;

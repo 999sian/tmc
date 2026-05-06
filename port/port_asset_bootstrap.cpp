@@ -45,6 +45,7 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <climits>
+#include <cstdlib>
 #include <mach-o/dyld.h>
 #else
 #include <climits>
@@ -112,6 +113,9 @@ std::optional<std::filesystem::path> GetExecutableDirectory() {
     buffer.resize(len);
     return std::filesystem::path(buffer).parent_path();
 #elif defined(__APPLE__)
+    /* macOS has no /proc filesystem; readlink("/proc/self/exe") fails.
+     * _NSGetExecutablePath returns the launch path which may include
+     * symlinks/relative segments, so realpath() it for a canonical form. */
     uint32_t size = 0;
     _NSGetExecutablePath(nullptr, &size);
     std::string buffer(size, '\0');

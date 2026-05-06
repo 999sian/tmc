@@ -762,7 +762,19 @@ u32 GetNextFunction(Entity* this) {
     }
 
     /* GBA-original alive dispatch order: gust-jar grab > contact >
-     * knockback > tick. Matches the Thumb asm at 0x0800279C. */
+     * knockback > tick. Matches the Thumb asm at 0x0800279C.
+     *
+     * NOTE for issue #54 follow-up: the original asm probably also
+     * routed confusedTime>0 to OnConfused (action 4) here, mirroring
+     * the dead-path branch above. Adding `if (confusedTime!=0) return 4;`
+     * does dispatch GenericConfused correctly, but #54's user-visible
+     * symptom is that dizzy stars persist — and they persist because the
+     * FX_STARS object isn't stored in entity->child for several enemies
+     * (e.g. OCTOROK2). So that dispatch fix alone doesn't clear the FX;
+     * landing it without the FX-storage fix would change behaviour
+     * (gravity ticks via GenericConfused) without solving the bug.
+     * Leaving the alive-dispatch unchanged until the FX-storage path is
+     * tracked down. */
     if (gustJarState & 4)
         return 5;
 
@@ -1540,7 +1552,32 @@ void* gAreaTiles[256];
 // ButtonUIElement_Actions — defined in ui.c with proper function pointers
 // EzloNagUIElement_Actions — defined in ui.c with proper function pointers
 // gUIElementDefinitions — defined in ui.c with proper UIElementDefinition type
-void* Subtask_FastTravel_Functions[16];
+
+/* Native function-pointer tables — the original `void*[16]` zero-stubs were
+ * an unfinished placeholder. On GBA the table is 5 packed 4-byte function
+ * pointers in ROM; the C dispatcher (`Subtask_FastTravel_Functions[idx]()`)
+ * strides 8 bytes per index on x86-64 and a NULL stub array means every
+ * dispatch hits NULL → SIGSEGV with RIP=0. The fix mirrors gleerok 9d5f55a5
+ * — a real native array of decompiled C functions.
+ *
+ * Caught by the auto-bug-report crash handler (Subtask_FastTravel+0x2e). */
+extern void Subtask_FastTravel_0(void);
+extern void Subtask_FastTravel_1(void);
+extern void Subtask_FastTravel_2(void);
+extern void Subtask_FastTravel_3(void);
+extern void Subtask_FastTravel_4(void);
+void (*const Subtask_FastTravel_Functions[])(void) = {
+    Subtask_FastTravel_0,
+    Subtask_FastTravel_1,
+    Subtask_FastTravel_2,
+    Subtask_FastTravel_3,
+    Subtask_FastTravel_4,
+};
+/* Subtask_MapHint_Functions — the matching usage in src/subtask/subtaskMapHint.c
+ * defines a *static local* array of the same name with proper native
+ * function pointers, so this global is dead code. Kept only because
+ * stubs_autogen.c still mentions the symbol; once stubs_autogen is
+ * regenerated the entire `void* []` line below can go away. */
 void* Subtask_MapHint_Functions[16];
 
 // Exit lists / transitions — now provided by src/data/transitions.c
@@ -1555,7 +1592,9 @@ u16* gMoreSpritePtrs[16];
 u8 gExtraFrameOffsets[4352];
 u8 gShakeOffsets[256];
 u16 gDungeonNames[64];
-u8 gFigurines[512] __attribute__((aligned(4)));
+/* gFigurines — now provided by port/port_figurines.c (Figurine[137] table,
+ * resolved from ROM after Port_LoadRom). The 512-byte stub here used to
+ * SEGV the figurine viewer (#57): every fig->pal / fig->gfx was NULL. */
 void* gLilypadRails[32];
 // gMapActTileToSurfaceType — now provided by src/data/mapActTileToSurfaceType.c
 /* gPalette_549 is the start of a 26-palette contiguous block in the GBA
