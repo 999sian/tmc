@@ -425,6 +425,17 @@ void sub_080A4B44(void) {
     }
 }
 
+#ifdef PC_PORT
+/* GBA-original struct_0812816C was a 24-byte GBA-Font-layout copy with
+ * 4-byte pointers. On x86_64 Font's pointers are 8 bytes, so the GBA-
+ * shaped struct's field offsets diverge from Font's — the (Font*)&s0
+ * cast in sub_080A4BA0 / sub_080A4CBC mis-read gfx_dest, buffer_loc, _c,
+ * gfx_src, width, draw_border, etc., giving font.width=0, font.gfx_src=0
+ * and a glyph-count of zero (#72: figurine names blank). Make the struct
+ * a direct Font alias on PC; ShowTextBox resolves the GBA EWRAM/VRAM
+ * addresses kept in dest/gfx_dest/buffer_loc to native gEwram/gVram. */
+typedef Font struct_0812816C;
+#else
 typedef struct {
     u16* unk0;
     u32 unk4;
@@ -433,18 +444,22 @@ typedef struct {
     u8 filler12[2];
     u8 unk14;
 } struct_0812816C;
-PORT_STATIC_ASSERT_SIZE(struct_0812816C, 0x18, 0x20, "struct_0812816C size incorrect");
-const struct_0812816C gUnk_0812816C = {
-    (u16*)0x02001b40,
-    0x0600a000,
-    { 0u, 0xdu, 0u, 0x2u, 0u, 0u, 0u, 0u },
-    0xf100,
+#endif
+PORT_STATIC_ASSERT_SIZE(struct_0812816C, 0x18, 0x28, "struct_0812816C size incorrect");
+const struct_0812816C gUnk_0812816C =
+#ifdef PC_PORT
     {
-        0x88u,
-        0u,
-    },
-    0x4u,
-};
+        .dest = (u16*)0x02001b40,
+        .gfx_dest = (void*)0x0600a000,
+        .buffer_loc = (void*)0x02000D00,   /* gTextGfxBuffer on GBA */
+        .gfx_src = 0xf100,
+        .width = 0x88,
+        .fill_type = 0x4,
+    };
+#else
+    { (u16*)0x02001b40, 0x0600a000, { 0u, 0xdu, 0u, 0x2u, 0u, 0u, 0u, 0u },
+      0xf100, { 0x88u, 0u }, 0x4u };
+#endif
 
 typedef struct {
     u32 unk0;
@@ -473,12 +488,21 @@ void sub_080A4BA0(u32 arg1, u32 arg2) {
     MemClear(buffer, sizeof(buffer));
     MemCopy(&gUnk_0812816C, &s0, sizeof(gUnk_0812816C));
     MemCopy(&gUnk_08128184, &s2, sizeof(gUnk_08128184));
+#ifdef PC_PORT
+    s0.gfx_dest = (void*)((uintptr_t)s0.gfx_dest + ((arg2 * 3) << 9));
+    s0.gfx_src += (arg2 * 3) << 4;
+    s0.dest += arg2 << 6;
+    if (arg2 == 2) {
+        s0.fill_type = arg2;
+    }
+#else
     s0.unk4 += (arg2 * 3) << 9;
     s0.unk10 += (arg2 * 3) << 4;
     s0.unk0 += arg2 << 6;
     if (arg2 == 2) {
         s0.unk14 = arg2;
     }
+#endif
 
     maxFigurines = !gSave.saw_staffroll ? 130 : 136;
 
@@ -498,7 +522,11 @@ void sub_080A4BA0(u32 arg1, u32 arg2) {
         r0 = 0xf00b;
         if (r6 == 2)
             r0 -= 7;
+#ifdef PC_PORT
+        MemFill16(r0, s0.dest, 0x80);
+#else
         MemFill16(r0, s0.unk0, 0x80);
+#endif
         if (r5 > 0) {
             if (r5 > 0x7fff) {
                 r5 = 0x889;
@@ -509,7 +537,11 @@ void sub_080A4BA0(u32 arg1, u32 arg2) {
             }
             s2.unk8 = r0 >> 8;
             s2.unk9 = r5;
+#ifdef PC_PORT
+            s0.dest += 0xb;
+#else
             s0.unk0 += 0xb;
+#endif
             if (gSaveHeader->language == 0) {
                 ShowTextBox((uintptr_t)&s2, (const Font*)&s0);
             } else {
@@ -520,26 +552,20 @@ void sub_080A4BA0(u32 arg1, u32 arg2) {
     }
 }
 
-const struct_0812816C gUnk_08128190 = {
-    (u16*)0x02021f72,
-    0x06004000,
+const struct_0812816C gUnk_08128190 =
+#ifdef PC_PORT
     {
-        0u,
-        0xdu,
-        0u,
-        0x2u,
-        0u,
-        0u,
-        0u,
-        0u,
-    },
-    0xc200,
-    {
-        0xe0u,
-        0u,
-    },
-    0x5u,
-};
+        .dest = (u16*)0x02021f72,
+        .gfx_dest = (void*)0x06004000,
+        .buffer_loc = (void*)0x02000D00,
+        .gfx_src = 0xc200,
+        .width = 0xe0,
+        .fill_type = 0x5,
+    };
+#else
+    { (u16*)0x02021f72, 0x06004000, { 0u, 0xdu, 0u, 0x2u, 0u, 0u, 0u, 0u },
+      0xc200, { 0xe0u, 0u }, 0x5u };
+#endif
 
 u32 sub_080A4CBC(u32 figurineIndex) {
     s32 ownsFigurine;
@@ -556,18 +582,19 @@ u32 sub_080A4CBC(u32 figurineIndex) {
         }
         gScreen.bg1.updated = 1;
     }
-    psVar2 = gUnk_08128190.unk0 + 0x80;
 #ifdef PC_PORT
-    /* gUnk_08128190.unk0 is hardcoded to (u16*)0x02021f72 — a GBA EWRAM
-     * address ShowTextBox writes glyph tilemap data to. On GBA, both the
-     * write (above) and the read (below) hit real EWRAM. On PC, ShowTextBox
-     * resolves through Port_ResolveEwramPtr internally; this raw scan
-     * dereferences unmapped 0x020220XX and SEGVs the figurine viewer (#57).
-     * Re-resolve through the same routing so we read the same memory. */
-    psVar2 = (const u16*)Port_ResolveEwramPtr((u32)((uintptr_t)psVar2));
+    /* gUnk_08128190.dest is the GBA EWRAM address (u16*)0x02021f72 that
+     * ShowTextBox writes glyph tilemap data to (resolved at write time
+     * to gEwram[]). The raw scan below would otherwise dereference the
+     * unmapped GBA address and SEGV (#57); resolve to the same native
+     * pointer ShowTextBox uses. */
+    psVar2 = (const u16*)Port_ResolveEwramPtr((u32)((uintptr_t)gUnk_08128190.dest));
     if (psVar2 == NULL) {
         return 0;
     }
+    psVar2 += 0x80;
+#else
+    psVar2 = gUnk_08128190.unk0 + 0x80;
 #endif
 
     for (uVar3 = 0; uVar3 < 0x14; uVar3++) {
