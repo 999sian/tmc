@@ -29,10 +29,33 @@ index b5dedb2..2bef632 100644
      MODE1_GBA_BG_COUNT = 4,
      MODE1_GBA_OAM_COUNT = 128,
 diff --git a/src/mode1.c b/src/mode1.c
-index bb1ca26..5b3f8c0 100644
+index bb1ca26..272c065 100644
 --- a/src/mode1.c
 +++ b/src/mode1.c
-@@ -426,7 +426,12 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+@@ -240,9 +240,21 @@ void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory *memory)
+     *memory = mode1_memory;
+ }
+ 
++/* PORT_PARALLEL_RENDER: when the per-line IO snapshot pass populates
++ * a thread-local override (set by the parallel render loop in
++ * virtuappu_mode1_render_frame), read from the snapshot instead of the
++ * global io_mem. Lets per-scanline rendering be parallelized over OpenMP
++ * threads while still seeing the correct HDMA-mutated register state
++ * (BG SCROLL, BLDY, etc.) for that scanline. NULL on the main / setup
++ * thread keeps the existing single-threaded behavior intact. */
++__thread const uint8_t *virtuappu_mode1_io_thread_override = NULL;
++
+ uint16_t virtuappu_mode1_io_read16(uint16_t offset)
+ {
+-    return (uint16_t)mode1_memory.io_mem[offset] | ((uint16_t)mode1_memory.io_mem[offset + 1u] << 8u);
++    const uint8_t *src = virtuappu_mode1_io_thread_override
++                             ? virtuappu_mode1_io_thread_override
++                             : mode1_memory.io_mem;
++    return (uint16_t)src[offset] | ((uint16_t)src[offset + 1u] << 8u);
+ }
+ 
+ uint32_t virtuappu_mode1_io_read32(uint16_t offset)
+@@ -426,7 +438,12 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
              uint8_t color_index;
              uint16_t rgb555;
  
@@ -46,7 +69,7 @@ index bb1ca26..5b3f8c0 100644
                  continue;
              }
  
-@@ -688,7 +693,16 @@ void virtuappu_mode1_composite_line(
+@@ -688,7 +705,16 @@ void virtuappu_mode1_composite_line(
              }
          }
  
@@ -64,3 +87,74 @@ index bb1ca26..5b3f8c0 100644
      }
  }
  
+@@ -847,37 +873,63 @@ void virtuappu_mode1_render_frame(const PPUMemory *ppu)
+         return;
+     }
+ 
++    /* PORT_PARALLEL_RENDER: scanlines are parallel-renderable but the HDMA
++     * pre-line callback (water-FX BG_VOFS scrolls, BLDY fades, etc.) must
++     * run sequentially because it mutates the live IO register file. So:
++     *   1. Sequential pass — call the callback once per line and snapshot
++     *      the (post-callback) IO state for that line.
++     *   2. Parallel pass — each thread points its `io_thread_override` at
++     *      its line's snapshot, then renders BG / OBJ / composite normally
++     *      via the existing single-line functions, which now read IO regs
++     *      through the override. */
++    static uint8_t io_snapshots[MODE1_GBA_HEIGHT][MODE1_IO_MEM_SIZE];
++    uint16_t per_line_dispcnt[MODE1_GBA_HEIGHT];
++
+     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
+         if (virtuappu_mode1_pre_line_callback != NULL) {
+             virtuappu_mode1_pre_line_callback(line);
+         }
++        memcpy(io_snapshots[line], mode1_memory.io_mem, MODE1_IO_MEM_SIZE);
++        per_line_dispcnt[line] =
++            (uint16_t)io_snapshots[line][MODE1_IO_DISPCNT] |
++            ((uint16_t)io_snapshots[line][MODE1_IO_DISPCNT + 1] << 8);
++    }
++
++#pragma omp parallel for schedule(static)
++    for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
++        uint16_t line_dispcnt = per_line_dispcnt[line];
+         uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
+         uint8_t bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
+         uint32_t obj_layer[MODE1_GBA_WIDTH];
+         uint8_t obj_priority[MODE1_GBA_WIDTH];
+-        bool obj_1d = (dispcnt & MODE1_DISP_OBJ_1D) != 0u;
++        bool obj_1d = (line_dispcnt & MODE1_DISP_OBJ_1D) != 0u;
++        const uint8_t *prev_override = virtuappu_mode1_io_thread_override;
++
++        virtuappu_mode1_io_thread_override = io_snapshots[line];
+ 
+         memset(bg_layers, 0, sizeof(bg_layers));
+         memset(bg_priority, 0, sizeof(bg_priority));
+         memset(obj_layer, 0, sizeof(obj_layer));
+         memset(obj_priority, 0xFF, sizeof(obj_priority));
+ 
+-        if ((dispcnt & MODE1_DISP_BG0_ON) != 0u) {
++        if ((line_dispcnt & MODE1_DISP_BG0_ON) != 0u) {
+             virtuappu_mode1_render_text_bg_line(0, line, bg_layers[0], bg_priority[0]);
+         }
+-        if ((dispcnt & MODE1_DISP_BG1_ON) != 0u) {
++        if ((line_dispcnt & MODE1_DISP_BG1_ON) != 0u) {
+             virtuappu_mode1_render_text_bg_line(1, line, bg_layers[1], bg_priority[1]);
+         }
+-        if ((dispcnt & MODE1_DISP_BG2_ON) != 0u) {
++        if ((line_dispcnt & MODE1_DISP_BG2_ON) != 0u) {
+             virtuappu_mode1_render_text_bg_line(2, line, bg_layers[2], bg_priority[2]);
+         }
+-        if ((dispcnt & MODE1_DISP_BG3_ON) != 0u) {
++        if ((line_dispcnt & MODE1_DISP_BG3_ON) != 0u) {
+             virtuappu_mode1_render_text_bg_line(3, line, bg_layers[3], bg_priority[3]);
+         }
+-        if ((dispcnt & MODE1_DISP_OBJ_ON) != 0u) {
++        if ((line_dispcnt & MODE1_DISP_OBJ_ON) != 0u) {
+             virtuappu_mode1_render_obj_line(line, obj_1d, obj_layer, obj_priority);
+         }
+ 
+-        virtuappu_mode1_composite_line(line, bg_layers, bg_priority, obj_layer, obj_priority, dispcnt);
++        virtuappu_mode1_composite_line(line, bg_layers, bg_priority, obj_layer, obj_priority, line_dispcnt);
++
++        virtuappu_mode1_io_thread_override = prev_override;
+     }
+ }

@@ -401,12 +401,18 @@ target("tmc_pc")
             { patch = "viruappu-internal-scale.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "virtuappu_mode1_render_affine_obj_overlay" },
-            -- Widescreen spike: makes MODE1_GBA_WIDTH overridable via -D.
-            -- Without -DMODE1_GBA_WIDTH=<n> the patch is a no-op (the macro
-            -- still resolves to 240); pass the option to widen.
+            -- Widescreen spike + per-scanline parallel render. Combined
+            -- patch because both mutate src/mode1.c in overlapping hunks.
+            -- The widescreen part is no-op without -DMODE1_GBA_WIDTH=<n>
+            -- (resolves to 240). The parallel-render part adds OpenMP
+            -- per-line rendering with thread-local IO snapshots so HDMA
+            -- callbacks (BG_VOFS water FX, BLDY fades) still see the right
+            -- per-line state. Marker checks for the io_thread_override
+            -- symbol so the patch is reapplied if the older single-stage
+            -- spike was already in place.
             { patch = "viruappu-widescreen.patch",
-              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
-              marker = "PORT_WIDESCREEN_SPIKE" },
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "io_thread_override" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
