@@ -21,6 +21,7 @@
 #include "object.h"
 #include "port_scripts.h"
 #include "screen.h"
+#include "script.h"
 #include "subtask.h"
 #include "tiles.h"
 
@@ -470,6 +471,21 @@ void sub_08053BAC(void) {
 
 void sub_08053BBC(void) {
     if (CheckRoomFlag(0)) {
+#ifdef PC_PORT
+        /* #93 Vaati takeover softlock: King / Minister / Vaati / 6 Guards /
+         * Zelda Stone all end their `script_*Takeover.inc` scripts with
+         *   WaitForSyncFlag 0x00000400
+         *   DoPostScriptAction 0x0006
+         * but neither orchestrator script (`script_CutsceneOrchestratorTakeover`
+         * nor `script_CutsceneOrchestratorTakeoverCutscene`) ever issues
+         * `SetSyncFlag 0x00000400`. On GBA this presumably comes from an
+         * implicit broadcast tied to the subtask transition; in the C decomp
+         * that detail is missing. Set it here, at the takeover-subtask's
+         * end-of-cutscene gate, so every helper falls through to its
+         * DoPostScriptAction 0x06 and self-deletes instead of hanging
+         * forever on the 0x400 wait. */
+        gActiveScriptInfo.syncFlags |= 0x400u;
+#endif
         gMenu.menuType++;
         DispReset(1);
         SetFade(FADE_INSTANT, 0x100);
