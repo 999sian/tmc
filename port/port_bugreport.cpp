@@ -66,7 +66,12 @@ PortBugReportState Port_BugReport_GetGameState(void);
 
 namespace {
 
-constexpr int kFrameW = 240;
+/* Track MODE1_GBA_WIDTH so widescreen-spike builds capture the full
+ * (potentially wider) framebuffer in screenshots. */
+#ifndef MODE1_GBA_WIDTH
+#define MODE1_GBA_WIDTH 240
+#endif
+constexpr int kFrameW = MODE1_GBA_WIDTH;
 constexpr int kFrameH = 160;
 
 std::string TimestampString() {
