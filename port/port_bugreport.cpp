@@ -30,11 +30,13 @@
 #include <thread>
 
 #if defined(__linux__) || defined(__APPLE__)
+#include <cerrno>
 #include <execinfo.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <sys/ucontext.h>
+#include <sys/wait.h>
 #endif
 
 #ifdef _WIN32
@@ -435,6 +437,117 @@ void* SafeReadPointer(void* p) {
  * description: `0xADDR <module>(+0xOFFSET) [symbol+disp]`. dladdr is
  * sufficient for the crash IP on glibc — for a full unwind, libunwind would
  * be needed. */
+/* Resolve the path of the current executable into `buf` (NUL-terminated).
+ * Returns true on success. Used for shelling out to addr2line. */
+bool ResolveOwnExePath(char* buf, size_t buflen) {
+    if (buflen < 2) return false;
+#if defined(__linux__)
+    ssize_t n = readlink("/proc/self/exe", buf, buflen - 1);
+    if (n <= 0) return false;
+    buf[n] = '\0';
+    return true;
+#elif defined(__APPLE__)
+    /* _NSGetExecutablePath needs <mach-o/dyld.h>; the port's other call
+     * sites use it but we keep this best-effort: if dladdr can give us
+     * the binary path that's good enough for addr2line. */
+    Dl_info info{};
+    if (dladdr(reinterpret_cast<void*>(&ResolveOwnExePath), &info) && info.dli_fname) {
+        std::strncpy(buf, info.dli_fname, buflen - 1);
+        buf[buflen - 1] = '\0';
+        return true;
+    }
+    return false;
+#else
+    (void)buf; (void)buflen;
+    return false;
+#endif
+}
+
+#if defined(__linux__) || defined(__APPLE__)
+/* Shell out to addr2line for file:line resolution. addr2line accepts
+ * binary-relative offsets when fed a PIE binary, so we subtract the load
+ * base. fork+execvp+pipe+read+waitpid are in POSIX async-signal-safe set,
+ * so this can run from the SIGSEGV handler. We avoid stdio in the parent
+ * and pipe addr2line's stdout straight into the report fd. */
+void RunAddr2Line(int report_fd, void** addrs, int n) {
+    if (n <= 0) return;
+
+    char exe_path[1024];
+    if (!ResolveOwnExePath(exe_path, sizeof(exe_path))) return;
+
+    Dl_info info{};
+    if (!dladdr(reinterpret_cast<void*>(&RunAddr2Line), &info) || !info.dli_fbase) return;
+    uintptr_t base = reinterpret_cast<uintptr_t>(info.dli_fbase);
+
+    /* Build argv: addr2line -e <exe> -fpCi <off1> <off2> ... NULL.
+     * -f: print function name
+     * -p: pretty single-line format
+     * -C: demangle C++
+     * -i: walk inlined frames
+     * Keep at most 32 addrs to bound the cmdline length. */
+    constexpr int kMaxAddrs = 32;
+    if (n > kMaxAddrs) n = kMaxAddrs;
+    char addr_strs[kMaxAddrs][20];
+    char* argv[5 + kMaxAddrs + 1];
+    int ai = 0;
+    argv[ai++] = const_cast<char*>("addr2line");
+    argv[ai++] = const_cast<char*>("-e");
+    argv[ai++] = exe_path;
+    argv[ai++] = const_cast<char*>("-fpCi");
+    for (int i = 0; i < n; i++) {
+        uintptr_t a = reinterpret_cast<uintptr_t>(addrs[i]);
+        if (a < base) { addr_strs[i][0] = '0'; addr_strs[i][1] = '\0'; }
+        else std::snprintf(addr_strs[i], sizeof(addr_strs[i]), "0x%lx",
+                           static_cast<unsigned long>(a - base));
+        argv[ai++] = addr_strs[i];
+    }
+    argv[ai] = nullptr;
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) return;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]); close(pipefd[1]);
+        return;
+    }
+    if (pid == 0) {
+        /* Child. Redirect stdout to the pipe, close everything else. */
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[0]);
+        close(pipefd[1]);
+        execvp("addr2line", argv);
+        _exit(127);
+    }
+    close(pipefd[1]);
+
+    /* Header so the section is identifiable in the report file. */
+    const char hdr[] = "\n--- addr2line (file:line) ---\n";
+    (void)!write(report_fd, hdr, sizeof(hdr) - 1);
+
+    char chunk[4096];
+    for (;;) {
+        ssize_t r = read(pipefd[0], chunk, sizeof(chunk));
+        if (r <= 0) {
+            if (r < 0 && errno == EINTR) continue;
+            break;
+        }
+        ssize_t off = 0;
+        while (off < r) {
+            ssize_t w = write(report_fd, chunk + off, r - off);
+            if (w <= 0) {
+                if (w < 0 && errno == EINTR) continue;
+                break;
+            }
+            off += w;
+        }
+    }
+    close(pipefd[0]);
+    int status = 0;
+    waitpid(pid, &status, 0);
+}
+#endif
+
 void WriteResolvedAddr(FILE* fp, const char* label, void* addr) {
     Dl_info info{};
     if (dladdr(addr, &info) && info.dli_fname) {
@@ -543,6 +656,25 @@ void WriteBacktracePosix(const std::filesystem::path& path,
     void* frames[64];
     int n = backtrace(frames, 64);
     backtrace_symbols_fd(frames, n, fileno(fp));
+
+    /* Append addr2line file:line lines for the crash IP + the captured
+     * frames. addr2line gives the precise source location (and walks
+     * inlined call sites with -i) which dladdr can't, turning every
+     * crash report into actionable file:LINE pointers without the
+     * tester having to install/run the toolchain. Best-effort — if
+     * the addr2line binary isn't on PATH (e.g. minimal release tarball)
+     * the section is just absent. */
+    {
+        std::fflush(fp);
+        void* probe[64 + 1];
+        int pn = 0;
+        if (regs.ip) probe[pn++] = regs.ip;
+        for (int i = 0; i < n && pn < (int)(sizeof(probe) / sizeof(probe[0])); i++) {
+            probe[pn++] = frames[i];
+        }
+        RunAddr2Line(fileno(fp), probe, pn);
+    }
+
     std::fclose(fp);
 }
 #endif
