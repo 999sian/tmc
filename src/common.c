@@ -762,6 +762,16 @@ void DrawDungeonFeatures(u32 floor, void* data, u32 size) {
     }
     layout = gDungeonLayouts[gArea.dungeon_idx][floor];
     MemClear(gMapDataBottomSpecial, 0x8000);
+#ifdef PC_PORT
+    /* #69: gDungeonMap accumulates pixels across floor switches because the
+     * `if (features != 0)` gate below skips rooms with no draw features —
+     * those tiles never get their pixels reset, so the previous floor's
+     * pixels stay drawn under the new floor. The original GBA flow must
+     * have cleared the bitmap somewhere off the C dispatch path; here we
+     * clear the destination explicitly before each redraw. Cheap (8 KiB
+     * memset) and only runs on floor switch / pause-menu open. */
+    MemClear(gDungeonMap, sizeof(gDungeonMap));
+#endif
     while (layout->area != 0) {
         // ROOM_VISIT_MARKER has to be first TileEntity in the room.
         tileEntity = (TileEntity*)GetRoomProperty(layout->area, layout->room, 3);
