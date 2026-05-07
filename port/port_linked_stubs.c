@@ -305,9 +305,25 @@ u8 gUnk_03000C30;
 u8 gUnk_03001020[sizeof(Screen)] __attribute__((aligned(4)));
 
 // Sound player data
-u8 gMPlayInfos[0x1C * 0x50] __attribute__((aligned(4)));
-u8 gMPlayInfos2[0x4 * 0x50] __attribute__((aligned(4)));
-u8 gMPlayTracks[0x50 * 16] __attribute__((aligned(4)));
+/* On 64-bit PC: pointer fields grow from 4 to 8 bytes, so MusicPlayerInfo
+ * is 96 bytes (vs GBA's 80) and MusicPlayerTrack is 112 (vs 80). The
+ * hardcoded `0x50 * N` stride undersizes the buffer — and worse, the
+ * gMusicPlayers table in sound.c references tracks up to `&gMPlayTracks[0x51]`
+ * (player MUSIC_PLAYER_BGM uses 12 tracks starting at offset 0x46 → ends
+ * at 0x51), so the array needs at least 0x52 tracks of storage. The
+ * original `[0x50 * 16] = 1280-byte` declaration was wrong for *both*
+ * size axes. When MPlayOpen + per-player MPlayStart writes touch tracks
+ * outside the buffer, they zero adjacent globals — including
+ * gAreaRoomHeaders, which made the windcrest-pin loop in
+ * subtaskFastTravel.c NULL-deref (#53 second-stage). Caught with a
+ * tripwire pinpointing m4aSoundInit. */
+#include "gba/m4a.h"
+#define M4A_MAX_INFO_INDEX  0x1C  /* gMPlayInfos uses 0x00..0x1B */
+#define M4A_MAX_INFO2_INDEX 0x4   /* gMPlayInfos2 uses 0x0..0x3 */
+#define M4A_MAX_TRACK_INDEX 0x52  /* gMPlayTracks uses 0x00..0x51 (BGM = 0x46+12) */
+u8 gMPlayInfos[M4A_MAX_INFO_INDEX * sizeof(MusicPlayerInfo)] __attribute__((aligned(8)));
+u8 gMPlayInfos2[M4A_MAX_INFO2_INDEX * sizeof(MusicPlayerInfo)] __attribute__((aligned(8)));
+u8 gMPlayTracks[M4A_MAX_TRACK_INDEX * sizeof(MusicPlayerTrack)] __attribute__((aligned(8)));
 u8 gMPlayMemAccArea[0x10] __attribute__((aligned(4)));
 
 // BGM song headers (ROM data stubs)
