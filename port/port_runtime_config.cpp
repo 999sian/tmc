@@ -182,13 +182,6 @@ extern "C" void Port_Config_Load(const char* path) {
     sUpscaleMethod = j.value("upscale_method", "nearest");
     sFrameTimeNs = j.value("frame_time_ns", 0ULL);
     sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
-    /* Migrate legacy 60 FPS lock to "uncapped" so users get the matheo
-     * default behavior without losing their other config. */
-    if (sFrameTimeNs == 16666667ULL) {
-        sFrameTimeNs = 0;
-        sConfigJson["frame_time_ns"] = 0;
-        SaveConfig();
-    }
 
     for (auto& v : sBinds) {
         v.clear();
