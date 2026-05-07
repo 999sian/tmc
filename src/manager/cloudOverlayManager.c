@@ -9,6 +9,7 @@
 #include "screen.h"
 #include "game.h"
 #include "room.h"
+#include "common.h"
 
 void CloudOverlayManager_OnEnterRoom(CloudOverlayManager*);
 void CloudOverlayManager_OnExitRoom(CloudOverlayManager*);
@@ -50,7 +51,34 @@ void CloudOverlayManager_Main(CloudOverlayManager* this) {
     }
 }
 
+#ifdef PC_PORT
+/* Snapshot of the BG3 cloud-overlay VRAM regions captured the first time
+ * we enter Hyrule Field with a working overlay (CHARBASE 1 chardata +
+ * SCREENBASE 30 tilemap). Hyrule Castle's parallax overwrites these on
+ * area transition; on PC the asset loader doesn't re-run the originating
+ * gfx-group load, so the cloud data is gone. Restore from this snapshot
+ * on every Hyrule Field room enter so the overlay works after castle
+ * exit (#25). */
+static u8 sCloudCharSnapshot[0x2000];
+static u8 sCloudScreenSnapshot[0x800];
+static int sCloudSnapshotValid = 0;
+#endif
+
 void CloudOverlayManager_OnEnterRoom(CloudOverlayManager* this) {
+#ifdef PC_PORT
+    if (gRoomControls.area == AREA_HYRULE_FIELD) {
+        if (!sCloudSnapshotValid) {
+            /* First time we see a working cloud overlay — capture it. */
+            MemCopy((void*)0x6004000, sCloudCharSnapshot, sizeof(sCloudCharSnapshot));
+            MemCopy((void*)0x600F000, sCloudScreenSnapshot, sizeof(sCloudScreenSnapshot));
+            sCloudSnapshotValid = 1;
+        } else {
+            /* Subsequent entries: restore. Castle may have trashed the data. */
+            MemCopy(sCloudCharSnapshot, (void*)0x6004000, sizeof(sCloudCharSnapshot));
+            MemCopy(sCloudScreenSnapshot, (void*)0x600F000, sizeof(sCloudScreenSnapshot));
+        }
+    }
+#endif
     gScreen.bg3.control = BGCNT_SCREENBASE(30) | BGCNT_PRIORITY(1) | BGCNT_CHARBASE(1);
     gScreen.lcd.displayControl |= DISPCNT_BG3_ON;
     gScreen.controls.layerFXControl =

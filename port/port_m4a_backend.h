@@ -24,6 +24,10 @@ void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, ui
 void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_t pan);
 void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute);
 const char* Port_GetSongLabel(uint16_t songId);
+/* Returns true while the player still has tracks actively running (i.e. song
+ * hasn't reached its `ply_fine`). Used to detect when a high-priority SFX has
+ * finished so the BGM can be unmuted. */
+bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex);
 
 #ifdef __cplusplus
 }

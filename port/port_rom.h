@@ -1,4 +1,5 @@
 #pragma once
+#include <string.h>
 #include "port_types.h"
 #include "structures.h"
 
@@ -33,6 +34,23 @@ static inline void* Port_ResolveRomData(u32 gba_addr) {
     if (gba_addr >= 0x08000000u && gba_addr < 0x08000000u + gRomSize)
         return &gRomData[gba_addr - 0x08000000u];
     return NULL;
+}
+
+/**
+ * Read entry [idx] from a packed-GBA-pointer table stored as a raw u8 array.
+ *
+ * Many `gUnk_08xxxxxx` tables in port/data_const_stubs.c are byte arrays of
+ * 4-byte GBA pointers. Game code declares them externally as `T*[]` so
+ * `arr[idx]` reads sizeof(T*) bytes — fine on the 32-bit GBA, broken on
+ * x86-64 (reads 8 bytes, gets two GBA addresses concatenated → garbage).
+ *
+ * Use this helper at PC call sites to manually unpack the 4-byte entry and
+ * resolve to a native pointer via the ROM mmap. (#16, #19 root cause.)
+ */
+static inline void* Port_PackedRomEntry(const void* base, u32 idx) {
+    u32 raw;
+    memcpy(&raw, (const u8*)base + idx * 4, 4);
+    return Port_ResolveRomData(raw);
 }
 
 static inline u16 Port_ReadU16(const void* data) {

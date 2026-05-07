@@ -47,6 +47,15 @@ typedef enum {
 } EntityFlags;
 
 /** Priority level to determine what events will block an Entity from updating. */
+/* macOS's <sys/resource.h> defines PRIO_MIN as `-20` (POSIX getpriority bounds)
+ * and the include chain leaks it into translation units that pull in entity.h
+ * via main.h → port_main.c → POSIX system headers. Defang the macro before
+ * declaring the enum so the identifier is free for our use. Linux glibc
+ * doesn't expose this macro at the same point in the include chain so it
+ * never collided there. */
+#ifdef PRIO_MIN
+#undef PRIO_MIN
+#endif
 typedef enum {
     PRIO_MIN,          /**< Default priority. */
     PRIO_PLAYER,       /**< Default priority for player. */

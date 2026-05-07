@@ -29,6 +29,12 @@ void Port_PPU_ToggleSmoothing(void);
 void Port_PPU_CyclePresentationMode(int direction);
 const char* Port_PPU_PresentationModeName(void);
 
+// Toggle SDL vsync on the renderer. Used by VBlankIntrWait to disable the
+// display-refresh cap when fast-forwarding or when target FPS exceeds the
+// monitor refresh rate; without this, fast-forward (#26) and FPS presets
+// > 60 are limited by the display, not by the busy-wait timer.
+void Port_PPU_SetVSync(bool enabled);
+
 // Cleanup
 void Port_PPU_Shutdown(void);
 

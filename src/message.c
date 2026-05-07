@@ -577,6 +577,10 @@ void TextDispEnquiry(TextRender* this) {
         default:
             break;
     }
+    /* After A_BUTTON, MemClear zeros gMessageChoices.choiceCount and
+     * renderStatus advances. The remaining bookkeeping is moot once
+     * choices are gone; the % below would trap SIGFPE on x86 with
+     * choiceCount == 0 (ARM silently returns garbage). (#16) */
     if (gMessageChoices.choiceCount <= 0) {
         return;
     }

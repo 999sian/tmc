@@ -22,6 +22,7 @@ typedef struct {
     u16 cancelledTextIndex;
     u16 fusingTextIndex;
 } NPCData;
+#include "port_rom.h"
 extern const u8 gUnk_08001A7C[];
 
 static NPCData* GetFusionNpcData(u32 fuserId) {

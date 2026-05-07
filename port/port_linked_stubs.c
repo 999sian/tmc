@@ -733,33 +733,61 @@ u32 GetNextFunction(Entity* this) {
     u8 gustJarState = this->gustJarState;
     u8 contactFlags = this->contactFlags;
 
+    /* Peahat (and other gust-jar-killable enemies) reach Subaction5 with
+     * health=0 + gustJarState=0x04 + ENT_COLLIDE clear, expecting the
+     * death sequence to take over. The gj=0x04 short-circuit at top would
+     * send them right back to OnGrabbed forever — corpse never despawns
+     * (#20). When dead, prefer the death-cascade dispatch so GenericDeath
+     * runs and the DEATH_FX cleanup chain fires.
+     *
+     * AcroBandit's chain unwind lives in OnCollision and only runs on the
+     * death frame (contactFlags bit 7 + health hits 0); short-circuiting
+     * straight to OnDeath would leave the surviving bandits stuck in
+     * Action4 with stale parent pointers (#35). Death-fall animation runs
+     * via OnKnockback while knockbackDuration is nonzero, so OnKnockback
+     * needs to keep dispatching during dying frames too. Fall through to
+     * OnDeath only when neither is active. */
     if (this->health == 0) {
         if (!(gustJarState & 4) && (contactFlags & 0x80))
-            return 1; 
+            return 1; /* OnCollision: chain unwind + death-state setup */
         if (this->knockbackDuration != 0)
-            return 2; 
+            return 2; /* OnKnockback: death-fall animation */
         if (this->action == 0 && this->subAction == 0)
-            return 0; /* dead but not initialized */
+            return 0;
         if (gustJarState & 8)
-            return 5; /* gust jar captured and dead */
+            return 5;
         if (this->confusedTime != 0)
-            return 4; /* confused */
-        return 3;     /* dying */
+            return 4;
+        return 3; /* OnDeath */
     }
 
-    if (this->knockbackDuration != 0)
-        return 2; /* knockback active */
-
+    /* GBA-original alive dispatch order: gust-jar grab > contact >
+     * knockback > tick. Matches the Thumb asm at 0x0800279C.
+     *
+     * NOTE for issue #54 follow-up: the original asm probably also
+     * routed confusedTime>0 to OnConfused (action 4) here, mirroring
+     * the dead-path branch above. Adding `if (confusedTime!=0) return 4;`
+     * does dispatch GenericConfused correctly, but #54's user-visible
+     * symptom is that dizzy stars persist — and they persist because the
+     * FX_STARS object isn't stored in entity->child for several enemies
+     * (e.g. OCTOROK2). So that dispatch fix alone doesn't clear the FX;
+     * landing it without the FX-storage fix would change behaviour
+     * (gravity ticks via GenericConfused) without solving the bug.
+     * Leaving the alive-dispatch unchanged until the FX-storage path is
+     * tracked down. */
     if (gustJarState & 4)
-        return 5; /* grabbed by Gust Jar */
+        return 5;
 
     if (contactFlags & 0x80)
-        return 1; /* contact initiated */
+        return 1;
+
+    if (this->knockbackDuration != 0)
+        return 2;
 
     if (this->action == 0 && this->subAction == 0)
-        return 0; /* not initialized */
+        return 0;
 
-    return 0; /* normal update */
+    return 0;
 }
 
 /*
@@ -1524,7 +1552,32 @@ void* gAreaTiles[256];
 // ButtonUIElement_Actions — defined in ui.c with proper function pointers
 // EzloNagUIElement_Actions — defined in ui.c with proper function pointers
 // gUIElementDefinitions — defined in ui.c with proper UIElementDefinition type
-void* Subtask_FastTravel_Functions[16];
+
+/* Native function-pointer tables — the original `void*[16]` zero-stubs were
+ * an unfinished placeholder. On GBA the table is 5 packed 4-byte function
+ * pointers in ROM; the C dispatcher (`Subtask_FastTravel_Functions[idx]()`)
+ * strides 8 bytes per index on x86-64 and a NULL stub array means every
+ * dispatch hits NULL → SIGSEGV with RIP=0. The fix mirrors gleerok 9d5f55a5
+ * — a real native array of decompiled C functions.
+ *
+ * Caught by the auto-bug-report crash handler (Subtask_FastTravel+0x2e). */
+extern void Subtask_FastTravel_0(void);
+extern void Subtask_FastTravel_1(void);
+extern void Subtask_FastTravel_2(void);
+extern void Subtask_FastTravel_3(void);
+extern void Subtask_FastTravel_4(void);
+void (*const Subtask_FastTravel_Functions[])(void) = {
+    Subtask_FastTravel_0,
+    Subtask_FastTravel_1,
+    Subtask_FastTravel_2,
+    Subtask_FastTravel_3,
+    Subtask_FastTravel_4,
+};
+/* Subtask_MapHint_Functions — the matching usage in src/subtask/subtaskMapHint.c
+ * defines a *static local* array of the same name with proper native
+ * function pointers, so this global is dead code. Kept only because
+ * stubs_autogen.c still mentions the symbol; once stubs_autogen is
+ * regenerated the entire `void* []` line below can go away. */
 void* Subtask_MapHint_Functions[16];
 
 // Exit lists / transitions — now provided by src/data/transitions.c
@@ -1539,10 +1592,21 @@ u16* gMoreSpritePtrs[16];
 u8 gExtraFrameOffsets[4352];
 u8 gShakeOffsets[256];
 u16 gDungeonNames[64];
-u8 gFigurines[512] __attribute__((aligned(4)));
+/* gFigurines — now provided by port/port_figurines.c (Figurine[137] table,
+ * resolved from ROM after Port_LoadRom). The 512-byte stub here used to
+ * SEGV the figurine viewer (#57): every fig->pal / fig->gfx was NULL. */
 void* gLilypadRails[32];
 // gMapActTileToSurfaceType — now provided by src/data/mapActTileToSurfaceType.c
-u8 gPalette_549[32];
+/* gPalette_549 is the start of a 26-palette contiguous block in the GBA
+ * `gfxAndPalettes` blob. Mt Crenel's weather-change manager reads
+ * `gPalette_549 + 0xD0` (i.e., 13 palettes past the start) as `palette2`
+ * for cross-fade — which only works because the GBA linker placed
+ * gPalette_549..gPalette_574 sequentially. The PC port previously stubbed
+ * this as a single 32-byte buffer, so the +0xD0 read walked off into garbage
+ * and the Mt Crenel mountaintop terrain rendered with random colors (#34).
+ * Allocate the full 416-color (832-byte) block; port_rom.c populates it
+ * from gGlobalGfxAndPalettes after ROM load. */
+u16 gPalette_549[0x1A0];
 void* gTranslations[16];
 // gWallMasterScreenTransitions — now provided by src/data/screenTransitions.c
 void* gZeldaFollowerText[8];
@@ -1562,7 +1626,13 @@ u8 gUnk_additional_8_DeepwoodShrine_StairsToB1[64];
 u8 gUnk_additional_8_HouseInteriors1_Library1F[64];
 u8 gUnk_additional_8_HouseInteriors3_BorlovEntrance[64];
 u8 gUnk_additional_8_HyruleCastle_3[64];
-u8 gUnk_additional_8_MelarisMine_Main[64];
+/* gUnk_additional_8_MelarisMine_Main needs at least 96 bytes for the
+ * post-state-change entity list (2 mountain minishes + Melari himself
+ * + 2 cutscene-sword objects + terminator). The smaller default size
+ * truncated past Melari, leaving the room with garbage entities the
+ * runtime parsed as kind=GROUND_ITEM (visible as the "double heart
+ * containers" in #42). */
+u8 gUnk_additional_8_MelarisMine_Main[128];
 u8 gUnk_additional_8_PalaceOfWinds_GyorgTornado[64];
 u8 gUnk_additional_9_HouseInteriors1_Library1F[64];
 u8 gUnk_additional_9_HouseInteriors2_Percy[64];

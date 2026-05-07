@@ -71,7 +71,16 @@ void RupeeLike_OnCollision(RupeeLikeEntity* this) {
         if (super->action == 4) {
             sub_080296D8(this);
         }
+#ifdef PC_PORT
+        /* `*(u8*)(*(u32*)&super->contactedEntity + 8) == 1` truncates the
+         * 8-byte x86-64 pointer to 32 bits, then dereferences the result —
+         * SIGSEGV when Link bumps a rupee-like (#"lick lick"-fountain crash
+         * report). Original intent: read `contactedEntity->kind` (Entity.kind
+         * lives at offset 8). Use the typed access on PC. */
+        if (super->contactedEntity != NULL && super->contactedEntity->kind == 1) {
+#else
         if (*(u8*)(*(u32*)&super->contactedEntity + 8) == 1) {
+#endif
             if (super->action == 2) {
                 InitializeAnimation(super, 0);
                 InitializeAnimation(super->child, 4);
@@ -93,6 +102,16 @@ void RupeeLike_OnCollision(RupeeLikeEntity* this) {
 }
 
 void RupeeLike_OnDeath(RupeeLikeEntity* this) {
+#ifdef PC_PORT
+    /* If Link was grabbed (action=4) when the rupee-like dies from a
+     * bomb / arrow, the regular release path in OnCollision/sub_0802953C
+     * never runs — gPlayerState.flags retains PL_CAPTURED and
+     * gPlayerState.mobility stays locked, soft-locking Link in place.
+     * Release him explicitly so the death cleans up the player state. */
+    if (super->action == 4) {
+        sub_080296D8(this);
+    }
+#endif
     EnemyCreateDeathFX((Enemy*)super, 0xff, gUnk_080CCC34[this->unk_84 * 3 + super->type]);
 }
 
