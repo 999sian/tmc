@@ -511,16 +511,31 @@ extern "C" bool Port_DebugMenu_HandleKey(int sdlKey) {
                 consumed = true;
                 break;
             case SDLK_LEFT:
+                /* On cycle items (FPS, Filter, ...) Left invokes the
+                 * cycle handler. On non-cycle items (warp list, items
+                 * page) fall back to PgUp-style page navigation so
+                 * the warp list — currently dozens of entries — is
+                 * easier to traverse with arrow keys (#76). */
                 if (page.cursor >= 0 && page.cursor < n) {
                     auto fn = page.items[page.cursor].cycleLeft;
-                    if (fn) fn();
+                    if (fn) {
+                        fn();
+                    } else if (n > 0) {
+                        page.cursor = std::max(0, page.cursor - kVisibleItemsMax);
+                        clampViewport();
+                    }
                 }
                 consumed = true;
                 break;
             case SDLK_RIGHT:
                 if (page.cursor >= 0 && page.cursor < n) {
                     auto fn = page.items[page.cursor].cycleRight;
-                    if (fn) fn();
+                    if (fn) {
+                        fn();
+                    } else if (n > 0) {
+                        page.cursor = std::min(n - 1, page.cursor + kVisibleItemsMax);
+                        clampViewport();
+                    }
                 }
                 consumed = true;
                 break;
