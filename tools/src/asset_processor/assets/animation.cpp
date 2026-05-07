@@ -1,6 +1,6 @@
 #include "animation.h"
 #include "reader.h"
-#include <fmt/format.h>
+#include "simple_format.h"
 #include <util/file.h>
 
 void AnimationAsset::convertToHumanReadable(const std::vector<char>& baserom) {
@@ -13,7 +13,7 @@ void AnimationAsset::convertToHumanReadable(const std::vector<char>& baserom) {
         u8 bitfield = reader.read_u8();
         u8 bitfield2 = reader.read_u8();
         end_of_animation = (bitfield2 & 0x80) != 0;
-        auto line = fmt::format("\tkeyframe frame_index={}", frame_index);
+        auto line = assetfmt::Format("\tkeyframe frame_index={}", frame_index);
         line += opt_param(", duration={}", 0, keyframe_duration);
         line += opt_param(", bitfield={:#x}", 0, bitfield);
         line += opt_param(", bitfield2={:#x}", 0, bitfield2);
@@ -27,6 +27,6 @@ void AnimationAsset::convertToHumanReadable(const std::vector<char>& baserom) {
 
     while (reader.cursor < size) {
         u8 keyframe_count = reader.read_u8();
-        fmt::print(file.get(), "\t.byte {} @ keyframe count\n", keyframe_count);
+        assetfmt::Print(file.get(), "\t.byte {} @ keyframe count\n", keyframe_count);
     }
 }

@@ -48,16 +48,10 @@ void          Port_PPU_CycleWindowScale(int direction);
 unsigned char Port_PPU_WindowScale(void);
 void          Port_PPU_CyclePresentationMode(int direction);
 const char*   Port_PPU_PresentationModeName(void);
-void          Port_PPU_CycleFilter(int direction);
-const char*   Port_PPU_FilterName(void);
 unsigned int  Port_Config_TargetFps(void);
 void          Port_Config_CycleTargetFps(int direction);
 unsigned char Port_Config_InternalScale(void);
 void          Port_Config_CycleInternalScale(int direction);
-
-/* Soft-slot equip-button assignments (port_softslots.c). */
-const char*   Port_SoftSlots_GetSlotLabel(int slot);
-void          Port_SoftSlots_CycleAssignment(int slot, int direction);
 }
 
 namespace {
@@ -130,7 +124,6 @@ MenuPage BuildWarpPage(void);
 MenuPage BuildAllAreasPage(void);
 MenuPage BuildAreaRoomsPage(unsigned char area);
 MenuPage BuildDisplaySettingsPage(void);
-MenuPage BuildSoftSlotsPage(void);
 MenuPage BuildMainPage(void);
 
 void Push(MenuPage page) {
@@ -317,21 +310,10 @@ MenuPage BuildDisplaySettingsPage(void) {
     filter.labelFn = []() {
         const char* name = Port_PPU_PresentationModeName();
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "Upscale     %s", name ? name : "?");
+        std::snprintf(buf, sizeof(buf), "Filter      %s", name ? name : "?");
         return std::string(buf);
     };
     p.items.push_back(std::move(filter));
-
-    MenuItem crtFilter;
-    crtFilter.cycleLeft  = []() { Port_PPU_CycleFilter(-1); };
-    crtFilter.cycleRight = []() { Port_PPU_CycleFilter(+1); };
-    crtFilter.labelFn = []() {
-        const char* name = Port_PPU_FilterName();
-        char buf[80];
-        std::snprintf(buf, sizeof(buf), "CRT filter  %s", name ? name : "?");
-        return std::string(buf);
-    };
-    p.items.push_back(std::move(crtFilter));
 
     MenuItem fps;
     fps.cycleLeft  = []() { Port_Config_CycleTargetFps(-1); };
@@ -379,30 +361,12 @@ MenuPage BuildDisplaySettingsPage(void) {
     return p;
 }
 
-/* Soft-slot assignment page. Each row is a cycle item: Left/Right walks
- * through the items the player owns. The label is regenerated every frame
- * via labelFn, so the displayed assignment updates immediately on cycle. */
-MenuPage BuildSoftSlotsPage(void) {
-    MenuPage p;
-    p.title = "EXTRA EQUIP SLOTS";
-    for (int s = 0; s < 4; ++s) {
-        MenuItem it;
-        it.cycleLeft  = [s]() { Port_SoftSlots_CycleAssignment(s, -1); };
-        it.cycleRight = [s]() { Port_SoftSlots_CycleAssignment(s, +1); };
-        it.labelFn = [s]() { return std::string(Port_SoftSlots_GetSlotLabel(s)); };
-        p.items.push_back(std::move(it));
-    }
-    p.items.push_back({ "<- Back", []() { Pop(); } });
-    return p;
-}
-
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
     p.items.push_back({ "Items / progress",  []() { Push(BuildItemsPage()); } });
     p.items.push_back({ "Warp",              []() { Push(BuildWarpPage());  } });
     p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
-    p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
     p.items.push_back({ "Close menu",        []() { Pop(); } });
     return p;
@@ -511,31 +475,16 @@ extern "C" bool Port_DebugMenu_HandleKey(int sdlKey) {
                 consumed = true;
                 break;
             case SDLK_LEFT:
-                /* On cycle items (FPS, Filter, ...) Left invokes the
-                 * cycle handler. On non-cycle items (warp list, items
-                 * page) fall back to PgUp-style page navigation so
-                 * the warp list — currently dozens of entries — is
-                 * easier to traverse with arrow keys (#76). */
                 if (page.cursor >= 0 && page.cursor < n) {
                     auto fn = page.items[page.cursor].cycleLeft;
-                    if (fn) {
-                        fn();
-                    } else if (n > 0) {
-                        page.cursor = std::max(0, page.cursor - kVisibleItemsMax);
-                        clampViewport();
-                    }
+                    if (fn) fn();
                 }
                 consumed = true;
                 break;
             case SDLK_RIGHT:
                 if (page.cursor >= 0 && page.cursor < n) {
                     auto fn = page.items[page.cursor].cycleRight;
-                    if (fn) {
-                        fn();
-                    } else if (n > 0) {
-                        page.cursor = std::min(n - 1, page.cursor + kVisibleItemsMax);
-                        clampViewport();
-                    }
+                    if (fn) fn();
                 }
                 consumed = true;
                 break;

@@ -65,7 +65,7 @@ end
 local use_system_packages = is_host("linux") and (os.getenv("XMAKE_USE_SYSTEM_SDL3") or os.getenv("IN_NIX_SHELL"))
 if use_system_packages then
     add_requires("nlohmann_json", {system = true, configs = {cmake = false}})
-    add_requires("fmt", {system = true})
+    add_requires("fmt", {configs = {header_only = true}})
     add_requires("libpng", {system = true})
     add_requires("zlib", {system = true})
     add_requires("libsdl3", {system = true})
@@ -137,7 +137,7 @@ target("asset_processor")
     add_files("tools/src/asset_processor/assets/*.cpp")
     add_includedirs("tools/src/asset_processor")
     add_includedirs("tools/src/util")
-    add_packages("nlohmann_json", "fmt")
+    add_packages("nlohmann_json")
     add_mingw_static_cpp_runtime()
 target_end()
 
@@ -152,7 +152,7 @@ target("asset_extractor")
     add_files("port/port_asset_index.c")
     add_includedirs("tools/src/assets_extractor")
     add_includedirs("include", "port", ".")
-    add_packages("nlohmann_json", "fmt")
+    add_packages("nlohmann_json")
     add_mingw_static_cpp_runtime()
     -- Embed assets/sounds.json into the binary so the extractor can guarantee
     -- it appears next to itself even when a release tarball forgets to ship
@@ -401,18 +401,6 @@ target("tmc_pc")
             { patch = "viruappu-internal-scale.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "virtuappu_mode1_render_affine_obj_overlay" },
-            -- Widescreen spike + per-scanline parallel render. Combined
-            -- patch because both mutate src/mode1.c in overlapping hunks.
-            -- The widescreen part is no-op without -DMODE1_GBA_WIDTH=<n>
-            -- (resolves to 240). The parallel-render part adds OpenMP
-            -- per-line rendering with thread-local IO snapshots so HDMA
-            -- callbacks (BG_VOFS water FX, BLDY fades) still see the right
-            -- per-line state. Marker checks for the io_thread_override
-            -- symbol so the patch is reapplied if the older single-stage
-            -- spike was already in place.
-            { patch = "viruappu-widescreen.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "io_thread_override" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
@@ -465,9 +453,6 @@ target("tmc_pc")
     -- literal at the use site.
     add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
     add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
-    -- Widescreen spike width override (240 = GBA-native; >240 widens).
-    local ws_width = tonumber(get_config("widescreen_width")) or 240
-    add_defines("MODE1_GBA_WIDTH=" .. tostring(ws_width))
     if use_avx2 and arch_supports_avx2 then
         add_defines("USE_AVX2")
         add_cflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})
@@ -484,6 +469,7 @@ target("tmc_pc")
     add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
     add_includedirs("libs/VirtuaAPU/include")
     add_includedirs("libs/agbplay_core")
+    add_includedirs("tools/src/assets_extractor")
 
     
 
@@ -495,10 +481,12 @@ target("tmc_pc")
     add_files("port/port_quicksave.c")
     add_files("port/port_inline_ptrs.c")
     add_files("port/port_asset_bootstrap.cpp")
+    add_files("port/port_asset_index.c")
     add_files("port/port_update_check.c")
     add_files("port/port_asset_loader.cpp")
     add_files("port/port_asset_pipeline.cpp")
     add_files("port/port_m4a_backend.cpp")
+    add_files("tools/src/assets_extractor/asset_extractor_runner.cpp")
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
     add_files("port/port_asset_index.c")  -- Asset offset index (path → ROM offset map)
@@ -630,7 +618,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3", "fmt", "nlohmann_json", "libpng", "zlib")
+    add_packages("libsdl3", "nlohmann_json", "libpng", "zlib")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     -- Apple clang ships without OpenMP support and rejects -fopenmp outright;

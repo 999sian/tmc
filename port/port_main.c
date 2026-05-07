@@ -360,13 +360,8 @@ int main(int argc, char* argv[]) {
     // Initialize PPU renderer
     Port_PPU_Init(window);
     fprintf(stderr, "PPU init complete.\n");
-    if (noAudio) {
-        gMain.muteAudio = 1;
-        fprintf(stderr, "Audio disabled by --no-audio flag.\n");
-    } else {
-        Port_InitAudio();
-        fprintf(stderr, "Audio init complete.\n");
-    }
+    Port_InitAudio();
+    fprintf(stderr, "Audio init complete.\n");
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 

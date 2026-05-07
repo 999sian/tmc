@@ -10,11 +10,11 @@
 #include "assets/spriteframe.h"
 #include "assets/subtileset.h"
 #include "offsets.h"
+#include "simple_format.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <fmt/format.h>
 
 using nlohmann::json;
 
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
 
     std::vector<char> baserom(static_cast<size_t>(size));
     if (!file.read(baserom.data(), size)) {
-        fmt::print(stderr, "Could not read baserom {}\n", gBaseromPath);
+        std::fprintf(stderr, "Could not read baserom %s\n", gBaseromPath.c_str());
         std::exit(1);
     }
     file.close();
@@ -296,7 +296,7 @@ std::unique_ptr<BaseAsset> getAssetHandlerByType(const std::filesystem::path& pa
         // Unknown binary asset
         assetHandler = std::make_unique<BaseAsset>(path, start, size, asset);
     } else {
-        fmt::print(stderr, "Error: Unimplemented asset type \"{}\"\n", type);
+        std::fprintf(stderr, "Error: Unimplemented asset type \"%s\"\n", type.c_str());
         std::exit(1);
     }
     assetHandler->setup();

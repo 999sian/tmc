@@ -18,7 +18,9 @@
 #include "port_asset_pipeline.hpp"
 
 extern "C" {
+#define this this_
 #include "port_asset_index.h"
+#undef this
 }
 
 struct Config

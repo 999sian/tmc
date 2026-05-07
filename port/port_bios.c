@@ -56,13 +56,11 @@ static void Port_UpdateInput(void) {
 
     {
         extern bool Port_DebugMenu_IsOpen(void);
-        /* While either overlay is open, hold all GBA buttons released so
-         * the game doesn't observe stray input from key presses we routed
-         * to the overlay. The soft-slot configuration overlay piggybacks
-         * on this behaviour while it's the active focus. */
-        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen()) {
+        if (Port_DebugMenu_IsOpen()) {
+            /* While the debug menu is open, hold all GBA buttons released
+             * so the game doesn't observe stray input from key presses we
+             * routed to the menu. */
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
-            Port_SoftSlots_TickPause();
             sFrameNum++;
             return;
         }

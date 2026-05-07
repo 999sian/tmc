@@ -9,7 +9,6 @@ extern "C" {
  *   ./bugreport_<timestamp>/screenshot.png  (240x160 GBA framebuffer)
  *   ./bugreport_<timestamp>/save.bin        (current save EEPROM dump)
  *   ./bugreport_<timestamp>/state.txt       (version/area/coords/reason)
- *   ./bugreport_<timestamp>/stderr.log      (last ~64 KiB of stderr output)
  *   ./bugreport_<timestamp>/backtrace.txt   (only when called from crash handler)
  *
  * `reason` is a free-form short tag written into state.txt to distinguish

@@ -27,16 +27,12 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <thread>
 
 #if defined(__linux__) || defined(__APPLE__)
-#include <cerrno>
 #include <execinfo.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <sys/ucontext.h>
-#include <sys/wait.h>
 #endif
 
 #ifdef _WIN32
@@ -66,12 +62,7 @@ PortBugReportState Port_BugReport_GetGameState(void);
 
 namespace {
 
-/* Track MODE1_GBA_WIDTH so widescreen-spike builds capture the full
- * (potentially wider) framebuffer in screenshots. */
-#ifndef MODE1_GBA_WIDTH
-#define MODE1_GBA_WIDTH 240
-#endif
-constexpr int kFrameW = MODE1_GBA_WIDTH;
+constexpr int kFrameW = 240;
 constexpr int kFrameH = 160;
 
 std::string TimestampString() {
@@ -129,173 +120,6 @@ const char* GameRegionString() {
     return "JP";
 #else
     return "?";
-#endif
-}
-
-/* ---------- stderr ring buffer ----------
- *
- * dup2 stderr to a pipe, run a reader thread that:
- *   (a) appends every chunk into a fixed-size circular buffer, and
- *   (b) re-emits each chunk to the original fd 2 so the user still
- *       sees logs in real time.
- *
- * On bug-report capture we snapshot the ring and write it as
- * stderr.log alongside the rest of the bundle. This unblocks
- * diagnosing aborts whose only signal is on stderr (gba_MemPtr
- * "FATAL: invalid address 0x..." etc.) which previously vanished
- * with the terminal session.
- *
- * The dump path runs from the SIGSEGV/SIGABRT handler, so it must be
- * async-signal-safe: no malloc, no std::ofstream, no mutex. We use
- * atomic head + atomic wrap-flag (single-writer/single-reader still
- * means relaxed ordering is enough — only the reader thread writes,
- * and the dump just snapshots the indices) and write(2) directly to
- * a freshly opened fd. The ring's storage is statically sized so no
- * allocation happens anywhere on the dump path. */
-constexpr size_t kStderrRingSize = 64 * 1024;
-
-struct StderrRing {
-    char buf[kStderrRingSize] {};
-    std::atomic<size_t> head{0};        /* next write offset, [0, kStderrRingSize) */
-    std::atomic<bool> wrapped{false};
-    int orig_stderr_fd = -1;
-
-    /* Called only from the reader thread, so writes are serialised. */
-    void Append(const char* data, size_t len) {
-        size_t h = head.load(std::memory_order_relaxed);
-        while (len > 0) {
-            size_t room = kStderrRingSize - h;
-            size_t n = len < room ? len : room;
-            std::memcpy(buf + h, data, n);
-            h += n;
-            if (h == kStderrRingSize) {
-                h = 0;
-                wrapped.store(true, std::memory_order_release);
-            }
-            data += n;
-            len -= n;
-        }
-        head.store(h, std::memory_order_release);
-    }
-
-#if defined(__linux__) || defined(__APPLE__)
-    /* Async-signal-safe dump. Path string must already be NUL-terminated.
-     * Tiny race with the reader thread is acceptable — at worst we miss
-     * the tail of a half-written chunk; the rest of the buffer is
-     * already-committed data. */
-    bool DumpTo(const char* path) {
-        int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-        if (fd < 0) return false;
-
-        size_t h = head.load(std::memory_order_acquire);
-        bool w = wrapped.load(std::memory_order_acquire);
-
-        auto write_all = [fd](const char* p, size_t n) {
-            while (n > 0) {
-                ssize_t r = write(fd, p, n);
-                if (r <= 0) {
-                    if (r < 0 && errno == EINTR) continue;
-                    return false;
-                }
-                p += r;
-                n -= r;
-            }
-            return true;
-        };
-
-        bool ok = true;
-        if (w) {
-            /* Older portion: head .. end. Skip the leading partial line so
-             * the file starts on a line boundary. */
-            const char* tail_start = buf + h;
-            size_t tail_len = kStderrRingSize - h;
-            const void* nl = std::memchr(tail_start, '\n', tail_len);
-            if (nl) {
-                size_t skip = static_cast<const char*>(nl) - tail_start + 1;
-                tail_start += skip;
-                tail_len -= skip;
-            } else {
-                tail_len = 0;
-            }
-            ok = ok && write_all(tail_start, tail_len);
-        }
-        ok = ok && write_all(buf, h);
-        close(fd);
-        return ok;
-    }
-#endif
-};
-
-StderrRing g_stderrRing;
-std::atomic<int> g_stderr_capture_installed{0};
-
-#if defined(__linux__) || defined(__APPLE__)
-void StderrReaderLoop(int read_fd, int orig_fd) {
-    char chunk[4096];
-    for (;;) {
-        ssize_t n = read(read_fd, chunk, sizeof(chunk));
-        if (n <= 0) {
-            if (n < 0 && errno == EINTR) continue;
-            break;
-        }
-        g_stderrRing.Append(chunk, static_cast<size_t>(n));
-        /* Mirror back to the real terminal so the user still sees logs.
-         * Best-effort — if this fails (terminal closed) we keep capturing. */
-        ssize_t off = 0;
-        while (off < n) {
-            ssize_t w = write(orig_fd, chunk + off, n - off);
-            if (w <= 0) {
-                if (w < 0 && errno == EINTR) continue;
-                break;
-            }
-            off += w;
-        }
-    }
-}
-
-bool InstallStderrCapturePosix() {
-    int orig = dup(STDERR_FILENO);
-    if (orig < 0) return false;
-    /* Make the saved fd survive exec() in case anything fork+exec's later. */
-    int flags = fcntl(orig, F_GETFD);
-    if (flags >= 0) fcntl(orig, F_SETFD, flags | FD_CLOEXEC);
-
-    int pipefd[2];
-    if (pipe(pipefd) != 0) {
-        close(orig);
-        return false;
-    }
-    /* Replace fd 2 with the pipe's write end so every write to stderr
-     * (libc, third-party libs, raw write(2)) ends up in our reader. */
-    if (dup2(pipefd[1], STDERR_FILENO) < 0) {
-        close(orig);
-        close(pipefd[0]);
-        close(pipefd[1]);
-        return false;
-    }
-    close(pipefd[1]);
-
-    /* glibc's stderr is unbuffered by default; reaffirm in case the runtime
-     * has changed buffering before we got here. */
-    std::setvbuf(stderr, nullptr, _IONBF, 0);
-
-    g_stderrRing.orig_stderr_fd = orig;
-    std::thread(StderrReaderLoop, pipefd[0], orig).detach();
-    return true;
-}
-#endif
-
-bool InstallStderrCapture() {
-    int expected = 0;
-    if (!g_stderr_capture_installed.compare_exchange_strong(expected, 1)) {
-        return true;
-    }
-#if defined(__linux__) || defined(__APPLE__)
-    return InstallStderrCapturePosix();
-#else
-    /* TODO Windows: CreatePipe + SetStdHandle + reader thread. The wine
-     * Windows path will keep emitting straight to the console for now. */
-    return false;
 #endif
 }
 
@@ -442,117 +266,6 @@ void* SafeReadPointer(void* p) {
  * description: `0xADDR <module>(+0xOFFSET) [symbol+disp]`. dladdr is
  * sufficient for the crash IP on glibc — for a full unwind, libunwind would
  * be needed. */
-/* Resolve the path of the current executable into `buf` (NUL-terminated).
- * Returns true on success. Used for shelling out to addr2line. */
-bool ResolveOwnExePath(char* buf, size_t buflen) {
-    if (buflen < 2) return false;
-#if defined(__linux__)
-    ssize_t n = readlink("/proc/self/exe", buf, buflen - 1);
-    if (n <= 0) return false;
-    buf[n] = '\0';
-    return true;
-#elif defined(__APPLE__)
-    /* _NSGetExecutablePath needs <mach-o/dyld.h>; the port's other call
-     * sites use it but we keep this best-effort: if dladdr can give us
-     * the binary path that's good enough for addr2line. */
-    Dl_info info{};
-    if (dladdr(reinterpret_cast<void*>(&ResolveOwnExePath), &info) && info.dli_fname) {
-        std::strncpy(buf, info.dli_fname, buflen - 1);
-        buf[buflen - 1] = '\0';
-        return true;
-    }
-    return false;
-#else
-    (void)buf; (void)buflen;
-    return false;
-#endif
-}
-
-#if defined(__linux__) || defined(__APPLE__)
-/* Shell out to addr2line for file:line resolution. addr2line accepts
- * binary-relative offsets when fed a PIE binary, so we subtract the load
- * base. fork+execvp+pipe+read+waitpid are in POSIX async-signal-safe set,
- * so this can run from the SIGSEGV handler. We avoid stdio in the parent
- * and pipe addr2line's stdout straight into the report fd. */
-void RunAddr2Line(int report_fd, void** addrs, int n) {
-    if (n <= 0) return;
-
-    char exe_path[1024];
-    if (!ResolveOwnExePath(exe_path, sizeof(exe_path))) return;
-
-    Dl_info info{};
-    if (!dladdr(reinterpret_cast<void*>(&RunAddr2Line), &info) || !info.dli_fbase) return;
-    uintptr_t base = reinterpret_cast<uintptr_t>(info.dli_fbase);
-
-    /* Build argv: addr2line -e <exe> -fpCi <off1> <off2> ... NULL.
-     * -f: print function name
-     * -p: pretty single-line format
-     * -C: demangle C++
-     * -i: walk inlined frames
-     * Keep at most 32 addrs to bound the cmdline length. */
-    constexpr int kMaxAddrs = 32;
-    if (n > kMaxAddrs) n = kMaxAddrs;
-    char addr_strs[kMaxAddrs][20];
-    char* argv[5 + kMaxAddrs + 1];
-    int ai = 0;
-    argv[ai++] = const_cast<char*>("addr2line");
-    argv[ai++] = const_cast<char*>("-e");
-    argv[ai++] = exe_path;
-    argv[ai++] = const_cast<char*>("-fpCi");
-    for (int i = 0; i < n; i++) {
-        uintptr_t a = reinterpret_cast<uintptr_t>(addrs[i]);
-        if (a < base) { addr_strs[i][0] = '0'; addr_strs[i][1] = '\0'; }
-        else std::snprintf(addr_strs[i], sizeof(addr_strs[i]), "0x%lx",
-                           static_cast<unsigned long>(a - base));
-        argv[ai++] = addr_strs[i];
-    }
-    argv[ai] = nullptr;
-
-    int pipefd[2];
-    if (pipe(pipefd) != 0) return;
-
-    pid_t pid = fork();
-    if (pid < 0) {
-        close(pipefd[0]); close(pipefd[1]);
-        return;
-    }
-    if (pid == 0) {
-        /* Child. Redirect stdout to the pipe, close everything else. */
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[0]);
-        close(pipefd[1]);
-        execvp("addr2line", argv);
-        _exit(127);
-    }
-    close(pipefd[1]);
-
-    /* Header so the section is identifiable in the report file. */
-    const char hdr[] = "\n--- addr2line (file:line) ---\n";
-    (void)!write(report_fd, hdr, sizeof(hdr) - 1);
-
-    char chunk[4096];
-    for (;;) {
-        ssize_t r = read(pipefd[0], chunk, sizeof(chunk));
-        if (r <= 0) {
-            if (r < 0 && errno == EINTR) continue;
-            break;
-        }
-        ssize_t off = 0;
-        while (off < r) {
-            ssize_t w = write(report_fd, chunk + off, r - off);
-            if (w <= 0) {
-                if (w < 0 && errno == EINTR) continue;
-                break;
-            }
-            off += w;
-        }
-    }
-    close(pipefd[0]);
-    int status = 0;
-    waitpid(pid, &status, 0);
-}
-#endif
-
 void WriteResolvedAddr(FILE* fp, const char* label, void* addr) {
     Dl_info info{};
     if (dladdr(addr, &info) && info.dli_fname) {
@@ -661,25 +374,6 @@ void WriteBacktracePosix(const std::filesystem::path& path,
     void* frames[64];
     int n = backtrace(frames, 64);
     backtrace_symbols_fd(frames, n, fileno(fp));
-
-    /* Append addr2line file:line lines for the crash IP + the captured
-     * frames. addr2line gives the precise source location (and walks
-     * inlined call sites with -i) which dladdr can't, turning every
-     * crash report into actionable file:LINE pointers without the
-     * tester having to install/run the toolchain. Best-effort — if
-     * the addr2line binary isn't on PATH (e.g. minimal release tarball)
-     * the section is just absent. */
-    {
-        std::fflush(fp);
-        void* probe[64 + 1];
-        int pn = 0;
-        if (regs.ip) probe[pn++] = regs.ip;
-        for (int i = 0; i < n && pn < (int)(sizeof(probe) / sizeof(probe[0])); i++) {
-            probe[pn++] = frames[i];
-        }
-        RunAddr2Line(fileno(fp), probe, pn);
-    }
-
     std::fclose(fp);
 }
 #endif
@@ -759,18 +453,6 @@ extern "C" char* Port_BugReport_Capture(const char* reason) {
      * the bundle's `ok` flag because crash reports without maps are
      * still useful (just harder to addr2line). */
     CopyProcMaps(std::filesystem::path(dirname) / "maps.txt");
-#endif
-    /* Flush libc's stderr buffer into the pipe so the reader thread can
-     * append it to the ring before we snapshot. Best-effort: the reader
-     * is asynchronous and on the crash path we cannot block (no sleep),
-     * so we may miss the last microseconds of output. The dump itself
-     * is async-signal-safe (no malloc / no locks / write(2) only). */
-    std::fflush(stderr);
-#if defined(__linux__) || defined(__APPLE__)
-    if (g_stderr_capture_installed.load()) {
-        std::string p = (std::filesystem::path(dirname) / "stderr.log").string();
-        g_stderrRing.DumpTo(p.c_str());
-    }
 #endif
 
     std::fprintf(stderr, "[BUG] Captured %s (ok=%d, reason=%s)\n",
@@ -882,9 +564,6 @@ extern "C" void Port_BugReport_InstallCrashHandlers(void) {
     if (!g_handlers_installed.compare_exchange_strong(expected, 1)) {
         return;
     }
-    /* Capture stderr first so any messages emitted by the crash handler
-     * itself land in stderr.log too. */
-    InstallStderrCapture();
 #if defined(__linux__) || defined(__APPLE__)
     InstallPosixHandlers();
 #endif
