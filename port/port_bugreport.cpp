@@ -27,9 +27,11 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <execinfo.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <dlfcn.h>
 #include <sys/ucontext.h>
@@ -120,6 +122,173 @@ const char* GameRegionString() {
     return "JP";
 #else
     return "?";
+#endif
+}
+
+/* ---------- stderr ring buffer ----------
+ *
+ * dup2 stderr to a pipe, run a reader thread that:
+ *   (a) appends every chunk into a fixed-size circular buffer, and
+ *   (b) re-emits each chunk to the original fd 2 so the user still
+ *       sees logs in real time.
+ *
+ * On bug-report capture we snapshot the ring and write it as
+ * stderr.log alongside the rest of the bundle. This unblocks
+ * diagnosing aborts whose only signal is on stderr (gba_MemPtr
+ * "FATAL: invalid address 0x..." etc.) which previously vanished
+ * with the terminal session.
+ *
+ * The dump path runs from the SIGSEGV/SIGABRT handler, so it must be
+ * async-signal-safe: no malloc, no std::ofstream, no mutex. We use
+ * atomic head + atomic wrap-flag (single-writer/single-reader still
+ * means relaxed ordering is enough — only the reader thread writes,
+ * and the dump just snapshots the indices) and write(2) directly to
+ * a freshly opened fd. The ring's storage is statically sized so no
+ * allocation happens anywhere on the dump path. */
+constexpr size_t kStderrRingSize = 64 * 1024;
+
+struct StderrRing {
+    char buf[kStderrRingSize] {};
+    std::atomic<size_t> head{0};        /* next write offset, [0, kStderrRingSize) */
+    std::atomic<bool> wrapped{false};
+    int orig_stderr_fd = -1;
+
+    /* Called only from the reader thread, so writes are serialised. */
+    void Append(const char* data, size_t len) {
+        size_t h = head.load(std::memory_order_relaxed);
+        while (len > 0) {
+            size_t room = kStderrRingSize - h;
+            size_t n = len < room ? len : room;
+            std::memcpy(buf + h, data, n);
+            h += n;
+            if (h == kStderrRingSize) {
+                h = 0;
+                wrapped.store(true, std::memory_order_release);
+            }
+            data += n;
+            len -= n;
+        }
+        head.store(h, std::memory_order_release);
+    }
+
+#if defined(__linux__) || defined(__APPLE__)
+    /* Async-signal-safe dump. Path string must already be NUL-terminated.
+     * Tiny race with the reader thread is acceptable — at worst we miss
+     * the tail of a half-written chunk; the rest of the buffer is
+     * already-committed data. */
+    bool DumpTo(const char* path) {
+        int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+        if (fd < 0) return false;
+
+        size_t h = head.load(std::memory_order_acquire);
+        bool w = wrapped.load(std::memory_order_acquire);
+
+        auto write_all = [fd](const char* p, size_t n) {
+            while (n > 0) {
+                ssize_t r = write(fd, p, n);
+                if (r <= 0) {
+                    if (r < 0 && errno == EINTR) continue;
+                    return false;
+                }
+                p += r;
+                n -= r;
+            }
+            return true;
+        };
+
+        bool ok = true;
+        if (w) {
+            /* Older portion: head .. end. Skip the leading partial line so
+             * the file starts on a line boundary. */
+            const char* tail_start = buf + h;
+            size_t tail_len = kStderrRingSize - h;
+            const void* nl = std::memchr(tail_start, '\n', tail_len);
+            if (nl) {
+                size_t skip = static_cast<const char*>(nl) - tail_start + 1;
+                tail_start += skip;
+                tail_len -= skip;
+            } else {
+                tail_len = 0;
+            }
+            ok = ok && write_all(tail_start, tail_len);
+        }
+        ok = ok && write_all(buf, h);
+        close(fd);
+        return ok;
+    }
+#endif
+};
+
+StderrRing g_stderrRing;
+std::atomic<int> g_stderr_capture_installed{0};
+
+#if defined(__linux__) || defined(__APPLE__)
+void StderrReaderLoop(int read_fd, int orig_fd) {
+    char chunk[4096];
+    for (;;) {
+        ssize_t n = read(read_fd, chunk, sizeof(chunk));
+        if (n <= 0) {
+            if (n < 0 && errno == EINTR) continue;
+            break;
+        }
+        g_stderrRing.Append(chunk, static_cast<size_t>(n));
+        /* Mirror back to the real terminal so the user still sees logs.
+         * Best-effort — if this fails (terminal closed) we keep capturing. */
+        ssize_t off = 0;
+        while (off < n) {
+            ssize_t w = write(orig_fd, chunk + off, n - off);
+            if (w <= 0) {
+                if (w < 0 && errno == EINTR) continue;
+                break;
+            }
+            off += w;
+        }
+    }
+}
+
+bool InstallStderrCapturePosix() {
+    int orig = dup(STDERR_FILENO);
+    if (orig < 0) return false;
+    /* Make the saved fd survive exec() in case anything fork+exec's later. */
+    int flags = fcntl(orig, F_GETFD);
+    if (flags >= 0) fcntl(orig, F_SETFD, flags | FD_CLOEXEC);
+
+    int pipefd[2];
+    if (pipe(pipefd) != 0) {
+        close(orig);
+        return false;
+    }
+    /* Replace fd 2 with the pipe's write end so every write to stderr
+     * (libc, third-party libs, raw write(2)) ends up in our reader. */
+    if (dup2(pipefd[1], STDERR_FILENO) < 0) {
+        close(orig);
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return false;
+    }
+    close(pipefd[1]);
+
+    /* glibc's stderr is unbuffered by default; reaffirm in case the runtime
+     * has changed buffering before we got here. */
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
+
+    g_stderrRing.orig_stderr_fd = orig;
+    std::thread(StderrReaderLoop, pipefd[0], orig).detach();
+    return true;
+}
+#endif
+
+bool InstallStderrCapture() {
+    int expected = 0;
+    if (!g_stderr_capture_installed.compare_exchange_strong(expected, 1)) {
+        return true;
+    }
+#if defined(__linux__) || defined(__APPLE__)
+    return InstallStderrCapturePosix();
+#else
+    /* TODO Windows: CreatePipe + SetStdHandle + reader thread. The wine
+     * Windows path will keep emitting straight to the console for now. */
+    return false;
 #endif
 }
 
@@ -454,6 +623,18 @@ extern "C" char* Port_BugReport_Capture(const char* reason) {
      * still useful (just harder to addr2line). */
     CopyProcMaps(std::filesystem::path(dirname) / "maps.txt");
 #endif
+    /* Flush libc's stderr buffer into the pipe so the reader thread can
+     * append it to the ring before we snapshot. Best-effort: the reader
+     * is asynchronous and on the crash path we cannot block (no sleep),
+     * so we may miss the last microseconds of output. The dump itself
+     * is async-signal-safe (no malloc / no locks / write(2) only). */
+    std::fflush(stderr);
+#if defined(__linux__) || defined(__APPLE__)
+    if (g_stderr_capture_installed.load()) {
+        std::string p = (std::filesystem::path(dirname) / "stderr.log").string();
+        g_stderrRing.DumpTo(p.c_str());
+    }
+#endif
 
     std::fprintf(stderr, "[BUG] Captured %s (ok=%d, reason=%s)\n",
                  dirname.c_str(), ok ? 1 : 0, reason ? reason : "user");
@@ -564,6 +745,9 @@ extern "C" void Port_BugReport_InstallCrashHandlers(void) {
     if (!g_handlers_installed.compare_exchange_strong(expected, 1)) {
         return;
     }
+    /* Capture stderr first so any messages emitted by the crash handler
+     * itself land in stderr.log too. */
+    InstallStderrCapture();
 #if defined(__linux__) || defined(__APPLE__)
     InstallPosixHandlers();
 #endif
