@@ -321,6 +321,10 @@ void m4aSongNumStart(u16 songId) {
     }
 
     MPlayStart(mplayInfo, header);
+    if (header == NULL) {
+        MPlayStop(mplayInfo);
+        return;
+    }
     if (!Port_M4A_Backend_StartSongById((u8)playerIndex, songId)) {
         MPlayStop(mplayInfo);
     }
@@ -339,6 +343,10 @@ void m4aSongNumStartOrChange(u16 songId) {
     if (mplayInfo->songHeader != header || (mplayInfo->status & MUSICPLAYER_STATUS_TRACK) == 0 ||
         (mplayInfo->status & MUSICPLAYER_STATUS_PAUSE) != 0) {
         MPlayStart(mplayInfo, header);
+        if (header == NULL) {
+            MPlayStop(mplayInfo);
+            return;
+        }
         if (!Port_M4A_Backend_StartSongById((u8)playerIndex, songId)) {
             MPlayStop(mplayInfo);
         }
@@ -357,6 +365,10 @@ void m4aSongNumStartOrContinue(u16 songId) {
 
     if (mplayInfo->songHeader != header || (mplayInfo->status & MUSICPLAYER_STATUS_TRACK) == 0) {
         MPlayStart(mplayInfo, header);
+        if (header == NULL) {
+            MPlayStop(mplayInfo);
+            return;
+        }
         if (!Port_M4A_Backend_StartSongById((u8)playerIndex, songId)) {
             MPlayStop(mplayInfo);
         }

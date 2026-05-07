@@ -778,18 +778,19 @@ u32 GetNextFunction(Entity* this) {
     }
 
     /* GBA-original alive dispatch order: gust-jar grab > contact >
-     * knockback > confused > tick. Matches the Thumb asm at 0x0800279C.
+     * knockback > tick. Matches the Thumb asm at 0x0800279C.
      *
-     * #54: dizzy-stars FX never leaves a boomerang-stunned enemy. The
-     * confusedTime check below was previously omitted, so GenericConfused
-     * never ran on living enemies — confusedTime never decremented, the
-     * FX_STARS object's parent (the enemy) stayed alive forever, and
-     * sub_08084694 (the FX's update) only self-deletes when its parent
-     * is gone. Re-introducing the dispatch lets GenericConfused tick
-     * confusedTime down and call EnemyDetachFX at the end of stun, which
-     * orphans the FX so its next tick deletes it. Empirically all FX_STARS
-     * spawners under src/enemy use EnemyCreateFX (stored in
-     * entity->child), so the existing detach path covers them. */
+     * NOTE for issue #54 follow-up: the original asm probably also
+     * routed confusedTime>0 to OnConfused (action 4) here, mirroring
+     * the dead-path branch above. Adding `if (confusedTime!=0) return 4;`
+     * does dispatch GenericConfused correctly, but #54's user-visible
+     * symptom is that dizzy stars persist — and they persist because the
+     * FX_STARS object isn't stored in entity->child for several enemies
+     * (e.g. OCTOROK2). So that dispatch fix alone doesn't clear the FX;
+     * landing it without the FX-storage fix would change behaviour
+     * (gravity ticks via GenericConfused) without solving the bug.
+     * Leaving the alive-dispatch unchanged until the FX-storage path is
+     * tracked down. */
     if (gustJarState & 4)
         return 5;
 
@@ -798,9 +799,6 @@ u32 GetNextFunction(Entity* this) {
 
     if (this->knockbackDuration != 0)
         return 2;
-
-    if (this->confusedTime != 0)
-        return 4;
 
     if (this->action == 0 && this->subAction == 0)
         return 0;

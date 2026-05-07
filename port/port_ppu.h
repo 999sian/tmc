@@ -29,12 +29,6 @@ void Port_PPU_ToggleSmoothing(void);
 void Port_PPU_CyclePresentationMode(int direction);
 const char* Port_PPU_PresentationModeName(void);
 
-// CRT/LCD post-process filter cycling (off / warm-composite-AG /
-// LCD-grid / warm-RF-AG). Applied at the upscaled resolution before
-// SDL upload — needs internal-scale >= 2 to be visible.
-void Port_PPU_CycleFilter(int direction);
-const char* Port_PPU_FilterName(void);
-
 // Toggle SDL vsync on the renderer. Used by VBlankIntrWait to disable the
 // display-refresh cap when fast-forwarding or when target FPS exceeds the
 // monitor refresh rate; without this, fast-forward (#26) and FPS presets

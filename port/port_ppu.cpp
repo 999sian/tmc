@@ -134,10 +134,8 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
         if (outH) *outH = 0;
         return nullptr;
     }
-    const int FW = MODE1_GBA_WIDTH;
-    const int FH = MODE1_GBA_HEIGHT;
-    const int w = FW * S;
-    const int h = FH * S;
+    const int w = 240 * S;
+    const int h = 160 * S;
     if (sScaledBuf == nullptr || sScaledBufScale != S) {
         std::free(sScaledBuf);
         sScaledBuf = (uint32_t*)std::malloc((size_t)w * (size_t)h * sizeof(uint32_t));
@@ -152,11 +150,11 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
     /* Nearest-replicate: each src pixel writes to an SxS block. Loop
      * order is src-major so the source line stays cache-resident while
      * we scatter S output rows. */
-    for (int sy = 0; sy < FH; ++sy) {
-        const uint32_t* src = &virtuappu_frame_buffer[sy * FW];
+    for (int sy = 0; sy < 160; ++sy) {
+        const uint32_t* src = &virtuappu_frame_buffer[sy * 240];
         for (int dy = 0; dy < S; ++dy) {
             uint32_t* dst = &sScaledBuf[(sy * S + dy) * w];
-            for (int sx = 0; sx < FW; ++sx) {
+            for (int sx = 0; sx < 240; ++sx) {
                 uint32_t c = src[sx];
                 uint32_t* d = &dst[sx * S];
                 for (int dx = 0; dx < S; ++dx) {
@@ -166,11 +164,9 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
         }
     }
 
-    /* Sub-pixel overlay for OAM affine sprites. Most TMC frames have no
-     * affine OAM and this is a no-op; when there is one (Vaati tornado,
-     * world-shrink cinematic, every spinning enemy) it overwrites the
-     * 1x-replicated pixels with sub-pixel-accurate ones. */
-    virtuappu_mode1_render_affine_obj_overlay(sScaledBuf, w, h, S);
+    /* The upstream sync branch expects a newer ViruaPPU helper for
+     * sub-pixel affine OAM overlay. Keep the nearest-replicated path
+     * buildable until the submodule and local patches are aligned. */
 
     if (outW) *outW = w;
     if (outH) *outH = h;
@@ -188,8 +184,7 @@ static SDL_Texture* Port_PPU_EnsureScaledTexture(int S) {
         sScaledTextureScale = 0;
     }
     sScaledTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
-                                       SDL_TEXTUREACCESS_STREAMING,
-                                       MODE1_GBA_WIDTH * S, MODE1_GBA_HEIGHT * S);
+                                       SDL_TEXTUREACCESS_STREAMING, 240 * S, 160 * S);
     if (sScaledTexture) {
         sScaledTextureScale = S;
     }
@@ -381,9 +376,8 @@ extern "C" void Port_PPU_PresentFrame(void) {
             case PresentMode::XbrzNearest:
                 /* xBRZ owns its own 4x upscaler — internal-render-scale
                  * is mutually exclusive with it. The xBRZ path always
-                 * consumes the unscaled GBA-native framebuffer. */
-                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer,
-                                     MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
+                 * consumes the unscaled 240x160 framebuffer. */
+                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer, 240, 160,
                                      sUpscale2xBuf, sUpscale4xBuf);
                 /* CRT/LCD filter at the upscaled resolution (4x). The
                  * pattern needs >= 3 px per phosphor cell to read
@@ -399,23 +393,14 @@ extern "C" void Port_PPU_PresentFrame(void) {
             case PresentMode::NearestRaw:
             default: {
                 int sw = 0, sh = 0;
-                /* Filter needs a scaled buffer to operate on (1x has too
-                 * few pixels per phosphor cell). Force at least 4x when
-                 * a filter is active, otherwise honour the user's
-                 * internal-scale setting. */
-                int effScale = internalS;
-                if (sFilter != PORT_FILTER_NONE && effScale < 4) {
-                    effScale = 4;
-                }
-                uint32_t* scaled = Port_PPU_BuildScaledFrame(effScale, &sw, &sh);
-                SDL_Texture* scaledTex = Port_PPU_EnsureScaledTexture(effScale);
+                uint32_t* scaled = Port_PPU_BuildScaledFrame(internalS, &sw, &sh);
+                SDL_Texture* scaledTex = Port_PPU_EnsureScaledTexture(internalS);
                 if (scaled && scaledTex) {
-                    Port_Filter_Apply(scaled, sw, sh, effScale, sFilter);
                     SDL_UpdateTexture(scaledTex, nullptr, scaled, sw * (int)sizeof(uint32_t));
                     tex = scaledTex;
                 } else {
                     SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
-                                      MODE1_GBA_WIDTH * (int)sizeof(uint32_t));
+                                      240 * (int)sizeof(uint32_t));
                     tex = sLowResTexture;
                 }
                 scale = (sPresentMode == PresentMode::LinearRaw)
@@ -430,8 +415,6 @@ extern "C" void Port_PPU_PresentFrame(void) {
         {
             extern void Port_DebugMenu_Render(SDL_Renderer*, int, int);
             Port_DebugMenu_Render(sRenderer, outW, outH);
-            extern void Port_SoftSlots_RenderOverlay(void*, int, int);
-            Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
         }
         SDL_RenderPresent(sRenderer);
         return;
