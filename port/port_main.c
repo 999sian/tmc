@@ -281,6 +281,7 @@ int main(int argc, char* argv[]) {
     Port_Config_Load("config.json");
 
     u8 window_scale = Port_Config_WindowScale();
+    bool noAudio = false;
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--window_scale=") == 0 || strncmp(argv[i], "--window_scale=", 15) == 0) {
@@ -292,9 +293,13 @@ int main(int argc, char* argv[]) {
                     fprintf(stderr, "Invalid window scale '%s'. Must be an integer between 1 and 10.\n", valueStr);
                 }
             }
+            else if (strcmp(argv[i], "--no-audio") == 0) {
+                noAudio = true;
+            }
             else if (strcmp(argv[i], "--help") == 0) {
-                fprintf(stderr, "Usage: %s [--window_scale=<value>]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--no-audio]\n", argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
+                fprintf(stderr, "  --no-audio: Skip audio init (workaround for agbplay crash)\n");
                 fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
             }
@@ -355,8 +360,13 @@ int main(int argc, char* argv[]) {
     // Initialize PPU renderer
     Port_PPU_Init(window);
     fprintf(stderr, "PPU init complete.\n");
-    Port_InitAudio();
-    fprintf(stderr, "Audio init complete.\n");
+    if (noAudio) {
+        gMain.muteAudio = 1;
+        fprintf(stderr, "Audio disabled by --no-audio flag.\n");
+    } else {
+        Port_InitAudio();
+        fprintf(stderr, "Audio init complete.\n");
+    }
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
