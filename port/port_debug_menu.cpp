@@ -48,6 +48,8 @@ void          Port_PPU_CycleWindowScale(int direction);
 unsigned char Port_PPU_WindowScale(void);
 void          Port_PPU_CyclePresentationMode(int direction);
 const char*   Port_PPU_PresentationModeName(void);
+void          Port_PPU_CycleFilter(int direction);
+const char*   Port_PPU_FilterName(void);
 unsigned int  Port_Config_TargetFps(void);
 void          Port_Config_CycleTargetFps(int direction);
 unsigned char Port_Config_InternalScale(void);
@@ -315,10 +317,21 @@ MenuPage BuildDisplaySettingsPage(void) {
     filter.labelFn = []() {
         const char* name = Port_PPU_PresentationModeName();
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "Filter      %s", name ? name : "?");
+        std::snprintf(buf, sizeof(buf), "Upscale     %s", name ? name : "?");
         return std::string(buf);
     };
     p.items.push_back(std::move(filter));
+
+    MenuItem crtFilter;
+    crtFilter.cycleLeft  = []() { Port_PPU_CycleFilter(-1); };
+    crtFilter.cycleRight = []() { Port_PPU_CycleFilter(+1); };
+    crtFilter.labelFn = []() {
+        const char* name = Port_PPU_FilterName();
+        char buf[80];
+        std::snprintf(buf, sizeof(buf), "CRT filter  %s", name ? name : "?");
+        return std::string(buf);
+    };
+    p.items.push_back(std::move(crtFilter));
 
     MenuItem fps;
     fps.cycleLeft  = []() { Port_Config_CycleTargetFps(-1); };
