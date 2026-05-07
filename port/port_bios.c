@@ -205,14 +205,35 @@ void VBlankIntrWait(void) {
     Port_PPU_PresentFrame();
     port_hdma_vblank_reset();
 
+    /* Deadline-based pacing: each frame's target is the previous
+     * frame's target + frameTimeNs (a fixed cadence on an ideal grid),
+     * not "now + frameTimeNs" (which drifts as game-tick work load
+     * varies). The drift version produced visible micro-stutter when
+     * a heavy frame consumed a few ms more than usual; deadline pacing
+     * absorbs that variance into the next wait without lagging the
+     * cadence. If we fall more than one frame behind real time
+     * (e.g. paused at a breakpoint, OS hitch), snap forward so we
+     * don't burn CPU catching up. */
     if (!sFastForward) {
         const u64 frameTimeNs = Port_Config_FrameTimeNs();
-        while (frameTimeNs != 0 && SDL_GetTicksNS() - lastFrameNs < frameTimeNs) {
+        if (frameTimeNs != 0) {
+            u64 deadline = lastFrameNs + frameTimeNs;
+            u64 now = SDL_GetTicksNS();
+            if (now > deadline + frameTimeNs) {
+                /* Fell behind the ideal grid by >1 frame — snap forward. */
+                deadline = now;
+            }
+            while (SDL_GetTicksNS() < deadline) {
+            }
+            lastFrameNs = deadline;
+        } else {
+            lastFrameNs = SDL_GetTicksNS();
         }
+    } else {
+        lastFrameNs = SDL_GetTicksNS();
     }
 
-    nowNs = SDL_GetTicksNS();
-    lastFrameNs = nowNs;
+    nowNs = lastFrameNs;
 
     if (sFpsWindowStartNs == 0) {
         sFpsWindowStartNs = nowNs;
