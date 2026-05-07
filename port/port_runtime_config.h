@@ -19,6 +19,13 @@ typedef enum {
     PORT_INPUT_DOWN,
     PORT_INPUT_R,
     PORT_INPUT_L,
+    /* Extra equip buttons (port_softslots.c). Each maps to a configurable
+     * key/pad/trigger and is read every frame to decide which item — if any —
+     * fires through the B-dispatch path. */
+    PORT_INPUT_SOFT_X,
+    PORT_INPUT_SOFT_Y,
+    PORT_INPUT_SOFT_L2,
+    PORT_INPUT_SOFT_R2,
     PORT_INPUT_COUNT,
 } PortInput;
 
@@ -47,6 +54,14 @@ void Port_Config_OpenGamepads(void);
 void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);
 void Port_Config_CloseGamepads(void);
+
+/* Soft-slot input poll, indexed 0..3 (X, Y, L2, R2). */
+bool Port_Config_SoftSlotPressed(int slot);
+
+/* Clear the per-input "pressed this frame" edge cache. Call after the
+ * port has committed KEYINPUT and the engine has read it, so the next
+ * frame's polled state isn't stuck reporting the previous tap. */
+void Port_Config_ClearInputEdges(void);
 
 #ifdef __cplusplus
 }
