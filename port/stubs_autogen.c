@@ -546,7 +546,7 @@ void ResetCollisionLayer(Entity* entity) {
 /* gExitList_RoyalValley_ForestMaze -- defined in port_linked_stubs.c */
 /* gExitLists -- defined in port_linked_stubs.c */
 /* gExtraFrameOffsets -- defined in port_linked_stubs.c */
-/* gFigurines -- defined in port_linked_stubs.c */
+/* gFigurines -- defined in port_figurines.c */
 /* gFixedTypeGfxData -- defined in port_linked_stubs.c */
 
 /* gFuseInfo -- defined in port_linked_stubs.c */

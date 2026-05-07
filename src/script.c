@@ -172,7 +172,7 @@ void ScriptCommand_0807F0C8(Entity* entity, ScriptExecutionContext* context);
 
 typedef void (*ScriptCommand)(Entity*, ScriptExecutionContext*);
 
-
+#include "port_rom.h"
 extern const u8 gUnk_08001A7C[];
 
 static u16* GetFusionTextIndices(u32 fuserId) {

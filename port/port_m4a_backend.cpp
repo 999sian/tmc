@@ -638,6 +638,15 @@ void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, ui
     }
 }
 
+bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex) {
+    std::lock_guard<std::mutex> lock(sStateMutex);
+    if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
+        return false;
+    }
+    const auto& player = sState.ctx->players[playerIndex];
+    return player.playing && !player.finished;
+}
+
 void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_t pan) {
     std::lock_guard<std::mutex> lock(sStateMutex);
 

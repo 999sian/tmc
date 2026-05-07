@@ -25,6 +25,9 @@
 #include "affine.h"
 #include "pauseMenu.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 void sub_080A4DA8(u32);
 void sub_080A4B44(void);
@@ -554,6 +557,18 @@ u32 sub_080A4CBC(u32 figurineIndex) {
         gScreen.bg1.updated = 1;
     }
     psVar2 = gUnk_08128190.unk0 + 0x80;
+#ifdef PC_PORT
+    /* gUnk_08128190.unk0 is hardcoded to (u16*)0x02021f72 — a GBA EWRAM
+     * address ShowTextBox writes glyph tilemap data to. On GBA, both the
+     * write (above) and the read (below) hit real EWRAM. On PC, ShowTextBox
+     * resolves through Port_ResolveEwramPtr internally; this raw scan
+     * dereferences unmapped 0x020220XX and SEGVs the figurine viewer (#57).
+     * Re-resolve through the same routing so we read the same memory. */
+    psVar2 = (const u16*)Port_ResolveEwramPtr((u32)((uintptr_t)psVar2));
+    if (psVar2 == NULL) {
+        return 0;
+    }
+#endif
 
     for (uVar3 = 0; uVar3 < 0x14; uVar3++) {
         if (*psVar2 == 0)

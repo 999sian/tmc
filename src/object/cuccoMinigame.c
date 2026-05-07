@@ -145,8 +145,12 @@ void sub_080A1270(CuccoMinigameEntity* this) {
     minusOne = -one;
     do {
         pEnt = *entArray;
+        /* Levels 8 and 9 only spawn 2-3 cuccos so the remaining heap slots
+         * are NULL. The original `pEnt->next != NULL && pEnt != NULL` order
+         * dereferences NULL before the guard fires; harmless on GBA (NULL
+         * reads return BIOS data) but a SIGSEGV on the PC port (#46). */
         if (*returnedArray == 0) { // this cucco not saved
-            if (pEnt->next != NULL && pEnt != NULL) {
+            if (pEnt != NULL && pEnt->next != NULL) {
                 if ((castedCageX <= pEnt->x.HALF.HI) && (castedCageY <= pEnt->y.HALF.HI)) {
                     returnedArray[0] = pEnt->type + one;
                     pEnt->type2 = 1;
@@ -159,7 +163,7 @@ void sub_080A1270(CuccoMinigameEntity* this) {
             }
         } else if (*returnedArray > 0) { // this cucco saved
             numReturnedCuccos++;
-            if (pEnt->next != NULL && pEnt != NULL) {
+            if (pEnt != NULL && pEnt->next != NULL) {
                 if (castedCageX + 4 > pEnt->x.HALF.HI) {
                     pEnt->x.HALF.HI = castedCageX + 4;
                 }
@@ -252,6 +256,13 @@ void CuccoMinigame_WinRupees(CuccoMinigameEntity* this) {
     rupees = 0;
 
     for (index = 9; index >= 0; index--) { // Only first 10 count?
+        /* GBA original mimicked an ARM register-add by casting CuccoMinigameRupees
+         * to int and adding the index, then re-casting to u8* and dereferencing.
+         * On 64-bit hosts that truncates the upper bits of the pointer and
+         * SIGSEGVs at the end of the cucco minigame (#46). Just bounds-check
+         * and index normally. cuccoType is in {-1, 0, 1, 2} (see
+         * sub_080A1270): the (u32) cast turns -1 into a huge value that
+         * fails the bounds check, the same as a signed `>= 0` guard. */
         cuccoType = *cuccoTypes;
         if ((u32)cuccoType < sizeof(CuccoMinigameRupees)) {
             rupees += CuccoMinigameRupees[cuccoType];

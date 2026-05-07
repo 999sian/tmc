@@ -930,6 +930,16 @@ void Port_LoadRom(const char* path) {
     /* gGlobalGfxAndPalettes — huge palette/gfx blob (still points into gRomData) */
     gGlobalGfxAndPalettes = &gRomData[R->gfxAndPalettes];
 
+    /* gPalette_549 — Mt Crenel weather-change reads a 26-palette contiguous
+     * block starting here. Copy it out of gGlobalGfxAndPalettes (offset 0x44A0
+     * — same relative position on USA and EU because the palette ordering in
+     * gfx_and_palettes.s is identical). Without this, the +0xD0 indexing in
+     * sub_08059894 reads garbage and the mountaintop renders pink/cyan (#34). */
+    {
+        extern u16 gPalette_549[0x1A0];
+        memcpy(gPalette_549, gGlobalGfxAndPalettes + 0x44A0, sizeof(gPalette_549));
+    }
+
     /* gFrameObjLists — from compile-time const data (no ROM read needed) */
     memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
     fprintf(stderr, "gFrameObjLists loaded (%u bytes from compile-time table).\n", R->frameObjListsSize);
@@ -1012,6 +1022,13 @@ void Port_LoadRom(const char* path) {
     {
         extern void Port_InitUIElementDefinitions(void);
         Port_InitUIElementDefinitions();
+    }
+
+    /* gFigurines[1..136] — Figurine viewer table; each entry's pal/gfx
+     * resolved from gRomData. See port/port_figurines.c (#57). */
+    {
+        extern void Port_PopulateFigurines(void);
+        Port_PopulateFigurines();
     }
 
     /* gTranslations — resolved from compile-time offset table */
@@ -1165,6 +1182,16 @@ void Port_LoadRom(const char* path) {
 
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gFrameObjLists).\n",
             gRomRegion == ROM_REGION_EU ? "EU" : "USA");
+
+    /* Patch inline rail pointers that the asset extractor leaves out of
+     * any .bin (the bytes between adjacent .incbin chunks in
+     * gUnk_additional_* tables). Without this, rooms that use those
+     * tables — Cave-of-Flames Rollobite, BossDoor, etc. — see NULL
+     * rail pointers and entities like lava platforms don't move (#36). */
+    {
+        extern void Port_PatchInlinePtrs(void);
+        Port_PatchInlinePtrs();
+    }
 
     /* Initialize data stubs with ROM datas */
     {

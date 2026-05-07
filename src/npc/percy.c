@@ -36,6 +36,7 @@ void sub_0806B3CC(Entity*);
 void sub_0806B504(Entity*);
 void sub_0806B540(Entity*);
 
+#include "port_rom.h"
 extern const u8 gUnk_08001A7C[];
 
 void Percy_Head(Entity* this) {

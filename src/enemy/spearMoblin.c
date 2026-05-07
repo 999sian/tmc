@@ -46,10 +46,22 @@ extern const s8 gUnk_080CC7D0[];
 extern const u16 gUnk_080CC7D8[];
 extern const u8 gUnk_080CC944[];
 
+#include "port_rom.h"
+
+/* gUnk_080CC944 is a packed table of 4-byte GBA Hitbox pointers; on
+ * x86-64 reading it as `const Hitbox* const[]` reads 8 bytes per slot
+ * and produces garbage. Unpack one entry at a time via the ROM resolver. */
 static const Hitbox* SpearMoblin_ReadHitboxTemplate(u32 index) {
     return (const Hitbox*)Port_UnpackRomDataPtr(gUnk_080CC944, index);
 }
 
+/* The enemy initializer sets super->hitbox to definition->ptr.hitbox,
+ * which lives in read-only mmap'd ROM (gRomData) on PC. Action routines
+ * write to hitbox->offset_x/y/width/height per frame, which traps SIGSEGV
+ * the first time the player approaches a spear moblin (#19, South Hyrule
+ * field loading-zone crash). Allocate a mutable Hitbox3D copy.
+ * AllocMutableHitbox() can't be used because UnloadHitbox() would zFree
+ * the const ROM pointer. */
 static void SpearMoblin_CloneHitbox(SpearMoblinEntity* this) {
     Hitbox3D* writable;
     const Hitbox* source = super->hitbox;

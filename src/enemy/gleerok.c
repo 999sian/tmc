@@ -20,6 +20,11 @@
 #include "pauseMenu.h"
 #include "color.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#include <stdio.h>
+#include <stdlib.h>
+#endif
 
 typedef struct {
     union SplitHWord unk0;
@@ -61,10 +66,57 @@ typedef struct {
 extern void (*const Gleerok_Functions[])(GleerokEntity*);
 extern void (*const gUnk_080CD75C[])(GleerokEntity*);
 extern void (*const gUnk_080CD7B8[])(GleerokEntity*);
+
+#ifdef PC_PORT
+/* gUnk_080CD7E4, _D810, _D828, _D848 ship in port/data_const_stubs.c
+ * as `const u8[]` packed 4-byte GBA function-pointer tables. The C
+ * runtime needs *native* function pointers, not GBA Thumb addresses, so
+ * a `void (*const [])(...)` view of the same bytes calls into mmap'd
+ * ROM memory and SIGSEGVs as soon as Gleerok's fight script starts
+ * (Cave-of-Flames boss, #36).
+ *
+ * Define native shadow tables here with the actual decompiled C
+ * functions. Each entry below mirrors a `.4byte sub_080XXXXX + 1`
+ * directive in data/const/enemy/gleerok.s. The original `const u8[]`
+ * symbols stay defined in data_const_stubs.c for any downstream use. */
+extern void sub_0802D674(GleerokEntity* this);
+extern void sub_0802D6F0(GleerokEntity* this);
+extern void sub_0802D714(GleerokEntity* this);
+extern void sub_0802D77C(GleerokEntity* this);
+extern void sub_0802D7B4(GleerokEntity* this);
+extern void sub_0802DB84(GleerokEntity* this);
+extern void sub_0802DC1C(GleerokEntity* this);
+extern void sub_0802DCE0(GleerokEntity* this);
+extern void sub_0802DDD8(GleerokEntity* this);
+extern void sub_0802DFA8(GleerokEntity* this);
+extern void sub_0802DFC0(GleerokEntity* this);
+extern void sub_0802E034(GleerokEntity* this);
+extern void sub_0802E0B8(GleerokEntity* this);
+extern void sub_0802E1D0(GleerokEntity* this);
+extern void sub_0802E300(GleerokEntity* this);
+extern void sub_0802E430(GleerokEntity* this);
+extern void sub_0802E448(GleerokEntity* this);
+extern void sub_0802E4C0(GleerokEntity* this);
+static void (*const gleerok_subactions_gUnk_080CD7E4[])(GleerokEntity*) = {
+    sub_0802D674, sub_0802D6F0, sub_0802D714, sub_0802D77C, sub_0802D7B4,
+};
+static void (*const gleerok_subactions_gUnk_080CD810[])(GleerokEntity*) = {
+    sub_0802DB84, sub_0802DC1C, sub_0802DCE0, sub_0802DDD8, sub_0802DFA8, sub_0802E430,
+};
+static void (*const gleerok_subactions_gUnk_080CD828[])(GleerokEntity*) = {
+    sub_0802DFC0, sub_0802E034, sub_0802E034, sub_0802E0B8, sub_0802E1D0, sub_0802E300,
+};
+static void (*const gleerok_subactions_gUnk_080CD848[])(GleerokEntity*) = {
+    sub_0802E448, sub_0802E4C0,
+};
+#define GLEEROK_FN(table, idx) (gleerok_subactions_##table[(idx)])
+#else
 extern void (*const gUnk_080CD7E4[])(GleerokEntity*);
 extern void (*const gUnk_080CD810[])(GleerokEntity*);
 extern void (*const gUnk_080CD828[])(GleerokEntity*);
 extern void (*const gUnk_080CD848[])(GleerokEntity*);
+#define GLEEROK_FN(table, idx) (table)[(idx)]
+#endif
 
 extern Gleerok_HeapStruct2 gUnk_080CD7C4[];
 extern u8 gUnk_080CD884[];
@@ -73,8 +125,22 @@ extern u8 gUnk_080CD840[];
 extern u8 gUnk_080CD844[];
 extern u8 gUnk_080CD850[];
 extern u8 gUnk_080CD854[];
+#ifdef PC_PORT
+/* gUnk_080CD86C / gUnk_080CD878 are GBA-pointer tables (4 packed
+ * u32 entries each) defined in port/data_const_stubs.c as `const u8[]`.
+ * Declaring them as `const u8*[]` on x86-64 strides 8 bytes per index
+ * and reads two GBA addresses concatenated — garbage. Treat as raw u8
+ * arrays and unpack each entry via Port_PackedRomEntry. */
+extern const u8 gUnk_080CD86C[];
+extern const u8 gUnk_080CD878[];
+#define GUNK_080CD86C_PTR(idx) ((const u8*)Port_PackedRomEntry(gUnk_080CD86C, (idx)))
+#define GUNK_080CD878_PTR(idx) ((const u8*)Port_PackedRomEntry(gUnk_080CD878, (idx)))
+#else
 extern const u8* gUnk_080CD86C[];
 extern const u8* gUnk_080CD878[];
+#define GUNK_080CD86C_PTR(idx) gUnk_080CD86C[(idx)]
+#define GUNK_080CD878_PTR(idx) gUnk_080CD878[(idx)]
+#endif
 
 extern u32 sub_0806FC80(Entity*, Entity*, s32);
 
@@ -287,12 +353,18 @@ void sub_0802D258(GleerokEntity* this) {
     }
 
     if ((gRoomTransition.frameCount & 0xf) == 0) {
-        Entity* fx;
+        /* Issue #51: original GBA code did raw offset arithmetic
+         * `(u8*)heap + 0x3c + rand*4` to pick a random spawn entity from
+         * the 5-platform entities[] array (with OOB rand==5 spilling into
+         * ent2 — the GBA pattern). On x86-64 the struct layout differs
+         * (Entity* is 8 bytes vs 4), so 0x3c lands inside entity1 and the
+         * resulting CreateFx() argument is garbage. Crash on boss death.
+         * Replace with proper field access keeping the same sparse {0,1,4,5}
+         * sample distribution. */
         u32 rand = Random() & 5;
-        u8* ptr = (u8*)this->unk_84;
-        rand *= 4;
-        ptr += 0x3c;
-        fx = CreateFx(*(Entity**)(ptr + rand), FX_GIANT_EXPLOSION3, 0);
+        Entity* target = (rand == 5) ? this->unk_84->ent2
+                                     : this->unk_84->entities[rand];
+        Entity* fx = target ? CreateFx(target, FX_GIANT_EXPLOSION3, 0) : NULL;
         if (fx) {
             fx->spritePriority.b0 = 0;
         }
@@ -306,14 +378,23 @@ void sub_0802D33C(GleerokEntity* this) {
     u32 i;
 
     for (i = 0; i < 4; i++) {
-        DeleteEntity(unk_84->entities[i]);
+        if (unk_84->entities[i]) {
+            DeleteEntity(unk_84->entities[i]);
+        }
     }
 
-    unk_84->entities[i]->health = 0;
-    ((Enemy*)(unk_84->entities[i]))->enemyFlags |= EM_FLAG_BOSS;
-    unk_84->ent2->health = 0;
-    unk_84->ent2->type2 = 0;
-    unk_84->ent2->spriteSettings.draw &= ~1;
+    /* The 5th platform entity stays alive after the others are deleted
+     * (it's the death-flash anchor). DeleteEntity is null-safe but the
+     * field accesses below aren't — guard each pointer. Issue #51. */
+    if (unk_84->entities[i]) {
+        unk_84->entities[i]->health = 0;
+        ((Enemy*)(unk_84->entities[i]))->enemyFlags |= EM_FLAG_BOSS;
+    }
+    if (unk_84->ent2) {
+        unk_84->ent2->health = 0;
+        unk_84->ent2->type2 = 0;
+        unk_84->ent2->spriteSettings.draw &= ~1;
+    }
     DeleteThisEntity();
 }
 
@@ -438,7 +519,7 @@ void sub_0802D650(GleerokEntity* this) {
     PausePlayer();
 #endif
 
-    gUnk_080CD7E4[super->subAction](this);
+    GLEEROK_FN(gUnk_080CD7E4, super->subAction)(this);
     sub_0802E7E4(this->unk_84);
 }
 
@@ -712,7 +793,7 @@ void sub_0802D86C(GleerokEntity* this) {
 
             break;
         case 0:
-            gUnk_080CD810[super->subAction](this);
+            GLEEROK_FN(gUnk_080CD810, super->subAction)(this);
             sub_0802E7E4(this->unk_84);
             break;
     }
@@ -951,7 +1032,7 @@ void sub_0802DDD8(GleerokEntity* this) {
 }
 
 void sub_0802DFA8(GleerokEntity* this) {
-    gUnk_080CD828[super->type2](this);
+    GLEEROK_FN(gUnk_080CD828, super->type2)(this);
 }
 
 void sub_0802DFC0(GleerokEntity* this) {
@@ -1093,6 +1174,10 @@ void sub_0802E1D0(GleerokEntity* this) {
                             this->unk_74 = 0;
                             this->unk_75 = 0x10;
                             this->unk_7c.HALF_U.LO = 0xB;
+                            /* Issue #51: explicitly start the fade in fade-out
+                             * direction. sub_0802E300 reads unk_83 to drive
+                             * the alpha transitions. */
+                            this->unk_83 = 0;
                             gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
                             gScreen.controls.layerFXControl = 0x240;
                             InitScreenShake(30, 0);
@@ -1114,24 +1199,53 @@ void sub_0802E300(GleerokEntity* this) {
     u8* ptr2;
     Entity* entity;
     Gleerok_HeapStruct* heap;
+
+    /* Issue #51 — Cave-of-Flames boss "doesn't resurface for round 3".
+     *
+     * The original decompiled structure was:
+     *
+     *   if (!(u79 & 0x80))      u7c--;
+     *   else if (u74 != 0x10)   { decrement u7c; on 0, reset u7c=0xb,
+     *                             u74++, u75--; }
+     *   if (u7c == 0) { fade-in step (u74--, u75++); }
+     *
+     * which can never enter the fade-in branch in practice: while u74<0x10
+     * Phase B keeps re-resetting u7c to 0xb whenever it hits 0, so the
+     * fade-in `if (u7c == 0)` test is always false. Once u74 reaches 0x10
+     * Phase B is gated off and nothing decrements u7c — it stays at 0xb
+     * forever. The fade-out completes visually (lava fills the room and
+     * sits there), but the boss never resurfaces. Confirmed by tick-by-
+     * tick trace of (u79, u74, u75, u7c) on Linux: state freezes at
+     * (0x81, 0x10, 0x00, 0x0b).
+     *
+     * Fix: track fade direction explicitly in unk_83 (otherwise unused on
+     * GleerokEntity), and always decrement u7c while submerged so Phase C
+     * can drive both the fade-out bump and the fade-in bump on the same
+     * 11-tick cadence.
+     *   unk_83 = 0  →  fade-out (lava rising, u74 climbing to 0x10)
+     *   unk_83 = 1  →  fade-in  (lava receding, u75 climbing to 0x10)
+     * sub_0802E1D0 sets unk_83=0 when entering the submerged splash path. */
     if ((this->unk_79 & 0x80) == 0) {
         this->unk_7c.HALF.LO--;
-    } else {
-        if (this->unk_74 != 0x10) {
-            if (this->unk_7c.HALF_U.LO) {
-                --this->unk_7c.HALF_U.LO;
-                if (this->unk_7c.HALF_U.LO == 0) {
-                    this->unk_7c.HALF_U.LO = 0xb;
-                    this->unk_75--;
-                    this->unk_74++;
-                    gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
-                }
-            }
-        }
+    } else if (this->unk_7c.HALF_U.LO) {
+        --this->unk_7c.HALF_U.LO;
     }
 
     if (this->unk_7c.HALF_U.LO == 0) {
         if (this->unk_79 & 0x80) {
+            if (this->unk_83 == 0) {
+                /* Fade-out cadence: u74 0→0x10, u75 0x10→0. When u74
+                 * tops out, flip into fade-in mode. */
+                if (this->unk_74 != 0x10) {
+                    this->unk_7c.HALF_U.LO = 0xb;
+                    this->unk_75--;
+                    this->unk_74++;
+                    gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
+                    return;
+                }
+                this->unk_83 = 1;
+                /* Fall through into fade-in branch this same tick. */
+            }
             if (this->unk_75 != 0x10) {
                 this->unk_7c.HALF_U.LO = 0xb;
                 this->unk_75++;
@@ -1139,6 +1253,9 @@ void sub_0802E300(GleerokEntity* this) {
                 gScreen.controls.alphaBlend = this->unk_74 | (this->unk_75 << 8);
                 return;
             }
+            /* Fade-in done. Reset the phase flag so the next round's
+             * submerge starts clean. */
+            this->unk_83 = 0;
         }
 
         this->unk_79 &= ~0x80;
@@ -1178,7 +1295,7 @@ void sub_0802E300(GleerokEntity* this) {
 }
 
 void sub_0802E430(GleerokEntity* this) {
-    gUnk_080CD848[super->type2](this);
+    GLEEROK_FN(gUnk_080CD848, super->type2)(this);
 }
 
 void sub_0802E448(GleerokEntity* this) {
@@ -1383,7 +1500,13 @@ void sub_0802E7E4(Gleerok_HeapStruct* this) {
                 this->entities[i + 1]->spritePriority.b0 = bVar6;
             }
         }
-        this->entity1->spritePriority.b0 = 0;
+        /* heap->entity1 is null-initialised at room entry and is only set
+         * once sub_0802D6F0 (subAction 1) creates the 6th child mid-fight.
+         * The GBA build silently wrote to BIOS at 0x00000000 + offset; on
+         * PC that's a SIGSEGV. Guard until the entity exists. (#36, Cave
+         * of Flames boss) */
+        if (this->entity1)
+            this->entity1->spritePriority.b0 = 0;
     } else {
         bVar6 = 5;
 
@@ -1403,7 +1526,8 @@ void sub_0802E7E4(Gleerok_HeapStruct* this) {
                 this->entities[i + 1]->spritePriority.b0 = bVar6;
             }
         }
-        this->entity1->spritePriority.b0 = 6;
+        if (this->entity1)
+            this->entity1->spritePriority.b0 = 6;
     }
 }
 
@@ -1558,8 +1682,8 @@ void sub_0802EBC4(GleerokEntity* this) {
     s32 iVar4;
 
     if (this->unk_74 == 0) {
-        iVar4 = GetRandomByWeight(gUnk_080CD86C[this->unk_79]);
-        if (gUnk_080CD878[this->unk_79][iVar4] < this->unk_75) {
+        iVar4 = GetRandomByWeight(GUNK_080CD86C_PTR(this->unk_79));
+        if (GUNK_080CD878_PTR(this->unk_79)[iVar4] < this->unk_75) {
             this->unk_75 = 0;
             if (this->unk_79 == 0) {
                 this->unk_76 = 0;

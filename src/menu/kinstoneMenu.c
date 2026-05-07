@@ -638,6 +638,9 @@ u32 sub_080A4418(u32 param_1, u32 param_2) {
 
 void KinstoneMenu_080A4468(void) {
     gPossibleInteraction.kinstoneId = KINSTONE_NONE;
+    /* Validate currentIndex before indexing candidates[] — the kinstone-bag
+     * get path can fire this without a live fuser and currentObject would
+     * otherwise be a stale/NULL pointer (#16). */
     if (gPossibleInteraction.currentIndex < ARRAY_COUNT(gPossibleInteraction.candidates)) {
         gPossibleInteraction.candidates[gPossibleInteraction.currentIndex].kinstoneId = KINSTONE_NONE;
         gPossibleInteraction.currentObject = &gPossibleInteraction.candidates[gPossibleInteraction.currentIndex];

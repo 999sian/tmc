@@ -18,6 +18,7 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <climits>
+#include <cstdlib>
 #include <mach-o/dyld.h>
 #else
 #include <climits>
@@ -44,6 +45,20 @@ std::optional<std::filesystem::path> GetExecutableDirectory() {
     }
     buffer.resize(len);
     return std::filesystem::path(buffer).parent_path();
+#elif defined(__APPLE__)
+    /* macOS has no /proc filesystem; readlink("/proc/self/exe") fails.
+     * _NSGetExecutablePath returns the launch path which may include
+     * symlinks/relative segments, so realpath() it for a canonical form. */
+    char raw[PATH_MAX];
+    uint32_t size = static_cast<uint32_t>(sizeof(raw));
+    if (_NSGetExecutablePath(raw, &size) != 0) {
+        return std::nullopt;
+    }
+    char resolved[PATH_MAX];
+    if (realpath(raw, resolved) == nullptr) {
+        return std::filesystem::path(raw).parent_path();
+    }
+    return std::filesystem::path(resolved).parent_path();
 #else
     char buffer[PATH_MAX];
     ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer));
@@ -263,22 +278,28 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window) {
     std::string error;
     bool ok = false;
 
+    /* Prefer an already-built runtime asset tree. Packaged installs may ship
+     * both assets/ and assets_src/, but startup should not walk the editable
+     * tree or run rebuild checks when runtime manifests are already present. */
+    if (FindReadyRuntimeRoot().has_value()) {
+        return;
+    }
+
     if (const auto editableRoot = FindReadyEditableRoot(); editableRoot.has_value()) {
+        const std::filesystem::path installRoot = editableRoot->parent_path();
         std::string reason;
         const bool needsBuild =
-            !RuntimeAssetsReady(*editableRoot) ||
-            PortAssetPipeline::RuntimeAssetsNeedRebuild(*editableRoot / "assets_src", *editableRoot / "assets", &reason);
+            !RuntimeAssetsReady(installRoot) ||
+            PortAssetPipeline::RuntimeAssetsNeedRebuild(*editableRoot, installRoot / "assets", &reason);
         if (!needsBuild) {
             return;
         }
 
         ok = RunWithExtractingScreen(window,
                                      [&]() {
-                                         return BuildRuntimeAssetsFromEditable(*editableRoot, error);
+                                         return BuildRuntimeAssetsFromEditable(installRoot, error);
                                      },
                                      error);
-    } else if (FindReadyRuntimeRoot().has_value()) {
-        return;
     } else {
         const std::filesystem::path root = PreferredAssetRoot();
         ok = RunWithExtractingScreen(window,
