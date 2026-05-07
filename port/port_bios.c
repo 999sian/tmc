@@ -5,6 +5,7 @@
 #include "port_hdma.h"
 #include "port_ppu.h"
 #include "port_runtime_config.h"
+#include "port_softslots.h"
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
@@ -55,11 +56,13 @@ static void Port_UpdateInput(void) {
 
     {
         extern bool Port_DebugMenu_IsOpen(void);
-        if (Port_DebugMenu_IsOpen()) {
-            /* While the debug menu is open, hold all GBA buttons released
-             * so the game doesn't observe stray input from key presses we
-             * routed to the menu. */
+        /* While either overlay is open, hold all GBA buttons released so
+         * the game doesn't observe stray input from key presses we routed
+         * to the overlay. The soft-slot configuration overlay piggybacks
+         * on this behaviour while it's the active focus. */
+        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen()) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
+            Port_SoftSlots_TickPause();
             sFrameNum++;
             return;
         }
@@ -71,7 +74,27 @@ static void Port_UpdateInput(void) {
         }
     }
 
+    /* Soft-slots (X / Y / L2 / R2): when one is held with an item
+     * assigned, force GBA B_BUTTON pressed so the engine spawns the
+     * soft-slot's item via the regular B-dispatch path. The override of
+     * which item to spawn lives in src/playerUtils.c via
+     * Port_SoftSlots_GetEffectiveBItem(); the save data is untouched. */
+    Port_SoftSlots_Update();
+    if (Port_SoftSlots_IsBHeld()) {
+        keyinput &= ~B_BUTTON;
+    }
+
+    /* Decay the pause-active grace counter. The engine's Subtask_PauseMenu
+     * pumps it back up to N each frame the start menu is open, so this
+     * naturally drops to 0 a few frames after the menu closes. */
+    Port_SoftSlots_TickPause();
+
     *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
+
+    /* Edge cache served its purpose for this frame's KEYINPUT — clear
+     * so the next frame starts fresh and a held key reverts to the
+     * polled-state path. */
+    Port_Config_ClearInputEdges();
 
     sFrameNum++;
     if (gMain.task == 0 && sFrameNum > 300 && sFrameNum < 310) {
@@ -87,6 +110,16 @@ static void Port_PumpEvents(void) {
             continue;
         }
         if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+            /* Soft-slot config overlay is highest priority: it consumes
+             * navigation keys before the rest of the routing fires. */
+            if (Port_SoftSlots_ConfigIsOpen()) {
+                if (Port_SoftSlots_ConfigHandleKey((int)e.key.key)) {
+                    continue;
+                }
+            } else if (e.key.key == SDLK_BACKSLASH && Port_SoftSlots_IsPauseActive()) {
+                Port_SoftSlots_ConfigOpen();
+                continue;
+            }
             bool altHeld = (e.key.mod & SDL_KMOD_ALT) != 0;
             if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && altHeld)) {
                 Port_PPU_ToggleFullscreen();
@@ -141,11 +174,10 @@ static void Port_PumpEvents(void) {
             sFastForward = false;
             continue;
         }
-        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
-            e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
-            sFastForward = e.gaxis.value > 16384;
-            continue;
-        }
+        /* Fast-forward via keyboard TAB only. The previous RIGHT_TRIGGER
+         * gamepad shortcut conflicted with the default soft-slot R2 binding
+         * (port_softslots.c) — pulling the trigger would simultaneously
+         * fast-forward and fire a soft-slot item. */
         Port_Config_HandleEvent(&e);
     }
 }

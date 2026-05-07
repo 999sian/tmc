@@ -52,6 +52,10 @@ unsigned int  Port_Config_TargetFps(void);
 void          Port_Config_CycleTargetFps(int direction);
 unsigned char Port_Config_InternalScale(void);
 void          Port_Config_CycleInternalScale(int direction);
+
+/* Soft-slot equip-button assignments (port_softslots.c). */
+const char*   Port_SoftSlots_GetSlotLabel(int slot);
+void          Port_SoftSlots_CycleAssignment(int slot, int direction);
 }
 
 namespace {
@@ -124,6 +128,7 @@ MenuPage BuildWarpPage(void);
 MenuPage BuildAllAreasPage(void);
 MenuPage BuildAreaRoomsPage(unsigned char area);
 MenuPage BuildDisplaySettingsPage(void);
+MenuPage BuildSoftSlotsPage(void);
 MenuPage BuildMainPage(void);
 
 void Push(MenuPage page) {
@@ -361,12 +366,30 @@ MenuPage BuildDisplaySettingsPage(void) {
     return p;
 }
 
+/* Soft-slot assignment page. Each row is a cycle item: Left/Right walks
+ * through the items the player owns. The label is regenerated every frame
+ * via labelFn, so the displayed assignment updates immediately on cycle. */
+MenuPage BuildSoftSlotsPage(void) {
+    MenuPage p;
+    p.title = "EXTRA EQUIP SLOTS";
+    for (int s = 0; s < 4; ++s) {
+        MenuItem it;
+        it.cycleLeft  = [s]() { Port_SoftSlots_CycleAssignment(s, -1); };
+        it.cycleRight = [s]() { Port_SoftSlots_CycleAssignment(s, +1); };
+        it.labelFn = [s]() { return std::string(Port_SoftSlots_GetSlotLabel(s)); };
+        p.items.push_back(std::move(it));
+    }
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
     p.items.push_back({ "Items / progress",  []() { Push(BuildItemsPage()); } });
     p.items.push_back({ "Warp",              []() { Push(BuildWarpPage());  } });
     p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
+    p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
     p.items.push_back({ "Close menu",        []() { Pop(); } });
     return p;

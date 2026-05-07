@@ -15,7 +15,13 @@ namespace {
 struct Bind {
     SDL_Keycode key = SDLK_UNKNOWN;
     SDL_GamepadButton pad = SDL_GAMEPAD_BUTTON_INVALID;
+    /* Triggers (L2/R2 on Xbox/PS pads) are reported by SDL as analog axes,
+     * not buttons, so the bind table allows binding to an axis. A value
+     * past kAxisThreshold counts as "pressed". */
+    SDL_GamepadAxis axis = SDL_GAMEPAD_AXIS_INVALID;
 };
+
+constexpr Sint16 kAxisThreshold = 16384;
 
 struct Def {
     PortInput input;
@@ -34,6 +40,13 @@ const std::array<Def, PORT_INPUT_COUNT> kDefaults = {{
     { PORT_INPUT_DOWN, "down", { "SDLK:0x40000051", "SDL_GAMEPAD:0x0000000c" } },
     { PORT_INPUT_R, "r", { "SDLK:0x00000073", "SDL_GAMEPAD:0x0000000a" } },
     { PORT_INPUT_L, "l", { "SDLK:0x00000061", "SDL_GAMEPAD:0x00000009" } },
+    /* Soft-slots: keyboard CV/QE + face-buttons WEST/NORTH + triggers L2/R2.
+     * Numeric values: SDL_GAMEPAD_BUTTON_WEST=2, NORTH=3,
+     * SDL_GAMEPAD_AXIS_LEFT_TRIGGER=4, RIGHT_TRIGGER=5. */
+    { PORT_INPUT_SOFT_X,  "soft_x",  { "SDLK:0x00000063", "SDL_GAMEPAD:0x00000002" } },
+    { PORT_INPUT_SOFT_Y,  "soft_y",  { "SDLK:0x00000076", "SDL_GAMEPAD:0x00000003" } },
+    { PORT_INPUT_SOFT_L2, "soft_l2", { "SDLK:0x00000071", "SDL_AXIS:0x00000004" } },
+    { PORT_INPUT_SOFT_R2, "soft_r2", { "SDLK:0x00000065", "SDL_AXIS:0x00000005" } },
 }};
 
 u8 sScale = 3;
@@ -42,6 +55,12 @@ std::string sUpscaleMethod = "nearest";
 u64 sFrameTimeNs = 0;
 bool sPortSettingsMenuEnabled = true;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
+/* Edge-detection cache. Set when the corresponding SDL key/button event
+ * arrives during the frame; cleared by Port_Config_ClearInputEdges()
+ * after KEYINPUT is committed. Catches sub-frame taps (press+release
+ * between two polls) that the polled-state path would otherwise miss
+ * — useful for frame-perfect rolls / spin-attack inputs. */
+std::array<bool, PORT_INPUT_COUNT> sEdgePressed{};
 std::vector<SDL_Gamepad*> sPads;
 std::filesystem::path sConfigPath = "config.json";
 nlohmann::json sConfigJson;
@@ -72,6 +91,9 @@ void AddBind(PortInput input, const std::string& name) {
         sBinds[input].push_back(b);
     } else if (name.rfind("SDL_GAMEPAD:", 0) == 0) {
         b.pad = static_cast<SDL_GamepadButton>(std::strtoul(name.c_str() + 12, nullptr, 0));
+        sBinds[input].push_back(b);
+    } else if (name.rfind("SDL_AXIS:", 0) == 0) {
+        b.axis = static_cast<SDL_GamepadAxis>(std::strtoul(name.c_str() + 9, nullptr, 0));
         sBinds[input].push_back(b);
     }
 }
@@ -308,10 +330,55 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
         OpenGamepad(e->gdevice.which);
     } else if (e->type == SDL_EVENT_GAMEPAD_REMOVED || e->type == SDL_EVENT_JOYSTICK_REMOVED) {
         CloseGamepad(e->gdevice.which);
+    } else if (e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) {
+        /* Stamp every PortInput whose binding includes this key as
+         * "pressed this frame" so the engine sees the press even if
+         * the matching release arrives before the next poll. */
+        for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
+            for (const Bind& b : sBinds[i]) {
+                if (b.key != SDLK_UNKNOWN && b.key == e->key.key) {
+                    sEdgePressed[i] = true;
+                    break;
+                }
+            }
+        }
+    } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+        for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
+            for (const Bind& b : sBinds[i]) {
+                if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT &&
+                    b.pad == (SDL_GamepadButton)e->gbutton.button) {
+                    sEdgePressed[i] = true;
+                    break;
+                }
+            }
+        }
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+               e->gaxis.value > kAxisThreshold) {
+        for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
+            for (const Bind& b : sBinds[i]) {
+                if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
+                    b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
+                    sEdgePressed[i] = true;
+                    break;
+                }
+            }
+        }
     }
 }
 
+extern "C" void Port_Config_ClearInputEdges(void) {
+    sEdgePressed.fill(false);
+}
+
 extern "C" bool Port_Config_InputPressed(PortInput input) {
+    /* Edge cache — set by Port_Config_HandleEvent on KEY_DOWN /
+     * GAMEPAD_BUTTON_DOWN events. Lets a sub-frame tap (press+release
+     * entirely between two polls) still register as held for one game
+     * frame, which the polled-state path below cannot do on its own. */
+    if (input >= 0 && input < PORT_INPUT_COUNT && sEdgePressed[input]) {
+        return true;
+    }
+
     SDL_UpdateGamepads();
     /* Re-scan every ~1s so a hot-plugged pad starts working even if its
      * GAMEPAD_ADDED event somehow didn't reach the poll loop. */
@@ -333,9 +400,22 @@ extern "C" bool Port_Config_InputPressed(PortInput input) {
             if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT && SDL_GetGamepadButton(pad, b.pad)) {
                 return true;
             }
+            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
+                SDL_GetGamepadAxis(pad, b.axis) > kAxisThreshold) {
+                return true;
+            }
         }
     }
     return false;
+}
+
+extern "C" bool Port_Config_SoftSlotPressed(int slot) {
+    static const PortInput kMap[4] = {
+        PORT_INPUT_SOFT_X, PORT_INPUT_SOFT_Y,
+        PORT_INPUT_SOFT_L2, PORT_INPUT_SOFT_R2,
+    };
+    if (slot < 0 || slot >= 4) return false;
+    return Port_Config_InputPressed(kMap[slot]);
 }
 
 extern "C" void Port_Config_CloseGamepads(void) {

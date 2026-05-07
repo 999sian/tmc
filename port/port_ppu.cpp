@@ -368,6 +368,8 @@ extern "C" void Port_PPU_PresentFrame(void) {
         {
             extern void Port_DebugMenu_Render(SDL_Renderer*, int, int);
             Port_DebugMenu_Render(sRenderer, outW, outH);
+            extern void Port_SoftSlots_RenderOverlay(void*, int, int);
+            Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
         }
         SDL_RenderPresent(sRenderer);
         return;
