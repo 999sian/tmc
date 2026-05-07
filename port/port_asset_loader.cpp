@@ -819,9 +819,13 @@ bool BuildAreaFromAssets(u32 area) {
 
     if (!gAssetGroupCache.areaRoomHeaders[area].empty()) {
         gAreaRoomHeaders[area] = gAssetGroupCache.areaRoomHeaders[area].data();
-    } else {
-        gAreaRoomHeaders[area] = nullptr;
     }
+    /* If the asset cache has no extracted headers for this area, leave
+     * gAreaRoomHeaders[area] alone — the startup ROM-pointer pass already
+     * populated it from kAreaRoomHeaderOffsets. Nulling here would clobber
+     * the valid pointer for any area whose header table wasn't extracted
+     * to JSON, and crash callers that read it directly (e.g. the world-map
+     * windcrest pin loop in subtaskFastTravel.c, #53). */
 
     const size_t tileSetSlots = std::max<size_t>(gAssetGroupCache.areaTileSets[area].size(), 64);
     gAssetGroupCache.areaTileSetPtrs[area].assign(tileSetSlots, nullptr);
