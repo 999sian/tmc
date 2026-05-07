@@ -253,8 +253,19 @@ void sub_08067A0C(CatEntity* this) {
     } else {
         tmp = (super->frame & 7);
         if (tmp != 0) {
+            /* #91 fix: index is `tmp - 1 + (flipX << 2)` which ranges
+             * 0..10 (tmp 1..7, flipX 0..1) — but the table is 8
+             * entries. With flipX=1 and tmp in {5,6,7} we'd read 1..3
+             * pointers past the table and dereference garbage as a
+             * Hitbox*, producing the access violation reported in the
+             * Blue House cat-attack crash. Clamp to the last valid
+             * entry; collision visuals are unaffected at the affected
+             * frames. */
+            int idx = (int)tmp - 1 + ((int)super->spriteSettings.flipX << 2);
+            if (idx < 0)  idx = 0;
+            if (idx >= 8) idx = 7;
             COLLISION_ON(super);
-            super->hitbox = gUnk_08111154[tmp - 1 + ((super->spriteSettings.flipX << 2))];
+            super->hitbox = gUnk_08111154[idx];
         } else {
             sub_08067DDC(super);
         }
