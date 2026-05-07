@@ -342,16 +342,13 @@ extern "C" void Port_PPU_PresentFrame(void) {
      * sleepStatus at 1, task at 2 — see include/main.h). Read raw bytes
      * to avoid pulling main.h into this C++ TU (the engine headers use
      * `this` as a C parameter name and don't parse as C++). */
+    /* Widescreen Phase 1: ViruaPPU clips BG/OAM at col 240 unconditionally
+     * (engine's 32-tile BG buffer doesn't have reliable data past col 240
+     * on static screens, and parked off-screen sprites live at x >= 240).
+     * For any widescreen_width > 240, uniform-stretch the 240-px frame
+     * into the full window. Phase 2 (sa2-style BGCNT_TXT512x256 + 64-tile
+     * BG buffer) replaces this with real extended tile loading. */
     if (MODE1_GBA_WIDTH > 240) {
-        /* Horizontally stretch the engine's 240-pixel output to fill
-         * MODE1_GBA_WIDTH on every frame. The BG buffer's 16-pixel
-         * "free" widescreen region (cols 240..255) is not reliably
-         * loaded by the engine in every scene — some rooms leave
-         * wrapped tilemap data there, which read as duplicate hearts /
-         * mirror tiles. Stretching everywhere trades a small uniform
-         * horizontal squash (~7% at 256 wide) for guaranteed no wrap
-         * and no artifact. The "real widescreen" path (engine writes
-         * tile data for cols 32..63) is documented as future work. */
         uint32_t scratch[240];
         for (int y = 0; y < MODE1_GBA_HEIGHT; ++y) {
             uint32_t* row = &virtuappu_frame_buffer[y * MODE1_GBA_WIDTH];
@@ -362,8 +359,8 @@ extern "C" void Port_PPU_PresentFrame(void) {
                 row[dst_x] = scratch[src_x];
             }
         }
-        (void)gMainOpaque;
     }
+    (void)gMainOpaque;
 
     if (sBackend == RenderBackend::Renderer) {
         int outW = 0;

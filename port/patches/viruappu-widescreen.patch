@@ -1,8 +1,8 @@
 diff --git a/include/cpu/mode1.h b/include/cpu/mode1.h
-index 8e91619..0d2b753 100644
+index b5dedb2..2bef632 100644
 --- a/include/cpu/mode1.h
 +++ b/include/cpu/mode1.h
-@@ -12,8 +12,22 @@ extern "C" {
+@@ -12,8 +12,24 @@ extern "C" {
  typedef void (*virtuappu_mode1_pre_line_fn)(int line);
  extern virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback;
  
@@ -11,50 +11,51 @@ index 8e91619..0d2b753 100644
 +#ifndef MODE1_GBA_WIDTH
 +#define MODE1_GBA_WIDTH 240
 +#endif
-+/* Canonical GBA viewport — used by OAM clipping. Stays at 240 so
-+ * engine-parked off-screen sprites don't bleed into the widescreen
-+ * pixels at MODE1_GBA_WIDTH > 240. */
++/* OAM and BG clip extents.
++ *
++ * The engine's 32-tile BG buffer holds reliable tile data only in the
++ * GBA-native 240-pixel viewport. Cols 30..31 (the 16 pixels past 240)
++ * are a *scroll buffer* that the engine updates when the camera moves
++ * but leaves stale/garbage on static screens (title, file-select,
++ * cutscene transitions). Engine-parked off-screen sprites also live
++ * at OAM x >= 240. So clip both BG and OAM at 240 unconditionally and
++ * pillarbox any width > 240. Real widescreen needs a 64-tile
++ * BGCNT_TXT512x256 (sa2-style) extension to the engine — Phase 2. */
 +#define MODE1_GBA_VIEWPORT_X 240
-+/* BG render clip — width of the engine's BG tilemap buffer. Default
-+ * 32-tile (256-pixel) BG buffer holds real room data at columns 0..255;
-+ * columns >= 256 read wrapped data. Composition fills past this with
-+ * black so the widescreen extra (cols 240..255) shows real content
-+ * while the wrap (cols 256+) becomes a clean pillarbox. */
-+#define MODE1_GBA_BG_CLIP_X 256
++#define MODE1_GBA_BG_CLIP_X  240
  enum {
 -    MODE1_GBA_WIDTH = 240,
      MODE1_GBA_HEIGHT = 160,
      MODE1_GBA_BG_COUNT = 4,
      MODE1_GBA_OAM_COUNT = 128,
 diff --git a/src/mode1.c b/src/mode1.c
-index fb6cbca..ede079b 100644
+index bb1ca26..5b3f8c0 100644
 --- a/src/mode1.c
 +++ b/src/mode1.c
-@@ -418,7 +418,10 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+@@ -426,7 +426,12 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
              uint8_t color_index;
              uint16_t rgb555;
  
 -            if (screen_x < 0 || screen_x >= MODE1_GBA_WIDTH) {
-+            /* PORT_WIDESCREEN_SPIKE: clip OAM at the GBA-native viewport
-+             * so engine-parked off-screen sprites don't leak into the
-+             * widescreen pixels at MODE1_GBA_WIDTH > 240. */
++            /* PORT_WIDESCREEN_SPIKE: clip OAM at the configured widescreen
++             * viewport. At <=256 widescreen, MODE1_GBA_VIEWPORT_X equals
++             * MODE1_GBA_WIDTH so all on-screen sprites render. Above 256,
++             * the viewport stays at 240 to keep parked off-screen sprites
++             * from leaking into the pillarbox region. */
 +            if (screen_x < 0 || screen_x >= MODE1_GBA_VIEWPORT_X) {
                  continue;
              }
  
-@@ -680,7 +683,19 @@ void virtuappu_mode1_composite_line(
+@@ -688,7 +693,16 @@ void virtuappu_mode1_composite_line(
              }
          }
  
 -        virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = top_color;
-+        /* PORT_WIDESCREEN_SPIKE: clip BG composition at the BG-buffer
-+         * width (256 by default). Engine-driven tile data is only
-+         * written into a 32-tile (256-pixel) wide window, so columns
-+         * 0..255 hold real game content (including the 16 extra pixels
-+         * past the GBA-native 240-pixel viewport) while columns >= 256
-+         * would read wrapped data. Force black past the buffer width
-+         * for a clean pillarbox until the engine is taught to write
-+         * tile data into a 64-tile-wide BG. */
++        /* PORT_WIDESCREEN_SPIKE: clip BG composition at the configured
++         * BG-buffer width. <=256 widescreen renders real BG everywhere;
++         * >256 force-blacks past col 256 (engine-loaded BG wraps past
++         * the 32-tile buffer) so port_ppu.cpp's stretch can fill the
++         * pillarbox. */
 +        if (x >= MODE1_GBA_BG_CLIP_X) {
 +            virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = 0xFF000000u;
 +        } else {
