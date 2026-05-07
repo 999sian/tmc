@@ -607,6 +607,20 @@ void Port_InitDataStubs(void) {
         extern u8 gUnk_additional_a_DeepwoodShrineBoss_Main[];
         extern u8 gUnk_additional_8_MelarisMine_Main[];
         extern u8 gUnk_additional_9_MelarisMine_Main[];
+        extern u8 gUnk_additional_8_DeepwoodShrine_StairsToB1[];
+        extern u8 gUnk_additional_8_HouseInteriors1_Library1F[];
+        extern u8 gUnk_additional_9_HouseInteriors1_Library1F[];
+        extern u8 gUnk_additional_8_HyruleCastle_3[];
+        extern u8 gUnk_additional_a_CaveOfFlamesBoss_Main[];
+        extern u8 gUnk_additional_a_TempleOfDroplets_BigOcto[];
+        extern u8 gUnk_additional_8_PalaceOfWinds_GyorgTornado[];
+        extern u8 gUnk_additional_9_PalaceOfWinds_GyorgTornado[];
+        extern u8 gUnk_additional_c_HouseInteriors2_Romio[];
+        extern u8 gUnk_additional_9_HouseInteriors2_Percy[];
+        extern u8 gUnk_additional_a_HouseInteriors2_Percy[];
+        extern u8 gUnk_additional_8_HouseInteriors3_BorlovEntrance[];
+        extern u8 gUnk_additional_9_HouseInteriors3_BorlovEntrance[];
+        extern u8 gUnk_additional_a_HouseInteriors3_BorlovEntrance[];
         struct PerRoomEntityListInit { const char* name; u32 rom_offset; u32 size; u8* dest; };
         struct PerRoomEntityListInit entries[] = {
             { "gUnk_additional_a_DeepwoodShrineBoss_Main", 0xDF94Cu, 0x30u,
@@ -623,6 +637,43 @@ void Port_InitDataStubs(void) {
               gUnk_additional_8_MelarisMine_Main },
             { "gUnk_additional_9_MelarisMine_Main", 0xDD274u, 0x20u,
               gUnk_additional_9_MelarisMine_Main },
+            /* Per-room state-change additional entity lists. Each one is
+             * loaded by sub_StateChange_<Room>() in roomInit.c via
+             * LoadRoomEntityList() — which iterates EntityData records
+             * until kind==0xFF. Zeroed stubs read kind=0 forever and
+             * crash. Populating from ROM lets the lists terminate
+             * correctly. Crashes covered: #64 (Temple of Droplets big-key
+             * area, BigOcto state-change), #68 (Hyrule Town Romio's
+             * "Purple House"), and others where the post-state-change
+             * room never loaded its real entity list. USA addresses. */
+            { "gUnk_additional_8_DeepwoodShrine_StairsToB1", 0xDE834u, 0x30u,
+              gUnk_additional_8_DeepwoodShrine_StairsToB1 },
+            { "gUnk_additional_8_HouseInteriors1_Library1F", 0xD66F4u, 0x20u,
+              gUnk_additional_8_HouseInteriors1_Library1F },
+            { "gUnk_additional_9_HouseInteriors1_Library1F", 0xD6734u, 0x50u,
+              gUnk_additional_9_HouseInteriors1_Library1F },
+            { "gUnk_additional_8_HyruleCastle_3", 0xD7690u, 0x40u,
+              gUnk_additional_8_HyruleCastle_3 },
+            { "gUnk_additional_a_CaveOfFlamesBoss_Main", 0xE1814u, 0x30u,
+              gUnk_additional_a_CaveOfFlamesBoss_Main },
+            { "gUnk_additional_a_TempleOfDroplets_BigOcto", 0xE49F4u, 0x30u,
+              gUnk_additional_a_TempleOfDroplets_BigOcto },
+            { "gUnk_additional_8_PalaceOfWinds_GyorgTornado", 0xE72E4u, 0x30u,
+              gUnk_additional_8_PalaceOfWinds_GyorgTornado },
+            { "gUnk_additional_9_PalaceOfWinds_GyorgTornado", 0xE7314u, 0x30u,
+              gUnk_additional_9_PalaceOfWinds_GyorgTornado },
+            { "gUnk_additional_c_HouseInteriors2_Romio", 0xF236Cu, 0x20u,
+              gUnk_additional_c_HouseInteriors2_Romio },
+            { "gUnk_additional_9_HouseInteriors2_Percy", 0xF2718u, 0x40u,
+              gUnk_additional_9_HouseInteriors2_Percy },
+            { "gUnk_additional_a_HouseInteriors2_Percy", 0xF2758u, 0x40u,
+              gUnk_additional_a_HouseInteriors2_Percy },
+            { "gUnk_additional_8_HouseInteriors3_BorlovEntrance", 0xF5F38u, 0x20u,
+              gUnk_additional_8_HouseInteriors3_BorlovEntrance },
+            { "gUnk_additional_9_HouseInteriors3_BorlovEntrance", 0xF5F58u, 0x20u,
+              gUnk_additional_9_HouseInteriors3_BorlovEntrance },
+            { "gUnk_additional_a_HouseInteriors3_BorlovEntrance", 0xF5F78u, 0x20u,
+              gUnk_additional_a_HouseInteriors3_BorlovEntrance },
         };
         for (size_t i = 0; i < sizeof(entries)/sizeof(entries[0]); i++) {
             if (entries[i].rom_offset + entries[i].size <= gRomSize) {
