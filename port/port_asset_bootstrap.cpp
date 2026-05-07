@@ -1,11 +1,11 @@
 #include "port_asset_bootstrap.h"
 #include "port_asset_pipeline.hpp"
+#include "asset_extractor_runner.h"
 
 #include <SDL3/SDL.h>
 
 #include <array>
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
 #include <future>
 #include <optional>
@@ -112,51 +112,42 @@ std::filesystem::path PreferredAssetRoot() {
     return ec ? std::filesystem::path(".") : cwd;
 }
 
-std::filesystem::path AssetExtractorPath(const std::filesystem::path& root) {
-#ifdef _WIN32
-    return root / "asset_extractor.exe";
-#else
-    return root / "asset_extractor";
-#endif
-}
+bool EnsureSoundsMetadata(const std::filesystem::path& root, std::string& error) {
+    if (std::filesystem::exists(root / "sounds.json") || std::filesystem::exists(root / "assets" / "sounds.json")) {
+        return true;
+    }
 
-#ifdef _WIN32
-std::string QuoteCommandPath(const std::filesystem::path& path) {
-    std::string quoted = "\"";
-    quoted += path.string();
-    quoted += "\"";
-    return quoted;
-}
-#else
-std::string QuoteCommandPath(const std::filesystem::path& path) {
-    std::string quoted = "'";
-    for (char ch : path.string()) {
-        if (ch == '\'') {
-            quoted += "'\\''";
-        } else {
-            quoted += ch;
+    for (std::filesystem::path probe = root; !probe.empty(); probe = probe.parent_path()) {
+        const std::filesystem::path source = probe / "assets" / "sounds.json";
+        if (std::filesystem::exists(source)) {
+            std::error_code ec;
+            std::filesystem::copy_file(
+                source, root / "sounds.json", std::filesystem::copy_options::overwrite_existing, ec
+            );
+            if (ec) {
+                error = "failed to copy sounds.json: " + ec.message();
+                return false;
+            }
+            return true;
+        }
+
+        const std::filesystem::path parent = probe.parent_path();
+        if (parent == probe) {
+            break;
         }
     }
-    quoted += "'";
-    return quoted;
+
+    error = "sounds.json was not found";
+    return false;
 }
-#endif
 
 bool RunAssetExtractor(const std::filesystem::path& root, std::string& error) {
-    const std::filesystem::path extractor = AssetExtractorPath(root);
-    if (!std::filesystem::exists(extractor)) {
-        error = "asset_extractor was not found next to tmc_pc";
-        return false;
-    }
-
-    const int status = std::system(QuoteCommandPath(extractor).c_str());
-    if (status != 0) {
-        error = "asset_extractor failed";
+    if (!RunEmbeddedAssetExtractor(root, &error)) {
         return false;
     }
 
     if (!RuntimeAssetsReady(root)) {
-        error = "asset_extractor finished but assets are still missing";
+        error = "asset extraction finished but assets are still missing";
         return false;
     }
 
@@ -167,6 +158,9 @@ bool BuildRuntimeAssetsFromEditable(const std::filesystem::path& root, std::stri
     std::string pipelineError;
     if (!PortAssetPipeline::BuildRuntimeAssets(root / "assets_src", root / "assets", &pipelineError)) {
         error = pipelineError.empty() ? "failed to build runtime assets" : pipelineError;
+        return false;
+    }
+    if (!EnsureSoundsMetadata(root, error)) {
         return false;
     }
 
@@ -269,6 +263,8 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window) {
             !RuntimeAssetsReady(*editableRoot) ||
             PortAssetPipeline::RuntimeAssetsNeedRebuild(*editableRoot / "assets_src", *editableRoot / "assets", &reason);
         if (!needsBuild) {
+            std::string ignoredError;
+            EnsureSoundsMetadata(*editableRoot, ignoredError);
             return;
         }
 
@@ -277,15 +273,22 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window) {
                                          return BuildRuntimeAssetsFromEditable(*editableRoot, error);
                                      },
                                      error);
-    } else if (FindReadyRuntimeRoot().has_value()) {
+    } else if (const auto runtimeRoot = FindReadyRuntimeRoot(); runtimeRoot.has_value()) {
+        std::string ignoredError;
+        EnsureSoundsMetadata(*runtimeRoot, ignoredError);
         return;
     } else {
+#ifdef TMC_ANDROID_PORT
+        error = "Android runtime assets are missing. Re-select the ROM so the in-app extractor can rebuild them.";
+        ok = false;
+#else
         const std::filesystem::path root = PreferredAssetRoot();
         ok = RunWithExtractingScreen(window,
                                      [&]() {
                                          return RunAssetExtractor(root, error);
                                      },
                                      error);
+#endif
     }
 
     if (!ok) {

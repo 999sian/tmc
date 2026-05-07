@@ -1,5 +1,5 @@
 #include "macroasm.h"
-#include <fmt/format.h>
+#include "simple_format.h"
 #include <util/file.h>
 
 std::filesystem::path BaseMacroAsmAsset::generateAssetPath() {
@@ -16,5 +16,5 @@ void BaseMacroAsmAsset::extractBinary(const std::vector<char>& baserom) {
     BaseAsset::extractBinary(baserom);
     // Create dummy .s file that just incbins the .bin file.
     auto file = util::open_file(assetPath.string(), "wb");
-    fmt::print(file.get(), "\t.incbin \"{}\"\n", path.generic_string());
+    assetfmt::Print(file.get(), "\t.incbin \"{}\"\n", path.generic_string());
 }

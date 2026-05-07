@@ -49,7 +49,7 @@ end
 local use_system_packages = is_host("linux") and (os.getenv("XMAKE_USE_SYSTEM_SDL3") or os.getenv("IN_NIX_SHELL"))
 if use_system_packages then
     add_requires("nlohmann_json", {system = true, configs = {cmake = false}})
-    add_requires("fmt", {system = true})
+    add_requires("fmt", {configs = {header_only = true}})
     add_requires("libpng", {system = true})
     add_requires("zlib", {system = true})
     add_requires("libsdl3", {system = true})
@@ -96,7 +96,7 @@ target("asset_processor")
     add_files("tools/src/asset_processor/assets/*.cpp")
     add_includedirs("tools/src/asset_processor")
     add_includedirs("tools/src/util")
-    add_packages("nlohmann_json", "fmt")
+    add_packages("nlohmann_json")
     add_mingw_static_cpp_runtime()
 target_end()
 
@@ -111,7 +111,7 @@ target("asset_extractor")
     add_files("port/port_asset_index.c")
     add_includedirs("tools/src/assets_extractor")
     add_includedirs("include", "port", ".")
-    add_packages("nlohmann_json", "fmt")
+    add_packages("nlohmann_json")
     add_mingw_static_cpp_runtime()
     after_build(function (target)
         local mirrored_exe = path.join(tools_bin, path.filename(target:targetfile()))
@@ -409,6 +409,7 @@ target("tmc_pc")
     add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
     add_includedirs("libs/VirtuaAPU/include")
     add_includedirs("libs/agbplay_core")
+    add_includedirs("tools/src/assets_extractor")
 
     
 
@@ -416,10 +417,12 @@ target("tmc_pc")
     add_files("port/port_audio.c")
     add_files("port/port_runtime_config.cpp")
     add_files("port/port_asset_bootstrap.cpp")
+    add_files("port/port_asset_index.c")
     add_files("port/port_update_check.c")
     add_files("port/port_asset_loader.cpp")
     add_files("port/port_asset_pipeline.cpp")
     add_files("port/port_m4a_backend.cpp")
+    add_files("tools/src/assets_extractor/asset_extractor_runner.cpp")
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
         -- PC port stubs for undefined symbols
@@ -545,7 +548,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3", "fmt", "nlohmann_json")
+    add_packages("libsdl3", "nlohmann_json")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     add_cflags("-fopenmp", {tools = {"gcc", "clang"}})

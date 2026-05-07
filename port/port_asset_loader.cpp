@@ -883,6 +883,12 @@ bool EnsureAssetGroupCache() {
     gAssetGroupCache.hasSpritePtrData = !spritePtrsJson.is_null();
     gAssetGroupCache.hasTextData = !textsJson.is_null();
 
+#ifdef TMC_ANDROID_PORT
+    gAssetGroupCache.hasAreaData = false;
+    gAssetGroupCache.hasSpritePtrData = false;
+    gAssetGroupCache.hasTextData = false;
+#endif
+
     try {
         ParseGfxGroups(gfxGroupsJson);
         ParsePaletteGroups(paletteGroupsJson);
