@@ -13,6 +13,13 @@
 #include <cstdlib>
 #include <cstring>
 
+/* Manual access to gMain (the engine's Main struct): including main.h
+ * would pull in player.h, which uses `this` as a C parameter name and
+ * doesn't compile as C++. Treat the symbol as opaque bytes and read the
+ * task field at known offset 2 (interruptFlag, sleepStatus, task —
+ * include/main.h). C linkage matches the engine's Main gMain. */
+extern "C" uint8_t gMainOpaque[] asm ("gMain");
+
 enum class RenderBackend {
     None,
     Renderer,
@@ -322,6 +329,39 @@ extern "C" void Port_PPU_PresentFrame(void) {
     }
 
     virtuappu_render_frame();
+
+    /* Widescreen-spike post-process: on screens where the engine doesn't
+     * load BG tile data past column 239 (title, file-select), the extra
+     * widescreen columns (240+) read stale VRAM and visually glitch
+     * (e.g. yellow band on title). Force-black them on those tasks; the
+     * gameplay task is left alone since it does scroll the BG buffer.
+     *
+     * gMain.task is byte 2 of the Main struct (vu8 interruptFlag at 0,
+     * sleepStatus at 1, task at 2 — see include/main.h). Read raw bytes
+     * to avoid pulling main.h into this C++ TU (the engine headers use
+     * `this` as a C parameter name and don't parse as C++). */
+    if (MODE1_GBA_WIDTH > 240) {
+        /* Horizontally stretch the engine's 240-pixel output to fill
+         * MODE1_GBA_WIDTH on every frame. The BG buffer's 16-pixel
+         * "free" widescreen region (cols 240..255) is not reliably
+         * loaded by the engine in every scene — some rooms leave
+         * wrapped tilemap data there, which read as duplicate hearts /
+         * mirror tiles. Stretching everywhere trades a small uniform
+         * horizontal squash (~7% at 256 wide) for guaranteed no wrap
+         * and no artifact. The "real widescreen" path (engine writes
+         * tile data for cols 32..63) is documented as future work. */
+        uint32_t scratch[240];
+        for (int y = 0; y < MODE1_GBA_HEIGHT; ++y) {
+            uint32_t* row = &virtuappu_frame_buffer[y * MODE1_GBA_WIDTH];
+            std::memcpy(scratch, row, 240 * sizeof(uint32_t));
+            for (int dst_x = 0; dst_x < MODE1_GBA_WIDTH; ++dst_x) {
+                int src_x = (dst_x * 240) / MODE1_GBA_WIDTH;
+                if (src_x > 239) src_x = 239;
+                row[dst_x] = scratch[src_x];
+            }
+        }
+        (void)gMainOpaque;
+    }
 
     if (sBackend == RenderBackend::Renderer) {
         int outW = 0;
