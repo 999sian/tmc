@@ -1,0 +1,65 @@
+diff --git a/include/cpu/mode1.h b/include/cpu/mode1.h
+index 8e91619..0d2b753 100644
+--- a/include/cpu/mode1.h
++++ b/include/cpu/mode1.h
+@@ -12,8 +12,22 @@ extern "C" {
+ typedef void (*virtuappu_mode1_pre_line_fn)(int line);
+ extern virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback;
+ 
++/* PORT_WIDESCREEN_SPIKE: MODE1_GBA_WIDTH made overridable via
++ * -DMODE1_GBA_WIDTH=N so the PC port can render wider frames. */
++#ifndef MODE1_GBA_WIDTH
++#define MODE1_GBA_WIDTH 240
++#endif
++/* Canonical GBA viewport — used by OAM clipping. Stays at 240 so
++ * engine-parked off-screen sprites don't bleed into the widescreen
++ * pixels at MODE1_GBA_WIDTH > 240. */
++#define MODE1_GBA_VIEWPORT_X 240
++/* BG render clip — width of the engine's BG tilemap buffer. Default
++ * 32-tile (256-pixel) BG buffer holds real room data at columns 0..255;
++ * columns >= 256 read wrapped data. Composition fills past this with
++ * black so the widescreen extra (cols 240..255) shows real content
++ * while the wrap (cols 256+) becomes a clean pillarbox. */
++#define MODE1_GBA_BG_CLIP_X 256
+ enum {
+-    MODE1_GBA_WIDTH = 240,
+     MODE1_GBA_HEIGHT = 160,
+     MODE1_GBA_BG_COUNT = 4,
+     MODE1_GBA_OAM_COUNT = 128,
+diff --git a/src/mode1.c b/src/mode1.c
+index fb6cbca..ede079b 100644
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -418,7 +418,10 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+             uint8_t color_index;
+             uint16_t rgb555;
+ 
+-            if (screen_x < 0 || screen_x >= MODE1_GBA_WIDTH) {
++            /* PORT_WIDESCREEN_SPIKE: clip OAM at the GBA-native viewport
++             * so engine-parked off-screen sprites don't leak into the
++             * widescreen pixels at MODE1_GBA_WIDTH > 240. */
++            if (screen_x < 0 || screen_x >= MODE1_GBA_VIEWPORT_X) {
+                 continue;
+             }
+ 
+@@ -680,7 +683,19 @@ void virtuappu_mode1_composite_line(
+             }
+         }
+ 
+-        virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = top_color;
++        /* PORT_WIDESCREEN_SPIKE: clip BG composition at the BG-buffer
++         * width (256 by default). Engine-driven tile data is only
++         * written into a 32-tile (256-pixel) wide window, so columns
++         * 0..255 hold real game content (including the 16 extra pixels
++         * past the GBA-native 240-pixel viewport) while columns >= 256
++         * would read wrapped data. Force black past the buffer width
++         * for a clean pillarbox until the engine is taught to write
++         * tile data into a 64-tile-wide BG. */
++        if (x >= MODE1_GBA_BG_CLIP_X) {
++            virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = 0xFF000000u;
++        } else {
++            virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = top_color;
++        }
+     }
+ }
+ 

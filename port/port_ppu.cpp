@@ -86,16 +86,21 @@ extern "C" const char* Port_PPU_PresentationModeName(void) {
     return kNames[(int)sPresentMode];
 }
 
-// Largest 240:160 (3:2) rect fitting inside (w, h), centered.
+// Largest GBA-aspect rect fitting inside (w, h), centered. Aspect uses
+// MODE1_GBA_WIDTH so the widescreen spike (override via -DMODE1_GBA_WIDTH)
+// keeps the rendered rect's proportions matching the framebuffer rather
+// than letterboxing the wider content.
 static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* outW, int* outH) {
+    const int FW = MODE1_GBA_WIDTH;
+    const int FH = MODE1_GBA_HEIGHT;
     int rw;
     int rh;
-    if (w * 160 >= h * 240) {
+    if (w * FH >= h * FW) {
         rh = h;
-        rw = (h * 240) / 160;
+        rw = (h * FW) / FH;
     } else {
         rw = w;
-        rh = (w * 160) / 240;
+        rh = (w * FH) / FW;
     }
     *outX = (w - rw) / 2;
     *outY = (h - rh) / 2;
@@ -120,8 +125,10 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
         if (outH) *outH = 0;
         return nullptr;
     }
-    const int w = 240 * S;
-    const int h = 160 * S;
+    const int FW = MODE1_GBA_WIDTH;
+    const int FH = MODE1_GBA_HEIGHT;
+    const int w = FW * S;
+    const int h = FH * S;
     if (sScaledBuf == nullptr || sScaledBufScale != S) {
         std::free(sScaledBuf);
         sScaledBuf = (uint32_t*)std::malloc((size_t)w * (size_t)h * sizeof(uint32_t));
@@ -136,11 +143,11 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
     /* Nearest-replicate: each src pixel writes to an SxS block. Loop
      * order is src-major so the source line stays cache-resident while
      * we scatter S output rows. */
-    for (int sy = 0; sy < 160; ++sy) {
-        const uint32_t* src = &virtuappu_frame_buffer[sy * 240];
+    for (int sy = 0; sy < FH; ++sy) {
+        const uint32_t* src = &virtuappu_frame_buffer[sy * FW];
         for (int dy = 0; dy < S; ++dy) {
             uint32_t* dst = &sScaledBuf[(sy * S + dy) * w];
-            for (int sx = 0; sx < 240; ++sx) {
+            for (int sx = 0; sx < FW; ++sx) {
                 uint32_t c = src[sx];
                 uint32_t* d = &dst[sx * S];
                 for (int dx = 0; dx < S; ++dx) {
@@ -172,7 +179,8 @@ static SDL_Texture* Port_PPU_EnsureScaledTexture(int S) {
         sScaledTextureScale = 0;
     }
     sScaledTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
-                                       SDL_TEXTUREACCESS_STREAMING, 240 * S, 160 * S);
+                                       SDL_TEXTUREACCESS_STREAMING,
+                                       MODE1_GBA_WIDTH * S, MODE1_GBA_HEIGHT * S);
     if (sScaledTexture) {
         sScaledTextureScale = S;
     }
@@ -225,7 +233,8 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         }
         sVSyncEnabled = true;
         sLowResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
-                                           SDL_TEXTUREACCESS_STREAMING, 240, 160);
+                                           SDL_TEXTUREACCESS_STREAMING,
+                                           MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
         sHiResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
                                           SDL_TEXTUREACCESS_STREAMING, kHiResW, kHiResH);
         if (!sLowResTexture || !sHiResTexture) {
@@ -253,16 +262,16 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     /* HBlank-DMA simulation: VirtuaPPU calls this before each scanline. */
     virtuappu_mode1_pre_line_callback = port_hdma_step_line;
 
-    virtuappu_registers.frame_width = 240;
+    virtuappu_registers.frame_width = MODE1_GBA_WIDTH;
     virtuappu_registers.mode = 1;
 
     if (sBackend == RenderBackend::None) {
         sFrameSurface = SDL_CreateSurfaceFrom(
-            240,
-            160,
+            MODE1_GBA_WIDTH,
+            MODE1_GBA_HEIGHT,
             SDL_PIXELFORMAT_ABGR8888,
             virtuappu_frame_buffer,
-            240 * static_cast<int>(sizeof(uint32_t)));
+            MODE1_GBA_WIDTH * static_cast<int>(sizeof(uint32_t)));
         if (!sFrameSurface) {
             printf("Port_PPU_Init: SDL_CreateSurfaceFrom failed: %s\n", SDL_GetError());
             return;
@@ -333,8 +342,9 @@ extern "C" void Port_PPU_PresentFrame(void) {
             case PresentMode::XbrzNearest:
                 /* xBRZ owns its own 4x upscaler — internal-render-scale
                  * is mutually exclusive with it. The xBRZ path always
-                 * consumes the unscaled 240x160 framebuffer. */
-                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer, 240, 160,
+                 * consumes the unscaled GBA-native framebuffer. */
+                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer,
+                                     MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
                                      sUpscale2xBuf, sUpscale4xBuf);
                 SDL_UpdateTexture(sHiResTexture, nullptr, sUpscale4xBuf,
                                   kHiResW * (int)sizeof(uint32_t));
@@ -353,7 +363,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
                     tex = scaledTex;
                 } else {
                     SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
-                                      240 * (int)sizeof(uint32_t));
+                                      MODE1_GBA_WIDTH * (int)sizeof(uint32_t));
                     tex = sLowResTexture;
                 }
                 scale = (sPresentMode == PresentMode::LinearRaw)
@@ -415,7 +425,7 @@ extern "C" void Port_PPU_CycleWindowScale(int direction) {
     }
     Port_Config_SetWindowScale(scale);
     if (sWindow && !Port_PPU_IsFullscreen()) {
-        SDL_SetWindowSize(sWindow, 240 * scale, 160 * scale);
+        SDL_SetWindowSize(sWindow, MODE1_GBA_WIDTH * scale, MODE1_GBA_HEIGHT * scale);
         SDL_SyncWindow(sWindow);
     }
 }

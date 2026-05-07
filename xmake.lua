@@ -26,6 +26,18 @@ option("pc_avx2")
     set_description("Enable AVX2 optimizations for tmc_pc when supported")
 option_end()
 
+-- Widescreen spike: render the GBA frame at a non-native horizontal
+-- width by overriding MODE1_GBA_WIDTH at compile time. Default 240 keeps
+-- the GBA-native behaviour. Larger values render extra columns on the
+-- sides; the engine isn't widescreen-aware so most rooms will look
+-- broken at >240 (wrapped tilemap on the right, off-position HUD, OAM
+-- cut at x=240). Spike-only — see port/patches/viruappu-widescreen.patch.
+option("widescreen_width")
+    set_default(240)
+    set_showmenu(true)
+    set_description("Override MODE1_GBA_WIDTH (240=native, e.g. 320 for widescreen spike)")
+option_end()
+
 -- Build directories
 local build_dir = "build/$(plat)"
 local tools_bin = "tools/bin"
@@ -385,6 +397,12 @@ target("tmc_pc")
             { patch = "viruappu-internal-scale.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "virtuappu_mode1_render_affine_obj_overlay" },
+            -- Widescreen spike: makes MODE1_GBA_WIDTH overridable via -D.
+            -- Without -DMODE1_GBA_WIDTH=<n> the patch is a no-op (the macro
+            -- still resolves to 240); pass the option to widen.
+            { patch = "viruappu-widescreen.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "PORT_WIDESCREEN_SPIKE" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
@@ -437,6 +455,9 @@ target("tmc_pc")
     -- literal at the use site.
     add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
     add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
+    -- Widescreen spike width override (240 = GBA-native; >240 widens).
+    local ws_width = tonumber(get_config("widescreen_width")) or 240
+    add_defines("MODE1_GBA_WIDTH=" .. tostring(ws_width))
     if use_avx2 and arch_supports_avx2 then
         add_defines("USE_AVX2")
         add_cflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})

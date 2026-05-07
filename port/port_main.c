@@ -1,6 +1,10 @@
 #include "gba/io_reg.h"
 #include "main.h"
 #include "port_config.h"
+/* Set by xmake (-DMODE1_GBA_WIDTH=N); falls back to GBA-native 240. */
+#ifndef MODE1_GBA_WIDTH
+#define MODE1_GBA_WIDTH 240
+#endif
 #include "port_asset_bootstrap.h"
 #include "port_audio.h"
 #include "port_gba_mem.h"
@@ -308,7 +312,7 @@ int main(int argc, char* argv[]) {
     Port_Config_OpenGamepads();
 
     SDL_Window* window = SDL_CreateWindow(
-        "The Minish Cap", 240 * window_scale, 160 * window_scale, SDL_WINDOW_RESIZABLE);
+        "The Minish Cap", MODE1_GBA_WIDTH * window_scale, 160 * window_scale, SDL_WINDOW_RESIZABLE);
     if (window == NULL) {
         fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
         SDL_Quit();
