@@ -110,8 +110,14 @@ static AgbplaySoundMode MakeAgbplayMode(void) {
      * resampler proper and removes virtually all imaging artefacts at
      * the cost of a few hundred extra MAC ops per audio frame. CPU
      * overhead is negligible on PC. */
-    mode.resamplerTypeNormal = ResamplerType::SINC;
-    mode.resamplerTypeFixed = ResamplerType::SINC;
+    /* LINEAR by default — softer than the GBA's NEAREST but ~10x cheaper
+     * than SINC, which mattered once the m4a init was no longer crashing
+     * early and the synth started running for real (mid-session perf
+     * regression report). SINC's audible benefit over LINEAR is small at
+     * 48 kHz playback for chiptune material; revisit if a high-end audio
+     * pass is wanted. */
+    mode.resamplerTypeNormal = ResamplerType::LINEAR;
+    mode.resamplerTypeFixed = ResamplerType::LINEAR;
     /* TMC was originally mixed for GBA speakers (small, bright, no
      * meaningful low-end). On modern PC playback the dry mix sounds
      * harsh; a gentle reverb (force ~32 of 255 max) adds spatial body
