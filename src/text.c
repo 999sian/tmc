@@ -544,6 +544,21 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
             Port_DecodeFontGBA(paramFont, &font);
         } else {
             MemCopy(paramFont, &font, sizeof(Font));
+            /* Native Font structs in figurineMenu.c (gUnk_0812816C / gUnk_08128190)
+             * carry GBA EWRAM/VRAM addresses verbatim in their pointer fields
+             * (e.g. dest=0x02001b40, gfx_dest=0x06004000, buffer_loc=0x02000d00).
+             * Resolve each GBA-range pointer to its native gEwram/gVram backing
+             * so the inner write loops land where the BG-update later reads
+             * the rendered tilemap from (#72). */
+            if ((uintptr_t)font.dest >= 0x02000000u && (uintptr_t)font.dest < 0x0A000000u) {
+                font.dest = (u16*)port_resolve_addr((uintptr_t)font.dest);
+            }
+            if ((uintptr_t)font.gfx_dest >= 0x02000000u && (uintptr_t)font.gfx_dest < 0x0A000000u) {
+                font.gfx_dest = port_resolve_addr((uintptr_t)font.gfx_dest);
+            }
+            if ((uintptr_t)font.buffer_loc >= 0x02000000u && (uintptr_t)font.buffer_loc < 0x0A000000u) {
+                font.buffer_loc = port_resolve_addr((uintptr_t)font.buffer_loc);
+            }
         }
 #else
         MemCopy(paramFont, &font, sizeof(Font));
