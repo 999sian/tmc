@@ -3,6 +3,7 @@
 #include "port_hdma.h"
 #include "port_upscale.h"
 #include "port_runtime_config.h"
+#include "port_filter.h"
 
 
 #include <cpu/mode1.h>
@@ -53,6 +54,7 @@ static int sScaledBufScale = 0;
 static SDL_Window* sWindow = nullptr;
 static SDL_Surface* sFrameSurface = nullptr;
 static PresentMode sPresentMode = PresentMode::NearestRaw;
+static PortFilterType sFilter = PORT_FILTER_NONE;
 static uint32_t* sUpscale2xBuf = nullptr;       /* 480x320 intermediate */
 static uint32_t* sUpscale4xBuf = nullptr;       /* 960x640 final        */
 
@@ -386,6 +388,10 @@ extern "C" void Port_PPU_PresentFrame(void) {
                 Port_Upscale_xBRZ_4x(virtuappu_frame_buffer,
                                      MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
                                      sUpscale2xBuf, sUpscale4xBuf);
+                /* CRT/LCD filter at the upscaled resolution (4x). The
+                 * pattern needs >= 3 px per phosphor cell to read
+                 * correctly, so xBRZ's 4x output is always large enough. */
+                Port_Filter_Apply(sUpscale4xBuf, kHiResW, kHiResH, 4, sFilter);
                 SDL_UpdateTexture(sHiResTexture, nullptr, sUpscale4xBuf,
                                   kHiResW * (int)sizeof(uint32_t));
                 tex = sHiResTexture;
@@ -396,9 +402,18 @@ extern "C" void Port_PPU_PresentFrame(void) {
             case PresentMode::NearestRaw:
             default: {
                 int sw = 0, sh = 0;
-                uint32_t* scaled = Port_PPU_BuildScaledFrame(internalS, &sw, &sh);
-                SDL_Texture* scaledTex = Port_PPU_EnsureScaledTexture(internalS);
+                /* Filter needs a scaled buffer to operate on (1x has too
+                 * few pixels per phosphor cell). Force at least 4x when
+                 * a filter is active, otherwise honour the user's
+                 * internal-scale setting. */
+                int effScale = internalS;
+                if (sFilter != PORT_FILTER_NONE && effScale < 4) {
+                    effScale = 4;
+                }
+                uint32_t* scaled = Port_PPU_BuildScaledFrame(effScale, &sw, &sh);
+                SDL_Texture* scaledTex = Port_PPU_EnsureScaledTexture(effScale);
                 if (scaled && scaledTex) {
+                    Port_Filter_Apply(scaled, sw, sh, effScale, sFilter);
                     SDL_UpdateTexture(scaledTex, nullptr, scaled, sw * (int)sizeof(uint32_t));
                     tex = scaledTex;
                 } else {
@@ -484,6 +499,21 @@ extern "C" void Port_PPU_CyclePresentationMode(int direction) {
 
 extern "C" void Port_PPU_ToggleSmoothing(void) {
     Port_PPU_CyclePresentationMode(1);
+}
+
+extern "C" void Port_PPU_CycleFilter(int direction) {
+    int next = (int)sFilter + (direction < 0 ? -1 : 1);
+    if (next < 0) {
+        next = (int)PORT_FILTER_COUNT - 1;
+    } else if (next >= (int)PORT_FILTER_COUNT) {
+        next = 0;
+    }
+    sFilter = (PortFilterType)next;
+    fprintf(stderr, "PPU filter: %s\n", Port_Filter_Name(sFilter));
+}
+
+extern "C" const char* Port_PPU_FilterName(void) {
+    return Port_Filter_Name(sFilter);
 }
 
 extern "C" void Port_PPU_Shutdown(void) {
