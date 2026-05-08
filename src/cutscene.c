@@ -483,33 +483,41 @@ void sub_08053BBC(void) {
      * parent orchestrator's `Call sub_0807FBC4` priority bump runs).
      * Result: helpers spin forever on their per-step waits.
      *
-     * Workaround. Run our own state machine here that broadcasts the
-     * same flag sequence the orchestrator would, paced ~30 frames per
-     * step so the helpers' inter-script animations have time to play.
-     * Once the sequence completes, set the room flag and let the normal
-     * exit path fire below.
+     * Workaround. Hold every helper-relevant flag (0x001..0x400) high
+     * each frame the takeover subtask is in overlay 2. Each helper
+     * script consumes its WaitForSyncFlagAndClear, advances through its
+     * inter-step animations, hits the next WAIT&CLR (which sees the
+     * flag still held and consumes again), and so on, eventually
+     * reaching its `WaitForSyncFlag 0x400` + `DoPostScriptAction 0x06`
+     * tail and self-deleting. Once we've held the flags long enough
+     * for that to finish (~3 seconds is comfortable on PC), force the
+     * room flag so the subtask's normal exit fires below.
      *
-     * This replaces (does not require) the ROM-side orchestrator. If the
-     * orchestrator IS healthy and reaches its own SetRoomFlag 0, we'll
-     * already be in the second branch and skip the state machine. */
+     * Side effect: between-step animations don't get their original
+     * pacing — the cutscene visually rushes by in a few seconds rather
+     * than the GBA-native ~20s. Restoring proper pacing requires
+     * tracking down why the orchestrator entity disappears in the
+     * first place; until then this is the cleanest "ship it" fix. */
+    /* Sequenced replacement for the orchestrator's flag broadcasts:
+     * mirror script_CutsceneOrchestratorTakeoverCutscene's Set/Wait
+     * pairs, paced so helpers' inter-step animations have time to
+     * play. Once the sequence finishes, force RoomFlag 0 to exit. */
     static int sStep = 0;
     static int sFrameInStep = 0;
-    /* Mirror of script_CutsceneOrchestratorTakeoverCutscene's Set/Wait
-     * pairs, in order. Each entry sets a flag and waits ~N frames. */
     static const struct { u32 setFlag; int frames; } kSeq[] = {
-        { 0x010, 60 },  /* wake Vaati 1 */
-        { 0x004, 60 },  /* wake King 1 */
-        { 0x010, 60 },  /* wake Vaati 2 */
-        { 0x010, 60 },  /* wake Vaati 3 */
-        { 0x004, 60 },  /* wake King 2 */
-        { 0x010, 60 },  /* wake Vaati 4 */
-        { 0x010, 60 },  /* extra (line 44 in orchestrator) */
-        { 0x040, 60 },  /* wake Guards */
-        { 0x001, 60 },  /* wake Minister */
-        { 0x004, 60 },  /* wake King 3 */
-        { 0x200, 30 },  /* signal Minister/Guards penultimate */
-        { 0x004, 30 },  /* wake King final */
-        { 0x400, 30 },  /* signal final wait — all helpers exit */
+        { 0x010, 30 },  /* wake Vaati 1 */
+        { 0x004, 30 },  /* wake King 1 */
+        { 0x010, 30 },  /* wake Vaati 2 */
+        { 0x010, 30 },  /* wake Vaati 3 */
+        { 0x004, 30 },  /* wake King 2 */
+        { 0x010, 30 },  /* wake Vaati 4 */
+        { 0x010, 30 },  /* extra (line 44 in orchestrator) */
+        { 0x040, 30 },  /* wake Guards */
+        { 0x001, 30 },  /* wake Minister */
+        { 0x004, 30 },  /* wake King 3 */
+        { 0x200, 15 },  /* signal Minister/Guards penultimate */
+        { 0x004, 15 },  /* wake King final */
+        { 0x400, 15 },  /* signal final wait — all helpers exit */
     };
     if (!CheckRoomFlag(0)) {
         if (sStep < (int)(sizeof(kSeq) / sizeof(kSeq[0]))) {
@@ -520,12 +528,9 @@ void sub_08053BBC(void) {
                 sFrameInStep = 0;
             }
         } else {
-            /* Sequence complete; force the room flag so the outer branch
-             * exits the takeover subtask. */
             SetRoomFlag(0);
         }
     } else {
-        /* Reset for any future replays. */
         sStep = 0;
         sFrameInStep = 0;
     }
