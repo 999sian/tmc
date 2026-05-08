@@ -470,20 +470,70 @@ void sub_08053BAC(void) {
 }
 
 void sub_08053BBC(void) {
+#ifdef PC_PORT
+    /* #93 Vaati takeover softlock — orchestrator-replacement watchdog.
+     *
+     * Background. The cutscene is normally driven by
+     * script_CutsceneOrchestratorTakeoverCutscene which broadcasts a
+     * sequenced wave of sync flags to wake King / Minister / Vaati /
+     * Guards / Zelda in order, then issues `SetRoomFlag 0` to signal
+     * end-of-cutscene. On the PC port the child orchestrator entity
+     * disappears mid-script (still under investigation; the entity is
+     * neither in any of gEntityLists nor seen by ObjectUpdate after the
+     * parent orchestrator's `Call sub_0807FBC4` priority bump runs).
+     * Result: helpers spin forever on their per-step waits.
+     *
+     * Workaround. Run our own state machine here that broadcasts the
+     * same flag sequence the orchestrator would, paced ~30 frames per
+     * step so the helpers' inter-script animations have time to play.
+     * Once the sequence completes, set the room flag and let the normal
+     * exit path fire below.
+     *
+     * This replaces (does not require) the ROM-side orchestrator. If the
+     * orchestrator IS healthy and reaches its own SetRoomFlag 0, we'll
+     * already be in the second branch and skip the state machine. */
+    static int sStep = 0;
+    static int sFrameInStep = 0;
+    /* Mirror of script_CutsceneOrchestratorTakeoverCutscene's Set/Wait
+     * pairs, in order. Each entry sets a flag and waits ~N frames. */
+    static const struct { u32 setFlag; int frames; } kSeq[] = {
+        { 0x010, 60 },  /* wake Vaati 1 */
+        { 0x004, 60 },  /* wake King 1 */
+        { 0x010, 60 },  /* wake Vaati 2 */
+        { 0x010, 60 },  /* wake Vaati 3 */
+        { 0x004, 60 },  /* wake King 2 */
+        { 0x010, 60 },  /* wake Vaati 4 */
+        { 0x010, 60 },  /* extra (line 44 in orchestrator) */
+        { 0x040, 60 },  /* wake Guards */
+        { 0x001, 60 },  /* wake Minister */
+        { 0x004, 60 },  /* wake King 3 */
+        { 0x200, 30 },  /* signal Minister/Guards penultimate */
+        { 0x004, 30 },  /* wake King final */
+        { 0x400, 30 },  /* signal final wait — all helpers exit */
+    };
+    if (!CheckRoomFlag(0)) {
+        if (sStep < (int)(sizeof(kSeq) / sizeof(kSeq[0]))) {
+            sFrameInStep++;
+            if (sFrameInStep >= kSeq[sStep].frames) {
+                gActiveScriptInfo.syncFlags |= kSeq[sStep].setFlag;
+                sStep++;
+                sFrameInStep = 0;
+            }
+        } else {
+            /* Sequence complete; force the room flag so the outer branch
+             * exits the takeover subtask. */
+            SetRoomFlag(0);
+        }
+    } else {
+        /* Reset for any future replays. */
+        sStep = 0;
+        sFrameInStep = 0;
+    }
+#endif
     if (CheckRoomFlag(0)) {
 #ifdef PC_PORT
-        /* #93 Vaati takeover softlock: King / Minister / Vaati / 6 Guards /
-         * Zelda Stone all end their `script_*Takeover.inc` scripts with
-         *   WaitForSyncFlag 0x00000400
-         *   DoPostScriptAction 0x0006
-         * but neither orchestrator script (`script_CutsceneOrchestratorTakeover`
-         * nor `script_CutsceneOrchestratorTakeoverCutscene`) ever issues
-         * `SetSyncFlag 0x00000400`. On GBA this presumably comes from an
-         * implicit broadcast tied to the subtask transition; in the C decomp
-         * that detail is missing. Set it here, at the takeover-subtask's
-         * end-of-cutscene gate, so every helper falls through to its
-         * DoPostScriptAction 0x06 and self-deletes instead of hanging
-         * forever on the 0x400 wait. */
+        /* Belt-and-suspenders for any helper whose final
+         * `WaitForSyncFlag 0x400` hasn't fired yet. */
         gActiveScriptInfo.syncFlags |= 0x400u;
 #endif
         gMenu.menuType++;

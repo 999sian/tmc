@@ -306,6 +306,20 @@ void CleanUpObjPalettes(void) {
     for (index2 = 0; index2 < ARRAY_COUNT(gEntityLists); index2++) {
         pEVar9 = (Entity*)&gEntityLists[index2];
         while (((Entity*)&gEntityLists[index2]) != (pEVar9 = pEVar9->next)) {
+#ifdef PC_PORT
+            /* #93 takeover-cutscene exit: when many helpers self-delete
+             * via DoPostScriptAction 0x06 in the same frame, the entity
+             * list can briefly contain a node whose `next` is NULL (the
+             * deleted-marker the engine sets) before ClearAllDeletedEntities
+             * runs. Iterating into that NULL drops us at a 0x10-offset
+             * deref of `kind` and segfaults. Bail out of this list when
+             * we hit it — palette cleanup for the rest of this list is
+             * skipped, but the cleanup is best-effort and the next frame
+             * will see a consistent list again. */
+            if (pEVar9 == NULL) {
+                break;
+            }
+#endif
             if (pEVar9->kind != MANAGER) {
                 if ((u8)(pEVar9->spriteAnimation[2] - 1) < 0x7f) {
                     bVar1 = pEVar9->spriteAnimation[2];
