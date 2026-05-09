@@ -64,6 +64,19 @@ int main(int argc, char* argv[])
         PortAssetLog::Reporter::Instance().Error(err);
         return 1;
     }
+    std::string error;
+    if (!RunEmbeddedAssetExtractor(executable_dir, &error)) {
+        std::cerr << "Failed to extract assets: " << error << std::endl;
+        return 1;
+    }
+
+    /* Always emit sounds.json next to the binary (= where tmc_pc launches
+     * from). Same directory as assets_src/ and assets/. */
+    write_sounds_json(executable_dir / "sounds.json");
+
+    /* Always emit sounds.json next to the binary (= where tmc_pc launches
+     * from). Same directory as assets_src/ and assets/. */
+    write_sounds_json(executable_dir / "sounds.json");
 
     /* Mirror the extractor's loaded ROM bytes into the gRomData /
      * gRomSize globals so any standalone-linked TU that still consults

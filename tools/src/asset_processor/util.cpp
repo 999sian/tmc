@@ -1,6 +1,8 @@
 #include "util.h"
+#include "simple_format.h"
 #include <iostream>
-#include <fmt/format.h>
+#include <iomanip>
+#include <sstream>
 
 void check_call(const std::vector<std::string>& cmd) {
     std::string cmdstr;
@@ -22,7 +24,13 @@ void check_call(const std::vector<std::string>& cmd) {
 
 std::string opt_param(const std::string& format, int defaultVal, int value) {
     if (value != defaultVal) {
-        return fmt::format(format, value);
+        return assetfmt::Format(format, value);
     }
     return "";
+}
+
+std::string hex_u32(uint32_t value) {
+    std::ostringstream out;
+    out << "0x" << std::hex << std::nouppercase << value;
+    return out.str();
 }

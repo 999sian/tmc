@@ -1,6 +1,10 @@
 #include "gba/io_reg.h"
 #include "main.h"
 #include "port_config.h"
+/* Set by xmake (-DMODE1_GBA_WIDTH=N); falls back to GBA-native 240. */
+#ifndef MODE1_GBA_WIDTH
+#define MODE1_GBA_WIDTH 240
+#endif
 #include "port_asset_bootstrap.h"
 #include "port_audio.h"
 #include "port_gba_mem.h"
@@ -242,6 +246,7 @@ int main(int argc, char* argv[]) {
     Port_Config_Load("config.json");
 
     u8 window_scale = Port_Config_WindowScale();
+    bool noAudio = false;
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--window_scale=") == 0 || strncmp(argv[i], "--window_scale=", 15) == 0) {
@@ -260,6 +265,13 @@ int main(int argc, char* argv[]) {
                 fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets]\n", argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
                 fprintf(stderr, "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
+            else if (strcmp(argv[i], "--no-audio") == 0) {
+                noAudio = true;
+            }
+            else if (strcmp(argv[i], "--help") == 0) {
+                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--no-audio]\n", argv[0]);
+                fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
+                fprintf(stderr, "  --no-audio: Skip audio init (workaround for agbplay crash)\n");
                 fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
             }
@@ -373,6 +385,14 @@ int main(int argc, char* argv[]) {
     Port_PaintBootSplash(window, "LOADING");
     Port_InitAudio();
     Port_PaintBootSplash(window, "LOADING");
+    fprintf(stderr, "PPU init complete.\n");
+    if (noAudio) {
+        gMain.muteAudio = 1;
+        fprintf(stderr, "Audio disabled by --no-audio flag.\n");
+    } else {
+        Port_InitAudio();
+        fprintf(stderr, "Audio init complete.\n");
+    }
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
