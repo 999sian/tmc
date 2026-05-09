@@ -148,13 +148,14 @@ target("asset_extractor")
     set_targetdir("build/pc")
     add_defines("PC_PORT", "NON_MATCHING", "USA", "ENGLISH", "REVISION=0")
     add_files("tools/src/assets_extractor/*.cpp")
+    remove_files("tools/src/assets_extractor/asset_extractor_runner.cpp")
     add_files("port/port_asset_pipeline.cpp")
     add_files("port/port_asset_log.cpp")
     add_files("port/port_asset_pak.cpp")
     add_files("port/port_asset_index.c")
     add_includedirs("tools/src/assets_extractor")
     add_includedirs("include", "port", ".")
-    add_packages("nlohmann_json")
+    add_packages("nlohmann_json", "fmt")
     add_mingw_static_cpp_runtime()
     -- Embed assets/sounds.json into the binary so the extractor can guarantee
     -- it appears next to itself even when a release tarball forgets to ship
@@ -526,12 +527,10 @@ target("tmc_pc")
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
     add_files("tools/src/assets_extractor/assets_extractor_api.cpp")
-    add_files("port/port_asset_index.c")
     add_files("port/port_m4a_backend.cpp")
     add_files("port/generated_sounds_embed.cpp")  -- compile-time sounds.json fallback
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
-    add_files("port/port_asset_index.c")  -- Asset offset index (path → ROM offset map)
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")
     add_files("port/stubs_autogen.c")
@@ -660,7 +659,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3", "nlohmann_json", "libpng", "zlib")
+    add_packages("libsdl3", "nlohmann_json", "libpng", "zlib", "fmt")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.
