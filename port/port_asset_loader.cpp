@@ -7,6 +7,7 @@ extern "C" {
 #include "common.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include "port_asset_index.h"
 #include "structures.h"
 #include "area.h"
 #undef this
@@ -326,6 +327,59 @@ bool LoadOptionalJson(const std::filesystem::path& path, nlohmann::json& json) {
 }
 
 const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath);
+
+/*
+ * Append the ROM bytes that follow an animation so the engine can read
+ * past the end of the extracted .bin exactly as it would on GBA.  We
+ * scan forward through the trailing ROM data for the first loop frame
+ * (bit-7 set on byte [3] of a 4-byte record) and include everything
+ * up to and including its loop_back byte.  Once the engine hits that
+ * loop it stays within the padded buffer.
+ *
+ * Returns the number of bytes appended (0 if ROM lookup fails).
+ */
+size_t AppendRomTrailingBytes(const char* assetPath, size_t fileSize,
+                              std::vector<u8>& buf) {
+    if (gRomData == nullptr || gRomSize == 0)
+        return 0;
+    const EmbeddedAssetEntry* index = EmbeddedAssetIndex_Get();
+    u32 indexCount = EmbeddedAssetIndex_Count();
+
+    u32 trailStart = 0;
+    bool found = false;
+    for (u32 idx = 0; idx < indexCount; ++idx) {
+        if (std::strcmp(assetPath, index[idx].path) == 0) {
+            trailStart = index[idx].offset + static_cast<u32>(fileSize);
+            found = true;
+            break;
+        }
+    }
+    if (!found || trailStart >= gRomSize)
+        return 0;
+
+    const u8* trail = gRomData + trailStart;
+    size_t available = static_cast<size_t>(gRomSize - trailStart);
+
+    /* Walk 4-byte frame records until we find one whose frame byte
+     * (byte [3]) has bit-7 set — that's a loop/done terminator.
+     * Include that frame (4 bytes) plus the loop_back byte (1). */
+    size_t needed = 0;
+    while (needed + 4 <= available) {
+        bool isLoop = (trail[needed + 3] & 0x80u) != 0u;
+        needed += 4;
+        if (isLoop) {
+            if (needed < available)
+                needed += 1; /* loop_back byte */
+            break;
+        }
+    }
+
+    if (needed == 0)
+        return 0;
+
+    buf.insert(buf.end(), trail, trail + needed);
+    return needed;
+}
 
 void ParseGfxGroups(const nlohmann::json& root) {
     gAssetGroupCache.gfxGroups.clear();
@@ -1300,44 +1354,28 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
                 continue;
             }
 
-            /* Every well-formed animation buffer (multiple of 4 bytes)
-             * gets a padded copy with the trailing loop_back byte the
-             * engine reads when bit-7 is set on a frame's third byte.
+            /* On GBA, animations are packed contiguously in ROM. The
+             * animation engine reads bytes sequentially from animPtr;
+             * when it walks past one animation it reads from the next.
+             * The asset extractor sizes each .bin by ROM-offset diff,
+             * truncating those trailing bytes.
              *
-             * On GBA, that byte was the first byte of the next animation
-             * in ROM; the assets extractor sizes each .bin by ROM offset
-             * diff, so the byte is missing from extracted .bins.
+             * For looping animations (last frame byte has bit-7 set),
+             * the missing byte is the loop_back distance.  We
+             * reconstruct it from the next animation's first byte.
              *
-             * For animations whose last frame already had bit-7 set we
-             * preserve the data and only append the loop_back byte.
-             *
-             * For animations whose last frame did NOT have bit-7 (the
-             * GBA original would have walked past end into adjacent ROM
-             * bytes), we OR-in 0x80 on the last frame's third byte and
-             * append a loop_back so the engine re-enters this animation
-             * from the start instead of reading heap garbage. The
-             * visible difference vs the GBA original is "frozen on the
-             * last frame replayed" instead of "garbled garbage from
-             * adjacent ROM region," which is what the asset-pipeline
-             * rewrite users observed as the mangled-NPC regression. */
+             * For non-looping animations (last frame byte lacks bit-7),
+             * the GBA would read adjacent ROM bytes as the next frame.
+             * We append those actual ROM bytes (looked up via
+             * EmbeddedAssetIndex) so frame signaling values that
+             * gameplay state-machines depend on are preserved.  A
+             * previous approach of OR-ing 0x80 into the last byte
+             * corrupted these values (e.g. 0x41 -> 0xC1 broke the
+             * item-get checks, phase-marker 3 -> 0x83 broke the
+             * portal-shrink switch). */
             const size_t numFrames = dataSize / 4u;
             const bool lastFrameLoops = (dataPtr[dataSize - 1] & 0x80u) != 0u;
 
-            u8 loopBack = static_cast<u8>(std::min<size_t>(numFrames, 0xFFu));
-            if (lastFrameLoops && a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr &&
-                !rawAnims[a + 1]->empty()) {
-                u8 nextByte = (*rawAnims[a + 1])[0];
-                if (nextByte > 0 && nextByte <= numFrames) {
-                    loopBack = nextByte;
-                }
-            }
-
-            /* Stash the padded copy in binaryFiles under a synthetic
-             * key (the original .bin is already cached under its real
-             * relative path, so this never collides). Anchoring the
-             * padded buffer in binaryFiles is what lets
-             * Port_IsLoadedAssetBytes succeed for the AnimRangeHasBytes
-             * range check the engine's trailing reads need. */
             const std::string& sourceKey = entry.animations[a];
             std::string paddedKey;
             paddedKey.reserve(sourceKey.size() + 32);
@@ -1349,16 +1387,36 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
             paddedKey.append(sourceKey);
 
             auto buf = std::make_unique<std::vector<u8>>();
-            buf->reserve(dataSize + 1);
             buf->assign(dataPtr, dataPtr + dataSize);
-            if (!lastFrameLoops) {
-                /* Force the last frame into a loop frame. The other
-                 * three bytes (frameIndex, frameDuration, settings)
-                 * keep the anim visually identical right up to the
-                 * loop point. */
-                buf->back() |= 0x80u;
+
+            if (lastFrameLoops) {
+                /* Loop-terminated: just append the missing loop_back
+                 * byte, preferring the next animation's first byte
+                 * (what the GBA would read). */
+                u8 loopBack = static_cast<u8>(std::min<size_t>(numFrames, 0xFFu));
+                if (a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr &&
+                    !rawAnims[a + 1]->empty()) {
+                    u8 nextByte = (*rawAnims[a + 1])[0];
+                    if (nextByte > 0 && nextByte <= numFrames) {
+                        loopBack = nextByte;
+                    }
+                }
+                buf->push_back(loopBack);
+            } else {
+                /* Non-looping: append the actual ROM bytes that follow
+                 * this animation so the engine reads the same data the
+                 * GBA would.  We scan forward until the first loop
+                 * frame so the engine stays within the buffer. */
+                size_t appended = AppendRomTrailingBytes(
+                    sourceKey.c_str(), dataSize, *buf);
+                if (appended == 0) {
+                    /* ROM unavailable — append a safe sentinel frame:
+                     * invisible tile (0xFF), 1-tick, ANIM_DONE, self-loop. */
+                    const u8 sentinel[] = { 0xFF, 0x01, 0x00, 0x80, 0x01 };
+                    buf->insert(buf->end(), sentinel, sentinel + sizeof(sentinel));
+                }
             }
-            buf->push_back(loopBack);
+
             const u8* paddedPtr = buf->data();
             gAssetGroupCache.binaryFiles.emplace(std::move(paddedKey), std::move(buf));
             animPtrs.push_back(paddedPtr);
