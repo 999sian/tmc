@@ -68,8 +68,10 @@
 // Converts a number to Q16.16 fixed-point format
 #define Q_16_16(n) ((s32)((n) * (1 << 16)))
 
+#ifndef __cplusplus
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) >= (b) ? (a) : (b))
+#endif
 
 #if defined(PORT_IGNORE_STATIC_ASSERTS)
 #define static_assert(...)

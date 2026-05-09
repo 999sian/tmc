@@ -380,14 +380,13 @@ int main(int argc, char* argv[]) {
      * user sees one continuous splash from window-open to first
      * GBA frame instead of multiple flickering states. */
     Port_PaintBootSplash(window, "LOADING");
-    Port_InitAudio();
-    Port_PaintBootSplash(window, "LOADING");
     fprintf(stderr, "PPU init complete.\n");
     if (noAudio) {
         gMain.muteAudio = 1;
         fprintf(stderr, "Audio disabled by --no-audio flag.\n");
     } else {
         Port_InitAudio();
+        Port_PaintBootSplash(window, "LOADING");
         fprintf(stderr, "Audio init complete.\n");
     }
 
