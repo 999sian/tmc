@@ -26,6 +26,22 @@ option("pc_avx2")
     set_description("Enable AVX2 optimizations for tmc_pc when supported")
 option_end()
 
+-- Widescreen: render the GBA frame at a non-native horizontal width by
+-- overriding MODE1_GBA_WIDTH at compile time.
+--   240: GBA-native (3:2). No widescreen, no pillarbox, no stretch.
+--   >240: ViruaPPU pillarboxes BG/OAM at col 240 (the engine's 32-tile
+--         BG buffer holds reliable tile data only in cols 0..29, plus
+--         parked off-screen sprites at x>=240). port_ppu.cpp uniformly
+--         stretches the 240-px frame to fill the wider window. Real
+--         widescreen needs a 64-tile sa2-style BGCNT_TXT512x256 engine
+--         extension — Phase 2.
+-- Default 240 = clean, no artifacts.
+option("widescreen_width")
+    set_default(240)
+    set_showmenu(true)
+    set_description("MODE1_GBA_WIDTH (240=native, >240=stretched until Phase 2)")
+option_end()
+
 -- Build directories
 local build_dir = "build/$(plat)"
 local tools_bin = "tools/bin"
@@ -49,7 +65,7 @@ end
 local use_system_packages = is_host("linux") and (os.getenv("XMAKE_USE_SYSTEM_SDL3") or os.getenv("IN_NIX_SHELL"))
 if use_system_packages then
     add_requires("nlohmann_json", {system = true, configs = {cmake = false}})
-    add_requires("fmt", {system = true})
+    add_requires("fmt", {configs = {header_only = true}})
     add_requires("libpng", {system = true})
     add_requires("zlib", {system = true})
     add_requires("libsdl3", {system = true})
@@ -121,7 +137,7 @@ target("asset_processor")
     add_files("tools/src/asset_processor/assets/*.cpp")
     add_includedirs("tools/src/asset_processor")
     add_includedirs("tools/src/util")
-    add_packages("nlohmann_json", "fmt")
+    add_packages("nlohmann_json")
     add_mingw_static_cpp_runtime()
 target_end()
 
@@ -138,7 +154,7 @@ target("asset_extractor")
     add_files("port/port_asset_index.c")
     add_includedirs("tools/src/assets_extractor")
     add_includedirs("include", "port", ".")
-    add_packages("nlohmann_json", "fmt")
+    add_packages("nlohmann_json")
     add_mingw_static_cpp_runtime()
     -- Embed assets/sounds.json into the binary so the extractor can guarantee
     -- it appears next to itself even when a release tarball forgets to ship
@@ -499,6 +515,7 @@ target("tmc_pc")
     add_files("port/port_quicksave.c")
     add_files("port/port_inline_ptrs.c")
     add_files("port/port_asset_bootstrap.cpp")
+    add_files("port/port_asset_index.c")
     add_files("port/port_update_check.c")
     add_files("port/port_asset_loader.cpp")
     add_files("port/port_asset_pipeline.cpp")
@@ -531,6 +548,8 @@ target("tmc_pc")
     add_files("port/port_hdma.c")    -- HBlank-DMA simulation (iris/circle WIN0H)
     add_files("port/port_upscale.c") -- xBRZ-style pixel-art upscaler
     add_files("port/port_save.c")        -- EEPROM save emulation
+    add_files("port/port_softslots.c")   -- Extra item-equip buttons (X/Y/L2/R2)
+    add_files("port/port_filter.c")      -- CRT/LCD post-process filters
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)
     add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
     add_files("port/port_text_render.c") -- Text rendering (UnpackTextNibbles, glyph pixel writers)
@@ -641,7 +660,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3", "fmt", "nlohmann_json", "libpng", "zlib")
+    add_packages("libsdl3", "nlohmann_json", "libpng", "zlib")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.

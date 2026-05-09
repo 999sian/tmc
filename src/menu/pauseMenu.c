@@ -23,6 +23,7 @@
 #include "fade.h"
 #ifdef PC_PORT
 #include "port_gba_mem.h"
+#include "port_softslots.h"
 #endif
 
 extern void sub_080A4DB8(u32);
@@ -34,6 +35,12 @@ void sub_080A5F48(Item, u32);
 void sub_080A57F4(void);
 
 void Subtask_PauseMenu(void) {
+#ifdef PC_PORT
+    /* Tell the port layer the pause/start menu is currently active.
+     * Used to render the soft-slot info panel + open the configuration
+     * overlay from inside the start menu. */
+    Port_SoftSlots_NotifyPauseActive();
+#endif
     static Subtask* const pauseMenu_Variants[] = {
         PauseMenu_Variant0, PauseMenu_Variant1, PauseMenu_Variant2,
         PauseMenu_Variant3, PauseMenu_Variant4, PauseMenu_Variant5,

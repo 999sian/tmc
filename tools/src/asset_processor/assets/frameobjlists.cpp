@@ -1,7 +1,7 @@
 #include "frameobjlists.h"
 #include "reader.h"
+#include "simple_format.h"
 #include <algorithm>
-#include <fmt/format.h>
 #include <util/file.h>
 
 void FrameObjListsAsset::convertToHumanReadable(const std::vector<char>& baserom) {
@@ -21,7 +21,7 @@ void FrameObjListsAsset::convertToHumanReadable(const std::vector<char>& baserom
 
         u32 pointer = reader.read_u32();
         first_level.push_back(pointer);
-        fmt::print(file.get(), "\t.4byte {:#x}\n", pointer);
+        assetfmt::Print(file.get(), "\t.4byte {:#x}\n", pointer);
     }
 
     std::fputs("\n@ Second level of offsets\n", file.get());
@@ -33,12 +33,12 @@ void FrameObjListsAsset::convertToHumanReadable(const std::vector<char>& baserom
         }
         u32 pointer = reader.read_u32();
         second_level.push_back(pointer);
-        fmt::print(file.get(), "\t.4byte {:#x}\n", pointer);
+        assetfmt::Print(file.get(), "\t.4byte {:#x}\n", pointer);
     }
 
     auto max_second_level_it = std::max_element(second_level.begin(), second_level.end());
     if (max_second_level_it == second_level.end()) {
-        fmt::print(stderr, "no second level (unreachable)");
+        std::fputs("no second level (unreachable)", stderr);
         exit(1);
     }
     u32 max_second_level = *max_second_level_it;
@@ -56,21 +56,21 @@ void FrameObjListsAsset::convertToHumanReadable(const std::vector<char>& baserom
                 }
             }
             int diff = next - reader.cursor;
-            fmt::print(file.get(), "@  Skipping {} bytes\n", diff);
+            assetfmt::Print(file.get(), "@  Skipping {} bytes\n", diff);
             for (int i = 0; i < diff; i++) {
                 u8 byte = reader.read_u8();
-                fmt::print(file.get(), "\t.byte {}\n", byte);
+                assetfmt::Print(file.get(), "\t.byte {}\n", byte);
             }
         }
         u8 num_objects = reader.read_u8();
-        fmt::print(file.get(), "\t.byte {} @ num_objs\n", num_objects);
+        assetfmt::Print(file.get(), "\t.byte {} @ num_objs\n", num_objects);
 
         for (int i = 0; i < num_objects; i++) {
             s8 x_offset = reader.read_s8();
             s8 y_offset = reader.read_s8();
             u8 bitfield = reader.read_u8();
             u16 bitfield2 = reader.read_u16();
-            auto line = fmt::format("\tobj x={}, y={}", x_offset, y_offset);
+            auto line = assetfmt::Format("\tobj x={}, y={}", x_offset, y_offset);
             line += opt_param(", bitfield={:#x}", 0, bitfield);
             line += opt_param(", bitfield2={:#x}", 0, bitfield2);
             std::fputs(line.c_str(), file.get());

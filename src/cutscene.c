@@ -21,6 +21,7 @@
 #include "object.h"
 #include "port_scripts.h"
 #include "screen.h"
+#include "script.h"
 #include "subtask.h"
 #include "tiles.h"
 
@@ -469,7 +470,77 @@ void sub_08053BAC(void) {
 }
 
 void sub_08053BBC(void) {
+#ifdef PC_PORT
+    /* #93 Vaati takeover softlock — orchestrator-replacement watchdog.
+     *
+     * Background. The cutscene is normally driven by
+     * script_CutsceneOrchestratorTakeoverCutscene which broadcasts a
+     * sequenced wave of sync flags to wake King / Minister / Vaati /
+     * Guards / Zelda in order, then issues `SetRoomFlag 0` to signal
+     * end-of-cutscene. On the PC port the child orchestrator entity
+     * disappears mid-script (still under investigation; the entity is
+     * neither in any of gEntityLists nor seen by ObjectUpdate after the
+     * parent orchestrator's `Call sub_0807FBC4` priority bump runs).
+     * Result: helpers spin forever on their per-step waits.
+     *
+     * Workaround. Hold every helper-relevant flag (0x001..0x400) high
+     * each frame the takeover subtask is in overlay 2. Each helper
+     * script consumes its WaitForSyncFlagAndClear, advances through its
+     * inter-step animations, hits the next WAIT&CLR (which sees the
+     * flag still held and consumes again), and so on, eventually
+     * reaching its `WaitForSyncFlag 0x400` + `DoPostScriptAction 0x06`
+     * tail and self-deleting. Once we've held the flags long enough
+     * for that to finish (~3 seconds is comfortable on PC), force the
+     * room flag so the subtask's normal exit fires below.
+     *
+     * Side effect: between-step animations don't get their original
+     * pacing — the cutscene visually rushes by in a few seconds rather
+     * than the GBA-native ~20s. Restoring proper pacing requires
+     * tracking down why the orchestrator entity disappears in the
+     * first place; until then this is the cleanest "ship it" fix. */
+    /* Sequenced replacement for the orchestrator's flag broadcasts:
+     * mirror script_CutsceneOrchestratorTakeoverCutscene's Set/Wait
+     * pairs, paced so helpers' inter-step animations have time to
+     * play. Once the sequence finishes, force RoomFlag 0 to exit. */
+    static int sStep = 0;
+    static int sFrameInStep = 0;
+    static const struct { u32 setFlag; int frames; } kSeq[] = {
+        { 0x010, 30 },  /* wake Vaati 1 */
+        { 0x004, 30 },  /* wake King 1 */
+        { 0x010, 30 },  /* wake Vaati 2 */
+        { 0x010, 30 },  /* wake Vaati 3 */
+        { 0x004, 30 },  /* wake King 2 */
+        { 0x010, 30 },  /* wake Vaati 4 */
+        { 0x010, 30 },  /* extra (line 44 in orchestrator) */
+        { 0x040, 30 },  /* wake Guards */
+        { 0x001, 30 },  /* wake Minister */
+        { 0x004, 30 },  /* wake King 3 */
+        { 0x200, 15 },  /* signal Minister/Guards penultimate */
+        { 0x004, 15 },  /* wake King final */
+        { 0x400, 15 },  /* signal final wait — all helpers exit */
+    };
+    if (!CheckRoomFlag(0)) {
+        if (sStep < (int)(sizeof(kSeq) / sizeof(kSeq[0]))) {
+            sFrameInStep++;
+            if (sFrameInStep >= kSeq[sStep].frames) {
+                gActiveScriptInfo.syncFlags |= kSeq[sStep].setFlag;
+                sStep++;
+                sFrameInStep = 0;
+            }
+        } else {
+            SetRoomFlag(0);
+        }
+    } else {
+        sStep = 0;
+        sFrameInStep = 0;
+    }
+#endif
     if (CheckRoomFlag(0)) {
+#ifdef PC_PORT
+        /* Belt-and-suspenders for any helper whose final
+         * `WaitForSyncFlag 0x400` hasn't fired yet. */
+        gActiveScriptInfo.syncFlags |= 0x400u;
+#endif
         gMenu.menuType++;
         DispReset(1);
         SetFade(FADE_INSTANT, 0x100);
