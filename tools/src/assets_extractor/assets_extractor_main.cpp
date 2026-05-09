@@ -4,7 +4,9 @@
 
 #include <fmt/format.h>
 
+#include <cstddef>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 
@@ -14,6 +16,9 @@
  * .cpp TU, so match that here rather than re-introducing extern "C". */
 u8* gRomData = nullptr;
 u32 gRomSize = 0;
+
+extern "C" const unsigned char kEmbeddedSoundsJson[];
+extern "C" const std::size_t kEmbeddedSoundsJsonSize;
 
 int main(int argc, char* argv[])
 {
@@ -64,28 +69,24 @@ int main(int argc, char* argv[])
         PortAssetLog::Reporter::Instance().Error(err);
         return 1;
     }
-    std::string error;
-    if (!RunEmbeddedAssetExtractor(executable_dir, &error)) {
-        std::cerr << "Failed to extract assets: " << error << std::endl;
-        return 1;
+
+    /* Emit sounds.json next to the binary (= where tmc_pc launches
+     * from). The data is baked in at build time via embedded_sounds_json.cpp
+     * so the extractor is fully self-contained. */
+    {
+        const std::filesystem::path sounds_dst = executable_dir / "sounds.json";
+        std::ofstream f(sounds_dst, std::ios::binary);
+        if (f) {
+            f.write(reinterpret_cast<const char*>(kEmbeddedSoundsJson),
+                    static_cast<std::streamsize>(kEmbeddedSoundsJsonSize));
+        }
     }
-
-    /* Always emit sounds.json next to the binary (= where tmc_pc launches
-     * from). Same directory as assets_src/ and assets/. */
-    write_sounds_json(executable_dir / "sounds.json");
-
-    /* Always emit sounds.json next to the binary (= where tmc_pc launches
-     * from). Same directory as assets_src/ and assets/. */
-    write_sounds_json(executable_dir / "sounds.json");
 
     /* Mirror the extractor's loaded ROM bytes into the gRomData /
      * gRomSize globals so any standalone-linked TU that still consults
-     * them (currently none, but kept for parity with the previous
-     * behavior where the API itself did this) sees the loaded bytes.
-     * The cast drops `const` because the legacy globals predate the
-     * const audit; the standalone binary never writes through them.
-     * The API deliberately no longer touches these so it doesn't
-     * orphan tmc_pc's Port_LoadRom-populated buffer. */
+     * them sees the loaded bytes. The cast drops `const` because the
+     * legacy globals predate the const audit; the standalone binary
+     * never writes through them. */
     const std::span<const uint8_t> rom = AssetExtractorApi::LoadedRomBytes();
     gRomData = const_cast<u8*>(rom.data());
     gRomSize = static_cast<u32>(rom.size());

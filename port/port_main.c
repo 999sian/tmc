@@ -261,17 +261,14 @@ int main(int argc, char* argv[]) {
             else if (strcmp(argv[i], "--loose-assets") == 0) {
                 Port_LooseAssetsRequested = 1;
             }
-            else if (strcmp(argv[i], "--help") == 0) {
-                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets]\n", argv[0]);
-                fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
-                fprintf(stderr, "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
             else if (strcmp(argv[i], "--no-audio") == 0) {
                 noAudio = true;
             }
             else if (strcmp(argv[i], "--help") == 0) {
-                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--no-audio]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio]\n", argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
-                fprintf(stderr, "  --no-audio: Skip audio init (workaround for agbplay crash)\n");
+                fprintf(stderr, "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
+                fprintf(stderr, "  --no-audio:             Skip audio init (workaround for agbplay crash)\n");
                 fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
             }

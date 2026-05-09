@@ -5,7 +5,6 @@
 #include <algorithm>
 #include "port_asset_bootstrap.h"
 #include "port_asset_pipeline.hpp"
-#include "asset_extractor_runner.h"
 
 #include <SDL3/SDL.h>
 
@@ -180,37 +179,6 @@ bool EnsureSoundsMetadata(const std::filesystem::path& root, std::string& error)
 
     error = "sounds.json was not found";
     return false;
-}
-
-bool RunAssetExtractor(const std::filesystem::path& root, std::string& error) {
-    if (!RunEmbeddedAssetExtractor(root, &error)) {
-        return false;
-    }
-
-    if (!RuntimeAssetsReady(root)) {
-        error = "asset extraction finished but assets are still missing";
-        return false;
-    }
-
-    return true;
-}
-
-bool BuildRuntimeAssetsFromEditable(const std::filesystem::path& root, std::string& error) {
-    std::string pipelineError;
-    if (!PortAssetPipeline::BuildRuntimeAssets(root / "assets_src", root / "assets", &pipelineError)) {
-        error = pipelineError.empty() ? "failed to build runtime assets" : pipelineError;
-        return false;
-    }
-    if (!EnsureSoundsMetadata(root, error)) {
-        return false;
-    }
-
-    if (!RuntimeAssetsReady(root)) {
-        error = "runtime assets were built but required manifests are still missing";
-        return false;
-    }
-
-    return true;
 }
 
 /* ----------------------------------------------------------------
@@ -540,36 +508,6 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
         Port_LoadSpritePtrsFromAssets();
         Port_LoadAreaTablesFromAssets();
         return;
-    
-    if (const auto editableRoot = FindReadyEditableRoot(); editableRoot.has_value()) {
-        const std::filesystem::path installRoot = editableRoot->parent_path();
-        std::string reason;
-        const bool needsBuild =
-            !RuntimeAssetsReady(installRoot) ||
-            PortAssetPipeline::RuntimeAssetsNeedRebuild(*editableRoot, installRoot / "assets", &reason);
-        if (!needsBuild) {
-            std::string ignoredError;
-            EnsureSoundsMetadata(*editableRoot, ignoredError);
-            return;
-        }
-
-        ok = RunWithExtractingScreen(window,
-                                     [&]() {
-                                         return BuildRuntimeAssetsFromEditable(installRoot, error);
-                                     },
-                                     error);
-    } else {
-#ifdef TMC_ANDROID_PORT
-        error = "Android runtime assets are missing. Re-select the ROM so the in-app extractor can rebuild them.";
-        ok = false;
-#else
-        const std::filesystem::path root = PreferredAssetRoot();
-        ok = RunWithExtractingScreen(window,
-                                     [&]() {
-                                         return RunAssetExtractor(root, error);
-                                     },
-                                     error);
-#endif
     }
 
     const std::string message = err.empty() ? std::string("Asset extraction failed.") : err;

@@ -11,6 +11,3 @@
 	path = libs/VirtuaAPU
 	url = https://github.com/MatheoVignaud/VirtuaAPU.git
   ignore = dirty
-[submodule "libs/tmc-Android-Experimental"]
-	path = libs/tmc-Android-Experimental
-	url = git@github.com:MatheoVignaud/tmc-Android-Experimental.git
