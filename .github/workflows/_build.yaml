@@ -46,6 +46,7 @@ jobs:
         shell: bash
         run: |
           git config --global url."https://x-access-token:${{ secrets.PRIVATE_SUBMODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${{ secrets.PRIVATE_SUBMODULES_TOKEN }}@github.com/".insteadOf "git@github.com:"
           git submodule sync --recursive
           git submodule update --init --recursive
 
