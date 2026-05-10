@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.13)
 
+# CMake 4 removed compatibility with cmake_minimum_required(VERSION < 3.5),
+# which breaks our FetchContent dependencies (nlohmann/json v3.10.4,
+# CLI11 v2.1.2) that still declare 3.1. Setting the policy minimum here
+# forwards the lower bound through to subprojects so the downloaded
+# CMakeLists keep parsing on CMake >= 4.0. See issue #107.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
