@@ -103,13 +103,40 @@ void ItemForSale_Action1(ItemForSaleEntity* this) {
 }
 
 void ItemForSale_Action2(ItemForSaleEntity* this) {
+#ifndef PC_PORT
     void* ptr;
+#else
+    InteractableObject* iface;
+#endif
 
     gHUD.rActionPlayerState = R_ACTION_DROP;
     super->spriteSettings.draw = gPlayerEntity.base.spriteSettings.draw;
     if ((gPlayerState.heldObject == 0) || (super != gPlayerEntity.carriedEntity)) {
         sub_080819B4(this);
     } else {
+#ifdef PC_PORT
+        /* GBA #90 fix: original code was
+         *   ptr = sub_080784E4();
+         *   if (... ptr+8 == 0 || ptr+1 != 1 || ...) sub_080819B4(...)
+         * where ptr+8 was meant to be `entity` and ptr+1 `type` of
+         * an InteractableObject. On 64-bit PC, sizeof(pointer) is 8
+         * (not 4), so InteractableObject's `customHitbox` shifts to
+         * offset 0x08 and `entity` to 0x10; ptr+8 now reads the low
+         * half of customHitbox instead of `entity`. The "is the
+         * current interaction target talkable" check breaks, so a
+         * player carrying a shop item next to a merchant (Syrup with
+         * the Awake Mushroom in Tree Interiors / Witch Hut) gets the
+         * drop branch instead of the speak branch — pressing A drops
+         * the mushroom, no buy dialog. Use struct fields instead. */
+        iface = sub_080784E4();
+        if (((iface->entity == NULL) ||
+             ((iface->type != INTERACTION_TALK ||
+               (gHUD.rActionPlayerState = R_ACTION_SPEAK,
+                (gPlayerState.playerInput.newInput & (INPUT_ACTION | INPUT_INTERACT)) == 0)))) &&
+            ((gPlayerState.playerInput.newInput & (INPUT_ACTION | INPUT_CANCEL | INPUT_INTERACT)) != 0)) {
+            sub_080819B4(this);
+        }
+#else
         ptr = sub_080784E4();
         if (((*(int*)(ptr + 8) == 0) || ((*(u8*)(ptr + 1) != 1 || (gHUD.rActionPlayerState = R_ACTION_SPEAK,
                                                                    (gPlayerState.playerInput.newInput &
@@ -117,6 +144,7 @@ void ItemForSale_Action2(ItemForSaleEntity* this) {
             ((gPlayerState.playerInput.newInput & (INPUT_ACTION | INPUT_CANCEL | INPUT_INTERACT)) != 0)) {
             sub_080819B4(this);
         }
+#endif
     }
 }
 
