@@ -2,12 +2,17 @@
 #include "collision.h"
 #include "effects.h"
 #include "entity.h"
+#include "fade.h"
 #include "map.h"
+#include "menu.h"
 #include "object.h"
 #include "physics.h"
 #include "player.h"
+#include "gba/defines.h"
+#include "port_entity_ctx.h"
 #include "port_gba_mem.h"
 #include "room.h"
+#include "screen.h"
 #include "script.h"
 #include "sound.h"
 
@@ -597,6 +602,186 @@ void Port_LogOrchEvent(const char* op, void* ent) {
     fprintf(stderr, "[orch-%s] ent=%p\n", op, ent);
 }
 
+/* #93 chase: per-frame snapshot of an orchestrator entity's script state
+ * (PC, wait counter, postScriptActions, global syncFlags). Dedup'd —
+ * only emits when one of those values changes. Lets us see exactly when
+ * the orchestrator's script PC stops advancing and which step it died on.
+ *
+ * Up to 4 tracked entity pointers, indexed in entry-order. */
+typedef struct {
+    Entity* ent;
+    void* lastSip;
+    u32 lastPostActions;
+    u32 lastSync;
+    u16 lastWait;
+    u8 used;
+} OrchPcSlot;
+static OrchPcSlot sOrchPcSlots[4];
+
+void Port_LogOrchScriptPc(Entity* ent) {
+    ScriptExecutionContext* ctx = Port_GetEntityScriptCtx(ent);
+    if (!ctx) return;
+
+    int i, slot = -1;
+    for (i = 0; i < 4; i++) {
+        if (sOrchPcSlots[i].used && sOrchPcSlots[i].ent == ent) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) {
+        for (i = 0; i < 4; i++) {
+            if (!sOrchPcSlots[i].used) {
+                sOrchPcSlots[i].used = 1;
+                sOrchPcSlots[i].ent = ent;
+                sOrchPcSlots[i].lastSip = (void*)0xDEADBEEF;
+                slot = i;
+                break;
+            }
+        }
+    }
+    if (slot < 0) return;
+
+    OrchPcSlot* s = &sOrchPcSlots[slot];
+    void* sip = (void*)ctx->scriptInstructionPointer;
+    u16 wait = ctx->wait;
+    u32 postActions = ctx->postScriptActions;
+    u32 sync = gActiveScriptInfo.syncFlags;
+
+    if (sip != s->lastSip || wait != s->lastWait ||
+        postActions != s->lastPostActions || sync != s->lastSync) {
+        fprintf(stderr,
+                "[orch-pc] ent=%p kind=%u id=0x%X sip=%p wait=%u postAct=0x%X sync=0x%X\n",
+                (void*)ent, ent->kind, ent->id, sip,
+                (unsigned)wait, postActions, sync);
+        s->lastSip = sip;
+        s->lastWait = wait;
+        s->lastPostActions = postActions;
+        s->lastSync = sync;
+    }
+}
+
+/* #93 chase: log every SetFade / SetFadeInverted call so we can trace
+ * the exact post-cutscene fade chain and find why type ends at 5
+ * (fade-OUT to black) instead of 4 (fade-IN to color). NO dedup —
+ * every call gets logged. */
+void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
+                      u32 priorType, u32 priorActive, u32 priorProg) {
+    fprintf(stderr,
+            "[fade-call] %s arg1=0x%X arg2=0x%X prior(type=0x%X active=%u prog=%u)\n",
+            fn, arg1, arg2, priorType, priorActive, priorProg);
+}
+
+/* #93 chase: log subtask entry. Dedup'd by (name, active, nextToLoad)
+ * so we only see actual state changes. Tells us whether
+ * Subtask_FadeOut/FadeIn/Init/Die actually run post-cutscene. */
+void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad) {
+    static const char* sLastName = "";
+    static unsigned sLastActive = 0xFFFFu;
+    static unsigned sLastNTL = 0xFFFFu;
+    if (name != sLastName || active != sLastActive || nextToLoad != sLastNTL) {
+        fprintf(stderr, "[subtask-%s] active=%u nextToLoad=%u\n",
+                name, active, nextToLoad);
+        sLastName = name;
+        sLastActive = active;
+        sLastNTL = nextToLoad;
+    }
+}
+
+/* #93 chase: log entity-list-assignment for kind=6 (OBJECT) entities.
+ * Dual orchestrators (id=0x69) hit AppendEntityToList(_, 6) at spawn,
+ * but our log shows the parent and child end up in DIFFERENT lists.
+ * This logger lets us see exactly which listIndex each one lands in. */
+void Port_LogListOp(const char* op, void* ent, unsigned kind, unsigned id,
+                    unsigned listIdx, void* listAddr) {
+    fprintf(stderr,
+            "[list-%s] ent=%p kind=%u id=0x%X listIdx=%u listAddr=%p\n",
+            op, ent, kind, id, listIdx, listAddr);
+}
+
+/* #93 chase: per-frame snapshot of display state (DISPCNT) + palette
+ * buffer hash. Dedup'd. The post-takeover black-screen issue: by the
+ * time fade.before logs active=0 progress=0, gFadeControl says screen
+ * should be visible. If it's still black, the cause is one of:
+ *   - displayControl bits disable BG/OAM
+ *   - gPaletteBuffer is all-zero (palette never re-loaded for new area)
+ * Hashing first 64 bytes of palette is enough to tell "all zero" vs
+ * "has color data". */
+static unsigned Port_HashBytes(const void* p, unsigned n) {
+    const unsigned char* b = (const unsigned char*)p;
+    unsigned h = 0x811C9DC5u;
+    for (unsigned i = 0; i < n; i++) {
+        h ^= b[i];
+        h *= 0x01000193u;
+    }
+    return h;
+}
+
+extern u8 gPaletteBuffer[];
+
+void Port_LogDisplayFrame(void) {
+    static u16 lastDispCtl = 0xFFFFu;
+    static unsigned lastPalHash = 0u;
+    static unsigned lastPalRamHash = 0u;
+
+    u16 dispCtl = gScreen.lcd.displayControl;
+    /* Hash the FULL 1024-byte palette buffer + the GPU palette (gBgPltt
+     * + gObjPltt — backing storage for PAL_RAM on the PC port; PAL_RAM
+     * itself isn't a real address-space reservation here so we read the
+     * underlying buffers). If palBuf changes but palRam doesn't, the
+     * buffer was loaded but never pushed to the GPU. If both stay the
+     * same across an area transition, the new area's palette never
+     * loaded. */
+    unsigned palHash = Port_HashBytes(gPaletteBuffer, 0x400);
+    unsigned palRamHash = Port_HashBytes(gBgPltt, 0x200)
+                       ^ Port_HashBytes(gObjPltt, 0x200);
+
+    if (dispCtl != lastDispCtl || palHash != lastPalHash ||
+        palRamHash != lastPalRamHash) {
+        fprintf(stderr,
+                "[disp] dispCtl=0x%04X palBuf=0x%08X palRam=0x%08X\n",
+                dispCtl, palHash, palRamHash);
+        lastDispCtl = dispCtl;
+        lastPalHash = palHash;
+        lastPalRamHash = palRamHash;
+    }
+}
+
+/* #93 chase: per-frame snapshot of gFadeControl state. Dedup'd — only
+ * emits when active/type/progress/sustain/mask change. Targets the
+ * post-takeover black-screen issue: lets us see whether the AuxCutscene
+ * exit-fade actually flips active=1 with the right type, and whether
+ * progress drains back to 0 (visible) or sustains at 0x100 (black). */
+void Port_LogFadeFrame(void) {
+    static u8 lastActive = 0xFF;
+    static u16 lastType = 0xFFFF;
+    static u16 lastProgress = 0xFFFF;
+    static u16 lastSustain = 0xFFFF;
+    static u8 lastColor = 0xFF;
+    static u32 lastMask = 0xFFFFFFFFu;
+
+    u8 active = (u8)gFadeControl.active;
+    u16 type = gFadeControl.type;
+    u16 progress = gFadeControl.progress;
+    u16 sustain = gFadeControl.sustain;
+    u8 color = gFadeControl.color;
+    u32 mask = gFadeControl.mask;
+
+    if (active != lastActive || type != lastType ||
+        progress != lastProgress || sustain != lastSustain ||
+        color != lastColor || mask != lastMask) {
+        fprintf(stderr,
+                "[fade] active=%u type=0x%X progress=%u sustain=%u color=0x%X mask=0x%X\n",
+                active, type, progress, sustain, color, mask);
+        lastActive = active;
+        lastType = type;
+        lastProgress = progress;
+        lastSustain = sustain;
+        lastColor = color;
+        lastMask = mask;
+    }
+}
+
 void Port_DumpOrchStack(const char* tag, void* ent) {
 #if PORT_HAVE_EXECINFO
     void* bt[24];
@@ -728,6 +913,10 @@ void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
     int i;
     sOrchTickCount++;
     Port_TakeoverWatchdog();
+    /* Per-frame fade snapshot (dedup'd in Port_LogFadeFrame). Cheap when
+     * fade state is stable. Only logs on actual transitions. */
+    Port_LogFadeFrame();
+    Port_LogDisplayFrame();
     for (i = 0; i < 4; i++) {
         if (!sOrchs[i].active) continue;
         Entity* ent = sOrchs[i].ent;

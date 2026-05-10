@@ -464,8 +464,13 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         # Copy ROM so the standalone asset_extractor can find it next
         # to itself and pre-populate build/pc/assets/ — a convenience
         # for local-dev runs of build/pc/tmc_pc.
-        shutil.copy2("baserom.gba", "build/pc/baserom.gba")
-        print("✓  Copied baserom.gba → build/pc/")
+        src = Path("baserom.gba").resolve()
+        dst = Path("build/pc/baserom.gba")
+        if not dst.exists() or dst.resolve() != src:
+            shutil.copy2("baserom.gba", "build/pc/baserom.gba")
+            print("✓  Copied baserom.gba → build/pc/")
+        else:
+            print("✓  baserom.gba already in build/pc/ (same file)")
 
         extractor = REPO_ROOT / "build" / "pc" / (
             "asset_extractor.exe" if PLATFORM == "Windows" else "asset_extractor"

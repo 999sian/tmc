@@ -16,6 +16,9 @@
 #include "subtask.h"
 #include "affine.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 
 typedef void(AuxCutsceneState)(void);
 typedef void(CutsceneMainState)(void);
@@ -39,6 +42,24 @@ typedef struct {
 static const CutsceneData sCutsceneData[];
 
 void Subtask_AuxCutscene(void) {
+#ifdef PC_PORT
+    /* #93 chase: log AuxCutscene state transitions. Subtask_AuxCutscene
+     * fires every frame; dedup on (menuType, field_0x0) so we only see
+     * the actual phase changes — Init → Main(CutsceneMain_Init) →
+     * Main(CutsceneMain_Update) → Main(CutsceneMain_Exit) → Exit.
+     * The post-takeover black-screen happens because something in this
+     * chain doesn't fire or fires with wrong fade state. */
+    static u8 sLastMenuType = 0xFF;
+    static u8 sLastInner = 0xFF;
+    if (sLastMenuType != gMenu.menuType || sLastInner != gMenu.field_0x0) {
+        fprintf(stderr,
+                "[aux-cs] menuType=%u inner=%u overlayType=%u xferTimer=%u uiField3=%u\n",
+                gMenu.menuType, gMenu.field_0x0, gMenu.overlayType,
+                (unsigned)gMenu.transitionTimer, gUI.field_0x3);
+        sLastMenuType = gMenu.menuType;
+        sLastInner = gMenu.field_0x0;
+    }
+#endif
     static AuxCutsceneState* const sStates[] = {
         AuxCutscene_Init,
         AuxCutscene_Main,
@@ -100,6 +121,20 @@ static const CutsceneData sCutsceneData[] = {
 
 static void AuxCutscene_Exit(void) {
     u32 flag = sCutsceneData[gUI.field_0x3]._3;
+#ifdef PC_PORT
+    /* #93 chase: this is where the post-takeover fade-IN should be
+     * staged. Log which branch fires (MenuFadeIn vs SetFadeInverted
+     * path) and the active gFadeControl values just before the call,
+     * so we can see whether the fade-in actually flips active=1 with
+     * type cleared of FADE_IN_OUT (i.e. fade-in direction). */
+    fprintf(stderr,
+            "[aux-cs-exit] flag=0x%X uiField3=%u branch=%s "
+            "fade.before active=%u type=0x%X progress=%u sustain=%u\n",
+            flag, gUI.field_0x3,
+            (flag & 0xF0) ? "MenuFadeIn" : "SetFadeInverted",
+            (unsigned)gFadeControl.active, gFadeControl.type,
+            gFadeControl.progress, gFadeControl.sustain);
+#endif
     if (flag & 0xF0) {
         MenuFadeIn(2, flag >> 4);
     } else {
@@ -107,6 +142,14 @@ static void AuxCutscene_Exit(void) {
         SetFadeInverted(0x10);
         MessageInitialize();
     }
+#ifdef PC_PORT
+    fprintf(stderr,
+            "[aux-cs-exit] fade.after  active=%u type=0x%X progress=%u sustain=%u "
+            "nextToLoad=%u\n",
+            (unsigned)gFadeControl.active, gFadeControl.type,
+            gFadeControl.progress, gFadeControl.sustain,
+            (unsigned)gUI.nextToLoad);
+#endif
 }
 
 // end of auxCutscene?
