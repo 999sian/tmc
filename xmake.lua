@@ -434,6 +434,14 @@ target("tmc_pc")
             { patch = "viruappu-internal-scale.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "virtuappu_mode1_render_affine_obj_overlay" },
+            -- Widescreen layout constants in mode1.h + per-scanline
+            -- `#pragma omp parallel for` in the mode1 render loop. Without
+            -- this, mode1 (Hyrule Town's BG mode) renders single-threaded
+            -- on fresh checkouts; existing dirty-submodule worktrees may
+            -- still have it applied historically, but new clones did not.
+            { patch = "viruappu-widescreen.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "MODE1_GBA_BG_CLIP_X" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
