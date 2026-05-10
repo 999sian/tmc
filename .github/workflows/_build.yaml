@@ -196,26 +196,19 @@ jobs:
         run: |
           xmake require --uninstall libsdl3 || true
 
-      - name: Configure xmake (no ROM needed for binaries)
+      - name: Resolve MinGW POSIX path (Windows)
+        if: matrix.os_name == 'windows'
         shell: bash
-        env:
-          TMC_XMAKE_TOOLCHAIN: ${{ matrix.os_name == 'windows' && 'mingw' || '' }}
+        # build.py reads TMC_XMAKE_MINGW from env and passes
+        # `--mingw=$path` to `xmake f`. MINGW_HOME from "Install MinGW
+        # Windows" is a Windows path; xmake (Git-Bash) needs the POSIX
+        # form, otherwise libpng install fails with "cannot get
+        # program for ar" because xmake auto-detects Git for Windows's
+        # bundled MinGW (no `ar`).
         run: |
-          GAME_VERSION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
-          if [ -n "$TMC_XMAKE_TOOLCHAIN" ]; then
-            # On Windows, force the chocolatey-installed MinGW root.
-            # Without --mingw, xmake auto-detects Git for Windows's bundled
-            # MinGW (no `ar`, libpng install fails with "cannot get program
-            # for ar"). MINGW_HOME is exported by the "Install MinGW Windows"
-            # step using a Git-Bash POSIX path conversion below.
-            MINGW_FLAG=""
-            if [ -n "$MINGW_HOME" ]; then
-              MINGW_POSIX=$(cygpath -u "$MINGW_HOME" 2>/dev/null || echo "$MINGW_HOME")
-              MINGW_FLAG="--mingw=$MINGW_POSIX"
-            fi
-            xmake f -y --game_version="$GAME_VERSION" --toolchain="$TMC_XMAKE_TOOLCHAIN" $MINGW_FLAG
-          else
-            xmake f -y --game_version="$GAME_VERSION"
+          if [ -n "$MINGW_HOME" ]; then
+            MINGW_POSIX=$(cygpath -u "$MINGW_HOME" 2>/dev/null || echo "$MINGW_HOME")
+            echo "TMC_XMAKE_MINGW=$MINGW_POSIX" >> "$GITHUB_ENV"
           fi
 
       - name: Dump xmake package install logs (Windows, always)
@@ -266,14 +259,29 @@ jobs:
           done
           true
 
-      - name: Build tmc_pc and asset_extractor
+      - name: Build tmc_pc and asset_extractor (build.py)
         shell: bash
         env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
+          # build.py reads these and passes --toolchain=/--mingw= to
+          # `xmake f`. TMC_XMAKE_MINGW is exported by the previous step
+          # (Windows only).
+          TMC_XMAKE_TOOLCHAIN: ${{ matrix.os_name == 'windows' && 'mingw' || '' }}
         run: |
-          xmake build -y tmc_pc
-          xmake build -y asset_extractor
+          # build.py covers configure (xmake f) + build tmc_pc +
+          # build asset_extractor. --slim skips xmake's
+          # extract_assets/convert_assets/build_assets steps and the
+          # post-compile asset_extractor invocation, all of which need
+          # a baserom.gba CI doesn't ship. The binaries themselves
+          # don't need ROM data at compile time. The "Prepare artifact"
+          # step below pulls the freshly-built tmc_pc + asset_extractor
+          # out of build/pc/ along with assets/sounds.json.
+          REGION_FLAG="--usa"
+          if [ "${{ matrix.region }}" = "eur" ]; then
+            REGION_FLAG="--eur"
+          fi
+          python3 build.py "$REGION_FLAG" --slim
 
       - name: Verify SDL3 audio backends linked into tmc_pc (Linux)
         if: matrix.os_name == 'linux'
