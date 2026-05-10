@@ -11,7 +11,6 @@
 #include "room.h"
 #include "physics.h"
 #include "tiles.h"
-#include "port_generic_entity.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -23,16 +22,6 @@ typedef struct {
     /*0x76*/ u8 unk_76[0x10];
     /*0x86*/ u16 pushedFlag;
 } PushableRockEntity;
-
-/* Issue #89: PushableRockEntity.pushedFlag aliases GenericEntity.field_0x86
- * on GBA, but on PC the Entity base grew from 0x68 to 0x90 bytes and the
- * GenericEntity tail union (cutsceneBeh + field_0x86 vs. an 8-byte
- * scriptContext pointer) shifts field_0x86 to a different offset than
- * the byte-counted `unk_*` filler in this struct produces. The result
- * was pushedFlag reading 0 → SetFlag(0) being a no-op → the rock's
- * "already pushed" state never persisting. Read/write through GE_FIELD
- * so we hit the real GenericEntity.field_0x86 on either platform. */
-#define PUSHED_FLAG(this) (GE_FIELD(&(this)->base, field_0x86)->HWORD)
 
 extern void (*const PushableRock_Actions[])(PushableRockEntity*);
 extern const u16 PushableRock_Speeds[];
@@ -110,8 +99,8 @@ void sub_0808A644(PushableRockEntity* this) {
     if ((actTile == ACT_TILE_25) || (actTile == ACT_TILE_240)) {
         SetTile(SPECIAL_TILE_21, this->tilePos, super->collisionLayer);
         super->action = 3;
-        if (!CheckFlags(PUSHED_FLAG(this))) {
-            SetFlag(PUSHED_FLAG(this));
+        if (!CheckFlags(this->pushedFlag)) {
+            SetFlag(this->pushedFlag);
             SoundReq(SFX_TASK_COMPLETE);
             InitializeAnimation(super, 5);
         } else {
