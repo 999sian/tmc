@@ -940,9 +940,78 @@ bool BuildAreaFromAssets(u32 area) {
                 continue;
             }
 
-            const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
-            if (fileData != nullptr && !fileData->empty()) {
-                props[i] = const_cast<u8*>(fileData->data());
+            /* #36: Room-property files are thin wrappers — they carry only
+             * the leading bytes of a multi-chunk `gUnk_additional_*` table
+             * (e.g. the 4-byte `.4byte` rail pointer that prefixes a 16-
+             * byte-per-entry lava-platform table) and omit the rest, which
+             * lives in adjacent `.incbin` files. Iterating off the
+             * truncated file runs straight off the end into heap garbage
+             * so LavaPlatform_SpawnPlatforms never finds the real 0xff
+             * terminator and no moving platforms spawn.
+             *
+             * Two paths reach gRomData:
+             *   (a) `room_properties/offset_<hex>.bin` — Rollobite repro
+             *       has its leading rail-pointer chunk under this name.
+             *   (b) Files registered in port_asset_index.c — the
+             *       BossDoor repro has its leading chunk under
+             *       `data_080D5360/gUnk_additional_8_CaveOfFlames_BossDoor.bin`
+             *       and 8 follow-on chunks at adjacent ROM offsets that
+             *       the asset extractor wrote into separate files.
+             *
+             * Both routes return gRomData + rom-offset so the consumer
+             * sees the GBA-original contiguous layout. (Both were
+             * dropped during the PR #60 merge; restored.) */
+            u8* romPtr = nullptr;
+            if (gRomData != nullptr) {
+                const std::string& path = roomEntry.files[i];
+
+                /* Path (a): filename-encoded hex offset. */
+                static constexpr const char kPropPrefix[] = "room_properties/offset_";
+                static constexpr const char kPropSuffix[] = ".bin";
+                constexpr size_t kPrefixLen = sizeof(kPropPrefix) - 1;
+                constexpr size_t kSuffixLen = sizeof(kPropSuffix) - 1;
+                if (path.size() > kPrefixLen + kSuffixLen
+                    && path.compare(0, kPrefixLen, kPropPrefix) == 0
+                    && path.compare(path.size() - kSuffixLen, kSuffixLen, kPropSuffix) == 0) {
+                    const std::string hex = path.substr(kPrefixLen, path.size() - kPrefixLen - kSuffixLen);
+                    char* end = nullptr;
+                    const unsigned long offset = std::strtoul(hex.c_str(), &end, 16);
+                    if (end != hex.c_str() && *end == '\0' && offset < gRomSize) {
+                        romPtr = gRomData + offset;
+                    }
+                }
+
+                /* Path (b): asset-index lookup. Built once on first use. */
+                if (romPtr == nullptr) {
+                    static const std::unordered_map<std::string, u32> kFileToRomOffset = []() {
+                        std::unordered_map<std::string, u32> m;
+                        const EmbeddedAssetEntry* entries = EmbeddedAssetIndex_Get();
+                        const u32 count = EmbeddedAssetIndex_Count();
+                        m.reserve(count);
+                        for (u32 k = 0; k < count; ++k) {
+                            m.emplace(entries[k].path, entries[k].offset);
+                        }
+                        return m;
+                    }();
+                    auto it = kFileToRomOffset.find(path);
+                    if (it != kFileToRomOffset.end() && it->second < gRomSize) {
+                        romPtr = gRomData + it->second;
+                    }
+                }
+            }
+
+            if (romPtr != nullptr) {
+                props[i] = romPtr;
+                AssetLogOnce(
+                    "rom-prop:" + std::to_string(area) + ":" +
+                        std::to_string(room) + ":" + std::to_string(i) + ":" + roomEntry.files[i],
+                    "room property area=0x%x room=%zu slot=%zu -> gRomData (%s)",
+                    area, room, i, roomEntry.files[i].c_str());
+            } else {
+                const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
+                if (fileData != nullptr && !fileData->empty()) {
+                    props[i] = const_cast<u8*>(fileData->data());
+                }
             }
         }
 

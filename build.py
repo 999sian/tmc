@@ -508,6 +508,46 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         dst_bin.chmod(dst_bin.stat().st_mode | 0o111)
     ok(f"Binary    →  dist/{version}/{EXE_NAME}")
 
+    # Linux: bundle libSDL3 + libgomp so the tarball runs on systems
+    # that don't ship SDL3 yet (Steam Deck SteamOS, older Ubuntu/Fedora).
+    # The binary is linked with -Wl,-rpath,$ORIGIN so it finds these
+    # next to itself before falling back to /usr/lib (xmake.lua).
+    # Resolved via ldd against the just-built binary.
+    if PLATFORM == "Linux":
+        import re
+        try:
+            ldd_out = subprocess.run(
+                ["ldd", str(src_bin)], capture_output=True, text=True, check=True
+            ).stdout
+        except Exception as e:
+            warn(f"ldd failed ({e}); skipping shared-library bundling")
+            ldd_out = ""
+        bundle_libs = ("libSDL3.so.0", "libgomp.so.1")
+        for libname in bundle_libs:
+            m = re.search(rf"^\s*{re.escape(libname)}\s*=>\s*(\S+)", ldd_out, re.MULTILINE)
+            if not m:
+                continue
+            src_lib = Path(m.group(1))
+            if not src_lib.exists():
+                continue
+            # cp -aP semantics: preserve the symlink AND copy the versioned
+            # target it points to, so `libSDL3.so.0 -> libSDL3.so.0.4.4`
+            # works the same way ld.so resolves it at runtime.
+            dst_lib = dist_dir / src_lib.name
+            if dst_lib.exists() or dst_lib.is_symlink():
+                dst_lib.unlink()
+            if src_lib.is_symlink():
+                shutil.copy(src_lib, dst_lib, follow_symlinks=False)
+                resolved = src_lib.resolve()
+                if resolved != src_lib and resolved.exists():
+                    dst_resolved = dist_dir / resolved.name
+                    if not dst_resolved.exists():
+                        shutil.copy2(resolved, dst_resolved)
+                ok(f"{src_lib.name} (+target) →  dist/{version}/")
+            else:
+                shutil.copy2(src_lib, dst_lib)
+                ok(f"{src_lib.name} →  dist/{version}/")
+
     if slim:
         # In slim mode the binary is the entire dist. tmc_pc's
         # embedded extractor will create assets/ on first run, and
