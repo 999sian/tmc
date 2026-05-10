@@ -25,6 +25,8 @@ on:
           - linux
           - windows
           - macos
+          - macos-arm
+          - macos-x86
 
 permissions:
   contents: write

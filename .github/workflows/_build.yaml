@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       os_filter:
-        description: "all | linux | windows | macos — restrict build matrix to one platform"
+        description: "all | linux | windows | macos | macos-arm | macos-x86 — restrict build matrix"
         required: false
         type: string
         default: all
@@ -35,27 +35,31 @@ jobs:
           # Use Ubuntu 22.04 (glibc 2.35) so the Linux binary runs on
           # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
           # on ubuntu-latest pins glibc 2.43+ which excludes most users.
-          linux='{"runner":"ubuntu-22.04","os_name":"linux","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          linux='{"runner":"ubuntu-22.04","os_name":"linux","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           # Pin to windows-2022: GitHub rolled `windows-latest` to Server
           # 2025 with a different VS/MinGW tooling layout, which broke
           # xmake-repo's libpng install step (exit 127 at the post-compile
           # install). The v0.1.6.x release built fine on windows-2022.
-          windows='{"runner":"windows-2022","os_name":"windows","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
-          # macos-latest = macos-14 = Apple Silicon arm64. First-pass macOS
-          # build is arm64-only; Intel Macs (macos-13 runner) can be added
-          # in a follow-up if there's demand.
-          macos='{"runner":"macos-latest","os_name":"macos","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          windows='{"runner":"windows-2022","os_name":"windows","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          # macos-14 = Apple Silicon arm64; macos-13 = Intel x86_64.
+          # Both keep os_name="macos" so the brew dep-install step's
+          # condition (`matrix.os_name == 'macos'`) covers both runners.
+          # Archive name uses ${matrix.arch} to disambiguate the assets.
+          macos_arm='{"runner":"macos-14","os_name":"macos","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          macos_x86='{"runner":"macos-13","os_name":"macos","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           case "${OS_FILTER:-all}" in
-            linux)   matrix="{\"include\":[$linux]}" ;;
-            windows) matrix="{\"include\":[$windows]}" ;;
-            macos)   matrix="{\"include\":[$macos]}" ;;
-            all|"")  matrix="{\"include\":[$linux,$windows,$macos]}" ;;
-            *)       echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos)"; exit 1 ;;
+            linux)      matrix="{\"include\":[$linux]}" ;;
+            windows)    matrix="{\"include\":[$windows]}" ;;
+            macos)      matrix="{\"include\":[$macos_arm,$macos_x86]}" ;;
+            macos-arm)  matrix="{\"include\":[$macos_arm]}" ;;
+            macos-x86)  matrix="{\"include\":[$macos_x86]}" ;;
+            all|"")     matrix="{\"include\":[$linux,$windows,$macos_arm,$macos_x86]}" ;;
+            *)          echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos, macos-arm, macos-x86)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build ${{ matrix.region }} on ${{ matrix.os_name }}
+    name: Build ${{ matrix.region }} on ${{ matrix.os_name }} ${{ matrix.arch }}
     needs: set-matrix
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -315,7 +319,13 @@ jobs:
       - name: Create archive
         shell: bash
         run: |
-          ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${{ inputs.version_label }}"
+          # Archive name embeds os_name + arch so macos-arm64 and
+          # macos-x86_64 (and any future arm64-Linux / arm64-Windows)
+          # don't collide on upload. Falls back to "x86_64" when arch is
+          # unset for compatibility with older callers.
+          ARCH="${{ matrix.arch }}"
+          [ -z "$ARCH" ] && ARCH="x86_64"
+          ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${ARCH}-${{ inputs.version_label }}"
           tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact .
           echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
 
