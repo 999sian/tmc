@@ -209,6 +209,12 @@ void GameMain_Subtask(void) {
 }
 
 void Subtask_FadeIn(void) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad);
+        Port_LogSubtaskEntry("FadeIn", gFadeControl.active, gUI.nextToLoad);
+    }
+#endif
     if (!gFadeControl.active) {
         MemCopy(&gScreen, &gUnk_03001020, sizeof(Screen));
         MemCopy(gPaletteBuffer, gPaletteBufferBackup, 0x400);
@@ -228,6 +234,12 @@ void Subtask_FadeIn(void) {
 }
 
 void Subtask_Init(void) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad);
+        Port_LogSubtaskEntry("Init", gFadeControl.active, gUI.nextToLoad);
+    }
+#endif
     if (gFadeControl.active == 0) {
         DeleteAllEntities();
         MemClear(&gMenu, sizeof(FigurineMenu));
@@ -246,6 +258,12 @@ void Subtask_Init(void) {
 }
 
 void Subtask_FadeOut(void) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad);
+        Port_LogSubtaskEntry("FadeOut", gFadeControl.active, gUI.nextToLoad);
+    }
+#endif
     if (!gFadeControl.active) {
         DeleteAllEntities();
         sub_0805E974();
@@ -275,6 +293,12 @@ void Subtask_FadeOut(void) {
 }
 
 void Subtask_Die(void) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad);
+        Port_LogSubtaskEntry("Die", gFadeControl.active, gUI.nextToLoad);
+    }
+#endif
     sub_080A74F4();
     if (gFadeControl.active == 0) {
         gMain.substate = gUI.pauseFadeIn;

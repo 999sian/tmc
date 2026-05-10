@@ -138,6 +138,15 @@ void SetFadeProgress(u32 arg0) {
 }
 
 void SetFade(u32 type, u32 speed) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
+                                     u32 priorType, u32 priorActive, u32 priorProg);
+        Port_LogFadeCall("SetFade", type, speed,
+                         gFadeControl.type, gFadeControl.active,
+                         gFadeControl.progress);
+    }
+#endif
     gFadeControl.speed = speed;
     gFadeControl.type = type;
     gFadeControl.active = 1;
@@ -166,6 +175,15 @@ void SetFade(u32 type, u32 speed) {
 }
 
 void SetFadeInverted(u32 speed) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
+                                     u32 priorType, u32 priorActive, u32 priorProg);
+        Port_LogFadeCall("SetFadeInverted", speed, 0,
+                         gFadeControl.type, gFadeControl.active,
+                         gFadeControl.progress);
+    }
+#endif
     gFadeControl.speed = speed;
     gFadeControl.type ^= FADE_IN_OUT;
     gFadeControl.active = 1;

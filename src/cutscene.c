@@ -580,23 +580,33 @@ void sub_08053BBC(void) {
     sFrameInStep = 0;
 #endif
     if (CheckRoomFlag(0)) {
-#ifdef PC_PORT
         gActiveScriptInfo.syncFlags |= 0x400u;
-        /* On GBA, the child orchestrator's `SetFade5` (FADE_IN_OUT|FADE_INSTANT)
-         * runs just before SetRoomFlag, leaving the screen already mid/at black
-         * by the time sub_08053BBC fires. The original `SetFade(FADE_INSTANT, 0x100)`
-         * here is a no-op/safe-snap on GBA. On PC the watchdog skipped the
-         * child orchestrator's fade, so we have to drive a fade-OUT-to-black
-         * here so the AuxCutscene exit has a defined starting point for its
-         * fade-IN. Use type=FADE_IN_OUT|FADE_INSTANT (5), which mirrors the
-         * child orchestrator's SetFade5. */
-        gMenu.menuType++;
-        DispReset(1);
-        SetFade(FADE_IN_OUT | FADE_INSTANT, 0x100);
-#else
+        /* Use SetFade(FADE_INSTANT, 0x100) — the GBA original.
+         *
+         * Post-cutscene black-screen fix:
+         *
+         * The takeover sets up via sub_08053BE8 → sub_080A71C4(5, 2,
+         * FADE_IN_OUT|FADE_INSTANT, 0x100), which writes
+         * gUI.fadeType = 0x5 + gUI.fadeInTime = 0x100.
+         *
+         * After AuxCutscene_Exit's SetFadeInverted toggles type 4→5
+         * and the fade drains to factor=0 (black), Subtask_FadeOut
+         * runs and — because gUI.fadeType != 0xffff — does
+         *   SetFade(gUI.fadeType=0x5, 0x100)
+         * That sets type=5/progress=256/active=1 and the next FadeMain
+         * snaps progress to 0 with FADE_IN_OUT applied → factor=0 →
+         * palRam all-zero / BLACK. Subtask_Die fires, main game
+         * resumes, but the fade pipeline is dormant (active=0) so
+         * factors stay at zero forever and palRam stays black.
+         *
+         * Forcing gUI.fadeType = -1 here makes Subtask_FadeOut take
+         * the else branch (SetFadeInverted), which toggles 5→4 and
+         * drains to factor=1024 (full color), restoring visibility. */
         gMenu.menuType++;
         DispReset(1);
         SetFade(FADE_INSTANT, 0x100);
+#ifdef PC_PORT
+        gUI.fadeType = (u16)-1;
 #endif
     }
 }

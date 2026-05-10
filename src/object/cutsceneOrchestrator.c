@@ -11,6 +11,7 @@
 void CutsceneOrchestrator(Entity* this) {
 #ifdef PC_PORT
     extern void Port_TrackOrch(Entity* ent);
+    extern void Port_LogOrchScriptPc(Entity* ent);
     Port_TrackOrch(this);
 #endif
     if ((this->flags & ENT_SCRIPTED) != 0) {
@@ -24,4 +25,10 @@ void CutsceneOrchestrator(Entity* this) {
     } else {
         this->action = 1;
     }
+#ifdef PC_PORT
+    /* After dispatch so sip reflects the next instruction the script
+     * will run (or whatever it stopped at). Includes both the no-script
+     * idle path and the post-execute path. */
+    Port_LogOrchScriptPc(this);
+#endif
 }
