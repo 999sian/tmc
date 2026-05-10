@@ -138,6 +138,16 @@ void UpdatePlayerInput(void) {
     gPlayerState.playerInput.newInput = state & prevState;
     // Calculate the direction from the currently held input.
     gPlayerState.direction = gUnk_08109202[(state & INPUT_ANY_DIRECTION) >> 8];
+#ifdef PC_PORT
+    {
+        extern void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys,
+                                        unsigned keys, unsigned state, unsigned direction,
+                                        int hasMacro);
+        Port_LogPlayerInput(gPlayerState.controlMode, gInput.heldKeys, keys,
+                            state, gPlayerState.direction,
+                            gPlayerState.playerInput.playerMacro != NULL);
+    }
+#endif
 }
 
 u32 ConvInputToState(u32 keys) {

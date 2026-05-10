@@ -326,6 +326,25 @@ bool32 CheckInitPauseMenu(void) {
 }
 
 void DoPlayerAction(PlayerEntity* this) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogPlayerState(unsigned action, unsigned controlMode,
+                                        unsigned stateFlags, unsigned eventPrio,
+                                        unsigned area, unsigned room,
+                                        int x, int y, unsigned heldKeys,
+                                        unsigned knockback, unsigned jumpStatus,
+                                        unsigned swimState, unsigned framestate,
+                                        unsigned attackStatus, unsigned spd);
+        Port_LogPlayerState(super->action, gPlayerState.controlMode,
+                            gPlayerState.flags, gPriorityHandler.event_priority,
+                            gRoomControls.area, gRoomControls.room,
+                            (int)super->x.HALF.HI, (int)super->y.HALF.HI,
+                            gInput.heldKeys,
+                            super->knockbackDuration, gPlayerState.jump_status,
+                            gPlayerState.swim_state, gPlayerState.framestate,
+                            gPlayerState.attack_status, super->speed);
+    }
+#endif
     static void (*const sPlayerActions[])(PlayerEntity*) = {
         [PLAYER_INIT] = PlayerInit,
         [PLAYER_NORMAL] = PlayerNormal,
@@ -413,6 +432,12 @@ static void PlayerInit(PlayerEntity* this) {
 }
 
 static void PlayerNormal(PlayerEntity* this) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogPlayerNormalEnter(unsigned queuedAction);
+        Port_LogPlayerNormalEnter(gPlayerState.queued_action);
+    }
+#endif
     gPlayerState.framestate = PL_STATE_IDLE;
     if (gPlayerState.flags & PL_CAPTURED) {
         super->spritePriority.b1 = 0;
@@ -442,6 +467,9 @@ static void PlayerNormal(PlayerEntity* this) {
     sub_080085B0(super);
     super->hurtType = 0;
     if (CheckQueuedAction()) {
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("CQA-0"); }
+#endif
         return;
     }
     if (!gPlayerState.swim_state && (gPlayerState.jump_status & 0xC0) == 0) {
@@ -463,6 +491,9 @@ static void PlayerNormal(PlayerEntity* this) {
     }
 
     if (CheckQueuedAction()) {
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("CQA-1"); }
+#endif
         return;
     }
 
@@ -475,12 +506,16 @@ static void PlayerNormal(PlayerEntity* this) {
                 UpdateFloorType();
                 CheckQueuedAction();
             }
+#ifdef PC_PORT
+            { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("sub_080782C0"); }
+#endif
             return;
         }
         if (((gPlayerState.flags & (PL_BUSY | PL_DROWNING | PL_USE_PORTAL | PL_CAPTURED | PL_FALLING | PL_BURNING |
                                     PL_IN_MINECART | PL_ROLLING)) |
              gPlayerState.attachedBeetleCount) == 0) {
-            switch (UpdatePlayerCollision()) {
+            int collisionResult = (int)UpdatePlayerCollision();
+            switch (collisionResult) {
                 case 0:
                     gPlayerState.pushedObject ^= 0x80;
                     break;
@@ -490,15 +525,29 @@ static void PlayerNormal(PlayerEntity* this) {
                 case 15:
                     super->flags &= ~ENT_COLLIDE;
                     sub_080797EC();
+#ifdef PC_PORT
+                    { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("col=15"); }
+#endif
                     return;
                 case 4:
                     gPlayerState.pushedObject ^= 0x80;
                     sub_080797EC();
+#ifdef PC_PORT
+                    { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("col=4"); }
+#endif
                     return;
                 case 1:
                 case 2:
                 case 5 ... 14:
                 default:
+#ifdef PC_PORT
+                    {
+                        extern void Port_LogPlayerEarlyReturn(const char* tag);
+                        char buf[16];
+                        snprintf(buf, sizeof(buf), "col=%d", collisionResult);
+                        Port_LogPlayerEarlyReturn(buf);
+                    }
+#endif
                     return;
             }
         }
@@ -507,21 +556,35 @@ static void PlayerNormal(PlayerEntity* this) {
     super->collisionFlags = 0;
     super->spritePriority.b0 = 4;
     if (sub_0807AC54(super)) {
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("sub_0807AC54"); }
+#endif
         return;
     }
     UpdateActiveItems(super);
 
-    if (CheckQueuedAction())
+    if (CheckQueuedAction()) {
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("CQA-2"); }
+#endif
         return;
+    }
 
     sub_080792D8();
     if ((gPlayerState.jump_status | gPlayerState.field_0xa) == 0 && (sub_08079550() || sub_08078F74(super))) {
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("9550-or-8F74"); }
+#endif
         return;
     }
     DoJump(this);
 
-    if (CheckQueuedAction())
+    if (CheckQueuedAction()) {
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("CQA-3"); }
+#endif
         return;
+    }
 
     if (gPlayerState.jump_status) {
         gPlayerState.framestate = PL_STATE_CAPE;
@@ -536,14 +599,28 @@ static void PlayerNormal(PlayerEntity* this) {
         UpdatePlayerMovement();
         if ((super->frame & 2) == 0 && !gPlayerState.attack_status)
             UpdateAnimationSingleFrame(super);
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("jump-path"); }
+#endif
         return;
     }
+#ifdef PC_PORT
+    {
+        extern void Port_LogPlayerEarlyReturn(const char* tag);
+        char buf[32];
+        snprintf(buf, sizeof(buf), "knock-check=%u", (unsigned)super->knockbackDuration);
+        Port_LogPlayerEarlyReturn(buf);
+    }
+#endif
     if (super->knockbackDuration == 0) {
         u32 v13;
 
         if (gPlayerState.swim_state) {
             gPlayerState.framestate = PL_STATE_SWIM;
             PlayerSwimming(super);
+#ifdef PC_PORT
+            { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("post-swim"); }
+#endif
         } else {
             if ((gPlayerState.flags & PL_CONVEYOR_PUSHED) == 0)
                 super->spritePriority.b1 = 1;
@@ -576,6 +653,17 @@ static void PlayerNormal(PlayerEntity* this) {
                 ((gPlayerState.dash_state & 0x40) || gPlayerState.floor_type != SURFACE_ICE))
                 v13 = 3;
         }
+#ifdef PC_PORT
+        {
+            extern void Port_LogPlayerMovementGate(unsigned v13, unsigned dir, unsigned psDir,
+                                                   unsigned f7, unsigned fa, unsigned dash,
+                                                   unsigned floor, unsigned swordState);
+            Port_LogPlayerMovementGate(v13, super->direction, gPlayerState.direction,
+                                       gPlayerState.field_0x7, gPlayerState.field_0xa,
+                                       gPlayerState.dash_state, gPlayerState.floor_type,
+                                       gPlayerState.sword_state);
+        }
+#endif
         sub_08070BEC(this, v13);
         sub_08008AC6(super);
         if (super->knockbackDuration == 0 && gPlayerState.keepFacing == 0 && gPlayerState.floor_type != SURFACE_LADDER)
@@ -585,8 +673,14 @@ static void PlayerNormal(PlayerEntity* this) {
             UpdateAnimationSingleFrame(super);
         if (gPlayerState.swim_state != 0 && (gRoomTransition.frameCount & 7) == 0)
             CreateWaterTrace(super);
+#ifdef PC_PORT
+        { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("knock-nonzero"); }
+#endif
         return;
     }
+#ifdef PC_PORT
+    { extern void Port_LogPlayerEarlyReturn(const char* tag); Port_LogPlayerEarlyReturn("pn-end"); }
+#endif
 }
 
 static void sub_08070BEC(PlayerEntity* this, u32 r0) {
