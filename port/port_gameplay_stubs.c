@@ -661,6 +661,156 @@ void Port_LogOrchScriptPc(Entity* ent) {
     }
 }
 
+/* #93 chase: per-frame player state log. Dedup'd by (action,
+ * controlMode, flags, eventPrio, area, room) so position drift
+ * doesn't spam, but key transitions ARE captured. After the takeover
+ * cutscene the player softlocks; this answers:
+ *  - is the player entity still alive and being updated (line firing
+ *    at all)?
+ *  - what action is it stuck in (PLAYER_NORMAL=movable, anything else
+ *    typically locks input)?
+ *  - is gPlayerState.controlMode CONTROL_DISABLED (input gated off)?
+ *  - is gPriorityHandler.event_priority elevated (PRIO_PLAYER_EVENT
+ *    blocks normal input)?
+ *  - is the player in the new area (Hyrule Field 3/8) or stuck in
+ *    the pre-cutscene room?
+ */
+/* #93 chase: log UpdatePlayerInput's outputs. The user's input is
+ * confirmed reaching gInput.heldKeys (per [player] log) but
+ * gPlayerState.direction ends up 0xFF (DIR_NONE), gating all
+ * movement. This shows whether ctlMode/macro/keys-gating is the
+ * culprit or whether ConvInputToState / the gUnk_08109202 lookup
+ * is producing the wrong value. */
+void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys, unsigned keys,
+                         unsigned state, unsigned direction, int hasMacro) {
+    static unsigned lCtl = 0xFFFFu, lHeld = 0xFFFFu, lKeys = 0xFFFFu;
+    static unsigned lState = 0xFFFFu, lDir = 0xFFFFu;
+    static int lMacro = -1;
+    if (ctlMode != lCtl || heldKeys != lHeld || keys != lKeys ||
+        state != lState || direction != lDir || hasMacro != lMacro) {
+        fprintf(stderr,
+                "[upi] ctl=%u held=0x%X keys=0x%X state=0x%X dir=0x%X macro=%d\n",
+                ctlMode, heldKeys, keys, state, direction, hasMacro);
+        lCtl = ctlMode; lHeld = heldKeys; lKeys = keys;
+        lState = state; lDir = direction; lMacro = hasMacro;
+    }
+}
+
+/* #93 chase: log PlayerNormal entry. Dedup by queued_action so we
+ * see when this transitions. Combined with [pn-ret] this tells us
+ * whether PlayerNormal is even being entered (vs DoPlayerAction
+ * routing somewhere else). */
+void Port_LogPlayerNormalEnter(unsigned queuedAction) {
+    static unsigned lastQ = 0xFFFFu;
+    static unsigned heartbeat = 0;
+    heartbeat++;
+    if (queuedAction != lastQ || (heartbeat % 60) == 0) {
+        fprintf(stderr, "[pn-enter] queuedAction=%u%s\n",
+                queuedAction,
+                queuedAction == lastQ ? " (heartbeat)" : "");
+        lastQ = queuedAction;
+    }
+}
+
+/* #93 chase: log the v13 movement-gate decision in PlayerNormal.
+ * v13&2 is what calls UpdatePlayerMovement(). If v13 is 0 or 1
+ * post-cutscene, that's why position is frozen. Dedup'd by all inputs
+ * so we only see actual transitions. */
+void Port_LogPlayerMovementGate(unsigned v13, unsigned dir, unsigned psDir,
+                                unsigned f7, unsigned fa, unsigned dash,
+                                unsigned floor, unsigned swordState) {
+    static unsigned lV13 = 0xFFFFu, lDir = 0xFFFFu, lPsDir = 0xFFFFu;
+    static unsigned lF7 = 0xFFFFu, lFa = 0xFFFFu, lDash = 0xFFFFu;
+    static unsigned lFloor = 0xFFFFu, lSword = 0xFFFFu;
+    static unsigned heartbeat = 0;
+    heartbeat++;
+    int changed = v13 != lV13 || dir != lDir || psDir != lPsDir ||
+                  f7 != lF7 || fa != lFa || dash != lDash ||
+                  floor != lFloor || swordState != lSword;
+    int beat = (heartbeat % 60) == 0;
+    if (changed || beat) {
+        fprintf(stderr,
+                "[mv-gate] v13=%u superDir=0x%X psDir=0x%X f7=0x%X fa=0x%X "
+                "dash=0x%X floor=%u sword=0x%X%s\n",
+                v13, dir, psDir, f7, fa, dash, floor, swordState,
+                beat && !changed ? " (heartbeat)" : "");
+        lV13 = v13; lDir = dir; lPsDir = psDir;
+        lF7 = f7; lFa = fa; lDash = dash;
+        lFloor = floor; lSword = swordState;
+    }
+}
+
+/* #93 chase: log which early-return inside PlayerNormal fires.
+ * Dedup'd by tag — if movement is gated, we'll see the same tag every
+ * frame; if movement reaches the end, no [pn-ret] log. */
+void Port_LogPlayerEarlyReturn(const char* tag) {
+    static const char* sLastTag = "";
+    if (tag != sLastTag) {
+        fprintf(stderr, "[pn-ret] %s\n", tag);
+        sLastTag = tag;
+    }
+}
+
+void Port_LogPlayerState(unsigned action, unsigned controlMode,
+                         unsigned stateFlags, unsigned eventPrio,
+                         unsigned area, unsigned room,
+                         int x, int y, unsigned heldKeys,
+                         unsigned knockback, unsigned jumpStatus,
+                         unsigned swimState, unsigned framestate,
+                         unsigned attackStatus, unsigned spd) {
+    static unsigned lastAction = 0xFFFFu;
+    static unsigned lastCtl = 0xFFFFu;
+    static unsigned lastFlags = 0xFFFFu;
+    static unsigned lastPrio = 0xFFFFu;
+    static unsigned lastArea = 0xFFFFu;
+    static unsigned lastRoom = 0xFFFFu;
+    static int lastX = -99999;
+    static int lastY = -99999;
+    static unsigned lastKeys = 0xFFFFu;
+    static unsigned lastKnock = 0xFFFFu;
+    static unsigned lastJump = 0xFFFFu;
+    static unsigned lastSwim = 0xFFFFu;
+    static unsigned lastFs = 0xFFFFu;
+    static unsigned lastAtk = 0xFFFFu;
+    static unsigned lastSpd = 0xFFFFu;
+    static unsigned heartbeat = 0;
+    int stateChanged = action != lastAction || controlMode != lastCtl ||
+                       stateFlags != lastFlags || eventPrio != lastPrio ||
+                       area != lastArea || room != lastRoom ||
+                       x != lastX || y != lastY || heldKeys != lastKeys ||
+                       knockback != lastKnock || jumpStatus != lastJump ||
+                       swimState != lastSwim || framestate != lastFs ||
+                       attackStatus != lastAtk || spd != lastSpd;
+    heartbeat++;
+    int beat = (heartbeat % 60) == 0;
+    if (stateChanged || beat) {
+        fprintf(stderr,
+                "[player] action=%u ctl=%u flags=0x%X prio=%u area=%u room=%u "
+                "pos=(%d,%d) keys=0x%X knock=%u jump=0x%X swim=0x%X fs=%u "
+                "atk=%u spd=%u%s\n",
+                action, controlMode, stateFlags, eventPrio,
+                area, room, x, y, heldKeys,
+                knockback, jumpStatus, swimState, framestate,
+                attackStatus, spd,
+                beat && !stateChanged ? " (heartbeat)" : "");
+        lastAction = action;
+        lastCtl = controlMode;
+        lastFlags = stateFlags;
+        lastPrio = eventPrio;
+        lastArea = area;
+        lastRoom = room;
+        lastX = x;
+        lastY = y;
+        lastKeys = heldKeys;
+        lastKnock = knockback;
+        lastJump = jumpStatus;
+        lastSwim = swimState;
+        lastFs = framestate;
+        lastAtk = attackStatus;
+        lastSpd = spd;
+    }
+}
+
 /* #93 chase: log every SetFade / SetFadeInverted call so we can trace
  * the exact post-cutscene fade chain and find why type ends at 5
  * (fade-OUT to black) instead of 4 (fade-IN to color). NO dedup —
