@@ -846,8 +846,18 @@ void CutsceneMiscObject_Type18(CutsceneMiscObjectEntity* this) {
     u32 tmp, idx;
 
     idx = super->health;
+#ifdef PC_PORT
+    /* GBA #82 fix: gArea.filler6 aliases gUnk_020342F8 on GBA but not
+     * on the port. See whirlwind.c for the full explanation. */
+    {
+        extern u8 gUnk_020342F8[];
+        if ((idx & 0x7F) != 0 && !ReadBit((u32*)gUnk_020342F8, idx - 1))
+            DeleteThisEntity();
+    }
+#else
     if ((idx & 0x7F) != 0 && !ReadBit((u32*)gArea.filler6, idx - 1))
         DeleteThisEntity();
+#endif
     if (super->timer != 0 && CheckKinstoneFused(super->type2))
         DeleteThisEntity();
     if (super->action == 0) {
