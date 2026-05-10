@@ -70,55 +70,6 @@ static void Port_LogVideoDiagnostics(void) {
     fprintf(stderr, "\n");
 }
 
-
-static void Port_LogAudioDiagnostics(void) {
-    int driverCount = SDL_GetNumAudioDrivers();
-
-    fprintf(stderr,
-            "Audio env: SDL_AUDIODRIVER='%s' XDG_RUNTIME_DIR='%s' PULSE_SERVER='%s' PIPEWIRE_REMOTE='%s'\n",
-            getenv("SDL_AUDIODRIVER") ? getenv("SDL_AUDIODRIVER") : "",
-            getenv("XDG_RUNTIME_DIR") ? getenv("XDG_RUNTIME_DIR") : "",
-            getenv("PULSE_SERVER") ? getenv("PULSE_SERVER") : "",
-            getenv("PIPEWIRE_REMOTE") ? getenv("PIPEWIRE_REMOTE") : "");
-
-    fprintf(stderr, "SDL compiled audio drivers:");
-    for (int i = 0; i < driverCount; i++) {
-        fprintf(stderr, " %s", SDL_GetAudioDriver(i));
-    }
-    fprintf(stderr, "\n");
-}
-
-static bool Port_TryInitAudioDriver(const char* audioDriver, bool muteOnSuccess, const char** outError) {
-    if (audioDriver && audioDriver[0] != '\0') {
-        SDL_SetHint(SDL_HINT_AUDIO_DRIVER, audioDriver);
-    } else {
-        SDL_ResetHint(SDL_HINT_AUDIO_DRIVER);
-    }
-
-    if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
-        if (outError) {
-            *outError = SDL_GetError();
-        }
-        return false;
-    }
-
-    if (!Port_Audio_Init()) {
-        if (outError) {
-            *outError = SDL_GetError();
-        }
-        Port_Audio_Shutdown();
-        SDL_QuitSubSystem(SDL_INIT_AUDIO);
-        return false;
-    }
-
-    fprintf(stderr,
-            "SDL audio driver: %s%s\n",
-            SDL_GetCurrentAudioDriver() ? SDL_GetCurrentAudioDriver() : "unknown",
-            muteOnSuccess ? " (muted dummy backend)" : "");
-    gMain.muteAudio = muteOnSuccess ? 1 : 0;
-    return true;
-}
-
 static bool Port_InitVideo(void) {
     const char* err = NULL;
     const char* forcedDriver = getenv("SDL_VIDEODRIVER");
