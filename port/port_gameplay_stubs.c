@@ -11,7 +11,17 @@
 #include "script.h"
 #include "sound.h"
 
+/* execinfo.h ships with glibc and macOS libSystem; MinGW does not have
+ * it, so the diagnostic Port_DumpOrchStack() backtrace dump is a no-op
+ * on Windows. The cutscene-watchdog fix doesn't depend on it — it's
+ * only used to identify the call path that deletes orchestrator
+ * entities during #93 debug. */
+#if !defined(_WIN32) && !defined(__MINGW32__) && !defined(__MINGW64__)
 #include <execinfo.h>
+#define PORT_HAVE_EXECINFO 1
+#else
+#define PORT_HAVE_EXECINFO 0
+#endif
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -588,6 +598,7 @@ void Port_LogOrchEvent(const char* op, void* ent) {
 }
 
 void Port_DumpOrchStack(const char* tag, void* ent) {
+#if PORT_HAVE_EXECINFO
     void* bt[24];
     int n = backtrace(bt, 24);
     char** sym = backtrace_symbols(bt, n);
@@ -596,6 +607,9 @@ void Port_DumpOrchStack(const char* tag, void* ent) {
         fprintf(stderr, "  #%d %s\n", i, sym ? sym[i] : "?");
     }
     if (sym) free(sym);
+#else
+    fprintf(stderr, "[orch-stack-%s] ent=%p (no execinfo on this platform)\n", tag, ent);
+#endif
     fflush(stderr);
 }
 
