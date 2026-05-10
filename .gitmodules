@@ -6,4 +6,4 @@
 	url = https://github.com/MatheoVignaud/VirtuaAPU.git
 [submodule "libs/tmc-Android-Experimental"]
 	path = libs/tmc-Android-Experimental
-	url = git@github.com:MatheoVignaud/tmc-Android-Experimental.git
+	url = https://github.com/MatheoVignaud/tmc-Android-Experimental.git
