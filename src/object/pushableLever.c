@@ -11,6 +11,7 @@
 #include "room.h"
 #include "player.h"
 #include "tiles.h"
+#include "port_generic_entity.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -21,6 +22,12 @@ typedef struct {
     /*0x76*/ u8 unk_76[16];
     /*0x86*/ u16 pushedFlag;
 } PushableLeverEntity;
+
+/* Issue #89: pushedFlag aliases GenericEntity.field_0x86 on GBA, but on
+ * PC the GenericEntity tail union shifts that field, so the byte-counted
+ * `unk_*` filler in this struct lands on the wrong offset. Read/write
+ * through GE_FIELD so the lever's pushed-state flag actually persists. */
+#define PUSHED_FLAG(this) (GE_FIELD(&(this)->base, field_0x86)->HWORD)
 
 enum PushableLeverAction {
     INIT,
@@ -70,9 +77,9 @@ void PushableLever_Pushing(PushableLeverEntity* this) {
     GetNextFrame(super);
     if ((super->frame & ANIM_DONE) != 0) {
         if (super->type2 == 0) {
-            SetFlag(this->pushedFlag);
+            SetFlag(PUSHED_FLAG(this));
         } else {
-            ClearFlag(this->pushedFlag);
+            ClearFlag(PUSHED_FLAG(this));
         }
         PushableLever_SetIdle(this);
     }
@@ -85,7 +92,7 @@ void PushableLever_SetIdle(PushableLeverEntity* this) {
 }
 
 void PushableLever_SetTiles(PushableLeverEntity* this) {
-    if (CheckFlags(this->pushedFlag) == FALSE) {
+    if (CheckFlags(PUSHED_FLAG(this)) == FALSE) {
         super->type2 = 0;
         this->tilePos = COORD_TO_TILE_OFFSET(super, 0, 0x10);
         this->tileIndex = GetTileIndex(this->tilePos, super->collisionLayer);
