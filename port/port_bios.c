@@ -134,6 +134,17 @@ static void Port_PumpEvents(void) {
                 Port_DebugMenu_Toggle();
                 continue;
             }
+            if (e.key.key == SDLK_F9) {
+                /* Capture a bug-report bundle (screenshot + save + state
+                 * dump) into a timestamped folder next to the binary so
+                 * playtesters can attach it to a GitHub issue. */
+                extern char* Port_BugReport_Capture(const char* reason);
+                char* dir = Port_BugReport_Capture("user");
+                if (dir) {
+                    free(dir);
+                }
+                continue;
+            }
             if (e.key.key == SDLK_F5) {
                 extern int Port_QuickSave(void);
                 Port_QuickSave();
