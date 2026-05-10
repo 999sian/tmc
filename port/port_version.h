@@ -5,5 +5,5 @@
  * (top of xmake.lua). The string below is only a fallback for editor /
  * IDE indexers that don't see the build flags. */
 #ifndef TMC_PC_VERSION
-#define TMC_PC_VERSION "0.1.2"
+#define TMC_PC_VERSION "0.1.3"
 #endif
