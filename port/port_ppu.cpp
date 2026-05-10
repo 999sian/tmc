@@ -166,12 +166,6 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
         }
     }
 
-    /* Sub-pixel overlay for OAM affine sprites. Most TMC frames have no
-     * affine OAM and this is a no-op; when there is one (Vaati tornado,
-     * world-shrink cinematic, every spinning enemy) it overwrites the
-     * 1x-replicated pixels with sub-pixel-accurate ones. */
-    virtuappu_mode1_render_affine_obj_overlay(sScaledBuf, w, h, S);
-
     if (outW) *outW = w;
     if (outH) *outH = h;
     return sScaledBuf;

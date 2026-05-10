@@ -184,7 +184,8 @@ void sub_0804AF0C(Entity* ent, const EntityData* dat) {
 #ifdef PC_PORT
             {
                 void* resolved = (void*)Port_ResolveRomData(dat->spritePtr);
-                if (!StartCutscene(ent, (u16*)resolved))
+                ScriptExecutionContext* ctx = StartCutscene(ent, (u16*)resolved);
+                if (!ctx)
                     DeleteEntity(ent);
             }
 #else
@@ -204,6 +205,8 @@ void sub_0804AF90(void) {
 static void** GetAreaRoomPropertyList(u32 area, u32 room) {
     void*** areaTable = gAreaTable[area];
     const u8* ptr = (const u8*)areaTable;
+    bool32 inRom = FALSE;
+    bool32 readable = FALSE;
 
     if (areaTable == NULL) {
         Port_RefreshAreaData(area);
@@ -214,16 +217,11 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
         }
     }
 
-    /* Sanity check: a valid areaTable must either point into gRomData (raw
-     * GBA pointer table) or at native heap/data memory below the canonical
-     * x86-64 user-space ceiling. Anything else is corruption — most often a
-     * stale 4-byte ROM pointer that was sign/zero-extended into a 64-bit slot
-     * before Port_RefreshAreaData ran. Force a refresh in that case so the
-     * map menu doesn't crash when it walks unvisited dungeon floors (#39). */
+    /* Sanity check: architecture-agnostic. */
     {
-        bool32 inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
-        bool32 plausible = ((uintptr_t)ptr < (uintptr_t)0x0000800000000000ULL);
-        if (!inRom && !plausible) {
+        inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
+        readable = Port_IsAreaTablePtrReadable(area, areaTable);
+        if (!readable) {
             Port_RefreshAreaData(area);
             areaTable = gAreaTable[area];
             ptr = (const u8*)areaTable;
@@ -231,13 +229,21 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
                 return NULL;
             }
             inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
+            readable = Port_IsAreaTablePtrReadable(area, areaTable);
+            if (!readable) {
+                return NULL;
+            }
         }
         if (inRom) {
-            return Port_ReadPackedRomPtr(areaTable, room);
+            void** result = Port_ReadPackedRomPtr(areaTable, room);
+            return result;
         }
     }
 
-    return areaTable[room];
+    {
+        void** result = areaTable[room];
+        return result;
+    }
 }
 
 static bool32 IsRoomPropertyListInRom(void** properties) {

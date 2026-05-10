@@ -14,6 +14,7 @@
 #include "droptables.h"
 #include "enemy.h"
 #include "entity.h"
+#include "fade.h"
 #include "fileselect.h"
 #include "flags.h"
 #include "functions.h"
