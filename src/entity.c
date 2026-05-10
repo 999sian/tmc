@@ -350,7 +350,19 @@ Entity* GetEmptyEntity() {
     do {
         currentEnt = (GenericEntity*)listPtr->first;
         nextList = listPtr + 1;
-        while ((intptr_t)currentEnt != (intptr_t)listPtr) {
+#ifdef PC_PORT
+        /* #93 follow-up: post-cutscene corruption — same pattern as
+         * RecycleEntities/etc. NULL-guard the iteration. */
+        if (currentEnt == NULL) {
+            listPtr = nextList;
+            continue;
+        }
+#endif
+        while ((intptr_t)currentEnt != (intptr_t)listPtr
+#ifdef PC_PORT
+               && currentEnt != NULL
+#endif
+        ) {
             if (currentEnt->base.kind != MANAGER &&
                 flags_ip < (currentEnt->base.flags & (ENT_UNUSED1 | ENT_UNUSED2 | ENT_DELETED)) &&
                 gUpdateContext.current_entity != &currentEnt->base) {
@@ -518,7 +530,7 @@ void DeleteAllEntities(void) {
     it = &gEntityLists[0];
     if (it->first) {
         do {
-            for (ent = it->first; (intptr_t)ent != (intptr_t)it; ent = next) {
+            for (ent = it->first; ent != NULL && (intptr_t)ent != (intptr_t)it; ent = next) {
                 next = ent->next;
                 DeleteEntityAny(ent);
             }
@@ -584,7 +596,22 @@ void RecycleEntities(void) {
 
     list = &gEntityLists[0];
     do {
-        for (i = list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
+#ifdef PC_PORT
+        /* #93 follow-up: post-takeover-cutscene, some lists are left
+         * with first=NULL instead of the usual (Entity*)list sentinel
+         * — the cutscene's entity churn ends with a list head that
+         * never got re-initialised. The original loop unconditionally
+         * dereferences i->flags on the first iteration, so first=NULL
+         * → NULL+0x18 SIGSEGV (Entity.flags is at offset 0x18 on the
+         * 64-bit port). Skip the list when it's in that uninitialised
+         * state; the entities it would have touched are already gone.
+         * The same guard pattern is applied to all entity-list
+         * iterations in this file by adding `i != NULL &&` to the
+         * loop condition (covers the "first ent's next pointer is
+         * NULL mid-iteration" variant of the same bug). */
+        if (list->first == NULL || list->last == NULL) continue;
+#endif
+        for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
             i->flags &= ~ENT_SCRIPTED;
             if ((i->flags & ENT_PERSIST) == 0) {
                 i->flags |= ENT_DELETED;
@@ -600,7 +627,10 @@ void DeleteSleepingEntities(void) {
 
     list = &gEntityLists[0];
     do {
-        for (ent = list->first; (intptr_t)ent != (intptr_t)list; ent = next) {
+#ifdef PC_PORT
+        if (list->first == NULL || list->last == NULL) continue;
+#endif
+        for (ent = list->first; ent != NULL && (intptr_t)ent != (intptr_t)list; ent = next) {
             next = ent->next;
             if (ent->flags & ENT_DELETED)
                 DeleteEntityAny(ent);
@@ -612,6 +642,16 @@ void AppendEntityToList(Entity* entity, u32 listIndex) {
     LinkedList* list;
 
     list = &gEntityLists[listIndex];
+#ifdef PC_PORT
+    /* #93 follow-up: if a prior cutscene left the list head with
+     * NULL first/last (uninitialised state), re-init it as empty
+     * before appending. Otherwise `list->last->next = entity`
+     * dereferences NULL.last and crashes. */
+    if (list->first == NULL || list->last == NULL) {
+        list->first = (Entity*)list;
+        list->last = (Entity*)list;
+    }
+#endif
     entity->next = (Entity*)list;
     entity->prev = list->last;
     list->last->next = entity;
@@ -641,6 +681,12 @@ void PrependEntityToList(Entity* entity, u32 listIndex) {
 
     UnlinkEntity(entity);
     list = &gEntityLists[listIndex];
+#ifdef PC_PORT
+    if (list->first == NULL || list->last == NULL) {
+        list->first = (Entity*)list;
+        list->last = (Entity*)list;
+    }
+#endif
     entity->prev = (Entity*)list;
     entity->next = list->first;
     list->first->prev = entity;
@@ -675,7 +721,7 @@ bool32 EntityHasDuplicateID(Entity* ent) {
 
     list = &gEntityLists[0];
     do {
-        for (i = list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
+        for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
             if (i != ent && i->kind == ent->kind && i->id == ent->id) {
                 return TRUE;
             }
@@ -690,7 +736,7 @@ Entity* FindEntityByID(u32 kind, u32 id, u32 listIndex) {
     LinkedList* list;
 
     list = &gEntityLists[listIndex];
-    for (it = list->first; (intptr_t)it != (intptr_t)list; it = it->next) {
+    for (it = list->first; it != NULL && (intptr_t)it != (intptr_t)list; it = it->next) {
         if (kind == it->kind && id == it->id)
             return it;
     }
@@ -702,7 +748,7 @@ Entity* FindEntity(u32 kind, u32 id, u32 listIndex, u32 type, u32 type2) {
     LinkedList* list;
 
     list = &gEntityLists[listIndex];
-    for (i = list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
+    for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
         if (kind == i->kind && id == i->id && type == i->type && type2 == i->type2)
             return i;
     }
@@ -714,7 +760,7 @@ Entity* FindNextDuplicateID(Entity* ent, int listIndex) {
     LinkedList* list;
 
     list = &gEntityLists[listIndex];
-    for (i = ent->next; (intptr_t)i != (intptr_t)list; i = i->next) {
+    for (i = ent->next; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
         if (i->kind == ent->kind && i->id == ent->id)
             return i;
     }
@@ -727,7 +773,7 @@ Entity* DeepFindEntityByID(u32 kind, u32 id) {
 
     list = &gEntityLists[0];
     do {
-        for (i = (Entity*)list->first; (intptr_t)i != (intptr_t)list; i = i->next) {
+        for (i = (Entity*)list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
             if (kind == i->kind && (id == i->id))
                 return i;
         }
@@ -743,7 +789,7 @@ void DeleteAllEnemies(void) {
 
     list = &gEntityLists[0];
     do {
-        for (ent = list->first; (intptr_t)ent != (intptr_t)list; ent = next) {
+        for (ent = list->first; ent != NULL && (intptr_t)ent != (intptr_t)list; ent = next) {
             next = ent->next;
             if (ent->kind == ENEMY)
                 DeleteEntity(ent);
