@@ -623,6 +623,17 @@ void AppendEntityToList(Entity* entity, u32 listIndex) {
         gManagerCount++;
     }
     InitDefaultPriority(entity);
+#ifdef PC_PORT
+    /* #93 chase: log every kind=6 (OBJECT) list-assignment so we can
+     * see which list orchestrators (id=0x69) land in, and catch the
+     * moment one gets re-listed mid-cutscene. */
+    if (entity->kind == 6) {
+        extern void Port_LogListOp(const char* op, void* ent, unsigned kind,
+                                   unsigned id, unsigned listIdx, void* listAddr);
+        Port_LogListOp("append", (void*)entity, entity->kind, entity->id,
+                       listIndex, (void*)list);
+    }
+#endif
 }
 
 void PrependEntityToList(Entity* entity, u32 listIndex) {
@@ -634,6 +645,14 @@ void PrependEntityToList(Entity* entity, u32 listIndex) {
     entity->next = list->first;
     list->first->prev = entity;
     list->first = entity;
+#ifdef PC_PORT
+    if (entity->kind == 6) {
+        extern void Port_LogListOp(const char* op, void* ent, unsigned kind,
+                                   unsigned id, unsigned listIdx, void* listAddr);
+        Port_LogListOp("prepend", (void*)entity, entity->kind, entity->id,
+                       listIndex, (void*)list);
+    }
+#endif
 }
 
 static void UnlinkEntity(Entity* ent) {
