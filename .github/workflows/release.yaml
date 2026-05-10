@@ -39,6 +39,9 @@ jobs:
       # tag-push always builds the full matrix (inputs.os_filter is empty
       # under push triggers, _build.yaml's default 'all' kicks in).
       os_filter: ${{ inputs.os_filter || 'all' }}
+    secrets:
+      ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
+      PRIVATE_SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
 
   create-release:
     runs-on: ubuntu-latest

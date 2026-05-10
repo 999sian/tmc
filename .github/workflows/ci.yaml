@@ -26,3 +26,6 @@ jobs:
     with:
       publish_mode: artifact
       version_label: ${{ needs.meta.outputs.stamp }}
+    secrets:
+      ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
+      PRIVATE_SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
