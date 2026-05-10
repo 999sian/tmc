@@ -14,7 +14,6 @@
 #include "physics.h"
 #include "player.h"
 #include "tiles.h"
-#include "port_generic_entity.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -31,10 +30,6 @@ typedef struct {
     /*0x7c*/ s8 unk_7c[0xa];
     /*0x86*/ u16 pushedFlag;
 } PushableGraveEntity;
-
-/* Issue #89 family: pushedFlag aliases GenericEntity.field_0x86 on GBA
- * but byte-counted struct filler lands on the wrong PC offset. */
-#define PUSHED_FLAG(this) (GE_FIELD(&(this)->base, field_0x86)->HWORD)
 
 extern void (*const PushableGrave_Actions[])(PushableGraveEntity*);
 extern const u8 gUnk_081232C0[];
@@ -149,8 +144,8 @@ void sub_080977F4(PushableGraveEntity* this) {
     if (super->type == 0) {
         SetTile(SPECIAL_TILE_34, tilePos - 1, super->collisionLayer);
     }
-    if (PUSHED_FLAG(this) != 0) {
-        SetFlag(PUSHED_FLAG(this));
+    if (this->pushedFlag != 0) {
+        SetFlag(this->pushedFlag);
     }
 }
 
@@ -159,7 +154,7 @@ bool32 sub_0809785C(PushableGraveEntity* this) {
 
     if (super->type != 0) {
         if (super->type2 != 0) {
-            if ((CheckFlags(PUSHED_FLAG(this)) != 0) ||
+            if ((CheckFlags(this->pushedFlag) != 0) ||
                 GetTileTypeAtTilePos(this->unk_68, super->collisionLayer) == SPECIAL_TILE_63) {
                 super->action = 3;
                 super->timer = 64;
@@ -184,7 +179,7 @@ bool32 sub_0809785C(PushableGraveEntity* this) {
         }
 
     } else {
-        if (CheckFlags(PUSHED_FLAG(this)) != 0) {
+        if (CheckFlags(this->pushedFlag) != 0) {
             super->action = 2;
             super->subAction = 0;
             super->timer = 240;
@@ -201,7 +196,7 @@ bool32 sub_0809785C(PushableGraveEntity* this) {
 
 bool32 sub_0809798C(PushableGraveEntity* this) {
     bool32 result = FALSE;
-    if (((super->type == 0) || (super->type2 != 0)) && CheckFlags(PUSHED_FLAG(this))) {
+    if (((super->type == 0) || (super->type2 != 0)) && CheckFlags(this->pushedFlag)) {
         result = TRUE;
     }
     return result;
