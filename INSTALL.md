@@ -1,83 +1,141 @@
-# Install
-This repository does not include any of the games assets.
-To build the game using the decomp you need an original baserom for each version you want to build.
-Put them with the appropriate filename into the repository root directory. 
-The supported versions are:
+# Build Instructions
 
-| Version               | Filename               | SHA1                                       |
-|-----------------------|------------------------|--------------------------------------------|
-| USA (project default) | `baserom.gba`          | `b4bd50e4131b027c334547b4524e2dbbd4227130` |
-| EU                    | `baserom_eu.gba`       | `cff199b36ff173fb6faf152653d1bccf87c26fb7` |
-| JP                    | `baserom_jp.gba`       | `6c5404a1effb17f481f352181d0f1c61a2765c5d` |
-| USA (Demo)            | `baserom_demo_usa.gba` | `63fcad218f9047b6a9edbb68c98bd0dec322d7a1` |
-| JP (Demo)             | `baserom_demo_jp.gba`  | `9cdb56fa79bba13158b81925c1f3641251326412` |
+PC port build instructions. The recommended path is `python3 build.py` from
+the repo root — it handles dependency checks, ROM detection, asset
+extraction, compilation, and staging into `dist/<VERSION>/`. This document
+covers the manual paths and build options for when you want finer control.
 
-## Prerequisites
+## Supported ROMs
 
-| Linux | macOS                                     | Windows 10 (build 18917+)             | Windows 10 (1709+)                 | Windows 8, 8.1, and 10 (1507, 1511, 1607, 1703) |
-|-------|-------------------------------------------|---------------------------------------|------------------------------------|-------------------------------------------------|
-| none  | [Xcode Command Line Tools package][xcode] | [Windows Subsystem for Linux 2][wsl2] | [Windows Subsystem for Linux][wsl] | [Cygwin][cygwin]                                |
+A copy of the original game is required. Place it in the repository root with
+the filename below:
 
-[xcode]: https://developer.apple.com/library/archive/technotes/tn2339/_index.html#//apple_ref/doc/uid/DTS40014588-CH1-DOWNLOADING_COMMAND_LINE_TOOLS_IS_NOT_AVAILABLE_IN_XCODE_FOR_MACOS_10_9__HOW_CAN_I_INSTALL_THEM_ON_MY_MACHINE_
-[wsl2]: https://docs.microsoft.com/windows/wsl/wsl2-install
-[wsl]: https://docs.microsoft.com/windows/wsl/install-win10
-[cygwin]: https://cygwin.com/install.html
+| Version | Filename         | SHA1                                       |
+|---------|------------------|--------------------------------------------|
+| USA     | `baserom.gba`    | `b4bd50e4131b027c334547b4524e2dbbd4227130` |
+| EU      | `baserom_eu.gba` | `cff199b36ff173fb6faf152653d1bccf87c26fb7` |
 
-The [prerelease version of the Linux subsystem](https://docs.microsoft.com/windows/wsl/install-legacy) available in the 1607 and 1703 releases of Windows 10 is obsolete so consider uninstalling it.
+This repository does **not** ship the ROM.
 
-Make sure that the `build-essential`, `git`, `python3`, `python3-pip`, `cmake` and `libpng-dev` packages are installed. The `build-essential` package includes the `make`, `gcc-core`, and `g++` packages, so they do not have to be obtained separately.
+## Dependencies
 
-In the case of Cygwin, [include](https://cygwin.com/cygwin-ug-net/setup-net.html#setup-packages) the `make`, `git`, `gcc-core`, `gcc-g++`, and `libpng-devel` packages.
+See the [README](README.md#dependencies) for per-platform package lists. The
+short version:
 
-To build the games code, the `arm-none-eabi-gcc` compiler is required.
-Both a standalone installation and [devkitPro](https://devkitpro.org/wiki/Getting_Started) are supported.
-For devkitPro, install the `gba-dev` package.
+- **xmake** (build system)
+- **SDL3** (window/input/audio)
+- **libpng**, **fmt**, **nlohmann-json** (asset tools + game code)
+- **libomp** (macOS only, for VirtuaPPU's parallel scanline path)
+- **git**, **python3**
 
-If `arm-none-eabi-gcc` is not available through `PATH` use `TOOLCHAIN_PATH=<path>` to indicate its location.
-This is not required for devkitPro, the `DEVKITARM` environment variable is used for auto-detection.
+xmake auto-downloads any C/C++ library not found on the system, but installing
+them via your package manager is faster and reuses the system copy.
 
-Install `python3` and the `pycparser` python package:
-`pip3 install pycparser`
+## One-shot build (recommended)
 
-## Installation
-
-To set up the repository:
-```shell
-git clone https://github.com/zeldaret/tmc
-git clone https://github.com/pret/agbcc
-
-cd ./agbcc
-sh build.sh
-sh install.sh ../tmc
-
-cd ../tmc
-make tools
+```sh
+python3 build.py            # interactive: choose USA, EU, or both
+python3 build.py --usa      # non-interactive, USA only
+python3 build.py --eur      # non-interactive, EU only
+python3 build.py --slim     # minimal dist (binary only; assets self-extract)
 ```
-To build `tmc.gba`:
-```shell
-make -j$(nproc)
+
+The script:
+
+- Checks dependencies and offers to install missing ones.
+- Initializes git submodules (`libs/ViruaPPU`, `libs/VirtuaAPU`).
+- Scans the repo root, parent directory, and `~/Downloads` for ROMs and
+  verifies their SHA1 against `tmc.sha1` / `tmc_eu.sha1`.
+- Compiles `tmc_pc` and `asset_extractor`.
+- Extracts a runtime asset cache.
+- Stages the result under `dist/<VERSION>/`.
+
+Run it:
+
+```sh
+cd dist/USA
+./tmc_pc
 ```
->**Note:** If the build command is not recognized on Linux, including the Linux environment used within Windows, run `nproc` and replace `$(nproc)` with the returned value (e.g.: `make -j4`). Because `nproc` is not available on macOS, the alternative is `sysctl -n hw.ncpu`.
 
-You can configure the game version built by using the `GAME_VERSION` variable (ie. `make GAME_VERSION=EU`).
-Convenience targets for all 5 versions exist (`make usa eu jp demo_usa demo_jp`).
-`make all` builds all 5 versions.
+`tmc.sav` is written to the working directory.
 
-If you modify the game you need to do a custom build.
-Use `CUSTOM=1` for that (any nonempty value will enable it, so `CUSTOM=0` will NOT disable it).
-There is a convenience target `make custom` that does a custom USA build.
+## Manual xmake invocation
 
-The `COMPARE` variable controls the SHA1 verification check.
-It is enabled (`1`) for normal builds and disabled (`0`) for custom builds by default.
+For incremental builds during development:
 
-### Note for Mac users
-
-The BSD make that comes with Mac XCode can be buggy, so obtain GNU make and sed using [Homebrew](https://brew.sh):
-```shell
-brew install make gnu-sed
+```sh
+xmake f -y --game_version=USA            # configure (USA build)
+xmake build tmc_pc                       # compile the game
+xmake build asset_extractor              # standalone asset extractor
 ```
-When compiling agbcc, substitute the `build.sh` line for
-```shell
-gsed 's/^make/gmake/g' build.sh | sh
+
+Build artefacts land in `build/pc/`. The binary resolves `baserom.gba`,
+`sounds.json`, and the asset trees relative to its own path (with cwd as a
+fallback), so `cd build/pc && ./tmc_pc` works as well as a packaged
+`dist/USA/` install.
+
+Configure flags worth knowing:
+
+| Flag                   | Effect                                                |
+|------------------------|-------------------------------------------------------|
+| `--game_version=USA`   | Build for USA (default).                              |
+| `--game_version=EU`    | Build for EU.                                         |
+| `--pc_avx2=y`          | Enable AVX2 in the PPU renderer (auto on x86-64).     |
+
+On Linux, set `XMAKE_USE_SYSTEM_SDL3=1` before configuring to use the
+distro's SDL3 instead of letting xmake build its own. `build.py` does this
+automatically when `pkg-config --exists sdl3` succeeds.
+
+## Slim builds
+
+`python3 build.py --slim` produces a `dist/<VERSION>/` containing only
+`tmc_pc`. The binary embeds the asset extractor and a fallback `sounds.json`,
+so a bare `tmc_pc + baserom.gba` install is enough — first launch
+self-extracts assets next to the binary in ≈3–5 s, subsequent launches are
+instant.
+
+CI uses this path for the published release tarballs.
+
+## Loose vs. packed assets
+
+By default the runtime asset tree is packed into `.pak` archives by category
+(`gfx.pak`, `animations.pak`, etc.). To force loose files instead — useful
+when editing assets by hand — pass `--loose-assets`:
+
+```sh
+./tmc_pc --loose-assets
 ```
-Finally, use `gmake` instead of `make` to compile the ROM(s).
+
+The first run with this flag wipes any existing `.pak` files and re-extracts
+into a loose tree.
+
+## Notes for macOS
+
+Use `python3 build.py` rather than invoking `xmake` directly — the script
+sets up `XMAKE_ROOT=y`, the right toolchain hints, and handles the
+Homebrew + libomp paths.
+
+If `clang` is missing:
+
+```sh
+xcode-select --install
+```
+
+If Homebrew packages report as missing even after `brew install`, run
+`brew --prefix <name>` to confirm the install location and check
+`pkg-config --variable pc_path pkg-config` includes it.
+
+## Troubleshooting
+
+- **"Could not load baserom.gba"** — place the ROM next to the binary, or
+  in the working directory you launch from. Supported names: `baserom.gba`,
+  `baserom_eu.gba`, `tmc.gba`, `tmc_eu.gba`.
+- **First launch is slow / shows EXTRACTING ASSETS** — expected. The asset
+  cache is built once, then warm launches skip extraction.
+- **Black window on launch** — check `stderr` for ROM-load errors. The port
+  surfaces fatal load failures via SDL message box; if you see a black
+  window with no message, the launch path likely couldn't write to its
+  install directory.
+- **"sounds.json was not found"** — the binary embeds a fallback so this is
+  rarely fatal, but if you want the editable copy, place `sounds.json` next
+  to `tmc_pc` (the build script does this automatically).
