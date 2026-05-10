@@ -47,13 +47,19 @@ jobs:
           # Archive name uses ${matrix.arch} to disambiguate the assets.
           macos_arm='{"runner":"macos-14","os_name":"macos","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           macos_x86='{"runner":"macos-13","os_name":"macos","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          # macos-x86 (Intel) is dropped from "all" and "macos" because the
+          # macos-13 hosted runners on free-tier accounts can sit queued for
+          # 4+ hours and stall the whole release (the create-release job
+          # waits for every matrix job). v0.2.1-experimental hung on this.
+          # Cut Intel-mac builds via workflow_dispatch with os_filter=macos-x86
+          # when one is needed.
           case "${OS_FILTER:-all}" in
             linux)      matrix="{\"include\":[$linux]}" ;;
             windows)    matrix="{\"include\":[$windows]}" ;;
-            macos)      matrix="{\"include\":[$macos_arm,$macos_x86]}" ;;
+            macos)      matrix="{\"include\":[$macos_arm]}" ;;
             macos-arm)  matrix="{\"include\":[$macos_arm]}" ;;
             macos-x86)  matrix="{\"include\":[$macos_x86]}" ;;
-            all|"")     matrix="{\"include\":[$linux,$windows,$macos_arm,$macos_x86]}" ;;
+            all|"")     matrix="{\"include\":[$linux,$windows,$macos_arm]}" ;;
             *)          echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos, macos-arm, macos-x86)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
