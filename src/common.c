@@ -1422,7 +1422,11 @@ KinstoneId GetFusionToOffer(Entity* entity) {
     u32 fuserStability;
     fuserId = GetFuserId(entity);
 
+#ifdef PC_PORT
     fuserData = (u8*)Port_UnpackRomDataPtr(gUnk_08001DCC, fuserId);
+#else
+    fuserData = (u8*)((u8**)gUnk_08001DCC)[fuserId];
+#endif
     if (fuserData == NULL) {
         return KINSTONE_NONE;
     }
