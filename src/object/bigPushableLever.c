@@ -11,6 +11,7 @@
 #include "room.h"
 #include "player.h"
 #include "tiles.h"
+#include "port_generic_entity.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -23,6 +24,11 @@ typedef struct {
     /*0x84*/ u16 timer;
     /*0x86*/ u16 pushedFlag;
 } BigPushableLeverEntity;
+
+/* Issue #89: same fix as pushableLever — pushedFlag aliases
+ * GenericEntity.field_0x86 on GBA, but byte-counted struct filler
+ * lands on the wrong PC offset. Read/write through GE_FIELD. */
+#define PUSHED_FLAG(this) (GE_FIELD(&(this)->base, field_0x86)->HWORD)
 
 enum BigPushableLeverAction {
     INIT,
@@ -71,9 +77,9 @@ void BigPushableLever_Pushing(BigPushableLeverEntity* this) {
     GetNextFrame(super);
     if ((super->frame & ANIM_DONE) != 0) {
         if (super->type2 == 0) {
-            SetFlag(this->pushedFlag);
+            SetFlag(PUSHED_FLAG(this));
         } else {
-            ClearFlag(this->pushedFlag);
+            ClearFlag(PUSHED_FLAG(this));
         }
         BigPushableLever_SetIdle(this);
     }
@@ -86,7 +92,7 @@ void BigPushableLever_SetIdle(BigPushableLeverEntity* this) {
 }
 
 void BigPushableLever_SetTiles(BigPushableLeverEntity* this) {
-    if (!CheckFlags(this->pushedFlag)) {
+    if (!CheckFlags(PUSHED_FLAG(this))) {
         super->type2 = 0;
         this->tilePosUpper = COORD_TO_TILE_OFFSET(super, 0, 0x10);
         this->tilePosLower = this->tilePosUpper - 0x40;
