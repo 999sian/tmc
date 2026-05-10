@@ -1,16 +1,9 @@
 [submodule "libs/ViruaPPU"]
 	path = libs/ViruaPPU
-	url = https://github.com/MatheoVignaud/VirtuaPPU.git
-	# The xmake build auto-applies port/patches/viruappu-*.patch into
-	# this submodule (HDMA per-line hook + mosaic register), which
-	# permanently dirties the working tree. Ignore the dirty state here
-	# so the parent repo's `git status` stays clean; bumps to the pinned
-	# submodule commit are still tracked normally.
-	ignore = dirty
+	url = https://github.com/MatheoVignaud/VirtuaPPU-experimental.git
 [submodule "libs/VirtuaAPU"]
 	path = libs/VirtuaAPU
 	url = https://github.com/MatheoVignaud/VirtuaAPU.git
-	ignore = dirty
 [submodule "libs/tmc-Android-Experimental"]
 	path = libs/tmc-Android-Experimental
-	url = https://github.com/MatheoVignaud/tmc-Android-Experimental.git
+	url = git@github.com:MatheoVignaud/tmc-Android-Experimental.git

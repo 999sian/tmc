@@ -183,6 +183,11 @@ xmake rom
 
 All contributions are welcome — decompilation, port improvements, tools, and documentation.
 
+| AI tool | Usage |
+|---------|-------|
+| Copilot | Comments and commit messages |
+| Cursor  | Merges |
+
 Most discussions happen on our [Discord Server](https://discord.gg/y9GvbTYkzk), where you are welcome to ask if you need help getting started, or if you have any questions regarding this project and other decompilation projects.
 
 
