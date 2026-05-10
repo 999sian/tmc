@@ -8,9 +8,12 @@
 #include "player.h"
 #include "port_gba_mem.h"
 #include "room.h"
+#include "script.h"
 #include "sound.h"
 
+#include <execinfo.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 extern const u8 gUnk_08007DF4[];
 extern const KeyValuePair gUnk_080046A4[];
@@ -541,13 +544,229 @@ void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, 
                 op, flag, cur, k, id, t);
     }
 }
+/* #93 chase: track orchestrator entities + detect state changes that
+ * bypass DeleteEntity/UnlinkEntity/ClearDeletedEntity. */
+typedef struct {
+    Entity* ent;
+    unsigned char kind;
+    unsigned char id;
+    unsigned char action;
+    unsigned char flags;
+    void* prev;
+    void* next;
+    unsigned alive_frames;
+    int active;
+} OrchTrack;
+static OrchTrack sOrchs[4];
+static unsigned sOrchTickCount = 0;
+
+/* Watched entity addresses — any modification (delete/unlink/memset) logs. */
+static void* sWatchedAddrs[4] = { NULL, NULL, NULL, NULL };
+
+static int Port_IsWatched(void* ent) {
+    int i;
+    for (i = 0; i < 4; i++) {
+        if (sWatchedAddrs[i] == ent) return 1;
+    }
+    return 0;
+}
+
+void Port_LogEntityEvent(const char* op, void* ent, unsigned kind, unsigned id, void* prev, void* next) {
+    if (!Port_IsWatched(ent)) return;
+    fprintf(stderr, "[%s] ent=%p kind=%u id=0x%X prev=%p next=%p\n",
+            op, ent, kind, id, prev, next);
+}
+void Port_LogPostAction(unsigned action_idx, unsigned kind, unsigned id) {
+    static unsigned sCount = 0;
+    if (sCount < 32) {
+        sCount++;
+        fprintf(stderr, "[post-act] act=%u kind=%u id=0x%X\n", action_idx, kind, id);
+    }
+}
+void Port_LogOrchEvent(const char* op, void* ent) {
+    fprintf(stderr, "[orch-%s] ent=%p\n", op, ent);
+}
+
+void Port_DumpOrchStack(const char* tag, void* ent) {
+    void* bt[24];
+    int n = backtrace(bt, 24);
+    char** sym = backtrace_symbols(bt, n);
+    fprintf(stderr, "[orch-stack-%s] ent=%p depth=%d\n", tag, ent, n);
+    for (int i = 0; i < n; i++) {
+        fprintf(stderr, "  #%d %s\n", i, sym ? sym[i] : "?");
+    }
+    if (sym) free(sym);
+    fflush(stderr);
+}
+
+void Port_TrackOrch(Entity* ent) {
+    int i;
+    /* Find existing slot or first empty */
+    for (i = 0; i < 4; i++) {
+        if (sOrchs[i].active && sOrchs[i].ent == ent) {
+            /* Update snapshot — entity is still alive and being called */
+            sOrchs[i].kind = ent->kind;
+            sOrchs[i].id = ent->id;
+            sOrchs[i].action = ent->action;
+            sOrchs[i].flags = (unsigned char)ent->flags;
+            sOrchs[i].prev = ent->prev;
+            sOrchs[i].next = ent->next;
+            sOrchs[i].alive_frames = sOrchTickCount;
+            return;
+        }
+    }
+    for (i = 0; i < 4; i++) {
+        if (!sOrchs[i].active) {
+            sOrchs[i].active = 1;
+            sOrchs[i].ent = ent;
+            sOrchs[i].kind = ent->kind;
+            sOrchs[i].id = ent->id;
+            sOrchs[i].action = ent->action;
+            sOrchs[i].flags = (unsigned char)ent->flags;
+            sOrchs[i].prev = ent->prev;
+            sOrchs[i].next = ent->next;
+            sOrchs[i].alive_frames = sOrchTickCount;
+            sWatchedAddrs[i] = (void*)ent;
+            fprintf(stderr, "[track] slot=%d ent=%p kind=%u id=0x%X (start)\n",
+                    i, (void*)ent, ent->kind, ent->id);
+            return;
+        }
+    }
+}
+
+/* Issue #93 watchdog: when the takeover orchestrator dies prematurely
+ * (which it always does on PC port), helper entities are still parked
+ * in their first WAIT&CLR for a start signal that the orchestrator
+ * never sent. Walk them through the same sequence the orchestrator
+ * would have driven. Triggered the moment ScriptCommand_DoPostScriptAction
+ * case 1<<6 broadcasts 0x400 (orchestrator self-delete). */
+static int sTakeoverWdActive = 0;
+static int sTakeoverWdStep = 0;
+static int sTakeoverWdFrame = 0;
+static int sTakeoverWdDone = 0;  /* one-shot: never re-run after first completion */
+void Port_TakeoverWatchdog(void) {
+    /* Disabled — defer to the cutscene.c sub_08053BBC watchdog instead,
+     * which fires SetFade + DispReset + menuType++ in the right order for
+     * the AuxCutscene exit-fade handoff. The port-side watchdog was
+     * racing the cutscene-side one and the screen was ending up at full
+     * black with the fade-in machinery skipped. Keeping the function so
+     * the call from Port_CheckOrchIntegrity is harmless. */
+    if (1) return;
+    if (sTakeoverWdDone) {
+        if (gActiveScriptInfo.syncFlags & 0x400u) {
+            gActiveScriptInfo.syncFlags &= ~0x400u;
+        }
+        return;
+    }
+    static const struct { unsigned setFlag; int frames; } kSeq[] = {
+        { 0x010, 30 },  /* wake Vaati 1 */
+        { 0x004, 30 },  /* wake King 1 */
+        { 0x010, 30 },  /* wake Vaati 2 */
+        { 0x010, 30 },  /* wake Vaati 3 */
+        { 0x004, 30 },  /* wake King 2 */
+        { 0x010, 30 },  /* wake Vaati 4 */
+        { 0x010, 30 },  /* extra */
+        { 0x040, 30 },  /* wake Guards */
+        { 0x001, 30 },  /* wake Minister */
+        { 0x004, 30 },  /* wake King 3 */
+        { 0x200, 15 },  /* signal penultimate */
+        { 0x004, 15 },  /* wake King final */
+        { 0x400, 15 },  /* final cutscene-over */
+    };
+    if (!sTakeoverWdActive) {
+        if (gActiveScriptInfo.syncFlags & 0x400u) {
+            sTakeoverWdActive = 1;
+            sTakeoverWdStep = 0;
+            sTakeoverWdFrame = 0;
+            fprintf(stderr, "[wd] activated (syncFlags=0x%X)\n", gActiveScriptInfo.syncFlags);
+        }
+        return;
+    }
+    if (sTakeoverWdStep < (int)(sizeof(kSeq) / sizeof(kSeq[0]))) {
+        gActiveScriptInfo.syncFlags |= kSeq[sTakeoverWdStep].setFlag;
+        sTakeoverWdFrame++;
+        {
+            static int sLogStep = -1;
+            if (sLogStep != sTakeoverWdStep) {
+                sLogStep = sTakeoverWdStep;
+                fprintf(stderr, "[wd] step=%d setFlag=0x%X\n",
+                        sTakeoverWdStep, kSeq[sTakeoverWdStep].setFlag);
+            }
+        }
+        if (sTakeoverWdFrame >= kSeq[sTakeoverWdStep].frames) {
+            sTakeoverWdStep++;
+            sTakeoverWdFrame = 0;
+        }
+    } else {
+        /* Sequence complete. We do NOT call SetRoomFlag(0) here — the
+         * cutscene.c version of the watchdog (sub_08053BBC) handles
+         * that, and it ALSO falls through to the original gMenu.menuType++
+         * + DispReset + SetFade(FADE_INSTANT, 0x100) sequence that's
+         * required for the AuxCutscene→FadeOut→FadeIn handoff to work. */
+        gActiveScriptInfo.syncFlags &= ~0x400u;
+        sTakeoverWdActive = 0;
+        sTakeoverWdDone = 1;
+        fprintf(stderr, "[wd] sequence complete -- cleared 0x400, latched done\n");
+    }
+}
+
+void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
+    int i;
+    sOrchTickCount++;
+    Port_TakeoverWatchdog();
+    for (i = 0; i < 4; i++) {
+        if (!sOrchs[i].active) continue;
+        Entity* ent = sOrchs[i].ent;
+        /* Check if state changed since last seen */
+        if (ent->kind != sOrchs[i].kind ||
+            ent->id != sOrchs[i].id ||
+            ent->prev != sOrchs[i].prev ||
+            ent->next != sOrchs[i].next ||
+            (unsigned char)ent->flags != sOrchs[i].flags) {
+            fprintf(stderr,
+                    "[track] CHANGE slot=%d ent=%p (%s phase=%u tick=%u age=%u)\n"
+                    "        kind: %u -> %u\n"
+                    "        id:   0x%X -> 0x%X\n"
+                    "        flags: 0x%X -> 0x%X\n"
+                    "        prev: %p -> %p\n"
+                    "        next: %p -> %p\n",
+                    i, (void*)ent, where, phase, sOrchTickCount,
+                    sOrchTickCount - sOrchs[i].alive_frames,
+                    sOrchs[i].kind, ent->kind,
+                    sOrchs[i].id, ent->id,
+                    sOrchs[i].flags, (unsigned)(unsigned char)ent->flags,
+                    sOrchs[i].prev, ent->prev,
+                    sOrchs[i].next, ent->next);
+            /* Update snapshot to avoid spam */
+            sOrchs[i].kind = ent->kind;
+            sOrchs[i].id = ent->id;
+            sOrchs[i].action = ent->action;
+            sOrchs[i].flags = (unsigned char)ent->flags;
+            sOrchs[i].prev = ent->prev;
+            sOrchs[i].next = ent->next;
+            /* If kind/id no longer orchestrator, deactivate slot */
+            if (ent->kind != 6 || ent->id != 105) {
+                fprintf(stderr, "[track] slot %d no longer an orchestrator — stopping watch\n", i);
+                sOrchs[i].active = 0;
+            }
+        }
+    }
+}
+
 void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t) {
+    /* Dedupe WAIT/WAIT&CLR events (they fire every frame the wait holds) but
+     * NEVER dedupe WAIT-PASS / SET / CLR — those are state transitions we
+     * always want to see. */
     static unsigned sLastFlag = 0xFFFFFFFFu;
     static unsigned sLastCur = 0xFFFFFFFFu;
     static unsigned sLastKid = 0xFFFFFFFFu;
+    static const char* sLastOp = "";
+    int alwaysLog = (op[0] == 'W' && op[1] == 'A' && op[2] == 'I' && op[3] == 'T' && op[4] == '-')  /* WAIT-PASS */
+                 || (op[0] == 'S')   /* SET */
+                 || (op[0] == 'C');  /* CLR */
     unsigned kid = (k << 16) | (id << 8) | t;
-    if (flag != sLastFlag || cur != sLastCur || kid != sLastKid) {
-        sLastFlag = flag; sLastCur = cur; sLastKid = kid;
+    if (alwaysLog || flag != sLastFlag || cur != sLastCur || kid != sLastKid || op != sLastOp) {
+        sLastFlag = flag; sLastCur = cur; sLastKid = kid; sLastOp = op;
         fprintf(stderr, "[sync] %s flag=0x%08X cur=0x%08X (k=%u id=%u type=%u)\n",
                 op, flag, cur, k, id, t);
     }

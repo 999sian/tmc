@@ -300,6 +300,18 @@ void HandlePostScriptActions(Entity* entity, ScriptExecutionContext* context) {
                 CreateSpeechBubbleQuestionMark(entity, 8, -0x18);
                 break;
             case 1 << 0x06:
+#ifdef PC_PORT
+                /* Issue #93 (Vaati takeover softlock): the takeover orchestrator
+                 * (kind=6 id=0x69) self-deletes here at the end of its script,
+                 * but its helpers (King 0x008, Vaati 0x020, etc.) are still in
+                 * Cutscene_WaitFlag(0x400) waiting for the cutscene-end signal.
+                 * On GBA the helpers' scripts naturally completed before the
+                 * orchestrator did; in our port the timing diverges. Broadcast
+                 * 0x400 here so any still-running helpers can advance. */
+                if (entity->kind == 6 && entity->id == 105) {
+                    gActiveScriptInfo.syncFlags |= 0x400u;
+                }
+#endif
                 DestroyScriptExecutionContext(context);
                 DeleteThisEntity();
             case 1 << 0x07:
@@ -1642,11 +1654,31 @@ void ScriptCommand_0807EF3C(Entity* entity, ScriptExecutionContext* context) {
 }
 
 void ScriptCommand_DoPostScriptAction(Entity* entity, ScriptExecutionContext* context) {
-    context->postScriptActions |= 1 << context->scriptInstructionPointer[1];
+    u32 action_idx = context->scriptInstructionPointer[1];
+    context->postScriptActions |= 1 << action_idx;
+#ifdef PC_PORT
+    {
+        extern void Port_LogPostAction(unsigned action_idx, unsigned kind, unsigned id);
+        Port_LogPostAction(action_idx, entity->kind, entity->id);
+    }
+    if (action_idx == 6 && entity->kind == 6 && entity->id == 105) {
+        gActiveScriptInfo.syncFlags |= 0x400u;
+    }
+#endif
 }
 
 void ScriptCommand_DoPostScriptAction2(Entity* entity, ScriptExecutionContext* context) {
-    context->postScriptActions |= 1 << context->scriptInstructionPointer[1];
+    u32 action_idx = context->scriptInstructionPointer[1];
+    context->postScriptActions |= 1 << action_idx;
+#ifdef PC_PORT
+    {
+        extern void Port_LogPostAction(unsigned action_idx, unsigned kind, unsigned id);
+        Port_LogPostAction(action_idx | 0x100, entity->kind, entity->id);
+    }
+    if (action_idx == 6 && entity->kind == 6 && entity->id == 105) {
+        gActiveScriptInfo.syncFlags |= 0x400u;
+    }
+#endif
 }
 
 void ScriptCommand_PlaySound(Entity* entity, ScriptExecutionContext* context) {

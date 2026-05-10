@@ -171,6 +171,14 @@ static int sEntityUpdateJmpBufValid = 0;
 void ram_UpdateEntities(u32 mode) {
     sUpdateEntitiesCalls++;
 
+    /* #93 chase: per-frame integrity check on tracked orchestrator
+     * entities. Detects state changes that bypass the standard
+     * delete/unlink paths. */
+    {
+        extern void Port_CheckOrchIntegrity(unsigned phase, const char* where);
+        Port_CheckOrchIntegrity(mode, "before-update");
+    }
+
     /* One-time struct layout check */
     Port_CheckStructLayouts();
 

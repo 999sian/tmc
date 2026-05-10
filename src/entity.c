@@ -400,6 +400,15 @@ void* GetEmptyEntityByKind(u32 kind) {
 
 void DeleteThisEntity(void) {
     void (*f)(void);
+#ifdef PC_PORT
+    {
+        Entity* ent = gUpdateContext.current_entity;
+        if (ent && ent->kind == 6 && ent->id == 105) {
+            extern void Port_LogOrchEvent(const char* op, void* ent);
+            Port_LogOrchEvent("delete-this", (void*)ent);
+        }
+    }
+#endif
     DeleteEntityAny(gUpdateContext.current_entity);
     f = ram_ClearAndUpdateEntities;
     f();
@@ -418,6 +427,16 @@ void DeleteEntityAny(Entity* ent) {
 }
 
 void DeleteEntity(Entity* ent) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogEntityEvent(const char* op, void* ent, unsigned kind, unsigned id, void* prev, void* next);
+        Port_LogEntityEvent("delete", (void*)ent, ent->kind, ent->id, ent->prev, ent->next);
+        if (ent->kind == 6 && ent->id == 105) {
+            extern void Port_DumpOrchStack(const char* tag, void* ent);
+            Port_DumpOrchStack("DeleteEntity", (void*)ent);
+        }
+    }
+#endif
     if (ent->next != NULL) {
         UnloadGFXSlots(ent);
         UnloadOBJPalette(ent);
@@ -473,6 +492,10 @@ void ClearAllDeletedEntities(void) {
 
 void ClearDeletedEntity(Entity* ent) {
 #ifdef PC_PORT
+    {
+        extern void Port_LogEntityEvent(const char* op, void* ent, unsigned kind, unsigned id, void* prev, void* next);
+        Port_LogEntityEvent("clear-del", (void*)ent, ent->kind, ent->id, ent->prev, ent->next);
+    }
     /* Use memset directly — DmaClear32 uses port_DmaTransfer which may not work for native pointers */
     memset(ent, 0, sizeof(GenericEntity));
 #else
@@ -485,6 +508,12 @@ void DeleteAllEntities(void) {
     Entity* ent;
     Entity* next;
     LinkedList* it;
+#ifdef PC_PORT
+    {
+        extern void Port_LogOrchEvent(const char* op, void* ent);
+        Port_LogOrchEvent("DELETEALL", NULL);
+    }
+#endif
 
     it = &gEntityLists[0];
     if (it->first) {
@@ -608,6 +637,12 @@ void PrependEntityToList(Entity* entity, u32 listIndex) {
 }
 
 static void UnlinkEntity(Entity* ent) {
+#ifdef PC_PORT
+    {
+        extern void Port_LogEntityEvent(const char* op, void* ent, unsigned kind, unsigned id, void* prev, void* next);
+        Port_LogEntityEvent("unlink", (void*)ent, ent->kind, ent->id, ent->prev, ent->next);
+    }
+#endif
     if (ent == gUpdateContext.current_entity) {
         gUpdateContext.current_entity = ent->prev;
     }
