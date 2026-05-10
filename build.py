@@ -57,16 +57,16 @@ def hr(ch=None):
 def blank():       print()
 def header(t):     hr(_ui_char("═", "=")); print(f"  {t}"); hr(_ui_char("═", "="))
 def section(t):    blank(); hr(); print(f"  {t}"); hr()
-def ok(m):         print(f"  \033[32m{_ui_char('', 'OK')}\033[0m  {m}")
-def warn(m):       print(f"  \033[33m{_ui_char('', 'WARN')}\033[0m  {m}")
-def err(m):        print(f"  \033[31m{_ui_char('', 'ERR')}\033[0m  {m}")
+def ok(m):         print(f"  \033[32m{_ui_char('✓', 'OK')}\033[0m  {m}")
+def warn(m):       print(f"  \033[33m{_ui_char('!', 'WARN')}\033[0m  {m}")
+def err(m):        print(f"  \033[31m{_ui_char('✗', 'ERR')}\033[0m  {m}")
 def info(m):       print(f"     {m}")
 
 def prompt(msg: str, choices=None) -> str:
     suffix = f" [{'/'.join(choices)}]" if choices else ""
     while True:
         try:
-            ans = input(f"  -> {msg}{suffix}: ").strip().lower()
+            ans = input(f"  → {msg}{suffix}: ").strip().lower()
         except (EOFError, KeyboardInterrupt):
             blank(); sys.exit(0)
         if not choices or ans in choices:
@@ -102,15 +102,6 @@ def dir_populated(d: Path) -> bool:
     except OSError:
         return False
 
-def replace_file_atomically(src: Path, dst: Path) -> None:
-    """Copy src to a temp file beside dst, then atomically replace dst.
-
-    This avoids ETXTBSY on Linux when dst is a currently running executable.
-    """
-    tmp = dst.with_name(dst.name + ".tmp")
-    shutil.copy2(src, tmp)
-    os.replace(tmp, dst)
-
 # ── Dependency detection ──────────────────────────────────────────────────────
 
 def detect_distro() -> str:
@@ -137,6 +128,32 @@ LINUX_DEPS = [
 WIN_DEPS = [
     ("xmake", lambda: bool(shutil.which("xmake"))),
     ("git",   lambda: bool(shutil.which("git"))),
+]
+
+# Apple Clang has no built-in OpenMP runtime, so VirtuaPPU's parallel
+# scanline path needs Homebrew's libomp. xmake.lua falls back to a
+# single-threaded build if libomp is missing, but we still surface it
+# here so `brew install libomp` is an obvious next step.
+def _libomp_present() -> bool:
+    if subprocess.run(["brew", "--prefix", "libomp"],
+                      capture_output=True).returncode == 0:
+        return True
+    return any(Path(p).is_dir() for p in (
+        "/opt/homebrew/opt/libomp",
+        "/usr/local/opt/libomp",
+    ))
+
+# (label, check_fn, brew_pkg)
+# SDL3 is intentionally omitted: xmake builds a vendored copy on macOS and
+# XMAKE_USE_SYSTEM_SDL3 is Linux-only by design.
+MAC_DEPS = [
+    ("xmake",         lambda: bool(shutil.which("xmake")),      "xmake"),
+    ("git",           lambda: bool(shutil.which("git")),        "git"),
+    ("pkg-config",    lambda: bool(shutil.which("pkg-config")), "pkg-config"),
+    ("libpng",        lambda: pkg_config_ok("libpng"),          "libpng"),
+    ("fmt",           lambda: pkg_config_ok("fmt"),             "fmt"),
+    ("nlohmann-json", lambda: pkg_config_ok("nlohmann_json"),   "nlohmann-json"),
+    ("libomp",        _libomp_present,                          "libomp"),
 ]
 
 def check_deps(non_interactive: bool = False) -> bool:
@@ -192,6 +209,46 @@ def check_deps(non_interactive: bool = False) -> bool:
             info("xmake : https://xmake.io")
             info("git   : https://git-scm.com")
             all_ok = False
+
+    elif PLATFORM == "Darwin":
+        # Apple Command Line Tools provide clang/ld/git; Homebrew won't install
+        # them and xmake can't build C++ without them.
+        if shutil.which("clang"):
+            ok("Xcode Command Line Tools (clang)")
+        else:
+            err("Xcode Command Line Tools (clang) not found")
+            info("Install with: xcode-select --install")
+            all_ok = False
+
+        miss_brew = []
+        for label, check_fn, brew_pkg in MAC_DEPS:
+            if check_fn():
+                ok(label)
+            else:
+                err(label)
+                miss_brew.append(brew_pkg)
+
+        if miss_brew:
+            blank()
+            warn("Missing dependencies. Install with:")
+            if shutil.which("brew"):
+                info(f"  brew install {' '.join(miss_brew)}")
+            else:
+                info("  Install Homebrew first: https://brew.sh")
+                info(f"  Then: brew install {' '.join(miss_brew)}")
+            blank()
+            if non_interactive or not shutil.which("brew"):
+                all_ok = False
+            elif prompt("Attempt automatic install via brew?", ["y", "n"]) == "y":
+                if run_cmd(["brew", "install"] + miss_brew, check=False).returncode != 0:
+                    err("Automatic install failed — install manually and re-run.")
+                    return False
+                still_missing = [l for l, fn, *_ in MAC_DEPS if not fn()]
+                if still_missing:
+                    err(f"Still missing after install: {', '.join(still_missing)}")
+                    return False
+            else:
+                all_ok = False
 
     else:
         err(f"Unsupported platform: {PLATFORM}")
@@ -258,7 +315,7 @@ def ensure_roms(selected: list, found: dict, non_interactive: bool = False) -> d
                 result[v] = True
                 continue
             info(f"Copy  {src}")
-            info(f"  ->   {target}")
+            info(f"  →   {target}")
             if non_interactive or prompt("Proceed?", ["y", "n"]) == "y":
                 shutil.copy2(src, target)
                 ok(f"Copied {target.name}")
@@ -276,6 +333,51 @@ def ensure_roms(selected: list, found: dict, non_interactive: bool = False) -> d
 
 # ── Build pipeline ────────────────────────────────────────────────────────────
 
+def ensure_sounds_embed() -> None:
+    """Generate port/generated_sounds_embed.cpp from assets/sounds.json.
+
+    xmake.lua references the file as a static input via add_files(...),
+    which is processed during the configure pass - BEFORE xmake's
+    before_build hook runs. On a clean checkout the file doesn't exist
+    yet and configure prints
+
+        warning: ./xmake.lua:NNN: cannot match add_files("port/generated_sounds_embed.cpp")
+
+    followed by an undefined-reference link error for
+    PortSoundsEmbed::kData / kSize. Running the generator here, before
+    invoking xmake, sidesteps the ordering issue regardless of whether
+    the user passed --slim. The generator is deterministic and no-ops
+    when the on-disk output already matches the input, so this is safe
+    to run unconditionally without busting xmake's incremental cache.
+    The xmake before_build hook is left in place as a safety net for
+    direct `xmake build` invocations.
+    """
+    script = REPO_ROOT / "tools" / "generate_sounds_embed.py"
+    sounds = REPO_ROOT / "assets" / "sounds.json"
+    output = REPO_ROOT / "port" / "generated_sounds_embed.cpp"
+    if not script.exists():
+        warn(f"generator missing: {script.relative_to(REPO_ROOT)} - relying on xmake before_build hook")
+        return
+
+    # Prefer python3 (matches xmake.lua), fall back to python (Windows
+    # installs without the python3 shim).
+    last_err: Optional[str] = None
+    for interp in ("python3", "python"):
+        if not shutil.which(interp):
+            continue
+        result = subprocess.run(
+            [interp, str(script), str(sounds), str(output)],
+            cwd=str(REPO_ROOT),
+        )
+        if result.returncode == 0:
+            ok(f"generated_sounds_embed.cpp ({sounds.name} -> {output.relative_to(REPO_ROOT)})")
+            return
+        last_err = f"{interp} exited {result.returncode}"
+
+    warn(f"sounds embed generator failed ({last_err or 'no python interpreter found'})")
+    info("Build will continue; xmake's before_build hook will retry.")
+
+
 def make_env() -> dict:
     env = os.environ.copy()
     env["XMAKE_ROOT"] = "y"
@@ -289,7 +391,19 @@ def make_env() -> dict:
 
     return env
 
-def build_version(version: str, env: dict, non_interactive: bool = False) -> Optional[Path]:
+def build_version(version: str, env: dict, non_interactive: bool = False,
+                  slim: bool = False) -> Optional[Path]:
+    """Build tmc_pc for `version` and stage it under dist/<version>/.
+
+    `slim=True` produces a minimal dist (just the binary). The
+    embedded extractor + embedded sounds.json fallback in tmc_pc
+    handle first-launch asset extraction and audio metadata from a
+    bare `tmc_pc + baserom.gba` install, so the dist no longer
+    needs to ship `assets/` or a separate `sounds.json`. Trade-off:
+    first launch takes ~3-5 s with a progress bar instead of being
+    instant. After that first run, `assets/` lives next to the
+    binary and warm launches are instant either way.
+    """
     dist_dir = REPO_ROOT / "dist" / version
 
     # Skip prompt if dist binary already exists
@@ -319,18 +433,20 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
         (f"Configure ({version})", configure_cmd),
     ]
 
-    if assets_ready:
-        info("Assets already exist in build/pc/assets and build/pc/assets_src — skipping extract/convert/build_assets.")
+    # Slim builds skip the legacy xmake extract/convert/build_assets
+    # tasks entirely — the dist won't include build/<version>/assets/
+    # so there's no point producing it. tmc_pc's embedded extractor
+    # handles first-launch extraction from baserom.gba.
+    if slim:
+        info("Slim build — skipping xmake extract_assets/convert_assets/build_assets.")
+    elif assets_ready:
+        info("Assets already exist in build/<version>/assets and build/<version>/assets_src — skipping extract/convert/build_assets.")
     else:
         steps.extend([
-            ("Extract assets", ["xmake", "extract_assets"]),
-            ("Convert assets", ["xmake", "convert_assets"]),
+            ("Extract assets",              ["xmake", "extract_assets"]),
+            ("Convert assets",              ["xmake", "convert_assets"]),
+            ("Build assets",                ["xmake", "build_assets"]),
         ])
-
-        if PLATFORM == "Windows":
-            info("Windows MinGW build detected — skipping xmake build_assets for PC release.")
-        else:
-            steps.append(("Build assets", ["xmake", "build_assets"]))
 
     steps.append((f"Compile tmc_pc ({version})", ["xmake", "build", "-y", "tmc_pc"]))
 
@@ -342,23 +458,30 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
             err(str(exc))
             return None
 
-    # Copy ROM so the runtime asset extractor can find it
     import shutil
-    shutil.copy2("baserom.gba", "build/pc/baserom.gba")
-    print("  Copied baserom.gba -> build/pc/")
-    
-    # asset_extractor: generates build/pc/assets/ + build/pc/assets_src/
-    extractor = REPO_ROOT / "build" / "pc" / (
-        "asset_extractor.exe" if PLATFORM == "Windows" else "asset_extractor"
-    )
-    if extractor.exists():
-        info("Extracting runtime assets...")
-        try:
-            run_cmd([extractor], cwd=REPO_ROOT)
-        except RuntimeError:
-            warn("asset_extractor failed — runtime assets may be incomplete")
-    else:
-        warn("asset_extractor not built — run: xmake build asset_extractor")
+
+    if not slim:
+        # Copy ROM so the standalone asset_extractor can find it next
+        # to itself and pre-populate build/pc/assets/ — a convenience
+        # for local-dev runs of build/pc/tmc_pc.
+        shutil.copy2("baserom.gba", "build/pc/baserom.gba")
+        print("✓  Copied baserom.gba → build/pc/")
+
+        extractor = REPO_ROOT / "build" / "pc" / (
+            "asset_extractor.exe" if PLATFORM == "Windows" else "asset_extractor"
+        )
+        if extractor.exists():
+            info("Extracting runtime assets (pak mode)...")
+            try:
+                # --pak matches tmc_pc's default (anything other than
+                # --loose-assets triggers pak mode), so a subsequent
+                # warm-launch of build/pc/tmc_pc skips re-extraction
+                # via the ROM-fingerprint fast path.
+                run_cmd([extractor, "--pak"], cwd=REPO_ROOT)
+            except RuntimeError:
+                warn("asset_extractor failed — runtime assets may be incomplete")
+        else:
+            warn("asset_extractor not built — run: xmake build asset_extractor")
 
     # ── Copy artefacts to dist/<version>/ ────────────────────────────────────
 
@@ -367,13 +490,20 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
         err(f"Binary not found: {src_bin}")
         return None
 
-    replace_file_atomically(src_bin, dst_bin)
+    shutil.copy2(src_bin, dst_bin)
     if PLATFORM != "Windows":
         dst_bin.chmod(dst_bin.stat().st_mode | 0o111)
-    ok(f"Binary    ->  dist/{version}/{EXE_NAME}")
+    ok(f"Binary    →  dist/{version}/{EXE_NAME}")
 
-    # Runtime assets consumed by the PC port live under build/pc/.
-    # build/<version>/assets only contains the intermediate extraction tree.
+    if slim:
+        # In slim mode the binary is the entire dist. tmc_pc's
+        # embedded extractor will create assets/ on first run, and
+        # the embedded sounds.json fallback (compiled into the
+        # binary by tools/generate_sounds_embed.py) handles audio.
+        info("Slim mode — assets/, assets_src/, and sounds.json are NOT copied.")
+        info("tmc_pc will self-extract assets on first launch using the embedded extractor.")
+        return dst_bin
+
     # Runtime assets (build/<version>/assets/) and editable assets (build/<version>/assets_src/)
     for src_name in ("assets", "assets_src"):
         src = REPO_ROOT / "build" / version / src_name
@@ -382,16 +512,19 @@ def build_version(version: str, env: dict, non_interactive: bool = False) -> Opt
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(src, dst)
-            ok(f"{src_name}/  ->  dist/{version}/{src_name}/")
+            ok(f"{src_name}/  →  dist/{version}/{src_name}/")
         else:
             warn(f"build/{version}/{src_name}/ not found — skipping")
 
     sounds_src = REPO_ROOT / "assets" / "sounds.json"
     if sounds_src.exists():
         shutil.copy2(sounds_src, dist_dir / "sounds.json")
-        ok(f"sounds.json ->  dist/{version}/sounds.json")
+        ok(f"sounds.json →  dist/{version}/sounds.json")
     else:
-        warn("assets/sounds.json not found — songs will be silent")
+        # Not fatal: the binary embeds a build-time copy as a fallback
+        # (see tools/generate_sounds_embed.py). The on-disk file just
+        # lets users tweak song metadata without rebuilding.
+        warn("assets/sounds.json not found — using the embedded fallback baked into tmc_pc")
 
     return dst_bin
 
@@ -401,11 +534,23 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="TMC PC Port build helper")
     parser.add_argument("--usa", action="store_true", help="Build USA version without prompts")
     parser.add_argument("--eur", action="store_true", help="Build EU version without prompts")
+    parser.add_argument(
+        "--slim",
+        action="store_true",
+        help=(
+            "Produce a minimal dist/<version>/ containing only tmc_pc. "
+            "Skips the standalone asset_extractor invocation, the "
+            "assets/ + assets_src/ copy, and the on-disk sounds.json copy. "
+            "tmc_pc self-extracts assets on first launch (3-5 s) and uses "
+            "its compiled-in sounds.json fallback for audio metadata."
+        ),
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
     non_interactive = args.usa or args.eur
+    slim = args.slim
 
     header("TMC PC Port Builder")
     info(f"Platform : {PLATFORM}")
@@ -474,10 +619,20 @@ def main():
         sys.exit(0)
 
     env     = make_env()
+    if slim:
+        info("Slim mode — dist will contain only tmc_pc (assets self-extract on first run).")
+
+    """Generate port/generated_sounds_embed.cpp before xmake's configure
+    pass reads it via add_files. xmake.lua keeps a before_build hook
+    as a safety net, but that fires AFTER configure, so a clean
+    checkout would otherwise warn + fail to link with undefined
+    references to PortSoundsEmbed::kData/kSize."""
+    ensure_sounds_embed()
+
     results = {}
     for v in buildable:
         section(f"Building {v}")
-        results[v] = build_version(v, env, non_interactive=non_interactive)
+        results[v] = build_version(v, env, non_interactive=non_interactive, slim=slim)
 
     section("Done")
     any_ok = False

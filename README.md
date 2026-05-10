@@ -14,7 +14,7 @@
 A decompilation of The Legend of Zelda: The Minish Cap (GBA, 2004) — and a work-in-progress native PC port built on top of it.
 
 The decompilation reconstructs the original C source from the GBA ROM using static and dynamic analysis.
-The PC port compiles that source for x86-64 Linux and Windows, replacing GBA hardware with SDL3, a software PPU renderer, and the agbplay audio engine.
+The PC port compiles that source for x86-64 Linux, Windows, and macOS (Apple Silicon and Intel), replacing GBA hardware with SDL3, a software PPU renderer, and the agbplay audio engine.
 
 ## Supported ROMs
 
@@ -98,6 +98,23 @@ sudo pacman -S xmake sdl3 libpng fmt nlohmann-json git curl
 sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git curl
 ```
 
+**macOS (Apple Silicon or Intel):**
+```sh
+xcode-select --install                                                                            # Apple's compiler + git
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"   # Homebrew, if you don't have it
+brew install xmake pkg-config fmt nlohmann-json libpng libomp
+```
+
+What each piece does, in plain English:
+- **Xcode Command Line Tools** — Apple's C/C++ compiler (`clang`), linker, and `git`. You can't build any native code on a Mac without them, and Homebrew won't install them for you.
+- **Homebrew** — the package manager that fetches everything else. If you've never used a Mac for development, this is the one prerequisite you'll always end up installing.
+- **xmake** — the build system that drives the whole compile (think `make`/`cmake`, but it auto-downloads any C/C++ libraries that aren't already on your system).
+- **pkg-config** — a tiny tool xmake uses to ask "where did Homebrew put libpng?". Without it, xmake can't find the brew-installed libraries and will rebuild them itself (slow and sometimes broken).
+- **fmt** and **nlohmann-json** — small C++ helper libraries the asset tools and game code use for text formatting and JSON parsing.
+- **libpng** — needed by the GBA graphics tools to read and write PNG sprite sheets.
+- **libomp** — Apple Clang doesn't ship with an OpenMP runtime, so VirtuaPPU's parallel scanline renderer needs Homebrew's `libomp`. If it's missing, the build still works but falls back to a single-threaded path.
+- **SDL3** — the cross-platform window/input/audio layer. Not in the brew list because xmake builds its own copy automatically on macOS (the Linux path uses the system one when available, but on macOS the bundled build is the default and Just Works).
+
 **Windows:** Install [xmake](https://xmake.io) and [git](https://git-scm.com). SDL3 and other libraries are downloaded automatically by xmake.
 
 ## PC port (work in progress)
@@ -110,9 +127,9 @@ Tested platforms:
 
 * Linux (Wayland preferred, X11 fallback)
 * Windows via MinGW static link
-
-macOS may build (the xmake config sets up the toolchain) but is not regularly
-tested.
+* macOS (Apple Silicon and Intel) via `python3 build.py` — builds cleanly with
+  Homebrew + Xcode Command Line Tools; lightly tested compared to Linux/Windows,
+  so please file issues if you hit anything.
 
 Build with `xmake build tmc_pc`; the binary lands in `build/pc/`. As of
 0.1.1 the binary resolves `baserom.gba`, `sounds.json`, and the asset
@@ -139,11 +156,6 @@ The window title shows the running port version — please include it when filin
 
 Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through
 xBRZ 4× and linear modes.
-
-**Bug-report capture (F9)** — writes a `bugreport_YYYYMMDD_HHMMSS/` folder
-next to the binary containing `screenshot.bmp`, `save.bin` (your current
-EEPROM dump), and `state.txt` (area / room / coords / hp). Attach the
-folder to a GitHub issue and we have everything we need to reproduce.
 
 ### Nix
 

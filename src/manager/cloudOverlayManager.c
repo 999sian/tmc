@@ -10,6 +10,10 @@
 #include "game.h"
 #include "room.h"
 #include "common.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#include "port_gba_mem.h"
+#endif
 
 void CloudOverlayManager_OnEnterRoom(CloudOverlayManager*);
 void CloudOverlayManager_OnExitRoom(CloudOverlayManager*);
@@ -72,6 +76,27 @@ void CloudOverlayManager_OnEnterRoom(CloudOverlayManager* this) {
             MemCopy((void*)0x6004000, sCloudCharSnapshot, sizeof(sCloudCharSnapshot));
             MemCopy((void*)0x600F000, sCloudScreenSnapshot, sizeof(sCloudScreenSnapshot));
             sCloudSnapshotValid = 1;
+            {
+                u32 nonzero = 0;
+                u8* vram = (u8*)gba_TryMemPtr(0x6004000);
+                if (vram) {
+                    for (u32 i = 0; i < 0x2000; i++)
+                        if (vram[i]) nonzero++;
+                }
+                fprintf(stderr, "[CLOUD] snapshot captured: chardata non-zero=%u/8192, first16=", nonzero);
+                if (vram) {
+                    for (int i = 0; i < 16; i++)
+                        fprintf(stderr, "%02X ", vram[i]);
+                }
+                fprintf(stderr, "\n");
+                u8* tmap = (u8*)gba_TryMemPtr(0x600F000);
+                u32 tnz = 0;
+                if (tmap) {
+                    for (u32 i = 0; i < 0x800; i++)
+                        if (tmap[i]) tnz++;
+                }
+                fprintf(stderr, "[CLOUD] tilemap non-zero=%u/2048\n", tnz);
+            }
         } else {
             /* Subsequent entries: restore. Castle may have trashed the data. */
             MemCopy(sCloudCharSnapshot, (void*)0x6004000, sizeof(sCloudCharSnapshot));

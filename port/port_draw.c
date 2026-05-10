@@ -146,6 +146,16 @@ extern UpdateContext gUpdateContext;
 /* External function called after each entity update */
 extern void UpdateCollision(Entity* entity);
 
+/* Forward declaration of helper that resets the entity sprite draw
+ * lists. Full definition (and the sDrawLists storage it operates on)
+ * is later in this file. Used by ram_UpdateEntities to clear the lists
+ * at the *start* of the entity-update phase so that during
+ * GAMEMAIN_CHANGEAREA / similar non-update phases, the previously
+ * registered entities continue to render at their last positions
+ * (matches GBA behavior; without this, door arch / Link sprites
+ * vanish on the second frame of fade-out). */
+static void ClearEntityDrawLists(void);
+
 /* ram_UpdateEntities (port of arm_UpdateEntities)
  *
  * Arguments:
@@ -173,6 +183,17 @@ void ram_UpdateEntities(u32 mode) {
         /* Entities: lists 0-7 (excluding manager list) */
         startList = 0;
         endList = 8;
+        /* Clear sprite draw lists at the start of the entity-update
+         * phase, NOT at the end of ram_DrawEntities. This matches GBA
+         * behavior: each entity's update re-registers itself via
+         * DrawEntity, and during GAMEMAIN_CHANGEAREA (no UpdateEntities
+         * call) the draw lists persist so previously-registered entities
+         * continue to render at their last positions. Without this,
+         * during fade-out a door arch / door slab / Link sprites all
+         * vanish on frame 2+ of the transition, exposing the
+         * transparent BG hole at the doorway as the fading backdrop
+         * color.. */
+        ClearEntityDrawLists();
     } else {
         /* Managers: only list 8 */
         startList = 8;
@@ -465,6 +486,14 @@ typedef struct {
 
 /* 4 main draw lists + 1 deferred (shadow) list */
 static EntityDrawList sDrawLists[5];
+
+/* Reset all entity sprite draw lists. See forward declaration earlier
+ * in this file for the rationale. */
+static void ClearEntityDrawLists(void) {
+    for (int i = 0; i < 4; i++) {
+        sDrawLists[i].count = 0;
+    }
+}
 
 /* Deferred draw entry (packed as on GBA: two shorts per entry) */
 typedef struct {
@@ -990,7 +1019,10 @@ void ram_DrawEntities(void) {
         /* Render deferred shadow/underlay sprites */
         ProcessDeferredList();
 
-        /* Clear draw list for next frame */
-        list->count = 0;
+        /* NOTE: do NOT clear list->count here. The list is cleared at
+         * the start of ram_UpdateEntities (mode=0) so registrations
+         * persist into ChangeArea/Init frames, where DrawEntities
+         * re-renders the same entities at their last positions. See
+         * comment in ram_UpdateEntities. */
     }
 }

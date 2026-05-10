@@ -10,22 +10,23 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <span>
 #include <string>
 #include <vector>
 
 namespace PortAssetPipeline {
 
-std::vector<uint8_t> DecodeGbaTiledGfx(const std::vector<uint8_t>& gfxData, uint16_t width, uint16_t height,
+std::vector<uint8_t> DecodeGbaTiledGfx(std::span<const uint8_t> gfxData, uint16_t width, uint16_t height,
                                        uint8_t bpp);
 std::vector<uint8_t> EncodeGbaTiledGfx(const std::vector<uint8_t>& pixels, uint16_t width, uint16_t height,
                                        uint8_t bpp);
 
-bool WriteIndexedBmp(const std::filesystem::path& outputPath, const std::vector<uint8_t>& pixels, uint16_t width,
+bool WriteIndexedBmp(const std::filesystem::path& outputPath, std::span<const uint8_t> pixels, uint16_t width,
                      uint16_t height, uint8_t bpp, std::string* error = nullptr);
 bool ReadEditableBmp(const std::filesystem::path& inputPath, std::vector<uint8_t>& pixels, uint16_t expectedWidth,
                      uint16_t expectedHeight, uint8_t bpp, std::string* error = nullptr);
 
-bool WritePaletteJson(const std::filesystem::path& outputPath, const std::vector<uint8_t>& paletteData,
+bool WritePaletteJson(const std::filesystem::path& outputPath, std::span<const uint8_t> paletteData,
                       std::string* error = nullptr);
 bool ReadPaletteJson(const std::filesystem::path& inputPath, std::vector<uint8_t>& paletteData,
                      std::string* error = nullptr);
@@ -36,11 +37,11 @@ bool WriteEditableText(const std::filesystem::path& outputPath, const std::vecto
                        std::string* error = nullptr);
 bool ReadEditableText(const std::filesystem::path& inputPath, std::vector<uint8_t>& textData,
                       std::string* error = nullptr);
-bool WriteEditableAnimation(const std::filesystem::path& outputPath, const std::vector<uint8_t>& animationData,
+bool WriteEditableAnimation(const std::filesystem::path& outputPath, std::span<const uint8_t> animationData,
                             std::string* error = nullptr);
 bool ReadEditableAnimation(const std::filesystem::path& inputPath, std::vector<uint8_t>& animationData,
                            std::string* error = nullptr);
-bool WriteEditableSpriteFrames(const std::filesystem::path& outputPath, const std::vector<uint8_t>& frameData,
+bool WriteEditableSpriteFrames(const std::filesystem::path& outputPath, std::span<const uint8_t> frameData,
                                std::string* error = nullptr);
 bool ReadEditableSpriteFrames(const std::filesystem::path& inputPath, std::vector<uint8_t>& frameData,
                               std::string* error = nullptr);
@@ -51,5 +52,12 @@ bool BuildRuntimeAssets(const std::filesystem::path& sourceRoot, const std::file
                         std::string* error = nullptr);
 bool EnsureRuntimeAssetsBuilt(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
                               std::string* reasonOrError = nullptr);
+
+/// Write the source-state file (`.asset_build_state.json`) into outputRoot
+/// based on the current contents of sourceRoot. Used by the extractor once
+/// it has dual-written both trees in a single pass, so that subsequent runs
+/// can detect the runtime tree as up-to-date and short-circuit.
+bool WriteBuildStateFile(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
+                         std::string* error = nullptr);
 
 } // namespace PortAssetPipeline

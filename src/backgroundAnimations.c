@@ -2452,6 +2452,18 @@ void LoadBgAnimations(u16* param_1) {
     while (param_1[0] != 0xffff) {
         animation->currentFrame = gUnk_080B7278[param_1[0]];
         animation->timer = GetBgAnimationTimer(&animation->currentFrame->unk_4);
+#ifdef PC_PORT
+        /* Prime the BG-animation VRAM slot with the first frame's graphics
+         * immediately at room init. The decomp defers the first upload to
+         * UpdateBgAnimations() when the per-animation timer expires
+         * (~8-20 frames), AND that function skips the upload entirely
+         * while gFadeControl.active is set. On GBA that's fine because
+         * nothing reads those VRAM bytes during the palette fade-in; on
+         * the port gVram persists across rooms, so a door-arch /
+         * doorway-rug / torch tile slots keep showing the previous room's
+         * animation graphics during the new room's fade-in. */
+        LoadBgAnimationGfx(animation->currentFrame->gfx);
+#endif
         animation++;
         param_1++;
     }

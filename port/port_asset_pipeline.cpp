@@ -1,5 +1,7 @@
 #include "port_asset_pipeline.hpp"
 
+#include "port_asset_log.hpp"
+
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -8,6 +10,7 @@
 #include <cstdint>
 #include <fstream>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -57,9 +60,9 @@ bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json& outJson, st
     }
 }
 
-bool WriteJsonFile(const std::filesystem::path& path, const nlohmann::json& json, std::string* error = nullptr) {
-    std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
+bool WriteJsonFile(const std::filesystem::path& path, const nlohmann::json& json, std::string* error = nullptr,
+                   int indent = 4) {
+    PortAssetLog::EnsureDir(path.parent_path());
 
     std::ofstream output(path);
     if (!output.good()) {
@@ -67,13 +70,16 @@ bool WriteJsonFile(const std::filesystem::path& path, const nlohmann::json& json
         return false;
     }
 
-    output << json.dump(4);
+    if (indent <= 0) {
+        output << json.dump();
+    } else {
+        output << json.dump(indent);
+    }
     return true;
 }
 
 bool WriteBinaryFile(const std::filesystem::path& path, const std::vector<uint8_t>& data, std::string* error = nullptr) {
-    std::error_code ec;
-    std::filesystem::create_directories(path.parent_path(), ec);
+    PortAssetLog::EnsureDir(path.parent_path());
 
     std::ofstream output(path, std::ios::binary);
     if (!output.good()) {
@@ -634,12 +640,31 @@ bool CopyFilePreserveRelative(const std::filesystem::path& sourceRoot, const std
     const std::filesystem::path sourcePath = sourceRoot / relativePath;
     const std::filesystem::path outputPath = outputRoot / relativePath;
 
-    std::error_code ec;
-    std::filesystem::create_directories(outputPath.parent_path(), ec);
-    if (!std::filesystem::copy_file(sourcePath, outputPath, std::filesystem::copy_options::overwrite_existing, ec)) {
-        if (ec) {
-            SetError(error, "Failed to copy " + sourcePath.string() + " to " + outputPath.string() + ": " + ec.message());
-            return false;
+    PortAssetLog::EnsureDir(outputPath.parent_path());
+
+    std::ifstream input(sourcePath, std::ios::binary);
+    if (!input.good()) {
+        SetError(error, "Failed to open source file: " + sourcePath.string());
+        return false;
+    }
+
+    std::ofstream output(outputPath, std::ios::binary | std::ios::trunc);
+    if (!output.good()) {
+        SetError(error, "Failed to open output file: " + outputPath.string());
+        return false;
+    }
+
+    constexpr std::size_t kBufferSize = 256 * 1024;
+    std::vector<char> buffer(kBufferSize);
+    while (input.good()) {
+        input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        const std::streamsize n = input.gcount();
+        if (n > 0) {
+            output.write(buffer.data(), n);
+            if (!output.good()) {
+                SetError(error, "Failed writing to: " + outputPath.string());
+                return false;
+            }
         }
     }
 
@@ -652,26 +677,52 @@ nlohmann::json BuildSourceState(const std::filesystem::path& sourceRoot) {
     state["builder_version"] = kBuildStateVersion;
     state["files"] = nlohmann::json::array();
 
-    std::vector<nlohmann::json> files;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(sourceRoot)) {
-        if (!entry.is_regular_file()) {
+    /* Two-phase: enumerate the tree (cheap, single-threaded — recursive
+     * directory iterator can't be parallelised cleanly), then stat every
+     * file in parallel. The per-file stat() pair (file_size + last_write_time)
+     * is what dominates wall time on Windows; parallelism scales it out
+     * across the worker pool. */
+    struct Entry {
+        std::filesystem::path absolute;
+        std::string relative;
+    };
+    std::vector<Entry> entries;
+    entries.reserve(8192);
+    for (const auto& dirent : std::filesystem::recursive_directory_iterator(sourceRoot)) {
+        if (!dirent.is_regular_file()) {
             continue;
         }
-
-        const std::filesystem::path relativePath = std::filesystem::relative(entry.path(), sourceRoot);
-        nlohmann::json fileState;
-        fileState["path"] = relativePath.generic_string();
-        fileState["size"] = static_cast<uint64_t>(entry.file_size());
-        fileState["mtime"] = static_cast<int64_t>(entry.last_write_time().time_since_epoch().count());
-        files.push_back(std::move(fileState));
+        Entry e;
+        e.absolute = dirent.path();
+        e.relative = std::filesystem::relative(dirent.path(), sourceRoot).generic_string();
+        entries.push_back(std::move(e));
     }
 
-    std::sort(files.begin(), files.end(), [](const nlohmann::json& a, const nlohmann::json& b) {
-        return a["path"].get<std::string>() < b["path"].get<std::string>();
+    struct StatResult {
+        std::string path;
+        uint64_t size;
+        int64_t mtime;
+    };
+    std::vector<StatResult> results(entries.size());
+    PortAssetLog::ParallelFor<size_t>(0, entries.size(), [&](size_t i) {
+        std::error_code ec;
+        const uint64_t size = std::filesystem::file_size(entries[i].absolute, ec);
+        const auto t = std::filesystem::last_write_time(entries[i].absolute, ec);
+        results[i].path = std::move(entries[i].relative);
+        results[i].size = ec ? 0 : size;
+        results[i].mtime = ec ? 0 : static_cast<int64_t>(t.time_since_epoch().count());
     });
 
-    for (const auto& file : files) {
-        state["files"].push_back(file);
+    std::sort(results.begin(), results.end(), [](const StatResult& a, const StatResult& b) {
+        return a.path < b.path;
+    });
+
+    for (auto& r : results) {
+        nlohmann::json fileState;
+        fileState["path"] = std::move(r.path);
+        fileState["size"] = r.size;
+        fileState["mtime"] = r.mtime;
+        state["files"].push_back(std::move(fileState));
     }
 
     return state;
@@ -683,36 +734,65 @@ bool BuildRuntimePaletteFiles(const std::filesystem::path& sourceRoot, const std
     runtimePalettes = nlohmann::json::array();
     paletteFileMap.clear();
 
-    for (const auto& sourceEntry : sourcePalettes) {
+    const size_t total = sourcePalettes.size();
+    std::vector<nlohmann::json> entries(total);
+    std::vector<std::pair<std::string, std::string>> mappings(total);
+
+    std::mutex error_mu;
+    std::string sticky_error;
+
+    PortAssetLog::ParallelFor<size_t>(0, total, [&](size_t i) {
+        const auto& sourceEntry = sourcePalettes[i];
         const std::string sourceFile = JsonStringOrEmpty(sourceEntry, "file");
         if (sourceFile.empty()) {
-            SetError(error, "Palette entry missing file path.");
-            return false;
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = "Palette entry missing file path.";
+            return;
         }
 
+        std::string local_err;
         std::vector<uint8_t> paletteData;
-        if (!ReadPaletteJson(sourceRoot / sourceFile, paletteData, error)) {
-            return false;
+        if (!ReadPaletteJson(sourceRoot / sourceFile, paletteData, &local_err)) {
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = local_err;
+            return;
         }
 
         if (sourceEntry.contains("size") && sourceEntry["size"].is_number_unsigned()) {
             const size_t expectedSize = sourceEntry["size"].get<size_t>();
             if (paletteData.size() != expectedSize) {
-                SetError(error, "Palette size mismatch for " + sourceFile);
-                return false;
+                std::lock_guard<std::mutex> lk(error_mu);
+                if (sticky_error.empty()) sticky_error = "Palette size mismatch for " + sourceFile;
+                return;
             }
         }
 
         const std::filesystem::path runtimeRelativeFile = ReplaceExtension(std::filesystem::path(sourceFile), ".pal");
-        if (!WriteBinaryFile(outputRoot / runtimeRelativeFile, paletteData, error)) {
-            return false;
+        if (!WriteBinaryFile(outputRoot / runtimeRelativeFile, paletteData, &local_err)) {
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = local_err;
+            return;
         }
 
         nlohmann::json runtimeEntry = sourceEntry;
         runtimeEntry["file"] = runtimeRelativeFile.generic_string();
         runtimeEntry["size"] = paletteData.size();
-        runtimePalettes.push_back(runtimeEntry);
-        paletteFileMap[sourceFile] = runtimeRelativeFile.generic_string();
+        entries[i] = std::move(runtimeEntry);
+        mappings[i] = {sourceFile, runtimeRelativeFile.generic_string()};
+    });
+
+    if (!sticky_error.empty()) {
+        SetError(error, sticky_error);
+        return false;
+    }
+
+    for (auto& e : entries) {
+        runtimePalettes.push_back(std::move(e));
+    }
+    for (auto& m : mappings) {
+        if (!m.first.empty()) {
+            paletteFileMap.emplace(std::move(m.first), std::move(m.second));
+        }
     }
 
     return true;
@@ -759,61 +839,112 @@ bool BuildRuntimeGfxFiles(const std::filesystem::path& sourceRoot, const std::fi
                           const nlohmann::json& sourceGroups, nlohmann::json& runtimeGroups, std::string* error) {
     runtimeGroups = nlohmann::json::object();
 
+    // Flatten (groupKey, elementIndex) pairs so we can process every gfx
+    // element in parallel. Decoding the BMP and re-encoding to GBA tiled
+    // bytes is the dominant cost of the legacy editable->runtime path.
+    struct WorkItem {
+        std::string key;
+        size_t group_index;
+        size_t element_index;
+    };
+
+    std::vector<std::string> keys;
+    std::vector<const nlohmann::json*> groups;
+    keys.reserve(sourceGroups.size());
+    groups.reserve(sourceGroups.size());
     for (auto it = sourceGroups.begin(); it != sourceGroups.end(); ++it) {
-        nlohmann::json runtimeGroup = nlohmann::json::array();
+        keys.push_back(it.key());
+        groups.push_back(&it.value());
+    }
 
-        for (const auto& sourceEntry : it.value()) {
-            nlohmann::json runtimeEntry;
-            runtimeEntry["unknown"] = sourceEntry.value("unknown", 0);
-            runtimeEntry["dest"] = sourceEntry.value("dest", 0u);
-            runtimeEntry["terminator"] = sourceEntry.value("terminator", false);
+    std::vector<std::vector<nlohmann::json>> results(keys.size());
+    for (size_t i = 0; i < keys.size(); ++i) {
+        results[i].resize(groups[i]->size());
+    }
 
-            const std::string sourceFile = JsonStringOrEmpty(sourceEntry, "file");
-            if (sourceFile.empty()) {
-                runtimeEntry["file"] = nullptr;
-                runtimeGroup.push_back(runtimeEntry);
-                continue;
-            }
+    std::vector<WorkItem> work;
+    for (size_t i = 0; i < keys.size(); ++i) {
+        for (size_t j = 0; j < groups[i]->size(); ++j) {
+            work.push_back({keys[i], i, j});
+        }
+    }
 
-            const uint16_t width = static_cast<uint16_t>(sourceEntry.value("width", 0));
-            const uint16_t height = static_cast<uint16_t>(sourceEntry.value("height", 0));
-            const uint8_t bpp = static_cast<uint8_t>(sourceEntry.value("bpp", 4));
-            if (width == 0 || height == 0 || (bpp != 4 && bpp != 8)) {
-                SetError(error, "Invalid gfx metadata for " + sourceFile);
-                return false;
-            }
+    std::mutex error_mu;
+    std::string sticky_error;
 
-            std::vector<uint8_t> pixels;
-            if (!ReadEditableBmp(sourceRoot / sourceFile, pixels, width, height, bpp, error)) {
-                return false;
-            }
+    PortAssetLog::ParallelFor<size_t>(0, work.size(), [&](size_t k) {
+        const WorkItem& item = work[k];
+        const nlohmann::json& sourceEntry = (*groups[item.group_index])[item.element_index];
 
-            std::vector<uint8_t> gfxData = EncodeGbaTiledGfx(pixels, width, height, bpp);
-            if (gfxData.empty()) {
-                SetError(error, "Failed to encode gfx from " + sourceFile);
-                return false;
-            }
+        nlohmann::json runtimeEntry;
+        runtimeEntry["unknown"] = sourceEntry.value("unknown", 0);
+        runtimeEntry["dest"] = sourceEntry.value("dest", 0u);
+        runtimeEntry["terminator"] = sourceEntry.value("terminator", false);
 
-            if (sourceEntry.contains("size") && sourceEntry["size"].is_number_unsigned()) {
-                const size_t expectedSize = sourceEntry["size"].get<size_t>();
-                if (gfxData.size() < expectedSize) {
-                    SetError(error, "Gfx size mismatch for " + sourceFile);
-                    return false;
-                }
-                gfxData.resize(expectedSize);
-            }
-
-            const std::filesystem::path runtimeRelativeFile = ReplaceExtension(std::filesystem::path(sourceFile), ".bin");
-            if (!WriteBinaryFile(outputRoot / runtimeRelativeFile, gfxData, error)) {
-                return false;
-            }
-
-            runtimeEntry["file"] = runtimeRelativeFile.generic_string();
-            runtimeEntry["size"] = gfxData.size();
-            runtimeGroup.push_back(runtimeEntry);
+        const std::string sourceFile = JsonStringOrEmpty(sourceEntry, "file");
+        if (sourceFile.empty()) {
+            runtimeEntry["file"] = nullptr;
+            results[item.group_index][item.element_index] = std::move(runtimeEntry);
+            return;
         }
 
-        runtimeGroups[it.key()] = runtimeGroup;
+        const uint16_t width = static_cast<uint16_t>(sourceEntry.value("width", 0));
+        const uint16_t height = static_cast<uint16_t>(sourceEntry.value("height", 0));
+        const uint8_t bpp = static_cast<uint8_t>(sourceEntry.value("bpp", 4));
+        if (width == 0 || height == 0 || (bpp != 4 && bpp != 8)) {
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = "Invalid gfx metadata for " + sourceFile;
+            return;
+        }
+
+        std::string local_err;
+        std::vector<uint8_t> pixels;
+        if (!ReadEditableBmp(sourceRoot / sourceFile, pixels, width, height, bpp, &local_err)) {
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = local_err;
+            return;
+        }
+
+        std::vector<uint8_t> gfxData = EncodeGbaTiledGfx(pixels, width, height, bpp);
+        if (gfxData.empty()) {
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = "Failed to encode gfx from " + sourceFile;
+            return;
+        }
+
+        if (sourceEntry.contains("size") && sourceEntry["size"].is_number_unsigned()) {
+            const size_t expectedSize = sourceEntry["size"].get<size_t>();
+            if (gfxData.size() < expectedSize) {
+                std::lock_guard<std::mutex> lk(error_mu);
+                if (sticky_error.empty()) sticky_error = "Gfx size mismatch for " + sourceFile;
+                return;
+            }
+            gfxData.resize(expectedSize);
+        }
+
+        const std::filesystem::path runtimeRelativeFile = ReplaceExtension(std::filesystem::path(sourceFile), ".bin");
+        if (!WriteBinaryFile(outputRoot / runtimeRelativeFile, gfxData, &local_err)) {
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = local_err;
+            return;
+        }
+
+        runtimeEntry["file"] = runtimeRelativeFile.generic_string();
+        runtimeEntry["size"] = gfxData.size();
+        results[item.group_index][item.element_index] = std::move(runtimeEntry);
+    });
+
+    if (!sticky_error.empty()) {
+        SetError(error, sticky_error);
+        return false;
+    }
+
+    for (size_t i = 0; i < keys.size(); ++i) {
+        nlohmann::json group_array = nlohmann::json::array();
+        for (auto& e : results[i]) {
+            group_array.push_back(std::move(e));
+        }
+        runtimeGroups[keys[i]] = std::move(group_array);
     }
 
     return true;
@@ -989,38 +1120,56 @@ bool BuildRuntimeSpritePtrs(const std::filesystem::path& sourceRoot, const std::
                            const nlohmann::json& sourceSpritePtrs, nlohmann::json& runtimeSpritePtrs,
                            std::string* error) {
     runtimeSpritePtrs = sourceSpritePtrs;
+
+    std::mutex anim_mu, frames_mu, ptr_mu, error_mu;
     std::unordered_map<std::string, std::string> compiledAnimations;
     std::unordered_map<std::string, std::string> compiledFrameFiles;
     std::unordered_map<std::string, std::string> compiledPtrFiles;
+    std::string sticky_error;
 
-    for (auto& entry : runtimeSpritePtrs) {
+    auto fail = [&](const std::string& msg) {
+        std::lock_guard<std::mutex> lk(error_mu);
+        if (sticky_error.empty()) sticky_error = msg;
+    };
+
+    PortAssetLog::ParallelFor<size_t>(0, runtimeSpritePtrs.size(), [&](size_t i) {
+        nlohmann::json& entry = runtimeSpritePtrs[i];
+
         if (entry.contains("animations") && entry["animations"].is_array()) {
             for (auto& animRef : entry["animations"]) {
-                if (!animRef.is_string()) {
-                    continue;
-                }
-
+                if (!animRef.is_string()) continue;
                 const std::string sourceFile = animRef.get<std::string>();
                 const std::filesystem::path sourcePath = sourceFile;
-                if (sourcePath.extension() != ".json") {
-                    continue;
+                if (sourcePath.extension() != ".json") continue;
+
+                std::string mapped;
+                {
+                    std::lock_guard<std::mutex> lk(anim_mu);
+                    auto found = compiledAnimations.find(sourceFile);
+                    if (found != compiledAnimations.end()) {
+                        mapped = found->second;
+                    }
                 }
 
-                auto found = compiledAnimations.find(sourceFile);
-                if (found == compiledAnimations.end()) {
+                if (mapped.empty()) {
+                    std::string local_err;
                     std::vector<uint8_t> animationData;
-                    if (!ReadEditableAnimation(sourceRoot / sourcePath, animationData, error)) {
-                        return false;
+                    if (!ReadEditableAnimation(sourceRoot / sourcePath, animationData, &local_err)) {
+                        fail(local_err);
+                        return;
                     }
-
                     const std::string runtimeFile = ReplaceExtension(sourcePath, ".bin").generic_string();
-                    if (!WriteBinaryFile(outputRoot / runtimeFile, animationData, error)) {
-                        return false;
+                    if (!WriteBinaryFile(outputRoot / runtimeFile, animationData, &local_err)) {
+                        fail(local_err);
+                        return;
                     }
-                    found = compiledAnimations.emplace(sourceFile, runtimeFile).first;
+                    {
+                        std::lock_guard<std::mutex> lk(anim_mu);
+                        auto inserted = compiledAnimations.emplace(sourceFile, runtimeFile);
+                        mapped = inserted.first->second;
+                    }
                 }
-
-                animRef = found->second;
+                animRef = mapped;
             }
         }
 
@@ -1028,21 +1177,31 @@ bool BuildRuntimeSpritePtrs(const std::filesystem::path& sourceRoot, const std::
         if (!framesFile.empty()) {
             const std::filesystem::path sourcePath = framesFile;
             if (sourcePath.extension() == ".json") {
-                auto found = compiledFrameFiles.find(framesFile);
-                if (found == compiledFrameFiles.end()) {
-                    std::vector<uint8_t> frameData;
-                    if (!ReadEditableSpriteFrames(sourceRoot / sourcePath, frameData, error)) {
-                        return false;
-                    }
-
-                    const std::string runtimeFile = ReplaceExtension(sourcePath, ".bin").generic_string();
-                    if (!WriteBinaryFile(outputRoot / runtimeFile, frameData, error)) {
-                        return false;
-                    }
-                    found = compiledFrameFiles.emplace(framesFile, runtimeFile).first;
+                std::string mapped;
+                {
+                    std::lock_guard<std::mutex> lk(frames_mu);
+                    auto found = compiledFrameFiles.find(framesFile);
+                    if (found != compiledFrameFiles.end()) mapped = found->second;
                 }
-
-                entry["frames_file"] = found->second;
+                if (mapped.empty()) {
+                    std::string local_err;
+                    std::vector<uint8_t> frameData;
+                    if (!ReadEditableSpriteFrames(sourceRoot / sourcePath, frameData, &local_err)) {
+                        fail(local_err);
+                        return;
+                    }
+                    const std::string runtimeFile = ReplaceExtension(sourcePath, ".bin").generic_string();
+                    if (!WriteBinaryFile(outputRoot / runtimeFile, frameData, &local_err)) {
+                        fail(local_err);
+                        return;
+                    }
+                    {
+                        std::lock_guard<std::mutex> lk(frames_mu);
+                        auto inserted = compiledFrameFiles.emplace(framesFile, runtimeFile);
+                        mapped = inserted.first->second;
+                    }
+                }
+                entry["frames_file"] = mapped;
             }
         }
 
@@ -1050,32 +1209,39 @@ bool BuildRuntimeSpritePtrs(const std::filesystem::path& sourceRoot, const std::
         if (!ptrFile.empty()) {
             const std::filesystem::path sourcePath = ptrFile;
             if (sourcePath.extension() == ".bmp") {
-                auto found = compiledPtrFiles.find(ptrFile);
-                if (found == compiledPtrFiles.end()) {
+                std::string mapped;
+                {
+                    std::lock_guard<std::mutex> lk(ptr_mu);
+                    auto found = compiledPtrFiles.find(ptrFile);
+                    if (found != compiledPtrFiles.end()) mapped = found->second;
+                }
+                if (mapped.empty()) {
                     const uint16_t width = static_cast<uint16_t>(entry.value("ptr_width", 0));
                     const uint16_t height = static_cast<uint16_t>(entry.value("ptr_height", 0));
                     const uint8_t bpp = static_cast<uint8_t>(entry.value("ptr_bpp", 4));
                     const size_t expectedSize = static_cast<size_t>(entry.value("ptr_size", 0u));
                     if (width == 0 || height == 0 || bpp != 4) {
-                        SetError(error, "Invalid sprite gfx metadata for " + ptrFile);
-                        return false;
+                        fail("Invalid sprite gfx metadata for " + ptrFile);
+                        return;
                     }
 
+                    std::string local_err;
                     std::vector<uint8_t> pixels;
-                    if (!ReadEditableBmp(sourceRoot / sourcePath, pixels, width, height, bpp, error)) {
-                        return false;
+                    if (!ReadEditableBmp(sourceRoot / sourcePath, pixels, width, height, bpp, &local_err)) {
+                        fail(local_err);
+                        return;
                     }
 
                     std::vector<uint8_t> gfxData = EncodeGbaTiledGfx(pixels, width, height, bpp);
                     if (gfxData.empty()) {
-                        SetError(error, "Failed to encode sprite gfx from " + ptrFile);
-                        return false;
+                        fail("Failed to encode sprite gfx from " + ptrFile);
+                        return;
                     }
 
                     if (expectedSize != 0) {
                         if (gfxData.size() < expectedSize) {
-                            SetError(error, "Sprite gfx size mismatch for " + ptrFile);
-                            return false;
+                            fail("Sprite gfx size mismatch for " + ptrFile);
+                            return;
                         }
                         gfxData.resize(expectedSize);
                     }
@@ -1085,13 +1251,17 @@ bool BuildRuntimeSpritePtrs(const std::filesystem::path& sourceRoot, const std::
                         runtimeFile = ReplaceExtension(sourcePath, ".4bpp").generic_string();
                     }
 
-                    if (!WriteBinaryFile(outputRoot / runtimeFile, gfxData, error)) {
-                        return false;
+                    if (!WriteBinaryFile(outputRoot / runtimeFile, gfxData, &local_err)) {
+                        fail(local_err);
+                        return;
                     }
-                    found = compiledPtrFiles.emplace(ptrFile, runtimeFile).first;
+                    {
+                        std::lock_guard<std::mutex> lk(ptr_mu);
+                        auto inserted = compiledPtrFiles.emplace(ptrFile, runtimeFile);
+                        mapped = inserted.first->second;
+                    }
                 }
-
-                entry["ptr_file"] = found->second;
+                entry["ptr_file"] = mapped;
             }
         }
 
@@ -1100,6 +1270,11 @@ bool BuildRuntimeSpritePtrs(const std::filesystem::path& sourceRoot, const std::
         entry.erase("ptr_height");
         entry.erase("ptr_bpp");
         entry.erase("ptr_size");
+    });
+
+    if (!sticky_error.empty()) {
+        SetError(error, sticky_error);
+        return false;
     }
 
     return true;
@@ -1141,6 +1316,10 @@ bool CopyRuntimePassthroughAssets(const std::filesystem::path& sourceRoot, const
         "area_tables.json",
     };
 
+    // Collect first, then copy in parallel. The recursive iterator is cheap;
+    // the per-file CreateFile/CloseFile pair is what dominates wall time on
+    // Windows, and that parallelises trivially.
+    std::vector<std::filesystem::path> to_copy;
     for (const auto& relativeDir : kDirectories) {
         const std::filesystem::path sourceDir = sourceRoot / relativeDir;
         if (!std::filesystem::exists(sourceDir)) {
@@ -1159,17 +1338,29 @@ bool CopyRuntimePassthroughAssets(const std::filesystem::path& sourceRoot, const
                 (relativePath.extension() == ".json" || relativePath.extension() == ".bmp")) {
                 continue;
             }
-            if (!CopyFilePreserveRelative(sourceRoot, outputRoot, relativePath, error)) {
-                return false;
-            }
+            to_copy.push_back(relativePath);
         }
     }
 
     for (const auto& relativeFile : kFiles) {
-        if (std::filesystem::exists(sourceRoot / relativeFile) &&
-            !CopyFilePreserveRelative(sourceRoot, outputRoot, relativeFile, error)) {
-            return false;
+        if (std::filesystem::exists(sourceRoot / relativeFile)) {
+            to_copy.push_back(relativeFile);
         }
+    }
+
+    std::mutex error_mu;
+    std::string sticky_error;
+    PortAssetLog::ParallelFor<size_t>(0, to_copy.size(), [&](size_t i) {
+        std::string local_err;
+        if (!CopyFilePreserveRelative(sourceRoot, outputRoot, to_copy[i], &local_err)) {
+            std::lock_guard<std::mutex> lk(error_mu);
+            if (sticky_error.empty()) sticky_error = local_err;
+        }
+    });
+
+    if (!sticky_error.empty()) {
+        SetError(error, sticky_error);
+        return false;
     }
 
     return true;
@@ -1177,7 +1368,7 @@ bool CopyRuntimePassthroughAssets(const std::filesystem::path& sourceRoot, const
 
 } // namespace
 
-std::vector<uint8_t> DecodeGbaTiledGfx(const std::vector<uint8_t>& gfxData, uint16_t width, uint16_t height, uint8_t bpp) {
+std::vector<uint8_t> DecodeGbaTiledGfx(std::span<const uint8_t> gfxData, uint16_t width, uint16_t height, uint8_t bpp) {
     if (gfxData.empty() || width == 0 || height == 0 || width % 8 != 0 || height % 8 != 0) {
         return {};
     }
@@ -1259,7 +1450,7 @@ std::vector<uint8_t> EncodeGbaTiledGfx(const std::vector<uint8_t>& pixels, uint1
     return gfxData;
 }
 
-bool WriteIndexedBmp(const std::filesystem::path& outputPath, const std::vector<uint8_t>& pixels, uint16_t width,
+bool WriteIndexedBmp(const std::filesystem::path& outputPath, std::span<const uint8_t> pixels, uint16_t width,
                      uint16_t height, uint8_t bpp, std::string* error) {
     if (pixels.size() != static_cast<size_t>(width) * height) {
         SetError(error, "Invalid BMP pixel buffer size.");
@@ -1285,8 +1476,7 @@ bool WriteIndexedBmp(const std::filesystem::path& outputPath, const std::vector<
     const uint32_t imageSize = rowStride * height;
     const uint32_t fileSize = pixelDataOffset + imageSize;
 
-    std::error_code ec;
-    std::filesystem::create_directories(outputPath.parent_path(), ec);
+    PortAssetLog::EnsureDir(outputPath.parent_path());
     std::ofstream output(outputPath, std::ios::binary);
     if (!output.good()) {
         SetError(error, "Could not write BMP file: " + outputPath.string());
@@ -1419,7 +1609,7 @@ bool ReadEditableBmp(const std::filesystem::path& inputPath, std::vector<uint8_t
     return true;
 }
 
-bool WritePaletteJson(const std::filesystem::path& outputPath, const std::vector<uint8_t>& paletteData, std::string* error) {
+bool WritePaletteJson(const std::filesystem::path& outputPath, std::span<const uint8_t> paletteData, std::string* error) {
     if (paletteData.size() % 32 != 0) {
         SetError(error, "Palette data size must be a multiple of 32 bytes.");
         return false;
@@ -1591,7 +1781,7 @@ bool ReadEditableText(const std::filesystem::path& inputPath, std::vector<uint8_
     return true;
 }
 
-bool WriteEditableAnimation(const std::filesystem::path& outputPath, const std::vector<uint8_t>& animationData,
+bool WriteEditableAnimation(const std::filesystem::path& outputPath, std::span<const uint8_t> animationData,
                             std::string* error) {
     nlohmann::json root;
     root["format"] = kAnimationFormat;
@@ -1667,7 +1857,7 @@ bool ReadEditableAnimation(const std::filesystem::path& inputPath, std::vector<u
     return true;
 }
 
-bool WriteEditableSpriteFrames(const std::filesystem::path& outputPath, const std::vector<uint8_t>& frameData,
+bool WriteEditableSpriteFrames(const std::filesystem::path& outputPath, std::span<const uint8_t> frameData,
                                std::string* error) {
     if (frameData.size() % 4 != 0) {
         SetError(error, "Sprite frame data size must be a multiple of 4 bytes.");
@@ -1722,42 +1912,77 @@ bool ReadEditableSpriteFrames(const std::filesystem::path& inputPath, std::vecto
 
 bool RuntimeAssetsNeedRebuild(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
                               std::string* reason) {
-    (void)sourceRoot;
-
-    if (std::filesystem::exists(outputRoot) && std::filesystem::is_directory(outputRoot)) {
-        const std::filesystem::path statePath = outputRoot / kBuildStateFile;
-        if (!std::filesystem::exists(statePath)) {
-            SetError(reason, "runtime build state is missing");
-            return true;
-        }
-
-        nlohmann::json state;
-        if (!LoadJsonFile(statePath, state, nullptr)) {
-            SetError(reason, "runtime build state could not be read");
-            return true;
-        }
-
-        if (!state.contains("builder_version") || !state["builder_version"].is_number_unsigned()) {
-            SetError(reason, "runtime build state is invalid");
-            return true;
-        }
-
-        if (state["builder_version"].get<uint32_t>() != kBuildStateVersion) {
-            SetError(reason, "runtime assets were built by an older pipeline version");
-            return true;
-        }
-
-        return false;
-    }
-
     if (std::filesystem::exists(outputRoot) && !std::filesystem::is_directory(outputRoot)) {
         SetError(reason, "runtime asset output path is not a directory");
         return true;
     }
 
-    SetError(reason, "runtime asset directory is missing");
-    return true;
+    if (!std::filesystem::exists(outputRoot) || !std::filesystem::is_directory(outputRoot)) {
+        SetError(reason, "runtime asset directory is missing");
+        return true;
+    }
 
+    const std::filesystem::path statePath = outputRoot / kBuildStateFile;
+    if (!std::filesystem::exists(statePath)) {
+        SetError(reason, "runtime build state is missing");
+        return true;
+    }
+
+    nlohmann::json state;
+    if (!LoadJsonFile(statePath, state, nullptr)) {
+        SetError(reason, "runtime build state could not be read");
+        return true;
+    }
+
+    if (!state.contains("builder_version") || !state["builder_version"].is_number_unsigned()) {
+        SetError(reason, "runtime build state is invalid");
+        return true;
+    }
+
+    if (state["builder_version"].get<uint32_t>() != kBuildStateVersion) {
+        SetError(reason, "runtime assets were built by an older pipeline version");
+        return true;
+    }
+
+    /* If the runtime tree was built in pak mode but BuildRuntimeAssets
+     * (which always emits loose files) is being asked to refresh it,
+     * force a rebuild so the engine sees a consistent loose tree. The
+     * extractor's own up-to-date check handles the inverse case. */
+    if (state.contains("pack_format") && state["pack_format"].is_string()) {
+        const std::string recorded = state["pack_format"].get<std::string>();
+        if (recorded != "loose") {
+            SetError(reason, "runtime tree is in pak mode but pipeline only writes loose files");
+            return true;
+        }
+    }
+
+    /* Compare the recorded source-state against the current one. If they
+     * match exactly (path/size/mtime), the runtime assets are still valid and
+     * we can skip the entire rebuild. This is what makes re-runs near-instant. */
+    if (!std::filesystem::exists(sourceRoot) || !std::filesystem::is_directory(sourceRoot)) {
+        /* No editable source tree to compare against — trust the state file. */
+        return false;
+    }
+
+    nlohmann::json current;
+    try {
+        current = BuildSourceState(sourceRoot);
+    } catch (const std::exception& e) {
+        SetError(reason, std::string("failed to enumerate source assets: ") + e.what());
+        return true;
+    }
+
+    if (!state.contains("files") || !current.contains("files")) {
+        SetError(reason, "runtime build state lacks file manifest");
+        return true;
+    }
+
+    if (state["files"] != current["files"]) {
+        SetError(reason, "editable assets have changed since the last build");
+        return true;
+    }
+
+    return false;
 }
 
 bool BuildRuntimeAssets(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
@@ -1817,6 +2042,23 @@ bool BuildRuntimeAssets(const std::filesystem::path& sourceRoot, const std::file
     }
 
     return true;
+}
+
+bool WriteBuildStateFile(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
+                         std::string* error)
+{
+    if (!std::filesystem::exists(sourceRoot) || !std::filesystem::is_directory(sourceRoot)) {
+        SetError(error, "source asset root does not exist");
+        return false;
+    }
+    nlohmann::json state;
+    try {
+        state = BuildSourceState(sourceRoot);
+    } catch (const std::exception& e) {
+        SetError(error, std::string("failed to enumerate source assets: ") + e.what());
+        return false;
+    }
+    return WriteJsonFile(outputRoot / kBuildStateFile, state, error);
 }
 
 bool EnsureRuntimeAssetsBuilt(const std::filesystem::path& sourceRoot, const std::filesystem::path& outputRoot,
