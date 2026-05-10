@@ -96,17 +96,6 @@ static void Port_PumpEvents(void) {
                 Port_PPU_ToggleSmoothing();
                 continue;
             }
-            if (e.key.key == SDLK_F9) {
-                /* Capture a bug-report bundle for playtesters: screenshot
-                 * + save copy + game-state text. Lands in a timestamped
-                 * directory next to the binary. */
-                extern char* Port_BugReport_Capture(const char* reason);
-                char* dir = Port_BugReport_Capture("user");
-                if (dir) {
-                    free(dir);
-                }
-                continue;
-            }
             if (e.key.key == SDLK_F8) {
                 extern void Port_DebugMenu_Toggle(void);
                 Port_DebugMenu_Toggle();

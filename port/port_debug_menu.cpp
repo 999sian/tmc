@@ -210,7 +210,7 @@ MenuPage BuildWarpPage(void) {
     p.items.push_back({ "Deepwood Shrine - boss",       []() { DoWarp(AREA_DEEPWOOD_SHRINE_BOSS, 0x00, 0x88, 0xD8, 1); } });
     p.items.push_back({ "Cave of Flames",               []() { DoWarp(AREA_CAVE_OF_FLAMES,     0x04, 0x98, 0xa8, 1); } });
     /* Room 0x08 = Rollobite lava room (#36 — moving lava platforms).
-     * Local coords come from the bug report's world (610, 3578) minus the
+     * Local coords come from the captured world position (610, 3578) minus the
      * room origin (336, 3200) recorded in area_room_headers.json. */
     p.items.push_back({ "Cave of Flames - Rollobite",   []() { DoWarp(AREA_CAVE_OF_FLAMES,     0x08, 0x112, 0x17A, 1); } });
     p.items.push_back({ "Cave of Flames - boss",        []() { DoWarp(AREA_CAVE_OF_FLAMES_BOSS, 0x00, 0xC0, 0xF8, 2); } });

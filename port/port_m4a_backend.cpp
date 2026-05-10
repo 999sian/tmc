@@ -52,6 +52,7 @@ extern const MusicPlayer gMusicPlayers[];
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -61,6 +62,13 @@ extern const MusicPlayer gMusicPlayers[];
 #include <span>
 #include <string>
 #include <vector>
+
+#ifdef TMC_ANDROID_PORT
+extern "C" {
+extern const unsigned char kEmbeddedSoundsJson[];
+extern const std::size_t kEmbeddedSoundsJsonSize;
+}
+#endif
 
 namespace {
 
@@ -200,6 +208,12 @@ static std::string LoadSoundsJson(void) {
             return text;
         }
     }
+
+#ifdef TMC_ANDROID_PORT
+    if (kEmbeddedSoundsJsonSize > 0) {
+        return std::string(reinterpret_cast<const char*>(kEmbeddedSoundsJson), kEmbeddedSoundsJsonSize);
+    }
+#endif
 
     std::fprintf(stderr, "[AUDIO] sounds.json not found — songs will be silent\n");
     return {};

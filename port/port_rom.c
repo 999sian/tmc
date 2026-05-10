@@ -414,6 +414,32 @@ static void* sRoomMapsResolved[AREA_COUNT][MAX_ROOMS];
 static void* sAreaTableResolved[AREA_COUNT][MAX_ROOMS];
 /* sExitListsResolved removed — gExitLists now compile-time const from transitions.c */
 
+bool32 Port_IsAreaTablePtrReadable(u32 area, const void* ptr) {
+    uintptr_t at;
+    uintptr_t romStart;
+    uintptr_t romEnd;
+    const uintptr_t packedTableBytes = MAX_ROOMS * sizeof(u32);
+
+    if (area >= AREA_COUNT || ptr == NULL) {
+        return FALSE;
+    }
+
+    if (gRomData != NULL && gRomSize >= packedTableBytes) {
+        at = (uintptr_t)ptr;
+        romStart = (uintptr_t)gRomData;
+        romEnd = romStart + (uintptr_t)gRomSize;
+        if (at >= romStart && at <= romEnd - packedTableBytes) {
+            return TRUE;
+        }
+    }
+
+    if (ptr == (const void*)sAreaTableResolved[area]) {
+        return TRUE;
+    }
+
+    return Port_IsAreaTablePtrFromAssets(area, ptr);
+}
+
 /* Forward declaration */
 static inline void* ResolveRomPtr(u32 gba_addr);
 

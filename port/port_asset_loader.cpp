@@ -1368,6 +1368,15 @@ extern "C" bool32 Port_RefreshAreaDataFromAssets(u32 area) {
     return BuildAreaFromAssets(area) ? TRUE : FALSE;
 }
 
+extern "C" bool32 Port_IsAreaTablePtrFromAssets(u32 area, const void* ptr) {
+    if (ptr == nullptr || !EnsureAssetGroupCache() || area >= kAreaCount) {
+        return FALSE;
+    }
+
+    const auto& table = gAssetGroupCache.areaTablePtrs[area];
+    return !table.empty() && ptr == table.data() ? TRUE : FALSE;
+}
+
 extern "C" bool32 Port_IsRoomHeaderPtrReadable(const void* ptr) {
     if (ptr == nullptr) {
         return FALSE;

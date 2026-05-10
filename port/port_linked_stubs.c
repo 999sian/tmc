@@ -1558,9 +1558,7 @@ void* gAreaTiles[256];
  * pointers in ROM; the C dispatcher (`Subtask_FastTravel_Functions[idx]()`)
  * strides 8 bytes per index on x86-64 and a NULL stub array means every
  * dispatch hits NULL → SIGSEGV with RIP=0. The fix mirrors gleerok 9d5f55a5
- * — a real native array of decompiled C functions.
- *
- * Caught by the auto-bug-report crash handler (Subtask_FastTravel+0x2e). */
+ * — a real native array of decompiled C functions. */
 extern void Subtask_FastTravel_0(void);
 extern void Subtask_FastTravel_1(void);
 extern void Subtask_FastTravel_2(void);

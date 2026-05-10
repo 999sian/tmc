@@ -13,6 +13,8 @@ void Port_LoadRom(const char* path);
 // Re-resolve a single area's room/tile/property tables from immutable ROM offsets.
 void Port_RefreshAreaData(u32 area);
 
+bool32 Port_IsAreaTablePtrReadable(u32 area, const void* ptr);
+
 // ROM access logging - logs unique ROM addresses accessed at runtime
 void Port_LogRomAccess(u32 gba_addr, const char* caller);
 void Port_PrintRomAccessSummary(void);

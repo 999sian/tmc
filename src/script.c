@@ -663,20 +663,6 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
 #ifdef PC_PORT
     {
         uintptr_t addr = (uintptr_t)context->scriptInstructionPointer;
-        if ((addr >> 48) != 0) {
-            fprintf(stderr,
-                    "[SCRIPT] ENTRY CORRUPTION: ptr=%p before any command. entity kind=%d id=%d type=%d "
-                    "context=%p (offset=%td in pool)\n",
-                    (void*)context->scriptInstructionPointer, entity->kind, entity->id, entity->type, (void*)context,
-                    (const u8*)context - (const u8*)&gScriptExecutionContextArray[0]);
-            const u8* raw = (const u8*)context;
-            fprintf(stderr, "[SCRIPT]   raw bytes: ");
-            for (int i = 0; i < 16; i++)
-                fprintf(stderr, "%02X ", raw[i]);
-            fprintf(stderr, "\n");
-            context->scriptInstructionPointer = NULL;
-            return;
-        }
         if (addr >= 0x08000000u && addr < 0x0A000000u) {
             fprintf(stderr,
                     "[SCRIPT] ERROR: scriptInstructionPointer is unresolved GBA address 0x%08X! entity kind=%d id=%d "
@@ -734,24 +720,6 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
 #ifdef PC_PORT
             if (!context->scriptInstructionPointer)
                 return;
-            {
-                uintptr_t _chk = (uintptr_t)context->scriptInstructionPointer;
-                if ((_chk >> 48) != 0) {
-                    fprintf(stderr, "[SCRIPT] CORRUPTION after cmd %d (size %d): ptr=%p entity kind=%d id=%d type=%d\n",
-                            activeScriptInfo->commandIndex, activeScriptInfo->commandSize,
-                            (void*)context->scriptInstructionPointer, entity->kind, entity->id, entity->type);
-                    /* Dump the raw bytes of the context struct */
-                    {
-                        const u8* raw = (const u8*)context;
-                        fprintf(stderr, "[SCRIPT]   context bytes: ");
-                        for (int i = 0; i < 16; i++)
-                            fprintf(stderr, "%02X ", raw[i]);
-                        fprintf(stderr, "\n");
-                    }
-                    context->scriptInstructionPointer = NULL;
-                    return;
-                }
-            }
 #endif
             context->scriptInstructionPointer += activeScriptInfo->commandSize;
             if (lastInstruction != context->scriptInstructionPointer) {
