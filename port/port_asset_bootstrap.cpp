@@ -448,9 +448,42 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
 
     /* Step 1: warm-launch fast path. Same ROM fingerprint + pack
      * mode as the recorded build → assets/ is current and we can
-     * skip the renderer entirely. */
-    if (AssetExtractorApi::RuntimeUpToDate(root / "assets", rom, packMode)) {
+     * skip the renderer entirely.
+     *
+     * baserom.gba may not be next to the binary — Port_LoadRom probes
+     * a candidate list that includes cwd-relative and developer-tree
+     * fallbacks (../../baserom.gba). When rom doesn't exist at
+     * exe_dir/baserom.gba, fall back to a buffer-size fingerprint so
+     * the warm-launch check still succeeds against the size we
+     * stamped during the previous run. */
+    std::error_code rom_ec;
+    const bool rom_on_disk = std::filesystem::exists(rom, rom_ec);
+    bool up_to_date = false;
+    if (rom_on_disk) {
+        up_to_date = AssetExtractorApi::RuntimeUpToDate(root / "assets", rom, packMode);
+    } else if (rom_data != nullptr && rom_size > 0) {
+        up_to_date = AssetExtractorApi::RuntimeUpToDate(root / "assets",
+                                                       static_cast<std::uint64_t>(rom_size),
+                                                       0, packMode);
+    }
+    if (up_to_date) {
         MountPaksForRoot(root);
+        /* Port_LoadRom already ran Port_Load{Texts,SpritePtrs,
+         * AreaTables}FromAssets before paks were mounted. Those
+         * helpers do binary lookups via LoadBinaryFileCached — for
+         * sprite animations in particular — and fail (returning
+         * FALSE) when the relevant .bin files only live inside
+         * paks. The first launch happened to find the legacy loose
+         * tree from build/<ver>/assets/ so the calls succeeded;
+         * once the first extraction wiped those subdirs every
+         * subsequent warm launch fell back to ROM-derived sprite
+         * pointers, producing scrambled NPC tiles + animation
+         * regressions. Re-run the same fixup the extract path
+         * does so warm and cold launches end in the same state. */
+        Port_AssetLoader_Reload();
+        Port_LoadTextsFromAssets();
+        Port_LoadSpritePtrsFromAssets();
+        Port_LoadAreaTablesFromAssets();
         return;
     }
 

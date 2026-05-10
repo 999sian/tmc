@@ -66,6 +66,17 @@ bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
                      const std::filesystem::path& rom_path,
                      bool pack_runtime);
 
+/* Buffer-driven warm-launch check. Used by tmc_pc when baserom.gba
+ * is not next to the binary but Port_LoadRom resolved it elsewhere
+ * (developer-tree fallbacks, cwd-relative paths) — the in-memory
+ * buffer is the only fingerprint source we have, so the recorded
+ * mtime collapses to 0 on both sides. Returns true iff the state
+ * file's rom_size and pack_format both match. */
+bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
+                     std::uint64_t rom_size,
+                     std::int64_t rom_mtime,
+                     bool pack_runtime);
+
 /* Resolve the directory containing the running executable, preferring
  * /proc/self/exe (Linux) or GetModuleFileNameW (Windows) over
  * argv[0]. Used by both binaries to locate baserom.gba and the

@@ -62,7 +62,14 @@ bool RuntimeAssetsUpToDateImpl(const std::filesystem::path& runtime_root,
         if (state["rom_size"].get<uint64_t>() != fp.size) {
             return false;
         }
-        if (state["rom_mtime"].get<int64_t>() != fp.mtime) {
+        /* mtime is a tiebreaker for "same-size, different ROM" (e.g.
+         * a USA/EU swap that happens to land on identical sizes).
+         * The buffer-only fingerprint path has no meaningful mtime
+         * and stamps 0; treat 0 on either side as "no opinion" so
+         * crossing between the path-based and buffer-based code
+         * paths doesn't spuriously invalidate a valid runtime tree. */
+        const std::int64_t state_mtime = state["rom_mtime"].get<int64_t>();
+        if (fp.mtime != 0 && state_mtime != 0 && state_mtime != fp.mtime) {
             return false;
         }
         const std::string desired = pack_runtime ? "v1" : "loose";
@@ -185,6 +192,20 @@ bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
     return RuntimeAssetsUpToDateImpl(runtime_root, fp, pack_runtime);
 }
 
+bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
+                     std::uint64_t rom_size,
+                     std::int64_t rom_mtime,
+                     bool pack_runtime)
+{
+    if (rom_size == 0) {
+        return false;
+    }
+    RomFingerprint fp;
+    fp.size = rom_size;
+    fp.mtime = rom_mtime;
+    return RuntimeAssetsUpToDateImpl(runtime_root, fp, pack_runtime);
+}
+
 bool ExtractAssets(const Options& opt, std::string* error)
 {
     auto fail = [&](std::string msg) {
@@ -199,15 +220,23 @@ bool ExtractAssets(const Options& opt, std::string* error)
     auto& reporter = PortAssetLog::Reporter::Instance();
     reporter.SetVerbose(opt.verbose);
 
-    /* Compute fingerprint from rom_path when available; for the
-     * in-memory path we only have the buffer, so the fingerprint is
-     * synthesized from size + 0 mtime. The engine path always has
-     * rom_path (it's the same baserom.gba it just loaded), so this
-     * mostly matters for unusual standalone-API callers. */
+    /* Compute fingerprint from rom_path when the file actually
+     * exists on disk; otherwise fall back to rom_buffer so the
+     * engine path (which sets rom_path = exe_dir/baserom.gba even
+     * when Port_LoadRom resolved the ROM via a different candidate
+     * like ../../baserom.gba) still records a non-zero size. A
+     * stamped fingerprint of size=0 caused the warm-launch
+     * RuntimeUpToDate check to fail on every subsequent run, which
+     * triggered a wipe + re-extract loop (and visibly "broken"
+     * assets if anything interrupted the wipe). */
     RomFingerprint rom_fp;
     if (!opt.rom_path.empty()) {
-        rom_fp = ComputeRomFingerprint(opt.rom_path);
-    } else {
+        std::error_code path_ec;
+        if (std::filesystem::exists(opt.rom_path, path_ec)) {
+            rom_fp = ComputeRomFingerprint(opt.rom_path);
+        }
+    }
+    if (rom_fp.size == 0 && !opt.rom_buffer.empty()) {
         rom_fp.size = opt.rom_buffer.size();
         rom_fp.mtime = 0;
     }
