@@ -607,6 +607,30 @@ void sub_08053BBC(void) {
         SetFade(FADE_INSTANT, 0x100);
 #ifdef PC_PORT
         gUI.fadeType = (u16)-1;
+        /* The child orchestrator's later script commands don't run on PC
+         * (it stops being iterated mid-cutscene; see commit 62e65e45). One
+         * of those missing commands is the post-cutscene
+         * ScriptCommand_EnablePlayerControl that brings player input back
+         * online. Without it, gPlayerState.controlMode stays at
+         * CONTROL_DISABLED (set by the takeover's
+         * ScriptCommand_DisablePlayerControl at start), UpdatePlayerInput
+         * keeps zeroing the keys, gPlayerState.direction stays at
+         * DIR_NONE (0xFF), v13 in PlayerNormal stays 0, and Link is
+         * softlocked at his post-cutscene position even though
+         * ctl/action/area all read sane.
+         *
+         * Force the re-enable here. CONTROL_ENABLED is the post-takeover
+         * state the script would have left us in.
+         *
+         * Set BOTH gPlayerState.controlMode AND gUI.controlMode —
+         * Subtask_FadeOut runs AFTER us and does
+         *   gPlayerState.controlMode = gUI.controlMode;
+         * (restoring the pre-cutscene controlMode that Subtask_FadeIn
+         * saved, which was CONTROL_DISABLED). Without updating
+         * gUI.controlMode too, that restore wipes our fix and the
+         * softlock returns. */
+        gPlayerState.controlMode = CONTROL_ENABLED;
+        gUI.controlMode = CONTROL_ENABLED;
 #endif
     }
 }
