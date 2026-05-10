@@ -425,6 +425,13 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     if toolchain:
         configure_cmd.append(f"--toolchain={toolchain}")
 
+    # CI on Windows pins the MinGW root via TMC_XMAKE_MINGW. Without
+    # this xmake auto-picks Git for Windows's stripped MinGW (no `ar`),
+    # libpng install fails with "cannot get program for ar".
+    mingw = env.get("TMC_XMAKE_MINGW", "").strip()
+    if mingw:
+        configure_cmd.append(f"--mingw={mingw}")
+
     assets_dir = REPO_ROOT / "build" / version / "assets"
     assets_src_dir = REPO_ROOT / "build" / version / "assets_src"
     assets_ready = assets_dir.exists() and assets_src_dir.exists()
@@ -449,6 +456,7 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         ])
 
     steps.append((f"Compile tmc_pc ({version})", ["xmake", "build", "-y", "tmc_pc"]))
+    steps.append((f"Compile asset_extractor ({version})", ["xmake", "build", "-y", "asset_extractor"]))
 
     for label, cmd in steps:
         info(f"{label}...")
@@ -607,16 +615,29 @@ def main():
         idx = int(choice)
         selected = keys if idx == len(keys) + 1 else [keys[idx - 1]]
 
-    section("Preparing ROMs")
-    rom_ok = ensure_roms(selected, found, non_interactive=non_interactive)
-    buildable = [v for v in selected if rom_ok.get(v)]
-    skipped   = [v for v in selected if not rom_ok.get(v)]
+    if slim:
+        # Slim builds skip xmake extract_assets/convert_assets/build_assets
+        # AND the post-compile asset_extractor invocation, none of which
+        # the binary itself needs to compile. So the ROM is optional —
+        # if it's missing we can still produce dist/<version>/tmc_pc.
+        # CI uses this path: no ROM in the runner, only the binaries.
+        section("Preparing ROMs (slim — ROM optional)")
+        rom_ok = ensure_roms(selected, found, non_interactive=non_interactive)
+        buildable = list(selected)
+        for v in selected:
+            if not rom_ok.get(v):
+                warn(f"{v}: no ROM, slim build will produce binary only")
+    else:
+        section("Preparing ROMs")
+        rom_ok = ensure_roms(selected, found, non_interactive=non_interactive)
+        buildable = [v for v in selected if rom_ok.get(v)]
+        skipped   = [v for v in selected if not rom_ok.get(v)]
 
-    if skipped:
-        warn(f"Skipping (no ROM): {', '.join(skipped)}")
-    if not buildable:
-        err("Nothing to build.")
-        sys.exit(1)
+        if skipped:
+            warn(f"Skipping (no ROM): {', '.join(skipped)}")
+        if not buildable:
+            err("Nothing to build.")
+            sys.exit(1)
 
     blank()
     info(f"Will build: {', '.join(buildable)}")
