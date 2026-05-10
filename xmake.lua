@@ -81,6 +81,14 @@ else
     add_requires("nlohmann_json", {configs = {cmake = false}})
 end
 
+-- libpng + zlib are linked by gbagfx (a build-time PNG codec used by the
+-- legacy asset pipeline). xmake-repo's libpng v1.6.58 source build is flaky
+-- on Windows MinGW (#107) so prefer system on Linux/macOS, mark optional
+-- everywhere, and let `add_packages("libpng","zlib")` pick whichever is
+-- installed. tmc_pc and asset_extractor don't link libpng.
+add_requires("libpng", {system = true, optional = true})
+add_requires("zlib", {system = true, optional = true})
+
 -- #15: even with `header_only = true` requested above, the xmake fmt
 -- package still links the system libfmt.so when one happens to be
 -- installed on the build host (Arch ships fmt 12.x; Fedora 43 ships
