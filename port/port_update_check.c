@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TMC_RELEASES_URL "https://github.com/999sian/tmc/releases"
+#define TMC_RELEASES_URL "https://github.com/MatheoVignaud/tmc/releases"
 #define TMC_WIDEN2(value) L##value
 #define TMC_WIDEN(value) TMC_WIDEN2(value)
 
@@ -173,7 +173,7 @@ static char* FetchLatestReleaseJson(void) {
 
     HINTERNET request = WinHttpOpenRequest(connect,
                                            L"GET",
-                                           L"/repos/999sian/tmc/releases?per_page=1",
+                                           L"/repos/MatheoVignaud/tmc/releases?per_page=1",
                                            NULL,
                                            WINHTTP_NO_REFERER,
                                            WINHTTP_DEFAULT_ACCEPT_TYPES,
@@ -275,14 +275,14 @@ static char* ReadCommandOutput(const char* command) {
 static char* FetchLatestReleaseJson(void) {
     char* response = ReadCommandOutput(
         "curl -fsSL --max-time 3 -H 'Accept: application/vnd.github+json' "
-        "-H 'User-Agent: tmc_pc' 'https://api.github.com/repos/999sian/tmc/releases?per_page=1' 2>/dev/null");
+        "-H 'User-Agent: tmc_pc' 'https://api.github.com/repos/MatheoVignaud/tmc/releases?per_page=1' 2>/dev/null");
     if (response) {
         return response;
     }
 
     return ReadCommandOutput(
         "wget -q -T 3 --header='Accept: application/vnd.github+json' "
-        "--header='User-Agent: tmc_pc' -O - 'https://api.github.com/repos/999sian/tmc/releases?per_page=1' 2>/dev/null");
+        "--header='User-Agent: tmc_pc' -O - 'https://api.github.com/repos/MatheoVignaud/tmc/releases?per_page=1' 2>/dev/null");
 }
 #endif
 

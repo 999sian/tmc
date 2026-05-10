@@ -5,8 +5,8 @@
 [progress]: https://zelda64.dev/games/tmc
 [progress-badge]: https://img.shields.io/endpoint?url=https://zelda64.dev/assets/csv/progress-tmc-shield.json
 
-[contributors]: https://github.com/zeldaret/tmc/graphs/contributors
-[contributors-badge]: https://img.shields.io/github/contributors/zeldaret/tmc
+[contributors]: https://github.com/MatheoVignaud/tmc/graphs/contributors
+[contributors-badge]: https://img.shields.io/github/contributors/MatheoVignaud/tmc
 
 [discord]: https://discord.gg/y9GvbTYkzk
 [discord-badge]: https://img.shields.io/discord/688807550715560050?color=%237289DA&logo=discord&logoColor=%23FFFFFF
@@ -32,7 +32,7 @@ The PC port currently supports **USA** and **EU**.
 
 ## PC Port — Pre-built releases (recommended)
 
-Pre-built tarballs are published on the [Releases page](https://github.com/999sian/tmc/releases). They contain just two binaries plus the audio metadata file:
+Pre-built tarballs are published on the [Releases page](https://github.com/MatheoVignaud/tmc/releases). They contain just two binaries plus the audio metadata file:
 
 ```
 asset_extractor      sounds.json      tmc_pc
@@ -138,7 +138,7 @@ works whether you `cd build/pc && ./tmc_pc` or invoke it from elsewhere.
 
 ### What's fixed and what's still broken
 
-See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.6-experimental** closes five tracker entries: cucco-minigame reward crash (#46), chuchu freeze-on-loop-frame (#45), Cave-of-Flames moving lava platforms missing + boss-room SIGSEGV (#36), and the Melari's Mines pair (Melari + crew missing #43, spurious heart containers + green warp tile #42). Also picks up matheo/master ×2 (cleaner `Port_UnpackRomDataPtr` helper, AVX2 build option) and ships an in-game **F8 debug menu** + **F5/F6 quicksave/quickload** so playtesters can jump straight to bug repros. Reverted PR #48 (skip-cutscene) — it broke audio sync.
+See [CHANGELOG.md](CHANGELOG.md) for the per-release notes. **0.1.2** is the latest published release on `MatheoVignaud/tmc`; newer PC-port work in this branch is not published as a release yet.
 
 The window title shows the running port version — please include it when filing issues.
 
