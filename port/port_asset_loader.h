@@ -15,6 +15,7 @@ bool32 Port_AreSpritePtrsLoadedFromAssets(void);
 void Port_LogAssetLoaderStatus(void);
 void Port_LogTextLookup(u32 langIndex, u32 textIndex);
 bool32 Port_RefreshAreaDataFromAssets(u32 area);
+bool32 Port_IsAreaTablePtrFromAssets(u32 area, const void* ptr);
 bool32 Port_IsRoomHeaderPtrReadable(const void* ptr);
 bool32 Port_IsLoadedAssetBytes(const void* ptr, u32 size);
 const u8* Port_GetMapAssetDataByIndex(u32 assetIndex, u32* size);
