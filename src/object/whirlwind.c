@@ -26,9 +26,26 @@ void Whirlwind(Entity* this) {
         Whirlwind_Action2,
     };
     u32 tmp = this->health;
+#ifdef PC_PORT
+    /* GBA #82 fix: gArea.filler6 happens to be at EWRAM 0x020342F8 on
+     * GBA — i.e. it aliases gUnk_020342F8, the bitmap
+     * DelayedEntityLoadManager actually writes to. On the PC port, gArea
+     * is a standalone global so gArea.filler6 is a different (always-zero)
+     * buffer, every spawned Whirlwind sees the bit cleared, and they all
+     * self-delete — visible as missing wind vortexes in Lon Lon Ranch
+     * (and any other map that spawns whirlwinds via the delayed-entity
+     * path). pinwheel.c and npc.c already do it the right way. */
+    {
+        extern u8 gUnk_020342F8[];
+        if (((tmp & 0x7f) != 0) && (ReadBit((u32*)gUnk_020342F8, tmp - 1) == 0)) {
+            DeleteThisEntity();
+        }
+    }
+#else
     if (((tmp & 0x7f) != 0) && (ReadBit(gArea.filler6, tmp - 1) == 0)) {
         DeleteThisEntity();
     }
+#endif
     Whirlwind_Actions[this->action](this);
 }
 
