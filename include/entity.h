@@ -158,6 +158,18 @@ typedef struct {
     u8 b3 : 1; // 0x80
 } PACKED SpritePriority;
 
+#ifdef PC_PORT
+#define GENERIC_ENTITY_TAIL_FIELDS \
+    union { \
+        struct { union SplitHWord cutsceneBeh; union SplitHWord field_0x86; }; \
+        void* scriptContext; /* PC: 8 bytes for 64-bit pointers */ \
+    };
+#else
+#define GENERIC_ENTITY_TAIL_FIELDS \
+    /*0x84*/ union SplitHWord cutsceneBeh; \
+    /*0x86*/ union SplitHWord field_0x86;
+#endif
+
 #define GENERIC_ENTITY_FIELDS \
     /*0x68*/ union SplitHWord field_0x68; \
     /*0x6a*/ union SplitHWord field_0x6a;  \
@@ -171,10 +183,7 @@ typedef struct {
     /*0x7c*/ union SplitWord field_0x7c;   \
     /*0x80*/ union SplitHWord field_0x80;  \
     /*0x82*/ union SplitHWord field_0x82;  \
-    union { \
-        struct { union SplitHWord cutsceneBeh; union SplitHWord field_0x86; }; \
-        void* scriptContext; /* PC: 8 bytes for 64-bit pointers */ \
-    };
+    GENERIC_ENTITY_TAIL_FIELDS
 
 /**
  * Container for instantiable behavior.
