@@ -10,6 +10,7 @@
 #include "flags.h"
 #include "room.h"
 #include "player.h"
+#include "port_generic_entity.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -18,6 +19,11 @@ typedef struct {
     /*0x72*/ u8 unk_72[0x14];
     /*0x86*/ u16 hitFlag;
 } HittableLeverEntity;
+
+/* Issue #89 family: hitFlag aliases GenericEntity.field_0x86 on GBA but
+ * the byte-counted struct filler lands on the wrong PC offset, so reads
+ * always returned 0 and the lever-hit state never persisted. */
+#define HIT_FLAG(this) (GE_FIELD(&(this)->base, field_0x86)->HWORD)
 
 extern void (*const HittableLever_Actions[])(HittableLeverEntity*);
 extern const Hitbox HittableLever_Hitbox;
@@ -39,13 +45,13 @@ void HittableLever_Init(HittableLeverEntity* this) {
     super->collisionMask = 0xa;
     super->hitbox = (Hitbox*)&HittableLever_Hitbox;
     if (super->type == 0) {
-        if (CheckFlags(this->hitFlag)) {
+        if (CheckFlags(HIT_FLAG(this))) {
             super->type = 1;
         } else {
             super->type = 0;
         }
     } else {
-        SetFlag(this->hitFlag);
+        SetFlag(HIT_FLAG(this));
     }
     HittableLever_UpdateTile(this);
 }
@@ -56,10 +62,10 @@ void HittableLever_Idle(HittableLeverEntity* this) {
         super->type ^= 1;
         super->iframes = -0x18;
         HittableLever_UpdateTile(this);
-        if (CheckFlags(this->hitFlag)) {
-            ClearFlag(this->hitFlag);
+        if (CheckFlags(HIT_FLAG(this))) {
+            ClearFlag(HIT_FLAG(this));
         } else {
-            SetFlag(this->hitFlag);
+            SetFlag(HIT_FLAG(this));
         }
         SoundReqClipped(super, SFX_117);
     }
