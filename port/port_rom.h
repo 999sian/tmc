@@ -10,6 +10,17 @@ extern u32 gRomSize;
 // Load the ROM file and set up ROM-backed symbols
 void Port_LoadRom(const char* path);
 
+/*
+ * Probe the same candidate locations Port_LoadRom would and return a
+ * pointer to a static buffer holding the absolute path of the first
+ * reachable ROM file, or NULL if none of the known candidate names
+ * are openable. Probe order matches Port_LoadRom's load order so a
+ * successful probe guarantees a successful load. Intended for the
+ * pre-window check in port_main.c so we can show an SDL message box
+ * (and exit cleanly) before any window is created.
+ */
+const char* Port_FindBaseRomPath(void);
+
 // Re-resolve a single area's room/tile/property tables from immutable ROM offsets.
 void Port_RefreshAreaData(u32 area);
 
@@ -65,7 +76,12 @@ static inline u32 Port_ReadU32(const void* data) {
     return (u32)raw[0] | ((u32)raw[1] << 8) | ((u32)raw[2] << 16) | ((u32)raw[3] << 24);
 }
 
-
+/*
+ * Read entry [index] from a packed-GBA-pointer ROM table and resolve to
+ * a native pointer. Equivalent to Port_PackedRomEntry but kept for the
+ * call sites that game code uses (matheo/master); the two helpers exist
+ * because they were introduced in parallel branches before being merged.
+ */
 static inline void* Port_UnpackRomDataPtr(const void* table, u32 index) {
     return Port_ResolveRomData(Port_ReadU32((const u8*)table + index * 4));
 }

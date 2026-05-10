@@ -1,5 +1,6 @@
 #include "port_m4a_backend.h"
 #include "port_config.h"
+#include "port_sounds_embed.hpp"
 #include "sound.h"
 
 #ifdef min
@@ -111,10 +112,21 @@ static MP2KSoundMode MakeSoundMode(void) {
 
 static AgbplaySoundMode MakeAgbplayMode(void) {
     AgbplaySoundMode mode;
-    mode.resamplerTypeNormal = ResamplerType::LINEAR;
-    mode.resamplerTypeFixed = ResamplerType::LINEAR;
+    /* Use SINC resampling for both pitch-bent and fixed-rate PCM samples.
+     * The GBA's hardware uses a no-interpolation nearest-neighbour fetch,
+     * giving its characteristic aliased "crunch" — agbplay's LINEAR (the
+     * previous default) softens that, but SINC is the bandlimited
+     * resampler proper and removes virtually all imaging artefacts at
+     * the cost of a few hundred extra MAC ops per audio frame. CPU
+     * overhead is negligible on PC. */
+    mode.resamplerTypeNormal = ResamplerType::SINC;
+    mode.resamplerTypeFixed = ResamplerType::SINC;
+    /* TMC was originally mixed for GBA speakers (small, bright, no
+     * meaningful low-end). On modern PC playback the dry mix sounds
+     * harsh; a gentle reverb (force ~32 of 255 max) adds spatial body
+     * without changing the song's intent. */
     mode.reverbType = ReverbType::NORMAL;
-    mode.reverbForce = 0;
+    mode.reverbForce = 32;
     mode.cgbPolyphony = CGBPolyphony::MONO_STRICT;
     mode.dmaBufferLen = 0x630;
     mode.accurateCh3Quantization = true;
@@ -212,6 +224,19 @@ static std::string LoadSoundsJson(void) {
 #ifdef TMC_ANDROID_PORT
     if (kEmbeddedSoundsJsonSize > 0) {
         return std::string(reinterpret_cast<const char*>(kEmbeddedSoundsJson), kEmbeddedSoundsJsonSize);
+    }
+#else
+    /* Compile-time fallback: every tmc_pc build embeds a copy of
+     * assets/sounds.json so a bare `tmc_pc + baserom.gba` install
+     * still has audio. kSize is 0 only when assets/sounds.json was
+     * missing at build time (in which case we fall through to the
+     * silent-songs warning below). */
+    if (PortSoundsEmbed::kSize > 0) {
+        std::fprintf(stderr,
+                     "[AUDIO] using embedded sounds.json (%zu bytes)\n",
+                     PortSoundsEmbed::kSize);
+        return std::string(reinterpret_cast<const char*>(PortSoundsEmbed::kData),
+                           PortSoundsEmbed::kSize);
     }
 #endif
 

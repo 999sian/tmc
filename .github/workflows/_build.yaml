@@ -11,52 +11,105 @@ on:
         description: "Date+SHA label (CI) or tag name (release)"
         required: true
         type: string
-    secrets:
-      ASSETS_TOKEN:
-        required: true
-      PRIVATE_SUBMODULES_TOKEN:
-        required: true
+      os_filter:
+        description: "all | linux | windows | macos — restrict build matrix to one platform"
+        required: false
+        type: string
+        default: all
 
 jobs:
+  # Compute the build matrix dynamically so callers can opt into a Linux-only
+  # or Windows-only release without redefining the runner list. Keeps the
+  # matrix definition in one place (this job's shell) instead of forcing
+  # every consumer to know the matrix shape.
+  set-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+    steps:
+      - id: compute
+        shell: bash
+        env:
+          OS_FILTER: ${{ inputs.os_filter }}
+        run: |
+          # Use Ubuntu 22.04 (glibc 2.35) so the Linux binary runs on
+          # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
+          # on ubuntu-latest pins glibc 2.43+ which excludes most users.
+          linux='{"runner":"ubuntu-22.04","os_name":"linux","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          # Pin to windows-2022: GitHub rolled `windows-latest` to Server
+          # 2025 with a different VS/MinGW tooling layout, which broke
+          # xmake-repo's libpng install step (exit 127 at the post-compile
+          # install). The v0.1.6.x release built fine on windows-2022.
+          windows='{"runner":"windows-2022","os_name":"windows","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          # macos-latest = macos-14 = Apple Silicon arm64. First-pass macOS
+          # build is arm64-only; Intel Macs (macos-13 runner) can be added
+          # in a follow-up if there's demand.
+          macos='{"runner":"macos-latest","os_name":"macos","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          case "${OS_FILTER:-all}" in
+            linux)   matrix="{\"include\":[$linux]}" ;;
+            windows) matrix="{\"include\":[$windows]}" ;;
+            macos)   matrix="{\"include\":[$macos]}" ;;
+            all|"")  matrix="{\"include\":[$linux,$windows,$macos]}" ;;
+            *)       echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos)"; exit 1 ;;
+          esac
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.region }} on ${{ matrix.os_name }}
+    needs: set-matrix
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            os_name: linux
-            region: usa
-            flag: --usa
-            exe_name: tmc_pc
-            extractor_name: asset_extractor
-          - runner: windows-latest
-            os_name: windows
-            region: usa
-            flag: --usa
-            exe_name: tmc_pc.exe
-            extractor_name: asset_extractor.exe
+      matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
+      - name: Force LF line endings (Windows)
+        if: matrix.os_name == 'windows'
+        shell: bash
+        # Git for Windows defaults `core.autocrlf=true`. The ViruaPPU
+        # submodule then gets CRLF, but our port/patches/*.patch were
+        # generated on Linux (LF). `git apply -3` fails with "repository
+        # lacks the necessary blob to perform 3-way merge" because the
+        # working-tree blob hashes don't match. Set autocrlf globally
+        # before checkout so the parent + submodules clone with LF.
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          submodules: false
-      - name: Checkout private submodules
-        shell: bash
-        run: |
-          git config --global url."https://x-access-token:${{ secrets.PRIVATE_SUBMODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git submodule sync --recursive
-          git submodule update --init --recursive
+          submodules: recursive
 
       - name: Install Linux dependencies
         if: matrix.os_name == 'linux'
         run: |
           sudo apt-get update
+          # Audio dev headers MUST be present before xmake builds SDL3 from
+          # source. SDL3's configure probes each backend's headers and silently
+          # omits any that are missing, so a runner without these would ship a
+          # statically-linked SDL3 with no Linux audio output (this is exactly
+          # what happened to the 0.1.6.1 release).
           sudo apt-get install -y \
             curl libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
-            xutils-dev xorg-dev autoconf automake libtool meson ninja-build
+            xutils-dev xorg-dev autoconf automake libtool ninja-build python3-pip \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev libsndio-dev \
+            libjack-jackd2-dev
+          # ubuntu-22.04 ships meson 0.61.2 but Wayland 1.25.0 (pulled in
+          # by xmake's SDL3 source build) requires meson >= 0.64.0. Use
+          # pip to grab a current meson without dragging in 24.04's libc.
+          sudo pip3 install --upgrade 'meson>=1.6'
+
+      - name: Install macOS dependencies
+        if: matrix.os_name == 'macos'
+        # xmake-managed packages (SDL3 etc.) build from source via Xcode's
+        # clang and need ninja + meson present. The system pieces (libpng,
+        # fmt, nlohmann-json) come from brew so xmake's `find_package` can
+        # pick them up instead of compiling each from source. CoreAudio
+        # ships with the OS, so SDL3's audio backend needs no extra deps.
+        run: |
+          brew update
+          brew install ninja meson libpng fmt nlohmann-json
 
       - name: Install MinGW Windows
         if: matrix.os_name == 'windows'
@@ -100,6 +153,25 @@ jobs:
           echo $mingw | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:PATH = "$mingw;$env:PATH"
 
+          # Save the MinGW *root* (parent of bin) for the Configure step.
+          # xmake's mingw SDK auto-detection otherwise picks up
+          # `C:\Program Files\Git\mingw64`, which is Git-for-Windows's stripped
+          # bundled MinGW: ships gcc but no binutils (`ar.exe` missing). Result
+          # was libpng install failing at the archive step with
+          # "cannot get program for ar". Pin via --mingw=<root> in xmake f.
+          $mingwRoot = Split-Path $mingw
+          Write-Host "MinGW root: $mingwRoot"
+          "MINGW_HOME=$mingwRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Verify ar.exe is actually present so the next CI iteration has
+          # an unambiguous yes/no signal if this assumption ever breaks.
+          if (Test-Path "$mingw\ar.exe") {
+            Write-Host "OK: ar.exe found at $mingw\ar.exe"
+          } else {
+            Write-Host "WARN: ar.exe NOT found in $mingw - listing ar* binaries:"
+            Get-ChildItem $mingw -Filter "ar*" -ErrorAction SilentlyContinue
+          }
+
           gcc --version
           g++ --version
 
@@ -108,30 +180,121 @@ jobs:
         with:
           xmake-version: latest
 
-      - name: Checkout private assets repository
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ vars.ASSETS_REPO }}
-          token: ${{ secrets.ASSETS_TOKEN }}
-          path: _assets
-
-      - name: Copy ROMs into workspace
-        shell: bash
-        run: |
-          cp _assets/baserom.gba ./baserom.gba
-          cp _assets/baserom_eu.gba ./baserom_eu.gba
-
-      - name: Build selected region (non-interactive, Linux)
+      - name: Force libsdl3 rebuild (Linux)
         if: matrix.os_name == 'linux'
-        run: python build.py ${{ matrix.flag }}
+        shell: bash
+        # xmake caches built packages keyed only on package version + configs,
+        # not on the host's apt-package state. A previously-cached SDL3 built
+        # on a runner without audio dev headers would otherwise persist into
+        # this run and ship a silent binary. Drop the cached build so the
+        # next `xmake f` rebuilds SDL3 against the freshly-installed
+        # libasound/libpulse/libpipewire/libsndio/libjack headers.
+        run: |
+          xmake require --uninstall libsdl3 || true
 
-      - name: Build selected region (non-interactive, Windows MinGW)
-        if: matrix.os_name == 'windows'
+      - name: Configure xmake (no ROM needed for binaries)
+        shell: bash
         env:
-          TMC_XMAKE_TOOLCHAIN: mingw
+          TMC_XMAKE_TOOLCHAIN: ${{ matrix.os_name == 'windows' && 'mingw' || '' }}
+        run: |
+          GAME_VERSION=$([ "${{ matrix.region }}" = "eur" ] && echo "EU" || echo "USA")
+          if [ -n "$TMC_XMAKE_TOOLCHAIN" ]; then
+            # On Windows, force the chocolatey-installed MinGW root.
+            # Without --mingw, xmake auto-detects Git for Windows's bundled
+            # MinGW (no `ar`, libpng install fails with "cannot get program
+            # for ar"). MINGW_HOME is exported by the "Install MinGW Windows"
+            # step using a Git-Bash POSIX path conversion below.
+            MINGW_FLAG=""
+            if [ -n "$MINGW_HOME" ]; then
+              MINGW_POSIX=$(cygpath -u "$MINGW_HOME" 2>/dev/null || echo "$MINGW_HOME")
+              MINGW_FLAG="--mingw=$MINGW_POSIX"
+            fi
+            xmake f -y --game_version="$GAME_VERSION" --toolchain="$TMC_XMAKE_TOOLCHAIN" $MINGW_FLAG
+          else
+            xmake f -y --game_version="$GAME_VERSION"
+          fi
+
+      - name: Dump xmake package install logs (Windows, always)
+        if: always() && matrix.os_name == 'windows'
+        shell: bash
+        # The libpng install bombs with a generic "install failed!" exit 127;
+        # the actual error lives in installdir.failed/logs/install.txt under
+        # the xmake package cache and never reaches the workflow output.
+        # Run this AFTER configure (which is where the install fires) and
+        # BEFORE build, with `if: always()` so it fires on success, failure,
+        # AND cancellation — earlier `failure()` gating skipped on cancel.
+        run: |
+          set +e
+          # Hardcoded Git-Bash POSIX path — $LOCALAPPDATA contains backslashes
+          # that bash eats during word expansion ("C:\Users\..." becomes
+          # "C:Users..." with no separators), so find returns mangled paths
+          # and cat fails. The previous version got that exact error.
+          base="/c/Users/runneradmin/AppData/Local/.xmake/cache/packages"
+          if [ ! -d "$base" ] && command -v cygpath >/dev/null 2>&1; then
+            base=$(cygpath -u "$LOCALAPPDATA")/.xmake/cache/packages
+          fi
+          echo "Scanning for install logs under $base"
+          if [ ! -d "$base" ]; then echo "(directory does not exist)"; exit 0; fi
+          # Walk every failed package dir; install.txt was empty in the prior
+          # iteration so dump every file under logs/, list the dir tree, and
+          # also dump xmake's own session log if present.
+          find "$base" -name 'installdir.failed' -type d 2>/dev/null | while read -r faildir; do
+            echo
+            echo "===== TREE $faildir ====="
+            ls -la "$faildir/" 2>/dev/null
+            ls -la "$faildir/logs/" 2>/dev/null
+            for f in "$faildir"/logs/*; do
+              [ -e "$f" ] || continue
+              echo
+              echo "----- $f (size=$(stat -c%s "$f" 2>/dev/null || echo ?)) -----"
+              cat "$f" 2>/dev/null || true
+            done
+            echo "===== END $faildir ====="
+          done
+          # Plus xmake's repo-level session log (also useful when build/install
+          # bails before writing the package log)
+          for sess in "$HOME/.xmake/buildinfo.txt" "$base/../../../buildinfo.txt"; do
+            [ -e "$sess" ] || continue
+            echo
+            echo "===== SESSION $sess ====="
+            cat "$sess"
+            echo "===== END SESSION ====="
+          done
+          true
+
+      - name: Build tmc_pc and asset_extractor
+        shell: bash
+        env:
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
-        run: python build.py ${{ matrix.flag }}
+        run: |
+          xmake build -y tmc_pc
+          xmake build -y asset_extractor
+
+      - name: Verify SDL3 audio backends linked into tmc_pc (Linux)
+        if: matrix.os_name == 'linux'
+        shell: bash
+        # SDL3's compiled-in audio backends each leave their driver-name as
+        # a literal string in the binary (alsa, pulseaudio, pipewire, sndio,
+        # jack — same strings the runtime probes via SDL_GetAudioDriver).
+        # If any of the three universal Linux backends is missing, the
+        # release will be silent for that user-base, so fail the build now
+        # rather than after release.
+        run: |
+          BIN="build/pc/${{ matrix.exe_name }}"
+          test -f "$BIN"
+          missing=()
+          for backend in alsa pulseaudio pipewire; do
+            if ! strings "$BIN" | grep -qx "$backend"; then
+              missing+=("$backend")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::SDL3 in $BIN missing audio backends: ${missing[*]}"
+            echo "Install libasound2-dev / libpulse-dev / libpipewire-0.3-dev before xmake build."
+            exit 1
+          fi
+          echo "OK: SDL3 has alsa + pulseaudio + pipewire compiled in."
 
       - name: Prepare artifact payload
         shell: bash

@@ -30,6 +30,7 @@
 #include "port_asset_loader.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include "port_softslots.h"
 #include <string.h>
 #endif
 
@@ -224,8 +225,14 @@ void UpdateActiveItems(PlayerEntity* this) {
     gPlayerState.attack_status &= 0xf;
     if (((gPlayerState.field_0x7 | gPlayerState.jump_status) & 0x80) == 0 && (gPlayerState.jump_status & 0x40) == 0 &&
         gPlayerState.swim_state == 0 && IsAbleToUseItem(this) && !IsPreventedFromUsingItem()) {
+        u32 bItem = gSave.stats.equipped[SLOT_B];
+#ifdef PC_PORT
+        /* Soft-slots (X/Y/L2/R2) override the B-equipped item without
+         * mutating gSave. See port/port_softslots.h. */
+        bItem = Port_SoftSlots_GetEffectiveBItem((u8)bItem);
+#endif
         CreateItemIfInputMatches(gSave.stats.equipped[SLOT_A], INPUT_USE_ITEM1, FALSE);
-        CreateItemIfInputMatches(gSave.stats.equipped[SLOT_B], INPUT_USE_ITEM2, FALSE);
+        CreateItemIfInputMatches(bItem, INPUT_USE_ITEM2, FALSE);
         IsTryingToPickupObject();
     }
 
@@ -693,6 +700,14 @@ bool32 IsItemActiveByInput(ItemBehavior* this, PlayerInputState input) {
     u32 val;
     Stats* stats = &gSave.stats;
     u32 id = this->behaviorId;
+#ifdef PC_PORT
+    /* If the player is firing this item via a soft-slot (X/Y/L2/R2),
+     * report it as if it were B-equipped so charged-hold semantics
+     * (Gust Jar, Bow) and held-state checks (Lantern) still work. */
+    if (Port_SoftSlots_IsBHeld() && Port_SoftSlots_GetEffectiveBItem(0xFF) == id) {
+        return (INPUT_USE_ITEM2 & input) ? TRUE : FALSE;
+    }
+#endif
     if (stats->equipped[SLOT_A] == id) {
         val = INPUT_USE_ITEM1;
     } else if (stats->equipped[SLOT_B] == id) {

@@ -163,6 +163,10 @@ void MPlayOpen(MusicPlayerInfo* mplayInfo, MusicPlayerTrack* tracks, u8 trackCou
         return;
     }
 
+    if (trackCount > M4A_MAX_TRACKS) {
+        trackCount = M4A_MAX_TRACKS;
+    }
+
     memset(mplayInfo, 0, sizeof(*mplayInfo));
     mplayInfo->tracks = tracks;
     mplayInfo->trackCount = trackCount;
@@ -171,17 +175,25 @@ void MPlayOpen(MusicPlayerInfo* mplayInfo, MusicPlayerTrack* tracks, u8 trackCou
     mplayInfo->tempoU = 0x100;
     mplayInfo->tempoI = 0x100;
 
-    for (i = 0; i < M4A_MAX_TRACKS; i++) {
+    /* Critical: iterate only 0..trackCount-1, not M4A_MAX_TRACKS=16. The
+     * sound.c MusicPlayer table assigns each player just 1 or 2 tracks
+     * out of the shared gMPlayTracks pool; iterating 16 here memsets
+     * 14+ adjacent tracks (or runs off the end of gMPlayTracks entirely
+     * for high-index players) and clobbers neighbouring globals — caught
+     * with a tripwire, gAreaRoomHeaders[6] zeroed shortly after
+     * m4aSoundInit ran, then sub_080A6EE0 NULL-deref'd on the windcrest
+     * pin draw (#53 second-stage). The GBA original (m4a.c::MPlayOpen)
+     * uses `while (trackCount != 0) { ... ; trackCount--; tracks++; }`
+     * — only touches the player's own tracks. */
+    for (i = 0; i < trackCount; i++) {
         MusicPlayerTrack* track = &tracks[i];
         memset(track, 0, sizeof(*track));
-        if (i < trackCount) {
-            track->flags = MPT_FLG_EXIST;
-            track->bendRange = 2;
-            track->volX = 64;
-            track->lfoSpeed = 22;
-            track->lfoSpeedC = 22;
-            track->tone.type = 1;
-        }
+        track->flags = MPT_FLG_EXIST;
+        track->bendRange = 2;
+        track->volX = 64;
+        track->lfoSpeed = 22;
+        track->lfoSpeedC = 22;
+        track->tone.type = 1;
     }
 }
 

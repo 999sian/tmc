@@ -1,94 +1,94 @@
-#include "asset_extractor_runner.h"
+#include "assets_extractor_api.hpp"
+#include "port_asset_log.hpp"
+#include "global.h"
 
-#include <cstdint>
-#include <filesystem>
-#include <iostream>
+#include <fmt/format.h>
 
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
+#include <string>
+#include <string_view>
 
-extern "C" {
-std::uint8_t* gRomData = nullptr;
-std::uint32_t gRomSize = 0;
+/* Standalone binary owns these globals; in tmc_pc they're defined in
+ * port_rom.c and Port_LoadRom populates them BEFORE the API runs.
+ * port_gba_mem.h declares them with C++ linkage when compiled from a
+ * .cpp TU, so match that here rather than re-introducing extern "C". */
+u8* gRomData = nullptr;
+u32 gRomSize = 0;
 
-/* Defined in embedded_sounds_json.cpp — assets/sounds.json baked in via
- * xmake's utils.bin2c rule. See that file for the rationale. */
-extern const unsigned char kEmbeddedSoundsJson[];
-extern const std::size_t kEmbeddedSoundsJsonSize;
-}
-
-/* Write the embedded copy of sounds.json next to the asset_extractor binary
- * (= same directory tmc_pc launches from). This guarantees the runtime
- * sound loader finds it even if the release tarball was built from a tree
- * that forgot to copy assets/sounds.json into the artifact (#50: v0.1.6
- * Linux/Windows tarballs shipped without sounds.json). Re-running the
- * extractor on a broken tarball is now sufficient to restore audio. */
-static void write_sounds_json(const std::filesystem::path& output_path)
-{
-    std::error_code ec;
-    if (std::filesystem::exists(output_path, ec) && !ec) {
-        const auto existing_size = std::filesystem::file_size(output_path, ec);
-        if (!ec && existing_size == kEmbeddedSoundsJsonSize) {
-            return; /* already correct, leave user-modified files alone */
-        }
-    }
-
-    std::ofstream out(output_path, std::ios::binary | std::ios::trunc);
-    if (!out) {
-        std::cerr << "Warning: could not write " << output_path
-                  << " (sounds.json) — runtime audio will be silent unless "
-                     "the file is provided manually." << std::endl;
-        return;
-    }
-    out.write(reinterpret_cast<const char*>(kEmbeddedSoundsJson),
-              static_cast<std::streamsize>(kEmbeddedSoundsJsonSize));
-    if (!out) {
-        std::cerr << "Warning: short write while emitting " << output_path
-                  << std::endl;
-        return;
-    }
-    std::cout << "Wrote sounds.json (" << kEmbeddedSoundsJsonSize
-              << " bytes) to " << output_path << std::endl;
-}
-
-static std::filesystem::path find_executable_directory(const std::filesystem::path& executable_path)
-{
-    if (executable_path.empty()) {
-        return {};
-    }
-
-    std::error_code ec;
-    std::filesystem::path absolute_path = std::filesystem::absolute(executable_path, ec);
-    if (ec) {
-        absolute_path = executable_path;
-    }
-
-    if (std::filesystem::is_directory(absolute_path, ec)) {
-        return absolute_path;
-    }
-
-    return absolute_path.parent_path();
-}
+extern "C" const unsigned char kEmbeddedSoundsJson[];
+extern "C" const std::size_t kEmbeddedSoundsJsonSize;
 
 int main(int argc, char* argv[])
 {
+    bool verbose = false;
+    bool runtime_only = false;
+    bool force = false;
+    bool pack_runtime = false;
+    for (int i = 1; i < argc; ++i) {
+        const std::string_view arg(argv[i]);
+        if (arg == "--verbose" || arg == "-v") {
+            verbose = true;
+        } else if (arg == "--runtime-only") {
+            runtime_only = true;
+        } else if (arg == "--force" || arg == "-f") {
+            force = true;
+        } else if (arg == "--pak") {
+            pack_runtime = true;
+        } else if (arg == "--help" || arg == "-h") {
+            fmt::print("Usage: asset_extractor [--verbose] [--runtime-only] [--force] [--pak]\n"
+                       "  --verbose       Print per-asset notes/warnings.\n"
+                       "  --runtime-only  Skip writing the editable assets_src/ tree.\n"
+                       "  --force         Re-extract even if assets/ are already up to date.\n"
+                       "  --pak           Pack runtime assets into per-category .pak archives\n"
+                       "                  instead of writing thousands of loose files.\n");
+            return 0;
+        }
+    }
+
     std::filesystem::path executable_dir;
     if (argc > 0) {
-        executable_dir = find_executable_directory(argv[0]);
+        executable_dir = AssetExtractorApi::FindExecutableDirectory(argv[0]);
     }
     if (executable_dir.empty()) {
         executable_dir = std::filesystem::current_path();
     }
 
-    std::string error;
-    if (!RunEmbeddedAssetExtractor(executable_dir, &error)) {
-        std::cerr << "Failed to extract assets: " << error << std::endl;
+    AssetExtractorApi::Options opt;
+    opt.rom_path = executable_dir / "baserom.gba";
+    opt.editable_root = executable_dir / "assets_src";
+    opt.runtime_root = executable_dir / "assets";
+    opt.runtime_only = runtime_only;
+    opt.pack_runtime = pack_runtime;
+    opt.force = force;
+    opt.verbose = verbose;
+
+    std::string err;
+    if (!AssetExtractorApi::ExtractAssets(opt, &err)) {
+        PortAssetLog::Reporter::Instance().Error(err);
         return 1;
     }
 
-    /* Always emit sounds.json next to the binary (= where tmc_pc launches
-     * from). Same directory as assets_src/ and assets/. */
-    write_sounds_json(executable_dir / "sounds.json");
+    /* Emit sounds.json next to the binary (= where tmc_pc launches
+     * from). The data is baked in at build time via embedded_sounds_json.cpp
+     * so the extractor is fully self-contained. */
+    {
+        const std::filesystem::path sounds_dst = executable_dir / "sounds.json";
+        std::ofstream f(sounds_dst, std::ios::binary);
+        if (f) {
+            f.write(reinterpret_cast<const char*>(kEmbeddedSoundsJson),
+                    static_cast<std::streamsize>(kEmbeddedSoundsJsonSize));
+        }
+    }
 
+    /* Mirror the extractor's loaded ROM bytes into the gRomData /
+     * gRomSize globals so any standalone-linked TU that still consults
+     * them sees the loaded bytes. The cast drops `const` because the
+     * legacy globals predate the const audit; the standalone binary
+     * never writes through them. */
+    const std::span<const uint8_t> rom = AssetExtractorApi::LoadedRomBytes();
+    gRomData = const_cast<u8*>(rom.data());
+    gRomSize = static_cast<u32>(rom.size());
     return 0;
 }

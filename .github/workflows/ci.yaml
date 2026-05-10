@@ -26,4 +26,3 @@ jobs:
     with:
       publish_mode: artifact
       version_label: ${{ needs.meta.outputs.stamp }}
-    secrets: inherit
