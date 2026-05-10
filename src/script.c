@@ -1047,11 +1047,21 @@ void ScriptCommand_ComparePlayerAnimationState(Entity* entity, ScriptExecutionCo
 }
 
 void ScriptCommand_SetSyncFlag(Entity* entity, ScriptExecutionContext* context) {
-    gActiveScriptInfo.syncFlags |= GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    gActiveScriptInfo.syncFlags |= flag;
+#ifdef PC_PORT
+    extern void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+    Port_DiagSyncFlag("SET", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
 }
 
 void ScriptCommand_ClearSyncFlag(Entity* entity, ScriptExecutionContext* context) {
-    gActiveScriptInfo.syncFlags &= ~GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    gActiveScriptInfo.syncFlags &= ~flag;
+#ifdef PC_PORT
+    extern void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+    Port_DiagSyncFlag("CLR", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
 }
 
 void ScriptCommand_SetLocalFlag(Entity* entity, ScriptExecutionContext* context) {
@@ -1090,6 +1100,10 @@ void ScriptCommand_WaitForSyncFlag(Entity* entity, ScriptExecutionContext* conte
     u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
     if ((gActiveScriptInfo.syncFlags & flag) != flag) {
         gActiveScriptInfo.commandSize = 0;
+#ifdef PC_PORT
+        extern void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+        Port_DiagSyncWait("WAIT", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
     }
 }
 
@@ -1097,6 +1111,10 @@ void ScriptCommand_WaitForSyncFlagAndClear(Entity* entity, ScriptExecutionContex
     u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
     if ((gActiveScriptInfo.syncFlags & flag) != flag) {
         gActiveScriptInfo.commandSize = 0;
+#ifdef PC_PORT
+        extern void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+        Port_DiagSyncWait("WAIT&CLR", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
     } else {
         gActiveScriptInfo.syncFlags &= ~flag;
         gActiveScriptInfo.flags |= 1;

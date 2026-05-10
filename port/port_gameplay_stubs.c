@@ -531,3 +531,24 @@ void UpdateIcePlayerVelocity(Entity* entity) {
     u32 direction = ((u32)entity->animationState >> 1) << 3;
     ApplyIceVelocityCore(entity, direction, 0);
 }
+
+/* Sync-flag tripwires for #93 cutscene-softlock chase. */
+void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t) {
+    static int sCount = 0;
+    if (sCount < 256) {
+        sCount++;
+        fprintf(stderr, "[sync] %s flag=0x%08X cur=0x%08X (k=%u id=%u type=%u)\n",
+                op, flag, cur, k, id, t);
+    }
+}
+void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t) {
+    static unsigned sLastFlag = 0xFFFFFFFFu;
+    static unsigned sLastCur = 0xFFFFFFFFu;
+    static unsigned sLastKid = 0xFFFFFFFFu;
+    unsigned kid = (k << 16) | (id << 8) | t;
+    if (flag != sLastFlag || cur != sLastCur || kid != sLastKid) {
+        sLastFlag = flag; sLastCur = cur; sLastKid = kid;
+        fprintf(stderr, "[sync] %s flag=0x%08X cur=0x%08X (k=%u id=%u type=%u)\n",
+                op, flag, cur, k, id, t);
+    }
+}

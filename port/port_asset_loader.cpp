@@ -1,5 +1,6 @@
 #include "port_asset_loader.h"
 #include "port_asset_pipeline.hpp"
+#include "port_asset_pak_loader.hpp"
 
 extern "C" {
 #define this this_
@@ -33,15 +34,19 @@ extern Frame* gSpriteAnimations_322[];
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #ifdef _WIN32
@@ -138,13 +143,40 @@ struct AssetGroupCache {
     std::array<std::vector<std::unique_ptr<void*[]>>, kAreaCount> areaPropertyStorage;
     std::array<std::vector<std::unique_ptr<MapDataDefinition[]>>, kAreaCount> mapDefStorage;
     std::vector<std::vector<const u8*>> spriteAnimationPtrs;
-    /* Padded copies of animation .bin files that ended on a loop frame
-     * without a trailing loop_back byte. On GBA the byte happens to be the
-     * first byte of the next animation in ROM; the extracted .bins truncate
-     * at exact ROM size. We rebuild the missing trailing byte here. */
-    std::vector<std::unique_ptr<std::vector<u8>>> animPaddedBuffers;
     std::array<std::vector<u8>, 7> translationBuffers;
     std::array<std::unordered_map<u32, std::string>, 7> textFilesById;
+
+    /* When non-empty, LoadBinaryFileCached will look up runtime
+     * binary files in these mmap'd pak archives before falling back
+     * to loose-file ifstream. Mounted at startup by
+     * port_asset_bootstrap if any *.pak is present in assetsRoot
+     * and the user hasn't passed --loose-assets. */
+    PortAssetPak::PakSet paks;
+    bool paksEnabled = false;
+
+#ifdef TMC_OVERLAP_EXTRACT_INIT
+    /* Per-pak-category gates so the engine can run
+     * Port_PPU_Init and AgbMain title-screen rendering in parallel
+     * with extraction. Each gate starts "open" (done=true) for the
+     * common warm-launch case; cold-launch flips them shut at the
+     * start of extraction and re-opens them as each phase finishes.
+     * LoadBinaryFileCached blocks on the relevant gate before
+     * touching the pak/loose tree.
+     *
+     * Sized to match assets_extractor.hpp's kPakCategoryCount = 9
+     * (Gfx, Palettes, Animations, Sprites, Tilemaps, Maps,
+     * RoomProps, Data, Misc). Kept as a literal here rather than
+     * pulling in the full extractor header to avoid leaking a
+     * 2k-line .hpp into the engine TU. */
+    static constexpr std::size_t kPhaseGateCount = 9;
+    struct PhaseGate {
+        std::atomic<bool> done{true};
+        std::mutex mu;
+        std::condition_variable cv;
+    };
+    std::array<PhaseGate, kPhaseGateCount> phaseGates;
+    PhaseGate aggregatesReady;
+#endif
 };
 
 AssetGroupCache gAssetGroupCache;
@@ -295,6 +327,59 @@ bool LoadOptionalJson(const std::filesystem::path& path, nlohmann::json& json) {
 }
 
 const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath);
+
+/*
+ * Append the ROM bytes that follow an animation so the engine can read
+ * past the end of the extracted .bin exactly as it would on GBA.  We
+ * scan forward through the trailing ROM data for the first loop frame
+ * (bit-7 set on byte [3] of a 4-byte record) and include everything
+ * up to and including its loop_back byte.  Once the engine hits that
+ * loop it stays within the padded buffer.
+ *
+ * Returns the number of bytes appended (0 if ROM lookup fails).
+ */
+size_t AppendRomTrailingBytes(const char* assetPath, size_t fileSize,
+                              std::vector<u8>& buf) {
+    if (gRomData == nullptr || gRomSize == 0)
+        return 0;
+    const EmbeddedAssetEntry* index = EmbeddedAssetIndex_Get();
+    u32 indexCount = EmbeddedAssetIndex_Count();
+
+    u32 trailStart = 0;
+    bool found = false;
+    for (u32 idx = 0; idx < indexCount; ++idx) {
+        if (std::strcmp(assetPath, index[idx].path) == 0) {
+            trailStart = index[idx].offset + static_cast<u32>(fileSize);
+            found = true;
+            break;
+        }
+    }
+    if (!found || trailStart >= gRomSize)
+        return 0;
+
+    const u8* trail = gRomData + trailStart;
+    size_t available = static_cast<size_t>(gRomSize - trailStart);
+
+    /* Walk 4-byte frame records until we find one whose frame byte
+     * (byte [3]) has bit-7 set — that's a loop/done terminator.
+     * Include that frame (4 bytes) plus the loop_back byte (1). */
+    size_t needed = 0;
+    while (needed + 4 <= available) {
+        bool isLoop = (trail[needed + 3] & 0x80u) != 0u;
+        needed += 4;
+        if (isLoop) {
+            if (needed < available)
+                needed += 1; /* loop_back byte */
+            break;
+        }
+    }
+
+    if (needed == 0)
+        return 0;
+
+    buf.insert(buf.end(), trail, trail + needed);
+    return needed;
+}
 
 void ParseGfxGroups(const nlohmann::json& root) {
     gAssetGroupCache.gfxGroups.clear();
@@ -680,10 +765,68 @@ void ParseTexts(const nlohmann::json& root) {
     }
 }
 
+#ifdef TMC_OVERLAP_EXTRACT_INIT
+/* Mirror of pak_route_for() in assets_extractor.hpp, kept in this TU
+ * to avoid including the full extractor header into the engine.
+ * Order matches AssetGroupCache::phaseGates and the extractor's
+ * PakCategory enum (Gfx, Palettes, Animations, Sprites, Tilemaps,
+ * Maps, RoomProps, Data, Misc). */
+std::size_t PhaseGateIndexForRelative(const std::string& relativePath) {
+    auto starts_with = [&](const char* prefix) {
+        return relativePath.rfind(prefix, 0) == 0;
+    };
+    if (starts_with("gfx/")) return 0;
+    if (starts_with("palettes/")) return 1;
+    if (starts_with("animations/") || starts_with("generated/animations/")) return 2;
+    if (starts_with("sprites/") || starts_with("generated/sprites/")) return 3;
+    if (starts_with("tilemaps/")) return 4;
+    if (starts_with("maps/")) return 5;
+    if (starts_with("room_properties/")) return 6;
+    if (starts_with("data_") || starts_with("data/")) return 7;
+    return 8;  // Misc
+}
+
+void WaitForPhaseGate(std::size_t idx) {
+    auto& gate = gAssetGroupCache.phaseGates[idx];
+    if (gate.done.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::unique_lock<std::mutex> lk(gate.mu);
+    /* Bounded wait so a missed phase_done event surfaces as a
+     * warning instead of an indefinite freeze. 5 s is generous —
+     * the slowest phase observed locally is sprites at ~900 ms. */
+    if (!gate.cv.wait_for(lk, std::chrono::seconds(5),
+                          [&]{ return gate.done.load(std::memory_order_acquire); })) {
+        std::fprintf(stderr,
+                     "[ASSET] phase gate %zu timed out (%s); proceeding anyway\n",
+                     idx, "asset may not be ready yet");
+    }
+}
+#endif
+
 const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     auto it = gAssetGroupCache.binaryFiles.find(relativePath);
     if (it != gAssetGroupCache.binaryFiles.end()) {
         return it->second.get();
+    }
+
+#ifdef TMC_OVERLAP_EXTRACT_INIT
+    WaitForPhaseGate(PhaseGateIndexForRelative(relativePath));
+#endif
+
+    /* Pak first when mounted: an mmap lookup beats opening a small
+     * file on every cold cache-miss. We still wrap the bytes in an
+     * owning std::vector to keep the existing six callers (which
+     * expect const std::vector<u8>* and store the pointer for the
+     * lifetime of the engine) source-compatible. A future change can
+     * thread std::span all the way through. */
+    if (gAssetGroupCache.paksEnabled) {
+        if (auto bytes = gAssetGroupCache.paks.Lookup(relativePath); bytes.has_value()) {
+            auto data = std::make_unique<std::vector<u8>>(bytes->begin(), bytes->end());
+            const std::vector<u8>* result = data.get();
+            gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
+            return result;
+        }
     }
 
     const std::filesystem::path fullPath = gAssetGroupCache.assetsRoot / std::filesystem::path(relativePath);
@@ -697,73 +840,6 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     const std::vector<u8>* result = data.get();
     gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
     return result;
-}
-
-/* Look up a property's ROM offset by file path so we can serve it directly
- * from gRomData. Some additional_X room properties (HouseDoor data tables,
- * for example) span multiple consecutive `_N.bin` chunks with inline 4-byte
- * GBA script pointers between them. The asset extractor splits those chunks
- * into separate files and area_tables.json references only the first chunk,
- * so iteration past the first file's bytes hits past-end memory and reads
- * a garbage 4th door. Pointing at gRomData (already populated by both the
- * baserom.gba load and the .bin overwrites) gives the contiguous, correctly-
- * terminated layout instead. (#28 root cause.) */
-extern "C" const EmbeddedAssetEntry* EmbeddedAssetIndex_Get(void);
-extern "C" u32 EmbeddedAssetIndex_Count(void);
-static u8* RomBackedPointerForAssetFile(const std::string& relativePath) {
-    if (gRomData == nullptr) {
-        return nullptr;
-    }
-    static std::unordered_map<std::string, u32> sFileToRomOffset = []() {
-        std::unordered_map<std::string, u32> map;
-        const EmbeddedAssetEntry* entries = EmbeddedAssetIndex_Get();
-        const u32 count = EmbeddedAssetIndex_Count();
-        map.reserve(count);
-        for (u32 i = 0; i < count; ++i) {
-            map.emplace(entries[i].path, entries[i].offset);
-        }
-        return map;
-    }();
-    auto it = sFileToRomOffset.find(relativePath);
-    if (it != sFileToRomOffset.end()) {
-        if (it->second >= gRomSize) {
-            return nullptr;
-        }
-        return gRomData + it->second;
-    }
-
-    /* Room-property files generated by the asset extractor follow the
-     * naming convention `room_properties/offset_<hex>.bin`. Many of those
-     * are thin wrappers — they carry only the leading bytes of a multi-
-     * chunk `gUnk_additional_*` table (for example, just the 4-byte
-     * `.4byte` rail pointer that prefixes the table) and omit the rest
-     * of the table that lives in adjacent `.incbin` files. When the
-     * runtime then iterates a 16-byte-per-entry table from that file it
-     * runs off the end of the buffer into heap garbage.
-     *
-     * Synthesising a gRomData-backed pointer from the offset encoded in
-     * the filename gives the consumer the original GBA-contiguous
-     * layout — including all interleaved `.4byte` rail pointers and
-     * subsequent chunks — so iteration finds the real `0xff` terminator.
-     * Cave-of-Flames Rollobite + BossDoor lava platforms are the
-     * user-visible repro for #36; this also covers any other room with
-     * a similarly-truncated property file. */
-    static constexpr const char kPropPrefix[] = "room_properties/offset_";
-    static constexpr const char kPropSuffix[] = ".bin";
-    constexpr size_t kPrefixLen = sizeof(kPropPrefix) - 1;
-    constexpr size_t kSuffixLen = sizeof(kPropSuffix) - 1;
-    if (relativePath.size() > kPrefixLen + kSuffixLen
-        && relativePath.compare(0, kPrefixLen, kPropPrefix) == 0
-        && relativePath.compare(relativePath.size() - kSuffixLen, kSuffixLen, kPropSuffix) == 0) {
-        const std::string hex = relativePath.substr(kPrefixLen, relativePath.size() - kPrefixLen - kSuffixLen);
-        char* end = nullptr;
-        const unsigned long offset = std::strtoul(hex.c_str(), &end, 16);
-        if (end != hex.c_str() && *end == '\0' && offset < gRomSize) {
-            return gRomData + offset;
-        }
-    }
-
-    return nullptr;
 }
 
 u32 RegisterMapAssetFile(const std::string& relativePath) {
@@ -819,9 +895,13 @@ bool BuildAreaFromAssets(u32 area) {
 
     if (!gAssetGroupCache.areaRoomHeaders[area].empty()) {
         gAreaRoomHeaders[area] = gAssetGroupCache.areaRoomHeaders[area].data();
-    } else {
-        gAreaRoomHeaders[area] = nullptr;
     }
+    /* If the asset cache has no extracted headers for this area, leave
+     * gAreaRoomHeaders[area] alone — the startup ROM-pointer pass already
+     * populated it from kAreaRoomHeaderOffsets. Nulling here would clobber
+     * the valid pointer for any area whose header table wasn't extracted
+     * to JSON, and crash callers that read it directly (e.g. the world-map
+     * windcrest pin loop in subtaskFastTravel.c, #53). */
 
     const size_t tileSetSlots = std::max<size_t>(gAssetGroupCache.areaTileSets[area].size(), 64);
     gAssetGroupCache.areaTileSetPtrs[area].assign(tileSetSlots, nullptr);
@@ -860,15 +940,9 @@ bool BuildAreaFromAssets(u32 area) {
                 continue;
             }
 
-            /* Prefer pointing into gRomData when the file is a ROM-backed
-             * asset — fixes split additional_* property tables (#28). */
-            if (u8* romPtr = RomBackedPointerForAssetFile(roomEntry.files[i])) {
-                props[i] = romPtr;
-            } else {
-                const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
-                if (fileData != nullptr && !fileData->empty()) {
-                    props[i] = const_cast<u8*>(fileData->data());
-                }
+            const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
+            if (fileData != nullptr && !fileData->empty()) {
+                props[i] = const_cast<u8*>(fileData->data());
             }
         }
 
@@ -1222,27 +1296,47 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
 
     for (size_t i = 0; i < gAssetGroupCache.spritePtrs.size() && i < kSpritePtrMax; ++i) {
         const SpritePtrEntryData& entry = gAssetGroupCache.spritePtrs[i];
-        SpritePtr sprite = {};
 
-        if (!entry.framesFile.empty()) {
-            const std::vector<u8>* framesData = LoadBinaryFileCached(entry.framesFile);
-            if (framesData == nullptr) {
-                return FALSE;
-            }
-            sprite.frames = reinterpret_cast<SpriteFrame*>(const_cast<u8*>(framesData->data()));
-        }
-
-        if (!entry.ptrFile.empty()) {
-            const std::vector<u8>* ptrData = LoadBinaryFileCached(entry.ptrFile);
-            if (ptrData == nullptr) {
-                return FALSE;
-            }
-            sprite.ptr = const_cast<u8*>(ptrData->data());
-        }
+        /* Seed from the ROM-resolved compile-time table. The
+         * asset-pipeline-rewrite extractor emits per-sprite tile
+         * (.ptr) and frame-table (.frames) bin files, but it slices
+         * each one at the GBA-ROM offset of the next sprite kind —
+         * which is the wrong size for sprites whose frames address
+         * tiles beyond that boundary. Example: sprite 42 (Npc5/Zelda)
+         * extracts to a 1600-byte tile buffer (50 tiles) but
+         * gSpriteFrames_Npc5's firstTileIndex values reach 0x88 (136
+         * tiles, 4352 bytes) — the engine reads heap garbage past end
+         * of the extracted buffer and the visible regression is
+         * scrambled NPC tiles in the Smith / Zelda / Picori scenes.
+         *
+         * In slim mode the ROM is mapped and `kSpritePtrEntries[i]`
+         * already gave us a correctly-sized in-ROM pointer, so we
+         * keep that and only refresh .animations / .pad below. The
+         * extracted ptr/frames bins remain available via the JSON if
+         * a future ROM-less path needs them, but we deliberately do
+         * not consume them here. */
+        SpritePtr sprite = (i < kSpritePtrMax) ? gSpritePtrs[i] : SpritePtr{};
+        sprite.animations = nullptr;
 
         auto& animPtrs = newAnimationPtrs[i];
         animPtrs.clear();
         animPtrs.reserve(entry.animations.size());
+
+        /* Two-pass walk so we can read the next animation's leading
+         * byte (the loop-back distance the GBA would have read off the
+         * end of this animation's bytes when bit-7 of the trailing
+         * frame is set). The asset extractor sizes each .bin by ROM
+         * offset diff and therefore truncates the loop-back byte that
+         * lives at the start of the adjacent ROM region. Without
+         * synthesising it back, FrameZero / UpdateAnimationVariableFrames
+         * read past end-of-buffer and the engine logs
+         *
+         *   FrameZero: loop byte out of ROM at <padded-end-pointer>
+         *
+         * Visible regression: garbled Zelda sprite during the file /
+         * intro screens, plus eventual segfault when a downstream
+         * reader keeps walking. Mirrors the logic that was previously
+         * in this function on origin/sync-matheo-release. */
         std::vector<const std::vector<u8>*> rawAnims;
         rawAnims.reserve(entry.animations.size());
         for (const std::string& animFile : entry.animations) {
@@ -1256,6 +1350,7 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
             }
             rawAnims.push_back(animData);
         }
+
         for (size_t a = 0; a < rawAnims.size(); ++a) {
             const std::vector<u8>* animData = rawAnims[a];
             if (animData == nullptr) {
@@ -1264,38 +1359,77 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
             }
             const u8* dataPtr = animData->data();
             const size_t dataSize = animData->size();
-            /* If the last 4-byte frame's bit-7 is set, the runtime expects a
-             * trailing loop_back byte. On GBA that byte is the first byte
-             * of the next animation in ROM (which the assets extractor drops
-             * because it sizes each anim by ROM offset diff). Reconstruct
-             * by copying the .bin and appending the next animation's first
-             * byte (or 0 if there isn't one). See port_animation.c FrameZero. */
-            if (dataSize >= 4 && (dataSize % 4u) == 0u && (dataPtr[dataSize - 1] & 0x80u)) {
-                /* Default: loop to the start of this animation (= numFrames).
-                 * If the next animation's first byte falls within this anim's
-                 * frame count, prefer that — it matches the byte the GBA
-                 * reads from the adjacent ROM region. Out-of-range values
-                 * (which happen because not every anim was meant to loop
-                 * naturally — actions transition out before the loop fires)
-                 * fall back to the safe "loop to start". */
-                const size_t numFrames = dataSize / 4u;
+            if (dataSize < 4 || (dataSize % 4u) != 0u) {
+                animPtrs.push_back(dataPtr);
+                continue;
+            }
+
+            /* On GBA, animations are packed contiguously in ROM. The
+             * animation engine reads bytes sequentially from animPtr;
+             * when it walks past one animation it reads from the next.
+             * The asset extractor sizes each .bin by ROM-offset diff,
+             * truncating those trailing bytes.
+             *
+             * For looping animations (last frame byte has bit-7 set),
+             * the missing byte is the loop_back distance.  We
+             * reconstruct it from the next animation's first byte.
+             *
+             * For non-looping animations (last frame byte lacks bit-7),
+             * the GBA would read adjacent ROM bytes as the next frame.
+             * We append those actual ROM bytes (looked up via
+             * EmbeddedAssetIndex) so frame signaling values that
+             * gameplay state-machines depend on are preserved.  A
+             * previous approach of OR-ing 0x80 into the last byte
+             * corrupted these values (e.g. 0x41 -> 0xC1 broke the
+             * item-get checks, phase-marker 3 -> 0x83 broke the
+             * portal-shrink switch). */
+            const size_t numFrames = dataSize / 4u;
+            const bool lastFrameLoops = (dataPtr[dataSize - 1] & 0x80u) != 0u;
+
+            const std::string& sourceKey = entry.animations[a];
+            std::string paddedKey;
+            paddedKey.reserve(sourceKey.size() + 32);
+            paddedKey.append("__padded__/");
+            paddedKey.append(std::to_string(i));
+            paddedKey.push_back('/');
+            paddedKey.append(std::to_string(a));
+            paddedKey.push_back('/');
+            paddedKey.append(sourceKey);
+
+            auto buf = std::make_unique<std::vector<u8>>();
+            buf->assign(dataPtr, dataPtr + dataSize);
+
+            if (lastFrameLoops) {
+                /* Loop-terminated: just append the missing loop_back
+                 * byte, preferring the next animation's first byte
+                 * (what the GBA would read). */
                 u8 loopBack = static_cast<u8>(std::min<size_t>(numFrames, 0xFFu));
-                if (a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr && !rawAnims[a + 1]->empty()) {
+                if (a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr &&
+                    !rawAnims[a + 1]->empty()) {
                     u8 nextByte = (*rawAnims[a + 1])[0];
                     if (nextByte > 0 && nextByte <= numFrames) {
                         loopBack = nextByte;
                     }
                 }
-                auto buf = std::make_unique<std::vector<u8>>();
-                buf->reserve(dataSize + 1);
-                buf->assign(dataPtr, dataPtr + dataSize);
                 buf->push_back(loopBack);
-                const u8* paddedPtr = buf->data();
-                gAssetGroupCache.animPaddedBuffers.push_back(std::move(buf));
-                animPtrs.push_back(paddedPtr);
             } else {
-                animPtrs.push_back(dataPtr);
+                /* Non-looping: append the actual ROM bytes that follow
+                 * this animation so the engine reads the same data the
+                 * GBA would.  We scan forward until the first loop
+                 * frame so the engine stays within the buffer. */
+                size_t appended = AppendRomTrailingBytes(
+                    sourceKey.c_str(), dataSize, *buf);
+                if (appended == 0) {
+                    /* ROM unavailable — append a safe sentinel frame:
+                     * invisible tile (0xFF), 1-tick, ANIM_DONE, self-loop. */
+                    const u8 sentinel[] = { 0xFF, 0x01, 0x00, 0x80, 0x01 };
+                    buf->insert(buf->end(), sentinel, sentinel + sizeof(sentinel));
+                }
             }
+
+            const u8* paddedPtr = buf->data();
+            gAssetGroupCache.binaryFiles.emplace(std::move(paddedKey), std::move(buf));
+            animPtrs.push_back(paddedPtr);
         }
 
         sprite.animations = animPtrs.empty() ? nullptr : (void*)animPtrs.data();
@@ -1304,8 +1438,14 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
     }
 
     gAssetGroupCache.spriteAnimationPtrs = std::move(newAnimationPtrs);
-    memset(gSpritePtrs, 0, sizeof(SpritePtr) * kSpritePtrMax);
-    for (size_t i = 0; i < newSpritePtrs.size(); ++i) {
+    /* Don't memset(gSpritePtrs, 0, ...) — sprite entries that the JSON
+     * doesn't override (which is all of them: ptr_file/frames_file are
+     * null in the extractor output) need to keep their ROM-resolved
+     * .ptr / .frames pointers from `gSpritePtrs loaded (... pointers
+     * resolved)` startup. We seed each `sprite` from the live entry
+     * above and only replace .animations / explicit .ptr / .frames /
+     * .pad here. */
+    for (size_t i = 0; i < newSpritePtrs.size() && i < kSpritePtrMax; ++i) {
         gSpritePtrs[i] = newSpritePtrs[i];
     }
 
@@ -1479,4 +1619,90 @@ extern "C" const u8* Port_GetSpriteAnimationData(u16 spriteIndex, u32 animIndex)
     }
 
     return static_cast<const u8*>(Port_ResolveRomData(animGbaAddr));
+}
+
+extern "C" int Port_MountAssetPaks(const char* assetsRoot) {
+    if (assetsRoot == nullptr || *assetsRoot == '\0') {
+        return 0;
+    }
+    const std::filesystem::path root(assetsRoot);
+    const std::size_t mounted = gAssetGroupCache.paks.Mount(root);
+    gAssetGroupCache.paksEnabled = mounted > 0;
+    return static_cast<int>(mounted);
+}
+
+extern "C" void Port_UnmountAssetPaks(void) {
+    gAssetGroupCache.paks.Clear();
+    gAssetGroupCache.paksEnabled = false;
+}
+
+extern "C" bool32 Port_PaksMounted(void) {
+    return gAssetGroupCache.paksEnabled ? TRUE : FALSE;
+}
+
+extern "C" int Port_PakEntryCount(void) {
+    return static_cast<int>(gAssetGroupCache.paks.TotalEntries());
+}
+
+#ifdef TMC_OVERLAP_EXTRACT_INIT
+/* Phase 7: feature-flagged hooks the bootstrap calls during a
+ * cold-launch extraction. With the flag off these are unreferenced
+ * and elided by the linker. */
+extern "C" void Port_AssetLoader_BeginGated(void) {
+    for (auto& gate : gAssetGroupCache.phaseGates) {
+        gate.done.store(false, std::memory_order_release);
+    }
+    gAssetGroupCache.aggregatesReady.done.store(false, std::memory_order_release);
+}
+
+extern "C" void Port_AssetLoader_OpenAllGates(void) {
+    for (auto& gate : gAssetGroupCache.phaseGates) {
+        {
+            std::lock_guard<std::mutex> lk(gate.mu);
+            gate.done.store(true, std::memory_order_release);
+        }
+        gate.cv.notify_all();
+    }
+    {
+        std::lock_guard<std::mutex> lk(gAssetGroupCache.aggregatesReady.mu);
+        gAssetGroupCache.aggregatesReady.done.store(true, std::memory_order_release);
+    }
+    gAssetGroupCache.aggregatesReady.cv.notify_all();
+}
+
+extern "C" void Port_AssetLoader_OpenGate(int phaseGateIndex) {
+    if (phaseGateIndex < 0 ||
+        static_cast<std::size_t>(phaseGateIndex) >= gAssetGroupCache.phaseGates.size()) {
+        return;
+    }
+    auto& gate = gAssetGroupCache.phaseGates[static_cast<std::size_t>(phaseGateIndex)];
+    {
+        std::lock_guard<std::mutex> lk(gate.mu);
+        gate.done.store(true, std::memory_order_release);
+    }
+    gate.cv.notify_all();
+}
+#endif
+
+extern "C" void Port_AssetLoader_Reload(void) {
+    /* Reset everything except the binary file cache (cheap to refill)
+     * and the pak set (managed independently by Port_MountAssetPaks).
+     * Subsequent EnsureAssetGroupCache calls will re-scan and pick up
+     * assets that were extracted after the first probe. */
+    gAssetGroupCache.initAttempted = false;
+    gAssetGroupCache.ready = false;
+    gAssetGroupCache.spritePtrsLoaded = false;
+    gAssetGroupCache.areaTablesLoaded = false;
+    gAssetGroupCache.textsLoaded = false;
+    gAssetGroupCache.hasSpritePtrData = false;
+    gAssetGroupCache.hasAreaData = false;
+    gAssetGroupCache.hasTextData = false;
+    gAssetGroupCache.assetsRoot.clear();
+    gAssetGroupCache.gfxGroups.clear();
+    gAssetGroupCache.paletteGroups.clear();
+    gAssetGroupCache.spritePtrs.clear();
+    /* The remaining caches (mapAssetFiles, areaRoomHeaders,
+     * areaTileSets, areaRoomMaps, areaTables, areaTiles, etc.) are
+     * rebuilt lazily inside EnsureAssetGroupCache; clearing the
+     * scalar flags above is sufficient to trigger that. */
 }

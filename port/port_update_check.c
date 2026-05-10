@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TMC_RELEASES_URL "https://github.com/MatheoVignaud/tmc/releases"
+#define TMC_RELEASES_URL "https://github.com/999sian/tmc/releases"
 #define TMC_WIDEN2(value) L##value
 #define TMC_WIDEN(value) TMC_WIDEN2(value)
 
