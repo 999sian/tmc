@@ -124,10 +124,11 @@ static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32
     }
 
 #else /* !PC_PORT — original GBA DMA macros */
-{
-    vu##bit tmp = (vu##bit)(value);
-    CpuSet((void*)&tmp, dest, CPU_SET_##bit##BIT | CPU_SET_SRC_FIXED | ((size) / ((bit) / 8) & 0x1FFFFF));
-}
+#define CPU_FILL(value, dest, size, bit)                                                                       \
+    {                                                                                                          \
+        vu##bit tmp = (vu##bit)(value);                                                                        \
+        CpuSet((void*)&tmp, dest, CPU_SET_##bit##BIT | CPU_SET_SRC_FIXED | ((size) / ((bit) / 8) & 0x1FFFFF)); \
+    }
 
 #define CpuFill16(value, dest, size) CPU_FILL(value, dest, size, 16)
 #define CpuFill32(value, dest, size) CPU_FILL(value, dest, size, 32)
