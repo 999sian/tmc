@@ -51,12 +51,13 @@ jobs:
             echo "::error::PRIVATE_SUBMODULES_TOKEN is empty. Cannot fetch private submodules."
             exit 1
           fi
-          git config --local url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "https://github.com/"
-          git config --local url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "https://github.com"
-          git config --local url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "git@github.com:"
-          git config --local url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
-          git submodule sync --recursive
-          git submodule update --init --recursive
+          url_cfg="url.https://x-access-token:${SUBMODULES_TOKEN}@github.com/.insteadOf"
+          git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+              -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+              submodule sync --recursive
+          git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+              -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+              submodule update --init --recursive
 
       - name: Install Linux dependencies
         if: matrix.os_name == 'linux'
