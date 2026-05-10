@@ -44,9 +44,17 @@ jobs:
           submodules: false
       - name: Checkout private submodules
         shell: bash
+        env:
+          SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
         run: |
-          git config --global url."https://x-access-token:${{ secrets.PRIVATE_SUBMODULES_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git config --global url."https://x-access-token:${{ secrets.PRIVATE_SUBMODULES_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          if [ -z "$SUBMODULES_TOKEN" ]; then
+            echo "::error::PRIVATE_SUBMODULES_TOKEN is empty. Cannot fetch private submodules."
+            exit 1
+          fi
+          git config --global url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "https://github.com"
+          git config --global url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "git@github.com:"
+          git config --global url."https://x-access-token:${SUBMODULES_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
           git submodule sync --recursive
           git submodule update --init --recursive
 
