@@ -43,7 +43,7 @@ Install `python3` and the `pycparser` python package:
 
 To set up the repository:
 ```shell
-git clone https://github.com/zeldaret/tmc
+git clone https://github.com/MatheoVignaud/tmc
 git clone https://github.com/pret/agbcc
 
 cd ./agbcc
