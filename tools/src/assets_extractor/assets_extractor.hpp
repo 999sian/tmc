@@ -1408,20 +1408,94 @@ inline uint32_t infer_asset_size(uint32_t offset, const std::unordered_map<uint3
     return offset < Rom.size() ? static_cast<uint32_t>(Rom.size()) - offset : 0;
 }
 
+struct ChunkInfo
+{
+    uint32_t offset;
+    uint32_t size;
+};
+
+inline std::unordered_map<std::string, ChunkInfo> build_path_to_chunk_lookup(
+    const std::unordered_map<uint32_t, IndexedAssetInfo>& offset_lookup)
+{
+    std::unordered_map<std::string, ChunkInfo> by_path;
+    by_path.reserve(offset_lookup.size());
+    for (const auto& [off, info] : offset_lookup) {
+        by_path.emplace(info.path.generic_string(), ChunkInfo{off, info.size});
+    }
+    return by_path;
+}
+
+/* #40, #36: Some asm symbols hold a multi-chunk table — a leading `.incbin`
+ * followed by inline `.4byte` pointers and follow-on `.incbin` chunks all under
+ * one label (e.g. gUnk_additional_c_HyruleTown_0 spans 192 bytes across
+ * `_0.bin` + script_DrLeftDoor + `_0_1.bin` + script_FirstHouseDoor + `_0_2.bin`).
+ * The asset index records each chunk as a separate entry, so a naive extract of
+ * the leading chunk drops the trailing chunks (and the inline pointers) on the
+ * floor. Detect this case from the path-suffix convention (`X.bin` followed by
+ * `X_1.bin`, `X_2.bin`, ...) and return the full span size end-relative to the
+ * leading offset, so the leading chunk's file holds the whole table when written.
+ * Returns 0 if not multi-chunk. */
+inline uint32_t multi_chunk_span_size(uint32_t leading_offset,
+                                      const std::unordered_map<uint32_t, IndexedAssetInfo>& offset_lookup,
+                                      const std::unordered_map<std::string, ChunkInfo>& path_lookup)
+{
+    auto leading_it = offset_lookup.find(leading_offset);
+    if (leading_it == offset_lookup.end()) {
+        return 0;
+    }
+    const std::string leading_path = leading_it->second.path.generic_string();
+    constexpr const char kSuffix[] = ".bin";
+    constexpr size_t kSuffixLen = sizeof(kSuffix) - 1;
+    if (leading_path.size() <= kSuffixLen ||
+        leading_path.compare(leading_path.size() - kSuffixLen, kSuffixLen, kSuffix) != 0) {
+        return 0;
+    }
+    const std::string base = leading_path.substr(0, leading_path.size() - kSuffixLen);
+    uint32_t span_end = leading_offset + leading_it->second.size;
+    uint32_t followup_count = 0;
+    for (uint32_t n = 1;; ++n) {
+        const std::string next_path = base + "_" + std::to_string(n) + kSuffix;
+        auto path_it = path_lookup.find(next_path);
+        if (path_it == path_lookup.end()) {
+            break;
+        }
+        /* The chunk must follow the previous one's end with at most a small gap
+         * (typically 4 bytes for an inline `.4byte script_X` pointer). Cap at
+         * 16 bytes to be defensive against unrelated assets sharing the prefix. */
+        const uint32_t next_offset = path_it->second.offset;
+        if (next_offset < span_end || next_offset - span_end > 16) {
+            break;
+        }
+        span_end = next_offset + path_it->second.size;
+        ++followup_count;
+    }
+    if (followup_count == 0) {
+        return 0;
+    }
+    return span_end - leading_offset;
+}
+
 inline std::filesystem::path extract_asset_or_raw(uint32_t rom_offset, uint32_t size,
                                                   const std::unordered_map<uint32_t, IndexedAssetInfo>& lookup,
                                                   const std::filesystem::path& output_root,
                                                   const std::filesystem::path& runtime_output_root,
                                                   const std::filesystem::path& generated_prefix,
-                                                  const Config* active_pak_config = nullptr)
+                                                  const Config* active_pak_config = nullptr,
+                                                  uint32_t size_override = 0)
 {
     auto found = lookup.find(rom_offset);
     std::filesystem::path relative_path;
     if (found != lookup.end()) {
         relative_path = found->second.path;
-        size = found->second.size;
+        /* Honour size_override (caller knows the chunk is multi-chunk and wants
+         * the full contiguous span written under the leading chunk's filename).
+         * Without override, fall back to the index entry's recorded size. */
+        size = size_override > found->second.size ? size_override : found->second.size;
     } else {
         relative_path = generated_prefix / ("offset_" + hex_offset_string(rom_offset) + ".bin");
+        if (size_override > size) {
+            size = size_override;
+        }
     }
 
     const std::span<const uint8_t> data = extract_bytes(rom_offset, size);
@@ -1642,6 +1716,13 @@ inline bool extract_area_tables(const Config& config, const std::unordered_map<u
     constexpr uint32_t kAreaCount = 0x90;
     std::vector<nlohmann::json> per_area(kAreaCount);
 
+    /* #40, #36: Multi-chunk room-property tables (e.g. door records spanning
+     * multiple `.incbin` chunks interleaved with inline `.4byte` script
+     * pointers) need to be extracted as a single contiguous file under the
+     * leading chunk's filename so the runtime sees the full table. Build a
+     * path→chunk reverse lookup once so we can quickly chain `_N.bin` follow-ons. */
+    const auto path_lookup = build_path_to_chunk_lookup(lookup);
+
     PortAssetLog::ParallelFor<uint32_t>(0, kAreaCount, [&](uint32_t area) {
         const uint32_t area_ptr = read_pointer(config.areaTableTableOffset + area * 4);
         nlohmann::json json_area = nlohmann::json::array();
@@ -1684,9 +1765,18 @@ inline bool extract_area_tables(const Config& config, const std::unordered_map<u
                         }
 
                         const uint32_t data_size = infer_asset_size(data_offset, lookup, boundaries, 4);
+                        /* If this property points at the leading chunk of a
+                         * multi-chunk table, override the size so the leading
+                         * chunk's file holds the entire contiguous span
+                         * (including inline `.4byte` pointers between chunks).
+                         * Without this the runtime reads a truncated table and
+                         * loops off the end into garbage — e.g. Hyrule Town
+                         * doors missing decorations (#40) and Cave of Flames
+                         * lava platforms not spawning (#36). */
+                        const uint32_t span_size = multi_chunk_span_size(data_offset, lookup, path_lookup);
                         const std::filesystem::path relative_path = extract_asset_or_raw(
                             data_offset, data_size, lookup, config.outputRoot, config.runtimeOutputRoot,
-                            "room_properties", &config);
+                            "room_properties", &config, span_size);
                         json_room.push_back(json_path_string(relative_path));
                     }
                 }
