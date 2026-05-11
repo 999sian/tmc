@@ -1175,6 +1175,146 @@ extern "C" void Port_LogAssetLoaderStatus(void) {
     AssetLogOnce("startup-map-assets", "registered map asset files: %zu", gAssetGroupCache.mapAssetFiles.size());
 }
 
+/* #110: unconditional asset-environment dump for FATAL paths.
+ * Common_AbortMissingAssetGroup calls this to surface enough state
+ * that a triager can tell, from the bug-report stderr alone, whether
+ * the user's problem is "extractor never ran", "assets/ is in the
+ * wrong place", "palette_groups.json missing palette N", or
+ * "EnsureAssetGroupCache failed altogether". */
+extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned int group) {
+    std::fprintf(out, "  --- asset environment ---\n");
+
+    std::error_code ec;
+    const auto cwd = std::filesystem::current_path(ec);
+    std::fprintf(out, "  cwd: %s\n", ec ? "<failed>" : PathForLog(cwd).c_str());
+    const auto exeDir = GetExecutableDirectory();
+    std::fprintf(out, "  exe dir: %s\n",
+                 exeDir.has_value() ? PathForLog(*exeDir).c_str() : "<unknown>");
+
+    /* Probe for baserom.gba in the same candidate roots the asset
+     * loader uses. If it's missing or the wrong size the auto-extractor
+     * cannot have produced a valid assets/ tree. */
+    {
+        bool romFound = false;
+        for (const auto& root : AssetSearchRoots()) {
+            const std::filesystem::path rom = root / "baserom.gba";
+            std::error_code rom_ec;
+            if (std::filesystem::exists(rom, rom_ec)) {
+                const auto sz = std::filesystem::file_size(rom, rom_ec);
+                std::fprintf(out, "  baserom.gba: %s (%llu bytes)%s\n",
+                             PathForLog(rom).c_str(),
+                             static_cast<unsigned long long>(rom_ec ? 0 : sz),
+                             (sz == 16ULL * 1024 * 1024) ? "" : "  <-- WRONG SIZE, expected 16777216");
+                romFound = true;
+                break;
+            }
+        }
+        if (!romFound) {
+            std::fprintf(out, "  baserom.gba: NOT FOUND in cwd or exe dir\n");
+        }
+    }
+
+    const auto editableRoot = FindEditableAssetsRoot();
+    const auto runtimeRoot = FindRuntimeAssetsRoot();
+    std::fprintf(out, "  editable assets root: %s\n",
+                 editableRoot.has_value() ? PathForLog(*editableRoot).c_str() : "<not found>");
+    std::fprintf(out, "  runtime assets root:  %s\n",
+                 runtimeRoot.has_value() ? PathForLog(*runtimeRoot).c_str() : "<not found>");
+
+    if (!EnsureAssetGroupCache()) {
+        std::fprintf(out, "  EnsureAssetGroupCache: FAILED — no assets/ found at all.\n");
+        std::fprintf(out, "  --> Extractor likely never ran. Either:\n");
+        std::fprintf(out, "      1) Place baserom.gba next to tmc_pc and run ./asset_extractor manually, or\n");
+        std::fprintf(out, "      2) Move baserom.gba to the same directory as tmc_pc and re-launch tmc_pc\n");
+        std::fprintf(out, "         (the binary auto-extracts on first launch if baserom is alongside).\n");
+        return;
+    }
+
+    std::fprintf(out, "  selected asset root: %s\n", PathForLog(gAssetGroupCache.assetsRoot).c_str());
+    std::fprintf(out, "  gfx groups loaded:     %zu\n", gAssetGroupCache.gfxGroups.size());
+    std::fprintf(out, "  palette groups loaded: %zu\n", gAssetGroupCache.paletteGroups.size());
+    std::fprintf(out, "  paks mounted: %s\n", gAssetGroupCache.paksEnabled ? "yes" : "no");
+
+    const std::filesystem::path palJson = gAssetGroupCache.assetsRoot / "palette_groups.json";
+    const std::filesystem::path gfxJson = gAssetGroupCache.assetsRoot / "gfx_groups.json";
+    std::fprintf(out, "  palette_groups.json: %s\n",
+                 std::filesystem::exists(palJson, ec) ? "exists" : "MISSING");
+    std::fprintf(out, "  gfx_groups.json:     %s\n",
+                 std::filesystem::exists(gfxJson, ec) ? "exists" : "MISSING");
+
+    if (gAssetGroupCache.paletteGroups.size() < 10) {
+        std::fprintf(out, "  WARNING: palette_groups appears truncated\n");
+    }
+
+    const bool isPalette = (kind && std::strcmp(kind, "palette") == 0);
+    const bool isGfx     = (kind && std::strcmp(kind, "gfx") == 0);
+
+    /* List the first few known indices for the failing kind so the
+     * triager can see whether group N is missing specifically vs all
+     * of them. */
+    if (isPalette) {
+        std::fprintf(out, "  palette groups indices present: ");
+        std::size_t shown = 0;
+        for (const auto& [idx, _] : gAssetGroupCache.paletteGroups) {
+            if (shown++ < 32) {
+                std::fprintf(out, "%u ", idx);
+            }
+        }
+        if (gAssetGroupCache.paletteGroups.size() > 32) {
+            std::fprintf(out, "... (%zu more)", gAssetGroupCache.paletteGroups.size() - 32);
+        }
+        std::fprintf(out, "\n");
+
+        /* If the group IS in the map, the failure is in a referenced
+         * palette file — enumerate them and flag the missing one. */
+        const auto it = gAssetGroupCache.paletteGroups.find(group);
+        if (it != gAssetGroupCache.paletteGroups.end()) {
+            std::fprintf(out, "  palette group %u IS described in palette_groups.json — checking files:\n", group);
+            for (const auto& entry : it->second) {
+                for (const auto& ref : entry.paletteFiles) {
+                    const std::filesystem::path p = gAssetGroupCache.assetsRoot / ref.file;
+                    const bool exists = std::filesystem::exists(p, ec);
+                    std::uintmax_t sz = 0;
+                    if (exists) sz = std::filesystem::file_size(p, ec);
+                    const bool tooSmall = exists && (ref.byteOffset + ref.size > sz);
+                    std::fprintf(out, "    %s %s (%llu bytes)%s\n",
+                                 exists ? (tooSmall ? "TRUNCATED" : "ok       ") : "MISSING  ",
+                                 ref.file.c_str(),
+                                 static_cast<unsigned long long>(sz),
+                                 tooSmall ? "  <-- file too small for byteOffset+size" : "");
+                }
+            }
+        }
+    } else if (isGfx) {
+        std::fprintf(out, "  gfx groups indices present: ");
+        std::size_t shown = 0;
+        for (const auto& [idx, _] : gAssetGroupCache.gfxGroups) {
+            if (shown++ < 32) {
+                std::fprintf(out, "%u ", idx);
+            }
+        }
+        if (gAssetGroupCache.gfxGroups.size() > 32) {
+            std::fprintf(out, "... (%zu more)", gAssetGroupCache.gfxGroups.size() - 32);
+        }
+        std::fprintf(out, "\n");
+
+        const auto it = gAssetGroupCache.gfxGroups.find(group);
+        if (it != gAssetGroupCache.gfxGroups.end()) {
+            std::fprintf(out, "  gfx group %u IS described in gfx_groups.json — checking files:\n", group);
+            for (const auto& entry : it->second) {
+                const std::filesystem::path p = gAssetGroupCache.assetsRoot / entry.file;
+                const bool exists = std::filesystem::exists(p, ec);
+                std::uintmax_t sz = 0;
+                if (exists) sz = std::filesystem::file_size(p, ec);
+                std::fprintf(out, "    %s %s (%llu bytes)\n",
+                             exists ? "ok     " : "MISSING",
+                             entry.file.c_str(),
+                             static_cast<unsigned long long>(sz));
+            }
+        }
+    }
+}
+
 enum GfxLoadDecision {
     GFX_SKIP = 0,
     GFX_LOAD = 1,

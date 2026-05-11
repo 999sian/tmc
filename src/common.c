@@ -131,6 +131,16 @@ static void Common_AbortMissingAssetGroup(const char* kind, u32 group) {
     fprintf(stderr, "  that directory before running tmc_pc) — it needs to find\n");
     fprintf(stderr, "  baserom.gba next to itself, then writes assets/ and\n");
     fprintf(stderr, "  assets_src/ alongside the binary.\n\n");
+
+    /* Surface enough diagnostic info that #110-style bug reports can
+     * be triaged without asking the user to re-run with a debug build.
+     * Tell them: did we find the ROM at all? Is assets/ present? Is
+     * the palette_groups.json in it? Print the cwd + exe-dir so the
+     * user can verify the paths we probed. */
+    {
+        extern void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned int group);
+        Port_DumpAssetEnvironment(stderr, kind, group);
+    }
     abort();
 }
 
