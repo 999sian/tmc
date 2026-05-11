@@ -515,19 +515,24 @@ void sub_08053BBC(void) {
      * before advancing even if doneFlag is observed (so helpers always have
      * time to *begin* their script after the flag bit goes up). maxFrames =
      * cap to prevent permanent hang if a helper never replies. */
+    /* minFrames extended from 30 → 90 (1.5s) so the camera has time to
+     * pan + linger before switching to the next NPC. With scrollSpeed=4
+     * and the throne-to-Vaati distance ~120px, the pan alone takes 30
+     * frames; the extra 60 frames let the audience read the moment
+     * (#109). */
     static const struct { u32 setFlag; u32 doneFlag; int minFrames; int maxFrames; } kSeq[] = {
-        { 0x010, 0x020, 30, 240 },  /* wake Vaati 1, wait Vaati done */
-        { 0x004, 0x008, 30, 240 },  /* wake King 1, wait King done */
-        { 0x010, 0x020, 30, 240 },  /* wake Vaati 2 */
-        { 0x010, 0x020, 30, 240 },  /* wake Vaati 3 */
-        { 0x004, 0x008, 30, 240 },  /* wake King 2 */
-        { 0x010, 0x020, 30, 240 },  /* wake Vaati 4 */
-        { 0x010, 0x020, 30, 240 },  /* extra Vaati */
-        { 0x040, 0x080, 30, 240 },  /* wake Guards, wait Guards done */
-        { 0x001, 0x002, 30, 240 },  /* wake Minister, wait Minister done */
-        { 0x004, 0x008, 30, 240 },  /* wake King 3 */
+        { 0x010, 0x020, 90, 300 },  /* wake Vaati 1, wait Vaati done */
+        { 0x004, 0x008, 90, 300 },  /* wake King 1, wait King done */
+        { 0x010, 0x020, 90, 300 },  /* wake Vaati 2 */
+        { 0x010, 0x020, 60, 240 },  /* wake Vaati 3 */
+        { 0x004, 0x008, 90, 300 },  /* wake King 2 */
+        { 0x010, 0x020, 90, 300 },  /* wake Vaati 4 */
+        { 0x010, 0x020, 30, 120 },  /* extra Vaati */
+        { 0x040, 0x080, 90, 300 },  /* wake Guards, wait Guards done */
+        { 0x001, 0x002, 90, 300 },  /* wake Minister, wait Minister done */
+        { 0x004, 0x008, 90, 300 },  /* wake King 3 */
         { 0x200, 0x000, 30, 60  },  /* one-way signal (penultimate); no done flag */
-        { 0x004, 0x008, 30, 240 },  /* wake King final */
+        { 0x004, 0x008, 90, 300 },  /* wake King final */
         { 0x400, 0x000, 60, 120 },  /* final cutscene-end signal; no done flag */
     };
     if (!CheckRoomFlag(0)) {
@@ -573,6 +578,63 @@ void sub_08053BBC(void) {
         } else {
             fprintf(stderr, "[wd] sequence done, setting room flag\n");
             SetRoomFlag(0);
+        }
+
+        /* #109: camera pan. The inner orch's script binary at the heap
+         * address ScriptCommand_StartPlayerScript resolves to is missing
+         * the first 4 commands (SetScrollSpeed, SetEntityPositionRelative,
+         * CameraTargetEntity, EndBlock) — confirmed by mGBA-vs-PC trace
+         * diff (see issue #109). So the camera_target never switches
+         * during the cutscene and the screen stays parked.
+         *
+         * Replay the missing camera_target switches in C. Each watchdog
+         * step's setFlag identifies which helper is being woken:
+         *   0x010 → Vaati, 0x004 → King (+ Zelda), 0x040 → Guards,
+         *   0x001 → Minister. Find that NPC and point gRoomControls.
+         *   camera_target at it; scroll.c::Scroll1 then pans there at
+         *   scrollSpeed. Don't touch scrollAction (forcing it to 1 fights
+         *   the engine's own scroll-mode state and SIGABRTs). */
+        if (sStep < nSteps) {
+            u32 flag = kSeq[sStep].setFlag;
+            u32 npcId = 0xFFFFFFFFu;
+            if (flag == 0x010u)      npcId = VAATI;
+            else if (flag == 0x004u) npcId = KING_DALTUS;
+            else if (flag == 0x040u) npcId = GUARD_1;
+            else if (flag == 0x001u) npcId = MINISTER_POTHO;
+            if (npcId != 0xFFFFFFFFu) {
+                /* Right before we'd target the Guards or Minister for the
+                 * first time, spawn the soldier/minister entity list the
+                 * GBA script would have called LoadRoomEntityList for.
+                 * One-shot: latch sLoadedSoldierList so it doesn't fire
+                 * every frame. */
+                /* Soldier-list spawn + BGM swap, single-shot at first
+                 * Guard/Minister target. Doing StopBgm + PlayBgm in one
+                 * cue (no silent gap) because PC isn't running the inner
+                 * orch's SetFade5/WaitForFadeFinish/StopBgm/Wait 120/
+                 * SetFade4 cross-fade — so the GBA-style 2-second silence
+                 * would just sound like the audio bugged out. The new
+                 * BGM_DIGGING_CAVE overwrites the previous track in the
+                 * mixer; the perceived effect is a single track change
+                 * at the moment the soldiers appear. */
+                static int sLoadedSoldierList = 0;
+                if (!sLoadedSoldierList && (npcId == GUARD_1 || npcId == MINISTER_POTHO)) {
+                    extern const EntityData gUnk_080FCE30[];
+                    sLoadedSoldierList = 1;
+                    fprintf(stderr, "[wd] spawn soldiers + switch BGM to DIGGING_CAVE\n");
+                    LoadRoomEntityList(gUnk_080FCE30);
+                    SoundReq(BGM_DIGGING_CAVE);
+                }
+                Entity* target = FindEntityByID(NPC, npcId, 7);
+                if (target == NULL) {
+                    target = FindEntityByID(NPC, npcId, 5);
+                }
+                if (target != NULL && gRoomControls.camera_target != target) {
+                    fprintf(stderr, "[wd] camera -> NPC id=0x%X (was %p) tgt=(%d,%d)\n",
+                            npcId, (void*)gRoomControls.camera_target,
+                            target->x.HALF.HI, target->y.HALF.HI);
+                    gRoomControls.camera_target = target;
+                }
+            }
         }
         return;
     }
