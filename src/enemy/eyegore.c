@@ -18,7 +18,21 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98 fix: on 64-bit PC, Enemy::child is an 8-byte pointer (vs 4 on
+       GBA). The Enemy struct's fields therefore sit 4 bytes further from
+       the Entity base than this struct's bare 0x68 offset comment
+       implies. Without compensation, EyegoreEntity::flag aliases
+       Enemy::field_0x78 (which holds kind|flags<<8 = 0x0F03), every
+       Eyegore looks "flagged" to Action 1, and never wakes up — so the
+       eyes never open and the arrow puzzle is impossible. Pad the gap so
+       unk_6d aliases Enemy::enemyFlags and flag aliases
+       Enemy::field_0x7c.HALF.LO, matching the GBA layout the original
+       code expects. */
+    u8 unk_68[0x5 + 4];
+#else
     /*0x68*/ u8 unk_68[0x5];
+#endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unk_6e[0x6];
     /*0x74*/ u16 unk_74;
@@ -35,6 +49,7 @@ typedef struct {
     /*0x84*/ u16 tileIndex3;
     /*0x86*/ u16 tileIndex4;
 } EyegoreEntity;
+
 
 extern Entity* sub_08017A90(Entity*, Entity*);
 
