@@ -20,6 +20,21 @@ void DarkNutSwordSlash_Init(Entity*);
 void DarkNutSwordSlash_OnTick(Entity*);
 
 void DarkNutSwordSlash(Entity* this) {
+    /* #97 root-cause fix: the Darknut can both spawn a sword-slash child
+     * AND null its parent pointer in the same frame — sub_08021038 spawns
+     * a slash when `super->frame != 0`, and the same function calls
+     * sub_08021588 (which clears `child->parent`) when `super->frame &
+     * ANIM_DONE`. With ANIM_DONE = 0x80 those conditions overlap, so the
+     * slash's very first tick can see parent = NULL.
+     *
+     * On GBA the NULL deref reads from the BIOS at 0x00000000 — garbage
+     * but harmless — so the original game "worked". On PC it's a hard
+     * segfault. Bail out before any parent-relative read and let the next
+     * tick delete the orphaned slash via the existing null guard. */
+    if (this->parent == NULL) {
+        DeleteThisEntity();
+        return;
+    }
     if (this->action == 0) {
         this->action = 1;
         DarkNutSwordSlash_Init(this);
@@ -27,7 +42,7 @@ void DarkNutSwordSlash(Entity* this) {
             InitAnimationForceUpdate(this, this->parent->animationState + 0x18);
         }
     }
-    if ((this->parent == NULL) || (this->parent->health == 0)) {
+    if (this->parent->health == 0) {
         DeleteThisEntity();
     }
     if (((this->contactFlags & CONTACT_NOW) != 0) && (this->contactedEntity == &gPlayerEntity.base)) {
@@ -43,6 +58,7 @@ void DarkNutSwordSlash(Entity* this) {
 }
 
 void DarkNutSwordSlash_Init(Entity* this) {
+    /* Caller (DarkNutSwordSlash) guarantees this->parent != NULL. */
     this->hitType = DarkNutSwordSlash_hitTypes[this->parent->type + this->type * 4];
 }
 
