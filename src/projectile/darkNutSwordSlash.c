@@ -50,27 +50,48 @@ void DarkNutSwordSlash_OnTick(Entity* this) {
     DarkNutSwordSlash_UpdatesForType[this->type](this);
 }
 
+/* #97 fix: every UpdateTypeN here indexes Hitbox-pointer tables by
+ * `parent->animationState` (table size 4: directions 0..3) and
+ * UpdateType0 additionally indexes by `(parent->frame & 0xf) - 1`
+ * (table size 6). The original GBA values are usually in range, but
+ * during animation transitions / state resets the Darknut briefly has
+ * frame & 0xf == 0 (so `- 1` underflows to -1) or animationState ==
+ * 0xff (sub_08020D70 sets it to -1 on init before sub_08021218
+ * replaces it). With 8-byte pointers on PC the read lands far enough
+ * past the table to dereference random .rodata as a Hitbox*, and on
+ * Windows that maps to 0xc0000005 access-violation crashes during the
+ * Castor Wilds Darknut fight. Clamp into the valid range — keeps the
+ * last valid hitbox active until the next frame restores a healthy
+ * value (same pattern as the #91 cat-attack fix). */
+static inline int DarkNut_ClampAnim(int s) {
+    return s < 0 ? 0 : (s > 3 ? 3 : s);
+}
+
 void DarkNutSwordSlash_UpdateType0(Entity* this) {
     Entity* parent = this->parent;
-    this->hitbox = (Hitbox*)gUnk_081293E0[parent->animationState][(parent->frame & 0xf) - 1];
+    int frame_idx = (int)(parent->frame & 0xf) - 1;
+    if (frame_idx < 0)  frame_idx = 0;
+    if (frame_idx > 5) frame_idx = 5;
+    this->hitbox = (Hitbox*)gUnk_081293E0[DarkNut_ClampAnim((s8)parent->animationState)][frame_idx];
 }
 
 void DarkNutSwordSlash_UpdateType2(Entity* this) {
     Entity* parent = this->parent;
-    this->hitbox = (Hitbox*)gUnk_081293F0[parent->animationState];
+    this->hitbox = (Hitbox*)gUnk_081293F0[DarkNut_ClampAnim((s8)parent->animationState)];
 }
 
 void DarkNutSwordSlash_UpdateType34(Entity* this) {
+    int anim = DarkNut_ClampAnim((s8)this->parent->animationState);
     if ((this->parent->frame & 0x10) != 0) {
-        this->hitbox = (Hitbox*)gUnk_08129410[this->parent->animationState];
+        this->hitbox = (Hitbox*)gUnk_08129410[anim];
     } else {
-        this->hitbox = (Hitbox*)gUnk_08129400[this->parent->animationState];
+        this->hitbox = (Hitbox*)gUnk_08129400[anim];
     }
 }
 
 void DarkNutSwordSlash_UpdateType1(Entity* this) {
     Entity* parent = this->parent;
-    this->hitbox = (Hitbox*)gUnk_08129420[parent->animationState];
+    this->hitbox = (Hitbox*)gUnk_08129420[DarkNut_ClampAnim((s8)parent->animationState)];
 }
 
 const u8 DarkNutSwordSlash_hitTypes[] = {
