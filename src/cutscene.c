@@ -515,125 +515,138 @@ void sub_08053BBC(void) {
      * before advancing even if doneFlag is observed (so helpers always have
      * time to *begin* their script after the flag bit goes up). maxFrames =
      * cap to prevent permanent hang if a helper never replies. */
-    /* minFrames extended from 30 → 90 (1.5s) so the camera has time to
-     * pan + linger before switching to the next NPC. With scrollSpeed=4
-     * and the throne-to-Vaati distance ~120px, the pan alone takes 30
-     * frames; the extra 60 frames let the audience read the moment
-     * (#109). */
-    static const struct { u32 setFlag; u32 doneFlag; int minFrames; int maxFrames; } kSeq[] = {
-        { 0x010, 0x020, 90, 300 },  /* wake Vaati 1, wait Vaati done */
-        { 0x004, 0x008, 90, 300 },  /* wake King 1, wait King done */
-        { 0x010, 0x020, 90, 300 },  /* wake Vaati 2 */
-        { 0x010, 0x020, 60, 240 },  /* wake Vaati 3 */
-        { 0x004, 0x008, 90, 300 },  /* wake King 2 */
-        { 0x010, 0x020, 90, 300 },  /* wake Vaati 4 */
-        { 0x010, 0x020, 30, 120 },  /* extra Vaati */
-        { 0x040, 0x080, 90, 300 },  /* wake Guards, wait Guards done */
-        { 0x001, 0x002, 90, 300 },  /* wake Minister, wait Minister done */
-        { 0x004, 0x008, 90, 300 },  /* wake King 3 */
-        { 0x200, 0x000, 30, 60  },  /* one-way signal (penultimate); no done flag */
-        { 0x004, 0x008, 90, 300 },  /* wake King final */
-        { 0x400, 0x000, 60, 120 },  /* final cutscene-end signal; no done flag */
+    /* #109: full C-side state machine mirroring
+     * script_CutsceneOrchestratorTakeoverCutscene. PC's asset extractor
+     * outputs a truncated script blob that bails out after 3 commands
+     * (BeginBlock, SetFadeTime, SetFade4), so none of the script's
+     * camera/scroll/wake/bgm side-effects fire naturally. Each kPhase
+     * entry encodes one logical "beat" of the cutscene:
+     *   - camNpcId: NPC the camera should be following during this beat
+     *     (the script positions an orchestrator entity at the desired
+     *     spot then CameraTargetEntity's onto itself; we approximate by
+     *     pointing camera_target at the relevant NPC, who's already there)
+     *   - wakeFlag / ackFlag: SetSyncFlag / WaitForSyncFlagAndClear pair
+     *     the script issues at this beat
+     *   - minFrames / maxFrames: lower-bound wait + timeout
+     *   - actions bitmask:
+     *       0x01 PLAY_VAATI_BGM
+     *       0x02 LOAD_SOLDIERS + STOP_BGM + PLAY_DIGGING_BGM
+     *       0x04 STOP_BGM (final)
+     *       0x08 SET_ROOM_FLAG (cutscene complete)
+     *
+     * Camera-target NPCs (kind=NPC, id=...):
+     *   VAATI (0x27)         — at (0x88, 0xe0), bottom of throne room
+     *   KING_DALTUS (0x24)   — at (0x88, 0x58), top (the throne)
+     *   GUARD_1 (0x15)       — soldier-phase camera focus
+     *   MINISTER_POTHO (0x25)— minister-phase
+     */
+    enum {
+        ACT_NONE              = 0,
+        ACT_PLAY_VAATI_BGM    = 1 << 0,
+        ACT_SOLDIER_SCENE     = 1 << 1,
+        ACT_STOP_BGM          = 1 << 2,
+        ACT_END               = 1 << 3,
     };
+    static const struct { u32 camNpcId; u32 wakeFlag; u32 ackFlag;
+                          int minFrames; int maxFrames; u8 actions; } kPhase[] = {
+        /* Phase 0: throne intro — King + Zelda visible, fade-in. */
+        { KING_DALTUS,  0x000, 0x000, 60,  90,  ACT_PLAY_VAATI_BGM },
+        /* Phase 1: pan to Vaati teleporting in. */
+        { VAATI,        0x010, 0x020, 90,  300, ACT_NONE },
+        /* Phase 2: pan back to King, King reacts. */
+        { KING_DALTUS,  0x004, 0x008, 90,  300, ACT_NONE },
+        /* Phase 3: pan to Vaati. */
+        { VAATI,        0x010, 0x020, 90,  300, ACT_NONE },
+        /* Phase 4 (Vaati 3 — third Vaati wake, camera stays on Vaati). */
+        { VAATI,        0x010, 0x020, 60,  240, ACT_NONE },
+        /* Phase 5: pan to King. */
+        { KING_DALTUS,  0x004, 0x008, 90,  300, ACT_NONE },
+        /* Phase 6: pan to Vaati (4th wake — the "I am taking over" beat). */
+        { VAATI,        0x010, 0x020, 90,  300, ACT_NONE },
+        /* Phase 7: extra Vaati hold before scene cut. */
+        { VAATI,        0x010, 0x020, 30,  120, ACT_NONE },
+        /* Phase 8: scene cut — load soldiers, swap BGM, fade to throne-
+         * soldiers shot. Wake first Guard. */
+        { GUARD_1,      0x040, 0x080, 90,  300, ACT_SOLDIER_SCENE },
+        /* Phase 9: wake Minister. */
+        { MINISTER_POTHO, 0x001, 0x002, 90, 300, ACT_NONE },
+        /* Phase 10: King talks to Minister. */
+        { KING_DALTUS,  0x004, 0x008, 90,  300, ACT_NONE },
+        /* Phase 11: one-way penultimate signal. */
+        { KING_DALTUS,  0x200, 0x000, 30,  60,  ACT_NONE },
+        /* Phase 12: King's final line. */
+        { KING_DALTUS,  0x004, 0x008, 90,  300, ACT_NONE },
+        /* Phase 13: cutscene-over fade + room-flag-set + helper-broadcast. */
+        { KING_DALTUS,  0x400, 0x000, 60,  120, ACT_STOP_BGM | ACT_END },
+    };
+
     if (!CheckRoomFlag(0)) {
-        /* Belt-and-suspenders: also clear any stuck fade so the
-         * orchestrator's WaitForFadeFinish commands resolve and its
-         * SetEntityPositionRelative/CameraTargetEntity steps run. Without
-         * this the camera doesn't pan between Vaati and King during the
-         * cutscene on PC. Fades themselves are FADE_INSTANT in this scene
-         * and complete in one frame on GBA, so clearing per-frame is
-         * effectively a no-op for normal fade pacing. */
+        /* Belt-and-suspenders: clear any stuck fade so the inner orch's
+         * (would-be) SetFade5/SetFade4/WaitForFadeFinish path's leftover
+         * state doesn't gate our beats. Fades themselves are FADE_INSTANT
+         * in this scene, so clearing per-frame is a no-op for real
+         * fade pacing. */
         gFadeControl.active = 0;
-        int nSteps = (int)(sizeof(kSeq) / sizeof(kSeq[0]));
+        int nSteps = (int)(sizeof(kPhase) / sizeof(kPhase[0]));
         if (sStep < nSteps) {
-            u32 setFlag = kSeq[sStep].setFlag;
-            u32 doneFlag = kSeq[sStep].doneFlag;
-            gActiveScriptInfo.syncFlags |= setFlag;
+            u32 setFlag = kPhase[sStep].wakeFlag;
+            u32 doneFlag = kPhase[sStep].ackFlag;
+            u32 camNpcId = kPhase[sStep].camNpcId;
+            if (setFlag) gActiveScriptInfo.syncFlags |= setFlag;
             sFrameInStep++;
             {
                 static int sLogStep = -1;
                 if (sLogStep != sStep) {
                     sLogStep = sStep;
-                    fprintf(stderr, "[wd] step=%d setFlag=0x%X doneFlag=0x%X\n",
-                        sStep, setFlag, doneFlag);
+                    fprintf(stderr, "[wd] phase=%d cam=0x%X wake=0x%X ack=0x%X act=0x%X\n",
+                        sStep, camNpcId, setFlag, doneFlag, kPhase[sStep].actions);
+                    /* Fire one-shot actions at the start of the phase. */
+                    u8 actions = kPhase[sStep].actions;
+                    if (actions & ACT_PLAY_VAATI_BGM) {
+                        fprintf(stderr, "[wd] PlayBgm BGM_VAATI_THEME\n");
+                        SoundReq(BGM_VAATI_THEME);
+                    }
+                    if (actions & ACT_SOLDIER_SCENE) {
+                        extern const EntityData gUnk_080FCE30[];
+                        fprintf(stderr, "[wd] spawn soldiers + BGM_DIGGING_CAVE\n");
+                        LoadRoomEntityList(gUnk_080FCE30);
+                        SoundReq(BGM_DIGGING_CAVE);
+                    }
+                    if (actions & ACT_STOP_BGM) {
+                        fprintf(stderr, "[wd] StopBgm\n");
+                        SoundReq(SONG_STOP_BGM);
+                    }
+                }
+            }
+            /* Camera follow: point camera_target at the phase's NPC. */
+            if (camNpcId != 0xFFFFFFFFu) {
+                Entity* target = FindEntityByID(NPC, camNpcId, 7);
+                if (target == NULL) target = FindEntityByID(NPC, camNpcId, 5);
+                if (target != NULL && gRoomControls.camera_target != target) {
+                    fprintf(stderr, "[wd] camera -> NPC id=0x%X (was %p) tgt=(%d,%d)\n",
+                            camNpcId, (void*)gRoomControls.camera_target,
+                            target->x.HALF.HI, target->y.HALF.HI);
+                    gRoomControls.camera_target = target;
                 }
             }
             int advance = 0;
-            if (sFrameInStep >= kSeq[sStep].maxFrames) {
+            if (sFrameInStep >= kPhase[sStep].maxFrames) {
                 advance = 1;  /* timeout — helper isn't responding */
-            } else if (sFrameInStep >= kSeq[sStep].minFrames) {
+            } else if (sFrameInStep >= kPhase[sStep].minFrames) {
                 if (doneFlag == 0) {
-                    advance = 1;  /* one-way signal step, advance after minFrames */
+                    advance = 1;  /* one-way step, advance after minFrames */
                 } else if ((gActiveScriptInfo.syncFlags & doneFlag) == doneFlag) {
-                    /* Helper has acked. Clear the done flag (mimicking
-                     * WaitForSyncFlagAndClear semantics) and advance. */
                     gActiveScriptInfo.syncFlags &= ~doneFlag;
                     advance = 1;
                 }
             }
             if (advance) {
+                if (kPhase[sStep].actions & ACT_END) {
+                    fprintf(stderr, "[wd] sequence done, setting room flag\n");
+                    SetRoomFlag(0);
+                }
                 sStep++;
                 sFrameInStep = 0;
-            }
-        } else {
-            fprintf(stderr, "[wd] sequence done, setting room flag\n");
-            SetRoomFlag(0);
-        }
-
-        /* #109: camera pan. The inner orch's script binary at the heap
-         * address ScriptCommand_StartPlayerScript resolves to is missing
-         * the first 4 commands (SetScrollSpeed, SetEntityPositionRelative,
-         * CameraTargetEntity, EndBlock) — confirmed by mGBA-vs-PC trace
-         * diff (see issue #109). So the camera_target never switches
-         * during the cutscene and the screen stays parked.
-         *
-         * Replay the missing camera_target switches in C. Each watchdog
-         * step's setFlag identifies which helper is being woken:
-         *   0x010 → Vaati, 0x004 → King (+ Zelda), 0x040 → Guards,
-         *   0x001 → Minister. Find that NPC and point gRoomControls.
-         *   camera_target at it; scroll.c::Scroll1 then pans there at
-         *   scrollSpeed. Don't touch scrollAction (forcing it to 1 fights
-         *   the engine's own scroll-mode state and SIGABRTs). */
-        if (sStep < nSteps) {
-            u32 flag = kSeq[sStep].setFlag;
-            u32 npcId = 0xFFFFFFFFu;
-            if (flag == 0x010u)      npcId = VAATI;
-            else if (flag == 0x004u) npcId = KING_DALTUS;
-            else if (flag == 0x040u) npcId = GUARD_1;
-            else if (flag == 0x001u) npcId = MINISTER_POTHO;
-            if (npcId != 0xFFFFFFFFu) {
-                /* Right before we'd target the Guards or Minister for the
-                 * first time, spawn the soldier/minister entity list the
-                 * GBA script would have called LoadRoomEntityList for.
-                 * One-shot: latch sLoadedSoldierList so it doesn't fire
-                 * every frame. */
-                /* Soldier-list spawn + BGM swap, single-shot at first
-                 * Guard/Minister target. Doing StopBgm + PlayBgm in one
-                 * cue (no silent gap) because PC isn't running the inner
-                 * orch's SetFade5/WaitForFadeFinish/StopBgm/Wait 120/
-                 * SetFade4 cross-fade — so the GBA-style 2-second silence
-                 * would just sound like the audio bugged out. The new
-                 * BGM_DIGGING_CAVE overwrites the previous track in the
-                 * mixer; the perceived effect is a single track change
-                 * at the moment the soldiers appear. */
-                static int sLoadedSoldierList = 0;
-                if (!sLoadedSoldierList && (npcId == GUARD_1 || npcId == MINISTER_POTHO)) {
-                    extern const EntityData gUnk_080FCE30[];
-                    sLoadedSoldierList = 1;
-                    fprintf(stderr, "[wd] spawn soldiers + switch BGM to DIGGING_CAVE\n");
-                    LoadRoomEntityList(gUnk_080FCE30);
-                    SoundReq(BGM_DIGGING_CAVE);
-                }
-                Entity* target = FindEntityByID(NPC, npcId, 7);
-                if (target == NULL) {
-                    target = FindEntityByID(NPC, npcId, 5);
-                }
-                if (target != NULL && gRoomControls.camera_target != target) {
-                    fprintf(stderr, "[wd] camera -> NPC id=0x%X (was %p) tgt=(%d,%d)\n",
-                            npcId, (void*)gRoomControls.camera_target,
-                            target->x.HALF.HI, target->y.HALF.HI);
-                    gRoomControls.camera_target = target;
-                }
             }
         }
         return;
