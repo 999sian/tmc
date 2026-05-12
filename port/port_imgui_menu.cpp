@@ -506,6 +506,15 @@ extern "C" int Port_DebugQuery_RoomDimensions(unsigned char area, unsigned char 
 
 static char sWarpFilter[64] = "";
 
+/* Override lookup from port_debug_actions.c — returns 1 + fills x/y/layer
+ * when (area, room) has a curated safe-spawn entry, else 0. Used by the
+ * Warp tab so high-traffic rooms whose geometric center is a wall (boss
+ * arenas, dungeon entrances, town buildings) drop Link on walkable
+ * ground instead of an obstacle. See issue #94. */
+extern "C" int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room,
+                                                  unsigned short* x, unsigned short* y,
+                                                  unsigned char* layer);
+
 static void DrawRibbonWarpTab(void) {
     /* Filter bar — type to narrow the area list. Empty filter = show
      * everything. Case-insensitive substring match. Steam Deck users
@@ -515,6 +524,32 @@ static void DrawRibbonWarpTab(void) {
                              sWarpFilter, sizeof(sWarpFilter));
     ImGui::SameLine();
     if (ImGui::Button("Clear")) sWarpFilter[0] = '\0';
+    ImGui::SameLine();
+    ImGui::TextDisabled("|");
+    ImGui::SameLine();
+    ImGui::TextDisabled("L/R bumpers = page jump");
+
+    /* Letter strip — issue #76. The area list is long (>140 entries)
+     * and previously the only way to traverse was one-line-at-a-time
+     * scrolling. Buttons here filter to areas whose name starts with
+     * that letter, giving instant A-Z jumps. */
+    static char sLetterFilter = 0; /* 0 = no letter filter */
+    {
+        const char* kLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        if (ImGui::SmallButton("All##warpLet")) sLetterFilter = 0;
+        for (const char* p = kLetters; *p; ++p) {
+            ImGui::SameLine();
+            char id[6];
+            std::snprintf(id, sizeof(id), "%c##wl", *p);
+            if (sLetterFilter == *p) {
+                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.55f, 0.30f, 1.0f));
+                if (ImGui::SmallButton(id)) sLetterFilter = 0;
+                ImGui::PopStyleColor();
+            } else {
+                if (ImGui::SmallButton(id)) sLetterFilter = *p;
+            }
+        }
+    }
 
     /* Scrollable area list. Each area is a collapsible header that
      * reveals its rooms as a button grid when opened. Headers are
@@ -524,6 +559,28 @@ static void DrawRibbonWarpTab(void) {
     const float listH = ImGui::GetTextLineHeightWithSpacing() * 18.0f;
     if (ImGui::BeginChild("##warpList", ImVec2(0, listH), ImGuiChildFlags_NavFlattened,
                           0)) {
+        /* L1/R1 bumpers = page jump while this child is focused/hovered.
+         * PgUp / PgDn keys give the same shortcut on keyboard. Home /
+         * End jump to the ends of the list. Issue #76. */
+        const bool listFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) ||
+                                 ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+        if (listFocused) {
+            const float pageStep = listH * 0.9f;
+            if (ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false) ||
+                ImGui::IsKeyPressed(ImGuiKey_PageUp,   false)) {
+                ImGui::SetScrollY(ImGui::GetScrollY() - pageStep);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) ||
+                ImGui::IsKeyPressed(ImGuiKey_PageDown, false)) {
+                ImGui::SetScrollY(ImGui::GetScrollY() + pageStep);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) {
+                ImGui::SetScrollY(0.0f);
+            }
+            if (ImGui::IsKeyPressed(ImGuiKey_End, false)) {
+                ImGui::SetScrollY(ImGui::GetScrollMaxY());
+            }
+        }
         const std::string filter = sWarpFilter[0] ? std::string(sWarpFilter) : std::string();
         std::string filter_lower = filter;
         for (auto& c : filter_lower) c = (char)std::tolower((unsigned char)c);
@@ -544,14 +601,32 @@ static void DrawRibbonWarpTab(void) {
                 for (auto& c : hl) c = (char)std::tolower((unsigned char)c);
                 if (hl.find(filter_lower) == std::string::npos) continue;
             }
+            /* Letter strip — match against the first letter of the
+             * area name itself (skip the "0xNN  " prefix). */
+            if (sLetterFilter && name) {
+                char first = name[0];
+                if (first >= 'a' && first <= 'z') first = (char)(first - 'a' + 'A');
+                if (first != sLetterFilter) continue;
+            }
             shown++;
 
             ImGui::PushID((int)area);
             if (ImGui::CollapsingHeader(header)) {
                 ImGui::Indent();
-                /* Quick-warp button for the area's first room. */
+                /* Quick-warp button for the area's first room. Uses the
+                 * curated safe-spawn override when one exists. */
                 if (ImGui::Button("Warp here (room 0)")) {
-                    if (Port_DebugAction_Warp(a, 0, 0x80, 0x80, 0)) {
+                    unsigned short sx = 0x80, sy = 0x80;
+                    unsigned char  slayer = 0;
+                    if (!Port_DebugAction_WarpSpawnOverride(a, 0, &sx, &sy, &slayer)) {
+                        unsigned short w0 = 0, h0 = 0;
+                        if (Port_DebugQuery_RoomDimensions(a, 0, &w0, &h0)) {
+                            sx = w0 ? (unsigned short)(w0 / 2) : 0x80;
+                            sy = h0 ? (unsigned short)(h0 / 2) : 0x80;
+                        }
+                        slayer = 1;
+                    }
+                    if (Port_DebugAction_Warp(a, 0, sx, sy, slayer)) {
                         char msg[96];
                         std::snprintf(msg, sizeof(msg), "Warp -> 0x%02X room 0", area);
                         Port_DebugMenu_ToastFromExternal(msg);
@@ -568,9 +643,15 @@ static void DrawRibbonWarpTab(void) {
                     std::snprintf(roomLabel, sizeof(roomLabel), "Room 0x%02X", r);
                     ImGui::PushID(r);
                     if (ImGui::Button(roomLabel, ImVec2(120, 0))) {
-                        unsigned short cx = w ? (unsigned short)(w / 2) : 0x80;
-                        unsigned short cy = h ? (unsigned short)(h / 2) : 0x80;
-                        if (Port_DebugAction_Warp(a, (unsigned char)r, cx, cy, 1)) {
+                        unsigned short cx = 0, cy = 0;
+                        unsigned char  layer = 1;
+                        if (!Port_DebugAction_WarpSpawnOverride(a, (unsigned char)r,
+                                                                &cx, &cy, &layer)) {
+                            cx = w ? (unsigned short)(w / 2) : 0x80;
+                            cy = h ? (unsigned short)(h / 2) : 0x80;
+                            layer = 1;
+                        }
+                        if (Port_DebugAction_Warp(a, (unsigned char)r, cx, cy, layer)) {
                             char msg[96];
                             std::snprintf(msg, sizeof(msg), "Warp -> 0x%02X room 0x%02X", area, r);
                             Port_DebugMenu_ToastFromExternal(msg);
