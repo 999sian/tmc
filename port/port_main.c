@@ -191,6 +191,24 @@ int main(int argc, char* argv[]) {
 
     Port_Config_Load("config.json");
 
+    /* Honour the persisted save-profile choice. Default ("tmc.sav") is
+     * applied if the config doesn't name one. */
+    {
+        extern const char* Port_Config_ActiveSaveProfile(void);
+        extern void Port_Save_SetActivePath(const char* path);
+        Port_Save_SetActivePath(Port_Config_ActiveSaveProfile());
+    }
+
+    /* Auto-save defaults to on. Apply the persisted interval too. */
+    {
+        extern bool Port_Config_AutosaveEnabled(void);
+        extern u32  Port_Config_AutosaveIntervalMs(void);
+        extern void Port_QuickSave_SetAutoEnabled(int enabled);
+        extern void Port_QuickSave_SetAutoIntervalMs(u32 ms);
+        Port_QuickSave_SetAutoEnabled(Port_Config_AutosaveEnabled() ? 1 : 0);
+        Port_QuickSave_SetAutoIntervalMs(Port_Config_AutosaveIntervalMs());
+    }
+
     u8 window_scale = Port_Config_WindowScale();
     bool noAudio = false;
     if (argc > 1) {
