@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <functional>
 #include <string>
 #include <vector>
@@ -58,6 +59,33 @@ void          Port_Config_CycleInternalScale(int direction);
 /* Soft-slot equip-button assignments (port_softslots.c). */
 const char*   Port_SoftSlots_GetSlotLabel(int slot);
 void          Port_SoftSlots_CycleAssignment(int slot, int direction);
+
+/* Save-state slots (port_quicksave.c). */
+int  Port_QuickSave_SaveSlot(int slot);
+int  Port_QuickSave_LoadSlot(int slot);
+int  Port_QuickSave_HasSlot(int slot);
+unsigned long long Port_QuickSave_SlotTimestamp(int slot);
+int  Port_QuickSave_SlotCount(void);
+int  Port_QuickSave_AutoSlotBase(void);
+int  Port_QuickSave_AutoSlotCount(void);
+int  Port_QuickSave_AutoEnabled(void);
+void Port_QuickSave_SetAutoEnabled(int enabled);
+unsigned int Port_QuickSave_AutoIntervalMs(void);
+void Port_QuickSave_SetAutoIntervalMs(unsigned int ms);
+/* Persistence wrappers — keep config.json in sync with runtime toggles. */
+bool         Port_Config_AutosaveEnabled(void);
+void         Port_Config_SetAutosaveEnabled(bool enabled);
+unsigned int Port_Config_AutosaveIntervalMs(void);
+void         Port_Config_SetAutosaveIntervalMs(unsigned int ms);
+
+/* Save profiles (port_save.c + port_runtime_config.cpp). */
+const char* Port_Save_GetActivePath(void);
+void        Port_Save_SetActivePath(const char* path);
+int         Port_Save_SaveAsProfile(const char* path);
+int         Port_Save_FilenameMax(void);
+int         Port_Save_ListProfiles(char (*out)[64], int max);
+const char* Port_Config_ActiveSaveProfile(void);
+void        Port_Config_SetActiveSaveProfile(const char* path);
 }
 
 namespace {
@@ -131,6 +159,8 @@ MenuPage BuildAllAreasPage(void);
 MenuPage BuildAreaRoomsPage(unsigned char area);
 MenuPage BuildDisplaySettingsPage(void);
 MenuPage BuildSoftSlotsPage(void);
+MenuPage BuildSaveStatesPage(void);
+MenuPage BuildSaveProfilesPage(void);
 MenuPage BuildMainPage(void);
 
 void Push(MenuPage page) {
@@ -396,11 +426,187 @@ MenuPage BuildSoftSlotsPage(void) {
     return p;
 }
 
+/* Save-state slot management. One row per slot (0 = quicksave, 1-4 =
+ * manual numbered, 5-7 = auto-save ring), each labeled with its
+ * populated/empty state and saved-at time. Action = load (with toast),
+ * cycleLeft = save (so Left arrow re-saves the slot from the same UI). */
+static std::string FormatSlotLabel(int slot) {
+    char buf[80];
+    const char* tag;
+    if (slot == 0) {
+        tag = "Quick";
+    } else if (slot < Port_QuickSave_AutoSlotBase()) {
+        static char tagbuf[8];
+        std::snprintf(tagbuf, sizeof(tagbuf), "Slot %d", slot);
+        tag = tagbuf;
+    } else {
+        static char tagbuf[16];
+        std::snprintf(tagbuf, sizeof(tagbuf), "Auto %d ",
+                      slot - Port_QuickSave_AutoSlotBase() + 1);
+        tag = tagbuf;
+    }
+    if (!Port_QuickSave_HasSlot(slot)) {
+        std::snprintf(buf, sizeof(buf), "%-7s (empty)", tag);
+        return std::string(buf);
+    }
+    unsigned long long t = Port_QuickSave_SlotTimestamp(slot);
+    time_t tt = (time_t)t;
+    char timestr[32] = "?";
+    if (t != 0) {
+        struct tm tm_buf;
+#ifdef _WIN32
+        localtime_s(&tm_buf, &tt);
+#else
+        localtime_r(&tt, &tm_buf);
+#endif
+        std::strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", &tm_buf);
+    }
+    std::snprintf(buf, sizeof(buf), "%-7s %s", tag, timestr);
+    return std::string(buf);
+}
+
+MenuPage BuildSaveStatesPage(void) {
+    MenuPage p;
+    p.title = "SAVE STATES (Enter=load, Left=save)";
+    const int n = Port_QuickSave_SlotCount();
+    for (int s = 0; s < n; ++s) {
+        MenuItem it;
+        it.action = [s]() {
+            if (Port_QuickSave_LoadSlot(s)) Toast("Loaded");
+            else Toast("Slot empty");
+        };
+        it.cycleLeft = [s]() {
+            if (Port_QuickSave_SaveSlot(s)) Toast("Saved");
+        };
+        it.cycleRight = [s]() {
+            if (Port_QuickSave_SaveSlot(s)) Toast("Saved");
+        };
+        it.labelFn = [s]() { return FormatSlotLabel(s); };
+        p.items.push_back(std::move(it));
+    }
+
+    auto flipAuto = []() {
+        bool next = !Port_QuickSave_AutoEnabled();
+        Port_QuickSave_SetAutoEnabled(next ? 1 : 0);
+        Port_Config_SetAutosaveEnabled(next);
+    };
+    MenuItem autoToggle;
+    autoToggle.cycleLeft  = flipAuto;
+    autoToggle.cycleRight = flipAuto;
+    autoToggle.action     = flipAuto;
+    autoToggle.labelFn = []() {
+        char b[64];
+        std::snprintf(b, sizeof(b), "Auto-save   %s",
+                      Port_QuickSave_AutoEnabled() ? "on" : "off");
+        return std::string(b);
+    };
+    p.items.push_back(std::move(autoToggle));
+
+    MenuItem autoInterval;
+    autoInterval.cycleLeft = []() {
+        unsigned int cur = Port_QuickSave_AutoIntervalMs();
+        unsigned int next = cur > 15000 ? cur - 15000 : 15000;
+        Port_QuickSave_SetAutoIntervalMs(next);
+        Port_Config_SetAutosaveIntervalMs(next);
+    };
+    autoInterval.cycleRight = []() {
+        unsigned int cur = Port_QuickSave_AutoIntervalMs();
+        unsigned int next = cur + 15000;
+        Port_QuickSave_SetAutoIntervalMs(next);
+        Port_Config_SetAutosaveIntervalMs(next);
+    };
+    autoInterval.labelFn = []() {
+        char b[64];
+        unsigned int ms = Port_QuickSave_AutoIntervalMs();
+        std::snprintf(b, sizeof(b), "Interval    %us", ms / 1000u);
+        return std::string(b);
+    };
+    p.items.push_back(std::move(autoInterval));
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
+/* Save-profile picker. Each row is one `tmc[_*].sav` file discovered in
+ * the working directory; activating it switches future EEPROM reads/writes
+ * to that file. Includes a "+ New profile from current" row that copies
+ * the in-memory EEPROM to the next available `tmc_NN.sav`. */
+MenuPage BuildSaveProfilesPage(void) {
+    MenuPage p;
+    p.title = "SAVE PROFILES";
+
+    /* Discover available .sav files. 32-entry cap is enough — even a
+     * dedicated speedrun setup is unlikely to keep that many runs. */
+    char names[32][64];
+    const int n = Port_Save_ListProfiles(names, 32);
+    const std::string activeNow = Port_Save_GetActivePath();
+
+    for (int i = 0; i < n; ++i) {
+        std::string name = names[i];
+        bool isActive = (name == activeNow);
+        MenuItem it;
+        it.action = [name]() {
+            Port_Save_SetActivePath(name.c_str());
+            Port_Config_SetActiveSaveProfile(name.c_str());
+            Toast(("Active: " + name + " — go to title to load").c_str());
+        };
+        /* labelFn so the active marker updates after switching without
+         * forcing a page rebuild. */
+        it.labelFn = [name]() {
+            std::string active = Port_Save_GetActivePath();
+            char buf[80];
+            std::snprintf(buf, sizeof(buf), "%s %s",
+                          (name == active) ? "*" : " ",
+                          name.c_str());
+            return std::string(buf);
+        };
+        p.items.push_back(std::move(it));
+        (void)isActive;
+    }
+
+    if (n == 0) {
+        MenuItem none;
+        none.label = "(no .sav files found in cwd)";
+        none.action = []() {};
+        p.items.push_back(std::move(none));
+    }
+
+    /* "Save current as new profile" — copies the in-memory EEPROM to
+     * the next available tmc_NN.sav. Doesn't switch active. */
+    MenuItem newProfile;
+    newProfile.action = []() {
+        /* Find the next free tmc_<n>.sav. Linear probe up to 99. */
+        char name[64];
+        int n = 1;
+        for (; n <= 99; ++n) {
+            std::snprintf(name, sizeof(name), "tmc_%d.sav", n);
+            FILE* probe = std::fopen(name, "rb");
+            if (!probe) break;
+            std::fclose(probe);
+        }
+        if (n > 99) { Toast("No free profile slots (1-99)"); return; }
+        if (Port_Save_SaveAsProfile(name)) {
+            char msg[96];
+            std::snprintf(msg, sizeof(msg), "Saved current as %s", name);
+            Toast(msg);
+        } else {
+            Toast("Save failed");
+        }
+    };
+    newProfile.labelFn = []() { return std::string("+ Save current as new profile"); };
+    p.items.push_back(std::move(newProfile));
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
     p.items.push_back({ "Items / progress",  []() { Push(BuildItemsPage()); } });
     p.items.push_back({ "Warp",              []() { Push(BuildWarpPage());  } });
+    p.items.push_back({ "Save states",       []() { Push(BuildSaveStatesPage()); } });
+    p.items.push_back({ "Save profiles",     []() { Push(BuildSaveProfilesPage()); } });
     p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
     p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });

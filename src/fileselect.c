@@ -294,6 +294,51 @@ static const u16 gUnk_080FC8DE[] = {
 #define PORT_SETTINGS_DIRTY gChooseFileState.unk_0x10
 #define PORT_SETTINGS_ROW gChooseFileState.unk_0x20
 
+#ifdef PC_PORT
+/* Save-profile cycling. Step through `tmc[_*].sav` files discovered in cwd;
+ * activating a profile re-reads EEPROM and refreshes the three save-slot
+ * tiles below so the user can immediately see / pick from that profile's
+ * data without leaving the title screen. */
+#define PORT_SETTINGS_ROW_COUNT 5
+#define PORT_PROFILE_ROW 4
+extern const char* Port_Save_GetActivePath(void);
+extern void        Port_Save_SetActivePath(const char* path);
+extern int         Port_Save_ListProfiles(char (*out)[64], int max);
+extern void        Port_Config_SetActiveSaveProfile(const char* path);
+
+/* Forward decl — defined later in this file. We need it for the
+ * profile cycler so the slot tiles refresh on switch. */
+static void ResetEmptyOrDeletedSaveFile(u32 index);
+
+static void Port_FileSelect_CycleProfile(int direction) {
+    char profiles[32][64];
+    const int n = Port_Save_ListProfiles(profiles, 32);
+    if (n == 0) return;
+
+    const char* active = Port_Save_GetActivePath();
+    int cur = 0;
+    for (int i = 0; i < n; ++i) {
+        if (strcmp(profiles[i], active) == 0) { cur = i; break; }
+    }
+    cur = (cur + direction + n) % n;
+
+    Port_Save_SetActivePath(profiles[cur]);
+    Port_Config_SetActiveSaveProfile(profiles[cur]);
+
+    /* Re-read the three engine save slots so the on-screen file tiles
+     * reflect the freshly-switched profile's data immediately. */
+    ResetEmptyOrDeletedSaveFile(0);
+    ResetEmptyOrDeletedSaveFile(1);
+    ResetEmptyOrDeletedSaveFile(2);
+}
+
+static const char* Port_FileSelect_ActiveProfileName(void) {
+    return Port_Save_GetActivePath();
+}
+#else
+#define PORT_SETTINGS_ROW_COUNT 4
+#endif
+
 
 static void sub_08050848(void);
 static void sub_0805086C(void);
@@ -777,8 +822,12 @@ static void HandlePortSettingsMenu(void) {
                 Port_PPU_CyclePresentationMode(-1);
             } else if (row == 2) {
                 Port_Config_CycleTargetFps(-1);
-            } else {
+            } else if (row == 3) {
                 Port_PPU_ToggleFullscreen();
+#ifdef PC_PORT
+            } else if (row == PORT_PROFILE_ROW) {
+                Port_FileSelect_CycleProfile(-1);
+#endif
             }
             PORT_SETTINGS_DIRTY = TRUE;
             SoundReq(SFX_TEXTBOX_CHOICE);
@@ -792,8 +841,12 @@ static void HandlePortSettingsMenu(void) {
                 Port_PPU_CyclePresentationMode(1);
             } else if (row == 2) {
                 Port_Config_CycleTargetFps(1);
-            } else {
+            } else if (row == 3) {
                 Port_PPU_ToggleFullscreen();
+#ifdef PC_PORT
+            } else if (row == PORT_PROFILE_ROW) {
+                Port_FileSelect_CycleProfile(1);
+#endif
             }
             PORT_SETTINGS_DIRTY = TRUE;
             SoundReq(SFX_TEXTBOX_CHOICE);
@@ -809,7 +862,7 @@ static void HandlePortSettingsMenu(void) {
             return;
     }
 
-    row = (row + 4) % 4;
+    row = (row + PORT_SETTINGS_ROW_COUNT) % PORT_SETTINGS_ROW_COUNT;
     if (PORT_SETTINGS_ROW != row) {
         PORT_SETTINGS_ROW = row;
         PORT_SETTINGS_DIRTY = TRUE;
@@ -822,7 +875,7 @@ static void HandlePortSettingsMenu(void) {
 }
 
 static void DrawPortSettingsMenu(void) {
-    static char sPortSettingsText[224];
+    static char sPortSettingsText[256];
     static char sFpsText[16];
     Font font;
     s32 row;
@@ -835,6 +888,21 @@ static void DrawPortSettingsMenu(void) {
     } else {
         snprintf(sFpsText, sizeof(sFpsText), "%u", (unsigned)fps);
     }
+#ifdef PC_PORT
+    snprintf(sPortSettingsText, sizeof(sPortSettingsText),
+             "PORT SETTINGS\n\n"
+             "%c Scale %ux\n"
+             "%c Filter %s\n"
+             "%c FPS %s\n"
+             "%c Fullscreen %s\n"
+             "%c Profile %s\n\n"
+             "A Change  B Back",
+             row == 0 ? '>' : ' ', (unsigned)Port_PPU_WindowScale(),
+             row == 1 ? '>' : ' ', Port_PPU_PresentationModeName(),
+             row == 2 ? '>' : ' ', sFpsText,
+             row == 3 ? '>' : ' ', Port_PPU_IsFullscreen() ? "on" : "off",
+             row == PORT_PROFILE_ROW ? '>' : ' ', Port_FileSelect_ActiveProfileName());
+#else
     snprintf(sPortSettingsText, sizeof(sPortSettingsText),
              "PORT SETTINGS\n\n"
              "%c Scale %ux\n"
@@ -846,6 +914,7 @@ static void DrawPortSettingsMenu(void) {
              row == 1 ? '>' : ' ', Port_PPU_PresentationModeName(),
              row == 2 ? '>' : ' ', sFpsText,
              row == 3 ? '>' : ' ', Port_PPU_IsFullscreen() ? "on" : "off");
+#endif
 
     MemClear(&gBG0Buffer, sizeof(gBG0Buffer));
     MemCopy(&gUnk_080FC844, &font, sizeof(font));

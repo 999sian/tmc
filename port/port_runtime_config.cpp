@@ -54,6 +54,16 @@ u8 sInternalScale = 1;
 std::string sUpscaleMethod = "nearest";
 u64 sFrameTimeNs = 0;
 bool sPortSettingsMenuEnabled = true;
+/* Persisted active save-profile filename. Defaults to tmc.sav. The
+ * port_save.c EEPROM emulation reads/writes this path; the F8 debug
+ * menu's "Save profiles" page switches it. */
+std::string sActiveSaveProfile = "tmc.sav";
+/* Persisted auto-save settings. On by default — protects new players
+ * from losing progress after a crash, since most TMC saves rely on
+ * the in-game tetra statue / file-save flow that requires getting
+ * back to a save point first. */
+bool sAutosaveEnabled = true;
+u32  sAutosaveIntervalMs = 60000;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Edge-detection cache. Set when the corresponding SDL key/button event
  * arrives during the frame; cleared by Port_Config_ClearInputEdges()
@@ -73,6 +83,9 @@ nlohmann::json DefaultsJson(void) {
         { "upscale_method", "nearest" },
         { "frame_time_ns", 0 },
         { "port_settings_menu", true },
+        { "active_save_profile", "tmc.sav" },
+        { "autosave_enabled", true },
+        { "autosave_interval_ms", 60000 },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -182,6 +195,9 @@ extern "C" void Port_Config_Load(const char* path) {
     sUpscaleMethod = j.value("upscale_method", "nearest");
     sFrameTimeNs = j.value("frame_time_ns", 0ULL);
     sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
+    sActiveSaveProfile = j.value("active_save_profile", std::string("tmc.sav"));
+    sAutosaveEnabled = j.value("autosave_enabled", true);
+    sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u);
 
     for (auto& v : sBinds) {
         v.clear();
@@ -214,6 +230,41 @@ extern "C" u32 Port_Config_TargetFps(void) {
 
 extern "C" bool Port_Config_PortSettingsMenuEnabled(void) {
     return sPortSettingsMenuEnabled;
+}
+
+extern "C" const char* Port_Config_ActiveSaveProfile(void) {
+    return sActiveSaveProfile.c_str();
+}
+
+extern "C" void Port_Config_SetActiveSaveProfile(const char* path) {
+    if (path == nullptr || path[0] == '\0') {
+        path = "tmc.sav";
+    }
+    sActiveSaveProfile = path;
+    sConfigJson["active_save_profile"] = sActiveSaveProfile;
+    SaveConfig();
+}
+
+extern "C" bool Port_Config_AutosaveEnabled(void) {
+    return sAutosaveEnabled;
+}
+
+extern "C" void Port_Config_SetAutosaveEnabled(bool enabled) {
+    sAutosaveEnabled = enabled;
+    sConfigJson["autosave_enabled"] = enabled;
+    SaveConfig();
+}
+
+extern "C" u32 Port_Config_AutosaveIntervalMs(void) {
+    return sAutosaveIntervalMs;
+}
+
+extern "C" void Port_Config_SetAutosaveIntervalMs(u32 ms) {
+    if (ms < 5000) ms = 5000;
+    if (ms > 600000) ms = 600000;
+    sAutosaveIntervalMs = ms;
+    sConfigJson["autosave_interval_ms"] = ms;
+    SaveConfig();
 }
 
 extern "C" void Port_Config_SetWindowScale(u8 scale) {
