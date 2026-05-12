@@ -14,11 +14,13 @@
 #include "player.h"
 #include "item.h"
 #include "transitions.h"
+#include "asm.h"
 
 void DoExitTransition(const Transition* data);
 void LoadItemGfx(void);
 extern bool32 Port_IsRoomHeaderPtrReadable(const void* ptr);
 extern void Port_RefreshAreaData(unsigned int area);
+const char* Port_DebugQuery_AreaName(unsigned char area);
 
 #define DEBUG_AREA_COUNT 0x90 /* matches kAreaCount in port_asset_loader.cpp */
 
@@ -120,6 +122,27 @@ void Port_DebugAction_AllKinstones(void) {
     gSave.kinstones.didAllFusions = 1;
 }
 
+/* Known-broken named areas — these have entries in kAreaNames but
+ * triggering the area-warp path crashes during room load (Port_Read-
+ * PackedRomPtr failures, entity-table walks past valid memory, etc.).
+ * Block them at the UI + dispatch layer until each is investigated.
+ * The list is the first arrival point for new "warping to X crashes"
+ * reports — add the offending area code here as a fast workaround, then
+ * fix the underlying loader bug separately. */
+static const unsigned char kBrokenWarpAreas[] = {
+    0x44, /* Simon's Simulation — entity 0x69 row triggers ROM-ptr fail */
+};
+
+/* Is (area) safe to warp to from the debug menu? Returns 1 if both
+ * named in kAreaNames AND not in the broken list, else 0. */
+int Port_DebugAction_AreaIsWarpable(unsigned char area) {
+    if (!Port_DebugQuery_AreaName(area)) return 0;
+    for (size_t i = 0; i < sizeof(kBrokenWarpAreas) / sizeof(kBrokenWarpAreas[0]); ++i) {
+        if (kBrokenWarpAreas[i] == area) return 0;
+    }
+    return 1;
+}
+
 /* Per-(area,room) spawn-coord overrides for the debug warp.
  *
  * Issue #94: blindly dropping Link at the room's geometric center lands
@@ -212,6 +235,15 @@ int Port_DebugAction_Warp(unsigned char area, unsigned char room,
     if (gSave.stats.health == 0 || gPlayerState.framestate == PL_STATE_DIE) {
         return 0;
     }
+    /* Reject warps to areas without a friendly name (AREA_NULL_*,
+     * numeric AREA_4D-style slots, etc.). These have no real map data
+     * and triggering the area-warp path runs us into the asset-loader
+     * Port_ReadPackedRomPtr failure or silently renders garbage. The
+     * UI tabs already filter the list but the public API is used from
+     * other callers too, so guard here for defence in depth. */
+    if (Port_DebugAction_AreaIsWarpable(area) == 0) {
+        return 0;
+    }
 
     t.warp_type = WARP_TYPE_AREA;
     t.startX = 0;
@@ -236,7 +268,111 @@ int Port_DebugAction_Warp(unsigned char area, unsigned char room,
 
     gRoomTransition.stairs_idx = 0; /* prevent StairsAreValid() cancellation */
     DoExitTransition(&t);
+    /* Arm the post-warp safe-spawn nudge — after the destination room
+     * has loaded and Link is placed, Port_DebugAction_WarpTick() spirals
+     * outward from his arrival tile to find a walkable spot if he's
+     * landed inside collision. Catches every room, including ones not
+     * in the curated override table. See issue #94. */
+    extern void Port_DebugAction_ArmWarpNudge(void);
+    Port_DebugAction_ArmWarpNudge();
     return 1;
+}
+
+/* -------- Auto safe-spawn nudge (issue #94) ----------------------- */
+
+/* After firing a debug warp, the room reload takes several frames
+ * (fade-out, room swap, entity respawn, fade-in). We can't sample tile
+ * collision until the destination room's tile/collision data is in
+ * place. Arm a frame counter at warp time; the per-frame Tick checks
+ * collision once it expires and, if Link is sitting on a non-walkable
+ * tile, spirals outward to find the closest walkable tile and snaps
+ * him there.
+ *
+ * Spiral search keeps Link near the user's intended destination rather
+ * than warping him to some arbitrary safe square. Radius is bounded
+ * so we never silently teleport him across the room. */
+
+#include <stdio.h>
+
+#define WARP_NUDGE_DELAY_FRAMES  45   /* ~0.75s — covers fade + spawn */
+#define WARP_NUDGE_MAX_RADIUS    8    /* tiles (= 128 px) */
+
+static int sWarpNudgePending = 0;
+
+void Port_DebugAction_ArmWarpNudge(void) {
+    sWarpNudgePending = WARP_NUDGE_DELAY_FRAMES;
+}
+
+/* Check whether the given room-relative (tileX, tileY) is walkable
+ * on the specified collision layer. 0 from GetCollisionDataAtTilePos
+ * means walkable, any other value means blocked. */
+static int Port_DebugAction_TileIsWalkable(int tileX, int tileY, unsigned char layer) {
+    if (tileX < 0 || tileX > 0x3f || tileY < 0 || tileY > 0x3f) return 0;
+    u32 tilePos = ((u32)tileX & 0x3f) | (((u32)tileY & 0x3f) << 6);
+    return GetCollisionDataAtTilePos(tilePos, layer) == 0;
+}
+
+/* Spiral outward from (tileX, tileY) up to maxRadius. Writes the first
+ * walkable tile coords into the out-params and returns 1; returns 0
+ * if no walkable tile is found within the radius. */
+static int Port_DebugAction_FindWalkable(int tileX, int tileY, unsigned char layer,
+                                         int maxRadius, int* outX, int* outY) {
+    /* Box-spiral: for each ring radius r, walk the perimeter. */
+    for (int r = 0; r <= maxRadius; ++r) {
+        for (int dy = -r; dy <= r; ++dy) {
+            for (int dx = -r; dx <= r; ++dx) {
+                /* Only test the perimeter — interior tiles were covered
+                 * by smaller radii. */
+                if (r > 0 && dx != -r && dx != r && dy != -r && dy != r) continue;
+                int tx = tileX + dx, ty = tileY + dy;
+                if (Port_DebugAction_TileIsWalkable(tx, ty, layer)) {
+                    if (outX) *outX = tx;
+                    if (outY) *outY = ty;
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void Port_DebugAction_WarpTick(void) {
+    if (sWarpNudgePending == 0) return;
+    if (--sWarpNudgePending != 0) return;
+
+    /* Only nudge when we're back in gameplay and Link is alive. */
+    if (gMain.task != TASK_GAME) return;
+    if (gSave.stats.health == 0 || gPlayerState.framestate == PL_STATE_DIE) return;
+
+    /* Sample Link's current tile collision. If walkable, nothing to do. */
+    u32 lx = gPlayerEntity.base.x.HALF.HI;
+    u32 ly = gPlayerEntity.base.y.HALF.HI;
+    unsigned char layer = gPlayerEntity.base.collisionLayer;
+    u32 linkTile = TILE(lx, ly);
+    if (GetCollisionDataAtTilePos(linkTile, layer) == 0) {
+        return; /* already on walkable ground */
+    }
+
+    /* Walk the spiral starting from Link's tile. */
+    int tileX = ((int)lx - (int)gRoomControls.origin_x) >> 4;
+    int tileY = ((int)ly - (int)gRoomControls.origin_y) >> 4;
+    int foundX = 0, foundY = 0;
+    if (!Port_DebugAction_FindWalkable(tileX, tileY, layer, WARP_NUDGE_MAX_RADIUS,
+                                       &foundX, &foundY)) {
+        fprintf(stderr, "[warp-nudge] no walkable tile within radius %d of Link "
+                        "(tile %d,%d layer %u) — leaving in place\n",
+                WARP_NUDGE_MAX_RADIUS, tileX, tileY, (unsigned)layer);
+        return;
+    }
+
+    /* Snap to the center of the chosen tile (+ 8 to land mid-tile). */
+    u16 newX = (u16)(gRoomControls.origin_x + (foundX << 4) + 8);
+    u16 newY = (u16)(gRoomControls.origin_y + (foundY << 4) + 8);
+    fprintf(stderr, "[warp-nudge] Link tile (%d,%d) blocked, snapped to (%d,%d) "
+                    "=> world (%u,%u)\n",
+            tileX, tileY, foundX, foundY, (unsigned)newX, (unsigned)newY);
+    gPlayerEntity.base.x.HALF.HI = newX;
+    gPlayerEntity.base.y.HALF.HI = newY;
 }
 
 /* ------------------------------------------------------------------ */

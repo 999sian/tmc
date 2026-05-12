@@ -100,6 +100,13 @@ static void Port_UpdateInput(void) {
     if (gMain.task == 0 && sFrameNum > 300 && sFrameNum < 310) {
         *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) &= ~START_BUTTON;
     }
+
+    /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
+     * frames after a debug-menu warp completes. */
+    {
+        extern void Port_DebugAction_WarpTick(void);
+        Port_DebugAction_WarpTick();
+    }
 }
 
 static void Port_PumpEvents(void) {
