@@ -89,6 +89,13 @@ end
 add_requires("libpng", {system = true, optional = true})
 add_requires("zlib", {system = true, optional = true})
 
+-- Dear ImGui for the in-game settings UI. Built against the SDL3 +
+-- SDL_Renderer backends so it sits on top of the existing PPU present
+-- without needing a separate GL/Vulkan context. Header-only-ish: the
+-- xmake package builds a tiny static lib that wraps imgui.cpp +
+-- imgui_demo.cpp + the two backend cpps.
+add_requires("imgui v1.92.7", {configs = {sdl3 = true, sdl3_renderer = true}})
+
 -- #15: even with `header_only = true` requested above, the xmake fmt
 -- package still links the system libfmt.so when one happens to be
 -- installed on the build host (Arch ships fmt 12.x; Fedora 43 ships
@@ -515,6 +522,7 @@ target("tmc_pc")
     add_files("port/port_audio.c")
     add_files("port/port_runtime_config.cpp")
     add_files("port/port_debug_menu.cpp")
+    add_files("port/port_imgui_menu.cpp")
     add_files("port/port_debug_actions.c")
     add_files("port/port_quicksave.c")
     add_files("port/port_inline_ptrs.c")
@@ -665,7 +673,7 @@ target("tmc_pc")
     -- libpng + zlib are needed by port_bugreport.cpp for F9 screenshot
      -- PNG encoding. Both are system-optional so MinGW Windows builds
      -- (where source builds fail) can fall back to host installs.
-    add_packages("libsdl3", "nlohmann_json", "fmt", "libpng", "zlib")
+    add_packages("libsdl3", "nlohmann_json", "fmt", "libpng", "zlib", "imgui")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.
