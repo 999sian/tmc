@@ -65,6 +65,11 @@ std::string sActiveSaveProfile = "tmc.sav";
 bool sAutosaveEnabled = true;
 u32  sAutosaveIntervalMs = 60000;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
+/* Rebind capture state. -1 = not capturing; otherwise the PortInput
+ * whose next key/button/axis press becomes a new binding. The ImGui
+ * "Controls" tab toggles this and shows a modal "Press a key..." popup
+ * while it's non-negative. */
+int sCapturingInput = -1;
 /* Edge-detection cache. Set when the corresponding SDL key/button event
  * arrives during the frame; cleared by Port_Config_ClearInputEdges()
  * after KEYINPUT is committed. Catches sub-frame taps (press+release
@@ -369,7 +374,82 @@ extern "C" void Port_Config_OpenGamepads(void) {
     Port_Config_RescanGamepads(true);
 }
 
+/* Helper for the capture path: serialize a Bind to the same string
+ * shape (`SDLK:0x...`, `SDL_GAMEPAD:0x...`, `SDL_AXIS:0x...`) used in
+ * config.json so the new binding round-trips cleanly through Save +
+ * Load on next launch. */
+static std::string FormatBindForJson(const Bind& b) {
+    char buf[40];
+    if (b.key != SDLK_UNKNOWN) {
+        std::snprintf(buf, sizeof(buf), "SDLK:0x%08x", (unsigned)b.key);
+    } else if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
+        std::snprintf(buf, sizeof(buf), "SDL_GAMEPAD:0x%08x", (unsigned)b.pad);
+    } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
+        std::snprintf(buf, sizeof(buf), "SDL_AXIS:0x%08x", (unsigned)b.axis);
+    } else {
+        return std::string();
+    }
+    return std::string(buf);
+}
+
+/* Re-serialize sBinds[input] back into sConfigJson["bindings"][name]
+ * and persist. Keeps the JSON in sync with runtime mutations so the
+ * next launch picks up the user's rebinds. */
+static void PersistBinds(PortInput input) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    const char* name = nullptr;
+    for (const auto& d : kDefaults) {
+        if (d.input == input) { name = d.name; break; }
+    }
+    if (!name) return;
+    nlohmann::json arr = nlohmann::json::array();
+    for (const Bind& b : sBinds[input]) {
+        std::string s = FormatBindForJson(b);
+        if (!s.empty()) arr.push_back(s);
+    }
+    if (!sConfigJson.contains("bindings") || !sConfigJson["bindings"].is_object()) {
+        sConfigJson["bindings"] = nlohmann::json::object();
+    }
+    sConfigJson["bindings"][name] = arr;
+    SaveConfig();
+}
+
 extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
+    /* Rebind capture: when the user's pressed an action-edit button in
+     * the ImGui Controls tab, the next press of any key / gamepad
+     * button / axis triggers becomes that action's new binding. Esc /
+     * Right-click cancels without binding. Consume the event so the
+     * captured press doesn't also propagate to its old action this
+     * frame. */
+    if (sCapturingInput >= 0) {
+        const PortInput target = (PortInput)sCapturingInput;
+        bool captured = false;
+        Bind newBind;
+        if (e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) {
+            if (e->key.key == SDLK_ESCAPE) {
+                /* Cancel without binding. */
+                sCapturingInput = -1;
+                return;
+            }
+            newBind.key = e->key.key;
+            captured = true;
+        } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+            newBind.pad = (SDL_GamepadButton)e->gbutton.button;
+            captured = true;
+        } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+                   e->gaxis.value > kAxisThreshold) {
+            newBind.axis = (SDL_GamepadAxis)e->gaxis.axis;
+            captured = true;
+        }
+        if (captured) {
+            sBinds[target].clear();
+            sBinds[target].push_back(newBind);
+            PersistBinds(target);
+            sCapturingInput = -1;
+            return;
+        }
+    }
+
     if (e->type == SDL_EVENT_GAMEPAD_ADDED || e->type == SDL_EVENT_JOYSTICK_ADDED) {
         OpenGamepad(e->gdevice.which);
     } else if (e->type == SDL_EVENT_GAMEPAD_REMOVED || e->type == SDL_EVENT_JOYSTICK_REMOVED) {
@@ -467,4 +547,93 @@ extern "C" void Port_Config_CloseGamepads(void) {
         SDL_CloseGamepad(pad);
     }
     sPads.clear();
+}
+
+/* ============================================================ */
+/*                     Rebind API for the UI                    */
+/* ============================================================ */
+
+extern "C" const char* Port_Config_InputName(PortInput input) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) return "?";
+    for (const auto& d : kDefaults) {
+        if (d.input == input) return d.name;
+    }
+    return "?";
+}
+
+extern "C" int Port_Config_BindingCount(PortInput input) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) return 0;
+    return (int)sBinds[input].size();
+}
+
+/* Human-readable label for a single binding. Composite three rows:
+ * gamepad buttons get the SDL_GetGamepadStringForButton name where
+ * available (Xbox-style "A", "Y", "DPad Up" etc.); axes get the
+ * trigger / stick name; keyboard keys use SDL_GetKeyName. Falls back
+ * to the raw numeric code if any of those return null. */
+extern "C" void Port_Config_BindingLabel(PortInput input, int idx, char* out, int cap) {
+    if (!out || cap <= 0) return;
+    out[0] = '\0';
+    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    if (idx < 0 || idx >= (int)sBinds[input].size()) return;
+    const Bind& b = sBinds[input][idx];
+    if (b.key != SDLK_UNKNOWN) {
+        const char* name = SDL_GetKeyName(b.key);
+        std::snprintf(out, cap, "%s", (name && *name) ? name : "Key");
+    } else if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
+        const char* name = SDL_GetGamepadStringForButton(b.pad);
+        if (name && *name) std::snprintf(out, cap, "Pad: %s", name);
+        else                std::snprintf(out, cap, "Pad button %d", (int)b.pad);
+    } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
+        const char* name = SDL_GetGamepadStringForAxis(b.axis);
+        if (name && *name) std::snprintf(out, cap, "Axis: %s", name);
+        else                std::snprintf(out, cap, "Pad axis %d", (int)b.axis);
+    }
+}
+
+extern "C" void Port_Config_ClearBindings(PortInput input) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    sBinds[input].clear();
+    PersistBinds(input);
+}
+
+extern "C" void Port_Config_BeginCaptureBinding(PortInput input) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    sCapturingInput = (int)input;
+}
+
+extern "C" int Port_Config_IsCapturingBinding(void) {
+    return sCapturingInput >= 0 ? 1 : 0;
+}
+
+extern "C" PortInput Port_Config_CapturingBindingInput(void) {
+    return (PortInput)sCapturingInput;
+}
+
+extern "C" void Port_Config_CancelCaptureBinding(void) {
+    sCapturingInput = -1;
+}
+
+extern "C" void Port_Config_ResetAllBindings(void) {
+    /* Re-populate sBinds from the kDefaults table and persist the
+     * resulting JSON. Mirrors what Port_Config_Load does on a missing
+     * config — same code path. */
+    for (auto& v : sBinds) v.clear();
+    for (const auto& d : kDefaults) {
+        for (const char* bind : d.binds) {
+            AddBind(d.input, bind);
+        }
+    }
+    /* Rewrite the bindings object in JSON wholesale. */
+    nlohmann::json b = nlohmann::json::object();
+    for (const auto& d : kDefaults) {
+        nlohmann::json arr = nlohmann::json::array();
+        for (const Bind& bind : sBinds[d.input]) {
+            std::string s = FormatBindForJson(bind);
+            if (!s.empty()) arr.push_back(s);
+        }
+        b[d.name] = arr;
+    }
+    sConfigJson["bindings"] = b;
+    SaveConfig();
 }
