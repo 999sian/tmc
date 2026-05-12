@@ -620,6 +620,84 @@ MenuPage BuildMainPage(void) {
 /*                          Public API                          */
 /* ============================================================ */
 
+/* ------------------------------------------------------------------ */
+/*   Accessors used by port_imgui_menu.cpp                            */
+/* ------------------------------------------------------------------ */
+/* These let the ImGui renderer walk the existing page stack without
+ * forking the state machine — Enter / Left / Right from ImGui call
+ * back into the same action lambdas the legacy key handler invokes,
+ * so behaviour stays identical regardless of which renderer is on. */
+extern "C" int Port_DebugMenu_PageDepth(void) {
+    return static_cast<int>(sPageStack.size());
+}
+extern "C" const char* Port_DebugMenu_PageTitle(int depth) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return nullptr;
+    return sPageStack[depth].title.c_str();
+}
+extern "C" int Port_DebugMenu_PageItemCount(int depth) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return 0;
+    return static_cast<int>(sPageStack[depth].items.size());
+}
+extern "C" const char* Port_DebugMenu_PageItemLabel(int depth, int idx) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return nullptr;
+    const auto& page = sPageStack[depth];
+    if (idx < 0 || idx >= (int)page.items.size()) return nullptr;
+    /* labelFn callbacks reconstruct a fresh string each frame; we
+     * stash the result in a per-thread static so the c_str() pointer
+     * stays valid until the next call. ImGui consumes the pointer
+     * synchronously inside DrawMenuPage so this is safe. */
+    static thread_local std::string sLabelCache;
+    const auto& it = page.items[idx];
+    sLabelCache = it.labelFn ? it.labelFn() : it.label;
+    return sLabelCache.c_str();
+}
+extern "C" int Port_DebugMenu_PageCursor(int depth) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return -1;
+    return sPageStack[depth].cursor;
+}
+extern "C" void Port_DebugMenu_PageSetCursor(int depth, int idx) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    auto& page = sPageStack[depth];
+    if (idx < 0 || idx >= (int)page.items.size()) return;
+    page.cursor = idx;
+}
+extern "C" void Port_DebugMenu_PageActivate(int depth, int idx) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    auto& page = sPageStack[depth];
+    if (idx < 0 || idx >= (int)page.items.size()) return;
+    /* Mirror Enter-handling from the legacy key path: prefer .action,
+     * fall back to .cycleRight for value-style items. */
+    auto& item = page.items[idx];
+    if (item.action) item.action();
+    else if (item.cycleRight) item.cycleRight();
+    ApplyPendingMutations();
+}
+extern "C" void Port_DebugMenu_PageCycleLeft(int depth, int idx) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    auto& page = sPageStack[depth];
+    if (idx < 0 || idx >= (int)page.items.size()) return;
+    auto& item = page.items[idx];
+    if (item.cycleLeft) item.cycleLeft();
+    ApplyPendingMutations();
+}
+extern "C" void Port_DebugMenu_PageCycleRight(int depth, int idx) {
+    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    auto& page = sPageStack[depth];
+    if (idx < 0 || idx >= (int)page.items.size()) return;
+    auto& item = page.items[idx];
+    if (item.cycleRight) item.cycleRight();
+    ApplyPendingMutations();
+}
+extern "C" const char* Port_DebugMenu_Toast(void) {
+    if (sToast.empty() || SDL_GetTicks() >= sToastUntilTicks) return nullptr;
+    return sToast.c_str();
+}
+
+extern "C" void Port_DebugMenu_ToastFromExternal(const char* msg) {
+    if (!msg) return;
+    Toast(msg);
+}
+
 extern "C" void Port_DebugMenu_Toggle(void) {
     if (sOpen) {
         sOpen = false;

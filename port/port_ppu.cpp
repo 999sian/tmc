@@ -303,6 +303,14 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     } else {
         printf("PPU initialized with SDL renderer backend.\n");
     }
+
+    /* Hand the renderer to the ImGui menu layer so it can draw on top
+     * of the rasterized GBA frame. Failure to init ImGui is non-fatal —
+     * the legacy SDL-text menu still works. */
+    if (sBackend == RenderBackend::Renderer) {
+        extern void Port_ImGui_Init(SDL_Window*, SDL_Renderer*);
+        Port_ImGui_Init(window, sRenderer);
+    }
 }
 
 extern "C" void Port_PPU_PresentFrame(void) {
@@ -432,8 +440,15 @@ extern "C" void Port_PPU_PresentFrame(void) {
         SDL_RenderClear(sRenderer);
         SDL_RenderTexture(sRenderer, tex, nullptr, &dst);
         {
-            extern void Port_DebugMenu_Render(SDL_Renderer*, int, int);
-            Port_DebugMenu_Render(sRenderer, outW, outH);
+            /* Try the ImGui-based menu first; if disabled (or init
+             * failed), fall back to the legacy SDL_RenderDebugText
+             * overlay so the menu still works. The soft-slot overlay
+             * is a separate HUD layer and always uses SDL primitives. */
+            extern bool Port_ImGui_Render(void);
+            if (!Port_ImGui_Render()) {
+                extern void Port_DebugMenu_Render(SDL_Renderer*, int, int);
+                Port_DebugMenu_Render(sRenderer, outW, outH);
+            }
             extern void Port_SoftSlots_RenderOverlay(void*, int, int);
             Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
         }
