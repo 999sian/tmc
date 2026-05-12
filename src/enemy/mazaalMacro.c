@@ -268,18 +268,37 @@ u32 sub_08035084(MazaalMacroEntity* this) {
 
     if (super->type == 0) {
         if (0x42 < gEntCount) {
+#ifdef PC_PORT
+            fprintf(stderr, "[mazaal] sub_08035084: gEntCount=%u > 0x42, deferring pillar spawn\n",
+                    (unsigned)gEntCount);
+#endif
             return 0;
         }
         do {
             vulnPillar = (s32)Random() % 6;
         } while (vulnPillar == gRoomTransition.field_0x38 >> 4);
         gRoomTransition.field_0x38 = (gRoomTransition.field_0x38 & 0xf) | (vulnPillar << 4);
+#ifdef PC_PORT
+        fprintf(stderr,
+                "[mazaal] spawn pillars: hp=0x%02x type2(phase)=%u entCount=%u vulnPillar=%u origin=(%d,%d)\n",
+                (unsigned)gRoomTransition.field_0x39,
+                (gRoomTransition.field_0x39 >= 0x3d) ? 0 : (gRoomTransition.field_0x39 >= 0x1f ? 1 : 2),
+                (unsigned)gEntCount, (unsigned)vulnPillar,
+                (int)gRoomControls.origin_x, (int)gRoomControls.origin_y);
+#endif
         for (i = 0, coords = gUnk_080CEECC; i < 6; i++, coords += 2) {
             if (i == vulnPillar) {
                 entity = super;
             } else {
                 entity = CreateEnemy(MAZAAL_MACRO, 1);
             }
+#ifdef PC_PORT
+            if (entity == NULL) {
+                fprintf(stderr, "[mazaal] pillar %u CreateEnemy returned NULL (entCount=%u)\n",
+                        (unsigned)i, (unsigned)gEntCount);
+                continue;
+            }
+#endif
             entity->x.HALF.HI = gRoomControls.origin_x + *coords;
             entity->y.HALF.HI = gRoomControls.origin_y + *(coords + 1);
             entity->collisionLayer = 1;
