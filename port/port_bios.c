@@ -105,6 +105,13 @@ static void Port_UpdateInput(void) {
 static void Port_PumpEvents(void) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        /* Forward every event to ImGui so its window/keyboard tracking
+         * stays in sync. ImGui only consumes input when a widget is
+         * actively hovered/focused; game input passes through. */
+        {
+            extern void Port_ImGui_HandleEvent(const SDL_Event*);
+            Port_ImGui_HandleEvent(&e);
+        }
         if (e.type == SDL_EVENT_QUIT) {
             gQuitRequested = true;
             continue;
@@ -192,6 +199,32 @@ static void Port_PumpEvents(void) {
          * gamepad shortcut conflicted with the default soft-slot R2 binding
          * (port_softslots.c) — pulling the trigger would simultaneously
          * fast-forward and fire a soft-slot item. */
+
+        /* Gamepad shortcut to open the F8 debug menu: Select + Start.
+         * Neither button alone is overloaded (Select opens the map in
+         * the engine; Start opens the pause menu), but the combo is
+         * unused by the game so it's a safe binding for Steam Deck
+         * users who don't have a keyboard within reach. Tracker pair is
+         * file-scope-static so it survives across SDL events; we update
+         * on both up and down edges so a release-and-re-press re-arms.
+         * The toggle fires once on the down-edge of whichever button
+         * completes the pair. */
+        {
+            static bool s_select_held = false, s_start_held = false;
+            const bool is_down = (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN);
+            const bool is_up   = (e.type == SDL_EVENT_GAMEPAD_BUTTON_UP);
+            if (is_down || is_up) {
+                if (e.gbutton.button == SDL_GAMEPAD_BUTTON_BACK)  s_select_held = is_down;
+                if (e.gbutton.button == SDL_GAMEPAD_BUTTON_START) s_start_held  = is_down;
+                if (is_down && s_select_held && s_start_held) {
+                    extern void Port_DebugMenu_Toggle(void);
+                    Port_DebugMenu_Toggle();
+                    s_select_held = false;
+                    s_start_held  = false;
+                }
+            }
+        }
+
         Port_Config_HandleEvent(&e);
     }
 }
