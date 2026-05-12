@@ -26,7 +26,16 @@ void Object70_Init(Entity* this) {
     this->frameIndex = this->type + 0xb;
     if (this->type != 0) {
         SnapToTile(this);
+#ifdef PC_PORT
+        /* Issue #84: on GBA flipY=3 (OAM priority 3, lowest) hides Link
+         * behind the muddy-water BG so Object70's splash sprite can
+         * show only his head. On the PC port Object70's splash sprite
+         * doesn't render, so flipY=3 leaves Link fully invisible.
+         * Use flipY=2 (normal priority) until the splash renders. */
+        gPlayerEntity.base.spriteOrientation.flipY = 2;
+#else
         gPlayerEntity.base.spriteOrientation.flipY = 3;
+#endif
         if ((gPlayerEntity.base.spritePriority.b0) != 7) {
             this->spritePriority.b0 = gPlayerEntity.base.spritePriority.b0 + 1;
         } else {
@@ -52,7 +61,12 @@ void Object70_Action1(Entity* this) {
         this->x = gPlayerEntity.base.x;
         this->y = gPlayerEntity.base.y;
         if (gPlayerState.jump_status == 0) {
+#ifdef PC_PORT
+            /* Issue #84 — see Object70_Init for rationale. */
+            gPlayerEntity.base.spriteOrientation.flipY = 2;
+#else
             gPlayerEntity.base.spriteOrientation.flipY = 3;
+#endif
             if (gPlayerEntity.base.spritePriority.b0 != 7) {
                 this->spritePriority.b0 = gPlayerEntity.base.spritePriority.b0 + 1;
             } else {
