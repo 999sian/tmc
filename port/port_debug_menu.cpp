@@ -40,6 +40,7 @@ int Port_DebugQuery_AreaRoomCount(unsigned char area);
 int Port_DebugQuery_RoomDimensions(unsigned char area, unsigned char room,
                                    unsigned short* w, unsigned short* h);
 const char* Port_DebugQuery_AreaName(unsigned char area);
+int Port_DebugAction_AreaIsWarpable(unsigned char area);
 
 /* Display / runtime-config knobs — same set the file-select "L Settings"
  * panel exposes, so the F8 menu can drive them mid-game. */
@@ -284,12 +285,11 @@ MenuPage BuildAllAreasPage(void) {
             continue;
         }
         const char* name = Port_DebugQuery_AreaName(a);
+        /* Match the ribbon UI: skip areas that aren't warpable
+         * (unnamed slots + known-broken named areas). */
+        if (!Port_DebugAction_AreaIsWarpable(a)) continue;
         char buf[80];
-        if (name) {
-            std::snprintf(buf, sizeof(buf), "0x%02X %s (%d)", area, name, count);
-        } else {
-            std::snprintf(buf, sizeof(buf), "0x%02X Area (%d rooms)", area, count);
-        }
+        std::snprintf(buf, sizeof(buf), "0x%02X %s (%d)", area, name, count);
         p.items.push_back({ buf, [a]() { Push(BuildAreaRoomsPage(a)); } });
     }
     p.items.push_back({ "<- Back", []() { Pop(); } });

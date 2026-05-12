@@ -514,6 +514,11 @@ static char sWarpFilter[64] = "";
 extern "C" int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room,
                                                   unsigned short* x, unsigned short* y,
                                                   unsigned char* layer);
+/* Returns 1 if (area) is safe to warp to (has a friendly name and is
+ * not on the known-broken deny-list). Same predicate the dispatch
+ * layer uses, so the UI list and the action layer agree on what's
+ * warpable. See port_debug_actions.c::kBrokenWarpAreas. */
+extern "C" int Port_DebugAction_AreaIsWarpable(unsigned char area);
 
 static void DrawRibbonWarpTab(void) {
     /* Filter bar — type to narrow the area list. Empty filter = show
@@ -592,9 +597,14 @@ static void DrawRibbonWarpTab(void) {
             if (roomCount <= 0) continue;
 
             const char* name = Port_DebugQuery_AreaName(a);
+            /* Skip areas that aren't warpable: no friendly name (AREA_
+             * NULL_*, numeric AREA_40-style slots) OR named-but-known-
+             * broken (Simon's Sim, etc.). Same predicate the dispatch
+             * layer uses so list + action stay in sync. See issue #94. */
+            if (!Port_DebugAction_AreaIsWarpable(a)) continue;
             char header[96];
-            if (name) std::snprintf(header, sizeof(header), "0x%02X  %s  (%d rooms)", area, name, roomCount);
-            else      std::snprintf(header, sizeof(header), "0x%02X  Area  (%d rooms)", area, roomCount);
+            std::snprintf(header, sizeof(header), "0x%02X  %s  (%d rooms)",
+                          area, name, roomCount);
 
             if (!filter_lower.empty()) {
                 std::string hl(header);
