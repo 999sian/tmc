@@ -155,6 +155,20 @@ static void Port_PumpEvents(void) {
                 Port_QuickLoad();
                 continue;
             }
+            /* F1..F4 — numbered save-state slots. Plain press = load,
+             * Shift+Fn = save. Mirrors emulator-style hotkey conventions. */
+            if (e.key.key >= SDLK_F1 && e.key.key <= SDLK_F4) {
+                extern int Port_QuickSave_SaveSlot(int slot);
+                extern int Port_QuickSave_LoadSlot(int slot);
+                const int slot = (int)(e.key.key - SDLK_F1) + 1;
+                const bool shift = (e.key.mod & SDL_KMOD_SHIFT) != 0;
+                if (shift) {
+                    Port_QuickSave_SaveSlot(slot);
+                } else {
+                    Port_QuickSave_LoadSlot(slot);
+                }
+                continue;
+            }
             /* When the debug menu is open, route key presses to it and
              * suppress further handling so the game itself doesn't see
              * the keystroke. */
@@ -264,6 +278,13 @@ void VBlankIntrWait(void) {
 
     Port_PumpEvents();
     Port_UpdateInput();
+
+    /* Auto-save (no-op unless enabled in F8 menu). Runs at frame
+     * boundaries so capture is always at a consistent post-tick state. */
+    {
+        extern void Port_QuickSave_AutoTick(void);
+        Port_QuickSave_AutoTick();
+    }
 
     VBlankIntr();
 }
