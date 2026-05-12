@@ -120,6 +120,78 @@ void Port_DebugAction_AllKinstones(void) {
     gSave.kinstones.didAllFusions = 1;
 }
 
+/* Per-(area,room) spawn-coord overrides for the debug warp.
+ *
+ * Issue #94: blindly dropping Link at the room's geometric center lands
+ * him inside walls for any room whose center isn't walkable (cross-
+ * shaped boss arenas, dungeon rooms with central pillars/holes, towns
+ * whose "center" is a building, etc.). Without per-room safe-spawn
+ * coords, the F8 Warp tab is unusable for those rooms.
+ *
+ * This table records known-good positions and layers for high-traffic
+ * warp targets. Lookup is linear (~few dozen entries); rooms not in the
+ * table fall back to the (w/2, h/2, layer=1) default that the caller
+ * computes from RoomDimensions. Add entries here when you find a room
+ * the default deposits Link into a wall.
+ *
+ * Coords are in pixels relative to the room origin. Layer 1 = bottom
+ * (default), 2 = top, useful for stairs / overlay layouts. */
+typedef struct WarpSpawnOverride {
+    unsigned char  area;
+    unsigned char  room;
+    unsigned short x;
+    unsigned short y;
+    unsigned char  layer;
+} WarpSpawnOverride;
+
+static const WarpSpawnOverride kWarpSpawnOverrides[] = {
+    /* Hyrule Town — south entrance (door from Hyrule Field) is the
+     * canonical Link-arrival spot; center lands in a building. */
+    { 0x01, 0x00, 0x88, 0x110, 1 },
+    /* Hyrule Field — overworld rooms are wide; center is fine except
+     * the Castle approach (0x00/0x06) which centers on a wall. */
+    { 0x00, 0x06, 0x88, 0xd0, 1 },
+    /* Minish Village — center is the swing tree, drop on the path. */
+    { 0x0a, 0x00, 0x80, 0xa8, 1 },
+    /* Deepwood Shrine (entry / boss) — center has the pit. */
+    { 0x48, 0x00, 0x80, 0xe0, 1 },
+    { 0x49, 0x00, 0x80, 0xe0, 1 },
+    /* Cave of Flames — central rooms have lava channel through the
+     * middle; spawn on the south ledge. */
+    { 0x50, 0x00, 0x80, 0xe0, 1 },
+    { 0x51, 0x00, 0x80, 0xe0, 1 },
+    /* Fortress of Winds — Mazaal boss room center is the floor void. */
+    { 0x58, 0x00, 0xb8, 0x78, 1 },
+    /* Fortress of Winds — Inner Mazaal cross arena, south arm. */
+    { 0x5a, 0x00, 0x88, 0xb8, 1 },
+    { 0x5a, 0x01, 0x88, 0xb8, 1 },
+    /* Temple of Droplets — Big Octorok / sun room has central platform. */
+    { 0x60, 0x00, 0x88, 0xc0, 1 },
+    /* Royal Crypt — center has the coffin. */
+    { 0x68, 0x00, 0x80, 0xc8, 1 },
+    /* Palace of Winds — entrance room has a central drop. */
+    { 0x88, 0x00, 0x80, 0xc8, 1 },
+    /* Dark Hyrule Castle — entrance, center is a wall. */
+    { 0x88, 0x01, 0x80, 0xd0, 1 },
+};
+
+/* Look up a curated safe-spawn for (area, room). Returns 1 and writes
+ * the out-params when found; returns 0 otherwise. */
+int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room,
+                                       unsigned short* x, unsigned short* y,
+                                       unsigned char* layer) {
+    for (size_t i = 0; i < sizeof(kWarpSpawnOverrides) / sizeof(kWarpSpawnOverrides[0]); ++i) {
+        const WarpSpawnOverride* e = &kWarpSpawnOverrides[i];
+        if (e->area == area && e->room == room) {
+            if (x)     *x = e->x;
+            if (y)     *y = e->y;
+            if (layer) *layer = e->layer;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Trigger a warp by building a Transition struct in place and handing it
  * to DoExitTransition() — the exact path the wallmaster + scripted area
  * exits use, so the player ends up properly initialized (correct spawn
