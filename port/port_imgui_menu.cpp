@@ -26,6 +26,8 @@
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
 
+#include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
+
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -193,6 +195,16 @@ void        Port_Config_SetActiveSaveProfile(const char* path);
 
 const char* Port_SoftSlots_GetSlotLabel(int slot);
 void        Port_SoftSlots_CycleAssignment(int slot, int direction);
+
+const char* Port_Config_InputName(int input);
+int  Port_Config_BindingCount(int input);
+void Port_Config_BindingLabel(int input, int idx, char* out, int cap);
+void Port_Config_ClearBindings(int input);
+void Port_Config_BeginCaptureBinding(int input);
+int  Port_Config_IsCapturingBinding(void);
+int  Port_Config_CapturingBindingInput(void);
+void Port_Config_CancelCaptureBinding(void);
+void Port_Config_ResetAllBindings(void);
 
 int Port_DebugQuery_AreaRoomCount(unsigned char area);
 int Port_DebugAction_Warp(unsigned char area, unsigned char room,
@@ -375,6 +387,109 @@ static void DrawRibbonProfilesTab(void) {
     }
 }
 
+/* Friendly display name for each action — matches the GBA button names
+ * users actually think in. The Port_Config side stores them as
+ * short ids ("a", "b", "soft_l2") for config.json compactness. */
+static const char* InputLabel(int input) {
+    switch (input) {
+        case PORT_INPUT_A:       return "A button (action)";
+        case PORT_INPUT_B:       return "B button (sword)";
+        case PORT_INPUT_SELECT:  return "Select";
+        case PORT_INPUT_START:   return "Start (pause)";
+        case PORT_INPUT_RIGHT:   return "D-pad Right";
+        case PORT_INPUT_LEFT:    return "D-pad Left";
+        case PORT_INPUT_UP:      return "D-pad Up";
+        case PORT_INPUT_DOWN:    return "D-pad Down";
+        case PORT_INPUT_R:       return "R (item slot 2)";
+        case PORT_INPUT_L:       return "L (item slot 1)";
+        case PORT_INPUT_SOFT_X:  return "Soft slot X";
+        case PORT_INPUT_SOFT_Y:  return "Soft slot Y";
+        case PORT_INPUT_SOFT_L2: return "Soft slot L2";
+        case PORT_INPUT_SOFT_R2: return "Soft slot R2";
+        default:                 return Port_Config_InputName(input);
+    }
+}
+
+static void DrawRibbonControlsTab(void) {
+    ImGui::TextWrapped("Click 'Set' next to an action, then press the new key or controller button. "
+                       "Esc cancels. Mappings save to config.json automatically.");
+    ImGui::Separator();
+
+    /* Two-column-ish table: action label | bindings + buttons. */
+    if (ImGui::BeginTable("##controls", 3,
+                          ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 200.0f);
+        ImGui::TableSetupColumn("Bindings", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+
+        for (int i = 0; i < PORT_INPUT_COUNT; ++i) {
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+
+            ImGui::TableSetColumnIndex(0);
+            ImGui::TextUnformatted(InputLabel(i));
+
+            ImGui::TableSetColumnIndex(1);
+            const int n = Port_Config_BindingCount(i);
+            if (n == 0) {
+                ImGui::TextDisabled("(unbound)");
+            } else {
+                for (int b = 0; b < n; ++b) {
+                    char label[64];
+                    Port_Config_BindingLabel(i, b, label, sizeof(label));
+                    if (b > 0) ImGui::SameLine(0, 6);
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.30f, 0.45f, 1.0f));
+                    ImGui::Button(label);
+                    ImGui::PopStyleColor();
+                }
+            }
+
+            ImGui::TableSetColumnIndex(2);
+            if (ImGui::Button("Set")) {
+                Port_Config_BeginCaptureBinding(i);
+                ImGui::OpenPopup("Capture binding");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear")) {
+                Port_Config_ClearBindings(i);
+            }
+
+            /* Modal popup that hangs around until the capture path
+             * commits (which clears IsCapturingBinding). We render the
+             * popup per-row but OpenPopup is fine because only one is
+             * open at a time. */
+            ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+            ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            if (ImGui::BeginPopupModal("Capture binding", nullptr,
+                                       ImGuiWindowFlags_AlwaysAutoResize |
+                                       ImGuiWindowFlags_NoMove)) {
+                ImGui::Text("Press a key or controller button for:");
+                ImGui::TextColored(ImVec4(1, 0.94f, 0.25f, 1), "%s", InputLabel(i));
+                ImGui::Text("Esc cancels.");
+                ImGui::Separator();
+                if (ImGui::Button("Cancel") ||
+                    !Port_Config_IsCapturingBinding()) {
+                    Port_Config_CancelCaptureBinding();
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::Separator();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.30f, 0.20f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.40f, 0.30f, 1.0f));
+    if (ImGui::Button("Reset all to defaults")) {
+        Port_Config_ResetAllBindings();
+        Port_DebugMenu_ToastFromExternal("Bindings reset");
+    }
+    ImGui::PopStyleColor(2);
+}
+
 static void DrawRibbonEquipTab(void) {
     for (int s = 0; s < 4; ++s) {
         ImGui::PushID(s);
@@ -509,6 +624,7 @@ static void DrawRibbon(void) {
             if (ImGui::BeginTabItem("Saves"))    { DrawRibbonSavesTab();    ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Profiles")) { DrawRibbonProfilesTab(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Equip"))    { DrawRibbonEquipTab();    ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Controls")) { DrawRibbonControlsTab(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Warp"))     { DrawRibbonWarpTab();     ImGui::EndTabItem(); }
             ImGui::EndTabBar();
         }
