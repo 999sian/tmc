@@ -257,7 +257,18 @@ def check_deps(non_interactive: bool = False) -> bool:
     # Git submodules
     virua  = REPO_ROOT / "libs" / "ViruaPPU"
     virtua = REPO_ROOT / "libs" / "VirtuaAPU"
-    if not dir_populated(virua) or not dir_populated(virtua):
+    submodule_paths = []
+    gitmodules = REPO_ROOT / ".gitmodules"
+    if gitmodules.exists():
+        for line in gitmodules.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("path = "):
+                submodule_paths.append(REPO_ROOT / line.split("=", 1)[1].strip())
+    if submodule_paths:
+        submodules_ready = all(dir_populated(path) for path in submodule_paths)
+    else:
+        submodules_ready = dir_populated(virua) and dir_populated(virtua)
+    if not submodules_ready:
         warn("Git submodules not initialized — fetching...")
         try:
             run_cmd(["git", "submodule", "update", "--init", "--recursive"], cwd=REPO_ROOT)
