@@ -382,7 +382,7 @@ typedef struct {
     u8 unk_01;
     u8 unk_02[2];
 } struct_02019EE0;
-extern struct_02019EE0 gMapDataBottomSpecial[16];
+extern struct_02019EE0 MAY_ALIAS gMapDataBottomSpecial[16];
 
 void KinstoneMenu_080A4054(void) {
     u32 uVar2;

@@ -24,7 +24,7 @@ typedef struct {
 
 extern u8 gUnk_08128E80[];
 
-extern u16 gUnk_02017AA0[];
+extern u16 MAY_ALIAS gUnk_02017AA0[];
 
 void sub_080A68D4();
 
