@@ -325,6 +325,155 @@ bool32 CheckInitPauseMenu(void) {
     return TRUE;
 }
 
+#ifdef PC_PORT
+/* Port-side muddy-water sink enforcer (issue #84 follow-up).
+ *
+ * On GBA the swamp visual is built from three pieces — Link's body
+ * hidden behind a BG tile, a Object70 splash sprite drawn on top of
+ * that tile (showing his head), and spriteOffsetY accumulating so the
+ * splash visibly drifts downward. On the PC port Object70's splash
+ * sprite has no VRAM data wired up, so we don't get the head-only
+ * overlay; combined with whatever's preventing SurfaceAction_Swamp
+ * from firing for some users on warp-in, Link just stands still.
+ *
+ * This tick samples the actTile under Link directly each frame. If
+ * it's ACT_TILE_19 (TILE_ACT_SWAMP), we accumulate a port-side sink
+ * counter and translate it into:
+ *
+ *   - rising spriteOffsetY (Link visibly slides downward)
+ *   - draw=0 once he's sunk past the muddy-water tile (vanishes)
+ *   - damage + reset position once fully sunk (matches GBA gameplay)
+ *
+ * Runs regardless of whether the engine's surfaceTimer pipeline is
+ * being driven, so the user always sees feedback. */
+#include "asm.h"
+#include "tiles.h"
+
+static void Port_MuddyWaterSinkTick(PlayerEntity* this) {
+    static u16 sSinkTimer = 0;
+
+    /* Pre-gate diagnostic: log every 30 frames so we see what's
+     * actually gating us out before any early return runs. */
+    {
+        static int sPreLog = 0;
+        if ((sPreLog++ % 30) == 0) {
+            fprintf(stderr,
+                    "[mud-pre] area=0x%02x pos=(%d,%d) action=%u z=%d minish=%d dash=0x%x actTile=0x%x\n",
+                    (unsigned)gRoomControls.area,
+                    (int)super->x.HALF.HI, (int)super->y.HALF.HI,
+                    (unsigned)super->action, (int)super->z.WORD,
+                    (gPlayerState.flags & PL_MINISH) != 0,
+                    (unsigned)gPlayerState.dash_state,
+                    (unsigned)GetActTileAtEntity(super));
+        }
+    }
+
+    /* Centralise the "we are NOT sinking right now" cleanup so all
+     * exit paths agree on clearing the port-side clip flag. */
+    extern int Port_MudSinkActive;
+
+    /* Only the standard walking / running actions count; don't sink
+     * during cutscenes, item-get, jumps, etc. */
+    if (super->action != PLAYER_NORMAL && super->action != PLAYER_ROLL) {
+        sSinkTimer = 0;
+        Port_MudSinkActive = 0;
+        return;
+    }
+    /* z != 0 means airborne — bunny-hopping over swamp is safe. */
+    if (super->z.WORD != 0) {
+        sSinkTimer = 0;
+        Port_MudSinkActive = 0;
+        return;
+    }
+    /* Minish form doesn't sink (matches GBA). */
+    if (gPlayerState.flags & PL_MINISH) {
+        sSinkTimer = 0;
+        Port_MudSinkActive = 0;
+        return;
+    }
+    /* Dashing across swamp (Pegasus Boots) skips it. */
+    if ((gPlayerState.dash_state & 0x40) != 0) {
+        sSinkTimer = 0;
+        Port_MudSinkActive = 0;
+        return;
+    }
+
+    u32 actTile = GetActTileAtEntity(super);
+    /* UNCONDITIONAL log to confirm we reach here. Throttle by frame
+     * counter from caller-visible state to avoid flooding. */
+    if ((sSinkTimer & 0xf) == 0 || actTile == ACT_TILE_19) {
+        fprintf(stderr, "[mud] area=0x%02x pos=(%d,%d) actTile=0x%x match=%d timer=%u\n",
+                (unsigned)gRoomControls.area,
+                (int)super->x.HALF.HI, (int)super->y.HALF.HI,
+                (unsigned)actTile, actTile == ACT_TILE_19, (unsigned)sSinkTimer);
+        fflush(stderr);
+    }
+    if (actTile != ACT_TILE_19) {
+        /* Not on swamp this frame. Drain the timer slowly. Keep the
+         * port-side clip flag ON as long as we still have accumulated
+         * sink — otherwise the player's collision box flicking between
+         * an adjacent grass/mud tile every other frame would toggle
+         * the clip on and off, producing a visible flash. */
+        if (sSinkTimer > 0) sSinkTimer--;
+        extern int Port_MudSinkActive;
+        Port_MudSinkActive = (sSinkTimer > 0);
+        return;
+    }
+
+    /* Standing on swamp. Accumulate, scale the offset, eventually
+     * damage and reset. Constants tuned to roughly match the GBA
+     * 4-second sink-and-respawn cadence. */
+    sSinkTimer++;
+    if (sSinkTimer < 240) {
+        /* GBA "head sticking out of mud" visual: the original game
+         * hides Link's body behind a BG tile and overlays Object70's
+         * splash sprite to show just his head. On PC port we don't
+         * have the splash sprite tiles, AND the mud BG isn't drawn
+         * over him in a way flipY=3 would clip, so neither half of
+         * the GBA trick works.
+         *
+         * Instead, set a port-side clip flag that port_draw reads
+         * when rendering the player. The renderer skips OAM pieces
+         * below `Port_MudClipFromY` so only the top portion (head +
+         * cap) shows. spriteOffsetY pushes the visible head downward
+         * over time so the sink reads as progressing. */
+        extern int Port_MudSinkActive;
+        extern int Port_MudSinkClipY;
+        Port_MudSinkActive = 1;
+        /* Progressive clip: start showing the whole body, then clip
+         * tighter over time so Link visibly disappears into the mud
+         * head-last. Sprite yoff is measured from the entity anchor
+         * (Link's feet); negative yoff = above feet (body, head),
+         * positive = below feet (usually 0 for him). Clipping skips
+         * any piece whose yoff > clipY, so smaller clipY = more body
+         * hidden. */
+        if      (sSinkTimer < 30)  Port_MudSinkClipY = 16;   /* full body */
+        else if (sSinkTimer < 60)  Port_MudSinkClipY = 0;    /* hide feet */
+        else if (sSinkTimer < 120) Port_MudSinkClipY = -8;   /* hide legs */
+        else if (sSinkTimer < 180) Port_MudSinkClipY = -16;  /* hide torso */
+        else                       Port_MudSinkClipY = -22;  /* head only */
+        /* Mild downward drift so the visible portion settles into mud. */
+        s32 offset = (s32)(sSinkTimer / 30);
+        if (offset > 8) offset = 8;
+        super->spriteOffsetY = (s8)offset;
+        if ((sSinkTimer % 30) == 0) {
+            fprintf(stderr, "[mud-apply] timer=%u offset=%d clipY=%d\n",
+                    (unsigned)sSinkTimer, (int)offset, Port_MudSinkClipY);
+            fflush(stderr);
+        }
+    } else {
+        /* Fully sunk — drown reset, matches the SurfaceAction_Swamp
+         * tail behaviour. */
+        sSinkTimer = 0;
+        Port_MudSinkActive = 0;
+        CreateFx(super, FX_GREEN_SPLASH, 0);
+        super->iframes = 0x20;
+        ModHealth(-4);
+        RespawnPlayer();
+    }
+}
+#endif
+
 void DoPlayerAction(PlayerEntity* this) {
 #ifdef PC_PORT
     {
@@ -380,6 +529,12 @@ void DoPlayerAction(PlayerEntity* this) {
         [PLAYER_PARACHUTE] = PlayerParachute,
     };
     sPlayerActions[super->action](this);
+#ifdef PC_PORT
+    /* After the standard action ran for this tick, apply the port-side
+     * mud-sink visual (#84). Done here so spriteOffsetY survives until
+     * the next interrupt copy. */
+    Port_MuddyWaterSinkTick(this);
+#endif
 }
 
 static void PlayerInit(PlayerEntity* this) {
