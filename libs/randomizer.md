@@ -33,24 +33,53 @@ prebuilt binary placed at `<exe>/randomizer/MinishCapRandomizerCLI[.exe]`.
 
 ## Building the CLI from the submodule
 
+### Recommended: let xmake do it
+
+The `tmc_pc` target now depends on `randomizer_cli`, which calls
+`dotnet publish` automatically and drops the result at
+`build/pc/randomizer/MinishCapRandomizerCLI[.exe]` — exactly where
+`Port_Randomizer_FindCLI()` looks (search slot #2).
+
+A normal `xmake build -y tmc_pc` produces both binaries. If .NET 8
+SDK is missing, the `randomizer_cli` step prints a yellow warning and
+the rest of the build continues — only F8 → Randomizer is degraded
+until you install .NET and rerun.
+
+### One-time .NET 8 SDK install
+
 ```sh
-# One-time .NET SDK install:
-#   Linux:   curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
-#   macOS:   brew install --cask dotnet-sdk
-#   Windows: winget install Microsoft.DotNet.SDK.8
-#
-# Then from this repo's root:
-cd libs/randomizer/MinishCapRandomizerCLI
-dotnet publish -c Release -r linux-x64 --self-contained \
-    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
-    -o ../../../build/pc/randomizer
+# Linux:
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
+
+# macOS:
+brew install --cask dotnet-sdk
+
+# Windows:
+winget install Microsoft.DotNet.SDK.8
+
+# Verify:
+dotnet --list-sdks   # should show 8.0.xxx
 ```
 
-`-r linux-x64` → use `win-x64`, `osx-x64`, or `osx-arm64` for the other
-platforms. The output ends up at
-`build/pc/randomizer/MinishCapRandomizerCLI[.exe]`, which is where
-`Port_Randomizer_FindCLI()` already looks (search order #2). No
-additional configuration needed.
+### Manual rebuild of just the CLI
+
+```sh
+xmake build randomizer_cli
+```
+
+Or invoke `dotnet publish` directly with the same args xmake uses:
+
+```sh
+dotnet publish libs/randomizer/MinishCapRandomizerCLI/MinishCapRandomizerCLI.csproj \
+    -c Release -r linux-x64 --self-contained \
+    -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
+    -o build/pc/randomizer
+```
+
+`-r linux-x64` → swap for `win-x64`, `osx-x64`, or `osx-arm64` to
+cross-build for other platforms. The csproj's
+`<SelfContained>true</SelfContained>` means the resulting binary
+embeds the .NET 8 runtime — **end users do not need .NET installed**.
 
 ## Using it in tmc_pc
 
