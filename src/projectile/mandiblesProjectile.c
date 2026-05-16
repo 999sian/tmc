@@ -259,6 +259,9 @@ void sub_080AA270(MandiblesProjectileEntity* this) {
     super->subtimer = gUnk_08129CA4[Random() & 7];
     animationState = parent->animationState;
     if (super->animationState == 0xff) {
+        /* #91 / #97 pattern: gUnk_08129CF4 has 8 entries; parent's raw
+         * animationState may exceed 7 during transient states. Clamp. */
+        if (animationState >= 8) animationState = 7;
         super->animationState = animationState;
         super->hitbox = (Hitbox*)gUnk_08129CF4[animationState];
         sub_080AA3E0(this, 0);
