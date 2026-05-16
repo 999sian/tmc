@@ -63,18 +63,31 @@ typedef struct {
 } VBlankDMA;
 
 typedef struct {
-    /*0x00*/ LcdControls lcd;
-    /*0x08*/ BgSettings bg0;
-    /*0x14*/ BgSettings bg1;
-    /*0x20*/ BgAffSettings bg2;
-    /*0x2c*/ BgAffSettings bg3;
-    /*0x38*/ BgControls controls;
-    /*0x6c*/ VBlankDMA vBlankDMA;
-    // /*0x6d*/ u8 _6d;
-    // /*0x70*/ void* _70;
-    // /*0x74*/ u32 _74;
-    // /*0x78*/ u32 _78;
+    /* GBA / PC64 offsets */
+    /*0x00 / 0x00*/ LcdControls lcd;
+    /*0x08 / 0x08*/ BgSettings bg0;
+    /*0x14 / 0x18*/ BgSettings bg1;
+    /*0x20 / 0x28*/ BgAffSettings bg2;
+    /*0x2c / 0x38*/ BgAffSettings bg3;
+    /*0x38 / 0x48*/ BgControls controls;
+    /*0x6c / 0x80*/ VBlankDMA vBlankDMA;
 } Screen;
+
+PORT_STATIC_ASSERT_SIZE(BgSettings,    0x0C, 0x10, "BgSettings size drift");
+PORT_STATIC_ASSERT_SIZE(BgAffSettings, 0x0C, 0x10, "BgAffSettings size drift");
+PORT_STATIC_ASSERT_SIZE(VBlankDMA,     0x10, 0x20, "VBlankDMA size drift");
+PORT_STATIC_ASSERT_OFFSET(BgSettings,    subTileMap, 0x08, 0x08, "BgSettings.subTileMap");
+PORT_STATIC_ASSERT_OFFSET(BgAffSettings, subTileMap, 0x08, 0x08, "BgAffSettings.subTileMap");
+PORT_STATIC_ASSERT_OFFSET(VBlankDMA,     src,        0x04, 0x08, "VBlankDMA.src");
+PORT_STATIC_ASSERT_OFFSET(VBlankDMA,     dest,       0x08, 0x10, "VBlankDMA.dest");
+PORT_STATIC_ASSERT_OFFSET(VBlankDMA,     size,       0x0C, 0x18, "VBlankDMA.size");
+PORT_STATIC_ASSERT_OFFSET(Screen, bg0,       0x08, 0x08, "Screen.bg0");
+PORT_STATIC_ASSERT_OFFSET(Screen, bg1,       0x14, 0x18, "Screen.bg1");
+PORT_STATIC_ASSERT_OFFSET(Screen, bg2,       0x20, 0x28, "Screen.bg2");
+PORT_STATIC_ASSERT_OFFSET(Screen, bg3,       0x2c, 0x38, "Screen.bg3");
+PORT_STATIC_ASSERT_OFFSET(Screen, controls,  0x38, 0x48, "Screen.controls");
+PORT_STATIC_ASSERT_OFFSET(Screen, vBlankDMA, 0x6c, 0x80, "Screen.vBlankDMA");
+PORT_STATIC_ASSERT_SIZE(Screen, 0x7C, 0xA0, "Screen size drift");
 
 #ifndef OAM_COMMAND_DEFINED
 #define OAM_COMMAND_DEFINED
