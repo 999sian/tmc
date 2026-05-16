@@ -556,6 +556,7 @@ target("tmc_pc")
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/
+    add_files("port/port_randomizer.cpp")  -- Phase A: shell-out to MinishCapRandomizerCLI
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")

@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "port_debug_menu.h"
+#include "port_randomizer.h"
 
 extern "C" {
 void Port_DebugAction_GiveAllItems(void);
@@ -600,6 +601,57 @@ MenuPage BuildSaveProfilesPage(void) {
     return p;
 }
 
+MenuPage BuildRandomizerPage(void) {
+    MenuPage p;
+    p.title = "RANDOMIZER (requires EU ROM + CLI)";
+
+    /* "Status" — confirm CLI is reachable so users can debug install
+     * problems without leaving the in-game menu. */
+    p.items.push_back({ "Detect CLI", []() {
+        char path[4096];
+        if (Port_Randomizer_FindCLI(path, sizeof(path))) {
+            Toast(std::string("CLI: ") + path);
+        } else {
+            Toast("CLI not found — set TMC_RANDOMIZER_CLI or place under <exe>/randomizer/");
+        }
+    }});
+
+    /* "Roll new seed" — runs the CLI against ./baserom_eu.gba (or
+     * TMC_RANDOMIZER_INPUT_ROM if set), writes baserom_rando.gba next
+     * to the executable. The user manually copies that to baserom.gba
+     * and restarts to play the rolled seed. */
+    p.items.push_back({ "Roll new seed", []() {
+        const char* input  = std::getenv("TMC_RANDOMIZER_INPUT_ROM");
+        const char* output = std::getenv("TMC_RANDOMIZER_OUTPUT_ROM");
+        const char* spoiler = std::getenv("TMC_RANDOMIZER_SPOILER");
+        if (!input)   input   = "./baserom_eu.gba";
+        if (!output)  output  = "./baserom_rando.gba";
+        if (!spoiler) spoiler = "./baserom_rando_spoiler.txt";
+
+        char err[256] = {0};
+        PortRandomizerStatus rc = Port_Randomizer_RollSeed(
+            input, 0 /* random seed */, output, spoiler, err, sizeof(err));
+
+        switch (rc) {
+            case PORT_RANDO_OK:
+                Toast(std::string("Rolled → ") + output + " — copy to baserom.gba and restart");
+                break;
+            case PORT_RANDO_CLI_NOT_FOUND:
+                Toast("Randomizer CLI not installed");
+                break;
+            case PORT_RANDO_INPUT_ROM_MISSING:
+                Toast(std::string("EU ROM missing at ") + input);
+                break;
+            default:
+                Toast(std::string("Roll failed: ") + err);
+                break;
+        }
+    }});
+
+    p.items.push_back({ "Back", []() { Pop(); } });
+    return p;
+}
+
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
@@ -609,6 +661,7 @@ MenuPage BuildMainPage(void) {
     p.items.push_back({ "Save profiles",     []() { Push(BuildSaveProfilesPage()); } });
     p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
     p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
+    p.items.push_back({ "Randomizer",        []() { Push(BuildRandomizerPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
     p.items.push_back({ "Close menu",        []() { Pop(); } });
     return p;
