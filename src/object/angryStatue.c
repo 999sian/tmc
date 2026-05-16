@@ -35,6 +35,10 @@ void AngryStatue_Init(Entity* this) {
 }
 
 void AngryStatue_Action1(Entity* this) {
+    /* #97 pattern: controller entity may be deleted before this statue. */
+    if (this->parent == NULL) {
+        return;
+    }
     if (this->parent->subtimer == 1) {
         this->action = 2;
         InitializeAnimation(this, this->type + 4);
@@ -72,7 +76,8 @@ void AngryStatue_Action3(Entity* this) {
         this->action = 4;
         this->timer = 15;
         InitializeAnimation(this, this->type);
-    } else {
+    } else if (this->parent != NULL) {
+        /* #97 pattern: parent may be cleared before action transitions. */
         this->parent->z.BYTES.byte2 |= 1 << this->type2;
     }
 }
