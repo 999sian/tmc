@@ -240,7 +240,7 @@ target_end()
 -- Group all tools
 target("tools")
     set_kind("phony")
-    add_deps("agb2mid", "aif2pcm", "asset_processor", "asset_extractor", "bin2c", "gbafix", "gbagfx", "mid2agb", "preproc", "scaninc", "tmc_strings")
+    add_deps("agb2mid", "aif2pcm", "asset_processor", "bin2c", "gbafix", "gbagfx", "mid2agb", "preproc", "scaninc", "tmc_strings")
 target_end()
 
 -- ====================
@@ -362,7 +362,6 @@ target("tmc_pc")
     set_kind("binary")
     set_languages("c11", "cxx20")
     set_targetdir("build/pc")
-    add_deps("asset_extractor")
 
     local use_avx2 = get_config("pc_avx2")
     if use_avx2 == nil then
