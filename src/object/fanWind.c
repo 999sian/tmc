@@ -24,6 +24,11 @@ void FanWind(Entity* this) {
         this->child = (Entity*)collisionData;
         InitializeAnimation(this, this->type);
     }
+    /* #97 pattern: fan wind effect can outlive the fan that spawned it. */
+    if (this->parent == NULL) {
+        DeleteThisEntity();
+        return;
+    }
     this->speed = this->parent->speed;
     LinearMoveUpdate(this);
     if (IsTileCollision((u8*)this->child, this->x.HALF.HI, this->y.HALF.HI, 9) != 0) {

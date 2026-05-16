@@ -61,6 +61,12 @@ void GyorgMaleEnergyProjectile_Init(Entity* this) {
 void GyorgMaleEnergyProjectile_Action1(Entity* this) {
     u32 animationState;
 
+    /* #97 pattern: Gyorg's death sequence clears parent before this projectile
+     * cleans up. NULL deref on GBA returned BIOS garbage; on PC it SIGSEGVs. */
+    if (this->parent == NULL) {
+        DeleteThisEntity();
+        return;
+    }
     if (this->parent->next == NULL) {
         DeleteThisEntity();
     }

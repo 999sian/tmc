@@ -41,6 +41,11 @@ void DirtBallProjectile_OnTick(Entity* this) {
 
 void DirtBallProjectile_OnCollision(Entity* this) {
     this->knockbackSpeed = 0;
+    /* #97 pattern: parent may already be freed when collision is processed. */
+    if (this->parent == NULL) {
+        DeleteThisEntity();
+        return;
+    }
     if (this->type == 0) {
         this->parent->child = NULL;
         if (this->contactFlags == CONTACT_NOW) {

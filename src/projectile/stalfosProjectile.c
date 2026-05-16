@@ -103,6 +103,11 @@ void StalfosProjectile_Init(Entity* this) {
 }
 
 void StalfosProjectile_Action1(Entity* this) {
+    /* #97 pattern: parent stalfos can die between throw and projectile tick. */
+    if (this->parent == NULL) {
+        sub_080A9BA8(this);
+        return;
+    }
     if (this->parent->next == NULL) {
         sub_080A9BA8(this);
     }
@@ -115,6 +120,11 @@ void StalfosProjectile_Action1(Entity* this) {
 }
 
 void StalfosProjectile_Action2(Entity* this) {
+    /* #97 pattern: parent stalfos can die between throw and projectile tick. */
+    if (this->parent == NULL) {
+        sub_080A9BA8(this);
+        return;
+    }
     if (this->parent->next == NULL) {
         sub_080A9BA8(this);
     }

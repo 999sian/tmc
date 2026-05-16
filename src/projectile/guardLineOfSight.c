@@ -31,6 +31,12 @@ void GuardLineOfSight(Entity* this) {
                 this->parent->type = 0xff;
             }
             DeleteThisEntity();
+            return;
+        }
+        /* #97 pattern: parent guard may have died this frame. */
+        if (this->parent == NULL) {
+            DeleteThisEntity();
+            return;
         }
         CopyPosition(this->parent, this);
         if (this->subtimer != 0) {

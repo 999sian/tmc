@@ -264,6 +264,10 @@ void sub_0803A364(MazaalBraceletEntity* this) {
     u32 index;
     s8* ptr;
 
+    /* #97 pattern: Mazaal death sequence orphans the bracelet. */
+    if (super->parent == NULL) {
+        return;
+    }
     ptr = gUnk_080CED6C;
     index = ((super->parent->subtimer >> 4) + 3);
     super->z.HALF.HI = ptr[(index + (u32)super->type * 2) & 7] + 4;
