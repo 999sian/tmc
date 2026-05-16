@@ -1,6 +1,6 @@
 set_project("tmc")
 -- Keep in sync with port/port_version.h.
-local TMC_PC_VERSION = "0.1.3"
+local TMC_PC_VERSION = "0.2.0-pre"
 set_version(TMC_PC_VERSION)
 set_xmakever("2.7.0")
 
@@ -687,21 +687,21 @@ target("tmc_pc")
             end
         end
         if libomp_prefix then
-            add_defines("USE_OPENMP")
-            add_includedirs(path.join(libomp_prefix, "include"))
-            add_linkdirs(path.join(libomp_prefix, "lib"))
-            add_cflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
-            add_cxxflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
-            add_syslinks("omp")
+            -- add_defines("USE_OPENMP")
+            --add_includedirs(path.join(libomp_prefix, "include"))
+            --add_linkdirs(path.join(libomp_prefix, "lib"))
+            --add_cflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
+            --add_cxxflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
+            --add_syslinks("omp")
         else
             print("[tmc_pc] libomp not found — building without OpenMP. Install with: brew install libomp")
         end
     else
-        add_defines("USE_OPENMP")
-        add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
-        add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
-        add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
-        add_syslinks("gomp")
+        -- add_defines("USE_OPENMP")
+        --add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
+        --add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
+        --add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
+        --add_syslinks("gomp")
     end
 
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
