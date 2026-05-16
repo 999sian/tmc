@@ -11,11 +11,16 @@ on:
         description: "Date+SHA label (CI) or tag name (release)"
         required: true
         type: string
+      os_filter:
+        description: "Optional OS filter for the build matrix"
+        required: false
+        default: all
+        type: string
     secrets:
       ASSETS_TOKEN:
         required: true
       PRIVATE_SUBMODULES_TOKEN:
-        required: true
+        required: false
 
 jobs:
   build:
@@ -30,37 +35,39 @@ jobs:
             region: usa
             flag: --usa
             exe_name: tmc_pc
-            extractor_name: asset_extractor
           - runner: windows-latest
             os_name: windows
             region: usa
             flag: --usa
             exe_name: tmc_pc.exe
-            extractor_name: asset_extractor.exe
     steps:
       - name: Checkout source
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: actions/checkout@v4
         with:
           submodules: false
+          clean: false
       - name: Checkout private submodules
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         env:
           SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
         run: |
-          if [ -z "$SUBMODULES_TOKEN" ]; then
-            echo "::error::PRIVATE_SUBMODULES_TOKEN is empty. Cannot fetch private submodules."
-            exit 1
+          if [ -n "$SUBMODULES_TOKEN" ]; then
+            url_cfg="url.https://x-access-token:${SUBMODULES_TOKEN}@github.com/.insteadOf"
+            git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+                -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+                submodule sync --recursive
+            git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+                -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+                submodule update --init --recursive --depth 1
+          else
+            git submodule sync --recursive
+            git submodule update --init --recursive --depth 1
           fi
-          url_cfg="url.https://x-access-token:${SUBMODULES_TOKEN}@github.com/.insteadOf"
-          git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
-              -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
-              submodule sync --recursive
-          git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
-              -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
-              submodule update --init --recursive
 
       - name: Install Linux dependencies
-        if: matrix.os_name == 'linux'
+        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'linux' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -69,7 +76,7 @@ jobs:
             xutils-dev xorg-dev autoconf automake libtool meson ninja-build
 
       - name: Install MinGW Windows
-        if: matrix.os_name == 'windows'
+        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'windows' }}
         shell: powershell
         run: |
           choco install mingw -y --no-progress
@@ -114,11 +121,13 @@ jobs:
           g++ --version
 
       - name: Setup xmake
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
 
       - name: Checkout private assets repository
+        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && vars.ASSETS_REPO != '' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.ASSETS_REPO }}
@@ -126,47 +135,55 @@ jobs:
           path: _assets
 
       - name: Copy ROMs into workspace
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         run: |
-          cp _assets/baserom.gba ./baserom.gba
-          cp _assets/baserom_eu.gba ./baserom_eu.gba
+          if [ -f "_assets/baserom.gba" ]; then
+            cp _assets/baserom.gba ./baserom.gba
+          fi
+          if [ -f "_assets/baserom_eu.gba" ]; then
+            cp _assets/baserom_eu.gba ./baserom_eu.gba
+          fi
+          test -f ./baserom.gba
+          test -f ./baserom_eu.gba
 
       - name: Build selected region (non-interactive, Linux)
-        if: matrix.os_name == 'linux'
-        run: python build.py ${{ matrix.flag }}
+        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'linux' }}
+        run: python build.py ${{ matrix.flag }} --slim
 
       - name: Build selected region (non-interactive, Windows MinGW)
-        if: matrix.os_name == 'windows'
+        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'windows' }}
         env:
           TMC_XMAKE_TOOLCHAIN: mingw
           PYTHONUTF8: "1"
           PYTHONIOENCODING: "utf-8"
-        run: python build.py ${{ matrix.flag }}
+        run: python build.py ${{ matrix.flag }} --slim
 
       - name: Prepare artifact payload
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         run: |
           BIN_PATH="build/pc/${{ matrix.exe_name }}"
-          EXTRACTOR_PATH="build/pc/${{ matrix.extractor_name }}"
           test -f "$BIN_PATH"
-          test -f "$EXTRACTOR_PATH"
 
           OUTDIR="artifact"
           mkdir -p "$OUTDIR"
           cp "$BIN_PATH" "$OUTDIR/${{ matrix.exe_name }}"
-          cp "$EXTRACTOR_PATH" "$OUTDIR/${{ matrix.extractor_name }}"
-          if [ -f "assets/sounds.json" ]; then
-            cp assets/sounds.json "$OUTDIR/sounds.json"
-          fi
 
       - name: Create archive
-        shell: bash
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
+        shell: pwsh
         run: |
-          ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${{ inputs.version_label }}"
-          tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact .
-          echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
+          $archiveBase = "tmc-${{ matrix.region }}-${{ matrix.os_name }}-${{ inputs.version_label }}"
+          $archiveName = "$archiveBase.zip"
+          if (Test-Path $archiveName) {
+            Remove-Item $archiveName -Force
+          }
+          Compress-Archive -Path artifact\* -DestinationPath $archiveName
+          "archive_name=$archiveName" >> $env:GITHUB_ENV
 
       - name: Upload artifact
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.archive_name }}
