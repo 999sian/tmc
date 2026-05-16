@@ -178,8 +178,20 @@ jobs:
         with:
           xmake-version: latest
 
+      - name: Probe for ASSETS_TOKEN
+        id: probe_assets
+        shell: bash
+        env:
+          T: ${{ secrets.ASSETS_TOKEN }}
+        run: |
+          if [ -n "$T" ] && [ -n "${{ vars.ASSETS_REPO }}" ]; then
+            echo "have_assets=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "have_assets=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout private assets repository
-        if: vars.ASSETS_REPO != '' && secrets.ASSETS_TOKEN != ''
+        if: steps.probe_assets.outputs.have_assets == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.ASSETS_REPO }}
@@ -187,14 +199,14 @@ jobs:
           path: _assets
 
       - name: Copy ROMs into workspace
-        if: vars.ASSETS_REPO != '' && secrets.ASSETS_TOKEN != ''
+        if: steps.probe_assets.outputs.have_assets == 'true'
         shell: bash
         run: |
           cp _assets/baserom.gba ./baserom.gba
           cp _assets/baserom_eu.gba ./baserom_eu.gba
 
       - name: Build selected region (non-interactive, Linux)
-        if: matrix.os_name == 'linux' && vars.ASSETS_REPO != '' && secrets.ASSETS_TOKEN != ''
+        if: matrix.os_name == 'linux' && steps.probe_assets.outputs.have_assets == 'true'
         run: python build.py ${{ matrix.flag }}
 
       - name: Resolve MinGW POSIX path (Windows)
