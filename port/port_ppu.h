@@ -40,6 +40,7 @@ const char* Port_PPU_FilterName(void);
 // monitor refresh rate; without this, fast-forward (#26) and FPS presets
 // > 60 are limited by the display, not by the busy-wait timer.
 void Port_PPU_SetVSync(bool enabled);
+bool Port_PPU_VSyncEnabled(void);
 
 // Cleanup
 void Port_PPU_Shutdown(void);
