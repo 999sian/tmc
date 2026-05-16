@@ -154,6 +154,12 @@ struct AssetGroupCache {
     PortAssetPak::PakSet paks;
     bool paksEnabled = false;
 
+    /* Mod overlays: directory roots searched (first-wins) before the
+     * pak archives and the loose assets tree. Populated by
+     * Port_Mods_Init() at startup from the TMC_MODS env var or auto-
+     * discovery in <exe>/mods/. */
+    std::vector<std::filesystem::path> modRoots;
+
 #ifdef TMC_OVERLAP_EXTRACT_INIT
     /* Per-pak-category gates so the engine can run
      * Port_PPU_Init and AgbMain title-screen rendering in parallel
@@ -814,6 +820,27 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     WaitForPhaseGate(PhaseGateIndexForRelative(relativePath));
 #endif
 
+    /* Mod overrides win over both pak archives and the loose tree.
+     * First-match-wins across modRoots, in TMC_MODS-listed order. */
+    for (const auto& modRoot : gAssetGroupCache.modRoots) {
+        const std::filesystem::path modPath = modRoot / std::filesystem::path(relativePath);
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(modPath, ec)) {
+            continue;
+        }
+        std::ifstream in(modPath, std::ios::binary);
+        if (!in.good()) {
+            continue;
+        }
+        auto data = std::make_unique<std::vector<u8>>(std::istreambuf_iterator<char>(in),
+                                                      std::istreambuf_iterator<char>());
+        std::fprintf(stderr, "[MOD] override %s ← %s (%zu bytes)\n",
+                     relativePath.c_str(), modPath.string().c_str(), data->size());
+        const std::vector<u8>* result = data.get();
+        gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
+        return result;
+    }
+
     /* Pak first when mounted: an mmap lookup beats opening a small
      * file on every cold cache-miss. We still wrap the bytes in an
      * owning std::vector to keep the existing six callers (which
@@ -1341,6 +1368,10 @@ GfxLoadDecision EvaluateGfxControl(u8 unknown) {
 }
 
 } // namespace
+
+void Port_AddModRoot(const std::filesystem::path& modRoot) {
+    gAssetGroupCache.modRoots.push_back(modRoot);
+}
 
 /* gPaletteBuffer lives in port_linked_stubs.c; declare it locally rather
  * than pulling all of main.h into this translation unit. */
