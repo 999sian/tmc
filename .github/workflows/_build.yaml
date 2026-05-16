@@ -57,13 +57,13 @@ jobs:
             url_cfg="url.https://x-access-token:${SUBMODULES_TOKEN}@github.com/.insteadOf"
             git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
                 -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
-                submodule sync -- libs/ViruaPPU libs/VirtuaAPU
+                submodule sync --recursive
             git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
                 -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
-                submodule update --init --depth 1 libs/ViruaPPU libs/VirtuaAPU
+                submodule update --init --recursive --depth 1
           else
-            git submodule sync -- libs/ViruaPPU libs/VirtuaAPU
-            git submodule update --init --depth 1 libs/ViruaPPU libs/VirtuaAPU
+            git submodule sync --recursive
+            git submodule update --init --recursive --depth 1
           fi
 
       - name: Install Linux dependencies
