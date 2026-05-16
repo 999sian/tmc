@@ -7,3 +7,6 @@
 [submodule "libs/tmc-Android-Experimental"]
 	path = libs/tmc-Android-Experimental
 	url = https://github.com/MatheoVignaud/tmc-Android-Experimental.git
+[submodule "libs/randomizer"]
+	path = libs/randomizer
+	url = https://github.com/minishmaker/randomizer
