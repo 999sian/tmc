@@ -325,6 +325,20 @@ int main(int argc, char* argv[]) {
     Port_EnsureAssetsReadyWithDisplay(window, gRomData, gRomSize);
     Port_CheckForUpdates(window);
 
+    /* Now that the ROM and asset tables are loaded, re-set the window
+     * icon — Port_CreateAppIcon prefers the ROM-extracted Ezlo sprite
+     * over the procedural fallback once gRomData/gSpritePtrs/gFrameObjLists
+     * are populated. SDL takes a deep copy, so we free the surface
+     * immediately. */
+    {
+        extern SDL_Surface* Port_CreateAppIcon(void);
+        SDL_Surface* icon = Port_CreateAppIcon();
+        if (icon) {
+            SDL_SetWindowIcon(window, icon);
+            SDL_DestroySurface(icon);
+        }
+    }
+
     // Verify ROM region matches compiled region
 #ifdef EU
     if (gRomRegion != ROM_REGION_EU) {
