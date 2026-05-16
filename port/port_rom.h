@@ -2,6 +2,7 @@
 #include <string.h>
 #include "port_types.h"
 #include "structures.h"
+#include "map.h"
 
 // ROM data buffer
 extern u8* gRomData;
@@ -138,3 +139,26 @@ static inline bool Port_IsFontGBAEncoded(const void* data) {
  * Returns NULL if the index is outside the loaded sprite table.
  */
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx);
+
+/*
+ * Decode one MapDataDefinition entry into a native-layout struct.
+ *
+ * GBA layout: 12 bytes packed {u32 src, u32 dest_gba_addr, u32 size}.
+ * Native layout (64-bit PC): 24 bytes with pointer-widening padding.
+ *
+ * Sniffs whether the input lies inside gRomData. If yes, unpacks via
+ * Port_ReadU32 and resolves dest via Port_ResolveEwramPtr.  If no, copies
+ * native layout directly with memcpy. The dest pointer in `out` is always
+ * a valid native pointer (or NULL when unmapped).
+ */
+static inline void Port_DecodeMapDataDefinition(const void* entry, MapDataDefinition* out) {
+    const u8* raw = (const u8*)entry;
+    if (gRomData && raw >= gRomData && raw < gRomData + gRomSize) {
+        u32 dest_gba = Port_ReadU32(raw + 4);
+        out->src  = Port_ReadU32(raw + 0);
+        out->dest = dest_gba ? Port_ResolveEwramPtr(dest_gba) : NULL;
+        out->size = Port_ReadU32(raw + 8);
+    } else {
+        memcpy(out, entry, sizeof *out);
+    }
+}
