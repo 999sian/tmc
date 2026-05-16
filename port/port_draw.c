@@ -30,6 +30,14 @@
 
 /* Forward declaration of RenderSpritePieces (defined below) */
 static void RenderSpritePieces(const u8* data, s16 baseX, s16 baseY, u32 flags, u16 extra);
+
+/* Muddy-water sink clip (issue #84). Set by Port_MuddyWaterSinkTick in
+ * src/player.c when Link is on a swamp tile; RenderSpritePieces drops
+ * OAM pieces with yoff > Port_MudSinkClipY when sRenderingPlayer is
+ * set, leaving only head + cap visible. */
+int Port_MudSinkActive = 0;
+int Port_MudSinkClipY = 4;
+static int sRenderingPlayer = 0;
 /* Shoes-overlay frame table (loaded from ROM 0x080B2B58, see comment below
  * the table definition). Forward-declared here because ProcessEntityForDraw
  * uses them and is defined above the loader. */
@@ -342,6 +350,17 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
         u8 tileLow = data[3];
         u8 tileHigh = data[4];
         data += 5;
+
+        /* Muddy-water sink clip (issue #84): when the player is in
+         * mud, skip the body-and-below OAM pieces so only his head/
+         * cap renders, approximating the GBA "head sticking out"
+         * visual without needing the Object70 splash sprite. yoff is
+         * signed and measured from the sprite anchor (negative = up,
+         * positive = down), so any piece below Port_MudSinkClipY gets
+         * dropped. */
+        if (sRenderingPlayer && Port_MudSinkActive && (s32)yoff > Port_MudSinkClipY) {
+            continue;
+        }
 
         /* Apply flip if not in affine mode */
         if (!(flags & 0x300)) {
@@ -704,14 +723,24 @@ static void LookupAndRenderNormal(Entity* entity, s32 x, s32 y, u32 flags, u16 e
 static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra) {
     s8 renderMode = (s8)entity->spriteAnimation[2]; /* offset 0x28 */
 
+    /* Per-entity player-rendering check — applies only to the OUTER
+     * entity's direct pieces. Multi-part sub-entity renders re-set
+     * the flag for their own entity inside the loop below. Issue #84. */
+    extern PlayerEntity gPlayerEntity;
+    int isPlayer = (entity == &gPlayerEntity.base);
+
     if (renderMode == 0) {
         /* Normal sprite rendering */
+        sRenderingPlayer = isPlayer;
         LookupAndRenderNormal(entity, x, y, flags, extra);
+        sRenderingPlayer = 0;
     } else if (renderMode < 0) {
         /* Direct frame data from myHeap */
         const u8* frameData = (const u8*)entity->myHeap;
         if (frameData) {
+            sRenderingPlayer = isPlayer;
             RenderSpritePieces(frameData, (s16)x, (s16)y, flags, extra);
+            sRenderingPlayer = 0;
         }
     } else {
         /* Multi-part from gUnk_020000C0 */
@@ -733,7 +762,9 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
                     ResolveEntitySpriteParams(subEntity, &sx, &sy, &sf, &se);
                     u8 extraYOff = ((u8*)&gOAMControls)[0x12]; /* fp[0x12] */
                     sy += extraYOff;
+                    sRenderingPlayer = (subEntity == &gPlayerEntity.base);
                     LookupAndRenderNormal(subEntity, sx, sy, sf, se);
+                    sRenderingPlayer = 0;
                 }
             } else {
                 /* Direct sub-sprite */
@@ -775,7 +806,9 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
                 if (subSprSlot != 0xFF) {
                     const u8* frameData = LookupFrameData(sprIdx, subSprSlot);
                     if (frameData) {
+                        sRenderingPlayer = isPlayer;
                         RenderSpritePieces(frameData, (s16)partX, (s16)partY, partFlags, partExtra);
+                        sRenderingPlayer = 0;
                     }
                 }
             }
