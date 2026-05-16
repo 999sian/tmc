@@ -82,7 +82,7 @@ typedef struct {
 extern struct_02019EE0 gMapDataBottomSpecial;
 // TODO size: 0x8000 from ClearTileMaps?
 
-extern void sub_08056FEC(u32, struct_020227E8*);
+extern u32 sub_08056FEC(u32, u8*);
 extern u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* font);
 extern void ClearTileMaps(void);
 extern void ResetSaveFile(u32);
