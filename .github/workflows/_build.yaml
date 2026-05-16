@@ -94,22 +94,43 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Checkout private submodules
+      - name: Checkout submodules
         shell: bash
         env:
           SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
         run: |
-          if [ -z "$SUBMODULES_TOKEN" ]; then
-            echo "::error::PRIVATE_SUBMODULES_TOKEN is empty. Cannot fetch private submodules."
-            exit 1
+          if [ -n "$SUBMODULES_TOKEN" ]; then
+            # Authenticated path — rewrites github.com URLs to use the
+            # PAT so private submodules work alongside public ones.
+            url_cfg="url.https://x-access-token:${SUBMODULES_TOKEN}@github.com/.insteadOf"
+            git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+                -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+                submodule sync --recursive
+            git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+                -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+                submodule update --init --recursive || true
+          else
+            # No token (forks): try a plain init so any public submodule
+            # still gets fetched. Each submodule is initialised
+            # individually so one private/missing entry doesn't take
+            # down the rest. Critical submodules (ViruaPPU) are checked
+            # explicitly after the loop and the step fails only if
+            # those are missing.
+            git submodule sync --recursive || true
+            git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | \
+              awk '{print $2}' | while read -r p; do
+                echo "::group::submodule $p"
+                git submodule update --init --recursive -- "$p" || \
+                  echo "::warning::failed to fetch submodule $p — continuing"
+                echo "::endgroup::"
+              done
+            if [ ! -e libs/ViruaPPU/CMakeLists.txt ] && \
+               [ ! -e libs/ViruaPPU/xmake.lua ] && \
+               [ ! -d libs/ViruaPPU/src ]; then
+              echo "::error::libs/ViruaPPU is empty after submodule init — build cannot proceed."
+              exit 1
+            fi
           fi
-          url_cfg="url.https://x-access-token:${SUBMODULES_TOKEN}@github.com/.insteadOf"
-          git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
-              -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
-              submodule sync --recursive
-          git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
-              -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
-              submodule update --init --recursive
 
       - name: Install Linux dependencies
         if: matrix.os_name == 'linux'
