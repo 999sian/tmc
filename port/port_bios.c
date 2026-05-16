@@ -5,6 +5,8 @@
 #include "port_hdma.h"
 #include "port_ppu.h"
 #include "port_runtime_config.h"
+#include "port_softslots.h"
+#include "port_touch_controls.h"
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
@@ -53,13 +55,47 @@ u64 DivAndModCombined(s32 num, s32 denom) {
 static void Port_UpdateInput(void) {
     u16 keyinput = 0x03FF;
 
+    {
+        extern bool Port_DebugMenu_IsOpen(void);
+        /* While either overlay is open, hold all GBA buttons released so
+         * the game doesn't observe stray input from key presses we routed
+         * to the overlay. The soft-slot configuration overlay piggybacks
+         * on this behaviour while it's the active focus. */
+        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen()) {
+            *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
+            Port_SoftSlots_TickPause();
+            sFrameNum++;
+            return;
+        }
+    }
+
     for (size_t i = 0; i < sizeof(sInputMap) / sizeof(sInputMap[0]); i++) {
         if (Port_Config_InputPressed(sInputMap[i].input)) {
             keyinput &= ~sInputMap[i].gbaMask;
         }
     }
 
+    /* Soft-slots (X / Y / L2 / R2): when one is held with an item
+     * assigned, force GBA B_BUTTON pressed so the engine spawns the
+     * soft-slot's item via the regular B-dispatch path. The override of
+     * which item to spawn lives in src/playerUtils.c via
+     * Port_SoftSlots_GetEffectiveBItem(); the save data is untouched. */
+    Port_SoftSlots_Update();
+    if (Port_SoftSlots_IsBHeld()) {
+        keyinput &= ~B_BUTTON;
+    }
+
+    /* Decay the pause-active grace counter. The engine's Subtask_PauseMenu
+     * pumps it back up to N each frame the start menu is open, so this
+     * naturally drops to 0 a few frames after the menu closes. */
+    Port_SoftSlots_TickPause();
+
     *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
+
+    /* Edge cache served its purpose for this frame's KEYINPUT — clear
+     * so the next frame starts fresh and a held key reverts to the
+     * polled-state path. */
+    Port_Config_ClearInputEdges();
 
     sFrameNum++;
     if (gMain.task == 0 && sFrameNum > 300 && sFrameNum < 310) {
@@ -75,6 +111,16 @@ static void Port_PumpEvents(void) {
             continue;
         }
         if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+            /* Soft-slot config overlay is highest priority: it consumes
+             * navigation keys before the rest of the routing fires. */
+            if (Port_SoftSlots_ConfigIsOpen()) {
+                if (Port_SoftSlots_ConfigHandleKey((int)e.key.key)) {
+                    continue;
+                }
+            } else if (e.key.key == SDLK_BACKSLASH && Port_SoftSlots_IsPauseActive()) {
+                Port_SoftSlots_ConfigOpen();
+                continue;
+            }
             bool altHeld = (e.key.mod & SDL_KMOD_ALT) != 0;
             if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && altHeld)) {
                 Port_PPU_ToggleFullscreen();
@@ -83,6 +129,39 @@ static void Port_PumpEvents(void) {
             if (e.key.key == SDLK_F12) {
                 Port_PPU_ToggleSmoothing();
                 continue;
+            }
+            if (e.key.key == SDLK_F8) {
+                extern void Port_DebugMenu_Toggle(void);
+                Port_DebugMenu_Toggle();
+                continue;
+            }
+            if (e.key.key == SDLK_F5) {
+                extern int Port_QuickSave(void);
+                Port_QuickSave();
+                continue;
+            }
+            if (e.key.key == SDLK_F6) {
+                extern int Port_QuickLoad(void);
+                Port_QuickLoad();
+                continue;
+            }
+            if (e.key.key == SDLK_F1) {
+                extern bool Port_DebugMenu_IsOpen(void);
+                if (!Port_DebugMenu_IsOpen() && !Port_SoftSlots_ConfigIsOpen() &&
+                    !Port_InGameSettingsModalIsOpen()) {
+                    Port_OpenInGameSettingsModal();
+                }
+                continue;
+            }
+            /* When the debug menu is open, route key presses to it and
+             * suppress further handling so the game itself doesn't see
+             * the keystroke. */
+            {
+                extern bool Port_DebugMenu_IsOpen(void);
+                extern bool Port_DebugMenu_HandleKey(int sdlKey);
+                if (Port_DebugMenu_IsOpen() && Port_DebugMenu_HandleKey((int)e.key.key)) {
+                    continue;
+                }
             }
             if (e.key.key == SDLK_TAB) {
                 sFastForward = true;
@@ -93,12 +172,19 @@ static void Port_PumpEvents(void) {
             sFastForward = false;
             continue;
         }
-        if (e.type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
-            e.gaxis.axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
-            sFastForward = e.gaxis.value > 16384;
-            continue;
-        }
+        /* Fast-forward via keyboard TAB only. The previous RIGHT_TRIGGER
+         * gamepad shortcut conflicted with the default soft-slot R2 binding
+         * (port_softslots.c) — pulling the trigger would simultaneously
+         * fast-forward and fire a soft-slot item. */
         Port_Config_HandleEvent(&e);
+    }
+
+    if (Port_TouchControls_ConsumeSettingsRequest()) {
+        extern bool Port_DebugMenu_IsOpen(void);
+        if (!Port_DebugMenu_IsOpen() && !Port_SoftSlots_ConfigIsOpen() &&
+            !Port_InGameSettingsModalIsOpen()) {
+            Port_OpenInGameSettingsModal();
+        }
     }
 }
 
@@ -110,16 +196,50 @@ static u32 sFpsFrameCount = 0;
 void VBlankIntrWait(void) {
     u64 nowNs;
 
+    /* Toggle VSync based on whether we're trying to run faster than the
+     * display refresh: fast-forward, or a target FPS preset > 60. With
+     * VSync on, SDL_RenderPresent caps us at the display rate regardless
+     * of the busy-wait timer below — so #26 reports of fast-forward and
+     * the FPS preset menu having no effect on Windows are actually the
+     * display refresh holding us. */
+    {
+        u32 targetFps = Port_Config_TargetFps();
+        bool wantVsync = !sFastForward && targetFps != 0 && targetFps <= 60;
+        Port_PPU_SetVSync(wantVsync);
+    }
+
     Port_PPU_PresentFrame();
     port_hdma_vblank_reset();
 
+    /* Deadline-based pacing: each frame's target is the previous
+     * frame's target + frameTimeNs (a fixed cadence on an ideal grid),
+     * not "now + frameTimeNs" (which drifts as game-tick work load
+     * varies). The drift version produced visible micro-stutter when
+     * a heavy frame consumed a few ms more than usual; deadline pacing
+     * absorbs that variance into the next wait without lagging the
+     * cadence. If we fall more than one frame behind real time
+     * (e.g. paused at a breakpoint, OS hitch), snap forward so we
+     * don't burn CPU catching up. */
     if (!sFastForward) {
-        while (SDL_GetTicksNS() - lastFrameNs < Port_Config_FrameTimeNs()) {
+        const u64 frameTimeNs = Port_Config_FrameTimeNs();
+        if (frameTimeNs != 0) {
+            u64 deadline = lastFrameNs + frameTimeNs;
+            u64 now = SDL_GetTicksNS();
+            if (now > deadline + frameTimeNs) {
+                /* Fell behind the ideal grid by >1 frame — snap forward. */
+                deadline = now;
+            }
+            while (SDL_GetTicksNS() < deadline) {
+            }
+            lastFrameNs = deadline;
+        } else {
+            lastFrameNs = SDL_GetTicksNS();
         }
+    } else {
+        lastFrameNs = SDL_GetTicksNS();
     }
 
-    nowNs = SDL_GetTicksNS();
-    lastFrameNs = nowNs;
+    nowNs = lastFrameNs;
 
     if (sFpsWindowStartNs == 0) {
         sFpsWindowStartNs = nowNs;
@@ -130,9 +250,14 @@ void VBlankIntrWait(void) {
     if (nowNs - sFpsWindowStartNs >= 1000000000ULL) {
         double elapsedSec = (double)(nowNs - sFpsWindowStartNs) / 1000000000.0;
         double fps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
-        char title[64];
+        char title[96];
 
-        SDL_snprintf(title, sizeof(title), "The Minish Cap - %.1f FPS", fps);
+/* TMC_PORT_VERSION is set by xmake.lua's add_defines; the fallback below
+ * is just for IDE indexers that don't see the build flags. */
+#ifndef TMC_PORT_VERSION
+#define TMC_PORT_VERSION "0.1.2"
+#endif
+        SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
         Port_PPU_SetWindowTitle(title);
 
         sFpsWindowStartNs = nowNs;

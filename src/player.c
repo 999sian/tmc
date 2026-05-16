@@ -2367,20 +2367,26 @@ static void sub_08072CFC(PlayerEntity* this) {
 }
 
 // TODO Why would this use FindValueForKey just to do a normal comparison?
-static const KeyValuePair sTiles0 = { 0x1AD, 1 };
+/* Each KeyValuePair list is iterated by FindValueForKey until `key == 0`.
+ * The matching `sTilesNEnd = 0` u16 sentinels were placed adjacently on
+ * GBA but the C linker can reorder them on PC, leaving these single-
+ * entry "lists" without a terminator and causing iteration to fall
+ * through into neighbouring data. Make each list a 2-element array
+ * with an inline {0, 0} sentinel so iteration self-terminates (#5). */
+static const KeyValuePair sTiles0[] = { { 0x1AD, 1 }, { 0, 0 } };
 static const u16 sTiles0End = 0;
-static const KeyValuePair sTiles1 = { 0x1AE, 1 };
+static const KeyValuePair sTiles1[] = { { 0x1AE, 1 }, { 0, 0 } };
 static const u16 sTiles1End = 0;
-static const KeyValuePair sTiles2 = { 0x1AC, 1 };
+static const KeyValuePair sTiles2[] = { { 0x1AC, 1 }, { 0, 0 } };
 static const u16 sTiles2End = 0;
-static const KeyValuePair sTiles3 = { 0x1AF, 1 };
+static const KeyValuePair sTiles3[] = { { 0x1AF, 1 }, { 0, 0 } };
 static const u16 sTiles3End = 0;
 
 static const KeyValuePair* const sTileTable[] = {
-    &sTiles0,
-    &sTiles1,
-    &sTiles2,
-    &sTiles3,
+    sTiles0,
+    sTiles1,
+    sTiles2,
+    sTiles3,
 };
 
 static void sub_08072D54(PlayerEntity* this) {
@@ -3264,19 +3270,8 @@ static void sub_08073F4C(PlayerEntity* this) {
         super->timer = 30;
         super->subAction++;
         super->spriteSettings.flipX = 0;
-#ifdef PC_PORT
-        /* TMC's GBA-original starts the "becoming big" cutscene with the
-         * affine scale at 1152 (sprite displays ~4.5x — giant) and shrinks
-         * down to 0x100 (1x). User intent for the port is the conventional
-         * "small grows to big" direction, so start at 0x80 (sprite displays
-         * 0.5x — small) and let sub_08074018 grow it. The growth direction
-         * is flipped in sub_08074018 below. */
-        this->unk_80.WORD_U = 0x80;
-        this->unk_84.WORD_U = 0x80;
-#else
         this->unk_80.WORD_U = 1152;
         this->unk_84.WORD_U = 1152;
-#endif
         super->spriteRendering.b0 = 3;
         sub_08074018(this);
         gPlayerState.animation = ANIM_GROW;
@@ -3301,27 +3296,12 @@ static void sub_08073FD0(PlayerEntity* this) {
 }
 
 static void sub_08074018(PlayerEntity* this) {
-#ifdef PC_PORT
-    /* Port: animate from small (0x80, 0.5x display) up to normal (0x100, 1x).
-     * GBA-original ran the opposite direction (giant → normal). See
-     * sub_08073F4C above for the matching start-value override. */
-    if (this->unk_80.WORD_U < 0x100)
-        this->unk_80.WORD_U += 5;
-    if (this->unk_84.WORD_U < 0x100)
-        this->unk_84.WORD_U += 5;
-    else
-        super->subAction++;
-    /* Clamp at the identity scale so we never overshoot into giant. */
-    if (this->unk_80.WORD_U > 0x100) this->unk_80.WORD_U = 0x100;
-    if (this->unk_84.WORD_U > 0x100) this->unk_84.WORD_U = 0x100;
-#else
     if (this->unk_80.WORD_U > 0x100)
         this->unk_80.WORD_U -= 32;
     if (this->unk_84.WORD_U > 0x100)
         this->unk_84.WORD_U -= 32;
     else
         super->subAction++;
-#endif
     SetAffineInfo(super, this->unk_80.WORD_U, this->unk_84.WORD_U, 0);
     UpdateAnimationSingleFrame(super);
 }

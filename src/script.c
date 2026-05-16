@@ -172,7 +172,12 @@ void ScriptCommand_0807F0C8(Entity* entity, ScriptExecutionContext* context);
 
 typedef void (*ScriptCommand)(Entity*, ScriptExecutionContext*);
 
-extern u16* gUnk_08001A7C[];
+#include "port_rom.h"
+extern const u8 gUnk_08001A7C[];
+
+static u16* GetFusionTextIndices(u32 fuserId) {
+    return (u16*)Port_UnpackRomDataPtr(gUnk_08001A7C, fuserId);
+}
 extern u8 gUnk_08114F30[];
 extern u8 gUnk_08114F34[];
 extern const u16 gUnk_08016984;
@@ -658,20 +663,6 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
 #ifdef PC_PORT
     {
         uintptr_t addr = (uintptr_t)context->scriptInstructionPointer;
-        if ((addr >> 48) != 0) {
-            fprintf(stderr,
-                    "[SCRIPT] ENTRY CORRUPTION: ptr=%p before any command. entity kind=%d id=%d type=%d "
-                    "context=%p (offset=%td in pool)\n",
-                    (void*)context->scriptInstructionPointer, entity->kind, entity->id, entity->type, (void*)context,
-                    (const u8*)context - (const u8*)&gScriptExecutionContextArray[0]);
-            const u8* raw = (const u8*)context;
-            fprintf(stderr, "[SCRIPT]   raw bytes: ");
-            for (int i = 0; i < 16; i++)
-                fprintf(stderr, "%02X ", raw[i]);
-            fprintf(stderr, "\n");
-            context->scriptInstructionPointer = NULL;
-            return;
-        }
         if (addr >= 0x08000000u && addr < 0x0A000000u) {
             fprintf(stderr,
                     "[SCRIPT] ERROR: scriptInstructionPointer is unresolved GBA address 0x%08X! entity kind=%d id=%d "
@@ -729,24 +720,6 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
 #ifdef PC_PORT
             if (!context->scriptInstructionPointer)
                 return;
-            {
-                uintptr_t _chk = (uintptr_t)context->scriptInstructionPointer;
-                if ((_chk >> 48) != 0) {
-                    fprintf(stderr, "[SCRIPT] CORRUPTION after cmd %d (size %d): ptr=%p entity kind=%d id=%d type=%d\n",
-                            activeScriptInfo->commandIndex, activeScriptInfo->commandSize,
-                            (void*)context->scriptInstructionPointer, entity->kind, entity->id, entity->type);
-                    /* Dump the raw bytes of the context struct */
-                    {
-                        const u8* raw = (const u8*)context;
-                        fprintf(stderr, "[SCRIPT]   context bytes: ");
-                        for (int i = 0; i < 16; i++)
-                            fprintf(stderr, "%02X ", raw[i]);
-                        fprintf(stderr, "\n");
-                    }
-                    context->scriptInstructionPointer = NULL;
-                    return;
-                }
-            }
 #endif
             context->scriptInstructionPointer += activeScriptInfo->commandSize;
             if (lastInstruction != context->scriptInstructionPointer) {
@@ -1074,11 +1047,21 @@ void ScriptCommand_ComparePlayerAnimationState(Entity* entity, ScriptExecutionCo
 }
 
 void ScriptCommand_SetSyncFlag(Entity* entity, ScriptExecutionContext* context) {
-    gActiveScriptInfo.syncFlags |= GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    gActiveScriptInfo.syncFlags |= flag;
+#ifdef PC_PORT
+    extern void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+    Port_DiagSyncFlag("SET", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
 }
 
 void ScriptCommand_ClearSyncFlag(Entity* entity, ScriptExecutionContext* context) {
-    gActiveScriptInfo.syncFlags &= ~GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
+    gActiveScriptInfo.syncFlags &= ~flag;
+#ifdef PC_PORT
+    extern void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+    Port_DiagSyncFlag("CLR", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
 }
 
 void ScriptCommand_SetLocalFlag(Entity* entity, ScriptExecutionContext* context) {
@@ -1117,6 +1100,10 @@ void ScriptCommand_WaitForSyncFlag(Entity* entity, ScriptExecutionContext* conte
     u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
     if ((gActiveScriptInfo.syncFlags & flag) != flag) {
         gActiveScriptInfo.commandSize = 0;
+#ifdef PC_PORT
+        extern void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+        Port_DiagSyncWait("WAIT", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
     }
 }
 
@@ -1124,6 +1111,10 @@ void ScriptCommand_WaitForSyncFlagAndClear(Entity* entity, ScriptExecutionContex
     u32 flag = GetNextScriptCommandWordAfterCommandMetadata(context->scriptInstructionPointer);
     if ((gActiveScriptInfo.syncFlags & flag) != flag) {
         gActiveScriptInfo.commandSize = 0;
+#ifdef PC_PORT
+        extern void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t);
+        Port_DiagSyncWait("WAIT&CLR", flag, gActiveScriptInfo.syncFlags, entity->kind, entity->id, entity->type);
+#endif
     } else {
         gActiveScriptInfo.syncFlags &= ~flag;
         gActiveScriptInfo.flags |= 1;
@@ -2008,7 +1999,12 @@ void sub_0807F634(Entity* entity, ScriptExecutionContext* context) {
 
 void sub_0807F650(Entity* entity, ScriptExecutionContext* context) {
     u32 fuserId = GetFuserId(entity);
-    InitializeFuseInfo(entity, gUnk_08001A7C[fuserId][0], gUnk_08001A7C[fuserId][1], gUnk_08001A7C[fuserId][2]);
+    u16* textIndices;
+    textIndices = GetFusionTextIndices(fuserId);
+    if (textIndices == NULL) {
+        return;
+    }
+    InitializeFuseInfo(entity, textIndices[0], textIndices[1], textIndices[2]);
     gPlayerState.controlMode = CONTROL_DISABLED;
 }
 

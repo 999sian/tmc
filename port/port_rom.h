@@ -1,4 +1,5 @@
 #pragma once
+#include <string.h>
 #include "port_types.h"
 #include "structures.h"
 
@@ -9,8 +10,21 @@ extern u32 gRomSize;
 // Load the ROM file and set up ROM-backed symbols
 void Port_LoadRom(const char* path);
 
+/*
+ * Probe the same candidate locations Port_LoadRom would and return a
+ * pointer to a static buffer holding the absolute path of the first
+ * reachable ROM file, or NULL if none of the known candidate names
+ * are openable. Probe order matches Port_LoadRom's load order so a
+ * successful probe guarantees a successful load. Intended for the
+ * pre-window check in port_main.c so we can show an SDL message box
+ * (and exit cleanly) before any window is created.
+ */
+const char* Port_FindBaseRomPath(void);
+
 // Re-resolve a single area's room/tile/property tables from immutable ROM offsets.
 void Port_RefreshAreaData(u32 area);
+
+bool32 Port_IsAreaTablePtrReadable(u32 area, const void* ptr);
 
 // ROM access logging - logs unique ROM addresses accessed at runtime
 void Port_LogRomAccess(u32 gba_addr, const char* caller);
@@ -35,6 +49,23 @@ static inline void* Port_ResolveRomData(u32 gba_addr) {
     return NULL;
 }
 
+/**
+ * Read entry [idx] from a packed-GBA-pointer table stored as a raw u8 array.
+ *
+ * Many `gUnk_08xxxxxx` tables in port/data_const_stubs.c are byte arrays of
+ * 4-byte GBA pointers. Game code declares them externally as `T*[]` so
+ * `arr[idx]` reads sizeof(T*) bytes — fine on the 32-bit GBA, broken on
+ * x86-64 (reads 8 bytes, gets two GBA addresses concatenated → garbage).
+ *
+ * Use this helper at PC call sites to manually unpack the 4-byte entry and
+ * resolve to a native pointer via the ROM mmap. (#16, #19 root cause.)
+ */
+static inline void* Port_PackedRomEntry(const void* base, u32 idx) {
+    u32 raw;
+    memcpy(&raw, (const u8*)base + idx * 4, 4);
+    return Port_ResolveRomData(raw);
+}
+
 static inline u16 Port_ReadU16(const void* data) {
     const u8* raw = (const u8*)data;
     return (u16)(raw[0] | (raw[1] << 8));
@@ -43,6 +74,16 @@ static inline u16 Port_ReadU16(const void* data) {
 static inline u32 Port_ReadU32(const void* data) {
     const u8* raw = (const u8*)data;
     return (u32)raw[0] | ((u32)raw[1] << 8) | ((u32)raw[2] << 16) | ((u32)raw[3] << 24);
+}
+
+/*
+ * Read entry [index] from a packed-GBA-pointer ROM table and resolve to
+ * a native pointer. Equivalent to Port_PackedRomEntry but kept for the
+ * call sites that game code uses (matheo/master); the two helpers exist
+ * because they were introduced in parallel branches before being merged.
+ */
+static inline void* Port_UnpackRomDataPtr(const void* table, u32 index) {
+    return Port_ResolveRomData(Port_ReadU32((const u8*)table + index * 4));
 }
 
 /*

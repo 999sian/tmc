@@ -184,7 +184,8 @@ void sub_0804AF0C(Entity* ent, const EntityData* dat) {
 #ifdef PC_PORT
             {
                 void* resolved = (void*)Port_ResolveRomData(dat->spritePtr);
-                if (!StartCutscene(ent, (u16*)resolved))
+                ScriptExecutionContext* ctx = StartCutscene(ent, (u16*)resolved);
+                if (!ctx)
                     DeleteEntity(ent);
             }
 #else
@@ -204,6 +205,8 @@ void sub_0804AF90(void) {
 static void** GetAreaRoomPropertyList(u32 area, u32 room) {
     void*** areaTable = gAreaTable[area];
     const u8* ptr = (const u8*)areaTable;
+    bool32 inRom = FALSE;
+    bool32 readable = FALSE;
 
     if (areaTable == NULL) {
         Port_RefreshAreaData(area);
@@ -214,11 +217,33 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
         }
     }
 
-    if (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize) {
-        return Port_ReadPackedRomPtr(areaTable, room);
+    /* Sanity check: architecture-agnostic. */
+    {
+        inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
+        readable = Port_IsAreaTablePtrReadable(area, areaTable);
+        if (!readable) {
+            Port_RefreshAreaData(area);
+            areaTable = gAreaTable[area];
+            ptr = (const u8*)areaTable;
+            if (areaTable == NULL) {
+                return NULL;
+            }
+            inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
+            readable = Port_IsAreaTablePtrReadable(area, areaTable);
+            if (!readable) {
+                return NULL;
+            }
+        }
+        if (inRom) {
+            void** result = Port_ReadPackedRomPtr(areaTable, room);
+            return result;
+        }
     }
 
-    return areaTable[room];
+    {
+        void** result = areaTable[room];
+        return result;
+    }
 }
 
 static bool32 IsRoomPropertyListInRom(void** properties) {

@@ -229,16 +229,42 @@ void sub_0802F8E4(WizzrobeEntity* this) {
     bool32 loopCondition;
     u32 rand;
 
+#ifdef PC_PORT
+    /* On GBA, WizzrobeEntity::unk_6e/unk_6f overlay Enemy::rangeX/rangeY (offset 0x6e/0x6f),
+     * and unk_70/unk_72 overlay Enemy::homeX/homeY (offset 0x70/0x72). On 64-bit PC the
+     * Entity base is 0x28 bytes wider (8-byte pointers), so the GBA-style offsets land
+     * inside the child-pointer area instead — `unk_6e << 3` becomes `(byte 6 of an x86-64
+     * canonical pointer, always 0) << 3 == 0`, and the `% 0` aborts with #DE (#78).
+     * Read the real Enemy fields. */
+    Enemy* em = (Enemy*)super;
+    u8 rangeX = em->rangeX;
+    u8 rangeY = em->rangeY;
+    u16 homeX = (u16)em->homeX;
+    u16 homeY = (u16)em->homeY;
+#else
+    u8 rangeX = this->unk_6e;
+    u8 rangeY = this->unk_6f;
+    u16 homeX = this->unk_70;
+    u16 homeY = this->unk_72;
+#endif
+
     if (super->type2 == 0) {
+        /* Defensive: a zero range box would still divide-by-zero. The original game
+         * relies on roomInit / EnemyInit to populate range from the enemy definition,
+         * so this should not happen in normal flow — but bail rather than fault. */
+        if (rangeX == 0 || rangeY == 0) {
+            sub_0802F888(this);
+            return;
+        }
         loopCondition = TRUE;
         do {
             rand = Random();
-            uVar1 = this->unk_70;
-            iVar4 = ((s32)rand & 0x7ff0) % (this->unk_6e << 3);
+            uVar1 = homeX;
+            iVar4 = ((s32)rand & 0x7ff0) % (rangeX << 3);
             uVar8 = (uVar1 + iVar4) | 8;
             rand >>= 0x10;
-            uVar1 = this->unk_72;
-            iVar4 = ((s32)(rand)&0x7ff0) % (this->unk_6f << 3);
+            uVar1 = homeY;
+            iVar4 = ((s32)(rand)&0x7ff0) % (rangeY << 3);
             uVar7 = (uVar1 + iVar4) | 8;
             tilePos = TILE(uVar8, uVar7);
             if ((GetCollisionDataAtTilePos(tilePos, super->collisionLayer) == 0) &&

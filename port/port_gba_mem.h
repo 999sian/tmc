@@ -83,16 +83,13 @@ static inline void* gba_MemPtr(uint32_t addr) {
  * port_resolve_addr — resolve a value that may be a GBA address or native ptr.
  * Used by the DMA emulation layer.
  */
-static inline void* port_resolve_addr(uintptr_t val) {
-    /* Try GBA address ranges first (0x02000000–0x09FFFFFF) */
-    if (val >= 0x02000000u && val < 0x0A000000u) {
-        void* p = gba_TryMemPtr((uint32_t)val);
-        if (p)
-            return p;
-    }
-    /* Otherwise treat as native pointer */
-    return (void*)val;
+#ifdef __cplusplus
+extern "C" {
+#endif
+void* port_resolve_addr(uintptr_t val);
+#ifdef __cplusplus
 }
+#endif
 
 static inline void gba_MemClear(u32 addr, u32 size) {
     void* ptr = gba_MemPtr(addr);

@@ -14,6 +14,24 @@
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[4];
+#ifdef PC_PORT
+    /* GBA aliases AcroBandit fields onto Enemy at the same absolute offsets:
+     *   unk_6c → Enemy.idx (0x6c)
+     *   unk_6e/6f → Enemy.rangeX/rangeY (0x6e/0x6f)
+     *   unk_70/72 → Enemy.homeX/homeY (0x70/0x72)
+     * sub_08031E48 leans on this: it only copies unk_*, but on GBA those
+     * writes also land in Enemy.homeX/homeY. Type 1 chain bandits never call
+     * sub_0804A720, so without the alias their home/range stay at zero.
+     *
+     * On PC, Entity is 0x90 bytes (was 0x68) and Enemy.child grew to 8 bytes,
+     * so all Enemy fields after Entity shift +4 vs the natural C layout of
+     * AcroBanditEntity. Without this padding the alias breaks: unk_70/72 land
+     * at Enemy.idx/rangeX, and unk_74/76 collide with Enemy.homeX/homeY —
+     * leaving the chain bandits' homeX = homeY = 0 and making the head of the
+     * chain wander toward (0,0), dragging the whole stack off-screen (#35).
+     * Pad to restore the alias. */
+    u8 _pc_enemy_align_pad[4];
+#endif
     /*0x6c*/ u8 unk_6c;
     /*0x6d*/ u8 unused2[1];
     /*0x6e*/ u8 unk_6e;
@@ -111,6 +129,28 @@ void AcroBandit_OnCollision(AcroBanditEntity* this) {
                             brother->iframes = -12;
                     } while (brother = brother->child, brother != NULL);
                 }
+#ifdef PC_PORT
+                /* Walk UP the chain too so the whole stack falls when one
+                 * bandit is killed. The original GBA unwind only walks DOWN
+                 * from the dying bandit, leaving any ancestors stuck in
+                 * Action4 — the player ends up with a partial stack hovering
+                 * indefinitely. The Action6 wake-up loop normally signals
+                 * ancestors to fall, but it requires at least one bandit to
+                 * already be in the death cascade with `child == NULL`, which
+                 * doesn't happen if you kill the bottom (no children to
+                 * cascade through). Set ancestors to action=5 explicitly so
+                 * the entire chain enters the death cascade together. */
+                {
+                    Entity* anc = super->parent;
+                    while (anc != NULL && anc->kind == 3 && anc->action < 5) {
+                        anc->action = 5;
+                        anc->spritePriority.b1 = 1;
+                        if (anc->iframes == 0)
+                            anc->iframes = -12;
+                        anc = anc->parent;
+                    }
+                }
+#endif
                 if (super->parent != NULL) {
                     super->parent->child = super->child;
                 } else {
@@ -446,6 +486,29 @@ void AcroBandit_Type1Action4(AcroBanditEntity* this) {
 
     if (!sub_080322A4(this)) {
         parent = super->parent;
+#ifdef PC_PORT
+        /* Self-heal stale parent pointer.
+         *
+         * AcroBandit_OnCollision walks the chain and re-points each surviving
+         * brother's parent past the dying bandit — but only when the bandit
+         * dies from a sword/bomb hit (knockbackDuration != 0 path). Hazards
+         * (sub_08001290 → CreatePitFallFX / CreateDrownFX / etc.) delete the
+         * entity directly, bypassing OnCollision entirely. On GBA the deleted
+         * slot wasn't zeroed before the next frame, so the child's
+         * `parent->x/y` still read its last live position and the AI just kept
+         * loosely tracking that spot. On PC, ClearDeletedEntity memsets the
+         * slot, so `parent->x = parent->y = 0` and the child walks toward the
+         * top-left corner of the world (#35).
+         *
+         * Detect the zeroed slot via parent->kind == 0 (deleted entity slot)
+         * or != KIND_ENEMY (parent is no longer an enemy). When that happens,
+         * promote this bandit to the chain head — Action4 below handles the
+         * parent==NULL case correctly. */
+        if (parent != NULL && parent->kind != 3) {
+            super->parent = NULL;
+            parent = NULL;
+        }
+#endif
         if (parent == NULL) {
             if (sub_08049FDC(super, 1)) {
                 if ((++this->unk_79 & 7) == 0) {

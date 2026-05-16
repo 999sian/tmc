@@ -7,6 +7,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#ifdef launcher
+void Port_SetBootstrapWindow(SDL_Window* window);
+#endif
 
 // Initialize the PPU renderer (call after SDL_CreateWindow)
 void Port_PPU_Init(SDL_Window* window);
@@ -29,8 +32,23 @@ void Port_PPU_ToggleSmoothing(void);
 void Port_PPU_CyclePresentationMode(int direction);
 const char* Port_PPU_PresentationModeName(void);
 
+// CRT/LCD post-process filter cycling (off / warm-composite-AG /
+// LCD-grid / warm-RF-AG). Applied at the upscaled resolution before
+// SDL upload — needs internal-scale >= 2 to be visible.
+void Port_PPU_CycleFilter(int direction);
+const char* Port_PPU_FilterName(void);
+
+// Toggle SDL vsync on the renderer. Used by VBlankIntrWait to disable the
+// display-refresh cap when fast-forwarding or when target FPS exceeds the
+// monitor refresh rate; without this, fast-forward (#26) and FPS presets
+// > 60 are limited by the display, not by the busy-wait timer.
+void Port_PPU_SetVSync(bool enabled);
+
 // Cleanup
 void Port_PPU_Shutdown(void);
+
+void Port_OpenInGameSettingsModal(void);
+bool Port_InGameSettingsModalIsOpen(void);
 
 #ifdef __cplusplus
 }

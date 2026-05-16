@@ -30,6 +30,7 @@
 #include "port_asset_loader.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include "port_softslots.h"
 #include <string.h>
 #endif
 
@@ -224,8 +225,14 @@ void UpdateActiveItems(PlayerEntity* this) {
     gPlayerState.attack_status &= 0xf;
     if (((gPlayerState.field_0x7 | gPlayerState.jump_status) & 0x80) == 0 && (gPlayerState.jump_status & 0x40) == 0 &&
         gPlayerState.swim_state == 0 && IsAbleToUseItem(this) && !IsPreventedFromUsingItem()) {
+        u32 bItem = gSave.stats.equipped[SLOT_B];
+#ifdef PC_PORT
+        /* Soft-slots (X/Y/L2/R2) override the B-equipped item without
+         * mutating gSave. See port/port_softslots.h. */
+        bItem = Port_SoftSlots_GetEffectiveBItem((u8)bItem);
+#endif
         CreateItemIfInputMatches(gSave.stats.equipped[SLOT_A], INPUT_USE_ITEM1, FALSE);
-        CreateItemIfInputMatches(gSave.stats.equipped[SLOT_B], INPUT_USE_ITEM2, FALSE);
+        CreateItemIfInputMatches(bItem, INPUT_USE_ITEM2, FALSE);
         IsTryingToPickupObject();
     }
 
@@ -577,6 +584,15 @@ void sub_08077D38(ItemBehavior* this, u32 index) {
     ptr = &gItemDefinitions[this->behaviorId];
     if (ptr->frameIndex) {
         if ((gPlayerState.flags & PL_NO_CAP)) {
+            /* GBA original: switch fell through to SetItemAnim with `anim`
+             * left in whatever register state the previous code used —
+             * normally the upper bits of behaviorId. Items without a
+             * no-cap form (boomerang, gust jar, cane, etc.) ended up
+             * passing 0x7FFF on x86-64 (uninitialized stack), and Link
+             * rendered as sprite 127 / SPRITE_JARPORTAL while using them
+             * (the F8 debug-menu unlock landed players in this exact
+             * state). Default to the regular animation. */
+            anim = ptr->frameIndex;
             switch (this->behaviorId) {
                 case 0x1b:
                     anim = ANIM_GRAB_NOCAP;
@@ -684,6 +700,14 @@ bool32 IsItemActiveByInput(ItemBehavior* this, PlayerInputState input) {
     u32 val;
     Stats* stats = &gSave.stats;
     u32 id = this->behaviorId;
+#ifdef PC_PORT
+    /* If the player is firing this item via a soft-slot (X/Y/L2/R2),
+     * report it as if it were B-equipped so charged-hold semantics
+     * (Gust Jar, Bow) and held-state checks (Lantern) still work. */
+    if (Port_SoftSlots_IsBHeld() && Port_SoftSlots_GetEffectiveBItem(0xFF) == id) {
+        return (INPUT_USE_ITEM2 & input) ? TRUE : FALSE;
+    }
+#endif
     if (stats->equipped[SLOT_A] == id) {
         val = INPUT_USE_ITEM1;
     } else if (stats->equipped[SLOT_B] == id) {
@@ -882,23 +906,34 @@ const KeyValuePair* const gUnk_0811C1E8[] = {
     gUnk_0811C22E,
 };
 
-const KeyValuePair gUnk_0811C1F8[] = { { 43, 1 }, { 65, 1 }, { 78, 8 }, { 76, 2 } };
+/* Each KeyValuePair list is iterated until `key == 0`. On GBA the assembler
+ * placed the matching `gUnk_..End = 0` u16 immediately after each array so
+ * that scan terminated naturally. On PC the C linker is free to reorder
+ * `const` definitions across translation units (and even within a TU when
+ * `-fdata-sections` is in play), so the terminator can land elsewhere and
+ * iteration falls through into the next array — making FindValueForKey
+ * return the FIRST entry of the wrong table. That manifested as Link
+ * back-flipping off solid Deepwood Shrine walls (#5): scanning the
+ * animState=0 vault table (gUnk_0811C1F8) walked into gUnk_0811C21C and
+ * matched its first entry `{42, 5}`. Inline a sentinel `{0, 0}` so each
+ * array self-terminates regardless of layout. */
+const KeyValuePair gUnk_0811C1F8[] = { { 43, 1 }, { 65, 1 }, { 78, 8 }, { 76, 2 }, { 0, 0 } };
 const u16 gUnk_0811C1F8End = 0;
-const KeyValuePair gUnk_0811C20A[] = { { 44, 3 }, { 66, 3 }, { 76, 2 }, { 77, 4 } };
+const KeyValuePair gUnk_0811C20A[] = { { 44, 3 }, { 66, 3 }, { 76, 2 }, { 77, 4 }, { 0, 0 } };
 const u16 gUnk_0811C20AEnd = 0;
-const KeyValuePair gUnk_0811C21C[] = { { 42, 5 }, { 64, 5 }, { 79, 6 }, { 77, 4 } };
+const KeyValuePair gUnk_0811C21C[] = { { 42, 5 }, { 64, 5 }, { 79, 6 }, { 77, 4 }, { 0, 0 } };
 const u16 gUnk_0811C21CEnd = 0;
-const KeyValuePair gUnk_0811C22E[] = { { 45, 7 }, { 67, 7 }, { 78, 8 }, { 79, 6 } };
+const KeyValuePair gUnk_0811C22E[] = { { 45, 7 }, { 67, 7 }, { 78, 8 }, { 79, 6 }, { 0, 0 } };
 const u16 gUnk_0811C22EEnd = 0;
-const KeyValuePair gUnk_0811C240[] = { { 42, 1 }, { 38, 1 } };
+const KeyValuePair gUnk_0811C240[] = { { 42, 1 }, { 38, 1 }, { 0, 0 } };
 const u16 gUnk_0811C240End = 0;
-const KeyValuePair gUnk_0811C24A[] = { { 45, 1 }, { 39, 1 } };
+const KeyValuePair gUnk_0811C24A[] = { { 45, 1 }, { 39, 1 }, { 0, 0 } };
 const u16 gUnk_0811C24AEnd = 0;
-const KeyValuePair gUnk_0811C254[] = { { 43, 1 }, { 38, 1 } };
+const KeyValuePair gUnk_0811C254[] = { { 43, 1 }, { 38, 1 }, { 0, 0 } };
 const u16 gUnk_0811C254End = 0;
-const KeyValuePair gUnk_0811C25E[] = { { 44, 1 }, { 39, 1 } };
+const KeyValuePair gUnk_0811C25E[] = { { 44, 1 }, { 39, 1 }, { 0, 0 } };
 const u16 gUnk_0811C25EEnd = 0;
-const KeyValuePair gUnk_0811C268[] = { { ACT_TILE_16, 1 }, { ACT_TILE_90, 1 }, { ACT_TILE_17, 1 }, { ACT_TILE_19, 1 } };
+const KeyValuePair gUnk_0811C268[] = { { ACT_TILE_16, 1 }, { ACT_TILE_90, 1 }, { ACT_TILE_17, 1 }, { ACT_TILE_19, 1 }, { 0, 0 } };
 const u16 gUnk_0811C268EEnd = 0;
 
 void sub_0807B114(PlayerEntity*);

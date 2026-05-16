@@ -68,8 +68,10 @@
 // Converts a number to Q16.16 fixed-point format
 #define Q_16_16(n) ((s32)((n) * (1 << 16)))
 
+#ifndef __cplusplus
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) >= (b) ? (a) : (b))
+#endif
 
 #if defined(PORT_IGNORE_STATIC_ASSERTS)
 #define static_assert(...)
@@ -83,7 +85,7 @@
 #define static_assert(...) //_Static_assert(__VA_ARGS__)
 #endif
 
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
 #define PORT_STATIC_ASSERT_SIZE(type, gba_size, pc_size, msg) static_assert(sizeof(type) == (pc_size), msg)
 #define PORT_STATIC_ASSERT_EXPR(expr, gba_size, pc_size, msg) static_assert((expr) == (pc_size), msg)
 #define PORT_STATIC_ASSERT_OFFSET(type, field, gba_off, pc_off, msg) static_assert(offsetof(type, field) == (pc_off), msg)

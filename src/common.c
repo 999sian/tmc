@@ -303,7 +303,7 @@ void MemCopy(const void* src, void* dest, u32 size) {
 #ifdef PC_PORT
     void* resolvedDest = port_resolve_addr((uintptr_t)dest);
     const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
-    memcpy(resolvedDest, resolvedSrc, size);
+    memmove(resolvedDest, resolvedSrc, size);
 #else
     gba_MemCopy((u32)src, (u32)dest, size);
 #endif
@@ -762,6 +762,16 @@ void DrawDungeonFeatures(u32 floor, void* data, u32 size) {
     }
     layout = gDungeonLayouts[gArea.dungeon_idx][floor];
     MemClear(gMapDataBottomSpecial, 0x8000);
+#ifdef PC_PORT
+    /* #69: gDungeonMap accumulates pixels across floor switches because the
+     * `if (features != 0)` gate below skips rooms with no draw features —
+     * those tiles never get their pixels reset, so the previous floor's
+     * pixels stay drawn under the new floor. The original GBA flow must
+     * have cleared the bitmap somewhere off the C dispatch path; here we
+     * clear the destination explicitly before each redraw. Cheap (8 KiB
+     * memset) and only runs on floor switch / pause-menu open. */
+    MemClear(gDungeonMap, sizeof(gDungeonMap));
+#endif
     while (layout->area != 0) {
         // ROOM_VISIT_MARKER has to be first TileEntity in the room.
         tileEntity = (TileEntity*)GetRoomProperty(layout->area, layout->room, 3);
@@ -1242,7 +1252,10 @@ void AddKinstoneToBag(KinstoneId kinstoneId) {
     s32 tmp;
 
     SortKinstoneBag(); // sometimes called just for this function
-    if (kinstoneId - 0x65 < 0x11) {
+    if (kinstoneId == KINSTONE_NONE) {
+        return;
+    }
+    if ((u32)(kinstoneId - 0x65) < 0x11) {
         index = GetIndexInKinstoneBag(kinstoneId);
         if (index < 0) {
             index = 0;
@@ -1395,7 +1408,9 @@ void UpdateVisibleFusionMapMarkers(void) {
     }
 }
 
-extern u8* gUnk_08001DCC[];
+/* This table is packed 4-byte GBA pointers; `gUnk_08001DCC[idx]` would
+ * read 8 bytes on x86-64. Use Port_UnpackRomDataPtr instead. */
+extern const u8 gUnk_08001DCC[];
 
 KinstoneId GetFusionToOffer(Entity* entity) {
     u8* fuserData;
@@ -1406,13 +1421,17 @@ KinstoneId GetFusionToOffer(Entity* entity) {
     s32 randomMood;
     u32 fuserStability;
     fuserId = GetFuserId(entity);
-    fuserData = gUnk_08001DCC[fuserId];
+
+    fuserData = (u8*)Port_UnpackRomDataPtr(gUnk_08001DCC, fuserId);
+    if (fuserData == NULL) {
+        return KINSTONE_NONE;
+    }
     if (GetInventoryValue(ITEM_KINSTONE_BAG) == 0 || fuserData[0] > gSave.global_progress) {
         return KINSTONE_NONE;
     }
     offeredFusion = gSave.kinstones.fuserOffers[fuserId];
     fuserProgress = gSave.kinstones.fuserProgress[fuserId];
-    fuserFusionData = (u8*)(fuserProgress + (u32)fuserData);
+    fuserFusionData = fuserData + fuserProgress;
     while (TRUE) { // loop through fusions for this fuser
         switch (offeredFusion) {
             case KINSTONE_NEEDS_REPLACEMENT: // offered fusion completed with someone else

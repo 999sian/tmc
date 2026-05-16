@@ -14,6 +14,10 @@
 #include "message.h"
 #include "manager.h"
 #include "physics.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#include <string.h>
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -44,7 +48,29 @@ extern void (*const gUnk_0810B77C[])(Entity*);
 extern u8 gUnk_0810B78C[];
 extern u16 gUnk_0810B790[];
 extern u16 gUnk_0810B7BA[];
+#ifdef PC_PORT
+/* `gUnk_0810B7C0` is defined in port/data_const_stubs.c as `const u8[2728]`
+ * (raw GBA-layout bytes — 8 bytes per Dialog). On the GBA the C declaration
+ * `extern Dialog gUnk_0810B7C0[]` would index by sizeof(Dialog)=8 and read
+ * the right bytes. On x86-64 sizeof(Dialog)=16 (the void* in the union
+ * forces 8-byte alignment), so indexing as `Dialog[]` reads gibberish that
+ * happened to be neighboring entries — caller saw textIndex 0x0011
+ * (TEXT_SAVE "Continue/Quit") instead of the real TEXT_TOWN line for the
+ * townsperson outside the library (#31 follow-up). Treat it as a u8 array
+ * and unpack the GBA layout manually. */
+extern const u8 gUnk_0810B7C0[];
+static void TownspersonGBADialog(u32 idx, Dialog* out) {
+    const u8* raw = gUnk_0810B7C0 + idx * 8;
+    u32 bitfield;
+    memcpy(&bitfield, raw, 4);
+    memset(out, 0, sizeof(*out));
+    *(u32*)out = bitfield;
+    out->data.indices.a = Port_ReadU16(raw + 4);
+    out->data.indices.b = Port_ReadU16(raw + 6);
+}
+#else
 extern Dialog gUnk_0810B7C0[];
+#endif
 
 void Townsperson(Entity* this) {
     if ((this->flags & ENT_SCRIPTED) != 0) {
@@ -299,7 +325,15 @@ void sub_08062048(Entity* this) {
         if (iVar1 < 0) {
             iVar1 = 0;
         }
+#ifdef PC_PORT
+        {
+            Dialog dia;
+            TownspersonGBADialog(this->type * 0x8 + iVar1, &dia);
+            ShowNPCDialogue(this, &dia);
+        }
+#else
         ShowNPCDialogue(this, gUnk_0810B7C0 + this->type * 0x8 + iVar1);
+#endif
     } else {
         MessageNoOverlap(0, this);
     }

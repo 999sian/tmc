@@ -181,10 +181,18 @@ void CreateVaatiApparateManager(VaatiAppearingManager* this, u32 type) {
         manager->parent = (Entity*)super;
         AppendEntityToList((Entity*)manager, 8);
     }
-    if (gArea.onEnter != NULL) {
+    if (gArea.transitionManager != NULL) {
         gScreen.lcd.displayControl &= ~DISPCNT_BG3_ON;
         RoomExitCallback();
-        //! @bug: this always variable points to ROM, not a Manager*
-        DeleteManager((Manager*)gArea.onEnter);
+        /* Original GBA code passed gArea.onEnter here, which is a script
+         * callback function pointer into ROM, not a Manager*. On GBA the
+         * ROM bytes were silently corrupted via the DeleteManager writes
+         * (read-only memory ate them) and the early ->next NULL check
+         * occasionally short-circuited; on x86-64 the read of
+         * manager->prev returns NULL and UnlinkEntity SIGSEGVs at 0x0
+         * during Vaati's apparate cutscene (Palace of Winds).
+         * The transitionManager field is the actual Manager pointer that
+         * onEnter/onExit are callbacks for — that's what was meant. */
+        DeleteManager(gArea.transitionManager);
     }
 }

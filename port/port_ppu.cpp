@@ -3,7 +3,12 @@
 #include "port_hdma.h"
 #include "port_upscale.h"
 #include "port_runtime_config.h"
+#include "port_filter.h"
+#include "port_touch_controls.h"
 
+#ifdef launcher
+#include "tmc_launcher.h"
+#endif
 
 #include <cpu/mode1.h>
 #include <virtuappu.h>
@@ -12,6 +17,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
+/* Manual access to gMain (the engine's Main struct): including main.h
+ * would pull in player.h, which uses `this` as a C parameter name and
+ * doesn't compile as C++. Treat the symbol as opaque bytes and read the
+ * task field at known offset 2 (interruptFlag, sleepStatus, task —
+ * include/main.h). C linkage matches the engine's Main gMain. */
+extern "C" uint8_t gMainOpaque[] asm ("gMain");
 
 enum class RenderBackend {
     None,
@@ -35,9 +47,35 @@ static RenderBackend sBackend = RenderBackend::None;
 static SDL_Renderer* sRenderer = nullptr;
 static SDL_Texture* sLowResTexture = nullptr;   /* 240x160 raw upload */
 static SDL_Texture* sHiResTexture = nullptr;    /* 960x640 upscaled  */
+/* Internal-render-scale streaming texture: re-sized lazily when scale
+ * changes (240*S x 160*S). Used when Port_Config_InternalScale() > 1
+ * and the user has chosen a non-xBRZ presentation mode — the framebuffer
+ * is S*S nearest-replicated into sScaledBuf and uploaded here. */
+static SDL_Texture* sScaledTexture = nullptr;
+static int sScaledTextureScale = 0;
+static uint32_t* sScaledBuf = nullptr;
+static int sScaledBufScale = 0;
 static SDL_Window* sWindow = nullptr;
+#ifdef launcher
+static SDL_Window* sBootstrapWindow = nullptr;
+#endif
+
+static SDL_Window* Port_PPU_ActiveWindow(void) {
+#ifdef launcher
+    return sWindow ? sWindow : sBootstrapWindow;
+#else
+    return sWindow;
+#endif
+}
+
+#ifdef launcher
+extern "C" void Port_SetBootstrapWindow(SDL_Window* window) {
+    sBootstrapWindow = window;
+}
+#endif
 static SDL_Surface* sFrameSurface = nullptr;
 static PresentMode sPresentMode = PresentMode::NearestRaw;
+static PortFilterType sFilter = PORT_FILTER_NONE;
 static uint32_t* sUpscale2xBuf = nullptr;       /* 480x320 intermediate */
 static uint32_t* sUpscale4xBuf = nullptr;       /* 960x640 final        */
 
@@ -78,21 +116,122 @@ extern "C" const char* Port_PPU_PresentationModeName(void) {
     return kNames[(int)sPresentMode];
 }
 
-// Largest 240:160 (3:2) rect fitting inside (w, h), centered.
+// Largest GBA-aspect rect fitting inside (w, h), centered. Aspect uses
+// MODE1_GBA_WIDTH so the widescreen spike (override via -DMODE1_GBA_WIDTH)
+// keeps the rendered rect's proportions matching the framebuffer rather
+// than letterboxing the wider content.
 static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* outW, int* outH) {
+    const int FW = MODE1_GBA_WIDTH;
+    const int FH = MODE1_GBA_HEIGHT;
     int rw;
     int rh;
-    if (w * 160 >= h * 240) {
+    if (w * FH >= h * FW) {
         rh = h;
-        rw = (h * 240) / 160;
+        rw = (h * FW) / FH;
     } else {
         rw = w;
-        rh = (w * 160) / 240;
+        rh = (w * FH) / FW;
     }
     *outX = (w - rw) / 2;
     *outY = (h - rh) / 2;
     *outW = rw;
     *outH = rh;
+}
+
+static void Port_PPU_QueryOutputSize(int* outW, int* outH) {
+    int w = 0;
+    int h = 0;
+    if (sRenderer) {
+        SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h);
+    }
+    if (w > 0 && h > 0) {
+        *outW = w;
+        *outH = h;
+        return;
+    }
+    if (sWindow) {
+        SDL_GetWindowSize(sWindow, &w, &h);
+    }
+    if (w > 0 && h > 0) {
+        *outW = w;
+        *outH = h;
+        return;
+    }
+    *outW = 960;
+    *outH = 540;
+}
+
+/* Build (or reuse) sScaledBuf at scale S and S*S-replicate the 240x160
+ * framebuffer into it. Returns the buffer + dims via out-params; returns
+ * nullptr if S<=1. The buffer survives across frames so we don't realloc
+ * unless the scale changes.
+ *
+ * This is the Stage-1 shape of internal-render-scale: pure post-process
+ * nearest-replicate on the CPU. By itself it produces visually the same
+ * result as SDL_SCALEMODE_NEAREST presentation, but it puts the scaled
+ * framebuffer in the pipeline so future PPU patches can render affine
+ * paths directly at sub-pixel density and the rest of the path doesn't
+ * need to change. */
+static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
+    if (S <= 1) {
+        if (outW) *outW = 0;
+        if (outH) *outH = 0;
+        return nullptr;
+    }
+    const int FW = MODE1_GBA_WIDTH;
+    const int FH = MODE1_GBA_HEIGHT;
+    const int w = FW * S;
+    const int h = FH * S;
+    if (sScaledBuf == nullptr || sScaledBufScale != S) {
+        std::free(sScaledBuf);
+        sScaledBuf = (uint32_t*)std::malloc((size_t)w * (size_t)h * sizeof(uint32_t));
+        sScaledBufScale = S;
+        if (sScaledBuf == nullptr) {
+            sScaledBufScale = 0;
+            if (outW) *outW = 0;
+            if (outH) *outH = 0;
+            return nullptr;
+        }
+    }
+    /* Nearest-replicate: each src pixel writes to an SxS block. Loop
+     * order is src-major so the source line stays cache-resident while
+     * we scatter S output rows. */
+    for (int sy = 0; sy < FH; ++sy) {
+        const uint32_t* src = &virtuappu_frame_buffer[sy * FW];
+        for (int dy = 0; dy < S; ++dy) {
+            uint32_t* dst = &sScaledBuf[(sy * S + dy) * w];
+            for (int sx = 0; sx < FW; ++sx) {
+                uint32_t c = src[sx];
+                uint32_t* d = &dst[sx * S];
+                for (int dx = 0; dx < S; ++dx) {
+                    d[dx] = c;
+                }
+            }
+        }
+    }
+
+    if (outW) *outW = w;
+    if (outH) *outH = h;
+    return sScaledBuf;
+}
+
+static SDL_Texture* Port_PPU_EnsureScaledTexture(int S) {
+    if (S <= 1) return nullptr;
+    if (sScaledTexture != nullptr && sScaledTextureScale == S) {
+        return sScaledTexture;
+    }
+    if (sScaledTexture != nullptr) {
+        SDL_DestroyTexture(sScaledTexture);
+        sScaledTexture = nullptr;
+        sScaledTextureScale = 0;
+    }
+    sScaledTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
+                                       SDL_TEXTUREACCESS_STREAMING,
+                                       MODE1_GBA_WIDTH * S, MODE1_GBA_HEIGHT * S);
+    if (sScaledTexture) {
+        sScaledTextureScale = S;
+    }
+    return sScaledTexture;
 }
 
 static void Port_PPU_PresentSurfaceFrame(void) {
@@ -114,11 +253,43 @@ static void Port_PPU_PresentSurfaceFrame(void) {
     SDL_UpdateWindowSurface(sWindow);
 }
 
+static bool sVSyncEnabled = true;
+
+extern "C" void Port_PPU_SetVSync(bool enabled) {
+    if (sRenderer == nullptr) {
+        sVSyncEnabled = enabled;
+        return;
+    }
+    if (sVSyncEnabled == enabled) {
+        return;
+    }
+    sVSyncEnabled = enabled;
+    SDL_SetRenderVSync(sRenderer, enabled ? 1 : 0);
+}
+
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
+#ifdef launcher
+    sBootstrapWindow = nullptr;
+#endif
     Port_PPU_LoadConfig();
 
-    sRenderer = SDL_CreateRenderer(window, nullptr);
+    /* Reuse the renderer the bootstrap progress UI created (if any)
+     * instead of destroying it and making a new one. SDL only allows
+     * one renderer per window, and recreating it on the same window
+     * causes a visible compositor flash on most platforms — exactly
+     * what made the asset-extractor screen look like a separate
+     * window from the game. SDL_GetRenderer returns NULL when no
+     * renderer has been associated with the window, in which case we
+     * fall back to creating one ourselves. */
+    sRenderer = SDL_GetRenderer(window);
+    if (!sRenderer) {
+        sRenderer = SDL_CreateRenderer(window, nullptr);
+    }
+    if (sRenderer) {
+        SDL_SetRenderTarget(sRenderer, nullptr);
+        SDL_SetRenderClipRect(sRenderer, nullptr);
+    }
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
     } else {
@@ -126,7 +297,8 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
             printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
         }
         sLowResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
-                                           SDL_TEXTUREACCESS_STREAMING, 240, 160);
+                                           SDL_TEXTUREACCESS_STREAMING,
+                                           MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
         sHiResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
                                           SDL_TEXTUREACCESS_STREAMING, kHiResW, kHiResH);
         if (!sLowResTexture || !sHiResTexture) {
@@ -154,16 +326,16 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     /* HBlank-DMA simulation: VirtuaPPU calls this before each scanline. */
     virtuappu_mode1_pre_line_callback = port_hdma_step_line;
 
-    virtuappu_registers.frame_width = 240;
+    virtuappu_registers.frame_width = MODE1_GBA_WIDTH;
     virtuappu_registers.mode = 1;
 
     if (sBackend == RenderBackend::None) {
         sFrameSurface = SDL_CreateSurfaceFrom(
-            240,
-            160,
+            MODE1_GBA_WIDTH,
+            MODE1_GBA_HEIGHT,
             SDL_PIXELFORMAT_ABGR8888,
             virtuappu_frame_buffer,
-            240 * static_cast<int>(sizeof(uint32_t)));
+            MODE1_GBA_WIDTH * static_cast<int>(sizeof(uint32_t)));
         if (!sFrameSurface) {
             printf("Port_PPU_Init: SDL_CreateSurfaceFrom failed: %s\n", SDL_GetError());
             return;
@@ -215,10 +387,41 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
     virtuappu_render_frame();
 
+    /* Widescreen-spike post-process: on screens where the engine doesn't
+     * load BG tile data past column 239 (title, file-select), the extra
+     * widescreen columns (240+) read stale VRAM and visually glitch
+     * (e.g. yellow band on title). Force-black them on those tasks; the
+     * gameplay task is left alone since it does scroll the BG buffer.
+     *
+     * gMain.task is byte 2 of the Main struct (vu8 interruptFlag at 0,
+     * sleepStatus at 1, task at 2 — see include/main.h). Read raw bytes
+     * to avoid pulling main.h into this C++ TU (the engine headers use
+     * `this` as a C parameter name and don't parse as C++). */
+    /* Widescreen Phase 1: ViruaPPU clips BG/OAM at col 240 unconditionally
+     * (engine's 32-tile BG buffer doesn't have reliable data past col 240
+     * on static screens, and parked off-screen sprites live at x >= 240).
+     * For any widescreen_width > 240, uniform-stretch the 240-px frame
+     * into the full window. Phase 2 (sa2-style BGCNT_TXT512x256 + 64-tile
+     * BG buffer) replaces this with real extended tile loading. */
+    if (MODE1_GBA_WIDTH > 240) {
+        uint32_t scratch[240];
+        for (int y = 0; y < MODE1_GBA_HEIGHT; ++y) {
+            uint32_t* row = &virtuappu_frame_buffer[y * MODE1_GBA_WIDTH];
+            std::memcpy(scratch, row, 240 * sizeof(uint32_t));
+            for (int dst_x = 0; dst_x < MODE1_GBA_WIDTH; ++dst_x) {
+                int src_x = (dst_x * 240) / MODE1_GBA_WIDTH;
+                if (src_x > 239) src_x = 239;
+                row[dst_x] = scratch[src_x];
+            }
+        }
+    }
+    (void)gMainOpaque;
+
     if (sBackend == RenderBackend::Renderer) {
         int outW = 0;
         int outH = 0;
-        SDL_GetCurrentRenderOutputSize(sRenderer, &outW, &outH);
+        Port_PPU_QueryOutputSize(&outW, &outH);
+        Port_TouchControls_NotifyRenderSize(outW, outH);
         int x;
         int y;
         int w;
@@ -228,11 +431,20 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
         SDL_Texture* tex;
         SDL_ScaleMode scale;
+        const int internalS = (int)Port_Config_InternalScale();
         switch (sPresentMode) {
             case PresentMode::XbrzLinear:
             case PresentMode::XbrzNearest:
-                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer, 240, 160,
+                /* xBRZ owns its own 4x upscaler — internal-render-scale
+                 * is mutually exclusive with it. The xBRZ path always
+                 * consumes the unscaled GBA-native framebuffer. */
+                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer,
+                                     MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
                                      sUpscale2xBuf, sUpscale4xBuf);
+                /* CRT/LCD filter at the upscaled resolution (4x). The
+                 * pattern needs >= 3 px per phosphor cell to read
+                 * correctly, so xBRZ's 4x output is always large enough. */
+                Port_Filter_Apply(sUpscale4xBuf, kHiResW, kHiResH, 4, sFilter);
                 SDL_UpdateTexture(sHiResTexture, nullptr, sUpscale4xBuf,
                                   kHiResW * (int)sizeof(uint32_t));
                 tex = sHiResTexture;
@@ -240,23 +452,44 @@ extern "C" void Port_PPU_PresentFrame(void) {
                             ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
                 break;
             case PresentMode::LinearRaw:
-                SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
-                                  240 * (int)sizeof(uint32_t));
-                tex = sLowResTexture;
-                scale = SDL_SCALEMODE_LINEAR;
-                break;
             case PresentMode::NearestRaw:
-            default:
-                SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
-                                  240 * (int)sizeof(uint32_t));
-                tex = sLowResTexture;
-                scale = SDL_SCALEMODE_NEAREST;
+            default: {
+                int sw = 0, sh = 0;
+                /* Filter needs a scaled buffer to operate on (1x has too
+                 * few pixels per phosphor cell). Force at least 4x when
+                 * a filter is active, otherwise honour the user's
+                 * internal-scale setting. */
+                int effScale = internalS;
+                if (sFilter != PORT_FILTER_NONE && effScale < 4) {
+                    effScale = 4;
+                }
+                uint32_t* scaled = Port_PPU_BuildScaledFrame(effScale, &sw, &sh);
+                SDL_Texture* scaledTex = Port_PPU_EnsureScaledTexture(effScale);
+                if (scaled && scaledTex) {
+                    Port_Filter_Apply(scaled, sw, sh, effScale, sFilter);
+                    SDL_UpdateTexture(scaledTex, nullptr, scaled, sw * (int)sizeof(uint32_t));
+                    tex = scaledTex;
+                } else {
+                    SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
+                                      MODE1_GBA_WIDTH * (int)sizeof(uint32_t));
+                    tex = sLowResTexture;
+                }
+                scale = (sPresentMode == PresentMode::LinearRaw)
+                            ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
                 break;
+            }
         }
         SDL_SetTextureScaleMode(tex, scale);
         SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);
         SDL_RenderClear(sRenderer);
         SDL_RenderTexture(sRenderer, tex, nullptr, &dst);
+        {
+            extern void Port_DebugMenu_Render(SDL_Renderer*, int, int);
+            Port_DebugMenu_Render(sRenderer, outW, outH);
+            extern void Port_SoftSlots_RenderOverlay(void*, int, int);
+            Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
+            Port_TouchControls_Render(sRenderer, outW, outH);
+        }
         SDL_RenderPresent(sRenderer);
         return;
     }
@@ -272,20 +505,22 @@ extern "C" void Port_PPU_SetWindowTitle(const char* title) {
 }
 
 extern "C" void Port_PPU_ToggleFullscreen(void) {
-    if (!sWindow) {
+    SDL_Window* w = Port_PPU_ActiveWindow();
+    if (!w) {
         return;
     }
-    SDL_WindowFlags flags = SDL_GetWindowFlags(sWindow);
+    SDL_WindowFlags flags = SDL_GetWindowFlags(w);
     bool wantFullscreen = (flags & SDL_WINDOW_FULLSCREEN) == 0;
-    SDL_SetWindowFullscreen(sWindow, wantFullscreen);
-    SDL_SyncWindow(sWindow);
+    SDL_SetWindowFullscreen(w, wantFullscreen);
+    SDL_SyncWindow(w);
 }
 
 extern "C" bool Port_PPU_IsFullscreen(void) {
-    if (!sWindow) {
+    SDL_Window* w = Port_PPU_ActiveWindow();
+    if (!w) {
         return false;
     }
-    return (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_FULLSCREEN) != 0;
+    return (SDL_GetWindowFlags(w) & SDL_WINDOW_FULLSCREEN) != 0;
 }
 
 extern "C" unsigned char Port_PPU_WindowScale(void) {
@@ -300,9 +535,10 @@ extern "C" void Port_PPU_CycleWindowScale(int direction) {
         scale = scale >= 10 ? 1 : (u8)(scale + 1);
     }
     Port_Config_SetWindowScale(scale);
-    if (sWindow && !Port_PPU_IsFullscreen()) {
-        SDL_SetWindowSize(sWindow, 240 * scale, 160 * scale);
-        SDL_SyncWindow(sWindow);
+    SDL_Window* w = Port_PPU_ActiveWindow();
+    if (w && !Port_PPU_IsFullscreen()) {
+        SDL_SetWindowSize(w, MODE1_GBA_WIDTH * scale, MODE1_GBA_HEIGHT * scale);
+        SDL_SyncWindow(w);
     }
 }
 
@@ -320,6 +556,56 @@ extern "C" void Port_PPU_CyclePresentationMode(int direction) {
 
 extern "C" void Port_PPU_ToggleSmoothing(void) {
     Port_PPU_CyclePresentationMode(1);
+}
+
+extern "C" void Port_PPU_CycleFilter(int direction) {
+    int next = (int)sFilter + (direction < 0 ? -1 : 1);
+    if (next < 0) {
+        next = (int)PORT_FILTER_COUNT - 1;
+    } else if (next >= (int)PORT_FILTER_COUNT) {
+        next = 0;
+    }
+    sFilter = (PortFilterType)next;
+    fprintf(stderr, "PPU filter: %s\n", Port_Filter_Name(sFilter));
+}
+
+extern "C" const char* Port_PPU_FilterName(void) {
+    return Port_Filter_Name(sFilter);
+}
+
+extern "C" bool Port_InGameSettingsModalIsOpen(void) {
+#ifdef launcher
+    return TmcSettings_IsModalOpen();
+#else
+    return false;
+#endif
+}
+
+extern "C" void Port_OpenInGameSettingsModal(void) {
+#ifdef launcher
+    if (TmcSettings_IsModalOpen()) {
+        return;
+    }
+    SDL_Window* w = sWindow ? sWindow : sBootstrapWindow;
+    if (!w) {
+        return;
+    }
+    SDL_Renderer* r = sRenderer;
+    if (!r) {
+        r = SDL_GetRenderer(w);
+    }
+    if (!r) {
+        return;
+    }
+    if (!TmcSettings_RunModalInGame(w, r)) {
+        SDL_Event ev;
+        std::memset(&ev, 0, sizeof(ev));
+        ev.type = SDL_EVENT_QUIT;
+        SDL_PushEvent(&ev);
+    }
+#else
+    /* No launcher: settings UI is not linked. */
+#endif
 }
 
 extern "C" void Port_PPU_Shutdown(void) {
