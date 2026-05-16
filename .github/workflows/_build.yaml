@@ -75,20 +75,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            os_name: linux
-            region: usa
-            flag: --usa
-            exe_name: tmc_pc
-            extractor_name: asset_extractor
-          - runner: windows-latest
-            os_name: windows
-            region: usa
-            flag: --usa
-            exe_name: tmc_pc.exe
-            extractor_name: asset_extractor.exe
+      matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
