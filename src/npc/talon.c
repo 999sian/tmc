@@ -11,6 +11,9 @@
 #include "message.h"
 #include "asm.h"
 #include "port_scripts.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -144,7 +147,21 @@ void sub_080656D4(TalonEntity* this) {
                 this->unk_69 = super->action;
                 super->action = 3;
                 super->interactType = INTERACTION_NONE;
+#ifdef PC_PORT
+                /* On GBA, `unk_84` overlaps Entity.scriptContext so
+                 * `*(u32*)&unk_84 + 4` was &ctx->intVariable. On x86-64
+                 * unk_84 is a 4-byte u32 storing the GBA-original script
+                 * address (from the universal spritePtr mirror), not a
+                 * live ScriptExecutionContext*; reading `unk_84 + 4` as
+                 * a pointer crashes. Pull the message id from the actual
+                 * context. */
+                {
+                    ScriptExecutionContext* ctx = Port_GetEntityScriptCtx(super);
+                    MessageNoOverlap(ctx ? ctx->intVariable : 0, super);
+                }
+#else
                 MessageNoOverlap(*(u32*)(*(u32*)&this->unk_84 + 4), super);
+#endif
                 sub_0806574C(this);
                 return;
             }

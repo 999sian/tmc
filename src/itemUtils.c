@@ -18,6 +18,10 @@
 #include "message.h"
 #include "ui.h"
 
+#ifdef PC_PORT
+#include "port_softslots.h"
+#endif
+
 const Wallet gWalletSizes[] = {
     { 100, 0xf060 },
     { 300, 0xf064 },
@@ -260,6 +264,15 @@ void ModArrows(s32 arrows) {
  */
 EquipSlot IsItemEquipped(u32 itemId) {
     EquipSlot equipSlot;
+
+#ifdef PC_PORT
+    /* When a soft-slot (X/Y/L2/R2) is currently active and assigned this
+     * item, report it as B-equipped so held-item code paths (lantern stay-
+     * lit, magic boomerang return, gust-jar charge) behave normally. */
+    if (Port_SoftSlots_IsBHeld() && Port_SoftSlots_GetEffectiveBItem(0xFF) == itemId) {
+        return EQUIP_SLOT_B;
+    }
+#endif
 
     if (itemId == gSave.stats.equipped[SLOT_A]) {
         equipSlot = EQUIP_SLOT_A;

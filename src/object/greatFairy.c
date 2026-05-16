@@ -175,6 +175,19 @@ void GreatFairy_FinalUpdate(GreatFairyEntity* this) {
         if ((super->subtimer == 0) && (target = GreatFairy_CreateForm(this, FORM9, 0), target != NULL)) {
             PositionRelative(super, target, 0, Q_16_16(-76.0));
             target->parent = super;
+#ifdef PC_PORT
+            /* #33 — Mt Crenel fairy fountain crash: sub_080871F8 (the
+             * FORM9 child's action=1 handler in GreatFairy_Form2Behaviors)
+             * dereferences `super->child` to find the position to move
+             * toward, but the spawn site here only sets `target->parent`,
+             * never `target->child`. On GBA the NULL deref reads from
+             * address 0 — mapped to BIOS ROM, returns undefined data but
+             * doesn't fault — so the cutscene happens to run. On x86-64
+             * NULL deref segfaults. The function reads `temp->x/y` and
+             * checks whether super is 32 px above temp, so temp is meant
+             * to be the parent fairy: alias child to super here. */
+            target->child = super;
+#endif
             super->subtimer = 1;
         }
     }

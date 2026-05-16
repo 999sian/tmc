@@ -3,6 +3,7 @@
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,13 @@ typedef enum {
     PORT_INPUT_DOWN,
     PORT_INPUT_R,
     PORT_INPUT_L,
+    /* Extra equip buttons (port_softslots.c). Each maps to a configurable
+     * key/pad/trigger and is read every frame to decide which item — if any —
+     * fires through the B-dispatch path. */
+    PORT_INPUT_SOFT_X,
+    PORT_INPUT_SOFT_Y,
+    PORT_INPUT_SOFT_L2,
+    PORT_INPUT_SOFT_R2,
     PORT_INPUT_COUNT,
 } PortInput;
 
@@ -32,10 +40,47 @@ void Port_Config_SetWindowScale(u8 scale);
 void Port_Config_SetUpscaleMethod(const char* method);
 void Port_Config_SetTargetFps(u32 fps);
 void Port_Config_CycleTargetFps(int direction);
+
+/* Internal render-resolution multiplier. The PPU normally renders at the
+ * GBA-native 240x160; with scale=N>1 it produces a 240*N by 160*N
+ * framebuffer, with sub-pixel sampling on affine paths (OAM affine,
+ * mode2 BG2, mode7) so rotated layers and scaled sprites stop staircase-
+ * aliasing. Text BGs and non-affine sprites are simply S*S nearest-
+ * replicated — pixel-art has no information to recover at higher density.
+ * Range 1..4 (capped by PPU framebuffer height of 640 = 160*4). */
+u8 Port_Config_InternalScale(void);
+void Port_Config_SetInternalScale(u8 scale);
+void Port_Config_CycleInternalScale(int direction);
+
+typedef enum {
+    PORT_TOUCH_SCHEME_JOYSTICK = 0,
+    PORT_TOUCH_SCHEME_DPAD     = 1,
+} PortTouchScheme;
+PortTouchScheme Port_Config_TouchScheme(void);
+void Port_Config_SetTouchScheme(PortTouchScheme scheme);
+void Port_Config_CycleTouchScheme(int direction);
+
 void Port_Config_OpenGamepads(void);
 void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);
 void Port_Config_CloseGamepads(void);
+
+/* Soft-slot input poll, indexed 0..3 (X, Y, L2, R2). */
+bool Port_Config_SoftSlotPressed(int slot);
+
+/* Clear the per-input "pressed this frame" edge cache. Call after the
+ * port has committed KEYINPUT and the engine has read it, so the next
+ * frame's polled state isn't stuck reporting the previous tap. */
+void Port_Config_ClearInputEdges(void);
+
+#ifdef launcher
+void Port_Config_SetPortSettingsMenuEnabled(bool enabled);
+const char* Port_Config_InputUiLabel(PortInput input);
+void Port_Config_FormatBindingsLine(PortInput input, char* out, size_t outCap);
+void Port_Config_SetKeyboardBindExclusive(PortInput input, int sdl_keycode);
+void Port_Config_FormatGamepadBindingsLine(PortInput input, char* out, size_t outCap);
+void Port_Config_SetGamepadBindExclusive(PortInput input, int sdl_gamepad_button);
+#endif
 
 #ifdef __cplusplus
 }

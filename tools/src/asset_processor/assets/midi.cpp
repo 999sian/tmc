@@ -1,8 +1,8 @@
 #include "midi.h"
 #include "reader.h"
+#include "simple_format.h"
 #include "util.h"
 #include <filesystem>
-#include <fmt/format.h>
 #include <nlohmann/json.hpp>
 #include <util/file.h>
 
@@ -42,9 +42,9 @@ void MidiAsset::extractBinary(const std::vector<char>& baserom) {
 
     // Create dummy .s file.
     auto file = util::open_file(buildPath.string(), "wb");
-    fmt::print(file.get(), "\t.incbin \"{}\"\n", tracksPath.generic_string());
-    fmt::print(file.get(), "{}::\n", label);
-    fmt::print(file.get(), "\t.incbin \"{}\"\n", headerPath.generic_string());
+    assetfmt::Print(file.get(), "\t.incbin \"{}\"\n", tracksPath.generic_string());
+    assetfmt::Print(file.get(), "{}::\n", label);
+    assetfmt::Print(file.get(), "\t.incbin \"{}\"\n", headerPath.generic_string());
 }
 
 void MidiAsset::parseOptions(std::vector<std::string>& commonParams, std::vector<std::string>& agb2midParams) {
@@ -116,7 +116,7 @@ void MidiAsset::convertToHumanReadable(const std::vector<char>& baserom) {
     std::vector<std::string> cmd;
     cmd.push_back((toolPath / "bin" / "agb2mid").string());
     cmd.push_back(gBaseromPath);
-    cmd.push_back(fmt::format("{:#x}", start + headerOffset));
+    cmd.push_back(hex_u32(static_cast<uint32_t>(start + headerOffset)));
     cmd.push_back(gBaseromPath); // TODO deduplicate?
     cmd.push_back(assetPath.string());
     cmd.insert(cmd.end(), commonParams.begin(), commonParams.end());

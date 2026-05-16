@@ -1,6 +1,5 @@
 #include "dungeonmap.h"
 #include "util.h"
-#include <fmt/format.h>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <util/file.h>
@@ -21,7 +20,7 @@ void DungeonMapAsset::convertToHumanReadable(const std::vector<char>& baserom) {
 
     std::vector<char> data(static_cast<size_t>(fileSize));
     if (!file.read(data.data(), fileSize)) {
-        fmt::print(stderr, "Can not read dungeon map {}\n", path.string());
+        std::fprintf(stderr, "Can not read dungeon map %s\n", path.string().c_str());
         std::exit(1);
     }
     file.close();
@@ -53,7 +52,7 @@ void DungeonMapAsset::buildToBinary() {
 
     std::vector<char> data(static_cast<size_t>(fileSize));
     if (!file.read(data.data(), fileSize)) {
-        fmt::print(stderr, "Can not read dungeon map {}\n", assetPath.string());
+        std::fprintf(stderr, "Can not read dungeon map %s\n", assetPath.string().c_str());
         std::exit(1);
     }
     file.close();
@@ -85,7 +84,7 @@ void DungeonMapAsset::buildToBinary() {
                 pixels++;
                 break;
             default:
-                fmt::print(stderr, "Unexpected character {}\n", data[i]);
+                std::fprintf(stderr, "Unexpected character %d\n", static_cast<unsigned char>(data[i]));
                 std::exit(1);
                 break;
         }

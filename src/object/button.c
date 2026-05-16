@@ -308,11 +308,16 @@ Entity* sub_08081D74(ButtonEntity* this) {
         }
     } else {
         if (gPlayerState.flags & PL_CLONING) {
-            if (EntityInRectRadius(super, gPlayerClones[0], 5, 6)) {
+            /* Same NULL-clone hazard as interrupts.c sub_080171F0 (#67):
+             * Red sword has 1 clone, Blue has 2, only Four Sword fills all
+             * three slots. EntityInRectRadius reads its second arg's flags
+             * byte at offset 0x40, so a NULL clone slot SIGSEGVs on x86-64
+             * (silently read garbage from BIOS region on GBA). */
+            if (gPlayerClones[0] != NULL && EntityInRectRadius(super, gPlayerClones[0], 5, 6)) {
                 ent = gPlayerClones[0];
-            } else if (EntityInRectRadius(super, gPlayerClones[1], 5, 6)) {
+            } else if (gPlayerClones[1] != NULL && EntityInRectRadius(super, gPlayerClones[1], 5, 6)) {
                 ent = gPlayerClones[1];
-            } else if (EntityInRectRadius(super, gPlayerClones[2], 5, 6)) {
+            } else if (gPlayerClones[2] != NULL && EntityInRectRadius(super, gPlayerClones[2], 5, 6)) {
                 ent = gPlayerClones[2];
             }
         }

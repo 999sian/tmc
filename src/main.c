@@ -13,6 +13,9 @@
 #include "screen.h"
 #include "sound.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "port_hdma.h"
+#endif
 #include "gba/io_reg.h"
 
 extern u32 gRand;
@@ -261,6 +264,9 @@ void SetVBlankDMA(u16* src, u16* dest, u32 size) {
 
 void DisableVBlankDMA(void) {
     gScreen.vBlankDMA.ready = FALSE;
+#ifdef PC_PORT
+    port_hdma_unregister(0);
+#endif
 }
 
 void SetSleepMode(void) {
