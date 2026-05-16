@@ -43,7 +43,9 @@ void Rupee_Init(Entity* this) {
 }
 
 void Rupee_Action_1(Entity* this) {
-    if (this->child->next == NULL) {
+    /* #97 pattern: Rupee_Init advanced action to 1 before CreateObject; the
+     * spawn may have failed and left child == NULL. */
+    if (this->child == NULL || this->child->next == NULL) {
         this->action = 2;
     } else {
         if (BounceUpdate(this, Q_8_8(40.0)) == BOUNCE_DONE_ALL) {
