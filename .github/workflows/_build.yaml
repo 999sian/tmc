@@ -190,6 +190,15 @@ jobs:
           echo $mingw | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:PATH = "$mingw;$env:PATH"
 
+          # Export MINGW_HOME (parent of bin/) so the next step's
+          # "Resolve MinGW POSIX path" can convert it to the POSIX form
+          # that xmake's --mingw flag expects. Without this, xmake
+          # auto-detects Git for Windows's bundled MinGW which has no
+          # `ar` and fails imgui/libpng install with
+          # 'error: cannot get program for ar'.
+          $mingwHome = Split-Path $mingw -Parent
+          echo "MINGW_HOME=$mingwHome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
           gcc --version
           g++ --version
 
