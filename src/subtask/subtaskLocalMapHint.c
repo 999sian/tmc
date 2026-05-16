@@ -44,7 +44,12 @@ void sub_080A6B04(void) {
     bVar1 = ptr->mapMarkerIcon;
     uVar3 = ptr2->_c;
     uVar4 = ptr2->_e;
-    uVar2 = GetOverworldLocation(uVar3, uVar4)->windcrestId;
+    {
+        /* #97 pattern: GetOverworldLocation may return NULL for kinstone-fuse
+         * coords that fall outside any windcrest bounding box. */
+        const OverworldLocation* loc = GetOverworldLocation(uVar3, uVar4);
+        uVar2 = (loc != NULL) ? loc->windcrestId : 0;
+    }
     gMenu.field_0x3 = uVar2;
     gGenericMenu.unk2b = 1;
     sub_080A67C4(uVar2);

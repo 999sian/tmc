@@ -85,7 +85,10 @@ void PauseMenu_Variant0(void) {
     } while (r1 <= 0xd);
     location = GetOverworldLocation((u16)gRoomTransition.player_status.overworld_map_x,
                                     (u16)gRoomTransition.player_status.overworld_map_y);
-    gPauseMenuOptions.unk2[4] = location->windcrestId;
+    /* #97 pattern: GetOverworldLocation returns NULL when the player's
+     * overworld coords don't fall inside any windcrest bounding box (e.g.
+     * inside certain dungeons or with fresh/invalid save data). */
+    gPauseMenuOptions.unk2[4] = (location != NULL) ? location->windcrestId : 0;
     gPauseMenuOptions.unk2[5] = sub_0801DB94();
     if (IsItemEquipped(ITEM_LANTERN_ON) != EQUIP_SLOT_NONE) {
         r1 = 0x10;
