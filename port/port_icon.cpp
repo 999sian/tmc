@@ -1,40 +1,34 @@
 #include "port_icon.h"
 
 #include <SDL3/SDL.h>
-#include <algorithm>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 
 /* Forward-declared C structs — we can't transitively include the project
  * headers because the C decomp uses `this` as a parameter name, which
- * C++ rejects as a reserved word. Layouts must stay in sync with
- * include/structures.h. PORT_STATIC_ASSERT_SIZE on the C side guards
- * any drift. */
+ * C++ rejects as a reserved word. */
 extern "C" {
 
-struct SpriteFrame {
-    uint8_t  numTiles;
-    uint8_t  unk_1;
-    uint16_t firstTileIndex;
+/* gFigurines table (port/port_figurines.c). Index 5 is Ezlo (Hat) — the
+ * figurine-pose sprite the user wanted: green Minish cap on a stand with
+ * a yellow beak. 40 tiles = 8 wide × 5 tall × 32 bytes/tile = 1280 (0x500). */
+struct Figurine {
+    uint8_t* pal;
+    uint8_t* gfx;
+    int      size;
+    int      zero;
 };
 
-struct SpritePtr {
-    void*         animations;
-    SpriteFrame*  frames;
-    void*         ptr;
-    uint32_t      pad;
-};
-
-const SpritePtr* Port_GetSpritePtr(uint16_t sprite_idx);
-extern uint32_t  gFrameObjLists[];
-extern uint8_t*  gRomData;
+extern Figurine gFigurines[];
+extern uint8_t* gRomData;
 
 }  // extern "C"
 
 namespace {
 
-constexpr uint16_t kSpriteEzloCap = 11; /* SPRITE_EZLOCAP from include/definitions.h */
+constexpr int kFigurineEzloHat = 4; /* gFigurines[4] = Ezlo (Hat) figurine (USA) */
+constexpr int kFigurineTilesW  = 4; /* 4 tiles wide × ceil(numTiles/4) tall */
+constexpr int kFigurineSkipRows = 6; /* skip frame chrome — Ezlo character begins around row 6 */
 
 struct Rgba { uint8_t r, g, b, a; };
 
@@ -140,152 +134,90 @@ constexpr Rgba kEzloApproxPalette[16] = {
     {128, 128, 128, 255},  /*15: fill */
 };
 
-/* GBA OBJ shape/size decode → pixels.
- *   shape: 0=square, 1=h-rect, 2=v-rect (3 is reserved)
- *   size:  0..3 within the shape's size table */
-constexpr int kObjSizes[3][4][2] = {
-    /* square */ {{ 8,  8}, {16, 16}, {32, 32}, {64, 64}},
-    /* h-rect */ {{16,  8}, {32,  8}, {32, 16}, {64, 32}},
-    /* v-rect */ {{ 8, 16}, { 8, 32}, {16, 32}, {32, 64}},
-};
-
-bool DecodeShape(uint8_t shape, uint8_t size, int& w, int& h) {
-    if (shape > 2 || size > 3) return false;
-    w = kObjSizes[shape][size][0];
-    h = kObjSizes[shape][size][1];
-    return true;
-}
-
-inline void Put(Rgba* row, int x, Rgba c) {
-    if (c.a == 0) return; /* keep underlying transparent */
-    row[x] = c;
-}
-
-/* Decode one 8x8 4bpp tile (32 bytes) at (px, py) on the surface.
- * hflip/vflip applied per piece. */
-void DecodeTile(const uint8_t* tile, SDL_Surface* surf, int px, int py,
-                bool hflip, bool vflip, const Rgba* pal) {
-    if (!tile) return;
+/* Decode one 8x8 4bpp tile (32 bytes) into RGBA at (px, py) on the surface. */
+void DecodeTile(const uint8_t* tile, SDL_Surface* surf, int px, int py, const Rgba* pal) {
     uint8_t* pixels = static_cast<uint8_t*>(surf->pixels);
     const int pitch = surf->pitch;
-    const int W = surf->w;
-    const int H = surf->h;
-
     for (int y = 0; y < 8; ++y) {
-        int destY = vflip ? py + (7 - y) : py + y;
-        if (destY < 0 || destY >= H) continue;
-        Rgba* row = reinterpret_cast<Rgba*>(pixels + destY * pitch);
+        Rgba* row = reinterpret_cast<Rgba*>(pixels + (py + y) * pitch);
         for (int xByte = 0; xByte < 4; ++xByte) {
             uint8_t b = tile[y * 4 + xByte];
             uint8_t lo = b & 0x0f;
             uint8_t hi = (b >> 4) & 0x0f;
-            int x0 = px + xByte * 2 + 0;
-            int x1 = px + xByte * 2 + 1;
-            if (hflip) { x0 = px + 7 - (xByte * 2);  x1 = px + 7 - (xByte * 2 + 1); }
-            if (x0 >= 0 && x0 < W) Put(row, x0, pal[lo]);
-            if (x1 >= 0 && x1 < W) Put(row, x1, pal[hi]);
+            /* Palette index 0 = transparent for OBJ sprites */
+            if (lo) row[px + xByte * 2 + 0] = pal[lo];
+            if (hi) row[px + xByte * 2 + 1] = pal[hi];
         }
     }
 }
 
-/* Get frame data for a sprite via gFrameObjLists indirection (mirror of
- * port_draw.c::LookupFrameData, kept local to avoid pulling in port_draw.c). */
-const uint8_t* LookupFrameData(uint16_t spriteIndex, uint8_t frameIndex) {
-    const size_t bytes = sizeof(uint32_t) * 50016; /* gFrameObjLists size */
-    const uint8_t* base = reinterpret_cast<const uint8_t*>(gFrameObjLists);
-    if ((size_t)spriteIndex >= bytes / sizeof(uint32_t)) return nullptr;
-    uint32_t off1 = gFrameObjLists[spriteIndex];
-    if ((size_t)off1 > bytes - sizeof(uint32_t)) return nullptr;
-    size_t entry = (size_t)off1 + (size_t)frameIndex * sizeof(uint32_t);
-    if (entry > bytes - sizeof(uint32_t)) return nullptr;
-    uint32_t off2;
-    memcpy(&off2, base + entry, sizeof(off2));
-    if ((size_t)off2 >= bytes) return nullptr;
-    return base + off2;
+/* Decode the 16-color GBA palette pointed to by `pal` (32 bytes RGB555 LE). */
+void DecodePaletteGba(const uint8_t* pal, Rgba out[16]) {
+    out[0] = {0, 0, 0, 0}; /* OBJ palette index 0 is always transparent */
+    for (int i = 1; i < 16; ++i) {
+        uint16_t c = pal[i * 2] | (uint16_t(pal[i * 2 + 1]) << 8);
+        uint8_t r = uint8_t(((c >> 0)  & 0x1f) * 255 / 31);
+        uint8_t g = uint8_t(((c >> 5)  & 0x1f) * 255 / 31);
+        uint8_t b = uint8_t(((c >> 10) & 0x1f) * 255 / 31);
+        out[i] = {r, g, b, 255};
+    }
 }
 
 }  // namespace
 
+/*
+ * Decode gFigurines[5] (Ezlo Hat) from the user's gRomData.
+ *
+ * Each figurine is N * 32 bytes of raw 4bpp OBJ tile data plus a 32-byte
+ * GBA-format palette. The figurine viewer arranges these as a 64x40
+ * sprite (8 tiles wide x 5 tall = 40 tiles = 0x500 bytes). No piece-list
+ * indirection — the data IS the bitmap, just in 8x8-tile column-major
+ * order as the GBA's OAM-1D mapping expects.
+ */
 extern "C" SDL_Surface* Port_ExtractEzloFromRom(void) {
     if (!gRomData) return nullptr;
 
-    const SpritePtr* spr = Port_GetSpritePtr(kSpriteEzloCap);
-    if (!spr || !spr->frames || !spr->ptr) return nullptr;
-
-    SpriteFrame* frame0 = &spr->frames[0];
-    if (frame0->numTiles == 0) return nullptr;
-
-    const uint8_t* pieceData = LookupFrameData(kSpriteEzloCap, 0);
-    if (!pieceData) return nullptr;
-
-    uint8_t pieceCount = pieceData[0];
-    if (pieceCount == 0 || pieceCount > 16) return nullptr;
-    const uint8_t* pieces = pieceData + 1;
-
-    /* Pass 1: bounding box */
-    int minX = std::numeric_limits<int>::max();
-    int minY = std::numeric_limits<int>::max();
-    int maxX = std::numeric_limits<int>::min();
-    int maxY = std::numeric_limits<int>::min();
-    for (int i = 0; i < pieceCount; ++i) {
-        int8_t xoff = static_cast<int8_t>(pieces[i * 5 + 0]);
-        int8_t yoff = static_cast<int8_t>(pieces[i * 5 + 1]);
-        uint8_t shapeInfo = pieces[i * 5 + 2];
-        int w, h;
-        if (!DecodeShape((shapeInfo >> 6) & 3, (shapeInfo >> 4) & 3, w, h)) return nullptr;
-        minX = std::min(minX, (int)xoff);
-        minY = std::min(minY, (int)yoff);
-        maxX = std::max(maxX, (int)xoff + w);
-        maxY = std::max(maxY, (int)yoff + h);
+    int figIdx = kFigurineEzloHat;
+    if (const char* override_idx = SDL_getenv("TMC_ICON_FIGURINE")) {
+        figIdx = SDL_atoi(override_idx);
     }
+    const Figurine& fig = gFigurines[figIdx];
+    if (!fig.pal || !fig.gfx || fig.size <= 0) return nullptr;
 
-    int surfW = maxX - minX;
-    int surfH = maxY - minY;
-    if (surfW <= 0 || surfH <= 0 || surfW > 256 || surfH > 256) return nullptr;
+    /* size = N tiles × 32 bytes. Use that to size the surface as a square-ish
+     * grid; aspect override available via TMC_ICON_TILES_W. */
+    int numTiles = fig.size / 32;
+    int tilesW = kFigurineTilesW;
+    if (const char* override_w = SDL_getenv("TMC_ICON_TILES_W")) {
+        tilesW = SDL_atoi(override_w);
+    }
+    if (tilesW <= 0) tilesW = 4;
+    int totalH = numTiles / tilesW;
+    if (totalH <= 0) return nullptr;
 
-    SDL_Surface* surf = SDL_CreateSurface(surfW, surfH, SDL_PIXELFORMAT_RGBA32);
+    int skipRows = kFigurineSkipRows;
+    if (const char* override_skip = SDL_getenv("TMC_ICON_SKIP_ROWS")) {
+        skipRows = SDL_atoi(override_skip);
+    }
+    if (skipRows < 0) skipRows = 0;
+    if (skipRows >= totalH) skipRows = 0; /* skip discards everything — fall back to full */
+    int tilesH = totalH - skipRows;
+    if (tilesH <= 0) return nullptr;
+
+    Rgba palette[16];
+    DecodePaletteGba(fig.pal, palette);
+
+    const int W = tilesW * 8;
+    const int H = tilesH * 8;
+    SDL_Surface* surf = SDL_CreateSurface(W, H, SDL_PIXELFORMAT_RGBA32);
     if (!surf) return nullptr;
-    /* Zero the surface (alpha=0 = transparent) */
-    SDL_memset(surf->pixels, 0, static_cast<size_t>(surf->pitch) * surfH);
+    SDL_memset(surf->pixels, 0, static_cast<size_t>(surf->pitch) * H);
 
-    /* Pass 2: walk pieces. The frame's tile bytes are contiguous starting at
-     * spr->ptr + firstTileIndex*32, and pieces consume tiles in the order
-     * they appear in the piece list. */
-    const uint8_t* tileBase = static_cast<const uint8_t*>(spr->ptr) + (uint32_t)frame0->firstTileIndex * 32u;
-    uint32_t tileCursor = 0;
-    for (int i = 0; i < pieceCount; ++i) {
-        int8_t xoff = static_cast<int8_t>(pieces[i * 5 + 0]);
-        int8_t yoff = static_cast<int8_t>(pieces[i * 5 + 1]);
-        uint8_t shapeInfo = pieces[i * 5 + 2];
-        int w = 0, h = 0;
-        if (!DecodeShape((shapeInfo >> 6) & 3, (shapeInfo >> 4) & 3, w, h)) {
-            SDL_DestroySurface(surf);
-            return nullptr;
-        }
-        bool hflip = (shapeInfo & 0x08) != 0;
-        bool vflip = (shapeInfo & 0x04) != 0;
-
-        int wTiles = w / 8;
-        int hTiles = h / 8;
-        int pieceTiles = wTiles * hTiles;
-        if (tileCursor + pieceTiles > (uint32_t)frame0->numTiles) {
-            /* Frame's declared tile count exceeded — stop to avoid OOB */
-            break;
-        }
-
-        int basePx = xoff - minX;
-        int basePy = yoff - minY;
-        for (int ty = 0; ty < hTiles; ++ty) {
-            for (int tx = 0; tx < wTiles; ++tx) {
-                const uint8_t* tile = tileBase + tileCursor * 32u;
-                int destTx = hflip ? (wTiles - 1 - tx) : tx;
-                int destTy = vflip ? (hTiles - 1 - ty) : ty;
-                DecodeTile(tile, surf,
-                           basePx + destTx * 8,
-                           basePy + destTy * 8,
-                           hflip, vflip, kEzloApproxPalette);
-                tileCursor++;
-            }
+    const uint8_t* gfx = fig.gfx + skipRows * tilesW * 32;
+    for (int ty = 0; ty < tilesH; ++ty) {
+        for (int tx = 0; tx < tilesW; ++tx) {
+            const uint8_t* tile = gfx + (ty * tilesW + tx) * 32;
+            DecodeTile(tile, surf, tx * 8, ty * 8, palette);
         }
     }
     return surf;
@@ -293,7 +225,11 @@ extern "C" SDL_Surface* Port_ExtractEzloFromRom(void) {
 
 extern "C" SDL_Surface* Port_CreateAppIcon(void) {
     if (SDL_Surface* rom_icon = Port_ExtractEzloFromRom()) {
-        SDL_Log("[icon] using ROM-extracted EzloCap (%dx%d)", rom_icon->w, rom_icon->h);
+        SDL_Log("[icon] using ROM-extracted Ezlo (Hat) figurine (%dx%d)", rom_icon->w, rom_icon->h);
+        if (const char* dump = SDL_getenv("TMC_DUMP_ICON")) {
+            SDL_SaveBMP(rom_icon, dump);
+            SDL_Log("[icon] wrote %s for inspection", dump);
+        }
         return rom_icon;
     }
     SDL_Log("[icon] using procedural placeholder (ROM/sprite tables not ready)");
