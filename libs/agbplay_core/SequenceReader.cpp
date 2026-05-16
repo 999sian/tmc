@@ -46,8 +46,18 @@ SequenceReader::SequenceReader(MP2KContext &ctx) : ctx(ctx)
 void SequenceReader::Process()
 {
     bool playing = false;
-    for (MP2KPlayer &player : ctx.players)
-        playing |= PlayerMain(player);
+    /* Iterate by INDEX with a bounds check rather than by reference
+     * (range-for would bind &player at loop entry). If something inside
+     * PlayerMain mutates ctx.players (e.g. through an
+     * m4aMPlayStart/Stop reentry via a callback), each lookup
+     * re-validates against the current vector state instead of relying
+     * on a possibly-invalidated reference. Issue #111. */
+    const size_t playerCount = ctx.players.size();
+    for (size_t i = 0; i < playerCount; ++i) {
+        if (i >= ctx.players.size())
+            break;  /* the vector shrank mid-iteration — bail out cleanly */
+        playing |= PlayerMain(ctx.players[i]);
+    }
 
     if (!playing && !endReached) {
         ctx.mixer.StartFadeOut(SONG_FINISH_TIME);

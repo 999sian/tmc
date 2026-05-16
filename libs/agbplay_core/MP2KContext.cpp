@@ -28,6 +28,12 @@ MP2KContext::MP2KContext(
 {
     assert(playerTableInfo.size() <= 32);
 
+    /* Reserve full capacity before any emplace_back so the vector never
+     * reallocates during construction. Without this, intermediate
+     * resizes move existing MP2KPlayer slots and any reference taken
+     * during construction (e.g., child structures that captured a
+     * &player) becomes dangling. Issue #111. */
+    players.reserve(playerTableInfo.size());
     for (size_t i = 0; i < playerTableInfo.size(); i++)
         players.emplace_back(*this, playerTableInfo.at(i), static_cast<uint8_t>(i));
 
