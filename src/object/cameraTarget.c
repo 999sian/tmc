@@ -123,6 +123,9 @@ void CameraTarget_Action2(Entity* this) {
     if ((this->type != 1) && (((u8)(gPossibleInteraction.currentObject->kinstoneId - 1) >= 100 ||
                                (this->child != gPossibleInteraction.currentObject->entity)))) {
         sub_080838DC(this);
+    } else if (this->child == NULL) {
+        /* #97 pattern: tracked entity may be deleted mid-frame. */
+        sub_080838DC(this);
     } else {
         this->x = this->child->x;
         this->y = this->child->y;
@@ -151,6 +154,10 @@ void sub_08083A40(Entity* this) {
 
     this->spriteSettings.draw = 1;
     this->action = 2;
+    /* #97 pattern: child target entity may be NULL. */
+    if (this->child == NULL) {
+        return;
+    }
     if (this->child->x.HALF.HI > gPlayerEntity.base.x.HALF.HI) {
         bVar1 = 0;
         this->spriteOffsetX = 8;
