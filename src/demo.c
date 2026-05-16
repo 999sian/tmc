@@ -16,6 +16,9 @@
 #include "sound.h"
 #include "affine.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 void sub_080A30AC(void);
 void sub_080A2E40(void);
@@ -165,6 +168,27 @@ void sub_080A30AC(void) {
     gOamCmd.y = 0x40;
     unk_0x10 = (s16)gGenericMenu.unk10.h[0];
     gOamCmd.x = -0x128 - unk_0x10;
+#ifdef PC_PORT
+    offset = Port_ReadU32(gUnk_08A068BF);
+    ptr = gUnk_08A068BF - 0xc;
+    sub_080ADA04(&gOamCmd, ptr + offset);
+    gOamCmd.x = -0xc0 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
+    gOamCmd.x = -0x58 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
+    gOamCmd.x = 0x10 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(gUnk_08A068BF));
+    gOamCmd.x = 0x78 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
+    gOamCmd.x = 0xe0 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
+    gOamCmd.x = 0x148 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(gUnk_08A068BF));
+    gOamCmd.x = 0x1b0 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
+    gOamCmd.x = 0x218 - unk_0x10;
+    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
+#else
     offset = *(u32*)gUnk_08A068BF;
     ptr = gUnk_08A068BF - 0xc;
     sub_080ADA04(&gOamCmd, ptr + offset);
@@ -184,6 +208,7 @@ void sub_080A30AC(void) {
     sub_080ADA04(&gOamCmd, ptr + *(u32*)(ptr + 4));
     gOamCmd.x = 0x218 - unk_0x10;
     sub_080ADA04(&gOamCmd, ptr + *(u32*)(ptr + 8));
+#endif
 }
 
 void sub_080A3198(u32 param_1, u32 param_2) {
