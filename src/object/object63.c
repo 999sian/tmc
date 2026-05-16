@@ -35,7 +35,10 @@ void Object63_Init(Entity* this) {
             if (CreateRandomItemDrop(this, 4) == 0) {
                 this->action = 2;
             }
-            this->child->zVelocity = this->zVelocity;
+            /* #97 pattern: CreateRandomItemDrop may have failed to spawn child. */
+            if (this->child != NULL) {
+                this->child->zVelocity = this->zVelocity;
+            }
             break;
         case 1:
             objEnt = CreateObject(0, OBJECT_BLOCKING_STAIRS, 0);
@@ -52,7 +55,8 @@ void Object63_Action1(Entity* this) {
         this->action = 2;
     }
 
-    if ((this->timer & 1) != 0) {
+    if ((this->timer & 1) != 0 && this->child != NULL) {
+        /* #97 pattern: child may have been deleted between frames. */
         this->child->y.HALF.HI++;
     }
 }
