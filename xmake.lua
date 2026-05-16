@@ -554,6 +554,7 @@ target("tmc_pc")
     add_files("port/port_m4a_backend.cpp")
     add_files("port/generated_sounds_embed.cpp")  -- compile-time sounds.json fallback
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
+    add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")
