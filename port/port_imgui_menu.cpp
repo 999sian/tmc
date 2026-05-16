@@ -283,7 +283,44 @@ static void DrawRibbonDisplayTab(void) {
     if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
 }
 
+/* Save current game to EEPROM, then drop the player back at the
+ * title screen. Issue #92 / "sleep menu goes back to title".
+ *
+ * Calling the engine's SetTask(TASK_TITLE) directly is fine here
+ * because the F8 menu only opens while the game is in TASK_GAME —
+ * SetTask is valid in that state. The save path is gated behind
+ * Port_Save_Quicksave so we go through the same EEPROM-write code
+ * the F5 quicksave uses (which is known good). */
+extern "C" {
+void SetTask(unsigned int task);
+}
+extern "C" int Port_QuickSave_SaveSlot(int slot);
+
+static void DoQuitToTitle(bool saveFirst) {
+    if (saveFirst) {
+        /* Slot 0 is the F5/F6 quicksave slot — writing there mirrors
+         * the user pressing F5 first. They can still F6-load it on
+         * the next launch. */
+        Port_QuickSave_SaveSlot(0);
+    }
+    SetTask(0 /* TASK_TITLE */);
+    Port_DebugMenu_Toggle();   /* close the F8 ribbon */
+}
+
 static void DrawRibbonSavesTab(void) {
+    /* Quit-to-title actions at the top of the tab — high-visibility
+     * because the existing pause menu doesn't expose them. */
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.35f, 0.55f, 0.30f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.45f, 0.70f, 0.40f, 1.0f));
+    if (ImGui::Button("Save & Quit to Title")) DoQuitToTitle(true);
+    ImGui::PopStyleColor(2);
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.35f, 0.30f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.45f, 0.40f, 1.0f));
+    if (ImGui::Button("Quit to Title (no save)")) DoQuitToTitle(false);
+    ImGui::PopStyleColor(2);
+    ImGui::Separator();
+
     /* Auto-save controls at the top. */
     bool autoOn = Port_QuickSave_AutoEnabled();
     if (ImGui::Checkbox("Auto-save", &autoOn)) {
