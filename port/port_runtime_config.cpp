@@ -56,7 +56,7 @@ u8 sScale = 3;
 u8 sInternalScale = 1;
 std::string sUpscaleMethod = "nearest";
 u64 sFrameTimeNs = 0;
-bool sPortSettingsMenuEnabled = true;
+bool sPortSettingsMenuEnabled = false;
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Edge-detection cache. Set when the corresponding SDL key/button event
@@ -78,7 +78,7 @@ nlohmann::json DefaultsJson(void) {
         { "internal_scale", 1 },
         { "upscale_method", "nearest" },
         { "frame_time_ns", 1000000000ULL / 60 },
-        { "port_settings_menu", true },
+        { "port_settings_menu", false },
         { "touch_scheme", "joystick" },
         { "bindings", nlohmann::json::object() },
     };
@@ -404,7 +404,7 @@ extern "C" void Port_Config_Load(const char* path) {
     sInternalScale = iscale >= 1 && iscale <= 4 ? (u8)iscale : 1;
     sUpscaleMethod = j.value("upscale_method", "nearest");
     sFrameTimeNs = j.value("frame_time_ns", kDefaultFrameTimeNs);
-    sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
+    sPortSettingsMenuEnabled = j.value("port_settings_menu", false);
     {
         std::string ts = j.value("touch_scheme", std::string("joystick"));
         for (char& c : ts) {
