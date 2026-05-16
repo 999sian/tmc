@@ -54,13 +54,19 @@ static float sHpPrevOutL = 0.0f, sHpPrevOutR = 0.0f;
  *   b0 = (1 - cos_w) / 2 / a0
  *   b1 = (1 - cos_w)     / a0
  *   b2 = (1 - cos_w) / 2 / a0
- *   a1 = -2 * cos_w      / a0
+ *   a1 = -2 * cos_w      / a0     (= +0.620203 — POSITIVE here because
+ *                                  cos_w is negative)
  *   a2 = (1 - alpha)     / a0
- *   a0 = 1 + alpha = 1.612372 */
+ *   a0 = 1 + alpha = 1.612372
+ *
+ * Issue #115: kLpA1 was previously stored with the wrong sign, giving
+ * a DC gain of ~3.0 — the soft-clip stage then squashed every loud
+ * passage, producing the "horribly compressed" intro audio reported
+ * on Linux Bazzite. The canonical sign restores unity DC gain. */
 static const float kLpB0 =  0.4651777f;
 static const float kLpB1 =  0.9303554f;
 static const float kLpB2 =  0.4651777f;
-static const float kLpA1 = -0.6202032f;
+static const float kLpA1 =  0.6202032f;
 static const float kLpA2 =  0.2403461f;
 static float sLpX1L = 0.0f, sLpX2L = 0.0f, sLpY1L = 0.0f, sLpY2L = 0.0f;
 static float sLpX1R = 0.0f, sLpX2R = 0.0f, sLpY1R = 0.0f, sLpY2R = 0.0f;
