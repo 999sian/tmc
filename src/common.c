@@ -72,7 +72,7 @@ typedef struct {
 typedef struct {
     u8 filler[0xA00];
 } struct_02017AA0;
-extern struct_02017AA0 gUnk_02017AA0[];
+extern struct_02017AA0 MAY_ALIAS gUnk_02017AA0[];
 
 extern const PaletteGroup* gPaletteGroups[];
 #ifdef PC_PORT

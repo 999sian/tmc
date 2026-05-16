@@ -30,8 +30,8 @@ extern void sub_0807C4F8(void);
 
 extern void gMapData;
 extern u8 gUpdateVisibleTiles;
-extern u16 gMapDataTopSpecial[];
-extern u16 gMapDataBottomSpecial[];
+extern u16 MAY_ALIAS gMapDataTopSpecial[];
+extern u16 MAY_ALIAS gMapDataBottomSpecial[];
 #ifdef PC_PORT
 extern const u8* gGlobalGfxAndPalettes;
 #else

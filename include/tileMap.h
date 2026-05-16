@@ -7,7 +7,7 @@
 // other parts of the game.
 
 // Rendered tileMaps https://www.coranac.com/tonc/text/regbg.htm#sec-map
-extern u16 gMapDataTopSpecial[0x4000];
-extern u16 gMapDataBottomSpecial[0x4000];
+extern u16 MAY_ALIAS gMapDataTopSpecial[0x4000];
+extern u16 MAY_ALIAS gMapDataBottomSpecial[0x4000];
 
 #endif // TILEMAP_H

@@ -22,7 +22,7 @@ void sub_0805DA08(u32, u32, u32);
 
 static const u8 gUnk_08108D74[] = { 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x0 };
 
-extern struct BgAffineDstData gUnk_02017AA0[];
+extern struct BgAffineDstData MAY_ALIAS gUnk_02017AA0[];
 
 void VaatiAppearingManager_Main(VaatiAppearingManager* this) {
     static void (*const VaatiAppearingManager_Actions[])(VaatiAppearingManager*) = {
