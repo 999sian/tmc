@@ -1,9 +1,11 @@
 # buttons-xbox
 
-Replaces the in-game **A**, **B**, and **R** button-prompt tiles (the
-small icons shown in dialog boxes and HUD) with the Xbox controller's
-A, B, and RB button shapes, using TMC's existing button-prompt palette
-so the colours blend into the surrounding UI.
+Replaces the in-game **A**, **B**, and **R** button-prompt tiles with
+Xbox controller equivalents, **in their Xbox colours** (green A, red B,
+grey RB). Ships both an updated `gfx/gfx_215e0_*.bin` (the actual button-
+prompt 4bpp tiles) and an updated `palettes/gPalette_1.pal` so the
+button-prompt OBJ palette renders with Xbox green/red instead of TMC's
+silver/blue.
 
 ## How it works
 
@@ -30,16 +32,45 @@ tiles  8..9  = R "R" letter column (8x16, 2 tiles vertical)
 tiles 10..13 = R shoulder shape (16x16)
 ```
 
-This mod replaces **all 14 tiles**:
+## Palette layout
 
-- A button (tiles 0..3) ← cropped from `face buttons.png` bottom-left (Xbox A).
-- B button (tiles 4..7) ← cropped from `face buttons.png` bottom-right (Xbox B).
-- R "R" column (tiles 8..9) ← left 8 px of `shoulder buttons grey.png`'s
-  RB button, resized to 8x16.
-- R shoulder (tiles 10..13) ← right 16 px of the same RB crop, resized to 16x16.
+The 4bpp tiles index into `palettes/gPalette_1.pal` (OBJ palette 1).
+That palette is loaded into the same OBJ slot by 8 different palette
+groups (9, 10, 11, 181, 203, 204, 205, 207), so any HUD sprite that
+also uses palette 1 sees the same colours.
 
-The two R pieces compose into a single 24x16 "RB" rounded button at the
-piece offsets defined in `gFrameObjLists[505][2]`.
+The mod **only changes slots 10..14**; slots 0..9 and 15 stay at their
+original values to minimise collateral damage to other HUD sprites:
+
+| Slot | Original (#hex) | Modded (#hex) | Purpose                |
+|:----:|:---------------:|:-------------:|------------------------|
+|  0..9 | (preserved)    | (preserved)   | Used by other HUD sprites; left untouched |
+|  10  | `#52626a`       | **`#506068`** | RB outline (matches PNG exactly) |
+|  11  | `#738b94`       | **`#b4b4bd`** | RB letter / light grey |
+|  12  | `#a4b4c5`       | **`#43a847`** | Xbox A bright green    |
+|  13  | `#d5deee`       | **`#cc3838`** | Xbox B bright red      |
+|  14  | `#ffffff`       | **`#1e5621`** | Dark green (A shadow, currently unused — quantiser picked black instead) |
+|  15  | `#000000`       | `#000000`     | Universal black outline — KEPT |
+
+The quantiser then maps the source PNG pixels to the nearest of those
+16 slots: Xbox A pixels land on slot 12 (green), B pixels on slot 13
+(red), RB outline on slot 10 (exact match), RB highlight on slot 5
+(original light cyan — close to off-white).
+
+## Known side-effects
+
+Any other OBJ sprite that uses palette 1 slots 10..14 will also pick up
+the new colours:
+
+- Slot 12 was a **light blue-grey** (used for highlights of metallic
+  HUD sprites). Now bright green. Affected sprites will look greener.
+- Slot 13 was **very light blue** (highlight). Now bright red.
+- Slot 14 was **pure white** (brightest highlight). Now dark green —
+  sprites that used white highlights lose them, becoming dark green.
+
+These side-effects only show on HUD/UI sprites loaded with palette 1
+into OBJ palette slot 1. Other gameplay sprites (entities, enemies,
+NPCs) use different palette groups and are unaffected.
 
 ## How to load
 
@@ -53,68 +84,57 @@ Stderr log when active:
 [MOD] active: buttons-xbox -> /…/mods/buttons-xbox
 [MOD] 1 mod registered
 [MOD] override gfx/gfx_215e0_32x32_4bpp_uncompressed.bin ← …
+[MOD] override palettes/gPalette_1.pal ← …
 ```
 
-The override fires during the title-screen demo loop (gfx group 16
-loads at startup), so you'll see Xbox-shaped buttons in the next
-dialog or HUD prompt with no save load required.
-
-## Known caveats
-
-1. **Colours are TMC's button-prompt palette, not Xbox green/red.**
-   The PNG → 4bpp conversion quantises against `palettes/gPalette_1.pal`
-   (shared OBJ palette 1, used by 8 palette groups for HUD sprites), so
-   the Xbox SHAPES are preserved but the COLOURS stay TMC's silver/blue
-   prompt palette. For Xbox-accurate green/red, the mod would also need
-   to ship a custom `palettes/gPalette_1.pal` — but that palette is
-   shared with many other OBJ sprites, so a naive override would
-   recolour them too.
-2. **Other UI tiles preserved.** Only the 448 bytes of `gfx_215e0` are
-   replaced. The 8-KB `gfx_1d7e0` blob that lives at the lower OBJ tile
-   range (which holds many other HUD pieces) is untouched.
+The gfx override fires at the title-screen demo loop (gfx group 16 is
+always loaded). The palette override fires later, when a save is
+loaded and the HUD/UI palette gets requested by palette groups 9/10/11
+or similar.
 
 ## Rebuild procedure
 
 ```sh
-# 1. Pull TMC's button-prompt palette so the quantiser uses the same
-#    16 colours as the in-game render path.
-cp build/USA/assets/palettes/gPalette_1.pal /tmp/
+# 1. Pull TMC's original gPalette_1.pal — we keep slots 0..9 and 15.
+cp build/USA/assets/palettes/gPalette_1.pal /tmp/orig_pal1.pal
 
-# 2. Face buttons (A, B). 32x32 PNG laid out as 2x2 of 16x16 buttons:
-#    Y(top-left)  X(top-right)
-#    A(bot-left)  B(bot-right)
-convert "tmc buttons/xbox style/face buttons.png" \
-        -crop 16x16+0+16 +repage xbox_A.png
-convert "tmc buttons/xbox style/face buttons.png" \
-        -crop 16x16+16+16 +repage xbox_B.png
-python3 tools/png_to_tmc4bpp.py xbox_A.png a.bin --palette /tmp/gPalette_1.pal
-python3 tools/png_to_tmc4bpp.py xbox_B.png b.bin --palette /tmp/gPalette_1.pal
+# 2. Build the modded palette (Python one-liner; see commit message for
+#    the slot allocation rationale).
+python3 - <<PY
+import struct, pathlib
+def rgb555(r,g,b): return ((r>>3)&0x1f) | (((g>>3)&0x1f)<<5) | (((b>>3)&0x1f)<<10)
+new = bytearray(pathlib.Path('/tmp/orig_pal1.pal').read_bytes())
+for idx,(r,g,b) in {10:(0x50,0x60,0x68), 11:(0xb4,0xb4,0xbd),
+                    12:(0x43,0xa8,0x47), 13:(0xcc,0x38,0x38),
+                    14:(0x1e,0x56,0x21)}.items():
+    new[idx*2:idx*2+2] = struct.pack('<H', rgb555(r,g,b))
+pathlib.Path('mods/buttons-xbox/palettes/gPalette_1.pal').write_bytes(bytes(new))
+pathlib.Path('/tmp/xbox_pal1.pal').write_bytes(bytes(new))
+PY
 
-# 3. Shoulder R/L. The 53x23 PNG holds LB top-left, RB bottom-left,
-#    RT and LT on the right. We crop RB (a 24x10 region), resize to
-#    24x16, then split into the 8x16 left column and 16x16 right
-#    block that TMC's R prompt OAM pieces expect.
-convert "tmc buttons/xbox style/shoulder buttons grey.png" \
-        -crop 24x10+0+12 +repage rb_raw.png
-convert rb_raw.png -filter point -resize 24x16! rb_24x16.png
-convert rb_24x16.png -crop  8x16+0+0  +repage rb_left8.png
-convert rb_24x16.png -crop 16x16+8+0  +repage rb_right16.png
-python3 tools/png_to_tmc4bpp.py rb_left8.png   rb_left.bin  --palette /tmp/gPalette_1.pal
-python3 tools/png_to_tmc4bpp.py rb_right16.png rb_right.bin --palette /tmp/gPalette_1.pal
+# 3. Crop A, B, RB and convert each against the new palette
+convert "tmc buttons/xbox style/face buttons.png" -crop 16x16+0+16 +repage /tmp/xbox_A.png
+convert "tmc buttons/xbox style/face buttons.png" -crop 16x16+16+16 +repage /tmp/xbox_B.png
+convert "tmc buttons/xbox style/shoulder buttons grey.png" -crop 24x10+0+12 +repage /tmp/rb_raw.png
+convert /tmp/rb_raw.png -filter point -resize 24x16! /tmp/rb_24x16.png
+convert /tmp/rb_24x16.png -crop 8x16+0+0  +repage /tmp/rb_left8.png
+convert /tmp/rb_24x16.png -crop 16x16+8+0 +repage /tmp/rb_right16.png
 
-# 4. Splice all 14 tiles into the 448-byte blob:
-python3 -c "
+python3 tools/png_to_tmc4bpp.py /tmp/xbox_A.png    /tmp/a.bin  --palette /tmp/xbox_pal1.pal
+python3 tools/png_to_tmc4bpp.py /tmp/xbox_B.png    /tmp/b.bin  --palette /tmp/xbox_pal1.pal
+python3 tools/png_to_tmc4bpp.py /tmp/rb_left8.png  /tmp/rl.bin --palette /tmp/xbox_pal1.pal
+python3 tools/png_to_tmc4bpp.py /tmp/rb_right16.png /tmp/rr.bin --palette /tmp/xbox_pal1.pal
+
+# 4. Splice into the 448-byte blob
+python3 - <<PY
 import pathlib
 orig = pathlib.Path('build/USA/assets/gfx/gfx_215e0_32x32_4bpp_uncompressed.bin').read_bytes()
-a  = pathlib.Path('a.bin').read_bytes()        # 128 B (4 tiles, A button)
-b  = pathlib.Path('b.bin').read_bytes()        # 128 B (4 tiles, B button)
-rl = pathlib.Path('rb_left.bin').read_bytes()  #  64 B (2 tiles, R col)
-rr = pathlib.Path('rb_right.bin').read_bytes() # 128 B (4 tiles, R pad)
+a  = pathlib.Path('/tmp/a.bin').read_bytes()
+b  = pathlib.Path('/tmp/b.bin').read_bytes()
+rl = pathlib.Path('/tmp/rl.bin').read_bytes()
+rr = pathlib.Path('/tmp/rr.bin').read_bytes()
 mod = bytearray(orig)
-mod[0:128]   = a    # tiles 0..3
-mod[128:256] = b    # tiles 4..7
-mod[256:320] = rl   # tiles 8..9
-mod[320:448] = rr   # tiles 10..13
+mod[0:128]=a; mod[128:256]=b; mod[256:320]=rl; mod[320:448]=rr
 pathlib.Path('mods/buttons-xbox/gfx/gfx_215e0_32x32_4bpp_uncompressed.bin').write_bytes(bytes(mod))
-"
+PY
 ```
