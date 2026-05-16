@@ -162,6 +162,8 @@ void Port_DebugAction_AllKinstones(void);
 
 void          Port_PPU_ToggleFullscreen(void);
 bool          Port_PPU_IsFullscreen(void);
+void          Port_PPU_SetVSync(bool enabled);
+bool          Port_PPU_VSyncEnabled(void);
 void          Port_PPU_CycleWindowScale(int direction);
 unsigned char Port_PPU_WindowScale(void);
 void          Port_PPU_CyclePresentationMode(int direction);
@@ -269,6 +271,10 @@ static void DrawRibbonDisplayTab(void) {
     /* Fullscreen */
     bool fs = Port_PPU_IsFullscreen();
     if (ImGui::Checkbox("Fullscreen", &fs)) Port_PPU_ToggleFullscreen();
+
+    /* VSync — toggle SDL3 swap-on-vblank. ON by default. Issue #118. */
+    bool vsync = Port_PPU_VSyncEnabled();
+    if (ImGui::Checkbox("VSync", &vsync)) Port_PPU_SetVSync(vsync);
 
     /* CRT filter */
     ImGui::Text("CRT filter"); ImGui::SameLine(140);

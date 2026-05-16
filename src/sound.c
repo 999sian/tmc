@@ -24,8 +24,19 @@ static void InitVolume(void);
  * while the jingle plays. The PC backend renders all players independently,
  * so we duck explicitly via the existing volumeBgmTarget fade and restore
  * once the SFX player finishes (#22). */
-static u8 sBgmDuckActive;
-static u8 sBgmDuckPlayer;
+static u8  sBgmDuckActive;
+static u8  sBgmDuckPlayer;
+static u16 sBgmDuckTimer; /* frames since duck activation; safety timeout */
+
+/* Heart-piece jingle in Minish Picori Village (#117) and a few other
+ * spots have the jingle finish but the SFX player stays marked as
+ * "playing" in agbplay_core, so the Is-Player-Active probe in
+ * AudioMain never returns false and the duck never lifts.  Force a
+ * restore after this many audio-frames regardless.  The jingle is ~3
+ * seconds (~180 frames), so 600 (10s) gives generous headroom but
+ * still recovers quickly enough that the player notices the bug only
+ * if they're actively listening for it. */
+#define BGM_DUCK_TIMEOUT_FRAMES 600
 
 static bool32 IsDuckingSfx(u32 song) {
     return song == SFX_ITEM_GET;
@@ -160,6 +171,7 @@ void SoundReq(u32 sound) {
                 if (IsDuckingSfx(song)) {
                     sBgmDuckActive = 1;
                     sBgmDuckPlayer = (u8)gSongTable[song].musicPlayerIndex;
+                    sBgmDuckTimer = 0;
                     ptr->volumeBgmTarget = 0;
                 }
 #endif
@@ -173,9 +185,14 @@ void AudioMain(void) {
     SoundPlayingInfo* ptr = &gSoundPlayingInfo;
 
 #ifdef PC_PORT
-    if (sBgmDuckActive && !Port_M4A_Backend_IsPlayerActive(sBgmDuckPlayer)) {
-        sBgmDuckActive = 0;
-        ptr->volumeBgmTarget = 0x100;
+    if (sBgmDuckActive) {
+        sBgmDuckTimer++;
+        if (!Port_M4A_Backend_IsPlayerActive(sBgmDuckPlayer) ||
+            sBgmDuckTimer >= BGM_DUCK_TIMEOUT_FRAMES) {
+            sBgmDuckActive = 0;
+            sBgmDuckTimer = 0;
+            ptr->volumeBgmTarget = 0x100;
+        }
     }
 #endif
 
@@ -263,6 +280,12 @@ static void InitVolume(void) {
     gSoundPlayingInfo.volumeBgmUnk = 0x100;
     gSoundPlayingInfo.volumeBgm = 0x100;
     gSoundPlayingInfo.volumeBgmTarget = 0x100;
+#ifdef PC_PORT
+    /* Any time we re-initialise volume (room change, new BGM via
+     * VOL_RESET path), clear a stuck duck — see #117. */
+    sBgmDuckActive = 0;
+    sBgmDuckTimer = 0;
+#endif
 }
 
 extern const SongHeader sfxNone;

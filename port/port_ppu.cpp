@@ -223,6 +223,10 @@ extern "C" void Port_PPU_SetVSync(bool enabled) {
     SDL_SetRenderVSync(sRenderer, enabled ? 1 : 0);
 }
 
+extern "C" bool Port_PPU_VSyncEnabled(void) {
+    return sVSyncEnabled;
+}
+
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
     Port_PPU_LoadConfig();
