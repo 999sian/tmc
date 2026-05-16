@@ -126,7 +126,13 @@ jobs:
           sudo apt-get install -y \
             curl libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
-            xutils-dev xorg-dev autoconf automake libtool meson ninja-build
+            xutils-dev xorg-dev autoconf automake libtool ninja-build python3-pip
+          # Ubuntu 22.04 ships meson 0.61.2, but Wayland 1.25.0 (pulled
+          # in transitively by xmake's SDL3 dep chain) needs >= 0.64.
+          # Install a newer meson via pip ahead of xmake so the package
+          # build doesn't fail with "Meson version is 0.61.2 but project
+          # requires >= 0.64.0".
+          sudo pip3 install --upgrade 'meson>=1.4'
 
       - name: Install macOS dependencies
         if: matrix.os_name == 'macos'
