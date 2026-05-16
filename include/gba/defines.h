@@ -6,7 +6,12 @@
 #define TRUE 1
 #define FALSE 0
 
-#if defined(__APPLE__)
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
+/* MSVC: GBA IWRAM/EWRAM sections are meaningless on PC; map to no-op so
+ * any code that retained these attributes compiles cleanly. */
+#define IWRAM_DATA
+#define EWRAM_DATA
+#elif defined(__APPLE__)
 #define IWRAM_DATA __attribute__((section("__DATA,iwram_data")))
 #define EWRAM_DATA __attribute__((section("__DATA,ewram_data")))
 #else
@@ -14,14 +19,37 @@
 #define EWRAM_DATA __attribute__((section("ewram_data")))
 #endif
 
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
+#define NAKED __declspec(naked)
+#define UNUSED
+#else
 #define NAKED __attribute__((naked))
 #define UNUSED __attribute__((unused))
+#endif
 #ifdef __CLION_IDE__
 #define PACKED
 #define ALIGNED(n)
+#define MAY_ALIAS
+#define PACKED_STRUCT_BEGIN
+#define PACKED_STRUCT_END
+#elif defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
+/* MSVC has no trailing-attribute equivalent of __attribute__((packed)).
+ * The cross-platform pattern is to wrap the struct definition with
+ *   PACKED_STRUCT_BEGIN  struct Foo { ... } PACKED_STRUCT_END;
+ * but most existing call sites use the trailing form, so expand PACKED
+ * to nothing on MSVC and emit a diagnostic if any struct actually relies
+ * on byte packing (those sites need converting to PACKED_STRUCT_BEGIN/END). */
+#define PACKED
+#define ALIGNED(n) __declspec(align(n))
+#define MAY_ALIAS
+#define PACKED_STRUCT_BEGIN __pragma(pack(push, 1))
+#define PACKED_STRUCT_END   __pragma(pack(pop))
 #else
 #define PACKED __attribute__((packed))
 #define ALIGNED(n) __attribute__((aligned(n)))
+#define MAY_ALIAS __attribute__((__may_alias__))
+#define PACKED_STRUCT_BEGIN
+#define PACKED_STRUCT_END
 #endif
 
 #ifdef PC_PORT

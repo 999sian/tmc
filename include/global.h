@@ -165,7 +165,11 @@ union SplitHWord {
     } PACKED HALF;
 } PACKED;
 
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)
+#define FORCE_WORD_ALIGNED __declspec(align(2))
+#else
 #define FORCE_WORD_ALIGNED __attribute__((packed, aligned(2)))
+#endif
 
 /* forward decls */
 struct Entity_;
