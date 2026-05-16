@@ -777,6 +777,71 @@ target("tmc_pc")
     -- locally (CI release tarballs may strip later). The xmake mode.release
     -- rule adds -s/--strip-all by default which makes addr2line useless.
     set_strip("none")
+
+    -- Best-effort dependency on the randomizer CLI. xmake builds it
+    -- automatically if .NET 8 SDK is installed; skips with a warning
+    -- otherwise. The F8 → Randomizer submenu in port_debug_menu.cpp
+    -- looks for the resulting binary at <exe>/randomizer/ — search
+    -- slot #2 in Port_Randomizer_FindCLI().
+    add_deps("randomizer_cli")
+target_end()
+
+
+-- ====================
+-- Randomizer CLI target
+-- ====================
+-- Builds libs/randomizer/MinishCapRandomizerCLI/ via `dotnet publish`
+-- into build/<plat>/randomizer/. The randomizer is GPL-3.0 and stays
+-- a separate program — tmc_pc only shells out to it via system().
+-- Building this target requires the .NET 8 SDK at build time; running
+-- tmc_pc does NOT require .NET at runtime (the binary is self-
+-- contained per its csproj's <SelfContained>true</SelfContained>).
+target("randomizer_cli")
+    set_kind("phony")
+    on_build(function (target)
+        import("lib.detect.find_program")
+        local dotnet = find_program("dotnet")
+        if not dotnet then
+            cprint("${yellow warning:} dotnet SDK not found — skipping randomizer build.")
+            cprint("${yellow }                Install .NET 8 SDK and rerun `xmake build randomizer_cli` to enable F8 → Randomizer.")
+            return
+        end
+
+        local csproj = path.join(os.scriptdir(), "libs", "randomizer",
+                                 "MinishCapRandomizerCLI",
+                                 "MinishCapRandomizerCLI.csproj")
+        if not os.exists(csproj) then
+            cprint("${yellow warning:} libs/randomizer submodule not initialised. Run `git submodule update --init libs/randomizer`.")
+            return
+        end
+
+        local outdir = path.join(os.scriptdir(), "build", "pc", "randomizer")
+        local rid = "linux-x64"
+        if is_plat("windows", "mingw") then rid = "win-x64"
+        elseif is_plat("macosx") then
+            if is_arch("arm64", "arm64-v8a") then rid = "osx-arm64"
+            else rid = "osx-x64" end
+        end
+
+        cprint("${cyan [randomizer_cli]} dotnet publish -c Release -r " .. rid)
+        local ok = try { function ()
+            os.iorunv(dotnet, {
+                "publish", csproj,
+                "-c", "Release",
+                "-r", rid,
+                "--self-contained",
+                "-p:PublishSingleFile=true",
+                "-p:IncludeNativeLibrariesForSelfExtract=true",
+                "-o", outdir,
+            })
+        end }
+        if not ok then
+            cprint("${yellow warning:} randomizer publish failed — F8 → Randomizer will report 'CLI not found' until fixed.")
+            return
+        end
+
+        cprint("${green [randomizer_cli]} built → " .. outdir)
+    end)
 target_end()
 
 
