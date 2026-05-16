@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: all
+    secrets:
+      ASSETS_TOKEN:
+        required: false
+      PRIVATE_SUBMODULES_TOKEN:
+        required: false
 
 jobs:
   # Compute the build matrix dynamically so callers can opt into a Linux-only
