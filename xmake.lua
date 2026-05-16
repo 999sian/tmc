@@ -26,6 +26,12 @@ option("pc_avx2")
     set_description("Enable AVX2 optimizations for tmc_pc when supported")
 option_end()
 
+option("pc_sanitize")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build tmc_pc with -fsanitize=address,undefined for runtime UB/NULL-deref detection")
+option_end()
+
 -- Widescreen: render the GBA frame at a non-native horizontal width by
 -- overriding MODE1_GBA_WIDTH at compile time.
 --   240: GBA-native (3:2). No widescreen, no pillarbox, no stretch.
@@ -752,6 +758,17 @@ target("tmc_pc")
 
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
+
+    -- Optional sanitizer build (xmake f -y --pc_sanitize=y). Catches NULL
+    -- deref, OOB reads/writes, signed-overflow UB, use-after-free with a
+    -- precise stack trace at the moment of the violation.
+    if has_config("pc_sanitize") then
+        add_cflags  ("-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-fno-sanitize-recover=all")
+        add_cxxflags("-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-fno-sanitize-recover=all")
+        add_ldflags ("-fsanitize=address,undefined", {force = true})
+        add_shflags ("-fsanitize=address,undefined", {force = true})
+        print("[tmc_pc] sanitizer: AddressSanitizer + UndefinedBehaviorSanitizer enabled")
+    end
 
     -- Keep symbols even in release mode so SIGSEGV traces are useful
     -- locally (CI release tarballs may strip later). The xmake mode.release

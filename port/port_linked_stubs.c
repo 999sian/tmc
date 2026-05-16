@@ -1650,7 +1650,10 @@ u8 gUnk_additional_8_HyruleCastle_3[64];
  * containers" in #42). */
 u8 gUnk_additional_8_MelarisMine_Main[128];
 u8 gUnk_additional_8_PalaceOfWinds_GyorgTornado[64];
-u8 gUnk_additional_9_HouseInteriors1_Library1F[64];
+/* ASan caught this at startup: Port_InitDataStubs (data_stubs_autogen.c:653)
+ * copies 0x50 (80) bytes here from ROM, but the storage was sized 64 — the
+ * memcpy overflowed 16 bytes into gUnk_additional_9_HouseInteriors2_Percy. */
+u8 gUnk_additional_9_HouseInteriors1_Library1F[128];
 u8 gUnk_additional_9_HouseInteriors2_Percy[64];
 u8 gUnk_additional_9_HouseInteriors3_BorlovEntrance[64];
 u8 gUnk_additional_9_MelarisMine_Main[64];
