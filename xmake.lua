@@ -80,6 +80,7 @@ else
     add_requires("libsdl3", {configs = {shared = false}})
     add_requires("nlohmann_json", {configs = {cmake = false}})
 end
+add_requires("guilite")
 
 -- #15: even with `header_only = true` requested above, the xmake fmt
 -- package still links the system libfmt.so when one happens to be
@@ -493,7 +494,14 @@ target("tmc_pc")
     add_includedirs("libs/agbplay_core")
     add_includedirs("tools/src/assets_extractor") -- AssetExtractorApi linked in-process
 
-    
+    add_defines("launcher", "GUILITE_ON")
+    add_includedirs("libs/tmc-Modern-Launcher/include")
+    add_includedirs("libs/tmc-Modern-Launcher/3p")
+    add_rules("utils.bin2c", {extensions = {".png"}})
+    add_files("libs/tmc-Modern-Launcher/assets/github.png", {rule = "utils.bin2c", nozeroend = true})
+    add_files("libs/tmc-Modern-Launcher/src/launcher_github_icon.cpp")
+    add_files("libs/tmc-Modern-Launcher/src/tmc_launcher.cpp")
+    add_files("port/port_launcher_bootstrap.cpp")
 
     add_files("port/port_main.c")
     add_files("port/port_audio.c")
@@ -533,6 +541,7 @@ target("tmc_pc")
     add_files("port/port_upscale.c") -- xBRZ-style pixel-art upscaler
     add_files("port/port_save.c")        -- EEPROM save emulation
     add_files("port/port_softslots.c")   -- Extra item-equip buttons (X/Y/L2/R2)
+    add_files("port/port_touch_controls.cpp")
     add_files("port/port_filter.c")      -- CRT/LCD post-process filters
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)
     add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
@@ -644,7 +653,7 @@ target("tmc_pc")
     -- GBA library (m4a sound) - skipped for PC, using stubs
     -- add_files("src/gba/m4a.c")
     
-    add_packages("libsdl3", "nlohmann_json", "fmt")
+    add_packages("libsdl3", "nlohmann_json", "fmt", "guilite")
 
     -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
     -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.

@@ -7,6 +7,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#ifdef launcher
+void Port_SetBootstrapWindow(SDL_Window* window);
+#endif
 
 // Initialize the PPU renderer (call after SDL_CreateWindow)
 void Port_PPU_Init(SDL_Window* window);
@@ -43,6 +46,9 @@ void Port_PPU_SetVSync(bool enabled);
 
 // Cleanup
 void Port_PPU_Shutdown(void);
+
+void Port_OpenInGameSettingsModal(void);
+bool Port_InGameSettingsModalIsOpen(void);
 
 #ifdef __cplusplus
 }
