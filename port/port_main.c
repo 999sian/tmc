@@ -290,6 +290,17 @@ int main(int argc, char* argv[]) {
     }
     (void)prerenderer; /* Owned by the window; retrieved via SDL_GetRenderer(window) later. */
 
+    /* Set window icon BEFORE first present so the title-bar and
+     * taskbar entry never flash the default SDL icon. */
+    {
+        extern SDL_Surface* Port_CreateAppIcon(void);
+        SDL_Surface* icon = Port_CreateAppIcon();
+        if (icon) {
+            SDL_SetWindowIcon(window, icon);
+            SDL_DestroySurface(icon);
+        }
+    }
+
     SDL_ShowWindow(window);
     SDL_RaiseWindow(window);
     SDL_SyncWindow(window);
