@@ -128,6 +128,14 @@ jobs:
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
             xutils-dev xorg-dev autoconf automake libtool meson ninja-build
 
+      - name: Install macOS dependencies
+        if: matrix.os_name == 'macos'
+        # build.py's dep-probe wants fmt + nlohmann-json reachable via
+        # pkg-config; libomp covers the OpenMP runtime ViruaPPU uses for
+        # scanline parallelism. The hosted macos-14 / macos-13 runners
+        # come with Homebrew, libpng, and the Xcode CLT preinstalled.
+        run: brew install fmt nlohmann-json libomp
+
       - name: Install MinGW Windows
         if: matrix.os_name == 'windows'
         shell: powershell
