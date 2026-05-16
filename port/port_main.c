@@ -325,6 +325,15 @@ int main(int argc, char* argv[]) {
     Port_EnsureAssetsReadyWithDisplay(window, gRomData, gRomSize);
     Port_CheckForUpdates(window);
 
+    /* Mod loader (Tier 1: asset overrides). Scans <exe>/mods/ for
+     * subdirectories whose files shadow runtime asset paths. Active set
+     * controlled by TMC_MODS env var; otherwise all mods/* directories
+     * are loaded in alphabetical order. */
+    {
+        extern void Port_Mods_Init(void);
+        Port_Mods_Init();
+    }
+
     /* Now that the ROM and asset tables are loaded, re-set the window
      * icon — Port_CreateAppIcon prefers the ROM-extracted Ezlo sprite
      * over the procedural fallback once gRomData/gSpritePtrs/gFrameObjLists
