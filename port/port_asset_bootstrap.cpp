@@ -143,6 +143,19 @@ std::optional<std::filesystem::path> GetExecutableDirectory() {
 }
 
 std::filesystem::path PreferredAssetRoot() {
+#ifdef __ANDROID__
+    const char* androidRuntimeDir = std::getenv("TMC_ANDROID_RUNTIME_DIR");
+    if (androidRuntimeDir != nullptr && androidRuntimeDir[0] != '\0') {
+        return std::filesystem::path(androidRuntimeDir);
+    }
+
+    std::error_code androidEc;
+    const auto androidCwd = std::filesystem::current_path(androidEc);
+    if (!androidEc) {
+        return androidCwd;
+    }
+#endif
+
     const auto exeDir = GetExecutableDirectory();
     if (exeDir.has_value()) {
         return *exeDir;
@@ -384,6 +397,8 @@ bool RunWithProgressScreen(SDL_Window* window, ProgressSnapshot& snap, Task task
      * its lifetime from then on. */
     DrawProgressScreen(window, renderer, snap);
     const bool ok = future.get();
+    SDL_SetRenderTarget(renderer, nullptr);
+    SDL_SetRenderClipRect(renderer, nullptr);
     return ok;
 }
 
@@ -451,6 +466,10 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
      * skip the renderer entirely. */
     if (AssetExtractorApi::RuntimeUpToDate(root / "assets", rom, packMode)) {
         MountPaksForRoot(root);
+        Port_AssetLoader_Reload();
+        Port_LoadTextsFromAssets();
+        Port_LoadSpritePtrsFromAssets();
+        Port_LoadAreaTablesFromAssets();
         return;
     }
 
@@ -498,6 +517,11 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
 #endif
 
     if (ok) {
+#ifdef __ANDROID__
+        if (SDL_Renderer* r = SDL_GetRenderer(window)) {
+            SDL_DestroyRenderer(r);
+        }
+#endif
         MountPaksForRoot(root);
         /* Port_LoadRom (which already ran at this point) probed the
          * asset loader before assets/ existed. Re-trigger the scan

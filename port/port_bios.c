@@ -6,6 +6,7 @@
 #include "port_ppu.h"
 #include "port_runtime_config.h"
 #include "port_softslots.h"
+#include "port_touch_controls.h"
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
@@ -60,7 +61,7 @@ static void Port_UpdateInput(void) {
          * the game doesn't observe stray input from key presses we routed
          * to the overlay. The soft-slot configuration overlay piggybacks
          * on this behaviour while it's the active focus. */
-        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen()) {
+        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen()) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
             Port_SoftSlots_TickPause();
             sFrameNum++;
@@ -144,6 +145,14 @@ static void Port_PumpEvents(void) {
                 Port_QuickLoad();
                 continue;
             }
+            if (e.key.key == SDLK_F1) {
+                extern bool Port_DebugMenu_IsOpen(void);
+                if (!Port_DebugMenu_IsOpen() && !Port_SoftSlots_ConfigIsOpen() &&
+                    !Port_InGameSettingsModalIsOpen()) {
+                    Port_OpenInGameSettingsModal();
+                }
+                continue;
+            }
             /* When the debug menu is open, route key presses to it and
              * suppress further handling so the game itself doesn't see
              * the keystroke. */
@@ -168,6 +177,14 @@ static void Port_PumpEvents(void) {
          * (port_softslots.c) — pulling the trigger would simultaneously
          * fast-forward and fire a soft-slot item. */
         Port_Config_HandleEvent(&e);
+    }
+
+    if (Port_TouchControls_ConsumeSettingsRequest()) {
+        extern bool Port_DebugMenu_IsOpen(void);
+        if (!Port_DebugMenu_IsOpen() && !Port_SoftSlots_ConfigIsOpen() &&
+            !Port_InGameSettingsModalIsOpen()) {
+            Port_OpenInGameSettingsModal();
+        }
     }
 }
 

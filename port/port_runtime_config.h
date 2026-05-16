@@ -3,6 +3,7 @@
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,6 +51,15 @@ void Port_Config_CycleTargetFps(int direction);
 u8 Port_Config_InternalScale(void);
 void Port_Config_SetInternalScale(u8 scale);
 void Port_Config_CycleInternalScale(int direction);
+
+typedef enum {
+    PORT_TOUCH_SCHEME_JOYSTICK = 0,
+    PORT_TOUCH_SCHEME_DPAD     = 1,
+} PortTouchScheme;
+PortTouchScheme Port_Config_TouchScheme(void);
+void Port_Config_SetTouchScheme(PortTouchScheme scheme);
+void Port_Config_CycleTouchScheme(int direction);
+
 void Port_Config_OpenGamepads(void);
 void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);
@@ -62,6 +72,15 @@ bool Port_Config_SoftSlotPressed(int slot);
  * port has committed KEYINPUT and the engine has read it, so the next
  * frame's polled state isn't stuck reporting the previous tap. */
 void Port_Config_ClearInputEdges(void);
+
+#ifdef launcher
+void Port_Config_SetPortSettingsMenuEnabled(bool enabled);
+const char* Port_Config_InputUiLabel(PortInput input);
+void Port_Config_FormatBindingsLine(PortInput input, char* out, size_t outCap);
+void Port_Config_SetKeyboardBindExclusive(PortInput input, int sdl_keycode);
+void Port_Config_FormatGamepadBindingsLine(PortInput input, char* out, size_t outCap);
+void Port_Config_SetGamepadBindExclusive(PortInput input, int sdl_gamepad_button);
+#endif
 
 #ifdef __cplusplus
 }
