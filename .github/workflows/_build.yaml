@@ -316,6 +316,33 @@ jobs:
           fi
           python3 build.py "$REGION_FLAG" --slim
 
+      - name: Dump xmake install logs (Windows, post-build on failure)
+        if: failure() && matrix.os_name == 'windows'
+        shell: bash
+        # The pre-build dump fires before any install attempts, so it
+        # never catches the configure-time package install failures
+        # that produce the 'Command exited 4294967295' bombs. This
+        # second dump runs after the build step on failure only.
+        run: |
+          set +e
+          base="/c/Users/runneradmin/AppData/Local/.xmake/cache/packages"
+          if [ ! -d "$base" ] && command -v cygpath >/dev/null 2>&1; then
+            base=$(cygpath -u "$LOCALAPPDATA")/.xmake/cache/packages
+          fi
+          echo "POST-BUILD scan under $base"
+          [ -d "$base" ] || { echo "(no package cache dir)"; exit 0; }
+          find "$base" -name 'installdir.failed' -type d 2>/dev/null | while read -r faildir; do
+            echo "===== TREE $faildir ====="
+            ls -la "$faildir/" 2>/dev/null
+            ls -la "$faildir/logs/" 2>/dev/null
+            for f in "$faildir"/logs/*; do
+              [ -e "$f" ] || continue
+              echo "----- $f -----"
+              cat "$f" 2>/dev/null || true
+            done
+          done
+          true
+
       - name: Verify SDL3 audio backends linked into tmc_pc (Linux)
         if: matrix.os_name == 'linux'
         shell: bash
