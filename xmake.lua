@@ -81,13 +81,20 @@ else
     add_requires("nlohmann_json", {configs = {cmake = false}})
 end
 
--- libpng + zlib are linked by gbagfx (a build-time PNG codec used by the
--- legacy asset pipeline). xmake-repo's libpng v1.6.58 source build is flaky
--- on Windows MinGW (#107) so prefer system on Linux/macOS, mark optional
--- everywhere, and let `add_packages("libpng","zlib")` pick whichever is
--- installed. tmc_pc and asset_extractor don't link libpng.
-add_requires("libpng", {system = true, optional = true})
-add_requires("zlib", {system = true, optional = true})
+-- libpng + zlib are linked by port_bugreport (F9 screenshot codec) and
+-- by gbagfx (build-time PNG codec). On Linux + macOS we have system
+-- packages (apt libpng-dev / brew libpng); on Windows MinGW the system
+-- isn't available so xmake has to build from source. Mark the system
+-- preference per platform and DON'T pass optional=true on Windows —
+-- without libpng there, port_bugreport.cpp fails to compile (png.h
+-- missing) and the whole release build dies.
+if is_plat("mingw", "windows") then
+    add_requires("libpng")
+    add_requires("zlib")
+else
+    add_requires("libpng", {system = true, optional = true})
+    add_requires("zlib",   {system = true, optional = true})
+end
 
 -- Dear ImGui for the in-game settings UI. Built against the SDL3 +
 -- SDL_Renderer backends so it sits on top of the existing PPU present
