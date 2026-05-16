@@ -83,7 +83,8 @@ void AmbientClouds_Action1(Entity* this) {
     } else {
         this->spriteOrientation.flipY = 1;
         this->spriteRendering.b3 = 0;
-        if ((this->type2 == 1) || (this->child->action == 2)) {
+        /* #97 pattern: child may not have been spawned (CreateObject failure). */
+        if ((this->type2 == 1) || (this->child != NULL && this->child->action == 2)) {
             if (gPlayerEntity.base.z.HALF.HI < -0x24)
                 this->timer = 1;
             else
@@ -93,7 +94,7 @@ void AmbientClouds_Action1(Entity* this) {
                 this->action = 2;
                 this->spriteOrientation.flipY = 2;
                 this->spriteRendering.b3 = 3;
-                if (this->type2 != 1) {
+                if (this->type2 != 1 && this->child != NULL) {
                     this->child->action = 1;
                 }
                 gPlayerState.field_0x14 = 1;
