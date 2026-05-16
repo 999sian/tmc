@@ -79,7 +79,7 @@ typedef struct {
     /*0x08*/ s8 saveStatus[3];
     /*0x0b*/ SaveFile saves[3];
 } struct_02019EE0;
-extern struct_02019EE0 gMapDataBottomSpecial;
+extern struct_02019EE0 MAY_ALIAS gMapDataBottomSpecial;
 // TODO size: 0x8000 from ClearTileMaps?
 
 extern u32 sub_08056FEC(u32, u8*);

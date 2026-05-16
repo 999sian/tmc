@@ -21,7 +21,7 @@
 extern u8 gEntCount;
 extern u8 gMapDataTopSpecial[];
 
-extern u16 gMapDataBottomSpecial[];
+extern u16 MAY_ALIAS gMapDataBottomSpecial[];
 
 extern u32 sub_08000E62(u32);
 

@@ -16,7 +16,7 @@ const u16 gUnk_08108588[] = { 0x1000, 0xF01, 0xE02, 0xD03, 0xC04, 0xB05, 0xA06, 
 
 const u16 gUnk_0810859A[] = { 0x808, 0x907, 0xA06, 0x907 };
 
-extern u16 gUnk_02017AA0[];
+extern u16 MAY_ALIAS gUnk_02017AA0[];
 
 void SteamOverlayManager_Init(SteamOverlayManager*);
 void SteamOverlayManager_Action4(SteamOverlayManager*);

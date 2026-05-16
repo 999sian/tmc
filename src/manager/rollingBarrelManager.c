@@ -18,7 +18,7 @@
 #include "asm.h"
 #include "fade.h"
 
-extern struct BgAffineDstData gUnk_02017AA0[];
+extern struct BgAffineDstData MAY_ALIAS gUnk_02017AA0[];
 extern struct BgAffineDstData gUnk_02017BA0[];
 extern u8 gUpdateVisibleTiles;
 extern u32 gUsedPalettes;

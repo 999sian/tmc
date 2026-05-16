@@ -18,7 +18,7 @@ void sub_08058084(u16*, u16*);
 void sub_08058004(u32, void*, void*);
 
 extern u8 gUnk_02006F00[];
-extern u16 gMapDataTopSpecial[];
+extern u16 MAY_ALIAS gMapDataTopSpecial[];
 
 void HorizontalMinishPathBackgroundManager_Main(HorizontalMinishPathBackgroundManager* this) {
     sub_08057F20(this);

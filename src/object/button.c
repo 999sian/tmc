@@ -352,9 +352,9 @@ u32 sub_08081E3C(ButtonEntity* this) {
 
 u32 sub_08081F00(u32*, u32*);
 
-extern u16 gMapDataTopSpecial[0x2000];
+extern u16 MAY_ALIAS gMapDataTopSpecial[0x2000];
 
-extern u16 gMapDataBottomSpecial[];
+extern u16 MAY_ALIAS gMapDataBottomSpecial[];
 
 void sub_08081E6C(ButtonEntity* this) {
     u32 tileType;

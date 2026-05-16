@@ -26,7 +26,7 @@ const u16 gUnk_08107C1C[];
 const u16 gUnk_08107C30[];
 const u8 gLightRayManagerGfxGroups[];
 
-extern u16 gUnk_02017AA0[];
+extern u16 MAY_ALIAS gUnk_02017AA0[];
 extern u16 gUnk_085B4180[];
 
 #define LIGHT_RAY_ACTION_COUNT 4
