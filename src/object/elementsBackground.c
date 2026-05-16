@@ -39,6 +39,10 @@ void sub_080A04E8(Entity* this) {
     int iVar2;
     u32 uVar3;
 
+    /* #97 pattern: background object can be orphaned during room transition. */
+    if (this->parent == NULL) {
+        return;
+    }
     iVar2 = (this->parent->z.HALF.HI < 0 ? -this->parent->z.HALF.HI : this->parent->z.HALF.HI) + 0x100;
     SetAffineInfo(this, iVar2, iVar2, 0);
     iVar2 = ((0x1c0 - iVar2) * 10) / iVar2;

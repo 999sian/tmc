@@ -84,6 +84,10 @@ void VaatiWrathEyeAction3(Entity* this) {
     const s8* ptr;
 
     parent = this->parent;
+    /* #97 pattern: Vaati's eyes can outlive their controller during transitions. */
+    if (parent == NULL) {
+        return;
+    }
     if (((VaatiWrathEntity*)parent)->unk_79 != 0) {
         sub_080485D8(this);
     } else {

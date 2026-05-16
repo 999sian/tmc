@@ -40,6 +40,11 @@ void MoblinSpear_OnTick(Entity* this) {
 void MoblinSpear_OnCollision(Entity* this) {
     u8 tmp;
 
+    /* #97 pattern: thrower can die between throw frame and collision frame.
+     * On GBA the NULL parent read returned BIOS garbage; on PC it SIGSEGVs. */
+    if (this->parent == NULL) {
+        return;
+    }
     if (this->contactFlags == CONTACT_NOW) {
         this->iframes = 0x10;
         this->knockbackDuration = 0xc;
