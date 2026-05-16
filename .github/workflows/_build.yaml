@@ -123,9 +123,15 @@ jobs:
         if: matrix.os_name == 'linux'
         run: |
           sudo apt-get update
+          # libasound2-dev / libpulse-dev / libpipewire-0.3-dev: needed
+          # for SDL3 to compile in alsa + pulseaudio + pipewire audio
+          # backends. The 'Verify SDL3 audio backends' step at the end
+          # of this job will hard-fail the build if any of those three
+          # strings is missing from the produced tmc_pc binary.
           sudo apt-get install -y \
             curl libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
+            libasound2-dev libpulse-dev libpipewire-0.3-dev \
             xutils-dev xorg-dev autoconf automake libtool ninja-build python3-pip
           # Ubuntu 22.04 ships meson 0.61.2, but Wayland 1.25.0 (pulled
           # in transitively by xmake's SDL3 dep chain) needs >= 0.64.
