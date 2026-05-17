@@ -422,15 +422,22 @@ void PauseMenu_ItemMenu_Update(void) {
                 if (gPauseMenu.items[menuSlot] != 0) {
                     u32 slot = !!(gInput.newKeys ^ A_BUTTON);
 #ifdef PC_PORT
-                    /* Reborn-parity: SELECT-hold makes A/B target the
-                     * secondary slots (SLOT_LA / SLOT_LB) rather than
-                     * the primary ones. The secondary storage is
-                     * gSave.stats.filler14[0..1]. */
+                    /* Reborn-parity: SELECT-hold writes the cursor's
+                     * item into one of the port's soft slots instead
+                     * of the primary A/B slots. Soft slot 0 ← A,
+                     * soft slot 1 ← B. Reuses the existing soft-slot
+                     * storage (port config file, no save mutation,
+                     * proper persistence) instead of carving out our
+                     * own SLOT_LA/SLOT_LB storage. Press X/Y/L2/R2 in
+                     * game to fire the soft-slot items (or L+A / L+B
+                     * if the L-shortcut toggle is on). */
                     {
                         extern bool Port_Reborn_IsEnabled(int feat);
+                        extern void Port_SoftSlots_SetAssignment(int s, unsigned char id);
                         if ((gInput.heldKeys & SELECT_BUTTON) &&
                             Port_Reborn_IsEnabled(/* SELECT-hold equip */ 10)) {
-                            gSave.stats.filler14[slot] = gPauseMenu.items[menuSlot];
+                            Port_SoftSlots_SetAssignment((int)slot,
+                                                         (unsigned char)gPauseMenu.items[menuSlot]);
                             SoundReq(SFX_TEXTBOX_SELECT);
                             break;
                         }
