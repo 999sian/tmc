@@ -43,20 +43,18 @@ bool Rando_IsActive(void);
 /* Current seed (0 if inactive). */
 uint32_t Rando_GetSeed(void);
 
-/* Chest item override hook. Called from src/playerItemUtils.c
- * OpenSmallChest at the moment a chest gives its reward. The chest's
- * vanilla item type and subtype come in via *type/*subtype; if the
- * randomizer wants to override them, it mutates the pointed values.
+/* Generic item-spawn override. Called from the centralized point in
+ * src/playerItemUtils.c::GiveItemWithCutscene, which all item-entity
+ * spawn paths flow through (chests, NPC gifts, cutscenes, drops, shop
+ * gives, kinstone-fusion rewards…).
  *
- * area/room/localFlag uniquely identify the chest. For M1 we use only
- * the item type to drive the permutation (item-pool shuffle, not
- * location-shuffle), so the location ID is logged in the spoiler but
- * doesn't change the substitution. M2+ will use it for per-location
- * placement.
+ * *type and *subtype come in as the vanilla values; if the active
+ * seed remaps the item, the function mutates the pointed values.
+ * Returns true if anything was rewritten.
  *
- * Returns true if the values were modified, false if vanilla. */
-bool Rando_OverrideChestReward(uint8_t area, uint8_t room, uint8_t localFlag,
-                               uint8_t* type, uint8_t* subtype);
+ * For M1 only *type matters (pool-shuffle of 8 major items). M2+ may
+ * also rewrite *subtype or require additional source context. */
+bool Rando_OverrideItem(uint8_t* type, uint8_t* subtype);
 
 /* Copy a UTF-8 spoiler describing the current permutation into `buf`
  * (NUL-terminated). Returns bytes written excluding the NUL. */
