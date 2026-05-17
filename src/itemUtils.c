@@ -223,8 +223,16 @@ void ModShells(s32 shells) {
     shells += gSave.stats.shells;
     if (shells < 0) {
         shells = 0;
+#ifdef PC_PORT
+    /* Reborn parity: raised shells cap from 999 → 9999. stats.shells is
+     * u16 (fits up to 65535). Inspired by Minish Cap Reborn but
+     * implemented clean-room from the README description. */
+    } else if (9999 < shells) {
+        shells = 9999;
+#else
     } else if (999 < shells) {
         shells = 999;
+#endif
     }
     gSave.stats.shells = shells;
 }

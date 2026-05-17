@@ -245,7 +245,32 @@ static void GameMain_ChangeRoom(void) {
     }
 }
 
+#ifdef PC_PORT
+/* Reborn parity (clean-room from README description, not source-copy):
+ * in-game equip shortcuts. Press R while holding L → equip Pegasus
+ * Boots in slot A. Press SELECT while holding L → equip Ocarina in
+ * slot A. Both gated on the item being in inventory + a state where
+ * the pause menu itself would normally be openable, so we don't
+ * trigger mid-cutscene or while dying. */
+static void Port_ApplyEquipShortcut(u32 trigger_key, u32 itemId) {
+    if (!(gInput.heldKeys & L_BUTTON)) return;
+    if (!(gInput.newKeys & trigger_key)) return;
+    if (gFadeControl.active) return;
+    if (gMessage.state & MESSAGE_ACTIVE) return;
+    if (gSave.stats.health == 0) return;
+    if (gPlayerState.controlMode != 0) return;
+    if (GetInventoryValue(itemId) == 0) return;
+    ForceEquipItem(itemId, EQUIP_SLOT_A);
+}
+#endif
+
 static void GameMain_Update(void) {
+#ifdef PC_PORT
+    /* Reborn-style item-equip shortcuts. Process BEFORE the pause-
+     * menu check so L+START still opens the pause menu normally. */
+    Port_ApplyEquipShortcut(R_BUTTON,      ITEM_PEGASUS_BOOTS);
+    Port_ApplyEquipShortcut(SELECT_BUTTON, ITEM_OCARINA);
+#endif
     if (CheckInitPauseMenu() || CheckInitPortal()) {
         return;
     }
