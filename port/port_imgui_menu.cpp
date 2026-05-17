@@ -300,6 +300,8 @@ extern "C" {
 void SetTask(unsigned int task);
 }
 extern "C" int Port_QuickSave_SaveSlot(int slot);
+extern "C" int  Port_QuickSave_AutoOnAreaChangeEnabled(void);
+extern "C" void Port_QuickSave_SetAutoOnAreaChange(int on);
 
 static void DoQuitToTitle(bool saveFirst) {
     if (saveFirst) {
@@ -337,6 +339,24 @@ static void DrawRibbonSavesTab(void) {
     if (ImGui::SliderInt("Interval (s)", &sec, 5, 600)) {
         Port_QuickSave_SetAutoIntervalMs((unsigned)sec * 1000u);
         Port_Config_SetAutosaveIntervalMs((unsigned)sec * 1000u);
+    }
+    {
+        bool areaOn = Port_QuickSave_AutoOnAreaChangeEnabled() != 0;
+        if (ImGui::Checkbox("Auto-save on area change", &areaOn)) {
+            Port_QuickSave_SetAutoOnAreaChange(areaOn ? 1 : 0);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::PushTextWrapPos(360.0f);
+            ImGui::TextUnformatted("Fires a snapshot to the auto ring "
+                                   "every time you transition between "
+                                   "areas/rooms. Independent of the "
+                                   "interval timer above.");
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
     }
     ImGui::Separator();
 
