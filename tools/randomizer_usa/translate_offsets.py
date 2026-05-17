@@ -22,7 +22,15 @@ Strategy (in priority order):
      bytes inside fixed code/data — text/script regions are often
      rearranged.
 
-  4. Unresolved: emit the EU offset unchanged with a `// UNRESOLVED`
+  4. Anchor-delta interpolation: if the EU offset is within a small
+     window of a known anchor, assume the same EU→USA delta applies.
+     Useful for offsets that cluster around the HeaderTable anchors
+     (Chunk0, Chunk1, Chunk2, etc. are very close together) but not
+     for arbitrary distant offsets — the delta is NOT a smooth
+     function across the whole ROM (we've observed 0x8A4, 0x8AC, 0x8B8,
+     0xAB0, 0xAC8, 0xAF8 in different ranges).
+
+  5. Unresolved: emit the EU offset unchanged with a `// UNRESOLVED`
      comment so the patch is auditable.
 
 The patches still won't apply cleanly until ALL ORGs in ALL patches
@@ -89,6 +97,24 @@ def find_byte_pattern(haystack, needle, start=0):
     return haystack.find(needle, start)
 
 
+def nearest_anchor(eu_offset):
+    """Return (anchor_eu, delta) of the KNOWN_PAIRS entry closest to eu_offset,
+    or (None, None) if KNOWN_PAIRS is empty."""
+    if not KNOWN_PAIRS:
+        return None, None
+    best = min(KNOWN_PAIRS.keys(), key=lambda a: abs(a - eu_offset))
+    return best, KNOWN_PAIRS[best] - best
+
+
+# Confidence windows around known anchors for interpolation.
+# Below ~0x2000 bytes from an anchor: HIGH confidence (we've observed
+# that addresses inside the same data table generally share the same
+# delta). Beyond that the delta is observed to drift in 0x4-0x250 byte
+# steps, so it's only useful as a guess to bisect later.
+ANCHOR_TIGHT_WINDOW   = 0x2000
+ANCHOR_LOOSE_WINDOW   = 0x20000
+
+
 def translate_offset(
     eu_offset,
     eu_map_sym_to_addr=None,
@@ -97,6 +123,7 @@ def translate_offset(
     eu_rom=None,
     usa_rom=None,
     probe_bytes=32,
+    allow_interp=True,
 ):
     """Return (usa_offset_or_None, source_tag)."""
     # 1. Known pair
@@ -121,6 +148,16 @@ def translate_offset(
         pos = find_byte_pattern(usa_rom, needle)
         if pos >= 0 and find_byte_pattern(usa_rom, needle, pos + 1) < 0:
             return pos, f"pattern:{probe_bytes}"
+
+    # 4. Anchor-delta interpolation (last-resort heuristic).
+    if allow_interp:
+        anchor, delta = nearest_anchor(eu_offset)
+        if anchor is not None:
+            dist = abs(eu_offset - anchor)
+            if dist <= ANCHOR_TIGHT_WINDOW:
+                return eu_offset + delta, f"interp:tight(±0x{dist:x} from $0x{anchor:X})"
+            if dist <= ANCHOR_LOOSE_WINDOW:
+                return eu_offset + delta, f"interp:loose(±0x{dist:x} from $0x{anchor:X})"
 
     return None, "unresolved"
 
