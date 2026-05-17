@@ -139,7 +139,13 @@ static void Port_PumpEvents(void) {
             Port_ImGui_HandleEvent(&e);
         }
         if (e.type == SDL_EVENT_QUIT) {
-            gQuitRequested = true;
+            /* Route the close-button (X) / OS-quit signal through the
+             * ImGui modal first so users get a chance to save. The
+             * modal sets Port_ImGui_QuitConfirmed() once the user
+             * picks Save&Quit or Quit-Without-Saving; the per-frame
+             * check below promotes that into gQuitRequested. */
+            extern void Port_ImGui_RequestQuitModal(void);
+            Port_ImGui_RequestQuitModal();
             continue;
         }
         if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
@@ -340,6 +346,15 @@ void VBlankIntrWait(void) {
 
         sFpsWindowStartNs = nowNs;
         sFpsFrameCount = 0;
+    }
+
+    /* The ImGui quit-confirm modal is rendered once per frame from
+     * port_imgui_menu.cpp; when the user picks Save & Quit or Quit
+     * Without Saving it sets the confirmed flag, which we promote
+     * into gQuitRequested here so the loop unwinds normally. */
+    {
+        extern bool Port_ImGui_QuitConfirmed(void);
+        if (Port_ImGui_QuitConfirmed()) gQuitRequested = true;
     }
 
     if (gQuitRequested) {
