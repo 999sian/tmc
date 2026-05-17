@@ -17,7 +17,11 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    u8 unused1[12 + 4];  /* #98/#99 pattern: +4 for Enemy::child PC growth */
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ Entity* unk_74;
     union {
         /*0x78*/ u16 HWORD;

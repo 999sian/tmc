@@ -32,7 +32,11 @@ struct SalesOffering {
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    u8 unused1[12 + 4];  /* #98/#99 pattern: +4 for Enemy::child PC growth */
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u16 unk_74;
     /*0x76*/ u16 unk_76;
     /*0x78*/ u16 unk_78;

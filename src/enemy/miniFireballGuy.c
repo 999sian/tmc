@@ -12,7 +12,13 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98/#99 pattern: 4-byte pad so post-Entity fields land at
+       Enemy_PC field offsets matching GBA (PC = GBA + 0x2C). */
+    u8 unused1[4 + 4];
+#else
     /*0x68*/ u8 unused1[4];
+#endif
     /*0x6c*/ u8 unk_6c;
 } MiniFireballGuyEntity;
 
