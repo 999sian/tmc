@@ -253,23 +253,31 @@ int main(int argc, char* argv[]) {
 
     Port_Config_OpenGamepads();
 
-    /* Pre-window ROM presence check: bail out with a message box BEFORE
-     * creating any window so the user gets clear feedback instead of a
-     * black-screen launch. SDL_ShowSimpleMessageBox accepts NULL as
-     * parent, so this is safe pre-window. */
+    /* Pre-window ROM presence check. If the auto-search misses, pop an
+     * SDL file picker so the user can choose any .gba from disk
+     * without having to rename it. We validate the picked file is a
+     * TMC ROM (BZME / BZMP region code), then copy it next to the exe
+     * as baserom.gba so subsequent launches Just Work. */
     const char* romPath = Port_FindBaseRomPath();
     if (romPath == NULL) {
-        static const char kMsg[] =
-            "Could not find baserom.gba.\n\n"
-            "Place baserom.gba next to tmc_pc and try again.\n"
-            "Supported names: baserom.gba (USA), baserom_eu.gba (EU),\n"
-            "tmc.gba, tmc_eu.gba.";
-        fprintf(stderr, "%s\n", kMsg);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                                 "Minish Cap PC Port - ROM not found",
-                                 kMsg, NULL);
-        SDL_Quit();
-        return 1;
+        extern int Port_RomPicker_PromptAndInstall(void);  /* port_rom_picker.c */
+        if (Port_RomPicker_PromptAndInstall() == 0) {
+            romPath = Port_FindBaseRomPath();
+        }
+        if (romPath == NULL) {
+            static const char kMsg[] =
+                "Could not find or load a Minish Cap ROM.\n\n"
+                "Place baserom.gba next to tmc_pc.exe, OR pick a .gba\n"
+                "via the dialog and we'll copy it for you.\n\n"
+                "Expected: USA SHA1 b4bd50e4131b027c334547b4524e2dbbd4227130\n"
+                "or EU SHA1 cff199b36ff173fb6faf152653d1bccf87c26fb7.";
+            fprintf(stderr, "%s\n", kMsg);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                                     "Minish Cap PC Port - ROM not found",
+                                     kMsg, NULL);
+            SDL_Quit();
+            return 1;
+        }
     }
 
     /* Use SDL_CreateWindowAndRenderer so SDL picks the renderer
