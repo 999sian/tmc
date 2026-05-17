@@ -254,6 +254,12 @@ int Port_QuickSave_LoadSlot(int slot) {
         return 0;
     }
     fprintf(stderr, "[quicksave] slot %d restored\n", slot);
+    {
+        /* Tell the Reborn-parity layer a resume just happened so it
+         * can swallow the next queued Ezlo hint (if that toggle is on). */
+        extern void Port_Reborn_NotifyJustResumed(void);
+        Port_Reborn_NotifyJustResumed();
+    }
     return 1;
 }
 

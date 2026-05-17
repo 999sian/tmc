@@ -28,6 +28,7 @@
 
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
 #include "port_randomizer.h"
+#include "port_reborn.h"
 #include "rando/rando.h"
 
 #include <cstdio>
@@ -804,6 +805,33 @@ static void DrawRibbonRandomizerTab(void) {
     }
 }
 
+static void DrawRibbonRebornTab(void) {
+    ImGui::TextWrapped("Quality-of-life features cherry-picked from "
+                       "Minish Cap Reborn (clean-room — does NOT include "
+                       "Reborn's GPL-3 source). Toggles persist until "
+                       "tmc_pc closes.");
+    ImGui::Separator();
+    for (int i = 0; i < REBORN_FEAT_COUNT; ++i) {
+        bool on = Port_Reborn_IsEnabled((RebornFeature)i);
+        const char* label = Port_Reborn_FeatureLabel((RebornFeature)i);
+        const char* desc  = Port_Reborn_FeatureDescription((RebornFeature)i);
+        if (ImGui::Checkbox(label, &on)) {
+            Port_Reborn_SetEnabled((RebornFeature)i, on);
+        }
+        if (desc && desc[0]) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(?)");
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(360.0f);
+                ImGui::TextUnformatted(desc);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+        }
+    }
+}
+
 static void DrawRibbon(void) {
     ImGuiIO& io = ImGui::GetIO();
     const float ribbonW = io.DisplaySize.x;
@@ -838,6 +866,7 @@ static void DrawRibbon(void) {
             if (ImGui::BeginTabItem("Controls"))   { DrawRibbonControlsTab();   ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Warp"))       { DrawRibbonWarpTab();       ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Randomizer")) { DrawRibbonRandomizerTab(); ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Reborn"))     { DrawRibbonRebornTab();     ImGui::EndTabItem(); }
             ImGui::EndTabBar();
         }
         /* Footer with the mode toggle + hotkey hint. */

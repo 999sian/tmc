@@ -219,8 +219,23 @@ static void GameMain_ChangeRoom(void) {
     SetPlayerControl(0);
     gPauseMenuOptions.disabled = 0;
 #if defined(USA) || defined(DEMO_USA)
-    if (gArea.unk28.textBaseIndex != 0xff) {
-        sub_0801855C();
+    {
+        bool fire_hint = (gArea.unk28.textBaseIndex != 0xff);
+#ifdef PC_PORT
+        /* Reborn-parity "skip Ezlo hint on resume": gPortJustResumed
+         * is set TRUE by Port_QuickLoad / save-load path; we consume
+         * it here on the first area init after resume. */
+        extern bool Port_Reborn_IsEnabled(int feat);
+        extern bool Port_Reborn_ConsumeJustResumed(void);
+        if (fire_hint && Port_Reborn_IsEnabled(3 /*REBORN_FEAT_NO_EZLO_ON_RESUME*/)
+            && Port_Reborn_ConsumeJustResumed()) {
+            gArea.unk28.textBaseIndex = 0xff;  /* mark as consumed */
+            fire_hint = false;
+        }
+#endif
+        if (fire_hint) {
+            sub_0801855C();
+        }
     }
     CreateMiscManager();
     CheckAreaDiscovery();
@@ -246,12 +261,17 @@ static void GameMain_ChangeRoom(void) {
 }
 
 #ifdef PC_PORT
+extern bool Port_Reborn_IsEnabled(int feat);
+#define _REBORN_LR_BOOTS         1
+#define _REBORN_LSELECT_OCARINA  2
+
 /* Reborn parity (clean-room from README description, not source-copy):
  * in-game equip shortcuts. Press R while holding L → equip Pegasus
  * Boots in slot A. Press SELECT while holding L → equip Ocarina in
  * slot A. Both gated on the item being in inventory + a state where
  * the pause menu itself would normally be openable, so we don't
- * trigger mid-cutscene or while dying. */
+ * trigger mid-cutscene or while dying. Each shortcut runtime-togglable
+ * via F8 → Reborn tab. */
 static void Port_ApplyEquipShortcut(u32 trigger_key, u32 itemId) {
     if (!(gInput.heldKeys & L_BUTTON)) return;
     if (!(gInput.newKeys & trigger_key)) return;
@@ -268,8 +288,12 @@ static void GameMain_Update(void) {
 #ifdef PC_PORT
     /* Reborn-style item-equip shortcuts. Process BEFORE the pause-
      * menu check so L+START still opens the pause menu normally. */
-    Port_ApplyEquipShortcut(R_BUTTON,      ITEM_PEGASUS_BOOTS);
-    Port_ApplyEquipShortcut(SELECT_BUTTON, ITEM_OCARINA);
+    if (Port_Reborn_IsEnabled(_REBORN_LR_BOOTS)) {
+        Port_ApplyEquipShortcut(R_BUTTON, ITEM_PEGASUS_BOOTS);
+    }
+    if (Port_Reborn_IsEnabled(_REBORN_LSELECT_OCARINA)) {
+        Port_ApplyEquipShortcut(SELECT_BUTTON, ITEM_OCARINA);
+    }
 #endif
     if (CheckInitPauseMenu() || CheckInitPortal()) {
         return;
