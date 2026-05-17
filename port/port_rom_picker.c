@@ -113,6 +113,13 @@ static int GetExeDir(char* out, size_t out_len) {
 }
 
 static int CopyFile_ToPath(const char* src, const char* dst) {
+#ifdef _WIN32
+    /* Win32 CopyFileA accepts narrow strings in the active code page,
+     * which matches what SDL's open-file callback hands us, and it
+     * handles Unicode paths internally. Strictly more reliable than
+     * fopen/fread/fwrite for the rom-copy step on Windows. */
+    return CopyFileA(src, dst, FALSE) ? 0 : -1;
+#else
     FILE* in = fopen(src, "rb");
     if (!in) return -1;
     FILE* out = fopen(dst, "wb");
@@ -126,6 +133,7 @@ static int CopyFile_ToPath(const char* src, const char* dst) {
     fclose(in);
     fclose(out);
     return rc;
+#endif
 }
 
 /* Returns 0 if the user picked a valid ROM and we installed it
