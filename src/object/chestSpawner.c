@@ -223,6 +223,8 @@ void sub_08084074(u32 flag) {
     if (tileEntity != NULL) {
         for (; tileEntity->type != 0; tileEntity++) {
             if ((tileEntity->type == BIG_CHEST) && (flag == tileEntity->localFlag)) {
+                /* port/rando interception now happens centrally inside
+                 * GiveItemWithCutscene (one call deeper). */
                 CreateItemEntity(tileEntity->_2, tileEntity->_3, 0);
                 return;
             }

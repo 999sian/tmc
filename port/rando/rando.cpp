@@ -150,12 +150,16 @@ extern "C" bool Rando_IsActive(void) { return sActive; }
 
 extern "C" uint32_t Rando_GetSeed(void) { return sSeed; }
 
-extern "C" bool Rando_OverrideChestReward(uint8_t area, uint8_t room, uint8_t localFlag,
-                                          uint8_t* type, uint8_t* subtype) {
-    (void)area; (void)room; (void)localFlag; (void)subtype;
-    if (!sActive || !type) return false;
+extern "C" bool Rando_OverrideItem(uint8_t* type, uint8_t* subtype) {
+    (void)subtype;
+    if (!type) return false;
+    if (!sActive) return false;
     const uint8_t v = *type;
     const uint8_t s = sRemap[v];
+    std::fprintf(stderr,
+        "[RANDO] item-give: vanilla=0x%02X (%s) → shuffled=0x%02X (%s)%s\n",
+        v, ItemName(v), s, ItemName(s),
+        s == v ? "  (pool miss — vanilla item not in M1 shuffle set)" : "");
     if (s == v) return false;
     *type = s;
     return true;
