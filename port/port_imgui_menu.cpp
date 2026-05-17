@@ -27,6 +27,7 @@
 #include <backends/imgui_impl_sdlrenderer3.h>
 
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
+#include "port_randomizer.h"
 
 #include <cstdio>
 #include <cstring>
@@ -727,6 +728,102 @@ static void DrawRibbonWarpTab(void) {
     ImGui::EndChild();
 }
 
+/* Randomizer tab — wraps Port_Randomizer_FindCLI / Port_Randomizer_RollSeed.
+ *
+ * The actual CRC compatibility check sits in the GPL-3 randomizer's logic
+ * file (default.logic declares EU CRC32 0xE8637292). We can't pre-empt it
+ * here without coupling tmc_pc to GPL — so we just call Roll and report
+ * the CLI's own error message via toast. See libs/randomizer.md for the
+ * USA-rejection rationale. */
+static char sRandoCliPath[1024] = {0};
+static char sRandoInputRom[1024] = {0};
+static char sRandoOutputRom[1024] = "./baserom_rando.gba";
+static char sRandoSpoiler[1024] = "./baserom_rando_spoiler.txt";
+static char sRandoSeedBuf[16] = "0";            /* 0 = let RollSeed pick */
+static char sRandoStatus[512] = {0};
+
+static void DrawRibbonRandomizerTab(void) {
+    /* Detect CLI lazily on first frame the tab is opened. The detect
+     * function is cheap (stat() probes) but we cache the result so a
+     * later install gets refreshed via the Re-detect button. */
+    if (sRandoCliPath[0] == '\0') {
+        Port_Randomizer_FindCLI(sRandoCliPath, sizeof(sRandoCliPath));
+    }
+    if (sRandoInputRom[0] == '\0') {
+        const char* env = std::getenv("TMC_RANDOMIZER_INPUT_ROM");
+        std::snprintf(sRandoInputRom, sizeof(sRandoInputRom),
+                      "%s", env && *env ? env : "./baserom_eu.gba");
+    }
+
+    ImGui::TextWrapped("Roll a new randomized ROM. Requires an EU baserom "
+                       "(USA ROMs are rejected by the logic-file CRC check).");
+    ImGui::Separator();
+
+    /* CLI status line */
+    if (sRandoCliPath[0]) {
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
+                           "CLI: %s", sRandoCliPath);
+    } else {
+        ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.4f, 1.0f),
+                           "CLI: not found — install .NET 8 SDK and "
+                           "`xmake build randomizer_cli`, or set TMC_RANDOMIZER_CLI.");
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Re-detect")) {
+        sRandoCliPath[0] = '\0';
+        Port_Randomizer_FindCLI(sRandoCliPath, sizeof(sRandoCliPath));
+    }
+
+    ImGui::Spacing();
+    ImGui::InputText("Input ROM (EU)",  sRandoInputRom,  sizeof(sRandoInputRom));
+    ImGui::InputText("Output ROM",      sRandoOutputRom, sizeof(sRandoOutputRom));
+    ImGui::InputText("Spoiler log",     sRandoSpoiler,   sizeof(sRandoSpoiler));
+    ImGui::InputText("Seed (0 = random)", sRandoSeedBuf, sizeof(sRandoSeedBuf),
+                     ImGuiInputTextFlags_CharsDecimal);
+
+    ImGui::Spacing();
+    const bool can_roll = sRandoCliPath[0] != '\0';
+    if (!can_roll) ImGui::BeginDisabled();
+    if (ImGui::Button("Roll new seed", ImVec2(180, 0))) {
+        uint32_t seed = (uint32_t)std::strtoul(sRandoSeedBuf, nullptr, 10);
+        char err[256] = {0};
+        PortRandomizerStatus rc = Port_Randomizer_RollSeed(
+            sRandoInputRom, seed, sRandoOutputRom,
+            sRandoSpoiler[0] ? sRandoSpoiler : nullptr,
+            err, sizeof(err));
+        switch (rc) {
+            case PORT_RANDO_OK:
+                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                              "OK — saved %s", sRandoOutputRom);
+                break;
+            case PORT_RANDO_CLI_NOT_FOUND:
+                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                              "CLI not found: %s", err);
+                break;
+            case PORT_RANDO_INPUT_ROM_MISSING:
+                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                              "Input ROM missing: %s", err);
+                break;
+            case PORT_RANDO_OUTPUT_MISSING:
+                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                              "CLI said OK but no output ROM landed: %s", err);
+                break;
+            case PORT_RANDO_RUN_FAILED:
+            default:
+                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                              "Failed: %s", err);
+                break;
+        }
+    }
+    if (!can_roll) ImGui::EndDisabled();
+
+    if (sRandoStatus[0]) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextWrapped("%s", sRandoStatus);
+    }
+}
+
 static void DrawRibbon(void) {
     ImGuiIO& io = ImGui::GetIO();
     const float ribbonW = io.DisplaySize.x;
@@ -753,13 +850,14 @@ static void DrawRibbon(void) {
         ImGui::PopStyleColor(3);
 
         if (ImGui::BeginTabBar("##ribbonTabs", ImGuiTabBarFlags_None)) {
-            if (ImGui::BeginTabItem("Items"))    { DrawRibbonItemsTab();    ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Display"))  { DrawRibbonDisplayTab();  ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Saves"))    { DrawRibbonSavesTab();    ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Profiles")) { DrawRibbonProfilesTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Equip"))    { DrawRibbonEquipTab();    ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Controls")) { DrawRibbonControlsTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Warp"))     { DrawRibbonWarpTab();     ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Items"))      { DrawRibbonItemsTab();      ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Display"))    { DrawRibbonDisplayTab();    ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Saves"))      { DrawRibbonSavesTab();      ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Profiles"))   { DrawRibbonProfilesTab();   ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Equip"))      { DrawRibbonEquipTab();      ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Controls"))   { DrawRibbonControlsTab();   ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Warp"))       { DrawRibbonWarpTab();       ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Randomizer")) { DrawRibbonRandomizerTab(); ImGui::EndTabItem(); }
             ImGui::EndTabBar();
         }
         /* Footer with the mode toggle + hotkey hint. */

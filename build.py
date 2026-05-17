@@ -579,6 +579,24 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
         # lets users tweak song metadata without rebuilding.
         warn("assets/sounds.json not found — using the embedded fallback baked into tmc_pc")
 
+    # Bundle the randomizer CLI (self-contained, no .NET runtime needed
+    # at end-user runtime). Lands at <dist>/randomizer/MinishCapRandomizerCLI[.exe]
+    # which is exactly slot 2 of Port_Randomizer_FindCLI's search order.
+    rando_src_dir = REPO_ROOT / "build" / "pc" / "randomizer"
+    if rando_src_dir.exists():
+        rando_dst_dir = dist_dir / "randomizer"
+        if rando_dst_dir.exists():
+            shutil.rmtree(rando_dst_dir)
+        shutil.copytree(rando_src_dir, rando_dst_dir, symlinks=False)
+        cli_name = "MinishCapRandomizerCLI.exe" if PLATFORM == "Windows" else "MinishCapRandomizerCLI"
+        cli_path = rando_dst_dir / cli_name
+        if cli_path.exists() and PLATFORM != "Windows":
+            cli_path.chmod(cli_path.stat().st_mode | 0o111)
+        ok(f"randomizer/  →  dist/{version}/randomizer/  ({cli_name})")
+    else:
+        warn("build/pc/randomizer/ not found — F8 → Randomizer will be unavailable. "
+             "Install .NET 8 SDK and rerun `xmake build randomizer_cli`.")
+
     return dst_bin
 
 # ── Main ──────────────────────────────────────────────────────────────────────
