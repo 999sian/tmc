@@ -79,6 +79,15 @@ void SoundReq(u32 sound) {
     SoundPlayingInfo* ptr;
     if (gMain.field_0x7)
         return;
+#ifdef PC_PORT
+    /* Per-category SFX mute. The user can flip toggles in F8 → Audio
+     * to suppress (e.g.) Ezlo's voice samples or the low-health beep
+     * without breaking the rest of the audio engine. */
+    {
+        extern bool Port_AudioMute_ShouldSuppress(unsigned int soundReq);
+        if (Port_AudioMute_ShouldSuppress((unsigned)sound)) return;
+    }
+#endif
     ptr = &gSoundPlayingInfo;
     song = sound & 0xffff;
     switch (sound & 0xffff0000) {

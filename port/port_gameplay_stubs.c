@@ -97,6 +97,15 @@ u32 FindValueForKey(u32 key, const KeyValuePair* keyValuePairList) {
 }
 
 void EnqueueSFX(u32 sfx) {
+    /* SoundReq has the same gate, but EnqueueSFX bypasses SoundReq
+     * (the queue is flushed each frame by port_draw.c which then calls
+     * SoundReq for real), so we need the filter here too. Without it
+     * the per-1.5s low-health beep would still register on the queue
+     * even with the mute toggle on, and we'd be wasting a queue slot
+     * for nothing. */
+    extern bool Port_AudioMute_ShouldSuppress(unsigned int soundReq);
+    if (Port_AudioMute_ShouldSuppress((unsigned)sfx)) return;
+
     u8 count = gUnk_02024048;
     if (count < (u8)ARRAY_COUNT(gUnk_02021F20)) {
         gUnk_02024048 = count + 1;
