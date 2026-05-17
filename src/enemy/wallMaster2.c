@@ -15,7 +15,14 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #119 — same #98/#99 pattern: 4-byte pad so post-Entity fields
+       land at Enemy_PC offsets matching GBA (PC = GBA + 0x2C).
+       Symptom: floormaster disregards player on TMC PC. */
+    u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u16 unk_74;
     /*0x76*/ u16 unk_76;
     /*0x78*/ u16 unk_78;
