@@ -92,13 +92,34 @@ bool WriteBinaryFile(const std::filesystem::path& path, const std::vector<uint8_
 }
 
 bool ReadBinaryFile(const std::filesystem::path& path, std::vector<uint8_t>& data, std::string* error = nullptr) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input.good()) {
+    /* Use stat-then-single-fread to avoid the byte-by-byte slowness of
+     * istreambuf_iterator. On low-end storage (SD / eMMC / HDD) this
+     * is several times faster for the same disk traffic because the
+     * kernel sees the full read length up front. */
+    std::error_code ec;
+    auto fsize = std::filesystem::file_size(path, ec);
+    if (ec) {
+        SetError(error, "Could not stat file: " + path.string());
+        return false;
+    }
+    if (fsize > (1ull << 30)) {
+        SetError(error, "File too large: " + path.string());
+        return false;
+    }
+    data.resize(static_cast<size_t>(fsize));
+    if (fsize == 0) return true;
+    FILE* fp = std::fopen(path.string().c_str(), "rb");
+    if (!fp) {
         SetError(error, "Could not open file: " + path.string());
         return false;
     }
-
-    data.assign(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+    size_t got = std::fread(data.data(), 1, static_cast<size_t>(fsize), fp);
+    std::fclose(fp);
+    if (got != static_cast<size_t>(fsize)) {
+        SetError(error, "Short read on: " + path.string());
+        data.clear();
+        return false;
+    }
     return true;
 }
 
