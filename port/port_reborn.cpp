@@ -66,6 +66,14 @@ struct {
         "Enemies and hazards deal double damage. Toggleable mid-run; takes "
         "effect from the next hit. (No save-format change.)",
     },
+    /* REBORN_FEAT_RUPEE_LIKE_OVERHAUL */
+    {
+        false,
+        "Rupee Like overhaul",
+        "Rupee Likes steal your shield (or damage you 1 HP/tick) instead of "
+        "harmlessly draining rupees, and auto-release after 10 ticks. More "
+        "punishing — off by default.",
+    },
 };
 
 static bool sJustResumed = false;
