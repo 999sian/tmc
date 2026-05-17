@@ -223,16 +223,19 @@ void ModShells(s32 shells) {
     shells += gSave.stats.shells;
     if (shells < 0) {
         shells = 0;
+    } else {
 #ifdef PC_PORT
-    /* Reborn parity: raised shells cap from 999 → 9999. stats.shells is
-     * u16 (fits up to 65535). Inspired by Minish Cap Reborn but
-     * implemented clean-room from the README description. */
-    } else if (9999 < shells) {
-        shells = 9999;
+        /* Reborn parity: raised shells cap to 9999 when the toggle is
+         * on (default), original 999 when off. Clean-room from the
+         * upstream README. */
+        extern bool Port_Reborn_IsEnabled(int feat);
+        s32 cap = Port_Reborn_IsEnabled(0 /* REBORN_FEAT_SHELLS_9999 */) ? 9999 : 999;
 #else
-    } else if (999 < shells) {
-        shells = 999;
+        const s32 cap = 999;
 #endif
+        if (cap < shells) {
+            shells = cap;
+        }
     }
     gSave.stats.shells = shells;
 }

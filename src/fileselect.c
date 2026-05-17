@@ -515,6 +515,14 @@ static void HandleFileScreenActive(void) {
 
 static void HandleFileScreenExit(void) {
     if (!gFadeControl.active) {
+#ifdef PC_PORT
+        /* Reborn parity: tell the parity layer a resume just happened
+         * so the next queued Ezlo hint can be suppressed (if the
+         * toggle is on). Harmless on a fresh new-game start because
+         * no hint is queued — the flag just gets consumed silently. */
+        extern void Port_Reborn_NotifyJustResumed(void);
+        Port_Reborn_NotifyJustResumed();
+#endif
         SetTask(TASK_GAME);
     }
 }
