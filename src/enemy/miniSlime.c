@@ -12,7 +12,11 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    u8 unused1[4 + 4];  /* #98/#99 pattern: +4 for Enemy::child PC growth */
+#else
     /*0x68*/ u8 unused1[4];
+#endif
     /*0x6c*/ u8 unk_6c;
     /*0x6d*/ u8 unk_6d;
 } MiniSlimeEntity;
