@@ -302,7 +302,7 @@ void MemClear(void* dest, u32 size) {
 void MemCopy(const void* src, void* dest, u32 size) {
 #ifdef PC_PORT
     void* resolvedDest = port_resolve_addr((uintptr_t)dest);
-    const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
+    const void* resolvedSrc = Port_IsLoadedAssetBytes(src, size) ? src : port_resolve_addr((uintptr_t)src);
     memmove(resolvedDest, resolvedSrc, size);
 #else
     gba_MemCopy((u32)src, (u32)dest, size);

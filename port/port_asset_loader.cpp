@@ -145,6 +145,8 @@ struct AssetGroupCache {
     std::vector<std::vector<const u8*>> spriteAnimationPtrs;
     std::array<std::vector<u8>, 7> translationBuffers;
     std::array<std::unordered_map<u32, std::string>, 7> textFilesById;
+    bool modsScanned = false;
+    std::unordered_map<std::string, std::filesystem::path> modReplacements;
 
     /* When non-empty, LoadBinaryFileCached will look up runtime
      * binary files in these mmap'd pak archives before falling back
@@ -288,6 +290,101 @@ std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
 
 std::filesystem::path RuntimeRootForEditableRoot(const std::filesystem::path& editableRoot) {
     return editableRoot.parent_path() / "assets";
+}
+
+bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json& outJson);
+
+std::string NormalizeAssetPath(std::string path) {
+    for (char& ch : path) {
+        if (ch == '\\') {
+            ch = '/';
+        }
+    }
+    while (!path.empty() && path.front() == '/') {
+        path.erase(path.begin());
+    }
+    return path;
+}
+
+void LoadModManifest(const std::filesystem::path& modsRoot, const std::filesystem::path& modDir,
+                     const std::filesystem::path& manifestPath) {
+    nlohmann::json manifest;
+    if (!LoadJsonFile(manifestPath, manifest) || !manifest.is_object()) {
+        std::fprintf(stderr, "[MOD] Failed to read manifest: %s\n", PathForLog(manifestPath).c_str());
+        return;
+    }
+
+    const std::string modName = manifest.value("name", modDir.filename().generic_string());
+    const nlohmann::json* replacements = nullptr;
+    if (manifest.contains("replace") && manifest["replace"].is_object()) {
+        replacements = &manifest["replace"];
+    } else if (manifest.contains("replacements") && manifest["replacements"].is_object()) {
+        replacements = &manifest["replacements"];
+    }
+    if (replacements == nullptr) {
+        AssetLogOnce("mod-empty:" + PathForLog(manifestPath), "mod %s has no replacements", modName.c_str());
+        return;
+    }
+
+    size_t loaded = 0;
+    for (auto it = replacements->begin(); it != replacements->end(); ++it) {
+        if (!it.value().is_string()) {
+            continue;
+        }
+
+        const std::string assetPath = NormalizeAssetPath(it.key());
+        const std::string replacement = NormalizeAssetPath(it.value().get<std::string>());
+        if (assetPath.empty() || replacement.empty()) {
+            continue;
+        }
+
+        std::filesystem::path replacementPath = modsRoot / std::filesystem::path(replacement);
+        if (!std::filesystem::exists(replacementPath)) {
+            replacementPath = modDir / std::filesystem::path(replacement);
+        }
+        if (!std::filesystem::exists(replacementPath) || !std::filesystem::is_regular_file(replacementPath)) {
+            std::fprintf(stderr, "[MOD] Missing replacement in %s: %s -> %s\n",
+                         modName.c_str(), assetPath.c_str(), replacement.c_str());
+            continue;
+        }
+
+        gAssetGroupCache.modReplacements[assetPath] = replacementPath;
+        ++loaded;
+    }
+
+    if (loaded != 0) {
+        std::fprintf(stderr, "[MOD] Loaded %s (%zu replacement%s)\n",
+                     modName.c_str(), loaded, loaded == 1 ? "" : "s");
+    }
+}
+
+void ScanMods() {
+    if (gAssetGroupCache.modsScanned) {
+        return;
+    }
+    gAssetGroupCache.modsScanned = true;
+    gAssetGroupCache.modReplacements.clear();
+
+    for (const auto& root : AssetSearchRoots()) {
+        const std::filesystem::path modsRoot = root / "mods";
+        if (!std::filesystem::exists(modsRoot) || !std::filesystem::is_directory(modsRoot)) {
+            continue;
+        }
+
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(modsRoot, ec)) {
+            if (ec) {
+                break;
+            }
+            if (!entry.is_directory()) {
+                continue;
+            }
+            const std::filesystem::path manifestPath = entry.path() / "mod_manifest.json";
+            if (std::filesystem::exists(manifestPath)) {
+                LoadModManifest(modsRoot, entry.path(), manifestPath);
+            }
+        }
+    }
 }
 
 bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json& outJson) {
@@ -814,6 +911,24 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     WaitForPhaseGate(PhaseGateIndexForRelative(relativePath));
 #endif
 
+    ScanMods();
+    const std::string normalizedPath = NormalizeAssetPath(relativePath);
+    auto modIt = gAssetGroupCache.modReplacements.find(normalizedPath);
+    if (modIt != gAssetGroupCache.modReplacements.end()) {
+        std::ifstream input(modIt->second, std::ios::binary);
+        if (input.good()) {
+            auto data = std::make_unique<std::vector<u8>>(std::istreambuf_iterator<char>(input),
+                                                          std::istreambuf_iterator<char>());
+            const std::vector<u8>* result = data.get();
+            gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
+            AssetLogOnce("mod-file:" + normalizedPath,
+                         "mod override %s <- %s", normalizedPath.c_str(), PathForLog(modIt->second).c_str());
+            return result;
+        }
+        std::fprintf(stderr, "[MOD] Failed to open replacement for %s: %s\n",
+                     normalizedPath.c_str(), PathForLog(modIt->second).c_str());
+    }
+
     /* Pak first when mounted: an mmap lookup beats opening a small
      * file on every cold cache-miss. We still wrap the bytes in an
      * owning std::vector to keep the existing six callers (which
@@ -1133,29 +1248,6 @@ GfxLoadDecision EvaluateGfxControl(u8 unknown) {
 
 } // namespace
 
-/* gPaletteBuffer lives in port_linked_stubs.c; declare it locally rather
- * than pulling all of main.h into this translation unit. */
-extern "C" u16 gPaletteBuffer[];
-
-/* Equivalent to common.c's LoadPalettes() but uses std::memcpy instead of
- * DmaCopy32 to avoid running the source pointer through port_resolve_addr.
- * The src here is a heap pointer (std::vector<u8>::data()) which on Windows
- * MinGW can land inside the GBA address window [0x02000000, 0x0A000000) and
- * get silently misrouted to gEwram[]/gVram[]/gRomData[] — same #61 mechanism
- * documented in Port_LoadGfxGroupFromAssets below. */
-static void LoadPalettesNative(const u8* src, s32 destPaletteNum, s32 numPalettes) {
-    if (numPalettes <= 0) {
-        return;
-    }
-    const u32 size = static_cast<u32>(numPalettes) * 32u;
-    u32 mask = 1u << destPaletteNum;
-    for (s32 i = 1; i < numPalettes; ++i) {
-        mask |= mask << 1;
-    }
-    gUsedPalettes |= mask;
-    std::memcpy(&gPaletteBuffer[destPaletteNum * 16], src, size);
-}
-
 extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
     if (!EnsureAssetGroupCache()) {
         return FALSE;
@@ -1181,9 +1273,9 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
             AssetLogOnce("palette-file:" + std::to_string(group) + ":" + std::to_string(entry.destPaletteNum + copiedPalettes) +
                              ":" + ref.file,
                          "palette group %u slot %u <- %s", group, entry.destPaletteNum + copiedPalettes, ref.file.c_str());
-            LoadPalettesNative(fileData->data() + ref.byteOffset,
-                               static_cast<s32>(entry.destPaletteNum + copiedPalettes),
-                               static_cast<s32>(ref.numPalettes));
+            LoadPalettes(fileData->data() + ref.byteOffset,
+                         static_cast<s32>(entry.destPaletteNum + copiedPalettes),
+                         static_cast<s32>(ref.numPalettes));
             copiedPalettes += ref.numPalettes;
         }
 
@@ -1250,11 +1342,12 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
             if (entry.dest >= 0x02000000u && entry.dest < 0x02040000u) {
                 resolvedDest = Port_ResolveEwramPtr(entry.dest);
             }
-            if (resolvedDest == nullptr) {
-                resolvedDest = gba_TryMemPtr(entry.dest);
-            }
+            
             if (resolvedDest != nullptr) {
                 std::memcpy(resolvedDest, fileData->data(), fileData->size());
+            } else {
+                MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
+                        static_cast<u32>(fileData->size()));
             }
         }
 

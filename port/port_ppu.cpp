@@ -23,7 +23,7 @@
  * doesn't compile as C++. Treat the symbol as opaque bytes and read the
  * task field at known offset 2 (interruptFlag, sleepStatus, task —
  * include/main.h). C linkage matches the engine's Main gMain. */
-extern "C" uint8_t gMainOpaque[] asm ("gMain");
+extern "C" uint8_t gMain[]; // fix for MSVC (UWP PORT)
 
 enum class RenderBackend {
     None,
@@ -323,8 +323,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         virtuappu_mode1_bind_gba_memory(&memory);
     }
 
-    /* HBlank-DMA simulation: VirtuaPPU calls this before each scanline. */
-    virtuappu_mode1_pre_line_callback = port_hdma_step_line;
+    virtuappu_mode1_pre_line_callback = nullptr;
 
     virtuappu_registers.frame_width = MODE1_GBA_WIDTH;
     virtuappu_registers.mode = 1;
@@ -385,6 +384,12 @@ extern "C" void Port_PPU_PresentFrame(void) {
             break;
     }
 
+    /* HBlank-DMA simulation: only enable the scanline callback while a
+     * channel is active. Affine BG rendering treats BG2X/BG2Y differently
+     * when HDMA has already supplied per-line reference points. */
+    virtuappu_mode1_pre_line_callback =
+        port_hdma_has_active_channels() ? port_hdma_step_line : nullptr;
+
     virtuappu_render_frame();
 
     /* Widescreen-spike post-process: on screens where the engine doesn't
@@ -415,7 +420,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
             }
         }
     }
-    (void)gMainOpaque;
+    (void)gMain;
 
     if (sBackend == RenderBackend::Renderer) {
         int outW = 0;
