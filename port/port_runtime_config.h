@@ -68,6 +68,13 @@ void Port_Config_CloseGamepads(void);
 /* Soft-slot input poll, indexed 0..3 (X, Y, L2, R2). */
 bool Port_Config_SoftSlotPressed(int slot);
 
+/* Raw left-analog-stick reading from the first attached gamepad, in
+ * the range [-1, 1] per axis (positive Y = downward on screen, matching
+ * TMC's top-left coord system). Returns false with outputs untouched
+ * when no pad is attached. Used by the 360° analog movement toggle in
+ * src/code_0805EC04.c::UpdatePlayerInput. */
+bool Port_Config_GetLeftStick(float* outX, float* outY);
+
 /* Clear the per-input "pressed this frame" edge cache. Call after the
  * port has committed KEYINPUT and the engine has read it, so the next
  * frame's polled state isn't stuck reporting the previous tap. */

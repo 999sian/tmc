@@ -809,6 +809,26 @@ extern "C" bool Port_Config_SoftSlotPressed(int slot) {
     return Port_Config_InputPressed(kMap[slot]);
 }
 
+/* Returns the left-stick reading from the first attached gamepad, in
+ * the range [-1, 1] per axis, with Y inverted to match TMC's screen
+ * convention (positive Y = down on screen, negative Y = up). Returns
+ * false (and leaves outputs untouched) when no gamepad is attached or
+ * when SDL hasn't reported any stick activity yet. */
+extern "C" bool Port_Config_GetLeftStick(float* outX, float* outY) {
+    if (sPads.empty()) {
+        return false;
+    }
+    SDL_Gamepad* pad = sPads.front();
+    /* SDL axis values are int16 -32768..32767. Normalise to [-1, 1].
+     * +y on SDL = stick down = positive screen-y in TMC (top-left
+     * origin), so no sign flip is required despite intuition. */
+    const int16_t rawX = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
+    const int16_t rawY = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
+    if (outX) *outX = (float)rawX / 32767.0f;
+    if (outY) *outY = (float)rawY / 32767.0f;
+    return true;
+}
+
 extern "C" void Port_Config_CloseGamepads(void) {
     for (SDL_Gamepad* pad : sPads) {
         SDL_CloseGamepad(pad);

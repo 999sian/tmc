@@ -92,6 +92,14 @@ struct {
         "the primary A/B slot. Soft slots persist to the port config, "
         "not the save file.",
     },
+    /* REBORN_FEAT_ANALOG_360_MOVEMENT */
+    {
+        true,
+        "360° analog stick movement",
+        "Move Link with the left analog stick at any of 32 angles "
+        "(11.25° each) instead of the D-pad's 8. Walk speed is "
+        "unchanged — only the direction Link faces and walks toward.",
+    },
 };
 
 static bool sJustResumed = false;
