@@ -59,6 +59,34 @@ extern Frame* gSpriteAnimations_322[];
 #include <unistd.h>
 #endif
 
+/* Optimized cold-cache file reader for low-end hardware.
+ *
+ * std::ifstream + std::istreambuf_iterator copies byte-by-byte through
+ * the streambuf with virtual-call overhead per byte — fine on a fast
+ * SSD with deep prefetch, miserable on eMMC / SD / HDD where the per-
+ * byte work prevents the kernel from running ahead. This helper:
+ *
+ *   1. file_size() to size the vector exactly (one stat, no growth).
+ *   2. Single fread() of the whole file — kernel sees full length up
+ *      front and prefetches optimally.
+ *
+ * Returns nullptr on any I/O failure. Caller owns the unique_ptr. */
+static std::unique_ptr<std::vector<u8>>
+PortAssetLoader_ReadFileFast(const std::filesystem::path& path) {
+    std::error_code ec;
+    auto fsize = std::filesystem::file_size(path, ec);
+    if (ec) return nullptr;
+    if (fsize > (1ull << 30)) return nullptr;  /* 1 GiB sanity cap */
+    auto buf = std::make_unique<std::vector<u8>>(static_cast<size_t>(fsize));
+    if (fsize == 0) return buf;
+    FILE* fp = std::fopen(path.string().c_str(), "rb");
+    if (!fp) return nullptr;
+    size_t got = std::fread(buf->data(), 1, static_cast<size_t>(fsize), fp);
+    std::fclose(fp);
+    if (got != static_cast<size_t>(fsize)) return nullptr;
+    return buf;
+}
+
 namespace {
 
 struct SaveHeaderLite {
@@ -828,12 +856,8 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
         if (!std::filesystem::is_regular_file(modPath, ec)) {
             continue;
         }
-        std::ifstream in(modPath, std::ios::binary);
-        if (!in.good()) {
-            continue;
-        }
-        auto data = std::make_unique<std::vector<u8>>(std::istreambuf_iterator<char>(in),
-                                                      std::istreambuf_iterator<char>());
+        auto data = PortAssetLoader_ReadFileFast(modPath);
+        if (!data) continue;
         std::fprintf(stderr, "[MOD] override %s ← %s (%zu bytes)\n",
                      relativePath.c_str(), modPath.string().c_str(), data->size());
         const std::vector<u8>* result = data.get();
@@ -857,13 +881,10 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     }
 
     const std::filesystem::path fullPath = gAssetGroupCache.assetsRoot / std::filesystem::path(relativePath);
-    std::ifstream input(fullPath, std::ios::binary);
-    if (!input.good()) {
+    auto data = PortAssetLoader_ReadFileFast(fullPath);
+    if (!data) {
         return nullptr;
     }
-
-    auto data = std::make_unique<std::vector<u8>>(std::istreambuf_iterator<char>(input),
-                                                  std::istreambuf_iterator<char>());
     const std::vector<u8>* result = data.get();
     gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
     return result;
