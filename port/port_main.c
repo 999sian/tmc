@@ -388,8 +388,11 @@ int main(int argc, char* argv[]) {
      * SDL_CreateRenderer call, with driver=opengl. */
     SDL_Window* window = NULL;
     SDL_Renderer* prerenderer = NULL;
+    /* TMC_PC_VERSION is defined by xmake.lua via add_defines("TMC_PC_VERSION=\"...\"") */
+    char window_title[64];
+    SDL_snprintf(window_title, sizeof(window_title), "The Minish Cap " TMC_PC_VERSION);
     if (!SDL_CreateWindowAndRenderer(
-            "The Minish Cap",
+            window_title,
             240 * window_scale, 160 * window_scale,
             SDL_WINDOW_RESIZABLE,
             &window, &prerenderer)) {
