@@ -1072,6 +1072,59 @@ static void DrawMenuTrigger(void) {
     }
 }
 
+/* Quit-save confirm modal state. The X-button (SDL_EVENT_QUIT) routes
+ * through Port_ImGui_RequestQuitModal which arms this flag instead of
+ * exiting straight away. The user picks Save & Quit / Quit Without
+ * Saving / Cancel. A static "armed" flag survives across frames until
+ * the user makes a choice — the modal can't ride a one-shot bool
+ * because ImGui::BeginPopupModal needs to be called every frame while
+ * it's open. */
+static bool sQuitModalArmed = false;
+static bool sQuitModalConfirmed = false;  /* set to true on "Save & Quit" or "Quit" — main loop polls and exits */
+extern "C" bool Port_ImGui_QuitConfirmed(void) { return sQuitModalConfirmed; }
+extern "C" void Port_ImGui_RequestQuitModal(void) {
+    /* If a previous confirm already fired, honour it and let the host
+     * exit. This catches the rare double-click on the X button. */
+    if (sQuitModalConfirmed) return;
+    sQuitModalArmed = true;
+}
+
+static void DrawQuitModal(void) {
+    if (sQuitModalArmed) {
+        ImGui::OpenPopup("Quit?");
+        sQuitModalArmed = false;
+    }
+    /* Centre the popup. */
+    const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal("Quit?", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize |
+                               ImGuiWindowFlags_NoCollapse)) {
+        ImGui::TextUnformatted("Save before quitting?");
+        ImGui::Separator();
+        ImGui::TextWrapped("Save & Quit writes the current game state to "
+                           "quicksave slot 0 (F6 to reload). Quit Without "
+                           "Saving exits immediately — any progress since "
+                           "your last in-game save is lost.");
+        ImGui::Spacing();
+        if (ImGui::Button("Save & Quit", ImVec2(140, 0))) {
+            Port_QuickSave_SaveSlot(0);
+            sQuitModalConfirmed = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Quit Without Saving", ImVec2(180, 0))) {
+            sQuitModalConfirmed = true;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(100, 0))) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
 extern "C" bool Port_ImGui_Render(void) {
     if (!sImGuiInited || !sImGuiEnabled) return false;
     if (!sRenderer) return false;
@@ -1100,6 +1153,12 @@ extern "C" bool Port_ImGui_Render(void) {
     /* Always show the click-to-open trigger so mouse/touch users have a
      * way in without the F8 hotkey. */
     DrawMenuTrigger();
+
+    /* Quit-save confirm modal — only renders when armed by
+     * Port_ImGui_RequestQuitModal (called from port_bios.c when SDL
+     * reports SDL_EVENT_QUIT). Independent of the F8 ribbon state so
+     * the user gets a chance to save even with the menu closed. */
+    DrawQuitModal();
 
     if (Port_DebugMenu_IsOpen()) {
         if (sRibbonEnabled) {
