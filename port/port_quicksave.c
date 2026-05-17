@@ -101,6 +101,14 @@ static int  sAutoEnabled = 1;                 /* on by default — the F8
                                                  can flip it off. */
 static u32  sAutoIntervalMs = 60000;          /* 60 seconds default */
 
+/* Area-change auto-save (independent of the interval timer). Tracks
+ * the last-observed (area, room) and saves to the ring whenever it
+ * changes. Helps with the crash-on-load-then-lose-an-hour case Jester
+ * flagged. */
+static int  sAutoOnAreaChange = 1;
+static u8   sLastSeenArea = 0xFF;
+static u8   sLastSeenRoom = 0xFF;
+
 static size_t TotalRegionBytes(void) {
     size_t total = 0;
     for (size_t i = 0; i < NUM_REGIONS; i++) {
@@ -306,22 +314,61 @@ int Port_QuickSave_HasSnapshot(void) { return Port_QuickSave_HasSlot(0); }
 /* Auto-save — call once per frame from VBlankIntrWait. Saves to the
  * next slot in the auto-save ring if enabled and the configured
  * interval has elapsed since the last auto-save. */
-void Port_QuickSave_AutoTick(void) {
-    if (!sAutoEnabled) return;
-    const u64 now = SDL_GetTicks();
-    if (sAutoLastSaveTicksMs == 0) {
-        sAutoLastSaveTicksMs = now;
-        return;
-    }
-    if (now - sAutoLastSaveTicksMs < sAutoIntervalMs) return;
-    sAutoLastSaveTicksMs = now;
+static void TakeAutoSnapshot(const char* reason) {
     const int slot = sAutoNextSlot;
     sAutoNextSlot++;
     if (sAutoNextSlot >= AUTO_SLOT_BASE + NUM_AUTO_SLOTS) {
         sAutoNextSlot = AUTO_SLOT_BASE;
     }
     if (Port_QuickSave_SaveSlot(slot)) {
-        fprintf(stderr, "[autosave] saved to ring slot %d\n", slot);
+        fprintf(stderr, "[autosave] saved to ring slot %d (%s)\n", slot, reason);
+    }
+}
+
+void Port_QuickSave_AutoTick(void) {
+    if (!sAutoEnabled) return;
+    const u64 now = SDL_GetTicks();
+
+    /* Area-change trigger. gRoomControls is the engine's source-of-
+     * truth for the current area/room; we just compare against the
+     * last value we observed and fire a snapshot on transition. The
+     * first poll seeds the cache without saving (sLastSeen* both
+     * 0xFF) so we don't double-save on boot. */
+    if (sAutoOnAreaChange) {
+        /* gRoomControls is declared in include/room.h, already in scope
+         * via include/save.h above. */
+        const u8 area = gRoomControls.area;
+        const u8 room = gRoomControls.room;
+        if (sLastSeenArea == 0xFF && sLastSeenRoom == 0xFF) {
+            sLastSeenArea = area;
+            sLastSeenRoom = room;
+        } else if (area != sLastSeenArea || room != sLastSeenRoom) {
+            sLastSeenArea = area;
+            sLastSeenRoom = room;
+            sAutoLastSaveTicksMs = now;
+            TakeAutoSnapshot("area-change");
+            return;
+        }
+    }
+
+    /* Interval trigger. */
+    if (sAutoLastSaveTicksMs == 0) {
+        sAutoLastSaveTicksMs = now;
+        return;
+    }
+    if (now - sAutoLastSaveTicksMs < sAutoIntervalMs) return;
+    sAutoLastSaveTicksMs = now;
+    TakeAutoSnapshot("interval");
+}
+
+int Port_QuickSave_AutoOnAreaChangeEnabled(void) { return sAutoOnAreaChange; }
+void Port_QuickSave_SetAutoOnAreaChange(int on) {
+    sAutoOnAreaChange = on ? 1 : 0;
+    /* Reset the seen-area cache when toggled on so the next change
+     * doesn't fire spuriously against pre-toggle history. */
+    if (on) {
+        sLastSeenArea = 0xFF;
+        sLastSeenRoom = 0xFF;
     }
 }
 
