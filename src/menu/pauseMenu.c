@@ -421,6 +421,21 @@ void PauseMenu_ItemMenu_Update(void) {
             case B_BUTTON:
                 if (gPauseMenu.items[menuSlot] != 0) {
                     u32 slot = !!(gInput.newKeys ^ A_BUTTON);
+#ifdef PC_PORT
+                    /* Reborn-parity: SELECT-hold makes A/B target the
+                     * secondary slots (SLOT_LA / SLOT_LB) rather than
+                     * the primary ones. The secondary storage is
+                     * gSave.stats.filler14[0..1]. */
+                    {
+                        extern bool Port_Reborn_IsEnabled(int feat);
+                        if ((gInput.heldKeys & SELECT_BUTTON) &&
+                            Port_Reborn_IsEnabled(/* SELECT-hold equip */ 10)) {
+                            gSave.stats.filler14[slot] = gPauseMenu.items[menuSlot];
+                            SoundReq(SFX_TEXTBOX_SELECT);
+                            break;
+                        }
+                    }
+#endif
                     ForceEquipItem(gPauseMenu.items[menuSlot], slot);
                     SoundReq(SFX_TEXTBOX_SELECT);
                 }

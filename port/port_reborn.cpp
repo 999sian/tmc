@@ -74,6 +74,22 @@ struct {
         "harmlessly draining rupees, and auto-release after 10 ticks. More "
         "punishing — off by default.",
     },
+    /* REBORN_FEAT_SECONDARY_LAB */
+    {
+        true,
+        "L + A/B → secondary item",
+        "Hold L while pressing A or B to use the SLOT_LA / SLOT_LB "
+        "secondary item. Set secondary items via SELECT-hold in the "
+        "pause menu (needs the other toggle too).",
+    },
+    /* REBORN_FEAT_SELECT_HOLD_EQUIP */
+    {
+        true,
+        "SELECT-hold equip in pause menu",
+        "Hold SELECT while pressing A in the pause menu to equip the "
+        "cursor's item to SLOT_LA (or B to SLOT_LB) instead of the "
+        "primary slot.",
+    },
 };
 
 static bool sJustResumed = false;

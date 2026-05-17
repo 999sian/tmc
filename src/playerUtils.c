@@ -225,13 +225,28 @@ void UpdateActiveItems(PlayerEntity* this) {
     gPlayerState.attack_status &= 0xf;
     if (((gPlayerState.field_0x7 | gPlayerState.jump_status) & 0x80) == 0 && (gPlayerState.jump_status & 0x40) == 0 &&
         gPlayerState.swim_state == 0 && IsAbleToUseItem(this) && !IsPreventedFromUsingItem()) {
+        u32 aItem = gSave.stats.equipped[SLOT_A];
         u32 bItem = gSave.stats.equipped[SLOT_B];
 #ifdef PC_PORT
         /* Soft-slots (X/Y/L2/R2) override the B-equipped item without
          * mutating gSave. See port/port_softslots.h. */
         bItem = Port_SoftSlots_GetEffectiveBItem((u8)bItem);
+        /* Reborn-parity: when L is held, A and B use the SLOT_LA /
+         * SLOT_LB secondary items (stored in filler14[0..1]). If the
+         * secondary slot is empty, leave the primary item active so
+         * the player isn't surprised by a dead button. */
+        {
+            extern bool Port_Reborn_IsEnabled(int feat);
+            #define _REBORN_L_HELD ((gInput.heldKeys & L_BUTTON) != 0)
+            if (_REBORN_L_HELD && Port_Reborn_IsEnabled(/* L+A/B secondary */ 9)) {
+                u8 la = gSave.stats.filler14[0];
+                u8 lb = gSave.stats.filler14[1];
+                if (la) aItem = la;
+                if (lb) bItem = lb;
+            }
+        }
 #endif
-        CreateItemIfInputMatches(gSave.stats.equipped[SLOT_A], INPUT_USE_ITEM1, FALSE);
+        CreateItemIfInputMatches(aItem, INPUT_USE_ITEM1, FALSE);
         CreateItemIfInputMatches(bItem, INPUT_USE_ITEM2, FALSE);
         IsTryingToPickupObject();
     }
