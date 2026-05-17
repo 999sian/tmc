@@ -101,6 +101,16 @@ static void Port_UpdateInput(void) {
         *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) &= ~START_BUTTON;
     }
 
+    /* Issue #99 auto-repro harness. Set TMC_REPRO_MAZAAL=1 to drive
+     * the game from the title screen into the FoW boss room mid-
+     * phase-3 so the [mazaal] diagnostic logs in mazaalMacro.c
+     * capture the pillar-spawn state on the broken path without
+     * needing a human to navigate. Exits at frame 4000. */
+    {
+        extern void Port_ReproMazaal_Tick(unsigned int frame);
+        Port_ReproMazaal_Tick(sFrameNum);
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {

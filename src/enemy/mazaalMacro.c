@@ -18,7 +18,17 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #99 fix: same #98 pattern as EyegoreEntity / MazaalHeadEntity.
+       Enemy::child is 8 bytes on PC vs 4 on GBA; pad to keep unk_6d,
+       unk_78 and `context` aliased correctly with the GBA layout the
+       original code assumes. Without this, framework writes to
+       Enemy::child stomp the Mazaal macro's state bytes and the
+       pillar-spawn dispatch falls apart between phases (issue #99). */
+    u8 unused1[0x5 + 4];
+#else
     /*0x68*/ u8 unused1[5];
+#endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unused2[10];
     /*0x78*/ u16 unk_78;
