@@ -69,6 +69,13 @@ KNOWN_PAIRS = {
 
 ORG_RE = re.compile(r"\bORG\s*(\$([0-9A-Fa-f]+)|0x([0-9A-Fa-f]+)|([0-9]+))\b")
 
+# POIN $hex — EventAssembler pointer-write directive. The literal is a
+# ROM address that gets written into the ROM as a 32-bit pointer (with
+# the GBA 0x08000000 base added at assembly time). These addresses
+# also need EU→USA translation. Only translate `$hex >= 0x1000` to
+# avoid touching small literals.
+POIN_RE = re.compile(r"\bPOIN\s*\$([0-9A-Fa-f]{4,})\b")
+
 
 def parse_map(map_path):
     """Parse an ldscript-style .map file into {symbol: rom_offset}."""
@@ -166,7 +173,7 @@ def translate_event_file(in_path, out_path, **lookup_args):
     text = pathlib.Path(in_path).read_text(encoding="utf-8", errors="replace")
     stats = {"hit": 0, "miss": 0, "by_source": {}}
 
-    def repl(m):
+    def repl_org(m):
         if m.group(2) is not None:
             eu_off = int(m.group(2), 16)
             raw = f"${m.group(2)}"
@@ -185,7 +192,18 @@ def translate_event_file(in_path, out_path, **lookup_args):
         stats["hit"] += 1
         return f"ORG ${usa_off:X}  // EU {raw} → USA via {source}"
 
-    out_text = ORG_RE.sub(repl, text)
+    def repl_poin(m):
+        eu_off = int(m.group(1), 16)
+        usa_off, source = translate_offset(eu_off, **lookup_args)
+        stats["by_source"][f"POIN/{source}"] = stats["by_source"].get(f"POIN/{source}", 0) + 1
+        if usa_off is None:
+            stats["miss"] += 1
+            return f"POIN ${m.group(1)}  /* UNRESOLVED for USA */"
+        stats["hit"] += 1
+        return f"POIN ${usa_off:X}  /* EU ${m.group(1)} → USA via {source} */"
+
+    out_text = ORG_RE.sub(repl_org, text)
+    out_text = POIN_RE.sub(repl_poin, out_text)
     pathlib.Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     pathlib.Path(out_path).write_text(out_text, encoding="utf-8")
     return stats

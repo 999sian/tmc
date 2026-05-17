@@ -42,14 +42,16 @@ DEFAULT_PATCH_ROOT = (
 )
 
 
-ORG_RE = re.compile(r"\bORG\s+\$([0-9A-Fa-f]+)")
+ORG_RE  = re.compile(r"\bORG\s+\$([0-9A-Fa-f]+)")
+POIN_RE = re.compile(r"\bPOIN\s+\$([0-9A-Fa-f]{4,})")
 
 
 def scan_file(path, **lookup_kwargs):
-    """Return dict per file: total orgs, set of unique orgs, per-class counts."""
+    """Return dict per file: total ORGs+POINs, unique addresses, per-class counts."""
     text = path.read_text(encoding="utf-8", errors="replace")
     orgs = [int(m, 16) for m in ORG_RE.findall(text)]
-    unique = sorted(set(orgs))
+    poins = [int(m, 16) for m in POIN_RE.findall(text)]
+    unique = sorted(set(orgs) | set(poins))
     classes = {}
     for off in unique:
         _, tag = translate_offset(off, **lookup_kwargs)
@@ -58,6 +60,7 @@ def scan_file(path, **lookup_kwargs):
     return {
         "path": str(path),
         "total_orgs": len(orgs),
+        "total_poins": len(poins),
         "unique_orgs": len(unique),
         "classes": classes,
     }
