@@ -221,3 +221,50 @@ int Port_Save_ListProfiles(char out[][SAVE_FILENAME_MAX], int max) {
 }
 
 int Port_Save_FilenameMax(void) { return SAVE_FILENAME_MAX; }
+
+/* Returns 1 if the path is something we created and should be willing
+ * to delete or rename — tmc.sav or tmc_<name>.sav. Anything else gets
+ * refused so a stray ../../etc/passwd argument can't escape the
+ * profile lane. */
+static int IsManagedProfilePath(const char* path) {
+    if (path == NULL || path[0] == '\0') return 0;
+    if (strchr(path, '/') != NULL) return 0;
+    if (strchr(path, '\\') != NULL) return 0;
+    if (strstr(path, "..") != NULL) return 0;
+    if (strcmp(path, DEFAULT_SAVE_FILENAME) == 0) return 1;
+    if (strncmp(path, "tmc_", 4) != 0) return 0;
+    const size_t len = strlen(path);
+    if (len <= 8) return 0; /* "tmc_X.sav" minimum */
+    if (strcmp(path + len - 4, ".sav") != 0) return 0;
+    return 1;
+}
+
+/* Delete a profile file. Refuses if the profile is currently active
+ * (caller should switch first) or if the name doesn't look like one
+ * of ours. Returns 1 on success. */
+int Port_Save_DeleteProfile(const char* path) {
+    if (!IsManagedProfilePath(path)) return 0;
+    if (strcmp(path, sActivePath) == 0) return 0; /* refuse to delete active */
+    return remove(path) == 0 ? 1 : 0;
+}
+
+/* Rename a profile file. Both args must look like managed profile
+ * names. The default tmc.sav cannot be renamed away (it's our fallback
+ * for fresh installs). If renaming the active profile, also updates
+ * sActivePath so subsequent reads/writes hit the new name. */
+int Port_Save_RenameProfile(const char* oldPath, const char* newPath) {
+    if (!IsManagedProfilePath(oldPath)) return 0;
+    if (!IsManagedProfilePath(newPath)) return 0;
+    if (strcmp(oldPath, DEFAULT_SAVE_FILENAME) == 0) return 0; /* don't rename default away */
+    if (strcmp(oldPath, newPath) == 0) return 1; /* no-op */
+    /* Refuse clobbering an existing file — fail-stop is safer than
+     * silently replacing somebody else's save. */
+    FILE* probe = fopen(newPath, "rb");
+    if (probe) { fclose(probe); return 0; }
+    if (rename(oldPath, newPath) != 0) return 0;
+    if (strcmp(oldPath, sActivePath) == 0) {
+        strncpy(sActivePath, newPath, SAVE_FILENAME_MAX - 1);
+        sActivePath[SAVE_FILENAME_MAX - 1] = '\0';
+    }
+    return 1;
+}
