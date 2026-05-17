@@ -17,7 +17,14 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98 / #99 pattern: 4-byte pad so Enemy::child's 8-byte pointer
+       write doesn't stomp unk_6d. Same template as eyegore.c. Without
+       it Vaati phase 2 transformed-form behavior is unpredictable. */
+    u8 unused1[5 + 4];
+#else
     /*0x68*/ u8 unused1[5];
+#endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unused2[6];
     /*0x74*/ u8 unk_74;
