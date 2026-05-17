@@ -583,7 +583,13 @@ typedef struct {
     /*0x0e*/ u8 bottles[4];
     /*0x12*/ u8 effect;
     /*0x13*/ u8 hasAllFigurines;
-    /*0x14*/ u8 filler14[4];
+    /*0x14*/ u8 filler14[4];     /* PC port: filler14[0]/filler14[1]
+                                    are repurposed as the L+A / L+B
+                                    "secondary" equipment slots; see
+                                    SLOT_LA / SLOT_LB below. Save layout
+                                    unchanged — legacy saves load with
+                                    zeroes in these bytes which means
+                                    "no secondary item bound." */
     /*0x18*/ u16 rupees;
     /*0x1a*/ u16 shells;
     /*0x1c*/ u16 charmTimer;
@@ -594,6 +600,24 @@ typedef struct {
 
 #define SLOT_A 0
 #define SLOT_B 1
+#ifdef PC_PORT
+/* Reborn-parity secondary slots, stored in filler14[0..1]. Reachable
+ * via L+A / L+B in-game; settable via SELECT-hold in the pause menu. */
+#define SLOT_LA 2
+#define SLOT_LB 3
+/* Access via a helper so call sites can just say stats->equipped[SLOT_LA]
+ * even though the underlying storage isn't in the equipped[] array. */
+static inline u8 PortGetSecondaryEquip(const Stats* s, int slot) {
+    if (slot == SLOT_LA) return s->filler14[0];
+    if (slot == SLOT_LB) return s->filler14[1];
+    return slot < 2 ? s->equipped[slot] : 0;
+}
+static inline void PortSetSecondaryEquip(Stats* s, int slot, u8 item) {
+    if (slot == SLOT_LA) s->filler14[0] = item;
+    else if (slot == SLOT_LB) s->filler14[1] = item;
+    else if (slot < 2) s->equipped[slot] = item;
+}
+#endif
 
 typedef struct {
     /*0x0*/ u8 field_0x0;
