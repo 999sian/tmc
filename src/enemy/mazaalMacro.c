@@ -76,6 +76,22 @@ void MazaalMacro(MazaalMacroEntity* this) {
 }
 
 void MazaalMacro_OnTick(MazaalMacroEntity* this) {
+#ifdef PC_PORT
+    /* One-shot per-instance: log the very first time each MazaalMacro
+     * instance ticks, so we can see whether the type=0 main macro is
+     * being instantiated at all in phase 3. unk_6d bit 7 is otherwise
+     * unused; we reuse it as a "logged-spawn" marker. */
+    if ((this->unk_6d & 0x80) == 0) {
+        this->unk_6d |= 0x80;
+        fprintf(stderr,
+                "[mazaal] MazaalMacro first tick: type=%u action=%u "
+                "subAction=%u parent=%p health=%u field_0x39=0x%02x\n",
+                (unsigned)super->type, (unsigned)super->action,
+                (unsigned)super->subAction, (void*)super->parent,
+                (unsigned)super->health,
+                (unsigned)gRoomTransition.field_0x39);
+    }
+#endif
     if (super->type != 2) {
         gUnk_080CEEA4[super->action](this);
     } else {
@@ -94,6 +110,16 @@ void MazaalMacro_OnDeath(MazaalMacroEntity* this) {
 
 void sub_08034CC4(MazaalMacroEntity* this) {
     Entity* entity;
+
+#ifdef PC_PORT
+    fprintf(stderr,
+            "[mazaal] sub_08034CC4 entry: type=%u action=%u health=%u "
+            "field_0x39=0x%02x gEntCount=%u\n",
+            (unsigned)super->type, (unsigned)super->action,
+            (unsigned)super->health,
+            (unsigned)gRoomTransition.field_0x39,
+            (unsigned)gEntCount);
+#endif
 
     if (sub_08035084(this) != 0) {
         super->action = super->type + 1;
@@ -215,6 +241,13 @@ void sub_08034F70(MazaalMacroEntity* this) {
     } else {
         super->type2 = 2;
     }
+#ifdef PC_PORT
+    fprintf(stderr,
+            "[mazaal] sub_08034F70: field_0x39=0x%02x → phase=%u (type2=%u)\n",
+            (unsigned)gRoomTransition.field_0x39,
+            (unsigned)super->type2,
+            (unsigned)super->type2);
+#endif
 }
 
 void sub_08034FA0(MazaalMacroEntity* this) {
