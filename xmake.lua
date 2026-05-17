@@ -467,11 +467,8 @@ target("tmc_pc")
     }
     local pc_game_version = get_config("game_version") or "USA"
     local pc_ver = pc_versions[pc_game_version] or pc_versions["USA"]
-    
-    -- Define PC_PORT, NON_MATCHING and game version. USE_OPENMP is added
-    -- below alongside the matching `-fopenmp` toolchain flags, since on
-    -- macOS we may have to disable it when libomp isn't installed.
-    add_defines("PC_PORT", "NON_MATCHING", pc_ver.region, pc_ver.language, "REVISION=0")
+
+    add_defines("PC_PORT", "NON_MATCHING", "USE_HDMA", pc_ver.region, pc_ver.language, "REVISION=0")
     -- Inject the version string from the top-of-file constant so the
     add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
     add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
@@ -654,55 +651,6 @@ target("tmc_pc")
     
     add_packages("libsdl3", "nlohmann_json", "fmt", "guilite")
 
-    -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
-    -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.
-    -- Apple Clang on macOS does NOT bundle an OpenMP runtime, so `-fopenmp`
-    -- is rejected outright. Use Homebrew's libomp via the standard
-    -- `-Xpreprocessor -fopenmp -lomp` recipe. If libomp isn't installed
-    -- we drop USE_OPENMP and fall back to the single-threaded path
-    -- guarded by `#ifdef USE_OPENMP` in mode0.c so the build still
-    -- succeeds (the `#pragma omp` lines are no-ops without the define).
-    if is_plat("macosx") then
-        -- xmake's description-scope sandbox strips pcall/try, so we can't
-        -- shell out to `brew --prefix libomp` here. Probe the standard
-        -- Homebrew prefixes (arm64 -> /opt/homebrew, x86_64 -> /usr/local)
-        -- and honour LIBOMP_PREFIX as an escape hatch for non-standard
-        -- layouts (MacPorts, custom prefix, etc.).
-        local libomp_prefix = nil
-        -- Build the candidate list defensively: ipairs() stops at the
-        -- first nil hole, so an unset LIBOMP_PREFIX would otherwise
-        -- short-circuit the whole probe and we'd never reach the
-        -- Homebrew defaults below.
-        local candidates = {}
-        local env_override = os.getenv("LIBOMP_PREFIX")
-        if env_override and env_override ~= "" then
-            table.insert(candidates, env_override)
-        end
-        table.insert(candidates, "/opt/homebrew/opt/libomp")
-        table.insert(candidates, "/usr/local/opt/libomp")
-        for _, candidate in ipairs(candidates) do
-            if os.isdir(candidate) then
-                libomp_prefix = candidate
-                break
-            end
-        end
-        if libomp_prefix then
-            -- add_defines("USE_OPENMP")
-            --add_includedirs(path.join(libomp_prefix, "include"))
-            --add_linkdirs(path.join(libomp_prefix, "lib"))
-            --add_cflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
-            --add_cxxflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
-            --add_syslinks("omp")
-        else
-            print("[tmc_pc] libomp not found — building without OpenMP. Install with: brew install libomp")
-        end
-    else
-        -- add_defines("USE_OPENMP")
-        --add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
-        --add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
-        --add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
-        --add_syslinks("gomp")
-    end
 
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then

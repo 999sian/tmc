@@ -1,6 +1,7 @@
 #include "gba/io_reg.h"
 #include "main.h"
 #include "port_audio.h"
+#include "port_asset_loader.h"
 #include "port_gba_mem.h"
 #include "port_hdma.h"
 #include "port_ppu.h"
@@ -18,6 +19,13 @@
 static bool gQuitRequested = false;
 static bool sFastForward = false;
 static int sFrameNum = 0;
+
+static const void* Port_ResolveCopySrc(const void* src, u32 size) {
+    if (Port_IsLoadedAssetBytes(src, size)) {
+        return src;
+    }
+    return port_resolve_addr((uintptr_t)src);
+}
 
 typedef struct {
     PortInput input;
@@ -320,9 +328,10 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
     u32 wordCount = cnt & 0x1FFFFF;
     int fill = (cnt >> 24) & 1;
     int is32 = (cnt >> 26) & 1;
+    u32 byteCount = is32 ? wordCount * 4 : wordCount * 2;
 
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
-    const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
+    const void* resolvedSrc = Port_ResolveCopySrc(src, byteCount);
 
     if (is32) {
         const u32* s = (const u32*)resolvedSrc;
@@ -348,7 +357,7 @@ void CpuFastSet(const void* src, void* dst, u32 cnt) {
     int fill = (cnt >> 24) & 1;
 
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
-    const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
+    const void* resolvedSrc = Port_ResolveCopySrc(src, wordCount * 4);
 
     const u32* s = (const u32*)resolvedSrc;
     u32* d = (u32*)resolvedDst;
