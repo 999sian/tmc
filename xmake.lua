@@ -824,23 +824,39 @@ target("randomizer_cli")
         end
 
         cprint("${cyan [randomizer_cli]} dotnet publish -c Release -r " .. rid)
-        local ok = try { function ()
-            os.iorunv(dotnet, {
-                "publish", csproj,
-                "-c", "Release",
-                "-r", rid,
-                "--self-contained",
-                "-p:PublishSingleFile=true",
-                "-p:IncludeNativeLibrariesForSelfExtract=true",
-                "-o", outdir,
-            })
-        end }
-        if not ok then
-            cprint("${yellow warning:} randomizer publish failed — F8 → Randomizer will report 'CLI not found' until fixed.")
+        -- os.execv prints child stdout/stderr directly and returns the
+        -- numeric exit code, which is the actual signal of success for
+        -- `dotnet publish`. (The previous `try { os.iorunv }` form
+        -- swallowed stdout and incorrectly classified publish runs as
+        -- failures whenever MSBuild emitted any stderr lines, even
+        -- when the build itself succeeded.)
+        local rc = os.execv(dotnet, {
+            "publish", csproj,
+            "-c", "Release",
+            "-r", rid,
+            "--self-contained",
+            "-p:PublishSingleFile=true",
+            "-p:IncludeNativeLibrariesForSelfExtract=true",
+            "-o", outdir,
+        }, { try = true })
+
+        if rc ~= 0 then
+            cprint("${yellow warning:} randomizer publish exited with code "
+                   .. tostring(rc) .. " — F8 → Randomizer will report 'CLI not found'.")
             return
         end
 
-        cprint("${green [randomizer_cli]} built → " .. outdir)
+        -- Final sanity check: did the binary actually land?
+        local cli_name = is_plat("windows", "mingw") and "MinishCapRandomizerCLI.exe"
+                                                       or "MinishCapRandomizerCLI"
+        local cli_path = path.join(outdir, cli_name)
+        if not os.exists(cli_path) then
+            cprint("${yellow warning:} dotnet publish reported success but "
+                   .. cli_path .. " is missing — F8 → Randomizer disabled.")
+            return
+        end
+
+        cprint("${green [randomizer_cli]} built → " .. cli_path)
     end)
 target_end()
 
