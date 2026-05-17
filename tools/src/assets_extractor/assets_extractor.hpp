@@ -491,12 +491,23 @@ inline bool is_runtime_passthrough_path(const std::string& relative_path)
 /* Bypass std::ofstream's iostream sync layer — fwrite is ~30% faster
  * on the small-file extraction workload (thousands of <16 KiB
  * payloads), and on slow storage that adds up to seconds-of-extraction
- * difference per run. */
+ * difference per run.
+ *
+ * Windows note: path.string() returns the OS *narrow* code page on
+ * Windows (CP1252-ish), NOT UTF-8 — so users with non-ASCII chars
+ * anywhere in their %USERPROFILE% path (Cyrillic / CJK / accented
+ * usernames) silently fail fopen(). Route through _wfopen with the
+ * native wide string instead. */
 inline bool write_binary_file_fwrite(const std::filesystem::path& output_path,
                                       const uint8_t* data, std::size_t size)
 {
     PortAssetLog::EnsureDir(output_path.parent_path());
-    FILE* fp = std::fopen(output_path.string().c_str(), "wb");
+    FILE* fp = nullptr;
+#ifdef _WIN32
+    fp = _wfopen(output_path.native().c_str(), L"wb");
+#else
+    fp = std::fopen(output_path.string().c_str(), "wb");
+#endif
     if (!fp) return false;
     bool ok = true;
     if (size > 0 && data != nullptr) {

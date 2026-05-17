@@ -80,7 +80,15 @@ PortAssetLoader_ReadFileFast(const std::filesystem::path& path) {
     if (fsize > (1ull << 30)) return nullptr;  /* 1 GiB sanity cap */
     auto buf = std::make_unique<std::vector<u8>>(static_cast<size_t>(fsize));
     if (fsize == 0) return buf;
-    FILE* fp = std::fopen(path.string().c_str(), "rb");
+    FILE* fp = nullptr;
+#ifdef _WIN32
+    /* path.string() on Windows is the OS narrow code page (~CP1252),
+     * not UTF-8 — silently fails on Cyrillic / CJK / accented usernames.
+     * Route through _wfopen with the wide native string. */
+    fp = _wfopen(path.native().c_str(), L"rb");
+#else
+    fp = std::fopen(path.string().c_str(), "rb");
+#endif
     if (!fp) return nullptr;
     size_t got = std::fread(buf->data(), 1, static_cast<size_t>(fsize), fp);
     std::fclose(fp);

@@ -95,7 +95,11 @@ bool ReadBinaryFile(const std::filesystem::path& path, std::vector<uint8_t>& dat
     /* Use stat-then-single-fread to avoid the byte-by-byte slowness of
      * istreambuf_iterator. On low-end storage (SD / eMMC / HDD) this
      * is several times faster for the same disk traffic because the
-     * kernel sees the full read length up front. */
+     * kernel sees the full read length up front.
+     *
+     * Windows note: path.string() uses the OS narrow code page, NOT
+     * UTF-8. Non-ASCII path components (Cyrillic username etc.) fail
+     * silently. Use the wide native path on Win32. */
     std::error_code ec;
     auto fsize = std::filesystem::file_size(path, ec);
     if (ec) {
@@ -108,7 +112,12 @@ bool ReadBinaryFile(const std::filesystem::path& path, std::vector<uint8_t>& dat
     }
     data.resize(static_cast<size_t>(fsize));
     if (fsize == 0) return true;
-    FILE* fp = std::fopen(path.string().c_str(), "rb");
+    FILE* fp = nullptr;
+#ifdef _WIN32
+    fp = _wfopen(path.native().c_str(), L"rb");
+#else
+    fp = std::fopen(path.string().c_str(), "rb");
+#endif
     if (!fp) {
         SetError(error, "Could not open file: " + path.string());
         return false;
