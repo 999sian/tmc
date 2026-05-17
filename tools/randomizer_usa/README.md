@@ -17,7 +17,8 @@ images, and binaries. Running `tools/randomizer_usa/scan_patches.py`:
 files:           33
 patches with at least one ORG: 28
 total ORGs:     804
-unique ORGs:    650
+total POINs:     40 (with hardcoded $hex; many more use symbolic labels)
+unique addrs:   690
 ```
 
 Each `ORG $hex` directive tells the assembler to seek to that EU ROM
@@ -71,9 +72,15 @@ honours the distinction.
 - **Coverage report at zero data inputs**
   (`reports/coverage_no_eu_data.csv`) — established the baseline. With
   no EU ROM and no EU map, the interpolation tier alone covers
-  **162/650 = 24.9%** of unique EU offsets. The other 488 need either
-  the EU ROM (enables byte-pattern probe) or the EU decomp map
-  (enables symbol matching).
+  **170/690 = 24.6%** of unique EU addresses (combined ORG + POIN).
+  The other 520 need either the EU ROM (enables byte-pattern probe)
+  or the EU decomp map (enables symbol matching).
+
+- **POIN-directive translation** — the translator also handles
+  `POIN $hex` directives (pointer writes), with the same 5-tier
+  fallback. Of the 40 hardcoded-hex POINs in the patches, 8 resolve
+  via interp today; the rest cluster in script/code regions where
+  we still need the EU side.
 
 - **`scan_validate.py` + `reports/interp_validation.md`** —
   validation pass against the USA decomp symbol map. Cross-checks
