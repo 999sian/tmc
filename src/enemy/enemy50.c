@@ -15,7 +15,13 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98 / #99 pattern: 4-byte pad so Enemy::child's 8-byte pointer
+       write doesn't stomp unk_6d. Same template as eyegore.c. */
+    u8 unk_68[0x5 + 4];
+#else
     /*0x68*/ u8 unk_68[0x5];
+#endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unk_6e;
     /*0x6f*/ u8 unk_6f;

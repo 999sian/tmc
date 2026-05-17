@@ -14,7 +14,15 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98 / #99 pattern: Enemy::child is 8 bytes on PC (vs 4 on GBA),
+       so without 4 bytes of padding here the framework's
+       Enemy::child write stomps unk_6d and the early state bytes.
+       Same template as src/enemy/eyegore.c::EyegoreEntity. */
+    u8 unk_68[0x5 + 4];
+#else
     /*0x68*/ u8 unk_68[0x5];
+#endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unk_6e;
     /*0x6f*/ u8 unk_6f;
