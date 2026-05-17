@@ -388,7 +388,16 @@ extern EntityData gUnk_additional_8_HouseInteriors1_Library1F;
 
 void sub_StateChange_HouseInteriors1_Library1F(void) {
     if (gSave.global_progress > 4) {
-        LoadRoomEntityList(&gUnk_080D6714);
+#ifdef PC_PORT
+        /* Reborn parity: when the toggle is on, skip loading the
+         * "library closed after Four Sword" entity layer so the
+         * library stays accessible post-LV5. */
+        extern bool Port_Reborn_IsEnabled(int feat);
+        if (!Port_Reborn_IsEnabled(4 /* REBORN_FEAT_LIBRARY_REOPEN */))
+#endif
+        {
+            LoadRoomEntityList(&gUnk_080D6714);
+        }
     }
 #ifdef PC_PORT
     /* The C-side `gUnk_additional_8/9_HouseInteriors1_Library1F` symbols are

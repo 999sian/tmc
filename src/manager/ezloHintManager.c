@@ -51,6 +51,18 @@ static void EzloHintManager_Action1(EzloHintManager* this) {
 }
 
 static void EzloHintManager_Action2(EzloHintManager* this) {
+#ifdef PC_PORT
+    /* Reborn parity: when the toggle is on, suppress Ezlo hint
+     * triggers entirely. Vanilla TMC fires these from in-region
+     * managers; turning them off makes the early-game less hand-
+     * holdy. */
+    {
+        extern bool Port_Reborn_IsEnabled(int feat);
+        if (Port_Reborn_IsEnabled(6 /* REBORN_FEAT_SKIP_EZLO_TUTORIALS */)) {
+            return;
+        }
+    }
+#endif
     if (gPlayerState.flags & PL_NO_CAP)
         return;
     if (!CheckPlayerInRegion(this->x, this->y, this->rx, this->ry))

@@ -24,6 +24,10 @@ typedef enum {
     REBORN_FEAT_EQUIP_LR_BOOTS,        /* L + R → Pegasus Boots */
     REBORN_FEAT_EQUIP_LSELECT_OCARINA, /* L + SELECT → Ocarina */
     REBORN_FEAT_NO_EZLO_ON_RESUME,     /* skip Ezlo hint after file resume */
+    REBORN_FEAT_LIBRARY_REOPEN,        /* Library accessible after Four Sword */
+    REBORN_FEAT_FIGURINE_MIN_RAISED,   /* raise minimum figurine drop chance */
+    REBORN_FEAT_SKIP_EZLO_TUTORIALS,   /* skip most early-game Ezlo tutorials */
+    REBORN_FEAT_HERO_MODE,             /* damage doubled — toggleable Hero Mode */
     REBORN_FEAT_COUNT,
 } RebornFeature;
 
