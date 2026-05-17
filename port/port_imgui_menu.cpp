@@ -32,7 +32,9 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include <vector>
 
 /* The menu state machine lives in port_debug_menu.cpp. We don't include
@@ -728,94 +730,136 @@ static void DrawRibbonWarpTab(void) {
     ImGui::EndChild();
 }
 
-/* Randomizer tab — wraps Port_Randomizer_FindCLI / Port_Randomizer_RollSeed.
- *
- * The actual CRC compatibility check sits in the GPL-3 randomizer's logic
- * file (default.logic declares EU CRC32 0xE8637292). We can't pre-empt it
- * here without coupling tmc_pc to GPL — so we just call Roll and report
- * the CLI's own error message via toast. See libs/randomizer.md for the
- * USA-rejection rationale. */
+/* Randomizer tab. Uses the ROM tmc_pc itself is already running on as
+ * the source — no need for the user to keep a separate EU ROM around.
+ * Region detection inside Port_Randomizer_RollSeed picks the right
+ * logic file (USA → default_usa.logic + Patches_USA, EU → defaults). */
+extern "C" const char* Port_FindBaseRomPath(void);
+
 static char sRandoCliPath[1024] = {0};
-static char sRandoInputRom[1024] = {0};
-static char sRandoOutputRom[1024] = "./baserom_rando.gba";
-static char sRandoSpoiler[1024] = "./baserom_rando_spoiler.txt";
-static char sRandoSeedBuf[16] = "0";            /* 0 = let RollSeed pick */
-static char sRandoStatus[512] = {0};
+static char sRandoSeedBuf[16]   = "0";    /* 0 = let RollSeed pick */
+static char sRandoStatus[512]   = {0};
+static bool sRandoLastOk        = false;
+static char sRandoLastOutput[1024] = {0};
+
+/* Default output sits next to baserom.gba (same dir as tmc_pc) so it's
+ * trivial to swap in. The "Apply now" button does the swap + backup. */
+static std::string DefaultRolledRomPath(void) {
+    const char* src = Port_FindBaseRomPath();
+    if (!src) return "./baserom_rando.gba";
+    std::filesystem::path p(src);
+    return (p.parent_path() / "baserom_rando.gba").string();
+}
+static std::string DefaultSpoilerPath(void) {
+    const char* src = Port_FindBaseRomPath();
+    if (!src) return "./baserom_rando_spoiler.txt";
+    std::filesystem::path p(src);
+    return (p.parent_path() / "baserom_rando_spoiler.txt").string();
+}
 
 static void DrawRibbonRandomizerTab(void) {
-    /* Detect CLI lazily on first frame the tab is opened. The detect
-     * function is cheap (stat() probes) but we cache the result so a
-     * later install gets refreshed via the Re-detect button. */
+    /* Detect CLI lazily; the detect function is cheap (stat() probes)
+     * and we cache the path. A later install can refresh it via the
+     * "Re-detect" button. */
     if (sRandoCliPath[0] == '\0') {
         Port_Randomizer_FindCLI(sRandoCliPath, sizeof(sRandoCliPath));
     }
-    if (sRandoInputRom[0] == '\0') {
-        const char* env = std::getenv("TMC_RANDOMIZER_INPUT_ROM");
-        std::snprintf(sRandoInputRom, sizeof(sRandoInputRom),
-                      "%s", env && *env ? env : "./baserom_eu.gba");
+
+    /* Source ROM = whatever tmc_pc is currently using. No user input
+     * required — the same baserom.gba you launched with gets rolled. */
+    const char* src_rom = Port_FindBaseRomPath();
+    const char* region_label = "(unknown)";
+    char region[5] = {0};
+    if (src_rom) {
+        FILE* f = std::fopen(src_rom, "rb");
+        if (f) {
+            std::fseek(f, 0xAC, SEEK_SET);
+            (void)std::fread(region, 1, 4, f);
+            std::fclose(f);
+            if (std::strcmp(region, "BZME") == 0)       region_label = "USA (BZME)";
+            else if (std::strcmp(region, "BZMP") == 0)  region_label = "EU (BZMP)";
+            else if (std::strcmp(region, "BZMJ") == 0)  region_label = "JP (BZMJ) — not supported";
+            else                                        region_label = region;
+        }
     }
 
-    ImGui::TextWrapped("Roll a new randomized ROM. Requires an EU baserom "
-                       "(USA ROMs are rejected by the logic-file CRC check).");
+    ImGui::TextWrapped("Roll a new randomized version of the ROM that "
+                       "tmc_pc is currently running on. Works with USA "
+                       "or EU; no separate EU ROM download needed.");
     ImGui::Separator();
 
-    /* CLI status line */
+    /* Source / CLI status */
+    ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none — tmc_pc has no ROM loaded)");
+    ImGui::Text("Region:      %s", region_label);
     if (sRandoCliPath[0]) {
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
-                           "CLI: %s", sRandoCliPath);
+                           "Randomizer CLI: %s", sRandoCliPath);
     } else {
         ImGui::TextColored(ImVec4(0.95f, 0.45f, 0.4f, 1.0f),
-                           "CLI: not found — install .NET 8 SDK and "
-                           "`xmake build randomizer_cli`, or set TMC_RANDOMIZER_CLI.");
+                           "Randomizer CLI: not found — rebuild with .NET 8 SDK installed.");
     }
     ImGui::SameLine();
-    if (ImGui::SmallButton("Re-detect")) {
+    if (ImGui::SmallButton("Re-detect##rando")) {
         sRandoCliPath[0] = '\0';
         Port_Randomizer_FindCLI(sRandoCliPath, sizeof(sRandoCliPath));
     }
 
     ImGui::Spacing();
-    ImGui::InputText("Input ROM (EU)",  sRandoInputRom,  sizeof(sRandoInputRom));
-    ImGui::InputText("Output ROM",      sRandoOutputRom, sizeof(sRandoOutputRom));
-    ImGui::InputText("Spoiler log",     sRandoSpoiler,   sizeof(sRandoSpoiler));
     ImGui::InputText("Seed (0 = random)", sRandoSeedBuf, sizeof(sRandoSeedBuf),
                      ImGuiInputTextFlags_CharsDecimal);
 
     ImGui::Spacing();
-    const bool can_roll = sRandoCliPath[0] != '\0';
+    const bool can_roll = sRandoCliPath[0] != '\0' && src_rom != nullptr;
     if (!can_roll) ImGui::BeginDisabled();
     if (ImGui::Button("Roll new seed", ImVec2(180, 0))) {
         uint32_t seed = (uint32_t)std::strtoul(sRandoSeedBuf, nullptr, 10);
+        const std::string out_path     = DefaultRolledRomPath();
+        const std::string spoiler_path = DefaultSpoilerPath();
         char err[256] = {0};
         PortRandomizerStatus rc = Port_Randomizer_RollSeed(
-            sRandoInputRom, seed, sRandoOutputRom,
-            sRandoSpoiler[0] ? sRandoSpoiler : nullptr,
+            src_rom, seed, out_path.c_str(),
+            spoiler_path.c_str(),
             err, sizeof(err));
-        switch (rc) {
-            case PORT_RANDO_OK:
-                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
-                              "OK — saved %s", sRandoOutputRom);
-                break;
-            case PORT_RANDO_CLI_NOT_FOUND:
-                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
-                              "CLI not found: %s", err);
-                break;
-            case PORT_RANDO_INPUT_ROM_MISSING:
-                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
-                              "Input ROM missing: %s", err);
-                break;
-            case PORT_RANDO_OUTPUT_MISSING:
-                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
-                              "CLI said OK but no output ROM landed: %s", err);
-                break;
-            case PORT_RANDO_RUN_FAILED:
-            default:
-                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
-                              "Failed: %s", err);
-                break;
+        sRandoLastOk = (rc == PORT_RANDO_OK);
+        if (sRandoLastOk) {
+            std::snprintf(sRandoLastOutput, sizeof(sRandoLastOutput),
+                          "%s", out_path.c_str());
+            std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                          "Rolled! Saved %s\nSpoiler: %s",
+                          out_path.c_str(), spoiler_path.c_str());
+        } else {
+            sRandoLastOutput[0] = '\0';
+            std::snprintf(sRandoStatus, sizeof(sRandoStatus), "%s", err);
         }
     }
     if (!can_roll) ImGui::EndDisabled();
+
+    /* One-click apply: backs up the original baserom.gba (only once)
+     * to baserom_original.gba, then replaces it with the rolled ROM.
+     * The user just needs to restart tmc_pc to play the seed — much
+     * tidier than the previous "rename files manually" flow. */
+    if (sRandoLastOk && sRandoLastOutput[0] && src_rom) {
+        ImGui::SameLine();
+        if (ImGui::Button("Apply (replace ROM, restart needed)", ImVec2(280, 0))) {
+            std::error_code ec;
+            std::filesystem::path src(src_rom);
+            std::filesystem::path backup = src.parent_path() / "baserom_original.gba";
+            if (!std::filesystem::exists(backup, ec)) {
+                std::filesystem::copy_file(src, backup,
+                    std::filesystem::copy_options::overwrite_existing, ec);
+            }
+            std::filesystem::copy_file(sRandoLastOutput, src,
+                std::filesystem::copy_options::overwrite_existing, ec);
+            if (!ec) {
+                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                              "Applied. Restart tmc_pc to play this seed.\n"
+                              "(Original backed up to baserom_original.gba)");
+            } else {
+                std::snprintf(sRandoStatus, sizeof(sRandoStatus),
+                              "Apply failed: %s", ec.message().c_str());
+            }
+        }
+    }
 
     if (sRandoStatus[0]) {
         ImGui::Spacing();
