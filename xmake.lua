@@ -550,6 +550,8 @@ target("tmc_pc")
     -- In-process randomizer (port/rando/). Clean-room C++; pulls in
     -- item.h via the same include path as the rest of port/.
     add_files("port/rando/rando.cpp")
+    -- Issue #99 auto-repro harness (env-gated, no-op when off).
+    add_files("port/port_repro_mazaal.c")
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.

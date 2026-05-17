@@ -19,7 +19,20 @@
 
 typedef struct MazaalHeadEntity_ {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #99 fix: same #98 pattern as EyegoreEntity. On 64-bit PC,
+       Enemy::child is an 8-byte pointer (vs 4 on GBA), so the bytes
+       between Entity base and the Enemy::child slot are 4 more on PC.
+       Without the +4 pad, `unk_6d` aliases byte 5 of Enemy::child's
+       pointer value (which the framework writes when wiring up
+       super->child), corrupting Mazaal head state on every spawn —
+       which causes phase 2 / phase 3 to fail to re-initialise pillars
+       properly (issue #99). Pad so unk_6d / unk_74 / unk_78 land in
+       the Enemy filler regions the GBA code expects. */
+    u8 unused1[0x5 + 4];
+#else
     /*0x68*/ u8 unused1[5];
+#endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unused2[6];
     /*0x74*/ struct MazaalHeadEntity_* unk_74;

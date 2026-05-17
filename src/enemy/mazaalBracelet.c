@@ -18,6 +18,13 @@
 
 typedef struct MazaalBraceletEntity_ {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #99 fix: same #98 pattern. Pad 4 bytes after Entity base so the
+       unk_74 / unk_78 union pointers below land at PC 0xA0 / 0xA8
+       (= Enemy::field_0x74 / field_0x7c), matching the GBA layout the
+       C decomp assumes. */
+    u8 _pc_pad[4];
+#endif
     /*0x68*/ u8 unused1[12];
     union {
         /*0x74*/ struct MazaalBraceletEntity_* entity;
