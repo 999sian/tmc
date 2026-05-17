@@ -198,6 +198,8 @@ const char* Port_Save_GetActivePath(void);
 void        Port_Save_SetActivePath(const char* path);
 int         Port_Save_SaveAsProfile(const char* path);
 int         Port_Save_ListProfiles(char (*out)[64], int max);
+int         Port_Save_DeleteProfile(const char* path);
+int         Port_Save_RenameProfile(const char* oldPath, const char* newPath);
 void        Port_Config_SetActiveSaveProfile(const char* path);
 
 const char* Port_SoftSlots_GetSlotLabel(int slot);
@@ -411,6 +413,12 @@ static void DrawRibbonProfilesTab(void) {
     ImGui::Text("Active profile: %s", activeNow.c_str());
     ImGui::Separator();
 
+    /* Rename buffer keyed by index, so each row has its own inline
+     * editor that survives across frames while the user is typing. */
+    static char sRenameBuf[32][64] = {};
+    static int  sRenameRow = -1;
+    static int  sConfirmDeleteRow = -1;
+
     for (int i = 0; i < n; ++i) {
         ImGui::PushID(i);
         bool isActive = (std::string(names[i]) == activeNow);
@@ -430,6 +438,55 @@ static void DrawRibbonProfilesTab(void) {
                 Port_Config_SetActiveSaveProfile(names[i]);
                 Port_DebugMenu_ToastFromExternal("Profile activated — go to title to load");
             }
+            ImGui::SameLine();
+        }
+        /* Rename: clicking opens an inline text box on the next row.
+         * Disabled for the default tmc.sav since renaming it away
+         * would orphan fresh installs. */
+        const bool isDefault = (std::strcmp(names[i], "tmc.sav") == 0);
+        if (!isDefault) {
+            if (ImGui::Button("Rename")) {
+                sRenameRow = i;
+                std::strncpy(sRenameBuf[i], names[i], sizeof(sRenameBuf[i]) - 1);
+                sRenameBuf[i][sizeof(sRenameBuf[i]) - 1] = '\0';
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Delete")) sConfirmDeleteRow = i;
+        }
+        if (sRenameRow == i) {
+            ImGui::Indent(40);
+            ImGui::PushItemWidth(220);
+            ImGui::InputText("##rename", sRenameBuf[i], sizeof(sRenameBuf[i]));
+            ImGui::PopItemWidth();
+            ImGui::SameLine();
+            if (ImGui::Button("OK")) {
+                if (Port_Save_RenameProfile(names[i], sRenameBuf[i])) {
+                    Port_DebugMenu_ToastFromExternal("Profile renamed");
+                } else {
+                    Port_DebugMenu_ToastFromExternal("Rename refused (clash / bad name / default)");
+                }
+                sRenameRow = -1;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("X")) sRenameRow = -1;
+            ImGui::Unindent(40);
+        }
+        if (sConfirmDeleteRow == i) {
+            ImGui::Indent(40);
+            ImGui::TextDisabled("Delete %s? This cannot be undone.", names[i]);
+            ImGui::SameLine();
+            if (ImGui::Button("Confirm delete")) {
+                if (Port_Save_DeleteProfile(names[i])) {
+                    Port_DebugMenu_ToastFromExternal("Profile deleted");
+                } else {
+                    Port_DebugMenu_ToastFromExternal("Delete refused (active / bad name)");
+                }
+                sConfirmDeleteRow = -1;
+                sRenameRow = -1;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) sConfirmDeleteRow = -1;
+            ImGui::Unindent(40);
         }
         ImGui::PopID();
     }
