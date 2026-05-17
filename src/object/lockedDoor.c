@@ -18,9 +18,6 @@
 #include "vram.h"
 #include "player.h"
 #include "color.h"
-#ifdef PC_PORT
-#include "port/port_generic_entity.h"
-#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -37,13 +34,13 @@ typedef struct {
 } LockedDoorEntity;
 
 #ifdef PC_PORT
-#define LD_UNK70(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
-#define LD_UNK72(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.HI)
-#define LD_UNK74(this) (GE_FIELD(&((this)->base), field_0x74)->HWORD)
-#define LD_UNK76(this) (GE_FIELD(&((this)->base), field_0x76)->HWORD)
-#define LD_UNK7E(this) (GE_FIELD(&((this)->base), field_0x7c)->BYTES.byte2)
-#define LD_FLAGS(this) (GE_FIELD(&((this)->base), cutsceneBeh)->HWORD)
-#define LD_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#define LD_UNK70(this) ((this)->unk_70)
+#define LD_UNK72(this) ((this)->unk_72)
+#define LD_UNK74(this) ((this)->unk_74)
+#define LD_UNK76(this) ((this)->unk_76)
+#define LD_UNK7E(this) ((this)->unk_7e)
+#define LD_FLAGS(this) ((this)->flags)
+#define LD_FLAG(this) ((this)->flag)
 #else
 #define LD_UNK70(this) ((this)->unk_70)
 #define LD_UNK72(this) ((this)->unk_72)
@@ -68,7 +65,7 @@ void sub_08083638(LockedDoorEntity* this);
 void sub_08083658(LockedDoorEntity* this);
 void sub_080836A0(LockedDoorEntity* this);
 void sub_080836DC(Entity* this, u32, u32);
-u32 sub_080837B0(LockedDoorEntity* this);
+bool32 sub_080837B0(LockedDoorEntity* this);
 void sub_08083814(LockedDoorEntity* this, u32);
 
 void (*const LockedDoor_Actions[])(LockedDoorEntity*) = {
@@ -328,7 +325,7 @@ u32 sub_08083734(Entity* this, u32 unk0) {
     return 0;
 }
 
-u32 sub_080837B0(LockedDoorEntity* this) {
+bool32 sub_080837B0(LockedDoorEntity* this) {
     u32 tmp;
     u32 tmp2 = gRoomControls.area;
     if (tmp2 < 0x40) {
@@ -353,7 +350,7 @@ u32 sub_080837B0(LockedDoorEntity* this) {
             ChangeObjPalette(super, 1);
         }
     }
-    LoadFixedGFX(super, tmp);
+    return LoadFixedGFX(super, tmp);
 }
 
 void sub_08083814(LockedDoorEntity* this, u32 unk0) {

@@ -1,9 +1,12 @@
 #include "port_runtime_config.h"
+#include "port_touch_controls.h"
 
 #include <SDL3/SDL.h>
 #include <array>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -64,6 +67,9 @@ std::string sActiveSaveProfile = "tmc.sav";
  * back to a save point first. */
 bool sAutosaveEnabled = true;
 u32  sAutosaveIntervalMs = 60000;
+/* Touch input scheme from matheo's launcher integration — kept for
+ * Android compatibility. */
+PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -80,6 +86,8 @@ std::vector<SDL_Gamepad*> sPads;
 std::filesystem::path sConfigPath = "config.json";
 nlohmann::json sConfigJson;
 const std::array<u32, 9> kFpsPresets = { 0, 30, 60, 75, 90, 120, 144, 150, 240 };
+/* Default cap when config omits frame_time_ns (1e9 ns / 60 Hz). */
+constexpr u64 kDefaultFrameTimeNs = 1000000000ULL / 60;
 
 nlohmann::json DefaultsJson(void) {
     nlohmann::json j = {
@@ -91,6 +99,7 @@ nlohmann::json DefaultsJson(void) {
         { "active_save_profile", "tmc.sav" },
         { "autosave_enabled", true },
         { "autosave_interval_ms", 60000 },
+        { "touch_scheme", "joystick" },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -144,6 +153,222 @@ u64 FrameTimeForFps(u32 fps) {
     }
     return 1000000000ULL / fps;
 }
+
+#ifdef launcher
+static std::string SerializeBindToken(const Bind& b) {
+    char buf[96];
+    if (b.key != SDLK_UNKNOWN) {
+        std::snprintf(buf, sizeof(buf), "SDLK:0x%08x", static_cast<unsigned>(b.key));
+        return buf;
+    }
+    if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
+        std::snprintf(buf, sizeof(buf), "SDL_GAMEPAD:0x%08x", static_cast<unsigned>(b.pad));
+        return buf;
+    }
+    if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
+        std::snprintf(buf, sizeof(buf), "SDL_AXIS:0x%08x", static_cast<unsigned>(b.axis));
+        return buf;
+    }
+    return {};
+}
+
+static void WriteBindingsJsonFromState(void) {
+    for (const auto& d : kDefaults) {
+        nlohmann::json arr = nlohmann::json::array();
+        for (const Bind& b : sBinds[d.input]) {
+            std::string tok = SerializeBindToken(b);
+            if (!tok.empty()) {
+                arr.push_back(std::move(tok));
+            }
+        }
+        sConfigJson["bindings"][d.name] = std::move(arr);
+    }
+    SaveConfig();
+}
+
+extern "C" void Port_Config_SetPortSettingsMenuEnabled(bool enabled) {
+    sPortSettingsMenuEnabled = enabled;
+    sConfigJson["port_settings_menu"] = enabled;
+    SaveConfig();
+}
+
+extern "C" const char* Port_Config_InputUiLabel(PortInput input) {
+    static const char* const kLabels[PORT_INPUT_COUNT] = {
+        "A (jump / talk)",
+        "B (attack / cancel)",
+        "Select",
+        "Start",
+        "D-pad Right",
+        "D-pad Left",
+        "D-pad Up",
+        "D-pad Down",
+        "R",
+        "L",
+        "Soft slot X",
+        "Soft slot Y",
+        "Soft slot L2 / LT",
+        "Soft slot R2 / RT",
+    };
+    if (input < 0 || input >= PORT_INPUT_COUNT) {
+        return "?";
+    }
+    return kLabels[input];
+}
+
+extern "C" void Port_Config_FormatBindingsLine(PortInput input, char* out, size_t outCap) {
+    if (!out || outCap == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (input < 0 || input >= PORT_INPUT_COUNT) {
+        return;
+    }
+    size_t pos = 0;
+    bool first = true;
+    for (const Bind& b : sBinds[input]) {
+        char piece[112];
+        piece[0] = '\0';
+        if (b.key != SDLK_UNKNOWN) {
+            const char* nm = SDL_GetKeyName(b.key);
+            if (nm && nm[0] != '\0') {
+                std::snprintf(piece, sizeof(piece), "%s", nm);
+            } else {
+                std::snprintf(piece, sizeof(piece), "key 0x%x", static_cast<unsigned>(b.key));
+            }
+        } else if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
+            const char* nm = SDL_GetGamepadStringForButton(b.pad);
+            if (nm && nm[0] != '\0') {
+                std::snprintf(piece, sizeof(piece), "%s", nm);
+            } else {
+                std::snprintf(piece, sizeof(piece), "pad btn %u", static_cast<unsigned>(b.pad));
+            }
+        } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
+            const char* nm = SDL_GetGamepadStringForAxis(b.axis);
+            if (nm && nm[0] != '\0') {
+                std::snprintf(piece, sizeof(piece), "%s", nm);
+            } else {
+                std::snprintf(piece, sizeof(piece), "axis %u", static_cast<unsigned>(b.axis));
+            }
+        }
+        if (piece[0] == '\0') {
+            continue;
+        }
+        if (!first) {
+            if (pos + 2 < outCap) {
+                out[pos++] = ',';
+                out[pos++] = ' ';
+                out[pos] = '\0';
+            }
+        }
+        first = false;
+        const size_t plen = std::strlen(piece);
+        if (pos + plen >= outCap) {
+            break;
+        }
+        std::memcpy(out + pos, piece, plen);
+        pos += plen;
+        out[pos] = '\0';
+    }
+    if (out[0] == '\0' && outCap > 1) {
+        std::snprintf(out, outCap, "(none)");
+    }
+}
+
+extern "C" void Port_Config_SetKeyboardBindExclusive(PortInput input, int sdl_keycode) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) {
+        return;
+    }
+    const SDL_Keycode nk = static_cast<SDL_Keycode>(sdl_keycode);
+    std::vector<Bind> kept;
+    kept.reserve(sBinds[input].size());
+    for (const Bind& b : sBinds[input]) {
+        if (b.pad != SDL_GAMEPAD_BUTTON_INVALID || b.axis != SDL_GAMEPAD_AXIS_INVALID) {
+            kept.push_back(b);
+        }
+    }
+    sBinds[input] = std::move(kept);
+    if (nk != SDLK_UNKNOWN) {
+        Bind kb;
+        kb.key = nk;
+        sBinds[input].insert(sBinds[input].begin(), kb);
+    }
+    WriteBindingsJsonFromState();
+}
+
+extern "C" void Port_Config_FormatGamepadBindingsLine(PortInput input, char* out, size_t outCap) {
+    if (!out || outCap == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (input < 0 || input >= PORT_INPUT_COUNT) {
+        return;
+    }
+    size_t pos = 0;
+    bool first = true;
+    for (const Bind& b : sBinds[input]) {
+        if (b.key != SDLK_UNKNOWN) continue;
+        char piece[112];
+        piece[0] = '\0';
+        if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
+            const char* nm = SDL_GetGamepadStringForButton(b.pad);
+            if (nm && nm[0] != '\0') {
+                std::snprintf(piece, sizeof(piece), "%s", nm);
+            } else {
+                std::snprintf(piece, sizeof(piece), "pad btn %u", static_cast<unsigned>(b.pad));
+            }
+        } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
+            const char* nm = SDL_GetGamepadStringForAxis(b.axis);
+            if (nm && nm[0] != '\0') {
+                std::snprintf(piece, sizeof(piece), "%s", nm);
+            } else {
+                std::snprintf(piece, sizeof(piece), "axis %u", static_cast<unsigned>(b.axis));
+            }
+        }
+        if (piece[0] == '\0') {
+            continue;
+        }
+        if (!first) {
+            if (pos + 2 < outCap) {
+                out[pos++] = ',';
+                out[pos++] = ' ';
+                out[pos] = '\0';
+            }
+        }
+        first = false;
+        const size_t plen = std::strlen(piece);
+        if (pos + plen >= outCap) {
+            break;
+        }
+        std::memcpy(out + pos, piece, plen);
+        pos += plen;
+        out[pos] = '\0';
+    }
+    if (out[0] == '\0' && outCap > 1) {
+        std::snprintf(out, outCap, "(none)");
+    }
+}
+
+extern "C" void Port_Config_SetGamepadBindExclusive(PortInput input, int sdl_gamepad_button) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) {
+        return;
+    }
+    const SDL_GamepadButton nb = static_cast<SDL_GamepadButton>(sdl_gamepad_button);
+    std::vector<Bind> kept;
+    kept.reserve(sBinds[input].size());
+    for (const Bind& b : sBinds[input]) {
+        if (b.pad == SDL_GAMEPAD_BUTTON_INVALID) {
+            kept.push_back(b);
+        }
+    }
+    sBinds[input] = std::move(kept);
+    if (nb != SDL_GAMEPAD_BUTTON_INVALID && nb >= 0 && nb < SDL_GAMEPAD_BUTTON_COUNT) {
+        Bind pb;
+        pb.pad = nb;
+        sBinds[input].insert(sBinds[input].begin(), pb);
+    }
+    WriteBindingsJsonFromState();
+}
+#endif
 
 } 
 
@@ -203,6 +428,13 @@ extern "C" void Port_Config_Load(const char* path) {
     sActiveSaveProfile = j.value("active_save_profile", std::string("tmc.sav"));
     sAutosaveEnabled = j.value("autosave_enabled", true);
     sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u);
+    {
+        std::string ts = j.value("touch_scheme", std::string("joystick"));
+        for (char& c : ts) {
+            if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+        }
+        sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
+    }
 
     for (auto& v : sBinds) {
         v.clear();
@@ -318,6 +550,21 @@ extern "C" void Port_Config_SetTargetFps(u32 fps) {
     SaveConfig();
 }
 
+extern "C" PortTouchScheme Port_Config_TouchScheme(void) {
+    return sTouchScheme;
+}
+
+extern "C" void Port_Config_SetTouchScheme(PortTouchScheme scheme) {
+    sTouchScheme = (scheme == PORT_TOUCH_SCHEME_DPAD) ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
+    sConfigJson["touch_scheme"] = (sTouchScheme == PORT_TOUCH_SCHEME_DPAD) ? "dpad" : "joystick";
+    SaveConfig();
+}
+
+extern "C" void Port_Config_CycleTouchScheme(int /*direction*/) {
+    Port_Config_SetTouchScheme(sTouchScheme == PORT_TOUCH_SCHEME_DPAD ? PORT_TOUCH_SCHEME_JOYSTICK
+                                                                      : PORT_TOUCH_SCHEME_DPAD);
+}
+
 extern "C" void Port_Config_CycleTargetFps(int direction) {
     const u32 current = Port_Config_TargetFps();
     size_t index = 0;
@@ -347,6 +594,7 @@ extern "C" void Port_Config_CycleTargetFps(int direction) {
  * in (or recognised by SDL) AFTER startup still gets picked up without
  * needing the GAMEPAD_ADDED event to flow through the poll loop. */
 static void Port_Config_RescanGamepads(bool verbose) {
+    const bool hadPads = !sPads.empty();
     int count = 0;
     SDL_JoystickID* ids = SDL_GetGamepads(&count);
     if (verbose) {
@@ -354,6 +602,11 @@ static void Port_Config_RescanGamepads(bool verbose) {
     }
     for (int i = 0; i < count; i++) {
         OpenGamepad(ids[i]);
+    }
+    if (!hadPads && !sPads.empty()) {
+        Port_TouchControls_SetGamepadAvailable(true);
+    } else if (hadPads && sPads.empty()) {
+        Port_TouchControls_SetGamepadAvailable(false);
     }
     SDL_free(ids);
 }
@@ -415,6 +668,11 @@ static void PersistBinds(PortInput input) {
 }
 
 extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
+    /* Touch-controls dispatch first so finger / virtual-pad events on
+     * Android route to the touch handler before the keyboard / pad
+     * paths below see them. From matheo's launcher integration. */
+    Port_TouchControls_HandleEvent(e);
+
     /* Rebind capture: when the user's pressed an action-edit button in
      * the ImGui Controls tab, the next press of any key / gamepad
      * button / axis triggers becomes that action's new binding. Esc /
@@ -454,6 +712,7 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
         OpenGamepad(e->gdevice.which);
     } else if (e->type == SDL_EVENT_GAMEPAD_REMOVED || e->type == SDL_EVENT_JOYSTICK_REMOVED) {
         CloseGamepad(e->gdevice.which);
+        Port_TouchControls_SetGamepadAvailable(!sPads.empty());
     } else if (e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) {
         /* Stamp every PortInput whose binding includes this key as
          * "pressed this frame" so the engine sees the press even if
@@ -467,6 +726,7 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
             }
         }
     } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+        Port_TouchControls_NotifyGamepadUsed();
         for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
             for (const Bind& b : sBinds[i]) {
                 if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT &&
@@ -478,6 +738,7 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
         }
     } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
                e->gaxis.value > kAxisThreshold) {
+        Port_TouchControls_NotifyGamepadUsed();
         for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
             for (const Bind& b : sBinds[i]) {
                 if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
@@ -495,6 +756,10 @@ extern "C" void Port_Config_ClearInputEdges(void) {
 }
 
 extern "C" bool Port_Config_InputPressed(PortInput input) {
+    if (Port_TouchControls_InputPressed(input)) {
+        return true;
+    }
+
     /* Edge cache — set by Port_Config_HandleEvent on KEY_DOWN /
      * GAMEPAD_BUTTON_DOWN events. Lets a sub-frame tap (press+release
      * entirely between two polls) still register as held for one game
@@ -522,10 +787,12 @@ extern "C" bool Port_Config_InputPressed(PortInput input) {
         }
         for (SDL_Gamepad* pad : sPads) {
             if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT && SDL_GetGamepadButton(pad, b.pad)) {
+                Port_TouchControls_NotifyGamepadUsed();
                 return true;
             }
             if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
                 SDL_GetGamepadAxis(pad, b.axis) > kAxisThreshold) {
+                Port_TouchControls_NotifyGamepadUsed();
                 return true;
             }
         }

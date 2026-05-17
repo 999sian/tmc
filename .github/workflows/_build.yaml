@@ -78,10 +78,13 @@ jobs:
       matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
       - name: Checkout source
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: actions/checkout@v4
         with:
           submodules: false
+          clean: false
       - name: Checkout submodules
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         env:
           SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
@@ -95,7 +98,7 @@ jobs:
                 submodule sync --recursive
             git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
                 -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
-                submodule update --init --recursive || true
+                submodule update --init --recursive --depth 1 || true
           else
             # No token (forks): try a plain init so any public submodule
             # still gets fetched. Each submodule is initialised
@@ -107,7 +110,7 @@ jobs:
             git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | \
               awk '{print $2}' | while read -r p; do
                 echo "::group::submodule $p"
-                git submodule update --init --recursive -- "$p" || \
+                git submodule update --init --recursive --depth 1 -- "$p" || \
                   echo "::warning::failed to fetch submodule $p — continuing"
                 echo "::endgroup::"
               done
@@ -120,7 +123,7 @@ jobs:
           fi
 
       - name: Install Linux dependencies
-        if: matrix.os_name == 'linux'
+        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'linux' }}
         run: |
           sudo apt-get update
           # libasound2-dev / libpulse-dev / libpipewire-0.3-dev: needed
@@ -149,7 +152,7 @@ jobs:
         run: brew install fmt nlohmann-json libomp
 
       - name: Install MinGW Windows
-        if: matrix.os_name == 'windows'
+        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'windows' }}
         shell: powershell
         run: |
           choco install mingw -y --no-progress
@@ -203,6 +206,7 @@ jobs:
           g++ --version
 
       - name: Setup xmake
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
@@ -231,8 +235,14 @@ jobs:
         if: steps.probe_assets.outputs.have_assets == 'true'
         shell: bash
         run: |
-          cp _assets/baserom.gba ./baserom.gba
-          cp _assets/baserom_eu.gba ./baserom_eu.gba
+          if [ -f "_assets/baserom.gba" ]; then
+            cp _assets/baserom.gba ./baserom.gba
+          fi
+          if [ -f "_assets/baserom_eu.gba" ]; then
+            cp _assets/baserom_eu.gba ./baserom_eu.gba
+          fi
+          test -f ./baserom.gba
+          test -f ./baserom_eu.gba
 
       - name: Build selected region (non-interactive, Linux)
         if: matrix.os_name == 'linux' && steps.probe_assets.outputs.have_assets == 'true'
@@ -378,28 +388,25 @@ jobs:
           echo "OK: SDL3 has alsa + pulseaudio + pipewire compiled in."
 
       - name: Prepare artifact payload
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         run: |
           BIN_PATH="build/pc/${{ matrix.exe_name }}"
-          EXTRACTOR_PATH="build/pc/${{ matrix.extractor_name }}"
           test -f "$BIN_PATH"
-          test -f "$EXTRACTOR_PATH"
 
           OUTDIR="artifact"
           mkdir -p "$OUTDIR"
           cp "$BIN_PATH" "$OUTDIR/${{ matrix.exe_name }}"
-          cp "$EXTRACTOR_PATH" "$OUTDIR/${{ matrix.extractor_name }}"
-          if [ -f "assets/sounds.json" ]; then
-            cp assets/sounds.json "$OUTDIR/sounds.json"
-          fi
 
       - name: Create archive
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         run: |
           # Archive name embeds os_name + arch so macos-arm64 and
           # macos-x86_64 (and any future arm64-Linux / arm64-Windows)
           # don't collide on upload. Falls back to "x86_64" when arch is
-          # unset for compatibility with older callers.
+          # unset for compatibility with older callers. tar is available
+          # on every hosted runner (Linux/macOS/Windows since 2019).
           ARCH="${{ matrix.arch }}"
           [ -z "$ARCH" ] && ARCH="x86_64"
           ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${ARCH}-${{ inputs.version_label }}"
@@ -407,6 +414,7 @@ jobs:
           echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload artifact
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.archive_name }}

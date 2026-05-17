@@ -13,6 +13,9 @@
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -22,6 +25,16 @@ typedef struct {
     /*0x84*/ u16 flag1;
     /*0x86*/ u16 flag2;
 } LightableSwitchEntity;
+
+#ifdef PC_PORT
+#define LS_UNK74(this) (GE_FIELD(&((this)->base), field_0x74)->HWORD)
+#define LS_FLAG1(this) (GE_FIELD(&((this)->base), cutsceneBeh)->HWORD)
+#define LS_FLAG2(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define LS_UNK74(this) ((this)->unk_74)
+#define LS_FLAG1(this) ((this)->flag1)
+#define LS_FLAG2(this) ((this)->flag2)
+#endif
 
 static void sub_0809EB30(LightableSwitchEntity* this);
 static void sub_0809EAD8(LightableSwitchEntity* this);
@@ -69,10 +82,10 @@ void LightableSwitch_Type0_Init(LightableSwitchEntity* this) {
 void LightableSwitch_Type0_Action1(LightableSwitchEntity* this) {
 
     if ((super->contactFlags & CONTACT_NOW) != 0) {
-        if (CheckFlags(this->flag2) != 0) {
-            ClearFlag(this->flag2);
+        if (CheckFlags(LS_FLAG2(this)) != 0) {
+            ClearFlag(LS_FLAG2(this));
         } else {
-            SetFlag(this->flag2);
+            SetFlag(LS_FLAG2(this));
         }
         EnqueueSFX(SFX_110);
     }
@@ -82,7 +95,7 @@ void LightableSwitch_Type0_Action1(LightableSwitchEntity* this) {
 static void sub_0809EABC(LightableSwitchEntity* this) {
     bool32 anySet = 0;
 
-    if (CheckFlags(this->flag2)) {
+    if (CheckFlags(LS_FLAG2(this))) {
         anySet = 1;
     }
     if (super->frameIndex != anySet) {
@@ -97,7 +110,7 @@ static void sub_0809EAD8(LightableSwitchEntity* this) {
     if (super->type2 != 0) {
 
         super->child = GetCurrentRoomProperty(super->type2);
-        UpdateRailMovement(super, (u16**)&super->child, &this->unk_74);
+        UpdateRailMovement(super, (u16**)&super->child, &LS_UNK74(this));
 
     } else {
         SetTile(SPECIAL_TILE_80, COORD_TO_TILE(super), super->collisionLayer);
@@ -112,7 +125,7 @@ static void sub_0809EB30(LightableSwitchEntity* this) {
         if ((super->direction & 0x80) == 0) {
             LinearMoveUpdate(super);
         }
-        puVar2 = &this->unk_74;
+        puVar2 = &LS_UNK74(this);
         if (!--*puVar2) {
             UpdateRailMovement(super, (u16**)&super->child, puVar2);
         }
@@ -141,7 +154,7 @@ void LightableSwitch_Type1_Init(LightableSwitchEntity* this) {
     super->hitbox = (Hitbox*)&gHitbox_0;
     sub_0809EAD8(this);
     UpdateSpriteForCollisionLayer(super);
-    if (CheckFlags(this->flag1)) {
+    if (CheckFlags(LS_FLAG1(this))) {
         super->action = 3;
         super->frameIndex = 2;
     }
@@ -152,21 +165,21 @@ void LightableSwitch_Type1_Action1(LightableSwitchEntity* this) {
         super->action = 2;
         super->timer = 16;
         super->frameIndex = 2;
-        SetFlag(this->flag2);
+        SetFlag(LS_FLAG2(this));
         EnqueueSFX(SFX_110);
     }
 }
 
 void LightableSwitch_Type1_Action2(LightableSwitchEntity* this) {
 
-    if (CheckFlags(this->flag1)) {
+    if (CheckFlags(LS_FLAG1(this))) {
         super->action = 3;
 
     } else {
         if (--super->timer == 0) {
             super->action = 1;
             super->frameIndex = 3;
-            ClearFlag(this->flag2);
+            ClearFlag(LS_FLAG2(this));
             EnqueueSFX(SFX_110);
         }
     }

@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <SDL3/SDL.h>
+#include "port_launcher_bootstrap.h"
 
 /*
  * Region-specific asset offset header is included based on detected ROM.
@@ -152,23 +153,119 @@ static void Port_InitAudio(void) {
  */
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
+#include <stdint.h>
 #include <windows.h>
+
+static int s_gba_va_reserve_done;
+
+static uintptr_t Port_AlignDownU(uintptr_t x, DWORD gran) {
+    return (x / (uintptr_t)gran) * (uintptr_t)gran;
+}
+
+static void Port_ReserveGbaAddressSpace(void);
+
+#if defined(__GNUC__)
+__attribute__((constructor(101)))
+#endif
+static void Port_ReserveGbaAddressSpaceEarly(void) {
+    Port_ReserveGbaAddressSpace();
+}
+
 static void Port_ReserveGbaAddressSpace(void) {
-    static const struct { uintptr_t base; size_t size; } regions[] = {
-        { 0x02000000u, 0x08000000u }, /* covers EWRAM, IWRAM, IO, palette, VRAM, OAM, ROM mirror */
-    };
-    for (size_t i = 0; i < sizeof(regions)/sizeof(regions[0]); ++i) {
-        LPVOID p = VirtualAlloc((LPVOID)regions[i].base, regions[i].size,
-                                MEM_RESERVE, PAGE_NOACCESS);
-        if (p == NULL) {
-            fprintf(stderr, "WARN: Could not reserve GBA address window 0x%zx-0x%zx; "
-                            "DmaCopy may misbehave.\n",
-                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
-        } else {
-            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n",
-                    (size_t)regions[i].base, (size_t)(regions[i].base + regions[i].size));
-        }
+    const uintptr_t range_lo = 0x02000000u;
+    const uintptr_t range_hi = 0x0A000000u;
+    const size_t want_bytes = (size_t)(range_hi - range_lo);
+
+    if (s_gba_va_reserve_done) {
+        return;
     }
+
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    const DWORD page = si.dwPageSize ? si.dwPageSize : 4096u;
+
+    LPVOID whole = VirtualAlloc((LPVOID)range_lo, (SIZE_T)want_bytes, MEM_RESERVE, PAGE_NOACCESS);
+    if (whole != NULL) {
+        if (getenv("TMC_VERBOSE_GBA_VA")) {
+            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n",
+                    (size_t)range_lo, (size_t)range_hi);
+        }
+        s_gba_va_reserve_done = 1;
+        return;
+    }
+
+    fprintf(stderr,
+            "WARN: Single-block GBA VA reserve failed (err=%lu); filling window by sub-regions.\n",
+            (unsigned long)GetLastError());
+
+    size_t reserved = 0;
+    uintptr_t q = range_lo;
+    while (q < range_hi) {
+        MEMORY_BASIC_INFORMATION mbi;
+        if (VirtualQuery((LPCVOID)q, &mbi, sizeof(mbi)) == 0) {
+            fprintf(stderr, "WARN: VirtualQuery stopped at 0x%zx (err=%lu).\n", (size_t)q,
+                    (unsigned long)GetLastError());
+            break;
+        }
+
+        const uintptr_t reg_base = (uintptr_t)mbi.BaseAddress;
+        const uintptr_t reg_end = reg_base + (uintptr_t)mbi.RegionSize;
+
+        if (q < reg_base) {
+            q = reg_base;
+            continue;
+        }
+
+        if (mbi.State != MEM_FREE) {
+            q = reg_end;
+            continue;
+        }
+
+        const uintptr_t lo_in = reg_base > range_lo ? reg_base : range_lo;
+        const uintptr_t hi_in = reg_end < range_hi ? reg_end : range_hi;
+        if (lo_in < hi_in) {
+            uintptr_t u = Port_AlignDownU(lo_in, page);
+            if (u < lo_in) {
+                u += (uintptr_t)page;
+            }
+            while (u < hi_in) {
+                uintptr_t next = u + (uintptr_t)page;
+                if (next > hi_in) {
+                    next = hi_in;
+                }
+                if (u >= lo_in) {
+                    const SIZE_T sz = (SIZE_T)(next - u);
+                    if (sz > 0 && VirtualAlloc((LPVOID)u, sz, MEM_RESERVE, PAGE_NOACCESS) != NULL) {
+                        reserved += (size_t)sz;
+                    }
+                }
+                if (next <= u) {
+                    break;
+                }
+                u = next;
+            }
+        }
+
+        q = reg_end;
+    }
+
+    if (reserved + (size_t)page >= want_bytes) {
+        if (getenv("TMC_VERBOSE_GBA_VA")) {
+            fprintf(stderr,
+                    "Reserved GBA address window 0x%zx-0x%zx (%zu / %zu bytes, sub-regions; heap can't land here).\n",
+                    (size_t)range_lo, (size_t)range_hi, reserved, want_bytes);
+        }
+    } else if (reserved > 0u) {
+        fprintf(stderr,
+                "WARN: Partial GBA VA reserve %zu / %zu bytes; heap may still use gaps — DmaCopy risk remains.\n",
+                reserved, want_bytes);
+    } else {
+        fprintf(stderr,
+                "WARN: Could not reserve GBA address window 0x%zx-0x%zx; DmaCopy may misbehave.\n",
+                (size_t)range_lo, (size_t)range_hi);
+    }
+
+    s_gba_va_reserve_done = 1;
 }
 #else
 static void Port_ReserveGbaAddressSpace(void) { /* not needed on Linux/macOS */ }
@@ -316,6 +413,14 @@ int main(int argc, char* argv[]) {
     SDL_ShowWindow(window);
     SDL_RaiseWindow(window);
     SDL_SyncWindow(window);
+
+#ifdef launcher
+    if (!Port_RunBootstrapLauncher(window)) {
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return 0;
+    }
+#endif
 
     /* Paint a "LOADING" splash IMMEDIATELY so the window never
      * shows a blank black rectangle. Without this, ROM load + asset

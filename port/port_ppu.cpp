@@ -4,7 +4,11 @@
 #include "port_upscale.h"
 #include "port_runtime_config.h"
 #include "port_filter.h"
+#include "port_touch_controls.h"
 
+#ifdef launcher
+#include "tmc_launcher.h"
+#endif
 
 #include <cpu/mode1.h>
 #include <virtuappu.h>
@@ -19,7 +23,7 @@
  * doesn't compile as C++. Treat the symbol as opaque bytes and read the
  * task field at known offset 2 (interruptFlag, sleepStatus, task —
  * include/main.h). C linkage matches the engine's Main gMain. */
-extern "C" uint8_t gMainOpaque[] asm ("gMain");
+extern "C" uint8_t gMain[]; // fix for MSVC (UWP PORT)
 
 enum class RenderBackend {
     None,
@@ -52,6 +56,23 @@ static int sScaledTextureScale = 0;
 static uint32_t* sScaledBuf = nullptr;
 static int sScaledBufScale = 0;
 static SDL_Window* sWindow = nullptr;
+#ifdef launcher
+static SDL_Window* sBootstrapWindow = nullptr;
+#endif
+
+static SDL_Window* Port_PPU_ActiveWindow(void) {
+#ifdef launcher
+    return sWindow ? sWindow : sBootstrapWindow;
+#else
+    return sWindow;
+#endif
+}
+
+#ifdef launcher
+extern "C" void Port_SetBootstrapWindow(SDL_Window* window) {
+    sBootstrapWindow = window;
+}
+#endif
 static SDL_Surface* sFrameSurface = nullptr;
 static PresentMode sPresentMode = PresentMode::NearestRaw;
 static PortFilterType sFilter = PORT_FILTER_NONE;
@@ -115,6 +136,29 @@ static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* out
     *outY = (h - rh) / 2;
     *outW = rw;
     *outH = rh;
+}
+
+static void Port_PPU_QueryOutputSize(int* outW, int* outH) {
+    int w = 0;
+    int h = 0;
+    if (sRenderer) {
+        SDL_GetCurrentRenderOutputSize(sRenderer, &w, &h);
+    }
+    if (w > 0 && h > 0) {
+        *outW = w;
+        *outH = h;
+        return;
+    }
+    if (sWindow) {
+        SDL_GetWindowSize(sWindow, &w, &h);
+    }
+    if (w > 0 && h > 0) {
+        *outW = w;
+        *outH = h;
+        return;
+    }
+    *outW = 960;
+    *outH = 540;
 }
 
 /* Build (or reuse) sScaledBuf at scale S and S*S-replicate the 240x160
@@ -229,6 +273,9 @@ extern "C" bool Port_PPU_VSyncEnabled(void) {
 
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
+#ifdef launcher
+    sBootstrapWindow = nullptr;
+#endif
     Port_PPU_LoadConfig();
 
     /* Reuse the renderer the bootstrap progress UI created (if any)
@@ -242,6 +289,10 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     sRenderer = SDL_GetRenderer(window);
     if (!sRenderer) {
         sRenderer = SDL_CreateRenderer(window, nullptr);
+    }
+    if (sRenderer) {
+        SDL_SetRenderTarget(sRenderer, nullptr);
+        SDL_SetRenderClipRect(sRenderer, nullptr);
     }
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
@@ -276,8 +327,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         virtuappu_mode1_bind_gba_memory(&memory);
     }
 
-    /* HBlank-DMA simulation: VirtuaPPU calls this before each scanline. */
-    virtuappu_mode1_pre_line_callback = port_hdma_step_line;
+    virtuappu_mode1_pre_line_callback = nullptr;
 
     virtuappu_registers.frame_width = MODE1_GBA_WIDTH;
     virtuappu_registers.mode = 1;
@@ -346,6 +396,12 @@ extern "C" void Port_PPU_PresentFrame(void) {
             break;
     }
 
+    /* HBlank-DMA simulation: only enable the scanline callback while a
+     * channel is active. Affine BG rendering treats BG2X/BG2Y differently
+     * when HDMA has already supplied per-line reference points. */
+    virtuappu_mode1_pre_line_callback =
+        port_hdma_has_active_channels() ? port_hdma_step_line : nullptr;
+
     virtuappu_render_frame();
 
     /* Widescreen-spike post-process: on screens where the engine doesn't
@@ -376,12 +432,13 @@ extern "C" void Port_PPU_PresentFrame(void) {
             }
         }
     }
-    (void)gMainOpaque;
+    (void)gMain;
 
     if (sBackend == RenderBackend::Renderer) {
         int outW = 0;
         int outH = 0;
-        SDL_GetCurrentRenderOutputSize(sRenderer, &outW, &outH);
+        Port_PPU_QueryOutputSize(&outW, &outH);
+        Port_TouchControls_NotifyRenderSize(outW, outH);
         int x;
         int y;
         int w;
@@ -455,6 +512,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
             }
             extern void Port_SoftSlots_RenderOverlay(void*, int, int);
             Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
+            Port_TouchControls_Render(sRenderer, outW, outH);
         }
         SDL_RenderPresent(sRenderer);
         return;
@@ -471,20 +529,22 @@ extern "C" void Port_PPU_SetWindowTitle(const char* title) {
 }
 
 extern "C" void Port_PPU_ToggleFullscreen(void) {
-    if (!sWindow) {
+    SDL_Window* w = Port_PPU_ActiveWindow();
+    if (!w) {
         return;
     }
-    SDL_WindowFlags flags = SDL_GetWindowFlags(sWindow);
+    SDL_WindowFlags flags = SDL_GetWindowFlags(w);
     bool wantFullscreen = (flags & SDL_WINDOW_FULLSCREEN) == 0;
-    SDL_SetWindowFullscreen(sWindow, wantFullscreen);
-    SDL_SyncWindow(sWindow);
+    SDL_SetWindowFullscreen(w, wantFullscreen);
+    SDL_SyncWindow(w);
 }
 
 extern "C" bool Port_PPU_IsFullscreen(void) {
-    if (!sWindow) {
+    SDL_Window* w = Port_PPU_ActiveWindow();
+    if (!w) {
         return false;
     }
-    return (SDL_GetWindowFlags(sWindow) & SDL_WINDOW_FULLSCREEN) != 0;
+    return (SDL_GetWindowFlags(w) & SDL_WINDOW_FULLSCREEN) != 0;
 }
 
 extern "C" unsigned char Port_PPU_WindowScale(void) {
@@ -499,9 +559,10 @@ extern "C" void Port_PPU_CycleWindowScale(int direction) {
         scale = scale >= 10 ? 1 : (u8)(scale + 1);
     }
     Port_Config_SetWindowScale(scale);
-    if (sWindow && !Port_PPU_IsFullscreen()) {
-        SDL_SetWindowSize(sWindow, MODE1_GBA_WIDTH * scale, MODE1_GBA_HEIGHT * scale);
-        SDL_SyncWindow(sWindow);
+    SDL_Window* w = Port_PPU_ActiveWindow();
+    if (w && !Port_PPU_IsFullscreen()) {
+        SDL_SetWindowSize(w, MODE1_GBA_WIDTH * scale, MODE1_GBA_HEIGHT * scale);
+        SDL_SyncWindow(w);
     }
 }
 
@@ -534,6 +595,41 @@ extern "C" void Port_PPU_CycleFilter(int direction) {
 
 extern "C" const char* Port_PPU_FilterName(void) {
     return Port_Filter_Name(sFilter);
+}
+
+extern "C" bool Port_InGameSettingsModalIsOpen(void) {
+#ifdef launcher
+    return TmcSettings_IsModalOpen();
+#else
+    return false;
+#endif
+}
+
+extern "C" void Port_OpenInGameSettingsModal(void) {
+#ifdef launcher
+    if (TmcSettings_IsModalOpen()) {
+        return;
+    }
+    SDL_Window* w = sWindow ? sWindow : sBootstrapWindow;
+    if (!w) {
+        return;
+    }
+    SDL_Renderer* r = sRenderer;
+    if (!r) {
+        r = SDL_GetRenderer(w);
+    }
+    if (!r) {
+        return;
+    }
+    if (!TmcSettings_RunModalInGame(w, r)) {
+        SDL_Event ev;
+        std::memset(&ev, 0, sizeof(ev));
+        ev.type = SDL_EVENT_QUIT;
+        SDL_PushEvent(&ev);
+    }
+#else
+    /* No launcher: settings UI is not linked. */
+#endif
 }
 
 extern "C" void Port_PPU_Shutdown(void) {

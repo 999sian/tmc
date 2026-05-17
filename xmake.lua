@@ -86,6 +86,7 @@ else
     add_requires("libsdl3", {configs = {shared = false}})
     add_requires("nlohmann_json", {configs = {cmake = false}})
 end
+add_requires("guilite")
 
 -- libpng + zlib are linked by port_bugreport (F9 screenshot codec) and
 -- by gbagfx (build-time PNG codec). On Linux + macOS we have system
@@ -267,7 +268,7 @@ target_end()
 -- Group all tools
 target("tools")
     set_kind("phony")
-    add_deps("agb2mid", "aif2pcm", "asset_processor", "asset_extractor", "bin2c", "gbafix", "gbagfx", "mid2agb", "preproc", "scaninc", "tmc_strings")
+    add_deps("agb2mid", "aif2pcm", "asset_processor", "bin2c", "gbafix", "gbagfx", "mid2agb", "preproc", "scaninc", "tmc_strings")
 target_end()
 
 -- ====================
@@ -389,7 +390,6 @@ target("tmc_pc")
     set_kind("binary")
     set_languages("c11", "cxx20")
     set_targetdir("build/pc")
-    add_deps("asset_extractor")
 
     local use_avx2 = get_config("pc_avx2")
     if use_avx2 == nil then
@@ -503,11 +503,8 @@ target("tmc_pc")
     }
     local pc_game_version = get_config("game_version") or "USA"
     local pc_ver = pc_versions[pc_game_version] or pc_versions["USA"]
-    
-    -- Define PC_PORT, NON_MATCHING and game version. USE_OPENMP is added
-    -- below alongside the matching `-fopenmp` toolchain flags, since on
-    -- macOS we may have to disable it when libomp isn't installed.
-    add_defines("PC_PORT", "NON_MATCHING", pc_ver.region, pc_ver.language, "REVISION=0")
+
+    add_defines("PC_PORT", "NON_MATCHING", "USE_HDMA", pc_ver.region, pc_ver.language, "REVISION=0")
     -- Inject the version string from the top-of-file constant so the
     add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
     add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
@@ -529,7 +526,21 @@ target("tmc_pc")
     add_includedirs("libs/agbplay_core")
     add_includedirs("tools/src/assets_extractor") -- AssetExtractorApi linked in-process
 
-    
+    -- tmc-Modern-Launcher is a private matheo repo; gate on submodule
+    -- presence so checkouts without access still build. Detect by
+    -- looking for the launcher's public header (the submodule pointer
+    -- exists in .gitmodules but the working tree is empty when the
+    -- clone fails).
+    if os.isfile("libs/tmc-Modern-Launcher/include/tmc_launcher.h") then
+        add_defines("launcher", "GUILITE_ON", "TMC_HAS_MODERN_LAUNCHER=1")
+        add_includedirs("libs/tmc-Modern-Launcher/include")
+        add_includedirs("libs/tmc-Modern-Launcher/3p")
+        add_rules("utils.bin2c", {extensions = {".png"}})
+        add_files("libs/tmc-Modern-Launcher/assets/github.png", {rule = "utils.bin2c", nozeroend = true})
+        add_files("libs/tmc-Modern-Launcher/src/launcher_github_icon.cpp")
+        add_files("libs/tmc-Modern-Launcher/src/tmc_launcher.cpp")
+        add_files("port/port_launcher_bootstrap.cpp")
+    end
 
     add_files("port/port_main.c")
     add_files("port/port_audio.c")
@@ -585,6 +596,7 @@ target("tmc_pc")
     add_files("port/port_upscale.c") -- xBRZ-style pixel-art upscaler
     add_files("port/port_save.c")        -- EEPROM save emulation
     add_files("port/port_softslots.c")   -- Extra item-equip buttons (X/Y/L2/R2)
+    add_files("port/port_touch_controls.cpp")
     add_files("port/port_filter.c")      -- CRT/LCD post-process filters
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)
     add_files("port/port_math.c")        -- Math functions (CalcDistance, direction, Sqrt, Div)
@@ -697,59 +709,11 @@ target("tmc_pc")
     -- add_files("src/gba/m4a.c")
     
     -- libpng + zlib are needed by port_bugreport.cpp for F9 screenshot
-     -- PNG encoding. Both are system-optional so MinGW Windows builds
-     -- (where source builds fail) can fall back to host installs.
-    add_packages("libsdl3", "nlohmann_json", "fmt", "libpng", "zlib", "imgui")
+    -- PNG encoding. imgui drives the F8/ribbon menus (HEAD).
+    -- guilite is matheo's mobile/touch UI overlay.
+    -- Keep all of them so both UI stacks build cleanly.
+    add_packages("libsdl3", "nlohmann_json", "fmt", "libpng", "zlib", "imgui", "guilite")
 
-    -- VirtuaPPU is compiled directly into tmc_pc, so OpenMP must be enabled here.
-    -- Linux GCC / MinGW: `-fopenmp` works directly and pulls in libgomp.
-    -- Apple Clang on macOS does NOT bundle an OpenMP runtime, so `-fopenmp`
-    -- is rejected outright. Use Homebrew's libomp via the standard
-    -- `-Xpreprocessor -fopenmp -lomp` recipe. If libomp isn't installed
-    -- we drop USE_OPENMP and fall back to the single-threaded path
-    -- guarded by `#ifdef USE_OPENMP` in mode0.c so the build still
-    -- succeeds (the `#pragma omp` lines are no-ops without the define).
-    if is_plat("macosx") then
-        -- xmake's description-scope sandbox strips pcall/try, so we can't
-        -- shell out to `brew --prefix libomp` here. Probe the standard
-        -- Homebrew prefixes (arm64 -> /opt/homebrew, x86_64 -> /usr/local)
-        -- and honour LIBOMP_PREFIX as an escape hatch for non-standard
-        -- layouts (MacPorts, custom prefix, etc.).
-        local libomp_prefix = nil
-        -- Build the candidate list defensively: ipairs() stops at the
-        -- first nil hole, so an unset LIBOMP_PREFIX would otherwise
-        -- short-circuit the whole probe and we'd never reach the
-        -- Homebrew defaults below.
-        local candidates = {}
-        local env_override = os.getenv("LIBOMP_PREFIX")
-        if env_override and env_override ~= "" then
-            table.insert(candidates, env_override)
-        end
-        table.insert(candidates, "/opt/homebrew/opt/libomp")
-        table.insert(candidates, "/usr/local/opt/libomp")
-        for _, candidate in ipairs(candidates) do
-            if os.isdir(candidate) then
-                libomp_prefix = candidate
-                break
-            end
-        end
-        if libomp_prefix then
-            add_defines("USE_OPENMP")
-            add_includedirs(path.join(libomp_prefix, "include"))
-            add_linkdirs(path.join(libomp_prefix, "lib"))
-            add_cflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
-            add_cxxflags("-Xpreprocessor", "-fopenmp", {tools = {"clang"}})
-            add_syslinks("omp")
-        else
-            print("[tmc_pc] libomp not found — building without OpenMP. Install with: brew install libomp")
-        end
-    else
-        add_defines("USE_OPENMP")
-        add_cflags("-fopenmp", {tools = {"gcc", "clang"}})
-        add_cxxflags("-fopenmp", {tools = {"gcc", "clang"}})
-        add_ldflags("-fopenmp", {tools = {"gcc", "clang"}})
-        add_syslinks("gomp")
-    end
 
     -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
     if is_plat("windows", "mingw") then
