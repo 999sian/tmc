@@ -537,6 +537,14 @@ extern "C" void Port_PPU_ToggleFullscreen(void) {
     bool wantFullscreen = (flags & SDL_WINDOW_FULLSCREEN) == 0;
     SDL_SetWindowFullscreen(w, wantFullscreen);
     SDL_SyncWindow(w);
+    /* Hide the cursor while fullscreen, show it again in windowed mode.
+     * The bare-mouse cursor floating over Hyrule Town gets distracting
+     * fast — flagged by nayyar in the suggestions thread. */
+    if (wantFullscreen) {
+        SDL_HideCursor();
+    } else {
+        SDL_ShowCursor();
+    }
 }
 
 extern "C" bool Port_PPU_IsFullscreen(void) {
