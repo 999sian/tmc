@@ -10,3 +10,6 @@
 [submodule "libs/randomizer"]
 	path = libs/randomizer
 	url = https://github.com/minishmaker/randomizer
+[submodule "libs/tmc-Modern-Launcher"]
+	path = libs/tmc-Modern-Launcher
+	url = https://github.com/MatheoVignaud/tmc-Modern-Launcher.git

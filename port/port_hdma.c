@@ -71,6 +71,18 @@ void port_hdma_unregister(int channel)
     s_channels[channel].active = 0;
 }
 
+int port_hdma_has_active_channels(void)
+{
+    int ch;
+
+    for (ch = 0; ch < HDMA_CHANNELS; ++ch) {
+        if (s_channels[ch].active) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void port_hdma_step_line(int line)
 {
     int ch;

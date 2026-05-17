@@ -1,11 +1,13 @@
 #include "gba/io_reg.h"
 #include "main.h"
 #include "port_audio.h"
+#include "port_asset_loader.h"
 #include "port_gba_mem.h"
 #include "port_hdma.h"
 #include "port_ppu.h"
 #include "port_runtime_config.h"
 #include "port_softslots.h"
+#include "port_touch_controls.h"
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
@@ -17,6 +19,13 @@
 static bool gQuitRequested = false;
 static bool sFastForward = false;
 static int sFrameNum = 0;
+
+static const void* Port_ResolveCopySrc(const void* src, u32 size) {
+    if (Port_IsLoadedAssetBytes(src, size)) {
+        return src;
+    }
+    return port_resolve_addr((uintptr_t)src);
+}
 
 typedef struct {
     PortInput input;
@@ -60,7 +69,7 @@ static void Port_UpdateInput(void) {
          * the game doesn't observe stray input from key presses we routed
          * to the overlay. The soft-slot configuration overlay piggybacks
          * on this behaviour while it's the active focus. */
-        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen()) {
+        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen()) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
             Port_SoftSlots_TickPause();
             sFrameNum++;
@@ -180,7 +189,10 @@ static void Port_PumpEvents(void) {
                 continue;
             }
             /* F1..F4 — numbered save-state slots. Plain press = load,
-             * Shift+Fn = save. Mirrors emulator-style hotkey conventions. */
+             * Shift+Fn = save. Mirrors emulator-style hotkey conventions.
+             * (Matheo's branch bound F1 to an InGameSettingsModal; we
+             * already surface those settings via F8 → Reborn / Display
+             * tabs, so the save-state binding wins here.) */
             if (e.key.key >= SDLK_F1 && e.key.key <= SDLK_F4) {
                 extern int Port_QuickSave_SaveSlot(int slot);
                 extern int Port_QuickSave_LoadSlot(int slot);
@@ -243,6 +255,14 @@ static void Port_PumpEvents(void) {
         }
 
         Port_Config_HandleEvent(&e);
+    }
+
+    if (Port_TouchControls_ConsumeSettingsRequest()) {
+        extern bool Port_DebugMenu_IsOpen(void);
+        if (!Port_DebugMenu_IsOpen() && !Port_SoftSlots_ConfigIsOpen() &&
+            !Port_InGameSettingsModalIsOpen()) {
+            Port_OpenInGameSettingsModal();
+        }
     }
 }
 
@@ -385,9 +405,10 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
     u32 wordCount = cnt & 0x1FFFFF;
     int fill = (cnt >> 24) & 1;
     int is32 = (cnt >> 26) & 1;
+    u32 byteCount = is32 ? wordCount * 4 : wordCount * 2;
 
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
-    const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
+    const void* resolvedSrc = Port_ResolveCopySrc(src, byteCount);
 
     if (is32) {
         const u32* s = (const u32*)resolvedSrc;
@@ -413,7 +434,7 @@ void CpuFastSet(const void* src, void* dst, u32 cnt) {
     int fill = (cnt >> 24) & 1;
 
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
-    const void* resolvedSrc = port_resolve_addr((uintptr_t)src);
+    const void* resolvedSrc = Port_ResolveCopySrc(src, wordCount * 4);
 
     const u32* s = (const u32*)resolvedSrc;
     u32* d = (u32*)resolvedDst;

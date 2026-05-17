@@ -182,6 +182,8 @@ struct AssetGroupCache {
     std::vector<std::vector<const u8*>> spriteAnimationPtrs;
     std::array<std::vector<u8>, 7> translationBuffers;
     std::array<std::unordered_map<u32, std::string>, 7> textFilesById;
+    bool modsScanned = false;
+    std::unordered_map<std::string, std::filesystem::path> modReplacements;
 
     /* When non-empty, LoadBinaryFileCached will look up runtime
      * binary files in these mmap'd pak archives before falling back
@@ -338,6 +340,109 @@ std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
 
 std::filesystem::path RuntimeRootForEditableRoot(const std::filesystem::path& editableRoot) {
     return editableRoot.parent_path() / "assets";
+}
+
+bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json& outJson);
+
+std::string NormalizeAssetPath(std::string path) {
+    for (char& ch : path) {
+        if (ch == '\\') {
+            ch = '/';
+        }
+    }
+    while (!path.empty() && path.front() == '/') {
+        path.erase(path.begin());
+    }
+    return path;
+}
+
+void LoadModManifest(const std::filesystem::path& modsRoot, const std::filesystem::path& modDir,
+                     const std::filesystem::path& manifestPath) {
+    nlohmann::json manifest;
+    if (!LoadJsonFile(manifestPath, manifest) || !manifest.is_object()) {
+        std::fprintf(stderr, "[MOD] Failed to read manifest: %s\n", PathForLog(manifestPath).c_str());
+        return;
+    }
+
+    const std::string modName = manifest.value("name", modDir.filename().generic_string());
+    const nlohmann::json* replacements = nullptr;
+    if (manifest.contains("replace") && manifest["replace"].is_object()) {
+        replacements = &manifest["replace"];
+    } else if (manifest.contains("replacements") && manifest["replacements"].is_object()) {
+        replacements = &manifest["replacements"];
+    }
+    if (replacements == nullptr) {
+        AssetLogOnce("mod-empty:" + PathForLog(manifestPath), "mod %s has no replacements", modName.c_str());
+        return;
+    }
+
+    size_t loaded = 0;
+    for (auto it = replacements->begin(); it != replacements->end(); ++it) {
+        if (!it.value().is_string()) {
+            continue;
+        }
+
+        const std::string assetPath = NormalizeAssetPath(it.key());
+        const std::string replacement = NormalizeAssetPath(it.value().get<std::string>());
+        if (assetPath.empty() || replacement.empty()) {
+            continue;
+        }
+
+        std::filesystem::path replacementPath = modsRoot / std::filesystem::path(replacement);
+        if (!std::filesystem::exists(replacementPath)) {
+            replacementPath = modDir / std::filesystem::path(replacement);
+        }
+        if (!std::filesystem::exists(replacementPath) || !std::filesystem::is_regular_file(replacementPath)) {
+            std::fprintf(stderr, "[MOD] Missing replacement in %s: %s -> %s\n",
+                         modName.c_str(), assetPath.c_str(), replacement.c_str());
+            continue;
+        }
+
+        gAssetGroupCache.modReplacements[assetPath] = replacementPath;
+        ++loaded;
+    }
+
+    if (loaded != 0) {
+        std::fprintf(stderr, "[MOD] Loaded %s (%zu replacement%s)\n",
+                     modName.c_str(), loaded, loaded == 1 ? "" : "s");
+    }
+}
+
+void ScanMods() {
+    if (gAssetGroupCache.modsScanned) {
+        return;
+    }
+    gAssetGroupCache.modsScanned = true;
+    gAssetGroupCache.modReplacements.clear();
+
+    auto scan_one_root = [](const std::filesystem::path& modsRoot) {
+        if (!std::filesystem::exists(modsRoot) || !std::filesystem::is_directory(modsRoot)) {
+            return;
+        }
+        std::error_code ec;
+        for (const auto& entry : std::filesystem::directory_iterator(modsRoot, ec)) {
+            if (ec) break;
+            if (!entry.is_directory()) continue;
+            const std::filesystem::path manifestPath = entry.path() / "mod_manifest.json";
+            if (std::filesystem::exists(manifestPath)) {
+                LoadModManifest(modsRoot, entry.path(), manifestPath);
+            }
+        }
+    };
+
+    /* Asset-root-relative mods: <assets>/mods/<name>/ — matheo's
+     * default convention. */
+    for (const auto& root : AssetSearchRoots()) {
+        scan_one_root(root / "mods");
+    }
+
+    /* Explicit roots registered via Port_AddModRoot (from port_mods.cpp's
+     * TMC_MODS env-var discovery + <exe-dir>/mods scan). Treat each
+     * registered path as the *parent* of mod folders, same as the
+     * AssetSearchRoots/mods convention. */
+    for (const auto& explicitRoot : gAssetGroupCache.modRoots) {
+        scan_one_root(explicitRoot);
+    }
 }
 
 bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json& outJson) {
@@ -864,21 +969,24 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     WaitForPhaseGate(PhaseGateIndexForRelative(relativePath));
 #endif
 
-    /* Mod overrides win over both pak archives and the loose tree.
-     * First-match-wins across modRoots, in TMC_MODS-listed order. */
-    for (const auto& modRoot : gAssetGroupCache.modRoots) {
-        const std::filesystem::path modPath = modRoot / std::filesystem::path(relativePath);
-        std::error_code ec;
-        if (!std::filesystem::is_regular_file(modPath, ec)) {
-            continue;
+    /* Mod overrides — matheo's hash-lookup approach (O(1) per lookup
+     * via the pre-scanned modReplacements map) wins over our linear
+     * modRoots scan. Combined with our fast-path reader so we don't
+     * regress on cold-cache misses on slow storage. */
+    ScanMods();
+    const std::string normalizedPath = NormalizeAssetPath(relativePath);
+    auto modIt = gAssetGroupCache.modReplacements.find(normalizedPath);
+    if (modIt != gAssetGroupCache.modReplacements.end()) {
+        auto data = PortAssetLoader_ReadFileFast(modIt->second);
+        if (data) {
+            const std::vector<u8>* result = data.get();
+            gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
+            AssetLogOnce("mod-file:" + normalizedPath,
+                         "mod override %s <- %s", normalizedPath.c_str(), PathForLog(modIt->second).c_str());
+            return result;
         }
-        auto data = PortAssetLoader_ReadFileFast(modPath);
-        if (!data) continue;
-        std::fprintf(stderr, "[MOD] override %s ← %s (%zu bytes)\n",
-                     relativePath.c_str(), modPath.string().c_str(), data->size());
-        const std::vector<u8>* result = data.get();
-        gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
-        return result;
+        std::fprintf(stderr, "[MOD] Failed to open replacement for %s: %s\n",
+                     normalizedPath.c_str(), PathForLog(modIt->second).c_str());
     }
 
     /* Pak first when mounted: an mmap lookup beats opening a small
@@ -1406,10 +1514,6 @@ GfxLoadDecision EvaluateGfxControl(u8 unknown) {
 
 } // namespace
 
-void Port_AddModRoot(const std::filesystem::path& modRoot) {
-    gAssetGroupCache.modRoots.push_back(modRoot);
-}
-
 /* gPaletteBuffer lives in port_linked_stubs.c; declare it locally rather
  * than pulling all of main.h into this translation unit. */
 extern "C" u16 gPaletteBuffer[];
@@ -1458,9 +1562,9 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
             AssetLogOnce("palette-file:" + std::to_string(group) + ":" + std::to_string(entry.destPaletteNum + copiedPalettes) +
                              ":" + ref.file,
                          "palette group %u slot %u <- %s", group, entry.destPaletteNum + copiedPalettes, ref.file.c_str());
-            LoadPalettesNative(fileData->data() + ref.byteOffset,
-                               static_cast<s32>(entry.destPaletteNum + copiedPalettes),
-                               static_cast<s32>(ref.numPalettes));
+            LoadPalettes(fileData->data() + ref.byteOffset,
+                         static_cast<s32>(entry.destPaletteNum + copiedPalettes),
+                         static_cast<s32>(ref.numPalettes));
             copiedPalettes += ref.numPalettes;
         }
 
@@ -1527,11 +1631,12 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
             if (entry.dest >= 0x02000000u && entry.dest < 0x02040000u) {
                 resolvedDest = Port_ResolveEwramPtr(entry.dest);
             }
-            if (resolvedDest == nullptr) {
-                resolvedDest = gba_TryMemPtr(entry.dest);
-            }
+            
             if (resolvedDest != nullptr) {
                 std::memcpy(resolvedDest, fileData->data(), fileData->size());
+            } else {
+                MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
+                        static_cast<u32>(fileData->size()));
             }
         }
 
@@ -1982,4 +2087,30 @@ extern "C" void Port_AssetLoader_Reload(void) {
      * areaTileSets, areaRoomMaps, areaTables, areaTiles, etc.) are
      * rebuilt lazily inside EnsureAssetGroupCache; clearing the
      * scalar flags above is sufficient to trigger that. */
+}
+
+void Port_AddModRoot(const std::filesystem::path& modRoot) {
+    /* Registers an extra search root containing one or more mod
+     * sub-directories (each with their own mod_manifest.json). Called
+     * from port_mods.cpp during startup from the TMC_MODS env var and
+     * the default <exe-dir>/mods scan. The mod scanner walks both
+     * <assets-root>/mods and these explicit roots. */
+    if (modRoot.empty()) {
+        return;
+    }
+    std::error_code ec;
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(modRoot, ec);
+    if (ec) {
+        canonical = modRoot;
+    }
+    /* Dedupe so repeated env-var parses don't grow the vector. */
+    for (const auto& existing : gAssetGroupCache.modRoots) {
+        if (existing == canonical) {
+            return;
+        }
+    }
+    gAssetGroupCache.modRoots.push_back(std::move(canonical));
+    /* Invalidate so the next asset request re-scans and picks up
+     * mod overrides from the newly-added root. */
+    gAssetGroupCache.modsScanned = false;
 }

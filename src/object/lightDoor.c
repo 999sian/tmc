@@ -11,12 +11,21 @@
 #include "physics.h"
 #include "screen.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[30];
     /*0x86*/ u16 flag;
 } LightDoorEntity;
+
+#ifdef PC_PORT
+#define LIGHTDOOR_FLAG(this) (GE_FIELD(&((this)->base), field_0x86)->HWORD)
+#else
+#define LIGHTDOOR_FLAG(this) ((this)->flag)
+#endif
 
 void LightDoor_Init(LightDoorEntity*);
 void LightDoor_Action1(LightDoorEntity*);
@@ -34,7 +43,7 @@ void LightDoor(LightDoorEntity* this) {
 
 void LightDoor_Init(LightDoorEntity* this) {
     if (super->type == 0) {
-        if (CheckFlags(this->flag)) {
+        if (CheckFlags(LIGHTDOOR_FLAG(this))) {
             DeleteThisEntity();
         }
         super->action = 1;

@@ -4,6 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 u8 gIoMem[0x400];
 u8 gEwram[0x40000];
 u8 gIwram[0x8000];
@@ -217,4 +222,23 @@ u32 gba_read32(uint32_t addr) {
 
     printf("gba_read32: unimplemented for address 0x%08X\n", addr);
     return 0;
+}
+
+void* port_resolve_addr(uintptr_t val)
+{
+#if defined(_WIN32)
+    if (val >= 0x02000000u && val < 0x0A000000u) {
+        MEMORY_BASIC_INFORMATION mbi;
+        if (VirtualQuery((LPCVOID)val, &mbi, sizeof(mbi)) != 0 && mbi.State == MEM_COMMIT) {
+            return (void*)val;
+        }
+    }
+#endif
+    if (val >= 0x02000000u && val < 0x0A000000u) {
+        void* p = gba_TryMemPtr((uint32_t)val);
+        if (p) {
+            return p;
+        }
+    }
+    return (void*)val;
 }
