@@ -99,6 +99,25 @@ After the CLI is built and dropped at `<exe>/randomizer/`:
    rolled output to load correctly — the rando produces EU-region
    ROMs.
 
+### Why USA `baserom.gba` is rejected today
+
+Feeding a USA ROM to the CLI fails at:
+
+```
+Randomization failed! Error: ROM does not match the expected CRC for the logic file!
+```
+
+The default logic file
+(`libs/randomizer/RandomizerCore/Resources/default.logic:6`) declares
+`!crc - 0xE8637292`, which is the **EU** ROM CRC32. USA ROM CRC32 is
+`0xABCEBBB1` — the check correctly refuses to apply EU-targeted
+patches to a USA ROM that they'd corrupt.
+
+This is the *content* blocker the `tools/randomizer_usa/` Phase 1 work
+is solving — once the patch set is USA-aware, a parallel USA logic
+file with `!crc - 0xABCEBBB1` becomes safe to write. Until then, F8 →
+Randomizer requires an EU ROM as input.
+
 ## Pin & update procedure
 
 ```sh

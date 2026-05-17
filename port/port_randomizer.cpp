@@ -145,12 +145,19 @@ extern "C" PortRandomizerStatus Port_Randomizer_RollSeed(
         if (seed == 0) seed = 1;
     }
 
-    /* Build a temporary Commands.txt the CLI consumes. Format taken
-     * from the randomizer README:
-     *   LoadRom (path)
-     *   ChangeSeed (number)
-     *   SaveRom (path)
-     *   SaveSpoiler (path)   ← optional */
+    /* Build a temporary Commands.txt the CLI consumes. Format is
+     * space-separated (NOT parenthesized) — see
+     * libs/randomizer/MinishCapRandomizerCLI/CommandFileParser.cs:19,
+     * which Split(' ')s the line and switches on inputs[0]. The earlier
+     * `(path)` form silently produced an unrandomized ROM.
+     *
+     *   LoadRom <path>
+     *   ChangeSeed S <seed>     ← "S" = set seed (vs "R" = random)
+     *   Randomize 1             ← required; 1 = single attempt
+     *   SaveRom <path>
+     *   SaveSpoiler <path>      ← optional
+     *   Exit
+     */
     const std::filesystem::path exeDir = ExecutableDirectory();
     const std::filesystem::path cmd_file = exeDir / "tmc_rando_commands.txt";
     {
@@ -159,12 +166,14 @@ extern "C" PortRandomizerStatus Port_Randomizer_RollSeed(
             report("could not write temporary commands file");
             return PORT_RANDO_RUN_FAILED;
         }
-        out << "LoadRom (" << input_rom_path << ")\n";
-        out << "ChangeSeed (" << seed << ")\n";
-        out << "SaveRom (" << output_rom_path << ")\n";
+        out << "LoadRom "    << input_rom_path  << "\n";
+        out << "ChangeSeed S " << seed          << "\n";
+        out << "Randomize 1\n";
+        out << "SaveRom "    << output_rom_path << "\n";
         if (spoiler_path && spoiler_path[0]) {
-            out << "SaveSpoiler (" << spoiler_path << ")\n";
+            out << "SaveSpoiler " << spoiler_path << "\n";
         }
+        out << "Exit\n";
     }
 
     /* Shell out. system() returns the CLI's exit code (with platform-
