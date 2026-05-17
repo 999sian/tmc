@@ -805,6 +805,47 @@ static void DrawRibbonRandomizerTab(void) {
     }
 }
 
+/* Forward decl pulled from port_audio_mute.h, kept local so this file
+ * doesn't depend on the new header for the rest of its surface area. */
+extern "C" {
+typedef enum {
+    AUDIO_MUTE_EZLO_VOICE,
+    AUDIO_MUTE_NPC_VOICE,
+    AUDIO_MUTE_LOW_HEALTH_BEEP,
+    AUDIO_MUTE_COUNT,
+} AudioMuteCategory;
+bool Port_AudioMute_IsEnabled(AudioMuteCategory c);
+void Port_AudioMute_SetEnabled(AudioMuteCategory c, bool on);
+const char* Port_AudioMute_Label(AudioMuteCategory c);
+const char* Port_AudioMute_Description(AudioMuteCategory c);
+}
+
+static void DrawRibbonAudioTab(void) {
+    ImGui::TextWrapped("Per-category SFX mutes. Each toggle suppresses "
+                       "the matching sound IDs at the SoundReq / EnqueueSFX "
+                       "entry points — music and other SFX are untouched.");
+    ImGui::Separator();
+    for (int i = 0; i < (int)AUDIO_MUTE_COUNT; ++i) {
+        bool on = Port_AudioMute_IsEnabled((AudioMuteCategory)i);
+        const char* label = Port_AudioMute_Label((AudioMuteCategory)i);
+        const char* desc  = Port_AudioMute_Description((AudioMuteCategory)i);
+        if (ImGui::Checkbox(label, &on)) {
+            Port_AudioMute_SetEnabled((AudioMuteCategory)i, on);
+        }
+        if (desc && desc[0]) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(?)");
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(360.0f);
+                ImGui::TextUnformatted(desc);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+        }
+    }
+}
+
 static void DrawRibbonRebornTab(void) {
     ImGui::TextWrapped("Quality-of-life features cherry-picked from "
                        "Minish Cap Reborn (clean-room — does NOT include "
@@ -866,6 +907,7 @@ static void DrawRibbon(void) {
             if (ImGui::BeginTabItem("Controls"))   { DrawRibbonControlsTab();   ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Warp"))       { DrawRibbonWarpTab();       ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Randomizer")) { DrawRibbonRandomizerTab(); ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Audio"))      { DrawRibbonAudioTab();      ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Reborn"))     { DrawRibbonRebornTab();     ImGui::EndTabItem(); }
             ImGui::EndTabBar();
         }
