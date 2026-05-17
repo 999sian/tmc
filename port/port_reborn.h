@@ -29,6 +29,8 @@ typedef enum {
     REBORN_FEAT_SKIP_EZLO_TUTORIALS,   /* skip most early-game Ezlo tutorials */
     REBORN_FEAT_HERO_MODE,             /* damage doubled — toggleable Hero Mode */
     REBORN_FEAT_RUPEE_LIKE_OVERHAUL,   /* rupee-likes steal shield, time-out 10t */
+    REBORN_FEAT_SECONDARY_LAB,         /* L+A / L+B → use SLOT_LA / SLOT_LB items */
+    REBORN_FEAT_SELECT_HOLD_EQUIP,     /* SELECT-hold in pause menu → equip secondary slot */
     REBORN_FEAT_COUNT,
 } RebornFeature;
 
