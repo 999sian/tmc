@@ -185,6 +185,10 @@ int main(int argc, char* argv[]) {
     Port_ReserveGbaAddressSpace();
 
     fprintf(stderr, "Initializing port layer...\n");
+    {
+        extern void Port_DebugVerbose_Init(void);
+        Port_DebugVerbose_Init();
+    }
 
     // Initialize REG_KEYINPUT to all-keys-released (GBA: 1=not pressed)
     *(u16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
