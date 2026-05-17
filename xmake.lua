@@ -736,6 +736,26 @@ target("tmc_pc")
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
                  "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
 
+    -- OpenMP scanline parallelism for ViruaPPU mode1.
+    --
+    -- libs/ViruaPPU/src/mode1.c contains `#pragma omp parallel for
+    -- schedule(static)` over the 160-row render loop (applied via
+    -- port/patches/viruappu-widescreen.patch). Because the .c files
+    -- are pulled into this target directly via add_files() — not
+    -- linked from the submodule's own xmake target — the submodule's
+    -- own -fopenmp flag never reaches the compiler here, and the
+    -- pragmas compile as silent no-ops. Wire -fopenmp explicitly so
+    -- the render actually runs on every core. The HDMA pre-line
+    -- callback still runs serially (with per-line IO snapshot) so
+    -- water-FX / BLDY fades stay correct; only the BG+OBJ+composite
+    -- inner pass parallelises.
+    --
+    -- On MinGW (Windows cross), libgomp ships with the toolchain and
+    -- is linked statically via the existing -static-libgcc.
+    add_cflags("-fopenmp")
+    add_cxxflags("-fopenmp")
+    add_ldflags("-fopenmp", {force = true})
+
     -- Optional sanitizer build (xmake f -y --pc_sanitize=y). Catches NULL
     -- deref, OOB reads/writes, signed-overflow UB, use-after-free with a
     -- precise stack trace at the moment of the violation.
