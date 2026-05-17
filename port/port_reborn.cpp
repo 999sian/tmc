@@ -38,6 +38,34 @@ struct {
         "Suppress the area Ezlo hint that fires the first time you re-enter "
         "the room after loading a save.",
     },
+    /* REBORN_FEAT_LIBRARY_REOPEN */
+    {
+        true,
+        "Library stays open after Four Sword",
+        "Keep the Royal Hyrule Library accessible after obtaining the Four "
+        "Sword. Vanilla closes it permanently.",
+    },
+    /* REBORN_FEAT_FIGURINE_MIN_RAISED */
+    {
+        true,
+        "Raise minimum figurine chance",
+        "Increase the floor on figurine-machine drop probability so "
+        "duplicates take fewer attempts to clear.",
+    },
+    /* REBORN_FEAT_SKIP_EZLO_TUTORIALS */
+    {
+        false,
+        "Skip Ezlo tutorial pop-ups",
+        "Suppress the early-game Ezlo tutorial hints (movement, signs, "
+        "talking, etc.). Doesn't affect plot-critical dialogue.",
+    },
+    /* REBORN_FEAT_HERO_MODE */
+    {
+        false,
+        "Hero Mode (2× damage)",
+        "Enemies and hazards deal double damage. Toggleable mid-run; takes "
+        "effect from the next hit. (No save-format change.)",
+    },
 };
 
 static bool sJustResumed = false;
