@@ -5,6 +5,9 @@
  * @brief Player entity
  */
 #include "player.h"
+#ifdef PC_PORT
+#include "port_debug_verbose.h"
+#endif
 #include "area.h"
 #include "asm.h"
 #include "collision.h"
@@ -401,7 +404,7 @@ static void Port_MuddyWaterSinkTick(PlayerEntity* this) {
     u32 actTile = GetActTileAtEntity(super);
     /* UNCONDITIONAL log to confirm we reach here. Throttle by frame
      * counter from caller-visible state to avoid flooding. */
-    if ((sSinkTimer & 0xf) == 0 || actTile == ACT_TILE_19) {
+    if (((sSinkTimer & 0xf) == 0 || actTile == ACT_TILE_19) && Port_DebugVerbose) {
         fprintf(stderr, "[mud] area=0x%02x pos=(%d,%d) actTile=0x%x match=%d timer=%u\n",
                 (unsigned)gRoomControls.area,
                 (int)super->x.HALF.HI, (int)super->y.HALF.HI,

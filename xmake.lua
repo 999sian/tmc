@@ -547,6 +547,7 @@ target("tmc_pc")
     add_files("port/port_asset_log.cpp")
     add_files("port/port_asset_pak.cpp")
     add_files("port/port_asset_pak_loader.cpp")
+    add_files("port/port_debug_verbose.c")  -- per-frame log gate, env-controlled
     -- In-process randomizer (port/rando/). Clean-room C++; pulls in
     -- item.h via the same include path as the rest of port/.
     add_files("port/rando/rando.cpp")

@@ -1,6 +1,7 @@
 #include "port_asset_loader.h"
 #include "port_asset_pipeline.hpp"
 #include "port_asset_pak_loader.hpp"
+#include "port_debug_verbose.h"  /* Port_DebugVerbose flag */
 
 extern "C" {
 #define this this_
@@ -224,6 +225,13 @@ void AssetLogOnce(const std::string& key, const char* fmt, ...) {
     if (!gAssetLogOnceKeys.insert(key).second) {
         return;
     }
+
+    /* On low-end hardware (Pi 4 / Steam Deck / old laptop) the per-
+     * asset [ASSET] line spam is a real CPU cost during room init
+     * — 20k+ formatted lines per boot. Default OFF; set TMC_VERBOSE=1
+     * to re-enable. The dedup set is still maintained so re-enabling
+     * mid-session doesn't replay everything. */
+    if (!Port_DebugVerbose) return;
 
     std::va_list args;
     va_start(args, fmt);

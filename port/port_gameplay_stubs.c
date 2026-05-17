@@ -745,6 +745,8 @@ void Port_LogPlayerMovementGate(unsigned v13, unsigned dir, unsigned psDir,
  * frame; if movement reaches the end, no [pn-ret] log. */
 void Port_LogPlayerEarlyReturn(const char* tag) {
     static const char* sLastTag = "";
+    extern bool Port_DebugVerbose;
+    if (!Port_DebugVerbose) return;
     if (tag != sLastTag) {
         fprintf(stderr, "[pn-ret] %s\n", tag);
         sLastTag = tag;
@@ -870,6 +872,12 @@ static unsigned Port_HashBytes(const void* p, unsigned n) {
 extern u8 gPaletteBuffer[];
 
 void Port_LogDisplayFrame(void) {
+    /* Per-frame palette/display state hash + log. On low-end CPUs this
+     * 1.5 KiB hash burns measurable cycles every frame. Skip entirely
+     * when TMC_VERBOSE is off. */
+    extern bool Port_DebugVerbose;
+    if (!Port_DebugVerbose) return;
+
     static u16 lastDispCtl = 0xFFFFu;
     static unsigned lastPalHash = 0u;
     static unsigned lastPalRamHash = 0u;
