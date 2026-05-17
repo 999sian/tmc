@@ -1,4 +1,4 @@
-@ Din completely alone
+@ Hyrule Town Din alone
 SCRIPT_START script_DinAlone
 	BeginBlock
 	Call Din_MakeInteractable
@@ -12,9 +12,10 @@ script_080121DE:
 	SetPlayerIdle
 	FacePlayer
 	DoPostScriptAction 0x0000
+	CheckLocalFlag MHOUSE_DIN_TALK
+	JumpIf script_0801205E
 	MessageNoOverlap TEXT_HAPPY_HEARTH, 0x27
 	WaitUntilTextboxCloses
-	EnablePlayerControl
-	SetAnimationState 0x0004
-	DoPostScriptAction 0x0001
-	Jump script_080121DE
+	SetLocalFlag MHOUSE_DIN_TALK
+	Jump script_0801209E
+
