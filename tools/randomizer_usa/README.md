@@ -75,6 +75,29 @@ honours the distinction.
   the EU ROM (enables byte-pattern probe) or the EU decomp map
   (enables symbol matching).
 
+- **`scan_validate.py` + `reports/interp_validation.md`** —
+  validation pass against the USA decomp symbol map. Cross-checks
+  every interp prediction by looking up which USA symbol it lands in.
+  Result: **309 / 309 (100%) of interp-tier predictions across all
+  patches land inside a named USA symbol** (not unmapped junk
+  space). Top hits also match patch intent:
+
+  | hits | USA symbol | what the patches do |
+  |-----:|------------|---------------------|
+  | 136  | `gFuseActions` | kinstone-fusion item table — 136 entries × 2 bytes each = the kinstone shuffle |
+  | 18   | `gUnk_additional_8_SimonsSimulation_Main` | Simon's-simulation area extras |
+  | 13   | `gFrameObjLists` | animation frame lists (hash icons) |
+  | 5    | `gItemMetaData` | item-metadata writes (firerod inventory, installer) |
+  | 5    | `gObjectDefinition_0` | object-definition table (progressive items, traps) |
+  | 4    | `Entities_DeepwoodShrine_Torch_0` | dungeon entity rewrites |
+  | 3    | `gTreeItemDrops` | tree-drop item shuffle |
+  | 3    | `gHoleTransitions` | hole-transition table writes |
+
+  This is the strongest correctness signal we can produce without an
+  EU ROM — it suggests the interpolation tier is not just covering
+  ~25% of addresses but covering them *correctly* for the cluster
+  regions.
+
 ## Key findings
 
 1. **The HeaderTable delta is *not* constant.** Observed EU→USA deltas
@@ -201,9 +224,11 @@ must keep tmc_pc as a separate, shell-out-only program — see
 
 ```
 tools/randomizer_usa/
-├── README.md              — this file
-├── translate_offsets.py   — per-file EU→USA translator
-├── scan_patches.py        — bulk scanner / coverage report
+├── README.md                — this file
+├── translate_offsets.py     — per-file EU→USA translator (5-tier fallback)
+├── scan_patches.py          — bulk scanner / coverage report
+├── scan_validate.py         — validate interp predictions vs USA symbol map
 └── reports/
-    └── coverage_no_eu_data.csv  — baseline (interp-only) coverage
+    ├── coverage_no_eu_data.csv   — baseline (interp-only) coverage
+    └── interp_validation.md      — interp-prediction landing-symbol report
 ```
