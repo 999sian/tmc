@@ -676,6 +676,25 @@ void FigurineDevice_Draw(FigurineDeviceEntity* this) {
 }
 
 void FigurineDevice_GetChanceBasedOffFigurineCount(FigurineDeviceEntity* this) {
+#ifdef PC_PORT
+    /* Reborn parity: floors raised 3× when toggle is on. */
+    extern bool Port_Reborn_IsEnabled(int feat);
+    int boost = Port_Reborn_IsEnabled(5 /* REBORN_FEAT_FIGURINE_MIN_RAISED */) ? 3 : 1;
+    if (gSave.stats.figurineCount < 50) {
+        u8 floor = 15 * boost;
+        if (this->chance < floor) this->chance = floor;
+    } else if (gSave.stats.figurineCount < 80) {
+        u8 floor = 12 * boost;
+        if (this->chance < floor) this->chance = floor;
+    } else if (gSave.stats.figurineCount < 110) {
+        u8 floor = 9 * boost;
+        if (this->chance < floor) this->chance = floor;
+    } else {
+        u8 floor = 6 * boost;
+        if (this->chance < floor) this->chance = floor;
+    }
+    return;
+#endif
     if (gSave.stats.figurineCount < 50) {
         if (this->chance < 15) {
             this->chance = 15;
