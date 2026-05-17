@@ -77,18 +77,20 @@ struct {
     /* REBORN_FEAT_SECONDARY_LAB */
     {
         true,
-        "L + A/B → secondary item",
-        "Hold L while pressing A or B to use the SLOT_LA / SLOT_LB "
-        "secondary item. Set secondary items via SELECT-hold in the "
-        "pause menu (needs the other toggle too).",
+        "L + A/B → soft-slot 0/1",
+        "Hold L while pressing A or B to fire the item assigned to "
+        "the port's soft-slot 0 / soft-slot 1 (settable via SELECT-"
+        "hold in the pause menu, or via the existing X/Y/L2/R2 "
+        "soft-slot binding UI).",
     },
     /* REBORN_FEAT_SELECT_HOLD_EQUIP */
     {
         true,
-        "SELECT-hold equip in pause menu",
-        "Hold SELECT while pressing A in the pause menu to equip the "
-        "cursor's item to SLOT_LA (or B to SLOT_LB) instead of the "
-        "primary slot.",
+        "SELECT-hold writes to soft slots",
+        "Hold SELECT while pressing A in the pause menu to assign the "
+        "cursor's item to soft-slot 0 (or B → soft-slot 1) instead of "
+        "the primary A/B slot. Soft slots persist to the port config, "
+        "not the save file.",
     },
 };
 

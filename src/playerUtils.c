@@ -231,16 +231,17 @@ void UpdateActiveItems(PlayerEntity* this) {
         /* Soft-slots (X/Y/L2/R2) override the B-equipped item without
          * mutating gSave. See port/port_softslots.h. */
         bItem = Port_SoftSlots_GetEffectiveBItem((u8)bItem);
-        /* Reborn-parity: when L is held, A and B use the SLOT_LA /
-         * SLOT_LB secondary items (stored in filler14[0..1]). If the
-         * secondary slot is empty, leave the primary item active so
-         * the player isn't surprised by a dead button. */
+        /* Reborn-parity: when L is held, A and B fire the items the
+         * user assigned to soft-slots 0 and 1 via SELECT-hold in the
+         * pause menu. Empty soft slot falls back to the primary so
+         * the button isn't dead. */
         {
             extern bool Port_Reborn_IsEnabled(int feat);
-            #define _REBORN_L_HELD ((gInput.heldKeys & L_BUTTON) != 0)
-            if (_REBORN_L_HELD && Port_Reborn_IsEnabled(/* L+A/B secondary */ 9)) {
-                u8 la = gSave.stats.filler14[0];
-                u8 lb = gSave.stats.filler14[1];
+            extern unsigned char Port_SoftSlots_GetAssignment(int s);
+            if ((gInput.heldKeys & L_BUTTON) &&
+                Port_Reborn_IsEnabled(/* L+A/B secondary */ 9)) {
+                u8 la = Port_SoftSlots_GetAssignment(0);
+                u8 lb = Port_SoftSlots_GetAssignment(1);
                 if (la) aItem = la;
                 if (lb) bItem = lb;
             }
