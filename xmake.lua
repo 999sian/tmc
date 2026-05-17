@@ -857,6 +857,50 @@ target("randomizer_cli")
         end
 
         cprint("${green [randomizer_cli]} built → " .. cli_path)
+
+        -- USA-region artifacts: generate the translated patches tree +
+        -- derive the USA logic file from the EU one with a CRC swap.
+        -- Both end up next to MinishCapRandomizerCLI under
+        -- build/pc/randomizer/, which the dist staging in build.py
+        -- copies wholesale.
+        local python = find_program("python3") or find_program("python")
+        local eu_logic = path.join(os.scriptdir(), "libs", "randomizer",
+                                   "RandomizerCore", "Resources", "default.logic")
+        local usa_logic_dst = path.join(outdir, "default_usa.logic")
+        if os.exists(eu_logic) then
+            -- Derive: take default.logic, swap EU CRC for USA CRC. The
+            -- USA Minish Cap (BZME) CRC32 is 0xABCEBBB1; EU (BZMP) is
+            -- 0xE8637292. Everything else in the file is region-
+            -- agnostic logic (item locations, dependencies, settings).
+            local content = io.readfile(eu_logic)
+            content = content:gsub("!crc%s*%-%s*0xE8637292",
+                                   "!crc - 0xABCEBBB1  # USA ROM CRC32 (derived)")
+            io.writefile(usa_logic_dst, content)
+            cprint("${green [randomizer_cli]} USA logic → " .. usa_logic_dst)
+        end
+
+        local usa_script = path.join(os.scriptdir(), "tools", "randomizer_usa", "build_usa_patches.py")
+        local eu_patches = path.join(os.scriptdir(), "libs", "randomizer",
+                                     "RandomizerCore", "Resources", "Patches")
+        local usa_patches_dst = path.join(outdir, "Patches_USA")
+        if python and os.exists(usa_script) and os.exists(eu_patches) then
+            cprint("${cyan [randomizer_cli]} generating USA-translated patches…")
+            local prc = os.execv(python, {
+                usa_script,
+                "--src", eu_patches,
+                "--dst", usa_patches_dst,
+                "--quiet",
+            }, { try = true })
+            if prc == 0 and os.exists(path.join(usa_patches_dst, "ROM Buildfile.event")) then
+                cprint("${green [randomizer_cli]} USA patches → " .. usa_patches_dst)
+            else
+                cprint("${yellow warning:} USA patches generation failed (rc=" ..
+                       tostring(prc) .. ") — F8 → Randomizer will reject USA ROMs.")
+            end
+        else
+            cprint("${yellow warning:} python or build_usa_patches.py missing — "
+                   .. "USA randomization unavailable.")
+        end
     end)
 target_end()
 
