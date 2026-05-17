@@ -276,6 +276,17 @@ s32 ModHealth(s32 delta) {
     s32 newHealth;
     Stats* stats = &gSave.stats;
 
+#ifdef PC_PORT
+    /* Reborn parity: Hero Mode — double incoming damage. Only applied
+     * to negative deltas so healing/heart-pickups stay normal. */
+    {
+        extern bool Port_Reborn_IsEnabled(int feat);
+        if (delta < 0 && Port_Reborn_IsEnabled(7 /* REBORN_FEAT_HERO_MODE */)) {
+            delta *= 2;
+        }
+    }
+#endif
+
     newHealth = stats->health + delta;
     if (newHealth < 0) {
         newHealth = 0;
