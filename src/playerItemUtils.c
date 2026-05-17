@@ -51,6 +51,16 @@ void ClearSmallChests(void) {
     MemClear(gSmallChests, sizeof(gSmallChests));
 }
 
+#ifdef PC_PORT
+#include <stdbool.h>
+/* port/rando hook — when a seed is active, the randomizer mutates
+ * the chest's (type, subtype) to a shuffled assignment. The native
+ * runtime randomizer lives in port/rando/ and operates in-process
+ * with zero ROM writes. */
+extern bool Rando_OverrideChestReward(u8 area, u8 room, u8 localFlag,
+                                      u8* type, u8* subtype);
+#endif
+
 void OpenSmallChest(u32 pos, u32 layer) {
     TileEntity* t = gSmallChests;
     u32 found = 0;
@@ -64,7 +74,13 @@ void OpenSmallChest(u32 pos, u32 layer) {
     if ((layer >> 1) == ((u32)(t->_6 << 31) >> 31)) {
         if (found) {
             SetLocalFlag(t->localFlag);
-            CreateItemEntity(t->_2, t->_3, 0);
+            u8 item_type    = t->_2;
+            u8 item_subtype = t->_3;
+#ifdef PC_PORT
+            Rando_OverrideChestReward(gRoomControls.area, gRoomControls.room,
+                                       t->localFlag, &item_type, &item_subtype);
+#endif
+            CreateItemEntity(item_type, item_subtype, 0);
         } else {
             CreateItemEntity(ITEM_FAIRY, 0, 0);
         }
