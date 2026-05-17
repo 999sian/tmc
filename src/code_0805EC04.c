@@ -139,6 +139,33 @@ void UpdatePlayerInput(void) {
     // Calculate the direction from the currently held input.
     gPlayerState.direction = gUnk_08109202[(state & INPUT_ANY_DIRECTION) >> 8];
 #ifdef PC_PORT
+    /* Reborn parity: 360° left-stick movement.
+     *
+     * When the user is holding the left analog stick past the deadzone
+     * and isn't being driven by a player-macro / cutscene, replace the
+     * 8-cardinal direction we just computed with a 32-direction snap
+     * to the actual stick angle. Also re-assert the cardinal INPUT_*
+     * direction bits so downstream "is moving?" checks fire normally.
+     *
+     * No effect when the toggle is off, no gamepad is attached, the
+     * stick is centered, or the player is in a control-disabled state. */
+    if (gPlayerState.playerInput.playerMacro == NULL &&
+        gPlayerState.controlMode == CONTROL_ENABLED) {
+        extern bool Port_AnalogMovement_Apply(u32* heldInputOut, u32* directionOut);
+        u32 override_held = gPlayerState.playerInput.heldInput;
+        u32 override_dir  = gPlayerState.direction;
+        if (Port_AnalogMovement_Apply(&override_held, &override_dir)) {
+            /* Recompute newInput so the rising-edge bits for any newly
+             * asserted direction still fire. prevState was captured
+             * before the override, which is exactly what we want — a
+             * direction freshly tilted into gets newInput set just like
+             * a D-pad tap would. */
+            gPlayerState.playerInput.heldInput = override_held;
+            gPlayerState.playerInput.newInput  = override_held & prevState;
+            gPlayerState.direction = (u8)override_dir;
+            state = override_held;
+        }
+    }
     {
         extern void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys,
                                         unsigned keys, unsigned state, unsigned direction,

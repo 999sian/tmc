@@ -31,6 +31,7 @@ typedef enum {
     REBORN_FEAT_RUPEE_LIKE_OVERHAUL,   /* rupee-likes steal shield, time-out 10t */
     REBORN_FEAT_SECONDARY_LAB,         /* L+A / L+B → use SLOT_LA / SLOT_LB items */
     REBORN_FEAT_SELECT_HOLD_EQUIP,     /* SELECT-hold in pause menu → equip secondary slot */
+    REBORN_FEAT_ANALOG_360_MOVEMENT,   /* 360° left-stick movement (32-step snap) */
     REBORN_FEAT_COUNT,
 } RebornFeature;
 
