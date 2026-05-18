@@ -322,14 +322,28 @@ void CollideFollowers(void) {
     if (val <= 1)
         return;
 
+#ifdef PC_PORT
+    /* Cycle + garbage-pointer guards mirror entity.c — Lake Hylia warp
+     * produced both a `next` cycle and a `next` pointing at a stray GBA
+     * EWRAM-relative address that escaped widening. */
+    extern int Port_IsValidEntityAddr(const void*);
+    int _wOuter = 0;
+    for (currentEntity = entityList->first; currentEntity != (Entity*)entityList && currentEntity != NULL && _wOuter < 256 && Port_IsValidEntityAddr(currentEntity); currentEntity = currentEntity->next, ++_wOuter) {
+#else
     for (currentEntity = entityList->first; currentEntity != (Entity*)entityList; currentEntity = currentEntity->next) {
+#endif
         Entity* nextEnt;
         if ((currentEntity->flags & ENT_DID_INIT) == 0)
             continue;
         if ((currentEntity->followerFlag & 1) == 0)
             continue;
 
+#ifdef PC_PORT
+        int _wInner = 0;
+        for (nextEnt = currentEntity->next; nextEnt != (Entity*)entityList && nextEnt != NULL && _wInner < 256 && Port_IsValidEntityAddr(nextEnt); nextEnt = nextEnt->next, ++_wInner) {
+#else
         for (nextEnt = currentEntity->next; nextEnt != (Entity*)entityList; nextEnt = nextEnt->next) {
+#endif
             if ((nextEnt->flags & ENT_DID_INIT) == 0)
                 continue;
             if ((nextEnt->followerFlag & 1) == 0)
