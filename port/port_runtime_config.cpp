@@ -70,6 +70,12 @@ u32  sAutosaveIntervalMs = 60000;
 /* Touch input scheme from matheo's launcher integration — kept for
  * Android compatibility. */
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
+/* Widescreen pillarbox config — applied in port_ppu.cpp's present path.
+ * Defaults reproduce the historical behavior: GBA 3:2 frame fills as
+ * much of the window as possible, side bars are black. */
+PortAspectMode sAspectMode = PORT_ASPECT_NATIVE_3_2;
+PortBgFill     sBgFill = PORT_BG_FILL_BLACK;
+u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -100,6 +106,9 @@ nlohmann::json DefaultsJson(void) {
         { "autosave_enabled", true },
         { "autosave_interval_ms", 60000 },
         { "touch_scheme", "joystick" },
+        { "aspect_mode", "native" },
+        { "bg_fill", "black" },
+        { "bg_fill_color", { 0, 0, 0 } },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -435,6 +444,32 @@ extern "C" void Port_Config_Load(const char* path) {
         }
         sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
     }
+    {
+        std::string am = j.value("aspect_mode", std::string("native"));
+        for (char& c : am) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
+        if      (am == "16:9" || am == "widescreen")       sAspectMode = PORT_ASPECT_WIDESCREEN_16_9;
+        else if (am == "21:9" || am == "ultrawide")        sAspectMode = PORT_ASPECT_ULTRAWIDE_21_9;
+        else if (am == "32:9" || am == "super_ultrawide")  sAspectMode = PORT_ASPECT_SUPER_ULTRAWIDE_32_9;
+        else                                                sAspectMode = PORT_ASPECT_NATIVE_3_2;
+
+        std::string bf = j.value("bg_fill", std::string("black"));
+        for (char& c : bf) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
+        if      (bf == "solid"   || bf == "solid_color")   sBgFill = PORT_BG_FILL_SOLID_COLOR;
+        else if (bf == "blurred" || bf == "blurred_frame") sBgFill = PORT_BG_FILL_BLURRED_FRAME;
+        else                                                sBgFill = PORT_BG_FILL_BLACK;
+
+        const auto& col = j.contains("bg_fill_color") ? j["bg_fill_color"] : nlohmann::json::array();
+        if (col.is_array() && col.size() >= 3) {
+            auto clamp_u8 = [](int v) -> u8 {
+                if (v < 0)   return 0;
+                if (v > 255) return 255;
+                return (u8)v;
+            };
+            sBgFillR = clamp_u8(col[0].is_number() ? col[0].get<int>() : 0);
+            sBgFillG = clamp_u8(col[1].is_number() ? col[1].get<int>() : 0);
+            sBgFillB = clamp_u8(col[2].is_number() ? col[2].get<int>() : 0);
+        }
+    }
 
     for (auto& v : sBinds) {
         v.clear();
@@ -563,6 +598,88 @@ extern "C" void Port_Config_SetTouchScheme(PortTouchScheme scheme) {
 extern "C" void Port_Config_CycleTouchScheme(int /*direction*/) {
     Port_Config_SetTouchScheme(sTouchScheme == PORT_TOUCH_SCHEME_DPAD ? PORT_TOUCH_SCHEME_JOYSTICK
                                                                       : PORT_TOUCH_SCHEME_DPAD);
+}
+
+extern "C" PortAspectMode Port_Config_AspectMode(void) {
+    return sAspectMode;
+}
+
+extern "C" const char* Port_Config_AspectModeName(PortAspectMode mode) {
+    switch (mode) {
+        case PORT_ASPECT_WIDESCREEN_16_9:      return "Widescreen 16:9";
+        case PORT_ASPECT_ULTRAWIDE_21_9:       return "Ultrawide 21:9";
+        case PORT_ASPECT_SUPER_ULTRAWIDE_32_9: return "Super Ultrawide 32:9";
+        case PORT_ASPECT_NATIVE_3_2:
+        default:                                return "Native 3:2 (GBA)";
+    }
+}
+
+extern "C" void Port_Config_SetAspectMode(PortAspectMode mode) {
+    if (mode < 0 || mode >= PORT_ASPECT_COUNT) mode = PORT_ASPECT_NATIVE_3_2;
+    sAspectMode = mode;
+    const char* name = "native";
+    switch (mode) {
+        case PORT_ASPECT_WIDESCREEN_16_9:      name = "16:9"; break;
+        case PORT_ASPECT_ULTRAWIDE_21_9:       name = "21:9"; break;
+        case PORT_ASPECT_SUPER_ULTRAWIDE_32_9: name = "32:9"; break;
+        case PORT_ASPECT_NATIVE_3_2:
+        default:                                name = "native"; break;
+    }
+    sConfigJson["aspect_mode"] = name;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_CycleAspectMode(int direction) {
+    int next = (int)sAspectMode + (direction < 0 ? -1 : 1);
+    if (next < 0) next = PORT_ASPECT_COUNT - 1;
+    if (next >= PORT_ASPECT_COUNT) next = 0;
+    Port_Config_SetAspectMode((PortAspectMode)next);
+}
+
+extern "C" PortBgFill Port_Config_BgFill(void) {
+    return sBgFill;
+}
+
+extern "C" const char* Port_Config_BgFillName(PortBgFill fill) {
+    switch (fill) {
+        case PORT_BG_FILL_SOLID_COLOR:   return "Solid color";
+        case PORT_BG_FILL_BLURRED_FRAME: return "Blurred frame";
+        case PORT_BG_FILL_BLACK:
+        default:                          return "Black";
+    }
+}
+
+extern "C" void Port_Config_SetBgFill(PortBgFill fill) {
+    if (fill < 0 || fill >= PORT_BG_FILL_COUNT) fill = PORT_BG_FILL_BLACK;
+    sBgFill = fill;
+    const char* name = "black";
+    switch (fill) {
+        case PORT_BG_FILL_SOLID_COLOR:   name = "solid";   break;
+        case PORT_BG_FILL_BLURRED_FRAME: name = "blurred"; break;
+        case PORT_BG_FILL_BLACK:
+        default:                          name = "black";   break;
+    }
+    sConfigJson["bg_fill"] = name;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_CycleBgFill(int direction) {
+    int next = (int)sBgFill + (direction < 0 ? -1 : 1);
+    if (next < 0) next = PORT_BG_FILL_COUNT - 1;
+    if (next >= PORT_BG_FILL_COUNT) next = 0;
+    Port_Config_SetBgFill((PortBgFill)next);
+}
+
+extern "C" void Port_Config_BgFillColor(u8* r, u8* g, u8* b) {
+    if (r) *r = sBgFillR;
+    if (g) *g = sBgFillG;
+    if (b) *b = sBgFillB;
+}
+
+extern "C" void Port_Config_SetBgFillColor(u8 r, u8 g, u8 b) {
+    sBgFillR = r; sBgFillG = g; sBgFillB = b;
+    sConfigJson["bg_fill_color"] = nlohmann::json::array({ (int)r, (int)g, (int)b });
+    SaveConfig();
 }
 
 extern "C" void Port_Config_CycleTargetFps(int direction) {

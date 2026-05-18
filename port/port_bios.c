@@ -1,4 +1,5 @@
 #include "gba/io_reg.h"
+#include "save.h"   /* gSave for Discord-RPC stat reads */
 #include "main.h"
 #include "port_audio.h"
 #include "port_asset_loader.h"
@@ -369,6 +370,22 @@ void VBlankIntrWait(void) {
     {
         extern void Port_QuickSave_AutoTick(void);
         Port_QuickSave_AutoTick();
+    }
+
+    /* Discord Rich Presence (no-op unless toggled on in F8 → Display).
+     * Self-throttled to 1 update per 15s inside the client, so per-
+     * frame calls are cheap. Health is stored as eighths of a heart
+     * (24 = 3 hearts), hence the >>3. */
+    {
+        extern void Port_DiscordRpc_Update(const char* area_name,
+                                           int hearts_now, int hearts_max,
+                                           int rupees);
+        extern const char* Port_DebugQuery_AreaName(unsigned char area);
+        const char* areaName = Port_DebugQuery_AreaName(gRoomControls.area);
+        Port_DiscordRpc_Update(
+            areaName,
+            (int)(gSave.stats.health >> 3), (int)(gSave.stats.maxHealth >> 3),
+            (int)gSave.stats.rupees);
     }
 
     VBlankIntr();

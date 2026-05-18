@@ -1174,24 +1174,41 @@ bool BuildAreaFromAssets(u32 area) {
      * to JSON, and crash callers that read it directly (e.g. the world-map
      * windcrest pin loop in subtaskFastTravel.c, #53). */
 
+    /* Same gotcha as the gAreaRoomHeaders fix in #53 (ac1081b2): the
+     * cache vectors below get sized to max(N,64) and filled with nullptr,
+     * then the first N slots are populated from extracted data. For areas
+     * with NO extracted tile/map data (e.g. Lake Hylia), N=0 and the
+     * vector ends up all-nullptr but non-empty — so the `.empty() ? nullptr
+     * : data()` checks always picked the data branch and clobbered the
+     * ROM-backed pointer that port_rom.c populated at startup. The renderer
+     * then reads tiles via NULL → all-black BG layers after fast-travel
+     * to an unextracted area. Only commit the cache when the SOURCE data
+     * (not the padded slot vector) was non-empty. */
     const size_t tileSetSlots = std::max<size_t>(gAssetGroupCache.areaTileSets[area].size(), 64);
     gAssetGroupCache.areaTileSetPtrs[area].assign(tileSetSlots, nullptr);
     for (size_t i = 0; i < gAssetGroupCache.areaTileSets[area].size(); ++i) {
         gAssetGroupCache.areaTileSetPtrs[area][i] = BuildMapDefinitionSequence(gAssetGroupCache.areaTileSets[area][i], area);
     }
-    gAreaTileSets[area] =
-        gAssetGroupCache.areaTileSetPtrs[area].empty() ? nullptr : gAssetGroupCache.areaTileSetPtrs[area].data();
+    if (!gAssetGroupCache.areaTileSets[area].empty()) {
+        gAreaTileSets[area] = gAssetGroupCache.areaTileSetPtrs[area].data();
+    }
 
     const size_t roomMapSlots = std::max<size_t>(gAssetGroupCache.areaRoomMaps[area].size(), 64);
     gAssetGroupCache.areaRoomMapPtrs[area].assign(roomMapSlots, nullptr);
     for (size_t i = 0; i < gAssetGroupCache.areaRoomMaps[area].size(); ++i) {
         gAssetGroupCache.areaRoomMapPtrs[area][i] = BuildMapDefinitionSequence(gAssetGroupCache.areaRoomMaps[area][i], area);
     }
-    gAreaRoomMaps[area] =
-        gAssetGroupCache.areaRoomMapPtrs[area].empty() ? nullptr : gAssetGroupCache.areaRoomMapPtrs[area].data();
+    if (!gAssetGroupCache.areaRoomMaps[area].empty()) {
+        gAreaRoomMaps[area] = gAssetGroupCache.areaRoomMapPtrs[area].data();
+    }
 
-    gAssetGroupCache.areaTilesPtrs[area] = BuildMapDefinitionSequence(gAssetGroupCache.areaTiles[area], area);
-    gAreaTiles[area] = gAssetGroupCache.areaTilesPtrs[area];
+    /* areaTiles[area] is a single pointer (not a sub-array). If the
+     * source was empty BuildMapDefinitionSequence returns nullptr; same
+     * preservation rule. */
+    if (!gAssetGroupCache.areaTiles[area].empty()) {
+        gAssetGroupCache.areaTilesPtrs[area] = BuildMapDefinitionSequence(gAssetGroupCache.areaTiles[area], area);
+        gAreaTiles[area] = gAssetGroupCache.areaTilesPtrs[area];
+    }
 
     const auto& jsonTables = gAssetGroupCache.areaTables[area];
     const size_t areaTableSlots = std::max<size_t>(jsonTables.size(), 64);
@@ -1289,8 +1306,13 @@ bool BuildAreaFromAssets(u32 area) {
         gAssetGroupCache.areaTablePtrs[area][room] = props.get();
         gAssetGroupCache.areaPropertyStorage[area][room] = std::move(props);
     }
-    gAreaTable[area] =
-        gAssetGroupCache.areaTablePtrs[area].empty() ? nullptr : gAssetGroupCache.areaTablePtrs[area].data();
+    /* Same preservation rule as the tile/map tables above: jsonTables
+     * is the SOURCE — when empty (no extracted area-tables JSON for this
+     * area, e.g. Lake Hylia) the padded all-nullptr slot vector must NOT
+     * clobber the ROM-backed pointer. */
+    if (!jsonTables.empty()) {
+        gAreaTable[area] = gAssetGroupCache.areaTablePtrs[area].data();
+    }
 
     return true;
 }

@@ -11,6 +11,9 @@
 #include "room.h"
 #include "player.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -21,6 +24,21 @@ typedef struct {
     /*0x76*/ u8 unk_76[16];
     /*0x86*/ u16 pushedFlag;
 } PushableLeverEntity;
+
+/* Issue #75 — same root cause as #89 (PushableRock). PushableLeverEntity's
+ * pushedFlag aliases GenericEntity.field_0x86 on GBA, but on PC the Entity
+ * base grew from 0x68 to 0x90 bytes and the byte-counted unk_* filler in
+ * this struct misses the resulting tail-union offset. Result on PC was
+ * pushedFlag reading 0 → SetFlag(0) being a no-op → the local flag the
+ * sunbeam manager waits on never got set → Temple of Droplets sunbeam
+ * never activated when the player pushed the lever. Route through
+ * GE_FIELD so we hit the real GenericEntity.field_0x86 on either
+ * platform. */
+#ifdef PC_PORT
+#define PUSHED_FLAG(this) (GE_FIELD(&(this)->base, field_0x86)->HWORD)
+#else
+#define PUSHED_FLAG(this) ((this)->pushedFlag)
+#endif
 
 enum PushableLeverAction {
     INIT,
@@ -70,9 +88,9 @@ void PushableLever_Pushing(PushableLeverEntity* this) {
     GetNextFrame(super);
     if ((super->frame & ANIM_DONE) != 0) {
         if (super->type2 == 0) {
-            SetFlag(this->pushedFlag);
+            SetFlag(PUSHED_FLAG(this));
         } else {
-            ClearFlag(this->pushedFlag);
+            ClearFlag(PUSHED_FLAG(this));
         }
         PushableLever_SetIdle(this);
     }
@@ -85,7 +103,7 @@ void PushableLever_SetIdle(PushableLeverEntity* this) {
 }
 
 void PushableLever_SetTiles(PushableLeverEntity* this) {
-    if (CheckFlags(this->pushedFlag) == FALSE) {
+    if (CheckFlags(PUSHED_FLAG(this)) == FALSE) {
         super->type2 = 0;
         this->tilePos = COORD_TO_TILE_OFFSET(super, 0, 0x10);
         this->tileIndex = GetTileIndex(this->tilePos, super->collisionLayer);

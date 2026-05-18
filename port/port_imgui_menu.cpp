@@ -29,6 +29,7 @@
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
 #include "port_randomizer.h"
 #include "port_reborn.h"
+#include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "rando/rando.h"
 
 #include <cstdio>
@@ -288,6 +289,87 @@ static void DrawRibbonDisplayTab(void) {
     if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
     ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
     if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
+
+    /* Aspect-ratio mode — picks the stage (visible area) that the GBA
+     * 3:2 frame sits inside. Wider modes add pillar bars around the
+     * frame; their fill is controlled by the next widget. */
+    {
+        ImGui::Text("Aspect ratio"); ImGui::SameLine(140);
+        if (ImGui::Button("<##aspect")) Port_Config_CycleAspectMode(-1);
+        ImGui::SameLine();
+        ImGui::Text("%s", Port_Config_AspectModeName(Port_Config_AspectMode()));
+        ImGui::SameLine();
+        if (ImGui::Button(">##aspect")) Port_Config_CycleAspectMode(+1);
+    }
+
+    /* Background-fill style for the pillar bars added by the aspect
+     * mode. "Blurred" uses a linearly-filtered stretched copy of the
+     * current frame for an "ambient mode" halo. */
+    {
+        ImGui::Text("Background"); ImGui::SameLine(140);
+        if (ImGui::Button("<##bgfill")) Port_Config_CycleBgFill(-1);
+        ImGui::SameLine();
+        ImGui::Text("%s", Port_Config_BgFillName(Port_Config_BgFill()));
+        ImGui::SameLine();
+        if (ImGui::Button(">##bgfill")) Port_Config_CycleBgFill(+1);
+
+        if (Port_Config_BgFill() == PORT_BG_FILL_SOLID_COLOR) {
+            /* Plain int sliders for R/G/B — controller-navigable, no
+             * popup state. (An earlier ColorEdit3 here opened a color
+             * picker popup whose lifetime could outlive the F8 ribbon
+             * and was suspected of crashing on close-via-gamepad.) The
+             * trailing ColorButton with NoPicker is a passive swatch. */
+            uint8_t r8 = 0, g8 = 0, b8 = 0;
+            Port_Config_BgFillColor(&r8, &g8, &b8);
+            int rgb[3] = { (int)r8, (int)g8, (int)b8 };
+            bool changed = false;
+            ImGui::PushItemWidth(120.0f);
+            if (ImGui::SliderInt("R##bgcol_r", &rgb[0], 0, 255)) changed = true;
+            ImGui::SameLine();
+            if (ImGui::SliderInt("G##bgcol_g", &rgb[1], 0, 255)) changed = true;
+            ImGui::SameLine();
+            if (ImGui::SliderInt("B##bgcol_b", &rgb[2], 0, 255)) changed = true;
+            ImGui::PopItemWidth();
+            ImGui::SameLine();
+            ImVec4 sw = ImVec4(rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f);
+            ImGui::ColorButton("##bgcol_preview", sw,
+                               ImGuiColorEditFlags_NoPicker |
+                               ImGuiColorEditFlags_NoTooltip,
+                               ImVec2(22, 22));
+            if (changed) {
+                Port_Config_SetBgFillColor((uint8_t)rgb[0],
+                                           (uint8_t)rgb[1],
+                                           (uint8_t)rgb[2]);
+            }
+        }
+    }
+
+    /* Discord Rich Presence — opens a local Unix IPC socket and
+     * publishes "area · hearts · rupees · time" once Discord is
+     * running. Off by default; no harm if Discord isn't around. */
+    {
+        bool drp = Port_DiscordRpc_IsEnabled();
+        if (ImGui::Checkbox("Discord Rich Presence", &drp)) {
+            Port_DiscordRpc_SetEnabled(drp);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::PushTextWrapPos(360.0f);
+            ImGui::TextUnformatted("Publishes current area + heart/rupee "
+                                   "count to Discord. Linux only for now "
+                                   "(no Windows named-pipe path yet). "
+                                   "Requires the Discord desktop client "
+                                   "to be running, and the env var "
+                                   "TMC_DISCORD_APP_ID to point at a "
+                                   "registered Discord application ID — "
+                                   "otherwise this toggle is a no-op "
+                                   "(see stderr for details).");
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+    }
 }
 
 /* Save current game to EEPROM, then drop the player back at the
@@ -1211,9 +1293,11 @@ extern "C" bool Port_ImGui_Render(void) {
      * default behaviour grabs the persistent MENU trigger and the
      * player's A press opens the menu instead of attacking. Toggle the
      * flag each frame so transitions are immediate. */
+    static bool sPrevMenuOpen = false;
+    const bool menuOpen = Port_DebugMenu_IsOpen();
     {
         ImGuiIO& io = ImGui::GetIO();
-        if (Port_DebugMenu_IsOpen()) {
+        if (menuOpen) {
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         } else {
             io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
@@ -1223,6 +1307,22 @@ extern "C" bool Port_ImGui_Render(void) {
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
+
+    /* Defensive cleanup on close-transition (open → closed). Without
+     * this, ImGui can retain nav focus / active-widget references to
+     * ribbon widgets that won't be drawn on the very next frame —
+     * causing intermittent crashes when the menu is closed via gamepad
+     * (Select+Start) while a widget is focused or being edited. Force-
+     * release window focus and any pending popups so the next render
+     * starts from a clean state. Safe to call between NewFrame and the
+     * first Begin. */
+    if (sPrevMenuOpen && !menuOpen) {
+        /* Release any window focus so ImGui's nav state doesn't keep a
+         * dangling reference to a ribbon widget. Calling with nullptr
+         * is the documented "no window focused" path. */
+        ImGui::SetWindowFocus(nullptr);
+    }
+    sPrevMenuOpen = menuOpen;
 
     /* Toast survives the menu being closed (e.g. after a warp). */
     DrawToast(Port_DebugMenu_Toast());

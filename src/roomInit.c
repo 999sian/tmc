@@ -5152,11 +5152,29 @@ extern u32 Enemies_LakeHylia_Main;
 extern u32 gUnk_080F3EA4;
 
 u32 sub_unk3_LakeHylia_Main(void) {
+#ifdef PC_PORT
+    /* On GBA, &Enemies_LakeHylia_Main and &gUnk_080F3EA4 are ROM
+     * addresses (0x080F3D44 and 0x080F3EA4 respectively — see
+     * data/map/entity_headers.s:17713). The port stubbed both as
+     * 4-byte uninitialised globals in port_linked_stubs.c, so taking
+     * their address gives the placeholder, not the ROM data the enemy
+     * loader needs. sub_0804B058 then iterated the 4 zero bytes as
+     * EntityData[], spawning garbage-kind entities and seeding the
+     * cycle/corruption that left Lake Hylia objects unable to spawn
+     * (tree portal etc). Resolve through the ROM widener instead. */
+    extern void* Port_ResolveRomData(u32 gba_addr);
+    if (CheckGlobalFlag(LV4_CLEAR) && !CheckLocalFlag(4)) {
+        gRoomVars.properties[2] = Port_ResolveRomData(0x080F3EA4);
+    } else {
+        gRoomVars.properties[2] = Port_ResolveRomData(0x080F3D44);
+    }
+#else
     if (CheckGlobalFlag(LV4_CLEAR) && !CheckLocalFlag(4)) {
         gRoomVars.properties[2] = &gUnk_080F3EA4;
     } else {
         gRoomVars.properties[2] = &Enemies_LakeHylia_Main;
     }
+#endif
     return 1;
 }
 

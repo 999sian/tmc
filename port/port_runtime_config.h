@@ -60,6 +60,43 @@ PortTouchScheme Port_Config_TouchScheme(void);
 void Port_Config_SetTouchScheme(PortTouchScheme scheme);
 void Port_Config_CycleTouchScheme(int direction);
 
+/* Aspect-ratio mode for the on-screen viewport. The GBA frame is always
+ * rendered at its native 3:2 aspect — this knob picks the *stage* it
+ * sits inside. Modes wider than 3:2 add pillar bars around the frame
+ * (filled per PortBgFill); modes equal to the window's natural aspect
+ * fill the whole window. Native means "no constraint, frame fills as
+ * much of the window as 3:2 allows" — the historical default. */
+typedef enum {
+    PORT_ASPECT_NATIVE_3_2          = 0,
+    PORT_ASPECT_WIDESCREEN_16_9     = 1,
+    PORT_ASPECT_ULTRAWIDE_21_9      = 2,
+    PORT_ASPECT_SUPER_ULTRAWIDE_32_9 = 3,
+    PORT_ASPECT_COUNT,
+} PortAspectMode;
+PortAspectMode Port_Config_AspectMode(void);
+const char*    Port_Config_AspectModeName(PortAspectMode mode);
+void           Port_Config_SetAspectMode(PortAspectMode mode);
+void           Port_Config_CycleAspectMode(int direction);
+
+/* Fill style for the area around the GBA frame (the "pillar bars" or
+ * "stage background"). Black is the historical default. Solid uses the
+ * persisted RGB triple from Port_Config_BgFillColor*. Blurred stretches
+ * a linearly-filtered copy of the current frame across the stage,
+ * giving a soft halo / "ambient mode" effect. */
+typedef enum {
+    PORT_BG_FILL_BLACK         = 0,
+    PORT_BG_FILL_SOLID_COLOR   = 1,
+    PORT_BG_FILL_BLURRED_FRAME = 2,
+    PORT_BG_FILL_COUNT,
+} PortBgFill;
+PortBgFill  Port_Config_BgFill(void);
+const char* Port_Config_BgFillName(PortBgFill fill);
+void        Port_Config_SetBgFill(PortBgFill fill);
+void        Port_Config_CycleBgFill(int direction);
+/* RGB triple, 0..255, used when BgFill == SOLID_COLOR. */
+void        Port_Config_BgFillColor(u8* r, u8* g, u8* b);
+void        Port_Config_SetBgFillColor(u8 r, u8 g, u8 b);
+
 void Port_Config_OpenGamepads(void);
 void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);

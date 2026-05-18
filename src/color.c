@@ -6,6 +6,9 @@
 #include "main.h"
 #include "gfx.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include <stdio.h>   /* fprintf for the per-frame palette-walker cycle warning */
+#endif
 
 extern Palette gUnk_02001A3C;
 
@@ -305,6 +308,14 @@ void CleanUpObjPalettes(void) {
 
     for (index2 = 0; index2 < ARRAY_COUNT(gEntityLists); index2++) {
         pEVar9 = (Entity*)&gEntityLists[index2];
+#ifdef PC_PORT
+        /* Lake Hylia warp repro produced a cycle in gEntityLists[0]
+         * (entity.c:361 fix); palette cleanup runs every frame and would
+         * spin forever on the same corruption. Bound the walk at 256
+         * steps — well above any real list length. */
+        int _w = 0;
+        const int _wCap = 256;
+#endif
         while (((Entity*)&gEntityLists[index2]) != (pEVar9 = pEVar9->next)) {
 #ifdef PC_PORT
             /* #93 takeover-cutscene exit: when many helpers self-delete
@@ -317,6 +328,26 @@ void CleanUpObjPalettes(void) {
              * skipped, but the cleanup is best-effort and the next frame
              * will see a consistent list again. */
             if (pEVar9 == NULL) {
+                break;
+            }
+            /* Lake Hylia warp repro: `next` can also contain a garbage
+             * GBA-EWRAM-relative address (e.g. 0x1100) that escaped
+             * pointer widening. Validate the address is in one of the
+             * legitimate entity pools before deref. Same idea as the
+             * a8502e5e #93 follow-up but for garbage values, not NULL. */
+            extern int Port_IsValidEntityAddr(const void*);
+            if (!Port_IsValidEntityAddr(pEVar9)) {
+                break;
+            }
+            if (++_w >= _wCap) {
+                static unsigned long sWarned = 0;
+                const unsigned long mask = 1UL << (index2 & 31);
+                if (!(sWarned & mask)) {
+                    sWarned |= mask;
+                    fprintf(stderr,
+                        "[color] cycle detected on gEntityLists[%d] in palette pass; bailing.\n",
+                        (int)index2);
+                }
                 break;
             }
 #endif

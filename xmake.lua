@@ -508,6 +508,29 @@ target("tmc_pc")
     -- Inject the version string from the top-of-file constant so the
     add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
     add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
+
+    -- Discord Rich Presence application ID — optional, gitignored.
+    -- Local devs/release builders drop their Discord App ID into
+    -- discord_app_id.txt at repo root and it gets baked in as the
+    -- compile-time fallback used when TMC_DISCORD_APP_ID env var is
+    -- unset. The file is in .gitignore so the public repo never
+    -- contains it (see port/port_discord_rpc.c security-model note).
+    --
+    -- File-reading APIs only exist in script-scope (on_load), so we
+    -- inject the macro from there rather than the surrounding
+    -- description scope.
+    on_load(function (target)
+        if os.isfile("discord_app_id.txt") then
+            local app_id = io.readfile("discord_app_id.txt")
+            if app_id then
+                app_id = app_id:gsub("%s+", "")
+                if app_id ~= "" then
+                    target:add("defines",
+                        'TMC_DISCORD_APP_ID_DEFAULT="' .. app_id .. '"')
+                end
+            end
+        end
+    end)
     if use_avx2 and arch_supports_avx2 then
         add_defines("USE_AVX2")
         add_cflags("-mavx2", "-mfma", {tools = {"gcc", "clang"}})
@@ -607,6 +630,7 @@ target("tmc_pc")
     add_files("port/port_script_funcs.c") -- Script Call/CallWithArg function lookup (generated)
     add_files("port/port_analog_movement.c") -- 360° left-stick movement bridge (REBORN_FEAT_ANALOG_360_MOVEMENT)
     add_files("port/port_audio_mute.cpp")    -- per-category SFX mute toggles (F8 → Audio)
+    add_files("port/port_discord_rpc.c")     -- Discord Rich Presence (Unix IPC, F8 → Display toggle)
     add_files("libs/ViruaPPU/src/*.c")
     add_files("libs/VirtuaAPU/src/*.c")
     add_files("libs/agbplay_core/*.cpp")

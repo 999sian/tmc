@@ -9,6 +9,9 @@
 #include "flags.h"
 #include "common.h"
 #include "object.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#endif
 #include "room.h"
 #include "player.h"
 #include "screen.h"
@@ -73,6 +76,13 @@ void TempleOfDropletsManager_Type0(TempleOfDropletsManager* this) {
         sub_0805AAF0(this->unk_23);
         gScreen.lcd.displayControl |= DISPCNT_WIN1_ON | DISPCNT_BG3_ON;
     }
+#ifdef PC_PORT
+    /* Issue #75: scroll.c and various overlay managers clear WIN1 / BG3
+     * from displayControl per-frame on PC. Original GBA Type 0 set the
+     * bits once at init and trusted them to stick. Re-set every frame
+     * so the sunbeam stays visible. */
+    gScreen.lcd.displayControl |= DISPCNT_WIN1_ON | DISPCNT_BG3_ON;
+#endif
     sub_0805A8EC(this);
 }
 
@@ -161,6 +171,17 @@ void TempleOfDropletsManager_Type2(TempleOfDropletsManager* this) {
     } else {
         TempleOfDropletsManager_Type2_Actions[super->action](this);
     }
+#ifdef PC_PORT
+    /* Issue #75: scroll.c::Scroll0 (line 420) clears DISPCNT_WIN1_ON on
+     * every scroll-end on PC; on GBA the bits set at init/action-3 stick
+     * but here they get nuked whenever the camera settles. When the
+     * puzzle is in the "beam visible" states (action >= 3, i.e. after
+     * the player pushed the lever and the LightRay animation completed),
+     * re-assert both bits every frame so the sunbeam keeps rendering. */
+    if (super->action >= 3) {
+        gScreen.lcd.displayControl |= DISPCNT_WIN1_ON | DISPCNT_BG3_ON;
+    }
+#endif
     sub_0805A8EC(this);
 }
 
@@ -423,10 +444,65 @@ void sub_0805A89C(TempleOfDropletsManager* this) {
 void sub_0805A94C(TempleOfDropletsManager* this);
 
 void sub_0805A8EC(TempleOfDropletsManager* this) {
+#ifdef PC_PORT
+    /* Issue #75 diagnostic: dump every ~2 seconds while the manager is
+     * alive. The previous version filtered on super->id == 0x2e but that
+     * never matched — Manager.id for a TempleOfDropletsManager is
+     * TEMPLE_OF_DROPLETS_MANAGER (= 21 = 0x15), 0x2e is TILE_PUZZLE_MANAGER.
+     * The filter silently suppressed every log line, leaving the
+     * sunbeam-not-rendering chase blind. */
+    if (getenv("TMC_TRACE_BEAM")) {
+        extern u16 gPaletteBuffer[];
+        static u32 frame_counter = 0;
+        if ((frame_counter++ % 120u) == 0u) {
+            u32 i;
+            u32 bg3_nonzero = 0;
+            for (i = 0; i < sizeof(gBG3Buffer) / sizeof(gBG3Buffer[0]); ++i) {
+                if (gBG3Buffer[i]) ++bg3_nonzero;
+            }
+            fprintf(stderr,
+                "[ToD-mgr] sub_0805A8EC type=%u action=%u subAction=%u unk_20=%u "
+                "room=%u reload=%u localFlag=0x%04x flag=0x%04x "
+                "unk_23=%u unk_34=%d unk_36=%d "
+                "dispCtl=0x%04x bg3.ctl=0x%04x bg3.off=(%d,%d) bg3.upd=%u "
+                "win1H=0x%04x win1V=0x%04x pal5[0..3]=%04x %04x %04x %04x "
+                "gBG3Buffer nonzero=%u/%u\n",
+                (unsigned)super->type, (unsigned)super->action,
+                (unsigned)super->subAction, (unsigned)this->unk_20,
+                (unsigned)gRoomControls.room, (unsigned)gRoomControls.reload_flags,
+                (unsigned)this->localFlag, (unsigned)this->flag,
+                (unsigned)this->unk_23, (int)this->unk_34, (int)this->unk_36,
+                (unsigned)gScreen.lcd.displayControl,
+                (unsigned)gScreen.bg3.control,
+                (int)(s16)gScreen.bg3.xOffset, (int)(s16)gScreen.bg3.yOffset,
+                (unsigned)gScreen.bg3.updated,
+                (unsigned)gScreen.controls.window1HorizontalDimensions,
+                (unsigned)gScreen.controls.window1VerticalDimensions,
+                (unsigned)gPaletteBuffer[5 * 16 + 0],
+                (unsigned)gPaletteBuffer[5 * 16 + 1],
+                (unsigned)gPaletteBuffer[5 * 16 + 2],
+                (unsigned)gPaletteBuffer[5 * 16 + 3],
+                (unsigned)bg3_nonzero,
+                (unsigned)(sizeof(gBG3Buffer) / sizeof(gBG3Buffer[0])));
+        }
+    }
+#endif
     sub_0805AA58(this);
     sub_0805A94C(this);
     if (gRoomControls.reload_flags == 1) {
+#ifdef PC_PORT
+        /* Issue #75: GBA original only sets WIN1 here, relying on BG3
+         * having been set at init and persisting. On PC, scroll.c
+         * (line 420) clears WIN1 on scroll-end and some overlay
+         * managers (steamOverlayManager, cloudOverlayManager) clear
+         * BG3 on room transitions; the per-frame reload-branch needs
+         * to re-enable BOTH so the sunbeam stays visible across all
+         * TempleOfDroplets Types (every Type's update chain ends at
+         * sub_0805A8EC). */
+        gScreen.lcd.displayControl |= DISPCNT_WIN1_ON | DISPCNT_BG3_ON;
+#else
         gScreen.lcd.displayControl |= DISPCNT_WIN1_ON;
+#endif
         super->subAction = 1;
     } else {
         if (super->subAction == 0)
