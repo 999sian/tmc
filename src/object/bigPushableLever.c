@@ -11,6 +11,9 @@
 #include "room.h"
 #include "player.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -23,6 +26,13 @@ typedef struct {
     /*0x84*/ u16 timer;
     /*0x86*/ u16 pushedFlag;
 } BigPushableLeverEntity;
+
+/* Issue #75 — same #89 alias pattern as PushableLever / PushableRock. */
+#ifdef PC_PORT
+#define BPL_PUSHED_FLAG(this) (GE_FIELD(&(this)->base, field_0x86)->HWORD)
+#else
+#define BPL_PUSHED_FLAG(this) ((this)->pushedFlag)
+#endif
 
 enum BigPushableLeverAction {
     INIT,
@@ -71,9 +81,9 @@ void BigPushableLever_Pushing(BigPushableLeverEntity* this) {
     GetNextFrame(super);
     if ((super->frame & ANIM_DONE) != 0) {
         if (super->type2 == 0) {
-            SetFlag(this->pushedFlag);
+            SetFlag(BPL_PUSHED_FLAG(this));
         } else {
-            ClearFlag(this->pushedFlag);
+            ClearFlag(BPL_PUSHED_FLAG(this));
         }
         BigPushableLever_SetIdle(this);
     }
@@ -86,7 +96,7 @@ void BigPushableLever_SetIdle(BigPushableLeverEntity* this) {
 }
 
 void BigPushableLever_SetTiles(BigPushableLeverEntity* this) {
-    if (!CheckFlags(this->pushedFlag)) {
+    if (!CheckFlags(BPL_PUSHED_FLAG(this))) {
         super->type2 = 0;
         this->tilePosUpper = COORD_TO_TILE_OFFSET(super, 0, 0x10);
         this->tilePosLower = this->tilePosUpper - 0x40;

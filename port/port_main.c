@@ -512,6 +512,10 @@ int main(int argc, char* argv[]) {
 
     AgbMain();
 
+    {
+        extern void Port_DiscordRpc_Shutdown(void);
+        Port_DiscordRpc_Shutdown();
+    }
     Port_Audio_Shutdown();
     Port_PPU_Shutdown();
     Port_Config_CloseGamepads();

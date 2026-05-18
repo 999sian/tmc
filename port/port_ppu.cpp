@@ -116,26 +116,65 @@ extern "C" const char* Port_PPU_PresentationModeName(void) {
     return kNames[(int)sPresentMode];
 }
 
-// Largest GBA-aspect rect fitting inside (w, h), centered. Aspect uses
-// MODE1_GBA_WIDTH so the widescreen spike (override via -DMODE1_GBA_WIDTH)
-// keeps the rendered rect's proportions matching the framebuffer rather
-// than letterboxing the wider content.
-static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* outW, int* outH) {
-    const int FW = MODE1_GBA_WIDTH;
-    const int FH = MODE1_GBA_HEIGHT;
+// Largest rect with aspect aspW:aspH fitting inside (w, h), centered.
+static void Port_PPU_FitAspectRect(int w, int h, int aspW, int aspH,
+                                   int* outX, int* outY, int* outW, int* outH) {
     int rw;
     int rh;
-    if (w * FH >= h * FW) {
+    if (w * aspH >= h * aspW) {
         rh = h;
-        rw = (h * FW) / FH;
+        rw = (h * aspW) / aspH;
     } else {
         rw = w;
-        rh = (w * FH) / FW;
+        rh = (w * aspH) / aspW;
     }
     *outX = (w - rw) / 2;
     *outY = (h - rh) / 2;
     *outW = rw;
     *outH = rh;
+}
+
+// Largest GBA-aspect rect fitting inside (w, h), centered. Aspect uses
+// MODE1_GBA_WIDTH so the widescreen spike (override via -DMODE1_GBA_WIDTH)
+// keeps the rendered rect's proportions matching the framebuffer rather
+// than letterboxing the wider content.
+static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* outW, int* outH) {
+    Port_PPU_FitAspectRect(w, h, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
+                           outX, outY, outW, outH);
+}
+
+// Compute both the "stage" rect (the visible area honoring the user's
+// configured aspect mode — gets the chosen background fill) and the
+// GBA "frame" rect that sits centered inside the stage. Outside the
+// stage is always black. For PORT_ASPECT_NATIVE_3_2 the stage equals
+// the GBA frame and there is no background fill region.
+static void Port_PPU_ComputeViewportRects(int outW, int outH,
+                                          int* stageX, int* stageY,
+                                          int* stageW, int* stageH,
+                                          int* frameX, int* frameY,
+                                          int* frameW, int* frameH) {
+    const int FW = MODE1_GBA_WIDTH;
+    const int FH = MODE1_GBA_HEIGHT;
+
+    int aspW = FW;
+    int aspH = FH;
+    const PortAspectMode mode = Port_Config_AspectMode();
+    switch (mode) {
+        case PORT_ASPECT_WIDESCREEN_16_9:      aspW = 16; aspH = 9; break;
+        case PORT_ASPECT_ULTRAWIDE_21_9:       aspW = 21; aspH = 9; break;
+        case PORT_ASPECT_SUPER_ULTRAWIDE_32_9: aspW = 32; aspH = 9; break;
+        case PORT_ASPECT_NATIVE_3_2:
+        default:                                aspW = FW; aspH = FH; break;
+    }
+    Port_PPU_FitAspectRect(outW, outH, aspW, aspH,
+                           stageX, stageY, stageW, stageH);
+    // Inside the stage, fit the GBA frame at its native 3:2.
+    int fx, fy, fw, fh;
+    Port_PPU_FitAspectRect(*stageW, *stageH, FW, FH, &fx, &fy, &fw, &fh);
+    *frameX = *stageX + fx;
+    *frameY = *stageY + fy;
+    *frameW = fw;
+    *frameH = fh;
 }
 
 static void Port_PPU_QueryOutputSize(int* outW, int* outH) {
@@ -439,12 +478,13 @@ extern "C" void Port_PPU_PresentFrame(void) {
         int outH = 0;
         Port_PPU_QueryOutputSize(&outW, &outH);
         Port_TouchControls_NotifyRenderSize(outW, outH);
-        int x;
-        int y;
-        int w;
-        int h;
-        Port_PPU_ComputeFitRect(outW, outH, &x, &y, &w, &h);
-        SDL_FRect dst = { (float)x, (float)y, (float)w, (float)h };
+        int sx, sy, sw_stage, sh_stage;
+        int x, y, w, h;
+        Port_PPU_ComputeViewportRects(outW, outH,
+                                      &sx, &sy, &sw_stage, &sh_stage,
+                                      &x,  &y,  &w,        &h);
+        SDL_FRect stage = { (float)sx, (float)sy, (float)sw_stage, (float)sh_stage };
+        SDL_FRect dst   = { (float)x,  (float)y,  (float)w,        (float)h        };
 
         SDL_Texture* tex;
         SDL_ScaleMode scale;
@@ -496,9 +536,28 @@ extern "C" void Port_PPU_PresentFrame(void) {
                 break;
             }
         }
-        SDL_SetTextureScaleMode(tex, scale);
+        /* Clear-to-black covers anything outside the stage rect (the
+         * area honoring the user's aspect-ratio choice). Inside the
+         * stage, the chosen background-fill style applies; on top of
+         * that, the sharp GBA frame is composited in `dst`. */
         SDL_SetRenderDrawColor(sRenderer, 0, 0, 0, 255);
         SDL_RenderClear(sRenderer);
+
+        const PortBgFill bgFill = Port_Config_BgFill();
+        if (bgFill == PORT_BG_FILL_SOLID_COLOR) {
+            u8 bgR = 0, bgG = 0, bgB = 0;
+            Port_Config_BgFillColor(&bgR, &bgG, &bgB);
+            SDL_SetRenderDrawColor(sRenderer, bgR, bgG, bgB, 255);
+            SDL_RenderFillRect(sRenderer, &stage);
+        } else if (bgFill == PORT_BG_FILL_BLURRED_FRAME) {
+            /* Stretch the same texture across the whole stage with
+             * linear filtering for a soft "ambient mode" halo, then
+             * the sharp letterboxed copy paints over the center. */
+            SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_LINEAR);
+            SDL_RenderTexture(sRenderer, tex, nullptr, &stage);
+        }
+
+        SDL_SetTextureScaleMode(tex, scale);
         SDL_RenderTexture(sRenderer, tex, nullptr, &dst);
         {
             /* Try the ImGui-based menu first; if disabled (or init

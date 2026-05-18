@@ -9,6 +9,7 @@
 #include "script.h"
 #include "game.h"
 #include "manager/bombableWallManager.h"
+#include "manager/templeOfDropletsManager.h"
 #include "map.h"
 #include "object.h"
 #include "tiles.h"
@@ -80,6 +81,61 @@ Entity* LoadRoomEntity(const EntityData* dat) {
         entity->id = dat->id;
         entity->type = dat->type;
         RegisterRoomEntity(entity, dat);
+#ifdef PC_PORT
+        /* Issue #75 — TempleOfDropletsManager fields after Manager.base
+         * get mis-mapped on PC by the manager-spawn MemCopy in
+         * RegisterRoomEntity. Done AFTER RegisterRoomEntity so the
+         * MemCopy doesn't clobber our writes.
+         *
+         * On GBA, the manager spawn copies the 16-byte EntityData onto
+         * the pool slot at offset 0x30 (= sizeof(Manager_GBA) + 0x10).
+         * That lands type2 in unk_34, xPos in unk_38, yPos in unk_3a,
+         * spritePtr halves in flag/localFlag — the layout the manager's
+         * update logic expects.
+         *
+         * On PC, Manager grew from 0x20 to 0x38 (prev/next/parent/child
+         * widened 4→8) AND TempleOfDropletsManager's own void* unk_28
+         * grew 4→8. The RegisterRoomEntity PC fork copies to
+         * sizeof(Manager_PC) + 0x10 = 0x48, but the additional 4-byte
+         * shift inside the struct (from unk_28's widening) means
+         * EntityData fields land 4 bytes earlier than the manager logic
+         * expects:
+         *
+         *     EntityData → GBA dest field   → PC actual write site
+         *     type2      → unk_34/unk_36    → unk_2e[2..5]  (junked)
+         *     xPos       → unk_38           → unk_34        (wrong)
+         *     yPos       → unk_3a           → unk_36        (wrong)
+         *     spritePtr  → flag/localFlag   → unk_38/unk_3a (wrong)
+         *
+         * unk_34/unk_36 feed bg3.xOffset/yOffset in sub_0805A94C — so
+         * when xPos (e.g. 0x88) lands in unk_34 instead of paramB's
+         * signed offset (e.g. -8), the bg3 scroll falls hundreds of
+         * pixels off and BG3 reads from an empty region of the
+         * tilemap. Visible symptom: WIN1 is sized and positioned
+         * correctly, but bg_layers[3] is transparent everywhere inside
+         * it → no sunbeam.
+         *
+         * Fix: re-write each of the six fields from the source
+         * EntityData at the right PC offset. Gated on id == 0x15 (=
+         * TempleOfDropletsManager) so other managers using the same
+         * MemCopy aren't disturbed. */
+        if (kind == 9 && dat->id == 0x15) {
+            TempleOfDropletsManager* mgr = (TempleOfDropletsManager*)entity;
+            /* unk_34 / unk_36 — bg3 scroll-offset corrections, from
+             * paramB (= type2). Encoded as a packed pair of s16. */
+            mgr->unk_34 = (s16)(dat->type2 & 0xFFFFu);
+            mgr->unk_36 = (s16)(dat->type2 >> 16);
+            /* unk_38 / unk_3a — beam world position from xPos/yPos.
+             * sub_0805A4CC uses these to place the spawned LightRay. */
+            mgr->unk_38 = (s16)dat->xPos;
+            mgr->unk_3a = (s16)dat->yPos;
+            /* flag / localFlag — puzzle-state flags from spritePtr
+             * halves. The lever-push → flag-set → manager-checks-flag
+             * chain depends on these matching the data. */
+            mgr->flag = (u16)(dat->spritePtr & 0xFFFFu);
+            mgr->localFlag = (u16)(dat->spritePtr >> 16);
+        }
+#endif
         if ((dat->flags & 0xF0) != 16) {
             u8 kind2;
             entity->type2 = *(u8*)&dat->type2;
@@ -356,6 +412,41 @@ void SetCurrentRoomPropertyList(u32 area, u32 room) {
     if (gAreaTable[area] != NULL) {
 #ifdef PC_PORT
         gCurrentRoomProperties = GetAreaRoomPropertyList(area, room);
+        /* Refresh the gRoomVars.properties[0..7] cache from the new
+         * property list. Without this, GetCurrentRoomProperty(idx<=7)
+         * keeps returning the PREVIOUS room's cached values — and
+         * LoadRoomEntityList iterates that stale pointer as if it
+         * were EntityData[], walking off the end into .bss garbage
+         * (e.g. sEntityUpdateJmpBuf) and writing garbage `next`
+         * pointers into freshly-spawned entities. Repro: ocarina
+         * fast-travel from Wind Ruins to Lake Hylia, which routes
+         * through subtaskWorldEvent.c → SetCurrentRoomPropertyList
+         * without going through the normal area-change path that
+         * already calls sub_0804AFB0 in LoadRoom/init.
+         *
+         * Use the (area, room) ARGUMENTS rather than gRoomControls —
+         * the caller (sub_08054974) sets gRoomControls AFTER us, so
+         * gRoomControls still names the source area at this point.
+         * Routing through sub_0804AFB0 directly would cache the source
+         * area's room callbacks (init/enter/update/exit) under the
+         * destination's property indices, leaving the destination's
+         * tree-portal / ocarina / interaction handlers inactive even
+         * after the warp visually completes. */
+        if (gCurrentRoomProperties != NULL) {
+            u32 i;
+            for (i = 0; i < 8; ++i) {
+                void* val = NULL;
+                if (i >= 4) {
+                    val = Port_GetRoomFuncProp(area, room, i);
+                }
+                if (val == NULL) {
+                    val = IsRoomPropertyListInRom(gCurrentRoomProperties)
+                              ? Port_ReadPackedRomPtr(gCurrentRoomProperties, i)
+                              : gCurrentRoomProperties[i];
+                }
+                gRoomVars.properties[i] = val;
+            }
+        }
 #else
         gCurrentRoomProperties = gAreaTable[area][room];
 #endif

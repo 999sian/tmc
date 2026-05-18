@@ -111,3 +111,8 @@ baserom.gba
 run/
 config.json
 release/
+
+# Discord Rich Presence application ID — per-developer/release secret-by-policy
+# (technically public-by-design, but we don't want forks to inherit our app).
+# xmake reads this if present and bakes the ID into the local build.
+discord_app_id.txt
