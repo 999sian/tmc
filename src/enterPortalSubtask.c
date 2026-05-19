@@ -185,6 +185,20 @@ void Subtask_PortalCutscene_0(void) {
     if ((portalId == PT_2) && (gUI.roomControls.area != 2)) {
         portalId = PT_DUNGEON;
     }
+#ifdef PC_PORT
+    /* gUnk_080D4138 / gUnk_080D4110 are both sized 4 (TREESTUMP/ROCK/PT_2/
+     * DUNGEON). Player.c's PortalEnterUpdate routes PT_TOD through
+     * DoExitTransition and PT_DUNGEON exits via sub_080717F8, so this
+     * cutscene path is theoretically only entered with portalId 0..3.
+     * The GBA happened to read adjacent .rodata bytes anyway (gUnk_080D4110
+     * neighbours the Subtask_MinishPortal function-pointer table — turning
+     * a stray index 4+ into a "call function pointer as EntityData*"
+     * disaster). Defend the index so a future caller can't accidentally
+     * smash through the bound. */
+    if (portalId > 3) {
+        portalId = PT_DUNGEON;
+    }
+#endif
     ptr = &gUnk_080D4138[portalId];
     LoadPaletteGroup(ptr->paletteGroup);
     LoadGfxGroup(ptr->gfxGroup);
