@@ -216,6 +216,14 @@ void sub_08038BA8(ScissorsBeetleEntity* this) {
 void sub_08038C2C(ScissorsBeetleEntity* this) {
     u32 parentAnimState;
     super->subtimer = gUnk_080CF634[Random() & 7];
+#ifdef PC_PORT
+    /* #101 — mandibles outlive the body. sub_08038A70:131 explicitly NULLs
+     * the mandibles' parent at detach; if sub_08038C2C runs after that
+     * (death sequence, residual frame), this->parent is NULL and the
+     * animationState read SIGSEGVs. Canonical #97-pattern guard. */
+    if (super->parent == NULL)
+        return;
+#endif
     parentAnimState = super->parent->animationState;
     if (super->animationState == 0xff) {
         super->animationState = parentAnimState;
