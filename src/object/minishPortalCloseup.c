@@ -57,7 +57,26 @@ void MinishPortalCloseup_Action1(MinishPortalCloseupEntity* this) {
         ResetPaletteTable(0);
         ResetPalettes();
         gGFXSlots.unk0 = 1;
-        ptr = &gUnk_081216C8[super->type * 3];
+        {
+#ifdef PC_PORT
+            /* gUnk_081216C8 holds 3 triples (TREESTUMP/ROCK/PT_2) plus a
+             * sentinel 0 — total 10 u16 entries. super->type comes from
+             * gArea.portal_type which can in principle be PT_DUNGEON/JAR/5;
+             * the upstream gating (PortalEnterUpdate split on PT_TOD,
+             * PortalUsePortal returning early on PT_DUNGEON) keeps the
+             * cutscene confined to types 0..2 in current data, but defend
+             * the index so a stray higher type can't read into the
+             * adjacent unrelated u16s (would yield bogus gfxId/paletteId/
+             * spriteIndex and likely a sprite-cache miss). */
+            u32 closeupType = super->type;
+            if (closeupType > 2) {
+                closeupType = 2;
+            }
+            ptr = &gUnk_081216C8[closeupType * 3];
+#else
+            ptr = &gUnk_081216C8[super->type * 3];
+#endif
+        }
         LoadFixedGFX(super, ptr[0]);
         LoadObjPalette(super, ptr[1]);
         super->spriteIndex = ptr[2];
