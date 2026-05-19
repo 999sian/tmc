@@ -19,7 +19,21 @@
 bool32 PortalReadyForMinish(void);
 
 void MinishPortalManager_Main(MinishPortalManager* this) {
-    static const s8 gUnk_08107C6C[] = { -3, -3, -3, 0 };
+    /* Decomp originally declared this as `{ -3, -3, -3, 0 }` (size 4),
+     * but entity_headers spawns this manager with paramA values up to
+     * 0xa — notably the Lake Hylia → Temple of Droplets entry uses
+     * paramA=PT_TOD (=6). The GBA's index-6 read lands on the high byte
+     * of the adjacent function pointer at 0x08107C70 (= 0x0805786d),
+     * which happens to be 0x05; that 5-pixel y-bias is what the ToD
+     * portal needs to align the player on the entry tile. On PC the
+     * `.rodata` neighbours are unrelated, so the OOB read returned
+     * garbage — portal_y drifted, the player oscillated, and on a
+     * lucky frame stood several pixels off the visual entry. Restore
+     * the GBA bytes verbatim through paramA=0xa so all portal types
+     * (TREESTUMP/ROCK/PT_2/DUNGEON, plus the post-array bytes the GBA
+     * code happens to read) align to the same offsets the original ROM
+     * produced. */
+    static const s8 gUnk_08107C6C[] = { -3, -3, -3, 0, 0x6d, 0x78, 0x05, 0x08, 0x21, 0x79, 0x05 };
     s8 tmp;
     if (super->action == 0) {
         super->action = 1;
