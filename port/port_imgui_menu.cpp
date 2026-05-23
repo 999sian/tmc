@@ -23,6 +23,12 @@
 
 #include <SDL3/SDL.h>
 #include <imgui.h>
+
+/* .glslp runtime hooks (port_glslp_runtime.cpp). File-scope so the F8
+ * preset-picker lambda below can call them through C linkage. */
+extern "C" int  Port_GlslpRuntime_Load(const char*);
+extern "C" void Port_GlslpRuntime_Unload(void);
+extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
 #ifdef TMC_GPU_RENDERER
@@ -39,6 +45,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <system_error>
@@ -345,6 +352,77 @@ static void DrawRibbonDisplayTab(void) {
     if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
     ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
     if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
+
+    /* Shader preset (libretro .glslp) — Step 7 picker. Scans the
+     * working directory's ./shaders/ subdirectory for *.glslp files;
+     * selecting one tears down any active preset and loads the new
+     * one through the .glslp runtime. "Off" returns to the stock GPU
+     * filter pipeline above. The list is cached and refreshes on
+     * the Scan button or after a successful Load. */
+    {
+
+        static std::vector<std::string> sPresetPaths;
+        static std::string              sActivePreset;
+        static bool                     sScannedOnce = false;
+
+        auto refresh = [&] {
+            sPresetPaths.clear();
+            std::error_code ec;
+            for (const auto& root : {"shaders", "glslp", "."}) {
+                if (!std::filesystem::is_directory(root, ec)) continue;
+                for (auto& entry : std::filesystem::recursive_directory_iterator(root, ec)) {
+                    if (entry.is_regular_file(ec) && entry.path().extension() == ".glslp") {
+                        sPresetPaths.push_back(entry.path().string());
+                    }
+                }
+            }
+            std::sort(sPresetPaths.begin(), sPresetPaths.end());
+        };
+        if (!sScannedOnce) { refresh(); sScannedOnce = true; }
+
+        ImGui::Text("Shader preset"); ImGui::SameLine(140);
+        if (ImGui::Button("Off##preset")) {
+            Port_GlslpRuntime_Unload();
+            sActivePreset.clear();
+            Port_DebugMenu_ToastFromExternal("Shader preset off");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Rescan##preset")) refresh();
+        ImGui::SameLine();
+        ImGui::TextDisabled("(%zu found)", sPresetPaths.size());
+
+        const bool active = Port_GlslpRuntime_IsActive() != 0;
+        if (active && !sActivePreset.empty()) {
+            ImGui::TextDisabled("  active: %s", sActivePreset.c_str());
+        }
+
+        /* Vertical list of presets — clickable. Capped at 8 visible
+         * before scrolling so the F8 ribbon stays compact on small
+         * windows. */
+        if (!sPresetPaths.empty()) {
+            ImGui::Indent(140);
+            if (ImGui::BeginListBox("##preset_list",
+                    ImVec2(420, ImGui::GetTextLineHeightWithSpacing() * 8))) {
+                for (size_t i = 0; i < sPresetPaths.size(); ++i) {
+                    bool selected = (sPresetPaths[i] == sActivePreset);
+                    /* Short display name — strip the leading directory
+                     * components so the user sees the .glslp filename. */
+                    std::string label = std::filesystem::path(sPresetPaths[i]).filename().string();
+                    label += "    "; label += sPresetPaths[i];
+                    if (ImGui::Selectable(label.c_str(), selected)) {
+                        if (Port_GlslpRuntime_Load(sPresetPaths[i].c_str())) {
+                            sActivePreset = sPresetPaths[i];
+                            Port_DebugMenu_ToastFromExternal("Preset loaded");
+                        } else {
+                            Port_DebugMenu_ToastFromExternal("Preset load FAILED — see stderr");
+                        }
+                    }
+                }
+                ImGui::EndListBox();
+            }
+            ImGui::Unindent(140);
+        }
+    }
 
     /* Aspect-ratio mode — picks the stage (visible area) that the GBA
      * 3:2 frame sits inside. Wider modes add pillar bars around the
