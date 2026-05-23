@@ -798,6 +798,188 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
     return out;
 }
 
+/* ----- Step 6: LUT image loader ------------------------------------- */
+
+namespace {
+
+/* Read N bytes from `path` into a buffer; small wrapper over
+ * ReadFileBytes that returns the vector directly. */
+static std::optional<std::vector<uint8_t>> ReadFileVec(const std::string& path) {
+    std::vector<uint8_t> v;
+    if (!ReadFileBytes(path, v)) return std::nullopt;
+    return v;
+}
+
+/* Detect file type by magic. PNG starts with 0x89 'P' 'N' 'G'. TGA
+ * has no robust magic; fall back to filename extension. */
+enum class LutImageFormat { Png, Tga, Unknown };
+static LutImageFormat DetectLutFormat(const std::string& path,
+                                      const std::vector<uint8_t>& bytes) {
+    if (bytes.size() >= 8 &&
+        bytes[0] == 0x89 && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G') {
+        return LutImageFormat::Png;
+    }
+    const std::string lower = [&] {
+        std::string s = path;
+        for (auto& c : s) c = (char)std::tolower((unsigned char)c);
+        return s;
+    }();
+    if (lower.size() >= 4 && lower.substr(lower.size() - 4) == ".tga") {
+        return LutImageFormat::Tga;
+    }
+    return LutImageFormat::Unknown;
+}
+
+/* TGA decoder — uncompressed truecolor (24/32-bit) only. Image
+ * descriptor's bit 5 controls origin (0 = bottom-left, 1 = top-left);
+ * we flip if needed so the output is always top-left. Format covers
+ * the LUTs in libretro/glsl-shaders that aren't PNG. */
+static std::optional<DecodedImage> DecodeTga(const std::vector<uint8_t>& bytes) {
+    if (bytes.size() < 18) return std::nullopt;
+    /* Header layout (little-endian): [0] id_len, [1] cmap_type,
+     * [2] image_type, [3..7] cmap spec, [8..11] x/y origin,
+     * [12..13] width, [14..15] height, [16] pixel_depth,
+     * [17] image_descriptor. */
+    if (bytes[1] != 0)        return std::nullopt;  /* no colormaps */
+    if (bytes[2] != 2)        return std::nullopt;  /* uncompressed truecolor only */
+    uint16_t w = (uint16_t)bytes[12] | ((uint16_t)bytes[13] << 8);
+    uint16_t h = (uint16_t)bytes[14] | ((uint16_t)bytes[15] << 8);
+    uint8_t  depth = bytes[16];
+    uint8_t  desc  = bytes[17];
+    if (w == 0 || h == 0)         return std::nullopt;
+    if (depth != 24 && depth != 32) return std::nullopt;
+    const size_t bpp = depth / 8;
+    const size_t need = 18 + (size_t)bytes[0] + (size_t)w * h * bpp;
+    if (bytes.size() < need) return std::nullopt;
+    const uint8_t* px = bytes.data() + 18 + bytes[0];
+    DecodedImage img;
+    img.width  = w;
+    img.height = h;
+    img.rgba.resize((size_t)w * h * 4);
+    const bool topLeft = (desc & 0x20) != 0;
+    for (int y = 0; y < h; ++y) {
+        const int src_y = topLeft ? y : (h - 1 - y);
+        const uint8_t* row = px + (size_t)src_y * w * bpp;
+        uint8_t* out = img.rgba.data() + (size_t)y * w * 4;
+        for (int x = 0; x < w; ++x) {
+            const uint8_t* p = row + x * bpp;
+            /* TGA stores BGR(A); swap to RGBA. */
+            out[0] = p[2];
+            out[1] = p[1];
+            out[2] = p[0];
+            out[3] = (bpp == 4) ? p[3] : 0xFF;
+            out += 4;
+        }
+    }
+    return img;
+}
+
+}  // namespace
+
+/* PNG decoder via libpng. libpng is already linked into the engine
+ * (port_bugreport.cpp uses it for screenshot encoding); we reuse the
+ * same set of symbols here. RGB inputs get an alpha channel filled
+ * with 0xFF to produce an ABGR8888-compatible buffer.
+ *
+ * Implementation detail: libpng's reading API is callback-based.
+ * Easier to push the file bytes in from memory than to drive its
+ * file-pointer interface. The png_set_read_fn callback below
+ * advances through the in-memory buffer that ReadPng captured. */
+static std::optional<DecodedImage> DecodePng(const std::vector<uint8_t>& bytes);
+
+std::optional<DecodedImage> LoadLutImage(const std::string& path) {
+    auto bytes_opt = ReadFileVec(path);
+    if (!bytes_opt) {
+        std::fprintf(stderr, "[glslp] LUT open failed: %s\n", path.c_str());
+        return std::nullopt;
+    }
+    const auto& bytes = *bytes_opt;
+    switch (DetectLutFormat(path, bytes)) {
+        case LutImageFormat::Png: return DecodePng(bytes);
+        case LutImageFormat::Tga: return DecodeTga(bytes);
+        case LutImageFormat::Unknown:
+            std::fprintf(stderr, "[glslp] LUT format not recognised: %s\n", path.c_str());
+            return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+}  // namespace PortGlslp
+
+/* PNG decoder implementation. Pulled out of the PortGlslp namespace so
+ * it can be defined after the libpng include without polluting the
+ * header surface. */
+#include <png.h>
+
+namespace PortGlslp {
+
+namespace {
+struct PngMemReader {
+    const uint8_t* data;
+    size_t         remaining;
+};
+static void PngReadFromMemory(png_structp png_ptr, png_bytep target, png_size_t n) {
+    PngMemReader* r = static_cast<PngMemReader*>(png_get_io_ptr(png_ptr));
+    if (r->remaining < n) { png_error(png_ptr, "short read"); return; }
+    std::memcpy(target, r->data, n);
+    r->data      += n;
+    r->remaining -= n;
+}
+}  // namespace
+
+static std::optional<DecodedImage> DecodePng(const std::vector<uint8_t>& bytes) {
+    png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+    if (!png) return std::nullopt;
+    png_infop info = png_create_info_struct(png);
+    if (!info) {
+        png_destroy_read_struct(&png, nullptr, nullptr);
+        return std::nullopt;
+    }
+    if (setjmp(png_jmpbuf(png))) {
+        png_destroy_read_struct(&png, &info, nullptr);
+        return std::nullopt;
+    }
+
+    PngMemReader reader{ bytes.data(), bytes.size() };
+    png_set_read_fn(png, &reader, PngReadFromMemory);
+
+    png_read_info(png, info);
+
+    png_uint_32 w = png_get_image_width(png, info);
+    png_uint_32 h = png_get_image_height(png, info);
+    int bit_depth  = png_get_bit_depth(png, info);
+    int color_type = png_get_color_type(png, info);
+
+    /* Normalise to 8-bit RGBA. The libretro LUTs we care about are
+     * 24-bit truecolor (no alpha) or 32-bit RGBA. */
+    if (bit_depth == 16) png_set_strip_16(png);
+    if (color_type == PNG_COLOR_TYPE_PALETTE) png_set_palette_to_rgb(png);
+    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) png_set_expand_gray_1_2_4_to_8(png);
+    if (png_get_valid(png, info, PNG_INFO_tRNS)) png_set_tRNS_to_alpha(png);
+    if (color_type == PNG_COLOR_TYPE_RGB ||
+        color_type == PNG_COLOR_TYPE_GRAY ||
+        color_type == PNG_COLOR_TYPE_PALETTE) {
+        png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
+    }
+    if (color_type == PNG_COLOR_TYPE_GRAY ||
+        color_type == PNG_COLOR_TYPE_GRAY_ALPHA) {
+        png_set_gray_to_rgb(png);
+    }
+    png_read_update_info(png, info);
+
+    DecodedImage img;
+    img.width  = (int)w;
+    img.height = (int)h;
+    img.rgba.resize((size_t)w * h * 4);
+    std::vector<png_bytep> rows(h);
+    for (png_uint_32 y = 0; y < h; ++y) {
+        rows[y] = img.rgba.data() + (size_t)y * w * 4;
+    }
+    png_read_image(png, rows.data());
+    png_destroy_read_struct(&png, &info, nullptr);
+    return img;
+}
+
 }  // namespace PortGlslp
 
 /* C-callable runtime API lives in port_glslp_runtime.cpp now (Step 5).
