@@ -27,10 +27,13 @@
 
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <sstream>
 #include <string>
+#include <system_error>
+#include <vector>
 
 namespace PortGlslp {
 
@@ -137,29 +140,210 @@ std::map<std::string, std::string> TokenizeGlslpFile(const char* path) {
     return out;
 }
 
-/* Step 2 (LoadPresetFile) is not implemented yet. The future
- * implementation will:
- *   1. TokenizeGlslpFile(path) → raw key/value map.
- *   2. Read `shaders = N` for the pass count.
- *   3. For each pass i in 0..N-1, walk shaderN/filter_linearN/
- *      scale_typeN/etc keys and assemble a ShaderPass struct.
- *   4. Read `textures = "A;B;..."` and for each LUT name, walk the
- *      A_linear / A_wrap_mode / A_mipmap keys + the `A = path` line
- *      to assemble LutTexture structs.
- *   5. Read `parameters = "p0;p1;..."`; the per-parameter default
- *      comes from `p0 = N` lines AND/OR `#pragma parameter` lines
- *      in the referenced .glsl files (Step 3 — preprocessor).
- *   6. Resolve relative shader/LUT paths against the .glslp file's
- *      dirname.
- *   7. Validate: each pass references an existing shader file, each
- *      LUT references an existing image. Skip-with-warning on
- *      missing files so partial extractor outputs don't kill load.
- *
- * Estimated effort: ~120 LOC, no external dependencies. The data
- * structures it populates live in port_glslp_parser.h. */
-std::optional<Preset> LoadPresetFile(const char* /*glslp_path*/) {
-    /* TODO. See implementation sketch above. */
-    return std::nullopt;
+/* ----- Step 2 helpers ---------------------------------------------- */
+
+namespace {
+
+/* Look up a key with a default fallback. Returns the default when
+ * the key is absent so per-pass options collapse cleanly to defaults. */
+static const std::string* Find(const std::map<std::string, std::string>& m,
+                               const std::string& key) {
+    auto it = m.find(key);
+    return (it == m.end()) ? nullptr : &it->second;
+}
+
+static int ParseInt(const std::string& s, int dflt) {
+    try { return std::stoi(s); } catch (...) { return dflt; }
+}
+static float ParseFloat(const std::string& s, float dflt) {
+    try { return std::stof(s); } catch (...) { return dflt; }
+}
+static bool ParseBool(const std::string& s, bool dflt) {
+    if (s.empty()) return dflt;
+    if (s == "true"  || s == "True"  || s == "TRUE"  || s == "1" || s == "yes") return true;
+    if (s == "false" || s == "False" || s == "FALSE" || s == "0" || s == "no")  return false;
+    return dflt;
+}
+
+static ScaleType ParseScaleType(const std::string& s) {
+    if (s == "source")   return ScaleType::Source;
+    if (s == "viewport") return ScaleType::Viewport;
+    if (s == "absolute") return ScaleType::Absolute;
+    return ScaleType::Source;  /* libretro default */
+}
+
+static WrapMode ParseWrapMode(const std::string& s) {
+    if (s == "clamp_to_border")  return WrapMode::ClampBorder;
+    if (s == "clamp_to_edge")    return WrapMode::ClampEdge;
+    if (s == "repeat")           return WrapMode::Repeat;
+    if (s == "mirrored_repeat")  return WrapMode::MirroredRepeat;
+    return WrapMode::ClampBorder;  /* libretro default */
+}
+
+/* Split "A;B;C" into ["A", "B", "C"]. Empty tokens dropped. */
+static std::vector<std::string> SplitSemicolons(const std::string& s) {
+    std::vector<std::string> out;
+    size_t lo = 0;
+    while (lo <= s.size()) {
+        size_t hi = s.find(';', lo);
+        if (hi == std::string::npos) hi = s.size();
+        std::string tok = s.substr(lo, hi - lo);
+        /* Trim per-token whitespace — libretro presets sometimes write
+         * "A; B; C" with spaces. */
+        size_t ts = tok.find_first_not_of(" \t");
+        size_t te = tok.find_last_not_of(" \t");
+        if (ts != std::string::npos) {
+            out.push_back(tok.substr(ts, te - ts + 1));
+        }
+        lo = hi + 1;
+    }
+    return out;
+}
+
+/* Resolve a maybe-relative path against the .glslp file's dirname.
+ * Absolute paths return unchanged. */
+static std::string ResolvePath(const std::string& glslp_path,
+                               const std::string& rel) {
+    namespace fs = std::filesystem;
+    fs::path p(rel);
+    if (p.is_absolute()) return p.lexically_normal().string();
+    fs::path base = fs::path(glslp_path).parent_path();
+    return (base / p).lexically_normal().string();
+}
+
+}  // namespace
+
+/* Step 2 — assemble the raw key/value map from Step 1 into a Preset.
+ * Catches malformed pass counts, missing required keys, and missing
+ * referenced files (warn-but-continue, so partial trees still load). */
+std::optional<Preset> LoadPresetFile(const char* glslp_path) {
+    if (!glslp_path) return std::nullopt;
+
+    auto map = TokenizeGlslpFile(glslp_path);
+    if (map.empty()) {
+        /* TokenizeGlslpFile already logged the reason. */
+        return std::nullopt;
+    }
+
+    Preset out;
+    out.source_path = glslp_path;
+
+    /* Pass count (`shaders = N`). Required. */
+    const std::string* shaders_str = Find(map, "shaders");
+    if (!shaders_str) {
+        std::fprintf(stderr, "[glslp] %s: missing required key 'shaders'\n", glslp_path);
+        return std::nullopt;
+    }
+    int npasses = ParseInt(*shaders_str, -1);
+    if (npasses < 0 || npasses > 64) {  /* libretro caps at ~16 in practice */
+        std::fprintf(stderr, "[glslp] %s: bad shaders count %d\n", glslp_path, npasses);
+        return std::nullopt;
+    }
+
+    /* Per-pass keys. libretro accepts both unified `scale_typeN/scaleN`
+     * and per-axis `scale_type_xN/scale_xN` forms; prefer the per-axis
+     * keys when present, fall back to the unified key for both axes. */
+    out.passes.reserve(npasses);
+    for (int i = 0; i < npasses; ++i) {
+        ShaderPass p;
+        const std::string idx = std::to_string(i);
+
+        const std::string* shader = Find(map, "shader" + idx);
+        if (!shader) {
+            std::fprintf(stderr, "[glslp] %s: pass %d missing 'shader%d' key\n",
+                         glslp_path, i, i);
+            return std::nullopt;
+        }
+        p.path = ResolvePath(glslp_path, *shader);
+
+        if (const std::string* v = Find(map, "filter_linear" + idx))    p.filter_linear    = ParseBool(*v, false);
+        if (const std::string* v = Find(map, "wrap_mode" + idx))        p.wrap             = ParseWrapMode(*v);
+        if (const std::string* v = Find(map, "mipmap_input" + idx))     p.mipmap_input     = ParseBool(*v, false);
+        if (const std::string* v = Find(map, "srgb_framebuffer" + idx)) p.srgb_framebuffer = ParseBool(*v, false);
+        if (const std::string* v = Find(map, "float_framebuffer" + idx)) p.float_framebuffer = ParseBool(*v, false);
+
+        /* Scale type/factor: per-axis takes precedence over unified. */
+        ScaleType st_unified = ScaleType::Source;
+        float     sc_unified = 1.0f;
+        if (const std::string* v = Find(map, "scale_type" + idx)) st_unified = ParseScaleType(*v);
+        if (const std::string* v = Find(map, "scale" + idx))      sc_unified = ParseFloat(*v, 1.0f);
+        p.scale_type_x = st_unified;
+        p.scale_type_y = st_unified;
+        p.scale_x = sc_unified;
+        p.scale_y = sc_unified;
+        if (const std::string* v = Find(map, "scale_type_x" + idx)) p.scale_type_x = ParseScaleType(*v);
+        if (const std::string* v = Find(map, "scale_type_y" + idx)) p.scale_type_y = ParseScaleType(*v);
+        if (const std::string* v = Find(map, "scale_x" + idx))      p.scale_x      = ParseFloat(*v, p.scale_x);
+        if (const std::string* v = Find(map, "scale_y" + idx))      p.scale_y      = ParseFloat(*v, p.scale_y);
+
+        if (const std::string* v = Find(map, "alias" + idx)) {
+            if (!v->empty()) p.alias = *v;
+        }
+
+        /* Soft-validate the shader file exists. Missing-but-continue
+         * so a partial extractor output doesn't kill load — Step 5
+         * (render-graph executor) will fail loudly if the shader
+         * can't be compiled. */
+        std::error_code ec;
+        if (!std::filesystem::exists(p.path, ec)) {
+            std::fprintf(stderr, "[glslp] %s: pass %d shader missing: %s\n",
+                         glslp_path, i, p.path.c_str());
+        }
+
+        out.passes.push_back(std::move(p));
+    }
+
+    /* Lookup-textures (LUTs). `textures = "A;B;..."` then per-name
+     * keys. Each LUT's path is the `NAME = path` line. */
+    if (const std::string* tex_list = Find(map, "textures")) {
+        for (const auto& name : SplitSemicolons(*tex_list)) {
+            const std::string* path = Find(map, name);
+            if (!path) {
+                std::fprintf(stderr, "[glslp] %s: LUT '%s' listed in textures= but no '%s = ...' line\n",
+                             glslp_path, name.c_str(), name.c_str());
+                continue;
+            }
+            LutTexture lut;
+            lut.name = name;
+            lut.path = ResolvePath(glslp_path, *path);
+            if (const std::string* v = Find(map, name + "_linear"))    lut.linear = ParseBool(*v, true);
+            if (const std::string* v = Find(map, name + "_wrap_mode")) lut.wrap   = ParseWrapMode(*v);
+            if (const std::string* v = Find(map, name + "_mipmap"))    lut.mipmap = ParseBool(*v, false);
+
+            std::error_code ec;
+            if (!std::filesystem::exists(lut.path, ec)) {
+                std::fprintf(stderr, "[glslp] %s: LUT '%s' file missing: %s\n",
+                             glslp_path, name.c_str(), lut.path.c_str());
+            }
+            out.luts.push_back(std::move(lut));
+        }
+    }
+
+    /* Runtime-tunable parameters declared in `parameters = "..."` and
+     * the matching `paramName = value` overrides. The per-parameter
+     * label/min/max/step come from `#pragma parameter` directives in
+     * the GLSL source itself — that's Step 3 (preprocessor). For now
+     * we only record the names + override values; Step 3 will fill in
+     * the metadata when it walks the GLSL sources. */
+    if (const std::string* param_list = Find(map, "parameters")) {
+        for (const auto& id : SplitSemicolons(*param_list)) {
+            ShaderParam pp;
+            pp.id = id;
+            pp.label = id;  /* placeholder; Step 3 reads `#pragma parameter` for real */
+            if (const std::string* v = Find(map, id)) {
+                pp.default_value = pp.current_value = ParseFloat(*v, 0.0f);
+            }
+            out.parameters.push_back(std::move(pp));
+        }
+    }
+
+    /* Optional feedback pass. */
+    if (const std::string* fb = Find(map, "feedback_pass")) {
+        int fp = ParseInt(*fb, -1);
+        if (fp >= 0 && fp < npasses) out.feedback_pass = fp;
+    }
+
+    return out;
 }
 
 }  // namespace PortGlslp
