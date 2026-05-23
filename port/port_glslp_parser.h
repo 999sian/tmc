@@ -182,9 +182,32 @@ struct Preset {
     std::string              source_path; /* for relative-path resolution */
 };
 
-/* TODO: implement. Returns nullopt on parse error; writes diagnostic
- * to stderr. */
+/* Step 2: returns the parsed preset, or nullopt on a fatal parse
+ * error. Missing referenced files (shaders / LUTs) warn but don't
+ * fail load. */
 std::optional<Preset> LoadPresetFile(const char* glslp_path);
+
+/* Step 3 output: a libretro .glsl source rewritten as GLSL 450 ready
+ * for glslang. Stored as two separate strings — libretro presets
+ * traditionally inline both stages in the same .glsl file separated
+ * by `#pragma stage vertex` / `#pragma stage fragment` blocks, but
+ * the SDL_GPU pipeline expects them as distinct SPIR-V modules. */
+struct PreprocessedShader {
+    std::string              vertex_glsl;
+    std::string              fragment_glsl;
+    /* Parameters discovered via `#pragma parameter` directives in
+     * the source. The .glslp file's `parameters = ...` line lists
+     * which subset to expose at runtime, and supplies optional
+     * default-value overrides; this list provides the label / min /
+     * max / step metadata that the .glslp file doesn't carry. */
+    std::vector<ShaderParam> parameters;
+};
+
+/* Step 3: rewrite libretro-flavoured GLSL into GLSL 450 stage modules.
+ * `source_text` is the file body (already read by the caller).
+ * Returns nullopt only when the source contains constructs we can't
+ * mechanically rewrite — most real libretro shaders are accepted. */
+std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& source_text);
 
 }  // namespace PortGlslp
 
