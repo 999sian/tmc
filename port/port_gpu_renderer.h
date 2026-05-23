@@ -48,6 +48,14 @@ bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_height);
  * present, no fallback needed — the GBA frame just doesn't show). */
 bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h);
 
+/* Stage 6: paint the boot splash via SDL_GPU — a single render pass
+ * that clears the swapchain to a dark "loading" colour. Replaces the
+ * SDL_Renderer-based Port_PaintBootSplash on GPU builds, which
+ * couldn't run because SDL_Renderer's Vulkan surface conflicted with
+ * the SDL_GPU swapchain claim. Returns false if the swapchain isn't
+ * ready (window minimised, mid-resize); caller can ignore. */
+bool Port_GPU_PaintBootSplash(void);
+
 /* Whether the GPU renderer was successfully initialised AND has
  * claimed the window. When true, Port_PPU_PresentFrame dispatches
  * to Port_GPU_PresentFrame instead of the SDL_Renderer path. */

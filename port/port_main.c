@@ -6,6 +6,10 @@
 #ifndef MODE1_GBA_WIDTH
 #define MODE1_GBA_WIDTH 240
 #endif
+/* Height stays at GBA-native 160 always — widescreen only stretches X. */
+#ifndef MODE1_GBA_HEIGHT
+#define MODE1_GBA_HEIGHT 160
+#endif
 #include "port_asset_bootstrap.h"
 #include "port_audio.h"
 #include "port_gba_mem.h"
@@ -448,20 +452,30 @@ int main(int argc, char* argv[]) {
 #endif
 
     /* Paint a "LOADING" splash IMMEDIATELY so the window never
-     * shows a blank black rectangle. Without this, ROM load + asset
-     * check + update check + PPU init add up to ~1.4 s of unpainted
-     * window before the first SDL_RenderPresent, which the user
-     * perceives as "black screen, then the game relaunches". The
-     * SDL_Renderer was already created atomically with the window
-     * by SDL_CreateWindowAndRenderer above, so this call just
-     * fetches it via SDL_GetRenderer(window) and presents on it.
+     * shows a blank black rectangle.
      *
-     * Stage 2 GPU build: skip the splash entirely. The splash creates
-     * an SDL_Renderer whose Vulkan surface blocks SDL_GPU's later
-     * ClaimWindow with VK_ERROR_SURFACE_LOST_KHR. Accept the ~1.4 s
-     * of blank window during boot on GPU builds for now — Stage 3 can
-     * port the splash to use SDL_GPU directly. */
-#ifndef TMC_GPU_RENDERER
+     * GPU build: stand up SDL_GPU EARLY (before any boot UI) so its
+     * swapchain claim doesn't fight an already-present SDL_Renderer
+     * surface. After ClaimWindow succeeds, Port_GPU_PaintBootSplash
+     * clears the swapchain to a dark teal — replaces the
+     * SDL_Renderer-based splash on GPU builds with something the user
+     * can see (it's not a blank window any more). Asset extractor's
+     * progress bar still uses SDL_Renderer though, so we still pass
+     * NULL window to the extractor on GPU builds.
+     *
+     * Non-GPU build: the SDL_Renderer that SDL_CreateWindowAndRenderer
+     * created is already attached to the window; Port_PaintBootSplash
+     * fetches it via SDL_GetRenderer and presents the "LOADING" card. */
+#ifdef TMC_GPU_RENDERER
+    {
+        extern bool Port_GPU_Init(SDL_Window*);
+        extern bool Port_GPU_ClaimWindow(SDL_Window*, int, int);
+        extern bool Port_GPU_PaintBootSplash(void);
+        Port_GPU_Init(window);
+        Port_GPU_ClaimWindow(window, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
+        Port_GPU_PaintBootSplash();
+    }
+#else
     Port_PaintBootSplash(window, "LOADING");
 #endif
 
@@ -523,14 +537,15 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    /* Stage 2: GPU device init runs BEFORE Port_PPU_Init so the latter
-     * can consult Port_GPU_ClaimWindow and skip SDL_Renderer creation
-     * when the GPU pipeline takes over. Without the --gpu_renderer=y
-     * build flag this is a no-op stub returning true. */
+    /* GPU device + window-claim already done earlier on TMC_GPU_RENDERER
+     * builds (so the boot splash could use SDL_GPU). On non-GPU builds
+     * this still needs to fire for the build-flag-off no-op stub path. */
+#ifndef TMC_GPU_RENDERER
     {
         extern bool Port_GPU_Init(SDL_Window*);
         Port_GPU_Init(window);
     }
+#endif
 
     // Initialize PPU renderer (will use SDL_GPU if claimed, else SDL_Renderer)
     Port_PPU_Init(window);
@@ -543,9 +558,15 @@ int main(int argc, char* argv[]) {
      * followed by a blank window followed by the title screen. */
     /* Repaint the same "LOADING" card on each transition so the
      * user sees one continuous splash from window-open to first
-     * GBA frame instead of multiple flickering states. (No-op on
-     * Stage 2 GPU build — see the earlier #ifndef block.) */
-#ifndef TMC_GPU_RENDERER
+     * GBA frame instead of multiple flickering states. On GPU
+     * builds the splash goes through SDL_GPU now (Stage 6); both
+     * paths are safe to call on every config. */
+#ifdef TMC_GPU_RENDERER
+    {
+        extern bool Port_GPU_PaintBootSplash(void);
+        Port_GPU_PaintBootSplash();
+    }
+#else
     Port_PaintBootSplash(window, "LOADING");
 #endif
     fprintf(stderr, "PPU init complete.\n");
@@ -554,7 +575,12 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Audio disabled by --no-audio flag.\n");
     } else {
         Port_InitAudio();
-#ifndef TMC_GPU_RENDERER
+#ifdef TMC_GPU_RENDERER
+        {
+            extern bool Port_GPU_PaintBootSplash(void);
+            Port_GPU_PaintBootSplash();
+        }
+#else
         Port_PaintBootSplash(window, "LOADING");
 #endif
         fprintf(stderr, "Audio init complete.\n");
