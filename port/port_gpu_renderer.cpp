@@ -27,6 +27,7 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* w, int fw, int fh) {
 extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int w, int h) {
     (void)fb; (void)w; (void)h; return false;
 }
+extern "C" bool Port_GPU_PaintBootSplash(void) { return false; }
 extern "C" bool Port_GPU_IsActive(void) { return false; }
 extern "C" void Port_GPU_Shutdown(void) {}
 extern "C" void Port_GPU_SetFilter(PortGpuFilter f) { (void)f; }
@@ -594,6 +595,41 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
 
     SDL_EndGPURenderPass(rp);
 
+    SDL_SubmitGPUCommandBuffer(cmd);
+    return true;
+}
+
+extern "C" bool Port_GPU_PaintBootSplash(void) {
+    /* Stage 6: minimal "the app is alive" splash via SDL_GPU. Single
+     * render pass that clears to a dark teal — matches the ImGui
+     * window-bg colour the F8 menu uses, so the transition from boot
+     * splash to first-frame doesn't flicker between two background
+     * tones. No text yet (font rendering through SDL_GPU needs a
+     * texture-atlas glyph cache that's outside this stage's scope).
+     * Compared to the SDL_Renderer path: no "LOADING" label, but the
+     * window is visibly NOT broken/black during the boot phase. */
+    if (!sWindowClaimed) return false;
+
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sDevice);
+    if (!cmd) return false;
+
+    SDL_GPUTexture* swap_tex = nullptr;
+    Uint32 sw = 0, sh = 0;
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, sWindow, &swap_tex, &sw, &sh) || !swap_tex) {
+        SDL_SubmitGPUCommandBuffer(cmd);
+        return false;
+    }
+
+    SDL_GPUColorTargetInfo color = {};
+    color.texture     = swap_tex;
+    /* Dark teal: r=0.07, g=0.08, b=0.10 — matches port_imgui_menu.cpp's
+     * ImGuiCol_WindowBg so the boot frame visually flows into the F8
+     * menu's chrome. */
+    color.clear_color = SDL_FColor{0.07f, 0.08f, 0.10f, 1.0f};
+    color.load_op     = SDL_GPU_LOADOP_CLEAR;
+    color.store_op    = SDL_GPU_STOREOP_STORE;
+    SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
+    SDL_EndGPURenderPass(rp);
     SDL_SubmitGPUCommandBuffer(cmd);
     return true;
 }
