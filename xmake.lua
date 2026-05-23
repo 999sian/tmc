@@ -32,6 +32,18 @@ option("pc_sanitize")
     set_description("Build tmc_pc with -fsanitize=address,undefined for runtime UB/NULL-deref detection")
 option_end()
 
+-- GPU shader pipeline (SDL_GPU). Stage 1: scaffold only — init the
+-- device, load the passthrough SPIR-V shaders, log. Doesn't yet drive
+-- presentation (SDL_Renderer still owns the screen). Stage 2 onward
+-- replaces port_ppu.cpp's present path with the SDL_GPU one, unlocking
+-- per-pixel shader filters (CRT, scanlines, lcd-grid, etc.) without
+-- the CPU-side approximation tradeoff. See port/port_gpu_renderer.{h,cpp}.
+option("gpu_renderer")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Compile the SDL_GPU presentation path (Stage 1: scaffold). Enables fragment-shader filters in future stages.")
+option_end()
+
 -- Widescreen: render the GBA frame at a non-native horizontal width by
 -- overriding MODE1_GBA_WIDTH at compile time.
 --   240: GBA-native (3:2). No widescreen, no pillarbox, no stretch.
@@ -598,6 +610,23 @@ target("tmc_pc")
     add_files("port/port_m4a_backend.cpp")
     add_files("port/generated_sounds_embed.cpp")  -- compile-time sounds.json fallback
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
+    add_files("port/port_gpu_renderer.cpp")  -- SDL_GPU presentation (Stage 1: scaffold; gated on --gpu_renderer=y)
+
+    -- SDL_GPU shader blobs. Compiled offline via port/shaders/build.sh
+    -- (run when *.vert / *.frag change); the .spv files are committed
+    -- so the build doesn't depend on glslangValidator on every host.
+    -- Only embedded when the gpu_renderer option is enabled — keeps
+    -- the default build identical in size for users who don't opt in.
+    if has_config("gpu_renderer") then
+        add_defines("TMC_GPU_RENDERER=1")
+        -- The extensions filter on the rule auto-matches add_files
+        -- entries with .spv suffix — re-specifying `rule = "utils.bin2c"`
+        -- on the add_files line was registering them twice and
+        -- triggered xmake's "job has already been added" warning.
+        add_rules("utils.bin2c", {extensions = {".spv"}, nozeroend = true})
+        add_files("port/shaders/build/passthrough.vert.spv")
+        add_files("port/shaders/build/passthrough.frag.spv")
+    end
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/
     add_files("port/port_randomizer.cpp")  -- Phase A: shell-out to MinishCapRandomizerCLI
