@@ -201,6 +201,13 @@ struct PreprocessedShader {
      * default-value overrides; this list provides the label / min /
      * max / step metadata that the .glslp file doesn't carry. */
     std::vector<ShaderParam> parameters;
+    /* Names of `uniform sampler2D` declarations in the source other
+     * than the built-in `Texture` (primary pass input at set=2,
+     * binding=0). Order matches the order they appear in source;
+     * the preprocessor assigns layout(set=2, binding=1+i) to each.
+     * Runtime walks this list, finds the matching LUT in
+     * preset.luts by name, and binds at sampler slot 1+i. */
+    std::vector<std::string> lut_sampler_names;
 };
 
 /* Step 3: rewrite libretro-flavoured GLSL into GLSL 450 stage modules.
