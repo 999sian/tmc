@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-experimental — 2026-05-23
+
+Boss-room crash sweep across Temple of Droplets, Discord Rich Presence
+default-on with native Windows named-pipe support, and the post-v0.2.2.0
+bundle of audio / VSync / portal / asset-loader follow-ups.
 
 ### Fixed (issue tracker)
 
@@ -11,9 +15,18 @@
 
 - **Temple of Droplets Element room: `FrozenOctorok_Action1` SIGSEGV on entry.** First crash uncovered while reproducing #100. Same Init→Action1 pattern as the OctorokBoss fix above: leg children (types 1-4) of the head (type 0 / WHOLE-equivalent) run their Init→Action1 (line 150) before the mouth (type 5) has assigned `heap->mouthObject`. GBA NULL-deref → BIOS garbage ≠ 1 → else branch; PC → SIGSEGV at the offset_of_health load. Single PC-port-only NULL guard at `src/object/frozenOctorok.c:193`. Also applied the same guard to three defence-in-depth sites in `src/enemy/octorokBoss.c` (`Hit` at line 122 — `tailObjects[0]` camera-target; `Hit_SubAction6` at lines 303/306 — `legObjects[0]` death-FX + `mouthObject` death-kill); these sites only reach the deref under a valid boss state, but the cost of guarding is one NULL check and avoids re-hitting the same pattern from a different attack path. (commit `69c84f84`)
 
+### Tooling / new features
+
+- **Discord Rich Presence: default-on + native Windows support.** Rich Presence now ships enabled by default on Linux, macOS, and Windows. Adds a `TryConnectWindows()` path in `port/port_discord_rpc.c` that opens `\\?\pipe\discord-ipc-N` via `CreateFileA` (`N = 0..9`), with the existing JSON-RPC frame protocol reused unchanged — `WriteFile` replaces `send(MSG_NOSIGNAL)` on the Windows branch. Connection handle storage moved from `int sock` to `intptr_t handle` so the same field holds either a Unix fd or a `HANDLE`. F8 toggle still controls per-session enable/disable; `TMC_DISCORD_APP_ID` env var or the `discord_app_id.txt`-at-build-time path still gate whether the connection is even attempted, so users without Discord (or without a registered app ID) see no behaviour change.
+
 ### Notes
 
 These NULL-guard fixes (`#91`/`#97` family) are intentionally not bit-identical to GBA: on hardware, the BIOS bytes at the NULL+offset address are deterministic but not always equal to the value our guard substitutes, so the chosen branch can differ for **one Init frame** before the sibling's Init runs. The affected fields (`unk_74`/`unk_76`/`radius`/`DeleteThisEntity` gating) all reset to correct values on the next tick, and the child sprite isn't drawn yet during that one frame, so the divergence is unobservable in-game. This matches the established "guard + clamp/early-return" pattern documented under *Critical concepts → NULL deref differs from GBA* in CLAUDE.md.
+
+### Carries from post-v0.2.2.0 master
+
+Issues already fixed in master between v0.2.2.0 and this tag — closed by re-release rather than further code changes:
+**#42, #45, #74, #75, #91, #94 (auto safe-spawn), #99, #101, #106, #107, #117, #118, #119**.
 
 ## 0.2.0-experimental — 2026-05-06
 

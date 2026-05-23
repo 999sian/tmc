@@ -344,9 +344,10 @@ static void DrawRibbonDisplayTab(void) {
         }
     }
 
-    /* Discord Rich Presence — opens a local Unix IPC socket and
-     * publishes "area · hearts · rupees · time" once Discord is
-     * running. Off by default; no harm if Discord isn't around. */
+    /* Discord Rich Presence — opens a local Unix IPC socket
+     * (Linux/macOS) or named pipe (Windows) and publishes "area ·
+     * hearts · rupees · time" once Discord is running. Enabled by
+     * default; no harm if Discord isn't around. */
     {
         bool drp = Port_DiscordRpc_IsEnabled();
         if (ImGui::Checkbox("Discord Rich Presence", &drp)) {
@@ -358,14 +359,13 @@ static void DrawRibbonDisplayTab(void) {
             ImGui::BeginTooltip();
             ImGui::PushTextWrapPos(360.0f);
             ImGui::TextUnformatted("Publishes current area + heart/rupee "
-                                   "count to Discord. Linux only for now "
-                                   "(no Windows named-pipe path yet). "
-                                   "Requires the Discord desktop client "
-                                   "to be running, and the env var "
-                                   "TMC_DISCORD_APP_ID to point at a "
-                                   "registered Discord application ID — "
-                                   "otherwise this toggle is a no-op "
-                                   "(see stderr for details).");
+                                   "count to Discord. Works on Linux, "
+                                   "macOS, and Windows. Requires the "
+                                   "Discord desktop client to be running, "
+                                   "and the env var TMC_DISCORD_APP_ID "
+                                   "to point at a registered Discord "
+                                   "application ID — otherwise this "
+                                   "toggle is a no-op (see stderr).");
             ImGui::PopTextWrapPos();
             ImGui::EndTooltip();
         }
