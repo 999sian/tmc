@@ -24,10 +24,13 @@
 
 const char* Port_Filter_Name(PortFilterType t) {
     switch (t) {
-        case PORT_FILTER_NONE:            return "Off";
+        case PORT_FILTER_NONE:               return "Off";
         case PORT_FILTER_CRT_WARM_COMPOSITE: return "CRT Warm Composite (AG)";
-        case PORT_FILTER_LCD_GRID:        return "LCD Grid";
-        case PORT_FILTER_CRT_WARM_RF:     return "CRT Warm RF (AG)";
+        case PORT_FILTER_LCD_GRID:           return "LCD Grid";
+        case PORT_FILTER_CRT_WARM_RF:        return "CRT Warm RF (AG)";
+        case PORT_FILTER_SCANLINES:          return "Scanlines";
+        case PORT_FILTER_HANDHELD:           return "Handheld Grid";
+        case PORT_FILTER_VIGNETTE:           return "Vignette";
         default: return "?";
     }
 }
@@ -188,6 +191,116 @@ static void Apply_CrtWarmRf(uint32_t* fb, int w, int h, int scale) {
     }
 }
 
+/* libretro scanline.glsl equivalent — dim every other "logical row" by
+ * ~25%. Stride matches the internal scale so the dark line covers one
+ * GBA pixel of height at any upscale level. No colour cast — pairs
+ * cleanly with the CRT mask filters or stands alone for a softer
+ * CRT-ish look without the RGB stripe pattern. */
+static void Apply_Scanlines(uint32_t* fb, int w, int h, int scale) {
+    if (scale < 2) return;
+    for (int y = 0; y < h; ++y) {
+        const bool dark = ((y / scale) & 1) != 0;
+        if (!dark) continue;
+        uint32_t* row = &fb[(size_t)y * (size_t)w];
+        for (int x = 0; x < w; ++x) {
+            int r = (int)( row[x]        & 0xFF);
+            int g = (int)((row[x] >>  8) & 0xFF);
+            int b = (int)((row[x] >> 16) & 0xFF);
+            r = (r * 192) >> 8;  /* 0.75× */
+            g = (g * 192) >> 8;
+            b = (b * 192) >> 8;
+            row[x] = 0xFF000000u
+                   | ((uint32_t)b << 16)
+                   | ((uint32_t)g <<  8)
+                   | (uint32_t)r;
+        }
+    }
+}
+
+/* libretro handheld-grid equivalent — like LCD Grid but tighter cells
+ * and a cool green-shifted tint matching the unlit GBA / Game Boy
+ * Pocket era LCD palette. Cell border dim is harsher (~60%) so the
+ * grid reads as a deliberate hardware mimicry. */
+static void Apply_HandheldGrid(uint32_t* fb, int w, int h, int scale) {
+    if (scale < 2) return;
+    /* Tint folded into a per-pixel gain triple — slight green push, red
+     * pulled down, blue pulled down further (the cool/sickly cast of
+     * an unlit LCD). */
+    const int tr = 240;  /* 0.94× */
+    const int tg = 264;  /* 1.03× */
+    const int tb = 232;  /* 0.91× */
+    for (int y = 0; y < h; ++y) {
+        const bool border_y = (y % scale) == 0;
+        uint32_t* row = &fb[(size_t)y * (size_t)w];
+        for (int x = 0; x < w; ++x) {
+            const bool border_x = (x % scale) == 0;
+            int r = (int)( row[x]        & 0xFF);
+            int g = (int)((row[x] >>  8) & 0xFF);
+            int b = (int)((row[x] >> 16) & 0xFF);
+            r = (r * tr) >> 8;
+            g = (g * tg) >> 8;
+            b = (b * tb) >> 8;
+            if (border_x || border_y) {
+                r = (r * 154) >> 8;  /* 0.60× — heavier than LCD Grid */
+                g = (g * 154) >> 8;
+                b = (b * 154) >> 8;
+            }
+            row[x] = 0xFF000000u
+                   | ((uint32_t)Clamp255(b) << 16)
+                   | ((uint32_t)Clamp255(g) <<  8)
+                   | (uint32_t)Clamp255(r);
+        }
+    }
+}
+
+/* libretro vignette.glsl equivalent — radial fall-off from screen
+ * centre. Strength chosen so corners drop to ~55% brightness and the
+ * inner ~60% of the image is untouched. No colour cast, no per-pixel
+ * pattern; cheap (mul+shift per pixel) and composable on top of the
+ * other filters in spirit, though we keep it as a single mode here for
+ * the F8 enum. */
+static void Apply_Vignette(uint32_t* fb, int w, int h, int scale) {
+    (void)scale;
+    if (w < 2 || h < 2) return;
+    const int cx = w / 2;
+    const int cy = h / 2;
+    /* Max distance squared from centre to any corner. */
+    const int max_d2 = cx * cx + cy * cy;
+    if (max_d2 == 0) return;
+    /* Inner radius² where vignette starts kicking in (~60% of max).
+     * Below this, leave pixels alone. */
+    const int inner_d2 = (max_d2 * 36) / 100;
+    const int span_d2  = max_d2 - inner_d2;
+    if (span_d2 <= 0) return;
+    /* Corner gain — bottom of the fall-off. 0.55× = 141 in 8.8 fixed. */
+    const int corner_gain = 141;
+    const int unity_gain  = 256;
+    for (int y = 0; y < h; ++y) {
+        const int dy = y - cy;
+        uint32_t* row = &fb[(size_t)y * (size_t)w];
+        for (int x = 0; x < w; ++x) {
+            const int dx = x - cx;
+            const int d2 = dx * dx + dy * dy;
+            if (d2 <= inner_d2) continue;
+            /* Linear interpolation between unity and corner_gain across
+             * the (inner_d2 .. max_d2) band. */
+            int t = ((d2 - inner_d2) * 256) / span_d2;
+            if (t > 256) t = 256;
+            const int gain = unity_gain + (((corner_gain - unity_gain) * t) >> 8);
+            int r = (int)( row[x]        & 0xFF);
+            int g = (int)((row[x] >>  8) & 0xFF);
+            int b = (int)((row[x] >> 16) & 0xFF);
+            r = (r * gain) >> 8;
+            g = (g * gain) >> 8;
+            b = (b * gain) >> 8;
+            row[x] = 0xFF000000u
+                   | ((uint32_t)Clamp255(b) << 16)
+                   | ((uint32_t)Clamp255(g) <<  8)
+                   | (uint32_t)Clamp255(r);
+        }
+    }
+}
+
 void Port_Filter_Apply(uint32_t* fb, int w, int h, int internal_scale,
                        PortFilterType filter) {
     if (!fb || w <= 0 || h <= 0) return;
@@ -196,6 +309,9 @@ void Port_Filter_Apply(uint32_t* fb, int w, int h, int internal_scale,
         case PORT_FILTER_CRT_WARM_COMPOSITE: Apply_CrtWarmComposite(fb, w, h, internal_scale); return;
         case PORT_FILTER_LCD_GRID:           Apply_LcdGrid(fb, w, h, internal_scale); return;
         case PORT_FILTER_CRT_WARM_RF:        Apply_CrtWarmRf(fb, w, h, internal_scale); return;
+        case PORT_FILTER_SCANLINES:          Apply_Scanlines(fb, w, h, internal_scale); return;
+        case PORT_FILTER_HANDHELD:           Apply_HandheldGrid(fb, w, h, internal_scale); return;
+        case PORT_FILTER_VIGNETTE:           Apply_Vignette(fb, w, h, internal_scale); return;
         default: return;
     }
 }

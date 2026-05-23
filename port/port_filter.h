@@ -30,6 +30,9 @@ typedef enum {
     PORT_FILTER_CRT_WARM_COMPOSITE,  /* Sonkun warm composite aperture grill */
     PORT_FILTER_LCD_GRID,             /* GBA-style LCD pixel grid */
     PORT_FILTER_CRT_WARM_RF,          /* Sonkun warm RF aperture grill */
+    PORT_FILTER_SCANLINES,            /* libretro scanline.glsl equivalent — alternating dim rows */
+    PORT_FILTER_HANDHELD,             /* libretro handheld-grid equivalent — tight LCD cells + cool tint */
+    PORT_FILTER_VIGNETTE,             /* libretro vignette equivalent — corner darkening */
     PORT_FILTER_COUNT
 } PortFilterType;
 
