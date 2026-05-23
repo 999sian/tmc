@@ -119,7 +119,19 @@ void OctorokBoss_Hit(OctorokBossEntity* this) {
     };
     if (this->bossPhase == 0) {
         if (super->subAction != 3) {
+#ifdef PC_PORT
+            /* #91/#97-class fix (same family as src/object/frozenOctorok.c:193).
+             * If tail-end creation failed during Init, tailObjects[0] is NULL;
+             * GBA NULL-deref returned a garbage non-null pointer that the
+             * camera tracked harmlessly, PC SIGSEGVs at &NULL->base when base
+             * is at a non-zero struct offset. Skip the target assignment if
+             * NULL — leaves camera on its previous target. */
+            if (this->heap->tailObjects[0] != NULL) {
+                gRoomControls.camera_target = &this->heap->tailObjects[0]->base;
+            }
+#else
             gRoomControls.camera_target = &this->heap->tailObjects[0]->base;
+#endif
             this->heap->field_0x7 = 0x5a;
             PausePlayer();
         }
@@ -300,10 +312,24 @@ void OctorokBoss_Hit_SubAction6(OctorokBossEntity* this) {
             // Explosion in the center
             CreateFx(super, FX_GIANT_EXPLOSION3, 0);
             // Explosion at the front right leg
+#ifdef PC_PORT
+            /* #91/#97-class guard — see frozenOctorok.c:193. */
+            if (this->heap->legObjects[0] != NULL) {
+                CreateFx(&this->heap->legObjects[0]->base, FX_GIANT_EXPLOSION3, 0);
+            }
+#else
             CreateFx(&this->heap->legObjects[0]->base, FX_GIANT_EXPLOSION3, 0);
+#endif
         }
         if (++this->angularSpeed.HALF.LO == 0x79) {
+#ifdef PC_PORT
+            /* #91/#97-class guard — see frozenOctorok.c:193. */
+            if (this->heap->mouthObject != NULL) {
+                this->heap->mouthObject->base.health = 1;
+            }
+#else
             this->heap->mouthObject->base.health = 1;
+#endif
             SoundReq(SFX_BOSS_DIE);
             // Kill this boss
             GenericDeath(super);
