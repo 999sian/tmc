@@ -57,14 +57,22 @@ jobs:
       - name: Flatten artifact files
         shell: bash
         run: |
+          # The matheo merge in 3ad31b84 switched _build.yaml's archive
+          # step from .zip to .tar.gz ("works on all hosted runners");
+          # the v0.3.0-experimental release CI surfaced that this step
+          # never got the matching update. Match both so a future
+          # platform-specific .zip still works.
           mkdir -p uploads
-          find release-assets -type f -name '*.zip' -exec cp {} uploads/ \;
+          find release-assets -type f \( -name '*.tar.gz' -o -name '*.zip' \) \
+              -exec cp {} uploads/ \;
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: "TMC ${{ inputs.tag || github.ref_name }}"
-          files: uploads/*.zip
+          files: |
+            uploads/*.tar.gz
+            uploads/*.zip
           generate_release_notes: true
           fail_on_unmatched_files: true
