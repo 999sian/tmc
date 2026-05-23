@@ -255,29 +255,63 @@ def check_deps(non_interactive: bool = False) -> bool:
         return False
 
     # Git submodules
+    #
+    # The xmake build gates optional submodules (tmc-Modern-Launcher,
+    # tmc-Android-Experimental — both private MatheoVignaud repos) on
+    # working-tree presence, so a fork without push access to those
+    # repos still builds tmc_pc fine. Treat only ViruaPPU + VirtuaAPU as
+    # build-blocking; fetch the others best-effort and continue on
+    # failure (private clone returns "could not read Username for
+    # https://github.com" when no PAT is configured — that's expected on
+    # public forks). Matches the workflow's no-token path in
+    # .github/workflows/_build.yaml.
     virua  = REPO_ROOT / "libs" / "ViruaPPU"
     virtua = REPO_ROOT / "libs" / "VirtuaAPU"
+    REQUIRED_SUBMODULES = {"libs/ViruaPPU", "libs/VirtuaAPU"}
+
     submodule_paths = []
     gitmodules = REPO_ROOT / ".gitmodules"
     if gitmodules.exists():
         for line in gitmodules.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line.startswith("path = "):
-                submodule_paths.append(REPO_ROOT / line.split("=", 1)[1].strip())
-    if submodule_paths:
-        submodules_ready = all(dir_populated(path) for path in submodule_paths)
-    else:
-        submodules_ready = dir_populated(virua) and dir_populated(virtua)
-    if not submodules_ready:
-        warn("Git submodules not initialized — fetching...")
+                submodule_paths.append(line.split("=", 1)[1].strip())
+    if not submodule_paths:
+        # No .gitmodules — fall back to the two required ones we know
+        # about so we still try to fetch.
+        submodule_paths = list(REQUIRED_SUBMODULES)
+
+    missing_required = []
+    fetched_any = False
+    for rel in submodule_paths:
+        abs_path = REPO_ROOT / rel
+        if dir_populated(abs_path):
+            continue
+        # Try to fetch this one specifically; ignore failures unless
+        # it's on the required list.
         try:
-            run_cmd(["git", "submodule", "update", "--init", "--recursive"], cwd=REPO_ROOT)
-            ok("Git submodules")
+            run_cmd(["git", "submodule", "update", "--init", "--recursive",
+                     "--depth", "1", "--", rel], cwd=REPO_ROOT)
+            fetched_any = True
         except RuntimeError:
-            err("Failed to initialize submodules")
-            all_ok = False
+            if rel in REQUIRED_SUBMODULES:
+                missing_required.append(rel)
+            else:
+                warn(f"  optional submodule {rel} unavailable — skipping "
+                     "(private repo / no PAT)")
+        # Re-check after fetch attempt.
+        if rel in REQUIRED_SUBMODULES and not dir_populated(abs_path):
+            if rel not in missing_required:
+                missing_required.append(rel)
+
+    if missing_required:
+        err(f"Required submodules missing: {', '.join(missing_required)}")
+        all_ok = False
     else:
-        ok("Git submodules")
+        if fetched_any:
+            ok("Git submodules (some optional ones skipped)")
+        else:
+            ok("Git submodules")
 
     return all_ok
 
