@@ -424,10 +424,17 @@ bind_virtuappu_memory:
 
     /* Hand the renderer to the ImGui menu layer so it can draw on top
      * of the rasterized GBA frame. Failure to init ImGui is non-fatal —
-     * the legacy SDL-text menu still works. */
+     * the legacy SDL-text menu still works.
+     *
+     * Stage 2 GPU build: Port_ImGui_Init detects sBackend internally
+     * and uses the SDL_GPU ImGui backend (ImGui_ImplSDLGPU3_*) when the
+     * GPU pipeline owns the window. Renderer can be NULL in that case. */
     if (sBackend == RenderBackend::Renderer) {
         extern void Port_ImGui_Init(SDL_Window*, SDL_Renderer*);
         Port_ImGui_Init(window, sRenderer);
+    } else if (sBackend == RenderBackend::Gpu) {
+        extern void Port_ImGui_Init(SDL_Window*, SDL_Renderer*);
+        Port_ImGui_Init(window, nullptr);
     }
 }
 
