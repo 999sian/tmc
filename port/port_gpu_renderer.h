@@ -53,6 +53,19 @@ bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h);
  * to Port_GPU_PresentFrame instead of the SDL_Renderer path. */
 bool Port_GPU_IsActive(void);
 
+/* Available GPU-side shader filters. Maps loosely onto port_filter.c's
+ * PortFilterType enum (Stage 3 ports a subset to real GLSL passes; the
+ * rest still run on the SDL_Renderer build's CPU path). */
+typedef enum {
+    PORT_GPU_FILTER_NONE = 0,    /* passthrough — direct blit */
+    PORT_GPU_FILTER_LCD_GRID,    /* GBA LCD grid (GLSL port of Apply_LcdGrid) */
+    PORT_GPU_FILTER_COUNT
+} PortGpuFilter;
+
+void Port_GPU_SetFilter(PortGpuFilter f);
+PortGpuFilter Port_GPU_GetFilter(void);
+const char* Port_GPU_FilterName(PortGpuFilter f);
+
 /* Release device + shader objects. Idempotent. */
 void Port_GPU_Shutdown(void);
 

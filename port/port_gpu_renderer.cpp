@@ -29,6 +29,11 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int w, int h) {
 }
 extern "C" bool Port_GPU_IsActive(void) { return false; }
 extern "C" void Port_GPU_Shutdown(void) {}
+extern "C" void Port_GPU_SetFilter(PortGpuFilter f) { (void)f; }
+extern "C" PortGpuFilter Port_GPU_GetFilter(void) { return PORT_GPU_FILTER_NONE; }
+extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
+    (void)f; return "Off";
+}
 
 #else
 
@@ -36,6 +41,7 @@ extern "C" void Port_GPU_Shutdown(void) {}
 
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 
 /* Embed the SPIR-V blobs. xmake's utils.bin2c rule generates a header
@@ -49,15 +55,19 @@ static const unsigned char kPassthroughVertSpv[] = {
 static const unsigned char kPassthroughFragSpv[] = {
 #include "passthrough.frag.spv.h"
 };
+static const unsigned char kLcdGridFragSpv[] = {
+#include "lcd_grid.frag.spv.h"
+};
 static constexpr size_t kPassthroughVertSpvSize = sizeof(kPassthroughVertSpv);
 static constexpr size_t kPassthroughFragSpvSize = sizeof(kPassthroughFragSpv);
+static constexpr size_t kLcdGridFragSpvSize     = sizeof(kLcdGridFragSpv);
 
 static SDL_GPUDevice*           sDevice    = nullptr;
 static SDL_GPUShader*           sVertShader = nullptr;
-static SDL_GPUShader*           sFragShader = nullptr;
+/* Stage 3: one fragment shader + one graphics pipeline per filter mode. */
+static SDL_GPUShader*           sFragShaders[PORT_GPU_FILTER_COUNT] = {};
+static SDL_GPUGraphicsPipeline* sPipelines[PORT_GPU_FILTER_COUNT]   = {};
 static SDL_Window*              sWindow    = nullptr;
-/* Stage 2: claimed-window state. Set when Port_GPU_ClaimWindow succeeds. */
-static SDL_GPUGraphicsPipeline* sPipeline       = nullptr;
 static SDL_GPUSampler*          sSampler        = nullptr;
 static SDL_GPUTexture*          sSourceTexture  = nullptr;
 static SDL_GPUTransferBuffer*   sTransferBuffer = nullptr;
@@ -65,6 +75,7 @@ static int                      sSourceW = 0;
 static int                      sSourceH = 0;
 static bool                     sWindowClaimed = false;
 static SDL_GPUTextureFormat     sSwapFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+static PortGpuFilter            sActiveFilter = PORT_GPU_FILTER_NONE;
 
 /* Accessors for port_imgui_menu.cpp so it can wire its SDL_GPU backend
  * against the same device and matching swapchain format. */
@@ -112,25 +123,40 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
         return false;
     }
 
-    /* Fragment shader. One combined sampler at set=2, binding=0
-     * (the SDL_GPU convention for "fragment samplers"). */
-    SDL_GPUShaderCreateInfo fci = {};
-    fci.code_size            = kPassthroughFragSpvSize;
-    fci.code                 = kPassthroughFragSpv;
-    fci.entrypoint           = "main";
-    fci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
-    fci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
-    fci.num_samplers         = 1;
-    sFragShader = SDL_CreateGPUShader(sDevice, &fci);
-    if (!sFragShader) {
-        std::fprintf(stderr, "[gpu] fragment shader load failed: %s\n", SDL_GetError());
-        Port_GPU_Shutdown();
-        return false;
+    /* Fragment shaders — one per filter slot. The passthrough shader
+     * uses 1 combined sampler at set=2/binding=0. The lcd_grid shader
+     * also takes a vec2 uniform at set=3/binding=0 (viewport size,
+     * pushed each frame via SDL_PushGPUFragmentUniformData). */
+    struct {
+        const unsigned char* code;
+        size_t               size;
+        unsigned             num_uniforms;
+        const char*          label;
+    } fragSpec[PORT_GPU_FILTER_COUNT] = {
+        { kPassthroughFragSpv, kPassthroughFragSpvSize, 0, "passthrough" },
+        { kLcdGridFragSpv,     kLcdGridFragSpvSize,     1, "lcd_grid"    },
+    };
+    for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
+        SDL_GPUShaderCreateInfo fci = {};
+        fci.code_size            = fragSpec[i].size;
+        fci.code                 = fragSpec[i].code;
+        fci.entrypoint           = "main";
+        fci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
+        fci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
+        fci.num_samplers         = 1;
+        fci.num_uniform_buffers  = fragSpec[i].num_uniforms;
+        sFragShaders[i] = SDL_CreateGPUShader(sDevice, &fci);
+        if (!sFragShaders[i]) {
+            std::fprintf(stderr, "[gpu] fragment shader '%s' load failed: %s\n",
+                         fragSpec[i].label, SDL_GetError());
+            Port_GPU_Shutdown();
+            return false;
+        }
     }
 
     std::fprintf(stderr,
-        "[gpu] passthrough shader loaded (vert %zu B, frag %zu B)\n",
-        kPassthroughVertSpvSize, kPassthroughFragSpvSize);
+        "[gpu] shaders loaded (vert %zu B, frag passthrough %zu B, frag lcd_grid %zu B)\n",
+        kPassthroughVertSpvSize, kPassthroughFragSpvSize, kLcdGridFragSpvSize);
     return true;
 }
 
@@ -208,10 +234,10 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         }
     }
 
-    /* Graphics pipeline. No vertex buffer (fullscreen quad synthesised
-     * from gl_VertexIndex in the vertex shader), triangle-strip topology,
-     * single combined-image-sampler at fragment set=2/binding=0, simple
-     * REPLACE blend (the source covers the entire viewport every frame). */
+    /* Graphics pipelines — one per filter slot. Each pairs the shared
+     * vertex shader with its filter's fragment shader; the rest of the
+     * pipeline state is identical (fullscreen quad, triangle strip,
+     * REPLACE blend). F8 picks which pipeline binds at draw time. */
     {
         SDL_GPUColorTargetDescription color_target_desc = {};
         color_target_desc.format = swap_fmt;
@@ -221,23 +247,32 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         target_info.num_color_targets = 1;
         target_info.color_target_descriptions = &color_target_desc;
 
-        SDL_GPUGraphicsPipelineCreateInfo gpci = {};
-        gpci.vertex_shader            = sVertShader;
-        gpci.fragment_shader          = sFragShader;
-        gpci.primitive_type           = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
-        gpci.rasterizer_state.fill_mode  = SDL_GPU_FILLMODE_FILL;
-        gpci.rasterizer_state.cull_mode  = SDL_GPU_CULLMODE_NONE;
-        gpci.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
-        gpci.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
-        gpci.target_info = target_info;
-        /* No vertex_input_state — vertices are synthesised in the
-         * vertex shader from gl_VertexIndex; no per-vertex inputs. */
+        for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
+            SDL_GPUGraphicsPipelineCreateInfo gpci = {};
+            gpci.vertex_shader            = sVertShader;
+            gpci.fragment_shader          = sFragShaders[i];
+            gpci.primitive_type           = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
+            gpci.rasterizer_state.fill_mode  = SDL_GPU_FILLMODE_FILL;
+            gpci.rasterizer_state.cull_mode  = SDL_GPU_CULLMODE_NONE;
+            gpci.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+            gpci.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+            gpci.target_info = target_info;
+            sPipelines[i] = SDL_CreateGPUGraphicsPipeline(sDevice, &gpci);
+            if (!sPipelines[i]) {
+                std::fprintf(stderr, "[gpu] pipeline %d create failed: %s\n", i, SDL_GetError());
+                Port_GPU_Shutdown();
+                return false;
+            }
+        }
+    }
 
-        sPipeline = SDL_CreateGPUGraphicsPipeline(sDevice, &gpci);
-        if (!sPipeline) {
-            std::fprintf(stderr, "[gpu] graphics pipeline create failed: %s\n", SDL_GetError());
-            Port_GPU_Shutdown();
-            return false;
+    /* TMC_GPU_FILTER env var lets us flip the active filter at startup
+     * without rebuilding. Recognised values: "off" (default),
+     * "lcd_grid". Later stages add more presets. */
+    if (const char* f = std::getenv("TMC_GPU_FILTER")) {
+        if (std::strcmp(f, "lcd_grid") == 0) {
+            sActiveFilter = PORT_GPU_FILTER_LCD_GRID;
+            std::fprintf(stderr, "[gpu] filter at startup: %s\n", Port_GPU_FilterName(sActiveFilter));
         }
     }
 
@@ -247,7 +282,7 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
 }
 
 extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
-    if (!sWindowClaimed || !sPipeline) return false;
+    if (!sWindowClaimed || !sPipelines[sActiveFilter]) return false;
     if (fb_w != sSourceW || fb_h != sSourceH) return false;  /* size change unsupported */
 
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sDevice);
@@ -295,20 +330,91 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
     extern void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer*);
     Port_ImGui_PrepareDrawDataGpu(cmd);
 
-    /* Render pass: clear to black, draw the fullscreen quad through the
-     * passthrough shader, draw the F8 menu on top, end. */
+    /* Render pass: clear full swapchain to black, then constrain the
+     * viewport to a centered fit-rect that preserves the GBA's source
+     * aspect ratio (MODE1_GBA_WIDTH:MODE1_GBA_HEIGHT). The clear fills
+     * the letterbox / pillarbox bars; the game quad draws inside the
+     * viewport. ImGui RenderDrawData runs with the viewport reset to
+     * the full swapchain so the menu can use the entire window. */
     SDL_GPUColorTargetInfo color = {};
     color.texture     = swap_tex;
     color.clear_color = SDL_FColor{0.0f, 0.0f, 0.0f, 1.0f};
     color.load_op     = SDL_GPU_LOADOP_CLEAR;
     color.store_op    = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
-    SDL_BindGPUGraphicsPipeline(rp, sPipeline);
+
+    /* Aspect-preserving viewport — same math as
+     * port_ppu.cpp::Port_PPU_FitAspectRect for the SDL_Renderer path.
+     * Source aspect uses the runtime fb size (which equals
+     * MODE1_GBA_WIDTH × MODE1_GBA_HEIGHT for now; future internal-scale
+     * or widescreen modes feed a bigger source through here too). */
+    {
+        const int aspW = fb_w;
+        const int aspH = fb_h;
+        const int w = (int)swap_w;
+        const int h = (int)swap_h;
+        int rw, rh;
+        if (w * aspH >= h * aspW) {
+            rh = h;
+            rw = (h * aspW) / aspH;
+        } else {
+            rw = w;
+            rh = (w * aspH) / aspW;
+        }
+        SDL_GPUViewport vp = {};
+        vp.x = (float)((w - rw) / 2);
+        vp.y = (float)((h - rh) / 2);
+        vp.w = (float)rw;
+        vp.h = (float)rh;
+        vp.min_depth = 0.0f;
+        vp.max_depth = 1.0f;
+        SDL_SetGPUViewport(rp, &vp);
+    }
+
+    SDL_BindGPUGraphicsPipeline(rp, sPipelines[sActiveFilter]);
     SDL_GPUTextureSamplerBinding tsb = {};
     tsb.texture = sSourceTexture;
     tsb.sampler = sSampler;
     SDL_BindGPUFragmentSamplers(rp, /*first_slot=*/0, &tsb, 1);
+
+    /* Push fragment uniforms required by the active filter. The LCD
+     * grid shader expects the output viewport size so it can compute
+     * cell stride; passthrough has no uniforms. */
+    if (sActiveFilter == PORT_GPU_FILTER_LCD_GRID) {
+        struct { float viewport[2]; float _pad[2]; } u;
+        /* Pass the fit-rect we computed earlier so the cells align with
+         * the actual draw area, not the full swapchain. The 16-byte
+         * std140 alignment requires padding. */
+        const int aspW = fb_w;
+        const int aspH = fb_h;
+        const int w = (int)swap_w;
+        const int h = (int)swap_h;
+        int rw, rh;
+        if (w * aspH >= h * aspW) {
+            rh = h; rw = (h * aspW) / aspH;
+        } else {
+            rw = w; rh = (w * aspH) / aspW;
+        }
+        u.viewport[0] = (float)rw;
+        u.viewport[1] = (float)rh;
+        u._pad[0] = u._pad[1] = 0.0f;
+        SDL_PushGPUFragmentUniformData(cmd, /*slot_index=*/0, &u, sizeof(u));
+    }
+
     SDL_DrawGPUPrimitives(rp, /*num_vertices=*/4, /*num_instances=*/1, 0, 0);
+
+    /* Reset the viewport to the full swapchain before drawing ImGui,
+     * otherwise the F8 menu draws clipped inside the letterbox. */
+    {
+        SDL_GPUViewport vp = {};
+        vp.x = 0.0f;
+        vp.y = 0.0f;
+        vp.w = (float)swap_w;
+        vp.h = (float)swap_h;
+        vp.min_depth = 0.0f;
+        vp.max_depth = 1.0f;
+        SDL_SetGPUViewport(rp, &vp);
+    }
 
     extern void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
     Port_ImGui_RenderDrawDataGpu(cmd, rp);
@@ -320,13 +426,27 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
 }
 
 extern "C" bool Port_GPU_IsActive(void) {
-    return sWindowClaimed && sPipeline != nullptr;
+    return sWindowClaimed && sPipelines[PORT_GPU_FILTER_NONE] != nullptr;
+}
+
+extern "C" void Port_GPU_SetFilter(PortGpuFilter f) {
+    if ((unsigned)f < PORT_GPU_FILTER_COUNT) sActiveFilter = f;
+}
+extern "C" PortGpuFilter Port_GPU_GetFilter(void) { return sActiveFilter; }
+extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
+    switch (f) {
+        case PORT_GPU_FILTER_NONE:     return "Off";
+        case PORT_GPU_FILTER_LCD_GRID: return "LCD Grid (GPU)";
+        default: return "?";
+    }
 }
 
 extern "C" void Port_GPU_Shutdown(void) {
-    if (sPipeline) {
-        SDL_ReleaseGPUGraphicsPipeline(sDevice, sPipeline);
-        sPipeline = nullptr;
+    for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
+        if (sPipelines[i]) {
+            SDL_ReleaseGPUGraphicsPipeline(sDevice, sPipelines[i]);
+            sPipelines[i] = nullptr;
+        }
     }
     if (sTransferBuffer) {
         SDL_ReleaseGPUTransferBuffer(sDevice, sTransferBuffer);
@@ -340,9 +460,11 @@ extern "C" void Port_GPU_Shutdown(void) {
         SDL_ReleaseGPUSampler(sDevice, sSampler);
         sSampler = nullptr;
     }
-    if (sFragShader) {
-        SDL_ReleaseGPUShader(sDevice, sFragShader);
-        sFragShader = nullptr;
+    for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
+        if (sFragShaders[i]) {
+            SDL_ReleaseGPUShader(sDevice, sFragShaders[i]);
+            sFragShaders[i] = nullptr;
+        }
     }
     if (sVertShader) {
         SDL_ReleaseGPUShader(sDevice, sVertShader);
