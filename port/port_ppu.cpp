@@ -4,6 +4,7 @@
 #include "port_upscale.h"
 #include "port_runtime_config.h"
 #include "port_filter.h"
+#include "port_gpu_renderer.h"  /* PortGpuFilter for the GPU-backend filter cycle */
 #include "port_touch_controls.h"
 
 #ifdef launcher
@@ -702,6 +703,24 @@ extern "C" void Port_PPU_ToggleSmoothing(void) {
 }
 
 extern "C" void Port_PPU_CycleFilter(int direction) {
+    /* On the SDL_GPU backend, the F8 → Filter button drives the GLSL
+     * pipeline switcher in port_gpu_renderer.cpp instead of the
+     * CPU-side filter (which is bypassed on the GPU path entirely).
+     * Stage 3 currently exposes 2 GPU filters (None + LCD Grid);
+     * Stages 4+ port the rest of port_filter.c's CRT / scanlines /
+     * vignette presets as GLSL shaders. */
+    if (sBackend == RenderBackend::Gpu) {
+        extern PortGpuFilter Port_GPU_GetFilter(void);
+        extern void Port_GPU_SetFilter(PortGpuFilter);
+        extern const char* Port_GPU_FilterName(PortGpuFilter);
+        int next = (int)Port_GPU_GetFilter() + (direction < 0 ? -1 : 1);
+        if (next < 0) next = (int)PORT_GPU_FILTER_COUNT - 1;
+        else if (next >= (int)PORT_GPU_FILTER_COUNT) next = 0;
+        Port_GPU_SetFilter((PortGpuFilter)next);
+        fprintf(stderr, "GPU filter: %s\n", Port_GPU_FilterName((PortGpuFilter)next));
+        return;
+    }
+
     int next = (int)sFilter + (direction < 0 ? -1 : 1);
     if (next < 0) {
         next = (int)PORT_FILTER_COUNT - 1;
@@ -713,6 +732,11 @@ extern "C" void Port_PPU_CycleFilter(int direction) {
 }
 
 extern "C" const char* Port_PPU_FilterName(void) {
+    if (sBackend == RenderBackend::Gpu) {
+        extern PortGpuFilter Port_GPU_GetFilter(void);
+        extern const char* Port_GPU_FilterName(PortGpuFilter);
+        return Port_GPU_FilterName(Port_GPU_GetFilter());
+    }
     return Port_Filter_Name(sFilter);
 }
 
