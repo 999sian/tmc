@@ -414,6 +414,17 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         }
     }
 
+    /* TMC_GLSLP_PRESET env var — load a libretro .glslp preset at
+     * startup. When set AND the runtime loads successfully, that
+     * preset takes over presentation; the stock GPU filter cycle
+     * becomes a no-op for the rest of the session. */
+    if (const char* preset_path = std::getenv("TMC_GLSLP_PRESET")) {
+        extern int Port_GlslpRuntime_Load(const char*);
+        if (Port_GlslpRuntime_Load(preset_path)) {
+            std::fprintf(stderr, "[gpu] glslp runtime active for '%s'\n", preset_path);
+        }
+    }
+
     /* TMC_GPU_FILTER env var lets us flip the active filter at startup
      * without rebuilding. Recognised values: "off" (default),
      * "lcd_grid", "scanline", "handheld", "vignette". */
