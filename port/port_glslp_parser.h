@@ -1,0 +1,215 @@
+#pragma once
+/*
+ * port_glslp_parser.h — Stage 5+C scaffold for the libretro .glslp
+ * preset-format parser.
+ *
+ * **Not implemented yet.** This header documents the data structures
+ * and parser API a future session would build. Together with the
+ * multi-pass infrastructure shipped in Stage 5+A (intermediate
+ * texture, prepass pipeline), it would let TMC drop the
+ * libretro/glsl-shaders repo into assets/shaders/ and Just Work.
+ *
+ * Why this file exists in this state: a full .glslp runtime is a
+ * 2–4 week project (parser + libretro GLSL preprocessor + render-
+ * graph executor + LUT loader + standard-uniform wiring). Rather
+ * than half-implement it, this scaffold names every piece so the
+ * next implementation session starts with a known design instead
+ * of staring at the libretro spec from scratch.
+ *
+ * ----------------------------------------------------------------
+ * libretro .glslp format (INI-like):
+ *
+ *   shaders = N                              # pass count
+ *   feedback_pass = K                        # optional history pass
+ *
+ *   shader0 = "shaders/foo/bar.glsl"
+ *   filter_linear0 = false                   # linear vs nearest sampling
+ *   wrap_mode0 = clamp_to_border             # clamp_to_border|clamp_to_edge|repeat|mirrored_repeat
+ *   mipmap_input0 = false
+ *   alias0 = "PassName"                      # optional name for later passes to sample
+ *   float_framebuffer0 = false               # rgba16f intermediate vs rgba8
+ *   srgb_framebuffer0 = false
+ *   scale_type_x0 = source                   # source|viewport|absolute
+ *   scale_type_y0 = source
+ *   scale_x0 = 1.0
+ *   scale_y0 = 1.0
+ *   # (or `scale_type0`/`scale0` to set both axes at once)
+ *
+ *   shader1 = ...
+ *
+ *   textures = "LUT1;LUT2"                   # external lookup textures
+ *   LUT1 = "shaders/foo/lut1.png"
+ *   LUT1_linear = true
+ *   LUT1_wrap_mode = clamp_to_border
+ *   LUT1_mipmap = false
+ *
+ *   parameters = "param0;param1"             # runtime knobs (#pragma parameter in shader)
+ *   param0 = 0.5
+ *
+ * ----------------------------------------------------------------
+ * Implementation plan, in dependency order:
+ *
+ *   1. INI tokenizer (~80 LOC) — parse key = value pairs, skip
+ *      comments (# and ;), handle quoted string values, expand
+ *      relative paths against the .glslp file's directory.
+ *
+ *   2. .glslp loader (~120 LOC) — read all keys into a GlslpPreset
+ *      struct (defined below). Validate pass count and per-pass
+ *      indices. Resolve relative shader / LUT paths to absolute.
+ *
+ *   3. Libretro GLSL preprocessor (~150 LOC) — substitute the
+ *      libretro-specific macros into modern GLSL 450:
+ *        COMPAT_PRECISION  → empty
+ *        COMPAT_VARYING    → `in` (FS) / `out` (VS)
+ *        COMPAT_ATTRIBUTE  → `layout(location=N) in`
+ *        COMPAT_TEXTURE    → `texture`
+ *        gl_FragColor      → `oColor` (declare layout(location=0))
+ *        gl_TexCoord[0]    → `vTexCoord`
+ *        Extract `#pragma parameter name "label" default min max step`
+ *        and produce uniform declarations for them.
+ *        Detect `#pragma stage vertex` / `#pragma stage fragment`
+ *        and emit the matching half of the file.
+ *
+ *   4. GLSL → SPIR-V at runtime — link against glslang at build
+ *      time, or invoke `glslangValidator` from the binary (uglier
+ *      but simpler). Cache compiled .spv blobs in assets/shaders/.cache/
+ *      keyed on (sourcehash, glslang_version) so repeated launches
+ *      skip the compile.
+ *
+ *   5. Multi-pass render-graph executor (~250 LOC) — extends the
+ *      existing two-pass infrastructure (Stage 5+A) to N passes:
+ *      - allocate one intermediate SDL_GPUTexture per pass at the
+ *        computed size (scale_type × scale × source/viewport)
+ *      - wire pass[i].output → pass[i+1].input
+ *      - bind any named-alias passes that pass[i] references via
+ *        the libretro `PassPrev1`/`Pass1`/`<Alias>` uniform names
+ *      - upload LUT textures once at preset-load time and bind to
+ *        named samplers per pass
+ *      - push the standard libretro uniforms each frame:
+ *          MVPMatrix, OutputSize, TextureSize, InputSize,
+ *          FrameCount, FrameDirection, OriginalSize, FinalViewportSize
+ *      - push the user-tunable #pragma parameters from the preset
+ *        defaults (a Stage 5+D could expose these in the F8 menu).
+ *
+ *   6. PNG/TGA LUT loader (~50 LOC) — for the `textures = ...`
+ *      entries. libpng is already linked; TGA is straightforward
+ *      to hand-decode for the small headers libretro shaders use.
+ *
+ *   7. F8 picker integration — add a "Shader preset" submenu that
+ *      lists every `.glslp` file under assets/shaders/. Switching
+ *      a preset tears down the active GlslpRuntime and loads a new
+ *      one; mid-frame swaps are not expected.
+ *
+ * Quirks the implementation will need to handle:
+ *   - Some shaders use deprecated `gl_FragCoord` semantics (origin
+ *     bottom-left in GL vs top-left in Vulkan). Add a `#define`d
+ *     `FragCoord = vec2(gl_FragCoord.x, OutputSize.y - gl_FragCoord.y)`
+ *     in the preprocessor when the source declares
+ *     `#pragma format ARGB16FX_FLIP_Y`.
+ *   - Several presets use `#include` to share helper headers.
+ *     Implement a minimal include resolver, relative to the
+ *     including file's dir.
+ *   - Feedback passes (`feedback_pass = N`) need two intermediate
+ *     textures per such pass — one for "current frame output",
+ *     one for "previous frame output (PassFeedback)". Ping-pong.
+ *
+ * ----------------------------------------------------------------
+ * Estimated effort (focused work, not counting interruptions):
+ *   1+2  ~1 day      — parser + loader
+ *   3    ~1 day      — preprocessor
+ *   4    ~0.5 day    — glslang link + cache
+ *   5    ~1 week     — render-graph executor (the hard part)
+ *   6    ~0.5 day    — LUT loader
+ *   7    ~0.5 day    — F8 picker
+ *
+ * Total: ~2 weeks for a working drop-in runtime that handles the
+ * most-used libretro presets (CRT-Geom, Lottes, NTSC, etc.). Add
+ * another week to cover edge cases (feedback passes, mipmap inputs,
+ * float framebuffers, all wrap modes).
+ *
+ * ----------------------------------------------------------------
+ * Data structures the implementation will populate:
+ */
+
+#ifdef __cplusplus
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <optional>
+
+namespace PortGlslp {
+
+enum class ScaleType { Source, Viewport, Absolute };
+enum class WrapMode  { ClampBorder, ClampEdge, Repeat, MirroredRepeat };
+
+struct ShaderPass {
+    std::string path;                    /* resolved abs path to .glsl */
+    bool        filter_linear   = false;
+    WrapMode    wrap            = WrapMode::ClampBorder;
+    bool        mipmap_input    = false;
+    bool        srgb_framebuffer = false;
+    bool        float_framebuffer = false;
+    ScaleType   scale_type_x    = ScaleType::Source;
+    ScaleType   scale_type_y    = ScaleType::Source;
+    float       scale_x         = 1.0f;
+    float       scale_y         = 1.0f;
+    std::optional<std::string> alias;     /* for `aliasN = "Foo"` references */
+};
+
+struct LutTexture {
+    std::string name;                    /* e.g. "LUT1" — the uniform name shaders use */
+    std::string path;                    /* resolved abs path to .png/.tga */
+    bool        linear  = true;
+    WrapMode    wrap    = WrapMode::ClampBorder;
+    bool        mipmap  = false;
+};
+
+struct ShaderParam {
+    std::string id;                       /* matches #pragma parameter ID */
+    std::string label;                    /* user-visible (for F8 menu) */
+    float       default_value = 0.0f;
+    float       min_value     = 0.0f;
+    float       max_value     = 1.0f;
+    float       step_value    = 0.01f;
+    float       current_value = 0.0f;     /* runtime mutable */
+};
+
+struct Preset {
+    std::vector<ShaderPass>  passes;
+    std::vector<LutTexture>  luts;
+    std::vector<ShaderParam> parameters;
+    std::optional<int>       feedback_pass;
+    std::string              source_path; /* for relative-path resolution */
+};
+
+/* TODO: implement. Returns nullopt on parse error; writes diagnostic
+ * to stderr. */
+std::optional<Preset> LoadPresetFile(const char* glslp_path);
+
+}  // namespace PortGlslp
+
+#endif  /* __cplusplus */
+
+/* C-callable API the runtime will use once the parser exists. None
+ * are implemented yet. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Load a .glslp preset and stand up its multi-pass GPU pipeline.
+ * Returns 1 on success, 0 on error. On success the next
+ * Port_GPU_PresentFrame calls render through the new preset.
+ * Replaces any currently-active preset. */
+int  Port_GlslpRuntime_Load(const char* glslp_path);
+
+/* Tear down the active preset (if any). Falls back to the
+ * stock PortGpuFilter pipeline-switcher (Stages 3–5 lcd_grid /
+ * scanline / handheld / vignette / crt_*). */
+void Port_GlslpRuntime_Unload(void);
+
+/* Whether a .glslp preset is currently driving presentation. */
+int  Port_GlslpRuntime_IsActive(void);
+
+#ifdef __cplusplus
+}
+#endif
