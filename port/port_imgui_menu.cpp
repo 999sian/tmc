@@ -1342,7 +1342,13 @@ static void DrawQuitModal(void) {
 
 extern "C" bool Port_ImGui_Render(void) {
     if (!sImGuiInited || !sImGuiEnabled) return false;
+    /* SDL_Renderer path needs a renderer; SDL_GPU path runs with
+     * sRenderer == nullptr (NewFrame uses ImGui_ImplSDLGPU3 instead
+     * and PresentFrame consumes the draw data via the *_Gpu helpers
+     * below). */
+#ifndef TMC_GPU_RENDERER
     if (!sRenderer) return false;
+#endif
 
     /* Gamepad nav gated on menu-open state. When the menu is closed,
      * ImGui must NOT consume gamepad input — otherwise the focus-by-

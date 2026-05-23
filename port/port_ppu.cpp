@@ -508,8 +508,18 @@ extern "C" void Port_PPU_PresentFrame(void) {
     /* Stage 2: SDL_GPU present path. Stretched 240x160 → swapchain via
      * the passthrough shader. No aspect-mode / internal-scale / xBRZ /
      * filter integration yet — those features stay on the SDL_Renderer
-     * path; Stage 3 will rebuild them on the GPU side as shader passes. */
+     * path; Stage 3 will rebuild them on the GPU side as shader passes.
+     *
+     * ImGui must run BEFORE Port_GPU_PresentFrame so its NewFrame + UI
+     * build + ImGui::Render() collect draw data that PresentFrame can
+     * then upload (PrepareDrawData) and overlay inside the same render
+     * pass. The SDL_Renderer branch below calls Port_ImGui_Render at
+     * the end (after the game's RenderPresent), which works because
+     * the renderer presents-then-overlays in one call; SDL_GPU needs
+     * the order swapped because the menu draws into the game's pass. */
     if (sBackend == RenderBackend::Gpu) {
+        extern bool Port_ImGui_Render(void);
+        Port_ImGui_Render();
         extern bool Port_GPU_PresentFrame(const uint32_t*, int, int);
         Port_GPU_PresentFrame(virtuappu_frame_buffer, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
         return;
