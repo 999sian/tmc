@@ -225,6 +225,21 @@ CompileGlslToSpirv(const std::string& glsl_source,
                    ShaderStage        stage,
                    const std::string& cache_dir);
 
+/* Step 6: decoded LUT image data. ABGR8888 little-endian (byte 0 = R,
+ * etc) to match SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM. Origin is
+ * top-left (we flip TGA's bottom-left origin during decode). */
+struct DecodedImage {
+    int                  width  = 0;
+    int                  height = 0;
+    std::vector<uint8_t> rgba;  /* width * height * 4 bytes */
+};
+
+/* Load a LUT image from disk. Supports PNG (via libpng) and the
+ * common subset of TGA (24/32-bit uncompressed, bottom-left origin
+ * auto-flipped). Returns nullopt on read/decode error with a stderr
+ * diagnostic. */
+std::optional<DecodedImage> LoadLutImage(const std::string& path);
+
 }  // namespace PortGlslp
 
 #endif  /* __cplusplus */
