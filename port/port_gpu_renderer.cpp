@@ -125,6 +125,15 @@ static PortGpuFilter            sActiveFilter = PORT_GPU_FILTER_NONE;
 extern "C" SDL_GPUDevice* Port_GPU_GetDevice(void)             { return sDevice; }
 extern "C" SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void) { return sSwapFormat; }
 
+/* .glslp runtime hooks (port_glslp_runtime.cpp). Declared at file
+ * scope; the runtime's defining TU is also compiled with extern "C"
+ * linkage on these symbols. */
+extern "C" int  Port_GlslpRuntime_IsActive(void);
+extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer*,
+                                               SDL_GPUTexture*,
+                                               SDL_GPUTexture*,
+                                               int, int, int, int, uint32_t);
+
 extern "C" bool Port_GPU_Init(SDL_Window* window) {
     if (sDevice) return true; /* idempotent */
 
@@ -473,6 +482,34 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
      * immediately. */
     extern void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer*);
     Port_ImGui_PrepareDrawDataGpu(cmd);
+
+    /* Stage 5+C step 5: if a libretro .glslp preset is loaded, route
+     * the full render through its multi-pass pipeline and skip the
+     * stock single-pass shader entirely. ImGui still gets a chance to
+     * overlay in its own pass below (the runtime's last pass renders
+     * to the swapchain texture, and we re-open an EndRenderPass-friendly
+     * render pass for ImGui). */
+    static uint32_t s_frame_counter = 0;
+    if (Port_GlslpRuntime_IsActive()) {
+        Port_GlslpRuntime_PresentFrame(cmd, sSourceTexture, swap_tex,
+                                       (int)swap_w, (int)swap_h,
+                                       fb_w, fb_h, s_frame_counter++);
+        /* ImGui still wants to draw after the runtime's last pass.
+         * Open one more clear-and-load render pass on the swapchain
+         * (load_op = LOAD so we keep the runtime's output) and run
+         * the menu overlay through it. */
+        SDL_GPUColorTargetInfo ovl = {};
+        ovl.texture     = swap_tex;
+        ovl.clear_color = SDL_FColor{0.0f, 0.0f, 0.0f, 1.0f};
+        ovl.load_op     = SDL_GPU_LOADOP_LOAD;
+        ovl.store_op    = SDL_GPU_STOREOP_STORE;
+        SDL_GPURenderPass* orp = SDL_BeginGPURenderPass(cmd, &ovl, 1, nullptr);
+        extern void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
+        Port_ImGui_RenderDrawDataGpu(cmd, orp);
+        SDL_EndGPURenderPass(orp);
+        SDL_SubmitGPUCommandBuffer(cmd);
+        return true;
+    }
 
     /* Stage 5+A multi-pass: when the active filter declares a prepass,
      * render source → intermediate texture first. The main pass below
