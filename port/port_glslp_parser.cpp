@@ -25,7 +25,9 @@
 
 #include "port_glslp_parser.h"
 
+#include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -33,6 +35,7 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <unistd.h>
 #include <vector>
 
 namespace PortGlslp {
@@ -344,6 +347,128 @@ std::optional<Preset> LoadPresetFile(const char* glslp_path) {
     }
 
     return out;
+}
+
+/* ----- Step 4: glslangValidator wrapper + content-hash cache -------- */
+
+namespace {
+
+/* 64-bit FNV-1a hash over a string. Plenty for distinguishing shader
+ * sources in the cache directory; the cache key is just a filename
+ * tag, not a cryptographic identifier. */
+static uint64_t Fnv1a64(const std::string& s) {
+    uint64_t h = 0xcbf29ce484222325ull;
+    for (unsigned char c : s) {
+        h ^= c;
+        h *= 0x100000001b3ull;
+    }
+    return h;
+}
+
+static bool ReadFileBytes(const std::string& path, std::vector<uint8_t>& out) {
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    if (!f) return false;
+    auto end = f.tellg();
+    f.seekg(0);
+    out.resize((size_t)end);
+    if (!f.read(reinterpret_cast<char*>(out.data()), out.size())) {
+        out.clear();
+        return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+std::optional<std::vector<uint8_t>>
+CompileGlslToSpirv(const std::string& glsl_source,
+                   ShaderStage        stage,
+                   const std::string& cache_dir) {
+    namespace fs = std::filesystem;
+
+    const char* stage_flag = (stage == ShaderStage::Vertex) ? "vert" : "frag";
+    const std::string ext  = (stage == ShaderStage::Vertex) ? "vert.spv" : "frag.spv";
+
+    /* Cache lookup. The hash incorporates the stage so a vertex
+     * shader text that happens to also be valid fragment source
+     * doesn't share a cache slot with its fragment build. */
+    std::string cache_path;
+    if (!cache_dir.empty()) {
+        uint64_t h = Fnv1a64(glsl_source);
+        h ^= ((stage == ShaderStage::Vertex) ? 0x1ULL : 0x2ULL) * 0x9e3779b97f4a7c15ULL;
+        char namebuf[40];
+        std::snprintf(namebuf, sizeof(namebuf), "%016llx.%s",
+                      (unsigned long long)h, ext.c_str());
+        std::error_code ec;
+        fs::create_directories(cache_dir, ec);
+        cache_path = (fs::path(cache_dir) / namebuf).string();
+
+        std::vector<uint8_t> cached;
+        if (ReadFileBytes(cache_path, cached) && !cached.empty()) {
+            return cached;
+        }
+    }
+
+    /* Write the GLSL to a temp file (glslangValidator only takes
+     * paths, not stdin in a way that emits to stdout cleanly). */
+    char tmp_in_buf[128];
+    std::snprintf(tmp_in_buf, sizeof(tmp_in_buf),
+                  "/tmp/tmc_glslp_in_%d_%s.glsl",
+                  (int)::getpid(), stage_flag);
+    char tmp_out_buf[128];
+    std::snprintf(tmp_out_buf, sizeof(tmp_out_buf),
+                  "/tmp/tmc_glslp_out_%d_%s.spv",
+                  (int)::getpid(), stage_flag);
+    {
+        std::ofstream f(tmp_in_buf);
+        if (!f) {
+            std::fprintf(stderr, "[glslp] failed to write tmp shader %s\n", tmp_in_buf);
+            return std::nullopt;
+        }
+        f << glsl_source;
+    }
+
+    /* Shell out to glslangValidator. -V = Vulkan SPIR-V output;
+     * --quiet suppresses the "filename printed on success" line. */
+    char cmd[512];
+    std::snprintf(cmd, sizeof(cmd),
+                  "glslangValidator -V -S %s -o %s %s 2>&1",
+                  stage_flag, tmp_out_buf, tmp_in_buf);
+    FILE* pipe = popen(cmd, "r");
+    if (!pipe) {
+        std::fprintf(stderr, "[glslp] popen failed for glslangValidator\n");
+        std::remove(tmp_in_buf);
+        return std::nullopt;
+    }
+    std::string diag;
+    char line[256];
+    while (std::fgets(line, sizeof(line), pipe)) {
+        diag += line;
+    }
+    int rc = pclose(pipe);
+
+    std::vector<uint8_t> spv;
+    bool ok = (rc == 0) && ReadFileBytes(tmp_out_buf, spv) && !spv.empty();
+
+    std::remove(tmp_in_buf);
+    std::remove(tmp_out_buf);
+
+    if (!ok) {
+        std::fprintf(stderr, "[glslp] glslang failed (rc=%d):\n%s\n", rc, diag.c_str());
+        return std::nullopt;
+    }
+
+    /* Persist to cache for next launch. Best-effort: on failure to
+     * write, log and continue (the in-memory result is still valid). */
+    if (!cache_path.empty()) {
+        std::ofstream f(cache_path, std::ios::binary);
+        if (f) {
+            f.write(reinterpret_cast<const char*>(spv.data()), spv.size());
+        } else {
+            std::fprintf(stderr, "[glslp] failed to write cache: %s\n", cache_path.c_str());
+        }
+    }
+    return spv;
 }
 
 /* ----- Step 3: libretro GLSL preprocessor --------------------------- */
