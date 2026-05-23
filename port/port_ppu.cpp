@@ -29,6 +29,7 @@ enum class RenderBackend {
     None,
     Renderer,
     Surface,
+    Gpu,       /* Stage 2: SDL_GPU pipeline owns the swapchain */
 };
 
 /* User-cycled presentation modes. F12 advances through these. */
@@ -317,18 +318,41 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
 #endif
     Port_PPU_LoadConfig();
 
-    /* Reuse the renderer the bootstrap progress UI created (if any)
-     * instead of destroying it and making a new one. SDL only allows
-     * one renderer per window, and recreating it on the same window
-     * causes a visible compositor flash on most platforms — exactly
-     * what made the asset-extractor screen look like a separate
-     * window from the game. SDL_GetRenderer returns NULL when no
-     * renderer has been associated with the window, in which case we
-     * fall back to creating one ourselves. */
-    sRenderer = SDL_GetRenderer(window);
-    if (!sRenderer) {
-        sRenderer = SDL_CreateRenderer(window, nullptr);
+    /* Stage 2: if the GPU renderer is compiled in and the device
+     * initialised successfully (Port_GPU_Init was called before us in
+     * port_main.c), tear down any pre-existing SDL_Renderer on this
+     * window and hand it to the SDL_GPU pipeline. Only one device can
+     * own a window's swapchain, so the SDL_Renderer fallback must give
+     * up the window first. On any GPU-side failure we keep the
+     * SDL_Renderer path — no behavioural change vs. pre-Stage-2 builds.
+     *
+     * Bootstrap-renderer reuse note: bootstrap may have created an
+     * SDL_Renderer for the LOADING splash. Destroying it before the
+     * GPU claim is the safe order — without that, SDL_ClaimWindow
+     * returns VK_ERROR_SURFACE_LOST_KHR. If GPU init fails the
+     * fallback path re-creates the renderer below. */
+    extern bool Port_GPU_Init(SDL_Window*);
+    extern bool Port_GPU_ClaimWindow(SDL_Window*, int, int);
+    extern bool Port_GPU_IsActive(void);
+    (void)Port_GPU_Init;  /* called earlier in port_main.c */
+
+    if (SDL_Renderer* existing = SDL_GetRenderer(window)) {
+        /* Try GPU first; if it claims, we drop the renderer. Otherwise
+         * fall through to the normal SDL_Renderer reuse path. */
+        SDL_DestroyRenderer(existing);
     }
+    if (Port_GPU_ClaimWindow(window, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT)) {
+        sBackend = RenderBackend::Gpu;
+        std::fprintf(stderr, "PPU initialized with SDL_GPU backend.\n");
+        /* GPU path doesn't need any of the SDL_Renderer / SDL_Texture
+         * state below — skip straight to the ViruaPPU memory bind. */
+        goto bind_virtuappu_memory;
+    }
+
+    /* GPU not available (build flag off, init failed, or claim failed):
+     * fall back to SDL_Renderer. SDL_GetRenderer is NULL here because
+     * we destroyed any existing one above; create one fresh. */
+    sRenderer = SDL_CreateRenderer(window, nullptr);
     if (sRenderer) {
         SDL_SetRenderTarget(sRenderer, nullptr);
         SDL_SetRenderClipRect(sRenderer, nullptr);
@@ -355,6 +379,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         }
     }
 
+bind_virtuappu_memory:
     {
         VirtuaPPUMode1GbaMemory memory = {
             gIoMem,
@@ -472,6 +497,16 @@ extern "C" void Port_PPU_PresentFrame(void) {
         }
     }
     (void)gMain;
+
+    /* Stage 2: SDL_GPU present path. Stretched 240x160 → swapchain via
+     * the passthrough shader. No aspect-mode / internal-scale / xBRZ /
+     * filter integration yet — those features stay on the SDL_Renderer
+     * path; Stage 3 will rebuild them on the GPU side as shader passes. */
+    if (sBackend == RenderBackend::Gpu) {
+        extern bool Port_GPU_PresentFrame(const uint32_t*, int, int);
+        Port_GPU_PresentFrame(virtuappu_frame_buffer, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
+        return;
+    }
 
     if (sBackend == RenderBackend::Renderer) {
         int outW = 0;
