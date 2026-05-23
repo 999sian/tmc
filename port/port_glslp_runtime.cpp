@@ -457,6 +457,45 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
     if (!g_runtime.loaded || g_runtime.passes.empty()) return false;
     if (!cmd || !src_texture || !swap_texture) return false;
 
+    /* Window-resize: when the swapchain size changes (user resized
+     * the window), any pass with scale_type=viewport now has a
+     * stale-sized intermediate texture. Rebuild only those —
+     * pipelines stay valid because their target format is unchanged.
+     * source-scale and absolute-scale passes are independent of
+     * viewport size; they keep their textures across resizes.
+     *
+     * Cheap to do every frame because the equality check skips out
+     * fast in the common steady-state. */
+    if ((Uint32)swap_w != g_runtime.assumed_vp_w
+        || (Uint32)swap_h != g_runtime.assumed_vp_h) {
+        for (size_t i = 0; i + 1 < g_runtime.passes.size(); ++i) {
+            const auto& pdef = g_runtime.preset.passes[i];
+            auto&       p    = g_runtime.passes[i];
+            const bool viewport_scaled =
+                pdef.scale_type_x == PortGlslp::ScaleType::Viewport ||
+                pdef.scale_type_y == PortGlslp::ScaleType::Viewport;
+            if (!viewport_scaled) continue;
+
+            int new_w, new_h;
+            ResolvePassSize(pdef, src_w, src_h, swap_w, swap_h, new_w, new_h);
+            if (new_w == p.out_w && new_h == p.out_h) continue;
+
+            if (p.out_texture) SDL_ReleaseGPUTexture(g_runtime.device, p.out_texture);
+            SDL_GPUTextureCreateInfo tci = {};
+            tci.type   = SDL_GPU_TEXTURETYPE_2D;
+            tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+            tci.width  = (Uint32)new_w;
+            tci.height = (Uint32)new_h;
+            tci.layer_count_or_depth = 1;
+            tci.num_levels           = 1;
+            p.out_texture = SDL_CreateGPUTexture(g_runtime.device, &tci);
+            p.out_w = new_w; p.out_h = new_h;
+        }
+        g_runtime.assumed_vp_w = (Uint32)swap_w;
+        g_runtime.assumed_vp_h = (Uint32)swap_h;
+    }
+
     SDL_GPUTexture* prev_input = src_texture;
     int             prev_w     = src_w;
     int             prev_h     = src_h;
