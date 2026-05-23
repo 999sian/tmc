@@ -25,6 +25,10 @@
 #include <imgui.h>
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
+#ifdef TMC_GPU_RENDERER
+#include <SDL3/SDL_gpu.h>
+#include <backends/imgui_impl_sdlgpu3.h>
+#endif
 
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
 #include "port_randomizer.h"
@@ -65,7 +69,14 @@ static SDL_Renderer* sRenderer = nullptr;
 
 extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
     if (sImGuiInited) return;
-    if (!window || !renderer) return;
+    if (!window) return;
+    /* On GPU builds renderer is intentionally NULL — Port_PPU_Init passes
+     * null when the SDL_GPU pipeline owns the swapchain. The GPU branch
+     * below handles that case; the SDL_Renderer branch still requires
+     * a non-null renderer. */
+#ifndef TMC_GPU_RENDERER
+    if (!renderer) return;
+#endif
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -115,6 +126,44 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
     colors[ImGuiCol_Text]           = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
     colors[ImGuiCol_TextDisabled]   = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
 
+#ifdef TMC_GPU_RENDERER
+    /* GPU path: renderer arg is NULL (Port_PPU_Init passed null when the
+     * SDL_GPU pipeline owns the window). Initialise the SDL_GPU ImGui
+     * backend instead — its NewFrame/PrepareDrawData/RenderDrawData
+     * trio integrates with our existing SDL_GPU PresentFrame. */
+    if (renderer == nullptr) {
+        extern SDL_GPUDevice* Port_GPU_GetDevice(void);
+        extern SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void);
+        SDL_GPUDevice* dev = Port_GPU_GetDevice();
+        SDL_GPUTextureFormat fmt = Port_GPU_GetSwapchainFormat();
+        if (!dev || fmt == SDL_GPU_TEXTUREFORMAT_INVALID) {
+            fprintf(stderr, "[imgui] GPU device/format unavailable — F8 menu disabled\n");
+            ImGui::DestroyContext();
+            return;
+        }
+        if (!ImGui_ImplSDL3_InitForSDLGPU(window)) {
+            fprintf(stderr, "[imgui] ImGui_ImplSDL3_InitForSDLGPU failed\n");
+            ImGui::DestroyContext();
+            return;
+        }
+        ImGui_ImplSDLGPU3_InitInfo info = {};
+        info.Device            = dev;
+        info.ColorTargetFormat = fmt;
+        info.MSAASamples       = SDL_GPU_SAMPLECOUNT_1;
+        if (!ImGui_ImplSDLGPU3_Init(&info)) {
+            fprintf(stderr, "[imgui] ImGui_ImplSDLGPU3_Init failed\n");
+            ImGui_ImplSDL3_Shutdown();
+            ImGui::DestroyContext();
+            return;
+        }
+        sWindow = window;
+        sRenderer = nullptr;  /* GPU backend signals "no SDL_Renderer" */
+        sImGuiInited = true;
+        fprintf(stderr, "[imgui] initialized (v%s, SDL_GPU backend)\n", IMGUI_VERSION);
+        return;
+    }
+#endif
+
     if (!ImGui_ImplSDL3_InitForSDLRenderer(window, renderer)) {
         fprintf(stderr, "[imgui] ImGui_ImplSDL3 init failed\n");
         ImGui::DestroyContext();
@@ -130,12 +179,19 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
     sWindow = window;
     sRenderer = renderer;
     sImGuiInited = true;
-    fprintf(stderr, "[imgui] initialized (v%s)\n", IMGUI_VERSION);
+    fprintf(stderr, "[imgui] initialized (v%s, SDL_Renderer backend)\n", IMGUI_VERSION);
 }
 
 extern "C" void Port_ImGui_Shutdown(void) {
     if (!sImGuiInited) return;
-    ImGui_ImplSDLRenderer3_Shutdown();
+#ifdef TMC_GPU_RENDERER
+    if (!sRenderer) {
+        ImGui_ImplSDLGPU3_Shutdown();
+    } else
+#endif
+    {
+        ImGui_ImplSDLRenderer3_Shutdown();
+    }
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
     sImGuiInited = false;
@@ -1304,7 +1360,15 @@ extern "C" bool Port_ImGui_Render(void) {
         }
     }
 
-    ImGui_ImplSDLRenderer3_NewFrame();
+#ifdef TMC_GPU_RENDERER
+    const bool gpuBackend = (sRenderer == nullptr);
+    if (gpuBackend) {
+        ImGui_ImplSDLGPU3_NewFrame();
+    } else
+#endif
+    {
+        ImGui_ImplSDLRenderer3_NewFrame();
+    }
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
@@ -1351,6 +1415,40 @@ extern "C" bool Port_ImGui_Render(void) {
     }
 
     ImGui::Render();
+#ifdef TMC_GPU_RENDERER
+    if (gpuBackend) {
+        /* GPU path: draw_data lives in ImGui's per-frame state until the
+         * GPU PresentFrame consumes it via Port_ImGui_RenderDrawDataGpu.
+         * We don't call PrepareDrawData here — that needs the cmd buffer
+         * from the GPU side. Return true so the caller knows a frame's
+         * worth of ImGui work is queued. */
+        return true;
+    }
+#endif
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sRenderer);
     return true;
 }
+
+#ifdef TMC_GPU_RENDERER
+/* Stage 2: called from Port_GPU_PresentFrame to inject the F8 menu into
+ * the same render pass that draws the game framebuffer. Splits the
+ * usual one-call render into two halves — PrepareDrawData uploads
+ * vertex/index buffers (must happen before BeginGPURenderPass), and
+ * RenderDrawData issues the actual draw commands inside the pass. */
+extern "C" void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer* cmd) {
+    if (!sImGuiInited || !sImGuiEnabled) return;
+    if (sRenderer != nullptr) return;  /* SDL_Renderer path doesn't use this */
+    ImDrawData* dd = ImGui::GetDrawData();
+    if (!dd) return;
+    ImGui_ImplSDLGPU3_PrepareDrawData(dd, cmd);
+}
+
+extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd,
+                                             SDL_GPURenderPass* rp) {
+    if (!sImGuiInited || !sImGuiEnabled) return;
+    if (sRenderer != nullptr) return;
+    ImDrawData* dd = ImGui::GetDrawData();
+    if (!dd) return;
+    ImGui_ImplSDLGPU3_RenderDrawData(dd, cmd, rp, /*pipeline=*/nullptr);
+}
+#endif

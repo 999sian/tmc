@@ -120,7 +120,12 @@ end
 -- without needing a separate GL/Vulkan context. Header-only-ish: the
 -- xmake package builds a tiny static lib that wraps imgui.cpp +
 -- imgui_demo.cpp + the two backend cpps.
-add_requires("imgui v1.92.7", {configs = {sdl3 = true, sdl3_renderer = true}})
+-- Enable both SDL_Renderer and SDL_GPU ImGui backends so the F8 menu
+-- works on the default build (SDL_Renderer) AND on --gpu_renderer=y
+-- builds (SDL_GPU). The two backends are mutually exclusive at runtime
+-- — port_imgui_menu.cpp picks via TMC_GPU_RENDERER define — but the
+-- compiled package needs both files available.
+add_requires("imgui v1.92.7", {configs = {sdl3 = true, sdl3_renderer = true, sdl3_gpu = true}})
 
 -- #15: even with `header_only = true` requested above, the xmake fmt
 -- package still links the system libfmt.so when one happens to be
