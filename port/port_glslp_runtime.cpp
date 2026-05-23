@@ -66,9 +66,20 @@ struct PassResources {
 struct LutResource {
     std::string     name;
     SDL_GPUTexture* texture = nullptr;
+    SDL_GPUSampler* sampler = nullptr;  /* per-LUT — honours preset's linear/wrap flags */
     int             w = 0;
     int             h = 0;
 };
+
+static SDL_GPUSamplerAddressMode WrapModeToSdl(PortGlslp::WrapMode w) {
+    switch (w) {
+        case PortGlslp::WrapMode::ClampBorder:   return SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;  /* SDL_GPU lacks a true border mode; clamp is the closest */
+        case PortGlslp::WrapMode::ClampEdge:     return SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        case PortGlslp::WrapMode::Repeat:        return SDL_GPU_SAMPLERADDRESSMODE_REPEAT;
+        case PortGlslp::WrapMode::MirroredRepeat: return SDL_GPU_SAMPLERADDRESSMODE_MIRRORED_REPEAT;
+    }
+    return SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+}
 #endif
 
 struct Runtime {
@@ -232,6 +243,20 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
             std::fprintf(stderr, "[glslp] Load: LUT '%s' GPU texture create failed: %s\n",
                          l.name.c_str(), SDL_GetError());
             continue;
+        }
+
+        /* Per-LUT sampler honouring the preset's linear / wrap_mode
+         * settings. mipmap_mode stays NEAREST regardless of l.mipmap
+         * until we actually generate mips at upload — TODO. */
+        {
+            SDL_GPUSamplerCreateInfo sci = {};
+            sci.min_filter     = l.linear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+            sci.mag_filter     = l.linear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST;
+            sci.mipmap_mode    = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+            sci.address_mode_u = WrapModeToSdl(l.wrap);
+            sci.address_mode_v = WrapModeToSdl(l.wrap);
+            sci.address_mode_w = WrapModeToSdl(l.wrap);
+            lr.sampler = SDL_CreateGPUSampler(g_runtime.device, &sci);
         }
 
         /* One-shot upload via a transfer buffer. Free the buffer
@@ -416,6 +441,7 @@ extern "C" void Port_GlslpRuntime_Unload(void) {
         }
         for (auto& lr : g_runtime.luts) {
             if (lr.texture) { SDL_ReleaseGPUTexture(g_runtime.device, lr.texture); lr.texture = nullptr; }
+            if (lr.sampler) { SDL_ReleaseGPUSampler(g_runtime.device, lr.sampler); lr.sampler = nullptr; }
         }
     }
     g_runtime.luts.clear();
@@ -537,15 +563,20 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
         samplers.push_back(primary);
         for (const auto& lut_name : p.lut_names) {
             SDL_GPUTextureSamplerBinding sb = {};
-            sb.sampler = g_runtime.sampler_linear;  /* preset's LUT_linear flag is unread for now */
             for (const auto& lr : g_runtime.luts) {
-                if (lr.name == lut_name) { sb.texture = lr.texture; break; }
+                if (lr.name == lut_name) {
+                    sb.texture = lr.texture;
+                    sb.sampler = lr.sampler ? lr.sampler : g_runtime.sampler_linear;
+                    break;
+                }
             }
             /* Missing LUT (decode failed earlier) — bind any texture
              * so the draw is valid; we already pushed the placeholder
              * pink texture into g_runtime.luts in Load. */
             if (!sb.texture && !g_runtime.luts.empty()) {
                 sb.texture = g_runtime.luts.front().texture;
+                sb.sampler = g_runtime.luts.front().sampler ? g_runtime.luts.front().sampler
+                                                              : g_runtime.sampler_linear;
             }
             samplers.push_back(sb);
         }
