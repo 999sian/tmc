@@ -5,11 +5,11 @@
  * documented JSON-RPC protocol ourselves. No external dependency.
  *
  * Protocol (https://discord.com/developers/docs/topics/rpc):
- *   1. Connect to local socket. On Linux it lives at one of:
+ *   1. Connect to local socket. On Linux/macOS it lives at one of:
  *        $XDG_RUNTIME_DIR/discord-ipc-N
  *        $TMPDIR/discord-ipc-N
  *        /tmp/discord-ipc-N      (N = 0..9, try in order)
- *      On Windows it's a named pipe \\?\pipe\discord-ipc-N (TODO).
+ *      On Windows it's a named pipe \\?\pipe\discord-ipc-N (N = 0..9).
  *   2. Send a HANDSHAKE op (opcode 0) with our v=1, client_id=<app>.
  *   3. Send SET_ACTIVITY frames (opcode 1, "cmd":"SET_ACTIVITY") with
  *      the activity payload nested inside.
@@ -55,8 +55,9 @@
 
 #include <SDL3/SDL.h>
 
+#include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>   /* getenv() inside TryConnectUnix */
+#include <stdlib.h>   /* getenv() inside the platform connect path */
 #include <string.h>
 #include <time.h>
 
@@ -66,9 +67,19 @@
 #include <unistd.h>
 #include <fcntl.h>
 #define HAS_UNIX_IPC 1
+#define HAS_WIN_IPC  0
+#elif defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <process.h>  /* _getpid */
+#define HAS_UNIX_IPC 0
+#define HAS_WIN_IPC  1
 #else
 #define HAS_UNIX_IPC 0
+#define HAS_WIN_IPC  0
 #endif
+
+#define HAS_IPC (HAS_UNIX_IPC || HAS_WIN_IPC)
 
 #define DISCORD_RPC_OPCODE_HANDSHAKE   0
 #define DISCORD_RPC_OPCODE_FRAME       1
@@ -80,10 +91,17 @@
 
 #define UPDATE_THROTTLE_MS 15000U   /* Discord rate-limit window */
 
+/* Connection handle stored as intptr_t so the same field carries either
+ * a Unix file descriptor or a Windows HANDLE without an extra union.
+ * `INVALID_DISCORD_HANDLE` (= -1) matches both sentinels: bare -1 for
+ * `socket()` failures and `INVALID_HANDLE_VALUE = (HANDLE)(LONG_PTR)-1`
+ * for `CreateFileA()` failures on Windows. */
+#define INVALID_DISCORD_HANDLE ((intptr_t)-1)
+
 static struct {
     bool   enabled;
     bool   connected;
-    int    sock;
+    intptr_t handle;
     uint64_t last_send_ms;
     /* Last reported state — we suppress identical re-sends inside the
      * throttle window. */
@@ -94,9 +112,14 @@ static struct {
      * shows session-since-enable rather than time-since-1970. */
     uint64_t epoch_start_seconds;
 } sState = {
-    .enabled = false,
+    /* Rich Presence opt-in is on by default as of v0.3.0-experimental.
+     * EnsureConnected silently bails if Discord isn't running or no
+     * TMC_DISCORD_APP_ID is set, so the default-on state is harmless
+     * for users without Discord; users who do want it off can flip the
+     * F8 toggle. */
+    .enabled = true,
     .connected = false,
-    .sock = -1,
+    .handle = INVALID_DISCORD_HANDLE,
     .last_send_ms = 0,
     .last_payload = {0},
     .pid = 0,
@@ -104,7 +127,7 @@ static struct {
 };
 
 #if HAS_UNIX_IPC
-static int TryConnectUnix(void) {
+static intptr_t TryConnectUnix(void) {
     const char* roots[3] = { NULL, NULL, "/tmp" };
     roots[0] = getenv("XDG_RUNTIME_DIR");
     roots[1] = getenv("TMPDIR");
@@ -118,7 +141,7 @@ static int TryConnectUnix(void) {
             if (written <= 0 || written >= (int)sizeof(path)) continue;
 
             int s = socket(AF_UNIX, SOCK_STREAM, 0);
-            if (s < 0) return -1;
+            if (s < 0) return INVALID_DISCORD_HANDLE;
             struct sockaddr_un addr = {0};
             addr.sun_family = AF_UNIX;
             strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
@@ -127,18 +150,45 @@ static int TryConnectUnix(void) {
                  * frame loop if Discord's socket is busy. */
                 int flags = fcntl(s, F_GETFL, 0);
                 if (flags >= 0) fcntl(s, F_SETFL, flags | O_NONBLOCK);
-                return s;
+                return (intptr_t)s;
             }
             close(s);
         }
     }
-    return -1;
+    return INVALID_DISCORD_HANDLE;
+}
+#endif
+
+#if HAS_WIN_IPC
+static intptr_t TryConnectWindows(void) {
+    /* Discord's Windows IPC lives on the named pipe \\?\pipe\discord-ipc-N
+     * (N = 0..9). Same JSON-RPC frame protocol as the Unix socket; only
+     * the transport changes. CreateFileA returns INVALID_HANDLE_VALUE on
+     * miss — try each candidate in turn. */
+    for (int n = 0; n < 10; ++n) {
+        char path[64];
+        const int written = snprintf(path, sizeof(path),
+                                     "\\\\?\\pipe\\discord-ipc-%d", n);
+        if (written <= 0 || written >= (int)sizeof(path)) continue;
+
+        HANDLE h = CreateFileA(path,
+                               GENERIC_READ | GENERIC_WRITE,
+                               0,                /* no sharing */
+                               NULL,             /* default security */
+                               OPEN_EXISTING,
+                               0,                /* no flags */
+                               NULL);
+        if (h != INVALID_HANDLE_VALUE) {
+            return (intptr_t)h;
+        }
+    }
+    return INVALID_DISCORD_HANDLE;
 }
 #endif
 
 static bool SendFrame(uint32_t opcode, const char* payload, uint32_t len) {
-    if (sState.sock < 0) return false;
-#if HAS_UNIX_IPC
+    if (sState.handle == INVALID_DISCORD_HANDLE) return false;
+#if HAS_IPC
     uint8_t header[8];
     /* little-endian, matching Discord's documented frame format */
     header[0] = (uint8_t)(opcode & 0xff);
@@ -149,10 +199,21 @@ static bool SendFrame(uint32_t opcode, const char* payload, uint32_t len) {
     header[5] = (uint8_t)((len >> 8) & 0xff);
     header[6] = (uint8_t)((len >> 16) & 0xff);
     header[7] = (uint8_t)((len >> 24) & 0xff);
+#if HAS_UNIX_IPC
+    int s = (int)sState.handle;
     /* MSG_NOSIGNAL prevents SIGPIPE when Discord exits mid-send. */
-    if (send(sState.sock, header, 8, MSG_NOSIGNAL) != 8) return false;
-    if (len > 0 && send(sState.sock, payload, len, MSG_NOSIGNAL) != (ssize_t)len) return false;
+    if (send(s, header, 8, MSG_NOSIGNAL) != 8) return false;
+    if (len > 0 && send(s, payload, len, MSG_NOSIGNAL) != (ssize_t)len) return false;
     return true;
+#elif HAS_WIN_IPC
+    HANDLE h = (HANDLE)sState.handle;
+    DWORD written = 0;
+    if (!WriteFile(h, header, 8, &written, NULL) || written != 8) return false;
+    if (len > 0) {
+        if (!WriteFile(h, payload, len, &written, NULL) || written != len) return false;
+    }
+    return true;
+#endif
 #else
     (void)opcode; (void)payload; (void)len;
     return false;
@@ -213,9 +274,22 @@ static void JsonEscape(const char* in, char* out, size_t cap) {
     out[w] = '\0';
 }
 
+static void CloseDiscordHandle(void) {
+#if HAS_UNIX_IPC
+    if (sState.handle != INVALID_DISCORD_HANDLE) {
+        close((int)sState.handle);
+    }
+#elif HAS_WIN_IPC
+    if (sState.handle != INVALID_DISCORD_HANDLE) {
+        CloseHandle((HANDLE)sState.handle);
+    }
+#endif
+    sState.handle = INVALID_DISCORD_HANDLE;
+}
+
 static bool EnsureConnected(void) {
     if (sState.connected) return true;
-#if HAS_UNIX_IPC
+#if HAS_IPC
     const char* client_id = ResolveClientId();
     if (!client_id) {
         /* No app ID supplied — Rich Presence is a no-op. Logged once so
@@ -230,22 +304,30 @@ static bool EnsureConnected(void) {
         }
         return false;
     }
-    sState.sock = TryConnectUnix();
-    if (sState.sock < 0) return false;
+#if HAS_UNIX_IPC
+    sState.handle = TryConnectUnix();
+#elif HAS_WIN_IPC
+    sState.handle = TryConnectWindows();
+#endif
+    if (sState.handle == INVALID_DISCORD_HANDLE) return false;
 
     char handshake[256];
     int n = snprintf(handshake, sizeof(handshake),
                      "{\"v\":1,\"client_id\":\"%s\"}", client_id);
     if (n <= 0 || n >= (int)sizeof(handshake)) {
-        close(sState.sock); sState.sock = -1;
+        CloseDiscordHandle();
         return false;
     }
     if (!SendFrame(DISCORD_RPC_OPCODE_HANDSHAKE, handshake, (uint32_t)n)) {
-        close(sState.sock); sState.sock = -1;
+        CloseDiscordHandle();
         return false;
     }
     sState.connected = true;
+#if HAS_WIN_IPC
+    sState.pid = (uint64_t)GetCurrentProcessId();
+#else
     sState.pid = (uint64_t)getpid();
+#endif
     fprintf(stderr, "[discord-rpc] connected (client_id=%s)\n", client_id);
     return true;
 #else
@@ -324,11 +406,10 @@ void Port_DiscordRpc_Update(const char* area_name,
 }
 
 void Port_DiscordRpc_Shutdown(void) {
-#if HAS_UNIX_IPC
-    if (sState.sock >= 0) {
+#if HAS_IPC
+    if (sState.handle != INVALID_DISCORD_HANDLE) {
         SendFrame(DISCORD_RPC_OPCODE_CLOSE, "{}", 2);
-        close(sState.sock);
-        sState.sock = -1;
+        CloseDiscordHandle();
     }
 #endif
     sState.connected = false;
