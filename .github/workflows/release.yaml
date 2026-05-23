@@ -72,8 +72,6 @@ jobs:
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: "TMC ${{ inputs.tag || github.ref_name }}"
-          files: |
-            uploads/*.tar.gz
-            uploads/*.zip
+          files: uploads/*.tar.gz
           generate_release_notes: true
           fail_on_unmatched_files: true
