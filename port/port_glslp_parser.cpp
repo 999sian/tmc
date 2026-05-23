@@ -711,22 +711,54 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
             param_block_decl += "#define " + p.id + " params." + p.id + "\n";
         }
     }
-    /* Strip `uniform <type> NAME;` lines. Match the common shape. */
+    /* Strip non-opaque `uniform <type> NAME;` lines, and decorate
+     * `uniform sampler2D NAME;` declarations with explicit
+     * `layout(set = 2, binding = K)` so Vulkan SPIR-V is happy.
+     * Binding 0 stays reserved for the primary pass input named
+     * "Texture"; LUT samplers (any other sampler) get sequential
+     * bindings 1, 2, 3, ... in source-declaration order. The runtime
+     * uses out.lut_sampler_names to wire LUTs at the matching slots. */
     {
         std::string scrubbed;
         scrubbed.reserve(filtered.size());
         std::istringstream rs(filtered);
         std::string ln;
+        int next_lut_binding = 1;
         while (std::getline(rs, ln)) {
             if (!ln.empty() && ln.back() == '\r') ln.pop_back();
             std::string tr = Trim(ln);
             if (tr.size() > 8 && tr.compare(0, 8, "uniform ") == 0) {
-                /* Skip samplers / images (opaque types — allowed bare
-                 * outside blocks). Crude detection: if `sampler` or
-                 * `image` appears in the line, keep it. */
+                /* Sampler / image uniform: opaque, allowed bare in
+                 * Vulkan but still needs a layout decoration. Detect
+                 * `sampler` substring; everything else falls through
+                 * to the strip path below. */
                 if (tr.find("sampler") != std::string::npos
                     || tr.find("image")   != std::string::npos) {
-                    scrubbed += ln; scrubbed += '\n';
+                    /* Pull the sampler name (last token before `;`). */
+                    size_t sc = tr.find(';');
+                    std::string body = (sc == std::string::npos)
+                                       ? tr.substr(8)
+                                       : tr.substr(8, sc - 8);
+                    size_t sp = body.find_last_of(" \t");
+                    std::string name = (sp == std::string::npos) ? body
+                                                                  : body.substr(sp + 1);
+                    if (name == "Texture") {
+                        /* The primary input is already declared in
+                         * the fragment header at set=2/binding=0;
+                         * drop the source's redundant copy to avoid
+                         * a double-declaration compile error. */
+                        continue;
+                    }
+                    int binding = next_lut_binding++;
+                    out.lut_sampler_names.push_back(name);
+                    /* Rewrite with the layout decorator. */
+                    char prefix[64];
+                    std::snprintf(prefix, sizeof(prefix),
+                                  "layout(set = 2, binding = %d) ", binding);
+                    /* Preserve original spacing of the rest of the line. */
+                    scrubbed += prefix;
+                    scrubbed += ln;
+                    scrubbed += '\n';
                     continue;
                 }
                 /* Non-opaque uniform: drop. If the name isn't in our
@@ -735,8 +767,6 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
                 size_t sc = tr.find(';');
                 if (sc != std::string::npos) {
                     std::string body = tr.substr(8, sc - 8);
-                    /* body is "<type> <name>" possibly with extra
-                     * qualifiers; pull the last token as name. */
                     size_t sp = body.find_last_of(" \t");
                     std::string name = (sp == std::string::npos) ? body
                                                                   : body.substr(sp + 1);

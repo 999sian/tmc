@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -53,7 +54,22 @@ struct PassResources {
      * pushes the values in this order; runtime override values come
      * from g_runtime.preset.parameters via ID lookup. */
     std::vector<PortGlslp::ShaderParam> params;
+    /* LUT sampler names this pass declared in source order. Each
+     * binding index = 1 + position in this vector (binding 0 is the
+     * primary pass input). PresentFrame matches each name against
+     * g_runtime.luts; missing entries fall back to a transparent
+     * placeholder. */
+    std::vector<std::string> lut_names;
 };
+
+#ifdef TMC_GPU_RENDERER
+struct LutResource {
+    std::string     name;
+    SDL_GPUTexture* texture = nullptr;
+    int             w = 0;
+    int             h = 0;
+};
+#endif
 
 struct Runtime {
     bool                       loaded = false;
@@ -64,6 +80,9 @@ struct Runtime {
     SDL_GPUSampler*      sampler_linear = nullptr;
     SDL_GPUSampler*      sampler_nearest = nullptr;
     SDL_GPUTextureFormat swap_format    = SDL_GPU_TEXTUREFORMAT_INVALID;
+    /* LUT textures keyed by name (PNG/TGA decoded + uploaded at Load
+     * time). Empty when the preset has no `textures = ...` line. */
+    std::vector<LutResource> luts;
     /* Stage-5 MVP: assume swapchain ~ 960×640 at startup and don't
      * re-resize intermediate textures when the window changes. A
      * later iteration adds an OnResize hook that re-allocates the
@@ -181,6 +200,75 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
 
     g_runtime.passes.resize(g_runtime.preset.passes.size());
 
+#ifdef TMC_GPU_RENDERER
+    /* Decode + upload every LUT referenced by the preset before the
+     * per-pass loop runs (some passes may reference them by name).
+     * Failures log but continue — missing LUTs become opaque-magenta
+     * placeholders so the bind still has a valid texture and the
+     * shader's `texture(LUTN, ...)` returns something rather than
+     * crashing. */
+    for (const auto& l : g_runtime.preset.luts) {
+        LutResource lr;
+        lr.name = l.name;
+        auto img = PortGlslp::LoadLutImage(l.path);
+        if (!img) {
+            std::fprintf(stderr, "[glslp] Load: LUT '%s' decode failed; using magenta placeholder\n",
+                         l.name.c_str());
+            img = PortGlslp::DecodedImage{};
+            img->width = img->height = 1;
+            img->rgba = { 255, 0, 255, 255 };
+        }
+        SDL_GPUTextureCreateInfo tci = {};
+        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width  = (Uint32)img->width;
+        tci.height = (Uint32)img->height;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels           = 1;
+        lr.texture = SDL_CreateGPUTexture(g_runtime.device, &tci);
+        lr.w = img->width; lr.h = img->height;
+        if (!lr.texture) {
+            std::fprintf(stderr, "[glslp] Load: LUT '%s' GPU texture create failed: %s\n",
+                         l.name.c_str(), SDL_GetError());
+            continue;
+        }
+
+        /* One-shot upload via a transfer buffer. Free the buffer
+         * immediately after submit — LUTs are static, no reuse needed. */
+        SDL_GPUTransferBufferCreateInfo tbci = {};
+        tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        tbci.size  = (Uint32)(img->width * img->height * 4);
+        SDL_GPUTransferBuffer* tb = SDL_CreateGPUTransferBuffer(g_runtime.device, &tbci);
+        if (tb) {
+            void* mapped = SDL_MapGPUTransferBuffer(g_runtime.device, tb, /*cycle=*/false);
+            if (mapped) {
+                std::memcpy(mapped, img->rgba.data(), img->rgba.size());
+                SDL_UnmapGPUTransferBuffer(g_runtime.device, tb);
+                SDL_GPUCommandBuffer* upload_cmd = SDL_AcquireGPUCommandBuffer(g_runtime.device);
+                if (upload_cmd) {
+                    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(upload_cmd);
+                    SDL_GPUTextureTransferInfo src = {};
+                    src.transfer_buffer = tb;
+                    src.offset = 0;
+                    src.pixels_per_row = (Uint32)img->width;
+                    src.rows_per_layer = (Uint32)img->height;
+                    SDL_GPUTextureRegion dst = {};
+                    dst.texture = lr.texture;
+                    dst.w = (Uint32)img->width;
+                    dst.h = (Uint32)img->height;
+                    dst.d = 1;
+                    SDL_UploadToGPUTexture(cp, &src, &dst, /*cycle=*/false);
+                    SDL_EndGPUCopyPass(cp);
+                    SDL_SubmitGPUCommandBuffer(upload_cmd);
+                }
+            }
+            SDL_ReleaseGPUTransferBuffer(g_runtime.device, tb);
+        }
+        g_runtime.luts.push_back(lr);
+    }
+#endif
+
     const int kSrcW = 240, kSrcH = 160;
     const int kVpW = 960, kVpH = 640;  /* assumed; refresh on resize */
 
@@ -202,7 +290,8 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
             Port_GlslpRuntime_Unload();
             return 0;
         }
-        p.params = std::move(pp->parameters);
+        p.params    = std::move(pp->parameters);
+        p.lut_names = std::move(pp->lut_sampler_names);
 
         auto vspv = PortGlslp::CompileGlslToSpirv(
             pp->vertex_glsl, PortGlslp::ShaderStage::Vertex, cache_dir.string());
@@ -233,7 +322,7 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
         fci.entrypoint           = "main";
         fci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
         fci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
-        fci.num_samplers         = 1;  /* primary input sampler */
+        fci.num_samplers         = 1 + (Uint32)p.lut_names.size();  /* primary input + LUTs */
         fci.num_uniform_buffers  = p.params.empty() ? 1 : 2;  /* LibretroUniforms + ShaderParams */
         p.fragment_shader = SDL_CreateGPUShader(g_runtime.device, &fci);
 
@@ -302,12 +391,17 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
     }
 
     g_runtime.loaded = true;
+#ifdef TMC_GPU_RENDERER
     std::fprintf(stderr,
-        "[glslp] loaded preset '%s' — %zu passes, %zu LUTs (textures not yet bound), %zu parameters\n",
+        "[glslp] loaded preset '%s' — %zu passes, %zu LUTs bound, %zu parameters\n",
         glslp_path,
         g_runtime.preset.passes.size(),
-        g_runtime.preset.luts.size(),
+        g_runtime.luts.size(),
         g_runtime.preset.parameters.size());
+#else
+    std::fprintf(stderr, "[glslp] loaded preset '%s' (TMC_GPU_RENDERER off — preset parsed only, not driving present)\n",
+                 glslp_path);
+#endif
     return 1;
 }
 
@@ -320,7 +414,11 @@ extern "C" void Port_GlslpRuntime_Unload(void) {
             if (p.fragment_shader) { SDL_ReleaseGPUShader(g_runtime.device, p.fragment_shader);           p.fragment_shader = nullptr; }
             if (p.vertex_shader)   { SDL_ReleaseGPUShader(g_runtime.device, p.vertex_shader);             p.vertex_shader = nullptr; }
         }
+        for (auto& lr : g_runtime.luts) {
+            if (lr.texture) { SDL_ReleaseGPUTexture(g_runtime.device, lr.texture); lr.texture = nullptr; }
+        }
     }
+    g_runtime.luts.clear();
 #endif
     g_runtime.passes.clear();
     g_runtime.preset = PortGlslp::Preset{};
@@ -387,11 +485,32 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
 
         SDL_BindGPUGraphicsPipeline(rp, p.pipeline);
 
-        SDL_GPUTextureSamplerBinding tsb = {};
-        tsb.texture = prev_input;
-        tsb.sampler = pdef.filter_linear ? g_runtime.sampler_linear
-                                          : g_runtime.sampler_nearest;
-        SDL_BindGPUFragmentSamplers(rp, 0, &tsb, 1);
+        /* Primary input sampler + each LUT in source order. The
+         * total binding array is { primary, LUT[0], LUT[1], ... } at
+         * fragment set=2, binding=0..N (the preprocessor assigned
+         * sequential bindings). */
+        std::vector<SDL_GPUTextureSamplerBinding> samplers;
+        samplers.reserve(1 + p.lut_names.size());
+        SDL_GPUTextureSamplerBinding primary = {};
+        primary.texture = prev_input;
+        primary.sampler = pdef.filter_linear ? g_runtime.sampler_linear
+                                              : g_runtime.sampler_nearest;
+        samplers.push_back(primary);
+        for (const auto& lut_name : p.lut_names) {
+            SDL_GPUTextureSamplerBinding sb = {};
+            sb.sampler = g_runtime.sampler_linear;  /* preset's LUT_linear flag is unread for now */
+            for (const auto& lr : g_runtime.luts) {
+                if (lr.name == lut_name) { sb.texture = lr.texture; break; }
+            }
+            /* Missing LUT (decode failed earlier) — bind any texture
+             * so the draw is valid; we already pushed the placeholder
+             * pink texture into g_runtime.luts in Load. */
+            if (!sb.texture && !g_runtime.luts.empty()) {
+                sb.texture = g_runtime.luts.front().texture;
+            }
+            samplers.push_back(sb);
+        }
+        SDL_BindGPUFragmentSamplers(rp, 0, samplers.data(), (Uint32)samplers.size());
 
         /* LibretroUniforms — same data pushed to both stages, since
          * the preprocessor's headers declare an identical block in
