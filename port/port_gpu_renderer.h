@@ -59,6 +59,9 @@ bool Port_GPU_IsActive(void);
 typedef enum {
     PORT_GPU_FILTER_NONE = 0,    /* passthrough — direct blit */
     PORT_GPU_FILTER_LCD_GRID,    /* GBA LCD grid (GLSL port of Apply_LcdGrid) */
+    PORT_GPU_FILTER_SCANLINE,    /* alternating dim rows (Apply_Scanlines) */
+    PORT_GPU_FILTER_HANDHELD,    /* LCD grid + cool tint (Apply_HandheldGrid) */
+    PORT_GPU_FILTER_VIGNETTE,    /* radial corner darkening (Apply_Vignette) */
     PORT_GPU_FILTER_COUNT
 } PortGpuFilter;
 
