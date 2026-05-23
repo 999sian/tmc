@@ -64,6 +64,12 @@ static SDL_GPUTransferBuffer*   sTransferBuffer = nullptr;
 static int                      sSourceW = 0;
 static int                      sSourceH = 0;
 static bool                     sWindowClaimed = false;
+static SDL_GPUTextureFormat     sSwapFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+
+/* Accessors for port_imgui_menu.cpp so it can wire its SDL_GPU backend
+ * against the same device and matching swapchain format. */
+extern "C" SDL_GPUDevice* Port_GPU_GetDevice(void)             { return sDevice; }
+extern "C" SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void) { return sSwapFormat; }
 
 extern "C" bool Port_GPU_Init(SDL_Window* window) {
     if (sDevice) return true; /* idempotent */
@@ -140,8 +146,10 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
     sWindowClaimed = true;
 
     /* Query the swapchain texture format so the pipeline's color target
-     * description matches. SDL_GPU's default present mode is VSYNC. */
+     * description matches. Cache it for the ImGui SDL_GPU backend (see
+     * Port_GPU_GetSwapchainFormat). SDL_GPU's default present mode is VSYNC. */
     SDL_GPUTextureFormat swap_fmt = SDL_GetGPUSwapchainTextureFormat(sDevice, window);
+    sSwapFormat = swap_fmt;
 
     /* Source texture: 240x160 RGBA8888. ViruaPPU's `virtuappu_frame_buffer`
      * is ABGR8888 little-endian (byte 0=R, 1=G, 2=B, 3=A), matching
@@ -279,8 +287,16 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
         SDL_EndGPUCopyPass(copy);
     }
 
+    /* ImGui draw-data preparation must run BEFORE BeginGPURenderPass —
+     * the SDL_GPU ImGui backend issues its own copy passes for vertex
+     * and index buffer uploads, which can't nest inside a render pass.
+     * Safe to call when ImGui isn't initialised; the stub returns
+     * immediately. */
+    extern void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer*);
+    Port_ImGui_PrepareDrawDataGpu(cmd);
+
     /* Render pass: clear to black, draw the fullscreen quad through the
-     * passthrough shader, end. */
+     * passthrough shader, draw the F8 menu on top, end. */
     SDL_GPUColorTargetInfo color = {};
     color.texture     = swap_tex;
     color.clear_color = SDL_FColor{0.0f, 0.0f, 0.0f, 1.0f};
@@ -293,6 +309,10 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
     tsb.sampler = sSampler;
     SDL_BindGPUFragmentSamplers(rp, /*first_slot=*/0, &tsb, 1);
     SDL_DrawGPUPrimitives(rp, /*num_vertices=*/4, /*num_instances=*/1, 0, 0);
+
+    extern void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
+    Port_ImGui_RenderDrawDataGpu(cmd, rp);
+
     SDL_EndGPURenderPass(rp);
 
     SDL_SubmitGPUCommandBuffer(cmd);
