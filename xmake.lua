@@ -635,6 +635,10 @@ target("tmc_pc")
         add_files("port/shaders/build/scanline.frag.spv")
         add_files("port/shaders/build/handheld.frag.spv")
         add_files("port/shaders/build/vignette.frag.spv")
+        add_files("port/shaders/build/crt_composite.frag.spv")
+        add_files("port/shaders/build/crt_rf.frag.spv")
+        add_files("port/shaders/build/blur5h.frag.spv")
+        add_files("port/shaders/build/crt_rf_p2.frag.spv")
     end
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/

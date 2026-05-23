@@ -67,18 +67,48 @@ static const unsigned char kHandheldFragSpv[] = {
 static const unsigned char kVignetteFragSpv[] = {
 #include "vignette.frag.spv.h"
 };
-static constexpr size_t kPassthroughVertSpvSize = sizeof(kPassthroughVertSpv);
-static constexpr size_t kPassthroughFragSpvSize = sizeof(kPassthroughFragSpv);
-static constexpr size_t kLcdGridFragSpvSize     = sizeof(kLcdGridFragSpv);
-static constexpr size_t kScanlineFragSpvSize    = sizeof(kScanlineFragSpv);
-static constexpr size_t kHandheldFragSpvSize    = sizeof(kHandheldFragSpv);
-static constexpr size_t kVignetteFragSpvSize    = sizeof(kVignetteFragSpv);
+static const unsigned char kCrtCompositeFragSpv[] = {
+#include "crt_composite.frag.spv.h"
+};
+static const unsigned char kCrtRfFragSpv[] = {
+#include "crt_rf.frag.spv.h"
+};
+static const unsigned char kBlur5hFragSpv[] = {
+#include "blur5h.frag.spv.h"
+};
+static const unsigned char kCrtRfP2FragSpv[] = {
+#include "crt_rf_p2.frag.spv.h"
+};
+static constexpr size_t kPassthroughVertSpvSize  = sizeof(kPassthroughVertSpv);
+static constexpr size_t kPassthroughFragSpvSize  = sizeof(kPassthroughFragSpv);
+static constexpr size_t kLcdGridFragSpvSize      = sizeof(kLcdGridFragSpv);
+static constexpr size_t kScanlineFragSpvSize     = sizeof(kScanlineFragSpv);
+static constexpr size_t kHandheldFragSpvSize     = sizeof(kHandheldFragSpv);
+static constexpr size_t kVignetteFragSpvSize     = sizeof(kVignetteFragSpv);
+static constexpr size_t kCrtCompositeFragSpvSize = sizeof(kCrtCompositeFragSpv);
+static constexpr size_t kCrtRfFragSpvSize        = sizeof(kCrtRfFragSpv);
+static constexpr size_t kBlur5hFragSpvSize       = sizeof(kBlur5hFragSpv);
+static constexpr size_t kCrtRfP2FragSpvSize      = sizeof(kCrtRfP2FragSpv);
 
 static SDL_GPUDevice*           sDevice    = nullptr;
 static SDL_GPUShader*           sVertShader = nullptr;
 /* Stage 3: one fragment shader + one graphics pipeline per filter mode. */
 static SDL_GPUShader*           sFragShaders[PORT_GPU_FILTER_COUNT] = {};
 static SDL_GPUGraphicsPipeline* sPipelines[PORT_GPU_FILTER_COUNT]   = {};
+
+/* Stage 5+A — multi-pass infrastructure. A filter can declare a
+ * `prePassShader` (e.g. blur5.frag) that renders source → sIntermediateTex
+ * BEFORE the main pass renders sIntermediateTex → swapchain. Most
+ * filters keep prePassShader == nullptr and run single-pass. The
+ * intermediate texture is sized to the source (240x160) — sufficient
+ * for the existing CRT prepass family. A future Stage 6 may need
+ * larger intermediates for viewport-scale prepasses; for now keep
+ * source-scale to minimise upload/render cost. */
+static SDL_GPUShader*           sPrePassFragShaders[PORT_GPU_FILTER_COUNT] = {};
+static SDL_GPUGraphicsPipeline* sPrePassPipelines[PORT_GPU_FILTER_COUNT]   = {};
+static SDL_GPUTexture*          sIntermediateTex = nullptr;
+static SDL_GPUTextureFormat     sIntermediateFmt = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+
 static SDL_Window*              sWindow    = nullptr;
 static SDL_GPUSampler*          sSampler        = nullptr;
 static SDL_GPUTexture*          sSourceTexture  = nullptr;
@@ -139,17 +169,42 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
      * uses 1 combined sampler at set=2/binding=0. The lcd_grid shader
      * also takes a vec2 uniform at set=3/binding=0 (viewport size,
      * pushed each frame via SDL_PushGPUFragmentUniformData). */
+    /* Per-filter shader spec. `prepass` is the source→intermediate
+     * shader (null for single-pass filters); `main` is intermediate→
+     * swapchain (or source→swapchain when prepass is null). CRT RF is
+     * the Stage 5+B proof-of-concept for the multi-pass path — it ran
+     * fine as a single inline-blur fragment before; rebuilding it as
+     * blur5h → crt_rf_p2 verifies the FBO chain works on real visible
+     * output. CRT Composite stays single-pass for the A/B comparison;
+     * Stage 6 onward will port more shaders into the multi-pass slot. */
     struct {
         const unsigned char* code;
         size_t               size;
         unsigned             num_uniforms;
         const char*          label;
     } fragSpec[PORT_GPU_FILTER_COUNT] = {
-        { kPassthroughFragSpv, kPassthroughFragSpvSize, 0, "passthrough" },
-        { kLcdGridFragSpv,     kLcdGridFragSpvSize,     1, "lcd_grid"    },
-        { kScanlineFragSpv,    kScanlineFragSpvSize,    1, "scanline"    },
-        { kHandheldFragSpv,    kHandheldFragSpvSize,    1, "handheld"    },
-        { kVignetteFragSpv,    kVignetteFragSpvSize,    1, "vignette"    },
+        { kPassthroughFragSpv,  kPassthroughFragSpvSize,  0, "passthrough"   },
+        { kLcdGridFragSpv,      kLcdGridFragSpvSize,      1, "lcd_grid"      },
+        { kScanlineFragSpv,     kScanlineFragSpvSize,     1, "scanline"      },
+        { kHandheldFragSpv,     kHandheldFragSpvSize,     1, "handheld"      },
+        { kVignetteFragSpv,     kVignetteFragSpvSize,     1, "vignette"      },
+        { kCrtCompositeFragSpv, kCrtCompositeFragSpvSize, 1, "crt_composite" },
+        { kCrtRfP2FragSpv,      kCrtRfP2FragSpvSize,      1, "crt_rf_p2"     },
+    };
+    /* Prepass spec — same layout. nullptr code = single-pass filter. */
+    struct {
+        const unsigned char* code;
+        size_t               size;
+        unsigned             num_uniforms;
+        const char*          label;
+    } prePassSpec[PORT_GPU_FILTER_COUNT] = {
+        { nullptr, 0, 0, nullptr },                                  /* NONE          */
+        { nullptr, 0, 0, nullptr },                                  /* LCD_GRID      */
+        { nullptr, 0, 0, nullptr },                                  /* SCANLINE      */
+        { nullptr, 0, 0, nullptr },                                  /* HANDHELD      */
+        { nullptr, 0, 0, nullptr },                                  /* VIGNETTE      */
+        { nullptr, 0, 0, nullptr },                                  /* CRT_COMPOSITE */
+        { kBlur5hFragSpv, kBlur5hFragSpvSize, 0, "blur5h" },          /* CRT_RF        */
     };
     for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
         SDL_GPUShaderCreateInfo fci = {};
@@ -167,13 +222,29 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
             Port_GPU_Shutdown();
             return false;
         }
+        /* Prepass shader (optional). */
+        if (prePassSpec[i].code) {
+            SDL_GPUShaderCreateInfo pci = {};
+            pci.code_size            = prePassSpec[i].size;
+            pci.code                 = prePassSpec[i].code;
+            pci.entrypoint           = "main";
+            pci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
+            pci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
+            pci.num_samplers         = 1;
+            pci.num_uniform_buffers  = prePassSpec[i].num_uniforms;
+            sPrePassFragShaders[i] = SDL_CreateGPUShader(sDevice, &pci);
+            if (!sPrePassFragShaders[i]) {
+                std::fprintf(stderr, "[gpu] prepass shader '%s' load failed: %s\n",
+                             prePassSpec[i].label, SDL_GetError());
+                Port_GPU_Shutdown();
+                return false;
+            }
+        }
     }
 
     std::fprintf(stderr,
-        "[gpu] shaders loaded (vert %zu B; frags passthrough %zu, lcd_grid %zu, "
-        "scanline %zu, handheld %zu, vignette %zu)\n",
-        kPassthroughVertSpvSize, kPassthroughFragSpvSize, kLcdGridFragSpvSize,
-        kScanlineFragSpvSize, kHandheldFragSpvSize, kVignetteFragSpvSize);
+        "[gpu] shaders loaded (vert %zu B; %d fragment filters)\n",
+        kPassthroughVertSpvSize, (int)PORT_GPU_FILTER_COUNT);
     return true;
 }
 
@@ -264,6 +335,7 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         target_info.num_color_targets = 1;
         target_info.color_target_descriptions = &color_target_desc;
 
+        /* Main pipelines (target = swapchain). */
         for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
             SDL_GPUGraphicsPipelineCreateInfo gpci = {};
             gpci.vertex_shader            = sVertShader;
@@ -281,16 +353,67 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
                 return false;
             }
         }
+
+        /* Prepass pipelines (target = intermediate texture; format may
+         * differ from swapchain). */
+        SDL_GPUColorTargetDescription inter_target = {};
+        inter_target.format = sIntermediateFmt;
+        inter_target.blend_state.enable_blend = false;
+        SDL_GPUGraphicsPipelineTargetInfo inter_info = {};
+        inter_info.num_color_targets = 1;
+        inter_info.color_target_descriptions = &inter_target;
+        for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
+            if (!sPrePassFragShaders[i]) continue;
+            SDL_GPUGraphicsPipelineCreateInfo gpci = {};
+            gpci.vertex_shader            = sVertShader;
+            gpci.fragment_shader          = sPrePassFragShaders[i];
+            gpci.primitive_type           = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
+            gpci.rasterizer_state.fill_mode  = SDL_GPU_FILLMODE_FILL;
+            gpci.rasterizer_state.cull_mode  = SDL_GPU_CULLMODE_NONE;
+            gpci.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+            gpci.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
+            gpci.target_info = inter_info;
+            sPrePassPipelines[i] = SDL_CreateGPUGraphicsPipeline(sDevice, &gpci);
+            if (!sPrePassPipelines[i]) {
+                std::fprintf(stderr, "[gpu] prepass pipeline %d create failed: %s\n", i, SDL_GetError());
+                Port_GPU_Shutdown();
+                return false;
+            }
+        }
+    }
+
+    /* Intermediate texture for multi-pass shaders. Source-sized so the
+     * prepass writes at GBA resolution and the main pass samples up to
+     * the viewport. R8G8B8A8_UNORM matches the source texture format
+     * for simplicity. SAMPLER + COLOR_TARGET usage: prepass writes,
+     * main pass samples. */
+    {
+        SDL_GPUTextureCreateInfo tci = {};
+        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.format = sIntermediateFmt;
+        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        tci.width  = (Uint32)fb_width;
+        tci.height = (Uint32)fb_height;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels           = 1;
+        sIntermediateTex = SDL_CreateGPUTexture(sDevice, &tci);
+        if (!sIntermediateTex) {
+            std::fprintf(stderr, "[gpu] intermediate texture create failed: %s\n", SDL_GetError());
+            Port_GPU_Shutdown();
+            return false;
+        }
     }
 
     /* TMC_GPU_FILTER env var lets us flip the active filter at startup
      * without rebuilding. Recognised values: "off" (default),
      * "lcd_grid", "scanline", "handheld", "vignette". */
     if (const char* f = std::getenv("TMC_GPU_FILTER")) {
-        if      (std::strcmp(f, "lcd_grid") == 0) sActiveFilter = PORT_GPU_FILTER_LCD_GRID;
-        else if (std::strcmp(f, "scanline") == 0) sActiveFilter = PORT_GPU_FILTER_SCANLINE;
-        else if (std::strcmp(f, "handheld") == 0) sActiveFilter = PORT_GPU_FILTER_HANDHELD;
-        else if (std::strcmp(f, "vignette") == 0) sActiveFilter = PORT_GPU_FILTER_VIGNETTE;
+        if      (std::strcmp(f, "lcd_grid")      == 0) sActiveFilter = PORT_GPU_FILTER_LCD_GRID;
+        else if (std::strcmp(f, "scanline")      == 0) sActiveFilter = PORT_GPU_FILTER_SCANLINE;
+        else if (std::strcmp(f, "handheld")      == 0) sActiveFilter = PORT_GPU_FILTER_HANDHELD;
+        else if (std::strcmp(f, "vignette")      == 0) sActiveFilter = PORT_GPU_FILTER_VIGNETTE;
+        else if (std::strcmp(f, "crt_composite") == 0) sActiveFilter = PORT_GPU_FILTER_CRT_COMPOSITE;
+        else if (std::strcmp(f, "crt_rf")        == 0) sActiveFilter = PORT_GPU_FILTER_CRT_RF;
         if (sActiveFilter != PORT_GPU_FILTER_NONE) {
             std::fprintf(stderr, "[gpu] filter at startup: %s\n", Port_GPU_FilterName(sActiveFilter));
         }
@@ -350,6 +473,31 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
     extern void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer*);
     Port_ImGui_PrepareDrawDataGpu(cmd);
 
+    /* Stage 5+A multi-pass: when the active filter declares a prepass,
+     * render source → intermediate texture first. The main pass below
+     * will sample from sIntermediateTex instead of sSourceTexture. */
+    const bool hasPrepass = (sPrePassPipelines[sActiveFilter] != nullptr);
+    if (hasPrepass) {
+        SDL_GPUColorTargetInfo pre_color = {};
+        pre_color.texture     = sIntermediateTex;
+        pre_color.clear_color = SDL_FColor{0.0f, 0.0f, 0.0f, 1.0f};
+        pre_color.load_op     = SDL_GPU_LOADOP_CLEAR;
+        pre_color.store_op    = SDL_GPU_STOREOP_STORE;
+        SDL_GPURenderPass* pre_rp = SDL_BeginGPURenderPass(cmd, &pre_color, 1, nullptr);
+        SDL_GPUViewport pre_vp = {};
+        pre_vp.x = 0.0f; pre_vp.y = 0.0f;
+        pre_vp.w = (float)fb_w; pre_vp.h = (float)fb_h;
+        pre_vp.min_depth = 0.0f; pre_vp.max_depth = 1.0f;
+        SDL_SetGPUViewport(pre_rp, &pre_vp);
+        SDL_BindGPUGraphicsPipeline(pre_rp, sPrePassPipelines[sActiveFilter]);
+        SDL_GPUTextureSamplerBinding pre_tsb = {};
+        pre_tsb.texture = sSourceTexture;
+        pre_tsb.sampler = sSampler;
+        SDL_BindGPUFragmentSamplers(pre_rp, 0, &pre_tsb, 1);
+        SDL_DrawGPUPrimitives(pre_rp, 4, 1, 0, 0);
+        SDL_EndGPURenderPass(pre_rp);
+    }
+
     /* Render pass: clear full swapchain to black, then constrain the
      * viewport to a centered fit-rect that preserves the GBA's source
      * aspect ratio (MODE1_GBA_WIDTH:MODE1_GBA_HEIGHT). The clear fills
@@ -393,7 +541,9 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
 
     SDL_BindGPUGraphicsPipeline(rp, sPipelines[sActiveFilter]);
     SDL_GPUTextureSamplerBinding tsb = {};
-    tsb.texture = sSourceTexture;
+    /* When a prepass ran, the main pass reads the blurred intermediate
+     * instead of the raw GBA framebuffer. */
+    tsb.texture = hasPrepass ? sIntermediateTex : sSourceTexture;
     tsb.sampler = sSampler;
     SDL_BindGPUFragmentSamplers(rp, /*first_slot=*/0, &tsb, 1);
 
@@ -458,11 +608,13 @@ extern "C" void Port_GPU_SetFilter(PortGpuFilter f) {
 extern "C" PortGpuFilter Port_GPU_GetFilter(void) { return sActiveFilter; }
 extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
     switch (f) {
-        case PORT_GPU_FILTER_NONE:     return "Off";
-        case PORT_GPU_FILTER_LCD_GRID: return "LCD Grid (GPU)";
-        case PORT_GPU_FILTER_SCANLINE: return "Scanlines (GPU)";
-        case PORT_GPU_FILTER_HANDHELD: return "Handheld Grid (GPU)";
-        case PORT_GPU_FILTER_VIGNETTE: return "Vignette (GPU)";
+        case PORT_GPU_FILTER_NONE:          return "Off";
+        case PORT_GPU_FILTER_LCD_GRID:      return "LCD Grid (GPU)";
+        case PORT_GPU_FILTER_SCANLINE:      return "Scanlines (GPU)";
+        case PORT_GPU_FILTER_HANDHELD:      return "Handheld Grid (GPU)";
+        case PORT_GPU_FILTER_VIGNETTE:      return "Vignette (GPU)";
+        case PORT_GPU_FILTER_CRT_COMPOSITE: return "CRT Composite (GPU)";
+        case PORT_GPU_FILTER_CRT_RF:        return "CRT RF (GPU)";
         default: return "?";
     }
 }
@@ -473,6 +625,14 @@ extern "C" void Port_GPU_Shutdown(void) {
             SDL_ReleaseGPUGraphicsPipeline(sDevice, sPipelines[i]);
             sPipelines[i] = nullptr;
         }
+        if (sPrePassPipelines[i]) {
+            SDL_ReleaseGPUGraphicsPipeline(sDevice, sPrePassPipelines[i]);
+            sPrePassPipelines[i] = nullptr;
+        }
+    }
+    if (sIntermediateTex) {
+        SDL_ReleaseGPUTexture(sDevice, sIntermediateTex);
+        sIntermediateTex = nullptr;
     }
     if (sTransferBuffer) {
         SDL_ReleaseGPUTransferBuffer(sDevice, sTransferBuffer);
@@ -490,6 +650,10 @@ extern "C" void Port_GPU_Shutdown(void) {
         if (sFragShaders[i]) {
             SDL_ReleaseGPUShader(sDevice, sFragShaders[i]);
             sFragShaders[i] = nullptr;
+        }
+        if (sPrePassFragShaders[i]) {
+            SDL_ReleaseGPUShader(sDevice, sPrePassFragShaders[i]);
+            sPrePassFragShaders[i] = nullptr;
         }
     }
     if (sVertShader) {
