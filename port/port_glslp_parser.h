@@ -209,6 +209,22 @@ struct PreprocessedShader {
  * mechanically rewrite — most real libretro shaders are accepted. */
 std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& source_text);
 
+/* Step 4: invoke glslangValidator at runtime to compile a GLSL 450
+ * source string to a SPIR-V bytecode buffer. `stage` selects vertex
+ * vs fragment. On success returns the .spv bytes; on failure logs
+ * glslang's diagnostic to stderr and returns nullopt.
+ *
+ * Caching: a content hash of `glsl_source` keys the result in
+ * <cache_dir>/<hash>.<stage>.spv. Subsequent calls with the same
+ * source skip the compile. Set `cache_dir` empty to disable caching
+ * (forces a fresh compile every call — useful for shader devs). */
+enum class ShaderStage { Vertex, Fragment };
+
+std::optional<std::vector<uint8_t>>
+CompileGlslToSpirv(const std::string& glsl_source,
+                   ShaderStage        stage,
+                   const std::string& cache_dir);
+
 }  // namespace PortGlslp
 
 #endif  /* __cplusplus */
