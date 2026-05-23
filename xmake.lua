@@ -776,11 +776,21 @@ target("tmc_pc")
     -- water-FX / BLDY fades stay correct; only the BG+OBJ+composite
     -- inner pass parallelises.
     --
-    -- On MinGW (Windows cross), libgomp ships with the toolchain and
-    -- is linked statically via the existing -static-libgcc.
-    add_cflags("-fopenmp")
-    add_cxxflags("-fopenmp")
-    add_ldflags("-fopenmp", {force = true})
+    -- Platform notes:
+    --   - Linux: gcc/clang both accept -fopenmp directly.
+    --   - MinGW (Windows cross): libgomp ships with the toolchain and
+    --     is linked statically via the existing -static-libgcc.
+    --   - macOS: Apple Clang doesn't accept bare -fopenmp (would need
+    --     `brew install libomp` + `-Xpreprocessor -fopenmp -lomp`).
+    --     The mode1 #pragma simply degrades to a serial loop on macOS
+    --     when the flag isn't set — render is slower but visually
+    --     identical. v0.3.0-experimental release CI hit this; skip the
+    --     flag on macOS so the build succeeds.
+    if not is_plat("macosx") then
+        add_cflags("-fopenmp")
+        add_cxxflags("-fopenmp")
+        add_ldflags("-fopenmp", {force = true})
+    end
 
     -- Optional sanitizer build (xmake f -y --pc_sanitize=y). Catches NULL
     -- deref, OOB reads/writes, signed-overflow UB, use-after-free with a
