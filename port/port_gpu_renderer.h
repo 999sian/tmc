@@ -57,11 +57,13 @@ bool Port_GPU_IsActive(void);
  * PortFilterType enum (Stage 3 ports a subset to real GLSL passes; the
  * rest still run on the SDL_Renderer build's CPU path). */
 typedef enum {
-    PORT_GPU_FILTER_NONE = 0,    /* passthrough — direct blit */
-    PORT_GPU_FILTER_LCD_GRID,    /* GBA LCD grid (GLSL port of Apply_LcdGrid) */
-    PORT_GPU_FILTER_SCANLINE,    /* alternating dim rows (Apply_Scanlines) */
-    PORT_GPU_FILTER_HANDHELD,    /* LCD grid + cool tint (Apply_HandheldGrid) */
-    PORT_GPU_FILTER_VIGNETTE,    /* radial corner darkening (Apply_Vignette) */
+    PORT_GPU_FILTER_NONE = 0,         /* passthrough — direct blit */
+    PORT_GPU_FILTER_LCD_GRID,         /* GBA LCD grid (GLSL port of Apply_LcdGrid) */
+    PORT_GPU_FILTER_SCANLINE,         /* alternating dim rows (Apply_Scanlines) */
+    PORT_GPU_FILTER_HANDHELD,         /* LCD grid + cool tint (Apply_HandheldGrid) */
+    PORT_GPU_FILTER_VIGNETTE,         /* radial corner darkening (Apply_Vignette) */
+    PORT_GPU_FILTER_CRT_COMPOSITE,    /* 3-tap blur + AG mask + warm tint */
+    PORT_GPU_FILTER_CRT_RF,           /* 5-tap blur + AG mask + warm tint + scanlines */
     PORT_GPU_FILTER_COUNT
 } PortGpuFilter;
 
