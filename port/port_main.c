@@ -392,6 +392,26 @@ int main(int argc, char* argv[]) {
     /* TMC_PC_VERSION is defined by xmake.lua via add_defines("TMC_PC_VERSION=\"...\"") */
     char window_title[64];
     SDL_snprintf(window_title, sizeof(window_title), "The Minish Cap " TMC_PC_VERSION);
+#ifdef TMC_GPU_RENDERER
+    /* SDL_GPU wants exclusive ownership of the window's swapchain
+     * surface. If we go through SDL_CreateWindowAndRenderer, the
+     * SDL_Renderer atomically creates its Vulkan surface and SDL_GPU's
+     * subsequent ClaimWindow gets back VK_ERROR_SURFACE_LOST_KHR
+     * (Wayland: "surface already exists"). Use bare SDL_CreateWindow
+     * with the VULKAN flag instead so SDL_GPU can claim the swapchain
+     * cleanly. The bootstrap-splash code paths still call
+     * Port_PaintBootSplash unconditionally; on GPU builds that's a
+     * no-op (no SDL_Renderer to draw on) — the boot splash trades
+     * away on this build for the GPU pipeline. */
+    window = SDL_CreateWindow(window_title,
+                              240 * window_scale, 160 * window_scale,
+                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
+    if (!window) {
+        fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+#else
     if (!SDL_CreateWindowAndRenderer(
             window_title,
             240 * window_scale, 160 * window_scale,
@@ -402,6 +422,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     (void)prerenderer; /* Owned by the window; retrieved via SDL_GetRenderer(window) later. */
+#endif
 
     /* Set window icon BEFORE first present so the title-bar and
      * taskbar entry never flash the default SDL icon. */
@@ -433,8 +454,16 @@ int main(int argc, char* argv[]) {
      * perceives as "black screen, then the game relaunches". The
      * SDL_Renderer was already created atomically with the window
      * by SDL_CreateWindowAndRenderer above, so this call just
-     * fetches it via SDL_GetRenderer(window) and presents on it. */
+     * fetches it via SDL_GetRenderer(window) and presents on it.
+     *
+     * Stage 2 GPU build: skip the splash entirely. The splash creates
+     * an SDL_Renderer whose Vulkan surface blocks SDL_GPU's later
+     * ClaimWindow with VK_ERROR_SURFACE_LOST_KHR. Accept the ~1.4 s
+     * of blank window during boot on GPU builds for now — Stage 3 can
+     * port the splash to use SDL_GPU directly. */
+#ifndef TMC_GPU_RENDERER
     Port_PaintBootSplash(window, "LOADING");
+#endif
 
     /* Load the ROM before showing the progress bar so the extractor
      * can reuse the in-memory buffer (skip a second 16 MB read) AND
@@ -443,7 +472,15 @@ int main(int argc, char* argv[]) {
      * 3-4 seconds of bad assets before we noticed. Use the path the
      * pre-window probe just resolved so we don't re-walk candidates. */
     Port_LoadRom(romPath);
+    /* Stage 2 GPU build: the asset-extractor progress UI also creates
+     * an SDL_Renderer. Pass NULL window so the extractor runs without
+     * the progress bar (still extracts in-process, just blank window).
+     * On non-GPU builds we keep the existing path. */
+#ifdef TMC_GPU_RENDERER
+    Port_EnsureAssetsReadyWithDisplay(NULL, gRomData, gRomSize);
+#else
     Port_EnsureAssetsReadyWithDisplay(window, gRomData, gRomSize);
+#endif
     Port_CheckForUpdates(window);
 
     /* Mod loader (Tier 1: asset overrides). Scans <exe>/mods/ for
@@ -486,17 +523,17 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    // Initialize PPU renderer
-    Port_PPU_Init(window);
-
-    /* GPU presentation scaffold — opt-in via `xmake f --gpu_renderer=y`.
-     * Without the build flag this is a no-op stub. With it, the SDL_GPU
-     * device is created and the passthrough shaders are loaded; the
-     * actual present path is still SDL_Renderer-driven (Stage 1). */
+    /* Stage 2: GPU device init runs BEFORE Port_PPU_Init so the latter
+     * can consult Port_GPU_ClaimWindow and skip SDL_Renderer creation
+     * when the GPU pipeline takes over. Without the --gpu_renderer=y
+     * build flag this is a no-op stub returning true. */
     {
         extern bool Port_GPU_Init(SDL_Window*);
         Port_GPU_Init(window);
     }
+
+    // Initialize PPU renderer (will use SDL_GPU if claimed, else SDL_Renderer)
+    Port_PPU_Init(window);
 
     /* Bridge frame: between the progress bar reaching 100% and
      * AgbMain producing its first GBA frame, audio init and AgbMain
@@ -506,15 +543,20 @@ int main(int argc, char* argv[]) {
      * followed by a blank window followed by the title screen. */
     /* Repaint the same "LOADING" card on each transition so the
      * user sees one continuous splash from window-open to first
-     * GBA frame instead of multiple flickering states. */
+     * GBA frame instead of multiple flickering states. (No-op on
+     * Stage 2 GPU build — see the earlier #ifndef block.) */
+#ifndef TMC_GPU_RENDERER
     Port_PaintBootSplash(window, "LOADING");
+#endif
     fprintf(stderr, "PPU init complete.\n");
     if (noAudio) {
         gMain.muteAudio = 1;
         fprintf(stderr, "Audio disabled by --no-audio flag.\n");
     } else {
         Port_InitAudio();
+#ifndef TMC_GPU_RENDERER
         Port_PaintBootSplash(window, "LOADING");
+#endif
         fprintf(stderr, "Audio init complete.\n");
     }
 

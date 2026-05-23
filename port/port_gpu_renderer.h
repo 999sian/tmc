@@ -32,10 +32,25 @@ extern "C" {
  * a no-op that returns true. */
 bool Port_GPU_Init(SDL_Window* window);
 
-/* Whether the GPU renderer was successfully initialised and is the
- * active presentation path. Stage 1 always returns false (we init
- * the device but don't yet drive present); kept as the integration
- * point Stage 2 will flip. */
+/* Stage 2: claim the window for the GPU device, query the swapchain
+ * texture format, and build the graphics pipeline + sampler + source
+ * texture (240x160 RGBA). Call AFTER Port_GPU_Init has succeeded and
+ * BEFORE Port_PPU_Init creates its SDL_Renderer. Returns true if the
+ * GPU path is ready to take over presentation; false on any error so
+ * the SDL_Renderer fallback can run. */
+bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_height);
+
+/* Stage 2: present one frame through the GPU. Uploads `fb` to the
+ * source texture, renders a fullscreen quad via the passthrough
+ * shader, submits to the swapchain. Caller must have invoked
+ * Port_GPU_ClaimWindow successfully first. Returns true on success;
+ * false if the swapchain wasn't ready this frame (caller skips the
+ * present, no fallback needed — the GBA frame just doesn't show). */
+bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h);
+
+/* Whether the GPU renderer was successfully initialised AND has
+ * claimed the window. When true, Port_PPU_PresentFrame dispatches
+ * to Port_GPU_PresentFrame instead of the SDL_Renderer path. */
 bool Port_GPU_IsActive(void);
 
 /* Release device + shader objects. Idempotent. */
