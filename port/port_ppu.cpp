@@ -419,9 +419,11 @@ bind_virtuappu_memory:
         SDL_SyncWindow(window);
         Port_PPU_PresentSurfaceFrame();
         printf("PPU initialized with SDL window surface fallback.\n");
-    } else {
+    } else if (sBackend == RenderBackend::Renderer) {
         printf("PPU initialized with SDL renderer backend.\n");
     }
+    /* GPU backend already logged "PPU initialized with SDL_GPU backend"
+     * inside the early Port_GPU_ClaimWindow branch above. */
 
     /* Hand the renderer to the ImGui menu layer so it can draw on top
      * of the rasterized GBA frame. Failure to init ImGui is non-fatal —

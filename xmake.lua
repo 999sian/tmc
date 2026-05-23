@@ -616,6 +616,7 @@ target("tmc_pc")
     add_files("port/generated_sounds_embed.cpp")  -- compile-time sounds.json fallback
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_gpu_renderer.cpp")  -- SDL_GPU presentation (Stage 1: scaffold; gated on --gpu_renderer=y)
+    add_files("port/port_glslp_parser.cpp")  -- libretro .glslp parser — step 1 of the runtime scaffold (Stage 5+C)
 
     -- SDL_GPU shader blobs. Compiled offline via port/shaders/build.sh
     -- (run when *.vert / *.frag change); the .spv files are committed
