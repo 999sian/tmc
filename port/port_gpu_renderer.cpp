@@ -58,9 +58,21 @@ static const unsigned char kPassthroughFragSpv[] = {
 static const unsigned char kLcdGridFragSpv[] = {
 #include "lcd_grid.frag.spv.h"
 };
+static const unsigned char kScanlineFragSpv[] = {
+#include "scanline.frag.spv.h"
+};
+static const unsigned char kHandheldFragSpv[] = {
+#include "handheld.frag.spv.h"
+};
+static const unsigned char kVignetteFragSpv[] = {
+#include "vignette.frag.spv.h"
+};
 static constexpr size_t kPassthroughVertSpvSize = sizeof(kPassthroughVertSpv);
 static constexpr size_t kPassthroughFragSpvSize = sizeof(kPassthroughFragSpv);
 static constexpr size_t kLcdGridFragSpvSize     = sizeof(kLcdGridFragSpv);
+static constexpr size_t kScanlineFragSpvSize    = sizeof(kScanlineFragSpv);
+static constexpr size_t kHandheldFragSpvSize    = sizeof(kHandheldFragSpv);
+static constexpr size_t kVignetteFragSpvSize    = sizeof(kVignetteFragSpv);
 
 static SDL_GPUDevice*           sDevice    = nullptr;
 static SDL_GPUShader*           sVertShader = nullptr;
@@ -135,6 +147,9 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
     } fragSpec[PORT_GPU_FILTER_COUNT] = {
         { kPassthroughFragSpv, kPassthroughFragSpvSize, 0, "passthrough" },
         { kLcdGridFragSpv,     kLcdGridFragSpvSize,     1, "lcd_grid"    },
+        { kScanlineFragSpv,    kScanlineFragSpvSize,    1, "scanline"    },
+        { kHandheldFragSpv,    kHandheldFragSpvSize,    1, "handheld"    },
+        { kVignetteFragSpv,    kVignetteFragSpvSize,    1, "vignette"    },
     };
     for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
         SDL_GPUShaderCreateInfo fci = {};
@@ -155,8 +170,10 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
     }
 
     std::fprintf(stderr,
-        "[gpu] shaders loaded (vert %zu B, frag passthrough %zu B, frag lcd_grid %zu B)\n",
-        kPassthroughVertSpvSize, kPassthroughFragSpvSize, kLcdGridFragSpvSize);
+        "[gpu] shaders loaded (vert %zu B; frags passthrough %zu, lcd_grid %zu, "
+        "scanline %zu, handheld %zu, vignette %zu)\n",
+        kPassthroughVertSpvSize, kPassthroughFragSpvSize, kLcdGridFragSpvSize,
+        kScanlineFragSpvSize, kHandheldFragSpvSize, kVignetteFragSpvSize);
     return true;
 }
 
@@ -268,10 +285,13 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
 
     /* TMC_GPU_FILTER env var lets us flip the active filter at startup
      * without rebuilding. Recognised values: "off" (default),
-     * "lcd_grid". Later stages add more presets. */
+     * "lcd_grid", "scanline", "handheld", "vignette". */
     if (const char* f = std::getenv("TMC_GPU_FILTER")) {
-        if (std::strcmp(f, "lcd_grid") == 0) {
-            sActiveFilter = PORT_GPU_FILTER_LCD_GRID;
+        if      (std::strcmp(f, "lcd_grid") == 0) sActiveFilter = PORT_GPU_FILTER_LCD_GRID;
+        else if (std::strcmp(f, "scanline") == 0) sActiveFilter = PORT_GPU_FILTER_SCANLINE;
+        else if (std::strcmp(f, "handheld") == 0) sActiveFilter = PORT_GPU_FILTER_HANDHELD;
+        else if (std::strcmp(f, "vignette") == 0) sActiveFilter = PORT_GPU_FILTER_VIGNETTE;
+        if (sActiveFilter != PORT_GPU_FILTER_NONE) {
             std::fprintf(stderr, "[gpu] filter at startup: %s\n", Port_GPU_FilterName(sActiveFilter));
         }
     }
@@ -377,14 +397,17 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
     tsb.sampler = sSampler;
     SDL_BindGPUFragmentSamplers(rp, /*first_slot=*/0, &tsb, 1);
 
-    /* Push fragment uniforms required by the active filter. The LCD
-     * grid shader expects the output viewport size so it can compute
-     * cell stride; passthrough has no uniforms. */
-    if (sActiveFilter == PORT_GPU_FILTER_LCD_GRID) {
+    /* Push the FragParams uniform (vec2 viewport size) for any filter
+     * other than passthrough. All four GLSL ports (lcd_grid, scanline,
+     * handheld, vignette) consume the same uniform layout, so a single
+     * branch covers them all. std140 layout requires 16-byte
+     * alignment on a vec2; the trailing pad keeps the struct size
+     * aligned. */
+    if (sActiveFilter != PORT_GPU_FILTER_NONE) {
         struct { float viewport[2]; float _pad[2]; } u;
-        /* Pass the fit-rect we computed earlier so the cells align with
-         * the actual draw area, not the full swapchain. The 16-byte
-         * std140 alignment requires padding. */
+        /* Match the fit-rect we set on the viewport so the shader's
+         * cell stride / row stride / radial centre line up with the
+         * actual draw area, not the full swapchain. */
         const int aspW = fb_w;
         const int aspH = fb_h;
         const int w = (int)swap_w;
@@ -437,6 +460,9 @@ extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
     switch (f) {
         case PORT_GPU_FILTER_NONE:     return "Off";
         case PORT_GPU_FILTER_LCD_GRID: return "LCD Grid (GPU)";
+        case PORT_GPU_FILTER_SCANLINE: return "Scanlines (GPU)";
+        case PORT_GPU_FILTER_HANDHELD: return "Handheld Grid (GPU)";
+        case PORT_GPU_FILTER_VIGNETTE: return "Vignette (GPU)";
         default: return "?";
     }
 }
