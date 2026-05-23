@@ -317,6 +317,7 @@ int main(int argc, char* argv[]) {
 
     u8 window_scale = Port_Config_WindowScale();
     bool noAudio = false;
+    const char* glslpPath = NULL;
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--window_scale=") == 0 || strncmp(argv[i], "--window_scale=", 15) == 0) {
@@ -334,11 +335,16 @@ int main(int argc, char* argv[]) {
             else if (strcmp(argv[i], "--no-audio") == 0) {
                 noAudio = true;
             }
+            else if (strncmp(argv[i], "--glslp=", 8) == 0) {
+                glslpPath = argv[i] + 8;
+            }
             else if (strcmp(argv[i], "--help") == 0) {
-                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio] [--glslp=<path>]\n", argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
                 fprintf(stderr, "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
                 fprintf(stderr, "  --no-audio:             Skip audio init (workaround for agbplay crash)\n");
+                fprintf(stderr, "  --glslp=<path>:         Load a libretro .glslp shader preset (requires --gpu_renderer=y build).\n");
+                fprintf(stderr, "                          Equivalent to setting TMC_GLSLP_PRESET=<path> env var.\n");
                 fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
             }
@@ -346,6 +352,16 @@ int main(int argc, char* argv[]) {
                 fprintf(stderr, "Unknown argument: %s\n", argv[i]);
             }
         }
+    }
+    /* Expose the path to port_gpu_renderer's startup probe by setting
+     * the env var the existing TMC_GLSLP_PRESET check reads. Keeps the
+     * load path single-sourced — CLI just becomes another way to fill
+     * the same env var. setenv lives behind POSIX feature macros that
+     * the build doesn't define on every platform; use a forward extern
+     * declaration so we don't need to crank up _POSIX_C_SOURCE. */
+    if (glslpPath) {
+        extern int setenv(const char*, const char*, int);
+        setenv("TMC_GLSLP_PRESET", glslpPath, /*overwrite=*/1);
     }
 
     // Initialize SDL video first. Audio is optional and handled separately.
