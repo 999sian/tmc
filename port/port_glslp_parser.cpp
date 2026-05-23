@@ -800,10 +800,5 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
 
 }  // namespace PortGlslp
 
-/* C-callable runtime API stubs — return failure / not-active until
- * the multi-pass executor (Step 5) is in place. */
-extern "C" int Port_GlslpRuntime_Load(const char* /*glslp_path*/) {
-    return 0;
-}
-extern "C" void Port_GlslpRuntime_Unload(void) {}
-extern "C" int Port_GlslpRuntime_IsActive(void) { return 0; }
+/* C-callable runtime API lives in port_glslp_runtime.cpp now (Step 5).
+ * Stubs removed from this file to avoid duplicate definitions. */
