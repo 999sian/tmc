@@ -44,6 +44,7 @@ jobs:
     secrets:
       ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
       PRIVATE_SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
+      TMC_DISCORD_APP_ID: ${{ secrets.TMC_DISCORD_APP_ID }}
 
   create-release:
     runs-on: ubuntu-latest

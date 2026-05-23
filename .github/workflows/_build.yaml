@@ -21,6 +21,8 @@ on:
         required: false
       PRIVATE_SUBMODULES_TOKEN:
         required: false
+      TMC_DISCORD_APP_ID:
+        required: false
 
 jobs:
   # Compute the build matrix dynamically so callers can opt into a Linux-only
@@ -310,6 +312,29 @@ jobs:
             echo "===== END SESSION ====="
           done
           true
+
+      - name: Inject Discord App ID (release builds)
+        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
+        shell: bash
+        env:
+          TMC_DISCORD_APP_ID: ${{ secrets.TMC_DISCORD_APP_ID }}
+        run: |
+          # Bake the release-build Discord App ID into discord_app_id.txt
+          # so xmake.lua's `if os.isfile("discord_app_id.txt")` branch
+          # injects TMC_DISCORD_APP_ID_DEFAULT and Rich Presence works
+          # out-of-the-box for end users without them needing to register
+          # their own Discord application. The file stays gitignored —
+          # forks without the repo secret build without an app ID baked
+          # in (their users would still need to set TMC_DISCORD_APP_ID
+          # themselves, matching the pre-v0.3.0 behaviour). Same probe
+          # pattern as the ASSETS_TOKEN step above — secrets can't be
+          # referenced in step-level `if:`, so we bail in bash.
+          if [ -z "$TMC_DISCORD_APP_ID" ]; then
+            echo "No TMC_DISCORD_APP_ID secret set — Rich Presence will need TMC_DISCORD_APP_ID env at runtime."
+            exit 0
+          fi
+          printf '%s' "$TMC_DISCORD_APP_ID" > discord_app_id.txt
+          echo "Discord App ID baked in (${#TMC_DISCORD_APP_ID} chars)."
 
       - name: Build tmc_pc and asset_extractor (build.py)
         shell: bash
