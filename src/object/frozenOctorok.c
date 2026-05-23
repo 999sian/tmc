@@ -190,7 +190,17 @@ void FrozenOctorok_Action1(FrozenOctorokEntity* this) {
             tmp1 = 0x10000 / (((FrozenOctorokEntity*)super->parent)->unk_76);
             tmp1 = ((tmp1 << 0xd) >> 8);
             tmp1 -= 0x2000;
+#ifdef PC_PORT
+            /* #91/#97-class fix: a leg child (type 1-4) calls Action1
+             * directly from Init (line 150) before the mouth (type 5)
+             * has had its Init run, so heap->mouthObject is still NULL.
+             * GBA NULL-deref returned BIOS garbage (≠ 1), landing us in
+             * the else branch by chance. PC SIGSEGVs. Mirror the GBA
+             * fall-through. */
+            if (this->heap->mouthObject != NULL && this->heap->mouthObject->base.health == 1) {
+#else
             if (this->heap->mouthObject->base.health == 1) {
+#endif
                 tmp1 = 0x2200 + tmp1;
             } else {
                 tmp1 = (tmp1 >> 1) + 0x2200;
