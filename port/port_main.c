@@ -1,5 +1,6 @@
 #include "gba/io_reg.h"
 #include "main.h"
+#include <stdbool.h>
 #include "port_config.h"
 /* Set by xmake (-DMODE1_GBA_WIDTH=N); falls back to GBA-native 240. */
 #ifndef MODE1_GBA_WIDTH
@@ -488,6 +489,15 @@ int main(int argc, char* argv[]) {
     // Initialize PPU renderer
     Port_PPU_Init(window);
 
+    /* GPU presentation scaffold — opt-in via `xmake f --gpu_renderer=y`.
+     * Without the build flag this is a no-op stub. With it, the SDL_GPU
+     * device is created and the passthrough shaders are loaded; the
+     * actual present path is still SDL_Renderer-driven (Stage 1). */
+    {
+        extern bool Port_GPU_Init(SDL_Window*);
+        Port_GPU_Init(window);
+    }
+
     /* Bridge frame: between the progress bar reaching 100% and
      * AgbMain producing its first GBA frame, audio init and AgbMain
      * warmup take long enough to leave the window blank. Paint a
@@ -511,6 +521,11 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
     AgbMain();
+
+    {
+        extern void Port_GPU_Shutdown(void);
+        Port_GPU_Shutdown();
+    }
 
     {
         extern void Port_DiscordRpc_Shutdown(void);
