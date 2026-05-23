@@ -595,7 +595,18 @@ void OctorokBoss_Action1(OctorokBossEntity* this) {
             if (((Enemy*)super->parent)->enemyFlags & EM_FLAG_BOSS_KILLED) {
                 DeleteThisEntity();
             }
+#ifdef PC_PORT
+            /* #91/#97-class fix — same family as frozenOctorok.c:193. The
+             * head (WHOLE) creates legs, mouth, tail-end, tails in that
+             * order, then each child runs Init→Action1 (line 472). When a
+             * leg is Init'd before the mouth's Init has had a chance to
+             * run, heap->mouthObject is still NULL. GBA NULL-deref read
+             * BIOS garbage (≠ 1), falling into the else branch; PC SIGSEGV.
+             * Guard the two health reads in this case block. */
+            if (this->heap->mouthObject != NULL && this->heap->mouthObject->base.health == 1) {
+#else
             if (this->heap->mouthObject->base.health == 1) {
+#endif
                 if ((s16)this->unk_76 < 0) {
                     this->unk_76 -= 4;
                 } else {
@@ -620,7 +631,11 @@ void OctorokBoss_Action1(OctorokBossEntity* this) {
             radius = 0x10000 / ((OctorokBossEntity*)super->parent)->unk_76;
             radius = radius << 0xd >> 0x8;
             radius = radius - 0x2000;
+#ifdef PC_PORT
+            if (this->heap->mouthObject != NULL && this->heap->mouthObject->base.health == 1) {
+#else
             if (this->heap->mouthObject->base.health == 1) {
+#endif
                 radius = radius + 0x2200;
             } else {
                 radius = (radius >> 1) + 0x2200;
@@ -633,9 +648,19 @@ void OctorokBoss_Action1(OctorokBossEntity* this) {
             break;
 
         case TAIL:
+#ifdef PC_PORT
+            /* #91/#97-class guard — same family as frozenOctorok.c:193.
+             * mouthObject is NULL until its Init runs; on PC the
+             * NULL-deref SIGSEGVs instead of the GBA's harmless garbage
+             * read. */
+            if (this->heap->mouthObject != NULL && this->heap->mouthObject->base.health < 2) {
+                DeleteThisEntity();
+            }
+#else
             if (this->heap->mouthObject->base.health < 2) {
                 DeleteThisEntity();
             }
+#endif
             if ((this->heap->tailCount - 2) < super->type2) {
                 DeleteThisEntity();
             }
@@ -654,9 +679,16 @@ void OctorokBoss_Action1(OctorokBossEntity* this) {
             break;
 
         case TAIL_END:
+#ifdef PC_PORT
+            /* #91/#97-class guard — same family as frozenOctorok.c:193. */
+            if (this->heap->mouthObject != NULL && this->heap->mouthObject->base.health < 2) {
+                DeleteThisEntity();
+            }
+#else
             if (this->heap->mouthObject->base.health < 2) {
                 DeleteThisEntity();
             }
+#endif
             UpdateAnimationSingleFrame(super);
             if (IS_FROZEN((OctorokBossEntity*)super->parent)) {
                 sub_08036AF0(this, GET_TAIL_RADIUS(this), 0x10);

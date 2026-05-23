@@ -248,7 +248,20 @@ void OctorokBossObject_Action1(OctorokBossObjectEntity* this) {
                 this->unk_78.WORD--;
                 return;
             }
+#ifdef PC_PORT
+            /* #91/#97-class fix — same family as frozenOctorok.c:193.
+             * Type-4 OctorokBossObject (the smoke-attack overlay) is
+             * spawned by OctorokBoss_ExecuteAttackSmoke without ever
+             * assigning helper, so the field stays NULL. The
+             * dead-store-ish read of tailObjects[timer]->x below worked
+             * harmlessly on GBA (NULL→BIOS garbage) but SIGSEGVs on PC.
+             * Guard the read; the DeleteThisEntity still fires. */
+            if (this->helper != NULL && this->helper->tailObjects[super->timer] != NULL) {
+                this->helper->tailObjects[super->timer]->x = this->helper->tailObjects[super->timer]->x;
+            }
+#else
             this->helper->tailObjects[super->timer]->x = this->helper->tailObjects[super->timer]->x;
+#endif
             DeleteThisEntity();
             break;
         case 5:
