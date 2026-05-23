@@ -46,9 +46,13 @@ struct PassResources {
      * (window size). Refreshes if the viewport changes — TODO. */
     int out_w = 0;
     int out_h = 0;
-    /* Number of #pragma parameter declarations discovered in this
-     * pass's source. Determines ShaderParams uniform-block layout. */
-    int parameter_count = 0;
+    /* Parameters declared by this pass's source via `#pragma parameter`.
+     * Order matches the ShaderParams uniform-block layout the
+     * preprocessor emitted (preprocessor walks the pragmas in source
+     * order and emits the block fields in the same order). PresentFrame
+     * pushes the values in this order; runtime override values come
+     * from g_runtime.preset.parameters via ID lookup. */
+    std::vector<PortGlslp::ShaderParam> params;
 };
 
 struct Runtime {
@@ -198,7 +202,7 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
             Port_GlslpRuntime_Unload();
             return 0;
         }
-        p.parameter_count = (int)pp->parameters.size();
+        p.params = std::move(pp->parameters);
 
         auto vspv = PortGlslp::CompileGlslToSpirv(
             pp->vertex_glsl, PortGlslp::ShaderStage::Vertex, cache_dir.string());
@@ -230,7 +234,7 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
         fci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
         fci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
         fci.num_samplers         = 1;  /* primary input sampler */
-        fci.num_uniform_buffers  = (p.parameter_count > 0) ? 2 : 1;  /* LibretroUniforms + ShaderParams */
+        fci.num_uniform_buffers  = p.params.empty() ? 1 : 2;  /* LibretroUniforms + ShaderParams */
         p.fragment_shader = SDL_CreateGPUShader(g_runtime.device, &fci);
 
         if (!p.vertex_shader || !p.fragment_shader) {
@@ -403,31 +407,25 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
         SDL_PushGPUVertexUniformData(cmd, 0, &u, sizeof(u));
         SDL_PushGPUFragmentUniformData(cmd, 0, &u, sizeof(u));
 
-        /* ShaderParams (if the pass declared any #pragma parameters).
-         * We push the preset's current parameter values in declaration
-         * order — must match the layout the preprocessor emitted. */
-        if (p.parameter_count > 0) {
-            std::vector<float> params;
-            params.reserve(p.parameter_count);
-            /* Glob the preset-level parameters list. The .glslp file's
-             * `parameters = ...` line may not enumerate every pragma
-             * parameter — fall back to the parameter's compiled-in
-             * default. */
-            for (int k = 0; k < p.parameter_count; ++k) params.push_back(0.5f);
-            /* Override with preset-defined defaults when names match. */
-            for (auto& pp : g_runtime.preset.parameters) {
-                /* TODO: align parameter ordering between source #pragma
-                 * declarations and preset list — needs the preprocessor
-                 * to expose its ShaderParam names per-pass. For now the
-                 * uniform block reads whatever bytes we push; binding
-                 * with placeholders is harmless until Step 5 finishes
-                 * the parameter-name wiring. */
-                (void)pp;
+        /* ShaderParams — the per-pass uniform block matching the
+         * `layout(set = 3, binding = 1) uniform ShaderParams { ... }`
+         * the preprocessor emitted. Fields are in #pragma-parameter
+         * declaration order (p.params); we look up each by ID in the
+         * preset's overrides and fall back to the parameter's
+         * compiled-in default.
+         *
+         * std140 layout: each float in a uniform block gets a vec4
+         * slot (16-byte aligned). Pad accordingly. */
+        if (!p.params.empty()) {
+            const size_t n = p.params.size();
+            std::vector<float> padded(n * 4, 0.0f);
+            for (size_t k = 0; k < n; ++k) {
+                float v = p.params[k].default_value;
+                for (const auto& pp : g_runtime.preset.parameters) {
+                    if (pp.id == p.params[k].id) { v = pp.current_value; break; }
+                }
+                padded[k * 4] = v;
             }
-            /* std140 layout for a float[N] block is 16-byte stride per
-             * element (each float gets a vec4 slot). Pad here. */
-            std::vector<float> padded(p.parameter_count * 4, 0.0f);
-            for (int k = 0; k < p.parameter_count; ++k) padded[k * 4] = params[k];
             SDL_PushGPUFragmentUniformData(cmd, 1, padded.data(),
                                             (Uint32)(padded.size() * sizeof(float)));
         }
