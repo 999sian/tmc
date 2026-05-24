@@ -55,11 +55,17 @@ public:
      * and shader binding table.  Throws Error on failure. */
     void createPipeline(const std::string& shaderDir);
 
-    /* Bind the diffuse atlas + sampler that the closest-hit shader
-     * will read through binding 4. May be called once at start; the
-     * pipeline only re-references these via descriptor writes when
-     * the AS is rebuilt. */
-    void setAtlas(VkImageView atlasView, VkSampler atlasSampler);
+    /* Bind the three texture-array entries the path tracer's rchit
+     * reads through bindings 4 (diffuse), 7 (emissive), 8 (normal).
+     * The sampler at binding 5 is shared. The first call is required
+     * before the first dispatchRays(); subsequent calls just update
+     * the views (next rebuildAS' descriptor write picks them up).
+     * Pass VK_NULL_HANDLE for emissive / normal to use a 1×1 fallback
+     * (the path tracer treats absent emissive as zero radiance and
+     * absent normal map as the geometric normal). */
+    void setAtlas(VkImageView diffuseView, VkSampler atlasSampler,
+                  VkImageView emissiveView = VK_NULL_HANDLE,
+                  VkImageView normalView   = VK_NULL_HANDLE);
 
     /* Build BLAS from the layer manager's current vertex/index
      * buffers, then build/refit TLAS over it. Records all commands
@@ -137,9 +143,11 @@ private:
     VkDeviceMemory mInstancesMemory = VK_NULL_HANDLE;
 
     /* Atlas bindings (set externally via setAtlas) */
-    VkImageView mAtlasView    = VK_NULL_HANDLE;
-    VkSampler   mAtlasSampler = VK_NULL_HANDLE;
-    bool        mAtlasBound   = false;
+    VkImageView mAtlasView      = VK_NULL_HANDLE;
+    VkSampler   mAtlasSampler   = VK_NULL_HANDLE;
+    VkImageView mEmissiveView   = VK_NULL_HANDLE;
+    VkImageView mNormalView     = VK_NULL_HANDLE;
+    bool        mAtlasBound     = false;
 
     /* Dynamic-loader pointers — these RT entry points aren't in the
      * core dispatch table because they come from KHR extensions. We

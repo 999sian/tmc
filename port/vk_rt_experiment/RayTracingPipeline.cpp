@@ -84,50 +84,61 @@ void RayTracingPipeline::createPipeline(const std::string& shaderDir) {
 }
 
 void RayTracingPipeline::createDescriptorLayout() {
-    /* Six bindings, one descriptor each (atlas uses an array of
-     * exactly 1 for now; descriptor-indexing future-proofs this for
-     * multi-atlas scenes). */
-    VkDescriptorSetLayoutBinding bindings[6]{};
+    /* Nine bindings for the PTGI pipeline:
+     *   0 TLAS, 1 outputImage, 2 verts, 3 indices,
+     *   4 diffuse atlas[], 5 sampler,
+     *   6 accumImage (HDR running mean for path-trace progressive),
+     *   7 emissive atlas[], 8 normal atlas[]. */
+    VkDescriptorSetLayoutBinding bindings[9]{};
 
-    /* binding 0: TLAS */
     bindings[0].binding         = 0;
     bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     bindings[0].descriptorCount = 1;
     bindings[0].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
-    /* binding 1: storage image (the rgen output target) */
     bindings[1].binding         = 1;
     bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
-    /* binding 2: vertex storage buffer (rchit reads UVs etc.) */
     bindings[2].binding         = 2;
     bindings[2].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     bindings[2].descriptorCount = 1;
     bindings[2].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
-    /* binding 3: index storage buffer */
     bindings[3].binding         = 3;
     bindings[3].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     bindings[3].descriptorCount = 1;
     bindings[3].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
-    /* binding 4: sampled-image array (atlas), size 1 for now */
     bindings[4].binding         = 4;
     bindings[4].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     bindings[4].descriptorCount = 1;
     bindings[4].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
-    /* binding 5: sampler (one linear-clamp for the atlas) */
     bindings[5].binding         = 5;
     bindings[5].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
     bindings[5].descriptorCount = 1;
     bindings[5].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
+    bindings[6].binding         = 6;
+    bindings[6].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    bindings[6].descriptorCount = 1;
+    bindings[6].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+    bindings[7].binding         = 7;
+    bindings[7].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    bindings[7].descriptorCount = 1;
+    bindings[7].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+
+    bindings[8].binding         = 8;
+    bindings[8].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    bindings[8].descriptorCount = 1;
+    bindings[8].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+
     VkDescriptorSetLayoutCreateInfo li{};
     li.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    li.bindingCount = 6;
+    li.bindingCount = 9;
     li.pBindings    = bindings;
     check(vkCreateDescriptorSetLayout(mEngine.device(), &li, nullptr, &mDescriptorSetLayout),
           "vkCreateDescriptorSetLayout");
@@ -136,9 +147,9 @@ void RayTracingPipeline::createDescriptorLayout() {
 void RayTracingPipeline::createDescriptorPool() {
     VkDescriptorPoolSize sizes[5]{};
     sizes[0] = {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1};
-    sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,              1};
-    sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             2};
-    sizes[3] = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,              1};
+    sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,              2}; /* outputImage + accumImage */
+    sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             2}; /* verts + indices */
+    sizes[3] = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,              3}; /* diffuse + emissive + normal */
     sizes[4] = {VK_DESCRIPTOR_TYPE_SAMPLER,                    1};
 
     VkDescriptorPoolCreateInfo pci{};
@@ -180,10 +191,13 @@ void RayTracingPipeline::createPipelineLayout() {
 }
 
 void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) {
-    std::vector<char> rgenCode      = loadSpv(shaderDir + "/raygen.rgen.spv");
-    std::vector<char> rmissCode     = loadSpv(shaderDir + "/miss.rmiss.spv");
-    std::vector<char> shadowMissCode= loadSpv(shaderDir + "/shadow.rmiss.spv");
-    std::vector<char> rchitCode     = loadSpv(shaderDir + "/closesthit.rchit.spv");
+    /* Path-trace pipeline: rgen + 1 miss + rchit (3 stages, 3 groups).
+     * No shadow rays — the path tracer accumulates emissive
+     * contributions along bounce chains instead. */
+    std::vector<char> rgenCode      = loadSpv(shaderDir + "/path_trace.rgen.spv");
+    std::vector<char> rmissCode     = loadSpv(shaderDir + "/path_trace_miss.rmiss.spv");
+    std::vector<char> shadowMissCode;  /* unused */
+    std::vector<char> rchitCode     = loadSpv(shaderDir + "/path_trace.rchit.spv");
 
     auto makeModule = [this](const std::vector<char>& code) -> VkShaderModule {
         VkShaderModuleCreateInfo smci{};
@@ -195,13 +209,13 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
               "vkCreateShaderModule");
         return mod;
     };
-    VkShaderModule rgen       = makeModule(rgenCode);
-    VkShaderModule rmiss      = makeModule(rmissCode);
-    VkShaderModule shadowMiss = makeModule(shadowMissCode);
-    VkShaderModule rchit      = makeModule(rchitCode);
+    (void)shadowMissCode;
+    VkShaderModule rgen  = makeModule(rgenCode);
+    VkShaderModule rmiss = makeModule(rmissCode);
+    VkShaderModule rchit = makeModule(rchitCode);
 
-    /* Four stages: rgen=0, miss-primary=1, miss-shadow=2, rchit=3. */
-    VkPipelineShaderStageCreateInfo stages[4]{};
+    /* Three stages: rgen=0, miss=1, rchit=2. */
+    VkPipelineShaderStageCreateInfo stages[3]{};
     stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stages[0].stage  = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
     stages[0].module = rgen;
@@ -211,22 +225,15 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
     stages[1].module = rmiss;
     stages[1].pName  = "main";
     stages[2].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stages[2].stage  = VK_SHADER_STAGE_MISS_BIT_KHR;
-    stages[2].module = shadowMiss;
+    stages[2].stage  = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    stages[2].module = rchit;
     stages[2].pName  = "main";
-    stages[3].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stages[3].stage  = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-    stages[3].module = rchit;
-    stages[3].pName  = "main";
 
-    /* Four shader groups, identity-mapped to stages:
-     *   group 0: rgen (general)
-     *   group 1: primary miss (general)   — rgen's missIndex = 0
-     *   group 2: shadow miss (general)    — rchit's shadow trace missIndex = 1
-     *   group 3: hit group (triangles)    — rchit
-     * The SBT below places groups 1+2 in the miss region as
-     * consecutive records, so the missIndex argument selects which. */
-    VkRayTracingShaderGroupCreateInfoKHR groups[4]{};
+    /* Three shader groups: rgen general, miss general, hit
+     * triangles. Identity-mapped to stages 0/1/2. The path tracer's
+     * trace calls all use missIndex=0 (no shadow rays), so a single
+     * miss record in the SBT is enough. */
+    VkRayTracingShaderGroupCreateInfoKHR groups[3]{};
     for (auto& g : groups) {
         g.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
         g.generalShader      = VK_SHADER_UNUSED_KHR;
@@ -238,19 +245,18 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
     groups[0].generalShader    = 0;
     groups[1].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
     groups[1].generalShader    = 1;
-    groups[2].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    groups[2].generalShader    = 2;
-    groups[3].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-    groups[3].closestHitShader = 3;
+    groups[2].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+    groups[2].closestHitShader = 2;
 
     VkRayTracingPipelineCreateInfoKHR pci{};
     pci.sType                        = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
-    pci.stageCount                   = 4;
+    pci.stageCount                   = 3;
     pci.pStages                      = stages;
-    pci.groupCount                   = 4;
+    pci.groupCount                   = 3;
     pci.pGroups                      = groups;
-    /* depth=2 covers primary (rgen→rchit) + one shadow recursion. */
-    pci.maxPipelineRayRecursionDepth = 2;
+    /* PT uses an in-shader bounce loop (not real recursion in
+     * Vulkan terms), so depth=1 suffices. */
+    pci.maxPipelineRayRecursionDepth = 1;
     pci.layout                       = mPipelineLayout;
     check(pfnCreateRTPipelines(mEngine.device(), VK_NULL_HANDLE, VK_NULL_HANDLE,
                                1, &pci, nullptr, &mPipeline),
@@ -258,14 +264,13 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
 
     vkDestroyShaderModule(mEngine.device(), rgen, nullptr);
     vkDestroyShaderModule(mEngine.device(), rmiss, nullptr);
-    vkDestroyShaderModule(mEngine.device(), shadowMiss, nullptr);
     vkDestroyShaderModule(mEngine.device(), rchit, nullptr);
 }
 
 void RayTracingPipeline::createShaderBindingTable() {
     const auto& props = mEngine.rtProperties();
-    const uint32_t groupCount = 4;       /* rgen + miss-primary + miss-shadow + rchit */
-    const uint32_t missCount  = 2;       /* primary + shadow */
+    const uint32_t groupCount = 3;       /* rgen + 1 miss + rchit */
+    const uint32_t missCount  = 1;       /* path-tracer only needs primary miss */
     const uint32_t handleSize = props.shaderGroupHandleSize;
     const uint32_t handleAlign = props.shaderGroupHandleAlignment;
     const uint32_t baseAlign  = props.shaderGroupBaseAlignment;
@@ -307,11 +312,10 @@ void RayTracingPipeline::createShaderBindingTable() {
     check(vkMapMemory(mEngine.device(), mSbtMemory, 0, sbtBytes, 0, &ptr), "vkMapMemory (sbt)");
     std::memset(ptr, 0, (size_t)sbtBytes);
     uint8_t* dst = (uint8_t*)ptr;
-    /* group indices: 0=rgen, 1=miss-primary, 2=miss-shadow, 3=hit. */
-    std::memcpy(dst + rgenOff,                handles.data() + 0 * handleSize, handleSize);
-    std::memcpy(dst + missOff,                handles.data() + 1 * handleSize, handleSize);
-    std::memcpy(dst + missOff + stride,       handles.data() + 2 * handleSize, handleSize);
-    std::memcpy(dst + hitOff,                 handles.data() + 3 * handleSize, handleSize);
+    /* group indices: 0=rgen, 1=miss, 2=hit. */
+    std::memcpy(dst + rgenOff, handles.data() + 0 * handleSize, handleSize);
+    std::memcpy(dst + missOff, handles.data() + 1 * handleSize, handleSize);
+    std::memcpy(dst + hitOff,  handles.data() + 2 * handleSize, handleSize);
     vkUnmapMemory(mEngine.device(), mSbtMemory);
 
     VkBufferDeviceAddressInfo bda{};
@@ -344,10 +348,21 @@ std::vector<char> RayTracingPipeline::loadSpv(const std::string& path) {
     return data;
 }
 
-void RayTracingPipeline::setAtlas(VkImageView atlasView, VkSampler atlasSampler) {
-    mAtlasView    = atlasView;
-    mAtlasSampler = atlasSampler;
-    mAtlasBound   = true;
+void RayTracingPipeline::setAtlas(VkImageView diffuseView, VkSampler atlasSampler,
+                                  VkImageView emissiveView, VkImageView normalView) {
+    mAtlasView      = diffuseView;
+    mAtlasSampler   = atlasSampler;
+    /* Fall back to the diffuse view when no emissive/normal map is
+     * supplied. The shaders treat absent emissive/normal sensibly:
+     * the emissive sample only matters when the material flag is
+     * set (so for non-emissive material codes the binding's content
+     * is irrelevant), and the normal map's "grey = no perturbation"
+     * convention plus our 0.05-tolerance length check means random
+     * diffuse data won't visibly perturb the geometric normal in
+     * practice. */
+    mEmissiveView   = (emissiveView != VK_NULL_HANDLE) ? emissiveView : diffuseView;
+    mNormalView     = (normalView   != VK_NULL_HANDLE) ? normalView   : diffuseView;
+    mAtlasBound     = true;
 }
 
 void RayTracingPipeline::destroyAS() {
@@ -418,7 +433,17 @@ void RayTracingPipeline::rebuildAS(VkCommandBuffer cmd) {
     VkDescriptorImageInfo samplerInfo{};
     samplerInfo.sampler = mAtlasSampler;
 
-    VkWriteDescriptorSet writes[6]{};
+    VkDescriptorImageInfo accumInfo{};
+    accumInfo.imageView   = mEngine.accumImageView();
+    accumInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkDescriptorImageInfo emissiveInfo{};
+    emissiveInfo.imageView   = mEmissiveView;
+    emissiveInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    VkDescriptorImageInfo normalInfo{};
+    normalInfo.imageView   = mNormalView;
+    normalInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkWriteDescriptorSet writes[9]{};
     writes[0].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].pNext            = &asDescInfo;
     writes[0].dstSet           = mDescriptorSet;
@@ -463,6 +488,29 @@ void RayTracingPipeline::rebuildAS(VkCommandBuffer cmd) {
         writes[5].descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLER;
         writes[5].pImageInfo       = &samplerInfo;
         writeCount = 6;
+
+        /* Path-tracer extras: accum image + emissive + normal atlas. */
+        writes[6].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[6].dstSet           = mDescriptorSet;
+        writes[6].dstBinding       = 6;
+        writes[6].descriptorCount  = 1;
+        writes[6].descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[6].pImageInfo       = &accumInfo;
+
+        writes[7].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[7].dstSet           = mDescriptorSet;
+        writes[7].dstBinding       = 7;
+        writes[7].descriptorCount  = 1;
+        writes[7].descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        writes[7].pImageInfo       = &emissiveInfo;
+
+        writes[8].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[8].dstSet           = mDescriptorSet;
+        writes[8].dstBinding       = 8;
+        writes[8].descriptorCount  = 1;
+        writes[8].descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        writes[8].pImageInfo       = &normalInfo;
+        writeCount = 9;
     }
     vkUpdateDescriptorSets(mEngine.device(), writeCount, writes, 0, nullptr);
 }

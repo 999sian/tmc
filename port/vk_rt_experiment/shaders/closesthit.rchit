@@ -77,8 +77,8 @@ const float kPi = 3.14159265359;
 const vec3  kAmbient = vec3(0.06, 0.07, 0.10);  /* darker = more contrast */
 
 const int  kLightCount    = 6;
-const int  kShadowSamples = 4;
-const float kShadowJitter = 4.0;
+const int  kShadowSamples = 1;   /* hard shadows — no per-pixel noise grain */
+const float kShadowJitter = 0.0;
 
 const vec3 kLightColours[kLightCount] = vec3[kLightCount](
     vec3(2.50, 0.90, 0.30),   /* warm orange */
@@ -97,7 +97,10 @@ const vec3 kLightColours[kLightCount] = vec3[kLightCount](
 vec3 lightPosition(float t, float phase, float radius) {
     return vec3(120.0 + radius * cos(t + phase),
                 80.0  + (radius * 0.6) * sin(t + phase * 1.7),
-                0.10);  /* just in front of sprites */
+                -0.40);  /* far enough back to keep shadow projection
+                          * modest — shadows are visible but don't
+                          * dominate the image as a noisy halo around
+                          * every sprite. */
 }
 
 const vec3  kSunDir       = normalize(vec3(0.3, -0.5, -0.8));
@@ -160,6 +163,19 @@ void main() {
         return;
     }
 
+    /* When the ray hit a sprite quad (anything past the first BG2
+     * quad's 2 triangles), pretend we're shading the BG plane behind
+     * it for shadow-trace purposes. Otherwise the sprite quad
+     * appears as a brighter rectangle than the BG around it
+     * (sprite-hit shadow rays at z=0.2 don't hit anything in front;
+     * BG-hit rays at z=0.8 are occluded by the sprite quads, so the
+     * sprite area is lit while surrounding BG is shadowed → visible
+     * box). Shifting the shadow origin to z=0.8 unifies the lighting
+     * across layers; the sprite still acts as a real shadow caster
+     * for *other* BG pixels via the ray it occludes. */
+    const bool isSprite = (gl_PrimitiveID >= 2);
+    const vec3 shadeOrigin = isSprite ? vec3(hitPos.xy, 0.8) : hitPos;
+
     /* Sun key light — single shadow trace, no jitter (hard shadow). */
     const float t = pc.params.y;
     vec3 lit = kAmbient;
@@ -172,15 +188,18 @@ void main() {
                 | gl_RayFlagsTerminateOnFirstHitEXT
                 | gl_RayFlagsSkipClosestHitShaderEXT,
             0xFF, 0, 0, 1,
-            hitPos + dir * 0.01, 0.0, dir, kSunDistance, 1
+            shadeOrigin + dir * 0.01, 0.0, dir, kSunDistance, 1
         );
         if (!shadowPayload.hit) lit += kSunColour;
     }
 
-    /* Six orbiting point lights — each gets kShadowSamples shadow
-     * rays jittered around its centre, so the resulting penumbra is
-     * soft rather than hard-edged. The accumulated visibility ratio
-     * weights the light's distance-falloff contribution. */
+    /* Orbiting coloured point lights — disabled for the current
+     * "subtle" preset. Setting kLightCount=0 above (or just
+     * compile-time guarding this loop) turns the world back to
+     * straight diffuse + sun shadow, which is far less busy. The
+     * loop is kept structurally so re-enabling is a one-line change
+     * when we want the disco vibe back. */
+    #if 0
     for (int i = 0; i < kLightCount; ++i) {
         float phase  = (float(i) * 2.0 * kPi) / float(kLightCount);
         float speed  = 0.7 + 0.12 * float(i);   /* per-light orbit rate */
@@ -191,46 +210,42 @@ void main() {
         float lightDist = length(toLight);
         vec3  centerDir = toLight / lightDist;
 
-        /* Distance falloff, hand-tuned for the 240×160 world scale. */
-        float falloff = 1.0 / (1.0 + 0.0008 * lightDist * lightDist);
-        if (falloff < 0.02) continue;  /* skip negligible lights */
+        /* Falloff from 2D screen-XY distance — uniform across layers. */
+        float dx       = base.x - hitPos.x;
+        float dy       = base.y - hitPos.y;
+        float dist2D2  = dx * dx + dy * dy;
+        float falloff  = 1.0 / (1.0 + 0.0008 * dist2D2);
+        if (falloff < 0.02) continue;
 
         /* Pulse light brightness on a per-light schedule so the
          * scene "breathes" even when occluders aren't moving. */
         float pulse = 0.7 + 0.3 * sin(t * 1.4 + phase * 2.0);
 
-        /* Build two perpendicular vectors to centerDir for jitter
-         * basis. Sun-direction-style trick: pick the most stable
-         * cross-product axis. */
-        vec3 up = abs(centerDir.y) < 0.9 ? vec3(0.0, 1.0, 0.0)
-                                        : vec3(1.0, 0.0, 0.0);
-        vec3 right = normalize(cross(centerDir, up));
-        up = cross(right, centerDir);
+        /* Single hard shadow ray per light. Direction from the
+         * shading origin (= BG plane for sprite hits, see comment
+         * up top) toward the light's centre. */
+        vec3 sToLight = base - shadeOrigin;
+        float sDist   = length(sToLight);
+        vec3  sDir    = sToLight / sDist;
 
-        float visible = 0.0;
-        for (int s = 0; s < kShadowSamples; ++s) {
-            /* Jittered point on a disc perpendicular to the ray. */
-            vec2 j = hash2(vec3(gl_LaunchIDEXT.xy, float(i * kShadowSamples + s)));
-            vec3 samplePos = base + (right * j.x + up * j.y) * kShadowJitter;
-            vec3 sToLight  = samplePos - hitPos;
-            float sDist    = length(sToLight);
-            vec3  sDir     = sToLight / sDist;
-
-            shadowPayload.hit = true;
-            traceRayEXT(
-                topLevelAS,
-                gl_RayFlagsOpaqueEXT
-                    | gl_RayFlagsTerminateOnFirstHitEXT
-                    | gl_RayFlagsSkipClosestHitShaderEXT,
-                0xFF, 0, 0, 1,
-                hitPos + sDir * 0.01, 0.0, sDir, sDist, 1
-            );
-            if (!shadowPayload.hit) visible += 1.0;
-        }
-        visible /= float(kShadowSamples);
+        shadowPayload.hit = true;
+        traceRayEXT(
+            topLevelAS,
+            gl_RayFlagsOpaqueEXT
+                | gl_RayFlagsTerminateOnFirstHitEXT
+                | gl_RayFlagsSkipClosestHitShaderEXT,
+            0xFF, 0, 0, 1,
+            shadeOrigin + sDir * 0.01, 0.0, sDir, sDist, 1
+        );
+        float visible = shadowPayload.hit ? 0.0 : 1.0;
 
         lit += kLightColours[i] * falloff * pulse * visible;
     }
+    #endif
+
+    /* Brighten ambient since we removed the 6 point lights; otherwise
+     * the scene is sun-only and very dim. */
+    lit = max(lit, vec3(0.55));
 
     /* Reinhard tonemap on the accumulated colour — keeps the bright
      * light pile-ups from blowing out, and rolls highlights toward

@@ -132,6 +132,8 @@ public:
     uint32_t         swapchainHeight()const { return mSwapchainExtent.height; }
     VkImage          storageImage()   const { return mStorageImage; }
     VkImageView      storageImageView()const{ return mStorageImageView; }
+    VkImage          accumImage()     const { return mAccumImage; }
+    VkImageView      accumImageView() const { return mAccumImageView; }
     uint32_t         currentFrameIndex() const { return mCurrentFrame; }
 
     /* Returned by enumeratePhysicalDevice; the ray-tracing pipeline
@@ -228,6 +230,15 @@ private:
     VkImage          mStorageImage = VK_NULL_HANDLE;
     VkDeviceMemory   mStorageImageMemory = VK_NULL_HANDLE;
     VkImageView      mStorageImageView = VK_NULL_HANDLE;
+
+    /* Accumulation image — HDR running mean for path-tracer
+     * progressive sampling. rgba32f so emissive radiance >1 doesn't
+     * clip; rebuilt alongside the storage image on swapchain
+     * resize. Stays in GENERAL layout — the shader does in-place
+     * read/write each frame. */
+    VkImage          mAccumImage = VK_NULL_HANDLE;
+    VkDeviceMemory   mAccumImageMemory = VK_NULL_HANDLE;
+    VkImageView      mAccumImageView = VK_NULL_HANDLE;
 
     std::array<FrameSync, kFramesInFlight> mFrames{};
     uint32_t         mCurrentFrame = 0;

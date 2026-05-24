@@ -1,0 +1,247 @@
+/* port/vk_rt_experiment/shaders/path_trace.rgen
+ *
+ * Multi-bounce path tracer for the pseudo-3D-projected GBA scene.
+ * Bounces a ray off opaque surfaces up to kMaxBounces times,
+ * accumulating emissive radiance × throughput at each hit. Includes
+ * a PCG-hash RNG seeded by pixel + frame for Monte-Carlo integration
+ * and a progressive-accumulation buffer (bound at set 0 binding 6)
+ * for noise reduction across frames.
+ *
+ * Pairs with path_trace.rchit, which writes the per-hit material
+ * data into the PathPayload struct. The two files MUST keep the
+ * payload struct identical — any change here needs the same change
+ * in the rchit.
+ *
+ * Host-side requirements (not yet wired in the current scaffold):
+ *   - set 0 binding 6: accumImage (storage_image, rgba16f recommended)
+ *   - push constant `pc.params.w` = 1.0 on the first frame after a
+ *     scene change (clears the accumulation), 0.0 thereafter
+ *   - Vertex layout extended with material flags and normals (the
+ *     rchit reads them; this rgen just consumes the payload)
+ */
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_nonuniform_qualifier : require
+
+/* Payload struct — written by path_trace.rchit, read here.
+ * Keep this byte-identical between the two files. */
+struct PathPayload {
+    vec3  radiance;       /* emissive radiance picked up at this hit */
+    vec3  albedo;         /* surface diffuse colour */
+    vec3  hitPos;         /* world-space hit position (for next bounce origin) */
+    vec3  normal;         /* world-space surface normal */
+    float hitDistance;    /* gl_HitTEXT on hit, <0 on miss */
+    uint  materialFlags;  /* bit 0: translucent  bit 1: emissive */
+    vec3  scatterDir;     /* if translucent, the forward-scatter direction */
+};
+
+layout(location = 0) rayPayloadEXT PathPayload payload;
+
+/* Descriptor bindings — match RayTracingPipeline.cpp's layout. */
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+/* outputImage is the swap-bound RGBA8 surface; tonemap to LDR
+ * before writing. accumImage stays HDR via rgba32f so progressive
+ * accumulation doesn't bias toward bright. */
+layout(set = 0, binding = 1, rgba8)   uniform image2D outputImage;
+layout(set = 0, binding = 6, rgba32f) uniform image2D accumImage;
+
+layout(push_constant) uniform PushConstants {
+    vec4 params;  /* x=frameIndex y=time z=exposure w=resetAccum */
+} pc;
+
+/* Material-flag bits (kept in sync with rchit). */
+const uint kMaterialTranslucent = 1u;
+const uint kMaterialEmissive    = 2u;
+
+/* Path-tracing constants. kMaxBounces = 3 covers direct + 2 indirect
+ * bounces — enough for visible colour bleeding without exploding
+ * the per-pixel ray count. Russian roulette below trims branches
+ * with small throughput. */
+const int   kMaxBounces        = 3;
+const int   kSamplesPerPixel   = 1;     /* per frame; accumulation handles noise */
+const float kRayEpsilon        = 0.001;
+const float kPI                = 3.14159265358979323846;
+const float kInf               = 1.0e30;
+
+/* ---- PCG hash RNG ---- */
+/* O'Neill's PCG (XSH-RR variant), 32-bit state, returns uniform u32. */
+uint pcgHash(uint state) {
+    state = state * 747796405u + 2891336453u;
+    uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+uint   rngState = 0u;
+float  rand() {
+    rngState = pcgHash(rngState);
+    return float(rngState) * (1.0 / 4294967296.0);
+}
+
+/* Seed the RNG with pixel + frame + an extra salt so rays per
+ * bounce don't reuse the same 2D point. */
+void seedRng(uvec2 pixel, uint frameIdx, uint salt) {
+    rngState = pixel.x * 1973u + pixel.y * 9277u + frameIdx * 26699u + salt;
+    rngState = pcgHash(rngState);
+    rngState = pcgHash(rngState);  /* one extra round so close pixels diverge */
+}
+
+/* ---- Hemisphere sampling ---- */
+/* Cosine-weighted hemisphere sample in TANGENT space (z = up). The
+ * PDF is cos(theta)/PI — which exactly cancels the Lambertian cosine
+ * term in the path-tracing integral, so we don't need to multiply or
+ * divide by it explicitly when accumulating throughput. */
+vec3 cosineSampleHemisphere(float u1, float u2) {
+    float r   = sqrt(u1);
+    float phi = 2.0 * kPI * u2;
+    return vec3(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - u1)));
+}
+
+/* Build an orthonormal tangent frame around `n`. Pixar's "Building an
+ * Orthonormal Basis from a Unit Vector": branchless, single sqrt.
+ * Output is t, b, n forming a right-handed basis. */
+void buildTangentFrame(vec3 n, out vec3 t, out vec3 b) {
+    float sign = n.z >= 0.0 ? 1.0 : -1.0;
+    float a    = -1.0 / (sign + n.z);
+    float c    = n.x * n.y * a;
+    t = vec3(1.0 + sign * n.x * n.x * a, sign * c, -sign * n.x);
+    b = vec3(c, sign + n.y * n.y * a, -n.y);
+}
+
+/* ---- Environment / sky ---- */
+/* Cheap analytic sky: vertical gradient from horizon (warm) to
+ * zenith (cool). Half-intensity so it doesn't dominate emissives. */
+vec3 sampleSky(vec3 dir) {
+    float t = clamp(0.5 + 0.5 * dir.y, 0.0, 1.0);
+    return mix(vec3(0.45, 0.55, 0.72), vec3(0.85, 0.88, 0.95), t) * 0.5;
+}
+
+/* ---- Main ---- */
+void main() {
+    const uvec2 pixel = gl_LaunchIDEXT.xy;
+    const uvec2 size  = gl_LaunchSizeEXT.xy;
+    const uint  frameIdx = uint(pc.params.x);
+
+    /* Orthographic camera over the GBA playfield (240×160 world
+     * units). Camera at z=-1.0, looking +z. Each launch ID maps 1:1
+     * to a swapchain pixel; the trace's world coords are scaled from
+     * the launch ratio. */
+    vec2 uvPix   = (vec2(pixel) + 0.5) / vec2(size);
+    vec2 worldXY = uvPix * vec2(240.0, 160.0);
+
+    vec3 sampleAccum = vec3(0.0);
+
+    for (int s = 0; s < kSamplesPerPixel; ++s) {
+        seedRng(pixel, frameIdx, uint(s));
+
+        /* Optional sub-pixel jitter for anti-aliasing. Keep it small
+         * so the pixel-art aesthetic isn't smeared. */
+        vec2 jitter = vec2(rand(), rand()) - 0.5;
+        vec2 origXY = worldXY + jitter * (vec2(240.0, 160.0) / vec2(size));
+
+        vec3 rayOrigin = vec3(origXY, -1.0);
+        vec3 rayDir    = vec3(0.0, 0.0, 1.0);
+
+        vec3 radiance   = vec3(0.0);
+        vec3 throughput = vec3(1.0);
+
+        for (int bounce = 0; bounce < kMaxBounces; ++bounce) {
+            /* Clear the payload before each trace — the rchit fills
+             * it, the miss leaves hitDistance < 0. */
+            payload.radiance      = vec3(0.0);
+            payload.albedo        = vec3(0.0);
+            payload.hitPos        = vec3(0.0);
+            payload.normal        = vec3(0.0, 0.0, -1.0);
+            payload.hitDistance   = -1.0;
+            payload.materialFlags = 0u;
+            payload.scatterDir    = vec3(0.0);
+
+            traceRayEXT(
+                topLevelAS,
+                gl_RayFlagsOpaqueEXT,
+                0xFF, 0, 0, 0,
+                rayOrigin, kRayEpsilon, rayDir, kInf, 0
+            );
+
+            if (payload.hitDistance < 0.0) {
+                /* Miss — add sky contribution and terminate. */
+                radiance += throughput * sampleSky(rayDir);
+                break;
+            }
+
+            /* Accumulate this hit's emissive into the path's total
+             * radiance, modulated by the chain of albedo bounces so
+             * far. */
+            radiance += throughput * payload.radiance;
+
+            /* Lambertian throughput update. PDF cancels with the
+             * cosine term (cosine-weighted sampling below), so the
+             * BRDF reduces to albedo / 1.0. */
+            throughput *= payload.albedo;
+
+            /* Russian roulette — terminate paths with negligible
+             * remaining throughput probabilistically rather than at
+             * fixed depth. Skip on bounce 0 so we always get at
+             * least direct lighting. */
+            if (bounce > 0) {
+                float p = max(throughput.r, max(throughput.g, throughput.b));
+                p = clamp(p, 0.05, 0.95);
+                if (rand() > p) break;
+                throughput /= p;
+            }
+
+            /* Translucent forward-scatter: a fraction of energy
+             * continues in the incoming direction (like sunlight
+             * through a leaf). We split here: the *current* bounce
+             * already accumulated the emissive; for the next, take
+             * the rchit's pre-computed scatterDir instead of a
+             * cosine-weighted reflection. */
+            if ((payload.materialFlags & kMaterialTranslucent) != 0u) {
+                /* Half the energy goes forward, half scatters
+                 * diffusely (cosine hemisphere). For the prototype
+                 * we just pick one branch by RNG; an unbiased path
+                 * tracer would split and sum both. */
+                if (rand() < 0.5) {
+                    rayOrigin = payload.hitPos + payload.scatterDir * kRayEpsilon;
+                    rayDir    = payload.scatterDir;
+                    /* Tint the throughput with a slight wavelength-
+                     * dependent attenuation to fake sub-surface
+                     * absorption. */
+                    throughput *= vec3(0.95, 1.05, 0.85);
+                    continue;
+                }
+                /* else fall through to diffuse bounce below. */
+            }
+
+            /* Cosine-weighted diffuse bounce. */
+            vec3 t, b;
+            buildTangentFrame(payload.normal, t, b);
+            vec3 local = cosineSampleHemisphere(rand(), rand());
+            rayDir     = normalize(local.x * t + local.y * b + local.z * payload.normal);
+            rayOrigin  = payload.hitPos + payload.normal * kRayEpsilon;
+        }
+
+        sampleAccum += radiance;
+    }
+
+    sampleAccum /= float(kSamplesPerPixel);
+
+    /* Progressive accumulation: blend this frame's sample into the
+     * running mean stored in accumImage. params.w == 1.0 indicates
+     * the caller wants a reset (scene changed); otherwise the mean
+     * window grows by one frame. */
+    vec3 accum;
+    if (pc.params.w > 0.5) {
+        accum = sampleAccum;
+    } else {
+        vec3 prev = imageLoad(accumImage, ivec2(pixel)).rgb;
+        float n   = float(frameIdx) + 1.0;
+        accum     = mix(prev, sampleAccum, 1.0 / n);
+    }
+    imageStore(accumImage, ivec2(pixel), vec4(accum, 1.0));
+
+    /* Reinhard tonemap + exposure to LDR. Exposure default = 1 when
+     * the caller doesn't push a value. */
+    float exposure = pc.params.z > 0.0 ? pc.params.z : 1.0;
+    vec3  tonemap  = (accum * exposure) / (accum * exposure + vec3(1.0));
+    imageStore(outputImage, ivec2(pixel), vec4(tonemap, 1.0));
+}
