@@ -560,7 +560,15 @@ static const char* kVertexHeader = R"GLSL(#version 450
  * first declared name, 1 for the second, etc.). */
 #define COMPAT_TEXTURE   texture
 #define COMPAT_PRECISION
-layout(set = 3, binding = 0) uniform LibretroUniforms {
+/* SDL_GPU SPIR-V binding convention places VERTEX uniform buffers at
+ * descriptor set 1 (and fragment uniform buffers at set 3). Using
+ * set=3 here would read garbage from a fragment-stage slot — making
+ * every vertex-stage uniform read in libretro shaders (OutputSize,
+ * TextureSize, etc.) come back uninitialised. That's silent on most
+ * passthrough shaders but catastrophic on anything that does math in
+ * the vertex stage (CRT-Geom's mod_factor / one / stretch precompute,
+ * crt-easymode's sample-grid offsets, etc.). */
+layout(set = 1, binding = 0) uniform LibretroUniforms {
     vec2  OutputSize;
     vec2  TextureSize;
     vec2  InputSize;
@@ -569,6 +577,10 @@ layout(set = 3, binding = 0) uniform LibretroUniforms {
     vec2  OriginalSize;
     vec2  FinalViewportSize;
 } u;
+/* Same set convention applies to the per-pass ShaderParams block —
+ * vertex uses set 1, fragment uses set 3. The param_block_decl
+ * (emitted by the preprocessor) refers to _GLSLP_PARAMS_SET. */
+#define _GLSLP_PARAMS_SET 1
 #define MVPMatrix (mat4(1.0))
 /* Vertex-stage `#define` aliases mirror the fragment header so
  * libretro shaders that reference these names directly (without
@@ -580,6 +592,30 @@ layout(set = 3, binding = 0) uniform LibretroUniforms {
 #define FrameDirection    u.FrameDirection
 #define OriginalSize      u.OriginalSize
 #define FinalViewportSize u.FinalViewportSize
+/* The runtime draws a 4-vertex triangle strip without any vertex
+ * buffer. The libretro vertex-shader convention is `in vec4 VertexCoord;`
+ * for clip-space position and `in vec4 TexCoord;` for UVs — both of
+ * which would be uninitialised garbage here. Synthesise them from
+ * gl_VertexIndex: bit 0 = right/left, bit 1 = top/bottom. The
+ * RewriteVaryingDecls pass strips the matching attribute declarations
+ * from the source so these macros don't collide. */
+vec4 _glslp_vertex_coord() {
+    return vec4(
+        (gl_VertexIndex & 1) == 0 ? -1.0 :  1.0,
+        (gl_VertexIndex & 2) == 0 ? -1.0 :  1.0,
+        0.0, 1.0);
+}
+vec4 _glslp_tex_coord() {
+    return vec4(
+        (gl_VertexIndex & 1) == 0 ?  0.0 :  1.0,
+        (gl_VertexIndex & 2) == 0 ?  1.0 :  0.0,
+        0.0, 0.0);
+}
+#define VertexCoord  _glslp_vertex_coord()
+#define TexCoord     _glslp_tex_coord()
+#define COLOR        vec4(1.0)
+#define LUTTexCoord  _glslp_tex_coord()
+#define LUT_TexCoord _glslp_tex_coord()
 )GLSL";
 
 static const char* kFragmentHeader = R"GLSL(#version 450
@@ -598,6 +634,9 @@ layout(set = 3, binding = 0) uniform LibretroUniforms {
     vec2  OriginalSize;
     vec2  FinalViewportSize;
 } u;
+/* Same set convention as kVertexHeader, but fragment uniforms live at
+ * set 3. The shared param_block_decl below references _GLSLP_PARAMS_SET. */
+#define _GLSLP_PARAMS_SET 3
 layout(location = 0) out vec4 _FragColor;
 #define gl_FragColor _FragColor
 #define OutputSize        u.OutputSize
@@ -830,6 +869,28 @@ static void RewriteVaryingDecls(std::string& s,
             size_t sp = body.find_last_of(" \t");
             if (sp != std::string::npos) {
                 std::string name = body.substr(sp + 1);
+                const bool is_input = !isVertex || (*keyword == "COMPAT_ATTRIBUTE")
+                                                 || (*keyword == "attribute");
+                /* Vertex-stage attribute inputs: libretro convention is
+                 * to read position/UV from `VertexCoord` / `TexCoord` /
+                 * `COLOR` / `LUT_TexCoord` (and possibly numbered
+                 * variants). We don't bind a vertex buffer — the runtime
+                 * draws a 4-vertex strip with gl_VertexIndex only — so
+                 * these inputs would be all-zero. Instead, the vertex
+                 * header defines them as macros that return values
+                 * derived from gl_VertexIndex. Strip the declaration
+                 * here so it doesn't conflict. */
+                if (isVertex && is_input) {
+                    static const char* kSynthesised[] = {
+                        "VertexCoord", "TexCoord", "COLOR",
+                        "LUTTexCoord", "LUT_TexCoord",
+                    };
+                    bool synth = false;
+                    for (const char* n : kSynthesised) {
+                        if (name == n) { synth = true; break; }
+                    }
+                    if (synth) continue;  /* drop the declaration */
+                }
                 int loc;
                 auto it = varying_map.find(name);
                 if (it == varying_map.end()) {
@@ -838,8 +899,6 @@ static void RewriteVaryingDecls(std::string& s,
                 } else {
                     loc = it->second;
                 }
-                const bool is_input = !isVertex || (*keyword == "COMPAT_ATTRIBUTE")
-                                                 || (*keyword == "attribute");
                 char prefix[64];
                 std::snprintf(prefix, sizeof(prefix),
                               "layout(location = %d) %s ", loc,
@@ -937,7 +996,7 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
      * don't link cleanly until a future stage adds them properly. */
     std::string param_block_decl;
     if (!out.parameters.empty()) {
-        param_block_decl = "layout(set = 3, binding = 1) uniform ShaderParams {\n";
+        param_block_decl = "layout(set = _GLSLP_PARAMS_SET, binding = 1) uniform ShaderParams {\n";
         for (const auto& p : out.parameters) {
             param_block_decl += "    float " + p.id + ";\n";
         }

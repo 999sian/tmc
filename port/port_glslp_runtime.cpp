@@ -355,7 +355,7 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
         vci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
         vci.stage                = SDL_GPU_SHADERSTAGE_VERTEX;
         vci.num_samplers         = 0;
-        vci.num_uniform_buffers  = 1;  /* LibretroUniforms */
+        vci.num_uniform_buffers  = p.params.empty() ? 1 : 2;  /* LibretroUniforms (+ ShaderParams) */
         p.vertex_shader = SDL_CreateGPUShader(g_runtime.device, &vci);
 
         SDL_GPUShaderCreateInfo fci = {};
@@ -517,19 +517,23 @@ extern "C" void Port_GlslpRuntime_Unload(void) {
 
 #ifdef TMC_GPU_RENDERER
 /* Per-frame uniform data matching the LibretroUniforms block in
- * the preprocessor's stage headers. std140 layout: each vec2 takes
- * 8 bytes but aligns to 16 in mixed-types blocks. We use the simple
- * "pad to 16-byte aligned" layout to match the block declaration. */
+ * the preprocessor's stage headers. std140 layout: vec2 has base
+ * alignment 8 (rule 2: 2N) AND size 8 — it does NOT pad to 16.
+ * Only vec3 has the "stored as 12, aligned as 16" weirdness.
+ * Verified with `spirv-dis`: glslang emits Offsets 0, 8, 16, 24, 28,
+ * 32, 40 — tightly packed 8-byte vec2 + 4-byte int/uint slots. Total
+ * size: 48 bytes. */
 struct LibretroUniformsPacked {
-    float OutputSize[4];        /* xy = (w, h), zw = unused (std140 pad) */
-    float TextureSize[4];
-    float InputSize[4];
-    uint32_t FrameCount;
-    int32_t  FrameDirection;
-    float    _pad_a[2];
-    float OriginalSize[4];
-    float FinalViewportSize[4];
+    float    OutputSize[2];        /* offset 0  — vec2 */
+    float    TextureSize[2];       /* offset 8  — vec2 */
+    float    InputSize[2];         /* offset 16 — vec2 */
+    uint32_t FrameCount;           /* offset 24 — uint */
+    int32_t  FrameDirection;       /* offset 28 — int */
+    float    OriginalSize[2];      /* offset 32 — vec2 */
+    float    FinalViewportSize[2]; /* offset 40 — vec2 */
 };
+static_assert(sizeof(LibretroUniformsPacked) == 48,
+              "std140 layout mismatch — must be 48 bytes");
 
 /* Step 5 present — walks every pass in the loaded preset. Source for
  * pass 0 is `src_texture` (the GBA framebuffer); for pass i > 0 it's
@@ -814,20 +818,28 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
          * preset's overrides and fall back to the parameter's
          * compiled-in default.
          *
-         * std140 layout: each float in a uniform block gets a vec4
-         * slot (16-byte aligned). Pad accordingly. */
+         * std140 layout: a UB of plain floats packs tightly (4-byte
+         * stride). The earlier "each float gets a vec4 slot" comment
+         * was wrong — that rule only kicks in for vec3 and arrays.
+         * Confirmed via spirv-dis: glslang emits Offset 0,4,8,12,...
+         * for CRT-Geom's 18 sequential floats. */
         if (!p.params.empty()) {
             const size_t n = p.params.size();
-            std::vector<float> padded(n * 4, 0.0f);
+            std::vector<float> packed(n, 0.0f);
             for (size_t k = 0; k < n; ++k) {
                 float v = p.params[k].default_value;
                 for (const auto& pp : g_runtime.preset.parameters) {
                     if (pp.id == p.params[k].id) { v = pp.current_value; break; }
                 }
-                padded[k * 4] = v;
+                packed[k] = v;
             }
-            SDL_PushGPUFragmentUniformData(cmd, 1, padded.data(),
-                                            (Uint32)(padded.size() * sizeof(float)));
+            SDL_PushGPUFragmentUniformData(cmd, 1, packed.data(),
+                                            (Uint32)(packed.size() * sizeof(float)));
+            /* Vertex stage also needs the params — libretro vertex
+             * shaders precompute things like CRT-Geom's stretch / one /
+             * mod_factor that use #pragma-parameter knobs. */
+            SDL_PushGPUVertexUniformData(cmd, 1, packed.data(),
+                                          (Uint32)(packed.size() * sizeof(float)));
         }
 
         SDL_DrawGPUPrimitives(rp, 4, 1, 0, 0);
