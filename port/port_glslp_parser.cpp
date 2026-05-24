@@ -553,12 +553,10 @@ static const char* kVertexHeader = R"GLSL(#version 450
  * actually appears in the output. Harmless when the shader uses
  * #pragma stage markers instead. */
 #define VERTEX
-/* COMPAT_* macros — the source's own #define versions are stripped
- * by StripLibretroDefines so ours win. SPIR-V layout decorators are
- * baked in here so the resulting `COMPAT_VARYING vec2 TEX0;` becomes
- * `layout(location = 0) out vec2 TEX0;` etc. */
-#define COMPAT_VARYING   layout(location = 0) out
-#define COMPAT_ATTRIBUTE layout(location = 0) in
+/* Only the non-varying COMPAT_* macros stay as #defines. COMPAT_VARYING
+ * and COMPAT_ATTRIBUTE are rewritten per-line by RewriteVaryingDecls
+ * with sequential layout(location = N) decorators (location 0 for the
+ * first declared name, 1 for the second, etc.). */
 #define COMPAT_TEXTURE   texture
 #define COMPAT_PRECISION
 layout(set = 3, binding = 0) uniform LibretroUniforms {
@@ -571,12 +569,21 @@ layout(set = 3, binding = 0) uniform LibretroUniforms {
     vec2  FinalViewportSize;
 } u;
 #define MVPMatrix (mat4(1.0))
+/* Vertex-stage `#define` aliases mirror the fragment header so
+ * libretro shaders that reference these names directly (without
+ * the `u.` prefix) compile in both stages. */
+#define OutputSize        u.OutputSize
+#define TextureSize       u.TextureSize
+#define InputSize         u.InputSize
+#define FrameCount        int(u.FrameCount)
+#define FrameDirection    u.FrameDirection
+#define OriginalSize      u.OriginalSize
+#define FinalViewportSize u.FinalViewportSize
 )GLSL";
 
 static const char* kFragmentHeader = R"GLSL(#version 450
 #define PARAMETER_UNIFORM
 #define FRAGMENT
-#define COMPAT_VARYING   layout(location = 0) in
 #define COMPAT_TEXTURE   texture
 #define COMPAT_PRECISION
 #define FragColor _FragColor
@@ -607,9 +614,10 @@ layout(location = 0) out vec4 _FragColor;
  * via __VERSION__ gates; we always emit GLSL 450 so a single
  * substitution per macro suffices.
  *
- * Without this strip, ReplaceAll-style textual substitution would
- * corrupt the source's own `#define COMPAT_VARYING out` lines
- * (turning them into `#define <substitution> out`, a parse error). */
+ * Also drop the source's own output declaration `out vec4 FragColor;`
+ * (modern-GLSL branch in many libretro fragment shaders) — our
+ * header declares `_FragColor` at location=0 and #defines FragColor
+ * → _FragColor, so the source's declaration would be a double-decl. */
 static void StripLibretroDefines(std::string& s) {
     std::string scrubbed;
     scrubbed.reserve(s.size());
@@ -619,7 +627,6 @@ static void StripLibretroDefines(std::string& s) {
         if (!ln.empty() && ln.back() == '\r') ln.pop_back();
         std::string tr = Trim(ln);
         if (tr.compare(0, 8, "#define ") == 0) {
-            /* Pull the macro name (token immediately after `#define `). */
             size_t p = 8;
             while (p < tr.size() && std::isspace((unsigned char)tr[p])) ++p;
             size_t name_start = p;
@@ -629,6 +636,77 @@ static void StripLibretroDefines(std::string& s) {
                 || name == "COMPAT_TEXTURE" || name == "COMPAT_PRECISION"
                 || name == "FragColor") {
                 continue;  /* drop — header redefines */
+            }
+        }
+        /* Drop `out vec4 FragColor;` / `out vec3 FragColor;` etc. The
+         * declaration appears in libretro shaders' modern-GLSL branch;
+         * our header provides _FragColor at location=0. */
+        if (tr.size() > 4 && tr.compare(0, 4, "out ") == 0
+            && tr.find("FragColor") != std::string::npos) {
+            continue;
+        }
+        scrubbed += ln; scrubbed += '\n';
+    }
+    s = std::move(scrubbed);
+}
+
+/* Rewrite `COMPAT_VARYING <type> <name>;` and `COMPAT_ATTRIBUTE <type>
+ * <name>;` declarations with explicit `layout(location = N) <out|in>`
+ * decorators. Each name gets a sequential location based on first
+ * occurrence in the source; same name in vertex and fragment maps
+ * to the same location so the linker matches them up.
+ *
+ * Caller passes the SAME varying_map across both stage rewrites so
+ * locations stay synchronised. The map records the first-seen
+ * location for each name; subsequent appearances reuse it (the
+ * source may declare a varying in both `#if defined(VERTEX)` and
+ * `#if defined(FRAGMENT)` branches with the same name). */
+static void RewriteVaryingDecls(std::string& s,
+                                std::map<std::string, int>& varying_map,
+                                bool isVertex) {
+    std::string scrubbed;
+    scrubbed.reserve(s.size());
+    std::istringstream rs(s);
+    std::string ln;
+    while (std::getline(rs, ln)) {
+        if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+        std::string tr = Trim(ln);
+        const std::string* keyword = nullptr;
+        size_t kw_len = 0;
+        if (tr.compare(0, 15, "COMPAT_VARYING ") == 0)        { static const std::string k = "COMPAT_VARYING";   keyword = &k; kw_len = 14; }
+        else if (tr.compare(0, 17, "COMPAT_ATTRIBUTE ") == 0) { static const std::string k = "COMPAT_ATTRIBUTE"; keyword = &k; kw_len = 16; }
+        else if (tr.compare(0,  8, "varying ") == 0)          { static const std::string k = "varying";          keyword = &k; kw_len = 7;  }
+        else if (tr.compare(0, 10, "attribute ") == 0)        { static const std::string k = "attribute";        keyword = &k; kw_len = 9;  }
+
+        if (keyword) {
+            /* Pull <type> <name>. After the keyword + space, walk
+             * forward to find the semicolon and split. */
+            std::string rest = Trim(tr.substr(kw_len));
+            size_t sc = rest.find(';');
+            std::string body = (sc == std::string::npos) ? rest : rest.substr(0, sc);
+            /* Last whitespace-separated token of `body` is the
+             * variable name. */
+            size_t sp = body.find_last_of(" \t");
+            if (sp != std::string::npos) {
+                std::string name = body.substr(sp + 1);
+                int loc;
+                auto it = varying_map.find(name);
+                if (it == varying_map.end()) {
+                    loc = (int)varying_map.size();
+                    varying_map.emplace(name, loc);
+                } else {
+                    loc = it->second;
+                }
+                const bool is_input = !isVertex || (*keyword == "COMPAT_ATTRIBUTE")
+                                                 || (*keyword == "attribute");
+                char prefix[64];
+                std::snprintf(prefix, sizeof(prefix),
+                              "layout(location = %d) %s ", loc,
+                              is_input ? "in" : "out");
+                scrubbed += prefix;
+                scrubbed += body;
+                scrubbed += ";\n";
+                continue;
             }
         }
         scrubbed += ln; scrubbed += '\n';
@@ -907,6 +985,15 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
      * header-supplied ones win. */
     StripLibretroDefines(out.vertex_glsl);
     StripLibretroDefines(out.fragment_glsl);
+
+    /* Rewrite COMPAT_VARYING / COMPAT_ATTRIBUTE / varying / attribute
+     * declarations with sequential layout(location = N) decorators.
+     * Use a SHARED map so each name gets the same location in both
+     * stages — required for the linker to match vertex outputs to
+     * fragment inputs. */
+    std::map<std::string, int> varying_map;
+    RewriteVaryingDecls(out.vertex_glsl,   varying_map, /*isVertex=*/true);
+    RewriteVaryingDecls(out.fragment_glsl, varying_map, /*isVertex=*/false);
 
     return out;
 }
