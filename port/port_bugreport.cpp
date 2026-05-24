@@ -543,7 +543,31 @@ void CrashHandlerPosix(int sig, siginfo_t* info, void* ucontext) {
     if (dir) {
         WriteBacktracePosix(std::filesystem::path(dir) / "backtrace.txt",
                             regs, fault_addr);
+        /* Print the absolute path so the user knows where to find
+         * the bundle. The process is about to die — no toast UI will
+         * survive — so use stderr (visible when launched from a
+         * terminal) plus SDL_ShowSimpleMessageBox (best-effort: not
+         * async-signal-safe, but worth trying — if it works the user
+         * sees a popup before the window closes). */
+        char abs[4096];
+        const char* shown = realpath(dir, abs) ? abs : dir;
+        std::fprintf(stderr, "\n[BUG] CRASH (%s) — bundle saved to:\n    %s\n",
+                     SignalName(sig), shown);
+        std::fflush(stderr);
+        char msg[8192];
+        std::snprintf(msg, sizeof(msg),
+            "The game crashed (%s).\n\n"
+            "A bug report bundle was saved to:\n%s\n\n"
+            "Please attach this folder when filing a GitHub issue.",
+            SignalName(sig), shown);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                                 "Minish Cap — Crash",
+                                 msg, nullptr);
         std::free(dir);
+    } else {
+        std::fprintf(stderr, "[BUG] CRASH (%s) but bug-report capture FAILED.\n",
+                     SignalName(sig));
+        std::fflush(stderr);
     }
 
     /* SA_RESETHAND was set during installation, so the next delivery uses
