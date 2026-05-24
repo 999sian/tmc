@@ -404,13 +404,21 @@ static void DrawRibbonDisplayTab(void) {
             if (ImGui::BeginListBox("##preset_list",
                     ImVec2(420, ImGui::GetTextLineHeightWithSpacing() * 8))) {
                 for (size_t i = 0; i < sPresetPaths.size(); ++i) {
-                    bool selected = (sPresetPaths[i] == sActivePreset);
+                    bool selected = (sPresetPaths[i] == sActivePreset)
+                                    && Port_GlslpRuntime_IsActive();
                     /* Short display name — strip the leading directory
                      * components so the user sees the .glslp filename. */
                     std::string label = std::filesystem::path(sPresetPaths[i]).filename().string();
                     label += "    "; label += sPresetPaths[i];
                     if (ImGui::Selectable(label.c_str(), selected)) {
-                        if (Port_GlslpRuntime_Load(sPresetPaths[i].c_str())) {
+                        if (selected) {
+                            /* Click on the currently-active row again →
+                             * toggle off and return to the stock GPU
+                             * filter pipeline. */
+                            Port_GlslpRuntime_Unload();
+                            sActivePreset.clear();
+                            Port_DebugMenu_ToastFromExternal("Shader preset off");
+                        } else if (Port_GlslpRuntime_Load(sPresetPaths[i].c_str())) {
                             sActivePreset = sPresetPaths[i];
                             Port_DebugMenu_ToastFromExternal("Preset loaded");
                         } else {
