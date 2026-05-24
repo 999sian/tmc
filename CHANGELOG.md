@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.1-experimental — 2026-05-24
+
+Bug-fix release covering five issue-tracker reports + a packet of
+quality-of-life features (renderer backend picker, auto-save,
+quit-save confirm, F8 audio tab, profile management).
+
+### Fixed (issue tracker)
+
+- **#131 Deepwood Shrine: missing barrel textures after pause-menu close.** Closing the pause menu while standing inside a barrel left `RollingBarrelManager` un-reinitialised, so the barrel sprites' GFX slots were never re-claimed. `Subtask_FadeOut` → `RestoreGameTask` now re-runs `RollingBarrelManager_OnEnterRoom()` when the barrel-update path is the resumed task. Confirmed both Linux and Wine/Windows builds. (commit `2b07478d`)
+- **#128 Hyrule Town: minish doors disappear after first walk-through; house signs disappear after scrolling off-screen.** Both bugs in the same family — a manager subclass declared an `unk_20` field meant to alias `EntityManager::field_0x20` (the per-instance "active door slots" bitmask).  On GBA the 4-byte Entity::zVelocity at offset 0x20 was reused as the manager's field; on PC the pointer-widened Entity shifts that slot, and the door's `parent->zVelocity & mask` read goes to actual zVelocity (always 0) so doors always delete themselves. Replaced the alias with a direct cast to the manager subclass, reading the real `field_0x20` / `bitfield` slot. Same pattern applied to `houseSign.c`. (commits `41c77124`, `f47e8470`)
+- **#129 Hyrule Castle Garden: post-takeover knights stand still.** The non-scripted patrol guards' movement script lives in `gUnk_0810F6BC[type]`, a 6-entry packed-pointer table.  `Port_ReadPackedRomPtr` was rejecting it because the table sits in PC `.rodata` (`data_const_stubs.c` defines it as `const u8[920]` copied verbatim from ROM 0x10F6BC) rather than inside the `gRomData` mmap. The base-bounds gate said "outside gRomData, reject" and `sub_0806EE04` got `child=NULL`, so the per-tick `RunScript` found no script to execute and the guards never moved. Loosened the gate: still bounds-validate when base is in gRomData, but accept PC stubs and trust the caller. Movement script loads, guards patrol. (commit `2f2fdbc2`)
+- **#101 Temple of Droplets: Scissors Beetle crash when defeated with detached mandibles (follow-up).** `8d5e0066f` already guarded `sub_08038C2C` but the underlying mandibles projectile has three more parent/child deref sites that crash in the same scenario.  Added NULL guards to `MandiblesProjectile` dispatch (line 48 `entity->confusedTime` after both child + parent fall through NULL), `sub_080AA270` (parent-anim-state read), and `OnCollision` default case (parent iframes/knockback writes).  Guarded with `#ifdef PC_PORT` so the GBA path is byte-identical. (commit `438e4bf1`)
+- **#110 \[FATAL\] palette group N not found — startup abort on Arch Linux.** Title screen tries to load palette group 2 (Japanese title intro) when `gSaveHeader->language != 0`. When the user's setup didn't extract the non-English palette files — or has a tmc.sav from a non-English session — the abort kills the engine before file-select. Engine-level fallback: a missing palette group N now tries the canonical English-equivalent (2 → 1, 4 → 3) before aborting, with a one-shot warning.  Title colours may be slightly off in the rare case the user genuinely wanted a non-English palette, but the game boots. The `7a7fd0c1` asset-environment dump is still emitted if neither group resolves. (commit `b05039e3`)
+- **#78 Wind Ruins wizards (follow-up).** After `8d5e0066f` fixed the divide-by-zero crash, JesterWizard / linkdedo reported the wizards "appear out of bounds" — the teleport do-while picked random positions in `[homeX, homeX + rangeX*8)` and accepted any walkable tile, including ones outside the room (OOB tiles return non-collision from asset-load fallback).  Now: reject candidates outside `gRoomControls.{origin_x..origin_x+width, origin_y..origin_y+height}` and cap iterations at 64 so the loop can't infinite-spin on unlucky rooms. (commit `924967d3`)
+
+### Quality of life
+
+- **F8 → renderer backend picker** (Auto / Software / GPU).  Software stays the default; users with broken SDL_GPU drivers (Wayland surface conflicts in particular) can pin Software at startup without env-var fiddling. (commit `9eca4567`)
+- **F8 → Audio tab with per-category SFX mutes** — mute Link's footsteps, sword swings, item pickups, etc. independently while keeping BGM. (commit `510e4721`)
+- **F8 → Profiles tab: rename + delete soft slots.** (commit `467faf91`)
+- **Auto-save on area / room change** — eliminates "I forgot to save" loss on crash. Quick-save-style soft slot is rotated every transition. (commit `7247a18e`)
+- **Quit-save confirm modal on window close.** Asks before discarding unsaved progress when you Alt-F4 / close the window. (commit `6c7e9972`)
+- **GPU backend parity with Software backend** — aspect ratio, bg fill, soft-slot overlay, internal render scale all now work on the SDL_GPU path. (commits `91283475`, `7d97af48`)
+
+### Defensive / hardening (no specific issue)
+
+- **#131-class crash hardening: defensive `UnlinkEntity` guards against half-pointer prev/next.** Rupee LikeLike crash showed `prev = 0x555511113333` (decompressed 32-bit-half written into 64-bit field).  `UnlinkEntity` now NULL-tests `ent->prev` / `ent->next` before dereferencing them and logs once if the pointer fails the user-space-address range check. Quiet on the GBA path, defensive guard on PC. (commit `265c2a5f`)
+- **gSpritePtrs runtime-extend beyond 329-entry compile-time cap.** Sprite-pointer indices > 329 used to fall off the end of `port_asset_index.c`'s lookup table; runtime now walks the ROM table directly past that index until it hits the 0-sentinel.  Lays groundwork for #127-class "sprite present but invisible". (commit `fcb5b57c`)
+
+### Notes on the Vulkan RT experiment
+
+The `port/vk_rt_experiment/` standalone Vulkan ray tracing demo gained
+slices 4–13 this release (sprite plane, multi-bounce GI, point lights,
+a-trous denoiser, water reflections, material variety, animated water,
+volumetric fog, bloom + dither, perf pass).  It's still a separate
+binary, not linked into `tmc_pc` — it consumes `/dev/shm/tmc_framebuffer`
+when `tmc_pc` is started with `TMC_PUBLISH_FRAMEBUFFER=1`. No change to
+normal end-user behaviour.
+
 ## 0.3.0-experimental — 2026-05-23
 
 Boss-room crash sweep across Temple of Droplets, Discord Rich Presence
