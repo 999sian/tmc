@@ -1515,6 +1515,47 @@ extern "C" bool Port_ImGui_Render(void) {
     }
     sPrevMenuOpen = menuOpen;
 
+    /* Soft-slot config overlay — replaces the SDL_Renderer-only popup
+     * from port_softslots.c with an ImGui equivalent so it works on
+     * both backends (the GPU path has no SDL_Renderer to draw the
+     * legacy version into). Centered modal-style window; closes via
+     * Enter/Escape, which Port_SoftSlots_HandleConfigKey already
+     * handles independently. */
+    extern bool Port_SoftSlots_ConfigIsOpen(void);
+    extern const char* Port_SoftSlots_GetSlotLabel(int slot);
+    extern void Port_SoftSlots_CycleAssignment(int slot, int direction);
+    extern void Port_SoftSlots_ConfigClose(void);
+    if (Port_SoftSlots_ConfigIsOpen()) {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(
+            ImVec2(vp->Pos.x + vp->Size.x * 0.5f,
+                   vp->Pos.y + vp->Size.y * 0.5f),
+            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(380, 0));
+        if (ImGui::Begin("##softslot_config", nullptr,
+                         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
+                         ImGuiWindowFlags_NoSavedSettings)) {
+            ImGui::TextColored(ImVec4(0.78f, 0.86f, 1.0f, 1.0f), "EXTRA EQUIP SLOTS");
+            ImGui::Separator();
+            for (int s = 0; s < 4; ++s) {
+                ImGui::PushID(s);
+                ImGui::Text("%s", Port_SoftSlots_GetSlotLabel(s));
+                ImGui::SameLine(260.0f);
+                if (ImGui::Button("<")) Port_SoftSlots_CycleAssignment(s, -1);
+                ImGui::SameLine();
+                if (ImGui::Button(">")) Port_SoftSlots_CycleAssignment(s, +1);
+                ImGui::PopID();
+            }
+            ImGui::Separator();
+            ImGui::TextDisabled("Up/Down pick   Left/Right cycle   Enter/Esc done");
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape) || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
+                Port_SoftSlots_ConfigClose();
+            }
+        }
+        ImGui::End();
+    }
+
     /* Toast survives the menu being closed (e.g. after a warp). */
     DrawToast(Port_DebugMenu_Toast());
 

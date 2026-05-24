@@ -14,6 +14,7 @@
  */
 
 #include "port_gpu_renderer.h"
+#include "port_runtime_config.h"
 
 #ifndef TMC_GPU_RENDERER
 
@@ -561,47 +562,116 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
      * the letterbox / pillarbox bars; the game quad draws inside the
      * viewport. ImGui RenderDrawData runs with the viewport reset to
      * the full swapchain so the menu can use the entire window. */
+    /* Clear color picks up the user's bg-fill choice when the aspect
+     * mode adds pillarbox bars. Black for BLACK / unsupported modes;
+     * persisted RGB for SOLID_COLOR. BLURRED_FRAME isn't implemented
+     * on the GPU path yet — falls back to black. */
+    SDL_FColor clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    {
+        const PortBgFill bf = Port_Config_BgFill();
+        if (bf == PORT_BG_FILL_SOLID_COLOR) {
+            uint8_t r = 0, g = 0, b = 0;
+            Port_Config_BgFillColor(&r, &g, &b);
+            clearColor.r = (float)r / 255.0f;
+            clearColor.g = (float)g / 255.0f;
+            clearColor.b = (float)b / 255.0f;
+        }
+    }
     SDL_GPUColorTargetInfo color = {};
     color.texture     = swap_tex;
-    color.clear_color = SDL_FColor{0.0f, 0.0f, 0.0f, 1.0f};
+    color.clear_color = clearColor;
     color.load_op     = SDL_GPU_LOADOP_CLEAR;
     color.store_op    = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
 
-    /* Aspect-preserving viewport — same math as
-     * port_ppu.cpp::Port_PPU_FitAspectRect for the SDL_Renderer path.
-     * Source aspect uses the runtime fb size (which equals
-     * MODE1_GBA_WIDTH × MODE1_GBA_HEIGHT for now; future internal-scale
-     * or widescreen modes feed a bigger source through here too). */
+    /* Aspect-preserving viewport — mirrors Port_PPU_ComputeViewportRects
+     * for the SDL_Renderer path. Two stages:
+     *   1. Stage rect: aspect-mode chosen area (16:9 / 21:9 / 32:9 /
+     *      native 3:2).
+     *   2. Frame rect: GBA 3:2 fitted inside the stage.
+     * Outside the stage is the clear color (black or bg-fill solid
+     * RGB above). Between stage and frame is the pillarbox area —
+     * gets a stretched-blurred copy of the game when bg-fill ==
+     * BLURRED_FRAME. */
+    int stageX = 0, stageY = 0, stageW = (int)swap_w, stageH = (int)swap_h;
+    int frameX = 0, frameY = 0, frameW = (int)swap_w, frameH = (int)swap_h;
     {
-        const int aspW = fb_w;
-        const int aspH = fb_h;
+        const int FW = fb_w;
+        const int FH = fb_h;
+        int aspW = FW, aspH = FH;
+        const PortAspectMode mode = Port_Config_AspectMode();
+        switch (mode) {
+            case PORT_ASPECT_WIDESCREEN_16_9:      aspW = 16; aspH = 9; break;
+            case PORT_ASPECT_ULTRAWIDE_21_9:       aspW = 21; aspH = 9; break;
+            case PORT_ASPECT_SUPER_ULTRAWIDE_32_9: aspW = 32; aspH = 9; break;
+            case PORT_ASPECT_NATIVE_3_2:
+            default:                                aspW = FW; aspH = FH; break;
+        }
         const int w = (int)swap_w;
         const int h = (int)swap_h;
-        int rw, rh;
+
         if (w * aspH >= h * aspW) {
-            rh = h;
-            rw = (h * aspW) / aspH;
+            stageH = h;
+            stageW = (h * aspW) / aspH;
         } else {
-            rw = w;
-            rh = (w * aspH) / aspW;
+            stageW = w;
+            stageH = (w * aspH) / aspW;
         }
+        stageX = (w - stageW) / 2;
+        stageY = (h - stageH) / 2;
+
+        if (stageW * FH >= stageH * FW) {
+            frameH = stageH;
+            frameW = (stageH * FW) / FH;
+        } else {
+            frameW = stageW;
+            frameH = (stageW * FH) / FW;
+        }
+        frameX = stageX + (stageW - frameW) / 2;
+        frameY = stageY + (stageH - frameH) / 2;
+    }
+
+    SDL_GPUTextureSamplerBinding tsb = {};
+    /* When a prepass ran, the main pass reads the blurred intermediate
+     * instead of the raw GBA framebuffer. */
+    tsb.texture = hasPrepass ? sIntermediateTex : sSourceTexture;
+    tsb.sampler = sSampler;
+
+    /* Blurred-frame backdrop: when bg fill is BLURRED_FRAME and the
+     * aspect mode adds pillarbox bars (stage > frame in either axis),
+     * draw a bilinear-stretched copy of the GBA frame across the
+     * stage area first. The passthrough pipeline (filter 0) sampling
+     * sSampler (LINEAR min/mag) gives the soft "ambient mode" halo
+     * that the SDL_Renderer path achieves via SDL_RenderTexture into
+     * the stage rect. */
+    if (Port_Config_BgFill() == PORT_BG_FILL_BLURRED_FRAME &&
+        (stageW != frameW || stageH != frameH)) {
         SDL_GPUViewport vp = {};
-        vp.x = (float)((w - rw) / 2);
-        vp.y = (float)((h - rh) / 2);
-        vp.w = (float)rw;
-        vp.h = (float)rh;
+        vp.x = (float)stageX;
+        vp.y = (float)stageY;
+        vp.w = (float)stageW;
+        vp.h = (float)stageH;
+        vp.min_depth = 0.0f;
+        vp.max_depth = 1.0f;
+        SDL_SetGPUViewport(rp, &vp);
+        SDL_BindGPUGraphicsPipeline(rp, sPipelines[PORT_GPU_FILTER_NONE]);
+        SDL_BindGPUFragmentSamplers(rp, /*first_slot=*/0, &tsb, 1);
+        SDL_DrawGPUPrimitives(rp, /*num_vertices=*/4, /*num_instances=*/1, 0, 0);
+    }
+
+    /* Sharp game frame in the inner viewport. */
+    {
+        SDL_GPUViewport vp = {};
+        vp.x = (float)frameX;
+        vp.y = (float)frameY;
+        vp.w = (float)frameW;
+        vp.h = (float)frameH;
         vp.min_depth = 0.0f;
         vp.max_depth = 1.0f;
         SDL_SetGPUViewport(rp, &vp);
     }
 
     SDL_BindGPUGraphicsPipeline(rp, sPipelines[sActiveFilter]);
-    SDL_GPUTextureSamplerBinding tsb = {};
-    /* When a prepass ran, the main pass reads the blurred intermediate
-     * instead of the raw GBA framebuffer. */
-    tsb.texture = hasPrepass ? sIntermediateTex : sSourceTexture;
-    tsb.sampler = sSampler;
     SDL_BindGPUFragmentSamplers(rp, /*first_slot=*/0, &tsb, 1);
 
     /* Push the FragParams uniform (vec2 viewport size) for any filter
@@ -612,21 +682,11 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
      * aligned. */
     if (sActiveFilter != PORT_GPU_FILTER_NONE) {
         struct { float viewport[2]; float _pad[2]; } u;
-        /* Match the fit-rect we set on the viewport so the shader's
-         * cell stride / row stride / radial centre line up with the
-         * actual draw area, not the full swapchain. */
-        const int aspW = fb_w;
-        const int aspH = fb_h;
-        const int w = (int)swap_w;
-        const int h = (int)swap_h;
-        int rw, rh;
-        if (w * aspH >= h * aspW) {
-            rh = h; rw = (h * aspW) / aspH;
-        } else {
-            rw = w; rh = (w * aspH) / aspW;
-        }
-        u.viewport[0] = (float)rw;
-        u.viewport[1] = (float)rh;
+        /* Match the frame rect we set on the viewport so the
+         * shader's cell stride / row stride / radial centre line
+         * up with the actual draw area. */
+        u.viewport[0] = (float)frameW;
+        u.viewport[1] = (float)frameH;
         u._pad[0] = u._pad[1] = 0.0f;
         SDL_PushGPUFragmentUniformData(cmd, /*slot_index=*/0, &u, sizeof(u));
     }

@@ -489,13 +489,21 @@ int main(int argc, char* argv[]) {
      * created is already attached to the window; Port_PaintBootSplash
      * fetches it via SDL_GetRenderer and presents the "LOADING" card. */
 #ifdef TMC_GPU_RENDERER
-    {
+    /* Skip GPU init entirely if the user pinned the renderer to
+     * Software in F8 — otherwise the GPU device claims the window
+     * (esp. the wayland surface) and the later SDL_Renderer create
+     * in Port_PPU_Init conflicts with it ("Surface got destroyed
+     * already" / "Wayland display connection closed by server"
+     * fatal error). Force-GPU and Auto both want the early init. */
+    if (Port_Config_RenderBackend() != PORT_RENDER_BACKEND_SOFTWARE) {
         extern bool Port_GPU_Init(SDL_Window*);
         extern bool Port_GPU_ClaimWindow(SDL_Window*, int, int);
         extern bool Port_GPU_PaintBootSplash(void);
         Port_GPU_Init(window);
         Port_GPU_ClaimWindow(window, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
         Port_GPU_PaintBootSplash();
+    } else {
+        Port_PaintBootSplash(window, "LOADING");
     }
 #else
     Port_PaintBootSplash(window, "LOADING");
