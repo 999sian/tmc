@@ -180,9 +180,10 @@ void RayTracingPipeline::createPipelineLayout() {
 }
 
 void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) {
-    std::vector<char> rgenCode = loadSpv(shaderDir + "/raygen.rgen.spv");
-    std::vector<char> rmissCode = loadSpv(shaderDir + "/miss.rmiss.spv");
-    std::vector<char> rchitCode = loadSpv(shaderDir + "/closesthit.rchit.spv");
+    std::vector<char> rgenCode      = loadSpv(shaderDir + "/raygen.rgen.spv");
+    std::vector<char> rmissCode     = loadSpv(shaderDir + "/miss.rmiss.spv");
+    std::vector<char> shadowMissCode= loadSpv(shaderDir + "/shadow.rmiss.spv");
+    std::vector<char> rchitCode     = loadSpv(shaderDir + "/closesthit.rchit.spv");
 
     auto makeModule = [this](const std::vector<char>& code) -> VkShaderModule {
         VkShaderModuleCreateInfo smci{};
@@ -194,11 +195,13 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
               "vkCreateShaderModule");
         return mod;
     };
-    VkShaderModule rgen = makeModule(rgenCode);
-    VkShaderModule rmiss = makeModule(rmissCode);
-    VkShaderModule rchit = makeModule(rchitCode);
+    VkShaderModule rgen       = makeModule(rgenCode);
+    VkShaderModule rmiss      = makeModule(rmissCode);
+    VkShaderModule shadowMiss = makeModule(shadowMissCode);
+    VkShaderModule rchit      = makeModule(rchitCode);
 
-    VkPipelineShaderStageCreateInfo stages[3]{};
+    /* Four stages: rgen=0, miss-primary=1, miss-shadow=2, rchit=3. */
+    VkPipelineShaderStageCreateInfo stages[4]{};
     stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stages[0].stage  = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
     stages[0].module = rgen;
@@ -208,79 +211,92 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
     stages[1].module = rmiss;
     stages[1].pName  = "main";
     stages[2].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    stages[2].stage  = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-    stages[2].module = rchit;
+    stages[2].stage  = VK_SHADER_STAGE_MISS_BIT_KHR;
+    stages[2].module = shadowMiss;
     stages[2].pName  = "main";
+    stages[3].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[3].stage  = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    stages[3].module = rchit;
+    stages[3].pName  = "main";
 
-    /* Three groups — rgen (general), miss (general), hit (triangles).
-     * Identity-mapped to stage indices 0/1/2. */
-    VkRayTracingShaderGroupCreateInfoKHR groups[3]{};
+    /* Four shader groups, identity-mapped to stages:
+     *   group 0: rgen (general)
+     *   group 1: primary miss (general)   — rgen's missIndex = 0
+     *   group 2: shadow miss (general)    — rchit's shadow trace missIndex = 1
+     *   group 3: hit group (triangles)    — rchit
+     * The SBT below places groups 1+2 in the miss region as
+     * consecutive records, so the missIndex argument selects which. */
+    VkRayTracingShaderGroupCreateInfoKHR groups[4]{};
     for (auto& g : groups) {
-        g.sType                            = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-        g.generalShader                    = VK_SHADER_UNUSED_KHR;
-        g.closestHitShader                 = VK_SHADER_UNUSED_KHR;
-        g.anyHitShader                     = VK_SHADER_UNUSED_KHR;
-        g.intersectionShader               = VK_SHADER_UNUSED_KHR;
+        g.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+        g.generalShader      = VK_SHADER_UNUSED_KHR;
+        g.closestHitShader   = VK_SHADER_UNUSED_KHR;
+        g.anyHitShader       = VK_SHADER_UNUSED_KHR;
+        g.intersectionShader = VK_SHADER_UNUSED_KHR;
     }
-    groups[0].type           = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    groups[0].generalShader  = 0;
-    groups[1].type           = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    groups[1].generalShader  = 1;
-    groups[2].type           = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-    groups[2].closestHitShader = 2;
+    groups[0].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    groups[0].generalShader    = 0;
+    groups[1].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    groups[1].generalShader    = 1;
+    groups[2].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    groups[2].generalShader    = 2;
+    groups[3].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+    groups[3].closestHitShader = 3;
 
     VkRayTracingPipelineCreateInfoKHR pci{};
     pci.sType                        = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
-    pci.stageCount                   = 3;
+    pci.stageCount                   = 4;
     pci.pStages                      = stages;
-    pci.groupCount                   = 3;
+    pci.groupCount                   = 4;
     pci.pGroups                      = groups;
-    /* One-bounce minimum; the closest-hit shader does emissive
-     * accumulation along a single trace, so depth=2 (primary +
-     * shadow) is enough for the scaffold. */
+    /* depth=2 covers primary (rgen→rchit) + one shadow recursion. */
     pci.maxPipelineRayRecursionDepth = 2;
     pci.layout                       = mPipelineLayout;
     check(pfnCreateRTPipelines(mEngine.device(), VK_NULL_HANDLE, VK_NULL_HANDLE,
                                1, &pci, nullptr, &mPipeline),
           "vkCreateRayTracingPipelinesKHR");
 
-    /* Modules can be destroyed now that the pipeline holds them. */
     vkDestroyShaderModule(mEngine.device(), rgen, nullptr);
     vkDestroyShaderModule(mEngine.device(), rmiss, nullptr);
+    vkDestroyShaderModule(mEngine.device(), shadowMiss, nullptr);
     vkDestroyShaderModule(mEngine.device(), rchit, nullptr);
 }
 
 void RayTracingPipeline::createShaderBindingTable() {
     const auto& props = mEngine.rtProperties();
-    const uint32_t groupCount = 3;
+    const uint32_t groupCount = 4;       /* rgen + miss-primary + miss-shadow + rchit */
+    const uint32_t missCount  = 2;       /* primary + shadow */
     const uint32_t handleSize = props.shaderGroupHandleSize;
     const uint32_t handleAlign = props.shaderGroupHandleAlignment;
     const uint32_t baseAlign  = props.shaderGroupBaseAlignment;
 
-    /* Per-record stride within a region must be aligned to
-     * shaderGroupHandleAlignment AND ≥ handleSize. */
+    /* Per-record stride: handleSize rounded up to handleAlignment. */
     const VkDeviceSize stride = alignUp(handleSize, handleAlign);
 
-    /* Per-region START (deviceAddress) must be aligned to
-     * shaderGroupBaseAlignment. With one record per region, the
-     * simplest correct layout is: each region occupies a baseAlign-
-     * sized slot in the SBT buffer, even though the data inside is
-     * only `stride` bytes. Lay them out as
-     *     offset 0           → rgen
-     *     offset baseAlign   → miss
-     *     offset 2*baseAlign → hit
-     * and the region.stride/size both equal stride (one record). */
-    const VkDeviceSize regionStride = alignUp(stride, baseAlign);
-    const VkDeviceSize sbtBytes     = regionStride * groupCount;
+    /* Per-region layout: each region's deviceAddress must be
+     * baseAlignment-aligned. Records inside a region are at multiples
+     * of stride.
+     *
+     *   rgen region  : 1 record at offset 0
+     *   miss region  : missCount records starting at offset miss0
+     *   hit region   : 1 record starting at offset hit0
+     *
+     * Offsets sized so each region starts baseAlign-aligned and
+     * regions don't overlap. */
+    const VkDeviceSize rgenOff   = 0;
+    const VkDeviceSize rgenSize  = stride;
+    const VkDeviceSize missOff   = alignUp(rgenOff + rgenSize, baseAlign);
+    const VkDeviceSize missSize  = stride * missCount;
+    const VkDeviceSize hitOff    = alignUp(missOff + missSize, baseAlign);
+    const VkDeviceSize hitSize   = stride;
+    const VkDeviceSize sbtBytes  = alignUp(hitOff + hitSize, baseAlign);
 
+    /* Fetch all group handles in one call. */
     std::vector<uint8_t> handles(handleSize * groupCount);
     check(pfnGetShaderGroupHandles(mEngine.device(), mPipeline, 0, groupCount,
                                    handles.size(), handles.data()),
           "vkGetRayTracingShaderGroupHandlesKHR");
 
-    /* Host-visible SBT — small (kilobytes), so non-DEVICE_LOCAL is
-     * fine for the scaffold. Production code would stage and keep
-     * the SBT device-local. */
     mEngine.allocateBuffer(sbtBytes,
         VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR |
         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -289,15 +305,13 @@ void RayTracingPipeline::createShaderBindingTable() {
 
     void* ptr = nullptr;
     check(vkMapMemory(mEngine.device(), mSbtMemory, 0, sbtBytes, 0, &ptr), "vkMapMemory (sbt)");
-    /* Zero the whole buffer first so the padding past `handleSize`
-     * inside each region is well-defined (Vulkan doesn't require it,
-     * but it makes the SBT contents reproducible across runs). */
     std::memset(ptr, 0, (size_t)sbtBytes);
     uint8_t* dst = (uint8_t*)ptr;
-    for (uint32_t i = 0; i < groupCount; ++i) {
-        std::memcpy(dst + i * regionStride,
-                    handles.data() + i * handleSize, handleSize);
-    }
+    /* group indices: 0=rgen, 1=miss-primary, 2=miss-shadow, 3=hit. */
+    std::memcpy(dst + rgenOff,                handles.data() + 0 * handleSize, handleSize);
+    std::memcpy(dst + missOff,                handles.data() + 1 * handleSize, handleSize);
+    std::memcpy(dst + missOff + stride,       handles.data() + 2 * handleSize, handleSize);
+    std::memcpy(dst + hitOff,                 handles.data() + 3 * handleSize, handleSize);
     vkUnmapMemory(mEngine.device(), mSbtMemory);
 
     VkBufferDeviceAddressInfo bda{};
@@ -305,17 +319,15 @@ void RayTracingPipeline::createShaderBindingTable() {
     bda.buffer = mSbtBuffer;
     VkDeviceAddress base = vkGetBufferDeviceAddress(mEngine.device(), &bda);
 
-    mRgenRegion.deviceAddress = base + 0 * regionStride;
+    mRgenRegion.deviceAddress = base + rgenOff;
     mRgenRegion.stride        = stride;
-    /* For ray-gen specifically, size MUST equal stride. */
-    mRgenRegion.size          = stride;
-    mMissRegion.deviceAddress = base + 1 * regionStride;
+    mRgenRegion.size          = stride;          /* rgen: size == stride */
+    mMissRegion.deviceAddress = base + missOff;
     mMissRegion.stride        = stride;
-    mMissRegion.size          = stride;
-    mHitRegion.deviceAddress  = base + 2 * regionStride;
+    mMissRegion.size          = stride * missCount;
+    mHitRegion.deviceAddress  = base + hitOff;
     mHitRegion.stride         = stride;
     mHitRegion.size           = stride;
-    /* No callable shaders → empty region. */
     mCallRegion = VkStridedDeviceAddressRegionKHR{};
 }
 

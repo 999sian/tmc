@@ -27,7 +27,15 @@ struct HitPayload {
     float distance;
 };
 
-layout(location = 0) rayPayloadInEXT HitPayload payload;
+/* Shadow-ray payload — distinct from primary so the shadow miss
+ * shader at SBT slot 1 can clear `hit = false` without colliding
+ * with the primary payload's layout. */
+struct ShadowPayload {
+    bool hit;
+};
+
+layout(location = 0) rayPayloadInEXT HitPayload     payload;
+layout(location = 1) rayPayloadEXT   ShadowPayload  shadowPayload;
 
 /* Built-in barycentric attribs for the hit triangle. */
 hitAttributeEXT vec2 attribs;
@@ -111,13 +119,40 @@ void main() {
         return;
     }
 
-    /* Scaffold lighting: flat diffuse modulated by the sun colour.
-     * The shadow trace is disabled until we register a second miss
-     * shader at SBT slot 1 — currently the only miss is the primary
-     * (slot 0), so tracing a shadow ray with missIndex=1 has
-     * undefined behaviour. Once the second miss is in, the original
-     * `traceRayEXT → shadowPayload.hit ? ambient : sun` block goes
-     * back here. */
-    payload.colour = diffuse.rgb * kSunColour;
+    /* Trace a shadow ray from the hit position toward the virtual
+     * sun. SBT slot 1's miss shader (shadow.rmiss) clears
+     * shadowPayload.hit = false when nothing blocks the path — so
+     * the surface is lit (kSunColour). If anything occludes (no
+     * miss runs, payload retains its pre-trace `true`), the surface
+     * is in shadow and renders with the cool-tinted ambient.
+     *
+     * Flags:
+     *   - OpaqueEXT             : skip any-hit testing (all our geo is opaque)
+     *   - TerminateOnFirstHitEXT: any occluder is enough, don't search further
+     *   - SkipClosestHitShaderEXT: we don't need the closest-hit shader's
+     *                             output for shadow rays
+     * tMin nudges off the surface to avoid self-intersection;
+     * tMax is the exact distance to the sun. */
+    const vec3 toSun     = normalize(kSunPosition - hitPos);
+    const float sunDist  = length(kSunPosition - hitPos);
+    shadowPayload.hit = true;  /* assume occluded; miss shader clears */
+    traceRayEXT(
+        topLevelAS,
+        gl_RayFlagsOpaqueEXT
+            | gl_RayFlagsTerminateOnFirstHitEXT
+            | gl_RayFlagsSkipClosestHitShaderEXT,
+        0xFF,
+        0,                       /* sbtRecordOffset */
+        0,                       /* sbtRecordStride */
+        1,                       /* missIndex — slot 1 = shadow miss */
+        hitPos + toSun * 0.01,
+        0.0,
+        toSun,
+        sunDist,
+        1                        /* payload location = 1 = shadowPayload */
+    );
+
+    const vec3 lit = shadowPayload.hit ? kAmbient : kSunColour;
+    payload.colour = diffuse.rgb * lit;
     payload.distance = gl_HitTEXT;
 }
