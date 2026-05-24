@@ -170,3 +170,86 @@ Recommend the loop:
 - Step F: 1 session
 
 Total: ~10–15 focused sessions of engineering + verification.
+
+## Scroll-pipeline deep-dive (session 2 findings)
+
+The actual flow from world tilemap to BG buffer to VRAM:
+
+```
+gMapBottom / gMapTop (per-area MapLayer)
+        │
+        ▼  RenderMapLayerToSubTileMap (beanstalk:1126)
+        │  loader writes 128 u16 stride
+        ▼
+gMapDataBottomSpecial / gMapDataTopSpecial (u16[0x4000], 128KB)
+        │
+        ▼  UpdateScrollVram (port_linked_stubs.c:883), dispatched by gUpdateVisibleTiles
+        │
+        ├─ mode 1: ram_sub_080B197C_c (initial full fill, 23×32)
+        ├─ mode 2: sub_0807D280 (screenTileMap.c:5)
+        ├─ mode 3: sub_0807D46C (screenTileMap.c:85)
+        └─ mode 4: sub_0807D6D8 (screenTileMap.c:217)
+        │
+        ▼  Each writes to gBG1Buffer + 0x20 / gBG2Buffer + 0x20
+        │  (the +0x20 skips one row used as pre-load margin)
+        ▼
+gBG1Buffer / gBG2Buffer (u16[0x400], 32×32 currently)
+        │
+        ▼  Interrupt DMA (interrupts.c:210-212)
+        │  DmaCopy32(3, &gBGnBuffer, VRAM + (control & 0x1f00) * 8, 0x5C0)
+        │  0x5C0 = 1472 bytes = 23 rows × 32 tiles × 2 bytes
+        ▼
+VRAM (BG screen block at gScreen.bgN.control's screen_base)
+```
+
+Each scroll mode has up to 5 cases for `scroll_direction` (0-4),
+each with its own DmaSet pattern. Sample magic constants in
+sub_0807D280:
+
+| Constant | Meaning | Phase-2 value (for 64-wide) |
+|---|---|---|
+| `0x20` | row stride in BG buffer (u16) | `0x40` |
+| `0x80` | row stride in mapSpecial (u16) | `0x100` (no change — already wide) |
+| `0x1e` | last-col offset within row | `0x3e` |
+| `0x80000020` | DmaSet word count: copy 32 u16 | `0x80000040` |
+| `0x800003c0` | DmaSet word count: copy 960 u16 (30 rows × 32) | `0x80000780` (60 rows × 32 = 1920) |
+| `0x280` | offset into BG buffer | needs re-derivation |
+| `0x2a0` | offset = 0x280 + 0x20 | `0x500 + 0x40` |
+
+Multiplied across 3 scroll-mode functions × ~5 cases each = ~15
+distinct DmaSet/memcpy invocations to update, plus 4 different buffer-
+offset arithmetic expressions per case. Each error causes wrong-
+columns-scroll rather than a clean crash, so detection requires
+visual verification of every transition type:
+
+- Single-screen room → loop in place (no scroll updates beyond
+  initial fill)
+- Multi-screen horizontal scroll (Hyrule Town → Lon Lon Ranch)
+- Multi-screen vertical scroll
+- Dungeon room-to-room transitions (fade-through patterns)
+- Special triggers: bean travel, minish-cap shrink, falls
+
+Each combination is its own test.
+
+## Recommended phase-2 sequence (revised)
+
+1. **Don't widen buffers yet**: keep gBGnBuffer at u16[0x400].
+   Instead, do a one-line spike — bump BGCNT[BG2] to 512×256 only —
+   and verify the PPU wraps the existing 32-tile buffer cleanly with
+   no DMA changes. This isolates "did PPU survive the BGCNT change"
+   from "did the buffer logic survive".
+2. Spike the doubled buffer for ONE layer (BG2 only) with the
+   simplest scroll mode (initial fill = mode 1 = `ram_sub_080B197C_c`).
+   Don't touch modes 2/3/4 yet — accept stale right-half tiles after
+   first scroll.
+3. Add modes 2/3/4 ONE AT A TIME, with screenshot verification per
+   transition type.
+4. Generalise to BG1 once BG2 is stable.
+5. Leave BG3 as the last (it's currently the vertical-pre-load
+   buffer — its layout change is independent of horizontal widening).
+6. Final pass: OAM viewport, UI offsets, camera bounds, cutscene
+   blackouts.
+
+Each numbered item is ~1 session. Total: 8-12 sessions for the
+engine surgery + a final integration session. This matches the
+earlier 10-15-session estimate but with concrete checkpoints.
