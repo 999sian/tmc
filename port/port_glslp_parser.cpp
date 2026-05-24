@@ -32,6 +32,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -650,6 +651,128 @@ static void StripLibretroDefines(std::string& s) {
     s = std::move(scrubbed);
 }
 
+/* Rewrite ALL whole-word references to a parameter name as
+ * `params.<name>` UNLESS the reference is preceded by a GLSL type or
+ * storage/precision qualifier (in which case it's a declaration of a
+ * local variable that happens to shadow the parameter).
+ *
+ * Imperfect: doesn't handle every shadowing case GLSL allows (e.g.
+ * struct field names, function parameter names) but covers the
+ * common one — local `float lum = ...;` inside a function where
+ * `lum` is also a #pragma parameter. CRT-Geom hits exactly this case.
+ *
+ * The set of "declaration-context" tokens is the GLSL 450 type
+ * keywords plus storage qualifiers and the libretro-specific
+ * COMPAT_PRECISION marker that we strip elsewhere. */
+static void RewriteParameterRefs(std::string& s,
+                                 const std::vector<ShaderParam>& params) {
+    if (params.empty()) return;
+    static const std::set<std::string> kDeclContext = {
+        "void", "float", "int", "uint", "bool", "double",
+        "vec2", "vec3", "vec4", "dvec2", "dvec3", "dvec4",
+        "ivec2", "ivec3", "ivec4", "uvec2", "uvec3", "uvec4",
+        "bvec2", "bvec3", "bvec4",
+        "mat2", "mat3", "mat4",
+        "mat2x2", "mat2x3", "mat2x4",
+        "mat3x2", "mat3x3", "mat3x4",
+        "mat4x2", "mat4x3", "mat4x4",
+        "sampler1D", "sampler2D", "sampler3D", "samplerCube",
+        "sampler2DRect", "sampler2DShadow", "samplerCubeShadow",
+        "const", "in", "out", "inout", "uniform", "attribute", "varying",
+        "highp", "mediump", "lowp", "COMPAT_PRECISION", "COMPAT_VARYING",
+        "COMPAT_ATTRIBUTE",
+    };
+    auto is_id_char = [](char c) {
+        return std::isalnum((unsigned char)c) != 0 || c == '_';
+    };
+    for (const auto& p : params) {
+        const std::string& name = p.id;
+        if (name.empty()) continue;
+        std::string out_buf;
+        out_buf.reserve(s.size());
+        size_t i = 0;
+        while (i < s.size()) {
+            size_t pos = s.find(name, i);
+            if (pos == std::string::npos) {
+                out_buf.append(s, i, std::string::npos);
+                break;
+            }
+            out_buf.append(s, i, pos - i);
+            /* Word-boundary check. */
+            const bool word_start = (pos == 0) || !is_id_char(s[pos - 1]);
+            const size_t end = pos + name.size();
+            const bool word_end = (end >= s.size()) || !is_id_char(s[end]);
+            if (!word_start || !word_end) {
+                out_buf.append(name);
+                i = end;
+                continue;
+            }
+            /* Preprocessor-line handling:
+             *  - `#define NAME body`: the NAME slot is a declaration —
+             *    keep it as-is. The body, however, is template code that
+             *    later substitutes into non-preprocessor context, so any
+             *    parameter refs inside it must be rewritten (else TEX2D's
+             *    body `pow(texture(...), vec4(CRTgamma))` expands to a
+             *    bare `CRTgamma` at the call site). Allow rewrite there.
+             *  - `#if / #ifdef / #ifndef / #elif`: expressions reference
+             *    PP macros, not GLSL identifiers. Skip the whole line.
+             *  - `#pragma / #include / #version / #extension`: leave
+             *    untouched.
+             * Strategy: scan back to line start, peek at the directive.
+             * For #define, also check whether `pos` falls inside the
+             * NAME slot (the first identifier after `#define`) — if so,
+             * skip; otherwise (we're in the body) allow rewrite. */
+            size_t line_start = pos;
+            while (line_start > 0 && s[line_start - 1] != '\n') --line_start;
+            size_t ls = line_start;
+            while (ls < s.size() && (s[ls] == ' ' || s[ls] == '\t')) ++ls;
+            if (ls < s.size() && s[ls] == '#') {
+                size_t hash = ls + 1;
+                while (hash < s.size() && (s[hash] == ' ' || s[hash] == '\t')) ++hash;
+                bool is_define = (hash + 6 < s.size()
+                                  && s.compare(hash, 6, "define") == 0
+                                  && (s[hash + 6] == ' ' || s[hash + 6] == '\t'));
+                if (is_define) {
+                    /* Locate the macro-name slot. */
+                    size_t ns = hash + 6;
+                    while (ns < s.size() && (s[ns] == ' ' || s[ns] == '\t')) ++ns;
+                    size_t ne = ns;
+                    while (ne < s.size() && is_id_char(s[ne])) ++ne;
+                    if (pos >= ns && pos < ne) {
+                        /* This occurrence IS the macro name — declaration. */
+                        out_buf.append(name);
+                        i = end;
+                        continue;
+                    }
+                    /* Otherwise we're in the body — fall through to the
+                     * normal previous-token check, so `float lum = ...`
+                     * inside a multi-line macro body still works. */
+                } else {
+                    /* #if / #ifdef / #ifndef / #elif / #pragma / etc. */
+                    out_buf.append(name);
+                    i = end;
+                    continue;
+                }
+            }
+            /* Find the previous non-whitespace identifier token. */
+            size_t back = pos;
+            while (back > 0 && std::isspace((unsigned char)s[back - 1])) --back;
+            size_t tok_end = back;
+            while (back > 0 && is_id_char(s[back - 1])) --back;
+            std::string prev_token = s.substr(back, tok_end - back);
+            if (kDeclContext.count(prev_token)) {
+                /* Local declaration shadowing the parameter — keep
+                 * the variable name as-is. */
+                out_buf.append(name);
+            } else {
+                out_buf.append("params.").append(name);
+            }
+            i = end;
+        }
+        s = std::move(out_buf);
+    }
+}
+
 /* Rewrite `COMPAT_VARYING <type> <name>;` and `COMPAT_ATTRIBUTE <type>
  * <name>;` declarations with explicit `layout(location = N) <out|in>`
  * decorators. Each name gets a sequential location based on first
@@ -801,11 +924,12 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
             param_block_decl += "    float " + p.id + ";\n";
         }
         param_block_decl += "} params;\n";
-        /* Per-parameter #define so the shader body's `STRENGTH` etc
-         * reads from the block. */
-        for (const auto& p : out.parameters) {
-            param_block_decl += "#define " + p.id + " params." + p.id + "\n";
-        }
+        /* No `#define NAME params.NAME` aliases — those are textual
+         * substitutions and trip on local variables that happen to
+         * shadow a parameter (CRT-Geom uses `lum` as both a
+         * #pragma parameter and a local variable in `saturation()`).
+         * Instead we walk the source below and rewrite only
+         * identifier REFERENCES (not declarations) to params.NAME. */
     }
     /* Strip non-opaque `uniform <type> NAME;` lines, and decorate
      * `uniform sampler2D NAME;` declarations with explicit
@@ -975,16 +1099,18 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
         }
     }
 
+    /* Strip the source's own #define COMPAT_* lines (and any stray
+     * `out vec4 FragColor;` decl) BEFORE concatenating, so the strip
+     * doesn't accidentally remove our header-supplied versions. */
+    StripLibretroDefines(shared);
+    StripLibretroDefines(vertex_body);
+    StripLibretroDefines(fragment_body);
+
     /* Build full stage modules: header + parameter block + shared +
      * stage-specific. Parameter block is empty when no parameters
      * exist; safe to concatenate. */
     out.vertex_glsl   = std::string(kVertexHeader)   + param_block_decl + shared + vertex_body;
     out.fragment_glsl = std::string(kFragmentHeader) + param_block_decl + shared + fragment_body;
-
-    /* Strip the source's own #define COMPAT_* lines so the
-     * header-supplied ones win. */
-    StripLibretroDefines(out.vertex_glsl);
-    StripLibretroDefines(out.fragment_glsl);
 
     /* Rewrite COMPAT_VARYING / COMPAT_ATTRIBUTE / varying / attribute
      * declarations with sequential layout(location = N) decorators.
@@ -994,6 +1120,14 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
     std::map<std::string, int> varying_map;
     RewriteVaryingDecls(out.vertex_glsl,   varying_map, /*isVertex=*/true);
     RewriteVaryingDecls(out.fragment_glsl, varying_map, /*isVertex=*/false);
+
+    /* Replace each parameter NAME (whole-word, non-declaration
+     * contexts only) with `params.NAME`. Handles the CRT-Geom case
+     * where a #pragma parameter has the same name as a local
+     * variable inside a function — the local declaration keeps the
+     * short name, references resolve via params.NAME. */
+    RewriteParameterRefs(out.vertex_glsl,   out.parameters);
+    RewriteParameterRefs(out.fragment_glsl, out.parameters);
 
     return out;
 }
