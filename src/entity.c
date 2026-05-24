@@ -926,6 +926,38 @@ static void UnlinkEntity(Entity* ent) {
     if (ent == gUpdateContext.current_entity) {
         gUpdateContext.current_entity = ent->prev;
     }
+#ifdef PC_PORT
+    /* Defensive guard against #131-class crashes where ent->prev gets
+     * partially overwritten by a GBA-era 32-bit write to what's now an
+     * 8-byte pointer on PC (the "half-pointer write" hazard described
+     * in CLAUDE.md). Symptom: prev like 0x0000_5555_11113333 — high
+     * bytes from the original pointer survive, low 4 bytes hold an
+     * unrelated u32. The deref ent->prev->next then either segfaults
+     * (low bytes alone point to unmapped memory) or trashes random
+     * memory elsewhere.
+     *
+     * If prev/next aren't in the entity-pool range (or NULL/-1), we
+     * have undefined data. Skip the link update — the entity may not
+     * be in any list, OR the link state is too corrupted to fix.
+     * Log the corruption so we can chase the writer separately. */
+    {
+        extern int Port_IsValidEntityAddr(const void*);
+        const bool prevOk =
+            ent->prev == NULL ||
+            (intptr_t)ent->prev == -1 ||
+            Port_IsValidEntityAddr(ent->prev);
+        const bool nextOk =
+            ent->next == NULL ||
+            Port_IsValidEntityAddr(ent->next);
+        if (!prevOk || !nextOk) {
+            fprintf(stderr,
+                "[ENT-GUARD] UnlinkEntity skipped: ent=%p kind=%u id=0x%X "
+                "prev=%p next=%p (one or both invalid)\n",
+                (void*)ent, ent->kind, ent->id, ent->prev, ent->next);
+            return;
+        }
+    }
+#endif
     ent->prev->next = ent->next;
     ent->next->prev = ent->prev;
 }
