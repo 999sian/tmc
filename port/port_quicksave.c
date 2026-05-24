@@ -84,13 +84,16 @@ static StateRegion sRegions[] = {
 #define AUTO_SLOT_BASE 5
 #define NUM_AUTO_SLOTS 3
 #define MAGIC      0x53434D54u /* "TMCS" little-endian */
-#define VERSION    1u
+#define VERSION    2u           /* bumped: header now carries gEntities
+                                 * base address for cross-process
+                                 * pointer-fixup on restore. */
 
 typedef struct {
     u8*     snapshot;       /* heap, NULL if slot empty */
     size_t  bytes;
     int     valid;
     u64     saved_at_unix;  /* clock_gettime CLOCK_REALTIME seconds */
+    u64     saved_entities_base;  /* gEntities address at save time; 0 for in-RAM slots */
 } Slot;
 
 static Slot sSlots[NUM_SLOTS];
@@ -140,6 +143,40 @@ static int Snapshot_Capture(Slot* s) {
     return 1;
 }
 
+/* When a slot was written by a previous process, every pointer captured
+ * inside gEntities (prev/next/child/parent and any subclass-specific
+ * Entity* fields) refers to the old ASLR base. Walk the restored bytes
+ * 8-aligned and rewrite anything that falls in [saved_base, saved_base +
+ * sizeof(gEntities)) to the corresponding offset under the new base.
+ *
+ * This is a heuristic — it can rewrite false positives if some non-
+ * pointer field happens to hold a value in the saved range. In practice
+ * the saved range is small (~5 MB) and that's vanishingly unlikely; the
+ * alternative (parsing every Entity subclass to know which fields are
+ * pointers) is unmaintainable. Misses the entity-list heads too —
+ * those live in gEntityLists which isn't a saved region. */
+static void FixupEntityPointers(u64 saved_base) {
+    if (saved_base == 0) return;
+    const uintptr_t cur_base = (uintptr_t)gEntities;
+    if ((uintptr_t)saved_base == cur_base) return;  /* same address, no-op */
+    const uintptr_t saved_lo = (uintptr_t)saved_base;
+    const uintptr_t saved_hi = saved_lo + sizeof(gEntities);
+    const intptr_t delta = (intptr_t)cur_base - (intptr_t)saved_lo;
+    uintptr_t* p = (uintptr_t*)gEntities;
+    const size_t n = sizeof(gEntities) / sizeof(uintptr_t);
+    size_t fixed = 0;
+    for (size_t i = 0; i < n; ++i) {
+        if (p[i] >= saved_lo && p[i] < saved_hi) {
+            p[i] = (uintptr_t)((intptr_t)p[i] + delta);
+            ++fixed;
+        }
+    }
+    fprintf(stderr,
+        "[quicksave] pointer-fixup: %zu pointers shifted by %p "
+        "(saved base %p → current %p)\n",
+        fixed, (void*)delta, (void*)saved_lo, (void*)cur_base);
+}
+
 static int Snapshot_Restore(const Slot* s) {
     if (!s->valid || s->snapshot == NULL || s->bytes != TotalRegionBytes()) {
         return 0;
@@ -149,6 +186,10 @@ static int Snapshot_Restore(const Slot* s) {
         memcpy(sRegions[i].ptr, src, sRegions[i].size);
         src += sRegions[i].size;
     }
+    /* gEntities was just overwritten; fix any pointer fields that
+     * point to the saved process's gEntities range. Safe no-op when
+     * the slot was made in this process (same base). */
+    FixupEntityPointers(s->saved_entities_base);
     return 1;
 }
 
@@ -178,10 +219,18 @@ static int WriteSlotToDisk(int slot) {
     const u32 version = VERSION;
     const u32 total = (u32)s->bytes;
     const u64 saved_at = s->saved_at_unix;
+    /* gEntities base — needed to fix up internal pointers when the
+     * file is loaded by a later process (different ASLR base). The
+     * captured bytes still contain prev/next/child/parent pointers
+     * into the old process's gEntities[]; without fixup, restoring
+     * them and running the entity-update loop dereferences unmapped
+     * memory. */
+    const u64 entities_base = (u64)(uintptr_t)gEntities;
     fwrite(&magic, sizeof(magic), 1, f);
     fwrite(&version, sizeof(version), 1, f);
     fwrite(&total, sizeof(total), 1, f);
     fwrite(&saved_at, sizeof(saved_at), 1, f);
+    fwrite(&entities_base, sizeof(entities_base), 1, f);
     const size_t written = fwrite(s->snapshot, 1, s->bytes, f);
     fclose(f);
     if (written != s->bytes) {
@@ -199,6 +248,7 @@ static int ReadSlotFromDisk(int slot) {
     if (!f) return 0;
     u32 magic = 0, version = 0, total = 0;
     u64 saved_at = 0;
+    u64 saved_entities_base = 0;
     if (fread(&magic, sizeof(magic), 1, f) != 1 ||
         fread(&version, sizeof(version), 1, f) != 1 ||
         fread(&total, sizeof(total), 1, f) != 1 ||
@@ -206,7 +256,21 @@ static int ReadSlotFromDisk(int slot) {
         fclose(f);
         return 0;
     }
-    if (magic != MAGIC || version != VERSION || total != (u32)TotalRegionBytes()) {
+    if (magic != MAGIC || total != (u32)TotalRegionBytes()) {
+        fclose(f);
+        return 0;
+    }
+    /* Version-2 files carry a gEntities base address for pointer-fixup
+     * across process restarts (different ASLR layouts). Older files
+     * have no base and only round-trip safely within a single process
+     * — Restore() refuses them when their pointers would point outside
+     * the current gEntities range. */
+    if (version >= 2) {
+        if (fread(&saved_entities_base, sizeof(saved_entities_base), 1, f) != 1) {
+            fclose(f);
+            return 0;
+        }
+    } else if (version != VERSION) {
         fclose(f);
         return 0;
     }
@@ -230,6 +294,7 @@ static int ReadSlotFromDisk(int slot) {
     }
     s->valid = 1;
     s->saved_at_unix = saved_at;
+    s->saved_entities_base = saved_entities_base;
     return 1;
 }
 
