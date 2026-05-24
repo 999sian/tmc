@@ -176,13 +176,11 @@ void main() {
                  * Tonemap pulls it toward white but it stays warm. */
                 sampleAccum = albedo * vec3(3.5, 3.0, 2.5);
             } else {
-                /* --- Soft shadow (4 jittered samples) --- */
+                /* --- Direct sun via soft shadow (4 jittered samples) --- */
                 const vec3 sunDir = normalize(vec3(0.80, -0.60, -0.02));
                 const int  kShadowSamples = 4;
                 float litFrac = 0.0;
                 for (int s = 0; s < kShadowSamples; ++s) {
-                    /* Cone jitter — small angular spread for soft
-                     * penumbra. 0.06 radians ≈ 3.4° apparent size. */
                     vec3 j  = vec3(rand() - 0.5, rand() - 0.5, rand() - 0.5);
                     vec3 sd = normalize(sunDir + j * 0.06);
                     payload.hitDistance = -1.0;
@@ -195,63 +193,107 @@ void main() {
                 }
                 litFrac /= float(kShadowSamples);
 
-                /* --- Ambient occlusion (4 hemisphere samples) --- */
+                /* --- Multi-bounce indirect lighting ---
+                 * Replace AO + emissive-GI with a true path-traced
+                 * indirect light integrator.  Two bounces, one sample
+                 * each, cosine-weighted hemisphere.  Lambertian BRDF
+                 * (albedo/π) cancels the cos·1/π in the cosine-PDF,
+                 * leaving a clean `throughput *= hit_albedo` update
+                 * per bounce.
+                 *
+                 * Each bounce hit contributes:
+                 *   direct: sun · hit_albedo · max(N·L, 0) · shadow
+                 *   emissive: emissive_radiance (if tagged)
+                 *   indirect: → recurse via throughput
+                 *
+                 * Russian roulette terminates paths whose throughput
+                 * has collapsed below the survival threshold so we
+                 * don't waste samples on dim contributors.
+                 *
+                 * Coordinates from the primary hit's normal + the
+                 * captured local frame; subsequent bounces rebuild
+                 * a fresh frame at each new hit. */
                 vec3 tang, bitan;
                 buildTangentFrame(hitN, tang, bitan);
-                const int   kAoSamples = 4;
-                const float kAoMaxDist = 0.5;
-                float aoFrac = 0.0;
-                for (int s = 0; s < kAoSamples; ++s) {
-                    vec3 local = cosineSampleHemisphere(rand(), rand());
-                    vec3 ad = normalize(local.x * tang + local.y * bitan + local.z * hitN);
-                    payload.hitDistance = -1.0;
-                    traceRayEXT(topLevelAS,
-                        gl_RayFlagsTerminateOnFirstHitEXT,
-                        0xFF, 0, 0, 0,
-                        hitPos + hitN * (kRayEpsilon * 4.0),
-                        kRayEpsilon, ad, kAoMaxDist, 0);
-                    if (payload.hitDistance < 0.0) aoFrac += 1.0;
-                }
-                aoFrac /= float(kAoSamples);
-                /* Clamp AO minimum to 0.35 so deep crevices don't go
-                 * pitch black — just darkened. */
-                aoFrac = 0.35 + 0.65 * aoFrac;
 
-                /* --- Emissive GI (single hemisphere ray) ---
-                 * Cast one ray into the hemisphere. If it hits an
-                 * emissive surface, the surface picks up that
-                 * radiance scaled by the emissive surface's albedo
-                 * (treating emissive intensity as proportional to
-                 * the diffuse colour). One-sample is noisy per
-                 * frame; the temporal accumulation averages it
-                 * out across ~5-10 frames. */
-                vec3 emissiveGI = vec3(0.0);
-                {
+                vec3 indirect   = vec3(0.0);
+                vec3 throughput = albedo;       /* primary surface BRDF */
+                vec3 curOrigin  = hitPos;
+                vec3 curNormal  = hitN;
+                vec3 curTang    = tang;
+                vec3 curBitan   = bitan;
+
+                const int kBounces = 2;
+                for (int b = 0; b < kBounces; ++b) {
+                    /* Cosine-weighted hemisphere sample around current normal. */
                     vec3 local = cosineSampleHemisphere(rand(), rand());
-                    vec3 ed = normalize(local.x * tang + local.y * bitan + local.z * hitN);
+                    vec3 wi    = normalize(local.x * curTang +
+                                           local.y * curBitan +
+                                           local.z * curNormal);
                     payload.hitDistance   = -1.0;
-                    payload.materialFlags = 0u;
                     payload.albedo        = vec3(0.0);
-                    traceRayEXT(topLevelAS,
-                        gl_RayFlagsNoneEXT,
-                        0xFF, 0, 0, 0,
-                        hitPos + hitN * (kRayEpsilon * 4.0),
-                        kRayEpsilon, ed, 200.0, 0);
-                    if (payload.hitDistance > 0.0 &&
-                        (payload.materialFlags & kMaterialEmissive) != 0u) {
-                        emissiveGI = payload.albedo * vec3(1.8, 1.5, 1.0);
+                    payload.materialFlags = 0u;
+                    traceRayEXT(topLevelAS, gl_RayFlagsNoneEXT, 0xFF, 0, 0, 0,
+                                curOrigin + curNormal * (kRayEpsilon * 4.0),
+                                kRayEpsilon, wi, 200.0, 0);
+
+                    if (payload.hitDistance < 0.0) {
+                        /* Sky contribution at the end of the chain. */
+                        indirect += throughput * sampleSky(wi);
+                        break;
                     }
+
+                    vec3 bAlbedo = payload.albedo;
+                    vec3 bPos    = payload.hitPos;
+                    vec3 bN      = payload.normal;
+                    bool bEmit   = (payload.materialFlags & kMaterialEmissive) != 0u;
+
+                    /* Emissive surface — pure radiance contribution.
+                     * Stop the chain (emitter terminates the bounce). */
+                    if (bEmit) {
+                        indirect += throughput * bAlbedo * vec3(3.5, 3.0, 2.5);
+                        break;
+                    }
+
+                    /* Direct sun at this bounce hit (one shadow ray, NdotL). */
+                    float NdotL = max(dot(bN, sunDir), 0.0);
+                    if (NdotL > 0.0) {
+                        payload.hitDistance = -1.0;
+                        traceRayEXT(topLevelAS, gl_RayFlagsTerminateOnFirstHitEXT,
+                                    0xFF, 0, 0, 0,
+                                    bPos + sunDir * (kRayEpsilon * 4.0),
+                                    kRayEpsilon, sunDir, kInf, 0);
+                        if (payload.hitDistance < 0.0) {
+                            indirect += throughput * bAlbedo * NdotL *
+                                        vec3(1.55, 1.40, 1.10);
+                        }
+                    }
+
+                    /* Update throughput for the next bounce.  Lambertian
+                     * absorbs into the BRDF·cos·1/PDF = albedo cancel. */
+                    throughput *= bAlbedo;
+
+                    /* Russian roulette — kill paths whose throughput is
+                     * too dim to pay for another bounce.  Threshold 0.08
+                     * keeps the brightest 90%-ish of contributors.  Skip
+                     * RR on the last bounce since we'd just break anyway. */
+                    float survival = max(max(throughput.r, throughput.g), throughput.b);
+                    if (b < kBounces - 1 && survival < 0.08) break;
+
+                    /* Re-orient for next bounce. */
+                    curOrigin = bPos;
+                    curNormal = bN;
+                    buildTangentFrame(bN, curTang, curBitan);
                 }
 
-                /* Warm/cool tint contrast. `litFrac` from the
-                 * soft-shadow sweep mixes between cool shadow and
-                 * warm sun; AO darkens crevices; emissive GI adds
-                 * a small warm halo near glowing sprites. */
+                /* Combine direct + indirect.  Direct sun uses the warm
+                 * sunTint; shadows fall back to the cool shadowTint so
+                 * the warm/cool contrast survives.  Indirect carries
+                 * its own colour from bounce hits. */
                 const vec3 sunTint    = vec3(1.55, 1.40, 1.10);
                 const vec3 shadowTint = vec3(0.30, 0.38, 0.62);
-                vec3 tint = mix(shadowTint, sunTint, litFrac);
-                sampleAccum = albedo * tint * aoFrac
-                              + albedo * emissiveGI;
+                vec3 direct = albedo * mix(shadowTint, sunTint, litFrac);
+                sampleAccum = direct + indirect;
             }
         }
 
