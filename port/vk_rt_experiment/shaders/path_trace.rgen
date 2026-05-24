@@ -45,8 +45,21 @@ layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = 1, rgba8)   uniform image2D outputImage;
 layout(set = 0, binding = 6, rgba32f) uniform image2D accumImage;
 
+/* Slice-6 point lights — extracted from the OAM-only sprite plane on
+ * the CPU side per frame.  Layout MUST match RayTracingPipeline::Light. */
+struct PointLight {
+    vec3  pos;       /* world-space centre of the bright cluster */
+    float radius;    /* falloff distance (world units) */
+    vec3  color;     /* normalized [0,1] colour from the sprite texel */
+    float intensity; /* HDR scale; tonemap brings back into LDR */
+};
+layout(set = 0, binding = 9, std430) readonly buffer Lights {
+    PointLight l[];
+} lights;
+
 layout(push_constant) uniform PushConstants {
-    vec4 params;  /* x=frameIndex y=time z=exposure w=resetAccum */
+    vec4 params;     /* x=frameIndex y=time z=exposure w=resetAccum */
+    uint numLights;  /* slice 6: active entries in `lights` */
 } pc;
 
 /* Material-flag bits (kept in sync with rchit). */
@@ -286,14 +299,52 @@ void main() {
                     buildTangentFrame(bN, curTang, curBitan);
                 }
 
-                /* Combine direct + indirect.  Direct sun uses the warm
-                 * sunTint; shadows fall back to the cool shadowTint so
-                 * the warm/cool contrast survives.  Indirect carries
-                 * its own colour from bounce hits. */
+                /* --- Slice 6: direct point-light contribution ---
+                 * Importance-sample ONE of the extracted point lights
+                 * (per-pixel random pick) and weight by 1/p = N.  This
+                 * keeps per-pixel cost flat regardless of light count
+                 * — temporal accumulation averages the picks across
+                 * frames so all lights contribute correctly.  Cast a
+                 * shadow ray to the light; skip if blocked. */
+                vec3 ptLight = vec3(0.0);
+                if (pc.numLights > 0u) {
+                    uint pick = uint(floor(rand() * float(pc.numLights)));
+                    if (pick >= pc.numLights) pick = pc.numLights - 1u;
+                    PointLight L = lights.l[pick];
+
+                    vec3  ldir   = L.pos - hitPos;
+                    float dist   = length(ldir);
+                    vec3  lwi    = ldir / max(dist, 1e-6);
+
+                    /* Inverse-square-ish falloff with smooth cutoff at L.radius. */
+                    float falloff = max(0.0, 1.0 - dist / L.radius);
+                    falloff = falloff * falloff;
+                    float NdotL = max(dot(hitN, lwi), 0.0);
+
+                    if (NdotL > 0.0 && falloff > 0.0) {
+                        payload.hitDistance = -1.0;
+                        traceRayEXT(topLevelAS,
+                            gl_RayFlagsTerminateOnFirstHitEXT,
+                            0xFF, 0, 0, 0,
+                            hitPos + lwi * (kRayEpsilon * 4.0),
+                            kRayEpsilon, lwi, dist - kRayEpsilon, 0);
+                        if (payload.hitDistance < 0.0) {
+                            ptLight = albedo * L.color * L.intensity
+                                      * NdotL * falloff
+                                      * float(pc.numLights);  /* 1/p compensation */
+                        }
+                    }
+                }
+
+                /* Combine direct sun + direct point-lights + indirect.
+                 * Sun uses the warm tint; shadowed surfaces fall back
+                 * to cool shadowTint so the warm/cool contrast still
+                 * shows. Indirect and point-light contributions
+                 * carry their own colour. */
                 const vec3 sunTint    = vec3(1.55, 1.40, 1.10);
                 const vec3 shadowTint = vec3(0.30, 0.38, 0.62);
                 vec3 direct = albedo * mix(shadowTint, sunTint, litFrac);
-                sampleAccum = direct + indirect;
+                sampleAccum = direct + ptLight + indirect;
             }
         }
 
