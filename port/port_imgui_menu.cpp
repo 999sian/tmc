@@ -368,7 +368,23 @@ static void DrawRibbonDisplayTab(void) {
         auto refresh = [&] {
             sPresetPaths.clear();
             std::error_code ec;
-            for (const auto& root : {"shaders", "glslp", "."}) {
+            /* Walk a few common locations: alongside the binary
+             * (typical user-install layout), the current working
+             * directory (developer setup), and the demo `/tmp/glslp_demo`
+             * path that the test scripts populate. Each path is
+             * recursively searched for `*.glslp`. */
+            std::vector<std::string> roots;
+            if (const char* base = SDL_GetBasePath()) {
+                std::string b = base;
+                roots.push_back(b + "shaders");
+                roots.push_back(b + "glslp");
+                roots.push_back(b);
+            }
+            roots.emplace_back("shaders");
+            roots.emplace_back("glslp");
+            roots.emplace_back(".");
+            roots.emplace_back("/tmp/glslp_demo");
+            for (const auto& root : roots) {
                 if (!std::filesystem::is_directory(root, ec)) continue;
                 for (auto& entry : std::filesystem::recursive_directory_iterator(root, ec)) {
                     if (entry.is_regular_file(ec) && entry.path().extension() == ".glslp") {
@@ -376,7 +392,11 @@ static void DrawRibbonDisplayTab(void) {
                     }
                 }
             }
+            /* De-dupe: the same .glslp can surface through multiple roots
+             * (e.g. ./shaders/x.glslp and ./x.glslp via recursive walk). */
             std::sort(sPresetPaths.begin(), sPresetPaths.end());
+            sPresetPaths.erase(std::unique(sPresetPaths.begin(), sPresetPaths.end()),
+                               sPresetPaths.end());
         };
         if (!sScannedOnce) { refresh(); sScannedOnce = true; }
 
