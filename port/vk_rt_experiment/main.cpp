@@ -20,6 +20,7 @@
 #include "RenderLayerManager.h"
 #include "RayTracingPipeline.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -705,6 +706,61 @@ int main() {
                          FrameSource::kFrameW, FrameSource::kFrameH);
             if (firstFrame) std::fprintf(stderr, "[main] first frame uploaded, tracing\n");
         }
+
+        /* --- Slice 6: extract point lights from the OAM-only sprite
+         * plane.  Scan for saturated bright pixels (the same gate the
+         * rchit uses for per-texel emissive), cluster nearby ones, and
+         * publish up to kMaxLights point lights for the rgen's direct
+         * illumination pass. */
+        RayTracingPipeline::Light lights[RayTracingPipeline::kMaxLights];
+        uint32_t lightCount = 0;
+        if (spritePlaneFB) {
+            const int kStride = 4;  /* sub-sample to keep CPU cost down */
+            for (int py = 0; py < 160; py += kStride) {
+                for (int px = 0; px < 240; px += kStride) {
+                    const uint8_t* p = &spritePlaneFB[(py * 240 + px) * 4];
+                    if (p[3] < 128) continue;  /* outside silhouette */
+                    float r = p[0] / 255.0f, g = p[1] / 255.0f, b = p[2] / 255.0f;
+                    float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+                    if (luma < 0.6f) continue;
+                    float maxC = std::max({r, g, b});
+                    float minC = std::min({r, g, b});
+                    float sat  = (maxC > 0.0001f) ? (maxC - minC) / maxC : 0.0f;
+                    if (sat < 0.4f) continue;
+
+                    /* Cluster: merge into an existing light within
+                     * mergeRadius pixels.  Otherwise emit a new one. */
+                    const float mergeRadius = 12.0f;
+                    bool merged = false;
+                    for (uint32_t i = 0; i < lightCount; ++i) {
+                        float dx = lights[i].posX - float(px);
+                        float dy = lights[i].posY - float(py);
+                        if (dx*dx + dy*dy < mergeRadius*mergeRadius) {
+                            /* Accumulate position + radiance (averaged on flush). */
+                            lights[i].posX = (lights[i].posX + float(px)) * 0.5f;
+                            lights[i].posY = (lights[i].posY + float(py)) * 0.5f;
+                            lights[i].r    = std::max(lights[i].r, r);
+                            lights[i].g    = std::max(lights[i].g, g);
+                            lights[i].b    = std::max(lights[i].b, b);
+                            merged = true;
+                            break;
+                        }
+                    }
+                    if (!merged && lightCount < RayTracingPipeline::kMaxLights) {
+                        RayTracingPipeline::Light& L = lights[lightCount++];
+                        L.posX      = float(px);
+                        L.posY      = float(py);
+                        L.posZ      = 0.15f;       /* slightly in front of sprite z=0.2 */
+                        L.radius    = 24.0f;       /* falloff radius in world units */
+                        L.r         = r;
+                        L.g         = g;
+                        L.b         = b;
+                        L.intensity = 3.0f;        /* HDR scale; tonemap brings down */
+                    }
+                }
+            }
+        }
+        rt.updateLights(cmd, lights, lightCount);
 
         if (layers.quadCount() > 0) {
             rt.rebuildAS(cmd);

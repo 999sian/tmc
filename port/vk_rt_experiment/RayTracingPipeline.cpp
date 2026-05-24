@@ -51,6 +51,11 @@ RayTracingPipeline::~RayTracingPipeline() {
     if (mInstancesMemory) vkFreeMemory(mEngine.device(), mInstancesMemory, nullptr);
     if (mSbtBuffer) vkDestroyBuffer(mEngine.device(), mSbtBuffer, nullptr);
     if (mSbtMemory) vkFreeMemory(mEngine.device(), mSbtMemory, nullptr);
+    if (mLightsStagingMap) vkUnmapMemory(mEngine.device(), mLightsStagingMem);
+    if (mLightsStaging)    vkDestroyBuffer(mEngine.device(), mLightsStaging, nullptr);
+    if (mLightsStagingMem) vkFreeMemory(mEngine.device(), mLightsStagingMem, nullptr);
+    if (mLightsBuffer)     vkDestroyBuffer(mEngine.device(), mLightsBuffer, nullptr);
+    if (mLightsMemory)     vkFreeMemory(mEngine.device(), mLightsMemory, nullptr);
     if (mPipeline)            vkDestroyPipeline(mEngine.device(), mPipeline, nullptr);
     if (mPipelineLayout)      vkDestroyPipelineLayout(mEngine.device(), mPipelineLayout, nullptr);
     if (mDescriptorPool)      vkDestroyDescriptorPool(mEngine.device(), mDescriptorPool, nullptr);
@@ -78,18 +83,22 @@ void RayTracingPipeline::createPipeline(const std::string& shaderDir) {
     createDescriptorLayout();
     createDescriptorPool();
     createDescriptorSet();
+    createLightsBuffer();    /* before createPipelineLayout so the
+                                 descriptor write inside setAtlas /
+                                 rebuildAS can reference the buffer. */
     createPipelineLayout();
     createRayTracingPipeline(shaderDir);
     createShaderBindingTable();
 }
 
 void RayTracingPipeline::createDescriptorLayout() {
-    /* Nine bindings for the PTGI pipeline:
+    /* Ten bindings for the PTGI pipeline:
      *   0 TLAS, 1 outputImage, 2 verts, 3 indices,
      *   4 diffuse atlas[], 5 sampler,
      *   6 accumImage (HDR running mean for path-trace progressive),
-     *   7 emissive atlas[], 8 normal atlas[]. */
-    VkDescriptorSetLayoutBinding bindings[9]{};
+     *   7 emissive atlas[], 8 normal atlas[],
+     *   9 point-light storage buffer (slice-6 light extraction). */
+    VkDescriptorSetLayoutBinding bindings[10]{};
 
     bindings[0].binding         = 0;
     bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
@@ -142,9 +151,14 @@ void RayTracingPipeline::createDescriptorLayout() {
     bindings[8].descriptorCount = 1;
     bindings[8].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
+    bindings[9].binding         = 9;
+    bindings[9].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    bindings[9].descriptorCount = 1;
+    bindings[9].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
     VkDescriptorSetLayoutCreateInfo li{};
     li.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    li.bindingCount = 9;
+    li.bindingCount = 10;
     li.pBindings    = bindings;
     check(vkCreateDescriptorSetLayout(mEngine.device(), &li, nullptr, &mDescriptorSetLayout),
           "vkCreateDescriptorSetLayout");
@@ -154,7 +168,7 @@ void RayTracingPipeline::createDescriptorPool() {
     VkDescriptorPoolSize sizes[5]{};
     sizes[0] = {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1};
     sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,              2}; /* outputImage + accumImage */
-    sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             2}; /* verts + indices */
+    sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             3}; /* verts + indices + lights */
     sizes[3] = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,              3}; /* diffuse + emissive + normal */
     sizes[4] = {VK_DESCRIPTOR_TYPE_SAMPLER,                    1};
 
@@ -184,7 +198,7 @@ void RayTracingPipeline::createPipelineLayout() {
     VkPushConstantRange pc{};
     pc.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     pc.offset = 0;
-    pc.size = 16;  /* room for vec4 of misc params */
+    pc.size = 20;  /* vec4 misc params + uint numLights (slice 6) */
 
     VkPipelineLayoutCreateInfo plci{};
     plci.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -464,7 +478,11 @@ void RayTracingPipeline::rebuildAS(VkCommandBuffer cmd) {
     normalInfo.imageView   = mNormalView;
     normalInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkWriteDescriptorSet writes[9]{};
+    VkDescriptorBufferInfo lightsInfo{};
+    lightsInfo.buffer = mLightsBuffer;
+    lightsInfo.range  = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet writes[10]{};
     writes[0].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].pNext            = &asDescInfo;
     writes[0].dstSet           = mDescriptorSet;
@@ -531,7 +549,17 @@ void RayTracingPipeline::rebuildAS(VkCommandBuffer cmd) {
         writes[8].descriptorCount  = 1;
         writes[8].descriptorType   = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         writes[8].pImageInfo       = &normalInfo;
-        writeCount = 9;
+
+        /* Point-lights storage buffer (slice 6). Always bound; the
+         * shader only reads up to pc.numLights entries so an empty
+         * buffer is harmless. */
+        writes[9].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[9].dstSet           = mDescriptorSet;
+        writes[9].dstBinding       = 9;
+        writes[9].descriptorCount  = 1;
+        writes[9].descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes[9].pBufferInfo      = &lightsInfo;
+        writeCount = 10;
     }
     vkUpdateDescriptorSets(mEngine.device(), writeCount, writes, 0, nullptr);
 }
@@ -726,23 +754,85 @@ void RayTracingPipeline::dispatchRays(VkCommandBuffer cmd, uint32_t width, uint3
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                             mPipelineLayout, 0, 1, &mDescriptorSet, 0, nullptr);
 
-    /* Push constants — pc.params is used by the rgen (exposure at .z)
-     * and the rchit (frameIndex at .x, time at .y for light animation).
-     * NVIDIA's strict path requires the call before vkCmdTraceRaysKHR
-     * even when values would all be defaults; production code must
-     * always supply them. */
-    float pc[4] = {
-        static_cast<float>(frameIndex),  /* .x = frame index */
-        time,                            /* .y = seconds (animates lights) */
-        1.0f,                            /* .z = exposure */
-        frameIndex < 4 ? 1.0f : 0.0f     /* .w = resetAccum (force fresh for first frames) */
+    /* Push constants — pc.params holds frame state (rgen + rchit),
+     * pc.numLights (slice 6) tells the rgen how many entries of the
+     * light buffer to iterate. NVIDIA's strict path requires the
+     * push before vkCmdTraceRaysKHR even when values would all be
+     * defaults. */
+    struct PC {
+        float    px, py, pz, pw;  /* x=frame y=time z=exposure w=resetAccum */
+        uint32_t numLights;
+    } pc = {
+        static_cast<float>(frameIndex),
+        time,
+        1.0f,
+        frameIndex < 4 ? 1.0f : 0.0f,
+        mLightCount,
     };
     vkCmdPushConstants(cmd, mPipelineLayout,
                        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
-                       0, sizeof(pc), pc);
+                       0, sizeof(pc), &pc);
 
     pfnCmdTraceRays(cmd, &mRgenRegion, &mMissRegion, &mHitRegion, &mCallRegion,
                     width, height, 1);
+}
+
+/* Allocate the per-frame point-light storage buffer.  Device-local for
+ * shader speed; persistent host-visible staging stays mapped so the
+ * per-frame upload is one memcpy + one vkCmdCopyBuffer. */
+void RayTracingPipeline::createLightsBuffer() {
+    const VkDeviceSize bytes = sizeof(Light) * kMaxLights;
+
+    mEngine.allocateBuffer(bytes,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &mLightsBuffer, &mLightsMemory);
+
+    mEngine.allocateBuffer(bytes,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &mLightsStaging, &mLightsStagingMem);
+
+    check(vkMapMemory(mEngine.device(), mLightsStagingMem, 0, bytes, 0,
+                      &mLightsStagingMap),
+          "vkMapMemory (lights staging)");
+
+    /* Initialise to zero so first dispatch with numLights=0 doesn't
+     * read garbage. */
+    std::memset(mLightsStagingMap, 0, bytes);
+}
+
+/* Upload up to kMaxLights entries.  Excess clamped silently.  The
+ * descriptor binding stays the same; only the buffer contents and
+ * pc.numLights change. */
+void RayTracingPipeline::updateLights(VkCommandBuffer cmd,
+                                      const Light* lights, uint32_t count) {
+    if (count > kMaxLights) count = kMaxLights;
+    mLightCount = count;
+    if (count > 0 && lights) {
+        std::memcpy(mLightsStagingMap, lights, sizeof(Light) * count);
+    }
+    /* memory-coherent host map means the staging is already visible;
+     * one buffer copy uploads to device-local. Always copy the whole
+     * range so stale tail bytes never leak into rgen reads. */
+    VkBufferCopy region{};
+    region.size = sizeof(Light) * kMaxLights;
+    vkCmdCopyBuffer(cmd, mLightsStaging, mLightsBuffer, 1, &region);
+
+    /* Ensure the copy is visible before the rgen reads the buffer. */
+    VkBufferMemoryBarrier barrier{};
+    barrier.sType               = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier.srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.buffer              = mLightsBuffer;
+    barrier.offset              = 0;
+    barrier.size                = region.size;
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        0, 0, nullptr, 1, &barrier, 0, nullptr);
 }
 
 }  /* namespace tmc_vkrt */
