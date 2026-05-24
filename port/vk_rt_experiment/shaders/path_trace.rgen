@@ -382,12 +382,28 @@ void main() {
                  */
                 vec3 reflection = vec3(0.0);
                 float reflWeight = 0.0;
+                vec3 caustics = vec3(0.0);
                 if ((payload.materialFlags & kMaterialReflective) != 0u) {
-                    /* Tilted reflection normal — rotate the +Z surface
-                     * normal ~17° toward -Y so reflection rays travel
-                     * up-and-back-toward-camera, hitting sprite quads
-                     * that are screen-above the water hit point. */
-                    vec3 wN = normalize(vec3(0.0, -0.3, -0.95));
+                    /* Slice 10: time-driven ripple noise on the reflection
+                     * normal — gives the surface a moving "broken-mirror"
+                     * shimmer instead of a static parallax illusion.  Two
+                     * octaves of sin/cos at offset world positions blend
+                     * cleanly without obvious patterns. */
+                    float t = pc.params.y;
+                    float wave1x = sin(hitPos.x * 0.42 + t * 1.7) *
+                                   cos(hitPos.y * 0.31 - t * 1.3);
+                    float wave1y = cos(hitPos.x * 0.37 - t * 1.5) *
+                                   sin(hitPos.y * 0.46 + t * 1.9);
+                    float wave2x = sin(hitPos.x * 0.18 + hitPos.y * 0.21 + t * 0.9);
+                    float wave2y = cos(hitPos.x * 0.22 - hitPos.y * 0.17 - t * 1.1);
+                    /* Amplitude ~0.08 keeps the ripple subtle — the
+                     * underlying tilted-toward-Y normal still dominates
+                     * so Link's reflection stays recognisably "above"
+                     * the water surface rather than dancing wildly. */
+                    vec3 ripple = vec3(0.08 * wave1x + 0.04 * wave2x,
+                                       -0.3 + 0.08 * wave1y + 0.04 * wave2y,
+                                       -0.95);
+                    vec3 wN = normalize(ripple);
                     vec3 r  = reflect(rayDir, wN);
                     payload.hitDistance = -1.0;
                     payload.albedo      = vec3(0.0);
@@ -399,13 +415,21 @@ void main() {
                     } else {
                         reflection = sampleSky(r);
                     }
-                    /* Schlick-style Fresnel approximation; we don't
-                     * track per-pixel view vectors precisely, so use
-                     * a fixed reflectivity-at-normal estimate that
-                     * lifts at grazing angles. The visual goal is
-                     * "water gets brighter and more reflective when
-                     * Link is near a shore" — implementation can
-                     * iterate. */
+                    /* Slice 10: caustic overlay — bright moving spots
+                     * approximating focused sunlight through wave crests.
+                     * Higher-frequency animated voronoi-ish pattern; the
+                     * pow() concentrates the bright peaks while keeping
+                     * the troughs dark, so the water surface looks like
+                     * it has sparkling highlights.  Tinted warm (sun
+                     * colour passing through water adds a slight yellow
+                     * tint). */
+                    float c1 = sin(hitPos.x * 0.62 + t * 2.4) *
+                               cos(hitPos.y * 0.55 - t * 1.8);
+                    float c2 = cos(hitPos.x * 0.83 - hitPos.y * 0.71 + t * 2.9);
+                    float causticIntensity = clamp(c1 * c1 * c2 * c2, 0.0, 1.0);
+                    causticIntensity = pow(causticIntensity, 4.0);  /* sharpen */
+                    caustics = vec3(1.30, 1.20, 0.90) * causticIntensity * litFrac;
+                    /* Schlick-style Fresnel approximation. */
                     reflWeight = 0.45;
                 }
 
@@ -419,7 +443,10 @@ void main() {
                 const vec3 shadowTint = vec3(0.30, 0.38, 0.62);
                 vec3 direct = albedo * mix(shadowTint, sunTint, litFrac);
                 vec3 baseShading = direct + ptLight + indirect;
-                sampleAccum = mix(baseShading, baseShading + reflection, reflWeight);
+                /* Water: blend reflection + add caustics on top.
+                 * Non-water surfaces: caustics = 0 (no contribution). */
+                sampleAccum = mix(baseShading, baseShading + reflection, reflWeight)
+                              + caustics;
             }
         }
 
