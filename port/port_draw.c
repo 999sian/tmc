@@ -221,18 +221,19 @@ void ram_UpdateEntities(u32 mode) {
         Entity* entity = list->first;
 
         while (entity != NULL && entity != (Entity*)list) {
-            /* Sanity-check: entity must either be one of the
-             * gEntityLists head sentinels (caught by the loop
-             * predicate above) or live inside gEntities. Any other
-             * value is a stale pointer left by a v1 quicksave with
-             * no pointer fixup, or by list corruption — bail out
-             * before the deref instead of SIGSEGVing. */
+            /* Sanity-check: entity must be a known entity address —
+             * inside gEntities, gAuxPlayerEntities, the manager pool,
+             * == &gPlayerEntity, or a gEntityLists head sentinel.
+             * Anything else is a stale pointer (v1 quicksave fallout
+             * or list corruption); bail out before the deref instead
+             * of SIGSEGVing. Reuses Port_IsValidEntityAddr from
+             * src/entity.c which already encodes the full valid
+             * region set — checking only gEntities (as an earlier
+             * version of this guard did) rejects gPlayerEntity and
+             * makes Link invisible. */
             {
-                extern GenericEntity gEntities[];
-                const uintptr_t addr = (uintptr_t)entity;
-                const uintptr_t lo   = (uintptr_t)&gEntities[0];
-                const uintptr_t hi   = lo + sizeof(GenericEntity) * MAX_ENTITIES;
-                int in_pool = (addr >= lo && addr < hi);
+                extern int Port_IsValidEntityAddr(const void* p);
+                int in_pool = Port_IsValidEntityAddr(entity);
                 if (!in_pool) {
                     for (int k = 0; k < 9; ++k) {
                         if (entity == (Entity*)&gEntityLists[k]) {
