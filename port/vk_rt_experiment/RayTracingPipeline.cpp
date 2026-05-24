@@ -256,8 +256,22 @@ void RayTracingPipeline::createShaderBindingTable() {
     const uint32_t handleSize = props.shaderGroupHandleSize;
     const uint32_t handleAlign = props.shaderGroupHandleAlignment;
     const uint32_t baseAlign  = props.shaderGroupBaseAlignment;
+
+    /* Per-record stride within a region must be aligned to
+     * shaderGroupHandleAlignment AND ≥ handleSize. */
     const VkDeviceSize stride = alignUp(handleSize, handleAlign);
-    const VkDeviceSize sbtBytes = alignUp(stride, baseAlign) * groupCount;
+
+    /* Per-region START (deviceAddress) must be aligned to
+     * shaderGroupBaseAlignment. With one record per region, the
+     * simplest correct layout is: each region occupies a baseAlign-
+     * sized slot in the SBT buffer, even though the data inside is
+     * only `stride` bytes. Lay them out as
+     *     offset 0           → rgen
+     *     offset baseAlign   → miss
+     *     offset 2*baseAlign → hit
+     * and the region.stride/size both equal stride (one record). */
+    const VkDeviceSize regionStride = alignUp(stride, baseAlign);
+    const VkDeviceSize sbtBytes     = regionStride * groupCount;
 
     std::vector<uint8_t> handles(handleSize * groupCount);
     check(pfnGetShaderGroupHandles(mEngine.device(), mPipeline, 0, groupCount,
@@ -275,9 +289,14 @@ void RayTracingPipeline::createShaderBindingTable() {
 
     void* ptr = nullptr;
     check(vkMapMemory(mEngine.device(), mSbtMemory, 0, sbtBytes, 0, &ptr), "vkMapMemory (sbt)");
+    /* Zero the whole buffer first so the padding past `handleSize`
+     * inside each region is well-defined (Vulkan doesn't require it,
+     * but it makes the SBT contents reproducible across runs). */
+    std::memset(ptr, 0, (size_t)sbtBytes);
     uint8_t* dst = (uint8_t*)ptr;
     for (uint32_t i = 0; i < groupCount; ++i) {
-        std::memcpy(dst + i * stride, handles.data() + i * handleSize, handleSize);
+        std::memcpy(dst + i * regionStride,
+                    handles.data() + i * handleSize, handleSize);
     }
     vkUnmapMemory(mEngine.device(), mSbtMemory);
 
@@ -286,13 +305,14 @@ void RayTracingPipeline::createShaderBindingTable() {
     bda.buffer = mSbtBuffer;
     VkDeviceAddress base = vkGetBufferDeviceAddress(mEngine.device(), &bda);
 
-    mRgenRegion.deviceAddress = base + 0 * stride;
+    mRgenRegion.deviceAddress = base + 0 * regionStride;
     mRgenRegion.stride        = stride;
+    /* For ray-gen specifically, size MUST equal stride. */
     mRgenRegion.size          = stride;
-    mMissRegion.deviceAddress = base + 1 * stride;
+    mMissRegion.deviceAddress = base + 1 * regionStride;
     mMissRegion.stride        = stride;
     mMissRegion.size          = stride;
-    mHitRegion.deviceAddress  = base + 2 * stride;
+    mHitRegion.deviceAddress  = base + 2 * regionStride;
     mHitRegion.stride         = stride;
     mHitRegion.size           = stride;
     /* No callable shaders → empty region. */
@@ -331,6 +351,12 @@ void RayTracingPipeline::destroyAS() {
 }
 
 void RayTracingPipeline::rebuildAS(VkCommandBuffer cmd) {
+    /* The AS handles + buffers from the previous frame may still be
+     * in use by an in-flight command buffer. Serialise with the GPU
+     * before destroying. Crude (kills frame-pacing parallelism) but
+     * correct — proper code would defer destruction via a per-frame
+     * delete queue gated on the frame's fence. */
+    vkDeviceWaitIdle(mEngine.device());
     destroyAS();
     buildBLAS(cmd);
 
@@ -613,6 +639,18 @@ void RayTracingPipeline::dispatchRays(VkCommandBuffer cmd, uint32_t width, uint3
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, mPipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                             mPipelineLayout, 0, 1, &mDescriptorSet, 0, nullptr);
+
+    /* Push constants — rgen/rchit statically reference pc.params,
+     * which means the driver REQUIRES vkCmdPushConstants to have been
+     * called before vkCmdTraceRaysKHR, even if all values are zero.
+     * Without this, validation flags the trace and NVIDIA's strict
+     * path silently produces nothing. Default: (frameIndex=0, time=0,
+     * exposure=1.0, reserved=0). */
+    float pc[4] = {0.0f, 0.0f, 1.0f, 0.0f};
+    vkCmdPushConstants(cmd, mPipelineLayout,
+                       VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+                       0, sizeof(pc), pc);
+
     pfnCmdTraceRays(cmd, &mRgenRegion, &mMissRegion, &mHitRegion, &mCallRegion,
                     width, height, 1);
 }

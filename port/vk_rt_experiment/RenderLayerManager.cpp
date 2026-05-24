@@ -68,6 +68,11 @@ void RenderLayerManager::emitQuad(Layer layer, float x, float y, float w, float 
 }
 
 void RenderLayerManager::flushToBuffers() {
+    /* Same in-flight-resource hazard as RayTracingPipeline::rebuildAS:
+     * the previous frame's vertex/index buffers may still be referenced
+     * by an in-flight command buffer when we get here. Serialise with
+     * the GPU before freeing. */
+    vkDeviceWaitIdle(mEngine.device());
     freeBuffers();
     if (mVertices.empty()) return;
 

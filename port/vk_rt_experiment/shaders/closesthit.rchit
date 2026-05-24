@@ -27,14 +27,7 @@ struct HitPayload {
     float distance;
 };
 
-/* Shadow-ray payload — distinct from primary because we only need
- * "did we hit anything" not a colour. */
-struct ShadowPayload {
-    bool hit;
-};
-
 layout(location = 0) rayPayloadInEXT HitPayload payload;
-layout(location = 1) rayPayloadEXT   ShadowPayload shadowPayload;
 
 /* Built-in barycentric attribs for the hit triangle. */
 hitAttributeEXT vec2 attribs;
@@ -118,26 +111,13 @@ void main() {
         return;
     }
 
-    /* Shadow ray: from hit toward the sun. If anything occludes,
-     * the surface is shadowed and gets ambient only. We use a
-     * dedicated miss shader for the shadow ray (miss → hit=false). */
-    const vec3 toSun = normalize(kSunPosition - hitPos);
-    shadowPayload.hit = true;  /* assume occluded unless miss writes false */
-    traceRayEXT(
-        topLevelAS,
-        gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsSkipClosestHitShaderEXT,
-        0xFF,
-        0,
-        0,
-        1,                       /* shadow-ray miss index */
-        hitPos + toSun * 0.01,   /* nudge to avoid self-hit */
-        0.0,
-        toSun,
-        length(kSunPosition - hitPos),
-        1                        /* shadowPayload location */
-    );
-
-    const vec3 lit = shadowPayload.hit ? kAmbient : kSunColour;
-    payload.colour = diffuse.rgb * lit;
+    /* Scaffold lighting: flat diffuse modulated by the sun colour.
+     * The shadow trace is disabled until we register a second miss
+     * shader at SBT slot 1 — currently the only miss is the primary
+     * (slot 0), so tracing a shadow ray with missIndex=1 has
+     * undefined behaviour. Once the second miss is in, the original
+     * `traceRayEXT → shadowPayload.hit ? ambient : sun` block goes
+     * back here. */
+    payload.colour = diffuse.rgb * kSunColour;
     payload.distance = gl_HitTEXT;
 }
