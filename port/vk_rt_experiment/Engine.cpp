@@ -274,8 +274,14 @@ void Engine::createDevice() {
     VkPhysicalDeviceFeatures2 feat2{};
     feat2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     feat2.pNext = &diFeat;
-    /* Standard 1.0 features we want enabled too. */
+    /* Core 1.0 features. shaderStorageImageWriteWithoutFormat lets
+     * the rgen declare its storage image with no format qualifier
+     * (`writeonly image2D` instead of `layout(rgba8)`), so the driver
+     * matches whatever format the bound view has. Avoids the
+     * fixed-qualifier rejection we hit with BGRA8 views. */
     feat2.features.samplerAnisotropy = VK_TRUE;
+    feat2.features.shaderStorageImageExtendedFormats = VK_TRUE;
+    feat2.features.shaderStorageImageWriteWithoutFormat = VK_TRUE;
 
     VkDeviceCreateInfo dci{};
     dci.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -366,30 +372,24 @@ void Engine::createSwapchain() {
 
     check(vkCreateSwapchainKHR(mDevice, &sci, nullptr, &mSwapchain), "vkCreateSwapchainKHR");
 
-    /* Pull the swapchain images and build a VkImageView per image. */
+    /* Swapchain images — we only blit into them (no shader sampling
+     * or attachment), so we don't need VkImageViews. They were
+     * unused anyway, and validation rejected creating views on
+     * images with TRANSFER_DST-only usage. */
     uint32_t actual = 0;
     vkGetSwapchainImagesKHR(mDevice, mSwapchain, &actual, nullptr);
     mSwapchainImages.resize(actual);
     vkGetSwapchainImagesKHR(mDevice, mSwapchain, &actual, mSwapchainImages.data());
-    mSwapchainViews.resize(actual);
-    for (uint32_t i = 0; i < actual; ++i) {
-        VkImageViewCreateInfo vci{};
-        vci.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        vci.image            = mSwapchainImages[i];
-        vci.viewType         = VK_IMAGE_VIEW_TYPE_2D;
-        vci.format           = mSwapchainFormat.format;
-        vci.components       = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
-                                VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
-        vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        check(vkCreateImageView(mDevice, &vci, nullptr, &mSwapchainViews[i]),
-              "vkCreateImageView (swapchain)");
-    }
+    mSwapchainViews.clear();
 }
 
 void Engine::createStorageImage() {
-    /* The RT pipeline writes RGBA8 to this image; we blit it to the
-     * swapchain in endFrame. STORAGE for the rgen image binding,
-     * TRANSFER_SRC for the blit. */
+    /* R8G8B8A8_UNORM exactly matches the rgen's `layout(rgba8)` SPIR-V
+     * Format operand — validation requires identical formats for
+     * Storage Images (compatible-but-different formats produce
+     * undefined values to the entire image, not just the writes).
+     * The blit to BGRA8 swapchain does the channel conversion at
+     * vkCmdBlitImage time per spec. */
     VkImageCreateInfo ici{};
     ici.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     ici.imageType     = VK_IMAGE_TYPE_2D;
@@ -401,7 +401,13 @@ void Engine::createStorageImage() {
     ici.arrayLayers   = 1;
     ici.samples       = VK_SAMPLE_COUNT_1_BIT;
     ici.tiling        = VK_IMAGE_TILING_OPTIMAL;
-    ici.usage         = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    /* TRANSFER_DST so vkCmdClearColorImage can clear it to a known
+     * colour (used by main.cpp's pre-trace red-clear diagnostic),
+     * TRANSFER_SRC for the blit-out to the swapchain, STORAGE so the
+     * rgen can write it. */
+    ici.usage         = VK_IMAGE_USAGE_STORAGE_BIT
+                      | VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+                      | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     ici.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
     ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     check(vkCreateImage(mDevice, &ici, nullptr, &mStorageImage), "vkCreateImage (storage)");
@@ -525,8 +531,10 @@ void Engine::endFrame() {
 
     transitionImageLayout(f.cmd, mStorageImage,
                           VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                          VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT,
-                          VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT);
+                          VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT,
+                          VK_ACCESS_TRANSFER_READ_BIT,
+                          VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                          VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     VkImageBlit blit{};
     blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
