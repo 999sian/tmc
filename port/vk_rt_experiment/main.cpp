@@ -23,57 +23,192 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <string>
 #include <vector>
 
 using namespace tmc_vkrt;
 
-/* Build a 256×256 procedural RGBA atlas with five named cells laid
- * out in a 1×5 row. Each cell is 256×51 (rounded), with a solid
- * colour matching the layer it'll be sampled by:
- *   cell 0: 0.10–0.30 UV-x → white border (UI)
- *   cell 1: 0.30–0.50            → red (sprite)
- *   cell 2: 0.50–0.70            → yellow (BG0)
- *   cell 3: 0.70–0.90            → green (BG1)
- *   cell 4: 0.90–1.00            → blue (BG2)
+/* Read all bytes from a file. Returns empty vector on failure (caller
+ * should check). Used by the real-tile atlas builder below. */
+static std::vector<uint8_t> readFile(const char* path) {
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    if (!f) return {};
+    auto end = f.tellg();
+    f.seekg(0);
+    std::vector<uint8_t> data((size_t)end);
+    if (!f.read((char*)data.data(), data.size())) data.clear();
+    return data;
+}
+
+/* Decode a 4-bits-per-pixel GBA tilesheet into row-major RGBA.
  *
- * Returns the RGBA bytes (size = w*h*4). */
+ * GBA tile layout:
+ *   - Each 8×8 tile is 32 bytes (4bpp).
+ *   - Within a tile, pixels are stored row-by-row, top-to-bottom.
+ *   - Each byte holds 2 pixels: low nibble = LEFT, high nibble = RIGHT.
+ *   - The sheet's tiles are arranged in a `tileCols`-wide grid,
+ *     left-to-right, top-to-bottom.
+ *
+ * `palette` is 16 RGBA8 colours; index 0 conventionally = transparent.
+ * Output buffer is (tileCols*8) × (tileRows*8) × 4 bytes.
+ *
+ * Returns the decoded RGBA bytes. */
+static std::vector<uint8_t> decode4bppTilesheet(const std::vector<uint8_t>& tileBytes,
+                                                int tileCols, int tileRows,
+                                                const uint32_t palette[16]) {
+    const int W = tileCols * 8;
+    const int H = tileRows * 8;
+    std::vector<uint8_t> rgba((size_t)W * H * 4, 0);
+    const size_t bytesPerTile = 32;
+    if (tileBytes.size() < bytesPerTile * (size_t)tileCols * tileRows) {
+        return rgba;  /* zero-filled — caller sees empty/black on missing data */
+    }
+    for (int ty = 0; ty < tileRows; ++ty) {
+        for (int tx = 0; tx < tileCols; ++tx) {
+            const uint8_t* src = &tileBytes[(ty * tileCols + tx) * bytesPerTile];
+            for (int py = 0; py < 8; ++py) {
+                for (int px = 0; px < 8; px += 2) {
+                    uint8_t b = src[py * 4 + (px / 2)];
+                    uint8_t lo = b & 0x0F;
+                    uint8_t hi = (b >> 4) & 0x0F;
+                    auto put = [&](int dx, int dy, uint8_t idx) {
+                        if (idx == 0) return;  /* transparent */
+                        uint32_t col = palette[idx];
+                        uint8_t* dst = &rgba[((dy * W) + dx) * 4];
+                        dst[0] = (col >>  0) & 0xFF;  /* R */
+                        dst[1] = (col >>  8) & 0xFF;  /* G */
+                        dst[2] = (col >> 16) & 0xFF;  /* B */
+                        dst[3] = (col >> 24) & 0xFF;  /* A */
+                    };
+                    put(tx * 8 + px,     ty * 8 + py, lo);
+                    put(tx * 8 + px + 1, ty * 8 + py, hi);
+                }
+            }
+        }
+    }
+    return rgba;
+}
+
+/* Real palette extracted from mods/buttons-gba/assets-src/face buttons.png
+ * via `convert ... -colors 16 -unique-colors`. That PNG is the editable
+ * source for the buttons-gba mod's 4bpp .bin output (the .bin file was
+ * generated from it at build time, so they share index→colour mapping).
+ * Only 7 distinct colours used (1 transparent + 6 greys); slots 7..15
+ * stay magenta as a "this was never used by this sheet" sentinel so any
+ * tile data sampling those indices visibly stands out as broken. */
+static constexpr uint32_t kTestPalette[16] = {
+    0x00000000u,  /* 0: transparent (GBA convention) */
+    0xFF000000u,  /* 1: black (outline) */
+    0xFF686050u,  /* 2: dark grey-blue */
+    0xFF908870u,  /* 3: mid-dark */
+    0xFFC0B0A0u,  /* 4: mid */
+    0xFFE8D8D0u,  /* 5: light */
+    0xFFF8F8F8u,  /* 6: near-white */
+    0xFFFF00FFu,  /* 7..15: sentinel magenta */
+    0xFFFF00FFu,
+    0xFFFF00FFu,
+    0xFFFF00FFu,
+    0xFFFF00FFu,
+    0xFFFF00FFu,
+    0xFFFF00FFu,
+    0xFFFF00FFu,
+    0xFFFF00FFu,
+};
+
+/* Atlas layout (256×256):
+ *
+ *      0─────────┬─────64─────128────192────256
+ *      │ GBA     │ Sprite  │ BG0      │ BG2 │
+ *      │ tile-   │ (red)   │ (yellow) │     │
+ *      │ sheet   ├─────────┼──────────┤(blue)
+ *      │ 64×56   │ BG1     │ UI box   │     │
+ *      │ from .  │ (green) │ (white,  │     │
+ *      │ /mods/. │         │ trans-   │     │
+ *      │ /buttons│         │ parent   │     │
+ *  64 ─┤         │         │ inside)  │     │
+ *      ├─────────┘         │          │     │
+ *      │ (unused, black)   │          │     │
+ *      │                   │          │     │
+ *      │                   │          │     │
+ *      ├───────────────────┴──────────┴─────┤
+ *  256 ─┘
+ *
+ * Cell UVs (used by main loop's drawSprite calls):
+ *
+ *   GBA_TILES   : (0.0, 0.0)   → (64/256, 56/256) = (0.25, 0.219)
+ *   Sprite      : (0.25, 0.0)  → (0.50, 0.25)
+ *   BG0         : (0.50, 0.0)  → (0.75, 0.25)
+ *   BG2         : (0.75, 0.0)  → (1.00, 1.00)
+ *   BG1         : (0.25, 0.25) → (0.50, 0.50)
+ *   UI          : (0.50, 0.25) → (0.75, 0.50)  (hollow box)
+ */
 static std::vector<uint8_t> buildAtlas(uint32_t& outW, uint32_t& outH) {
     const uint32_t W = 256;
     const uint32_t H = 256;
     outW = W; outH = H;
     std::vector<uint8_t> px(W * H * 4u, 0);
 
-    struct Cell { float u0, u1; uint8_t r, g, b; };
-    const Cell cells[5] = {
-        { 0.10f, 0.30f, 240, 240, 240 },  /* UI    : near-white */
-        { 0.30f, 0.50f, 230,  60,  50 },  /* Sprite: red */
-        { 0.50f, 0.70f, 235, 200,  60 },  /* BG0   : yellow */
-        { 0.70f, 0.90f,  80, 180,  90 },  /* BG1   : green */
-        { 0.90f, 1.00f,  60, 110, 200 },  /* BG2   : blue */
+    /* Block-fill a solid colour into a rect of the atlas. */
+    auto fillRect = [&](uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1,
+                        uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+        for (uint32_t y = y0; y < y1; ++y) {
+            for (uint32_t x = x0; x < x1; ++x) {
+                uint8_t* p = &px[(y * W + x) * 4u];
+                p[0] = r; p[1] = g; p[2] = b; p[3] = a;
+            }
+        }
     };
-    for (const Cell& c : cells) {
-        uint32_t x0 = (uint32_t)(c.u0 * W);
-        uint32_t x1 = (uint32_t)(c.u1 * W);
-        for (uint32_t y = 0; y < H; ++y) {
-            for (uint32_t x = x0; x < x1; ++x) {
-                uint8_t* p = &px[(y * W + x) * 4u];
-                p[0] = c.r; p[1] = c.g; p[2] = c.b; p[3] = 255;
-            }
+
+    /* Sprite cell (red), BG0 (yellow), BG2 (blue), BG1 (green), UI (white). */
+    fillRect( 64, 0, 128,  64, 230,  60,  50, 255);  /* Sprite */
+    fillRect(128, 0, 192,  64, 235, 200,  60, 255);  /* BG0 */
+    fillRect(192, 0, 256, 256,  60, 110, 200, 255);  /* BG2 (full-height) */
+    fillRect( 64, 64, 128, 128,  80, 180,  90, 255); /* BG1 */
+    fillRect(128, 64, 192, 128, 240, 240, 240, 255); /* UI box outer */
+    /* UI box: hollow interior. */
+    fillRect(134, 70, 186, 122, 0, 0, 0, 0);
+
+    /* Multi-tilesheet atlas packer. Each tilesheet is decoded with
+     * the shared kTestPalette and blitted into a free region of the
+     * atlas, recorded in the order their UVs are looked up below. */
+    struct SheetSpec {
+        const char* path;
+        int         tileCols;
+        int         tileRows;
+        uint32_t    atlasX, atlasY;  /* top-left in the 256×256 atlas */
+        const char* label;
+    };
+    /* Tilesheet 1: face buttons (8 tiles × 7 tiles = 64×56). Lands
+     *   at atlas (0, 0).
+     * Tilesheet 2: shoulder buttons (7 × 2 tiles = 56×16). Lands at
+     *   atlas (0, 56) just below the first. */
+    const SheetSpec sheets[] = {
+        { "../../mods/buttons-gba/gfx/gfx_35cb00_64x56_4bpp_uncompressed.bin",
+          8, 7, 0, 0,  "face" },
+        { "../../mods/buttons-gba/gfx/gfx_215e0_32x32_4bpp_uncompressed.bin",
+          7, 2, 0, 56, "shoulder" },
+    };
+
+    for (const SheetSpec& s : sheets) {
+        auto bytes = readFile(s.path);
+        if (bytes.empty()) {
+            std::fprintf(stderr, "[atlas] missing %s — slot stays black\n", s.path);
+            continue;
         }
-    }
-    /* Cell 0 (UI): hollow box — clear inside so emissive=0 quads can
-     * sample alpha=0 and discard via the rchit's a<0.01 check. */
-    {
-        uint32_t x0 = (uint32_t)(cells[0].u0 * W) + 6;
-        uint32_t x1 = (uint32_t)(cells[0].u1 * W) - 6;
-        for (uint32_t y = 6; y < H - 6; ++y) {
-            for (uint32_t x = x0; x < x1; ++x) {
-                uint8_t* p = &px[(y * W + x) * 4u];
-                p[3] = 0;  /* transparent interior */
-            }
+        const int sheetW = s.tileCols * 8;
+        const int sheetH = s.tileRows * 8;
+        auto rgba = decode4bppTilesheet(bytes, s.tileCols, s.tileRows, kTestPalette);
+        for (int y = 0; y < sheetH; ++y) {
+            std::memcpy(&px[((s.atlasY + y) * W + s.atlasX) * 4u],
+                        &rgba[(y * sheetW) * 4u],
+                        (size_t)sheetW * 4u);
         }
+        std::fprintf(stderr,
+            "[atlas] decoded %s tilesheet (%zu bytes → %dx%d, placed at atlas %u,%u)\n",
+            s.label, bytes.size(), sheetW, sheetH, s.atlasX, s.atlasY);
     }
+
     return px;
 }
 
@@ -195,13 +330,15 @@ static AtlasGpu uploadAtlas(Engine& eng, const std::vector<uint8_t>& px,
     return out;
 }
 
-/* Cell UV ranges in the procedural atlas above. */
+/* Cell UV ranges into the atlas built by buildAtlas above. */
 struct CellUV { float u0, v0, u1, v1; };
-static constexpr CellUV kCellUI     = {0.10f, 0.00f, 0.30f, 1.00f};
-static constexpr CellUV kCellSprite = {0.30f, 0.00f, 0.50f, 1.00f};
-static constexpr CellUV kCellBG0    = {0.50f, 0.00f, 0.70f, 1.00f};
-static constexpr CellUV kCellBG1    = {0.70f, 0.00f, 0.90f, 1.00f};
-static constexpr CellUV kCellBG2    = {0.90f, 0.00f, 1.00f, 1.00f};
+static constexpr CellUV kCellFace   = {0.000f, 0.000f, 64.0f/256, 56.0f/256}; /* face buttons */
+static constexpr CellUV kCellShould = {0.000f, 56.0f/256, 56.0f/256, 72.0f/256}; /* shoulder buttons */
+static constexpr CellUV kCellSprite = {0.250f, 0.000f, 0.500f,    0.250f};   /* red */
+static constexpr CellUV kCellBG0    = {0.500f, 0.000f, 0.750f,    0.250f};   /* yellow */
+static constexpr CellUV kCellBG2    = {0.750f, 0.000f, 1.000f,    1.000f};   /* blue */
+static constexpr CellUV kCellBG1    = {0.250f, 0.250f, 0.500f,    0.500f};   /* green */
+static constexpr CellUV kCellUI     = {0.500f, 0.250f, 0.750f,    0.500f};   /* white */
 
 int main() {
     Engine engine;
@@ -257,6 +394,17 @@ int main() {
         layers.drawSprite(Layer::Sprite, x, 70.0f, 16.0f, 16.0f,
                           kCellSprite.u0, kCellSprite.v0,
                           kCellSprite.u1, kCellSprite.v1);
+
+        /* Real GBA tilesheets — face buttons (64×56) above the
+         * shoulder buttons (56×16). Both decoded from 4bpp .bin
+         * files with the kTestPalette extracted from the mod's
+         * face-buttons PNG via ImageMagick. */
+        layers.drawSprite(Layer::Sprite, 88.0f, 4.0f, 64.0f, 56.0f,
+                          kCellFace.u0, kCellFace.v0,
+                          kCellFace.u1, kCellFace.v1);
+        layers.drawSprite(Layer::Sprite, 88.0f, 64.0f, 56.0f, 16.0f,
+                          kCellShould.u0, kCellShould.v0,
+                          kCellShould.u1, kCellShould.v1);
 
         /* UI border (white, transparent interior) — top-corner box */
         layers.drawSprite(Layer::UI, 4.0f, 4.0f, 32.0f, 16.0f,
