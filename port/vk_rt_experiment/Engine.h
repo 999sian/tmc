@@ -134,6 +134,17 @@ public:
     VkImageView      storageImageView()const{ return mStorageImageView; }
     VkImage          accumImage()     const { return mAccumImage; }
     VkImageView      accumImageView() const { return mAccumImageView; }
+
+    /* Slice-7 denoiser guide buffers — populated by the rgen at the
+     * primary hit, read by the compute filter's edge-stopping weights. */
+    VkImage     gNormalImage()     const { return mGNormalImage; }
+    VkImageView gNormalImageView() const { return mGNormalImageView; }
+    VkImage     gHitPosImage()     const { return mGHitPosImage; }
+    VkImageView gHitPosImageView() const { return mGHitPosImageView; }
+    /* Ping-pong scratch for the multi-pass a-trous filter. */
+    VkImage     denoiseScratchImage()     const { return mDenoiseScratchImage; }
+    VkImageView denoiseScratchImageView() const { return mDenoiseScratchImageView; }
+
     uint32_t         currentFrameIndex() const { return mCurrentFrame; }
 
     /* Returned by enumeratePhysicalDevice; the ray-tracing pipeline
@@ -239,6 +250,19 @@ private:
     VkImage          mAccumImage = VK_NULL_HANDLE;
     VkDeviceMemory   mAccumImageMemory = VK_NULL_HANDLE;
     VkImageView      mAccumImageView = VK_NULL_HANDLE;
+
+    /* Slice-7 denoiser auxiliaries — created alongside the accum image
+     * because they share its dimensions and lifecycle.  All RGBA32F so
+     * the rgen can store unbounded HDR / world-space without loss. */
+    VkImage          mGNormalImage = VK_NULL_HANDLE;
+    VkDeviceMemory   mGNormalImageMemory = VK_NULL_HANDLE;
+    VkImageView      mGNormalImageView = VK_NULL_HANDLE;
+    VkImage          mGHitPosImage = VK_NULL_HANDLE;
+    VkDeviceMemory   mGHitPosImageMemory = VK_NULL_HANDLE;
+    VkImageView      mGHitPosImageView = VK_NULL_HANDLE;
+    VkImage          mDenoiseScratchImage = VK_NULL_HANDLE;
+    VkDeviceMemory   mDenoiseScratchImageMemory = VK_NULL_HANDLE;
+    VkImageView      mDenoiseScratchImageView = VK_NULL_HANDLE;
 
     std::array<FrameSync, kFramesInFlight> mFrames{};
     uint32_t         mCurrentFrame = 0;

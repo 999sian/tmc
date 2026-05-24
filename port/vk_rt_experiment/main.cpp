@@ -19,6 +19,7 @@
 #include "FrameSource.h"
 #include "RenderLayerManager.h"
 #include "RayTracingPipeline.h"
+#include "DenoisePipeline.h"
 
 #include <algorithm>
 #include <chrono>
@@ -540,11 +541,13 @@ int main() {
 
     RenderLayerManager layers(engine);
     RayTracingPipeline rt(engine, layers);
+    DenoisePipeline    denoise(engine);
 
     /* Compiled-shader directory: ./shaders relative to the binary's
      * cwd. The build script writes *.spv there. */
     std::fprintf(stderr, "[main] step: createPipeline\n");
     rt.createPipeline("./shaders");
+    denoise.createPipeline("./shaders");
     std::fprintf(stderr, "[main] step: pipeline ok\n");
 
     /* Atlas: 240 × (4 × 160) = 240×640, four stacked planes:
@@ -767,6 +770,21 @@ int main() {
             rt.dispatchRays(cmd,
                             engine.swapchainWidth(), engine.swapchainHeight(),
                             frameIdx, time);
+
+            /* Barrier: rgen-writes to accumImage + gNormal + gHitPos
+             * must complete before the denoise compute shader reads
+             * them.  storageImage is the eventual write target — both
+             * shader types touch it via storage access. */
+            VkMemoryBarrier toCompute{};
+            toCompute.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            toCompute.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+            toCompute.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            vkCmdPipelineBarrier(cmd,
+                VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0, 1, &toCompute, 0, nullptr, 0, nullptr);
+
+            denoise.dispatch(cmd, engine.swapchainWidth(), engine.swapchainHeight());
         }
 
         engine.endFrame();

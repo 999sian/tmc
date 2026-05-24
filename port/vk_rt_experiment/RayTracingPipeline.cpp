@@ -92,13 +92,15 @@ void RayTracingPipeline::createPipeline(const std::string& shaderDir) {
 }
 
 void RayTracingPipeline::createDescriptorLayout() {
-    /* Ten bindings for the PTGI pipeline:
+    /* Twelve bindings for the PTGI pipeline:
      *   0 TLAS, 1 outputImage, 2 verts, 3 indices,
      *   4 diffuse atlas[], 5 sampler,
      *   6 accumImage (HDR running mean for path-trace progressive),
      *   7 emissive atlas[], 8 normal atlas[],
-     *   9 point-light storage buffer (slice-6 light extraction). */
-    VkDescriptorSetLayoutBinding bindings[10]{};
+     *   9 point-light storage buffer (slice-6 light extraction),
+     *  10 gNormalImage  (slice-7 denoiser guide — rgen writes),
+     *  11 gHitPosImage  (slice-7 denoiser guide — rgen writes). */
+    VkDescriptorSetLayoutBinding bindings[12]{};
 
     bindings[0].binding         = 0;
     bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
@@ -156,9 +158,19 @@ void RayTracingPipeline::createDescriptorLayout() {
     bindings[9].descriptorCount = 1;
     bindings[9].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
+    bindings[10].binding         = 10;
+    bindings[10].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    bindings[10].descriptorCount = 1;
+    bindings[10].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
+    bindings[11].binding         = 11;
+    bindings[11].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    bindings[11].descriptorCount = 1;
+    bindings[11].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+
     VkDescriptorSetLayoutCreateInfo li{};
     li.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    li.bindingCount = 10;
+    li.bindingCount = 12;
     li.pBindings    = bindings;
     check(vkCreateDescriptorSetLayout(mEngine.device(), &li, nullptr, &mDescriptorSetLayout),
           "vkCreateDescriptorSetLayout");
@@ -167,7 +179,7 @@ void RayTracingPipeline::createDescriptorLayout() {
 void RayTracingPipeline::createDescriptorPool() {
     VkDescriptorPoolSize sizes[5]{};
     sizes[0] = {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1};
-    sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,              2}; /* outputImage + accumImage */
+    sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,              4}; /* outputImage + accumImage + gNormal + gHitPos */
     sizes[2] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,             3}; /* verts + indices + lights */
     sizes[3] = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,              3}; /* diffuse + emissive + normal */
     sizes[4] = {VK_DESCRIPTOR_TYPE_SAMPLER,                    1};
@@ -482,7 +494,14 @@ void RayTracingPipeline::rebuildAS(VkCommandBuffer cmd) {
     lightsInfo.buffer = mLightsBuffer;
     lightsInfo.range  = VK_WHOLE_SIZE;
 
-    VkWriteDescriptorSet writes[10]{};
+    VkDescriptorImageInfo gNormalInfo{};
+    gNormalInfo.imageView   = mEngine.gNormalImageView();
+    gNormalInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    VkDescriptorImageInfo gHitPosInfo{};
+    gHitPosInfo.imageView   = mEngine.gHitPosImageView();
+    gHitPosInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    VkWriteDescriptorSet writes[12]{};
     writes[0].sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     writes[0].pNext            = &asDescInfo;
     writes[0].dstSet           = mDescriptorSet;
@@ -559,7 +578,22 @@ void RayTracingPipeline::rebuildAS(VkCommandBuffer cmd) {
         writes[9].descriptorCount  = 1;
         writes[9].descriptorType   = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         writes[9].pBufferInfo      = &lightsInfo;
-        writeCount = 10;
+
+        /* Slice-7 denoiser guide images. */
+        writes[10].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[10].dstSet          = mDescriptorSet;
+        writes[10].dstBinding      = 10;
+        writes[10].descriptorCount = 1;
+        writes[10].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[10].pImageInfo      = &gNormalInfo;
+
+        writes[11].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[11].dstSet          = mDescriptorSet;
+        writes[11].dstBinding      = 11;
+        writes[11].descriptorCount = 1;
+        writes[11].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[11].pImageInfo      = &gHitPosInfo;
+        writeCount = 12;
     }
     vkUpdateDescriptorSets(mEngine.device(), writeCount, writes, 0, nullptr);
 }
