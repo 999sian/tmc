@@ -121,6 +121,7 @@ void main() {
     const uvec2 size  = gl_LaunchSizeEXT.xy;
     const uint  frameIdx = uint(pc.params.x);
 
+
     /* Orthographic camera over the GBA playfield (240×160 world
      * units). Camera at z=-1.0, looking +z. Each launch ID maps 1:1
      * to a swapchain pixel; the trace's world coords are scaled from
@@ -271,8 +272,14 @@ void main() {
         }
         imageStore(accumImage, ivec2(pixel), vec4(final, 1.0));
 
-        /* Reinhard tonemap to LDR. */
-        vec3 ldr = final / (final + vec3(1.0));
+        /* Reinhard tonemap with exposure correction.  The sunTint
+         * boost pushes scene HDR ~1.0..2.0 which un-exposed Reinhard
+         * squishes toward 0.5 (warm-grey).  Multiplying by
+         * `kExposure < 1.0` brings inputs into a contrast-preserving
+         * range while leaving room above 1.0 for emissive HDR. */
+        const float kExposure = 0.8;
+        vec3 hdr = final * kExposure;
+        vec3 ldr = hdr / (hdr + vec3(1.0));
         imageStore(outputImage, ivec2(pixel), vec4(ldr, 1.0));
     }
 }

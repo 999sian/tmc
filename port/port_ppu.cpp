@@ -501,23 +501,71 @@ extern "C" void Port_PPU_PresentFrame(void) {
      * does, just called again with a dedicated destination. Skipped
      * when the env var isn't set. */
     {
+        extern void Port_Shm_PublishFramebuffer(const uint32_t*, int, int);
         extern void Port_Shm_PublishBgPlanes(const uint32_t*, const uint32_t*, int, int);
+        extern void Port_Shm_PublishSpritePlane(const uint32_t*, int, int);
         extern int  Port_Shm_IsActive(void);
         if (Port_Shm_IsActive()) {
-            const int W = MODE1_GBA_WIDTH;
-            const int H = MODE1_GBA_HEIGHT;
+            /* The plane buffers are GBA-native sized — render at 240x160
+             * regardless of widescreen or InternalScale.  MODE1_GBA_WIDTH
+             * is the compile-time widescreen override (>240 stretches the
+             * composite) which we explicitly bypass here because the engine
+             * BG/OBJ renderers stop at 240 (32-tile BG buffer extent). */
+            const int W = 240;
+            const int H = 160;
             static uint32_t bg1Plane[240 * 160];
             static uint32_t bg2Plane[240 * 160];
+            static uint32_t spritePlane[240 * 160];
             static uint8_t  pri[240];
-            if (W == 240 && H == 160) {
-                std::memset(bg1Plane, 0, sizeof(bg1Plane));
-                std::memset(bg2Plane, 0, sizeof(bg2Plane));
-                for (int line = 0; line < H; ++line) {
-                    virtuappu_mode1_render_text_bg_line(1, line, &bg1Plane[line * W], pri);
-                    virtuappu_mode1_render_text_bg_line(2, line, &bg2Plane[line * W], pri);
-                }
-                Port_Shm_PublishBgPlanes(bg1Plane, bg2Plane, W, H);
+            std::memset(bg1Plane, 0, sizeof(bg1Plane));
+            std::memset(bg2Plane, 0, sizeof(bg2Plane));
+            /* Sprite plane pre-cleared to 0x00000000 — render_obj_line
+             * skips transparent texels (color_index == 0), so untouched
+             * pixels stay at alpha=0. The RT consumer (vk_rt_experiment)
+             * uses this to mask emissive boosts to actual silhouettes
+             * instead of bleeding across the full 16×16 sprite quad. */
+            std::memset(spritePlane, 0, sizeof(spritePlane));
+            /* DISPCNT bit 6 = OBJ_1D (1D char mapping); read via the
+             * engine's IO accessor so the per-line HDMA snapshot view
+             * stays consistent. */
+            extern uint16_t virtuappu_mode1_io_read16(uint16_t offset);
+            const bool obj_1d = (virtuappu_mode1_io_read16(0) & 0x40) != 0;
+            for (int line = 0; line < H; ++line) {
+                virtuappu_mode1_render_text_bg_line(1, line, &bg1Plane[line * W], pri);
+                virtuappu_mode1_render_text_bg_line(2, line, &bg2Plane[line * W], pri);
+                /* Reset priority buffer between scanlines (render_obj_line
+                 * reads it to depth-test OAM entries against each other).
+                 * 0xFF = "none drawn yet", same convention as render_frame. */
+                std::memset(pri, 0xFF, W);
+                virtuappu_mode1_render_obj_line(line, obj_1d, &spritePlane[line * W], pri);
             }
+            /* Build a native-size 240×160 composite for the shm publish so
+             * the consumer's atlas dims match the BG/sprite planes.
+             *
+             * virtuappu_frame_buffer is laid out at stride=MODE1_GBA_WIDTH
+             * (>240 in widescreen builds, but the engine only renders to
+             * cols 0..239 — the rest is the stale right-edge that the
+             * widescreen post-pass stretches away).  We're called BEFORE
+             * that post-pass so cols 0..239 are valid GBA-native pixels.
+             *
+             * When MODE1_GBA_WIDTH == 240 the buffer is contiguous and we
+             * can publish directly; otherwise copy the first 240 cols of
+             * each scanline into a packed scratch buffer. */
+            const uint32_t* compositeSrc;
+            static uint32_t compositeNative[240 * 160];
+            if (MODE1_GBA_WIDTH == 240) {
+                compositeSrc = virtuappu_frame_buffer;
+            } else {
+                for (int y = 0; y < H; ++y) {
+                    std::memcpy(&compositeNative[y * 240],
+                                &virtuappu_frame_buffer[y * MODE1_GBA_WIDTH],
+                                240 * sizeof(uint32_t));
+                }
+                compositeSrc = compositeNative;
+            }
+            Port_Shm_PublishBgPlanes(bg1Plane, bg2Plane, W, H);
+            Port_Shm_PublishSpritePlane(spritePlane, W, H);
+            Port_Shm_PublishFramebuffer(compositeSrc, W, H);
         }
     }
 

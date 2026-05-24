@@ -735,7 +735,7 @@ void RayTracingPipeline::dispatchRays(VkCommandBuffer cmd, uint32_t width, uint3
         static_cast<float>(frameIndex),  /* .x = frame index */
         time,                            /* .y = seconds (animates lights) */
         1.0f,                            /* .z = exposure */
-        0.0f                             /* .w = reserved */
+        frameIndex < 4 ? 1.0f : 0.0f     /* .w = resetAccum (force fresh for first frames) */
     };
     vkCmdPushConstants(cmd, mPipelineLayout,
                        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
