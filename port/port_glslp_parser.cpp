@@ -1033,9 +1033,27 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
                 size_t sc = tr.find(';');
                 if (sc != std::string::npos) {
                     std::string body = tr.substr(8, sc - 8);
-                    size_t sp = body.find_last_of(" \t");
-                    std::string name = (sp == std::string::npos) ? body
-                                                                  : body.substr(sp + 1);
+                    /* Split into whitespace-separated tokens. body looks
+                     * like `float foo` / `vec2 BLOOM_APPROXtexture_size`
+                     * / `COMPAT_PRECISION float foo` / `lowp vec2 X`.
+                     * The last token is the name; the previous non-
+                     * precision-qualifier token is the type. */
+                    std::vector<std::string> toks;
+                    {
+                        std::istringstream bs(body);
+                        std::string t;
+                        while (bs >> t) toks.push_back(std::move(t));
+                    }
+                    if (toks.empty()) { continue; }
+                    std::string name = toks.back();
+                    std::string type;
+                    for (auto it = toks.rbegin() + 1; it != toks.rend(); ++it) {
+                        if (*it == "COMPAT_PRECISION" || *it == "highp"
+                            || *it == "mediump" || *it == "lowp"
+                            || *it == "const") continue;
+                        type = *it;
+                        break;
+                    }
                     bool standard = false;
                     for (const char* sn : kStandardLibretroUniforms) {
                         if (name == sn) { standard = true; break; }
@@ -1048,9 +1066,46 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
                         if (p.id == name) { known = true; break; }
                     }
                     if (!known) {
+                        /* Auto-stub unknown uniforms with type-appropriate
+                         * defaults so shaders that rely on libretro's
+                         * runtime-uniform override mechanism (crt-royale,
+                         * etc.) still compile. Values are zero (or 1 for
+                         * sizes that get divided into) — won't match the
+                         * intended look, but a stable pipeline is better
+                         * than failing to compile. Eventually replace
+                         * with proper preset-driven overrides. */
+                        std::string default_expr;
+                        if      (type == "float")  default_expr = "0.0";
+                        else if (type == "int")    default_expr = "0";
+                        else if (type == "uint")   default_expr = "0u";
+                        else if (type == "bool")   default_expr = "false";
+                        else if (type == "vec2") {
+                            /* Size-style uniforms (ending in *size,
+                             * *Size, *_size) are usually divided into,
+                             * so default to non-zero. */
+                            if (name.find("size") != std::string::npos
+                                || name.find("Size") != std::string::npos)
+                                default_expr = "vec2(1.0, 1.0)";
+                            else
+                                default_expr = "vec2(0.0)";
+                        }
+                        else if (type == "vec3")   default_expr = "vec3(0.0)";
+                        else if (type == "vec4")   default_expr = "vec4(0.0)";
+                        else if (type == "ivec2")  default_expr = "ivec2(0)";
+                        else if (type == "ivec3")  default_expr = "ivec3(0)";
+                        else if (type == "ivec4")  default_expr = "ivec4(0)";
+                        else if (type == "mat2")   default_expr = "mat2(1.0)";
+                        else if (type == "mat3")   default_expr = "mat3(1.0)";
+                        else if (type == "mat4")   default_expr = "mat4(1.0)";
+                        if (!default_expr.empty()) {
+                            scrubbed += "#define " + name + " " + default_expr + "\n";
+                            continue;  /* don't emit the uniform decl */
+                        }
+                        /* Type we don't know how to default — drop with a warning. */
                         std::fprintf(stderr,
-                            "[glslp] preprocessor: dropped uniform '%s' (not in #pragma parameter list); "
-                            "shader may have undefined references\n", name.c_str());
+                            "[glslp] preprocessor: dropped uniform '%s' (unknown type '%s'); "
+                            "shader may have undefined references\n",
+                            name.c_str(), type.c_str());
                     }
                 }
                 continue;
