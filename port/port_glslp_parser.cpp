@@ -635,9 +635,27 @@ static void StripLibretroDefines(std::string& s) {
             std::string name = tr.substr(name_start, p - name_start);
             if (name == "COMPAT_VARYING" || name == "COMPAT_ATTRIBUTE"
                 || name == "COMPAT_TEXTURE" || name == "COMPAT_PRECISION"
-                || name == "FragColor") {
+                || name == "FragColor"
+                /* Standard-uniform aliases the header already supplies.
+                 * Sources like scanline.glsl re-#define these to wrap
+                 * the value in a vec4(...), which collides with our
+                 * `#define OutputSize u.OutputSize`. Drop the source-side
+                 * version; the header's wins. */
+                || name == "OutputSize" || name == "TextureSize"
+                || name == "InputSize"  || name == "FrameCount"
+                || name == "FrameDirection" || name == "OriginalSize"
+                || name == "FinalViewportSize"
+                || name == "MVPMatrix") {
                 continue;  /* drop — header redefines */
             }
+        }
+        /* Drop a stray `#version N` line in the source body — our
+         * stage header already emits `#version 450` and glslang
+         * rejects a second `#version` directive that isn't the first
+         * non-comment token. */
+        if (tr.compare(0, 8, "#version") == 0
+            && (tr.size() == 8 || std::isspace((unsigned char)tr[8]))) {
+            continue;
         }
         /* Drop `out vec4 FragColor;` / `out vec3 FragColor;` etc. The
          * declaration appears in libretro shaders' modern-GLSL branch;
