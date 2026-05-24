@@ -478,6 +478,33 @@ extern "C" void Port_PPU_PresentFrame(void) {
 
     virtuappu_render_frame();
 
+    /* If TMC_PUBLISH_FRAMEBUFFER is on, re-render each main world BG
+     * (BG1 + BG2) separately into static buffers and ship them over
+     * shm so the RT scaffold can render them as distinct world-Z
+     * quads. Cheap: the same per-line render the composite already
+     * does, just called again with a dedicated destination. Skipped
+     * when the env var isn't set. */
+    {
+        extern void Port_Shm_PublishBgPlanes(const uint32_t*, const uint32_t*, int, int);
+        extern int  Port_Shm_IsActive(void);
+        if (Port_Shm_IsActive()) {
+            const int W = MODE1_GBA_WIDTH;
+            const int H = MODE1_GBA_HEIGHT;
+            static uint32_t bg1Plane[240 * 160];
+            static uint32_t bg2Plane[240 * 160];
+            static uint8_t  pri[240];
+            if (W == 240 && H == 160) {
+                std::memset(bg1Plane, 0, sizeof(bg1Plane));
+                std::memset(bg2Plane, 0, sizeof(bg2Plane));
+                for (int line = 0; line < H; ++line) {
+                    virtuappu_mode1_render_text_bg_line(1, line, &bg1Plane[line * W], pri);
+                    virtuappu_mode1_render_text_bg_line(2, line, &bg2Plane[line * W], pri);
+                }
+                Port_Shm_PublishBgPlanes(bg1Plane, bg2Plane, W, H);
+            }
+        }
+    }
+
     /* Widescreen-spike post-process: on screens where the engine doesn't
      * load BG tile data past column 239 (title, file-select), the extra
      * widescreen columns (240+) read stale VRAM and visually glitch

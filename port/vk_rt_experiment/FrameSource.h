@@ -113,6 +113,12 @@ public:
     const uint16_t* currentOam() const;
     int oamCount() const { return 128; }
 
+    /* Per-BG-layer rendered planes (shm v3+). Each is a width×height
+     * RGBA8 buffer rendered separately from the BG1 / BG2 layer (the
+     * two main world layers in TMC). Returns nullptr when the
+     * producer is older than v3. */
+    const uint8_t* currentBgPlane(int planeIndex) const;
+
 private:
     void*    mBase    = nullptr;
     size_t   mBytes   = 0;
