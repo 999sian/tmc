@@ -37,6 +37,7 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #endif
 
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
+#include "port_gpu_renderer.h"    /* Port_GPU_IsActive() for backend-conditional UI */
 #include "port_randomizer.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
@@ -315,11 +316,26 @@ static void DrawRibbonDisplayTab(void) {
     ImGui::SameLine(); ImGui::Text("%dx", scale); ImGui::SameLine();
     if (ImGui::Button(">##scale")) Port_PPU_CycleWindowScale(+1);
 
-    /* Filter */
+    /* Backend-conditional disable for SW-only presentation features.
+     * The GPU path skips Port_Filter_Apply / Port_Upscale_xBRZ /
+     * Port_PPU_BuildScaledFrame entirely (its shader pipeline does
+     * the equivalent work), so cycling these settings while GPU is
+     * active wouldn't change anything visible. */
+    const bool gpuActive = Port_GPU_IsActive();
+    const char* swOnlyTip =
+        "SW-only. GPU backend uses the .glslp shader pipeline below "
+        "for the equivalent effects (xbr-*.glslp, crt-*.glslp).";
+
+    /* Filter (SW-path presentation mode: nearest/linear/xBRZ) */
+    ImGui::BeginDisabled(gpuActive);
     ImGui::Text("Filter"); ImGui::SameLine(140);
     if (ImGui::Button("<##filter")) Port_PPU_CyclePresentationMode(-1);
     ImGui::SameLine(); ImGui::Text("%s", Port_PPU_PresentationModeName()); ImGui::SameLine();
     if (ImGui::Button(">##filter")) Port_PPU_CyclePresentationMode(+1);
+    ImGui::EndDisabled();
+    if (gpuActive && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("%s", swOnlyTip);
+    }
 
     /* FPS */
     ImGui::Text("Target FPS"); ImGui::SameLine(140);
@@ -331,7 +347,11 @@ static void DrawRibbonDisplayTab(void) {
     ImGui::SameLine();
     if (ImGui::Button(">##fps")) Port_Config_CycleTargetFps(+1);
 
-    /* Internal scale */
+    /* Internal scale — now active on both backends. SW path scales
+     * the buffer before SDL_RenderTexture; GPU path uploads the
+     * scaled buffer through the source texture (recreated on size
+     * change inside Port_GPU_PresentFrame). The visible effect is
+     * the same: nearest-replicate base + affine OAM subpixel AA. */
     ImGui::Text("Internal"); ImGui::SameLine(140);
     if (ImGui::Button("<##iscale")) Port_Config_CycleInternalScale(-1);
     ImGui::SameLine();
@@ -347,18 +367,31 @@ static void DrawRibbonDisplayTab(void) {
     bool vsync = Port_PPU_VSyncEnabled();
     if (ImGui::Checkbox("VSync", &vsync)) Port_PPU_SetVSync(vsync);
 
-    /* CRT filter */
+    /* CRT filter (SW path: CPU-side pseudo-filter pass) */
+    ImGui::BeginDisabled(gpuActive);
     ImGui::Text("CRT filter"); ImGui::SameLine(140);
     if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
     ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
     if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
+    ImGui::EndDisabled();
+    if (gpuActive && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("%s", swOnlyTip);
+    }
 
     /* Shader preset (libretro .glslp) — Step 7 picker. Scans the
      * working directory's ./shaders/ subdirectory for *.glslp files;
      * selecting one tears down any active preset and loads the new
      * one through the .glslp runtime. "Off" returns to the stock GPU
      * filter pipeline above. The list is cached and refreshes on
-     * the Scan button or after a successful Load. */
+     * the Scan button or after a successful Load. Requires the GPU
+     * backend — the .glslp runtime loads SPIR-V shaders into
+     * SDL_GPU pipelines. Gray out the picker on the SDL_Renderer
+     * (software) path so the user knows it has no effect there. */
+    if (!gpuActive) {
+        ImGui::TextDisabled("Shader preset");
+        ImGui::SameLine();
+        ImGui::TextDisabled("(GPU backend required)");
+    } else
     {
 
         static std::vector<std::string> sPresetPaths;

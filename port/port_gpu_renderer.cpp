@@ -456,7 +456,45 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
     Port_Shm_PublishFramebuffer(fb, fb_w, fb_h);
 
     if (!sWindowClaimed || !sPipelines[sActiveFilter]) return false;
-    if (fb_w != sSourceW || fb_h != sSourceH) return false;  /* size change unsupported */
+
+    /* Recreate source texture + transfer buffer when the framebuffer
+     * size changes (e.g. user picked a different internal render
+     * scale — the GBA-native 240×160 grows to 480×320 / 720×480 /
+     * 960×640). Internal scale changes via the F8 menu, not per-
+     * frame, so the realloc cost is paid once per change. The
+     * shader UV [0..1] continues to cover the whole texture, which
+     * is exactly the active region. */
+    if (fb_w != sSourceW || fb_h != sSourceH) {
+        SDL_WaitForGPUIdle(sDevice);
+        if (sSourceTexture)  SDL_ReleaseGPUTexture(sDevice, sSourceTexture);
+        if (sTransferBuffer) SDL_ReleaseGPUTransferBuffer(sDevice, sTransferBuffer);
+        sSourceTexture  = nullptr;
+        sTransferBuffer = nullptr;
+
+        SDL_GPUTextureCreateInfo tci = {};
+        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width  = (Uint32)fb_w;
+        tci.height = (Uint32)fb_h;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels           = 1;
+        sSourceTexture = SDL_CreateGPUTexture(sDevice, &tci);
+
+        SDL_GPUTransferBufferCreateInfo tbci = {};
+        tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+        tbci.size  = (Uint32)(fb_w * fb_h * (int)sizeof(uint32_t));
+        sTransferBuffer = SDL_CreateGPUTransferBuffer(sDevice, &tbci);
+
+        if (!sSourceTexture || !sTransferBuffer) {
+            std::fprintf(stderr, "[gpu] resize to %dx%d failed: %s\n",
+                         fb_w, fb_h, SDL_GetError());
+            return false;
+        }
+        sSourceW = fb_w;
+        sSourceH = fb_h;
+        std::fprintf(stderr, "[gpu] source texture resized to %dx%d\n", fb_w, fb_h);
+    }
 
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sDevice);
     if (!cmd) return false;

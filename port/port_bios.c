@@ -179,9 +179,27 @@ static void Port_PumpEvents(void) {
                  * dump) into a timestamped folder next to the binary so
                  * playtesters can attach it to a GitHub issue. */
                 extern char* Port_BugReport_Capture(const char* reason);
+                extern void  Port_DebugMenu_ToastFromExternal(const char* msg);
                 char* dir = Port_BugReport_Capture("user");
                 if (dir) {
+                    /* Resolve absolute path so the user knows exactly
+                     * where the bundle ended up (CWD varies by launcher
+                     * — Steam, double-click, terminal). realpath needs
+                     * stdlib.h; declared inline so we don't pull a
+                     * heavy header chain just for this. */
+                    extern char* realpath(const char*, char*);
+                    char  abs[4096];
+                    char* resolved = realpath(dir, abs);
+                    const char* shown = resolved ? abs : dir;
+                    fprintf(stderr, "[BUG] F9 capture → %s\n", shown);
+                    char msg[256];
+                    snprintf(msg, sizeof(msg), "Bug report saved: %s",
+                             resolved ? abs : dir);
+                    Port_DebugMenu_ToastFromExternal(msg);
                     free(dir);
+                } else {
+                    fprintf(stderr, "[BUG] F9 capture FAILED — check stderr for mkdir errors\n");
+                    Port_DebugMenu_ToastFromExternal("Bug report capture FAILED — see stderr");
                 }
                 continue;
             }
