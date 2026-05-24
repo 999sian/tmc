@@ -106,6 +106,17 @@ struct Runtime {
      * viewport-scale passes. */
     Uint32               assumed_vp_w   = 960;
     Uint32               assumed_vp_h   = 640;
+    /* Frame-history ring buffer of GBA framebuffer copies. Used to
+     * provide `PrevTexture` / `Prev1Texture` / ... / `Prev6Texture`
+     * sampler bindings for shaders that do temporal effects
+     * (motion blur, anti-flicker, interlace shutter). Lazily
+     * allocated at PresentFrame when needed (src_w/src_h known
+     * only then). */
+    static constexpr int      kPrevCount = 7;
+    SDL_GPUTexture*           prev_ring[kPrevCount] = {};
+    int                       prev_head = 0;   /* slot that will hold THIS frame's copy */
+    int                       prev_ring_w = 0;
+    int                       prev_ring_h = 0;
 #endif
 };
 
@@ -491,6 +502,11 @@ extern "C" void Port_GlslpRuntime_Unload(void) {
             if (lr.texture) { SDL_ReleaseGPUTexture(g_runtime.device, lr.texture); lr.texture = nullptr; }
             if (lr.sampler) { SDL_ReleaseGPUSampler(g_runtime.device, lr.sampler); lr.sampler = nullptr; }
         }
+        for (auto& t : g_runtime.prev_ring) {
+            if (t) { SDL_ReleaseGPUTexture(g_runtime.device, t); t = nullptr; }
+        }
+        g_runtime.prev_head = 0;
+        g_runtime.prev_ring_w = g_runtime.prev_ring_h = 0;
     }
     g_runtime.luts.clear();
 #endif
@@ -568,6 +584,44 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
         }
         g_runtime.assumed_vp_w = (Uint32)swap_w;
         g_runtime.assumed_vp_h = (Uint32)swap_h;
+    }
+
+    /* Lazy frame-history ring allocation. Match src dimensions; if
+     * those change (rare — only if the GBA framebuffer ever resizes,
+     * which it doesn't), reallocate the whole ring. After alloc, copy
+     * the current frame's input into ring[prev_head]. The copy uses
+     * SDL_BlitGPUTexture under the hood — cheap (same dimensions, no
+     * resize, no format change). */
+    if (g_runtime.prev_ring_w != src_w || g_runtime.prev_ring_h != src_h) {
+        for (auto& t : g_runtime.prev_ring) {
+            if (t) { SDL_ReleaseGPUTexture(g_runtime.device, t); t = nullptr; }
+        }
+        g_runtime.prev_ring_w = src_w;
+        g_runtime.prev_ring_h = src_h;
+        for (auto& t : g_runtime.prev_ring) {
+            SDL_GPUTextureCreateInfo tci = {};
+            tci.type   = SDL_GPU_TEXTURETYPE_2D;
+            tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+            tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+            tci.width  = (Uint32)src_w;
+            tci.height = (Uint32)src_h;
+            tci.layer_count_or_depth = 1;
+            tci.num_levels           = 1;
+            t = SDL_CreateGPUTexture(g_runtime.device, &tci);
+        }
+        g_runtime.prev_head = 0;
+    }
+    if (g_runtime.prev_ring[g_runtime.prev_head]) {
+        SDL_GPUBlitInfo bi = {};
+        bi.source.texture       = src_texture;
+        bi.source.w             = (Uint32)src_w;
+        bi.source.h             = (Uint32)src_h;
+        bi.destination.texture  = g_runtime.prev_ring[g_runtime.prev_head];
+        bi.destination.w        = (Uint32)src_w;
+        bi.destination.h        = (Uint32)src_h;
+        bi.load_op              = SDL_GPU_LOADOP_DONT_CARE;
+        bi.filter               = SDL_GPU_FILTER_NEAREST;
+        SDL_BlitGPUTexture(cmd, &bi);
     }
 
     SDL_GPUTexture* prev_input = src_texture;
@@ -666,6 +720,34 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
                 } else if (lut_name == "Source" || lut_name == "SourceTexture") {
                     sb.texture = prev_input;
                     sb.sampler = g_runtime.sampler_linear;
+                } else if (lut_name == "Prev" || lut_name == "PrevTexture"
+                           || (lut_name.size() > 4 + 7
+                               && lut_name.compare(0, 4, "Prev") == 0
+                               && lut_name.compare(lut_name.size() - 7, 7, "Texture") == 0
+                               && lut_name[4] >= '0' && lut_name[4] <= '9')) {
+                    /* Prev / PrevTexture is 1 frame ago; PrevNTexture is
+                     * N+1 frames ago (so Prev1Texture = 2 frames ago,
+                     * Prev6Texture = 7 frames ago, the maximum). */
+                    int n = 1;  /* default: 1 frame ago */
+                    if (lut_name.size() > 4 + 7
+                        && lut_name[4] >= '0' && lut_name[4] <= '9') {
+                        n = 0;
+                        for (size_t k = 4; k + 7 < lut_name.size(); ++k) {
+                            if (lut_name[k] < '0' || lut_name[k] > '9') {
+                                n = -1; break;
+                            }
+                            n = n * 10 + (lut_name[k] - '0');
+                        }
+                        if (n >= 0) n += 1;  /* Prev0 = 1 frame ago */
+                    }
+                    if (n > 0 && n <= Runtime::kPrevCount) {
+                        int slot = (g_runtime.prev_head + Runtime::kPrevCount - n)
+                                   % Runtime::kPrevCount;
+                        if (g_runtime.prev_ring[slot]) {
+                            sb.texture = g_runtime.prev_ring[slot];
+                            sb.sampler = g_runtime.sampler_linear;
+                        }
+                    }
                 } else if (lut_name.size() > 12 + 7  /* "PassPrev" + "Texture" */
                            && lut_name.compare(0, 8, "PassPrev") == 0
                            && lut_name.compare(lut_name.size() - 7, 7, "Texture") == 0) {
@@ -767,6 +849,11 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
         p.prev_texture = p.out_texture;
         p.out_texture  = tmp;
     }
+    /* Advance the prev-ring head so next frame's copy lands in a
+     * fresh slot. The slot we just wrote becomes "PrevTexture" for
+     * the next frame (1 frame ago); the one before becomes
+     * "Prev1Texture" (2 frames ago); etc. */
+    g_runtime.prev_head = (g_runtime.prev_head + 1) % Runtime::kPrevCount;
     return true;
 }
 #endif  /* TMC_GPU_RENDERER */
