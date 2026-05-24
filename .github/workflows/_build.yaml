@@ -79,6 +79,18 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
+      - name: Disable CRLF conversion (Windows)
+        if: ${{ matrix.os_name == 'windows' }}
+        shell: bash
+        run: |
+          # Windows runners default to core.autocrlf=true, which converts
+          # checked-out text files to CRLF.  The viruappu-*.patch files
+          # are authored against LF source; with CRLF in the submodule
+          # working tree, `git apply` rejects them ("patch does not
+          # apply") even though content matches.  Force LF on checkout.
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
       - name: Checkout source
         if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: actions/checkout@v4
