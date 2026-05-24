@@ -14,6 +14,11 @@
 #include <cstring>
 #include <filesystem>
 
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 namespace tmc_vkrt {
 
 bool FrameSource::loadDirectory(const std::string& dir) {
@@ -130,6 +135,157 @@ const uint8_t* FrameSource::advance(int framesPerStep) {
         mCurrent = (mCurrent + 1) % mFrames.size();
     }
     return mFrames[mCurrent].data();
+}
+
+/* ---------- ShmFrameSource ---------- */
+
+static constexpr uint32_t kShmMagic   = 0x46434D54u;  /* "TMCF" little-endian */
+static constexpr uint32_t kShmVersion = 1u;
+static constexpr size_t   kShmHeader  = 24;
+
+bool ShmFrameSource::open(const char* shmName) {
+    if (mBase) return true;  /* already open */
+
+    mFd = shm_open(shmName, O_RDONLY, 0);
+    if (mFd < 0) {
+        std::fprintf(stderr, "[shm-rd] shm_open(%s) failed (is tmc_pc running with TMC_PUBLISH_FRAMEBUFFER=1?)\n",
+                     shmName);
+        return false;
+    }
+
+    struct stat st{};
+    if (fstat(mFd, &st) < 0 || (size_t)st.st_size < kShmHeader) {
+        std::fprintf(stderr, "[shm-rd] fstat / size too small\n");
+        ::close(mFd);
+        mFd = -1;
+        return false;
+    }
+    mBytes = (size_t)st.st_size;
+
+    /* Map read-only — we never write to the producer's region. */
+    void* p = mmap(nullptr, mBytes, PROT_READ, MAP_SHARED, mFd, 0);
+    if (p == MAP_FAILED) {
+        std::fprintf(stderr, "[shm-rd] mmap failed\n");
+        ::close(mFd);
+        mFd = -1;
+        return false;
+    }
+    mBase = p;
+
+    /* Sanity-check the header before trusting the rest. Accept
+     * version >= 2 (v1 was framebuffer-only, no OAM block; we'd
+     * need to fall back without OAM). */
+    const uint32_t* h = (const uint32_t*)mBase;
+    if (h[0] != kShmMagic || h[1] < 1 || h[1] > 2) {
+        std::fprintf(stderr, "[shm-rd] bad header magic/version (got %08x/%u, want %08x/[1..2])\n",
+                     h[0], h[1], kShmMagic);
+        munmap(mBase, mBytes);
+        ::close(mFd);
+        mBase = nullptr; mFd = -1;
+        return false;
+    }
+    mWidth   = (int)h[2];
+    mHeight  = (int)h[3];
+    mVersion = h[1];
+    std::fprintf(stderr, "[shm-rd] opened %s — %dx%d, v%u, frame=%u\n",
+                 shmName, mWidth, mHeight, mVersion, h[4]);
+    return true;
+}
+
+void ShmFrameSource::close() {
+    if (mBase) {
+        munmap(mBase, mBytes);
+        mBase = nullptr;
+    }
+    if (mFd >= 0) {
+        ::close(mFd);
+        mFd = -1;
+    }
+    mBytes = 0;
+    mWidth = mHeight = 0;
+}
+
+const uint8_t* ShmFrameSource::currentFrame(uint32_t* outFrameSeq) const {
+    if (!mBase) return nullptr;
+    const uint32_t* h = (const uint32_t*)mBase;
+    if (outFrameSeq) *outFrameSeq = __atomic_load_n(&h[4], __ATOMIC_ACQUIRE);
+    return (const uint8_t*)mBase + kShmHeader;
+}
+
+const uint16_t* ShmFrameSource::currentOam() const {
+    if (!mBase || mVersion < 2) return nullptr;
+    const size_t pixelsBytes = (size_t)mWidth * mHeight * 4;
+    /* OAM block starts immediately after the pixel block. */
+    return reinterpret_cast<const uint16_t*>(
+        (const uint8_t*)mBase + kShmHeader + pixelsBytes);
+}
+
+/* ---------- ParsedOam ---------- */
+
+/* GBA OAM layout (per https://problemkaputt.de/gbatek.htm):
+ *   attr0  bit 0..7   y coordinate
+ *          bit 8..9   rotation/scaling flag
+ *                       00: normal, 01: affine, 10: hidden, 11: affine 2x
+ *          bit 10..11 mode (0=normal, 1=semi-transparent, 2=window, 3=prohibited)
+ *          bit 12     mosaic
+ *          bit 13     8bpp vs 4bpp
+ *          bit 14..15 shape (0=square, 1=horizontal, 2=vertical)
+ *   attr1  bit 0..8   x coordinate (sign-extended from 9 bits)
+ *          bit 9..13  affine index (when bit 9 of attr0 set)
+ *                     OR bits 12,13 = h/v flip (when not affine)
+ *          bit 14..15 size (combined with shape → 12 valid combos)
+ *   attr2  bit 0..9   tile index
+ *          bit 10..11 priority (0=front, 3=back)
+ *          bit 12..15 palette bank (4bpp only)
+ *
+ * Shape×size → dimensions (in pixels):
+ *   shape 0 square:    [8,16,32,64] both
+ *   shape 1 horizontal:[16x8, 32x8, 32x16, 64x32]
+ *   shape 2 vertical:  [8x16, 8x32, 16x32, 32x64]
+ */
+static const int kSpriteDims[3][4][2] = {
+    {{8, 8},  {16,16}, {32,32}, {64,64}},  /* shape 0 (square) */
+    {{16, 8}, {32, 8}, {32,16}, {64,32}},  /* shape 1 (horizontal) */
+    {{ 8,16}, { 8,32}, {16,32}, {32,64}},  /* shape 2 (vertical) */
+};
+
+void ParsedOam::parse(const uint16_t* oam, int count) {
+    mSprites.clear();
+    if (!oam) return;
+    for (int i = 0; i < count; ++i) {
+        const uint16_t attr0 = oam[i * 4 + 0];
+        const uint16_t attr1 = oam[i * 4 + 1];
+        const uint16_t attr2 = oam[i * 4 + 2];
+
+        const int  rotScale  = (attr0 >> 8) & 0x3;
+        const bool hidden    = (rotScale == 2);   /* hidden, non-affine */
+        if (hidden) continue;
+
+        const int shape = (attr0 >> 14) & 0x3;
+        const int size  = (attr1 >> 14) & 0x3;
+        if (shape > 2) continue;  /* shape=3 is prohibited */
+
+        const int w = kSpriteDims[shape][size][0];
+        const int h = kSpriteDims[shape][size][1];
+
+        int y = attr0 & 0xFF;       /* 8-bit unsigned 0..255 */
+        if (y >= 160) y -= 256;     /* GBA wraps high y to negative */
+        int x = attr1 & 0x1FF;      /* 9-bit unsigned */
+        if (x >= 240) x -= 512;     /* wraps high x to negative */
+
+        /* Cull fully off-screen. */
+        if (x + w <= 0 || y + h <= 0 || x >= 240 || y >= 160) continue;
+
+        OamSprite s{};
+        s.x            = x;
+        s.y            = y;
+        s.w            = w;
+        s.h            = h;
+        s.paletteIndex = (uint8_t)((attr2 >> 12) & 0xF);
+        s.priority     = (uint8_t)((attr2 >> 10) & 0x3);
+        s.oamIndex     = i;
+        mSprites.push_back(s);
+    }
 }
 
 }  /* namespace tmc_vkrt */

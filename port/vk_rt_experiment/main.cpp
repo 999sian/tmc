@@ -20,6 +20,7 @@
 #include "RenderLayerManager.h"
 #include "RayTracingPipeline.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -521,22 +522,33 @@ int main() {
     rt.setAtlas(atlas.view, atlas.sampler);
     std::fprintf(stderr, "[main] step: atlas ok (%ux%u)\n", atlas.w, atlas.h);
 
-    /* Frame source — scans for `tmc-*.png` in a small set of likely
-     * locations (the repo root has them, but the binary's cwd may be
-     * the experiment dir or elsewhere). Each must be exactly the GBA
-     * framebuffer size. */
-    FrameSource frames;
-    const std::vector<std::string> candidateDirs = {
-        ".", "../..", "../../..",   /* binary's cwd → repo root */
-    };
-    for (const auto& d : candidateDirs) {
-        if (frames.loadDirectory(d)) break;
-    }
-    if (frames.frameCount() == 0) {
-        std::fprintf(stderr,
-            "[main] no tmc-*.png frames found — RT will show whatever\n"
-            "        the atlas was initialised with. Drop a few 240×160\n"
-            "        screenshots into the binary's cwd.\n");
+    /* Two frame sources, in priority order:
+     *   1. ShmFrameSource — live mmap of /dev/shm/tmc_framebuffer.
+     *      Works when tmc_pc was started with
+     *      TMC_PUBLISH_FRAMEBUFFER=1 in its environment. This is
+     *      the real integration: the running game's output is
+     *      ray-traced in real time.
+     *   2. PNG FrameSource — cycles tmc-*.png screenshots as a
+     *      fallback when no live producer is available. Useful for
+     *      iterating on the RT side without running the full game. */
+    ShmFrameSource liveSrc;
+    FrameSource    pngSrc;
+    bool useLive = liveSrc.open();
+    if (!useLive) {
+        std::fprintf(stderr, "[main] no live shm producer — falling back to PNG screenshots\n");
+        const std::vector<std::string> candidateDirs = {
+            ".", "../..", "../../..",
+        };
+        for (const auto& d : candidateDirs) {
+            if (pngSrc.loadDirectory(d)) break;
+        }
+        if (pngSrc.frameCount() == 0) {
+            std::fprintf(stderr,
+                "[main] no tmc-*.png frames either — atlas stays at its\n"
+                "        initial contents. Start tmc_pc with\n"
+                "        TMC_PUBLISH_FRAMEBUFFER=1 ./tmc_pc, or drop a few\n"
+                "        240x160 PNGs into the binary's cwd.\n");
+        }
     }
 
     (void)kCellFace;   (void)kCellShould; (void)kCellSprite;
@@ -544,23 +556,67 @@ int main() {
 
     /* Frame loop */
     bool firstFrame = true;
+    uint32_t frameIdx = 0;
+    const auto t0 = std::chrono::steady_clock::now();
     while (engine.pumpEvents()) {
-        /* One full-screen quad — the entire GBA frame at z=BG2. The
-         * closest-hit shader samples it from the atlas (which we'll
-         * overwrite with this frame's PPU output via refreshAtlas
-         * below, before the trace runs). */
+        const float time =
+            std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+
+        /* Geometry for the trace:
+         *   - one full-screen quad at z=BG2 textured with the GBA
+         *     framebuffer (the engine's composited image is the
+         *     background plane);
+         *   - one quad per visible OAM sprite at z=Sprite, at the
+         *     screen position the GBA engine placed it. The
+         *     framebuffer already shows the sprite drawn inside it
+         *     too (since OAM rendering is part of the PPU's output);
+         *     the per-sprite quads exist *additionally*, as occluders
+         *     for the RT shadow trace — so the moving point lights'
+         *     soft shadows track Link, NPCs, items, etc. as they
+         *     move through the world. */
         layers.beginFrame();
         layers.drawSprite(Layer::BG2, 0.0f, 0.0f, 240.0f, 160.0f,
                           0.0f, 0.0f, 1.0f, 1.0f);
+
+        ParsedOam parsed;
+        if (useLive) {
+            parsed.parse(liveSrc.currentOam(), liveSrc.oamCount());
+        }
+        for (const OamSprite& s : parsed.visibleSprites()) {
+            /* The sprite quad samples its own footprint from the
+             * framebuffer atlas — so its visible colour matches the
+             * pixels already drawn at that screen position by the
+             * PPU, and the quad appears "invisible" against the BG2
+             * plane. Its actual purpose at Z=Sprite (0.2) is to act
+             * as an occluder for shadow rays from the lights, so
+             * the moving point-lights cast soft shadows that track
+             * Link, NPCs, items, and any other on-screen OAM entry.
+             *
+             * Slice 2 will replace these UVs with real sprite-atlas
+             * UVs decoded from gfx.pak + the tile's palette bank. */
+            const float u0 = (float)s.x / 240.0f;
+            const float v0 = (float)s.y / 160.0f;
+            const float u1 = (float)(s.x + s.w) / 240.0f;
+            const float v1 = (float)(s.y + s.h) / 160.0f;
+            layers.drawSprite(Layer::Sprite,
+                              (float)s.x, (float)s.y,
+                              (float)s.w, (float)s.h,
+                              u0, v0, u1, v1);
+        }
         layers.flushToBuffers();
 
         VkCommandBuffer cmd = engine.beginFrame();
         if (cmd == VK_NULL_HANDLE) continue;  /* swapchain out of date */
 
-        /* Advance the PPU-frame source at ~6fps (one new frame every
-         * 10 RT frames at 60Hz vsync). The pointer is owned by the
-         * FrameSource — no copy needed before memcpy. */
-        const uint8_t* px = frames.advance(10);
+        /* Pick the active source: live shm if connected, else cycle
+         * the PNG ring. Either path returns a `uint8_t*` of exactly
+         * 240*160*4 bytes — same shape, different origin. */
+        const uint8_t* px = nullptr;
+        if (useLive) {
+            px = liveSrc.currentFrame();
+        } else {
+            px = pngSrc.advance(10);
+        }
         if (px) {
             refreshAtlas(engine, cmd, atlas, px);
             if (firstFrame) std::fprintf(stderr, "[main] first frame uploaded, tracing\n");
@@ -568,10 +624,13 @@ int main() {
 
         if (layers.quadCount() > 0) {
             rt.rebuildAS(cmd);
-            rt.dispatchRays(cmd, engine.swapchainWidth(), engine.swapchainHeight());
+            rt.dispatchRays(cmd,
+                            engine.swapchainWidth(), engine.swapchainHeight(),
+                            frameIdx, time);
         }
 
         engine.endFrame();
+        ++frameIdx;
         firstFrame = false;
     }
 
