@@ -360,8 +360,14 @@ int main(int argc, char* argv[]) {
      * the build doesn't define on every platform; use a forward extern
      * declaration so we don't need to crank up _POSIX_C_SOURCE. */
     if (glslpPath) {
+#if defined(_WIN32)
+        /* MinGW lacks POSIX setenv; _putenv_s is the equivalent. */
+        extern int _putenv_s(const char*, const char*);
+        _putenv_s("TMC_GLSLP_PRESET", glslpPath);
+#else
         extern int setenv(const char*, const char*, int);
         setenv("TMC_GLSLP_PRESET", glslpPath, /*overwrite=*/1);
+#endif
     }
 
     // Initialize SDL video first. Audio is optional and handled separately.
