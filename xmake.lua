@@ -57,7 +57,13 @@ option_end()
 option("widescreen_width")
     set_default(240)
     set_showmenu(true)
-    set_description("MODE1_GBA_WIDTH (240=native, >240=stretched until Phase 2)")
+    set_description("MODE1_GBA_WIDTH (240=native, 256=phase-1 spike, >256=stretched)")
+    after_check(function(option)
+        local w = tonumber(option:value()) or 240
+        if w ~= 240 then
+            option:add("defines", "MODE1_GBA_WIDTH=" .. w)
+        end
+    end)
 option_end()
 
 -- Build directories
@@ -407,6 +413,7 @@ target("tmc_pc")
     set_kind("binary")
     set_languages("c11", "cxx20")
     set_targetdir("build/pc")
+    add_options("widescreen_width")
 
     local use_avx2 = get_config("pc_avx2")
     if use_avx2 == nil then
