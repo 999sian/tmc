@@ -621,21 +621,21 @@ void* Port_ReadPackedRomPtr(const void* base, u32 index) {
         fprintf(stderr, "Port_ReadPackedRomPtr: base is NULL (index=%u)\n", index);
         return NULL;
     }
-    /* Safety: check that base points inside gRomData */
-    if (gRomData && ((const u8*)base < gRomData || (const u8*)base >= gRomData + gRomSize)) {
-        fprintf(stderr, "Port_ReadPackedRomPtr: base %p is outside gRomData [%p..%p] (index=%u)\n", base,
-                (void*)gRomData, (void*)(gRomData + gRomSize), index);
-        return NULL;
+    /* base may point into gRomData (direct ROM) OR into a PC `.rodata` stub
+     * created by data_const_stubs.c — the stub holds verbatim ROM bytes for
+     * symbols that aren't resolved through gRomData at runtime.  Either way,
+     * read 4 bytes at base + index*4 and treat as a GBA ROM pointer. */
+    if (gRomData && (const u8*)base >= gRomData && (const u8*)base < gRomData + gRomSize) {
+        const u8* readPtr = (const u8*)base + index * 4;
+        if (readPtr + 4 > gRomData + gRomSize) {
+            fprintf(stderr, "Port_ReadPackedRomPtr: read at %p+%u*4 would exceed ROM bounds [%p..%p] (index=%u)\n",
+                    base, index, (void*)gRomData, (void*)(gRomData + gRomSize), index);
+            return NULL;
+        }
     }
-    
-    /* Check bounds: ensure we don't read past the end of ROM data */
+    /* For PC `.rodata` stubs we have no size info — trust the caller. */
+
     const u8* readPtr = (const u8*)base + index * 4;
-    if (gRomData && (readPtr + 4 > gRomData + gRomSize)) {
-        fprintf(stderr, "Port_ReadPackedRomPtr: read at %p+%u*4 would exceed ROM bounds [%p..%p] (index=%u)\n", 
-                base, index, (void*)gRomData, (void*)(gRomData + gRomSize), index);
-        return NULL;
-    }
-    
     u32 raw;
     memcpy(&raw, readPtr, 4);
     if (raw == 0)
