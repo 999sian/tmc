@@ -41,6 +41,12 @@ struct PassResources {
     /* Intermediate texture this pass renders into. nullptr for the
      * last pass (renders directly to the swapchain instead). */
     SDL_GPUTexture*          out_texture     = nullptr;
+    /* Previous-frame copy of out_texture, used by feedback passes.
+     * Allocated at Load only if the preset references this pass's
+     * alias via `<alias>Feedback` in a downstream pass; nullptr
+     * otherwise. Swapped with out_texture at the end of each frame. */
+    SDL_GPUTexture*          prev_texture    = nullptr;
+    bool                     needs_feedback  = false;
 #endif
     /* Resolved output dimensions in pixels. Computed at Load time
      * given the source framebuffer (240×160) and final viewport
@@ -415,14 +421,54 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
 #endif
     }
 
+#ifdef TMC_GPU_RENDERER
+    /* Feedback-pass scan: any pass whose lut_names contains
+     * `<alias>Feedback` for an earlier-pass alias triggers prev_texture
+     * allocation on that earlier pass. We swap current↔prev at frame
+     * end so the next frame samples the previous frame's output. */
+    int feedback_passes = 0;
+    for (size_t i = 0; i < g_runtime.passes.size(); ++i) {
+        for (const auto& sname : g_runtime.passes[i].lut_names) {
+            const std::string kSuffix = "Feedback";
+            if (sname.size() <= kSuffix.size()) continue;
+            if (sname.compare(sname.size() - kSuffix.size(), kSuffix.size(),
+                              kSuffix) != 0) continue;
+            std::string alias = sname.substr(0, sname.size() - kSuffix.size());
+            for (size_t j = 0; j < g_runtime.preset.passes.size(); ++j) {
+                if (g_runtime.preset.passes[j].alias
+                    && *g_runtime.preset.passes[j].alias == alias) {
+                    g_runtime.passes[j].needs_feedback = true;
+                    break;
+                }
+            }
+        }
+    }
+    for (size_t i = 0; i < g_runtime.passes.size(); ++i) {
+        auto& p = g_runtime.passes[i];
+        if (!p.needs_feedback || !p.out_texture) continue;
+        SDL_GPUTextureCreateInfo tci = {};
+        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        tci.width  = (Uint32)p.out_w;
+        tci.height = (Uint32)p.out_h;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels           = 1;
+        p.prev_texture = SDL_CreateGPUTexture(g_runtime.device, &tci);
+        if (p.prev_texture) ++feedback_passes;
+    }
+#endif
+
     g_runtime.loaded = true;
 #ifdef TMC_GPU_RENDERER
     std::fprintf(stderr,
-        "[glslp] loaded preset '%s' — %zu passes, %zu LUTs bound, %zu parameters\n",
+        "[glslp] loaded preset '%s' — %zu passes, %zu LUTs bound, %zu parameters%s%s\n",
         glslp_path,
         g_runtime.preset.passes.size(),
         g_runtime.luts.size(),
-        g_runtime.preset.parameters.size());
+        g_runtime.preset.parameters.size(),
+        feedback_passes ? ", " : "",
+        feedback_passes ? (std::to_string(feedback_passes) + " feedback").c_str() : "");
 #else
     std::fprintf(stderr, "[glslp] loaded preset '%s' (TMC_GPU_RENDERER off — preset parsed only, not driving present)\n",
                  glslp_path);
@@ -436,6 +482,8 @@ extern "C" void Port_GlslpRuntime_Unload(void) {
         for (auto& p : g_runtime.passes) {
             if (p.pipeline)        { SDL_ReleaseGPUGraphicsPipeline(g_runtime.device, p.pipeline);        p.pipeline = nullptr; }
             if (p.out_texture)     { SDL_ReleaseGPUTexture(g_runtime.device, p.out_texture);              p.out_texture = nullptr; }
+            if (p.prev_texture)    { SDL_ReleaseGPUTexture(g_runtime.device, p.prev_texture);             p.prev_texture = nullptr; }
+            p.needs_feedback = false;
             if (p.fragment_shader) { SDL_ReleaseGPUShader(g_runtime.device, p.fragment_shader);           p.fragment_shader = nullptr; }
             if (p.vertex_shader)   { SDL_ReleaseGPUShader(g_runtime.device, p.vertex_shader);             p.vertex_shader = nullptr; }
         }
@@ -578,6 +626,33 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
                     break;
                 }
             }
+            /* Feedback variant: `<alias>Feedback` samples that pass's
+             * output from the PREVIOUS frame (prev_texture). Marked
+             * up at Load; texture allocated only when needed. The
+             * referenced pass may be at any position in the chain
+             * (feedback can reference any aliased pass, including the
+             * current one — its prev_texture is its last-frame output). */
+            if (!sb.texture) {
+                const std::string kSuffix = "Feedback";
+                if (lut_name.size() > kSuffix.size()
+                    && lut_name.compare(lut_name.size() - kSuffix.size(),
+                                        kSuffix.size(), kSuffix) == 0) {
+                    std::string alias = lut_name.substr(
+                        0, lut_name.size() - kSuffix.size());
+                    for (size_t j = 0; j < g_runtime.preset.passes.size(); ++j) {
+                        const auto& q = g_runtime.preset.passes[j];
+                        if (q.alias && *q.alias == alias) {
+                            if (g_runtime.passes[j].prev_texture) {
+                                sb.texture = g_runtime.passes[j].prev_texture;
+                                sb.sampler = q.filter_linear
+                                                ? g_runtime.sampler_linear
+                                                : g_runtime.sampler_nearest;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
             /* Special pass-history identifiers: `Original` is pass-0
              * input (== the GBA framebuffer), `Source` is the previous
              * pass's output (already bound as primary; bind again).
@@ -681,6 +756,16 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
             prev_w     = p.out_w;
             prev_h     = p.out_h;
         }
+    }
+
+    /* End-of-frame feedback swap. For every pass with a feedback alias,
+     * swap current↔previous so the NEXT frame samples THIS frame's
+     * output via `<alias>Feedback`. Cheap pointer swap; no GPU copy. */
+    for (auto& p : g_runtime.passes) {
+        if (!p.needs_feedback) continue;
+        SDL_GPUTexture* tmp = p.prev_texture;
+        p.prev_texture = p.out_texture;
+        p.out_texture  = tmp;
     }
     return true;
 }
