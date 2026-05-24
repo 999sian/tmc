@@ -447,6 +447,48 @@ void main() {
                  * Non-water surfaces: caustics = 0 (no contribution). */
                 sampleAccum = mix(baseShading, baseShading + reflection, reflWeight)
                               + caustics;
+
+                /* --- Slice 12: volumetric fog / god rays ---
+                 * March a FIXED depth slice from camera toward the
+                 * back layer, casting a shadow ray to the sun at each
+                 * step.  Using a constant march distance (rather than
+                 * camera→hit) keeps the per-pixel fog contribution
+                 * uniform whether the primary ray hit a near sprite
+                 * or the far BG composite — without that, Link would
+                 * appear in a "clear zone" (less fog accumulated)
+                 * surrounded by foggier BG, which read as a halo
+                 * ring around him.
+                 *
+                 * 6 steps at a constant 0.9-unit span (camera at -1.0,
+                 * stops at z≈-0.1 — just in front of the sprite layer
+                 * at z=0.2, so the march fog doesn't contribute past
+                 * any visible surface).  Per-pixel jitter randomises
+                 * sample positions so temporal accumulation gathers
+                 * different scene regions → less visible banding. */
+                {
+                    const vec3 sunDir = normalize(vec3(0.80, -0.60, -0.02));
+                    const int   kFogSteps = 6;
+                    const float kFogSpan  = 0.9;
+                    const float kFogDensity = 0.015;
+                    const vec3  kFogLitTint = vec3(1.10, 0.90, 0.55);
+
+                    vec3 fogAccum = vec3(0.0);
+                    float stepLen = kFogSpan / float(kFogSteps);
+                    float jitter  = rand();
+                    for (int s = 0; s < kFogSteps; ++s) {
+                        float t = (float(s) + jitter) * stepLen;
+                        vec3  pSample = rayOrigin + rayDir * t;
+                        payload.hitDistance = -1.0;
+                        traceRayEXT(topLevelAS,
+                            gl_RayFlagsTerminateOnFirstHitEXT,
+                            0xFF, 0, 0, 0,
+                            pSample, kRayEpsilon, sunDir, kInf, 0);
+                        if (payload.hitDistance < 0.0) {
+                            fogAccum += kFogLitTint * kFogDensity * stepLen;
+                        }
+                    }
+                    sampleAccum += fogAccum;
+                }
             }
         }
 
