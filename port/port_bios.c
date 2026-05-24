@@ -186,10 +186,17 @@ static void Port_PumpEvents(void) {
                      * where the bundle ended up (CWD varies by launcher
                      * — Steam, double-click, terminal). realpath needs
                      * stdlib.h; declared inline so we don't pull a
-                     * heavy header chain just for this. */
-                    extern char* realpath(const char*, char*);
+                     * heavy header chain just for this.  Windows/MinGW
+                     * uses _fullpath with the same signature shape. */
                     char  abs[4096];
-                    char* resolved = realpath(dir, abs);
+                    char* resolved;
+#ifdef _WIN32
+                    extern char* _fullpath(char*, const char*, size_t);
+                    resolved = _fullpath(abs, dir, sizeof(abs));
+#else
+                    extern char* realpath(const char*, char*);
+                    resolved = realpath(dir, abs);
+#endif
                     const char* shown = resolved ? abs : dir;
                     fprintf(stderr, "[BUG] F9 capture → %s\n", shown);
                     char msg[256];
