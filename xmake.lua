@@ -488,9 +488,13 @@ target("tmc_pc")
                     -- have drifted (some hunks already in upstream), so the
                     -- step stays self-healing instead of silently no-oping.
                     local rel = path.relative(patch_file, os.projectdir())
+                    -- --ignore-whitespace tolerates the CRLF / LF mismatch that
+                    -- Windows git checkouts introduce by default — the patches
+                    -- are authored against LF source on Linux, and a strict
+                    -- apply rejects them on Windows even when content matches.
                     local applied = try {
                         function ()
-                            os.execv("git", {"-C", sub, "apply", "-3", patch_file})
+                            os.execv("git", {"-C", sub, "apply", "-3", "--ignore-whitespace", patch_file})
                             return true
                         end
                     }
