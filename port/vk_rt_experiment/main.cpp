@@ -16,6 +16,7 @@
  */
 
 #include "Engine.h"
+#include "FrameSource.h"
 #include "RenderLayerManager.h"
 #include "RayTracingPipeline.h"
 
@@ -143,7 +144,7 @@ static constexpr uint32_t kTestPalette[16] = {
  *   BG1         : (0.25, 0.25) → (0.50, 0.50)
  *   UI          : (0.50, 0.25) → (0.75, 0.50)  (hollow box)
  */
-static std::vector<uint8_t> buildAtlas(uint32_t& outW, uint32_t& outH) {
+[[maybe_unused]] static std::vector<uint8_t> buildAtlas(uint32_t& outW, uint32_t& outH) {
     const uint32_t W = 256;
     const uint32_t H = 256;
     outW = W; outH = H;
@@ -212,18 +213,173 @@ static std::vector<uint8_t> buildAtlas(uint32_t& outW, uint32_t& outH) {
     return px;
 }
 
-/* Upload `pixels` to a freshly-created sampled-image with a one-
- * shot copy from a staging buffer. Returns the image, view, memory,
- * and sampler — caller frees them on shutdown. */
+/* Atlas image + view + memory + sampler. Created once with a fixed
+ * size matching the GBA framebuffer (240×160); the contents are
+ * overwritten each frame via the persistent staging buffer below.
+ *
+ * Per-frame upload path:
+ *   1. memcpy framebuffer bytes into mapped staging.
+ *   2. Record into the per-frame cmd buffer:
+ *        - barrier atlas: SHADER_READ_ONLY → TRANSFER_DST
+ *        - vkCmdCopyBufferToImage staging → atlas
+ *        - barrier atlas: TRANSFER_DST → SHADER_READ_ONLY
+ *   3. Then issue rebuildAS + dispatchRays, which samples atlas. */
 struct AtlasGpu {
     VkImage        image = VK_NULL_HANDLE;
     VkImageView    view  = VK_NULL_HANDLE;
     VkDeviceMemory memory = VK_NULL_HANDLE;
     VkSampler      sampler = VK_NULL_HANDLE;
+
+    /* Persistent staging — mapped at create time, kept mapped. */
+    VkBuffer       stagingBuf  = VK_NULL_HANDLE;
+    VkDeviceMemory stagingMem  = VK_NULL_HANDLE;
+    void*          stagingMap  = nullptr;
+    uint32_t       w = 0, h = 0;
 };
 
-static AtlasGpu uploadAtlas(Engine& eng, const std::vector<uint8_t>& px,
-                            uint32_t w, uint32_t h) {
+/* Create an empty (UNDEFINED → SHADER_READ_ONLY) atlas of the given
+ * dimensions plus its persistent staging buffer. The image's
+ * contents start unspecified — first call to refreshAtlas() writes
+ * the first real pixels. */
+static AtlasGpu createAtlas(Engine& eng, uint32_t w, uint32_t h) {
+    AtlasGpu out;
+    out.w = w;
+    out.h = h;
+
+    /* Image */
+    VkImageCreateInfo ici{};
+    ici.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ici.imageType     = VK_IMAGE_TYPE_2D;
+    ici.format        = VK_FORMAT_R8G8B8A8_UNORM;
+    ici.extent        = { w, h, 1 };
+    ici.mipLevels     = 1;
+    ici.arrayLayers   = 1;
+    ici.samples       = VK_SAMPLE_COUNT_1_BIT;
+    ici.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    ici.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    ici.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    check(vkCreateImage(eng.device(), &ici, nullptr, &out.image), "atlas vkCreateImage");
+
+    VkMemoryRequirements mr{};
+    vkGetImageMemoryRequirements(eng.device(), out.image, &mr);
+    VkMemoryAllocateInfo mai{};
+    mai.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    mai.allocationSize  = mr.size;
+    mai.memoryTypeIndex = eng.findMemoryType(mr.memoryTypeBits,
+                                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    check(vkAllocateMemory(eng.device(), &mai, nullptr, &out.memory), "atlas vkAllocateMemory");
+    check(vkBindImageMemory(eng.device(), out.image, out.memory, 0), "atlas vkBindImageMemory");
+
+    /* Persistent staging buffer — host-visible, kept mapped so each
+     * frame's memcpy doesn't pay the Map/Unmap cost. */
+    const VkDeviceSize bytes = (VkDeviceSize)w * h * 4;
+    eng.allocateBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       &out.stagingBuf, &out.stagingMem);
+    check(vkMapMemory(eng.device(), out.stagingMem, 0, bytes, 0, &out.stagingMap),
+          "atlas staging vkMapMemory");
+
+    /* Transition UNDEFINED → SHADER_READ_ONLY so the first frame's
+     * descriptor binding is valid even before refreshAtlas runs.
+     * (Contents undefined until the first refresh — that's fine, the
+     * rgen+rchit only sample after the first frame's upload.) */
+    eng.oneShot([&](VkCommandBuffer cmd) {
+        VkImageMemoryBarrier b{};
+        b.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        b.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+        b.newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        b.image               = out.image;
+        b.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        b.srcAccessMask       = 0;
+        b.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+        vkCmdPipelineBarrier(cmd,
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+            0, 0, nullptr, 0, nullptr, 1, &b);
+    });
+
+    /* View */
+    VkImageViewCreateInfo vci{};
+    vci.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vci.image            = out.image;
+    vci.viewType         = VK_IMAGE_VIEW_TYPE_2D;
+    vci.format           = VK_FORMAT_R8G8B8A8_UNORM;
+    vci.components       = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                            VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+    vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    check(vkCreateImageView(eng.device(), &vci, nullptr, &out.view), "atlas vkCreateImageView");
+
+    /* Linear sampler with clamp-to-edge. */
+    VkSamplerCreateInfo sci{};
+    sci.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sci.magFilter    = VK_FILTER_NEAREST;  /* pixel-art: nearest stays crisp */
+    sci.minFilter    = VK_FILTER_NEAREST;
+    sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sci.mipmapMode   = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    check(vkCreateSampler(eng.device(), &sci, nullptr, &out.sampler), "atlas vkCreateSampler");
+    return out;
+}
+
+/* Per-frame atlas refresh: memcpy `pixels` into staging, then
+ * record (into `cmd`) the layout transitions + copy that publish
+ * the new contents to the image. Caller submits cmd later. */
+static void refreshAtlas(Engine& eng, VkCommandBuffer cmd,
+                        AtlasGpu& atlas, const uint8_t* pixels) {
+    const size_t bytes = (size_t)atlas.w * atlas.h * 4;
+    std::memcpy(atlas.stagingMap, pixels, bytes);
+    (void)eng;
+
+    /* SHADER_READ_ONLY → TRANSFER_DST */
+    VkImageMemoryBarrier toDst{};
+    toDst.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    toDst.oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toDst.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toDst.image               = atlas.image;
+    toDst.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toDst.srcAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+    toDst.dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr, 1, &toDst);
+
+    VkBufferImageCopy region{};
+    region.bufferOffset      = 0;
+    region.bufferRowLength   = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.imageOffset       = {0, 0, 0};
+    region.imageExtent       = {atlas.w, atlas.h, 1};
+    vkCmdCopyBufferToImage(cmd, atlas.stagingBuf, atlas.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &region);
+
+    /* TRANSFER_DST → SHADER_READ_ONLY (sync with subsequent trace) */
+    VkImageMemoryBarrier toRead = toDst;
+    toRead.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toRead.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    toRead.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        0, 0, nullptr, 0, nullptr, 1, &toRead);
+}
+
+/* Legacy one-shot uploader retained for reference / future use; not
+ * called by main() anymore now that the atlas is refreshed per
+ * frame from the FrameSource. Kept compilable so the file builds
+ * even if no caller uses it; the linker drops it when unused. */
+[[maybe_unused]] static AtlasGpu uploadAtlas(Engine& eng, const std::vector<uint8_t>& px,
+                                             uint32_t w, uint32_t h) {
     AtlasGpu out;
 
     /* Image */
@@ -358,89 +514,76 @@ int main() {
     rt.createPipeline("./shaders");
     std::fprintf(stderr, "[main] step: pipeline ok\n");
 
-    /* Procedural atlas. NOTE: build the pixels into a named variable
-     * BEFORE the uploadAtlas call — C++ doesn't sequence function
-     * arguments, so `uploadAtlas(eng, buildAtlas(aw,ah), aw, ah)`
-     * would let `aw`/`ah` be read as 0 before buildAtlas updates
-     * them, then uploadAtlas creates a 0×0 image. */
-    uint32_t aw = 0, ah = 0;
-    std::fprintf(stderr, "[main] step: uploadAtlas\n");
-    std::vector<uint8_t> atlasPixels = buildAtlas(aw, ah);
-    AtlasGpu atlas = uploadAtlas(engine, atlasPixels, aw, ah);
-    std::fprintf(stderr, "[main] step: atlas ok (%ux%u)\n", aw, ah);
+    /* Atlas sized exactly to one GBA frame. Created empty; refreshed
+     * each render frame from the FrameSource below. */
+    std::fprintf(stderr, "[main] step: createAtlas\n");
+    AtlasGpu atlas = createAtlas(engine, FrameSource::kFrameW, FrameSource::kFrameH);
     rt.setAtlas(atlas.view, atlas.sampler);
+    std::fprintf(stderr, "[main] step: atlas ok (%ux%u)\n", atlas.w, atlas.h);
+
+    /* Frame source — scans for `tmc-*.png` in a small set of likely
+     * locations (the repo root has them, but the binary's cwd may be
+     * the experiment dir or elsewhere). Each must be exactly the GBA
+     * framebuffer size. */
+    FrameSource frames;
+    const std::vector<std::string> candidateDirs = {
+        ".", "../..", "../../..",   /* binary's cwd → repo root */
+    };
+    for (const auto& d : candidateDirs) {
+        if (frames.loadDirectory(d)) break;
+    }
+    if (frames.frameCount() == 0) {
+        std::fprintf(stderr,
+            "[main] no tmc-*.png frames found — RT will show whatever\n"
+            "        the atlas was initialised with. Drop a few 240×160\n"
+            "        screenshots into the binary's cwd.\n");
+    }
+
+    (void)kCellFace;   (void)kCellShould; (void)kCellSprite;
+    (void)kCellBG0;    (void)kCellBG1;    (void)kCellBG2;    (void)kCellUI;
 
     /* Frame loop */
+    bool firstFrame = true;
     while (engine.pumpEvents()) {
-        /* Stage one frame's quads. The world-space frame is 240×160;
-         * the layers stack at z = 0.0..0.8 per the spec. */
+        /* One full-screen quad — the entire GBA frame at z=BG2. The
+         * closest-hit shader samples it from the atlas (which we'll
+         * overwrite with this frame's PPU output via refreshAtlas
+         * below, before the trace runs). */
         layers.beginFrame();
-
-        /* BG2 (back, blue) — fills the entire playfield */
-        layers.drawBgQuad(Layer::BG2,
-                          kCellBG2.u0, kCellBG2.v0, kCellBG2.u1, kCellBG2.v1);
-
-        /* BG1 (mid, green) — a left-half band */
-        layers.drawSprite(Layer::BG1, 0.0f, 0.0f, 120.0f, 160.0f,
-                          kCellBG1.u0, kCellBG1.v0, kCellBG1.u1, kCellBG1.v1);
-
-        /* BG0 (front, yellow) — a smaller right-side patch */
-        layers.drawSprite(Layer::BG0, 140.0f, 30.0f, 80.0f, 80.0f,
-                          kCellBG0.u0, kCellBG0.v0, kCellBG0.u1, kCellBG0.v1);
-
-        /* Sprite (red) — a 16×16 quad sliding across the screen */
-        static uint32_t frame = 0;
-        const float x = 30.0f + std::fmod((float)frame * 0.8f, 180.0f);
-        layers.drawSprite(Layer::Sprite, x, 70.0f, 16.0f, 16.0f,
-                          kCellSprite.u0, kCellSprite.v0,
-                          kCellSprite.u1, kCellSprite.v1);
-
-        /* Real GBA tilesheets — face buttons (64×56) above the
-         * shoulder buttons (56×16). Both decoded from 4bpp .bin
-         * files with the kTestPalette extracted from the mod's
-         * face-buttons PNG via ImageMagick. */
-        layers.drawSprite(Layer::Sprite, 88.0f, 4.0f, 64.0f, 56.0f,
-                          kCellFace.u0, kCellFace.v0,
-                          kCellFace.u1, kCellFace.v1);
-        layers.drawSprite(Layer::Sprite, 88.0f, 64.0f, 56.0f, 16.0f,
-                          kCellShould.u0, kCellShould.v0,
-                          kCellShould.u1, kCellShould.v1);
-
-        /* UI border (white, transparent interior) — top-corner box */
-        layers.drawSprite(Layer::UI, 4.0f, 4.0f, 32.0f, 16.0f,
-                          kCellUI.u0, kCellUI.v0, kCellUI.u1, kCellUI.v1);
-
-        ++frame;
-
-        /* Upload to GPU buffers, rebuild AS, dispatch rays. */
-        static bool firstFrame = true;
-        if (firstFrame) std::fprintf(stderr, "[main] step: first flushToBuffers\n");
+        layers.drawSprite(Layer::BG2, 0.0f, 0.0f, 240.0f, 160.0f,
+                          0.0f, 0.0f, 1.0f, 1.0f);
         layers.flushToBuffers();
-        if (firstFrame) std::fprintf(stderr, "[main] step: flushToBuffers ok\n");
 
         VkCommandBuffer cmd = engine.beginFrame();
         if (cmd == VK_NULL_HANDLE) continue;  /* swapchain out of date */
 
+        /* Advance the PPU-frame source at ~6fps (one new frame every
+         * 10 RT frames at 60Hz vsync). The pointer is owned by the
+         * FrameSource — no copy needed before memcpy. */
+        const uint8_t* px = frames.advance(10);
+        if (px) {
+            refreshAtlas(engine, cmd, atlas, px);
+            if (firstFrame) std::fprintf(stderr, "[main] first frame uploaded, tracing\n");
+        }
+
         if (layers.quadCount() > 0) {
-            if (firstFrame) std::fprintf(stderr, "[main] step: rebuildAS\n");
             rt.rebuildAS(cmd);
-            if (firstFrame) std::fprintf(stderr, "[main] step: rebuildAS ok, dispatchRays\n");
             rt.dispatchRays(cmd, engine.swapchainWidth(), engine.swapchainHeight());
-            if (firstFrame) std::fprintf(stderr, "[main] step: dispatchRays returned (deferred)\n");
         }
 
         engine.endFrame();
-        if (firstFrame) std::fprintf(stderr, "[main] step: endFrame ok\n");
         firstFrame = false;
     }
 
     /* Tidy up GPU resources we created here. The Engine + RT + layer
      * destructors free everything they own. */
     vkDeviceWaitIdle(engine.device());
-    if (atlas.sampler) vkDestroySampler(engine.device(), atlas.sampler, nullptr);
-    if (atlas.view)    vkDestroyImageView(engine.device(), atlas.view, nullptr);
-    if (atlas.image)   vkDestroyImage(engine.device(), atlas.image, nullptr);
-    if (atlas.memory)  vkFreeMemory(engine.device(), atlas.memory, nullptr);
+    if (atlas.sampler)    vkDestroySampler(engine.device(), atlas.sampler, nullptr);
+    if (atlas.view)       vkDestroyImageView(engine.device(), atlas.view, nullptr);
+    if (atlas.image)      vkDestroyImage(engine.device(), atlas.image, nullptr);
+    if (atlas.memory)     vkFreeMemory(engine.device(), atlas.memory, nullptr);
+    if (atlas.stagingBuf) vkDestroyBuffer(engine.device(), atlas.stagingBuf, nullptr);
+    if (atlas.stagingMem) vkFreeMemory(engine.device(), atlas.stagingMem, nullptr);
 
     return 0;
 }
