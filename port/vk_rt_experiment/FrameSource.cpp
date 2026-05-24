@@ -172,12 +172,12 @@ bool ShmFrameSource::open(const char* shmName) {
     }
     mBase = p;
 
-    /* Sanity-check the header before trusting the rest. Accept
-     * version >= 2 (v1 was framebuffer-only, no OAM block; we'd
-     * need to fall back without OAM). */
+    /* Sanity-check the header before trusting the rest. Accept any
+     * known version (1..3): v1 was framebuffer-only, v2 added the
+     * OAM block, v3 added per-BG-layer planes. */
     const uint32_t* h = (const uint32_t*)mBase;
-    if (h[0] != kShmMagic || h[1] < 1 || h[1] > 2) {
-        std::fprintf(stderr, "[shm-rd] bad header magic/version (got %08x/%u, want %08x/[1..2])\n",
+    if (h[0] != kShmMagic || h[1] < 1 || h[1] > 3) {
+        std::fprintf(stderr, "[shm-rd] bad header magic/version (got %08x/%u, want %08x/[1..3])\n",
                      h[0], h[1], kShmMagic);
         munmap(mBase, mBytes);
         ::close(mFd);
