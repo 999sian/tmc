@@ -267,6 +267,10 @@ MenuPage BuildWarpPage(void) {
      * (0x78, 0x50). Walk into the device + insert shells to draw. */
     p.items.push_back({ "Carlov figurine shop (#57 repro)",
                         []() { DoWarp(0x23, 0x07, 0x78, 0x50, 1); } });
+    /* #101 repro: Scissors Beetle crash room in Temple of Droplets.
+     * World pos (1650, 3335) - room origin (1568, 3280) = local (82, 55). */
+    p.items.push_back({ "ToD Scissors Beetle (#101 repro)",
+                        []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x33, 0x52, 0x37, 1); } });
     p.items.push_back({ "All areas (raw, by index) ->", []() { Push(BuildAllAreasPage()); } });
     p.items.push_back({ "<- Back",                      []() { Pop(); } });
     return p;
