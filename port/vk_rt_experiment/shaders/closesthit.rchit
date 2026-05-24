@@ -74,25 +74,30 @@ layout(push_constant) uniform PushConstants {
  * the camera (at z=-1.0); rays from playfield hits at z≈0.8 toward
  * the lights travel back through any intervening occluder geometry. */
 const float kPi = 3.14159265359;
-const vec3  kAmbient = vec3(0.12, 0.14, 0.18);
+const vec3  kAmbient = vec3(0.06, 0.07, 0.10);  /* darker = more contrast */
 
-const int  kLightCount  = 6;
-const int  kShadowSamples = 4;          /* soft-shadow samples per light */
-const float kShadowJitter = 6.0;        /* world-space radius of sample disc */
+const int  kLightCount    = 6;
+const int  kShadowSamples = 4;
+const float kShadowJitter = 4.0;
 
 const vec3 kLightColours[kLightCount] = vec3[kLightCount](
-    vec3(1.40, 0.55, 0.18),   /* warm orange */
-    vec3(0.20, 0.55, 1.40),   /* cool blue */
-    vec3(0.25, 1.30, 0.45),   /* bright green */
-    vec3(1.30, 0.30, 1.20),   /* magenta */
-    vec3(1.40, 1.10, 0.30),   /* gold */
-    vec3(0.30, 1.30, 1.20)    /* cyan */
+    vec3(2.50, 0.90, 0.30),   /* warm orange */
+    vec3(0.35, 0.90, 2.50),   /* cool blue */
+    vec3(0.40, 2.20, 0.75),   /* bright green */
+    vec3(2.20, 0.50, 2.00),   /* magenta */
+    vec3(2.30, 1.80, 0.50),   /* gold */
+    vec3(0.50, 2.20, 2.00)    /* cyan */
 );
 
+/* Lights orbit just IN FRONT of the sprite plane (sprites at z=0.2)
+ * so the projection from sprite-occluder → BG2-receiver expands the
+ * shadow by ~6× the sprite size. Without this the shadows are sprite-
+ * sized and barely readable; with it, every on-screen sprite trails a
+ * clearly visible coloured penumbra on the background. */
 vec3 lightPosition(float t, float phase, float radius) {
     return vec3(120.0 + radius * cos(t + phase),
                 80.0  + (radius * 0.6) * sin(t + phase * 1.7),
-                -1.8);
+                0.10);  /* just in front of sprites */
 }
 
 const vec3  kSunDir       = normalize(vec3(0.3, -0.5, -0.8));

@@ -75,11 +75,18 @@ void main() {
         origin, 0.001, direction, 2.0, 0
     );
 
-    /* Tonemap: caller pushes exposure in pc.params.z; treat 0 (which
-     * is the unset default if the host never pushed constants) as
-     * unity exposure so a fresh scaffold isn't black-screen by
-     * accident. Clamp to [0,1] for the LDR storage image. */
+    /* Tonemap + vignette:
+     *   - exposure multiply (caller pushes via pc.params.z; 0 treated
+     *     as unity so a fresh scaffold isn't black-screen by accident)
+     *   - radial darkening at screen edges. The vignette is smoothstep
+     *     from 0.5 radius (where uv center distance ≈ 0.5) outward,
+     *     applied as a 0.25 multiplier floor so corners stay just
+     *     visible. */
     float exposure = pc.params.z > 0.0 ? pc.params.z : 1.0;
-    vec3 final = clamp(payload.colour * exposure, vec3(0.0), vec3(1.0));
+    vec2  centred  = uv - 0.5;
+    float dist2    = dot(centred, centred);
+    float vignette = mix(1.0, 0.45, smoothstep(0.05, 0.30, dist2));
+    vec3  final    = clamp(payload.colour * exposure * vignette,
+                           vec3(0.0), vec3(1.0));
     imageStore(outputImage, ivec2(pixel), vec4(final, 1.0));
 }
