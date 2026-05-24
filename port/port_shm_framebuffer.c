@@ -211,8 +211,13 @@ void Port_Shm_Shutdown(void) {
 
 #else  /* non-Linux */
 
+int Port_Shm_IsActive(void) { return 0; }
+int shmEnabled(void) { return 0; }
 void Port_Shm_PublishFramebuffer(const uint32_t* p, int w, int h) {
     (void)p; (void)w; (void)h;
+}
+void Port_Shm_PublishOam(const uint16_t* o, int count) {
+    (void)o; (void)count;
 }
 void Port_Shm_PublishBgPlanes(const uint32_t* a, const uint32_t* b, int w, int h) {
     (void)a; (void)b; (void)w; (void)h;
