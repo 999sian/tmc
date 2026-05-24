@@ -134,21 +134,52 @@ void main() {
     const vec4 diffuse =
         texture(sampler2D(atlasTextures[0], atlasSampler), uv);
 
-    /* Water detection (slice 8). Apply only to back-composite tile
-     * hits (matCode ~= 0 — actual sprites carry matCode = 1.0 for
-     * emissive candidacy and shouldn't be water-flagged). */
-    if (matCode < 0.5 && diffuse.a > 0.5) {
-        float wB    = diffuse.b;
+    /* Slice 8 + 9: material auto-detection from diffuse colour.
+     * BG-composite hits (matCode < 0.5) can be water or lava.
+     * Sprite hits (matCode > 0.5) can be metal/armor.
+     *
+     * The flag bits below must match the rgen's kMaterial* constants:
+     *   bit 0 (1)  = translucent
+     *   bit 1 (2)  = emissive
+     *   bit 2 (4)  = reflective (water mirror, metal specular)
+     *   bit 3 (8)  = lava (animated shimmer + strong emissive)
+     */
+    if (diffuse.a > 0.5) {
         float wR    = diffuse.r;
         float wG    = diffuse.g;
+        float wB    = diffuse.b;
         float maxC  = max(max(wR, wG), wB);
         float minC  = min(min(wR, wG), wB);
         float sat   = (maxC > 0.0001) ? (maxC - minC) / maxC : 0.0;
-        /* Heuristic: blue dominates red, blue dominates or matches
-         * green, mid-to-high saturation, mid-to-high value.  Catches
-         * both shallow turquoise and deep water palettes. */
-        if (wB > wR + 0.10 && wB > wG - 0.05 && sat > 0.25 && wB > 0.35) {
-            flags |= 4u;  /* kMaterialReflective (slice 8 — defined below) */
+        float luma  = dot(diffuse.rgb, vec3(0.2126, 0.7152, 0.0722));
+
+        if (matCode < 0.5) {
+            /* --- BG-composite materials --- */
+
+            /* Water: blue dominates red, decent saturation, mid value. */
+            if (wB > wR + 0.10 && wB > wG - 0.05 && sat > 0.25 && wB > 0.35) {
+                flags |= 4u;
+            }
+            /* Lava: red dominates green and blue, very saturated,
+             * mid-to-high luma. Distinguishes lava from blood
+             * splatters by the high luma requirement. */
+            else if (wR > wG + 0.15 && wR > wB + 0.20 && sat > 0.55 && luma > 0.35) {
+                flags |= 8u;  /* kMaterialLava */
+                flags |= 2u;  /* also tag emissive — gives self-glow */
+            }
+        } else {
+            /* --- Sprite materials --- */
+
+            /* Metal/armor: low saturation, high value (silver/grey).
+             * Sword blades, knight armor, shield rim.  The sat<0.20
+             * gate also catches Link's eyes (pure white) — accept
+             * the false positive since "specular eyes" is barely
+             * visible and trying to filter further risks losing
+             * legitimate metals. */
+            if (sat < 0.20 && luma > 0.65) {
+                flags |= 4u;  /* reflective — rgen treats metal like water */
+                /* No emissive flag — metal isn't a light source. */
+            }
         }
     }
 
