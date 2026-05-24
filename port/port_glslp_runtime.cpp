@@ -563,20 +563,74 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
         samplers.push_back(primary);
         for (const auto& lut_name : p.lut_names) {
             SDL_GPUTextureSamplerBinding sb = {};
-            for (const auto& lr : g_runtime.luts) {
-                if (lr.name == lut_name) {
-                    sb.texture = lr.texture;
-                    sb.sampler = lr.sampler ? lr.sampler : g_runtime.sampler_linear;
+            /* First: does this sampler name match a named-alias of an
+             * EARLIER pass? `aliasN = "Foo"` in the preset; any later
+             * pass that declares `uniform sampler2D Foo;` gets that
+             * pass's output bound here. The preprocessor records the
+             * name in lut_sampler_names; we resolve to the right
+             * texture at bind time. */
+            for (size_t j = 0; j < i; ++j) {
+                const auto& q = g_runtime.preset.passes[j];
+                if (q.alias && *q.alias == lut_name) {
+                    sb.texture = g_runtime.passes[j].out_texture;
+                    sb.sampler = q.filter_linear ? g_runtime.sampler_linear
+                                                  : g_runtime.sampler_nearest;
                     break;
                 }
             }
-            /* Missing LUT (decode failed earlier) — bind any texture
-             * so the draw is valid; we already pushed the placeholder
-             * pink texture into g_runtime.luts in Load. */
+            /* Special pass-history identifiers: `Original` is pass-0
+             * input (== the GBA framebuffer), `Source` is the previous
+             * pass's output (already bound as primary; bind again).
+             * `PassPrev<N>Texture` is the output of the pass N positions
+             * earlier in the chain — used by crt-easymode-halation,
+             * crt-royale, and others that bypass adjacent samplers. */
+            if (!sb.texture) {
+                if (lut_name == "Original" || lut_name == "OriginalTexture") {
+                    sb.texture = src_texture;
+                    sb.sampler = g_runtime.sampler_linear;
+                } else if (lut_name == "Source" || lut_name == "SourceTexture") {
+                    sb.texture = prev_input;
+                    sb.sampler = g_runtime.sampler_linear;
+                } else if (lut_name.size() > 12 + 7  /* "PassPrev" + "Texture" */
+                           && lut_name.compare(0, 8, "PassPrev") == 0
+                           && lut_name.compare(lut_name.size() - 7, 7, "Texture") == 0) {
+                    int n = 0;
+                    for (size_t k = 8; k + 7 < lut_name.size(); ++k) {
+                        if (lut_name[k] < '0' || lut_name[k] > '9') { n = -1; break; }
+                        n = n * 10 + (lut_name[k] - '0');
+                    }
+                    if (n > 0 && (size_t)n <= i) {
+                        sb.texture = g_runtime.passes[i - n].out_texture;
+                        sb.sampler = g_runtime.sampler_linear;
+                    } else if (n > 0) {
+                        /* Requested earlier pass than exists — fall back
+                         * to the original input. */
+                        sb.texture = src_texture;
+                        sb.sampler = g_runtime.sampler_linear;
+                    }
+                }
+            }
+            /* Otherwise, treat as an actual LUT texture. */
+            if (!sb.texture) {
+                for (const auto& lr : g_runtime.luts) {
+                    if (lr.name == lut_name) {
+                        sb.texture = lr.texture;
+                        sb.sampler = lr.sampler ? lr.sampler : g_runtime.sampler_linear;
+                        break;
+                    }
+                }
+            }
+            /* Missing slot (no alias, no LUT) — bind any texture so the
+             * draw is valid. Prefer the magenta placeholder if present;
+             * otherwise reuse the primary input. */
             if (!sb.texture && !g_runtime.luts.empty()) {
                 sb.texture = g_runtime.luts.front().texture;
                 sb.sampler = g_runtime.luts.front().sampler ? g_runtime.luts.front().sampler
                                                               : g_runtime.sampler_linear;
+            }
+            if (!sb.texture) {
+                sb.texture = prev_input;
+                sb.sampler = g_runtime.sampler_linear;
             }
             samplers.push_back(sb);
         }
