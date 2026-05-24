@@ -116,11 +116,52 @@ void main() {
 
     vec3 filtered = sumCol / sumW;
 
-    /* Final pass: Reinhard tonemap into LDR.  Intermediate passes
-     * keep HDR so successive wavelet passes don't truncate signal. */
+    /* Final pass: bloom gather + Reinhard tonemap + dither → LDR.
+     * Intermediate passes keep HDR so successive wavelet passes don't
+     * truncate signal. */
     if (pc.finalPass != 0u) {
-        vec3 hdr = filtered * pc.exposure;
+        /* Slice-13 bloom: sample the partially-denoised srcImage
+         * (not the raw accumRef — that's the noisy 1spp signal and
+         * threshold-based bloom would flicker in/out per frame).
+         * Add the OVER-bright portion of each neighbour back with a
+         * Gaussian falloff so emissives glow into surrounding tiles.
+         * High threshold (>1.5) + low strength (0.10) keeps the
+         * effect subtle on UI/text — the user reported "noise on
+         * title screen" when this was aggressive. */
+        const int kBloomRadius = 6;
+        const float kBloomThreshold = 1.5;
+        vec3 bloom = vec3(0.0);
+        float bloomW = 0.0;
+        for (int dy = -kBloomRadius; dy <= kBloomRadius; dy += 2) {
+            for (int dx = -kBloomRadius; dx <= kBloomRadius; dx += 2) {
+                ivec2 q = px + ivec2(dx, dy);
+                if (q.x < 0 || q.y < 0 || q.x >= size.x || q.y >= size.y) continue;
+                vec3 c = imageLoad(srcImage, q).rgb;
+                float over = max(0.0, max(max(c.r, c.g), c.b) - kBloomThreshold);
+                if (over <= 0.0) continue;
+                float d2 = float(dx * dx + dy * dy);
+                float w  = exp(-d2 / (2.0 * float(kBloomRadius * kBloomRadius)));
+                bloom  += c * over * w;
+                bloomW += w;
+            }
+        }
+        if (bloomW > 0.0) bloom /= bloomW;
+
+        /* Reinhard tonemap with exposure. */
+        vec3 hdr = (filtered + bloom * 0.10) * pc.exposure;
         vec3 ldr = hdr / (hdr + vec3(1.0));
+
+        /* Slice-13 dithering: small per-pixel offset breaks up the
+         * 1-bit gradient banding Reinhard introduces in dark/uniform
+         * regions.  Amplitude ±0.25/255 (half a quantisation step) —
+         * just enough to dither the boundary without becoming
+         * visible as grain on flat UI. */
+        uvec2 hp  = uvec2(px);
+        uint  hash = (hp.x * 1973u + hp.y * 9277u);
+        hash = (hash ^ (hash >> 13)) * 277803737u;
+        float dither = (float(hash & 0xFFu) / 255.0 - 0.5) / 510.0;
+        ldr += vec3(dither);
+
         imageStore(dstImage, px, vec4(ldr, 1.0));
     } else {
         imageStore(dstImage, px, vec4(filtered, 1.0));
