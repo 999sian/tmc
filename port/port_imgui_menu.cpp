@@ -464,6 +464,21 @@ static void DrawRibbonDisplayTab(void) {
         if (ImGui::Button(">##aspect")) Port_Config_CycleAspectMode(+1);
     }
 
+    /* Renderer backend — Auto, Software (SDL_Renderer), or GPU
+     * (SDL_GPU). The GPU path is required for CRT/LCD/glslp shader
+     * filters. Changing this needs a restart because the window's
+     * swapchain owner is set once at Port_PPU_Init time. */
+    {
+        ImGui::Text("Renderer"); ImGui::SameLine(140);
+        if (ImGui::Button("<##renderer")) Port_Config_CycleRenderBackend(-1);
+        ImGui::SameLine();
+        ImGui::Text("%s", Port_Config_RenderBackendName(Port_Config_RenderBackend()));
+        ImGui::SameLine();
+        if (ImGui::Button(">##renderer")) Port_Config_CycleRenderBackend(+1);
+        ImGui::SameLine();
+        ImGui::TextDisabled("(restart)");
+    }
+
     /* Background-fill style for the pillar bars added by the aspect
      * mode. "Blurred" uses a linearly-filtered stretched copy of the
      * current frame for an "ambient mode" halo. */

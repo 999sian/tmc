@@ -97,6 +97,24 @@ void        Port_Config_CycleBgFill(int direction);
 void        Port_Config_BgFillColor(u8* r, u8* g, u8* b);
 void        Port_Config_SetBgFillColor(u8 r, u8 g, u8 b);
 
+/* Renderer backend selection. The port has two presentation paths:
+ * SDL_GPU (shader pipeline, required for CRT/LCD filters and the
+ * .glslp preset runtime) and SDL_Renderer (software composite via
+ * SDL's 2D API). AUTO is the historical default — try GPU first,
+ * fall back to SDL_Renderer if GPU init fails. Changing this needs
+ * a restart to take effect; the window's swapchain owner is set
+ * once at Port_PPU_Init time. */
+typedef enum {
+    PORT_RENDER_BACKEND_AUTO     = 0,
+    PORT_RENDER_BACKEND_SOFTWARE = 1,
+    PORT_RENDER_BACKEND_GPU      = 2,
+    PORT_RENDER_BACKEND_COUNT,
+} PortRenderBackend;
+PortRenderBackend Port_Config_RenderBackend(void);
+const char*       Port_Config_RenderBackendName(PortRenderBackend b);
+void              Port_Config_SetRenderBackend(PortRenderBackend b);
+void              Port_Config_CycleRenderBackend(int direction);
+
 void Port_Config_OpenGamepads(void);
 void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);
