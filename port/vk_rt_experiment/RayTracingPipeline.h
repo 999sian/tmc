@@ -85,6 +85,21 @@ public:
     void dispatchRays(VkCommandBuffer cmd, uint32_t width, uint32_t height,
                       uint32_t frameIndex, float time);
 
+    /* GPU side per-frame point lights (extracted from the OAM-only
+     * sprite plane by the consumer).  Each entry is 8 floats:
+     *   pos.xyz (12B) + radius (4B) + radiance.rgb (12B) + intensity (4B)
+     * The shader picks one at random per pixel for direct illumination
+     * (importance-sampled). updateLights() memcpys into the persistent
+     * device-local storage buffer; pass 0 lights to disable. */
+    struct Light {
+        float posX, posY, posZ;
+        float radius;
+        float r, g, b;
+        float intensity;
+    };
+    static constexpr uint32_t kMaxLights = 32;
+    void updateLights(VkCommandBuffer cmd, const Light* lights, uint32_t count);
+
 private:
     /* SPIR-V loader. Throws Error if the file is missing or malformed. */
     std::vector<char> loadSpv(const std::string& path);
@@ -141,6 +156,16 @@ private:
      * frame with the current per-instance transform. */
     VkBuffer       mInstancesBuffer = VK_NULL_HANDLE;
     VkDeviceMemory mInstancesMemory = VK_NULL_HANDLE;
+
+    /* Point-light storage buffer (binding 9). Capacity = kMaxLights;
+     * the active count is sent in the push constants each dispatch. */
+    VkBuffer        mLightsBuffer        = VK_NULL_HANDLE;
+    VkDeviceMemory  mLightsMemory        = VK_NULL_HANDLE;
+    VkBuffer        mLightsStaging       = VK_NULL_HANDLE;
+    VkDeviceMemory  mLightsStagingMem    = VK_NULL_HANDLE;
+    void*           mLightsStagingMap    = nullptr;
+    uint32_t        mLightCount          = 0;
+    void createLightsBuffer();
 
     /* Atlas bindings (set externally via setAtlas) */
     VkImageView mAtlasView      = VK_NULL_HANDLE;
