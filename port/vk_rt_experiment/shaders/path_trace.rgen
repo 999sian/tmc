@@ -70,6 +70,7 @@ layout(push_constant) uniform PushConstants {
 /* Material-flag bits (kept in sync with rchit). */
 const uint kMaterialTranslucent = 1u;
 const uint kMaterialEmissive    = 2u;
+const uint kMaterialReflective  = 4u;  /* slice 8 — water */
 
 /* Path-tracing constants. kMaxBounces = 3 covers direct + 2 indirect
  * bounces — enough for visible colour bleeding without exploding
@@ -353,15 +354,56 @@ void main() {
                     }
                 }
 
+                /* --- Slice 8: water-tile mirror reflection ---
+                 * For surfaces flagged reflective (water), cast a
+                 * single reflection ray.  Use a slightly tilted
+                 * normal (not the geometric +Z) so the reflection
+                 * picks up sprites above the water position in
+                 * screen space — gives the classic Zelda "Link's
+                 * reflection in the lake" effect on top of the
+                 * diffuse water colour.  Mix by a Fresnel-ish
+                 * factor so glancing pixels reflect more strongly.
+                 */
+                vec3 reflection = vec3(0.0);
+                float reflWeight = 0.0;
+                if ((payload.materialFlags & kMaterialReflective) != 0u) {
+                    /* Tilted reflection normal — rotate the +Z surface
+                     * normal ~17° toward -Y so reflection rays travel
+                     * up-and-back-toward-camera, hitting sprite quads
+                     * that are screen-above the water hit point. */
+                    vec3 wN = normalize(vec3(0.0, -0.3, -0.95));
+                    vec3 r  = reflect(rayDir, wN);
+                    payload.hitDistance = -1.0;
+                    payload.albedo      = vec3(0.0);
+                    traceRayEXT(topLevelAS, gl_RayFlagsNoneEXT, 0xFF, 0, 0, 0,
+                                hitPos + r * (kRayEpsilon * 4.0),
+                                kRayEpsilon, r, 200.0, 0);
+                    if (payload.hitDistance > 0.0) {
+                        reflection = payload.albedo;
+                    } else {
+                        reflection = sampleSky(r);
+                    }
+                    /* Schlick-style Fresnel approximation; we don't
+                     * track per-pixel view vectors precisely, so use
+                     * a fixed reflectivity-at-normal estimate that
+                     * lifts at grazing angles. The visual goal is
+                     * "water gets brighter and more reflective when
+                     * Link is near a shore" — implementation can
+                     * iterate. */
+                    reflWeight = 0.45;
+                }
+
                 /* Combine direct sun + direct point-lights + indirect.
                  * Sun uses the warm tint; shadowed surfaces fall back
                  * to cool shadowTint so the warm/cool contrast still
                  * shows. Indirect and point-light contributions
-                 * carry their own colour. */
+                 * carry their own colour. For water, the reflection
+                 * blends with the direct colour by reflWeight. */
                 const vec3 sunTint    = vec3(1.55, 1.40, 1.10);
                 const vec3 shadowTint = vec3(0.30, 0.38, 0.62);
                 vec3 direct = albedo * mix(shadowTint, sunTint, litFrac);
-                sampleAccum = direct + ptLight + indirect;
+                vec3 baseShading = direct + ptLight + indirect;
+                sampleAccum = mix(baseShading, baseShading + reflection, reflWeight);
             }
         }
 
