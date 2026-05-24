@@ -76,6 +76,10 @@ PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
 PortAspectMode sAspectMode = PORT_ASPECT_NATIVE_3_2;
 PortBgFill     sBgFill = PORT_BG_FILL_BLACK;
 u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
+/* Renderer backend selection — read once at PPU init; menu writes
+ * here but a restart is needed to apply because the window's
+ * swapchain owner is set once and is not live-switchable. */
+PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -109,6 +113,7 @@ nlohmann::json DefaultsJson(void) {
         { "aspect_mode", "native" },
         { "bg_fill", "black" },
         { "bg_fill_color", { 0, 0, 0 } },
+        { "render_backend", "auto" },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -470,6 +475,13 @@ extern "C" void Port_Config_Load(const char* path) {
             sBgFillB = clamp_u8(col[2].is_number() ? col[2].get<int>() : 0);
         }
     }
+    {
+        std::string rb = j.value("render_backend", std::string("auto"));
+        for (char& c : rb) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
+        if      (rb == "software" || rb == "sw")    sRenderBackend = PORT_RENDER_BACKEND_SOFTWARE;
+        else if (rb == "gpu")                       sRenderBackend = PORT_RENDER_BACKEND_GPU;
+        else                                         sRenderBackend = PORT_RENDER_BACKEND_AUTO;
+    }
 
     for (auto& v : sBinds) {
         v.clear();
@@ -680,6 +692,40 @@ extern "C" void Port_Config_SetBgFillColor(u8 r, u8 g, u8 b) {
     sBgFillR = r; sBgFillG = g; sBgFillB = b;
     sConfigJson["bg_fill_color"] = nlohmann::json::array({ (int)r, (int)g, (int)b });
     SaveConfig();
+}
+
+extern "C" PortRenderBackend Port_Config_RenderBackend(void) {
+    return sRenderBackend;
+}
+
+extern "C" const char* Port_Config_RenderBackendName(PortRenderBackend b) {
+    switch (b) {
+        case PORT_RENDER_BACKEND_SOFTWARE: return "Software";
+        case PORT_RENDER_BACKEND_GPU:      return "GPU";
+        case PORT_RENDER_BACKEND_AUTO:
+        default:                            return "Auto";
+    }
+}
+
+extern "C" void Port_Config_SetRenderBackend(PortRenderBackend b) {
+    if (b < 0 || b >= PORT_RENDER_BACKEND_COUNT) b = PORT_RENDER_BACKEND_AUTO;
+    sRenderBackend = b;
+    const char* name = "auto";
+    switch (b) {
+        case PORT_RENDER_BACKEND_SOFTWARE: name = "software"; break;
+        case PORT_RENDER_BACKEND_GPU:      name = "gpu";      break;
+        case PORT_RENDER_BACKEND_AUTO:
+        default:                            name = "auto";     break;
+    }
+    sConfigJson["render_backend"] = name;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_CycleRenderBackend(int direction) {
+    int next = (int)sRenderBackend + (direction < 0 ? -1 : 1);
+    if (next < 0) next = PORT_RENDER_BACKEND_COUNT - 1;
+    if (next >= PORT_RENDER_BACKEND_COUNT) next = 0;
+    Port_Config_SetRenderBackend((PortRenderBackend)next);
 }
 
 extern "C" void Port_Config_CycleTargetFps(int direction) {

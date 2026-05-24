@@ -342,12 +342,28 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
          * fall through to the normal SDL_Renderer reuse path. */
         SDL_DestroyRenderer(existing);
     }
-    if (Port_GPU_ClaimWindow(window, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT)) {
-        sBackend = RenderBackend::Gpu;
-        std::fprintf(stderr, "PPU initialized with SDL_GPU backend.\n");
-        /* GPU path doesn't need any of the SDL_Renderer / SDL_Texture
-         * state below — skip straight to the ViruaPPU memory bind. */
-        goto bind_virtuappu_memory;
+    /* Honour the user's renderer preference from the F8 menu. AUTO
+     * (default) tries GPU and falls back to SDL_Renderer on failure;
+     * SOFTWARE skips the GPU claim entirely; GPU forces the claim
+     * and refuses to fall back (so a missing CRT shader pipeline
+     * surfaces loudly instead of silently degrading to the SW path). */
+    {
+        const PortRenderBackend pref = Port_Config_RenderBackend();
+        const bool tryGpu  = (pref != PORT_RENDER_BACKEND_SOFTWARE);
+        const bool forceGpu = (pref == PORT_RENDER_BACKEND_GPU);
+        if (tryGpu && Port_GPU_ClaimWindow(window, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT)) {
+            sBackend = RenderBackend::Gpu;
+            std::fprintf(stderr, "PPU initialized with SDL_GPU backend (pref=%s).\n",
+                         Port_Config_RenderBackendName(pref));
+            /* GPU path doesn't need any of the SDL_Renderer / SDL_Texture
+             * state below — skip straight to the ViruaPPU memory bind. */
+            goto bind_virtuappu_memory;
+        }
+        if (forceGpu) {
+            std::fprintf(stderr,
+                "PPU: render_backend=gpu requested but Port_GPU_ClaimWindow "
+                "failed; falling back to SDL_Renderer anyway.\n");
+        }
     }
 
     /* GPU not available (build flag off, init failed, or claim failed):
