@@ -477,6 +477,16 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     if mingw:
         configure_cmd.append(f"--mingw={mingw}")
 
+    # Release builds always enable the SDL_GPU backend so users can
+    # pick GPU from F8 → Renderer and the .glslp shader-preset picker
+    # is exposed.  Without --gpu_renderer=y the entire port_gpu_renderer.cpp
+    # body is stubbed by `#ifndef TMC_GPU_RENDERER`, Port_GPU_IsActive
+    # returns false unconditionally, and the shader preset entry shows
+    # "(GPU backend required)" even when the user has GPU selected.
+    # Default-on costs ~150 KB of embedded SPIR-V; no runtime impact
+    # for users who stay on the software backend.
+    configure_cmd.append("--gpu_renderer=y")
+
     assets_dir = REPO_ROOT / "build" / version / "assets"
     assets_src_dir = REPO_ROOT / "build" / version / "assets_src"
     assets_ready = assets_dir.exists() and assets_src_dir.exists()
