@@ -445,6 +445,56 @@ void Engine::createStorageImage() {
                               VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                               VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
     });
+
+    /* Accumulation image (HDR, rgba32f) — path-tracer running-mean
+     * buffer. Same dimensions as the storage image. Stays in GENERAL
+     * layout so the shader can imageLoad + imageStore in one pass. */
+    VkImageCreateInfo aci{};
+    aci.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    aci.imageType     = VK_IMAGE_TYPE_2D;
+    aci.format        = VK_FORMAT_R32G32B32A32_SFLOAT;
+    aci.extent.width  = mSwapchainExtent.width;
+    aci.extent.height = mSwapchainExtent.height;
+    aci.extent.depth  = 1;
+    aci.mipLevels     = 1;
+    aci.arrayLayers   = 1;
+    aci.samples       = VK_SAMPLE_COUNT_1_BIT;
+    aci.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    aci.usage         = VK_IMAGE_USAGE_STORAGE_BIT;
+    aci.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    aci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    check(vkCreateImage(mDevice, &aci, nullptr, &mAccumImage), "vkCreateImage (accum)");
+
+    VkMemoryRequirements amr{};
+    vkGetImageMemoryRequirements(mDevice, mAccumImage, &amr);
+    VkMemoryAllocateInfo amai{};
+    amai.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    amai.allocationSize  = amr.size;
+    amai.memoryTypeIndex = findMemoryType(amr.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (amai.memoryTypeIndex == UINT32_MAX) throw Error("accum image: no device-local memory type");
+    check(vkAllocateMemory(mDevice, &amai, nullptr, &mAccumImageMemory),
+          "vkAllocateMemory (accum)");
+    check(vkBindImageMemory(mDevice, mAccumImage, mAccumImageMemory, 0),
+          "vkBindImageMemory (accum)");
+
+    VkImageViewCreateInfo avci{};
+    avci.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    avci.image            = mAccumImage;
+    avci.viewType         = VK_IMAGE_VIEW_TYPE_2D;
+    avci.format           = VK_FORMAT_R32G32B32A32_SFLOAT;
+    avci.components       = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                             VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+    avci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    check(vkCreateImageView(mDevice, &avci, nullptr, &mAccumImageView),
+          "vkCreateImageView (accum)");
+
+    oneShot([&](VkCommandBuffer cmd) {
+        transitionImageLayout(cmd, mAccumImage,
+                              VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                              0, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                              VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                              VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
+    });
 }
 
 void Engine::createFrameSync() {
@@ -603,9 +653,15 @@ void Engine::recreateSwapchain() {
     if (mStorageImageView) vkDestroyImageView(mDevice, mStorageImageView, nullptr);
     if (mStorageImage)     vkDestroyImage(mDevice, mStorageImage, nullptr);
     if (mStorageImageMemory) vkFreeMemory(mDevice, mStorageImageMemory, nullptr);
+    if (mAccumImageView)   vkDestroyImageView(mDevice, mAccumImageView, nullptr);
+    if (mAccumImage)       vkDestroyImage(mDevice, mAccumImage, nullptr);
+    if (mAccumImageMemory) vkFreeMemory(mDevice, mAccumImageMemory, nullptr);
     mStorageImageView = VK_NULL_HANDLE;
     mStorageImage = VK_NULL_HANDLE;
     mStorageImageMemory = VK_NULL_HANDLE;
+    mAccumImageView = VK_NULL_HANDLE;
+    mAccumImage = VK_NULL_HANDLE;
+    mAccumImageMemory = VK_NULL_HANDLE;
 
     createSwapchain();
     createStorageImage();
@@ -634,6 +690,9 @@ void Engine::shutdown() {
     if (mStorageImageView) vkDestroyImageView(mDevice, mStorageImageView, nullptr);
     if (mStorageImage)     vkDestroyImage(mDevice, mStorageImage, nullptr);
     if (mStorageImageMemory) vkFreeMemory(mDevice, mStorageImageMemory, nullptr);
+    if (mAccumImageView)   vkDestroyImageView(mDevice, mAccumImageView, nullptr);
+    if (mAccumImage)       vkDestroyImage(mDevice, mAccumImage, nullptr);
+    if (mAccumImageMemory) vkFreeMemory(mDevice, mAccumImageMemory, nullptr);
     for (VkImageView v : mSwapchainViews) {
         if (v) vkDestroyImageView(mDevice, v, nullptr);
     }
@@ -665,6 +724,9 @@ void Engine::shutdown() {
     mStorageImage = VK_NULL_HANDLE;
     mStorageImageMemory = VK_NULL_HANDLE;
     mStorageImageView = VK_NULL_HANDLE;
+    mAccumImage = VK_NULL_HANDLE;
+    mAccumImageMemory = VK_NULL_HANDLE;
+    mAccumImageView = VK_NULL_HANDLE;
     mSwapchainImages.clear();
 }
 
