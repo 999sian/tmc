@@ -141,107 +141,138 @@ void main() {
         vec3 rayOrigin = vec3(origXY, -1.0);
         vec3 rayDir    = vec3(0.0, 0.0, 1.0);
 
-        vec3 radiance   = vec3(0.0);
-        vec3 throughput = vec3(1.0);
+        /* RTX direct-lighting + multi-sample AO + emissive-GI
+         * model for the stacked-quad scene. Per pixel:
+         *   1 primary ray   — gets surface albedo, normal, mat
+         *   4 shadow rays   — jittered cone around sun, soft shadow
+         *   4 AO rays       — short hemisphere, crevice darkening
+         *   1 emissive-GI   — random hemisphere, picks up emissive
+         *                     lighting on nearby glowing sprites
+         * Then progressive temporal accumulation (low-alpha blend)
+         * for noise reduction without ghosting on moving content. */
+        payload.radiance      = vec3(0.0);
+        payload.albedo        = vec3(0.0);
+        payload.hitPos        = vec3(0.0);
+        payload.normal        = vec3(0.0, 0.0, -1.0);
+        payload.hitDistance   = -1.0;
+        payload.materialFlags = 0u;
+        payload.scatterDir    = vec3(0.0);
+        traceRayEXT(
+            topLevelAS, gl_RayFlagsNoneEXT, 0xFF, 0, 0, 0,
+            rayOrigin, kRayEpsilon, rayDir, kInf, 0
+        );
 
-        for (int bounce = 0; bounce < kMaxBounces; ++bounce) {
-            /* Clear the payload before each trace — the rchit fills
-             * it, the miss leaves hitDistance < 0. */
-            payload.radiance      = vec3(0.0);
-            payload.albedo        = vec3(0.0);
-            payload.hitPos        = vec3(0.0);
-            payload.normal        = vec3(0.0, 0.0, -1.0);
-            payload.hitDistance   = -1.0;
-            payload.materialFlags = 0u;
-            payload.scatterDir    = vec3(0.0);
+        if (payload.hitDistance < 0.0) {
+            sampleAccum = sampleSky(rayDir);
+        } else {
+            const vec3 albedo     = payload.albedo;
+            const vec3 hitPos     = payload.hitPos;
+            const vec3 hitN       = payload.normal;
+            const bool isEmissive = (payload.materialFlags & kMaterialEmissive) != 0u;
 
-            traceRayEXT(
-                topLevelAS,
-                gl_RayFlagsOpaqueEXT,
-                0xFF, 0, 0, 0,
-                rayOrigin, kRayEpsilon, rayDir, kInf, 0
-            );
-
-            if (payload.hitDistance < 0.0) {
-                /* Miss — add sky contribution and terminate. */
-                radiance += throughput * sampleSky(rayDir);
-                break;
-            }
-
-            /* Accumulate this hit's emissive into the path's total
-             * radiance, modulated by the chain of albedo bounces so
-             * far. */
-            radiance += throughput * payload.radiance;
-
-            /* Lambertian throughput update. PDF cancels with the
-             * cosine term (cosine-weighted sampling below), so the
-             * BRDF reduces to albedo / 1.0. */
-            throughput *= payload.albedo;
-
-            /* Russian roulette — terminate paths with negligible
-             * remaining throughput probabilistically rather than at
-             * fixed depth. Skip on bounce 0 so we always get at
-             * least direct lighting. */
-            if (bounce > 0) {
-                float p = max(throughput.r, max(throughput.g, throughput.b));
-                p = clamp(p, 0.05, 0.95);
-                if (rand() > p) break;
-                throughput /= p;
-            }
-
-            /* Translucent forward-scatter: a fraction of energy
-             * continues in the incoming direction (like sunlight
-             * through a leaf). We split here: the *current* bounce
-             * already accumulated the emissive; for the next, take
-             * the rchit's pre-computed scatterDir instead of a
-             * cosine-weighted reflection. */
-            if ((payload.materialFlags & kMaterialTranslucent) != 0u) {
-                /* Half the energy goes forward, half scatters
-                 * diffusely (cosine hemisphere). For the prototype
-                 * we just pick one branch by RNG; an unbiased path
-                 * tracer would split and sum both. */
-                if (rand() < 0.5) {
-                    rayOrigin = payload.hitPos + payload.scatterDir * kRayEpsilon;
-                    rayDir    = payload.scatterDir;
-                    /* Tint the throughput with a slight wavelength-
-                     * dependent attenuation to fake sub-surface
-                     * absorption. */
-                    throughput *= vec3(0.95, 1.05, 0.85);
-                    continue;
+            if (isEmissive) {
+                /* Emissive surface: warm, overexposed self-glow.
+                 * Tonemap pulls it toward white but it stays warm. */
+                sampleAccum = albedo * vec3(3.5, 3.0, 2.5);
+            } else {
+                /* --- Soft shadow (4 jittered samples) --- */
+                const vec3 sunDir = normalize(vec3(0.80, -0.60, -0.02));
+                const int  kShadowSamples = 4;
+                float litFrac = 0.0;
+                for (int s = 0; s < kShadowSamples; ++s) {
+                    /* Cone jitter — small angular spread for soft
+                     * penumbra. 0.06 radians ≈ 3.4° apparent size. */
+                    vec3 j  = vec3(rand() - 0.5, rand() - 0.5, rand() - 0.5);
+                    vec3 sd = normalize(sunDir + j * 0.06);
+                    payload.hitDistance = -1.0;
+                    traceRayEXT(topLevelAS,
+                        gl_RayFlagsTerminateOnFirstHitEXT,
+                        0xFF, 0, 0, 0,
+                        hitPos + sd * (kRayEpsilon * 4.0),
+                        kRayEpsilon, sd, kInf, 0);
+                    if (payload.hitDistance < 0.0) litFrac += 1.0;
                 }
-                /* else fall through to diffuse bounce below. */
-            }
+                litFrac /= float(kShadowSamples);
 
-            /* Cosine-weighted diffuse bounce. */
-            vec3 t, b;
-            buildTangentFrame(payload.normal, t, b);
-            vec3 local = cosineSampleHemisphere(rand(), rand());
-            rayDir     = normalize(local.x * t + local.y * b + local.z * payload.normal);
-            rayOrigin  = payload.hitPos + payload.normal * kRayEpsilon;
+                /* --- Ambient occlusion (4 hemisphere samples) --- */
+                vec3 tang, bitan;
+                buildTangentFrame(hitN, tang, bitan);
+                const int   kAoSamples = 4;
+                const float kAoMaxDist = 0.5;
+                float aoFrac = 0.0;
+                for (int s = 0; s < kAoSamples; ++s) {
+                    vec3 local = cosineSampleHemisphere(rand(), rand());
+                    vec3 ad = normalize(local.x * tang + local.y * bitan + local.z * hitN);
+                    payload.hitDistance = -1.0;
+                    traceRayEXT(topLevelAS,
+                        gl_RayFlagsTerminateOnFirstHitEXT,
+                        0xFF, 0, 0, 0,
+                        hitPos + hitN * (kRayEpsilon * 4.0),
+                        kRayEpsilon, ad, kAoMaxDist, 0);
+                    if (payload.hitDistance < 0.0) aoFrac += 1.0;
+                }
+                aoFrac /= float(kAoSamples);
+                /* Clamp AO minimum to 0.35 so deep crevices don't go
+                 * pitch black — just darkened. */
+                aoFrac = 0.35 + 0.65 * aoFrac;
+
+                /* --- Emissive GI (single hemisphere ray) ---
+                 * Cast one ray into the hemisphere. If it hits an
+                 * emissive surface, the surface picks up that
+                 * radiance scaled by the emissive surface's albedo
+                 * (treating emissive intensity as proportional to
+                 * the diffuse colour). One-sample is noisy per
+                 * frame; the temporal accumulation averages it
+                 * out across ~5-10 frames. */
+                vec3 emissiveGI = vec3(0.0);
+                {
+                    vec3 local = cosineSampleHemisphere(rand(), rand());
+                    vec3 ed = normalize(local.x * tang + local.y * bitan + local.z * hitN);
+                    payload.hitDistance   = -1.0;
+                    payload.materialFlags = 0u;
+                    payload.albedo        = vec3(0.0);
+                    traceRayEXT(topLevelAS,
+                        gl_RayFlagsNoneEXT,
+                        0xFF, 0, 0, 0,
+                        hitPos + hitN * (kRayEpsilon * 4.0),
+                        kRayEpsilon, ed, 200.0, 0);
+                    if (payload.hitDistance > 0.0 &&
+                        (payload.materialFlags & kMaterialEmissive) != 0u) {
+                        emissiveGI = payload.albedo * vec3(1.8, 1.5, 1.0);
+                    }
+                }
+
+                /* Warm/cool tint contrast. `litFrac` from the
+                 * soft-shadow sweep mixes between cool shadow and
+                 * warm sun; AO darkens crevices; emissive GI adds
+                 * a small warm halo near glowing sprites. */
+                const vec3 sunTint    = vec3(1.55, 1.40, 1.10);
+                const vec3 shadowTint = vec3(0.30, 0.38, 0.62);
+                vec3 tint = mix(shadowTint, sunTint, litFrac);
+                sampleAccum = albedo * tint * aoFrac
+                              + albedo * emissiveGI;
+            }
         }
 
-        sampleAccum += radiance;
+        /* --- Temporal accumulation ---
+         * Live producer is animated, so straight averaging would
+         * ghost. Use a low-alpha blend (0.35) so the running mean
+         * catches up in ~3-4 frames — still smooths the AO/shadow
+         * noise without locking in old geometry. params.w == 1.0
+         * forces a hard reset (caller pushes that on scene
+         * change). */
+        vec3 final;
+        if (pc.params.w > 0.5) {
+            final = sampleAccum;
+        } else {
+            vec3 prev = imageLoad(accumImage, ivec2(pixel)).rgb;
+            const float kBlendAlpha = 0.35;
+            final = mix(prev, sampleAccum, kBlendAlpha);
+        }
+        imageStore(accumImage, ivec2(pixel), vec4(final, 1.0));
+
+        /* Reinhard tonemap to LDR. */
+        vec3 ldr = final / (final + vec3(1.0));
+        imageStore(outputImage, ivec2(pixel), vec4(ldr, 1.0));
     }
-
-    sampleAccum /= float(kSamplesPerPixel);
-
-    /* Progressive accumulation: blend this frame's sample into the
-     * running mean stored in accumImage. params.w == 1.0 indicates
-     * the caller wants a reset (scene changed); otherwise the mean
-     * window grows by one frame. */
-    vec3 accum;
-    if (pc.params.w > 0.5) {
-        accum = sampleAccum;
-    } else {
-        vec3 prev = imageLoad(accumImage, ivec2(pixel)).rgb;
-        float n   = float(frameIdx) + 1.0;
-        accum     = mix(prev, sampleAccum, 1.0 / n);
-    }
-    imageStore(accumImage, ivec2(pixel), vec4(accum, 1.0));
-
-    /* Reinhard tonemap + exposure to LDR. Exposure default = 1 when
-     * the caller doesn't push a value. */
-    float exposure = pc.params.z > 0.0 ? pc.params.z : 1.0;
-    vec3  tonemap  = (accum * exposure) / (accum * exposure + vec3(1.0));
-    imageStore(outputImage, ivec2(pixel), vec4(tonemap, 1.0));
 }

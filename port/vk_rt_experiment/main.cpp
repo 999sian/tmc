@@ -327,14 +327,30 @@ static AtlasGpu createAtlas(Engine& eng, uint32_t w, uint32_t h) {
     return out;
 }
 
-/* Per-frame atlas refresh: memcpy `pixels` into staging, then
- * record (into `cmd`) the layout transitions + copy that publish
- * the new contents to the image. Caller submits cmd later. */
+/* Per-frame atlas refresh — supports up to 3 source planes packed
+ * vertically into the atlas image (composite + BG1 + BG2). Each
+ * plane is `srcW × srcH` RGBA8; the atlas's height must be at least
+ * `numPlanes * srcH`. Pass nullptr for missing planes to leave them
+ * unchanged from the previous frame. */
 static void refreshAtlas(Engine& eng, VkCommandBuffer cmd,
-                        AtlasGpu& atlas, const uint8_t* pixels) {
-    const size_t bytes = (size_t)atlas.w * atlas.h * 4;
-    std::memcpy(atlas.stagingMap, pixels, bytes);
+                         AtlasGpu& atlas,
+                         const uint8_t* composite,
+                         const uint8_t* bg1,
+                         const uint8_t* bg2,
+                         uint32_t srcW, uint32_t srcH) {
     (void)eng;
+    if (!composite && !bg1 && !bg2) return;
+    if (srcW == 0 || srcH == 0) return;
+
+    /* Stage the up-to-three planes in the persistent staging buffer.
+     * Layout matches the atlas image: plane 0 at top, then BG1, then
+     * BG2. Skipped planes leave the staging bytes unchanged
+     * (harmless — only the regions we copy below get pushed). */
+    const size_t planeBytes = (size_t)srcW * srcH * 4;
+    uint8_t* dst = (uint8_t*)atlas.stagingMap;
+    if (composite) std::memcpy(dst + 0 * planeBytes, composite, planeBytes);
+    if (bg1)       std::memcpy(dst + 1 * planeBytes, bg1,       planeBytes);
+    if (bg2)       std::memcpy(dst + 2 * planeBytes, bg2,       planeBytes);
 
     /* SHADER_READ_ONLY → TRANSFER_DST */
     VkImageMemoryBarrier toDst{};
@@ -352,16 +368,28 @@ static void refreshAtlas(Engine& eng, VkCommandBuffer cmd,
         VK_PIPELINE_STAGE_TRANSFER_BIT,
         0, 0, nullptr, 0, nullptr, 1, &toDst);
 
-    VkBufferImageCopy region{};
-    region.bufferOffset      = 0;
-    region.bufferRowLength   = 0;
-    region.bufferImageHeight = 0;
-    region.imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-    region.imageOffset       = {0, 0, 0};
-    region.imageExtent       = {atlas.w, atlas.h, 1};
-    vkCmdCopyBufferToImage(cmd, atlas.stagingBuf, atlas.image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           1, &region);
+    /* One vkCmdCopyBufferToImage per plane present. Each copy
+     * specifies its destination y-offset to land in the right
+     * region of the atlas. */
+    VkBufferImageCopy regions[3]{};
+    uint32_t regionCount = 0;
+    auto addRegion = [&](uint32_t planeIdx) {
+        VkBufferImageCopy& r = regions[regionCount++];
+        r.bufferOffset      = planeIdx * planeBytes;
+        r.bufferRowLength   = 0;
+        r.bufferImageHeight = 0;
+        r.imageSubresource  = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        r.imageOffset       = {0, (int32_t)(planeIdx * srcH), 0};
+        r.imageExtent       = {srcW, srcH, 1};
+    };
+    if (composite) addRegion(0);
+    if (bg1)       addRegion(1);
+    if (bg2)       addRegion(2);
+    if (regionCount > 0) {
+        vkCmdCopyBufferToImage(cmd, atlas.stagingBuf, atlas.image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               regionCount, regions);
+    }
 
     /* TRANSFER_DST → SHADER_READ_ONLY (sync with subsequent trace) */
     VkImageMemoryBarrier toRead = toDst;
@@ -515,10 +543,16 @@ int main() {
     rt.createPipeline("./shaders");
     std::fprintf(stderr, "[main] step: pipeline ok\n");
 
-    /* Atlas sized exactly to one GBA frame. Created empty; refreshed
-     * each render frame from the FrameSource below. */
+    /* Atlas: 240 × (3 × 160) = 240×480, three stacked planes:
+     *   y =   0..160 : composite framebuffer (engine's final output)
+     *   y = 160..320 : BG1 layer (mid-world; transparent where holes)
+     *   y = 320..480 : BG2 layer (back-world)
+     * Each plane is refreshed independently per frame from the shm
+     * region's three blocks. */
     std::fprintf(stderr, "[main] step: createAtlas\n");
-    AtlasGpu atlas = createAtlas(engine, FrameSource::kFrameW, FrameSource::kFrameH);
+    AtlasGpu atlas = createAtlas(engine,
+                                 FrameSource::kFrameW,
+                                 FrameSource::kFrameH * 3u);
     rt.setAtlas(atlas.view, atlas.sampler);
     std::fprintf(stderr, "[main] step: atlas ok (%ux%u)\n", atlas.w, atlas.h);
 
@@ -562,63 +596,103 @@ int main() {
         const float time =
             std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
 
-        /* Geometry for the trace:
-         *   - one full-screen quad at z=BG2 textured with the GBA
-         *     framebuffer (the engine's composited image is the
-         *     background plane);
-         *   - one quad per visible OAM sprite at z=Sprite, at the
-         *     screen position the GBA engine placed it. The
-         *     framebuffer already shows the sprite drawn inside it
-         *     too (since OAM rendering is part of the PPU's output);
-         *     the per-sprite quads exist *additionally*, as occluders
-         *     for the RT shadow trace — so the moving point lights'
-         *     soft shadows track Link, NPCs, items, etc. as they
-         *     move through the world. */
+        /* Geometry for the trace. Three world-layer quads + per-OAM
+         * sprite quads, all sampling the same 240×480 atlas at
+         * different vertical regions:
+         *
+         *   atlas y region   meaning            quad at layer Z
+         *   ─────────────────────────────────────────────────────
+         *      0/3..1/3      composite (PPU)    sprite quads (z=0.2)
+         *      1/3..2/3      BG1 plane (mid)    BG1 quad      (z=0.6)
+         *      2/3..3/3      BG2 plane (back)   BG2 quad      (z=0.8)
+         *
+         * Any-hit shader (path_trace.rahit) lets rays pass through
+         * BG1 plane pixels with alpha < 0.01, so transparent holes
+         * in the mid layer reveal the BG2 plane behind. Per-OAM
+         * sprite quads sample the COMPOSITE region (which already
+         * has the PPU-drawn sprite art at the right position),
+         * acting as opaque occluders at z=0.2 that cast shadows on
+         * the BG plane far behind. */
+        const float kPlaneU0 = 0.0f, kPlaneU1 = 1.0f;
+        const float kCompV1  = 1.0f / 3.0f;
+        const float kBg1V0   = 1.0f / 3.0f, kBg1V1 = 2.0f / 3.0f;
+        const float kBg2V0   = 2.0f / 3.0f, kBg2V1 = 1.0f;
+
         layers.beginFrame();
+        /* Single back layer: the full composite (every BG layer the
+         * engine drew, including BG0 HUD + light rays + alpha
+         * overlays). Putting BG1 as a separate quad on top would
+         * occlude the composite where BG1 is opaque — which in
+         * TMC's foreground layer means almost everywhere — hiding
+         * the HUD and BG0 effects. The composite already has BG1
+         * content baked into it at the correct positions, so a
+         * single back layer is sufficient. Sprites at z=0.2 still
+         * cast RT shadows onto this back composite, which is the
+         * primary RTX effect for this scene. */
         layers.drawSprite(Layer::BG2, 0.0f, 0.0f, 240.0f, 160.0f,
-                          0.0f, 0.0f, 1.0f, 1.0f);
+                          kPlaneU0, 0.0f, kPlaneU1, kCompV1);
 
         ParsedOam parsed;
         if (useLive) {
             parsed.parse(liveSrc.currentOam(), liveSrc.oamCount());
         }
+        /* Emissive auto-tag DISABLED: the only signal we have is
+         * the composite pixel at the sprite centre, which mixes
+         * sprite + BG, so a sprite on a bright BG would be flagged
+         * even when the sprite itself isn't glowing. The sprite
+         * quad samples composite (fully opaque) so the emissive
+         * boost lights the entire 16×16 quad rectangle as a bright
+         * box — the artefact the user spotted around Link. A
+         * proper implementation needs an isolated sprite-only
+         * alpha layer (OAM-only render) so the emissive boost
+         * applies to the actual sprite silhouette. For now,
+         * return false so no sprite is tagged emissive; the AO +
+         * soft shadow + warm/cool tint still give the RT look. */
+        auto isSpriteEmissive = [&](const OamSprite& /*s*/) -> bool {
+            return false;
+        };
         for (const OamSprite& s : parsed.visibleSprites()) {
-            /* The sprite quad samples its own footprint from the
-             * framebuffer atlas — so its visible colour matches the
-             * pixels already drawn at that screen position by the
-             * PPU, and the quad appears "invisible" against the BG2
-             * plane. Its actual purpose at Z=Sprite (0.2) is to act
-             * as an occluder for shadow rays from the lights, so
-             * the moving point-lights cast soft shadows that track
-             * Link, NPCs, items, and any other on-screen OAM entry.
-             *
-             * Slice 2 will replace these UVs with real sprite-atlas
-             * UVs decoded from gfx.pak + the tile's palette bank. */
+            /* Sprite quad samples the COMPOSITE region at the
+             * sprite's screen position. The composite already has
+             * the PPU-drawn sprite art there, so the quad visually
+             * matches its surroundings while still acting as an
+             * opaque shadow occluder at z=Sprite. UV v is divided
+             * by 3 because the composite occupies only the top
+             * third of the 240×480 atlas. */
             const float u0 = (float)s.x / 240.0f;
-            const float v0 = (float)s.y / 160.0f;
             const float u1 = (float)(s.x + s.w) / 240.0f;
-            const float v1 = (float)(s.y + s.h) / 160.0f;
+            const float v0 = ((float)s.y         / 160.0f) * kCompV1;
+            const float v1 = ((float)(s.y + s.h) / 160.0f) * kCompV1;
+            const bool emit = isSpriteEmissive(s);
             layers.drawSprite(Layer::Sprite,
                               (float)s.x, (float)s.y,
                               (float)s.w, (float)s.h,
-                              u0, v0, u1, v1);
+                              u0, v0, u1, v1,
+                              emit);
         }
         layers.flushToBuffers();
 
         VkCommandBuffer cmd = engine.beginFrame();
         if (cmd == VK_NULL_HANDLE) continue;  /* swapchain out of date */
 
-        /* Pick the active source: live shm if connected, else cycle
-         * the PNG ring. Either path returns a `uint8_t*` of exactly
-         * 240*160*4 bytes — same shape, different origin. */
-        const uint8_t* px = nullptr;
+        /* Pull all three planes from the live shm (or the PNG ring's
+         * single composite for the offline fallback). The refresh
+         * function uploads each present plane into its region of the
+         * atlas; the BG planes only show up when the producer is v3+. */
+        const uint8_t* composite = nullptr;
+        const uint8_t* bg1Plane  = nullptr;
+        const uint8_t* bg2Plane  = nullptr;
         if (useLive) {
-            px = liveSrc.currentFrame();
+            composite = liveSrc.currentFrame();
+            bg1Plane  = liveSrc.currentBgPlane(0);
+            bg2Plane  = liveSrc.currentBgPlane(1);
         } else {
-            px = pngSrc.advance(10);
+            composite = pngSrc.advance(10);
         }
-        if (px) {
-            refreshAtlas(engine, cmd, atlas, px);
+        if (composite || bg1Plane || bg2Plane) {
+            refreshAtlas(engine, cmd, atlas,
+                         composite, bg1Plane, bg2Plane,
+                         FrameSource::kFrameW, FrameSource::kFrameH);
             if (firstFrame) std::fprintf(stderr, "[main] first frame uploaded, tracing\n");
         }
 

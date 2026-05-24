@@ -101,25 +101,31 @@ void RayTracingPipeline::createDescriptorLayout() {
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
 
+    /* Vertex/index storage buffers and the diffuse atlas + sampler
+     * are used by BOTH the closest-hit and the any-hit (for the
+     * transparency check). Stage flags must list both. */
+    const VkShaderStageFlags hitStages =
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+
     bindings[2].binding         = 2;
     bindings[2].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     bindings[2].descriptorCount = 1;
-    bindings[2].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    bindings[2].stageFlags      = hitStages;
 
     bindings[3].binding         = 3;
     bindings[3].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     bindings[3].descriptorCount = 1;
-    bindings[3].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    bindings[3].stageFlags      = hitStages;
 
     bindings[4].binding         = 4;
     bindings[4].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     bindings[4].descriptorCount = 1;
-    bindings[4].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    bindings[4].stageFlags      = hitStages;
 
     bindings[5].binding         = 5;
     bindings[5].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
     bindings[5].descriptorCount = 1;
-    bindings[5].stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    bindings[5].stageFlags      = hitStages;
 
     bindings[6].binding         = 6;
     bindings[6].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -191,13 +197,14 @@ void RayTracingPipeline::createPipelineLayout() {
 }
 
 void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) {
-    /* Path-trace pipeline: rgen + 1 miss + rchit (3 stages, 3 groups).
-     * No shadow rays — the path tracer accumulates emissive
-     * contributions along bounce chains instead. */
+    /* Path-trace pipeline: rgen + 1 miss + rchit + rahit
+     * (4 stages, still 3 groups — the hit group bundles rchit and
+     * rahit together). No shadow rays; the bounce loop in the rgen
+     * does direct + indirect via emissive accumulation. */
     std::vector<char> rgenCode      = loadSpv(shaderDir + "/path_trace.rgen.spv");
     std::vector<char> rmissCode     = loadSpv(shaderDir + "/path_trace_miss.rmiss.spv");
-    std::vector<char> shadowMissCode;  /* unused */
     std::vector<char> rchitCode     = loadSpv(shaderDir + "/path_trace.rchit.spv");
+    std::vector<char> rahitCode     = loadSpv(shaderDir + "/path_trace.rahit.spv");
 
     auto makeModule = [this](const std::vector<char>& code) -> VkShaderModule {
         VkShaderModuleCreateInfo smci{};
@@ -209,13 +216,13 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
               "vkCreateShaderModule");
         return mod;
     };
-    (void)shadowMissCode;
     VkShaderModule rgen  = makeModule(rgenCode);
     VkShaderModule rmiss = makeModule(rmissCode);
     VkShaderModule rchit = makeModule(rchitCode);
+    VkShaderModule rahit = makeModule(rahitCode);
 
-    /* Three stages: rgen=0, miss=1, rchit=2. */
-    VkPipelineShaderStageCreateInfo stages[3]{};
+    /* Four stages: rgen=0, miss=1, rchit=2, rahit=3. */
+    VkPipelineShaderStageCreateInfo stages[4]{};
     stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stages[0].stage  = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
     stages[0].module = rgen;
@@ -228,11 +235,25 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
     stages[2].stage  = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
     stages[2].module = rchit;
     stages[2].pName  = "main";
+    stages[3].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    stages[3].stage  = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+    stages[3].module = rahit;
+    stages[3].pName  = "main";
 
-    /* Three shader groups: rgen general, miss general, hit
-     * triangles. Identity-mapped to stages 0/1/2. The path tracer's
-     * trace calls all use missIndex=0 (no shadow rays), so a single
-     * miss record in the SBT is enough. */
+    /* Three shader groups:
+     *   group 0: rgen
+     *   group 1: miss
+     *   group 2: hit group (rchit AT stage 2 + rahit AT stage 3) —
+     *            the hit group bundles closest-hit and any-hit
+     *            together; both run for a triangle hit, in spec
+     *            order (any-hit first per-candidate, closest-hit
+     *            on the eventually-accepted closest hit).
+     *
+     * Also clear the geometry-instance flag in the TLAS instance
+     * (rebuildAS.cpp's instance.flags) — we *do* want any-hit to
+     * run, so we must NOT pass VK_GEOMETRY_INSTANCE_OPAQUE_BIT_KHR;
+     * the geometry's existing OPAQUE flag from rebuildAS' geom.flags
+     * also needs to be removed so any-hit invocations are permitted. */
     VkRayTracingShaderGroupCreateInfoKHR groups[3]{};
     for (auto& g : groups) {
         g.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
@@ -247,15 +268,14 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
     groups[1].generalShader    = 1;
     groups[2].type             = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
     groups[2].closestHitShader = 2;
+    groups[2].anyHitShader     = 3;
 
     VkRayTracingPipelineCreateInfoKHR pci{};
     pci.sType                        = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
-    pci.stageCount                   = 3;
+    pci.stageCount                   = 4;
     pci.pStages                      = stages;
     pci.groupCount                   = 3;
     pci.pGroups                      = groups;
-    /* PT uses an in-shader bounce loop (not real recursion in
-     * Vulkan terms), so depth=1 suffices. */
     pci.maxPipelineRayRecursionDepth = 1;
     pci.layout                       = mPipelineLayout;
     check(pfnCreateRTPipelines(mEngine.device(), VK_NULL_HANDLE, VK_NULL_HANDLE,
@@ -265,6 +285,7 @@ void RayTracingPipeline::createRayTracingPipeline(const std::string& shaderDir) 
     vkDestroyShaderModule(mEngine.device(), rgen, nullptr);
     vkDestroyShaderModule(mEngine.device(), rmiss, nullptr);
     vkDestroyShaderModule(mEngine.device(), rchit, nullptr);
+    vkDestroyShaderModule(mEngine.device(), rahit, nullptr);
 }
 
 void RayTracingPipeline::createShaderBindingTable() {
@@ -532,7 +553,11 @@ void RayTracingPipeline::buildBLAS(VkCommandBuffer cmd) {
     geom.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
     geom.geometryType  = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
     geom.geometry.triangles = tri;
-    geom.flags         = VK_GEOMETRY_OPAQUE_BIT_KHR;
+    /* Cleared (no OPAQUE flag) so the any-hit shader runs on every
+     * candidate intersection — it's what skips transparent texels
+     * in the BG layer and sprite alpha edges. With OPAQUE set the
+     * driver bypasses any-hit, defeating the transparency check. */
+    geom.flags         = 0;
 
     const uint32_t primitiveCount = mLayers.buffers().indexCount / 3;
 
