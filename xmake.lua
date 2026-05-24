@@ -584,6 +584,7 @@ target("tmc_pc")
 
     add_files("port/port_main.c")
     add_files("port/port_audio.c")
+    add_files("port/port_shm_framebuffer.c")  -- publishes GBA framebuffer to shm (opt-in)
     add_files("port/port_runtime_config.cpp")
     add_files("port/port_debug_menu.cpp")
     add_files("port/port_imgui_menu.cpp")

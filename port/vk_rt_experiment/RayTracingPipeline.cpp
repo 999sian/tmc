@@ -647,18 +647,23 @@ void RayTracingPipeline::buildTLAS(VkCommandBuffer cmd) {
     pfnCmdBuildAS(cmd, 1, &bgi, &ranges);
 }
 
-void RayTracingPipeline::dispatchRays(VkCommandBuffer cmd, uint32_t width, uint32_t height) {
+void RayTracingPipeline::dispatchRays(VkCommandBuffer cmd, uint32_t width, uint32_t height,
+                                      uint32_t frameIndex, float time) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, mPipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                             mPipelineLayout, 0, 1, &mDescriptorSet, 0, nullptr);
 
-    /* Push constants — rgen/rchit statically reference pc.params,
-     * which means the driver REQUIRES vkCmdPushConstants to have been
-     * called before vkCmdTraceRaysKHR, even if all values are zero.
-     * Without this, validation flags the trace and NVIDIA's strict
-     * path silently produces nothing. Default: (frameIndex=0, time=0,
-     * exposure=1.0, reserved=0). */
-    float pc[4] = {0.0f, 0.0f, 1.0f, 0.0f};
+    /* Push constants — pc.params is used by the rgen (exposure at .z)
+     * and the rchit (frameIndex at .x, time at .y for light animation).
+     * NVIDIA's strict path requires the call before vkCmdTraceRaysKHR
+     * even when values would all be defaults; production code must
+     * always supply them. */
+    float pc[4] = {
+        static_cast<float>(frameIndex),  /* .x = frame index */
+        time,                            /* .y = seconds (animates lights) */
+        1.0f,                            /* .z = exposure */
+        0.0f                             /* .w = reserved */
+    };
     vkCmdPushConstants(cmd, mPipelineLayout,
                        VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
                        0, sizeof(pc), pc);
