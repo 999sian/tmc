@@ -271,6 +271,10 @@ MenuPage BuildWarpPage(void) {
      * World pos (1650, 3335) - room origin (1568, 3280) = local (82, 55). */
     p.items.push_back({ "ToD Scissors Beetle (#101 repro)",
                         []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x33, 0x52, 0x37, 1); } });
+    /* #78 repro: Wind Ruins / Fortress-of-Winds approach left wizard room.
+     * World pos (520, 5379) - room origin (352, 5312) = local (168, 67). */
+    p.items.push_back({ "WindRuins Wizards (#78 repro)",
+                        []() { DoWarp(AREA_FORTRESS_OF_WINDS, 0x23, 0xA8, 0x43, 1); } });
     p.items.push_back({ "All areas (raw, by index) ->", []() { Push(BuildAllAreasPage()); } });
     p.items.push_back({ "<- Back",                      []() { Pop(); } });
     return p;
