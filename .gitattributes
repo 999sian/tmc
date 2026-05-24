@@ -12,6 +12,10 @@ Makefile text eol=lf
 *.sed text eol=lf
 *.sh text eol=lf
 *.json text eol=lf
+*.patch text eol=lf
+*.lua text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
 
 *.png binary
 *.bin binary
