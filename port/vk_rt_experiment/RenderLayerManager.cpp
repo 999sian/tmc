@@ -67,27 +67,9 @@ void RenderLayerManager::emitQuad(Layer layer, float x, float y, float w, float 
     }
 }
 
-void RenderLayerManager::flushToBuffers() {
-    /* Same in-flight-resource hazard as RayTracingPipeline::rebuildAS:
-     * the previous frame's vertex/index buffers may still be referenced
-     * by an in-flight command buffer when we get here. Serialise with
-     * the GPU before freeing. */
-    vkDeviceWaitIdle(mEngine.device());
-    freeBuffers();
-    if (mVertices.empty()) return;
+void RenderLayerManager::ensurePersistentBuffers() {
+    if (mPersistentReady) return;
 
-    const VkDeviceSize vSize = mVertices.size() * sizeof(Vertex);
-    const VkDeviceSize iSize = mIndices.size()  * sizeof(uint32_t);
-
-    /* Device-local destination buffers. Usage flags:
-     *   VERTEX_BUFFER       — for completeness (unused by RT path
-     *                         but useful when debugging via raster)
-     *   STORAGE_BUFFER      — closest-hit shader reads vertices
-     *                         through the storage-buffer binding
-     *   AS_BUILD_INPUT_READ — BLAS reads positions via device address
-     *   SHADER_DEVICE_ADDRESS — needed to obtain the address used by
-     *                           the AS-geometry struct
-     *   TRANSFER_DST        — destination of the staging copy */
     const VkBufferUsageFlags kVtxUsage =
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
@@ -100,58 +82,75 @@ void RenderLayerManager::flushToBuffers() {
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
         VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-
-    mEngine.allocateBuffer(vSize, kVtxUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                           &mBuffers.vertexBuffer, &mBuffers.vertexMemory);
-    mEngine.allocateBuffer(iSize, kIdxUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                           &mBuffers.indexBuffer, &mBuffers.indexMemory);
-
-    /* Staging buffer — host-visible, used once. */
-    VkBuffer       stagingV = VK_NULL_HANDLE;
-    VkDeviceMemory stagingVMem = VK_NULL_HANDLE;
-    VkBuffer       stagingI = VK_NULL_HANDLE;
-    VkDeviceMemory stagingIMem = VK_NULL_HANDLE;
     const VkMemoryPropertyFlags kHostProps =
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-    mEngine.allocateBuffer(vSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                           kHostProps, &stagingV, &stagingVMem);
-    mEngine.allocateBuffer(iSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                           kHostProps, &stagingI, &stagingIMem);
+    const VkDeviceSize vCapBytes = kMaxQuads * 4u * sizeof(Vertex);
+    const VkDeviceSize iCapBytes = kMaxQuads * 6u * sizeof(uint32_t);
 
-    /* Map → copy → unmap, then submit a one-shot copy. */
-    void* ptr = nullptr;
-    check(vkMapMemory(mEngine.device(), stagingVMem, 0, vSize, 0, &ptr),
-          "vkMapMemory (vertex staging)");
-    std::memcpy(ptr, mVertices.data(), (size_t)vSize);
-    vkUnmapMemory(mEngine.device(), stagingVMem);
+    /* Device-local destination buffers (read by BLAS + rchit). */
+    mEngine.allocateBuffer(vCapBytes, kVtxUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           &mBuffers.vertexBuffer, &mBuffers.vertexMemory);
+    mEngine.allocateBuffer(iCapBytes, kIdxUsage, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                           &mBuffers.indexBuffer, &mBuffers.indexMemory);
 
-    check(vkMapMemory(mEngine.device(), stagingIMem, 0, iSize, 0, &ptr),
-          "vkMapMemory (index staging)");
-    std::memcpy(ptr, mIndices.data(), (size_t)iSize);
-    vkUnmapMemory(mEngine.device(), stagingIMem);
+    /* Persistent host-visible staging — mapped once, written each frame. */
+    mEngine.allocateBuffer(vCapBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                           kHostProps, &mStagingVertex, &mStagingVertexMem);
+    mEngine.allocateBuffer(iCapBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                           kHostProps, &mStagingIndex,  &mStagingIndexMem);
+    check(vkMapMemory(mEngine.device(), mStagingVertexMem, 0, vCapBytes, 0, &mStagingVertexMap),
+          "vkMapMemory (persistent vertex staging)");
+    check(vkMapMemory(mEngine.device(), mStagingIndexMem,  0, iCapBytes, 0, &mStagingIndexMap),
+          "vkMapMemory (persistent index staging)");
 
-    mEngine.oneShot([&](VkCommandBuffer cmd) {
-        VkBufferCopy vCopy{};
-        vCopy.size = vSize;
-        vkCmdCopyBuffer(cmd, stagingV, mBuffers.vertexBuffer, 1, &vCopy);
-        VkBufferCopy iCopy{};
-        iCopy.size = iSize;
-        vkCmdCopyBuffer(cmd, stagingI, mBuffers.indexBuffer, 1, &iCopy);
-    });
-
-    vkDestroyBuffer(mEngine.device(), stagingV, nullptr);
-    vkFreeMemory(mEngine.device(), stagingVMem, nullptr);
-    vkDestroyBuffer(mEngine.device(), stagingI, nullptr);
-    vkFreeMemory(mEngine.device(), stagingIMem, nullptr);
-
-    /* Capture device addresses for the AS builder. */
+    /* Cache device addresses — stable for the lifetime of the buffers. */
     VkBufferDeviceAddressInfo bda{};
     bda.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
     bda.buffer = mBuffers.vertexBuffer;
     mBuffers.vertexAddr = vkGetBufferDeviceAddress(mEngine.device(), &bda);
     bda.buffer = mBuffers.indexBuffer;
     mBuffers.indexAddr  = vkGetBufferDeviceAddress(mEngine.device(), &bda);
+
+    mPersistentReady = true;
+}
+
+void RenderLayerManager::flushToBuffers() {
+    if (mVertices.empty()) {
+        mBuffers.vertexCount = 0;
+        mBuffers.indexCount  = 0;
+        return;
+    }
+
+    ensurePersistentBuffers();
+
+    const VkDeviceSize vSize = mVertices.size() * sizeof(Vertex);
+    const VkDeviceSize iSize = mIndices.size()  * sizeof(uint32_t);
+    const VkDeviceSize vCap  = kMaxQuads * 4u * sizeof(Vertex);
+    const VkDeviceSize iCap  = kMaxQuads * 6u * sizeof(uint32_t);
+    if (vSize > vCap || iSize > iCap) {
+        std::fprintf(stderr, "[layers] WARN: %zu quads exceeds kMaxQuads=%u — clipping\n",
+                     mVertices.size() / 4, kMaxQuads);
+        return;
+    }
+
+    /* Memcpy into the persistent staging — host-coherent so no flush. */
+    std::memcpy(mStagingVertexMap, mVertices.data(), (size_t)vSize);
+    std::memcpy(mStagingIndexMap,  mIndices.data(),  (size_t)iSize);
+
+    /* One-shot copy from staging → device-local.  oneShot still uses
+     * a queue submit + idle-wait internally, but it's one round trip
+     * instead of the old alloc+map+copy+free per buffer. */
+    const VkDeviceSize vCopySize = vSize;
+    const VkDeviceSize iCopySize = iSize;
+    mEngine.oneShot([&](VkCommandBuffer cmd) {
+        VkBufferCopy vCopy{};
+        vCopy.size = vCopySize;
+        vkCmdCopyBuffer(cmd, mStagingVertex, mBuffers.vertexBuffer, 1, &vCopy);
+        VkBufferCopy iCopy{};
+        iCopy.size = iCopySize;
+        vkCmdCopyBuffer(cmd, mStagingIndex, mBuffers.indexBuffer, 1, &iCopy);
+    });
 
     mBuffers.vertexCount = (uint32_t)mVertices.size();
     mBuffers.indexCount  = (uint32_t)mIndices.size();
@@ -163,6 +162,20 @@ void RenderLayerManager::freeBuffers() {
     if (mBuffers.indexBuffer)  vkDestroyBuffer(mEngine.device(), mBuffers.indexBuffer,  nullptr);
     if (mBuffers.indexMemory)  vkFreeMemory(mEngine.device(), mBuffers.indexMemory,  nullptr);
     mBuffers = GeometryBuffers{};
+
+    /* Slice 11 persistent staging — release on full teardown only,
+     * not between frames.  freeBuffers() is called from the dtor and
+     * the (removed) per-frame realloc path. */
+    if (mStagingVertexMap) vkUnmapMemory(mEngine.device(), mStagingVertexMem);
+    if (mStagingVertex)    vkDestroyBuffer(mEngine.device(), mStagingVertex, nullptr);
+    if (mStagingVertexMem) vkFreeMemory(mEngine.device(), mStagingVertexMem, nullptr);
+    if (mStagingIndexMap)  vkUnmapMemory(mEngine.device(), mStagingIndexMem);
+    if (mStagingIndex)     vkDestroyBuffer(mEngine.device(), mStagingIndex, nullptr);
+    if (mStagingIndexMem)  vkFreeMemory(mEngine.device(), mStagingIndexMem, nullptr);
+    mStagingVertex = mStagingIndex = VK_NULL_HANDLE;
+    mStagingVertexMem = mStagingIndexMem = VK_NULL_HANDLE;
+    mStagingVertexMap = mStagingIndexMap = nullptr;
+    mPersistentReady = false;
 }
 
 }  /* namespace tmc_vkrt */

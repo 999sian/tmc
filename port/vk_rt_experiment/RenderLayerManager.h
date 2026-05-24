@@ -136,6 +136,13 @@ public:
      * pass it into the geometry data struct. */
     static constexpr VkDeviceSize vertexStride() { return sizeof(Vertex); }
 
+    /* Slice-11 perf: capacity of the persistent buffers in quads.
+     * 256 quads = 1024 verts × 24B = 24 KB vertex, 1.5 KB index, 30 KB
+     * total — small enough to keep resident without thinking about
+     * memory.  Per-frame batches stay well under this in practice
+     * (back composite + ≤128 OAM sprites). */
+    static constexpr uint32_t kMaxQuads = 256;
+
 private:
     /* Generate one quad worth of vertices into `mVertices`. */
     void emitQuad(Layer layer, float x, float y, float w, float h,
@@ -144,12 +151,27 @@ private:
     /* Free the GPU buffers, zero out GeometryBuffers. */
     void freeBuffers();
 
+    /* Slice 11: lazy allocate the persistent device + staging buffers
+     * on the first flush. Sized for kMaxQuads, never reallocated. */
+    void ensurePersistentBuffers();
+
     /* Host-side staging — re-filled every frame. */
     std::vector<Vertex>   mVertices;
     std::vector<uint32_t> mIndices;
 
     Engine&          mEngine;
     GeometryBuffers  mBuffers{};
+
+    /* Slice-11 persistent host-visible staging.  Kept mapped so the
+     * per-frame upload is one memcpy + one vkCmdCopyBuffer instead
+     * of alloc/map/copy/unmap/free. */
+    VkBuffer        mStagingVertex     = VK_NULL_HANDLE;
+    VkDeviceMemory  mStagingVertexMem  = VK_NULL_HANDLE;
+    void*           mStagingVertexMap  = nullptr;
+    VkBuffer        mStagingIndex      = VK_NULL_HANDLE;
+    VkDeviceMemory  mStagingIndexMem   = VK_NULL_HANDLE;
+    void*           mStagingIndexMap   = nullptr;
+    bool            mPersistentReady   = false;
 };
 
 }  /* namespace tmc_vkrt */
