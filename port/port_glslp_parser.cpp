@@ -540,6 +540,27 @@ static std::optional<ShaderParam> ParsePragmaParameter(const std::string& line) 
  * turn into `out vec2 vTexCoord;` (vertex) / `in vec2 vTexCoord;`
  * (fragment). Declaring it in the header too would double-declare. */
 static const char* kVertexHeader = R"GLSL(#version 450
+/* Real libretro shaders gate their per-parameter uniform/default
+ * declarations on PARAMETER_UNIFORM. Defining it here forces the
+ * `#ifdef PARAMETER_UNIFORM` branch (which declares `uniform float
+ * NAME;` — we strip these and replace with our ShaderParams block)
+ * over the `#else #define NAME default` branch (which would redefine
+ * the same names the preprocessor is already #defining itself). */
+#define PARAMETER_UNIFORM
+/* Libretro shaders that don't use #pragma stage markers gate vertex
+ * vs fragment code with `#if defined(VERTEX)` / `#elif defined(FRAGMENT)`.
+ * Define the appropriate one per stage so the right `void main()`
+ * actually appears in the output. Harmless when the shader uses
+ * #pragma stage markers instead. */
+#define VERTEX
+/* COMPAT_* macros — the source's own #define versions are stripped
+ * by StripLibretroDefines so ours win. SPIR-V layout decorators are
+ * baked in here so the resulting `COMPAT_VARYING vec2 TEX0;` becomes
+ * `layout(location = 0) out vec2 TEX0;` etc. */
+#define COMPAT_VARYING   layout(location = 0) out
+#define COMPAT_ATTRIBUTE layout(location = 0) in
+#define COMPAT_TEXTURE   texture
+#define COMPAT_PRECISION
 layout(set = 3, binding = 0) uniform LibretroUniforms {
     vec2  OutputSize;
     vec2  TextureSize;
@@ -553,6 +574,12 @@ layout(set = 3, binding = 0) uniform LibretroUniforms {
 )GLSL";
 
 static const char* kFragmentHeader = R"GLSL(#version 450
+#define PARAMETER_UNIFORM
+#define FRAGMENT
+#define COMPAT_VARYING   layout(location = 0) in
+#define COMPAT_TEXTURE   texture
+#define COMPAT_PRECISION
+#define FragColor _FragColor
 layout(set = 2, binding = 0) uniform sampler2D Texture;
 layout(set = 3, binding = 0) uniform LibretroUniforms {
     vec2  OutputSize;
@@ -574,43 +601,39 @@ layout(location = 0) out vec4 _FragColor;
 #define FinalViewportSize u.FinalViewportSize
 )GLSL";
 
-/* Macros that libretro shaders use to abstract over GLES vs desktop
- * GLSL vs older GLSL versions. On desktop GLSL 450 these all collapse
- * to their modern-syntax equivalent. */
-static void ApplyCompatMacros(std::string& s, bool isVertex) {
-    /* Precision qualifiers are no-ops in core GLSL 450. */
-    ReplaceAll(s, "COMPAT_PRECISION", "");
-    ReplaceAll(s, "mediump",          "");
-    ReplaceAll(s, "highp",            "");
-    ReplaceAll(s, "lowp",             "");
-    /* Texture sampling — modern GLSL collapses texture2D/texture3D
-     * into the overloaded texture() builtin. */
-    ReplaceAll(s, "COMPAT_TEXTURE",   "texture");
-    ReplaceAll(s, "texture2D",        "texture");
-    ReplaceAll(s, "texture3D",        "texture");
-    /* Stage-direction macros. libretro defines COMPAT_VARYING / IN /
-     * OUT to be `varying` (GLSL 110), then `in`/`out` for newer
-     * versions. We want pure `in` (fragment) / `out` (vertex) PLUS a
-     * SPIR-V-required explicit location decorator.
-     *
-     * Step 3 limitation: we hardcode location = 0 for every varying.
-     * Most libretro post-process shaders have exactly one
-     * varying (TEX0), so this works for the common case. Multi-
-     * varying shaders need a smarter line-by-line walker with a
-     * counter — TODO for when we hit a preset that actually breaks. */
-    if (isVertex) {
-        ReplaceAll(s, "COMPAT_VARYING",   "layout(location = 0) out");
-        ReplaceAll(s, "COMPAT_ATTRIBUTE", "layout(location = 0) in");
-        ReplaceAll(s, "varying",          "layout(location = 0) out");
-        ReplaceAll(s, "attribute",        "layout(location = 0) in");
-    } else {
-        ReplaceAll(s, "COMPAT_VARYING",   "layout(location = 0) in");
-        ReplaceAll(s, "varying",          "layout(location = 0) in");
+/* Strip the source's own `#define COMPAT_*` / `#define varying` /
+ * `#define attribute` lines so OUR header-supplied macros win at
+ * compile time. The source's defines target multiple GLSL versions
+ * via __VERSION__ gates; we always emit GLSL 450 so a single
+ * substitution per macro suffices.
+ *
+ * Without this strip, ReplaceAll-style textual substitution would
+ * corrupt the source's own `#define COMPAT_VARYING out` lines
+ * (turning them into `#define <substitution> out`, a parse error). */
+static void StripLibretroDefines(std::string& s) {
+    std::string scrubbed;
+    scrubbed.reserve(s.size());
+    std::istringstream rs(s);
+    std::string ln;
+    while (std::getline(rs, ln)) {
+        if (!ln.empty() && ln.back() == '\r') ln.pop_back();
+        std::string tr = Trim(ln);
+        if (tr.compare(0, 8, "#define ") == 0) {
+            /* Pull the macro name (token immediately after `#define `). */
+            size_t p = 8;
+            while (p < tr.size() && std::isspace((unsigned char)tr[p])) ++p;
+            size_t name_start = p;
+            while (p < tr.size() && !std::isspace((unsigned char)tr[p]) && tr[p] != '(') ++p;
+            std::string name = tr.substr(name_start, p - name_start);
+            if (name == "COMPAT_VARYING" || name == "COMPAT_ATTRIBUTE"
+                || name == "COMPAT_TEXTURE" || name == "COMPAT_PRECISION"
+                || name == "FragColor") {
+                continue;  /* drop — header redefines */
+            }
+        }
+        scrubbed += ln; scrubbed += '\n';
     }
-    /* Vertex-stage `TexCoord` output is named differently in many
-     * libretro shaders. Normalise to vTexCoord so our header's
-     * declaration matches. */
-    ReplaceAll(s, "TEX0",             "vTexCoord");
+    s = std::move(scrubbed);
 }
 
 /* Split the source into the two stage bodies. libretro uses
@@ -680,16 +703,11 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
         filtered += '\n';
     }
 
-    /* Pre-strip precision qualifiers (COMPAT_PRECISION, mediump, etc)
-     * so the uniform-line detector below sees `uniform <type> NAME;`
-     * even when the source writes `COMPAT_PRECISION uniform float NAME;`.
-     * These qualifiers are no-ops in core GLSL 450; ApplyCompatMacros
-     * would do this later but we need it now for the strip pass to
-     * match. */
-    ReplaceAll(filtered, "COMPAT_PRECISION", "");
-    ReplaceAll(filtered, "mediump", "");
-    ReplaceAll(filtered, "highp",   "");
-    ReplaceAll(filtered, "lowp",    "");
+    /* (Old global ReplaceAll of precision qualifiers removed — it
+     * mangled the source's own `#define COMPAT_PRECISION mediump`
+     * lines into `#define  ` which glslang rejects. The strip pass
+     * below now skips leading precision qualifiers locally per line
+     * via PrecisionAwareUniformLine().) */
 
     /* Vulkan SPIR-V doesn't allow non-opaque uniforms outside a block,
      * but libretro shaders declare each `#pragma parameter` as a bare
@@ -718,6 +736,25 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
      * "Texture"; LUT samplers (any other sampler) get sequential
      * bindings 1, 2, 3, ... in source-declaration order. The runtime
      * uses out.lut_sampler_names to wire LUTs at the matching slots. */
+    auto strip_leading_qualifiers = [](const std::string& s) {
+        std::string r = s;
+        auto strip_prefix = [&](const std::string& prefix) {
+            while (true) {
+                size_t lo = r.find_first_not_of(" \t");
+                if (lo == std::string::npos) return;
+                if (r.compare(lo, prefix.size(), prefix) != 0) return;
+                /* must be followed by whitespace, not e.g. an identifier */
+                if (lo + prefix.size() < r.size()
+                    && !std::isspace((unsigned char)r[lo + prefix.size()])) return;
+                r.erase(lo, prefix.size());
+            }
+        };
+        strip_prefix("COMPAT_PRECISION");
+        strip_prefix("mediump");
+        strip_prefix("highp");
+        strip_prefix("lowp");
+        return r;
+    };
     {
         std::string scrubbed;
         scrubbed.reserve(filtered.size());
@@ -726,7 +763,7 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
         int next_lut_binding = 1;
         while (std::getline(rs, ln)) {
             if (!ln.empty() && ln.back() == '\r') ln.pop_back();
-            std::string tr = Trim(ln);
+            std::string tr = Trim(strip_leading_qualifiers(ln));
             if (tr.size() > 8 && tr.compare(0, 8, "uniform ") == 0) {
                 /* Sampler / image uniform: opaque, allowed bare in
                  * Vulkan but still needs a layout decoration. Detect
@@ -761,15 +798,31 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
                     scrubbed += '\n';
                     continue;
                 }
-                /* Non-opaque uniform: drop. If the name isn't in our
-                 * parameter list, log a warning so the user knows
-                 * which uniform isn't wired. */
+                /* Non-opaque uniform: drop. We supply the standard
+                 * libretro uniforms via the LibretroUniforms block in
+                 * the header; per-#pragma-parameter uniforms via the
+                 * ShaderParams block. Source declarations of any of
+                 * those are silently dropped because they conflict
+                 * with our definitions. Anything truly unknown gets
+                 * a stderr warning. */
+                static const char* kStandardLibretroUniforms[] = {
+                    "MVPMatrix", "OutputSize", "TextureSize", "InputSize",
+                    "FrameCount", "FrameDirection", "OriginalSize",
+                    "FinalViewportSize",
+                };
                 size_t sc = tr.find(';');
                 if (sc != std::string::npos) {
                     std::string body = tr.substr(8, sc - 8);
                     size_t sp = body.find_last_of(" \t");
                     std::string name = (sp == std::string::npos) ? body
                                                                   : body.substr(sp + 1);
+                    bool standard = false;
+                    for (const char* sn : kStandardLibretroUniforms) {
+                        if (name == sn) { standard = true; break; }
+                    }
+                    if (standard) {
+                        continue;  /* silent drop — we supplied it via the header */
+                    }
                     bool known = false;
                     for (const auto& p : out.parameters) {
                         if (p.id == name) { known = true; break; }
@@ -791,27 +844,57 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
     std::string shared, vertex_body, fragment_body;
     SplitStages(filtered, shared, vertex_body, fragment_body);
 
-    /* If no stage markers were found, treat the whole body as shared
-     * and synthesise a trivial passthrough vertex shader (a lot of
-     * post-process libretro shaders skip the vertex stage entirely
-     * because they don't customise vertex output). */
+    /* If no stage markers were found, two sub-cases:
+     *   - Real libretro shaders use `#if defined(VERTEX)` /
+     *     `#elif defined(FRAGMENT)` to gate per-stage code in the
+     *     same file. We send the entire source to BOTH vertex_body
+     *     and fragment_body; the stage headers `#define VERTEX`
+     *     vs `#define FRAGMENT` make each compile pick its branch.
+     *   - Simple post-process shaders (the synthetic invert demo)
+     *     have no per-stage code at all; the same dual-emission works
+     *     for them too — the fragment body's gl_FragColor write is
+     *     skipped during vertex compile because no `#if defined(VERTEX)`
+     *     branch exists, and the missing vertex main() is supplied
+     *     by a synthesised passthrough we prepend below. */
     if (vertex_body.empty() && fragment_body.empty()) {
-        fragment_body = std::move(shared);
-        shared.clear();
-        vertex_body =
+        const std::string passthrough_vertex =
+            "#ifndef VERTEX_MAIN_PROVIDED\n"
+            "/* Synthesised fullscreen-quad vertex shader for sources\n"
+            " * that don't gate a vertex stage of their own. Picked up\n"
+            " * when the source has no `#if defined(VERTEX)` block\n"
+            " * AND no #pragma stage vertex section. */\n"
             "layout(location = 0) out vec2 vTexCoord;\n"
             "void main() {\n"
-            "    /* Synthesised fullscreen quad — same trick as our\n"
-            "     * passthrough.vert: positions from gl_VertexIndex. */\n"
             "    vec2 pos = vec2((gl_VertexIndex & 1) == 0 ? -1.0 : 1.0,\n"
             "                    (gl_VertexIndex & 2) == 0 ? -1.0 : 1.0);\n"
             "    vTexCoord = vec2((gl_VertexIndex & 1) == 0 ?  0.0 : 1.0,\n"
             "                     (gl_VertexIndex & 2) == 0 ?  1.0 : 0.0);\n"
             "    gl_Position = vec4(pos, 0.0, 1.0);\n"
-            "}\n";
-        /* Fragment-side: the body inherited from `shared` doesn't
-         * declare vTexCoord either, so add the layout decl up front. */
-        fragment_body = "layout(location = 0) in vec2 vTexCoord;\n" + fragment_body;
+            "}\n"
+            "#endif\n";
+        /* Heuristic: if the shared body contains `defined(VERTEX)` or
+         * `defined(FRAGMENT)`, the source provides its own per-stage
+         * main()s — don't synthesise a vertex one. Use a `#define
+         * VERTEX_MAIN_PROVIDED` to suppress the passthrough. */
+        const bool source_has_vertex_main =
+            shared.find("defined(VERTEX)")   != std::string::npos ||
+            shared.find("#ifdef VERTEX")      != std::string::npos;
+        std::string vertex_pre;
+        if (source_has_vertex_main) {
+            vertex_pre = "#define VERTEX_MAIN_PROVIDED\n";
+        }
+        vertex_body   = vertex_pre + shared + passthrough_vertex;
+        fragment_body = shared;
+        shared.clear();
+        /* Fragment-side stub: synthesised passthroughs (no
+         * `#if defined(FRAGMENT)` in source) need a fragment main()
+         * too. Emit one when the source doesn't provide its own. */
+        const bool source_has_fragment_main =
+            fragment_body.find("defined(FRAGMENT)")   != std::string::npos ||
+            fragment_body.find("#ifdef FRAGMENT")      != std::string::npos;
+        if (!source_has_fragment_main && fragment_body.find("void main()") == std::string::npos) {
+            fragment_body = "layout(location = 0) in vec2 vTexCoord;\n" + fragment_body;
+        }
     }
 
     /* Build full stage modules: header + parameter block + shared +
@@ -820,10 +903,10 @@ std::optional<PreprocessedShader> PreprocessLibretroGlsl(const std::string& sour
     out.vertex_glsl   = std::string(kVertexHeader)   + param_block_decl + shared + vertex_body;
     out.fragment_glsl = std::string(kFragmentHeader) + param_block_decl + shared + fragment_body;
 
-    /* Apply the COMPAT_* / varying / attribute / texture macro
-     * substitutions per stage. */
-    ApplyCompatMacros(out.vertex_glsl,   /*isVertex=*/true);
-    ApplyCompatMacros(out.fragment_glsl, /*isVertex=*/false);
+    /* Strip the source's own #define COMPAT_* lines so the
+     * header-supplied ones win. */
+    StripLibretroDefines(out.vertex_glsl);
+    StripLibretroDefines(out.fragment_glsl);
 
     return out;
 }
