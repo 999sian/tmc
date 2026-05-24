@@ -70,4 +70,78 @@ private:
     int    mCallsSinceStep = 0;
 };
 
+/* Live framebuffer source: mmap()s /dev/shm/tmc_framebuffer (the
+ * region tmc_pc populates when started with TMC_PUBLISH_FRAMEBUFFER=1).
+ * Each `currentFrame()` reads the latest published bytes — no need
+ * to advance(), the producer drives the cadence.
+ *
+ * Header layout MUST match port/port_shm_framebuffer.c:
+ *   u32 magic = 'TMCF' (0x46434D54 LE)
+ *   u32 version = 1
+ *   u32 width
+ *   u32 height
+ *   u32 frameCount   (monotonic; used to detect a new frame)
+ *   u32 pad
+ *   u8  pixels[width * height * 4]
+ *
+ * Producer is single-writer, consumer is single-reader. Tearing is
+ * possible (we copy `width*height*4` bytes while the producer might
+ * be partway through writing the next frame), but unlikely to be
+ * visible at 60fps; a proper SMR with double-buffered slots is a
+ * future-work item. */
+class ShmFrameSource {
+public:
+    /* Open the shm region. Returns false if the region doesn't exist
+     * (tmc_pc not running, or built without the publisher) or has
+     * the wrong magic/version. */
+    bool open(const char* shmName = "/tmc_framebuffer");
+    bool isOpen() const { return mBase != nullptr; }
+    void close();
+
+    int width()  const { return mWidth; }
+    int height() const { return mHeight; }
+
+    /* Returns the current pixel pointer + the producer's frame
+     * counter at the moment of the call. The pointer is valid until
+     * the next call OR until close() — caller should memcpy if they
+     * need stable data across multiple ticks. */
+    const uint8_t* currentFrame(uint32_t* outFrameSeq = nullptr) const;
+
+    /* Raw OAM table (1024 bytes = 128 sprites × 4 halfwords each:
+     * attr0, attr1, attr2, affine). Decoded by ParsedOam below.
+     * nullptr if version < 2 / region too small. */
+    const uint16_t* currentOam() const;
+    int oamCount() const { return 128; }
+
+private:
+    void*    mBase    = nullptr;
+    size_t   mBytes   = 0;
+    int      mFd      = -1;
+    int      mWidth   = 0;
+    int      mHeight  = 0;
+    uint32_t mVersion = 0;
+};
+
+/* One decoded OAM entry — what the rest of the demo needs to draw
+ * the sprite as a 3D quad. Hidden / off-screen sprites are excluded
+ * by ParsedOam::visibleSprites(). */
+struct OamSprite {
+    int     x, y;          /* screen position of the sprite's top-left */
+    int     w, h;          /* sprite dimensions in pixels */
+    uint8_t paletteIndex;  /* 4bpp palette bank, for future texturing */
+    uint8_t priority;      /* 0..3, where 0 is in front */
+    int     oamIndex;      /* original entry in the OAM table */
+};
+
+/* Decode the raw OAM halfwords into a list of visible sprites.
+ * Pure host-side parsing; nothing here interacts with Vulkan. */
+class ParsedOam {
+public:
+    /* Walk all 128 entries, append non-hidden ones to mSprites. */
+    void parse(const uint16_t* oam, int count = 128);
+    const std::vector<OamSprite>& visibleSprites() const { return mSprites; }
+private:
+    std::vector<OamSprite> mSprites;
+};
+
 }  /* namespace tmc_vkrt */

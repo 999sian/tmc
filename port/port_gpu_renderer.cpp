@@ -446,6 +446,14 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
 }
 
 extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
+    /* Publish the framebuffer to POSIX shared memory when the runtime
+     * has opted in via TMC_PUBLISH_FRAMEBUFFER. Consumers (the
+     * port/vk_rt_experiment Vulkan-RT demo) mmap the same region and
+     * pick up frames at their own pace. No-op when the env var isn't
+     * set, so normal builds pay nothing. */
+    extern void Port_Shm_PublishFramebuffer(const uint32_t*, int, int);
+    Port_Shm_PublishFramebuffer(fb, fb_w, fb_h);
+
     if (!sWindowClaimed || !sPipelines[sActiveFilter]) return false;
     if (fb_w != sSourceW || fb_h != sSourceH) return false;  /* size change unsupported */
 

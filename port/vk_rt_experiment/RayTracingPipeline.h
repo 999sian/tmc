@@ -73,8 +73,11 @@ public:
 
     /* Issue vkCmdTraceRaysKHR for a `width × height` ray grid. The
      * RT pipeline must have been created and the AS must have been
-     * built at least once. */
-    void dispatchRays(VkCommandBuffer cmd, uint32_t width, uint32_t height);
+     * built at least once. `time` is the wall-clock seconds the
+     * rgen/rchit use to animate the moving point lights — pass
+     * 0 to disable animation. */
+    void dispatchRays(VkCommandBuffer cmd, uint32_t width, uint32_t height,
+                      uint32_t frameIndex, float time);
 
 private:
     /* SPIR-V loader. Throws Error if the file is missing or malformed. */

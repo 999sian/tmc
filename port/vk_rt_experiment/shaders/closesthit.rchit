@@ -62,14 +62,50 @@ layout(push_constant) uniform PushConstants {
     vec4 params;  /* x=frameIndex, y=time, z=exposure */
 } pc;
 
-/* Virtual sun — fixed position high above the playfield. Direction
- * pointed back toward this from the hit gives the shadow-ray
- * vector. Z is negative so the sun is on the camera side; soft
- * shadows would require multiple jittered samples (skipped here
- * for the scaffold — single shadow ray = hard shadow). */
-const vec3 kSunPosition = vec3(80.0, 30.0, -2.0);
-const vec3 kSunColour   = vec3(1.0, 0.95, 0.85);
-const vec3 kAmbient     = vec3(0.25, 0.27, 0.32);  /* slight cool tint when shadowed */
+/* Lighting:
+ *   - One static warm "sun" key light far above the playfield.
+ *   - Six coloured point lights orbit above the playfield at
+ *     different phases + radii so they don't bunch.
+ * All shadow rays are soft (N jittered samples per light) so the
+ * shadow edges fade rather than crack hard.
+ *
+ * Light positions derive from pc.params.y (seconds) so they
+ * animate frame-by-frame. Z = -1.5..-2.0 puts them in front of
+ * the camera (at z=-1.0); rays from playfield hits at z≈0.8 toward
+ * the lights travel back through any intervening occluder geometry. */
+const float kPi = 3.14159265359;
+const vec3  kAmbient = vec3(0.12, 0.14, 0.18);
+
+const int  kLightCount  = 6;
+const int  kShadowSamples = 4;          /* soft-shadow samples per light */
+const float kShadowJitter = 6.0;        /* world-space radius of sample disc */
+
+const vec3 kLightColours[kLightCount] = vec3[kLightCount](
+    vec3(1.40, 0.55, 0.18),   /* warm orange */
+    vec3(0.20, 0.55, 1.40),   /* cool blue */
+    vec3(0.25, 1.30, 0.45),   /* bright green */
+    vec3(1.30, 0.30, 1.20),   /* magenta */
+    vec3(1.40, 1.10, 0.30),   /* gold */
+    vec3(0.30, 1.30, 1.20)    /* cyan */
+);
+
+vec3 lightPosition(float t, float phase, float radius) {
+    return vec3(120.0 + radius * cos(t + phase),
+                80.0  + (radius * 0.6) * sin(t + phase * 1.7),
+                -1.8);
+}
+
+const vec3  kSunDir       = normalize(vec3(0.3, -0.5, -0.8));
+const vec3  kSunColour    = vec3(0.85, 0.80, 0.70);
+const float kSunDistance  = 4.0;     /* shadow trace length for the sun */
+
+/* Cheap deterministic 2D hash → [-1, 1] vec2. Used to jitter shadow
+ * sample positions per pixel + per light + per sample. */
+vec2 hash2(vec3 seed) {
+    float n = dot(seed, vec3(127.1, 311.7, 74.7));
+    return vec2(fract(sin(n) * 43758.5453),
+                fract(sin(n + 17.0) * 24634.6345)) * 2.0 - 1.0;
+}
 
 void main() {
     /* Reconstruct the three vertex indices for the hit triangle. */
@@ -119,40 +155,83 @@ void main() {
         return;
     }
 
-    /* Trace a shadow ray from the hit position toward the virtual
-     * sun. SBT slot 1's miss shader (shadow.rmiss) clears
-     * shadowPayload.hit = false when nothing blocks the path — so
-     * the surface is lit (kSunColour). If anything occludes (no
-     * miss runs, payload retains its pre-trace `true`), the surface
-     * is in shadow and renders with the cool-tinted ambient.
-     *
-     * Flags:
-     *   - OpaqueEXT             : skip any-hit testing (all our geo is opaque)
-     *   - TerminateOnFirstHitEXT: any occluder is enough, don't search further
-     *   - SkipClosestHitShaderEXT: we don't need the closest-hit shader's
-     *                             output for shadow rays
-     * tMin nudges off the surface to avoid self-intersection;
-     * tMax is the exact distance to the sun. */
-    const vec3 toSun     = normalize(kSunPosition - hitPos);
-    const float sunDist  = length(kSunPosition - hitPos);
-    shadowPayload.hit = true;  /* assume occluded; miss shader clears */
-    traceRayEXT(
-        topLevelAS,
-        gl_RayFlagsOpaqueEXT
-            | gl_RayFlagsTerminateOnFirstHitEXT
-            | gl_RayFlagsSkipClosestHitShaderEXT,
-        0xFF,
-        0,                       /* sbtRecordOffset */
-        0,                       /* sbtRecordStride */
-        1,                       /* missIndex — slot 1 = shadow miss */
-        hitPos + toSun * 0.01,
-        0.0,
-        toSun,
-        sunDist,
-        1                        /* payload location = 1 = shadowPayload */
-    );
+    /* Sun key light — single shadow trace, no jitter (hard shadow). */
+    const float t = pc.params.y;
+    vec3 lit = kAmbient;
+    {
+        vec3 dir = -kSunDir;
+        shadowPayload.hit = true;
+        traceRayEXT(
+            topLevelAS,
+            gl_RayFlagsOpaqueEXT
+                | gl_RayFlagsTerminateOnFirstHitEXT
+                | gl_RayFlagsSkipClosestHitShaderEXT,
+            0xFF, 0, 0, 1,
+            hitPos + dir * 0.01, 0.0, dir, kSunDistance, 1
+        );
+        if (!shadowPayload.hit) lit += kSunColour;
+    }
 
-    const vec3 lit = shadowPayload.hit ? kAmbient : kSunColour;
-    payload.colour = diffuse.rgb * lit;
+    /* Six orbiting point lights — each gets kShadowSamples shadow
+     * rays jittered around its centre, so the resulting penumbra is
+     * soft rather than hard-edged. The accumulated visibility ratio
+     * weights the light's distance-falloff contribution. */
+    for (int i = 0; i < kLightCount; ++i) {
+        float phase  = (float(i) * 2.0 * kPi) / float(kLightCount);
+        float speed  = 0.7 + 0.12 * float(i);   /* per-light orbit rate */
+        float radius = 60.0 + 22.0 * sin(t * 0.4 + phase);  /* radius pulses */
+        vec3  base   = lightPosition(t * speed, phase, radius);
+
+        vec3  toLight   = base - hitPos;
+        float lightDist = length(toLight);
+        vec3  centerDir = toLight / lightDist;
+
+        /* Distance falloff, hand-tuned for the 240×160 world scale. */
+        float falloff = 1.0 / (1.0 + 0.0008 * lightDist * lightDist);
+        if (falloff < 0.02) continue;  /* skip negligible lights */
+
+        /* Pulse light brightness on a per-light schedule so the
+         * scene "breathes" even when occluders aren't moving. */
+        float pulse = 0.7 + 0.3 * sin(t * 1.4 + phase * 2.0);
+
+        /* Build two perpendicular vectors to centerDir for jitter
+         * basis. Sun-direction-style trick: pick the most stable
+         * cross-product axis. */
+        vec3 up = abs(centerDir.y) < 0.9 ? vec3(0.0, 1.0, 0.0)
+                                        : vec3(1.0, 0.0, 0.0);
+        vec3 right = normalize(cross(centerDir, up));
+        up = cross(right, centerDir);
+
+        float visible = 0.0;
+        for (int s = 0; s < kShadowSamples; ++s) {
+            /* Jittered point on a disc perpendicular to the ray. */
+            vec2 j = hash2(vec3(gl_LaunchIDEXT.xy, float(i * kShadowSamples + s)));
+            vec3 samplePos = base + (right * j.x + up * j.y) * kShadowJitter;
+            vec3 sToLight  = samplePos - hitPos;
+            float sDist    = length(sToLight);
+            vec3  sDir     = sToLight / sDist;
+
+            shadowPayload.hit = true;
+            traceRayEXT(
+                topLevelAS,
+                gl_RayFlagsOpaqueEXT
+                    | gl_RayFlagsTerminateOnFirstHitEXT
+                    | gl_RayFlagsSkipClosestHitShaderEXT,
+                0xFF, 0, 0, 1,
+                hitPos + sDir * 0.01, 0.0, sDir, sDist, 1
+            );
+            if (!shadowPayload.hit) visible += 1.0;
+        }
+        visible /= float(kShadowSamples);
+
+        lit += kLightColours[i] * falloff * pulse * visible;
+    }
+
+    /* Reinhard tonemap on the accumulated colour — keeps the bright
+     * light pile-ups from blowing out, and rolls highlights toward
+     * white instead of clipping to neon. */
+    vec3 raw = diffuse.rgb * lit;
+    vec3 tonemapped = raw / (raw + vec3(1.0));
+    payload.colour   = tonemapped;
     payload.distance = gl_HitTEXT;
 }
