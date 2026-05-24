@@ -173,11 +173,12 @@ bool ShmFrameSource::open(const char* shmName) {
     mBase = p;
 
     /* Sanity-check the header before trusting the rest. Accept any
-     * known version (1..3): v1 was framebuffer-only, v2 added the
-     * OAM block, v3 added per-BG-layer planes. */
+     * known version (1..4): v1 was framebuffer-only, v2 added the
+     * OAM block, v3 added per-BG-layer planes, v4 added the OAM-only
+     * sprite plane. */
     const uint32_t* h = (const uint32_t*)mBase;
-    if (h[0] != kShmMagic || h[1] < 1 || h[1] > 3) {
-        std::fprintf(stderr, "[shm-rd] bad header magic/version (got %08x/%u, want %08x/[1..3])\n",
+    if (h[0] != kShmMagic || h[1] < 1 || h[1] > 4) {
+        std::fprintf(stderr, "[shm-rd] bad header magic/version (got %08x/%u, want %08x/[1..4])\n",
                      h[0], h[1], kShmMagic);
         munmap(mBase, mBytes);
         ::close(mFd);
@@ -227,6 +228,17 @@ const uint8_t* ShmFrameSource::currentBgPlane(int planeIndex) const {
     /* BG planes start after the composite framebuffer + OAM block. */
     const size_t off = kShmHeader + pixelsBytes + kOamBytes
                        + (size_t)planeIndex * pixelsBytes;
+    return (const uint8_t*)mBase + off;
+}
+
+const uint8_t* ShmFrameSource::currentSpritePlane() const {
+    if (!mBase || mVersion < 4) return nullptr;
+    const size_t pixelsBytes = (size_t)mWidth * mHeight * 4;
+    const size_t kOamBytes = 1024;
+    /* Sprite plane (OAM-only render, alpha=0 outside silhouettes) sits
+     * immediately after the 2 BG planes — plane index 2 in the layout. */
+    const size_t off = kShmHeader + pixelsBytes + kOamBytes
+                       + (size_t)2 * pixelsBytes;
     return (const uint8_t*)mBase + off;
 }
 

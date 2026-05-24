@@ -138,14 +138,33 @@ void main() {
         return;
     }
 
-    /* Emissive sample — only consult the emissive atlas when the
-     * material is flagged as a light source. The "× 4.0" boosts the
-     * radiance above 1.0 so emissive sprites visibly illuminate
-     * neighbouring surfaces through the path tracer (HDR radiance,
-     * not LDR colour). */
+    /* Emissive sample — when the geometry is tagged emissive, gate
+     * the boost by the diffuse texel's luma + alpha. The sprite
+     * plane has alpha=0 outside silhouettes and the diffuse colour
+     * is the actual sprite pixel, so this lights ONLY genuinely
+     * bright opaque texels (Link's lantern bulb, fire core, lit
+     * sign tiles) rather than the full 16×16 quad rectangle.
+     *
+     * Two gates: high luma AND high saturation.  Luma alone catches
+     * Link's eyes (pure white, luma=1.0 sat=0) — but real emissives
+     * (fire, lanterns) are highly-saturated warm colours.  Requiring
+     * sat >= 0.4 rejects neutral whites while admitting torches /
+     * sparkles / red-glow effects.  "× 4.0" lifts the emitted
+     * radiance well above 1.0 so the HDR contribution visibly
+     * illuminates neighbouring surfaces after tonemap. */
     vec3 emissive = vec3(0.0);
-    if ((flags & kMaterialEmissive) != 0u) {
-        emissive = texture(sampler2D(emissiveTextures[0], atlasSampler), uv).rgb * 4.0;
+    if ((flags & kMaterialEmissive) != 0u && diffuse.a > 0.5) {
+        float luma = dot(diffuse.rgb, vec3(0.2126, 0.7152, 0.0722));
+        float maxC = max(max(diffuse.r, diffuse.g), diffuse.b);
+        float minC = min(min(diffuse.r, diffuse.g), diffuse.b);
+        float sat  = (maxC > 0.0001) ? (maxC - minC) / maxC : 0.0;
+        if (luma >= 0.6 && sat >= 0.4) {
+            emissive = diffuse.rgb * 4.0;
+        } else {
+            /* Not a true emissive texel — clear the flag so the
+             * rgen path-traces it as a normal diffuse surface. */
+            flags &= ~kMaterialEmissive;
+        }
     }
 
     /* Normal — start with the quad's geometric normal (camera-facing

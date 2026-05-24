@@ -46,10 +46,10 @@
 #endif
 
 #define TMC_SHM_MAGIC   0x46434D54u  /* "TMCF" little-endian */
-#define TMC_SHM_VERSION 3u           /* v3 adds per-BG-layer planes */
+#define TMC_SHM_VERSION 4u           /* v4 adds OAM-only sprite plane (plane index 2) */
 #define TMC_SHM_HEADER  24
 #define TMC_SHM_OAM_BYTES 1024u       /* 128 OAM entries × 8 bytes */
-#define TMC_SHM_BG_PLANES 2u          /* BG1 + BG2 (main world layers) */
+#define TMC_SHM_BG_PLANES 3u          /* BG1 + BG2 + Sprite (OAM-only, alpha=0 outside silhouettes) */
 #define TMC_SHM_PATH    "/tmc_framebuffer"
 
 #if defined(__linux__)
@@ -196,6 +196,31 @@ void Port_Shm_PublishBgPlanes(const uint32_t* bg1, const uint32_t* bg2,
      * coherent for the consumer's poll. */
 }
 
+/* Publish an OAM-only sprite plane (shm v4+). The plane is the
+ * engine's OBJ-layer render with NO background — pixels outside
+ * sprite silhouettes are 0x00000000 (alpha=0). Lets the RT consumer
+ * sample real sprite alpha for shadow-occluder testing and apply
+ * emissive boosts only to actual silhouette pixels (rather than the
+ * fully-opaque composite, which would light whole 16×16 quad
+ * rectangles around any glowing sprite).
+ *
+ * Layout: appended after the 2 BG planes (index 2 in the plane
+ * array). Caller still drives cadence — call BEFORE PublishFramebuffer
+ * so the sprite plane is coherent with the composite + OAM table. */
+void Port_Shm_PublishSpritePlane(const uint32_t* sprites,
+                                 int width, int height) {
+    if (!shmEnabled() || !sShmBase) return;
+    if (!sprites || width <= 0 || height <= 0) return;
+
+    const size_t planeBytes = (size_t)width * (size_t)height * 4u;
+    const size_t off2 = (size_t)TMC_SHM_HEADER + planeBytes + (size_t)TMC_SHM_OAM_BYTES
+                       + planeBytes * 2u;  /* skip BG1, BG2 */
+
+    if (off2 + planeBytes > sShmBytes) return;
+
+    memcpy(sShmBase + off2, sprites, planeBytes);
+}
+
 void Port_Shm_Shutdown(void) {
     if (sShmBase && sShmBase != MAP_FAILED) {
         munmap(sShmBase, sShmBytes);
@@ -221,6 +246,9 @@ void Port_Shm_PublishOam(const uint16_t* o, int count) {
 }
 void Port_Shm_PublishBgPlanes(const uint32_t* a, const uint32_t* b, int w, int h) {
     (void)a; (void)b; (void)w; (void)h;
+}
+void Port_Shm_PublishSpritePlane(const uint32_t* s, int w, int h) {
+    (void)s; (void)w; (void)h;
 }
 void Port_Shm_Shutdown(void) { }
 

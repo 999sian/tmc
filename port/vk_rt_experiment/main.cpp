@@ -327,30 +327,32 @@ static AtlasGpu createAtlas(Engine& eng, uint32_t w, uint32_t h) {
     return out;
 }
 
-/* Per-frame atlas refresh — supports up to 3 source planes packed
- * vertically into the atlas image (composite + BG1 + BG2). Each
- * plane is `srcW × srcH` RGBA8; the atlas's height must be at least
- * `numPlanes * srcH`. Pass nullptr for missing planes to leave them
- * unchanged from the previous frame. */
+/* Per-frame atlas refresh — supports up to 4 source planes packed
+ * vertically into the atlas image (composite + BG1 + BG2 + sprite).
+ * Each plane is `srcW × srcH` RGBA8; the atlas's height must be at
+ * least `numPlanes * srcH`. Pass nullptr for missing planes to leave
+ * them unchanged from the previous frame. */
 static void refreshAtlas(Engine& eng, VkCommandBuffer cmd,
                          AtlasGpu& atlas,
                          const uint8_t* composite,
                          const uint8_t* bg1,
                          const uint8_t* bg2,
+                         const uint8_t* sprite,
                          uint32_t srcW, uint32_t srcH) {
     (void)eng;
-    if (!composite && !bg1 && !bg2) return;
+    if (!composite && !bg1 && !bg2 && !sprite) return;
     if (srcW == 0 || srcH == 0) return;
 
-    /* Stage the up-to-three planes in the persistent staging buffer.
-     * Layout matches the atlas image: plane 0 at top, then BG1, then
-     * BG2. Skipped planes leave the staging bytes unchanged
+    /* Stage the up-to-four planes in the persistent staging buffer.
+     * Layout matches the atlas image: composite/BG1/BG2/sprite top-to-
+     * bottom. Skipped planes leave the staging bytes unchanged
      * (harmless — only the regions we copy below get pushed). */
     const size_t planeBytes = (size_t)srcW * srcH * 4;
     uint8_t* dst = (uint8_t*)atlas.stagingMap;
     if (composite) std::memcpy(dst + 0 * planeBytes, composite, planeBytes);
     if (bg1)       std::memcpy(dst + 1 * planeBytes, bg1,       planeBytes);
     if (bg2)       std::memcpy(dst + 2 * planeBytes, bg2,       planeBytes);
+    if (sprite)    std::memcpy(dst + 3 * planeBytes, sprite,    planeBytes);
 
     /* SHADER_READ_ONLY → TRANSFER_DST */
     VkImageMemoryBarrier toDst{};
@@ -371,7 +373,7 @@ static void refreshAtlas(Engine& eng, VkCommandBuffer cmd,
     /* One vkCmdCopyBufferToImage per plane present. Each copy
      * specifies its destination y-offset to land in the right
      * region of the atlas. */
-    VkBufferImageCopy regions[3]{};
+    VkBufferImageCopy regions[4]{};
     uint32_t regionCount = 0;
     auto addRegion = [&](uint32_t planeIdx) {
         VkBufferImageCopy& r = regions[regionCount++];
@@ -385,6 +387,7 @@ static void refreshAtlas(Engine& eng, VkCommandBuffer cmd,
     if (composite) addRegion(0);
     if (bg1)       addRegion(1);
     if (bg2)       addRegion(2);
+    if (sprite)    addRegion(3);
     if (regionCount > 0) {
         vkCmdCopyBufferToImage(cmd, atlas.stagingBuf, atlas.image,
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -543,16 +546,19 @@ int main() {
     rt.createPipeline("./shaders");
     std::fprintf(stderr, "[main] step: pipeline ok\n");
 
-    /* Atlas: 240 × (3 × 160) = 240×480, three stacked planes:
+    /* Atlas: 240 × (4 × 160) = 240×640, four stacked planes:
      *   y =   0..160 : composite framebuffer (engine's final output)
      *   y = 160..320 : BG1 layer (mid-world; transparent where holes)
      *   y = 320..480 : BG2 layer (back-world)
+     *   y = 480..640 : sprite plane (OAM-only, alpha=0 outside silhouettes)
      * Each plane is refreshed independently per frame from the shm
-     * region's three blocks. */
+     * region's four blocks. The sprite plane lets the any-hit shader
+     * pass rays through transparent sprite-quad pixels and lets the
+     * rchit luma-test only emissive-tag real silhouette texels. */
     std::fprintf(stderr, "[main] step: createAtlas\n");
     AtlasGpu atlas = createAtlas(engine,
                                  FrameSource::kFrameW,
-                                 FrameSource::kFrameH * 3u);
+                                 FrameSource::kFrameH * 4u);
     rt.setAtlas(atlas.view, atlas.sampler);
     std::fprintf(stderr, "[main] step: atlas ok (%ux%u)\n", atlas.w, atlas.h);
 
@@ -596,27 +602,28 @@ int main() {
         const float time =
             std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
 
-        /* Geometry for the trace. Three world-layer quads + per-OAM
-         * sprite quads, all sampling the same 240×480 atlas at
-         * different vertical regions:
+        /* Geometry for the trace. World composite back layer + per-OAM
+         * sprite quads, sampling the same 240×640 atlas at different
+         * vertical regions:
          *
-         *   atlas y region   meaning            quad at layer Z
+         *   atlas y region   meaning              quad at layer Z
          *   ─────────────────────────────────────────────────────
-         *      0/3..1/3      composite (PPU)    sprite quads (z=0.2)
-         *      1/3..2/3      BG1 plane (mid)    BG1 quad      (z=0.6)
-         *      2/3..3/3      BG2 plane (back)   BG2 quad      (z=0.8)
+         *      0/4..1/4      composite (PPU)      back layer (z=0.8)
+         *      1/4..2/4      BG1 plane (mid)      [unused — composite already has it]
+         *      2/4..3/4      BG2 plane (back)     [unused — composite already has it]
+         *      3/4..4/4      sprite plane (OAM-only) sprite quads (z=0.2)
          *
-         * Any-hit shader (path_trace.rahit) lets rays pass through
-         * BG1 plane pixels with alpha < 0.01, so transparent holes
-         * in the mid layer reveal the BG2 plane behind. Per-OAM
-         * sprite quads sample the COMPOSITE region (which already
-         * has the PPU-drawn sprite art at the right position),
-         * acting as opaque occluders at z=0.2 that cast shadows on
-         * the BG plane far behind. */
+         * Sprite quads now sample the SPRITE plane instead of the
+         * composite — its alpha is 0 outside silhouettes, so the
+         * any-hit shader skips transparent texels (rays pass through
+         * the empty 16×16 quad corners) and the rchit luma-test marks
+         * only opaque bright pixels as emissive. This kills the
+         * bright-box-around-Link artefact from the previous slice. */
         const float kPlaneU0 = 0.0f, kPlaneU1 = 1.0f;
-        const float kCompV1  = 1.0f / 3.0f;
-        const float kBg1V0   = 1.0f / 3.0f, kBg1V1 = 2.0f / 3.0f;
-        const float kBg2V0   = 2.0f / 3.0f, kBg2V1 = 1.0f;
+        const float kCompV1  = 1.0f / 4.0f;
+        const float kBg1V0   = 1.0f / 4.0f, kBg1V1 = 2.0f / 4.0f;
+        const float kBg2V0   = 2.0f / 4.0f, kBg2V1 = 3.0f / 4.0f;
+        const float kSprV0   = 3.0f / 4.0f, kSprV1 = 1.0f;
 
         layers.beginFrame();
         /* Single back layer: the full composite (every BG layer the
@@ -633,36 +640,36 @@ int main() {
                           kPlaneU0, 0.0f, kPlaneU1, kCompV1);
 
         ParsedOam parsed;
+        const uint8_t* spritePlane = nullptr;
         if (useLive) {
             parsed.parse(liveSrc.currentOam(), liveSrc.oamCount());
+            spritePlane = liveSrc.currentSpritePlane();
         }
-        /* Emissive auto-tag DISABLED: the only signal we have is
-         * the composite pixel at the sprite centre, which mixes
-         * sprite + BG, so a sprite on a bright BG would be flagged
-         * even when the sprite itself isn't glowing. The sprite
-         * quad samples composite (fully opaque) so the emissive
-         * boost lights the entire 16×16 quad rectangle as a bright
-         * box — the artefact the user spotted around Link. A
-         * proper implementation needs an isolated sprite-only
-         * alpha layer (OAM-only render) so the emissive boost
-         * applies to the actual sprite silhouette. For now,
-         * return false so no sprite is tagged emissive; the AO +
-         * soft shadow + warm/cool tint still give the RT look. */
+        /* Emissive auto-tag: every visible sprite quad is a
+         * candidate; the shader (path_trace.rchit) gates per-texel
+         * by alpha > 0.5 AND luma ≥ kEmissiveLuma.  Doing the gate
+         * shader-side avoids the host-side "center pixel" sampling
+         * flipping between frames as the sprite animation cycles
+         * (which would flash Link's head emissive on/off as he
+         * walked).  The shader sees a stable per-texel signal. */
         auto isSpriteEmissive = [&](const OamSprite& /*s*/) -> bool {
-            return false;
+            return true;
         };
+        (void)spritePlane;
         for (const OamSprite& s : parsed.visibleSprites()) {
-            /* Sprite quad samples the COMPOSITE region at the
-             * sprite's screen position. The composite already has
-             * the PPU-drawn sprite art there, so the quad visually
-             * matches its surroundings while still acting as an
-             * opaque shadow occluder at z=Sprite. UV v is divided
-             * by 3 because the composite occupies only the top
-             * third of the 240×480 atlas. */
+            /* Sprite quad now samples the SPRITE plane (OAM-only
+             * render, alpha=0 outside silhouettes). The quad's
+             * outer pixels are transparent, so the any-hit shader
+             * skips them — rays pass through the empty quad
+             * corners onto the back composite. This also means
+             * shadows cast by the sprite occupy exactly the
+             * silhouette, not the full bounding-box rectangle. */
             const float u0 = (float)s.x / 240.0f;
             const float u1 = (float)(s.x + s.w) / 240.0f;
-            const float v0 = ((float)s.y         / 160.0f) * kCompV1;
-            const float v1 = ((float)(s.y + s.h) / 160.0f) * kCompV1;
+            const float vy0 = (float)s.y         / 160.0f;
+            const float vy1 = (float)(s.y + s.h) / 160.0f;
+            const float v0 = kSprV0 + vy0 * (kSprV1 - kSprV0);
+            const float v1 = kSprV0 + vy1 * (kSprV1 - kSprV0);
             const bool emit = isSpriteEmissive(s);
             layers.drawSprite(Layer::Sprite,
                               (float)s.x, (float)s.y,
@@ -675,23 +682,26 @@ int main() {
         VkCommandBuffer cmd = engine.beginFrame();
         if (cmd == VK_NULL_HANDLE) continue;  /* swapchain out of date */
 
-        /* Pull all three planes from the live shm (or the PNG ring's
+        /* Pull all four planes from the live shm (or the PNG ring's
          * single composite for the offline fallback). The refresh
          * function uploads each present plane into its region of the
-         * atlas; the BG planes only show up when the producer is v3+. */
-        const uint8_t* composite = nullptr;
-        const uint8_t* bg1Plane  = nullptr;
-        const uint8_t* bg2Plane  = nullptr;
+         * atlas; the BG / sprite planes only show up when the
+         * producer is v3+ / v4+ respectively. */
+        const uint8_t* composite     = nullptr;
+        const uint8_t* bg1Plane      = nullptr;
+        const uint8_t* bg2Plane      = nullptr;
+        const uint8_t* spritePlaneFB = nullptr;
         if (useLive) {
-            composite = liveSrc.currentFrame();
-            bg1Plane  = liveSrc.currentBgPlane(0);
-            bg2Plane  = liveSrc.currentBgPlane(1);
+            composite     = liveSrc.currentFrame();
+            bg1Plane      = liveSrc.currentBgPlane(0);
+            bg2Plane      = liveSrc.currentBgPlane(1);
+            spritePlaneFB = liveSrc.currentSpritePlane();
         } else {
             composite = pngSrc.advance(10);
         }
-        if (composite || bg1Plane || bg2Plane) {
+        if (composite || bg1Plane || bg2Plane || spritePlaneFB) {
             refreshAtlas(engine, cmd, atlas,
-                         composite, bg1Plane, bg2Plane,
+                         composite, bg1Plane, bg2Plane, spritePlaneFB,
                          FrameSource::kFrameW, FrameSource::kFrameH);
             if (firstFrame) std::fprintf(stderr, "[main] first frame uploaded, tracing\n");
         }

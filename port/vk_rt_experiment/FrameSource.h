@@ -119,6 +119,13 @@ public:
      * producer is older than v3. */
     const uint8_t* currentBgPlane(int planeIndex) const;
 
+    /* OAM-only sprite plane (shm v4+). Width×height RGBA8 where pixels
+     * outside sprite silhouettes are 0x00000000 (alpha=0). RT consumer
+     * samples this for sprite-quad UVs so the any-hit alpha cutoff and
+     * emissive-tag luma checks only consider real silhouette texels.
+     * Returns nullptr when the producer is older than v4. */
+    const uint8_t* currentSpritePlane() const;
+
 private:
     void*    mBase    = nullptr;
     size_t   mBytes   = 0;
