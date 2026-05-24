@@ -652,11 +652,6 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
         vp.x = 0.0f; vp.y = 0.0f;
         vp.w = (float)tw; vp.h = (float)th;
         vp.min_depth = 0.0f; vp.max_depth = 1.0f;
-        /* No aspect-fit letterbox here: the source framebuffer is
-         * already widened (MODE1_GBA_WIDTH = 256 in phase-1 widescreen)
-         * and the user wants the shader to fill the whole window.
-         * Stock-filter path keeps its own pillarbox math for the 240
-         * default; the .glslp path lets the shader handle aspect. */
         SDL_SetGPUViewport(rp, &vp);
 
         SDL_BindGPUGraphicsPipeline(rp, p.pipeline);
