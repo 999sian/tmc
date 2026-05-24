@@ -280,6 +280,14 @@ void (*const gUnk_08128F1C[])(void) = {
 PauseMenuOptions gPauseMenuOptions;
 
 SpritePtr gSpritePtrs[512];
+/* port_rom.c reads up to this many entries from ROM at startup. The
+ * compile-time table caps at 329 but TMC references indices up to
+ * ~510 (Moldorm at 484, others). Keep in sync with the gSpritePtrs[]
+ * array size above. */
+const u32 kMaxSpritePtrs = 512;
+/* Updated by port_rom.c after the runtime extension. Used by
+ * Port_GetSpritePtr instead of the compile-time spritePtrsCount. */
+u32 gSpritePtrsLoadedCount = 0;
 
 // Map data — both are u16[0x4000] tilemaps (0x8000 bytes) reused for file-select overlay
 u16 gMapDataBottomSpecial[0x4000] __attribute__((aligned(4)));
