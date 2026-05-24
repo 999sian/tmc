@@ -46,9 +46,10 @@
 #endif
 
 #define TMC_SHM_MAGIC   0x46434D54u  /* "TMCF" little-endian */
-#define TMC_SHM_VERSION 2u
+#define TMC_SHM_VERSION 3u           /* v3 adds per-BG-layer planes */
 #define TMC_SHM_HEADER  24
 #define TMC_SHM_OAM_BYTES 1024u       /* 128 OAM entries × 8 bytes */
+#define TMC_SHM_BG_PLANES 2u          /* BG1 + BG2 (main world layers) */
 #define TMC_SHM_PATH    "/tmc_framebuffer"
 
 #if defined(__linux__)
@@ -59,9 +60,21 @@ static size_t   sShmBytes  = 0;
 static int      sEnabled   = -1;   /* -1 = not yet checked, 0 = off, 1 = on */
 static uint32_t sFrameSeq  = 0;
 
+/* Public probe — port_ppu.cpp checks this to decide whether to spend
+ * cycles on the per-BG re-render. Mirrors shmEnabled() but as a real
+ * symbol the C++ TU can extern. */
+int Port_Shm_IsActive(void) {
+#if defined(__linux__)
+    extern int shmEnabled(void);
+    return shmEnabled();
+#else
+    return 0;
+#endif
+}
+
 /* Lazily probe TMC_PUBLISH_FRAMEBUFFER on first call. Avoids paying
  * the getenv lookup every frame. */
-static int shmEnabled(void) {
+int shmEnabled(void) {
     if (sEnabled < 0) {
         const char* v = getenv("TMC_PUBLISH_FRAMEBUFFER");
         sEnabled = (v && v[0] && v[0] != '0') ? 1 : 0;
@@ -78,9 +91,11 @@ static int shmEnabled(void) {
 static int shmInit(int width, int height) {
     if (sShmBase) return 0;  /* already up */
 
+    const size_t planeBytes = (size_t)width * (size_t)height * 4u;
     const size_t bytes = (size_t)TMC_SHM_HEADER
-                       + (size_t)width * (size_t)height * 4u
-                       + (size_t)TMC_SHM_OAM_BYTES;
+                       + planeBytes                       /* composite framebuffer */
+                       + (size_t)TMC_SHM_OAM_BYTES        /* OAM table */
+                       + planeBytes * (size_t)TMC_SHM_BG_PLANES; /* BG1, BG2 planes */
     sShmFd = shm_open(TMC_SHM_PATH, O_CREAT | O_RDWR, 0600);
     if (sShmFd < 0) {
         fprintf(stderr, "[shm-fb] shm_open failed: %s\n", strerror(errno));
@@ -154,6 +169,33 @@ void Port_Shm_PublishFramebuffer(const uint32_t* pixels, int width, int height) 
     __atomic_store_n(&h[4], ++sFrameSeq, __ATOMIC_RELEASE);
 }
 
+/* Publish two pre-rendered BG-layer planes (BG1, BG2) for the RT
+ * scaffold to render as separate world-Z quads. Each plane is the
+ * same dimensions as the composite framebuffer (width × height
+ * RGBA8). The caller is responsible for actually doing the per-line
+ * render (via virtuappu_mode1_render_text_bg_line); this function
+ * just copies the prepared planes into the shm region.
+ *
+ * Layout: planes go AFTER the composite + OAM blocks. The header's
+ * width/height applies to all planes uniformly. */
+void Port_Shm_PublishBgPlanes(const uint32_t* bg1, const uint32_t* bg2,
+                              int width, int height) {
+    if (!shmEnabled() || !sShmBase) return;
+    if (!bg1 || !bg2 || width <= 0 || height <= 0) return;
+
+    const size_t planeBytes = (size_t)width * (size_t)height * 4u;
+    const size_t off0 = (size_t)TMC_SHM_HEADER + planeBytes + (size_t)TMC_SHM_OAM_BYTES;
+    const size_t off1 = off0 + planeBytes;
+
+    if (off1 + planeBytes > sShmBytes) return;
+
+    memcpy(sShmBase + off0, bg1, planeBytes);
+    memcpy(sShmBase + off1, bg2, planeBytes);
+    /* No frame counter bump — the framebuffer publish flips it.
+     * Call this BEFORE PublishFramebuffer so planes + composite stay
+     * coherent for the consumer's poll. */
+}
+
 void Port_Shm_Shutdown(void) {
     if (sShmBase && sShmBase != MAP_FAILED) {
         munmap(sShmBase, sShmBytes);
@@ -171,6 +213,9 @@ void Port_Shm_Shutdown(void) {
 
 void Port_Shm_PublishFramebuffer(const uint32_t* p, int w, int h) {
     (void)p; (void)w; (void)h;
+}
+void Port_Shm_PublishBgPlanes(const uint32_t* a, const uint32_t* b, int w, int h) {
+    (void)a; (void)b; (void)w; (void)h;
 }
 void Port_Shm_Shutdown(void) { }
 

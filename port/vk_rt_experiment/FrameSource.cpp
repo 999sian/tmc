@@ -220,6 +220,16 @@ const uint16_t* ShmFrameSource::currentOam() const {
         (const uint8_t*)mBase + kShmHeader + pixelsBytes);
 }
 
+const uint8_t* ShmFrameSource::currentBgPlane(int planeIndex) const {
+    if (!mBase || mVersion < 3 || planeIndex < 0 || planeIndex >= 2) return nullptr;
+    const size_t pixelsBytes = (size_t)mWidth * mHeight * 4;
+    const size_t kOamBytes = 1024;
+    /* BG planes start after the composite framebuffer + OAM block. */
+    const size_t off = kShmHeader + pixelsBytes + kOamBytes
+                       + (size_t)planeIndex * pixelsBytes;
+    return (const uint8_t*)mBase + off;
+}
+
 /* ---------- ParsedOam ---------- */
 
 /* GBA OAM layout (per https://problemkaputt.de/gbatek.htm):
