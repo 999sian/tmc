@@ -567,6 +567,23 @@ extern "C" void Port_PPU_PresentFrame(void) {
         extern bool Port_ImGui_Render(void);
         Port_ImGui_Render();
         extern bool Port_GPU_PresentFrame(const uint32_t*, int, int);
+
+        /* Honour internal render scale on the GPU path too — same
+         * Port_PPU_BuildScaledFrame the SDL_Renderer branch uses,
+         * which nearest-replicates the source then overlays the
+         * affine OAM at sub-pixel precision. Feeding the bigger
+         * buffer to PresentFrame is enough; PresentFrame recreates
+         * its source texture when fb_w/fb_h change. Falls back to
+         * the native frame at scale==1 (no allocation, fast path). */
+        const int gpuScale = (int)Port_Config_InternalScale();
+        if (gpuScale > 1) {
+            int sw = 0, sh = 0;
+            uint32_t* scaled = Port_PPU_BuildScaledFrame(gpuScale, &sw, &sh);
+            if (scaled) {
+                Port_GPU_PresentFrame(scaled, sw, sh);
+                return;
+            }
+        }
         Port_GPU_PresentFrame(virtuappu_frame_buffer, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
         return;
     }
