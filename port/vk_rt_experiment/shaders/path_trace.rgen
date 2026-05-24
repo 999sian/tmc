@@ -70,7 +70,8 @@ layout(push_constant) uniform PushConstants {
 /* Material-flag bits (kept in sync with rchit). */
 const uint kMaterialTranslucent = 1u;
 const uint kMaterialEmissive    = 2u;
-const uint kMaterialReflective  = 4u;  /* slice 8 — water */
+const uint kMaterialReflective  = 4u;  /* slice 8 — water; slice 9 — metal */
+const uint kMaterialLava        = 8u;  /* slice 9 — animated shimmer + glow */
 
 /* Path-tracing constants. kMaxBounces = 3 covers direct + 2 indirect
  * bounces — enough for visible colour bleeding without exploding
@@ -201,10 +202,25 @@ void main() {
             const vec3 hitPos     = payload.hitPos;
             const vec3 hitN       = payload.normal;
             const bool isEmissive = (payload.materialFlags & kMaterialEmissive) != 0u;
+            const bool isLava     = (payload.materialFlags & kMaterialLava)     != 0u;
 
-            if (isEmissive) {
-                /* Emissive surface: warm, overexposed self-glow.
-                 * Tonemap pulls it toward white but it stays warm. */
+            if (isLava) {
+                /* Lava: very strong emissive radiance + animated
+                 * shimmer driven by world-position and time, so the
+                 * surface visibly pulses and ripples. Stronger
+                 * radiance multiplier than regular emissives so the
+                 * GI bounce lights neighbouring walls noticeably. */
+                float t       = pc.params.y;
+                float ripple1 = sin(hitPos.x * 0.32 + t * 2.7) *
+                                cos(hitPos.y * 0.27 - t * 2.1);
+                float ripple2 = sin(hitPos.x * 0.11 - hitPos.y * 0.09 + t * 1.3);
+                float shimmer = 0.85 + 0.30 * ripple1 + 0.20 * ripple2;
+                sampleAccum = albedo * vec3(5.0, 3.0, 1.2) * shimmer;
+            } else if (isEmissive) {
+                /* Regular emissive (lit sprite pixels — fire bulb,
+                 * sparkle, lantern flame).  Warm, overexposed self-
+                 * glow.  Tonemap pulls it toward white but it stays
+                 * warm. */
                 sampleAccum = albedo * vec3(3.5, 3.0, 2.5);
             } else {
                 /* --- Direct sun via soft shadow (4 jittered samples) --- */
