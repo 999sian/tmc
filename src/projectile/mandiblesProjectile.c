@@ -45,9 +45,25 @@ void MandiblesProjectile(MandiblesProjectileEntity* this) {
     if (entity == NULL) {
         entity = super->parent;
     }
+#ifdef PC_PORT
+    /* #101 — mandibles can survive both their parent (body) being
+     * killed AND their child slot being self-unlinked in Action4
+     * (line `super->child = NULL`).  When that happens both child
+     * and parent are NULL and the legacy `entity->confusedTime`
+     * deref SIGSEGVs on PC.  On GBA the NULL read hit BIOS and
+     * returned 0, so the original code "worked" by accident.  Skip
+     * the COLLISION_ON gating in that case — it's only an
+     * iframes/collide-toggle convenience and the projectile will
+     * shortly delete itself via the next-NULL checks elsewhere. */
+    if (entity != NULL && (entity->confusedTime == 0) &&
+        ((super->flags & ENT_COLLIDE) == 0)) {
+        COLLISION_ON(super);
+    }
+#else
     if ((entity->confusedTime == 0) && ((super->flags & ENT_COLLIDE) == 0)) {
         COLLISION_ON(super);
     }
+#endif
     MandiblesProjectile_Functions[GetNextFunction(super)](this);
 }
 
@@ -79,6 +95,10 @@ void MandiblesProjectile_OnCollision(MandiblesProjectileEntity* this) {
                 break;
             default:
                 parent = super->parent;
+#ifdef PC_PORT
+                /* #101 — same NULL-parent hazard as sub_080AA270. */
+                if (parent == NULL) break;
+#endif
                 parent->iframes = super->iframes;
                 parent->knockbackDirection = super->knockbackDirection;
                 parent->knockbackDuration = super->knockbackDuration;
@@ -257,6 +277,16 @@ void sub_080AA270(MandiblesProjectileEntity* this) {
     Entity* parent;
     parent = super->parent;
     super->subtimer = gUnk_08129CA4[Random() & 7];
+#ifdef PC_PORT
+    /* #101 — parent can be NULL after the body is killed mid-detach
+     * (sub_08038A70:131 NULLs the mandibles' parent at launch, and
+     * Action4 only re-points it to the child slot which is itself
+     * stale once the body dies).  GBA tolerated the NULL deref via
+     * BIOS-at-0 reads; PC SIGSEGVs. Skip the anim-state update — the
+     * projectile will self-delete via the entity->next == NULL checks
+     * elsewhere shortly. */
+    if (parent == NULL) return;
+#endif
     animationState = parent->animationState;
     if (super->animationState == 0xff) {
         /* #91 / #97 pattern: gUnk_08129CF4 has 8 entries; parent's raw
