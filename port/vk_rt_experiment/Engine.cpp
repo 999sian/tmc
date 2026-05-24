@@ -495,6 +495,69 @@ void Engine::createStorageImage() {
                               VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                               VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR);
     });
+
+    /* Slice 7: denoiser guides (normal + world-pos) and a ping-pong
+     * scratch image for the multi-pass a-trous filter.  Same format
+     * and dimensions as the accum image so they share lifecycle.
+     * All start in GENERAL since both rgen-write and compute-read
+     * happen via storage-image bindings. */
+    auto createGeneralImg = [&](VkFormat format,
+                                VkImage* outImg, VkDeviceMemory* outMem, VkImageView* outView,
+                                const char* label) {
+        VkImageCreateInfo ci{};
+        ci.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        ci.imageType     = VK_IMAGE_TYPE_2D;
+        ci.format        = format;
+        ci.extent.width  = mSwapchainExtent.width;
+        ci.extent.height = mSwapchainExtent.height;
+        ci.extent.depth  = 1;
+        ci.mipLevels     = 1;
+        ci.arrayLayers   = 1;
+        ci.samples       = VK_SAMPLE_COUNT_1_BIT;
+        ci.tiling        = VK_IMAGE_TILING_OPTIMAL;
+        ci.usage         = VK_IMAGE_USAGE_STORAGE_BIT;
+        ci.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+        ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        std::string l = std::string("vkCreateImage (") + label + ")";
+        check(vkCreateImage(mDevice, &ci, nullptr, outImg), l.c_str());
+
+        VkMemoryRequirements r{};
+        vkGetImageMemoryRequirements(mDevice, *outImg, &r);
+        VkMemoryAllocateInfo ai{};
+        ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        ai.allocationSize  = r.size;
+        ai.memoryTypeIndex = findMemoryType(r.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        if (ai.memoryTypeIndex == UINT32_MAX) throw Error(std::string(label) + ": no device-local memory");
+        check(vkAllocateMemory(mDevice, &ai, nullptr, outMem), "vkAllocateMemory");
+        check(vkBindImageMemory(mDevice, *outImg, *outMem, 0), "vkBindImageMemory");
+
+        VkImageViewCreateInfo vci{};
+        vci.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        vci.image            = *outImg;
+        vci.viewType         = VK_IMAGE_VIEW_TYPE_2D;
+        vci.format           = format;
+        vci.components       = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                                VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
+        vci.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        check(vkCreateImageView(mDevice, &vci, nullptr, outView), "vkCreateImageView");
+
+        oneShot([&](VkCommandBuffer cmd) {
+            transitionImageLayout(cmd, *outImg,
+                                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+                                  0, VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                  VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR
+                                  | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+        });
+    };
+
+    createGeneralImg(VK_FORMAT_R32G32B32A32_SFLOAT,
+                     &mGNormalImage, &mGNormalImageMemory, &mGNormalImageView, "gNormal");
+    createGeneralImg(VK_FORMAT_R32G32B32A32_SFLOAT,
+                     &mGHitPosImage, &mGHitPosImageMemory, &mGHitPosImageView, "gHitPos");
+    createGeneralImg(VK_FORMAT_R32G32B32A32_SFLOAT,
+                     &mDenoiseScratchImage, &mDenoiseScratchImageMemory,
+                     &mDenoiseScratchImageView, "denoiseScratch");
 }
 
 void Engine::createFrameSync() {
@@ -656,12 +719,30 @@ void Engine::recreateSwapchain() {
     if (mAccumImageView)   vkDestroyImageView(mDevice, mAccumImageView, nullptr);
     if (mAccumImage)       vkDestroyImage(mDevice, mAccumImage, nullptr);
     if (mAccumImageMemory) vkFreeMemory(mDevice, mAccumImageMemory, nullptr);
+    if (mGNormalImageView)        vkDestroyImageView(mDevice, mGNormalImageView, nullptr);
+    if (mGNormalImage)            vkDestroyImage(mDevice, mGNormalImage, nullptr);
+    if (mGNormalImageMemory)      vkFreeMemory(mDevice, mGNormalImageMemory, nullptr);
+    if (mGHitPosImageView)        vkDestroyImageView(mDevice, mGHitPosImageView, nullptr);
+    if (mGHitPosImage)            vkDestroyImage(mDevice, mGHitPosImage, nullptr);
+    if (mGHitPosImageMemory)      vkFreeMemory(mDevice, mGHitPosImageMemory, nullptr);
+    if (mDenoiseScratchImageView)   vkDestroyImageView(mDevice, mDenoiseScratchImageView, nullptr);
+    if (mDenoiseScratchImage)       vkDestroyImage(mDevice, mDenoiseScratchImage, nullptr);
+    if (mDenoiseScratchImageMemory) vkFreeMemory(mDevice, mDenoiseScratchImageMemory, nullptr);
     mStorageImageView = VK_NULL_HANDLE;
     mStorageImage = VK_NULL_HANDLE;
     mStorageImageMemory = VK_NULL_HANDLE;
     mAccumImageView = VK_NULL_HANDLE;
     mAccumImage = VK_NULL_HANDLE;
     mAccumImageMemory = VK_NULL_HANDLE;
+    mGNormalImage = VK_NULL_HANDLE;
+    mGNormalImageMemory = VK_NULL_HANDLE;
+    mGNormalImageView = VK_NULL_HANDLE;
+    mGHitPosImage = VK_NULL_HANDLE;
+    mGHitPosImageMemory = VK_NULL_HANDLE;
+    mGHitPosImageView = VK_NULL_HANDLE;
+    mDenoiseScratchImage = VK_NULL_HANDLE;
+    mDenoiseScratchImageMemory = VK_NULL_HANDLE;
+    mDenoiseScratchImageView = VK_NULL_HANDLE;
 
     createSwapchain();
     createStorageImage();
@@ -693,6 +774,15 @@ void Engine::shutdown() {
     if (mAccumImageView)   vkDestroyImageView(mDevice, mAccumImageView, nullptr);
     if (mAccumImage)       vkDestroyImage(mDevice, mAccumImage, nullptr);
     if (mAccumImageMemory) vkFreeMemory(mDevice, mAccumImageMemory, nullptr);
+    if (mGNormalImageView)        vkDestroyImageView(mDevice, mGNormalImageView, nullptr);
+    if (mGNormalImage)            vkDestroyImage(mDevice, mGNormalImage, nullptr);
+    if (mGNormalImageMemory)      vkFreeMemory(mDevice, mGNormalImageMemory, nullptr);
+    if (mGHitPosImageView)        vkDestroyImageView(mDevice, mGHitPosImageView, nullptr);
+    if (mGHitPosImage)            vkDestroyImage(mDevice, mGHitPosImage, nullptr);
+    if (mGHitPosImageMemory)      vkFreeMemory(mDevice, mGHitPosImageMemory, nullptr);
+    if (mDenoiseScratchImageView)   vkDestroyImageView(mDevice, mDenoiseScratchImageView, nullptr);
+    if (mDenoiseScratchImage)       vkDestroyImage(mDevice, mDenoiseScratchImage, nullptr);
+    if (mDenoiseScratchImageMemory) vkFreeMemory(mDevice, mDenoiseScratchImageMemory, nullptr);
     for (VkImageView v : mSwapchainViews) {
         if (v) vkDestroyImageView(mDevice, v, nullptr);
     }

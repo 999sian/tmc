@@ -44,6 +44,11 @@ layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
  * accumulation doesn't bias toward bright. */
 layout(set = 0, binding = 1, rgba8)   uniform image2D outputImage;
 layout(set = 0, binding = 6, rgba32f) uniform image2D accumImage;
+/* Slice-7 denoiser guides — the rgen writes the primary hit's
+ * world-space normal and position so the compute filter can use
+ * them as edge-stopping references. */
+layout(set = 0, binding = 10, rgba32f) uniform image2D gNormalImage;
+layout(set = 0, binding = 11, rgba32f) uniform image2D gHitPosImage;
 
 /* Slice-6 point lights — extracted from the OAM-only sprite plane on
  * the CPU side per frame.  Layout MUST match RayTracingPipeline::Light. */
@@ -175,6 +180,18 @@ void main() {
             topLevelAS, gl_RayFlagsNoneEXT, 0xFF, 0, 0, 0,
             rayOrigin, kRayEpsilon, rayDir, kInf, 0
         );
+
+        /* Capture guide data BEFORE secondary rays overwrite payload.
+         * On miss: write (0,0,-1) normal and (0,0,0) position so the
+         * denoise compute shader can detect "no primary hit" via
+         * length(gHitPos) < epsilon and skip filtering for the sky. */
+        if (payload.hitDistance < 0.0) {
+            imageStore(gNormalImage, ivec2(pixel), vec4(0.0, 0.0, -1.0, 0.0));
+            imageStore(gHitPosImage, ivec2(pixel), vec4(0.0));
+        } else {
+            imageStore(gNormalImage, ivec2(pixel), vec4(payload.normal, 0.0));
+            imageStore(gHitPosImage, ivec2(pixel), vec4(payload.hitPos, 1.0));
+        }
 
         if (payload.hitDistance < 0.0) {
             sampleAccum = sampleSky(rayDir);
@@ -364,15 +381,9 @@ void main() {
             final = mix(prev, sampleAccum, kBlendAlpha);
         }
         imageStore(accumImage, ivec2(pixel), vec4(final, 1.0));
-
-        /* Reinhard tonemap with exposure correction.  The sunTint
-         * boost pushes scene HDR ~1.0..2.0 which un-exposed Reinhard
-         * squishes toward 0.5 (warm-grey).  Multiplying by
-         * `kExposure < 1.0` brings inputs into a contrast-preserving
-         * range while leaving room above 1.0 for emissive HDR. */
-        const float kExposure = 0.8;
-        vec3 hdr = final * kExposure;
-        vec3 ldr = hdr / (hdr + vec3(1.0));
-        imageStore(outputImage, ivec2(pixel), vec4(ldr, 1.0));
+        /* The denoise compute pipeline (slice 7) consumes accumImage
+         * via a 3-pass a-trous wavelet, applies the Reinhard tonemap
+         * on the final pass, and writes the LDR result into
+         * outputImage.  The rgen no longer touches outputImage. */
     }
 }
