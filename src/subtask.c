@@ -280,6 +280,27 @@ void Subtask_FadeOut(void) {
         gArea.localFlagOffset = GetFlagBankOffset(gRoomControls.area);
         gArea.pCurrentRoomInfo = GetCurrentRoomInfo();
         RestoreGameTask(gUI.loadGfxOnRestore);
+#ifdef PC_PORT
+        /* Issue #131: when the pause menu closes while Link is inside
+         * a Deepwood Shrine rolling barrel, the barrel's gfx group
+         * (0x16) and palette (0x28) are not restored — RestoreGameTask
+         * → LoadGfxGroups only reloads the global slots (16, 23, …),
+         * not the barrel-specific ones set up by
+         * RollingBarrelManager_OnEnterRoom. Result: barrel sprite +
+         * surrounding wall/stair tiles disappear and you see the
+         * ground underneath. Re-run the barrel manager's enter
+         * routine here so its palette + gfx + BG control regs are
+         * put back exactly as they were before the menu opened.
+         *
+         * Symptom reproduces on both Linux and Windows builds, so
+         * this is a logic gap in the restore path, not a port-side
+         * heap-pointer issue. The fix mirrors the GBA behaviour the
+         * decomp likely intended. */
+        if (gUI.pauseFadeIn == GAMEMAIN_BARRELUPDATE) {
+            extern void RollingBarrelManager_OnEnterRoom(void);
+            RollingBarrelManager_OnEnterRoom();
+        }
+#endif
         sub_0801D000(gUI.unk_d != 0);
         sub_080A74F4();
         if (gUI.fadeType != 0xffff) {
