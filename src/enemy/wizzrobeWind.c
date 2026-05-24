@@ -256,6 +256,50 @@ void sub_0802F8E4(WizzrobeEntity* this) {
             sub_0802F888(this);
             return;
         }
+#ifdef PC_PORT
+        /* #78 follow-up: the original do-while can spin forever AND will
+         * accept any walkable tile, even ones outside the current room
+         * (wizard's [homeX, homeX+rangeX*8) range can exceed gRoomControls
+         * extents when the enemy table sets a wide range or homeX near a
+         * room edge).  Bound the search by:
+         *   1. Room bounds — reject candidate positions outside the
+         *      current screen so wizards don't teleport through walls
+         *      into the void (reporter heard the teleport SFX but didn't
+         *      see them).
+         *   2. Iteration cap — give up after 64 tries and stay put rather
+         *      than locking the game in an infinite loop. */
+        const u16 roomMinX = gRoomControls.origin_x;
+        const u16 roomMaxX = gRoomControls.origin_x + gRoomControls.width;
+        const u16 roomMinY = gRoomControls.origin_y;
+        const u16 roomMaxY = gRoomControls.origin_y + gRoomControls.height;
+        int tries = 0;
+        loopCondition = TRUE;
+        do {
+            rand = Random();
+            uVar1 = homeX;
+            iVar4 = ((s32)rand & 0x7ff0) % (rangeX << 3);
+            uVar8 = (uVar1 + iVar4) | 8;
+            rand >>= 0x10;
+            uVar1 = homeY;
+            iVar4 = ((s32)(rand)&0x7ff0) % (rangeY << 3);
+            uVar7 = (uVar1 + iVar4) | 8;
+            if (uVar8 < roomMinX || uVar8 >= roomMaxX ||
+                uVar7 < roomMinY || uVar7 >= roomMaxY) {
+                if (++tries >= 64) break;
+                continue;
+            }
+            tilePos = TILE(uVar8, uVar7);
+            if ((GetCollisionDataAtTilePos(tilePos, super->collisionLayer) == 0) &&
+                (GetTileIndex(tilePos, super->collisionLayer) != SPECIAL_TILE_113)) {
+                super->x.HALF.HI = (s16)uVar8;
+                super->y.HALF.HI = (s16)uVar7;
+                if (sub_08049FA0(super) != 0) {
+                    loopCondition = FALSE;
+                }
+            }
+            if (++tries >= 64) break;
+        } while (loopCondition);
+#else
         loopCondition = TRUE;
         do {
             rand = Random();
@@ -276,6 +320,7 @@ void sub_0802F8E4(WizzrobeEntity* this) {
                 }
             }
         } while (loopCondition);
+#endif
         sub_0802F888(this);
     }
 }
