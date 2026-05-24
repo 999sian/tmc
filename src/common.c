@@ -347,6 +347,39 @@ void LoadPaletteGroup(u32 group) {
     if (Port_LoadPaletteGroupFromAssets(group)) {
         return;
     }
+    /* #110 — palette group is missing in the assets/ tree (most often
+     * because the user's save header reports a non-English language
+     * whose palette files weren't extracted, e.g. group 2 = Japanese
+     * title intro).  Before aborting, fall back to the canonical
+     * English-equivalent group:
+     *   2 -> 1 (title intro)
+     *   4 -> 3 (file-select)
+     *   N -> N (no known fallback, abort)
+     * Title-screen colours will look slightly off in the rare case
+     * the user genuinely wanted a non-English palette, but the game
+     * still boots.  A real Japanese / EU build with the right ROM
+     * would have those palettes extracted and this path wouldn't
+     * fire. */
+    static u8 sWarnedFallback[256] = {0};
+    u32 fallback = group;
+    switch (group) {
+        case 2: fallback = 1; break;
+        case 4: fallback = 3; break;
+        default: break;
+    }
+    if (fallback != group) {
+        if (group < 256 && !sWarnedFallback[group]) {
+            sWarnedFallback[group] = 1;
+            fprintf(stderr,
+                    "\n[WARN] palette group %u not in assets/, falling back to group %u "
+                    "(English-equivalent).  Re-run asset_extractor if you wanted "
+                    "the original language palettes.\n",
+                    group, fallback);
+        }
+        if (Port_LoadPaletteGroupFromAssets(fallback)) {
+            return;
+        }
+    }
     Common_AbortMissingAssetGroup("palette", group);
 #endif
     const PaletteGroup* paletteGroup = gPaletteGroups[group];
