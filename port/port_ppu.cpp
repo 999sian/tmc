@@ -494,19 +494,14 @@ extern "C" void Port_PPU_PresentFrame(void) {
      * For any widescreen_width > 240, uniform-stretch the 240-px frame
      * into the full window. Phase 2 (sa2-style BGCNT_TXT512x256 + 64-tile
      * BG buffer) replaces this with real extended tile loading. */
-    /* Post-render stretch path: only kicks in when the framebuffer is
-     * wider than 256 (Phase 2+). For 241..256, the BG renderer is
-     * already filling cols 240..255 from the engine's scroll buffer
-     * (MODE1_GBA_BG_CLIP_X follows MODE1_GBA_WIDTH up to 256), so
-     * stretching would destroy that real-tile content. */
-    if (MODE1_GBA_WIDTH > 256) {
-        uint32_t scratch[256];
+    if (MODE1_GBA_WIDTH > 240) {
+        uint32_t scratch[240];
         for (int y = 0; y < MODE1_GBA_HEIGHT; ++y) {
             uint32_t* row = &virtuappu_frame_buffer[y * MODE1_GBA_WIDTH];
-            std::memcpy(scratch, row, 256 * sizeof(uint32_t));
+            std::memcpy(scratch, row, 240 * sizeof(uint32_t));
             for (int dst_x = 0; dst_x < MODE1_GBA_WIDTH; ++dst_x) {
-                int src_x = (dst_x * 256) / MODE1_GBA_WIDTH;
-                if (src_x > 255) src_x = 255;
+                int src_x = (dst_x * 240) / MODE1_GBA_WIDTH;
+                if (src_x > 239) src_x = 239;
                 row[dst_x] = scratch[src_x];
             }
         }
