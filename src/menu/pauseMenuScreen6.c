@@ -136,6 +136,23 @@ void sub_080A67C4(u32 param_1) {
     s32 room;
     const struct_gUnk_08128E94* ptr;
 
+#ifdef PC_PORT
+    /* #44 (Windows: grey blocks at top of map screen). Defensive — clear
+     * any leftover HBlank DMA from a prior menu screen (or a prior entry
+     * to this one) before we re-arm. On GBA the DMA-engine writes to a
+     * fixed register and re-arming just overwrites src/dest; on PC the
+     * leftover DMA can fire one tick into BG3CNT before sub_080A67C4
+     * finishes populating gUnk_02017AA0, leaving the first few scanlines
+     * of BG3 reading from the wrong charBase. Symptom: a vertical column
+     * of grey 8×8 blocks at the top-left of the map area, only on Windows
+     * (Linux's timing apparently never loses the race; Subtask_FadeOut's
+     * catch-all only covers the MENU-EXIT path, not the per-screen entry).
+     * Pair with the existing Subtask_FadeOut DisableVBlankDMA + per-manager
+     * RestoreBgGfx block (src/subtask.c:317-328). */
+    extern void DisableVBlankDMA(void);
+    DisableVBlankDMA();
+#endif
+
     LoadPaletteGroup(param_1 + 0xba);
     iVar4 = param_1 + 0x5f;
     switch (param_1) {
