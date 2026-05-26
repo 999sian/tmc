@@ -24,6 +24,20 @@ extern u8 gUpdateVisibleTiles;
 extern u32 gUsedPalettes;
 
 void RollingBarrelManager_OnEnterRoom(void);
+#ifdef PC_PORT
+extern void DisableVBlankDMA(void);
+static void RollingBarrelManager_OnExitRoom(void* this) {
+    /* Pairs with the per-frame SetVBlankDMA at line ~47 that writes
+     * BG2PA per-HBlank.  The manager registers no exit handler in
+     * vanilla, so on leaving Deepwood Shrine's rolling-barrel room
+     * the HDMA keeps firing into BG2PA in the next room — visible
+     * BG2 affine glitch when entering subsequent areas without a
+     * pause-menu open in between (which would mask the issue by
+     * overwriting the DMA src/dest).  Same fix class as #103. */
+    (void)this;
+    DisableVBlankDMA();
+}
+#endif
 void sub_08058BC8(RollingBarrelManager*);
 void sub_08058CB0(RollingBarrelManager*);
 void sub_08058CFC(void);
@@ -53,7 +67,11 @@ void RollingBarrelManager_Init(RollingBarrelManager* this) {
     this->unk_28 = 0x1234;
     super->timer = CheckLocalFlags(0x15, 0x2) != 0;
     sub_08058CB0(this);
+#ifdef PC_PORT
+    RegisterTransitionHandler(this, RollingBarrelManager_OnEnterRoom, RollingBarrelManager_OnExitRoom);
+#else
     RegisterTransitionHandler(this, RollingBarrelManager_OnEnterRoom, NULL);
+#endif
 }
 
 void RollingBarrelManager_Action1(RollingBarrelManager* this) {
