@@ -39,8 +39,16 @@ const s8 gUnk_080D1D78[] = { 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xfa, 0xfb, 0xfc, 0xf
 const s8 gUnk_080D1D98[] = { 0xe8, 0x04, 0xf8, 0x08, 0x08, 0x08, 0x18, 0x04 };
 
 void VaatiWrathEye(Entity* this) {
+#ifdef PC_PORT
+    /* #136 family — parent==NULL crashes on PC before the first real
+       frame. Same fix shape as gyorgFemaleMouth.c. */
+    if (this->parent == NULL) return;
+#endif
     if (this->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     vaatiWrathEyeActions[this->action](this);
 }

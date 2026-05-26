@@ -39,8 +39,14 @@ void GyorgTail(GyorgTailEntity* this) {
     };
     GyorgTailEntity* parent;
 
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     gUnk_0812A994[super->type2](this);
     if (super->type == 0) {

@@ -78,11 +78,20 @@ void Flame_Action1(FlameEntity* this) {
             DeleteThisEntity();
             break;
         case 3:
+#ifdef PC_PORT
+            if (super->parent == NULL) { DeleteThisEntity(); return; } /* #136 family */
+#endif
             if (super->parent->next == NULL) {
                 DeleteThisEntity();
+#ifdef PC_PORT
+                return;
+#endif
             }
             if (--super->timer == 0) {
                 DeleteThisEntity();
+#ifdef PC_PORT
+                return;
+#endif
             }
 
             CopyPosition(super->parent, super);

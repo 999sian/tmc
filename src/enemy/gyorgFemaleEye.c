@@ -35,8 +35,19 @@ void (*const GyorgFemaleEye_Functions[])(GyorgFemaleEyeEntity*) = {
 };
 
 void GyorgFemaleEye(Entity* this) {
+#ifdef PC_PORT
+    /* #136 family — sibling not yet Init'd. parent==NULL between
+       CreateEnemy and the orchestrator's parent assignment SIGSEGVs
+       on PC. Same fix shape as gyorgFemaleMouth.c::GyorgFemaleMouth. */
+    if (this->parent == NULL) {
+        return;
+    }
+#endif
     if (this->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     GyorgFemaleEye_Functions[GetNextFunction(this)]((GyorgFemaleEyeEntity*)this);
 }

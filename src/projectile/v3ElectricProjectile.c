@@ -78,8 +78,14 @@ void V3ElectricProjectile_Init(V3ElectricProjectileEntity* this) {
 }
 
 void V3ElectricProjectile_Action1(V3ElectricProjectileEntity* this) {
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     CopyPositionAndSpriteOffset(super->parent, super);
     super->z.HALF.HI -= 0x14;

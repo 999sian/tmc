@@ -217,8 +217,14 @@ void VaatiProjectileFunction0Action7(VaatiProjectileEntity* this) {
 }
 
 void VaatiProjectileFunction0Action8(VaatiProjectileEntity* this) {
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     PositionRelative(super->parent, super, 0, Q_16_16(-1.0));
     GetNextFrame(super);
