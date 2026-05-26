@@ -126,6 +126,7 @@
 #define GBA_script_Stockwell 0x080142B0
 #define GBA_script_MinishVillageObjectLeftStoneOpening 0x08016030
 #define GBA_script_MinishVillageObjectRightStoneOpening 0x0801606C
+#define GBA_script_WindTribespeople6 0x08014A80
 
 /**
  * Resolve a script's GBA ROM address to a native PC pointer.

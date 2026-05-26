@@ -12,6 +12,9 @@
 #include "flags.h"
 #include "save.h"
 #include "player.h"
+#ifdef PC_PORT
+#include "port_scripts.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -76,7 +79,19 @@ void sub_0806C7D4(Entity* this) {
         if ((this->type2 == 3) && (!CheckGlobalFlag(WARP_EVENT_END)) && (CheckLocalFlag(SORA_ELDER_RECOVER)) &&
             (CheckRoomFlag(0))) {
             this->type2 = 7;
+#ifdef PC_PORT
+            /* #55: `script_WindTribespeople6` is a 2-byte BSS stub in
+               port_linked_stubs.c, so &script_WindTribespeople6 points
+               at zero-filled memory and ExecuteScript short-circuits on
+               cmd==0. Resolve the real script bytes from the ROM via
+               PORT_SCRIPT — same pattern as script_MazaalMacroDefeated
+               et al. Without this, the partner script never runs,
+               sync flag 0x2 is never set, and Gregal hangs at his
+               first WaitForSyncFlagAndClear 2 in script_GregalSick. */
+            sub_0807DD80(this, (Script*)PORT_SCRIPT(script_WindTribespeople6));
+#else
             sub_0807DD80(this, &script_WindTribespeople6);
+#endif
         }
     }
 }
