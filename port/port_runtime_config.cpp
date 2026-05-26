@@ -435,7 +435,7 @@ extern "C" void Port_Config_Load(const char* path) {
     int scale = j.value("window_scale", 3);
     sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
     int iscale = j.value("internal_scale", 1);
-    sInternalScale = iscale >= 1 && iscale <= 4 ? (u8)iscale : 1;
+    sInternalScale = iscale >= 1 && iscale <= 10 ? (u8)iscale : 1;
     sUpscaleMethod = j.value("upscale_method", "nearest");
     sFrameTimeNs = j.value("frame_time_ns", 0ULL);
     sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
@@ -567,9 +567,15 @@ extern "C" u8 Port_Config_InternalScale(void) {
 }
 
 extern "C" void Port_Config_SetInternalScale(u8 scale) {
-    /* Cap at 4: PPU framebuffer is 1280x640 max (160*4 = 640). */
+    /* Cap at 10×. The scaled framebuffer is malloc'd in port_ppu.cpp
+       (Port_PPU_BuildScaledFrame) so it's not bounded by the static
+       virtuappu_frame_buffer; the affine-OAM overlay patch is already
+       parameterised by `scale` and samples sub-pixel per S step. The
+       limit is now SDL_Texture max / fill-rate, not memory: at 10×
+       the destination is 2400×1600 = 15 MB and ~3.8 Mpx copied per
+       frame. */
     if (scale < 1) scale = 1;
-    if (scale > 4) scale = 4;
+    if (scale > 10) scale = 10;
     sInternalScale = scale;
     sConfigJson["internal_scale"] = static_cast<int>(scale);
     SaveConfig();
@@ -577,8 +583,8 @@ extern "C" void Port_Config_SetInternalScale(u8 scale) {
 
 extern "C" void Port_Config_CycleInternalScale(int direction) {
     int next = (int)sInternalScale + (direction < 0 ? -1 : 1);
-    if (next < 1) next = 4;
-    if (next > 4) next = 1;
+    if (next < 1) next = 10;
+    if (next > 10) next = 1;
     Port_Config_SetInternalScale((u8)next);
 }
 
