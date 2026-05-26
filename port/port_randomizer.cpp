@@ -12,6 +12,13 @@
 #if defined(__linux__) || defined(__APPLE__)
 #include <unistd.h>
 #endif
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace {
 
@@ -24,8 +31,33 @@ const char* kCliBinaryNames[] = {
 };
 
 std::filesystem::path ExecutableDirectory() {
+    /* Linux: /proc/self/exe.  macOS: _NSGetExecutablePath + canonicalise.
+     * Windows: GetModuleFileNameW.  cwd is the fallback when the
+     * platform query somehow fails. */
+#if defined(_WIN32)
+    std::wstring buffer(MAX_PATH, L'\0');
+    DWORD len = GetModuleFileNameW(nullptr, buffer.data(),
+                                   static_cast<DWORD>(buffer.size()));
+    while (len > 0 && len >= buffer.size() - 1) {
+        buffer.resize(buffer.size() * 2);
+        len = GetModuleFileNameW(nullptr, buffer.data(),
+                                 static_cast<DWORD>(buffer.size()));
+    }
+    if (len > 0) {
+        buffer.resize(len);
+        return std::filesystem::path(buffer).parent_path();
+    }
+#elif defined(__APPLE__)
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buf(size, '\0');
+    if (_NSGetExecutablePath(buf.data(), &size) == 0) {
+        std::error_code ec;
+        auto canonical = std::filesystem::weakly_canonical(buf.c_str(), ec);
+        if (!ec) return canonical.parent_path();
+    }
+#elif defined(__linux__)
     char buf[4096];
-#if defined(__linux__)
     ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf));
     if (len > 0 && static_cast<size_t>(len) < sizeof(buf)) {
         buf[len] = '\0';
