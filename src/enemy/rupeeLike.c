@@ -288,6 +288,9 @@ void sub_08029660(RupeeLikeEntity* this) {
 }
 
 void sub_08029688(RupeeLikeEntity* this) {
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         DeleteEntity(super);
     }

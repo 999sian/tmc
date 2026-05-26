@@ -766,6 +766,9 @@ u32 sub_08034A10(MazaalHeadEntity* this) {
 }
 
 void sub_08034A84(MazaalHeadEntity* this) {
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         DeleteEntity(super);
     } else {
