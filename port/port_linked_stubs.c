@@ -1912,12 +1912,15 @@ void GenericConfused(Entity* entity) {
         u8 phase = entity->confusedTime & 3;
         entity->spriteOffsetX = sConfusedOffsets[phase];
         if (entity->confusedTime == 0) {
-            /* On GBA, a linked FX entity pointer is stored at offset 0x68
-               (spanning field_0x68 + field_0x6a as 4 bytes). On 64-bit this
-               doesn't work (pointer is 8 bytes), but the child field serves
-               the same purpose in many cases. Check child for the confusion
-               FX entity (kind=6, id=0xF, type=0x1C) and detach it. */
-            Entity* fx = entity->child;
+            /* #54: the GBA asm reads [entity + 0x68] as the linked FX pointer.
+               On GBA that offset is `Enemy::child` (since Entity ends at 0x68);
+               on PC the 8-byte pointer widening puts `Enemy::child` at 0x90
+               while `Entity::child` sits at 0x68. EnemyCreateFX writes through
+               `Enemy::child`, so the detach gate must read it through the
+               Enemy* cast too — using `entity->child` here reads a different
+               field (Entity::child) and the identity check never matches,
+               leaving FX_STARS stuck on the enemy after stun ends. */
+            Entity* fx = ((Enemy*)entity)->child;
             if (fx != NULL && fx->kind == 6 && fx->id == 0xF && fx->type == 0x1C) {
                 EnemyDetachFX(entity);
             }
