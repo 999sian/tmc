@@ -597,12 +597,25 @@ extern "C" void Port_PaintBootSplash(SDL_Window* window, const char* message) {
     const float fh = static_cast<float>(height);
     const float scale = std::max(2.0f, std::round(fw / 240.0f));
 
-    SDL_SetRenderDrawColor(renderer, 12, 16, 22, 255);
+    /* Project Picori boot splash — matches the green-themed ImGui
+     * chrome so the boot frame flows visually into the F8 menu without
+     * a colour-tone flip. RGB (15, 18, 18) is the bgBase shade from
+     * port_imgui_menu.cpp scaled into 8-bit space. */
+    SDL_SetRenderDrawColor(renderer, 15, 18, 18, 255);
     SDL_RenderClear(renderer);
 
+    /* Title above the status line, status line below. The title is the
+     * project name (stable across launches); the status line is
+     * "LOADING" / "STARTING" / etc. passed by main.c. */
+    const std::string title = "PROJECT PICORI";
     const std::string text = message ? std::string(message) : std::string("STARTING");
-    const float w = MeasureText(text, scale);
-    DrawText(renderer, text, (fw - w) * 0.5f, (fh - 7.0f * scale) * 0.5f, scale);
+    const float titleScale = scale * 1.6f;
+    const float titleW = MeasureText(title, titleScale);
+    const float bodyW  = MeasureText(text, scale);
+    const float titleY = (fh - (7.0f * titleScale + 7.0f * scale + 16.0f)) * 0.5f;
+    const float bodyY  = titleY + 7.0f * titleScale + 16.0f;
+    DrawText(renderer, title, (fw - titleW) * 0.5f, titleY, titleScale);
+    DrawText(renderer, text,  (fw - bodyW)  * 0.5f, bodyY,  scale);
 
     SDL_RenderPresent(renderer);
 }
