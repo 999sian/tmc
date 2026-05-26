@@ -4,8 +4,14 @@ on:
   push:
     branches:
       - 'master'
+      - 'sync-matheo-release'
       - 'CI-Test'
   pull_request:
+  # Cross-platform-parity safety net: CI compiles the active branch on
+  # Linux, Windows, and macOS-arm64 (the matrix is defined in _build.yaml
+  # under os_filter=all). Any new code that breaks on a non-Linux build
+  # gets flagged at push/PR time instead of surfacing during a Wine /
+  # native test much later.
 
 permissions:
   contents: read
