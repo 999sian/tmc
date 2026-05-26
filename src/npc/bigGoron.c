@@ -175,7 +175,19 @@ void sub_0806D0F8(void) {
 
 void sub_0806D110(void) {
     u8* tmp = gMapDataTopSpecial;
+#ifdef PC_PORT
+    /* Issue #102 — `tmp + 0x4000` was meant to address gUnk_02006F00 via
+     * the GBA EWRAM layout (gMapDataTopSpecial @ 0x02002F00 + 0x4000 =
+     * 0x02006F00 = gUnk_02006F00). On PC the two arrays are separate
+     * host allocations, so the offset lands in the middle of
+     * gMapDataTopSpecial instead, leaving gUnk_02006F00 zero-filled —
+     * which is what sub_0806D164 then DMA-copies back out, producing
+     * the missing-sprite symptom *and* the eventual SIGSEGV when ptr
+     * arithmetic overflows. Route through the actual buffer. */
+    u8* tmp2 = (u8*)gUnk_02006F00;
+#else
     u8* tmp2 = tmp + 0x4000;
+#endif
     sub_0806D138((unk_0806D138param_1*)tmp, (unk_0806D138param_2*)tmp2);
     tmp += 0x800;
     tmp2 += 0x40;
@@ -201,12 +213,42 @@ void sub_0806D164(Entity* this) {
     gScreen.bg1.yOffset = (gRoomControls.scroll_y - this->y.HALF.HI) + 0xb0;
     ptr = gUnk_02006F00;
     puVar1 = &ptr[0];
+#ifdef PC_PORT
+    /* Issue #102 — Veil Falls Biggoron hiding-state crash. Original uses
+     * &gUnk_02006F00[-0x4000] to address gMapDataTopSpecial via the GBA
+     * EWRAM layout (gUnk_02006F00 @ 0x02006F00, gMapDataTopSpecial @
+     * 0x02002F00 — exactly 0x4000 apart in one contiguous EWRAM block).
+     * On PC the two arrays are separate host allocations
+     * (port_linked_stubs.c:65 and :294) so the offset lands in unmapped
+     * memory and SIGSEGVs inside DmaCopy16's memcpy. Route through the
+     * actual buffer instead. */
+    puVar2 = (u8*)gMapDataTopSpecial;
+#else
     puVar2 = &ptr[-0x4000];
+#endif
 
-    for (index = 0x20, ptr = &puVar1[(xOffset >> 4) * 4]; index != 0; index--) {
-        DmaCopy16(3, ptr, puVar2, 0x20 * 2);
-        ptr += 0x100;
-        puVar2 += 0x40;
+    {
+        u32 startOff = (xOffset >> 4) * 4;
+#ifdef PC_PORT
+        /* Issue #102 — when scroll_x < this->x (player walks west past
+         * Biggoron), xOffset goes negative; as u32, (xOffset>>4)*4 is
+         * huge, and ptr lands far outside the 16 KB gUnk_02006F00 buffer.
+         * On GBA the read just picks up adjacent EWRAM garbage; on PC it
+         * SIGSEGVs inside DmaCopy16. The loop reads 32 × 0x100 = 0x2000
+         * bytes from puVar1[startOff], so cap startOff so the final
+         * read stays within the 0x4000 buffer. Skip the update entirely
+         * if the entity is far enough offscreen that we can't show a
+         * meaningful slice — nothing visible to update anyway. */
+        if (startOff > 0x4000u - 0x2000u) {
+            gScreen.bg1.updated = 1;
+            return;
+        }
+#endif
+        for (index = 0x20, ptr = &puVar1[startOff]; index != 0; index--) {
+            DmaCopy16(3, ptr, puVar2, 0x20 * 2);
+            ptr += 0x100;
+            puVar2 += 0x40;
+        }
     }
     gScreen.bg1.updated = 1;
 }
