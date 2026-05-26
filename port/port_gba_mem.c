@@ -226,14 +226,18 @@ u32 gba_read32(uint32_t addr) {
 
 void* port_resolve_addr(uintptr_t val)
 {
-#if defined(_WIN32)
-    if (val >= 0x02000000u && val < 0x0A000000u) {
-        MEMORY_BASIC_INFORMATION mbi;
-        if (VirtualQuery((LPCVOID)val, &mbi, sizeof(mbi)) != 0 && mbi.State == MEM_COMMIT) {
-            return (void*)val;
-        }
-    }
-#endif
+    /* GBA-range values are address-mapped through gba_TryMemPtr on
+     * every platform. The previous Windows-only short-circuit used
+     * VirtualQuery to "trust" the raw address if it happened to be a
+     * committed VM page on the host — but on Wine (and native Windows
+     * with the wrong ASLR alignment) a real GBA EWRAM address like
+     * gMapDataBottomSpecial at 0x02006B00 IS a committed page (the
+     * system DLLs map plenty of pages in the low address space) so
+     * the short-circuit returned the GBA address verbatim instead of
+     * remapping to gEwram[]. The pause-menu map screen then read its
+     * tilemap from random host memory — symptom #44 (grey blocks at
+     * top of map + bouncing player marker), Windows-only on the bug
+     * tracker. Linux's path was already correct, so unify on it. */
     if (val >= 0x02000000u && val < 0x0A000000u) {
         void* p = gba_TryMemPtr((uint32_t)val);
         if (p) {
