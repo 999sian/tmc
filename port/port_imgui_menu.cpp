@@ -1702,3 +1702,174 @@ extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd,
     ImGui_ImplSDLGPU3_RenderDrawData(dd, cmd, rp, /*pipeline=*/nullptr);
 }
 #endif
+
+/* Forward decls for the prelaunch logo (port_prelaunch_logo.cpp). */
+extern "C" bool        Port_PrelaunchLogo_EnsureLoaded(SDL_Renderer*, SDL_GPUDevice*);
+extern "C" ImTextureID Port_PrelaunchLogo_GetTexId(void);
+extern "C" int         Port_PrelaunchLogo_GetWidth(void);
+extern "C" int         Port_PrelaunchLogo_GetHeight(void);
+
+/* Project Picori prelaunch — builds and presents a centred ImGui
+ * card with embedded logo, title / subtitle, version, ROM filename,
+ * and Play / Change-ROM buttons. Returns false if ImGui isn't ready
+ * (caller falls back to the plain boot splash).
+ *
+ * Button presses are reported through the out_play / out_change_rom
+ * pointers (caller may pass NULL to ignore). On the SDL_Renderer
+ * backend, presents the frame inline. On the SDL_GPU backend, builds
+ * + Render()s the draw data and returns true — the caller must follow
+ * up with Port_GPU_PresentPrelaunchFrame() to present it. */
+extern "C" bool Port_ImGui_RenderPrelaunch(const char* version,
+                                           const char* rom_name,
+                                           bool* out_play,
+                                           bool* out_change_rom) {
+    if (out_play) *out_play = false;
+    if (out_change_rom) *out_change_rom = false;
+    if (!sImGuiInited || !sImGuiEnabled) return false;
+
+    /* Lazy-load the logo on the first frame. Safe on both backends —
+     * the loader picks the right path based on which pointer is
+     * non-null. */
+#ifdef TMC_GPU_RENDERER
+    const bool gpuBackend = (sRenderer == nullptr);
+    {
+        extern SDL_GPUDevice* Port_GPU_GetDevice(void);
+        SDL_GPUDevice* dev = gpuBackend ? Port_GPU_GetDevice() : nullptr;
+        Port_PrelaunchLogo_EnsureLoaded(sRenderer, dev);
+    }
+    if (gpuBackend) {
+        ImGui_ImplSDLGPU3_NewFrame();
+    } else
+#else
+    Port_PrelaunchLogo_EnsureLoaded(sRenderer, nullptr);
+#endif
+    {
+        ImGui_ImplSDLRenderer3_NewFrame();
+    }
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const ImVec2 viewport_center(vp->WorkPos.x + vp->WorkSize.x * 0.5f,
+                                 vp->WorkPos.y + vp->WorkSize.y * 0.5f);
+    ImGui::SetNextWindowPos(viewport_center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(36, 32));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
+    if (ImGui::Begin("##prelaunch", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)) {
+        const float win_w = ImGui::GetWindowSize().x;
+        const ImVec4 accent(0.40f, 0.72f, 0.46f, 1.00f);
+        const ImVec4 subtxt(0.70f, 0.78f, 0.70f, 1.00f);
+
+        /* Logo centred at top, sized to ~160px square. Falls through
+         * if the loader couldn't get a texture (decode error etc) —
+         * the rest of the card still draws fine. */
+        const ImTextureID logo_tex = Port_PrelaunchLogo_GetTexId();
+        if (logo_tex != 0) {
+            const float DISPLAY = 160.0f;
+            ImGui::SetCursorPosX((win_w - DISPLAY) * 0.5f);
+            ImGui::Image(logo_tex, ImVec2(DISPLAY, DISPLAY));
+            ImGui::Dummy(ImVec2(0, 8));
+        }
+
+        ImGui::PushStyleColor(ImGuiCol_Text, accent);
+        ImGui::SetWindowFontScale(2.4f);
+        {
+            const char* t = "PROJECT PICORI";
+            float t_w = ImGui::CalcTextSize(t).x;
+            ImGui::SetCursorPosX((win_w - t_w) * 0.5f);
+            ImGui::TextUnformatted(t);
+        }
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+
+        ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+        {
+            const char* s = "Minish Cap PC Port";
+            float s_w = ImGui::CalcTextSize(s).x;
+            ImGui::SetCursorPosX((win_w - s_w) * 0.5f);
+            ImGui::TextUnformatted(s);
+        }
+        ImGui::PopStyleColor();
+
+        ImGui::Dummy(ImVec2(0, 16));
+        ImGui::Separator();
+        ImGui::Dummy(ImVec2(0, 14));
+
+        ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+        ImGui::TextUnformatted("Version");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(170.0f);
+        ImGui::TextUnformatted(version ? version : "?");
+
+        ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+        ImGui::TextUnformatted("ROM");
+        ImGui::PopStyleColor();
+        ImGui::SameLine(170.0f);
+        ImGui::TextUnformatted(rom_name ? rom_name : "?");
+        ImGui::SameLine();
+        /* Right-align the Change-ROM button to the edge of the card. */
+        {
+            const char* lbl = "Change ROM...";
+            float bw = ImGui::CalcTextSize(lbl).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            float pad = ImGui::GetStyle().WindowPadding.x;
+            ImGui::SameLine(win_w - pad - bw);
+            if (ImGui::Button(lbl)) {
+                if (out_change_rom) *out_change_rom = true;
+            }
+        }
+
+        ImGui::Dummy(ImVec2(0, 22));
+
+        /* Big centred Play button. Enter / Space / Gamepad-A also fire. */
+        {
+            const char* lbl = "Play";
+            const ImVec2 sz(220.0f, 48.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.42f, 0.24f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.55f, 0.34f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.40f, 0.72f, 0.46f, 1.0f));
+            ImGui::SetCursorPosX((win_w - sz.x) * 0.5f);
+            ImGui::SetWindowFontScale(1.4f);
+            if (ImGui::Button(lbl, sz) ||
+                ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) ||
+                ImGui::IsKeyPressed(ImGuiKey_Space)) {
+                if (out_play) *out_play = true;
+            }
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::PopStyleColor(3);
+            ImGui::PopStyleVar();
+        }
+
+        ImGui::Dummy(ImVec2(0, 6));
+        ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+        {
+            const char* hint = "Press Enter or click Play to start";
+            float h_w = ImGui::CalcTextSize(hint).x;
+            ImGui::SetCursorPosX((win_w - h_w) * 0.5f);
+            ImGui::TextUnformatted(hint);
+        }
+        ImGui::PopStyleColor();
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+
+    ImGui::Render();
+
+#ifdef TMC_GPU_RENDERER
+    if (gpuBackend) {
+        return true;
+    }
+#endif
+    if (sRenderer) {
+        SDL_SetRenderDrawColor(sRenderer, 15, 18, 18, 255);
+        SDL_RenderClear(sRenderer);
+        ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sRenderer);
+        SDL_RenderPresent(sRenderer);
+    }
+    return true;
+}
