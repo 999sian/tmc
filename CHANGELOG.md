@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.3.2-experimental — 2026-05-26
+
+Bug-fix release covering five issue-tracker reports across the Vaati /
+Gyorg / Mazaal boss family, the boomerang stun visual, and the Wind
+Tribe Tower 2F softlock, plus xBRZ now working on the SDL_GPU backend
+and a wider internal render-scale range.
+
+### Fixed (issue tracker)
+
+- **#54 follow-up: Boomerang — dizzy-stars sprite never leaves enemies.** `b9ce2fb5d` restored the alive-dispatch branch so `GenericConfused` ticks on stunned enemies, but the FX detach inside `GenericConfused` still never fired — the rationale conflated `Entity::child` (PC offset 0x68) with `Enemy::child` (PC offset 0x90); they're two different fields after pointer widening. `EnemyCreateFX` writes the FX through the `Enemy*` cast, so the FX pointer lives in `Enemy::child`; the detach gate was reading `entity->child` (Entity::child), the kind/id/type identity check never matched, and `FX_STARS` — which self-deletes only when its parent goes NULL — stayed glued to the enemy after stun ended. (commit `d86cde0ba`)
+- **#55 "Palace of Winds Tower" (actually Wind Tribe Tower 2F): softlock removing ghost from Gregal.** `script_WindTribespeople6` is declared as a 2-byte BSS stub in `port/port_linked_stubs.c` (one of many such stubs to satisfy the linker — the real script bytes live in ROM). The call site at `src/npc/windTribespeople.c:79` used `&script_WindTribespeople6` which resolved to zero-filled memory, so when Tribesperson5 script-swapped to it after the gust-jar capture, her `ExecuteScript` hit the defensive `cmd == 0x0000` short-circuit every frame and never advanced. Gregal had already set sync flag 1 and parked on `WaitForSyncFlagAndClear 2`; the partner's `SetSyncFlag 2` never executed → softlock. Diagnosed live via GDB `inspect_cutscene` + the `[sync]` diagnostic stream. Fix routes the call through `PORT_SCRIPT(script_WindTribespeople6)` so the real bytes resolve via `Port_ResolveRomData`; ROM address `0x08014A80` confirmed against the upstream zeldaret/tmc USA map. (commit `1b6f1d4b8`)
+- **#102 Veil Falls: Biggoron + sibling BG-manager EWRAM-bridge bugs.** The GBA decomp uses pointer arithmetic that crosses *between* two distinct EWRAM symbols (`gMapDataTopSpecial + 0x4000` resolves to `gUnk_02006F00` on GBA's flat 256 KB EWRAM layout). On PC the two arrays are separate host allocations, so the bridged offset lands in unrelated memory: at best silently corrupts the wrong buffer, at worst SIGSEGVs inside `DmaCopy16`. Confirmed cases: `bigGoron.c::sub_0806D110` + `sub_0806D164`, `horizontalMinishPathBackgroundManager.c::sub_08058004`, `minishRaftersBackgroundManager.c::sub_080582D0` + `sub_080582A0`. PC fix routes bridge arithmetic through the actual target symbol on `PC_PORT` and clamps / early-returns when scroll-derived offsets would overflow the source buffer. (commit `7893f1cb4`)
+- **#103 Cloud Tops: BG texture broken after kinstone fusion.** `vaatiAppearingManager` armed `SetVBlankDMA` on entry and never called `DisableVBlankDMA` on exit. On GBA this was benign because the next subtask re-armed `SetVBlankDMA` and overwrote the old src/dest; on PC the leftover DMA kept firing into BG2's charBase register every HBlank, breaking the next room's BG rendering. Fix pairs every `SetVBlankDMA` with a `DisableVBlankDMA` on the manager's exit path. (commits `4e28ea2c4`, follow-up `543a8f47a` for two other unpaired managers caught by the class audit.)
+- **#136 Palace of Winds: Gyorg boss NULL deref on entry.** The boss-room dispatcher (`gyorgBossObject.c::sub_080A1DCC`) unconditionally calls tail helpers *after* the action handler every frame. On frame 0 the action handler is `SetupStart`, which populates `heap->female / male1 / male2` but NOT `heap->mouth / heap->tail` — those get filled by `GyorgFemale_Setup` on the female's first tick. The helper then dereferences `heap->mouth` and NULL-crashes. Fix NULL-guards the heap fields plus the `tail->child->child->child` walk. (commit `b91a4faa6`)
+
+### Quality of life
+
+- **xBRZ on the SDL_GPU backend.** The CPU-side xBRZ 4× upscaler used to only fire on the SDL_Renderer path; the SDL_GPU branch bypassed it entirely. GPU branch now runs `Port_Upscale_xBRZ_4x` and feeds the 960×640 buffer straight to `Port_GPU_PresentFrame` (mutually exclusive with internal-scale, same as the SDL_Renderer branch). F8 → "Filter" picker is no longer gated behind "GPU inactive". CRT filter stays SW-only — separate Stage 3 work. (commit `205616720`)
+- **Internal render scale cap raised 4× → 10×.** The 4× cap was based on a stale comment about a fixed framebuffer size; the scaled buffer is actually `malloc`'d lazily and the affine-OAM overlay scales naturally with the `scale` parameter. 10× yields a 2400×1600 internal render (≈15 MB scratch + matching SDL_Texture). Verified live on both SDL_Renderer and SDL_GPU / Vulkan paths. (commit `7a12173c5`)
+
+### Defensive / hardening (no specific issue)
+
+- **#136 family — defensive `parent == NULL` guards across 12 boss-helper sites.** Class audit after the #136 fix found the same shape (helper derefs `this->parent->next == NULL` at function entry with no preceding NULL check) across Vaati / Mazaal / Gyorg families plus `rupeeLike.c` and `flame.c`. `#ifdef PC_PORT` early-returns mirror the existing `sub_080A1DCC` fix; GBA path is byte-identical. Patched: `vaatiWrathEye`, three `vaatiEyesMacro` functions, `vaatiProjectile`, `v3ElectricProjectile`, `mazaalHead`, two `mazaalMacro` functions, `mazaalObject`, `gyorgFemaleEye`, `gyorgFemaleMouth`, `gyorgTail`, `rupeeLike`, `flame`. (commit `cd7805da2`)
+- **`IsColliding` host-pointer range guard for stale hitbox.** Cross-process quicksave (F6 reloading a state from a different binary run) can leave `Player->hitbox = &sMinishHitbox` pointing at the old process's ASLR address. `IsColliding` now range-checks the hitbox pointer (`[0x100000000000, 0x800000000000)`) and returns FALSE on out-of-range, logging the offending entity once. Cross-process quicksaves still aren't fully portable for pointer-to-rodata fields, but the player no longer SIGSEGVs the moment they move. (commit `897e73aa1`)
+- **Auto-crash bug-report capture restored.** A Matheo-merge regression removed the `Port_BugReport_InstallCrashHandlers` call from the top of `main()`. F9 manual capture kept working but auto-on-crash bundles silently stopped generating. Re-added the install call. (commit `51dc6c9c1`)
+- **Delayed-entity bitmap reset on PC.** `gArea.filler6` aliases `gUnk_020342F8` (the delayed-entity-load bitmap) on GBA but they're separate symbols on PC; `sub_0806F364` now clears both. (commit `b1c58e587`)
+
+### Build / CI / docs
+
+- **Windows F9 path-resolve fix** — replaced POSIX `realpath` with `_fullpath` under `#ifdef _WIN32`. MinGW lacks `realpath` and a whole-file `extern "C"` declaration of it failed at link time. (commit `5cff9ad6a`)
+- **`build.py` always passes `--gpu_renderer=y`** so the shipping binary has the SDL_GPU backend + F8 → Shader Preset picker enabled. (commit `d3ff4c374`)
+- **Windows CI: force LF on checkout + `git apply --ignore-whitespace`** so `port/patches/viruappu-*.patch` apply cleanly even when CRLF crept into the submodule. (commit `d82630f44`)
+- **`docs/widescreen-phase2-design.md` kept after the Phase 2 revert** as an archive of what was tried, what worked, what broke, and why — so a future attempt doesn't re-walk the same dead-ends. (commit `7cd6afeab`)
+
 ## 0.3.1-experimental — 2026-05-24
 
 Bug-fix release covering five issue-tracker reports + a packet of
