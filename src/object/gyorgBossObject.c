@@ -335,16 +335,42 @@ void sub_080A1D8C(GyorgBossObjectEntity* this, s32 unk1) {
 
 void sub_080A1DCC(GyorgBossObjectEntity* this) {
     GenericEntity* tmp;
+#ifdef PC_PORT
+    /* Issue #136 — Palace of Winds boss room crash. GyorgBossObject's
+     * dispatcher (line 62/63) calls this every frame, including the
+     * first frame when action=0 = GyorgBossObject_SetupStart. SetupStart
+     * populates heap->female/male1/male2 but NOT heap->mouth or
+     * heap->tail — those get filled later by GyorgFemale_Setup on the
+     * female's first update. So on the very first tick `mouth` and
+     * `tail` are still NULL.  GBA NULL-derefs read BIOS garbage; PC
+     * SIGSEGVs at line 353 inside `mouth->base.flags |= 0x80`.
+     * Same fix shape as src/object/frozenOctorok.c (#64), per CLAUDE.md
+     * "Multi-entity shared-heap, sibling-not-yet-Init'd". Also guard
+     * the chained `tail->child->child->child` walk — tail's child chain
+     * isn't established until the projectile chain spawns. */
+    GyorgHeap* heap = (GyorgHeap*)super->myHeap;
+    if (heap == NULL || heap->mouth == NULL || heap->tail == NULL)
+        return;
+#endif
     if ((tmp = (GenericEntity*)((GyorgHeap*)super->myHeap)->male1) != NULL ||
         (tmp = (GenericEntity*)((GyorgHeap*)super->myHeap)->male2) != NULL) {
         if (tmp->field_0x7c.BYTES.byte0 && tmp->base.spriteRendering.b3 == 2) {
             ((GyorgHeap*)super->myHeap)->mouth->base.flags &= ~0x80;
             tmp = ((GyorgHeap*)super->myHeap)->tail;
             tmp->base.flags &= ~0x80;
+#ifdef PC_PORT
+            if (tmp->base.child == NULL) return;
+#endif
             tmp = (GenericEntity*)tmp->base.child;
             tmp->base.flags &= ~0x80;
+#ifdef PC_PORT
+            if (tmp->base.child == NULL) return;
+#endif
             tmp = (GenericEntity*)tmp->base.child;
             tmp->base.flags &= ~0x80;
+#ifdef PC_PORT
+            if (tmp->base.child == NULL) return;
+#endif
             tmp = (GenericEntity*)tmp->base.child;
             tmp->base.flags &= ~0x80;
             return;
@@ -353,10 +379,19 @@ void sub_080A1DCC(GyorgBossObjectEntity* this) {
     ((GyorgHeap*)super->myHeap)->mouth->base.flags |= 0x80;
     tmp = ((GyorgHeap*)super->myHeap)->tail;
     tmp->base.flags |= 0x80;
+#ifdef PC_PORT
+    if (tmp->base.child == NULL) return;
+#endif
     tmp = (GenericEntity*)tmp->base.child;
     tmp->base.flags |= 0x80;
+#ifdef PC_PORT
+    if (tmp->base.child == NULL) return;
+#endif
     tmp = (GenericEntity*)tmp->base.child;
     tmp->base.flags |= 0x80;
+#ifdef PC_PORT
+    if (tmp->base.child == NULL) return;
+#endif
     tmp = (GenericEntity*)tmp->base.child;
     tmp->base.flags |= 0x80;
 }
