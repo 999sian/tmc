@@ -638,10 +638,15 @@ int main(int argc, char* argv[]) {
      * way the dwell auto-exits after PRELAUNCH_TIMEOUT_MS or as soon
      * as the user gives any input. */
     {
-        extern void Port_PaintPrelaunch(SDL_Window*, const char*, const char*, int);
+        extern bool Port_ImGui_RenderPrelaunch(const char*, const char*, bool*, bool*);
+        extern void Port_ImGui_HandleEvent(const SDL_Event*);
+        extern bool Port_GPU_PresentPrelaunchFrame(void);
+        extern bool Port_GPU_PaintBootSplash(void);
         extern void Port_GPU_Shutdown(void);
         extern void Port_DiscordRpc_Shutdown(void);
-#ifndef TMC_GPU_RENDERER
+        extern int  Port_RomPicker_PromptAndInstall(void);
+
+        char rom_name_buf[1024];
         const char* rom_name = "baserom.gba";
         if (romPath) {
             const char* slash = strrchr(romPath, '/');
@@ -649,39 +654,53 @@ int main(int argc, char* argv[]) {
             const char* bslash = strrchr(romPath, '\\');
             if (bslash && (!slash || bslash > slash)) slash = bslash;
 #endif
-            if (slash && slash[1]) rom_name = slash + 1;
-            else rom_name = romPath;
+            if (slash && slash[1]) {
+                snprintf(rom_name_buf, sizeof(rom_name_buf), "%s", slash + 1);
+            } else {
+                snprintf(rom_name_buf, sizeof(rom_name_buf), "%s", romPath);
+            }
+            rom_name = rom_name_buf;
         }
-#endif
-        const Uint64 PRELAUNCH_TIMEOUT_MS = 2200;
-        const Uint64 start_ms = SDL_GetTicks();
-        bool skipped = false;
-        for (;;) {
-            const Uint64 elapsed = SDL_GetTicks() - start_ms;
-            if (elapsed >= PRELAUNCH_TIMEOUT_MS) break;
 
+        fprintf(stderr, "Prelaunch: waiting for Play.\n");
+
+        bool done = false;
+        while (!done) {
+            bool play_clicked = false;
+            bool change_rom_clicked = false;
+            const bool imgui_built = Port_ImGui_RenderPrelaunch(
+                TMC_PC_VERSION, rom_name, &play_clicked, &change_rom_clicked);
 #ifdef TMC_GPU_RENDERER
-            {
-                extern bool Port_GPU_PaintBootSplash(void);
+            if (imgui_built) {
+                Port_GPU_PresentPrelaunchFrame();
+            } else {
                 Port_GPU_PaintBootSplash();
             }
 #else
-            const int remaining_s = (int)((PRELAUNCH_TIMEOUT_MS - elapsed + 999) / 1000);
-            Port_PaintPrelaunch(window, TMC_PC_VERSION, rom_name, remaining_s);
+            (void)imgui_built; /* SDL_Renderer path presents inline. */
 #endif
+
+            if (play_clicked) {
+                done = true;
+            } else if (change_rom_clicked) {
+                /* The ROM picker installs the chosen .gba next to the
+                 * exe as baserom.gba. Re-running Port_LoadRom mid-boot
+                 * is risky (lots of ROM-derived pointers are already
+                 * resolved), so we tell the user to restart instead. */
+                if (Port_RomPicker_PromptAndInstall() == 0) {
+                    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+                        "ROM installed",
+                        "Restart Project Picori to load the new ROM.",
+                        window);
+                }
+            }
+
             SDL_Event ev;
             while (SDL_PollEvent(&ev)) {
-                if (ev.type == SDL_EVENT_KEY_DOWN ||
-                    ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
-                    ev.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
-                    ev.type == SDL_EVENT_FINGER_DOWN) {
-                    skipped = true;
-                    break;
-                }
+                /* Forward to ImGui — without this the Play button can't
+                 * receive mouse / keyboard events. */
+                Port_ImGui_HandleEvent(&ev);
                 if (ev.type == SDL_EVENT_QUIT) {
-                    /* User closed the window before the game started —
-                     * bail out of main() the same way an AgbMain quit
-                     * would. */
                     Port_GPU_Shutdown();
                     Port_DiscordRpc_Shutdown();
                     Port_Audio_Shutdown();
@@ -692,10 +711,9 @@ int main(int argc, char* argv[]) {
                     return 0;
                 }
             }
-            if (skipped) break;
-            SDL_Delay(33); /* ~30 fps repaint is plenty for static text */
+            SDL_Delay(16); /* ~60 fps so the Play button feels responsive */
         }
-        fprintf(stderr, "Prelaunch %s.\n", skipped ? "skipped by user" : "auto-advanced");
+        fprintf(stderr, "Prelaunch: Play pressed — entering AgbMain.\n");
     }
 
     AgbMain();

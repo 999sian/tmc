@@ -783,6 +783,44 @@ extern "C" bool Port_GPU_PaintBootSplash(void) {
     return true;
 }
 
+/* Project Picori prelaunch presenter — same shape as
+ * Port_GPU_PaintBootSplash but also renders ImGui draw data on top.
+ * Caller (Port_ImGui_RenderPrelaunch) must have already built the
+ * draw data via ImGui::Render() so PrepareDrawData can upload buffers
+ * before BeginRenderPass. */
+extern "C" bool Port_GPU_PresentPrelaunchFrame(void) {
+    if (!sWindowClaimed) return false;
+
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sDevice);
+    if (!cmd) return false;
+
+    /* Vertex/index buffer uploads happen via copy passes that can't
+     * run inside a render pass — do them first. */
+    extern void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer*);
+    Port_ImGui_PrepareDrawDataGpu(cmd);
+
+    SDL_GPUTexture* swap_tex = nullptr;
+    Uint32 sw = 0, sh = 0;
+    if (!SDL_WaitAndAcquireGPUSwapchainTexture(cmd, sWindow, &swap_tex, &sw, &sh) || !swap_tex) {
+        SDL_SubmitGPUCommandBuffer(cmd);
+        return false;
+    }
+
+    SDL_GPUColorTargetInfo color = {};
+    color.texture     = swap_tex;
+    color.clear_color = SDL_FColor{0.058f, 0.07f, 0.07f, 1.0f};
+    color.load_op     = SDL_GPU_LOADOP_CLEAR;
+    color.store_op    = SDL_GPU_STOREOP_STORE;
+    SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
+
+    extern void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
+    Port_ImGui_RenderDrawDataGpu(cmd, rp);
+
+    SDL_EndGPURenderPass(rp);
+    SDL_SubmitGPUCommandBuffer(cmd);
+    return true;
+}
+
 extern "C" bool Port_GPU_IsActive(void) {
     return sWindowClaimed && sPipelines[PORT_GPU_FILTER_NONE] != nullptr;
 }
