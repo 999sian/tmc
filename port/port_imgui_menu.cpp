@@ -105,34 +105,85 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
      * physical pixels but high DPI relative to the player's hands; what
      * looks chunky on a desktop monitor reads as comfortably sized on
      * the Deck. Players on a normal monitor still get a clean look. */
+    /* Project Picori theme — heavier rounding + deep-green accents
+     * inspired by the Dusklight TP PC port UI. The previous blue palette
+     * stayed for the in-game F8 dev menu vibe; this theme leans into the
+     * Minish-Cap green character (Ezlo, Link's hat, Minish leaves) and
+     * card-like surfaces with bigger rounding so the launcher screen
+     * and config tabs feel cohesive. */
     ImGui::StyleColorsDark();
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowRounding = 6.0f;
-    style.FrameRounding = 6.0f;
-    style.ScrollbarRounding = 6.0f;
-    style.TabRounding = 6.0f;
-    style.GrabRounding = 6.0f;
-    style.WindowPadding = ImVec2(14, 12);
-    style.FramePadding = ImVec2(12, 8);          /* bigger touch targets */
-    style.ItemSpacing = ImVec2(10, 8);
+    style.WindowRounding = 10.0f;
+    style.ChildRounding = 8.0f;
+    style.FrameRounding = 8.0f;
+    style.PopupRounding = 8.0f;
+    style.ScrollbarRounding = 10.0f;
+    style.TabRounding = 8.0f;
+    style.GrabRounding = 8.0f;
+    style.WindowBorderSize = 0.0f;               /* card look — solid fills, no outline */
+    style.FrameBorderSize = 0.0f;
+    style.PopupBorderSize = 0.0f;
+    style.WindowPadding = ImVec2(18, 16);
+    style.FramePadding = ImVec2(14, 9);          /* bigger touch targets */
+    style.ItemSpacing = ImVec2(12, 10);
+    style.ItemInnerSpacing = ImVec2(10, 6);
     style.ScrollbarSize = 18.0f;                 /* finger-draggable */
-    style.GrabMinSize = 16.0f;
+    style.GrabMinSize = 18.0f;
+    style.IndentSpacing = 22.0f;
     /* Bump the global font size 1.4× without re-loading a font atlas.
      * ImGui scales the default ProggyClean upward; the resulting glyphs
      * are crisp enough at native resolution for menu use, and big
      * enough to be readable on the Deck at hand-held distance. */
     io.FontGlobalScale = 1.4f;
     ImVec4* colors = style.Colors;
-    colors[ImGuiCol_WindowBg]       = ImVec4(0.07f, 0.08f, 0.10f, 0.94f);
-    colors[ImGuiCol_TitleBgActive]  = ImVec4(0.12f, 0.20f, 0.32f, 1.00f);
-    colors[ImGuiCol_Header]         = ImVec4(0.20f, 0.30f, 0.50f, 0.50f);
-    colors[ImGuiCol_HeaderHovered]  = ImVec4(0.25f, 0.40f, 0.65f, 0.70f);
-    colors[ImGuiCol_HeaderActive]   = ImVec4(0.30f, 0.50f, 0.80f, 1.00f);
-    colors[ImGuiCol_Button]         = ImVec4(0.18f, 0.22f, 0.28f, 1.00f);
-    colors[ImGuiCol_ButtonHovered]  = ImVec4(0.30f, 0.45f, 0.65f, 1.00f);
-    colors[ImGuiCol_ButtonActive]   = ImVec4(0.40f, 0.55f, 0.75f, 1.00f);
-    colors[ImGuiCol_Text]           = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
-    colors[ImGuiCol_TextDisabled]   = ImVec4(0.55f, 0.55f, 0.55f, 1.00f);
+    /* Greens — primary accent (a deep, slightly-warm green that
+     * reads as "Minish leaf"), with brighter / dimmer variants. */
+    const ImVec4 accentDim  = ImVec4(0.18f, 0.32f, 0.22f, 1.00f);
+    const ImVec4 accent     = ImVec4(0.28f, 0.55f, 0.34f, 1.00f);
+    const ImVec4 accentLit  = ImVec4(0.40f, 0.72f, 0.46f, 1.00f);
+    /* Surface — near-black with a faint cool tint so the green pops. */
+    const ImVec4 bgBase     = ImVec4(0.058f, 0.07f, 0.07f, 0.96f);
+    const ImVec4 bgChild    = ImVec4(0.085f, 0.10f, 0.10f, 1.00f);
+    const ImVec4 bgFrame    = ImVec4(0.13f, 0.15f, 0.15f, 1.00f);
+    const ImVec4 bgFrameH   = ImVec4(0.17f, 0.21f, 0.20f, 1.00f);
+
+    colors[ImGuiCol_WindowBg]            = bgBase;
+    colors[ImGuiCol_ChildBg]             = bgChild;
+    colors[ImGuiCol_PopupBg]             = bgBase;
+    colors[ImGuiCol_FrameBg]             = bgFrame;
+    colors[ImGuiCol_FrameBgHovered]      = bgFrameH;
+    colors[ImGuiCol_FrameBgActive]       = accentDim;
+    colors[ImGuiCol_TitleBg]             = ImVec4(0.07f, 0.10f, 0.09f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]       = accentDim;
+    colors[ImGuiCol_TitleBgCollapsed]    = ImVec4(0.05f, 0.07f, 0.06f, 0.75f);
+    colors[ImGuiCol_MenuBarBg]           = ImVec4(0.10f, 0.12f, 0.11f, 1.00f);
+    colors[ImGuiCol_Header]              = ImVec4(accent.x, accent.y, accent.z, 0.32f);
+    colors[ImGuiCol_HeaderHovered]       = ImVec4(accent.x, accent.y, accent.z, 0.60f);
+    colors[ImGuiCol_HeaderActive]        = accent;
+    colors[ImGuiCol_Button]              = bgFrame;
+    colors[ImGuiCol_ButtonHovered]       = accent;
+    colors[ImGuiCol_ButtonActive]        = accentLit;
+    colors[ImGuiCol_Tab]                 = ImVec4(0.10f, 0.13f, 0.11f, 1.00f);
+    colors[ImGuiCol_TabHovered]          = accent;
+    colors[ImGuiCol_TabActive]           = accentDim;
+    colors[ImGuiCol_TabUnfocused]        = ImVec4(0.07f, 0.09f, 0.08f, 1.00f);
+    colors[ImGuiCol_TabUnfocusedActive]  = ImVec4(0.13f, 0.18f, 0.15f, 1.00f);
+    colors[ImGuiCol_Separator]           = ImVec4(0.20f, 0.24f, 0.22f, 1.00f);
+    colors[ImGuiCol_SeparatorHovered]    = accent;
+    colors[ImGuiCol_SeparatorActive]     = accentLit;
+    colors[ImGuiCol_ResizeGrip]          = ImVec4(accent.x, accent.y, accent.z, 0.25f);
+    colors[ImGuiCol_ResizeGripHovered]   = ImVec4(accent.x, accent.y, accent.z, 0.55f);
+    colors[ImGuiCol_ResizeGripActive]    = accent;
+    colors[ImGuiCol_SliderGrab]          = accent;
+    colors[ImGuiCol_SliderGrabActive]    = accentLit;
+    colors[ImGuiCol_CheckMark]           = accentLit;
+    colors[ImGuiCol_ScrollbarBg]         = ImVec4(0.05f, 0.06f, 0.06f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrab]       = ImVec4(0.20f, 0.24f, 0.22f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered]= accentDim;
+    colors[ImGuiCol_ScrollbarGrabActive] = accent;
+    colors[ImGuiCol_Text]                = ImVec4(0.93f, 0.94f, 0.92f, 1.00f);
+    colors[ImGuiCol_TextDisabled]        = ImVec4(0.50f, 0.54f, 0.50f, 1.00f);
+    colors[ImGuiCol_TextSelectedBg]      = ImVec4(accent.x, accent.y, accent.z, 0.40f);
 
 #ifdef TMC_GPU_RENDERER
     /* GPU path: renderer arg is NULL (Port_PPU_Init passed null when the
