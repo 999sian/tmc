@@ -771,10 +771,10 @@ extern "C" bool Port_GPU_PaintBootSplash(void) {
 
     SDL_GPUColorTargetInfo color = {};
     color.texture     = swap_tex;
-    /* Dark teal: r=0.07, g=0.08, b=0.10 — matches port_imgui_menu.cpp's
-     * ImGuiCol_WindowBg so the boot frame visually flows into the F8
-     * menu's chrome. */
-    color.clear_color = SDL_FColor{0.07f, 0.08f, 0.10f, 1.0f};
+    /* Picori-green-tinted dark: matches port_imgui_menu.cpp's bgBase
+     * (rgb 0.058 / 0.07 / 0.07) so the boot frame visually flows into
+     * the F8 menu's chrome under the new Project Picori theme. */
+    color.clear_color = SDL_FColor{0.058f, 0.07f, 0.07f, 1.0f};
     color.load_op     = SDL_GPU_LOADOP_CLEAR;
     color.store_op    = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
