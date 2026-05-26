@@ -259,34 +259,15 @@ static int CopyFile_ToPath(const char* src, const char* dst) {
 #endif
 }
 
-/* Returns 0 if the user picked a valid ROM and we installed it
- * as <exe-dir>/baserom.gba (so the caller can re-run
- * Port_FindBaseRomPath and find it). Returns -1 on cancel/error. */
+/* Returns 0 if the user picked a valid ROM and we installed it as
+ * <exe-dir>/baserom.gba (so the caller can re-run
+ * Port_FindBaseRomPath and find it). Returns -1 on cancel/error.
+ *
+ * The prelaunch UI shows the user-facing "Pick your ROM" prompt
+ * before calling this, so we skip straight to the file dialog. */
 int Port_RomPicker_PromptAndInstall(void)
 {
-    /* Heads-up message box before the dialog so the user knows what
-     * they're picking and why. Otherwise the file picker just appears
-     * with no context. */
-    SDL_MessageBoxData info = {0};
-    info.flags = SDL_MESSAGEBOX_INFORMATION;
-    info.window = NULL;
-    info.title = "Project Picori — ROM needed";
-    info.message =
-        "We couldn't find a Minish Cap ROM next to the binary.\n\n"
-        "Pick any .gba file from disk on the next screen — we identify\n"
-        "the ROM by SHA-1 hash, so the filename doesn't matter. The\n"
-        "file gets copied into place so subsequent launches skip this.\n\n"
-        "Accepted dumps: USA / EU / JP retail + USA / JP demo.";
-    SDL_MessageBoxButtonData buttons[] = {
-        { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 0, "Pick ROM…" },
-        { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 1, "Cancel" },
-    };
-    info.buttons = buttons;
-    info.numbuttons = 2;
-    int btn = -1;
-    if (!SDL_ShowMessageBox(&info, &btn) || btn != 0) {
-        return -1;
-    }
+    fprintf(stderr, "[rom-picker] opening SDL file dialog...\n");
 
     SDL_DialogFileFilter filters[] = {
         { "Game Boy Advance ROM", "gba" },

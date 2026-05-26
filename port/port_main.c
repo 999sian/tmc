@@ -386,32 +386,12 @@ int main(int argc, char* argv[]) {
 
     Port_Config_OpenGamepads();
 
-    /* Pre-window ROM presence check. If the auto-search misses, pop an
-     * SDL file picker so the user can choose any .gba from disk
-     * without having to rename it. We validate the picked file is a
-     * TMC ROM (BZME / BZMP region code), then copy it next to the exe
-     * as baserom.gba so subsequent launches Just Work. */
-    const char* romPath = Port_FindBaseRomPath();
-    if (romPath == NULL) {
-        extern int Port_RomPicker_PromptAndInstall(void);  /* port_rom_picker.c */
-        if (Port_RomPicker_PromptAndInstall() == 0) {
-            romPath = Port_FindBaseRomPath();
-        }
-        if (romPath == NULL) {
-            static const char kMsg[] =
-                "Could not find or load a Minish Cap ROM.\n\n"
-                "Place baserom.gba next to tmc_pc.exe, OR pick a .gba\n"
-                "via the dialog and we'll copy it for you.\n\n"
-                "Expected: USA SHA1 b4bd50e4131b027c334547b4524e2dbbd4227130\n"
-                "or EU SHA1 cff199b36ff173fb6faf152653d1bccf87c26fb7.";
-            fprintf(stderr, "%s\n", kMsg);
-            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                                     "Minish Cap PC Port - ROM not found",
-                                     kMsg, NULL);
-            SDL_Quit();
-            return 1;
-        }
-    }
+    /* ROM probe deferred — the prelaunch screen (rendered after PPU
+     * init below) handles ROM selection via Port_RomPicker_PromptAndInstall.
+     * On first launch with no ROM, the prelaunch shows a "Select ROM..."
+     * card. Once the user picks a valid dump, we drop into the regular
+     * Port_LoadRom / asset-extract / audio-init chain. */
+    const char* romPath = NULL;
 
     /* Use SDL_CreateWindowAndRenderer so SDL picks the renderer
      * driver (opengl/vulkan/...) and creates the window with the
@@ -518,17 +498,129 @@ int main(int argc, char* argv[]) {
     Port_PaintBootSplash(window, "LOADING");
 #endif
 
-    /* Load the ROM before showing the progress bar so the extractor
-     * can reuse the in-memory buffer (skip a second 16 MB read) AND
-     * so we can validate the region BEFORE extracting. Previously the
-     * order was reversed and a wrong-region ROM would happily extract
-     * 3-4 seconds of bad assets before we noticed. Use the path the
-     * pre-window probe just resolved so we don't re-walk candidates. */
+    /* PPU init first — creates the SDL_Renderer / SDL_GPU device + the
+     * ImGui context. Doesn't touch ROM data, so we can stand up the
+     * prelaunch UI before the user has even pointed us at a .gba.
+     *
+     * On non-GPU builds the GPU stub still needs to fire for the
+     * build-flag-off no-op path. */
+#ifndef TMC_GPU_RENDERER
+    {
+        extern bool Port_GPU_Init(SDL_Window*);
+        Port_GPU_Init(window);
+    }
+#endif
+    Port_PPU_Init(window);
+
+#ifdef TMC_GPU_RENDERER
+    {
+        extern bool Port_GPU_PaintBootSplash(void);
+        Port_GPU_PaintBootSplash();
+    }
+#else
+    Port_PaintBootSplash(window, "LOADING");
+#endif
+    fprintf(stderr, "PPU init complete.\n");
+
+    /* ====================================================================
+     * Project Picori prelaunch screen.
+     *
+     * Renders before any ROM is loaded. If no .gba is present next to
+     * the exe, the card shows a "Select your ROM" prompt and a big
+     * Select-ROM button. Once the user picks a valid dump (SHA-1
+     * matched against the known TMC hashes — see port_rom_picker.c),
+     * the card flips to the regular state with version / ROM / Play.
+     *
+     * Play exits the loop and we fall through to Port_LoadRom + asset
+     * extraction + audio init. Quit during the loop cleanly shuts down
+     * the partial init we did so far.
+     * ==================================================================== */
+    {
+        extern bool Port_ImGui_RenderPrelaunch(bool, const char*, const char*, bool*, bool*);
+        extern void Port_ImGui_HandleEvent(const SDL_Event*);
+        extern bool Port_GPU_PresentPrelaunchFrame(void);
+        extern bool Port_GPU_PaintBootSplash(void);
+        extern void Port_GPU_Shutdown(void);
+        extern void Port_DiscordRpc_Shutdown(void);
+        extern int  Port_RomPicker_PromptAndInstall(void);
+
+        romPath = Port_FindBaseRomPath();
+        fprintf(stderr, "Prelaunch: %s — waiting for user.\n",
+                romPath ? "ROM detected" : "no ROM yet");
+
+        bool done = false;
+        while (!done) {
+            /* Re-derive the displayable filename each iteration in case
+             * a Change-ROM swap moved the file. */
+            char rom_name_buf[1024];
+            const char* rom_name = "(none)";
+            if (romPath) {
+                const char* slash = strrchr(romPath, '/');
+#ifdef _WIN32
+                const char* bslash = strrchr(romPath, '\\');
+                if (bslash && (!slash || bslash > slash)) slash = bslash;
+#endif
+                if (slash && slash[1]) {
+                    snprintf(rom_name_buf, sizeof(rom_name_buf), "%s", slash + 1);
+                } else {
+                    snprintf(rom_name_buf, sizeof(rom_name_buf), "%s", romPath);
+                }
+                rom_name = rom_name_buf;
+            }
+
+            const bool rom_present = (romPath != NULL);
+            bool play_clicked = false;
+            bool change_rom_clicked = false;
+            const bool imgui_built = Port_ImGui_RenderPrelaunch(
+                rom_present, TMC_PC_VERSION, rom_name,
+                &play_clicked, &change_rom_clicked);
+#ifdef TMC_GPU_RENDERER
+            if (imgui_built) {
+                Port_GPU_PresentPrelaunchFrame();
+            } else {
+                Port_GPU_PaintBootSplash();
+            }
+#else
+            (void)imgui_built; /* SDL_Renderer path presents inline. */
+#endif
+
+            if (play_clicked && rom_present) {
+                fprintf(stderr, "Prelaunch: play_clicked.\n");
+                done = true;
+            } else if (change_rom_clicked) {
+                fprintf(stderr, "Prelaunch: change_rom_clicked — calling picker.\n");
+                int rc = Port_RomPicker_PromptAndInstall();
+                fprintf(stderr, "Prelaunch: picker returned %d.\n", rc);
+                if (rc == 0) {
+                    romPath = Port_FindBaseRomPath();
+                    fprintf(stderr, "Prelaunch: post-picker romPath=%s.\n",
+                            romPath ? romPath : "(still NULL)");
+                }
+            } else if (play_clicked) {
+                fprintf(stderr, "Prelaunch: play_clicked but no ROM (ignored).\n");
+            }
+
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
+                Port_ImGui_HandleEvent(&ev);
+                if (ev.type == SDL_EVENT_QUIT) {
+                    Port_GPU_Shutdown();
+                    Port_DiscordRpc_Shutdown();
+                    Port_PPU_Shutdown();
+                    Port_Config_CloseGamepads();
+                    SDL_DestroyWindow(window);
+                    SDL_Quit();
+                    return 0;
+                }
+            }
+            SDL_Delay(16);
+        }
+        fprintf(stderr, "Prelaunch: Play — loading ROM and assets.\n");
+    }
+
+    /* Play pressed and romPath is set. The rest of the original init
+     * order runs now (ROM load → asset extraction → mods → audio). */
     Port_LoadRom(romPath);
-    /* Stage 2 GPU build: the asset-extractor progress UI also creates
-     * an SDL_Renderer. Pass NULL window so the extractor runs without
-     * the progress bar (still extracts in-process, just blank window).
-     * On non-GPU builds we keep the existing path. */
 #ifdef TMC_GPU_RENDERER
     Port_EnsureAssetsReadyWithDisplay(NULL, gRomData, gRomSize);
 #else
@@ -548,8 +640,7 @@ int main(int argc, char* argv[]) {
     /* Now that the ROM and asset tables are loaded, re-set the window
      * icon — Port_CreateAppIcon prefers the ROM-extracted Ezlo sprite
      * over the procedural fallback once gRomData/gSpritePtrs/gFrameObjLists
-     * are populated. SDL takes a deep copy, so we free the surface
-     * immediately. */
+     * are populated. */
     {
         extern SDL_Surface* Port_CreateAppIcon(void);
         SDL_Surface* icon = Port_CreateAppIcon();
@@ -559,7 +650,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Verify ROM region matches compiled region
+    /* Region cross-check between the compile-time `EU` macro and the
+     * runtime-detected ROM region. Mismatch is non-fatal but flags
+     * that asset offsets may be wrong. */
 #ifdef EU
     if (gRomRegion != ROM_REGION_EU) {
         fprintf(stderr,
@@ -576,145 +669,25 @@ int main(int argc, char* argv[]) {
     }
 #endif
 
-    /* GPU device + window-claim already done earlier on TMC_GPU_RENDERER
-     * builds (so the boot splash could use SDL_GPU). On non-GPU builds
-     * this still needs to fire for the build-flag-off no-op stub path. */
-#ifndef TMC_GPU_RENDERER
-    {
-        extern bool Port_GPU_Init(SDL_Window*);
-        Port_GPU_Init(window);
+    if (noAudio) {
+        gMain.muteAudio = 1;
+        fprintf(stderr, "Audio disabled by --no-audio flag.\n");
+    } else {
+        Port_InitAudio();
+        fprintf(stderr, "Audio init complete.\n");
     }
-#endif
 
-    // Initialize PPU renderer (will use SDL_GPU if claimed, else SDL_Renderer)
-    Port_PPU_Init(window);
-
-    /* Bridge frame: between the progress bar reaching 100% and
-     * AgbMain producing its first GBA frame, audio init and AgbMain
-     * warmup take long enough to leave the window blank. Paint a
-     * single "Starting..." card on the same renderer so the user
-     * sees one continuous experience instead of an extractor screen
-     * followed by a blank window followed by the title screen. */
-    /* Repaint the same "LOADING" card on each transition so the
-     * user sees one continuous splash from window-open to first
-     * GBA frame instead of multiple flickering states. On GPU
-     * builds the splash goes through SDL_GPU now (Stage 6); both
-     * paths are safe to call on every config. */
+    /* Last bridging splash before the game's title fade-in takes
+     * over. After this the engine drives the frame loop. */
 #ifdef TMC_GPU_RENDERER
     {
         extern bool Port_GPU_PaintBootSplash(void);
         Port_GPU_PaintBootSplash();
     }
 #else
-    Port_PaintBootSplash(window, "LOADING");
+    Port_PaintBootSplash(window, "STARTING");
 #endif
-    fprintf(stderr, "PPU init complete.\n");
-    if (noAudio) {
-        gMain.muteAudio = 1;
-        fprintf(stderr, "Audio disabled by --no-audio flag.\n");
-    } else {
-        Port_InitAudio();
-#ifdef TMC_GPU_RENDERER
-        {
-            extern bool Port_GPU_PaintBootSplash(void);
-            Port_GPU_PaintBootSplash();
-        }
-#else
-        Port_PaintBootSplash(window, "LOADING");
-#endif
-        fprintf(stderr, "Audio init complete.\n");
-    }
-
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
-
-    /* Project Picori prelaunch: brief skip-able dwell on the boot
-     * splash with version + ROM info so the user actually sees the
-     * branding before the game's title fade-in steals focus. On the
-     * SDL_Renderer backend Port_PaintPrelaunch draws the richer card
-     * (title / subtitle / version / ROM / countdown); on the SDL_GPU
-     * backend we re-clear via Port_GPU_PaintBootSplash for a steady
-     * green canvas (text rendering on the GPU pipeline is follow-up
-     * work — the GPU build doesn't have a font atlas yet). Either
-     * way the dwell auto-exits after PRELAUNCH_TIMEOUT_MS or as soon
-     * as the user gives any input. */
-    {
-        extern bool Port_ImGui_RenderPrelaunch(const char*, const char*, bool*, bool*);
-        extern void Port_ImGui_HandleEvent(const SDL_Event*);
-        extern bool Port_GPU_PresentPrelaunchFrame(void);
-        extern bool Port_GPU_PaintBootSplash(void);
-        extern void Port_GPU_Shutdown(void);
-        extern void Port_DiscordRpc_Shutdown(void);
-        extern int  Port_RomPicker_PromptAndInstall(void);
-
-        char rom_name_buf[1024];
-        const char* rom_name = "baserom.gba";
-        if (romPath) {
-            const char* slash = strrchr(romPath, '/');
-#ifdef _WIN32
-            const char* bslash = strrchr(romPath, '\\');
-            if (bslash && (!slash || bslash > slash)) slash = bslash;
-#endif
-            if (slash && slash[1]) {
-                snprintf(rom_name_buf, sizeof(rom_name_buf), "%s", slash + 1);
-            } else {
-                snprintf(rom_name_buf, sizeof(rom_name_buf), "%s", romPath);
-            }
-            rom_name = rom_name_buf;
-        }
-
-        fprintf(stderr, "Prelaunch: waiting for Play.\n");
-
-        bool done = false;
-        while (!done) {
-            bool play_clicked = false;
-            bool change_rom_clicked = false;
-            const bool imgui_built = Port_ImGui_RenderPrelaunch(
-                TMC_PC_VERSION, rom_name, &play_clicked, &change_rom_clicked);
-#ifdef TMC_GPU_RENDERER
-            if (imgui_built) {
-                Port_GPU_PresentPrelaunchFrame();
-            } else {
-                Port_GPU_PaintBootSplash();
-            }
-#else
-            (void)imgui_built; /* SDL_Renderer path presents inline. */
-#endif
-
-            if (play_clicked) {
-                done = true;
-            } else if (change_rom_clicked) {
-                /* The ROM picker installs the chosen .gba next to the
-                 * exe as baserom.gba. Re-running Port_LoadRom mid-boot
-                 * is risky (lots of ROM-derived pointers are already
-                 * resolved), so we tell the user to restart instead. */
-                if (Port_RomPicker_PromptAndInstall() == 0) {
-                    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
-                        "ROM installed",
-                        "Restart Project Picori to load the new ROM.",
-                        window);
-                }
-            }
-
-            SDL_Event ev;
-            while (SDL_PollEvent(&ev)) {
-                /* Forward to ImGui — without this the Play button can't
-                 * receive mouse / keyboard events. */
-                Port_ImGui_HandleEvent(&ev);
-                if (ev.type == SDL_EVENT_QUIT) {
-                    Port_GPU_Shutdown();
-                    Port_DiscordRpc_Shutdown();
-                    Port_Audio_Shutdown();
-                    Port_PPU_Shutdown();
-                    Port_Config_CloseGamepads();
-                    SDL_DestroyWindow(window);
-                    SDL_Quit();
-                    return 0;
-                }
-            }
-            SDL_Delay(16); /* ~60 fps so the Play button feels responsive */
-        }
-        fprintf(stderr, "Prelaunch: Play pressed — entering AgbMain.\n");
-    }
 
     AgbMain();
 
