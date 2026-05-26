@@ -195,6 +195,42 @@ bool32 IsColliding(Entity* this, Entity* that) {
     if ((this->collisionLayer & that->collisionLayer) != 0) {
         Hitbox* bb_this = this->hitbox;
         Hitbox* bb_that = that->hitbox;
+#ifdef PC_PORT
+        /* Port-side guard: on GBA a NULL/garbage hitbox dereferenced through
+         * 0x000000xx returns BIOS code bytes — odd but doesn't fault. On
+         * PC a stale or unset hitbox is genuine garbage and SIGSEGVs the
+         * first u8 load below. Reject NULL plus "looks bogus" pointers —
+         * a real host pointer on Linux x86_64 lands in the binary's
+         * 0x55xx... or mmap's 0x7Fxx... range, never below 0x10000_00000000.
+         * Catches the half-pointer-write hazard (CLAUDE.md) where the
+         * upper 32 bits are garbage but the low 32 look numerically
+         * plausible (e.g. seen here: 0x40201000101).  Same class of fix as
+         * src/npc/cat.c (#91) and src/projectile/darkNutSwordSlash.c (#97). */
+        {
+            uintptr_t pa = (uintptr_t)bb_this;
+            uintptr_t pb = (uintptr_t)bb_that;
+            /* Linux x86_64 userspace lives in [0x100000000000, 0x800000000000).
+             * Anything below is low garbage (NULL, half-pointer-write);
+             * anything at/above is kernel-space (or sign-extended negative
+             * like -6 = 0xFFFFFFFFFFFFFFFA). Reject both. */
+            int pa_bad = pa < 0x100000000000ULL || pa >= 0x800000000000ULL;
+            int pb_bad = pb < 0x100000000000ULL || pb >= 0x800000000000ULL;
+            if (pa_bad || pb_bad) {
+                static int s_warned = 0;
+                if (s_warned < 8) {
+                    s_warned++;
+                    fprintf(stderr,
+                        "[IsColliding] bad hitbox: this kind=%u id=0x%X type=%u hb=%p%s | "
+                        "that kind=%u id=0x%X type=%u hb=%p%s\n",
+                        (unsigned)this->kind, (unsigned)this->id, (unsigned)this->type,
+                        (void*)pa, pa_bad ? " (BAD)" : "",
+                        (unsigned)that->kind, (unsigned)that->id, (unsigned)that->type,
+                        (void*)pb, pb_bad ? " (BAD)" : "");
+                }
+                return FALSE;
+            }
+        }
+#endif
         u32 this_len = bb_this->width;
         u32 sumw = this_len + bb_that->width;
         if ((((this->x.HALF.HI - that->x.HALF.HI) + bb_this->offset_x) - bb_that->offset_x) + sumw <= (sumw)*2) {
