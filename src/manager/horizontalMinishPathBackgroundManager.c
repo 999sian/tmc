@@ -66,7 +66,26 @@ void sub_08057F20(HorizontalMinishPathBackgroundManager* this) {
 
 void sub_08058004(u32 unk1, void* src, void* dest) {
     u32 tmp = 0x20;
-    src += (unk1 >> 4) << 2;
+    u32 startOff = (unk1 >> 4) << 2;
+#ifdef PC_PORT
+    /* Same-class fix as bigGoron.c::sub_0806D164 (issue #102).
+     * Callers pass src = gUnk_02006F00 (16 KB) or gUnk_02006F00 + 0x2000
+     * (so 8 KB remaining). The loop reads 32 × 0x100 = 0x2000 bytes
+     * forward from src+startOff. When unk1 is derived from
+     * scroll_x - origin_x and that goes negative (camera wraps past the
+     * BG edge during e.g. a Minish-path transition), startOff balloons
+     * to a huge value and the read walks off into unmapped host memory.
+     * On GBA this just picks up adjacent EWRAM garbage; on PC it
+     * SIGSEGVs inside DmaCopy16. Skip the update when we can't keep
+     * the read inside gUnk_02006F00. */
+    {
+        extern u8 gUnk_02006F00[];
+        uintptr_t srcOff = (uintptr_t)src - (uintptr_t)gUnk_02006F00;
+        if (srcOff > 0x4000u || startOff + 0x2000u > 0x4000u - srcOff)
+            return;
+    }
+#endif
+    src += startOff;
     for (tmp; tmp != 0; tmp--) {
         DmaCopy16(3, src, dest, 0x20 * 2);
         src += 0x100;

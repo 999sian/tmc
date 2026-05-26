@@ -15,6 +15,27 @@ extern void sub_0805754C(VerticalMinishPathBackgroundManager*);
 
 extern u8 gMapDataTopSpecial[];
 
+#ifdef PC_PORT
+/* Same-family fix as bigGoron / horizontalMinishPath / minishRafters
+ * (issue #102 cluster): subTileMap pointer arithmetic depends on
+ * `bgOffset` staying in bounds. When scroll_y < origin_y (camera
+ * approaching room top during a transition), bgOffset goes negative;
+ * (bgOffset/0x40)*0x200 becomes a negative byte delta and the resulting
+ * subTileMap pointer lands BEFORE gMapDataTopSpecial. On GBA this still
+ * reads adjacent EWRAM; on PC the buffer's a standalone allocation and
+ * the renderer dereferences unmapped memory. gMapDataTopSpecial is
+ * 0x8000 bytes; the renderer reads BG_SCREEN_SIZE (0x800) from
+ * subTileMap, so clamp the byte delta to [0, 0x7800]. */
+static inline s32 VMP_ClampBgDelta(s32 bgOffset, s32 baseAdd) {
+    s32 delta = (bgOffset / 0x40) * 0x200;
+    s32 lo = -baseAdd;
+    s32 hi = 0x7800 - baseAdd;
+    if (delta < lo) delta = lo;
+    if (delta > hi) delta = hi;
+    return delta;
+}
+#endif
+
 void VerticalMinishPathBackgroundManager_Main(VerticalMinishPathBackgroundManager* this) {
     if (super->action == 0) {
         super->action = 1;
@@ -31,7 +52,11 @@ void sub_0805754C(VerticalMinishPathBackgroundManager* this) {
     bgOffset = (gRoomControls.scroll_y - gRoomControls.origin_y);
     bgOffset += bgOffset >> 3;
     gScreen.bg3.yOffset = bgOffset & 0x3f;
+#ifdef PC_PORT
+    gScreen.bg3.subTileMap = gMapDataTopSpecial + VMP_ClampBgDelta(bgOffset, 0);
+#else
     gScreen.bg3.subTileMap = gMapDataTopSpecial + (bgOffset / 0x40) * 0x200;
+#endif
     if (this->field_0x38 != gScreen.bg3.subTileMap) {
         this->field_0x38 = gScreen.bg3.subTileMap;
         gScreen.bg3.updated = 1;
@@ -39,7 +64,11 @@ void sub_0805754C(VerticalMinishPathBackgroundManager* this) {
     bgOffset = (gRoomControls.scroll_y - gRoomControls.origin_y);
     bgOffset += bgOffset >> 2;
     gScreen.bg1.yOffset = bgOffset & 0x3f;
+#ifdef PC_PORT
+    gScreen.bg1.subTileMap = gMapDataTopSpecial + 0x2000 + VMP_ClampBgDelta(bgOffset, 0x2000);
+#else
     gScreen.bg1.subTileMap = gMapDataTopSpecial + 0x2000 + (bgOffset / 0x40) * 0x200;
+#endif
     if (this->field_0x3c != gScreen.bg1.subTileMap) {
         this->field_0x3c = gScreen.bg1.subTileMap;
         gScreen.bg1.updated = 1;
@@ -58,7 +87,11 @@ void sub_080575C8(u32 param) {
     bgOffset += bgOffset >> 3;
     gScreen.bg3.yOffset = bgOffset & 0x3f;
     gScreen.bg3.xOffset = 0;
+#ifdef PC_PORT
+    gScreen.bg3.subTileMap = &gMapDataTopSpecial[VMP_ClampBgDelta(bgOffset, 0)];
+#else
     gScreen.bg3.subTileMap = &gMapDataTopSpecial[(bgOffset / 0x40) * 0x200];
+#endif
     gScreen.bg3.control = BGCNT_SCREENBASE(29) | BGCNT_PRIORITY(1) | BGCNT_CHARBASE(2) | BGCNT_MOSAIC;
     gScreen.bg3.updated = 1;
 
@@ -66,7 +99,11 @@ void sub_080575C8(u32 param) {
     bgOffset += bgOffset >> 2;
     gScreen.bg1.yOffset = bgOffset & 0x3f;
     gScreen.bg1.xOffset = 0;
+#ifdef PC_PORT
+    gScreen.bg1.subTileMap = &gMapDataTopSpecial[0x2000 + VMP_ClampBgDelta(bgOffset, 0x2000)];
+#else
     gScreen.bg1.subTileMap = &gMapDataTopSpecial[0x2000 + (bgOffset / 0x40) * 0x200];
+#endif
     gScreen.bg1.control = BGCNT_SCREENBASE(30) | BGCNT_PRIORITY(1) | BGCNT_CHARBASE(2) | BGCNT_MOSAIC;
     gScreen.bg1.updated = 1;
     gScreen.controls.layerFXControl =

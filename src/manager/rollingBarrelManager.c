@@ -230,7 +230,19 @@ void sub_08058BC8(RollingBarrelManager* this) {
         BgAffineSet(&tmp2, tmp, 1);
         tmp++;
     } while (++tmp3 < 0xA0u);
+#ifdef PC_PORT
+    /* On GBA, gUnk_02017BA0 lives at gUnk_02017AA0 + 0x100 in EWRAM
+     * (documented in port_linked_stubs.c:70) — i.e. 0x10 BgAffineDstData
+     * entries forward in the SAME buffer that the write loop above just
+     * filled. On PC the two arrays are separate host allocations, so
+     * gUnk_02017BA0 was never written and reading from it gives zeros,
+     * silently zero-ing BG2's affine register snapshot — visible glitch
+     * during the Deepwood Shrine rolling-barrel cutscene. Route the
+     * read through the buffer that actually got written. */
+    tmp = &gUnk_02017AA0[gUnk_03003DE4[0] * 0xA0 + 0x10];
+#else
     tmp = &gUnk_02017BA0[gUnk_03003DE4[0] * 0xA0];
+#endif
     gScreen.controls.bg2.dx = tmp->pa;
     gScreen.controls.bg2.dmx = tmp->pb;
     gScreen.controls.bg2.dy = tmp->pc;
