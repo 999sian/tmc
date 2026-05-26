@@ -19,6 +19,9 @@ void VaatiAppearingManager_Action2(VaatiAppearingManager*);
 void VaatiAppearingManager_Action1(VaatiAppearingManager*);
 void VaatiAppearingManager_Init(VaatiAppearingManager*);
 void sub_0805DA08(u32, u32, u32);
+#ifdef PC_PORT
+extern void DisableVBlankDMA(void);
+#endif
 
 static const u8 gUnk_08108D74[] = { 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x0 };
 
@@ -100,6 +103,15 @@ void VaatiAppearingManager_Action1(VaatiAppearingManager* this) {
             if (--super->timer == 0) {
                 sub_0801E104();
                 gScreen.lcd.displayControl &= ~DISPCNT_BG3_ON;
+#ifdef PC_PORT
+                /* Pairs with the SetVBlankDMA at line ~170 that writes
+                 * BG3HOFS per-HBlank.  Without this disable the HDMA
+                 * keeps firing into BG3HOFS in the next room (no
+                 * scoping subtask between the cutscene and gameplay
+                 * resume), producing visual glitches the next time
+                 * BG3 is active.  Same fix shape as #103. */
+                DisableVBlankDMA();
+#endif
                 DeleteThisEntity();
             }
     }
