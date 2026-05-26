@@ -56,6 +56,13 @@ static struct_gUnk_020000C0* GetExtraSpriteStorage(Entity* this);
 
 void sub_0806F364(void) {
     gArea.filler[1] ^= 0x80;
+#ifdef PC_PORT
+    {
+        extern u8 gUnk_020342F8[];
+        /* On GBA, gArea.filler6 aliases this delayed-entity bitmap. */
+        MemClear(&gUnk_020342F8[(gArea.filler[1] + 7) / 8], 16);
+    }
+#endif
     MemClear(&gArea.filler6[(gArea.filler[1] + 7) / 8], 16);
 }
 
