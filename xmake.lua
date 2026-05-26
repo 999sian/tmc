@@ -64,9 +64,28 @@ option_end()
 local build_dir = "build/$(plat)"
 local tools_bin = "tools/bin"
 
+-- Force GCC-style bitfield packing on MinGW.
+--
+-- MinGW defaults to `-mms-bitfields` (MSVC-compatible bitfield layout),
+-- which gives different sizeof() and member offsets than Linux GCC for
+-- any `__attribute__((packed))` struct that contains bitfields. The TMC
+-- decomp has several such structs (e.g. gUnk_08128DE8_struct_2 in the
+-- pause-menu cursor data — 5+5+6 bits, packs to 2 bytes on Linux but
+-- 3 bytes on MinGW), so the same C source compiles to different memory
+-- layouts on the two platforms — manifests as #44 (Windows pause-map
+-- cursor at wrong position, grey-blocks/bouncing). `-mno-ms-bitfields`
+-- restores parity with Linux GCC across the board.
+local function add_mingw_bitfield_parity()
+    if is_plat("windows", "mingw") then
+        add_cflags("-mno-ms-bitfields", {force = true})
+        add_cxxflags("-mno-ms-bitfields", {force = true})
+    end
+end
+
 local function add_mingw_static_runtime()
     if is_plat("windows", "mingw") then
         add_ldflags("-static", "-static-libgcc", {force = true})
+        add_mingw_bitfield_parity()
     end
 end
 
@@ -113,6 +132,19 @@ if is_plat("mingw", "windows") then
 else
     add_requires("libpng", {system = true, optional = true})
     add_requires("zlib",   {system = true, optional = true})
+end
+
+-- Global -mno-ms-bitfields on MinGW so the entire codebase matches the
+-- Linux GCC bitfield layout. MinGW's default `-mms-bitfields` makes
+-- packed-bitfield structs (e.g. pauseMenu.c's gUnk_08128DE8_struct_2 —
+-- 5+5+6 packed bits) size to 3 bytes instead of 2, shifting every
+-- subsequent member offset in the containing struct. Manifests as
+-- issue #44 (Windows-only pause-map cursor at wrong position +
+-- bouncing). Pin the GCC layout globally — every target picks it up,
+-- so we don't have to remember to call a helper per target.
+if is_plat("mingw", "windows") then
+    add_cflags("-mno-ms-bitfields", {force = true})
+    add_cxxflags("-mno-ms-bitfields", {force = true})
 end
 
 -- Dear ImGui for the in-game settings UI. Built against the SDL3 +
