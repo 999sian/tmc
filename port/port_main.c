@@ -292,6 +292,15 @@ int main(int argc, char* argv[]) {
         Port_DebugVerbose_Init();
     }
 
+    /* Auto-capture on SIGSEGV/SIGABRT/SIGBUS — dropped from port_main.c by
+     * upstream refactor 5987bf9b1 and not re-added when #108 brought
+     * port_bugreport.cpp back. Without this, crashes produce no bundle
+     * (F9 manual capture still works via port_bios.c). */
+    {
+        extern void Port_BugReport_InstallCrashHandlers(void);
+        Port_BugReport_InstallCrashHandlers();
+    }
+
     // Initialize REG_KEYINPUT to all-keys-released (GBA: 1=not pressed)
     *(u16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
 
