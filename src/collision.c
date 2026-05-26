@@ -209,12 +209,28 @@ bool32 IsColliding(Entity* this, Entity* that) {
         {
             uintptr_t pa = (uintptr_t)bb_this;
             uintptr_t pb = (uintptr_t)bb_that;
+#if defined(_WIN32)
+            /* Windows / Wine: user-mode pointers are in the low ~128 TB
+             * (heap typically 0x000001XX_XXXXXXXX, exe/DLL 0x00007FFE_...).
+             * The Linux check below would reject *every* valid Windows
+             * pointer (Wine puts entities at ~0x140_XXXXX ≈ 5 GB, way
+             * under 17.5 TB), silently flipping IsColliding to FALSE for
+             * every entity pair — symptom: no enemy damages Link, Link
+             * can't damage enemies. Use a much looser check here that
+             * still rules out NULL + first 64 KB. We lose the Linux
+             * heuristic for half-pointer-write detection, but the
+             * cross-process quicksave path that motivated the guard
+             * doesn't apply on Windows portably anyway. */
+            int pa_bad = pa < 0x10000ULL || pa >= 0x800000000000ULL;
+            int pb_bad = pb < 0x10000ULL || pb >= 0x800000000000ULL;
+#else
             /* Linux x86_64 userspace lives in [0x100000000000, 0x800000000000).
              * Anything below is low garbage (NULL, half-pointer-write);
              * anything at/above is kernel-space (or sign-extended negative
              * like -6 = 0xFFFFFFFFFFFFFFFA). Reject both. */
             int pa_bad = pa < 0x100000000000ULL || pa >= 0x800000000000ULL;
             int pb_bad = pb < 0x100000000000ULL || pb >= 0x800000000000ULL;
+#endif
             if (pa_bad || pb_bad) {
                 static int s_warned = 0;
                 if (s_warned < 8) {
