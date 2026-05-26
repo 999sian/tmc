@@ -37,8 +37,26 @@ const Hitbox gUnk_080D2914 = { 0xF4, 0x20, { 0, 0, 0, 0 }, 0xA, 0x8 };
 
 void GyorgFemaleMouth(Entity* this) {
     u32 tmp;
+#ifdef PC_PORT
+    /* #136 family — sibling not yet Init'd. CreateEnemy(GYORG_FEMALE_MOUTH)
+       returns the entity with `parent == NULL`; GyorgFemale's Init then
+       sets it. If anything dispatches the mouth between those two points
+       (or after a parent reset), the deref below SIGSEGVs on PC. Same
+       fix shape as gyorgBossObject.c::sub_080A1DCC. */
+    if (this->parent == NULL) {
+        return;
+    }
+#endif
     if (this->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        /* DeleteThisEntity queues for cleanup but does not return; the
+           original asm continues into the parent->animationState read
+           below. On GBA the deleted slot's parent stays valid through
+           the rest of this frame, but the safer thing on PC is to bail
+           after a delete signal. */
+        return;
+#endif
     }
     if (this->action == 0) {
         this->action = 1;

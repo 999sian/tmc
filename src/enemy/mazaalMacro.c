@@ -192,6 +192,9 @@ void sub_08034E30(MazaalMacroEntity* this) {
 void sub_08034E68(MazaalMacroEntity* this) {
     ScriptExecutionContext* scriptExecutionContext;
 
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         if (super->spriteSettings.draw != 0) {
             super->spriteSettings.draw = 0;
@@ -210,6 +213,9 @@ void sub_08034E68(MazaalMacroEntity* this) {
 }
 
 void sub_08034EC0(MazaalMacroEntity* this) {
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         sub_08035120(this);
         DeleteThisEntity();

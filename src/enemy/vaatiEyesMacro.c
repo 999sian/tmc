@@ -163,6 +163,9 @@ void VaatiEyesMacroFunction0Type1Action0(VaatiEyesMacroEntity* this) {
 }
 
 void VaatiEyesMacroFunction0Type1Action1(VaatiEyesMacroEntity* this) {
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         COLLISION_OFF(super);
         super->health = 0;
@@ -181,8 +184,14 @@ void VaatiEyesMacroFunction0Type2(VaatiEyesMacroEntity* this) {
     u32 uVar2;
     xy* temp;
 
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     if (super->action == 0) {
         super->action = 1;
@@ -201,8 +210,14 @@ void VaatiEyesMacroFunction0Type2(VaatiEyesMacroEntity* this) {
 }
 
 void VaatiEyesMacroFunction0Type3(VaatiEyesMacroEntity* this) {
+#ifdef PC_PORT
+    if (super->parent == NULL) return; /* #136 family */
+#endif
     if (super->parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     if (super->action == 0) {
         super->action = 1;
