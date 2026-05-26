@@ -81,6 +81,24 @@ static PortFilterType sFilter = PORT_FILTER_NONE;
 static uint32_t* sUpscale2xBuf = nullptr;       /* 480x320 intermediate */
 static uint32_t* sUpscale4xBuf = nullptr;       /* 960x640 final        */
 
+/* xBRZ scratch buffers used to be allocated only on the SDL_Renderer
+ * init path (since the GPU branch bypassed every legacy effect). With
+ * xBRZ now reaching the GPU backend too, lazy-alloc on first request
+ * so a session that boots into GPU + xBRZ has the buffers ready. Safe
+ * to call repeatedly; only allocates once. */
+static bool Port_PPU_EnsureXbrzBuffers(void) {
+    if (sUpscale4xBuf != nullptr && sUpscale2xBuf != nullptr) {
+        return true;
+    }
+    if (sUpscale2xBuf == nullptr) {
+        sUpscale2xBuf = (uint32_t*)std::malloc((size_t)480 * 320 * sizeof(uint32_t));
+    }
+    if (sUpscale4xBuf == nullptr) {
+        sUpscale4xBuf = (uint32_t*)std::malloc((size_t)kHiResW * kHiResH * sizeof(uint32_t));
+    }
+    return sUpscale2xBuf != nullptr && sUpscale4xBuf != nullptr;
+}
+
 static void Port_PPU_LoadConfig(void) {
     const char* method = Port_Config_UpscaleMethod();
     if (std::strcmp(method, "nearest") == 0) {
@@ -390,8 +408,7 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
             SDL_DestroyRenderer(sRenderer);
             sRenderer = nullptr;
         } else {
-            sUpscale2xBuf = (uint32_t*)std::malloc((size_t)480 * 320 * sizeof(uint32_t));
-            sUpscale4xBuf = (uint32_t*)std::malloc((size_t)kHiResW * kHiResH * sizeof(uint32_t));
+            Port_PPU_EnsureXbrzBuffers();
             sBackend = RenderBackend::Renderer;
         }
     }
@@ -600,9 +617,11 @@ extern "C" void Port_PPU_PresentFrame(void) {
     (void)gMain;
 
     /* Stage 2: SDL_GPU present path. Stretched 240x160 → swapchain via
-     * the passthrough shader. No aspect-mode / internal-scale / xBRZ /
-     * filter integration yet — those features stay on the SDL_Renderer
-     * path; Stage 3 will rebuild them on the GPU side as shader passes.
+     * the passthrough shader. Internal-scale and xBRZ now route through
+     * here too (the upscaled buffer is just fed to Port_GPU_PresentFrame
+     * which recreates its source texture on size change). Aspect-mode
+     * and filter (CRT/LCD) remain on the SDL_Renderer path; Stage 3
+     * will rebuild them on the GPU side as shader passes.
      *
      * ImGui must run BEFORE Port_GPU_PresentFrame so its NewFrame + UI
      * build + ImGui::Render() collect draw data that PresentFrame can
@@ -615,6 +634,26 @@ extern "C" void Port_PPU_PresentFrame(void) {
         extern bool Port_ImGui_Render(void);
         Port_ImGui_Render();
         extern bool Port_GPU_PresentFrame(const uint32_t*, int, int);
+
+        /* xBRZ on the GPU path. Same mutual exclusion with internal
+         * scale that the SDL_Renderer branch uses (xBRZ is itself a
+         * 4× upscaler; combining would compound smoothing). Sampler
+         * mode (Linear vs Nearest) currently rides on whatever the
+         * GPU passthrough shader uses — we don't yet plumb the
+         * XbrzLinear/XbrzNearest distinction through to the SDL_GPU
+         * sampler. Filter chain (CRT/LCD) is still SW-only. */
+        if (sPresentMode == PresentMode::XbrzLinear ||
+            sPresentMode == PresentMode::XbrzNearest) {
+            if (Port_PPU_EnsureXbrzBuffers()) {
+                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer,
+                                     MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
+                                     sUpscale2xBuf, sUpscale4xBuf);
+                Port_GPU_PresentFrame(sUpscale4xBuf, kHiResW, kHiResH);
+                return;
+            }
+            /* Buffer alloc failed: fall through to internal-scale path
+             * rather than dropping the frame. */
+        }
 
         /* Honour internal render scale on the GPU path too — same
          * Port_PPU_BuildScaledFrame the SDL_Renderer branch uses,
