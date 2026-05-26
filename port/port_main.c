@@ -627,6 +627,77 @@ int main(int argc, char* argv[]) {
 
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
+    /* Project Picori prelaunch: brief skip-able dwell on the boot
+     * splash with version + ROM info so the user actually sees the
+     * branding before the game's title fade-in steals focus. On the
+     * SDL_Renderer backend Port_PaintPrelaunch draws the richer card
+     * (title / subtitle / version / ROM / countdown); on the SDL_GPU
+     * backend we re-clear via Port_GPU_PaintBootSplash for a steady
+     * green canvas (text rendering on the GPU pipeline is follow-up
+     * work — the GPU build doesn't have a font atlas yet). Either
+     * way the dwell auto-exits after PRELAUNCH_TIMEOUT_MS or as soon
+     * as the user gives any input. */
+    {
+        extern void Port_PaintPrelaunch(SDL_Window*, const char*, const char*, int);
+        extern void Port_GPU_Shutdown(void);
+        extern void Port_DiscordRpc_Shutdown(void);
+#ifndef TMC_GPU_RENDERER
+        const char* rom_name = "baserom.gba";
+        if (romPath) {
+            const char* slash = strrchr(romPath, '/');
+#ifdef _WIN32
+            const char* bslash = strrchr(romPath, '\\');
+            if (bslash && (!slash || bslash > slash)) slash = bslash;
+#endif
+            if (slash && slash[1]) rom_name = slash + 1;
+            else rom_name = romPath;
+        }
+#endif
+        const Uint64 PRELAUNCH_TIMEOUT_MS = 2200;
+        const Uint64 start_ms = SDL_GetTicks();
+        bool skipped = false;
+        for (;;) {
+            const Uint64 elapsed = SDL_GetTicks() - start_ms;
+            if (elapsed >= PRELAUNCH_TIMEOUT_MS) break;
+
+#ifdef TMC_GPU_RENDERER
+            {
+                extern bool Port_GPU_PaintBootSplash(void);
+                Port_GPU_PaintBootSplash();
+            }
+#else
+            const int remaining_s = (int)((PRELAUNCH_TIMEOUT_MS - elapsed + 999) / 1000);
+            Port_PaintPrelaunch(window, TMC_PC_VERSION, rom_name, remaining_s);
+#endif
+            SDL_Event ev;
+            while (SDL_PollEvent(&ev)) {
+                if (ev.type == SDL_EVENT_KEY_DOWN ||
+                    ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                    ev.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ||
+                    ev.type == SDL_EVENT_FINGER_DOWN) {
+                    skipped = true;
+                    break;
+                }
+                if (ev.type == SDL_EVENT_QUIT) {
+                    /* User closed the window before the game started —
+                     * bail out of main() the same way an AgbMain quit
+                     * would. */
+                    Port_GPU_Shutdown();
+                    Port_DiscordRpc_Shutdown();
+                    Port_Audio_Shutdown();
+                    Port_PPU_Shutdown();
+                    Port_Config_CloseGamepads();
+                    SDL_DestroyWindow(window);
+                    SDL_Quit();
+                    return 0;
+                }
+            }
+            if (skipped) break;
+            SDL_Delay(33); /* ~30 fps repaint is plenty for static text */
+        }
+        fprintf(stderr, "Prelaunch %s.\n", skipped ? "skipped by user" : "auto-advanced");
+    }
+
     AgbMain();
 
     {

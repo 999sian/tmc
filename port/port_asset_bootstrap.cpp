@@ -619,3 +619,79 @@ extern "C" void Port_PaintBootSplash(SDL_Window* window, const char* message) {
 
     SDL_RenderPresent(renderer);
 }
+
+/* Project Picori prelaunch frame — repaints the boot splash with
+ * richer content (version, ROM filename, countdown). Called repeatedly
+ * by main.c's prelaunch loop until the user presses a key or the
+ * countdown expires. countdown is the remaining seconds (≥ 0); 0 means
+ * "starting now".
+ *
+ * Same bitmap-font approach as Port_PaintBootSplash so we don't need
+ * font-atlas plumbing — this stage runs before ImGui's NewFrame
+ * pipeline is wired up and shares the rest of the splash's render
+ * primitives. */
+extern "C" void Port_PaintPrelaunch(SDL_Window* window,
+                                    const char* version,
+                                    const char* rom_name,
+                                    int countdown_seconds) {
+    if (!window) return;
+    SDL_Renderer* renderer = SDL_GetRenderer(window);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, nullptr);
+    }
+    if (!renderer) return;
+
+    int width = 0;
+    int height = 0;
+    SDL_GetWindowSize(window, &width, &height);
+    const float fw = static_cast<float>(width);
+    const float fh = static_cast<float>(height);
+    const float scale = std::max(2.0f, std::round(fw / 240.0f));
+
+    SDL_SetRenderDrawColor(renderer, 15, 18, 18, 255);
+    SDL_RenderClear(renderer);
+
+    const std::string title = "PROJECT PICORI";
+    const std::string sub   = "MINISH CAP PC PORT";
+    const std::string ver   = version  ? std::string("VERSION ") + version    : std::string("VERSION ?");
+    const std::string rom   = rom_name ? std::string("ROM: ") + rom_name      : std::string("ROM: ?");
+    char prompt[64];
+    if (countdown_seconds > 0) {
+        std::snprintf(prompt, sizeof(prompt),
+                      "STARTING IN %d   PRESS ANY KEY TO SKIP",
+                      countdown_seconds);
+    } else {
+        std::snprintf(prompt, sizeof(prompt), "STARTING");
+    }
+    const SDL_Color accent  = { 105, 184, 117, 255 };  /* Minish-green */
+    const SDL_Color subText = { 180, 195, 180, 255 };
+
+    const float titleScale = scale * 1.8f;
+    const float subScale   = scale * 0.9f;
+
+    const float titleW = MeasureText(title, titleScale);
+    const float subW   = MeasureText(sub,   subScale);
+    const float verW   = MeasureText(ver,   scale);
+    const float romW   = MeasureText(rom,   scale);
+    const float prW    = MeasureText(prompt, scale);
+
+    const float gap = 12.0f;
+    const float blockH = 7.0f * titleScale + gap
+                       + 7.0f * subScale   + gap * 2.0f
+                       + 7.0f * scale      + gap
+                       + 7.0f * scale      + gap * 2.0f
+                       + 7.0f * scale;
+    float y = (fh - blockH) * 0.5f;
+
+    DrawText(renderer, title,  (fw - titleW) * 0.5f, y, titleScale, accent);
+    y += 7.0f * titleScale + gap;
+    DrawText(renderer, sub,    (fw - subW)   * 0.5f, y, subScale,   subText);
+    y += 7.0f * subScale + gap * 2.0f;
+    DrawText(renderer, ver,    (fw - verW)   * 0.5f, y, scale);
+    y += 7.0f * scale + gap;
+    DrawText(renderer, rom,    (fw - romW)   * 0.5f, y, scale);
+    y += 7.0f * scale + gap * 2.0f;
+    DrawText(renderer, prompt, (fw - prW)    * 0.5f, y, scale, subText);
+
+    SDL_RenderPresent(renderer);
+}
