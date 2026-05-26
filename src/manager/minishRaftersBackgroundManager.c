@@ -57,6 +57,24 @@ u32 sub_08058244(int i) {
 
 void sub_080582A0(u32 unk, u32* unk2, u16* unk3) {
     int i = 0x20;
+#ifdef PC_PORT
+    /* Same-class fix as bigGoron.c::sub_0806D164 (issue #102) /
+     * horizontalMinishPathBackgroundManager.c::sub_08058004.
+     * Callers pass unk2 = gUnk_02006F00 (16 KB). The loop reads
+     * 32 × 0x100 = 0x2000 bytes forward starting at unk2 + (unk>>4)*4
+     * (unk2 is u32*, so += 0x40 == +0x100 bytes). When `unk` comes from
+     * scroll_x derivations and goes negative under camera-wrap, the
+     * start offset balloons and the read walks off into unmapped host
+     * memory — SIGSEGV inside DmaCopy16. Skip the update if the start
+     * would push the trailing 0x2000-byte read out of bounds. */
+    {
+        u32 startBytes = (unk >> 4) * 4;
+        if ((u8*)unk2 < (u8*)gUnk_02006F00 ||
+            (u8*)unk2 >= (u8*)gUnk_02006F00 + 0x4000 ||
+            startBytes + 0x2000u > 0x4000u - (u32)((u8*)unk2 - (u8*)gUnk_02006F00))
+            return;
+    }
+#endif
     unk2 += unk >> 4;
     for (; i != 0; i--) {
         DmaCopy16(3, unk2, unk3, 0x20 * 2);
@@ -67,7 +85,20 @@ void sub_080582A0(u32 unk, u32* unk2, u16* unk3) {
 
 void sub_080582D0(void) {
     u8* tmp = gMapDataTopSpecial;
+#ifdef PC_PORT
+    /* Same-class fix as bigGoron.c::sub_0806D110 (issue #102).
+     * On GBA `tmp + 0x4000` resolves to gUnk_02006F00 (16 KB BG tilemap
+     * buffer) via the contiguous EWRAM layout (gMapDataTopSpecial @
+     * 0x02002F00 + 0x4000 = 0x02006F00 = gUnk_02006F00).  On PC the two
+     * are separate host allocations, so the bridge silently writes into
+     * the middle of gMapDataTopSpecial instead — leaving gUnk_02006F00
+     * uninitialised, which is what sub_080582A0 then DmaCopies back out
+     * (and what can SIGSEGV when its start offset goes wild). Route
+     * through the real buffer. */
+    u8* tmp2 = (u8*)gUnk_02006F00;
+#else
     u8* tmp2 = tmp + 0x4000;
+#endif
     sub_080582F8(tmp, tmp2);
     tmp += 0x800;
     tmp2 += 0x40;
