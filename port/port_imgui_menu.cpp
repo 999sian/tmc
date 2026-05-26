@@ -317,25 +317,23 @@ static void DrawRibbonDisplayTab(void) {
     if (ImGui::Button(">##scale")) Port_PPU_CycleWindowScale(+1);
 
     /* Backend-conditional disable for SW-only presentation features.
-     * The GPU path skips Port_Filter_Apply / Port_Upscale_xBRZ /
-     * Port_PPU_BuildScaledFrame entirely (its shader pipeline does
-     * the equivalent work), so cycling these settings while GPU is
-     * active wouldn't change anything visible. */
+     * CRT/LCD filter still only runs in the SDL_Renderer branch
+     * (Port_Filter_Apply is CPU-side and not yet plumbed into the GPU
+     * present path). xBRZ NOW works on both backends — the GPU path
+     * feeds the CPU-upscaled 960x640 buffer straight to PresentFrame. */
     const bool gpuActive = Port_GPU_IsActive();
     const char* swOnlyTip =
-        "SW-only. GPU backend uses the .glslp shader pipeline below "
-        "for the equivalent effects (xbr-*.glslp, crt-*.glslp).";
+        "SW-only on the CPU filter path. GPU users: load a "
+        "crt-*.glslp shader preset below instead.";
 
-    /* Filter (SW-path presentation mode: nearest/linear/xBRZ) */
-    ImGui::BeginDisabled(gpuActive);
+    /* Filter (presentation mode: nearest/linear/xBRZ). Enabled on both
+     * backends. xBRZ Linear vs Nearest currently only differs on the
+     * SDL_Renderer path (SDL_SCALEMODE controls the final stretch); on
+     * GPU both ride whatever sampler the passthrough shader picks. */
     ImGui::Text("Filter"); ImGui::SameLine(140);
     if (ImGui::Button("<##filter")) Port_PPU_CyclePresentationMode(-1);
     ImGui::SameLine(); ImGui::Text("%s", Port_PPU_PresentationModeName()); ImGui::SameLine();
     if (ImGui::Button(">##filter")) Port_PPU_CyclePresentationMode(+1);
-    ImGui::EndDisabled();
-    if (gpuActive && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("%s", swOnlyTip);
-    }
 
     /* FPS */
     ImGui::Text("Target FPS"); ImGui::SameLine(140);
