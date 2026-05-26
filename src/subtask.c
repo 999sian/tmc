@@ -8,6 +8,9 @@
 #include "save.h"
 #include "screen.h"
 #include "ui.h"
+#ifdef PC_PORT
+#include "manager.h"
+#endif
 #include "windcrest.h"
 #include "affine.h"
 #include "beanstalkSubtask.h"
@@ -299,6 +302,29 @@ void Subtask_FadeOut(void) {
         if (gUI.pauseFadeIn == GAMEMAIN_BARRELUPDATE) {
             extern void RollingBarrelManager_OnEnterRoom(void);
             RollingBarrelManager_OnEnterRoom();
+        }
+        /* Issue #103: kinstone-fusion world-map screen
+         * (pauseMenuScreen6.c:165-176) sets up an HBlank DMA that
+         * writes 0x1e0a to BG3CNT every scanline.  Its subtask exits
+         * without disabling that DMA, so on return to gameplay BG3
+         * keeps reading from the wrong charBase — Cloud Tops cloud
+         * texture goes missing/garbled.  Disable any leftover
+         * VBlankDMA here, then re-apply each AnimatedBackgroundManager's
+         * bg3 control so the next frame's VBlank write overwrites
+         * whatever the dead DMA left in BG3CNT.  Safe-by-default —
+         * if a subtask wanted persistent DMA across its exit it
+         * would have re-armed it post-restore anyway. */
+        {
+            extern void DisableVBlankDMA(void);
+            extern Entity* FindEntityByID(u32 kind, u32 id, u32 idx);
+            extern void AnimatedBackgroundManager_RestoreBgGfx(void* mgr);
+            DisableVBlankDMA();
+            for (u32 i = 0; i < 9; ++i) {
+                Entity* mgr = FindEntityByID(MANAGER, ANIMATED_BACKGROUND_MANAGER, i);
+                if (mgr != NULL) {
+                    AnimatedBackgroundManager_RestoreBgGfx(mgr);
+                }
+            }
         }
 #endif
         sub_0801D000(gUI.unk_d != 0);
