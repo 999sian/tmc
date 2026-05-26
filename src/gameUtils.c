@@ -9,6 +9,7 @@
 #include "fade.h"
 #include "fileselect.h"
 #include "manager.h"
+#include "manager/animatedBackgroundManager.h"
 #include "game.h"
 #include "item.h"
 #include "main.h"
@@ -368,6 +369,23 @@ void RestoreGameTask(bool32 loadGfx) {
     sub_080ADE24();
     InitUI(TRUE);
     sub_0801AE44(loadGfx);
+#ifdef PC_PORT
+    {
+        u32 i;
+        for (i = 0; i < ARRAY_COUNT(gEntityLists); i++) {
+            AnimatedBackgroundManager* manager =
+                (AnimatedBackgroundManager*)FindEntityByID(MANAGER, ANIMATED_BACKGROUND_MANAGER, i);
+            if (manager != NULL) {
+                /*
+                 * Menu subtasks reuse BG3 screenbase 30 for kinstone graphics.
+                 * Restored managers resume at action 1, so their init path does
+                 * not re-apply the animated BG control/tiles until a room reload.
+                 */
+                AnimatedBackgroundManager_RestoreBgGfx(manager);
+            }
+        }
+    }
+#endif
     MemCopy(gPaletteBufferBackup, gPaletteBuffer, 1024);
     gUsedPalettes = 0xffffffff;
 #ifdef PC_PORT

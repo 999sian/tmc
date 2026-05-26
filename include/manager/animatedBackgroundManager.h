@@ -7,4 +7,6 @@ typedef struct {
     Manager base;
 } AnimatedBackgroundManager;
 
+void AnimatedBackgroundManager_RestoreBgGfx(AnimatedBackgroundManager*);
+
 #endif // ANIMATEDBACKGROUNDMANAGER_H

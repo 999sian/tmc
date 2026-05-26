@@ -1734,8 +1734,19 @@ u32 sub_unk3_TownMinishHoles_LibraryBookshelf(void) {
     return 1;
 }
 
+/* #135: flags=15 (=0x0F) skipped the script-start path in
+ * sub_0804AF0C — `flags & 0xF0` lands on case 0x0 which only
+ * positions the entity, while case 0x40 also calls StartCutscene
+ * (which sets ENT_SCRIPTED). Without ENT_SCRIPTED, TownMinish's
+ * scripted update path (sub_0806ACC4) never runs, the script's
+ * `Call TownMinish_MakeInteractable` never fires, and no
+ * Speak prompt appears for the Flippers-quest yellow Minish in
+ * the bookshelf. The .s definition at @ 080DB820 uses the
+ * default `npc_raw` pool of 0x4F → matches every other NPC
+ * EntityData in src/cutscene.c / src/worldEvent/*; the `15` in
+ * the C transcription was a decomp typo. */
 EntityData gUnk_additional_a_TownMinishHoles_LibraryBookshelf[] = {
-    { NPC, 15, TOWN_MINISH, 2, 0x200, 0x80, 0x158, ENTITY_SCRIPT(script_TownMinish1) },
+    { NPC, 0x4F, TOWN_MINISH, 2, 0x200, 0x80, 0x158, ENTITY_SCRIPT(script_TownMinish1) },
     { 0xFF, 0, 0, 0, 0, 0, 0, 0 },
 };
 
