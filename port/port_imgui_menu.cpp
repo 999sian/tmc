@@ -1719,7 +1719,8 @@ extern "C" int         Port_PrelaunchLogo_GetHeight(void);
  * backend, presents the frame inline. On the SDL_GPU backend, builds
  * + Render()s the draw data and returns true — the caller must follow
  * up with Port_GPU_PresentPrelaunchFrame() to present it. */
-extern "C" bool Port_ImGui_RenderPrelaunch(const char* version,
+extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
+                                           const char* version,
                                            const char* rom_name,
                                            bool* out_play,
                                            bool* out_change_rom) {
@@ -1799,46 +1800,80 @@ extern "C" bool Port_ImGui_RenderPrelaunch(const char* version,
         ImGui::Separator();
         ImGui::Dummy(ImVec2(0, 14));
 
-        ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
-        ImGui::TextUnformatted("Version");
-        ImGui::PopStyleColor();
-        ImGui::SameLine(170.0f);
-        ImGui::TextUnformatted(version ? version : "?");
+        if (rom_present) {
+            ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+            ImGui::TextUnformatted("Version");
+            ImGui::PopStyleColor();
+            ImGui::SameLine(170.0f);
+            ImGui::TextUnformatted(version ? version : "?");
 
-        ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
-        ImGui::TextUnformatted("ROM");
-        ImGui::PopStyleColor();
-        ImGui::SameLine(170.0f);
-        ImGui::TextUnformatted(rom_name ? rom_name : "?");
-        ImGui::SameLine();
-        /* Right-align the Change-ROM button to the edge of the card. */
-        {
-            const char* lbl = "Change ROM...";
-            float bw = ImGui::CalcTextSize(lbl).x + ImGui::GetStyle().FramePadding.x * 2.0f;
-            float pad = ImGui::GetStyle().WindowPadding.x;
-            ImGui::SameLine(win_w - pad - bw);
-            if (ImGui::Button(lbl)) {
-                if (out_change_rom) *out_change_rom = true;
+            ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+            ImGui::TextUnformatted("ROM");
+            ImGui::PopStyleColor();
+            ImGui::SameLine(170.0f);
+            ImGui::TextUnformatted(rom_name ? rom_name : "?");
+            ImGui::SameLine();
+            /* Right-align the Change-ROM button to the edge of the card. */
+            {
+                const char* lbl = "Change ROM...";
+                float bw = ImGui::CalcTextSize(lbl).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+                float pad = ImGui::GetStyle().WindowPadding.x;
+                ImGui::SameLine(win_w - pad - bw);
+                if (ImGui::Button(lbl)) {
+                    if (out_change_rom) *out_change_rom = true;
+                }
             }
+        } else {
+            /* First-launch / missing-ROM state: dominate the card with a
+             * "Select your Minish Cap ROM" prompt + big button. No Play
+             * yet — there's nothing to play. */
+            ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
+            {
+                const char* h = "No ROM found.";
+                float hw = ImGui::CalcTextSize(h).x;
+                ImGui::SetCursorPosX((win_w - hw) * 0.5f);
+                ImGui::TextUnformatted(h);
+            }
+            {
+                const char* h2 = "Project Picori needs your own Minish Cap dump (.gba).";
+                float hw = ImGui::CalcTextSize(h2).x;
+                ImGui::SetCursorPosX((win_w - hw) * 0.5f);
+                ImGui::TextUnformatted(h2);
+            }
+            {
+                const char* h3 = "We identify it by SHA-1 — filename is irrelevant.";
+                float hw = ImGui::CalcTextSize(h3).x;
+                ImGui::SetCursorPosX((win_w - hw) * 0.5f);
+                ImGui::TextUnformatted(h3);
+            }
+            ImGui::PopStyleColor();
         }
 
         ImGui::Dummy(ImVec2(0, 22));
 
-        /* Big centred Play button. Enter / Space / Gamepad-A also fire. */
+        /* Big centred action button: Play when a ROM is loaded, Select
+         * ROM when none. Enter / Space activates whichever is shown. */
         {
-            const char* lbl = "Play";
-            const ImVec2 sz(220.0f, 48.0f);
+            const bool is_select = !rom_present;
+            const char* lbl = is_select ? "Select ROM..." : "Play";
+            const ImVec2 sz(is_select ? 260.0f : 220.0f, 48.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
             ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.42f, 0.24f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.55f, 0.34f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.40f, 0.72f, 0.46f, 1.0f));
             ImGui::SetCursorPosX((win_w - sz.x) * 0.5f);
             ImGui::SetWindowFontScale(1.4f);
-            if (ImGui::Button(lbl, sz) ||
+            const bool clicked =
+                ImGui::Button(lbl, sz) ||
                 ImGui::IsKeyPressed(ImGuiKey_Enter) ||
                 ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) ||
-                ImGui::IsKeyPressed(ImGuiKey_Space)) {
-                if (out_play) *out_play = true;
+                ImGui::IsKeyPressed(ImGuiKey_Space);
+            if (clicked) {
+                if (is_select) {
+                    if (out_change_rom) *out_change_rom = true;
+                } else {
+                    if (out_play) *out_play = true;
+                }
             }
             ImGui::SetWindowFontScale(1.0f);
             ImGui::PopStyleColor(3);
@@ -1848,7 +1883,9 @@ extern "C" bool Port_ImGui_RenderPrelaunch(const char* version,
         ImGui::Dummy(ImVec2(0, 6));
         ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
         {
-            const char* hint = "Press Enter or click Play to start";
+            const char* hint = rom_present
+                ? "Press Enter or click Play to start"
+                : "Press Enter or click to pick your .gba file";
             float h_w = ImGui::CalcTextSize(hint).x;
             ImGui::SetCursorPosX((win_w - h_w) * 0.5f);
             ImGui::TextUnformatted(hint);
