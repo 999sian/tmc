@@ -1283,6 +1283,14 @@ static void DrawRibbonAccessibilityTab(void) {
     ImGui::Text("Backend"); ImGui::SameLine(160);
     if (backendName) {
         ImGui::TextUnformatted(backendName);
+        /* On Windows the runtime path picks NVDA vs SAPI per Speak
+         * call. If the user has NVDA running we hand off to their
+         * configured voice — note that the rate/pitch/volume sliders
+         * below are ignored on the NVDA path (NVDA owns those). */
+        if (std::strcmp(backendName, "NVDA") == 0) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(rate/pitch/volume ignored — NVDA controls those)");
+        }
     } else {
         ImGui::TextDisabled("(unavailable — install spd-say / espeak-ng on Linux)");
     }

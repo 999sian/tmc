@@ -57,6 +57,11 @@ enum class Backend {
     Espeak,      /* Linux: original espeak */
     Say,         /* macOS: AppKit-backed CLI */
     Sapi,        /* Windows: PowerShell + System.Speech.Synthesis */
+    Nvda,        /* Windows: nvdaControllerClient — preferred when NVDA
+                  *          is the user's screen reader. NVDA owns the
+                  *          rate/pitch/voice settings (configured inside
+                  *          NVDA itself), so our sliders are ignored on
+                  *          this path. */
 };
 
 const char* BackendName(Backend b) {
@@ -66,15 +71,74 @@ const char* BackendName(Backend b) {
         case Backend::Espeak:   return "espeak";
         case Backend::Say:      return "say";
         case Backend::Sapi:     return "sapi";
+        case Backend::Nvda:     return "NVDA";
         default:                return nullptr;
     }
 }
 
 #ifdef _WIN32
+/* ============================================================
+ * NVDA Controller Client integration.
+ *
+ * NVDA (NonVisual Desktop Access) is the de-facto open-source
+ * screen reader on Windows. Apps that want to be screen-reader-
+ * friendly call into nvdaControllerClient.dll instead of doing
+ * their own synthesis — NVDA then queues the speech through the
+ * user's configured voice / rate / pitch (which the user has
+ * already tuned in NVDA's own settings).
+ *
+ * We load the DLL lazily so this binary still runs on Windows
+ * boxes that don't have NVDA installed (we just fall back to
+ * SAPI). 64-bit binaries need nvdaControllerClient64.dll;
+ * 32-bit needs nvdaControllerClient32.dll. We also try the
+ * plain name in case the user dropped the right one next to
+ * tmc_pc.exe themselves.
+ * ============================================================ */
+typedef int (__cdecl *PFN_nvdaController_testIfRunning)(void);
+typedef int (__cdecl *PFN_nvdaController_speakText)(const wchar_t*);
+typedef int (__cdecl *PFN_nvdaController_cancelSpeech)(void);
+
+HMODULE g_nvda_dll = nullptr;
+PFN_nvdaController_testIfRunning g_nvda_testIfRunning = nullptr;
+PFN_nvdaController_speakText     g_nvda_speakText     = nullptr;
+PFN_nvdaController_cancelSpeech  g_nvda_cancelSpeech  = nullptr;
+
+bool TryLoadNvda() {
+    if (g_nvda_dll) return g_nvda_speakText != nullptr;
+    /* DLL search order matters — prefer the 64-bit name (matches
+     * our tmc_pc.exe target), then the 32-bit name (in case
+     * someone copied the wrong one), then the unversioned name
+     * (NVDA's installer drops it in NVDA's program-files dir but
+     * a developer might place a copy next to the binary). */
+    g_nvda_dll = LoadLibraryA("nvdaControllerClient64.dll");
+    if (!g_nvda_dll) g_nvda_dll = LoadLibraryA("nvdaControllerClient32.dll");
+    if (!g_nvda_dll) g_nvda_dll = LoadLibraryA("nvdaControllerClient.dll");
+    if (!g_nvda_dll) return false;
+    g_nvda_testIfRunning = (PFN_nvdaController_testIfRunning)
+        GetProcAddress(g_nvda_dll, "nvdaController_testIfRunning");
+    g_nvda_speakText = (PFN_nvdaController_speakText)
+        GetProcAddress(g_nvda_dll, "nvdaController_speakText");
+    g_nvda_cancelSpeech = (PFN_nvdaController_cancelSpeech)
+        GetProcAddress(g_nvda_dll, "nvdaController_cancelSpeech");
+    if (!g_nvda_testIfRunning || !g_nvda_speakText || !g_nvda_cancelSpeech) {
+        FreeLibrary(g_nvda_dll);
+        g_nvda_dll = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool NvdaIsRunning() {
+    /* nvdaController_testIfRunning returns 0 (S_OK) when NVDA is
+     * running, non-zero otherwise — opposite of the conventional
+     * "boolean" sense, but matches the NVDA Controller API docs. */
+    return TryLoadNvda() && g_nvda_testIfRunning() == 0;
+}
+
 bool CommandExists(const char*) {
-    /* Windows backend is always available — Add-Type loads
-     * System.Speech from the bundled .NET assemblies. PowerShell
-     * is shipped with every supported Windows version. */
+    /* Windows backend is always available — SAPI ships in every
+     * supported Windows version via PowerShell + System.Speech.
+     * NVDA path detection happens separately in NvdaIsRunning(). */
     return false;
 }
 #else
@@ -88,6 +152,13 @@ bool CommandExists(const char* name) {
 
 Backend DetectBackend() {
 #ifdef _WIN32
+    /* Prefer NVDA when its DLL is present + the user has NVDA
+     * running. Each Speak call re-tests at runtime via
+     * NvdaIsRunning() so we transparently fall back to SAPI if
+     * NVDA exits mid-session (and vice-versa). The "preferred"
+     * backend recorded here is the one the F8 UI labels; the
+     * runtime dispatch happens in SpeakOne. */
+    if (TryLoadNvda()) return Backend::Nvda;
     return Backend::Sapi;
 #elif defined(__APPLE__)
     return Backend::Say;     /* present on every macOS install */
@@ -301,7 +372,31 @@ int RunPowerShell(const std::string& script) {
     return (int)rc;
 }
 
+void SpeakNvda(const std::string& text, const PortTtsOptions& opts) {
+    /* NVDA's controller API only does Speak / Cancel — rate / pitch /
+     * volume are controlled by the user inside NVDA itself. That's
+     * the *correct* behaviour: screen-reader users have already tuned
+     * NVDA to their preferences, and overriding from app code would
+     * fight muscle memory. We just hand it the text. */
+    if (!g_nvda_speakText) return;
+    /* nvdaController_speakText queues asynchronously; for URGENT we
+     * cancel first to clear the queue. */
+    if (opts.priority == PORT_TTS_PRIO_URGENT && g_nvda_cancelSpeech) {
+        g_nvda_cancelSpeech();
+    }
+    /* UTF-8 → UTF-16 (NVDA expects wchar_t* / UTF-16 on Windows). */
+    int len = MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+    if (len <= 0) return;
+    std::vector<wchar_t> wtext(static_cast<size_t>(len));
+    MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, wtext.data(), len);
+    g_nvda_speakText(wtext.data());
+}
+
 void KillCurrent() {
+    /* NVDA path: cancel its queue instead of killing a subprocess. */
+    if (g_nvda_cancelSpeech && NvdaIsRunning()) {
+        g_nvda_cancelSpeech();
+    }
     HANDLE h = g_state.current_proc.exchange(nullptr);
     if (h) TerminateProcess(h, 1);
 }
@@ -347,7 +442,12 @@ void SpeakSapi(const std::string& text, const PortTtsOptions& opts) {
 void SpeakOne(const Utterance& u) {
     g_state.in_flight.store(true);
 #ifdef _WIN32
-    if (g_state.backend == Backend::Sapi) {
+    /* Re-test NVDA each frame so the backend transparently follows
+     * the user's choice: if NVDA starts mid-session we route there;
+     * if NVDA exits we fall back to SAPI on the next call. */
+    if (NvdaIsRunning()) {
+        SpeakNvda(u.text, u.opts);
+    } else {
         SpeakSapi(u.text, u.opts);
     }
 #else
