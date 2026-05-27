@@ -522,6 +522,16 @@ int main(int argc, char* argv[]) {
 #endif
     fprintf(stderr, "PPU init complete.\n");
 
+    /* TTS init runs after PPU so ImGui is up (the F8 menu's TTS tab
+     * uses it immediately) but well before AgbMain — accessibility
+     * announcements for the prelaunch screen need a working backend
+     * BEFORE the prelaunch frame loop runs. Idempotent + no-op if no
+     * backend is available; never blocks. */
+    {
+        extern bool Port_TTS_Init(void);
+        Port_TTS_Init();
+    }
+
     /* ====================================================================
      * Project Picori prelaunch screen.
      *
@@ -691,6 +701,10 @@ int main(int argc, char* argv[]) {
 
     AgbMain();
 
+    {
+        extern void Port_TTS_Shutdown(void);
+        Port_TTS_Shutdown();
+    }
     {
         extern void Port_GPU_Shutdown(void);
         Port_GPU_Shutdown();
