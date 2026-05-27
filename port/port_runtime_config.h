@@ -115,6 +115,21 @@ const char*       Port_Config_RenderBackendName(PortRenderBackend b);
 void              Port_Config_SetRenderBackend(PortRenderBackend b);
 void              Port_Config_CycleRenderBackend(int direction);
 
+/* Text-to-speech accessibility settings — read by port_tts at startup
+ * and re-written on every setter. All persisted to config.json. */
+bool        Port_Config_GetTtsEnabled(void);
+void        Port_Config_SetTtsEnabled(bool on);
+float       Port_Config_GetTtsRate(void);
+void        Port_Config_SetTtsRate(float v);
+float       Port_Config_GetTtsPitch(void);
+void        Port_Config_SetTtsPitch(float v);
+float       Port_Config_GetTtsVolume(void);
+void        Port_Config_SetTtsVolume(float v);
+const char* Port_Config_GetTtsVoice(void);
+void        Port_Config_SetTtsVoice(const char* v);
+const char* Port_Config_GetTtsLanguage(void);
+void        Port_Config_SetTtsLanguage(const char* v);
+
 void Port_Config_OpenGamepads(void);
 void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);

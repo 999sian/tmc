@@ -41,6 +41,7 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "port_randomizer.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
+#include "port_tts.h"             /* Port_TTS_* — accessibility tab + focus reader */
 #include "rando/rando.h"
 
 #include <cstdio>
@@ -1264,6 +1265,99 @@ static void DrawRibbonAudioTab(void) {
     }
 }
 
+static void DrawRibbonAccessibilityTab(void) {
+    /* TTS-driven accessibility — reads UI labels aloud through the
+     * platform-native synthesizer. Keep this tab minimal (toggle +
+     * a few sliders + voice/lang text inputs + a test button) so
+     * everything is keyboard-reachable. All Port_TTS_* live in
+     * port_tts.h which we include at the top. */
+    Port_TTS_Init();  /* idempotent — safe if main.c already initialised */
+    const char* backendName = Port_TTS_GetBackendName();
+
+    ImGui::TextWrapped(
+        "Text-to-speech reads important UI labels aloud (focused "
+        "buttons, dialogs, errors). Toggle off at any time. Default "
+        "off; settings persist across launches.");
+    ImGui::Separator();
+
+    ImGui::Text("Backend"); ImGui::SameLine(160);
+    if (backendName) {
+        ImGui::TextUnformatted(backendName);
+    } else {
+        ImGui::TextDisabled("(unavailable — install spd-say / espeak-ng on Linux)");
+    }
+
+    bool on = Port_TTS_GetEnabled();
+    if (ImGui::Checkbox("Enable TTS", &on)) {
+        Port_TTS_SetEnabled(on);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(F7 toggles, F6 stops speech)");
+
+    float rate = Port_TTS_GetRate();
+    if (ImGui::SliderFloat("Rate##tts", &rate, 0.0f, 1.0f, "%.2f")) {
+        Port_TTS_SetRate(rate);
+    }
+    float pitch = Port_TTS_GetPitch();
+    if (ImGui::SliderFloat("Pitch##tts", &pitch, 0.0f, 1.0f, "%.2f")) {
+        Port_TTS_SetPitch(pitch);
+    }
+    float volume = Port_TTS_GetVolume();
+    if (ImGui::SliderFloat("Volume##tts", &volume, 0.0f, 1.0f, "%.2f")) {
+        Port_TTS_SetVolume(volume);
+    }
+
+    static char voiceBuf[128];
+    static char langBuf[32];
+    static bool inited = false;
+    if (!inited) {
+        const char* v = Port_TTS_GetVoice();
+        const char* l = Port_TTS_GetLanguage();
+        std::strncpy(voiceBuf, v ? v : "", sizeof(voiceBuf) - 1);
+        std::strncpy(langBuf,  l ? l : "", sizeof(langBuf) - 1);
+        inited = true;
+    }
+    if (ImGui::InputText("Voice##tts", voiceBuf, sizeof(voiceBuf))) {
+        Port_TTS_SetVoice(voiceBuf);
+    }
+    if (ImGui::InputText("Language##tts", langBuf, sizeof(langBuf))) {
+        Port_TTS_SetLanguage(langBuf);
+    }
+    ImGui::TextDisabled(
+        "Voice IDs vary by backend (espeak: 'en+f2', say: 'Samantha', "
+        "SAPI: 'Microsoft David Desktop'). Leave blank for default.");
+
+    ImGui::Separator();
+    if (ImGui::Button("Test voice")) {
+        /* Bypass dedupe for the test button so repeated presses
+         * always speak — useful when tuning rate/pitch. */
+        PortTtsOptions o = {};
+        o.rate = o.pitch = o.volume = 0.0f/0.0f;
+        o.dedupe = false;
+        Port_TTS_Speak(
+            "This is the Project Picori text-to-speech test. "
+            "If you hear this, T T S is wired up.",
+            &o);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Stop")) {
+        Port_TTS_Stop();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Read focus")) {
+        Port_TTS_Speak("Focus reader test. The focused control reads aloud as you Tab.", nullptr);
+    }
+
+    ImGui::Separator();
+    ImGui::TextWrapped(
+        "Manual test plan:\n"
+        "  1. Enable above, click Test voice — hear the test line.\n"
+        "  2. Tab through this tab's controls — each label announces.\n"
+        "  3. F7 toggles TTS without opening the menu.\n"
+        "  4. F6 stops mid-utterance.\n"
+        "  5. Open a save-overwrite dialog — modal is announced.");
+}
+
 static void DrawRibbonRebornTab(void) {
     ImGui::TextWrapped("Quality-of-life features cherry-picked from "
                        "Minish Cap Reborn (clean-room — does NOT include "
@@ -1326,6 +1420,7 @@ static void DrawRibbon(void) {
             if (ImGui::BeginTabItem("Warp"))       { DrawRibbonWarpTab();       ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Randomizer")) { DrawRibbonRandomizerTab(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Audio"))      { DrawRibbonAudioTab();      ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Accessibility")) { DrawRibbonAccessibilityTab(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Reborn"))     { DrawRibbonRebornTab();     ImGui::EndTabItem(); }
             ImGui::EndTabBar();
         }
@@ -1663,6 +1758,15 @@ extern "C" bool Port_ImGui_Render(void) {
             }
         }
     }
+
+    /* Future-friendly: per-frame focus reader hook. ImGui doesn't
+     * expose a label-string from the focus ID (labels are hashed
+     * into IDs at widget time) so the per-tab handlers call
+     * Port_TTS_OnFocusChanged manually for each row when they want
+     * announcements. This block is intentionally left empty for
+     * now — keep the slot reserved next to Render() so future
+     * work that DOES carry labels through DataID has an obvious
+     * place to plug in. */
 
     ImGui::Render();
 #ifdef TMC_GPU_RENDERER

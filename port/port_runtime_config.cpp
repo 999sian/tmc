@@ -80,6 +80,12 @@ u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
  * here but a restart is needed to apply because the window's
  * swapchain owner is set once and is not live-switchable. */
 PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
+bool        sTtsEnabled  = false;
+float       sTtsRate     = 0.5f;
+float       sTtsPitch    = 0.5f;
+float       sTtsVolume   = 0.8f;
+std::string sTtsVoice;
+std::string sTtsLanguage;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -114,6 +120,15 @@ nlohmann::json DefaultsJson(void) {
         { "bg_fill", "black" },
         { "bg_fill_color", { 0, 0, 0 } },
         { "render_backend", "auto" },
+        /* TTS accessibility — default OFF (privacy + voice synthesis
+         * isn't every user's preference). Rate/pitch/volume in [0,1];
+         * voice/language empty = backend default. */
+        { "tts_enabled", false },
+        { "tts_rate", 0.5 },
+        { "tts_pitch", 0.5 },
+        { "tts_volume", 0.8 },
+        { "tts_voice", "" },
+        { "tts_language", "" },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -482,6 +497,15 @@ extern "C" void Port_Config_Load(const char* path) {
         else if (rb == "gpu")                       sRenderBackend = PORT_RENDER_BACKEND_GPU;
         else                                         sRenderBackend = PORT_RENDER_BACKEND_AUTO;
     }
+
+    /* TTS settings — read-once at Port_TTS_Init; setters from the
+     * F8 menu write back via Port_Config_SetTts* below. */
+    sTtsEnabled  = j.value("tts_enabled", false);
+    sTtsRate     = (float)j.value("tts_rate",   0.5);
+    sTtsPitch    = (float)j.value("tts_pitch",  0.5);
+    sTtsVolume   = (float)j.value("tts_volume", 0.8);
+    sTtsVoice    = j.value("tts_voice",    std::string());
+    sTtsLanguage = j.value("tts_language", std::string());
 
     for (auto& v : sBinds) {
         v.clear();
@@ -1091,5 +1115,59 @@ extern "C" void Port_Config_ResetAllBindings(void) {
         b[d.name] = arr;
     }
     sConfigJson["bindings"] = b;
+    SaveConfig();
+}
+
+/* ------------------------------------------------------------------ */
+/*  TTS settings                                                      */
+/*                                                                    */
+/*  Persisted to config.json so the user's voice / rate / pitch /     */
+/*  volume / language survives restarts. The actual TTS service       */
+/*  caches these in port_tts.cpp and re-reads on init.                */
+/* ------------------------------------------------------------------ */
+
+extern "C" bool Port_Config_GetTtsEnabled(void) { return sTtsEnabled; }
+extern "C" void Port_Config_SetTtsEnabled(bool on) {
+    sTtsEnabled = on;
+    sConfigJson["tts_enabled"] = on;
+    SaveConfig();
+}
+
+extern "C" float Port_Config_GetTtsRate(void) { return sTtsRate; }
+extern "C" void  Port_Config_SetTtsRate(float v) {
+    sTtsRate = v;
+    sConfigJson["tts_rate"] = (double)v;
+    SaveConfig();
+}
+
+extern "C" float Port_Config_GetTtsPitch(void) { return sTtsPitch; }
+extern "C" void  Port_Config_SetTtsPitch(float v) {
+    sTtsPitch = v;
+    sConfigJson["tts_pitch"] = (double)v;
+    SaveConfig();
+}
+
+extern "C" float Port_Config_GetTtsVolume(void) { return sTtsVolume; }
+extern "C" void  Port_Config_SetTtsVolume(float v) {
+    sTtsVolume = v;
+    sConfigJson["tts_volume"] = (double)v;
+    SaveConfig();
+}
+
+extern "C" const char* Port_Config_GetTtsVoice(void) {
+    return sTtsVoice.c_str();
+}
+extern "C" void Port_Config_SetTtsVoice(const char* v) {
+    sTtsVoice = v ? v : "";
+    sConfigJson["tts_voice"] = sTtsVoice;
+    SaveConfig();
+}
+
+extern "C" const char* Port_Config_GetTtsLanguage(void) {
+    return sTtsLanguage.c_str();
+}
+extern "C" void Port_Config_SetTtsLanguage(const char* v) {
+    sTtsLanguage = v ? v : "";
+    sConfigJson["tts_language"] = sTtsLanguage;
     SaveConfig();
 }

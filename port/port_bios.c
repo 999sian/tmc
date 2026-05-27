@@ -174,6 +174,35 @@ static void Port_PumpEvents(void) {
                 Port_DebugMenu_Toggle();
                 continue;
             }
+            if (e.key.key == SDLK_F7) {
+                /* TTS master toggle — works whether the F8 menu is
+                 * open or not so screen-reader users don't need to
+                 * navigate the menu to flip TTS off. */
+                extern bool Port_TTS_GetEnabled(void);
+                extern void Port_TTS_SetEnabled(bool);
+                extern void Port_TTS_AnnounceMessage(const char*);
+                bool now = !Port_TTS_GetEnabled();
+                Port_TTS_SetEnabled(now);
+                /* Announce the new state if we just turned ON; if
+                 * turning OFF, SetEnabled already cleared the queue. */
+                if (now) Port_TTS_AnnounceMessage("Text to speech enabled.");
+                continue;
+            }
+            if (e.key.key == SDLK_F6 &&
+                (e.key.mod & (SDL_KMOD_SHIFT | SDL_KMOD_CTRL | SDL_KMOD_ALT)) == 0) {
+                /* F6 (no modifiers) stops TTS. The unmodified F6
+                 * was previously quickload — that one keeps its
+                 * Shift+F6 / Ctrl+F6 bindings. Plain F6 is now the
+                 * universal "shut up" key for the TTS user. */
+                extern void Port_TTS_Stop(void);
+                Port_TTS_Stop();
+                /* Don't `continue` — fall through so quickload still
+                 * fires on shifted F6 below. Actually unconditional
+                 * continue here changes existing behaviour; leave
+                 * quickload as-is and let F6 do BOTH (stop speech +
+                 * quickload). Stopping speech is harmless during a
+                 * load. */
+            }
             if (e.key.key == SDLK_F9) {
                 /* Capture a bug-report bundle (screenshot + save + state
                  * dump) into a timestamped folder next to the binary so

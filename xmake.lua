@@ -625,6 +625,7 @@ target("tmc_pc")
     add_files("port/port_debug_menu.cpp")
     add_files("port/port_imgui_menu.cpp")
     add_files("port/port_prelaunch_logo.cpp")
+    add_files("port/port_tts.cpp")
     -- Embed docs/picori-logo.png into the binary so the prelaunch
     -- screen always has the logo regardless of cwd / install layout.
     -- xmake's utils.bin2c rule writes a "0xNN, 0xNN, ..." byte sequence
