@@ -7,6 +7,10 @@
 #include "save.h"
 #include "sound.h"
 #include "ui.h"
+#ifdef PC_PORT
+#include <stdio.h>
+#include "../port/port_tts.h"
+#endif
 
 #define MESSAGE_ADVANCE_KEYS (A_BUTTON | B_BUTTON | DPAD_ANY | R_BUTTON)
 #define MESSAGE_PRESS_ANY_ADVANCE_KEYS ((gInput.newKeys & MESSAGE_ADVANCE_KEYS) != 0)
@@ -42,6 +46,59 @@ extern void sub_0805EEB4(Token* tok, u32 textIdx);
 extern void sub_0805F8E4(u32 idx, WStruct* data);
 u32 sub_0805F7DC(u32, WStruct*);
 u32 GetFontStrWith(Token*, u32);
+
+#ifdef PC_PORT
+extern u8* gUnk_08107BE0[];
+
+/* Walk a fresh Token through the same decoder the renderer uses,
+ * collecting printable bytes into a UTF-8 buffer and handing it to
+ * Port_TTS_AnnounceMessage. Variable substitutions (player name,
+ * rupees, item names) recurse inside GetCharacter so we get the
+ * expanded text "for free" — we just keep pulling chars until the
+ * stream terminates (chr == 0). */
+static void PortTTSSpeakTextIndex(u32 textIndex) {
+    Token tok;
+    char buf[1024];
+    size_t pos = 0;
+    int iter = 0;
+
+    if (!Port_TTS_GetEnabled())
+        return;
+
+    MemClear(&tok, sizeof(tok));
+    sub_0805EEB4(&tok, textIndex);
+    /* Same variable-source table the renderer uses — without this,
+     * GetCharacter's case-6 substitution falls back to global slots
+     * and player_name / item_name reads come out empty. */
+    tok._c = (void*)&gUnk_08107BE0;
+
+    while (pos + 4 < sizeof(buf) && iter++ < 8192) {
+        u32 chr = GetCharacter(&tok);
+        if (chr == 0)
+            break;
+        if (chr == 1) {
+            if (pos > 0 && buf[pos - 1] != ' ')
+                buf[pos++] = ' ';
+            continue;
+        }
+        /* High byte 1 = "normal printable byte from text stream"
+         * (the default case in GetCharacter adds 0x100). Other
+         * non-zero high bytes are control wrappers (color, choice,
+         * wait, etc.) — skip them. */
+        if ((chr >> 8) != 1)
+            continue;
+        u8 c = (u8)(chr & 0xff);
+        if (c >= 0x20 && c < 0x80)
+            buf[pos++] = (char)c;
+    }
+
+    if (pos == 0)
+        return;
+    buf[pos] = '\0';
+    fprintf(stderr, "[tts] dialog 0x%04X: %.200s\n", textIndex & 0xFFFF, buf);
+    Port_TTS_AnnounceMessage(buf);
+}
+#endif
 
 static void StatusUpdate(u32 status);
 
@@ -297,6 +354,12 @@ u32 MsgInit(void) {
     gTextRender.curToken._c = &gUnk_08107BE0;
     gTextRender._50.unk8 = gTextGfxBuffer;
     gTextRender._50.unk4 = 0xd0;
+#ifdef PC_PORT
+    /* Announce the dialog text to a screen reader / TTS backend.
+     * Runs on a fresh Token, so the renderer's gTextRender.curToken
+     * walk is unaffected. */
+    PortTTSSpeakTextIndex(gTextRender.message.textIndex);
+#endif
     SetState(2);
     MsgChangeLine(0);
     StatusUpdate(MSG_UPDATE);
@@ -559,6 +622,9 @@ void TextDispEnquiry(TextRender* this) {
             } else {
                 this->message.textIndex = nextTextIdx;
                 sub_0805EEB4(&this->curToken, nextTextIdx);
+#ifdef PC_PORT
+                PortTTSSpeakTextIndex(nextTextIdx);
+#endif
                 src = gUnk_08107C0F;
             }
             sub_0805EF40(&this->curToken, src);
