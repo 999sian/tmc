@@ -13,6 +13,9 @@
 #include "physics.h"
 #include "manager.h"
 #include "asm.h"
+#ifdef PC_PORT
+#include "../../port/port_rom.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -253,19 +256,40 @@ void sub_08067A0C(CatEntity* this) {
     } else {
         tmp = (super->frame & 7);
         if (tmp != 0) {
-            /* #91 fix: index is `tmp - 1 + (flipX << 2)` which ranges
-             * 0..10 (tmp 1..7, flipX 0..1) — but the table is 8
-             * entries. With flipX=1 and tmp in {5,6,7} we'd read 1..3
-             * pointers past the table and dereference garbage as a
-             * Hitbox*, producing the access violation reported in the
-             * Blue House cat-attack crash. Clamp to the last valid
-             * entry; collision visuals are unaffected at the affected
-             * frames. */
+            /* #91 follow-up: the original clamp was correct as far as
+             * it went (index ranges 0..10 with flipX=1 / high tmp,
+             * table only has 8 entries) but the in-bounds reads were
+             * *also* broken on 64-bit PC and we didn't realise until
+             * the cat-room interactable-loop crash showed up again on
+             * 2026-05-27 (bugreport_20260527_014009, area=0x22 room=7).
+             *
+             * The underlying problem: `gUnk_08111154` is declared in
+             * cat.c as `Hitbox* [8]` (8-byte slots on PC) but the
+             * data_const_stubs definition is a raw u8 blob containing
+             * the original GBA 32-bit pointers. So `gUnk_08111154[4]`
+             * on PC reads bytes 32..39 as a single u64 — splicing two
+             * adjacent 4-byte GBA pointers into one bogus 8-byte
+             * address (e.g. 0x40201000101 from `01 01 00 01 02 04 00
+             * 00`). Linux IsColliding's range guard catches that for
+             * collision tests, but sub_080784E4's interactable loop
+             * dereferences `entity->hitbox->width` without a guard
+             * and SIGSEGVs the moment the player walks near.
+             *
+             * Read each 32-bit GBA pointer separately and widen via
+             * Port_ResolveRomPointerAt — the underlying Hitbox structs
+             * (gUnk_08111114 … gUnk_0811114C) live at the pointed-to
+             * GBA ROM offsets and are layout-compatible with the
+             * native Hitbox struct (both 8 bytes), so the resolved
+             * native pointer is directly usable. */
             int idx = (int)tmp - 1 + ((int)super->spriteSettings.flipX << 2);
             if (idx < 0)  idx = 0;
             if (idx >= 8) idx = 7;
             COLLISION_ON(super);
+#ifdef PC_PORT
+            super->hitbox = (Hitbox*)Port_UnpackRomDataPtr(&gUnk_08111154[0], idx);
+#else
             super->hitbox = gUnk_08111154[idx];
+#endif
         } else {
             sub_08067DDC(super);
         }
