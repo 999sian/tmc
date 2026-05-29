@@ -175,19 +175,17 @@ void GreatFairy_FinalUpdate(GreatFairyEntity* this) {
         if ((super->subtimer == 0) && (target = GreatFairy_CreateForm(this, FORM9, 0), target != NULL)) {
             PositionRelative(super, target, 0, Q_16_16(-76.0));
             target->parent = super;
-#ifdef PC_PORT
-            /* #33 — Mt Crenel fairy fountain crash: sub_080871F8 (the
-             * FORM9 child's action=1 handler in GreatFairy_Form2Behaviors)
-             * dereferences `super->child` to find the position to move
-             * toward, but the spawn site here only sets `target->parent`,
-             * never `target->child`. On GBA the NULL deref reads from
-             * address 0 — mapped to BIOS ROM, returns undefined data but
-             * doesn't fault — so the cutscene happens to run. On x86-64
-             * NULL deref segfaults. The function reads `temp->x/y` and
-             * checks whether super is 32 px above temp, so temp is meant
-             * to be the parent fairy: alias child to super here. */
-            target->child = super;
-#endif
+            /* #87 — the #33 Mt-Crenel crash fix used to alias
+             * `target->child = super` here so sub_080871F8 (the FORM9
+             * "blessing light" handler) had a non-NULL `child` to deref.
+             * But that made the light home onto the fairy (32px above =
+             * her face) and park there forever — its action-2 release flag
+             * is never set for this form — which is the "light shining in
+             * the face" bug. On GBA `child` is uninitialised garbage so the
+             * light drifts off-screen instead. The NULL deref #33 guarded
+             * against is now handled defensively in sub_080871F8, which keeps
+             * the light at its off-screen spawn point (76px above) and never
+             * lands it on the face. */
             super->subtimer = 1;
         }
     }
@@ -449,6 +447,20 @@ void sub_080871D0(GreatFairyEntity* this) {
 
 void sub_080871F8(GreatFairyEntity* this) {
     Entity* temp = super->child;
+
+#ifdef PC_PORT
+    /* #87/#33: the FORM9 "blessing light" spawn site only sets `parent`, never
+     * `child`, so `child` is NULL on PC (garbage on GBA). On GBA the light
+     * homes toward that garbage point, drifts off-screen and is cleaned up, so
+     * no light is ever visible on the fairy. Deref-NULL would crash (#33), and
+     * homing toward the fairy parks a light on her face (#87). With no valid
+     * target the light serves no purpose, so just delete it — matching the
+     * GBA result of no visible light. */
+    if (temp == NULL) {
+        DeleteEntity(super);
+        return;
+    }
+#endif
 
     if ((temp->x.HALF.HI == super->x.HALF.HI) && (temp->y.HALF.HI - 32 == super->y.HALF.HI)) {
         super->action = 2;
