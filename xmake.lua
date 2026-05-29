@@ -510,6 +510,16 @@ target("tmc_pc")
             { patch = "viruappu-widescreen.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "MODE1_GBA_BG_CLIP_X" },
+            -- Stable BG-priority sort in the mode1 composite. GBA hardware
+            -- orders equal-priority BGs by BG index (lower drawn on top); the
+            -- upstream selection sort swapped non-adjacent entries, so a
+            -- disabled BG left at a lower priority could reorder two
+            -- equal-priority BGs (#139: ToGrimblade's BG1 flame braziers were
+            -- hidden behind the BG2 bowl after a dark-room round-trip left
+            -- BG3CNT at priority 0).
+            { patch = "viruappu-bg-priority-sort.patch",
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "key_pri" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
