@@ -1,0 +1,38 @@
+diff --git a/src/mode1.c b/src/mode1.c
+index 272c065..4649300 100644
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -596,15 +596,25 @@ void virtuappu_mode1_composite_line(
+         bg_order_priority[i] = (uint8_t)(virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0CNT + i * 2)) & 3u);
+     }
+ 
+-    for (i = 0; i < MODE1_GBA_BG_COUNT - 1; ++i) {
+-        int j;
+-        for (j = i + 1; j < MODE1_GBA_BG_COUNT; ++j) {
+-            if (bg_order_priority[bg_order[j]] < bg_order_priority[bg_order[i]]) {
+-                uint8_t tmp = bg_order[i];
+-                bg_order[i] = bg_order[j];
+-                bg_order[j] = tmp;
+-            }
++    /* Stable insertion sort by priority. GBA hardware breaks priority ties by
++     * BG index (lower BG number drawn on top), so equal-priority BGs MUST keep
++     * their initial 0,1,2,3 order. The previous selection sort swapped
++     * non-adjacent entries, so a lower-priority BG (e.g. a disabled BG3 left at
++     * priority 0 by a prior dark room) could swap forward and displace BG1 past
++     * BG2 — flipping the BG1/BG2 tie-break and hiding a same-priority BG1 layer
++     * behind BG2. #139: ToGrimblade's BG1 flame braziers vanished behind the
++     * BG2 bowl after a dark-dojo round-trip left BG3CNT at priority 0. Using a
++     * stable sort (`>` strict, only shift higher-priority entries) keeps the
++     * GBA index tie-break intact regardless of the other BGs' priorities. */
++    for (i = 1; i < MODE1_GBA_BG_COUNT; ++i) {
++        uint8_t key = bg_order[i];
++        uint8_t key_pri = bg_order_priority[key];
++        int j = i - 1;
++        while (j >= 0 && bg_order_priority[bg_order[j]] > key_pri) {
++            bg_order[j + 1] = bg_order[j];
++            --j;
+         }
++        bg_order[j + 1] = key;
+     }
+ 
+     for (x = 0; x < MODE1_GBA_WIDTH; ++x) {
