@@ -520,6 +520,13 @@ target("tmc_pc")
             { patch = "viruappu-bg-priority-sort.patch",
               marker_file = path.join(sub, "src", "mode1.c"),
               marker = "key_pri" },
+            -- Semi-transparent OBJ (attr0 mode 1) forced alpha-blend in the
+            -- mode1 composite. GBA treats a mode-1 sprite as an unconditional
+            -- blend 1st-target; without this, see-through sprites (Great Fairy,
+            -- steam, ghosts, portal stones, etc.) render fully opaque.
+            { patch = "viruappu-obj-semitrans.patch",
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "virtuappu_mode1_obj_semitrans" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)

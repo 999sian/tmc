@@ -1,0 +1,102 @@
+diff --git a/src/mode1.c b/src/mode1.c
+index 4649300..4debbc1 100644
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -141,6 +141,13 @@ static uint8_t mode1_oam_palette(Mode1OAMAttr attr)
+     return (uint8_t)((attr.attr2 >> 12u) & 0x0Fu);
+ }
+ 
++/* OBJ mode field (attr0 bits 10-11): 0 = normal, 1 = semi-transparent
++ * (forced alpha-blend 1st target), 2 = OBJ window, 3 = prohibited. */
++static uint8_t mode1_oam_mode(Mode1OAMAttr attr)
++{
++    return (uint8_t)((attr.attr0 >> 10u) & 3u);
++}
++
+ static bool mode1_is_first_target(uint16_t bldcnt, int layer_id)
+ {
+     return ((bldcnt >> layer_id) & 1u) != 0u;
+@@ -249,6 +256,14 @@ void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory *memory)
+  * thread keeps the existing single-threaded behavior intact. */
+ __thread const uint8_t *virtuappu_mode1_io_thread_override = NULL;
+ 
++/* Per-scanline scratch (one slot per screen column) marking which OBJ pixels
++ * came from a semi-transparent OBJ (attr0 mode 1). Written by render_obj_line
++ * for the winning OBJ pixel, read by composite_line to force alpha blending —
++ * GBA-accurate (a mode-1 OBJ is an unconditional blend 1st target). __thread so
++ * each OpenMP render thread, which processes a whole scanline at a time, has
++ * its own copy; render_obj_line clears it at the top of every line. */
++__thread uint8_t virtuappu_mode1_obj_semitrans[MODE1_GBA_WIDTH];
++
+ uint16_t virtuappu_mode1_io_read16(uint16_t offset)
+ {
+     const uint8_t *src = virtuappu_mode1_io_thread_override
+@@ -347,6 +362,8 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+     const uint32_t obj_tile_base = 0x10000u;
+     int i;
+ 
++    memset(virtuappu_mode1_obj_semitrans, 0, sizeof(virtuappu_mode1_obj_semitrans));
++
+     for (i = MODE1_GBA_OAM_COUNT - 1; i >= 0; --i) {
+         Mode1OAMAttr attr;
+         uint8_t shape;
+@@ -506,6 +523,7 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+ 
+             line_buffer[screen_x] = virtuappu_mode1_rgb555_to_abgr8888(rgb555);
+             priority_buffer[screen_x] = priority;
++            virtuappu_mode1_obj_semitrans[screen_x] = (mode1_oam_mode(attr) == 1u) ? 1u : 0u;
+         }
+     }
+ }
+@@ -694,24 +712,36 @@ void virtuappu_mode1_composite_line(
+         }
+ 
+         if (allow_sfx) {
+-            switch (effect) {
+-            case MODE1_BLEND_ALPHA:
+-                if (mode1_is_first_target(bldcnt, top_layer) && mode1_is_second_target(bldcnt, bottom_layer)) {
++            if (top_layer == 4 && virtuappu_mode1_obj_semitrans[x]) {
++                /* Semi-transparent OBJ (attr0 mode 1): GBA forces it to be an
++                 * alpha-blend 1st target regardless of BLDCNT's effect mode and
++                 * 1st-target bits. It blends with the layer directly below when
++                 * that layer is a BLDCNT 2nd target (the backdrop counts via the
++                 * BD bit); otherwise the OBJ shows opaque. This also preempts
++                 * any brighten/darken effect for this pixel. */
++                if (mode1_is_second_target(bldcnt, bottom_layer)) {
+                     top_color = mode1_alpha_blend(top_color, bottom_color, eva, evb);
+                 }
+-                break;
+-            case MODE1_BLEND_BRIGHTEN:
+-                if (mode1_is_first_target(bldcnt, top_layer)) {
+-                    top_color = mode1_brighten(top_color, evy);
+-                }
+-                break;
+-            case MODE1_BLEND_DARKEN:
+-                if (mode1_is_first_target(bldcnt, top_layer)) {
+-                    top_color = mode1_darken(top_color, evy);
++            } else {
++                switch (effect) {
++                case MODE1_BLEND_ALPHA:
++                    if (mode1_is_first_target(bldcnt, top_layer) && mode1_is_second_target(bldcnt, bottom_layer)) {
++                        top_color = mode1_alpha_blend(top_color, bottom_color, eva, evb);
++                    }
++                    break;
++                case MODE1_BLEND_BRIGHTEN:
++                    if (mode1_is_first_target(bldcnt, top_layer)) {
++                        top_color = mode1_brighten(top_color, evy);
++                    }
++                    break;
++                case MODE1_BLEND_DARKEN:
++                    if (mode1_is_first_target(bldcnt, top_layer)) {
++                        top_color = mode1_darken(top_color, evy);
++                    }
++                    break;
++                default:
++                    break;
+                 }
+-                break;
+-            default:
+-                break;
+             }
+         }
+ 
