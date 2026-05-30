@@ -118,7 +118,7 @@ bundle of audio / VSync / portal / asset-loader follow-ups.
 
 ### Notes
 
-These NULL-guard fixes (`#91`/`#97` family) are intentionally not bit-identical to GBA: on hardware, the BIOS bytes at the NULL+offset address are deterministic but not always equal to the value our guard substitutes, so the chosen branch can differ for **one Init frame** before the sibling's Init runs. The affected fields (`unk_74`/`unk_76`/`radius`/`DeleteThisEntity` gating) all reset to correct values on the next tick, and the child sprite isn't drawn yet during that one frame, so the divergence is unobservable in-game. This matches the established "guard + clamp/early-return" pattern documented under *Critical concepts → NULL deref differs from GBA* in CLAUDE.md.
+These NULL-guard fixes (`#91`/`#97` family) are intentionally not bit-identical to GBA: on hardware, the BIOS bytes at the NULL+offset address are deterministic but not always equal to the value our guard substitutes, so the chosen branch can differ for **one Init frame** before the sibling's Init runs. The affected fields (`unk_74`/`unk_76`/`radius`/`DeleteThisEntity` gating) all reset to correct values on the next tick, and the child sprite isn't drawn yet during that one frame, so the divergence is unobservable in-game. This matches the established "guard + clamp/early-return" pattern used throughout the port for the "NULL deref differs from GBA" class of fixes.
 
 ### Carries from post-v0.2.2.0 master
 

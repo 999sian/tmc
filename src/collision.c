@@ -202,7 +202,7 @@ bool32 IsColliding(Entity* this, Entity* that) {
          * first u8 load below. Reject NULL plus "looks bogus" pointers —
          * a real host pointer on Linux x86_64 lands in the binary's
          * 0x55xx... or mmap's 0x7Fxx... range, never below 0x10000_00000000.
-         * Catches the half-pointer-write hazard (CLAUDE.md) where the
+         * Catches the half-pointer-write hazard where the
          * upper 32 bits are garbage but the low 32 look numerically
          * plausible (e.g. seen here: 0x40201000101).  Same class of fix as
          * src/npc/cat.c (#91) and src/projectile/darkNutSwordSlash.c (#97). */
