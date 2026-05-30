@@ -13,6 +13,7 @@
 #include "ui.h"
 #include "room.h"
 #include "player.h"
+#include "manager/goronMerchantShopManager.h"
 
 typedef struct {
     u8 before[0x20];
@@ -155,7 +156,18 @@ void sub_080819B4(ItemForSaleEntity* this) {
 
     if (gRoomVars.shopItemType == 0) {
         if (super->parent != NULL) {
+#ifdef PC_PORT
+            /* SHOP_ITEM is created only by GoronMerchantShopManager (which sets
+               itself as parent, goronMerchantShopManager.c:69-79), so the parent
+               is always that manager. Its itemActive[] lives at the widened-
+               Manager PC offset (0x38), NOT the GBA-0x20 zVelocity alias the
+               ModifiedParentEntity cast targets — so on PC the 0xff sold marker
+               missed itemActive[] and the Goron-Kakera sold flag was never set.
+               Write the real field. */
+            ((GoronMerchantShopManager*)super->parent)->itemActive[super->subtimer] = 0xff;
+#else
             ((ModifiedParentEntity*)super->parent)->unk_20[super->subtimer] = 0xff;
+#endif
         }
         DeleteThisEntity();
     }
