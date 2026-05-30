@@ -17,6 +17,9 @@
 #include "save.h"
 #include "screen.h"
 #include "sound.h"
+#ifdef PC_PORT
+#include "../port/port_tts.h"
+#endif
 
 extern void FlushSprites(void);
 extern void CopyOAM(void);
@@ -277,6 +280,21 @@ static void HandleTitlescreen(void) {
 #endif
                 gIntroState.timer = 3600;
                 gIntroState.state++;
+#ifdef PC_PORT
+                /* Title screen just became interactive — tell the
+                 * screen reader what the player's looking at and
+                 * what input it expects. Fires exactly once per
+                 * boot since state monotonically advances past 2. */
+                {
+                    PortTtsOptions opts = {0};
+                    opts.priority = PORT_TTS_PRIO_URGENT;
+                    opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+                    opts.dedupe = false;
+                    Port_TTS_Speak("Title screen. The Legend of Zelda, "
+                                   "The Minish Cap. Press Start.",
+                                   &opts);
+                }
+#endif
             }
 #if defined(USA) || defined(DEMO_USA)
             UpdatePressStartIcon();
