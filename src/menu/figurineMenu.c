@@ -27,6 +27,7 @@
 #include "fade.h"
 #ifdef PC_PORT
 #include "port_rom.h"
+#include "../port/port_tts.h"
 #endif
 
 void sub_080A4DA8(u32);
@@ -651,6 +652,37 @@ void sub_080A4DB8(u32 param_1) {
     MemClear(gHUD.elements, sizeof(gHUD.elements));
     MemClear(&gFigurineMenu, sizeof(gFigurineMenu));
     gFigurineMenu.unk2e = -1;
+#ifdef PC_PORT
+    /* Announce the pause-menu tab name as the player switches tabs.
+     * Names are hard-coded from PauseMenuScreen enum labels — the
+     * data tables (gUnk_08128A38 / gUnk_08128AD8) don't carry text
+     * indices, so we just emit the screen's purpose directly.
+     * Per-item TTS comes from sub_080A6F6C / ShowAreaName /
+     * sub_080A7040 hooks once the screen is up. */
+    {
+        const char* tab_name = NULL;
+        switch (param_1) {
+            case PauseMenuScreen_1:  tab_name = "Items"; break;
+            case PauseMenuScreen_2:  tab_name = "Quest Status"; break;
+            case PauseMenuScreen_4:  tab_name = "Map"; break;
+            case PauseMenuScreen_5:  tab_name = "Dungeon Map"; break;
+            case PauseMenuScreen_6:  tab_name = "Map Detail"; break;
+            case PauseMenuScreen_7:  tab_name = "Kinstone Pieces"; break;
+            case PauseMenuScreen_8:  tab_name = "Sword Techniques"; break;
+            case PauseMenuScreen_9:  tab_name = "Save"; break;
+            case PauseMenuScreen_10: tab_name = "Save Confirmation"; break;
+            case PauseMenuScreen_11: tab_name = "Save Confirmation"; break;
+            default: break;
+        }
+        if (tab_name) {
+            PortTtsOptions opts = {0};
+            opts.priority = PORT_TTS_PRIO_URGENT;
+            opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+            opts.dedupe = false;
+            Port_TTS_Speak(tab_name, &opts);
+        }
+    }
+#endif
     gMenu.field_0x3 = gPauseMenuOptions.unk2[param_1];
     ptr = &gUnk_08128AD8[gUnk_08128A38[param_1].unk0];
     gScreen.lcd.displayControl = ptr->unk2 | 0x1940;

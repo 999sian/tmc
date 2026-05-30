@@ -105,6 +105,14 @@ void        Port_TTS_SetLanguage(const char* v);
  * tell the user what's wired up. */
 const char* Port_TTS_GetBackendName(void);
 
+/* Walk a TMC dialog text index through the same decoder the renderer
+ * uses and speak the result. Used for UI focus text (pause menu item
+ * names, descriptions, popup labels) that's drawn via ShowTextBox
+ * directly — bypassing the MessageMain dialog pipeline that already
+ * has its own per-page TTS hook. URGENT + dedupe under the hood.
+ * Implementation lives in src/message.c (needs Token / GetCharacter). */
+void Port_TTS_SpeakTextIndex(unsigned int textIndex);
+
 /* Voice enumeration — returns the number of voices the backend
  * advertises (capped at the buffer size). Each `out[i]` is a
  * NUL-terminated voice id. NULL backend or no enumerator → 0. */

@@ -50,36 +50,56 @@ u32 GetFontStrWith(Token*, u32);
 #ifdef PC_PORT
 extern u8* gUnk_08107BE0[];
 
-/* Walk a fresh Token through the same decoder the renderer uses,
- * collecting printable bytes into a UTF-8 buffer and handing it to
- * Port_TTS_AnnounceMessage. Variable substitutions (player name,
- * rupees, item names) recurse inside GetCharacter so we get the
- * expanded text "for free" — we just keep pulling chars until the
- * stream terminates (chr == 0). */
-static void PortTTSSpeakTextIndex(u32 textIndex) {
-    Token tok;
+/* Per-page TTS state. The shadow Token walks the same dialog stream
+ * as the renderer's gTextRender.curToken but in independent lock-step:
+ * we read one page-worth of printable chars (up to the newline that
+ * would put the renderer into RENDER_WAIT) and hand that to TTS, then
+ * resume at TextDispRoll when the player advances. This way TTS
+ * speaks exactly what's visible in the current text window instead
+ * of the whole dialog at once. */
+static Token sTtsToken;
+static u8    sTtsLineNo;    /* mirrors gTextRender._98.bytes.lineNo */
+static bool  sTtsActive;    /* false once we've spoken the final page or dialog ended */
+
+/* Walk sTtsToken forward, collecting printable bytes into a buffer
+ * until we hit a page boundary:
+ *   - chr == 0 → end of dialog (mark inactive)
+ *   - chr == 1 (newline) on line 1 → renderer would enter RENDER_WAIT,
+ *     i.e. end of current page; the *next* page restarts on line 0
+ *   - chr == 1 on line 0 → just an in-page newline; emit a space
+ * Speaks the collected buffer via Port_TTS_Speak (urgent + no dedupe
+ * so consecutive identical pages still play and an in-flight previous
+ * page is cut off cleanly when the player advances).
+ *
+ * No-op if TTS is disabled or sTtsActive is false. */
+static void PortTTSSpeakCurrentPage(void) {
     char buf[1024];
     size_t pos = 0;
     int iter = 0;
 
-    if (!Port_TTS_GetEnabled())
+    if (!Port_TTS_GetEnabled() || !sTtsActive)
         return;
 
-    MemClear(&tok, sizeof(tok));
-    sub_0805EEB4(&tok, textIndex);
-    /* Same variable-source table the renderer uses — without this,
-     * GetCharacter's case-6 substitution falls back to global slots
-     * and player_name / item_name reads come out empty. */
-    tok._c = (void*)&gUnk_08107BE0;
-
     while (pos + 4 < sizeof(buf) && iter++ < 8192) {
-        u32 chr = GetCharacter(&tok);
-        if (chr == 0)
+        u32 chr = GetCharacter(&sTtsToken);
+        if (chr == 0) {
+            sTtsActive = false;
             break;
+        }
         if (chr == 1) {
-            if (pos > 0 && buf[pos - 1] != ' ')
-                buf[pos++] = ' ';
-            continue;
+            if (sTtsLineNo == 0) {
+                sTtsLineNo = 1;
+                if (pos > 0 && buf[pos - 1] != ' ')
+                    buf[pos++] = ' ';
+                continue;
+            }
+            /* lineNo == 1 → next char would push the renderer into
+             * RENDER_WAIT. Stop here, leave Token positioned so the
+             * next PortTTSSpeakCurrentPage call picks up where we
+             * left off. Reset our shadow lineNo to 0 because the
+             * roll-to-next-page clears both lines. */
+            sTtsLineNo = 0;
+            break;
         }
         /* High byte 1 = "normal printable byte from text stream"
          * (the default case in GetCharacter adds 0x100). Other
@@ -95,8 +115,76 @@ static void PortTTSSpeakTextIndex(u32 textIndex) {
     if (pos == 0)
         return;
     buf[pos] = '\0';
-    fprintf(stderr, "[tts] dialog 0x%04X: %.200s\n", textIndex & 0xFFFF, buf);
-    Port_TTS_AnnounceMessage(buf);
+
+    PortTtsOptions opts = {0};
+    opts.priority = PORT_TTS_PRIO_URGENT;  /* cut off prior page if still speaking */
+    opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+    opts.dedupe = false;
+    Port_TTS_Speak(buf, &opts);
+}
+
+/* Re-init the shadow Token at the start of a dialog (or after a
+ * choice jumps to a new text index). Cancels any in-flight speech
+ * from a prior dialog and speaks the first page. */
+static void PortTTSBeginDialog(u32 textIndex) {
+    if (!Port_TTS_GetEnabled())
+        return;
+    Port_TTS_Stop();
+    MemClear(&sTtsToken, sizeof(sTtsToken));
+    sub_0805EEB4(&sTtsToken, textIndex);
+    /* Same variable-source table the renderer uses — without this,
+     * GetCharacter's case-6 substitution falls back to global slots
+     * and player_name / item_name reads come out empty. */
+    sTtsToken._c = (void*)&gUnk_08107BE0;
+    sTtsLineNo = 0;
+    sTtsActive = true;
+    PortTTSSpeakCurrentPage();
+}
+
+/* Speak a text index as a single utterance — the whole text walked
+ * once, no pagination. Used for menu focus labels (pause menu item
+ * names, descriptions, popup hints) which are typically a single
+ * short string. URGENT so the previous focus's announcement is cut
+ * off when the cursor moves; dedupe so identical labels that re-fire
+ * within the dedupe window don't spam. */
+void Port_TTS_SpeakTextIndex(u32 textIndex) {
+    Token tok;
+    char buf[1024];
+    size_t pos = 0;
+    int iter = 0;
+
+    if (!Port_TTS_GetEnabled())
+        return;
+
+    MemClear(&tok, sizeof(tok));
+    sub_0805EEB4(&tok, textIndex);
+    tok._c = (void*)&gUnk_08107BE0;
+
+    while (pos + 4 < sizeof(buf) && iter++ < 8192) {
+        u32 chr = GetCharacter(&tok);
+        if (chr == 0)
+            break;
+        if (chr == 1) {
+            if (pos > 0 && buf[pos - 1] != ' ')
+                buf[pos++] = ' ';
+            continue;
+        }
+        if ((chr >> 8) != 1)
+            continue;
+        u8 c = (u8)(chr & 0xff);
+        if (c >= 0x20 && c < 0x80)
+            buf[pos++] = (char)c;
+    }
+
+    if (pos == 0)
+        return;
+    buf[pos] = '\0';
+
+    PortTtsOptions opts = {0};
+    opts.priority = PORT_TTS_PRIO_URGENT;
+    opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+    opts.dedupe = true;
+    Port_TTS_Speak(buf, &opts);
 }
 #endif
 
@@ -356,9 +444,10 @@ u32 MsgInit(void) {
     gTextRender._50.unk4 = 0xd0;
 #ifdef PC_PORT
     /* Announce the dialog text to a screen reader / TTS backend.
-     * Runs on a fresh Token, so the renderer's gTextRender.curToken
-     * walk is unaffected. */
-    PortTTSSpeakTextIndex(gTextRender.message.textIndex);
+     * Uses a separate shadow Token so the renderer's gTextRender.curToken
+     * walk is unaffected. Only speaks the current page; TextDispRoll
+     * resumes for the next page when the player advances. */
+    PortTTSBeginDialog(gTextRender.message.textIndex);
 #endif
     SetState(2);
     MsgChangeLine(0);
@@ -623,7 +712,7 @@ void TextDispEnquiry(TextRender* this) {
                 this->message.textIndex = nextTextIdx;
                 sub_0805EEB4(&this->curToken, nextTextIdx);
 #ifdef PC_PORT
-                PortTTSSpeakTextIndex(nextTextIdx);
+                PortTTSBeginDialog(nextTextIdx);
 #endif
                 src = gUnk_08107C0F;
             }
@@ -712,6 +801,11 @@ static void TextDispRoll(TextRender* this) {
     MsgChangeLine(0);
     PaletteChange(this, this->_8f | 0x40);
     this->renderStatus = RENDER_UPDATE;
+#ifdef PC_PORT
+    /* Player just advanced past the previous page (RENDER_WAIT →
+     * RENDER_ROLL). Speak the next page from the shadow Token. */
+    PortTTSSpeakCurrentPage();
+#endif
 }
 
 static void TextDispDie(TextRender* this) {

@@ -10,6 +10,7 @@
 #include "ui.h"
 #ifdef PC_PORT
 #include "manager.h"
+#include "../port/port_tts.h"
 #endif
 #include "windcrest.h"
 #include "affine.h"
@@ -57,6 +58,13 @@ void sub_080A6F6C(u32 textIndexOrPtr) {
         MemClear(&gBG0Buffer[0x220], 0x100);
         if ((textIndexOrPtr & 0xff) != 0) {
             ShowTextBox(textIndexOrPtr, &gUnk_08128FA8);
+#ifdef PC_PORT
+            /* Pause-menu / quest-menu focus text changed — announce
+             * the new item label to TTS. The visual ShowTextBox is
+             * already gated on textIndex change, so this fires once
+             * per cursor move (not every frame). */
+            Port_TTS_SpeakTextIndex(textIndexOrPtr);
+#endif
         }
         gScreen.bg0.updated = 1;
     }
@@ -98,6 +106,9 @@ void ShowAreaName(WindcrestID windcrest, u32 type) {
         MemClear(&gBG0Buffer[0x220], 0x100);
         if ((textIndexOrPtr & 0xff) != 0) {
             ShowTextBox(textIndexOrPtr, font);
+#ifdef PC_PORT
+            Port_TTS_SpeakTextIndex(textIndexOrPtr);
+#endif
         }
         gScreen.bg0.updated = 1;
     }
@@ -112,6 +123,9 @@ void sub_080A7040(u32 param_1) {
         MemCopy(gBG1Buffer, (void*)0x600e000, 0x800);
         if (GetInventoryValue(gUnk_08128D70[param_1].item) != 0) {
             ShowTextBox(gUnk_08128D70[param_1].textIndex, &gUnk_08129004);
+#ifdef PC_PORT
+            Port_TTS_SpeakTextIndex(gUnk_08128D70[param_1].textIndex);
+#endif
         }
         gScreen.bg1.yOffset = 3;
         gScreen.bg1.updated = 1;

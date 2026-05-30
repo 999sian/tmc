@@ -13,6 +13,9 @@
 #include "screen.h"
 #include "vram.h"
 #include "fade.h"
+#ifdef PC_PORT
+#include "../port/port_tts.h"
+#endif
 
 const u16 gUnk_08108DE8[] = { 0,     0x70b, 0x70c, 0x70d, 0x70e, 0x70f, 0x710, 0x711, 0x712, 0x713, 0x714,
                               0x715, 0x716, 0x717, 0x718, 0x719, 0x71a, 0x71b, 0x71c, 0x71d, 0x71e, 0x71f,
@@ -92,4 +95,14 @@ void sub_0805E1F8(u32 unk0, bool32 isDungeon) {
         font = &gUnk_08108E30;
     ShowTextBox((uintptr_t)&tmp, font);
     gScreen.bg0.updated = 1;
+#ifdef PC_PORT
+    /* Announce the new area / dungeon name to TTS. The visual banner
+     * is built around a tiny wrapper buffer that re-targets a textIndex,
+     * so we just feed the textIndex directly to the speech path —
+     * dedupe inside Port_TTS_Speak suppresses re-announcing when the
+     * player crosses room boundaries inside the same area. */
+    if (unk0 != 0) {
+        Port_TTS_SpeakTextIndex(unk0);
+    }
+#endif
 }

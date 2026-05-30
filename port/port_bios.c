@@ -127,6 +127,7 @@ static void Port_UpdateInput(void) {
         extern void Port_DebugAction_WarpTick(void);
         Port_DebugAction_WarpTick();
     }
+
 }
 
 static void Port_PumpEvents(void) {
