@@ -53,9 +53,9 @@ the GBA original, and comment it referencing the bug.
   (`0x08…/0x02…/0x03…`) must be routed through `Port_ResolveRomData`,
   `Port_ReadU16/U32`, or `gEwram[]`/`gIwram[]` (`port/port_rom.*`).
 
-The repo's `CLAUDE.md` has the full catalogue of these bug classes with
-`file:line` examples and fix templates — it is the best reference when you hit
-a crash, even if you don't use the assistant it's named for.
+These bug classes recur across `src/` — most new crashes are another instance
+of one of them. The existing `#ifdef PC_PORT` fixes and their comments (grep
+for `PC_PORT`) are the best reference when you hit one.
 
 ## Fixing a bug
 
@@ -77,10 +77,13 @@ a crash, even if you don't use the assistant it's named for.
 
 `libs/ViruaPPU` is a submodule, so **direct edits to its source are lost** on
 `xmake clean` or a fresh checkout. Port-side PPU changes live as patches in
-`port/patches/viruappu-*.patch`, applied (idempotently) at configure time. See
-`CLAUDE.md` → *Authoring a new ViruaPPU patch* for the index-staging extraction
-recipe and the "test with a **full** `git -C libs/ViruaPPU reset --hard HEAD`,
-never a partial checkout" caveat.
+`port/patches/viruappu-*.patch`, applied (idempotently) at configure time. To
+author one: edit the working-tree submodule source, build to verify, extract
+*only your delta* as a patch, and wire it into `xmake.lua`. **Test a new or
+edited patch with a full `git -C libs/ViruaPPU reset --hard HEAD` then rebuild —
+never a partial one-file checkout** (other patches edit the same file but keep
+their marker elsewhere, so a partial reset leaves them un-re-applied and
+produces false conflicts).
 
 ## Submitting changes
 

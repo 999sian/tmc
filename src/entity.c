@@ -929,8 +929,8 @@ static void UnlinkEntity(Entity* ent) {
 #ifdef PC_PORT
     /* Defensive guard against #131-class crashes where ent->prev gets
      * partially overwritten by a GBA-era 32-bit write to what's now an
-     * 8-byte pointer on PC (the "half-pointer write" hazard described
-     * in CLAUDE.md). Symptom: prev like 0x0000_5555_11113333 — high
+     * 8-byte pointer on PC (the "half-pointer write" hazard).
+     * Symptom: prev like 0x0000_5555_11113333 — high
      * bytes from the original pointer survive, low 4 bytes hold an
      * unrelated u32. The deref ent->prev->next then either segfaults
      * (low bytes alone point to unmapped memory) or trashes random

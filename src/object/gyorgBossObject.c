@@ -344,8 +344,8 @@ void sub_080A1DCC(GyorgBossObjectEntity* this) {
      * female's first update. So on the very first tick `mouth` and
      * `tail` are still NULL.  GBA NULL-derefs read BIOS garbage; PC
      * SIGSEGVs at line 353 inside `mouth->base.flags |= 0x80`.
-     * Same fix shape as src/object/frozenOctorok.c (#64), per CLAUDE.md
-     * "Multi-entity shared-heap, sibling-not-yet-Init'd". Also guard
+     * Same fix shape as src/object/frozenOctorok.c (#64) — the
+     * multi-entity shared-heap, sibling-not-yet-Init'd pattern. Also guard
      * the chained `tail->child->child->child` walk — tail's child chain
      * isn't established until the projectile chain spawns. */
     GyorgHeap* heap = (GyorgHeap*)super->myHeap;

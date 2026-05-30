@@ -83,7 +83,7 @@ because `FixupEntityPointers` (`port/port_quicksave.c:158`) only relocates words
 value lands **inside the `gEntities` window**. Everything pointing elsewhere stays stale:
 - **`src/scroll.c:103`** — `gRoomControls.camera_target == &gPlayerEntity` (a static global, below `gEntities`) is never fixed; `Scroll1` derefs `camera_target->x` **every frame** → SIGSEGV on the first post-load frame. Same staleness hits `screenTileMap.c`, `script.c`, `message.c` camera_target derefs.
 - **`port_quicksave.c:158`** — the structural gap: pointer-to-`.rodata` (hitbox), pointer-to-other-pool, and the separately-memcpy'd regions (`gPlayerEntity`/`gRoomControls`) are never passed to the fixup.
-- **`src/player.c:556`** (LOW) — `Player->hitbox = &gPlayerHitbox/&sMinishHitbox` (`.rodata`) stale; unguarded tile-probe (`playerUtils.c:2586`) & interactable-scan (`1426`) derefs crash. (This one is the documented CLAUDE.md limitation.)
+- **`src/player.c:556`** (LOW) — `Player->hitbox = &gPlayerHitbox/&sMinishHitbox` (`.rodata`) stale; unguarded tile-probe (`playerUtils.c:2586`) & interactable-scan (`1426`) derefs crash. (This one is the documented cross-process quicksave limitation.)
 - **Fix:** in `Snapshot_Restore`, after the memcpy loop, (a) re-assign `gPlayerEntity.base.hitbox` from live `.rodata` per `gPlayerState` form, and (b) record the saved base addresses of the fixed-global regions and shift any restored pointer landing in a saved region's range to the new base — `camera_target` is the most reliably-hit instance. A `scroll.c` range-guard fallback to `&gPlayerEntity` is a cheap belt-and-suspenders.
 - Same-process F5→F6 is the documented no-op early-return and stays safe.
 
