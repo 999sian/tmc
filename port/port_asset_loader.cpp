@@ -1796,6 +1796,9 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
     std::vector<std::vector<const u8*>> newAnimationPtrs;
     newAnimationPtrs.resize(std::max(kSpritePtrMax, gAssetGroupCache.spritePtrs.size()));
     std::vector<SpritePtr> newSpritePtrs(kSpritePtrMax);
+    for (size_t i = 0; i < kSpritePtrMax; ++i) {
+        newSpritePtrs[i] = gSpritePtrs[i];
+    }
 
     for (size_t i = 0; i < gAssetGroupCache.spritePtrs.size() && i < kSpritePtrMax; ++i) {
         const SpritePtrEntryData& entry = gAssetGroupCache.spritePtrs[i];
@@ -1818,7 +1821,7 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
          * extracted ptr/frames bins remain available via the JSON if
          * a future ROM-less path needs them, but we deliberately do
          * not consume them here. */
-        SpritePtr sprite = (i < kSpritePtrMax) ? gSpritePtrs[i] : SpritePtr{};
+        SpritePtr sprite = gSpritePtrs[i];
         sprite.animations = nullptr;
 
         auto& animPtrs = newAnimationPtrs[i];
