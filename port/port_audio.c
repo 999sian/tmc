@@ -138,7 +138,11 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
             frames = 1024;
         }
 
-        Port_M4A_Backend_Render(buffer, (uint32_t)frames, gMain.muteAudio);
+        /* gMain.muteAudio is written on the main thread; read it with a relaxed
+           atomic load here on the SDL audio thread to avoid a data race. It is a
+           rarely-changing u8 flag, so relaxed ordering is sufficient. */
+        Port_M4A_Backend_Render(buffer, (uint32_t)frames,
+                                __atomic_load_n(&gMain.muteAudio, __ATOMIC_RELAXED) != 0);
         Port_Audio_PostProcess(buffer, frames);
         SDL_PutAudioStreamData(stream, buffer, frames * PORT_AUDIO_BYTES_PER_FRAME);
         remaining -= frames * PORT_AUDIO_BYTES_PER_FRAME;
