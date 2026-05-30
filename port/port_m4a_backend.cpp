@@ -99,6 +99,12 @@ struct BackendState {
      * NEAREST sample-and-hold + no forced reverb. Read by MakeAgbplayMode when
      * the context is (re)built, and mutated live by SetGbaAccurate. */
     bool gbaAccurate = false;
+    /* Forced PCM-reverb level byte (F8 → Audio "Reverb"). 0x00 = OFF (dry —
+     * ships unchanged). When enabled it is (0x80 | level), level 1..0x7F; the
+     * 0x80 REV_MASK_SET bit is what actually engages SoundMixer::GetReverbLevel
+     * (plain 32 lacked it, which is why the original forced reverb was inert).
+     * NORMAL reverb is a PCM-only comb (CGB/PSG voices stay dry by mix order). */
+    uint8_t reverbForceByte = 0x00;
 };
 
 BackendState sState;
@@ -132,11 +138,12 @@ static AgbplaySoundMode MakeAgbplayMode(void) {
     mode.resamplerTypeNormal = rs;
     mode.resamplerTypeFixed = rs;
     mode.reverbType = ReverbType::NORMAL;
-    /* reverbForce needs REV_MASK_SET (0x80) to actually force; plain 32 lacks
-     * it, so the mixer falls through to the song's own reverb in BOTH modes —
-     * i.e. this is currently inert and reverb tracks the song as on GBA. Kept
-     * 0 in accurate mode for semantic clarity ("no forced reverb"). */
-    mode.reverbForce = sState.gbaAccurate ? 0 : 32;
+    /* Forced PCM reverb. reverbForce must carry REV_MASK_SET (0x80) to engage
+     * (sState.reverbForceByte is 0x00 by default = OFF/dry, or 0x80|level when
+     * the user opts in via the F8 slider — see Port_M4A_Backend_SetReverbLevel).
+     * GBA-accurate mode forces it fully dry. Honoured here so a context rebuild
+     * (ROM reload / area change) preserves the user's chosen level. */
+    mode.reverbForce = sState.gbaAccurate ? 0 : sState.reverbForceByte;
     mode.cgbPolyphony = CGBPolyphony::MONO_STRICT;
     mode.dmaBufferLen = 0x630;
     mode.accurateCh3Quantization = true;
@@ -581,6 +588,12 @@ void Port_M4A_Backend_Reset(void) {
     std::lock_guard<std::mutex> lock(sStateMutex);
 
     ResetTrackMixControlsLocked();
+    /* RebuildContextLocked destroys and reconstructs every MP2KTrack and its
+       ReverbEffect (fresh zero-filled reverb buffer) and re-derives reverbForce
+       from sState.reverbForceByte via MakeAgbplayMode — so a reverb tail can
+       never bleed across an area/song change, and the user's chosen level
+       persists. If a lighter soft-reset path is ever added that keeps the
+       context alive, call trk.reverb->Reset() to flush the comb ring. */
     RebuildContextLocked();
 }
 
@@ -719,20 +732,48 @@ void Port_M4A_Backend_SetGbaAccurate(bool accurate) {
         return;
     }
     /* Mutate the live mode so the change takes effect without a context
-     * rebuild: reverbForce is re-read by the mixer each frame; the resampler
-     * type is re-read whenever a PCM channel is (re)allocated — i.e. on the
-     * next note-on, so it audibly switches within a fraction of a second.
-     * MakeAgbplayMode also honours sState.gbaAccurate if the context is later
-     * rebuilt (ROM reload). */
+     * rebuild. The resampler type is re-read whenever a PCM channel is
+     * (re)allocated — i.e. on the next note-on, so it audibly switches within a
+     * fraction of a second. reverbForce, however, is NOT re-read per frame: it
+     * is captured into each ReverbEffect's cached intensity, refreshed only by
+     * SoundMixer::UpdateReverb() — so set the field AND call UpdateReverb() to
+     * apply it live. MakeAgbplayMode also honours these on a later rebuild. */
     const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::SINC;
     sState.ctx->agbplaySoundMode.resamplerTypeNormal = rs;
     sState.ctx->agbplaySoundMode.resamplerTypeFixed = rs;
-    sState.ctx->agbplaySoundMode.reverbForce = accurate ? 0 : 32;
+    sState.ctx->agbplaySoundMode.reverbForce = accurate ? 0 : sState.reverbForceByte;
+    sState.ctx->mixer.UpdateReverb();
 }
 
 bool Port_M4A_Backend_GetGbaAccurate(void) {
     std::lock_guard<std::mutex> lock(sStateMutex);
     return sState.gbaAccurate;
+}
+
+void Port_M4A_Backend_SetReverbLevel(int level) {
+    std::lock_guard<std::mutex> lock(sStateMutex);
+    /* 0 (or below) → fully dry (byte 0x00); otherwise 0x80|level engages the
+     * forced reverb. Clamp to the slider's safe ceiling (24) — NORMAL's
+     * single-tap comb flutters/rings well below the 0x7F maximum. */
+    if (level < 0) {
+        level = 0;
+    } else if (level > 24) {
+        level = 24;
+    }
+    sState.reverbForceByte = (level == 0) ? 0x00 : (uint8_t)(0x80 | (level & 0x7F));
+    if (!sState.ctx) {
+        return;
+    }
+    /* Apply live: GetReverbLevel reads reverbForce, and UpdateReverb() pushes
+     * the new level onto every existing ReverbEffect via SetLevel() — no
+     * context rebuild, so the currently-playing song is not restarted. */
+    sState.ctx->agbplaySoundMode.reverbForce = sState.gbaAccurate ? 0 : sState.reverbForceByte;
+    sState.ctx->mixer.UpdateReverb();
+}
+
+int Port_M4A_Backend_GetReverbLevel(void) {
+    std::lock_guard<std::mutex> lock(sStateMutex);
+    return (sState.reverbForceByte & 0x80) ? (sState.reverbForceByte & 0x7F) : 0;
 }
 
 void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_t pan) {

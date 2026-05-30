@@ -286,6 +286,16 @@ float Port_Audio_GetWidth(void) {
     return w;
 }
 
+void Port_Audio_SetReverbLevel(int level) {
+    /* Synth-side (agbplay PCM-only comb); the backend takes its own mutex and
+       applies live via UpdateReverb, so no song restart. */
+    Port_M4A_Backend_SetReverbLevel(level);
+}
+
+int Port_Audio_GetReverbLevel(void) {
+    return Port_M4A_Backend_GetReverbLevel();
+}
+
 void Port_Audio_OnFifoWrite(uint32_t addr, uint32_t value) {
     (void)addr;
     (void)value;

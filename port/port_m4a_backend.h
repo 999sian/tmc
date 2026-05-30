@@ -37,6 +37,14 @@ bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex);
 void Port_M4A_Backend_SetGbaAccurate(bool accurate);
 bool Port_M4A_Backend_GetGbaAccurate(void);
 
+/* Forced PCM-only reverb level (F8 -> Audio "Reverb"). level 0 = OFF/dry
+ * (default, ships unchanged); 1..24 engages agbplay's NORMAL comb on PCM
+ * tracks only (CGB/PSG voices stay dry). Applied live via SoundMixer::
+ * UpdateReverb — no context rebuild, the current song is not restarted.
+ * Forced fully dry whenever GBA-accurate mode is on. */
+void Port_M4A_Backend_SetReverbLevel(int level);
+int Port_M4A_Backend_GetReverbLevel(void);
+
 #ifdef __cplusplus
 }
 #endif
