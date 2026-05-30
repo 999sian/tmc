@@ -28,6 +28,7 @@
 #include "fade.h"
 #include "port_ppu.h"
 #include "port_runtime_config.h"
+#include "port_tts.h"
 #include <stdio.h>
 
 
@@ -409,6 +410,31 @@ void SetFileSelectState(FileSelectState mode) {
     gUI.state = mode;
     MemClear(&gBG0Buffer, sizeof(gBG0Buffer));
     MemClear(&gBG1Buffer, sizeof(gBG1Buffer));
+#ifdef PC_PORT
+    /* Announce the file-select sub-screen as the user transitions into
+     * it. Each state lands on a distinct UI; this fires once per real
+     * transition (the gUI.state assignment above is the gate). */
+    {
+        const char* name = NULL;
+        switch (mode) {
+            case STATE_NONE:        name = "File select. Choose a save file."; break;
+            case STATE_NEW:         name = "New file. Enter a name."; break;
+            case STATE_CHOOSE_LANG: name = "Language select."; break;
+            case STATE_OPTIONS:     name = "Options."; break;
+            case STATE_VIEW:        name = "File details. Press A to start, B to go back."; break;
+            case STATE_COPY:        name = "Copy file."; break;
+            case STATE_ERASE:       name = "Erase file."; break;
+            case STATE_START:       name = "Starting game."; break;
+        }
+        if (name) {
+            PortTtsOptions opts = {0};
+            opts.priority = PORT_TTS_PRIO_URGENT;
+            opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+            opts.dedupe = true;
+            Port_TTS_Speak(name, &opts);
+        }
+    }
+#endif
 }
 
 void LoadOptionsFromSave(u32 idx) {
@@ -729,6 +755,24 @@ void sub_08050940(void) {
 
     row_idx = gMapDataBottomSpecial.unk6;
     keys = gInput.newKeys;
+#ifdef PC_PORT
+    /* Debug: TMC_AUTOLOAD=N env var auto-selects save slot N once at
+     * file-select entry. Lets headless reproductions (issue repros) skip
+     * the manual click-through. */
+    {
+        static int sAutoLoadFired = 0;
+        if (!sAutoLoadFired) {
+            const char* al = getenv("TMC_AUTOLOAD");
+            if (al && *al >= '0' && *al <= '2') {
+                sAutoLoadFired = 1;
+                row_idx = *al - '0';
+                gMapDataBottomSpecial.unk6 = row_idx;
+                keys = A_BUTTON;
+                fprintf(stderr, "[autoload] selecting save slot %d\n", row_idx);
+            }
+        }
+    }
+#endif
     if ((gInput.heldKeys & L_BUTTON) && gMapDataBottomSpecial.saveStatus[row_idx] == SAVE_VALID) {
         keys &= ~(DPAD_UP | DPAD_DOWN);
     }
@@ -993,6 +1037,32 @@ void sub_08050AFC(u32 idx) {
         sub_08050B3C(&gBG1Buffer[0x14E]);
     }
     gScreen.bg1.updated = 1;
+#ifdef PC_PORT
+    /* Announce the currently-focused save slot row so a screen-reader
+     * user knows which file they're on. Called once per cursor move
+     * (caller already gates on row-idx change). Slots 0..2 are the
+     * three save files; idx 3 is the language toggle row that only
+     * shows in multi-language builds. */
+    {
+        char buf[96];
+        if (idx < NUM_SAVE_SLOTS) {
+            const char* status = "empty";
+            switch ((SaveStatus)gMapDataBottomSpecial.saveStatus[idx]) {
+                case SAVE_VALID:   status = "in progress"; break;
+                case SAVE_DELETED: status = "deleted"; break;
+                case SAVE_EMPTY:   status = "empty"; break;
+            }
+            snprintf(buf, sizeof(buf), "File %u, %s.", (unsigned)(idx + 1), status);
+        } else {
+            snprintf(buf, sizeof(buf), "Language select.");
+        }
+        PortTtsOptions opts = {0};
+        opts.priority = PORT_TTS_PRIO_URGENT;
+        opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+        opts.dedupe = true;
+        Port_TTS_Speak(buf, &opts);
+    }
+#endif
 }
 
 typedef struct {
@@ -1087,12 +1157,26 @@ void HandleFileView(void) {
 
 void sub_08050C54(void) {
     s32 column_idx;
+    u32 vkeys;
 
     if (gMapDataBottomSpecial.isTransitioning)
         return;
 
     column_idx = gMenu.column_idx;
-    switch (gInput.newKeys) {
+    vkeys = gInput.newKeys;
+#ifdef PC_PORT
+    {
+        static int sAutoViewFired = 0;
+        if (!sAutoViewFired && getenv("TMC_AUTOLOAD")) {
+            sAutoViewFired = 1;
+            vkeys = A_BUTTON;
+            column_idx = 0; /* Start column */
+            gMenu.column_idx = 0;
+            fprintf(stderr, "[autoload] starting selected save\n");
+        }
+    }
+#endif
+    switch (vkeys) {
         case A_BUTTON:
         case START_BUTTON:
             if (column_idx == 0) {
