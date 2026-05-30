@@ -216,8 +216,8 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
             bool destIsVram = rawDestValue >= 0x06000000u && rawDestValue < 0x06018000u;
             dest = useGbaDest ? Port_ResolveEwramPtr((u32)rawDestValue) : dataDefinition->dest;
             if (dest != NULL) {
+                u32 assetSize = 0;  /* real file byte count, 0 for the in-memory gMapData path */
                 if ((dataDefinition->src & MAP_SRC_FILE) != 0) {
-                    u32 assetSize = 0;
                     src = (u8*)Port_GetMapAssetDataByIndex(dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE), &assetSize);
                     if (src == NULL) {
                         fprintf(stderr, "LoadMapData: missing map asset index %u area=%u room=%u\n",
@@ -230,13 +230,35 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
                     src = (u8*)&gMapData + (dataDefinition->src & 0x7fffffff);
                 }
                 if ((dataDefinition->size & MAP_COMPRESSED) != 0) {
+                    /* A truncated compressed asset over-reads with no length
+                       bound (the decompressed size lives in the LZ77 header in
+                       src). Require at least the 4-byte LZ77 header on the
+                       file path. */
+                    if (assetSize != 0 && assetSize < 4) {
+                        fprintf(stderr, "LoadMapData: compressed asset index %u too small (%u bytes) — skipping\n",
+                                dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE), assetSize);
+                        dataDefinition++;
+                        continue;
+                    }
                     if (destIsVram) {
                         LZ77UnCompVram(src, dest);
                     } else {
                         LZ77UnCompWram(src, dest);
                     }
                 } else {
-                    MemCopy(src, dest, dataDefinition->size);
+                    /* The copy length is the JSON 'size' field; the real asset
+                       byte count is assetSize. If a packed/extracted .bin is
+                       shorter than the manifest claims (truncated download,
+                       extractor/manifest version mismatch), an unclamped copy
+                       over-reads past the cached file buffer. Clamp on the file
+                       path. */
+                    u32 copyLen = dataDefinition->size;
+                    if (assetSize != 0 && copyLen > assetSize) {
+                        fprintf(stderr, "LoadMapData: asset index %u truncated (manifest %u > file %u) — clamping\n",
+                                dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE), copyLen, assetSize);
+                        copyLen = assetSize;
+                    }
+                    MemCopy(src, dest, copyLen);
                 }
             } else {
                 LoadPaletteGroup(*(u16*)dataDefinition);
