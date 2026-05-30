@@ -84,5 +84,15 @@ void GyorgFemaleMouth(Entity* this) {
             tmp++;
         }
     }
+#ifdef PC_PORT
+    /* tmp = parent->animationState>>5 (0..7), then +1 at lines above → can reach
+       8, one past gUnk_080D28AC's 8 entries. On GBA the OOB read picked up a
+       plausible adjacent pointer; on PC index 8 reads past the table and the
+       hitbox gets a wild pointer (IsColliding's range guard catches the
+       collision path, but other deref paths don't). Clamp to the valid range. */
+    if (tmp > 7) {
+        tmp = 7;
+    }
+#endif
     this->hitbox = (Hitbox*)gUnk_080D28AC[tmp]; // discarding const qualifier with cast
 }
