@@ -12,7 +12,17 @@ extern void SetTile(u32 tileIndex, u32 tilePos, u32 layer);
 extern void UpdateScrollVram(void);
 extern u32 sub_080B1BA4(u32, u32, u32);
 extern void LoadResourceAsync(const void* src, void* dest, u32 size);
-extern u64 GetFuserId(struct Entity_*);
+/* Issue #142 (talking to Tingle crashes): GetFuserId packs two results — the
+ * fuser id (low 32) and the fuser text id (high 32). On GBA it's declared u32
+ * (upstream zeldaret/tmc), so the simple callers `gSave.kinstones.fuserProgress[
+ * GetFuserId(this)]` (tingleSiblings/din/farore/nayru) index with just the
+ * fuser id. A port commit (7ccca6769) widened this to u64; on 64-bit PC the
+ * un-truncated index then includes the non-zero high half (text id), so the
+ * array subscript lands ~2.7 TB out of range and SIGSEGVs. On GBA the index is
+ * 32-bit regardless, so it never showed there. Restore the u32 declaration to
+ * match upstream — callers needing both halves use GetFuserIdAndFuserTextId,
+ * which reinterpret-casts the function pointer and is unaffected by this type. */
+extern u32 GetFuserId(struct Entity_*);
 #define GetFuserIdAndFuserTextId(ent) ((union SplitDWord)(*(MultiReturnTypeSingleEntityArg)(&GetFuserId))(ent))
 extern u32 CheckPlayerInRegion(u32 centerX, u32 centerY, u32 radiusX, u32 radiusY);
 extern u32 GravityUpdate(struct Entity_* entity, u32 gravity);
