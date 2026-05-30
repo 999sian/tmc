@@ -3128,14 +3128,35 @@ void sub_0807AAF8(Entity* this, u32 tilePos) {
 // TODO some sort of flame spreading?
 void sub_0807AB44(Entity* this, s32 xOffset, s32 yOffset) {
     Entity* object;
+    u32 useLayer = this->collisionLayer;
     const u16* ptr =
-        sub_0806FC50(GetTileTypeAtTilePos(COORD_TO_TILE_OFFSET(this, -xOffset, -yOffset), this->collisionLayer), 0xb);
+        sub_0806FC50(GetTileTypeAtTilePos(COORD_TO_TILE_OFFSET(this, -xOffset, -yOffset), useLayer), 0xb);
+#ifdef PC_PORT
+    /* Issue #139: lightable torch tiles (TILE_TYPE_117) in some rooms
+     * (Grimblade dojo, area 0x25 room 5) only exist on LAYER_TOP while
+     * the player walks on LAYER_BOTTOM. Fall back to the other layer
+     * if the player's layer isn't ignitable, and propagate that layer
+     * to the spawned FLAME so SetTileType updates the layer the
+     * LightLevelSetManager watches. */
+    if (ptr == NULL) {
+        u32 other = (useLayer == 2) ? 1 : 2;
+        const u16* alt = sub_0806FC50(
+            GetTileTypeAtTilePos(COORD_TO_TILE_OFFSET(this, -xOffset, -yOffset), other), 0xb);
+        if (alt != NULL) {
+            ptr = alt;
+            useLayer = other;
+        }
+    }
+#endif
     if (ptr != NULL) {
         if (ptr[3] == 0x76) {
             object = CreateObject(FLAME, 1, 0);
             if (object != NULL) {
                 PositionRelative(this, object, xOffset << 0x10, yOffset << 0x10);
                 SnapToTile(object);
+#ifdef PC_PORT
+                object->collisionLayer = useLayer;
+#endif
                 sub_0807B7D8(ptr[3], COORD_TO_TILE(object), object->collisionLayer);
             }
         } else {
@@ -3143,6 +3164,9 @@ void sub_0807AB44(Entity* this, s32 xOffset, s32 yOffset) {
             if (object != NULL) {
                 PositionRelative(this, object, xOffset << 0x10, yOffset << 0x10);
                 object->child = (Entity*)ptr;
+#ifdef PC_PORT
+                object->collisionLayer = useLayer;
+#endif
                 SetTile(SPECIAL_TILE_79, COORD_TO_TILE(object), object->collisionLayer);
             }
         }

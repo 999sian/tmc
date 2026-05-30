@@ -409,6 +409,22 @@ static void InitializeEntities(void) {
 }
 
 static void sub_08051D98(void) {
+#ifdef PC_PORT
+    /* Issue #139 (dark-room dim overlay): intra-area RELOAD_ALL doesn't call
+     * InitRoom, so gArea.lightType persists from the previous room. The
+     * LIGHT_MANAGER (ENT_PERSIST) carries over via RecycleEntities and keeps
+     * the dim BG3/WIN0 overlay active in the bright destination room. Clear
+     * lightType + the DISPCNT enable bits so the overlay drops; a genuinely
+     * dark next room re-energises it via its tile entity (room.c:613 ->
+     * sub_0805BB00). The separate symptom — the ToGrimblade flame braziers
+     * vanishing behind the bowl on this transition — was a PPU BG-priority
+     * sort bug, fixed in libs/ViruaPPU/src/mode1.c (the dark room leaves
+     * BG3CNT at priority 0, which an unstable sort let reorder BG1 past BG2). */
+    if (gArea.lightType != 0) {
+        gArea.lightType = 0;
+        gScreen.lcd.displayControl &= ~(DISPCNT_BG3_ON | DISPCNT_WIN0_ON);
+    }
+#endif
     sub_08052EA0();
     gRoomVars.didEnterScrolling = TRUE;
 
