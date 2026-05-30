@@ -37,7 +37,7 @@ index fb6cbca..2c08815 100644
      int scroll_y = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0VOFS + bg_index * 4)) & 0x1FF;
 -    int src_y = (line + scroll_y) % (map_height_tiles * 8);
 +    uint16_t mosaic_reg = virtuappu_mode1_io_read16(MODE1_IO_MOSAIC);
-+    mosaic_on = mosaic_on && getenv("TMC_ENABLE_MOSAIC") != NULL;
++    /* BG mosaic honored when BGCNT bit 6 is set (GBA-accurate; gate removed). */
 +    int mosaic_h = mosaic_on ? (int)((mosaic_reg & 0x0Fu) + 1u) : 1;
 +    int mosaic_v = mosaic_on ? (int)(((mosaic_reg >> 4u) & 0x0Fu) + 1u) : 1;
 +    int eff_line = (line / mosaic_v) * mosaic_v;
