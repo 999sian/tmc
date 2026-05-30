@@ -12,7 +12,15 @@
 
 typedef struct {
     Entity base;
+#ifdef PC_PORT
+    /* #98 fix: +4 for Enemy::child PC growth. Without it, unk_82 (the dive
+       countdown, GBA 0x82 = the spawn yPos param read-before-write in the
+       dive state) aliases Enemy::field_0x7c on PC, so crows dive for the wrong
+       duration. Pattern: eyegore.c. */
+    u8 filler[0x10 + 4];
+#else
     u8 filler[0x10];
+#endif
     s16 unk_78;
     s16 unk_7a;
     u32 filler2;

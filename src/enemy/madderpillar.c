@@ -15,7 +15,16 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98 fix: Enemy::child is 8 bytes on PC (4 on GBA), so the spawn framework
+       writes this enemy's params 4 bytes higher. Without the +4 pad, unk_86
+       (a spawn-param flag, GBA 0x86 = spritePtr.hi, 0 for scriptless) aliases
+       Enemy::field_0x82 = yPos (nonzero) on PC, so sub_0802A14C reads it as set
+       and forces the explosion/self-destruct branch on spawn. Pattern: eyegore.c. */
+    u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u8 unk_74;
     /*0x75*/ u8 unk_75;
     /*0x76*/ u8 unused2[1];
