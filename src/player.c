@@ -3398,8 +3398,29 @@ static void PlayerMinish(PlayerEntity* this) {
     sPlayerMinishStates[super->subAction](this);
 }
 
+#ifdef PC_PORT
+/* Moved to file scope so Port_RestorePlayerHitbox (below) can reach it; the
+   GBA build keeps the original function-local static (codegen-identical). */
+static const Hitbox sMinishHitbox = { 0, -1, { 3, 2, 2, 3 }, 2, 2 };
+
+/* Cross-process quickload restores gPlayerEntity from a slot written by a
+   previous process, so its hitbox pointer is a stale .rodata address (the ASLR
+   base shifted independently). FixupEntityPointers only relocates pointers that
+   live inside gEntities, so re-resolve the player hitbox from the current form.
+   Called from port/port_quicksave.c::Snapshot_Restore. */
+void Port_RestorePlayerHitbox(void) {
+    if (gPlayerState.flags & PL_MINISH) {
+        gPlayerEntity.base.hitbox = (Hitbox*)&sMinishHitbox;
+    } else {
+        gPlayerEntity.base.hitbox = (Hitbox*)&gPlayerHitbox;
+    }
+}
+#endif
+
 static void sub_08073C80(PlayerEntity* this) {
+#ifndef PC_PORT
     static const Hitbox sMinishHitbox = { 0, -1, { 3, 2, 2, 3 }, 2, 2 };
+#endif
 
     gPlayerState.flags |= PL_MINISH;
     gPlayerState.animation = ANIM_BOUNCE_MINISH;
