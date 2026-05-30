@@ -298,6 +298,8 @@ unsigned char Port_Config_InternalScale(void);
 void          Port_Config_CycleInternalScale(int direction);
 void          Port_Audio_SetGbaAccurate(bool accurate);
 bool          Port_Audio_IsGbaAccurate(void);
+void          Port_Audio_SetWidth(float width);
+float         Port_Audio_GetWidth(void);
 
 int  Port_QuickSave_SaveSlot(int slot);
 int  Port_QuickSave_LoadSlot(int slot);
@@ -1261,6 +1263,31 @@ static void DrawRibbonAudioTab(void) {
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
+    ImGui::Separator();
+
+    /* Enhancement sliders — only meaningful while the enhanced (non-accurate)
+       post-process chain is running, so grey them out in GBA-accurate mode. */
+    ImGui::BeginDisabled(gbaAccurate);
+
+    float width = Port_Audio_GetWidth();
+    if (ImGui::SliderFloat("Stereo width", &width, 1.00f, 1.50f, "%.2f")) {
+        Port_Audio_SetWidth(width);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "Mid/side stereo widening. 1.00 = mono image (reference), "
+            "1.20 = default. The mid is never altered, so mono playback always "
+            "collapses cleanly to the original mix. Lower values (~1.12) reduce "
+            "hard-panned peak overshoot. No effect in GBA-accurate mode.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+
+    ImGui::EndDisabled();
     ImGui::Separator();
 
     ImGui::TextWrapped("Per-category SFX mutes. Each toggle suppresses "

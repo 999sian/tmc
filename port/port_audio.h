@@ -17,4 +17,10 @@ void Port_Audio_OnFifoWrite(uint32_t addr, uint32_t value);
 void Port_Audio_SetGbaAccurate(bool accurate);
 bool Port_Audio_IsGbaAccurate(void);
 
+/* Mid/side stereo-widen gain (enhanced path only). Range [1.00, 1.50];
+ * 1.00 = mono image, 1.20 = shipped default. Mid is never scaled, so mono
+ * fold-down is unchanged at any value. */
+void Port_Audio_SetWidth(float width);
+float Port_Audio_GetWidth(void);
+
 #endif

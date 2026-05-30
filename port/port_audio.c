@@ -22,6 +22,14 @@ static SDL_AudioStream* sAudioStream;
  * stopped touching the filter statics. */
 static bool sGbaAccurate = false;
 
+/* Mid/side widen gain for post-process stage 3 (F8 → Audio "Stereo width").
+ * Default 1.20 = the long-standing shipped image. Written on the main thread,
+ * read once per PostProcess call on the audio thread; relaxed atomics suffice
+ * (a rarely-changing float that touches no other state, and the widen is
+ * memoryless so a torn transition is at worst one slightly-off buffer). The
+ * mid is never scaled, so mono fold-down equals the original mix at any value. */
+static float sWidth = 1.20f;
+
 /* ---- Output DSP post-processing chain ------------------------------
  *
  * Runs after agbplay's MP2K render, before the buffer is handed to
@@ -124,6 +132,14 @@ static inline float Port_Audio_SoftClip(float x) {
 }
 
 static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
+    /* Read the width gain once per call (not per sample). __atomic_load (the
+       generic form) is used because __atomic_load_n rejects float. Clamp
+       defensively to the slider's range in case of an out-of-band write. */
+    float w;
+    __atomic_load(&sWidth, &w, __ATOMIC_RELAXED);
+    if (w < 1.0f) w = 1.0f;
+    if (w > 1.5f) w = 1.5f;
+
     for (int i = 0; i < frames; ++i) {
         float l = (float)buffer[i * 2 + 0];
         float r = (float)buffer[i * 2 + 1];
@@ -145,7 +161,7 @@ static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
         /* 3. Mid/side widen — boost side by 20 %, leave mid alone so
          *    mono playback collapses cleanly to the original mix. */
         const float mid  = (lpL + lpR) * 0.5f;
-        const float side = (lpL - lpR) * 0.5f * 1.2f;
+        const float side = (lpL - lpR) * 0.5f * w;
         const float wL = mid + side;
         const float wR = mid - side;
 
@@ -256,6 +272,18 @@ void Port_Audio_SetGbaAccurate(bool accurate) {
 
 bool Port_Audio_IsGbaAccurate(void) {
     return __atomic_load_n(&sGbaAccurate, __ATOMIC_ACQUIRE);
+}
+
+void Port_Audio_SetWidth(float width) {
+    if (width < 1.0f) width = 1.0f;
+    if (width > 1.5f) width = 1.5f;
+    __atomic_store(&sWidth, &width, __ATOMIC_RELAXED);
+}
+
+float Port_Audio_GetWidth(void) {
+    float w;
+    __atomic_load(&sWidth, &w, __ATOMIC_RELAXED);
+    return w;
 }
 
 void Port_Audio_OnFifoWrite(uint32_t addr, uint32_t value) {
