@@ -71,5 +71,18 @@ const KeyValuePair gMapActTileToSurfaceType[] = {
     { ACT_TILE_41, SURFACE_DOOR },
     { ACT_TILE_23, SURFACE_2D },
     { ACT_TILE_40, SURFACE_DOOR_13 },
+#ifdef PC_PORT
+    /* PC-port fix (#5 KeyValuePair-terminator class): FindValueForKey /
+     * FindEntryForKeyInternal iterate until `key == 0`. On GBA the assembler
+     * placed `gMapActTileToSurfaceTypeEnd = 0` (a 0 u16) immediately after this
+     * table so a not-found scan terminated naturally on the adjacent symbol.
+     * On PC the C linker may reorder `const` definitions across TUs, so this
+     * table (in its own translation unit) would otherwise run off the end into
+     * unrelated .rodata when the searched act tile isn't listed (the common
+     * case for ordinary ground under the player, hit every frame via
+     * GetSurfaceUnder*). Inline a `{0, 0}` sentinel so the array self-terminates
+     * regardless of layout — same fix as gUnk_0811C1F8.. in playerUtils.c. */
+    { 0, 0 },
+#endif
 };
 // const u16 gMapActTileToSurfaceTypeEnd = 0;
