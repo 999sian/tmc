@@ -13,7 +13,15 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98 fix: +4 for Enemy::child PC growth. Without it, unk_86 (GBA 0x86 =
+       spritePtr.hi, 0 for a scriptless beetle, read-before-write as a cooldown
+       gate in sub_08021D00) aliases Enemy::field_0x82 = yPos (nonzero) on PC, so
+       the beetle starts on a bogus cooldown. Pattern: eyegore.c. */
+    u8 unused1[30 + 4];
+#else
     /*0x68*/ u8 unused1[30];
+#endif
     /*0x86*/ u8 unk_86;
     /*0x87*/ u8 unk_87;
 } BeetleEntity;
