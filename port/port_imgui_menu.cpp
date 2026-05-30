@@ -296,6 +296,8 @@ unsigned int  Port_Config_TargetFps(void);
 void          Port_Config_CycleTargetFps(int direction);
 unsigned char Port_Config_InternalScale(void);
 void          Port_Config_CycleInternalScale(int direction);
+void          Port_Audio_SetGbaAccurate(bool accurate);
+bool          Port_Audio_IsGbaAccurate(void);
 
 int  Port_QuickSave_SaveSlot(int slot);
 int  Port_QuickSave_LoadSlot(int slot);
@@ -1240,6 +1242,27 @@ const char* Port_AudioMute_Description(AudioMuteCategory c);
 }
 
 static void DrawRibbonAudioTab(void) {
+    bool gbaAccurate = Port_Audio_IsGbaAccurate();
+    if (ImGui::Checkbox("GBA-accurate audio", &gbaAccurate)) {
+        Port_Audio_SetGbaAccurate(gbaAccurate);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "On: NEAREST resampling (the hardware's no-interpolation "
+            "sample-and-hold 'crunch') and the output is handed straight to "
+            "the device with no post-process DSP — for A/B comparison against "
+            "real hardware / mGBA.\n\n"
+            "Off (default): SINC resampling plus the DC-blocker / low-pass / "
+            "stereo-widen / soft-clip chain tuned for modern speakers.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+    ImGui::Separator();
+
     ImGui::TextWrapped("Per-category SFX mutes. Each toggle suppresses "
                        "the matching sound IDs at the SoundReq / EnqueueSFX "
                        "entry points — music and other SFX are untouched.");
