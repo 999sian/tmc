@@ -30,6 +30,20 @@ void MinishSizedEntranceManager_Main(MinishSizedEntranceManager* this) {
     }
     spawnData = (MinishEntranceSpawnData*)GetCurrentRoomProperty(super->type);
 
+#ifdef PC_PORT
+    /* Port-side NULL guard (NULL-deref-differs-from-GBA). When this manager
+     * ticks while an auxiliary cutscene overlay is active (e.g. an aux cutscene
+     * triggered from a minish-entrance room), GetCurrentRoomProperty resolves
+     * against the cutscene's room, which has no property for super->type, and
+     * returns NULL. On GBA the subsequent `spawnData->x` read picks up adjacent
+     * ROM garbage and the loop harmlessly churns / terminates; on PC it
+     * dereferences NULL and SIGSEGVs. Nothing to spawn when the property is
+     * absent, so bail. */
+    if (spawnData == NULL) {
+        return;
+    }
+#endif
+
     for (count = 0; (spawnData->x != 0) && (count < 0x20); ++count) {
         if (CheckRectOnScreen(spawnData->x, spawnData->y, 4, 4) != 0) {
             if (((this->field_0x20 & (1 << count)) == 0) && (sub_0805B8CC(spawnData->field_0x4) != 0)) {
