@@ -224,7 +224,16 @@ void AudioMain(void) {
         if (ptr->volumeBgmTarget != ptr->volumeBgm) {
             fadeValue = fade(ptr->volumeBgmTarget, ptr->volumeBgm);
             if (fadeValue == 0) {
-                if (ptr->stopBgm && ptr->volumeBgmTarget == 0) {
+                if (ptr->stopBgm && ptr->volumeBgmTarget == 0
+#ifdef PC_PORT
+                    /* The BGM duck (#22) drives volumeBgmTarget to 0 to lower —
+                     * not stop — the BGM. Never let a duck-driven fade-to-0
+                     * satisfy the stop (it would kill currentBgm and leave the
+                     * track silent after the duck lifts). A genuine SONG_STOP_BGM
+                     * still stops once the duck is inactive. */
+                    && !sBgmDuckActive
+#endif
+                ) {
                     ptr->stopBgm = FALSE;
                     ptr->currentBgm = 0;
                     m4aSongNumStop(0);
@@ -293,10 +302,18 @@ static void InitVolume(void) {
     gSoundPlayingInfo.volumeBgm = 0x100;
     gSoundPlayingInfo.volumeBgmTarget = 0x100;
 #ifdef PC_PORT
-    /* Any time we re-initialise volume (room change, new BGM via
-     * VOL_RESET path), clear a stuck duck — see #117. */
+    /* Any time we re-initialise volume (room change, new BGM via VOL_RESET /
+     * default-IS_BGM path), clear a stuck duck (#117) AND a stale stopBgm flag.
+     * stopBgm is only cleared in AudioMain when a fade-to-0 completes; if a new
+     * BGM starts (target back to 0x100) before that, stopBgm persists TRUE
+     * across songs. A later duck (target=0) then satisfies the stop condition
+     * and KILLS the song (currentBgm=0) — the Jabber-Nut "music goes mute until
+     * room change" bug (#22): the duck means only to lower volume, but a stale
+     * stopBgm turns it into a full stop. A new BGM makes any pending stop
+     * obsolete, so clear it here. */
     sBgmDuckActive = 0;
     sBgmDuckTimer = 0;
+    gSoundPlayingInfo.stopBgm = FALSE;
 #endif
 }
 
