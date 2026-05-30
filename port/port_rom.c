@@ -1055,6 +1055,25 @@ void Port_LoadRom(const char* path) {
                 sizeof(gPalette_549));
     }
 
+    /* gLilypadRails — USA: a 3-entry .4byte pointer table at 0x080FED98 (rail
+     * command lists for type2>=0x80 lilypads and kinstone-fused lilypad rails,
+     * data/const/game_2.s). The port stub (port_linked_stubs.c) is a zero-init
+     * native array, so without this the rails resolve to NULL and those lilypads
+     * never move along their path. Resolve the 3 ROM pointers into it (same
+     * approach as gPalette_549/gFigurines). USA-only absolute address; EU is
+     * left as the NULL stub (status quo — no regression). */
+    if (gRomRegion == ROM_REGION_USA) {
+        extern void* gLilypadRails[];
+        u8* base = (u8*)Port_ResolveRomData(0x080FED98);
+        if (base != NULL) {
+            int i;
+            for (i = 0; i < 3; i++) {
+                gLilypadRails[i] = Port_UnpackRomDataPtr(base, (u32)i);
+            }
+            fprintf(stderr, "gLilypadRails loaded (3 rail pointers from 0x080FED98).\n");
+        }
+    }
+
     /* gFrameObjLists — from compile-time const data (no ROM read needed) */
     memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
     fprintf(stderr, "gFrameObjLists loaded (%u bytes from compile-time table).\n", R->frameObjListsSize);
