@@ -95,6 +95,10 @@ struct BackendState {
      * effectively idempotent for repeated calls; agbplay's m4aMPlayStart
      * restarts unconditionally and that's audible as music resetting). */
     uint16_t currentSongId[kPlayerCount];
+    /* GBA-accurate audio toggle (F8 → Audio). false = enhanced (SINC); true =
+     * NEAREST sample-and-hold + no forced reverb. Read by MakeAgbplayMode when
+     * the context is (re)built, and mutated live by SetGbaAccurate. */
+    bool gbaAccurate = false;
 };
 
 BackendState sState;
@@ -119,14 +123,20 @@ static AgbplaySoundMode MakeAgbplayMode(void) {
      * resampler proper and removes virtually all imaging artefacts at
      * the cost of a few hundred extra MAC ops per audio frame. CPU
      * overhead is negligible on PC. */
-    mode.resamplerTypeNormal = ResamplerType::SINC;
-    mode.resamplerTypeFixed = ResamplerType::SINC;
-    /* TMC was originally mixed for GBA speakers (small, bright, no
-     * meaningful low-end). On modern PC playback the dry mix sounds
-     * harsh; a gentle reverb (force ~32 of 255 max) adds spatial body
-     * without changing the song's intent. */
+    /* GBA-accurate mode (F8 → Audio toggle) uses NEAREST — the hardware's
+     * no-interpolation sample-and-hold fetch and its characteristic aliased
+     * "crunch". The default enhanced path uses SINC, the bandlimited resampler
+     * proper, which removes virtually all imaging artefacts for a few hundred
+     * extra MAC ops per audio frame (negligible on PC). */
+    const ResamplerType rs = sState.gbaAccurate ? ResamplerType::NEAREST : ResamplerType::SINC;
+    mode.resamplerTypeNormal = rs;
+    mode.resamplerTypeFixed = rs;
     mode.reverbType = ReverbType::NORMAL;
-    mode.reverbForce = 32;
+    /* reverbForce needs REV_MASK_SET (0x80) to actually force; plain 32 lacks
+     * it, so the mixer falls through to the song's own reverb in BOTH modes —
+     * i.e. this is currently inert and reverb tracks the song as on GBA. Kept
+     * 0 in accurate mode for semantic clarity ("no forced reverb"). */
+    mode.reverbForce = sState.gbaAccurate ? 0 : 32;
     mode.cgbPolyphony = CGBPolyphony::MONO_STRICT;
     mode.dmaBufferLen = 0x630;
     mode.accurateCh3Quantization = true;
@@ -700,6 +710,29 @@ bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex) {
         }
     }
     return false;
+}
+
+void Port_M4A_Backend_SetGbaAccurate(bool accurate) {
+    std::lock_guard<std::mutex> lock(sStateMutex);
+    sState.gbaAccurate = accurate;
+    if (!sState.ctx) {
+        return;
+    }
+    /* Mutate the live mode so the change takes effect without a context
+     * rebuild: reverbForce is re-read by the mixer each frame; the resampler
+     * type is re-read whenever a PCM channel is (re)allocated — i.e. on the
+     * next note-on, so it audibly switches within a fraction of a second.
+     * MakeAgbplayMode also honours sState.gbaAccurate if the context is later
+     * rebuilt (ROM reload). */
+    const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::SINC;
+    sState.ctx->agbplaySoundMode.resamplerTypeNormal = rs;
+    sState.ctx->agbplaySoundMode.resamplerTypeFixed = rs;
+    sState.ctx->agbplaySoundMode.reverbForce = accurate ? 0 : 32;
+}
+
+bool Port_M4A_Backend_GetGbaAccurate(void) {
+    std::lock_guard<std::mutex> lock(sStateMutex);
+    return sState.gbaAccurate;
 }
 
 void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_t pan) {

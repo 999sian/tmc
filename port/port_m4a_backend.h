@@ -29,6 +29,14 @@ const char* Port_GetSongLabel(uint16_t songId);
  * finished so the BGM can be unmuted. */
 bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex);
 
+/* GBA-accurate audio toggle. When true, the synth uses NEAREST resampling
+ * (the GBA's no-interpolation sample-and-hold "crunch") and no forced reverb,
+ * for A/B comparison against hardware/mGBA. When false (default), the enhanced
+ * path (SINC resampling) is used. The output-DSP post-process bypass lives on
+ * the Port_Audio side; this controls only the agbplay synth knobs. */
+void Port_M4A_Backend_SetGbaAccurate(bool accurate);
+bool Port_M4A_Backend_GetGbaAccurate(void);
+
 #ifdef __cplusplus
 }
 #endif

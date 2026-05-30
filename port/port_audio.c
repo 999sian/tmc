@@ -13,6 +13,12 @@ enum {
 
 static SDL_AudioStream* sAudioStream;
 
+/* GBA-accurate audio toggle. Written on the main thread (F8 menu), read on the
+ * SDL audio thread (Port_Audio_Feed) to decide whether to bypass the output-DSP
+ * post-process chain below. Accessed via relaxed atomics — a rarely-changing
+ * flag, so ordering doesn't matter. */
+static bool sGbaAccurate = false;
+
 /* ---- Output DSP post-processing chain ------------------------------
  *
  * Runs after agbplay's MP2K render, before the buffer is handed to
@@ -143,7 +149,13 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
            rarely-changing u8 flag, so relaxed ordering is sufficient. */
         Port_M4A_Backend_Render(buffer, (uint32_t)frames,
                                 __atomic_load_n(&gMain.muteAudio, __ATOMIC_RELAXED) != 0);
-        Port_Audio_PostProcess(buffer, frames);
+        /* GBA-accurate mode hands the synth output straight to SDL — no
+           HPF/LPF/widen/soft-clip coloring — for A/B comparison against
+           hardware/mGBA. The synth-side knobs (NEAREST resampling) are set
+           separately via the backend. */
+        if (!__atomic_load_n(&sGbaAccurate, __ATOMIC_RELAXED)) {
+            Port_Audio_PostProcess(buffer, frames);
+        }
         SDL_PutAudioStreamData(stream, buffer, frames * PORT_AUDIO_BYTES_PER_FRAME);
         remaining -= frames * PORT_AUDIO_BYTES_PER_FRAME;
     }
@@ -188,6 +200,22 @@ void Port_Audio_Shutdown(void) {
 
 void Port_Audio_Reset(void) {
     Port_M4A_Backend_Reset();
+
+    /* Clear the post-process filter history so a reset doesn't carry stale
+       DC-blocker / low-pass state into the next buffer (a benign one-buffer
+       transient otherwise). */
+    sHpPrevInL = sHpPrevInR = sHpPrevOutL = sHpPrevOutR = 0.0f;
+    sLpX1L = sLpX2L = sLpY1L = sLpY2L = 0.0f;
+    sLpX1R = sLpX2R = sLpY1R = sLpY2R = 0.0f;
+}
+
+void Port_Audio_SetGbaAccurate(bool accurate) {
+    __atomic_store_n(&sGbaAccurate, accurate, __ATOMIC_RELAXED);
+    Port_M4A_Backend_SetGbaAccurate(accurate);
+}
+
+bool Port_Audio_IsGbaAccurate(void) {
+    return __atomic_load_n(&sGbaAccurate, __ATOMIC_RELAXED);
 }
 
 void Port_Audio_OnFifoWrite(uint32_t addr, uint32_t value) {
