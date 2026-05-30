@@ -11,6 +11,7 @@
 #include "entity.h"
 #include "physics.h"
 #include "asm.h"
+#include "manager/angryStatueManager.h"
 
 extern void (*const CannonballProjectile_Functions[])(Entity*);
 extern void (*const CannonballProjectile_Actions[])(Entity*);
@@ -81,8 +82,29 @@ bool32 sub_080AB5F4(Entity* this) {
 }
 
 bool32 sub_080AB634(Entity* this) {
+#ifdef PC_PORT
+    /* #-port crash fix: on GBA `&this->parent->zVelocity` (Entity offset 0x20)
+     * aliased the parent AngryStatueManager's `field_0x20[4]` array exactly,
+     * because GBA Entity* slots are 4 bytes (Manager is 0x20, field_0x20[] at
+     * +0x20 == zVelocity's offset). On x86-64 the pointer-widened Manager base
+     * grows to 0x38, so `&parent->zVelocity` now lands 0x10 bytes BEFORE the
+     * real field_0x20[] and is read as 8-byte slots — splicing unrelated
+     * Manager fields into non-NULL wild pointers that pass the `!= NULL` test
+     * and SIGSEGV inside IsColliding (which derefs `that->collisionLayer` /
+     * `that->hitbox` before its host-pointer guard). Reachable in normal play:
+     * deflecting a cannonball back to destroy the AngryStatues. Index the real
+     * array, and NULL-guard the parent. */
+    AngryStatueManager* parent = (AngryStatueManager*)this->parent;
+    Entity** entities;
+    u32 i;
+    if (parent == NULL) {
+        return FALSE;
+    }
+    entities = parent->field_0x20;
+#else
     Entity** entities = ((Entity**)&this->parent->zVelocity);
     u32 i;
+#endif
     for (i = 0; i <= 3; ++i) {
         if (entities[i] != NULL && (IsColliding(this, entities[i]) != 0)) {
             if (entities[i]->action < 3) {
