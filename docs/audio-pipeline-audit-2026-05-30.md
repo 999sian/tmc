@@ -154,10 +154,12 @@ The MMIO→software migration is **already complete and structurally clean**; th
    *Why:* removes GBA aliasing "crunch", brick-walls at 16 kHz, widens stereo, soft-clips — all unconditional, no runtime bypass. Largest perceptual departure from hardware.
    *Fix:* add an F8 "GBA-accurate audio" toggle that selects `NEAREST`/`LINEAR` resampling, `reverbForce=0`, and bypasses `Port_Audio_PostProcess` for A/B comparison against mGBA. Also `memset` the HPF/LPF biquad state (`sHp*`/`sLp*`) in `Port_Audio_Reset` (`port_audio.c:189`) — currently it carries stale history across a reset (benign one-buffer transient).
 
-5. **[MEDIUM — behavioral loss] Engine-driven fades and tempo changes are silently dropped.**
+5. **[INVESTIGATED 2026-05-30 — inert for TMC; no action] Engine-driven fades/tempo are dropped, but TMC never drives them.**
    *Location:* `MPlayFadeOut/FadeIn/FadeOutTemporarily` and `m4aMPlayTempoControl` in `port_m4a_stubs.c` write only `MusicPlayerInfo` fields; nothing forwards them to agbplay (`SequenceReader.cpp:98` notes "TODO implement player based fadeout").
-   *Why:* scripted fade-outs and runtime tempo ramps the engine issues via the m4a API (not via `src/sound.c`'s volume system) are inaudible on PC.
-   *Fix:* forward `MPlayFadeOut/FadeIn` to `StartFadeOut`/`StartFadeIn` and `m4aMPlayTempoControl` to a backend tempo setter.
+   *Why originally flagged:* scripted fade-outs / runtime tempo ramps issued via the m4a API (not via `src/sound.c`'s volume system) would be inaudible on PC.
+   *Investigation result:* a full `src/`+`data/`+`include/` sweep found **zero live callers** of any fade function — the only references are in the compiled-but-unused `src/gba/m4a.c`. TMC fades music exclusively through `src/sound.c`'s `volumeBgmTarget` ramp (the path hardened for #22), which works. The only live tempo wiring is `SoundReq`'s `SONG_PLAY_TEMPO_CONTROL` case → `m4aMPlayTempoControl`, but `SONG_PLAY_TEMPO_CONTROL` (`0x800C0000`, `sound.h:593`) has **no sender** anywhere in the tree (no symbolic use, no raw `0x800c`, no script tempo). So the path is never exercised.
+   *Why NOT forwarding it:* agbplay's tempo knob is a **single global** `SequenceReader::speedFactor` applied to *every* player (`SequenceReader.cpp:116` — `player.bpm * speedFactor`); per-player tempo is the unimplemented `player.bpmFactor`/line-98 TODO. Forwarding `m4aMPlayTempoControl` to it would scale BGM **and** SFX together — i.e. convert a benign silent-drop into latent *wrong* behavior — for a command the game never sends. Implementing correct per-player tempo would be a sizable agbplay change with zero live payoff.
+   *Decision:* **no code change.** Left as a documented latent gap; revisit only if a romhack or future game-code change actually sends `SONG_PLAY_TEMPO_CONTROL`, at which point the right fix is per-player tempo in agbplay, not a global-reader hack.
 
 6. **[LOW — by design] Timing/drift & control-latency from thread decoupling.**
    *Location:* clock-only `m4aSoundMain` (`port_m4a_stubs.c:269`) vs real tick on the audio thread (`RenderChunkLocked:504`); fps compensation `GetBufferLengthSpeedCorrection` (`SoundMixer.cpp:154`).
