@@ -23,4 +23,10 @@ bool Port_Audio_IsGbaAccurate(void);
 void Port_Audio_SetWidth(float width);
 float Port_Audio_GetWidth(void);
 
+/* Forced PCM-only reverb level (enhanced path only). 0 = off (default, dry);
+ * 1..24 adds a short room tail to sampled drums/bass; chiptune leads stay dry.
+ * Applied live (no song restart). Forwards to the agbplay backend. */
+void Port_Audio_SetReverbLevel(int level);
+int Port_Audio_GetReverbLevel(void);
+
 #endif
