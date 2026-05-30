@@ -502,6 +502,19 @@ void WriteBacktraceWindows(const std::filesystem::path& path, CONTEXT* ctx) {
  * 0 = idle, 1 = capturing. compare_exchange flips to 1 on entry. */
 std::atomic<int> g_capturing{0};
 
+#if defined(__linux__) || defined(__APPLE__)
+/* Set by CrashHandlerPosix right before it calls Port_BugReport_Capture so that
+ * Capture writes backtrace.txt FIRST — before the heavier, not-async-signal-safe
+ * screenshot/save/state/malloc steps that can deadlock or re-fault if the crash
+ * happened inside malloc/SDL/stdio while a lock was held. The backtrace is the
+ * most valuable artifact, so it must escape first. Cleared after the early
+ * write; the F9 manual-capture path never sets it (and gets no backtrace, as
+ * before). */
+std::atomic<bool> g_crashBacktracePending{false};
+CrashRegs g_crashRegs{};
+void* g_crashFaultAddr = nullptr;
+#endif
+
 } // namespace
 
 extern "C" char* Port_BugReport_Capture(const char* reason) {
@@ -522,6 +535,20 @@ extern "C" char* Port_BugReport_Capture(const char* reason) {
         std::fprintf(stderr, "[BUG] mkdir failed: %s\n", ec.message().c_str());
         return nullptr;
     }
+
+#if defined(__linux__) || defined(__APPLE__)
+    /* Crash path: write backtrace.txt FIRST (the most valuable artifact),
+     * before the heavier steps below that may deadlock if the fault occurred
+     * inside malloc/SDL/stdio holding a lock. The F9 manual path skips this
+     * (g_crashBacktracePending is false). WriteBacktracePosix still uses stdio
+     * — not strictly async-signal-safe — but ordering it first is a strict
+     * improvement over writing it only after the heavy bundle steps succeed. */
+    if (g_crashBacktracePending.load()) {
+        WriteBacktracePosix(std::filesystem::path(dirname) / "backtrace.txt",
+                            g_crashRegs, g_crashFaultAddr);
+        g_crashBacktracePending.store(false);
+    }
+#endif
 
     PortBugReportState s = Port_BugReport_GetGameState();
 
@@ -577,30 +604,27 @@ void CrashHandlerPosix(int sig, siginfo_t* info, void* ucontext) {
     std::snprintf(reason, sizeof(reason), "crash:%s@%p ip=%p",
                   SignalName(sig), fault_addr, regs.ip);
 
+    /* Hand the crash context to Port_BugReport_Capture so it writes
+     * backtrace.txt BEFORE its heavier (non-async-signal-safe) steps, in case
+     * those deadlock when the fault came from inside malloc/SDL/stdio. */
+    g_crashRegs = regs;
+    g_crashFaultAddr = fault_addr;
+    g_crashBacktracePending.store(true);
+
     char* dir = Port_BugReport_Capture(reason);
+    g_crashBacktracePending.store(false);  /* clear if Capture bailed pre-write */
     if (dir) {
-        WriteBacktracePosix(std::filesystem::path(dir) / "backtrace.txt",
-                            regs, fault_addr);
-        /* Print the absolute path so the user knows where to find
-         * the bundle. The process is about to die — no toast UI will
-         * survive — so use stderr (visible when launched from a
-         * terminal) plus SDL_ShowSimpleMessageBox (best-effort: not
-         * async-signal-safe, but worth trying — if it works the user
-         * sees a popup before the window closes). */
+        /* backtrace.txt was already written (early, inside Capture). Report the
+         * path on stderr. Deliberately NO SDL_ShowSimpleMessageBox here:
+         * calling SDL from a signal handler can re-enter a held SDL/windowing
+         * lock and deadlock — and the crash often originates in the SDL-heavy
+         * present path. The stderr line conveys the path; the re-raise below
+         * still produces an OS core dump. */
         char abs[4096];
         const char* shown = realpath(dir, abs) ? abs : dir;
         std::fprintf(stderr, "\n[BUG] CRASH (%s) — bundle saved to:\n    %s\n",
                      SignalName(sig), shown);
         std::fflush(stderr);
-        char msg[8192];
-        std::snprintf(msg, sizeof(msg),
-            "The game crashed (%s).\n\n"
-            "A bug report bundle was saved to:\n%s\n\n"
-            "Please attach this folder when filing a GitHub issue.",
-            SignalName(sig), shown);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                                 "Minish Cap — Crash",
-                                 msg, nullptr);
         std::free(dir);
     } else {
         std::fprintf(stderr, "[BUG] CRASH (%s) but bug-report capture FAILED.\n",
