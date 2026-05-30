@@ -18,6 +18,17 @@ u32 FindFirstFreeGFXSlot(void);
 void sub_080AE218(u32, u32);
 void MoveGFXSlots(u32, u32);
 
+static bool32 IsLiveGFXSlot(u32 index) {
+    switch (gGFXSlots.slots[index].status) {
+        case GFX_SLOT_RESERVED:
+        case GFX_SLOT_GFX:
+        case GFX_SLOT_PALETTE:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
 void ResetPalettes(void) {
     GfxSlot* slots;
     GfxSlot* slot;
@@ -165,7 +176,7 @@ bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
         result = TRUE;
     } else {
         for (index = 4; index < MAX_GFX_SLOTS; index++) {
-            if (gfxIndex == gGFXSlots.slots[index].gfxIndex) {
+            if (IsLiveGFXSlot(index) && gfxIndex == gGFXSlots.slots[index].gfxIndex) {
                 // Gfx is already loaded to a slot.
                 sub_080AE0C8(index, entity, GFX_SLOT_RESERVED);
                 result = TRUE;
@@ -194,7 +205,7 @@ bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
 
     if (gfxIndex != 0) {
         for (index = 4; index < MAX_GFX_SLOTS; index++) {
-            if (gfxIndex == gGFXSlots.slots[index].gfxIndex) {
+            if (IsLiveGFXSlot(index) && gfxIndex == gGFXSlots.slots[index].gfxIndex) {
                 // Gfx is already loaded to a slot.
                 goto _080ADFF2;
             }
