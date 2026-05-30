@@ -964,6 +964,14 @@ void sub_08061B18(NPC5Entity* this) {
         case INTERACTION_TALK:
             super->interactType = INTERACTION_NONE;
             sub_08061AFC(this);
+#ifdef PC_PORT
+            /* gZeldaFollowerText is an unbridged native stub (always NULL), so
+               messageData resolves to NULL here. The Zelda-follower subsystem is
+               unused, but guard the deref so this path can't SIGSEGV. */
+            if (this->messageData == NULL) {
+                break;
+            }
+#endif
             puVar2 = this->messageData;
             puVar2 += (super->timer++);
             if (puVar2[1] == 0) {
