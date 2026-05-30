@@ -683,7 +683,23 @@ bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex) {
         return false;
     }
     const auto& player = sState.ctx->players[playerIndex];
-    return player.playing && !player.finished;
+    if (!player.playing) {
+        return false;
+    }
+    /* #22: agbplay leaves `finished` false for one-shot SFX players past their
+     * audible end (it is only set on the sequence's FINE marker, which an
+     * item-get jingle that loops/holds may never hit), so `playing &&
+     * !finished` never goes false — the BGM duck then had to fall back to a
+     * timeout. Use real liveness instead: the player is audibly active only
+     * while a track is still sequencing (`enabled`) or still holding ringing
+     * notes (`activeNotes`). This lets the duck lift exactly when the jingle
+     * ends; the frame-count timeout in src/sound.c is now just a backstop. */
+    for (const auto& trk : player.tracks) {
+        if (trk.enabled || trk.activeNotes.any()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_t pan) {
