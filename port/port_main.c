@@ -16,6 +16,7 @@
 #include "port_ppu.h"
 #include "port_rom.h"
 #include "port_runtime_config.h"
+#include "port_tts.h"
 #include "port_types.h"
 #include "port_update_check.h"
 #include <stdlib.h>
@@ -558,7 +559,31 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Prelaunch: %s — waiting for user.\n",
                 romPath ? "ROM detected" : "no ROM yet");
 
+        /* Announce the prelaunch screen for screen-reader users.
+         * Port_TTS_Init ran a few lines above so the backend is up;
+         * Port_TTS_Speak is a no-op when TTS is disabled in config. */
+        {
+            PortTtsOptions opts = {0};
+            opts.priority = PORT_TTS_PRIO_URGENT;
+            opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+            opts.dedupe = false;
+            if (romPath) {
+                Port_TTS_Speak("Project Picori, the Minish Cap PC port. "
+                               "ROM detected. Press Enter or Space to play.",
+                               &opts);
+            } else {
+                Port_TTS_Speak("Project Picori, the Minish Cap PC port. "
+                               "No ROM found. Press Enter or Space to "
+                               "select your Minish Cap GBA ROM file.",
+                               &opts);
+            }
+        }
+
         bool done = false;
+        if (romPath && getenv("TMC_AUTOPLAY")) {
+            fprintf(stderr, "Prelaunch: TMC_AUTOPLAY set — skipping menu.\n");
+            done = true;
+        }
         while (!done) {
             /* Re-derive the displayable filename each iteration in case
              * a Change-ROM swap moved the file. */
@@ -605,6 +630,20 @@ int main(int argc, char* argv[]) {
                     romPath = Port_FindBaseRomPath();
                     fprintf(stderr, "Prelaunch: post-picker romPath=%s.\n",
                             romPath ? romPath : "(still NULL)");
+                    /* Re-announce so the user hears the new state
+                     * without having to look at the screen. */
+                    {
+                        PortTtsOptions opts = {0};
+                        opts.priority = PORT_TTS_PRIO_URGENT;
+                        opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+                        opts.dedupe = false;
+                        if (romPath) {
+                            Port_TTS_Speak("ROM loaded. Press Enter or "
+                                           "Space to play.", &opts);
+                        } else {
+                            Port_TTS_Speak("No ROM selected.", &opts);
+                        }
+                    }
                 }
             } else if (play_clicked) {
                 fprintf(stderr, "Prelaunch: play_clicked but no ROM (ignored).\n");

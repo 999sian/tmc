@@ -80,7 +80,7 @@ u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
  * here but a restart is needed to apply because the window's
  * swapchain owner is set once and is not live-switchable. */
 PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
-bool        sTtsEnabled  = false;
+bool        sTtsEnabled  = true;
 float       sTtsRate     = 0.5f;
 float       sTtsPitch    = 0.5f;
 float       sTtsVolume   = 0.8f;
@@ -120,10 +120,12 @@ nlohmann::json DefaultsJson(void) {
         { "bg_fill", "black" },
         { "bg_fill_color", { 0, 0, 0 } },
         { "render_backend", "auto" },
-        /* TTS accessibility — default OFF (privacy + voice synthesis
-         * isn't every user's preference). Rate/pitch/volume in [0,1];
+        /* TTS accessibility — default ON for the accessibility-focused
+         * test build so screen-reader users hear feedback at first
+         * launch (title screen → file select → gameplay) without
+         * having to find F7 first. Rate/pitch/volume in [0,1];
          * voice/language empty = backend default. */
-        { "tts_enabled", false },
+        { "tts_enabled", true },
         { "tts_rate", 0.5 },
         { "tts_pitch", 0.5 },
         { "tts_volume", 0.8 },
@@ -499,8 +501,9 @@ extern "C" void Port_Config_Load(const char* path) {
     }
 
     /* TTS settings — read-once at Port_TTS_Init; setters from the
-     * F8 menu write back via Port_Config_SetTts* below. */
-    sTtsEnabled  = j.value("tts_enabled", false);
+     * F8 menu write back via Port_Config_SetTts* below. Default ON
+     * matches DefaultsJson — accessibility-friendly first launch. */
+    sTtsEnabled  = j.value("tts_enabled", true);
     sTtsRate     = (float)j.value("tts_rate",   0.5);
     sTtsPitch    = (float)j.value("tts_pitch",  0.5);
     sTtsVolume   = (float)j.value("tts_volume", 0.8);
