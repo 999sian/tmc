@@ -58,6 +58,16 @@ void Vaati3Arm_Action2(Entity* this) {
 
 void sub_080A0640(Entity* this) {
     if (this->type == 0) {
+#ifdef PC_PORT
+        /* #136 family — Vaati's death sequence (vaatiArm.c:1159) sets
+           entities[4]->myHeap = NULL while keeping entities[4] alive as this
+           type-0 arm's parent, so the heap[4] read below would deref
+           ((Entity**)NULL)[4]. On GBA that read BIOS bytes; on PC it SIGSEGVs.
+           Skip positioning this frame until the heap is valid again. */
+        if (this->parent == NULL || this->parent->myHeap == NULL) {
+            return;
+        }
+#endif
         PositionRelative(*(((Entity**)this->parent->myHeap) + 4), this, 0, Q_16_16(8.0));
     } else {
         CopyPosition(this->parent, this);
