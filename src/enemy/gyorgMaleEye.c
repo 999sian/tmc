@@ -26,8 +26,21 @@ void sub_08048F74(GyorgMaleEyeEntity*);
 
 void GyorgMaleEye(GyorgMaleEyeEntity* this) {
     Entity* parent = super->parent;
+#ifdef PC_PORT
+    /* #136 family — sibling not yet Init'd. Between CreateEnemy (gyorgMale.c)
+       and the orchestrator's `tmp->parent = super` assignment, parent is NULL;
+       the `parent->next` read below (and the parent derefs at 33-35) read BIOS
+       bytes on GBA but SIGSEGV on PC. Missed member of the committed #136 fix —
+       mirror gyorgFemaleEye.c::GyorgFemaleEye exactly. */
+    if (parent == NULL) {
+        return;
+    }
+#endif
     if (parent->next == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        return;
+#endif
     }
     GyorgMaleEye_Functions[GetNextFunction(super)](this);
     super->spriteOrientation.flipY = parent->spriteOrientation.flipY;
