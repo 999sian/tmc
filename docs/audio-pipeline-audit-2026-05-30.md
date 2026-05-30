@@ -176,3 +176,50 @@ The MMIO→software migration is **already complete and structurally clean**; th
    *Location:* `MP2KChnPSGWave` takes one 16-byte wave snapshot at note-on (`MP2KChnPSG.cpp:581-585`, no two-bank/mid-note reload); `Port_Audio_OnFifoWrite` no-op (`port_audio.c:193`) + `gba_write8/32` FIFO hook (`port_gba_mem.c:31,138`); `port_DmaTransfer` lacks `DMA_START_SPECIAL`.
    *Why:* none exercised by TMC's static wave voices or by any compiled FIFO write; the DMA gap is masked by `m4a.c` being excluded.
    *Fix:* low priority — remove or clearly comment the vestigial FIFO hook; document the DMA-re-enable hazard in the build comment near `xmake.lua:859`. No action needed for the wave snapshot unless a non-static wave voice is introduced.
+
+## 7. AUDIO-QUALITY ENHANCEMENTS (shipped 2026-05-31)
+
+Driven by a 5-lens design panel (spatial/reverb, tonal-EQ, stereo-imaging,
+dynamics/loudness, purist-minimal), each proposal adversarially critiqued, then
+synthesized. Guiding principle: **default-on-launch output stays byte-identical
+to before** — every audible change is either a fix to an objective defect or an
+opt-in control defaulted to the current value. All apply to the *enhanced*
+(toggle-OFF) path only; GBA-accurate mode stays raw.
+
+**Shipped:**
+- **C1-continuous tanh soft-clip** (`1c2be2eb4`, `port_audio.c`). The atan bend had
+  slope 1.0 below the 25000 knee but 2/π≈0.637 above it — a transfer-curve corner
+  that injects odd harmonics (edgy fizz) on loud lead notes. `room*tanh(over/room)`
+  matches slope 1 on both sides, asymptotes at exactly 32767, byte-identical below
+  |25000|. The one always-on change; isolated to a single variable for A/B.
+- **Click-free GBA-accurate toggle** (`1c2be2eb4`). `Port_Audio_ClearFilterState`
+  (single source of truth), RELEASE/ACQUIRE on the flag, biquad history cleared on
+  the false→true edge so re-engaging the chain doesn't click/ring.
+- **F8 → Audio "Stereo width" slider** (`ebea05a24`), [1.00,1.50], default 1.20
+  (= shipped). Mid never scaled → mono fold-down invariant. Read once/call, memoryless.
+- **F8 → Audio "Reverb" slider** (`d7c394fae`), 0..24, default 0 (= dry). Engages the
+  previously-inert forced reverb correctly (`0x80|level`), PCM-only (chiptune leads
+  stay dry by mix order), applied **live** via `SoundMixer::UpdateReverb()` (no song
+  restart — the live path the design synthesis had missed), persists across rebuilds,
+  byte-identical at level 0.
+
+**Deliberately REJECTED (do not re-propose without a listening test + a gate):**
+- **Low-shelf "warmth" bass boost** — TMC has little real low end by design; a shelf
+  amplifies synthesis noise/DC residue and pushes bass-heavy panned notes past the
+  25000 knee (#115-class squash). No bass boost; the 30 Hz DC-blocker stays.
+- **High-shelf de-tilt** — would dull TMC's deliberately bright top; taste-level
+  character change with no objective defect behind it. Defer; gate if ever revisited.
+- **Bus/glue compressor or limiter** — would pump on the dense ~60 Hz transient
+  stream and smear staccato PSG snap; there's no headroom to compress into (upstream
+  float mix is pre-bounded). The tanh soft-clip is the *only* dynamics stage by design.
+- **Even-harmonic (DC-bias) warmth** — the textbook way to *muddy* a bright chiptune;
+  fights the DC-blocker. Wrong tool for the source.
+- **Output-stage reverb** — would reverberate the summed mix (dry PSG leads + SFX +
+  UI blips); reverb MUST stay synth-side (PCM-only) where selectivity is free.
+- **True-peak ceiling drop / widen makeup-gain trim** — both permanently soften
+  loudness for the majority (already-48 kHz devices / near-mono content) to fix edge
+  cases TMC's centre-clustered mix essentially never produces.
+- **reverbType GS1/GS2/MGAT** — the hall algorithms are far too wet/smeary; NORMAL's
+  short comb is the restrained, idiomatic MP2K choice.
+- **Removing the dormant per-track pan stage in `RenderChunkLocked`** — correct and
+  retained for romhack panpot; commented, not deleted, to avoid a future double-pan.
