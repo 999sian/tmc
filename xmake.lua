@@ -527,6 +527,15 @@ target("tmc_pc")
             { patch = "viruappu-obj-semitrans.patch",
               marker_file = path.join(sub, "src", "mode1.c"),
               marker = "virtuappu_mode1_obj_semitrans" },
+            -- OBJ-window (attr0 mode 2) support in the mode1 composite. A
+            -- mode-2 sprite is invisible and only carves the OBJ window;
+            -- WINOUT's high byte then selects which layers show inside it.
+            -- Without this, src/object/litArea.c's dark-room light circles
+            -- (Stockwell, ToD lantern rooms, Palace of Winds entrance, Royal
+            -- Valley graves) draw as opaque blobs and the dark mask is lost.
+            { patch = "viruappu-objwin.patch",
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "virtuappu_mode1_obj_window" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)

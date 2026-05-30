@@ -275,6 +275,16 @@ MenuPage BuildWarpPage(void) {
      * World pos (520, 5379) - room origin (352, 5312) = local (168, 67). */
     p.items.push_back({ "WindRuins Wizards (#78 repro)",
                         []() { DoWarp(AREA_FORTRESS_OF_WINDS, 0x23, 0xA8, 0x43, 1); } });
+    /* OBJ-window (mode-2) render test — dark rooms whose light circles are
+     * litArea OBJ-window sprites (src/object/litArea.c). Spawn point sits on a
+     * litArea coordinate (always-on, no flag gate) so the light reveal is in
+     * view immediately. Correct render: dark room + soft circular light, no
+     * floating opaque blob. Stockwell = MinishRafters room 0x01 (two candle
+     * circles); Madderpillars = ToD room 0x2C (two circles). */
+    p.items.push_back({ "OBJWIN test: Stockwell shop (litArea)",
+                        []() { DoWarp(0x2E, 0x01, 0x64, 0x78, 1); } });
+    p.items.push_back({ "OBJWIN test: ToD Madderpillars (litArea)",
+                        []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x2C, 0xBC, 0x58, 1); } });
     p.items.push_back({ "All areas (raw, by index) ->", []() { Push(BuildAllAreasPage()); } });
     p.items.push_back({ "<- Back",                      []() { Pop(); } });
     return p;
