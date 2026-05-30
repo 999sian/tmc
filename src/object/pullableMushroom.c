@@ -219,7 +219,14 @@ void sub_0808ACEC(PullableMushroomEntity* this) {
 }
 
 void sub_0808ADA0(PullableMushroomEntity* this) {
+#ifdef PC_PORT
+    /* deref-before-guard: sub_0808B1F0 dereferences super->child (other->x/y),
+       so the NULL check must short-circuit FIRST. On GBA the NULL read returned
+       a small BIOS byte (<8, so it limped along); on PC it SIGSEGVs. */
+    if ((super->child == NULL) || (sub_0808B1F0(this, super->child) < 8)) {
+#else
     if ((sub_0808B1F0(this, super->child) < 8) || (super->child == NULL)) {
+#endif
         super->subAction++;
         super->timer = 2;
         super->flags |= ENT_COLLIDE;
@@ -316,6 +323,13 @@ void sub_0808AEB0(PullableMushroomEntity* this) {
 void sub_0808AFD4(PullableMushroomEntity* this) {
     super->action = 1;
     super->subAction = 1;
+#ifdef PC_PORT
+    /* child-creation-failed path: super->child can be NULL here (same
+       precondition guarded in sub_0808ADA0); the deref below SIGSEGVs on PC. */
+    if (super->child == NULL) {
+        return;
+    }
+#endif
     (super->child)->direction = DirectionTurnAround(super->direction);
     SoundReq(SFX_130);
 }
