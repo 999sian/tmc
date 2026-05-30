@@ -106,8 +106,16 @@ void WizzrobeWind_Action1(WizzrobeEntity* this) {
                 super->timer = 40;
                 tmp = super->direction >> 3;
                 parent = super->parent;
-                parent->timer = 1;
-                parent->spriteSettings.draw = 1;
+#ifdef PC_PORT
+                /* super->parent is the wind's own WIND_PROJECTILE, set in Init
+                   only if EnemyCreateProjectile succeeded; NULL on pool
+                   exhaustion. GBA read BIOS bytes, PC SIGSEGVs. */
+                if (parent != NULL)
+#endif
+                {
+                    parent->timer = 1;
+                    parent->spriteSettings.draw = 1;
+                }
                 InitializeAnimation(super, tmp | 4);
             }
             break;
@@ -123,7 +131,10 @@ void WizzrobeWind_Action2(WizzrobeEntity* this) {
                     this->timer2++;
                     super->timer = 56;
                     super->subtimer = 0;
-                    super->parent->spriteSettings.draw = 0;
+#ifdef PC_PORT
+                    if (super->parent != NULL)
+#endif
+                        super->parent->spriteSettings.draw = 0;
                     break;
                 case 8:
                     if (EntityInRectRadius(super, &gPlayerEntity.base, 0xa0, 0xa0) && CheckOnScreen(super)) {
@@ -187,15 +198,23 @@ void WizzrobeWind_Action3(WizzrobeEntity* this) {
                 }
                 this->timer2++;
                 super->timer = 40;
-                parent->timer = 1;
-                parent->spriteSettings.draw = 1;
+#ifdef PC_PORT
+                if (parent != NULL)
+#endif
+                {
+                    parent->timer = 1;
+                    parent->spriteSettings.draw = 1;
+                }
                 InitializeAnimation(super, super->animationState >> 1 | 4);
                 break;
             case 2:
                 if (--super->timer == 0) {
                     this->timer2++;
                     super->timer = (Random() & 0x1f) + 48;
-                    parent->spriteSettings.draw = 0;
+#ifdef PC_PORT
+                    if (parent != NULL)
+#endif
+                        parent->spriteSettings.draw = 0;
                     InitializeAnimation(super, super->animationState >> 1);
                 } else if (super->timer == 8) {
                     parent = EnemyCreateProjectile(super, WIND_PROJECTILE, 1);
@@ -207,7 +226,10 @@ void WizzrobeWind_Action3(WizzrobeEntity* this) {
     } else {
         if (this->timer2 != 0) {
             this->timer2 = 0;
-            parent->spriteSettings.draw = 0;
+#ifdef PC_PORT
+            if (parent != NULL)
+#endif
+                parent->spriteSettings.draw = 0;
         }
     }
 }
@@ -372,7 +394,13 @@ bool32 sub_0802FA88(WizzrobeEntity* this) {
         direction = CalculateDirectionTo(super->x.HALF.HI, super->y.HALF.HI, this->targetX, this->targetY);
         super->direction = direction;
         super->animationState = ((direction + 4) & 0x18) >> 2;
-        if (((super->parent)->spriteSettings.draw & 3) != 0) {
+        if (
+#ifdef PC_PORT
+            /* Init's type2!=0 path calls this (line 67) BEFORE super->parent is
+               assigned (line 79), so parent is NULL here on the first tick. */
+            super->parent != NULL &&
+#endif
+            ((super->parent)->spriteSettings.draw & 3) != 0) {
             InitializeAnimation(super, direction >> 3 | 4);
         } else {
             InitializeAnimation(super, direction >> 3);
