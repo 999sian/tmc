@@ -31,6 +31,7 @@
 #if defined(__linux__) || defined(__APPLE__)
 #include <execinfo.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <dlfcn.h>
 #include <sys/ucontext.h>
 #endif
@@ -294,13 +295,50 @@ CrashRegs ExtractCrashRegs(void* ucontext) {
     return r;
 }
 
+#if defined(__linux__) || defined(__APPLE__)
+/* Pre-made pipe used to probe pointer readability from inside the signal
+ * handler without faulting (see SafeReadPointer). Created once at install. */
+int s_probe_fds[2] = { -1, -1 };
+#endif
+
 void* SafeReadPointer(void* p) {
-    /* Read 8 bytes from *p without faulting if p is unmapped. We can't
-     * trap a SEGV inside our SEGV handler reliably, so fall back to a
-     * conservative null check. The stack pointer at the crash site is
-     * (almost always) mapped so this is mostly belt-and-braces. */
-    if (!p) return nullptr;
+    /* Read 8 bytes from *p without faulting if p is unmapped — this runs
+     * INSIDE the SIGSEGV handler while walking the rbp frame chain, and a
+     * corrupt frame pointer (e.g. rbp ~0x6 → reading at 0xe) used to fault
+     * the handler itself and truncate the bugreport (the recurring
+     * `crash:SIGSEGV@0xe` in WriteBacktracePosix). */
+    uintptr_t a = reinterpret_cast<uintptr_t>(p);
+    /* Cheap pre-filter: reject NULL, the never-mapped low 64 KB (catches the
+     * small garbage frame pointers that crashed us), misaligned addresses (a
+     * real saved-rbp / return slot is 8-byte aligned), and non-canonical
+     * x86-64 user addresses. */
+    if (a < 0x10000 || (a & 7u) != 0u || a >= 0x800000000000ULL) {
+        return nullptr;
+    }
     void* v = nullptr;
+#if defined(__linux__) || defined(__APPLE__)
+    /* Definitive readability probe: write() to a pre-made pipe returns
+     * -1/EFAULT for an unmapped source instead of raising SIGSEGV, and write()
+     * is async-signal-safe. If the kernel accepts the 8 bytes, read them back
+     * to recover the value; the pipe is non-blocking and drained every call so
+     * it never fills. */
+    if (s_probe_fds[1] >= 0) {
+        ssize_t w = write(s_probe_fds[1], p, sizeof(v));
+        if (w == static_cast<ssize_t>(sizeof(v))) {
+            if (read(s_probe_fds[0], &v, sizeof(v)) != static_cast<ssize_t>(sizeof(v))) {
+                v = nullptr;
+            }
+            return v;
+        }
+        if (w > 0) { /* defensive: drain a partial write so the pipe stays in sync */
+            char tmp[sizeof(v)];
+            (void)read(s_probe_fds[0], tmp, static_cast<size_t>(w));
+        }
+        return nullptr;
+    }
+#endif
+    /* Fallback (probe pipe unavailable): the pre-filter above has already
+     * rejected the obviously-bogus pointers that caused the handler crash. */
     std::memcpy(&v, p, sizeof(v));
     return v;
 }
@@ -577,6 +615,17 @@ void CrashHandlerPosix(int sig, siginfo_t* info, void* ucontext) {
 }
 
 void InstallPosixHandlers() {
+    /* Pipe used by SafeReadPointer to probe pointer readability from inside the
+     * handler without faulting. Non-blocking + close-on-exec; drained on every
+     * use so it never fills. Created here (not in the handler) since pipe() is
+     * not async-signal-safe. */
+    if (s_probe_fds[0] < 0 && pipe(s_probe_fds) == 0) {
+        fcntl(s_probe_fds[0], F_SETFL, O_NONBLOCK);
+        fcntl(s_probe_fds[1], F_SETFL, O_NONBLOCK);
+        fcntl(s_probe_fds[0], F_SETFD, FD_CLOEXEC);
+        fcntl(s_probe_fds[1], F_SETFD, FD_CLOEXEC);
+    }
+
     stack_t ss{};
     ss.ss_sp = g_altstack;
     ss.ss_size = sizeof(g_altstack);
