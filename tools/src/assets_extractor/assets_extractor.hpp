@@ -1422,6 +1422,56 @@ inline uint32_t infer_asset_size(uint32_t offset, const std::unordered_map<uint3
     return offset < Rom.size() ? static_cast<uint32_t>(Rom.size()) - offset : 0;
 }
 
+// Exact byte-length for a SELF-CONTAINED animation, by mirroring the runtime
+// decoder (port/port_animation.c). Each frame is 4 bytes; a frame whose byte[3]
+// has bit 7 set (loop flag) is the terminal frame and is followed by ONE
+// loop_back byte. The decoder then does `p -= loop_back * 4`.
+//
+// Option 3 (docs/extractor-animation-remediation-plan.md, validated 2026-05-30):
+// only return the trimmed exact extent `N*4+1` when the loop is SELF-CONTAINED,
+// i.e. `loop_back ∈ [1, N]` so it jumps back within this animation's own frames.
+// Such anims self-terminate (the decoder cycles within [offset, offset+N*4) and
+// never reads following bytes), so the trimmed odd size is safe even though it
+// bypasses the runtime's contiguous-packing net. This recovers the ~900 anims
+// that the boundary-gap heuristic over-counted by 1-3 alignment bytes (→ strict
+// parser rejected them → zeroed/blank).
+//
+// When `loop_back > N` (the loop jumps back BEYOND this anim, into the
+// contiguous PRECEDING animation — a shared-frame technique, 38 anims found) or
+// `loop_back == 0`, or no loop frame is found, fall back to the boundary-gap
+// size (the old infer_asset_size behavior). Those anims stay EVEN-sized so the
+// runtime net keeps packing them contiguously and the back-reference resolves —
+// trimming them would feed the decoder detached/garbage frames (the failure mode
+// of the reverted 28fbfa9ff salvage).
+inline uint32_t compute_animation_extent(uint32_t offset,
+                                         const std::unordered_map<uint32_t, IndexedAssetInfo>& lookup,
+                                         const std::vector<uint32_t>& boundaries)
+{
+    const uint32_t boundary_gap = infer_asset_size(offset, lookup, boundaries, 4);
+    uint32_t boundary = offset + boundary_gap;
+    if (boundary > Rom.size()) {
+        boundary = static_cast<uint32_t>(Rom.size());
+    }
+
+    uint32_t p = offset;
+    while (p + 4 <= boundary) {
+        const uint8_t frame_byte = Rom[p + 3];
+        p += 4;
+        if (frame_byte & 0x80) { // terminal loop frame
+            if (p < boundary) {
+                const uint32_t n = (p - offset) / 4; // frames consumed so far
+                const uint8_t loop_back = Rom[p];
+                if (loop_back >= 1 && loop_back <= n) {
+                    // self-contained loop → exact, safe to trim alignment
+                    return (p - offset) + 1;
+                }
+            }
+            break; // shared-frame / degenerate → boundary-gap fallback below
+        }
+    }
+    return boundary_gap; // non-self-contained: keep even size for the runtime net
+}
+
 struct ChunkInfo
 {
     uint32_t offset;
@@ -2038,7 +2088,12 @@ inline bool extract_sprite_ptrs(const Config& config, const std::unordered_map<u
                     break;
                 }
                 const uint32_t anim_offset = to_rom_address(anim_ptr);
-                const uint32_t anim_size = infer_asset_size(anim_offset, lookup, boundaries, 4);
+                // Self-contained anims get the exact decoder-derived length
+                // (recovers ~900 over-counted/blank ones); shared-frame anims
+                // (loop_back beyond their start) keep the even boundary-gap size
+                // so the runtime contiguous-packing net still feeds them their
+                // preceding frames. (#-port anim-extent fix, Option 3)
+                const uint32_t anim_size = compute_animation_extent(anim_offset, lookup, boundaries);
                 const SpritePtrPaths paths = convert_animation(anim_offset, anim_size);
                 editable_entry["animations"].push_back(json_path_string(paths.editable));
                 runtime_entry["animations"].push_back(json_path_string(paths.runtime));
