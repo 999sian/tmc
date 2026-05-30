@@ -300,6 +300,8 @@ void          Port_Audio_SetGbaAccurate(bool accurate);
 bool          Port_Audio_IsGbaAccurate(void);
 void          Port_Audio_SetWidth(float width);
 float         Port_Audio_GetWidth(void);
+void          Port_Audio_SetReverbLevel(int level);
+int           Port_Audio_GetReverbLevel(void);
 
 int  Port_QuickSave_SaveSlot(int slot);
 int  Port_QuickSave_LoadSlot(int slot);
@@ -1283,6 +1285,25 @@ static void DrawRibbonAudioTab(void) {
             "1.20 = default. The mid is never altered, so mono playback always "
             "collapses cleanly to the original mix. Lower values (~1.12) reduce "
             "hard-panned peak overshoot. No effect in GBA-accurate mode.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+
+    int reverb = Port_Audio_GetReverbLevel();
+    if (ImGui::SliderInt("Reverb", &reverb, 0, 24)) {
+        Port_Audio_SetReverbLevel(reverb);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "Adds a short room tail to sampled (PCM) voices — drums, bass, "
+            "some leads — while the chiptune PSG/CGB voices stay dry by the "
+            "synth's mix order, so it adds space without muddying the melody. "
+            "0 = off (default). ~12 is a gentle, musical amount. Applies live "
+            "(does not restart the music). No effect in GBA-accurate mode.");
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
