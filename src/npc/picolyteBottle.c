@@ -56,15 +56,27 @@ void PicolyteBottle_Init(PicolyteBottleEntity* this) {
 
     if (super->type == 0) {
         super->action = 1;
+        /* #-port: CreateNPC can return NULL (entity pool exhaustion). On GBA the
+           `npc->parent = super` write then landed in BIOS garbage; on PC it is a
+           NULL store -> SIGSEGV. Guard each store. */
         npc = CreateNPC(PICOLYTE_BOTTLE, 1, 0);
         this->ent1 = npc;
-        npc->parent = super;
+#ifdef PC_PORT
+        if (npc != NULL)
+#endif
+            npc->parent = super;
         npc = CreateNPC(PICOLYTE_BOTTLE, 1, 1);
         this->ent2 = npc;
-        npc->parent = super;
+#ifdef PC_PORT
+        if (npc != NULL)
+#endif
+            npc->parent = super;
         npc = CreateNPC(PICOLYTE_BOTTLE, 1, 2);
         this->ent3 = npc;
-        npc->parent = super;
+#ifdef PC_PORT
+        if (npc != NULL)
+#endif
+            npc->parent = super;
         this->unk74 = 0;
         this->unk76 = 10;
         gRoomTransition.field_0x6 = 10;
