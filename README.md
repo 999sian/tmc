@@ -134,21 +134,55 @@ single-target invocation, and other build options.
 
 ## Controls
 
-| Action               | Keyboard         | Gamepad        |
-|----------------------|------------------|----------------|
-| Fast-forward (hold)  | Tab              | Right trigger  |
-| Toggle fullscreen    | F11 / Alt+Enter  | —              |
-| Cycle upscaler       | F12              | —              |
-| Capture bug report   | F9               | —              |
-| Open debug menu      | F8               | —              |
-| Quicksave            | F5               | —              |
-| Quickload            | F6               | —              |
+| Action                         | Keyboard         | Gamepad        |
+|--------------------------------|------------------|----------------|
+| Fast-forward (hold)            | Tab              | Right trigger  |
+| Toggle fullscreen              | F11 / Alt+Enter  | —              |
+| Cycle upscaler                 | F12              | —              |
+| Toggle text-to-speech          | F7               | —              |
+| Open debug menu                | F8               | —              |
+| Capture bug report             | F9               | —              |
+| Quicksave                      | F5               | —              |
+| Quickload (also stops speech)  | F6               | —              |
 
-Default upscaler is nearest-neighbor (sharp pixels). F12 cycles through xBRZ
-4× and linear modes.
+The **F8** debug menu also covers warp, items, heal, internal render scale,
+the renderer/shader toggles (see *Renderer & shaders*) and an Accessibility tab
+(see *Accessibility*).
+
+Default upscaler is nearest-neighbor (sharp pixels). **F12** cycles through:
+nearest-raw → xBRZ 4× (linear, smooth) → xBRZ 4× (nearest, sharp) → linear-raw.
 
 The window title shows the running port version — please include it when
 filing issues.
+
+## Renderer & shaders
+
+The default renderer is the software PPU (`libs/ViruaPPU`) presented through
+SDL. An optional **SDL_GPU** backend adds post-processing shader presets (CRT,
+LCD, scanline looks, …). In the **F8** menu:
+
+- **Renderer** toggles software ↔ GPU.
+- **Shader Preset** picks a `.glslp` preset while the GPU backend is active.
+
+The GPU backend is compiled into the pre-built releases and `build.py` builds
+by default. A bare `xmake` configure needs `--gpu_renderer=y` — without it the
+GPU options are present but show "GPU backend required".
+
+## Accessibility
+
+The port has built-in text-to-speech for screen-reader users. Press **F7** to
+toggle it on or off; dialog text, figurine descriptions, file-select hints and
+other text surfaces are read aloud. While TTS is on, plain **F6** silences the
+current utterance, and the **F8 → Accessibility** tab has rate / pitch / volume
+sliders.
+
+The speech backend is selected automatically per platform:
+
+- **Windows** — the NVDA Controller Client if NVDA is running (using your
+  configured NVDA voice; the F8 sliders are ignored while NVDA owns the queue),
+  otherwise SAPI.
+- **Linux / macOS** — the first available of `spd-say`, `espeak-ng`, `espeak`,
+  or macOS `say`.
 
 See [CHANGELOG.md](CHANGELOG.md) for per-release notes.
 
