@@ -28,15 +28,18 @@ static u8  sBgmDuckActive;
 static u8  sBgmDuckPlayer;
 static u16 sBgmDuckTimer; /* frames since duck activation; safety timeout */
 
-/* Heart-piece jingle in Minish Picori Village (#117) and a few other
- * spots have the jingle finish but the SFX player stays marked as
- * "playing" in agbplay_core, so the Is-Player-Active probe in
- * AudioMain never returns false and the duck never lifts.  Force a
- * restore after this many audio-frames regardless.  The jingle is ~3
- * seconds (~180 frames), so 600 (10s) gives generous headroom but
- * still recovers quickly enough that the player notices the bug only
- * if they're actively listening for it. */
-#define BGM_DUCK_TIMEOUT_FRAMES 600
+/* The item-get jingle (#117 heart-piece, #22 Jabber Nut, etc.) often finishes
+ * while the SFX player stays marked "playing" in agbplay_core, so the
+ * IsPlayerActive probe in AudioMain never returns false and the duck only lifts
+ * on this timeout. Diagnosed via the Jabber Nut repro: a logged probe-success
+ * measured the jingle at ~147 frames, so the duck is capped at the jingle
+ * length (~180f / 3s). The previous 600 (10s) "headroom" left the BGM audibly
+ * muted for ~10 seconds per item-get whenever the probe stuck — the reported
+ * bug, made near-continuous by the Jabber Nut sequence firing the jingle
+ * several times. When the probe DOES work it still lifts earlier (~147f); this
+ * is just the stuck-probe backstop, and the only ducking SFX is SFX_ITEM_GET so
+ * the cap can safely match its length. */
+#define BGM_DUCK_TIMEOUT_FRAMES 180
 
 static bool32 IsDuckingSfx(u32 song) {
     return song == SFX_ITEM_GET;
