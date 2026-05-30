@@ -544,6 +544,13 @@ target("tmc_pc")
             { patch = "viruappu-winv-wrap.patch",
               marker_file = path.join(sub, "src", "mode1.c"),
               marker = "win0_v_wrap" },
+            -- #132: affine BG2 internal-reference latch — fixes the Deepwood
+            -- Shrine rolling barrel rendering ~2x too many wooden panels (the
+            -- old "ref_io + pd*line" formula double-counted the vertical step
+            -- when the barrel's per-scanline HBlank DMA reloads BG2X/BG2Y).
+            { patch = "viruappu-mode2-affine-latch.patch",
+              marker_file = path.join(sub, "src", "mode2.c"),
+              marker = "affine_internal_y" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
