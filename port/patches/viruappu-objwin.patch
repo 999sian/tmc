@@ -1,0 +1,70 @@
+diff --git a/src/mode1.c b/src/mode1.c
+index 4debbc1..6c64072 100644
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -264,6 +264,13 @@ __thread const uint8_t *virtuappu_mode1_io_thread_override = NULL;
+  * its own copy; render_obj_line clears it at the top of every line. */
+ __thread uint8_t virtuappu_mode1_obj_semitrans[MODE1_GBA_WIDTH];
+ 
++/* Per-scanline OBJ-window mask (attr0 mode 2). A mode-2 OBJ is INVISIBLE on
++ * GBA — it doesn't draw colour; its opaque pixels just carve the OBJ window,
++ * inside which WINOUT's high byte (WINOBJ) selects which layers show. Written
++ * by render_obj_line, read by composite_line. __thread + cleared per line, as
++ * with obj_semitrans. */
++__thread uint8_t virtuappu_mode1_obj_window[MODE1_GBA_WIDTH];
++
+ uint16_t virtuappu_mode1_io_read16(uint16_t offset)
+ {
+     const uint8_t *src = virtuappu_mode1_io_thread_override
+@@ -363,6 +370,7 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+     int i;
+ 
+     memset(virtuappu_mode1_obj_semitrans, 0, sizeof(virtuappu_mode1_obj_semitrans));
++    memset(virtuappu_mode1_obj_window, 0, sizeof(virtuappu_mode1_obj_window));
+ 
+     for (i = MODE1_GBA_OAM_COUNT - 1; i >= 0; --i) {
+         Mode1OAMAttr attr;
+@@ -511,6 +519,12 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+                 continue;
+             }
+ 
++            if (mode1_oam_mode(attr) == 2u) {
++                /* OBJ-window sprite: invisible, only marks the window mask. */
++                virtuappu_mode1_obj_window[screen_x] = 1u;
++                continue;
++            }
++
+             if (line_buffer[screen_x] != 0u && priority_buffer[screen_x] < priority) {
+                 continue;
+             }
+@@ -555,7 +569,8 @@ void virtuappu_mode1_composite_line(
+     uint8_t bg_order_priority[MODE1_GBA_BG_COUNT];
+     bool win0_on = (dispcnt & MODE1_DISP_WIN0_ON) != 0u;
+     bool win1_on = (dispcnt & MODE1_DISP_WIN1_ON) != 0u;
+-    bool any_window = win0_on || win1_on;
++    bool objwin_on = (dispcnt & MODE1_DISP_OBJWIN_ON) != 0u;
++    bool any_window = win0_on || win1_on || objwin_on;
+     uint16_t winin = virtuappu_mode1_io_read16(MODE1_IO_WININ);
+     uint16_t winout = virtuappu_mode1_io_read16(MODE1_IO_WINOUT);
+     uint16_t win0h = virtuappu_mode1_io_read16(MODE1_IO_WIN0H);
+@@ -577,6 +592,7 @@ void virtuappu_mode1_composite_line(
+     uint8_t win0_ctrl = (uint8_t)(winin & 0x3Fu);
+     uint8_t win1_ctrl = (uint8_t)((winin >> 8u) & 0x3Fu);
+     uint8_t outside_ctrl = (uint8_t)(winout & 0x3Fu);
++    uint8_t objwin_ctrl = (uint8_t)((winout >> 8u) & 0x3Fu);
+     int i;
+     int x;
+ 
+@@ -650,6 +666,12 @@ void virtuappu_mode1_composite_line(
+ 
+         if (any_window) {
+             win_ctrl = outside_ctrl;
++            /* Window priority is WIN0 > WIN1 > OBJ-window > outside, so OBJ
++             * window sits below WIN1/WIN0 (applied after this) and above the
++             * plain outside control. */
++            if (objwin_on && virtuappu_mode1_obj_window[x]) {
++                win_ctrl = objwin_ctrl;
++            }
+             if (win1_v_active) {
+                 bool in_h = win1_h_wrap ? (x >= win1_left || x < win1_right) : (x >= win1_left && x < win1_right);
+                 if (in_h) {
