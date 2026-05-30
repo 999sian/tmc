@@ -1323,6 +1323,14 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
 /**
  * sub_080B1BA4 — like sub_080B1B84 but AND result with a mask (r2).
  * (port of arm_sub_080B1BA4 at 0x080B1BA4)
+ *
+ * #PC_PORT issue #139: when the lantern queries a tile for the "ignitable"
+ * flag (mask 0x40), it passes the player's collisionLayer. In some rooms
+ * (Grimblade dojo room 5 area 0x25) the lightable TILE_TYPE_117 tiles only
+ * live on LAYER_TOP while the player walks on LAYER_BOTTOM, so the check
+ * silently fails. If the queried layer returns 0 for the masked flag, fall
+ * back to the OTHER layer — keeps existing behaviour when the property is
+ * already present on the queried layer.
  */
 u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
     u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
@@ -1332,7 +1340,16 @@ u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
     } else {
         table = gUnk_080B7A3E;
     }
-    return table[tileType & 0x3FFF] & mask;
+    u32 r = table[tileType & 0x3FFF] & mask;
+#ifdef PC_PORT
+    if (r == 0) {
+        u32 other = (layer == 2) ? 1 : 2;
+        u32 tt2 = GetTileTypeAtTilePos(tilePos, other);
+        const u16* t2 = (tt2 < 0x4000) ? (const u16*)&gRomData[0x360] : gUnk_080B7A3E;
+        r = t2[tt2 & 0x3FFF] & mask;
+    }
+#endif
+    return r;
 }
 
 /* ---------- SetCollisionData, SetActTileAtTilePos, GetTileIndex, SetTile, CloneTile ---------- */
