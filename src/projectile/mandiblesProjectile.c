@@ -156,6 +156,13 @@ void MandiblesProjectile_Action3(MandiblesProjectileEntity* this) {
     entity = super->child;
     if (entity == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        /* #101 sibling: DeleteThisEntity() only queues deletion (no return), so
+           the `entity->next` deref below reads NULL. On GBA that hit BIOS and
+           returned garbage; on PC it SIGSEGVs. The #101 fix guarded the
+           dispatcher but not this Action3 path — bail like the dispatcher does. */
+        return;
+#endif
     }
     if (entity->next == NULL) {
         DeleteThisEntity();
