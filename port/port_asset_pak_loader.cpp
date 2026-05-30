@@ -192,6 +192,24 @@ bool PakArchive::Open(const std::filesystem::path& path, std::string* error_out)
         Close();
         return false;
     }
+
+    /* Per-entry name-span bounds check. The header check above validates the
+       name-table extent as a whole, but not each entry's (name_offset,
+       name_length). A corrupt or truncated *.pak with an out-of-range name span
+       would make the (static) CompareEntry read past the mmap region on every
+       binary-search probe -> OOB read / mis-routed lookup. Validate once here at
+       mount so a damaged archive fails to mount with a clear error rather than
+       silently faulting at first use. */
+    for (uint32_t i = 0; i < entry_count_; ++i) {
+        const uint8_t* entry = base_ + kHeaderSize + static_cast<uint64_t>(i) * kEntrySize;
+        const uint32_t name_offset = ReadU32LE(entry + 0);
+        const uint32_t name_length = ReadU32LE(entry + 4);
+        if (static_cast<uint64_t>(name_offset) + name_length > name_table_size) {
+            SetError(error_out, "pak file entry name out of range: " + path.string());
+            Close();
+            return false;
+        }
+    }
     return true;
 }
 
