@@ -46,7 +46,16 @@ void GleerokProjectile_Init(GleerokProjectileEntity* this) {
 
     super->action = 1;
     super->zVelocity = Q_16_16(-1.0);
-    if (super->type != 3) {
+    /* #51 family — parent/child are populated by the gleerok boss right before
+       creation, but child comes from heap->entities[0] which is NULL if that
+       CreateEnemy failed at boss init. The parent (line below) and child derefs
+       read BIOS bytes on GBA but SIGSEGV on PC; skip the init-positioning block
+       when either is unset. */
+    if (super->type != 3
+#ifdef PC_PORT
+        && super->parent != NULL && super->child != NULL
+#endif
+    ) {
         CopyPosition(super->parent, super);
         LinearMoveDirection(super, 0x1000, super->direction);
         super->z.WORD = super->parent->y.WORD - super->child->y.WORD;
