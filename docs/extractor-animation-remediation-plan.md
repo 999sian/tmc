@@ -185,3 +185,26 @@ Option 3 is the recommended next step: lower risk, no runtime-net change, and it
 still recovers the large majority of the blank animations. The
 `compute_animation_extent` implementation from this attempt is in the git history
 (reverted from `tools/src/assets_extractor/assets_extractor.hpp`) for reuse.
+
+## Option 3 — IMPLEMENTED & validated (2026-05-30)
+
+Shipped: `compute_animation_extent` now returns the exact `N*4+1` extent **only**
+for self-contained loops (`loop_back ∈ [1, N]`); everything else (shared-frame
+`loop_back > N`, `loop_back == 0`, no-loop) falls back to the original
+boundary-gap size, so the runtime net is untouched for those.
+
+**Regression proof** (diff of Option-3 output vs the original extractor, all 2883
+anims):
+
+- **141 files changed; all 141 are byte-prefixes of the original** (only trailing
+  alignment trimmed — the runtime never reads those bytes, since a self-contained
+  loop's `loop_back` jumps back within its own frames).
+- **all 141 changed files are valid self-contained loops**; **0** are non-prefix,
+  **0** are non-self-contained. Every shared-frame / fallback anim is byte-
+  identical to before.
+
+So Option 3 **recovers 141 animations** (the over-counted subset the strict
+parser had been rejecting into blank/zeroed data) with **provably zero
+regression**. The remaining shared-frame anims (`loop_back > N`) still need the
+contiguous-packing rework (the full fix above) and are deliberately left at their
+original size.
