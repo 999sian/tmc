@@ -1,0 +1,75 @@
+diff --git a/src/mode2.c b/src/mode2.c
+index 189c580..62f6170 100644
+--- a/src/mode2.c
++++ b/src/mode2.c
+@@ -19,6 +19,34 @@ void virtuappu_mode2_render_frame(const PPUMemory *ppu)
+         return;
+     }
+ 
++    /* Hardware-accurate affine BG2 internal-reference latch (#132).
++     * On GBA the BG2X/BG2Y "internal" reference registers are reloaded from
++     * the I/O registers whenever the CPU/DMA writes them, and otherwise
++     * auto-increment by dmx(=pb)/dmy(=pd) at the end of each scanline.  The
++     * Deepwood Shrine rolling barrel rewrites the full reference point every
++     * scanline via HBlank DMA (REG_ADDR_BG2PA, 8 halfwords) to fake a Mode-7
++     * cylinder.  The old "tex = ref_io + P*line" formula then double-counted
++     * the vertical step: ref_io already held this line's dy, so adding pd*line
++     * on top ~doubled the vertical slope -> wooden panels repeated ~2x too
++     * often and all three barrel openings showed at once.  Track the internal
++     * reference explicitly: reload it whenever the I/O reference differs from
++     * the value last seen (a write happened, e.g. the barrel's per-scanline
++     * DMA), otherwise accumulate pb/pd.  For static affine BGs (e.g. the
++     * title-screen sword) the reference never changes mid-frame, so this is
++     * byte-identical to the previous behaviour. */
++    int32_t affine_internal_x = (int32_t)virtuappu_mode1_io_read32(0x28u);
++    int32_t affine_internal_y = (int32_t)virtuappu_mode1_io_read32(0x2Cu);
++    int32_t affine_prev_io_x;
++    int32_t affine_prev_io_y;
++    if ((affine_internal_x & 0x08000000) != 0) {
++        affine_internal_x |= (int32_t)0xF0000000u;
++    }
++    if ((affine_internal_y & 0x08000000) != 0) {
++        affine_internal_y |= (int32_t)0xF0000000u;
++    }
++    affine_prev_io_x = affine_internal_x;
++    affine_prev_io_y = affine_internal_y;
++
+     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
+         if (virtuappu_mode1_pre_line_callback != NULL) {
+             virtuappu_mode1_pre_line_callback(line);
+@@ -82,9 +110,22 @@ void virtuappu_mode2_render_frame(const PPUMemory *ppu)
+                 ref_y |= (int32_t)0xF0000000u;
+             }
+ 
++            /* A write to BG2X/BG2Y (e.g. the rolling barrel's per-scanline
++             * HBlank DMA) reloads the internal reference; otherwise it keeps
++             * the value advanced by pb/pd below.  See the latch comment above
++             * the line loop (#132). */
++            if (ref_x != affine_prev_io_x) {
++                affine_internal_x = ref_x;
++            }
++            if (ref_y != affine_prev_io_y) {
++                affine_internal_y = ref_y;
++            }
++            affine_prev_io_x = ref_x;
++            affine_prev_io_y = ref_y;
++
+             for (x = 0; x < MODE1_GBA_WIDTH; ++x) {
+-                int32_t tex_x = ref_x + pb * line + pa * x;
+-                int32_t tex_y = ref_y + pd * line + pc * x;
++                int32_t tex_x = affine_internal_x + pa * x;
++                int32_t tex_y = affine_internal_y + pc * x;
+                 int32_t src_x = tex_x >> 8;
+                 int32_t src_y = tex_y >> 8;
+                 int tile_col;
+@@ -119,6 +160,10 @@ void virtuappu_mode2_render_frame(const PPUMemory *ppu)
+                 bg_layers[2][x] = virtuappu_mode1_rgb555_to_abgr8888(memory.bg_palette[color_index]);
+                 bg_priority[2][x] = bg_priority_value;
+             }
++            /* dmx/dmy advance for the next scanline (overwritten next line if
++             * a per-scanline reference write occurs, as in the barrel). */
++            affine_internal_x += pb;
++            affine_internal_y += pd;
+         }
+ 
+         if ((dispcnt & MODE1_DISP_OBJ_ON) != 0u) {
