@@ -1,0 +1,41 @@
+diff --git a/src/mode1.c b/src/mode1.c
+index 6c64072..62fa078 100644
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -580,6 +580,7 @@ void virtuappu_mode1_composite_line(
+     int win0_top = win0v >> 8u;
+     int win0_bottom = win0v & 0xFFu;
+     bool win0_h_wrap;
++    bool win0_v_wrap;
+     bool win0_v_active;
+     uint16_t win1h = virtuappu_mode1_io_read16(MODE1_IO_WIN1H);
+     uint16_t win1v = virtuappu_mode1_io_read16(MODE1_IO_WIN1V);
+@@ -588,6 +589,7 @@ void virtuappu_mode1_composite_line(
+     int win1_top = win1v >> 8u;
+     int win1_bottom = win1v & 0xFFu;
+     bool win1_h_wrap;
++    bool win1_v_wrap;
+     bool win1_v_active;
+     uint8_t win0_ctrl = (uint8_t)(winin & 0x3Fu);
+     uint8_t win1_ctrl = (uint8_t)((winin >> 8u) & 0x3Fu);
+@@ -622,9 +624,18 @@ void virtuappu_mode1_composite_line(
+     }
+ 
+     win0_h_wrap = win0_left > win0_right;
+-    win0_v_active = win0_on && win0_top <= win0_bottom && line >= win0_top && line < win0_bottom;
++    /* GBA: WINxV with top > bottom is an inverted/wrapped vertical span,
++     * active for (line >= top || line < bottom) — mirrors the horizontal
++     * winX_h_wrap handling. Previously the window went fully inactive on
++     * inversion, blanking the digging-cave iris spotlight (src/scroll.c
++     * Scroll5Sub2/Sub5) on small-iris frames where an inverted WINxV is packed. */
++    win0_v_wrap = win0_top > win0_bottom;
++    win0_v_active = win0_on && (win0_v_wrap ? (line >= win0_top || line < win0_bottom)
++                                            : (line >= win0_top && line < win0_bottom));
+     win1_h_wrap = win1_left > win1_right;
+-    win1_v_active = win1_on && win1_top <= win1_bottom && line >= win1_top && line < win1_bottom;
++    win1_v_wrap = win1_top > win1_bottom;
++    win1_v_active = win1_on && (win1_v_wrap ? (line >= win1_top || line < win1_bottom)
++                                            : (line >= win1_top && line < win1_bottom));
+ 
+     for (i = 0; i < MODE1_GBA_BG_COUNT; ++i) {
+         bg_order_priority[i] = (uint8_t)(virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0CNT + i * 2)) & 3u);

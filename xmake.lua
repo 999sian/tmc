@@ -536,6 +536,14 @@ target("tmc_pc")
             { patch = "viruappu-objwin.patch",
               marker_file = path.join(sub, "src", "mode1.c"),
               marker = "virtuappu_mode1_obj_window" },
+            -- Vertical window wraparound (WIN0V/WIN1V top > bottom). The
+            -- horizontal path already wraps; the vertical path disabled the
+            -- window on inversion, blanking the digging-cave iris spotlight
+            -- (src/scroll.c Scroll5Sub2/Sub5) on small-iris frames. Now mirrors
+            -- the horizontal wrap: active for (line >= top || line < bottom).
+            { patch = "viruappu-winv-wrap.patch",
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "win0_v_wrap" },
         }
         for _, p in ipairs(patches) do
             local patch_file = path.join(patches_dir, p.patch)
