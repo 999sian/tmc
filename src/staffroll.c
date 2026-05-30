@@ -57,8 +57,46 @@ extern StaffrollEntry gUnk_081272F0[];
 extern StaffrollEntry gUnk_08127644[];
 extern StaffrollEntry gUnk_08127998[];
 extern const StaffrollGfxEntry gUnk_08127CEC[];
+
+#ifdef PC_PORT
+/* gUnk_08127D00 / gUnk_08127D10 ship in port/data_const_stubs.c as
+ * `const u8[]` packed 4-byte GBA function-pointer tables. The C runtime
+ * needs *native* function pointers, not GBA Thumb addresses, so a
+ * `void (*const [])(void)` view of the same bytes splices two adjacent
+ * 4-byte GBA addresses into one 8-byte pointer and then calls into mmap'd
+ * ROM memory — SIGSEGV the moment the credits start (SetTask(TASK_STAFFROLL)
+ * from script.c:2332). Define native shadow tables with the actual
+ * decompiled C functions; each entry mirrors a `.4byte StaffrollTask_*`
+ * directive in data/const/staffroll.s. Same class as the gleerok #36 fix. */
+void StaffrollTask_State0(void);
+void StaffrollTask_State1(void);
+void StaffrollTask_State2(void);
+void StaffrollTask_State3(void);
+void StaffrollTask_State1MenuType0(void);
+void StaffrollTask_State1MenuType1(void);
+void StaffrollTask_State1MenuType2(void);
+void StaffrollTask_State1MenuType3(void);
+void StaffrollTask_State1MenuType4(void);
+void StaffrollTask_State1MenuType5(void);
+void StaffrollTask_State1MenuType6(void);
+void StaffrollTask_State1MenuType7(void);
+static void (*const sStaffrollStates_gUnk_08127D00[])(void) = {
+    StaffrollTask_State0,
+    StaffrollTask_State1,
+    StaffrollTask_State2,
+    StaffrollTask_State3,
+};
+static void (*const sStaffrollMenuTypes_gUnk_08127D10[])(void) = {
+    StaffrollTask_State1MenuType0, StaffrollTask_State1MenuType1, StaffrollTask_State1MenuType2,
+    StaffrollTask_State1MenuType3, StaffrollTask_State1MenuType4, StaffrollTask_State1MenuType5,
+    StaffrollTask_State1MenuType6, StaffrollTask_State1MenuType7,
+};
+#define gUnk_08127D00 sStaffrollStates_gUnk_08127D00
+#define gUnk_08127D10 sStaffrollMenuTypes_gUnk_08127D10
+#else
 extern void (*const gUnk_08127D00[])(void);
 extern void (*const gUnk_08127D10[])(void);
+#endif
 
 void sub_080A3954(void);
 
