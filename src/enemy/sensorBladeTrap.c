@@ -12,7 +12,16 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /* #98 fix: Enemy::child is 8 bytes on PC (4 on GBA), shifting the framework-
+       written spawn params up 4 bytes. Without the +4 pad, unk_84/unk_86 alias
+       Enemy::field_0x80/field_0x82 (xPos/yPos) instead of the spritePtr params
+       the trap seeds its launch target from, so it fires at the wrong distance.
+       Pattern from eyegore.c (#98). */
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
     /*0x7c*/ u16 unk_7c;
