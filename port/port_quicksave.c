@@ -55,6 +55,11 @@ extern u8 gIwram[];
 extern u8 gVram[];
 extern u8 gIoMem[];
 
+/* Defined in src/player.c — re-resolves the player's .rodata hitbox pointer
+   from the current form after a cross-process quickload (FixupEntityPointers
+   only relocates pointers that land inside gEntities). */
+void Port_RestorePlayerHitbox(void);
+
 typedef struct {
     void* ptr;
     size_t size;
@@ -190,6 +195,31 @@ static int Snapshot_Restore(const Slot* s) {
      * point to the saved process's gEntities range. Safe no-op when
      * the slot was made in this process (same base). */
     FixupEntityPointers(s->saved_entities_base);
+
+    /* Cross-process restore only: pointers that target fixed globals / .rodata
+     * (not gEntities) are NOT relocated by FixupEntityPointers and are left
+     * pointing into the previous process's address space. Re-establish the two
+     * that are dereferenced unguarded every frame after a load:
+     *   - gRoomControls.camera_target — in normal play this is &gPlayerEntity (a
+     *     fixed global outside gEntities). After fixup a valid camera_target is
+     *     NULL, an entity now inside the relocated gEntities range, or this
+     *     stale player pointer; so anything non-NULL outside gEntities is the
+     *     stale player target — re-point it at the live player (Scroll1 derefs
+     *     it every frame, the scroll.c:103 crash).
+     *   - gPlayerEntity.base.hitbox — a stale .rodata pointer; the player tile-
+     *     probe / interactable scan deref it without the IsColliding guard.
+     * In-process F5/F6 keeps the same base (FixupEntityPointers no-ops), so
+     * these are skipped there to leave the fast path untouched. */
+    if (s->saved_entities_base != 0 &&
+        (uintptr_t)s->saved_entities_base != (uintptr_t)gEntities) {
+        uintptr_t ct = (uintptr_t)gRoomControls.camera_target;
+        uintptr_t lo = (uintptr_t)gEntities;
+        uintptr_t hi = lo + sizeof(gEntities);
+        if (ct != 0 && (ct < lo || ct >= hi)) {
+            gRoomControls.camera_target = (Entity*)&gPlayerEntity;
+        }
+        Port_RestorePlayerHitbox();
+    }
     return 1;
 }
 
