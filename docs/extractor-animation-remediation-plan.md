@@ -136,3 +136,52 @@ Medium. The extent walk is ~30 lines; the validation harness (byte-identical +
 loopBack-in-bounds) is the bulk and the part that makes this safe to ship.
 Recommend implementing the validation harness **first**, running it against the
 current strict extractor to establish the baseline, then landing the extent calc.
+
+## Validation findings — attempt 2026-05-30 (DO NOT ship the extractor-only change)
+
+`compute_animation_extent` (terminator-driven walk, exact mirror of the decoder)
+was implemented, built, and validated against all 2883 extracted animations.
+Result:
+
+- **1974** extract as clean self-contained loops (`N*4+1`, last frame loop-flagged,
+  `loop_back ∈ [1,N]`). ✓
+- **865** have no loop frame within the boundary → kept the boundary-gap size
+  (unchanged behavior). ✓
+- **38** have **`loop_back > N`** — the loop jumps back **beyond the animation's
+  own start**, into the **contiguous preceding animation** in ROM. This is a real
+  shared-frame technique: e.g. `gSpriteAnimations_12_0` (N=8, loop_back=26) reuses
+  frames from the animation packed before it. (Plus a few `loop_back==0`.)
+
+**Why exact extraction REGRESSES those 38.** The old boundary-gap sizes were
+even (`%4==0` after alignment), so the runtime net at
+`port_asset_loader.cpp:1868` packed those anims **contiguously** and the
+loop-back-into-previous reference resolved. Exact extraction makes them
+**odd-sized (`N*4+1`)**, which trips that net's `dataSize % 4 != 0` **skip** →
+the anim is no longer contiguous with its predecessor → the back-reference reads
+detached/garbage data. **The extractor change alone trades 38 working anims for
+the ~900.** The validation gate (`loop_back`-in-bounds check on the output)
+caught this before it shipped — exactly the failure class the reverted
+`28fbfa9ff` salvage hit.
+
+**The real crux is contiguity, not the trailing byte.** The complete fix must
+pair the exact extent with a runtime net that packs **all** anims contiguously,
+including odd-sized ones, preserving ROM order so a `loop_back > N` resolves into
+the genuine preceding frames. Concretely:
+
+1. **Runtime side first.** Change `port_asset_loader.cpp:1868` so the
+   contiguous two-pass packing covers `N*4+1` (odd) anims too — pack every anim
+   back-to-back in ROM order into one buffer, hand each its own start pointer.
+   A `loop_back` that walks before an anim's start then lands in the real
+   preceding bytes, as on GBA. Validate the 38 `loop_back > N` anims resolve
+   in-bounds within the packed buffer.
+2. **Then the exact extent calc** (`compute_animation_extent`) so the strict
+   parser accepts the ~900.
+3. **Or, simpler interim:** only apply the exact extent to anims whose
+   `loop_back ≤ N` (self-contained); leave `loop_back > N` anims at the
+   even boundary-gap size so the existing net keeps packing them. This fixes most
+   of the ~900 with zero regression risk and defers the contiguity rework.
+
+Option 3 is the recommended next step: lower risk, no runtime-net change, and it
+still recovers the large majority of the blank animations. The
+`compute_animation_extent` implementation from this attempt is in the git history
+(reverted from `tools/src/assets_extractor/assets_extractor.hpp`) for reuse.
