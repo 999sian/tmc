@@ -17,7 +17,16 @@
 
 typedef struct {
     Entity base;
+#ifdef PC_PORT
+    /* #98 fix: Enemy::child is an 8-byte pointer on PC (4 on GBA), so the spawn
+       framework writes this enemy's params (yPos/spritePtr) 4 bytes higher than
+       this struct's bare offsets imply. Without the +4 pad, unk_82/unk_84 read
+       the wrong words and every torch trap computes a bogus tile position and
+       firing direction. Pattern from eyegore.c (#98). */
+    u8 filler[0xc + 4];
+#else
     u8 filler[0xc];
+#endif
     u16 tilePos;
     u16 filler2;
     u16 unk_78;
