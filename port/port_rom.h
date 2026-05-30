@@ -8,6 +8,27 @@
 extern u8* gRomData;
 extern u32 gRomSize;
 
+#ifdef PC_PORT
+/*
+ * Host-pointer plausibility guard. Mirrors the inline check in
+ * src/collision.c::IsColliding so the two can't drift: a real Linux x86_64
+ * userspace pointer lives in [0x100000000000, 0x800000000000); on Windows/Wine
+ * use the looser [0x10000, 0x800000000000). Returns 0 for NULL, half-pointer-
+ * write garbage, and #91-style spliced ROM pointers (upper half non-zero); 1
+ * for a pointer that could be a live host allocation. Use to gate a deref on
+ * paths that — unlike IsColliding — have no other range guard (e.g. the player
+ * interactable scan in src/playerUtils.c::sub_080784E4).
+ */
+static inline int Port_IsValidHostPtr(const void* p) {
+    uintptr_t a = (uintptr_t)p;
+#if defined(_WIN32)
+    return a >= 0x10000ULL && a < 0x800000000000ULL;
+#else
+    return a >= 0x100000000000ULL && a < 0x800000000000ULL;
+#endif
+}
+#endif /* PC_PORT */
+
 // Load the ROM file and set up ROM-backed symbols
 void Port_LoadRom(const char* path);
 

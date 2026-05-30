@@ -1423,6 +1423,18 @@ InteractableObject* sub_080784E4(void) {
             r4 += (s8)hitbox[1];
             puVar5 = hitbox + 2;
         } else {
+#ifdef PC_PORT
+            /* #91 family — the interactable scan derefs entity->hitbox->width
+               with no NULL check and (unlike IsColliding) no host-pointer
+               range guard. The customHitbox branch above is NULL-checked; this
+               one was not. A NULL, stale (cross-process quickload), or
+               #91-style spliced hitbox pointer SIGSEGVs here — the exact
+               unguarded twin of the cat #91 collision-path crash. Skip the
+               candidate if its hitbox pointer isn't a live host allocation. */
+            if (!Port_IsValidHostPtr(iObject->entity->hitbox)) {
+                continue;
+            }
+#endif
             puVar5 = &iObject->entity->hitbox->width;
         }
         if (((puVar5[0] + interactX) - r3 < (u32)puVar5[0] << 1) &&
