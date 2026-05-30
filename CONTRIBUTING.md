@@ -1,299 +1,101 @@
-# Decompiling
+# Contributing to Project Picori
 
-Code starts out in `asm/`. When decompiled to C, it goes into `src/`. The goal is to decompile all the code.
+Thanks for helping with the Minish Cap PC port! This fork turns the
+[zeldaret/tmc](https://github.com/zeldaret/tmc) decompilation into a native PC
+game (SDL3 + a software PPU + the agbplay audio engine). The contributions we
+most want: **bug fixes** for crashes and rendering/gameplay glitches,
+build/packaging improvements, and accessibility / quality-of-life features.
 
-Some of the code in `asm/` is handwritten assembly. It can't and shouldn't be decompiled. It's already commented, so there's no further work to do on these files.
-Check `linker.ld` and ignore anything under the "handwritten assembly" section.
+If you want to *decompile* still-undecompiled GBA functions (matching ARM
+assembly byte-for-byte), that work belongs upstream at zeldaret/tmc — see
+[Decompiling new functions](#decompiling-new-functions) at the bottom.
 
-The rest of the `.s` files in `asm/` are fair game.
+## Getting set up
 
-The basic decompilation process is:
-* Choose a file in `asm/`, i.e. `asm/x.s`. Create a C file called `src/x.c`.
-* Translate the first function in `asm/x.s` to C in `src/x.c`.
-* `make`, and tweak the function until it matches.
-* Clean up the code and comment.
-* Repeat for each function until `asm/x.s` is empty.
+- Read the [README](README.md) for the build (`python3 build.py`, or the faster
+  `xmake` dev cycle) and [INSTALL.md](INSTALL.md) for build options.
+- You need your own ROM at the repo root — it is **not** shipped. USA
+  `baserom.gba`, SHA1 `b4bd50e4131b027c334547b4524e2dbbd4227130`.
+- There is **no automated test suite.** Verification is interactive play, the
+  **F8** warp/debug menu, capturing repros with **F9**, and comparing against
+  GBA reference behaviour.
 
+## Source layout
 
-# For example, let's decompile `asm/evilSpirit.s`.
+| Path | What it is |
+|------|------------|
+| `src/` | C decompilation of the GBA game. **Edit carefully** — many functions still pattern-match the ARM original and use `super` (= `&this->base`). |
+| `port/` | PC-only glue: main loop, ROM mmap, asset loader, PPU/audio/input bridges, quicksave, bug-report, debug menu. Most port work happens here and in guarded `src/` edits. |
+| `libs/ViruaPPU` | Software GBA PPU renderer (submodule). Don't edit directly — see [Renderer changes](#renderer-changes-viruappu). |
+| `libs/agbplay_core` | GBA M4A audio engine (LGPL-3.0 submodule). |
+| `asm/` | Undecompiled functions, linked alongside `src/` via `linker.ld`. |
+| `data/`, `assets/` | GBA data (`.s`) and the extracted runtime asset trees. |
 
+## The one thing to internalise: GBA → PC differences
 
-## 1. Create `src/evilSpirit.c`
+The port compiles GBA game logic natively for x86-64 — it is **not** an
+emulator. Most bugs come from a handful of hardware-behaviour differences.
+**When you fix one, guard it behind `#ifdef PC_PORT`** so the code still matches
+the GBA original, and comment it referencing the bug.
 
-```c
-#include "global.h"
-```
+- **Pointers are 8 bytes, not 4.** Any struct with embedded pointers shifts
+  layout on PC. Keep both layouts in sync with the
+  `PORT_STATIC_ASSERT_OFFSET/SIZE` macros (`include/global.h`). Enemy
+  subclasses that wrap `Entity base` sometimes need an extra 4 bytes of
+  `#ifdef PC_PORT` padding (the "#98" pattern — template in
+  `src/enemy/eyegore.c`).
+- **NULL / out-of-range reads crash here.** On GBA, reading address `0` or an
+  OOB table index returned harmless garbage; on PC it SIGSEGVs. Guard the
+  deref / clamp the index and early-return — don't "fix" the underlying logic.
+  Canonical examples: `src/npc/cat.c` (#91),
+  `src/projectile/darkNutSwordSlash.c` (#97).
+- **Never dereference a raw GBA address.** ROM/EWRAM/IWRAM pointers
+  (`0x08…/0x02…/0x03…`) must be routed through `Port_ResolveRomData`,
+  `Port_ReadU16/U32`, or `gEwram[]`/`gIwram[]` (`port/port_rom.*`).
 
-`global.h` contains typedefs for GBA programming and more.
-It must be the first include in the file. Other includes will assume you have included it.
+The repo's `CLAUDE.md` has the full catalogue of these bug classes with
+`file:line` examples and fix templates — it is the best reference when you hit
+a crash, even if you don't use the assistant it's named for.
 
+## Fixing a bug
 
-## 2. Include it in the rom
+1. **Reproduce it.** Bug reports come as a `bugreport_*` folder (screenshot,
+   `save.bin`, `state.txt`, and on crashes `backtrace.txt` + `maps.txt`). Drop
+   `save.bin` next to `tmc_pc` as `tmc.sav` to load the exact state. Press **F9**
+   anytime to capture your own bundle.
+2. **Locate a crash.** On Linux, resolve `backtrace.txt`'s addresses with
+   `addr2line -e build/pc/tmc_pc -fpi <addr − base>` (build the *same* commit),
+   then inspect the faulting instruction with
+   `objdump -d build/pc/tmc_pc --disassemble=<Function>`.
+3. **Fix defensively**, behind `#ifdef PC_PORT`, with a comment naming the bug
+   and why the GBA tolerated it.
+4. **Build and play-test** the affected area — the F8 warp menu makes this fast.
+5. **Commit one fix per commit**, message style `fix(port): <short description>`
+   (reference an issue number when there is one).
 
-Include `src/evilSpirit.c` in the rom by adding `src/evilSpirit.o` to `linker.ld`:
-```diff
-	asm/room.o(.text);
-	asm/code_08080974.o(.text);
-+	src/evilSpirit.o(.text);
-	asm/evilSpirit.o(.text);
-	asm/houseDoorExterior.o(.text);
+## Renderer changes (ViruaPPU)
 
-```
-Do not remove `asm/evilSpirit.o(.text)`. We want both `src/evilSpirit.c` and `asm/evilSpirit.s` in the rom.
+`libs/ViruaPPU` is a submodule, so **direct edits to its source are lost** on
+`xmake clean` or a fresh checkout. Port-side PPU changes live as patches in
+`port/patches/viruappu-*.patch`, applied (idempotently) at configure time. See
+`CLAUDE.md` → *Authoring a new ViruaPPU patch* for the index-staging extraction
+recipe and the "test with a **full** `git -C libs/ViruaPPU reset --hard HEAD`,
+never a partial checkout" caveat.
 
+## Submitting changes
 
-## 3. Translate the function to C
+- Keep PRs focused — one logical change per PR where practical.
+- Match the existing code style and the `#ifdef PC_PORT` convention; don't
+  reformat unrelated lines.
+- Say **how you tested** (which area / repro), since there is no CI test gate.
+- For larger work, open an issue first so we can coordinate.
 
-Take the first function in `asm/evilSpirit.s`. Either comment it out or remove it, whichever is easier.
+## Decompiling new functions
 
-```asm
-	thumb_func_start sub_08086284
-sub_08086284: @ 0x08086284
-	push {r4, lr}
-	adds r4, r0, #0
-	ldr r1, _080862B4 @ =gUnk_08120668
-	ldrb r0, [r4, #0xc]
-	lsls r0, r0, #2
-	adds r0, r0, r1
-	ldr r1, [r0]
-	adds r0, r4, #0
-	bl _call_via_r1
-	adds r1, r4, #0
-	adds r1, #0x41
-	movs r0, #0
-	strb r0, [r1]
-	adds r0, r4, #0
-	adds r0, #0x76
-	ldrh r1, [r0]
-	adds r0, #4
-	ldrh r2, [r0]
-	adds r0, r4, #0
-	movs r3, #0
-	bl SetAffineInfo
-	pop {r4, pc}
-	.align 2, 0
-_080862B4: .4byte gUnk_08120668
-```
----
-
-Then, start translating the code to `src/evilSpirit.c`, bit by bit:
-
-```asm
-	push {r4, lr}
-	adds r4, r0, #0
-```
-```c
-	void sub_08086284(u8* r0) {
-```
----
-```asm
-        ldr     r1, _080862B4 @ =gUnk_08120668
-        ldrb    r0, [r4, #0xc]
-        lsl     r0, r0, #0x2
-        add     r0, r0, r1
-        ldr     r1, [r0]
-        add     r0, r4, #0
-        bl      _call_via_r1
-```
-```c
-	gUnk_08120668[*(u8 *)(r0 + 0xc)](r0);
-```
----
-
----
-```asm
-        add     r1, r4, #0
-        add     r1, r1, #0x41
-        mov     r0, #0
-        strb    r0, [r1]
-```
-```c
-    *(u8 *)(r0 + 0x41) = 0;
-```
----
-```asm
-        add     r0, r4, #0
-        add     r0, r0, #0x76
-        ldrh    r1, [r0]
-        add     r0, r0, #0x4
-        ldrh    r2, [r0]
-        add     r0, r4, #0
-        mov     r3, #0
-        bl      SetAffineInfo
-```
-```c
-	SetAffineInfo(r0, *(u16 *)(r0 + 0x76), *(u16 *)(r0 + 0x7a), 0);
-```
----
-```asm
-        pop     {r4, pc}
-```
-```c
-	return;
-```
-The type signature of the function depends on the return type. Return values are stored in r0,
-so pay attention to how the assembly treats this register toward the end of the function.
-ex:
-* `add r0, r4, #0`
-
-  `pop {r4, pc}`
-
-The compiler chose to move a value into r0 here; the most likely explanation is that it's returning something.
-
-You will need to look at the caller and the function prologue to determine the exact type if not void.
-
-Since it only used `pop {r4, pc}`, it's probably `void`.
-
----
-
-Putting it all together, we get:
-```c
-void sub_08086284(u8 *r0) {
-    gUnk_08120668[*(u8 *)(r0 + 0xc)](r0);
-    *(u8 *)(r0 + 0x41) = 0;
-    SetAffineInfo(r0, *(u16 *)(r0 + 0x76), *(u16 *)(r0 + 0x7a), 0);
-    return;
-}
-```
-
-
-## 4. Simplify and document
-
-This line doesn't look quite right.
-
-```c
-	gUnk_08120668[*(u8 *)(r0 + 0xc)](r0);
-```
-
-What is `r0`? Since this function corresponds to an entity, we should first try to assign r0 to an `Entity` struct.
-You can find out what this is with `git grep`:
-
-```sh
-git grep "Entity" include/
-```
-```grep
-include/entity.h:typedef struct Entity
-```
-
-So it's a struct called `Entity`. Let's look in `entity.h`:
-
-```c
-typedef struct Entity_ {
-    /*0x00*/ struct Entity_* prev;
-    /*0x04*/ struct Entity_* next;
-    /*0x08*/ u8 kind;
-    /*0x09*/ u8 id;
-    /*0x0a*/ u8 type;
-    /*0x0b*/ u8 type2;
-    /*0x0c*/ u8 action;
-    /*0x0d*/ u8 subAction;
-    ...
-} Entity;
-```
----
-
-What's the 12th byte in this struct?
-```c
-    /*0x00*/ struct Entity_* prev;
-    /*0x04*/ struct Entity_* next;
-    ...
-    /*0x0c*/ u8 action; <-
-```
-
----
-
-The 12th byte belongs to `action`. We can substitute this in by replacing r0's parameter type and adding in the member names.
-
-```c
-void sub_08086284(Entity *r0) {
-    gUnk_08120668[r0->action](r0);
-```
-
-Much better.
-
----
-
-```c
-void sub_08086284(Entity *r0) {
-    gUnk_08120668[r0->action](r0);
-    r0->bitfield = 0;
-    SetAffineInfo(r0, r0->field_0x76.HWORD, r0->field_0x7a.HWORD, 0);
-    return;
-}
-```
-
-The fields at the end of of `Entity` are general purpose. For this reason the fields are defined as unions so the proper data size may be loaded.
-This isn't pretty, but right now we are just concerned with making the function match. Later on we can define these entity-specific fields.
-
-## 5. Build
-
-```sh
-make
-```
-```
-src/evilSpirit.c: In function `sub_08086284':
-src/evilSpirit.c:4: syntax error before `*'
-src/evilSpirit.c:5: `gUnk_08120668' undeclared (first use in this function)
-src/evilSpirit.c:5: (Each undeclared identifier is reported only once for each function it appears in.)
-src/evilSpirit.c:7: warning: implicit declaration of function `SetAffineInfo'
-```
-
-We got some errors. We need to tell the compiler what `gUnk_08120668`, `Entity`, and `SetAffineInfo` are.
-
-We know `r0` is an `Entity`, which is from `entity.h`. We can declare this above the function:
-```c
-#include "entity.h"
-```
-What about `gUnk_08120668` and `SetAffineInfo`?
-```c
-extern void SetAffineInfo();
-extern void (*gUnk_08120668[])(Entity *);
-```
-Now the compiler will look outside of this file for both of these. We don't have to set the size of `gUnk_08120668`, a function array, since it's size is irrelevant for now.
-
----
-
-Now our file looks like this:
-```c
-#include "global.h"
-#include "entity.h"
-
-extern void SetAffineInfo();
-extern void (*gUnk_08120668[])(Entity *);
-
-void sub_08086284(Entity *r0) {
-    gUnk_08120668[r0->action](r0);
-    r0->bitfield = 0;
-    SetAffineInfo(r0, r0->field_0x76.HWORD, r0->field_0x7a.HWORD, 0);
-    return;
-}
-```
-
----
-
-Build again, and we get:
-```sh
-make
-```
-```sha1sum
-tmc.gba: OK
-```
-
-This means the function matches. Congratulations!
-
----
-
-If it doesn't match, you will get:
-```sha1sum
-tmc.gba: FAILED
-sha1sum: WARNING: 1 computed checksum did NOT match
-```
-
----
-
-If you forgot to remove the function from `asm/evilSpirit.s`, you will get this error:
-```gcc
-asm/evilSpirit.o: In function `sub_08086284':
-(.text+0x0): multiple definition of `sub_08086284'
-src/evilSpirit.o:(.text+0x0): first defined here
-```
+Matching still-undecompiled ARM functions byte-for-byte happens in the upstream
+[zeldaret/tmc](https://github.com/zeldaret/tmc) project — its build produces the
+GBA ROM and verifies the SHA1 match, which this PC fork (built for x86-64) can't
+do. Upstream's CONTRIBUTING guide walks through a full `asm/*.s` → `src/*.c`
+example. When you bring a newly decompiled function into this port, keep the
+`#ifdef PC_PORT` / `PORT_STATIC_ASSERT` layout guards intact so it works under
+8-byte pointers.
