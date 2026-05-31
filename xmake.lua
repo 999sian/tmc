@@ -552,32 +552,72 @@ target("tmc_pc")
               marker_file = path.join(sub, "src", "mode2.c"),
               marker = "affine_internal_y" },
         }
-        for _, p in ipairs(patches) do
+        -- Apply one patch when its marker is absent. -3 tolerates drifted
+        -- context (and on shallow submodule clones, where the pre-image blob
+        -- is missing, falls back to a plain apply); --ignore-whitespace
+        -- tolerates CRLF on Windows checkouts.
+        local function apply_one(p)
             local patch_file = path.join(patches_dir, p.patch)
-            if os.isfile(p.marker_file) and os.isfile(patch_file) then
-                local content = io.readfile(p.marker_file)
-                if not (content and content:find(p.marker, 1, true)) then
-                    -- -3 falls back to a 3-way merge when surrounding lines
-                    -- have drifted (some hunks already in upstream), so the
-                    -- step stays self-healing instead of silently no-oping.
-                    local rel = path.relative(patch_file, os.projectdir())
-                    -- --ignore-whitespace tolerates the CRLF / LF mismatch that
-                    -- Windows git checkouts introduce by default — the patches
-                    -- are authored against LF source on Linux, and a strict
-                    -- apply rejects them on Windows even when content matches.
-                    local applied = try {
-                        function ()
-                            os.execv("git", {"-C", sub, "apply", "-3", "--ignore-whitespace", patch_file})
-                            return true
-                        end
-                    }
-                    if applied then
-                        print("[viruappu] applied %s", rel)
-                    else
-                        print("[viruappu] WARN: %s did not apply (drift?); continuing without it", rel)
+            if not (os.isfile(p.marker_file) and os.isfile(patch_file)) then
+                return
+            end
+            local content = io.readfile(p.marker_file)
+            if content and content:find(p.marker, 1, true) then
+                return -- already applied
+            end
+            local rel = path.relative(patch_file, os.projectdir())
+            local applied = try {
+                function ()
+                    os.execv("git", {"-C", sub, "apply", "-3", "--ignore-whitespace", patch_file})
+                    return true
+                end
+            }
+            if applied then
+                print("[viruappu] applied %s", rel)
+            else
+                print("[viruappu] WARN: %s did not apply yet (drift?)", rel)
+            end
+        end
+
+        for _, p in ipairs(patches) do
+            apply_one(p)
+        end
+
+        -- Verify every required marker landed. A missing marker means a
+        -- renderer patch silently failed to apply and the build would ship a
+        -- visibly-wrong PPU. This is exactly how the Windows release shipped
+        -- issues #138/#79 (src/object/litArea.c's OBJ-window light circles
+        -- drew as opaque blobs): `git apply` hit drift / a shallow-clone blob
+        -- gap and the step "continued without it". Self-heal once via the
+        -- documented clean submodule reset, then HARD-FAIL rather than ship a
+        -- broken renderer.
+        local function missing_markers()
+            local miss = {}
+            for _, p in ipairs(patches) do
+                if os.isfile(p.marker_file) then
+                    local c = io.readfile(p.marker_file)
+                    if not (c and c:find(p.marker, 1, true)) then
+                        table.insert(miss, p.patch)
                     end
                 end
             end
+            return miss
+        end
+
+        local miss = missing_markers()
+        if #miss > 0 then
+            print("[viruappu] markers missing (%s) — resetting submodule to a clean base and reapplying",
+                  table.concat(miss, ", "))
+            os.execv("git", {"-C", sub, "checkout", "--", "."})
+            for _, p in ipairs(patches) do
+                apply_one(p)
+            end
+            miss = missing_markers()
+        end
+        if #miss > 0 then
+            raise("[viruappu] FATAL: required renderer patch(es) did not apply: " .. table.concat(miss, ", ") ..
+                  ".\n  The build would render incorrectly (e.g. issues #138/#79 — litArea OBJ-window light " ..
+                  "circles draw as opaque blobs).\n  Fix: git -C libs/ViruaPPU reset --hard HEAD   (then rebuild).")
         end
 
         print("[tmc_pc] arch=%s pc_avx2=%s", target_arch ~= "" and target_arch or "auto", use_avx2 and "on" or "off")
@@ -695,6 +735,7 @@ target("tmc_pc")
     add_files("port/port_reborn.cpp")
     -- Issue #99 auto-repro harness (env-gated, no-op when off).
     add_files("port/port_repro_mazaal.c")
+    add_files("port/port_repro_litarea.c")
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
