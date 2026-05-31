@@ -86,7 +86,15 @@ void CrenelBeanSprout_Init(CrenelBeanSproutEntity* this) {
             if (CheckGlobalFlag(WATERBEAN_OUT)) {
                 if (CheckGlobalFlag(WATERBEAN_PUT) == 0) {
                     super->spritePriority.b0 = gPlayerEntity.base.spritePriority.b0 - 1;
+#ifdef PC_PORT
+                    /* #140-class: unk_79 lives past the Entity base, which grew
+                     * 0x68->0x90 on PC, so the raw GBA offset 0x79 lands inside
+                     * base.animPtr (0x78) and corrupts the player's anim pointer.
+                     * Use the named field (0x79 on GBA, 0xA9 on PC). */
+                    gPlayerEntity.unk_79 = tmp;
+#else
                     *(((u8*)&gPlayerEntity.base) + 0x79) = tmp;
+#endif
                     PositionRelative(&gPlayerEntity.base, super, 0, -0x180000);
                 } else {
                     DeleteThisEntity();
