@@ -147,7 +147,17 @@ void GyorgBossObject_FemalePhase1(GyorgBossObjectEntity* this) {
 
 void GyorgBossObject_MalePhase1(GyorgBossObjectEntity* this) {
     sub_080A1FF0(this);
+#ifdef PC_PORT
+    /* Issue #140 — male1 nulls its own heap slot the frame it finishes dying
+     * (sub_08047D24). If the boss is still in this phase then, the GBA read
+     * BIOS garbage here; PC SIGSEGVs. A gone male1 means "defeated": fall into
+     * the NULL-safe sub_080A20B8 path (it already returns 1 for NULL) so the
+     * fight advances, and skip the else branch's male1 deref. */
+    if (((GyorgHeap*)super->myHeap)->male1 == NULL ||
+        ((GyorgHeap*)super->myHeap)->male1->base.health == 0) {
+#else
     if (((GyorgHeap*)super->myHeap)->male1->base.health == 0) {
+#endif
         if (sub_080A20B8(this, ((GyorgHeap*)super->myHeap)->male1)) {
             // start female phase 2
             super->action = 4;
@@ -167,7 +177,15 @@ void GyorgBossObject_MalePhase1(GyorgBossObjectEntity* this) {
 void GyorgBossObject_FemalePhase2(GyorgBossObjectEntity* this) {
     if (((GyorgHeap*)super->myHeap)->female->base.health == 0) {
         // start male phase 2
-        ((GyorgHeap*)super->myHeap)->male1->base.health = 12;
+#ifdef PC_PORT
+        /* Issue #140 — by the time female phase 2 ends, male1 has long since
+         * finished dying and nulled its own heap slot (its ~400-frame death
+         * is dwarfed by this phase), and male phase 2 is driven by male2 (see
+         * MalePhase2 below). This write is vestigial: on GBA it harmlessly hit
+         * the NULL/BIOS address, on PC it SIGSEGVs. Skip it when male1 is gone. */
+        if (((GyorgHeap*)super->myHeap)->male1 != NULL)
+#endif
+            ((GyorgHeap*)super->myHeap)->male1->base.health = 12;
         super->action = 5;
         super->timer = 35;
         this->unk_6c = 2;
@@ -216,7 +234,14 @@ void GyorgBossObject_FemalePhase3(GyorgBossObjectEntity* this) {
 
 void GyorgBossObject_MalePhase3(GyorgBossObjectEntity* this) {
     sub_080A1FF0(this);
+#ifdef PC_PORT
+    /* Issue #140 — as in MalePhase1: male2 nulls its heap slot when it finishes
+     * dying; treat a gone male2 as defeated so the NULL-safe path advances. */
+    if (((GyorgHeap*)super->myHeap)->male2 == NULL ||
+        ((GyorgHeap*)super->myHeap)->male2->base.health == 0) {
+#else
     if (((GyorgHeap*)super->myHeap)->male2->base.health == 0) {
+#endif
         if (sub_080A20B8(this, ((GyorgHeap*)super->myHeap)->male2)) {
             // start female phase 4
             super->action = 8;
