@@ -975,22 +975,38 @@ static void sub_08043440(VaatiArmEntity* this) {
     u32 i;
     int iVar4;
     u8* ptr;
+#ifndef PC_PORT
     int offset;
+#endif
     int zero;
 
     i = 0;
     iVar4 = 0;
     zero = 0;
+#ifndef PC_PORT
     offset = 0x18;
+#endif
     do {
+#ifdef PC_PORT
+        /* #140-class: VaatiArm_HeapStruct leads with 6 pointers (entities[5] +
+         * parent) — 0x18 bytes on GBA, but 0x30 on PC (8-byte pointers), so
+         * s1[] starts at 0x30 here. The raw `myHeap + 0x18 + 0x10*i` walk lands
+         * in the pointer array on PC, and the `((u16*)ptr)[2] = 0` write below
+         * would clobber entities[3]. Index the real s1[] field (== the GBA
+         * offset on a 4-byte-pointer build). */
+        ptr = (u8*)&((VaatiArm_HeapStruct*)super->myHeap)->s1[i];
+#else
         ptr = ((u8*)super->myHeap) + offset;
+#endif
         if (ptr[5] >= 0x11) {
             ptr[5] -= 0x10;
             iVar4++;
         } else {
             ((u16*)ptr)[2] = zero;
         }
+#ifndef PC_PORT
         offset += 0x10;
+#endif
         i++;
     } while (i < 5);
     if (iVar4 == 0) {
@@ -1374,7 +1390,9 @@ static void sub_08043BF0(VaatiArmEntity* this) {
 
 static void sub_08043C40(VaatiArmEntity* this, VaatiArm_HeapStruct1* heapStruct) {
     u8* iVar3;
+#ifndef PC_PORT
     int offset;
+#endif
     const u8* puVar6;
     u32 i;
 
@@ -1391,8 +1409,17 @@ static void sub_08043C40(VaatiArmEntity* this, VaatiArm_HeapStruct1* heapStruct)
             }
         }
     }
+#ifdef PC_PORT
+    /* #140-class (see sub_08043440): raw `myHeap + 0x28 + 0x10*i` assumes the
+     * GBA layout (s1[] at 0x18); on PC s1[] is at 0x30, and the `(int)` cast
+     * also truncates the 64-bit heap base. Index s1[] directly — on GBA
+     * offset 0x28 == &s1[1], so the address is identical there. */
+    for (i = 0; i < 3; i++) {
+        iVar3 = (u8*)&((VaatiArm_HeapStruct*)super->myHeap)->s1[i + 1];
+#else
     for (i = 0, offset = 0x28; i < 3; offset += 0x10, i++) {
         iVar3 = (u8*)(int)((VaatiArm_HeapStruct*)super->myHeap) + offset;
+#endif
         if (puVar6[i] != iVar3[0xc]) {
             if (puVar6[i] < iVar3[0xc]) {
                 iVar3[0xc]--;
