@@ -995,11 +995,28 @@ void sub_08047BF0(GyorgMaleEntity* this) {
 void sub_08047D24(GyorgMaleEntity* this) {
     this->unk_7e += 8;
     if (this->unk_7e > 0x800) {
+#ifdef PC_PORT
+        /* Issue #140 — Gyorg Pair crash entering phase 2/3. When a male
+         * finishes dying it clears its own slot in the shared GyorgHeap so
+         * nothing derefs the freed entity (sub_080A1DCC is written to fall
+         * back male1 -> male2 the moment male1 goes NULL). The GBA cleared
+         * the slot by raw 4-byte word index: ((u32*)myHeap)[2]/[3] aliased
+         * heap->male1/male2. With 8-byte PC pointers those indices land
+         * inside heap->female (bytes 8..15), zeroing half of it -> the boss
+         * SIGSEGVs the next frame it derefs female (during female phase 2).
+         * Null the real fields instead. */
+        if (super->type == 0) {
+            ((GyorgHeap*)super->myHeap)->male1 = NULL;
+        } else {
+            ((GyorgHeap*)super->myHeap)->male2 = NULL;
+        }
+#else
         if (super->type == 0) {
             ((u32*)super->myHeap)[2] = 0;
         } else {
             ((u32*)super->myHeap)[3] = 0;
         }
+#endif
         super->myHeap = NULL;
         DeleteThisEntity();
     } else {
