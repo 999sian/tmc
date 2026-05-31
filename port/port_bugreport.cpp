@@ -177,6 +177,13 @@ bool WriteScreenshotPNG(const std::filesystem::path& path) {
     return true;
 }
 
+/* Repro-harness shim (#138/#79): capture the base GBA framebuffer to an
+ * explicit path, headless-safe and cross-platform (used by
+ * port_repro_litarea.c on Linux and under Wine). */
+extern "C" int Port_CaptureBaseFramebufferPNG(const char* path) {
+    return WriteScreenshotPNG(std::filesystem::path(path)) ? 1 : 0;
+}
+
 bool CopySaveFile(const std::filesystem::path& dest) {
     std::error_code ec;
     std::filesystem::copy_file("tmc.sav", dest,

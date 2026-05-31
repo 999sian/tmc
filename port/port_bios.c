@@ -121,6 +121,13 @@ static void Port_UpdateInput(void) {
         Port_ReproMazaal_Tick(sFrameNum);
     }
 
+    /* Issues #138/#79 auto-repro harness. Set TMC_REPRO_LITAREA=1 to warp
+     * into a litArea OBJ-window dark room and capture the framebuffer. */
+    {
+        extern void Port_ReproLitArea_Tick(unsigned int frame);
+        Port_ReproLitArea_Tick(sFrameNum);
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
