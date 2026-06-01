@@ -166,6 +166,7 @@ static void ResolvePassSize(const PortGlslp::ShaderPass& p,
  * we don't pull its full header. */
 extern "C" SDL_GPUDevice*       Port_GPU_GetDevice(void);
 extern "C" SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void);
+extern "C" bool                 Port_GPU_SupportsGlslpRuntime(void);
 #endif
 
 extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
@@ -192,6 +193,10 @@ extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
     g_runtime.device = Port_GPU_GetDevice();
     if (!g_runtime.device) {
         std::fprintf(stderr, "[glslp] Load: SDL_GPU device unavailable; .glslp runtime needs --gpu_renderer=y\n");
+        return 0;
+    }
+    if (!Port_GPU_SupportsGlslpRuntime()) {
+        std::fprintf(stderr, "[glslp] Load: active SDL_GPU shader format does not support SPIR-V presets\n");
         return 0;
     }
     g_runtime.swap_format = Port_GPU_GetSwapchainFormat();
