@@ -301,7 +301,17 @@ void sub_0802D170(GleerokEntity* this) {
     } else {
         super->action = 3;
         this->unk_80 = 0;
+#ifdef PC_PORT
+        /* #140-class: the decompiler spelled heap->ent2 as ((Entity*)heap)->parent
+         * because Entity.parent and ent2 both sit at 0x50 under 4-byte GBA
+         * pointers. On PC Entity.parent is 0x60 (8-byte pointers), which aliases
+         * entities[4] instead — so this set the wrong segment's timer and ent2
+         * (the head) never got it, breaking the fight. Use the real field
+         * (identical to the ->ent2->timer writes at lines 588/603). */
+        this->unk_84->ent2->timer = 24;
+#else
         ((Entity*)this->unk_84)->parent->timer = 24;
+#endif
         this->unk_84->filler2[0].unk0.HALF.HI = 0;
     }
 }
@@ -314,7 +324,13 @@ void sub_0802D218(GleerokEntity* this) {
     super->timer = 0;
     super->subtimer = 0;
     this->unk_7c.HALF_U.LO = 0xb4;
+#ifdef PC_PORT
+    /* #140-class: see line 304 — ((Entity*)heap)->parent aliases ent2 only on
+     * GBA (both at 0x50); on PC parent is 0x60, which lands in entities[4]. */
+    this->unk_84->ent2->timer = 12;
+#else
     ((Entity*)(this->unk_84))->parent->timer = 12;
+#endif
     CreateObjectWithParent(super, GLEEROK_PARTICLE, 0x2, this->unk_7c.HALF_U.LO);
 }
 
