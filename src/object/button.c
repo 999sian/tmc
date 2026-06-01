@@ -448,7 +448,19 @@ void sub_08081FF8(Entity* this) {
     direction = GetFacingDirection(this->child, this);
     sub_080044AE(this->child, 0x200, direction);
     for (i = 0; i < 3; i++) {
+#ifdef PC_PORT
+        /* #130 followup (bugreport_20260601_010030): clones spawned during the
+         * Four Sword charge are inserted into gPlayerClones[] (player.c:3792)
+         * before PlayerClone assigns super->hitbox — playerClone.c only does
+         * that once gPlayerState.chargeState.action reaches 5. During that
+         * window a clone sits here with hitbox == NULL; sub_080044AE ->
+         * CalculateEntityTileCollisions dereferences it, which reads harmless
+         * BIOS-region garbage on the GBA but SIGSEGVs at address 0 on PC.
+         * Skip clones that are not yet pushable. */
+        if (gPlayerClones[i] != NULL && gPlayerClones[i]->hitbox != NULL) {
+#else
         if (gPlayerClones[i]) {
+#endif
             sub_080044AE(gPlayerClones[i], 0x200, direction);
         }
     }
