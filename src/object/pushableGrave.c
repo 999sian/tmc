@@ -28,8 +28,27 @@ typedef struct {
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
     /*0x7c*/ s8 unk_7c[0xa];
+#ifdef PC_PORT
+    /* #130-class softlock. pushedFlag sits at GBA 0x86 = GenericEntity.field_0x86.
+     * Room-placed graves get their flag from spritePtr through RegisterRoomEntity,
+     * which on PC writes it to BOTH the aligned field_0x86 (0xB2) and the raw
+     * filler offset (0xAE), so a raw 0xAE field happens to work for them. But the
+     * WORLD_EVENT_TYPE_15 kinstone-fusion path (worldEvent15.c) spawns this grave
+     * with spritePtr=0 and then writes the activation flag 0x80ff straight into
+     * GE_FIELD(field_0x86) (PC 0xB2) ONLY — no 0xAE mirror. With a raw 0x1E filler
+     * pushedFlag landing at 0xAE, the grave read 0: pushing it fully ran the
+     * `if (pushedFlag != 0) SetFlag()` as a no-op instead of SetRoomFlag(0xFF), so
+     * WorldEvent_15_1's `CheckRoomFlag(0xff)` wait never cleared -> softlock.
+     * 4 bytes of padding restores the field_0x86 alias (same as #130). */
+    u8 filler_pc[4];
+#endif
     /*0x86*/ u16 pushedFlag;
 } PushableGraveEntity;
+
+/* pushedFlag MUST alias GenericEntity.field_0x86 (where the room spawner and
+ * worldEvent15.c write the activation flag). */
+PORT_STATIC_ASSERT_OFFSET(PushableGraveEntity, pushedFlag, 0x86, 0xB2,
+                          "PushableGrave pushedFlag must alias field_0x86");
 
 extern void (*const PushableGrave_Actions[])(PushableGraveEntity*);
 extern const u8 gUnk_081232C0[];
