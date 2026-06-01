@@ -12,8 +12,24 @@
 typedef struct {
     Entity base;
     u8 filler[0x1E];
+#ifdef PC_PORT
+    /* #130 Four Sword Sanctuary softlock. On GBA `objFlags` sits at 0x86, which
+     * is exactly GenericEntity.field_0x86 — the word sub_0807F8E8 writes the
+     * activation flag (0x8004) into when the script spawns this plaque. The
+     * Entity base grew 0x68->0x90 on PC and GenericEntity's tail pointer pushes
+     * field_0x86 to 0xB2, but a raw 0x1E filler only reaches 0xAE, so objFlags
+     * and field_0x86 stopped aliasing. The plaque then read/wrote the wrong
+     * word: beaming it ran SetFlag(0) (a no-op) instead of SetRoomFlag(4), so
+     * the ceremony's `CheckRoomFlag 4` wait after the Four Sword is restored
+     * never cleared -> softlock. 4 bytes of padding restores the alias. */
+    u8 filler_pc[4];
+#endif
     u16 objFlags;
 } SanctuaryStoneTabletEntity;
+
+/* objFlags MUST alias GenericEntity.field_0x86 (what sub_0807F8E8 writes). */
+PORT_STATIC_ASSERT_OFFSET(SanctuaryStoneTabletEntity, objFlags, 0x86, 0xB2,
+                          "SanctuaryStoneTablet objFlags must alias field_0x86");
 
 void SanctuaryStoneTablet_Init(SanctuaryStoneTabletEntity*);
 void SanctuaryStoneTablet_Action1(SanctuaryStoneTabletEntity*);
