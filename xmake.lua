@@ -736,6 +736,7 @@ target("tmc_pc")
     -- Issue #99 auto-repro harness (env-gated, no-op when off).
     add_files("port/port_repro_mazaal.c")
     add_files("port/port_repro_litarea.c")
+    add_files("port/port_repro_clonebutton.c")
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
