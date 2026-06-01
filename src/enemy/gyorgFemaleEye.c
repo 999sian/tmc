@@ -221,6 +221,17 @@ u32 sub_08048D70(GyorgFemaleEntity* parent) {
     if (!tmp) {
         tmp = ((GyorgHeap*)parent->base.myHeap)->male2;
     }
+#ifdef PC_PORT
+    /* Issue #140 — both males null their own GyorgHeap slot the frame they
+     * finish dying (sub_08047D24). Once the female is also dead, male1 and
+     * male2 are both NULL here, so tmp is NULL. The GBA read BIOS garbage at
+     * 0x4d; PC SIGSEGVs. No live male means "defeated": fall through to
+     * return 1 (matches the male-dead path below and sub_080A20B8's NULL
+     * convention in gyorgBossObject.c). */
+    if (tmp == NULL) {
+        return 1;
+    }
+#endif
     if (tmp->base.health != 0) {
         return 0;
     }
