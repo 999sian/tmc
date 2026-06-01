@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file cutscene.c
  *
  * @brief Cutscenes
@@ -224,7 +224,15 @@ void sub_08053758(void) {
     gMenu.overlayType = 1;
     gMenu.transitionTimer = 120;
     gMenu.field_0xa = 0x1e;
+#ifdef PC_PORT
+    /* Raw +0x10 targets GenericMenu.unk10.a[0] (the story-page counter) on GBA,
+     * where Menu is 0x10 bytes. On PC Menu.field_0xc is an 8-byte pointer, so the
+     * Menu base grows to 0x18 and +0x10 lands inside that pointer — corrupting it
+     * and never resetting the page counter. Write the named field instead. */
+    gGenericMenu.unk10.a[0] = 0;
+#else
     *((u8*)&gMenu + 0x10) = 0; // TODO
+#endif
     gUI.loadGfxOnRestore = TRUE;
     gMapBottom.bgSettings = NULL;
     gMapTop.bgSettings = NULL;
@@ -471,44 +479,39 @@ void sub_08053BAC(void) {
 
 #ifdef PC_PORT
 #include <stdio.h>
+#include "port_debug_verbose.h" /* Port_DebugVerbose — gates the [wd] restore log */
 #endif
 void sub_08053BBC(void) {
 #ifdef PC_PORT
-    /* Issue #93 (Vaati takeover softlock).
+    /* Issue #93 / #109 (Vaati castle-takeover).
      *
-     * On GBA the orchestrator entity (kind=6 id=0x69, running
-     * script_CutsceneOrchestratorTakeover/Cutscene) drives the takeover
-     * by alternately setting "wake helper N" flags and waiting for the
-     * helper's "done N" reply. In our port the orchestrator entity gets
-     * deleted prematurely — its script reaches `DoPostScriptAction 0x06`
-     * (self-delete via HandlePostScriptActions case 1<<6) while several
-     * helpers are still parked at their first WAIT&CLR for a start
-     * signal that the orchestrator never sent.
+     * On GBA the inner orchestrator (kind=6 id=0x69, running
+     * script_CutsceneOrchestratorTakeoverCutscene) drives the throne-room
+     * choreography via SetSyncFlag/WaitForSyncFlagAndClear handshakes with
+     * its King/Vaati/Zelda helpers. The port used to orphan it: when Vaati
+     * apparated, CreateVaatiApparateManager's DeleteManager corrupted
+     * gEntityLists[6] and dropped the orchestrator from the entity-update
+     * walk, so it froze one command after its first SetSyncFlag and the
+     * whole handshake deadlocked. That corruption is now fixed at the
+     * source (see src/manager/vaatiAppearingManager.c), and the native
+     * script runs the cutscene to completion on its own — GBA-accurate.
      *
-     * Symptom without intervention: Vaati visible on screen frozen,
-     * helpers spinning on `WAIT&CLR flag=0x004` (King) and
-     * `WAIT&CLR flag=0x010` (Vaati helper).
-     *
-     * Workaround. Run our own paced state machine here that broadcasts
-     * the Set/Wait flag sequence the orchestrator would have driven —
-     * mirroring script_CutsceneOrchestratorTakeoverCutscene's pairs.
-     * Each helper consumes its WAIT&CLR, runs its inter-step animation,
-     * hits the next WAIT&CLR (which sees the next sequenced flag and
-     * consumes again), eventually reaches its `WaitForSyncFlag 0x400`
-     * tail and self-deletes. Final 0x400 broadcast also covered by
-     * src/script.c HandlePostScriptActions case 1<<6 — that one fires
-     * the moment the orchestrator self-deletes, this one is the backup
-     * for helpers still waiting on intermediate signals.
-     *
-     * Known cosmetic issue: between-step animations don't get their
-     * GBA-native pacing because the camera/fade work itself was driven
-     * by the (now-deleted) orchestrator. Visuals rush by; cutscene
-     * COMPLETES (subtask exits, player ends in Hyrule Field with the
-     * right local flag set) but doesn't *play* properly. Restoring
-     * proper visuals requires tracking down why the orchestrator dies
-     * early — currently unknown root cause. */
+     * The C state machine below that re-drove the handshake is therefore
+     * only an opt-in fallback now (TMC_TAKEOVER_WD=1); by default it does
+     * nothing. The CheckRoomFlag(0) completion block still runs
+     * unconditionally: it re-arms player control + restarts the overworld
+     * BGM for the direct-launch repro (sub_08053BE8), which skips the outer
+     * orchestrator that would otherwise do so. */
     static int sStep = 0;
     static int sFrameInStep = 0;
+    /* One-shot guard for the post-cutscene overworld-BGM restart (#109). */
+    static int sBgmRestored = 0;
+    /* The native orchestrator now drives the takeover correctly, so the C
+     * watchdog is opt-in (set TMC_TAKEOVER_WD=1 to force it as a fallback);
+     * by default the GBA-native script choreography runs unaided. */
+    static int sWd = -1;
+    if (sWd < 0)
+        sWd = (getenv("TMC_TAKEOVER_WD") != NULL);
     /* Each entry: setFlag = "wake helper" bit to set; doneFlag = "helper done"
      * bit to wait for (mirroring the GBA child orchestrator's
      * SetSyncFlag/WaitForSyncFlagAndClear pairs). minFrames = floor we hold
@@ -580,7 +583,7 @@ void sub_08053BBC(void) {
         { KING_DALTUS,  0x400, 0x000, 60,  120, ACT_STOP_BGM | ACT_END },
     };
 
-    if (!CheckRoomFlag(0)) {
+    if (sWd && !CheckRoomFlag(0)) {
         /* Belt-and-suspenders: clear any stuck fade so the inner orch's
          * (would-be) SetFade5/SetFade4/WaitForFadeFinish path's leftover
          * state doesn't gate our beats. Fades themselves are FADE_INSTANT
@@ -588,6 +591,7 @@ void sub_08053BBC(void) {
          * fade pacing. */
         gFadeControl.active = 0;
         int nSteps = (int)(sizeof(kPhase) / sizeof(kPhase[0]));
+        sBgmRestored = 0; /* cutscene in progress — arm the post-exit BGM restart */
         if (sStep < nSteps) {
             u32 setFlag = kPhase[sStep].wakeFlag;
             u32 doneFlag = kPhase[sStep].ackFlag;
@@ -618,11 +622,17 @@ void sub_08053BBC(void) {
                     }
                 }
             }
-            /* Camera follow: point camera_target at the phase's NPC. */
+            /* #109: let the native inner orchestrator own the opening pans.
+             * On GBA the takeover script positions a CUTSCENE_ORCHESTRATOR object
+             * and CameraTargetEntity's onto it for the throne intro + Vaati reveal.
+             * Our watchdog was clobbering those first two beats to NPC anchors,
+             * flattening the choreography. From phase 2 onward we still take over
+             * the camera so the workaround can finish the cutscene after the native
+             * orchestrator stalls. */
             if (camNpcId != 0xFFFFFFFFu) {
                 Entity* target = FindEntityByID(NPC, camNpcId, 7);
                 if (target == NULL) target = FindEntityByID(NPC, camNpcId, 5);
-                if (target != NULL && gRoomControls.camera_target != target) {
+                if (sStep >= 2 && target != NULL && gRoomControls.camera_target != target) {
                     fprintf(stderr, "[wd] camera -> NPC id=0x%X (was %p) tgt=(%d,%d)\n",
                             camNpcId, (void*)gRoomControls.camera_target,
                             target->x.HALF.HI, target->y.HALF.HI);
@@ -706,6 +716,22 @@ void sub_08053BBC(void) {
          * softlock returns. */
         gPlayerState.controlMode = CONTROL_ENABLED;
         gUI.controlMode = CONTROL_ENABLED;
+        /* The outer takeover orchestrator's post-cutscene `PlayBGM` (script
+         * line 32 of script_CutsceneOrchestratorTakeover, i.e.
+         * SoundReq(gArea.bgm)) is one of the "later script commands [that]
+         * don't run on PC" noted above. Without it the overworld stays
+         * SILENT after the takeover: the inner cutscene's StopBgm zeroed
+         * gSoundPlayingInfo.currentBgm, but gArea.bgm still equals
+         * gArea.queued_bgm, so GameMain_ChangeRoom's
+         * `bgm != queued_bgm` re-request never fires either. Replay the
+         * script's PlayBGM once here, exactly like the control re-enable. */
+        if (!sBgmRestored) {
+            sBgmRestored = 1;
+            SoundReq(gArea.bgm);
+            if (Port_DebugVerbose)
+                fprintf(stderr, "[wd] restore overworld BGM: SoundReq(gArea.bgm=0x%X)\n",
+                        (unsigned)gArea.bgm);
+        }
 #endif
     }
 }

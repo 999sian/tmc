@@ -4,6 +4,8 @@
 
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
+#include "port_debug_verbose.h" /* Port_DebugVerbose — gates [bgm] trace */
 
 #define M4A_PLAYER_COUNT 32
 #define M4A_MAX_TRACKS 16
@@ -312,6 +314,10 @@ void m4aSoundVSync(void) {
 }
 
 void m4aSongNumStart(u16 songId) {
+    if (Port_DebugVerbose) {
+        const char* _l = Port_GetSongLabel(songId);
+        fprintf(stderr, "[bgm] start id=0x%X (%s)\n", songId, _l ? _l : "?");
+    }
     const SongHeader* header = NULL;
     u16 playerIndex = 0;
     MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header, &playerIndex);
@@ -378,6 +384,10 @@ void m4aSongNumStartOrContinue(u16 songId) {
 }
 
 void m4aSongNumStop(u16 songId) {
+    if (Port_DebugVerbose) {
+        const char* _l = Port_GetSongLabel(songId);
+        fprintf(stderr, "[bgm] stop id=0x%X (%s)\n", songId, _l ? _l : "?");
+    }
     const SongHeader* header = NULL;
     u16 playerIndex = 0;
     MusicPlayerInfo* mplayInfo = ResolveSongPlayer(songId, &header, &playerIndex);
@@ -408,6 +418,7 @@ void m4aSongNumContinue(u16 songId) {
 }
 
 void m4aMPlayAllStop(void) {
+    if (Port_DebugVerbose) fprintf(stderr, "[bgm] allstop\n");
     ForEachTrackedPlayer(StopPlayer);
 }
 
