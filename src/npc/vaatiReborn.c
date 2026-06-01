@@ -51,9 +51,17 @@ void VaatiRebornAction0(Entity* this) {
                 }
             }
             entity = CreateNPC(VAATI_REBORN, 1, 0);
-            entity->parent = this;
-            entity->spriteOffsetY = -1;
-            PositionRelative(this, entity, 0, Q_16_16(1.0));
+#ifdef PC_PORT
+            /* GBA left this 5th CreateNPC unchecked (the loop just above NULL-checks).
+             * A full entity pool returns NULL; the parent/offset writes hit the
+             * read-only BIOS region harmlessly on GBA but SIGSEGV at address 0 on PC. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = this;
+                entity->spriteOffsetY = -1;
+                PositionRelative(this, entity, 0, Q_16_16(1.0));
+            }
             InitAnimationForceUpdate(this, 0);
             break;
         case 1:
@@ -200,6 +208,12 @@ void sub_0806B96C(Entity* this) {
     entity = sub_0806B9BC(this);
     if (entity == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        /* GBA fell through and read entity->spriteSettings (NULL+0x18) from the BIOS
+         * region; on PC that SIGSEGVs. The entity is being deleted, so the rest of
+         * this function is meaningless — bail. */
+        return;
+#endif
     }
     ptr = &gUnk_08112F80[this->type2];
     this->spriteSettings.draw = entity->spriteSettings.draw;
