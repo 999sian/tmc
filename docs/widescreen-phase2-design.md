@@ -365,3 +365,35 @@ of scroll-update timing.
 ### 🔲 Steps D / E / F — UI offsets, camera bounds, cutscene bars
 
 Per the original design above.
+
+### 2026-05-30 re-attempt (reverted again) — new finding: room-transition scroll distance
+
+Re-did Option A from scratch — direct `gMapData{Bottom,Top}Special` reads in
+`render_text_bg_line` for `x >= MODE1_GBA_BG_CLIP_X` (no separate shadow buffer),
+camera centering + right-clamp keyed to the view width (`src/scroll.c`), sprite
+visibility widened (`CheckOnScreen` / `CheckRectOnScreen` / `RenderSpritePieces`),
+non-gameplay **stretch** in `port_ppu.cpp`, OAM viewport = `MODE1_GBA_WIDTH`.
+Verified at 384: gameplay BG fills the full width, seamless at the col-240 split,
+camera centered. All reverted to the documented baseline (option present, unwired).
+
+Re-confirmed the **Step C-2 dead-end**: OAM/entity flicker is the blocker. Widescreen
+reveals cols 240..W where the engine parks/animates sprites it treats as off-screen,
+and `CheckOnScreen`-gated AI runs there too → occasional 1-frame sprite flash near the
+edges. No clean global fix; it is per-entity (several enemies/objects use hardcoded
+`scroll_x + 0x108`-style bounds, e.g. gyorgChild/gyorgMale/bombPeahat).
+
+**NEW finding (not previously documented): overworld room transitions hardcode a 240px
+scroll distance.** `src/scroll.c::Scroll2Sub2` scrolls horizontal room crossings until
+`unk_18 == 0x3c` (60 steps × 4px = 240 = native width). With a wider camera the
+destination camera position is one *view* width away, so the transition under-scrolls by
+`W-240` and leaves a **permanent black band** on the leading edge after entry
+(reproduced walking into Lon Lon Ranch, area 0x03 room 0x05). Working fix: gate the
+horizontal cases on `viewwidth/4` (= 96 at 384) instead of `0x3c`; vertical stays `0x28`
+(height unchanged). Caveat: the leading edge still goes black *during* the ~1.5s scroll,
+because the wide view spans the room being left while `gMapData*Special` is already the
+destination room (clips to backdrop). Seamless transitions need both rooms' maps live
+during the cross-fade.
+
+Also: non-gameplay screens (title via the GBA-mode-1 → ViruaPPU-mode-2 path, menus, boot
+logos) want a 240→W **stretch** (fills the screen, no bars). Pillarbox bars were
+explicitly rejected during review.
