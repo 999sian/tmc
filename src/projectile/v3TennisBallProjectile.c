@@ -89,6 +89,30 @@ bool32 sub_080ACB40(Entity* this) {
     }
     Entity* r1_grandparent = this->parent->parent;
     Entity* child = this->child;
+#ifdef PC_PORT
+    /* #140-class: heap[7..10] are the four eyes, which Vaati's defeat cleanup
+     * (vaatiWrath.c:sub_08041BE8) DeleteEntity's and NULLs. A tennis ball
+     * already in flight outlives them and still reaches OnCollision -> here,
+     * so an eye slot (or the whole heap) can be NULL. The GBA read harmless
+     * open-bus at the small address; PC SIGSEGVs on eye->child. Skip any eye
+     * that's gone (a deleted eye can't be claiming a target). */
+    Entity** heap = (Entity**)r1_grandparent->myHeap;
+    int i;
+    if (heap == NULL) {
+        return TRUE;
+    }
+    for (i = 7; i <= 10; i++) {
+        Entity* tmp = heap[i];
+        if (tmp == NULL) {
+            continue;
+        }
+        tmp = tmp->child;
+        if (tmp != this && child == tmp->child) {
+            return FALSE;
+        }
+    }
+    return TRUE;
+#else
     Entity* tmp = ((Entity**)(r1_grandparent->myHeap))[7]->child;
 
     if (tmp != this && child == tmp->child) {
@@ -114,6 +138,7 @@ bool32 sub_080ACB40(Entity* this) {
     }
 
     return TRUE;
+#endif
 }
 
 void sub_080ACB90(Entity* this) {
