@@ -162,11 +162,14 @@ SDL. An optional **SDL_GPU** backend adds post-processing shader presets (CRT,
 LCD, scanline looks, …). In the **F8** menu:
 
 - **Renderer** toggles software ↔ GPU.
-- **Shader Preset** picks a `.glslp` preset while the GPU backend is active.
+- **CRT filter** cycles the stock CPU/GPU presentation filters.
+- **Shader Preset** picks a `.glslp` preset when the SPIR-V/Vulkan GPU backend is active.
 
 The GPU backend is compiled into the pre-built releases and `build.py` builds
-by default. A bare `xmake` configure needs `--gpu_renderer=y` — without it the
-GPU options are present but show "GPU backend required".
+it by default. A bare `xmake` configure needs `--gpu_renderer=y` — without it
+the GPU options are present but show "GPU backend required". On macOS the GPU
+backend uses Metal for the stock filters; runtime `.glslp` shader presets still
+require the SPIR-V/Vulkan backend.
 
 ## Accessibility
 

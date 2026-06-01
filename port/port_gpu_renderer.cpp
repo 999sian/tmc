@@ -30,6 +30,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int w, int h) {
 }
 extern "C" bool Port_GPU_PaintBootSplash(void) { return false; }
 extern "C" bool Port_GPU_IsActive(void) { return false; }
+extern "C" bool Port_GPU_SupportsGlslpRuntime(void) { return false; }
 extern "C" void Port_GPU_Shutdown(void) {}
 extern "C" void Port_GPU_SetFilter(PortGpuFilter f) { (void)f; }
 extern "C" PortGpuFilter Port_GPU_GetFilter(void) { return PORT_GPU_FILTER_NONE; }
@@ -92,6 +93,10 @@ static constexpr size_t kCrtRfFragSpvSize        = sizeof(kCrtRfFragSpv);
 static constexpr size_t kBlur5hFragSpvSize       = sizeof(kBlur5hFragSpv);
 static constexpr size_t kCrtRfP2FragSpvSize      = sizeof(kCrtRfP2FragSpv);
 
+#if defined(__APPLE__)
+#include "port_gpu_msl_shaders.inl"
+#endif
+
 static SDL_GPUDevice*           sDevice    = nullptr;
 static SDL_GPUShader*           sVertShader = nullptr;
 /* Stage 3: one fragment shader + one graphics pipeline per filter mode. */
@@ -120,11 +125,71 @@ static int                      sSourceH = 0;
 static bool                     sWindowClaimed = false;
 static SDL_GPUTextureFormat     sSwapFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
 static PortGpuFilter            sActiveFilter = PORT_GPU_FILTER_NONE;
+static SDL_GPUShaderFormat      sShaderFormat = SDL_GPU_SHADERFORMAT_INVALID;
+
+static const char* Port_GPU_ShaderFormatName(SDL_GPUShaderFormat format) {
+    switch (format) {
+        case SDL_GPU_SHADERFORMAT_SPIRV:    return "SPIR-V";
+        case SDL_GPU_SHADERFORMAT_MSL:      return "MSL";
+        case SDL_GPU_SHADERFORMAT_METALLIB: return "metallib";
+        default:                            return "?";
+    }
+}
+
+static const char* Port_GPU_ShaderEntrypoint(void) {
+#if defined(__APPLE__)
+    if (sShaderFormat == SDL_GPU_SHADERFORMAT_MSL) {
+        return "main0";
+    }
+#endif
+    return "main";
+}
+
+static SDL_GPUDevice* Port_GPU_CreateDevice(SDL_GPUShaderFormat* out_format) {
+#if defined(__APPLE__)
+    /* Prefer Metal on Apple. The stock filters have native MSL sources,
+     * so users do not need MoltenVK just to select the GPU backend. If
+     * Metal creation fails, fall back to the old SPIR-V/Vulkan path so
+     * developer machines with MoltenVK still have a chance to run. */
+    SDL_GPUDevice* metal = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_MSL,
+                                               /*debug=*/false,
+                                               /*name=*/"metal");
+    if (metal) {
+        *out_format = SDL_GPU_SHADERFORMAT_MSL;
+        return metal;
+    }
+    std::fprintf(stderr, "[gpu] Metal device unavailable, trying SPIR-V/Vulkan: %s\n", SDL_GetError());
+#endif
+
+    SDL_GPUDevice* device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV,
+                                                /*debug=*/false,
+                                                /*name=*/nullptr);
+    if (device) {
+        *out_format = SDL_GPU_SHADERFORMAT_SPIRV;
+        return device;
+    }
+
+    *out_format = SDL_GPU_SHADERFORMAT_INVALID;
+    return nullptr;
+}
+
+#if defined(__APPLE__)
+#define TMC_GPU_SHADER_CODE(msl_code, spv_code) \
+    ((sShaderFormat == SDL_GPU_SHADERFORMAT_MSL) ? reinterpret_cast<const unsigned char*>(msl_code) : (spv_code))
+#define TMC_GPU_SHADER_SIZE(msl_size, spv_size) \
+    ((sShaderFormat == SDL_GPU_SHADERFORMAT_MSL) ? (msl_size) : (spv_size))
+#else
+#define TMC_GPU_SHADER_CODE(msl_code, spv_code) (spv_code)
+#define TMC_GPU_SHADER_SIZE(msl_size, spv_size) (spv_size)
+#endif
 
 /* Accessors for port_imgui_menu.cpp so it can wire its SDL_GPU backend
  * against the same device and matching swapchain format. */
 extern "C" SDL_GPUDevice* Port_GPU_GetDevice(void)             { return sDevice; }
 extern "C" SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void) { return sSwapFormat; }
+extern "C" bool Port_GPU_SupportsGlslpRuntime(void) {
+    return sShaderFormat == SDL_GPU_SHADERFORMAT_SPIRV;
+}
 
 /* .glslp runtime hooks (port_glslp_runtime.cpp). Declared at file
  * scope; the runtime's defining TU is also compiled with extern "C"
@@ -138,16 +203,15 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer*,
 extern "C" bool Port_GPU_Init(SDL_Window* window) {
     if (sDevice) return true; /* idempotent */
 
-    /* Request SPIR-V format support. The runtime picks the best
-     * backend (Vulkan first; Metal/D3D12 if SPIR-V isn't native, with
-     * SDL doing the cross-compile internally on those backends). */
-    sDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV, /*debug=*/false, /*name=*/nullptr);
+    sDevice = Port_GPU_CreateDevice(&sShaderFormat);
     if (!sDevice) {
         std::fprintf(stderr, "[gpu] SDL_CreateGPUDevice failed: %s\n", SDL_GetError());
         return false;
     }
     const char* backend = SDL_GetGPUDeviceDriver(sDevice);
-    std::fprintf(stderr, "[gpu] device created (backend=%s)\n", backend ? backend : "?");
+    std::fprintf(stderr, "[gpu] device created (backend=%s, shader=%s)\n",
+                 backend ? backend : "?",
+                 Port_GPU_ShaderFormatName(sShaderFormat));
 
     /* Stage 1: don't ClaimWindow yet. SDL_Renderer already owns the
      * window (via its own Vulkan instance on Linux), and only one
@@ -162,12 +226,13 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
     sWindow = window;
 
     /* Vertex shader. No vertex buffer (fullscreen quad synthesised
-     * from gl_VertexIndex), no per-vertex sampler/uniform inputs. */
+     * from vertex_id / gl_VertexIndex), no per-vertex sampler/uniform
+     * inputs. */
     SDL_GPUShaderCreateInfo vci = {};
-    vci.code_size   = kPassthroughVertSpvSize;
-    vci.code        = kPassthroughVertSpv;
-    vci.entrypoint  = "main";
-    vci.format      = SDL_GPU_SHADERFORMAT_SPIRV;
+    vci.code_size   = TMC_GPU_SHADER_SIZE(kPassthroughVertMslSize, kPassthroughVertSpvSize);
+    vci.code        = TMC_GPU_SHADER_CODE(kPassthroughVertMsl, kPassthroughVertSpv);
+    vci.entrypoint  = Port_GPU_ShaderEntrypoint();
+    vci.format      = sShaderFormat;
     vci.stage       = SDL_GPU_SHADERSTAGE_VERTEX;
     sVertShader = SDL_CreateGPUShader(sDevice, &vci);
     if (!sVertShader) {
@@ -194,13 +259,20 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
         unsigned             num_uniforms;
         const char*          label;
     } fragSpec[PORT_GPU_FILTER_COUNT] = {
-        { kPassthroughFragSpv,  kPassthroughFragSpvSize,  0, "passthrough"   },
-        { kLcdGridFragSpv,      kLcdGridFragSpvSize,      1, "lcd_grid"      },
-        { kScanlineFragSpv,     kScanlineFragSpvSize,     1, "scanline"      },
-        { kHandheldFragSpv,     kHandheldFragSpvSize,     1, "handheld"      },
-        { kVignetteFragSpv,     kVignetteFragSpvSize,     1, "vignette"      },
-        { kCrtCompositeFragSpv, kCrtCompositeFragSpvSize, 1, "crt_composite" },
-        { kCrtRfP2FragSpv,      kCrtRfP2FragSpvSize,      1, "crt_rf_p2"     },
+        { TMC_GPU_SHADER_CODE(kPassthroughFragMsl,  kPassthroughFragSpv),
+          TMC_GPU_SHADER_SIZE(kPassthroughFragMslSize,  kPassthroughFragSpvSize),  0, "passthrough"   },
+        { TMC_GPU_SHADER_CODE(kLcdGridFragMsl,      kLcdGridFragSpv),
+          TMC_GPU_SHADER_SIZE(kLcdGridFragMslSize,      kLcdGridFragSpvSize),      1, "lcd_grid"      },
+        { TMC_GPU_SHADER_CODE(kScanlineFragMsl,     kScanlineFragSpv),
+          TMC_GPU_SHADER_SIZE(kScanlineFragMslSize,     kScanlineFragSpvSize),     1, "scanline"      },
+        { TMC_GPU_SHADER_CODE(kHandheldFragMsl,     kHandheldFragSpv),
+          TMC_GPU_SHADER_SIZE(kHandheldFragMslSize,     kHandheldFragSpvSize),     1, "handheld"      },
+        { TMC_GPU_SHADER_CODE(kVignetteFragMsl,     kVignetteFragSpv),
+          TMC_GPU_SHADER_SIZE(kVignetteFragMslSize,     kVignetteFragSpvSize),     1, "vignette"      },
+        { TMC_GPU_SHADER_CODE(kCrtCompositeFragMsl, kCrtCompositeFragSpv),
+          TMC_GPU_SHADER_SIZE(kCrtCompositeFragMslSize, kCrtCompositeFragSpvSize), 1, "crt_composite" },
+        { TMC_GPU_SHADER_CODE(kCrtRfP2FragMsl,      kCrtRfP2FragSpv),
+          TMC_GPU_SHADER_SIZE(kCrtRfP2FragMslSize,      kCrtRfP2FragSpvSize),      1, "crt_rf_p2"     },
     };
     /* Prepass spec — same layout. nullptr code = single-pass filter. */
     struct {
@@ -215,14 +287,15 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
         { nullptr, 0, 0, nullptr },                                  /* HANDHELD      */
         { nullptr, 0, 0, nullptr },                                  /* VIGNETTE      */
         { nullptr, 0, 0, nullptr },                                  /* CRT_COMPOSITE */
-        { kBlur5hFragSpv, kBlur5hFragSpvSize, 0, "blur5h" },          /* CRT_RF        */
+        { TMC_GPU_SHADER_CODE(kBlur5hFragMsl, kBlur5hFragSpv),
+          TMC_GPU_SHADER_SIZE(kBlur5hFragMslSize, kBlur5hFragSpvSize), 0, "blur5h" }, /* CRT_RF */
     };
     for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
         SDL_GPUShaderCreateInfo fci = {};
         fci.code_size            = fragSpec[i].size;
         fci.code                 = fragSpec[i].code;
-        fci.entrypoint           = "main";
-        fci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
+        fci.entrypoint           = Port_GPU_ShaderEntrypoint();
+        fci.format               = sShaderFormat;
         fci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
         fci.num_samplers         = 1;
         fci.num_uniform_buffers  = fragSpec[i].num_uniforms;
@@ -238,8 +311,8 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
             SDL_GPUShaderCreateInfo pci = {};
             pci.code_size            = prePassSpec[i].size;
             pci.code                 = prePassSpec[i].code;
-            pci.entrypoint           = "main";
-            pci.format               = SDL_GPU_SHADERFORMAT_SPIRV;
+            pci.entrypoint           = Port_GPU_ShaderEntrypoint();
+            pci.format               = sShaderFormat;
             pci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
             pci.num_samplers         = 1;
             pci.num_uniform_buffers  = prePassSpec[i].num_uniforms;
@@ -254,8 +327,8 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
     }
 
     std::fprintf(stderr,
-        "[gpu] shaders loaded (vert %zu B; %d fragment filters)\n",
-        kPassthroughVertSpvSize, (int)PORT_GPU_FILTER_COUNT);
+        "[gpu] shaders loaded (format=%s; vert %zu B; %d fragment filters)\n",
+        Port_GPU_ShaderFormatName(sShaderFormat), vci.code_size, (int)PORT_GPU_FILTER_COUNT);
     return true;
 }
 
@@ -416,13 +489,19 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
     }
 
     /* TMC_GLSLP_PRESET env var — load a libretro .glslp preset at
-     * startup. When set AND the runtime loads successfully, that
-     * preset takes over presentation; the stock GPU filter cycle
-     * becomes a no-op for the rest of the session. */
+     * startup. The runtime currently produces SPIR-V shader modules,
+     * so it is available on the SPIR-V/Vulkan backend only; the Metal
+     * path uses the stock MSL filters above. */
     if (const char* preset_path = std::getenv("TMC_GLSLP_PRESET")) {
-        extern int Port_GlslpRuntime_Load(const char*);
-        if (Port_GlslpRuntime_Load(preset_path)) {
-            std::fprintf(stderr, "[gpu] glslp runtime active for '%s'\n", preset_path);
+        if (Port_GPU_SupportsGlslpRuntime()) {
+            extern int Port_GlslpRuntime_Load(const char*);
+            if (Port_GlslpRuntime_Load(preset_path)) {
+                std::fprintf(stderr, "[gpu] glslp runtime active for '%s'\n", preset_path);
+            }
+        } else {
+            std::fprintf(stderr,
+                         "[gpu] ignoring TMC_GLSLP_PRESET on %s shader backend; .glslp runtime needs SPIR-V\n",
+                         Port_GPU_ShaderFormatName(sShaderFormat));
         }
     }
 
@@ -891,6 +970,7 @@ extern "C" void Port_GPU_Shutdown(void) {
         sDevice = nullptr;
         sWindow = nullptr;
         sWindowClaimed = false;
+        sShaderFormat = SDL_GPU_SHADERFORMAT_INVALID;
     }
 }
 

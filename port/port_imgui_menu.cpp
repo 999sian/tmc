@@ -374,15 +374,10 @@ static void DrawRibbonDisplayTab(void) {
     ImGui::SameLine(); ImGui::Text("%dx", scale); ImGui::SameLine();
     if (ImGui::Button(">##scale")) Port_PPU_CycleWindowScale(+1);
 
-    /* Backend-conditional disable for SW-only presentation features.
-     * CRT/LCD filter still only runs in the SDL_Renderer branch
-     * (Port_Filter_Apply is CPU-side and not yet plumbed into the GPU
-     * present path). xBRZ NOW works on both backends — the GPU path
-     * feeds the CPU-upscaled 960x640 buffer straight to PresentFrame. */
+    /* Backend-conditional features. Port_PPU_CycleFilter dispatches to
+     * the CPU-side SDL_Renderer filters on the software path and to the
+     * stock SDL_GPU shader filters on the GPU path. */
     const bool gpuActive = Port_GPU_IsActive();
-    const char* swOnlyTip =
-        "SW-only on the CPU filter path. GPU users: load a "
-        "crt-*.glslp shader preset below instead.";
 
     /* Filter (presentation mode: nearest/linear/xBRZ). Enabled on both
      * backends. xBRZ Linear vs Nearest currently only differs on the
@@ -423,30 +418,28 @@ static void DrawRibbonDisplayTab(void) {
     bool vsync = Port_PPU_VSyncEnabled();
     if (ImGui::Checkbox("VSync", &vsync)) Port_PPU_SetVSync(vsync);
 
-    /* CRT filter (SW path: CPU-side pseudo-filter pass) */
-    ImGui::BeginDisabled(gpuActive);
+    /* CRT / shader filter. On GPU this cycles the stock SDL_GPU filter
+     * pipeline, including Metal-backed macOS builds where .glslp
+     * presets are intentionally unavailable. */
     ImGui::Text("CRT filter"); ImGui::SameLine(140);
     if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
     ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
     if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
-    ImGui::EndDisabled();
-    if (gpuActive && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("%s", swOnlyTip);
-    }
 
     /* Shader preset (libretro .glslp) — Step 7 picker. Scans the
      * working directory's ./shaders/ subdirectory for *.glslp files;
      * selecting one tears down any active preset and loads the new
      * one through the .glslp runtime. "Off" returns to the stock GPU
      * filter pipeline above. The list is cached and refreshes on
-     * the Scan button or after a successful Load. Requires the GPU
-     * backend — the .glslp runtime loads SPIR-V shaders into
-     * SDL_GPU pipelines. Gray out the picker on the SDL_Renderer
-     * (software) path so the user knows it has no effect there. */
-    if (!gpuActive) {
+     * the Scan button or after a successful Load. Requires a GPU
+     * backend that accepts SPIR-V — the .glslp runtime compiles GLSL
+     * presets into SPIR-V SDL_GPU pipelines, while the native Metal
+     * macOS path uses only the stock MSL filters. */
+    const bool glslpSupported = gpuActive && Port_GPU_SupportsGlslpRuntime();
+    if (!glslpSupported) {
         ImGui::TextDisabled("Shader preset");
         ImGui::SameLine();
-        ImGui::TextDisabled("(GPU backend required)");
+        ImGui::TextDisabled("%s", gpuActive ? "(SPIR-V backend required)" : "(GPU backend required)");
     } else
     {
 
