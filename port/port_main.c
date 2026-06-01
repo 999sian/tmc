@@ -404,7 +404,9 @@ int main(int argc, char* argv[]) {
      * window flags went from 0x220 → 0x222 across the first
      * SDL_CreateRenderer call, with driver=opengl. */
     SDL_Window* window = NULL;
+#ifndef TMC_GPU_RENDERER
     SDL_Renderer* prerenderer = NULL;
+#endif
     /* TMC_PC_VERSION is defined by xmake.lua via add_defines("TMC_PC_VERSION=\"...\"") */
     char window_title[64];
     SDL_snprintf(window_title, sizeof(window_title), "The Minish Cap " TMC_PC_VERSION);
@@ -414,14 +416,25 @@ int main(int argc, char* argv[]) {
      * SDL_Renderer atomically creates its Vulkan surface and SDL_GPU's
      * subsequent ClaimWindow gets back VK_ERROR_SURFACE_LOST_KHR
      * (Wayland: "surface already exists"). Use bare SDL_CreateWindow
-     * with the VULKAN flag instead so SDL_GPU can claim the swapchain
-     * cleanly. The bootstrap-splash code paths still call
-     * Port_PaintBootSplash unconditionally; on GPU builds that's a
-     * no-op (no SDL_Renderer to draw on) — the boot splash trades
-     * away on this build for the GPU pipeline. */
+     * so SDL_GPU can claim the swapchain cleanly. The bootstrap-splash
+     * code paths still call Port_PaintBootSplash unconditionally; on
+     * GPU builds that's a no-op (no SDL_Renderer to draw on) — the boot
+     * splash trades away on this build for the GPU pipeline.
+     *
+     * Non-Apple platforms keep SDL_WINDOW_VULKAN here to preserve the
+     * existing Vulkan swapchain path. On macOS, that flag makes
+     * SDL_CreateWindow call SDL_Vulkan_LoadLibrary immediately and abort
+     * startup if MoltenVK is not bundled, before AUTO can fall back to
+     * the software SDL_Renderer path. Leave the window Vulkan-flag-free
+     * on macOS; SDL_GPU can still attempt its claim later, and failure
+     * there falls back cleanly in Port_PPU_Init. */
+    SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
+#if !defined(__APPLE__)
+    window_flags |= SDL_WINDOW_VULKAN;
+#endif
     window = SDL_CreateWindow(window_title,
                               240 * window_scale, 160 * window_scale,
-                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
+                              window_flags);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
         SDL_Quit();
