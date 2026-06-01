@@ -136,6 +136,15 @@ static void Port_UpdateInput(void) {
         Port_ReproCloneButton_Tick(sFrameNum);
     }
 
+    /* Vaati Castle takeover cutscene repro (#93/#109). Set TMC_REPRO_TAKEOVER=1
+     * to launch the takeover aux-cutscene and watch the inner orchestrator's
+     * [orch-pc] trace (native script drives it by default; TMC_TAKEOVER_WD=1
+     * forces the old sub_08053BBC fallback watchdog). */
+    {
+        extern void Port_ReproTakeover_Tick(unsigned int frame);
+        Port_ReproTakeover_Tick(sFrameNum);
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
