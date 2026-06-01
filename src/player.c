@@ -359,7 +359,7 @@ static void Port_MuddyWaterSinkTick(PlayerEntity* this) {
      * actually gating us out before any early return runs. */
     {
         static int sPreLog = 0;
-        if ((sPreLog++ % 30) == 0) {
+        if (Port_DebugVerbose && (sPreLog++ % 30) == 0) {
             fprintf(stderr,
                     "[mud-pre] area=0x%02x pos=(%d,%d) action=%u z=%d minish=%d dash=0x%x actTile=0x%x\n",
                     (unsigned)gRoomControls.area,

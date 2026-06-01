@@ -15,6 +15,7 @@
 #include "screen.h"
 #include "script.h"
 #include "sound.h"
+#include "port_debug_verbose.h"  /* Port_DebugVerbose — gates per-frame diag logs */
 
 /* execinfo.h ships with glibc and macOS libSystem; MinGW does not have
  * it, so the diagnostic Port_DumpOrchStack() backtrace dump is a no-op
@@ -561,6 +562,7 @@ void UpdateIcePlayerVelocity(Entity* entity) {
 
 /* Sync-flag tripwires for #93 cutscene-softlock chase. */
 void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t) {
+    if (!Port_DebugVerbose) return;
     static int sCount = 0;
     if (sCount < 256) {
         sCount++;
@@ -601,6 +603,7 @@ void Port_LogEntityEvent(const char* op, void* ent, unsigned kind, unsigned id, 
             op, ent, kind, id, prev, next);
 }
 void Port_LogPostAction(unsigned action_idx, unsigned kind, unsigned id) {
+    if (!Port_DebugVerbose) return;
     static unsigned sCount = 0;
     if (sCount < 32) {
         sCount++;
@@ -608,6 +611,7 @@ void Port_LogPostAction(unsigned action_idx, unsigned kind, unsigned id) {
     }
 }
 void Port_LogOrchEvent(const char* op, void* ent) {
+    if (!Port_DebugVerbose) return;
     fprintf(stderr, "[orch-%s] ent=%p\n", op, ent);
 }
 
@@ -628,6 +632,7 @@ typedef struct {
 static OrchPcSlot sOrchPcSlots[4];
 
 void Port_LogOrchScriptPc(Entity* ent) {
+    if (!Port_DebugVerbose) return;
     ScriptExecutionContext* ctx = Port_GetEntityScriptCtx(ent);
     if (!ctx) return;
 
@@ -692,6 +697,7 @@ void Port_LogOrchScriptPc(Entity* ent) {
  * is producing the wrong value. */
 void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys, unsigned keys,
                          unsigned state, unsigned direction, int hasMacro) {
+    if (!Port_DebugVerbose) return;
     static unsigned lCtl = 0xFFFFu, lHeld = 0xFFFFu, lKeys = 0xFFFFu;
     static unsigned lState = 0xFFFFu, lDir = 0xFFFFu;
     static int lMacro = -1;
@@ -710,6 +716,7 @@ void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys, unsigned keys,
  * whether PlayerNormal is even being entered (vs DoPlayerAction
  * routing somewhere else). */
 void Port_LogPlayerNormalEnter(unsigned queuedAction) {
+    if (!Port_DebugVerbose) return;
     static unsigned lastQ = 0xFFFFu;
     static unsigned heartbeat = 0;
     heartbeat++;
@@ -728,6 +735,7 @@ void Port_LogPlayerNormalEnter(unsigned queuedAction) {
 void Port_LogPlayerMovementGate(unsigned v13, unsigned dir, unsigned psDir,
                                 unsigned f7, unsigned fa, unsigned dash,
                                 unsigned floor, unsigned swordState) {
+    if (!Port_DebugVerbose) return;
     static unsigned lV13 = 0xFFFFu, lDir = 0xFFFFu, lPsDir = 0xFFFFu;
     static unsigned lF7 = 0xFFFFu, lFa = 0xFFFFu, lDash = 0xFFFFu;
     static unsigned lFloor = 0xFFFFu, lSword = 0xFFFFu;
@@ -769,6 +777,7 @@ void Port_LogPlayerState(unsigned action, unsigned controlMode,
                          unsigned knockback, unsigned jumpStatus,
                          unsigned swimState, unsigned framestate,
                          unsigned attackStatus, unsigned spd) {
+    if (!Port_DebugVerbose) return;
     static unsigned lastAction = 0xFFFFu;
     static unsigned lastCtl = 0xFFFFu;
     static unsigned lastFlags = 0xFFFFu;
@@ -828,6 +837,7 @@ void Port_LogPlayerState(unsigned action, unsigned controlMode,
  * every call gets logged. */
 void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
                       u32 priorType, u32 priorActive, u32 priorProg) {
+    if (!Port_DebugVerbose) return;
     fprintf(stderr,
             "[fade-call] %s arg1=0x%X arg2=0x%X prior(type=0x%X active=%u prog=%u)\n",
             fn, arg1, arg2, priorType, priorActive, priorProg);
@@ -837,6 +847,7 @@ void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
  * so we only see actual state changes. Tells us whether
  * Subtask_FadeOut/FadeIn/Init/Die actually run post-cutscene. */
 void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad) {
+    if (!Port_DebugVerbose) return;
     static const char* sLastName = "";
     static unsigned sLastActive = 0xFFFFu;
     static unsigned sLastNTL = 0xFFFFu;
@@ -855,6 +866,7 @@ void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad
  * This logger lets us see exactly which listIndex each one lands in. */
 void Port_LogListOp(const char* op, void* ent, unsigned kind, unsigned id,
                     unsigned listIdx, void* listAddr) {
+    if (!Port_DebugVerbose) return;
     fprintf(stderr,
             "[list-%s] ent=%p kind=%u id=0x%X listIdx=%u listAddr=%p\n",
             op, ent, kind, id, listIdx, listAddr);
@@ -920,6 +932,7 @@ void Port_LogDisplayFrame(void) {
  * exit-fade actually flips active=1 with the right type, and whether
  * progress drains back to 0 (visible) or sustains at 0x100 (black). */
 void Port_LogFadeFrame(void) {
+    if (!Port_DebugVerbose) return;
     static u8 lastActive = 0xFF;
     static u16 lastType = 0xFFFF;
     static u16 lastProgress = 0xFFFF;
@@ -950,6 +963,7 @@ void Port_LogFadeFrame(void) {
 }
 
 void Port_DumpOrchStack(const char* tag, void* ent) {
+    if (!Port_DebugVerbose) return;
 #if PORT_HAVE_EXECINFO
     void* bt[24];
     int n = backtrace(bt, 24);
@@ -966,6 +980,7 @@ void Port_DumpOrchStack(const char* tag, void* ent) {
 }
 
 void Port_TrackOrch(Entity* ent) {
+    if (!Port_DebugVerbose) return;
     int i;
     /* Find existing slot or first empty */
     for (i = 0; i < 4; i++) {
@@ -1077,6 +1092,7 @@ void Port_TakeoverWatchdog(void) {
 }
 
 void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
+    if (!Port_DebugVerbose) return;
     int i;
     sOrchTickCount++;
     Port_TakeoverWatchdog();
@@ -1124,6 +1140,7 @@ void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
 }
 
 void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t) {
+    if (!Port_DebugVerbose) return;
     /* Dedupe WAIT/WAIT&CLR events (they fire every frame the wait holds) but
      * NEVER dedupe WAIT-PASS / SET / CLR — those are state transitions we
      * always want to see. */
