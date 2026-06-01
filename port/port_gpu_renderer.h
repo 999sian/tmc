@@ -61,6 +61,11 @@ bool Port_GPU_PaintBootSplash(void);
  * to Port_GPU_PresentFrame instead of the SDL_Renderer path. */
 bool Port_GPU_IsActive(void);
 
+/* True when the active GPU shader format can load runtime .glslp
+ * presets. The current .glslp compiler emits SPIR-V, so Metal-backed
+ * macOS GPU builds use stock filters but disable preset loading. */
+bool Port_GPU_SupportsGlslpRuntime(void);
+
 /* Available GPU-side shader filters. Maps loosely onto port_filter.c's
  * PortFilterType enum (Stage 3 ports a subset to real GLSL passes; the
  * rest still run on the SDL_Renderer build's CPU path). */
