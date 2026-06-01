@@ -128,6 +128,14 @@ static void Port_UpdateInput(void) {
         Port_ReproLitArea_Tick(sFrameNum);
     }
 
+    /* Four Sword Sanctuary clone/button crash repro (followup to #130).
+     * Set TMC_REPRO_CLONEBUTTON=1 to warp into the sanctuary and exercise
+     * sub_08081FF8 with a NULL-hitbox clone in gPlayerClones[]. */
+    {
+        extern void Port_ReproCloneButton_Tick(unsigned int frame);
+        Port_ReproCloneButton_Tick(sFrameNum);
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
