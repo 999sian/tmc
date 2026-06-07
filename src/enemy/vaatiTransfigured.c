@@ -44,6 +44,21 @@ typedef struct {
     /*0x86*/ u8 unk_86;
     /*0x87*/ u8 unk_87;
 } VaatiTransfiguredEntity;
+#ifdef PC_PORT
+static Entity* VaatiTransfigured_GetLiveParent(VaatiTransfiguredEntity* this) {
+    /* #151 follow-up: these child parts assume parent stays valid on GBA; once
+     * the body dies, PC must stop before the next parent deref instead of
+     * walking a stale entity pointer. */
+    extern int Port_IsValidEntityAddr(const void*);
+    Entity* parent = super->parent;
+    if (!Port_IsValidEntityAddr(parent) || parent->next == NULL || parent->health == 0) {
+        this->unk_6d |= 2;
+        DeleteThisEntity();
+        return NULL;
+    }
+    return parent;
+}
+#endif
 
 extern void Knockback1(Entity*);
 
@@ -199,12 +214,21 @@ void VaatiTransfiguredType0Action0(VaatiTransfiguredEntity* this) {
         sub_080408EC(this);
         for (i = 0; i < 8; ++i) {
             enemy = CreateEnemy(VAATI_TRANSFIGURED_EYE, 0);
-            enemy->parent = super;
-            enemy->type2 = i;
-            if ((this->unk_75 >> (i)&1) != 0) {
-                enemy->timer = 1;
-            } else {
-                enemy->timer = 0;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool
+             * returns NULL and the writes below hit the read-only BIOS region
+             * at address 0 harmlessly on GBA but SIGSEGV at address 0 on PC.
+             * Guard the writes. */
+            if (enemy != NULL)
+#endif
+            {
+                enemy->parent = super;
+                enemy->type2 = i;
+                if ((this->unk_75 >> (i)&1) != 0) {
+                    enemy->timer = 1;
+                } else {
+                    enemy->timer = 0;
+                }
             }
         }
         InitAnimationForceUpdate(super, 0);
@@ -631,11 +655,18 @@ void VaatiTransfiguredType1Action0(VaatiTransfiguredEntity* this) {
 void VaatiTransfiguredType1Action1(VaatiTransfiguredEntity* this) {
     Entity* parent;
 
+#ifdef PC_PORT
+    parent = VaatiTransfigured_GetLiveParent(this);
+    if (parent == NULL) {
+        return;
+    }
+#else
     parent = super->parent;
     if (parent->health == 0) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
+#endif
     super->x.HALF.HI = ((VaatiTransfiguredEntity*)parent)->unk_7a;
     super->y.HALF.HI = ((VaatiTransfiguredEntity*)parent)->unk_7e;
     if (((VaatiTransfiguredEntity*)parent)->unk_74 == 0) {
@@ -683,11 +714,19 @@ void VaatiTransfiguredType2Action1(VaatiTransfiguredEntity* this) {
 
     const xy* t;
 
+#ifdef PC_PORT
+    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    if (parent == NULL) {
+        return;
+    }
+#else
     if (super->parent->health == 0) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    CopyPosition(super->parent, super);
+    Entity* parent = super->parent;
+#endif
+    CopyPosition(parent, super);
     switch (super->type2) {
         case 2:
             uVar3 = GetFacingDirection(super, &gPlayerEntity.base);
@@ -736,12 +775,20 @@ void VaatiTransfiguredType2Action1(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType2Action2(VaatiTransfiguredEntity* this) {
+#ifdef PC_PORT
+    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    if (parent == NULL) {
+        return;
+    }
+#else
     if (super->parent->health == 0) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    CopyPosition(super->parent, super);
-    if (super->parent->frameIndex == 2) {
+    Entity* parent = super->parent;
+#endif
+    CopyPosition(parent, super);
+    if (parent->frameIndex == 2) {
         super->action = 1;
         super->spriteSettings.draw = 1;
     }
@@ -754,11 +801,19 @@ void VaatiTransfiguredType3Action0(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType3Action1(VaatiTransfiguredEntity* this) {
+#ifdef PC_PORT
+    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    if (parent == NULL) {
+        return;
+    }
+#else
     if (super->parent->health == 0) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    CopyPosition(super->parent, super);
+    Entity* parent = super->parent;
+#endif
+    CopyPosition(parent, super);
     UpdateAnimationSingleFrame(super);
 }
 
@@ -772,11 +827,19 @@ void VaatiTransfiguredType4Action0(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType4Action1(VaatiTransfiguredEntity* this) {
+#ifdef PC_PORT
+    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    if (parent == NULL) {
+        return;
+    }
+#else
     if (super->parent->health == 0) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    if (super->parent->action != 5) {
+    Entity* parent = super->parent;
+#endif
+    if (parent->action != 5) {
         if (this->unk_80 != 0) {
             this->unk_80 = 0;
             super->spriteSettings.draw = 0;
@@ -791,7 +854,7 @@ void VaatiTransfiguredType4Action1(VaatiTransfiguredEntity* this) {
             SoundReq(SFX_149);
         }
     }
-    CopyPosition(super->parent, super);
+    CopyPosition(parent, super);
     GetNextFrame(super);
 }
 
@@ -809,13 +872,21 @@ void VaatiTransfiguredType5Action0(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType5Action1(VaatiTransfiguredEntity* this) {
+#ifdef PC_PORT
+    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    if (parent == NULL) {
+        return;
+    }
+#else
     if (super->parent->health == 0) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
+    Entity* parent = super->parent;
+#endif
     switch (this->unk_80) {
         case 0:
-            if (super->parent->action != 6) {
+            if (parent->action != 6) {
                 return;
             }
             this->unk_80++;
@@ -823,7 +894,7 @@ void VaatiTransfiguredType5Action1(VaatiTransfiguredEntity* this) {
             InitializeAnimation(super, 1);
             break;
         case 1:
-            if (super->parent->action != 6) {
+            if (parent->action != 6) {
                 this->unk_80 = 0;
                 super->spriteSettings.draw = 0;
             } else {
@@ -841,16 +912,35 @@ void VaatiTransfiguredType5Action1(VaatiTransfiguredEntity* this) {
             }
             break;
     }
-    CopyPosition(super->parent, super);
+    CopyPosition(parent, super);
 }
 
 void VaatiTransfiguredType5Action2(VaatiTransfiguredEntity* this) {
+#ifdef PC_PORT
+    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    if (parent == NULL) {
+        return;
+    }
+#else
     if (super->parent->health == 0) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
+    Entity* parent = super->parent;
+#endif
     if (this->unk_80 == 0) {
+#ifdef PC_PORT
+        extern int Port_IsValidEntityAddr(const void*);
+        Entity* body = parent->parent;
+        if (!Port_IsValidEntityAddr(body) || body->next == NULL) {
+            this->unk_6d |= 2;
+            DeleteThisEntity();
+            return;
+        }
+        if (body->action != 6) {
+#else
         if (super->parent->parent->action != 6) {
+#endif
             if ((super->frame & ANIM_DONE) != 0) {
                 this->unk_80++;
                 InitializeAnimation(super, 3);
@@ -859,9 +949,12 @@ void VaatiTransfiguredType5Action2(VaatiTransfiguredEntity* this) {
     } else {
         if ((super->frame & ANIM_DONE) != 0) {
             DeleteThisEntity();
+#ifdef PC_PORT
+            return;
+#endif
         }
     }
-    CopyPosition(super->parent, super);
+    CopyPosition(parent, super);
     GetNextFrame(super);
 }
 
@@ -869,11 +962,19 @@ void sub_08040648(VaatiTransfiguredEntity* this, u32 type, u32 type2) {
     Entity* enemy;
 
     enemy = CreateEnemy(VAATI_TRANSFIGURED, type);
-    enemy->type2 = type2;
-    enemy->parent = super;
-    CopyPosition(super, enemy);
-    if ((type == 2) && (type2 == 0)) {
-        super->child = enemy;
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (enemy != NULL)
+#endif
+    {
+        enemy->type2 = type2;
+        enemy->parent = super;
+        CopyPosition(super, enemy);
+        if ((type == 2) && (type2 == 0)) {
+            super->child = enemy;
+        }
     }
 }
 

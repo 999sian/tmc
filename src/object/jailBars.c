@@ -61,6 +61,20 @@ void JailBars_Action1(JailBarsEntity* this) {
 
 void JailBars_Action2(JailBarsEntity* this) {
     GetNextFrame(super);
+#ifdef PC_PORT
+    /* #149: the action-1 (closed) Init path never InitializeAnimation()s, so
+     * super->animPtr is NULL here. The GBA UpdateAnimationVariableFrames had no
+     * NULL-animPtr guard and advanced off the read-protected BIOS region, which
+     * set ANIM_DONE and let the door reach action 3 (loads the open frame). The
+     * PC animation system guards that NULL deref (port_animation.c), making
+     * GetNextFrame a no-op — so the door stalls in action 2 forever: collision
+     * opened (SetJailBarTiles in action 1) but the texture never did, and only
+     * a room reload (which re-runs the open Init path) fixed it. Mirror the GBA
+     * advance: with no animation to tick, the transition completes immediately. */
+    if (super->animPtr == NULL) {
+        super->frame |= ANIM_DONE;
+    }
+#endif
     if (super->frame & ANIM_DONE) {
         super->action = 3;
         InitializeAnimation(super, 1);

@@ -224,30 +224,78 @@ void sub_0803A274(MazaalBraceletEntity* this) {
     if (gEntCount < 0x45) {
         if (super->type == 0) {
             entity = CreateEnemy(MAZAAL_HAND, 0);
-            entity->parent = super;
-            super->child = entity;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool
+             * returns NULL and the writes below hit the read-only BIOS region
+             * at address 0 harmlessly on GBA but SIGSEGV at address 0 on PC. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                super->child = entity;
+            }
 
             entity = CreateEnemy(MAZAAL_BRACELET, 2);
-            entity->parent = super;
-            this->unk_74.entity = (MazaalBraceletEntity*)entity;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool
+             * returns NULL and the writes below hit the read-only BIOS region
+             * at address 0 harmlessly on GBA but SIGSEGV at address 0 on PC. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                this->unk_74.entity = (MazaalBraceletEntity*)entity;
+            }
 
             entity = CreateObject(MAZAAL_OBJECT, 1, 0);
-            entity->parent = super;
-            entity->child = super->child;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool
+             * returns NULL and the writes below hit the read-only BIOS region
+             * at address 0 harmlessly on GBA but SIGSEGV at address 0 on PC. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                entity->child = super->child;
+            }
 
             PositionRelative(super->parent, super, Q_16_16(16.0), Q_16_16(32.0));
         } else {
             entity = CreateEnemy(MAZAAL_HAND, 1);
-            entity->parent = super;
-            super->child = entity;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool
+             * returns NULL and the writes below hit the read-only BIOS region
+             * at address 0 harmlessly on GBA but SIGSEGV at address 0 on PC. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                super->child = entity;
+            }
 
             entity = CreateEnemy(MAZAAL_BRACELET, 3);
-            entity->parent = super;
-            this->unk_74.entity = (MazaalBraceletEntity*)entity;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool
+             * returns NULL and the writes below hit the read-only BIOS region
+             * at address 0 harmlessly on GBA but SIGSEGV at address 0 on PC. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                this->unk_74.entity = (MazaalBraceletEntity*)entity;
+            }
 
             entity = CreateObject(MAZAAL_OBJECT, 2, 0);
-            entity->parent = super;
-            entity->child = super->child;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool
+             * returns NULL and the writes below hit the read-only BIOS region
+             * at address 0 harmlessly on GBA but SIGSEGV at address 0 on PC. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                entity->child = super->child;
+            }
 
             super->spriteSettings.flipX = 1;
             PositionRelative(super->parent, super, Q_16_16(-16.0), Q_16_16(32.0));

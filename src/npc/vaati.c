@@ -20,8 +20,20 @@ typedef struct {
 } VaatiEntity;
 
 extern void sub_08095CB0(Entity*);
+#ifdef PC_PORT
+/* #151: these actually take (Entity*, ScriptExecutionContext*) — see
+ * repeatedSoundManager.c. The GBA decomp declared + called them with only
+ * (Entity*); ARM regalloc happened to leave `context` (this->context, written
+ * on the line just above each call) in r1, so the 2nd arg arrived implicitly.
+ * On x86-64 the 2nd-arg register (rsi) holds garbage, so the callee reads
+ * context->intVariable off a bogus pointer (0x36) → SIGSEGV at 0x3e. Declare
+ * them correctly and pass the context explicitly below. */
+extern void CreateRepeatedSoundManager(Entity*, ScriptExecutionContext*);
+extern void DeleteRepeatedSoundManager(Entity*, ScriptExecutionContext*);
+#else
 extern void CreateRepeatedSoundManager(Entity*);
 extern void DeleteRepeatedSoundManager(Entity*);
+#endif
 extern void CreateVaatiApparateManager(Entity*, u32);
 
 void VaatiAction0(VaatiEntity*);
@@ -64,12 +76,20 @@ void VaatiAction1(VaatiEntity* this) {
             case 3:
                 context = this->context;
                 context->intVariable = 4;
+#ifdef PC_PORT
+                CreateRepeatedSoundManager(super, context); /* #151: pass context (see extern) */
+#else
                 CreateRepeatedSoundManager(super);
+#endif
                 break;
             case 4:
                 context = this->context;
                 context->intVariable = 4;
+#ifdef PC_PORT
+                DeleteRepeatedSoundManager(super, context); /* #151: pass context (see extern) */
+#else
                 DeleteRepeatedSoundManager(super);
+#endif
                 EnqueueSFX(SFX_21D);
                 break;
         }

@@ -200,12 +200,11 @@ static int Snapshot_Restore(const Slot* s) {
      * (not gEntities) are NOT relocated by FixupEntityPointers and are left
      * pointing into the previous process's address space. Re-establish the two
      * that are dereferenced unguarded every frame after a load:
-     *   - gRoomControls.camera_target — in normal play this is &gPlayerEntity (a
-     *     fixed global outside gEntities). After fixup a valid camera_target is
-     *     NULL, an entity now inside the relocated gEntities range, or this
-     *     stale player pointer; so anything non-NULL outside gEntities is the
-     *     stale player target — re-point it at the live player (Scroll1 derefs
-     *     it every frame, the scroll.c:103 crash).
+     *   - gRoomControls.camera_target — room restore paths deref it while
+     *     rebuilding scroll. After fixup a usable target is an entity now inside
+     *     the relocated gEntities range; NULL and non-NULL pointers outside
+     *     gEntities both leave the restore path without a safe target, so point
+     *     them at the live player.
      *   - gPlayerEntity.base.hitbox — a stale .rodata pointer; the player tile-
      *     probe / interactable scan deref it without the IsColliding guard.
      * In-process F5/F6 keeps the same base (FixupEntityPointers no-ops), so
@@ -215,7 +214,7 @@ static int Snapshot_Restore(const Slot* s) {
         uintptr_t ct = (uintptr_t)gRoomControls.camera_target;
         uintptr_t lo = (uintptr_t)gEntities;
         uintptr_t hi = lo + sizeof(gEntities);
-        if (ct != 0 && (ct < lo || ct >= hi)) {
+        if (ct == 0 || ct < lo || ct >= hi) {
             gRoomControls.camera_target = (Entity*)&gPlayerEntity;
         }
         Port_RestorePlayerHitbox();
