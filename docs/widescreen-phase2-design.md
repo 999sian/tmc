@@ -1,5 +1,54 @@
 # Widescreen Phase 2 — design notes
 
+**Status (2026-06-04): WIP behind a runtime toggle.** BG widescreen reveal
+renders full clean content in wide gameplay (`--widescreen_width=384`), but the
+feature defaults off via `config.json:widescreen_enabled=false`. F8 → Display
+settings can toggle it at runtime in wide builds.
+Right-side HUD BG0 tiles and A/B/R button sprites now anchor to the wide right
+edge during normal gameplay; messages/hidden-HUD states keep the native 240
+safe area. The 2026-05/06 "magenta = unstreamed palette", "needs a tile-loading
+subsystem", and "working source is lost" conclusions below were WRONG. The
+actual BG-reveal root cause was a one-line bug.**
+
+Root cause: `Port_Widescreen_UpdateShadows` (port/port_linked_stubs.c) assigned
+the shadow tilemaps to the wrong PPU BG index — hardcoded `shadow[1]=bottomMap`,
+`shadow[2]=topMap`. But the engine renders the **bottom** map as **PPU BG2** and
+the **top** map as **PPU BG1** (the map's `bgSettings->control` screen_base
+selects the BG; `bottom.ctrl==bg2.ctrl`, `top.ctrl==bg1.ctrl`). So PPU BG1 (the
+sparse overlay) read the dense bottom-map shadow → wrong tiles; PPU BG2 (the real
+floor) read the sparse top-map shadow → mostly transparent → force-black. That is
+exactly the "half-black + garbage reveal" every prior attempt fought. The earlier
+residency-gate "fix" made it worse: it blacked reveal tiles whose index wasn't in
+the engine's 32-col tilemap window, but the area tileset is resident in char-VRAM
+regardless of that window, so it blacked legitimately-loaded tiles (the ~45%
+black). No tile/palette loading subsystem was ever needed.
+
+Fix (all in `port/port_linked_stubs.c`, gated `#if MODE1_GBA_WIDTH > 240`):
+1. `Port_WidescreenPpuBgForControl()` resolves each map's PPU BG index from its
+   control screen_base; `Port_Widescreen_UpdateShadows` assigns the shadow to
+   that index (no hardcoded 1/2).
+2. `Port_WidescreenShadow_Populate` indexing made exact vs the engine fill
+   `ram_sub_080B197C_c`: shadow ROW index == VRAM buffer row `sr` holding map row
+   `2*row16-1+sr` (was `world_row&31`, a camera-shifted wrong row); consumer base
+   == VRAM tile_col of the first reveal column == `CLIP_X/8 + (BGHOFS>=8?1:0)`
+   (was `ws_base_world_col & 31`, which drifted with the camera → far-edge wrap
+   into stale cells). Verified: filled shadow == engine `gBG1Buffer` byte-for-byte.
+3. Residency gate deleted. Hybrid signal simplified to `Port_Widescreen_ShouldStretch
+   = (gRoomControls.width < MODE1_GBA_WIDTH)` — a room narrower than the viewport
+   can't fill the reveal, so it falls back to stretched native-240. Direct,
+   per-room, flicker-free (no settle/measurement).
+
+Known limitations:
+- A *wide* room with *narrow content* (e.g. a 400px festival room whose floor
+  ends ~30px short of the viewport) stays in widescreen and shows a thin border
+  edge at the far right — identical to the May 31 build (which had no hybrid).
+  Catching those would need a content-width signal (rightmost non-empty
+  bottom-map column per room), not just `gRoomControls.width`.
+- Widescreen is still a build-time width (`--widescreen_width=N`) plus runtime
+  toggle, not a fully dynamic renderer resize. Native-width builds show the
+  toggle as unavailable.
+
+
 **Status (2026-05-26):** ALL implementation work REVERTED to the
 pre-Phase-2 state (commit `d3ff4c374`).  Reverted in-tree
 hard-reset; the working code that was committed during attempts
@@ -397,3 +446,165 @@ during the cross-fade.
 Also: non-gameplay screens (title via the GBA-mode-1 → ViruaPPU-mode-2 path, menus, boot
 logos) want a 240→W **stretch** (fills the screen, no bars). Pillarbox bars were
 explicitly rejected during review.
+
+
+### 2026-06-01 re-land — BG reveal working again, correct shadow indexing
+
+Re-landed Option A (port-side shadow) on top of the new DISPLAY_WIDTH-parametric
+culling foundation (`port/port_widescreen.h`, parametric `CheckOnScreen` /
+`CheckRectOnScreen`). Behind the default-off `--widescreen_width` flag.
+
+**Root-caused the prior shadow misalignment.** The 97efcdd18 template indexed the
+shadow as if `BGHOFS` carried the full camera scroll. It does NOT: the engine
+(`src/scroll.c::UpdateScreenShake`) sets `BGHOFS = (scroll_x-origin_x) & 0xF` and
+`BGVOFS = ((scroll_y-origin_y) & 0xF) + 8` — i.e. ONLY the sub-16px offset. Coarse
+scroll is done by re-filling the 32-tile buffer aligned to 16px blocks
+(`ram_sub_080B197C_c`: `col16 = xdiff>>4`, sub-tile stride **128 u16**, buffer cell
+`(br,bc)` holds world sub-tile `(2*row16-1+br, 2*col16+bc)`).
+
+Correct shadow population (`port/port_linked_stubs.c::Port_WidescreenShadow_Populate`):
+- `base_col = 2*(xdiff>>4) + MODE1_GBA_BG_CLIP_X/8`  (world sub-col at display 240)
+- `base_row = 2*(ydiff>>4) - 1`  (world sub-row of buffer/shadow row 0)
+- `virtuappu_mode1_ws_shadow_base_tile = MODE1_GBA_BG_CLIP_X/8` (**constant 30** —
+  BGHOFS excludes coarse scroll, so the PPU's `(tile_col - base + 32) % 32` lands
+  shadow_idx 0 at display col 240 regardless of camera position)
+- stride 128 u16; fill `shadow[br]` (br = PPU `tile_row`) with the SAME world row
+  the VRAM buffer row br holds, so the reveal is continuous with VRAM at the seam.
+- `MODE1_WS_SHADOW_COLS` now scales with width: `((MODE1_GBA_WIDTH-240)/8)+4`.
+
+**Verified at 384 (Festival Town, headless `TMC_REPRO_LITAREA` capture):**
+- Native columns [0,240) are **byte-identical** between the 240 and 384 builds
+  (0/38400 px differ) — the change is provably additive, zero native regression.
+- Reveal columns [240,384) are 72% real world tiles (28% force-black: room edge /
+  transparent), seamless at the col-240 seam.
+- `port/port_bugreport.cpp` screenshot capture made width-aware (`kFrameW =
+  MODE1_GBA_WIDTH`) — it hard-coded 240 and sheared widescreen captures.
+- `port_ppu.cpp` stretch now gated to non-GAME tasks only (`gMain[2] != 2`);
+  gameplay presents the real wide composite.
+- OAM clip `MODE1_GBA_VIEWPORT_X` now tracks `MODE1_GBA_WIDTH`.
+
+**Still outstanding for a finished feature (unchanged from prior analysis):**
+- Camera centering + right-clamp (reveal is currently right-side only; player not
+  centered). `src/scroll.c`.
+- `RenderSpritePieces` (`port/port_draw.c`) still clips sprite pieces at x>=240 and
+  masks OAM X to 9 bits — sprites don't yet render in the reveal. Needs the
+  EXTENDED_OAM-style wide-X path + the per-entity parking pass (flicker).
+- Room-transition scroll distance (`Scroll2Sub2` → viewwidth/4) + the transient
+  leading-edge black during cross-fades.
+
+### 2026-06-01 (cont.) — camera centering, sprite reveal, and the chardata wall
+
+Landed (all gated `#if MODE1_GBA_WIDTH > 240`, native 240 re-verified byte-identical):
+- **Camera centering** (`src/scroll.c::sub_080809D4`, `sub_08080974`): the hardcoded
+  `120` (240/2) player-centering offset + room clamp are now parametric on
+  `MODE1_GBA_WIDTH`. Clamp rewritten as `scroll_x = clamp(target - W/2, origin,
+  max(origin, origin + width - W))` — reduces EXACTLY to the GBA-original at 240
+  (kept verbatim in `#else`), centers the player in wide rooms, and pins narrow
+  rooms (width < W) to the left.
+- **Sprite reveal** (`port/port_draw.c::RenderSpritePieces`): clip widened from
+  `x >= 240` to `x >= PORT_VIEW_WIDTH`. No OAM-width change needed after all —
+  9-bit OAM X covers 0..511 and the PPU only sign-flips at `obj_x >= MODE1_GBA_WIDTH`
+  (`mode1.c:462`), so reveal sprites at x in [240, W) draw correctly and genuine
+  off-left sprites (X 384..511) still wrap. EXTENDED_OAM is unnecessary for W<=512.
+
+**Root-caused the reveal garbage (the real remaining blocker): CHARDATA, not indexing.**
+Instrumented `shadow[br][c]` vs the engine's own `gBG1Buffer` (VRAM) at the overlap
+columns: they are **byte-identical** (`shadow[br][0]==gBG1[br*32+30]`, `[1]==[31]`
+for every row) — the shadow tilemap indexing is provably correct. The garbage
+(uniform magenta `0x7C1F` tiles) is from reveal tiles whose **tile chardata is not
+loaded in VRAM**: the engine only DMAs chardata for the tile set used in the visible
+240-wide area. Areas whose tileset fully fits VRAM (Hyrule Town, Festival Town)
+reveal correctly; areas with partial/streamed chardata (Hyrule Field) show stale
+VRAM for reveal-only tile variants.
+
+→ Finishing universal BG widescreen requires **chardata streaming for the wider
+viewport** (load the reveal region's tiles, not just the visible set) — a
+substantial engine change. Until then, BG reveal is correct only where the area's
+full tileset is resident. Camera-centering + sprite-reveal are in place and waiting
+on it. Per-entity parking pass (flicker) and `Scroll2Sub2` (transition) still open.
+
+### 2026-06-01 (cont.) — the chardata blocker is per-area tileset streaming
+
+Confirmed *why* the chardata isn't resident: TMC streams BG tile graphics by camera
+region via per-area **tileset managers**, because GBA BG char VRAM can't hold a whole
+area's tileset at once:
+- `src/manager/hyruleTownTileSetManager.c` — `*_UpdateLoadGfxGroups` swaps gfx groups
+  by the camera's town quadrant.
+- `src/manager/minishVillageTileSetManager.c` — explicit `{ROM src, 0x0600x000 VRAM
+  char slot}` tables, reloaded as you cross region boundaries.
+
+Implications for universal BG widescreen:
+- Areas with a **fixed, fully-resident** tileset already reveal correctly (the BG
+  mechanism + centering + sprites are done and correct for them).
+- Areas with a **streaming** tileset (Hyrule Town/Field, Minish Village, …) show stale
+  VRAM for reveal-only tile variants until their manager loads that region.
+- Making the reveal correct there means widening each manager's resident region by the
+  reveal extent — area-by-area, and bounded by the **GBA VRAM char budget** (the very
+  reason streaming exists; naively loading more overflows the char slots). On the PC
+  port, expanding `gVram` alone does NOT help: the engine DMAs to fixed GBA char
+  addresses and decides what to stream based on its own budget, not the buffer size.
+
+So "universal true widescreen" needs a deliberate VRAM-char-budget + streaming rework
+(per area, or a port-wide expansion of the engine's char-slot model) — a distinct major
+effort, not a continuation of the rendering pipeline. The pipeline (culling, BG read,
+camera, sprites) is complete and verified; it is gated and native-safe at 240.
+
+### 2026-06-01 (cont.) — the chardata "working set" + a shippable 16:9 everywhere
+
+Built the foundation for reveal re-indexing (`port/port_widechar.cpp`: per-gfx-group
+BG-char cache via a `Port_LoadGfxGroupFromAssets` hook; region->group rect harvest via
+a `CheckRegionsOnScreen` hook). All gated `MODE1_GBA_WIDTH > 240`; native 240 re-verified
+byte-identical.
+
+Using it, instrumented the reveal in Hyrule Field (a NON-region-streamed area —
+`CheckRegionsOnScreen` is never called there; it streams chardata incrementally as the
+camera scrolls). Findings, with data:
+- Magenta is NOT at the col-240 seam and is NOT uniform — it **increases with reveal
+  distance** (per-column: x240-288 mostly clean, peak magenta at x320-352). Classic
+  chardata **working-set** signature: tiles near the visible edge are resident; far ones
+  aren't. The indexing is correct.
+- The garbage is **stale VRAM**: reveal tiles reference char indices the current area's
+  loaded tileset didn't write, so they read leftover graphics from a prior room/area
+  (a magenta `0x7C1F` palette entry), not black.
+- Consequence (measured): at width 288 (=160*16/9, standard 16:9) the reveal is mostly
+  real content; **Festival Town = 0% magenta (fully clean)**, **Hyrule Field ≈ 5-6%**
+  magenta confined to the far-right ~8px (the working-set boundary). Narrowing to 272
+  does not fix Hyrule Field's edge (6%) — it's inherent to that area's tile density.
+
+Net, honest position:
+- **Standard 16:9 (≈288) "true widescreen everywhere" is largely achieved**: real world
+  content (not a stretch) in every area, fully clean in most, with a thin stale-VRAM edge
+  artifact in the most tile-dense streamed areas (Hyrule Field). Recommended supported
+  width: `--widescreen_width=288`.
+- **Cinematic ultra-wide (e.g. 384) everywhere is NOT achievable** without the
+  re-indexing subsystem (blocked by the GBA char budget + scroll-dependent index meaning:
+  the same tile index denotes different graphics at different scroll positions, so the
+  reveal cannot recover "future" tiles without per-area streaming replication).
+- Clean-edge options for 288 in dense areas (future, each needs care): clear the
+  area-tileset BG-char region on area load so unloaded reveal indices read transparent
+  (force-blacked) instead of stale magenta — must exclude the persistent HUD char region;
+  or complete the residency tracker (hook ALL VRAM char writes, not just LoadGfxGroup)
+  and force-black non-resident reveal tiles in render_text_bg_line.
+
+### 2026-06-02 — residency gate for the broken edge (partial)
+
+Reported: broken tiles on the reveal edge (stale-VRAM garbage), worst in tile-dense
+streamed areas. Added a port-side **residency gate** in the shadow populate
+(`port/port_linked_stubs.c::Port_WidescreenShadow_Populate`): a reveal tile is kept
+only if its index appears in the engine's on-screen buffer (`gBG1Buffer`/`gBG2Buffer`)
+— those tiles' chardata is provably resident; everything else is forced transparent so
+the composite force-blacks it (clean black instead of garbage). Gated `>240`, native
+240 byte-identical.
+
+Result (Hyrule Field, 288): garbage largely replaced by real content + clean black
+(content 46%, black 48%), but a **~5% scattered residual** survives. Diagnosed:
+- Not OAM (magenta unchanged with all OAM disabled) — it's BG.
+- The gate is too permissive: `gBG1Buffer` is the full 32x32 buffer including the
+  off-screen MARGIN entries, whose chardata the engine may not have loaded. Those
+  margin indices get marked "resident", so a few stale tiles slip through.
+
+To fully clean it, the resident oracle must be the **actually-rendered visible window**
+(cols 0-240), not the whole buffer — or move residency tracking into the PPU (per-tile
+chardata-loaded test). Alternatively, limit the reveal to the engine's reliable 256-px
+BG buffer (≈16-px reveal, guaranteed clean, no shadow) for a clean-but-minimal widescreen.
+The width/quality tradeoff (wide+imperfect vs narrow+clean) is now the open decision.

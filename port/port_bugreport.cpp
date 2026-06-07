@@ -11,6 +11,7 @@
 
 #include "port_bugreport.h"
 #include "port_version.h"
+#include "port_widescreen.h"
 
 #include <SDL3/SDL.h>
 #include <png.h>
@@ -66,7 +67,10 @@ PortBugReportState Port_BugReport_GetGameState(void);
 
 namespace {
 
-constexpr int kFrameW = 240;
+/* Framebuffer stride tracks the configured widescreen width (xmake injects
+ * MODE1_GBA_WIDTH for the whole target; 240 = native). Reading at the wrong
+ * stride shears the capture, so this MUST match virtuappu_frame_buffer. */
+constexpr int kFrameW = MODE1_GBA_WIDTH;
 constexpr int kFrameH = 160;
 
 std::string TimestampString() {
@@ -128,8 +132,9 @@ const char* GameRegionString() {
 }
 
 bool WriteScreenshotPNG(const std::filesystem::path& path) {
-    /* virtuappu_frame_buffer is kFrameW*kFrameH ABGR8888 (little-endian: B,G,R,A
-     * in memory). Convert to packed RGB8 row-by-row and hand to libpng. */
+    /* virtuappu_frame_buffer is stride kFrameW. Runtime-disabled widescreen
+     * captures only the native 240 columns so F9/repro output matches what
+     * the presenter shows; active true-wide gameplay captures the full frame. */
     FILE* fp = std::fopen(path.string().c_str(), "wb");
     if (!fp) {
         std::fprintf(stderr, "[BUG] PNG fopen failed: %s\n", path.string().c_str());
@@ -154,8 +159,10 @@ bool WriteScreenshotPNG(const std::filesystem::path& path) {
         return false;
     }
 
+    const int outW = Port_Widescreen_IsActive() ? kFrameW : 240;
+
     png_init_io(png, fp);
-    png_set_IHDR(png, info, kFrameW, kFrameH, 8, PNG_COLOR_TYPE_RGB,
+    png_set_IHDR(png, info, outW, kFrameH, 8, PNG_COLOR_TYPE_RGB,
                  PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
                  PNG_FILTER_TYPE_DEFAULT);
     png_write_info(png, info);
@@ -163,7 +170,7 @@ bool WriteScreenshotPNG(const std::filesystem::path& path) {
     uint8_t row[kFrameW * 3];
     for (int y = 0; y < kFrameH; y++) {
         const uint32_t* src = &virtuappu_frame_buffer[y * kFrameW];
-        for (int x = 0; x < kFrameW; x++) {
+        for (int x = 0; x < outW; x++) {
             uint32_t p = src[x];
             row[x * 3 + 0] = static_cast<uint8_t>(p & 0xFF);          /* R (ABGR LE: byte0=R) */
             row[x * 3 + 1] = static_cast<uint8_t>((p >> 8) & 0xFF);   /* G */

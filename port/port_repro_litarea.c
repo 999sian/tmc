@@ -89,8 +89,16 @@ void Port_ReproLitArea_Tick(unsigned int frame) {
         fprintf(stderr, "[litarea] frame %u: warp -> %d\n", frame, rc);
         if (rc == 1) {
             warp_done = 1;
-            capture_frame = (int)(frame + 300); /* let the room + litArea sprites settle */
+            capture_frame = (int)(frame + (getenv("TMC_REPRO_WALK") ? 700 : 300)); /* settle (or walk + stream) */
         }
+    }
+
+    /* TMC_REPRO_WALK: walk RIGHT during the settle so the camera scrolls and
+     * the engine streams in the reveal region's tiles/palettes — captures the
+     * PLAYED state, not the static post-warp state (which is pre-stream). */
+    if (warp_done && getenv("TMC_REPRO_WALK") && capture_frame && (int)frame < capture_frame - 60) {
+        gIoMem[KEYINPUT_REG] = 0xEF;     /* RIGHT pressed (KEYINPUT: 0 = pressed) */
+        gIoMem[KEYINPUT_REG + 1] = 0x03;
     }
 
     if (warp_done && capture_frame && (int)frame >= capture_frame) {

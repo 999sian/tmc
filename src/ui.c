@@ -14,6 +14,7 @@
 #include "structures.h"
 #ifdef PC_PORT
 #include "port_rom.h"
+#include "port_widescreen.h"
 #endif
 
 extern void sub_0805ECEC(u32, u32, u32, u32);
@@ -58,6 +59,18 @@ UIElement* FindUIElement(u32);
 void sub_0801CAD0(UIElement*);
 void sub_0801CAB8(UIElement*, Frame*);
 void EraseChargeBar(void);
+
+static s16 HudButtonTargetX(u32 type) {
+    s16 x = (s16)gHUD.buttonX[type];
+#ifdef PC_PORT
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    if (Port_Widescreen_HudRightAnchor() && x >= 0 && x < 240) {
+        x += MODE1_GBA_WIDTH - 240;
+    }
+#endif
+#endif
+    return x;
+}
 
 void UpdateUIElements(void) {
     u32 index;
@@ -657,7 +670,7 @@ void ButtonUIElement(UIElement* element) {
 }
 
 void ButtonUIElement_Action0(UIElement* element) {
-    element->x = gHUD.buttonX[element->type];
+    element->x = HudButtonTargetX(element->type);
     element->y = gHUD.buttonY[element->type] - 0x20;
     element->action = 1;
     element->unk_0_1 = 1;
@@ -692,7 +705,7 @@ void ButtonUIElement_Action1(UIElement* element) {
         element->y += y_diff;
     }
 
-    x = (short)gHUD.buttonX[element->type];
+    x = HudButtonTargetX(element->type);
     x -= (short)element->x;
     x_diff = (x < 0) ? -x : x;
 
