@@ -26,6 +26,7 @@ void Port_PPU_ToggleFullscreen(void);
 bool Port_PPU_IsFullscreen(void);
 void Port_PPU_CycleWindowScale(int direction);
 unsigned char Port_PPU_WindowScale(void);
+void Port_PPU_ApplyWindowScale(void);
 
 // Toggle nearest-neighbor (sharp pixels) ↔ linear (smooth) upscale filter.
 void Port_PPU_ToggleSmoothing(void);

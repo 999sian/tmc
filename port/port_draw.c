@@ -24,6 +24,8 @@
 #include "structures.h"
 #include "vram.h"
 
+#include "port_widescreen.h"
+
 #include <setjmp.h>
 #include <stdio.h>
 #include <string.h>
@@ -420,7 +422,7 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
         }
 
         x -= (s32)se[0]; /* subtract x anchor */
-        if (x >= 240) {
+        if (x >= Port_Widescreen_EffectiveViewWidth()) {
             continue;
         }
         if (x + (s32)se[2] <= 0) {
@@ -569,7 +571,9 @@ static DeferredDrawList sDeferredList;
 u32 CheckOnScreen(Entity* entity) {
     s32 x = (s32)entity->x.HALF.HI - (s32)gRoomControls.scroll_x;
     x += 0x3F;
-    if ((u32)x >= 0x16E)
+    /* Runtime-gated widescreen: the right edge only widens while the WIP
+     * option is enabled and the current room can fill the wider viewport. */
+    if ((u32)x >= (u32)Port_Widescreen_EffectiveViewWidth() + 0x7E)
         return 0;
 
     s32 y = (s32)entity->y.HALF.HI - (s32)gRoomControls.scroll_y;
