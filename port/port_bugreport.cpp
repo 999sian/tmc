@@ -493,7 +493,12 @@ void WriteBacktraceWindows(const std::filesystem::path& path, CONTEXT* ctx) {
 
     if (ctx) {
         std::fprintf(fp, "Exception context:\n");
+#if defined(_M_ARM64) || defined(__aarch64__)
+        /* Windows ARM64 CONTEXT exposes the program counter as Pc (Rip is x64-only). */
+        std::fprintf(fp, "  PC=0x%llx\n", static_cast<unsigned long long>(ctx->Pc));
+#else
         std::fprintf(fp, "  RIP=0x%llx\n", static_cast<unsigned long long>(ctx->Rip));
+#endif
     }
     for (USHORT i = 0; i < n; i++) {
         DWORD64 addr = reinterpret_cast<DWORD64>(frames[i]);
