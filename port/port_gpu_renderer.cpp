@@ -542,8 +542,10 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
         SDL_WaitForGPUIdle(sDevice);
         if (sSourceTexture)  SDL_ReleaseGPUTexture(sDevice, sSourceTexture);
         if (sTransferBuffer) SDL_ReleaseGPUTransferBuffer(sDevice, sTransferBuffer);
-        sSourceTexture  = nullptr;
-        sTransferBuffer = nullptr;
+        if (sIntermediateTex) SDL_ReleaseGPUTexture(sDevice, sIntermediateTex);
+        sSourceTexture   = nullptr;
+        sTransferBuffer  = nullptr;
+        sIntermediateTex = nullptr;
 
         SDL_GPUTextureCreateInfo tci = {};
         tci.type   = SDL_GPU_TEXTURETYPE_2D;
@@ -560,7 +562,11 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
         tbci.size  = (Uint32)(fb_w * fb_h * (int)sizeof(uint32_t));
         sTransferBuffer = SDL_CreateGPUTransferBuffer(sDevice, &tbci);
 
-        if (!sSourceTexture || !sTransferBuffer) {
+        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        tci.format = sIntermediateFmt;
+        sIntermediateTex = SDL_CreateGPUTexture(sDevice, &tci);
+
+        if (!sSourceTexture || !sTransferBuffer || !sIntermediateTex) {
             std::fprintf(stderr, "[gpu] resize to %dx%d failed: %s\n",
                          fb_w, fb_h, SDL_GetError());
             return false;

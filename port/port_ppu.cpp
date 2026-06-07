@@ -6,6 +6,7 @@
 #include "port_filter.h"
 #include "port_gpu_renderer.h"  /* PortGpuFilter for the GPU-backend filter cycle */
 #include "port_touch_controls.h"
+#include "port_widescreen.h"
 
 #ifdef launcher
 #include "tmc_launcher.h"
@@ -25,6 +26,8 @@
  * task field at known offset 2 (interruptFlag, sleepStatus, task —
  * include/main.h). C linkage matches the engine's Main gMain. */
 extern "C" uint8_t gMain[]; // fix for MSVC (UWP PORT)
+/* Port_Widescreen_* lives in port_linked_stubs.c; include
+ * port_widescreen.h for the runtime WIP toggle gate. */
 
 enum class RenderBackend {
     None,
@@ -42,22 +45,37 @@ enum class PresentMode {
     Count
 };
 
-static const int kHiResW = 960;
-static const int kHiResH = 640;
+static const int kNativeHiResW = 240 * 4;
+static const int kNativeHiResH = 160 * 4;
 
 static RenderBackend sBackend = RenderBackend::None;
 static SDL_Renderer* sRenderer = nullptr;
 static SDL_Texture* sLowResTexture = nullptr;   /* 240x160 raw upload */
-static SDL_Texture* sHiResTexture = nullptr;    /* 960x640 upscaled  */
+static int sLowResTextureW = 0;
+static int sLowResTextureH = 0;
+static SDL_Texture* sHiResTexture = nullptr;    /* xBRZ 4x upload */
+static int sHiResTextureW = 0;
+static int sHiResTextureH = 0;
 /* Internal-render-scale streaming texture: re-sized lazily when scale
  * changes (240*S x 160*S). Used when Port_Config_InternalScale() > 1
  * and the user has chosen a non-xBRZ presentation mode — the framebuffer
  * is S*S nearest-replicated into sScaledBuf and uploaded here. */
 static SDL_Texture* sScaledTexture = nullptr;
+static int sScaledTextureW = 0;
+static int sScaledTextureH = 0;
 static int sScaledTextureScale = 0;
 static uint32_t* sScaledBuf = nullptr;
+static int sScaledBufW = 0;
+static int sScaledBufH = 0;
 static int sScaledBufScale = 0;
 static SDL_Window* sWindow = nullptr;
+
+static int Port_PPU_WindowBaseWidth(void) {
+    return (MODE1_GBA_WIDTH > 240 && Port_Config_WidescreenEnabled())
+               ? MODE1_GBA_WIDTH
+               : 240;
+}
+
 #ifdef launcher
 static SDL_Window* sBootstrapWindow = nullptr;
 #endif
@@ -80,23 +98,65 @@ static PresentMode sPresentMode = PresentMode::NearestRaw;
 static PortFilterType sFilter = PORT_FILTER_NONE;
 static uint32_t* sUpscale2xBuf = nullptr;       /* 480x320 intermediate */
 static uint32_t* sUpscale4xBuf = nullptr;       /* 960x640 final        */
+static size_t sUpscale2xPixels = 0;
+static size_t sUpscale4xPixels = 0;
+static uint32_t sNativePresentFrame[240 * 160];
 
-/* xBRZ scratch buffers used to be allocated only on the SDL_Renderer
- * init path (since the GPU branch bypassed every legacy effect). With
- * xBRZ now reaching the GPU backend too, lazy-alloc on first request
- * so a session that boots into GPU + xBRZ has the buffers ready. Safe
- * to call repeatedly; only allocates once. */
-static bool Port_PPU_EnsureXbrzBuffers(void) {
-    if (sUpscale4xBuf != nullptr && sUpscale2xBuf != nullptr) {
+/* xBRZ scratch buffers are sized to the frame we are actually presenting:
+ * 240x160 when the WIP widescreen option is off/falling back, or
+ * MODE1_GBA_WIDTHx160 while true widescreen is active. */
+static bool Port_PPU_EnsureXbrzBuffers(int srcW, int srcH) {
+    const size_t need2x = (size_t)srcW * 2u * (size_t)srcH * 2u;
+    const size_t need4x = (size_t)srcW * 4u * (size_t)srcH * 4u;
+    if (sUpscale2xBuf != nullptr && sUpscale4xBuf != nullptr &&
+        sUpscale2xPixels == need2x && sUpscale4xPixels == need4x) {
         return true;
     }
-    if (sUpscale2xBuf == nullptr) {
-        sUpscale2xBuf = (uint32_t*)std::malloc((size_t)480 * 320 * sizeof(uint32_t));
-    }
-    if (sUpscale4xBuf == nullptr) {
-        sUpscale4xBuf = (uint32_t*)std::malloc((size_t)kHiResW * kHiResH * sizeof(uint32_t));
-    }
+    std::free(sUpscale2xBuf);
+    std::free(sUpscale4xBuf);
+    sUpscale2xBuf = (uint32_t*)std::malloc(need2x * sizeof(uint32_t));
+    sUpscale4xBuf = (uint32_t*)std::malloc(need4x * sizeof(uint32_t));
+    sUpscale2xPixels = sUpscale2xBuf ? need2x : 0;
+    sUpscale4xPixels = sUpscale4xBuf ? need4x : 0;
     return sUpscale2xBuf != nullptr && sUpscale4xBuf != nullptr;
+}
+
+static SDL_Texture* Port_PPU_EnsureTexture(SDL_Texture** slot, int* curW, int* curH,
+                                           int w, int h) {
+    if (*slot != nullptr && *curW == w && *curH == h) {
+        return *slot;
+    }
+    if (*slot != nullptr) {
+        SDL_DestroyTexture(*slot);
+        *slot = nullptr;
+    }
+    *curW = 0;
+    *curH = 0;
+    *slot = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
+                              SDL_TEXTUREACCESS_STREAMING, w, h);
+    if (*slot != nullptr) {
+        *curW = w;
+        *curH = h;
+    }
+    return *slot;
+}
+
+static const uint32_t* Port_PPU_SelectPresentFrame(int* outW, int* outH) {
+    if (MODE1_GBA_WIDTH == 240 ||
+        (gMain[2] == 2 /* TASK_GAME */ && Port_Widescreen_IsActive())) {
+        if (outW) *outW = MODE1_GBA_WIDTH;
+        if (outH) *outH = MODE1_GBA_HEIGHT;
+        return virtuappu_frame_buffer;
+    }
+
+    for (int y = 0; y < MODE1_GBA_HEIGHT; ++y) {
+        std::memcpy(&sNativePresentFrame[y * 240],
+                    &virtuappu_frame_buffer[y * MODE1_GBA_WIDTH],
+                    240 * sizeof(uint32_t));
+    }
+    if (outW) *outW = 240;
+    if (outH) *outH = MODE1_GBA_HEIGHT;
+    return sNativePresentFrame;
 }
 
 static void Port_PPU_LoadConfig(void) {
@@ -168,13 +228,13 @@ static void Port_PPU_ComputeFitRect(int w, int h, int* outX, int* outY, int* out
 // GBA "frame" rect that sits centered inside the stage. Outside the
 // stage is always black. For PORT_ASPECT_NATIVE_3_2 the stage equals
 // the GBA frame and there is no background fill region.
-static void Port_PPU_ComputeViewportRects(int outW, int outH,
+static void Port_PPU_ComputeViewportRects(int outW, int outH, int fbW, int fbH,
                                           int* stageX, int* stageY,
                                           int* stageW, int* stageH,
                                           int* frameX, int* frameY,
                                           int* frameW, int* frameH) {
-    const int FW = MODE1_GBA_WIDTH;
-    const int FH = MODE1_GBA_HEIGHT;
+    const int FW = fbW;
+    const int FH = fbH;
 
     int aspW = FW;
     int aspH = FH;
@@ -220,33 +280,29 @@ static void Port_PPU_QueryOutputSize(int* outW, int* outH) {
     *outH = 540;
 }
 
-/* Build (or reuse) sScaledBuf at scale S and S*S-replicate the 240x160
- * framebuffer into it. Returns the buffer + dims via out-params; returns
- * nullptr if S<=1. The buffer survives across frames so we don't realloc
- * unless the scale changes.
- *
- * This is the Stage-1 shape of internal-render-scale: pure post-process
- * nearest-replicate on the CPU. By itself it produces visually the same
- * result as SDL_SCALEMODE_NEAREST presentation, but it puts the scaled
- * framebuffer in the pipeline so future PPU patches can render affine
- * paths directly at sub-pixel density and the rest of the path doesn't
- * need to change. */
-static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
-    if (S <= 1) {
+/* Build (or reuse) sScaledBuf at scale S and S*S-replicate the selected
+ * presentation frame into it. Source frames are contiguous: either the
+ * native 240x160 scratch copy or the wide VirtuaPPU framebuffer. */
+static uint32_t* Port_PPU_BuildScaledFrame(const uint32_t* srcFrame, int FW, int FH,
+                                           int S, int* outW, int* outH) {
+    if (S <= 1 || srcFrame == nullptr) {
         if (outW) *outW = 0;
         if (outH) *outH = 0;
         return nullptr;
     }
-    const int FW = MODE1_GBA_WIDTH;
-    const int FH = MODE1_GBA_HEIGHT;
     const int w = FW * S;
     const int h = FH * S;
-    if (sScaledBuf == nullptr || sScaledBufScale != S) {
+    if (sScaledBuf == nullptr || sScaledBufScale != S ||
+        sScaledBufW != FW || sScaledBufH != FH) {
         std::free(sScaledBuf);
         sScaledBuf = (uint32_t*)std::malloc((size_t)w * (size_t)h * sizeof(uint32_t));
         sScaledBufScale = S;
+        sScaledBufW = FW;
+        sScaledBufH = FH;
         if (sScaledBuf == nullptr) {
             sScaledBufScale = 0;
+            sScaledBufW = 0;
+            sScaledBufH = 0;
             if (outW) *outW = 0;
             if (outH) *outH = 0;
             return nullptr;
@@ -256,7 +312,7 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
      * order is src-major so the source line stays cache-resident while
      * we scatter S output rows. */
     for (int sy = 0; sy < FH; ++sy) {
-        const uint32_t* src = &virtuappu_frame_buffer[sy * FW];
+        const uint32_t* src = &srcFrame[sy * FW];
         for (int dy = 0; dy < S; ++dy) {
             uint32_t* dst = &sScaledBuf[(sy * S + dy) * w];
             for (int sx = 0; sx < FW; ++sx) {
@@ -274,23 +330,16 @@ static uint32_t* Port_PPU_BuildScaledFrame(int S, int* outW, int* outH) {
     return sScaledBuf;
 }
 
-static SDL_Texture* Port_PPU_EnsureScaledTexture(int S) {
+static SDL_Texture* Port_PPU_EnsureScaledTexture(int w, int h, int S) {
     if (S <= 1) return nullptr;
-    if (sScaledTexture != nullptr && sScaledTextureScale == S) {
-        return sScaledTexture;
-    }
-    if (sScaledTexture != nullptr) {
-        SDL_DestroyTexture(sScaledTexture);
-        sScaledTexture = nullptr;
-        sScaledTextureScale = 0;
-    }
-    sScaledTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
-                                       SDL_TEXTUREACCESS_STREAMING,
-                                       MODE1_GBA_WIDTH * S, MODE1_GBA_HEIGHT * S);
-    if (sScaledTexture) {
+    SDL_Texture* tex = Port_PPU_EnsureTexture(&sScaledTexture,
+                                              &sScaledTextureW,
+                                              &sScaledTextureH,
+                                              w, h);
+    if (tex != nullptr) {
         sScaledTextureScale = S;
     }
-    return sScaledTexture;
+    return tex;
 }
 
 static void Port_PPU_PresentSurfaceFrame(void) {
@@ -398,17 +447,20 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         if (!SDL_SetRenderVSync(sRenderer, 1)) {
             printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
         }
-        sLowResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
-                                           SDL_TEXTUREACCESS_STREAMING,
-                                           MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
-        sHiResTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ABGR8888,
-                                          SDL_TEXTUREACCESS_STREAMING, kHiResW, kHiResH);
+        sLowResTexture = Port_PPU_EnsureTexture(&sLowResTexture,
+                                                &sLowResTextureW,
+                                                &sLowResTextureH,
+                                                MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
+        sHiResTexture = Port_PPU_EnsureTexture(&sHiResTexture,
+                                               &sHiResTextureW,
+                                               &sHiResTextureH,
+                                               kNativeHiResW, kNativeHiResH);
         if (!sLowResTexture || !sHiResTexture) {
             printf("Port_PPU_Init: SDL_CreateTexture failed: %s\n", SDL_GetError());
             SDL_DestroyRenderer(sRenderer);
             sRenderer = nullptr;
         } else {
-            Port_PPU_EnsureXbrzBuffers();
+            Port_PPU_EnsureXbrzBuffers(240, 160);
             sBackend = RenderBackend::Renderer;
         }
     }
@@ -586,35 +638,9 @@ extern "C" void Port_PPU_PresentFrame(void) {
         }
     }
 
-    /* Widescreen-spike post-process: on screens where the engine doesn't
-     * load BG tile data past column 239 (title, file-select), the extra
-     * widescreen columns (240+) read stale VRAM and visually glitch
-     * (e.g. yellow band on title). Force-black them on those tasks; the
-     * gameplay task is left alone since it does scroll the BG buffer.
-     *
-     * gMain.task is byte 2 of the Main struct (vu8 interruptFlag at 0,
-     * sleepStatus at 1, task at 2 — see include/main.h). Read raw bytes
-     * to avoid pulling main.h into this C++ TU (the engine headers use
-     * `this` as a C parameter name and don't parse as C++). */
-    /* Widescreen Phase 1: ViruaPPU clips BG/OAM at col 240 unconditionally
-     * (engine's 32-tile BG buffer doesn't have reliable data past col 240
-     * on static screens, and parked off-screen sprites live at x >= 240).
-     * For any widescreen_width > 240, uniform-stretch the 240-px frame
-     * into the full window. Phase 2 (sa2-style BGCNT_TXT512x256 + 64-tile
-     * BG buffer) replaces this with real extended tile loading. */
-    if (MODE1_GBA_WIDTH > 240) {
-        uint32_t scratch[240];
-        for (int y = 0; y < MODE1_GBA_HEIGHT; ++y) {
-            uint32_t* row = &virtuappu_frame_buffer[y * MODE1_GBA_WIDTH];
-            std::memcpy(scratch, row, 240 * sizeof(uint32_t));
-            for (int dst_x = 0; dst_x < MODE1_GBA_WIDTH; ++dst_x) {
-                int src_x = (dst_x * 240) / MODE1_GBA_WIDTH;
-                if (src_x > 239) src_x = 239;
-                row[dst_x] = scratch[src_x];
-            }
-        }
-    }
-    (void)gMain;
+    int presentW = 0;
+    int presentH = 0;
+    const uint32_t* presentFrame = Port_PPU_SelectPresentFrame(&presentW, &presentH);
 
     /* Stage 2: SDL_GPU present path. Stretched 240x160 → swapchain via
      * the passthrough shader. Internal-scale and xBRZ now route through
@@ -644,11 +670,12 @@ extern "C" void Port_PPU_PresentFrame(void) {
          * sampler. Filter chain (CRT/LCD) is still SW-only. */
         if (sPresentMode == PresentMode::XbrzLinear ||
             sPresentMode == PresentMode::XbrzNearest) {
-            if (Port_PPU_EnsureXbrzBuffers()) {
-                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer,
-                                     MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
+            if (Port_PPU_EnsureXbrzBuffers(presentW, presentH)) {
+                const int hiW = presentW * 4;
+                const int hiH = presentH * 4;
+                Port_Upscale_xBRZ_4x(presentFrame, presentW, presentH,
                                      sUpscale2xBuf, sUpscale4xBuf);
-                Port_GPU_PresentFrame(sUpscale4xBuf, kHiResW, kHiResH);
+                Port_GPU_PresentFrame(sUpscale4xBuf, hiW, hiH);
                 return;
             }
             /* Buffer alloc failed: fall through to internal-scale path
@@ -665,13 +692,13 @@ extern "C" void Port_PPU_PresentFrame(void) {
         const int gpuScale = (int)Port_Config_InternalScale();
         if (gpuScale > 1) {
             int sw = 0, sh = 0;
-            uint32_t* scaled = Port_PPU_BuildScaledFrame(gpuScale, &sw, &sh);
+            uint32_t* scaled = Port_PPU_BuildScaledFrame(presentFrame, presentW, presentH, gpuScale, &sw, &sh);
             if (scaled) {
                 Port_GPU_PresentFrame(scaled, sw, sh);
                 return;
             }
         }
-        Port_GPU_PresentFrame(virtuappu_frame_buffer, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
+        Port_GPU_PresentFrame(presentFrame, presentW, presentH);
         return;
     }
 
@@ -682,31 +709,47 @@ extern "C" void Port_PPU_PresentFrame(void) {
         Port_TouchControls_NotifyRenderSize(outW, outH);
         int sx, sy, sw_stage, sh_stage;
         int x, y, w, h;
-        Port_PPU_ComputeViewportRects(outW, outH,
+        Port_PPU_ComputeViewportRects(outW, outH, presentW, presentH,
                                       &sx, &sy, &sw_stage, &sh_stage,
                                       &x,  &y,  &w,        &h);
         SDL_FRect stage = { (float)sx, (float)sy, (float)sw_stage, (float)sh_stage };
         SDL_FRect dst   = { (float)x,  (float)y,  (float)w,        (float)h        };
 
-        SDL_Texture* tex;
+        SDL_Texture* tex = nullptr;
         SDL_ScaleMode scale;
         const int internalS = (int)Port_Config_InternalScale();
         switch (sPresentMode) {
             case PresentMode::XbrzLinear:
             case PresentMode::XbrzNearest:
                 /* xBRZ owns its own 4x upscaler — internal-render-scale
-                 * is mutually exclusive with it. The xBRZ path always
-                 * consumes the unscaled GBA-native framebuffer. */
-                Port_Upscale_xBRZ_4x(virtuappu_frame_buffer,
-                                     MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT,
-                                     sUpscale2xBuf, sUpscale4xBuf);
-                /* CRT/LCD filter at the upscaled resolution (4x). The
-                 * pattern needs >= 3 px per phosphor cell to read
-                 * correctly, so xBRZ's 4x output is always large enough. */
-                Port_Filter_Apply(sUpscale4xBuf, kHiResW, kHiResH, 4, sFilter);
-                SDL_UpdateTexture(sHiResTexture, nullptr, sUpscale4xBuf,
-                                  kHiResW * (int)sizeof(uint32_t));
-                tex = sHiResTexture;
+                 * is mutually exclusive with it. It consumes whichever
+                 * frame is active this tick: native 240 or true wide. */
+                if (Port_PPU_EnsureXbrzBuffers(presentW, presentH)) {
+                    const int hiW = presentW * 4;
+                    const int hiH = presentH * 4;
+                    SDL_Texture* hiTex = Port_PPU_EnsureTexture(&sHiResTexture,
+                                                                &sHiResTextureW,
+                                                                &sHiResTextureH,
+                                                                hiW, hiH);
+                    if (hiTex != nullptr) {
+                        Port_Upscale_xBRZ_4x(presentFrame, presentW, presentH,
+                                             sUpscale2xBuf, sUpscale4xBuf);
+                        Port_Filter_Apply(sUpscale4xBuf, hiW, hiH, 4, sFilter);
+                        SDL_UpdateTexture(hiTex, nullptr, sUpscale4xBuf,
+                                          hiW * (int)sizeof(uint32_t));
+                        tex = hiTex;
+                    }
+                }
+                if (tex == nullptr) {
+                    SDL_Texture* rawTex = Port_PPU_EnsureTexture(&sLowResTexture,
+                                                                 &sLowResTextureW,
+                                                                 &sLowResTextureH,
+                                                                 presentW, presentH);
+                    if (rawTex == nullptr) return;
+                    SDL_UpdateTexture(rawTex, nullptr, presentFrame,
+                                      presentW * (int)sizeof(uint32_t));
+                    tex = rawTex;
+                }
                 scale = (sPresentMode == PresentMode::XbrzLinear)
                             ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
                 break;
@@ -722,16 +765,22 @@ extern "C" void Port_PPU_PresentFrame(void) {
                 if (sFilter != PORT_FILTER_NONE && effScale < 4) {
                     effScale = 4;
                 }
-                uint32_t* scaled = Port_PPU_BuildScaledFrame(effScale, &sw, &sh);
-                SDL_Texture* scaledTex = Port_PPU_EnsureScaledTexture(effScale);
+                uint32_t* scaled = Port_PPU_BuildScaledFrame(presentFrame, presentW, presentH,
+                                                             effScale, &sw, &sh);
+                SDL_Texture* scaledTex = scaled ? Port_PPU_EnsureScaledTexture(sw, sh, effScale) : nullptr;
                 if (scaled && scaledTex) {
                     Port_Filter_Apply(scaled, sw, sh, effScale, sFilter);
                     SDL_UpdateTexture(scaledTex, nullptr, scaled, sw * (int)sizeof(uint32_t));
                     tex = scaledTex;
                 } else {
-                    SDL_UpdateTexture(sLowResTexture, nullptr, virtuappu_frame_buffer,
-                                      MODE1_GBA_WIDTH * (int)sizeof(uint32_t));
-                    tex = sLowResTexture;
+                    SDL_Texture* rawTex = Port_PPU_EnsureTexture(&sLowResTexture,
+                                                                 &sLowResTextureW,
+                                                                 &sLowResTextureH,
+                                                                 presentW, presentH);
+                    if (rawTex == nullptr) return;
+                    SDL_UpdateTexture(rawTex, nullptr, presentFrame,
+                                      presentW * (int)sizeof(uint32_t));
+                    tex = rawTex;
                 }
                 scale = (sPresentMode == PresentMode::LinearRaw)
                             ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
@@ -820,6 +869,15 @@ extern "C" unsigned char Port_PPU_WindowScale(void) {
     return Port_Config_WindowScale();
 }
 
+extern "C" void Port_PPU_ApplyWindowScale(void) {
+    SDL_Window* w = Port_PPU_ActiveWindow();
+    if (w && !Port_PPU_IsFullscreen()) {
+        const u8 scale = Port_Config_WindowScale();
+        SDL_SetWindowSize(w, Port_PPU_WindowBaseWidth() * scale, MODE1_GBA_HEIGHT * scale);
+        SDL_SyncWindow(w);
+    }
+}
+
 extern "C" void Port_PPU_CycleWindowScale(int direction) {
     u8 scale = Port_Config_WindowScale();
     if (direction < 0) {
@@ -828,11 +886,7 @@ extern "C" void Port_PPU_CycleWindowScale(int direction) {
         scale = scale >= 10 ? 1 : (u8)(scale + 1);
     }
     Port_Config_SetWindowScale(scale);
-    SDL_Window* w = Port_PPU_ActiveWindow();
-    if (w && !Port_PPU_IsFullscreen()) {
-        SDL_SetWindowSize(w, MODE1_GBA_WIDTH * scale, MODE1_GBA_HEIGHT * scale);
-        SDL_SyncWindow(w);
-    }
+    Port_PPU_ApplyWindowScale();
 }
 
 extern "C" void Port_PPU_CyclePresentationMode(int direction) {
@@ -936,18 +990,38 @@ extern "C" void Port_PPU_Shutdown(void) {
         SDL_DestroyTexture(sLowResTexture);
         sLowResTexture = nullptr;
     }
+    sLowResTextureW = 0;
+    sLowResTextureH = 0;
     if (sHiResTexture) {
         SDL_DestroyTexture(sHiResTexture);
         sHiResTexture = nullptr;
     }
+    sHiResTextureW = 0;
+    sHiResTextureH = 0;
+    if (sScaledTexture) {
+        SDL_DestroyTexture(sScaledTexture);
+        sScaledTexture = nullptr;
+    }
+    sScaledTextureW = 0;
+    sScaledTextureH = 0;
+    sScaledTextureScale = 0;
     if (sUpscale2xBuf) {
         std::free(sUpscale2xBuf);
         sUpscale2xBuf = nullptr;
     }
+    sUpscale2xPixels = 0;
     if (sUpscale4xBuf) {
         std::free(sUpscale4xBuf);
         sUpscale4xBuf = nullptr;
     }
+    sUpscale4xPixels = 0;
+    if (sScaledBuf) {
+        std::free(sScaledBuf);
+        sScaledBuf = nullptr;
+    }
+    sScaledBufW = 0;
+    sScaledBufH = 0;
+    sScaledBufScale = 0;
     if (sRenderer) {
         SDL_DestroyRenderer(sRenderer);
         sRenderer = nullptr;

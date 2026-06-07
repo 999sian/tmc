@@ -326,6 +326,9 @@ int main(int argc, char* argv[]) {
     }
 
     u8 window_scale = Port_Config_WindowScale();
+    int window_base_width = (MODE1_GBA_WIDTH > 240 && Port_Config_WidescreenEnabled())
+                                ? MODE1_GBA_WIDTH
+                                : 240;
     bool noAudio = false;
     const char* glslpPath = NULL;
     if (argc > 1) {
@@ -433,7 +436,7 @@ int main(int argc, char* argv[]) {
     window_flags |= SDL_WINDOW_VULKAN;
 #endif
     window = SDL_CreateWindow(window_title,
-                              240 * window_scale, 160 * window_scale,
+                              window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
                               window_flags);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
@@ -443,7 +446,7 @@ int main(int argc, char* argv[]) {
 #else
     if (!SDL_CreateWindowAndRenderer(
             window_title,
-            240 * window_scale, 160 * window_scale,
+            window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
             SDL_WINDOW_RESIZABLE,
             &window, &prerenderer)) {
         fprintf(stderr, "SDL_CreateWindowAndRenderer Error: %s\n", SDL_GetError());

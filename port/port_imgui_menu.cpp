@@ -37,6 +37,7 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #endif
 
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
+#include "port_widescreen.h"
 #include "port_gpu_renderer.h"    /* Port_GPU_IsActive() for backend-conditional UI */
 #include "port_randomizer.h"
 #include "port_reborn.h"
@@ -287,6 +288,7 @@ bool          Port_PPU_IsFullscreen(void);
 void          Port_PPU_SetVSync(bool enabled);
 bool          Port_PPU_VSyncEnabled(void);
 void          Port_PPU_CycleWindowScale(int direction);
+void          Port_PPU_ApplyWindowScale(void);
 unsigned char Port_PPU_WindowScale(void);
 void          Port_PPU_CyclePresentationMode(int direction);
 const char*   Port_PPU_PresentationModeName(void);
@@ -409,6 +411,25 @@ static void DrawRibbonDisplayTab(void) {
     ImGui::Text("%ux", (unsigned)Port_Config_InternalScale());
     ImGui::SameLine();
     if (ImGui::Button(">##iscale")) Port_Config_CycleInternalScale(+1);
+
+    /* True widescreen reveal is WIP. Runtime-toggle it so wide builds can
+     * fall back to a clean native 240x160 frame without rebuilding. */
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+    {
+        bool ws = Port_Config_WidescreenEnabled();
+        if (ImGui::Checkbox("Widescreen (WIP)", &ws)) {
+            Port_Config_SetWidescreenEnabled(ws);
+            Port_PPU_ApplyWindowScale();
+            Port_DebugMenu_ToastFromExternal(ws ? "Widescreen enabled" : "Widescreen disabled");
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("native fallback outside wide gameplay");
+    }
+#else
+    ImGui::TextDisabled("Widescreen (WIP)");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(build with --widescreen_width > 240)");
+#endif
 
     /* Fullscreen */
     bool fs = Port_PPU_IsFullscreen();

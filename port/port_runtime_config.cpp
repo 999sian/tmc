@@ -70,6 +70,7 @@ u32  sAutosaveIntervalMs = 60000;
 /* Touch input scheme from matheo's launcher integration — kept for
  * Android compatibility. */
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
+bool sWidescreenEnabled = false;
 /* Widescreen pillarbox config — applied in port_ppu.cpp's present path.
  * Defaults reproduce the historical behavior: GBA 3:2 frame fills as
  * much of the window as possible, side bars are black. */
@@ -116,6 +117,7 @@ nlohmann::json DefaultsJson(void) {
         { "autosave_enabled", true },
         { "autosave_interval_ms", 60000 },
         { "touch_scheme", "joystick" },
+        { "widescreen_enabled", false },
         { "aspect_mode", "native" },
         { "bg_fill", "black" },
         { "bg_fill_color", { 0, 0, 0 } },
@@ -466,6 +468,7 @@ extern "C" void Port_Config_Load(const char* path) {
         }
         sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
     }
+    sWidescreenEnabled = j.value("widescreen_enabled", false);
     {
         std::string am = j.value("aspect_mode", std::string("native"));
         for (char& c : am) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
@@ -643,6 +646,20 @@ extern "C" void Port_Config_SetTouchScheme(PortTouchScheme scheme) {
 extern "C" void Port_Config_CycleTouchScheme(int /*direction*/) {
     Port_Config_SetTouchScheme(sTouchScheme == PORT_TOUCH_SCHEME_DPAD ? PORT_TOUCH_SCHEME_JOYSTICK
                                                                       : PORT_TOUCH_SCHEME_DPAD);
+}
+
+extern "C" bool Port_Config_WidescreenEnabled(void) {
+    return sWidescreenEnabled;
+}
+
+extern "C" void Port_Config_SetWidescreenEnabled(bool enabled) {
+    sWidescreenEnabled = enabled;
+    sConfigJson["widescreen_enabled"] = enabled;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_ToggleWidescreen(void) {
+    Port_Config_SetWidescreenEnabled(!sWidescreenEnabled);
 }
 
 extern "C" PortAspectMode Port_Config_AspectMode(void) {

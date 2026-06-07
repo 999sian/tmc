@@ -1,8 +1,8 @@
 diff --git a/include/cpu/mode1.h b/include/cpu/mode1.h
-index b5dedb2..2bef632 100644
+index b5dedb2..4112caa 100644
 --- a/include/cpu/mode1.h
 +++ b/include/cpu/mode1.h
-@@ -12,8 +12,24 @@ extern "C" {
+@@ -12,8 +12,28 @@ extern "C" {
  typedef void (*virtuappu_mode1_pre_line_fn)(int line);
  extern virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback;
  
@@ -11,28 +11,65 @@ index b5dedb2..2bef632 100644
 +#ifndef MODE1_GBA_WIDTH
 +#define MODE1_GBA_WIDTH 240
 +#endif
-+/* OAM and BG clip extents.
++/* OAM and BG clip extents (widescreen Phase 2 — Option A).
 + *
-+ * The engine's 32-tile BG buffer holds reliable tile data only in the
-+ * GBA-native 240-pixel viewport. Cols 30..31 (the 16 pixels past 240)
-+ * are a *scroll buffer* that the engine updates when the camera moves
-+ * but leaves stale/garbage on static screens (title, file-select,
-+ * cutscene transitions). Engine-parked off-screen sprites also live
-+ * at OAM x >= 240. So clip both BG and OAM at 240 unconditionally and
-+ * pillarbox any width > 240. Real widescreen needs a 64-tile
-+ * BGCNT_TXT512x256 (sa2-style) extension to the engine — Phase 2. */
-+#define MODE1_GBA_VIEWPORT_X 240
++ * MODE1_GBA_BG_CLIP_X (240) is the split point: BG columns < 240 read
++ * the engine's VRAM screenblock as usual; columns >= 240 read the
++ * port-side shadow tilemap (virtuappu_mode1_ws_shadow[], populated from
++ * gMapData*Special) — the 32-tile screenblock only spans 256 px of world
++ * and wraps past that, so the reveal columns can't come from VRAM. When
++ * no shadow is registered (native 240, or non-gameplay screens) the
++ * composite force-blacks past 240.
++ *
++ * MODE1_GBA_VIEWPORT_X is the OAM clip; it tracks MODE1_GBA_WIDTH so
++ * sprites render across the full widescreen viewport. Engine-parked
++ * off-screen sprites are kept out by the DISPLAY_WIDTH-relative culling
++ * (CheckOnScreen / per-entity bounds), not by clipping here. */
++#define MODE1_GBA_VIEWPORT_X MODE1_GBA_WIDTH
 +#define MODE1_GBA_BG_CLIP_X  240
  enum {
 -    MODE1_GBA_WIDTH = 240,
      MODE1_GBA_HEIGHT = 160,
      MODE1_GBA_BG_COUNT = 4,
      MODE1_GBA_OAM_COUNT = 128,
+@@ -23,6 +43,18 @@ enum {
+     MODE1_OAM_HALFWORDS = 512
+ };
+ 
++/* Widescreen Option A — port-side shadow tilemap for the reveal region
++ * (display cols >= MODE1_GBA_BG_CLIP_X on 32-tile BGs). Populated by
++ * port/port_linked_stubs.c::Port_Widescreen_UpdateShadows; a NULL entry
++ * means "no shadow" => render_text_bg_line clips at 240 and the composite
++ * force-blacks past it (native-240 / non-gameplay behaviour). COLS scales
++ * with the configured width (reveal tiles = (W-240)/8, plus scroll/wrap
++ * headroom); ROWS=32 mirrors the engine's mod-32 vertical row rolling. */
++#define MODE1_WS_SHADOW_ROWS 32
++#define MODE1_WS_SHADOW_COLS (((MODE1_GBA_WIDTH - 240) / 8) + 4)
++extern uint16_t *virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT];
++extern int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT];
++
+ enum {
+     MODE1_IO_DISPCNT = 0x00,
+     MODE1_IO_BG0CNT = 0x08,
 diff --git a/src/mode1.c b/src/mode1.c
-index bb1ca26..272c065 100644
+index 2f77f13..c39559c 100644
 --- a/src/mode1.c
 +++ b/src/mode1.c
-@@ -240,9 +240,21 @@ void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory *memory)
+@@ -12,6 +12,13 @@ typedef struct Mode1TilemapEntry {
+     uint16_t raw;
+ } Mode1TilemapEntry;
+ 
++/* Widescreen Option A — port-side shadow tilemap pointers (declared in
++ * include/cpu/mode1.h, populated by the PC port). NULL => no widescreen
++ * reveal for that BG; render_text_bg_line then clips at MODE1_GBA_BG_CLIP_X
++ * and the composite force-blacks past it. */
++uint16_t *virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT] = { NULL, NULL, NULL, NULL };
++int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT] = { 0, 0, 0, 0 };
++
+ typedef struct Mode1OAMAttr {
+     uint16_t attr0;
+     uint16_t attr1;
+@@ -240,9 +247,21 @@ void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory *memory)
      *memory = mode1_memory;
  }
  
@@ -55,7 +92,67 @@ index bb1ca26..272c065 100644
  }
  
  uint32_t virtuappu_mode1_io_read32(uint16_t offset)
-@@ -426,7 +438,12 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+@@ -282,8 +301,23 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t *line_
+     int tile_row = src_y / 8;
+     int pixel_y = src_y % 8;
+     int x;
+-
+-    for (x = 0; x < MODE1_GBA_WIDTH; ++x) {
++    /* Widescreen Option A: 32-tile BGs have valid VRAM tile data only
++     * within the native 240 px; render up to MODE1_GBA_WIDTH but read the
++     * reveal columns (x >= MODE1_GBA_BG_CLIP_X) from the port-side shadow.
++     * shadow==NULL => clip at 240 (composite force-blacks past it).
++     * 64-tile BGs span the full source, so render them straight from VRAM. */
++    int render_max_x =
++        (map_width_tiles >= 64) ? MODE1_GBA_WIDTH
++                                : ((virtuappu_mode1_ws_shadow[bg_index] != NULL)
++                                       ? MODE1_GBA_WIDTH
++                                       : MODE1_GBA_BG_CLIP_X);
++    if (render_max_x > MODE1_GBA_WIDTH) render_max_x = MODE1_GBA_WIDTH;
++    const bool ws_shadow_active =
++        (map_width_tiles < 64) && (virtuappu_mode1_ws_shadow[bg_index] != NULL);
++    const int ws_shadow_base = virtuappu_mode1_ws_shadow_base_tile[bg_index];
++    uint16_t * const ws_shadow = virtuappu_mode1_ws_shadow[bg_index];
++
++    for (x = 0; x < render_max_x; ++x) {
+         int eff_x = (x / mosaic_h) * mosaic_h;
+         int src_x = (eff_x + scroll_x) % (map_width_tiles * 8);
+         int tile_col = src_x / 8;
+@@ -300,7 +334,16 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t *line_
+         uint8_t color_index;
+         uint16_t rgb555;
+ 
+-        tile_entry.raw = (uint16_t)mode1_memory.vram[map_addr] | ((uint16_t)mode1_memory.vram[map_addr + 1u] << 8u);
++        if (ws_shadow_active && x >= MODE1_GBA_BG_CLIP_X) {
++            /* (tile_col - base + 32) % 32 handles BGHOFS sub-tile wrap so a
++             * scroll past a mod-32 boundary still indexes the right cell. */
++            int shadow_idx = (tile_col - ws_shadow_base + 32) % 32;
++            tile_entry.raw = (shadow_idx < MODE1_WS_SHADOW_COLS)
++                                 ? ws_shadow[(size_t)local_row * MODE1_WS_SHADOW_COLS + shadow_idx]
++                                 : (uint16_t)0u;
++        } else {
++            tile_entry.raw = (uint16_t)mode1_memory.vram[map_addr] | ((uint16_t)mode1_memory.vram[map_addr + 1u] << 8u);
++        }
+         tile_pixel_x = mode1_tile_hflip(tile_entry) ? (7 - pixel_x) : pixel_x;
+         tile_pixel_y = mode1_tile_vflip(tile_entry) ? (7 - pixel_y) : pixel_y;
+ 
+@@ -325,6 +368,15 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t *line_
+             rgb555 = mode1_memory.bg_palette[(size_t)mode1_tile_palette(tile_entry) * 16u + color_index];
+         }
+ 
++        /* Widescreen reveal: a reveal tile can reference a palette bank the
++         * engine hasn't streamed in yet (its slots hold the 0x7C1F "unloaded"
++         * sentinel) — rendering it shows magenta garbage. Skip those pixels so
++         * the composite force-blacks them: a clean edge that fills in with real
++         * colour as the palette streams in during play. */
++        if (x >= MODE1_GBA_BG_CLIP_X && (rgb555 & 0x7FFFu) == 0x7C1Fu) {
++            continue;
++        }
++
+         line_buffer[x] = virtuappu_mode1_rgb555_to_abgr8888(rgb555);
+         priority_buffer[x] = priority;
+     }
+@@ -426,7 +478,12 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
              uint8_t color_index;
              uint16_t rgb555;
  
@@ -69,25 +166,35 @@ index bb1ca26..272c065 100644
                  continue;
              }
  
-@@ -688,7 +705,16 @@ void virtuappu_mode1_composite_line(
+@@ -688,7 +745,26 @@ void virtuappu_mode1_composite_line(
              }
          }
  
 -        virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = top_color;
-+        /* PORT_WIDESCREEN_SPIKE: clip BG composition at the configured
-+         * BG-buffer width. <=256 widescreen renders real BG everywhere;
-+         * >256 force-blacks past col 256 (engine-loaded BG wraps past
-+         * the 32-tile buffer) so port_ppu.cpp's stretch can fill the
-+         * pillarbox. */
++        /* Widescreen Option A: past MODE1_GBA_BG_CLIP_X (240) the reveal
++         * columns are valid only where render_text_bg_line wrote real tile
++         * data — which happens only when a shadow is registered (gameplay)
++         * and the world tile there is non-transparent. Everywhere else
++         * (native 240, non-gameplay screens, a narrow room's empty edge)
++         * bg_layers stays 0 here, so force-black and let port_ppu.cpp's
++         * non-gameplay path fill the margin. */
 +        if (x >= MODE1_GBA_BG_CLIP_X) {
-+            virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = 0xFF000000u;
++            bool any_bg_drew_here = false;
++            for (int b = 0; b < MODE1_GBA_BG_COUNT; ++b) {
++                if (bg_enabled[b] && bg_layers[b][x] != 0u) {
++                    any_bg_drew_here = true;
++                    break;
++                }
++            }
++            virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] =
++                any_bg_drew_here ? top_color : 0xFF000000u;
 +        } else {
 +            virtuappu_frame_buffer[(size_t)line * MODE1_GBA_WIDTH + (size_t)x] = top_color;
 +        }
      }
  }
  
-@@ -847,37 +873,63 @@ void virtuappu_mode1_render_frame(const PPUMemory *ppu)
+@@ -847,37 +923,63 @@ void virtuappu_mode1_render_frame(const PPUMemory *ppu)
          return;
      }
  

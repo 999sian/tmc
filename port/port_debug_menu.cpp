@@ -26,6 +26,7 @@
 
 #include "port_debug_menu.h"
 #include "port_randomizer.h"
+#include "port_widescreen.h"
 
 extern "C" {
 void Port_DebugAction_GiveAllItems(void);
@@ -49,6 +50,7 @@ void          Port_PPU_ToggleFullscreen(void);
 bool          Port_PPU_IsFullscreen(void);
 void          Port_PPU_CycleWindowScale(int direction);
 unsigned char Port_PPU_WindowScale(void);
+void          Port_PPU_ApplyWindowScale(void);
 void          Port_PPU_CyclePresentationMode(int direction);
 const char*   Port_PPU_PresentationModeName(void);
 void          Port_PPU_CycleFilter(int direction);
@@ -57,6 +59,8 @@ unsigned int  Port_Config_TargetFps(void);
 void          Port_Config_CycleTargetFps(int direction);
 unsigned char Port_Config_InternalScale(void);
 void          Port_Config_CycleInternalScale(int direction);
+bool          Port_Config_WidescreenEnabled(void);
+void          Port_Config_SetWidescreenEnabled(bool enabled);
 
 /* Soft-slot equip-button assignments (port_softslots.c). */
 const char*   Port_SoftSlots_GetSlotLabel(int slot);
@@ -423,6 +427,27 @@ MenuPage BuildDisplaySettingsPage(void) {
         return std::string(buf);
     };
     p.items.push_back(std::move(internalScale));
+
+    MenuItem widescreen;
+    widescreen.cycleLeft  = []() {
+        Port_Config_SetWidescreenEnabled(!Port_Config_WidescreenEnabled());
+        Port_PPU_ApplyWindowScale();
+    };
+    widescreen.cycleRight = []() {
+        Port_Config_SetWidescreenEnabled(!Port_Config_WidescreenEnabled());
+        Port_PPU_ApplyWindowScale();
+    };
+    widescreen.labelFn = []() {
+        char buf[64];
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+        std::snprintf(buf, sizeof(buf), "Widescreen  %s (WIP)",
+                      Port_Config_WidescreenEnabled() ? "on" : "off");
+#else
+        std::snprintf(buf, sizeof(buf), "Widescreen  unavailable");
+#endif
+        return std::string(buf);
+    };
+    p.items.push_back(std::move(widescreen));
 
     p.items.push_back({ "<- Back", []() { Pop(); } });
     return p;
