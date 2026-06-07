@@ -54,11 +54,11 @@ jobs:
           # install). The v0.1.6.x release built fine on windows-2022.
           windows='{"runner":"windows-2022","os_name":"windows","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
           # Windows ARM64 (aarch64) via the native windows-11-arm runner +
-          # llvm-mingw (dedicated install step). Opt-in (os_filter
-          # windows-arm or arm), intentionally NOT in "all" until a manual
-          # run validates the llvm-mingw toolchain — the x86 MinGW path
-          # (choco gcc, -mno-ms-bitfields, libgomp) doesn't apply to
-          # aarch64 clang. Promote to "all" once green.
+          # llvm-mingw (dedicated install step). In "all": validated green
+          # (the x86 MinGW path — choco gcc, -mno-ms-bitfields, libgomp —
+          # doesn't apply, so it uses aarch64 clang + -static; OpenMP is
+          # degraded to serial there). Also reachable via os_filter
+          # windows-arm or arm.
           windows_arm='{"runner":"windows-11-arm","os_name":"windows","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
           # macos-14 = Apple Silicon arm64; macos-13 = Intel x86_64.
           # Both keep os_name="macos" so the brew dep-install step's
@@ -81,7 +81,7 @@ jobs:
             macos)       matrix="{\"include\":[$macos_arm]}" ;;
             macos-arm)   matrix="{\"include\":[$macos_arm]}" ;;
             macos-x86)   matrix="{\"include\":[$macos_x86]}" ;;
-            all|"")      matrix="{\"include\":[$linux,$linux_arm,$windows,$macos_arm]}" ;;
+            all|"")      matrix="{\"include\":[$linux,$linux_arm,$windows,$windows_arm,$macos_arm]}" ;;
             *)           echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, linux-arm, windows, windows-arm, arm, macos, macos-arm, macos-x86)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
