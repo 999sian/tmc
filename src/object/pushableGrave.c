@@ -28,7 +28,7 @@ typedef struct {
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
     /*0x7c*/ s8 unk_7c[0xa];
-#ifdef PC_PORT
+#if defined(PC_PORT) && __SIZEOF_POINTER__ == 8 /* 64-bit-ptr ports only; 32-bit ports (N64/MIPS) keep GBA 0x68 */
     /* #130-class softlock. pushedFlag sits at GBA 0x86 = GenericEntity.field_0x86.
      * Room-placed graves get their flag from spritePtr through RegisterRoomEntity,
      * which on PC writes it to BOTH the aligned field_0x86 (0xB2) and the raw

@@ -43,6 +43,9 @@ void Vaati3Arm_Action1(Entity* this) {
     } else {
         if (this->parent->next == NULL) {
             DeleteThisEntity();
+#ifdef PC_PORT
+            return;
+#endif
         }
         sub_080A0640(this);
         GetNextFrame(this);

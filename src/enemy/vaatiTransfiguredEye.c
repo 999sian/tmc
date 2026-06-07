@@ -13,7 +13,17 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
+    /* #151: this struct is also used to cast the Vaati Transfigured body in
+     * VaatiTransfiguredEye_OnCollision. Match VaatiTransfiguredEntity's
+     * #98 Enemy::child padding so hits set the body's real unk_76 mask; without
+     * this, Phase 2 eyes write four bytes low and Vaati never becomes vulnerable.
+     * Gated to 8-byte pointers: on MIPS32 (N64) the Entity base stays 0x68 and
+     * Enemy::child is 4 bytes, so the +4 must drop or unk_76 lands at 0x7A. */
+    /*0x68*/ u8 unused1[13 + 4];
+#else
     /*0x68*/ u8 unused1[13];
+#endif
     /*0x75*/ u8 unk_75;
     /*0x76*/ u8 unk_76;
     /*0x77*/ u8 unused2[9];
@@ -24,6 +34,10 @@ typedef struct {
     /*0x84*/ u8 unused3[1];
     /*0x85*/ u8 unk_85;
 } VaatiTransfiguredEyeEntity;
+PORT_STATIC_ASSERT_OFFSET(VaatiTransfiguredEyeEntity, unk_76, 0x76, 0xA2,
+                          "VaatiTransfiguredEyeEntity unk_76 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiTransfiguredEyeEntity, unk_81, 0x81, 0xAD,
+                          "VaatiTransfiguredEyeEntity unk_81 offset incorrect");
 
 void sub_08045A00(VaatiTransfiguredEyeEntity*);
 void sub_08045A28(VaatiTransfiguredEyeEntity*);

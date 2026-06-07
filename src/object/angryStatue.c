@@ -12,6 +12,7 @@
 #include "room.h"
 #include "sound.h"
 #include "tiles.h"
+#include "manager/angryStatueManager.h"
 
 void AngryStatue_Init(Entity*);
 void AngryStatue_Action1(Entity*);
@@ -78,7 +79,19 @@ void AngryStatue_Action3(Entity* this) {
         InitializeAnimation(this, this->type);
     } else if (this->parent != NULL) {
         /* #97 pattern: parent may be cleared before action transitions. */
+#ifdef PC_PORT
+        /* #77: GBA signalled the manager via `parent->z.BYTES.byte2`, which
+         * aliased AngryStatueManager.field_0x36 exactly (Entity.z@0x34 →
+         * byte2@0x36 == field_0x36@0x36 with 4-byte pointers). On x86-64
+         * Entity.z moves to 0x3C (byte2@0x3E) while field_0x36 moves to 0x5E,
+         * so the write instead corrupts field_0x20[0] (the first statue
+         * pointer, 0x38..0x40) into a wild non-NULL pointer — later SIGSEGVs in
+         * sub_080AB634/IsColliding — and field_0x36 never reaches 0xf so the
+         * statues never register as destroyed. Write the real field. */
+        ((AngryStatueManager*)this->parent)->field_0x36 |= 1 << this->type2;
+#else
         this->parent->z.BYTES.byte2 |= 1 << this->type2;
+#endif
     }
 }
 

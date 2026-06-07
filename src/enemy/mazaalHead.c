@@ -176,9 +176,24 @@ void sub_08033F3C(MazaalHeadEntity* this) {
         this->unk_80 = 0;
         InitializeAnimation(super, 0);
         pEVar1 = CreateEnemy(MAZAAL_HEAD, 1);
-        pEVar1->parent = super;
+#ifdef PC_PORT
+        /* #140-class: GBA left this create unchecked; a full entity pool returns
+         * NULL and the write below hits the read-only BIOS region at address 0
+         * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the write. */
+        if (pEVar1 != NULL)
+#endif
+        {
+            pEVar1->parent = super;
+        }
         pEVar2 = CreateObject(MAZAAL_OBJECT, 0, 0);
-        pEVar2->parent = super;
+#ifdef PC_PORT
+        /* #140-class: unchecked create; guard the dereference below (a NULL pool
+         * slot writes harmlessly to BIOS on GBA but SIGSEGV at address 0 on PC). */
+        if (pEVar2 != NULL)
+#endif
+        {
+            pEVar2->parent = super;
+        }
         if (gRoomTransition.field_0x39 == 0) {
             super->action = 0xd;
             super->subAction = 0;
@@ -186,14 +201,34 @@ void sub_08033F3C(MazaalHeadEntity* this) {
             COLLISION_OFF(super);
         } else {
             pEVar2 = CreateEnemy(MAZAAL_BRACELET, 0);
-            pEVar2->parent = super;
-            ((MazaalHeadEntity*)pEVar2)->unk_78 = this;
-            this->unk_74 = (MazaalHeadEntity*)pEVar2;
+#ifdef PC_PORT
+            /* #140-class: unchecked create; guard the writes below. */
+            if (pEVar2 != NULL)
+#endif
+            {
+                pEVar2->parent = super;
+                ((MazaalHeadEntity*)pEVar2)->unk_78 = this;
+                this->unk_74 = (MazaalHeadEntity*)pEVar2;
+            }
             pEVar2 = CreateEnemy(MAZAAL_BRACELET, 1);
-            pEVar2->parent = super;
-            ((MazaalHeadEntity*)pEVar2)->unk_78 = (MazaalHeadEntity*)pEVar1;
-            this->unk_78 = (MazaalHeadEntity*)pEVar2;
-            CreateEnemy(MAZAAL_HEAD, 4)->parent = super;
+#ifdef PC_PORT
+            /* #140-class: unchecked create; guard the writes below. */
+            if (pEVar2 != NULL)
+#endif
+            {
+                pEVar2->parent = super;
+                ((MazaalHeadEntity*)pEVar2)->unk_78 = (MazaalHeadEntity*)pEVar1;
+                this->unk_78 = (MazaalHeadEntity*)pEVar2;
+            }
+            pEVar2 = CreateEnemy(MAZAAL_HEAD, 4);
+#ifdef PC_PORT
+            /* #140-class: GBA inlined this create+deref; capture into a temp so PC
+             * can guard the NULL pool case (harmless BIOS write on GBA). */
+            if (pEVar2 != NULL)
+#endif
+            {
+                pEVar2->parent = super;
+            }
         }
     }
 }

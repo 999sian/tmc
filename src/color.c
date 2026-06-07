@@ -187,6 +187,15 @@ void SetEntityObjPalette(Entity* entity, s32 palette) {
     if (palette < 0) {
         palette = 0;
     }
+#ifdef PC_PORT
+    /* #151 repro slots can restore during a room transition with a stale
+     * palette-chain nibble. GBA writes past gPaletteList into adjacent IWRAM;
+     * on PC that can run off the mapped globals page. Clamp the chain before
+     * walking it, preserving normal palette allocations unchanged. */
+    if (palette >= (s32)ARRAY_COUNT(gPaletteList)) {
+        palette = 0;
+    }
+#endif
     if (0x7e < (u8)(entity->spriteAnimation[2] - 1)) {
         entity->spriteAnimation[1] = palette;
     }
@@ -202,6 +211,16 @@ void SetEntityObjPalette(Entity* entity, s32 palette) {
     if ((s8)pPVar1->_0_0 != 4) {
         pPVar1->_1++;
         uVar1 = pPVar1->_0_4;
+#ifdef PC_PORT
+        if (uVar1 == 0) {
+            uVar1 = 1;
+        } else {
+            u32 max = ARRAY_COUNT(gPaletteList) - (u32)palette;
+            if (uVar1 > max) {
+                uVar1 = max;
+            }
+        }
+#endif
         pPVar1->_0_0 = 3;
         while (uVar1 = uVar1 - 1, uVar1 != 0) {
             pPVar1 = pPVar1 + 1;
@@ -223,10 +242,26 @@ void sub_0801D244(u32 a1) {
     Palette* pPVar2;
     u32 uVar3;
 
+#ifdef PC_PORT
+    if (a1 >= ARRAY_COUNT(gPaletteList)) {
+        return;
+    }
+#endif
     pPVar2 = gPaletteList + a1;
     if ((s8)pPVar2->_0_0 == 3) {
         if (--pPVar2->_1 == 0) {
             uVar3 = pPVar2->_0_4;
+#ifdef PC_PORT
+            if (uVar3 == 0) {
+                return;
+            }
+            {
+                u32 max = ARRAY_COUNT(gPaletteList) - a1;
+                if (uVar3 > max) {
+                    uVar3 = max;
+                }
+            }
+#endif
             do {
                 pPVar2->_1 = 0;
                 pPVar2->_0_0 = 1;

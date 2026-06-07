@@ -70,6 +70,17 @@ typedef struct {
     u32 unk8;
 } GfxItem;
 
+#ifdef TMC_N64
+/* GBA ROM structs are little-endian; on the big-endian N64 a native multi-byte
+ * read byte-swaps them. Convert ROM-sourced u16/u32 struct fields to host order.
+ * (u8 fields are byte reads and need no conversion.) */
+#define ROM_U16(x) ((u16)__builtin_bswap16((u16)(x)))
+#define ROM_U32(x) ((u32)__builtin_bswap32((u32)(x)))
+#else
+#define ROM_U16(x) (x)
+#define ROM_U32(x) (x)
+#endif
+
 typedef struct {
     u8 filler[0xA00];
 } struct_02017AA0;
@@ -122,6 +133,14 @@ typedef struct {
 #define COMMON_AREA_TABLE_COUNT 0x90
 
 static void Common_AbortMissingAssetGroup(const char* kind, u32 group) {
+#ifdef TMC_N64
+    /* #N64: graphics/palettes come from the embedded ROM via the GBA-original
+     * path *below* the PC `assets/` block, not from a PC asset tree. Returning
+     * here lets the caller (LoadGfxGroup / LoadPaletteGroup) fall through to
+     * that ROM path instead of aborting. */
+    (void)kind; (void)group;
+    return;
+#endif
     fprintf(stderr, "\n[FATAL] %s group %u not found.\n", kind, group);
     fprintf(stderr, "\n  The PC port reads tile graphics, palettes and music\n");
     fprintf(stderr, "  from an `assets/` tree that you produce once by running\n");
@@ -384,14 +403,30 @@ void LoadPaletteGroup(u32 group) {
     Common_AbortMissingAssetGroup("palette", group);
 #endif
     const PaletteGroup* paletteGroup = gPaletteGroups[group];
+#ifdef PC_PORT
+    /* #port bug-class-2: a ROM palette group can be unresolved (NULL) on the
+     * native port; the GBA always had a valid ROM pointer here. Skip rather than
+     * NULL-deref (crashes on N64; harmless garbage read on GBA). */
+    if (paletteGroup == NULL) {
+        static u8 sSeenNullPg[256] = {0};
+        if (group < 256 && !sSeenNullPg[group]) {
+            sSeenNullPg[group] = 1;
+            fprintf(stderr, "[port] LoadPaletteGroup: group %u unresolved (NULL) — skipping\n", group);
+        }
+        return;
+    }
+#endif
     while (1) {
-        u32 destPaletteNum = paletteGroup->destPaletteNum;
-        u32 numPalettes = paletteGroup->numPalettes & 0xF;
+        /* Read the 4-byte PaletteGroup via a 32-bit load (N64 cart lbu/lhu are
+         * broken); ROM_U32 byte-swaps on the BE host. */
+        u32 pg = ROM_U32(*(const u32*)paletteGroup);
+        u32 destPaletteNum = (pg >> 16) & 0xFF;
+        u32 numPalettes = (pg >> 24) & 0xF;
         if (numPalettes == 0) {
             numPalettes = 16;
         }
-        LoadPalettes(&gGlobalGfxAndPalettes[paletteGroup->paletteId * 32], destPaletteNum, numPalettes);
-        if ((paletteGroup->numPalettes & 0x80) == 0) {
+        LoadPalettes(&gGlobalGfxAndPalettes[(pg & 0xFFFF) * 32], destPaletteNum, numPalettes);
+        if (((pg >> 24) & 0x80) == 0) {
             break;
         }
         paletteGroup++;
@@ -408,6 +443,12 @@ void LoadPalettes(const u8* src, s32 destPaletteNum, s32 numPalettes) {
     gUsedPalettes |= usedPalettesMask;
     dest = &gPaletteBuffer[destPaletteNum * 16];
     DmaCopy32(3, src, dest, size);
+#ifdef TMC_N64
+    /* DmaCopy32 byte-preserves the GBA little-endian colors; a native u16 read
+     * on the big-endian N64 would byte-swap each BGR555 color. Swap in place so
+     * the engine and ViruaPPU see correct colors. */
+    for (u32 i = 0; i < size / 2u; i++) dest[i] = (u16)__builtin_bswap16(dest[i]);
+#endif
 }
 
 void SetColor(u32 colorIndex, u32 color) {
@@ -438,10 +479,23 @@ void LoadGfxGroup(u32 group) {
     u32 dest;
     int size;
     const GfxItem* gfxItem = gGfxGroups[group];
+#ifdef PC_PORT
+    /* #port bug-class-2: ROM gfx group can be unresolved (NULL) on the native
+     * port; skip rather than NULL-deref (crashes on N64). */
+    if (gfxItem == NULL) {
+        static u8 sSeenNullGfx[256] = {0};
+        if (group < 256 && !sSeenNullGfx[group]) {
+            sSeenNullGfx[group] = 1;
+            fprintf(stderr, "[port] LoadGfxGroup: group %u unresolved (NULL) — skipping\n", group);
+        }
+        return;
+    }
+#endif
     while (1) {
         u32 loadGfx = FALSE;
-        u32 ctrl = gfxItem->unk0.bytes.unk3;
-        ctrl &= 0xF;
+        /* Read unk0 via a 32-bit load (N64 cart byte reads are broken). */
+        u32 gi = ROM_U32(gfxItem->unk0.raw);
+        u32 ctrl = (gi >> 24) & 0xF;
         switch (ctrl) {
             case 0x7:
                 loadGfx = TRUE;
@@ -466,10 +520,10 @@ void LoadGfxGroup(u32 group) {
         }
 
         if (loadGfx) {
-            gfxOffset = gfxItem->unk0.raw & 0xFFFFFF;
+            gfxOffset = gi & 0xFFFFFF;
             src = &gGlobalGfxAndPalettes[gfxOffset];
-            dest = gfxItem->dest;
-            size = gfxItem->unk8;
+            dest = ROM_U32(gfxItem->dest);
+            size = (int)ROM_U32(gfxItem->unk8);
             dmaCtrl = 0x80000000;
             if (size < 0) {
                 if (dest >= VRAM) {
@@ -482,8 +536,7 @@ void LoadGfxGroup(u32 group) {
             }
         }
 
-        terminator = gfxItem->unk0.bytes.unk3;
-        terminator &= 0x80;
+        terminator = (gi >> 24) & 0x80;
         gfxItem++;
         if (!terminator) {
             break;
