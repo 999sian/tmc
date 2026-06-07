@@ -78,6 +78,20 @@ typedef struct {
     Entity* arms[2];
     Entity* eyes[4];
 } VaatiWrathHeapStruct;
+#ifdef PC_PORT
+static Entity* VaatiWrath_GetLiveType0(Entity* this) {
+    /* #151 follow-up: type1/type2/type3 assume heap->type0 always survives on
+     * GBA; if a Phase 3 child outlives or loses that pointer on PC, the NULL or
+     * stale deref SIGSEGVs instead of falling into BIOS garbage. */
+    extern int Port_IsValidEntityAddr(const void*);
+    VaatiWrathHeapStruct* heap = (VaatiWrathHeapStruct*)this->myHeap;
+    Entity* type0 = heap != NULL ? heap->type0 : NULL;
+    if (!Port_IsValidEntityAddr(type0) || type0->next == NULL) {
+        return NULL;
+    }
+    return type0;
+}
+#endif
 
 void (*const vaatiWrathTypes[])(VaatiWrathEntity*) = {
     VaatiWrathType0,
@@ -652,10 +666,26 @@ void sub_08041D14(VaatiWrathEntity* this) {
         } else {
             if (gEntCount < 0x46) {
                 pEVar1 = CreateObject(VAATI3_DEATH, 0, 0);
-                pEVar1->parent = super;
-                super->child = pEVar1;
+#ifdef PC_PORT
+                /* #140-class: GBA left this create unchecked; a full entity pool returns
+                 * NULL and the writes below hit the read-only BIOS region at address 0
+                 * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+                if (pEVar1 != NULL)
+#endif
+                {
+                    pEVar1->parent = super;
+                    super->child = pEVar1;
+                }
                 pEVar1 = CreateObject(VAATI3_DEATH, 1, 0);
-                pEVar1->parent = super;
+#ifdef PC_PORT
+                /* #140-class: GBA left this create unchecked; a full entity pool returns
+                 * NULL and the writes below hit the read-only BIOS region at address 0
+                 * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+                if (pEVar1 != NULL)
+#endif
+                {
+                    pEVar1->parent = super;
+                }
                 super->subAction = 3;
                 super->timer = 150;
                 super->subtimer = 0;
@@ -742,11 +772,27 @@ u32 sub_08041ED4(VaatiWrathEntity* this) {
             heap->arms[0] = NULL;
             heap->arms[1] = NULL;
             entity = CreateEnemy(VAATI_WRATH, 1);
-            entity->myHeap = (void*)heap;
-            heap->type1 = entity;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool returns
+             * NULL and the writes below hit the read-only BIOS region at address 0
+             * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+            if (entity != NULL)
+#endif
+            {
+                entity->myHeap = (void*)heap;
+                heap->type1 = entity;
+            }
             entity = CreateEnemy(VAATI_WRATH, 2);
-            entity->myHeap = (void*)heap;
-            heap->type2 = entity;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool returns
+             * NULL and the writes below hit the read-only BIOS region at address 0
+             * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+            if (entity != NULL)
+#endif
+            {
+                entity->myHeap = (void*)heap;
+                heap->type2 = entity;
+            }
             return 1;
         }
     }
@@ -761,17 +807,49 @@ u32 sub_08041F1C(VaatiWrathEntity* this) {
     }
 
     eye = CreateEnemy(VAATI_WRATH_EYE, 0);
-    eye->parent = super;
-    ((VaatiWrathHeapStruct*)super->myHeap)->eyes[0] = eye;
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (eye != NULL)
+#endif
+    {
+        eye->parent = super;
+        ((VaatiWrathHeapStruct*)super->myHeap)->eyes[0] = eye;
+    }
     eye = CreateEnemy(VAATI_WRATH_EYE, 1);
-    eye->parent = super;
-    ((VaatiWrathHeapStruct*)super->myHeap)->eyes[1] = eye;
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (eye != NULL)
+#endif
+    {
+        eye->parent = super;
+        ((VaatiWrathHeapStruct*)super->myHeap)->eyes[1] = eye;
+    }
     eye = CreateEnemy(VAATI_WRATH_EYE, 2);
-    eye->parent = super;
-    ((VaatiWrathHeapStruct*)super->myHeap)->eyes[2] = eye;
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (eye != NULL)
+#endif
+    {
+        eye->parent = super;
+        ((VaatiWrathHeapStruct*)super->myHeap)->eyes[2] = eye;
+    }
     eye = CreateEnemy(VAATI_WRATH_EYE, 3);
-    eye->parent = super;
-    ((VaatiWrathHeapStruct*)super->myHeap)->eyes[3] = eye;
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (eye != NULL)
+#endif
+    {
+        eye->parent = super;
+        ((VaatiWrathHeapStruct*)super->myHeap)->eyes[3] = eye;
+    }
     return 1;
 }
 
@@ -786,9 +864,17 @@ u32 sub_08041F74(VaatiWrathEntity* this, u32 unk1) {
     arm = NULL;
     if ((gRoomTransition.field_0x39 >> unk1 & 1U) != 0) {
         arm = CreateEnemy(VAATI_ARM, 0);
-        arm->type2 = unk1;
-        arm->parent = super;
-        CopyPosition(super, arm);
+#ifdef PC_PORT
+        /* #140-class: GBA left this create unchecked; a full entity pool returns
+         * NULL and the writes below hit the read-only BIOS region at address 0
+         * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+        if (arm != NULL)
+#endif
+        {
+            arm->type2 = unk1;
+            arm->parent = super;
+            CopyPosition(super, arm);
+        }
     }
     if (unk1 == 0) {
         heap->arms[0] = arm;
@@ -1033,10 +1119,19 @@ void VaatiWrathType0PreAction(VaatiWrathEntity* this) {
 #endif
 
 void VaatiWrathType1(VaatiWrathEntity* this) {
+#ifdef PC_PORT
+    Entity* type0 = VaatiWrath_GetLiveType0(super);
+    if (type0 == NULL) {
+        super->myHeap = NULL;
+        DeleteThisEntity();
+        return;
+    }
+#else
     if (((VaatiWrathHeapStruct*)super->myHeap)->type0->next == NULL) {
         super->myHeap = NULL;
         DeleteThisEntity();
     }
+#endif
     if (super->action == 0) {
         super->action = 1;
         super->subAction = 0;
@@ -1049,22 +1144,38 @@ void VaatiWrathType1(VaatiWrathEntity* this) {
         InitializeAnimation(super, 0xc);
         super->frameDuration = (Random() & 0x78) + 0x78;
     }
+#ifdef PC_PORT
+    sub_0806FA90(type0, super, 0, 1);
+#else
     sub_0806FA90(((VaatiWrathHeapStruct*)super->myHeap)->type0, super, 0, 1);
+#endif
     super->spriteOffsetY--;
 }
 
 void VaatiWrathType2(VaatiWrathEntity* this) {
     u32 uVar1;
-
+#ifdef PC_PORT
+    Entity* type0 = VaatiWrath_GetLiveType0(super);
+    if (type0 == NULL) {
+        super->myHeap = NULL;
+        DeleteThisEntity();
+        return;
+    }
+#else
     if (((VaatiWrathHeapStruct*)super->myHeap)->type0->next == NULL) {
         super->myHeap = NULL;
         DeleteThisEntity();
     }
+#endif
     if (super->action == 0) {
         super->action = 1;
         InitializeAnimation(super, 0x12);
     }
+#ifdef PC_PORT
+    sub_0806FA90(type0, super, 0, -1);
+#else
     sub_0806FA90(((VaatiWrathHeapStruct*)super->myHeap)->type0, super, 0, -1);
+#endif
     super->spriteOffsetY++;
     if (super->animIndex == 0x12) {
         uVar1 = GetFacingDirection(super, &gPlayerEntity.base);
@@ -1073,15 +1184,28 @@ void VaatiWrathType2(VaatiWrathEntity* this) {
 }
 
 void VaatiWrathType3(VaatiWrathEntity* this) {
+#ifdef PC_PORT
+    Entity* type0 = VaatiWrath_GetLiveType0(super);
+    if (type0 == NULL) {
+        super->myHeap = NULL;
+        DeleteThisEntity();
+        return;
+    }
+#else
     if (((VaatiWrathHeapStruct*)super->myHeap)->type0->next == NULL) {
         super->myHeap = NULL;
         DeleteThisEntity();
     }
+#endif
     if (super->action == 0) {
         super->action = 1;
         InitializeAnimation(super, 0x1c);
     }
+#ifdef PC_PORT
+    sub_0806FA90(type0, super, 0, -1);
+#else
     sub_0806FA90(((VaatiWrathHeapStruct*)super->myHeap)->type0, super, 0, -1);
+#endif
     super->spriteOffsetY++;
     GetNextFrame(super);
 }

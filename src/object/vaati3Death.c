@@ -8,9 +8,17 @@
 #include "physics.h"
 
 void Vaati3Death(Entity* this) {
+#ifdef PC_PORT
+    extern int Port_IsValidEntityAddr(const void*);
+    if (!Port_IsValidEntityAddr(this->parent) || this->parent->next == NULL || this->parent->subAction > 3) {
+        DeleteThisEntity();
+        return;
+    }
+#else
     if (this->parent->subAction > 3) {
         DeleteThisEntity();
     }
+#endif
     if (this->action == 0) {
         this->action = 1;
         InitializeAnimation(this, this->type);

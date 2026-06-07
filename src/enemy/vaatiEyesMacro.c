@@ -123,7 +123,15 @@ void VaatiEyesMacroFunction0Type0Action0(VaatiEyesMacroEntity* this) {
         manager->parent = (Entity*)super;
         AppendEntityToList((Entity*)manager, 8);
         enemy = CreateEnemy(VAATI_EYES_MACRO, 2);
-        enemy->parent = super;
+#ifdef PC_PORT
+        /* #140-class: GBA left this create unchecked; a full entity pool returns
+         * NULL and the write below hits the read-only BIOS region at address 0
+         * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the write. */
+        if (enemy != NULL)
+#endif
+        {
+            enemy->parent = super;
+        }
         super->action = 1;
         if (gRoomControls.room == 0) {
             this->unk_79 = super->health = gRoomTransition.field_0x3a;
@@ -152,7 +160,15 @@ void VaatiEyesMacroFunction0Type1Action0(VaatiEyesMacroEntity* this) {
 
     if (gEntCount < 0x47) {
         entity = CreateEnemy(VAATI_EYES_MACRO, 3);
-        entity->parent = super;
+#ifdef PC_PORT
+        /* #140-class: GBA left this create unchecked; a full entity pool returns
+         * NULL and the write below hits the read-only BIOS region at address 0
+         * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the write. */
+        if (entity != NULL)
+#endif
+        {
+            entity->parent = super;
+        }
         super->action = 1;
         rand = Random();
         super->timer = (rand & 3) + 1;

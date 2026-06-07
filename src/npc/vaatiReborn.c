@@ -131,6 +131,16 @@ void VaatiRebornAction1(Entity* this) {
             entity = sub_0806B9BC(this);
             if (entity == NULL) {
                 DeleteThisEntity();
+#ifdef PC_PORT
+                /* #151: the sorcerer Vaati (type 0) self-deletes the instant it
+                 * transforms; DeleteEntity sets its next=NULL, so this child's
+                 * sub_0806B9BC returns NULL the very next frame. GBA fell through
+                 * to PositionRelative(NULL, this, ...) reading the BIOS region at
+                 * address 0 harmlessly; on PC that dereferences NULL->x.WORD →
+                 * SIGSEGV. The entity is already deleted — bail, matching the
+                 * default case below. */
+                break;
+#endif
             }
             PositionRelative(entity, this, 0, Q_16_16(33.0));
             UpdateAnimationSingleFrame(this);

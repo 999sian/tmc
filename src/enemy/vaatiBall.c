@@ -51,6 +51,15 @@ void VaatiBall(VaatiBallEntity* this) {
         sub_0804468C, sub_0804474C, sub_080447E0, sub_08044868, sub_0804474C, sub_080449F8, sub_08044B04,
     };
     Entity* parent = super->parent;
+#ifdef PC_PORT
+    /* #151/#136 family: Vaati balls are always parented by the Reborn
+     * controller on the GBA path. If a bad restore/repro leaves one orphaned,
+     * the original reads the BIOS page through NULL; on PC that is a SIGSEGV. */
+    if (parent == NULL) {
+        DeleteThisEntity();
+        return;
+    }
+#endif
     if (super->action && super->action != 3) {
         super->x.WORD += parent->x.WORD - *(int*)&((VaatiBallEntity*)parent)->unk_78;
         super->y.WORD += parent->y.WORD - ((VaatiBallEntity*)parent)->unk_7c;

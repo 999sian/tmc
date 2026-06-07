@@ -105,6 +105,14 @@ void SpinyBeetle_Init(SpinyBeetleEntity* this) {
 
     if (obj == NULL) {
         DeleteThisEntity();
+#ifdef PC_PORT
+        /* #151-class: the dev intended the pool-exhaustion case to bail (it
+         * deletes the beetle), but the GBA code never returned — it fell through
+         * to CopyPosition(super, NULL) and obj->parent = super, which read/write
+         * the BIOS region at address 0 harmlessly on GBA. On PC those dereference
+         * NULL → SIGSEGV. The beetle is already deleted, so bail. */
+        return;
+#endif
     }
 
     CopyPosition(super, obj);

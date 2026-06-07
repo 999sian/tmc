@@ -49,6 +49,19 @@ typedef struct VaatiArm_HeapStruct {
     Entity* parent;
     VaatiArm_HeapStruct1 s1[5];
 } VaatiArm_HeapStruct;
+#ifdef PC_PORT
+typedef struct {
+    Entity* type0;
+    Entity* type1;
+    Entity* type2;
+    Entity* type3;
+    Entity* object5b;
+    Entity* arm0;
+    Entity* arm1;
+} VaatiWrathArmAlias;
+PORT_STATIC_ASSERT_OFFSET(VaatiWrathArmAlias, arm0, 0x14, 0x28, "VaatiWrathArmAlias arm0 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiWrathArmAlias, arm1, 0x18, 0x30, "VaatiWrathArmAlias arm1 offset incorrect");
+#endif
 
 extern void EnemyDetachFX(Entity*);
 
@@ -1165,6 +1178,18 @@ static void sub_08043770(VaatiArmEntity* this) {
         if ((gRoomTransition.field_0x39 & 0xc) == 0) {
             entity->subAction = 2;
         }
+#ifdef PC_PORT
+        /* #151 follow-up: this room-transition path intentionally aliases the
+         * VaatiWrath arm slots through VaatiArm_HeapStruct's parent/s1 fields on
+         * GBA. Preserve that alias with full-width pointers on PC. */
+        if (super->type2 == 0) {
+            ((VaatiWrathArmAlias*)entity->myHeap)->arm0 = NULL;
+            gRoomTransition.field_0x39 &= 0xfe;
+        } else {
+            ((VaatiWrathArmAlias*)entity->myHeap)->arm1 = NULL;
+            gRoomTransition.field_0x39 &= 0xfd;
+        }
+#else
         if (super->type2 == 0) {
             ((VaatiArm_HeapStruct*)entity->myHeap)->parent = NULL;
             gRoomTransition.field_0x39 &= 0xfe;
@@ -1172,6 +1197,7 @@ static void sub_08043770(VaatiArmEntity* this) {
             *(u32*)((VaatiArm_HeapStruct*)entity->myHeap)->s1 = 0;
             gRoomTransition.field_0x39 &= 0xfd;
         }
+#endif
         ((VaatiArm_HeapStruct*)super->myHeap)->entities[4]->base.myHeap = NULL;
         ((VaatiArm_HeapStruct*)super->myHeap)->entities[4]->base.health = 0;
         (*(Entity**)&this->unk_68)->parent = &((VaatiArm_HeapStruct*)super->myHeap)->entities[4]->base;
@@ -1194,29 +1220,61 @@ static u32 sub_080437DC(VaatiArmEntity* this) {
     super->myHeap = (u32*)heapStruct;
     heapStruct->entities[0] = this;
     entity = CreateEnemy(VAATI_ARM, 1);
-    entity->spritePriority.b0 = 5;
-    entity->collisionFlags = entity->collisionFlags | 0x10;
-    entity->myHeap = (u32*)heapStruct;
-    heapStruct->entities[1] = (VaatiArmEntity*)entity;
-    CopyPosition(super, entity);
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (entity != NULL)
+#endif
+    {
+        entity->spritePriority.b0 = 5;
+        entity->collisionFlags = entity->collisionFlags | 0x10;
+        entity->myHeap = (u32*)heapStruct;
+        heapStruct->entities[1] = (VaatiArmEntity*)entity;
+        CopyPosition(super, entity);
+    }
     entity = CreateEnemy(VAATI_ARM, 2);
-    entity->spritePriority.b0 = 5;
-    entity->collisionFlags = entity->collisionFlags | 0x10;
-    entity->myHeap = (u32*)heapStruct;
-    heapStruct->entities[2] = (VaatiArmEntity*)entity;
-    CopyPosition(super, entity);
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (entity != NULL)
+#endif
+    {
+        entity->spritePriority.b0 = 5;
+        entity->collisionFlags = entity->collisionFlags | 0x10;
+        entity->myHeap = (u32*)heapStruct;
+        heapStruct->entities[2] = (VaatiArmEntity*)entity;
+        CopyPosition(super, entity);
+    }
     entity = CreateEnemy(VAATI_ARM, 3);
-    entity->spritePriority.b0 = 5;
-    entity->collisionFlags = entity->collisionFlags | 0x10;
-    entity->myHeap = (u32*)heapStruct;
-    heapStruct->entities[3] = (VaatiArmEntity*)entity;
-    CopyPosition(super, entity);
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (entity != NULL)
+#endif
+    {
+        entity->spritePriority.b0 = 5;
+        entity->collisionFlags = entity->collisionFlags | 0x10;
+        entity->myHeap = (u32*)heapStruct;
+        heapStruct->entities[3] = (VaatiArmEntity*)entity;
+        CopyPosition(super, entity);
+    }
     entity = CreateEnemy(VAATI_ARM, 4);
-    entity->spritePriority.b0 = 5;
-    entity->collisionFlags = entity->collisionFlags | 0x10;
-    entity->myHeap = (u32*)heapStruct;
-    heapStruct->entities[4] = (VaatiArmEntity*)entity;
-    CopyPosition(super, entity);
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (entity != NULL)
+#endif
+    {
+        entity->spritePriority.b0 = 5;
+        entity->collisionFlags = entity->collisionFlags | 0x10;
+        entity->myHeap = (u32*)heapStruct;
+        heapStruct->entities[4] = (VaatiArmEntity*)entity;
+        CopyPosition(super, entity);
+    }
     heapStruct->parent = super->parent;
     temp = gUnk_080D135C[super->type2];
     heapStruct->s1[0].unk00.HWORD = temp;
@@ -1510,7 +1568,14 @@ static void sub_08043DB0(VaatiArmEntity* this) {
             pEVar2 = ((VaatiArm_HeapStruct*)super->myHeap)->parent;
             gRoomTransition.field_0x40 = pEVar2->x.HALF.HI;
             gRoomTransition.field_0x42 = pEVar2->y.HALF.HI;
+#ifdef PC_PORT
+            /* #151 follow-up: VaatiWrath keeps its two live arm pointers at the
+             * same GBA offsets VaatiArm sees as parent/s1. Read the real PC
+             * pointers instead of truncating arm1 through *(int*). */
+            pEVar4 = ((VaatiWrathArmAlias*)pEVar2->myHeap)->arm0;
+#else
             pEVar4 = ((VaatiArm_HeapStruct*)pEVar2->myHeap)->parent;
+#endif
             if (pEVar4 != NULL) {
                 gRoomTransition.field_0x44 = pEVar4->x.HALF.HI;
                 gRoomTransition.field_0x46 = pEVar4->y.HALF.HI;
@@ -1518,7 +1583,11 @@ static void sub_08043DB0(VaatiArmEntity* this) {
                 gRoomTransition.field_0x44 = gRoomControls.origin_x + 0x110;
                 gRoomTransition.field_0x46 = gRoomControls.origin_y + 0x60;
             }
+#ifdef PC_PORT
+            pEVar4 = ((VaatiWrathArmAlias*)pEVar2->myHeap)->arm1;
+#else
             pEVar4 = (Entity*)(*(int*)((VaatiArm_HeapStruct*)pEVar2->myHeap)->s1);
+#endif
             if (pEVar4 != NULL) {
                 gRoomTransition.field_0x48 = pEVar4->x.HALF.HI;
                 gRoomTransition.field_0x4a = pEVar4->y.HALF.HI;

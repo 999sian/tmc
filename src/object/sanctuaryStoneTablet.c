@@ -12,7 +12,7 @@
 typedef struct {
     Entity base;
     u8 filler[0x1E];
-#ifdef PC_PORT
+#if defined(PC_PORT) && __SIZEOF_POINTER__ == 8 /* 64-bit-ptr ports only; 32-bit ports (N64/MIPS) keep GBA 0x68 */
     /* #130 Four Sword Sanctuary softlock. On GBA `objFlags` sits at 0x86, which
      * is exactly GenericEntity.field_0x86 — the word sub_0807F8E8 writes the
      * activation flag (0x8004) into when the script spawns this plaque. The

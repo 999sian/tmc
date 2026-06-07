@@ -95,22 +95,46 @@ void sub_08022C58(MoldormEntity* this) {
         return;
 
     tail0 = CreateEnemy(MOLDORM, 1);
-    super->child = tail0;
-    tail0->spritePriority.b0 = 5;
-    tail0->parent = super;
-    CopyPosition(super, tail0);
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (tail0 != NULL)
+#endif
+    {
+        super->child = tail0;
+        tail0->spritePriority.b0 = 5;
+        tail0->parent = super;
+        CopyPosition(super, tail0);
+    }
 
     tail1 = CreateEnemy(MOLDORM, 2);
-    tail0->child = tail1;
-    tail1->spritePriority.b0 = 5;
-    tail1->parent = super;
-    CopyPosition(super, tail1);
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (tail1 != NULL)
+#endif
+    {
+        tail0->child = tail1;
+        tail1->spritePriority.b0 = 5;
+        tail1->parent = super;
+        CopyPosition(super, tail1);
+    }
 
     tail2 = CreateEnemy(MOLDORM, 3);
-    tail1->child = tail2;
-    tail2->spritePriority.b0 = 5;
-    tail2->parent = super;
-    CopyPosition(super, tail2);
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (tail2 != NULL)
+#endif
+    {
+        tail1->child = tail2;
+        tail2->spritePriority.b0 = 5;
+        tail2->parent = super;
+        CopyPosition(super, tail2);
+    }
 
     sub_0804A720(super);
     super->action = 1;

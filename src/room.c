@@ -10,6 +10,7 @@
 #include "game.h"
 #include "manager/bombableWallManager.h"
 #include "manager/templeOfDropletsManager.h"
+#include "manager/angryStatueManager.h"
 #include "map.h"
 #include "object.h"
 #include "tiles.h"
@@ -134,6 +135,19 @@ Entity* LoadRoomEntity(const EntityData* dat) {
              * chain depends on these matching the data. */
             mgr->flag = (u16)(dat->spritePtr & 0xFFFFu);
             mgr->localFlag = (u16)(dat->spritePtr >> 16);
+        }
+        /* #77: same RegisterRoomEntity MemCopy mis-map as #75 above. On GBA the
+         * 16-byte EntityData lands at manager 0x30, putting spritePtr at
+         * 0x3c-0x3f so the AngryStatueManager completion flag field_0x3e
+         * (0x3e = paramC>>16) is populated. On PC the copy lands at 0x48
+         * (Manager grew 0x20->0x38 AND field_0x20[4] grew 0x10->0x20), leaving
+         * field_0x3e (0x66) zero — so AngryStatueManager_Action2's
+         * SetFlag(field_0x3e) becomes SetFlag(0) on completion and destroying
+         * all four statues never sets the reward flag (the pillars never drop).
+         * field_0x20[]/field_0x36 are re-initialised by AngryStatueManager_Init,
+         * so only the flag needs restoring here. */
+        if (kind == 9 && dat->id == ANGRY_STATUE_MANAGER) {
+            ((AngryStatueManager*)entity)->field_0x3e = (u16)(dat->spritePtr >> 16);
         }
 #endif
         if ((dat->flags & 0xF0) != 16) {
