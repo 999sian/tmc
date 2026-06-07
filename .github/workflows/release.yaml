@@ -23,7 +23,10 @@ on:
         options:
           - all
           - linux
+          - linux-arm
           - windows
+          - windows-arm
+          - arm
           - macos
           - macos-arm
           - macos-x86

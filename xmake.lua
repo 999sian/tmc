@@ -64,7 +64,14 @@ option_end()
 local build_dir = "build/$(plat)"
 local tools_bin = "tools/bin"
 
--- Force GCC-style bitfield packing on MinGW.
+-- True when the active target arch is x86/x64. ARM (arm64/aarch64) ports
+-- skip x86-only codegen flags (-mavx2, -mno-ms-bitfields) and the GCC-only
+-- -static-libgcc/-static-libstdc++ (aarch64 llvm-mingw uses -static alone).
+local function is_x86_target()
+    return is_arch("x86", "x64", "x86_64", "i386", "amd64")
+end
+
+-- Force GCC-style bitfield packing on MinGW (x86 only).
 --
 -- MinGW defaults to `-mms-bitfields` (MSVC-compatible bitfield layout),
 -- which gives different sizeof() and member offsets than Linux GCC for
@@ -75,23 +82,36 @@ local tools_bin = "tools/bin"
 -- layouts on the two platforms — manifests as #44 (Windows pause-map
 -- cursor at wrong position, grey-blocks/bouncing). `-mno-ms-bitfields`
 -- restores parity with Linux GCC across the board.
+--
+-- It's an x86 GCC option that doesn't apply to the AArch64 ABI (and
+-- aarch64 llvm-mingw clang rejects it), so it's gated to x86 targets.
+-- A Windows-ARM64 bitfield divergence would be caught by the
+-- PORT_STATIC_ASSERT layout checks.
 local function add_mingw_bitfield_parity()
-    if is_plat("windows", "mingw") then
+    if is_plat("windows", "mingw") and is_x86_target() then
         add_cflags("-mno-ms-bitfields", {force = true})
         add_cxxflags("-mno-ms-bitfields", {force = true})
     end
 end
 
+-- Statically link the runtime so the Windows binary is standalone.
+-- `-static` covers everything (incl. libgcc/libstdc++ or, on aarch64
+-- llvm-mingw, libc++/libunwind/compiler-rt). The extra -static-libgcc/
+-- -static-libstdc++ are GCC spellings kept for the established x86 build;
+-- aarch64 clang doesn't need them and may reject -static-libstdc++.
 local function add_mingw_static_runtime()
     if is_plat("windows", "mingw") then
-        add_ldflags("-static", "-static-libgcc", {force = true})
+        add_ldflags("-static", {force = true})
+        if is_x86_target() then
+            add_ldflags("-static-libgcc", {force = true})
+        end
         add_mingw_bitfield_parity()
     end
 end
 
 local function add_mingw_static_cpp_runtime()
     add_mingw_static_runtime()
-    if is_plat("windows", "mingw") then
+    if is_plat("windows", "mingw") and is_x86_target() then
         add_ldflags("-static-libstdc++", {force = true})
     end
 end
@@ -142,7 +162,7 @@ end
 -- issue #44 (Windows-only pause-map cursor at wrong position +
 -- bouncing). Pin the GCC layout globally — every target picks it up,
 -- so we don't have to remember to call a helper per target.
-if is_plat("mingw", "windows") then
+if is_plat("mingw", "windows") and is_x86_target() then
     add_cflags("-mno-ms-bitfields", {force = true})
     add_cxxflags("-mno-ms-bitfields", {force = true})
 end
@@ -935,9 +955,15 @@ target("tmc_pc")
     add_packages("libsdl3", "nlohmann_json", "fmt", "libpng", "zlib", "imgui", "guilite")
 
 
-    -- Build a standalone Windows binary with MinGW (static SDL + runtimes)
+    -- Build a standalone Windows binary with MinGW (static SDL + runtimes).
+    -- x86 uses the GCC -static-libgcc/-static-libstdc++ spellings; aarch64
+    -- llvm-mingw gets -static alone (statically links libc++/libunwind/
+    -- compiler-rt/winpthreads), since clang may reject -static-libstdc++.
     if is_plat("windows", "mingw") then
-        add_ldflags("-static", "-static-libgcc", "-static-libstdc++", {force = true})
+        add_ldflags("-static", {force = true})
+        if is_x86_target() then
+            add_ldflags("-static-libgcc", "-static-libstdc++", {force = true})
+        end
         -- dbghelp: SymInitialize / SymFromAddr used by port_bugreport.cpp's
         -- WriteBacktraceWindows() for symbol resolution in the crash handler.
         add_syslinks("winhttp", "winpthread", "dbghelp")
@@ -972,7 +998,7 @@ target("tmc_pc")
     --
     -- Platform notes:
     --   - Linux: gcc/clang both accept -fopenmp directly.
-    --   - MinGW (Windows cross): libgomp ships with the toolchain and
+    --   - MinGW (Windows x86 cross): libgomp ships with the toolchain and
     --     is linked statically via the existing -static-libgcc.
     --   - macOS: Apple Clang doesn't accept bare -fopenmp (would need
     --     `brew install libomp` + `-Xpreprocessor -fopenmp -lomp`).
@@ -980,7 +1006,15 @@ target("tmc_pc")
     --     when the flag isn't set — render is slower but visually
     --     identical. v0.3.0-experimental release CI hit this; skip the
     --     flag on macOS so the build succeeds.
-    if not is_plat("macosx") then
+    --   - Windows ARM64 (llvm-mingw): ships libomp (not libgomp); static
+    --     linking of it under -static is unverified, so degrade to the
+    --     same serial mode1 path as macOS to guarantee the build links.
+    --     Re-enable once a CI run confirms libomp links cleanly.
+    local openmp_ok = not is_plat("macosx")
+    if is_plat("windows", "mingw") and not is_x86_target() then
+        openmp_ok = false
+    end
+    if openmp_ok then
         add_cflags("-fopenmp")
         add_cxxflags("-fopenmp")
         add_ldflags("-fopenmp", {force = true})
@@ -1040,11 +1074,10 @@ target("randomizer_cli")
         end
 
         local outdir = path.join(os.scriptdir(), "build", "pc", "randomizer")
-        local rid = "linux-x64"
-        if is_plat("windows", "mingw") then rid = "win-x64"
-        elseif is_plat("macosx") then
-            if is_arch("arm64", "arm64-v8a") then rid = "osx-arm64"
-            else rid = "osx-x64" end
+        local is_arm64 = is_arch("arm64", "arm64-v8a", "aarch64")
+        local rid = is_arm64 and "linux-arm64" or "linux-x64"
+        if is_plat("windows", "mingw") then rid = is_arm64 and "win-arm64" or "win-x64"
+        elseif is_plat("macosx") then rid = is_arm64 and "osx-arm64" or "osx-x64"
         end
 
         cprint("${cyan [randomizer_cli]} dotnet publish -c Release -r " .. rid)

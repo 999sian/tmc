@@ -43,11 +43,23 @@ jobs:
           # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
           # on ubuntu-latest pins glibc 2.43+ which excludes most users.
           linux='{"runner":"ubuntu-22.04","os_name":"linux","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          # Linux ARM64 (aarch64) via GitHub's native arm64 runner. Same
+          # ubuntu-22.04 glibc-2.35 baseline as x86_64. In "all": the
+          # C/C++ is ARM-clean (macOS arm64 already ships) and the apt +
+          # build.py path is arch-neutral on a native runner.
+          linux_arm='{"runner":"ubuntu-22.04-arm","os_name":"linux","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           # Pin to windows-2022: GitHub rolled `windows-latest` to Server
           # 2025 with a different VS/MinGW tooling layout, which broke
           # xmake-repo's libpng install step (exit 127 at the post-compile
           # install). The v0.1.6.x release built fine on windows-2022.
           windows='{"runner":"windows-2022","os_name":"windows","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          # Windows ARM64 (aarch64) via the native windows-11-arm runner +
+          # llvm-mingw (dedicated install step). Opt-in (os_filter
+          # windows-arm or arm), intentionally NOT in "all" until a manual
+          # run validates the llvm-mingw toolchain — the x86 MinGW path
+          # (choco gcc, -mno-ms-bitfields, libgomp) doesn't apply to
+          # aarch64 clang. Promote to "all" once green.
+          windows_arm='{"runner":"windows-11-arm","os_name":"windows","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
           # macos-14 = Apple Silicon arm64; macos-13 = Intel x86_64.
           # Both keep os_name="macos" so the brew dep-install step's
           # condition (`matrix.os_name == 'macos'`) covers both runners.
@@ -61,13 +73,16 @@ jobs:
           # Cut Intel-mac builds via workflow_dispatch with os_filter=macos-x86
           # when one is needed.
           case "${OS_FILTER:-all}" in
-            linux)      matrix="{\"include\":[$linux]}" ;;
-            windows)    matrix="{\"include\":[$windows]}" ;;
-            macos)      matrix="{\"include\":[$macos_arm]}" ;;
-            macos-arm)  matrix="{\"include\":[$macos_arm]}" ;;
-            macos-x86)  matrix="{\"include\":[$macos_x86]}" ;;
-            all|"")     matrix="{\"include\":[$linux,$windows,$macos_arm]}" ;;
-            *)          echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, windows, macos, macos-arm, macos-x86)"; exit 1 ;;
+            linux)       matrix="{\"include\":[$linux]}" ;;
+            linux-arm)   matrix="{\"include\":[$linux_arm]}" ;;
+            windows)     matrix="{\"include\":[$windows]}" ;;
+            windows-arm) matrix="{\"include\":[$windows_arm]}" ;;
+            arm)         matrix="{\"include\":[$linux_arm,$windows_arm]}" ;;
+            macos)       matrix="{\"include\":[$macos_arm]}" ;;
+            macos-arm)   matrix="{\"include\":[$macos_arm]}" ;;
+            macos-x86)   matrix="{\"include\":[$macos_x86]}" ;;
+            all|"")      matrix="{\"include\":[$linux,$linux_arm,$windows,$macos_arm]}" ;;
+            *)           echo "::error::unknown os_filter: $OS_FILTER (expected: all, linux, linux-arm, windows, windows-arm, arm, macos, macos-arm, macos-x86)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -92,13 +107,11 @@ jobs:
           git config --global core.eol lf
 
       - name: Checkout source
-        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: actions/checkout@v4
         with:
           submodules: false
           clean: false
       - name: Checkout submodules
-        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         env:
           SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
@@ -137,7 +150,7 @@ jobs:
           fi
 
       - name: Install Linux dependencies
-        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'linux' }}
+        if: ${{ matrix.os_name == 'linux' }}
         run: |
           sudo apt-get update
           # libasound2-dev / libpulse-dev / libpipewire-0.3-dev: needed
@@ -166,7 +179,7 @@ jobs:
         run: brew install fmt nlohmann-json libomp
 
       - name: Install MinGW Windows
-        if: ${{ (inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name) && matrix.os_name == 'windows' }}
+        if: ${{ matrix.os_name == 'windows' && matrix.arch != 'arm64' }}
         shell: powershell
         run: |
           choco install mingw -y --no-progress
@@ -219,8 +232,34 @@ jobs:
           gcc --version
           g++ --version
 
+      - name: Install llvm-mingw (Windows ARM64)
+        if: ${{ matrix.os_name == 'windows' && matrix.arch == 'arm64' }}
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The x86 choco-MinGW path (gcc, libgomp, -mno-ms-bitfields) doesn't
+          # apply to aarch64. llvm-mingw ships a native Windows-ARM64 toolchain
+          # (aarch64-w64-mingw32-clang); xmake's `mingw` toolchain selects it
+          # from the aarch64- cross-prefix given --mingw=<root> --arch=arm64
+          # (wired by build.py via TMC_XMAKE_MINGW + TMC_XMAKE_ARCH).
+          $ErrorActionPreference = "Stop"
+          $apiHeaders = @{ "User-Agent" = "tmc-ci" }
+          if ($env:GH_TOKEN) { $apiHeaders["Authorization"] = "Bearer $env:GH_TOKEN" }
+          $rel = Invoke-RestMethod -Headers $apiHeaders "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest"
+          $asset = $rel.assets | Where-Object { $_.name -like "*-ucrt-aarch64.zip" } | Select-Object -First 1
+          if ($null -eq $asset) { Write-Error "no ucrt-aarch64 llvm-mingw asset in latest release"; exit 1 }
+          Write-Host "Downloading $($asset.name)"
+          $zip = "$env:RUNNER_TEMP\llvm-mingw.zip"
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "C:\llvm-mingw" -Force
+          $root = (Get-ChildItem "C:\llvm-mingw" -Directory | Select-Object -First 1).FullName
+          Write-Host "llvm-mingw root: $root"
+          echo "$root\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "MINGW_HOME=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & "$root\bin\aarch64-w64-mingw32-clang.exe" --version
+
       - name: Setup xmake
-        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
@@ -326,7 +365,6 @@ jobs:
           true
 
       - name: Inject Discord App ID (release builds)
-        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         env:
           TMC_DISCORD_APP_ID: ${{ secrets.TMC_DISCORD_APP_ID }}
@@ -357,6 +395,10 @@ jobs:
           # `xmake f`. TMC_XMAKE_MINGW is exported by the previous step
           # (Windows only).
           TMC_XMAKE_TOOLCHAIN: ${{ matrix.os_name == 'windows' && 'mingw' || '' }}
+          # The mingw platform defaults to x86_64 regardless of host, so the
+          # Windows-ARM64 job must pass --arch=arm64. Native Linux/macOS arm64
+          # runners build for the host arch, so they leave this empty.
+          TMC_XMAKE_ARCH: ${{ (matrix.os_name == 'windows' && matrix.arch == 'arm64') && 'arm64' || '' }}
         run: |
           # build.py covers configure (xmake f) + build tmc_pc +
           # build asset_extractor. --slim skips xmake's
@@ -425,7 +467,6 @@ jobs:
           echo "OK: SDL3 has alsa + pulseaudio + pipewire compiled in."
 
       - name: Prepare artifact payload
-        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         run: |
           BIN_PATH="build/pc/${{ matrix.exe_name }}"
@@ -436,7 +477,6 @@ jobs:
           cp "$BIN_PATH" "$OUTDIR/${{ matrix.exe_name }}"
 
       - name: Create archive
-        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         shell: bash
         run: |
           # Archive name embeds os_name + arch so macos-arm64 and
@@ -451,7 +491,6 @@ jobs:
           echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload artifact
-        if: ${{ inputs.os_filter == 'all' || inputs.os_filter == matrix.os_name }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.archive_name }}

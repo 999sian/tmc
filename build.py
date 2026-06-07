@@ -466,6 +466,14 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     if xmake_platform:
         configure_cmd.append(f"--plat={xmake_platform}")
 
+    # Target architecture override. Native builds use the host arch (no
+    # flag needed), but cross-style configs must be explicit: the `mingw`
+    # platform defaults to x86_64 regardless of host, so the Windows-ARM64
+    # CI job sets TMC_XMAKE_ARCH=arm64 to build an aarch64 binary.
+    xmake_arch = env.get("TMC_XMAKE_ARCH", "").strip()
+    if xmake_arch:
+        configure_cmd.append(f"--arch={xmake_arch}")
+
     toolchain = env.get("TMC_XMAKE_TOOLCHAIN", "").strip()
     if toolchain:
         configure_cmd.append(f"--toolchain={toolchain}")
