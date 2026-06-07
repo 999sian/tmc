@@ -314,10 +314,23 @@ void CollideFollowers(void) {
     Entity* currentEntity;
     u32 val;
 
+#ifdef PC_PORT
+    /* The guarded collision loops below are not enough after a cross-process
+     * quickload: the preliminary count also walks restored next pointers. */
+    extern int Port_IsValidEntityAddr(const void*);
+    int _wCount = 0;
+    for (currentEntity = entityList->first, val = 0;
+         currentEntity != (Entity*)entityList && currentEntity != NULL && _wCount < 256 &&
+         Port_IsValidEntityAddr(currentEntity);
+         currentEntity = currentEntity->next, ++_wCount) {
+        val++;
+    }
+#else
     for (currentEntity = entityList->first, val = 0; currentEntity != (Entity*)entityList;
          currentEntity = currentEntity->next) {
         val++;
     }
+#endif
 
     if (val <= 1)
         return;
@@ -326,7 +339,6 @@ void CollideFollowers(void) {
     /* Cycle + garbage-pointer guards mirror entity.c — Lake Hylia warp
      * produced both a `next` cycle and a `next` pointing at a stray GBA
      * EWRAM-relative address that escaped widening. */
-    extern int Port_IsValidEntityAddr(const void*);
     int _wOuter = 0;
     for (currentEntity = entityList->first; currentEntity != (Entity*)entityList && currentEntity != NULL && _wOuter < 256 && Port_IsValidEntityAddr(currentEntity); currentEntity = currentEntity->next, ++_wOuter) {
 #else

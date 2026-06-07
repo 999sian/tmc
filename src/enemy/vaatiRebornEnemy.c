@@ -141,24 +141,56 @@ void VaatiRebornEnemyType0Action0(VaatiRebornEnemyEntity* this) {
         this->unk_78 = super->x;
         this->unk_7c = super->y;
         entity = CreateEnemy(VAATI_REBORN_ENEMY, 1);
-        entity->parent = super;
-        super->child = entity;
+#ifdef PC_PORT
+        /* #140-class: GBA left this create unchecked; a full entity pool returns
+         * NULL and the writes below hit the read-only BIOS region at address 0
+         * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+        if (entity != NULL)
+#endif
+        {
+            entity->parent = super;
+            super->child = entity;
+        }
         for (i = 0; i < 6; i++) {
             entity = CreateEnemy(VAATI_BALL, 0);
-            entity->parent = super;
-            ((VaatiRebornEnemyEntity*)entity)->unk_78.BYTES.byte1 = i;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool returns
+             * NULL and the writes below hit the read-only BIOS region at address 0
+             * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                ((VaatiRebornEnemyEntity*)entity)->unk_78.BYTES.byte1 = i;
+            }
         }
         for (i = 0; i < 4; i++) {
             entity = CreateEnemy(VAATI_REBORN_ENEMY, 3);
-            entity->parent = super;
-            entity->timer = i;
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool returns
+             * NULL and the writes below hit the read-only BIOS region at address 0
+             * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                entity->timer = i;
+            }
         }
         for (i = 0; i < 2; i++) {
             entity = CreateEnemy(VAATI_BALL, 1);
-            entity->parent = super;
-            entity->spriteSettings.flipX = i;
-            ptr = &gUnk_080D04A8[i];
-            PositionRelative(super, entity, Q_16_16(ptr->x), Q_16_16(ptr->y));
+#ifdef PC_PORT
+            /* #140-class: GBA left this create unchecked; a full entity pool returns
+             * NULL and the writes below hit the read-only BIOS region at address 0
+             * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+            if (entity != NULL)
+#endif
+            {
+                entity->parent = super;
+                entity->spriteSettings.flipX = i;
+                ptr = &gUnk_080D04A8[i];
+                PositionRelative(super, entity, Q_16_16(ptr->x), Q_16_16(ptr->y));
+            }
         }
         InitAnimationForceUpdate(super, 0);
     }
@@ -525,8 +557,16 @@ void VaatiRebornEnemyType1Action0(VaatiRebornEnemyEntity* this) {
     super->spriteOffsetY = -1;
     PositionRelative(super->parent, super, 0, Q_16_16(1.0));
     enemy = CreateEnemy(VAATI_REBORN_ENEMY, 2);
-    enemy->parent = super;
-    enemy->child = super->parent;
+#ifdef PC_PORT
+    /* #140-class: GBA left this create unchecked; a full entity pool returns
+     * NULL and the writes below hit the read-only BIOS region at address 0
+     * harmlessly on GBA but SIGSEGV at address 0 on PC. Guard the writes. */
+    if (enemy != NULL)
+#endif
+    {
+        enemy->parent = super;
+        enemy->child = super->parent;
+    }
     InitAnimationForceUpdate(super, this->unk_74);
 }
 

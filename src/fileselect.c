@@ -879,8 +879,8 @@ static void HandlePortSettingsMenu(void) {
 #ifdef PC_PORT
             } else if (row == PORT_PROFILE_ROW) {
                 Port_FileSelect_CycleProfile(-1);
-#endif
             }
+#endif
             PORT_SETTINGS_DIRTY = TRUE;
             SoundReq(SFX_TEXTBOX_CHOICE);
             break;
@@ -898,8 +898,8 @@ static void HandlePortSettingsMenu(void) {
 #ifdef PC_PORT
             } else if (row == PORT_PROFILE_ROW) {
                 Port_FileSelect_CycleProfile(1);
-#endif
             }
+#endif
             PORT_SETTINGS_DIRTY = TRUE;
             SoundReq(SFX_TEXTBOX_CHOICE);
             break;
@@ -932,6 +932,7 @@ static void DrawPortSettingsMenu(void) {
     Font font;
     s32 row;
     u32 fps;
+
 
     row = PORT_SETTINGS_ROW;
     fps = Port_Config_TargetFps();
