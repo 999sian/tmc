@@ -87,6 +87,10 @@ void PerformVBlankDMA(void) {
     }
 }
 
+#ifdef PC_PORT
+extern void Port_Widescreen_UpdateShadows(void);
+#endif
+
 void UpdateDisplayControls(void) {
     if (gOAMControls.field_0x0 && (gScreen.lcd.displayControl & DISPCNT_OBJ_ON)) {
         gOAMControls.field_0x0 = 0;
@@ -98,6 +102,12 @@ void UpdateDisplayControls(void) {
     sub_08016CA8(&gScreen.bg1);
     sub_08016CA8((BgSettings*)&gScreen.bg2);
     sub_08016CA8((BgSettings*)&gScreen.bg3);
+#ifdef PC_PORT
+    /* Widescreen Phase 2 (Option A): refresh the port-side shadow tables
+     * each frame so the PPU's render_text_bg_line has fresh reveal tile
+     * entries for display cols >= MODE1_GBA_BG_CLIP_X (no-op at native 240). */
+    Port_Widescreen_UpdateShadows();
+#endif
 }
 
 void sub_08016CA8(BgSettings* bg) {

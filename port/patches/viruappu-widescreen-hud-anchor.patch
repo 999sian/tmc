@@ -1,0 +1,60 @@
+diff --git a/include/cpu/mode1.h b/include/cpu/mode1.h
+index 4112caa..9f7e1f2 100644
+--- a/include/cpu/mode1.h
++++ b/include/cpu/mode1.h
+@@ -54,6 +54,14 @@ enum {
+ #define MODE1_WS_SHADOW_COLS (((MODE1_GBA_WIDTH - 240) / 8) + 4)
+ extern uint16_t *virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT];
+ extern int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT];
++
++/* Runtime WIP widescreen HUD anchor. BG0 stays 32 tiles wide, but gameplay
++ * HUD uses both left-anchored widgets (hearts/charge) and right-anchored
++ * widgets (rupees/keys). When enabled by the port, render BG0 cols
++ * MODE1_WS_HUD_RIGHT_NATIVE_X..239 at the far right of the wide viewport
++ * instead of in the middle of the revealed world. */
++#define MODE1_WS_HUD_RIGHT_NATIVE_X 176
++extern int virtuappu_mode1_ws_hud_right_anchor;
+ 
+ enum {
+     MODE1_IO_DISPCNT = 0x00,
+diff --git a/src/mode1.c b/src/mode1.c
+index c39559c..f3e2a18 100644
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -65,6 +65,7 @@ typedef struct Mode1TilemapEntry {
+  * and the composite force-blacks past it. */
+ uint16_t *virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT] = { NULL, NULL, NULL, NULL };
+ int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT] = { 0, 0, 0, 0 };
++int virtuappu_mode1_ws_hud_right_anchor = 0;
+ 
+ typedef struct Mode1OAMAttr {
+     uint16_t attr0;
+@@ -315,10 +316,27 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t *line_
+     const bool ws_shadow_active =
+         (map_width_tiles < 64) && (virtuappu_mode1_ws_shadow[bg_index] != NULL);
+     const int ws_shadow_base = virtuappu_mode1_ws_shadow_base_tile[bg_index];
+     uint16_t * const ws_shadow = virtuappu_mode1_ws_shadow[bg_index];
++    const bool ws_hud_right_anchor =
++        (bg_index == 0) && (virtuappu_mode1_ws_hud_right_anchor != 0) &&
++        (MODE1_GBA_WIDTH > MODE1_GBA_BG_CLIP_X);
++    const int ws_hud_right_dst_x =
++        MODE1_GBA_WIDTH - (MODE1_GBA_BG_CLIP_X - MODE1_WS_HUD_RIGHT_NATIVE_X);
++
++    if (ws_hud_right_anchor) {
++        render_max_x = MODE1_GBA_WIDTH;
++    }
+ 
+     for (x = 0; x < render_max_x; ++x) {
+-        int eff_x = (x / mosaic_h) * mosaic_h;
++        int sample_x = x;
++        if (ws_hud_right_anchor) {
++            if (x >= ws_hud_right_dst_x) {
++                sample_x = x - (MODE1_GBA_WIDTH - MODE1_GBA_BG_CLIP_X);
++            } else if (x >= MODE1_WS_HUD_RIGHT_NATIVE_X) {
++                continue;
++            }
++        }
++        int eff_x = (sample_x / mosaic_h) * mosaic_h;
+         int src_x = (eff_x + scroll_x) % (map_width_tiles * 8);
+         int tile_col = src_x / 8;
+         int pixel_x = src_x % 8;

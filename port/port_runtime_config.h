@@ -1,7 +1,9 @@
 #pragma once
 
 #include "port_types.h"
+#ifndef TMC_N64
 #include <SDL3/SDL.h>
+#endif
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -59,6 +61,14 @@ typedef enum {
 PortTouchScheme Port_Config_TouchScheme(void);
 void Port_Config_SetTouchScheme(PortTouchScheme scheme);
 void Port_Config_CycleTouchScheme(int direction);
+
+/* True widescreen reveal is still WIP. The build-time
+ * --widescreen_width=N only reserves the larger framebuffer; this runtime
+ * switch decides whether gameplay uses the wider camera/reveal or falls
+ * back to a native 240x160 frame. No effect in native-width builds. */
+bool Port_Config_WidescreenEnabled(void);
+void Port_Config_SetWidescreenEnabled(bool enabled);
+void Port_Config_ToggleWidescreen(void);
 
 /* Aspect-ratio mode for the on-screen viewport. The GBA frame is always
  * rendered at its native 3:2 aspect — this knob picks the *stage* it
@@ -131,7 +141,9 @@ const char* Port_Config_GetTtsLanguage(void);
 void        Port_Config_SetTtsLanguage(const char* v);
 
 void Port_Config_OpenGamepads(void);
+#ifndef TMC_N64
 void Port_Config_HandleEvent(const SDL_Event* e);
+#endif
 bool Port_Config_InputPressed(PortInput input);
 void Port_Config_CloseGamepads(void);
 

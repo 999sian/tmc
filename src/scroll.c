@@ -789,6 +789,21 @@ void sub_08080974(u32 arg0, u32 arg1) {
     RoomControls* roomControls = &gRoomControls;
 
     var0 = roomControls->origin_x;
+#if MODE1_GBA_WIDTH > 240
+    {
+        extern int Port_Widescreen_ShouldStretch(void);
+        s32 stretch = Port_Widescreen_ShouldStretch();
+        s32 half  = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
+        s32 viewW = stretch ? 240 : MODE1_GBA_WIDTH;
+        s32 want = (s32)arg0 - half;
+        s32 lo = (s32)var0;
+        s32 hi = (s32)var0 + (s32)roomControls->width - viewW;
+        if (hi < lo) hi = lo;
+        if (want < lo) want = lo;
+        if (want > hi) want = hi;
+        roomControls->scroll_x = (s16)want;
+    }
+#else
     if (arg0 <= var0 + 120) {
         roomControls->scroll_x = var0;
     } else {
@@ -799,6 +814,7 @@ void sub_08080974(u32 arg0, u32 arg1) {
         }
         roomControls->scroll_x = var1 - 120;
     }
+#endif
 
     var0 = roomControls->origin_y;
     if (arg1 <= var0 + 80) {
@@ -824,6 +840,24 @@ void sub_080809D4(void) {
 
     x = roomControls->camera_target->x.HALF.HI;
     var0 = roomControls->origin_x;
+#if MODE1_GBA_WIDTH > 240
+    /* Widescreen: center the camera target in the MODE1_GBA_WIDTH-wide view
+     * and clamp the (wider) view to the room. This reduces exactly to the
+     * GBA-original 240-view centering below when MODE1_GBA_WIDTH == 240. */
+    {
+        extern int Port_Widescreen_ShouldStretch(void);
+        s32 stretch = Port_Widescreen_ShouldStretch();
+        s32 half  = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
+        s32 viewW = stretch ? 240 : MODE1_GBA_WIDTH;
+        s32 want = (s32)x - half;
+        s32 lo = (s32)var0;
+        s32 hi = (s32)var0 + (s32)roomControls->width - viewW;
+        if (hi < lo) hi = lo;          /* room narrower than the view → pin left */
+        if (want < lo) want = lo;
+        if (want > hi) want = hi;
+        roomControls->scroll_x = (s16)want;
+    }
+#else
     if (x <= var0 + 120) {
         roomControls->scroll_x = var0;
     } else {
@@ -834,6 +868,7 @@ void sub_080809D4(void) {
         }
         roomControls->scroll_x = var1 - 120;
     }
+#endif
 
     y = roomControls->camera_target->y.HALF.HI;
     var0 = roomControls->origin_y;

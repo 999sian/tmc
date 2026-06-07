@@ -510,6 +510,12 @@ target("tmc_pc")
             { patch = "viruappu-widescreen.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "MODE1_GBA_BG_CLIP_X" },
+            -- Runtime WIP widescreen HUD anchoring: BG0 right-side HUD
+            -- tiles (rupees/keys) are shifted to the wide viewport's right
+            -- edge only when the runtime widescreen option is active.
+            { patch = "viruappu-widescreen-hud-anchor.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "virtuappu_mode1_ws_hud_right_anchor" },
             -- Stable BG-priority sort in the mode1 composite. GBA hardware
             -- orders equal-priority BGs by BG index (lower drawn on top); the
             -- upstream selection sort swapped non-adjacent entries, so a
@@ -643,6 +649,16 @@ target("tmc_pc")
     add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
     add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
 
+    -- Widescreen: single source of truth for the rendered viewport width.
+    -- The orphaned `widescreen_width` option is injected here as
+    -- MODE1_GBA_WIDTH so BOTH the ViruaPPU renderer (compiled into this
+    -- target via add_files) and the port's engine-side cull tests
+    -- (CheckOnScreen / CheckRectOnScreen, via port/port_widescreen.h) key
+    -- off one value and can never disagree. 240 = GBA-native; the cull
+    -- bounds collapse to their original literals at 240.
+    local ws_width = get_config("widescreen_width") or 240
+    add_defines("MODE1_GBA_WIDTH=" .. ws_width)
+
     -- Discord Rich Presence application ID — optional, gitignored.
     -- Local devs/release builders drop their Discord App ID into
     -- discord_app_id.txt at repo root and it gets baked in as the
@@ -738,6 +754,10 @@ target("tmc_pc")
     add_files("port/port_repro_litarea.c")
     add_files("port/port_repro_clonebutton.c")
     add_files("port/port_repro_takeover.c")
+    add_files("port/port_repro_jailbars.c")
+    add_files("port/port_repro_angrystatue.c")
+    add_files("port/port_repro_vaati.c")
+    add_files("port/port_repro_credits.c")
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.

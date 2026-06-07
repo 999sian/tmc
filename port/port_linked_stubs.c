@@ -30,6 +30,8 @@
 
 #include "port_entity_ctx.h"
 #include "port_gba_mem.h"
+#include "port_runtime_config.h"
+#include "port_widescreen.h"
 
 #include <string.h>
 
@@ -157,7 +159,14 @@ u32 gFrameObjLists[50016];
 // On GBA this is a label in .rodata at gAreaRoomMap_None (~14MB region).
 // On PC, we use a large buffer filled from ROM in Port_LoadRom().
 // Source files use &gMapData + offset, so this must be an array (not a pointer).
+#ifdef TMC_N64
+/* #N64: the ~14 MB ROM map-data window can't live in 8 MB RDRAM. Temporary 1 MB
+ * placeholder so the binary links and boots to the title (which doesn't read map
+ * data). Phase 3 backs &gMapData with the embedded cart ROM (PI/DFS), not a RAM copy. */
+u8 gMapData[0x100000] __attribute__((aligned(4))); /* 1 MB placeholder */
+#else
 u8 gMapData[0xE00000] __attribute__((aligned(4))); /* ~14 MB */
+#endif
 
 // gCollisionMtx — On GBA, the collision matrix label sits at 0x080B7B74 with
 // only 1210 bytes of named data, but collision.c declares it as
@@ -914,6 +923,156 @@ void UpdateScrollVram(void) {
         func(gMapDataTopSpecial, &gBG2Buffer[0x20]);
     }
 }
+
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+#include "cpu/mode1.h"
+
+/*
+ * Widescreen Phase 2 (Option A) — port-side shadow tilemap.
+ *
+ * The PPU (libs/ViruaPPU/src/mode1.c::render_text_bg_line) reads tile
+ * entries from these for display cols >= MODE1_GBA_BG_CLIP_X on 32-tile
+ * BGs, bypassing VRAM — the 32-tile screenblock only spans 256 px of
+ * world and wraps past that, so the reveal columns can't come from VRAM.
+ *
+ * Each shadow is MODE1_WS_SHADOW_ROWS rows x MODE1_WS_SHADOW_COLS u16
+ * entries, indexed by tile_row (mod 32, mirroring the engine's vertical
+ * rolling) and (tile_col - base) mod 32 in the PPU. Populated each
+ * scroll-update from gMapData{Bottom,Top}Special (128x128 BG-tiles) at
+ * world cols [cam_bg_col + MODE1_GBA_BG_CLIP_X/8 .. + COLS).
+ *
+ * Gated #if width>240: the native build never compiles this and the PPU
+ * shadow pointers stay NULL (render falls back to clip-at-240). */
+static u16 sWsShadowBG1[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
+static u16 sWsShadowBG2[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
+
+/* ---- Runtime widescreen gate --------------------------------------------
+ * `--widescreen_width=N` only reserves a wider framebuffer. True widescreen
+ * is still WIP, so a persisted runtime option decides whether gameplay uses
+ * the wider camera/reveal. Disabled, non-gameplay, and rooms narrower than
+ * MODE1_GBA_WIDTH all fall back to a native 240x160 frame; the camera/culling
+ * helpers below report 240 in that state so the engine remains GBA-clean. */
+int Port_Widescreen_ShouldStretch(void) {
+    if (!Port_Config_WidescreenEnabled()) {
+        return 1;
+    }
+    return ((s32)gRoomControls.width < MODE1_GBA_WIDTH) ? 1 : 0;
+}
+
+int Port_Widescreen_IsActive(void) {
+    return (gMain.task == TASK_GAME &&
+            Port_Config_WidescreenEnabled() &&
+            !Port_Widescreen_ShouldStretch()) ? 1 : 0;
+}
+
+int Port_Widescreen_EffectiveViewWidth(void) {
+    return Port_Widescreen_IsActive() ? MODE1_GBA_WIDTH : 240;
+}
+
+int Port_Widescreen_HudRightAnchor(void) {
+    if (!Port_Widescreen_IsActive()) {
+        return 0;
+    }
+    if ((gMessage.state & MESSAGE_ACTIVE) != 0 || gHUD.hideFlags != HUD_HIDE_NONE) {
+        return 0;
+    }
+    return 1;
+}
+
+static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* shadow) {
+    /* Populate the port-side shadow tilemap the PPU reads for the reveal
+     * columns (display x >= MODE1_GBA_BG_CLIP_X). The engine's 32-tile VRAM
+     * screenblock only spans ~256 px of world and wraps past that, so the
+     * reveal columns can't come from VRAM; we mirror, from gMapData*Special,
+     * exactly what the engine fill (ram_sub_080B197C_c) would have placed.
+     *
+     * Engine ground truth (ram_sub_080B197C_c, common case ydiff>=8):
+     *   VRAM buffer cell (row sr, col c) = mapSpecial[2*row16 - 1 + sr][2*col16 + c]
+     *   with col16 = xdiff>>4, row16 = ydiff>>4, mapSpecial stride 128 u16.
+     * The PPU reads the shadow at [local_row][shadow_idx] where
+     *   local_row  = ((line + BGVOFS) % 256)/8 % 32   (== the VRAM buffer row)
+     *   shadow_idx = (tile_col - base) % 32           (tile_col == VRAM col at x)
+     *
+     * Therefore:
+     *   (a) the shadow ROW index IS the VRAM buffer row sr, so fill shadow[sr]
+     *       with map row (2*row16 - 1 + sr) — NOT (world_row & 31), which reads
+     *       camera-shifted wrong rows.
+     *   (b) the consumer base MUST equal the VRAM tile_col of the first reveal
+     *       column (display CLIP_X) = CLIP_X/8 + (BGHOFS>=8 ? 1 : 0), so
+     *       shadow_idx lands on reveal column index d. BGHOFS = (scroll-origin)
+     *       & 0xf (UpdateScreenShake); its upper half carries one extra tile.
+     * Getting either wrong shifts/wraps the reveal into stale cells — the
+     * far-edge garbage. (No residency gate: the area tileset is resident in
+     * char VRAM regardless of the 32-col tilemap window, so gating on that
+     * window blacked legitimately-loaded reveal tiles. The PPU's 0x7C1F skip
+     * still drops genuinely-unstreamed-palette pixels to clean black.) */
+    s16 xdiff = (s16)(gRoomControls.scroll_x - gRoomControls.origin_x);
+    s16 ydiff = (s16)(gRoomControls.scroll_y - gRoomControls.origin_y);
+    s32 row16 = ydiff >> 4;
+    /* First reveal world tile col, continuing the native edge:
+     * 2*col16 + CLIP/8 + (BGHOFS>=8) == (xdiff>>3) + CLIP/8. */
+    s32 ws_base_world_col = (xdiff >> 3) + (MODE1_GBA_BG_CLIP_X / 8);
+    virtuappu_mode1_ws_shadow_base_tile[bg_index] =
+        (MODE1_GBA_BG_CLIP_X / 8) + (((xdiff & 0xf) >= 8) ? 1 : 0);
+
+    enum { kMapStride = 128, kMapRows = 128 };
+    for (int sr = 0; sr < MODE1_WS_SHADOW_ROWS; sr++) {
+        u16* row_dst = shadow + (size_t)sr * MODE1_WS_SHADOW_COLS;
+        s32 world_row = 2 * row16 - 1 + sr;
+        if (world_row < 0 || world_row >= kMapRows) {
+            for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++) row_dst[C] = 0;
+            continue;
+        }
+        u16* row_src = mapSpecial + (size_t)world_row * kMapStride;
+        for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++) {
+            s32 world_col = ws_base_world_col + C;
+            u16 entry = (world_col >= 0 && world_col < kMapStride) ? row_src[world_col] : (u16)0;
+            row_dst[C] = entry;
+        }
+    }
+    virtuappu_mode1_ws_shadow[bg_index] = shadow;
+}
+
+/* Which PPU BG index renders a given map: the PPU selects a BG's tilemap by
+ * its BGCNT screen_base, so the map whose bgSettings->control screen_base
+ * matches gScreen.bgN.control is rendered as BG N. (In the field this is
+ * bottom->BG2, top->BG1 — the reverse of the buffer numbering, which is why a
+ * hardcoded shadow[1]=bottom/shadow[2]=top was swapped and showed garbage.) */
+static int Port_WidescreenPpuBgForControl(u32 control) {
+    u32 sb = (control >> 8) & 0x1fu;
+    if (((gScreen.bg0.control >> 8) & 0x1fu) == sb) return 0;
+    if (((gScreen.bg1.control >> 8) & 0x1fu) == sb) return 1;
+    if (((gScreen.bg2.control >> 8) & 0x1fu) == sb) return 2;
+    if (((gScreen.bg3.control >> 8) & 0x1fu) == sb) return 3;
+    return -1;
+}
+
+/* Called per-VBlank from src/interrupts.c::UpdateDisplayControls. */
+void Port_Widescreen_UpdateShadows(void) {
+    for (int i = 0; i < MODE1_GBA_BG_COUNT; i++) virtuappu_mode1_ws_shadow[i] = NULL;
+    virtuappu_mode1_ws_hud_right_anchor = 0;
+
+    if (!Port_Widescreen_IsActive()) {
+        return;
+    }
+    virtuappu_mode1_ws_hud_right_anchor = Port_Widescreen_HudRightAnchor();
+
+    if (gMapBottom.bgSettings != NULL) {
+        int bg = Port_WidescreenPpuBgForControl(gMapBottom.bgSettings->control);
+        if (bg >= 0) Port_WidescreenShadow_Populate(bg, gMapDataBottomSpecial, sWsShadowBG1);
+    }
+    if (gMapTop.bgSettings != NULL) {
+        int bg = Port_WidescreenPpuBgForControl(gMapTop.bgSettings->control);
+        if (bg >= 0) Port_WidescreenShadow_Populate(bg, gMapDataTopSpecial, sWsShadowBG2);
+    }
+}
+#else
+void Port_Widescreen_UpdateShadows(void) { /* no-op at native 240 */ }
+int Port_Widescreen_ShouldStretch(void) { return 0; }
+int Port_Widescreen_IsActive(void) { return 0; }
+int Port_Widescreen_EffectiveViewWidth(void) { return 240; }
+int Port_Widescreen_HudRightAnchor(void) { return 0; }
+#endif
 
 /*
  * UpdateSpriteForCollisionLayer — sets OBJ priority bits based on entity's collision layer.
@@ -1785,7 +1944,10 @@ u32 GetRandomByWeight(const u8* weights) {
 u32 CheckRectOnScreen(s32 x, s32 y, u32 halfW, u32 halfH) {
     s32 sx = gRoomControls.scroll_x - gRoomControls.origin_x;
     u32 dx = (u32)(x - sx + halfW);
-    if (dx >= halfW * 2 + 0xF0)
+    /* Runtime-gated widescreen: when the WIP option is off or this room
+     * falls back to native, cull against 240 so engine behaviour matches the
+     * 240x160 frame we present. */
+    if (dx >= halfW * 2 + (u32)Port_Widescreen_EffectiveViewWidth())
         return 0;
     s32 sy = gRoomControls.scroll_y - gRoomControls.origin_y;
     u32 dy = (u32)(y - sy + halfH);
