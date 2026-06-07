@@ -15,8 +15,19 @@
 #include "fade.h"
 #ifdef PC_PORT
 #include "port_hdma.h"
+#include <setjmp.h>
 #endif
 #include "gba/io_reg.h"
+
+#ifdef TMC_N64
+/* N64 bring-up: paint a boot-phase marker (port/n64/n64_main.c) so a hang in
+ * init — before the engine's first VBlankIntrWait can render — is localizable.
+ * Compiles to nothing off N64. Diagnostic scaffolding. */
+extern void n64_post(int);
+#define N64_POST(n) n64_post(n)
+#else
+#define N64_POST(n)
+#endif
 
 extern u32 gRand;
 
@@ -38,22 +49,45 @@ void (*const sTaskHandlers[])(void) = {
 };
 
 void AgbMain(void) {
+#ifdef PC_PORT
+    /* Soft-reset re-entry point. SoftReset() (port_bios.c) longjmp()s here so
+     * the credits end, the reset combo, and game-over restart to the title by
+     * re-running the init below — RegisterRamReset preserves EWRAM (save data),
+     * everything else is reset. Native equivalent of the GBA BIOS soft reset;
+     * see DoSoftReset() / SoftReset(). */
+    {
+        extern jmp_buf gPortSoftResetJmp;
+        extern int gPortSoftResetArmed;
+        setjmp(gPortSoftResetJmp);
+        gPortSoftResetArmed = 1;
+    }
+#endif
     // Initialization
+    N64_POST(10);
     InitOverlays();
+    N64_POST(11);
     InitSound();
+    N64_POST(12);
     InitDMA();
+    N64_POST(13);
     InitSaveData();
+    N64_POST(14);
     InitSaveHeader();
+    N64_POST(15);
     InitVBlankDMA();
+    N64_POST(16);
     gUnk_02000010.field_0x4 = 0xc1;
     InitFade();
     DmaCopy32(3, BG_PLTT, gPaletteBuffer, BG_PLTT_SIZE);
     SetBrightness(1);
+    N64_POST(17);
     MessageInitialize();
     ResetPalettes();
+    N64_POST(18);
     gRand = 0x1234567;
     MemClear(&gMain, sizeof(gMain));
     SetTask(TASK_TITLE);
+    N64_POST(20);
 
     // Game Loop
     while (TRUE) {
@@ -84,6 +118,9 @@ void AgbMain(void) {
 
                 gMain.ticks++;
                 sTaskHandlers[gMain.task]();
+#ifdef TMC_N64
+        { static int s_once = 0; if (!s_once) { s_once = 1; n64_post(22); } }
+#endif
 
                 MessageMain();
 

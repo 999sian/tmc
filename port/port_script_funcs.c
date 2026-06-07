@@ -425,6 +425,7 @@ extern void sub_0807F8E8();
 extern void sub_0807F93C();
 extern void sub_0807FADC();
 extern void sub_0807FB28();
+extern void sub_0807FB94(); /* Roll Credits — SetTask(TASK_STAFFROLL) */
 extern void sub_0807FBA0();
 extern void sub_0807FBB4();
 extern void sub_0807FBC4();
@@ -888,6 +889,7 @@ static const ScriptFuncEntry sScriptFuncTable[] = {
     { 0x0807FB29, (void(*)(void))sub_0807FB28 },
     { 0x0807FB65, (void(*)(void))SetPlayerIFrames },
     { 0x0807FB75, (void(*)(void))DisablePlayerSwimState },
+    { 0x0807FB95, (void(*)(void))sub_0807FB94 },
     { 0x0807FBA1, (void(*)(void))sub_0807FBA0 },
     { 0x0807FBB5, (void(*)(void))sub_0807FBB4 },
     { 0x0807FBC5, (void(*)(void))sub_0807FBC4 },

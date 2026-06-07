@@ -16,10 +16,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <setjmp.h>
 
 static bool gQuitRequested = false;
 static bool sFastForward = false;
 static int sFrameNum = 0;
+
+/* Soft-reset re-entry. AgbMain arms this with setjmp() at the top of the
+ * game loop; SoftReset() longjmp()s back to re-run AgbMain's init (which
+ * RegisterRamResets everything except EWRAM, preserving save data) — the
+ * native equivalent of the GBA BIOS soft reset back to the title. Shared
+ * with src/main.c (extern there). */
+jmp_buf gPortSoftResetJmp;
+int gPortSoftResetArmed = 0;
 
 static const void* Port_ResolveCopySrc(const void* src, u32 size) {
     if (Port_IsLoadedAssetBytes(src, size)) {
@@ -143,6 +152,37 @@ static void Port_UpdateInput(void) {
     {
         extern void Port_ReproTakeover_Tick(unsigned int frame);
         Port_ReproTakeover_Tick(sFrameNum);
+    }
+
+    /* JailBars prison-door texture repro (#149). Set TMC_REPRO_JAILBARS=1 to
+     * warp into DHC B2 Prison, open the door via its flag, and confirm the
+     * door reaches action 3 (open frame) instead of stalling in action 2. */
+    {
+        extern void Port_ReproJailBars_Tick(unsigned int frame);
+        Port_ReproJailBars_Tick(sFrameNum);
+    }
+
+    /* AngryStatue reward-flag repro (#77). Set TMC_REPRO_ANGRYSTATUE=1 to warp
+     * into DHC 1F Loop Left, destroy the four statues at once, and confirm the
+     * manager's completion flag (field_0x3e) is populated and gets set. */
+    {
+        extern void Port_ReproAngryStatue_Tick(unsigned int frame);
+        Port_ReproAngryStatue_Tick(sFrameNum);
+    }
+
+    /* Vaati transform crash repro (#151). Set TMC_REPRO_VAATI=1 (+ TMC_VAATI_SLOT)
+     * to restore a boss-fight save-state snapshot and let the transform run. */
+    {
+        extern void Port_ReproVaati_Tick(unsigned int frame);
+        Port_ReproVaati_Tick(sFrameNum);
+    }
+
+    /* "Credits don't load" repro. Set TMC_REPRO_CREDITS=1 to force the
+     * staffroll task (the ending script's SetTask(TASK_STAFFROLL)) and
+     * snapshot the credits framebuffer headless. */
+    {
+        extern void Port_ReproCredits_Tick(unsigned int frame);
+        Port_ReproCredits_Tick(sFrameNum);
     }
 
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
@@ -619,11 +659,26 @@ s32 Div(s32 num, s32 denom) {
     return num / denom;
 }
 
-/* SoftReset — just exit */
+/* SoftReset (SWI 0x00) — restart the game to the title, GBA-faithful.
+ *
+ * The GBA BIOS soft reset re-runs the cartridge from its entry point,
+ * preserving EWRAM (so save data survives) and resetting the rest. Here we
+ * longjmp back to AgbMain's setjmp at the top of its init, which re-runs
+ * RegisterRamReset(RESET_ALL & ~RESET_EWRAM) + the full re-init. This is the
+ * end-of-credits path (staffroll.c StaffrollTask_State3 -> DoSoftReset), the
+ * Start+Select+A+B reset combo, and the game-over -> title path.
+ *
+ * It must NOT exit(): besides being the wrong behaviour (closing the app when
+ * the player beats the game), process exit runs C++ static destructors over
+ * still-joinable worker threads (TTS/audio) -> std::terminate -> SIGABRT. */
 void SoftReset(u32 flags) {
     (void)flags;
-    printf("SoftReset called — exiting.\n");
-    exit(0);
+    if (gPortSoftResetArmed) {
+        longjmp(gPortSoftResetJmp, 1);
+    }
+    /* Reset requested before the game loop armed the jump target (should not
+     * happen in practice). Leave without running the crashing teardown. */
+    _Exit(0);
 }
 
 /* BgAffineSet (SWI 0x0E) */
