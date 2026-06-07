@@ -7,6 +7,27 @@ on:
       - 'sync-matheo-release'
       - 'CI-Test'
   pull_request:
+  # Manual trigger to validate / build a specific platform — notably the
+  # opt-in ARM64 targets (os_filter=arm | linux-arm | windows-arm) that are
+  # not in the default "all" matrix yet. Push/PR runs leave os_filter empty,
+  # so _build.yaml's default "all" applies.
+  workflow_dispatch:
+    inputs:
+      os_filter:
+        description: "Platform filter"
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - linux
+          - linux-arm
+          - windows
+          - windows-arm
+          - arm
+          - macos
+          - macos-arm
+          - macos-x86
   # Cross-platform-parity safety net: CI compiles the active branch on
   # Linux, Windows, and macOS-arm64 (the matrix is defined in _build.yaml
   # under os_filter=all). Any new code that breaks on a non-Linux build
@@ -32,6 +53,8 @@ jobs:
     with:
       publish_mode: artifact
       version_label: ${{ needs.meta.outputs.stamp }}
+      # Empty on push/PR -> _build.yaml defaults to "all"; set on manual runs.
+      os_filter: ${{ inputs.os_filter || 'all' }}
     secrets:
       ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
       PRIVATE_SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
