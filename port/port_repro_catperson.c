@@ -20,6 +20,10 @@
  * loads gUnk_080F238C, the two-NPC list containing the cat woman. Otherwise the
  * room loads only gUnk_additional_c_HouseInteriors2_Romio (one dog-person NPC).
  *
+ * It also exercises ScriptCommand_ShowNPCDialogue against the same raw ROM
+ * Dialog address (0x0810BB58) so generic script-dialog unpacking resolves
+ * CALL_FUNC entries too, not just the townsperson-specific table helper.
+ *
  * TMC_REPRO_CATPERSON=1 drives title -> file-select -> game, then invokes the
  * EXACT talk handler sub_08062048 on a townsperson entity (id 6, type 0x0e) with
  * global_progress forced to 5 — the precise crashing path the script reaches.
@@ -37,6 +41,7 @@
 #include <string.h>
 #include "main.h"         /* gMain, TASK_TITLE / TASK_FILE_SELECT / TASK_GAME */
 #include "entity.h"       /* Entity */
+#include "script.h"       /* ScriptExecutionContext */
 #include "save.h"         /* gSave.global_progress */
 #include "message.h"      /* gMessage (PASS evidence) */
 #include "flags.h"        /* SetGlobalFlag, MIZUKAKI_START */
@@ -92,6 +97,7 @@ void Port_ReproCatPerson_Tick(unsigned int frame) {
     if (gMain.task == TASK_GAME && frame - task_change_frame > 180) {
         extern void* Port_LookupScriptFunc(unsigned int gba_addr);
         extern void sub_08062048(Entity*);
+        extern void ScriptCommand_ShowNPCDialogue(Entity*, ScriptExecutionContext*);
         Entity ent;
 
         void* fn = Port_LookupScriptFunc(0x0806200Du);
@@ -108,6 +114,16 @@ void Port_ReproCatPerson_Tick(unsigned int frame) {
         gSave.global_progress = 5;      /* iVar1 = 3 -> gUnk_0810B7C0[0x0e*8+3] = CALL_FUNC */
         SetGlobalFlag(MIZUKAKI_START);  /* real Romio-room spawn gate for the couple */
         SetInventoryValue(ITEM_FLIPPERS, 0);
+        {
+            ScriptExecutionContext ctx;
+            memset(&ctx, 0, sizeof(ctx));
+            ctx.intVariable = 0x0810BB58u; /* gUnk_0810B7C0[0x0e*8+3], raw CALL_FUNC dialog */
+            fprintf(stderr, "[catperson] calling generic ScriptCommand_ShowNPCDialogue (raw dialog=0x%08x)...\n",
+                    ctx.intVariable);
+            fflush(stderr);
+            ScriptCommand_ShowNPCDialogue(&ent, &ctx);
+        }
+
 
         fprintf(stderr, "[catperson] calling talk handler sub_08062048 (type=0x0e, progress=5)...\n");
         fflush(stderr);
