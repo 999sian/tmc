@@ -20,12 +20,19 @@
 #include <cstdlib>
 #include <cstring>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 /* Manual access to gMain (the engine's Main struct): including main.h
  * would pull in player.h, which uses `this` as a C parameter name and
  * doesn't compile as C++. Treat the symbol as opaque bytes and read the
  * task field at known offset 2 (interruptFlag, sleepStatus, task —
  * include/main.h). C linkage matches the engine's Main gMain. */
 extern "C" uint8_t gMain[]; // fix for MSVC (UWP PORT)
+/* Phase-timer hooks (defined in port_bios.c, C linkage). */
+extern "C" int Port_Profile_Enabled(void);
+extern "C" uint64_t gPortProfileRenderNs;
 /* Port_Widescreen_* lives in port_linked_stubs.c; include
  * port_widescreen.h for the runtime WIP toggle gate. */
 
@@ -386,6 +393,33 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
 #endif
     Port_PPU_LoadConfig();
 
+    /* Cap the OpenMP scanline-render pool. virtuappu_mode1_render_frame
+     * parallelizes 160 scanlines with a spin-wait barrier; using ALL physical
+     * cores oversubscribes against the main + audio threads and the barrier
+     * thrashes — measured on an 8-core (no HT): 8 threads = 5.0 ms/frame vs
+     * 6 threads = 0.28 ms (a ~16x cliff at full subscription). Reserve a core
+     * (ncores-1) and cap at 6 (the 160-line workload sees no gain past that).
+     * The render pragma has no num_threads clause, so this nthreads default
+     * governs it. TMC_RENDER_THREADS forces a value; an explicit
+     * OMP_NUM_THREADS is left untouched (power-user override). */
+#ifdef _OPENMP
+    {
+        int n = -1;
+        const char* force = getenv("TMC_RENDER_THREADS");
+        if (force && *force) {
+            n = atoi(force);
+        } else if (getenv("OMP_NUM_THREADS") == nullptr) {
+            n = omp_get_num_procs() - 1;
+            if (n > 6) n = 6;
+        }
+        if (n >= 1) {
+            omp_set_num_threads(n);
+            std::fprintf(stderr, "[render] OpenMP scanline threads = %d (of %d cores)\n",
+                         n, omp_get_num_procs());
+        }
+    }
+#endif
+
     /* Stage 2: if the GPU renderer is compiled in and the device
      * initialised successfully (Port_GPU_Init was called before us in
      * port_main.c), tear down any pre-existing SDL_Renderer on this
@@ -561,7 +595,15 @@ extern "C" void Port_PPU_PresentFrame(void) {
     virtuappu_mode1_pre_line_callback =
         port_hdma_has_active_channels() ? port_hdma_step_line : nullptr;
 
-    virtuappu_render_frame();
+    {
+        if (Port_Profile_Enabled()) {
+            uint64_t t0 = SDL_GetTicksNS();
+            virtuappu_render_frame();
+            gPortProfileRenderNs += SDL_GetTicksNS() - t0;
+        } else {
+            virtuappu_render_frame();
+        }
+    }
 
     /* If TMC_PUBLISH_FRAMEBUFFER is on, re-render each main world BG
      * (BG1 + BG2) separately into static buffers and ship them over
