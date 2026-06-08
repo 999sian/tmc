@@ -1099,6 +1099,11 @@ target("randomizer_cli")
         end
 
         local outdir = path.join(os.scriptdir(), "build", "pc", "randomizer")
+        -- The randomizer .csproj has a post-build copy into this same output
+        -- directory. On fresh CI runners (notably Linux ARM64), build/pc does
+        -- not exist yet, so MSBuild's `cp -r ... build/pc/randomizer` fails
+        -- before dotnet gets a chance to materialize the `-o` directory.
+        os.mkdir(outdir)
         local is_arm64 = is_arch("arm64", "arm64-v8a", "aarch64")
         local rid = is_arm64 and "linux-arm64" or "linux-x64"
         if is_plat("windows", "mingw") then rid = is_arm64 and "win-arm64" or "win-x64"
