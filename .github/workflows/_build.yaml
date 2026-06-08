@@ -60,16 +60,18 @@ jobs:
           # degraded to serial there). Also reachable via os_filter
           # windows-arm or arm.
           windows_arm='{"runner":"windows-11-arm","os_name":"windows","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
-          # macos-14 = Apple Silicon arm64; macos-13 = Intel x86_64.
-          # Both keep os_name="macos" so the brew dep-install step's
-          # condition (`matrix.os_name == 'macos'`) covers both runners.
-          # Archive name uses ${matrix.arch} to disambiguate the assets.
+          # macos-14 = Apple Silicon arm64; macos-15-intel = Intel x86_64.
+          # Use the explicit Intel label: older Intel image aliases can remain
+          # queued indefinitely once GitHub-hosted runner capacity/labels move.
+          # Both keep os_name="macos" so the brew dep-install step's condition
+          # (`matrix.os_name == 'macos'`) covers both runners. Archive name uses
+          # ${matrix.arch} to disambiguate the assets.
           macos_arm='{"runner":"macos-14","os_name":"macos","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
-          macos_x86='{"runner":"macos-13","os_name":"macos","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          macos_x86='{"runner":"macos-15-intel","os_name":"macos","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           # Full release/CI coverage is six native hosted targets:
           #   x86_64: Linux, Windows, macOS Intel
           #   arm64:  Linux, Windows, macOS Apple Silicon
-          # macos-13 can queue longer than Apple Silicon, but include it in
+          # macOS Intel can queue longer than Apple Silicon, but include it in
           # "all" so tagged releases always ship the complete platform set.
           case "${OS_FILTER:-all}" in
             linux)       matrix="{\"include\":[$linux]}" ;;
