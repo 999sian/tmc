@@ -583,6 +583,12 @@ target("tmc_pc")
             { patch = "viruappu-mode2-affine-latch.patch",
               marker_file = path.join(sub, "src", "mode2.c"),
               marker = "affine_internal_y" },
+            -- N64/bare-metal mode1 portability + cheap text-BG inner-loop
+            -- cleanup. Must apply after widescreen/OBJ-window patches because
+            -- it replaces their TLS declarations and tilemap read path.
+            { patch = "viruappu-n64-mode1-perf.patch",
+              marker_file = path.join(sub, "include", "virtuappu.h"),
+              marker = "TMC_N64" },
         }
         -- Apply one patch when its marker is absent. -3 tolerates drifted
         -- context (and on shallow submodule clones, where the pre-image blob

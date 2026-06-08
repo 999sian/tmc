@@ -28,6 +28,7 @@
 
 #include "main.h"         /* gMain */
 #include "port_gba_mem.h" /* gIoMem, gVram, gBgPltt, gObjPltt, gOamMem */
+#include "room.h"        /* gRoomControls, gRoomVars.properties[] */
 
 extern int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short x, unsigned short y,
                                  unsigned char layer);
@@ -137,9 +138,14 @@ void Port_ReproPerfcap_Tick(unsigned int frame) {
         dumped = 1;
         perfcap_dump(out);
         Port_CaptureBaseFramebufferPNG("/tmp/tmc_perfcap_scene.png");
+        fprintf(stderr,
+                "[perfcap] room area=0x%02x room=0x%02x  prop0=%p prop1=%p prop5(statechange)=%p prop7=%p\n",
+                gRoomControls.area, gRoomControls.room, gRoomVars.properties[0], gRoomVars.properties[1],
+                gRoomVars.properties[5], gRoomVars.properties[7]);
+        fprintf(stderr, "[perfcap] anchor &Port_DebugAction_Warp=%p\n", (void*)Port_DebugAction_Warp);
         if (!getenv("TMC_PROFILE")) {
             fflush(stderr);
-            exit(0);
+            _Exit(0);
         }
     }
 
