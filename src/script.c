@@ -2067,13 +2067,19 @@ void ScriptCommand_ShowNPCDialogue(Entity* entity, ScriptExecutionContext* conte
     if (!rawDia)
         return;
     Dialog dia;
-    *(u32*)&dia = *(const u32*)rawDia;              /* bitfield: flag, flagType, type, fromSelf */
-    dia.data.indices.a = *(const u16*)(rawDia + 4); /* first data halfword */
-    dia.data.indices.b = *(const u16*)(rawDia + 6); /* second data halfword */
-    /* Note: if type == DIALOG_CALL_FUNC, dia.data.func is a GBA address that
-     * needs resolution.  ShowNPCDialogue currently reads it as a native pointer.
-     * For now, we handle the indices case; func-type dialogs from ROM will need
-     * further work if they arise. */
+    memset(&dia, 0, sizeof(dia));
+    u32 bitfield = Port_ReadU32(rawDia);
+    memcpy(&dia, &bitfield, sizeof(bitfield)); /* flag, flagType, type, fromSelf */
+    if (dia.type == DIALOG_CALL_FUNC) {
+        /* #152-class: ROM Dialog.data.func is a 4-byte GBA Thumb address.
+         * ShowNPCDialogue calls it as a native pointer, so resolve it before
+         * dispatch; NULL becomes the existing harmless no-op in ShowNPCDialogue. */
+        u32 gbaAddr = Port_ReadU16(rawDia + 4) | ((u32)Port_ReadU16(rawDia + 6) << 16);
+        dia.data.func = (void (*)(Entity*))Port_LookupScriptFunc(gbaAddr);
+    } else {
+        dia.data.indices.a = Port_ReadU16(rawDia + 4);
+        dia.data.indices.b = Port_ReadU16(rawDia + 6);
+    }
     ShowNPCDialogue(entity, &dia);
 #else
     ShowNPCDialogue(entity, (Dialog*)context->intVariable);
