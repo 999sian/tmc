@@ -206,6 +206,7 @@ extern void sub_08061FB8();
 extern void sub_08061FD8();
 extern void sub_08061FE4();
 extern void sub_08061FF4();
+extern void sub_0806200C(); /* #152: cat-person CALL_FUNC dialog target (bestiary line) */
 extern void sub_08062048();
 extern void sub_08062500();
 extern void sub_0806265C();
@@ -556,6 +557,7 @@ static const ScriptFuncEntry sScriptFuncTable[] = {
     { 0x08061FD9, (void(*)(void))sub_08061FD8 },
     { 0x08061FE5, (void(*)(void))sub_08061FE4 },
     { 0x08061FF5, (void(*)(void))sub_08061FF4 },
+    { 0x0806200D, (void(*)(void))sub_0806200C },
     { 0x08062049, (void(*)(void))sub_08062048 },
     { 0x08062501, (void(*)(void))sub_08062500 },
     { 0x0806265D, (void(*)(void))sub_0806265C },
