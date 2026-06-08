@@ -32,6 +32,12 @@ option("pc_sanitize")
     set_description("Build tmc_pc with -fsanitize=address,undefined for runtime UB/NULL-deref detection")
 option_end()
 
+option("pc_profile")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build tmc_pc with -pg gprof instrumentation for hotspot profiling")
+option_end()
+
 -- GPU shader pipeline (SDL_GPU). Stage 1: scaffold only — init the
 -- device, load the passthrough SPIR-V shaders, log. Doesn't yet drive
 -- presentation (SDL_Renderer still owns the screen). Stage 2 onward
@@ -778,6 +784,7 @@ target("tmc_pc")
     add_files("port/port_repro_angrystatue.c")
     add_files("port/port_repro_vaati.c")
     add_files("port/port_repro_credits.c")
+    add_files("port/port_repro_perfcap.c")
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
@@ -1029,6 +1036,17 @@ target("tmc_pc")
         add_ldflags ("-fsanitize=address,undefined", {force = true})
         add_shflags ("-fsanitize=address,undefined", {force = true})
         print("[tmc_pc] sanitizer: AddressSanitizer + UndefinedBehaviorSanitizer enabled")
+    end
+
+    -- Optional gprof profiling build (xmake f -y --pc_profile=y). Adds -pg
+    -- instrumentation so a headless repro run drops gmon.out for
+    -- `gprof ./tmc_pc gmon.out`. Run with OMP_NUM_THREADS=1 so the parallel
+    -- scanline render attributes to the profiled main thread. Off by default.
+    if has_config("pc_profile") then
+        add_cflags  ("-pg", "-fno-omit-frame-pointer")
+        add_cxxflags("-pg", "-fno-omit-frame-pointer")
+        add_ldflags ("-pg", {force = true})
+        print("[tmc_pc] gprof profiling: -pg enabled (run with OMP_NUM_THREADS=1; gmon.out -> gprof)")
     end
 
     -- Keep symbols even in release mode so SIGSEGV traces are useful

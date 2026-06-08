@@ -185,6 +185,13 @@ static void Port_UpdateInput(void) {
         Port_ReproCredits_Tick(sFrameNum);
     }
 
+    /* Performance-capture harness (TMC_PERFCAP=1): drive into gameplay and
+     * dump a complete PPU snapshot for the standalone render microbench. */
+    {
+        extern void Port_ReproPerfcap_Tick(unsigned int frame);
+        Port_ReproPerfcap_Tick(sFrameNum);
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
@@ -397,6 +404,26 @@ static u64 lastFrameNs = 0;
 static u64 sFpsWindowStartNs = 0;
 static u32 sFpsFrameCount = 0;
 
+/* --- Performance phase timers (TMC_PROFILE=1). Off by default; cheap (two
+ * SDL_GetTicksNS reads per frame). Decomposes each uncapped frame into
+ * game-tick (engine + entity update), present (all of Port_PPU_PresentFrame),
+ * and the PPU rasterizer (virtuappu_render_frame, accumulated by
+ * port_ppu.cpp). Reports a rolling average to stderr every 600 frames. */
+static u64 sProfLastPresentEndNs = 0;
+static u64 sProfAccGameNs = 0;
+static u64 sProfAccPresentNs = 0;
+static u32 sProfFrames = 0;
+u64 gPortProfileRenderNs = 0; /* updated from port_ppu.cpp */
+
+int Port_Profile_Enabled(void) {
+    static int en = -1;
+    if (en < 0) {
+        const char* e = getenv("TMC_PROFILE");
+        en = (e && *e && e[0] != '0') ? 1 : 0;
+    }
+    return en;
+}
+
 void VBlankIntrWait(void) {
     u64 nowNs;
 
@@ -412,7 +439,34 @@ void VBlankIntrWait(void) {
         Port_PPU_SetVSync(wantVsync);
     }
 
-    Port_PPU_PresentFrame();
+    if (Port_Profile_Enabled()) {
+        u64 entry = SDL_GetTicksNS();
+        if (sProfLastPresentEndNs != 0) {
+            sProfAccGameNs += entry - sProfLastPresentEndNs;
+        }
+        Port_PPU_PresentFrame();
+        u64 pEnd = SDL_GetTicksNS();
+        sProfAccPresentNs += pEnd - entry;
+        sProfLastPresentEndNs = pEnd;
+        if (++sProfFrames >= 600) {
+            double n = (double)sProfFrames;
+            double game = sProfAccGameNs / 1e6 / n;
+            double present = sProfAccPresentNs / 1e6 / n;
+            double render = gPortProfileRenderNs / 1e6 / n;
+            double total = game + present;
+            fprintf(stderr,
+                    "[profile] %u frames: game=%.3f present=%.3f (render=%.3f) ms/frame | "
+                    "%.0f fps uncapped | render=%.0f%% of frame\n",
+                    sProfFrames, game, present, render,
+                    total > 0.0 ? 1000.0 / total : 0.0,
+                    total > 0.0 ? 100.0 * render / total : 0.0);
+            sProfAccGameNs = sProfAccPresentNs = 0;
+            gPortProfileRenderNs = 0;
+            sProfFrames = 0;
+        }
+    } else {
+        Port_PPU_PresentFrame();
+    }
     port_hdma_vblank_reset();
 
     /* Deadline-based pacing: each frame's target is the previous
