@@ -192,6 +192,15 @@ static void Port_UpdateInput(void) {
         Port_ReproPerfcap_Tick(sFrameNum);
     }
 
+    /* "Crash talking to the cat woman" repro (#152). Set TMC_REPRO_CATPERSON=1
+     * to drive in-game and invoke the cat person's talk handler (sub_08062048,
+     * type 0x0e, global_progress 5) — the DIALOG_CALL_FUNC path that jumped to a
+     * raw GBA address before the fix. */
+    {
+        extern void Port_ReproCatPerson_Tick(unsigned int frame);
+        Port_ReproCatPerson_Tick(sFrameNum);
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
