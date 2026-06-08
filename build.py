@@ -495,6 +495,11 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     # for users who stay on the software backend.
     configure_cmd.append("--gpu_renderer=y")
 
+    # 0.5.0 release cutover: ship the real widescreen build. Direct xmake
+    # developer builds still default to 240 unless explicitly configured, but
+    # every build.py/CI/release artifact uses the wide viewport.
+    configure_cmd.append("--widescreen_width=384")
+
     assets_dir = REPO_ROOT / "build" / version / "assets"
     assets_src_dir = REPO_ROOT / "build" / version / "assets_src"
     assets_ready = assets_dir.exists() and assets_src_dir.exists()
