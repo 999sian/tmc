@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.5.0 — 2026-06-08
+
+0.5.0 cuts over the release build to the wide viewport (`build.py` now
+configures `--widescreen_width=384`) and rolls up the post-0.4.0 crash,
+renderer, CI, and portability fixes.
+
+### Release / renderer
+
+- **Release artifacts now compile as widescreen builds.** The `build.py`
+  release path, including CI's `--slim` tag builds, passes
+  `--widescreen_width=384` so `MODE1_GBA_WIDTH` is baked into `tmc_pc`.
+  Direct `xmake` developer builds still default to native 240 unless
+  explicitly configured.
+- **ViruaPPU N64 / mode1 patch landed via the proper patch pipeline.**
+  The N64/bare-metal TLS/endian/RDRAM shrink work plus the mode1 text-BG
+  inner-loop cleanup now lives in `port/patches/viruappu-n64-mode1-perf.patch`
+  and is registered in `xmake.lua`, not as dirty live submodule edits.
+- **Render-thread cap for scanline OpenMP.** Runtime caps mode1 scanline
+  workers to avoid oversubscription and includes the `TMC_PERFCAP=1`
+  capture harness used for renderer profiling.
+
+### Fixed
+
+- **#152 Romio house cat woman crash.** In area `0x22`, room `0x6`, the
+  left woman is gated by `MIZUKAKI_START && !ITEM_FLIPPERS`. Her townsperson
+  dialog entry is the only raw `DIALOG_CALL_FUNC` in `gUnk_0810B7C0` and
+  pointed at GBA Thumb address `0x0806200D`; the PC unpacker stored that raw
+  address as a native function pointer and jumped into GBA address space.
+  The dialog unpacker now resolves CALL_FUNC slots via `Port_LookupScriptFunc`,
+  and the repro harness covers both the townsperson path and the generic
+  script-dialog unpacker.
+- **Credits soft-reset path.** The end-of-credits script target is now
+  registered, and staffroll completion returns through the PC soft-reset
+  trampoline instead of leaving the game stuck/crashing.
+- **Boss/enemy crash sweep.** Added PC-port guards/fixes for recent Vaati,
+  Gyorg, Gleerok, Four Sword clone/button, PushableGrave, and takeover
+  field-alias / NULL-deref failures.
+
+### Build / CI
+
+- **ARM64 build coverage.** Linux ARM64 and Windows ARM64 targets are now
+  part of the default matrix; Windows ARM64 uses llvm-mingw and the corrected
+  crash-handler PC register.
+
+
 ## 0.3.2-experimental — 2026-05-27
 
 Re-tagged from the original 2026-05-26 cut to include the post-tag
