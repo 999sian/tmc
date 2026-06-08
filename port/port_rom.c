@@ -15,7 +15,9 @@
 #include "port_gba_mem.h"
 #include "structures.h"
 #include "tileMap.h"
+#ifndef TMC_N64
 #include <SDL3/SDL.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,12 +32,26 @@
 #include <mach-o/dyld.h>
 #include <stdlib.h>      /* realpath */
 #include <sys/stat.h>
-#else
+#elif !defined(TMC_N64)
 #include <dirent.h>
 #include <sys/stat.h>
 /* Forward-declare readlink to avoid pulling in _POSIX_C_SOURCE feature test
  * macros, which the c11 build mode otherwise hides. */
 extern long readlink(const char* path, char* buf, unsigned long bufsiz);
+#endif
+
+#ifdef TMC_N64
+/* N64/newlib lacks <dirent.h> and several POSIX FS calls. The host ROM
+ * file-finding functions that use them are never called on N64 (Port_LoadRom
+ * skips file I/O) and are dropped by --gc-sections, but must still COMPILE,
+ * so provide just enough declarations. */
+typedef struct __n64_DIR DIR;
+struct dirent { char d_name[256]; };
+DIR* opendir(const char*);
+struct dirent* readdir(DIR*);
+int closedir(DIR*);
+int mkdir(const char*, unsigned);
+extern long readlink(const char*, char*, unsigned long);
 #endif
 
 u8* gRomData = NULL;
@@ -76,8 +92,12 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
 static void FatalRomError(const char* title, const char* message) {
     fprintf(stderr, "ERROR: %s\n", message);
     fflush(stderr);
+#ifndef TMC_N64
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
     SDL_Quit();
+#else
+    (void)title;
+#endif
     exit(1);
 }
 
@@ -498,12 +518,26 @@ bool32 Port_IsAreaTablePtrReadable(u32 area, const void* ptr) {
 /* Forward declaration */
 static inline void* ResolveRomPtr(u32 gba_addr);
 
+/* Read a GBA little-endian u16/u32 from a ROM byte pointer, host-endian-safe.
+ * GBA ROM data is little-endian; a native u16/u32 load byte-swaps it on a
+ * big-endian host (N64). Reading byte-by-byte in LE order is correct on both
+ * little-endian PC and big-endian N64. */
+static inline u32 RomLE32(const void* p) {
+    /* Use a 32-bit load: N64 CPU byte reads (lbu) from the cart are corrupted
+     * (odd 16-bit halfwords dropped), but 32-bit loads (lw) work. The lw returns
+     * the GBA little-endian bytes in big-endian order on N64, so byte-swap. */
+    u32 v = *(const u32*)p;
+#ifdef TMC_N64
+    v = __builtin_bswap32(v);
+#endif
+    return v;
+}
+
 /* Resolve a ROM sub-table of 32-bit GBA pointers into a native pointer array. */
 static void ResolveSubTable(void* romBase, void** dest, u32 count) {
     u8* base = (u8*)romBase;
     for (u32 j = 0; j < count; j++) {
-        u32 ptr;
-        memcpy(&ptr, base + j * 4, 4);
+        u32 ptr = RomLE32(base + j * 4);
         dest[j] = ResolveRomPtr(ptr);
     }
 }
@@ -517,8 +551,7 @@ static u32 ScanSubArrayCount(const void* base) {
     }
 
     for (u32 i = 0; i < MAX_ROOMS; i++) {
-        u32 value;
-        memcpy(&value, bytes + i * 4, 4);
+        u32 value = RomLE32(bytes + i * 4);
         if (value == 0 || (value >= 0x08000000u && value < 0x08000000u + gRomSize)) {
             count = i + 1;
         } else {
@@ -636,8 +669,7 @@ void* Port_ReadPackedRomPtr(const void* base, u32 index) {
     /* For PC `.rodata` stubs we have no size info — trust the caller. */
 
     const u8* readPtr = (const u8*)base + index * 4;
-    u32 raw;
-    memcpy(&raw, readPtr, 4);
+    u32 raw = RomLE32(readPtr);
     if (raw == 0)
         return NULL;
     raw &= ~1u;
@@ -933,6 +965,7 @@ static int LoadRomGaps(void) {
 }
 
 void Port_LoadRom(const char* path) {
+#ifndef TMC_N64
     memset(sExtractedPages, 0, sizeof(sExtractedPages));
 
     /* ---- Step 1: try loading from rom_data/ extracted pages ---- */
@@ -1029,6 +1062,14 @@ void Port_LoadRom(const char* path) {
             "No ROM data available after loading.\n\n"
             "The ROM file may be empty or unreadable.");
     }
+#else
+    /* #N64: gRomData/gRomSize already point at the embedded cart ROM (set by
+     * n64_main before calling Port_LoadRom). Skip all host file I/O. */
+    (void)path;
+    if (!gRomData || gRomSize == 0) {
+        return;
+    }
+#endif
 
     /* ---- Step 3: auto-detect ROM region ---- */
     Port_DetectRomRegion(gRomData, gRomSize);
@@ -1037,10 +1078,35 @@ void Port_LoadRom(const char* path) {
     fprintf(stderr, "Using offsets for %s (game code: %.4s)\n", gRomRegion == ROM_REGION_EU ? "EU" : "USA",
             R->gameCode);
 
+#ifdef TMC_N64
+    {   /* Byte-order / alignment probe: compare against known GBA header bytes.
+         * Logo@0x04 is the fixed sequence 24 FF AE 51 69 9A A2 21; gamecode@0xAC
+         * is 'BZME' = 42 5A 4D 45. Mismatch => cart CPU byte reads are swapped or
+         * gRomData is misaligned. */
+        const u8* h = gRomData;
+        fprintf(stderr, "[romdump] hdr[0..7]=%02x %02x %02x %02x %02x %02x %02x %02x  logo[4..11]=%02x %02x %02x %02x %02x %02x %02x %02x (expect 24 FF AE 51 69 9A A2 21)\n",
+                h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7], h[4],h[5],h[6],h[7],h[8],h[9],h[10],h[11]);
+        fprintf(stderr, "[romdump] gamecode[AC..AF]=%02x %02x %02x %02x (expect 42 5A 4D 45 'BZME')\n",
+                h[0xAC],h[0xAD],h[0xAE],h[0xAF]);
+        const u8* g = &gRomData[R->gfxGroups];
+        fprintf(stderr, "[romdump] gfxGroups@0x%X [0..11]=%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                R->gfxGroups, g[0],g[1],g[2],g[3],g[4],g[5],g[6],g[7],g[8],g[9],g[10],g[11]);
+    }
+#endif
+
     /* ---- Step 4: resolve ROM symbols using compile-time tables + gRomData ---- */
 
     /* gGlobalGfxAndPalettes — huge palette/gfx blob (still points into gRomData) */
     gGlobalGfxAndPalettes = &gRomData[R->gfxAndPalettes];
+
+    /* gGfxGroups / gPaletteGroups — resolve the ROM pointer tables (arrays of
+     * GBA pointers to GfxItem / PaletteGroup descriptors). On PC these come from
+     * the asset pipeline; on N64 (assets stubbed) they MUST be resolved from the
+     * ROM here, else LoadGfxGroup/LoadPaletteGroup see NULL and skip every load. */
+    ResolveSubTable(&gRomData[R->gfxGroups], (void**)gGfxGroups, R->gfxGroupsCount);
+    ResolveSubTable(&gRomData[R->paletteGroups], (void**)gPaletteGroups, R->paletteGroupsCount);
+    fprintf(stderr, "gGfxGroups/gPaletteGroups resolved (%u gfx, %u palette) from ROM.\n",
+            R->gfxGroupsCount, R->paletteGroupsCount);
 
     /* gPalette_549 — Mt Crenel weather-change reads a 26-palette contiguous
      * block starting here. Copy it out of gGlobalGfxAndPalettes (offset 0x44A0
@@ -1257,6 +1323,10 @@ void Port_LoadRom(const char* path) {
         u32 mapDataSize = gRomSize - R->mapDataBase;
         if (mapDataSize > 0xE00000u)
             mapDataSize = 0xE00000u;
+#ifdef TMC_N64
+        if (mapDataSize > 0x100000u)
+            mapDataSize = 0x100000u; /* gMapData is a 1 MB placeholder on N64 */
+#endif
         memcpy(gMapData, &gRomData[R->mapDataBase], mapDataSize);
         fprintf(stderr, "gMapData loaded (%u bytes from ROM offset 0x%X).\n", mapDataSize, R->mapDataBase);
     }
