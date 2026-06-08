@@ -424,16 +424,17 @@ int main(int argc, char* argv[]) {
      * GPU builds that's a no-op (no SDL_Renderer to draw on) — the boot
      * splash trades away on this build for the GPU pipeline.
      *
-     * Non-Apple platforms keep SDL_WINDOW_VULKAN here to preserve the
-     * existing Vulkan swapchain path. On macOS, that flag makes
-     * SDL_CreateWindow call SDL_Vulkan_LoadLibrary immediately and abort
-     * startup if MoltenVK is not bundled, before AUTO can fall back to
-     * the software SDL_Renderer path. Leave the window Vulkan-flag-free
-     * on macOS; SDL_GPU can still attempt its claim later, and failure
-     * there falls back cleanly in Port_PPU_Init. */
+     * Do not add SDL_WINDOW_VULKAN unconditionally: in a GPU-compiled release
+     * build, users can still force Software (and Auto must be able to fall back).
+     * A Vulkan window flag makes SDL_CreateWindow fail before that fallback on
+     * dummy/no-Vulkan systems. Forced-GPU keeps the Vulkan flag on non-Apple
+     * platforms to preserve the explicit swapchain path; Auto tries GPU later
+     * from a plain window and falls back cleanly in Port_PPU_Init. */
     SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
 #if !defined(__APPLE__)
-    window_flags |= SDL_WINDOW_VULKAN;
+    if (Port_Config_RenderBackend() == PORT_RENDER_BACKEND_GPU) {
+        window_flags |= SDL_WINDOW_VULKAN;
+    }
 #endif
     window = SDL_CreateWindow(window_title,
                               window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
