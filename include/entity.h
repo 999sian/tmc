@@ -224,8 +224,14 @@ typedef struct Entity_ {
     /*0x1a*/ union PACKED Palette {
     /*    */    u8 raw;
     /*    */    struct PACKED PaletteB {
+    /*    */        /* #N64 BE: reversed so .b0 stays the LOW nibble (raw & 0xF), as on LE. Verified via MIPS disasm. */
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    /*    */        u8 b4 : 4;
+    /*    */        u8 b0 : 4;
+#else
     /*    */        u8 b0 : 4;
     /*    */        u8 b4 : 4;
+#endif
     /*    */    } b;
     /*    */ } palette;
     /*0x1b*/ struct PACKED SpriteOrientation {

@@ -56,10 +56,26 @@ static inline void* gba_TryMemPtr(uint32_t addr) {
     return NULL;
 }
 
+#ifdef TMC_N64
+extern volatile uint32_t g_n64_last_bad_addr;
+extern volatile uint32_t g_n64_bad_count;
+#endif
+
 static inline void* gba_MemPtr(uint32_t addr) {
     void* ptr = gba_TryMemPtr(addr);
     if (ptr)
         return ptr;
+#ifdef TMC_N64
+    /* #N64: never abort on a stray GBA address (libdragon abort() draws the
+     * CPU-exception inspector and halts). Record it (surfaced on-screen by
+     * Port_N64_VBlank) and return a shared scratch page so the engine limps. */
+    {
+        static u8 sN64Scratch[0x10000];
+        g_n64_last_bad_addr = addr;
+        g_n64_bad_count++;
+        return sN64Scratch;
+    }
+#else
 #if defined(__GNUC__)
     void* caller = __builtin_return_address(0);
     fprintf(stderr, "FATAL: gba_MemPtr: invalid address 0x%08X (called from %p)\n", addr, caller);
@@ -77,6 +93,7 @@ static inline void* gba_MemPtr(uint32_t addr) {
 #endif
     abort();
     return NULL;
+#endif
 }
 
 /*

@@ -3,7 +3,9 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#ifndef TMC_N64
 #include <SDL3/SDL.h>
+#endif
 
 bool Port_Audio_Init(void);
 void Port_Audio_Shutdown(void);
