@@ -59,14 +59,24 @@ extern u16 gUnk_0810B7BA[];
  * townsperson outside the library (#31 follow-up). Treat it as a u8 array
  * and unpack the GBA layout manually. */
 extern const u8 gUnk_0810B7C0[];
+extern void* Port_LookupScriptFunc(u32 gba_addr);
 static void TownspersonGBADialog(u32 idx, Dialog* out) {
     const u8* raw = gUnk_0810B7C0 + idx * 8;
     u32 bitfield;
     memcpy(&bitfield, raw, 4);
     memset(out, 0, sizeof(*out));
     *(u32*)out = bitfield;
-    out->data.indices.a = Port_ReadU16(raw + 4);
-    out->data.indices.b = Port_ReadU16(raw + 6);
+    if (out->type == DIALOG_CALL_FUNC) {
+        /* #152: for a CALL_FUNC entry this slot is a 4-byte GBA Thumb function
+         * address (the cat person's stage-5 line -> sub_0806200C @ 0x0806200D).
+         * ShowNPCDialogue invokes data.func directly, so it must hold the native
+         * pointer; a raw GBA address segfaults on PC (NULL -> harmless no-op). */
+        u32 gbaAddr = Port_ReadU16(raw + 4) | ((u32)Port_ReadU16(raw + 6) << 16);
+        out->data.func = (void (*)(Entity*))Port_LookupScriptFunc(gbaAddr);
+    } else {
+        out->data.indices.a = Port_ReadU16(raw + 4);
+        out->data.indices.b = Port_ReadU16(raw + 6);
+    }
 }
 #else
 extern Dialog gUnk_0810B7C0[];

@@ -785,6 +785,7 @@ target("tmc_pc")
     add_files("port/port_repro_vaati.c")
     add_files("port/port_repro_credits.c")
     add_files("port/port_repro_perfcap.c")
+    add_files("port/port_repro_catperson.c")
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
