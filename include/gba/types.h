@@ -5,11 +5,23 @@
 
 typedef uint8_t u8;
 typedef uint16_t u16;
+#ifdef TMC_N64
+/* mips64-newlib makes uint32_t 'unsigned long' — a type distinct from 'unsigned int'
+ * and from enum underlying types, which breaks function-prototype/enum compatibility
+ * the decomp relies on (it holds on x86 where uint32_t == unsigned int). Use plain
+ * 'unsigned int' on N64: still 32-bit under o64, and matches the x86 type identity. */
+typedef unsigned int u32;
+#else
 typedef uint32_t u32;
+#endif
 typedef uint64_t u64;
 typedef int8_t s8;
 typedef int16_t s16;
+#ifdef TMC_N64
+typedef int s32;
+#else
 typedef int32_t s32;
+#endif
 typedef int64_t s64;
 
 typedef volatile u8 vu8;

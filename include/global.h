@@ -124,7 +124,11 @@
 typedef union {
     s32 WORD;
     struct {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        s16 y, x; /* #N64 BE: reversed so .x/.y alias the same WORD bits as little-endian */
+#else
         s16 x, y;
+#endif
     } HALF;
 } Coords;
 
@@ -136,17 +140,37 @@ typedef struct {
 union SplitDWord {
     s64 DWORD;
     u64 DWORD_U;
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    struct {
+        s32 HI, LO;
+    } HALF;
+    struct {
+        u32 HI, LO;
+    } HALF_U;
+#else
     struct {
         s32 LO, HI;
     } HALF;
     struct {
         u32 LO, HI;
     } HALF_U;
+#endif
 };
 
 union SplitWord {
     s32 WORD;
     u32 WORD_U;
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    struct {
+        s16 HI, LO;
+    } HALF;
+    struct {
+        u16 HI, LO;
+    } HALF_U;
+    struct {
+        u8 byte3, byte2, byte1, byte0;
+    } BYTES;
+#else
     struct {
         s16 LO, HI;
     } HALF;
@@ -156,13 +180,20 @@ union SplitWord {
     struct {
         u8 byte0, byte1, byte2, byte3;
     } BYTES;
+#endif
 };
 
 union SplitHWord {
     u16 HWORD;
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    struct {
+        u8 HI, LO;
+    } PACKED HALF;
+#else
     struct {
         u8 LO, HI;
     } PACKED HALF;
+#endif
 } PACKED;
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__GNUC__)

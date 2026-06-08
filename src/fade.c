@@ -42,6 +42,17 @@ static const u32 sFadeTableOffsets[NUM_FADE_BRIGHTNESS][3] = {
     { 0x1104, 0x1144, 0x1184 }, /* brightness 2 */
 };
 
+#ifdef TMC_N64
+/* 16-bit cart reads (lhu) are broken on N64's strict PI bus; read the containing
+ * 32-bit-aligned word (lw is fine) and extract the halfword (big-endian: the
+ * lower address is the high half). Returns the same value the GBA's lhu would. */
+static inline u16 n64_cart_u16(const void* p) {
+    uintptr_t a = (uintptr_t)p;
+    u32 w = *(const volatile u32*)(void*)(a & ~(uintptr_t)3);
+    return (a & 2u) ? (u16)(w & 0xFFFFu) : (u16)(w >> 16);
+}
+#endif
+
 static void Port_MakeFadeBuff256(u8* src, u8* dest, u16 intensity, u8 color) {
     u32 bias = (u32)intensity * (u32)color;
     u32 factor = 0x400 - (u32)intensity * 4;
@@ -63,6 +74,25 @@ static void Port_MakeFadeBuff256(u8* src, u8* dest, u16 intensity, u8 color) {
 
     if (!dstPtr)
         return; // Safety check
+
+#ifdef TMC_N64
+    /* The fade tables live in the cart; the tableR[r>>1] loads below are 16-bit
+     * cart reads (lhu) that return garbage on N64's strict PI bus -> wrong faded
+     * colors every frame (the ares "wrong colours" bug). Cache the 3 tables
+     * (32 u16 each) in RAM via 32-bit-safe reads, re-copied only when brightness
+     * (hence the table set) changes, then index the RAM copies. */
+    static u16 sCacheR[32], sCacheG[32], sCacheB[32];
+    static int sCacheBrightness = -1;
+    if ((int)brightness != sCacheBrightness) {
+        for (int k = 0; k < 32; k++) {
+            sCacheR[k] = n64_cart_u16(&tableR[k]);
+            sCacheG[k] = n64_cart_u16(&tableG[k]);
+            sCacheB[k] = n64_cart_u16(&tableB[k]);
+        }
+        sCacheBrightness = (int)brightness;
+    }
+    tableR = sCacheR; tableG = sCacheG; tableB = sCacheB;
+#endif
 
     for (int i = 0; i < 16; i++) {
         u16 col = srcPtr[i];
