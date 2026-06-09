@@ -49,7 +49,8 @@ void Port_Config_CycleTargetFps(int direction);
  * mode2 BG2, mode7) so rotated layers and scaled sprites stop staircase-
  * aliasing. Text BGs and non-affine sprites are simply S*S nearest-
  * replicated — pixel-art has no information to recover at higher density.
- * Range 1..4 (capped by PPU framebuffer height of 640 = 160*4). */
+ * Range 1..10; port_ppu.cpp backs the scaled framebuffer with a fixed
+ * BSS scratch pool so scale changes do not allocate in the frame loop. */
 u8 Port_Config_InternalScale(void);
 void Port_Config_SetInternalScale(u8 scale);
 void Port_Config_CycleInternalScale(int direction);
