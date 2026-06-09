@@ -81,11 +81,11 @@ static inline uint32_t blend3(uint32_t a, uint32_t b) {
     return ((a & 0xFEFEFEFEu) >> 1) + ((mid & 0xFEFEFEFEu) >> 1);
 }
 
-void Port_Upscale_xBRZ_2x(const uint32_t* src, int srcW, int srcH, uint32_t* dst) {
+void Port_Upscale_xBRZ_2x_Pitch(const uint32_t* src, int srcW, int srcH,
+                                int srcPitchPixels, uint32_t* dst) {
     int x;
     int y;
     int dstW = srcW * 2;
-
     for (y = 0; y < srcH; y++) {
         for (x = 0; x < srcW; x++) {
             uint32_t M;     /* center */
@@ -98,11 +98,11 @@ void Port_Upscale_xBRZ_2x(const uint32_t* src, int srcW, int srcH, uint32_t* dst
             uint32_t BL;
             uint32_t BR;
 
-            M  = src[y * srcW + x];
-            Lt = (x > 0)        ? src[y * srcW + (x - 1)]   : M;
-            R  = (x < srcW - 1) ? src[y * srcW + (x + 1)]   : M;
-            U  = (y > 0)        ? src[(y - 1) * srcW + x]   : M;
-            Dn = (y < srcH - 1) ? src[(y + 1) * srcW + x]   : M;
+            M  = src[(size_t)y * (size_t)srcPitchPixels + x];
+            Lt = (x > 0)        ? src[(size_t)y * (size_t)srcPitchPixels + (x - 1)]   : M;
+            R  = (x < srcW - 1) ? src[(size_t)y * (size_t)srcPitchPixels + (x + 1)]   : M;
+            U  = (y > 0)        ? src[(size_t)(y - 1) * (size_t)srcPitchPixels + x]   : M;
+            Dn = (y < srcH - 1) ? src[(size_t)(y + 1) * (size_t)srcPitchPixels + x]   : M;
 
             TL = TR = BL = BR = M;
 
@@ -133,8 +133,18 @@ void Port_Upscale_xBRZ_2x(const uint32_t* src, int srcW, int srcH, uint32_t* dst
     }
 }
 
+void Port_Upscale_xBRZ_4x_Pitch(const uint32_t* src, int srcW, int srcH,
+                                int srcPitchPixels,
+                                uint32_t* scratch2x, uint32_t* dst) {
+    Port_Upscale_xBRZ_2x_Pitch(src, srcW, srcH, srcPitchPixels, scratch2x);
+    Port_Upscale_xBRZ_2x_Pitch(scratch2x, srcW * 2, srcH * 2, srcW * 2, dst);
+}
+
+void Port_Upscale_xBRZ_2x(const uint32_t* src, int srcW, int srcH, uint32_t* dst) {
+    Port_Upscale_xBRZ_2x_Pitch(src, srcW, srcH, srcW, dst);
+}
+
 void Port_Upscale_xBRZ_4x(const uint32_t* src, int srcW, int srcH,
                           uint32_t* scratch2x, uint32_t* dst) {
-    Port_Upscale_xBRZ_2x(src, srcW, srcH, scratch2x);
-    Port_Upscale_xBRZ_2x(scratch2x, srcW * 2, srcH * 2, dst);
+    Port_Upscale_xBRZ_4x_Pitch(src, srcW, srcH, srcW, scratch2x, dst);
 }
