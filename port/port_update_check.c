@@ -318,6 +318,16 @@ static void ShowUpdateDialog(SDL_Window* window, const char* latestTag, const ch
 }
 
 void Port_CheckForUpdates(SDL_Window* window) {
+    /* Skip the (blocking, network) update check in automated/headless runs:
+     * TMC_AUTOPLAY drives CI/smoke/repro harnesses with no user to see a
+     * dialog, and TMC_NO_UPDATE_CHECK is an explicit opt-out. */
+    const char* autoplay = getenv("TMC_AUTOPLAY");
+    const char* noupdate = getenv("TMC_NO_UPDATE_CHECK");
+    if ((autoplay && autoplay[0] && autoplay[0] != '0') ||
+        (noupdate && noupdate[0] && noupdate[0] != '0')) {
+        return;
+    }
+
     char* json = FetchLatestReleaseJson();
     if (!json) {
         return;

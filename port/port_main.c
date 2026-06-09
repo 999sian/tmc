@@ -710,6 +710,10 @@ int main(int argc, char* argv[]) {
 #else
     Port_EnsureAssetsReadyWithDisplay(window, gRomData, gRomSize);
 #endif
+    {
+        extern bool RandoLogic_LoadDefaultFiles(void);
+        RandoLogic_LoadDefaultFiles();
+    }
     Port_CheckForUpdates(window);
 
     /* Mod loader (Tier 1: asset overrides). Scans <exe>/mods/ for

@@ -504,6 +504,28 @@ void* GetRoomProperty(u32 area, u32 room, u32 property) {
     return temp;
 }
 
+#ifdef PC_PORT
+/* Randomizer chest identity: MinishMaker `.logic` addresses chests as
+ * area-room-index, where index is the 0-based position of the chest among the
+ * room's SMALL_CHEST/BIG_CHEST TileEntities (in property-list order). Map a
+ * chest's localFlag to that index so the reward hooks build a matching key.
+ * Returns -1 if not found. */
+int Rando_RoomChestIndex(u32 area, u32 room, u32 localFlag) {
+    TileEntity* te = (TileEntity*)GetRoomProperty(area, room, 3);
+    int index = 0;
+    if (te == NULL)
+        return -1;
+    for (int i = 0; i < 256 && te[i].type != 0; ++i) {
+        if (te[i].type != SMALL_CHEST && te[i].type != BIG_CHEST)
+            continue;
+        if (te[i].localFlag == localFlag)
+            return index;
+        index++;
+    }
+    return -1;
+}
+#endif
+
 void* GetCurrentRoomProperty(u32 idx) {
     if (gCurrentRoomProperties == NULL)
         return NULL;

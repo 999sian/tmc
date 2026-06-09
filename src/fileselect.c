@@ -44,6 +44,9 @@ typedef enum {
     STATE_COPY,
     STATE_ERASE,
     STATE_START,
+#ifdef PC_PORT
+    STATE_RANDOMIZER_CONFIG,
+#endif
 } FileSelectState;
 
 // todo: does this belong with gMapDataBottomSpecial?
@@ -258,9 +261,15 @@ static void HandleFileView(void);
 extern void HandleFileCopy(void);
 extern void HandleFileDelete(void);
 extern void HandleFileStart(void);
+#ifdef PC_PORT
+static void HandleFileRandoConfig(void);
+#endif
 static void (*const sFileScreenSubHandlers[])(void) = {
     HandleFileSelect, HandleFileNew,  HandleFileLanguageSelect, HandleFileOptions,
     HandleFileView,   HandleFileCopy, HandleFileDelete,         HandleFileStart,
+#ifdef PC_PORT
+    HandleFileRandoConfig,
+#endif
 };
 
 #ifdef PC_PORT
@@ -344,10 +353,19 @@ static const char* Port_FileSelect_ActiveProfileName(void) {
 static void sub_08050848(void);
 static void sub_0805086C(void);
 static void sub_08050940(void);
+#ifdef PC_PORT
+extern bool Port_RandoSave_LoadSlot(int slot);
+extern void Rando_Reset(void);
+#endif
 
 static void DrawFileSelectSettingsHint(void);
 static void HandlePortSettingsMenu(void);
 static void DrawPortSettingsMenu(void);
+#ifdef PC_PORT
+extern bool Port_RandoFileMenu_ShouldOpenForNewFile(void);
+extern void Port_RandoFileMenu_Open(int save_slot);
+extern bool Port_RandoFileMenu_IsOpen(void);
+#endif
 
 void sub_08051358(void);
 void sub_08051574(u32);
@@ -425,6 +443,11 @@ void SetFileSelectState(FileSelectState mode) {
             case STATE_COPY:        name = "Copy file."; break;
             case STATE_ERASE:       name = "Erase file."; break;
             case STATE_START:       name = "Starting game."; break;
+#ifdef PC_PORT
+            case STATE_RANDOMIZER_CONFIG:
+                name = "Randomizer settings.";
+                break;
+#endif
         }
         if (name) {
             PortTtsOptions opts = {0};
@@ -462,7 +485,33 @@ void SetActiveSave(u32 idx) {
         MemCopy(&gMapDataBottomSpecial.saves[idx], &gSave, sizeof(gMapDataBottomSpecial.saves[idx]));
     }
     LoadOptionsFromSave(idx);
+#ifdef PC_PORT
+    if (idx < NUM_SAVE_SLOTS) {
+        if (!Port_RandoSave_LoadSlot((int)idx)) {
+            Rando_Reset();
+        }
+    } else {
+        Rando_Reset();
+    }
+#endif
 }
+
+#ifdef PC_PORT
+void Port_FileSelectRando_StartSlot(int slot) {
+    if ((u32)slot < NUM_SAVE_SLOTS) {
+        gMapDataBottomSpecial.saveStatus[slot] = SAVE_VALID;
+        SetActiveSave((u32)slot);
+    }
+    SoundReq(SONG_VOL_FADE_OUT);
+    SetFileSelectState(STATE_START);
+}
+
+void Port_FileSelectRando_CancelSlot(int slot) {
+    (void)slot;
+    SoundReq(SFX_MENU_CANCEL);
+    SetFileSelectState(STATE_NONE);
+}
+#endif
 
 void FileSelectTask(void) {
     FlushSprites();
@@ -1668,6 +1717,12 @@ void sub_080513C0(void) {
     switch (HandleSave(0)) {
         case 1:
             gMapDataBottomSpecial.saveStatus[gMapDataBottomSpecial.unk6] = 1;
+#ifdef PC_PORT
+            if (Port_RandoFileMenu_ShouldOpenForNewFile()) {
+                SetFileSelectState(STATE_RANDOMIZER_CONFIG);
+                break;
+            }
+#endif
             SetMenuType(3);
             break;
         case 0:
@@ -2001,6 +2056,14 @@ void sub_080518E4(void) {
             break;
     }
 }
+
+#ifdef PC_PORT
+static void HandleFileRandoConfig(void) {
+    if (!Port_RandoFileMenu_IsOpen()) {
+        Port_RandoFileMenu_Open((int)gMapDataBottomSpecial.unk6);
+    }
+}
+#endif
 
 void HandleFileStart(void) {
     if (gMenu.menuType == 0) {

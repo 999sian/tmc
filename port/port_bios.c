@@ -9,6 +9,7 @@
 #include "port_runtime_config.h"
 #include "port_softslots.h"
 #include "port_touch_controls.h"
+#include "rando/rando_file_menu.h"
 #include "port_types.h"
 #include <SDL3/SDL.h>
 #include <stdbool.h>
@@ -79,7 +80,8 @@ static void Port_UpdateInput(void) {
          * the game doesn't observe stray input from key presses we routed
          * to the overlay. The soft-slot configuration overlay piggybacks
          * on this behaviour while it's the active focus. */
-        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen()) {
+        if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() ||
+            Port_InGameSettingsModalIsOpen() || Port_RandoFileMenu_IsOpen()) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
             Port_SoftSlots_TickPause();
             sFrameNum++;
@@ -201,6 +203,14 @@ static void Port_UpdateInput(void) {
         Port_ReproCatPerson_Tick(sFrameNum);
     }
 
+    /* Headless end-to-end randomizer check (TMC_REPRO_RANDO=1): drives the
+     * file-select overlay + generation + the engine item-override hooks and
+     * asserts items actually change. */
+    {
+        extern void Port_ReproRando_Tick(unsigned int frame);
+        Port_ReproRando_Tick(sFrameNum);
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
@@ -228,6 +238,10 @@ static void Port_PumpEvents(void) {
              * check below promotes that into gQuitRequested. */
             extern void Port_ImGui_RequestQuitModal(void);
             Port_ImGui_RequestQuitModal();
+            continue;
+        }
+        if (Port_RandoFileMenu_IsOpen()) {
+            Port_RandoFileMenu_HandleEvent(&e);
             continue;
         }
         if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {

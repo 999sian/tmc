@@ -784,6 +784,9 @@ target("tmc_pc")
     -- In-process randomizer (port/rando/). Clean-room C++; pulls in
     -- item.h via the same include path as the rest of port/.
     add_files("port/rando/rando.cpp")
+    add_files("port/rando/rando_logic.cpp")
+    add_files("port/rando/rando_file_menu.c")
+    add_files("port/rando/rando_save.c")
     -- Minish Cap Reborn parity toggles (clean-room from upstream
     -- README description — does NOT include any Reborn source).
     add_files("port/port_reborn.cpp")
@@ -798,6 +801,7 @@ target("tmc_pc")
     add_files("port/port_repro_credits.c")
     add_files("port/port_repro_perfcap.c")
     add_files("port/port_repro_catperson.c")
+    add_files("port/port_repro_rando.c")
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
@@ -1073,6 +1077,21 @@ target("tmc_pc")
     -- looks for the resulting binary at <exe>/randomizer/ — search
     -- slot #2 in Port_Randomizer_FindCLI().
     add_deps("randomizer_cli")
+target_end()
+
+-- ====================
+-- Native randomizer self-test
+-- ====================
+target("rando_logic_test")
+    set_kind("binary")
+    set_languages("c11", "cxx20")
+    set_targetdir("build/pc")
+    add_includedirs("port")
+    add_includedirs("include")
+    add_files("port/rando/rando.cpp")
+    add_files("port/rando/rando_logic.cpp")
+    add_files("port/rando/rando_save.c")
+    add_files("port/rando/rando_test.c")
 target_end()
 
 

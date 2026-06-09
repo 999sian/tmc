@@ -246,6 +246,9 @@ void LoadRoomTileEntities();
 Entity* LoadRoomEntity(const EntityData*);
 void LoadRoomEntityList(const EntityData* listPtr);
 void* GetRoomProperty(u32 area, u32 room, u32 property);
+#ifdef PC_PORT
+int Rando_RoomChestIndex(u32 area, u32 room, u32 localFlag);
+#endif
 
 bool32 LoadFixedGFX(Entity*, u32);
 void UnloadGFXSlots(Entity*);
