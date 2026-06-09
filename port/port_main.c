@@ -601,6 +601,11 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Prelaunch: TMC_AUTOPLAY set — skipping menu.\n");
             done = true;
         }
+        /* Deadline pacing keeps the prelaunch menu near 60 Hz without
+         * busy-waiting. Fixed SDL_Delay(16) drifts and can spin hot on
+         * timer jitter; this yields only until the next frame deadline. */
+        const Uint64 prelaunchFrameNs = 1000000000ull / 60ull;
+        Uint64 nextPrelaunchFrameNs = SDL_GetTicksNS() + prelaunchFrameNs;
         while (!done) {
             /* Re-derive the displayable filename each iteration in case
              * a Change-ROM swap moved the file. */
@@ -679,7 +684,20 @@ int main(int argc, char* argv[]) {
                     return 0;
                 }
             }
-            SDL_Delay(16);
+            {
+                const Uint64 nowNs = SDL_GetTicksNS();
+                if (nowNs < nextPrelaunchFrameNs) {
+                    const Uint64 remainingNs = nextPrelaunchFrameNs - nowNs;
+                    const Uint64 delayMs = remainingNs / 1000000ull;
+                    SDL_Delay(delayMs > 0 ? (Uint32)delayMs : 0);
+                }
+                const Uint64 afterDelayNs = SDL_GetTicksNS();
+                if (afterDelayNs > nextPrelaunchFrameNs + prelaunchFrameNs) {
+                    nextPrelaunchFrameNs = afterDelayNs + prelaunchFrameNs;
+                } else {
+                    nextPrelaunchFrameNs += prelaunchFrameNs;
+                }
+            }
         }
         fprintf(stderr, "Prelaunch: Play — loading ROM and assets.\n");
     }
