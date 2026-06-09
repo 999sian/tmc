@@ -589,6 +589,12 @@ target("tmc_pc")
             { patch = "viruappu-n64-mode1-perf.patch",
               marker_file = path.join(sub, "include", "virtuappu.h"),
               marker = "TMC_N64" },
+            -- Pitch-aware framebuffer rows + visible-width culling. Must
+            -- apply after the mode1 perf/widescreen patches so it can reuse
+            -- their TLS scratch and widescreen clip constants.
+            { patch = "viruappu-pitch-culling.patch",
+              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
+              marker = "virtuappu_mode1_set_frame_geometry" },
         }
         -- Apply one patch when its marker is absent. -3 tolerates drifted
         -- context (and on shallow submodule clones, where the pre-image blob

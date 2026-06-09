@@ -25,8 +25,8 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
 extern "C" bool Port_GPU_ClaimWindow(SDL_Window* w, int fw, int fh) {
     (void)w; (void)fw; (void)fh; return false;
 }
-extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int w, int h) {
-    (void)fb; (void)w; (void)h; return false;
+extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int w, int h, int pitch_bytes) {
+    (void)fb; (void)w; (void)h; (void)pitch_bytes; return false;
 }
 extern "C" bool Port_GPU_PaintBootSplash(void) { return false; }
 extern "C" bool Port_GPU_IsActive(void) { return false; }
@@ -525,11 +525,15 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
     return true;
 }
 
-extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
+extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, int fb_pitch_bytes) {
     /* shm publish moved to port_ppu.cpp so the RT consumer always sees
      * the GBA-native 240×160 framebuffer + BG/sprite planes at matching
      * dims, regardless of InternalScale.  Don't republish here. */
     if (!sWindowClaimed || !sPipelines[sActiveFilter]) return false;
+    if (!fb || fb_w <= 0 || fb_h <= 0 ||
+        fb_pitch_bytes < fb_w * (int)sizeof(uint32_t)) {
+        return false;
+    }
 
     /* Recreate source texture + transfer buffer when the framebuffer
      * size changes (e.g. user picked a different internal render
@@ -592,10 +596,23 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h) {
         return false;
     }
 
-    /* Upload the framebuffer via transfer buffer. Map → memcpy → unmap. */
+    /* Upload the framebuffer via transfer buffer. VirtuaPPU may render a
+     * 240-wide visible viewport inside a wider fixed-pitch framebuffer; pack
+     * rows into the upload buffer so the GPU source texture stays tight. */
     void* mapped = SDL_MapGPUTransferBuffer(sDevice, sTransferBuffer, /*cycle=*/true);
     if (mapped) {
-        std::memcpy(mapped, fb, (size_t)fb_w * (size_t)fb_h * sizeof(uint32_t));
+        uint8_t* dst_bytes = static_cast<uint8_t*>(mapped);
+        const uint8_t* src_bytes = reinterpret_cast<const uint8_t*>(fb);
+        const size_t row_bytes = (size_t)fb_w * sizeof(uint32_t);
+        if (fb_pitch_bytes == (int)row_bytes) {
+            std::memcpy(dst_bytes, src_bytes, row_bytes * (size_t)fb_h);
+        } else {
+            for (int y = 0; y < fb_h; ++y) {
+                std::memcpy(dst_bytes + (size_t)y * row_bytes,
+                            src_bytes + (size_t)y * (size_t)fb_pitch_bytes,
+                            row_bytes);
+            }
+        }
         SDL_UnmapGPUTransferBuffer(sDevice, sTransferBuffer);
 
         SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);

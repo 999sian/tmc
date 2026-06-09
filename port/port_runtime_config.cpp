@@ -597,13 +597,11 @@ extern "C" u8 Port_Config_InternalScale(void) {
 }
 
 extern "C" void Port_Config_SetInternalScale(u8 scale) {
-    /* Cap at 10×. The scaled framebuffer is malloc'd in port_ppu.cpp
-       (Port_PPU_BuildScaledFrame) so it's not bounded by the static
-       virtuappu_frame_buffer; the affine-OAM overlay patch is already
-       parameterised by `scale` and samples sub-pixel per S step. The
-       limit is now SDL_Texture max / fill-rate, not memory: at 10×
-       the destination is 2400×1600 = 15 MB and ~3.8 Mpx copied per
-       frame. */
+    /* Cap at 10×. port_ppu.cpp backs the scaled framebuffer with a fixed
+       64-byte-aligned BSS pool, so scale changes do not allocate in the
+       frame loop and are not bounded by the static virtuappu_frame_buffer.
+       At 10×, native output is 2400×1600 = 15 MB and ~3.8 Mpx copied per
+       frame, so the practical limit is SDL_Texture max / fill-rate. */
     if (scale < 1) scale = 1;
     if (scale > 10) scale = 10;
     sInternalScale = scale;
