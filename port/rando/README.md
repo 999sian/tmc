@@ -94,7 +94,11 @@ Implemented and tested (`rando_logic_test`):
   source (NPCs, shops, dojos, fusions, drops, …) is randomized via the global
   `Rando_OverrideItem` pool bijection;
 - `!ensurereachability` is executed: when present (or `ACCESSIBILITY =
-  ACCESS_LOCATIONS`), every location is verified reachable, not just the goal.
+  ACCESS_LOCATIONS`), every location is verified reachable, not just the goal;
+- the file-select overlay enumerates the logic's declared `!flag`/`!dropdown`/
+  `!numberbox` settings and lets the player change them; each change is applied
+  as a define override + reparse, so the menu genuinely drives real-logic
+  generation (e.g. toggling `FIGURINE_HUNT` adds figurines to the pool).
 
 NOT yet at full parity (honest gaps):
 - `!import` logic functions are approximated (logic-only item symbols are

@@ -178,30 +178,49 @@ static int run_real_logic_chest_probe(void) {
         return 0;
     }
     uint32_t n = RandoLogic_GetLocationCountRaw();
-    int keyed = 0, engine_match = 0, overridden = 0;
+    int keyed = 0, engine_match = 0, overridden = 0, hook_key_ok = 0;
+    uint32_t demo_key = 0xFFFFFFFFu;
+    unsigned char demo_vanilla = 0, demo_item = 0;
     for (uint32_t i = 0; i < n; ++i) {
         uint32_t key = RandoLogic_GetLocationKeyAt(i);
         if (key == 0xFFFFFFFFu) continue;
         keyed++;
         u32 area = (key >> 16) & 0xff, room = (key >> 8) & 0xff, chest = key & 0xff;
+        u8 vanilla = 0xFF;
         if (area < 0x90 && room < 64) {
             TileEntity* te = (TileEntity*)GetRoomProperty(area, room, 3);
-            int idx = 0, hit = 0;
+            int idx = 0;
             for (int k = 0; te != NULL && k < 256 && te[k].type != 0; ++k) {
                 if (te[k].type != SMALL_CHEST && te[k].type != BIG_CHEST) continue;
-                if (idx == (int)chest) { hit = 1; break; }
+                if (idx == (int)chest) {
+                    engine_match++;
+                    vanilla = te[k]._2;
+                    /* Exact runtime keying function used by OpenSmallChest /
+                     * the big-chest hook: localFlag -> room chest index. It must
+                     * reproduce the logic's chest-index byte. */
+                    if (Rando_RoomChestIndex(area, room, te[k].localFlag) == (int)chest) hook_key_ok++;
+                    break;
+                }
                 idx++;
             }
-            if (hit) engine_match++;
         }
-        /* The logic key is already index-based (from the area-room-chest
-         * triple), so this is exactly what the runtime chest hook now builds. */
-        unsigned char t = 0xEE, sub = 0;
-        if (Rando_OverrideLocationKey(key, &t, &sub)) overridden++;
+        /* Replicate the exact in-game small-chest hook (playerItemUtils.c):
+         * vanilla item -> Rando_OverrideLocationKey(area-room-chestIndex). */
+        unsigned char t = vanilla, sub = 0;
+        if (Rando_OverrideLocationKey(key, &t, &sub)) {
+            overridden++;
+            if (demo_key == 0xFFFFFFFFu && vanilla != 0xFF && t != vanilla) {
+                demo_key = key; demo_vanilla = vanilla; demo_item = t;
+            }
+        }
     }
-    fprintf(stderr, "[rando-repro] real-chest probe: keyed=%d engine-chest-match=%d overridden=%d\n",
-            keyed, engine_match, overridden);
-    if (engine_match <= 0 || overridden <= 0) return 0;
+    fprintf(stderr, "[rando-repro] real-chest probe: keyed=%d engine-chest-match=%d overridden=%d hook-key-ok=%d\n",
+            keyed, engine_match, overridden, hook_key_ok);
+    if (demo_key != 0xFFFFFFFFu) {
+        fprintf(stderr, "[rando-repro]   e.g. chest area %02X room %02X #%u: vanilla 0x%02X -> 0x%02X\n",
+                (demo_key >> 16) & 0xff, (demo_key >> 8) & 0xff, demo_key & 0xff, demo_vanilla, demo_item);
+    }
+    if (engine_match <= 0 || overridden <= 0 || hook_key_ok != engine_match) return 0;
 
     /* Persistence round-trip: a real-logic seed must survive sidecar
      * save/reload (so chests stay randomized across save+restart). Capture a
@@ -239,6 +258,42 @@ static int run_real_logic_chest_probe(void) {
     return 1;
 }
 
+/* Drive the file-select overlay in logic mode: toggle a known logic setting
+ * through simulated input and confirm it actually re-parsed and changed the
+ * generated pool (proves the menu drives real-logic generation). */
+static int run_real_logic_menu_test(void) {
+    Port_RandoFileMenu_Open(0);
+    if (!Port_RandoFileMenu_IsOpen()) {
+        fprintf(stderr, "[rando-repro] FAIL: overlay did not open (logic mode)\n");
+        return 0;
+    }
+    int fig = -1;
+    uint32_t sc = RandoLogic_GetSettingCount();
+    for (uint32_t i = 0; i < sc; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s != NULL && strcmp(s->define, "FIGURINE_HUNT") == 0) { fig = (int)i; break; }
+    }
+    if (fig < 0) {
+        fprintf(stderr, "[rando-repro] FAIL: FIGURINE_HUNT setting not found\n");
+        Port_RandoFileMenu_Close();
+        return 0;
+    }
+    uint32_t base = RandoLogic_GetStats().item_count;
+    /* Row 0 is seed; settings start at row 2. Navigate down to the flag. */
+    for (int k = 0; k < 2 + fig; ++k) push_key(SDLK_DOWN);
+    push_key(SDLK_RIGHT); /* toggle the flag -> override + reparse */
+    uint32_t after = RandoLogic_GetStats().item_count;
+    Port_RandoFileMenu_Close();
+    RandoLogic_ClearOverrides();
+    RandoLogic_Reparse();
+    if (after <= base) {
+        fprintf(stderr, "[rando-repro] FAIL: menu toggle did not change pool (%u -> %u)\n", base, after);
+        return 0;
+    }
+    fprintf(stderr, "[rando-repro] menu settings OK: toggling FIGURINE_HUNT changed pool %u -> %u\n", base, after);
+    return 1;
+}
+
 void Port_ReproRando_Tick(unsigned int frame) {
     static int mode = -1;
     if (mode < 0) {
@@ -258,6 +313,7 @@ void Port_ReproRando_Tick(unsigned int frame) {
          * exercise the real per-location chest path instead of the built-in
          * bijection tests. */
         ok = run_real_logic_chest_probe();
+        if (ok) ok = run_real_logic_menu_test();
     } else {
         ok = run_menu_path();
         if (ok) ok = run_logic_key_path();
