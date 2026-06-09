@@ -21,8 +21,10 @@
 #include "beanstalkSubtask.h"
 #include "roomid.h"
 #ifdef PC_PORT
+#include <stdbool.h>
 #include <stdio.h>
 #include "port/port_generic_entity.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 #endif
 
 typedef struct {
@@ -221,13 +223,20 @@ void ChestSpawner_Type2Action4(ChestSpawnerEntity* this) {
 void sub_08084074(u32 flag) {
     TileEntity* tileEntity = (TileEntity*)GetCurrentRoomProperty(3);
     if (tileEntity != NULL) {
+        int chestIndex = 0;
         for (; tileEntity->type != 0; tileEntity++) {
+            bool isChest = (tileEntity->type == SMALL_CHEST || tileEntity->type == BIG_CHEST);
             if ((tileEntity->type == BIG_CHEST) && (flag == tileEntity->localFlag)) {
-                /* port/rando interception now happens centrally inside
-                 * GiveItemWithCutscene (one call deeper). */
-                CreateItemEntity(tileEntity->_2, tileEntity->_3, 0);
+                u8 item = tileEntity->_2;
+                u8 subtype = tileEntity->_3;
+#ifdef PC_PORT
+                u32 key = ((u32)gRoomControls.area << 16) | ((u32)gRoomControls.room << 8) | (u32)chestIndex;
+                (void)Rando_OverrideLocationKey(key, &item, &subtype);
+#endif
+                CreateItemEntity(item, subtype, 0);
                 return;
             }
+            if (isChest) chestIndex++;
         }
     }
 }
