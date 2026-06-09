@@ -16,6 +16,27 @@ extern "C" {
 #define RANDO_LOGIC_MAX_SYMBOLS 8192
 #define RANDO_LOGIC_MAX_NODES 60000
 #define RANDO_LOGIC_MAX_DEFINES 2048
+#define RANDO_LOGIC_MAX_SETTINGS 320
+#define RANDO_LOGIC_MAX_SETTING_OPTIONS 10
+
+typedef enum RandoSettingType {
+    RANDO_SETTING_FLAG = 0,
+    RANDO_SETTING_DROPDOWN,
+    RANDO_SETTING_NUMBER,
+} RandoSettingType;
+
+typedef struct RandoLogicSetting {
+    char define[48];
+    char label[48];
+    RandoSettingType type;
+    bool flag_on;                 /* current state (flag) */
+    int number;                   /* current value (number) */
+    int num_min, num_max;         /* number bounds */
+    int option_count;             /* dropdown */
+    int option_index;             /* current dropdown option */
+    char opt_label[RANDO_LOGIC_MAX_SETTING_OPTIONS][40];
+    char opt_value[RANDO_LOGIC_MAX_SETTING_OPTIONS][32];
+} RandoLogicSetting;
 
 typedef enum RandoLogicItemType {
     RANDO_LOGIC_ITEM_UNKNOWN = 0,
@@ -73,6 +94,15 @@ int RandoLogic_FindLocationByKey(uint32_t key);
 uint32_t RandoLogic_GetLocationKeyAt(uint32_t index);
 uint32_t RandoLogic_GetLocationCountRaw(void);
 const char* RandoLogic_GetLocationName(uint32_t index);
+
+/* Declared settings (from !flag/!dropdown/!numberbox). The menu enumerates
+ * these, lets the player change them, and the choices are applied as define
+ * overrides + a reparse before generation. */
+uint32_t RandoLogic_GetSettingCount(void);
+const RandoLogicSetting* RandoLogic_GetSetting(uint32_t index);
+void RandoLogic_ClearOverrides(void);
+void RandoLogic_SetOverride(const char* define, const char* value);
+bool RandoLogic_Reparse(void);
 
 #ifdef __cplusplus
 }
