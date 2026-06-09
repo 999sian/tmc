@@ -157,6 +157,29 @@ static int run_real_logic_diagnostic(void) {
             st.item_count, st.location_count, st.helper_count, st.symbol_count,
             st.node_count, st.define_count, st.native_mapped_items);
 
+    /* Settings control: enabling FIGURINE_HUNT must add figurines to the pool
+     * (item count rises after reparse); clearing the override restores it. */
+    {
+        uint32_t base_items = st.item_count;
+        uint32_t setting_count = RandoLogic_GetSettingCount();
+        RandoLogic_SetOverride("FIGURINE_HUNT", "true");
+        if (!RandoLogic_Reparse()) {
+            fprintf(stderr, "[real] FAIL: reparse after override failed\n");
+            return 0;
+        }
+        uint32_t hunt_items = RandoLogic_GetStats().item_count;
+        RandoLogic_ClearOverrides();
+        RandoLogic_Reparse();
+        uint32_t restored_items = RandoLogic_GetStats().item_count;
+        fprintf(stderr, "[real] settings=%u; FIGURINE_HUNT: items %u -> %u (restored %u)\n",
+                setting_count, base_items, hunt_items, restored_items);
+        if (hunt_items <= base_items || restored_items != base_items) {
+            fprintf(stderr, "[real] FAIL: setting override did not drive generation\n");
+            return 0;
+        }
+    }
+    st = RandoLogic_GetStats();
+
     static uint16_t a[RANDO_LOCATION_COUNT];
     static uint16_t b[RANDO_LOCATION_COUNT];
     RandomizerSettings s = Rando_DefaultSettings();

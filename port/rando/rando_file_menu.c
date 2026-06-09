@@ -47,6 +47,11 @@ typedef struct RandoFileMenuState {
     RandoItemPoolDifficulty difficulty;
     char status[96];
     RandoMenuElement elements[RANDO_MENU_ELEMENT_COUNT];
+    /* Logic mode: when a real .logic file is loaded, the toggles are replaced
+     * by a scrollable list of its declared settings, applied as overrides. */
+    bool logic_mode;
+    int logic_row;     /* 0=seed, 1=randomize, 2..=settings, last=generate */
+    int logic_scroll;
 } RandoFileMenuState;
 
 static SDL_Window* sWindow;
@@ -174,6 +179,75 @@ static void ActivateCurrent(void) {
     }
 }
 
+/* ---- Logic mode (real .logic settings) ---------------------------------- */
+
+static int LogicSettingCount(void) {
+    return (int)RandoLogic_GetSettingCount();
+}
+
+/* Rows: 0 = seed, 1 = randomize, 2..(2+N-1) = settings, (2+N) = generate. */
+static int LogicRowCount(void) {
+    return 3 + LogicSettingCount();
+}
+
+static int LogicGenerateRow(void) {
+    return 2 + LogicSettingCount();
+}
+
+static int LogicRowToSetting(int row) {
+    return (row >= 2 && row < LogicGenerateRow()) ? (row - 2) : -1;
+}
+
+/* Change setting `idx` by `delta` and re-parse so the choice drives generation. */
+static void ChangeLogicSetting(int idx, int delta) {
+    const RandoLogicSetting* s = RandoLogic_GetSetting((uint32_t)idx);
+    if (s == NULL) return;
+    char value[32];
+    switch (s->type) {
+        case RANDO_SETTING_FLAG:
+            SDL_snprintf(value, sizeof(value), "%s", s->flag_on ? "false" : "true");
+            break;
+        case RANDO_SETTING_DROPDOWN: {
+            if (s->option_count <= 0) return;
+            int oi = s->option_index + delta;
+            if (oi < 0) oi = s->option_count - 1;
+            if (oi >= s->option_count) oi = 0;
+            SDL_snprintf(value, sizeof(value), "%s", s->opt_value[oi]);
+            break;
+        }
+        case RANDO_SETTING_NUMBER: {
+            int v = s->number + delta;
+            if (v < s->num_min) v = s->num_min;
+            if (v > s->num_max) v = s->num_max;
+            SDL_snprintf(value, sizeof(value), "%d", v);
+            break;
+        }
+        default:
+            return;
+    }
+    RandoLogic_SetOverride(s->define, value);
+    RandoLogic_Reparse();
+}
+
+static void LogicMove(int delta) {
+    int rows = LogicRowCount();
+    int next = sMenu.logic_row + delta;
+    if (next < 0) next = rows - 1;
+    if (next >= rows) next = 0;
+    sMenu.logic_row = next;
+}
+
+static void LogicActivate(void) {
+    if (sMenu.logic_row == 1) {
+        RandomizeSeedText();
+    } else if (sMenu.logic_row == LogicGenerateRow()) {
+        CommitAndStart();
+    } else {
+        int sidx = LogicRowToSetting(sMenu.logic_row);
+        if (sidx >= 0) ChangeLogicSetting(sidx, +1);
+    }
+}
+
 static bool PointInRect(float x, float y, const SDL_FRect* r) {
     return x >= r->x && x < r->x + r->w && y >= r->y && y < r->y + r->h;
 }
@@ -237,6 +311,61 @@ static void DrawRowText(SDL_Renderer* renderer, int index, const char* value) {
              255);
 }
 
+static void LogicRowText(int row, char* out, size_t out_len) {
+    if (row == 0) {
+        SDL_snprintf(out, out_len, "Seed: %s%s", sMenu.seed_text, sMenu.logic_row == 0 ? "_" : "");
+    } else if (row == 1) {
+        SDL_snprintf(out, out_len, "Randomize Seed");
+    } else if (row == LogicGenerateRow()) {
+        SDL_snprintf(out, out_len, "Generate Seed & Start Game");
+    } else {
+        const RandoLogicSetting* s = RandoLogic_GetSetting((uint32_t)LogicRowToSetting(row));
+        if (s == NULL) { out[0] = '\0'; return; }
+        if (s->type == RANDO_SETTING_FLAG) {
+            SDL_snprintf(out, out_len, "%s: %s", s->label, s->flag_on ? "On" : "Off");
+        } else if (s->type == RANDO_SETTING_DROPDOWN) {
+            const char* v = (s->option_index < s->option_count) ? s->opt_label[s->option_index] : "?";
+            SDL_snprintf(out, out_len, "%s: %s", s->label, v);
+        } else {
+            SDL_snprintf(out, out_len, "%s: %d", s->label, s->number);
+        }
+    }
+}
+
+static void RenderLogicSettings(SDL_Renderer* renderer, const SDL_FRect* box) {
+    const int visible = 8;
+    const float row_h = 26.0f;
+    int rows = LogicRowCount();
+
+    if (sMenu.logic_row < sMenu.logic_scroll) sMenu.logic_scroll = sMenu.logic_row;
+    if (sMenu.logic_row >= sMenu.logic_scroll + visible) sMenu.logic_scroll = sMenu.logic_row - visible + 1;
+    if (sMenu.logic_scroll < 0) sMenu.logic_scroll = 0;
+
+    for (int slot = 0; slot < visible; ++slot) {
+        int row = sMenu.logic_scroll + slot;
+        if (row >= rows) break;
+        SDL_FRect r;
+        r.x = box->x + 24.0f;
+        r.y = box->y + 70.0f + (float)slot * (row_h + 2.0f);
+        r.w = box->w - 48.0f;
+        r.h = row_h;
+        bool selected = (row == sMenu.logic_row);
+        SDL_SetRenderDrawColor(renderer, selected ? 42 : 16, selected ? 48 : 24, selected ? 74 : 44, 232);
+        SDL_RenderFillRect(renderer, &r);
+        SDL_SetRenderDrawColor(renderer, selected ? 255 : 92, selected ? 224 : 104, selected ? 96 : 132, 255);
+        SDL_RenderRect(renderer, &r);
+        char line[160];
+        LogicRowText(row, line, sizeof(line));
+        DrawText(renderer, r.x + 10.0f, r.y + 7.0f, line,
+                 selected ? 255 : 225, selected ? 240 : 230, selected ? 96 : 220, 255);
+    }
+    {
+        char foot[64];
+        SDL_snprintf(foot, sizeof(foot), "Setting %d / %d   Left/Right change", sMenu.logic_row + 1, rows);
+        DrawText(renderer, box->x + 18.0f, box->y + box->h - 28.0f, foot, 150, 210, 170, 255);
+    }
+}
+
 static void RenderFileMenuUISized(SDL_Renderer* renderer, int window_width, int window_height) {
     SDL_FRect box;
     char seed_line[RANDO_MENU_SEED_MAX + 4];
@@ -262,18 +391,19 @@ static void RenderFileMenuUISized(SDL_Renderer* renderer, int window_width, int 
              "D-Pad/Arrows move  Left/Right cycle  Enter/A start  Esc/B cancel",
              185, 196, 216, 255);
 
-    {
+    if (sMenu.logic_mode) {
         char logic_line[96];
-        if (RandoLogic_IsLoaded()) {
-            RandoLogicStats st = RandoLogic_GetStats();
-            SDL_snprintf(logic_line, sizeof(logic_line),
-                         "Logic: external .logic file (%u locations) - toggles below are advisory",
-                         st.location_count);
-        } else {
-            SDL_snprintf(logic_line, sizeof(logic_line), "Logic: built-in native graph");
-        }
+        RandoLogicStats st = RandoLogic_GetStats();
+        SDL_snprintf(logic_line, sizeof(logic_line),
+                     "Logic: external .logic (%u locations, %u settings)",
+                     st.location_count, RandoLogic_GetSettingCount());
         DrawText(renderer, box.x + 18.0f, box.y + 48.0f, logic_line, 150, 210, 170, 255);
+        RenderLogicSettings(renderer, &box);
+        return;
     }
+
+    DrawText(renderer, box.x + 18.0f, box.y + 48.0f, "Logic: built-in native graph",
+             150, 210, 170, 255);
 
     for (int i = 0; i < RANDO_MENU_ELEMENT_COUNT; ++i) {
         const bool selected = (i == sMenu.active_element_index);
@@ -337,6 +467,14 @@ void Port_RandoFileMenu_Open(int save_slot) {
     sMenu.shuffle_kinstones = defaults.shuffle_kinstones;
     sMenu.shuffle_dojos = defaults.shuffle_dojos;
     sMenu.difficulty = defaults.item_difficulty;
+    sMenu.logic_mode = RandoLogic_IsLoaded();
+    sMenu.logic_row = 0;
+    sMenu.logic_scroll = 0;
+    if (sMenu.logic_mode) {
+        /* Start from the file's declared defaults each time the menu opens. */
+        RandoLogic_ClearOverrides();
+        RandoLogic_Reparse();
+    }
     SetSeedText("MINISH");
     if (sWindow != NULL) {
         SDL_StartTextInput(sWindow);
@@ -357,7 +495,8 @@ void ProcessFileMenuInput(SDL_Event* event) {
     if (event == NULL || !sMenu.open) return;
 
     if (event->type == SDL_EVENT_TEXT_INPUT) {
-        if (sMenu.active_element_index == 0) {
+        bool seed_focused = sMenu.logic_mode ? (sMenu.logic_row == 0) : (sMenu.active_element_index == 0);
+        if (seed_focused) {
             const char* text = event->text.text;
             for (size_t i = 0; text != NULL && text[i] != '\0'; ++i) {
                 if (sMenu.seed_len >= RANDO_MENU_SEED_MAX) break;
@@ -380,6 +519,33 @@ void ProcessFileMenuInput(SDL_Event* event) {
                 sMenu.active_element_index = i;
                 ActivateCurrent();
                 return;
+            }
+        }
+        return;
+    }
+
+    if (sMenu.logic_mode) {
+        if (event->type == SDL_EVENT_KEY_DOWN && !event->key.repeat) {
+            switch (event->key.key) {
+                case SDLK_UP: LogicMove(-1); return;
+                case SDLK_DOWN: case SDLK_TAB: LogicMove(1); return;
+                case SDLK_LEFT: { int si = LogicRowToSetting(sMenu.logic_row); if (si >= 0) ChangeLogicSetting(si, -1); return; }
+                case SDLK_RIGHT: { int si = LogicRowToSetting(sMenu.logic_row); if (si >= 0) ChangeLogicSetting(si, +1); return; }
+                case SDLK_BACKSPACE: if (sMenu.logic_row == 0 && sMenu.seed_len > 0) sMenu.seed_text[--sMenu.seed_len] = '\0'; return;
+                case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE: LogicActivate(); return;
+                case SDLK_ESCAPE: Port_RandoFileMenu_Close(); Port_FileSelectRando_CancelSlot(sMenu.save_slot); return;
+                default: return;
+            }
+        }
+        if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+            switch ((SDL_GamepadButton)event->gbutton.button) {
+                case SDL_GAMEPAD_BUTTON_DPAD_UP: LogicMove(-1); return;
+                case SDL_GAMEPAD_BUTTON_DPAD_DOWN: LogicMove(1); return;
+                case SDL_GAMEPAD_BUTTON_DPAD_LEFT: { int si = LogicRowToSetting(sMenu.logic_row); if (si >= 0) ChangeLogicSetting(si, -1); return; }
+                case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: { int si = LogicRowToSetting(sMenu.logic_row); if (si >= 0) ChangeLogicSetting(si, +1); return; }
+                case SDL_GAMEPAD_BUTTON_SOUTH: case SDL_GAMEPAD_BUTTON_START: LogicActivate(); return;
+                case SDL_GAMEPAD_BUTTON_EAST: Port_RandoFileMenu_Close(); Port_FileSelectRando_CancelSlot(sMenu.save_slot); return;
+                default: return;
             }
         }
         return;

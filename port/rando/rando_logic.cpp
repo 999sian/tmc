@@ -109,6 +109,30 @@ static LogicModel sLogic;
 static char sLineBuf[LINE_MAX_LEN + 1];
 static char sExpandedLine[LINE_MAX_LEN + 1];
 
+/* Declared settings for the current parse (rebuilt each load). */
+static RandoLogicSetting sSettings[RANDO_LOGIC_MAX_SETTINGS];
+static uint32_t sSettingCount;
+
+/* Define overrides chosen by the UI; persist across reset/reparse. */
+typedef struct LogicOverride {
+    char name[48];
+    char value[32];
+    bool has_value; /* false => "defined without value" (flag on); cleared flag = absent */
+} LogicOverride;
+static LogicOverride sOverrides[RANDO_LOGIC_MAX_SETTINGS];
+static uint32_t sOverrideCount;
+
+/* Raw logic text retained so settings changes can re-parse from scratch. */
+static char sRawLogic[1024 * 1024 + 1];
+static size_t sRawLen;
+
+static int FindOverride(const char* name) {
+    for (uint32_t i = 0; i < sOverrideCount; ++i) {
+        if (strcmp(sOverrides[i].name, name) == 0) return (int)i;
+    }
+    return -1;
+}
+
 static char* LTrim(char* s) {
     while (*s && isspace((unsigned char)*s)) ++s;
     return s;
@@ -736,31 +760,61 @@ static bool ParseLocationLine(char* line) {
     return true;
 }
 
+static RandoLogicSetting* RecordSetting(const char* define, const char* label, RandoSettingType type) {
+    if (sSettingCount >= RANDO_LOGIC_MAX_SETTINGS || define == NULL || define[0] == '\0') return NULL;
+    RandoLogicSetting* s = &sSettings[sSettingCount++];
+    memset(s, 0, sizeof(*s));
+    CopyName(s->define, sizeof(s->define), define, strlen(define));
+    CopyName(s->label, sizeof(s->label), label ? label : define, label ? strlen(label) : strlen(define));
+    s->type = type;
+    return s;
+}
+
 static void ParseFlagDirective(char* args) {
     char* fields[8] = {0};
     int n = SplitDashFields(args, fields, 8);
-    /* `!flag - tab - type - group - DEFINE - readable - tooltip - [default]`.
-     * The optional default ("true") is field index 6. */
-    if (n >= 5) {
-        bool default_true = (n >= 7 && fields[6] != NULL && strcmp(fields[6], "true") == 0);
-        if (default_true) SetDefineValue(fields[3], NULL, false);
-    }
+    /* `!flag - tab - type - group - DEFINE - readable - tooltip - [default]`. */
+    if (n < 5) return;
+    bool on = (n >= 7 && fields[6] != NULL && strcmp(fields[6], "true") == 0);
+    int ov = FindOverride(fields[3]);
+    if (ov >= 0) on = (strcmp(sOverrides[ov].value, "true") == 0);
+    if (on) SetDefineValue(fields[3], NULL, false);
+    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_FLAG);
+    if (s != NULL) s->flag_on = on;
 }
 
 static void ParseDropdownDirective(char* args) {
-    char* fields[10] = {0};
-    int n = SplitDashFields(args, fields, 10);
-    if (n >= 7) {
-        SetDefineValue(fields[3], fields[6], true);
+    char* fields[40] = {0};
+    int n = SplitDashFields(args, fields, 40);
+    if (n < 7) return;
+    const char* def = fields[6];
+    int ov = FindOverride(fields[3]);
+    const char* chosen = (ov >= 0) ? sOverrides[ov].value : def;
+    SetDefineValue(fields[3], chosen, true);
+    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_DROPDOWN);
+    if (s == NULL) return;
+    /* Options are (label, value, tooltip) triplets starting at field 7. */
+    for (int i = 7; i + 1 < n && s->option_count < RANDO_LOGIC_MAX_SETTING_OPTIONS; i += 3) {
+        CopyName(s->opt_label[s->option_count], sizeof(s->opt_label[0]), fields[i], strlen(fields[i]));
+        CopyName(s->opt_value[s->option_count], sizeof(s->opt_value[0]), fields[i + 1], strlen(fields[i + 1]));
+        if (chosen != NULL && strcmp(s->opt_value[s->option_count], chosen) == 0) s->option_index = s->option_count;
+        s->option_count++;
     }
 }
 
 static void ParseNumberboxDirective(char* args) {
     char* fields[10] = {0};
     int n = SplitDashFields(args, fields, 10);
-    if (n >= 7) {
-        SetDefineValue(fields[3], fields[6], true);
-    }
+    if (n < 7) return;
+    const char* chosen = fields[6];
+    int ov = FindOverride(fields[3]);
+    if (ov >= 0) chosen = sOverrides[ov].value;
+    SetDefineValue(fields[3], chosen, true);
+    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_NUMBER);
+    if (s == NULL) return;
+    s->number = (int)strtol(chosen ? chosen : "0", NULL, 0);
+    s->num_min = (n >= 8 && fields[7]) ? (int)strtol(fields[7], NULL, 0) : 0;
+    s->num_max = (n >= 9 && fields[8]) ? (int)strtol(fields[8], NULL, 0) : 0;
 }
 
 static void ParseDefineDirective(char* args) {
@@ -1017,10 +1071,20 @@ extern "C" bool RandoLogic_LoadText(const char* text, size_t len) {
     bool active = true;
 
     RandoLogic_Reset();
+    sSettingCount = 0;
 
     if (text == NULL) {
         SetError("null logic text");
         return false;
+    }
+
+    /* Retain the raw text so settings changes can re-parse from scratch
+     * (overrides are applied while parsing). Skip the self-copy on reparse. */
+    if (text != sRawLogic) {
+        size_t copy = len < sizeof(sRawLogic) - 1 ? len : sizeof(sRawLogic) - 1;
+        memcpy(sRawLogic, text, copy);
+        sRawLogic[copy] = '\0';
+        sRawLen = copy;
     }
 
     const char* p = text;
@@ -1120,6 +1184,35 @@ extern "C" uint32_t RandoLogic_GetLocationCountRaw(void) {
 
 extern "C" const char* RandoLogic_GetLocationName(uint32_t index) {
     return index < sLogic.location_count ? sLogic.locations[index].name : "";
+}
+
+extern "C" uint32_t RandoLogic_GetSettingCount(void) {
+    return sSettingCount;
+}
+
+extern "C" const RandoLogicSetting* RandoLogic_GetSetting(uint32_t index) {
+    return index < sSettingCount ? &sSettings[index] : NULL;
+}
+
+extern "C" void RandoLogic_ClearOverrides(void) {
+    sOverrideCount = 0;
+}
+
+extern "C" void RandoLogic_SetOverride(const char* define, const char* value) {
+    if (define == NULL || define[0] == '\0') return;
+    int idx = FindOverride(define);
+    if (idx < 0) {
+        if (sOverrideCount >= RANDO_LOGIC_MAX_SETTINGS) return;
+        idx = (int)sOverrideCount++;
+        CopyName(sOverrides[idx].name, sizeof(sOverrides[idx].name), define, strlen(define));
+    }
+    CopyName(sOverrides[idx].value, sizeof(sOverrides[idx].value), value ? value : "", value ? strlen(value) : 0);
+    sOverrides[idx].has_value = true;
+}
+
+extern "C" bool RandoLogic_Reparse(void) {
+    if (sRawLen == 0) return false;
+    return RandoLogic_LoadText(sRawLogic, sRawLen);
 }
 
 extern "C" bool RandoLogic_IsLoaded(void) {
