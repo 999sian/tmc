@@ -59,7 +59,11 @@ renderer, CI, and portability fixes.
   generates a deterministic seed end-to-end with **all 365 real locations
   verified reachable** (executing `!ensurereachability`), and the headless
   harness confirms 144/161 keyed chests resolve to real engine chests in-game
-  and survive a sidecar save/reload. `!import` is approximated (logic-only item
+  (e.g. Smith House chest: 20 rupees -> 50 rupees) and survive a sidecar
+  save/reload. The file-select overlay enumerates the logic's declared
+  `!flag`/`!dropdown`/`!numberbox` settings and applies changes as define
+  overrides + reparse, so the menu drives real-logic generation. `!import` is
+  approximated (logic-only item
   symbols assumed owned, standing in for `LogicImport.cs` — clean-room);
   `!prizeplacement`, precise-address NPC/floor reward hooks, and byte-for-byte
   placement parity remain.
