@@ -21,6 +21,52 @@ renderer, CI, and portability fixes.
   workers to avoid oversubscription and includes the `TMC_PERFCAP=1`
   capture harness used for renderer profiling.
 
+### Randomizer
+
+- **Native in-process randomizer.** Added a clean-room, fixed-array randomizer
+  with deterministic SplitMix64 seeds and a file-select SDL setup overlay for
+  new saves (seed entry, glitchless/kinstones/dojos toggles, item difficulty).
+  An active seed installs a **pool-preserving item bijection** that the
+  engine's central give-item hook (`Rando_OverrideItem` in
+  `GiveItemWithCutscene`) applies to every chest/NPC/drop, so real in-game
+  rewards actually change. Difficulty scales the shuffle: `Normal` shuffles
+  collectibles only (always beatable — progression untouched), `Hard` adds
+  non-gating majors, `Chaos` also shuffles dungeon-gating progression (may be
+  unbeatable without logic). For true per-location logic, a clean-room
+  MinishMaker-style `.logic` engine (written from the public format spec, not
+  the GPL C# source) parses the documented grammar and runs an **assumed-fill**
+  placer with typed item/location pools + fallbacks, `~Items.X` placement
+  guards, weighted count logic, accessibility modes, and graceful handling of
+  symbols with no native id; it drives `Rando_OverrideLocationKey` at chests
+  via address keys when a `.logic` file is supplied (`TMC_RANDO_LOGIC`).
+  Seeds persist to a
+  profile-local `*.randomizer` sidecar (vanilla EEPROM untouched) and reload on
+  slot activation. The setup overlay is gated to the SDL_Renderer/software
+  backend (where its SDL primitives are actually presented); on the default
+  `auto`/GPU backend the new-file flow stays vanilla and the **F8 → Randomizer**
+  menu (which renders on GPU) is the activation path — this avoids a freeze
+  where the overlay opened and masked input behind an undrawn menu. Verified by
+  `rando_logic_test` and the `TMC_REPRO_RANDO=1` headless end-to-end harness.
+  The `.logic` engine maps item symbols to the authoritative engine `Item`
+  enum (extracted to `include/item_ids.h` and shared by the C engine and the
+  C++ randomizer, replacing drift-prone hardcoded id copies), and writes
+  per-location rewards at small chests, big chests, and freestanding ground
+  items; chests use MinishMaker's `area-room-chestIndex` identity (resolved via
+  `Rando_RoomChestIndex`) so real `.logic` placements land on the correct
+  in-game chest, while all other reward sources use the global item bijection.
+  The engine is validated against the real MinishMaker `default.logic` (via
+  `TMC_RANDO_LOGIC`): it parses the full file (882 locations / 176 items),
+  generates a deterministic seed end-to-end with **all 365 real locations
+  verified reachable** (executing `!ensurereachability`), and the headless
+  harness confirms 144/161 keyed chests resolve to real engine chests in-game
+  and survive a sidecar save/reload. `!import` is approximated (logic-only item
+  symbols assumed owned, standing in for `LogicImport.cs` — clean-room);
+  `!prizeplacement`, precise-address NPC/floor reward hooks, and byte-for-byte
+  placement parity remain.
+- **Headless update-check skip.** `Port_CheckForUpdates` now returns
+  immediately when `TMC_AUTOPLAY` or `TMC_NO_UPDATE_CHECK` is set, so
+  automated/CI/repro runs don't block on the GitHub release network fetch.
+
 ### Fixed
 
 - **#152 Romio house cat woman crash.** In area `0x22`, room `0x6`, the

@@ -20,6 +20,10 @@
 #include "script.h"
 #include "sound.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include <stdbool.h>
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 
 void sub_08081150(ItemOnGroundEntity* this);
 u8 sub_0808147C(u32);
@@ -374,8 +378,16 @@ void ItemOnGround_SetFlagAndDelete(ItemOnGroundEntity* this, bool32 doSetFlag) {
 
 bool32 sub_08081420(ItemOnGroundEntity* this) {
     if (CheckShouldPlayItemGetCutscene(this)) {
+        u8 item = (u8)super->type;
+        u8 subtype = (u8)super->type2;
         SetEntityPriority(super, PRIO_PLAYER_EVENT);
-        CreateItemEntity(super->type, super->type2, 0);
+#ifdef PC_PORT
+        {
+            u32 key = ((u32)gRoomControls.area << 16) | ((u32)gRoomControls.room << 8) | (this->flag & 0xff);
+            (void)Rando_OverrideLocationKey(key, &item, &subtype);
+        }
+#endif
+        CreateItemEntity(item, subtype, 0);
         return TRUE;
     } else {
         GiveItem(super->type, super->type2);

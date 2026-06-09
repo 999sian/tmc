@@ -6,6 +6,7 @@
 #include "port_filter.h"
 #include "port_gpu_renderer.h"  /* PortGpuFilter for the GPU-backend filter cycle */
 #include "port_touch_controls.h"
+#include "rando/rando_file_menu.h"
 #include "port_widescreen.h"
 
 #ifdef launcher
@@ -633,6 +634,7 @@ bind_virtuappu_memory:
         extern void Port_ImGui_Init(SDL_Window*, SDL_Renderer*);
         Port_ImGui_Init(window, nullptr);
     }
+    Port_RandoFileMenu_SetWindow(window);
 }
 
 extern "C" void Port_PPU_PresentFrame(void) {
@@ -950,6 +952,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
             extern void Port_SoftSlots_RenderOverlay(void*, int, int);
             Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
             Port_TouchControls_Render(sRenderer, outW, outH);
+            Port_RandoFileMenu_Render(sRenderer, outW, outH);
         }
         SDL_RenderPresent(sRenderer);
         return;
@@ -1104,6 +1107,13 @@ extern "C" void Port_OpenInGameSettingsModal(void) {
     /* No launcher: settings UI is not linked. */
 #endif
 }
+/* True only when the active backend presents the SDL_Renderer 2D overlays
+ * (soft-slots/touch/file-select randomizer). The GPU and surface-fallback
+ * backends do not, so input-masking overlays must not auto-open there. */
+extern "C" bool Port_PPU_OverlaysUseRenderer(void) {
+    return sBackend == RenderBackend::Renderer;
+}
+
 
 extern "C" void Port_PPU_Shutdown(void) {
     if (sWindow && sBackend == RenderBackend::Surface) {

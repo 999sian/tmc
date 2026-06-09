@@ -1200,11 +1200,12 @@ static void DrawRibbonRandomizerTab(void) {
     }
 
     ImGui::TextWrapped("Native in-process randomizer. Roll a seed and "
-                       "items in chests are shuffled live — no ROM "
-                       "files written, no restart needed.");
-    ImGui::TextWrapped("M1: 8 major progression items (Sword, Gust Jar, "
-                       "Pacci Cane, Mole Mitts, Roc's Cape, Pegasus Boots, "
-                       "Fire Rod, Ocarina) get permuted by the seed.");
+                       "the engine resolves rewards through a fixed "
+                       "location table — no ROM files written, no "
+                       "restart needed.");
+    ImGui::TextWrapped("Graph logic: progression, major, and junk pools "
+                       "are forward-filled against the native reachability "
+                       "DAG and verified before activation.");
     ImGui::Separator();
 
     ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none)");

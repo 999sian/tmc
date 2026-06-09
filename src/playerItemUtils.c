@@ -33,8 +33,10 @@ void InitItemGetSequence(u32 type, u32 type2, u32 delay) {
 #include <stdbool.h>
 /* Generic randomizer hook — called at the centralized point where any
  * item entity gets spawned (chests, NPC gifts, drops, cutscenes...).
- * Substitutes *item if the active seed's permutation remaps it. */
+ * Location-specific hooks run at source call sites when an external
+ * MinishMaker-style logic file supplies address keys. */
 extern bool Rando_OverrideItem(u8* type, u8* subtype);
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 #endif
 
 static Entity* GiveItemWithCutscene(u32 item, u32 type2, u32 delay) {
@@ -81,10 +83,18 @@ void OpenSmallChest(u32 pos, u32 layer) {
     if ((layer >> 1) == ((u32)(t->_6 << 31) >> 31)) {
         if (found) {
             SetLocalFlag(t->localFlag);
-            /* port/rando interception now happens centrally inside
-             * GiveItemWithCutscene — see the Rando_OverrideItem hook
-             * up the call stack. No per-source hook needed here. */
-            CreateItemEntity(t->_2, t->_3, 0);
+            {
+                u8 item = t->_2;
+                u8 subtype = t->_3;
+#ifdef PC_PORT
+                int ci = Rando_RoomChestIndex(gRoomControls.area, gRoomControls.room, t->localFlag);
+                if (ci >= 0) {
+                    u32 key = ((u32)gRoomControls.area << 16) | ((u32)gRoomControls.room << 8) | (u32)ci;
+                    (void)Rando_OverrideLocationKey(key, &item, &subtype);
+                }
+#endif
+                CreateItemEntity(item, subtype, 0);
+            }
         } else {
             CreateItemEntity(ITEM_FAIRY, 0, 0);
         }
