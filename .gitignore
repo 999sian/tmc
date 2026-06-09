@@ -116,3 +116,15 @@ release/
 # (technically public-by-design, but we don't want forks to inherit our app).
 # xmake reads this if present and bakes the ID into the local build.
 discord_app_id.txt
+
+# Per-user runtime state (randomizer seed/state + soft save slots) and F9 bug
+# captures (screenshots + save.bin). Same runtime-local policy as *.sav / run/
+# above — these must NOT be committed to the public repository.
+tmc.randomizer
+tmc.softslots
+bugreport_*/
+
+# tools/ build-dependency install prefix: fmt / nlohmann_json / CLI11 are fetched
+# and compiled by tools/CMakeLists.txt (FetchContent) into these dirs.
+tools/include/
+tools/lib/
