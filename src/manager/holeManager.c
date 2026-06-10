@@ -17,6 +17,12 @@
 #include "assets/gfx_offsets.h"
 #include "gfx.h"
 
+#ifdef PC_PORT
+/* Randomizer dungeon-entrance shuffle: rewrites the Palace of Winds
+ * ledge-jump return (port/rando/rando_entrance.cpp). No-op otherwise. */
+extern void Rando_Entrance_RemapHole(u8 cur_area, u8* area, u8* room, u8* layer, s16* x, s16* y);
+#endif
+
 typedef enum {
     HOLE_TRANSITION_ABSOLUTE,
     HOLE_TRANSITION_RELATIVE,
@@ -274,6 +280,11 @@ void DoHoleTransition(HoleManager* this) {
         default:
             break;
     }
+#ifdef PC_PORT
+    Rando_Entrance_RemapHole(gRoomControls.area, &gRoomTransition.player_status.area_next,
+                             &gRoomTransition.player_status.room_next, &gRoomTransition.player_status.layer,
+                             &gRoomTransition.player_status.start_pos_x, &gRoomTransition.player_status.start_pos_y);
+#endif
 }
 
 void HoleManager_UpdateParallaxBackground(HoleManager* this) {
