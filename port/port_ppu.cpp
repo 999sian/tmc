@@ -95,7 +95,7 @@ static int Port_PPU_WindowBaseWidth(void) {
 static SDL_Window* sBootstrapWindow = nullptr;
 #endif
 
-static SDL_Window* Port_PPU_ActiveWindow(void) {
+extern "C" SDL_Window* Port_PPU_ActiveWindow(void) {
 #ifdef launcher
     return sWindow ? sWindow : sBootstrapWindow;
 #else

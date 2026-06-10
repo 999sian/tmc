@@ -200,7 +200,7 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
         SDL_GPUDevice* dev = Port_GPU_GetDevice();
         SDL_GPUTextureFormat fmt = Port_GPU_GetSwapchainFormat();
         if (!dev || fmt == SDL_GPU_TEXTUREFORMAT_INVALID) {
-            fprintf(stderr, "[imgui] GPU device/format unavailable — F8 menu disabled\n");
+            fprintf(stderr, "[imgui] GPU device/format unavailable - F8 menu disabled\n");
             ImGui::DestroyContext();
             return;
         }
@@ -258,6 +258,20 @@ extern "C" void Port_ImGui_Shutdown(void) {
     ImGui_ImplSDL3_Shutdown();
     ImGui::DestroyContext();
     sImGuiInited = false;
+}
+
+/* True when the per-frame ImGui pass can actually present UI this run:
+ * init succeeded (Renderer or GPU backend) and the runtime toggle is on.
+ * The surface fallback backend never initialises ImGui, and the GPU
+ * device probe can fail — gates that auto-open input-masking overlays
+ * (file-select randomizer setup) check this so they never open an
+ * invisible modal over a masked game (= softlock). */
+extern "C" bool Port_ImGui_CanPresent(void) {
+    if (!sImGuiInited || !sImGuiEnabled) return false;
+#ifndef TMC_GPU_RENDERER
+    if (!sRenderer) return false;
+#endif
+    return true;
 }
 
 extern "C" void Port_ImGui_HandleEvent(const SDL_Event* event) {
@@ -547,7 +561,7 @@ static void DrawRibbonDisplayTab(void) {
                             sActivePreset = sPresetPaths[i];
                             Port_DebugMenu_ToastFromExternal("Preset loaded");
                         } else {
-                            Port_DebugMenu_ToastFromExternal("Preset load FAILED — see stderr");
+                            Port_DebugMenu_ToastFromExternal("Preset load FAILED - see stderr");
                         }
                     }
                 }
@@ -646,7 +660,7 @@ static void DrawRibbonDisplayTab(void) {
                                    "Discord desktop client to be running, "
                                    "and the env var TMC_DISCORD_APP_ID "
                                    "to point at a registered Discord "
-                                   "application ID — otherwise this "
+                                   "application ID - otherwise this "
                                    "toggle is a no-op (see stderr).");
             ImGui::PopTextWrapPos();
             ImGui::EndTooltip();
@@ -800,7 +814,7 @@ static void DrawRibbonProfilesTab(void) {
             if (ImGui::Button("Activate")) {
                 Port_Save_SetActivePath(names[i]);
                 Port_Config_SetActiveSaveProfile(names[i]);
-                Port_DebugMenu_ToastFromExternal("Profile activated — go to title to load");
+                Port_DebugMenu_ToastFromExternal("Profile activated - go to title to load");
             }
             ImGui::SameLine();
         }
@@ -1282,7 +1296,7 @@ static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
     }
     if (len > 31) {
         std::fprintf(stderr,
-                     "[RANDO] color override %s exceeds engine value cap (%u chars) — truncated\n",
+                     "[RANDO] color override %s exceeds engine value cap (%u chars) - truncated\n",
                      st->define, (unsigned)len);
     }
     RandoLogic_SetOverride(st->define, value);
@@ -1417,7 +1431,7 @@ static void DrawRibbonRandomizerTab(void) {
             if (got == 4) {
                 if (std::strcmp(region, "BZME") == 0)       region_label = "USA (BZME)";
                 else if (std::strcmp(region, "BZMP") == 0)  region_label = "EU (BZMP)";
-                else if (std::strcmp(region, "BZMJ") == 0)  region_label = "JP (BZMJ) — not supported";
+                else if (std::strcmp(region, "BZMJ") == 0)  region_label = "JP (BZMJ) - not supported";
                 else                                        region_label = region;
             }
         }
@@ -1431,7 +1445,7 @@ static void DrawRibbonRandomizerTab(void) {
         ImGui::PushTextWrapPos(360.0f);
         ImGui::TextUnformatted(
             "Rolls a seed and resolves rewards live through a fixed location "
-            "table — no ROM files written, no restart needed. Progression, "
+            "table - no ROM files written, no restart needed. Progression, "
             "major, and junk pools are forward-filled against the "
             "reachability graph and a playthrough is simulated before the "
             "seed activates, so rolled seeds are always beatable. The active "
@@ -1467,20 +1481,20 @@ static void DrawRibbonRandomizerTab(void) {
         const int pool = (active.item_difficulty < RANDO_ITEM_POOL_COUNT)
                              ? (int)active.item_difficulty : 0;
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
-                           "Active seed: %llu — %s pool%s",
+                           "Active seed: %llu - %s pool%s",
                            (unsigned long long)Rando_GetSeed64(), kPoolNames[pool],
                            active.glitchless_logic ? ", glitchless" : "");
     } else {
-        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No seed rolled — vanilla.");
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No seed rolled - vanilla.");
     }
 
     ImGui::Spacing();
     ImGui::SeparatorText("Settings");
 
     static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-        "Normal — collectibles only",
-        "Hard — + non-gating majors",
-        "Chaos — + gating progression",
+        "Normal - collectibles only",
+        "Hard - + non-gating majors",
+        "Chaos - + gating progression",
     };
     int difficulty = (int)sRandoUiSettings.item_difficulty;
     ImGui::SetNextItemWidth(280);
@@ -1494,7 +1508,7 @@ static void DrawRibbonRandomizerTab(void) {
         ImGui::PushTextWrapPos(360.0f);
         ImGui::TextUnformatted(
             "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
-            "heart pieces — progression untouched.\n"
+            "heart pieces - progression untouched.\n"
             "Hard: also shuffles non-gating majors (bottles, upgrades, "
             "skills).\n"
             "Chaos: also shuffles dungeon-gating progression; verification "
@@ -1538,7 +1552,7 @@ static void DrawRibbonRandomizerTab(void) {
         switch (status) {
         case RANDO_OK:
             std::snprintf(sRandoResult, sizeof(sRandoResult),
-                          "Rolled seed %llu — verified beatable.",
+                          "Rolled seed %llu - verified beatable.",
                           (unsigned long long)chosen);
             std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu",
                           (unsigned long long)chosen);
@@ -1547,7 +1561,7 @@ static void DrawRibbonRandomizerTab(void) {
         case RANDO_UNBEATABLE:
             std::snprintf(sRandoResult, sizeof(sRandoResult),
                           "No beatable arrangement found for this seed/settings "
-                          "(32 attempts) — previous state kept.");
+                          "(32 attempts) - previous state kept.");
             break;
         case RANDO_BAD_SETTINGS:
             std::snprintf(sRandoResult, sizeof(sRandoResult),
@@ -1555,7 +1569,7 @@ static void DrawRibbonRandomizerTab(void) {
             break;
         default:
             std::snprintf(sRandoResult, sizeof(sRandoResult),
-                          "Generation failed (internal error) — see stderr log.");
+                          "Generation failed (internal error) - see stderr log.");
             break;
         }
     }
@@ -1618,7 +1632,7 @@ static void DrawRibbonAudioTab(void) {
         ImGui::TextUnformatted(
             "On: NEAREST resampling (the hardware's no-interpolation "
             "sample-and-hold 'crunch') and the output is handed straight to "
-            "the device with no post-process DSP — for A/B comparison against "
+            "the device with no post-process DSP - for A/B comparison against "
             "real hardware / mGBA.\n\n"
             "Off (default): SINC resampling plus the DC-blocker / low-pass / "
             "stereo-widen / soft-clip chain tuned for modern speakers.");
@@ -1659,8 +1673,8 @@ static void DrawRibbonAudioTab(void) {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(360.0f);
         ImGui::TextUnformatted(
-            "Adds a short room tail to sampled (PCM) voices — drums, bass, "
-            "some leads — while the chiptune PSG/CGB voices stay dry by the "
+            "Adds a short room tail to sampled (PCM) voices - drums, bass, "
+            "some leads - while the chiptune PSG/CGB voices stay dry by the "
             "synth's mix order, so it adds space without muddying the melody. "
             "0 = off (default). ~12 is a gentle, musical amount. Applies live "
             "(does not restart the music). No effect in GBA-accurate mode.");
@@ -1673,7 +1687,7 @@ static void DrawRibbonAudioTab(void) {
 
     ImGui::TextWrapped("Per-category SFX mutes. Each toggle suppresses "
                        "the matching sound IDs at the SoundReq / EnqueueSFX "
-                       "entry points — music and other SFX are untouched.");
+                       "entry points - music and other SFX are untouched.");
     ImGui::Separator();
     for (int i = 0; i < (int)AUDIO_MUTE_COUNT; ++i) {
         bool on = Port_AudioMute_IsEnabled((AudioMuteCategory)i);
@@ -1720,10 +1734,10 @@ static void DrawRibbonAccessibilityTab(void) {
          * below are ignored on the NVDA path (NVDA owns those). */
         if (std::strcmp(backendName, "NVDA") == 0) {
             ImGui::SameLine();
-            ImGui::TextDisabled("(rate/pitch/volume ignored — NVDA controls those)");
+            ImGui::TextDisabled("(rate/pitch/volume ignored - NVDA controls those)");
         }
     } else {
-        ImGui::TextDisabled("(unavailable — install spd-say / espeak-ng on Linux)");
+        ImGui::TextDisabled("(unavailable - install spd-say / espeak-ng on Linux)");
     }
 
     bool on = Port_TTS_GetEnabled();
@@ -1790,16 +1804,16 @@ static void DrawRibbonAccessibilityTab(void) {
     ImGui::Separator();
     ImGui::TextWrapped(
         "Manual test plan:\n"
-        "  1. Enable above, click Test voice — hear the test line.\n"
-        "  2. Tab through this tab's controls — each label announces.\n"
+        "  1. Enable above, click Test voice - hear the test line.\n"
+        "  2. Tab through this tab's controls - each label announces.\n"
         "  3. F7 toggles TTS without opening the menu.\n"
         "  4. F6 stops mid-utterance.\n"
-        "  5. Open a save-overwrite dialog — modal is announced.");
+        "  5. Open a save-overwrite dialog - modal is announced.");
 }
 
 static void DrawRibbonRebornTab(void) {
     ImGui::TextWrapped("Quality-of-life features cherry-picked from "
-                       "Minish Cap Reborn (clean-room — does NOT include "
+                       "Minish Cap Reborn (clean-room - does NOT include "
                        "Reborn's GPL-3 source). Toggles persist until "
                        "tmc_pc closes.");
     ImGui::Separator();
@@ -2056,7 +2070,7 @@ static void DrawQuitModal(void) {
         ImGui::Separator();
         ImGui::TextWrapped("Save & Quit writes the current game state to "
                            "quicksave slot 0 (F6 to reload). Quit Without "
-                           "Saving exits immediately — any progress since "
+                           "Saving exits immediately - any progress since "
                            "your last in-game save is lost.");
         ImGui::Spacing();
         if (ImGui::Button("Save & Quit", ImVec2(140, 0))) {
@@ -2098,11 +2112,18 @@ static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
 static void DrawRandoFileMenuModal(void) {
     if (!Port_RandoFileMenu_IsOpen()) return;
 
+    /* Clamp to the viewport so the Generate/Cancel row stays reachable
+     * on small windows (window_scale 2 = 480x320). The window scrolls
+     * if the clamped height still can't fit everything. */
     const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const float maxW = vp->WorkSize.x - 16.0f;
+    const float maxH = vp->WorkSize.y - 16.0f;
+    const float winW = 560.0f < maxW ? 560.0f : maxW;
     ImGui::SetNextWindowPos(
         ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f),
         ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(560, 0));
+    ImGui::SetNextWindowSize(ImVec2(winW, 0));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f), ImVec2(winW, maxH));
     if (ImGui::Begin("##rando_file_menu", nullptr,
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
@@ -2111,9 +2132,17 @@ static void DrawRandoFileMenuModal(void) {
         ImGui::Separator();
 
         ImGui::SetNextItemWidth(300);
-        ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
-                         RANDO_FILE_MENU_SEED_MAX + 1,
-                         ImGuiInputTextFlags_CallbackCharFilter, RandoSeedCharFilter);
+        /* EnterReturnsTrue: pressing Enter while typing the seed commits
+         * directly (parity with the pre-ImGui overlay where Enter always
+         * meant "generate & start"). */
+        if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
+                             RANDO_FILE_MENU_SEED_MAX + 1,
+                             ImGuiInputTextFlags_CallbackCharFilter |
+                                 ImGuiInputTextFlags_EnterReturnsTrue,
+                             RandoSeedCharFilter)) {
+            Port_RandoFileMenu_SeedEdited();
+            Port_RandoFileMenu_CommitAndStart();
+        }
         if (ImGui::IsItemEdited()) Port_RandoFileMenu_SeedEdited();
         ImGui::SameLine();
         if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
@@ -2126,7 +2155,12 @@ static void DrawRandoFileMenuModal(void) {
                                 st.location_count, count);
             /* Color settings are deliberately skipped — they live in the F8
              * Cosmetics section and roll vanilla unless edited there. */
-            ImGui::BeginChild("##rando_logic_settings", ImVec2(0, 280),
+            /* Settings list shrinks with the viewport so the action row
+             * below never falls off-screen; 280px when there is room. */
+            float childH = maxH - 240.0f;
+            if (childH > 280.0f) childH = 280.0f;
+            if (childH < 120.0f) childH = 120.0f;
+            ImGui::BeginChild("##rando_logic_settings", ImVec2(0, childH),
                               ImGuiChildFlags_Borders, 0);
             static int sNumEditIdx = -1;
             static int sNumEditVal = 0;
@@ -2183,9 +2217,9 @@ static void DrawRandoFileMenuModal(void) {
         } else {
             ImGui::TextDisabled("Logic: built-in native graph");
             static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-                "Normal — collectibles only",
-                "Hard — + non-gating majors",
-                "Chaos — + gating progression",
+                "Normal - collectibles only",
+                "Hard - + non-gating majors",
+                "Chaos - + gating progression",
             };
             int difficulty = Port_RandoFileMenu_Difficulty();
             ImGui::SetNextItemWidth(280);
@@ -2209,15 +2243,28 @@ static void DrawRandoFileMenuModal(void) {
         if (ImGui::Button("Cancel", ImVec2(120, 0))) {
             Port_RandoFileMenu_Cancel();
         }
-        ImGui::TextDisabled("Esc / B cancels   Enter / A activates");
+        ImGui::TextDisabled("Enter generates & starts   Esc / B cancels");
 
         /* Escape / gamepad B back out — but not while a combo popup or an
          * actively-edited widget would consume the same press. */
-        if (!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel) &&
-            !ImGui::IsAnyItemActive() &&
+        const bool popupOpen =
+            ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+        if (!popupOpen && !ImGui::IsAnyItemActive() &&
             (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
              ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false))) {
             Port_RandoFileMenu_Cancel();
+        }
+        /* Enter = "Generate Seed & Start Game" when the press isn't owned
+         * by a widget: nav focus routes Enter to the focused item (the
+         * seed field commits via EnterReturnsTrue above; buttons activate
+         * themselves), so only fire when nothing is focused or active.
+         * Re-check IsOpen() — a button earlier this frame may have already
+         * committed or cancelled. */
+        if (Port_RandoFileMenu_IsOpen() && !popupOpen &&
+            !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused() &&
+            (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))) {
+            Port_RandoFileMenu_CommitAndStart();
         }
     }
     ImGui::End();
@@ -2537,7 +2584,7 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
                 ImGui::TextUnformatted(h2);
             }
             {
-                const char* h3 = "We identify it by SHA-1 — filename is irrelevant.";
+                const char* h3 = "We identify it by SHA-1 - filename is irrelevant.";
                 float hw = ImGui::CalcTextSize(h3).x;
                 ImGui::SetCursorPosX((win_w - hw) * 0.5f);
                 ImGui::TextUnformatted(h3);

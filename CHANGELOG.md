@@ -62,6 +62,26 @@
   still on the global bijection, placement not byte-identical to the C#
   PRNG by design.
 
+### Fixed
+
+- **File-select randomizer setup modal (keyboard + small windows).** Enter now
+  generates & starts: pressing Enter in the seed field commits directly
+  (`EnterReturnsTrue`), and a window-level Enter fallback fires when no widget
+  owns the press — restoring the pre-ImGui overlay's "Enter = generate & start"
+  behavior that was lost in the ImGui move (the footer hint claimed it worked).
+  The modal now clamps to the viewport and shrinks its settings list on small
+  windows, so the Generate/Cancel row can no longer fall off-screen at low
+  window scales. Auto-open is gated on `Port_ImGui_CanPresent()`: on the
+  surface fallback backend (or if ImGui init failed / is disabled) the
+  new-file flow stays vanilla instead of opening an invisible modal over
+  masked input (= softlock).
+- **Em-dashes in ImGui UI strings rendered as `?`** (the bundled font has no
+  U+2014 glyph) — all user-visible menu/modal strings now use ASCII dashes.
+- `TMC_REPRO_RANDO` harness gained an ImGui keyboard stage: it now drives the
+  real modal with synthetic SDL Return-key events through the live event pump
+  and asserts the typed seed goes active, covering the full user-visible
+  keyboard path end-to-end.
+
 ### Improved
 
 - **F8 → Randomizer tab overhaul.** Settings are now controllable from the tab
