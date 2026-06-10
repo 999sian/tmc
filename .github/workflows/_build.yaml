@@ -96,15 +96,17 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.set-matrix.outputs.matrix) }}
     steps:
-      - name: Disable CRLF conversion (Windows)
-        if: ${{ matrix.os_name == 'windows' }}
+      - name: Disable CRLF conversion
         shell: bash
         run: |
           # Windows runners default to core.autocrlf=true, which converts
           # checked-out text files to CRLF.  The viruappu-*.patch files
           # are authored against LF source; with CRLF in the submodule
           # working tree, `git apply` rejects them ("patch does not
-          # apply") even though content matches.  Force LF on checkout.
+          # apply") even though content matches.  Force LF on checkout
+          # on every platform — a no-op where the default is already LF,
+          # and it keeps the `git apply` patch flow byte-identical across
+          # all runners.
           git config --global core.autocrlf false
           git config --global core.eol lf
 
@@ -237,8 +239,6 @@ jobs:
       - name: Install llvm-mingw (Windows ARM64)
         if: ${{ matrix.os_name == 'windows' && matrix.arch == 'arm64' }}
         shell: powershell
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           # The x86 choco-MinGW path (gcc, libgomp, -mno-ms-bitfields) doesn't
           # apply to aarch64. llvm-mingw ships a native Windows-ARM64 toolchain
@@ -246,14 +246,17 @@ jobs:
           # from the aarch64- cross-prefix given --mingw=<root> --arch=arm64
           # (wired by build.py via TMC_XMAKE_MINGW + TMC_XMAKE_ARCH).
           $ErrorActionPreference = "Stop"
-          $apiHeaders = @{ "User-Agent" = "tmc-ci" }
-          if ($env:GH_TOKEN) { $apiHeaders["Authorization"] = "Bearer $env:GH_TOKEN" }
-          $rel = Invoke-RestMethod -Headers $apiHeaders "https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest"
-          $asset = $rel.assets | Where-Object { $_.name -like "*-ucrt-aarch64.zip" } | Select-Object -First 1
-          if ($null -eq $asset) { Write-Error "no ucrt-aarch64 llvm-mingw asset in latest release"; exit 1 }
-          Write-Host "Downloading $($asset.name)"
+          # Pinned llvm-mingw release: 20260602 (LLVM 22.1.7), the latest
+          # stable tag as of 2026-06. Previously this resolved 'latest' via
+          # the GitHub API, which made builds non-reproducible and could
+          # break overnight on a new upstream release. Bump deliberately by
+          # updating this tag.
+          $tag = "20260602"
+          $name = "llvm-mingw-$tag-ucrt-aarch64.zip"
+          $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/$tag/$name"
+          Write-Host "Downloading $name"
           $zip = "$env:RUNNER_TEMP\llvm-mingw.zip"
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip
+          Invoke-WebRequest -Uri $url -OutFile $zip
           Expand-Archive -Path $zip -DestinationPath "C:\llvm-mingw" -Force
           $root = (Get-ChildItem "C:\llvm-mingw" -Directory | Select-Object -First 1).FullName
           Write-Host "llvm-mingw root: $root"
@@ -265,6 +268,16 @@ jobs:
         uses: xmake-io/github-action-setup-xmake@v1
         with:
           xmake-version: latest
+          # Cache the xmake install itself plus the xmake package cache
+          # (libpng/SDL3/fmt/... build artifacts). Keys are scoped per
+          # os+arch so llvm-mingw (windows-arm64), choco MinGW
+          # (windows-x86_64), and the Linux/macOS GCC/clang package
+          # binaries never cross-contaminate.
+          actions-cache-folder: '.xmake-cache'
+          actions-cache-key: ${{ matrix.os_name }}-${{ matrix.arch }}
+          package-cache: true
+          package-cache-key: ${{ matrix.os_name }}-${{ matrix.arch }}
+          project-path: '.'
 
       - name: Probe for ASSETS_TOKEN
         id: probe_assets
@@ -467,6 +480,41 @@ jobs:
             exit 1
           fi
           echo "OK: SDL3 has alsa + pulseaudio + pipewire compiled in."
+
+      - name: Build and run rando_logic_test (Linux x86_64)
+        if: matrix.os_name == 'linux' && matrix.arch == 'x86_64'
+        shell: bash
+        # Offline randomizer self-test (port/rando/rando_test.c): needs no
+        # ROM or assets — it generates seeds against the built-in location
+        # table plus an embedded .logic snippet and exits nonzero (with a
+        # "rando_test: ..." line on stderr) on any failure. Reuses the
+        # xmake configuration build.py already set up.
+        run: |
+          xmake build -y rando_logic_test
+          ./build/pc/rando_logic_test
+
+      - name: Smoke test tmc_pc headless (Linux)
+        if: matrix.os_name == 'linux'
+        shell: bash
+        # Boot the freshly built binary with SDL dummy video/audio drivers.
+        # CI has no game ROM; the verified no-ROM behavior is: init SDL +
+        # renderer + imgui, print "PPU init complete." and "Prelaunch: no
+        # ROM yet — waiting for user.", then wait forever — so `timeout`
+        # killing it with exit 124 is the success signal. Run from an empty
+        # temp dir so a ROM checked out by the assets step can't be picked
+        # up. The em-dash line is grepped via its stable ASCII prefix only.
+        run: |
+          BIN="$PWD/build/pc/${{ matrix.exe_name }}"
+          test -f "$BIN"
+          SMOKE_DIR=$(mktemp -d)
+          cd "$SMOKE_DIR"
+          code=0
+          timeout 20 env TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy "$BIN" --no-audio > smoke.log 2>&1 || code=$?
+          cat smoke.log
+          test "$code" = 124
+          grep -q "Prelaunch: no ROM yet" smoke.log
+          grep -q "PPU init complete" smoke.log
+          echo "OK: binary booted headless and parked in prelaunch (killed by timeout as expected)."
 
       - name: Prepare artifact payload
         shell: bash
