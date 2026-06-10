@@ -16,7 +16,10 @@
 #include "room.h"
 #include "physics.h"
 #include "player.h"
-
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[24];
@@ -163,7 +166,28 @@ void Book_Action4(BookEntity* this) {
     if (gPlayerState.flags & PL_MINISH) {
         sub_0800445C(super);
     } else if (IsCollidingPlayer(super)) {
-        CreateItemEntity(super->type + ITEM_QST_BOOK1, 0, 0);
+        u8 item = super->type + ITEM_QST_BOOK1;
+        u8 subtype = 0;
+#ifdef PC_PORT
+        switch (super->type) {
+            case 0:
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_RED_BOOK, 0, 0), &item,
+                    &subtype);
+                break;
+            case 1:
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_GREEN_BOOK, 0, 0), &item,
+                    &subtype);
+                break;
+            case 2:
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BLUE_BOOK, 0, 0), &item,
+                    &subtype);
+                break;
+        }
+#endif
+        CreateItemEntity(item, subtype, 0);
         DeleteThisEntity();
     }
 }

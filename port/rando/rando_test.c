@@ -338,7 +338,16 @@ static int run_real_logic_diagnostic(void) {
             "Hylia_DogNPC") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_JABBER_NUT, 0, 0),
-            "MinishVillage_BarrelHouse_Item")) {
+            "MinishVillage_BarrelHouse_Item") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_RED_BOOK, 0, 0),
+            "Town_Jullieta_Item") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_GREEN_BOOK, 0, 0),
+            "Town_DrLeft_AtticItem") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BLUE_BOOK, 0, 0),
+            "Hylia_MayorCabin_Item")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }
