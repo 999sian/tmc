@@ -14,6 +14,14 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <io.h>
+#else
+#include <unistd.h>
+extern int fileno(FILE*);
+#endif
+
 #define RANDO_SIDECAR_SLOTS 3
 /* Sidecar format version. Slot location keys/indices encode area-room-chest
  * where the chest index is the TileEntity iteration order from room data
@@ -144,10 +152,14 @@ static bool LoadAll(void) {
     return ok;
 }
 
-static bool SaveAll(void) {
-    char path[512];
-    BuildSidecarPath(path, sizeof(path));
-    FILE* f = fopen(path, "wb");
+/* Write the whole sidecar atomically: serialize to a sibling temp file, flush
+ * it through to disk, then rename over the target. A crash or power loss
+ * leaves either the old complete file or the new one, never a truncated image
+ * the next LoadAll() would reject (and then zero on the following save). */
+static bool WriteSidecarFile(const char* path) {
+    char tmp[520];
+    if ((size_t)snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= sizeof(tmp)) return false;
+    FILE* f = fopen(tmp, "wb");
     if (f == NULL) return false;
     const uint32_t version = RANDO_SIDECAR_VERSION;
     const uint32_t capacity = RANDO_LOCATION_COUNT;
@@ -155,13 +167,54 @@ static bool SaveAll(void) {
               fwrite(&version, sizeof(version), 1, f) == 1 &&
               fwrite(&capacity, sizeof(capacity), 1, f) == 1 &&
               fwrite(&sSidecar, sizeof(sSidecar), 1, f) == 1;
-    fclose(f);
-    return ok;
+    if (ok) {
+        fflush(f);
+#ifdef _WIN32
+        _commit(_fileno(f));
+#else
+        fsync(fileno(f));
+#endif
+    }
+    if (fclose(f) != 0) ok = false;
+    if (!ok) { remove(tmp); return false; }
+#ifdef _WIN32
+    if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING)) { remove(tmp); return false; }
+#else
+    if (rename(tmp, path) != 0) { remove(tmp); return false; }
+#endif
+    return true;
+}
+
+/* If a sidecar file exists on disk, rename it to <path>.bak. Called when
+ * LoadAll() failed (corrupt / older-version file) right before an overwrite,
+ * so the unreadable slots are preserved for recovery/migration instead of
+ * being silently zeroed. No-op when no file exists (normal first save). */
+static void BackupSidecarIfPresent(void) {
+    char path[512];
+    char bak[520];
+    BuildSidecarPath(path, sizeof(path));
+    FILE* probe = fopen(path, "rb");
+    if (probe == NULL) return;
+    fclose(probe);
+    if ((size_t)snprintf(bak, sizeof(bak), "%s.bak", path) >= sizeof(bak)) return;
+    remove(bak);
+    if (rename(path, bak) == 0) {
+        fprintf(stderr, "[RANDO] unreadable sidecar preserved as %s before overwrite\n", bak);
+    }
+}
+
+static bool SaveAll(void) {
+    char path[512];
+    BuildSidecarPath(path, sizeof(path));
+    return WriteSidecarFile(path);
 }
 
 bool Port_RandoSave_SaveActiveSlot(int slot) {
     if (slot < 0 || slot >= RANDO_SIDECAR_SLOTS || !Rando_IsActive()) return false;
-    (void)LoadAll();
+    /* Preserve an existing-but-unreadable sidecar before overwriting: LoadAll
+     * memsets all slots on any parse failure, so a corrupt/older file would
+     * otherwise have its other slots silently zeroed by SaveAll below. */
+    if (!LoadAll()) BackupSidecarIfPresent();
 
     RandoSidecarSlot* rec = &sSidecar.slots[slot];
     const uint16_t* table = Rando_GetRandomizedItemTable();
@@ -280,7 +333,7 @@ bool Port_RandoSave_LoadSlot(int slot) {
 
 void Port_RandoSave_ClearSlot(int slot) {
     if (slot < 0 || slot >= RANDO_SIDECAR_SLOTS) return;
-    (void)LoadAll();
+    if (!LoadAll()) BackupSidecarIfPresent();
     memset(&sSidecar.slots[slot], 0, sizeof(sSidecar.slots[slot]));
     (void)SaveAll();
 }
