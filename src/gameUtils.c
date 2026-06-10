@@ -288,6 +288,19 @@ s32 ModHealth(s32 delta) {
     }
 #endif
 
+#ifdef PC_PORT
+    /* Randomizer eventdefines: `dmgMulti` (full multiplier, 2-4) or
+     * `heroMode` (x2); rando_runtime resolves the precedence (dmgMulti
+     * wins, never both). Returns 1 when no seed is active. Stacks with
+     * the independent Reborn hero-mode toggle above. */
+    {
+        extern int Rando_Runtime_DamageMultiplier(void);
+        if (delta < 0) {
+            delta *= Rando_Runtime_DamageMultiplier();
+        }
+    }
+#endif
+
     newHealth = stats->health + delta;
     if (newHealth < 0) {
         newHealth = 0;
