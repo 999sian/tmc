@@ -14,6 +14,12 @@
 #include "physics.h"
 #include "player.h"
 
+#ifdef PC_PORT
+/* Randomizer dungeon-entrance shuffle: redirects the post-boss green warp
+ * (type 2) out of a shuffled dungeon (port/rando/rando_entrance.cpp). */
+extern void Rando_Entrance_RemapGreenWarp(u8 cur_area, u32 warp_type, u8* area, u8* room, s16* x, s16* y);
+#endif
+
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[8];
@@ -174,6 +180,12 @@ void WarpPoint_Action5(WarpPointEntity* this) {
         gRoomTransition.player_status.layer = 0;
         gRoomTransition.player_status.start_anim = 4;
         gRoomTransition.player_status.spawn_type = PL_SPAWN_DEFAULT;
+#ifdef PC_PORT
+        Rando_Entrance_RemapGreenWarp(gRoomControls.area, super->type, &gRoomTransition.player_status.area_next,
+                                      &gRoomTransition.player_status.room_next,
+                                      &gRoomTransition.player_status.start_pos_x,
+                                      &gRoomTransition.player_status.start_pos_y);
+#endif
         if (super->type == 2) {
             gRoomTransition.type = TRANSITION_FADE_WHITE_SLOW;
         }
