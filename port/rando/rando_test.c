@@ -1,5 +1,6 @@
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
+#include "item_ids.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -124,6 +125,113 @@ static int run_engine_semantics_test(void) {
         memcmp(a, b, sizeof(a)) != 0) {
         fprintf(stderr, "rando_test: assumed-fill not deterministic\n");
         return 0;
+    }
+    RandoLogic_Reset();
+    Rando_Reset();
+    return 1;
+}
+
+/* Parity semantics introduced for MinishMaker 1:1: dungeon-id tag binding,
+ * `!prizeplacement` redirects, `!eventdefine` evaluation (incl. RAND_INT
+ * determinism), and entrance-assignment recording. */
+static int run_parity_semantics_test(void) {
+    /* DWSKey is tagged DWSSmall: only DWSChest carries that tag, so the key
+     * MUST land there even though both chests accept DungeonMajor items.
+     * The prize redirects from Pedestal into the :DWSPrize pool (DWSChest2).
+     * Entrance dummies pair off against the two entrance locations. */
+    static const char kLogicText[] =
+        "!eventdefine - dmgMulti - 2\n"
+        "!eventdefine - flagOnly\n"
+        "!eventdefine - rngVal - 0x`RAND_INT`\n"
+        "!eventdefine - masked - ((0x7FFF >> 5) & 0x1F)\n"
+        "!prizeplacement - Pedestal - DWSPrize\n"
+        "Items.SmallKey.0x18; DungeonMajor; DWSSmall\n"
+        "Items.EarthElement; DungeonPrize;\n"
+        "Items.Entrance.0x01; DungeonEntrance;\n"
+        "Items.Entrance.0x02; DungeonEntrance;\n"
+        "Items.Rupees20:2; Filler;\n"
+        "DWSChest:DWSSmall:DWSPrize; Dungeon; 00-00-01; ;\n"
+        "CoFChest:CoFSmall; Dungeon; 00-00-02; ;\n"
+        "DWSChest2:DWSPrize; Dungeon; 00-00-03; ;\n"
+        "Pedestal; DungeonPrize; 00-00-04; ;\n"
+        "EntranceA; DungeonEntrance; ; ;\n"
+        "EntranceB; DungeonEntrance; ; ;\n"
+        "Goal; Helper; ; Items.SmallKey.0x18, Items.EarthElement;\n";
+
+    RandomizerSettings settings = Rando_DefaultSettings();
+    if (!RandoLogic_LoadText(kLogicText, sizeof(kLogicText) - 1)) {
+        fprintf(stderr, "rando_test: parity logic parse failed: %s\n", RandoLogic_GetStats().error);
+        return 0;
+    }
+    RandoLogicStats stats = RandoLogic_GetStats();
+    if (stats.tag_count == 0 || stats.prize_rule_count != 1 || stats.eventdefine_count != 4) {
+        fprintf(stderr, "rando_test: parity stats wrong tags=%u prize=%u event=%u\n",
+                stats.tag_count, stats.prize_rule_count, stats.eventdefine_count);
+        return 0;
+    }
+    if (!GenerateSeed(0xc0ffee123ull, settings)) {
+        fprintf(stderr, "rando_test: parity generation failed\n");
+        return 0;
+    }
+    /* Tag binding: the DWS key must be at DWSChest (key 00-00-01), never at
+     * the untagged-for-DWSSmall CoFChest. */
+    int at_dws = item_at_key(0x000001u);
+    int at_cof = item_at_key(0x000002u);
+    if (at_dws != ITEM_SMALL_KEY) {
+        fprintf(stderr, "rando_test: tagged key not in own dungeon (dws=%d cof=%d)\n", at_dws, at_cof);
+        return 0;
+    }
+    /* Prize redirect: EarthElement must be at DWSChest2 (the only open
+     * :DWSPrize slot — DWSChest already holds the key), not at Pedestal. */
+    if (item_at_key(0x000003u) != ITEM_EARTH_ELEMENT) {
+        fprintf(stderr, "rando_test: prize redirect missed DWSPrize pool (got %d)\n",
+                item_at_key(0x000003u));
+        return 0;
+    }
+    if (item_at_key(0x000004u) == ITEM_EARTH_ELEMENT) {
+        fprintf(stderr, "rando_test: prize stayed on redirected pedestal\n");
+        return 0;
+    }
+    /* Entrance assignments: both entrance locations got a distinct dummy. */
+    {
+        int seen1 = 0, seen2 = 0;
+        for (uint32_t l = 0; l < RandoLogic_GetLocationCountRaw(); ++l) {
+            int e = RandoLogic_GetEntranceAssignment(l);
+            if (e == 0x01) seen1++;
+            if (e == 0x02) seen2++;
+        }
+        if (seen1 != 1 || seen2 != 1) {
+            fprintf(stderr, "rando_test: entrance assignment wrong (%d/%d)\n", seen1, seen2);
+            return 0;
+        }
+    }
+    /* Eventdefines: values evaluate; RAND_INT is per-seed deterministic. */
+    {
+        bool has_value = false;
+        uint32_t v = 0;
+        if (!RandoLogic_HasEventDefine("flagOnly", &has_value) || has_value) {
+            fprintf(stderr, "rando_test: flag-only eventdefine wrong\n");
+            return 0;
+        }
+        if (!RandoLogic_EvalEventDefine("dmgMulti", 1, &v) || v != 2) {
+            fprintf(stderr, "rando_test: dmgMulti eval wrong (%u)\n", v);
+            return 0;
+        }
+        if (!RandoLogic_EvalEventDefine("masked", 1, &v) || v != ((0x7FFFu >> 5) & 0x1Fu)) {
+            fprintf(stderr, "rando_test: masked eval wrong (%u)\n", v);
+            return 0;
+        }
+        uint32_t r1 = 0, r2 = 0, r3 = 0;
+        if (!RandoLogic_EvalEventDefine("rngVal", 42, &r1) ||
+            !RandoLogic_EvalEventDefine("rngVal", 42, &r2) ||
+            !RandoLogic_EvalEventDefine("rngVal", 43, &r3)) {
+            fprintf(stderr, "rando_test: rngVal eval failed\n");
+            return 0;
+        }
+        if (r1 != r2 || r1 == r3) {
+            fprintf(stderr, "rando_test: RAND_INT determinism wrong (%u %u %u)\n", r1, r2, r3);
+            return 0;
+        }
     }
     RandoLogic_Reset();
     Rando_Reset();
@@ -256,6 +364,9 @@ int main(void) {
         return 1;
     }
     if (!run_engine_semantics_test()) {
+        return 1;
+    }
+    if (!run_parity_semantics_test()) {
         return 1;
     }
     if (!run_real_logic_diagnostic()) {
