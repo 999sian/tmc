@@ -419,8 +419,16 @@ def ensure_sounds_embed() -> None:
             return
         last_err = f"{interp} exited {result.returncode}"
 
-    warn(f"sounds embed generator failed ({last_err or 'no python interpreter found'})")
-    info("Build will continue; xmake's before_build hook will retry.")
+    reason = last_err or "no python interpreter found"
+    if output.exists():
+        warn(f"sounds embed generator failed ({reason})")
+        info(f"Reusing existing {output.relative_to(REPO_ROOT)} - it may be stale vs {sounds.name}.")
+    else:
+        err(f"sounds embed generator failed ({reason}) and "
+            f"{output.relative_to(REPO_ROOT)} does not exist.")
+        info(f"Run it manually to see the error: python3 {script.relative_to(REPO_ROOT)} "
+             f"{sounds.relative_to(REPO_ROOT)} {output.relative_to(REPO_ROOT)}")
+        sys.exit(1)
 
 
 def make_env() -> dict:
