@@ -99,6 +99,7 @@ bool RandoLogic_LoadDefaultFiles(void);
 RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettings* settings,
                                 uint16_t* out_table, size_t out_table_count,
                                 uint64_t* out_seed);
+uint8_t RandoLogic_GetGeneratedItemSubtype(uint32_t location_index);
 int RandoLogic_FindLocationByKey(uint32_t key);
 uint32_t RandoLogic_GetLocationKeyAt(uint32_t index);
 uint32_t RandoLogic_GetLocationCountRaw(void);

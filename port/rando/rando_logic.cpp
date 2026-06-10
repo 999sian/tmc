@@ -136,6 +136,9 @@ static int16_t sEntranceAssign[RANDO_LOGIC_MAX_LOCATIONS];
 /* Per-area music assignment (song id) from the last generation; -1 = vanilla. */
 #define RANDO_LOGIC_MUSIC_AREAS 256
 static int16_t sMusicAssign[RANDO_LOGIC_MUSIC_AREAS];
+/* Per-location subtype from the last successful generation. Meaning depends on
+ * item family (shell amount, kinstone piece id, dungeon id, ...). */
+static uint8_t sGeneratedSubtypes[RANDO_LOGIC_MAX_LOCATIONS];
 static char sLineBuf[LINE_MAX_LEN + 1];
 static char sExpandedLine[LINE_MAX_LEN + 1];
 
@@ -462,6 +465,7 @@ static uint16_t NativeItemFromBareName(const char* name) {
     if (!strcmp(name, "SwimButterfly")) return ITEM_SWIM_BUTTERFLY;
     if (!strcmp(name, "HeartContainer")) return ITEM_HEART_CONTAINER;
     if (!strcmp(name, "Shells")) return ITEM_SHELLS;
+    if (StartsWith(name, "Shells.")) return ITEM_SHELLS;
     if (!strcmp(name, "Shells30") || !strcmp(name, "MysteryShells")) return ITEM_SHELLS30;
     if (StartsWith(name, "Kinstone")) return ITEM_KINSTONE;
     /* Subtyped dungeon-item families: `BigKey.0x1D`, `SmallKey.0x18`,
@@ -472,6 +476,58 @@ static uint16_t NativeItemFromBareName(const char* name) {
     if (StartsWith(name, "Compass")) return ITEM_COMPASS;
     if (StartsWith(name, "DungeonMap")) return ITEM_DUNGEON_MAP;
     return ITEM_NONE;
+}
+
+static bool ParseDotNumberSuffix(const char* name, uint8_t* out) {
+    const char* dot = strrchr(name, '.');
+    char* end = NULL;
+    unsigned long v;
+    if (dot == NULL || dot[1] == '\0' || out == NULL) return false;
+    v = strtoul(dot + 1, &end, 0);
+    if (end == dot + 1 || *end != '\0' || v > 0xfful) return false;
+    *out = (uint8_t)v;
+    return true;
+}
+
+static uint8_t NativeSubtypeFromBareName(const char* name, uint16_t item, uint8_t* gold_cloud_idx, uint8_t* gold_swamp_idx) {
+    uint8_t subtype = 0;
+    switch (item) {
+        case ITEM_SHELLS:
+            if (ParseDotNumberSuffix(name, &subtype)) return subtype;
+            return 0;
+        case ITEM_KINSTONE:
+            if (!strcmp(name, "Kinstone.GoldenCloudTops")) {
+                static const uint8_t kGoldCloud[] = { 0x65, 0x66, 0x67, 0x68, 0x69 };
+                uint8_t idx = gold_cloud_idx ? *gold_cloud_idx : 0;
+                if (gold_cloud_idx) *gold_cloud_idx = (uint8_t)((idx + 1) % (uint8_t)ARRAY_COUNT(kGoldCloud));
+                return kGoldCloud[idx % ARRAY_COUNT(kGoldCloud)];
+            }
+            if (!strcmp(name, "Kinstone.GoldenSwamp")) {
+                static const uint8_t kGoldSwamp[] = { 0x6A, 0x6B, 0x6C };
+                uint8_t idx = gold_swamp_idx ? *gold_swamp_idx : 0;
+                if (gold_swamp_idx) *gold_swamp_idx = (uint8_t)((idx + 1) % (uint8_t)ARRAY_COUNT(kGoldSwamp));
+                return kGoldSwamp[idx % ARRAY_COUNT(kGoldSwamp)];
+            }
+            if (!strcmp(name, "Kinstone.GoldenFalls")) return 0x6D;
+            if (!strcmp(name, "Kinstone.RedW")) return 0x6E;
+            if (!strcmp(name, "Kinstone.RedV")) return 0x6F;
+            if (!strcmp(name, "Kinstone.RedE")) return 0x70;
+            if (!strcmp(name, "Kinstone.BlueL")) return 0x71;
+            if (!strcmp(name, "Kinstone.BlueS")) return 0x72;
+            if (!strcmp(name, "Kinstone.GreenC")) return 0x73;
+            if (!strcmp(name, "Kinstone.GreenG")) return 0x74;
+            if (!strcmp(name, "Kinstone.GreenP")) return 0x75;
+            return 0;
+        case ITEM_BIG_KEY:
+        case ITEM_SMALL_KEY:
+        case ITEM_COMPASS:
+        case ITEM_DUNGEON_MAP:
+            if (ParseDotNumberSuffix(name, &subtype)) return subtype;
+            return 0;
+        default:
+            return 0;
+    }
+    return 0;
 }
 
 static uint16_t NativeItemFromSymbolName(const char* symbol_name) {
@@ -1199,19 +1255,27 @@ static uint32_t CountNativeMappedItems(void) {
 }
 
 static bool ProcessDirective(char* line, CondFrame* stack, int* depth, bool* active) {
+    /* Conditional stack capacity = the caller's stack[64]. Past the cap we
+     * keep counting depth so every !endif still balances its !ifdef, but stop
+     * writing stack[] and force the over-deep region inactive. The old code
+     * dropped the push without counting it, so a >64-deep (malformed) file's
+     * matching !endif popped a real frame and desynced the rest of the parse. */
+    enum { COND_STACK_MAX = 64 };
     if (StartsWith(line, "!ifdef")) {
         char* args = line + 6;
         char* fields[1] = {0};
         SplitDashFields(args, fields, 1);
         bool cond = fields[0] != NULL && DefineExists(fields[0]);
-        if (*depth < 64) {
+        if (*depth < COND_STACK_MAX) {
             stack[*depth].parent_active = *active;
             stack[*depth].condition_true = cond;
             stack[*depth].active = *active && cond;
             stack[*depth].else_seen = false;
             *active = stack[*depth].active;
-            (*depth)++;
+        } else {
+            *active = false;
         }
+        (*depth)++;
         return true;
     }
     if (StartsWith(line, "!ifndef")) {
@@ -1219,29 +1283,39 @@ static bool ProcessDirective(char* line, CondFrame* stack, int* depth, bool* act
         char* fields[1] = {0};
         SplitDashFields(args, fields, 1);
         bool cond = fields[0] != NULL && !DefineExists(fields[0]);
-        if (*depth < 64) {
+        if (*depth < COND_STACK_MAX) {
             stack[*depth].parent_active = *active;
             stack[*depth].condition_true = cond;
             stack[*depth].active = *active && cond;
             stack[*depth].else_seen = false;
             *active = stack[*depth].active;
-            (*depth)++;
+        } else {
+            *active = false;
         }
+        (*depth)++;
         return true;
     }
     if (StartsWith(line, "!else")) {
-        if (*depth > 0) {
+        if (*depth > 0 && *depth <= COND_STACK_MAX) {
             CondFrame* f = &stack[*depth - 1];
             f->active = f->parent_active && !f->condition_true && !f->else_seen;
             f->else_seen = true;
             *active = f->active;
+        } else if (*depth > COND_STACK_MAX) {
+            *active = false;
         }
         return true;
     }
     if (StartsWith(line, "!endif")) {
         if (*depth > 0) {
             (*depth)--;
-            *active = (*depth > 0) ? stack[*depth - 1].active : true;
+            if (*depth == 0) {
+                *active = true;
+            } else if (*depth <= COND_STACK_MAX) {
+                *active = stack[*depth - 1].active;
+            } else {
+                *active = false;
+            }
         }
         return true;
     }
@@ -1951,13 +2025,25 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
         if (filler_count > 0) assignment[l] = filler[BoundedRandom(&rng, filler_count)];
     }
 
-    /* Emit the native item table (0 = leave the vanilla reward in place). */
+    /* Emit the native item table + subtype table (0 = leave vanilla reward /
+     * no subtype override). Families with indistinguishable symbols but
+     * multiple native piece ids (gold cloud/swamp kinstones) are distributed
+     * deterministically in encounter order, matching the start-inventory
+     * round-robin policy. */
+    uint8_t gold_cloud_idx = 0;
+    uint8_t gold_swamp_idx = 0;
     for (uint32_t l = 0; l < sLogic.location_count; ++l) {
         LogicLocation* loc = &sLogic.locations[l];
         uint16_t sym = (loc->fixed_item_symbol != UINT16_MAX) ? loc->fixed_item_symbol : assignment[l];
-        out_table[l] = (loc->is_helper || sym == UINT16_MAX || sym >= sLogic.symbol_count)
-                           ? (uint16_t)NITEM_NONE
-                           : NativeItemFromSymbolName(sLogic.symbols[sym].name);
+        if (loc->is_helper || sym == UINT16_MAX || sym >= sLogic.symbol_count) {
+            out_table[l] = (uint16_t)NITEM_NONE;
+            sGeneratedSubtypes[l] = 0;
+            continue;
+        }
+        const char* name = sLogic.symbols[sym].name;
+        if (StartsWith(name, "Items.")) name += 6;
+        out_table[l] = NativeItemFromBareName(name);
+        sGeneratedSubtypes[l] = NativeSubtypeFromBareName(name, out_table[l], &gold_cloud_idx, &gold_swamp_idx);
     }
 
     /* Verify per accessibility mode. */
@@ -2044,6 +2130,11 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
     if (out_seed) *out_seed = seed;
     return RANDO_OK;
 }
+extern "C" uint8_t RandoLogic_GetGeneratedItemSubtype(uint32_t location_index) {
+    if (!sLogic.loaded || location_index >= sLogic.location_count) return 0;
+    return sGeneratedSubtypes[location_index];
+}
+
 
 extern "C" int RandoLogic_GetEntranceAssignment(uint32_t location_index) {
     if (!sLogic.loaded || location_index >= sLogic.location_count) return -1;
