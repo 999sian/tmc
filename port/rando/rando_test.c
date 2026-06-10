@@ -379,6 +379,7 @@ static int run_real_logic_diagnostic(void) {
     RandoLogic_SetOverride("GORON_SETTING", "GORON_5");
     RandoLogic_SetOverride("BLUE_FUSION_SETTING", "VANILLA_BLUE_FUSIONS");
     RandoLogic_SetOverride("RED_FUSION_SETTING", "VANILLA_RED_FUSIONS");
+    RandoLogic_SetOverride("BIGGORON_SETTING", "BIGGORON_NORMAL");
     RandoLogic_SetOverride("CUCCO_SETTING", "CUCCO_10");
     if (!RandoLogic_Reparse() || !GenerateSeed(0xC0FFEEu, s) || !Rando_IsActive() ||
         !expect_bound_location(
@@ -388,7 +389,10 @@ static int run_real_logic_diagnostic(void) {
                                "Town_Cuccos_Lv_10_NPC") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BOMB_MINISH_REMOTES, 0, 0),
-            "MinishWoods_BombMinish_NPC2")) {
+            "MinishWoods_BombMinish_NPC2") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BIGGORON, 0, 0),
+            "Falls_Biggoron")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }

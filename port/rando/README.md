@@ -152,10 +152,11 @@ Full-parity features (added in the 1:1 pass):
   medal, the Hylia dog bottle, the Minish Village barrel-house Jabber Nut, the
   three library books, Melari's broken-sword reward, the shoe-shop Pegasus
   Boots, the Witch Hut mushroom, the Bomb Minish bomb bag, Minish/Crenel/Valley
-  Great Fairy rewards, Valley Dampe's graveyard key, and Business Scrub item
-  sales by default (29 locations at stock settings). With `GORON_5` +
-  `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `CUCCO_10`, 57/58 scripted
-  locations bind in the real-file diagnostic;
+  Great Fairy rewards, Valley Dampe's graveyard key, Biggoron's mirror shield,
+  and Business Scrub item sales by default (29 locations at stock settings).
+  With `GORON_5` + `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` +
+  `BIGGORON_NORMAL` + `CUCCO_10`, 58/59 scripted locations bind in the
+  real-file diagnostic;
 - **spoiler log** honors `:NoSpoiler` tags; the F8 tab exposes `!color`
   settings as live color pickers (override string = comma-separated RGB555
   hex, the same format `ParseColorDirective` consumes).
@@ -167,9 +168,9 @@ NOT yet at full parity (honest gaps):
 - per-location keyed hooks are still missing for the remaining NPC-script and
   fusion reward sites whose grant callsites do not yet expose a stable native
   identity (Bomb Minish remote-bombs outside the red-fusion setting, the
-  library yellow-minish reward, crypt / pedestal / biggoron / direct
-  fusion-item grants / similar one-off scripts). Those locations still
-  randomize via the global `Rando_OverrideItem` bijection;
+  library yellow-minish reward, crypt / pedestal / direct fusion-item grants /
+  similar one-off scripts). Those locations still randomize via the global
+  `Rando_OverrideItem` bijection;
 - placement is feature-identical but not byte-identical to the C# shuffler
   (different PRNG by clean-room design — same seed text gives a different,
   equally-valid arrangement);
