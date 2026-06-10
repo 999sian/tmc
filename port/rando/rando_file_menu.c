@@ -27,6 +27,7 @@
 
 extern void Port_FileSelectRando_StartSlot(int slot);
 extern void Port_FileSelectRando_CancelSlot(int slot);
+extern bool Port_ImGui_CanPresent(void);
 
 typedef struct RandoFileMenuState {
     bool open;
@@ -213,8 +214,15 @@ void Port_RandoFileMenu_Cancel(void) {
 }
 
 bool Port_RandoFileMenu_ShouldOpenForNewFile(void) {
-    /* The ImGui modal presents on every backend (SDL_Renderer and SDL_GPU),
-     * so the only gate left is the explicit kill-switch. */
+    /* The ImGui modal presents on the SDL_Renderer and SDL_GPU backends.
+     * If ImGui can't present this run (surface fallback backend, GPU
+     * device probe failed, or runtime-disabled), the modal would open
+     * invisible while port_bios.c masks all game input = softlock, so
+     * stay on the vanilla new-file flow instead. TMC_RANDO_FILE_MENU=0
+     * is the explicit kill-switch. */
+    if (!Port_ImGui_CanPresent()) {
+        return false;
+    }
     if (sEnabledCached < 0) {
         const char* env = getenv("TMC_RANDO_FILE_MENU");
         sEnabledCached = (env == NULL || env[0] == '\0' || env[0] != '0') ? 1 : 0;

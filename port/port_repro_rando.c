@@ -20,6 +20,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <SDL3/SDL.h>
+
 #include "rando/rando.h"
 #include "rando/rando_file_menu.h"
 #include "rando/rando_logic.h"
@@ -27,6 +29,7 @@
 #include "rando/rando_save.h"
 
 extern bool Rando_OverrideLocationKey(uint32_t location_key, unsigned char* type, unsigned char* subtype);
+extern bool Port_ImGui_CanPresent(void);
 
 static int item_changes(uint16_t lo, uint16_t hi) {
     int changed = 0;
@@ -267,8 +270,91 @@ static int run_real_logic_menu_test(void) {
     return 1;
 }
 
+/* Stage 2: drive the REAL ImGui modal with synthetic SDL key events.
+ * Unlike the frame-200 tests (which call the state helpers directly),
+ * this exercises the user-visible keyboard path end-to-end: SDL event
+ * pump -> ImGui_ImplSDL3 -> nav focus / EnterReturnsTrue / window-level
+ * Enter handler -> CommitAndStart. Port_ReproRando_Tick runs before the
+ * port_bios input mask, so the harness keeps ticking while the modal is
+ * open exactly like a player at the screen. */
+extern SDL_Window* Port_PPU_ActiveWindow(void);
+
+static void push_return_key(bool down) {
+    SDL_Event e;
+    SDL_zero(e);
+    e.type = down ? SDL_EVENT_KEY_DOWN : SDL_EVENT_KEY_UP;
+    e.key.timestamp = SDL_GetTicksNS();
+    /* ImGui_ImplSDL3_ProcessEvent drops key events whose windowID doesn't
+     * match its window — stamp the real one. */
+    e.key.windowID = SDL_GetWindowID(Port_PPU_ActiveWindow());
+    e.key.scancode = SDL_SCANCODE_RETURN;
+    e.key.key = SDLK_RETURN;
+    e.key.down = down;
+    SDL_PushEvent(&e);
+}
+
+#define REPRO_IMGUI_OPEN_FRAME 240
+#define REPRO_IMGUI_DEADLINE   480
+
+static int imgui_keyboard_stage(unsigned int frame, int* done) {
+    static int presses = 0;
+    *done = 0;
+
+    if (frame == REPRO_IMGUI_OPEN_FRAME) {
+        Port_RandoFileMenu_Open(0);
+        Port_RandoFileMenu_SetSeed("424242");
+        if (!Port_RandoFileMenu_IsOpen()) {
+            fprintf(stderr, "[rando-repro] FAIL: imgui stage overlay did not open\n");
+            *done = 1;
+            return 0;
+        }
+        return 1;
+    }
+
+    if (!Port_RandoFileMenu_IsOpen()) {
+        /* Modal closed: Enter must have committed. Verify the seed went
+         * active and matches the typed text. */
+        if (!Rando_IsActive() ||
+            Rando_GetSeed64() != Rando_SeedFromString("424242")) {
+            fprintf(stderr,
+                    "[rando-repro] FAIL: imgui Enter commit seed mismatch "
+                    "(active=%d seed=%llu want=%llu)\n",
+                    Rando_IsActive() ? 1 : 0,
+                    (unsigned long long)Rando_GetSeed64(),
+                    (unsigned long long)Rando_SeedFromString("424242"));
+            *done = 1;
+            return 0;
+        }
+        fprintf(stderr,
+                "[rando-repro] imgui keyboard path OK: Enter committed after "
+                "%d press(es), seed matches\n", presses);
+        *done = 1;
+        return 1;
+    }
+
+    /* Tap Return every 12 frames (down for 3) until the modal commits.
+     * Depending on nav focus the first press may only start editing the
+     * seed field; the next one then commits via EnterReturnsTrue. */
+    if ((frame % 12) == 0) {
+        push_return_key(true);
+        presses++;
+    } else if ((frame % 12) == 3) {
+        push_return_key(false);
+    }
+
+    if (frame >= REPRO_IMGUI_DEADLINE) {
+        fprintf(stderr,
+                "[rando-repro] FAIL: imgui modal still open after %d Enter "
+                "presses\n", presses);
+        *done = 1;
+        return 0;
+    }
+    return 1;
+}
+
 void Port_ReproRando_Tick(unsigned int frame) {
     static int mode = -1;
+    static int stage1_ok = 0;
     if (mode < 0) {
         const char* v = getenv("TMC_REPRO_RANDO");
         mode = (v && *v && strcmp(v, "0") != 0) ? 1 : 0;
@@ -276,23 +362,47 @@ void Port_ReproRando_Tick(unsigned int frame) {
             fprintf(stderr, "[rando-repro] enabled; will run at frame 200\n");
         }
     }
-    if (!mode || frame != 200) {
+    if (!mode) {
         return;
     }
 
-    int ok;
-    if (RandoLogic_IsLoaded()) {
-        /* A real .logic was loaded at startup: every GenerateSeed uses it, so
-         * exercise the real per-location chest path instead of the built-in
-         * bijection tests. */
-        ok = run_real_logic_chest_probe();
-        if (ok) ok = run_real_logic_menu_test();
-    } else {
-        ok = run_menu_path();
-        if (ok) ok = run_logic_key_path();
+    if (frame == 200) {
+        int ok;
+        if (RandoLogic_IsLoaded()) {
+            /* A real .logic was loaded at startup: every GenerateSeed uses it,
+             * so exercise the real per-location chest path instead of the
+             * built-in bijection tests. */
+            ok = run_real_logic_chest_probe();
+            if (ok) ok = run_real_logic_menu_test();
+        } else {
+            ok = run_menu_path();
+            if (ok) ok = run_logic_key_path();
+        }
+        if (!ok) {
+            fprintf(stderr, "[rando-repro] FAIL\n");
+            fflush(stderr);
+            _Exit(1);
+        }
+        stage1_ok = 1;
+        if (!Port_ImGui_CanPresent()) {
+            /* No ImGui this run (surface fallback): the modal never auto-
+             * opens there (Port_RandoFileMenu_ShouldOpenForNewFile gates on
+             * CanPresent), so the keyboard stage doesn't apply. */
+            fprintf(stderr, "[rando-repro] imgui unavailable; skipping keyboard stage\n");
+            fprintf(stderr, "[rando-repro] PASS\n");
+            fflush(stderr);
+            _Exit(0);
+        }
+        return;
     }
 
-    fprintf(stderr, "[rando-repro] %s\n", ok ? "PASS" : "FAIL");
-    fflush(stderr);
-    _Exit(ok ? 0 : 1);
+    if (stage1_ok && frame >= REPRO_IMGUI_OPEN_FRAME) {
+        int done = 0;
+        int ok = imgui_keyboard_stage(frame, &done);
+        if (done) {
+            fprintf(stderr, "[rando-repro] %s\n", ok ? "PASS" : "FAIL");
+            fflush(stderr);
+            _Exit(ok ? 0 : 1);
+        }
+    }
 }
