@@ -1,5 +1,81 @@
 # Changelog
 
+## Unreleased
+
+### Compatibility
+
+- **Save files are now mGBA/VBA-M compatible, both directions.** `tmc.sav` (and
+  profiles) are written in the byte order emulators use for EEPROM saves: each
+  8-byte block in wire-transmission order, i.e. byte-reversed relative to game
+  RAM (the GBA driver shifts units out `data[3]→data[0]`, MSB-first — the
+  well-known GBA EEPROM `.sav` quirk). A Minish Cap save from mGBA drops in as
+  `tmc.sav` unchanged, and `tmc.sav` loads in mGBA when renamed to match the
+  ROM. Saves from older Picori builds are detected via the `AGBZELDA` signature
+  block and migrated once on load, with the original preserved as
+  `tmc.sav.bak`. Verified by byte-exact round-trip plus headless boots of both
+  formats (game accepts the save; file untouched on reload).
+
+### Fixed
+
+- **Save flush no longer silently loses data on write failure.** `FlushEepromFile`
+  previously cleared the dirty flag even when `fwrite` came up short (disk full,
+  I/O error), so the flush was never retried and the save was lost. The flag now
+  survives failed writes (checked `fwrite` + `fclose`), and a truncated `tmc.sav`
+  loads as blank EEPROM (`0xFF`) instead of plausible-but-partial garbage.
+- **`.logic` location keys with out-of-range components are rejected.** The parser
+  masked `area-room-chest` components with `& 0xff`, so a malformed key like
+  `1FF-05-02` silently aliased an unrelated location's chest. Such keys now parse
+  as invalid with a warning; the chest keeps its vanilla reward.
+- **ROM directory scan no longer acts on silently truncated paths.** The
+  `rom_data/` page scan and exe-relative ROM probing joined 4 KB directory paths
+  into 256-byte buffers; truncation is now detected and the entry skipped with a
+  warning instead of stat'ing the wrong file.
+
+### Defensive
+
+- All `fread`/`fwrite` calls across `port_save.c`, `port_quicksave.c`, and
+  `port_rom.c` now verify byte counts: short quicksave reads discard the slot
+  cleanly, short `rom_gaps.bin`/page reads abort with a warning instead of
+  leaving partial state, and a short main-ROM read takes the existing fatal-error
+  path instead of booting on garbage.
+- **Randomizer sidecar slots are sanitized at load.** A corrupted `*.randomizer`
+  file can no longer drive out-of-bounds reads via an oversized slot `count` or
+  item-pool index; bad slots are cleared with a warning. The sidecar version
+  constant now documents that location-key semantics (TileEntity iteration order)
+  require a version bump if they change.
+- **`.logic` parse truncations warn instead of failing silently:** setting
+  defines longer than the 48-byte field (which would break override lookups) and
+  dropdowns with more than 10 options now emit parse-time warnings.
+- F8 Randomizer tab only trusts the ROM region string when all 4 bytes were
+  actually read.
+
+### Build & CI
+
+- **CI now runs the binaries it ships.** Linux jobs gate on a headless no-ROM
+  smoke run (`SDL_VIDEODRIVER=dummy`, asserts SDL/PPU/imgui init reaches the
+  prelaunch ROM wait) and Linux x86_64 builds and runs `rando_logic_test`.
+  Previously nothing in CI ever executed a built binary.
+- **CI caching enabled** for xmake and its package artifacts with per-OS/arch
+  cache keys (keeps llvm-mingw, choco MinGW, and Linux/macOS package binaries
+  from cross-contaminating); the Windows ARM64 llvm-mingw toolchain is pinned to
+  release `20260602` instead of floating on `latest`.
+- CRLF suppression (`core.autocrlf=false`) now applies on all CI runners, not
+  just Windows, protecting the `git apply` ViruaPPU patch flow.
+- ViruaPPU patches that are skipped because their marker is already present now
+  log one line each, making patch drift diagnosable; removed duplicate
+  `nlohmann_json` package requires in `xmake.lua`.
+- `build.py` aborts with an actionable error when the sounds-embed generator
+  fails and no previous `generated_sounds_embed.cpp` exists (previously it
+  warned and deferred to an xmake hook that swallows its own failures).
+
+### Docs & hygiene
+
+- `docs/widescreen-phase2-design.md` opens with a single dated status block
+  (Phase 2 fixed and shipping in 0.5.0 behind `widescreen_enabled`), replacing
+  the contradictory WIP/REVERTED headers.
+- `*.bundle` ignored; stray root git bundle removed; `gdb_softlock.gdb` moved to
+  `scripts/`.
+
 ## 0.5.0 — 2026-06-08
 
 0.5.0 cuts over the release build to the wide viewport (`build.py` now
