@@ -347,7 +347,10 @@ static int run_real_logic_diagnostic(void) {
             "Town_DrLeft_AtticItem") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BLUE_BOOK, 0, 0),
-            "Hylia_MayorCabin_Item")) {
+            "Hylia_MayorCabin_Item") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_MELARI, 0, 0),
+            "Crenel_Melari_NPC")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }

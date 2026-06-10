@@ -12,7 +12,10 @@
 #include "script.h"
 #include "message.h"
 #include "asm.h"
-
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 fusionOffer;
@@ -160,7 +163,13 @@ void sub_08068910(Entity* this) {
 }
 
 void sub_08068964(Entity* this) {
-    InitItemGetSequence(ITEM_QST_BROKEN_SWORD, 0, 3);
+    u8 item = ITEM_QST_BROKEN_SWORD;
+    u8 subtype = 0;
+#ifdef PC_PORT
+    (void)Rando_OverrideLocationKey(
+        Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_MELARI, 0, 0), &item, &subtype);
+#endif
+    InitItemGetSequence(item, subtype, 3);
     SetInventoryValue(ITEM_QST_BROKEN_SWORD, 2);
 }
 
