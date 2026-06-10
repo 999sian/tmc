@@ -3,9 +3,9 @@
  *
  * Drives the same code paths the file-select overlay and the engine reward
  * hooks use, then asserts that items actually change:
- *   1. Open the SDL file-select randomizer overlay (Port_RandoFileMenu_Open).
- *   2. Feed it real SDL events (text input + navigation + confirm) through
- *      ProcessFileMenuInput, exactly as port_bios.c routes them.
+ *   1. Open the file-select randomizer overlay (Port_RandoFileMenu_Open).
+ *   2. Drive it through the same state-mutation helpers the ImGui modal
+ *      calls (Port_RandoFileMenu_SetSeed / CommitAndStart / ...).
  *   3. Confirm "Generate & Start" produced an active seed matching the typed
  *      seed string, and that the engine's central item-override hook
  *      (Rando_OverrideItem — the one GiveItemWithCutscene calls for every
@@ -20,8 +20,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <SDL3/SDL.h>
-
 #include "rando/rando.h"
 #include "rando/rando_file_menu.h"
 #include "rando/rando_logic.h"
@@ -29,23 +27,6 @@
 #include "rando/rando_save.h"
 
 extern bool Rando_OverrideLocationKey(uint32_t location_key, unsigned char* type, unsigned char* subtype);
-
-static void push_key(SDL_Keycode key) {
-    SDL_Event e;
-    memset(&e, 0, sizeof(e));
-    e.type = SDL_EVENT_KEY_DOWN;
-    e.key.key = key;
-    e.key.repeat = false;
-    ProcessFileMenuInput(&e);
-}
-
-static void push_text(const char* text) {
-    SDL_Event e;
-    memset(&e, 0, sizeof(e));
-    e.type = SDL_EVENT_TEXT_INPUT;
-    e.text.text = text;
-    ProcessFileMenuInput(&e);
-}
 
 static int item_changes(uint16_t lo, uint16_t hi) {
     int changed = 0;
@@ -73,17 +54,10 @@ static int run_menu_path(void) {
         return 0;
     }
 
-    /* Clear the default seed and type a deterministic numeric seed. */
-    for (int i = 0; i < 16; ++i) {
-        push_key(SDLK_BACKSPACE);
-    }
-    push_text("12345");
-
-    /* Navigate from the seed row (index 0) to "Generate & Start" (index 6). */
-    for (int i = 0; i < 6; ++i) {
-        push_key(SDLK_DOWN);
-    }
-    push_key(SDLK_RETURN);
+    /* Type a deterministic numeric seed and confirm — the same helpers the
+     * ImGui modal's seed field and "Generate Seed & Start Game" button call. */
+    Port_RandoFileMenu_SetSeed("12345");
+    Port_RandoFileMenu_CommitAndStart();
 
     if (Port_RandoFileMenu_IsOpen()) {
         fprintf(stderr, "[rando-repro] FAIL: overlay still open after confirm\n");
@@ -279,9 +253,8 @@ static int run_real_logic_menu_test(void) {
         return 0;
     }
     uint32_t base = RandoLogic_GetStats().item_count;
-    /* Row 0 is seed; settings start at row 2. Navigate down to the flag. */
-    for (int k = 0; k < 2 + fig; ++k) push_key(SDLK_DOWN);
-    push_key(SDLK_RIGHT); /* toggle the flag -> override + reparse */
+    /* Toggle the flag through the modal's mutation helper -> override + reparse. */
+    Port_RandoFileMenu_ChangeLogicSetting(fig, +1);
     uint32_t after = RandoLogic_GetStats().item_count;
     Port_RandoFileMenu_Close();
     RandoLogic_ClearOverrides();

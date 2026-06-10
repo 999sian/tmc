@@ -45,6 +45,7 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "port_tts.h"             /* Port_TTS_* — accessibility tab + focus reader */
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
+#include "rando/rando_file_menu.h"
 
 #include <cstdio>
 #include <cstring>
@@ -2077,6 +2078,152 @@ static void DrawQuitModal(void) {
     }
 }
 
+/* ---- File-select randomizer setup modal ---------------------------------
+ * State machine + commit logic live in rando/rando_file_menu.c; this draws
+ * it with ImGui so it presents on every backend (the old SDL_Renderer-
+ * primitive overlay was invisible on SDL_GPU). Opened by src/fileselect.c
+ * on new-file creation (STATE_RANDOMIZER_CONFIG); closes via Start/Cancel,
+ * Escape, or gamepad B. Game input stays masked while open (port_bios.c
+ * holds KEYINPUT released and swallows SDL events). */
+static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter) {
+        if (data->EventChar < 128 &&
+            Port_RandoFileMenu_IsSeedChar((char)data->EventChar)) {
+            return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static void DrawRandoFileMenuModal(void) {
+    if (!Port_RandoFileMenu_IsOpen()) return;
+
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f),
+        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(560, 0));
+    if (ImGui::Begin("##rando_file_menu", nullptr,
+                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
+                     ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::TextColored(ImVec4(0.78f, 0.95f, 0.78f, 1.0f), "RANDOMIZER SETUP");
+        ImGui::Separator();
+
+        ImGui::SetNextItemWidth(300);
+        ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
+                         RANDO_FILE_MENU_SEED_MAX + 1,
+                         ImGuiInputTextFlags_CallbackCharFilter, RandoSeedCharFilter);
+        if (ImGui::IsItemEdited()) Port_RandoFileMenu_SeedEdited();
+        ImGui::SameLine();
+        if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
+
+        ImGui::Spacing();
+        if (Port_RandoFileMenu_LogicMode()) {
+            const RandoLogicStats st = RandoLogic_GetStats();
+            const uint32_t count = RandoLogic_GetSettingCount();
+            ImGui::TextDisabled("Logic: external .logic (%u locations, %u settings)",
+                                st.location_count, count);
+            /* Color settings are deliberately skipped — they live in the F8
+             * Cosmetics section and roll vanilla unless edited there. */
+            ImGui::BeginChild("##rando_logic_settings", ImVec2(0, 280),
+                              ImGuiChildFlags_Borders, 0);
+            static int sNumEditIdx = -1;
+            static int sNumEditVal = 0;
+            for (uint32_t i = 0; i < count; ++i) {
+                const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+                if (s == nullptr || s->type == RANDO_SETTING_COLOR) continue;
+                ImGui::PushID((int)i);
+                switch (s->type) {
+                    case RANDO_SETTING_FLAG: {
+                        bool v = s->flag_on;
+                        if (ImGui::Checkbox(s->label, &v)) {
+                            Port_RandoFileMenu_ChangeLogicSetting((int)i, +1);
+                        }
+                        break;
+                    }
+                    case RANDO_SETTING_DROPDOWN: {
+                        const int oi = s->option_index;
+                        const char* preview =
+                            (oi >= 0 && oi < s->option_count) ? s->opt_label[oi] : "?";
+                        ImGui::SetNextItemWidth(220);
+                        if (ImGui::BeginCombo(s->label, preview)) {
+                            for (int o = 0; o < s->option_count; ++o) {
+                                const bool sel = (o == oi);
+                                if (ImGui::Selectable(s->opt_label[o], sel)) {
+                                    Port_RandoFileMenu_SetLogicOption((int)i, o);
+                                }
+                                if (sel) ImGui::SetItemDefaultFocus();
+                            }
+                            ImGui::EndCombo();
+                        }
+                        break;
+                    }
+                    case RANDO_SETTING_NUMBER: {
+                        /* Commit on release — every commit reparses the
+                         * whole .logic file, far too heavy per drag pixel. */
+                        int v = (sNumEditIdx == (int)i) ? sNumEditVal : s->number;
+                        ImGui::SetNextItemWidth(220);
+                        if (ImGui::SliderInt(s->label, &v, s->num_min, s->num_max)) {
+                            sNumEditIdx = (int)i;
+                            sNumEditVal = v;
+                        }
+                        if (ImGui::IsItemDeactivatedAfterEdit() && sNumEditIdx == (int)i) {
+                            Port_RandoFileMenu_SetLogicNumber((int)i, sNumEditVal);
+                            sNumEditIdx = -1;
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+                ImGui::PopID();
+            }
+            ImGui::EndChild();
+        } else {
+            ImGui::TextDisabled("Logic: built-in native graph");
+            static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+                "Normal — collectibles only",
+                "Hard — + non-gating majors",
+                "Chaos — + gating progression",
+            };
+            int difficulty = Port_RandoFileMenu_Difficulty();
+            ImGui::SetNextItemWidth(280);
+            if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+                Port_RandoFileMenu_SetDifficulty(difficulty);
+            }
+            ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
+            ImGui::Checkbox("Shuffle kinstones", Port_RandoFileMenu_ShuffleKinstones());
+            ImGui::Checkbox("Shuffle dojos", Port_RandoFileMenu_ShuffleDojos());
+        }
+
+        ImGui::Spacing();
+        const char* status = Port_RandoFileMenu_Status();
+        if (status[0]) {
+            ImGui::TextColored(ImVec4(1.0f, 0.44f, 0.44f, 1.0f), "%s", status);
+        }
+        if (ImGui::Button("Generate Seed & Start Game", ImVec2(280, 0))) {
+            Port_RandoFileMenu_CommitAndStart();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            Port_RandoFileMenu_Cancel();
+        }
+        ImGui::TextDisabled("Esc / B cancels   Enter / A activates");
+
+        /* Escape / gamepad B back out — but not while a combo popup or an
+         * actively-edited widget would consume the same press. */
+        if (!ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel) &&
+            !ImGui::IsAnyItemActive() &&
+            (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+             ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false))) {
+            Port_RandoFileMenu_Cancel();
+        }
+    }
+    ImGui::End();
+}
+
 extern "C" bool Port_ImGui_Render(void) {
     if (!sImGuiInited || !sImGuiEnabled) return false;
     /* SDL_Renderer path needs a renderer; SDL_GPU path runs with
@@ -2087,16 +2234,19 @@ extern "C" bool Port_ImGui_Render(void) {
     if (!sRenderer) return false;
 #endif
 
-    /* Gamepad nav gated on menu-open state. When the menu is closed,
+    /* Gamepad nav gated on overlay-open state. When no overlay is open,
      * ImGui must NOT consume gamepad input — otherwise the focus-by-
      * default behaviour grabs the persistent MENU trigger and the
      * player's A press opens the menu instead of attacking. Toggle the
-     * flag each frame so transitions are immediate. */
+     * flag each frame so transitions are immediate. The file-select
+     * randomizer modal counts too: it is gamepad-navigated while the
+     * game's KEYINPUT is masked by port_bios.c. */
     static bool sPrevMenuOpen = false;
     const bool menuOpen = Port_DebugMenu_IsOpen();
+    const bool navWanted = menuOpen || Port_RandoFileMenu_IsOpen();
     {
         ImGuiIO& io = ImGui::GetIO();
-        if (menuOpen) {
+        if (navWanted) {
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
         } else {
             io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
@@ -2171,6 +2321,10 @@ extern "C" bool Port_ImGui_Render(void) {
         }
         ImGui::End();
     }
+
+    /* File-select randomizer setup modal — drawn here (per-frame ImGui
+     * pass) so it presents on every backend, independent of the F8 menu. */
+    DrawRandoFileMenuModal();
 
     /* Toast survives the menu being closed (e.g. after a warp). */
     DrawToast(Port_DebugMenu_Toast());

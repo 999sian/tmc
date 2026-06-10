@@ -6,7 +6,6 @@
 #include "port_filter.h"
 #include "port_gpu_renderer.h"  /* PortGpuFilter for the GPU-backend filter cycle */
 #include "port_touch_controls.h"
-#include "rando/rando_file_menu.h"
 #include "port_widescreen.h"
 
 #ifdef launcher
@@ -634,7 +633,6 @@ bind_virtuappu_memory:
         extern void Port_ImGui_Init(SDL_Window*, SDL_Renderer*);
         Port_ImGui_Init(window, nullptr);
     }
-    Port_RandoFileMenu_SetWindow(window);
 }
 
 extern "C" void Port_PPU_PresentFrame(void) {
@@ -952,7 +950,6 @@ extern "C" void Port_PPU_PresentFrame(void) {
             extern void Port_SoftSlots_RenderOverlay(void*, int, int);
             Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
             Port_TouchControls_Render(sRenderer, outW, outH);
-            Port_RandoFileMenu_Render(sRenderer, outW, outH);
         }
         SDL_RenderPresent(sRenderer);
         return;
