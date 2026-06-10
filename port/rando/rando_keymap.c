@@ -201,6 +201,9 @@ static const RandoScriptedKeyEntry kScriptedKeys[] = {
 
     /* --- Unique scripted item grants ------------------------------------ */
     { "Town_Carlov_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0) },
+    { "Hylia_DogNPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DOG_BOTTLE, 0, 0) },
+    { "MinishVillage_BarrelHouse_Item",
+      RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_JABBER_NUT, 0, 0) },
     { "Trilby_Scrub_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_BOTTLE, 0, 0) },
     { "Crenel_Scrub_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_GRIP, 0, 0) },
 };
