@@ -14,6 +14,10 @@
 #include <string.h>
 
 #define RANDO_SIDECAR_SLOTS 3
+/* Sidecar format version. Slot location keys/indices encode area-room-chest
+ * where the chest index is the TileEntity iteration order from room data
+ * (see Rando_RoomChestIndex). ANY change to that encoding or to the slot
+ * layout below requires bumping this version. */
 #define RANDO_SIDECAR_VERSION 1u
 
 static const char kMagic[8] = { 'T', 'M', 'C', 'R', 'N', 'D', 'O', '1' };
@@ -76,7 +80,25 @@ static bool LoadAll(void) {
               capacity == RANDO_LOCATION_COUNT &&
               fread(&sSidecar, sizeof(sSidecar), 1, f) == 1;
     fclose(f);
-    if (!ok) memset(&sSidecar, 0, sizeof(sSidecar));
+    if (!ok) {
+        memset(&sSidecar, 0, sizeof(sSidecar));
+        return false;
+    }
+
+    /* A corrupted/crafted file passed the header check; never let per-slot
+     * fields drive out-of-range reads downstream (Rando_ActivateTable,
+     * randomized_item_table indexing). Clear any slot that is out of range. */
+    for (int i = 0; i < RANDO_SIDECAR_SLOTS; ++i) {
+        RandoSidecarSlot* rec = &sSidecar.slots[i];
+        if (!rec->active) continue;
+        if (rec->count == 0 || rec->count > RANDO_LOCATION_COUNT ||
+            rec->item_difficulty >= RANDO_ITEM_POOL_COUNT) {
+            fprintf(stderr,
+                    "[rando] warning: sidecar slot %d corrupt (count=%u, difficulty=%u); cleared\n",
+                    i, rec->count, rec->item_difficulty);
+            memset(rec, 0, sizeof(*rec));
+        }
+    }
     return ok;
 }
 
