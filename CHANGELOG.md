@@ -63,12 +63,13 @@
   bottle, the Minish Village barrel-house Jabber Nut, the three library books,
   Melari's broken-sword reward, the shoe-shop Pegasus Boots, the Witch Hut
   mushroom, the Bomb Minish bomb bag, Minish/Crenel/Valley Great Fairy
-  rewards, Valley Dampe's graveyard key, Business Scrub item sales, plus opt-in
-  Goron Merchant sets / Cucco rounds / Bomb Minish remote bombs. The real-file
-  diagnostic now binds 29/58 scripted keys at stock settings and 57/58 under
-  `GORON_5` + `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `CUCCO_10`; the
-  headless repro probe rises from 206 keyed / 195 overridden to 235 keyed /
-  224 overridden at stock settings.
+  rewards, Valley Dampe's graveyard key, Biggoron's mirror shield, Business
+  Scrub item sales, plus opt-in Goron Merchant sets / Cucco rounds / Bomb
+  Minish remote bombs. The real-file diagnostic now binds 29/59 scripted keys
+  at stock settings and 58/59 under `GORON_5` + `VANILLA_BLUE_FUSIONS` +
+  `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` + `CUCCO_10`; the headless repro
+  probe rises from 206 keyed / 195 overridden to 235 keyed / 224 overridden at
+  stock settings.
 - Honest remaining gaps documented in `port/rando/README.md`: `!import`
   approximation (unused by default.logic), remaining NPC-script / fusion
   reward sites without stable native identities, and placement not
