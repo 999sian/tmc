@@ -17,12 +17,18 @@ extern "C" {
 #define RANDO_LOGIC_MAX_NODES 60000
 #define RANDO_LOGIC_MAX_DEFINES 2048
 #define RANDO_LOGIC_MAX_SETTINGS 320
-#define RANDO_LOGIC_MAX_SETTING_OPTIONS 10
+#define RANDO_LOGIC_MAX_SETTING_OPTIONS 24
+#define RANDO_LOGIC_MAX_TAGS 256
+#define RANDO_LOGIC_MAX_LOC_TAGS 24
+#define RANDO_LOGIC_MAX_PRIZE_RULES 16
+#define RANDO_LOGIC_MAX_EVENT_DEFINES 512
+#define RANDO_LOGIC_MAX_COLOR_SETS 8
 
 typedef enum RandoSettingType {
     RANDO_SETTING_FLAG = 0,
     RANDO_SETTING_DROPDOWN,
     RANDO_SETTING_NUMBER,
+    RANDO_SETTING_COLOR,
 } RandoSettingType;
 
 typedef struct RandoLogicSetting {
@@ -77,6 +83,9 @@ typedef struct RandoLogicStats {
     uint32_t node_count;
     uint32_t define_count;
     uint32_t native_mapped_items;
+    uint32_t tag_count;
+    uint32_t prize_rule_count;
+    uint32_t eventdefine_count;
     bool loaded;
     bool native_assignable;
     char error[128];
@@ -103,6 +112,36 @@ const RandoLogicSetting* RandoLogic_GetSetting(uint32_t index);
 void RandoLogic_ClearOverrides(void);
 void RandoLogic_SetOverride(const char* define, const char* value);
 bool RandoLogic_Reparse(void);
+
+/* UI override enumeration (sidecar persistence): a stored seed must reload
+ * with the same define overrides it was generated under, or eventdefine-
+ * driven runtime features would evaluate against file defaults. */
+uint32_t RandoLogic_GetOverrideCount(void);
+bool RandoLogic_GetOverride(uint32_t index, const char** out_name, const char** out_value);
+
+/* Dungeon-entrance shuffle: assignment of `Items.Entrance.*` dummies onto
+ * DungeonEntrance locations from the last successful generation. Returns the
+ * entrance item's subtype (0x01..0x08) assigned to location `index`, or -1
+ * when `index` is not an entrance location / nothing was assigned. */
+int RandoLogic_GetEntranceAssignment(uint32_t location_index);
+/* Sidecar restore path: entrance assignments are generation-time state, so a
+ * reloaded slot re-injects them (guarded by a parse fingerprint upstream). */
+void RandoLogic_ClearEntranceAssignments(void);
+bool RandoLogic_RestoreEntranceAssignment(uint32_t location_index, int subtype);
+
+/* Event defines (`!eventdefine`): MinishMaker writes these to the ROM patch
+ * assembler; natively they configure runtime features (start inventory,
+ * cosmetics, open world, damage multipliers, ...). Values are stored raw and
+ * evaluated on demand: every `RAND_INT` occurrence is substituted with a
+ * seed-derived hex value (matching the C# text-substitution semantics), then
+ * the C-like integer expression is evaluated. */
+uint32_t RandoLogic_GetEventDefineCount(void);
+const char* RandoLogic_GetEventDefineName(uint32_t index);
+/* True if `name` is event-defined. `*out_has_value` false = flag-only. */
+bool RandoLogic_HasEventDefine(const char* name, bool* out_has_value);
+/* Evaluate the define's value expression for `seed`. False if undefined,
+ * flag-only, or unparseable. */
+bool RandoLogic_EvalEventDefine(const char* name, uint64_t seed, uint32_t* out_value);
 
 #ifdef __cplusplus
 }

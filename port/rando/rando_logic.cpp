@@ -50,6 +50,7 @@ typedef struct LogicItem {
     uint16_t symbol;
     RandoLogicItemType type;
     uint16_t native_item;
+    uint16_t pool_tag;     /* dungeon-id binding (interned tag) or UINT16_MAX */
 } LogicItem;
 
 typedef struct LogicLocation {
@@ -62,6 +63,10 @@ typedef struct LogicLocation {
     RandoLogicLocationType type;
     bool filled_by_generation;
     bool is_helper;
+    uint8_t tag_count;
+    uint16_t tags[RANDO_LOGIC_MAX_LOC_TAGS]; /* pool tags from the name field */
+    bool has_prize_redirect;                 /* `!prizeplacement` target */
+    uint16_t prize_redirect_tag;             /* redirect pool or UINT16_MAX = anywhere */
 } LogicLocation;
 
 typedef struct ExprNode {
@@ -79,6 +84,19 @@ typedef struct LogicDefine {
     bool has_value;
 } LogicDefine;
 
+/* `!eventdefine` — raw value kept verbatim; `RAND_INT` occurrences are
+ * substituted per-seed at evaluation time (mirrors the C# text substitution). */
+typedef struct EventDefine {
+    char name[48];
+    char value[128];
+    bool has_value;
+} EventDefine;
+
+typedef struct PrizeRule {
+    char loc_name[NAME_MAX_LEN + 1];
+    uint16_t tag; /* UINT16_MAX = place anywhere */
+} PrizeRule;
+
 typedef struct CondFrame {
     bool parent_active;
     bool condition_true;
@@ -92,6 +110,9 @@ typedef struct LogicModel {
     LogicLocation locations[RANDO_LOGIC_MAX_LOCATIONS];
     ExprNode nodes[RANDO_LOGIC_MAX_NODES];
     LogicDefine defines[RANDO_LOGIC_MAX_DEFINES];
+    char tag_names[RANDO_LOGIC_MAX_TAGS][32];
+    PrizeRule prize_rules[RANDO_LOGIC_MAX_PRIZE_RULES];
+    EventDefine eventdefines[RANDO_LOGIC_MAX_EVENT_DEFINES];
     uint32_t symbol_count;
     uint32_t item_count;
     uint32_t location_count;
@@ -99,6 +120,9 @@ typedef struct LogicModel {
     uint32_t node_count;
     uint32_t define_count;
     uint32_t native_mapped_items;
+    uint32_t tag_count;
+    uint32_t prize_rule_count;
+    uint32_t eventdefine_count;
     bool loaded;
     bool native_assignable;
     bool ensure_reachability;
@@ -106,6 +130,9 @@ typedef struct LogicModel {
 } LogicModel;
 
 static LogicModel sLogic;
+
+/* Entrance-dummy assignment from the last successful generation; -1 = none. */
+static int16_t sEntranceAssign[RANDO_LOGIC_MAX_LOCATIONS];
 static char sLineBuf[LINE_MAX_LEN + 1];
 static char sExpandedLine[LINE_MAX_LEN + 1];
 
@@ -304,6 +331,31 @@ static uint16_t FindOrAddSymbol(const char* name, SymbolKind kind) {
     return (uint16_t)idx;
 }
 
+/* Pool tags ("dungeon ids"): interned bare names. Location name fields carry
+ * `:Tag` capabilities; item lines bind to one tag via their third field. */
+static uint16_t InternTag(const char* name, size_t len) {
+    while (len > 0 && name[0] == ':') { ++name; --len; }
+    if (len == 0) return UINT16_MAX;
+    char tmp[32];
+    CopyName(tmp, sizeof(tmp), name, len);
+    for (uint32_t i = 0; i < sLogic.tag_count; ++i) {
+        if (strcmp(sLogic.tag_names[i], tmp) == 0) return (uint16_t)i;
+    }
+    if (sLogic.tag_count >= RANDO_LOGIC_MAX_TAGS) {
+        SetError("too many pool tags");
+        return UINT16_MAX;
+    }
+    CopyName(sLogic.tag_names[sLogic.tag_count], sizeof(sLogic.tag_names[0]), tmp, strlen(tmp));
+    return (uint16_t)sLogic.tag_count++;
+}
+
+static bool LocationHasTag(const LogicLocation* loc, uint16_t tag) {
+    for (uint8_t i = 0; i < loc->tag_count; ++i) {
+        if (loc->tags[i] == tag) return true;
+    }
+    return false;
+}
+
 /* MinishMaker `.logic` item symbol (with the leading "Items." stripped) ->
  * native engine item id. Names taken from the public default.logic item pool.
  * Unmapped symbols return ITEM_NONE so the location keeps its vanilla reward. */
@@ -478,8 +530,11 @@ static char* ExpandBackticks(char* line) {
                 char key[NAME_MAX_LEN + 1];
                 CopyName(key, sizeof(key), line + i + 1, j - i - 1);
                 /* A define with no/empty value expands to nothing; an unknown
-                 * token also expands to empty (never the literal key name). */
+                 * token also expands to empty (never the literal key name).
+                 * Exception: `RAND_INT` is the MinishMaker per-seed random
+                 * builtin — kept literal for eventdefine-time substitution. */
                 const char* value = DefineValue(key);
+                if (value == NULL && strcmp(key, "RAND_INT") == 0) value = "RAND_INT";
                 if (value == NULL) value = "";
                 for (size_t k = 0; value[k] != '\0' && out < LINE_MAX_LEN; ++k) {
                     sExpandedLine[out++] = value[k];
@@ -640,7 +695,8 @@ static uint16_t CompileExpr(char* expr) {
     return n;
 }
 
-static bool AddLogicItem(const char* symbol_name, RandoLogicItemType type, uint32_t amount) {
+static bool AddLogicItem(const char* symbol_name, RandoLogicItemType type, uint32_t amount,
+                         uint16_t pool_tag) {
     if (amount == 0) amount = 1;
     uint16_t sym = FindOrAddSymbol(symbol_name, SYMBOL_ITEM);
     if (sym == UINT16_MAX) return false;
@@ -653,6 +709,7 @@ static bool AddLogicItem(const char* symbol_name, RandoLogicItemType type, uint3
         item->symbol = sym;
         item->type = type;
         item->native_item = NativeItemFromSymbolName(symbol_name);
+        item->pool_tag = pool_tag;
         if (item->native_item != NITEM_NONE) sLogic.native_mapped_items++;
         sLogic.symbols[sym].kind = SYMBOL_ITEM;
         sLogic.symbols[sym].index = (uint16_t)sLogic.item_count;
@@ -684,7 +741,16 @@ static bool ParseItemPoolLine(char* line) {
     CopyName(item_name, sizeof(item_name), spec, strlen(spec));
     RandoLogicItemType type = ParseItemType(fields[1]);
     if (type == RANDO_LOGIC_ITEM_UNKNOWN) return true;
-    return AddLogicItem(item_name, type, amount);
+    /* Third field = dungeon-id binding ("DWSSmall", "DHCValid", ...). */
+    uint16_t pool_tag = UINT16_MAX;
+    if (count >= 3 && fields[2] != NULL) {
+        const char* t = fields[2];
+        while (*t == ':' || isspace((unsigned char)*t)) ++t;
+        size_t tl = 0;
+        while (t[tl] != '\0' && t[tl] != ':' && !isspace((unsigned char)t[tl])) tl++;
+        if (tl > 0) pool_tag = InternTag(t, tl);
+    }
+    return AddLogicItem(item_name, type, amount, pool_tag);
 }
 /* Runtime key for the in-game reward hooks: only the `area-room-chest` triple
  * maps to the engine's (area, room, local-flag) chest identity. Precise ROM
@@ -722,9 +788,15 @@ static bool ParseLocationLine(char* line) {
 
     char name[NAME_MAX_LEN + 1];
     char symbol_name[NAME_MAX_LEN + 10];
-    char* name_end = strchr(fields[0], ':');
-    if (name_end == NULL) name_end = fields[0] + strlen(fields[0]);
-    CopyName(name, sizeof(name), fields[0], (size_t)(name_end - fields[0]));
+    /* Name = leading run up to the first ':' or whitespace; the remainder of
+     * the field is pool tags (`:DWSSmall :Big ...` — defines expand to runs
+     * of ':'-prefixed, whitespace-separated capability tags). */
+    size_t name_len = 0;
+    while (fields[0][name_len] != '\0' && fields[0][name_len] != ':' &&
+           !isspace((unsigned char)fields[0][name_len])) {
+        name_len++;
+    }
+    CopyName(name, sizeof(name), fields[0], name_len);
 
     LogicLocation* loc = &sLogic.locations[sLogic.location_count];
     memset(loc, 0, sizeof(*loc));
@@ -735,6 +807,27 @@ static bool ParseLocationLine(char* line) {
     loc->item_symbol = UINT16_MAX;
     loc->expr = UINT16_MAX;
     loc->key = (count >= 3) ? ParseLocationKey(fields[2]) : UINT32_MAX;
+
+    /* Pool tags from the rest of the name field. */
+    {
+        const char* tp = fields[0] + name_len;
+        while (*tp != '\0') {
+            while (*tp == ':' || isspace((unsigned char)*tp)) ++tp;
+            size_t tl = 0;
+            while (tp[tl] != '\0' && tp[tl] != ':' && !isspace((unsigned char)tp[tl])) tl++;
+            if (tl == 0) break;
+            uint16_t tag = InternTag(tp, tl);
+            if (tag != UINT16_MAX) {
+                if (loc->tag_count < RANDO_LOGIC_MAX_LOC_TAGS) {
+                    loc->tags[loc->tag_count++] = tag;
+                } else {
+                    fprintf(stderr, "[rando] warning: location '%s' exceeds %d tags\n",
+                            name, RANDO_LOGIC_MAX_LOC_TAGS);
+                }
+            }
+            tp += tl;
+        }
+    }
 
     snprintf(symbol_name, sizeof(symbol_name), "%s.%s", loc->is_helper ? "Helpers" : "Locations", name);
     loc->symbol = FindOrAddSymbol(symbol_name, loc->is_helper ? SYMBOL_HELPER : SYMBOL_LOCATION);
@@ -979,6 +1072,107 @@ static void ParseSetTypeDirective(char* args) {
     }
 }
 
+static void ParseEventDefineDirective(char* args) {
+    char* fields[2] = {0};
+    int n = SplitDashFields(args, fields, 2);
+    if (n < 1 || fields[0][0] == '\0') return;
+    char name[NAME_MAX_LEN + 1];
+    ResolveDefineToken(fields[0], name, sizeof(name));
+    /* Latest definition wins — the file redefines these across branches. */
+    EventDefine* d = NULL;
+    for (uint32_t i = 0; i < sLogic.eventdefine_count; ++i) {
+        if (strcmp(sLogic.eventdefines[i].name, name) == 0) { d = &sLogic.eventdefines[i]; break; }
+    }
+    if (d == NULL) {
+        if (sLogic.eventdefine_count >= RANDO_LOGIC_MAX_EVENT_DEFINES) {
+            fprintf(stderr, "[rando] warning: too many !eventdefine entries; '%s' dropped\n", name);
+            return;
+        }
+        d = &sLogic.eventdefines[sLogic.eventdefine_count++];
+        CopyName(d->name, sizeof(d->name), name, strlen(name));
+    }
+    d->has_value = (n >= 2 && fields[1][0] != '\0');
+    d->value[0] = '\0';
+    if (d->has_value) CopyName(d->value, sizeof(d->value), fields[1], strlen(fields[1]));
+}
+
+static void ParsePrizePlacementDirective(char* args) {
+    char* fields[2] = {0};
+    int n = SplitDashFields(args, fields, 2);
+    if (n < 1 || fields[0][0] == '\0') return;
+    PrizeRule* r = NULL;
+    for (uint32_t i = 0; i < sLogic.prize_rule_count; ++i) {
+        if (strcmp(sLogic.prize_rules[i].loc_name, fields[0]) == 0) { r = &sLogic.prize_rules[i]; break; }
+    }
+    if (r == NULL) {
+        if (sLogic.prize_rule_count >= RANDO_LOGIC_MAX_PRIZE_RULES) {
+            fprintf(stderr, "[rando] warning: too many !prizeplacement rules; '%s' dropped\n", fields[0]);
+            return;
+        }
+        r = &sLogic.prize_rules[sLogic.prize_rule_count++];
+        CopyName(r->loc_name, sizeof(r->loc_name), fields[0], strlen(fields[0]));
+    }
+    r->tag = UINT16_MAX;
+    if (n >= 2 && fields[1][0] != '\0') {
+        const char* t = fields[1];
+        while (*t == ':' || isspace((unsigned char)*t)) ++t;
+        size_t tl = 0;
+        while (t[tl] != '\0' && t[tl] != ':' && !isspace((unsigned char)t[tl])) tl++;
+        if (tl > 0) r->tag = InternTag(t, tl);
+    }
+}
+
+/* `!color - tab - type - group - DEFINE - label - tooltip - R - G - B [- ...]`
+ * Default sets do NOT set defines (spec: only when the player changes the
+ * color). An override value is comma-separated RGB555 hex, one per set. */
+static void ParseColorDirective(char* args) {
+    char* fields[40] = {0};
+    int n = SplitDashFields(args, fields, 40);
+    if (n < 5) return;
+    const char* define = fields[3];
+    RandoLogicSetting* s = RecordSetting(define, fields[4], RANDO_SETTING_COLOR);
+    uint32_t comp[3];
+    int ci = 0, set_count = 0;
+    char packed[RANDO_LOGIC_MAX_COLOR_SETS][8];
+    for (int i = 6; i < n && set_count < RANDO_LOGIC_MAX_COLOR_SETS; ++i) {
+        char* t = fields[i];
+        while (*t == '~') t = Trim(t + 1); /* tolerate the spec's '~' markers */
+        if (t[0] == '\0') continue;
+        char* endp = NULL;
+        unsigned long v = strtoul(t, &endp, 0);
+        if (endp == t) continue;
+        comp[ci++] = (uint32_t)v & 0xFF;
+        if (ci == 3) {
+            uint32_t rgb555 = ((comp[2] >> 3) << 10) | ((comp[1] >> 3) << 5) | (comp[0] >> 3);
+            snprintf(packed[set_count], sizeof(packed[0]), "%04X", rgb555);
+            set_count++;
+            ci = 0;
+        }
+    }
+    if (s != NULL) {
+        s->option_count = set_count;
+        for (int i = 0; i < set_count && i < RANDO_LOGIC_MAX_SETTING_OPTIONS; ++i) {
+            CopyName(s->opt_value[i], sizeof(s->opt_value[0]), packed[i], strlen(packed[i]));
+        }
+    }
+    int ov = FindOverride(define);
+    if (ov < 0) return;
+    SetDefineValue(define, NULL, false);
+    char buf[VALUE_MAX_LEN + 1];
+    CopyName(buf, sizeof(buf), sOverrides[ov].value, strlen(sOverrides[ov].value));
+    char* p = buf;
+    int idx = 0;
+    while (p != NULL && *p != '\0') {
+        char* comma = strchr(p, ',');
+        if (comma != NULL) *comma = '\0';
+        char dname[NAME_MAX_LEN + 1];
+        snprintf(dname, sizeof(dname), "%s_%d", define, idx);
+        SetDefineValue(dname, Trim(p), true);
+        idx++;
+        p = (comma != NULL) ? comma + 1 : NULL;
+    }
+}
+
 static bool IsItemLine(const char* s) {
     return StartsWith(s, "Items.") && strchr(s, ';') != NULL;
 }
@@ -1055,8 +1249,10 @@ static bool ProcessDirective(char* line, CondFrame* stack, int* depth, bool* act
     if (StartsWith(line, "!replaceincrement")) { ParseReplaceIncrementDirective(line + 17); return true; }
     if (StartsWith(line, "!replace")) { ParseReplaceDirective(line + 8); return true; }
     if (StartsWith(line, "!settype")) { ParseSetTypeDirective(line + 8); return true; }
-    if (StartsWith(line, "!import")) { return true; }
-    if (StartsWith(line, "!prizeplacement")) { return true; }
+    if (StartsWith(line, "!import")) { return true; } /* unused by default.logic; see README */
+    if (StartsWith(line, "!prizeplacement")) { ParsePrizePlacementDirective(line + 15); return true; }
+    if (StartsWith(line, "!eventdefine")) { ParseEventDefineDirective(line + 12); return true; }
+    if (StartsWith(line, "!color")) { ParseColorDirective(line + 6); return true; }
     if (StartsWith(line, "!ensurereachability")) { sLogic.ensure_reachability = true; return true; }
 
     /* Other MinishMaker directives are patch/UI controls ignored by the
@@ -1119,6 +1315,21 @@ extern "C" bool RandoLogic_LoadText(const char* text, size_t len) {
             ParseLocationLine(line);
         }
         if (sLogic.error[0] != '\0') break;
+    }
+
+    /* Resolve `!prizeplacement` rules onto their named locations. */
+    for (uint32_t r = 0; r < sLogic.prize_rule_count; ++r) {
+        bool found = false;
+        for (uint32_t l = 0; l < sLogic.location_count; ++l) {
+            if (strcmp(sLogic.locations[l].name, sLogic.prize_rules[r].loc_name) != 0) continue;
+            sLogic.locations[l].has_prize_redirect = true;
+            sLogic.locations[l].prize_redirect_tag = sLogic.prize_rules[r].tag;
+            found = true;
+        }
+        if (!found) {
+            fprintf(stderr, "[rando] warning: !prizeplacement location '%s' not found\n",
+                    sLogic.prize_rules[r].loc_name);
+        }
     }
 
     sLogic.native_mapped_items = CountNativeMappedItems();
@@ -1225,6 +1436,28 @@ extern "C" void RandoLogic_SetOverride(const char* define, const char* value) {
     sOverrides[idx].has_value = true;
 }
 
+extern "C" uint32_t RandoLogic_GetOverrideCount(void) {
+    return sOverrideCount;
+}
+
+extern "C" bool RandoLogic_GetOverride(uint32_t index, const char** out_name, const char** out_value) {
+    if (index >= sOverrideCount) return false;
+    if (out_name != NULL) *out_name = sOverrides[index].name;
+    if (out_value != NULL) *out_value = sOverrides[index].value;
+    return true;
+}
+
+extern "C" void RandoLogic_ClearEntranceAssignments(void) {
+    for (uint32_t l = 0; l < RANDO_LOGIC_MAX_LOCATIONS; ++l) sEntranceAssign[l] = -1;
+}
+
+extern "C" bool RandoLogic_RestoreEntranceAssignment(uint32_t location_index, int subtype) {
+    if (!sLogic.loaded || location_index >= sLogic.location_count) return false;
+    if (sLogic.locations[location_index].type != RANDO_LOGIC_LOCATION_DUNGEON_ENTRANCE) return false;
+    sEntranceAssign[location_index] = (int16_t)subtype;
+    return true;
+}
+
 extern "C" bool RandoLogic_Reparse(void) {
     if (sRawLen == 0) return false;
     return RandoLogic_LoadText(sRawLogic, sRawLen);
@@ -1244,6 +1477,9 @@ extern "C" RandoLogicStats RandoLogic_GetStats(void) {
     stats.node_count = sLogic.node_count;
     stats.define_count = sLogic.define_count;
     stats.native_mapped_items = sLogic.native_mapped_items;
+    stats.tag_count = sLogic.tag_count;
+    stats.prize_rule_count = sLogic.prize_rule_count;
+    stats.eventdefine_count = sLogic.eventdefine_count;
     stats.loaded = sLogic.loaded;
     stats.native_assignable = sLogic.native_assignable;
     CopyName(stats.error, sizeof(stats.error), sLogic.error, strlen(sLogic.error));
@@ -1258,12 +1494,19 @@ static bool AllowedAt(RandoLogicItemType it, RandoLogicLocationType lt) {
         case RANDO_LOGIC_ITEM_DUNGEON_ENTRANCE:     return lt == RANDO_LOGIC_LOCATION_DUNGEON_ENTRANCE;
         case RANDO_LOGIC_ITEM_DUNGEON_CONSTRAINT:   return lt == RANDO_LOGIC_LOCATION_DUNGEON_CONSTRAINT;
         case RANDO_LOGIC_ITEM_OVERWORLD_CONSTRAINT: return lt == RANDO_LOGIC_LOCATION_OVERWORLD_CONSTRAINT;
-        case RANDO_LOGIC_ITEM_DUNGEON_PRIZE:        return lt == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE ||
-                                                           lt == RANDO_LOGIC_LOCATION_DUNGEON;
-        case RANDO_LOGIC_ITEM_DUNGEON_MAJOR:        return lt == RANDO_LOGIC_LOCATION_DUNGEON;
-        case RANDO_LOGIC_ITEM_DUNGEON_MINOR:        return lt == RANDO_LOGIC_LOCATION_DUNGEON;
+        /* Spec: prize items go ONLY to DungeonPrize locations — reaching
+         * Dungeon-pool slots happens exclusively via `!prizeplacement`. */
+        case RANDO_LOGIC_ITEM_DUNGEON_PRIZE:        return lt == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE;
+        /* Prize locations left over after the prize phase join the Dungeon
+         * pool (spec); prizes place first in kPlaceOrder, so they get first
+         * pick before dungeon/major items can land on prize slots. */
+        case RANDO_LOGIC_ITEM_DUNGEON_MAJOR:        return lt == RANDO_LOGIC_LOCATION_DUNGEON ||
+                                                           lt == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE;
+        case RANDO_LOGIC_ITEM_DUNGEON_MINOR:        return lt == RANDO_LOGIC_LOCATION_DUNGEON ||
+                                                           lt == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE;
         case RANDO_LOGIC_ITEM_MAJOR:                return lt == RANDO_LOGIC_LOCATION_MAJOR ||
                                                            lt == RANDO_LOGIC_LOCATION_DUNGEON ||
+                                                           lt == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE ||
                                                            lt == RANDO_LOGIC_LOCATION_ANY;
         case RANDO_LOGIC_ITEM_MINOR:                return lt == RANDO_LOGIC_LOCATION_MINOR ||
                                                            lt == RANDO_LOGIC_LOCATION_ANY;
@@ -1551,6 +1794,12 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
         }
     }
 
+    /* A redirected prize "consumes" its prize location even though the slot
+     * stays open for later dungeon-pool items — each `!prizeplacement` rule
+     * fires at most once per generation, mirroring the 1:1 prize pairing. */
+    static bool prize_consumed[RANDO_LOGIC_MAX_LOCATIONS];
+    memset(prize_consumed, 0, sizeof(prize_consumed));
+
     /* Place every non-filler item, in documented type-priority order. */
     for (size_t t = 0; t < ARRAY_COUNT(kPlaceOrder); ++t) {
         RandoLogicItemType type = kPlaceOrder[t];
@@ -1589,6 +1838,13 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
                 LogicLocation* loc = &sLogic.locations[l];
                 if (loc->is_helper || loc->fixed_item_symbol != UINT16_MAX || assignment[l] != UINT16_MAX) continue;
                 if (!AllowedAt(type, loc->type)) continue;
+                if (type == RANDO_LOGIC_ITEM_DUNGEON_PRIZE &&
+                    loc->type == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE && prize_consumed[l]) continue;
+                /* Dungeon-id binding: a tagged item only goes on locations
+                 * carrying its tag. Vanilla pins, own-dungeon, own-region —
+                 * the whole keysanity matrix is tag data in the file. */
+                uint16_t ptag = sLogic.items[item_idx].pool_tag;
+                if (ptag != UINT16_MAX && !LocationHasTag(loc, ptag)) continue;
                 if (NodeForbidsSymbol(loc->expr, sym)) continue;
                 /* Constraint/entrance items are structural dummies that grant
                  * no real item, so they need not sit in a reachable slot. */
@@ -1617,7 +1873,38 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
                 }
                 return RANDO_UNBEATABLE;
             }
-            assignment[candidates[BoundedRandom(&rng, cand_count)]] = sym;
+            uint16_t chosen = candidates[BoundedRandom(&rng, cand_count)];
+            /* `!prizeplacement`: a prize assigned to a redirected prize
+             * location is instead placed within the redirect tag pool (or
+             * anywhere when the rule has no dungeon id); the prize slot
+             * itself stays open and joins the Dungeon pool. */
+            if (type == RANDO_LOGIC_ITEM_DUNGEON_PRIZE &&
+                sLogic.locations[chosen].has_prize_redirect && !prize_consumed[chosen]) {
+                const uint16_t rtag = sLogic.locations[chosen].prize_redirect_tag;
+                prize_consumed[chosen] = true;
+                cand_count = 0;
+                for (uint32_t l = 0; l < sLogic.location_count; ++l) {
+                    LogicLocation* loc = &sLogic.locations[l];
+                    if (loc->is_helper || loc->fixed_item_symbol != UINT16_MAX || assignment[l] != UINT16_MAX) continue;
+                    if (loc->type != RANDO_LOGIC_LOCATION_DUNGEON &&
+                        loc->type != RANDO_LOGIC_LOCATION_ANY &&
+                        loc->type != RANDO_LOGIC_LOCATION_MAJOR &&
+                        loc->type != RANDO_LOGIC_LOCATION_MINOR &&
+                        loc->type != RANDO_LOGIC_LOCATION_DUNGEON_PRIZE) continue;
+                    if (loc->type == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE && prize_consumed[l]) continue;
+                    if (rtag != UINT16_MAX && !LocationHasTag(loc, rtag)) continue;
+                    if (NodeForbidsSymbol(loc->expr, sym)) continue;
+                    if (!no_logic && !state.location_reached[l]) continue;
+                    candidates[cand_count++] = (uint16_t)l;
+                }
+                if (cand_count == 0) {
+                    if (dbg) fprintf(stderr, "[gen] FAIL prize redirect for '%s' (tag pool empty)\n",
+                                     sLogic.symbols[sym].name);
+                    return RANDO_UNBEATABLE;
+                }
+                chosen = candidates[BoundedRandom(&rng, cand_count)];
+            }
+            assignment[chosen] = sym;
             placed[item_idx] = true;
         }
     }
@@ -1713,6 +2000,189 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
         }
     }
 
+    /* Record entrance-dummy assignments for the runtime entrance swap. */
+    for (uint32_t l = 0; l < sLogic.location_count; ++l) {
+        sEntranceAssign[l] = -1;
+        if (sLogic.locations[l].type != RANDO_LOGIC_LOCATION_DUNGEON_ENTRANCE) continue;
+        uint16_t esym = assignment[l];
+        if (esym == UINT16_MAX) esym = sLogic.locations[l].fixed_item_symbol;
+        if (esym == UINT16_MAX) continue;
+        const char* nm = sLogic.symbols[esym].name; /* "Items.Entrance.0xNN" */
+        const char* dot = strrchr(nm, '.');
+        if (dot != NULL) sEntranceAssign[l] = (int16_t)strtoul(dot + 1, NULL, 0);
+    }
+
     if (out_seed) *out_seed = seed;
     return RANDO_OK;
+}
+
+extern "C" int RandoLogic_GetEntranceAssignment(uint32_t location_index) {
+    if (!sLogic.loaded || location_index >= sLogic.location_count) return -1;
+    return sEntranceAssign[location_index];
+}
+
+/* ---- `!eventdefine` evaluation ------------------------------------------ */
+
+/* Substitute every literal `RAND_INT` with a seed/name/occurrence-derived
+ * 8-hex-digit value, mirroring MinishMaker's parse-time text substitution
+ * (each occurrence yields a distinct value; deterministic per seed). */
+static void SubstituteRandInts(const char* in, char* out, size_t out_len,
+                               uint64_t seed, const char* name) {
+    uint64_t h = 1469598103934665603ull ^ seed;
+    for (const unsigned char* q = (const unsigned char*)name; *q; ++q) {
+        h ^= (uint64_t)(*q);
+        h *= 1099511628211ull;
+    }
+    uint32_t occurrence = 0;
+    size_t o = 0;
+    for (size_t i = 0; in[i] != '\0' && o + 1 < out_len;) {
+        if (strncmp(in + i, "RAND_INT", 8) == 0) {
+            SplitMix64Local r;
+            r.state = h + 0x9e3779b97f4a7c15ull * (uint64_t)(++occurrence);
+            char num[12];
+            int nn = snprintf(num, sizeof(num), "%08X", (uint32_t)NextRandom(&r));
+            for (int k = 0; k < nn && o + 1 < out_len; ++k) out[o++] = num[k];
+            i += 8;
+            continue;
+        }
+        out[o++] = in[i++];
+    }
+    out[o] = '\0';
+}
+
+/* Tiny C-like integer expression evaluator: hex/dec literals, parens, and
+ * the operators the logic file uses (* / % + - << >> & ^ |). */
+typedef struct EvalCtx {
+    const char* p;
+    bool ok;
+} EvalCtx;
+
+static uint32_t EvalOrExpr(EvalCtx* c);
+
+static void EvalSkipWs(EvalCtx* c) {
+    while (*c->p == ' ' || *c->p == '\t') c->p++;
+}
+
+static uint32_t EvalPrimary(EvalCtx* c) {
+    EvalSkipWs(c);
+    if (*c->p == '(') {
+        c->p++;
+        uint32_t v = EvalOrExpr(c);
+        EvalSkipWs(c);
+        if (*c->p == ')') c->p++; else c->ok = false;
+        return v;
+    }
+    char* end = NULL;
+    unsigned long v = strtoul(c->p, &end, 0);
+    if (end == c->p) { c->ok = false; return 0; }
+    c->p = end;
+    return (uint32_t)v;
+}
+
+static uint32_t EvalMulExpr(EvalCtx* c) {
+    uint32_t v = EvalPrimary(c);
+    for (;;) {
+        EvalSkipWs(c);
+        char op = *c->p;
+        if (op != '*' && op != '/' && op != '%') return v;
+        c->p++;
+        uint32_t r = EvalPrimary(c);
+        if (op == '*') v *= r;
+        else if (r == 0) { c->ok = false; return 0; }
+        else if (op == '/') v /= r;
+        else v %= r;
+    }
+}
+
+static uint32_t EvalAddExpr(EvalCtx* c) {
+    uint32_t v = EvalMulExpr(c);
+    for (;;) {
+        EvalSkipWs(c);
+        char op = *c->p;
+        if (op != '+' && op != '-') return v;
+        c->p++;
+        uint32_t r = EvalMulExpr(c);
+        v = (op == '+') ? v + r : v - r;
+    }
+}
+
+static uint32_t EvalShiftExpr(EvalCtx* c) {
+    uint32_t v = EvalAddExpr(c);
+    for (;;) {
+        EvalSkipWs(c);
+        if (c->p[0] == '<' && c->p[1] == '<') { c->p += 2; v <<= (EvalAddExpr(c) & 31); continue; }
+        if (c->p[0] == '>' && c->p[1] == '>') { c->p += 2; v >>= (EvalAddExpr(c) & 31); continue; }
+        return v;
+    }
+}
+
+static uint32_t EvalAndExpr(EvalCtx* c) {
+    uint32_t v = EvalShiftExpr(c);
+    for (;;) {
+        EvalSkipWs(c);
+        if (c->p[0] != '&') return v;
+        c->p++;
+        v &= EvalShiftExpr(c);
+    }
+}
+
+static uint32_t EvalXorExpr(EvalCtx* c) {
+    uint32_t v = EvalAndExpr(c);
+    for (;;) {
+        EvalSkipWs(c);
+        if (c->p[0] != '^') return v;
+        c->p++;
+        v ^= EvalAndExpr(c);
+    }
+}
+
+static uint32_t EvalOrExpr(EvalCtx* c) {
+    uint32_t v = EvalXorExpr(c);
+    for (;;) {
+        EvalSkipWs(c);
+        if (c->p[0] != '|') return v;
+        c->p++;
+        v |= EvalXorExpr(c);
+    }
+}
+
+static const EventDefine* FindEventDefine(const char* name) {
+    if (name == NULL) return NULL;
+    for (uint32_t i = 0; i < sLogic.eventdefine_count; ++i) {
+        if (strcmp(sLogic.eventdefines[i].name, name) == 0) return &sLogic.eventdefines[i];
+    }
+    return NULL;
+}
+
+extern "C" uint32_t RandoLogic_GetEventDefineCount(void) {
+    return sLogic.eventdefine_count;
+}
+
+extern "C" const char* RandoLogic_GetEventDefineName(uint32_t index) {
+    return index < sLogic.eventdefine_count ? sLogic.eventdefines[index].name : "";
+}
+
+extern "C" bool RandoLogic_HasEventDefine(const char* name, bool* out_has_value) {
+    const EventDefine* d = FindEventDefine(name);
+    if (out_has_value != NULL) *out_has_value = (d != NULL) && d->has_value;
+    return d != NULL;
+}
+
+extern "C" bool RandoLogic_EvalEventDefine(const char* name, uint64_t seed, uint32_t* out_value) {
+    const EventDefine* d = FindEventDefine(name);
+    if (d == NULL || !d->has_value) return false;
+    char expanded[256];
+    SubstituteRandInts(d->value, expanded, sizeof(expanded), seed, d->name);
+    EvalCtx c;
+    c.p = expanded;
+    c.ok = true;
+    uint32_t v = EvalOrExpr(&c);
+    EvalSkipWs(&c);
+    if (!c.ok || *c.p != '\0') {
+        fprintf(stderr, "[rando] warning: eventdefine '%s' value '%s' not evaluable\n",
+                d->name, d->value);
+        return false;
+    }
+    if (out_value != NULL) *out_value = v;
+    return true;
 }
