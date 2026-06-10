@@ -371,7 +371,10 @@ static int run_real_logic_diagnostic(void) {
             "Valley_DampeNPC") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_WITCH_HUT, 0, 0),
-            "MinishWoods_WitchHut_Item")) {
+            "MinishWoods_WitchHut_Item") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_LIBRARY_YELLOW_MINISH, 0, 0),
+            "Town_Library_YellowMinish_NPC")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }
