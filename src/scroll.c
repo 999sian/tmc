@@ -25,6 +25,14 @@
 #define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
 #endif
 
+#ifdef PC_PORT
+/* Randomizer dungeon-entrance shuffle: rewrites the destination written by
+ * DoExitTransition when the active seed carries entrance assignments
+ * (port/rando/rando_entrance.cpp). No-op otherwise. */
+extern void Rando_Entrance_RemapExit(u8 cur_area, u8* area, u8* room, s16* x, s16* y, u8* layer, u8* spawn_type,
+                                     u8* facing);
+#endif
+
 extern void UpdateScreenShake(void);
 extern void sub_0807C8B0(u16*, u32, u32);
 extern void sub_0807C810();
@@ -728,6 +736,10 @@ void DoExitTransition(const Transition* data) {
     status->layer = data->layer;
     status->spawn_type = data->transition_type;
     status->start_anim = data->facing_direction;
+#ifdef PC_PORT
+    Rando_Entrance_RemapExit(gRoomControls.area, &status->area_next, &status->room_next, &status->start_pos_x,
+                             &status->start_pos_y, &status->layer, &status->spawn_type, &status->start_anim);
+#endif
     if (data->transitionSFX != SFX_NONE) {
         SoundReq(data->transitionSFX);
     }
