@@ -250,7 +250,9 @@ static void Port_PumpEvents(void) {
             continue;
         }
         if (Port_RandoFileMenu_IsOpen()) {
-            Port_RandoFileMenu_HandleEvent(&e);
+            /* The ImGui modal owns the randomizer-setup input (the event
+             * was already forwarded to ImGui above); swallow everything
+             * else so game hotkeys stay masked while it is open. */
             continue;
         }
         if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
