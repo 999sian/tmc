@@ -332,7 +332,13 @@ static int run_real_logic_diagnostic(void) {
                                "Crenel_Dojo_NPC") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0),
-            "Town_Carlov_NPC")) {
+            "Town_Carlov_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DOG_BOTTLE, 0, 0),
+            "Hylia_DogNPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_JABBER_NUT, 0, 0),
+            "MinishVillage_BarrelHouse_Item")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }

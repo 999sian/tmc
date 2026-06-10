@@ -149,9 +149,10 @@ Full-parity features (added in the 1:1 pass):
 - **scripted runtime keys**: `rando_keymap.h/.c` reserves bit 31 for stable
   native identities that are not area-room-local triples. The runtime binds
   default.logic's Stockwell shop slots, Blade Brothers dojo rewards, Carlov
-  medal, and Business Scrub item sales by default (16 locations at stock
-  settings), and binds Goron Merchant sets + Cucco rounds when their `.logic`
-  settings are enabled (40/44 scripted locations in the real-file `GORON_5` +
+  medal, the Hylia dog bottle, the Minish Village barrel-house Jabber Nut, and
+  Business Scrub item sales by default (18 locations at stock settings), and
+  binds Goron Merchant sets + Cucco rounds when their `.logic` settings are
+  enabled (42/46 scripted locations in the real-file `GORON_5` +
   `VANILLA_BLUE_FUSIONS` + `CUCCO_10` diagnostic);
 - **spoiler log** honors `:NoSpoiler` tags; the F8 tab exposes `!color`
   settings as live color pickers (override string = comma-separated RGB555
@@ -163,8 +164,8 @@ NOT yet at full parity (honest gaps):
   clean-room). Note: the real `default.logic` contains no `!import` lines;
 - per-location keyed hooks are still missing for the remaining NPC-script and
   fusion reward sites whose grant callsites do not yet expose a stable native
-  identity (library / crypt / pedestal / dog bottle / witch hut / direct
-  fusion-item grants / similar one-off scripts). Those locations still
+  identity (library / crypt / pedestal / witch hut / direct fusion-item
+  grants / similar one-off scripts). Those locations still
   randomize via the global `Rando_OverrideItem` bijection;
 - placement is feature-identical but not byte-identical to the C# shuffler
   (different PRNG by clean-room design — same seed text gives a different,
@@ -183,10 +184,10 @@ locations verified reachable** (`!ensurereachability`) — the assumed-fill
 places every pooled item, filler covers the rest. `TMC_RANDO_DEBUG=1` adds
 `[gen]` placement traces. In-game, the runtime hooks resolve to the logic's
 location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
-set) probes 222 keyed locations at default settings (161 chests + 45 ground
-items from `rando_keymap.c` + 16 scripted rewards from the high-bit runtime
-namespace); 149 chest keys match real engine chest TileEntities (all 149
-key-resolve through the runtime `Rando_RoomChestIndex` path) and 211
+set) probes 224 keyed locations at default settings (161 chests + 45 ground
+items from `rando_keymap.c` + 18 scripted rewards from the high-bit runtime
+namespace); 150 chest keys match real engine chest TileEntities (all 150
+key-resolve through the runtime `Rando_RoomChestIndex` path) and 213
 locations receive their `.logic`-placed item at the title-screen probe frame
 (more at actual play time, once distant areas are resolved). The harness also
 confirms a real-logic seed survives a sidecar save/reset/reload round-trip
@@ -202,7 +203,7 @@ full parity):
   heart pieces/containers, subtyped `BigKey`/`SmallKey`/`Compass`/`DungeonMap`,
   butterflies, progressive bases, …); the remaining ~20 are non-reward symbols
   (kinstone fusions, figurines, music, entrance/trap dummies) that leave their
-  vanilla reward in place. At default settings 211/222 keyed locations
+  vanilla reward in place. At default settings 213/224 keyed locations
   override at the probe frame; the rest hold placements that keep their
   vanilla reward.
 
