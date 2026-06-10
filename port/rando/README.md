@@ -124,21 +124,39 @@ Full-parity features (added in the 1:1 pass):
 - **entrance shuffle**: generation records `Items.Entrance.*` assignments and
   `rando_entrance.cpp` performs coupled swaps at the engine's transition choke
   points;
-- **sidecar v2** persists the seed's `.logic` define overrides and entrance
-  assignments per slot, so a reloaded save restores its full eventdefine
-  context (guarded by a parse fingerprint).
+- **sidecar v2/v3** persists the seed's `.logic` define overrides, entrance
+  assignments, and per-area music assignments per slot, so a reloaded save
+  restores its full context (guarded by a parse fingerprint);
+- **dropdown option-value flags**: choosing a dropdown option defines the
+  option's VALUE token as a flag (in addition to the setting define), which is
+  what activates `!ifdef - SMALL_KEYS_STANDARD` / `MUSIC_RANDO` style branches
+  throughout the file — without this, the whole keysanity/music sections were
+  silently inert;
+- **music shuffle** (`MUSIC_RANDO`): generation assigns `Items.Music.0xNN`
+  song ids to the 141 `Area%xMusic` slots; `rando_music.c` remaps
+  `gAreaMetadata[].queueBgm` at the engine's only reader (`LoadRoomBgm`) —
+  same id space, no translation. Surplus pool songs are cosmetic, never a
+  generation failure;
+- **ground-item location keys**: `rando_keymap.c` binds 49 curated
+  name→(area-room-flag) keys for default.logic's dungeon rupee/pot/underwater
+  locations (triple-verified against USA ROM room data and the EU→USA address
+  deltas), feeding the existing `itemOnGround` per-location hook — 45 bind
+  under default settings, the other 4 live in non-default `!ifdef` branches
+  and bind when those settings activate;
+- **spoiler log** honors `:NoSpoiler` tags; the F8 tab exposes `!color`
+  settings as live color pickers (override string = comma-separated RGB555
+  hex, the same format `ParseColorDirective` consumes).
 
 NOT yet at full parity (honest gaps):
 - `!import` logic functions are approximated (logic-only item symbols are
   assumed owned, standing in for `LogicImport.cs` — not translated,
   clean-room). Note: the real `default.logic` contains no `!import` lines;
-- per-location keyed hooks for non-chest/non-ground reward types (those use
-  MinishMaker precise ROM addresses rather than `area-room-chestIndex`); such
-  rewards still randomize via the global `Rando_OverrideItem` bijection;
+- per-location keyed hooks for NPC-script, shop, dojo, and fusion rewards
+  (no stable identity exists at their grant callsites yet); such rewards
+  still randomize via the global `Rando_OverrideItem` bijection;
 - placement is feature-identical but not byte-identical to the C# shuffler
   (different PRNG by clean-room design — same seed text gives a different,
   equally-valid arrangement);
-- `Music`-type locations parse but there is no runtime music remap;
 - custom heart-outline colors tint other HUD glyphs drawn with the shared
   palette-15 white (upstream replaces heart tile graphics; out of scope for a
   runtime palette override).
