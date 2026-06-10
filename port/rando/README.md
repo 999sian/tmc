@@ -153,10 +153,10 @@ Full-parity features (added in the 1:1 pass):
   three library books, Melari's broken-sword reward, the shoe-shop Pegasus
   Boots, the Witch Hut mushroom, the Bomb Minish bomb bag, Minish/Crenel/Valley
   Great Fairy rewards, Valley Dampe's graveyard key, Biggoron's mirror shield,
-  and Business Scrub item sales by default (29 locations at stock settings).
-  With `GORON_5` + `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` +
-  `BIGGORON_NORMAL` + `CUCCO_10`, 58/59 scripted locations bind in the
-  real-file diagnostic;
+  the library yellow-minish reward, and Business Scrub item sales by default
+  (30 locations at stock settings). With `GORON_5` +
+  `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` +
+  `CUCCO_10`, 59/60 scripted locations bind in the real-file diagnostic;
 - **spoiler log** honors `:NoSpoiler` tags; the F8 tab exposes `!color`
   settings as live color pickers (override string = comma-separated RGB555
   hex, the same format `ParseColorDirective` consumes).
@@ -167,10 +167,9 @@ NOT yet at full parity (honest gaps):
   unused by the real `default.logic`);
 - per-location keyed hooks are still missing for the remaining NPC-script and
   fusion reward sites whose grant callsites do not yet expose a stable native
-  identity (Bomb Minish remote-bombs outside the red-fusion setting, the
-  library yellow-minish reward, crypt / pedestal / direct fusion-item grants /
-  similar one-off scripts). Those locations still randomize via the global
-  `Rando_OverrideItem` bijection;
+  identity (Bomb Minish remote-bombs outside the red-fusion setting, crypt /
+  pedestal / direct fusion-item grants / similar one-off scripts). Those
+  locations still randomize via the global `Rando_OverrideItem` bijection;
 - placement is feature-identical but not byte-identical to the C# shuffler
   (different PRNG by clean-room design — same seed text gives a different,
   equally-valid arrangement);
@@ -188,10 +187,10 @@ locations verified reachable** (`!ensurereachability`) — the assumed-fill
 places every pooled item, filler covers the rest. `TMC_RANDO_DEBUG=1` adds
 `[gen]` placement traces. In-game, the runtime hooks resolve to the logic's
 location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
-set) probes 235 keyed locations at default settings (161 chests + 45 ground
-items from `rando_keymap.c` + 29 scripted rewards from the high-bit runtime
+set) probes 236 keyed locations at default settings (161 chests + 45 ground
+items from `rando_keymap.c` + 30 scripted rewards from the high-bit runtime
 namespace); 154 chest keys match real engine chest TileEntities (all 154
-key-resolve through the runtime `Rando_RoomChestIndex` path) and 224
+key-resolve through the runtime `Rando_RoomChestIndex` path) and 225
 locations receive their `.logic`-placed item at the title-screen probe frame
 (more at actual play time, once distant areas are resolved). The harness also
 confirms a real-logic seed survives a sidecar save/reset/reload round-trip
@@ -207,7 +206,7 @@ full parity):
   heart pieces/containers, subtyped `BigKey`/`SmallKey`/`Compass`/`DungeonMap`,
   butterflies, progressive bases, …); the remaining ~20 are non-reward symbols
   (kinstone fusions, figurines, music, entrance/trap dummies) that leave their
-  vanilla reward in place. At default settings 224/235 keyed locations
+  vanilla reward in place. At default settings 225/236 keyed locations
   override at the probe frame; the rest hold placements that keep their
   vanilla reward.
 
