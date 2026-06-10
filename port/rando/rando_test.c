@@ -350,20 +350,45 @@ static int run_real_logic_diagnostic(void) {
             "Hylia_MayorCabin_Item") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_MELARI, 0, 0),
-            "Crenel_Melari_NPC")) {
+            "Crenel_Melari_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_SHOE_SHOP, 0, 0),
+            "Town_ShoeShop_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BOMB_MINISH_BAG, 0, 0),
+            "MinishWoods_BombMinish_NPC1") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_MINISH_GREAT_FAIRY, 0, 0),
+            "Minish_GreatFairy_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CRENEL_GREAT_FAIRY, 0, 0),
+            "Crenel_GreatFairy_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_VALLEY_GREAT_FAIRY, 0, 0),
+            "Valley_GreatFairy_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DAMPE, 0, 0),
+            "Valley_DampeNPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_WITCH_HUT, 0, 0),
+            "MinishWoods_WitchHut_Item")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }
     fprintf(stderr, "[real] OK: default scripted runtime keys bound for stockwell/dojo/special rewards\n");
     RandoLogic_SetOverride("GORON_SETTING", "GORON_5");
     RandoLogic_SetOverride("BLUE_FUSION_SETTING", "VANILLA_BLUE_FUSIONS");
+    RandoLogic_SetOverride("RED_FUSION_SETTING", "VANILLA_RED_FUSIONS");
     RandoLogic_SetOverride("CUCCO_SETTING", "CUCCO_10");
     if (!RandoLogic_Reparse() || !GenerateSeed(0xC0FFEEu, s) || !Rando_IsActive() ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 0, 0, 0),
             "Town_GoronMerchant_1_Left") ||
         !expect_bound_location(RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 9, 0, 0),
-                               "Town_Cuccos_Lv_10_NPC")) {
+                               "Town_Cuccos_Lv_10_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BOMB_MINISH_REMOTES, 0, 0),
+            "MinishWoods_BombMinish_NPC2")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }
