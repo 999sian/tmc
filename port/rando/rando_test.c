@@ -429,7 +429,19 @@ static int run_real_logic_diagnostic(void) {
             "MinishWoods_WitchHut_Item") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_LIBRARY_YELLOW_MINISH, 0, 0),
-            "Town_Library_YellowMinish_NPC")) {
+            "Town_Library_YellowMinish_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DEEPWOOD_PRIZE, 0, 0),
+            "Deepwood_Prize") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_COF_PRIZE, 0, 0),
+            "CoF_Prize") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DROPLETS_PRIZE, 0, 0),
+            "Droplets_Prize") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_PALACE_PRIZE, 0, 0),
+            "Palace_Prize")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }

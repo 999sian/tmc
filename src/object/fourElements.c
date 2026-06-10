@@ -20,6 +20,10 @@
 #include "script.h"
 #include "fade.h"
 #include "port_scripts.h"
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -122,7 +126,33 @@ void FourElements_Action2(FourElementsEntity* this) {
         super->timer = 45;
         gScreen.controls.layerFXControl = 0x640;
         gScreen.controls.alphaBlend = 0;
-        InitItemGetSequence(super->type, 0, 1);
+        u8 item = super->type;
+        u8 subtype = 0;
+#ifdef PC_PORT
+        switch (super->type) {
+            case ITEM_EARTH_ELEMENT:
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DEEPWOOD_PRIZE, 0, 0), &item,
+                    &subtype);
+                break;
+            case ITEM_FIRE_ELEMENT:
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_COF_PRIZE, 0, 0), &item,
+                    &subtype);
+                break;
+            case ITEM_WATER_ELEMENT:
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DROPLETS_PRIZE, 0, 0), &item,
+                    &subtype);
+                break;
+            case ITEM_WIND_ELEMENT:
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_PALACE_PRIZE, 0, 0), &item,
+                    &subtype);
+                break;
+        }
+#endif
+        InitItemGetSequence(item, subtype, 1);
         sub_0808C650(super, 1);
         SetFade(FADE_BLACK_WHITE | FADE_INSTANT, 2);
         SoundReq(SFX_F8);
