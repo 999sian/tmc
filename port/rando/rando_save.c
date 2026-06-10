@@ -8,6 +8,7 @@
 
 #include "rando/rando_save.h"
 #include "rando/rando.h"
+#include "rando/rando_logic.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -17,12 +18,26 @@
 /* Sidecar format version. Slot location keys/indices encode area-room-chest
  * where the chest index is the TileEntity iteration order from room data
  * (see Rando_RoomChestIndex). ANY change to that encoding or to the slot
- * layout below requires bumping this version. */
-#define RANDO_SIDECAR_VERSION 1u
+ * layout below requires bumping this version.
+ * v2: per-slot .logic define overrides + entrance assignments, so a reloaded
+ * seed restores its eventdefine context and entrance shuffle. */
+#define RANDO_SIDECAR_VERSION 2u
+#define RANDO_SIDECAR_MAX_OVERRIDES 64
+#define RANDO_SIDECAR_MAX_ENTRANCES 16
 
 static const char kMagic[8] = { 'T', 'M', 'C', 'R', 'N', 'D', 'O', '1' };
 
 extern const char* Port_Save_GetActivePath(void);
+
+typedef struct RandoSidecarOverride {
+    char name[48];
+    char value[32];
+} RandoSidecarOverride;
+
+typedef struct RandoSidecarEntrance {
+    uint16_t location_index;
+    int16_t subtype;
+} RandoSidecarEntrance;
 
 typedef struct RandoSidecarSlot {
     uint8_t active;
@@ -30,9 +45,15 @@ typedef struct RandoSidecarSlot {
     uint8_t shuffle_kinstones;
     uint8_t shuffle_dojos;
     uint8_t item_difficulty;
-    uint8_t reserved[3];
+    uint8_t reserved;
+    uint16_t override_count;
+    uint16_t entrance_count;
+    uint8_t reserved2[2];
+    uint32_t logic_location_count; /* parse fingerprint for index validity */
     uint64_t seed;
     uint32_t count;
+    RandoSidecarOverride overrides[RANDO_SIDECAR_MAX_OVERRIDES];
+    RandoSidecarEntrance entrances[RANDO_SIDECAR_MAX_ENTRANCES];
     uint16_t table[RANDO_LOCATION_COUNT];
 } RandoSidecarSlot;
 
@@ -81,6 +102,11 @@ static bool LoadAll(void) {
               fread(&sSidecar, sizeof(sSidecar), 1, f) == 1;
     fclose(f);
     if (!ok) {
+        /* v1 sidecars lack overrides/entrances — clean break, but say so. */
+        if (memcmp(magic, kMagic, sizeof(kMagic)) == 0 && version != RANDO_SIDECAR_VERSION) {
+            fprintf(stderr, "[RANDO] sidecar version %u unsupported (want %u); ignoring file\n",
+                    version, RANDO_SIDECAR_VERSION);
+        }
         memset(&sSidecar, 0, sizeof(sSidecar));
         return false;
     }
@@ -92,11 +118,24 @@ static bool LoadAll(void) {
         RandoSidecarSlot* rec = &sSidecar.slots[i];
         if (!rec->active) continue;
         if (rec->count == 0 || rec->count > RANDO_LOCATION_COUNT ||
-            rec->item_difficulty >= RANDO_ITEM_POOL_COUNT) {
+            rec->item_difficulty >= RANDO_ITEM_POOL_COUNT ||
+            rec->override_count > RANDO_SIDECAR_MAX_OVERRIDES ||
+            rec->entrance_count > RANDO_SIDECAR_MAX_ENTRANCES) {
             fprintf(stderr,
                     "[rando] warning: sidecar slot %d corrupt (count=%u, difficulty=%u); cleared\n",
                     i, rec->count, rec->item_difficulty);
             memset(rec, 0, sizeof(*rec));
+            continue;
+        }
+        /* Force-terminate strings; disarm out-of-range entrance indices. */
+        for (uint32_t o = 0; o < rec->override_count; ++o) {
+            rec->overrides[o].name[sizeof(rec->overrides[o].name) - 1] = '\0';
+            rec->overrides[o].value[sizeof(rec->overrides[o].value) - 1] = '\0';
+        }
+        for (uint32_t e = 0; e < rec->entrance_count; ++e) {
+            if (rec->entrances[e].location_index >= RANDO_LOCATION_COUNT) {
+                rec->entrances[e].subtype = -1;
+            }
         }
     }
     return ok;
@@ -137,6 +176,39 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
     rec->count = (uint32_t)count;
     memcpy(rec->table, table, count * sizeof(rec->table[0]));
 
+    /* Persist the .logic define overrides this seed was generated under and
+     * the generation-time entrance assignments — both are required to restore
+     * the seed's full context after a process restart. */
+    if (RandoLogic_IsLoaded()) {
+        uint32_t oc = RandoLogic_GetOverrideCount();
+        if (oc > RANDO_SIDECAR_MAX_OVERRIDES) {
+            fprintf(stderr, "[RANDO] warning: %u overrides exceed sidecar cap %d; extras dropped\n",
+                    oc, RANDO_SIDECAR_MAX_OVERRIDES);
+            oc = RANDO_SIDECAR_MAX_OVERRIDES;
+        }
+        for (uint32_t o = 0; o < oc; ++o) {
+            const char* nm = NULL;
+            const char* val = NULL;
+            if (!RandoLogic_GetOverride(o, &nm, &val)) break;
+            snprintf(rec->overrides[o].name, sizeof(rec->overrides[o].name), "%s", nm);
+            snprintf(rec->overrides[o].value, sizeof(rec->overrides[o].value), "%s", val);
+            rec->override_count++;
+        }
+        rec->logic_location_count = RandoLogic_GetLocationCountRaw();
+        for (uint32_t l = 0; l < rec->logic_location_count; ++l) {
+            int e = RandoLogic_GetEntranceAssignment(l);
+            if (e < 0) continue;
+            if (rec->entrance_count >= RANDO_SIDECAR_MAX_ENTRANCES) {
+                fprintf(stderr, "[RANDO] warning: entrance assignments exceed sidecar cap %d\n",
+                        RANDO_SIDECAR_MAX_ENTRANCES);
+                break;
+            }
+            rec->entrances[rec->entrance_count].location_index = (uint16_t)l;
+            rec->entrances[rec->entrance_count].subtype = (int16_t)e;
+            rec->entrance_count++;
+        }
+    }
+
     if (!SaveAll()) return false;
     fprintf(stderr, "[RANDO] saved sidecar slot %d (%u locations)\n", slot, rec->count);
     return true;
@@ -157,8 +229,40 @@ bool Port_RandoSave_LoadSlot(int slot) {
         settings.item_difficulty = (RandoItemPoolDifficulty)rec->item_difficulty;
     }
 
+    /* Restore the seed's .logic define overrides and reparse BEFORE
+     * activation, so eventdefine-driven runtime features (damage multi,
+     * cosmetics, start-inventory context) evaluate against the settings the
+     * seed was generated with — not the file defaults. The stored item table
+     * below stays authoritative for placement regardless. */
+    if (RandoLogic_IsLoaded()) {
+        RandoLogic_ClearOverrides();
+        for (uint32_t o = 0; o < rec->override_count; ++o) {
+            RandoLogic_SetOverride(rec->overrides[o].name, rec->overrides[o].value);
+        }
+        RandoLogic_Reparse();
+    }
+
     if (!Rando_ActivateTable(rec->seed, settings, rec->table, rec->count)) return false;
-    fprintf(stderr, "[RANDO] loaded sidecar slot %d (%u locations)\n", slot, rec->count);
+
+    /* Entrance assignments are generation-time state: re-inject them when the
+     * reparsed logic matches the parse the slot was saved under. */
+    if (RandoLogic_IsLoaded() && rec->entrance_count > 0) {
+        if (rec->logic_location_count == RandoLogic_GetLocationCountRaw()) {
+            RandoLogic_ClearEntranceAssignments();
+            for (uint32_t e = 0; e < rec->entrance_count; ++e) {
+                if (rec->entrances[e].subtype < 0) continue;
+                RandoLogic_RestoreEntranceAssignment(rec->entrances[e].location_index,
+                                                     rec->entrances[e].subtype);
+            }
+        } else {
+            fprintf(stderr,
+                    "[RANDO] warning: .logic changed since slot %d was saved "
+                    "(%u vs %u locations); entrance shuffle not restored\n",
+                    slot, rec->logic_location_count, RandoLogic_GetLocationCountRaw());
+        }
+    }
+    fprintf(stderr, "[RANDO] loaded sidecar slot %d (%u locations, %u overrides, %u entrances)\n",
+            slot, rec->count, rec->override_count, rec->entrance_count);
     return true;
 }
 
