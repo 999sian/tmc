@@ -695,7 +695,14 @@ static uint32_t ParseLocationKey(const char* field) {
     if (field == NULL) return UINT32_MAX;
     while (*field && isspace((unsigned char)*field)) ++field;
     if (sscanf(field, "%x-%x-%x", &a, &b, &c) == 3) {
-        return ((a & 0xffu) << 16) | ((b & 0xffu) << 8) | (c & 0xffu);
+        /* Components map to the engine's 8-bit (area, room, chest-index)
+         * identity. Masking an oversized component would alias an unrelated
+         * location, so reject the key instead (chest keeps vanilla reward). */
+        if (a > 0xffu || b > 0xffu || c > 0xffu) {
+            fprintf(stderr, "[rando] warning: location key '%s' exceeds 8-bit fields; ignored\n", field);
+            return UINT32_MAX;
+        }
+        return (a << 16) | (b << 8) | c;
     }
     return UINT32_MAX;
 }
@@ -764,6 +771,10 @@ static RandoLogicSetting* RecordSetting(const char* define, const char* label, R
     if (sSettingCount >= RANDO_LOGIC_MAX_SETTINGS || define == NULL || define[0] == '\0') return NULL;
     RandoLogicSetting* s = &sSettings[sSettingCount++];
     memset(s, 0, sizeof(*s));
+    if (strlen(define) >= sizeof(s->define)) {
+        /* Truncation breaks later override lookups, which match by full name. */
+        fprintf(stderr, "[rando] warning: setting name truncated: %s\n", define);
+    }
     CopyName(s->define, sizeof(s->define), define, strlen(define));
     CopyName(s->label, sizeof(s->label), label ? label : define, label ? strlen(label) : strlen(define));
     s->type = type;
@@ -799,6 +810,10 @@ static void ParseDropdownDirective(char* args) {
         CopyName(s->opt_value[s->option_count], sizeof(s->opt_value[0]), fields[i + 1], strlen(fields[i + 1]));
         if (chosen != NULL && strcmp(s->opt_value[s->option_count], chosen) == 0) s->option_index = s->option_count;
         s->option_count++;
+    }
+    if (s->option_count == RANDO_LOGIC_MAX_SETTING_OPTIONS && 7 + 3 * s->option_count + 1 < n) {
+        fprintf(stderr, "[rando] warning: dropdown '%s' has more than %d options; extras dropped\n",
+                s->define, RANDO_LOGIC_MAX_SETTING_OPTIONS);
     }
 }
 
