@@ -49,6 +49,11 @@ typedef struct RandoKeymapEntry {
     uint8_t flag; /* ItemOnGroundEntity.flag low byte (room entity data) */
 } RandoKeymapEntry;
 
+typedef struct RandoScriptedKeyEntry {
+    const char* location; /* .logic location name */
+    uint32_t key;         /* Rando_BuildScriptedKey(...) */
+} RandoScriptedKeyEntry;
+
 static const RandoKeymapEntry kGroundItemKeys[] = {
     /* --- Deepwood Shrine (area 0x48, EU+0x8C4) --------------------------- */
     /* USA rec 0x0DE6C4: GI HeartPiece flag 0x4F; EU 0x0DDE03+0x8C4=0x0DE6C7=rec+3 */
@@ -142,11 +147,66 @@ static const RandoKeymapEntry kGroundItemKeys[] = {
 
 #define RANDO_KEYMAP_COUNT (sizeof(kGroundItemKeys) / sizeof(kGroundItemKeys[0]))
 
-void Rando_Keymap_Apply(void) {
+static const RandoScriptedKeyEntry kScriptedKeys[] = {
+    /* --- Town shop / Stockwell ------------------------------------------ */
+    { "Town_Shop_80Item", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_80, 0, 0) },
+    { "Town_Shop_300Item", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_300, 0, 0) },
+    { "Town_Shop_600Item", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_600, 0, 0) },
+    { "Town_Shop_Extra600Item",
+      RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_EXTRA_600, 0, 0) },
+    { "Town_Shop_BehindCounterItem",
+      RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_DOGFOOD, 0, 0) },
+
+    /* --- Goron merchant ------------------------------------------------- */
+    { "Town_GoronMerchant_1_Left", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 0, 0, 0) },
+    { "Town_GoronMerchant_1_Middle", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 0, 1, 0) },
+    { "Town_GoronMerchant_1_Right", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 0, 2, 0) },
+    { "Town_GoronMerchant_2_Left", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 1, 0, 0) },
+    { "Town_GoronMerchant_2_Middle", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 1, 1, 0) },
+    { "Town_GoronMerchant_2_Right", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 1, 2, 0) },
+    { "Town_GoronMerchant_3_Left", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 2, 0, 0) },
+    { "Town_GoronMerchant_3_Middle", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 2, 1, 0) },
+    { "Town_GoronMerchant_3_Right", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 2, 2, 0) },
+    { "Town_GoronMerchant_4_Left", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 3, 0, 0) },
+    { "Town_GoronMerchant_4_Middle", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 3, 1, 0) },
+    { "Town_GoronMerchant_4_Right", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 3, 2, 0) },
+    { "Town_GoronMerchant_5_Left", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 4, 0, 0) },
+    { "Town_GoronMerchant_5_Middle", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 4, 1, 0) },
+    { "Town_GoronMerchant_5_Right", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 4, 2, 0) },
+
+    /* --- Dojo rewards (BladeBrothers_GetScroll timer index) ------------- */
+    { "Town_Dojo_NPC1", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 0, 0, 0) },
+    { "Town_Dojo_NPC2", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 1, 0, 0) },
+    { "Town_Dojo_NPC3", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 2, 0, 0) },
+    { "Town_Dojo_NPC4", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 3, 0, 0) },
+    { "Crenel_Dojo_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 4, 0, 0) },
+    { "Castle_Dojo_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 5, 0, 0) },
+    { "Hylia_Dojo_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 6, 0, 0) },
+    { "Swamp_Dojo_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 7, 0, 0) },
+    { "Swamp_WaterfallFusion_DojoNPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 8, 0, 0) },
+    { "FallsLower_WaterfallFusion_DojoNPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 9, 0, 0) },
+    { "NorthField_WaterfallFusion_DojoNPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 10, 0, 0) },
+
+    /* --- Cucco minigame rounds ------------------------------------------ */
+    { "Town_Cuccos_Lv_1_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 0, 0, 0) },
+    { "Town_Cuccos_Lv_2_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 1, 0, 0) },
+    { "Town_Cuccos_Lv_3_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 2, 0, 0) },
+    { "Town_Cuccos_Lv_4_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 3, 0, 0) },
+    { "Town_Cuccos_Lv_5_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 4, 0, 0) },
+    { "Town_Cuccos_Lv_6_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 5, 0, 0) },
+    { "Town_Cuccos_Lv_7_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 6, 0, 0) },
+    { "Town_Cuccos_Lv_8_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 7, 0, 0) },
+    { "Town_Cuccos_Lv_9_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 8, 0, 0) },
+    { "Town_Cuccos_Lv_10_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 9, 0, 0) },
+
+    /* --- Unique scripted item grants ------------------------------------ */
+    { "Town_Carlov_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0) },
+    { "Trilby_Scrub_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_BOTTLE, 0, 0) },
+    { "Crenel_Scrub_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_GRIP, 0, 0) },
+};
+
+static unsigned BindGroundItemKeys(void) {
     unsigned bound = 0;
-    if (!RandoLogic_IsLoaded()) {
-        return;
-    }
     for (unsigned i = 0; i < (unsigned)RANDO_KEYMAP_COUNT; ++i) {
         const RandoKeymapEntry* e = &kGroundItemKeys[i];
         uint32_t key = ((uint32_t)e->area << 16) | ((uint32_t)e->room << 8) | (uint32_t)e->flag;
@@ -154,6 +214,28 @@ void Rando_Keymap_Apply(void) {
             ++bound;
         }
     }
-    fprintf(stderr, "[RANDO] keymap: bound %u/%u ground-item locations\n", bound,
-            (unsigned)RANDO_KEYMAP_COUNT);
+    return bound;
+}
+
+static unsigned BindScriptedKeys(void) {
+    unsigned bound = 0;
+    for (unsigned i = 0; i < (unsigned)(sizeof(kScriptedKeys) / sizeof(kScriptedKeys[0])); ++i) {
+        if (RandoLogic_BindRuntimeKey(kScriptedKeys[i].location, kScriptedKeys[i].key)) {
+            ++bound;
+        }
+    }
+    return bound;
+}
+
+#define RANDO_KEYMAP_COUNT (sizeof(kGroundItemKeys) / sizeof(kGroundItemKeys[0]))
+
+void Rando_Keymap_Apply(void) {
+    if (!RandoLogic_IsLoaded()) {
+        return;
+    }
+    unsigned ground_bound = BindGroundItemKeys();
+    unsigned scripted_bound = BindScriptedKeys();
+    fprintf(stderr, "[RANDO] keymap: bound %u/%u ground-item + %u/%u scripted locations\n",
+            ground_bound, (unsigned)RANDO_KEYMAP_COUNT, scripted_bound,
+            (unsigned)(sizeof(kScriptedKeys) / sizeof(kScriptedKeys[0])));
 }

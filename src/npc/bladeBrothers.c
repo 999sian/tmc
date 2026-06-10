@@ -18,7 +18,10 @@
 #include "sound.h"
 #include "effects.h"
 #include "color.h"
-
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 fusionOffer;
@@ -390,8 +393,19 @@ void sub_08068C28(Entity* this) {
     }
 }
 
+#ifdef PC_PORT
+static uint32_t BladeBrothers_RandoKey(const Entity* this) {
+    return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_DOJO, this->timer, 0, 0);
+}
+#endif
+
 void BladeBrothers_GetScroll(Entity* this) {
-    InitItemGetSequence(gUnk_0811162B[this->timer] & 0xffffff7f, 0, 0);
+    u8 item = gUnk_0811162B[this->timer] & 0x7f;
+    u8 subtype = 0;
+#ifdef PC_PORT
+    (void)Rando_OverrideLocationKey(BladeBrothers_RandoKey(this), &item, &subtype);
+#endif
+    InitItemGetSequence(item, subtype, 0);
 }
 
 void sub_08068C8C(Entity* this, ScriptExecutionContext* context) {

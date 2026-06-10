@@ -57,10 +57,17 @@
   heart outline, tunic, split-tunic) as live color pickers with per-setting
   enable toggles; edits apply immediately to an active seed. Spoiler log now
   honors `:NoSpoiler` tags.
+- **Scripted reward location keys**: added a high-bit runtime-key namespace for
+  non-area/room rewards and threaded per-location overrides into Stockwell's
+  shop slots, Blade Brothers dojo rewards, Carlov's medal, Business Scrub item
+  sales, plus opt-in Goron Merchant sets and Cucco rounds. `rando_logic_test`
+  now asserts those bindings under both default and override settings, and the
+  headless repro probe rises from 206 keyed / 195 overridden to 222 keyed /
+  211 overridden at stock settings.
 - Honest remaining gaps documented in `port/rando/README.md`: `!import`
-  approximation (unused by default.logic), NPC/shop/dojo/fusion rewards
-  still on the global bijection, placement not byte-identical to the C#
-  PRNG by design.
+  approximation (unused by default.logic), remaining NPC-script / fusion
+  reward sites without stable native identities, and placement not
+  byte-identical to the C# PRNG by design.
 
 ### Fixed
 
