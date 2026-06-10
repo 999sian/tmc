@@ -1718,6 +1718,17 @@ static uint32_t ScriptCommand_RandoKeyForItem(const Entity* entity, u8 item) {
                         return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_WITCH_HUT, 0, 0);
                     }
                     break;
+                case DAMPE:
+                    if (item == ITEM_QST_GRAVEYARD_KEY) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DAMPE, 0, 0);
+                    }
+                    break;
+                case TOWN_MINISH:
+                    if (item == ITEM_RUPEE50 && entity->type2 == 0) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
+                                                      RANDO_SPECIAL_KEY_LIBRARY_YELLOW_MINISH, 0, 0);
+                    }
+                    break;
             }
             break;
         case OBJECT:
