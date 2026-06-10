@@ -26,6 +26,8 @@ enum {
 
 enum {
     RANDO_SPECIAL_KEY_CARLOV_MEDAL = 0,
+    RANDO_SPECIAL_KEY_DOG_BOTTLE = 1,
+    RANDO_SPECIAL_KEY_JABBER_NUT = 2,
 };
 
 enum {

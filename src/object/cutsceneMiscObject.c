@@ -23,7 +23,10 @@
 #include "scroll.h"
 #include "sound.h"
 #include "tiles.h"
-
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 extern u8 gUnk_08122AE0[];
 extern u16 gUnk_08122AE8[];
 extern s8 gUnk_08122AF8[]; // TODO struct s8XY
@@ -433,15 +436,22 @@ void CutsceneMiscObject_Type6(CutsceneMiscObjectEntity* this) {
             break;
         case 3:
             if (gPlayerEntity.base.action != PLAYER_EMPTYBOTTLE) {
+                u8 item = ITEM_BOTTLE1;
+                u8 subtype = 0;
                 super->action = 4;
+#ifdef PC_PORT
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DOG_BOTTLE, 0, 0), &item,
+                    &subtype);
+#endif
 #ifndef EU
                 if (!CheckGlobalFlag(BIN_DOGFOOD)) {
-                    CreateItemEntity(ITEM_BOTTLE1, 0, 0);
+                    CreateItemEntity(item, subtype, 0);
                     SetGlobalFlag(BIN_DOGFOOD);
                     super->timer = 60;
                 }
 #else
-                CreateItemEntity(ITEM_BOTTLE1, 0, 0);
+                CreateItemEntity(item, subtype, 0);
 #endif
             }
             break;
@@ -477,7 +487,14 @@ void CutsceneMiscObject_Type7(CutsceneMiscObjectEntity* this) {
             break;
         case 2:
             if ((gMessage.state & MESSAGE_ACTIVE) == 0) {
-                CreateItemEntity(ITEM_JABBERNUT, 0, 0);
+                u8 item = ITEM_JABBERNUT;
+                u8 subtype = 0;
+#ifdef PC_PORT
+                (void)Rando_OverrideLocationKey(
+                    Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_JABBER_NUT, 0, 0), &item,
+                    &subtype);
+#endif
+                CreateItemEntity(item, subtype, 0);
                 DeleteThisEntity();
             }
             break;
