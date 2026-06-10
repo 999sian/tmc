@@ -211,6 +211,15 @@ static void Port_UpdateInput(void) {
         Port_ReproRando_Tick(sFrameNum);
     }
 
+    /* Randomizer cosmetic palette overrides (tunic / heart colors from
+     * !eventdefine). Content-addressed gPaletteBuffer rewrite; runs before
+     * WaitForNextFrame()'s FadeVBlank() upload. No-op without an active
+     * seed. See port/rando/rando_cosmetic.cpp. */
+    {
+        extern void Rando_Cosmetic_Tick(void);
+        Rando_Cosmetic_Tick();
+    }
+
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
