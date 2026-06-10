@@ -153,11 +153,11 @@ Full-parity features (added in the 1:1 pass):
   three library books, Melari's broken-sword reward, the shoe-shop Pegasus
   Boots, the Witch Hut mushroom, the Bomb Minish bomb bag, Minish/Crenel/Valley
   Great Fairy rewards, Valley Dampe's graveyard key, Biggoron's mirror shield,
-  the library yellow-minish reward, the Deepwood/CoF/Droplets/Palace dungeon
-  prizes, and Business Scrub item sales by default (34 locations at stock
-  settings). With `GORON_5` + `VANILLA_BLUE_FUSIONS` +
-  `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` + `CUCCO_10`, 63/64 scripted
-  locations bind in the real-file diagnostic;
+  the library yellow-minish reward, the Town Cafe lady kinstone, the Crypt
+  prize, the Deepwood/CoF/Droplets/Palace dungeon prizes, and Business Scrub
+  item sales by default (36 locations at stock settings). With `GORON_5` +
+  `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` +
+  `CUCCO_10`, 65/66 scripted locations bind in the real-file diagnostic;
 - **same-item subtype overrides**: external logic no longer loses placements
   whose native engine item id matches the vanilla reward but whose subtype is
   different. `RandoLogic_Generate` now emits a per-location subtype table
@@ -174,10 +174,9 @@ NOT yet at full parity (honest gaps):
   unused by the real `default.logic`);
 - per-location keyed hooks are still missing for the remaining NPC-script and
   fusion reward sites whose grant callsites do not yet expose a stable native
-  identity (Bomb Minish remote-bombs outside the red-fusion setting, crypt
-  prize, sanctuary pedestal items, direct fusion-item grants / similar one-off
-  scripts). Those locations still randomize via the global
-  `Rando_OverrideItem` bijection;
+  identity (Bomb Minish remote-bombs outside the red-fusion setting, sanctuary
+  pedestal items, direct fusion-item grants / similar one-off scripts). Those
+  locations still randomize via the global `Rando_OverrideItem` bijection;
 - placement is feature-identical but not byte-identical to the C# shuffler
   (different PRNG by clean-room design — same seed text gives a different,
   equally-valid arrangement);
@@ -191,10 +190,10 @@ Validated against the actual MinishMaker `default.logic` (set
 `TMC_RANDO_LOGIC=path`; `rando_logic_test` then asserts it). The full file's
 `[gen]` placement traces. In-game, the runtime hooks resolve to the logic's
 location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
-set) probes 240 keyed locations at default settings (161 chests + 45 ground
-items from `rando_keymap.c` + 34 scripted rewards from the high-bit runtime
-namespace); 154 chest keys match real engine chest TileEntities (all 154
-key-resolve through the runtime `Rando_RoomChestIndex` path) and 239
+set) probes 242 keyed locations at default settings (161 chests + 45 ground
+items from `rando_keymap.c` + 36 scripted rewards from the high-bit runtime
+namespace); 156 chest keys match real engine chest TileEntities (all 156
+key-resolve through the runtime `Rando_RoomChestIndex` path) and 241
 locations receive their `.logic`-placed item at the title-screen probe frame
 (more at actual play time, once distant areas are resolved). The harness also
 confirms a real-logic seed survives a sidecar save/reset/reload round-trip
@@ -210,10 +209,9 @@ full parity):
   heart pieces/containers, subtyped `BigKey`/`SmallKey`/`Compass`/`DungeonMap`,
   butterflies, progressive bases, …); the remaining ~20 are non-reward symbols
   (kinstone fusions, figurines, music, entrance/trap dummies) that leave their
-  vanilla reward in place. At default settings 239/240 keyed locations
+  vanilla reward in place. At default settings 241/242 keyed locations
   override at the probe frame; the rest hold placements that keep their
   vanilla reward.
-
 ## Build / test
 
 ```bash
