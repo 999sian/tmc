@@ -117,10 +117,12 @@ uint32_t Rando_GetSeed(void);
 uint64_t Rando_GetSeed64(void);
 RandomizerSettings Rando_GetSettings(void);
 const uint16_t* Rando_GetRandomizedItemTable(void);
+const uint8_t* Rando_GetRandomizedItemSubtypeTable(void);
 size_t Rando_GetLocationCount(void);
 const RandoLocationDef* Rando_GetLocationDef(RandoLocationId id);
 uint16_t Rando_ResolveLocationItem(RandoLocationId location, uint16_t vanilla_item);
-bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table, size_t count);
+bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table, const uint8_t* subtype_table,
+                         size_t count);
 
 bool Rando_VerifyCurrentSeed(void);
 

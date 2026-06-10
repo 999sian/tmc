@@ -157,6 +157,12 @@ Full-parity features (added in the 1:1 pass):
   (30 locations at stock settings). With `GORON_5` +
   `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` +
   `CUCCO_10`, 59/60 scripted locations bind in the real-file diagnostic;
+- **same-item subtype overrides**: external logic no longer loses placements
+  whose native engine item id matches the vanilla reward but whose subtype is
+  different. `RandoLogic_Generate` now emits a per-location subtype table
+  (shell counts, kinstone piece ids, dungeon item ids), `Rando_OverrideLocationKey`
+  compares both item and subtype, and sidecar v4 persists those subtypes across
+  save/reload;
 - **spoiler log** honors `:NoSpoiler` tags; the F8 tab exposes `!color`
   settings as live color pickers (override string = comma-separated RGB555
   hex, the same format `ParseColorDirective` consumes).
@@ -190,7 +196,7 @@ location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
 set) probes 236 keyed locations at default settings (161 chests + 45 ground
 items from `rando_keymap.c` + 30 scripted rewards from the high-bit runtime
 namespace); 154 chest keys match real engine chest TileEntities (all 154
-key-resolve through the runtime `Rando_RoomChestIndex` path) and 225
+key-resolve through the runtime `Rando_RoomChestIndex` path) and 235
 locations receive their `.logic`-placed item at the title-screen probe frame
 (more at actual play time, once distant areas are resolved). The harness also
 confirms a real-logic seed survives a sidecar save/reset/reload round-trip
@@ -206,7 +212,7 @@ full parity):
   heart pieces/containers, subtyped `BigKey`/`SmallKey`/`Compass`/`DungeonMap`,
   butterflies, progressive bases, …); the remaining ~20 are non-reward symbols
   (kinstone fusions, figurines, music, entrance/trap dummies) that leave their
-  vanilla reward in place. At default settings 225/236 keyed locations
+  vanilla reward in place. At default settings 235/236 keyed locations
   override at the probe frame; the rest hold placements that keep their
   vanilla reward.
 

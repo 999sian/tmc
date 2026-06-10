@@ -126,6 +126,7 @@ typedef struct SplitMix64 {
 
 extern "C" {
 uint16_t randomized_item_table[RANDO_LOCATION_COUNT];
+uint8_t randomized_item_subtype_table[RANDO_LOCATION_COUNT];
 }
 
 static uint16_t sCompatibilityRemap[256];
@@ -313,6 +314,7 @@ static void EnsureInitialized(void) {
     if (sInitialized) return;
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         randomized_item_table[i] = (i < (size_t)RANDO_LOCATION_BUILTIN_COUNT) ? kLocations[i].vanilla_item : (uint16_t)ITEM_NONE;
+        randomized_item_subtype_table[i] = 0;
     }
     for (size_t i = 0; i < RANDO_ARRAY_COUNT(sCompatibilityRemap); ++i) {
         sCompatibilityRemap[i] = (uint16_t)i;
@@ -521,10 +523,11 @@ static void BuildSpoiler(uint64_t seed, const RandomizerSettings* settings) {
 }
 
 static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* settings,
-                                const uint16_t* table, size_t count) {
+                                const uint16_t* table, const uint8_t* subtype_table, size_t count) {
     if (count > RANDO_LOCATION_COUNT) return RANDO_BAD_SETTINGS;
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         randomized_item_table[i] = (i < count) ? table[i] : (uint16_t)ITEM_NONE;
+        randomized_item_subtype_table[i] = (subtype_table != NULL && i < count) ? subtype_table[i] : 0;
     }
     sSettings = *settings;
     sSeed = seed;
@@ -588,6 +591,7 @@ extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed,
                                            uint64_t* out_seed) {
     RandomizerSettings local;
     uint16_t candidate[RANDO_LOCATION_COUNT];
+    uint8_t candidate_subtypes[RANDO_LOCATION_COUNT];
     RandoStatus last = RANDO_INTERNAL;
 
     EnsureInitialized();
@@ -605,12 +609,17 @@ extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed,
             uint64_t attempt_seed = seed + 0x9e3779b97f4a7c15ull * (uint64_t)attempt;
             for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
                 candidate[i] = (i < (size_t)RANDO_LOCATION_BUILTIN_COUNT) ? kLocations[i].vanilla_item : (uint16_t)ITEM_NONE;
+                candidate_subtypes[i] = 0;
             }
             last = RandoLogic_Generate(attempt_seed, &local, candidate, RANDO_LOCATION_COUNT, NULL);
             if (last == RANDO_OK) {
+                size_t loc_count = (size_t)RandoLogic_GetStats().location_count;
+                for (size_t i = 0; i < loc_count && i < RANDO_LOCATION_COUNT; ++i) {
+                    candidate_subtypes[i] = RandoLogic_GetGeneratedItemSubtype((uint32_t)i);
+                }
                 if (out_seed) *out_seed = seed;
                 sActiveExternalLogic = true;
-                RandoStatus activated = ActivateSeed(seed, &local, candidate, RandoLogic_GetStats().location_count);
+                RandoStatus activated = ActivateSeed(seed, &local, candidate, candidate_subtypes, loc_count);
                 return activated;
             }
         }
@@ -623,7 +632,7 @@ extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed,
         if (last == RANDO_OK) {
             if (out_seed) *out_seed = seed;
             sActiveExternalLogic = false;
-            return ActivateSeed(seed, &local, candidate, RANDO_LOCATION_BUILTIN_COUNT);
+            return ActivateSeed(seed, &local, candidate, NULL, RANDO_LOCATION_BUILTIN_COUNT);
         }
     }
 
@@ -641,6 +650,7 @@ extern "C" void Rando_Reset(void) {
     sActive = false;
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         randomized_item_table[i] = (i < (size_t)RANDO_LOCATION_BUILTIN_COUNT) ? kLocations[i].vanilla_item : (uint16_t)ITEM_NONE;
+        randomized_item_subtype_table[i] = 0;
     }
     sActiveLocationCount = (size_t)RANDO_LOCATION_BUILTIN_COUNT;
     for (size_t i = 0; i < RANDO_ARRAY_COUNT(sCompatibilityRemap); ++i) {
@@ -672,6 +682,11 @@ extern "C" const uint16_t* Rando_GetRandomizedItemTable(void) {
     EnsureInitialized();
     return randomized_item_table;
 }
+extern "C" const uint8_t* Rando_GetRandomizedItemSubtypeTable(void) {
+    EnsureInitialized();
+    return randomized_item_subtype_table;
+}
+
 
 extern "C" size_t Rando_GetLocationCount(void) {
     return sActiveLocationCount;
@@ -697,16 +712,26 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
     int loc = RandoLogic_FindLocationByKey(location_key);
     if (loc < 0 || (size_t)loc >= sActiveLocationCount) return false;
     uint16_t item = randomized_item_table[(size_t)loc];
+    uint8_t item_subtype = randomized_item_subtype_table[(size_t)loc];
     /* 0 = item not mapped to a native engine id -> leave the vanilla reward. */
-    if (item == 0 || item == *type || item > 0xffu) return false;
+    if (item == 0 || item > 0xffu) return false;
+    if (item == *type && (subtype == NULL || item_subtype == *subtype)) return false;
     *type = (uint8_t)item;
+    if (subtype != NULL) *subtype = item_subtype;
     return true;
 }
 
-extern "C" bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table, size_t count) {
+extern "C" bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
+                                    const uint8_t* subtype_table, size_t count) {
     EnsureInitialized();
-    sActiveExternalLogic = (count > RANDO_LOCATION_BUILTIN_COUNT);
-    return table != NULL && ActivateSeed(seed, &settings, table, count) == RANDO_OK;
+    /* Classify by whether a .logic file is loaded, NOT by location count.
+     * The old `count > RANDO_LOCATION_BUILTIN_COUNT` heuristic misclassified
+     * a small external .logic (<= builtin count) as built-in on reload,
+     * applying the wrong item bijection and breaking seed determinism across
+     * save/reload. Generation sets the flag directly; this reload path is the
+     * only caller, and LoadSlot reparses the .logic before this runs. */
+    sActiveExternalLogic = RandoLogic_IsLoaded();
+    return table != NULL && ActivateSeed(seed, &settings, table, subtype_table, count) == RANDO_OK;
 }
 
 extern "C" bool Rando_VerifyCurrentSeed(void) {

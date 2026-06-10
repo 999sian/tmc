@@ -68,6 +68,61 @@ static int run_logic_parser_test(RandomizerSettings settings) {
     Rando_Reset();
     return 1;
 }
+static int run_subtype_override_test(RandomizerSettings settings) {
+    static const char kLogicText[] =
+        "Items.Kinstone.RedE; Major;\n"
+        "Items.Shells.50; Major;\n"
+        "KinLoc; Major; 00-00-01; ;\n"
+        "ShellLoc; Major; 00-00-02; ;\n";
+    int kin_loc;
+    int shell_loc;
+    const uint16_t* table;
+    const uint8_t* subtypes;
+
+    if (!RandoLogic_LoadText(kLogicText, sizeof(kLogicText) - 1)) {
+        RandoLogicStats stats = RandoLogic_GetStats();
+        fprintf(stderr, "rando_test: subtype logic parse failed: %s\n", stats.error);
+        return 0;
+    }
+    if (!GenerateSeed(0x5eed1234u, settings) || !Rando_IsActive()) {
+        fprintf(stderr, "rando_test: subtype logic generation failed\n");
+        return 0;
+    }
+    kin_loc = RandoLogic_FindLocationByKey(0x000001u);
+    shell_loc = RandoLogic_FindLocationByKey(0x000002u);
+    if (kin_loc < 0 || shell_loc < 0) {
+        fprintf(stderr, "rando_test: subtype key lookup failed (%d, %d)\n", kin_loc, shell_loc);
+        RandoLogic_Reset();
+        Rando_Reset();
+        return 0;
+    }
+    table = Rando_GetRandomizedItemTable();
+    subtypes = Rando_GetRandomizedItemSubtypeTable();
+    for (int i = 0; i < 2; ++i) {
+        int loc = (i == 0) ? kin_loc : shell_loc;
+        uint8_t type = (uint8_t)table[loc];
+        uint8_t subtype = 0xFF;
+        if ((type != ITEM_KINSTONE && type != ITEM_SHELLS) || subtypes[loc] == 0) {
+            fprintf(stderr, "rando_test: subtype test expected shell/kinstone at loc %d, got type=0x%02X sub=%u\n",
+                    loc, type, (unsigned)subtypes[loc]);
+            RandoLogic_Reset();
+            Rando_Reset();
+            return 0;
+        }
+        if (!Rando_OverrideLocationKey((uint32_t)(loc + 1), &type, &subtype) ||
+            type != table[loc] || subtype != subtypes[loc]) {
+            fprintf(stderr,
+                    "rando_test: subtype override failed for loc %d (type=0x%02X/0x%02X sub=%u/%u)\n",
+                    loc, type, table[loc], (unsigned)subtype, (unsigned)subtypes[loc]);
+            RandoLogic_Reset();
+            Rando_Reset();
+            return 0;
+        }
+    }
+    RandoLogic_Reset();
+    Rando_Reset();
+    return 1;
+}
 
 static int item_at_key(uint32_t key) {
     uint8_t type = 0x99;
@@ -502,6 +557,9 @@ int main(void) {
     }
 
     if (!run_logic_parser_test(settings)) {
+        return 1;
+    }
+    if (!run_subtype_override_test(settings)) {
         return 1;
     }
     if (!run_engine_semantics_test()) {
