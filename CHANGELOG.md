@@ -68,8 +68,10 @@
   sets / Cucco rounds / Bomb Minish remote bombs. The real-file diagnostic now
   binds 30/60 scripted keys at stock settings and 59/60 under `GORON_5` +
   `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` +
-  `CUCCO_10`; the headless repro probe rises from 206 keyed / 195 overridden
-  to 236 keyed / 225 overridden at stock settings.
+  `CUCCO_10`; subtype-aware external rewards now persist shell counts,
+  kinstone piece ids, and dungeon-item ids through sidecar v4, and the
+  headless repro probe rises from 206 keyed / 195 overridden to 236 keyed /
+  235 overridden at stock settings.
 - Honest remaining gaps documented in `port/rando/README.md`: `!import`
   approximation (unused by default.logic), remaining NPC-script / fusion
   reward sites without stable native identities, and placement not
