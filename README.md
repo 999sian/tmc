@@ -72,7 +72,11 @@ cd dist/USA
 ./tmc_pc
 ```
 
-Saves are written to `tmc.sav` in the working directory.
+Saves are written to `tmc.sav` in the working directory, in the same byte
+order mGBA/VBA-M use — a Minish Cap `.sav` from those emulators can be dropped
+in as `tmc.sav` (and `tmc.sav` works in them, renamed to match the ROM).
+Saves created by older Picori builds are migrated automatically on first
+load; the original is kept as `tmc.sav.bak`.
 
 ### Dependencies
 
