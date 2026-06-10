@@ -255,11 +255,15 @@ static int WriteSlotToDisk(int slot) {
      * them and running the entity-update loop dereferences unmapped
      * memory. */
     const u64 entities_base = (u64)(uintptr_t)gEntities;
-    fwrite(&magic, sizeof(magic), 1, f);
-    fwrite(&version, sizeof(version), 1, f);
-    fwrite(&total, sizeof(total), 1, f);
-    fwrite(&saved_at, sizeof(saved_at), 1, f);
-    fwrite(&entities_base, sizeof(entities_base), 1, f);
+    if (fwrite(&magic, sizeof(magic), 1, f) != 1 ||
+        fwrite(&version, sizeof(version), 1, f) != 1 ||
+        fwrite(&total, sizeof(total), 1, f) != 1 ||
+        fwrite(&saved_at, sizeof(saved_at), 1, f) != 1 ||
+        fwrite(&entities_base, sizeof(entities_base), 1, f) != 1) {
+        fprintf(stderr, "[quicksave] header write failed for %s\n", path);
+        fclose(f);
+        return 0;
+    }
     const size_t written = fwrite(s->snapshot, 1, s->bytes, f);
     fclose(f);
     if (written != s->bytes) {
@@ -282,6 +286,7 @@ static int ReadSlotFromDisk(int slot) {
         fread(&version, sizeof(version), 1, f) != 1 ||
         fread(&total, sizeof(total), 1, f) != 1 ||
         fread(&saved_at, sizeof(saved_at), 1, f) != 1) {
+        fprintf(stderr, "[quicksave] short read on %s header, ignoring slot file\n", path);
         fclose(f);
         return 0;
     }
@@ -296,6 +301,7 @@ static int ReadSlotFromDisk(int slot) {
      * the current gEntities range. */
     if (version >= 2) {
         if (fread(&saved_entities_base, sizeof(saved_entities_base), 1, f) != 1) {
+            fprintf(stderr, "[quicksave] short read on %s v2 header, ignoring slot file\n", path);
             fclose(f);
             return 0;
         }
@@ -318,6 +324,7 @@ static int ReadSlotFromDisk(int slot) {
     const size_t got = fread(s->snapshot, 1, total, f);
     fclose(f);
     if (got != total) {
+        fprintf(stderr, "[quicksave] short read on %s (%zu/%u bytes), ignoring slot file\n", path, got, total);
         s->valid = 0;
         return 0;
     }

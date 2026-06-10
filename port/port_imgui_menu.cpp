@@ -1190,12 +1190,14 @@ static void DrawRibbonRandomizerTab(void) {
         FILE* f = std::fopen(src_rom, "rb");
         if (f) {
             std::fseek(f, 0xAC, SEEK_SET);
-            (void)std::fread(region, 1, 4, f);
+            const size_t got = std::fread(region, 1, 4, f);
             std::fclose(f);
-            if (std::strcmp(region, "BZME") == 0)       region_label = "USA (BZME)";
-            else if (std::strcmp(region, "BZMP") == 0)  region_label = "EU (BZMP)";
-            else if (std::strcmp(region, "BZMJ") == 0)  region_label = "JP (BZMJ) — not supported";
-            else                                        region_label = region;
+            if (got == 4) {
+                if (std::strcmp(region, "BZME") == 0)       region_label = "USA (BZME)";
+                else if (std::strcmp(region, "BZMP") == 0)  region_label = "EU (BZMP)";
+                else if (std::strcmp(region, "BZMJ") == 0)  region_label = "JP (BZMJ) — not supported";
+                else                                        region_label = region;
+            }
         }
     }
 

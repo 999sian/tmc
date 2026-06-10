@@ -170,8 +170,12 @@ static void ExtractPage(u32 page) {
 
     FILE* f = fopen(path, "wb");
     if (f) {
-        fwrite(&gRomData[offset], 1, size, f);
-        fclose(f);
+        const size_t wrote = fwrite(&gRomData[offset], 1, size, f);
+        const int closed = fclose(f);
+        if (wrote != size || closed != 0) {
+            fprintf(stderr, "WARNING: short write extracting %s (%zu/%u bytes); removing\n", path, wrote, size);
+            remove(path);
+        }
     }
 }
 
@@ -201,8 +205,11 @@ static int LoadExtractedPagesFrom(const char* dir) {
     }
 
 #ifdef _WIN32
-    char pattern[256];
-    snprintf(pattern, sizeof(pattern), "%s\\*.bin", dir);
+    char pattern[4096 + 16];
+    if (snprintf(pattern, sizeof(pattern), "%s\\*.bin", dir) >= (int)sizeof(pattern)) {
+        fprintf(stderr, "WARNING: rom_data dir path too long, skipping: %s\n", dir);
+        return 0;
+    }
     WIN32_FIND_DATAA fd;
     HANDLE hFind = FindFirstFileA(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE)
@@ -214,8 +221,11 @@ static int LoadExtractedPagesFrom(const char* dir) {
         if (offset >= gRomSize)
             continue;
 
-        char path[256];
-        snprintf(path, sizeof(path), "%s\\%s", dir, fd.cFileName);
+        char path[4096 + 280];
+        if (snprintf(path, sizeof(path), "%s\\%s", dir, fd.cFileName) >= (int)sizeof(path)) {
+            fprintf(stderr, "WARNING: rom_data path too long, skipping: %s\n", fd.cFileName);
+            continue;
+        }
         FILE* f = fopen(path, "rb");
         if (!f)
             continue;
@@ -224,8 +234,12 @@ static int LoadExtractedPagesFrom(const char* dir) {
         fseek(f, 0, SEEK_SET);
         if (offset + fsize > gRomSize)
             fsize = gRomSize - offset;
-        fread(&gRomData[offset], 1, fsize, f);
+        const size_t got = fread(&gRomData[offset], 1, fsize, f);
         fclose(f);
+        if (got != fsize) {
+            fprintf(stderr, "WARNING: short read on %s (%zu/%u bytes); skipping\n", path, got, fsize);
+            continue;
+        }
 
         /* Mark pages as extracted so we don't re-write them */
         u32 first_page = offset >> ROM_PAGE_SHIFT;
@@ -247,8 +261,11 @@ static int LoadExtractedPagesFrom(const char* dir) {
         if (offset >= gRomSize)
             continue;
 
-        char path[256];
-        snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
+        char path[4096 + 280];
+        if (snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name) >= (int)sizeof(path)) {
+            fprintf(stderr, "WARNING: rom_data path too long, skipping: %s\n", ent->d_name);
+            continue;
+        }
         FILE* f = fopen(path, "rb");
         if (!f)
             continue;
@@ -257,8 +274,12 @@ static int LoadExtractedPagesFrom(const char* dir) {
         fseek(f, 0, SEEK_SET);
         if (offset + fsize > gRomSize)
             fsize = gRomSize - offset;
-        fread(&gRomData[offset], 1, fsize, f);
+        const size_t got = fread(&gRomData[offset], 1, fsize, f);
         fclose(f);
+        if (got != fsize) {
+            fprintf(stderr, "WARNING: short read on %s (%zu/%u bytes); skipping\n", path, got, fsize);
+            continue;
+        }
 
         u32 first_page = offset >> ROM_PAGE_SHIFT;
         u32 last_page = (offset + fsize - 1) >> ROM_PAGE_SHIFT;
@@ -871,11 +892,15 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
             if (strchr(p, '/') || strchr(p, '\\'))
                 continue;
             char prefixed[4096 + 256];
-            snprintf(prefixed, sizeof(prefixed), "%s/%s", exeDir, p);
+            if (snprintf(prefixed, sizeof(prefixed), "%s/%s", exeDir, p) >= (int)sizeof(prefixed)) {
+                fprintf(stderr, "WARNING: exe-dir ROM path too long, skipping candidate %s\n", p);
+                continue;
+            }
             FILE* f = fopen(prefixed, "rb");
             if (f) {
-                if (foundPath)
-                    snprintf(foundPath, foundPathLen, "%s", prefixed);
+                if (foundPath &&
+                    snprintf(foundPath, foundPathLen, "%s", prefixed) >= foundPathLen)
+                    fprintf(stderr, "WARNING: ROM path truncated in foundPath (%s)\n", prefixed);
                 return f;
             }
         }
@@ -885,8 +910,9 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
     for (int i = 0; i < count; i++) {
         FILE* f = fopen(paths[i], "rb");
         if (f) {
-            if (foundPath)
-                snprintf(foundPath, foundPathLen, "%s", paths[i]);
+            if (foundPath &&
+                snprintf(foundPath, foundPathLen, "%s", paths[i]) >= foundPathLen)
+                fprintf(stderr, "WARNING: ROM path truncated in foundPath (%s)\n", paths[i]);
             return f;
         }
     }
@@ -938,6 +964,7 @@ static int LoadRomGaps(void) {
         return 0;
     }
     if (fread(&chunkCount, 4, 1, f) != 1) {
+        fprintf(stderr, "WARNING: %s truncated (missing chunk count); skipping gap data\n", usedPath);
         fclose(f);
         return 0;
     }
@@ -947,14 +974,20 @@ static int LoadRomGaps(void) {
     u32 totalBytes = 0;
     for (u32 i = 0; i < chunkCount; i++) {
         u32 offset, size;
-        if (fread(&offset, 4, 1, f) != 1 || fread(&size, 4, 1, f) != 1)
+        if (fread(&offset, 4, 1, f) != 1 || fread(&size, 4, 1, f) != 1) {
+            fprintf(stderr, "WARNING: %s truncated at chunk %u/%u header; aborting gap load\n",
+                    usedPath, i, chunkCount);
             break;
+        }
         if (offset + size > gRomSize) {
             fseek(f, (long)size, SEEK_CUR);
             continue;
         }
-        if (fread(&gRomData[offset], 1, size, f) != size)
+        if (fread(&gRomData[offset], 1, size, f) != size) {
+            fprintf(stderr, "WARNING: %s truncated in chunk %u/%u (offset 0x%X, %u bytes); aborting gap load\n",
+                    usedPath, i, chunkCount, offset, size);
             break;
+        }
         loaded++;
         totalBytes += size;
     }
@@ -1000,9 +1033,11 @@ void Port_LoadRom(const char* path) {
             u32 fileSize = (u32)ftell(f);
             fseek(f, 0, SEEK_SET);
 
+            int allocatedHere = 0;
             if (!gRomData) {
                 gRomSize = fileSize;
                 gRomData = (u8*)malloc(gRomSize);
+                allocatedHere = 1;
                 if (!gRomData) {
                     char msg[160];
                     snprintf(msg, sizeof(msg),
@@ -1013,12 +1048,27 @@ void Port_LoadRom(const char* path) {
                 }
             }
             if (fileSize <= gRomSize) {
-                fread(gRomData, 1, fileSize, f);
-                gRomSize = fileSize;
+                const size_t got = fread(gRomData, 1, fileSize, f);
+                if (got == (size_t)fileSize) {
+                    gRomSize = fileSize;
+                    romLoaded = 1;
+                } else {
+                    fprintf(stderr, "ERROR: short read on ROM %s (%zu/%u bytes); ignoring ROM file\n",
+                            usedPath, got, fileSize);
+                    if (allocatedHere) {
+                        free(gRomData);
+                        gRomData = NULL;
+                        gRomSize = 0;
+                    }
+                }
+            } else {
+                /* Oversized file with a pre-filled buffer: keep prior
+                 * behaviour (treated as loaded without re-reading). */
+                romLoaded = 1;
             }
             fclose(f);
-            romLoaded = 1;
-            fprintf(stderr, "ROM loaded: %u bytes (0x%X) from %s\n", gRomSize, gRomSize, usedPath);
+            if (romLoaded)
+                fprintf(stderr, "ROM loaded: %u bytes (0x%X) from %s\n", gRomSize, gRomSize, usedPath);
         }
     }
 
