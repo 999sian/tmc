@@ -29,8 +29,10 @@ extern int fileno(FILE*);
  * layout below requires bumping this version.
  * v2: per-slot .logic define overrides + entrance assignments, so a reloaded
  * seed restores its eventdefine context and entrance shuffle.
- * v3: per-slot per-area music assignments (MUSIC_RANDO). */
-#define RANDO_SIDECAR_VERSION 3u
+ * v3: per-slot per-area music assignments (MUSIC_RANDO).
+ * v4: per-location reward subtypes (shell counts, kinstone piece ids, dungeon
+ * item ids) so same-item placements restore exactly across reloads. */
+#define RANDO_SIDECAR_VERSION 4u
 #define RANDO_SIDECAR_MAX_OVERRIDES 64
 #define RANDO_SIDECAR_MAX_ENTRANCES 16
 #define RANDO_SIDECAR_MUSIC_AREAS 256
@@ -66,6 +68,7 @@ typedef struct RandoSidecarSlot {
     RandoSidecarEntrance entrances[RANDO_SIDECAR_MAX_ENTRANCES];
     int16_t music[RANDO_SIDECAR_MUSIC_AREAS]; /* per-area song id, -1 = vanilla */
     uint16_t table[RANDO_LOCATION_COUNT];
+    uint8_t subtype_table[RANDO_LOCATION_COUNT];
 } RandoSidecarSlot;
 
 typedef struct RandoSidecarFile {
@@ -218,6 +221,7 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
 
     RandoSidecarSlot* rec = &sSidecar.slots[slot];
     const uint16_t* table = Rando_GetRandomizedItemTable();
+    const uint8_t* subtype_table = Rando_GetRandomizedItemSubtypeTable();
     RandomizerSettings settings = Rando_GetSettings();
     size_t count = Rando_GetLocationCount();
     if (count > RANDO_LOCATION_COUNT) return false;
@@ -231,6 +235,7 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
     rec->seed = Rando_GetSeed64();
     rec->count = (uint32_t)count;
     memcpy(rec->table, table, count * sizeof(rec->table[0]));
+    memcpy(rec->subtype_table, subtype_table, count * sizeof(rec->subtype_table[0]));
 
     /* Persist the .logic define overrides this seed was generated under and
      * the generation-time entrance assignments — both are required to restore
@@ -301,7 +306,7 @@ bool Port_RandoSave_LoadSlot(int slot) {
         RandoLogic_Reparse();
     }
 
-    if (!Rando_ActivateTable(rec->seed, settings, rec->table, rec->count)) return false;
+    if (!Rando_ActivateTable(rec->seed, settings, rec->table, rec->subtype_table, rec->count)) return false;
 
     /* Entrance and music assignments are generation-time state: re-inject
      * them when the reparsed logic matches the parse the slot was saved
