@@ -89,6 +89,7 @@ Thumbs.db
 tags
 types_*.taghl
 *.zip
+*.bundle
 !calcrom.pl
 !sound/programmable_wave_samples/*.pcm
 _Deparsed_XSubs.pm
