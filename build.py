@@ -670,8 +670,10 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
             cli_path.chmod(cli_path.stat().st_mode | 0o111)
         ok(f"randomizer/  →  dist/{version}/randomizer/  ({cli_name})")
     else:
-        warn("build/pc/randomizer/ not found — F8 → Randomizer will be unavailable. "
-             "Install .NET 8 SDK and rerun `xmake build randomizer_cli`.")
+        warn("build/pc/randomizer/ not found — external CLI ROM generation "
+             "(debug menu) will be unavailable; the native F8 → Randomizer "
+             "works regardless. Install .NET 8 SDK and rerun "
+             "`xmake build randomizer_cli` to enable the CLI.")
 
     return dst_bin
 
