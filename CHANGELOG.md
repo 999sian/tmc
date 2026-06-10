@@ -39,10 +39,28 @@
   eventdefine evaluation (incl. RAND_INT determinism), entrance assignment
   recording. Full 882-location `default.logic` generation and the
   `TMC_REPRO_RANDO` harness (save/reload round-trip) stay green.
+- **Dropdown option-value flags** (parity bug fix): choosing a dropdown option
+  now defines the option's VALUE token as a flag, which is what the file's
+  `!ifdef - SMALL_KEYS_STANDARD` / `MUSIC_RANDO` branches key off — without
+  it, the keysanity define chains and music section were silently inert.
+- **Music shuffle** (`MUSIC_RANDO`): per-area BGM assignments generated from
+  the `Items.Music` pool, persisted in sidecar v3, applied at the engine's
+  single `queueBgm` reader. Same song-id space as the GBA sound enum;
+  out-of-range ids fall back to vanilla with a warning.
+- **Ground-item location keys**: 49 curated dungeon rupee/pot/underwater
+  locations (triple-verified against USA ROM room data) now resolve
+  per-location instead of via the global bijection — keyed coverage in the
+  repro probe rose from 161 to 206 locations. Also fixes the ground-item
+  hook running only inside the item-get-cutscene branch, which skipped
+  repeat-denomination rupee pickups.
+- **Cosmetics UI**: the F8 Randomizer tab exposes `!color` settings (heart,
+  heart outline, tunic, split-tunic) as live color pickers with per-setting
+  enable toggles; edits apply immediately to an active seed. Spoiler log now
+  honors `:NoSpoiler` tags.
 - Honest remaining gaps documented in `port/rando/README.md`: `!import`
-  approximation (unused by default.logic), non-chest precise-address hooks
-  (global bijection fallback), no music remap, placement not byte-identical
-  to the C# PRNG by design.
+  approximation (unused by default.logic), NPC/shop/dojo/fusion rewards
+  still on the global bijection, placement not byte-identical to the C#
+  PRNG by design.
 
 ### Improved
 
