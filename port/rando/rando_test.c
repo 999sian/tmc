@@ -441,7 +441,13 @@ static int run_real_logic_diagnostic(void) {
             "Droplets_Prize") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_PALACE_PRIZE, 0, 0),
-            "Palace_Prize")) {
+            "Palace_Prize") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CAFE_LADY, 0, 0),
+            "Town_CafeLady_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CRYPT_PRIZE, 0, 0),
+            "Crypt_Prize")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }
