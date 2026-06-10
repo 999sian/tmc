@@ -18,7 +18,9 @@
 #include "save.h"
 #include "port_scripts.h"
 #include "subtask.h"
-#ifndef EU
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 #endif
 
 #ifndef EU
@@ -174,10 +176,17 @@ void sub_0806528C(Entity* this) {
 
 void sub_080652B0(Entity* this) {
     if ((gMessage.state & MESSAGE_ACTIVE) == 0) {
+        u8 item = ITEM_QST_DOGFOOD;
+        u8 subtype = 0;
         this->subAction++;
         this->timer = 10;
         gRoomVars.animFlags = this->subtimer;
-        CreateItemEntity(ITEM_QST_DOGFOOD, 0, 0);
+#ifdef PC_PORT
+        (void)Rando_OverrideLocationKey(
+            Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_DOGFOOD, 0, 0),
+            &item, &subtype);
+#endif
+        CreateItemEntity(item, subtype, 0);
     }
 }
 
@@ -211,6 +220,25 @@ void sub_08065338(Entity* this) {
 void sub_08065368(StockwellEntity* this) {
     GetNextFrame(super);
 }
+
+#ifdef PC_PORT
+static uint32_t Stockwell_RandoKeyForItem(u32 item) {
+    switch (item) {
+        case ITEM_WALLET:
+            return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_80, 0, 0);
+        case ITEM_BOOMERANG:
+            return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_300, 0, 0);
+        case ITEM_LARGE_QUIVER:
+            return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_600, 0, 0);
+#ifndef EU
+        case ITEM_BOMBBAG:
+            return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_EXTRA_600, 0, 0);
+#endif
+        default:
+            return UINT32_MAX;
+    }
+}
+#endif
 
 void sub_08065370(Entity* this, ScriptExecutionContext* context) {
     u32 bVar1;
@@ -265,8 +293,18 @@ void sub_08065370(Entity* this, ScriptExecutionContext* context) {
     if (bVar1) {
         itemPrice = GetItemPrice(shopItemType);
         if (itemPrice <= gSave.stats.rupees) {
+            u8 item = (u8)shopItemType;
+            u8 subtype = gRoomVars.shopItemType2;
             ModRupees(-itemPrice);
-            InitItemGetSequence(shopItemType, gRoomVars.shopItemType2, 2);
+#ifdef PC_PORT
+            {
+                uint32_t key = Stockwell_RandoKeyForItem(shopItemType);
+                if (key != UINT32_MAX) {
+                    (void)Rando_OverrideLocationKey(key, &item, &subtype);
+                }
+            }
+#endif
+            InitItemGetSequence(item, subtype, 2);
             gRoomVars.shopItemType = 0;
             gRoomVars.shopItemType2 = 0;
             context->condition = 1;
