@@ -104,8 +104,6 @@ const char* ArchString() {
     return "x86_64";
 #elif defined(__aarch64__) || defined(_M_ARM64)
     return "aarch64";
-#elif defined(__i386__) || defined(_M_IX86)
-    return "i686";
 #else
     return "unknown";
 #endif

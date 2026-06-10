@@ -89,10 +89,9 @@ const char* BackendName(Backend b) {
  *
  * We load the DLL lazily so this binary still runs on Windows
  * boxes that don't have NVDA installed (we just fall back to
- * SAPI). 64-bit binaries need nvdaControllerClient64.dll;
- * 32-bit needs nvdaControllerClient32.dll. We also try the
- * plain name in case the user dropped the right one next to
- * tmc_pc.exe themselves.
+ * SAPI). Our 64-bit binary needs nvdaControllerClient64.dll;
+ * we also try the plain name in case the user dropped a copy
+ * next to tmc_pc.exe themselves.
  * ============================================================ */
 typedef int (__cdecl *PFN_nvdaController_testIfRunning)(void);
 typedef int (__cdecl *PFN_nvdaController_speakText)(const wchar_t*);
@@ -105,13 +104,11 @@ PFN_nvdaController_cancelSpeech  g_nvda_cancelSpeech  = nullptr;
 
 bool TryLoadNvda() {
     if (g_nvda_dll) return g_nvda_speakText != nullptr;
-    /* DLL search order matters — prefer the 64-bit name (matches
-     * our tmc_pc.exe target), then the 32-bit name (in case
-     * someone copied the wrong one), then the unversioned name
-     * (NVDA's installer drops it in NVDA's program-files dir but
-     * a developer might place a copy next to the binary). */
+    /* DLL search order matters — prefer the 64-bit name (the PC
+     * port is 64-bit only), then the unversioned name (NVDA's
+     * installer drops it in NVDA's program-files dir but a
+     * developer might place a copy next to the binary). */
     g_nvda_dll = LoadLibraryA("nvdaControllerClient64.dll");
-    if (!g_nvda_dll) g_nvda_dll = LoadLibraryA("nvdaControllerClient32.dll");
     if (!g_nvda_dll) g_nvda_dll = LoadLibraryA("nvdaControllerClient.dll");
     if (!g_nvda_dll) return false;
     g_nvda_testIfRunning = (PFN_nvdaController_testIfRunning)
