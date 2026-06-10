@@ -811,8 +811,7 @@ static void DrawRibbonProfilesTab(void) {
         if (!isDefault) {
             if (ImGui::Button("Rename")) {
                 sRenameRow = i;
-                std::strncpy(sRenameBuf[i], names[i], sizeof(sRenameBuf[i]) - 1);
-                sRenameBuf[i][sizeof(sRenameBuf[i]) - 1] = '\0';
+                snprintf(sRenameBuf[i], sizeof(sRenameBuf[i]), "%s", names[i]);
             }
             ImGui::SameLine();
             if (ImGui::Button("Delete")) sConfirmDeleteRow = i;
