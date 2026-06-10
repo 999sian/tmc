@@ -18,6 +18,10 @@
 #include "asm.h"
 #include "physics.h"
 #include "map.h"
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -494,8 +498,14 @@ void sub_0806D600(Entity* this, ScriptExecutionContext* context) {
 }
 
 void sub_0806D620(void) {
+    u8 item = ITEM_MIRROR_SHIELD;
+    u8 subtype = 0;
     SetInventoryValue(ITEM_SHIELD, 0);
-    InitItemGetSequence(ITEM_MIRROR_SHIELD, 0, 0);
+#ifdef PC_PORT
+    (void)Rando_OverrideLocationKey(
+        Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BIGGORON, 0, 0), &item, &subtype);
+#endif
+    InitItemGetSequence(item, subtype, 0);
 }
 
 void sub_0806D638(Entity* this) {
