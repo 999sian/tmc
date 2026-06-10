@@ -74,6 +74,16 @@ u64 DivAndModCombined(s32 num, s32 denom) {
 static void Port_UpdateInput(void) {
     u16 keyinput = 0x03FF;
 
+    /* Headless end-to-end randomizer check (TMC_REPRO_RANDO=1): drives the
+     * file-select overlay + generation + the engine item-override hooks and
+     * asserts items actually change. Runs BEFORE the overlay input mask so
+     * it can keep ticking (and push synthetic SDL events) while its own
+     * modal is open — the ImGui-keyboard stage depends on that. */
+    {
+        extern void Port_ReproRando_Tick(unsigned int frame);
+        Port_ReproRando_Tick(sFrameNum);
+    }
+
     {
         extern bool Port_DebugMenu_IsOpen(void);
         /* While either overlay is open, hold all GBA buttons released so
@@ -201,14 +211,6 @@ static void Port_UpdateInput(void) {
     {
         extern void Port_ReproCatPerson_Tick(unsigned int frame);
         Port_ReproCatPerson_Tick(sFrameNum);
-    }
-
-    /* Headless end-to-end randomizer check (TMC_REPRO_RANDO=1): drives the
-     * file-select overlay + generation + the engine item-override hooks and
-     * asserts items actually change. */
-    {
-        extern void Port_ReproRando_Tick(unsigned int frame);
-        Port_ReproRando_Tick(sFrameNum);
     }
 
     /* Randomizer cosmetic palette overrides (tunic / heart colors from

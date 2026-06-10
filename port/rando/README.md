@@ -169,13 +169,15 @@ Validated against the actual MinishMaker `default.logic` (set
 and the engine **generates a deterministic seed end-to-end with all 365 real
 locations verified reachable** (`!ensurereachability`) — the assumed-fill
 places every pooled item, filler covers the rest. `TMC_RANDO_DEBUG=1` adds
-`[gen]` placement traces. In-game, the runtime chest hooks resolve to the
-logic's chest identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
-set) confirms 144/161 keyed chests match real engine chests and 128 receive
-their `.logic`-placed item at the title-screen probe frame (more at actual play
-time, once distant areas are resolved). The harness also confirms a real-logic
-seed survives a sidecar save/reset/reload round-trip (chests stay randomized
-across save+restart).
+`[gen]` placement traces. In-game, the runtime hooks resolve to the logic's
+location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
+set) probes 206 keyed locations (161 chests + 45 ground items from
+`rando_keymap.c`); 144 chest keys match real engine chest TileEntities (all
+144 key-resolve through the runtime `Rando_RoomChestIndex` path) and 195
+locations receive their `.logic`-placed item at the title-screen probe frame
+(more at actual play time, once distant areas are resolved). The harness also
+confirms a real-logic seed survives a sidecar save/reset/reload round-trip
+(chests stay randomized across save+restart).
 
 Approximations still in effect (don't block beatable generation, but are not
 full parity):
@@ -187,8 +189,9 @@ full parity):
   heart pieces/containers, subtyped `BigKey`/`SmallKey`/`Compass`/`DungeonMap`,
   butterflies, progressive bases, …); the remaining ~20 are non-reward symbols
   (kinstone fusions, figurines, music, entrance/trap dummies) that leave their
-  vanilla reward in place. At default settings every keyed chest resolves to a
-  native item (probe: 161/161 keyed locations overridden).
+  vanilla reward in place. At default settings 195/206 keyed locations
+  override at the probe frame; the rest hold placements that keep their
+  vanilla reward.
 
 ## Build / test
 
@@ -205,24 +208,27 @@ xmake build -y tmc_pc
 
 End-to-end runtime check (drives the file-select overlay, generation, the
 `Rando_OverrideItem` give-item hook, and the `Rando_OverrideLocationKey`
-address hook, then asserts items actually change):
+address hook, then asserts items actually change; a second stage drives the
+real ImGui modal with synthetic SDL Return-key events through the live event
+pump and asserts the typed seed goes active):
 
 ```bash
 TMC_REPRO_RANDO=1 TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
   ./build/pc/tmc_pc --no-audio        # prints "[rando-repro] PASS", exits 0
 ```
 
-### Backend note (Resolved)
+### Backend note
 
-The file-select setup overlay draws via SDL_Renderer 2D primitives, so it only
-engages on the **software / SDL_Renderer** backend. The default `render_backend`
-is `auto`, which selects **SDL_GPU** whenever the platform supports it (most
-desktops, Steam Deck) — and the GPU/surface backends do not present these SDL
-primitives. To prevent a freeze (the overlay masking all input behind an
-undrawn menu), `Port_RandoFileMenu_ShouldOpenForNewFile()` checks
-`Port_PPU_OverlaysUseRenderer()` and only auto-opens on the SDL_Renderer
-backend; otherwise the new-file flow stays vanilla.
+The file-select setup modal is drawn by `port_imgui_menu.cpp`
+(`DrawRandoFileMenuModal`) inside the per-frame ImGui pass, so it presents on
+both the **SDL_Renderer** and **SDL_GPU** backends. Keyboard, mouse, and
+gamepad all work: Enter in the seed field (or with nothing focused) =
+generate & start, Esc / gamepad B = cancel, and the window clamps to the
+viewport so the action row stays reachable at small window scales.
 
-To use the file-select overlay, set `render_backend` to `software` in
-`config.json` (or the F8 renderer setting). On any backend, **F8 → Randomizer**
-rolls a seed and works because the F8 menu renders through ImGui on GPU too.
+The **surface fallback** backend never initialises ImGui, and the GPU device
+probe can fail — `Port_RandoFileMenu_ShouldOpenForNewFile()` therefore gates
+auto-open on `Port_ImGui_CanPresent()` and falls back to the vanilla new-file
+flow rather than opening an invisible modal over masked input (= softlock).
+`TMC_RANDO_FILE_MENU=0` is the explicit kill-switch. On any backend,
+**F8 → Randomizer** also rolls/configures seeds in-game.
