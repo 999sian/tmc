@@ -1758,6 +1758,26 @@ static inline void ScriptCommand_RandoOverrideItem(const Entity* entity, u8* ite
     }
 }
 #endif
+#ifdef PC_PORT
+static uint32_t ScriptCommand_RandoKeyForKinstone(const Entity* entity, u8 subtype) {
+    if (entity == NULL) return UINT32_MAX;
+    if (entity->kind != NPC) return UINT32_MAX;
+    switch (entity->id) {
+        case KING_GUSTAF:
+            if (subtype == 0x6D) {
+                return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CRYPT_PRIZE, 0, 0);
+            }
+            break;
+        case SITTING_PERSON:
+            if (subtype == 0x70) {
+                return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CAFE_LADY, 0, 0);
+            }
+            break;
+    }
+    return UINT32_MAX;
+}
+#endif
+
 
 void ScriptCommand_GivePlayerItem(Entity* entity, ScriptExecutionContext* context) {
     u8 item = context->scriptInstructionPointer[1];
@@ -1772,7 +1792,17 @@ void ScriptCommand_GivePlayerItem(Entity* entity, ScriptExecutionContext* contex
 }
 
 void ScriptCommand_GiveKinstone(Entity* entity, ScriptExecutionContext* context) {
-    InitItemGetSequence(0x5C, context->scriptInstructionPointer[1], 0);
+    u8 item = ITEM_KINSTONE;
+    u8 subtype = context->scriptInstructionPointer[1];
+#ifdef PC_PORT
+    {
+        uint32_t key = ScriptCommand_RandoKeyForKinstone(entity, subtype);
+        if (key != UINT32_MAX) {
+            (void)Rando_OverrideLocationKey(key, &item, &subtype);
+        }
+    }
+#endif
+    InitItemGetSequence(item, subtype, 0);
 }
 
 void ScriptCommand_GetInventoryValue(Entity* entity, ScriptExecutionContext* context) {
