@@ -67,6 +67,7 @@ void LightableSwitch_Type0(LightableSwitchEntity* this) {
 
 void LightableSwitch_Type0_Init(LightableSwitchEntity* this) {
     super->action = 1;
+    super->spriteSettings.draw = 1;
     COLLISION_ON(super);
     super->frameIndex = 0;
     super->collisionFlags = 7;
@@ -143,8 +144,8 @@ void LightableSwitch_Type1(LightableSwitchEntity* this) {
 }
 
 void LightableSwitch_Type1_Init(LightableSwitchEntity* this) {
-
     super->action = 1;
+    super->spriteSettings.draw = 1;
     COLLISION_ON(super);
     super->frameIndex = 3;
     super->collisionFlags = 7;
