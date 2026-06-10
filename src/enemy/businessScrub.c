@@ -18,7 +18,10 @@
 #include "tiles.h"
 #include "vram.h"
 #include "color.h"
-
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 struct SalesOffering {
     u8 field_0x0;
     u8 field_0x1;
@@ -265,6 +268,19 @@ void BusinessScrub_Action4(BusinessScrubEntity* this) {
     sub_08028F0C(this);
 }
 
+#ifdef PC_PORT
+static uint32_t BusinessScrub_RandoKey(const struct SalesOffering* offer) {
+    switch (offer->offeredItem) {
+        case ITEM_BOTTLE1:
+            return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_BOTTLE, 0, 0);
+        case ITEM_GRIP_RING:
+            return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_GRIP, 0, 0);
+        default:
+            return UINT32_MAX;
+    }
+}
+#endif
+
 void BusinessScrub_Action5(BusinessScrubEntity* this) {
     struct SalesOffering* offer = (struct SalesOffering*)this->unk_7c;
     u32 subtype;
@@ -278,13 +294,21 @@ void BusinessScrub_Action5(BusinessScrubEntity* this) {
             } else {
                 ModRupees(-offer->price);
                 switch (offer->field_0x0 >> 2) {
-                    case 0: // random kinstone
+                    case 0: { // random kinstone
+                        u8 item = offer->offeredItem;
                         subtype = offer->item_subtype;
                         if (subtype == KINSTONE_RANDOM) {
                             subtype = kinstoneTypes[Random() & 7];
                         }
-
-                        CreateItemEntity(offer->offeredItem, subtype, 0);
+#ifdef PC_PORT
+                        {
+                            uint32_t key = BusinessScrub_RandoKey(offer);
+                            if (key != UINT32_MAX) {
+                                (void)Rando_OverrideLocationKey(key, &item, (u8*)&subtype);
+                            }
+                        }
+#endif
+                        CreateItemEntity(item, subtype, 0);
 
                         super->action = 6;
                         super->timer = 4;
@@ -294,16 +318,39 @@ void BusinessScrub_Action5(BusinessScrubEntity* this) {
                         SetLocalFlag(KS_B06);
 #endif
                         return;
-                    case 1: // refill, bottle, specific kinstone
-                        CreateItemEntity(offer->offeredItem, offer->item_subtype, 0);
+                    }
+                    case 1: { // refill, bottle, specific kinstone
+                        u8 item = offer->offeredItem;
+                        u8 itemSubtype = offer->item_subtype;
+#ifdef PC_PORT
+                        {
+                            uint32_t key = BusinessScrub_RandoKey(offer);
+                            if (key != UINT32_MAX) {
+                                (void)Rando_OverrideLocationKey(key, &item, &itemSubtype);
+                            }
+                        }
+#endif
+                        CreateItemEntity(item, itemSubtype, 0);
                         super->timer = 4;
                         sub_0802922C(this);
                         return;
-                    case 2: // grip ring
-                        CreateItemEntity(offer->offeredItem, offer->item_subtype, 0);
+                    }
+                    case 2: { // grip ring
+                        u8 item = offer->offeredItem;
+                        u8 itemSubtype = offer->item_subtype;
+#ifdef PC_PORT
+                        {
+                            uint32_t key = BusinessScrub_RandoKey(offer);
+                            if (key != UINT32_MAX) {
+                                (void)Rando_OverrideLocationKey(key, &item, &itemSubtype);
+                            }
+                        }
+#endif
+                        CreateItemEntity(item, itemSubtype, 0);
                         super->timer = 8;
                         sub_0802922C(this);
                         return;
+                    }
                 }
             }
         } else {

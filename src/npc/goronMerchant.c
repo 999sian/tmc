@@ -13,7 +13,10 @@
 #include "save.h"
 #include "script.h"
 #include "physics.h"
-
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 static u32 GoronMerchant_GetSalePrice(Entity*);
 
 extern void (*const gUnk_08111B88[])(Entity*);
@@ -137,12 +140,51 @@ static u32 GoronMerchant_GetSalePrice(Entity* this) {
     return sKinstonePrices[restockCount * 3 + kinstoneType];
 }
 
+#ifdef PC_PORT
+static uint8_t GoronMerchant_GetRestockLevel(void) {
+    uint8_t restockCount = 0;
+    if (CheckGlobalFlag(GORON_KAKERA_LV2)) {
+        restockCount = 1;
+    }
+    if (CheckGlobalFlag(GORON_KAKERA_LV3)) {
+        restockCount = 2;
+    }
+    if (CheckGlobalFlag(GORON_KAKERA_LV4)) {
+        restockCount = 3;
+    }
+    if (CheckGlobalFlag(GORON_KAKERA_LV5)) {
+        restockCount = 4;
+    }
+    return restockCount;
+}
+
+static uint8_t GoronMerchant_GetSlotFromSubtype(uint8_t subtype) {
+    if (subtype <= 0x70) {
+        return 0;
+    }
+    if (subtype <= 0x72) {
+        return 1;
+    }
+    return 2;
+}
+#endif
+
 void GoronMerchant_TryToBuyKinstone(Entity* this, ScriptExecutionContext* context) {
     s32 salePrice = GoronMerchant_GetSalePrice(this);
     if (salePrice <= gSave.stats.rupees) {
         if (GetAmountInKinstoneBag(gRoomVars.shopItemType2) < 99) {
+            u8 item = ITEM_KINSTONE;
+            u8 subtype = gRoomVars.shopItemType2;
             ModRupees(-salePrice);
-            InitItemGetSequence(ITEM_KINSTONE, gRoomVars.shopItemType2, 0);
+#ifdef PC_PORT
+            {
+                uint32_t key = Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_GORON_MERCHANT,
+                                                      GoronMerchant_GetRestockLevel(),
+                                                      GoronMerchant_GetSlotFromSubtype(subtype), 0);
+                (void)Rando_OverrideLocationKey(key, &item, &subtype);
+            }
+#endif
+            InitItemGetSequence(item, subtype, 0);
             gRoomVars.shopItemType = 0;
             gRoomVars.shopItemType2 = 0;
             context->condition = 1;

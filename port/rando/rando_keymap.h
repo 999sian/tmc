@@ -1,17 +1,54 @@
 #ifndef PORT_RANDO_KEYMAP_H
 #define PORT_RANDO_KEYMAP_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Bind curated native runtime keys (area<<16 | room<<8 | groundItemFlag) onto
- * the .logic ground-item locations that only carry MinishMaker EU-ROM patch
- * addresses. Idempotent per parse: RandoLogic_BindRuntimeKey fills empty keys
- * only, and a reparse clears them, so this runs after every successful
- * parse+activate. Locations not in the table keep the global-bijection
- * fallback. */
+enum {
+    RANDO_SCRIPTED_KEY_STOCKWELL = 1,
+    RANDO_SCRIPTED_KEY_GORON_MERCHANT = 2,
+    RANDO_SCRIPTED_KEY_DOJO = 3,
+    RANDO_SCRIPTED_KEY_CUCCO = 4,
+    RANDO_SCRIPTED_KEY_SPECIAL = 5,
+    RANDO_SCRIPTED_KEY_SCRUB = 6,
+};
+
+enum {
+    RANDO_STOCKWELL_SLOT_80 = 0,
+    RANDO_STOCKWELL_SLOT_300 = 1,
+    RANDO_STOCKWELL_SLOT_600 = 2,
+    RANDO_STOCKWELL_SLOT_EXTRA_600 = 3,
+    RANDO_STOCKWELL_SLOT_DOGFOOD = 4,
+};
+
+enum {
+    RANDO_SPECIAL_KEY_CARLOV_MEDAL = 0,
+};
+
+enum {
+    RANDO_SCRUB_KEY_BOTTLE = 0,
+    RANDO_SCRUB_KEY_GRIP = 1,
+};
+
+/* Bind curated native runtime keys onto .logic locations that only carry
+ * MinishMaker EU-ROM patch addresses. This includes:
+ *   - ground items keyed by area-room-flag
+ *   - scripted grant sites keyed in the high-bit runtime namespace below
+ * Reparse clears bindings; this is rerun after every successful generation. */
 void Rando_Keymap_Apply(void);
+
+/* Scripted-grant runtime namespace. Vanilla chest / ground-item keys fit in
+ * 24 bits; precise .logic ROM-address keys do too. Reserve bit 31 for native
+ * location identities that do not correspond to an area-room-local triple. */
+#define RANDO_SCRIPTED_KEY(group, a, b, c) \
+    (0x80000000u | ((uint32_t)(group) << 24) | ((uint32_t)(a) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(c))
+
+static inline uint32_t Rando_BuildScriptedKey(uint8_t group, uint8_t a, uint8_t b, uint8_t c) {
+    return RANDO_SCRIPTED_KEY(group, a, b, c);
+}
 
 #ifdef __cplusplus
 }

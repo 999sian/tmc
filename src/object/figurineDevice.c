@@ -20,7 +20,10 @@
 #include "script.h"
 #include "subtask.h"
 #include "tiles.h"
-
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[0x10];
@@ -811,9 +814,16 @@ void FigurineDevice_LostOrFinishedMessage(void) {
             gMessage.textWindowPosY = 12;
         }
     } else if (gSave.stats._hasAllFigurines != 0) {
+        u8 item = ITEM_QST_CARLOV_MEDAL;
+        u8 subtype = 0;
         // GOT ALL THEM FIGURINES (:
         gSave.stats.hasAllFigurines = 1;
-        CreateItemEntity(ITEM_QST_CARLOV_MEDAL, 0, 0);
+#ifdef PC_PORT
+        (void)Rando_OverrideLocationKey(
+            Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0), &item,
+            &subtype);
+#endif
+        CreateItemEntity(item, subtype, 0);
         SetGlobalFlag(FIGURE_ALLCOMP);
     }
     ClearRoomFlag(8);

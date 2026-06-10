@@ -20,6 +20,8 @@
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
 #include "port_rom.h"
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 #endif
 
 typedef struct {
@@ -215,7 +217,8 @@ void CuccoMinigame_Results(CuccoMinigameEntity* this, ScriptExecutionContext* co
 
 void CuccoMinigame_WinItem(CuccoMinigameEntity* this) {
     bool32 skipItem;
-    const CuccoMinigamePrizeData* prize = &prizeData[CuccoMinigame_GetLevel()];
+    u8 level = (u8)CuccoMinigame_GetLevel();
+    const CuccoMinigamePrizeData* prize = &prizeData[level];
 
     skipItem = 0;
     switch (prize->item) {
@@ -239,7 +242,13 @@ void CuccoMinigame_WinItem(CuccoMinigameEntity* this) {
     }
 
     if (!skipItem) {
-        InitItemGetSequence(prize->item, prize->subtype, 0);
+        u8 item = prize->item;
+        u8 subtype = prize->subtype;
+#ifdef PC_PORT
+        uint32_t key = Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_CUCCO, level, 0, 0);
+        (void)Rando_OverrideLocationKey(key, &item, &subtype);
+#endif
+        InitItemGetSequence(item, subtype, 0);
     } else {
         this->unk6e = 2;
     }

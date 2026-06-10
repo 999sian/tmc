@@ -1,5 +1,6 @@
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
+#include "rando/rando_keymap.h"
 #include "item_ids.h"
 
 #include <stdint.h>
@@ -73,6 +74,20 @@ static int item_at_key(uint32_t key) {
     uint8_t sub = 0;
     if (!Rando_OverrideLocationKey(key, &type, &sub)) return -1;
     return (int)type;
+}
+
+static int expect_bound_location(uint32_t key, const char* want_name) {
+    int idx = RandoLogic_FindLocationByKey(key);
+    if (idx < 0) {
+        fprintf(stderr, "[real] FAIL: key 0x%08X not bound\n", key);
+        return 0;
+    }
+    const char* got = RandoLogic_GetLocationName((uint32_t)idx);
+    if (got == NULL || strcmp(got, want_name) != 0) {
+        fprintf(stderr, "[real] FAIL: key 0x%08X bound to %s, expected %s\n", key, got ? got : "(null)", want_name);
+        return 0;
+    }
+    return 1;
 }
 
 /* Exercises the documented placement semantics:
@@ -310,6 +325,39 @@ static int run_real_logic_diagnostic(void) {
         return 0;
     }
     fprintf(stderr, "[real] OK: deterministic beatable seed over %u locations\n", (unsigned)lc);
+    if (!expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_80, 0, 0),
+            "Town_Shop_80Item") ||
+        !expect_bound_location(RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_DOJO, 4, 0, 0),
+                               "Crenel_Dojo_NPC") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0),
+            "Town_Carlov_NPC")) {
+        RandoLogic_Reset(); Rando_Reset();
+        return 0;
+    }
+    fprintf(stderr, "[real] OK: default scripted runtime keys bound for stockwell/dojo/special rewards\n");
+    RandoLogic_SetOverride("GORON_SETTING", "GORON_5");
+    RandoLogic_SetOverride("BLUE_FUSION_SETTING", "VANILLA_BLUE_FUSIONS");
+    RandoLogic_SetOverride("CUCCO_SETTING", "CUCCO_10");
+    if (!RandoLogic_Reparse() || !GenerateSeed(0xC0FFEEu, s) || !Rando_IsActive() ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_GORON_MERCHANT, 0, 0, 0),
+            "Town_GoronMerchant_1_Left") ||
+        !expect_bound_location(RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_CUCCO, 9, 0, 0),
+                               "Town_Cuccos_Lv_10_NPC")) {
+        RandoLogic_Reset(); Rando_Reset();
+        return 0;
+    }
+    fprintf(stderr, "[real] OK: opt-in scripted runtime keys bound for goron + cucco rewards\n");
+    RandoLogic_ClearOverrides();
+    RandoLogic_Reparse();
+    if (!GenerateSeed(0xC0FFEEu, s) || !Rando_IsActive()) {
+        fprintf(stderr, "[real] FAIL: restore after scripted-key override check failed\n");
+        RandoLogic_Reset(); Rando_Reset();
+        return 0;
+    }
+    fprintf(stderr, "[real] OK: scripted runtime keys bound for shop/goron/dojo/cucco/special rewards\n");
     /* MUSIC_RANDO: enabling the flag must yield per-area music assignments
      * (the 192 Area%xMusic locations + Items.Music pool), and they must be
      * deterministic per seed. Default settings must yield none. */
