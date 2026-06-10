@@ -9,6 +9,7 @@
 
 #include "rando.h"
 #include "rando_logic.h"
+#include "rando_keymap.h"
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -502,6 +503,9 @@ static void BuildSpoiler(uint64_t seed, const RandomizerSettings* settings) {
         for (size_t i = 0; i < sActiveLocationCount; ++i) {
             uint16_t item = randomized_item_table[i];
             if (item == ITEM_NONE) continue; /* unmapped -> vanilla, skip */
+            /* MinishMaker parity: locations tagged :NoSpoiler never appear in
+             * the spoiler log (192 area-music slots, fake dojos, ...). */
+            if (RandoLogic_LocationHasTagName((uint32_t)i, "NoSpoiler")) continue;
             SpoilerAppend(&pos, "%-40s : %s\n", RandoLogic_GetLocationName((uint32_t)i), ItemName(item));
         }
         return;
@@ -526,6 +530,11 @@ static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* setting
     sSeed = seed;
     sActive = true;
     sActiveLocationCount = count;
+    /* Re-bind curated ground-item runtime keys: every activation follows the
+     * most recent .logic parse (generation, sidecar restore after Reparse),
+     * and a reparse clears bound keys, so this is the single point that keeps
+     * address-only locations keyed. No-op when no logic file is loaded. */
+    Rando_Keymap_Apply();
     BuildCompatibilityRemap();
     BuildSpoiler(seed, settings);
     fprintf(stderr, "[RANDO] seed %llu generated (%s logic, %s pool, %zu locations)\n",

@@ -20,10 +20,12 @@
  * (see Rando_RoomChestIndex). ANY change to that encoding or to the slot
  * layout below requires bumping this version.
  * v2: per-slot .logic define overrides + entrance assignments, so a reloaded
- * seed restores its eventdefine context and entrance shuffle. */
-#define RANDO_SIDECAR_VERSION 2u
+ * seed restores its eventdefine context and entrance shuffle.
+ * v3: per-slot per-area music assignments (MUSIC_RANDO). */
+#define RANDO_SIDECAR_VERSION 3u
 #define RANDO_SIDECAR_MAX_OVERRIDES 64
 #define RANDO_SIDECAR_MAX_ENTRANCES 16
+#define RANDO_SIDECAR_MUSIC_AREAS 256
 
 static const char kMagic[8] = { 'T', 'M', 'C', 'R', 'N', 'D', 'O', '1' };
 
@@ -54,6 +56,7 @@ typedef struct RandoSidecarSlot {
     uint32_t count;
     RandoSidecarOverride overrides[RANDO_SIDECAR_MAX_OVERRIDES];
     RandoSidecarEntrance entrances[RANDO_SIDECAR_MAX_ENTRANCES];
+    int16_t music[RANDO_SIDECAR_MUSIC_AREAS]; /* per-area song id, -1 = vanilla */
     uint16_t table[RANDO_LOCATION_COUNT];
 } RandoSidecarSlot;
 
@@ -207,6 +210,9 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
             rec->entrances[rec->entrance_count].subtype = (int16_t)e;
             rec->entrance_count++;
         }
+        for (uint32_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) {
+            rec->music[a] = (int16_t)RandoLogic_GetMusicAssignment(a);
+        }
     }
 
     if (!SaveAll()) return false;
@@ -244,9 +250,11 @@ bool Port_RandoSave_LoadSlot(int slot) {
 
     if (!Rando_ActivateTable(rec->seed, settings, rec->table, rec->count)) return false;
 
-    /* Entrance assignments are generation-time state: re-inject them when the
-     * reparsed logic matches the parse the slot was saved under. */
-    if (RandoLogic_IsLoaded() && rec->entrance_count > 0) {
+    /* Entrance and music assignments are generation-time state: re-inject
+     * them when the reparsed logic matches the parse the slot was saved
+     * under. Music is keyed by area id, so it is safe regardless, but keep
+     * the single fingerprint gate for consistency. */
+    if (RandoLogic_IsLoaded()) {
         if (rec->logic_location_count == RandoLogic_GetLocationCountRaw()) {
             RandoLogic_ClearEntranceAssignments();
             for (uint32_t e = 0; e < rec->entrance_count; ++e) {
@@ -254,10 +262,14 @@ bool Port_RandoSave_LoadSlot(int slot) {
                 RandoLogic_RestoreEntranceAssignment(rec->entrances[e].location_index,
                                                      rec->entrances[e].subtype);
             }
-        } else {
+            RandoLogic_ClearMusicAssignments();
+            for (uint32_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) {
+                if (rec->music[a] >= 0) RandoLogic_RestoreMusicAssignment(a, rec->music[a]);
+            }
+        } else if (rec->entrance_count > 0) {
             fprintf(stderr,
                     "[RANDO] warning: .logic changed since slot %d was saved "
-                    "(%u vs %u locations); entrance shuffle not restored\n",
+                    "(%u vs %u locations); entrance/music shuffle not restored\n",
                     slot, rec->logic_location_count, RandoLogic_GetLocationCountRaw());
         }
     }

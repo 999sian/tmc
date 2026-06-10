@@ -791,6 +791,8 @@ target("tmc_pc")
     add_files("port/rando/rando_runtime.c")    -- eventdefine-driven runtime features (C: needs player.h/save.h layouts)
     add_files("port/rando/rando_entrance.cpp") -- coupled dungeon-entrance shuffle
     add_files("port/rando/rando_cosmetic.cpp") -- tunic / heart color eventdefines
+    add_files("port/rando/rando_music.c")    -- MUSIC_RANDO area-BGM remap
+    add_files("port/rando/rando_keymap.c")   -- curated ground-item location keys (area-room-flag)
     -- Minish Cap Reborn parity toggles (clean-room from upstream
     -- README description — does NOT include any Reborn source).
     add_files("port/port_reborn.cpp")
@@ -1095,6 +1097,7 @@ target("rando_logic_test")
     add_files("port/rando/rando.cpp")
     add_files("port/rando/rando_logic.cpp")
     add_files("port/rando/rando_save.c")
+    add_files("port/rando/rando_keymap.c")
     add_files("port/rando/rando_test.c")
 target_end()
 

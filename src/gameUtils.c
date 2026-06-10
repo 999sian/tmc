@@ -31,6 +31,8 @@
 #include "port_gba_mem.h"
 #include <stdio.h>
 #include <stdint.h>
+/* rando: MUSIC_RANDO area-BGM remap (port/rando/rando_music.c) */
+extern int Rando_Music_Remap(int area, int song);
 #endif
 
 u32 StairsAreValid(void);
@@ -417,6 +419,12 @@ void RestoreGameTask(bool32 loadGfx) {
 
 void LoadRoomBgm(void) {
     gArea.queued_bgm = gAreaMetadata[gRoomControls.area].queueBgm;
+#ifdef PC_PORT
+    /* Music shuffle: MinishMaker patches this table byte in ROM (EU
+     * 0x12746b + 4*area); natively remap at its single read point. -1
+     * assignment (seed off / MUSIC_RANDO off) keeps vanilla. */
+    gArea.queued_bgm = (u32)Rando_Music_Remap(gRoomControls.area, (int)gArea.queued_bgm);
+#endif
     if (CheckLocalFlagByBank(FLAG_BANK_10, LV6_KANE_START)) {
         gArea.queued_bgm = BGM_FIGHT_THEME2;
     }

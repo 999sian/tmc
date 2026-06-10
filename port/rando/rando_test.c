@@ -310,6 +310,49 @@ static int run_real_logic_diagnostic(void) {
         return 0;
     }
     fprintf(stderr, "[real] OK: deterministic beatable seed over %u locations\n", (unsigned)lc);
+    /* MUSIC_RANDO: enabling the flag must yield per-area music assignments
+     * (the 192 Area%xMusic locations + Items.Music pool), and they must be
+     * deterministic per seed. Default settings must yield none. */
+    {
+        int base_music = 0;
+        for (uint32_t area = 0; area < 256; ++area) {
+            if (RandoLogic_GetMusicAssignment(area) >= 0) base_music++;
+        }
+        if (base_music != 0) {
+            fprintf(stderr, "[real] FAIL: music assigned without MUSIC_RANDO (%d)\n", base_music);
+            RandoLogic_Reset(); Rando_Reset();
+            return 0;
+        }
+        RandoLogic_SetOverride("MUSIC_SETTING", "MUSIC_RANDO");
+        RandoLogic_Reparse();
+        if (!GenerateSeed(0xC0FFEEu, s) || !Rando_IsActive()) {
+            fprintf(stderr, "[real] FAIL: MUSIC_RANDO generation failed\n");
+            RandoLogic_Reset(); Rando_Reset();
+            return 0;
+        }
+        int music_count = 0, first_area = -1, first_song = -1;
+        for (uint32_t area = 0; area < 256; ++area) {
+            int song = RandoLogic_GetMusicAssignment(area);
+            if (song < 0) continue;
+            music_count++;
+            if (first_area < 0) { first_area = (int)area; first_song = song; }
+        }
+        if (music_count < 100) {
+            fprintf(stderr, "[real] FAIL: MUSIC_RANDO assigned only %d areas\n", music_count);
+            RandoLogic_Reset(); Rando_Reset();
+            return 0;
+        }
+        if (!GenerateSeed(0xC0FFEEu, s) ||
+            RandoLogic_GetMusicAssignment((uint32_t)first_area) != first_song) {
+            fprintf(stderr, "[real] FAIL: music assignment not deterministic\n");
+            RandoLogic_Reset(); Rando_Reset();
+            return 0;
+        }
+        fprintf(stderr, "[real] OK: MUSIC_RANDO assigned %d areas (e.g. area 0x%02x -> song 0x%02x)\n",
+                music_count, first_area, first_song);
+        RandoLogic_ClearOverrides();
+        RandoLogic_Reparse();
+    }
     {
         static char spoiler[2048];
         size_t sn = Rando_GetSpoiler(spoiler, sizeof(spoiler));
