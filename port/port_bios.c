@@ -335,7 +335,7 @@ static void Port_PumpEvents(void) {
                     const char* shown = resolved ? abs : dir;
                     fprintf(stderr, "[BUG] F9 capture → %s\n", shown);
                     char msg[256];
-                    snprintf(msg, sizeof(msg), "Bug report saved: %s",
+                    snprintf(msg, sizeof(msg), "Bug report saved: %.230s",
                              resolved ? abs : dir);
                     Port_DebugMenu_ToastFromExternal(msg);
                     free(dir);

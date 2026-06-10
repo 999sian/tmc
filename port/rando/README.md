@@ -212,7 +212,7 @@ TMC_REPRO_RANDO=1 TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
   ./build/pc/tmc_pc --no-audio        # prints "[rando-repro] PASS", exits 0
 ```
 
-### Backend note
+### Backend note (Resolved)
 
 The file-select setup overlay draws via SDL_Renderer 2D primitives, so it only
 engages on the **software / SDL_Renderer** backend. The default `render_backend`
