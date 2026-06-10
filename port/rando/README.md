@@ -100,15 +100,48 @@ Implemented and tested (`rando_logic_test`):
   as a define override + reparse, so the menu genuinely drives real-logic
   generation (e.g. toggling `FIGURINE_HUNT` adds figurines to the pool).
 
+Full-parity features (added in the 1:1 pass):
+- **dungeon-id tag binding**: location name fields carry `:Tag` capabilities
+  and item lines bind to one tag via their third field — the entire
+  keysanity/dungeon-item-mode matrix (`Own Dungeon`/`Own Region`/`Vanilla`
+  pins/`Anywhere`) is honoured as data, exactly as the file expresses it;
+- **`!prizeplacement`** executed: a prize assigned to a redirected prize
+  location is placed within the redirect tag pool instead (or anywhere with no
+  dungeon id), the prize slot joins the Dungeon pool, and each rule fires at
+  most once per generation. Prize items otherwise place ONLY on DungeonPrize
+  locations per spec (a previous direct-to-Dungeon fallback was a bug);
+- **`!eventdefine`** parsed and evaluated (`RandoLogic_EvalEventDefine`):
+  values are stored raw, every `RAND_INT` occurrence substitutes a
+  seed-derived value (per-occurrence, deterministic), and a C-like integer
+  expression evaluator handles the file's `(x >> 5) & 0x1F` forms. Runtime
+  consumers (`rando_runtime.c`): start inventory (full `startInventory*`
+  mapping incl. bottles/kinstones/quivers/wallets), wind crests, dungeon
+  warps, instant text, `dmgMulti`/`heroMode` damage scaling, low-health-beep
+  and `no_music` mutes;
+- **`!color`** parsed (defaults + `NAME_X` define overrides); tunic and heart
+  colors apply at runtime via content-addressed palette overrides
+  (`rando_cosmetic.cpp`), including rainbow hearts;
+- **entrance shuffle**: generation records `Items.Entrance.*` assignments and
+  `rando_entrance.cpp` performs coupled swaps at the engine's transition choke
+  points;
+- **sidecar v2** persists the seed's `.logic` define overrides and entrance
+  assignments per slot, so a reloaded save restores its full eventdefine
+  context (guarded by a parse fingerprint).
+
 NOT yet at full parity (honest gaps):
 - `!import` logic functions are approximated (logic-only item symbols are
-  assumed owned, standing in for `LogicImport.cs` — not translated, clean-room);
-- `!prizeplacement`, `!eventdefine`, `!color` are parsed but not executed;
-- exact dungeon/region/keysanity item-mode semantics and entrance shuffle;
+  assumed owned, standing in for `LogicImport.cs` — not translated,
+  clean-room). Note: the real `default.logic` contains no `!import` lines;
 - per-location keyed hooks for non-chest/non-ground reward types (those use
-  MinishMaker precise ROM addresses rather than `area-room-chestIndex`);
-- byte-for-byte spoiler/placement parity (needs the real `default.logic` data
-  plus reference spoilers to diff against).
+  MinishMaker precise ROM addresses rather than `area-room-chestIndex`); such
+  rewards still randomize via the global `Rando_OverrideItem` bijection;
+- placement is feature-identical but not byte-identical to the C# shuffler
+  (different PRNG by clean-room design — same seed text gives a different,
+  equally-valid arrangement);
+- `Music`-type locations parse but there is no runtime music remap;
+- custom heart-outline colors tint other HUD glyphs drawn with the shared
+  palette-15 white (upstream replaces heart tile graphics; out of scope for a
+  runtime palette override).
 
 ### Real `default.logic` status
 
@@ -129,12 +162,9 @@ across save+restart).
 Approximations still in effect (don't block beatable generation, but are not
 full parity):
 - Item symbols that appear in logic but aren't in the shuffled pool (start
-  items, fixed grants, and unmodelled events/`!import` results) are treated as
-  owned in both placement and verification. This stands in for the complete
-  event graph + the `!import` functions defined in MinishMaker's
-  `LogicImport.cs` (not translated — clean-room).
-- `!prizeplacement` is parsed; dungeon-prize items are placed in prize/dungeon
-  pools without the per-location dungeon redirect.
+  items, fixed grants, and unmodelled events) are treated as owned in both
+  placement and verification. This stands in for the complete event graph
+  (not translated — clean-room).
 - 156/176 item symbols map to native engine ids (gear, elements, scrolls,
   heart pieces/containers, subtyped `BigKey`/`SmallKey`/`Compass`/`DungeonMap`,
   butterflies, progressive bases, …); the remaining ~20 are non-reward symbols

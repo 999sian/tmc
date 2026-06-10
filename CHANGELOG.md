@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### Randomizer — MinishMaker 1:1 parity pass
+
+- **Generation parity with the MinishMaker shuffler** (clean-room, from the
+  public `.logic` spec — no GPL code read): dungeon-id tag binding now drives
+  the full keysanity matrix (Own Dungeon / Own Region / Vanilla pins / Removed
+  for keys, maps, compasses, prizes — all expressed as data in the logic
+  file); `!prizeplacement` redirects execute (elements shuffle within their
+  dungeon under 'Own Dungeon' elements); prize items place only on
+  DungeonPrize locations per spec (fixed a fallback that could drop them
+  directly into dungeon slots); `!eventdefine` is parsed and evaluated with
+  per-seed `RAND_INT` substitution and a C-like expression evaluator;
+  `!color` parses defaults and override-driven defines; dropdowns support 24
+  options (THREE_HEART no longer truncated).
+- **Eventdefine-driven runtime features** (`rando_runtime.c`): start
+  inventory (full `startInventory*` mapping — swords, tools, elements,
+  scrolls, bottles incl. randomized contents, kinstones, bomb bags/quivers/
+  wallets with counts), wind crest unlocks, dungeon warp states, instant
+  text, `dmgMulti`/`heroMode` damage scaling at the ModHealth choke point,
+  low-health-beep and music mutes. Applied once at rando file creation and
+  refreshed on every save activation.
+- **Coupled dungeon-entrance shuffle** (`rando_entrance.cpp`): generation
+  records `Items.Entrance.*` assignments; runtime hooks at the engine's
+  transition choke points swap dungeon entrances in coupled pairs. Vanilla
+  behavior is untouched when no entrance shuffle is active.
+- **Cosmetics** (`rando_cosmetic.cpp`): tunic and heart colors from `!color`
+  eventdefines via content-addressed palette overrides (verified against the
+  vanilla palette bytes), including rainbow hearts at upstream's 12-frame
+  cadence.
+- **Sidecar format v2**: each slot now persists the `.logic` define overrides
+  the seed was generated under plus its entrance assignments, so quitting and
+  reloading restores damage multipliers, cosmetics, and entrance shuffle —
+  previously these silently reverted to file defaults after a restart. v1
+  sidecars are rejected with a clear log line.
+- New `rando_logic_test` parity suite: tag binding, prize redirects,
+  eventdefine evaluation (incl. RAND_INT determinism), entrance assignment
+  recording. Full 882-location `default.logic` generation and the
+  `TMC_REPRO_RANDO` harness (save/reload round-trip) stay green.
+- Honest remaining gaps documented in `port/rando/README.md`: `!import`
+  approximation (unused by default.logic), non-chest precise-address hooks
+  (global bijection fallback), no music remap, placement not byte-identical
+  to the C# PRNG by design.
+
 ### Improved
 
 - **F8 → Randomizer tab overhaul.** Settings are now controllable from the tab
