@@ -44,6 +44,7 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"             /* Port_TTS_* — accessibility tab + focus reader */
 #include "rando/rando.h"
+#include "rando/rando_logic.h"
 
 #include <cstdio>
 #include <cstring>
@@ -1177,10 +1178,19 @@ static void DrawRibbonWarpTab(void) {
  * the new permutation immediately. */
 extern "C" const char* Port_FindBaseRomPath(void);
 
-static char sRandoSeedBuf[16] = "0";   /* 0 = engine picks */
-static char sRandoStatus[1024] = {0};
+static char sRandoSeedBuf[64] = "";        /* empty/0 = engine picks; text is hashed */
+static char sRandoResult[192] = {0};       /* last roll outcome line */
+static bool sRandoResultOk = true;
+static char sRandoSpoiler[4096] = {0};
+static RandomizerSettings sRandoUiSettings;
+static bool sRandoUiSettingsInit = false;
 
 static void DrawRibbonRandomizerTab(void) {
+    if (!sRandoUiSettingsInit) {
+        sRandoUiSettings = Rando_DefaultSettings();
+        sRandoUiSettingsInit = true;
+    }
+
     /* Source / region — informational only. The engine reads gRomData
      * from the loaded ROM; no separate input file is involved. */
     const char* src_rom = Port_FindBaseRomPath();
@@ -1201,49 +1211,167 @@ static void DrawRibbonRandomizerTab(void) {
         }
     }
 
-    ImGui::TextWrapped("Native in-process randomizer. Roll a seed and "
-                       "the engine resolves rewards through a fixed "
-                       "location table — no ROM files written, no "
-                       "restart needed.");
-    ImGui::TextWrapped("Graph logic: progression, major, and junk pools "
-                       "are forward-filled against the native reachability "
-                       "DAG and verified before activation.");
+    ImGui::TextUnformatted("Native in-process randomizer");
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "Rolls a seed and resolves rewards live through a fixed location "
+            "table — no ROM files written, no restart needed. Progression, "
+            "major, and junk pools are forward-filled against the "
+            "reachability graph and a playthrough is simulated before the "
+            "seed activates, so rolled seeds are always beatable. The active "
+            "seed persists per save slot in a .randomizer sidecar.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
     ImGui::Separator();
 
     ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none)");
     ImGui::Text("Region:      %s", region_label);
+
+    /* Logic source: external MinishMaker .logic file vs built-in graph. */
+    if (RandoLogic_IsLoaded()) {
+        const RandoLogicStats stats = RandoLogic_GetStats();
+        ImGui::Text("Logic:       .logic file (%u locations, %u items)",
+                    stats.location_count, stats.item_count);
+    } else {
+        const RandoLogicStats stats = RandoLogic_GetStats();
+        if (stats.error[0]) {
+            ImGui::TextColored(ImVec4(0.9f, 0.45f, 0.3f, 1.0f),
+                               "Logic:       built-in graph (.logic load failed: %s)",
+                               stats.error);
+        } else {
+            ImGui::Text("Logic:       built-in graph (%d locations)",
+                        (int)RANDO_LOCATION_BUILTIN_COUNT);
+        }
+    }
+
     if (Rando_IsActive()) {
+        static const char* kPoolNames[RANDO_ITEM_POOL_COUNT] = { "Normal", "Hard", "Chaos" };
+        const RandomizerSettings active = Rando_GetSettings();
+        const int pool = (active.item_difficulty < RANDO_ITEM_POOL_COUNT)
+                             ? (int)active.item_difficulty : 0;
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
-                           "Active seed: %u", Rando_GetSeed());
+                           "Active seed: %llu — %s pool%s",
+                           (unsigned long long)Rando_GetSeed64(), kPoolNames[pool],
+                           active.glitchless_logic ? ", glitchless" : "");
     } else {
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No seed rolled — vanilla.");
     }
 
     ImGui::Spacing();
-    ImGui::InputText("Seed (0 = random)", sRandoSeedBuf, sizeof(sRandoSeedBuf),
-                     ImGuiInputTextFlags_CharsDecimal);
+    ImGui::SeparatorText("Settings");
+
+    static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+        "Normal — collectibles only",
+        "Hard — + non-gating majors",
+        "Chaos — + gating progression",
+    };
+    int difficulty = (int)sRandoUiSettings.item_difficulty;
+    ImGui::SetNextItemWidth(280);
+    if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+        sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)difficulty;
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
+            "heart pieces — progression untouched.\n"
+            "Hard: also shuffles non-gating majors (bottles, upgrades, "
+            "skills).\n"
+            "Chaos: also shuffles dungeon-gating progression; verification "
+            "still rejects unbeatable arrangements.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+
+    ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic);
+    ImGui::SameLine();
+    ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones);
+    ImGui::SameLine();
+    ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos);
+
+    ImGui::Spacing();
+    ImGui::SetNextItemWidth(280);
+    ImGui::InputText("Seed (empty = random)", sRandoSeedBuf, sizeof(sRandoSeedBuf));
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "Decimal numbers are used as-is; any other text is hashed to a "
+            "64-bit seed, so phrases work and are shareable.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
 
     ImGui::Spacing();
     if (ImGui::Button("Roll new seed", ImVec2(180, 0))) {
-        uint32_t seed = (uint32_t)std::strtoul(sRandoSeedBuf, nullptr, 10);
-        uint32_t chosen = 0;
-        Rando_RollSeed(seed, &chosen);
-        char spoiler[2048];
-        Rando_GetSpoiler(spoiler, sizeof(spoiler));
-        std::snprintf(sRandoStatus, sizeof(sRandoStatus),
-                      "Rolled seed %u.\n\n%s", chosen, spoiler);
-        std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%u", chosen);
+        const uint64_t requested =
+            sRandoSeedBuf[0] ? Rando_SeedFromString(sRandoSeedBuf) : 0;
+        uint64_t chosen = 0;
+        const RandoStatus status =
+            Rando_GenerateSeed(requested, &sRandoUiSettings, &chosen);
+        sRandoResultOk = (status == RANDO_OK);
+        switch (status) {
+        case RANDO_OK:
+            std::snprintf(sRandoResult, sizeof(sRandoResult),
+                          "Rolled seed %llu — verified beatable.",
+                          (unsigned long long)chosen);
+            std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu",
+                          (unsigned long long)chosen);
+            Rando_GetSpoiler(sRandoSpoiler, sizeof(sRandoSpoiler));
+            break;
+        case RANDO_UNBEATABLE:
+            std::snprintf(sRandoResult, sizeof(sRandoResult),
+                          "No beatable arrangement found for this seed/settings "
+                          "(32 attempts) — previous state kept.");
+            break;
+        case RANDO_BAD_SETTINGS:
+            std::snprintf(sRandoResult, sizeof(sRandoResult),
+                          "Rejected: invalid settings combination.");
+            break;
+        default:
+            std::snprintf(sRandoResult, sizeof(sRandoResult),
+                          "Generation failed (internal error) — see stderr log.");
+            break;
+        }
     }
     ImGui::SameLine();
     if (ImGui::Button("Reset to vanilla", ImVec2(160, 0))) {
         Rando_Reset();
-        sRandoStatus[0] = '\0';
+        sRandoResult[0] = '\0';
+        sRandoSpoiler[0] = '\0';
     }
 
-    if (sRandoStatus[0]) {
+    if (sRandoResult[0]) {
         ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::TextWrapped("%s", sRandoStatus);
+        if (sRandoResultOk) {
+            ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "%s", sRandoResult);
+        } else {
+            ImGui::TextColored(ImVec4(0.9f, 0.45f, 0.3f, 1.0f), "%s", sRandoResult);
+        }
+    }
+
+    /* Spoiler stays collapsed by default — opening it is the player's choice. */
+    if (Rando_IsActive() && sRandoSpoiler[0]) {
+        ImGui::Spacing();
+        if (ImGui::CollapsingHeader("Spoiler log")) {
+            if (ImGui::SmallButton("Copy to clipboard")) {
+                ImGui::SetClipboardText(sRandoSpoiler);
+            }
+            ImGui::BeginChild("##rando_spoiler", ImVec2(0, 180), ImGuiChildFlags_Borders,
+                              ImGuiWindowFlags_HorizontalScrollbar);
+            ImGui::TextUnformatted(sRandoSpoiler);
+            ImGui::EndChild();
+        }
     }
 }
 
