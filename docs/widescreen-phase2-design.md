@@ -1,14 +1,11 @@
 # Widescreen Phase 2 — design notes
 
-**Status (2026-06-04): WIP behind a runtime toggle.** BG widescreen reveal
-renders full clean content in wide gameplay (`--widescreen_width=384`), but the
-feature defaults off via `config.json:widescreen_enabled=false`. F8 → Display
-settings can toggle it at runtime in wide builds.
-Right-side HUD BG0 tiles and A/B/R button sprites now anchor to the wide right
-edge during normal gameplay; messages/hidden-HUD states keep the native 240
-safe area. The 2026-05/06 "magenta = unstreamed palette", "needs a tile-loading
-subsystem", and "working source is lost" conclusions below were WRONG. The
-actual BG-reveal root cause was a one-line bug.**
+**Status (2026-06-10, as of release 0.5.0):** Phase 2 is fixed and shipping.
+The "half-black + garbage reveal" root cause was a one-line shadow-BG index bug
+(fix detailed below). 0.5.0 release builds compile wide (`--widescreen_width=384`);
+the feature is gated behind `config.json:widescreen_enabled` (default off,
+runtime-toggleable via F8 → Display settings). The rest of this document is
+retained as the design/history record — earlier "WIP"/"REVERTED" statuses are superseded.
 
 Root cause: `Port_Widescreen_UpdateShadows` (port/port_linked_stubs.c) assigned
 the shadow tilemaps to the wrong PPU BG index — hardcoded `shadow[1]=bottomMap`,
@@ -49,7 +46,7 @@ Known limitations:
   toggle as unavailable.
 
 
-**Status (2026-05-26):** ALL implementation work REVERTED to the
+**Historical status (2026-05-26 — superseded, see header):** ALL implementation work REVERTED to the
 pre-Phase-2 state (commit `d3ff4c374`).  Reverted in-tree
 hard-reset; the working code that was committed during attempts
 (`564650014` .. `9be970693`) is recoverable from `git reflog` if a
