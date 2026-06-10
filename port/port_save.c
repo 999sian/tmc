@@ -5,6 +5,18 @@
  * This module stores it in `tmc.sav` (the default profile) or
  * `tmc_<name>.sav` (named profile) next to the executable.
  *
+ * On-disk format (mGBA-compatible)
+ * --------------------------------
+ * Files are stored in the byte order mGBA/VBA-M use for EEPROM saves:
+ * each 8-byte block holds its 64-bit unit in wire-transmission order,
+ * which is byte-reversed relative to the game's RAM buffer (the GBA
+ * driver in src/eeprom.c shifts units out data[3]→data[0], MSB-first).
+ * In memory we keep game-RAM order so the BIOS shims stay straight
+ * memcpys; blocks are reversed on load/flush. A Minish Cap .sav from
+ * mGBA drops in directly and vice versa. Legacy port saves (RAM order
+ * on disk) are detected by the save signature and migrated once, with
+ * the original kept as <name>.sav.bak.
+ *
  * Profile model
  * -------------
  * A *profile* is one named save file. The active profile's filename is
@@ -51,17 +63,73 @@ static int sEepromDirty = 0; /* set on write, cleared on flush */
 static int sEepromInited = 0;
 static char sActivePath[SAVE_FILENAME_MAX] = DEFAULT_SAVE_FILENAME;
 
+/* ---- On-disk byte order -------------------------------------------------- */
+
+/* First 8-byte block of every initialized TMC save ("AGBZELDA:..."), in
+ * game-RAM order and in on-disk (mGBA wire) order. Same in all regions. */
+#define EEPROM_SIG_RAM "AGBZELDA"
+
+/* Reverse each 8-byte block in place: converts between game-RAM order
+ * (in-memory) and mGBA/VBA-M wire order (on-disk). Involution: applying
+ * it twice is the identity, so blank 0xFF images are unaffected. */
+static void ReverseEepromBlocks(u8* buf) {
+    for (int b = 0; b < EEPROM_SIZE; b += EEPROM_BLOCK) {
+        for (int i = 0; i < EEPROM_BLOCK / 2; i++) {
+            u8 t = buf[b + i];
+            buf[b + i] = buf[b + EEPROM_BLOCK - 1 - i];
+            buf[b + EEPROM_BLOCK - 1 - i] = t;
+        }
+    }
+}
+
+/* Write the in-memory EEPROM to f in on-disk order. 1 on full write. */
+static int WriteEepromDiskOrder(FILE* f) {
+    static u8 disk[EEPROM_SIZE];
+    memcpy(disk, sEeprom, EEPROM_SIZE);
+    ReverseEepromBlocks(disk);
+    return fwrite(disk, 1, EEPROM_SIZE, f) == EEPROM_SIZE;
+}
+
+static void FlushEepromFile(void);
+
 /* ---- Persistence -------------------------------------------------------- */
 
 static void LoadEepromFile(void) {
     FILE* f = fopen(sActivePath, "rb");
-    if (f) {
-        fread(sEeprom, 1, EEPROM_SIZE, f);
-        fclose(f);
-        fprintf(stderr, "[SAVE] Loaded save file: %s\n", sActivePath);
-    } else {
+    if (!f) {
         memset(sEeprom, 0xFF, EEPROM_SIZE); /* blank EEPROM = 0xFF */
         fprintf(stderr, "[SAVE] No save file at %s, starting fresh.\n", sActivePath);
+        return;
+    }
+    const size_t got = fread(sEeprom, 1, EEPROM_SIZE, f);
+    fclose(f);
+    if (got != EEPROM_SIZE) {
+        fprintf(stderr, "[SAVE] ERROR: short read on %s (%zu/%d bytes), starting fresh.\n",
+                sActivePath, got, EEPROM_SIZE);
+        memset(sEeprom, 0xFF, EEPROM_SIZE); /* blank EEPROM = 0xFF */
+        return;
+    }
+    if (memcmp(sEeprom, EEPROM_SIG_RAM, EEPROM_BLOCK) == 0) {
+        /* Legacy port-format file (game-RAM order on disk). The buffer
+         * is already in the order we keep in memory; keep the original
+         * bytes as .bak, then rewrite the file in on-disk order. */
+        char bak[SAVE_FILENAME_MAX + 4];
+        snprintf(bak, sizeof(bak), "%s.bak", sActivePath);
+        int backedUp = 0;
+        FILE* bf = fopen(bak, "wb");
+        if (bf) {
+            backedUp = fwrite(sEeprom, 1, EEPROM_SIZE, bf) == EEPROM_SIZE;
+            backedUp &= fclose(bf) == 0;
+        }
+        fprintf(stderr, "[SAVE] Migrating %s to mGBA byte order (backup: %s)%s.\n",
+                sActivePath, bak, backedUp ? "" : " — BACKUP FAILED");
+        sEepromDirty = 1;
+        FlushEepromFile();
+    } else {
+        /* mGBA/VBA-M order — or blank/uninitialized, where reversal is
+         * inconsequential. Convert to game-RAM order in memory. */
+        ReverseEepromBlocks(sEeprom);
+        fprintf(stderr, "[SAVE] Loaded save file: %s\n", sActivePath);
     }
 }
 
@@ -69,12 +137,18 @@ static void FlushEepromFile(void) {
     if (!sEepromDirty)
         return;
     FILE* f = fopen(sActivePath, "wb");
-    if (f) {
-        fwrite(sEeprom, 1, EEPROM_SIZE, f);
-        fclose(f);
+    if (!f) {
+        fprintf(stderr, "[SAVE] ERROR: Could not write %s\n", sActivePath);
+        return;
+    }
+    const int wroteAll = WriteEepromDiskOrder(f);
+    const int closed = fclose(f);
+    if (wroteAll && closed == 0) {
         sEepromDirty = 0;
     } else {
-        fprintf(stderr, "[SAVE] ERROR: Could not write %s\n", sActivePath);
+        /* Keep the dirty flag so the next flush retries. */
+        fprintf(stderr, "[SAVE] ERROR: short write on %s%s; will retry.\n",
+                sActivePath, closed != 0 ? " (close failed)" : "");
     }
 }
 
@@ -172,9 +246,8 @@ int Port_Save_SaveAsProfile(const char* path) {
     }
     FILE* f = fopen(path, "wb");
     if (!f) return 0;
-    const size_t got = fwrite(sEeprom, 1, EEPROM_SIZE, f);
-    fclose(f);
-    return got == EEPROM_SIZE ? 1 : 0;
+    const int wroteAll = WriteEepromDiskOrder(f);
+    return (fclose(f) == 0 && wroteAll) ? 1 : 0;
 }
 
 /* List `tmc.sav` and `tmc_*.sav` files in cwd. Caller passes a fixed-
