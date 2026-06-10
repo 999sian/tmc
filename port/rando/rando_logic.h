@@ -129,6 +129,18 @@ int RandoLogic_GetEntranceAssignment(uint32_t location_index);
 void RandoLogic_ClearEntranceAssignments(void);
 bool RandoLogic_RestoreEntranceAssignment(uint32_t location_index, int subtype);
 
+/* Per-area music shuffle: assignment from "Area%xMusic" locations; -1 = vanilla. */
+int RandoLogic_GetMusicAssignment(uint32_t area);
+void RandoLogic_ClearMusicAssignments(void);
+bool RandoLogic_RestoreMusicAssignment(uint32_t area, int song);
+
+/* True when the location carries the named pool tag (e.g. "NoSpoiler"). */
+bool RandoLogic_LocationHasTagName(uint32_t location_index, const char* tag_name);
+
+/* Bind a native runtime key (e.g. area-room-flag) onto a .logic location that
+ * carries only a MinishMaker precise ROM address. Fills empty keys only. */
+bool RandoLogic_BindRuntimeKey(const char* location_name, uint32_t key);
+
 /* Event defines (`!eventdefine`): MinishMaker writes these to the ROM patch
  * assembler; natively they configure runtime features (start inventory,
  * cosmetics, open world, damage multipliers, ...). Values are stored raw and
