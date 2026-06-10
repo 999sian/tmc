@@ -1185,6 +1185,218 @@ static char sRandoSpoiler[4096] = {0};
 static RandomizerSettings sRandoUiSettings;
 static bool sRandoUiSettingsInit = false;
 
+/* ---- Cosmetics (.logic !color settings) ----------------------------------
+ * A RANDO_SETTING_COLOR setting carries option_count default color sets
+ * (RGB555 hex strings in opt_value[]). The override value consumed by
+ * ParseColorDirective is comma-separated RGB555 hex, one per set
+ * (e.g. "7C1F,03E0"). Per the MinishMaker spec, defaults never set defines:
+ * the override only exists once the player actually edits a color, so an
+ * enabled-but-untouched setting still rolls vanilla. */
+extern "C" void Rando_Cosmetic_Apply(void); /* rando_cosmetic.cpp — live palette re-apply */
+
+typedef struct RandoColorUiState {
+    char define[48];
+    bool enabled; /* checkbox; the engine override only exists once dirty */
+    bool dirty;   /* an edit was committed at least once this session */
+    bool pending; /* floats edited; commit once the picker goes idle */
+    float col[RANDO_LOGIC_MAX_COLOR_SETS][3];
+} RandoColorUiState;
+static RandoColorUiState sRandoColorUi[32];
+static int sRandoColorUiCount = 0;
+
+static bool RandoUi_FindOverrideValue(const char* define, const char** out_value) {
+    const uint32_t n = RandoLogic_GetOverrideCount();
+    for (uint32_t i = 0; i < n; ++i) {
+        const char* name = NULL;
+        const char* value = NULL;
+        if (RandoLogic_GetOverride(i, &name, &value) && name != NULL &&
+            std::strcmp(name, define) == 0) {
+            if (out_value != NULL) *out_value = value;
+            return true;
+        }
+    }
+    return false;
+}
+
+/* GBA RGB555 layout: R in the low 5 bits (matches ParseColorDirective's
+ * packing and the `0x..._0 & 0x1F` eventdefine extraction in .logic). */
+static void RandoUi_Rgb555ToFloat(unsigned v, float out[3]) {
+    out[0] = (float)(v & 0x1F) / 31.0f;
+    out[1] = (float)((v >> 5) & 0x1F) / 31.0f;
+    out[2] = (float)((v >> 10) & 0x1F) / 31.0f;
+}
+
+static unsigned RandoUi_FloatToRgb555(const float in[3]) {
+    unsigned c[3];
+    for (int i = 0; i < 3; ++i) {
+        float f = in[i];
+        if (f < 0.0f) f = 0.0f;
+        if (f > 1.0f) f = 1.0f;
+        c[i] = (unsigned)(f * 31.0f + 0.5f);
+    }
+    return (c[2] << 10) | (c[1] << 5) | c[0];
+}
+
+/* Per-define UI cache. Needed because the engine never echoes overrides back
+ * into opt_value[] (those always hold the file defaults after a reparse). */
+static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
+    for (int i = 0; i < sRandoColorUiCount; ++i) {
+        if (std::strcmp(sRandoColorUi[i].define, s->define) == 0) return &sRandoColorUi[i];
+    }
+    if (sRandoColorUiCount >= (int)(sizeof(sRandoColorUi) / sizeof(sRandoColorUi[0]))) {
+        return NULL;
+    }
+    RandoColorUiState* st = &sRandoColorUi[sRandoColorUiCount++];
+    std::snprintf(st->define, sizeof(st->define), "%s", s->define);
+    for (int j = 0; j < RANDO_LOGIC_MAX_COLOR_SETS; ++j) {
+        unsigned v = 0x7FFF; /* spec: white when no default given */
+        if (j < s->option_count) v = (unsigned)std::strtoul(s->opt_value[j], NULL, 16);
+        RandoUi_Rgb555ToFloat(v, st->col[j]);
+    }
+    /* Pre-existing override (sidecar restore / earlier session): adopt it. */
+    const char* ov = NULL;
+    if (RandoUi_FindOverrideValue(s->define, &ov) && ov != NULL && ov[0] != '\0') {
+        st->enabled = true;
+        st->dirty = true;
+        const char* p = ov;
+        int j = 0;
+        while (*p != '\0' && j < RANDO_LOGIC_MAX_COLOR_SETS) {
+            char* end = NULL;
+            unsigned v = (unsigned)std::strtoul(p, &end, 16);
+            if (end == p) break;
+            RandoUi_Rgb555ToFloat(v, st->col[j++]);
+            p = end;
+            while (*p == ',' || *p == ' ') ++p;
+        }
+    }
+    return st;
+}
+
+static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
+    char value[48]; /* 8 sets x "XXXX," fits; engine caps stored values at 31 */
+    size_t len = 0;
+    for (int j = 0; j < set_count && j < RANDO_LOGIC_MAX_COLOR_SETS; ++j) {
+        len += (size_t)std::snprintf(value + len, sizeof(value) - len, "%s%04X",
+                                     j ? "," : "", RandoUi_FloatToRgb555(st->col[j]));
+        if (len >= sizeof(value) - 1) break;
+    }
+    if (len > 31) {
+        std::fprintf(stderr,
+                     "[RANDO] color override %s exceeds engine value cap (%u chars) — truncated\n",
+                     st->define, (unsigned)len);
+    }
+    RandoLogic_SetOverride(st->define, value);
+    RandoLogic_Reparse();
+    st->dirty = true;
+    /* Cosmetics cache keys on (active, seed64); force a re-evaluation so the
+     * edit shows up live instead of waiting for the next seed roll. */
+    if (Rando_IsActive()) Rando_Cosmetic_Apply();
+    std::fprintf(stderr, "[RANDO] color override %s = %s\n", st->define, value);
+}
+
+/* The engine only exposes SetOverride + ClearOverrides-all; an empty-value
+ * override is NOT vanilla (ParseColorDirective would still define the bare
+ * flag and flip !ifdef blocks). So clearing one define = snapshot the other
+ * overrides, ClearOverrides, re-set the survivors, reparse — the selective
+ * version of rando_file_menu.c's ClearOverrides+Reparse reset. */
+static void RandoUi_RemoveOverride(const char* define) {
+    static char names[RANDO_LOGIC_MAX_SETTINGS][48];
+    static char values[RANDO_LOGIC_MAX_SETTINGS][32]; /* engine value cap */
+    const uint32_t n = RandoLogic_GetOverrideCount();
+    uint32_t kept = 0;
+    for (uint32_t i = 0; i < n && kept < RANDO_LOGIC_MAX_SETTINGS; ++i) {
+        const char* name = NULL;
+        const char* value = NULL;
+        if (!RandoLogic_GetOverride(i, &name, &value) || name == NULL) continue;
+        if (std::strcmp(name, define) == 0) continue;
+        std::snprintf(names[kept], sizeof(names[0]), "%s", name);
+        std::snprintf(values[kept], sizeof(values[0]), "%s", value ? value : "");
+        kept++;
+    }
+    RandoLogic_ClearOverrides();
+    for (uint32_t i = 0; i < kept; ++i) RandoLogic_SetOverride(names[i], values[i]);
+    RandoLogic_Reparse();
+    if (Rando_IsActive()) Rando_Cosmetic_Apply();
+    std::fprintf(stderr, "[RANDO] color override %s cleared (vanilla)\n", define);
+}
+
+static void DrawRandoCosmeticsSection(void) {
+    if (!RandoLogic_IsLoaded()) return;
+    const uint32_t count = RandoLogic_GetSettingCount();
+    bool any = false;
+    for (uint32_t i = 0; i < count; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s != NULL && s->type == RANDO_SETTING_COLOR && s->option_count > 0) {
+            any = true;
+            break;
+        }
+    }
+    if (!any) return; /* hidden when the file declares no color settings */
+
+    ImGui::Spacing();
+    if (!ImGui::CollapsingHeader("Cosmetics")) return;
+
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "Color overrides feed the generation context, so they fully apply "
+            "to the NEXT rolled seed. Palette cosmetics re-evaluate on "
+            "activation, though, so while a seed is active edits also apply "
+            "live. Unchecked = vanilla (no override).");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+
+    for (uint32_t i = 0; i < count; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s == NULL || s->type != RANDO_SETTING_COLOR || s->option_count <= 0) continue;
+        RandoColorUiState* st = RandoUi_ColorState(s);
+        if (st == NULL) continue;
+
+        /* Sidecar restore can add overrides behind the UI's back. */
+        const char* live = NULL;
+        const bool has_live =
+            RandoUi_FindOverrideValue(s->define, &live) && live != NULL && live[0] != '\0';
+        if (has_live && !st->enabled) {
+            st->enabled = true;
+            st->dirty = true;
+        }
+
+        ImGui::PushID(s->define);
+        bool en = st->enabled;
+        if (ImGui::Checkbox(s->label, &en)) {
+            st->enabled = en;
+            if (!en) {
+                st->pending = false;
+                if (has_live) RandoUi_RemoveOverride(s->define);
+            } else if (st->dirty) {
+                /* Re-enable with earlier edits retained: restore the override. */
+                RandoUi_CommitColorOverride(st, s->option_count);
+            }
+        }
+        if (!st->enabled) ImGui::BeginDisabled();
+        ImGui::Indent();
+        for (int j = 0; j < s->option_count && j < RANDO_LOGIC_MAX_COLOR_SETS; ++j) {
+            char label[64];
+            std::snprintf(label, sizeof(label), "%s %d", s->label, j);
+            ImGui::PushID(j);
+            if (ImGui::ColorEdit3(label, st->col[j])) st->pending = true;
+            ImGui::PopID();
+        }
+        ImGui::Unindent();
+        if (!st->enabled) ImGui::EndDisabled();
+        /* Commit once the picker goes idle: every commit reparses the whole
+         * .logic text, so committing per drag-frame would stutter. */
+        if (st->pending && st->enabled && !ImGui::IsAnyItemActive()) {
+            st->pending = false;
+            RandoUi_CommitColorOverride(st, s->option_count);
+        }
+        ImGui::PopID();
+    }
+}
+
 static void DrawRibbonRandomizerTab(void) {
     if (!sRandoUiSettingsInit) {
         sRandoUiSettings = Rando_DefaultSettings();
@@ -1296,6 +1508,9 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones);
     ImGui::SameLine();
     ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos);
+
+    /* Cosmetics — .logic !color settings (HEART_COLOR, TUNIC_COLOR, ...). */
+    DrawRandoCosmeticsSection();
 
     ImGui::Spacing();
     ImGui::SetNextItemWidth(280);
