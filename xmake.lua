@@ -130,7 +130,6 @@ if use_system_packages then
     add_requires("nlohmann_json", {system = true, configs = {cmake = false}})
     add_requires("fmt", {configs = {header_only = true}})
     add_requires("libsdl3", {system = true})
-    add_requires("nlohmann_json", {configs = {cmake = false}})
 else
     add_requires("nlohmann_json", {configs = {cmake = false}})
     -- #15: passing system=false makes xmake ignore the host's
@@ -141,7 +140,6 @@ else
     -- (ships fmt 11.x).
     add_requires("fmt", {system = false, configs = {header_only = true}})
     add_requires("libsdl3", {configs = {shared = false}})
-    add_requires("nlohmann_json", {configs = {cmake = false}})
 end
 add_requires("guilite")
 
@@ -607,7 +605,8 @@ target("tmc_pc")
             end
             local content = io.readfile(p.marker_file)
             if content and content:find(p.marker, 1, true) then
-                return -- already applied
+                print("[viruappu] %s: marker present, skipping", p.patch)
+                return
             end
             local rel = path.relative(patch_file, os.projectdir())
             local applied = try {
