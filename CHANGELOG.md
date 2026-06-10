@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Improved
+
+- **F8 → Randomizer tab overhaul.** Settings are now controllable from the tab
+  (item pool Normal/Hard/Chaos, glitchless logic, kinstone/dojo shuffles)
+  instead of always rolling with defaults; seeds are full 64-bit and accept
+  text (hashed, shareable phrases); failed rolls report why (unbeatable after
+  32 attempts / bad settings / internal) instead of silently keeping vanilla.
+  Status block shows the logic source (.logic file with counts, built-in
+  graph, or the parse error) and the active seed's pool. The spoiler log is
+  collapsed by default, scrollable, copyable to clipboard, and no longer
+  truncated through a 1 KB status buffer. Removed the now-unused
+  `Rando_RollSeed` default-settings wrapper.
+
 ### Compatibility
 
 - **Save files are now mGBA/VBA-M compatible, both directions.** `tmc.sav` (and

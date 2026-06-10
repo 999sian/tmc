@@ -625,13 +625,6 @@ extern "C" bool GenerateSeed(uint64_t seed, RandomizerSettings settings) {
     return Rando_GenerateSeed(seed, &settings, NULL) == RANDO_OK;
 }
 
-extern "C" RandoStatus Rando_RollSeed(uint32_t seed, uint32_t* out_seed) {
-    uint64_t chosen = 0;
-    RandomizerSettings settings = Rando_DefaultSettings();
-    RandoStatus status = Rando_GenerateSeed((uint64_t)seed, &settings, &chosen);
-    if (out_seed) *out_seed = (uint32_t)chosen;
-    return status;
-}
 
 extern "C" void Rando_Reset(void) {
     EnsureInitialized();

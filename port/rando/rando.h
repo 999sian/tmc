@@ -125,8 +125,6 @@ bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint1
 bool Rando_VerifyCurrentSeed(void);
 
 bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, uint8_t* subtype);
-/* Back-compat wrapper used by existing F8/ImGui menus. */
-RandoStatus Rando_RollSeed(uint32_t seed, uint32_t* out_seed);
 
 /* Existing centralized item-give fallback. Prefer
  * Rando_ResolveLocationItem() for new location-aware reward hooks. */
