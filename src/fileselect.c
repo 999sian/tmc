@@ -356,6 +356,10 @@ static void sub_08050940(void);
 #ifdef PC_PORT
 extern bool Port_RandoSave_LoadSlot(int slot);
 extern void Rando_Reset(void);
+extern bool Rando_IsActive(void);
+extern void Rando_Runtime_OnNewFile(void);   /* port/rando/rando_runtime.c */
+extern void Rando_Runtime_Refresh(void);     /* port/rando/rando_runtime.c */
+extern u32 WriteSaveFile(u32 index, SaveFile* saveFile); /* src/save.c */
 #endif
 
 static void DrawFileSelectSettingsHint(void);
@@ -493,6 +497,9 @@ void SetActiveSave(u32 idx) {
     } else {
         Rando_Reset();
     }
+    /* Recompute eventdefine-driven runtime state (damage multiplier,
+     * beep/music mutes) for whichever seed is now active (or none). */
+    Rando_Runtime_Refresh();
 #endif
 }
 
@@ -501,6 +508,19 @@ void Port_FileSelectRando_StartSlot(int slot) {
     if ((u32)slot < NUM_SAVE_SLOTS) {
         gMapDataBottomSpecial.saveStatus[slot] = SAVE_VALID;
         SetActiveSave((u32)slot);
+        if (Rando_IsActive()) {
+            /* New-rando-file commit point: the slot was initialized and
+             * written by the vanilla new-file flow (sub_080513C0) before
+             * the rando config opened, and SetActiveSave() just loaded it
+             * into gSave + activated the sidecar seed. Apply the seed's
+             * one-shot grants (start inventory, crests, portals, instant
+             * text) and persist them so they survive a quit without an
+             * in-game save. Sidecar reloads of existing saves never pass
+             * through here, so grants apply exactly once per new file. */
+            Rando_Runtime_OnNewFile();
+            MemCopy(&gSave, &gMapDataBottomSpecial.saves[slot], sizeof(gSave));
+            WriteSaveFile((u32)slot, &gSave);
+        }
     }
     SoundReq(SONG_VOL_FADE_OUT);
     SetFileSelectState(STATE_START);

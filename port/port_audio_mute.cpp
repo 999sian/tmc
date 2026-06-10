@@ -5,6 +5,7 @@
  */
 
 #include "port_audio_mute.h"
+#include "rando/rando_runtime.h"
 #include "sound.h"
 
 namespace {
@@ -103,6 +104,20 @@ extern "C" bool Port_AudioMute_ShouldSuppress(unsigned int soundReq) {
 
     if (sCategories[AUDIO_MUTE_LOW_HEALTH_BEEP].enabled) {
         if (song == (unsigned)SFX_LOW_HEALTH) return true;
+    }
+
+    /* Randomizer eventdefines (port/rando/rando_runtime.c): seed-scoped
+     * suppression that is independent of the user toggles above and
+     * resets automatically when a non-rando save is active. */
+    if (song == (unsigned)SFX_LOW_HEALTH && Rando_Runtime_MuteLowHealthBeep()) {
+        return true;
+    }
+    /* `no_music`: BGM ids are the contiguous block [BGM_CASTLE_TOURNAMENT,
+     * SFX_BEEP) in include/sound.h. Command words targeting a BGM (fades,
+     * stops) are suppressed too — harmless since the BGM never started. */
+    if (song >= (unsigned)BGM_CASTLE_TOURNAMENT && song < (unsigned)SFX_BEEP &&
+        Rando_Runtime_MuteMusic()) {
+        return true;
     }
 
     return false;
