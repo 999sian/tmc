@@ -133,6 +133,9 @@ static LogicModel sLogic;
 
 /* Entrance-dummy assignment from the last successful generation; -1 = none. */
 static int16_t sEntranceAssign[RANDO_LOGIC_MAX_LOCATIONS];
+/* Per-area music assignment (song id) from the last generation; -1 = vanilla. */
+#define RANDO_LOGIC_MUSIC_AREAS 256
+static int16_t sMusicAssign[RANDO_LOGIC_MUSIC_AREAS];
 static char sLineBuf[LINE_MAX_LEN + 1];
 static char sExpandedLine[LINE_MAX_LEN + 1];
 
@@ -895,6 +898,11 @@ static void ParseDropdownDirective(char* args) {
     int ov = FindOverride(fields[3]);
     const char* chosen = (ov >= 0) ? sOverrides[ov].value : def;
     SetDefineValue(fields[3], chosen, true);
+    /* MinishMaker dropdown semantics: the CHOSEN OPTION VALUE is also defined
+     * as a flag — the file's `!ifdef - SMALL_KEYS_STANDARD` / `MUSIC_RANDO`
+     * branches key off the value token, while `\`SETTING\`` backtick
+     * indirection reads the setting define above. Both are required. */
+    if (chosen != NULL && chosen[0] != '\0') SetDefineValue(chosen, NULL, false);
     RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_DROPDOWN);
     if (s == NULL) return;
     /* Options are (label, value, tooltip) triplets starting at field 7. */
@@ -1854,6 +1862,12 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
                 if (!no_logic && needs_reach && !state.location_reached[l]) continue;
                 candidates[cand_count++] = (uint16_t)l;
             }
+            if (cand_count == 0 && type == RANDO_LOGIC_ITEM_MUSIC) {
+                /* The music pool can be larger than the area-slot count;
+                 * leftover songs are cosmetic surplus, never a failure. */
+                placed[item_idx] = true;
+                continue;
+            }
             if (cand_count == 0) {
                 if (dbg) {
                     uint32_t empty_by_type[16] = {0};
@@ -2012,6 +2026,21 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
         if (dot != NULL) sEntranceAssign[l] = (int16_t)strtoul(dot + 1, NULL, 0);
     }
 
+    /* Record per-area music assignments ("Area%xMusic" <- "Items.Music.0xNN"). */
+    for (uint32_t a = 0; a < RANDO_LOGIC_MUSIC_AREAS; ++a) sMusicAssign[a] = -1;
+    for (uint32_t l = 0; l < sLogic.location_count; ++l) {
+        if (sLogic.locations[l].type != RANDO_LOGIC_LOCATION_MUSIC) continue;
+        const char* nm = sLogic.locations[l].name;
+        if (strncmp(nm, "Area", 4) != 0) continue;
+        char* end = NULL;
+        unsigned long area = strtoul(nm + 4, &end, 16);
+        if (end == nm + 4 || strcmp(end, "Music") != 0 || area >= RANDO_LOGIC_MUSIC_AREAS) continue;
+        uint16_t msym = assignment[l];
+        if (msym == UINT16_MAX) continue;
+        const char* dot = strrchr(sLogic.symbols[msym].name, '.');
+        if (dot != NULL) sMusicAssign[area] = (int16_t)strtoul(dot + 1, NULL, 0);
+    }
+
     if (out_seed) *out_seed = seed;
     return RANDO_OK;
 }
@@ -2019,6 +2048,44 @@ extern "C" RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettin
 extern "C" int RandoLogic_GetEntranceAssignment(uint32_t location_index) {
     if (!sLogic.loaded || location_index >= sLogic.location_count) return -1;
     return sEntranceAssign[location_index];
+}
+
+extern "C" int RandoLogic_GetMusicAssignment(uint32_t area) {
+    if (!sLogic.loaded || area >= RANDO_LOGIC_MUSIC_AREAS) return -1;
+    return sMusicAssign[area];
+}
+
+extern "C" void RandoLogic_ClearMusicAssignments(void) {
+    for (uint32_t a = 0; a < RANDO_LOGIC_MUSIC_AREAS; ++a) sMusicAssign[a] = -1;
+}
+
+extern "C" bool RandoLogic_RestoreMusicAssignment(uint32_t area, int song) {
+    if (area >= RANDO_LOGIC_MUSIC_AREAS) return false;
+    sMusicAssign[area] = (int16_t)song;
+    return true;
+}
+
+extern "C" bool RandoLogic_LocationHasTagName(uint32_t location_index, const char* tag_name) {
+    if (!sLogic.loaded || location_index >= sLogic.location_count || tag_name == NULL) return false;
+    const LogicLocation* loc = &sLogic.locations[location_index];
+    for (uint8_t i = 0; i < loc->tag_count; ++i) {
+        if (strcmp(sLogic.tag_names[loc->tags[i]], tag_name) == 0) return true;
+    }
+    return false;
+}
+
+/* Bind a native runtime key onto a .logic location that carries only a
+ * MinishMaker precise ROM address (which the native engine cannot use). The
+ * curated name->key table lives port-side; binding only fills empty keys. */
+extern "C" bool RandoLogic_BindRuntimeKey(const char* location_name, uint32_t key) {
+    if (!sLogic.loaded || location_name == NULL) return false;
+    for (uint32_t l = 0; l < sLogic.location_count; ++l) {
+        if (strcmp(sLogic.locations[l].name, location_name) != 0) continue;
+        if (sLogic.locations[l].key != UINT32_MAX) return false; /* already keyed */
+        sLogic.locations[l].key = key;
+        return true;
+    }
+    return false;
 }
 
 /* ---- `!eventdefine` evaluation ------------------------------------------ */
