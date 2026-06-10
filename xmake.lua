@@ -70,11 +70,13 @@ option_end()
 local build_dir = "build/$(plat)"
 local tools_bin = "tools/bin"
 
--- True when the active target arch is x86/x64. ARM (arm64/aarch64) ports
+-- True when the active target arch is x86-64. ARM (arm64/aarch64) ports
 -- skip x86-only codegen flags (-mavx2, -mno-ms-bitfields) and the GCC-only
 -- -static-libgcc/-static-libstdc++ (aarch64 llvm-mingw uses -static alone).
+-- 32-bit arches are not listed: the PC port targets 64-bit systems only
+-- (enforced by a pointer-size static assert in port/port_types.h).
 local function is_x86_target()
-    return is_arch("x86", "x64", "x86_64", "i386", "amd64")
+    return is_arch("x64", "x86_64", "amd64")
 end
 
 -- Force GCC-style bitfield packing on MinGW (x86 only).
@@ -469,7 +471,7 @@ target("tmc_pc")
         use_avx2 = true
     end
     local target_arch = get_config("arch") or ""
-    local arch_supports_avx2 = is_arch("x86", "x64", "x86_64", "amd64")
+    local arch_supports_avx2 = is_arch("x64", "x86_64", "amd64")
     if not arch_supports_avx2 and target_arch ~= "" then
         local arch_l = target_arch:lower()
         arch_supports_avx2 = (arch_l == "x64" or arch_l == "x86_64" or arch_l == "amd64")

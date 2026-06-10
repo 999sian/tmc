@@ -55,7 +55,7 @@
  */
 static inline int Port_GEFieldShift(const Entity* e, size_t ge_extra_rel) {
     if (sizeof(void*) <= 4)
-        return 0; /* 32-bit: no shift ever */
+        return 0; /* 32-bit pointers (N64 target): GBA layouts hold, no shift */
 
     switch (e->kind) {
     case 3: /* ENEMY */

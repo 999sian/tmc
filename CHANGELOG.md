@@ -67,6 +67,12 @@
 - `build.py` aborts with an actionable error when the sounds-embed generator
   fails and no previous `generated_sounds_embed.cpp` exists (previously it
   warned and deferred to an xmake hook that swallows its own failures).
+- **64-bit-only policy made explicit.** The PC port now enforces
+  `sizeof(void*) == 8` via a static assert in `port_types.h` (the N64 target is
+  exempt), so accidental 32-bit configurations fail at compile time with a
+  clear message. Removed dead 32-bit accommodation: the i686 crash-report arch
+  label, the `nvdaControllerClient32.dll` probe (a 32-bit DLL can never load
+  into a 64-bit process), and 32-bit arch tokens in `xmake.lua` gates.
 
 ### Docs & hygiene
 
