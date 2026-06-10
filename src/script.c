@@ -23,7 +23,10 @@
 #include "port_entity_ctx.h"
 #include "port_rom.h"
 #include "port/port_generic_entity.h"
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 extern void* Port_LookupScriptFunc(u32 gba_addr);
+static inline void ScriptCommand_RandoOverrideItem(const Entity* entity, u8* item, u8* subtype);
 #else
 #define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
 #endif
@@ -986,19 +989,24 @@ void ScriptCommand_CheckKinstoneFused(Entity* entity, ScriptExecutionContext* co
 }
 
 void ScriptCommand_BuyItem(Entity* entity, ScriptExecutionContext* context) {
-    u32 item, tmp2;
+    u8 item;
+    u8 subtype;
     s32 price;
+
     item = context->scriptInstructionPointer[1];
-    tmp2 = context->scriptInstructionPointer[2];
+    subtype = context->scriptInstructionPointer[2];
     if (!item) {
         item = gRoomVars.shopItemType;
-        tmp2 = gRoomVars.shopItemType2;
+        subtype = gRoomVars.shopItemType2;
     }
     price = GetItemPrice(item);
     context->condition = (price <= gSave.stats.rupees);
     if (context->condition) {
         ModRupees(-price);
-        InitItemGetSequence(item, tmp2, 0);
+#ifdef PC_PORT
+        ScriptCommand_RandoOverrideItem(entity, &item, &subtype);
+#endif
+        InitItemGetSequence(item, subtype, 0);
         gRoomVars.shopItemType = 0;
         gRoomVars.shopItemType2 = 0;
     }
@@ -1681,13 +1689,75 @@ void ScriptCommand_IncreaseMaxHealth(Entity* entity, ScriptExecutionContext* con
     gSave.stats.maxHealth = min(gSave.stats.maxHealth + 8, 0xA0);
     gSave.stats.health = gSave.stats.maxHealth;
 }
+#ifdef PC_PORT
+static uint32_t ScriptCommand_RandoKeyForItem(const Entity* entity, u8 item) {
+    if (entity == NULL) {
+        return UINT32_MAX;
+    }
+
+    switch (entity->kind) {
+        case NPC:
+            switch (entity->id) {
+                case REM:
+                    if (item == ITEM_PEGASUS_BOOTS) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_SHOE_SHOP, 0, 0);
+                    }
+                    break;
+                case FOREST_MINISH:
+                    if (item == ITEM_BOMBBAG) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BOMB_MINISH_BAG, 0,
+                                                      0);
+                    }
+                    if (item == ITEM_REMOTE_BOMBS) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
+                                                      RANDO_SPECIAL_KEY_BOMB_MINISH_REMOTES, 0, 0);
+                    }
+                    break;
+                case SYRUP:
+                    if (item == ITEM_QST_MUSHROOM) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_WITCH_HUT, 0, 0);
+                    }
+                    break;
+            }
+            break;
+        case OBJECT:
+            if (entity->id == GREAT_FAIRY) {
+                switch (item) {
+                    case ITEM_WALLET:
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
+                                                      RANDO_SPECIAL_KEY_MINISH_GREAT_FAIRY, 0, 0);
+                    case ITEM_BOMBBAG:
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
+                                                      RANDO_SPECIAL_KEY_CRENEL_GREAT_FAIRY, 0, 0);
+                    case ITEM_LARGE_QUIVER:
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
+                                                      RANDO_SPECIAL_KEY_VALLEY_GREAT_FAIRY, 0, 0);
+                }
+            }
+            break;
+    }
+
+    return UINT32_MAX;
+}
+
+static inline void ScriptCommand_RandoOverrideItem(const Entity* entity, u8* item, u8* subtype) {
+    uint32_t key = ScriptCommand_RandoKeyForItem(entity, *item);
+    if (key != UINT32_MAX) {
+        (void)Rando_OverrideLocationKey(key, item, subtype);
+    }
+}
+#endif
 
 void ScriptCommand_GivePlayerItem(Entity* entity, ScriptExecutionContext* context) {
-    u32 tmp = 0;
-    if (context->scriptInstructionPointer[1] == ITEM_SHELLS) {
-        tmp = context->intVariable;
+    u8 item = context->scriptInstructionPointer[1];
+    u8 subtype = 0;
+    if (item == ITEM_SHELLS) {
+        subtype = (u8)context->intVariable;
     }
-    InitItemGetSequence(context->scriptInstructionPointer[1], tmp, 0);
+#ifdef PC_PORT
+    ScriptCommand_RandoOverrideItem(entity, &item, &subtype);
+#endif
+    InitItemGetSequence(item, subtype, 0);
 }
 
 void ScriptCommand_GiveKinstone(Entity* entity, ScriptExecutionContext* context) {
@@ -1704,7 +1774,12 @@ void ScriptCommand_SetInventoryValue(Entity* entity, ScriptExecutionContext* con
 }
 
 void ScriptCommand_InitItemGetSequence(Entity* entity, ScriptExecutionContext* context) {
-    InitItemGetSequence(context->scriptInstructionPointer[1], 0, 3);
+    u8 item = context->scriptInstructionPointer[1];
+    u8 subtype = 0;
+#ifdef PC_PORT
+    ScriptCommand_RandoOverrideItem(entity, &item, &subtype);
+#endif
+    InitItemGetSequence(item, subtype, 3);
 }
 
 void ScriptCommand_CameraTargetEntity(Entity* entity, ScriptExecutionContext* context) {

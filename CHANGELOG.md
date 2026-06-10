@@ -61,11 +61,14 @@
   non-area/room rewards and threaded per-location overrides into Stockwell's
   shop slots, Blade Brothers dojo rewards, Carlov's medal, the Hylia dog
   bottle, the Minish Village barrel-house Jabber Nut, the three library books,
-  Melari's broken-sword reward, Business Scrub item sales, plus opt-in Goron
-  Merchant sets and Cucco rounds. `rando_logic_test` now asserts those
-  bindings under both default and override settings, and the headless repro
-  probe rises from 206 keyed / 195 overridden to 228 keyed / 217 overridden at
-  stock settings.
+  Melari's broken-sword reward, the shoe-shop Pegasus Boots, the Witch Hut
+  mushroom, the Bomb Minish bomb bag, Minish/Crenel/Valley Great Fairy
+  rewards, Valley Dampe's graveyard key, Business Scrub item sales, plus opt-in
+  Goron Merchant sets / Cucco rounds / Bomb Minish remote bombs. The real-file
+  diagnostic now binds 29/58 scripted keys at stock settings and 57/58 under
+  `GORON_5` + `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `CUCCO_10`; the
+  headless repro probe rises from 206 keyed / 195 overridden to 235 keyed /
+  224 overridden at stock settings.
 - Honest remaining gaps documented in `port/rando/README.md`: `!import`
   approximation (unused by default.logic), remaining NPC-script / fusion
   reward sites without stable native identities, and placement not
