@@ -1035,10 +1035,16 @@ bool32 sub_08078008(ChargeState* state) {
     Item swordType;
     if (ItemIsSword(gSave.stats.equipped[SLOT_A]) != ITEM_NONE) {
         swordType = gSave.stats.equipped[SLOT_A];
-    } else if (ItemIsSword(gSave.stats.equipped[SLOT_B]) != ITEM_NONE) {
-        swordType = gSave.stats.equipped[SLOT_B];
     } else {
-        swordType = ITEM_NONE;
+        u32 bItem = gSave.stats.equipped[SLOT_B];
+#ifdef PC_PORT
+        bItem = Port_SoftSlots_GetEffectiveBItem(bItem);
+#endif
+        if (ItemIsSword(bItem) != ITEM_NONE) {
+            swordType = bItem;
+        } else {
+            swordType = ITEM_NONE;
+        }
     }
 
     if (swordType == ITEM_SMITH_SWORD || swordType == ITEM_GREEN_SWORD) {
@@ -2741,7 +2747,11 @@ bool32 HasSwordEquipped(void) {
     if (ItemIsSword((u32)gSave.stats.equipped[SLOT_A]) != 0) {
         return TRUE;
     } else {
-        return ItemIsSword((u32)gSave.stats.equipped[SLOT_B]);
+        u32 bItem = gSave.stats.equipped[SLOT_B];
+#ifdef PC_PORT
+        bItem = Port_SoftSlots_GetEffectiveBItem(bItem);
+#endif
+        return ItemIsSword(bItem);
     }
 }
 

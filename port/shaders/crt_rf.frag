@@ -20,7 +20,7 @@ layout(location = 0) in  vec2 vTexCoord;
 layout(location = 0) out vec4 oColor;
 
 vec3 blur5(sampler2D src, vec2 uv) {
-    vec2 dx = vec2(1.0 / 240.0, 0.0);
+    vec2 dx = vec2(1.0 / float(textureSize(src, 0).x), 0.0);
     vec3 t0 = texture(src, uv - dx - dx).rgb;
     vec3 t1 = texture(src, uv - dx     ).rgb;
     vec3 t2 = texture(src, uv          ).rgb;

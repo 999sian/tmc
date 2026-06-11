@@ -465,6 +465,20 @@ static PlayerTableInfo BuildPlayerTable(void) {
     return playerTable;
 }
 
+/* Throttled log when an agbplay exception is contained at a C boundary.
+ * agbplay throws Xcept (: std::exception) on malformed song data — a bad
+ * sounds.json offset or corrupt ROM — and several callers run on the SDL
+ * audio thread, where letting it unwind across the extern "C" boundary is
+ * UB / std::terminate. The guards below convert that into silence + a warning. */
+static void AudioGuardWarn(const char* where, const char* what) {
+    static int warned = 0;
+    if (warned < 8) {
+        fprintf(stderr, "[AUDIO] contained exception in %s: %s\n",
+                where, what ? what : "unknown");
+        ++warned;
+    }
+}
+
 static void RebuildContextLocked(void) {
     std::span<uint8_t> romSpan;
     SongTableInfo songTableInfo;
@@ -480,17 +494,25 @@ static void RebuildContextLocked(void) {
         return;
     }
 
-    romSpan = std::span<uint8_t>(gRomData, gRomSize);
-    sState.rom = std::make_unique<Rom>(Rom::LoadFromBufferRef(romSpan));
+    try {
+        romSpan = std::span<uint8_t>(gRomData, gRomSize);
+        sState.rom = std::make_unique<Rom>(Rom::LoadFromBufferRef(romSpan));
 
-    songTableInfo.pos = SongTableInfo::POS_AUTO;
-    songTableInfo.count = 0;
-    songTableInfo.tableIdx = 0;
+        songTableInfo.pos = SongTableInfo::POS_AUTO;
+        songTableInfo.count = 0;
+        songTableInfo.tableIdx = 0;
 
-    sState.ctx = std::make_unique<MP2KContext>(
-        sState.sampleRate, -1, *sState.rom, MakeSoundMode(), MakeAgbplayMode(), songTableInfo, BuildPlayerTable()
-    );
-    sState.ctx->m4aSoundMode(sState.soundMode);
+        sState.ctx = std::make_unique<MP2KContext>(
+            sState.sampleRate, -1, *sState.rom, MakeSoundMode(), MakeAgbplayMode(), songTableInfo, BuildPlayerTable()
+        );
+        sState.ctx->m4aSoundMode(sState.soundMode);
+    } catch (const std::exception& e) {
+        /* Malformed song table / ROM: leave the backend silent rather than
+         * letting agbplay's Xcept cross the extern "C" boundary. */
+        AudioGuardWarn("RebuildContextLocked", e.what());
+        sState.ctx.reset();
+        sState.rom.reset();
+    }
 }
 
 static bool HasActivePlaybackLocked(void) {
@@ -518,6 +540,7 @@ static void RenderChunkLocked(void) {
         return;
     }
 
+    try {
     sState.ctx->m4aSoundMain();
 
     for (size_t sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
@@ -558,6 +581,11 @@ static void RenderChunkLocked(void) {
 
         sState.pendingSamples[sampleIndex * 2 + 0] = static_cast<int16_t>(std::lround(left * 32767.0f));
         sState.pendingSamples[sampleIndex * 2 + 1] = static_cast<int16_t>(std::lround(right * 32767.0f));
+    }
+    } catch (const std::exception& e) {
+        AudioGuardWarn("RenderChunkLocked", e.what());
+        std::fill(sState.pendingSamples.begin(), sState.pendingSamples.end(),
+                  static_cast<int16_t>(0));
     }
 }
 
@@ -622,46 +650,55 @@ void Port_M4A_Backend_SetVSyncEnabled(bool enabled) {
 
 bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId) {
     std::lock_guard<std::mutex> lock(sStateMutex);
-    const size_t songPos = SongIdToRomPosLocked(songId);
+    try {
+        const size_t songPos = SongIdToRomPosLocked(songId);
 
-    if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
-        return false;
-    }
-    if (songPos == 0 || songPos >= gRomSize) {
-        sState.ctx->m4aMPlayStop(playerIndex);
-        if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
-        return false;
-    }
+        if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
+            return false;
+        }
+        if (songPos == 0 || songPos >= gRomSize) {
+            sState.ctx->m4aMPlayStop(playerIndex);
+            if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
+            return false;
+        }
 
-    /* Idempotent restart for BGM only (song IDs 1..99): if this player is
-     * already running this exact BGM, leave it alone. The engine commonly
-     * re-issues the room BGM on every room transition; restarting the
-     * playback is audible as music resetting between rooms. SFX (>=100)
-     * legitimately re-trigger the same id and must NOT be skipped. */
-    if (songId >= 1 && songId <= 99 && playerIndex < kPlayerCount &&
-        sState.currentSongId[playerIndex] == songId) {
+        /* Idempotent restart for BGM only (song IDs 1..99): if this player is
+         * already running this exact BGM, leave it alone. The engine commonly
+         * re-issues the room BGM on every room transition; restarting the
+         * playback is audible as music resetting between rooms. SFX (>=100)
+         * legitimately re-trigger the same id and must NOT be skipped. */
+        if (songId >= 1 && songId <= 99 && playerIndex < kPlayerCount &&
+            sState.currentSongId[playerIndex] == songId) {
+            return true;
+        }
+
+        sState.ctx->m4aMPlayStart(playerIndex, songPos);
+        if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = songId;
         return true;
+    } catch (const std::exception& e) {
+        AudioGuardWarn("StartSongById", e.what());
+        return false;
     }
-
-    sState.ctx->m4aMPlayStart(playerIndex, songPos);
-    if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = songId;
-    return true;
 }
 
 void Port_M4A_Backend_StartSong(uint8_t playerIndex, const SongHeader* songHeader) {
     std::lock_guard<std::mutex> lock(sStateMutex);
-    const size_t songPos = SongHeaderToRomPos(songHeader);
+    try {
+        const size_t songPos = SongHeaderToRomPos(songHeader);
 
-    if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
-        return;
+        if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
+            return;
+        }
+
+        if (songPos == 0) {
+            sState.ctx->m4aMPlayStop(playerIndex);
+            return;
+        }
+
+        sState.ctx->m4aMPlayStart(playerIndex, songPos);
+    } catch (const std::exception& e) {
+        AudioGuardWarn("StartSong", e.what());
     }
-
-    if (songPos == 0) {
-        sState.ctx->m4aMPlayStop(playerIndex);
-        return;
-    }
-
-    sState.ctx->m4aMPlayStart(playerIndex, songPos);
 }
 
 void Port_M4A_Backend_StopPlayer(uint8_t playerIndex) {

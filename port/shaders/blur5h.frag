@@ -13,7 +13,9 @@ layout(location = 0) in  vec2 vTexCoord;
 layout(location = 0) out vec4 oColor;
 
 void main() {
-    vec2 dx = vec2(1.0 / 240.0, 0.0);
+    // Texel size from the actual source dimensions, not a hardcoded 240: the
+    // source may be native 240, the 384 widescreen FB, or an internal-scaled buffer.
+    vec2 dx = vec2(1.0 / float(textureSize(uSource, 0).x), 0.0);
     vec3 t0 = texture(uSource, vTexCoord - dx - dx).rgb;
     vec3 t1 = texture(uSource, vTexCoord - dx     ).rgb;
     vec3 t2 = texture(uSource, vTexCoord          ).rgb;
