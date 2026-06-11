@@ -199,6 +199,12 @@ u32 InitSaveData(void) {
 }
 
 u32 WriteSaveFile(u32 index, SaveFile* saveFile) {
+#ifdef PC_PORT
+    {
+        extern bool Port_RandoSave_SaveActiveSlot(int slot);
+        Port_RandoSave_SaveActiveSlot((int)index);
+    }
+#endif
 #if defined(DEMO_USA) || defined(DEMO_JP)
     return 1;
 #else
