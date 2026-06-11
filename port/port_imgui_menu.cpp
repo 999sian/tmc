@@ -46,6 +46,7 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
 #include "rando/rando_file_menu.h"
+#include "port_softslots.h"
 
 #include <cstdio>
 #include <cstring>
@@ -284,6 +285,7 @@ extern "C" void Port_ImGui_SetEnabled(bool enabled) { sImGuiEnabled = enabled; }
 extern "C" bool Port_ImGui_RibbonEnabled(void) { return sRibbonEnabled; }
 extern "C" void Port_ImGui_SetRibbonEnabled(bool enabled) { sRibbonEnabled = enabled; }
 
+static void RandoUi_HelpTooltip(const char* text);
 /* ------------------------------------------------------------------ */
 /*   Externs for the ribbon's direct-action widgets                   */
 /* ------------------------------------------------------------------ */
@@ -371,115 +373,156 @@ void Port_DebugMenu_Toggle(void);
 extern "C" void Port_DebugMenu_ToastFromExternal(const char* msg);
 
 static void DrawRibbonItemsTab(void) {
-    if (ImGui::Button("Unlock all items"))      { Port_DebugAction_GiveAllItems(); Port_DebugMenu_ToastFromExternal("All items granted"); }
-    ImGui::SameLine();
-    if (ImGui::Button("Max hearts"))            { Port_DebugAction_MaxHearts();    Port_DebugMenu_ToastFromExternal("Hearts maxed"); }
-    ImGui::SameLine();
-    if (ImGui::Button("Heal"))                  { Port_DebugAction_HealFull();     Port_DebugMenu_ToastFromExternal("Healed"); }
-    ImGui::SameLine();
-    if (ImGui::Button("999 rupees"))            { Port_DebugAction_MaxRupees();    Port_DebugMenu_ToastFromExternal("999 rupees"); }
-    ImGui::SameLine();
-    if (ImGui::Button("999 shells"))            { Port_DebugAction_MaxShells();    Port_DebugMenu_ToastFromExternal("999 shells"); }
-    ImGui::SameLine();
-    if (ImGui::Button("All kinstones fused"))   { Port_DebugAction_AllKinstones(); Port_DebugMenu_ToastFromExternal("All kinstones"); }
+    if (ImGui::BeginTable("##items_tab_table", 2, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Stats & Unlocks", ImGuiTableColumnFlags_WidthFixed, 220.0f);
+        ImGui::TableSetupColumn("Recovery & Cheats", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableNextRow();
+
+        ImGui::TableSetColumnIndex(0);
+        ImGui::SeparatorText("Stats & Unlocks");
+        if (ImGui::Button("Unlock all items", ImVec2(200, 0))) {
+            Port_DebugAction_GiveAllItems();
+            Port_DebugMenu_ToastFromExternal("All items granted");
+        }
+        if (ImGui::Button("All kinstones fused", ImVec2(200, 0))) {
+            Port_DebugAction_AllKinstones();
+            Port_DebugMenu_ToastFromExternal("All kinstones");
+        }
+
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SeparatorText("Recovery & Cheats");
+        if (ImGui::Button("Heal", ImVec2(120, 0))) {
+            Port_DebugAction_HealFull();
+            Port_DebugMenu_ToastFromExternal("Healed");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Max hearts", ImVec2(120, 0))) {
+            Port_DebugAction_MaxHearts();
+            Port_DebugMenu_ToastFromExternal("Hearts maxed");
+        }
+        if (ImGui::Button("999 rupees", ImVec2(120, 0))) {
+            Port_DebugAction_MaxRupees();
+            Port_DebugMenu_ToastFromExternal("999 rupees");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("999 shells", ImVec2(120, 0))) {
+            Port_DebugAction_MaxShells();
+            Port_DebugMenu_ToastFromExternal("999 shells");
+        }
+
+        ImGui::EndTable();
+    }
 }
 
 static void DrawRibbonDisplayTab(void) {
-    /* Scale */
-    int scale = (int)Port_PPU_WindowScale();
-    ImGui::Text("Window scale"); ImGui::SameLine(140);
-    if (ImGui::Button("<##scale")) Port_PPU_CycleWindowScale(-1);
-    ImGui::SameLine(); ImGui::Text("%dx", scale); ImGui::SameLine();
-    if (ImGui::Button(">##scale")) Port_PPU_CycleWindowScale(+1);
-
-    /* Backend-conditional features. Port_PPU_CycleFilter dispatches to
-     * the CPU-side SDL_Renderer filters on the software path and to the
-     * stock SDL_GPU shader filters on the GPU path. */
     const bool gpuActive = Port_GPU_IsActive();
 
-    /* Filter (presentation mode: nearest/linear/xBRZ). Enabled on both
-     * backends. xBRZ Linear vs Nearest currently only differs on the
-     * SDL_Renderer path (SDL_SCALEMODE controls the final stretch); on
-     * GPU both ride whatever sampler the passthrough shader picks. */
-    ImGui::Text("Filter"); ImGui::SameLine(140);
-    if (ImGui::Button("<##filter")) Port_PPU_CyclePresentationMode(-1);
-    ImGui::SameLine(); ImGui::Text("%s", Port_PPU_PresentationModeName()); ImGui::SameLine();
-    if (ImGui::Button(">##filter")) Port_PPU_CyclePresentationMode(+1);
+    if (ImGui::BeginTable("##display_settings_table", 2, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-    /* FPS */
-    ImGui::Text("Target FPS"); ImGui::SameLine(140);
-    if (ImGui::Button("<##fps")) Port_Config_CycleTargetFps(-1);
-    ImGui::SameLine();
-    unsigned fps = Port_Config_TargetFps();
-    if (fps == 0) ImGui::Text("uncapped");
-    else          ImGui::Text("%u", fps);
-    ImGui::SameLine();
-    if (ImGui::Button(">##fps")) Port_Config_CycleTargetFps(+1);
+        // Window scale
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Window scale");
+        ImGui::TableSetColumnIndex(1);
+        int scale = (int)Port_PPU_WindowScale();
+        if (ImGui::Button("<##scale")) Port_PPU_CycleWindowScale(-1);
+        ImGui::SameLine(); ImGui::Text("%dx", scale); ImGui::SameLine();
+        if (ImGui::Button(">##scale")) Port_PPU_CycleWindowScale(+1);
 
-    /* Internal scale — now active on both backends. SW path scales
-     * the buffer before SDL_RenderTexture; GPU path uploads the
-     * scaled buffer through the source texture (recreated on size
-     * change inside Port_GPU_PresentFrame). The visible effect is
-     * the same: nearest-replicate base + affine OAM subpixel AA. */
-    ImGui::Text("Internal"); ImGui::SameLine(140);
-    if (ImGui::Button("<##iscale")) Port_Config_CycleInternalScale(-1);
-    ImGui::SameLine();
-    ImGui::Text("%ux", (unsigned)Port_Config_InternalScale());
-    ImGui::SameLine();
-    if (ImGui::Button(">##iscale")) Port_Config_CycleInternalScale(+1);
+        // Filter
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Filter");
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("<##filter")) Port_PPU_CyclePresentationMode(-1);
+        ImGui::SameLine(); ImGui::Text("%s", Port_PPU_PresentationModeName()); ImGui::SameLine();
+        if (ImGui::Button(">##filter")) Port_PPU_CyclePresentationMode(+1);
 
-    /* True widescreen reveal is WIP. Runtime-toggle it so wide builds can
-     * fall back to a clean native 240x160 frame without rebuilding. */
-#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
-    {
-        bool ws = Port_Config_WidescreenEnabled();
-        if (ImGui::Checkbox("Widescreen (WIP)", &ws)) {
-            Port_Config_SetWidescreenEnabled(ws);
-            Port_PPU_ApplyWindowScale();
-            Port_DebugMenu_ToastFromExternal(ws ? "Widescreen enabled" : "Widescreen disabled");
-        }
+        // Target FPS
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Target FPS");
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("<##fps")) Port_Config_CycleTargetFps(-1);
         ImGui::SameLine();
-        ImGui::TextDisabled("native fallback outside wide gameplay");
+        unsigned fps = Port_Config_TargetFps();
+        if (fps == 0) ImGui::Text("uncapped");
+        else          ImGui::Text("%u", fps);
+        ImGui::SameLine();
+        if (ImGui::Button(">##fps")) Port_Config_CycleTargetFps(+1);
+
+        // Internal scale
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Internal scale");
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("<##iscale")) Port_Config_CycleInternalScale(-1);
+        ImGui::SameLine(); ImGui::Text("%ux", (unsigned)Port_Config_InternalScale()); ImGui::SameLine();
+        if (ImGui::Button(">##iscale")) Port_Config_CycleInternalScale(+1);
+
+        // Aspect ratio
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Aspect ratio");
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("<##aspect")) Port_Config_CycleAspectMode(-1);
+        ImGui::SameLine(); ImGui::Text("%s", Port_Config_AspectModeName(Port_Config_AspectMode())); ImGui::SameLine();
+        if (ImGui::Button(">##aspect")) Port_Config_CycleAspectMode(+1);
+
+        // Renderer
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Renderer");
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("<##renderer")) Port_Config_CycleRenderBackend(-1);
+        ImGui::SameLine(); ImGui::Text("%s", Port_Config_RenderBackendName(Port_Config_RenderBackend())); ImGui::SameLine();
+        if (ImGui::Button(">##renderer")) Port_Config_CycleRenderBackend(+1);
+        ImGui::SameLine(); ImGui::TextDisabled("(restart)");
+
+        // Background
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Background");
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("<##bgfill")) Port_Config_CycleBgFill(-1);
+        ImGui::SameLine(); ImGui::Text("%s", Port_Config_BgFillName(Port_Config_BgFill())); ImGui::SameLine();
+        if (ImGui::Button(">##bgfill")) Port_Config_CycleBgFill(+1);
+
+        // CRT filter
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("CRT filter");
+        ImGui::TableSetColumnIndex(1);
+        if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
+        ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
+        if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
+
+        ImGui::EndTable();
     }
-#else
-    ImGui::TextDisabled("Widescreen (WIP)");
-    ImGui::SameLine();
-    ImGui::TextDisabled("(build with --widescreen_width > 240)");
-#endif
 
-    /* Fullscreen */
-    bool fs = Port_PPU_IsFullscreen();
-    if (ImGui::Checkbox("Fullscreen", &fs)) Port_PPU_ToggleFullscreen();
+    if (Port_Config_BgFill() == PORT_BG_FILL_SOLID_COLOR) {
+        uint8_t r8 = 0, g8 = 0, b8 = 0;
+        Port_Config_BgFillColor(&r8, &g8, &b8);
+        int rgb[3] = { (int)r8, (int)g8, (int)b8 };
+        bool changed = false;
+        ImGui::Indent(150.0f);
+        ImGui::PushItemWidth(120.0f);
+        if (ImGui::SliderInt("R##bgcol_r", &rgb[0], 0, 255)) changed = true; ImGui::SameLine();
+        if (ImGui::SliderInt("G##bgcol_g", &rgb[1], 0, 255)) changed = true; ImGui::SameLine();
+        if (ImGui::SliderInt("B##bgcol_b", &rgb[2], 0, 255)) changed = true;
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        ImVec4 sw = ImVec4(rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f);
+        ImGui::ColorButton("##bgcol_preview", sw,
+                           ImGuiColorEditFlags_NoPicker |
+                           ImGuiColorEditFlags_NoTooltip,
+                           ImVec2(22, 22));
+        ImGui::Unindent(150.0f);
+        if (changed) {
+            Port_Config_SetBgFillColor((uint8_t)rgb[0], (uint8_t)rgb[1], (uint8_t)rgb[2]);
+        }
+    }
 
-    /* VSync — toggle SDL3 swap-on-vblank. ON by default. Issue #118. */
-    bool vsync = Port_PPU_VSyncEnabled();
-    if (ImGui::Checkbox("VSync", &vsync)) Port_PPU_SetVSync(vsync);
-
-    /* CRT / shader filter. On GPU this cycles the stock SDL_GPU filter
-     * pipeline, including Metal-backed macOS builds where .glslp
-     * presets are intentionally unavailable. */
-    ImGui::Text("CRT filter"); ImGui::SameLine(140);
-    if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
-    ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
-    if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
-
-    /* Shader preset (libretro .glslp) — Step 7 picker. Scans the
-     * working directory's ./shaders/ subdirectory for *.glslp files;
-     * selecting one tears down any active preset and loads the new
-     * one through the .glslp runtime. "Off" returns to the stock GPU
-     * filter pipeline above. The list is cached and refreshes on
-     * the Scan button or after a successful Load. Requires a GPU
-     * backend that accepts SPIR-V — the .glslp runtime compiles GLSL
-     * presets into SPIR-V SDL_GPU pipelines, while the native Metal
-     * macOS path uses only the stock MSL filters. */
     const bool glslpSupported = gpuActive && Port_GPU_SupportsGlslpRuntime();
     if (!glslpSupported) {
-        ImGui::TextDisabled("Shader preset");
-        ImGui::SameLine();
-        ImGui::TextDisabled("%s", gpuActive ? "(SPIR-V backend required)" : "(GPU backend required)");
-    } else
-    {
-
+        ImGui::Indent(150.0f);
+        ImGui::TextDisabled("Shader preset: %s", gpuActive ? "(SPIR-V backend required)" : "(GPU backend required)");
+        ImGui::Unindent(150.0f);
+    } else {
         static std::vector<std::string> sPresetPaths;
         static std::string              sActivePreset;
         static bool                     sScannedOnce = false;
@@ -487,11 +530,6 @@ static void DrawRibbonDisplayTab(void) {
         auto refresh = [&] {
             sPresetPaths.clear();
             std::error_code ec;
-            /* Walk a few common locations: alongside the binary
-             * (typical user-install layout), the current working
-             * directory (developer setup), and the demo `/tmp/glslp_demo`
-             * path that the test scripts populate. Each path is
-             * recursively searched for `*.glslp`. */
             std::vector<std::string> roots;
             if (const char* base = SDL_GetBasePath()) {
                 std::string b = base;
@@ -511,15 +549,14 @@ static void DrawRibbonDisplayTab(void) {
                     }
                 }
             }
-            /* De-dupe: the same .glslp can surface through multiple roots
-             * (e.g. ./shaders/x.glslp and ./x.glslp via recursive walk). */
             std::sort(sPresetPaths.begin(), sPresetPaths.end());
             sPresetPaths.erase(std::unique(sPresetPaths.begin(), sPresetPaths.end()),
                                sPresetPaths.end());
         };
         if (!sScannedOnce) { refresh(); sScannedOnce = true; }
 
-        ImGui::Text("Shader preset"); ImGui::SameLine(140);
+        ImGui::Indent(150.0f);
+        ImGui::TextUnformatted("Shader preset"); ImGui::SameLine();
         if (ImGui::Button("Off##preset")) {
             Port_GlslpRuntime_Unload();
             sActivePreset.clear();
@@ -535,25 +572,16 @@ static void DrawRibbonDisplayTab(void) {
             ImGui::TextDisabled("  active: %s", sActivePreset.c_str());
         }
 
-        /* Vertical list of presets — clickable. Capped at 8 visible
-         * before scrolling so the F8 ribbon stays compact on small
-         * windows. */
         if (!sPresetPaths.empty()) {
-            ImGui::Indent(140);
             if (ImGui::BeginListBox("##preset_list",
-                    ImVec2(420, ImGui::GetTextLineHeightWithSpacing() * 8))) {
+                    ImVec2(420, ImGui::GetTextLineHeightWithSpacing() * 3.5f))) {
                 for (size_t i = 0; i < sPresetPaths.size(); ++i) {
                     bool selected = (sPresetPaths[i] == sActivePreset)
                                     && Port_GlslpRuntime_IsActive();
-                    /* Short display name — strip the leading directory
-                     * components so the user sees the .glslp filename. */
                     std::string label = std::filesystem::path(sPresetPaths[i]).filename().string();
                     label += "    "; label += sPresetPaths[i];
                     if (ImGui::Selectable(label.c_str(), selected)) {
                         if (selected) {
-                            /* Click on the currently-active row again →
-                             * toggle off and return to the stock GPU
-                             * filter pipeline. */
                             Port_GlslpRuntime_Unload();
                             sActivePreset.clear();
                             Port_DebugMenu_ToastFromExternal("Shader preset off");
@@ -561,112 +589,45 @@ static void DrawRibbonDisplayTab(void) {
                             sActivePreset = sPresetPaths[i];
                             Port_DebugMenu_ToastFromExternal("Preset loaded");
                         } else {
-                            Port_DebugMenu_ToastFromExternal("Preset load FAILED - see stderr");
+                            Port_DebugMenu_ToastFromExternal("Preset load FAILED");
                         }
                     }
                 }
                 ImGui::EndListBox();
             }
-            ImGui::Unindent(140);
         }
+        ImGui::Unindent(150.0f);
     }
 
-    /* Aspect-ratio mode — picks the stage (visible area) that the GBA
-     * 3:2 frame sits inside. Wider modes add pillar bars around the
-     * frame; their fill is controlled by the next widget. */
-    {
-        ImGui::Text("Aspect ratio"); ImGui::SameLine(140);
-        if (ImGui::Button("<##aspect")) Port_Config_CycleAspectMode(-1);
-        ImGui::SameLine();
-        ImGui::Text("%s", Port_Config_AspectModeName(Port_Config_AspectMode()));
-        ImGui::SameLine();
-        if (ImGui::Button(">##aspect")) Port_Config_CycleAspectMode(+1);
-    }
+    ImGui::Separator();
 
-    /* Renderer backend — Auto, Software (SDL_Renderer), or GPU
-     * (SDL_GPU). The GPU path is required for CRT/LCD/glslp shader
-     * filters. Changing this needs a restart because the window's
-     * swapchain owner is set once at Port_PPU_Init time. */
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
     {
-        ImGui::Text("Renderer"); ImGui::SameLine(140);
-        if (ImGui::Button("<##renderer")) Port_Config_CycleRenderBackend(-1);
-        ImGui::SameLine();
-        ImGui::Text("%s", Port_Config_RenderBackendName(Port_Config_RenderBackend()));
-        ImGui::SameLine();
-        if (ImGui::Button(">##renderer")) Port_Config_CycleRenderBackend(+1);
-        ImGui::SameLine();
-        ImGui::TextDisabled("(restart)");
-    }
-
-    /* Background-fill style for the pillar bars added by the aspect
-     * mode. "Blurred" uses a linearly-filtered stretched copy of the
-     * current frame for an "ambient mode" halo. */
-    {
-        ImGui::Text("Background"); ImGui::SameLine(140);
-        if (ImGui::Button("<##bgfill")) Port_Config_CycleBgFill(-1);
-        ImGui::SameLine();
-        ImGui::Text("%s", Port_Config_BgFillName(Port_Config_BgFill()));
-        ImGui::SameLine();
-        if (ImGui::Button(">##bgfill")) Port_Config_CycleBgFill(+1);
-
-        if (Port_Config_BgFill() == PORT_BG_FILL_SOLID_COLOR) {
-            /* Plain int sliders for R/G/B — controller-navigable, no
-             * popup state. (An earlier ColorEdit3 here opened a color
-             * picker popup whose lifetime could outlive the F8 ribbon
-             * and was suspected of crashing on close-via-gamepad.) The
-             * trailing ColorButton with NoPicker is a passive swatch. */
-            uint8_t r8 = 0, g8 = 0, b8 = 0;
-            Port_Config_BgFillColor(&r8, &g8, &b8);
-            int rgb[3] = { (int)r8, (int)g8, (int)b8 };
-            bool changed = false;
-            ImGui::PushItemWidth(120.0f);
-            if (ImGui::SliderInt("R##bgcol_r", &rgb[0], 0, 255)) changed = true;
-            ImGui::SameLine();
-            if (ImGui::SliderInt("G##bgcol_g", &rgb[1], 0, 255)) changed = true;
-            ImGui::SameLine();
-            if (ImGui::SliderInt("B##bgcol_b", &rgb[2], 0, 255)) changed = true;
-            ImGui::PopItemWidth();
-            ImGui::SameLine();
-            ImVec4 sw = ImVec4(rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f);
-            ImGui::ColorButton("##bgcol_preview", sw,
-                               ImGuiColorEditFlags_NoPicker |
-                               ImGuiColorEditFlags_NoTooltip,
-                               ImVec2(22, 22));
-            if (changed) {
-                Port_Config_SetBgFillColor((uint8_t)rgb[0],
-                                           (uint8_t)rgb[1],
-                                           (uint8_t)rgb[2]);
-            }
-        }
-    }
-
-    /* Discord Rich Presence — opens a local Unix IPC socket
-     * (Linux/macOS) or named pipe (Windows) and publishes "area ·
-     * hearts · rupees · time" once Discord is running. Enabled by
-     * default; no harm if Discord isn't around. */
-    {
-        bool drp = Port_DiscordRpc_IsEnabled();
-        if (ImGui::Checkbox("Discord Rich Presence", &drp)) {
-            Port_DiscordRpc_SetEnabled(drp);
+        bool ws = Port_Config_WidescreenEnabled();
+        if (ImGui::Checkbox("Widescreen (WIP)", &ws)) {
+            Port_Config_SetWidescreenEnabled(ws);
+            Port_PPU_ApplyWindowScale();
+            Port_DebugMenu_ToastFromExternal(ws ? "Widescreen enabled" : "Widescreen disabled");
         }
         ImGui::SameLine();
-        ImGui::TextDisabled("(?)");
-        if (ImGui::IsItemHovered()) {
-            ImGui::BeginTooltip();
-            ImGui::PushTextWrapPos(360.0f);
-            ImGui::TextUnformatted("Publishes current area + heart/rupee "
-                                   "count to Discord. Works on Linux, "
-                                   "macOS, and Windows. Requires the "
-                                   "Discord desktop client to be running, "
-                                   "and the env var TMC_DISCORD_APP_ID "
-                                   "to point at a registered Discord "
-                                   "application ID - otherwise this "
-                                   "toggle is a no-op (see stderr).");
-            ImGui::PopTextWrapPos();
-            ImGui::EndTooltip();
-        }
     }
+#endif
+
+    bool fs = Port_PPU_IsFullscreen();
+    if (ImGui::Checkbox("Fullscreen", &fs)) Port_PPU_ToggleFullscreen();
+    ImGui::SameLine();
+
+    bool vsync = Port_PPU_VSyncEnabled();
+    if (ImGui::Checkbox("VSync", &vsync)) Port_PPU_SetVSync(vsync);
+    ImGui::SameLine();
+
+    bool drp = Port_DiscordRpc_IsEnabled();
+    if (ImGui::Checkbox("Discord RPC", &drp)) {
+        Port_DiscordRpc_SetEnabled(drp);
+    }
+    RandoUi_HelpTooltip("Publishes current area + heart/rupee count to Discord...");
 }
+
 
 /* Save current game to EEPROM, then drop the player back at the
  * title screen. Issue #92 / "sleep menu goes back to title".
@@ -743,43 +704,58 @@ static void DrawRibbonSavesTab(void) {
     /* Slot grid: each slot is one row with Save / Load buttons + timestamp. */
     const int n = Port_QuickSave_SlotCount();
     const int autoBase = Port_QuickSave_AutoSlotBase();
-    for (int s = 0; s < n; ++s) {
-        ImGui::PushID(s);
-        const char* tag;
-        char tagbuf[16];
-        if (s == 0) tag = "Quick";
-        else if (s < autoBase) { std::snprintf(tagbuf, sizeof(tagbuf), "Slot %d", s); tag = tagbuf; }
-        else { std::snprintf(tagbuf, sizeof(tagbuf), "Auto %d", s - autoBase + 1); tag = tagbuf; }
-        ImGui::Text("%-7s", tag); ImGui::SameLine(80);
+    if (ImGui::BeginTable("##quicksaves_table", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+        ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+        ImGui::TableSetupColumn("Timestamp", ImGuiTableColumnFlags_WidthStretch);
 
-        if (ImGui::Button("Save")) {
-            if (Port_QuickSave_SaveSlot(s)) Port_DebugMenu_ToastFromExternal("Saved");
-        }
-        ImGui::SameLine();
-        if (Port_QuickSave_HasSlot(s)) {
-            if (ImGui::Button("Load")) {
-                if (Port_QuickSave_LoadSlot(s)) Port_DebugMenu_ToastFromExternal("Loaded");
+        for (int s = 0; s < n; ++s) {
+            ImGui::PushID(s);
+            ImGui::TableNextRow();
+
+            // Column 1: Slot name
+            ImGui::TableSetColumnIndex(0);
+            const char* tag;
+            char tagbuf[16];
+            if (s == 0) tag = "Quick";
+            else if (s < autoBase) { std::snprintf(tagbuf, sizeof(tagbuf), "Slot %d", s); tag = tagbuf; }
+            else { std::snprintf(tagbuf, sizeof(tagbuf), "Auto %d", s - autoBase + 1); tag = tagbuf; }
+            ImGui::Text("%s", tag);
+
+            // Column 2: Actions
+            ImGui::TableSetColumnIndex(1);
+            if (ImGui::Button("Save")) {
+                if (Port_QuickSave_SaveSlot(s)) Port_DebugMenu_ToastFromExternal("Saved");
             }
-        } else {
-            ImGui::BeginDisabled(); ImGui::Button("Load"); ImGui::EndDisabled();
-        }
-        ImGui::SameLine();
-        unsigned long long ts = Port_QuickSave_SlotTimestamp(s);
-        if (ts == 0) {
-            ImGui::TextDisabled("(empty)");
-        } else {
-            time_t tt = (time_t)ts;
-            struct tm tm_buf;
+            ImGui::SameLine();
+            if (Port_QuickSave_HasSlot(s)) {
+                if (ImGui::Button("Load")) {
+                    if (Port_QuickSave_LoadSlot(s)) Port_DebugMenu_ToastFromExternal("Loaded");
+                }
+            } else {
+                ImGui::BeginDisabled(); ImGui::Button("Load"); ImGui::EndDisabled();
+            }
+
+            // Column 3: Timestamp
+            ImGui::TableSetColumnIndex(2);
+            unsigned long long ts = Port_QuickSave_SlotTimestamp(s);
+            if (ts == 0) {
+                ImGui::TextDisabled("(empty)");
+            } else {
+                time_t tt = (time_t)ts;
+                struct tm tm_buf;
 #ifdef _WIN32
-            localtime_s(&tm_buf, &tt);
+                localtime_s(&tm_buf, &tt);
 #else
-            localtime_r(&tt, &tm_buf);
+                localtime_r(&tt, &tm_buf);
 #endif
-            char timestr[32];
-            std::strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", &tm_buf);
-            ImGui::TextDisabled("%s", timestr);
+                char timestr[32];
+                std::strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", &tm_buf);
+                ImGui::TextDisabled("%s", timestr);
+            }
+            ImGui::PopID();
         }
-        ImGui::PopID();
+        ImGui::EndTable();
     }
 }
 
@@ -797,75 +773,86 @@ static void DrawRibbonProfilesTab(void) {
     static int  sRenameRow = -1;
     static int  sConfirmDeleteRow = -1;
 
-    for (int i = 0; i < n; ++i) {
-        ImGui::PushID(i);
-        bool isActive = (std::string(names[i]) == activeNow);
-        if (isActive) {
-            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.94f, 0.25f, 1.0f));
-            ImGui::Bullet();
-            ImGui::SameLine();
-            ImGui::Text("%s (active)", names[i]);
-            ImGui::PopStyleColor();
-        } else {
-            ImGui::Text(" %s", names[i]);
-        }
-        ImGui::SameLine(280);
-        if (!isActive) {
-            if (ImGui::Button("Activate")) {
-                Port_Save_SetActivePath(names[i]);
-                Port_Config_SetActiveSaveProfile(names[i]);
-                Port_DebugMenu_ToastFromExternal("Profile activated - go to title to load");
+    if (ImGui::BeginTable("##profiles_table", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("Profile File", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("Actions", ImGuiTableColumnFlags_WidthStretch);
+
+        for (int i = 0; i < n; ++i) {
+            ImGui::PushID(i);
+            ImGui::TableNextRow();
+
+            // Column 1: Profile Name
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%s", names[i]);
+
+            // Column 2: Status
+            ImGui::TableSetColumnIndex(1);
+            bool isActive = (std::string(names[i]) == activeNow);
+            if (isActive) {
+                ImGui::TextColored(ImVec4(1.0f, 0.94f, 0.25f, 1.0f), "active");
+            } else {
+                ImGui::TextDisabled("-");
             }
-            ImGui::SameLine();
-        }
-        /* Rename: clicking opens an inline text box on the next row.
-         * Disabled for the default tmc.sav since renaming it away
-         * would orphan fresh installs. */
-        const bool isDefault = (std::strcmp(names[i], "tmc.sav") == 0);
-        if (!isDefault) {
-            if (ImGui::Button("Rename")) {
-                sRenameRow = i;
-                snprintf(sRenameBuf[i], sizeof(sRenameBuf[i]), "%s", names[i]);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Delete")) sConfirmDeleteRow = i;
-        }
-        if (sRenameRow == i) {
-            ImGui::Indent(40);
-            ImGui::PushItemWidth(220);
-            ImGui::InputText("##rename", sRenameBuf[i], sizeof(sRenameBuf[i]));
-            ImGui::PopItemWidth();
-            ImGui::SameLine();
-            if (ImGui::Button("OK")) {
-                if (Port_Save_RenameProfile(names[i], sRenameBuf[i])) {
-                    Port_DebugMenu_ToastFromExternal("Profile renamed");
-                } else {
-                    Port_DebugMenu_ToastFromExternal("Rename refused (clash / bad name / default)");
+
+            // Column 3: Actions
+            ImGui::TableSetColumnIndex(2);
+            if (!isActive) {
+                if (ImGui::Button("Activate")) {
+                    Port_Save_SetActivePath(names[i]);
+                    Port_Config_SetActiveSaveProfile(names[i]);
+                    Port_DebugMenu_ToastFromExternal("Profile activated - go to title to load");
                 }
-                sRenameRow = -1;
+                ImGui::SameLine();
             }
-            ImGui::SameLine();
-            if (ImGui::Button("X")) sRenameRow = -1;
-            ImGui::Unindent(40);
-        }
-        if (sConfirmDeleteRow == i) {
-            ImGui::Indent(40);
-            ImGui::TextDisabled("Delete %s? This cannot be undone.", names[i]);
-            ImGui::SameLine();
-            if (ImGui::Button("Confirm delete")) {
-                if (Port_Save_DeleteProfile(names[i])) {
-                    Port_DebugMenu_ToastFromExternal("Profile deleted");
-                } else {
-                    Port_DebugMenu_ToastFromExternal("Delete refused (active / bad name)");
+            const bool isDefault = (std::strcmp(names[i], "tmc.sav") == 0);
+            if (!isDefault) {
+                if (ImGui::Button("Rename")) {
+                    sRenameRow = i;
+                    snprintf(sRenameBuf[i], sizeof(sRenameBuf[i]), "%s", names[i]);
                 }
-                sConfirmDeleteRow = -1;
-                sRenameRow = -1;
+                ImGui::SameLine();
+                if (ImGui::Button("Delete")) sConfirmDeleteRow = i;
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel")) sConfirmDeleteRow = -1;
-            ImGui::Unindent(40);
+
+            if (sRenameRow == i) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::PushItemWidth(160);
+                ImGui::InputText("##rename", sRenameBuf[i], sizeof(sRenameBuf[i]));
+                ImGui::PopItemWidth();
+                ImGui::TableSetColumnIndex(2);
+                if (ImGui::Button("OK")) {
+                    if (Port_Save_RenameProfile(names[i], sRenameBuf[i])) {
+                        Port_DebugMenu_ToastFromExternal("Profile renamed");
+                    } else {
+                        Port_DebugMenu_ToastFromExternal("Rename refused (clash / bad name / default)");
+                    }
+                    sRenameRow = -1;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("X")) sRenameRow = -1;
+            }
+            if (sConfirmDeleteRow == i) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(ImVec4(0.9f, 0.35f, 0.35f, 1.0f), "Delete %s?", names[i]);
+                ImGui::TableSetColumnIndex(2);
+                if (ImGui::Button("Confirm delete")) {
+                    if (Port_Save_DeleteProfile(names[i])) {
+                        Port_DebugMenu_ToastFromExternal("Profile deleted");
+                    } else {
+                        Port_DebugMenu_ToastFromExternal("Delete refused (active / bad name)");
+                    }
+                    sConfirmDeleteRow = -1;
+                    sRenameRow = -1;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel")) sConfirmDeleteRow = -1;
+            }
+            ImGui::PopID();
         }
-        ImGui::PopID();
+        ImGui::EndTable();
     }
 
     ImGui::Separator();
@@ -888,6 +875,7 @@ static void DrawRibbonProfilesTab(void) {
         }
     }
 }
+
 
 /* Friendly display name for each action — matches the GBA button names
  * users actually think in. The Port_Config side stores them as
@@ -993,13 +981,36 @@ static void DrawRibbonControlsTab(void) {
 }
 
 static void DrawRibbonEquipTab(void) {
-    for (int s = 0; s < 4; ++s) {
-        ImGui::PushID(s);
-        ImGui::Text("%s", Port_SoftSlots_GetSlotLabel(s)); ImGui::SameLine(280);
-        if (ImGui::Button("<")) Port_SoftSlots_CycleAssignment(s, -1);
-        ImGui::SameLine();
-        if (ImGui::Button(">")) Port_SoftSlots_CycleAssignment(s, +1);
-        ImGui::PopID();
+    if (ImGui::BeginTable("##equip_table", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
+        ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+        ImGui::TableSetupColumn("Assigned Item", ImGuiTableColumnFlags_WidthFixed, 220.0f);
+        ImGui::TableSetupColumn("Cycle", ImGuiTableColumnFlags_WidthStretch);
+
+        for (int s = 0; s < 4; ++s) {
+            ImGui::PushID(s);
+            ImGui::TableNextRow();
+
+            // Column 1: Slot name
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%s", Port_SoftSlots_SlotName(s));
+
+            // Column 2: Assigned item name
+            ImGui::TableSetColumnIndex(1);
+            const char* label = Port_SoftSlots_GetSlotLabel(s);
+            const char* colon = std::strchr(label, ':');
+            const char* item_name = colon ? colon + 1 : label;
+            while (*item_name == ' ') ++item_name;
+            ImGui::Text("%s", item_name);
+
+            // Column 3: Buttons
+            ImGui::TableSetColumnIndex(2);
+            if (ImGui::Button("<")) Port_SoftSlots_CycleAssignment(s, -1);
+            ImGui::SameLine();
+            if (ImGui::Button(">")) Port_SoftSlots_CycleAssignment(s, +1);
+
+            ImGui::PopID();
+        }
+        ImGui::EndTable();
     }
 }
 
@@ -1063,7 +1074,7 @@ static void DrawRibbonWarpTab(void) {
      * controller-navigable (D-pad up/down) and the inner buttons take
      * keyboard / gamepad nav too. */
     ImGui::Separator();
-    const float listH = ImGui::GetTextLineHeightWithSpacing() * 18.0f;
+    const float listH = ImGui::GetContentRegionAvail().y - 4.0f;
     if (ImGui::BeginChild("##warpList", ImVec2(0, listH), ImGuiChildFlags_NavFlattened,
                           0)) {
         /* L1/R1 bumpers = page jump while this child is focused/hovered.
@@ -2041,62 +2052,56 @@ static void DrawRibbonAudioTab(void) {
     if (ImGui::Checkbox("GBA-accurate audio", &gbaAccurate)) {
         Port_Audio_SetGbaAccurate(gbaAccurate);
     }
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
-            "On: NEAREST resampling (the hardware's no-interpolation "
-            "sample-and-hold 'crunch') and the output is handed straight to "
-            "the device with no post-process DSP - for A/B comparison against "
-            "real hardware / mGBA.\n\n"
-            "Off (default): SINC resampling plus the DC-blocker / low-pass / "
-            "stereo-widen / soft-clip chain tuned for modern speakers.");
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
+    RandoUi_HelpTooltip(
+        "On: NEAREST resampling (the hardware's no-interpolation "
+        "sample-and-hold 'crunch') and the output is handed straight to "
+        "the device with no post-process DSP - for A/B comparison against "
+        "real hardware / mGBA.\n\n"
+        "Off (default): SINC resampling plus the DC-blocker / low-pass / "
+        "stereo-widen / soft-clip chain tuned for modern speakers.");
+
     ImGui::Separator();
 
     /* Enhancement sliders — only meaningful while the enhanced (non-accurate)
        post-process chain is running, so grey them out in GBA-accurate mode. */
     ImGui::BeginDisabled(gbaAccurate);
 
-    float width = Port_Audio_GetWidth();
-    if (ImGui::SliderFloat("Stereo width", &width, 1.00f, 1.50f, "%.2f")) {
-        Port_Audio_SetWidth(width);
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
+    if (ImGui::BeginTable("##audio_enhancements", 2, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+        ImGui::TableSetupColumn("Control", ImGuiTableColumnFlags_WidthStretch);
+
+        // Stereo width
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Stereo width");
+        ImGui::TableSetColumnIndex(1);
+        float width = Port_Audio_GetWidth();
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::SliderFloat("##width", &width, 1.00f, 1.50f, "%.2f")) {
+            Port_Audio_SetWidth(width);
+        }
+        RandoUi_HelpTooltip(
             "Mid/side stereo widening. 1.00 = mono image (reference), "
             "1.20 = default. The mid is never altered, so mono playback always "
             "collapses cleanly to the original mix. Lower values (~1.12) reduce "
             "hard-panned peak overshoot. No effect in GBA-accurate mode.");
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
 
-    int reverb = Port_Audio_GetReverbLevel();
-    if (ImGui::SliderInt("Reverb", &reverb, 0, 24)) {
-        Port_Audio_SetReverbLevel(reverb);
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
+        // Reverb
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Reverb");
+        ImGui::TableSetColumnIndex(1);
+        int reverb = Port_Audio_GetReverbLevel();
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::SliderInt("##reverb", &reverb, 0, 24)) {
+            Port_Audio_SetReverbLevel(reverb);
+        }
+        RandoUi_HelpTooltip(
             "Adds a short room tail to sampled (PCM) voices - drums, bass, "
             "some leads - while the chiptune PSG/CGB voices stay dry by the "
             "synth's mix order, so it adds space without muddying the melody. "
             "0 = off (default). ~12 is a gentle, musical amount. Applies live "
             "(does not restart the music). No effect in GBA-accurate mode.");
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
+
+        ImGui::EndTable();
     }
 
     ImGui::EndDisabled();
@@ -2106,33 +2111,30 @@ static void DrawRibbonAudioTab(void) {
                        "the matching sound IDs at the SoundReq / EnqueueSFX "
                        "entry points - music and other SFX are untouched.");
     ImGui::Separator();
-    for (int i = 0; i < (int)AUDIO_MUTE_COUNT; ++i) {
-        bool on = Port_AudioMute_IsEnabled((AudioMuteCategory)i);
-        const char* label = Port_AudioMute_Label((AudioMuteCategory)i);
-        const char* desc  = Port_AudioMute_Description((AudioMuteCategory)i);
-        if (ImGui::Checkbox(label, &on)) {
-            Port_AudioMute_SetEnabled((AudioMuteCategory)i, on);
-        }
-        if (desc && desc[0]) {
-            ImGui::SameLine();
-            ImGui::TextDisabled("(?)");
-            if (ImGui::IsItemHovered()) {
-                ImGui::BeginTooltip();
-                ImGui::PushTextWrapPos(360.0f);
-                ImGui::TextUnformatted(desc);
-                ImGui::PopTextWrapPos();
-                ImGui::EndTooltip();
+
+    if (ImGui::BeginTable("##sfx_mutes", 2, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Left", ImGuiTableColumnFlags_WidthFixed, 220.0f);
+        ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
+
+        for (int i = 0; i < (int)AUDIO_MUTE_COUNT; ++i) {
+            if ((i % 2) == 0) ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(i % 2);
+
+            bool on = Port_AudioMute_IsEnabled((AudioMuteCategory)i);
+            const char* label = Port_AudioMute_Label((AudioMuteCategory)i);
+            const char* desc  = Port_AudioMute_Description((AudioMuteCategory)i);
+            if (ImGui::Checkbox(label, &on)) {
+                Port_AudioMute_SetEnabled((AudioMuteCategory)i, on);
+            }
+            if (desc && desc[0]) {
+                RandoUi_HelpTooltip(desc);
             }
         }
+        ImGui::EndTable();
     }
 }
 
 static void DrawRibbonAccessibilityTab(void) {
-    /* TTS-driven accessibility — reads UI labels aloud through the
-     * platform-native synthesizer. Keep this tab minimal (toggle +
-     * a few sliders + voice/lang text inputs + a test button) so
-     * everything is keyboard-reachable. All Port_TTS_* live in
-     * port_tts.h which we include at the top. */
     Port_TTS_Init();  /* idempotent — safe if main.c already initialised */
     const char* backendName = Port_TTS_GetBackendName();
 
@@ -2142,65 +2144,100 @@ static void DrawRibbonAccessibilityTab(void) {
         "off; settings persist across launches.");
     ImGui::Separator();
 
-    ImGui::Text("Backend"); ImGui::SameLine(160);
-    if (backendName) {
-        ImGui::TextUnformatted(backendName);
-        /* On Windows the runtime path picks NVDA vs SAPI per Speak
-         * call. If the user has NVDA running we hand off to their
-         * configured voice — note that the rate/pitch/volume sliders
-         * below are ignored on the NVDA path (NVDA owns those). */
-        if (std::strcmp(backendName, "NVDA") == 0) {
-            ImGui::SameLine();
-            ImGui::TextDisabled("(rate/pitch/volume ignored - NVDA controls those)");
+    if (ImGui::BeginTable("##tts_table", 2, ImGuiTableFlags_SizingFixedFit)) {
+        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("Control", ImGuiTableColumnFlags_WidthStretch);
+
+        // Backend row
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Backend");
+        ImGui::TableSetColumnIndex(1);
+        if (backendName) {
+            ImGui::TextUnformatted(backendName);
+            if (std::strcmp(backendName, "NVDA") == 0) {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(rate/pitch/volume ignored - NVDA controls those)");
+            }
+        } else {
+            ImGui::TextDisabled("(unavailable - install spd-say / espeak-ng on Linux)");
         }
-    } else {
-        ImGui::TextDisabled("(unavailable - install spd-say / espeak-ng on Linux)");
-    }
 
-    bool on = Port_TTS_GetEnabled();
-    if (ImGui::Checkbox("Enable TTS", &on)) {
-        Port_TTS_SetEnabled(on);
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("(F7 toggles, F6 stops speech)");
+        // Enable Row
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Enable TTS");
+        ImGui::TableSetColumnIndex(1);
+        bool on = Port_TTS_GetEnabled();
+        if (ImGui::Checkbox("##enable_tts", &on)) {
+            Port_TTS_SetEnabled(on);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(F7 toggles, F6 stops speech)");
 
-    float rate = Port_TTS_GetRate();
-    if (ImGui::SliderFloat("Rate##tts", &rate, 0.0f, 1.0f, "%.2f")) {
-        Port_TTS_SetRate(rate);
-    }
-    float pitch = Port_TTS_GetPitch();
-    if (ImGui::SliderFloat("Pitch##tts", &pitch, 0.0f, 1.0f, "%.2f")) {
-        Port_TTS_SetPitch(pitch);
-    }
-    float volume = Port_TTS_GetVolume();
-    if (ImGui::SliderFloat("Volume##tts", &volume, 0.0f, 1.0f, "%.2f")) {
-        Port_TTS_SetVolume(volume);
-    }
+        // Rate
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Rate");
+        ImGui::TableSetColumnIndex(1);
+        float rate = Port_TTS_GetRate();
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::SliderFloat("##rate", &rate, 0.0f, 1.0f, "%.2f")) {
+            Port_TTS_SetRate(rate);
+        }
 
-    static char voiceBuf[128];
-    static char langBuf[32];
-    static bool inited = false;
-    if (!inited) {
-        const char* v = Port_TTS_GetVoice();
-        const char* l = Port_TTS_GetLanguage();
-        std::strncpy(voiceBuf, v ? v : "", sizeof(voiceBuf) - 1);
-        std::strncpy(langBuf,  l ? l : "", sizeof(langBuf) - 1);
-        inited = true;
-    }
-    if (ImGui::InputText("Voice##tts", voiceBuf, sizeof(voiceBuf))) {
-        Port_TTS_SetVoice(voiceBuf);
-    }
-    if (ImGui::InputText("Language##tts", langBuf, sizeof(langBuf))) {
-        Port_TTS_SetLanguage(langBuf);
+        // Pitch
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Pitch");
+        ImGui::TableSetColumnIndex(1);
+        float pitch = Port_TTS_GetPitch();
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::SliderFloat("##pitch", &pitch, 0.0f, 1.0f, "%.2f")) {
+            Port_TTS_SetPitch(pitch);
+        }
+
+        // Volume
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Volume");
+        ImGui::TableSetColumnIndex(1);
+        float volume = Port_TTS_GetVolume();
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::SliderFloat("##volume", &volume, 0.0f, 1.0f, "%.2f")) {
+            Port_TTS_SetVolume(volume);
+        }
+
+        // Voice
+        static char voiceBuf[128];
+        static char langBuf[32];
+        static bool inited = false;
+        if (!inited) {
+            const char* v = Port_TTS_GetVoice();
+            const char* l = Port_TTS_GetLanguage();
+            std::strncpy(voiceBuf, v ? v : "", sizeof(voiceBuf) - 1);
+            std::strncpy(langBuf,  l ? l : "", sizeof(langBuf) - 1);
+            inited = true;
+        }
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Voice");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::InputText("##voice", voiceBuf, sizeof(voiceBuf))) {
+            Port_TTS_SetVoice(voiceBuf);
+        }
+
+        // Language
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Language");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(100.0f);
+        if (ImGui::InputText("##lang", langBuf, sizeof(langBuf))) {
+            Port_TTS_SetLanguage(langBuf);
+        }
+
+        ImGui::EndTable();
     }
     ImGui::TextDisabled(
-        "Voice IDs vary by backend (espeak: 'en+f2', say: 'Samantha', "
-        "SAPI: 'Microsoft David Desktop'). Leave blank for default.");
+        "Voice IDs vary by backend (espeak: 'en+f2', say: 'Samantha', SAPI: 'Microsoft David').");
 
     ImGui::Separator();
     if (ImGui::Button("Test voice")) {
-        /* Bypass dedupe for the test button so repeated presses
-         * always speak — useful when tuning rate/pitch. */
         PortTtsOptions o = {};
         o.rate = o.pitch = o.volume = 0.0f/0.0f;
         o.dedupe = false;
@@ -2227,6 +2264,7 @@ static void DrawRibbonAccessibilityTab(void) {
         "  4. F6 stops mid-utterance.\n"
         "  5. Open a save-overwrite dialog - modal is announced.");
 }
+
 
 static void DrawRibbonRebornTab(void) {
     ImGui::TextWrapped("Quality-of-life features cherry-picked from "
