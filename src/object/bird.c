@@ -21,6 +21,10 @@
 #include "subtask.h"
 #include "pauseMenu.h"
 #include "port_scripts.h"
+#ifdef PC_PORT
+#include "rando/rando_keymap.h"
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -173,7 +177,16 @@ void Bird_Type2_Action1(BirdEntity* this) {
     if ((gPlayerState.flags & PL_MINISH) != 0) {
         sub_0800445C(super);
     } else if (IsCollidingPlayer(super) != 0) {
-        CreateItemEntity(ITEM_OCARINA, 0, 0);
+        u8 item = ITEM_OCARINA;
+        u8 subtype = 0;
+#ifdef PC_PORT
+        /* Randomizer: the falling-bird ocarina is the Fortress of Winds
+         * dungeon prize (.logic Fortress_Prize). */
+        (void)Rando_OverrideLocationKey(
+            Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_FORTRESS_PRIZE, 0, 0), &item,
+            &subtype);
+#endif
+        CreateItemEntity(item, subtype, 0);
         gSave.windcrests |= 0x10000000;
         DeleteThisEntity();
     }
