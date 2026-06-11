@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.6.0 (2026-06-11)
 
 ### Randomizer — MinishMaker 1:1 parity pass
 
