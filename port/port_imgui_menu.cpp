@@ -2939,29 +2939,6 @@ static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
 }
 
 
-static void DrawFileSelectSettingsTrigger(void) {
-    if (Port_RandoFileMenu_IsOpen()) return; /* sidebar is already forced open for setup */
-    const ImGuiViewport* vp = ImGui::GetMainViewport();
-    const float padding = 12.0f;
-    const float buttonW = 180.0f;
-    const float buttonH = 26.0f;
-    ImGui::SetNextWindowPos(
-        ImVec2(vp->Pos.x + vp->Size.x - buttonW - padding, vp->Pos.y + padding),
-        ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(buttonW, buttonH), ImGuiCond_Always);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    if (ImGui::Begin("##file_select_settings_trigger", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground)) {
-        if (ImGui::Button("Port & Rando Settings", ImVec2(buttonW, buttonH))) {
-            Port_RandoFileMenu_ToggleSidebar();
-        }
-    }
-    ImGui::End();
-    ImGui::PopStyleVar(2);
-}
 
 static void DrawRandoFileMenuModal(void) {
     bool forceOpen = Port_RandoFileMenu_IsOpen();
@@ -3079,21 +3056,14 @@ static void DrawRandoFileMenuModal(void) {
         }
 
         /* Allow closing the manual sidebar or setup modal via Escape/Gamepad B,
-         * or GBA L button (with a debounce cooldown). */
+         * or by pressing the GBA L button again (utilizing the edge cache). */
         const bool popupOpen =
             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
-
-        static bool sWasOpen = false;
-        static int sLCooldown = 0;
-        bool isOpen = Port_RandoFileMenu_IsSidebarOpen();
-        if (isOpen && !sWasOpen) sLCooldown = 15;
-        sWasOpen = isOpen;
-        if (sLCooldown > 0) sLCooldown--;
 
         if (!popupOpen && !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused()) {
             const bool esc_pressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
                                      ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
-            const bool l_pressed = (sLCooldown == 0 && Port_Config_InputPressed(PORT_INPUT_L));
+            const bool l_pressed = Port_Config_InputEdgePressed(PORT_INPUT_L);
 
             if (esc_pressed || l_pressed) {
                 if (forceOpen) {
@@ -3223,9 +3193,6 @@ extern "C" bool Port_ImGui_Render(void) {
 
     /* File-select randomizer setup modal — drawn here (per-frame ImGui
      * pass) so it presents on every backend, independent of the F8 menu. */
-    if (Rando_IsInFileSelect()) {
-        DrawFileSelectSettingsTrigger();
-    }
     DrawRandoFileMenuModal();
 
     /* Toast survives the menu being closed (e.g. after a warp). */
