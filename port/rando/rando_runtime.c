@@ -22,6 +22,7 @@
 #include "save.h"      /* gSave, gSaveHeader */
 #include "item.h"      /* Item ids */
 #include "windcrest.h" /* WINDCREST_* bit indices */
+#include "room.h"      /* GetRoomProperty, TileEntity */
 
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
@@ -496,4 +497,26 @@ void Rando_Runtime_OnNewFile(void) {
     ApplyPortals(seed);
     ApplyInstantText();
     Rando_Runtime_Refresh();
+}
+
+unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestIndex) {
+    TileEntity* te = (TileEntity*)GetRoomProperty(area, room, 3);
+    int index = 0;
+    if (te == NULL) return 0xFF;
+    for (int i = 0; te[i].tilePos != 0; ++i) {
+        if (te[i].type != SMALL_CHEST && te[i].type != BIG_CHEST) continue;
+        if (index == (int)chestIndex) return te[i].localFlag;
+        index++;
+    }
+    return 0xFF;
+}
+
+unsigned Rando_GetDungeonKeyCount(unsigned dungeon_idx) {
+    if (dungeon_idx >= 16) return 0;
+    return gSave.dungeonKeys[dungeon_idx];
+}
+
+bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx) {
+    if (dungeon_idx >= 16) return false;
+    return (gSave.dungeonItems[dungeon_idx] & 2) != 0;
 }
