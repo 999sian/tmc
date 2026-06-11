@@ -29,6 +29,9 @@
 #include "playerItem/playerItemBottle.h"
 #include "playeritem.h"
 #include "port_scripts.h"
+#ifdef PC_PORT
+#include "port_softslots.h"
+#endif
 #include "save.h"
 #include "scroll.h"
 #include "screen.h"
@@ -3764,6 +3767,19 @@ void SurfaceAction_CloneTile(PlayerEntity* this) {
             item = gSave.stats.equipped[SLOT_A];
         } else {
             item = gSave.stats.equipped[SLOT_B];
+#ifdef PC_PORT
+            /* Soft-slots can map an arbitrary item to "effective B". This is
+             * the sword-clone mechanic and the switch below only handles
+             * sword levels (1-4,6); a non-sword effective item would hit the
+             * `default` case where n is left uninitialized (latent GBA bug,
+             * reachable on PC only via soft-slots). Substitute only when the
+             * result stays a sword, preserving the GBA item domain. */
+            {
+                u32 eff = Port_SoftSlots_GetEffectiveBItem(item);
+                if (ItemIsSword(eff))
+                    item = eff;
+            }
+#endif
         }
         switch (item) {
             case 1:

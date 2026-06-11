@@ -641,7 +641,14 @@ target("tmc_pc")
             for _, p in ipairs(patches) do
                 if os.isfile(p.marker_file) then
                     local c = io.readfile(p.marker_file)
-                    if not (c and c:find(p.marker, 1, true)) then
+                    local present = c and c:find(p.marker, 1, true)
+                    -- A 3-way apply conflict leaves the marker string inside a
+                    -- <<<<<<< / ======= / >>>>>>> block: the marker "looks
+                    -- present" but the file is corrupt and won't compile. Treat
+                    -- a conflicted file as not-applied, so the self-heal reset +
+                    -- final hard-fail catch it instead of compiling garbage.
+                    local conflicted = c and (c:find("<<<<<<<", 1, true) or c:find(">>>>>>>", 1, true))
+                    if (not present) or conflicted then
                         table.insert(miss, p.patch)
                     end
                 end
