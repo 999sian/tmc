@@ -24,6 +24,7 @@
 #include "windcrest.h" /* WINDCREST_* bit indices */
 #include "room.h"      /* GetRoomProperty, TileEntity */
 #include "main.h"      /* gMain, Task */
+#include "sound.h"     /* SoundReq, SFX_MENU_CANCEL */
 
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
@@ -528,4 +529,8 @@ bool Rando_IsInGameplay(void) {
 
 bool Rando_IsInFileSelect(void) {
     return gMain.task == TASK_FILE_SELECT;
+}
+
+void Rando_PlayCancelSfx(void) {
+    SoundReq(SFX_MENU_CANCEL);
 }

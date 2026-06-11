@@ -3078,17 +3078,34 @@ static void DrawRandoFileMenuModal(void) {
             DrawRibbonAccessibilityTab();
         }
 
-        if (forceOpen) {
-            /* Escape / gamepad B back out — but only when we are actively in the GBA
-             * setup modal state. Otherwise, the player can open/close the sidebar via
-             * the button. */
-            const bool popupOpen =
-                ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
-            if (!popupOpen && !ImGui::IsAnyItemActive() &&
-                (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
-                 ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false))) {
-                Port_RandoFileMenu_Cancel();
+        /* Allow closing the manual sidebar or setup modal via Escape/Gamepad B,
+         * or GBA L button (with a debounce cooldown). */
+        const bool popupOpen =
+            ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+
+        static bool sWasOpen = false;
+        static int sLCooldown = 0;
+        bool isOpen = Port_RandoFileMenu_IsSidebarOpen();
+        if (isOpen && !sWasOpen) sLCooldown = 15;
+        sWasOpen = isOpen;
+        if (sLCooldown > 0) sLCooldown--;
+
+        if (!popupOpen && !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused()) {
+            const bool esc_pressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+                                     ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+            const bool l_pressed = (sLCooldown == 0 && Port_Config_InputPressed(PORT_INPUT_L));
+
+            if (esc_pressed || l_pressed) {
+                if (forceOpen) {
+                    Port_RandoFileMenu_Cancel();
+                } else {
+                    Port_RandoFileMenu_SetSidebarOpen(false);
+                    Rando_PlayCancelSfx();
+                }
             }
+        }
+
+        if (forceOpen) {
             if (Port_RandoFileMenu_IsOpen() && !popupOpen &&
                 !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused() &&
                 (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
@@ -3099,6 +3116,7 @@ static void DrawRandoFileMenuModal(void) {
             /* Close button for the sidebar when opened manually */
             if (ImGui::Button("Close Sidebar", ImVec2(-1, 30))) {
                 Port_RandoFileMenu_SetSidebarOpen(false);
+                Rando_PlayCancelSfx();
             }
         }
     }
