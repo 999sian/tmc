@@ -585,7 +585,7 @@ static void DrawRibbonDisplayTab(void) {
 
         if (!sPresetPaths.empty()) {
             if (ImGui::BeginListBox("##preset_list",
-                    ImVec2(420, ImGui::GetTextLineHeightWithSpacing() * 3.5f))) {
+                    ImVec2(ImGui::GetContentRegionAvail().x - 4.0f, ImGui::GetTextLineHeightWithSpacing() * 3.5f))) {
                 for (size_t i = 0; i < sPresetPaths.size(); ++i) {
                     bool selected = (sPresetPaths[i] == sActivePreset)
                                     && Port_GlslpRuntime_IsActive();
@@ -2941,84 +2941,91 @@ static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
 static void DrawRandoFileMenuModal(void) {
     if (!Port_RandoFileMenu_IsOpen()) return;
 
-    /* Clamp to the viewport so the Generate/Cancel row stays reachable
-     * on small windows (window_scale 2 = 480x320). The window scrolls
-     * if the clamped height still can't fit everything. */
     const ImGuiViewport* vp = ImGui::GetMainViewport();
-    const float maxW = vp->WorkSize.x - 16.0f;
-    const float maxH = vp->WorkSize.y - 16.0f;
-    const float winW = 560.0f < maxW ? 560.0f : maxW;
+    const float padding = 12.0f;
+    const float sidebarW = 380.0f;
+    const float sidebarH = vp->WorkSize.y - 2 * padding;
+
     ImGui::SetNextWindowPos(
-        ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f),
-        ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(winW, 0));
-    ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f), ImVec2(winW, maxH));
-    if (ImGui::Begin("##rando_file_menu", nullptr,
+        ImVec2(vp->Pos.x + vp->Size.x - sidebarW - padding, vp->Pos.y + padding),
+        ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(sidebarW, sidebarH), ImGuiCond_Always);
+
+    if (ImGui::Begin("##port_setup_sidebar", nullptr,
                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
                      ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::TextColored(ImVec4(0.78f, 0.95f, 0.78f, 1.0f), "RANDOMIZER SETUP");
+
+        ImGui::TextColored(ImVec4(0.78f, 0.95f, 0.78f, 1.0f), "PORT & RANDOMIZER SETUP");
         ImGui::Separator();
 
-        ImGui::SetNextItemWidth(300);
-        /* EnterReturnsTrue: pressing Enter while typing the seed commits
-         * directly (parity with the pre-ImGui overlay where Enter always
-         * meant "generate & start"). */
-        if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
-                             RANDO_FILE_MENU_SEED_MAX + 1,
-                             ImGuiInputTextFlags_CallbackCharFilter |
-                                 ImGuiInputTextFlags_EnterReturnsTrue,
-                             RandoSeedCharFilter)) {
-            Port_RandoFileMenu_SeedEdited();
-            Port_RandoFileMenu_CommitAndStart();
-        }
-        if (ImGui::IsItemEdited()) Port_RandoFileMenu_SeedEdited();
-        ImGui::SameLine();
-        if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
-
-        ImGui::Spacing();
-        if (Port_RandoFileMenu_LogicMode()) {
-            const RandoLogicStats st = RandoLogic_GetStats();
-            ImGui::TextDisabled("Logic: external .logic (%u locations, %u settings)",
-                                st.location_count, RandoLogic_GetSettingCount());
-            DrawRandoPresetsRow();
-            /* Color settings live in the F8 Cosmetics section and roll
-             * vanilla unless edited there. Settings list shrinks with the
-             * viewport so the action row below never falls off-screen. */
-            float childH = maxH - 270.0f;
-            if (childH > 280.0f) childH = 280.0f;
-            if (childH < 120.0f) childH = 120.0f;
-            DrawRandoLogicSettingsBrowser(childH);
-        } else {
-            ImGui::TextDisabled("Logic: built-in native graph");
-            static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-                "Normal - collectibles only",
-                "Hard - + non-gating majors",
-                "Chaos - + gating progression",
-            };
-            int difficulty = Port_RandoFileMenu_Difficulty();
-            ImGui::SetNextItemWidth(280);
-            if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
-                Port_RandoFileMenu_SetDifficulty(difficulty);
+        if (ImGui::CollapsingHeader("Randomizer Setup", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::SetNextItemWidth(180);
+            if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
+                                 RANDO_FILE_MENU_SEED_MAX + 1,
+                                 ImGuiInputTextFlags_CallbackCharFilter |
+                                     ImGuiInputTextFlags_EnterReturnsTrue,
+                                 RandoSeedCharFilter)) {
+                Port_RandoFileMenu_SeedEdited();
+                Port_RandoFileMenu_CommitAndStart();
             }
-            ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
-            ImGui::Checkbox("Shuffle kinstones", Port_RandoFileMenu_ShuffleKinstones());
-            ImGui::Checkbox("Shuffle dojos", Port_RandoFileMenu_ShuffleDojos());
+            if (ImGui::IsItemEdited()) Port_RandoFileMenu_SeedEdited();
+            ImGui::SameLine();
+            if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
+
+            ImGui::Spacing();
+            if (Port_RandoFileMenu_LogicMode()) {
+                const RandoLogicStats st = RandoLogic_GetStats();
+                ImGui::TextDisabled("Logic: external .logic (%u locations)", st.location_count);
+                DrawRandoPresetsRow();
+                /* Smaller child height to fit within the sidebar cleanly */
+                DrawRandoLogicSettingsBrowser(180.0f);
+            } else {
+                ImGui::TextDisabled("Logic: built-in native graph");
+                static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+                    "Normal", "Hard", "Chaos"
+                };
+                int difficulty = Port_RandoFileMenu_Difficulty();
+                ImGui::SetNextItemWidth(160);
+                if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+                    Port_RandoFileMenu_SetDifficulty(difficulty);
+                }
+                ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
+                ImGui::SameLine();
+                ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
+                ImGui::SameLine();
+                ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
+            }
+
+            ImGui::Spacing();
+            const char* status = Port_RandoFileMenu_Status();
+            if (status[0]) {
+                ImGui::TextColored(ImVec4(1.0f, 0.44f, 0.44f, 1.0f), "%s", status);
+            }
+
+            const float actionW = (sidebarW - 32.0f) / 2.0f;
+            if (ImGui::Button("Generate & Start", ImVec2(actionW, 0))) {
+                Port_RandoFileMenu_CommitAndStart();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(actionW, 0))) {
+                Port_RandoFileMenu_Cancel();
+            }
+            ImGui::TextDisabled("Enter starts   Esc / Gamepad B cancels");
         }
 
-        ImGui::Spacing();
-        const char* status = Port_RandoFileMenu_Status();
-        if (status[0]) {
-            ImGui::TextColored(ImVec4(1.0f, 0.44f, 0.44f, 1.0f), "%s", status);
+        if (ImGui::CollapsingHeader("Display & Video")) {
+            DrawRibbonDisplayTab();
         }
-        if (ImGui::Button("Generate Seed & Start Game", ImVec2(280, 0))) {
-            Port_RandoFileMenu_CommitAndStart();
+        if (ImGui::CollapsingHeader("Audio & Sound")) {
+            DrawRibbonAudioTab();
         }
-        ImGui::SameLine();
-        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-            Port_RandoFileMenu_Cancel();
+        if (ImGui::CollapsingHeader("Save Profiles")) {
+            DrawRibbonProfilesTab();
         }
-        ImGui::TextDisabled("Enter generates & starts   Esc / B cancels");
+        if (ImGui::CollapsingHeader("Accessibility")) {
+            DrawRibbonAccessibilityTab();
+        }
 
         /* Escape / gamepad B back out — but not while a combo popup or an
          * actively-edited widget would consume the same press. */
@@ -3029,12 +3036,7 @@ static void DrawRandoFileMenuModal(void) {
              ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false))) {
             Port_RandoFileMenu_Cancel();
         }
-        /* Enter = "Generate Seed & Start Game" when the press isn't owned
-         * by a widget: nav focus routes Enter to the focused item (the
-         * seed field commits via EnterReturnsTrue above; buttons activate
-         * themselves), so only fire when nothing is focused or active.
-         * Re-check IsOpen() — a button earlier this frame may have already
-         * committed or cancelled. */
+        /* Enter = "Generate & Start" when the press isn't owned by a widget. */
         if (Port_RandoFileMenu_IsOpen() && !popupOpen &&
             !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused() &&
             (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
