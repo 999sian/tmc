@@ -213,17 +213,28 @@ Issues and pull requests are welcome — port improvements, tools, and
 documentation. Open an issue describing the bug or proposed change before
 larger work so we can coordinate.
 
-# Third-party notice: agbplay
+## License
 
-`libs/agbplay_core` contains code derived from:
+Project Picori's own code is released under the **Anti-Capitalist Software
+License v1.4** — see [`LICENSE`](LICENSE). It is free to use, modify, and
+distribute for individuals, non-profits, educational institutions, and
+worker-owned/cooperative organizations, but not for organizations organized
+along capitalist lines, nor for law enforcement or military.
 
-- Project: agbplay
-- Repository: https://github.com/ipatix/agbplay
-- Author: ipatix and contributors
-- License: GNU Lesser General Public License v3.0
+This license applies only to the project's **own** code. Bundled, linked, and
+invoked third-party components keep their own licenses — see
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md) for the full list.
+Notably:
 
-The original agbplay project is licensed under the LGPL-3.0. The copied and
-modified files in this directory remain under that license.
+- **agbplay** (`libs/agbplay_core`, derived from
+  https://github.com/ipatix/agbplay) is **LGPL-3.0**; those files remain under
+  the LGPL and the larger work is not relicensed by linking it.
+- The **Minish Cap randomizer** (`libs/randomizer`,
+  https://github.com/minishmaker/randomizer) is **GPL-3.0**; it is built as a
+  **separate executable** that the port invokes as its own process, so it does
+  not impose GPL on the main binary. Keep it a separate process to preserve
+  this.
 
-The rest of this repository is not automatically relicensed as LGPL-3.0
-solely because it links to or uses this LGPL component.
+This project also builds on the zeldaret/tmc decompilation of a copyrighted
+game. All Nintendo intellectual property remains owned by Nintendo; a
+legitimately-owned ROM is required.

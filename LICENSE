@@ -1,0 +1,59 @@
+ANTI-CAPITALIST SOFTWARE LICENSE (v 1.4)
+
+Copyright © 2026 Project Picori contributors
+
+------------------------------------------------------------------------------
+Scope of this license
+------------------------------------------------------------------------------
+This license covers the ORIGINAL work in this repository authored by the
+Project Picori contributors — primarily the native PC port layer (port/), the
+port-specific portions of src/ and include/, and the project's own build,
+tooling, and documentation.
+
+It does NOT relicense the third-party and upstream components bundled in,
+linked by, or invoked by this project. Each of those retains its own license.
+In particular, this repository links LGPL-3.0 code (agbplay) and ships a
+separately-built GPL-3.0 binary (the Minish Cap randomizer CLI) that the port
+invokes as a separate process. See THIRD-PARTY-LICENSES.md for the full list
+and the terms that apply to each component. Where a component's own license
+conflicts with the terms below, that component's license governs that
+component.
+
+This repository also builds on the zeldaret/tmc decompilation of a
+copyrighted, commercially released game; nothing here grants rights to
+Nintendo's intellectual property, which remains owned by Nintendo.
+
+------------------------------------------------------------------------------
+ANTI-CAPITALIST SOFTWARE LICENSE (v 1.4)
+------------------------------------------------------------------------------
+
+This is anti-capitalist software, released for free use by individuals and
+organizations that do not operate by capitalist principles.
+
+Permission is hereby granted, free of charge, to any person or organization
+(the "User") obtaining a copy of this software and associated documentation
+files (the "Software"), to use, copy, modify, merge, distribute, and/or sell
+copies of the Software, subject to the following conditions:
+
+1. The above copyright notice and this permission notice shall be included in
+all copies or modified versions of the Software.
+
+2. The User is one of the following:
+  a. An individual person, laboring for themselves
+  b. A non-profit organization
+  c. An educational institution
+  d. An organization that seeks shared profit for all of its members, and
+     allows non-members to set the cost of their labor
+
+3. If the User is an organization with owners, then all owners are workers and
+all workers are owners with equal equity and/or equal vote.
+
+4. If the User is an organization, then the User is not law enforcement or
+military, or working for or under either.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT EXPRESS OR IMPLIED WARRANTY OF ANY
+KIND, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
