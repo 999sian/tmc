@@ -983,6 +983,13 @@ extern "C" void Port_Config_ClearInputEdges(void) {
     sEdgePressed.fill(false);
 }
 
+extern "C" bool Port_Config_InputEdgePressed(PortInput input) {
+    if (input >= 0 && input < PORT_INPUT_COUNT) {
+        return sEdgePressed[input];
+    }
+    return false;
+}
+
 extern "C" bool Port_Config_InputPressed(PortInput input) {
     if (Port_TouchControls_InputPressed(input)) {
         return true;
