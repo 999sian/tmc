@@ -87,7 +87,6 @@ TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./dist/USA/tmc_pc --n
 - Required native deps vary by platform; common deps include `git`, SDL3, libpng, fmt, and nlohmann-json. xmake vendors several packages.
 - Python 3 drives `build.py` and helper generators such as `tools/generate_sounds_embed.py`.
 - CMake is used for tools (`tools/CMakeLists.txt`), not as the main project build entry.
-- `.NET 8 SDK` is only needed to build/package `libs/randomizer`; the randomizer is optional when the SDK is absent.
 - Supported staged runtime expects `dist/USA/` or `dist/EU/` with `tmc_pc`, `baserom.gba`, `assets/`, and `sounds.json` unless using slim/self-extract mode.
 - Config and saves are runtime-local: `config.json`, `tmc.sav`, optional save profiles.
 

@@ -10,14 +10,15 @@ Project Picori contributors — primarily the native PC port layer (port/), the
 port-specific portions of src/ and include/, and the project's own build,
 tooling, and documentation.
 
-It does NOT relicense the third-party and upstream components bundled in,
-linked by, or invoked by this project. Each of those retains its own license.
-In particular, this repository links LGPL-3.0 code (agbplay) and ships a
-separately-built GPL-3.0 binary (the Minish Cap randomizer CLI) that the port
-invokes as a separate process. See THIRD-PARTY-LICENSES.md for the full list
-and the terms that apply to each component. Where a component's own license
-conflicts with the terms below, that component's license governs that
-component.
+It does NOT relicense the third-party and upstream components bundled in or
+linked by this project. Each of those retains its own license. In particular,
+this repository links LGPL-3.0 code (agbplay), whose files remain under the
+LGPL. The in-game randomizer (port/rando/) is the project's own clean-room
+reimplementation and is covered by this license — it is not the GPL-3.0
+minishmaker/randomizer, which this project does not bundle or link. See
+THIRD-PARTY-LICENSES.md for the full list and the terms that apply to each
+component. Where a component's own license conflicts with the terms below, that
+component's license governs that component.
 
 This repository also builds on the zeldaret/tmc decompilation of a
 copyrighted, commercially released game; nothing here grants rights to

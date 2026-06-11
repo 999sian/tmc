@@ -854,7 +854,6 @@ target("tmc_pc")
     end
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/
-    add_files("port/port_randomizer.cpp")  -- Phase A: shell-out to MinishCapRandomizerCLI
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")
@@ -1086,13 +1085,6 @@ target("tmc_pc")
     -- locally (CI release tarballs may strip later). The xmake mode.release
     -- rule adds -s/--strip-all by default which makes addr2line useless.
     set_strip("none")
-
-    -- Best-effort dependency on the randomizer CLI. xmake builds it
-    -- automatically if .NET 8 SDK is installed; skips with a warning
-    -- otherwise. The F8 → Randomizer submenu in port_debug_menu.cpp
-    -- looks for the resulting binary at <exe>/randomizer/ — search
-    -- slot #2 in Port_Randomizer_FindCLI().
-    add_deps("randomizer_cli")
 target_end()
 
 -- ====================
@@ -1109,128 +1101,6 @@ target("rando_logic_test")
     add_files("port/rando/rando_save.c")
     add_files("port/rando/rando_keymap.c")
     add_files("port/rando/rando_test.c")
-target_end()
-
-
--- ====================
--- Randomizer CLI target
--- ====================
--- Builds libs/randomizer/MinishCapRandomizerCLI/ via `dotnet publish`
--- into build/<plat>/randomizer/. The randomizer is GPL-3.0 and stays
--- a separate program — tmc_pc only shells out to it via system().
--- Building this target requires the .NET 8 SDK at build time; running
--- tmc_pc does NOT require .NET at runtime (the binary is self-
--- contained per its csproj's <SelfContained>true</SelfContained>).
-target("randomizer_cli")
-    set_kind("phony")
-    on_build(function (target)
-        import("lib.detect.find_program")
-        local dotnet = find_program("dotnet")
-        if not dotnet then
-            cprint("${yellow warning:} dotnet SDK not found — skipping randomizer build.")
-            cprint("${yellow }                Install .NET 8 SDK and rerun `xmake build randomizer_cli` to enable F8 → Randomizer.")
-            return
-        end
-
-        local csproj = path.join(os.scriptdir(), "libs", "randomizer",
-                                 "MinishCapRandomizerCLI",
-                                 "MinishCapRandomizerCLI.csproj")
-        if not os.exists(csproj) then
-            cprint("${yellow warning:} libs/randomizer submodule not initialised. Run `git submodule update --init libs/randomizer`.")
-            return
-        end
-
-        local outdir = path.join(os.scriptdir(), "build", "pc", "randomizer")
-        -- The randomizer .csproj has a post-build copy into this same output
-        -- directory. On fresh CI runners (notably Linux ARM64), build/pc does
-        -- not exist yet, so MSBuild's `cp -r ... build/pc/randomizer` fails
-        -- before dotnet gets a chance to materialize the `-o` directory.
-        os.mkdir(outdir)
-        local is_arm64 = is_arch("arm64", "arm64-v8a", "aarch64")
-        local rid = is_arm64 and "linux-arm64" or "linux-x64"
-        if is_plat("windows", "mingw") then rid = is_arm64 and "win-arm64" or "win-x64"
-        elseif is_plat("macosx") then rid = is_arm64 and "osx-arm64" or "osx-x64"
-        end
-
-        cprint("${cyan [randomizer_cli]} dotnet publish -c Release -r " .. rid)
-        -- os.execv prints child stdout/stderr directly and returns the
-        -- numeric exit code, which is the actual signal of success for
-        -- `dotnet publish`. (The previous `try { os.iorunv }` form
-        -- swallowed stdout and incorrectly classified publish runs as
-        -- failures whenever MSBuild emitted any stderr lines, even
-        -- when the build itself succeeded.)
-        local rc = os.execv(dotnet, {
-            "publish", csproj,
-            "-c", "Release",
-            "-r", rid,
-            "--self-contained",
-            "-p:PublishSingleFile=true",
-            "-p:IncludeNativeLibrariesForSelfExtract=true",
-            "-o", outdir,
-        }, { try = true })
-
-        if rc ~= 0 then
-            cprint("${yellow warning:} randomizer publish exited with code "
-                   .. tostring(rc) .. " — F8 → Randomizer will report 'CLI not found'.")
-            return
-        end
-
-        -- Final sanity check: did the binary actually land?
-        local cli_name = is_plat("windows", "mingw") and "MinishCapRandomizerCLI.exe"
-                                                       or "MinishCapRandomizerCLI"
-        local cli_path = path.join(outdir, cli_name)
-        if not os.exists(cli_path) then
-            cprint("${yellow warning:} dotnet publish reported success but "
-                   .. cli_path .. " is missing — F8 → Randomizer disabled.")
-            return
-        end
-
-        cprint("${green [randomizer_cli]} built → " .. cli_path)
-
-        -- USA-region artifacts: generate the translated patches tree +
-        -- derive the USA logic file from the EU one with a CRC swap.
-        -- Both end up next to MinishCapRandomizerCLI under
-        -- build/pc/randomizer/, which the dist staging in build.py
-        -- copies wholesale.
-        local python = find_program("python3") or find_program("python")
-        local eu_logic = path.join(os.scriptdir(), "libs", "randomizer",
-                                   "RandomizerCore", "Resources", "default.logic")
-        local usa_logic_dst = path.join(outdir, "default_usa.logic")
-        if os.exists(eu_logic) then
-            -- Derive: take default.logic, swap EU CRC for USA CRC. The
-            -- USA Minish Cap (BZME) CRC32 is 0xABCEBBB1; EU (BZMP) is
-            -- 0xE8637292. Everything else in the file is region-
-            -- agnostic logic (item locations, dependencies, settings).
-            local content = io.readfile(eu_logic)
-            content = content:gsub("!crc%s*%-%s*0xE8637292",
-                                   "!crc - 0xABCEBBB1  # USA ROM CRC32 (derived)")
-            io.writefile(usa_logic_dst, content)
-            cprint("${green [randomizer_cli]} USA logic → " .. usa_logic_dst)
-        end
-
-        local usa_script = path.join(os.scriptdir(), "tools", "randomizer_usa", "build_usa_patches.py")
-        local eu_patches = path.join(os.scriptdir(), "libs", "randomizer",
-                                     "RandomizerCore", "Resources", "Patches")
-        local usa_patches_dst = path.join(outdir, "Patches_USA")
-        if python and os.exists(usa_script) and os.exists(eu_patches) then
-            cprint("${cyan [randomizer_cli]} generating USA-translated patches…")
-            local prc = os.execv(python, {
-                usa_script,
-                "--src", eu_patches,
-                "--dst", usa_patches_dst,
-                "--quiet",
-            }, { try = true })
-            if prc == 0 and os.exists(path.join(usa_patches_dst, "ROM Buildfile.event")) then
-                cprint("${green [randomizer_cli]} USA patches → " .. usa_patches_dst)
-            else
-                cprint("${yellow warning:} USA patches generation failed (rc=" ..
-                       tostring(prc) .. ") — F8 → Randomizer will reject USA ROMs.")
-            end
-        else
-            cprint("${yellow warning:} python or build_usa_patches.py missing — "
-                   .. "USA randomization unavailable.")
-        end
-    end)
 target_end()
 
 

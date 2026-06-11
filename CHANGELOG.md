@@ -2,6 +2,19 @@
 
 ## v0.6.0 (2026-06-11)
 
+### Licensing — remove GPL-3.0 randomizer dependency
+
+- Removed the `libs/randomizer` submodule (GPL-3.0 minishmaker/randomizer)
+  and everything that built or invoked it: the `randomizer_cli` xmake target,
+  the `port/port_randomizer.{cpp,h}` shell-out, the F8 → Randomizer debug-menu
+  page, the `build.py` dist staging, and the now-orphaned `tools/randomizer_usa/`
+  USA-patch generator.
+- The in-game randomizer is now solely the project's own clean-room
+  reimplementation under `port/rando/`, covered by the project license.
+- With no GPL-3.0 component bundled, linked, or invoked, the project's own code
+  is unambiguously under the Anti-Capitalist Software License. Updated
+  `LICENSE`, `THIRD-PARTY-LICENSES.md`, `README.md`, and `AGENTS.md` to match.
+
 ### Accessibility — audio navigation cues (Phase 1)
 
 - **Intro/prologue text-to-speech**: the opening "legend of the Picori"
