@@ -21,8 +21,9 @@ layout(location = 0) in  vec2 vTexCoord;
 layout(location = 0) out vec4 oColor;
 
 vec3 blur3(sampler2D src, vec2 uv) {
-    // Tap spacing = 1 source-texel. Source is 240 wide, so dx = 1/240.
-    vec2 dx = vec2(1.0 / 240.0, 0.0);
+    // Tap spacing = 1 source-texel; derive from the live source size (240,
+    // the 384 widescreen FB, or an internal-scaled buffer) rather than 1/240.
+    vec2 dx = vec2(1.0 / float(textureSize(src, 0).x), 0.0);
     vec3 L = texture(src, uv - dx).rgb;
     vec3 C = texture(src, uv     ).rgb;
     vec3 R = texture(src, uv + dx).rgb;

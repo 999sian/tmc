@@ -786,13 +786,16 @@ extern "C" void Port_PPU_PresentFrame(void) {
         extern bool Port_ImGui_Render(void);
         Port_ImGui_Render();
 
+        SDL_ScaleMode scale = SDL_SCALEMODE_NEAREST;
+        if (sPresentMode == PresentMode::XbrzLinear || sPresentMode == PresentMode::LinearRaw) {
+            scale = SDL_SCALEMODE_LINEAR;
+        }
+        extern void Port_GPU_SetTextureScaleMode(SDL_ScaleMode);
+        Port_GPU_SetTextureScaleMode(scale);
         /* xBRZ on the GPU path. Same mutual exclusion with internal
          * scale that the SDL_Renderer branch uses (xBRZ is itself a
-         * 4× upscaler; combining would compound smoothing). Sampler
-         * mode (Linear vs Nearest) currently rides on whatever the
-         * GPU passthrough shader uses — we don't yet plumb the
-         * XbrzLinear/XbrzNearest distinction through to the SDL_GPU
-         * sampler. Filter chain (CRT/LCD) is still SW-only. */
+         * 4× upscaler; combining would compound smoothing). Filter chain
+         * (CRT/LCD) is still SW-only. */
         if (sPresentMode == PresentMode::XbrzLinear ||
             sPresentMode == PresentMode::XbrzNearest) {
             if (Port_PPU_EnsureXbrzBuffers(presentW, presentH)) {

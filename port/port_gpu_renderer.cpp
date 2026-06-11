@@ -37,6 +37,7 @@ extern "C" PortGpuFilter Port_GPU_GetFilter(void) { return PORT_GPU_FILTER_NONE;
 extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
     (void)f; return "Off";
 }
+extern "C" void Port_GPU_SetTextureScaleMode(SDL_ScaleMode mode) { (void)mode; }
 
 #else
 
@@ -117,7 +118,9 @@ static SDL_GPUTexture*          sIntermediateTex = nullptr;
 static SDL_GPUTextureFormat     sIntermediateFmt = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 
 static SDL_Window*              sWindow    = nullptr;
-static SDL_GPUSampler*          sSampler        = nullptr;
+static SDL_GPUSampler*          sSamplerNearest = nullptr;
+static SDL_GPUSampler*          sSamplerLinear  = nullptr;
+static bool                     sUseNearest     = false;
 static SDL_GPUTexture*          sSourceTexture  = nullptr;
 static SDL_GPUTransferBuffer*   sTransferBuffer = nullptr;
 static int                      sSourceW = 0;
@@ -371,9 +374,8 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         sSourceH = fb_height;
     }
 
-    /* Linear sampler — paired with the GPU upscale, gives a soft blit
-     * by default. Future stages will let the user pick nearest vs
-     * linear (and per-shader-pass overrides) via the F8 cycle. */
+    /* Samplers — one linear, one nearest. Future stages will let the user
+     * pick nearest vs linear (and per-shader-pass overrides) via the F8 cycle. */
     {
         SDL_GPUSamplerCreateInfo sci = {};
         sci.min_filter     = SDL_GPU_FILTER_LINEAR;
@@ -382,8 +384,13 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         sci.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         sci.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         sci.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-        sSampler = SDL_CreateGPUSampler(sDevice, &sci);
-        if (!sSampler) {
+        sSamplerLinear = SDL_CreateGPUSampler(sDevice, &sci);
+        
+        sci.min_filter     = SDL_GPU_FILTER_NEAREST;
+        sci.mag_filter     = SDL_GPU_FILTER_NEAREST;
+        sSamplerNearest = SDL_CreateGPUSampler(sDevice, &sci);
+        
+        if (!sSamplerLinear || !sSamplerNearest) {
             std::fprintf(stderr, "[gpu] sampler create failed: %s\n", SDL_GetError());
             Port_GPU_Shutdown();
             return false;
@@ -645,10 +652,10 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * to the swapchain texture, and we re-open an EndRenderPass-friendly
      * render pass for ImGui). */
     static uint32_t s_frame_counter = 0;
-    if (Port_GlslpRuntime_IsActive()) {
+    if (Port_GlslpRuntime_IsActive() &&
         Port_GlslpRuntime_PresentFrame(cmd, sSourceTexture, swap_tex,
                                        (int)swap_w, (int)swap_h,
-                                       fb_w, fb_h, s_frame_counter++);
+                                       fb_w, fb_h, s_frame_counter++)) {
         /* ImGui still wants to draw after the runtime's last pass.
          * Open one more clear-and-load render pass on the swapchain
          * (load_op = LOAD so we keep the runtime's output) and run
@@ -685,7 +692,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         SDL_BindGPUGraphicsPipeline(pre_rp, sPrePassPipelines[sActiveFilter]);
         SDL_GPUTextureSamplerBinding pre_tsb = {};
         pre_tsb.texture = sSourceTexture;
-        pre_tsb.sampler = sSampler;
+        pre_tsb.sampler = sUseNearest ? sSamplerNearest : sSamplerLinear;
         SDL_BindGPUFragmentSamplers(pre_rp, 0, &pre_tsb, 1);
         SDL_DrawGPUPrimitives(pre_rp, 4, 1, 0, 0);
         SDL_EndGPURenderPass(pre_rp);
@@ -770,7 +777,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
     /* When a prepass ran, the main pass reads the blurred intermediate
      * instead of the raw GBA framebuffer. */
     tsb.texture = hasPrepass ? sIntermediateTex : sSourceTexture;
-    tsb.sampler = sSampler;
+    tsb.sampler = sUseNearest ? sSamplerNearest : sSamplerLinear;
 
     /* Blurred-frame backdrop: when bg fill is BLURRED_FRAME and the
      * aspect mode adds pillarbox bars (stage > frame in either axis),
@@ -790,7 +797,12 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         vp.max_depth = 1.0f;
         SDL_SetGPUViewport(rp, &vp);
         SDL_BindGPUGraphicsPipeline(rp, sPipelines[PORT_GPU_FILTER_NONE]);
-        SDL_BindGPUFragmentSamplers(rp, /*first_slot=*/0, &tsb, 1);
+        
+        SDL_GPUTextureSamplerBinding tsb_bg = {};
+        tsb_bg.texture = sSourceTexture;
+        tsb_bg.sampler = sSamplerLinear; /* Blurred halo always uses linear */
+        SDL_BindGPUFragmentSamplers(rp, 0, &tsb_bg, 1);
+        
         SDL_DrawGPUPrimitives(rp, /*num_vertices=*/4, /*num_instances=*/1, 0, 0);
     }
 
@@ -967,9 +979,13 @@ extern "C" void Port_GPU_Shutdown(void) {
         SDL_ReleaseGPUTexture(sDevice, sSourceTexture);
         sSourceTexture = nullptr;
     }
-    if (sSampler) {
-        SDL_ReleaseGPUSampler(sDevice, sSampler);
-        sSampler = nullptr;
+    if (sSamplerLinear) {
+        SDL_ReleaseGPUSampler(sDevice, sSamplerLinear);
+        sSamplerLinear = nullptr;
+    }
+    if (sSamplerNearest) {
+        SDL_ReleaseGPUSampler(sDevice, sSamplerNearest);
+        sSamplerNearest = nullptr;
     }
     for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
         if (sFragShaders[i]) {
@@ -995,6 +1011,9 @@ extern "C" void Port_GPU_Shutdown(void) {
         sWindowClaimed = false;
         sShaderFormat = SDL_GPU_SHADERFORMAT_INVALID;
     }
+}
+extern "C" void Port_GPU_SetTextureScaleMode(SDL_ScaleMode mode) {
+    sUseNearest = (mode == SDL_SCALEMODE_NEAREST);
 }
 
 #endif /* TMC_GPU_RENDERER */
