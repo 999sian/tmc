@@ -23,6 +23,7 @@
 #include "item.h"      /* Item ids */
 #include "windcrest.h" /* WINDCREST_* bit indices */
 #include "room.h"      /* GetRoomProperty, TileEntity */
+#include "main.h"      /* gMain, Task */
 
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
@@ -519,4 +520,8 @@ unsigned Rando_GetDungeonKeyCount(unsigned dungeon_idx) {
 bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx) {
     if (dungeon_idx >= 16) return false;
     return (gSave.dungeonItems[dungeon_idx] & 2) != 0;
+}
+
+bool Rando_IsInGameplay(void) {
+    return gMain.task == TASK_GAME;
 }

@@ -2297,6 +2297,7 @@ static void DrawRibbonRandomizerTab(void) {
     }
 
     ImGui::Spacing();
+    ImGui::BeginDisabled(Rando_IsInGameplay());
     const bool rolled_normal = ImGui::Button("Roll new seed", ImVec2(150, 0));
     ImGui::SameLine();
     const bool rolled_race = ImGui::Button("Roll race seed", ImVec2(150, 0));
@@ -2316,6 +2317,11 @@ static void DrawRibbonRandomizerTab(void) {
         sRandoResult[0] = '\0';
         sRandoSpoiler[0] = '\0';
         sRandoSpoilerHidden = false;
+    }
+    ImGui::EndDisabled();
+    if (Rando_IsInGameplay()) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(locked during gameplay)");
     }
     if (rolled_normal || rolled_race) {
         if (rolled_race) sRandoSeedBuf[0] = '\0'; /* race seeds are always random */
@@ -2694,7 +2700,7 @@ static void DrawRibbon(void) {
             if (ImGui::BeginTabItem("Equip"))      { DrawRibbonEquipTab();      ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Controls"))   { DrawRibbonControlsTab();   ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Warp"))       { DrawRibbonWarpTab();       ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Randomizer")) { DrawRibbonRandomizerTab(); ImGui::EndTabItem(); }
+            if ((!Rando_IsInGameplay() || Rando_IsActive()) && ImGui::BeginTabItem("Randomizer")) { DrawRibbonRandomizerTab(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Audio"))      { DrawRibbonAudioTab();      ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Accessibility")) { DrawRibbonAccessibilityTab(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Reborn"))     { DrawRibbonRebornTab();     ImGui::EndTabItem(); }

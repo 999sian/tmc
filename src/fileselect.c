@@ -2053,6 +2053,12 @@ void sub_08051874(void) {
         case 1:
             MemCopy(&gSave, &gMapDataBottomSpecial.saves[gMapDataBottomSpecial.unk7],
                     sizeof(gMapDataBottomSpecial.saves[gMapDataBottomSpecial.unk7]));
+#ifdef PC_PORT
+            {
+                extern void Port_RandoSave_CopySlot(int src, int dst);
+                Port_RandoSave_CopySlot((int)gMapDataBottomSpecial.unk6, (int)gMapDataBottomSpecial.unk7);
+            }
+#endif
             SetFileSelectState(0);
             break;
         case -1:
@@ -2099,6 +2105,12 @@ void ResetSaveFile(u32 save_idx) {
     SaveFile* save;
 
     gMapDataBottomSpecial.saveStatus[save_idx] = 0;
+#ifdef PC_PORT
+    {
+        extern void Port_RandoSave_ClearSlot(int slot);
+        Port_RandoSave_ClearSlot((int)save_idx);
+    }
+#endif
     save = &gMapDataBottomSpecial.saves[save_idx];
     MemClear(save, sizeof(SaveFile));
     save->msg_speed = 1;
