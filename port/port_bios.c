@@ -602,29 +602,67 @@ void VBlankIntrWait(void) {
 
 /* ---- BIOS functions ---- */
 
+/* Bytes addressable from a GBA address to the end of its memory region,
+ * mirroring the ranges in gba_TryMemPtr. 0 = region unknown (caller treats
+ * as unbounded). Used to clamp decompressor output so a corrupt ROM header
+ * can't overrun a fixed host buffer (gVram/gEwram/gIwram). */
+static size_t Port_GbaRegionBytesLeft(uintptr_t gbaAddr) {
+    if (gbaAddr >= 0x02000000u && gbaAddr < 0x02040000u) return 0x02040000u - gbaAddr; /* EWRAM */
+    if (gbaAddr >= 0x03000000u && gbaAddr < 0x03008000u) return 0x03008000u - gbaAddr; /* IWRAM */
+    if (gbaAddr >= 0x06000000u && gbaAddr < 0x06018000u) return 0x06018000u - gbaAddr; /* VRAM  */
+    return 0;
+}
+
+/* If `src` lies inside the loaded ROM image, return one-past-the-last ROM
+ * byte so a decompressor can't read off the end of a truncated/corrupt ROM.
+ * NULL (unbounded) for asset-resolved sources from our own trusted pipeline. */
+static const u8* Port_RomBufferEnd(const void* src) {
+    if (gRomData && (const u8*)src >= gRomData && (const u8*)src < gRomData + gRomSize)
+        return gRomData + gRomSize;
+    return NULL;
+}
+
 /* LZ77 decompressor (SWI 0x11/0x12) */
-static void lz77_decomp(const u8* src, u8* dst) {
+static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd) {
+    if (srcEnd && src + 4 > srcEnd)
+        return;
     u32 header = src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
     u32 decompSize = header >> 8;
     src += 4;
 
+    /* Clamp the declared output size to the destination region so a
+     * corrupt/crafted header can't overrun the host buffer. For a valid
+     * ROM decompSize is always <= the region, so behavior is unchanged. */
+    if (dstCap && decompSize > dstCap)
+        decompSize = (u32)dstCap;
+
     u32 written = 0;
     while (written < decompSize) {
+        if (srcEnd && src >= srcEnd)
+            break;
         u8 flags = *src++;
         for (int i = 7; i >= 0 && written < decompSize; i--) {
             if (flags & (1 << i)) {
                 /* Compressed block: 2 bytes → length + distance */
+                if (srcEnd && src + 2 > srcEnd)
+                    return;
                 u8 b1 = *src++;
                 u8 b2 = *src++;
                 u32 length = ((b1 >> 4) & 0xF) + 3;
                 u32 distance = ((b1 & 0xF) << 8) | b2;
                 distance += 1;
+                /* A back-reference pointing before the output start is
+                 * malformed; refuse rather than wild-read host memory. */
+                if (distance > written)
+                    return;
                 for (u32 j = 0; j < length && written < decompSize; j++) {
                     dst[written] = dst[written - distance];
                     written++;
                 }
             } else {
                 /* Uncompressed byte */
+                if (srcEnd && src >= srcEnd)
+                    return;
                 dst[written++] = *src++;
             }
         }
@@ -633,12 +671,14 @@ static void lz77_decomp(const u8* src, u8* dst) {
 
 void LZ77UnCompVram(const void* src, void* dst) {
     void* resolved = port_resolve_addr((uintptr_t)dst);
-    lz77_decomp((const u8*)src, (u8*)resolved);
+    lz77_decomp((const u8*)src, (u8*)resolved,
+                Port_GbaRegionBytesLeft((uintptr_t)dst), Port_RomBufferEnd(src));
 }
 
 void LZ77UnCompWram(const void* src, void* dst) {
     void* resolved = port_resolve_addr((uintptr_t)dst);
-    lz77_decomp((const u8*)src, (u8*)resolved);
+    lz77_decomp((const u8*)src, (u8*)resolved,
+                Port_GbaRegionBytesLeft((uintptr_t)dst), Port_RomBufferEnd(src));
 }
 
 /* CpuSet (SWI 0x0B) */
@@ -670,8 +710,7 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
 
 /* CpuFastSet (SWI 0x0C) */
 void CpuFastSet(const void* src, void* dst, u32 cnt) {
-    u32 blockCount = cnt & 0x1FFFFF;
-    u32 wordCount = blockCount * 8;
+    u32 wordCount = cnt & 0x1FFFFF; /* low 21 bits = 32-bit word count */
     int fill = (cnt >> 24) & 1;
 
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
@@ -734,18 +773,34 @@ void RegisterRamReset(u32 flags) {
 
 /* Sqrt (SWI 0x08) */
 u16 Sqrt(u32 num) {
-    if (num == 0)
-        return 0;
-    u32 r = 1;
-    while (r * r <= num)
-        r++;
-    return (u16)(r - 1);
+    /* Bit-by-bit integer sqrt — O(16) and overflow-free. The old
+     * `while (r*r <= num) r++` looped forever near num=0xFFFFFFFF
+     * because r*r wraps in u32. Returns floor(sqrt(num)), matching the
+     * GBA BIOS Sqrt (SWI 0x08). */
+    u32 result = 0;
+    u32 bit = 1u << 30; /* highest power of four <= 2^31 */
+    while (bit > num)
+        bit >>= 2;
+    while (bit != 0) {
+        if (num >= result + bit) {
+            num -= result + bit;
+            result = (result >> 1) + bit;
+        } else {
+            result >>= 1;
+        }
+        bit >>= 2;
+    }
+    return (u16)result;
 }
 
 /* Div (SWI 0x06) */
 s32 Div(s32 num, s32 denom) {
     if (denom == 0)
         return 0;
+    /* INT_MIN / -1 overflows the signed result and is UB on x86 (SIGFPE).
+     * ARM SDIV yields INT_MIN here, so match that explicitly. */
+    if (denom == -1 && num == (s32)0x80000000)
+        return (s32)0x80000000;
     return num / denom;
 }
 

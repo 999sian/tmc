@@ -99,6 +99,11 @@ static const float kLpA2 =  0.2403461f;
 static float sLpX1L = 0.0f, sLpX2L = 0.0f, sLpY1L = 0.0f, sLpY2L = 0.0f;
 static float sLpX1R = 0.0f, sLpX2R = 0.0f, sLpY1R = 0.0f, sLpY2R = 0.0f;
 
+/* Set by the game thread (reset / GBA-accurate toggle), consumed on the audio
+ * thread at the top of PostProcess. The actual memset MUST happen on the audio
+ * thread so it never races the callback reading these statics mid-buffer. */
+static int sFilterClearPending = 0;
+
 /* Zero the HPF/LPF biquad history. Single source of truth so the reset path
  * and the GBA-accurate toggle (which clears on entry to keep re-engagement
  * click-free) can't drift if a future IIR stage adds more state. */
@@ -139,6 +144,13 @@ static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
     __atomic_load(&sWidth, &w, __ATOMIC_RELAXED);
     if (w < 1.0f) w = 1.0f;
     if (w > 1.5f) w = 1.5f;
+
+    /* Apply any pending filter-history reset here, on the audio thread, before
+       the read loop touches the statics — so the game-thread reset/toggle
+       paths can request a clear without memset-ing concurrently with us. */
+    if (__atomic_exchange_n(&sFilterClearPending, 0, __ATOMIC_ACQUIRE)) {
+        Port_Audio_ClearFilterState();
+    }
 
     for (int i = 0; i < frames; ++i) {
         float l = (float)buffer[i * 2 + 0];
@@ -248,24 +260,25 @@ void Port_Audio_Shutdown(void) {
 void Port_Audio_Reset(void) {
     Port_M4A_Backend_Reset();
 
-    /* Clear filter history so a reset doesn't carry stale DC-blocker / low-pass
-       state into the next buffer (a benign one-buffer transient otherwise). */
-    Port_Audio_ClearFilterState();
+    /* Request a filter-history clear; the audio thread applies it at the top of
+       its next PostProcess so we never memset these statics concurrently with
+       the audio callback reading them (a benign one-buffer transient otherwise). */
+    __atomic_store_n(&sFilterClearPending, 1, __ATOMIC_RELEASE);
 }
 
 void Port_Audio_SetGbaAccurate(bool accurate) {
     const bool prev = __atomic_load_n(&sGbaAccurate, __ATOMIC_RELAXED);
     __atomic_store_n(&sGbaAccurate, accurate, __ATOMIC_RELEASE);
 
-    /* On the false→true edge the audio thread stops running PostProcess (it
-       observes the flag via the ACQUIRE load in Feed), so the filter statics are
-       no longer read — clear them now so a later return to the enhanced chain
-       resumes from zero history instead of state lagged by the raw buffers that
-       ran in between, which would click/ring on the first re-engaged buffer and
-       contaminate the very A/B the toggle exists for. Clear only on this edge:
-       on true→false the chain restarts from already-cleared state. */
+    /* On the false→true edge, request a filter-history clear so a later return
+       to the enhanced chain resumes from zero history (otherwise the first
+       re-engaged buffer clicks/rings on state lagged by the raw buffers that
+       ran while accurate). Deferred to the audio thread via the pending flag so
+       it can't race a PostProcess call that's mid-read; it is consumed at the
+       next PostProcess (the true→false re-engagement) — exactly when the
+       cleared state is needed. */
     if (!prev && accurate) {
-        Port_Audio_ClearFilterState();
+        __atomic_store_n(&sFilterClearPending, 1, __ATOMIC_RELEASE);
     }
     Port_M4A_Backend_SetGbaAccurate(accurate);
 }

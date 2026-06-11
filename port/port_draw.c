@@ -345,6 +345,23 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
     u8 count = *data++;
     if (count == 0)
         return;
+    /* Bound the piece read to the frame-object buffer. `count` (and the 5-byte
+     * pieces that follow) come from gFrameObjLists, which LookupFrameData only
+     * range-checks up to the count byte itself — a corrupt/truncated ROM can
+     * leave `count` claiming more pieces than remain, reading past the array.
+     * When `data` lies inside gFrameObjLists, clamp to the bytes available.
+     * (Overlay callers pass small fixed internal buffers, not ROM data.) */
+    {
+        const u8* fobBase = (const u8*)gFrameObjLists;
+        const u8* fobEnd  = fobBase + sizeof(gFrameObjLists);
+        if (data >= fobBase && data < fobEnd) {
+            size_t maxPieces = (size_t)(fobEnd - data) / 5u;
+            if ((size_t)count > maxPieces)
+                count = (u8)maxPieces;
+            if (count == 0)
+                return;
+        }
+    }
     if (gOAMControls.updated >= 0x80)
         return;
 

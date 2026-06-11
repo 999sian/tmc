@@ -230,10 +230,17 @@ static int LoadExtractedPagesFrom(const char* dir) {
         if (!f)
             continue;
         fseek(f, 0, SEEK_END);
-        u32 fsize = (u32)ftell(f);
+        long ftellRes = ftell(f);
         fseek(f, 0, SEEK_SET);
-        if (offset + fsize > gRomSize)
-            fsize = gRomSize - offset;
+        if (ftellRes < 0) {
+            fclose(f);
+            continue;
+        }
+        /* Clamp in 64-bit: `offset + fsize` wraps in u32 for a >=4 GB file,
+         * which would defeat the bound and overflow gRomData. offset is
+         * already known < gRomSize. */
+        u64 avail = (u64)gRomSize - offset;
+        u32 fsize = (u64)ftellRes > avail ? (u32)avail : (u32)ftellRes;
         const size_t got = fread(&gRomData[offset], 1, fsize, f);
         fclose(f);
         if (got != fsize) {
@@ -270,10 +277,17 @@ static int LoadExtractedPagesFrom(const char* dir) {
         if (!f)
             continue;
         fseek(f, 0, SEEK_END);
-        u32 fsize = (u32)ftell(f);
+        long ftellRes = ftell(f);
         fseek(f, 0, SEEK_SET);
-        if (offset + fsize > gRomSize)
-            fsize = gRomSize - offset;
+        if (ftellRes < 0) {
+            fclose(f);
+            continue;
+        }
+        /* Clamp in 64-bit: `offset + fsize` wraps in u32 for a >=4 GB file,
+         * which would defeat the bound and overflow gRomData. offset is
+         * already known < gRomSize. */
+        u64 avail = (u64)gRomSize - offset;
+        u32 fsize = (u64)ftellRes > avail ? (u32)avail : (u32)ftellRes;
         const size_t got = fread(&gRomData[offset], 1, fsize, f);
         fclose(f);
         if (got != fsize) {

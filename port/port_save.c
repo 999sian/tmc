@@ -90,7 +90,53 @@ static int WriteEepromDiskOrder(FILE* f) {
     return fwrite(disk, 1, EEPROM_SIZE, f) == EEPROM_SIZE;
 }
 
+/* Write the in-memory EEPROM to `path` atomically: serialize to a sibling
+ * temp file, flush it through to disk, then rename over the target. A crash
+ * or power loss leaves either the old complete file or the new complete
+ * file — never the truncated one that plain "wb" + fwrite produced (which
+ * the next load treated as a blank save, silently wiping progress).
+ * Returns 1 on success. */
+static int WriteEepromAtomic(const char* path) {
+    char tmp[SAVE_FILENAME_MAX + 8];
+    if ((size_t)snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= sizeof(tmp))
+        return 0;
+
+    FILE* f = fopen(tmp, "wb");
+    if (!f)
+        return 0;
+
+    int ok = WriteEepromDiskOrder(f);
+    if (ok) {
+        fflush(f);
+#ifdef _WIN32
+        _commit(_fileno(f));
+#else
+        fsync(fileno(f));
+#endif
+    }
+    if (fclose(f) != 0)
+        ok = 0;
+    if (!ok) {
+        remove(tmp);
+        return 0;
+    }
+
+#ifdef _WIN32
+    if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING)) {
+        remove(tmp);
+        return 0;
+    }
+#else
+    if (rename(tmp, path) != 0) {
+        remove(tmp);
+        return 0;
+    }
+#endif
+    return 1;
+}
+
 static void FlushEepromFile(void);
+static int IsManagedProfilePath(const char* path);
 
 /* ---- Persistence -------------------------------------------------------- */
 
@@ -136,19 +182,12 @@ static void LoadEepromFile(void) {
 static void FlushEepromFile(void) {
     if (!sEepromDirty)
         return;
-    FILE* f = fopen(sActivePath, "wb");
-    if (!f) {
-        fprintf(stderr, "[SAVE] ERROR: Could not write %s\n", sActivePath);
-        return;
-    }
-    const int wroteAll = WriteEepromDiskOrder(f);
-    const int closed = fclose(f);
-    if (wroteAll && closed == 0) {
+    if (WriteEepromAtomic(sActivePath)) {
         sEepromDirty = 0;
     } else {
         /* Keep the dirty flag so the next flush retries. */
-        fprintf(stderr, "[SAVE] ERROR: short write on %s%s; will retry.\n",
-                sActivePath, closed != 0 ? " (close failed)" : "");
+        fprintf(stderr, "[SAVE] ERROR: atomic write of %s failed; will retry.\n",
+                sActivePath);
     }
 }
 
@@ -214,6 +253,13 @@ u16 EEPROMCompare(u16 block, const u16* src) {
 void Port_Save_SetActivePath(const char* path) {
     if (path == NULL || path[0] == '\0') {
         path = DEFAULT_SAVE_FILENAME;
+    } else if (!IsManagedProfilePath(path)) {
+        /* The active-profile name comes from config.json (user-editable);
+         * refuse anything outside the tmc.sav / tmc_<name>.sav lane so a
+         * crafted value can't redirect saves elsewhere on disk. */
+        fprintf(stderr, "[SAVE] Ignoring unmanaged save profile '%s'; using %s.\n",
+                path, DEFAULT_SAVE_FILENAME);
+        path = DEFAULT_SAVE_FILENAME;
     }
     /* If the EEPROM was already loaded under the old path, flush it
      * first so the user doesn't lose pending writes when switching. */
@@ -238,16 +284,16 @@ const char* Port_Save_GetActivePath(void) {
  * captures right-now state. Returns 0 on failure. */
 int Port_Save_SaveAsProfile(const char* path) {
     if (path == NULL || path[0] == '\0') return 0;
+    /* Only allow writing into the managed profile lane so the "save as"
+     * UI can't be pointed at an arbitrary host path. */
+    if (!IsManagedProfilePath(path)) return 0;
     /* Ensure EEPROM was loaded at least once so we have meaningful data
      * to copy. (Right after launch, before any read, sEeprom is zeroed.) */
     if (!sEepromInited) {
         LoadEepromFile();
         sEepromInited = 1;
     }
-    FILE* f = fopen(path, "wb");
-    if (!f) return 0;
-    const int wroteAll = WriteEepromDiskOrder(f);
-    return (fclose(f) == 0 && wroteAll) ? 1 : 0;
+    return WriteEepromAtomic(path);
 }
 
 /* List `tmc.sav` and `tmc_*.sav` files in cwd. Caller passes a fixed-

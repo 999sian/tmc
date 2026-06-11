@@ -111,10 +111,11 @@ jobs:
           git config --global core.eol lf
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: false
           clean: false
+          persist-credentials: false
       - name: Checkout submodules
         shell: bash
         env:
@@ -265,7 +266,7 @@ jobs:
           & "$root\bin\aarch64-w64-mingw32-clang.exe" --version
 
       - name: Setup xmake
-        uses: xmake-io/github-action-setup-xmake@v1
+        uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1
         with:
           xmake-version: latest
           # Cache the xmake install itself plus the xmake package cache
@@ -293,11 +294,12 @@ jobs:
 
       - name: Checkout private assets repository
         if: steps.probe_assets.outputs.have_assets == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: ${{ vars.ASSETS_REPO }}
           token: ${{ secrets.ASSETS_TOKEN }}
           path: _assets
+          persist-credentials: false
 
       - name: Copy ROMs into workspace
         if: steps.probe_assets.outputs.have_assets == 'true'
@@ -528,6 +530,8 @@ jobs:
 
       - name: Create archive
         shell: bash
+        env:
+          VERSION_LABEL: ${{ inputs.version_label }}
         run: |
           # Archive name embeds os_name + arch so macos-arm64 and
           # macos-x86_64 (and any future arm64-Linux / arm64-Windows)
@@ -536,12 +540,12 @@ jobs:
           # on every hosted runner (Linux/macOS/Windows since 2019).
           ARCH="${{ matrix.arch }}"
           [ -z "$ARCH" ] && ARCH="x86_64"
-          ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${ARCH}-${{ inputs.version_label }}"
+          ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${ARCH}-${VERSION_LABEL}"
           tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact .
           echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.archive_name }}
           path: ${{ env.archive_name }}

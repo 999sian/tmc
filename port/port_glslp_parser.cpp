@@ -239,8 +239,8 @@ std::optional<Preset> LoadPresetFile(const char* glslp_path) {
         return std::nullopt;
     }
     int npasses = ParseInt(*shaders_str, -1);
-    if (npasses < 0 || npasses > 64) {  /* libretro caps at ~16 in practice */
-        std::fprintf(stderr, "[glslp] %s: bad shaders count %d\n", glslp_path, npasses);
+    if (npasses < 1 || npasses > 64) {  /* must have >=1 pass; libretro caps ~16 */
+        std::fprintf(stderr, "[glslp] %s: bad shaders count %d (need 1..64)\n", glslp_path, npasses);
         return std::nullopt;
     }
 
@@ -412,21 +412,35 @@ CompileGlslToSpirv(const std::string& glsl_source,
 
     /* Write the GLSL to a temp file (glslangValidator only takes
      * paths, not stdin in a way that emits to stdout cleanly). */
-    char tmp_in_buf[128];
-    std::snprintf(tmp_in_buf, sizeof(tmp_in_buf),
-                  "/tmp/tmc_glslp_in_%d_%s.glsl",
-                  (int)::getpid(), stage_flag);
-    char tmp_out_buf[128];
-    std::snprintf(tmp_out_buf, sizeof(tmp_out_buf),
-                  "/tmp/tmc_glslp_out_%d_%s.spv",
-                  (int)::getpid(), stage_flag);
+    /* Create the input temp via mkstemp: O_EXCL + an unpredictable suffix, so
+     * a pre-planted symlink in a shared temp dir can't redirect our write (the
+     * old fixed "/tmp/tmc_glslp_in_<pid>" name was guessable). The .spv output
+     * path derives from the unique input name. */
+    const char* tmpdir = getenv("TMPDIR");
+    if (tmpdir == nullptr || tmpdir[0] == '\0') tmpdir = "/tmp";
+    char tmp_in_buf[256];
+    std::snprintf(tmp_in_buf, sizeof(tmp_in_buf), "%s/tmc_glslp_%s_XXXXXX", tmpdir, stage_flag);
+    int in_fd = mkstemp(tmp_in_buf);
+    if (in_fd < 0) {
+        std::fprintf(stderr, "[glslp] failed to create tmp shader file under %s\n", tmpdir);
+        return std::nullopt;
+    }
+    char tmp_out_buf[264];
+    std::snprintf(tmp_out_buf, sizeof(tmp_out_buf), "%s.spv", tmp_in_buf);
     {
-        std::ofstream f(tmp_in_buf);
-        if (!f) {
+        size_t off = 0;
+        bool wrote = true;
+        while (off < glsl_source.size()) {
+            ssize_t n = ::write(in_fd, glsl_source.data() + off, glsl_source.size() - off);
+            if (n <= 0) { wrote = false; break; }
+            off += (size_t)n;
+        }
+        ::close(in_fd);
+        if (!wrote) {
             std::fprintf(stderr, "[glslp] failed to write tmp shader %s\n", tmp_in_buf);
+            std::remove(tmp_in_buf);
             return std::nullopt;
         }
-        f << glsl_source;
     }
 
     /* Shell out to glslangValidator. -V = Vulkan SPIR-V output;
@@ -1415,6 +1429,15 @@ static std::optional<DecodedImage> DecodePng(const std::vector<uint8_t>& bytes) 
     png_uint_32 h = png_get_image_height(png, info);
     int bit_depth  = png_get_bit_depth(png, info);
     int color_type = png_get_color_type(png, info);
+    /* Reject implausible dimensions before allocating: a crafted PNG header
+     * could request a multi-gigabyte (w*h*4) buffer -> bad_alloc/terminate.
+     * Real shader LUTs are tiny; 8192 per side is already far beyond any. */
+    if (w == 0 || h == 0 || w > 8192 || h > 8192) {
+        std::fprintf(stderr, "[glslp] LUT rejected: implausible dimensions %ux%u\n",
+                     (unsigned)w, (unsigned)h);
+        png_destroy_read_struct(&png, &info, nullptr);
+        return std::nullopt;
+    }
 
     /* Normalise to 8-bit RGBA. The libretro LUTs we care about are
      * 24-bit truecolor (no alpha) or 32-bit RGBA. */

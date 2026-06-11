@@ -1207,6 +1207,7 @@ static bool sRandoUiSettingsInit = false;
  * the override only exists once the player actually edits a color, so an
  * enabled-but-untouched setting still rolls vanilla. */
 extern "C" void Rando_Cosmetic_Apply(void); /* rando_cosmetic.cpp — live palette re-apply */
+extern "C" void Rando_Keymap_Apply(void);   /* rando_keymap.c — rebind ground-item keys */
 
 typedef struct RandoColorUiState {
     char define[48];
@@ -1304,7 +1305,10 @@ static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
     st->dirty = true;
     /* Cosmetics cache keys on (active, seed64); force a re-evaluation so the
      * edit shows up live instead of waiting for the next seed roll. */
-    if (Rando_IsActive()) Rando_Cosmetic_Apply();
+    /* A reparse clears the bound ground-item/scripted location keys that only
+     * seed activation rebinds, so without this a cosmetic edit silently
+     * reverts dungeon items to vanilla. Rebind, then re-evaluate cosmetics. */
+    if (Rando_IsActive()) { Rando_Keymap_Apply(); Rando_Cosmetic_Apply(); }
     std::fprintf(stderr, "[RANDO] color override %s = %s\n", st->define, value);
 }
 
@@ -1330,7 +1334,7 @@ static void RandoUi_RemoveOverride(const char* define) {
     RandoLogic_ClearOverrides();
     for (uint32_t i = 0; i < kept; ++i) RandoLogic_SetOverride(names[i], values[i]);
     RandoLogic_Reparse();
-    if (Rando_IsActive()) Rando_Cosmetic_Apply();
+    if (Rando_IsActive()) { Rando_Keymap_Apply(); Rando_Cosmetic_Apply(); }
     std::fprintf(stderr, "[RANDO] color override %s cleared (vanilla)\n", define);
 }
 

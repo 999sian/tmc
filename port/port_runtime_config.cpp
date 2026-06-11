@@ -451,75 +451,92 @@ extern "C" void Port_Config_Load(const char* path) {
 
     sConfigJson = j;
 
-    int scale = j.value("window_scale", 3);
-    sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
-    int iscale = j.value("internal_scale", 1);
-    sInternalScale = iscale >= 1 && iscale <= 10 ? (u8)iscale : 1;
-    sUpscaleMethod = j.value("upscale_method", "nearest");
-    sFrameTimeNs = j.value("frame_time_ns", 0ULL);
-    sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
-    sActiveSaveProfile = j.value("active_save_profile", std::string("tmc.sav"));
-    sAutosaveEnabled = j.value("autosave_enabled", true);
-    sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u);
-    {
-        std::string ts = j.value("touch_scheme", std::string("joystick"));
-        for (char& c : ts) {
-            if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+    /* Apply parsed JSON into the runtime statics. j.value(key, default)
+     * throws json::type_error when a key is present with the wrong type
+     * (e.g. a hand-edited "window_scale": "big"). The parse above is
+     * guarded; guard the reads too so a malformed-but-valid-JSON config
+     * degrades to defaults instead of terminating the process. The lambda
+     * param shadows the outer j so it can be re-run against defaults. */
+    auto apply = [](const nlohmann::json& j) {
+        int scale = j.value("window_scale", 3);
+        sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
+        int iscale = j.value("internal_scale", 1);
+        sInternalScale = iscale >= 1 && iscale <= 10 ? (u8)iscale : 1;
+        sUpscaleMethod = j.value("upscale_method", "nearest");
+        sFrameTimeNs = j.value("frame_time_ns", 0ULL);
+        sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
+        sActiveSaveProfile = j.value("active_save_profile", std::string("tmc.sav"));
+        sAutosaveEnabled = j.value("autosave_enabled", true);
+        sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u);
+        {
+            std::string ts = j.value("touch_scheme", std::string("joystick"));
+            for (char& c : ts) {
+                if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+            }
+            sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
         }
-        sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
-    }
-    sWidescreenEnabled = j.value("widescreen_enabled", false);
-    {
-        std::string am = j.value("aspect_mode", std::string("native"));
-        for (char& c : am) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
-        if      (am == "16:9" || am == "widescreen")       sAspectMode = PORT_ASPECT_WIDESCREEN_16_9;
-        else if (am == "21:9" || am == "ultrawide")        sAspectMode = PORT_ASPECT_ULTRAWIDE_21_9;
-        else if (am == "32:9" || am == "super_ultrawide")  sAspectMode = PORT_ASPECT_SUPER_ULTRAWIDE_32_9;
-        else                                                sAspectMode = PORT_ASPECT_NATIVE_3_2;
+        sWidescreenEnabled = j.value("widescreen_enabled", false);
+        {
+            std::string am = j.value("aspect_mode", std::string("native"));
+            for (char& c : am) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
+            if      (am == "16:9" || am == "widescreen")       sAspectMode = PORT_ASPECT_WIDESCREEN_16_9;
+            else if (am == "21:9" || am == "ultrawide")        sAspectMode = PORT_ASPECT_ULTRAWIDE_21_9;
+            else if (am == "32:9" || am == "super_ultrawide")  sAspectMode = PORT_ASPECT_SUPER_ULTRAWIDE_32_9;
+            else                                                sAspectMode = PORT_ASPECT_NATIVE_3_2;
 
-        std::string bf = j.value("bg_fill", std::string("black"));
-        for (char& c : bf) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
-        if      (bf == "solid"   || bf == "solid_color")   sBgFill = PORT_BG_FILL_SOLID_COLOR;
-        else if (bf == "blurred" || bf == "blurred_frame") sBgFill = PORT_BG_FILL_BLURRED_FRAME;
-        else                                                sBgFill = PORT_BG_FILL_BLACK;
+            std::string bf = j.value("bg_fill", std::string("black"));
+            for (char& c : bf) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
+            if      (bf == "solid"   || bf == "solid_color")   sBgFill = PORT_BG_FILL_SOLID_COLOR;
+            else if (bf == "blurred" || bf == "blurred_frame") sBgFill = PORT_BG_FILL_BLURRED_FRAME;
+            else                                                sBgFill = PORT_BG_FILL_BLACK;
 
-        const auto& col = j.contains("bg_fill_color") ? j["bg_fill_color"] : nlohmann::json::array();
-        if (col.is_array() && col.size() >= 3) {
-            auto clamp_u8 = [](int v) -> u8 {
-                if (v < 0)   return 0;
-                if (v > 255) return 255;
-                return (u8)v;
-            };
-            sBgFillR = clamp_u8(col[0].is_number() ? col[0].get<int>() : 0);
-            sBgFillG = clamp_u8(col[1].is_number() ? col[1].get<int>() : 0);
-            sBgFillB = clamp_u8(col[2].is_number() ? col[2].get<int>() : 0);
+            const auto& col = j.contains("bg_fill_color") ? j["bg_fill_color"] : nlohmann::json::array();
+            if (col.is_array() && col.size() >= 3) {
+                auto clamp_u8 = [](int v) -> u8 {
+                    if (v < 0)   return 0;
+                    if (v > 255) return 255;
+                    return (u8)v;
+                };
+                sBgFillR = clamp_u8(col[0].is_number() ? col[0].get<int>() : 0);
+                sBgFillG = clamp_u8(col[1].is_number() ? col[1].get<int>() : 0);
+                sBgFillB = clamp_u8(col[2].is_number() ? col[2].get<int>() : 0);
+            }
         }
-    }
-    {
-        std::string rb = j.value("render_backend", std::string("auto"));
-        for (char& c : rb) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
-        if      (rb == "software" || rb == "sw")    sRenderBackend = PORT_RENDER_BACKEND_SOFTWARE;
-        else if (rb == "gpu")                       sRenderBackend = PORT_RENDER_BACKEND_GPU;
-        else                                         sRenderBackend = PORT_RENDER_BACKEND_AUTO;
-    }
+        {
+            std::string rb = j.value("render_backend", std::string("auto"));
+            for (char& c : rb) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
+            if      (rb == "software" || rb == "sw")    sRenderBackend = PORT_RENDER_BACKEND_SOFTWARE;
+            else if (rb == "gpu")                       sRenderBackend = PORT_RENDER_BACKEND_GPU;
+            else                                         sRenderBackend = PORT_RENDER_BACKEND_AUTO;
+        }
 
-    /* TTS settings — read-once at Port_TTS_Init; setters from the
-     * F8 menu write back via Port_Config_SetTts* below. Default ON
-     * matches DefaultsJson — accessibility-friendly first launch. */
-    sTtsEnabled  = j.value("tts_enabled", true);
-    sTtsRate     = (float)j.value("tts_rate",   0.5);
-    sTtsPitch    = (float)j.value("tts_pitch",  0.5);
-    sTtsVolume   = (float)j.value("tts_volume", 0.8);
-    sTtsVoice    = j.value("tts_voice",    std::string());
-    sTtsLanguage = j.value("tts_language", std::string());
+        /* TTS settings — read-once at Port_TTS_Init; setters from the
+         * F8 menu write back via Port_Config_SetTts* below. Default ON
+         * matches DefaultsJson — accessibility-friendly first launch. */
+        sTtsEnabled  = j.value("tts_enabled", true);
+        sTtsRate     = (float)j.value("tts_rate",   0.5);
+        sTtsPitch    = (float)j.value("tts_pitch",  0.5);
+        sTtsVolume   = (float)j.value("tts_volume", 0.8);
+        sTtsVoice    = j.value("tts_voice",    std::string());
+        sTtsLanguage = j.value("tts_language", std::string());
 
-    for (auto& v : sBinds) {
-        v.clear();
-    }
-    nlohmann::json empty = nlohmann::json::object();
-    const auto& b = j.contains("bindings") ? j["bindings"] : empty;
-    for (const auto& d : kDefaults) {
-        LoadBinds(d.input, b.contains(d.name) ? b[d.name] : DefaultsJson()["bindings"][d.name]);
+        for (auto& v : sBinds) {
+            v.clear();
+        }
+        nlohmann::json empty = nlohmann::json::object();
+        const auto& b = j.contains("bindings") ? j["bindings"] : empty;
+        for (const auto& d : kDefaults) {
+            LoadBinds(d.input, b.contains(d.name) ? b[d.name] : DefaultsJson()["bindings"][d.name]);
+        }
+    };
+
+    try {
+        apply(j);
+    } catch (const std::exception& e) {
+        fprintf(stderr, "[CONFIG] Malformed config.json (%s); falling back to defaults.\n", e.what());
+        const nlohmann::json def = DefaultsJson();
+        sConfigJson = def;
+        apply(def); /* defaults are well-typed and cannot throw */
     }
 }
 

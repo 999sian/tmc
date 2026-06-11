@@ -749,7 +749,11 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
                         }
                         if (n >= 0) n += 1;  /* Prev0 = 1 frame ago */
                     }
-                    if (n > 0 && n <= Runtime::kPrevCount) {
+                    /* n < kPrevCount, not <=: the ring holds the current frame
+                     * at prev_head plus (kPrevCount-1) past frames, so n==kPrevCount
+                     * would alias prev_head (the current frame) instead of the
+                     * oldest history slot. */
+                    if (n > 0 && n < Runtime::kPrevCount) {
                         int slot = (g_runtime.prev_head + Runtime::kPrevCount - n)
                                    % Runtime::kPrevCount;
                         if (g_runtime.prev_ring[slot]) {
@@ -757,7 +761,7 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
                             sb.sampler = g_runtime.sampler_linear;
                         }
                     }
-                } else if (lut_name.size() > 12 + 7  /* "PassPrev" + "Texture" */
+                } else if (lut_name.size() > 8 + 7  /* "PassPrev"(8) + N + "Texture"(7) */
                            && lut_name.compare(0, 8, "PassPrev") == 0
                            && lut_name.compare(lut_name.size() - 7, 7, "Texture") == 0) {
                     int n = 0;
@@ -876,5 +880,8 @@ extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer* cmd,
 #endif  /* TMC_GPU_RENDERER */
 
 extern "C" int Port_GlslpRuntime_IsActive(void) {
-    return g_runtime.loaded ? 1 : 0;
+    /* A preset with zero usable passes must not register as active, or the
+     * present path would route to it and overlay ImGui on an undefined
+     * swapchain. (The parser already rejects shaders<1; this is defense.) */
+    return (g_runtime.loaded && !g_runtime.passes.empty()) ? 1 : 0;
 }
