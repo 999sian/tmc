@@ -148,6 +148,7 @@ void Port_Config_HandleEvent(const SDL_Event* e);
 bool Port_Config_InputPressed(PortInput input);
 void Port_Config_CloseGamepads(void);
 
+bool Port_Config_InputEdgePressed(PortInput input);
 /* Soft-slot input poll, indexed 0..3 (X, Y, L2, R2). */
 bool Port_Config_SoftSlotPressed(int slot);
 
