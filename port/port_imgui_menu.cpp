@@ -48,6 +48,17 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "rando/rando_file_menu.h"
 #include "port_softslots.h"
 
+#include "rando/rando_runtime.h"
+#include "rando/rando_keymap.h"
+#include "item_ids.h"
+
+extern "C" {
+unsigned GetInventoryValue(unsigned item);
+bool CheckLocalFlagByBank(unsigned bankOffset, unsigned flag);
+unsigned GetFlagBankOffset(unsigned area);
+bool CheckGlobalFlag(unsigned flag);
+}
+
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -1779,6 +1790,362 @@ static void DrawRandoLogicSettingsBrowser(float height) {
     ImGui::EndChild();
 }
 
+/* ---- Built-in logic-aware Tracker overlay ------------------------------
+ * Reads the player's live inventory and progress flags, runs the logic
+ * propagation solver in the background, and displays owned items/elements,
+ * dungeon key status, and a list of reachable checks grouped by area. */
+
+static bool RandoUi_CheckItemOwned(const char* name) {
+    if (name == nullptr || std::strlen(name) < 7) return false;
+    if (std::strncmp(name, "Items.", 6) != 0) return false;
+    const char* item = name + 6;
+
+    /* Unique progress items */
+    if (std::strcmp(item, "GustJar") == 0) return GetInventoryValue(ITEM_GUST_JAR) != 0;
+    if (std::strcmp(item, "PacciCane") == 0) return GetInventoryValue(ITEM_PACCI_CANE) != 0;
+    if (std::strcmp(item, "MoleMitts") == 0) return GetInventoryValue(ITEM_MOLE_MITTS) != 0;
+    if (std::strcmp(item, "PegasusBoots") == 0) return GetInventoryValue(ITEM_PEGASUS_BOOTS) != 0;
+    if (std::strcmp(item, "RocsCape") == 0) return GetInventoryValue(ITEM_ROCS_CAPE) != 0;
+    if (std::strcmp(item, "Ocarina") == 0) return GetInventoryValue(ITEM_OCARINA) != 0;
+    if (std::strcmp(item, "Lantern") == 0) return GetInventoryValue(ITEM_LANTERN_ON) != 0 || GetInventoryValue(ITEM_LANTERN_OFF) != 0;
+    if (std::strcmp(item, "Flippers") == 0) return GetInventoryValue(ITEM_FLIPPERS) != 0;
+    if (std::strcmp(item, "PowerBracelets") == 0) return GetInventoryValue(ITEM_POWER_BRACELETS) != 0;
+    if (std::strcmp(item, "GripRing") == 0) return GetInventoryValue(ITEM_GRIP_RING) != 0;
+
+    /* Progressive items (Sword/Shield/Bow/Boomerang/Bombs) */
+    if (std::strcmp(item, "SmithSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 1;
+    if (std::strcmp(item, "GreenSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 2;
+    if (std::strcmp(item, "RedSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 3;
+    if (std::strcmp(item, "BlueSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 4;
+    if (std::strcmp(item, "FourSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 5;
+
+    if (std::strcmp(item, "Shield") == 0) return GetInventoryValue(ITEM_SHIELD) >= 1;
+    if (std::strcmp(item, "MirrorShield") == 0) return GetInventoryValue(ITEM_SHIELD) >= 2;
+
+    if (std::strcmp(item, "Bow") == 0) return GetInventoryValue(ITEM_BOW) >= 1;
+    if (std::strcmp(item, "LightArrow") == 0) return GetInventoryValue(ITEM_BOW) >= 2;
+
+    if (std::strcmp(item, "Bombs") == 0) return GetInventoryValue(ITEM_BOMBS) >= 1;
+    if (std::strcmp(item, "RemoteBombs") == 0) return GetInventoryValue(ITEM_REMOTE_BOMBS) >= 1;
+
+    if (std::strcmp(item, "Boomerang") == 0) return GetInventoryValue(ITEM_BOOMERANG) >= 1;
+    if (std::strcmp(item, "MagicBoomerang") == 0) return GetInventoryValue(ITEM_BOOMERANG) >= 2;
+
+    /* Elements */
+    if (std::strcmp(item, "EarthElement") == 0) return GetInventoryValue(ITEM_EARTH_ELEMENT) != 0;
+    if (std::strcmp(item, "FireElement") == 0) return GetInventoryValue(ITEM_FIRE_ELEMENT) != 0;
+    if (std::strcmp(item, "WaterElement") == 0) return GetInventoryValue(ITEM_WATER_ELEMENT) != 0;
+    if (std::strcmp(item, "WindElement") == 0) return GetInventoryValue(ITEM_WIND_ELEMENT) != 0;
+
+    /* Quest Items */
+    if (std::strcmp(item, "GraveyardKey") == 0) return GetInventoryValue(ITEM_QST_GRAVEYARD_KEY) != 0;
+    if (std::strcmp(item, "LonLonKey") == 0) return GetInventoryValue(ITEM_QST_LONLON_KEY) != 0;
+    if (std::strcmp(item, "WakeUpMushroom") == 0) return GetInventoryValue(ITEM_QST_MUSHROOM) != 0;
+    if (std::strcmp(item, "JabberNut") == 0) return GetInventoryValue(ITEM_JABBERNUT) != 0;
+    if (std::strcmp(item, "CarlovMedal") == 0) return GetInventoryValue(ITEM_QST_CARLOV_MEDAL) != 0;
+
+    /* Dungeon Keys: format Items.SmallKey.0x180, Items.SmallKey.0x181... */
+    if (std::strncmp(item, "SmallKey.0x", 11) == 0 && std::strlen(item) >= 14) {
+        char hex[3] = { item[11], item[12], '\0' };
+        unsigned area = (unsigned)std::strtoul(hex, nullptr, 16);
+        int dungeon_idx = (int)area - 23;
+        if (dungeon_idx >= 0 && dungeon_idx < 16) {
+            int key_index = item[13] - '0';
+            int held = (int)Rando_GetDungeonKeyCount(dungeon_idx);
+            return held > key_index;
+        }
+    }
+    if (std::strncmp(item, "BigKey.0x", 9) == 0 && std::strlen(item) >= 11) {
+        char hex[3] = { item[9], item[10], '\0' };
+        unsigned area = (unsigned)std::strtoul(hex, nullptr, 16);
+        int dungeon_idx = (int)area - 23;
+        if (dungeon_idx >= 0 && dungeon_idx < 16) {
+            return Rando_GetDungeonHasBigKey(dungeon_idx);
+        }
+    }
+
+    return false;
+}
+
+static bool RandoUi_LocationChecked(uint32_t loc_idx) {
+    uint32_t key = RandoLogic_GetLocationKeyAt(loc_idx);
+    if (key == UINT32_MAX) return false;
+
+    if (key & 0x80000000u) {
+        uint32_t group = (key >> 16) & 0x7FFF;
+        uint32_t subkey = key & 0xFFFF;
+        if (group == RANDO_SCRIPTED_KEY_SPECIAL) {
+            switch (subkey) {
+            case RANDO_SPECIAL_KEY_BELL_HP:
+                return CheckLocalFlagByBank(GetFlagBankOffset(2), 0xd0); /* Hyrule Town local flag 0xd0 */
+            case RANDO_SPECIAL_KEY_TINGLE_TROPHY:
+                return GetInventoryValue(ITEM_QST_TINGLE_TROPHY) != 0;
+            case RANDO_SPECIAL_KEY_FORTRESS_PRIZE:
+                return GetInventoryValue(ITEM_OCARINA) != 0;
+            }
+        }
+        return false;
+    }
+
+    uint32_t area = (key >> 16) & 0xFF;
+    uint32_t room = (key >> 8) & 0xFF;
+    uint32_t flag_or_chest = key & 0xFF;
+
+    unsigned flag = Rando_GetChestLocalFlag(area, room, flag_or_chest);
+    if (flag != 0xFF) {
+        unsigned offset = GetFlagBankOffset(area);
+        return CheckLocalFlagByBank(offset, flag) != 0;
+    } else {
+        unsigned offset = GetFlagBankOffset(area);
+        return CheckLocalFlagByBank(offset, flag_or_chest) != 0;
+    }
+}
+
+static bool sShowRandoTracker = false;
+
+static void DrawRandoTrackerOverlay(void) {
+    if (!sShowRandoTracker) return;
+
+    static bool sReached[RANDO_LOGIC_MAX_LOCATIONS] = {};
+    static bool sChecked[RANDO_LOGIC_MAX_LOCATIONS] = {};
+    static int sFrameThrottle = 0;
+    const uint32_t count = RandoLogic_GetLocationCountRaw();
+
+    if (++sFrameThrottle >= 15 || sFrameThrottle == 1) {
+        sFrameThrottle = 0;
+        const uint16_t* active_table = Rando_GetRandomizedItemTable();
+        RandoLogic_EvaluateReachability(active_table, RandoUi_CheckItemOwned, sReached, count);
+        for (uint32_t i = 0; i < count; ++i) {
+            sChecked[i] = RandoUi_LocationChecked(i);
+        }
+    }
+
+    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Randomizer HUD Tracker", &sShowRandoTracker, ImGuiWindowFlags_NoCollapse)) {
+        if (ImGui::BeginTabBar("##tracker_tabs")) {
+            if (ImGui::BeginTabItem("Items")) {
+                struct TrackerItem { const char* label; const char* sym; };
+                static const TrackerItem kMainItems[] = {
+                    { "Gust Jar", "Items.GustJar" },
+                    { "Cane of Pacci", "Items.PacciCane" },
+                    { "Mole Mitts", "Items.MoleMitts" },
+                    { "Pegasus Boots", "Items.PegasusBoots" },
+                    { "Roc's Cape", "Items.RocsCape" },
+                    { "Ocarina of Wind", "Items.Ocarina" },
+                    { "Lantern", "Items.Lantern" },
+                    { "Flippers", "Items.Flippers" },
+                    { "Power Bracelets", "Items.PowerBracelets" },
+                    { "Grip Ring", "Items.GripRing" },
+                };
+
+                ImGui::SeparatorText("Key Items");
+                if (ImGui::BeginTable("##tracker_items_grid", 5, ImGuiTableFlags_SizingFixedFit)) {
+                    for (int i = 0; i < 10; ++i) {
+                        if ((i % 5) == 0) ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(i % 5);
+                        bool owned = RandoUi_CheckItemOwned(kMainItems[i].sym);
+                        if (owned) {
+                            ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "[ %s ]", kMainItems[i].label);
+                        } else {
+                            ImGui::TextDisabled("[ %s ]", kMainItems[i].label);
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+
+                ImGui::SeparatorText("Progressive Upgrades");
+                if (ImGui::BeginTable("##tracker_upgrades", 2, ImGuiTableFlags_SizingFixedFit)) {
+                    ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+                    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0); ImGui::Text("Sword");
+                    ImGui::TableSetColumnIndex(1);
+                    if (RandoUi_CheckItemOwned("Items.FourSword")) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Four Sword (Infused)");
+                    else if (RandoUi_CheckItemOwned("Items.BlueSword")) ImGui::Text("Blue Sword");
+                    else if (RandoUi_CheckItemOwned("Items.RedSword")) ImGui::Text("Red Sword");
+                    else if (RandoUi_CheckItemOwned("Items.GreenSword")) ImGui::Text("Green Sword");
+                    else if (RandoUi_CheckItemOwned("Items.SmithSword")) ImGui::Text("Smith's Sword");
+                    else ImGui::TextDisabled("None");
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0); ImGui::Text("Shield");
+                    ImGui::TableSetColumnIndex(1);
+                    if (RandoUi_CheckItemOwned("Items.MirrorShield")) ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.95f, 1.0f), "Mirror Shield");
+                    else if (RandoUi_CheckItemOwned("Items.Shield")) ImGui::Text("Small Shield");
+                    else ImGui::TextDisabled("None");
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0); ImGui::Text("Bow");
+                    ImGui::TableSetColumnIndex(1);
+                    if (RandoUi_CheckItemOwned("Items.LightArrow")) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Light Bow");
+                    else if (RandoUi_CheckItemOwned("Items.Bow")) ImGui::Text("Bow");
+                    else ImGui::TextDisabled("None");
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0); ImGui::Text("Bombs");
+                    ImGui::TableSetColumnIndex(1);
+                    if (RandoUi_CheckItemOwned("Items.RemoteBombs")) ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.95f, 1.0f), "Remote Bombs");
+                    else if (RandoUi_CheckItemOwned("Items.Bombs")) ImGui::Text("Normal Bombs");
+                    else ImGui::TextDisabled("None");
+
+                    ImGui::EndTable();
+                }
+
+                ImGui::SeparatorText("Elements");
+                if (ImGui::BeginTable("##tracker_elements", 4, ImGuiTableFlags_SizingFixedFit)) {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    if (RandoUi_CheckItemOwned("Items.EarthElement")) ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "[ Earth Element ]");
+                    else ImGui::TextDisabled("[ Earth Element ]");
+
+                    ImGui::TableSetColumnIndex(1);
+                    if (RandoUi_CheckItemOwned("Items.FireElement")) ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "[ Fire Element ]");
+                    else ImGui::TextDisabled("[ Fire Element ]");
+
+                    ImGui::TableSetColumnIndex(2);
+                    if (RandoUi_CheckItemOwned("Items.WaterElement")) ImGui::TextColored(ImVec4(0.4f, 0.6f, 0.9f, 1.0f), "[ Water Element ]");
+                    else ImGui::TextDisabled("[ Water Element ]");
+
+                    ImGui::TableSetColumnIndex(3);
+                    if (RandoUi_CheckItemOwned("Items.WindElement")) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "[ Wind Element ]");
+                    else ImGui::TextDisabled("[ Wind Element ]");
+
+                    ImGui::EndTable();
+                }
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Dungeons")) {
+                static const struct { const char* name; int idx; const char* elem; } kDungeonInfo[] = {
+                    { "Deepwood Shrine", 1, "Items.EarthElement" },
+                    { "Cave of Flames",  2, "Items.FireElement" },
+                    { "Fortress of Winds", 3, "Items.WindElement" },
+                    { "Temple of Droplets", 4, "Items.WaterElement" },
+                    { "Palace of Winds", 6, "Items.WindElement" },
+                    { "Dark Hyrule Castle", 7, "" },
+                    { "Royal Crypt", 5, "" },
+                };
+
+                if (ImGui::BeginTable("##tracker_dungeons", 5, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter)) {
+                    ImGui::TableSetupColumn("Dungeon", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+                    ImGui::TableSetupColumn("Element", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Keys", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Big Key", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                    ImGui::TableSetupColumn("Boss Clear", ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableHeadersRow();
+
+                    for (int i = 0; i < 7; ++i) {
+                        ImGui::TableNextRow();
+                        int idx = kDungeonInfo[i].idx;
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::Text("%s", kDungeonInfo[i].name);
+
+                        ImGui::TableSetColumnIndex(1);
+                        if (kDungeonInfo[i].elem[0]) {
+                            bool has_el = RandoUi_CheckItemOwned(kDungeonInfo[i].elem);
+                            if (has_el) ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Yes");
+                            else        ImGui::TextDisabled("-");
+                        } else {
+                            ImGui::TextDisabled("N/A");
+                        }
+
+                        ImGui::TableSetColumnIndex(2);
+                        unsigned keys = Rando_GetDungeonKeyCount(idx);
+                        if (keys > 0) ImGui::Text("%u keys", keys);
+                        else          ImGui::TextDisabled("0");
+
+                        ImGui::TableSetColumnIndex(3);
+                        bool has_bk = Rando_GetDungeonHasBigKey(idx);
+                        if (has_bk) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Yes");
+                        else        ImGui::TextDisabled("-");
+
+                        ImGui::TableSetColumnIndex(4);
+                        if (idx <= 6) {
+                            bool cleared = CheckGlobalFlag(idx);
+                            if (cleared) ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Defeated");
+                            else         ImGui::TextDisabled("-");
+                        } else {
+                            ImGui::TextDisabled("N/A");
+                        }
+                    }
+                    ImGui::EndTable();
+                }
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Locations")) {
+                static ImGuiTextFilter sLocFilter;
+                sLocFilter.Draw("##loc_filter", 180);
+                ImGui::SameLine();
+                ImGui::TextDisabled("Filter by area/check name");
+
+                ImGui::BeginChild("##tracker_loc_list", ImVec2(0, 0), ImGuiChildFlags_Borders, 0);
+                char cur_area[48] = "";
+                bool area_open = false;
+
+                for (uint32_t i = 0; i < count; ++i) {
+                    RandoLogicLocationType t = RandoLogic_GetLocationType(i);
+                    if (t == RANDO_LOGIC_LOCATION_HELPER) continue;
+
+                    const char* name = RandoLogic_GetLocationName(i);
+                    if (name == nullptr || name[0] == '\0') continue;
+
+                    bool checked = sChecked[i];
+                    if (checked) continue;
+
+                    bool reached = sReached[i];
+                    if (!reached) continue;
+
+                    if (sLocFilter.IsActive() && !sLocFilter.PassFilter(name)) continue;
+
+                    char area_name[48] = "Overworld";
+                    const char* under = std::strchr(name, '_');
+                    if (under != nullptr && (size_t)(under - name) < sizeof(area_name)) {
+                        std::memcpy(area_name, name, under - name);
+                        area_name[under - name] = '\0';
+                    }
+
+                    if (std::strcmp(cur_area, area_name) != 0) {
+                        std::snprintf(cur_area, sizeof(cur_area), "%s", area_name);
+                        int avail = 0;
+                        for (uint32_t j = i; j < count; ++j) {
+                            const char* n = RandoLogic_GetLocationName(j);
+                            if (n == nullptr || RandoLogic_GetLocationType(j) == RANDO_LOGIC_LOCATION_HELPER) continue;
+                            if (sChecked[j] || !sReached[j]) continue;
+                            if (sLocFilter.IsActive() && !sLocFilter.PassFilter(n)) continue;
+                            if (std::strncmp(n, cur_area, std::strlen(cur_area)) == 0 && n[std::strlen(cur_area)] == '_') {
+                                ++avail;
+                            }
+                        }
+                        char header[64];
+                        std::snprintf(header, sizeof(header), "%s (%d available)###area_%s", cur_area, avail, cur_area);
+                        area_open = ImGui::CollapsingHeader(header, ImGuiTreeNodeFlags_DefaultOpen);
+                    }
+
+                    if (area_open) {
+                        const char* label = name;
+                        if (std::strncmp(label, cur_area, std::strlen(cur_area)) == 0 && label[std::strlen(cur_area)] == '_') {
+                            label += std::strlen(cur_area) + 1;
+                        }
+                        ImGui::Bullet();
+                        ImGui::SameLine();
+                        ImGui::TextUnformatted(label);
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Logical check: %s", name);
+                        }
+                    }
+                }
+                ImGui::EndChild();
+                ImGui::EndTabItem();
+            }
+
+            ImGui::EndTabBar();
+        }
+    }
+    ImGui::End();
+}
+
 static void DrawRibbonRandomizerTab(void) {
     if (!sRandoUiSettingsInit) {
         sRandoUiSettings = Rando_DefaultSettings();
@@ -1868,6 +2235,7 @@ static void DrawRibbonRandomizerTab(void) {
                 "Two players with the same seed AND the same fingerprint are "
                 "playing identical seeds - useful for races.");
         }
+        ImGui::Checkbox("Show HUD Tracker", &sShowRandoTracker);
     } else {
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No seed rolled - vanilla.");
     }
@@ -2808,6 +3176,7 @@ extern "C" bool Port_ImGui_Render(void) {
      * work that DOES carry labels through DataID has an obvious
      * place to plug in. */
 
+    DrawRandoTrackerOverlay();
     ImGui::Render();
 #ifdef TMC_GPU_RENDERER
     if (gpuBackend) {
