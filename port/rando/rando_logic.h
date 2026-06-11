@@ -111,6 +111,10 @@ uint32_t RandoLogic_GetLocationKeyAt(uint32_t index);
 uint32_t RandoLogic_GetLocationCountRaw(void);
 const char* RandoLogic_GetLocationName(uint32_t index);
 RandoLogicLocationType RandoLogic_GetLocationType(uint32_t index);
+void RandoLogic_EvaluateReachability(const uint16_t* active_table,
+                                     bool (*check_item_fn)(const char* name),
+                                     bool* out_reached,
+                                     uint32_t location_count);
 
 /* Declared settings (from !flag/!dropdown/!numberbox). The menu enumerates
  * these, lets the player change them, and the choices are applied as define

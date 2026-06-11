@@ -1508,6 +1508,7 @@ extern "C" uint32_t RandoLogic_GetLocationKeyAt(uint32_t index) {
     if (index >= sLogic.location_count) return UINT32_MAX;
     return sLogic.locations[index].is_helper ? UINT32_MAX : sLogic.locations[index].key;
 }
+
 extern "C" RandoLogicLocationType RandoLogic_GetLocationType(uint32_t index) {
     if (index >= sLogic.location_count) return RANDO_LOGIC_LOCATION_UNKNOWN;
     return sLogic.locations[index].type;
@@ -1788,6 +1789,33 @@ static void CollectReachable(EvalState* state, uint16_t* assignment) {
             if (sym != UINT16_MAX) state->item_owned[sym] = true;
         }
     } while (progressed);
+}
+
+extern "C" void RandoLogic_EvaluateReachability(
+    const uint16_t* active_table,
+    bool (*check_item_fn)(const char* name),
+    bool* out_reached,
+    uint32_t location_count) {
+
+    if (!sLogic.loaded || out_reached == NULL) return;
+
+    EvalState state;
+    memset(&state, 0, sizeof(state));
+
+    /* 1. Seed item ownership from GBA inventory/flags */
+    for (uint32_t s = 0; s < sLogic.symbol_count; ++s) {
+        if (sLogic.symbols[s].kind == SYMBOL_ITEM) {
+            state.item_owned[s] = check_item_fn(sLogic.symbols[s].name);
+        }
+    }
+
+    /* 2. Propagate reachability across the expressions graph */
+    CollectReachable(&state, (uint16_t*)active_table);
+
+    /* 3. Output reached flags */
+    for (uint32_t l = 0; l < sLogic.location_count && l < location_count; ++l) {
+        out_reached[l] = state.location_reached[l];
+    }
 }
 
 /* Items referenced anywhere in logic expressions are "advancement": their

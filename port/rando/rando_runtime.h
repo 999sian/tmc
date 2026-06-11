@@ -38,6 +38,12 @@ bool Rando_Runtime_MuteLowHealthBeep(void);
 /* `no_music` => suppress BGM song requests (same consult point). */
 bool Rando_Runtime_MuteMusic(void);
 
+/* Query a chest's localFlag by room property 3 (tile entities list).
+ * Returns 0xFF if not found. */
+unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestIndex);
+unsigned Rando_GetDungeonKeyCount(unsigned dungeon_idx);
+bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx);
+
 #ifdef __cplusplus
 }
 #endif
