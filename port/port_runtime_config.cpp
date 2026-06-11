@@ -989,6 +989,41 @@ extern "C" bool Port_Config_InputEdgePressed(PortInput input) {
     }
     return false;
 }
+/* True when the SDL event is a fresh "down" (key press, gamepad button
+ * press, or axis crossing the trigger threshold) bound to `input`. Mirrors
+ * the matching in Port_Config_HandleEvent but reports a single input rather
+ * than stamping the edge cache — used by callers that consume an input
+ * while game KEYINPUT is masked (e.g. closing the file-select setup
+ * sidebar with its open button). Key repeats are ignored so a held key
+ * fires once. */
+extern "C" bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) {
+        return false;
+    }
+    if (e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) {
+        for (const Bind& b : sBinds[input]) {
+            if (b.key != SDLK_UNKNOWN && b.key == e->key.key) {
+                return true;
+            }
+        }
+    } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+        for (const Bind& b : sBinds[input]) {
+            if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT &&
+                b.pad == (SDL_GamepadButton)e->gbutton.button) {
+                return true;
+            }
+        }
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+               e->gaxis.value > kAxisThreshold) {
+        for (const Bind& b : sBinds[input]) {
+            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
+                b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 extern "C" bool Port_Config_InputPressed(PortInput input) {
     if (Port_TouchControls_InputPressed(input)) {

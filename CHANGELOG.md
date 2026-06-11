@@ -113,6 +113,16 @@
   surface fallback backend (or if ImGui init failed / is disabled) the
   new-file flow stays vanilla instead of opening an invisible modal over
   masked input (= softlock).
+- **File-select "L Settings" sidebar could not be closed with L.** Opening the
+  Port & Randomizer setup sidebar with L flips `Port_RandoFileMenu_IsOpen()`
+  true, which masks all GBA input and makes `Port_PumpEvents` swallow the next
+  L press before the game's own handler sees it — so a second L never closed
+  the panel, and the close path mistook the sidebar for the forced new-file
+  modal (calling its no-op `Cancel()` and hiding the "Close Sidebar" button).
+  The sidebar now toggles shut on a second L press (handled in
+  `Port_PumpEvents`, skipped while the seed field has keyboard focus so the
+  L-bound key can still be typed), and Esc / Gamepad B / the on-screen
+  "Close Sidebar" button work again.
 - **Em-dashes in ImGui UI strings rendered as `?`** (the bundled font has no
   U+2014 glyph) — all user-visible menu/modal strings now use ASCII dashes.
 - `TMC_REPRO_RANDO` harness gained an ImGui keyboard stage: it now drives the
