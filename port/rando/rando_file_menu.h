@@ -18,6 +18,9 @@ void Port_RandoFileMenu_Close(void);
 bool Port_RandoFileMenu_IsOpen(void);
 bool Port_RandoFileMenu_GetRandoOptionEnabled(void);
 void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled);
+bool Port_RandoFileMenu_IsSidebarOpen(void);
+void Port_RandoFileMenu_SetSidebarOpen(bool open);
+void Port_RandoFileMenu_ToggleSidebar(void);
 
 /* State accessors + mutation helpers. The modal itself is rendered by
  * port_imgui_menu.cpp (DrawRandoFileMenuModal) so it works on every
