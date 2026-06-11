@@ -342,3 +342,10 @@ void Port_RandoSave_ClearSlot(int slot) {
     memset(&sSidecar.slots[slot], 0, sizeof(sSidecar.slots[slot]));
     (void)SaveAll();
 }
+
+void Port_RandoSave_CopySlot(int src, int dst) {
+    if (src < 0 || src >= RANDO_SIDECAR_SLOTS || dst < 0 || dst >= RANDO_SIDECAR_SLOTS) return;
+    if (!LoadAll()) BackupSidecarIfPresent();
+    sSidecar.slots[dst] = sSidecar.slots[src];
+    (void)SaveAll();
+}
