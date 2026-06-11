@@ -64,15 +64,16 @@
   Melari's broken-sword reward, the shoe-shop Pegasus Boots, the Witch Hut
   mushroom, the Bomb Minish bomb bag, Minish/Crenel/Valley Great Fairy
   rewards, Valley Dampe's graveyard key, Biggoron's mirror shield, the library
-  yellow-minish reward, the Town Cafe lady kinstone, the Crypt prize, the
-  Deepwood/CoF/Droplets/Palace dungeon prizes, Business Scrub item sales, plus
-  opt-in Goron Merchant sets / Cucco rounds / Bomb Minish remote bombs. The
-  real-file diagnostic now binds 36/66 scripted keys at stock settings and
-  65/66 under `GORON_5` + `VANILLA_BLUE_FUSIONS` +
-  `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` + `CUCCO_10`; subtype-aware
-  external rewards persist shell counts, kinstone piece ids, and dungeon-item
-  ids through sidecar v4, and the headless repro probe rises from 206 keyed /
-  195 overridden to 242 keyed / 241 overridden at stock settings.
+  yellow-minish reward, the Town Cafe lady kinstone, the Crypt prize, Gregal's
+  shells + light arrows, the Deepwood/CoF/Droplets/Palace dungeon prizes,
+  Business Scrub item sales, plus opt-in Goron Merchant sets / Cucco rounds /
+  Bomb Minish remote bombs. The real-file diagnostic now binds 38/68 scripted
+  keys at stock settings and 67/68 under `GORON_5` +
+  `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` +
+  `CUCCO_10`; subtype-aware external rewards persist shell counts, kinstone
+  piece ids, and dungeon-item ids through sidecar v4, and the headless repro
+  probe rises from 206 keyed / 195 overridden to 244 keyed / 243 overridden at
+  stock settings.
 - Honest remaining gaps documented in `port/rando/README.md`: `!import`
   approximation (unused by default.logic), remaining NPC-script / fusion
   reward sites without stable native identities, and placement not

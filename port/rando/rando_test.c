@@ -447,7 +447,13 @@ static int run_real_logic_diagnostic(void) {
             "Town_CafeLady_NPC") ||
         !expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CRYPT_PRIZE, 0, 0),
-            "Crypt_Prize")) {
+            "Crypt_Prize") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_GREGAL_SHELLS, 0, 0),
+            "WindTribe_2F_Gregal_NPC1") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_GREGAL_LIGHT_ARROW, 0, 0),
+            "WindTribe_2F_Gregal_NPC2")) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }
