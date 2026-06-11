@@ -39,7 +39,6 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
 #include "port_widescreen.h"
 #include "port_gpu_renderer.h"    /* Port_GPU_IsActive() for backend-conditional UI */
-#include "port_randomizer.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"             /* Port_TTS_* — accessibility tab + focus reader */

@@ -9,21 +9,16 @@ components listed below. **Each retains its own license**, and those terms — n
 the ACSL — govern those components. They are reproduced/redistributed here under
 their respective licenses.
 
-> ⚠️ **Copyleft note.** This project links **LGPL-3.0** code and ships a
-> separately-built **GPL-3.0** binary. The GPL-3.0 randomizer is built as a
-> **standalone executable** that the port invokes as a **separate process**
-> (mere aggregation), and is **not** statically linked into `tmc_pc`. agbplay is
-> **LGPL-3.0** and is dynamically/statically linked in a relinkable form, as
-> LGPL permits, while the larger work carries its own license. If the GPL-3.0
-> randomizer were ever compiled directly into the main binary, the combined
-> binary would have to be distributed under GPL-3.0 — keep it a separate
-> executable to preserve the licensing above.
+> ⚠️ **Copyleft note.** This project links **LGPL-3.0** code (agbplay). agbplay
+> is linked into `tmc_pc` in relinkable form, as LGPL permits, while the larger
+> work carries its own license. The project does **not** bundle, link, or invoke
+> any GPL-3.0 component: the randomizer feature is the project's own clean-room
+> reimplementation under `port/rando/`, not the GPL-3.0 minishmaker/randomizer.
 
 ## Copyleft components (GPL / LGPL family)
 
 | Component | Path | Upstream | License | Linkage |
 |-----------|------|----------|---------|---------|
-| **Minish Cap Randomizer** | `libs/randomizer` | https://github.com/minishmaker/randomizer | **GPL-3.0** | Built as a standalone `randomizer_cli` binary; invoked by the port as a **separate process** (not linked into `tmc_pc`). |
 | **agbplay** (agbplay_core) | `libs/agbplay_core` | https://github.com/ipatix/agbplay | **LGPL-3.0** | Linked into `tmc_pc` in relinkable form. See `libs/agbplay_core/LICENSE`. |
 
 ## Permissively-licensed components

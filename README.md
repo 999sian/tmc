@@ -229,11 +229,10 @@ Notably:
 - **agbplay** (`libs/agbplay_core`, derived from
   https://github.com/ipatix/agbplay) is **LGPL-3.0**; those files remain under
   the LGPL and the larger work is not relicensed by linking it.
-- The **Minish Cap randomizer** (`libs/randomizer`,
-  https://github.com/minishmaker/randomizer) is **GPL-3.0**; it is built as a
-  **separate executable** that the port invokes as its own process, so it does
-  not impose GPL on the main binary. Keep it a separate process to preserve
-  this.
+
+The in-game randomizer (`port/rando/`) is the project's own clean-room
+reimplementation and is covered by the project license above; it is **not** the
+GPL-3.0 minishmaker/randomizer, which this project does not bundle or link.
 
 This project also builds on the zeldaret/tmc decompilation of a copyrighted
 game. All Nintendo intellectual property remains owned by Nintendo; a
