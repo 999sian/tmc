@@ -47,6 +47,7 @@ typedef struct RandoFileMenuState {
 static RandoFileMenuState sMenu;
 static int sEnabledCached = -1;
 static bool sRandoOptionEnabled = false;
+static bool sShowSidebar = false;
 static uint64_t sQuickSeedCounter = 0x853c49e6748fea9bull;
 
 static uint64_t SplitMix64_NextLocal(uint64_t* state) {
@@ -262,5 +263,18 @@ void Port_RandoFileMenu_Close(void) {
 }
 
 bool Port_RandoFileMenu_IsOpen(void) {
-    return sMenu.open;
+    extern bool Rando_IsInFileSelect(void);
+    return sMenu.open || (Rando_IsInFileSelect() && sShowSidebar);
+}
+
+bool Port_RandoFileMenu_IsSidebarOpen(void) {
+    return sShowSidebar;
+}
+
+void Port_RandoFileMenu_SetSidebarOpen(bool open) {
+    sShowSidebar = open;
+}
+
+void Port_RandoFileMenu_ToggleSidebar(void) {
+    sShowSidebar = !sShowSidebar;
 }
