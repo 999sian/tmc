@@ -16,6 +16,7 @@ bool Port_RandoFileMenu_ShouldOpenForNewFile(void);
 void Port_RandoFileMenu_Open(int save_slot);
 void Port_RandoFileMenu_Close(void);
 bool Port_RandoFileMenu_IsOpen(void);
+bool Port_RandoFileMenu_IsModalOpen(void);
 bool Port_RandoFileMenu_GetRandoOptionEnabled(void);
 void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled);
 bool Port_RandoFileMenu_IsSidebarOpen(void);

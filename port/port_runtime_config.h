@@ -144,6 +144,8 @@ void        Port_Config_SetTtsLanguage(const char* v);
 void Port_Config_OpenGamepads(void);
 #ifndef TMC_N64
 void Port_Config_HandleEvent(const SDL_Event* e);
+/* True when an SDL event is a fresh press bound to `input` (see .cpp). */
+bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input);
 #endif
 bool Port_Config_InputPressed(PortInput input);
 void Port_Config_CloseGamepads(void);
