@@ -43,6 +43,7 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "port_reborn.h"
 #include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"             /* Port_TTS_* — accessibility tab + focus reader */
+#include "port_a11y_cues.h"       /* Port_A11y_ScanSurroundings — navigation cues */
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
 #include "rando/rando_file_menu.h"
@@ -2637,6 +2638,41 @@ static void DrawRibbonAccessibilityTab(void) {
     ImGui::SameLine();
     if (ImGui::Button("Read focus")) {
         Port_TTS_Speak("Focus reader test. The focused control reads aloud as you Tab.", nullptr);
+    }
+
+    ImGui::Separator();
+    ImGui::TextWrapped(
+        "Navigation cues (for blind / low-vision players). On-demand keys "
+        "in game: F10 scans nearby points of interest (chests, items, NPCs, "
+        "animals, enemies, exits); Shift+F10 steps through them one at a "
+        "time; Ctrl+F10 reads the surface under you, walls around you, and "
+        "exits.");
+    if (ImGui::Button("Scan surroundings (F10)")) { Port_A11y_ScanSurroundings(); }
+    ImGui::SameLine();
+    if (ImGui::Button("Cycle (Shift+F10)"))       { Port_A11y_CycleNext(); }
+    ImGui::SameLine();
+    if (ImGui::Button("Look around (Ctrl+F10)"))  { Port_A11y_LookAround(); }
+
+    ImGui::Spacing();
+    ImGui::TextWrapped(
+        "Passive cues play automatically as you move: a tonal enemy radar "
+        "(stereo pan = direction, pitch = distance), footstep sounds tinted "
+        "by surface, fall-hazard warnings, and wall bumps.");
+    {
+        bool b;
+        b = Port_A11y_GetPassiveEnabled();
+        if (ImGui::Checkbox("Passive cues", &b)) Port_A11y_SetPassiveEnabled(b);
+        b = Port_A11y_GetFootstepsEnabled();
+        if (ImGui::Checkbox("Footsteps", &b))    Port_A11y_SetFootstepsEnabled(b);
+        ImGui::SameLine();
+        b = Port_A11y_GetHazardsEnabled();
+        if (ImGui::Checkbox("Hazards", &b))      Port_A11y_SetHazardsEnabled(b);
+        ImGui::SameLine();
+        b = Port_A11y_GetRadarEnabled();
+        if (ImGui::Checkbox("Enemy radar", &b))  Port_A11y_SetRadarEnabled(b);
+        ImGui::SameLine();
+        b = Port_A11y_GetWallsEnabled();
+        if (ImGui::Checkbox("Walls", &b))        Port_A11y_SetWallsEnabled(b);
     }
 
     ImGui::Separator();

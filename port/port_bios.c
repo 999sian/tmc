@@ -132,6 +132,14 @@ static void Port_UpdateInput(void) {
         *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) &= ~START_BUTTON;
     }
 
+    /* Accessibility passive cues (footsteps / hazards / enemy radar / wall
+     * bumps). Internally gated on TASK_GAME and per-category toggles; runs
+     * after the overlay early-return above so cues stay silent in menus. */
+    {
+        extern void Port_A11y_Update(void);
+        Port_A11y_Update();
+    }
+
     /* Issue #99 auto-repro harness. Set TMC_REPRO_MAZAAL=1 to drive
      * the game from the title screen into the FoW boss room mid-
      * phase-3 so the [mazaal] diagnostic logs in mazaalMacro.c
@@ -202,6 +210,13 @@ static void Port_UpdateInput(void) {
     {
         extern void Port_ReproPerfcap_Tick(unsigned int frame);
         Port_ReproPerfcap_Tick(sFrameNum);
+    }
+
+    /* Accessibility surroundings-scan self-test (TMC_REPRO_A11Y=1): drive
+     * into a room and invoke Port_A11y_ScanSurroundings on live state. */
+    {
+        extern void Port_ReproA11y_Tick(unsigned int frame);
+        Port_ReproA11y_Tick(sFrameNum);
     }
 
     /* "Crash talking to the cat woman" repro (#152). Set TMC_REPRO_CATPERSON=1
@@ -309,6 +324,20 @@ static void Port_PumpEvents(void) {
                 /* Announce the new state if we just turned ON; if
                  * turning OFF, SetEnabled already cleared the queue. */
                 if (now) Port_TTS_AnnounceMessage("Text to speech enabled.");
+                continue;
+            }
+            if (e.key.key == SDLK_F10) {
+                /* Accessibility navigation cues (blind / low-vision):
+                 *   F10        — speak nearby points of interest
+                 *   Shift+F10  — step to the next nearby object
+                 *   Ctrl+F10   — orientation: surface, walls, exits
+                 * All no-op outside gameplay / when TTS is off. */
+                extern void Port_A11y_ScanSurroundings(void);
+                extern void Port_A11y_CycleNext(void);
+                extern void Port_A11y_LookAround(void);
+                if (e.key.mod & SDL_KMOD_SHIFT)     Port_A11y_CycleNext();
+                else if (e.key.mod & SDL_KMOD_CTRL) Port_A11y_LookAround();
+                else                                Port_A11y_ScanSurroundings();
                 continue;
             }
             if (e.key.key == SDLK_F6 &&

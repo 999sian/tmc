@@ -550,6 +550,12 @@ int main(int argc, char* argv[]) {
         Port_TTS_Init();
     }
 
+    /* Load persisted accessibility cue toggles into the cue module. */
+    {
+        extern void Port_A11y_Init(void);
+        Port_A11y_Init();
+    }
+
     /* ====================================================================
      * Project Picori prelaunch screen.
      *

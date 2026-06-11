@@ -2,6 +2,24 @@
 
 ## v0.6.0 (2026-06-11)
 
+### Accessibility — audio navigation cues (Phase 1)
+
+- **Intro/prologue text-to-speech**: the opening "legend of the Picori"
+  story panels (`src/cutscene.c`) are now read aloud as each page appears.
+  They render through `ShowTextBox` (not the MessageMain dialog pipeline),
+  so they previously bypassed TTS; hooked via `Port_TTS_SpeakTextIndex`,
+  matching the existing dialog / room-name / menu TTS sites.
+- **Surroundings scan (F10)**: a new on-demand cue for blind / low-vision
+  players. Press F10 in game (or the F8 → Accessibility "Scan surroundings"
+  button) to hear nearby chests, collectible pickups (rupees, hearts,
+  kinstones, keys, bombs, arrows, fairies), NPCs and animals, enemies, and
+  room exits — each spoken as "label, direction, distance in tiles",
+  nearest first (`port/port_a11y_cues.c`). Reads the live entity pool plus
+  the room's transition list; a no-op outside gameplay or when TTS is off.
+- Headless regression guard `port/port_repro_a11y.c` (`TMC_REPRO_A11Y=1`)
+  warps into a room, spawns known points of interest, and asserts the scan
+  classifies and locates them (`TMC_A11Y_DEBUG=1` echoes the spoken phrase).
+
 ### Randomizer — MinishMaker 1:1 parity pass
 
 - **Full per-location coverage**: every reward location in MinishMaker's
