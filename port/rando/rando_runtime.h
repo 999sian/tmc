@@ -38,6 +38,7 @@ bool Rando_Runtime_MuteLowHealthBeep(void);
 /* `no_music` => suppress BGM song requests (same consult point). */
 bool Rando_Runtime_MuteMusic(void);
 bool Rando_IsInGameplay(void);
+bool Rando_IsInFileSelect(void);
 
 /* Query a chest's localFlag by room property 3 (tile entities list).
  * Returns 0xFF if not found. */
