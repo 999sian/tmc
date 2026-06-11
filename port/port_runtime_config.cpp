@@ -87,6 +87,11 @@ float       sTtsPitch    = 0.5f;
 float       sTtsVolume   = 0.8f;
 std::string sTtsVoice;
 std::string sTtsLanguage;
+bool        sA11yCues      = true;
+bool        sA11yFootsteps = true;
+bool        sA11yHazards   = true;
+bool        sA11yRadar     = true;
+bool        sA11yWalls     = true;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -133,6 +138,13 @@ nlohmann::json DefaultsJson(void) {
         { "tts_volume", 0.8 },
         { "tts_voice", "" },
         { "tts_language", "" },
+        /* Accessibility passive navigation cues (Phase 2) — default ON to
+         * match the TTS-on accessibility build. */
+        { "a11y_cues", true },
+        { "a11y_footsteps", true },
+        { "a11y_hazards", true },
+        { "a11y_radar", true },
+        { "a11y_walls", true },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -519,6 +531,11 @@ extern "C" void Port_Config_Load(const char* path) {
         sTtsVolume   = (float)j.value("tts_volume", 0.8);
         sTtsVoice    = j.value("tts_voice",    std::string());
         sTtsLanguage = j.value("tts_language", std::string());
+        sA11yCues      = j.value("a11y_cues", true);
+        sA11yFootsteps = j.value("a11y_footsteps", true);
+        sA11yHazards   = j.value("a11y_hazards", true);
+        sA11yRadar     = j.value("a11y_radar", true);
+        sA11yWalls     = j.value("a11y_walls", true);
 
         for (auto& v : sBinds) {
             v.clear();
@@ -1248,3 +1265,14 @@ extern "C" void Port_Config_SetTtsLanguage(const char* v) {
     sConfigJson["tts_language"] = sTtsLanguage;
     SaveConfig();
 }
+
+extern "C" bool Port_Config_GetA11yCues(void) { return sA11yCues; }
+extern "C" void Port_Config_SetA11yCues(bool on) { sA11yCues = on; sConfigJson["a11y_cues"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetA11yFootsteps(void) { return sA11yFootsteps; }
+extern "C" void Port_Config_SetA11yFootsteps(bool on) { sA11yFootsteps = on; sConfigJson["a11y_footsteps"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetA11yHazards(void) { return sA11yHazards; }
+extern "C" void Port_Config_SetA11yHazards(bool on) { sA11yHazards = on; sConfigJson["a11y_hazards"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetA11yRadar(void) { return sA11yRadar; }
+extern "C" void Port_Config_SetA11yRadar(bool on) { sA11yRadar = on; sConfigJson["a11y_radar"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetA11yWalls(void) { return sA11yWalls; }
+extern "C" void Port_Config_SetA11yWalls(bool on) { sA11yWalls = on; sConfigJson["a11y_walls"] = on; SaveConfig(); }
