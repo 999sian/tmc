@@ -1739,6 +1739,19 @@ static uint32_t ScriptCommand_RandoKeyForItem(const Entity* entity, u8 item) {
                                                       RANDO_SPECIAL_KEY_LIBRARY_YELLOW_MINISH, 0, 0);
                     }
                     break;
+                case TINGLE_SIBLINGS:
+                    if (item == ITEM_QST_TINGLE_TROPHY) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_TINGLE_TROPHY, 0,
+                                                      0);
+                    }
+                    break;
+                case MINISTER_POTHO:
+                    /* DHC B2 prison: the freed king's minister hands over the
+                     * .logic DHC_B2_King reward (vanilla a single rupee). */
+                    if (item == ITEM_RUPEE1 && gRoomControls.area == 0x88 && gRoomControls.room == 0x39) {
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DHC_KING, 0, 0);
+                    }
+                    break;
             }
             break;
         case OBJECT:
@@ -1756,6 +1769,14 @@ static uint32_t ScriptCommand_RandoKeyForItem(const Entity* entity, u8 item) {
                 }
             }
             break;
+    }
+
+    /* Simon's Simulation reward (.logic Town_Simulation_Chest): the heart
+     * piece is granted by the waking-up script — area-keyed because the
+     * executing entity is a cutscene orchestrator, not a stable NPC. */
+    if (item == ITEM_HEART_PIECE &&
+        (gRoomControls.area == 0x44 || (gRoomControls.area == 0x23 && gRoomControls.room == 0x04))) {
+        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_SIMULATION, 0, 0);
     }
 
     return UINT32_MAX;

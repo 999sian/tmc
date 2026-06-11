@@ -11,6 +11,13 @@
 #include "item.h"
 #include "sound.h"
 #include "scroll.h"
+#ifdef PC_PORT
+#include "room.h"
+#endif
+#ifdef PC_PORT
+#include <stdbool.h>
+extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -75,8 +82,20 @@ static void HeartContainer_Action2(HeartContainerEntity* this) {
 static void HeartContainer_Action3(HeartContainerEntity* this) {
     sub_08080CB4(super);
     if (!(gPlayerState.flags & PL_MINISH) && IsCollidingPlayer(super)) {
+        u8 item = ITEM_HEART_CONTAINER;
+        u8 subtype = 0;
         SetFlag(this->flag);
-        CreateItemEntity(ITEM_HEART_CONTAINER, 0, 0);
+#ifdef PC_PORT
+        /* Randomizer: boss heart containers are .logic locations
+         * (Deepwood/CoF/Fortress/Droplets/Palace _BossItem). Key by the
+         * container's room-local persistence flag, same namespace as
+         * itemOnGround pickups. */
+        {
+            u32 key = ((u32)gRoomControls.area << 16) | ((u32)gRoomControls.room << 8) | (this->flag & 0xff);
+            (void)Rando_OverrideLocationKey(key, &item, &subtype);
+        }
+#endif
+        CreateItemEntity(item, subtype, 0);
         DeleteThisEntity();
     }
 }
