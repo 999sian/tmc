@@ -395,6 +395,25 @@ static int run_real_logic_diagnostic(void) {
         }
         fprintf(stderr, "[unkeyed] total %u\n", unkeyed);
     }
+    /* Settings metadata (tab / group / tooltip / defaults) drives the
+     * grouped settings browser in the menus — assert the parser fills it. */
+    {
+        const uint32_t sc = RandoLogic_GetSettingCount();
+        const RandoLogicSetting* map_setting = NULL;
+        for (uint32_t i = 0; i < sc; ++i) {
+            const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+            if (s != NULL && strcmp(s->define, "MAP_SETTING") == 0) { map_setting = s; break; }
+        }
+        if (map_setting == NULL || strcmp(map_setting->tab, "Main Settings") != 0 ||
+            strcmp(map_setting->group, "Dungeon Settings") != 0 || map_setting->tooltip[0] == '\0' ||
+            map_setting->default_option < 0 || map_setting->default_option >= map_setting->option_count ||
+            strcmp(map_setting->opt_value[map_setting->default_option], "MAP_STANDARD") != 0) {
+            fprintf(stderr, "[real] FAIL: MAP_SETTING metadata (tab/group/tooltip/default) not parsed\n");
+            RandoLogic_Reset(); Rando_Reset();
+            return 0;
+        }
+        fprintf(stderr, "[real] OK: settings metadata parsed (tab/group/tooltip/defaults)\n");
+    }
     if (!expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_80, 0, 0),
             "Town_Shop_80Item") ||
