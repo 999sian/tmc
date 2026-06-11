@@ -24,6 +24,9 @@
 #include "script.h"
 #include "subtask.h"
 #include "tiles.h"
+#ifdef PC_PORT
+#include "../port/port_tts.h"
+#endif
 
 void sub_08051F78(void);
 void sub_08051FF0(void);
@@ -270,6 +273,14 @@ void sub_08053800(void) {
         LoadGfxGroup(index + 0x3a);
         MemClear(&gBG1Buffer, 0x800);
         ShowTextBox(TEXT_INDEX(TEXT_PICORI, 1) + index, ptr->font);
+#ifdef PC_PORT
+        /* Intro "legend of the Picori" prologue renders each story
+         * page via ShowTextBox (not the MessageMain dialog pipeline),
+         * so it never reached TTS. Speak each page as it appears —
+         * sub_08053800 runs once per page with `index` advancing, so
+         * this fires once per page, mirroring the visual. */
+        Port_TTS_SpeakTextIndex(TEXT_INDEX(TEXT_PICORI, 1) + index);
+#endif
         gScreen.bg1.updated = 1;
         gScreen.controls.alphaBlend = 0x10;
         gScreen.controls.window0HorizontalDimensions = ptr->width;
