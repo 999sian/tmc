@@ -39,8 +39,10 @@
 
 #include "rando/rando_logic.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef struct RandoKeymapEntry {
     const char* location; /* .logic location name (build/default.logic) */
@@ -143,6 +145,188 @@ static const RandoKeymapEntry kGroundItemKeys[] = {
     { "Palace_1stHalf_2F_Item3", 0x70, 0x21, 0x5C },
     { "Palace_1stHalf_2F_Item4", 0x70, 0x21, 0x5D },
     { "Palace_1stHalf_2F_Item5", 0x70, 0x21, 0x5E },
+
+    /* ================== 1:1 pass — overworld & remaining dungeon items ==
+     * Same verification method as above: USA record found in the room's
+     * entity lists (gAreaTable walk), record+3 = item-type byte matches the
+     * .logic vanilla item, and EU addr - (rec+3) equals the surrounding data
+     * block's constant EU->USA delta. Flags are spritePtr>>16 (ground items
+     * / EnemyItem / ice blocks) or spritePtr&0xFFFF (FallingItemManager,
+     * src/manager/fallingItemManager.c copies sp.low into the spawned
+     * ground item's flag).                                                 */
+
+    /* --- Dojos (area 0x25, EU-0x8A4) ------------------------------------ */
+    /* USA recs 0xD7DCC/0xD816C/0xD825C/0xD83A4: GI HeartPiece flags
+     * 0x80/0x7F/0x83/0x82 in rooms 0x00/0x04/0x05/0x06 */
+    { "Crenel_Dojo_HP", 0x25, 0x00, 0x80 },
+    { "Swamp_Dojo_HP", 0x25, 0x04, 0x7F },
+    { "Castle_Dojo_HP", 0x25, 0x05, 0x83 },
+    { "Hylia_Dojo_HP", 0x25, 0x06, 0x82 },
+
+    /* --- Town house interiors ------------------------------------------- */
+    /* USA rec 0xD6F78: GI HeartPiece flag 0xB8 (inn backdoor, EU-0x8A4) */
+    { "Town_Inn_BackdoorHP", 0x21, 0x0A, 0xB8 },
+    /* USA rec 0xF5E48: GI HeartPiece flag 0xB4 (music house, EU-0xA44) */
+    { "Town_MusicHouse_HP", 0x23, 0x05, 0xB4 },
+
+    /* --- Minish paths (area 0x11, EU-0x8A4) ----------------------------- */
+    { "Town_School_Path_HP", 0x11, 0x02, 0x7E },
+    { "LonLon_Path_HP", 0x11, 0x03, 0xBA },
+
+    /* --- Royal Valley graves / Castor caves ----------------------------- */
+    /* USA rec 0xD9388: GI HeartPiece flag 0x5D (EU-0x8A4) */
+    { "Valley_GraveyardLeftGrave_HP", 0x34, 0x00, 0x5D },
+    /* USA rec 0xDA1B8: GI HeartPiece flag 0x38 (EU-0x8B4) */
+    { "Swamp_NearWaterfall_CaveHP", 0x2A, 0x04, 0x38 },
+
+    /* --- Minish caves / village (EU-0x8C4) ------------------------------ */
+    { "Ruins_MinishCave_HP", 0x35, 0x03, 0x7E },
+    { "SouthField_MinishSize_WaterHole_HP", 0x35, 0x04, 0x81 },
+    { "MinishWoods_FlipperHole_HP", 0x35, 0x09, 0x7A },
+    { "MinishVillage_HP", 0x01, 0x01, 0xC2 },
+
+    /* --- Melari's Mine dig spots (area 0x10 room 0, EU-0x8C4) ----------- */
+    { "Crenel_Melari_UpperTop_MiddleDig", 0x10, 0x00, 0xBA },
+    { "Crenel_Melari_UpperTop_RightDig", 0x10, 0x00, 0xBC },
+    { "Crenel_Melari_UpperMiddle_RightDig", 0x10, 0x00, 0xBD },
+    { "Crenel_Melari_UpperMiddle_LeftDig", 0x10, 0x00, 0xBF },
+
+    /* --- Cloud Tops (area 0x08, EU-0x8C4) -------------------------------- */
+    /* Kill rewards: FallingItemManager recs 0xDD7A0/0xDD7B0 (item 0x5C
+     * golden kinstone, room 0x02); north y=0x38, south y=0x2E8 */
+    { "Clouds_North_Kill", 0x08, 0x02, 0xF4 },
+    { "Clouds_South_Kill", 0x08, 0x02, 0xF6 },
+    /* Dig kinstones: 7x GI recs 0xDD40C..0xDD46C (room 0x01), EU
+     * 0xDCB4B..0xDCBAB in .logic order */
+    { "Clouds_NorthWest_DigSpot", 0x08, 0x01, 0xE5 },
+    { "Clouds_NorthEast_DigSpot", 0x08, 0x01, 0xE6 },
+    { "Clouds_South_MiddleDigSpot", 0x08, 0x01, 0xE7 },
+    { "Clouds_SouthEast_TopDigSpot", 0x08, 0x01, 0xE8 },
+    { "Clouds_South_DigSpot", 0x08, 0x01, 0xE9 },
+    { "Clouds_South_RightDigSpot", 0x08, 0x01, 0xEA },
+    { "Clouds_SouthEast_BottomDigSpot", 0x08, 0x01, 0xEB },
+
+    /* --- Hyrule Field caves (area 0x03, EU-0xA44/-0xA54) ----------------- */
+    /* USA recs 0xF7730/0xF7740 (room 0x05, LonLon cape cave): HP + buried
+     * Rupee50; 0xF7C60 (room 0x06): buried Rupee50 */
+    { "Hylia_CapeCave_LonLonHP", 0x03, 0x05, 0x7E },
+    { "LonLon_DigSpot", 0x03, 0x05, 0x7F },
+    { "NorthField_DigSpot", 0x03, 0x06, 0x8F },
+
+    /* --- Lake Hylia (area 0x0B room 0, EU-0x9DC) ------------------------- */
+    { "Hylia_SmallIsland_HP", 0x0B, 0x00, 0x08 },
+    { "Hylia_BottomHP", 0x0B, 0x00, 0x0A },
+
+    /* --- Minish Woods (area 0x00 room 0, EU-0x9DC) ----------------------- */
+    { "MinishWoods_TopHP", 0x00, 0x00, 0x3C },
+    { "MinishWoods_BottomHP", 0x00, 0x00, 0x3D },
+
+    /* --- Dig caves (EU-0x9DC) -------------------------------------------- */
+    /* USA rec 0xF4678: GI Rupee20 flag 0x46 (Eastern Hills farm dig cave) */
+    { "Hills_FarmDigCave_Item", 0x13, 0x00, 0x46 },
+    /* USA rec 0xF4580: GI HeartPiece flag 0x45 (Crenel dig cave) */
+    { "Crenel_DigCave_HP", 0x14, 0x00, 0x45 },
+
+    /* --- Hyrule Town minish caves (area 0x62) ---------------------------- */
+    /* USA rec 0xEFD70: GI HeartPiece flag 0xC3 (fountain, EU-0x9BC);
+     * 0xF0164: GI Rupee50 underwater flag 0x13 (under library, EU-0x9CC) */
+    { "Town_Fountain_HP", 0x62, 0x00, 0xC3 },
+    { "Town_UnderLibrary_Underwater", 0x62, 0x10, 0x13 },
+
+    /* --- Veil Falls region (EU-0xAA4/-0xAB4) ------------------------------ */
+    /* USA rec 0xF90EC: GI HeartPiece flag 0x7B (north field cave, area 0x32) */
+    { "NorthField_HP", 0x32, 0x15, 0x7B },
+    /* VEIL_FALLS area 0x0A room 0 block (EU-0xAB4): HP pair + rocks + digs */
+    { "Falls_Entrance_HP", 0x0A, 0x00, 0xA1 },
+    { "FallsLower_HP", 0x0A, 0x00, 0xAB },
+    { "FallsLower_RockItem1", 0x0A, 0x00, 0xA3 },
+    { "FallsLower_RockItem2", 0x0A, 0x00, 0xA4 },
+    { "FallsLower_RockItem3", 0x0A, 0x00, 0xA5 },
+    { "Falls_NorthDigSpot", 0x0A, 0x00, 0xA8 },
+    { "Falls_SouthDigSpot", 0x0A, 0x00, 0xAA },
+    /* Falls rupee cave (area 0x33 room 0x08): 15x GI recs 0xF99D8..0xF9AB8
+     * (EU 0xF8F27..0xF9007, uniform EU-0xAB4; item types match per record) */
+    { "Falls_RupeeCave_TopTop", 0x33, 0x08, 0x4D },
+    { "Falls_RupeeCave_TopLeft", 0x33, 0x08, 0x4E },
+    { "Falls_RupeeCave_TopMiddle", 0x33, 0x08, 0x4F },
+    { "Falls_RupeeCave_TopRight", 0x33, 0x08, 0x50 },
+    { "Falls_RupeeCave_TopBottom", 0x33, 0x08, 0x51 },
+    { "Falls_RupeeCave_SideTop", 0x33, 0x08, 0x52 },
+    { "Falls_RupeeCave_SideLeft", 0x33, 0x08, 0x53 },
+    { "Falls_RupeeCave_SideRight", 0x33, 0x08, 0x54 },
+    { "Falls_RupeeCave_SideBottom", 0x33, 0x08, 0x55 },
+    { "Falls_RupeeCave_Underwater_TopLeft", 0x33, 0x08, 0x56 },
+    { "Falls_RupeeCave_Underwater_TopRight", 0x33, 0x08, 0x57 },
+    { "Falls_RupeeCave_Underwater_MiddleLeft", 0x33, 0x08, 0x58 },
+    { "Falls_RupeeCave_Underwater_MiddleRight", 0x33, 0x08, 0x59 },
+    { "Falls_RupeeCave_Underwater_BottomLeft", 0x33, 0x08, 0x5A },
+    { "Falls_RupeeCave_Underwater_BottomRight", 0x33, 0x08, 0x5B },
+
+    /* --- Mt Crenel (EU-0xAB4/-0xABC) -------------------------------------- */
+    { "CrenelBase_EntranceVine", 0x06, 0x04, 0x4B },
+    { "CrenelBase_FairyCave_Item1", 0x26, 0x09, 0x43 },
+    { "CrenelBase_FairyCave_Item2", 0x26, 0x09, 0x44 },
+    { "CrenelBase_FairyCave_Item3", 0x26, 0x09, 0x45 },
+    { "CrenelBase_WaterCave_HP", 0x26, 0x08, 0x40 },
+    { "Crenel_FairyCave_HP", 0x26, 0x05, 0x7D },
+
+    /* --- Fight drops (FallingItemManager, flag = spritePtr&0xFFFF) ------- */
+    /* USA rec 0xDEDDC (EU 0xDE51B-0x8C4+3): SmallKey, Deepwood room 0x08 */
+    { "Deepwood_1F_East_MulldozerFight_Item", 0x48, 0x08, 0x30 },
+    /* USA rec 0xE5ECC (EU 0xE55CB-0x904+3): SmallKey, ToD room 0x2F */
+    { "Droplets_RightPath_B2_Mulldozers_ItemDrop", 0x60, 0x2F, 0x6F },
+    /* USA recs 0xE9270/0xE7AA0 (EU-0x904): SmallKeys, PoW rooms 0x20/0x08 */
+    { "Palace_1stHalf_3F_PotPuzzle_ItemDrop", 0x70, 0x20, 0x59 },
+    { "Palace_1stHalf_5F_BallAndChainSoldiers_ItemDrop", 0x70, 0x08, 0x41 },
+    /* USA recs 0xE340C/0xE354C: SmallKeys in WEST_STAIRS_1F (0x20) /
+     * EAST_STAIRS_1F (0x22); the fowLeftItem/fowRightItem define targets */
+    { "Fortress_Left_3F_ItemDrop", 0x58, 0x20, 0x3F },
+    { "Fortress_Right_3F_ItemDrop", 0x58, 0x22, 0x41 },
+    /* USA rec 0xE276C (EU 0xE1E8B-0x8E4+3): SmallKey in
+     * PILLAR_CLONE_BUTTONS (.logic FoWStatueCloneSwitch room) */
+    { "Fortress_BackRight_Statue_ItemDrop", 0x58, 0x14, 0x2E },
+    /* USA rec 0xF4C28 (EU 0xF424F-0x9DC+3): SmallKey; aliased property list
+     * (0x18,0x04)==(0x58,0x06); area 0x18 hosts these fortress sub-rooms
+     * (same precedent as the verified Fortress_Left_2F rows above) */
+    { "Fortress_BackRight_Minish_ItemDrop", 0x18, 0x04, 0x64 },
+
+    /* --- Royal Crypt (area 0x68, EU-0x904) -------------------------------- */
+    /* FallingItemManager recs 0xE6C58/0xE6CA8 (room 0x04, key-block room) */
+    { "Crypt_LeftItem", 0x68, 0x04, 0xB6 },
+    { "Crypt_RightItem", 0x68, 0x04, 0xB7 },
+    /* EnemyItem recs 0xE718C/0xE71AC (room 0x08, entrance): gibdo-bound
+     * drops, t2 item bytes Bombs5/SmallKey match the .logic vanilla items */
+    { "Crypt_Gibdo_LeftItem", 0x68, 0x08, 0xC4 },
+    { "Crypt_Gibdo_RightItem", 0x68, 0x08, 0xC5 },
+
+    /* --- ToD entrance ice blocks (smallIceBlock.c releases the key via
+     * CreateGroundItemWithFlags(this->flag)) ------------------------------ */
+    /* USA rec 0xE4DA0: SMALL_ICE_BLOCK type 2 (BigKey) flag 0x4F in room
+     * 0x20 (BOSS_KEY); 0xE4E60: type 1 (SmallKey) flag 0x52 in room 0x21
+     * (NORTH_SMALL_KEY) */
+    { "Droplets_Entrance_B2_WestIceblock", 0x60, 0x20, 0x4F },
+    { "Droplets_Entrance_B2_EastIceblock", 0x60, 0x21, 0x52 },
+
+    /* --- Boss heart containers (heartContainer.c pickup hook keys
+     * area-room-(flag&0xFF); records from the boss rooms' state-change
+     * entity lists, flag = spritePtr&0xFFFF persistence flag) ------------- */
+    { "Deepwood_BossItem", 0x49, 0x00, 0x47 },
+    { "CoF_BossItem", 0x51, 0x00, 0x3A },
+    { "Fortress_BossItem", 0x58, 0x16, 0x32 },
+    { "Droplets_BossItem", 0x60, 0x0E, 0x40 },
+    { "Palace_BossItem", 0x70, 0x00, 0x7D },
+
+    /* --- Chest TileEntities with precise .logic addresses ----------------- */
+    /* USA TileEntity 0xD9410 (EU 0xD8A86-0x98C+2): SMALL_CHEST Shells,
+     * ROYAL_VALLEY_GRAVES room 0x01, chest index 0 (chestSpawner hook keys
+     * area-room-chestIndex) */
+    { "Valley_LostWoods_Chest", 0x34, 0x01, 0x00 },
+
+    /* --- Smith house floor items (spawned by the PC port when a real
+     * .logic places rewards there — roomInit.c LinksHouseSmith hook; flags
+     * 0xE0/0xE1 are unused across every LOCAL_BANK_2 area's entity data) --- */
+    { "Smith_Floor_Item1", 0x22, 0x11, 0xE0 },
+    { "Smith_Floor_Item2", 0x22, 0x11, 0xE1 },
 };
 
 #define RANDO_KEYMAP_COUNT (sizeof(kGroundItemKeys) / sizeof(kGroundItemKeys[0]))
@@ -238,25 +422,35 @@ static const RandoScriptedKeyEntry kScriptedKeys[] = {
       RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_GREGAL_LIGHT_ARROW, 0, 0) },
     { "Trilby_Scrub_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_BOTTLE, 0, 0) },
     { "Crenel_Scrub_NPC", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_GRIP, 0, 0) },
+    { "Fortress_Prize", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_FORTRESS_PRIZE, 0, 0) },
+    { "Town_Bell_HP", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BELL_HP, 0, 0) },
+    { "SouthField_Tingle_NPC",
+      RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_TINGLE_TROPHY, 0, 0) },
+    { "DHC_B2_King", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DHC_KING, 0, 0) },
+    { "Town_Simulation_Chest", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_SIMULATION, 0, 0) },
 };
 
-static unsigned BindGroundItemKeys(void) {
+static unsigned BindGroundItemKeys(bool log_misses) {
     unsigned bound = 0;
     for (unsigned i = 0; i < (unsigned)RANDO_KEYMAP_COUNT; ++i) {
         const RandoKeymapEntry* e = &kGroundItemKeys[i];
         uint32_t key = ((uint32_t)e->area << 16) | ((uint32_t)e->room << 8) | (uint32_t)e->flag;
         if (RandoLogic_BindRuntimeKey(e->location, key)) {
             ++bound;
+        } else if (log_misses) {
+            fprintf(stderr, "[RANDO] keymap miss (ground): %s\n", e->location);
         }
     }
     return bound;
 }
 
-static unsigned BindScriptedKeys(void) {
+static unsigned BindScriptedKeys(bool log_misses) {
     unsigned bound = 0;
     for (unsigned i = 0; i < (unsigned)(sizeof(kScriptedKeys) / sizeof(kScriptedKeys[0])); ++i) {
         if (RandoLogic_BindRuntimeKey(kScriptedKeys[i].location, kScriptedKeys[i].key)) {
             ++bound;
+        } else if (log_misses) {
+            fprintf(stderr, "[RANDO] keymap miss (scripted): %s\n", kScriptedKeys[i].location);
         }
     }
     return bound;
@@ -268,8 +462,9 @@ void Rando_Keymap_Apply(void) {
     if (!RandoLogic_IsLoaded()) {
         return;
     }
-    unsigned ground_bound = BindGroundItemKeys();
-    unsigned scripted_bound = BindScriptedKeys();
+    bool log_misses = getenv("TMC_RANDO_DEBUG") != NULL;
+    unsigned ground_bound = BindGroundItemKeys(log_misses);
+    unsigned scripted_bound = BindScriptedKeys(log_misses);
     fprintf(stderr, "[RANDO] keymap: bound %u/%u ground-item + %u/%u scripted locations\n",
             ground_bound, (unsigned)RANDO_KEYMAP_COUNT, scripted_bound,
             (unsigned)(sizeof(kScriptedKeys) / sizeof(kScriptedKeys[0])));

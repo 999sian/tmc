@@ -380,6 +380,21 @@ static int run_real_logic_diagnostic(void) {
         return 0;
     }
     fprintf(stderr, "[real] OK: deterministic beatable seed over %u locations\n", (unsigned)lc);
+    if (getenv("TMC_RANDO_DUMP_UNKEYED") != NULL) {
+        uint32_t raw = RandoLogic_GetLocationCountRaw();
+        unsigned unkeyed = 0;
+        for (uint32_t i = 0; i < raw; ++i) {
+            uint32_t key = RandoLogic_GetLocationKeyAt(i);
+            if (key != UINT32_MAX) continue;
+            const char* name = RandoLogic_GetLocationName(i);
+            if (name == NULL || name[0] == '\0') continue;
+            RandoLogicLocationType t = RandoLogic_GetLocationType(i);
+            if (t == RANDO_LOGIC_LOCATION_HELPER) continue;
+            fprintf(stderr, "[unkeyed] type=%d %s\n", (int)t, name);
+            unkeyed++;
+        }
+        fprintf(stderr, "[unkeyed] total %u\n", unkeyed);
+    }
     if (!expect_bound_location(
             RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_80, 0, 0),
             "Town_Shop_80Item") ||
@@ -457,6 +472,42 @@ static int run_real_logic_diagnostic(void) {
         RandoLogic_Reset(); Rando_Reset();
         return 0;
     }
+    /* 1:1 pass — boss heart containers, fight drops, ice blocks, and the
+     * remaining scripted one-offs (ground/chest keys are plain
+     * area-room-flag triples; scripted keys use the high-bit namespace). */
+    if (!expect_bound_location((0x49u << 16) | (0x00u << 8) | 0x47u, "Deepwood_BossItem") ||
+        !expect_bound_location((0x51u << 16) | (0x00u << 8) | 0x3Au, "CoF_BossItem") ||
+        !expect_bound_location((0x58u << 16) | (0x16u << 8) | 0x32u, "Fortress_BossItem") ||
+        !expect_bound_location((0x60u << 16) | (0x0Eu << 8) | 0x40u, "Droplets_BossItem") ||
+        !expect_bound_location((0x70u << 16) | (0x00u << 8) | 0x7Du, "Palace_BossItem") ||
+        !expect_bound_location((0x48u << 16) | (0x08u << 8) | 0x30u, "Deepwood_1F_East_MulldozerFight_Item") ||
+        !expect_bound_location((0x58u << 16) | (0x20u << 8) | 0x3Fu, "Fortress_Left_3F_ItemDrop") ||
+        !expect_bound_location((0x58u << 16) | (0x22u << 8) | 0x41u, "Fortress_Right_3F_ItemDrop") ||
+        !expect_bound_location((0x60u << 16) | (0x20u << 8) | 0x4Fu, "Droplets_Entrance_B2_WestIceblock") ||
+        !expect_bound_location((0x60u << 16) | (0x21u << 8) | 0x52u, "Droplets_Entrance_B2_EastIceblock") ||
+        !expect_bound_location((0x68u << 16) | (0x04u << 8) | 0xB6u, "Crypt_LeftItem") ||
+        !expect_bound_location((0x68u << 16) | (0x08u << 8) | 0xC4u, "Crypt_Gibdo_LeftItem") ||
+        !expect_bound_location((0x08u << 16) | (0x02u << 8) | 0xF4u, "Clouds_North_Kill") ||
+        !expect_bound_location((0x34u << 16) | (0x01u << 8) | 0x00u, "Valley_LostWoods_Chest") ||
+        !expect_bound_location((0x22u << 16) | (0x11u << 8) | 0xE0u, "Smith_Floor_Item1") ||
+        !expect_bound_location((0x22u << 16) | (0x11u << 8) | 0xE1u, "Smith_Floor_Item2") ||
+        !expect_bound_location((0x25u << 16) | (0x00u << 8) | 0x80u, "Crenel_Dojo_HP") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_FORTRESS_PRIZE, 0, 0),
+            "Fortress_Prize") ||
+        !expect_bound_location(RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BELL_HP, 0, 0),
+                               "Town_Bell_HP") ||
+        !expect_bound_location(
+            RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_TINGLE_TROPHY, 0, 0),
+            "SouthField_Tingle_NPC") ||
+        !expect_bound_location(RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DHC_KING, 0, 0),
+                               "DHC_B2_King") ||
+        !expect_bound_location(RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_SIMULATION, 0, 0),
+                               "Town_Simulation_Chest")) {
+        RandoLogic_Reset(); Rando_Reset();
+        return 0;
+    }
+    fprintf(stderr, "[real] OK: 1:1 keys bound for boss HCs, fight drops, ice blocks, and one-offs\n");
     fprintf(stderr, "[real] OK: default scripted runtime keys bound for stockwell/dojo/special rewards\n");
     RandoLogic_SetOverride("GORON_SETTING", "GORON_5");
     RandoLogic_SetOverride("BLUE_FUSION_SETTING", "VANILLA_BLUE_FUSIONS");

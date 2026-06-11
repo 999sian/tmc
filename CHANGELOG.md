@@ -4,6 +4,27 @@
 
 ### Randomizer — MinishMaker 1:1 parity pass
 
+- **Full per-location coverage**: every reward location in MinishMaker's
+  `default.logic` now has a native keyed identity (331 keyed locations at
+  default settings, up from 244). New `rando_keymap.c` rows — all
+  triple-verified against USA ROM room entity data and the per-block EU→USA
+  address deltas — cover every overworld heart piece, dig spot, rock item and
+  rupee-cave item, the Cloud Tops dig kinstones and kill rewards, Royal Crypt
+  gibdo/key drops, fight-completion key drops (FallingItemManager), the
+  Temple of Droplets entrance ice-block keys, and the Lost Woods chest.
+- **New grant-site hooks**: boss heart containers
+  (`src/object/heartContainer.c` — Deepwood/CoF/Fortress/Droplets/Palace
+  `*_BossItem`), the Fortress prize ocarina (`src/object/bird.c`), the Hyrule
+  Town bell heart piece (`src/object/graveyardKey.c`), Tingle's trophy, the
+  DHC B2 king reward, and Simon's Simulation heart piece (script command
+  dispatcher in `src/script.c`).
+- **Smith-house floor items**: the two `.logic` floor locations the GBA
+  randomizer creates by rewriting furniture records are spawned natively at
+  room load when an active seed places rewards there (`src/roomInit.c`,
+  bank-verified free flags 0xE0/0xE1).
+- `TMC_RANDO_DEBUG=1` logs keymap binder misses by location name; the real
+  `default.logic` diagnostic now asserts the new boss-container, fight-drop,
+  ice-block, and one-off bindings.
 - **Generation parity with the MinishMaker shuffler** (clean-room, from the
   public `.logic` spec — no GPL code read): dungeon-id tag binding now drives
   the full keysanity matrix (Own Dungeon / Own Region / Vanilla pins / Removed

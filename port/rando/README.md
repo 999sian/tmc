@@ -140,12 +140,26 @@ Full-parity features (added in the 1:1 pass):
   `gAreaMetadata[].queueBgm` at the engine's only reader (`LoadRoomBgm`) —
   same id space, no translation. Surplus pool songs are cosmetic, never a
   generation failure;
-- **ground-item location keys**: `rando_keymap.c` binds 49 curated
-  name→(area-room-flag) keys for default.logic's dungeon rupee/pot/underwater
-  locations (triple-verified against USA ROM room data and the EU→USA address
-  deltas), feeding the existing `itemOnGround` per-location hook — 45 bind
-  under default settings, the other 4 live in non-default `!ifdef` branches
-  and bind when those settings activate;
+- **ground-item location keys**: `rando_keymap.c` binds 138 curated
+  name→(area-room-flag) keys — every dungeon rupee/pot/underwater item, every
+  overworld heart piece, dig spot, rock item, rupee-cave item, the Cloud Tops
+  dig kinstones and kill rewards, crypt gibdo/key drops, fight-completion key
+  drops (FallingItemManager records — flag is the spritePtr **low** half),
+  the ToD entrance ice-block keys, the five boss heart containers, the Lost
+  Woods chest, and the two smith-house floor items. All triple-verified
+  against USA ROM room data and the per-block EU→USA address deltas. 127 bind
+  under default settings; the other 11 (pot-rando pots, `FALLSDIGKINSTONE`
+  spots — `Inaccessible` at defaults) live in non-default `!ifdef` branches
+  and bind when those settings activate. `TMC_RANDO_DEBUG=1` logs binder
+  misses by name;
+- **boss heart containers**: `src/object/heartContainer.c` keys the pickup by
+  the container's room-local persistence flag, covering the five
+  `*_BossItem` locations (Deepwood/CoF/Fortress/Droplets/Palace);
+- **smith-house floor items**: MinishMaker creates `Smith_Floor_Item1/2` by
+  rewriting two furniture records in the GBA room data; natively
+  `src/roomInit.c` spawns the equivalent ground items (flags `0xE0/0xE1`,
+  unused across every LOCAL_BANK_2 area) when an active `.logic` seed has
+  those locations;
 - **scripted runtime keys**: `rando_keymap.h/.c` reserves bit 31 for stable
   native identities that are not area-room-local triples. The runtime binds
   default.logic's Stockwell shop slots, Blade Brothers dojo rewards, Carlov
@@ -155,10 +169,15 @@ Full-parity features (added in the 1:1 pass):
   Great Fairy rewards, Valley Dampe's graveyard key, Biggoron's mirror shield,
   the library yellow-minish reward, the Town Cafe lady kinstone, the Crypt
   prize, Gregal's shells + light arrows, the Deepwood/CoF/Droplets/Palace
-  dungeon prizes, and Business Scrub item sales by default (38 locations at
-  stock settings). With `GORON_5` + `VANILLA_BLUE_FUSIONS` +
-  `VANILLA_RED_FUSIONS` + `BIGGORON_NORMAL` + `CUCCO_10`, 67/68 scripted
-  locations bind in the real-file diagnostic;
+  dungeon prizes, the Fortress prize (the falling-bird ocarina,
+  `src/object/bird.c`), the Hyrule Town bell heart piece
+  (`src/object/graveyardKey.c` type 1), Tingle's trophy, the DHC B2 king
+  reward (Minister Potho's script grant), Simon's Simulation heart piece, and
+  Business Scrub item sales by default (43 locations at stock settings). With
+  `GORON_5` + `VANILLA_BLUE_FUSIONS` + `VANILLA_RED_FUSIONS` +
+  `BIGGORON_NORMAL` + `CUCCO_10`, 72/73 scripted locations bind in the
+  real-file diagnostic (the last, `Town_Shop_Extra600Item`, is gated behind
+  the `SHOPBOMBBAG` template's setting);
 - **same-item subtype overrides**: external logic no longer loses placements
   whose native engine item id matches the vanilla reward but whose subtype is
   different. `RandoLogic_Generate` now emits a per-location subtype table
@@ -173,11 +192,14 @@ NOT yet at full parity (honest gaps):
 - `!import` logic functions are approximated (logic-only item symbols are
   assumed owned, standing in for `LogicImport.cs` — not translated, but
   unused by the real `default.logic`);
-- per-location keyed hooks are still missing for the remaining NPC-script and
-  fusion reward sites whose grant callsites do not yet expose a stable native
-  identity (Bomb Minish remote-bombs outside the red-fusion setting, sanctuary
-  pedestal items, and any remaining direct fusion-item one-offs). Those
-  locations still randomize via the global `Rando_OverrideItem` bijection;
+- locations whose `.logic` entries are disabled by settings (`Inaccessible`
+  templates, non-default `!ifdef` branches) have no keyed identity until the
+  matching setting is enabled; give-item sources for those still randomize
+  via the global `Rando_OverrideItem` bijection. Every reward location that
+  parses in is keyed — the only unkeyed entries at default settings are pure
+  logic constructs (`Shared%x`/`DummyToD` constraint nodes, the eight
+  `*_Entrance` dummies, `Dummy_*` pool pins, `All_Requirements_Met`) which
+  never hold real in-world rewards;
 - placement is feature-identical but not byte-identical to the C# shuffler
   (different PRNG by clean-room design — same seed text gives a different,
   equally-valid arrangement);
@@ -191,10 +213,10 @@ Validated against the actual MinishMaker `default.logic` (set
 `TMC_RANDO_LOGIC=path`; `rando_logic_test` then asserts it). The full file's
 `[gen]` placement traces. In-game, the runtime hooks resolve to the logic's
 location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
-set) probes 244 keyed locations at default settings (161 chests + 45 ground
-items from `rando_keymap.c` + 38 scripted rewards from the high-bit runtime
-namespace); 158 chest keys match real engine chest TileEntities (all 158
-key-resolve through the runtime `Rando_RoomChestIndex` path) and 243
+set) probes 331 keyed locations at default settings (161 chests + 127 ground
+items from `rando_keymap.c` + 43 scripted rewards from the high-bit runtime
+namespace); 160 chest keys match real engine chest TileEntities (all 160
+key-resolve through the runtime `Rando_RoomChestIndex` path) and 330
 locations receive their `.logic`-placed item at the title-screen probe frame
 (more at actual play time, once distant areas are resolved). The harness also
 confirms a real-logic seed survives a sidecar save/reset/reload round-trip

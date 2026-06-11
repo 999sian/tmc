@@ -104,6 +104,7 @@ int RandoLogic_FindLocationByKey(uint32_t key);
 uint32_t RandoLogic_GetLocationKeyAt(uint32_t index);
 uint32_t RandoLogic_GetLocationCountRaw(void);
 const char* RandoLogic_GetLocationName(uint32_t index);
+RandoLogicLocationType RandoLogic_GetLocationType(uint32_t index);
 
 /* Declared settings (from !flag/!dropdown/!numberbox). The menu enumerates
  * these, lets the player change them, and the choices are applied as define

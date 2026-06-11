@@ -35,6 +35,9 @@
 #ifdef PC_PORT
 #include "port_rom.h"
 #include "port_gba_mem.h"
+#include "object/itemOnGround.h"
+#include "rando/rando.h"
+#include "rando/rando_logic.h"
 extern void* Port_ReadPackedRomPtr(const void* base, u32 index);
 #endif
 extern u32 sub_08060354(void);
@@ -5018,6 +5021,46 @@ u32 sub_unk3_HouseInteriors2_LinksHouseSmith(void) {
 extern EntityData gUnk_080F2E94;
 extern EntityData gUnk_080F2EC4;
 
+#ifdef PC_PORT
+/* Randomizer: MinishMaker's `.logic` declares two floor items in the smith
+ * house (Smith_Floor_Item1/2, vanilla the starting sword + shield) that the
+ * GBA randomizer creates by rewriting two furniture records in the room's
+ * entity data. Natively, spawn the equivalent ground items at room load when
+ * a real .logic seed is active and has those locations. Flags 0xE0/0xE1 are
+ * unused across every LOCAL_BANK_2 area's entity data; ItemOnGround_Init
+ * deletes an already-collected item via CheckFlags, and the pickup routes
+ * through the standard area-room-flag location hook (rando_keymap.c binds
+ * the names to 0x22-0x11-0xE0/0xE1). */
+static void Rando_SpawnSmithFloorItems(void) {
+    static const struct {
+        u8 item;
+        u16 x, y;
+        u16 flag;
+    } kFloorItems[] = {
+        { ITEM_SMITH_SWORD, 0x60, 0x48, 0xE0 },
+        { ITEM_SHIELD, 0x80, 0x48, 0xE1 },
+    };
+    if (!Rando_IsActive() || !RandoLogic_IsLoaded()) {
+        return;
+    }
+    for (u32 i = 0; i < 2; ++i) {
+        u32 key = (0x22u << 16) | (0x11u << 8) | kFloorItems[i].flag;
+        ItemOnGroundEntity* object;
+        if (RandoLogic_FindLocationByKey(key) < 0) {
+            continue;
+        }
+        object = (ItemOnGroundEntity*)CreateObject(GROUND_ITEM, kFloorItems[i].item, 0);
+        if (object != NULL) {
+            object->base.timer = 5;
+            object->base.collisionLayer = 1;
+            object->base.x.HALF.HI = kFloorItems[i].x + gRoomControls.origin_x;
+            object->base.y.HALF.HI = kFloorItems[i].y + gRoomControls.origin_y;
+            object->flag = kFloorItems[i].flag;
+        }
+    }
+}
+#endif
+
 void sub_StateChange_HouseInteriors2_LinksHouseSmith(void) {
     if (!CheckGlobalFlag(OUTDOOR)) {
         gArea.bgm = gArea.queued_bgm;
@@ -5028,6 +5071,9 @@ void sub_StateChange_HouseInteriors2_LinksHouseSmith(void) {
     } else {
         LoadRoomEntityList(&gUnk_080F2EC4);
     }
+#ifdef PC_PORT
+    Rando_SpawnSmithFloorItems();
+#endif
 }
 
 u32 sub_unk3_HouseInteriors2_Dampe(void) {
