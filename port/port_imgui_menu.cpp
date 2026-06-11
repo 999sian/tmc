@@ -1196,6 +1196,8 @@ static char sRandoSeedBuf[64] = "";        /* empty/0 = engine picks; text is ha
 static char sRandoResult[192] = {0};       /* last roll outcome line */
 static bool sRandoResultOk = true;
 static char sRandoSpoiler[4096] = {0};
+static bool sRandoSpoilerHidden = false;   /* race-seed convention: hide until revealed */
+static ImGuiTextFilter sRandoSpoilerFilter; /* spoiler log line filter */
 static RandomizerSettings sRandoUiSettings;
 static bool sRandoUiSettingsInit = false;
 
@@ -1415,6 +1417,357 @@ static void DrawRandoCosmeticsSection(void) {
     }
 }
 
+/* ---- Logic settings browser (shared by the F8 tab + file-select modal) --
+ * The `.logic` file declares per-setting window tab, group, and tooltip
+ * text; the browser turns the former flat list into OoTR-style progressive
+ * disclosure: collapsing tab sections, group separators, a search filter,
+ * per-setting upstream tooltips, modified-from-default markers, and
+ * right-click reset. Edits route through the same override+reparse path the
+ * engine already uses; while a seed is active the location keymap and
+ * cosmetics are rebound so nothing silently desyncs (settings affect the
+ * NEXT roll, the active item table is untouched). */
+
+static void RandoUi_ApplyOverride(const char* define, const char* value) {
+    RandoLogic_SetOverride(define, value);
+    RandoLogic_Reparse();
+    if (Rando_IsActive()) {
+        Rando_Keymap_Apply();
+        Rando_Cosmetic_Apply();
+    }
+}
+
+static bool RandoUi_SettingModified(const RandoLogicSetting* s) {
+    switch (s->type) {
+    case RANDO_SETTING_FLAG: return s->flag_on != s->default_flag;
+    case RANDO_SETTING_DROPDOWN: return s->option_index != s->default_option;
+    case RANDO_SETTING_NUMBER: return s->number != s->default_number;
+    default: return false;
+    }
+}
+
+static void RandoUi_SettingDefaultValue(const RandoLogicSetting* s, char* out, size_t out_len) {
+    switch (s->type) {
+    case RANDO_SETTING_FLAG:
+        std::snprintf(out, out_len, "%s", s->default_flag ? "true" : "false");
+        break;
+    case RANDO_SETTING_DROPDOWN:
+        std::snprintf(out, out_len, "%s",
+                      (s->default_option >= 0 && s->default_option < s->option_count)
+                          ? s->opt_value[s->default_option] : "");
+        break;
+    case RANDO_SETTING_NUMBER:
+        std::snprintf(out, out_len, "%d", s->default_number);
+        break;
+    default:
+        out[0] = '\0';
+        break;
+    }
+}
+
+static void RandoUi_HelpTooltip(const char* text) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(420.0f);
+        ImGui::TextUnformatted(text);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+/* Effective-state fingerprint: hashes every generation-relevant setting's
+ * current value (colors excluded - cosmetic only). Two players comparing
+ * race seeds can match seed + fingerprint instead of diffing 200 settings. */
+static uint64_t RandoUi_SettingsFingerprint(void) {
+    uint64_t h = 0xcbf29ce484222325ull; /* FNV-1a 64 */
+    const uint32_t count = RandoLogic_GetSettingCount();
+    for (uint32_t i = 0; i < count; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s == NULL || s->type == RANDO_SETTING_COLOR) continue;
+        char value[40];
+        switch (s->type) {
+        case RANDO_SETTING_FLAG: std::snprintf(value, sizeof(value), "%d", s->flag_on ? 1 : 0); break;
+        case RANDO_SETTING_DROPDOWN: std::snprintf(value, sizeof(value), "%d", s->option_index); break;
+        case RANDO_SETTING_NUMBER: std::snprintf(value, sizeof(value), "%d", s->number); break;
+        default: value[0] = '\0'; break;
+        }
+        for (const char* p = s->define; *p; ++p) { h ^= (uint8_t)*p; h *= 0x100000001b3ull; }
+        h ^= (uint8_t)'=';
+        h *= 0x100000001b3ull;
+        for (const char* p = value; *p; ++p) { h ^= (uint8_t)*p; h *= 0x100000001b3ull; }
+    }
+    return h;
+}
+
+static int RandoUi_ModifiedSettingCount(void) {
+    int n = 0;
+    const uint32_t count = RandoLogic_GetSettingCount();
+    for (uint32_t i = 0; i < count; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s != NULL && s->type != RANDO_SETTING_COLOR && RandoUi_SettingModified(s)) ++n;
+    }
+    return n;
+}
+
+/* Reset every non-color setting to its file default. Color overrides are
+ * preserved (they live in the Cosmetics section and are orthogonal). */
+static void RandoUi_ResetSettingsToDefaults(void) {
+    const uint32_t count = RandoLogic_GetSettingCount();
+    for (uint32_t i = 0; i < count; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s == NULL || s->type == RANDO_SETTING_COLOR || !RandoUi_SettingModified(s)) continue;
+        char value[40];
+        RandoUi_SettingDefaultValue(s, value, sizeof(value));
+        RandoLogic_SetOverride(s->define, value);
+    }
+    RandoLogic_Reparse();
+    if (Rando_IsActive()) {
+        Rando_Keymap_Apply();
+        Rando_Cosmetic_Apply();
+    }
+}
+
+/* ---- Presets (OoTR convention: load changes everything except cosmetics).
+ * Each preset starts from file defaults, then applies its pairs. */
+typedef struct RandoUiPresetPair { const char* define; const char* value; } RandoUiPresetPair;
+typedef struct RandoUiPreset {
+    const char* name;
+    const char* desc;
+    const RandoUiPresetPair* pairs;
+    int count;
+} RandoUiPreset;
+
+static const RandoUiPresetPair kRandoPresetStandard[] = {
+    { "RUPEEMANIA", "true" },      { "SPECIALPOTS", "true" },    { "DIGGING", "true" },
+    { "UNDERWATER", "true" },      { "GOLDEN_ENEMY", "true" },   { "OPEN_TINGLE", "true" },
+    { "OPEN_LIBRARY", "true" },    { "CUCCO_SETTING", "CUCCO_5" },
+    { "GORON_SETTING", "GORON_5" },{ "BIGGORON_SETTING", "BIGGORON_NORMAL" },
+};
+static const RandoUiPresetPair kRandoPresetKeysanity[] = {
+    { "RUPEEMANIA", "true" },      { "SPECIALPOTS", "true" },    { "DIGGING", "true" },
+    { "UNDERWATER", "true" },      { "GOLDEN_ENEMY", "true" },   { "OPEN_TINGLE", "true" },
+    { "OPEN_LIBRARY", "true" },    { "CUCCO_SETTING", "CUCCO_5" },
+    { "GORON_SETTING", "GORON_5" },{ "BIGGORON_SETTING", "BIGGORON_NORMAL" },
+    { "SMALL_KEYS_SETTING", "SMALL_KEYSANITY" }, { "BIG_KEYS_SETTING", "BIG_KEYSANITY" },
+    { "MAP_SETTING", "MAP_KEYSANITY" },          { "COMPASS_SETTING", "COMPASS_KEYSANITY" },
+};
+static const RandoUiPresetPair kRandoPresetOpen[] = {
+    { "OPENWORLD", "OPENWORLD_ON" }, { "OPEN_WIND_TRIBE", "true" }, { "OPEN_TINGLE", "true" },
+    { "OPEN_LIBRARY", "true" },      { "CRENEL_CREST", "true" },    { "FALLS_CREST", "true" },
+    { "CLOUD_CREST", "true" },       { "SWAMP_CREST", "true" },     { "SHF_CREST", "true" },
+    { "MINISH_CREST", "true" },
+};
+
+static const RandoUiPreset kRandoPresets[] = {
+    { "File defaults (Beginner)",
+      "Every setting at the .logic file's defaults - chests and hearts "
+      "shuffled, progression close to vanilla. Best first seed.",
+      NULL, 0 },
+    { "Standard shuffle",
+      "Adds the common location shuffles on top of the defaults: rupees, "
+      "special pots, dig spots, underwater spots, golden enemies, all "
+      "cucco rounds, Goron merchant sets, and Biggoron. Library and "
+      "Tingle siblings start open.",
+      kRandoPresetStandard, (int)(sizeof(kRandoPresetStandard) / sizeof(kRandoPresetStandard[0])) },
+    { "Keysanity",
+      "Standard shuffle plus dungeon small keys, big keys, maps, and "
+      "compasses shuffled anywhere in the world.",
+      kRandoPresetKeysanity, (int)(sizeof(kRandoPresetKeysanity) / sizeof(kRandoPresetKeysanity[0])) },
+    { "Open world (fast)",
+      "World obstacles start open, all wind crests are active, and the "
+      "Wind Tribe tower, library, and Tingle siblings are unlocked from "
+      "the start. Shorter seeds with less walking.",
+      kRandoPresetOpen, (int)(sizeof(kRandoPresetOpen) / sizeof(kRandoPresetOpen[0])) },
+};
+
+static void RandoUi_ApplyPreset(int preset_index) {
+    if (preset_index < 0 || preset_index >= (int)(sizeof(kRandoPresets) / sizeof(kRandoPresets[0]))) return;
+    const RandoUiPreset* p = &kRandoPresets[preset_index];
+    /* Start from file defaults so presets are absolute, not additive. */
+    const uint32_t count = RandoLogic_GetSettingCount();
+    for (uint32_t i = 0; i < count; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s == NULL || s->type == RANDO_SETTING_COLOR || !RandoUi_SettingModified(s)) continue;
+        char value[40];
+        RandoUi_SettingDefaultValue(s, value, sizeof(value));
+        RandoLogic_SetOverride(s->define, value);
+    }
+    for (int i = 0; i < p->count; ++i) RandoLogic_SetOverride(p->pairs[i].define, p->pairs[i].value);
+    RandoLogic_Reparse();
+    if (Rando_IsActive()) {
+        Rando_Keymap_Apply();
+        Rando_Cosmetic_Apply();
+    }
+    std::fprintf(stderr, "[RANDO] preset applied: %s\n", p->name);
+}
+
+static void DrawRandoPresetsRow(void) {
+    static int sPresetIdx = 0;
+    const int preset_count = (int)(sizeof(kRandoPresets) / sizeof(kRandoPresets[0]));
+    ImGui::SetNextItemWidth(220);
+    if (ImGui::BeginCombo("##rando_preset", kRandoPresets[sPresetIdx].name)) {
+        for (int i = 0; i < preset_count; ++i) {
+            if (ImGui::Selectable(kRandoPresets[i].name, i == sPresetIdx)) sPresetIdx = i;
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+                ImGui::BeginTooltip();
+                ImGui::PushTextWrapPos(360.0f);
+                ImGui::TextUnformatted(kRandoPresets[i].desc);
+                ImGui::PopTextWrapPos();
+                ImGui::EndTooltip();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Load preset")) RandoUi_ApplyPreset(sPresetIdx);
+    RandoUi_HelpTooltip(kRandoPresets[sPresetIdx].desc);
+}
+
+static void DrawRandoSettingRow(const RandoLogicSetting* s, int idx) {
+    ImGui::PushID(idx);
+    const bool modified = RandoUi_SettingModified(s);
+    if (modified) {
+        /* Modified-from-default marker: color cue plus a non-color glyph so
+         * the state never relies on color alone. */
+        ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.25f, 1.0f), "*");
+        ImGui::SameLine(0.0f, 4.0f);
+    }
+    switch (s->type) {
+    case RANDO_SETTING_FLAG: {
+        bool v = s->flag_on;
+        if (ImGui::Checkbox(s->label, &v)) RandoUi_ApplyOverride(s->define, v ? "true" : "false");
+        break;
+    }
+    case RANDO_SETTING_DROPDOWN: {
+        const int oi = s->option_index;
+        const char* preview = (oi >= 0 && oi < s->option_count) ? s->opt_label[oi] : "?";
+        ImGui::SetNextItemWidth(200);
+        if (ImGui::BeginCombo(s->label, preview)) {
+            for (int o = 0; o < s->option_count; ++o) {
+                const bool sel = (o == oi);
+                if (ImGui::Selectable(s->opt_label[o], sel)) RandoUi_ApplyOverride(s->define, s->opt_value[o]);
+                if (sel) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+        break;
+    }
+    case RANDO_SETTING_NUMBER: {
+        /* Commit on release - every commit reparses the whole .logic file,
+         * far too heavy per drag pixel. */
+        static int sNumEditIdx = -1;
+        static int sNumEditVal = 0;
+        int v = (sNumEditIdx == idx) ? sNumEditVal : s->number;
+        ImGui::SetNextItemWidth(200);
+        if (ImGui::SliderInt(s->label, &v, s->num_min, s->num_max)) {
+            sNumEditIdx = idx;
+            sNumEditVal = v;
+        }
+        if (ImGui::IsItemDeactivatedAfterEdit() && sNumEditIdx == idx) {
+            char text[32];
+            std::snprintf(text, sizeof(text), "%d", sNumEditVal);
+            RandoUi_ApplyOverride(s->define, text);
+            sNumEditIdx = -1;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    if (ImGui::BeginPopupContextItem("##setting_ctx")) {
+        ImGui::TextDisabled("%s", s->define);
+        if (ImGui::MenuItem("Reset to default", NULL, false, modified)) {
+            char value[40];
+            RandoUi_SettingDefaultValue(s, value, sizeof(value));
+            RandoUi_ApplyOverride(s->define, value);
+        }
+        ImGui::EndPopup();
+    }
+    if (s->tooltip[0]) RandoUi_HelpTooltip(s->tooltip);
+    ImGui::PopID();
+}
+
+static void DrawRandoLogicSettingsBrowser(float height) {
+    static ImGuiTextFilter sFilter;
+    const uint32_t count = RandoLogic_GetSettingCount();
+
+    sFilter.Draw("##rando_settings_filter", 200);
+    ImGui::SameLine();
+    ImGui::TextDisabled("Search");
+    const int modified = RandoUi_ModifiedSettingCount();
+    if (modified > 0) {
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.25f, 1.0f), "* %d changed", modified);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset all")) ImGui::OpenPopup("##rando_reset_all");
+        if (ImGui::BeginPopup("##rando_reset_all")) {
+            ImGui::TextUnformatted("Reset every setting to the file defaults?");
+            if (ImGui::Button("Reset")) {
+                RandoUi_ResetSettingsToDefaults();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Keep")) ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
+    }
+
+    ImGui::BeginChild("##rando_logic_settings", ImVec2(0, height), ImGuiChildFlags_Borders, 0);
+    const bool filtering = sFilter.IsActive();
+    char cur_tab[24] = "";
+    char cur_group[32] = "";
+    bool tab_open = true;
+    for (uint32_t i = 0; i < count; ++i) {
+        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
+        if (s == NULL || s->type == RANDO_SETTING_COLOR) continue;
+        if (filtering) {
+            if (!sFilter.PassFilter(s->label) && !sFilter.PassFilter(s->define) &&
+                !sFilter.PassFilter(s->group) && !sFilter.PassFilter(s->tab)) {
+                continue;
+            }
+            /* Flat results with tab > group breadcrumbs between sections. */
+            if (std::strcmp(cur_tab, s->tab) != 0 || std::strcmp(cur_group, s->group) != 0) {
+                std::snprintf(cur_tab, sizeof(cur_tab), "%s", s->tab);
+                std::snprintf(cur_group, sizeof(cur_group), "%s", s->group);
+                char crumb[64];
+                std::snprintf(crumb, sizeof(crumb), "%s > %s", s->tab, s->group);
+                ImGui::SeparatorText(crumb);
+            }
+        } else {
+            if (std::strcmp(cur_tab, s->tab) != 0) {
+                std::snprintf(cur_tab, sizeof(cur_tab), "%s", s->tab);
+                cur_group[0] = '\0';
+                /* Per-section changed badge keeps edits findable when the
+                 * section is collapsed. */
+                int tab_changed = 0;
+                for (uint32_t j = i; j < count; ++j) {
+                    const RandoLogicSetting* t = RandoLogic_GetSetting(j);
+                    if (t == NULL) continue;
+                    if (std::strcmp(t->tab, s->tab) != 0) break; /* tabs are contiguous in file order */
+                    if (t->type != RANDO_SETTING_COLOR && RandoUi_SettingModified(t)) ++tab_changed;
+                }
+                char header[64];
+                if (tab_changed > 0) {
+                    std::snprintf(header, sizeof(header), "%s (* %d changed)###tab_%s", s->tab,
+                                  tab_changed, s->tab);
+                } else {
+                    std::snprintf(header, sizeof(header), "%s###tab_%s", s->tab, s->tab);
+                }
+                tab_open = ImGui::CollapsingHeader(
+                    header, (std::strcmp(s->tab, "Main Settings") == 0) ? ImGuiTreeNodeFlags_DefaultOpen : 0);
+            }
+            if (!tab_open) continue;
+            if (std::strcmp(cur_group, s->group) != 0) {
+                std::snprintf(cur_group, sizeof(cur_group), "%s", s->group);
+                ImGui::SeparatorText(s->group);
+            }
+        }
+        DrawRandoSettingRow(s, (int)i);
+    }
+    ImGui::EndChild();
+}
+
 static void DrawRibbonRandomizerTab(void) {
     if (!sRandoUiSettingsInit) {
         sRandoUiSettings = Rando_DefaultSettings();
@@ -1488,6 +1841,22 @@ static void DrawRibbonRandomizerTab(void) {
                            "Active seed: %llu - %s pool%s",
                            (unsigned long long)Rando_GetSeed64(), kPoolNames[pool],
                            active.glitchless_logic ? ", glitchless" : "");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Copy seed")) {
+            char text[32];
+            std::snprintf(text, sizeof(text), "%llu", (unsigned long long)Rando_GetSeed64());
+            ImGui::SetClipboardText(text);
+        }
+        if (RandoLogic_IsLoaded()) {
+            /* Settings fingerprint: racers compare seed + fingerprint to
+             * confirm identical settings without diffing the whole list. */
+            ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "Settings fingerprint: %08X",
+                               (unsigned)(RandoUi_SettingsFingerprint() & 0xFFFFFFFFu));
+            RandoUi_HelpTooltip(
+                "Hash of every generation-relevant setting's current value. "
+                "Two players with the same seed AND the same fingerprint are "
+                "playing identical seeds - useful for races.");
+        }
     } else {
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No seed rolled - vanilla.");
     }
@@ -1495,37 +1864,36 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::Spacing();
     ImGui::SeparatorText("Settings");
 
-    static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-        "Normal - collectibles only",
-        "Hard - + non-gating majors",
-        "Chaos - + gating progression",
-    };
-    int difficulty = (int)sRandoUiSettings.item_difficulty;
-    ImGui::SetNextItemWidth(280);
-    if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
-        sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)difficulty;
-    }
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
+    if (RandoLogic_IsLoaded()) {
+        /* External .logic mode: presets + the grouped settings browser
+         * (the built-in pool/difficulty toggles only drive the native
+         * graph, which is inactive while a .logic file is loaded). */
+        DrawRandoPresetsRow();
+        DrawRandoLogicSettingsBrowser(280.0f);
+    } else {
+        static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+            "Normal - collectibles only",
+            "Hard - + non-gating majors",
+            "Chaos - + gating progression",
+        };
+        int difficulty = (int)sRandoUiSettings.item_difficulty;
+        ImGui::SetNextItemWidth(280);
+        if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+            sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)difficulty;
+        }
+        RandoUi_HelpTooltip(
             "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
             "heart pieces - progression untouched.\n"
             "Hard: also shuffles non-gating majors (bottles, upgrades, "
             "skills).\n"
             "Chaos: also shuffles dungeon-gating progression; verification "
             "still rejects unbeatable arrangements.");
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
+        ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic);
+        ImGui::SameLine();
+        ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones);
+        ImGui::SameLine();
+        ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos);
     }
-
-    ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic);
-    ImGui::SameLine();
-    ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones);
-    ImGui::SameLine();
-    ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos);
 
     /* Cosmetics — .logic !color settings (HEART_COLOR, TUNIC_COLOR, ...). */
     DrawRandoCosmeticsSection();
@@ -1533,20 +1901,45 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::Spacing();
     ImGui::SetNextItemWidth(280);
     ImGui::InputText("Seed (empty = random)", sRandoSeedBuf, sizeof(sRandoSeedBuf));
+    RandoUi_HelpTooltip(
+        "Decimal numbers are used as-is; any other text is hashed to a "
+        "64-bit seed, so phrases work and are shareable.");
     ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
-            "Decimal numbers are used as-is; any other text is hashed to a "
-            "64-bit seed, so phrases work and are shareable.");
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
+    if (ImGui::SmallButton("Random")) {
+        /* A visible random seed (instead of an empty box) so the player can
+         * share it BEFORE rolling. */
+        uint64_t r = (uint64_t)ImGui::GetTime() * 0x9E3779B97F4A7C15ull ^ Rando_GetSeed64();
+        r ^= r >> 30; r *= 0xBF58476D1CE4E5B9ull; r ^= r >> 27;
+        std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu", (unsigned long long)r);
+    }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Copy")) {
+        ImGui::SetClipboardText(sRandoSeedBuf);
     }
 
     ImGui::Spacing();
-    if (ImGui::Button("Roll new seed", ImVec2(180, 0))) {
+    const bool rolled_normal = ImGui::Button("Roll new seed", ImVec2(150, 0));
+    ImGui::SameLine();
+    const bool rolled_race = ImGui::Button("Roll race seed", ImVec2(150, 0));
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(360.0f);
+        ImGui::TextUnformatted(
+            "Rolls a fresh random seed and keeps the spoiler log hidden, "
+            "following the usual race convention. Share the seed number and "
+            "the settings fingerprint with the other racers.");
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reset to vanilla", ImVec2(140, 0))) {
+        Rando_Reset();
+        sRandoResult[0] = '\0';
+        sRandoSpoiler[0] = '\0';
+        sRandoSpoilerHidden = false;
+    }
+    if (rolled_normal || rolled_race) {
+        if (rolled_race) sRandoSeedBuf[0] = '\0'; /* race seeds are always random */
         const uint64_t requested =
             sRandoSeedBuf[0] ? Rando_SeedFromString(sRandoSeedBuf) : 0;
         uint64_t chosen = 0;
@@ -1556,11 +1949,13 @@ static void DrawRibbonRandomizerTab(void) {
         switch (status) {
         case RANDO_OK:
             std::snprintf(sRandoResult, sizeof(sRandoResult),
-                          "Rolled seed %llu - verified beatable.",
-                          (unsigned long long)chosen);
+                          "Rolled seed %llu - verified beatable.%s",
+                          (unsigned long long)chosen,
+                          rolled_race ? " Spoiler log hidden (race)." : "");
             std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu",
                           (unsigned long long)chosen);
             Rando_GetSpoiler(sRandoSpoiler, sizeof(sRandoSpoiler));
+            sRandoSpoilerHidden = rolled_race;
             break;
         case RANDO_UNBEATABLE:
             std::snprintf(sRandoResult, sizeof(sRandoResult),
@@ -1577,12 +1972,6 @@ static void DrawRibbonRandomizerTab(void) {
             break;
         }
     }
-    ImGui::SameLine();
-    if (ImGui::Button("Reset to vanilla", ImVec2(160, 0))) {
-        Rando_Reset();
-        sRandoResult[0] = '\0';
-        sRandoSpoiler[0] = '\0';
-    }
 
     if (sRandoResult[0]) {
         ImGui::Spacing();
@@ -1593,16 +1982,40 @@ static void DrawRibbonRandomizerTab(void) {
         }
     }
 
-    /* Spoiler stays collapsed by default — opening it is the player's choice. */
+    /* Spoiler stays collapsed by default — opening it is the player's choice.
+     * Race seeds hide it entirely behind an explicit reveal. */
     if (Rando_IsActive() && sRandoSpoiler[0]) {
         ImGui::Spacing();
-        if (ImGui::CollapsingHeader("Spoiler log")) {
+        if (sRandoSpoilerHidden) {
+            ImGui::TextDisabled("Spoiler log hidden (race seed).");
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Reveal anyway")) sRandoSpoilerHidden = false;
+        } else if (ImGui::CollapsingHeader("Spoiler log")) {
             if (ImGui::SmallButton("Copy to clipboard")) {
                 ImGui::SetClipboardText(sRandoSpoiler);
             }
+            ImGui::SameLine();
+            sRandoSpoilerFilter.Draw("##spoiler_filter", 180);
+            ImGui::SameLine();
+            ImGui::TextDisabled("Filter");
             ImGui::BeginChild("##rando_spoiler", ImVec2(0, 180), ImGuiChildFlags_Borders,
                               ImGuiWindowFlags_HorizontalScrollbar);
-            ImGui::TextUnformatted(sRandoSpoiler);
+            if (sRandoSpoilerFilter.IsActive()) {
+                /* Line-filtered view: show only locations matching the query. */
+                const char* p = sRandoSpoiler;
+                while (*p) {
+                    const char* nl = std::strchr(p, '\n');
+                    const size_t len = nl ? (size_t)(nl - p) : std::strlen(p);
+                    char line[512];
+                    const size_t copy = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
+                    std::memcpy(line, p, copy);
+                    line[copy] = '\0';
+                    if (sRandoSpoilerFilter.PassFilter(line)) ImGui::TextUnformatted(line);
+                    p += len + (nl ? 1 : 0);
+                }
+            } else {
+                ImGui::TextUnformatted(sRandoSpoiler);
+            }
             ImGui::EndChild();
         }
     }
@@ -2154,70 +2567,16 @@ static void DrawRandoFileMenuModal(void) {
         ImGui::Spacing();
         if (Port_RandoFileMenu_LogicMode()) {
             const RandoLogicStats st = RandoLogic_GetStats();
-            const uint32_t count = RandoLogic_GetSettingCount();
             ImGui::TextDisabled("Logic: external .logic (%u locations, %u settings)",
-                                st.location_count, count);
-            /* Color settings are deliberately skipped — they live in the F8
-             * Cosmetics section and roll vanilla unless edited there. */
-            /* Settings list shrinks with the viewport so the action row
-             * below never falls off-screen; 280px when there is room. */
-            float childH = maxH - 240.0f;
+                                st.location_count, RandoLogic_GetSettingCount());
+            DrawRandoPresetsRow();
+            /* Color settings live in the F8 Cosmetics section and roll
+             * vanilla unless edited there. Settings list shrinks with the
+             * viewport so the action row below never falls off-screen. */
+            float childH = maxH - 270.0f;
             if (childH > 280.0f) childH = 280.0f;
             if (childH < 120.0f) childH = 120.0f;
-            ImGui::BeginChild("##rando_logic_settings", ImVec2(0, childH),
-                              ImGuiChildFlags_Borders, 0);
-            static int sNumEditIdx = -1;
-            static int sNumEditVal = 0;
-            for (uint32_t i = 0; i < count; ++i) {
-                const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-                if (s == nullptr || s->type == RANDO_SETTING_COLOR) continue;
-                ImGui::PushID((int)i);
-                switch (s->type) {
-                    case RANDO_SETTING_FLAG: {
-                        bool v = s->flag_on;
-                        if (ImGui::Checkbox(s->label, &v)) {
-                            Port_RandoFileMenu_ChangeLogicSetting((int)i, +1);
-                        }
-                        break;
-                    }
-                    case RANDO_SETTING_DROPDOWN: {
-                        const int oi = s->option_index;
-                        const char* preview =
-                            (oi >= 0 && oi < s->option_count) ? s->opt_label[oi] : "?";
-                        ImGui::SetNextItemWidth(220);
-                        if (ImGui::BeginCombo(s->label, preview)) {
-                            for (int o = 0; o < s->option_count; ++o) {
-                                const bool sel = (o == oi);
-                                if (ImGui::Selectable(s->opt_label[o], sel)) {
-                                    Port_RandoFileMenu_SetLogicOption((int)i, o);
-                                }
-                                if (sel) ImGui::SetItemDefaultFocus();
-                            }
-                            ImGui::EndCombo();
-                        }
-                        break;
-                    }
-                    case RANDO_SETTING_NUMBER: {
-                        /* Commit on release — every commit reparses the
-                         * whole .logic file, far too heavy per drag pixel. */
-                        int v = (sNumEditIdx == (int)i) ? sNumEditVal : s->number;
-                        ImGui::SetNextItemWidth(220);
-                        if (ImGui::SliderInt(s->label, &v, s->num_min, s->num_max)) {
-                            sNumEditIdx = (int)i;
-                            sNumEditVal = v;
-                        }
-                        if (ImGui::IsItemDeactivatedAfterEdit() && sNumEditIdx == (int)i) {
-                            Port_RandoFileMenu_SetLogicNumber((int)i, sNumEditVal);
-                            sNumEditIdx = -1;
-                        }
-                        break;
-                    }
-                    default:
-                        break;
-                }
-                ImGui::PopID();
-            }
-            ImGui::EndChild();
+            DrawRandoLogicSettingsBrowser(childH);
         } else {
             ImGui::TextDisabled("Logic: built-in native graph");
             static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
