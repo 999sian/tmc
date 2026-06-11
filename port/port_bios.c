@@ -252,9 +252,24 @@ static void Port_PumpEvents(void) {
             continue;
         }
         if (Port_RandoFileMenu_IsOpen()) {
-            /* The ImGui modal owns the randomizer-setup input (the event
-             * was already forwarded to ImGui above); swallow everything
-             * else so game hotkeys stay masked while it is open. */
+            /* The ImGui modal owns the randomizer-setup input (the event was
+             * already forwarded to ImGui above). The manually-opened sidebar
+             * closes on a second press of the same GBA L button that opened
+             * it — but the game's own L handler is masked while the menu is
+             * up (Port_UpdateInput holds KEYINPUT released), so close it here.
+             * Skipped while a text field (seed entry) has keyboard focus so
+             * the L-bound key can still be typed, and never for the forced
+             * new-file modal, which commits/cancels via its own controls.
+             * Everything else is swallowed so game hotkeys stay masked. */
+            extern bool Port_ImGui_WantsTextInput(void);
+            if (Port_RandoFileMenu_IsSidebarOpen() &&
+                !Port_RandoFileMenu_IsModalOpen() &&
+                !Port_ImGui_WantsTextInput() &&
+                Port_Config_EventIsInputDown(&e, PORT_INPUT_L)) {
+                extern void Rando_PlayCancelSfx(void);
+                Port_RandoFileMenu_SetSidebarOpen(false);
+                Rando_PlayCancelSfx();
+            }
             continue;
         }
         if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {

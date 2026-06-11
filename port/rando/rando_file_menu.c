@@ -267,6 +267,14 @@ bool Port_RandoFileMenu_IsOpen(void) {
     return sMenu.open || (Rando_IsInFileSelect() && sShowSidebar);
 }
 
+/* True only for the forced new-file setup modal (driven by
+ * Port_RandoFileMenu_Open). The manually-toggled sidebar is reported
+ * by Port_RandoFileMenu_IsSidebarOpen() instead; callers that must
+ * treat the two differently (e.g. the L-button close) use this. */
+bool Port_RandoFileMenu_IsModalOpen(void) {
+    return sMenu.open;
+}
+
 bool Port_RandoFileMenu_IsSidebarOpen(void) {
     return sShowSidebar;
 }
