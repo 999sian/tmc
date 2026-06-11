@@ -34,12 +34,18 @@ typedef enum RandoSettingType {
 typedef struct RandoLogicSetting {
     char define[48];
     char label[48];
+    char tab[24];      /* window tab from the directive (e.g. "Main Settings") */
+    char group[32];    /* setting group within the tab (e.g. "Dungeon Settings") */
+    char tooltip[1152]; /* upstream description text; \n sequences unescaped */
     RandoSettingType type;
     bool flag_on;                 /* current state (flag) */
+    bool default_flag;            /* file-default state before overrides */
     int number;                   /* current value (number) */
+    int default_number;           /* file-default value before overrides */
     int num_min, num_max;         /* number bounds */
     int option_count;             /* dropdown */
     int option_index;             /* current dropdown option */
+    int default_option;           /* file-default option before overrides */
     char opt_label[RANDO_LOGIC_MAX_SETTING_OPTIONS][40];
     char opt_value[RANDO_LOGIC_MAX_SETTING_OPTIONS][32];
 } RandoLogicSetting;

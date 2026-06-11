@@ -919,7 +919,20 @@ static bool ParseLocationLine(char* line) {
     return true;
 }
 
-static RandoLogicSetting* RecordSetting(const char* define, const char* label, RandoSettingType type) {
+static void CopyTooltip(char* dst, size_t dst_len, const char* src) {
+    /* Tooltip text carries literal "\n" (and occasional "\t") escapes. */
+    size_t j = 0;
+    if (src == NULL) { dst[0] = '\0'; return; }
+    for (size_t i = 0; src[i] != '\0' && j + 1 < dst_len; ++i) {
+        if (src[i] == '\\' && src[i + 1] == 'n') { dst[j++] = '\n'; ++i; }
+        else if (src[i] == '\\' && src[i + 1] == 't') { dst[j++] = ' '; ++i; }
+        else dst[j++] = src[i];
+    }
+    dst[j] = '\0';
+}
+
+static RandoLogicSetting* RecordSetting(const char* define, const char* label, RandoSettingType type,
+                                        const char* tab, const char* group, const char* tooltip) {
     if (sSettingCount >= RANDO_LOGIC_MAX_SETTINGS || define == NULL || define[0] == '\0') return NULL;
     RandoLogicSetting* s = &sSettings[sSettingCount++];
     memset(s, 0, sizeof(*s));
@@ -929,6 +942,9 @@ static RandoLogicSetting* RecordSetting(const char* define, const char* label, R
     }
     CopyName(s->define, sizeof(s->define), define, strlen(define));
     CopyName(s->label, sizeof(s->label), label ? label : define, label ? strlen(label) : strlen(define));
+    if (tab != NULL) CopyName(s->tab, sizeof(s->tab), tab, strlen(tab));
+    if (group != NULL) CopyName(s->group, sizeof(s->group), group, strlen(group));
+    CopyTooltip(s->tooltip, sizeof(s->tooltip), tooltip);
     s->type = type;
     return s;
 }
@@ -938,12 +954,16 @@ static void ParseFlagDirective(char* args) {
     int n = SplitDashFields(args, fields, 8);
     /* `!flag - tab - type - group - DEFINE - readable - tooltip - [default]`. */
     if (n < 5) return;
-    bool on = (n >= 7 && fields[6] != NULL && strcmp(fields[6], "true") == 0);
+    bool def_on = (n >= 7 && fields[6] != NULL && strcmp(fields[6], "true") == 0);
+    bool on = def_on;
     int ov = FindOverride(fields[3]);
     if (ov >= 0) on = (strcmp(sOverrides[ov].value, "true") == 0);
     if (on) SetDefineValue(fields[3], NULL, false);
-    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_FLAG);
-    if (s != NULL) s->flag_on = on;
+    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_FLAG, fields[0], fields[2], fields[5]);
+    if (s != NULL) {
+        s->flag_on = on;
+        s->default_flag = def_on;
+    }
 }
 
 static void ParseDropdownDirective(char* args) {
@@ -959,13 +979,15 @@ static void ParseDropdownDirective(char* args) {
      * branches key off the value token, while `\`SETTING\`` backtick
      * indirection reads the setting define above. Both are required. */
     if (chosen != NULL && chosen[0] != '\0') SetDefineValue(chosen, NULL, false);
-    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_DROPDOWN);
+    RandoLogicSetting* s =
+        RecordSetting(fields[3], fields[4], RANDO_SETTING_DROPDOWN, fields[0], fields[2], fields[5]);
     if (s == NULL) return;
     /* Options are (label, value, tooltip) triplets starting at field 7. */
     for (int i = 7; i + 1 < n && s->option_count < RANDO_LOGIC_MAX_SETTING_OPTIONS; i += 3) {
         CopyName(s->opt_label[s->option_count], sizeof(s->opt_label[0]), fields[i], strlen(fields[i]));
         CopyName(s->opt_value[s->option_count], sizeof(s->opt_value[0]), fields[i + 1], strlen(fields[i + 1]));
         if (chosen != NULL && strcmp(s->opt_value[s->option_count], chosen) == 0) s->option_index = s->option_count;
+        if (def != NULL && strcmp(s->opt_value[s->option_count], def) == 0) s->default_option = s->option_count;
         s->option_count++;
     }
     if (s->option_count == RANDO_LOGIC_MAX_SETTING_OPTIONS && 7 + 3 * s->option_count + 1 < n) {
@@ -982,9 +1004,10 @@ static void ParseNumberboxDirective(char* args) {
     int ov = FindOverride(fields[3]);
     if (ov >= 0) chosen = sOverrides[ov].value;
     SetDefineValue(fields[3], chosen, true);
-    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_NUMBER);
+    RandoLogicSetting* s = RecordSetting(fields[3], fields[4], RANDO_SETTING_NUMBER, fields[0], fields[2], fields[5]);
     if (s == NULL) return;
     s->number = (int)strtol(chosen ? chosen : "0", NULL, 0);
+    s->default_number = (int)strtol(fields[6] ? fields[6] : "0", NULL, 0);
     s->num_min = (n >= 8 && fields[7]) ? (int)strtol(fields[7], NULL, 0) : 0;
     s->num_max = (n >= 9 && fields[8]) ? (int)strtol(fields[8], NULL, 0) : 0;
 }
@@ -1194,7 +1217,7 @@ static void ParseColorDirective(char* args) {
     int n = SplitDashFields(args, fields, 40);
     if (n < 5) return;
     const char* define = fields[3];
-    RandoLogicSetting* s = RecordSetting(define, fields[4], RANDO_SETTING_COLOR);
+    RandoLogicSetting* s = RecordSetting(define, fields[4], RANDO_SETTING_COLOR, fields[0], fields[2], fields[5]);
     uint32_t comp[3];
     int ci = 0, set_count = 0;
     char packed[RANDO_LOGIC_MAX_COLOR_SETS][8];

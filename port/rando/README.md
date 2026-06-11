@@ -275,3 +275,25 @@ auto-open on `Port_ImGui_CanPresent()` and falls back to the vanilla new-file
 flow rather than opening an invisible modal over masked input (= softlock).
 `TMC_RANDO_FILE_MENU=0` is the explicit kill-switch. On any backend,
 **F8 → Randomizer** also rolls/configures seeds in-game.
+
+### Menu UX
+
+Both randomizer surfaces (the file-select setup modal and **F8 →
+Randomizer**) share one settings browser built from the `.logic` file's own
+metadata: every `!flag`/`!dropdown`/`!numberbox` directive's window tab,
+setting group, and tooltip text are parsed into `RandoLogicSetting`, so the
+UI groups ~200 settings under collapsing tab sections with group separators,
+a text search filter, hover tooltips (upstream's own descriptions), orange
+`*` modified-from-default markers with per-section changed counts,
+right-click → reset-to-default, and a confirm-gated "Reset all".
+
+Presets follow the OoTR convention (absolute, not additive — loading one
+resets everything except cosmetics first): **File defaults (Beginner)**,
+**Standard shuffle**, **Keysanity**, and **Open world (fast)**.
+
+The F8 tab also gets: Random/Copy buttons on the seed field, a **Roll race
+seed** button (random seed, spoiler log hidden behind an explicit "Reveal
+anyway"), a copyable active-seed line, a **settings fingerprint** (FNV-1a
+over every generation-relevant setting's effective value — two players with
+the same seed and fingerprint are playing identical seeds), and a line
+filter on the spoiler log.
