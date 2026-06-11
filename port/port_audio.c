@@ -2,6 +2,7 @@
 
 #include "main.h"
 #include "port_m4a_backend.h"
+#include "port_a11y_audio.h"
 
 #include <math.h>
 
@@ -215,6 +216,9 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
         if (!__atomic_load_n(&sGbaAccurate, __ATOMIC_ACQUIRE)) {
             Port_Audio_PostProcess(buffer, frames);
         }
+        /* Accessibility tone cues: summed on top of the game mix (after the
+         * DSP chain so they aren't filtered), clamped inside the mixer. */
+        Port_A11yAudio_Mix(buffer, frames);
         SDL_PutAudioStreamData(stream, buffer, frames * PORT_AUDIO_BYTES_PER_FRAME);
         remaining -= frames * PORT_AUDIO_BYTES_PER_FRAME;
     }

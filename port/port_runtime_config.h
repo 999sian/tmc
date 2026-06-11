@@ -141,6 +141,19 @@ void        Port_Config_SetTtsVoice(const char* v);
 const char* Port_Config_GetTtsLanguage(void);
 void        Port_Config_SetTtsLanguage(const char* v);
 
+/* Accessibility passive-cue toggles (Phase 2) — read at Port_A11y_Init,
+ * re-written on every setter. All persisted to config.json. */
+bool        Port_Config_GetA11yCues(void);
+void        Port_Config_SetA11yCues(bool on);
+bool        Port_Config_GetA11yFootsteps(void);
+void        Port_Config_SetA11yFootsteps(bool on);
+bool        Port_Config_GetA11yHazards(void);
+void        Port_Config_SetA11yHazards(bool on);
+bool        Port_Config_GetA11yRadar(void);
+void        Port_Config_SetA11yRadar(bool on);
+bool        Port_Config_GetA11yWalls(void);
+void        Port_Config_SetA11yWalls(bool on);
+
 void Port_Config_OpenGamepads(void);
 #ifndef TMC_N64
 void Port_Config_HandleEvent(const SDL_Event* e);
