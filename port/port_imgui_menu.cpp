@@ -286,6 +286,16 @@ extern "C" bool Port_ImGui_CanPresent(void) {
     return true;
 }
 
+/* True when an ImGui text widget currently has keyboard focus (e.g. the
+ * seed entry field). The port input layer consults this before letting a
+ * keyboard key that doubles as a GBA button (default L = 'a', a valid seed
+ * char) close the file-select setup sidebar, so typing a seed isn't
+ * interrupted. */
+extern "C" bool Port_ImGui_WantsTextInput(void) {
+    if (!sImGuiInited) return false;
+    return ImGui::GetIO().WantTextInput;
+}
+
 extern "C" void Port_ImGui_HandleEvent(const SDL_Event* event) {
     if (!sImGuiInited || !sImGuiEnabled) return;
     ImGui_ImplSDL3_ProcessEvent(event);
@@ -2941,7 +2951,7 @@ static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
 
 
 static void DrawRandoFileMenuModal(void) {
-    bool forceOpen = Port_RandoFileMenu_IsOpen();
+    bool forceOpen = Port_RandoFileMenu_IsModalOpen();
     bool shouldShow = forceOpen || (Rando_IsInFileSelect() && Port_RandoFileMenu_IsSidebarOpen());
     if (!shouldShow) return;
 
@@ -3055,17 +3065,18 @@ static void DrawRandoFileMenuModal(void) {
             DrawRibbonAccessibilityTab();
         }
 
-        /* Allow closing the manual sidebar or setup modal via Escape/Gamepad B,
-         * or by pressing the GBA L button again (utilizing the edge cache). */
+        /* Close via Escape / Gamepad B. The manual sidebar additionally
+         * closes on a second press of the GBA L button, but that press is
+         * masked here (port_bios.c swallows game input while the menu is
+         * open) so it is handled in Port_PumpEvents instead. */
         const bool popupOpen =
             ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
 
         if (!popupOpen && !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused()) {
             const bool esc_pressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
                                      ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
-            const bool l_pressed = Port_Config_InputEdgePressed(PORT_INPUT_L);
 
-            if (esc_pressed || l_pressed) {
+            if (esc_pressed) {
                 if (forceOpen) {
                     Port_RandoFileMenu_Cancel();
                 } else {
