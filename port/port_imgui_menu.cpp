@@ -2938,7 +2938,6 @@ static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
-static bool sShowSidebar = false;
 
 static void DrawFileSelectSettingsTrigger(void) {
     if (Port_RandoFileMenu_IsOpen()) return; /* sidebar is already forced open for setup */
@@ -2957,7 +2956,7 @@ static void DrawFileSelectSettingsTrigger(void) {
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground)) {
         if (ImGui::Button("Port & Rando Settings", ImVec2(buttonW, buttonH))) {
-            sShowSidebar = !sShowSidebar;
+            Port_RandoFileMenu_ToggleSidebar();
         }
     }
     ImGui::End();
@@ -2966,7 +2965,7 @@ static void DrawFileSelectSettingsTrigger(void) {
 
 static void DrawRandoFileMenuModal(void) {
     bool forceOpen = Port_RandoFileMenu_IsOpen();
-    bool shouldShow = forceOpen || (Rando_IsInFileSelect() && sShowSidebar);
+    bool shouldShow = forceOpen || (Rando_IsInFileSelect() && Port_RandoFileMenu_IsSidebarOpen());
     if (!shouldShow) return;
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -3099,7 +3098,7 @@ static void DrawRandoFileMenuModal(void) {
         } else {
             /* Close button for the sidebar when opened manually */
             if (ImGui::Button("Close Sidebar", ImVec2(-1, 30))) {
-                sShowSidebar = false;
+                Port_RandoFileMenu_SetSidebarOpen(false);
             }
         }
     }

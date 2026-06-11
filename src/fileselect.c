@@ -863,10 +863,8 @@ void sub_08050940(void) {
             break;
         case L_BUTTON:
             if (Port_Config_PortSettingsMenuEnabled()) {
-                PORT_SETTINGS_OPEN = TRUE;
-                PORT_SETTINGS_DIRTY = TRUE;
-                PORT_SETTINGS_ROW = 0;
-                gChooseFileState.unk_0x12 = 0;
+                extern void Port_RandoFileMenu_ToggleSidebar(void);
+                Port_RandoFileMenu_ToggleSidebar();
                 SoundReq(SFX_TEXTBOX_SELECT);
             }
             break;
@@ -910,11 +908,11 @@ static void DrawFileSelectSettingsHint(void) {
     Font font;
 
     gChooseFileState.unk_0x12 = 1;
-    MemClear(&gBG0Buffer[0x221], 0x80);
+    MemClear(&gBG0Buffer[0x34], 0x40);
     gScreen.bg0.updated = 1;
 
     MemCopy(&gUnk_080FC844, &font, sizeof(font));
-    font.dest = &gBG0Buffer[0x221];
+    font.dest = &gBG0Buffer[0x34];
     font.width = 0x60;
     font.right_align = 0;
     font.sm_border = 0;
