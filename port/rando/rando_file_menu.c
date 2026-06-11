@@ -46,6 +46,7 @@ typedef struct RandoFileMenuState {
 
 static RandoFileMenuState sMenu;
 static int sEnabledCached = -1;
+static bool sRandoOptionEnabled = false;
 static uint64_t sQuickSeedCounter = 0x853c49e6748fea9bull;
 
 static uint64_t SplitMix64_NextLocal(uint64_t* state) {
@@ -227,7 +228,15 @@ bool Port_RandoFileMenu_ShouldOpenForNewFile(void) {
         const char* env = getenv("TMC_RANDO_FILE_MENU");
         sEnabledCached = (env == NULL || env[0] == '\0' || env[0] != '0') ? 1 : 0;
     }
-    return sEnabledCached != 0;
+    return sEnabledCached != 0 && sRandoOptionEnabled;
+}
+
+bool Port_RandoFileMenu_GetRandoOptionEnabled(void) {
+    return sRandoOptionEnabled;
+}
+
+void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled) {
+    sRandoOptionEnabled = enabled;
 }
 
 void Port_RandoFileMenu_Open(int save_slot) {

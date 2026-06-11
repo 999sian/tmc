@@ -2938,8 +2938,36 @@ static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
+static bool sShowSidebar = false;
+
+static void DrawFileSelectSettingsTrigger(void) {
+    if (Port_RandoFileMenu_IsOpen()) return; /* sidebar is already forced open for setup */
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const float padding = 12.0f;
+    const float buttonW = 180.0f;
+    const float buttonH = 26.0f;
+    ImGui::SetNextWindowPos(
+        ImVec2(vp->Pos.x + vp->Size.x - buttonW - padding, vp->Pos.y + padding),
+        ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(buttonW, buttonH), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 4.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    if (ImGui::Begin("##file_select_settings_trigger", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground)) {
+        if (ImGui::Button("Port & Rando Settings", ImVec2(buttonW, buttonH))) {
+            sShowSidebar = !sShowSidebar;
+        }
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+}
+
 static void DrawRandoFileMenuModal(void) {
-    if (!Port_RandoFileMenu_IsOpen()) return;
+    bool forceOpen = Port_RandoFileMenu_IsOpen();
+    bool shouldShow = forceOpen || (Rando_IsInFileSelect() && sShowSidebar);
+    if (!shouldShow) return;
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     const float padding = 12.0f;
@@ -2959,61 +2987,85 @@ static void DrawRandoFileMenuModal(void) {
         ImGui::TextColored(ImVec4(0.78f, 0.95f, 0.78f, 1.0f), "PORT & RANDOMIZER SETUP");
         ImGui::Separator();
 
-        if (ImGui::CollapsingHeader("Randomizer Setup", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::SetNextItemWidth(180);
-            if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
-                                 RANDO_FILE_MENU_SEED_MAX + 1,
-                                 ImGuiInputTextFlags_CallbackCharFilter |
-                                     ImGuiInputTextFlags_EnterReturnsTrue,
-                                 RandoSeedCharFilter)) {
-                Port_RandoFileMenu_SeedEdited();
-                Port_RandoFileMenu_CommitAndStart();
-            }
-            if (ImGui::IsItemEdited()) Port_RandoFileMenu_SeedEdited();
-            ImGui::SameLine();
-            if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
+        // Randomizer checkbox (toggle rando vs vanilla)
+        bool randoEnabled = Port_RandoFileMenu_GetRandoOptionEnabled();
+        if (ImGui::Checkbox("Enable Randomizer Mode", &randoEnabled)) {
+            Port_RandoFileMenu_SetRandoOptionEnabled(randoEnabled);
+        }
+        RandoUi_HelpTooltip(
+            "On: Starting a new save slot will roll a randomized seed using "
+            "the settings below.\n\n"
+            "Off (default): New slots start as a normal, unmodified vanilla game.");
 
-            ImGui::Spacing();
-            if (Port_RandoFileMenu_LogicMode()) {
-                const RandoLogicStats st = RandoLogic_GetStats();
-                ImGui::TextDisabled("Logic: external .logic (%u locations)", st.location_count);
-                DrawRandoPresetsRow();
-                /* Smaller child height to fit within the sidebar cleanly */
-                DrawRandoLogicSettingsBrowser(180.0f);
-            } else {
-                ImGui::TextDisabled("Logic: built-in native graph");
-                static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-                    "Normal", "Hard", "Chaos"
-                };
-                int difficulty = Port_RandoFileMenu_Difficulty();
-                ImGui::SetNextItemWidth(160);
-                if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
-                    Port_RandoFileMenu_SetDifficulty(difficulty);
+        ImGui::Separator();
+
+        // 1. RANDOMIZER SETUP SECTION (Only active if enabled)
+        if (randoEnabled) {
+            if (ImGui::CollapsingHeader("Randomizer Setup", ImGuiTreeNodeFlags_DefaultOpen)) {
+                ImGui::SetNextItemWidth(180);
+                if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
+                                     RANDO_FILE_MENU_SEED_MAX + 1,
+                                     ImGuiInputTextFlags_CallbackCharFilter |
+                                         ImGuiInputTextFlags_EnterReturnsTrue,
+                                     RandoSeedCharFilter)) {
+                    Port_RandoFileMenu_SeedEdited();
+                    Port_RandoFileMenu_CommitAndStart();
                 }
-                ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
+                if (ImGui::IsItemEdited()) Port_RandoFileMenu_SeedEdited();
                 ImGui::SameLine();
-                ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
-                ImGui::SameLine();
-                ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
-            }
+                if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
 
-            ImGui::Spacing();
-            const char* status = Port_RandoFileMenu_Status();
-            if (status[0]) {
-                ImGui::TextColored(ImVec4(1.0f, 0.44f, 0.44f, 1.0f), "%s", status);
-            }
+                ImGui::Spacing();
+                if (Port_RandoFileMenu_LogicMode()) {
+                    const RandoLogicStats st = RandoLogic_GetStats();
+                    ImGui::TextDisabled("Logic: external .logic (%u locations)", st.location_count);
+                    DrawRandoPresetsRow();
+                    /* Smaller child height to fit within the sidebar cleanly */
+                    DrawRandoLogicSettingsBrowser(150.0f);
+                } else {
+                    ImGui::TextDisabled("Logic: built-in native graph");
+                    static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+                        "Normal", "Hard", "Chaos"
+                    };
+                    int difficulty = Port_RandoFileMenu_Difficulty();
+                    ImGui::SetNextItemWidth(160);
+                    if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+                        Port_RandoFileMenu_SetDifficulty(difficulty);
+                    }
+                    ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
+                    ImGui::SameLine();
+                    ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
+                }
 
-            const float actionW = (sidebarW - 32.0f) / 2.0f;
-            if (ImGui::Button("Generate & Start", ImVec2(actionW, 0))) {
-                Port_RandoFileMenu_CommitAndStart();
+                ImGui::Spacing();
+                const char* status = Port_RandoFileMenu_Status();
+                if (status[0]) {
+                    ImGui::TextColored(ImVec4(1.0f, 0.44f, 0.44f, 1.0f), "%s", status);
+                }
+
+                if (forceOpen) {
+                    /* Only show Generate/Cancel actions when the GBA state is actively
+                     * waiting for input on a new file creation slot. */
+                    const float actionW = (sidebarW - 32.0f) / 2.0f;
+                    if (ImGui::Button("Generate & Start", ImVec2(actionW, 0))) {
+                        Port_RandoFileMenu_CommitAndStart();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel", ImVec2(actionW, 0))) {
+                        Port_RandoFileMenu_Cancel();
+                    }
+                    ImGui::TextDisabled("Enter starts   Esc / Gamepad B cancels");
+                } else {
+                    ImGui::TextDisabled("Options will apply to your next new save file.");
+                }
             }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel", ImVec2(actionW, 0))) {
-                Port_RandoFileMenu_Cancel();
-            }
-            ImGui::TextDisabled("Enter starts   Esc / Gamepad B cancels");
+        } else {
+            ImGui::TextDisabled("Randomizer: disabled (Vanilla game).");
         }
 
+        // 2. GENERAL PORT SETTINGS (Always available)
         if (ImGui::CollapsingHeader("Display & Video")) {
             DrawRibbonDisplayTab();
         }
@@ -3027,21 +3079,28 @@ static void DrawRandoFileMenuModal(void) {
             DrawRibbonAccessibilityTab();
         }
 
-        /* Escape / gamepad B back out — but not while a combo popup or an
-         * actively-edited widget would consume the same press. */
-        const bool popupOpen =
-            ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
-        if (!popupOpen && !ImGui::IsAnyItemActive() &&
-            (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
-             ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false))) {
-            Port_RandoFileMenu_Cancel();
-        }
-        /* Enter = "Generate & Start" when the press isn't owned by a widget. */
-        if (Port_RandoFileMenu_IsOpen() && !popupOpen &&
-            !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused() &&
-            (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
-             ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))) {
-            Port_RandoFileMenu_CommitAndStart();
+        if (forceOpen) {
+            /* Escape / gamepad B back out — but only when we are actively in the GBA
+             * setup modal state. Otherwise, the player can open/close the sidebar via
+             * the button. */
+            const bool popupOpen =
+                ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+            if (!popupOpen && !ImGui::IsAnyItemActive() &&
+                (ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
+                 ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false))) {
+                Port_RandoFileMenu_Cancel();
+            }
+            if (Port_RandoFileMenu_IsOpen() && !popupOpen &&
+                !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused() &&
+                (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
+                 ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))) {
+                Port_RandoFileMenu_CommitAndStart();
+            }
+        } else {
+            /* Close button for the sidebar when opened manually */
+            if (ImGui::Button("Close Sidebar", ImVec2(-1, 30))) {
+                sShowSidebar = false;
+            }
         }
     }
     ImGui::End();
@@ -3147,6 +3206,9 @@ extern "C" bool Port_ImGui_Render(void) {
 
     /* File-select randomizer setup modal — drawn here (per-frame ImGui
      * pass) so it presents on every backend, independent of the F8 menu. */
+    if (Rando_IsInFileSelect()) {
+        DrawFileSelectSettingsTrigger();
+    }
     DrawRandoFileMenuModal();
 
     /* Toast survives the menu being closed (e.g. after a warp). */

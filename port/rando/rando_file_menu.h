@@ -16,6 +16,8 @@ bool Port_RandoFileMenu_ShouldOpenForNewFile(void);
 void Port_RandoFileMenu_Open(int save_slot);
 void Port_RandoFileMenu_Close(void);
 bool Port_RandoFileMenu_IsOpen(void);
+bool Port_RandoFileMenu_GetRandoOptionEnabled(void);
+void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled);
 
 /* State accessors + mutation helpers. The modal itself is rendered by
  * port_imgui_menu.cpp (DrawRandoFileMenuModal) so it works on every
