@@ -1485,6 +1485,10 @@ extern "C" uint32_t RandoLogic_GetLocationKeyAt(uint32_t index) {
     if (index >= sLogic.location_count) return UINT32_MAX;
     return sLogic.locations[index].is_helper ? UINT32_MAX : sLogic.locations[index].key;
 }
+extern "C" RandoLogicLocationType RandoLogic_GetLocationType(uint32_t index) {
+    if (index >= sLogic.location_count) return RANDO_LOGIC_LOCATION_UNKNOWN;
+    return sLogic.locations[index].type;
+}
 
 extern "C" uint32_t RandoLogic_GetLocationCountRaw(void) {
     return sLogic.location_count;
