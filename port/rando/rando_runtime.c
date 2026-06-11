@@ -525,3 +525,7 @@ bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx) {
 bool Rando_IsInGameplay(void) {
     return gMain.task == TASK_GAME;
 }
+
+bool Rando_IsInFileSelect(void) {
+    return gMain.task == TASK_FILE_SELECT;
+}
