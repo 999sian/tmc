@@ -37,6 +37,37 @@ their respective licenses.
 | zlib | https://zlib.net | Zlib |
 | libpng | http://www.libpng.org/pub/png/libpng.html | libpng (PNG Reference Library) |
 
+## Build-time decompilation toolchain (`tools/src/`)
+
+These are **build-time only** tools (used to build the GBA ROM and process
+assets); they are **not** part of the shipped `tmc_pc` binary. They originate
+from the pret/zeldaret decomp toolchain and each keeps its own license, with the
+license file present in-tree alongside the tool.
+
+| Tool | Path | License | License file |
+|------|------|---------|--------------|
+| agb2mid | `tools/src/agb2mid` | MIT (© YamaArashi) | `tools/src/agb2mid/LICENSE` |
+| aif2pcm | `tools/src/aif2pcm` | MIT (© huderlem; © Marco Trillo) | `tools/src/aif2pcm/LICENSE` |
+| bin2c | `tools/src/bin2c` | MIT (© YamaArashi) | `tools/src/bin2c/LICENSE` |
+| gbagfx | `tools/src/gbagfx` | MIT (© YamaArashi) | `tools/src/gbagfx/LICENSE` |
+| mid2agb | `tools/src/mid2agb` | MIT (© YamaArashi) | `tools/src/mid2agb/LICENSE` |
+| preproc | `tools/src/preproc` | MIT (© YamaArashi) | `tools/src/preproc/LICENSE` |
+| scaninc | `tools/src/scaninc` | MIT (© YamaArashi) | `tools/src/scaninc/LICENSE` |
+| **gbafix** | `tools/src/gbafix` | **GPL-3.0** | `tools/src/gbafix/COPYING` |
+
+> `gbafix` is **GPL-3.0**, but it is a standalone build-time executable (it
+> stamps the GBA ROM header); it is not linked into or distributed with the PC
+> port, so it does not affect the port's licensing.
+
+The project's own tools — `asset_processor`, `assets_extractor`, `tmc_strings`,
+`util` — are first-party and covered by the project `LICENSE`.
+
+**Build-time fetched tool dependencies** (downloaded by `tools/CMakeLists.txt`
+via CMake FetchContent; not committed to this repo): nlohmann/json (MIT) and
+{fmt} (MIT) as above, **CLI11** (BSD-3-Clause,
+https://github.com/CLIUtils/CLI11), and cpp-best-practices/project_options
+(MIT). These are pulled only when building the CMake tool set.
+
 ## Components without a published license
 
 These submodules currently ship **without a license file** and are therefore
