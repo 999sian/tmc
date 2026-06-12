@@ -1,9 +1,12 @@
 /*
- * port/rando/rando.h — clean-room in-process randomizer.
+ * port/rando/rando.h — in-process native randomizer.
  *
- * Native graph logic: no ROM patching, no external randomizer process, no
- * heap-owned containers in generation. The active seed writes a fixed
- * LOCATION_COUNT item table that engine reward hooks can query directly.
+ * The canonical randomizer is a native location graph generated in-process: no
+ * ROM patching, no external randomizer process, no heap-owned containers in
+ * generation. The active seed writes a fixed LOCATION_COUNT item table that
+ * engine reward hooks can query directly. A separate optional importer
+ * (rando_logic.*) parses the public `.logic` text format for per-location
+ * logic; that path is off by default and not required.
  */
 
 #ifndef PORT_RANDO_RANDO_H

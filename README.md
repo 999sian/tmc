@@ -230,9 +230,12 @@ Notably:
   https://github.com/ipatix/agbplay) is **LGPL-3.0**; those files remain under
   the LGPL and the larger work is not relicensed by linking it.
 
-The in-game randomizer (`port/rando/`) is the project's own clean-room
-reimplementation and is covered by the project license above; it is **not** the
-GPL-3.0 minishmaker/randomizer, which this project does not bundle or link.
+The in-game randomizer (`port/rando/`) is the project's own **independent
+reimplementation** — a native location graph whose data is derived from the
+decompilation and ROM. It can *optionally* import the public `.logic` text
+format, but it does **not** bundle, link, or translate the GPL-3.0
+minishmaker/randomizer. It is an independent reimplementation, format-compatible
+with that project by design, not a strict isolated clean-room.
 
 This project also builds on the zeldaret/tmc decompilation of a copyrighted
 game. All Nintendo intellectual property remains owned by Nintendo; a
