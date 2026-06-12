@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Randomizer — open world, story skip, homewarp (#155)
+
+- **Story skip**: every randomizer file now starts post-intro — Link wakes
+  at home with Ezlo on his head, the festival/castle/Minish-door story
+  already done (the engine's own canonical post-intro flag set from
+  `src/title.c`'s demo save). Items are untouched: the shuffled pool still
+  governs what you find.
+- **World-opening settings now work.** The `.logic` `m<hex>` eventdefines
+  are applied as save pokes (with GBA→PC layout translation), which makes
+  the Gold/Red/Blue/Green **"Fusions are Open"** World Settings and the
+  Castor Wilds shortcut genuinely take effect, including their beanstalk
+  and Cloud Tops tornado side effects. The **Speed Up** flags are consumed
+  too: Wind Tribe Tower open, Tingle brothers spawned from the start, and
+  the library/book quest active from the start.
+- **Homewarp** (`HOMEWARP`, default on): press **SELECT on the Quest
+  Status pause screen** to sleep — Link warps back to his bed, matching
+  the GBA randomizer's SLEEP option. Refused while minish (that would
+  softlock); a `SELECT: SLEEP (WARP HOME)` hint appears on the pause
+  overlay when available.
+- The headless `TMC_REPRO_RANDO=1` harness gained two stages: a
+  world-open/story-skip state check, and an end-to-end homewarp run that
+  boots a new rando file from the title screen, warps away, and asserts
+  the SLEEP warp lands back at the bed. The CHAOS stage now proves the
+  glitchless pin both ways (was silently broken by the #155 glitchless
+  guard when no `.logic` file is present).
+
 ### Randomizer — glitchless beatability + persistent settings (#155)
 
 - **Glitchless now guarantees a beatable seed on the built-in graph.** The

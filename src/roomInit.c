@@ -38,6 +38,7 @@
 #include "object/itemOnGround.h"
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
+#include "rando/rando_runtime.h"
 extern void* Port_ReadPackedRomPtr(const void* base, u32 index);
 #endif
 extern u32 sub_08060354(void);
@@ -5246,7 +5247,13 @@ void sub_StateChange_LakeHylia_Main(void) {
     if (CheckKinstoneFused(KINSTONE_12)) {
         LoadRoomEntityList(&gUnk_080F3C94);
     }
+#ifdef PC_PORT
+    /* issue #155: `openTingleBrothers` spawns the brothers from the start. */
+    if (Rando_Runtime_OpenTingleBrothers() ||
+        ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
+#else
     if ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST)) {
+#endif
         LoadRoomEntityList(&gUnk_080F3C44);
     }
     SetTile(SPECIAL_TILE_145, TILE_POS(16, 22), LAYER_BOTTOM);
@@ -5942,7 +5949,13 @@ void sub_StateChange_HyruleField_LonLonRanch(void) {
         SetTile(SPECIAL_TILE_114, TILE_POS(8, 54), LAYER_BOTTOM);
         SetTile(SPECIAL_TILE_150, TILE_POS(8, 55), LAYER_BOTTOM);
     }
+#ifdef PC_PORT
+    /* issue #155: `openTingleBrothers` spawns the brothers from the start. */
+    if (Rando_Runtime_OpenTingleBrothers() ||
+        ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
+#else
     if ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST)) {
+#endif
         LoadRoomEntityList(&gUnk_080F78A0);
     }
 }
@@ -6154,7 +6167,13 @@ extern EntityData gUnk_080F806C;
 
 void sub_StateChange_HyruleField_TrilbyHighlands(void) {
     CloudOverlayManager_Main(NULL);
+#ifdef PC_PORT
+    /* issue #155: `openTingleBrothers` spawns the brothers from the start. */
+    if (Rando_Runtime_OpenTingleBrothers() ||
+        ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
+#else
     if ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST)) {
+#endif
         LoadRoomEntityList(&gUnk_080F806C);
     }
 }
