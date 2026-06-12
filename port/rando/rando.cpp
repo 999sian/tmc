@@ -194,8 +194,8 @@ static uint64_t ItemFlags(uint16_t item) {
 
 /* Difficulty-scaled, pool-preserving item bijections built from the seed.
  * NORMAL only shuffles collectibles (always beatable); HARD adds non-gating
- * majors; CHAOS adds dungeon-gating progression (may need glitches/be
- * unbeatable without a logic file). */
+ * majors; CHAOS adds dungeon-gating progression. The HARD/CHAOS pools are
+ * only applied with glitchless logic OFF — see BuildCompatibilityRemap(). */
 static const uint16_t kRemapJunkPool[] = {
     ITEM_RUPEE1, ITEM_RUPEE5, ITEM_RUPEE20, ITEM_RUPEE50, ITEM_RUPEE100, ITEM_RUPEE200,
     ITEM_KINSTONE, ITEM_BOMBS5, ITEM_ARROWS5, ITEM_HEART, ITEM_FAIRY, ITEM_SHELLS,
@@ -458,6 +458,14 @@ static void BuildCompatibilityRemap(void) {
 
     rng.state = sSeed ? sSeed : 1ull;
     RemapPool(kRemapJunkPool, RANDO_ARRAY_COUNT(kRemapJunkPool), &rng);
+    /* This fallback remap applies to *every* non-keyed give — including
+     * story-script grants the location graph cannot see (e.g. the shield,
+     * which gates Deepwood Shrine's Business Scrub). Swapping majors or
+     * progression items therefore bypasses VerifyTable entirely and can
+     * strand a story gate (issue #155: shield rolled into a boomerang on a
+     * glitchless seed). Glitchless promises a beatable seed, so it keeps
+     * those pools vanilla; HARD/CHAOS scrambling needs glitchless OFF. */
+    if (sSettings.glitchless_logic) return;
     if (sSettings.item_difficulty >= RANDO_ITEM_POOL_HARD) {
         RemapPool(kRemapMajorPool, RANDO_ARRAY_COUNT(kRemapMajorPool), &rng);
     }
@@ -505,7 +513,7 @@ static void BuildSpoiler(uint64_t seed, const RandomizerSettings* settings) {
         for (size_t i = 0; i < sActiveLocationCount; ++i) {
             uint16_t item = randomized_item_table[i];
             if (item == ITEM_NONE) continue; /* unmapped -> vanilla, skip */
-            /* MinishMaker parity: locations tagged :NoSpoiler never appear in
+            /* GBA-randomizer parity: locations tagged :NoSpoiler never appear in
              * the spoiler log (192 area-music slots, fake dojos, ...). */
             if (RandoLogic_LocationHasTagName((uint32_t)i, "NoSpoiler")) continue;
             SpoilerAppend(&pos, "%-40s : %s\n", RandoLogic_GetLocationName((uint32_t)i), ItemName(item));

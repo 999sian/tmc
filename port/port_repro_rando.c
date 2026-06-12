@@ -10,7 +10,7 @@
  *      seed string, and that the engine's central item-override hook
  *      (Rando_OverrideItem — the one GiveItemWithCutscene calls for every
  *      chest/NPC/drop) now remaps at least one item.
- *   4. Repeat with an in-memory MinishMaker-style .logic file so the
+ *   4. Repeat with an in-memory public-format .logic file so the
  *      location-key hook (Rando_OverrideLocationKey) is exercised too.
  *
  * Combine with TMC_AUTOPLAY=1 + SDL_VIDEODRIVER=dummy for a headless run.
@@ -111,7 +111,7 @@ static int run_menu_path(void) {
 }
 
 static int run_logic_key_path(void) {
-    /* Minimal MinishMaker-style logic: one Major item, one keyed Major
+    /* Minimal .logic text: one Major item, one keyed Major
      * location, plus filler. The Major item must land on the keyed chest. */
     static const char kLogic[] =
         "Items.GustJar; Major;\n"

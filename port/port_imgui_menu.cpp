@@ -1237,7 +1237,7 @@ static bool sRandoUiSettingsInit = false;
  * A RANDO_SETTING_COLOR setting carries option_count default color sets
  * (RGB555 hex strings in opt_value[]). The override value consumed by
  * ParseColorDirective is comma-separated RGB555 hex, one per set
- * (e.g. "7C1F,03E0"). Per the MinishMaker spec, defaults never set defines:
+ * (e.g. "7C1F,03E0"). Per the `.logic` spec, defaults never set defines:
  * the override only exists once the player actually edits a color, so an
  * enabled-but-untouched setting still rolls vanilla. */
 extern "C" void Rando_Cosmetic_Apply(void); /* rando_cosmetic.cpp — live palette re-apply */
@@ -1336,6 +1336,7 @@ static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
     }
     RandoLogic_SetOverride(st->define, value);
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
     st->dirty = true;
     /* Cosmetics cache keys on (active, seed64); force a re-evaluation so the
      * edit shows up live instead of waiting for the next seed roll. */
@@ -1368,6 +1369,7 @@ static void RandoUi_RemoveOverride(const char* define) {
     RandoLogic_ClearOverrides();
     for (uint32_t i = 0; i < kept; ++i) RandoLogic_SetOverride(names[i], values[i]);
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
     if (Rando_IsActive()) { Rando_Keymap_Apply(); Rando_Cosmetic_Apply(); }
     std::fprintf(stderr, "[RANDO] color override %s cleared (vanilla)\n", define);
 }
@@ -1462,6 +1464,7 @@ static void DrawRandoCosmeticsSection(void) {
 static void RandoUi_ApplyOverride(const char* define, const char* value) {
     RandoLogic_SetOverride(define, value);
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
     if (Rando_IsActive()) {
         Rando_Keymap_Apply();
         Rando_Cosmetic_Apply();
@@ -1554,6 +1557,7 @@ static void RandoUi_ResetSettingsToDefaults(void) {
         RandoLogic_SetOverride(s->define, value);
     }
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
     if (Rando_IsActive()) {
         Rando_Keymap_Apply();
         Rando_Cosmetic_Apply();
@@ -1627,6 +1631,7 @@ static void RandoUi_ApplyPreset(int preset_index) {
     }
     for (int i = 0; i < p->count; ++i) RandoLogic_SetOverride(p->pairs[i].define, p->pairs[i].value);
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
     if (Rando_IsActive()) {
         Rando_Keymap_Apply();
         Rando_Cosmetic_Apply();
@@ -2203,7 +2208,7 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none)");
     ImGui::Text("Region:      %s", region_label);
 
-    /* Logic source: external MinishMaker .logic file vs built-in graph. */
+    /* Logic source: external .logic file vs built-in graph. */
     if (RandoLogic_IsLoaded()) {
         const RandoLogicStats stats = RandoLogic_GetStats();
         ImGui::Text("Logic:       .logic file (%u locations, %u items)",
@@ -2275,13 +2280,23 @@ static void DrawRibbonRandomizerTab(void) {
             "heart pieces - progression untouched.\n"
             "Hard: also shuffles non-gating majors (bottles, upgrades, "
             "skills).\n"
-            "Chaos: also shuffles dungeon-gating progression; verification "
-            "still rejects unbeatable arrangements.");
+            "Chaos: also shuffles dungeon-gating progression.\n"
+            "Hard/Chaos scrambling of majors and progression applies to "
+            "story gifts too, which cannot be verified beatable - so it "
+            "requires Glitchless logic OFF. With Glitchless ON those items "
+            "stay vanilla and only collectibles are scrambled.");
         ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic);
         ImGui::SameLine();
         ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones);
         ImGui::SameLine();
         ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos);
+        if (sRandoUiSettings.glitchless_logic &&
+            sRandoUiSettings.item_difficulty > RANDO_ITEM_POOL_NORMAL) {
+            ImGui::TextDisabled("Glitchless ON: %s pool only scrambles collectibles "
+                                "(guaranteed beatable).",
+                                sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS
+                                    ? "Chaos" : "Hard");
+        }
     }
 
     /* Cosmetics — .logic !color settings (HEART_COLOR, TUNIC_COLOR, ...). */
@@ -3058,6 +3073,11 @@ static void DrawRandoFileMenuModal(void) {
                     ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
                     ImGui::SameLine();
                     ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
+                    if (*Port_RandoFileMenu_GlitchlessLogic() &&
+                        Port_RandoFileMenu_Difficulty() > (int)RANDO_ITEM_POOL_NORMAL) {
+                        ImGui::TextDisabled("Glitchless ON: pool only scrambles collectibles\n"
+                                            "(guaranteed beatable). Uncheck for full scrambling.");
+                    }
                 }
 
                 ImGui::Spacing();

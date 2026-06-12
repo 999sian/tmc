@@ -18,10 +18,12 @@
 #include "rando/rando.h"
 #include "rando/rando_save.h"
 #include "rando/rando_logic.h"
+#include "port_runtime_config.h"
 
 #include <SDL3/SDL.h>
 
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -47,8 +49,19 @@ typedef struct RandoFileMenuState {
 static RandoFileMenuState sMenu;
 static int sEnabledCached = -1;
 static bool sRandoOptionEnabled = false;
+static bool sRandoOptionLoaded = false;
 static bool sShowSidebar = false;
 static uint64_t sQuickSeedCounter = 0x853c49e6748fea9bull;
+
+/* The "Enable Randomizer Mode" toggle persists in config.json
+ * (issue #155). Lazy-loaded so every entry point — modal, sidebar,
+ * ShouldOpenForNewFile — sees the restored value without ordering
+ * constraints against Port_Config_Load. */
+static void EnsureRandoOptionLoaded(void) {
+    if (sRandoOptionLoaded) return;
+    sRandoOptionLoaded = true;
+    sRandoOptionEnabled = Port_Config_GetRandoEnabled();
+}
 
 static uint64_t SplitMix64_NextLocal(uint64_t* state) {
     uint64_t z = (*state += 0x9e3779b97f4a7c15ull);
@@ -163,6 +176,7 @@ void Port_RandoFileMenu_ChangeLogicSetting(int idx, int delta) {
     }
     RandoLogic_SetOverride(s->define, value);
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
 }
 
 void Port_RandoFileMenu_SetLogicOption(int idx, int option_index) {
@@ -172,6 +186,7 @@ void Port_RandoFileMenu_SetLogicOption(int idx, int option_index) {
     if (option_index == s->option_index) return;
     RandoLogic_SetOverride(s->define, s->opt_value[option_index]);
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
 }
 
 void Port_RandoFileMenu_SetLogicNumber(int idx, int value) {
@@ -184,6 +199,30 @@ void Port_RandoFileMenu_SetLogicNumber(int idx, int value) {
     SDL_snprintf(text, sizeof(text), "%d", value);
     RandoLogic_SetOverride(s->define, text);
     RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
+}
+
+/* Persist the current .logic define overrides to config.json so the
+ * player's settings survive a restart (issue #155). Also called from the
+ * ImGui mutation paths in port_imgui_menu.cpp (setting rows, presets,
+ * cosmetics) so sidebar tweaks stick without requiring a generation. */
+void Port_RandoFileMenu_PersistLogicOverrides(void) {
+    uint32_t i, n;
+    Port_Config_RandoOverridesBegin();
+    n = RandoLogic_GetOverrideCount();
+    for (i = 0; i < n; i++) {
+        const char* name = NULL;
+        const char* value = NULL;
+        if (RandoLogic_GetOverride(i, &name, &value)) {
+            Port_Config_RandoOverridesAppend(name, value);
+        }
+    }
+    Port_Config_RandoOverridesCommit();
+}
+
+static void PersistMenuSettings(void) {
+    Port_Config_SetRandoSettings(sMenu.glitchless_logic, sMenu.shuffle_kinstones,
+                                 sMenu.shuffle_dojos, (int)sMenu.difficulty);
 }
 
 void Port_RandoFileMenu_CommitAndStart(void) {
@@ -194,6 +233,13 @@ void Port_RandoFileMenu_CommitAndStart(void) {
     settings.shuffle_kinstones = sMenu.shuffle_kinstones;
     settings.shuffle_dojos = sMenu.shuffle_dojos;
     settings.item_difficulty = sMenu.difficulty;
+
+    /* Settings persist whether or not generation succeeds — they are the
+     * player's choice, not a property of the seed. */
+    PersistMenuSettings();
+    if (sMenu.logic_mode) {
+        Port_RandoFileMenu_PersistLogicOverrides();
+    }
 
     seed = CurrentSeedValue();
     if (GenerateSeed(seed, settings)) {
@@ -211,6 +257,8 @@ void Port_RandoFileMenu_CommitAndStart(void) {
 
 void Port_RandoFileMenu_Cancel(void) {
     if (!sMenu.open) return;
+    /* Keep the player's tweaks across the cancel too. */
+    PersistMenuSettings();
     sMenu.open = false;
     Port_FileSelectRando_CancelSlot(sMenu.save_slot);
 }
@@ -233,28 +281,66 @@ bool Port_RandoFileMenu_ShouldOpenForNewFile(void) {
 }
 
 bool Port_RandoFileMenu_GetRandoOptionEnabled(void) {
+    EnsureRandoOptionLoaded();
     return sRandoOptionEnabled;
 }
 
 void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled) {
+    EnsureRandoOptionLoaded();
+    if (sRandoOptionEnabled == enabled) return;
     sRandoOptionEnabled = enabled;
+    Port_Config_SetRandoEnabled(enabled);
+    if (!enabled) {
+        /* "Resets to vanilla when switched off" (issue #155): drop the
+         * remembered settings back to defaults and clear any .logic
+         * define overrides. An already-active seed on a running save is
+         * untouched — this only affects future new files. */
+        RandomizerSettings defaults = Rando_DefaultSettings();
+        Port_Config_SetRandoSettings(defaults.glitchless_logic, defaults.shuffle_kinstones,
+                                     defaults.shuffle_dojos, (int)defaults.item_difficulty);
+        if (RandoLogic_IsLoaded()) {
+            RandoLogic_ClearOverrides();
+            RandoLogic_Reparse();
+        }
+        Port_RandoFileMenu_PersistLogicOverrides();
+    }
+}
+
+/* Startup restore (port_main.c, right after RandoLogic_LoadDefaultFiles):
+ * re-apply the persisted .logic define overrides so the settings browser,
+ * the new-file modal, and generation all see the player's last
+ * configuration instead of the file defaults. */
+void Port_RandoFileMenu_RestorePersistedSettings(void) {
+    EnsureRandoOptionLoaded();
+    if (!RandoLogic_IsLoaded()) return;
+    size_t n = Port_Config_RandoOverrideCount();
+    if (n == 0) return;
+    for (size_t i = 0; i < n; i++) {
+        const char* name = NULL;
+        const char* value = NULL;
+        if (Port_Config_RandoOverrideAt(i, &name, &value)) {
+            RandoLogic_SetOverride(name, value);
+        }
+    }
+    RandoLogic_Reparse();
+    fprintf(stderr, "[RANDO] restored %u persisted setting override(s)\n", (unsigned)n);
 }
 
 void Port_RandoFileMenu_Open(int save_slot) {
-    RandomizerSettings defaults = Rando_DefaultSettings();
     memset(&sMenu, 0, sizeof(sMenu));
     sMenu.open = true;
     sMenu.save_slot = save_slot;
-    sMenu.glitchless_logic = defaults.glitchless_logic;
-    sMenu.shuffle_kinstones = defaults.shuffle_kinstones;
-    sMenu.shuffle_dojos = defaults.shuffle_dojos;
-    sMenu.difficulty = defaults.item_difficulty;
+    /* Settings persist across opens and restarts (issue #155); they only
+     * fall back to Rando_DefaultSettings() via the config defaults or
+     * when the rando option is switched off. */
+    sMenu.glitchless_logic = Port_Config_GetRandoGlitchless();
+    sMenu.shuffle_kinstones = Port_Config_GetRandoKinstones();
+    sMenu.shuffle_dojos = Port_Config_GetRandoDojos();
+    Port_RandoFileMenu_SetDifficulty(Port_Config_GetRandoItemPool());
     sMenu.logic_mode = RandoLogic_IsLoaded();
-    if (sMenu.logic_mode) {
-        /* Start from the file's declared defaults each time the menu opens. */
-        RandoLogic_ClearOverrides();
-        RandoLogic_Reparse();
-    }
+    /* .logic overrides are global parser state and already reflect the
+     * persisted + sidebar-tweaked configuration; opening the modal no
+     * longer resets them to file defaults. */
     Port_RandoFileMenu_SetSeed("MINISH");
 }
 

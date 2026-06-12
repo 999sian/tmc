@@ -1,9 +1,9 @@
 /*
  * port/rando/rando_cosmetic.cpp — eventdefine-driven cosmetic palette
- * overrides (MinishMaker parity: tunic color, heart fill/outline color,
+ * overrides (GBA-randomizer parity: tunic color, heart fill/outline color,
  * rainbow hearts).
  *
- * MinishMaker patches palette data in ROM:
+ * The GBA randomizer patches palette data in ROM:
  *   tunic.event:  SHORTs at EU 0x5A2596/98/9A/9E = gPalette_14 (Link,
  *                 objPaletteId 0x16) entries 3 (DARKEST), 4 (DARK),
  *                 5 (MAIN), 7 (LIGHT).

@@ -63,7 +63,7 @@ enum {
 };
 
 /* Bind curated native runtime keys onto .logic locations that only carry
- * MinishMaker EU-ROM patch addresses. This includes:
+ * EU-ROM patch addresses. This includes:
  *   - ground items keyed by area-room-flag
  *   - scripted grant sites keyed in the high-bit runtime namespace below
  * Reparse clears bindings; this is rerun after every successful generation. */

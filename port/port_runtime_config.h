@@ -154,6 +154,26 @@ void        Port_Config_SetA11yRadar(bool on);
 bool        Port_Config_GetA11yWalls(void);
 void        Port_Config_SetA11yWalls(bool on);
 
+/* Randomizer persistence (issue #155): the file-select "Enable Randomizer
+ * Mode" toggle, the built-in graph settings, and .logic define overrides
+ * survive restarts. They reset to vanilla defaults only when the rando
+ * toggle is switched off (rando_file_menu.c owns that policy). */
+bool Port_Config_GetRandoEnabled(void);
+void Port_Config_SetRandoEnabled(bool on);
+bool Port_Config_GetRandoGlitchless(void);
+bool Port_Config_GetRandoKinstones(void);
+bool Port_Config_GetRandoDojos(void);
+int  Port_Config_GetRandoItemPool(void);
+void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, int item_pool);
+/* .logic define overrides, stored as a name->value object in config.json.
+ * Writes are transactional: Begin clears the staged set, Append adds
+ * pairs, Commit swaps it in and saves. Reads index the loaded set. */
+void   Port_Config_RandoOverridesBegin(void);
+void   Port_Config_RandoOverridesAppend(const char* name, const char* value);
+void   Port_Config_RandoOverridesCommit(void);
+size_t Port_Config_RandoOverrideCount(void);
+bool   Port_Config_RandoOverrideAt(size_t index, const char** out_name, const char** out_value);
+
 void Port_Config_OpenGamepads(void);
 #ifndef TMC_N64
 void Port_Config_HandleEvent(const SDL_Event* e);

@@ -1,7 +1,7 @@
 /*
  * port/rando/rando_entrance.h — coupled dungeon-entrance shuffle (runtime).
  *
- * MinishMaker's "Dungeon Entrance Shuffle" patches ROM transition structs so
+ * The GBA randomizer's "Dungeon Entrance Shuffle" patches ROM transition structs so
  * that each of the 8 shuffleable entrance doors leads to its assigned dungeon
  * and every way OUT of that dungeon (door exit, post-boss green warp,
  * element-get warp, Palace ledge hole) returns to the door it was entered
@@ -36,7 +36,7 @@ void Rando_Entrance_RemapHole(uint8_t cur_area, uint8_t* area, uint8_t* room, ui
 
 /* WarpPoint_Action5 (src/object/warpPoint.c): post-boss green warp
  * (warp_type == 2) out of a dungeon. Blue/red intra-dungeon warps and the
- * overworld warp pads are left untouched (MinishMaker parity). */
+ * overworld warp pads are left untouched (GBA-randomizer parity). */
 void Rando_Entrance_RemapGreenWarp(uint8_t cur_area, uint32_t warp_type, uint8_t* area, uint8_t* room, int16_t* x,
                                    int16_t* y);
 

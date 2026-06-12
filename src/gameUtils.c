@@ -420,7 +420,7 @@ void RestoreGameTask(bool32 loadGfx) {
 void LoadRoomBgm(void) {
     gArea.queued_bgm = gAreaMetadata[gRoomControls.area].queueBgm;
 #ifdef PC_PORT
-    /* Music shuffle: MinishMaker patches this table byte in ROM (EU
+    /* Music shuffle: the GBA randomizer patches this table byte in ROM (EU
      * 0x12746b + 4*area); natively remap at its single read point. -1
      * assignment (seed off / MUSIC_RANDO off) keeps vanilla. */
     gArea.queued_bgm = (u32)Rando_Music_Remap(gRoomControls.area, (int)gArea.queued_bgm);
