@@ -1,4 +1,20 @@
-# port/rando/ — In-process clean-room randomizer
+# port/rando/ — In-process native randomizer
+
+The canonical randomizer is a **native location graph** generated in-process
+(see `rando.cpp`). The external `.logic` text format is supported only as an
+**optional import** (`rando_logic.*`), gated behind an alias table
+(`rando_keymap.c`) that maps a public-format file's location names onto the
+project's native runtime keys. With no `.logic` file imported, none of the
+import machinery runs and the native graph alone drives generation.
+
+> **Provenance / independence.** `port/rando/` is an independent reimplementation.
+> Its numeric location data (area/room/flag keys, chest identities) is derived
+> from the USA baserom and the decompilation — not copied from any external
+> project. The optional importer parses a *public text format*; it does not
+> translate GPL C# code and vendors no `.logic` data file. It is, however,
+> format- and behaviour-aware of the upstream randomizer by design (so imported
+> files work), so this is best described as an *independent reimplementation*,
+> not a strict isolated clean-room.
 
 Native randomizer logic that runs inside `tmc_pc`. It does not patch a GBA
 ROM, shell out to the GPL C# randomizer, or allocate heap containers during
@@ -129,6 +145,27 @@ Full-parity features (added in the 1:1 pass):
   mapping incl. bottles/kinstones/quivers/wallets), wind crests, dungeon
   warps, instant text, `dmgMulti`/`heroMode` damage scaling, low-health-beep
   and `no_music` mutes;
+- **story skip** (issue #155): every rando new file starts post-intro —
+  Link wakes at home with Ezlo, festival/castle/Minish-door sequence done.
+  The flag set mirrors the engine's own canonical post-intro state
+  (`gDemoSave` in `src/title.c`), flags only: items stay with the shuffled
+  pool and the spawn stays `FinalizeSave()`'s bed spawn;
+- **world-opening eventdefines** (issue #155): `m<hex>` defines are byte
+  pokes into GBA save state (gSave at EWRAM `0x2000A40`; offsets are
+  translated per region because the PC `SaveFile` packs `KinstoneSave`
+  one byte tighter than agbcc) — this makes every fusion-opening World
+  Setting (`OPEN_GOLD/RED/BLUE/GREEN_FUSIONS`, the Castor Wilds block)
+  work natively. Named defines: `goldTornado` (KUMOTATSUMAKI),
+  `openWindTribe` (WARP_EVENT_END), `openTingleBrothers` (TINGLE_TALK1ST
+  + a PC-side bypass of the `global_progress > 3` half at the three
+  roomInit spawn sites), `openLibrary` (MIZUKAKI_START — approximation:
+  upstream re-times its own modified library opening), and the five
+  beanstalk demos (`BEANDEMO_00..04`, LOCAL_BANK_1);
+- **homewarp** (`allowHomewarp`; issue #155): SELECT on the pause menu's
+  Quest Status screen warps Link back to his bed, GBA-randomizer "SLEEP"
+  parity. The request is refused while minish (no portal home = softlock);
+  the warp fires from a per-frame tick after the menu closes, and the
+  pause overlay shows a `SELECT: SLEEP` hint when available;
 - **`!color`** parsed (defaults + `NAME_X` define overrides); tunic and heart
   colors apply at runtime via content-addressed palette overrides
   (`rando_cosmetic.cpp`), including rainbow hearts;
@@ -215,6 +252,14 @@ NOT yet at full parity (honest gaps):
 - custom heart-outline colors tint other HUD glyphs drawn with the shared
   palette-15 white (upstream replaces heart tile graphics; out of scope for a
   runtime palette override).
+- a tranche of eventdefines is still unconsumed: `openWorld` (the
+  "every cut tree / cracked block / bomb wall" permanent-obstacle list —
+  needs a curated native flag table), `kinstoneMultiplier*` (bag-grant
+  scaling for removed colors), `follower`/`followerID`, fusion-flow
+  tweaks (`DEFICKLE`, `SEEDED_SHARED`, `FUSION_SKIPS`/`SHOW_MAP`,
+  `noFairy`, `guaranteedBarlov`), and `historyOption` (item-name HUD
+  ticker). Their settings parse and persist but have no runtime effect
+  yet.
 
 ### Real `default.logic` status
 

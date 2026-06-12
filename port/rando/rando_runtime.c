@@ -23,13 +23,17 @@
 #include "item.h"      /* Item ids */
 #include "windcrest.h" /* WINDCREST_* bit indices */
 #include "room.h"      /* GetRoomProperty, TileEntity */
+#include "flags.h"     /* SetGlobalFlag/SetLocalFlagByBank + flag enums */
 #include "main.h"      /* gMain, Task */
 #include "sound.h"     /* SoundReq, SFX_MENU_CANCEL */
+#include "transitions.h" /* Transition, WARP_TYPE_AREA (homewarp) */
+#include "pauseMenu.h"  /* gPauseMenuOptions, PauseMenuScreen_2 */
 
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
 #include "rando/rando_runtime.h"
 
+#include <stddef.h> /* offsetof (mpoke layout asserts) */
 #include <stdio.h>
 #include <string.h>
 
@@ -403,6 +407,219 @@ static void ApplyInstantText(void) {
 }
 
 /* ------------------------------------------------------------------ */
+/* `m<hex>` save pokes                                                  */
+/* ------------------------------------------------------------------ */
+
+/* Upstream's patcher treats `m<hex>` eventdefines as byte writes into
+ * EWRAM save state, where the GBA build keeps gSave at 0x2000A40.
+ * Anchor proof: mC81..mC8D is exactly gSave.kinstones.fusedKinstones[13]
+ * (GBA offset 0x241; 0xA40 + 0x241 = 0xC81), and the "everything open"
+ * values (0xFE,0xFF*11,0x1F) set exactly the 100 fusion bits ids 1..100
+ * that CheckKinstoneFused() reads. This consumer makes every
+ * fusion-opening World Setting (Gold/Red/Blue/Green "Open") work
+ * natively.
+ *
+ * The PC SaveFile is NOT byte-identical to the GBA layout: agbcc pads
+ * KinstoneSave to 0x148 while the PC packs it to 0x147, so every field
+ * from `flags` on sits one byte earlier here (offsetof(flags) == 0x25B
+ * vs GBA 0x25C). Offsets are therefore translated per GBA region and
+ * written through the real PC field; unmapped regions are refused. */
+#define MPOKE_GSAVE 0xA40u                    /* GBA gSave EWRAM offset */
+#define MPOKE_KINSTONES (MPOKE_GSAVE + 0x114u) /* KinstoneSave (GBA pad 0x148) */
+#define MPOKE_FLAGS (MPOKE_GSAVE + 0x25Cu)     /* flags[0x200] */
+#define MPOKE_DKEYS (MPOKE_GSAVE + 0x45Cu)     /* dungeonKeys[0x10] */
+#define MPOKE_DITEMS (MPOKE_GSAVE + 0x46Cu)    /* dungeonItems[0x10] */
+#define MPOKE_END (MPOKE_GSAVE + 0x47Cu)
+
+static_assert(offsetof(SaveFile, kinstones) == 0x114,
+              "PC SaveFile prefix no longer matches the GBA layout");
+static_assert(offsetof(SaveFile, kinstones.fusedKinstones) == 0x241,
+              "fusedKinstones anchor moved");
+
+/* GBA-layout EWRAM offset -> PC byte, or NULL when unmapped. */
+static u8* MpokeTarget(u32 ewram) {
+    if (ewram >= MPOKE_GSAVE && ewram < MPOKE_KINSTONES) {
+        /* Header..inventory: PC layout matches GBA up to kinstones. */
+        return (u8*)&gSave + (ewram - MPOKE_GSAVE);
+    }
+    if (ewram >= MPOKE_KINSTONES && ewram < MPOKE_FLAGS) {
+        u32 rel = ewram - MPOKE_KINSTONES;
+        if (rel >= sizeof(KinstoneSave)) {
+            return NULL; /* the GBA tail padding byte */
+        }
+        return (u8*)&gSave.kinstones + rel;
+    }
+    if (ewram >= MPOKE_FLAGS && ewram < MPOKE_DKEYS) {
+        return &gSave.flags[ewram - MPOKE_FLAGS];
+    }
+    if (ewram >= MPOKE_DKEYS && ewram < MPOKE_DITEMS) {
+        return &gSave.dungeonKeys[ewram - MPOKE_DKEYS];
+    }
+    if (ewram >= MPOKE_DITEMS && ewram < MPOKE_END) {
+        return &gSave.dungeonItems[ewram - MPOKE_DITEMS];
+    }
+    return NULL;
+}
+
+static void ApplyMemoryPokes(u64 seed) {
+    u32 count = RandoLogic_GetEventDefineCount();
+    u32 applied = 0;
+    u32 i;
+
+    for (i = 0; i < count; i++) {
+        const char* name = RandoLogic_GetEventDefineName(i);
+        const char* p;
+        u32 ewram = 0;
+        u32 value = 0;
+
+        /* Strictly `m` + 1..6 hex digits; names like "minishCrest" fail
+         * the hex parse and never reach the poke path. */
+        if (name == NULL || name[0] != 'm' || name[1] == '\0') {
+            continue;
+        }
+        for (p = name + 1; *p != '\0'; p++) {
+            u32 digit;
+            if (*p >= '0' && *p <= '9') {
+                digit = (u32)(*p - '0');
+            } else if (*p >= 'A' && *p <= 'F') {
+                digit = (u32)(*p - 'A') + 10;
+            } else if (*p >= 'a' && *p <= 'f') {
+                digit = (u32)(*p - 'a') + 10;
+            } else {
+                break;
+            }
+            ewram = (ewram << 4) | digit;
+        }
+        if (*p != '\0' || (size_t)(p - (name + 1)) > 6) {
+            continue;
+        }
+        if (!MpokeTarget(ewram)) {
+            fprintf(stderr, "[RANDO] poke %s unmapped; skipped\n", name);
+            continue;
+        }
+        if (!RandoLogic_EvalEventDefine(name, seed, &value)) {
+            continue;
+        }
+        /* A new file is zero-initialized, so zero pokes are no-ops; skipping
+         * them also guarantees a poke can never clear bits another applier
+         * just set in a shared byte. */
+        if ((value & 0xFFu) == 0) {
+            continue;
+        }
+        *MpokeTarget(ewram) = (u8)value;
+        applied++;
+    }
+    if (applied != 0) {
+        fprintf(stderr, "[RANDO] applied %u save poke(s) (world-opening eventdefines)\n", applied);
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Story skip + world-opening flags                                     */
+/* ------------------------------------------------------------------ */
+
+/* Every GBA randomizer seed starts post-intro: Link wakes at home with
+ * Ezlo, the festival/castle/Minish-door story sequence already done
+ * (issue #155 "banish story content"). The flag set below is the
+ * engine's own canonical post-intro state — it mirrors gDemoSave in
+ * src/title.c (the kiosk demo save) exactly, flags only: items stay
+ * vanilla-empty so the shuffled pool governs them, and the spawn stays
+ * FinalizeSave()'s new-game bed spawn (area 0x22 room 0x15). */
+static void ApplyStorySkip(void) {
+    /* Globals (FLAG_BANK_0): festival/journey gates. OUTDOOR is also set
+     * by South Hyrule Field's room init, but setting it now keeps the
+     * first house load off the intro BGM path (roomInit.c:5008). */
+    SetGlobalFlag(START);      /* Met Zelda */
+    SetGlobalFlag(EZERO_1ST);  /* Met Ezlo — cap on, minish portals live */
+    SetGlobalFlag(TABIDACHI);  /* Talked to Daltus and Smith */
+    SetGlobalFlag(OUTDOOR);    /* Exited Link's house */
+    SetGlobalFlag(ENTRANCE_0); /* Trunk-entrance cutscene seen */
+    /* Area-local intro cutscene latches (same banks as gDemoSave). */
+    SetLocalFlagByBank(FLAG_BANK_1, MORI_00_KOBITO);
+    SetLocalFlagByBank(FLAG_BANK_1, MORI_ENTRANCE_1ST);
+    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_01_ZELDA);
+    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_WAKAGI_1);
+    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_WAKAGI_2);
+    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_WAKAGI_3);
+    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_AKINDO);
+    SetLocalFlagByBank(FLAG_BANK_1, CASTLE_04_MEZAME);
+    SetLocalFlagByBank(FLAG_BANK_1, MACHI_01_DEMO);
+    SetLocalFlagByBank(FLAG_BANK_2, MHOUSE15_OP1ST);
+    SetLocalFlagByBank(FLAG_BANK_2, M_PRIEST_TALK);
+    SetLocalFlagByBank(FLAG_BANK_2, M_ELDER_TALK1ST);
+    SetLocalFlagByBank(FLAG_BANK_2, M_PRIEST_MOVE);
+    SetLocalFlagByBank(FLAG_BANK_2, KOBITO_MORI_1ST);
+    SetLocalFlagByBank(FLAG_BANK_5, LV1_0B_WALK);
+    fprintf(stderr, "[RANDO] story skip: intro flags set (post-Ezlo start)\n");
+}
+
+/* World Settings "Speed Up" eventdefines that translate to named engine
+ * flags. The `m<hex>` byte pokes can't express these: each lives in a
+ * byte shared with unrelated progress (e.g. the tornado bit sits next
+ * to the graveyard-key stages), which is exactly why upstream emits
+ * them as named defines. */
+static void ApplyWorldOpen(void) {
+    u32 opened = 0;
+
+    if (HasDefine("goldTornado")) {
+        /* Cloud Tops vortex up to the Wind Tribe / Palace approach
+         * (src/object/cloud.c sets it after the gold cloud fusions). */
+        SetGlobalFlag(KUMOTATSUMAKI);
+        opened++;
+    }
+    if (HasDefine("openWindTribe")) {
+        /* Tower state "already entered from Cloud Tops": unblocks the
+         * entrance stairs and the upper floors incl. Gregal
+         * (src/roomInit.c WindTribeTower gates on WARP_EVENT_END). */
+        SetGlobalFlag(WARP_EVENT_END);
+        opened++;
+    }
+    if (HasDefine("openTingleBrothers")) {
+        /* Brothers also require global_progress > 3; that half is
+         * bypassed at the three spawn sites via
+         * Rando_Runtime_OpenTingleBrothers(). */
+        SetGlobalFlag(TINGLE_TALK1ST);
+        opened++;
+    }
+    if (HasDefine("openLibrary")) {
+        /* MIZUKAKI_START activates the library/book quest chain from
+         * the start (vanilla: set by the Lake Hylia forest minish,
+         * src/npc/forestMinish.c). Approximation: the GBA randomizer
+         * instead re-times its own modified library opening. */
+        SetGlobalFlag(MIZUKAKI_START);
+        opened++;
+    }
+
+    /* Beanstalk grow-demos for fusions pre-completed by the `m` pokes.
+     * gWorldEvents (src/gameData.c) keys each stalk's demo to a
+     * LOCAL_BANK_1 BEANDEMO flag; marking it consumed removes the
+     * pending fusion marker, matching upstream's OPEN_*_FUSIONS path. */
+    {
+        static const struct {
+            const char* define;
+            u16 flag;
+        } kBeanstalks[] = {
+            { "redCrenelBeanstalk", BEANDEMO_00 },  /* Crenel Summit */
+            { "blueHyliaBeanstalk", BEANDEMO_01 },  /* Lake Hylia */
+            { "redRuinsBeanstalk", BEANDEMO_02 },   /* Wind Ruins */
+            { "blueHillsBeanstalk", BEANDEMO_03 },  /* Eastern Hills */
+            { "blueWoodsBeanstalk", BEANDEMO_04 },  /* Western Wood */
+        };
+        u32 i;
+        for (i = 0; i < (u32)(sizeof(kBeanstalks) / sizeof(kBeanstalks[0])); i++) {
+            if (HasDefine(kBeanstalks[i].define)) {
+                SetLocalFlagByBank(FLAG_BANK_1, kBeanstalks[i].flag);
+                opened++;
+            }
+        }
+    }
+
+    if (opened != 0) {
+        fprintf(stderr, "[RANDO] world open: %u speed-up flag(s) applied\n", opened);
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* Per-seed cached runtime state                                        */
 /* ------------------------------------------------------------------ */
 
@@ -412,7 +629,9 @@ static struct {
     int damage_multiplier;
     bool mute_low_health_beep;
     bool mute_music;
-} sRuntime = { false, 0, 1, false, false };
+    bool allow_homewarp;
+    bool open_tingle;
+} sRuntime = { false, 0, 1, false, false, false, false };
 
 void Rando_Runtime_Refresh(void) {
     u64 seed;
@@ -423,6 +642,8 @@ void Rando_Runtime_Refresh(void) {
     sRuntime.damage_multiplier = 1;
     sRuntime.mute_low_health_beep = false;
     sRuntime.mute_music = false;
+    sRuntime.allow_homewarp = false;
+    sRuntime.open_tingle = false;
 
     if (!sRuntime.active) {
         return;
@@ -450,6 +671,8 @@ void Rando_Runtime_Refresh(void) {
     }
 
     sRuntime.mute_music = HasDefine("no_music");
+    sRuntime.allow_homewarp = HasDefine("allowHomewarp");
+    sRuntime.open_tingle = HasDefine("openTingleBrothers");
 
     if (sRuntime.damage_multiplier != 1 || sRuntime.mute_low_health_beep || sRuntime.mute_music) {
         fprintf(stderr, "[RANDO] runtime: damage x%d%s%s\n", sRuntime.damage_multiplier,
@@ -482,6 +705,21 @@ bool Rando_Runtime_MuteMusic(void) {
     return sRuntime.mute_music;
 }
 
+/* `allowHomewarp` (HOMEWARP flag, default on; also force-emitted for
+ * softlock-prone setting combos): pause-menu SLEEP warps Link home. */
+bool Rando_Runtime_AllowHomewarp(void) {
+    EnsureFresh();
+    return sRuntime.active && sRuntime.allow_homewarp;
+}
+
+/* `openTingleBrothers`: spawn Knuckle/Ankle/David Jr. from the start.
+ * Consulted by the three roomInit spawn sites whose vanilla condition
+ * additionally requires gSave.global_progress > 3. */
+bool Rando_Runtime_OpenTingleBrothers(void) {
+    EnsureFresh();
+    return sRuntime.active && sRuntime.open_tingle;
+}
+
 /* ------------------------------------------------------------------ */
 /* New-file commit                                                      */
 /* ------------------------------------------------------------------ */
@@ -494,6 +732,9 @@ void Rando_Runtime_OnNewFile(void) {
     seed = Rando_GetSeed64();
     fprintf(stderr, "[RANDO] applying new-file grants (seed %llu)\n",
             (unsigned long long)seed);
+    ApplyMemoryPokes(seed); /* byte writes first: flag setters below OR bits */
+    ApplyStorySkip();
+    ApplyWorldOpen();
     ApplyStartInventory(seed);
     ApplyCrests(seed);
     ApplyPortals(seed);
@@ -533,4 +774,78 @@ bool Rando_IsInFileSelect(void) {
 
 void Rando_PlayCancelSfx(void) {
     SoundReq(SFX_MENU_CANCEL);
+}
+
+/* ------------------------------------------------------------------ */
+/* Homewarp (issue #155)                                                */
+/* ------------------------------------------------------------------ */
+
+/* SELECT on the pause menu's Quest Status screen arms a deferred warp;
+ * the menu then closes itself and the warp fires from the per-frame
+ * tick once the pause subtask has fully torn down (DoExitTransition
+ * during the pause frame would race the menu teardown). Destination is
+ * FinalizeSave()'s new-game bed spawn in Link's house. */
+static u8 sHomewarpPending = 0;
+
+extern bool Port_SoftSlots_IsPauseActive(void);
+void DoExitTransition(const Transition* data);
+
+bool Rando_Homewarp_Request(void) {
+    if (!Rando_Runtime_AllowHomewarp() || sHomewarpPending != 0) {
+        return false;
+    }
+    /* Minish Link in the bedroom has no portal back to human size —
+     * refuse instead of trading one softlock for another. */
+    if (gPlayerState.flags & PL_MINISH) {
+        return false;
+    }
+    sHomewarpPending = 1;
+    fprintf(stderr, "[RANDO] homewarp armed (sleeping)\n");
+    return true;
+}
+
+/* Soft-slot pause overlay: show the SLEEP hint only where the input is
+ * accepted (Quest Status screen, human-size Link). */
+bool Rando_Homewarp_HintVisible(void) {
+    return Rando_Runtime_AllowHomewarp() &&
+           gPauseMenuOptions.screen == PauseMenuScreen_2 &&
+           !(gPlayerState.flags & PL_MINISH);
+}
+
+void Rando_Homewarp_Tick(void) {
+    Transition t;
+
+    if (sHomewarpPending == 0) {
+        return;
+    }
+    if (gMain.task != TASK_GAME || gSave.stats.health == 0) {
+        sHomewarpPending = 0; /* left gameplay (death, file change): cancel */
+        return;
+    }
+    if (Port_SoftSlots_IsPauseActive()) {
+        return; /* pause menu still closing (grace-counted) */
+    }
+    sHomewarpPending = 0;
+
+    /* Same Transition recipe as Port_DebugAction_Warp (port_debug_
+     * actions.c), pinned to the bed spawn FinalizeSave() uses for a
+     * brand-new file: area 0x22 (house interiors 2), room 0x15 (Link's
+     * bedroom), (0x90, 0x38), layer 1. */
+    t.warp_type = WARP_TYPE_AREA;
+    t.startX = 0;
+    t.startY = 0;
+    t.endX = 0x90;
+    t.endY = 0x38;
+    t.shape = 0;
+    t.area = 0x22;
+    t.room = 0x15;
+    t.layer = 1;
+    t.transition_type = 0; /* TRANSITION_TYPE_NORMAL */
+    t.facing_direction = 0;
+    t.transitionSFX = 0;
+    t.unk2 = 0;
+    t.unk3 = 0;
+    gRoomTransition.stairs_idx = 0; /* prevent StairsAreValid() cancellation */
+    DoExitTransition(&t);
+    fprintf(stderr, "[RANDO] homewarp: warped to Link's bed\n");
 }

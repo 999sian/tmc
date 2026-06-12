@@ -37,6 +37,21 @@ bool Rando_Runtime_MuteLowHealthBeep(void);
 
 /* `no_music` => suppress BGM song requests (same consult point). */
 bool Rando_Runtime_MuteMusic(void);
+
+/* `allowHomewarp`: pause-menu SLEEP (SELECT on Quest Status) is enabled. */
+bool Rando_Runtime_AllowHomewarp(void);
+
+/* `openTingleBrothers`: bypass the `global_progress > 3` half of the
+ * Tingle-brother spawn conditions in src/roomInit.c (issue #155). */
+bool Rando_Runtime_OpenTingleBrothers(void);
+
+/* Homewarp: arm from the pause menu (returns false when unavailable —
+ * homewarp off, already pending, or Link is minish); the deferred warp
+ * fires from the per-frame tick after the menu closes. Hint feeds the
+ * pause-menu soft-slot overlay. */
+bool Rando_Homewarp_Request(void);
+void Rando_Homewarp_Tick(void);
+bool Rando_Homewarp_HintVisible(void);
 bool Rando_IsInGameplay(void);
 bool Rando_IsInFileSelect(void);
 void Rando_PlayCancelSfx(void);

@@ -124,6 +124,7 @@ discord_app_id.txt
 tmc.randomizer
 tmc.softslots
 bugreport_*/
+state_auto_*.bin
 
 # tools/ build-dependency install prefix: fmt / nlohmann_json / CLI11 are fetched
 # and compiled by tools/CMakeLists.txt (FetchContent) into these dirs.

@@ -140,6 +140,14 @@ static void Port_UpdateInput(void) {
         Port_A11y_Update();
     }
 
+    /* Late half of the rando repro: applies the homewarp stage's queued
+     * KEYINPUT presses after the store above (the early tick at the top
+     * of this function would be overwritten). */
+    {
+        extern void Port_ReproRando_LateTick(void);
+        Port_ReproRando_LateTick();
+    }
+
     /* Issue #99 auto-repro harness. Set TMC_REPRO_MAZAAL=1 to drive
      * the game from the title screen into the FoW boss room mid-
      * phase-3 so the [mazaal] diagnostic logs in mazaalMacro.c
@@ -242,6 +250,14 @@ static void Port_UpdateInput(void) {
     {
         extern void Port_DebugAction_WarpTick(void);
         Port_DebugAction_WarpTick();
+    }
+
+    /* Randomizer homewarp (issue #155): fires the deferred bed warp once
+     * the pause menu has closed. No-op unless armed via SELECT on the
+     * Quest Status screen. */
+    {
+        extern void Rando_Homewarp_Tick(void);
+        Rando_Homewarp_Tick();
     }
 
 }

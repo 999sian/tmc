@@ -24,6 +24,7 @@
 #ifdef PC_PORT
 #include "port_gba_mem.h"
 #include "port_softslots.h"
+#include "rando/rando_runtime.h"
 #endif
 
 extern void sub_080A4DB8(u32);
@@ -117,6 +118,17 @@ void PauseMenu_Variant2(void) {
     int iVar4;
     s32 bVar5;
 
+#ifdef PC_PORT
+    /* issue #155: randomizer homewarp — GBA-randomizer parity for the
+     * "SLEEP option on the QUEST STATUS screen". SELECT on the quest
+     * page arms the deferred warp (Rando_Homewarp_Tick fires it after
+     * the menu closes) and requests the normal menu-exit path. */
+    if (sub_080A51F4() && gPauseMenuOptions.screen == PauseMenuScreen_2 &&
+        (gInput.newKeys & SELECT_BUTTON) && Rando_Homewarp_Request()) {
+        SoundReq(SFX_TEXTBOX_OPEN);
+        gPauseMenuOptions.screen2 = 0xe; /* request menu close */
+    }
+#endif
     if (sub_080A51F4() && (gMenu.field_0xc != NULL)) {
         iVar1 = -1;
         switch (gInput.newKeys) {

@@ -513,9 +513,22 @@ void Port_SoftSlots_DrawInfoIntoFramebuffer(uint32_t* fb) {
                    empty ? kEmptyColor : kValueColor);
     }
 
-    /* No persistent hint — first run users see the F8 menu and the config
-     * key (\\) is also documented in the F8 page. */
-    (void)kHintColor;
+    /* Randomizer homewarp hint (issue #155): shown only on the Quest
+     * Status screen of an active homewarp-enabled seed, right-aligned
+     * just above the slot bar. */
+    {
+        extern bool Rando_Homewarp_HintVisible(void);
+        if (Rando_Homewarp_HintVisible()) {
+            static const char kHint[] = "SELECT: SLEEP (WARP HOME)";
+            int w = (int)(sizeof(kHint) - 1) * CHAR_PITCH;
+            int x = FB_W - 3 - w;
+            int y = barY - 9;
+            FillRect(fb, x - 2, y - 1, w + 4, 8, kBgColor);
+            DrawString(fb, x, y, kHint, kHintColor);
+        }
+    }
+    /* No persistent hint otherwise — first run users see the F8 menu and
+     * the config key (\\) is also documented in the F8 page. */
 }
 
 /* ---- Pause-menu sprite badges (X / Y / L / R) ---------------------- *
