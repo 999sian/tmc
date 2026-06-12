@@ -1,7 +1,7 @@
 /*
  * Curated runtime keys for .logic ground-item locations (rando_keymap.h).
  *
- * MinishMaker's `.logic` file identifies dungeon ground items (DUNGEONRUPEE /
+ * The `.logic` format identifies dungeon ground items (DUNGEONRUPEE /
  * DUNGEONUNDERWATER / DUNGEONSMALLUNDERWATER / DUNGEONPOT / DUNGEONHP and
  * the FORTRESS- / PALACE-prefixed variants) by a precise EU-ROM patch
  * address instead of an area-room-index triple, so the native engine cannot

@@ -5022,7 +5022,7 @@ extern EntityData gUnk_080F2E94;
 extern EntityData gUnk_080F2EC4;
 
 #ifdef PC_PORT
-/* Randomizer: MinishMaker's `.logic` declares two floor items in the smith
+/* Randomizer: The `.logic` file declares two floor items in the smith
  * house (Smith_Floor_Item1/2, vanilla the starting sword + shield) that the
  * GBA randomizer creates by rewriting two furniture records in the room's
  * entity data. Natively, spawn the equivalent ground items at room load when

@@ -718,7 +718,11 @@ int main(int argc, char* argv[]) {
 #endif
     {
         extern bool RandoLogic_LoadDefaultFiles(void);
+        extern void Port_RandoFileMenu_RestorePersistedSettings(void);
         RandoLogic_LoadDefaultFiles();
+        /* Re-apply persisted .logic setting overrides (issue #155) so the
+         * randomizer comes back configured the way the player left it. */
+        Port_RandoFileMenu_RestorePersistedSettings();
     }
     Port_CheckForUpdates(window);
 

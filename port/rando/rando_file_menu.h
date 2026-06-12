@@ -54,6 +54,13 @@ void Port_RandoFileMenu_SetLogicNumber(int idx, int value);
 void Port_RandoFileMenu_CommitAndStart(void);
 void Port_RandoFileMenu_Cancel(void);
 
+/* Persistence (issue #155): settings + .logic overrides survive restarts
+ * via config.json. Restore is called once at startup after
+ * RandoLogic_LoadDefaultFiles(); Persist is also called by the ImGui
+ * override-mutation paths (setting rows, presets, cosmetics). */
+void Port_RandoFileMenu_RestorePersistedSettings(void);
+void Port_RandoFileMenu_PersistLogicOverrides(void);
+
 #ifdef __cplusplus
 }
 #endif

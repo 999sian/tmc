@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Randomizer — glitchless beatability + persistent settings (#155)
+
+- **Glitchless now guarantees a beatable seed on the built-in graph.** The
+  seed-scoped item bijection (`Rando_OverrideItem`) applies to every
+  non-keyed story give and is not covered by placement verification, so the
+  Hard/Chaos pools could scramble story gates — e.g. the shield (needed for
+  Deepwood Shrine's Business Scrub) rolling into a boomerang. With
+  "Glitchless logic" checked, Hard/Chaos now only scramble non-gating
+  collectibles; full major/progression scrambling requires unchecking it.
+  The F8 tab and the file-select modal say so inline, and
+  `rando_logic_test` gained a regression guard for both directions.
+- **Randomizer settings persist** until switched off, instead of resetting
+  on every menu open and every launch. "Enable Randomizer Mode", the
+  built-in toggles (glitchless / kinstones / dojos / item pool), and all
+  `.logic` setting overrides (settings browser edits, presets, cosmetics)
+  are stored in `config.json` (`rando_*` keys) and restored at startup.
+  Turning "Enable Randomizer Mode" off resets everything back to vanilla
+  defaults. The new-file modal no longer resets `.logic` settings to file
+  defaults when it opens.
+
 ## v0.6.0 (2026-06-11)
 
 ### Licensing — remove GPL-3.0 randomizer dependency

@@ -379,7 +379,7 @@ void ItemOnGround_SetFlagAndDelete(ItemOnGroundEntity* this, bool32 doSetFlag) {
 bool32 sub_08081420(ItemOnGroundEntity* this) {
 #ifdef PC_PORT
     /* Resolve the per-location randomized reward BEFORE the item-get-cutscene
-     * decision: MinishMaker rewrites the item bytes in the room's entity
+     * decision: the GBA randomizer rewrites the item bytes in the room's entity
      * data, so the whole vanilla flow (cutscene vs silent GiveItem) must see
      * the replacement item. The hook used to sit inside the cutscene branch
      * only — GiveItem() sets the 2-bit inventory state for every item id

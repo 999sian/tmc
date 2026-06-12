@@ -1,7 +1,7 @@
 /*
  * Area-music shuffle runtime (MUSIC_RANDO).
  *
- * MinishMaker patches the per-area song byte in the ROM's area-metadata
+ * The GBA randomizer patches the per-area song byte in the ROM's area-metadata
  * table (EU: 0x12746b + 4*area); natively that byte is
  * gAreaMetadata[area].queueBgm, read in exactly one place (LoadRoomBgm).
  * This remap is the runtime equivalent of that table patch.

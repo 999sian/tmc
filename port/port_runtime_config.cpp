@@ -92,6 +92,15 @@ bool        sA11yFootsteps = true;
 bool        sA11yHazards   = true;
 bool        sA11yRadar     = true;
 bool        sA11yWalls     = true;
+/* Randomizer persistence (issue #155) — file-select toggle, built-in
+ * graph settings, and .logic define overrides. Defaults = vanilla. */
+bool sRandoEnabled    = false;
+bool sRandoGlitchless = true;
+bool sRandoKinstones  = true;
+bool sRandoDojos      = true;
+int  sRandoItemPool   = 0;
+std::vector<std::pair<std::string, std::string>> sRandoOverrides;
+std::vector<std::pair<std::string, std::string>> sRandoOverridesStaged;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -145,6 +154,12 @@ nlohmann::json DefaultsJson(void) {
         { "a11y_hazards", true },
         { "a11y_radar", true },
         { "a11y_walls", true },
+        { "rando_enabled", false },
+        { "rando_glitchless", true },
+        { "rando_kinstones", true },
+        { "rando_dojos", true },
+        { "rando_item_pool", 0 },
+        { "rando_logic_overrides", nlohmann::json::object() },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -536,6 +551,20 @@ extern "C" void Port_Config_Load(const char* path) {
         sA11yHazards   = j.value("a11y_hazards", true);
         sA11yRadar     = j.value("a11y_radar", true);
         sA11yWalls     = j.value("a11y_walls", true);
+
+        sRandoEnabled    = j.value("rando_enabled", false);
+        sRandoGlitchless = j.value("rando_glitchless", true);
+        sRandoKinstones  = j.value("rando_kinstones", true);
+        sRandoDojos      = j.value("rando_dojos", true);
+        sRandoItemPool   = j.value("rando_item_pool", 0);
+        sRandoOverrides.clear();
+        if (j.contains("rando_logic_overrides") && j["rando_logic_overrides"].is_object()) {
+            for (const auto& it : j["rando_logic_overrides"].items()) {
+                if (it.value().is_string()) {
+                    sRandoOverrides.emplace_back(it.key(), it.value().get<std::string>());
+                }
+            }
+        }
 
         for (auto& v : sBinds) {
             v.clear();
@@ -1276,3 +1305,54 @@ extern "C" bool Port_Config_GetA11yRadar(void) { return sA11yRadar; }
 extern "C" void Port_Config_SetA11yRadar(bool on) { sA11yRadar = on; sConfigJson["a11y_radar"] = on; SaveConfig(); }
 extern "C" bool Port_Config_GetA11yWalls(void) { return sA11yWalls; }
 extern "C" void Port_Config_SetA11yWalls(bool on) { sA11yWalls = on; sConfigJson["a11y_walls"] = on; SaveConfig(); }
+
+/* ---- Randomizer persistence (issue #155) ------------------------------ */
+
+extern "C" bool Port_Config_GetRandoEnabled(void) { return sRandoEnabled; }
+extern "C" void Port_Config_SetRandoEnabled(bool on) {
+    sRandoEnabled = on;
+    sConfigJson["rando_enabled"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetRandoGlitchless(void) { return sRandoGlitchless; }
+extern "C" bool Port_Config_GetRandoKinstones(void) { return sRandoKinstones; }
+extern "C" bool Port_Config_GetRandoDojos(void) { return sRandoDojos; }
+extern "C" int  Port_Config_GetRandoItemPool(void) { return sRandoItemPool; }
+extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, int item_pool) {
+    sRandoGlitchless = glitchless;
+    sRandoKinstones  = kinstones;
+    sRandoDojos      = dojos;
+    sRandoItemPool   = item_pool;
+    sConfigJson["rando_glitchless"] = glitchless;
+    sConfigJson["rando_kinstones"]  = kinstones;
+    sConfigJson["rando_dojos"]      = dojos;
+    sConfigJson["rando_item_pool"]  = item_pool;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_RandoOverridesBegin(void) {
+    sRandoOverridesStaged.clear();
+}
+extern "C" void Port_Config_RandoOverridesAppend(const char* name, const char* value) {
+    if (name == nullptr || name[0] == '\0') return;
+    sRandoOverridesStaged.emplace_back(name, value ? value : "");
+}
+extern "C" void Port_Config_RandoOverridesCommit(void) {
+    sRandoOverrides.swap(sRandoOverridesStaged);
+    sRandoOverridesStaged.clear();
+    nlohmann::json obj = nlohmann::json::object();
+    for (const auto& kv : sRandoOverrides) {
+        obj[kv.first] = kv.second;
+    }
+    sConfigJson["rando_logic_overrides"] = std::move(obj);
+    SaveConfig();
+}
+extern "C" size_t Port_Config_RandoOverrideCount(void) {
+    return sRandoOverrides.size();
+}
+extern "C" bool Port_Config_RandoOverrideAt(size_t index, const char** out_name, const char** out_value) {
+    if (index >= sRandoOverrides.size()) return false;
+    if (out_name) *out_name = sRandoOverrides[index].first.c_str();
+    if (out_value) *out_value = sRandoOverrides[index].second.c_str();
+    return true;
+}

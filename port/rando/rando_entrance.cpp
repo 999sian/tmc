@@ -1,8 +1,8 @@
 /*
  * port/rando/rando_entrance.cpp — coupled dungeon-entrance shuffle.
  *
- * Mirrors MinishMaker's UpdateSpecialEntrances()/TransitionFactory ROM writes
- * (RandomizerCore/Randomizer/Shuffler/ShufflerBase.cs) as a runtime remap.
+ * Mirrors the GBA randomizer's entrance-shuffle ROM writes as a runtime
+ * remap.
  * All tuples below were cross-checked against the decomp's own data:
  *
  *   enter doors      src/data/transitions.c (exit lists; see kEnter notes)
@@ -47,7 +47,7 @@ struct EntranceTuple {
 };
 
 /* Interior entry points, i.e. what entering dungeon d writes into
- * PlayerRoomStatus (MinishMaker ShufflerBase.cs entranceX/Y+targetArea/Room).
+ * PlayerRoomStatus (the entrance-shuffle entry tuple: x/y + target area/room).
  * Vanilla carriers of these tuples:
  *   [0] gExitList_MinishWoods_Main[1] / _DeepwoodShrineEntry_Main[0] / _61_0[0]
  *   [1] gExitList_MtCrenel_CaveOfFlamesEntrance[7]
@@ -68,8 +68,8 @@ const EntranceTuple kEnter[kEntranceCount] = {
     { 0x43, 0x00, 0x068, 0x1A8, 1, 0, 0 },  /* Hyrule Castle cellar (DHC side) */
 };
 
-/* Exterior door-return points of each LOCATION (MinishMaker
- * TransitionFactory ExitX/Y + EntranceArea/Room). Vanilla carriers:
+/* Exterior door-return points of each LOCATION (the door-return tuple:
+ * exit x/y + entrance area/room). Vanilla carriers:
  *   [0] gExitList_DeepwoodShrine_Entrance[2]   -> Deepwood porch (area 0x4A)
  *   [1] gExitList_CaveOfFlames_Entrance[0]     -> Mt Crenel CoF door room
  *   [2] gExitList_OuterFortressOfWinds_EntranceHall[5] -> Wind Ruins
@@ -90,7 +90,7 @@ const EntranceTuple kExterior[kEntranceCount] = {
 };
 
 /* Post-boss green-warp landing per LOCATION. area/room as kExterior; x/y
- * decoded from MinishMaker GreenWarpExitCoordinate c:
+ * decoded from the packed green-warp exit coordinate c:
  * x=((c&0x3f)<<4)+8, y=((c&0xfc0)>>2)+8 (WarpPoint_Action5 packing). */
 struct WarpXY {
     uint16_t x, y;
@@ -102,7 +102,7 @@ const WarpXY kGreenWarpXY[kEntranceCount] = {
     { 0x1F8, 0x038 }, /* 0x00DF */ { 0x068, 0x058 }, /* 0x0146 */
 };
 
-/* Element-get warp landing per LOCATION (MinishMaker ElementGetExitX/Y). */
+/* Element-get warp landing per LOCATION (the element-get warp landing tuple). */
 const WarpXY kElementWarpXY[kEntranceCount] = {
     { 0x078, 0x078 }, { 0x068, 0x098 }, { 0x198, 0x068 }, { 0x128, 0x1A8 },
     { 0x0E8, 0x098 }, { 0x078, 0x078 }, { 0x1F8, 0x038 }, { 0x068, 0x058 },
@@ -276,7 +276,7 @@ extern "C" void Rando_Entrance_RemapHole(uint8_t cur_area, uint8_t* area, uint8_
                                          int16_t* y) {
     if (!EnsureMapping()) return;
     /* Palace of Winds entrance-room ledge jump: vanilla hole lands on the
-     * Wind Tribe tower roof (kExterior[5]). MinishMaker rewrites only
+     * Wind Tribe tower roof (kExterior[5]). The GBA randomizer rewrites only
      * area/room/layer/x/y of this gHoleTransitions entry. */
     if (cur_area != kEnter[5].area) return;
     if (!TupleMatches(kExterior[5], *area, *room, *x, *y)) return;
@@ -298,7 +298,7 @@ extern "C" void Rando_Entrance_RemapGreenWarp(uint8_t cur_area, uint32_t warp_ty
     if (v < 0) return;
     int loc = sInverse[v];
     if (loc < 0) return;
-    /* MinishMaker rewrites the in-dungeon green warp unconditionally for
+    /* The GBA randomizer rewrites the in-dungeon green warp unconditionally for
      * every shuffled dungeon (ToD's even points back inside in vanilla), so
      * identity assignments are normalized to the exterior pad as well. */
     *area = kExterior[loc].area;

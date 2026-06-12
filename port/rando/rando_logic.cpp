@@ -1,5 +1,5 @@
 /*
- * Clean-room MinishMaker-style .logic parser and verifier.
+ * Clean-room parser and verifier for the public `.logic` text format.
  *
  * This code implements the public text format described by default.logic:
  * directives, defines, fixed item/location types, and prefix logic
@@ -362,7 +362,7 @@ static bool LocationHasTag(const LogicLocation* loc, uint16_t tag) {
     return false;
 }
 
-/* MinishMaker `.logic` item symbol (with the leading "Items." stripped) ->
+/* `.logic` item symbol (with the leading "Items." stripped) ->
  * native engine item id. Names taken from the public default.logic item pool.
  * Unmapped symbols return ITEM_NONE so the location keeps its vanilla reward. */
 static uint16_t NativeItemFromBareName(const char* name) {
@@ -590,7 +590,7 @@ static char* ExpandBackticks(char* line) {
                 CopyName(key, sizeof(key), line + i + 1, j - i - 1);
                 /* A define with no/empty value expands to nothing; an unknown
                  * token also expands to empty (never the literal key name).
-                 * Exception: `RAND_INT` is the MinishMaker per-seed random
+                 * Exception: `RAND_INT` is the `.logic` per-seed random
                  * builtin — kept literal for eventdefine-time substitution. */
                 const char* value = DefineValue(key);
                 if (value == NULL && strcmp(key, "RAND_INT") == 0) value = "RAND_INT";
@@ -974,7 +974,7 @@ static void ParseDropdownDirective(char* args) {
     int ov = FindOverride(fields[3]);
     const char* chosen = (ov >= 0) ? sOverrides[ov].value : def;
     SetDefineValue(fields[3], chosen, true);
-    /* MinishMaker dropdown semantics: the CHOSEN OPTION VALUE is also defined
+    /* `.logic` dropdown semantics: the CHOSEN OPTION VALUE is also defined
      * as a flag — the file's `!ifdef - SMALL_KEYS_STANDARD` / `MUSIC_RANDO`
      * branches key off the value token, while `\`SETTING\`` backtick
      * indirection reads the setting define above. Both are required. */
@@ -1360,7 +1360,7 @@ static bool ProcessDirective(char* line, CondFrame* stack, int* depth, bool* act
     if (StartsWith(line, "!color")) { ParseColorDirective(line + 6); return true; }
     if (StartsWith(line, "!ensurereachability")) { sLogic.ensure_reachability = true; return true; }
 
-    /* Other MinishMaker directives are patch/UI controls ignored by the
+    /* Other `.logic` directives are patch/UI controls ignored by the
      * native generator until a matching engine subsystem exists. */
     return true;
 }
@@ -1843,7 +1843,7 @@ static int FindGoalLocation(void) {
     return -1;
 }
 
-/* Assumed-fill placement matching the documented MinishMaker algorithm:
+/* Assumed-fill placement matching the documented `.logic` algorithm:
  * advancement items are placed so the seed stays beatable (every item is
  * reachable assuming you already hold all not-yet-placed advancement items),
  * typed pools are honoured in priority order with the documented fallbacks,
@@ -2221,7 +2221,7 @@ extern "C" bool RandoLogic_LocationHasTagName(uint32_t location_index, const cha
 }
 
 /* Bind a native runtime key onto a .logic location that carries only a
- * MinishMaker precise ROM address (which the native engine cannot use). The
+ * `.logic`-file precise ROM address (which the native engine cannot use). The
  * curated name->key table lives port-side; binding only fills empty keys. */
 extern "C" bool RandoLogic_BindRuntimeKey(const char* location_name, uint32_t key) {
     if (!sLogic.loaded || location_name == NULL) return false;
@@ -2237,8 +2237,8 @@ extern "C" bool RandoLogic_BindRuntimeKey(const char* location_name, uint32_t ke
 /* ---- `!eventdefine` evaluation ------------------------------------------ */
 
 /* Substitute every literal `RAND_INT` with a seed/name/occurrence-derived
- * 8-hex-digit value, mirroring MinishMaker's parse-time text substitution
- * (each occurrence yields a distinct value; deterministic per seed). */
+ * 8-hex-digit value, mirroring the GBA randomizer's parse-time text
+ * substitution (each occurrence yields a distinct value; deterministic per seed). */
 static void SubstituteRandInts(const char* in, char* out, size_t out_len,
                                uint64_t seed, const char* name) {
     uint64_t h = 1469598103934665603ull ^ seed;

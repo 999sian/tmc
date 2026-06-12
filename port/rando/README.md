@@ -12,10 +12,14 @@ difficulty-scaled:
 - `Normal` — shuffles collectibles only (rupees, hearts, kinstones, ammo,
   shells, heart pieces). Progression is untouched, so the seed stays beatable.
 - `Hard` — also shuffles non-gating majors (bottles, upgrades, skills, etc.).
-- `Chaos` — also shuffles dungeon-gating progression (may be unbeatable without
-  a logic file).
+- `Chaos` — also shuffles dungeon-gating progression.
 
-For true per-location logic, supply a MinishMaker-style `.logic` file
+The Hard/Chaos extra pools also hit story-script gives the location graph
+cannot verify (e.g. the shield gating Deepwood's Business Scrub), so they
+only apply with **glitchless logic OFF** (issue #155). Glitchless ON keeps
+majors/progression vanilla in the bijection — guaranteed beatable.
+
+For true per-location logic, supply a public-format `.logic` file
 (`TMC_RANDO_LOGIC=/path`); chests are then remapped per area/room/flag key via
 `Rando_OverrideLocationKey`.
 
@@ -25,7 +29,7 @@ Primary API:
 RandomizerSettings settings = Rando_DefaultSettings();
 bool ok = GenerateSeed(seed64, settings);
 uint16_t item = Rando_ResolveLocationItem(location_id, vanilla_item);
-/* Optional MinishMaker-style address hook: 0xAARRLL = area, room, local flag. */
+/* Optional address-keyed hook: 0xAARRLL = area, room, local flag. */
 Rando_OverrideLocationKey(0x000001, &item_type, &item_subtype);
 ```
 
@@ -35,14 +39,18 @@ Rando_OverrideLocationKey(0x000001, &item_type, &item_subtype);
 - `rando.cpp` — SplitMix64 PRNG, the seeded pool-preserving item bijection
   applied via `Rando_OverrideItem`, plus a built-in location graph used for the
   spoiler/self-verification and offline tests.
-- `rando_logic.h/.cpp` — MinishMaker-style `.logic` parser and expression
-  VM for public-format interoperability without translating GPL C# code.
+- `rando_logic.h/.cpp` — parser and expression VM for the public `.logic`
+  text format, for interoperability without translating GPL C# code.
   Startup probes `TMC_RANDO_LOGIC`, `assets/rando/default.logic`,
   `dist/USA/assets/rando/default.logic`, `dist/EU/assets/rando/default.logic`,
   `rando/default.logic`, then `default.logic`. The GPL logic file is not
   vendored.
 - `rando_file_menu.h/.c` — SDL3 file-select setup overlay using fixed
-  element arrays and `SDL_FRect` hitboxes.
+  element arrays and `SDL_FRect` hitboxes. Owns randomizer persistence
+  (issue #155): the "Enable Randomizer Mode" toggle, built-in graph
+  settings, and `.logic` define overrides live in `config.json`
+  (`rando_*` keys, via `port_runtime_config`), restored at startup and
+  reset to vanilla defaults only when the toggle is switched off.
 - `rando_save.h/.c` — profile-local `*.randomizer` sidecar storing seed,
   settings, active location count, and fixed item table for all three save
   slots without touching EEPROM.
@@ -59,10 +67,10 @@ The location graph is deliberately native and data-oriented:
 - generation uses stack scratch arrays only;
 - verification simulates a playthrough before a seed becomes active.
 
-## MinishMaker `.logic` parity status
+## `.logic` format parity status
 
 The `.logic` engine is a clean-room reimplementation of the documented
-MinishMaker format/algorithm (written from the public spec block at the top of
+format/algorithm (written from the public spec block at the top of
 `default.logic`, not from the GPL C# source).
 
 Implemented and tested (`rando_logic_test`):
@@ -90,7 +98,7 @@ Implemented and tested (`rando_logic_test`):
   items, Stockwell's shop slots, Blade Brothers dojo rewards, Cucco minigame
   rounds, Carlov's medal, Business Scrub item sales, and Goron Merchant sets
   (when the corresponding `.logic` settings enable them) are remapped
-  per-location. Chests use the MinishMaker chest identity
+  per-location. Chests use the format's chest identity
   `area-room-chestIndex` (the third byte is the chest's 0-based position among
   the room's chest TileEntities, resolved by `Rando_RoomChestIndex`), so real
   `.logic` placements land on the right chest in-game. Remaining NPC / fusion /
@@ -155,7 +163,8 @@ Full-parity features (added in the 1:1 pass):
 - **boss heart containers**: `src/object/heartContainer.c` keys the pickup by
   the container's room-local persistence flag, covering the five
   `*_BossItem` locations (Deepwood/CoF/Fortress/Droplets/Palace);
-- **smith-house floor items**: MinishMaker creates `Smith_Floor_Item1/2` by
+- **smith-house floor items**: the `.logic` file declares `Smith_Floor_Item1/2`,
+  which the GBA randomizer creates by
   rewriting two furniture records in the GBA room data; natively
   `src/roomInit.c` spawns the equivalent ground items (flags `0xE0/0xE1`,
   unused across every LOCAL_BANK_2 area) when an active `.logic` seed has
@@ -190,8 +199,8 @@ Full-parity features (added in the 1:1 pass):
 
 NOT yet at full parity (honest gaps):
 - `!import` logic functions are approximated (logic-only item symbols are
-  assumed owned, standing in for `LogicImport.cs` — not translated, but
-  unused by the real `default.logic`);
+  assumed owned, standing in for upstream's import mechanism — not
+  translated, but unused by the real `default.logic`);
 - locations whose `.logic` entries are disabled by settings (`Inaccessible`
   templates, non-default `!ifdef` branches) have no keyed identity until the
   matching setting is enabled; give-item sources for those still randomize
@@ -209,7 +218,7 @@ NOT yet at full parity (honest gaps):
 
 ### Real `default.logic` status
 
-Validated against the actual MinishMaker `default.logic` (set
+Validated against the real upstream `default.logic` (set
 `TMC_RANDO_LOGIC=path`; `rando_logic_test` then asserts it). The full file's
 `[gen]` placement traces. In-game, the runtime hooks resolve to the logic's
 location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`

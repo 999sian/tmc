@@ -150,11 +150,11 @@ bool RandoLogic_RestoreMusicAssignment(uint32_t area, int song);
 bool RandoLogic_LocationHasTagName(uint32_t location_index, const char* tag_name);
 
 /* Bind a native runtime key (e.g. area-room-flag) onto a .logic location that
- * carries only a MinishMaker precise ROM address. Fills empty keys only. */
+ * carries only a `.logic`-file precise ROM address. Fills empty keys only. */
 bool RandoLogic_BindRuntimeKey(const char* location_name, uint32_t key);
 
-/* Event defines (`!eventdefine`): MinishMaker writes these to the ROM patch
- * assembler; natively they configure runtime features (start inventory,
+/* Event defines (`!eventdefine`): the GBA randomizer writes these to the ROM
+ * patch assembler; natively they configure runtime features (start inventory,
  * cosmetics, open world, damage multipliers, ...). Values are stored raw and
  * evaluated on demand: every `RAND_INT` occurrence is substituted with a
  * seed-derived hex value (matching the C# text-substitution semantics), then

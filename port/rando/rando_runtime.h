@@ -1,5 +1,5 @@
 /*
- * port/rando/rando_runtime.h — MinishMaker `!eventdefine` runtime features.
+ * port/rando/rando_runtime.h — `.logic` `!eventdefine` runtime features.
  *
  * The logic engine (rando_logic) parses `!eventdefine` entries; this module
  * makes the game honor them natively:

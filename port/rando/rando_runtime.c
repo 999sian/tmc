@@ -1,7 +1,7 @@
 /*
- * port/rando/rando_runtime.c — MinishMaker `!eventdefine` runtime features.
+ * port/rando/rando_runtime.c — `.logic` `!eventdefine` runtime features.
  *
- * MinishMaker compiles eventdefines into ROM patches; natively we read the
+ * The GBA randomizer compiles eventdefines into ROM patches; natively we read the
  * same defines through the rando_logic API and mutate engine state directly.
  *
  * Built as C (not C++) because it needs the real SaveFile/Stats layout from
@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* gSave.windcrests crest byte: MinishMaker's crest defines are bit values
+/* gSave.windcrests crest byte: the `.logic` crest defines are bit values
  * inside the upper byte (crenel=0x01 ... minish=0x80), i.e. bits 24..31. */
 #define RANDO_WINDCREST_SHIFT 24
 static_assert(WINDCREST_MT_CRENEL == 24 && WINDCREST_MINISH_WOODS == 31,
@@ -429,7 +429,7 @@ void Rando_Runtime_Refresh(void) {
     }
     seed = sRuntime.seed;
 
-    /* dmgMulti is the full multiplier and wins over heroMode (MinishMaker
+    /* dmgMulti is the full multiplier and wins over heroMode (upstream
      * emits heroMode alongside every dmgMulti > 1; applying both would
      * double-count). */
     if (RandoLogic_EvalEventDefine("dmgMulti", seed, &v) && v >= 2 && v <= 4) {

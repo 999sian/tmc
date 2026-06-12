@@ -201,9 +201,10 @@ static int run_engine_semantics_test(void) {
     return 1;
 }
 
-/* Parity semantics introduced for MinishMaker 1:1: dungeon-id tag binding,
- * `!prizeplacement` redirects, `!eventdefine` evaluation (incl. RAND_INT
- * determinism), and entrance-assignment recording. */
+/* Parity semantics introduced for 1:1 upstream `.logic` behavior:
+ * dungeon-id tag binding, `!prizeplacement` redirects, `!eventdefine`
+ * evaluation (incl. RAND_INT determinism), and entrance-assignment
+ * recording. */
 static int run_parity_semantics_test(void) {
     /* DWSKey is tagged DWSSmall: only DWSChest carries that tag, so the key
      * MUST land there even though both chests accept DungeonMajor items.
@@ -613,6 +614,58 @@ static int run_real_logic_diagnostic(void) {
     return 1;
 }
 
+/* Issue #155: glitchless must guarantee a beatable seed. The compatibility
+ * remap (Rando_OverrideItem) applies to every non-keyed story give and is
+ * NOT covered by VerifyTable, so with glitchless ON it must never move
+ * majors (the shield gates Deepwood's Business Scrub) or progression
+ * items. With glitchless OFF, HARD/CHAOS scrambling stays available. */
+static int remap_changes_item(uint16_t id) {
+    uint8_t a = (uint8_t)id;
+    uint8_t b = 0;
+    return Rando_OverrideItem(&a, &b) && a != (uint8_t)id;
+}
+
+static int run_glitchless_remap_guard_test(void) {
+    static const uint16_t kGating[] = {
+        ITEM_SHIELD,        ITEM_BOOMERANG,    ITEM_JABBERNUT,     ITEM_KINSTONE_BAG,
+        ITEM_SMITH_SWORD,   ITEM_GUST_JAR,     ITEM_PACCI_CANE,    ITEM_OCARINA,
+        ITEM_EARTH_ELEMENT, ITEM_FIRE_ELEMENT, ITEM_WATER_ELEMENT, ITEM_WIND_ELEMENT,
+    };
+    const size_t gating_count = sizeof(kGating) / sizeof(kGating[0]);
+    RandomizerSettings settings = Rando_DefaultSettings();
+    const uint64_t seed = 0xfeedbeefcafef00dull;
+    size_t i;
+    int changed = 0;
+
+    settings.glitchless_logic = true;
+    settings.item_difficulty = RANDO_ITEM_POOL_CHAOS;
+    if (!GenerateSeed(seed, settings)) {
+        fprintf(stderr, "rando_test: glitchless chaos generation failed\n");
+        return 0;
+    }
+    for (i = 0; i < gating_count; i++) {
+        if (remap_changes_item(kGating[i])) {
+            fprintf(stderr, "rando_test: glitchless seed remapped gating item 0x%02X\n",
+                    kGating[i]);
+            return 0;
+        }
+    }
+
+    settings.glitchless_logic = false;
+    if (!GenerateSeed(seed, settings)) {
+        fprintf(stderr, "rando_test: relaxed chaos generation failed\n");
+        return 0;
+    }
+    for (i = 0; i < gating_count; i++) {
+        changed += remap_changes_item(kGating[i]);
+    }
+    if (changed == 0) {
+        fprintf(stderr, "rando_test: relaxed chaos left every major/progression item vanilla\n");
+        return 0;
+    }
+    return 1;
+}
+
 int main(void) {
     RandomizerSettings settings = Rando_DefaultSettings();
     uint16_t first[RANDO_LOCATION_COUNT];
@@ -647,6 +700,10 @@ int main(void) {
     }
     if (memcmp(first, third, sizeof(first)) == 0) {
         fprintf(stderr, "rando_test: distinct settings produced identical table\n");
+        return 1;
+    }
+
+    if (!run_glitchless_remap_guard_test()) {
         return 1;
     }
 
