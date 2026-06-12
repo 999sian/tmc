@@ -83,11 +83,11 @@ The location graph is deliberately native and data-oriented:
 - generation uses stack scratch arrays only;
 - verification simulates a playthrough before a seed becomes active.
 
-## `.logic` format parity status
+## `.logic` import format support
 
-The `.logic` engine is a clean-room reimplementation of the documented
-format/algorithm (written from the public spec block at the top of
-`default.logic`, not from the GPL C# source).
+The optional `.logic` importer is an independent reimplementation of the
+documented public text format (written from the public spec block at the top of
+a `.logic` file, not from the GPL C# source).
 
 Implemented and tested (`rando_logic_test`):
 - expression grammar: base-level AND (`,`), `(| …)`, `(& …)`, weighted count
@@ -246,9 +246,9 @@ NOT yet at full parity (honest gaps):
   logic constructs (`Shared%x`/`DummyToD` constraint nodes, the eight
   `*_Entrance` dummies, `Dummy_*` pool pins, `All_Requirements_Met`) which
   never hold real in-world rewards;
-- placement is feature-identical but not byte-identical to the C# shuffler
-  (different PRNG by clean-room design — same seed text gives a different,
-  equally-valid arrangement);
+- placement is not byte-identical to the upstream shuffler — a different,
+  independent PRNG means the same seed text gives a different but
+  equally-valid arrangement;
 - custom heart-outline colors tint other HUD glyphs drawn with the shared
   palette-15 white (upstream replaces heart tile graphics; out of scope for a
   runtime palette override).
@@ -261,10 +261,12 @@ NOT yet at full parity (honest gaps):
   ticker). Their settings parse and persist but have no runtime effect
   yet.
 
-### Real `default.logic` status
+### Optional import: real `default.logic` interop
 
-Validated against the real upstream `default.logic` (set
-`TMC_RANDO_LOGIC=path`; `rando_logic_test` then asserts it). The full file's
+As an optional interop check, the importer can be pointed at a user-supplied
+upstream `default.logic` (set `TMC_RANDO_LOGIC=path`; `rando_logic_test` then
+asserts the import parses and resolves). This file is never vendored; it is the
+user's own. The canonical native graph does not depend on it. The full file's
 `[gen]` placement traces. In-game, the runtime hooks resolve to the logic's
 location identity: the `TMC_REPRO_RANDO=1` harness (with `TMC_RANDO_LOGIC`
 set) probes 331 keyed locations at default settings (161 chests + 127 ground
@@ -281,7 +283,7 @@ full parity):
 - Item symbols that appear in logic but aren't in the shuffled pool (start
   items, fixed grants, and unmodelled events) are treated as owned in both
   placement and verification. This stands in for the complete event graph
-  (not translated — clean-room).
+  (independently approximated, not translated from upstream code).
 - 156/176 item symbols map to native engine ids (gear, elements, scrolls,
   heart pieces/containers, subtyped `BigKey`/`SmallKey`/`Compass`/`DungeonMap`,
   butterflies, progressive bases, …); the remaining ~20 are non-reward symbols

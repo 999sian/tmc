@@ -1,5 +1,5 @@
 /*
- * port/rando/rando.cpp — fixed-array clean-room graph randomizer.
+ * port/rando/rando.cpp — fixed-array native graph randomizer.
  *
  * Generation is intentionally boring: a compact DAG of native Location
  * records, SplitMix64 for deterministic entropy, fixed scratch arrays, and a

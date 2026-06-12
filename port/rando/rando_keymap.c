@@ -1,12 +1,26 @@
 /*
- * Curated runtime keys for .logic ground-item locations (rando_keymap.h).
+ * Optional `.logic` import alias map (rando_keymap.h).
  *
- * The `.logic` format identifies dungeon ground items (DUNGEONRUPEE /
+ * This file belongs to the OPTIONAL public-format `.logic` importer, not the
+ * canonical randomizer. The randomizer's canonical location identity is the
+ * engine-native runtime key (area<<16|room<<8|flag for world items/chests, and
+ * the bit-31 scripted-grant namespace below) — every numeric value here is
+ * derived from the USA baserom and the decompilation, independent of any
+ * external project.
+ *
+ * The leading string on each row is an ALIAS: it matches the location-name
+ * spelling used by the public `.logic` text format, and is used ONLY to bind an
+ * imported `.logic` file's named locations onto the native runtime keys. With no
+ * `.logic` file imported these tables are never consulted (Rando_Keymap_Apply
+ * early-returns on !RandoLogic_IsLoaded), and the native graph runs with no
+ * reference to these names.
+ *
+ * The public `.logic` format identifies dungeon ground items (DUNGEONRUPEE /
  * DUNGEONUNDERWATER / DUNGEONSMALLUNDERWATER / DUNGEONPOT / DUNGEONHP and
  * the FORTRESS- / PALACE-prefixed variants) by a precise EU-ROM patch
- * address instead of an area-room-index triple, so the native engine cannot
- * key them by itself.
- * This table maps each such location name to the runtime key the in-game
+ * address instead of an area-room-index triple, so the importer cannot
+ * key them from the file alone.
+ * Each row maps such an import alias to the runtime key the in-game
  * hook builds at pickup:
  *
  *     key = area << 16 | room << 8 | (ItemOnGroundEntity.flag & 0xff)
@@ -56,7 +70,7 @@ typedef struct RandoScriptedKeyEntry {
     uint32_t key;         /* Rando_BuildScriptedKey(...) */
 } RandoScriptedKeyEntry;
 
-static const RandoKeymapEntry kGroundItemKeys[] = {
+static const RandoKeymapEntry kLogicImportGroundKeys[] = {
     /* --- Deepwood Shrine (area 0x48, EU+0x8C4) --------------------------- */
     /* USA rec 0x0DE6C4: GI HeartPiece flag 0x4F; EU 0x0DDE03+0x8C4=0x0DE6C7=rec+3 */
     { "Deepwood_1F_BlueWarp_HP", 0x48, 0x01, 0x4F },
@@ -329,9 +343,9 @@ static const RandoKeymapEntry kGroundItemKeys[] = {
     { "Smith_Floor_Item2", 0x22, 0x11, 0xE1 },
 };
 
-#define RANDO_KEYMAP_COUNT (sizeof(kGroundItemKeys) / sizeof(kGroundItemKeys[0]))
+#define RANDO_KEYMAP_COUNT (sizeof(kLogicImportGroundKeys) / sizeof(kLogicImportGroundKeys[0]))
 
-static const RandoScriptedKeyEntry kScriptedKeys[] = {
+static const RandoScriptedKeyEntry kLogicImportScriptedKeys[] = {
     /* --- Town shop / Stockwell ------------------------------------------ */
     { "Town_Shop_80Item", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_80, 0, 0) },
     { "Town_Shop_300Item", RANDO_SCRIPTED_KEY(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_300, 0, 0) },
@@ -433,7 +447,7 @@ static const RandoScriptedKeyEntry kScriptedKeys[] = {
 static unsigned BindGroundItemKeys(bool log_misses) {
     unsigned bound = 0;
     for (unsigned i = 0; i < (unsigned)RANDO_KEYMAP_COUNT; ++i) {
-        const RandoKeymapEntry* e = &kGroundItemKeys[i];
+        const RandoKeymapEntry* e = &kLogicImportGroundKeys[i];
         uint32_t key = ((uint32_t)e->area << 16) | ((uint32_t)e->room << 8) | (uint32_t)e->flag;
         if (RandoLogic_BindRuntimeKey(e->location, key)) {
             ++bound;
@@ -446,17 +460,17 @@ static unsigned BindGroundItemKeys(bool log_misses) {
 
 static unsigned BindScriptedKeys(bool log_misses) {
     unsigned bound = 0;
-    for (unsigned i = 0; i < (unsigned)(sizeof(kScriptedKeys) / sizeof(kScriptedKeys[0])); ++i) {
-        if (RandoLogic_BindRuntimeKey(kScriptedKeys[i].location, kScriptedKeys[i].key)) {
+    for (unsigned i = 0; i < (unsigned)(sizeof(kLogicImportScriptedKeys) / sizeof(kLogicImportScriptedKeys[0])); ++i) {
+        if (RandoLogic_BindRuntimeKey(kLogicImportScriptedKeys[i].location, kLogicImportScriptedKeys[i].key)) {
             ++bound;
         } else if (log_misses) {
-            fprintf(stderr, "[RANDO] keymap miss (scripted): %s\n", kScriptedKeys[i].location);
+            fprintf(stderr, "[RANDO] keymap miss (scripted): %s\n", kLogicImportScriptedKeys[i].location);
         }
     }
     return bound;
 }
 
-#define RANDO_KEYMAP_COUNT (sizeof(kGroundItemKeys) / sizeof(kGroundItemKeys[0]))
+#define RANDO_KEYMAP_COUNT (sizeof(kLogicImportGroundKeys) / sizeof(kLogicImportGroundKeys[0]))
 
 void Rando_Keymap_Apply(void) {
     if (!RandoLogic_IsLoaded()) {
@@ -467,5 +481,5 @@ void Rando_Keymap_Apply(void) {
     unsigned scripted_bound = BindScriptedKeys(log_misses);
     fprintf(stderr, "[RANDO] keymap: bound %u/%u ground-item + %u/%u scripted locations\n",
             ground_bound, (unsigned)RANDO_KEYMAP_COUNT, scripted_bound,
-            (unsigned)(sizeof(kScriptedKeys) / sizeof(kScriptedKeys[0])));
+            (unsigned)(sizeof(kLogicImportScriptedKeys) / sizeof(kLogicImportScriptedKeys[0])));
 }

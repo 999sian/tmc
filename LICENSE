@@ -13,9 +13,12 @@ tooling, and documentation.
 It does NOT relicense the third-party and upstream components bundled in or
 linked by this project. Each of those retains its own license. In particular,
 this repository links LGPL-3.0 code (agbplay), whose files remain under the
-LGPL. The in-game randomizer (port/rando/) is the project's own clean-room
-reimplementation and is covered by this license — it is not the GPL-3.0
-minishmaker/randomizer, which this project does not bundle or link. See
+LGPL. The in-game randomizer (port/rando/) is the project's own independent
+reimplementation — a native location graph with data derived from the
+decompilation/ROM — and is covered by this license. It can optionally import the
+public .logic text format but does not bundle, link, or translate the GPL-3.0
+minishmaker/randomizer; it is format-compatible with that project by design,
+not a strict isolated clean-room. See
 THIRD-PARTY-LICENSES.md for the full list and the terms that apply to each
 component. Where a component's own license conflicts with the terms below, that
 component's license governs that component.

@@ -12,8 +12,12 @@ their respective licenses.
 > ⚠️ **Copyleft note.** This project links **LGPL-3.0** code (agbplay). agbplay
 > is linked into `tmc_pc` in relinkable form, as LGPL permits, while the larger
 > work carries its own license. The project does **not** bundle, link, or invoke
-> any GPL-3.0 component: the randomizer feature is the project's own clean-room
-> reimplementation under `port/rando/`, not the GPL-3.0 minishmaker/randomizer.
+> any GPL-3.0 component: the randomizer feature is the project's own independent
+> reimplementation under `port/rando/` — a native location graph with data
+> derived from the decompilation/ROM, which can optionally import the public
+> `.logic` text format but does not bundle, link, or translate the GPL-3.0
+> minishmaker/randomizer. It is format-compatible with that project by design,
+> not a strict isolated clean-room.
 
 ## Copyleft components (GPL / LGPL family)
 

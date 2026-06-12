@@ -62,16 +62,19 @@ enum {
     RANDO_SCRUB_KEY_GRIP = 1,
 };
 
-/* Bind curated native runtime keys onto .logic locations that only carry
- * EU-ROM patch addresses. This includes:
+/* Optional `.logic` import step: bind native runtime keys onto the named
+ * locations of an imported public-format `.logic` file (whose entries otherwise
+ * carry only EU-ROM patch addresses). This includes:
  *   - ground items keyed by area-room-flag
  *   - scripted grant sites keyed in the high-bit runtime namespace below
- * Reparse clears bindings; this is rerun after every successful generation. */
+ * No-op unless a `.logic` file is imported (early-returns on !RandoLogic_IsLoaded);
+ * the canonical native graph never needs it. Reparse clears bindings; this is
+ * rerun after every successful generation while an import is active. */
 void Rando_Keymap_Apply(void);
 
-/* Scripted-grant runtime namespace. Vanilla chest / ground-item keys fit in
- * 24 bits; precise .logic ROM-address keys do too. Reserve bit 31 for native
- * location identities that do not correspond to an area-room-local triple. */
+/* Native scripted-grant runtime namespace (canonical, engine-derived). Vanilla
+ * chest / ground-item keys fit in 24 bits. Reserve bit 31 for native location
+ * identities that do not correspond to an area-room-local triple. */
 #define RANDO_SCRIPTED_KEY(group, a, b, c) \
     (0x80000000u | ((uint32_t)(group) << 24) | ((uint32_t)(a) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(c))
 

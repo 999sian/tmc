@@ -1,10 +1,14 @@
 /*
- * Clean-room parser and verifier for the public `.logic` text format.
+ * Optional importer: an independent parser and verifier for the public
+ * `.logic` text format.
  *
- * This code implements the public text format described by default.logic:
- * directives, defines, fixed item/location types, and prefix logic
- * expressions. It does not translate GPL C# implementation code. Parsed data
- * lives in fixed static arrays; generation/evaluation uses only stack scratch.
+ * This is the OPTIONAL `.logic` import path, separate from the canonical native
+ * graph (rando.cpp). It implements the public text format described by the spec
+ * block at the top of a `.logic` file — directives, defines, fixed
+ * item/location types, and prefix logic expressions — written independently
+ * from that public format; it does not translate GPL C# implementation code and
+ * no `.logic` data file is vendored. Parsed data lives in fixed static arrays;
+ * generation/evaluation uses only stack scratch.
  */
 
 #include "rando/rando_logic.h"

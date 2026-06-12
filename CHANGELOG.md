@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Randomizer — native graph made canonical; `.logic` demoted to optional import
+
+- Reframed `port/rando/` so the **native location graph is the canonical
+  randomizer** and the public-format `.logic` parser is an explicitly
+  **optional importer** behind an alias table. The import alias step
+  (`rando_keymap.c`) already no-ops unless a `.logic` file is imported; renamed
+  its tables to `kLogicImportGroundKeys` / `kLogicImportScriptedKeys` and
+  documented that the leading strings are import-only aliases while the
+  canonical identity is the engine-native runtime key (derived from the USA
+  baserom + decompilation).
+- Corrected provenance language throughout (`port/rando/README.md`, source
+  headers, `LICENSE`, `README.md`, `THIRD-PARTY-LICENSES.md`): dropped
+  "clean-room" / "1:1 parity with MinishMaker" overclaims in favour of the
+  accurate **"independent reimplementation, format-compatible by design, not a
+  strict isolated clean-room."** No code is copied or translated from the
+  GPL-3.0 randomizer and no `.logic` data file is vendored.
+- No generation behaviour change: `rando_logic_test` and the native graph
+  (36 locations) pass unchanged; `tmc_pc` builds clean.
+
 ### Randomizer — open world, story skip, homewarp (#155)
 
 - **Story skip**: every randomizer file now starts post-intro — Link wakes
