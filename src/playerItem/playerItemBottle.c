@@ -97,11 +97,11 @@ void PlayerItemBottle_Action1(PlayerItemBottleEntity* this) {
         if ((super->type == 1) && (super->type2 != ITEM_BOTTLE_EMPTY)) {
             bottleIndex = this->bottleIndex - ITEM_BOTTLE1;
             SetBottleContents(super->type2, bottleIndex);
-#if defined(EU) || defined(JP) || defined(DEMO_JP)
-            CreateItemEntity(super->type2, bottleIndex, 5);
-#else
-            InitItemGetSequence(super->type2, bottleIndex, 5);
-#endif
+            if (REGION_IS_EU || REGION_IS_JP) {
+                CreateItemEntity(super->type2, bottleIndex, 5);
+            } else {
+                InitItemGetSequence(super->type2, bottleIndex, 5);
+            }
             SoundReq(SFX_ITEM_GET);
         }
         DeleteThisEntity();

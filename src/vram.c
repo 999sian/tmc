@@ -48,11 +48,9 @@ void sub_080ADD70(void) {
     u32 index;
     GfxSlot* slot;
     if (gGFXSlots.unk0 != 0) {
-#ifndef EU
-        if (gGFXSlots.unk_3 != 0) {
+        if (!REGION_IS_EU && gGFXSlots.unk_3 != 0) {
             sub_080ADE24();
         } else {
-#endif
             index = 0;
             for (index = 0; index < MAX_GFX_SLOTS; index++) {
                 slot = &gGFXSlots.slots[index];
@@ -69,9 +67,7 @@ void sub_080ADD70(void) {
                         break;
                 }
             }
-#ifndef EU
         }
-#endif
     }
 }
 

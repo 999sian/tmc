@@ -151,11 +151,11 @@ void GyorgFemale_Setup(GyorgFemaleEntity* this) {
     GyorgFemale_Reset(this);
     gPlayerEntity.base.collisionLayer = 2;
     UpdateSpriteForCollisionLayer(&gPlayerEntity.base);
-#ifndef EU
+    if (!REGION_IS_EU) {
     RegisterTransitionHandler(this, GyorgFemale_OnEnterRoom, NULL);
-#else
+    } else {
     RegisterTransitionHandler(this, GyorgFemale_Reset, NULL);
-#endif
+    }
 }
 
 void GyorgFemale_Action1(GyorgFemaleEntity* this) {
@@ -431,9 +431,7 @@ void GyorgFemale_ProcessEyeHit(GyorgFemaleEntity* this) {
         this->unk_80 |= this->eyesHit;
         this->eyesHit = 0;
         sub_080467DC(this);
-#ifndef EU
-        if (((GyorgHeap*)super->myHeap)->unk_3c != 0xFF) {
-#endif
+        if (REGION_IS_EU || (((GyorgHeap*)super->myHeap)->unk_3c != 0xFF)) {
             tmp = &gPlayerEntity.base;
             tmp->knockbackDirection = ((GyorgHeap*)super->myHeap)->unk_3c;
             tmp->iframes = 0xF4;
@@ -445,9 +443,7 @@ void GyorgFemale_ProcessEyeHit(GyorgFemaleEntity* this) {
                 tmp->collisionLayer = 1;
                 UpdateSpriteForCollisionLayer(tmp);
             }
-#ifndef EU
         }
-#endif
     }
     this->eyesHitFrame = 0;
 }

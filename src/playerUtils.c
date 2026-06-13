@@ -3471,9 +3471,9 @@ void sub_0807B264(PlayerEntity* this) {
         super->timer = 80;
         super->zVelocity = Q_16_16(0.5);
         this->unk_6e++;
-#ifndef EU
-        SoundReq(SFX_NEAR_PORTAL);
-#endif
+        if (!REGION_IS_EU) {
+            SoundReq(SFX_NEAR_PORTAL);
+        }
     }
 }
 

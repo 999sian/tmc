@@ -314,9 +314,9 @@ void BusinessScrub_Action5(BusinessScrubEntity* this) {
                         super->timer = 4;
                         this->unk_81 = 0;
                         sub_080290E0(this, 3);
-#if defined(USA) || defined(DEMO_USA)
-                        SetLocalFlag(KS_B06);
-#endif
+                        if (REGION_IS_USA) {
+                            SetLocalFlag(KS_B06);
+                        }
                         return;
                     }
                     case 1: { // refill, bottle, specific kinstone

@@ -70,9 +70,9 @@ void sub_08065080(StockwellEntity* this) {
     SetEntityPriority(super, PRIO_MESSAGE);
     InitializeAnimation(super, 4);
     AddInteractableWhenBigObject(super);
-#ifndef EU
-    SetInteractableObjectCollision(super, 0, 0, &gUnk_0810FDA0);
-#endif
+    if (!REGION_IS_EU) {
+        SetInteractableObjectCollision(super, 0, 0, &gUnk_0810FDA0);
+    }
 #ifdef PC_PORT
     context = StartCutscene(super, PORT_SCRIPT(script_Stockwell));
 #else

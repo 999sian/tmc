@@ -61,9 +61,9 @@ void ItemForSale_Init(ItemForSaleEntity* this) {
     super->spriteSettings.draw = 1;
     super->spritePriority.b1 = 0;
     super->carryFlags = 0;
-#ifdef EU
-    SetEntityPriority(super, 6);
-#endif
+    if (REGION_IS_EU) {
+        SetEntityPriority(super, 6);
+    }
     super->child = super;
     ItemForSale_MakeInteractable(this);
     switch (super->timer) {

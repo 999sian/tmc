@@ -69,9 +69,9 @@ void PlayerItemBoomerang_Init(PlayerItemBoomerangEntity* this) {
     super->hitbox = &gUnk_081271CC;
     super->frameIndex = 0xff;
     this->unk_80 = 0;
-#ifdef EU
-    super->spriteVramOffset = gPlayerEntity.base.spriteVramOffset;
-#endif
+    if (REGION_IS_EU) {
+        super->spriteVramOffset = gPlayerEntity.base.spriteVramOffset;
+    }
     super->animIndex = 11;
     super->parent = &gPlayerEntity.base;
     this->unk_86 = 0;

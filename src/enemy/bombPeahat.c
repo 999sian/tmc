@@ -212,21 +212,21 @@ void sub_0802AAC0(BombPeahatEntity* this) {
         } else if (entity->next == NULL) {
             this->unk_81 = 0;
             super->child = NULL;
-#ifdef EU
-        } else if (entity->timer == 0) {
-            if (GetCollisionDataAtTilePos(COORD_TO_TILE(super), 1) == 0) {
-                if (EntityInRectRadius(super, &gPlayerEntity.base, 0x10, 0x10) && entity->subtimer <= 0x50) {
+        } else if (REGION_IS_EU) {
+            if (entity->timer == 0) {
+                if (GetCollisionDataAtTilePos(COORD_TO_TILE(super), 1) == 0) {
+                    if (EntityInRectRadius(super, &gPlayerEntity.base, 0x10, 0x10) && entity->subtimer <= 0x50) {
+                        this->unk_81 = 0;
+                    }
+                } else if (entity->subtimer <= 0x13) {
                     this->unk_81 = 0;
                 }
-            } else if (entity->subtimer <= 0x13) {
+            }
+        } else {
+            if ((entity->timer == 0) && (entity->subtimer <= 0x50)) {
                 this->unk_81 = 0;
             }
         }
-#else
-        } else if ((entity->timer == 0) && (entity->subtimer <= 0x50)) {
-            this->unk_81 = 0;
-        }
-#endif
     } else {
         super->action = 4;
         super->timer = 192;
@@ -318,8 +318,7 @@ void sub_0802AC40(BombPeahatEntity* this) {
         if (!sub_0802B234(this)) {
             this->unk_7a = 0;
             super->spritePriority.b1 = 0;
-#ifndef EU
-        } else {
+        } else if (!REGION_IS_EU) {
             if (super->z.HALF.HI == 0) {
                 if (super->spritePriority.b1 != 1) {
                     super->spritePriority.b1 = 1;
@@ -329,7 +328,6 @@ void sub_0802AC40(BombPeahatEntity* this) {
                     super->spritePriority.b1 = 3;
                 }
             }
-#endif
         }
     } else {
         if (sub_0802B234(this)) {
