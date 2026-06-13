@@ -1053,10 +1053,12 @@ target("tmc_pc")
     -- Compiler flags
     add_cflags("-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers",
                "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O0", "-g",
-               "-fvisibility=default")
+               "-fvisibility=default", "-funsigned-char")
 
     add_cxxflags("-Wall", "-Wextra", "-Wno-unused-parameter",
-                 "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g")
+                 "-fno-strict-aliasing", "-fwrapv", "-fno-strict-overflow", "-O3", "-g", "-funsigned-char")
+    add_cflags("/J", {tools = {"cl"}})
+    add_cxxflags("/J", {tools = {"cl"}})
 
     -- OpenMP scanline parallelism for ViruaPPU mode1.
     --
