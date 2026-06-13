@@ -29,11 +29,7 @@ void sub_08054EB8(Entity* this, ScriptExecutionContext* context) {
         manager->x = this->x.HALF.HI - gRoomControls.origin_x;
         manager->y = (this->y.HALF.HI - gRoomControls.origin_y) - 0x10;
         manager->layer = LAYER_BOTTOM;
-#if defined(EU) || defined(JP) || defined(DEMO_JP)
-        manager->flag = 0x77;
-#else
-        manager->flag = 0x79;
-#endif
+        manager->flag = (REGION_IS_EU || REGION_IS_JP) ? 0x77 : 0x79;
         AppendEntityToList((Entity*)manager, 6);
     }
 }
