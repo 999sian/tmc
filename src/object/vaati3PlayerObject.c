@@ -7,9 +7,7 @@
 #include "entity.h"
 #include "physics.h"
 #include "player.h"
-#ifndef EU
 #include "room.h"
-#endif
 
 void Vaati3PlayerObject(Entity* this) {
     if (this->action == 0) {

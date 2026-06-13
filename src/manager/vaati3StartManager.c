@@ -16,9 +16,7 @@
 #include "sound.h"
 #include "scroll.h"
 #include "fade.h"
-#if !defined(EU) && !defined(JP)
 #include "save.h"
-#endif
 
 void sub_0805E094(void);
 void Vaati3StartManager_Type0(Vaati3StartManager*);
@@ -56,9 +54,9 @@ void Vaati3StartManager_Type0_Init(Vaati3StartManager* this) {
     gRoomTransition.field_0x39 = 0x0f;
     *(u8*)&gRoomTransition.field_0x3a = 0x20;
     *((u8*)&gRoomTransition.field_0x3a + 1) = 0x20;
-#if !defined(EU) && !defined(JP)
-    gSave.vaati_timer = 0x1194;
-#endif
+    if (REGION_IS_USA) {
+        gSave.vaati_timer = 0x1194;
+    }
 }
 
 void Vaati3StartManager_Type0_Action1(Vaati3StartManager* this) {

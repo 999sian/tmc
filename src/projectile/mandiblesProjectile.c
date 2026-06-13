@@ -13,9 +13,7 @@
 #include "tiles.h"
 #include "player.h"
 #include "asm.h"
-#ifndef EU
 #include "game.h"
-#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -186,15 +184,15 @@ void MandiblesProjectile_Action3(MandiblesProjectileEntity* this) {
                 uVar1 = entity->animationState;
                 super->direction = uVar1 << 2;
                 super->animationState = uVar1 << 0x1a >> 0x1a;
-#ifdef EU
-                super->spriteOrientation.flipY = 1;
-                super->hitbox = (Hitbox*)&gHitbox_0;
-#else
-                super->hitbox = (Hitbox*)&gHitbox_0;
-                if (AreaIsDungeon() != 0) {
+                if (REGION_IS_EU) {
                     super->spriteOrientation.flipY = 1;
+                    super->hitbox = (Hitbox*)&gHitbox_0;
+                } else {
+                    super->hitbox = (Hitbox*)&gHitbox_0;
+                    if (AreaIsDungeon() != 0) {
+                        super->spriteOrientation.flipY = 1;
+                    }
                 }
-#endif
                 sub_080AA3E0(this, 0);
             }
         }

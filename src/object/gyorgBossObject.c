@@ -19,9 +19,7 @@
 #include "screenTransitions.h"
 #include "scroll.h"
 #include "fade.h"
-#ifndef EU
 #include "area.h"
-#endif
 
 struct GyorgChildSpawns {
     s16 offsetX;

@@ -70,7 +70,6 @@ bool32 AreaHasMap(void);
  */
 bool32 AreaHasKeys(void);
 
-#ifndef EU
 /**
  * This function was introduced to allow warping from indoor areas (palace of winds).
  *
@@ -82,7 +81,6 @@ u32 AreaAllowsWarp(void);
  * Related to a music bug?
  */
 void sub_08052878(void);
-#endif
 
 /**
  * Modify the number of keys the player has for the current dungeon.

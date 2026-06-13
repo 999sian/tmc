@@ -237,17 +237,15 @@ void InitializePlayer(void) {
     RegisterPlayerHitbox();
 }
 
+/* gAreaMetadata is a single USA-baseline table for all regions (see
+ * areaMetadata.c), so overworld areas always carry AR_ALLOWS_WARP. This yields
+ * the same overworld set for every region as retail does against its own table,
+ * because EU never otherwise observes the warp bit. */
 bool32 AreaIsOverworld(void) {
-    /* EU treats AR_IS_OVERWORLD alone as "overworld"; USA/JP require the warp
-     * bit too (EU folds warp-permission into the overworld flag). */
-    if (REGION_IS_EU)
-        return gArea.areaMetadata == AR_IS_OVERWORLD;
     return gArea.areaMetadata == (AR_ALLOWS_WARP | AR_IS_OVERWORLD);
 }
 
 bool32 CheckAreaOverworld(u32 area) {
-    if (REGION_IS_EU)
-        return gAreaMetadata[area].flags == AR_IS_OVERWORLD;
     return gAreaMetadata[area].flags == (AR_ALLOWS_WARP | AR_IS_OVERWORLD);
 }
 
