@@ -13,6 +13,7 @@
 #include "port_hdma.h"
 #include "port_imgui_menu.h"
 #include "port_ppu.h"
+#include "port_rom.h"
 #include "port_practice.h"
 #include "port_runtime_config.h"
 #include "port_softslots.h"
@@ -78,6 +79,7 @@ u64 DivAndModCombined(s32 num, s32 denom) {
 }
 
 static void Port_UpdateInput(void) {
+    Port_ApplyLanguage();
     u16 keyinput = 0x03FF;
 
     /* Headless end-to-end randomizer check (TMC_REPRO_RANDO=1): drives the

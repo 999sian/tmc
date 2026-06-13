@@ -12,6 +12,7 @@
 #include "map.h"
 #include "port_asset_loader.h"
 #include "port_config.h"
+#include "port_runtime_config.h"
 #include "port_gba_mem.h"
 #include "structures.h"
 #include "tileMap.h"
@@ -84,6 +85,29 @@ static const char* kRomCandidates[] = {
 };
 #define ROM_CANDIDATE_COUNT ((int)(sizeof(kRomCandidates) / sizeof(kRomCandidates[0])))
 
+static const char* kRomCandidates_USA[] = {
+    "baserom.gba",
+    "synthetic_baserom.gba",
+    "build/pc/baserom.gba",
+    "tmc.gba",
+    "../../baserom.gba",
+    "../../tmc.gba",
+};
+static const char* kRomCandidates_EU[] = {
+    "baserom_eu.gba",
+    "build/pc/baserom_eu.gba",
+    "tmc_eu.gba",
+    "../../baserom_eu.gba",
+    "../../tmc_eu.gba",
+};
+static const char* kRomCandidates_JP[] = {
+    "baserom_jp.gba",
+    "build/pc/baserom_jp.gba",
+    "tmc_jp.gba",
+    "../../baserom_jp.gba",
+    "../../tmc_jp.gba",
+};
+
 /* Forward declaration so FatalRomError + Port_FindBaseRomPath can
  * sit at the top of the file alongside the candidate list while
  * TryOpenRom keeps its existing position lower down. */
@@ -126,7 +150,18 @@ const char* Port_FindBaseRomPath(void) {
             sFoundPath[0] = '\0';
         }
     }
-    FILE* f = TryOpenRom(kRomCandidates, ROM_CANDIDATE_COUNT, sFoundPath, (int)sizeof(sFoundPath));
+    FILE* f = NULL;
+    int preferred = Port_Config_PreferredRegion();
+    if (preferred == 0 /* USA */) {
+        f = TryOpenRom(kRomCandidates_USA, (int)(sizeof(kRomCandidates_USA) / sizeof(kRomCandidates_USA[0])), sFoundPath, (int)sizeof(sFoundPath));
+    } else if (preferred == 1 /* EU */) {
+        f = TryOpenRom(kRomCandidates_EU, (int)(sizeof(kRomCandidates_EU) / sizeof(kRomCandidates_EU[0])), sFoundPath, (int)sizeof(sFoundPath));
+    } else if (preferred == 2 /* JP */) {
+        f = TryOpenRom(kRomCandidates_JP, (int)(sizeof(kRomCandidates_JP) / sizeof(kRomCandidates_JP[0])), sFoundPath, (int)sizeof(sFoundPath));
+    }
+    if (!f) {
+        f = TryOpenRom(kRomCandidates, ROM_CANDIDATE_COUNT, sFoundPath, (int)sizeof(sFoundPath));
+    }
     if (!f)
         return NULL;
     fclose(f);
@@ -1165,16 +1200,26 @@ void Port_LoadRom(const char* path) {
         }
 
         if (!f) {
-            /* Prepend the caller-supplied path to the shared kRomCandidates
-             * list so a user-provided argument still wins over the defaults
-             * but the rest of the probe order matches Port_FindBaseRomPath. */
-            const char* romCandidates[ROM_CANDIDATE_COUNT + 1];
-            romCandidates[0] = path;
-            for (int i = 0; i < ROM_CANDIDATE_COUNT; i++)
-                romCandidates[i + 1] = kRomCandidates[i];
-            int numCandidates = ROM_CANDIDATE_COUNT + 1;
-
-            f = TryOpenRom(romCandidates, numCandidates, usedPath, (int)sizeof(usedPath));
+            /* Try caller-supplied path first */
+            if (path && path[0]) {
+                const char* singlePath[1] = { path };
+                f = TryOpenRom(singlePath, 1, usedPath, (int)sizeof(usedPath));
+            }
+        }
+        if (!f) {
+            /* Try preferred region next */
+            int preferred = Port_Config_PreferredRegion();
+            if (preferred == 0 /* USA */) {
+                f = TryOpenRom(kRomCandidates_USA, (int)(sizeof(kRomCandidates_USA) / sizeof(kRomCandidates_USA[0])), usedPath, (int)sizeof(usedPath));
+            } else if (preferred == 1 /* EU */) {
+                f = TryOpenRom(kRomCandidates_EU, (int)(sizeof(kRomCandidates_EU) / sizeof(kRomCandidates_EU[0])), usedPath, (int)sizeof(usedPath));
+            } else if (preferred == 2 /* JP */) {
+                f = TryOpenRom(kRomCandidates_JP, (int)(sizeof(kRomCandidates_JP) / sizeof(kRomCandidates_JP[0])), usedPath, (int)sizeof(usedPath));
+            }
+        }
+        if (!f) {
+            /* Fallback to default candidates list */
+            f = TryOpenRom(kRomCandidates, ROM_CANDIDATE_COUNT, usedPath, (int)sizeof(usedPath));
         }
         if (f) {
             fseek(f, 0, SEEK_END);
@@ -1713,4 +1758,15 @@ void Port_LoadRom(const char* path) {
     }
 
     Port_PrintRomAccessSummary();
+}
+
+void Port_ApplyLanguage(void) {
+    extern void* gTranslations[];
+    if (!gSaveHeader) return;
+    int pref = Port_Config_PreferredLanguage();
+    if (pref >= 0 && pref < 6 /* NUM_LANGUAGES */) {
+        if (gTranslations[pref] != NULL) {
+            gSaveHeader->language = (u8)pref;
+        }
+    }
 }

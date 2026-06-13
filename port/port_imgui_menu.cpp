@@ -40,8 +40,12 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "port_debug_query.h"
 #include "port_debug_actions.h"
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
+
+extern "C" const u8* gTranslations[];
+extern "C" void Port_ApplyLanguage(void);
+
 #include "port_widescreen.h"
-#include "port_gpu_renderer.h"    /* Port_GPU_IsActive() for backend-conditional UI */
+#include "port_gpu_renderer.h"
 #include "port_prelaunch_logo.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
@@ -479,6 +483,69 @@ static void DoQuitToTitle(bool saveFirst) {
     SetTask(0 /* TASK_TITLE */);
     Port_DebugMenu_Toggle();   /* close the F8 ribbon */
 }
+static void DrawRibbonVersionLanguageSection(void) {
+    ImGui::SeparatorText("ROM Region & Language");
+
+    // 1. Preferred ROM Region
+    int preferredRegion = Port_Config_PreferredRegion();
+    const char* regionNames[] = {
+        "Auto (Use loaded ROM)",
+        "USA (baserom.gba)",
+        "EU (baserom_eu.gba)",
+        "JP (baserom_jp.gba)"
+    };
+    int regionIdx = preferredRegion + 1; // map -1..2 to 0..3
+    ImGui::SetNextItemWidth(260);
+    if (ImGui::Combo("Preferred ROM", &regionIdx, regionNames, 4)) {
+        Port_Config_SetPreferredRegion(regionIdx - 1);
+    }
+    ImGui::SameLine();
+    ImGui::TextDisabled("(restart required)");
+    // 2. Preferred Game Language
+    int preferredLanguage = Port_Config_PreferredLanguage();
+    // Options: -1 = Auto, 0..5 = JP, EN, FR, DE, ES, IT
+    const char* langNames[] = {
+        "Auto (Default)",
+        "Japanese",
+        "English",
+        "French",
+        "German",
+        "Spanish",
+        "Italian"
+    };
+
+    int langIdx = preferredLanguage + 1; // map -1..5 to 0..6
+    ImGui::SetNextItemWidth(260);
+    
+    if (ImGui::BeginCombo("Language", langNames[langIdx])) {
+        for (int i = 0; i < 7; ++i) {
+            bool isSupported = true;
+            char label[128];
+            std::strcpy(label, langNames[i]);
+            
+            if (i > 0) {
+                int langVal = i - 1;
+                if (gTranslations[langVal] == nullptr) {
+                    isSupported = false;
+                    std::strcat(label, " (not supported by loaded ROM)");
+                }
+            }
+            
+            bool selected = (i == langIdx);
+            if (!isSupported) {
+                ImGui::BeginDisabled();
+            }
+            if (ImGui::Selectable(label, selected)) {
+                Port_Config_SetPreferredLanguage(i - 1);
+                Port_ApplyLanguage();
+            }
+            if (!isSupported) {
+                ImGui::EndDisabled();
+            }
+        }
+        ImGui::EndCombo();
+    }
+}
 
 static void DrawRibbonSavesTab(void) {
     /* Quit-to-title actions at the top of the tab — high-visibility
@@ -612,6 +679,8 @@ static void DrawRibbonSavesTab(void) {
         }
         ImGui::EndTable();
     }
+    ImGui::Separator();
+    DrawRibbonVersionLanguageSection();
 }
 
 static void DrawRibbonProfilesTab(void) {

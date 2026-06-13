@@ -236,6 +236,10 @@ bool Port_Config_GetLeftStick(float* outX, float* outY);
  * frame's polled state isn't stuck reporting the previous tap. */
 void Port_Config_ClearInputEdges(void);
 
+int  Port_Config_PreferredRegion(void);
+void Port_Config_SetPreferredRegion(int region);
+int  Port_Config_PreferredLanguage(void);
+void Port_Config_SetPreferredLanguage(int lang);
 #ifdef launcher
 void Port_Config_SetPortSettingsMenuEnabled(bool enabled);
 const char* Port_Config_InputUiLabel(PortInput input);
