@@ -11,8 +11,8 @@ const KeyValuePair gUnk_080046A4[] = {
     { 42, 36 },    { 29, 36 },  { 43, 36 },  { 97, 44 },  { 101, 45 }, { 353, 47 }, { 355, 48 }, { 16384, 25 },
     { 16480, 26 }, { 374, 49 }, { 843, 33 }, { 844, 34 }, { 375, 50 }, { 871, 51 }, { 872, 52 }, { 16490, 24 },
     { 105, 41 },   { 106, 42 }, { 111, 43 }, { 109, 53 }, { 110, 54 }, { 78, 7 },   { 389, 36 }, { 390, 36 },
-    { 391, 36 },   { 392, 36 }, { 393, 36 }, { 394, 36 }, { 398, 36 }, { 399, 36 }, { 403, 36 }, { 404, 36 },
-    { 405, 36 },   { 406, 36 }, { 407, 36 }, { 408, 36 },
+    { 345, 66 },   { 346, 67 }, { 179, 68 }, { 344, 65 }, { 167, 3 },  { 168, 64 }, { 334, 53 }, { 266, 60 },
+    { 0, 0 }
 };
 const u16 gUnk_080046A4End = 0;
 
@@ -54,46 +54,55 @@ const PlayerMacroEntry gPlayerMacroSanctuary[] = {
     { 1, DPAD_UP },
     { 120, B_BUTTON },
     { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroSanctuaryEnd = PLAYER_MACRO_END;
+
 
 const PlayerMacroEntry gPlayerMacroBladeBrothers0[] = {
     { 120, B_BUTTON },
     { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers0End = PLAYER_MACRO_END;
+
 const PlayerMacroEntry gPlayerMacroBladeBrothers1[] = {
     { 60, DPAD_RIGHT },
     { 4, B_BUTTON },
     { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers1End = PLAYER_MACRO_END;
+
 const PlayerMacroEntry gPlayerMacroBladeBrothers2[] = {
     { 4, DPAD_LEFT },
     { 120, A_BUTTON },
     { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers2End = PLAYER_MACRO_END;
+
 const PlayerMacroEntry gPlayerMacroBladeBrothers3[] = {
     { 1, DPAD_DOWN }, { 4, A_BUTTON }, { 10, 0 }, { 10, B_BUTTON }, { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers3End = PLAYER_MACRO_END;
+
 const PlayerMacroEntry gPlayerMacroBladeBrothers4[] = {
     { 4, DPAD_RIGHT }, { 8, R_BUTTON + DPAD_RIGHT }, { 30, 0 }, { 1, DPAD_LEFT }, { 30, 0 },
     { 4, DPAD_LEFT },  { 4, R_BUTTON + DPAD_LEFT },  { 20, 0 }, { 6, B_BUTTON },  { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers4End = PLAYER_MACRO_END;
+
 const PlayerMacroEntry gPlayerMacroBladeBrothers5[] = {
     { 1, DPAD_LEFT }, { 30, 0 }, { 4, B_BUTTON }, { 60, 0 }, { 4, B_BUTTON }, { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers5End = PLAYER_MACRO_END;
+
 const PlayerMacroEntry gPlayerMacroBladeBrothers6[] = {
     { 1, DPAD_LEFT }, { 30, 0 }, { 4, B_BUTTON }, { 60, 0 }, { 4, B_BUTTON }, { 60, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers6End = PLAYER_MACRO_END;
+
 const PlayerMacroEntry gPlayerMacroBladeBrothers7[] = {
     { 1, DPAD_LEFT }, { 120, B_BUTTON }, { 10, 0 }, { 4, B_BUTTON }, { 4, 0 },  { 4, B_BUTTON },
     { 4, 0 },         { 4, B_BUTTON },   { 4, 0 },  { 4, B_BUTTON }, { 4, 0 },  { 4, B_BUTTON },
     { 4, 0 },         { 4, B_BUTTON },   { 4, 0 },  { 4, B_BUTTON }, { 30, 0 },
+	{ PLAYER_MACRO_END, 0 }
 };
-const u16 gPlayerMacroBladeBrothers7End = PLAYER_MACRO_END;
+
