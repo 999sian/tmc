@@ -5,6 +5,7 @@
  */
 
 #include "port_reborn.h"
+#include "port_runtime_config.h"  /* persist feature toggles (issue #146) */
 
 namespace {
 
@@ -122,9 +123,24 @@ extern "C" bool Port_Reborn_IsEnabled(RebornFeature f) {
     return sFeatures[f].enabled;
 }
 
+/* Bitmask helpers for persistence (issue #146): bit i == feature i enabled. */
+extern "C" unsigned Port_Reborn_GetMask(void) {
+    unsigned m = 0;
+    for (unsigned i = 0; i < REBORN_FEAT_COUNT; i++)
+        if (sFeatures[i].enabled) m |= (1u << i);
+    return m;
+}
+
+extern "C" void Port_Reborn_ApplyMask(unsigned mask) {
+    for (unsigned i = 0; i < REBORN_FEAT_COUNT; i++)
+        sFeatures[i].enabled = ((mask >> i) & 1u) != 0;
+}
+
 extern "C" void Port_Reborn_SetEnabled(RebornFeature f, bool on) {
     if ((unsigned)f >= REBORN_FEAT_COUNT) return;
     sFeatures[f].enabled = on;
+    /* Persist the full feature set so the toggle survives restart. */
+    Port_Config_SetRebornMask(Port_Reborn_GetMask());
 }
 
 extern "C" const char* Port_Reborn_FeatureLabel(RebornFeature f) {

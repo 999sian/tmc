@@ -128,9 +128,9 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
     }
     if (gRoomControls.reload_flags)
         return;
-#ifndef JP
+    if (!REGION_IS_JP) {
     tmp = this->unk_20;
-#endif
+    }
     tmp2 = &gUnk_081080A4[tmp << 4];
     switch (super->timer) {
         case 0:
@@ -183,10 +183,10 @@ void sub_08057E7C(u32 unk1) {
     u32 tmp;
     const u32* tmp2;
 
-#ifndef EU
+    if (!REGION_IS_EU) {
     if (unk1 > 4)
         return;
-#endif
+    }
 
     LoadPaletteGroup(gUnk_081081E4[unk1]);
     tmp2 = &gUnk_081080A4[unk1 << 4];

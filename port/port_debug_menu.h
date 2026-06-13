@@ -24,6 +24,10 @@ bool Port_DebugMenu_HandleKey(int sdlKey);
  * game frame texture has been drawn but before SDL_RenderPresent. */
 void Port_DebugMenu_Render(struct SDL_Renderer* renderer, int windowWidth, int windowHeight);
 
+/* Lightweight toast/status line used by external subsystems (bug-report,
+ * shader preset loader, etc.) without exposing the full page-stack API. */
+void Port_DebugMenu_ToastFromExternal(const char* msg);
+
 #ifdef __cplusplus
 }
 #endif

@@ -23,10 +23,10 @@
 #include <string.h>
 #include "main.h"         /* gMain */
 #include "room.h"
+#include "port_repro.h"
 #include "port_gba_mem.h" /* gIoMem */
+#include "port_debug_actions.h"
 
-extern int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short x, unsigned short y,
-                                 unsigned char layer);
 extern int Port_CaptureBaseFramebufferPNG(const char* path); /* shim in port_bugreport.cpp */
 
 #define KEYINPUT_REG 0x130

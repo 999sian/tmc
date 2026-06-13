@@ -65,6 +65,11 @@ bool Port_GPU_IsActive(void);
  * presets. The current .glslp compiler emits SPIR-V, so Metal-backed
  * macOS GPU builds use stock filters but disable preset loading. */
 bool Port_GPU_SupportsGlslpRuntime(void);
+SDL_GPUDevice* Port_GPU_GetDevice(void);
+SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void);
+
+/* Prelaunch-screen present helper used before the main game loop takes over. */
+bool Port_GPU_PresentPrelaunchFrame(void);
 
 /* Available GPU-side shader filters. Maps loosely onto port_filter.c's
  * PortFilterType enum (Stage 3 ports a subset to real GLSL passes; the
@@ -81,6 +86,7 @@ typedef enum {
 } PortGpuFilter;
 
 void Port_GPU_SetFilter(PortGpuFilter f);
+void Port_GPU_SetTextureScaleMode(SDL_ScaleMode mode);
 PortGpuFilter Port_GPU_GetFilter(void);
 const char* Port_GPU_FilterName(PortGpuFilter f);
 

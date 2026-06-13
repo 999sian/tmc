@@ -220,7 +220,7 @@ static void GameMain_ChangeRoom(void) {
     gPauseMenuOptions.disabled = 0;
 #if defined(USA) || defined(DEMO_USA)
     {
-        bool fire_hint = (gArea.unk28.textBaseIndex != 0xff);
+        bool32 fire_hint = (gArea.unk28.textBaseIndex != 0xff);
 #ifdef PC_PORT
         /* Reborn-parity "skip Ezlo hint on resume": gPortJustResumed
          * is set TRUE by Port_QuickLoad / save-load path; we consume

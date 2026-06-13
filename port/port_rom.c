@@ -66,16 +66,21 @@ static SpritePtr sSpritePtrsStable[512];
 static const char* kRomCandidates[] = {
     "baserom.gba",            /* USA default */
     "baserom_eu.gba",         /* EU default */
+    "baserom_jp.gba",         /* JP default */
     "synthetic_baserom.gba",  /* generated from extracted assets */
     "build/pc/baserom.gba",   /* copied to build dir */
     "build/pc/baserom_eu.gba",
+    "build/pc/baserom_jp.gba",
     "tmc.gba",                /* common alternate names */
     "tmc_eu.gba",
+    "tmc_jp.gba",
     /* Developer-tree fallbacks for `cd build/pc && ./tmc_pc`. */
     "../../baserom.gba",
     "../../baserom_eu.gba",
+    "../../baserom_jp.gba",
     "../../tmc.gba",
     "../../tmc_eu.gba",
+    "../../tmc_jp.gba",
 };
 #define ROM_CANDIDATE_COUNT ((int)(sizeof(kRomCandidates) / sizeof(kRomCandidates[0])))
 
@@ -104,6 +109,23 @@ static void FatalRomError(const char* title, const char* message) {
 const char* Port_FindBaseRomPath(void) {
     static char sFoundPath[4096];
     sFoundPath[0] = '\0';
+    /* Explicit override (TMC_BASEROM=/path/to/rom.gba) takes precedence over the
+     * probe list. Lets headless/CI and multi-region verification point the binary
+     * at a specific region ROM without depending on the exe-dir/cwd probe order,
+     * and lets users keep their ROM outside the default locations. */
+    {
+        const char* override = getenv("TMC_BASEROM");
+        if (override && override[0]) {
+            FILE* of = fopen(override, "rb");
+            if (of) {
+                fclose(of);
+                snprintf(sFoundPath, sizeof(sFoundPath), "%s", override);
+                return sFoundPath;
+            }
+            fprintf(stderr, "TMC_BASEROM='%s' not openable; using probe list.\n", override);
+            sFoundPath[0] = '\0';
+        }
+    }
     FILE* f = TryOpenRom(kRomCandidates, ROM_CANDIDATE_COUNT, sFoundPath, (int)sizeof(sFoundPath));
     if (!f)
         return NULL;
@@ -354,6 +376,13 @@ void Port_PrintRomAccessSummary(void) {
 /*  ROM region detection & offset tables (USA / EU)                   */
 /* ------------------------------------------------------------------ */
 RomRegion gRomRegion = ROM_REGION_UNKNOWN;
+
+#if defined(PC_PORT) && defined(MULTI_REGION)
+/* Runtime region identity read by the REGION_IS_* macros in region.h. Defaults
+ * to USA until Port_DetectRomRegion publishes the loaded ROM's region. */
+#include "region.h"
+int gActiveRegion = TMC_REGION_USA;
+#endif
 const RomOffsets* gRomOffsets = NULL;
 
 /* USA offsets (from build/USA/tmc.map) */
@@ -438,6 +467,63 @@ const RomOffsets kRomOffsets_EU = {
     .gameCode = "BZMP",
 };
 
+/*
+ * JP (BZMJ) offsets — derived from the retail USA + JP ROMs by content-anchoring
+ * (the USA addresses are known-correct, so each USA table is located in the JP
+ * ROM). Method + evidence per field in docs/JP_PORT_ENABLEMENT.md. In brief:
+ *   - direct table-content match (unique 64B signature) for version-stable tables;
+ *   - pointer-table dereference / shift-search where the whole 0x08xxxxxx pointer
+ *     array is consistent under one shift;
+ *   - the text/translations cluster's uniform -0x33C shift, fixed by 4 anchors.
+ * Regional shifts grow monotonically with address (0 -> -0x260 -> ~-0x338 ->
+ * -0x33C -> -0x3D4), each value corroborated by its neighbours, and the whole
+ * table is validated by booting the JP build against the retail JP ROM.
+ *
+ * NOTE: this tree's decomp ROM build is non-matching (port edits shift symbols),
+ * so build/JP/tmc_jp.map is NOT a valid source here — these come straight from
+ * the retail ROMs instead. Count/size fields are content-invariant (identical
+ * across USA and EU) and carried over.
+ */
+const RomOffsets kRomOffsets_JP = {
+    .gfxAndPalettes = 0x5A2B20,
+    .gfxGroups = 0x100770,
+    .paletteGroups = 0xFF500,
+    .objPalettes = 0x132F94,
+    .frameObjLists = 0x2F39A0,
+    .fixedTypeGfx = 0x13275C,
+    .spritePtrs = 0x29B4,
+    .translations = 0x108ED8,
+    .text09230 = 0x108EF4,
+    .text09244 = 0x108F08,
+    .text09248 = 0x108F0C,
+    .text0926C = 0x108F30,
+    .text092AC = 0x108F70,
+    .text092D4 = 0x108F98,
+    .text0942E = 0x1090F2,
+    .text094CE = 0x109192,
+    .uiData = 0xC8DE4,
+    .fadeData = 0xF54,
+    .overlaySizeTable = 0xB2988,
+    .mapDataBase = 0x324710,
+    .areaRoomHeaders = 0x11DED8,
+    .areaTileSets = 0x102134,
+    .areaTileSetsCount = 0x90,
+    .areaRoomMaps = 0x107650,
+    .areaTable = 0xD4E9C,
+    .areaTiles = 0x102D64,
+    .exitLists = 0x13A41C,
+    .bgAnimTable = 0xB72FC,
+    .localFlagBanks = 0x11E118,
+    .gfxGroupsCount = 133,
+    .paletteGroupsCount = 208,
+    .objPalettesCount = 360,
+    .frameObjListsSize = 200045,
+    .fixedTypeGfxCount = 527,
+    .spritePtrsCount = 329,
+    .expectedRomSize = 0x1000000,
+    .gameCode = "BZMJ",
+};
+
 RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
     if (!romData || romSize < 0xB0)
         return ROM_REGION_UNKNOWN;
@@ -450,11 +536,41 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
         gRomRegion = ROM_REGION_EU;
         gRomOffsets = &kRomOffsets_EU;
         fprintf(stderr, "ROM region detected: EU (BZMP)\n");
+    } else if (memcmp(&romData[0xAC], "BZMJ", 4) == 0) {
+        gRomRegion = ROM_REGION_JP;
+        fprintf(stderr, "ROM region detected: JP (BZMJ)\n");
+#if defined(JP) || defined(MULTI_REGION)
+        /* JP binary (or fat multi-region binary): use JP offsets, but refuse to
+         * proceed if the table is still the unpopulated placeholder. */
+        if (kRomOffsets_JP.gfxAndPalettes == 0) {
+            fprintf(stderr,
+                "FATAL: JP offsets unpopulated. Fill kRomOffsets_JP "
+                "(see docs/JP_PORT_ENABLEMENT.md).\n");
+            exit(1);
+        }
+        gRomOffsets = &kRomOffsets_JP;
+#else
+        /* JP ROM fed to a single-region non-JP binary: code/data version
+         * mismatch. Keep USA offsets so the region cross-check in port_main.c
+         * reports the mismatch instead of crashing on the JP table. */
+        fprintf(stderr,
+            "WARNING: JP ROM in a non-JP binary — rebuild with --game_version=JP.\n");
+        gRomOffsets = &kRomOffsets_USA;
+#endif
     } else {
         fprintf(stderr, "WARNING: Unknown ROM game code '%.4s'. Defaulting to USA offsets.\n", &romData[0xAC]);
         gRomRegion = ROM_REGION_USA;
         gRomOffsets = &kRomOffsets_USA;
     }
+#if defined(PC_PORT) && defined(MULTI_REGION)
+    /* Fat binary: publish the detected region to the runtime REGION_IS_* macros
+     * so the converted gameplay-behavior branches follow the loaded ROM. */
+    gActiveRegion = (gRomRegion == ROM_REGION_EU) ? TMC_REGION_EU :
+                    (gRomRegion == ROM_REGION_JP) ? TMC_REGION_JP : TMC_REGION_USA;
+    fprintf(stderr, "Active region set to %s (multi-region binary).\n",
+            gActiveRegion == TMC_REGION_EU ? "EU" :
+            gActiveRegion == TMC_REGION_JP ? "JP" : "USA");
+#endif
     return gRomRegion;
 }
 
@@ -1031,17 +1147,35 @@ void Port_LoadRom(const char* path) {
      */
     int romLoaded = 0;
     {
-        /* Prepend the caller-supplied path to the shared kRomCandidates
-         * list so a user-provided argument still wins over the defaults
-         * but the rest of the probe order matches Port_FindBaseRomPath. */
-        const char* romCandidates[ROM_CANDIDATE_COUNT + 1];
-        romCandidates[0] = path;
-        for (int i = 0; i < ROM_CANDIDATE_COUNT; i++)
-            romCandidates[i + 1] = kRomCandidates[i];
-        int numCandidates = ROM_CANDIDATE_COUNT + 1;
         char usedPath[4096] = { 0 };
+        FILE* f = NULL;
 
-        FILE* f = TryOpenRom(romCandidates, numCandidates, usedPath, (int)sizeof(usedPath));
+        /* TMC_BASEROM overrides the probe list entirely (headless/CI and
+         * multi-region verification, or a ROM kept outside the default
+         * locations). Checked BEFORE TryOpenRom because TryOpenRom's
+         * exe-dir prefix pass would otherwise match a bundled baserom.gba
+         * ahead of an absolute override path. */
+        const char* romOverride = getenv("TMC_BASEROM");
+        if (romOverride && romOverride[0]) {
+            f = fopen(romOverride, "rb");
+            if (f)
+                snprintf(usedPath, sizeof(usedPath), "%s", romOverride);
+            else
+                fprintf(stderr, "TMC_BASEROM='%s' not openable; using probe list.\n", romOverride);
+        }
+
+        if (!f) {
+            /* Prepend the caller-supplied path to the shared kRomCandidates
+             * list so a user-provided argument still wins over the defaults
+             * but the rest of the probe order matches Port_FindBaseRomPath. */
+            const char* romCandidates[ROM_CANDIDATE_COUNT + 1];
+            romCandidates[0] = path;
+            for (int i = 0; i < ROM_CANDIDATE_COUNT; i++)
+                romCandidates[i + 1] = kRomCandidates[i];
+            int numCandidates = ROM_CANDIDATE_COUNT + 1;
+
+            f = TryOpenRom(romCandidates, numCandidates, usedPath, (int)sizeof(usedPath));
+        }
         if (f) {
             fseek(f, 0, SEEK_END);
             u32 fileSize = (u32)ftell(f);
@@ -1139,7 +1273,9 @@ void Port_LoadRom(const char* path) {
     Port_DetectRomRegion(gRomData, gRomSize);
     const RomOffsets* R = gRomOffsets;
 
-    fprintf(stderr, "Using offsets for %s (game code: %.4s)\n", gRomRegion == ROM_REGION_EU ? "EU" : "USA",
+    fprintf(stderr, "Using offsets for %s (game code: %.4s)\n",
+            gRomRegion == ROM_REGION_EU ? "EU" :
+            gRomRegion == ROM_REGION_JP ? "JP" : "USA",
             R->gameCode);
 
 #ifdef TMC_N64
@@ -1496,7 +1632,8 @@ void Port_LoadRom(const char* path) {
     }
 
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gFrameObjLists).\n",
-            gRomRegion == ROM_REGION_EU ? "EU" : "USA");
+            gRomRegion == ROM_REGION_EU ? "EU" :
+            gRomRegion == ROM_REGION_JP ? "JP" : "USA");
 
     /* Initialize data stubs with ROM datas */
     {

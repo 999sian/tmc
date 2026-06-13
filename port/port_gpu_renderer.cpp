@@ -14,6 +14,7 @@
  */
 
 #include "port_gpu_renderer.h"
+#include "port_imgui_menu.h"
 #include "port_runtime_config.h"
 
 #ifndef TMC_GPU_RENDERER
@@ -642,7 +643,6 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * and index buffer uploads, which can't nest inside a render pass.
      * Safe to call when ImGui isn't initialised; the stub returns
      * immediately. */
-    extern void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer*);
     Port_ImGui_PrepareDrawDataGpu(cmd);
 
     /* Stage 5+C step 5: if a libretro .glslp preset is loaded, route
@@ -666,7 +666,6 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         ovl.load_op     = SDL_GPU_LOADOP_LOAD;
         ovl.store_op    = SDL_GPU_STOREOP_STORE;
         SDL_GPURenderPass* orp = SDL_BeginGPURenderPass(cmd, &ovl, 1, nullptr);
-        extern void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
         Port_ImGui_RenderDrawDataGpu(cmd, orp);
         SDL_EndGPURenderPass(orp);
         SDL_SubmitGPUCommandBuffer(cmd);
@@ -853,7 +852,6 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         SDL_SetGPUViewport(rp, &vp);
     }
 
-    extern void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
     Port_ImGui_RenderDrawDataGpu(cmd, rp);
 
     SDL_EndGPURenderPass(rp);
@@ -910,7 +908,6 @@ extern "C" bool Port_GPU_PresentPrelaunchFrame(void) {
 
     /* Vertex/index buffer uploads happen via copy passes that can't
      * run inside a render pass — do them first. */
-    extern void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer*);
     Port_ImGui_PrepareDrawDataGpu(cmd);
 
     SDL_GPUTexture* swap_tex = nullptr;
@@ -927,7 +924,6 @@ extern "C" bool Port_GPU_PresentPrelaunchFrame(void) {
     color.store_op    = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
 
-    extern void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
     Port_ImGui_RenderDrawDataGpu(cmd, rp);
 
     SDL_EndGPURenderPass(rp);

@@ -37,6 +37,9 @@ typedef enum {
 
 bool Port_Reborn_IsEnabled(RebornFeature f);
 void Port_Reborn_SetEnabled(RebornFeature f, bool on);
+/* Bitmask accessors for config persistence (issue #146): bit i == feature i. */
+unsigned Port_Reborn_GetMask(void);
+void Port_Reborn_ApplyMask(unsigned mask);
 
 /* Human-readable label for a feature. Used by the F8 ribbon UI. */
 const char* Port_Reborn_FeatureLabel(RebornFeature f);

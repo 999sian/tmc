@@ -303,12 +303,9 @@ void sub_080812A8(ItemOnGroundEntity* this) {
 
 void sub_080812E8(ItemOnGroundEntity* this) {
     PlayerState* playerState = &gPlayerState;
-#ifdef EU
-    if ((playerState->swim_state & 0x80) && IsColliding(super, &gPlayerEntity.base)) {
-#else
-    if ((playerState->swim_state & 0x80) && (playerState->flags & PL_MINISH) == 0 &&
-        IsColliding(super, &gPlayerEntity.base)) {
-#endif
+    if (REGION_IS_EU ? ((playerState->swim_state & 0x80) && IsColliding(super, &gPlayerEntity.base))
+                     : ((playerState->swim_state & 0x80) && (playerState->flags & PL_MINISH) == 0 &&
+                        IsColliding(super, &gPlayerEntity.base))) {
         sub_080810FC(this);
     }
 }

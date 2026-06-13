@@ -231,10 +231,10 @@ void DrawGameOverText(void) {
     gOamCmd.y = gGenericMenu.unk10.a[0];
     for (i = 0; i < 8; ++i) {
         gOamCmd.x = sOffsets[i];
-#ifdef EU
-        DrawDirect(0x1fc, i);
-#else
-        DrawDirect(0x1fd, i);
-#endif
+        if (REGION_IS_EU) {
+            DrawDirect(0x1fc, i);
+        } else {
+            DrawDirect(0x1fd, i);
+        }
     }
 }

@@ -401,11 +401,7 @@ void Bird_Type10(BirdEntity* this) {
 
 void CreateBird(Entity* this) {
     // EU only allows warp from the overworld. This prevents warping from the rooftop of the Wind Tribe's tower.
-#ifndef EU
-    if (AreaAllowsWarp()) {
-#else
-    if (AreaIsOverworld()) {
-#endif
+    if (REGION_IS_EU ? AreaIsOverworld() : AreaAllowsWarp()) {
         if (!FindEntity(OBJECT, BIRD, 6, 8, 0)) {
             Entity* bird = CreateObject(BIRD, 8, 0);
             if (bird != NULL) {

@@ -220,11 +220,11 @@ void FigurineDevice_Action3(FigurineDeviceEntity* this) {
         default:
             if (!CheckRoomFlag(2)) {
                 super->spriteSettings.draw = 0;
-#ifdef EU
+                if (REGION_IS_EU) {
                 ClearRoomFlag(9);
-#else
+                } else {
                 ClearRoomFlag(4);
-#endif
+                }
                 DeleteThisEntity();
             }
             break;
@@ -262,17 +262,13 @@ void FigurineDevice_Action4(FigurineDeviceEntity* this) {
                 return;
             }
             old_81 = this->shells;
-#ifndef EU
+            if (!REGION_IS_EU) {
             if ((gInput.heldKeys & R_BUTTON) != 0) {
                 tmp = 10;
             } else {
                 tmp = 1;
             }
-#ifdef JP
-            switch (gInput.menuScrollKeys) {
-#else
-            switch (gInput.menuScrollKeys & ~R_BUTTON) {
-#endif
+            switch (REGION_IS_JP ? gInput.menuScrollKeys : gInput.menuScrollKeys & ~R_BUTTON) {
                 case DPAD_UP:
                     FigurineDevice_ChangeShellAmount(this, tmp);
                     break;
@@ -283,7 +279,7 @@ void FigurineDevice_Action4(FigurineDeviceEntity* this) {
             if (old_81 != this->shells) {
                 sub_080882A8(this);
             }
-#else
+            } else {
             switch (gInput.menuScrollKeys) {
                 case DPAD_UP:
                     FigurineDevice_ChangeShellAmount(this, 1);
@@ -295,17 +291,17 @@ void FigurineDevice_Action4(FigurineDeviceEntity* this) {
             if (old_81 != this->shells) {
                 sub_080882A8(this);
             }
-#endif
+            }
             break;
         case 2:
             this->unk_7a = 0;
             this->unk_7b = 4;
             SetRoomFlag(3);
             MessageFromTarget(TEXT_INDEX(TEXT_CARLOV, 0x1a));
-#ifndef EU
+            if (!REGION_IS_EU) {
             gMessage.textWindowPosX = 1;
             gMessage.textWindowPosY = 0xc;
-#endif
+            }
             gMessage.rupees = this->shells;
             break;
     }
@@ -750,9 +746,9 @@ void FigurineDevice_NoFigurinesLeftMessage(void) {
     if (isUnlucky) {
         gMessage.rupees = 5;
     }
-#ifndef EU
+    if (!REGION_IS_EU) {
     gPlayerEntity.base.animationState = 6;
-#endif
+    }
 }
 
 void FigurineDevice_NothingNewToDrawMessage(void) {
@@ -787,11 +783,7 @@ void FigurineDevice_NewFigurinesMessage(void) {
 
 void FigurineDevice_TryAgainMessage(void) {
     u32 messageIndex;
-#ifdef EU
-    if (CheckRoomFlag(10)) {
-#else
-    if (CheckRoomFlag(9)) {
-#endif
+    if (REGION_IS_EU ? CheckRoomFlag(10) : CheckRoomFlag(9)) {
         if (CheckLocalFlag(SHOP07_COMPLETE)) {
             messageIndex = TEXT_INDEX(TEXT_CARLOV, 19); // ...already have all ... still want to have a try?
         } else {

@@ -538,9 +538,9 @@ void VaatiRebornEnemyType0Action7(VaatiRebornEnemyEntity* this) {
                     tmp = Random() & 0x3f3f;
                     fx->x.HALF.HI = ((tmp & 0xff) - 0x20) + fx->x.HALF.HI;
                     fx->y.HALF.HI = ((tmp >> 8) & 0xff) - 0x20 + fx->y.HALF.HI;
-#ifndef EU
+                    if (!REGION_IS_EU) {
                     fx->spritePriority.b0 = 2;
-#endif
+                    }
                 }
             }
         }

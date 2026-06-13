@@ -331,11 +331,11 @@ static void HandleTitlescreen(void) {
             if ((gIntroState.timer & 0x20) == 0) {
                 gOamCmd._8 = 0xe000;
                 gOamCmd.y = 0x84;
-#ifdef EU
+                if (REGION_IS_EU) {
                 DrawDirect(0x1fe, 0);
-#else
+                } else {
                 DrawDirect(0x1ff, 0);
-#endif
+                }
             }
     }
     if (gIntroState.language != gSaveHeader->language) {

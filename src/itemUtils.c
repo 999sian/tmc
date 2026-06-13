@@ -482,11 +482,11 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
                 // nop
                 ptr3 = &gDroptableModifiers[DROPTABLE_NONE];
             } else {
-#ifdef EU
+                if (REGION_IS_EU) {
                 ptr3 = &gEnemyDroptables[r1 + 9];
-#else
+                } else {
                 ptr3 = &gEnemyDroptables[r1 + 6];
-#endif
+                }
             }
             // vector addition, s0 = ptr4 + ptr2 + ptr3
             SumDropProbabilities(droptable.a, ptr4->a, ptr2->a, ptr3->a);

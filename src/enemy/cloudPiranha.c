@@ -215,11 +215,11 @@ void sub_08038754(CloudPiranhaEntity* this) {
     super->action = 4;
     super->flags |= ENT_COLLIDE;
     super->hitType = 0x5a;
-#ifdef EU
-    super->speed = 0x100;
-#else
-    super->speed = 0xc0;
-#endif
+    if (REGION_IS_EU) {
+        super->speed = 0x100;
+    } else {
+        super->speed = 0xc0;
+    }
     super->zVelocity = Q_16_16(2);
     this->unk_81 = 0;
     super->spritePriority.b1 = 3;

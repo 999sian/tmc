@@ -25,23 +25,11 @@
 #include <vector>
 
 #include "port_debug_menu.h"
+#include "port_debug_query.h"
+#include "port_debug_actions.h"
 #include "port_widescreen.h"
 
 extern "C" {
-void Port_DebugAction_GiveAllItems(void);
-void Port_DebugAction_MaxHearts(void);
-void Port_DebugAction_HealFull(void);
-void Port_DebugAction_MaxRupees(void);
-void Port_DebugAction_MaxShells(void);
-void Port_DebugAction_AllKinstones(void);
-int Port_DebugAction_Warp(unsigned char area, unsigned char room,
-                          unsigned short x, unsigned short y,
-                          unsigned char layer);
-int Port_DebugQuery_AreaRoomCount(unsigned char area);
-int Port_DebugQuery_RoomDimensions(unsigned char area, unsigned char room,
-                                   unsigned short* w, unsigned short* h);
-const char* Port_DebugQuery_AreaName(unsigned char area);
-int Port_DebugAction_AreaIsWarpable(unsigned char area);
 
 /* Display / runtime-config knobs — same set the file-select "L Settings"
  * panel exposes, so the F8 menu can drive them mid-game. */

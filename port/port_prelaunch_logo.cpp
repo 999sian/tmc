@@ -18,6 +18,8 @@
  *                         backend as of v1.92, per the header docs).
  */
 
+#include "port_prelaunch_logo.h"
+
 #include <SDL3/SDL.h>
 #include <png.h>
 #include <imgui.h>

@@ -3,6 +3,9 @@
 Sample mods for the tmc_pc Tier-1 mod loader. Each subdirectory is a
 self-contained mod that overrides one or more runtime asset files.
 
+**Making your own mod?** Start from `example-mod/` — a copy-paste template
+with a step-by-step walkthrough of both the drop-in and manifest workflows.
+
 ## Available button-prompt mods
 
 | Mod | What it replaces | Style |
@@ -18,10 +21,10 @@ active at a time**.
 ## How to switch styles
 
 The mod loader auto-discovers every subdirectory of `mods/` and loads
-them in alphabetical order. With more than one button-style mod
-present that means the first one wins on every collision (currently
-`buttons-gba` would win alphabetically). To pick a specific style use
-the `TMC_MODS` env var — comma-separated, leftmost wins:
+them in alphabetical order. On file collisions, the first loaded mod
+wins. With the sample button mods present, `buttons-gba` wins
+alphabetically unless you choose a specific active set with `TMC_MODS`:
+comma-separated, leftmost wins, and unlisted mods are disabled.
 
 ```sh
 # Use Xbox style:
@@ -37,9 +40,56 @@ TMC_MODS=buttons-ps-grey ./build/pc/tmc_pc
 ./build/pc/tmc_pc
 ```
 
-When `TMC_MODS` is unset the loader falls back to auto-discovery
-(alphabetical), so leaving multiple mods in `mods/` and not setting
-the env var is non-deterministic — better to set it explicitly.
+When `TMC_MODS` is unset the loader falls back to deterministic
+alphabetical auto-discovery. That is useful for local testing, but
+explicit `TMC_MODS=...` is clearer when multiple mods touch the same
+asset.
+
+## What Tier-1 mods can change
+
+Tier 1 mods are runtime asset replacements only. They can replace files
+the asset loader asks for under `assets/`: `gfx/`, `palettes/`,
+`animations/`, `sprites/`, `tilemaps/`, `maps/`, `room_props/`,
+`data/`, `misc/`, and text JSON-derived runtime files. They do not add
+new engine code, script opcodes, entities, rooms, or asset IDs.
+
+Lookup order for a requested asset is:
+
+1. active mod replacement;
+2. mounted `assets/*.pak`;
+3. loose `assets/` file;
+4. ROM fallback in the caller, if that subsystem has one.
+
+## Mod layouts
+
+The simplest mod mirrors the runtime asset tree:
+
+```text
+mods/my-mod/
+  gfx/gfx_215e0_32x32_4bpp_uncompressed.bin
+  palettes/palette_1234.bin
+```
+
+Auto-discovery registers every regular file below the mod directory as a
+replacement for the same relative asset path. It skips `mod_manifest.json`,
+`README*`, dotfiles, `.git/`, and `assets-src/`.
+
+For renamed/shared files, add `mod_manifest.json`:
+
+```json
+{
+  "name": "my-mod",
+  "replace": {
+    "gfx/gfx_215e0_32x32_4bpp_uncompressed.bin": "files/buttons.bin",
+    "palettes/palette_1234.bin": "palettes/warmer.bin"
+  }
+}
+```
+
+`replacements` is accepted as an alias for `replace`. Keys are runtime
+asset paths. Values are replacement files, normally relative to the mod
+directory. If a value is not found inside the mod, the loader also checks
+the parent `mods/` directory so several mods can share one file.
 
 ## Stderr log when a button-style mod is active
 

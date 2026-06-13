@@ -1,6 +1,7 @@
 /* C reimplementation of text rendering routines from asm/src/code_08001A7C.s */
 
 #include "global.h"
+#include "port_rom.h"
 
 // 0x08002724: Unpack 4bpp font data (64 bytes) into per-pixel bytes (128 bytes)
 void UnpackTextNibbles(void* src_ptr, u8* dest) {
@@ -11,8 +12,6 @@ void UnpackTextNibbles(void* src_ptr, u8* dest) {
         return;
     }
     {
-        extern u8* gRomData;
-        extern u32 gRomSize;
         uintptr_t srcAddr = (uintptr_t)src;
         uintptr_t romStart = (uintptr_t)gRomData;
         uintptr_t romEnd = romStart + (uintptr_t)gRomSize;

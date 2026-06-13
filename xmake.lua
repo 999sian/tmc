@@ -20,6 +20,18 @@ option("game_version")
     set_description("Game version to build", "USA", "EU", "JP", "DEMO_USA", "DEMO_JP")
 option_end()
 
+-- Multi-region (fat) PC binary: one binary that detects the loaded ROM and
+-- selects USA/EU/JP data + behavior at runtime. Compiles src/ once; the
+-- REGION_IS_* macros (include/region.h) become runtime instead of compile-time.
+-- game_version still controls the asset/offset baseline used for the build
+-- (USA by default); only behavior sites already converted to REGION_IS_* are
+-- runtime-driven. No effect on the matching GBA ROM build.
+option("multi_region")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build one PC binary supporting USA/EU/JP at runtime")
+option_end()
+
 option("pc_avx2")
     set_default(true)
     set_showmenu(true)
@@ -686,14 +698,34 @@ target("tmc_pc")
     local pc_versions = {
         USA = { region = "USA", language = "ENGLISH" },
         EU  = { region = "EU",  language = "ENGLISH" },
+        -- JP is wired but ROM-gated: building it needs a JP baserom (BZMJ),
+        -- extracted JP assets in build/JP/, and the generated port_offset_JP.h.
+        -- region/language become the JP + JAPANESE defines the decomp's
+        -- #ifdef JP paths expect. See docs/JP_PORT_ENABLEMENT.md.
+        JP  = { region = "JP",  language = "JAPANESE" },
     }
     local pc_game_version = get_config("game_version") or "USA"
     local pc_ver = pc_versions[pc_game_version] or pc_versions["USA"]
+    if pc_versions[pc_game_version] == nil then
+        print("WARNING: PC port has no config for game_version='" .. pc_game_version
+              .. "'; falling back to USA. (JP is ROM-gated — see docs/JP_PORT_ENABLEMENT.md.)")
+    end
 
     add_defines("PC_PORT", "NON_MATCHING", "USE_HDMA", pc_ver.region, pc_ver.language, "REVISION=0")
     -- Inject the version string from the top-of-file constant so the
     add_defines('TMC_PC_VERSION="' .. TMC_PC_VERSION .. '"')
     add_defines('TMC_PORT_VERSION="' .. TMC_PC_VERSION .. '"')
+
+    -- Multi-region fat binary: switch REGION_IS_* (include/region.h) to runtime.
+    -- Force-include region.h everywhere so converted gameplay-behavior sites and
+    -- the matching ROM build see the same macros. region.h is pure macros in the
+    -- non-multi-region path, so this is inert for normal single-region builds.
+    add_forceincludes("region.h")
+    if get_config("multi_region") then
+        add_defines("MULTI_REGION")
+        print("PC port: MULTI_REGION build — one binary for USA/EU/JP at runtime "
+              .. "(asset/offset baseline: " .. pc_game_version .. ").")
+    end
 
     -- Widescreen: single source of truth for the rendered viewport width.
     -- The orphaned `widescreen_width` option is injected here as
@@ -739,7 +771,7 @@ target("tmc_pc")
     add_includedirs("include", "libs")
     add_includedirs("port")
     add_includedirs(".")
-    add_includedirs("build/" .. pc_game_version) -- For assets/map_offsets.h etc (USA or EU)
+    add_includedirs("build/" .. pc_game_version) -- For assets/map_offsets.h etc (USA, EU, or JP)
     add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
     add_includedirs("libs/VirtuaAPU/include")
     add_includedirs("libs/agbplay_core")
@@ -780,7 +812,9 @@ target("tmc_pc")
     add_files("docs/picori-logo.png", {rule = "utils.bin2c", nozeroend = true})
     add_files("port/port_debug_actions.c")
     add_files("port/port_quicksave.c")
+    add_files("port/port_practice.c")   -- Speedrun practice mode (timer/inputs/reload/slow-mo)
     add_files("port/port_inline_ptrs.c")
+    add_files("port/port_script_addrs.c")  -- per-region GBA_script_* address translation (M3)
     add_files("port/port_asset_bootstrap.cpp")
     add_files("port/port_asset_index.c")
     add_files("port/port_update_check.c")
@@ -798,6 +832,7 @@ target("tmc_pc")
     add_files("port/rando/rando_file_menu.c")
     add_files("port/rando/rando_save.c")
     add_files("port/rando/rando_runtime.c")    -- eventdefine-driven runtime features (C: needs player.h/save.h layouts)
+    add_files("port/rando/rando_newfile.c") -- new-file randomizer baseline flag/figurine tables
     add_files("port/rando/rando_entrance.cpp") -- coupled dungeon-entrance shuffle
     add_files("port/rando/rando_cosmetic.cpp") -- tunic / heart color eventdefines
     add_files("port/rando/rando_music.c")    -- MUSIC_RANDO area-BGM remap
@@ -938,8 +973,10 @@ target("tmc_pc")
     add_files("src/objectUtils.c")
     add_files("src/objectDefinitions.c")
     add_files("src/object/*.c")
+    add_files("src/enemyUpdate.c")
     add_files("src/projectile.c")
     add_files("src/projectileUtils.c")
+    add_files("src/projectileUpdate.c")
     add_files("src/projectile/*.c")
     add_files("src/manager.c")
     add_files("src/manager/*.c")
@@ -1099,8 +1136,22 @@ target("rando_logic_test")
     add_files("port/rando/rando.cpp")
     add_files("port/rando/rando_logic.cpp")
     add_files("port/rando/rando_save.c")
+    add_files("port/rando/rando_entrance.cpp")
+    add_files("port/rando/rando_music.c")
+    add_files("port/rando/rando_newfile.c")
     add_files("port/rando/rando_keymap.c")
     add_files("port/rando/rando_test.c")
+target_end()
+
+-- ====================
+-- PRNG golden-vector regression test (guards the gameplay RNG from drift)
+-- ====================
+target("rng_golden_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs("port")
+    add_files("port/port_rng_golden_test.c")
 target_end()
 
 
@@ -1211,9 +1262,9 @@ task("rom")
         -- Common flags
         local asinclude = "-I " .. assets_dir .. " -I " .. build_dir .. "/enum_include"
         local asflags = "-mcpu=arm7tdmi --defsym " .. game_version .. "=1 --defsym REVISION=0 --defsym " .. ver.language .. "=1 " .. asinclude
+        -- `-I port` lets the GBA ROM build resolve the self-PC_PORT-guarded
         local cinclude = "-I include -I " .. build_dir
         local cppflags = "-I tools/agbcc -I tools/agbcc/include " .. cinclude .. " -nostdinc -undef -D" .. game_version .. " -DREVISION=0 -D" .. ver.language
-        local cflags = "-O2 -Wimplicit -Wparentheses -Werror -Wno-multichar -g3"
         
         -- Interwork files need special flags
         local interwork_files = {
@@ -1350,6 +1401,11 @@ task("rom")
                 "-I", "tools/agbcc/include",
                 "-I", "include",
                 "-I", build_dir,
+                -- Lets the GBA ROM build resolve the self-PC_PORT-guarded port
+                -- headers that committed src/ files #include (e.g. port_scripts.h).
+                -- PC_PORT is undefined here, so those headers expand to nothing —
+                -- this only fixes header resolution, pulling in no port/PC/SDL code.
+                "-I", "port",
                 "-nostdinc",
                 "-undef",
                 "-D" .. game_version,

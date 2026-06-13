@@ -225,7 +225,7 @@ void sub_08084074(u32 flag) {
     if (tileEntity != NULL) {
         int chestIndex = 0;
         for (; tileEntity->type != 0; tileEntity++) {
-            bool isChest = (tileEntity->type == SMALL_CHEST || tileEntity->type == BIG_CHEST);
+            bool32 isChest = (tileEntity->type == SMALL_CHEST || tileEntity->type == BIG_CHEST);
             if ((tileEntity->type == BIG_CHEST) && (flag == tileEntity->localFlag)) {
                 u8 item = tileEntity->_2;
                 u8 subtype = tileEntity->_3;

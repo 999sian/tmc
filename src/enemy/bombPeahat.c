@@ -116,19 +116,19 @@ void sub_0802A924(BombPeahatEntity* this) {
     super->timer = 0;
     super->subtimer = 0;
     super->hitbox = (Hitbox*)&gUnk_080CD16C;
-#ifdef EU
+    if (REGION_IS_EU) {
     super->collisionFlags |= 0x10;
-#endif
+    }
     super->z.HALF.HI = -0x30;
     this->unk_80 = Random() & 1;
     this->unk_82 = 0;
     this->unk_7b = 0;
     this->unk_81 = 0;
     this->unk_7a = 0;
-#ifndef EU
+    if (!REGION_IS_EU) {
     this->unk_78 = 0;
     this->unk_79 = 0;
-#endif
+    }
     super->collisionLayer = 3;
     super->spriteOrientation.flipY = 1;
     super->spriteRendering.b3 = 1;
@@ -232,11 +232,11 @@ void sub_0802AAC0(BombPeahatEntity* this) {
         super->timer = 192;
         super->subtimer = 4;
         this->unk_80 ^= 1;
-#ifndef EU
+        if (!REGION_IS_EU) {
         this->unk_78 = 0;
         this->unk_79 = 4;
         super->direction = DIR_NONE;
-#endif
+        }
         InitializeAnimation(super, 0);
     }
 }
@@ -334,15 +334,15 @@ void sub_0802AC40(BombPeahatEntity* this) {
     } else {
         if (sub_0802B234(this)) {
             this->unk_7a = 1;
-#ifndef EU
+            if (!REGION_IS_EU) {
             if (super->z.HALF.HI == 0) {
                 super->spritePriority.b1 = 1;
             } else {
                 super->spritePriority.b1 = 3;
             }
-#else
+            } else {
             super->spritePriority.b1 = 3;
-#endif
+            }
         }
     }
 }
@@ -401,9 +401,9 @@ void sub_0802ADDC(BombPeahatEntity* this) {
         entity->parent = super;
         super->child = entity;
         CopyPosition(super, entity);
-#ifdef EU
+        if (REGION_IS_EU) {
         entity->z.HALF.HI += 8;
-#endif
+        }
         this->unk_81 = 1;
         if (super->type == 0) {
             this->unk_7a++;

@@ -238,26 +238,25 @@ void InitializePlayer(void) {
 }
 
 bool32 AreaIsOverworld(void) {
-#ifdef EU
-    return gArea.areaMetadata == AR_IS_OVERWORLD;
-#else
+    /* EU treats AR_IS_OVERWORLD alone as "overworld"; USA/JP require the warp
+     * bit too (EU folds warp-permission into the overworld flag). */
+    if (REGION_IS_EU)
+        return gArea.areaMetadata == AR_IS_OVERWORLD;
     return gArea.areaMetadata == (AR_ALLOWS_WARP | AR_IS_OVERWORLD);
-#endif
 }
 
 bool32 CheckAreaOverworld(u32 area) {
-#if EU
-    return gAreaMetadata[area].flags == AR_IS_OVERWORLD;
-#else
+    if (REGION_IS_EU)
+        return gAreaMetadata[area].flags == AR_IS_OVERWORLD;
     return gAreaMetadata[area].flags == (AR_ALLOWS_WARP | AR_IS_OVERWORLD);
-#endif
 }
 
-#ifndef EU
+/* USA/JP expose a dedicated "warp allowed" check; EU never calls it (warp
+ * permission is folded into AR_IS_OVERWORLD above). Always defined for the
+ * multi-region build so the runtime !REGION_IS_EU caller links. */
 bool32 AreaAllowsWarp(void) {
     return (gArea.areaMetadata >> 7) & 1;
 }
-#endif
 
 bool32 AreaIsDungeon(void) {
     return (gArea.areaMetadata >> 2) & 1;

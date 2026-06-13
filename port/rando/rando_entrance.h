@@ -40,6 +40,11 @@ void Rando_Entrance_RemapHole(uint8_t cur_area, uint8_t* area, uint8_t* room, ui
 void Rando_Entrance_RemapGreenWarp(uint8_t cur_area, uint32_t warp_type, uint8_t* area, uint8_t* room, int16_t* x,
                                    int16_t* y);
 
+void Rando_Entrance_SetAssignment(int loc_idx, int interior_idx);
+int Rando_Entrance_GetAssignment(int loc_idx);
+int Rando_Entrance_GetInverseAssignment(int interior_idx);
+void Rando_Entrance_ClearAssignments(void);
+
 #ifdef __cplusplus
 }
 #endif

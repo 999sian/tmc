@@ -22,12 +22,16 @@ extern "C" {
  * Discovery order:
  *   1. TMC_MODS env var: comma-separated list, e.g.
  *        TMC_MODS=buttons-xbox,widescreen-tilemaps
- *      Each entry is a directory name under mods/. First entry wins on
- *      file-collision (left-to-right priority).
- *   2. Otherwise, every directory directly inside <exe>/mods/ is loaded,
- *      sorted alphabetically (deterministic but no priority control).
+ *      Each entry is a directory name under a discovered mods/ root.
+ *      Only listed mods are active; first entry wins on file collision
+ *      (left-to-right priority).
+ *   2. Otherwise, the asset loader auto-discovers every directory
+ *      directly inside each asset search root's mods/ directory, sorted
+ *      alphabetically (deterministic but no priority control).
  *
- * No mods are loaded if mods/ does not exist or is empty.
+ * The loader checks both binary-local and cwd-local mods/ during explicit
+ * TMC_MODS resolution. No mods are loaded if no active mods/ root exists
+ * or every selected name is missing.
  *
  * Mods can override any asset path the runtime asks for via
  * LoadBinaryFileCached — gfx, palettes, animations, tilemaps, room

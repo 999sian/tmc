@@ -8,7 +8,8 @@
 
 #include "rando/rando_save.h"
 #include "rando/rando.h"
-#include "rando/rando_logic.h"
+#include "rando/rando_entrance.h"
+#include "rando/rando_music.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -31,8 +32,10 @@ extern int fileno(FILE*);
  * seed restores its eventdefine context and entrance shuffle.
  * v3: per-slot per-area music assignments (MUSIC_RANDO).
  * v4: per-location reward subtypes (shell counts, kinstone piece ids, dungeon
- * item ids) so same-item placements restore exactly across reloads. */
-#define RANDO_SIDECAR_VERSION 4u
+ * item ids) so same-item placements restore exactly across reloads.
+ * v5: shuffle_entrances flag (decoupled from shuffle_kinstones) + tricks
+ * bitmask (glitch-logic tier) so a seed's logic tier restores exactly. */
+#define RANDO_SIDECAR_VERSION 5u
 #define RANDO_SIDECAR_MAX_OVERRIDES 64
 #define RANDO_SIDECAR_MAX_ENTRANCES 16
 #define RANDO_SIDECAR_MUSIC_AREAS 256
@@ -57,10 +60,12 @@ typedef struct RandoSidecarSlot {
     uint8_t shuffle_kinstones;
     uint8_t shuffle_dojos;
     uint8_t item_difficulty;
-    uint8_t reserved;
+    uint8_t open_world; /* was `reserved` (always 0) before the option existed */
     uint16_t override_count;
     uint16_t entrance_count;
-    uint8_t reserved2[2];
+    uint8_t shuffle_entrances; /* v5: was reserved2[0] */
+    uint8_t reserved2;         /* v5: was reserved2[1] */
+    uint32_t tricks;           /* v5: RANDO_TRICK_* bitmask (glitch-logic tier) */
     uint32_t logic_location_count; /* parse fingerprint for index validity */
     uint64_t seed;
     uint32_t count;
@@ -230,47 +235,30 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
     rec->active = 1;
     rec->glitchless_logic = settings.glitchless_logic ? 1 : 0;
     rec->shuffle_kinstones = settings.shuffle_kinstones ? 1 : 0;
+    rec->shuffle_entrances = settings.shuffle_entrances ? 1 : 0;
     rec->shuffle_dojos = settings.shuffle_dojos ? 1 : 0;
+    rec->open_world = settings.open_world ? 1 : 0;
     rec->item_difficulty = (uint8_t)settings.item_difficulty;
+    rec->tricks = settings.tricks;
     rec->seed = Rando_GetSeed64();
     rec->count = (uint32_t)count;
     memcpy(rec->table, table, count * sizeof(rec->table[0]));
     memcpy(rec->subtype_table, subtype_table, count * sizeof(rec->subtype_table[0]));
 
-    /* Persist the .logic define overrides this seed was generated under and
-     * the generation-time entrance assignments — both are required to restore
-     * the seed's full context after a process restart. */
-    if (RandoLogic_IsLoaded()) {
-        uint32_t oc = RandoLogic_GetOverrideCount();
-        if (oc > RANDO_SIDECAR_MAX_OVERRIDES) {
-            fprintf(stderr, "[RANDO] warning: %u overrides exceed sidecar cap %d; extras dropped\n",
-                    oc, RANDO_SIDECAR_MAX_OVERRIDES);
-            oc = RANDO_SIDECAR_MAX_OVERRIDES;
-        }
-        for (uint32_t o = 0; o < oc; ++o) {
-            const char* nm = NULL;
-            const char* val = NULL;
-            if (!RandoLogic_GetOverride(o, &nm, &val)) break;
-            snprintf(rec->overrides[o].name, sizeof(rec->overrides[o].name), "%s", nm);
-            snprintf(rec->overrides[o].value, sizeof(rec->overrides[o].value), "%s", val);
-            rec->override_count++;
-        }
-        rec->logic_location_count = RandoLogic_GetLocationCountRaw();
-        for (uint32_t l = 0; l < rec->logic_location_count; ++l) {
-            int e = RandoLogic_GetEntranceAssignment(l);
-            if (e < 0) continue;
-            if (rec->entrance_count >= RANDO_SIDECAR_MAX_ENTRANCES) {
-                fprintf(stderr, "[RANDO] warning: entrance assignments exceed sidecar cap %d\n",
-                        RANDO_SIDECAR_MAX_ENTRANCES);
-                break;
-            }
-            rec->entrances[rec->entrance_count].location_index = (uint16_t)l;
+    /* Save entrance assignments */
+    rec->entrance_count = 0;
+    for (int i = 0; i < 8; ++i) {
+        int e = Rando_Entrance_GetAssignment(i);
+        if (e >= 0) {
+            rec->entrances[rec->entrance_count].location_index = (uint16_t)i;
             rec->entrances[rec->entrance_count].subtype = (int16_t)e;
             rec->entrance_count++;
         }
-        for (uint32_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) {
-            rec->music[a] = (int16_t)RandoLogic_GetMusicAssignment(a);
-        }
+    }
+
+    /* Save music assignments */
+    for (uint32_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) {
+        rec->music[a] = (int16_t)Rando_Music_GetAssignment(a);
     }
 
     if (!SaveAll()) return false;
@@ -288,51 +276,33 @@ bool Port_RandoSave_LoadSlot(int slot) {
     RandomizerSettings settings = Rando_DefaultSettings();
     settings.glitchless_logic = rec->glitchless_logic != 0;
     settings.shuffle_kinstones = rec->shuffle_kinstones != 0;
+    settings.shuffle_entrances = rec->shuffle_entrances != 0;
     settings.shuffle_dojos = rec->shuffle_dojos != 0;
+    settings.open_world = rec->open_world != 0;
+    settings.tricks = rec->tricks;
     if (rec->item_difficulty < RANDO_ITEM_POOL_COUNT) {
         settings.item_difficulty = (RandoItemPoolDifficulty)rec->item_difficulty;
     }
 
-    /* Restore the seed's .logic define overrides and reparse BEFORE
-     * activation, so eventdefine-driven runtime features (damage multi,
-     * cosmetics, start-inventory context) evaluate against the settings the
-     * seed was generated with — not the file defaults. The stored item table
-     * below stays authoritative for placement regardless. */
-    if (RandoLogic_IsLoaded()) {
-        RandoLogic_ClearOverrides();
-        for (uint32_t o = 0; o < rec->override_count; ++o) {
-            RandoLogic_SetOverride(rec->overrides[o].name, rec->overrides[o].value);
-        }
-        RandoLogic_Reparse();
-    }
+    // No logic define overrides to restore anymore
 
     if (!Rando_ActivateTable(rec->seed, settings, rec->table, rec->subtype_table, rec->count)) return false;
 
-    /* Entrance and music assignments are generation-time state: re-inject
-     * them when the reparsed logic matches the parse the slot was saved
-     * under. Music is keyed by area id, so it is safe regardless, but keep
-     * the single fingerprint gate for consistency. */
-    if (RandoLogic_IsLoaded()) {
-        if (rec->logic_location_count == RandoLogic_GetLocationCountRaw()) {
-            RandoLogic_ClearEntranceAssignments();
-            for (uint32_t e = 0; e < rec->entrance_count; ++e) {
-                if (rec->entrances[e].subtype < 0) continue;
-                RandoLogic_RestoreEntranceAssignment(rec->entrances[e].location_index,
-                                                     rec->entrances[e].subtype);
-            }
-            RandoLogic_ClearMusicAssignments();
-            for (uint32_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) {
-                if (rec->music[a] >= 0) RandoLogic_RestoreMusicAssignment(a, rec->music[a]);
-            }
-        } else if (rec->entrance_count > 0) {
-            fprintf(stderr,
-                    "[RANDO] warning: .logic changed since slot %d was saved "
-                    "(%u vs %u locations); entrance/music shuffle not restored\n",
-                    slot, rec->logic_location_count, RandoLogic_GetLocationCountRaw());
+    /* Restore entrance and music assignments */
+    Rando_Entrance_ClearAssignments();
+    for (uint32_t e = 0; e < rec->entrance_count; ++e) {
+        Rando_Entrance_SetAssignment(rec->entrances[e].location_index, rec->entrances[e].subtype);
+    }
+
+    Rando_Music_ClearAssignments();
+    for (uint32_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) {
+        if (rec->music[a] >= 0) {
+            Rando_Music_SetAssignment(a, rec->music[a]);
         }
     }
-    fprintf(stderr, "[RANDO] loaded sidecar slot %d (%u locations, %u overrides, %u entrances)\n",
-            slot, rec->count, rec->override_count, rec->entrance_count);
+
+    fprintf(stderr, "[RANDO] loaded sidecar slot %d (%u locations, %u entrances)\n",
+            slot, rec->count, rec->entrance_count);
     return true;
 }
 

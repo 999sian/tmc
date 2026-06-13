@@ -318,6 +318,19 @@ jobs:
         if: matrix.os_name == 'linux' && steps.probe_assets.outputs.have_assets == 'true'
         run: python build.py ${{ matrix.flag }}
 
+      # Guards the gameplay PRNG constants against silent drift. The test is
+      # header-only (port_rng.h pulls just <stdint.h>) so it compiles with a
+      # bare cc — no xmake, no SDL deps, no ROM, no private assets — which is
+      # why it runs on every Linux build regardless of asset availability.
+      # A one-character edit to the multiply/rotate constants fails CI here,
+      # which would otherwise desync every existing speedrun RNG manip.
+      - name: RNG golden-vector regression (Linux)
+        if: matrix.os_name == 'linux'
+        shell: bash
+        run: |
+          cc -I port -O2 -o /tmp/rng_golden_test port/port_rng_golden_test.c
+          /tmp/rng_golden_test
+
       - name: Resolve MinGW POSIX path (Windows)
         if: matrix.os_name == 'windows'
         shell: bash

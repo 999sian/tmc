@@ -23,6 +23,7 @@
 #include "menu.h"         /* gMenu */
 #include "save.h"         /* gSaveHeader */
 #include "port_gba_mem.h" /* gIoMem */
+#include "port_repro.h"
 
 extern int Port_CaptureBaseFramebufferPNG(const char* path); /* port_bugreport.cpp */
 

@@ -2,6 +2,70 @@
 
 ## Unreleased
 
+### Randomizer — embedded logic database; no external file needed (#155)
+
+- **The randomizer no longer needs a separate `.logic` file.** A new
+  embedded database (`port/rando/native.logic`, compiled into the binary
+  via bin2c) gives every install per-location keyed placement +
+  reachability out of the box: 196 items over 244 locations — all 138
+  engine-derived ground-item keys and 73 scripted reward keys from
+  `rando_keymap.c` bind 1:1 — with the settings the runtime consumes
+  (OPENWORLD dropdown, sleep warp, start sword, early wind crests, fast
+  text).
+- **Licensing stays clean**: the embedded database is ORIGINAL content
+  authored for this port against the decompilation; the GPL
+  `default.logic` is still never vendored. A user-supplied upstream file
+  (`TMC_RANDO_LOGIC=/path` or `assets/rando/default.logic`) keeps
+  precedence and still offers its full 882-location coverage;
+  `TMC_RANDO_LOGIC=none` falls back to the old built-in graph.
+- Softlock-free by construction: requirements err strict, quest-gated NPC
+  rewards only ever hold non-progression items, dungeon keys stay vanilla,
+  and the smith's sword is granted at file creation. Open world pre-solves
+  obstacles at runtime while generation keeps the strict requirements
+  (extra access only — never a stranded item).
+- Verified: offline `rando_logic_test` (deterministic beatable seeds over
+  244 locations, OPENWORLD override drives the `openWorld` eventdefine,
+  binding asserts) and the headless `TMC_REPRO_RANDO=1` harness in all
+  three modes — embedded, upstream file, and `none` — including chest
+  persistence round-trip and the sleep-warp e2e on the embedded database.
+
+### Randomizer — Open world setting + new-file baseline parity (#155)
+
+- **Open world now actually opens the world.** The `OPENWORLD` World
+  Setting (and the "Open world (fast)" preset) previously only relaxed
+  generation logic: seeds placed progression behind cut trees, cracked
+  blocks, bomb walls, webs, switches, and locked shortcuts that still
+  existed in-game — a softlock. The `openWorld` eventdefine is now
+  consumed at new-file commit: a 403-entry named-engine-flag table
+  (`port/rando/rando_newfile.c`) pre-solves every permanently solvable
+  obstacle — cut trees, cracked blocks, bomb walls, boulder shortcuts,
+  non-key doors, bean vines, switches, levers, chest spawns, extendable
+  bridges — plus marks the world map visited and unlocks Dampé's
+  graveyard gate, matching the GBA randomizer's `worldOpen` new-game
+  table byte-for-byte (asserted by `rando_logic_test` under USA flag
+  numbering; the named flags compile to the correct bits on EU too,
+  where a raw byte image would have corrupted saves).
+- **Open world is also a built-in option.** Native-graph seeds (no
+  `.logic` file) get an "Open world" checkbox in the file-select overlay
+  and the F8 Randomizer tab, persisted as `rando_open_world` in
+  `config.json` and in the per-slot `.randomizer` sidecar.
+- **Every rando file now starts from the upstream new-game baseline.**
+  The unconditional `startingFlags` blob is applied as a 47-entry named
+  flag table on top of the existing story skip — including baseline
+  obstacle removals that default `.logic` reachability assumes (e.g. the
+  Royal Valley graveyard bomb wall), which could previously strand
+  placements on no-bomb seeds. Upstream QoL parity comes with it:
+  first-pickup item popups pre-seen, pause menu usable before any sword,
+  world map item + full map reveal, kinstone bag visible, all figurines
+  owned (unless the figurine-hunt goal is on), cucco minigame
+  pre-skipped per the `CUCCO_*` setting, sanctuary stone NPCs unfrozen,
+  unshuffled pot/dig/underwater kinstone locations guarded, pre-opened
+  dungeon portals' switches marked pressed, and `blueGinaGrave` honored.
+- The headless `TMC_REPRO_RANDO=1` harness now asserts the full chain on
+  the real `default.logic`: `OPENWORLD=OPENWORLD_ON` override → reparse →
+  beatable generation → obstacles actually open at new-file commit; plus
+  baseline/QoL state and the native toggle path.
+
 ### Randomizer — native graph made canonical; `.logic` demoted to optional import
 
 - Reframed `port/rando/` so the **native location graph is the canonical

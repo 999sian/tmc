@@ -83,12 +83,15 @@ void V3TennisBallProjectile_Action2(Entity* this) {
 }
 
 bool32 sub_080ACB40(Entity* this) {
+    Entity* r1_grandparent;
+    Entity* child;
+    Entity* tmp;
     /* #97 pattern: parent or grandparent may have died this frame. */
     if (this->parent == NULL || this->parent->parent == NULL) {
         return FALSE;
     }
-    Entity* r1_grandparent = this->parent->parent;
-    Entity* child = this->child;
+    r1_grandparent = this->parent->parent;
+    child = this->child;
 #ifdef PC_PORT
     /* #140-class: heap[7..10] are the four eyes, which Vaati's defeat cleanup
      * (vaatiWrath.c:sub_08041BE8) DeleteEntity's and NULLs. A tennis ball
@@ -113,7 +116,7 @@ bool32 sub_080ACB40(Entity* this) {
     }
     return TRUE;
 #else
-    Entity* tmp = ((Entity**)(r1_grandparent->myHeap))[7]->child;
+    tmp = ((Entity**)(r1_grandparent->myHeap))[7]->child;
 
     if (tmp != this && child == tmp->child) {
         return FALSE;

@@ -84,20 +84,20 @@ void GyorgBossObject_SetupStart(GyorgBossObjectEntity* this) {
     heap->female = (GyorgFemaleEntity*)tmp;
     tmp = CreateEnemy(GYORG_MALE, 0);
     tmp->x.HALF.HI = gRoomControls.origin_x + 0x200;
-#ifdef EU
+    if (REGION_IS_EU) {
     tmp->y.HALF.HI = gRoomControls.origin_y + 0x380;
-#else
+    } else {
     tmp->y.HALF.HI = gRoomControls.origin_y + 0x330;
-#endif
+    }
     tmp->myHeap = heap;
     heap->male1 = (GyorgMaleEntity*)tmp;
     tmp = CreateEnemy(GYORG_MALE, 1);
     tmp->x.HALF.HI = gRoomControls.origin_x + 0x260;
-#ifdef EU
+    if (REGION_IS_EU) {
     tmp->y.HALF.HI = gRoomControls.origin_y + 0x360;
-#else
+    } else {
     tmp->y.HALF.HI = gRoomControls.origin_y + 0x310;
-#endif
+    }
     tmp->myHeap = heap;
     heap->male2 = (GyorgMaleEntity*)tmp;
     gScreen.bg3.control = 0x1E07;
@@ -112,10 +112,10 @@ void GyorgBossObject_SetupStart(GyorgBossObjectEntity* this) {
     gPlayerState.flags |= PL_GYORG_FIGHT;
     gPlayerState.startPosX = gRoomControls.origin_x + 0x200;
     gPlayerState.startPosY = gRoomControls.origin_y + 0x210;
-#ifndef EU
+    if (!REGION_IS_EU) {
     SoundReq(SONG_STOP_BGM);
     gArea.bgm = gArea.queued_bgm;
-#endif
+    }
 }
 
 void GyorgBossObject_Setup(GyorgBossObjectEntity* this) {

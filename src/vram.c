@@ -232,10 +232,10 @@ bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
 bool32 LoadSwapGFX(Entity* entity, u32 count, u32 slotIndex) {
     u32 status;
     if ((slotIndex == 0) && (slotIndex = FindFreeGFXSlots(count), slotIndex == 0)) {
-#ifndef EU
+        if (!REGION_IS_EU) {
         CleanUpGFXSlots();
         slotIndex = FindFreeGFXSlots(count);
-#endif
+        }
         if (slotIndex == 0) {
             goto _080AE058;
         }
@@ -333,11 +333,7 @@ u32 FindFreeGFXSlots(u32 slotCount) {
     continuosFreeSlots = 0;
     index = 4;
     for (index = 4; index < MAX_GFX_SLOTS; index++) {
-#ifdef EU
-        if (gGFXSlots.slots[index].status == GFX_SLOT_UNLOADED) {
-#else
-        if (gGFXSlots.slots[index].status == GFX_SLOT_FREE || gGFXSlots.slots[index].status == GFX_SLOT_UNLOADED) {
-#endif
+        if (REGION_IS_EU ? (gGFXSlots.slots[index].status == GFX_SLOT_UNLOADED) : (gGFXSlots.slots[index].status == GFX_SLOT_FREE || gGFXSlots.slots[index].status == GFX_SLOT_UNLOADED)) {
             continuosFreeSlots++;
             if (slotCount <= continuosFreeSlots) {
                 return (index - continuosFreeSlots) + 1;

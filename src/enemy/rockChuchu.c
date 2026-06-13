@@ -49,9 +49,9 @@ void RockChuchu_OnCollision(Entity* this) {
                 entity = CreateEnemy(CHUCHU, 1);
                 if (entity != NULL) {
                     entity->type2 = 1;
-#ifndef EU
+                    if (!REGION_IS_EU) {
                     entity->iframes = -8;
-#endif
+                    }
                     EnemyCopyParams(this, entity);
                     this->action = 2;
                     COLLISION_OFF(this);
@@ -105,10 +105,10 @@ void sub_080223E4(Entity* this) {
     if (entity != NULL) {
         entity->contactFlags = (CONTACT_NOW | 0x14);
         entity->iframes = 0x10;
-#ifndef EU
+        if (!REGION_IS_EU) {
         entity->knockbackDuration = 0xc;
         entity->knockbackDirection = this->direction;
-#endif
+        }
     }
 
     DeleteEntity(this);

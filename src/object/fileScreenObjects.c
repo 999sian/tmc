@@ -175,11 +175,11 @@ static bool32 sub_0808E950(void) {
 void FileScreenObjects_Type24(FileScreenObjectsEntity* this) {
     if (super->action == 0) {
         super->action = 1;
-#ifdef EU
+        if (REGION_IS_EU) {
         super->spriteIndex = 0x141;
-#else
+        } else {
         super->spriteIndex = 0x142;
-#endif
+        }
         super->type2 = 0xFF;
         LoadSwapGFX(super, 1, 3);
     }
@@ -460,7 +460,7 @@ void FileScreenObjects_Type10(FileScreenObjectsEntity* this) {
     };
     s32 var0, var1, var2;
 
-    var0 = ((SaveHeader*)gba_MemPtr(0x2000000))->language != 0;
+    var0 = gSaveHeader->language != 0;
     var1 = super->type - 10;
     super->frameIndex = gUnk_08121D38[var0][var1];
     super->x.HALF.HI = gUnk_08121D18[var0][var1];

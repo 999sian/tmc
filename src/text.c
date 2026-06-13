@@ -58,7 +58,12 @@ extern struct_gUnk_02034330 gUnk_02034330;
 extern WStruct gUnk_02036540[4];
 
 extern u32* gTranslations[];
+#ifdef PC_PORT
 extern u8* gTextVariableSources[];
+#else
+extern u8* gUnk_08109230[];
+#define gTextVariableSources gUnk_08109230
+#endif
 extern u32 gUnk_08109244;   // TODO structure?
 extern u32* gUnk_08109248[];
 extern u32 gUnk_0810926C[];

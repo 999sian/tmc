@@ -253,7 +253,9 @@ void sub_0804AF0C(Entity* ent, const EntityData* dat) {
             ent->y.HALF.HI = dat->yPos + gRoomControls.origin_y;
 #ifdef PC_PORT
             {
-                void* resolved = (void*)Port_ResolveRomData(dat->spritePtr);
+                /* dat->spritePtr holds a baked USA script address (ENTITY_SCRIPT);
+                 * translate to the active region before resolving into ROM data. */
+                void* resolved = (void*)Port_ResolveScript(dat->spritePtr);
                 ScriptExecutionContext* ctx = StartCutscene(ent, (u16*)resolved);
                 if (!ctx)
                     DeleteEntity(ent);

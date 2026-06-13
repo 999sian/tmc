@@ -254,6 +254,15 @@ int RunSubprocess(const char* const argv[]) {
         return -1;
     }
     g_state.current_pid.store(pid);
+    /* If shutdown began between the worker's dequeue and this spawn,
+     * Port_TTS_Stop()'s KillCurrent() may have run while current_pid was
+     * still 0 (this child hadn't been spawned yet), leaving spd-say
+     * unkilled — waitpid() below would then block forever and deadlock
+     * Port_TTS_Shutdown()'s worker.join() (frozen quit). Re-check the
+     * flag now that the pid is recorded and kill if we're shutting down. */
+    if (g_state.quitting.load()) {
+        kill(pid, SIGTERM);
+    }
     int status = 0;
     waitpid(pid, &status, 0);
     g_state.current_pid.store(0);

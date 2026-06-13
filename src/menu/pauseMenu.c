@@ -261,11 +261,11 @@ void sub_080A5128(void) {
     gOamCmd._8 = 0x400;
     gOamCmd.x = p[0].x;
     gOamCmd.y = p[0].y;
-#ifdef EU
+    if (REGION_IS_EU) {
     r5 = 0x1fa;
-#else
+    } else {
     r5 = 0x1fb;
-#endif
+    }
     DrawDirect(r5, 0);
     gOamCmd.x = p[1].x;
     gOamCmd.y = p[1].y;
@@ -971,11 +971,11 @@ void sub_080A57F4(void) {
                 if (!GetSpriteAnimation322Index(uVar5, &uVar5)) {
                     continue;
                 }
-#ifdef EU
+                if (REGION_IS_EU) {
                 spriteIndex = 0x141;
-#else
+                } else {
                 spriteIndex = 0x142;
-#endif
+                }
             }
             DrawDirect(spriteIndex, uVar5);
         }
@@ -1106,13 +1106,13 @@ void PauseMenu_Screen_9() {
 void sub_080A5AF4(void) {
     gMenu.field_0x3 = 0;
     SetPopupState(2, 0);
-#ifndef EU
+    if (!REGION_IS_EU) {
     if (gSaveHeader->language == 0) {
         gScreen.bg1.yOffset = -4;
     } else {
         gScreen.bg1.yOffset = 0;
     }
-#endif
+    }
     SetMenuType(1);
 }
 

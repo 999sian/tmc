@@ -682,11 +682,11 @@ void sub_StateChange_HyruleCastle_1(void) {
         if (!CheckGlobalFlag(LV1_CLEAR) && CheckGlobalFlag(TABIDACHI)) {
             LoadRoomEntityList(&gUnk_080D73E0);
         }
-#ifndef EU
+        if (!REGION_IS_EU) {
         if (CheckGlobalFlag(CASTLE_BGM)) {
             gArea.queued_bgm = gArea.bgm;
         }
-#endif
+        }
     }
 }
 
@@ -700,11 +700,11 @@ extern EntityData gUnk_080D75D8;
 extern EntityData gUnk_080D7618;
 
 void sub_StateChange_HyruleCastle_2(void) {
-#ifndef EU
+    if (!REGION_IS_EU) {
     if (CheckGlobalFlag(CASTLE_BGM)) {
         gArea.queued_bgm = gArea.bgm;
     }
-#endif
+    }
 
     if (CheckGlobalFlag(ENDING)) {
         LoadRoomEntityList(&gUnk_080D7618);
@@ -5611,11 +5611,11 @@ u32 sub_unk3_HouseInteriors3_RemShoeShop(void) {
 extern EntityData gUnk_080F5B3C;
 
 void sub_StateChange_HouseInteriors3_RemShoeShop(void) {
-#ifndef EU
+    if (!REGION_IS_EU) {
     if (GetInventoryValue(ITEM_QST_MUSHROOM) == 1) {
         LoadRoomEntityList(&gUnk_080F5B3C);
     }
-#endif
+    }
 }
 
 u32 sub_unk3_HouseInteriors3_Bakery(void) {
@@ -5762,9 +5762,9 @@ void sub_StateChange_WindTribeTowerRoof_Main(void) {
         LoadRoomEntityList(&gUnk_080F66AC);
     }
     SetWorldMapPos(8, 0, 0x1e8, 0x158);
-#ifndef EU
+    if (!REGION_IS_EU) {
     gArea.areaMetadata |= AR_ALLOWS_WARP;
-#endif
+    }
 }
 
 u32 sub_unk3_Beanstalks_MountCrenel(void) {
@@ -5975,11 +5975,11 @@ u32 sub_unk3_HyruleField_OutsideCastle(void) {
         gRoomVars.properties[7] = sub_0804F4E4;
         gRoomVars.properties[2] = NULL;
     }
-#ifndef EU
+    if (!REGION_IS_EU) {
     if (CheckGlobalFlag(TABIDACHI)) {
         ClearGlobalFlag(CASTLE_BGM);
     }
-#endif
+    }
     return 1;
 }
 

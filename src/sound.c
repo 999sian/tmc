@@ -56,9 +56,9 @@ void InitSoundPlayingInfo(void) {
     InitVolume();
     gSoundPlayingInfo.volumeSfx = 0x100;
     gSoundPlayingInfo.unk_04 = 0x100;
-#ifndef EU
+    if (!REGION_IS_EU) {
     m4aMPlayAllStop();
-#endif
+    }
 }
 
 void SetMasterVolume(u32 volume) {

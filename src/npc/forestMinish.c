@@ -556,7 +556,7 @@ void ForestMinish(ForestMinishEntity* this) {
                 super->timer = 0;
                 SetEntityPriority(super, PRIO_MESSAGE);
 #ifdef PC_PORT
-                StartCutscene(super, (u16*)Port_ResolveRomData(gForestMinishScriptGBAAddrs[super->type2]));
+                StartCutscene(super, (u16*)Port_ResolveScript(gForestMinishScriptGBAAddrs[super->type2]));
 #else
                 StartCutscene(super, (u16*)gUnk_08109D18[super->type2]);
 #endif

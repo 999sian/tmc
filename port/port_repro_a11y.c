@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "port_repro.h"
 
 #include "main.h"   /* gMain, TASK_GAME */
 #include "room.h"   /* gRoomControls */
@@ -33,9 +34,8 @@
 #include "item_ids.h" /* ITEM_RUPEE20 */
 #include "port_a11y_cues.h"
 #include "port_gba_mem.h"
+#include "port_debug_actions.h"
 
-extern int Port_DebugAction_Warp(unsigned char area, unsigned char room,
-                                 unsigned short x, unsigned short y, unsigned char layer);
 
 #define KEYINPUT_REG 0x130
 #define A_BUTTON     0x0001

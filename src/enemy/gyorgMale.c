@@ -153,11 +153,11 @@ void sub_08046930(GyorgMaleEntity* this) {
     if (super->type) {
         super->subAction = 5;
         super->direction = 0x20;
-#ifdef EU
+        if (REGION_IS_EU) {
         super->speed = 0x200;
-#else
+        } else {
         super->speed = 0x280;
-#endif
+        }
     }
     sub_08047D88(this);
     if (this->unk_7c == 0)
@@ -166,11 +166,11 @@ void sub_08046930(GyorgMaleEntity* this) {
     super->timer = 1;
     super->animationState = IdleNorth;
     super->direction = IdleNorth;
-#ifdef EU
+    if (REGION_IS_EU) {
     super->speed = 0x200;
-#else
+    } else {
     super->speed = 0x280;
-#endif
+    }
 }
 
 void sub_0804696C(GyorgMaleEntity* this) {
@@ -181,16 +181,12 @@ void sub_0804696C(GyorgMaleEntity* this) {
         super->speed = 0x100;
         super->spriteOrientation.flipY = 3;
         super->spriteRendering.b3 = 3;
-#ifndef EU
+        if (!REGION_IS_EU) {
         SoundReq(BGM_BOSS_THEME);
-#endif
+        }
     }
     if (super->timer) {
-#ifdef EU
-        if (gRoomControls.origin_y + 0x210 > super->y.HALF.HI) {
-#else
-        if (gRoomControls.origin_y + 0x258 > super->y.HALF.HI) {
-#endif
+        if (gRoomControls.origin_y + (REGION_IS_EU ? 0x210 : 0x258) > super->y.HALF.HI) {
             super->timer = 0;
             SoundReq(SFX_APPARATE);
         }

@@ -1,9 +1,15 @@
 /*
  * port_config.h — ROM region detection and offset configuration.
  *
- * Supports both USA (BZME) and EU (BZMP) ROMs with runtime auto-detection.
- * All region-specific ROM offsets are stored in RomOffsets and selected
- * at load time based on the game code at ROM offset 0xAC.
+ * Supports USA (BZME), EU (BZMP), and JP (BZMJ) ROMs with runtime
+ * auto-detection. All region-specific ROM offsets are stored in RomOffsets
+ * and selected at load time based on the game code at ROM offset 0xAC.
+ *
+ * JP NOTE: the JP path is wired but its offset values are ROM-derived and
+ * cannot be produced without a JP baserom (BZMJ, matching tmc_jp.sha1) and a
+ * JP build. kRomOffsets_JP below is a placeholder until then — see
+ * docs/JP_PORT_ENABLEMENT.md. A JP build also requires the generated
+ * port_offset_JP.h, so it will not compile until that file exists.
  */
 #pragma once
 #include "port_types.h"
@@ -13,6 +19,7 @@ typedef enum {
     ROM_REGION_UNKNOWN = 0,
     ROM_REGION_USA, /* Game code: BZME */
     ROM_REGION_EU,  /* Game code: BZMP */
+    ROM_REGION_JP,  /* Game code: BZMJ — offsets UNVERIFIED (ROM-gated) */
 } RomRegion;
 
 /* ---- Region-specific ROM symbol offsets ---- */
@@ -72,6 +79,10 @@ extern const RomOffsets* gRomOffsets;
 /* ---- Predefined offset tables ---- */
 extern const RomOffsets kRomOffsets_USA;
 extern const RomOffsets kRomOffsets_EU;
+/* JP table is a placeholder until generated from build/JP/tmc_jp.map — its
+ * ROM-derived address fields are 0. Port_DetectRomRegion refuses to run a JP
+ * build against it while unpopulated. See docs/JP_PORT_ENABLEMENT.md. */
+extern const RomOffsets kRomOffsets_JP;
 
 /* Detect region from loaded ROM data and set gRomRegion + gRomOffsets.
  * Returns the detected region. */

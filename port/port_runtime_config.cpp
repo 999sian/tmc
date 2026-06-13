@@ -71,6 +71,13 @@ u32  sAutosaveIntervalMs = 60000;
  * Android compatibility. */
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
 bool sWidescreenEnabled = false;
+/* Console-Parity mode. When true the port suppresses every feature that
+ * gives the player an edge over real GBA hardware, so a run is provably
+ * console-equivalent: sub-frame input edge leniency off, save-states inert,
+ * widescreen forced off, frame pacing locked to the authentic 59.7275 Hz.
+ * Default false. Persisted as "console_parity"; CLI --console-parity forces
+ * it on after config load. */
+bool sConsoleParity = false;
 /* Widescreen pillarbox config — applied in port_ppu.cpp's present path.
  * Defaults reproduce the historical behavior: GBA 3:2 frame fills as
  * much of the window as possible, side bars are black. */
@@ -92,15 +99,34 @@ bool        sA11yFootsteps = true;
 bool        sA11yHazards   = true;
 bool        sA11yRadar     = true;
 bool        sA11yWalls     = true;
+/* Speedrun practice mode (port_practice.c). Overlays default off so normal
+ * play stays uncluttered; slow-mo defaults to 1.0 (normal speed). */
+bool        sPracticeShowTimer   = false;
+bool        sPracticeShowInputs  = false;
+bool        sPracticeShowHistory = false;
+float       sPracticeSlowmo      = 1.0f;
+/* Runtime toggles that previously lived only in memory (issue #146): they
+ * now persist to config.json and are re-applied at startup. */
+bool        sDiscordRpc    = false;
+bool        sVSyncCfg      = true;     /* matches Port_PPU's sVSyncEnabled default */
+bool        sFullscreen    = false;
+std::string sShaderPreset;             /* path to active .glslp, empty = none */
+unsigned    sRebornFeatures   = 0;     /* bitmask of enabled Reborn features */
+bool        sHasRebornFeatures = false;/* was the key present in config.json? */
 /* Randomizer persistence (issue #155) — file-select toggle, built-in
  * graph settings, and .logic define overrides. Defaults = vanilla. */
 bool sRandoEnabled    = false;
 bool sRandoGlitchless = true;
 bool sRandoKinstones  = true;
 bool sRandoDojos      = true;
+bool sRandoOpenWorld  = false;
 int  sRandoItemPool   = 0;
-std::vector<std::pair<std::string, std::string>> sRandoOverrides;
-std::vector<std::pair<std::string, std::string>> sRandoOverridesStaged;
+bool sRandoHomewarp   = true;
+bool sRandoStartSword = true;
+bool sRandoEarlyCrests = true;
+bool sRandoInstantText = true;
+int  sRandoTunicColor = 0;
+int  sRandoHeartColor = 0;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -119,6 +145,10 @@ nlohmann::json sConfigJson;
 const std::array<u32, 9> kFpsPresets = { 0, 30, 60, 75, 90, 120, 144, 150, 240 };
 /* Default cap when config omits frame_time_ns (1e9 ns / 60 Hz). */
 constexpr u64 kDefaultFrameTimeNs = 1000000000ULL / 60;
+/* Authentic GBA frame period used in Console-Parity mode. The GBA draws
+ * 228 scanlines * 1232 cycles = 280896 cycles/frame at a 2^24 Hz CPU clock,
+ * i.e. 16777216/280896 = 59.7275 Hz -> 280896/16777216 s = 16742706 ns. */
+constexpr u64 kGbaFrameTimeNs = 16742706ULL;
 
 nlohmann::json DefaultsJson(void) {
     nlohmann::json j = {
@@ -132,6 +162,8 @@ nlohmann::json DefaultsJson(void) {
         { "autosave_interval_ms", 60000 },
         { "touch_scheme", "joystick" },
         { "widescreen_enabled", false },
+        /* Console-Parity mode — off by default; legit-run integrity toggle. */
+        { "console_parity", false },
         { "aspect_mode", "native" },
         { "bg_fill", "black" },
         { "bg_fill_color", { 0, 0, 0 } },
@@ -154,12 +186,30 @@ nlohmann::json DefaultsJson(void) {
         { "a11y_hazards", true },
         { "a11y_radar", true },
         { "a11y_walls", true },
+        /* Speedrun practice mode — overlays off, slow-mo at normal speed. */
+        { "practice_show_timer", false },
+        { "practice_show_inputs", false },
+        { "practice_show_history", false },
+        { "practice_slowmo", 1.0 },
+        /* Persisted runtime toggles (issue #146). reborn_features is
+         * intentionally absent from defaults — its presence is the signal
+         * to override the compile-time feature defaults. */
+        { "discord_rpc", false },
+        { "vsync", true },
+        { "fullscreen", false },
+        { "shader_preset", "" },
         { "rando_enabled", false },
         { "rando_glitchless", true },
         { "rando_kinstones", true },
         { "rando_dojos", true },
+        { "rando_open_world", false },
         { "rando_item_pool", 0 },
-        { "rando_logic_overrides", nlohmann::json::object() },
+        { "rando_homewarp", true },
+        { "rando_start_sword", true },
+        { "rando_early_crests", true },
+        { "rando_instant_text", true },
+        { "rando_tunic_color", 0 },
+        { "rando_heart_color", 0 },
         { "bindings", nlohmann::json::object() },
     };
     for (const auto& d : kDefaults) {
@@ -503,6 +553,7 @@ extern "C" void Port_Config_Load(const char* path) {
             sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
         }
         sWidescreenEnabled = j.value("widescreen_enabled", false);
+        sConsoleParity = j.value("console_parity", false);
         {
             std::string am = j.value("aspect_mode", std::string("native"));
             for (char& c : am) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
@@ -552,19 +603,30 @@ extern "C" void Port_Config_Load(const char* path) {
         sA11yRadar     = j.value("a11y_radar", true);
         sA11yWalls     = j.value("a11y_walls", true);
 
+        sPracticeShowTimer   = j.value("practice_show_timer", false);
+        sPracticeShowInputs  = j.value("practice_show_inputs", false);
+        sPracticeShowHistory = j.value("practice_show_history", false);
+        sPracticeSlowmo      = (float)j.value("practice_slowmo", 1.0);
+
+        sDiscordRpc  = j.value("discord_rpc", false);
+        sVSyncCfg    = j.value("vsync", true);
+        sFullscreen  = j.value("fullscreen", false);
+        sShaderPreset = j.value("shader_preset", std::string());
+        sHasRebornFeatures = j.contains("reborn_features");
+        sRebornFeatures = sHasRebornFeatures ? j.value("reborn_features", 0u) : 0u;
+
         sRandoEnabled    = j.value("rando_enabled", false);
         sRandoGlitchless = j.value("rando_glitchless", true);
         sRandoKinstones  = j.value("rando_kinstones", true);
         sRandoDojos      = j.value("rando_dojos", true);
+        sRandoOpenWorld  = j.value("rando_open_world", false);
         sRandoItemPool   = j.value("rando_item_pool", 0);
-        sRandoOverrides.clear();
-        if (j.contains("rando_logic_overrides") && j["rando_logic_overrides"].is_object()) {
-            for (const auto& it : j["rando_logic_overrides"].items()) {
-                if (it.value().is_string()) {
-                    sRandoOverrides.emplace_back(it.key(), it.value().get<std::string>());
-                }
-            }
-        }
+        sRandoHomewarp   = j.value("rando_homewarp", true);
+        sRandoStartSword = j.value("rando_start_sword", true);
+        sRandoEarlyCrests = j.value("rando_early_crests", true);
+        sRandoInstantText = j.value("rando_instant_text", true);
+        sRandoTunicColor = j.value("rando_tunic_color", 0);
+        sRandoHeartColor = j.value("rando_heart_color", 0);
 
         for (auto& v : sBinds) {
             v.clear();
@@ -595,14 +657,21 @@ extern "C" const char* Port_Config_UpscaleMethod(void) {
 }
 
 extern "C" u64 Port_Config_FrameTimeNs(void) {
+    /* Parity mode pins pacing to authentic GBA refresh, ignoring any user
+     * fps cap (including uncapped), so segment/long-run timing matches
+     * console instead of the round 60 Hz default. */
+    if (sConsoleParity) {
+        return kGbaFrameTimeNs;
+    }
     return sFrameTimeNs;
 }
 
 extern "C" u32 Port_Config_TargetFps(void) {
-    if (sFrameTimeNs == 0) {
+    const u64 frameNs = Port_Config_FrameTimeNs();
+    if (frameNs == 0) {
         return 0;
     }
-    return (u32)((1000000000ULL + (sFrameTimeNs / 2)) / sFrameTimeNs);
+    return (u32)((1000000000ULL + (frameNs / 2)) / frameNs);
 }
 
 extern "C" bool Port_Config_PortSettingsMenuEnabled(void) {
@@ -710,6 +779,14 @@ extern "C" void Port_Config_CycleTouchScheme(int /*direction*/) {
 }
 
 extern "C" bool Port_Config_WidescreenEnabled(void) {
+    /* Parity mode forces the effective answer to false regardless of the
+     * stored preference: widening the framebuffer also widens off-screen
+     * AI culling, which ticks enemies (and advances RNG) earlier than
+     * hardware. The saved pref is preserved so toggling parity back off
+     * restores the user's choice. */
+    if (sConsoleParity) {
+        return false;
+    }
     return sWidescreenEnabled;
 }
 
@@ -721,6 +798,20 @@ extern "C" void Port_Config_SetWidescreenEnabled(bool enabled) {
 
 extern "C" void Port_Config_ToggleWidescreen(void) {
     Port_Config_SetWidescreenEnabled(!sWidescreenEnabled);
+}
+
+extern "C" bool Port_Config_GetConsoleParity(void) {
+    return sConsoleParity;
+}
+
+extern "C" void Port_Config_SetConsoleParity(bool on) {
+    sConsoleParity = on;
+    sConfigJson["console_parity"] = on;
+    SaveConfig();
+}
+
+extern "C" void Port_Config_ToggleConsoleParity(void) {
+    Port_Config_SetConsoleParity(!sConsoleParity);
 }
 
 extern "C" PortAspectMode Port_Config_AspectMode(void) {
@@ -1030,6 +1121,12 @@ extern "C" void Port_Config_ClearInputEdges(void) {
 }
 
 extern "C" bool Port_Config_InputEdgePressed(PortInput input) {
+    /* Parity mode disables the sub-frame edge cache: a press is only seen
+     * on the frame the engine actually polls it, matching hardware 1-frame
+     * input granularity instead of the more-lenient port default. */
+    if (sConsoleParity) {
+        return false;
+    }
     if (input >= 0 && input < PORT_INPUT_COUNT) {
         return sEdgePressed[input];
     }
@@ -1080,7 +1177,7 @@ extern "C" bool Port_Config_InputPressed(PortInput input) {
      * GAMEPAD_BUTTON_DOWN events. Lets a sub-frame tap (press+release
      * entirely between two polls) still register as held for one game
      * frame, which the polled-state path below cannot do on its own. */
-    if (input >= 0 && input < PORT_INPUT_COUNT && sEdgePressed[input]) {
+    if (!sConsoleParity && input >= 0 && input < PORT_INPUT_COUNT && sEdgePressed[input]) {
         return true;
     }
 
@@ -1306,6 +1403,39 @@ extern "C" void Port_Config_SetA11yRadar(bool on) { sA11yRadar = on; sConfigJson
 extern "C" bool Port_Config_GetA11yWalls(void) { return sA11yWalls; }
 extern "C" void Port_Config_SetA11yWalls(bool on) { sA11yWalls = on; sConfigJson["a11y_walls"] = on; SaveConfig(); }
 
+/* ---- Speedrun practice mode ------------------------------------------- */
+extern "C" bool Port_Config_GetPracticeShowTimer(void) { return sPracticeShowTimer; }
+extern "C" void Port_Config_SetPracticeShowTimer(bool on) { sPracticeShowTimer = on; sConfigJson["practice_show_timer"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetPracticeShowInputs(void) { return sPracticeShowInputs; }
+extern "C" void Port_Config_SetPracticeShowInputs(bool on) { sPracticeShowInputs = on; sConfigJson["practice_show_inputs"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetPracticeShowHistory(void) { return sPracticeShowHistory; }
+extern "C" void Port_Config_SetPracticeShowHistory(bool on) { sPracticeShowHistory = on; sConfigJson["practice_show_history"] = on; SaveConfig(); }
+extern "C" float Port_Config_GetPracticeSlowmo(void) { return sPracticeSlowmo; }
+extern "C" void Port_Config_SetPracticeSlowmo(float v) {
+    if (v < 0.05f) v = 0.05f;
+    if (v > 1.0f)  v = 1.0f;
+    sPracticeSlowmo = v; sConfigJson["practice_slowmo"] = v; SaveConfig();
+}
+
+/* ---- Persisted runtime toggles (issue #146) --------------------------- */
+extern "C" bool Port_Config_GetDiscordRpc(void) { return sDiscordRpc; }
+extern "C" void Port_Config_SetDiscordRpc(bool on) { sDiscordRpc = on; sConfigJson["discord_rpc"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetVSync(void) { return sVSyncCfg; }
+extern "C" void Port_Config_SetVSync(bool on) { sVSyncCfg = on; sConfigJson["vsync"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetFullscreen(void) { return sFullscreen; }
+extern "C" void Port_Config_SetFullscreen(bool on) { sFullscreen = on; sConfigJson["fullscreen"] = on; SaveConfig(); }
+extern "C" const char* Port_Config_GetShaderPreset(void) { return sShaderPreset.c_str(); }
+extern "C" void Port_Config_SetShaderPreset(const char* path) {
+    sShaderPreset = (path && path[0]) ? path : "";
+    sConfigJson["shader_preset"] = sShaderPreset; SaveConfig();
+}
+extern "C" int      Port_Config_HasRebornMask(void) { return sHasRebornFeatures ? 1 : 0; }
+extern "C" unsigned Port_Config_GetRebornMask(void) { return sRebornFeatures; }
+extern "C" void     Port_Config_SetRebornMask(unsigned mask) {
+    sRebornFeatures = mask; sHasRebornFeatures = true;
+    sConfigJson["reborn_features"] = mask; SaveConfig();
+}
+
 /* ---- Randomizer persistence (issue #155) ------------------------------ */
 
 extern "C" bool Port_Config_GetRandoEnabled(void) { return sRandoEnabled; }
@@ -1317,42 +1447,39 @@ extern "C" void Port_Config_SetRandoEnabled(bool on) {
 extern "C" bool Port_Config_GetRandoGlitchless(void) { return sRandoGlitchless; }
 extern "C" bool Port_Config_GetRandoKinstones(void) { return sRandoKinstones; }
 extern "C" bool Port_Config_GetRandoDojos(void) { return sRandoDojos; }
+extern "C" bool Port_Config_GetRandoOpenWorld(void) { return sRandoOpenWorld; }
 extern "C" int  Port_Config_GetRandoItemPool(void) { return sRandoItemPool; }
-extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, int item_pool) {
+extern "C" bool Port_Config_GetRandoHomewarp(void) { return sRandoHomewarp; }
+extern "C" bool Port_Config_GetRandoStartSword(void) { return sRandoStartSword; }
+extern "C" bool Port_Config_GetRandoEarlyCrests(void) { return sRandoEarlyCrests; }
+extern "C" bool Port_Config_GetRandoInstantText(void) { return sRandoInstantText; }
+extern "C" int  Port_Config_GetRandoTunicColor(void) { return sRandoTunicColor; }
+extern "C" int  Port_Config_GetRandoHeartColor(void) { return sRandoHeartColor; }
+
+extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, bool open_world,
+                                             int item_pool, bool homewarp, bool start_sword, bool early_crests,
+                                             bool instant_text, int tunic_color, int heart_color) {
     sRandoGlitchless = glitchless;
     sRandoKinstones  = kinstones;
     sRandoDojos      = dojos;
+    sRandoOpenWorld  = open_world;
     sRandoItemPool   = item_pool;
+    sRandoHomewarp   = homewarp;
+    sRandoStartSword = start_sword;
+    sRandoEarlyCrests = early_crests;
+    sRandoInstantText = instant_text;
+    sRandoTunicColor = tunic_color;
+    sRandoHeartColor = heart_color;
     sConfigJson["rando_glitchless"] = glitchless;
     sConfigJson["rando_kinstones"]  = kinstones;
     sConfigJson["rando_dojos"]      = dojos;
+    sConfigJson["rando_open_world"] = open_world;
     sConfigJson["rando_item_pool"]  = item_pool;
+    sConfigJson["rando_homewarp"]   = homewarp;
+    sConfigJson["rando_start_sword"] = start_sword;
+    sConfigJson["rando_early_crests"] = early_crests;
+    sConfigJson["rando_instant_text"] = instant_text;
+    sConfigJson["rando_tunic_color"] = tunic_color;
+    sConfigJson["rando_heart_color"] = heart_color;
     SaveConfig();
-}
-
-extern "C" void Port_Config_RandoOverridesBegin(void) {
-    sRandoOverridesStaged.clear();
-}
-extern "C" void Port_Config_RandoOverridesAppend(const char* name, const char* value) {
-    if (name == nullptr || name[0] == '\0') return;
-    sRandoOverridesStaged.emplace_back(name, value ? value : "");
-}
-extern "C" void Port_Config_RandoOverridesCommit(void) {
-    sRandoOverrides.swap(sRandoOverridesStaged);
-    sRandoOverridesStaged.clear();
-    nlohmann::json obj = nlohmann::json::object();
-    for (const auto& kv : sRandoOverrides) {
-        obj[kv.first] = kv.second;
-    }
-    sConfigJson["rando_logic_overrides"] = std::move(obj);
-    SaveConfig();
-}
-extern "C" size_t Port_Config_RandoOverrideCount(void) {
-    return sRandoOverrides.size();
-}
-extern "C" bool Port_Config_RandoOverrideAt(size_t index, const char** out_name, const char** out_value) {
-    if (index >= sRandoOverrides.size()) return false;
-    if (out_name) *out_name = sRandoOverrides[index].first.c_str();
-    if (out_value) *out_value = sRandoOverrides[index].second.c_str();
-    return true;
 }

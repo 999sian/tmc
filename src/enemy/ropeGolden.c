@@ -121,11 +121,11 @@ void sub_08038304(RopeGoldenEntity* this) {
     UpdateAnimationVariableFrames(super, 2);
     if (!ProcessMovement0(super)) {
         if (this->unk_78 == super->direction) {
-#ifdef EU
+            if (REGION_IS_EU) {
             super->subtimer = 30;
-#else
+            } else {
             super->subtimer = 90;
-#endif
+            }
             sub_080383AC(this);
         } else {
             super->direction = this->unk_78;

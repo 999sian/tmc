@@ -193,7 +193,10 @@ inline uint32_t to_rom_address(uint32_t offset)
 
 inline uint32_t read_pointer(uint32_t offset)
 {
-    if (offset + 4 > Rom.size()) {
+    /* Guard against integer overflow: `offset + 4` wraps for offsets near
+     * UINT32_MAX (e.g. a garbage 0xFFFFFFFD computed from a wrong region text
+     * root), which previously bypassed this check and read out of bounds. */
+    if (offset > Rom.size() || Rom.size() - offset < 4) {
         return 0;
     }
     return Rom[offset] | (Rom[offset + 1] << 8) | (Rom[offset + 2] << 16) | (Rom[offset + 3] << 24);
@@ -2238,14 +2241,20 @@ inline bool extract_texts(const Config& config)
         pl.valid = true;
         pl.root_offset = root_offset;
         pl.category_count = read_pointer(root_offset) / 4;
+        /* Sanity-cap against a misparsed root (e.g. a region whose text root we
+         * resolved wrong): a garbage huge count would otherwise spin the loop
+         * for billions of iterations. The real table has a few dozen categories. */
+        if (pl.category_count > 0x1000u) {
+            pl.category_count = 0;
+        }
 
         for (uint32_t category = 0; category < pl.category_count; ++category) {
             const uint32_t category_table_relative = read_pointer(root_offset + category * 4);
-            if (category_table_relative == 0) {
+            if (category_table_relative == 0 || category_table_relative >= Rom.size()) {
                 continue;
             }
             const uint32_t category_table_offset = root_offset + category_table_relative;
-            if (category_table_offset + 4 > Rom.size()) {
+            if (category_table_offset > Rom.size() || Rom.size() - category_table_offset < 4) {
                 continue;
             }
 
@@ -2253,6 +2262,10 @@ inline bool extract_texts(const Config& config)
             pc.category = category;
             pc.table_rom_offset = category_table_offset;
             pc.message_count = read_pointer(category_table_offset) / 4;
+            /* Same guard for messages within a category. */
+            if (pc.message_count > 0x10000u) {
+                continue;
+            }
             pc.name = text_category_name(category);
 
             for (uint32_t message = 0; message < pc.message_count; ++message) {

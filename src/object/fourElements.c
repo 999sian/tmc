@@ -117,6 +117,8 @@ void FourElements_Action1(FourElementsEntity* this) {
 }
 
 void FourElements_Action2(FourElementsEntity* this) {
+    u8 item;
+    u8 subtype;
     sub_080A0424(this);
     sub_080A0444(this);
     if (IsCollidingPlayer(super)) {
@@ -126,8 +128,8 @@ void FourElements_Action2(FourElementsEntity* this) {
         super->timer = 45;
         gScreen.controls.layerFXControl = 0x640;
         gScreen.controls.alphaBlend = 0;
-        u8 item = super->type;
-        u8 subtype = 0;
+        item = super->type;
+        subtype = 0;
 #ifdef PC_PORT
         switch (super->type) {
             case ITEM_EARTH_ELEMENT:

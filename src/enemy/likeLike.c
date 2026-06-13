@@ -289,11 +289,11 @@ bool32 LikeLike_StealItem(u32 item) {
 }
 
 void LikeLike_ReturnStolenItem(u32 item) {
-#ifdef EU
+    if (REGION_IS_EU) {
     CreateItemEntity(item, 0, 1);
-#else
+    } else {
     InitItemGetSequence(item, 0, 1);
-#endif
+    }
     MessageFromTarget(TEXT_INDEX(TEXT_ITEM_GET, 0x79));
 }
 

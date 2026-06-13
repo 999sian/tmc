@@ -116,7 +116,7 @@ void DiggingCaveEntranceManager_EnterEntrance(DiggingCaveEntranceManager* this, 
     gDiggingCaveEntranceTransition.offsetY =
         gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y - ((entr->sourceTilePos & TILE_POS_Y_COMPONENT) >> 2);
 
-#ifndef EU
+    if (!REGION_IS_EU) {
     isDiggingCave = gDiggingCaveEntranceTransition.isDiggingCave;
     if (!isDiggingCave) {
         if ((entr->targetRoom | 0x80) != gDiggingCaveEntranceTransition.targetRoom) {
@@ -124,7 +124,7 @@ void DiggingCaveEntranceManager_EnterEntrance(DiggingCaveEntranceManager* this, 
         }
         gDiggingCaveEntranceTransition.targetRoom = entr->targetRoom | 0x80;
     }
-#endif
+    }
 
     sub_08080930(entr->type);
     DeleteManager(this);

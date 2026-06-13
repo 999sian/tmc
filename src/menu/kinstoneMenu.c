@@ -413,19 +413,19 @@ void KinstoneMenu_080A4080(void) {
     gOamCmd.y = 0x10 - gKinstoneMenu.unk2f;
     gOamCmd.x = 0x40;
     gOamCmd._8 = 0x400;
-#ifdef EU
+    if (REGION_IS_EU) {
     DrawDirect(0x1fa, 0);
-#else
+    } else {
     DrawDirect(0x1fb, 0);
-#endif
+    }
     gOamCmd.y = 0x94;
     gOamCmd.x = 0x50;
     gOamCmd._8 = 0x480;
-#ifdef EU
+    if (REGION_IS_EU) {
     t = 0x1f9;
-#else
+    } else {
     t = 0x1fa;
-#endif
+    }
     DrawDirect(t, 0);
     gOamCmd.x = 0xb8;
     gOamCmd._8 = 0x4a0;

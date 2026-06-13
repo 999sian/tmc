@@ -1,11 +1,17 @@
 #pragma once
 
 #ifdef __cplusplus
+#include <filesystem>
+
+/* C++-only hooks used by the mod loader to control explicit mod directories.
+ * The C asset API below remains stable for game/port C code. */
+void Port_SetModsExplicitSelection(bool explicitSelection);
+void Port_AddModRoot(const std::filesystem::path& modRoot);
+
 extern "C" {
 #endif
 
 #include "global.h"
-
 bool32 Port_LoadPaletteGroupFromAssets(u32 group);
 bool32 Port_LoadGfxGroupFromAssets(u32 group);
 bool32 Port_LoadAreaTablesFromAssets(void);

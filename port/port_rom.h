@@ -71,6 +71,27 @@ static inline void* Port_ResolveRomData(u32 gba_addr) {
     return NULL;
 }
 
+/*
+ * Translate a baked USA script ROM address (the GBA_script_* constants in
+ * port_scripts.h) to the active region's retail address. Identity for USA and
+ * for unknown addresses. Defined in the generated port_script_addrs.c.
+ *
+ * Only the port's own compiled-in USA script constants need translating —
+ * addresses read out of the loaded ROM's own bytecode are already in the
+ * active region's address space and must NOT be passed through this.
+ */
+u32 Port_TranslateScriptAddr(u32 gba_addr);
+
+/*
+ * Resolve a baked USA script ROM address to a native PC pointer, translating it
+ * to the active region first. Use this (not Port_ResolveRomData) for the
+ * port-injected GBA_script_* addresses: PORT_SCRIPT(), ENTITY_SCRIPT storage
+ * resolved in sub_0804AF0C, and the gForestMinishScriptGBAAddrs table.
+ */
+static inline void* Port_ResolveScript(u32 gba_addr) {
+    return Port_ResolveRomData(Port_TranslateScriptAddr(gba_addr));
+}
+
 /**
  * Read entry [idx] from a packed-GBA-pointer table stored as a raw u8 array.
  *

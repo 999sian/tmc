@@ -998,10 +998,10 @@ void sub_080269CC(ChuchuBossEntity* this) {
         entity = (GenericEntity*)CreateObjectWithParent(super, CHUCHU_BOSS_PARTICLE, 0, 0);
         if (entity != NULL) {
             entity->base.spriteIndex = 0xc9;
-#ifdef EU
+            if (REGION_IS_EU) {
             entity->base.spriteVramOffset = super->spriteVramOffset;
             entity->base.palette.b.b0 = super->palette.b.b0;
-#endif
+            }
             entity->base.animIndex = 1;
             entity->base.y.HALF.HI += 0x10;
             entity->base.spritePriority.b0 = 0;
@@ -1012,14 +1012,14 @@ void sub_080269CC(ChuchuBossEntity* this) {
             } else {
                 entity->base.x.HALF.HI += 0x38;
             }
-#ifndef EU
+            if (!REGION_IS_EU) {
             LoadFixedGFX(&entity->base, 0x3e);
             if (super->type2 == 0) {
                 LoadObjPalette(&entity->base, 0x2b);
             } else {
                 LoadObjPalette(&entity->base, 0x2c);
             }
-#endif
+            }
         }
         pEVar6 = (ChuchuBossEntity*)super->parent;
         pEVar5 = (ChuchuBossEntity*)super->child;
@@ -1900,20 +1900,20 @@ Entity* sub_08027D20(ChuchuBossEntity* this) {
     Entity* r4 = CreateObjectWithParent(super, CHUCHU_BOSS_PARTICLE, 0, 0);
     if (r4 != NULL) {
         r4->spriteIndex = 0xc9;
-#ifdef EU
+        if (REGION_IS_EU) {
         r4->spriteVramOffset = super->spriteVramOffset;
         r4->palette.b.b0 = super->palette.b.b0;
-#endif
+        }
         r4->y.HALF.HI++;
         r4->spriteOffsetY = 8;
-#ifndef EU
+        if (!REGION_IS_EU) {
         LoadFixedGFX(r4, 0x3e);
         if (super->type2 == 0) {
             LoadObjPalette(r4, 0x2b);
         } else {
             LoadObjPalette(r4, 0x2c);
         }
-#endif
+        }
     }
     return r4;
 }

@@ -20,6 +20,7 @@
 #include "sound.h"
 #include "tiles.h"
 #include "common.h"
+#include "script.h"
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
 #include "port_scripts.h"

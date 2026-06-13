@@ -71,6 +71,16 @@ bool Port_Config_WidescreenEnabled(void);
 void Port_Config_SetWidescreenEnabled(bool enabled);
 void Port_Config_ToggleWidescreen(void);
 
+/* Console-Parity mode. When ON the port is held provably equivalent to real
+ * GBA hardware for speedrun integrity: the sub-frame input edge cache is
+ * disabled (hardware 1-frame input granularity), save-states (F1-F6) are
+ * inert, widescreen is forced off (no early off-screen-AI RNG advance), and
+ * frame pacing locks to the authentic 59.7275 Hz. Default OFF. Persisted to
+ * config.json as "console_parity"; --console-parity forces it on at launch. */
+bool Port_Config_GetConsoleParity(void);
+void Port_Config_SetConsoleParity(bool on);
+void Port_Config_ToggleConsoleParity(void);
+
 /* Aspect-ratio mode for the on-screen viewport. The GBA frame is always
  * rendered at its native 3:2 aspect — this knob picks the *stage* it
  * sits inside. Modes wider than 3:2 add pillar bars around the frame
@@ -154,6 +164,32 @@ void        Port_Config_SetA11yRadar(bool on);
 bool        Port_Config_GetA11yWalls(void);
 void        Port_Config_SetA11yWalls(bool on);
 
+/* Speedrun practice mode (port_practice.c). Overlay toggles + slow-mo factor
+ * (0.05..1.0; 1.0 = normal speed). All persisted to config.json. */
+bool        Port_Config_GetPracticeShowTimer(void);
+void        Port_Config_SetPracticeShowTimer(bool on);
+bool        Port_Config_GetPracticeShowInputs(void);
+void        Port_Config_SetPracticeShowInputs(bool on);
+bool        Port_Config_GetPracticeShowHistory(void);
+void        Port_Config_SetPracticeShowHistory(bool on);
+float       Port_Config_GetPracticeSlowmo(void);
+void        Port_Config_SetPracticeSlowmo(float v);
+
+/* Persisted runtime toggles (issue #146). Applied at startup; setters write
+ * config.json immediately. reborn_features is a bitmask over RebornFeature;
+ * HasRebornMask reports whether the user ever overrode the compile defaults. */
+bool        Port_Config_GetDiscordRpc(void);
+void        Port_Config_SetDiscordRpc(bool on);
+bool        Port_Config_GetVSync(void);
+void        Port_Config_SetVSync(bool on);
+bool        Port_Config_GetFullscreen(void);
+void        Port_Config_SetFullscreen(bool on);
+const char* Port_Config_GetShaderPreset(void);
+void        Port_Config_SetShaderPreset(const char* path);
+int         Port_Config_HasRebornMask(void);
+unsigned    Port_Config_GetRebornMask(void);
+void        Port_Config_SetRebornMask(unsigned mask);
+
 /* Randomizer persistence (issue #155): the file-select "Enable Randomizer
  * Mode" toggle, the built-in graph settings, and .logic define overrides
  * survive restarts. They reset to vanilla defaults only when the rando
@@ -163,16 +199,17 @@ void Port_Config_SetRandoEnabled(bool on);
 bool Port_Config_GetRandoGlitchless(void);
 bool Port_Config_GetRandoKinstones(void);
 bool Port_Config_GetRandoDojos(void);
+bool Port_Config_GetRandoOpenWorld(void);
 int  Port_Config_GetRandoItemPool(void);
-void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, int item_pool);
-/* .logic define overrides, stored as a name->value object in config.json.
- * Writes are transactional: Begin clears the staged set, Append adds
- * pairs, Commit swaps it in and saves. Reads index the loaded set. */
-void   Port_Config_RandoOverridesBegin(void);
-void   Port_Config_RandoOverridesAppend(const char* name, const char* value);
-void   Port_Config_RandoOverridesCommit(void);
-size_t Port_Config_RandoOverrideCount(void);
-bool   Port_Config_RandoOverrideAt(size_t index, const char** out_name, const char** out_value);
+bool Port_Config_GetRandoHomewarp(void);
+bool Port_Config_GetRandoStartSword(void);
+bool Port_Config_GetRandoEarlyCrests(void);
+bool Port_Config_GetRandoInstantText(void);
+int  Port_Config_GetRandoTunicColor(void);
+int  Port_Config_GetRandoHeartColor(void);
+void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, bool open_world,
+                                  int item_pool, bool homewarp, bool start_sword, bool early_crests,
+                                  bool instant_text, int tunic_color, int heart_color);
 
 void Port_Config_OpenGamepads(void);
 #ifndef TMC_N64
