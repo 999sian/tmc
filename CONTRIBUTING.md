@@ -19,6 +19,36 @@ assembly byte-for-byte), that work belongs upstream at zeldaret/tmc — see
 - There is **no automated test suite.** Verification is interactive play, the
   **F8** warp/debug menu, capturing repros with **F9**, and comparing against
   GBA reference behaviour.
+- Code-quality conventions for this port (header ownership, the metrics that
+  matter, when to add a characterization test) live in
+  [docs/MAINTAINABILITY.md](docs/MAINTAINABILITY.md).
+
+
+## Your first contribution
+
+If you want one path through the repo that teaches the conventions without
+requiring GBA reverse-engineering first, do this:
+
+1. Build the native port with `python3 build.py --usa` or
+   `xmake build -y tmc_pc`.
+2. Run the documented smoke path and make sure it reaches
+   `Port layer initialized. Entering AgbMain...`.
+3. Read the [PC port module map](#pc-port-module-map) below before opening
+   files. Most first fixes live in `port/`, not in `src/`.
+4. Pick a contained change:
+   - a persisted setting in `port_runtime_config.*`;
+   - an F8 menu tweak in `port_imgui_menu.cpp`;
+   - a ROM/asset/mod path issue in `port_asset_loader.*` or `port_mods.*`;
+   - a crash fix in `src/` guarded behind `#ifdef PC_PORT`.
+5. Follow the owner-file rule: change the runtime path first, then the UI,
+   then the docs if the user-visible behavior changed.
+6. Build again, play-test the affected area, and say exactly what you tested
+   in the PR.
+
+If you are working in the decompiled engine (`src/`) or want to move a
+function from `asm/` into C, read [docs/DECOMP-ONBOARDING.md](docs/DECOMP-ONBOARDING.md)
+first. That document covers the dual GBA/PC build, agbcc quirks, and the
+byte-matching workflow.
 
 ## Source layout
 
@@ -30,6 +60,92 @@ assembly byte-for-byte), that work belongs upstream at zeldaret/tmc — see
 | `libs/agbplay_core` | GBA M4A audio engine (LGPL-3.0 submodule). |
 | `asm/` | Undecompiled functions, linked alongside `src/` via `linker.ld`. |
 | `data/`, `assets/` | GBA data (`.s`) and the extracted runtime asset trees. |
+
+
+### PC port module map
+
+The `port/` directory is intentionally thin glue around the decompiled GBA
+engine, but it has grown into several subsystems. Start from the owner file
+below instead of grepping randomly:
+
+| Area | Owner files | Notes |
+|------|-------------|-------|
+| Process boot | `port_main.c` | Reserves the GBA address window, loads `config.json`, creates SDL, runs the prelaunch screen, selects the active mod set, then loads ROM/assets/audio before entering `AgbMain()`. |
+| Runtime config / input | `port_runtime_config.*`, `port_config.h`, `port_bios.c` | `port_runtime_config.*` owns persisted settings and gamepad/key bindings. `port_bios.c` polls SDL events and handles global hotkeys (`F5` save, `F6` load/TTS stop, `F7` TTS, `F8` menu, `F9` bug report, `F10` accessibility scan, `F12` upscaler). |
+| ROM / native address bridge | `port_rom.*`, `port_gba_mem.*`, `port_offset_*.h` | Converts ROM/GBA addresses into native pointers. Use these helpers; never cast a raw `0x08...` address. |
+| Assets / mods | `port_asset_bootstrap.*`, `port_asset_loader.*`, `port_asset_pak*`, `port_asset_pipeline.*`, `port_mods.*` | Asset lookup is: mod override → mounted `.pak` → loose `assets/` file → ROM fallback at the caller. Mods are Tier 1 asset replacements; see `mods/README.md`. |
+| Rendering | `port_ppu.*`, `port_gpu_renderer.*`, `port_filter.*`, `port_upscale.*`, `port_glslp_*`, `libs/ViruaPPU/src/*` | `port_ppu.cpp` owns presentation. SDL_GPU is an optional backend. ViruaPPU changes must be patches in `port/patches/`. |
+| Audio | `port_audio.*`, `port_m4a_backend.*`, `port_m4a_stubs.c`, `port_audio_mute.*` | `port_audio.c` owns SDL audio device/thread plumbing; `port_m4a_backend.cpp` adapts agbplay/M4A data. |
+| Debug/UI | `port_imgui_menu.cpp`, `port_debug_menu.*`, `port_debug_actions.c`, `port_bugreport.*`, `port_repro_*.c` | `port_imgui_menu.cpp` draws the modern F8 UI; `port_debug_menu.*` is the legacy page model still used by keyboard/controller navigation. Repro files are env-gated harnesses for specific bugs. |
+| Randomizer | `port/rando/*` | Best documented subsystem; read `port/rando/README.md` before touching it. `rando_logic_test` is a focused self-test target. |
+| Native stubs | `port_stubs.c`, `port_gameplay_stubs.c`, `port_linked_stubs.c` | Hand-written replacements for missing GBA assembly/data symbols. Prefer a real typed implementation here over a placeholder. |
+| Generated data/tables | `stubs_autogen.c`, `data_stubs_autogen.c`, `data_const_stubs.c`, `port_room_funcs.c`, `port_script_funcs.c`, `port_rom_tables.c`, `port_asset_index.c`, `generated_sounds_embed.cpp` | Do not hand-edit. Regenerate or add a hand-written override in the right owner file. |
+
+Header rule: if a symbol is used across files, put its declaration in an
+owner header and include that header. Do **not** add new file-local
+`extern` declarations in consumers; they hide coupling and make refactors
+unsafe.
+
+### Adding a persisted setting
+
+Adding a persisted setting usually touches five places:
+
+1. Add the runtime field and default JSON key in `port_runtime_config.cpp`.
+2. Parse it in `Port_Config_Load`.
+3. Add getter/setter declarations in `port_runtime_config.h`.
+4. Make the setter update `sConfigJson[...]` and call `SaveConfig()`.
+5. Add the UI control in `port_imgui_menu.cpp` only after the runtime path
+   works without UI.
+
+Adding a new moddable asset category should keep the same resolution order:
+manifest/auto-discovered mod replacement first, then `.pak`, then loose
+`assets/`, then a ROM fallback at the engine boundary. Do not add a second
+asset search path convention.
+
+### Stub taxonomy and the dual-build decision tree
+
+The repo has two consumers for gameplay code:
+
+- the **GBA ROM build** (`xmake rom`): `src/**.c` + `asm/` + `data/`,
+  linked by `linker.ld`;
+- the **PC port** (`tmc_pc`): the same `src/**.c` plus the native
+  bridge/stub layer in `port/`.
+
+That means "fix it in one place" is only true when the fix belongs in
+shared gameplay C (`src/`). If you change a gameplay behavior only in a
+PC stub, the ROM build still behaves differently. Use this decision tree:
+
+1. **Is the bug in shared gameplay logic?**
+   - Yes → fix it in `src/`.
+   - If the fix is only needed on native builds, guard the divergent path
+     with `#ifdef PC_PORT` and comment why the GBA tolerated the issue.
+2. **Is the symbol still undecompiled in `asm/` and only needed by the PC
+   build?**
+   - Function body / gameplay helper → hand-written stubs live in
+     `port_stubs.c`, `port_gameplay_stubs.c`, or `port_linked_stubs.c`.
+   - Data/table symbol → generated shims live in `stubs_autogen.c`,
+     `data_stubs_autogen.c`, or `data_const_stubs.c`.
+3. **Is it a room-init or script-call address lookup?**
+   - Room property callbacks → `port_room_funcs.c` (auto-generated map
+     from `(area, room)` to native function pointers).
+   - Script `Call` / `CallWithArg` targets → `port_script_funcs.c`
+     (auto-generated address → native function table).
+4. **Is it a PC-only service/API?**
+   - It belongs in the owning `port_*.c/.cpp` file, declared in its
+     owner header, and consumed by `#include` — not by a new file-local
+     `extern`.
+
+Rules of thumb:
+
+- `src/**.c` is shared. Start there before adding a stub.
+- `*_autogen.c` / `data_const_stubs.c` / `port_room_funcs.c` /
+  `port_script_funcs.c` are generated or table-driven — do not hand-edit
+  them unless you are also changing their generator/source of truth.
+- If the linker says a symbol is missing, grep for it first. A surprising
+  number of "missing" gameplay functions already exist as placeholders in
+  one of the `port_*stubs*.c` files and just need a real implementation.
+- Keep the two-build mental model in your head at all times:
+  `src/` serves **both** builds; `port/` serves **only** the native port.
 
 ## The one thing to internalise: GBA → PC differences
 
@@ -92,6 +208,10 @@ produces false conflicts).
   reformat unrelated lines.
 - Say **how you tested** (which area / repro), since there is no CI test gate.
 - For larger work, open an issue first so we can coordinate.
+
+- If you touched `src/`, or anything related to `asm/`/`linker.ld`, read
+  [docs/DECOMP-ONBOARDING.md](docs/DECOMP-ONBOARDING.md) before posting the
+  PR. The shared-engine / dual-build rules are different from normal app code.
 
 ## Decompiling new functions
 

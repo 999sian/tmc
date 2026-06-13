@@ -236,7 +236,7 @@ SECTIONS {
         asm/lib/libgcc.o(.text);
         asm/src/code_08000F10.o(.text);
         data/data_08000F54.o(.rodata);
-        asm/src/enemy.o(.text);
+        src/enemyUpdate.o(.text);
         src/droptables.o(.rodata);
         asm/src/code_08001A7C.o(.text);
         data/gfx/sprite_ptrs.o(.rodata);
@@ -251,7 +251,7 @@ SECTIONS {
         /* scripts */
         data/scripts.o(.text);
         asm/src/script.o(.text);
-        asm/src/projectileUpdate.o(.text);
+        src/projectileUpdate.o(.text);
 
         /* C source compiled with interworking */
         src/interrupts.o(.text);

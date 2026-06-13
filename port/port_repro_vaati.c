@@ -23,14 +23,14 @@
 #include "main.h"         /* gMain, TASK_* */
 #include "entity.h"       /* Entity, GenericEntity, MAX_ENTITIES, NPC */
 #include "npc.h"          /* VAATI, VAATI_REBORN */
+#include "port_repro.h"
 #include "enemy.h"        /* VAATI_* enemy ids */
 #include "flags.h"        /* SetLocalFlag, ClearLocalFlag, SetRoomFlag, ClearRoomFlag, CheckRoomFlag */
 #include "room.h"         /* gRoomControls */
 #include "player.h"       /* gPlayerState */
 #include "port_gba_mem.h" /* gIoMem */
+#include "port_debug_actions.h"
 
-extern int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short x, unsigned short y,
-                                 unsigned char layer);
 extern void VaatiTransfigured(Entity* this);
 extern GenericEntity gEntities[MAX_ENTITIES];
 extern int Port_QuickSave_LoadSlot(int slot);

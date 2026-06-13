@@ -35,9 +35,13 @@ cannot verify (e.g. the shield gating Deepwood's Business Scrub), so they
 only apply with **glitchless logic OFF** (issue #155). Glitchless ON keeps
 majors/progression vanilla in the bijection — guaranteed beatable.
 
-For true per-location logic, supply a public-format `.logic` file
-(`TMC_RANDO_LOGIC=/path`); chests are then remapped per area/room/flag key via
-`Rando_OverrideLocationKey`.
+For true per-location logic the engine loads a `.logic` database. One is
+**embedded in the binary** (`native.logic`, original content — see below),
+so no external file is needed; a user-supplied public-format file
+(`TMC_RANDO_LOGIC=/path` or `assets/rando/default.logic`) takes precedence.
+Chests are then remapped per area/room/flag key via
+`Rando_OverrideLocationKey`. `TMC_RANDO_LOGIC=none` (or `builtin`/`0`)
+disables both and falls back to the built-in graph above.
 
 Primary API:
 
@@ -59,8 +63,22 @@ Rando_OverrideLocationKey(0x000001, &item_type, &item_subtype);
   text format, for interoperability without translating GPL C# code.
   Startup probes `TMC_RANDO_LOGIC`, `assets/rando/default.logic`,
   `dist/USA/assets/rando/default.logic`, `dist/EU/assets/rando/default.logic`,
-  `rando/default.logic`, then `default.logic`. The GPL logic file is not
-  vendored.
+  `rando/default.logic`, then `default.logic`, then falls back to the
+  **embedded `native.logic`**. The GPL logic file is not vendored.
+- `native.logic` — the embedded logic database (bin2c'd into the binary).
+  ORIGINAL CONTENT authored for this port: 196 items, 244 locations
+  (every engine-derived runtime key in `rando_keymap.c` — 138 ground items
+  + 73 scripted rewards — binds 1:1), 33 helpers, and the settings the
+  runtime consumes (OPENWORLD dropdown, sleep-warp, start sword, early
+  crests, fast text). Design rules keep it softlock-free by construction:
+  requirements err strict; NPC rewards with quest-driven engine gates are
+  typed `Minor` so progression never lands behind an un-modeled gate;
+  dungeon small/big keys stay `Unshuffled` (vanilla key flow needs no key
+  counting); the smith's sword is a start grant, not a pool item. With
+  OPENWORLD=Open the runtime pre-solves the obstacles while generation
+  keeps the strict requirements (sound: extra access only). Offline
+  `rando_logic_test` and the headless harness drive it end-to-end
+  (deterministic beatable seeds, chest persistence, homewarp).
 - `rando_file_menu.h/.c` — SDL3 file-select setup overlay using fixed
   element arrays and `SDL_FRect` hitboxes. Owns randomizer persistence
   (issue #155): the "Enable Randomizer Mode" toggle, built-in graph
@@ -150,6 +168,40 @@ Full-parity features (added in the 1:1 pass):
   The flag set mirrors the engine's own canonical post-intro state
   (`gDemoSave` in `src/title.c`), flags only: items stay with the shuffled
   pool and the spawn stays `FinalizeSave()`'s bed spawn;
+- **new-file baseline parity** (`rando_newfile.c`): the upstream
+  randomizer's unconditional `startingFlags` new-game blob (116 bytes over
+  gSave.flags) is applied as a **named engine-flag table** — 47 flags
+  covering the "banish story" latches plus the baseline obstacle removals
+  default `.logic` reachability assumes (e.g. `HAKA_00_BW00`, the Royal
+  Valley bomb wall; `SOUGEN_06_IWA_0`; the dungeon-clear/first-pickup
+  message latches). Missing these was a softlock source for no-bomb seeds.
+  Names compile per region (flag numbering shifts under EU, so a raw USA
+  byte image would corrupt EU saves); `rando_logic_test` asserts the table
+  renders byte-identical to the upstream blob under USA numbering. The
+  same pass applies upstream's QoL state: first-pickup "seen" inventory
+  latches (rupees/hearts/ammo/dungeon items/...), pause menu enabled
+  swordless (`inventory[0]`), the world-map item, the kinstone bag, all
+  figurines pre-owned (skipped when `requirementFigurinesAmount` — the
+  figurine-hunt goal — is active), full world-map reveal
+  (`windcrests & 0x1FFFF`), element map-hint pings off, world-map cursor
+  over Link's house, the cucco minigame pre-skipped to
+  `cuccoSkippedLevels` rounds (default 9 → one round), the
+  elemental-sanctuary stone NPCs unfrozen, and the unshuffled-location
+  collect guards (`kinstonePots`/`specialPots`/`kinstoneDig`/
+  `kinstoneWater`/`lakeHPWater`/`todKeyWater`);
+- **open world** (`openWorld`; the user-reported softlock fix): World
+  Settings "Open" relaxes every obstacle helper during generation, and the
+  runtime now applies the matching world state at new-file commit — the
+  upstream `worldOpen` blob (308 bytes) as a 403-entry named-flag table:
+  every cut tree, cracked block, bomb wall, boulder shortcut, non-key
+  door, bean vine, switch, lever, chest spawn, and extendable bridge
+  pre-solved, plus `areaVisitFlags` marked and Dampé's graveyard gate
+  unlocked (graveyard-key state 2). Previously the define parsed but had
+  no effect, so OPENWORLD_ON seeds placed progression behind obstacles
+  that still existed in-game. Byte parity is test-asserted like the
+  baseline. For **built-in-graph seeds** the same table is driven by a new
+  `RandomizerSettings.open_world` toggle (file-select overlay + F8 tab,
+  persisted as `rando_open_world`, sidecar-restored);
 - **world-opening eventdefines** (issue #155): `m<hex>` defines are byte
   pokes into GBA save state (gSave at EWRAM `0x2000A40`; offsets are
   translated per region because the PC `SaveFile` packs `KinstoneSave`
@@ -159,8 +211,11 @@ Full-parity features (added in the 1:1 pass):
   `openWindTribe` (WARP_EVENT_END), `openTingleBrothers` (TINGLE_TALK1ST
   + a PC-side bypass of the `global_progress > 3` half at the three
   roomInit spawn sites), `openLibrary` (MIZUKAKI_START — approximation:
-  upstream re-times its own modified library opening), and the five
-  beanstalk demos (`BEANDEMO_00..04`, LOCAL_BANK_1);
+  upstream re-times its own modified library opening), `blueGinaGrave`
+  (YAMA_04_BOMBWALL0), the five beanstalk demos (`BEANDEMO_00..04`,
+  LOCAL_BANK_1), and the dungeon-portal switch room flags that keep
+  pre-opened portals' switches visually pressed (`LV1_01_01`,
+  `LV3_04_WARP_0`, ...);
 - **homewarp** (`allowHomewarp`; issue #155): SELECT on the pause menu's
   Quest Status screen warps Link back to his bed, GBA-randomizer "SLEEP"
   parity. The request is refused while minish (no portal home = softlock);
@@ -252,14 +307,12 @@ NOT yet at full parity (honest gaps):
 - custom heart-outline colors tint other HUD glyphs drawn with the shared
   palette-15 white (upstream replaces heart tile graphics; out of scope for a
   runtime palette override).
-- a tranche of eventdefines is still unconsumed: `openWorld` (the
-  "every cut tree / cracked block / bomb wall" permanent-obstacle list —
-  needs a curated native flag table), `kinstoneMultiplier*` (bag-grant
-  scaling for removed colors), `follower`/`followerID`, fusion-flow
-  tweaks (`DEFICKLE`, `SEEDED_SHARED`, `FUSION_SKIPS`/`SHOW_MAP`,
-  `noFairy`, `guaranteedBarlov`), and `historyOption` (item-name HUD
-  ticker). Their settings parse and persist but have no runtime effect
-  yet.
+- a tranche of eventdefines is still unconsumed: `kinstoneMultiplier*`
+  (bag-grant scaling for removed colors), `follower`/`followerID`,
+  fusion-flow tweaks (`DEFICKLE`, `SEEDED_SHARED`, `FUSION_SKIPS`/
+  `SHOW_MAP`, `noFairy`, `guaranteedBarlov`), and `historyOption`
+  (item-name HUD ticker). Their settings parse and persist but have no
+  runtime effect yet.
 
 ### Optional import: real `default.logic` interop
 

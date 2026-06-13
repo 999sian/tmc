@@ -49,11 +49,23 @@
 #include "main.h"
 #include "entity.h"
 #include "port_gba_mem.h"
+#include "port_runtime_config.h"
 
 extern u8 gEwram[];
 extern u8 gIwram[];
 extern u8 gVram[];
 extern u8 gIoMem[];
+
+/* The gameplay PRNG seed. On GBA this lived in IWRAM (0x03001150) and was
+ * therefore captured by an IWRAM-snapshotting savestate; in the port it is a
+ * standalone host global (port_linked_stubs.c), so it must be listed explicitly
+ * or QuickLoad would restore everything EXCEPT RNG state and desync manips. */
+extern u32 gRand;
+
+/* Speedrun-practice IGT frame counter (port_practice.c). Listed as a region
+ * so loading any savestate rewinds the practice timer to the value captured
+ * with that state — "reload the section and the timer comes back too". */
+extern u64 gPracticeFrame;
 
 /* Defined in src/player.c — re-resolves the player's .rodata hitbox pointer
    from the current form after a cross-process quickload (FixupEntityPointers
@@ -82,6 +94,8 @@ static StateRegion sRegions[] = {
     { &gRoomControls,   sizeof(gRoomControls),   "gRoomControls" },
     { &gRoomTransition, sizeof(gRoomTransition), "gRoomTransition" },
     { gEntities,        sizeof(gEntities),       "gEntities" },
+    { &gRand,           sizeof(gRand),           "gRand" },
+    { &gPracticeFrame,  sizeof(gPracticeFrame),  "gPracticeFrame" },
 };
 
 #define NUM_REGIONS  (sizeof(sRegions) / sizeof(sRegions[0]))
@@ -89,9 +103,12 @@ static StateRegion sRegions[] = {
 #define AUTO_SLOT_BASE 5
 #define NUM_AUTO_SLOTS 3
 #define MAGIC      0x53434D54u /* "TMCS" little-endian */
-#define VERSION    2u           /* bumped: header now carries gEntities
-                                 * base address for cross-process
-                                 * pointer-fixup on restore. */
+#define VERSION    4u           /* v2: header carries gEntities base address for
+                                 * cross-process pointer-fixup on restore.
+                                 * v3: gRand added to the region list so RNG
+                                 * state round-trips (GBA had it in IWRAM).
+                                 * v4: gPracticeFrame added so the speedrun IGT
+                                 * timer rewinds with the state. */
 
 typedef struct {
     u8*     snapshot;       /* heap, NULL if slot empty */
@@ -168,7 +185,10 @@ static void FixupEntityPointers(u64 saved_base) {
     const uintptr_t saved_hi = saved_lo + sizeof(gEntities);
     const intptr_t delta = (intptr_t)cur_base - (intptr_t)saved_lo;
     uintptr_t* p = (uintptr_t*)gEntities;
-    const size_t n = sizeof(gEntities) / sizeof(uintptr_t);
+    /* Whole-array word scan: total bytes / word size, NOT entity count.
+     * The parens silence -Wsizeof-array-div, which mistakes this for an
+     * element-count division (element type is GenericEntity, not uintptr_t). */
+    const size_t n = sizeof(gEntities) / (sizeof(uintptr_t));
     size_t fixed = 0;
     for (size_t i = 0; i < n; ++i) {
         if (p[i] >= saved_lo && p[i] < saved_hi) {
@@ -349,6 +369,9 @@ int Port_QuickSave_SaveSlot(int slot) {
 }
 
 int Port_QuickSave_LoadSlot(int slot) {
+    /* Refuse any state restore under Console-Parity — covers the menu/imgui
+     * load buttons too, not just the F-key hotkeys. */
+    if (Port_Config_GetConsoleParity()) return 0;
     if (slot < 0 || slot >= NUM_SLOTS) return 0;
     if (!sSlots[slot].valid) {
         /* Try loading from disk first — handles "fresh launch, never
@@ -383,6 +406,41 @@ int Port_QuickSave_HasSlot(int slot) {
     if (!f) return 0;
     fclose(f);
     return 1;
+}
+
+/* ---- Practice point -------------------------------------------------- *
+ * A dedicated in-memory snapshot for the speedrun practice mode, kept
+ * separate from the F1..F5 user slots so practising a segment never clobbers
+ * a manual save. In-process only (no disk, no pointer fixup needed — the
+ * entities base is unchanged within a run), so set/reload is a sub-ms memcpy.
+ * Driven from port_practice.c via the Port_Practice_SetPoint/LoadPoint API. */
+static Slot sPracticeSlot;
+
+int Port_QuickSave_SavePractice(void) {
+    if (!Snapshot_Capture(&sPracticeSlot)) return 0;
+    fprintf(stderr, "[quicksave] practice point set (%zu bytes)\n", sPracticeSlot.bytes);
+    return 1;
+}
+
+int Port_QuickSave_LoadPractice(void) {
+    if (Port_Config_GetConsoleParity()) return 0;
+    if (!sPracticeSlot.valid) {
+        fprintf(stderr, "[quicksave] practice point empty\n");
+        return 0;
+    }
+    if (!Snapshot_Restore(&sPracticeSlot)) {
+        fprintf(stderr, "[quicksave] practice point restore failed\n");
+        return 0;
+    }
+    {
+        extern void Port_Reborn_NotifyJustResumed(void);
+        Port_Reborn_NotifyJustResumed();
+    }
+    return 1;
+}
+
+int Port_QuickSave_HasPractice(void) {
+    return sPracticeSlot.valid ? 1 : 0;
 }
 
 u64 Port_QuickSave_SlotTimestamp(int slot) {

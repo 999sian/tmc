@@ -29,6 +29,7 @@
  */
 
 #include "port_softslots.h"
+#include "port_runtime_config.h"
 
 #include <SDL3/SDL.h>
 #include <stdio.h>
@@ -53,9 +54,6 @@ static uint8_t sAssignments[PORT_SOFTSLOT_COUNT];
 static int sActiveSlot = -1;
 static bool sLoaded = false;
 
-/* Defined in port_runtime_config.cpp. Returns true if the soft-slot's
- * bound input (keyboard or gamepad button/trigger) is currently held. */
-extern bool Port_Config_SoftSlotPressed(int slot);
 
 const char* Port_SoftSlots_SlotName(int slot) {
     switch (slot) {

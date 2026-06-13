@@ -428,7 +428,8 @@ void sub_08067C44(CatEntity* this) {
             if (iVar4 == 1) {
                 super->spriteSettings.flipX = 1;
             } else {
-                if (super->spriteSettings.flipX == 3) { // TODO 3 ???
+                u32 flipX = super->spriteSettings.flipX;
+                if (flipX == 3) { // TODO 3 ???
                     super->spriteSettings.flipX = 0;
                 }
             }

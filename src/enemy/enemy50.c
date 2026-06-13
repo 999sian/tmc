@@ -62,11 +62,7 @@ bool32 sub_08041170(Enemy50Entity*);
 
 void Enemy50(Enemy50Entity* this) {
     if ((super->type == 1) && ((super->parent)->next == NULL)) {
-#ifdef EU
-        if (super->action == 8 || super->action == 9) {
-#else
-        if (sub_08041300(this)) {
-#endif
+        if (REGION_IS_EU ? (super->action == 8 || super->action == 9) : sub_08041300(this)) {
             sub_0803F6EC(this);
         }
         CreateFx(super, FX_DEATH, 0);

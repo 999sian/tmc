@@ -26,9 +26,11 @@
 #include "affine.h"
 #include "gfx.h"
 #include "fade.h"
+#ifdef PC_PORT
 #include "port_ppu.h"
 #include "port_runtime_config.h"
 #include "port_tts.h"
+#endif
 #include <stdio.h>
 
 
@@ -300,9 +302,11 @@ static const u16 gUnk_080FC8DE[] = {
 };
 
 
+#ifdef PC_PORT
 #define PORT_SETTINGS_OPEN gChooseFileState.unk_0x0
 #define PORT_SETTINGS_DIRTY gChooseFileState.unk_0x10
 #define PORT_SETTINGS_ROW gChooseFileState.unk_0x20
+#endif
 
 #ifdef PC_PORT
 /* Save-profile cycling. Step through `tmc[_*].sav` files discovered in cwd;
@@ -362,9 +366,11 @@ extern void Rando_Runtime_Refresh(void);     /* port/rando/rando_runtime.c */
 extern u32 WriteSaveFile(u32 index, SaveFile* saveFile); /* src/save.c */
 #endif
 
+#ifdef PC_PORT
 static void DrawFileSelectSettingsHint(void);
 static void HandlePortSettingsMenu(void);
 static void DrawPortSettingsMenu(void);
+#endif
 #ifdef PC_PORT
 extern bool Port_RandoFileMenu_ShouldOpenForNewFile(void);
 extern void Port_RandoFileMenu_Open(int save_slot);
@@ -569,7 +575,11 @@ static void HandleFileScreenEnter(void) {
 
     DispReset(1);
     InitSoundPlayingInfo();
+#ifdef PC_PORT
     gba_MemClear(VRAM, 0x80); // clear palettes
+#else
+    MemClear((void*)VRAM, 0x80);
+#endif
     MessageInitialize();
     EraseAllEntities();
     ClearTileMaps();
@@ -694,7 +704,7 @@ void sub_0805070C(void) {
             // Use native-to-GBA copy since var0->unk8 is a native pointer
             port_MemCopyToGBA(var0->unk8, 0x06014000 + i * 0x200, 0x200);
 #else
-            gba_MemCopy((u32)var0->unk8, (u32)(OBJ_VRAM0 + 0x4000 + i * 0x200), 0x200);
+            MemCopy(var0->unk8, (void*)(OBJ_VRAM0 + 0x4000 + i * 0x200), 0x200);
 #endif
         }
         sub_0805F300(var0);
@@ -742,16 +752,20 @@ static void ShowButtonR(void) {
 
 static void HandleFileSelect(void) {
 
+#ifdef PC_PORT
     if (Port_Config_PortSettingsMenuEnabled() && PORT_SETTINGS_OPEN) {
         HandlePortSettingsMenu();
         return;
     }
+#endif
 
     sFileSelectDefaultHandlers[gChooseFileState.state]();
     sub_08050A64(gMapDataBottomSpecial.unk6);
+#ifdef PC_PORT
     if (Port_Config_PortSettingsMenuEnabled()) {
         DrawFileSelectSettingsHint();
     }
+#endif
 }
 
 void sub_08050848(void) {
@@ -861,6 +875,7 @@ void sub_08050940(void) {
             if (row_idx < NUM_SAVE_SLOTS && gMapDataBottomSpecial.saveStatus[row_idx] == SAVE_VALID)
                 mode = STATE_OPTIONS;
             break;
+#ifdef PC_PORT
         case L_BUTTON:
             if (Port_Config_PortSettingsMenuEnabled()) {
                 extern void Port_RandoFileMenu_ToggleSidebar(void);
@@ -868,6 +883,7 @@ void sub_08050940(void) {
                 SoundReq(SFX_TEXTBOX_SELECT);
             }
             break;
+#endif
         case A_BUTTON:
         case START_BUTTON:
             SetActiveSave(row_idx);
@@ -903,6 +919,7 @@ void sub_08050940(void) {
 }
 
 
+#ifdef PC_PORT
 static void DrawFileSelectSettingsHint(void) {
     static const u8 sSettingsHintText[] = "L Settings";
     Font font;
@@ -1046,6 +1063,7 @@ static void DrawPortSettingsMenu(void) {
     ShowTextBox((uintptr_t)sPortSettingsText, &font);
     gScreen.bg0.updated = 1;
 }
+#endif
 
 
 void sub_08050A64(u32 idx) {

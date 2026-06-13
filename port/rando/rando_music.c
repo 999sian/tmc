@@ -8,29 +8,44 @@
  */
 
 #include "rando/rando_music.h"
-
 #include "rando/rando.h"
-#include "rando/rando_logic.h"
-
 #include "sound.h" /* NUM_BGM */
 
 #include <stdint.h>
 #include <stdio.h>
-
 #define RANDO_MUSIC_MAX_AREAS 256
 
+static int16_t sMusicAssignments[RANDO_MUSIC_MAX_AREAS];
+
+void Rando_Music_SetAssignment(int area, int song) {
+    if (area >= 0 && area < RANDO_MUSIC_MAX_AREAS) {
+        sMusicAssignments[area] = (int16_t)song;
+    }
+}
+
+int Rando_Music_GetAssignment(int area) {
+    if (area >= 0 && area < RANDO_MUSIC_MAX_AREAS) {
+        return sMusicAssignments[area];
+    }
+    return -1;
+}
+
+void Rando_Music_ClearAssignments(void) {
+    for (int i = 0; i < RANDO_MUSIC_MAX_AREAS; ++i) {
+        sMusicAssignments[i] = -1;
+    }
+}
+
 int Rando_Music_Remap(int area, int song) {
-    /* One warning per area, then silent vanilla fallback (LoadRoomBgm runs
-     * on every room transition). */
     static uint8_t warned[RANDO_MUSIC_MAX_AREAS / 8];
     int assigned;
 
     if (!Rando_IsActive() || area < 0 || area >= RANDO_MUSIC_MAX_AREAS) {
         return song;
     }
-    assigned = RandoLogic_GetMusicAssignment((uint32_t)area);
+    assigned = sMusicAssignments[area];
     if (assigned < 0) {
-        return song; /* MUSIC_RANDO off / no assignment: strict no-op */
+        return song;
     }
     if (assigned == 0 || assigned > NUM_BGM) {
         if (!(warned[area >> 3] & (1u << (area & 7)))) {

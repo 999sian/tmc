@@ -10,6 +10,7 @@
 #include "player.h"
 #include "gba/defines.h"
 #include "port_entity_ctx.h"
+#include "port_audio_mute.h"
 #include "port_gba_mem.h"
 #include "room.h"
 #include "screen.h"
@@ -104,7 +105,6 @@ void EnqueueSFX(u32 sfx) {
      * the per-1.5s low-health beep would still register on the queue
      * even with the mute toggle on, and we'd be wasting a queue slot
      * for nothing. */
-    extern bool Port_AudioMute_ShouldSuppress(unsigned int soundReq);
     if (Port_AudioMute_ShouldSuppress((unsigned)sfx)) return;
 
     u8 count = gUnk_02024048;

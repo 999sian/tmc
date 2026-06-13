@@ -11,6 +11,8 @@
 #define _BSD_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 
+#include "port_rom_picker.h"
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_dialog.h>
 #include <SDL3/SDL_messagebox.h>

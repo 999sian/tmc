@@ -609,14 +609,14 @@ void sub_08041BE8(VaatiWrathEntity* this) {
         entity->myHeap = NULL;
         DeleteEntity(entity);
         ((VaatiWrathHeapStruct*)super->myHeap)->type3 = NULL;
-#ifndef EU
+        if (!REGION_IS_EU) {
         entity = ((VaatiWrathHeapStruct*)super->myHeap)->object5b;
         entity->myHeap = NULL;
         DeleteEntity(entity);
         ((VaatiWrathHeapStruct*)super->myHeap)->object5b = NULL;
 
         gRoomControls.camera_target = &gPlayerEntity.base;
-#endif
+        }
         entity = ((VaatiWrathHeapStruct*)super->myHeap)->eyes[0];
         entity->myHeap = NULL;
         DeleteEntity(entity);

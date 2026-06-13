@@ -132,7 +132,7 @@
  * Resolve a script's GBA ROM address to a native PC pointer.
  * Usage: PORT_SCRIPT(script_PlayerIntro) instead of &script_PlayerIntro
  */
-#define PORT_SCRIPT(name) ((void*)Port_ResolveRomData(GBA_##name))
+#define PORT_SCRIPT(name) ((void*)Port_ResolveScript(GBA_##name))
 
 /**
  * Store a script's GBA ROM address as a u32 constant for EntityData tables.

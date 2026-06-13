@@ -37,6 +37,15 @@ VERSIONS = {
         "sha1":         _read_sha1_file("tmc_eu.sha1"),
         "game_version": "EU",
     },
+    # JP is ROM-gated: needs a legal BZMJ baserom (tmc_jp.gba, sha1 in
+    # tmc_jp.sha1) plus the generated port_offset_JP.h. The build will fail
+    # at that missing header until it is generated — see
+    # docs/JP_PORT_ENABLEMENT.md.
+    "JP": {
+        "rom_filename": "baserom_jp.gba",
+        "sha1":         _read_sha1_file("tmc_jp.sha1"),
+        "game_version": "JP",
+    },
 }
 
 SHA1_TO_VERSION = {
@@ -663,6 +672,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="TMC PC Port build helper")
     parser.add_argument("--usa", action="store_true", help="Build USA version without prompts")
     parser.add_argument("--eur", action="store_true", help="Build EU version without prompts")
+    parser.add_argument("--jp", action="store_true",
+                        help="Build JP version without prompts (ROM-gated; needs a JP baserom "
+                             "and the generated port_offset_JP.h — see docs/JP_PORT_ENABLEMENT.md)")
     parser.add_argument(
         "--slim",
         action="store_true",
@@ -678,7 +690,7 @@ def parse_args() -> argparse.Namespace:
 
 def main():
     args = parse_args()
-    non_interactive = args.usa or args.eur
+    non_interactive = args.usa or args.eur or args.jp
     slim = args.slim
 
     header("TMC PC Port Builder")
@@ -709,7 +721,9 @@ def main():
             selected.append("USA")
         if args.eur:
             selected.append("EU")
-        info("Non-interactive mode enabled via --usa/--eur")
+        if args.jp:
+            selected.append("JP")
+        info("Non-interactive mode enabled via --usa/--eur/--jp")
         info(f"Selected: {', '.join(selected)}")
     else:
         section("Select Version")

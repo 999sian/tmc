@@ -109,23 +109,6 @@ static void ForEachTrackedPlayer(void (*cb)(MusicPlayerInfo*)) {
     }
 }
 
-static void ResetPlayerInfo(MusicPlayerInfo* mplayInfo) {
-    if (mplayInfo == NULL) {
-        return;
-    }
-
-    mplayInfo->songHeader = NULL;
-    mplayInfo->status = 0;
-    mplayInfo->clock = 0;
-    mplayInfo->cmd = 0;
-    mplayInfo->tempoD = 0x100;
-    mplayInfo->tempoU = 0x100;
-    mplayInfo->tempoI = 0x100;
-    mplayInfo->tempoC = 0;
-    mplayInfo->fadeOI = 0;
-    mplayInfo->fadeOC = 0;
-    mplayInfo->fadeOV = 0;
-}
 
 static void StopPlayer(MusicPlayerInfo* mplayInfo) {
     int playerIndex;

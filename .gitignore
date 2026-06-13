@@ -130,3 +130,9 @@ state_auto_*.bin
 # and compiled by tools/CMakeLists.txt (FetchContent) into these dirs.
 tools/include/
 tools/lib/
+
+# Matching retail maps from upstream zeldaret/tmc (for per-region address derivation)
+tools/retail_maps/
+
+# Temporary build/run artifacts
+.tmp/

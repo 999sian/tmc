@@ -40,11 +40,13 @@ extern const Hitbox* const* const gUnk_080CB8A4[];
 extern s16 gUnk_080B4488[];
 
 void DoorMimic(DoorMimicEntity* this) {
+    u32 outer;
+    u32 inner;
     DoorMimic_Functions[GetNextFunction(super)](this);
     /* #91 / #97 pattern: outer table is 4 entries, inner tables have 12.
      * Either index can transiently exceed bounds during animation resets. */
-    u32 outer = super->type2;
-    u32 inner = super->frameIndex;
+    outer = super->type2;
+    inner = super->frameIndex;
     if (outer >= 4) outer = 3;
     if (inner >= 12) inner = 11;
     super->hitbox = (Hitbox*)gUnk_080CB8A4[outer][inner];

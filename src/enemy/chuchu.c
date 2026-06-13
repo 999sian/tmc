@@ -353,16 +353,16 @@ void sub_0801F428(ChuchuEntity* this) {
     super->action = 3;
     super->subtimer = 30;
 
-#ifdef EU
+    if (REGION_IS_EU) {
     super->direction = sub_08049F84(super, 1);
-#endif
+    }
 
     COLLISION_ON(super);
     super->spritePriority.b1 = 3;
 
-#ifndef EU
+    if (!REGION_IS_EU) {
     super->spriteSettings.draw = 1;
-#endif
+    }
 
     InitializeAnimation(super, 2);
 }

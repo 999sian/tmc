@@ -22,6 +22,7 @@
  */
 
 #include <SDL3/SDL.h>
+#include "port_imgui_menu.h"
 #include <imgui.h>
 
 /* .glslp runtime hooks (port_glslp_runtime.cpp). File-scope so the F8
@@ -36,9 +37,12 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include <backends/imgui_impl_sdlgpu3.h>
 #endif
 
+#include "port_debug_query.h"
+#include "port_debug_actions.h"
 #include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
 #include "port_widescreen.h"
 #include "port_gpu_renderer.h"    /* Port_GPU_IsActive() for backend-conditional UI */
+#include "port_prelaunch_logo.h"
 #include "port_reborn.h"
 #include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"             /* Port_TTS_* — accessibility tab + focus reader */
@@ -47,7 +51,6 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 #include "rando/rando_logic.h"
 #include "rando/rando_file_menu.h"
 #include "port_softslots.h"
-
 #include "rando/rando_runtime.h"
 #include "rando/rando_keymap.h"
 #include "item_ids.h"
@@ -207,8 +210,6 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
      * backend instead — its NewFrame/PrepareDrawData/RenderDrawData
      * trio integrates with our existing SDL_GPU PresentFrame. */
     if (renderer == nullptr) {
-        extern SDL_GPUDevice* Port_GPU_GetDevice(void);
-        extern SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void);
         SDL_GPUDevice* dev = Port_GPU_GetDevice();
         SDL_GPUTextureFormat fmt = Port_GPU_GetSwapchainFormat();
         if (!dev || fmt == SDL_GPU_TEXTUREFORMAT_INVALID) {
@@ -379,13 +380,28 @@ int  Port_Config_CapturingBindingInput(void);
 void Port_Config_CancelCaptureBinding(void);
 void Port_Config_ResetAllBindings(void);
 
-int Port_DebugQuery_AreaRoomCount(unsigned char area);
-int Port_DebugAction_Warp(unsigned char area, unsigned char room,
-                          unsigned short x, unsigned short y,
-                          unsigned char layer);
-const char* Port_DebugQuery_AreaName(unsigned char area);
 
 void Port_DebugMenu_Toggle(void);
+
+/* Speedrun practice mode (port_practice.c). u16/u64 are declared here as the
+ * underlying fixed-width types; extern "C" matches by symbol name so this
+ * stays ABI-compatible with the C definitions. */
+unsigned long long Port_Practice_ElapsedFrames(void);
+bool Port_Practice_TimerRunning(void);
+void Port_Practice_TimerReset(void);
+void Port_Practice_TimerToggle(void);
+void Port_Practice_AddSplit(void);
+int  Port_Practice_SplitCount(void);
+unsigned long long Port_Practice_SplitAt(int i);
+void Port_Practice_ClearSplits(void);
+unsigned short Port_Practice_CurrentInputMask(void);
+unsigned short Port_Practice_HistoryAt(int index);
+int  Port_Practice_HistoryCount(void);
+int  Port_Practice_SetPoint(void);
+int  Port_Practice_LoadPoint(void);
+bool Port_Practice_HasPoint(void);
+bool Port_Practice_IsPaused(void);
+void Port_Practice_TogglePause(void);
 }
 
 /* Mini-toast for ribbon actions so the user sees "Saved" etc. without
@@ -435,219 +451,7 @@ static void DrawRibbonItemsTab(void) {
     }
 }
 
-static void DrawRibbonDisplayTab(void) {
-    const bool gpuActive = Port_GPU_IsActive();
-
-    if (ImGui::BeginTable("##display_settings_table", 2, ImGuiTableFlags_SizingFixedFit)) {
-        ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-
-        // Window scale
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Window scale");
-        ImGui::TableSetColumnIndex(1);
-        int scale = (int)Port_PPU_WindowScale();
-        if (ImGui::Button("<##scale")) Port_PPU_CycleWindowScale(-1);
-        ImGui::SameLine(); ImGui::Text("%dx", scale); ImGui::SameLine();
-        if (ImGui::Button(">##scale")) Port_PPU_CycleWindowScale(+1);
-
-        // Filter
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Filter");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##filter")) Port_PPU_CyclePresentationMode(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_PPU_PresentationModeName()); ImGui::SameLine();
-        if (ImGui::Button(">##filter")) Port_PPU_CyclePresentationMode(+1);
-
-        // Target FPS
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Target FPS");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##fps")) Port_Config_CycleTargetFps(-1);
-        ImGui::SameLine();
-        unsigned fps = Port_Config_TargetFps();
-        if (fps == 0) ImGui::Text("uncapped");
-        else          ImGui::Text("%u", fps);
-        ImGui::SameLine();
-        if (ImGui::Button(">##fps")) Port_Config_CycleTargetFps(+1);
-
-        // Internal scale
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Internal scale");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##iscale")) Port_Config_CycleInternalScale(-1);
-        ImGui::SameLine(); ImGui::Text("%ux", (unsigned)Port_Config_InternalScale()); ImGui::SameLine();
-        if (ImGui::Button(">##iscale")) Port_Config_CycleInternalScale(+1);
-
-        // Aspect ratio
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Aspect ratio");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##aspect")) Port_Config_CycleAspectMode(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_Config_AspectModeName(Port_Config_AspectMode())); ImGui::SameLine();
-        if (ImGui::Button(">##aspect")) Port_Config_CycleAspectMode(+1);
-
-        // Renderer
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Renderer");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##renderer")) Port_Config_CycleRenderBackend(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_Config_RenderBackendName(Port_Config_RenderBackend())); ImGui::SameLine();
-        if (ImGui::Button(">##renderer")) Port_Config_CycleRenderBackend(+1);
-        ImGui::SameLine(); ImGui::TextDisabled("(restart)");
-
-        // Background
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Background");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##bgfill")) Port_Config_CycleBgFill(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_Config_BgFillName(Port_Config_BgFill())); ImGui::SameLine();
-        if (ImGui::Button(">##bgfill")) Port_Config_CycleBgFill(+1);
-
-        // CRT filter
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("CRT filter");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
-        if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
-
-        ImGui::EndTable();
-    }
-
-    if (Port_Config_BgFill() == PORT_BG_FILL_SOLID_COLOR) {
-        uint8_t r8 = 0, g8 = 0, b8 = 0;
-        Port_Config_BgFillColor(&r8, &g8, &b8);
-        int rgb[3] = { (int)r8, (int)g8, (int)b8 };
-        bool changed = false;
-        ImGui::Indent(150.0f);
-        ImGui::PushItemWidth(120.0f);
-        if (ImGui::SliderInt("R##bgcol_r", &rgb[0], 0, 255)) changed = true; ImGui::SameLine();
-        if (ImGui::SliderInt("G##bgcol_g", &rgb[1], 0, 255)) changed = true; ImGui::SameLine();
-        if (ImGui::SliderInt("B##bgcol_b", &rgb[2], 0, 255)) changed = true;
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
-        ImVec4 sw = ImVec4(rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f);
-        ImGui::ColorButton("##bgcol_preview", sw,
-                           ImGuiColorEditFlags_NoPicker |
-                           ImGuiColorEditFlags_NoTooltip,
-                           ImVec2(22, 22));
-        ImGui::Unindent(150.0f);
-        if (changed) {
-            Port_Config_SetBgFillColor((uint8_t)rgb[0], (uint8_t)rgb[1], (uint8_t)rgb[2]);
-        }
-    }
-
-    const bool glslpSupported = gpuActive && Port_GPU_SupportsGlslpRuntime();
-    if (!glslpSupported) {
-        ImGui::Indent(150.0f);
-        ImGui::TextDisabled("Shader preset: %s", gpuActive ? "(SPIR-V backend required)" : "(GPU backend required)");
-        ImGui::Unindent(150.0f);
-    } else {
-        static std::vector<std::string> sPresetPaths;
-        static std::string              sActivePreset;
-        static bool                     sScannedOnce = false;
-
-        auto refresh = [&] {
-            sPresetPaths.clear();
-            std::error_code ec;
-            std::vector<std::string> roots;
-            if (const char* base = SDL_GetBasePath()) {
-                std::string b = base;
-                roots.push_back(b + "shaders");
-                roots.push_back(b + "glslp");
-                roots.push_back(b);
-            }
-            roots.emplace_back("shaders");
-            roots.emplace_back("glslp");
-            roots.emplace_back(".");
-            roots.emplace_back("/tmp/glslp_demo");
-            for (const auto& root : roots) {
-                if (!std::filesystem::is_directory(root, ec)) continue;
-                for (auto& entry : std::filesystem::recursive_directory_iterator(root, ec)) {
-                    if (entry.is_regular_file(ec) && entry.path().extension() == ".glslp") {
-                        sPresetPaths.push_back(entry.path().string());
-                    }
-                }
-            }
-            std::sort(sPresetPaths.begin(), sPresetPaths.end());
-            sPresetPaths.erase(std::unique(sPresetPaths.begin(), sPresetPaths.end()),
-                               sPresetPaths.end());
-        };
-        if (!sScannedOnce) { refresh(); sScannedOnce = true; }
-
-        ImGui::Indent(150.0f);
-        ImGui::TextUnformatted("Shader preset"); ImGui::SameLine();
-        if (ImGui::Button("Off##preset")) {
-            Port_GlslpRuntime_Unload();
-            sActivePreset.clear();
-            Port_DebugMenu_ToastFromExternal("Shader preset off");
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Rescan##preset")) refresh();
-        ImGui::SameLine();
-        ImGui::TextDisabled("(%zu found)", sPresetPaths.size());
-
-        const bool active = Port_GlslpRuntime_IsActive() != 0;
-        if (active && !sActivePreset.empty()) {
-            ImGui::TextDisabled("  active: %s", sActivePreset.c_str());
-        }
-
-        if (!sPresetPaths.empty()) {
-            if (ImGui::BeginListBox("##preset_list",
-                    ImVec2(ImGui::GetContentRegionAvail().x - 4.0f, ImGui::GetTextLineHeightWithSpacing() * 3.5f))) {
-                for (size_t i = 0; i < sPresetPaths.size(); ++i) {
-                    bool selected = (sPresetPaths[i] == sActivePreset)
-                                    && Port_GlslpRuntime_IsActive();
-                    std::string label = std::filesystem::path(sPresetPaths[i]).filename().string();
-                    label += "    "; label += sPresetPaths[i];
-                    if (ImGui::Selectable(label.c_str(), selected)) {
-                        if (selected) {
-                            Port_GlslpRuntime_Unload();
-                            sActivePreset.clear();
-                            Port_DebugMenu_ToastFromExternal("Shader preset off");
-                        } else if (Port_GlslpRuntime_Load(sPresetPaths[i].c_str())) {
-                            sActivePreset = sPresetPaths[i];
-                            Port_DebugMenu_ToastFromExternal("Preset loaded");
-                        } else {
-                            Port_DebugMenu_ToastFromExternal("Preset load FAILED");
-                        }
-                    }
-                }
-                ImGui::EndListBox();
-            }
-        }
-        ImGui::Unindent(150.0f);
-    }
-
-    ImGui::Separator();
-
-#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
-    {
-        bool ws = Port_Config_WidescreenEnabled();
-        if (ImGui::Checkbox("Widescreen (WIP)", &ws)) {
-            Port_Config_SetWidescreenEnabled(ws);
-            Port_PPU_ApplyWindowScale();
-            Port_DebugMenu_ToastFromExternal(ws ? "Widescreen enabled" : "Widescreen disabled");
-        }
-        ImGui::SameLine();
-    }
-#endif
-
-    bool fs = Port_PPU_IsFullscreen();
-    if (ImGui::Checkbox("Fullscreen", &fs)) Port_PPU_ToggleFullscreen();
-    ImGui::SameLine();
-
-    bool vsync = Port_PPU_VSyncEnabled();
-    if (ImGui::Checkbox("VSync", &vsync)) Port_PPU_SetVSync(vsync);
-    ImGui::SameLine();
-
-    bool drp = Port_DiscordRpc_IsEnabled();
-    if (ImGui::Checkbox("Discord RPC", &drp)) {
-        Port_DiscordRpc_SetEnabled(drp);
-    }
-    RandoUi_HelpTooltip("Publishes current area + heart/rupee count to Discord...");
-}
+#include "port_imgui_display_tab.inc"
 
 
 /* Save current game to EEPROM, then drop the player back at the
@@ -688,6 +492,36 @@ static void DrawRibbonSavesTab(void) {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.45f, 0.40f, 1.0f));
     if (ImGui::Button("Quit to Title (no save)")) DoQuitToTitle(false);
     ImGui::PopStyleColor(2);
+    ImGui::Separator();
+
+    /* Console-Parity — run-integrity master switch. Lives here because it
+     * makes the save-state controls below inert. */
+    {
+        bool parity = Port_Config_GetConsoleParity();
+        if (ImGui::Checkbox("Console-Parity mode (legit-run integrity)", &parity)) {
+            Port_Config_SetConsoleParity(parity);
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(?)");
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::PushTextWrapPos(360.0f);
+            ImGui::TextUnformatted("Holds the port provably equivalent to GBA "
+                                   "hardware for legitimate speedruns:\n"
+                                   "  - input edge-cache off (1-frame granularity)\n"
+                                   "  - save-states inert (no mid-run restores)\n"
+                                   "  - widescreen forced off (no early off-screen "
+                                   "AI / RNG advance)\n"
+                                   "  - frame pacing locked to 59.7275 Hz\n"
+                                   "Leave OFF for practice/casual play.");
+            ImGui::PopTextWrapPos();
+            ImGui::EndTooltip();
+        }
+        if (parity) {
+            ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.25f, 1.0f),
+                               "Save-states disabled while Console-Parity is ON.");
+        }
+    }
     ImGui::Separator();
 
     /* Auto-save controls at the top. */
@@ -1035,8 +869,6 @@ static void DrawRibbonEquipTab(void) {
     }
 }
 
-extern "C" int Port_DebugQuery_RoomDimensions(unsigned char area, unsigned char room,
-                                              unsigned short* w, unsigned short* h);
 
 static char sWarpFilter[64] = "";
 
@@ -1045,14 +877,10 @@ static char sWarpFilter[64] = "";
  * Warp tab so high-traffic rooms whose geometric center is a wall (boss
  * arenas, dungeon entrances, town buildings) drop Link on walkable
  * ground instead of an obstacle. See issue #94. */
-extern "C" int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room,
-                                                  unsigned short* x, unsigned short* y,
-                                                  unsigned char* layer);
 /* Returns 1 if (area) is safe to warp to (has a friendly name and is
  * not on the known-broken deny-list). Same predicate the dispatch
  * layer uses, so the UI list and the action layer agree on what's
  * warpable. See port_debug_actions.c::kBrokenWarpAreas. */
-extern "C" int Port_DebugAction_AreaIsWarpable(unsigned char area);
 
 static void DrawRibbonWarpTab(void) {
     /* Filter bar — type to narrow the area list. Empty filter = show
@@ -1242,6 +1070,7 @@ static bool sRandoUiSettingsInit = false;
  * enabled-but-untouched setting still rolls vanilla. */
 extern "C" void Rando_Cosmetic_Apply(void); /* rando_cosmetic.cpp — live palette re-apply */
 extern "C" void Rando_Keymap_Apply(void);   /* rando_keymap.c — rebind ground-item keys */
+extern "C" void Rando_SetCosmetics(int tunic_color, int heart_color); /* rando.cpp — live cosmetic settings */
 
 typedef struct RandoColorUiState {
     char define[48];
@@ -1375,79 +1204,41 @@ static void RandoUi_RemoveOverride(const char* define) {
 }
 
 static void DrawRandoCosmeticsSection(void) {
-    if (!RandoLogic_IsLoaded()) return;
-    const uint32_t count = RandoLogic_GetSettingCount();
-    bool any = false;
-    for (uint32_t i = 0; i < count; ++i) {
-        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-        if (s != NULL && s->type == RANDO_SETTING_COLOR && s->option_count > 0) {
-            any = true;
-            break;
-        }
-    }
-    if (!any) return; /* hidden when the file declares no color settings */
-
     ImGui::Spacing();
-    if (!ImGui::CollapsingHeader("Cosmetics")) return;
+    if (!ImGui::CollapsingHeader("Cosmetics", ImGuiTreeNodeFlags_DefaultOpen)) return;
 
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
-            "Color overrides feed the generation context, so they fully apply "
-            "to the NEXT rolled seed. Palette cosmetics re-evaluate on "
-            "activation, though, so while a seed is active edits also apply "
-            "live. Unchecked = vanilla (no override).");
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
+    static const char* kTunicColors[] = { "Green (Vanilla)", "Red", "Blue", "Purple", "Orange", "Grey", "Random" };
+    static const char* kHeartColors[] = { "Red (Vanilla)", "Blue", "Green", "Yellow", "Purple", "Rainbow", "Random" };
+
+    int tunic = Port_Config_GetRandoTunicColor();
+    int heart = Port_Config_GetRandoHeartColor();
+    bool changed = false;
+
+    ImGui::SetNextItemWidth(200);
+    if (ImGui::Combo("Tunic color", &tunic, kTunicColors, 7)) {
+        changed = true;
+    }
+    ImGui::SetNextItemWidth(200);
+    if (ImGui::Combo("Heart color", &heart, kHeartColors, 7)) {
+        changed = true;
     }
 
-    for (uint32_t i = 0; i < count; ++i) {
-        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-        if (s == NULL || s->type != RANDO_SETTING_COLOR || s->option_count <= 0) continue;
-        RandoColorUiState* st = RandoUi_ColorState(s);
-        if (st == NULL) continue;
-
-        /* Sidecar restore can add overrides behind the UI's back. */
-        const char* live = NULL;
-        const bool has_live =
-            RandoUi_FindOverrideValue(s->define, &live) && live != NULL && live[0] != '\0';
-        if (has_live && !st->enabled) {
-            st->enabled = true;
-            st->dirty = true;
+    if (changed) {
+        Port_Config_SetRandoSettings(Port_Config_GetRandoGlitchless(), Port_Config_GetRandoKinstones(),
+                                     Port_Config_GetRandoDojos(), Port_Config_GetRandoOpenWorld(),
+                                     Port_Config_GetRandoItemPool(), Port_Config_GetRandoHomewarp(),
+                                     Port_Config_GetRandoStartSword(), Port_Config_GetRandoEarlyCrests(),
+                                     Port_Config_GetRandoInstantText(), tunic, heart);
+        /* Keep the F8 roll-settings struct in sync so a subsequent "Roll new
+         * seed" carries the picked colors. */
+        sRandoUiSettings.tunic_color = tunic;
+        sRandoUiSettings.heart_color = heart;
+        /* Cosmetics don't affect placement: push them onto the active seed's
+         * settings and re-evaluate the palette so the change is live. */
+        Rando_SetCosmetics(tunic, heart);
+        if (Rando_IsActive()) {
+            Rando_Cosmetic_Apply();
         }
-
-        ImGui::PushID(s->define);
-        bool en = st->enabled;
-        if (ImGui::Checkbox(s->label, &en)) {
-            st->enabled = en;
-            if (!en) {
-                st->pending = false;
-                if (has_live) RandoUi_RemoveOverride(s->define);
-            } else if (st->dirty) {
-                /* Re-enable with earlier edits retained: restore the override. */
-                RandoUi_CommitColorOverride(st, s->option_count);
-            }
-        }
-        if (!st->enabled) ImGui::BeginDisabled();
-        ImGui::Indent();
-        for (int j = 0; j < s->option_count && j < RANDO_LOGIC_MAX_COLOR_SETS; ++j) {
-            char label[64];
-            std::snprintf(label, sizeof(label), "%s %d", s->label, j);
-            ImGui::PushID(j);
-            if (ImGui::ColorEdit3(label, st->col[j])) st->pending = true;
-            ImGui::PopID();
-        }
-        ImGui::Unindent();
-        if (!st->enabled) ImGui::EndDisabled();
-        /* Commit once the picker goes idle: every commit reparses the whole
-         * .logic text, so committing per drag-frame would stutter. */
-        if (st->pending && st->enabled && !ImGui::IsAnyItemActive()) {
-            st->pending = false;
-            RandoUi_CommitColorOverride(st, s->option_count);
-        }
-        ImGui::PopID();
     }
 }
 
@@ -2163,12 +1954,20 @@ static void DrawRandoTrackerOverlay(void) {
 
 static void DrawRibbonRandomizerTab(void) {
     if (!sRandoUiSettingsInit) {
-        sRandoUiSettings = Rando_DefaultSettings();
+        sRandoUiSettings.glitchless_logic = Port_Config_GetRandoGlitchless();
+        sRandoUiSettings.shuffle_kinstones = Port_Config_GetRandoKinstones();
+        sRandoUiSettings.shuffle_dojos = Port_Config_GetRandoDojos();
+        sRandoUiSettings.open_world = Port_Config_GetRandoOpenWorld();
+        sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)Port_Config_GetRandoItemPool();
+        sRandoUiSettings.homewarp = Port_Config_GetRandoHomewarp();
+        sRandoUiSettings.start_sword = Port_Config_GetRandoStartSword();
+        sRandoUiSettings.early_crests = Port_Config_GetRandoEarlyCrests();
+        sRandoUiSettings.instant_text = Port_Config_GetRandoInstantText();
+        sRandoUiSettings.tunic_color = Port_Config_GetRandoTunicColor();
+        sRandoUiSettings.heart_color = Port_Config_GetRandoHeartColor();
         sRandoUiSettingsInit = true;
     }
 
-    /* Source / region — informational only. The engine reads gRomData
-     * from the loaded ROM; no separate input file is involved. */
     const char* src_rom = Port_FindBaseRomPath();
     const char* region_label = "(unknown)";
     char region[5] = {0};
@@ -2207,23 +2006,7 @@ static void DrawRibbonRandomizerTab(void) {
 
     ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none)");
     ImGui::Text("Region:      %s", region_label);
-
-    /* Logic source: external .logic file vs built-in graph. */
-    if (RandoLogic_IsLoaded()) {
-        const RandoLogicStats stats = RandoLogic_GetStats();
-        ImGui::Text("Logic:       .logic file (%u locations, %u items)",
-                    stats.location_count, stats.item_count);
-    } else {
-        const RandoLogicStats stats = RandoLogic_GetStats();
-        if (stats.error[0]) {
-            ImGui::TextColored(ImVec4(0.9f, 0.45f, 0.3f, 1.0f),
-                               "Logic:       built-in graph (.logic load failed: %s)",
-                               stats.error);
-        } else {
-            ImGui::Text("Logic:       built-in graph (%d locations)",
-                        (int)RANDO_LOCATION_BUILTIN_COUNT);
-        }
-    }
+    ImGui::Text("Logic:       built-in native graph (%d locations)", RANDO_LOCATION_COUNT);
 
     if (Rando_IsActive()) {
         static const char* kPoolNames[RANDO_ITEM_POOL_COUNT] = { "Normal", "Hard", "Chaos" };
@@ -2240,16 +2023,6 @@ static void DrawRibbonRandomizerTab(void) {
             std::snprintf(text, sizeof(text), "%llu", (unsigned long long)Rando_GetSeed64());
             ImGui::SetClipboardText(text);
         }
-        if (RandoLogic_IsLoaded()) {
-            /* Settings fingerprint: racers compare seed + fingerprint to
-             * confirm identical settings without diffing the whole list. */
-            ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "Settings fingerprint: %08X",
-                               (unsigned)(RandoUi_SettingsFingerprint() & 0xFFFFFFFFu));
-            RandoUi_HelpTooltip(
-                "Hash of every generation-relevant setting's current value. "
-                "Two players with the same seed AND the same fingerprint are "
-                "playing identical seeds - useful for races.");
-        }
         ImGui::Checkbox("Show HUD Tracker", &sShowRandoTracker);
     } else {
         ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "No seed rolled - vanilla.");
@@ -2258,48 +2031,70 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::Spacing();
     ImGui::SeparatorText("Settings");
 
-    if (RandoLogic_IsLoaded()) {
-        /* External .logic mode: presets + the grouped settings browser
-         * (the built-in pool/difficulty toggles only drive the native
-         * graph, which is inactive while a .logic file is loaded). */
-        DrawRandoPresetsRow();
-        DrawRandoLogicSettingsBrowser(280.0f);
-    } else {
-        static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-            "Normal - collectibles only",
-            "Hard - + non-gating majors",
-            "Chaos - + gating progression",
-        };
-        int difficulty = (int)sRandoUiSettings.item_difficulty;
-        ImGui::SetNextItemWidth(280);
-        if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
-            sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)difficulty;
-        }
-        RandoUi_HelpTooltip(
-            "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
-            "heart pieces - progression untouched.\n"
-            "Hard: also shuffles non-gating majors (bottles, upgrades, "
-            "skills).\n"
-            "Chaos: also shuffles dungeon-gating progression.\n"
-            "Hard/Chaos scrambling of majors and progression applies to "
-            "story gifts too, which cannot be verified beatable - so it "
-            "requires Glitchless logic OFF. With Glitchless ON those items "
-            "stay vanilla and only collectibles are scrambled.");
-        ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic);
-        ImGui::SameLine();
-        ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones);
-        ImGui::SameLine();
-        ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos);
-        if (sRandoUiSettings.glitchless_logic &&
-            sRandoUiSettings.item_difficulty > RANDO_ITEM_POOL_NORMAL) {
-            ImGui::TextDisabled("Glitchless ON: %s pool only scrambles collectibles "
-                                "(guaranteed beatable).",
-                                sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS
-                                    ? "Chaos" : "Hard");
-        }
+    static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+        "Normal - collectibles only",
+        "Hard - + non-gating majors",
+        "Chaos - + gating progression",
+    };
+    int difficulty = (int)sRandoUiSettings.item_difficulty;
+    bool changed = false;
+
+    ImGui::SetNextItemWidth(280);
+    if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+        sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)difficulty;
+        changed = true;
+    }
+    RandoUi_HelpTooltip(
+        "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
+        "heart pieces - progression untouched.\n"
+        "Hard: also shuffles non-gating majors (bottles, upgrades, "
+        "skills).\n"
+        "Chaos: also shuffles dungeon-gating progression.\n"
+        "Hard/Chaos scrambling of majors and progression applies to "
+        "story gifts too, which cannot be verified beatable - so it "
+        "requires Glitchless logic OFF. With Glitchless ON those items "
+        "stay vanilla and only collectibles are scrambled.");
+
+    if (ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic)) changed = true;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones)) changed = true;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos)) changed = true;
+
+    if (ImGui::Checkbox("Open world", &sRandoUiSettings.open_world)) changed = true;
+    RandoUi_HelpTooltip(
+        "Starts with every permanently solvable obstacle pre-solved: cut "
+        "trees, cracked blocks, bomb walls, boulder shortcuts, non-key "
+        "doors, bean vines, switches, levers, chest spawns, and "
+        "extendable bridges (1:1 with the GBA randomizer's World "
+        "Settings \"Open\"). Less walking, shorter seeds.");
+
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Sleep warp (homewarp)", &sRandoUiSettings.homewarp)) changed = true;
+
+    if (ImGui::Checkbox("Start with Smith's Sword", &sRandoUiSettings.start_sword)) changed = true;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Early Wind Crests", &sRandoUiSettings.early_crests)) changed = true;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Fast text (instant text)", &sRandoUiSettings.instant_text)) changed = true;
+
+    if (sRandoUiSettings.glitchless_logic &&
+        sRandoUiSettings.item_difficulty > RANDO_ITEM_POOL_NORMAL) {
+        ImGui::TextDisabled("Glitchless ON: %s pool only scrambles collectibles "
+                            "(guaranteed beatable).",
+                            sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS
+                                ? "Chaos" : "Hard");
     }
 
-    /* Cosmetics — .logic !color settings (HEART_COLOR, TUNIC_COLOR, ...). */
+    if (changed) {
+        Port_Config_SetRandoSettings(sRandoUiSettings.glitchless_logic, sRandoUiSettings.shuffle_kinstones,
+                                     sRandoUiSettings.shuffle_dojos, sRandoUiSettings.open_world,
+                                     (int)sRandoUiSettings.item_difficulty, sRandoUiSettings.homewarp,
+                                     sRandoUiSettings.start_sword, sRandoUiSettings.early_crests,
+                                     sRandoUiSettings.instant_text, sRandoUiSettings.tunic_color,
+                                     sRandoUiSettings.heart_color);
+    }
+
     DrawRandoCosmeticsSection();
 
     ImGui::Spacing();
@@ -2310,8 +2105,6 @@ static void DrawRibbonRandomizerTab(void) {
         "64-bit seed, so phrases work and are shareable.");
     ImGui::SameLine();
     if (ImGui::SmallButton("Random")) {
-        /* A visible random seed (instead of an empty box) so the player can
-         * share it BEFORE rolling. */
         uint64_t r = (uint64_t)ImGui::GetTime() * 0x9E3779B97F4A7C15ull ^ Rando_GetSeed64();
         r ^= r >> 30; r *= 0xBF58476D1CE4E5B9ull; r ^= r >> 27;
         std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu", (unsigned long long)r);
@@ -2349,7 +2142,7 @@ static void DrawRibbonRandomizerTab(void) {
         ImGui::TextDisabled("(locked during gameplay)");
     }
     if (rolled_normal || rolled_race) {
-        if (rolled_race) sRandoSeedBuf[0] = '\0'; /* race seeds are always random */
+        if (rolled_race) sRandoSeedBuf[0] = '\0';
         const uint64_t requested =
             sRandoSeedBuf[0] ? Rando_SeedFromString(sRandoSeedBuf) : 0;
         uint64_t chosen = 0;
@@ -2392,8 +2185,6 @@ static void DrawRibbonRandomizerTab(void) {
         }
     }
 
-    /* Spoiler stays collapsed by default — opening it is the player's choice.
-     * Race seeds hide it entirely behind an explicit reveal. */
     if (Rando_IsActive() && sRandoSpoiler[0]) {
         ImGui::Spacing();
         if (sRandoSpoilerHidden) {
@@ -2411,7 +2202,6 @@ static void DrawRibbonRandomizerTab(void) {
             ImGui::BeginChild("##rando_spoiler", ImVec2(0, 180), ImGuiChildFlags_Borders,
                               ImGuiWindowFlags_HorizontalScrollbar);
             if (sRandoSpoilerFilter.IsActive()) {
-                /* Line-filtered view: show only locations matching the query. */
                 const char* p = sRandoSpoiler;
                 while (*p) {
                     const char* nl = std::strchr(p, '\n');
@@ -2430,6 +2220,7 @@ static void DrawRibbonRandomizerTab(void) {
         }
     }
 }
+
 
 /* Forward decl pulled from port_audio_mute.h, kept local so this file
  * doesn't depend on the new header for the rest of its surface area. */
@@ -2727,6 +2518,88 @@ static void DrawRibbonRebornTab(void) {
     }
 }
 
+/* Defined alongside DrawPracticeOverlay below; used here in the ribbon tab. */
+static void Practice_FormatFrames(unsigned long long frames, char* out, size_t cap);
+
+static void DrawRibbonPracticeTab(void) {
+    ImGui::TextWrapped("Speedrun practice tools. Overlays draw over the game "
+                       "whenever their toggle is on (independent of this menu).");
+    ImGui::Separator();
+
+    ImGui::SeparatorText("Overlays");
+    bool t = Port_Config_GetPracticeShowTimer();
+    if (ImGui::Checkbox("Show IGT timer", &t)) Port_Config_SetPracticeShowTimer(t);
+    bool in = Port_Config_GetPracticeShowInputs();
+    if (ImGui::Checkbox("Show input display", &in)) Port_Config_SetPracticeShowInputs(in);
+    bool h = Port_Config_GetPracticeShowHistory();
+    if (ImGui::Checkbox("Show input history", &h)) Port_Config_SetPracticeShowHistory(h);
+
+    ImGui::SeparatorText("Timer");
+    char buf[32];
+    Practice_FormatFrames(Port_Practice_ElapsedFrames(), buf, sizeof(buf));
+    ImGui::Text("Elapsed: %s  (%llu frames)", buf,
+                (unsigned long long)Port_Practice_ElapsedFrames());
+    if (ImGui::Button(Port_Practice_TimerRunning() ? "Stop" : "Start")) Port_Practice_TimerToggle();
+    ImGui::SameLine();
+    if (ImGui::Button("Reset timer")) Port_Practice_TimerReset();
+    ImGui::SameLine();
+    if (ImGui::Button("Split")) Port_Practice_AddSplit();
+
+    int nsplits = Port_Practice_SplitCount();
+    if (nsplits > 0) {
+        ImGui::SameLine();
+        if (ImGui::Button("Clear splits")) Port_Practice_ClearSplits();
+        if (ImGui::BeginTable("##splits", 3,
+                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+            ImGui::TableSetupColumn("#");
+            ImGui::TableSetupColumn("Time");
+            ImGui::TableSetupColumn("Delta");
+            ImGui::TableHeadersRow();
+            unsigned long long prev = 0;
+            for (int i = 0; i < nsplits; ++i) {
+                unsigned long long f = Port_Practice_SplitAt(i);
+                char tbuf[32], dbuf[32];
+                Practice_FormatFrames(f, tbuf, sizeof(tbuf));
+                Practice_FormatFrames(f - prev, dbuf, sizeof(dbuf));
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0); ImGui::Text("%d", i + 1);
+                ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted(tbuf);
+                ImGui::TableSetColumnIndex(2); ImGui::Text("+%s", dbuf);
+                prev = f;
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    ImGui::SeparatorText("Practice point");
+    if (ImGui::Button("Set point")) {
+        if (Port_Practice_SetPoint()) Port_DebugMenu_ToastFromExternal("Practice point set");
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!Port_Practice_HasPoint());
+    if (ImGui::Button("Reload point")) {
+        Port_DebugMenu_ToastFromExternal(
+            Port_Practice_LoadPoint() ? "Practice point loaded" : "Reload failed");
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled(Port_Practice_HasPoint() ? "(set)" : "(empty)");
+
+    ImGui::SeparatorText("Speed");
+    float sm = Port_Config_GetPracticeSlowmo();
+    if (ImGui::SliderFloat("Slow-mo", &sm, 0.1f, 1.0f, "%.2fx")) {
+        Port_Config_SetPracticeSlowmo(sm);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("1x")) Port_Config_SetPracticeSlowmo(1.0f);
+    if (ImGui::Button(Port_Practice_IsPaused() ? "Resume" : "Pause")) Port_Practice_TogglePause();
+
+    ImGui::SeparatorText("Hotkeys");
+    ImGui::TextDisabled(
+        "Keyboard:  [ set point   ] reload   P pause   . frame-advance   ' reset   ; split\n"
+        "Gamepad:   hold Select + A reload / B set / X pause / Y advance / D-Up reset / D-Down split");
+}
+
 static void DrawRibbon(void) {
     ImGuiIO& io = ImGui::GetIO();
     const float ribbonW = io.DisplaySize.x;
@@ -2764,6 +2637,7 @@ static void DrawRibbon(void) {
             if (ImGui::BeginTabItem("Audio"))      { DrawRibbonAudioTab();      ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Accessibility")) { DrawRibbonAccessibilityTab(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Reborn"))     { DrawRibbonRebornTab();     ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Practice"))   { DrawRibbonPracticeTab();   ImGui::EndTabItem(); }
             ImGui::EndTabBar();
         }
         /* Footer with the mode toggle + hotkey hint. */
@@ -2798,6 +2672,112 @@ static void DrawToast(const char* text) {
     }
     ImGui::End();
     ImGui::PopStyleColor();
+}
+
+/* ---- Speedrun practice overlay ---------------------------------------- *
+ * Non-interactive (NoInputs) HUD drawn every frame, independent of the F8
+ * menu, gated by the practice_* config toggles. Timer top-centre; input
+ * display + rolling history bottom-centre. All state from port_practice.c. */
+
+static void Practice_FormatFrames(unsigned long long frames, char* out, size_t cap) {
+    unsigned long long totalMs = frames * 1000ull / 60ull;   /* 60 fps IGT */
+    unsigned ms = (unsigned)(totalMs % 1000);
+    unsigned long long totalS = totalMs / 1000;
+    unsigned s = (unsigned)(totalS % 60);
+    unsigned m = (unsigned)(totalS / 60);
+    snprintf(out, cap, "%u:%02u.%03u", m, s, ms);
+}
+
+/* Button rows shared by the held-glyph line and the history grid. */
+static const struct { int bit; const char* name; } kPracticeBtns[] = {
+    { PORT_INPUT_A, "A" }, { PORT_INPUT_B, "B" },
+    { PORT_INPUT_L, "L" }, { PORT_INPUT_R, "R" },
+    { PORT_INPUT_UP, "^" }, { PORT_INPUT_DOWN, "v" },
+    { PORT_INPUT_LEFT, "<" }, { PORT_INPUT_RIGHT, ">" },
+    { PORT_INPUT_START, "St" }, { PORT_INPUT_SELECT, "Se" },
+};
+static const int kPracticeBtnCount = (int)(sizeof(kPracticeBtns) / sizeof(kPracticeBtns[0]));
+
+static void Practice_DrawHeldGlyphs(unsigned short mask) {
+    for (int i = 0; i < kPracticeBtnCount; ++i) {
+        bool on = (mask & (unsigned short)(1u << kPracticeBtns[i].bit)) != 0;
+        ImVec4 col = on ? ImVec4(0.30f, 0.85f, 0.45f, 1.0f)
+                        : ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
+        ImGui::TextColored(col, "%s", kPracticeBtns[i].name);
+        if (i != kPracticeBtnCount - 1) ImGui::SameLine();
+    }
+}
+
+static void Practice_DrawHistory(void) {
+    const int cols = 60;                  /* ~1 second of frames */
+    const float cw = 4.0f, ch = 9.0f, labelW = 16.0f;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    for (int r = 0; r < kPracticeBtnCount; ++r) {
+        float y = origin.y + r * ch;
+        dl->AddText(ImVec2(origin.x, y), IM_COL32(180, 180, 180, 255), kPracticeBtns[r].name);
+        for (int c = 0; c < cols; ++c) {
+            /* Rightmost column (c=cols-1) is the newest sample (history idx 0). */
+            unsigned short m = Port_Practice_HistoryAt(cols - 1 - c);
+            if (m & (unsigned short)(1u << kPracticeBtns[r].bit)) {
+                float x = origin.x + labelW + c * cw;
+                dl->AddRectFilled(ImVec2(x, y), ImVec2(x + cw - 1.0f, y + ch - 1.0f),
+                                  IM_COL32(80, 200, 120, 255));
+            }
+        }
+    }
+    ImGui::Dummy(ImVec2(labelW + cols * cw, kPracticeBtnCount * ch));
+}
+
+static void DrawPracticeOverlay(void) {
+    const bool showTimer   = Port_Config_GetPracticeShowTimer();
+    const bool showInputs  = Port_Config_GetPracticeShowInputs();
+    const bool showHistory = Port_Config_GetPracticeShowHistory();
+    if (!showTimer && !showInputs && !showHistory) return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 vp = io.DisplaySize;
+    const float pad = 10.0f;
+    const ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoInputs;
+
+    if (showTimer) {
+        char buf[32];
+        Practice_FormatFrames(Port_Practice_ElapsedFrames(), buf, sizeof(buf));
+        ImGui::SetNextWindowBgAlpha(0.75f);
+        ImGui::SetNextWindowPos(ImVec2(vp.x * 0.5f, pad), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+        if (ImGui::Begin("##practice_timer", nullptr, flags)) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.94f, 0.30f, 1.0f));
+            ImGui::TextUnformatted(buf);
+            ImGui::PopStyleColor();
+            ImGui::SameLine();
+            ImGui::TextDisabled("(%llu)", (unsigned long long)Port_Practice_ElapsedFrames());
+            if (Port_Practice_IsPaused()) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "PAUSED");
+            } else if (!Port_Practice_TimerRunning()) {
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "STOP");
+            }
+        }
+        ImGui::End();
+    }
+
+    if (showInputs || showHistory) {
+        ImGui::SetNextWindowBgAlpha(0.70f);
+        ImGui::SetNextWindowPos(ImVec2(vp.x * 0.5f, vp.y - pad), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        if (ImGui::Begin("##practice_inputs", nullptr, flags)) {
+            if (showInputs) Practice_DrawHeldGlyphs(Port_Practice_CurrentInputMask());
+            if (showHistory) {
+                if (showInputs) ImGui::Spacing();
+                Practice_DrawHistory();
+            }
+        }
+        ImGui::End();
+    }
 }
 
 static void DrawMenuPage(int depth) {
@@ -3052,32 +3032,44 @@ static void DrawRandoFileMenuModal(void) {
                 if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
 
                 ImGui::Spacing();
-                if (Port_RandoFileMenu_LogicMode()) {
-                    const RandoLogicStats st = RandoLogic_GetStats();
-                    ImGui::TextDisabled("Logic: external .logic (%u locations)", st.location_count);
-                    DrawRandoPresetsRow();
-                    /* Smaller child height to fit within the sidebar cleanly */
-                    DrawRandoLogicSettingsBrowser(150.0f);
-                } else {
-                    ImGui::TextDisabled("Logic: built-in native graph");
-                    static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-                        "Normal", "Hard", "Chaos"
-                    };
-                    int difficulty = Port_RandoFileMenu_Difficulty();
-                    ImGui::SetNextItemWidth(160);
-                    if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
-                        Port_RandoFileMenu_SetDifficulty(difficulty);
-                    }
-                    ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
-                    ImGui::SameLine();
-                    ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
-                    ImGui::SameLine();
-                    ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
-                    if (*Port_RandoFileMenu_GlitchlessLogic() &&
-                        Port_RandoFileMenu_Difficulty() > (int)RANDO_ITEM_POOL_NORMAL) {
-                        ImGui::TextDisabled("Glitchless ON: pool only scrambles collectibles\n"
-                                            "(guaranteed beatable). Uncheck for full scrambling.");
-                    }
+                ImGui::TextDisabled("Logic: built-in native graph (%d locations)", RANDO_LOCATION_COUNT);
+                static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+                    "Normal", "Hard", "Chaos"
+                };
+                int difficulty = Port_RandoFileMenu_Difficulty();
+                ImGui::SetNextItemWidth(160);
+                if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+                    Port_RandoFileMenu_SetDifficulty(difficulty);
+                }
+                ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
+                ImGui::SameLine();
+                ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
+                ImGui::SameLine();
+                ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
+                ImGui::Checkbox("Open world", Port_RandoFileMenu_OpenWorld());
+                RandoUi_HelpTooltip(
+                    "Every permanent obstacle (trees, cracked blocks, bomb "
+                    "walls, switches, non-key doors, ...) starts pre-solved, "
+                    "matching the GBA randomizer's World Settings \"Open\".");
+                ImGui::SameLine();
+                ImGui::Checkbox("Sleep warp", Port_RandoFileMenu_Homewarp());
+                ImGui::Checkbox("Start Sword", Port_RandoFileMenu_StartSword());
+                ImGui::SameLine();
+                ImGui::Checkbox("Early Crests", Port_RandoFileMenu_EarlyCrests());
+                ImGui::SameLine();
+                ImGui::Checkbox("Fast Text", Port_RandoFileMenu_InstantText());
+                
+                static const char* kTunicColors[] = { "Green", "Red", "Blue", "Purple", "Orange", "Grey", "Random" };
+                static const char* kHeartColors[] = { "Red", "Blue", "Green", "Yellow", "Purple", "Rainbow", "Random" };
+                ImGui::SetNextItemWidth(160);
+                ImGui::Combo("Tunic color", Port_RandoFileMenu_TunicColor(), kTunicColors, 7);
+                ImGui::SetNextItemWidth(160);
+                ImGui::Combo("Heart color", Port_RandoFileMenu_HeartColor(), kHeartColors, 7);
+
+                if (*Port_RandoFileMenu_GlitchlessLogic() &&
+                    Port_RandoFileMenu_Difficulty() > (int)RANDO_ITEM_POOL_NORMAL) {
+                    ImGui::TextDisabled("Glitchless ON: pool only scrambles collectibles\n"
+                                        "(guaranteed beatable). Uncheck for full scrambling.");
                 }
 
                 ImGui::Spacing();
@@ -3297,6 +3289,7 @@ extern "C" bool Port_ImGui_Render(void) {
      * place to plug in. */
 
     DrawRandoTrackerOverlay();
+    DrawPracticeOverlay();
     ImGui::Render();
 #ifdef TMC_GPU_RENDERER
     if (gpuBackend) {
@@ -3336,11 +3329,6 @@ extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd,
 }
 #endif
 
-/* Forward decls for the prelaunch logo (port_prelaunch_logo.cpp). */
-extern "C" bool        Port_PrelaunchLogo_EnsureLoaded(SDL_Renderer*, SDL_GPUDevice*);
-extern "C" ImTextureID Port_PrelaunchLogo_GetTexId(void);
-extern "C" int         Port_PrelaunchLogo_GetWidth(void);
-extern "C" int         Port_PrelaunchLogo_GetHeight(void);
 
 /* Project Picori prelaunch — builds and presents a centred ImGui
  * card with embedded logo, title / subtitle, version, ROM filename,
@@ -3367,7 +3355,6 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
 #ifdef TMC_GPU_RENDERER
     const bool gpuBackend = (sRenderer == nullptr);
     {
-        extern SDL_GPUDevice* Port_GPU_GetDevice(void);
         SDL_GPUDevice* dev = gpuBackend ? Port_GPU_GetDevice() : nullptr;
         Port_PrelaunchLogo_EnsureLoaded(sRenderer, dev);
     }

@@ -21,13 +21,12 @@
 #include <stdlib.h>
 #include "common.h"
 #include "room.h"
+#include "port_repro.h"
 
-extern int Port_DebugAction_Warp(unsigned char area, unsigned char room,
-                                  unsigned short x, unsigned short y,
-                                  unsigned char layer);
 
 #include "main.h"         /* gMain, TASK_GAME */
 #include "port_gba_mem.h" /* gIoMem */
+#include "port_debug_actions.h"
 
 #define KEYINPUT_REG 0x130
 

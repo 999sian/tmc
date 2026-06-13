@@ -87,11 +87,11 @@ void CameraTarget_Init(Entity* this) {
     if (this->spriteAnimation[0] != 1) {
         LoadSwapGFX(this, 1, 1);
         this->spriteVramOffset -= 0x10;
-#ifdef EU
+        if (REGION_IS_EU) {
         sub_080ADDD8(1, 0x10277e0);
-#else
+        } else {
         sub_080ADDD8(1, 0x1027820);
-#endif
+        }
         sub_080838DC(this);
     }
     this->action = 1;

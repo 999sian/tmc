@@ -635,9 +635,9 @@ void VaatiTransfiguredType0Action7(VaatiTransfiguredEntity* this) {
             uVar4 = Random() & 0x3f3f;
             pEVar3->x.HALF.HI += (uVar4 & 0xff) - 0x20;
             pEVar3->y.HALF.HI += ((uVar4 >> 8) & 0xff) - 0x20;
-#ifndef EU
+if (!REGION_IS_EU) {
             pEVar3->spritePriority.b0 = 2;
-#endif
+}
             SoundReq(SFX_16E);
         }
     }
@@ -714,8 +714,9 @@ void VaatiTransfiguredType2Action1(VaatiTransfiguredEntity* this) {
 
     const xy* t;
 
+    Entity* parent;
 #ifdef PC_PORT
-    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    parent = VaatiTransfigured_GetLiveParent(this);
     if (parent == NULL) {
         return;
     }
@@ -724,7 +725,7 @@ void VaatiTransfiguredType2Action1(VaatiTransfiguredEntity* this) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    Entity* parent = super->parent;
+    parent = super->parent;
 #endif
     CopyPosition(parent, super);
     switch (super->type2) {
@@ -775,8 +776,9 @@ void VaatiTransfiguredType2Action1(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType2Action2(VaatiTransfiguredEntity* this) {
+    Entity* parent;
 #ifdef PC_PORT
-    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    parent = VaatiTransfigured_GetLiveParent(this);
     if (parent == NULL) {
         return;
     }
@@ -785,7 +787,7 @@ void VaatiTransfiguredType2Action2(VaatiTransfiguredEntity* this) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    Entity* parent = super->parent;
+    parent = super->parent;
 #endif
     CopyPosition(parent, super);
     if (parent->frameIndex == 2) {
@@ -801,8 +803,9 @@ void VaatiTransfiguredType3Action0(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType3Action1(VaatiTransfiguredEntity* this) {
+    Entity* parent;
 #ifdef PC_PORT
-    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    parent = VaatiTransfigured_GetLiveParent(this);
     if (parent == NULL) {
         return;
     }
@@ -811,7 +814,7 @@ void VaatiTransfiguredType3Action1(VaatiTransfiguredEntity* this) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    Entity* parent = super->parent;
+    parent = super->parent;
 #endif
     CopyPosition(parent, super);
     UpdateAnimationSingleFrame(super);
@@ -827,8 +830,9 @@ void VaatiTransfiguredType4Action0(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType4Action1(VaatiTransfiguredEntity* this) {
+    Entity* parent;
 #ifdef PC_PORT
-    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    parent = VaatiTransfigured_GetLiveParent(this);
     if (parent == NULL) {
         return;
     }
@@ -837,7 +841,7 @@ void VaatiTransfiguredType4Action1(VaatiTransfiguredEntity* this) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    Entity* parent = super->parent;
+    parent = super->parent;
 #endif
     if (parent->action != 5) {
         if (this->unk_80 != 0) {
@@ -872,8 +876,9 @@ void VaatiTransfiguredType5Action0(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType5Action1(VaatiTransfiguredEntity* this) {
+    Entity* parent;
 #ifdef PC_PORT
-    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    parent = VaatiTransfigured_GetLiveParent(this);
     if (parent == NULL) {
         return;
     }
@@ -882,7 +887,7 @@ void VaatiTransfiguredType5Action1(VaatiTransfiguredEntity* this) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    Entity* parent = super->parent;
+    parent = super->parent;
 #endif
     switch (this->unk_80) {
         case 0:
@@ -916,8 +921,9 @@ void VaatiTransfiguredType5Action1(VaatiTransfiguredEntity* this) {
 }
 
 void VaatiTransfiguredType5Action2(VaatiTransfiguredEntity* this) {
+    Entity* parent;
 #ifdef PC_PORT
-    Entity* parent = VaatiTransfigured_GetLiveParent(this);
+    parent = VaatiTransfigured_GetLiveParent(this);
     if (parent == NULL) {
         return;
     }
@@ -926,7 +932,7 @@ void VaatiTransfiguredType5Action2(VaatiTransfiguredEntity* this) {
         this->unk_6d |= 2;
         DeleteThisEntity();
     }
-    Entity* parent = super->parent;
+    parent = super->parent;
 #endif
     if (this->unk_80 == 0) {
 #ifdef PC_PORT

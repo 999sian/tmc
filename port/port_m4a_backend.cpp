@@ -168,6 +168,8 @@ static const char* GetCurrentVariantName(void) {
     switch (gRomRegion) {
         case ROM_REGION_EU:
             return "EU";
+        case ROM_REGION_JP:
+            return "JP";
         case ROM_REGION_USA:
         default:
             return "USA";

@@ -1,23 +1,29 @@
 #include "gba/io_reg.h"
 #include "save.h"   /* gSave for Discord-RPC stat reads */
 #include "main.h"
+#include "port_a11y_cues.h"
 #include "port_audio.h"
 #include "port_asset_loader.h"
+#include "port_debug_actions.h"
+#include "port_bugreport.h"
+#include "port_debug_menu.h"
+#include "port_debug_query.h"
+#include "port_discord_rpc.h"
 #include "port_gba_mem.h"
 #include "port_hdma.h"
+#include "port_imgui_menu.h"
 #include "port_ppu.h"
+#include "port_practice.h"
 #include "port_runtime_config.h"
 #include "port_softslots.h"
 #include "port_touch_controls.h"
+#include "port_tts.h"
 #include "rando/rando_file_menu.h"
 #include "port_types.h"
 #include <SDL3/SDL.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <math.h>
 #include <setjmp.h>
+#include "port_repro.h"
 
 static bool gQuitRequested = false;
 static bool sFastForward = false;
@@ -80,12 +86,10 @@ static void Port_UpdateInput(void) {
      * it can keep ticking (and push synthetic SDL events) while its own
      * modal is open — the ImGui-keyboard stage depends on that. */
     {
-        extern void Port_ReproRando_Tick(unsigned int frame);
         Port_ReproRando_Tick(sFrameNum);
     }
 
     {
-        extern bool Port_DebugMenu_IsOpen(void);
         /* While either overlay is open, hold all GBA buttons released so
          * the game doesn't observe stray input from key presses we routed
          * to the overlay. The soft-slot configuration overlay piggybacks
@@ -144,7 +148,6 @@ static void Port_UpdateInput(void) {
      * KEYINPUT presses after the store above (the early tick at the top
      * of this function would be overwritten). */
     {
-        extern void Port_ReproRando_LateTick(void);
         Port_ReproRando_LateTick();
     }
 
@@ -154,14 +157,12 @@ static void Port_UpdateInput(void) {
      * capture the pillar-spawn state on the broken path without
      * needing a human to navigate. Exits at frame 4000. */
     {
-        extern void Port_ReproMazaal_Tick(unsigned int frame);
         Port_ReproMazaal_Tick(sFrameNum);
     }
 
     /* Issues #138/#79 auto-repro harness. Set TMC_REPRO_LITAREA=1 to warp
      * into a litArea OBJ-window dark room and capture the framebuffer. */
     {
-        extern void Port_ReproLitArea_Tick(unsigned int frame);
         Port_ReproLitArea_Tick(sFrameNum);
     }
 
@@ -169,7 +170,6 @@ static void Port_UpdateInput(void) {
      * Set TMC_REPRO_CLONEBUTTON=1 to warp into the sanctuary and exercise
      * sub_08081FF8 with a NULL-hitbox clone in gPlayerClones[]. */
     {
-        extern void Port_ReproCloneButton_Tick(unsigned int frame);
         Port_ReproCloneButton_Tick(sFrameNum);
     }
 
@@ -178,7 +178,6 @@ static void Port_UpdateInput(void) {
      * [orch-pc] trace (native script drives it by default; TMC_TAKEOVER_WD=1
      * forces the old sub_08053BBC fallback watchdog). */
     {
-        extern void Port_ReproTakeover_Tick(unsigned int frame);
         Port_ReproTakeover_Tick(sFrameNum);
     }
 
@@ -186,7 +185,6 @@ static void Port_UpdateInput(void) {
      * warp into DHC B2 Prison, open the door via its flag, and confirm the
      * door reaches action 3 (open frame) instead of stalling in action 2. */
     {
-        extern void Port_ReproJailBars_Tick(unsigned int frame);
         Port_ReproJailBars_Tick(sFrameNum);
     }
 
@@ -194,14 +192,12 @@ static void Port_UpdateInput(void) {
      * into DHC 1F Loop Left, destroy the four statues at once, and confirm the
      * manager's completion flag (field_0x3e) is populated and gets set. */
     {
-        extern void Port_ReproAngryStatue_Tick(unsigned int frame);
         Port_ReproAngryStatue_Tick(sFrameNum);
     }
 
     /* Vaati transform crash repro (#151). Set TMC_REPRO_VAATI=1 (+ TMC_VAATI_SLOT)
      * to restore a boss-fight save-state snapshot and let the transform run. */
     {
-        extern void Port_ReproVaati_Tick(unsigned int frame);
         Port_ReproVaati_Tick(sFrameNum);
     }
 
@@ -209,21 +205,18 @@ static void Port_UpdateInput(void) {
      * staffroll task (the ending script's SetTask(TASK_STAFFROLL)) and
      * snapshot the credits framebuffer headless. */
     {
-        extern void Port_ReproCredits_Tick(unsigned int frame);
         Port_ReproCredits_Tick(sFrameNum);
     }
 
     /* Performance-capture harness (TMC_PERFCAP=1): drive into gameplay and
      * dump a complete PPU snapshot for the standalone render microbench. */
     {
-        extern void Port_ReproPerfcap_Tick(unsigned int frame);
         Port_ReproPerfcap_Tick(sFrameNum);
     }
 
     /* Accessibility surroundings-scan self-test (TMC_REPRO_A11Y=1): drive
      * into a room and invoke Port_A11y_ScanSurroundings on live state. */
     {
-        extern void Port_ReproA11y_Tick(unsigned int frame);
         Port_ReproA11y_Tick(sFrameNum);
     }
 
@@ -232,7 +225,6 @@ static void Port_UpdateInput(void) {
      * type 0x0e, global_progress 5) — the DIALOG_CALL_FUNC path that jumped to a
      * raw GBA address before the fix. */
     {
-        extern void Port_ReproCatPerson_Tick(unsigned int frame);
         Port_ReproCatPerson_Tick(sFrameNum);
     }
 
@@ -248,7 +240,6 @@ static void Port_UpdateInput(void) {
     /* Post-warp safe-spawn nudge (issue #94). No-op except in the few
      * frames after a debug-menu warp completes. */
     {
-        extern void Port_DebugAction_WarpTick(void);
         Port_DebugAction_WarpTick();
     }
 
@@ -268,17 +259,13 @@ static void Port_PumpEvents(void) {
         /* Forward every event to ImGui so its window/keyboard tracking
          * stays in sync. ImGui only consumes input when a widget is
          * actively hovered/focused; game input passes through. */
-        {
-            extern void Port_ImGui_HandleEvent(const SDL_Event*);
-            Port_ImGui_HandleEvent(&e);
-        }
+        Port_ImGui_HandleEvent(&e);
         if (e.type == SDL_EVENT_QUIT) {
             /* Route the close-button (X) / OS-quit signal through the
              * ImGui modal first so users get a chance to save. The
              * modal sets Port_ImGui_QuitConfirmed() once the user
              * picks Save&Quit or Quit-Without-Saving; the per-frame
              * check below promotes that into gQuitRequested. */
-            extern void Port_ImGui_RequestQuitModal(void);
             Port_ImGui_RequestQuitModal();
             continue;
         }
@@ -292,7 +279,6 @@ static void Port_PumpEvents(void) {
              * the L-bound key can still be typed, and never for the forced
              * new-file modal, which commits/cancels via its own controls.
              * Everything else is swallowed so game hotkeys stay masked. */
-            extern bool Port_ImGui_WantsTextInput(void);
             if (Port_RandoFileMenu_IsSidebarOpen() &&
                 !Port_RandoFileMenu_IsModalOpen() &&
                 !Port_ImGui_WantsTextInput() &&
@@ -317,6 +303,7 @@ static void Port_PumpEvents(void) {
             bool altHeld = (e.key.mod & SDL_KMOD_ALT) != 0;
             if (e.key.key == SDLK_F11 || (e.key.key == SDLK_RETURN && altHeld)) {
                 Port_PPU_ToggleFullscreen();
+                Port_Config_SetFullscreen(Port_PPU_IsFullscreen()); /* persist (#146) */
                 continue;
             }
             if (e.key.key == SDLK_F12) {
@@ -324,7 +311,6 @@ static void Port_PumpEvents(void) {
                 continue;
             }
             if (e.key.key == SDLK_F8) {
-                extern void Port_DebugMenu_Toggle(void);
                 Port_DebugMenu_Toggle();
                 continue;
             }
@@ -332,9 +318,6 @@ static void Port_PumpEvents(void) {
                 /* TTS master toggle — works whether the F8 menu is
                  * open or not so screen-reader users don't need to
                  * navigate the menu to flip TTS off. */
-                extern bool Port_TTS_GetEnabled(void);
-                extern void Port_TTS_SetEnabled(bool);
-                extern void Port_TTS_AnnounceMessage(const char*);
                 bool now = !Port_TTS_GetEnabled();
                 Port_TTS_SetEnabled(now);
                 /* Announce the new state if we just turned ON; if
@@ -348,9 +331,6 @@ static void Port_PumpEvents(void) {
                  *   Shift+F10  — step to the next nearby object
                  *   Ctrl+F10   — orientation: surface, walls, exits
                  * All no-op outside gameplay / when TTS is off. */
-                extern void Port_A11y_ScanSurroundings(void);
-                extern void Port_A11y_CycleNext(void);
-                extern void Port_A11y_LookAround(void);
                 if (e.key.mod & SDL_KMOD_SHIFT)     Port_A11y_CycleNext();
                 else if (e.key.mod & SDL_KMOD_CTRL) Port_A11y_LookAround();
                 else                                Port_A11y_ScanSurroundings();
@@ -362,7 +342,6 @@ static void Port_PumpEvents(void) {
                  * was previously quickload — that one keeps its
                  * Shift+F6 / Ctrl+F6 bindings. Plain F6 is now the
                  * universal "shut up" key for the TTS user. */
-                extern void Port_TTS_Stop(void);
                 Port_TTS_Stop();
                 /* Don't `continue` — fall through so quickload still
                  * fires on shifted F6 below. Actually unconditional
@@ -375,8 +354,6 @@ static void Port_PumpEvents(void) {
                 /* Capture a bug-report bundle (screenshot + save + state
                  * dump) into a timestamped folder next to the binary so
                  * playtesters can attach it to a GitHub issue. */
-                extern char* Port_BugReport_Capture(const char* reason);
-                extern void  Port_DebugMenu_ToastFromExternal(const char* msg);
                 char* dir = Port_BugReport_Capture("user");
                 if (dir) {
                     /* Resolve absolute path so the user knows exactly
@@ -407,6 +384,15 @@ static void Port_PumpEvents(void) {
                 }
                 continue;
             }
+            /* Console-Parity mode makes every save-state hotkey inert —
+             * save-states let a run restore arbitrary state mid-glitch, which
+             * has no hardware equivalent. Swallow F1-F6 here so neither save
+             * nor load fires. */
+            if ((e.key.key >= SDLK_F1 && e.key.key <= SDLK_F6) &&
+                Port_Config_GetConsoleParity()) {
+                Port_DebugMenu_ToastFromExternal("Save-states disabled (Console-Parity)");
+                continue;
+            }
             if (e.key.key == SDLK_F5) {
                 extern int Port_QuickSave(void);
                 Port_QuickSave();
@@ -434,12 +420,45 @@ static void Port_PumpEvents(void) {
                 }
                 continue;
             }
+            /* Speedrun practice-mode hotkeys. Always active (like the
+             * save-state F-keys above), but suppressed while an ImGui text
+             * field is focused so typing a seed/filename doesn't trip pause.
+             * Keys avoid the taken F1..F12 / TAB / BACKSLASH bindings. */
+            if (!Port_ImGui_WantsTextInput()) {
+                bool handled = true;
+                switch (e.key.key) {
+                    case SDLK_LEFTBRACKET:   /* [  set practice point */
+                        if (Port_Practice_SetPoint())
+                            Port_DebugMenu_ToastFromExternal("Practice point set");
+                        break;
+                    case SDLK_RIGHTBRACKET:  /* ]  reload practice point */
+                        Port_DebugMenu_ToastFromExternal(
+                            Port_Practice_LoadPoint() ? "Practice point loaded"
+                                                      : "No practice point set");
+                        break;
+                    case SDLK_P:             /* P  pause / resume */
+                        Port_Practice_TogglePause();
+                        Port_DebugMenu_ToastFromExternal(
+                            Port_Practice_IsPaused() ? "Paused" : "Resumed");
+                        break;
+                    case SDLK_PERIOD:        /* .  frame-advance (while paused) */
+                        Port_Practice_RequestStep();
+                        break;
+                    case SDLK_APOSTROPHE:    /* '  reset IGT timer */
+                        Port_Practice_TimerReset();
+                        Port_DebugMenu_ToastFromExternal("Timer reset");
+                        break;
+                    case SDLK_SEMICOLON:     /* ;  record split */
+                        Port_Practice_AddSplit();
+                        break;
+                    default: handled = false; break;
+                }
+                if (handled) continue;
+            }
             /* When the debug menu is open, route key presses to it and
              * suppress further handling so the game itself doesn't see
              * the keystroke. */
             {
-                extern bool Port_DebugMenu_IsOpen(void);
-                extern bool Port_DebugMenu_HandleKey(int sdlKey);
                 if (Port_DebugMenu_IsOpen() && Port_DebugMenu_HandleKey((int)e.key.key)) {
                     continue;
                 }
@@ -480,6 +499,42 @@ static void Port_PumpEvents(void) {
                     s_select_held = false;
                     s_start_held  = false;
                 }
+                /* Practice-mode combos: hold Select(Back) + a face / d-pad
+                 * button. Mirrors the Select+Start menu combo above. Fires on
+                 * the second button's down-edge; Select is not consumed so
+                 * repeated taps (e.g. frame-advance) work while held. Start is
+                 * excluded — that pair is the menu toggle. */
+                if (is_down && s_select_held &&
+                    e.gbutton.button != SDL_GAMEPAD_BUTTON_BACK &&
+                    e.gbutton.button != SDL_GAMEPAD_BUTTON_START) {
+                    switch (e.gbutton.button) {
+                        case SDL_GAMEPAD_BUTTON_SOUTH:     /* A: reload point */
+                            Port_DebugMenu_ToastFromExternal(
+                                Port_Practice_LoadPoint() ? "Practice point loaded"
+                                                          : "No practice point set");
+                            break;
+                        case SDL_GAMEPAD_BUTTON_EAST:      /* B: set point */
+                            if (Port_Practice_SetPoint())
+                                Port_DebugMenu_ToastFromExternal("Practice point set");
+                            break;
+                        case SDL_GAMEPAD_BUTTON_WEST:      /* X: pause/resume */
+                            Port_Practice_TogglePause();
+                            Port_DebugMenu_ToastFromExternal(
+                                Port_Practice_IsPaused() ? "Paused" : "Resumed");
+                            break;
+                        case SDL_GAMEPAD_BUTTON_NORTH:     /* Y: frame-advance */
+                            Port_Practice_RequestStep();
+                            break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_UP:   /* reset timer */
+                            Port_Practice_TimerReset();
+                            Port_DebugMenu_ToastFromExternal("Timer reset");
+                            break;
+                        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: /* record split */
+                            Port_Practice_AddSplit();
+                            break;
+                        default: break;
+                    }
+                }
             }
         }
 
@@ -487,7 +542,6 @@ static void Port_PumpEvents(void) {
     }
 
     if (Port_TouchControls_ConsumeSettingsRequest()) {
-        extern bool Port_DebugMenu_IsOpen(void);
         if (!Port_DebugMenu_IsOpen() && !Port_SoftSlots_ConfigIsOpen() &&
             !Port_InGameSettingsModalIsOpen()) {
             Port_OpenInGameSettingsModal();
@@ -522,6 +576,19 @@ int Port_Profile_Enabled(void) {
 
 void VBlankIntrWait(void) {
     u64 nowNs;
+
+    /* Practice-mode pause: hold the engine here, presenting and pumping
+     * events only (no Port_UpdateInput, so the game state can't advance),
+     * until unpaused or a single frame-advance step is requested. The F8
+     * menu and the practice overlay stay live while the game is frozen;
+     * Port_Practice_ConsumeStep() lets exactly one frame through per step. */
+    while (Port_Practice_IsPaused() && !Port_Practice_ConsumeStep()) {
+        Port_PPU_PresentFrame();
+        Port_PumpEvents();
+        if (Port_ImGui_QuitConfirmed()) gQuitRequested = true;
+        if (gQuitRequested) exit(0);
+        SDL_Delay(4); /* ~4ms: responsive UI without a busy spin */
+    }
 
     /* Toggle VSync based on whether we're trying to run faster than the
      * display refresh: fast-forward, or a target FPS preset > 60. With
@@ -575,7 +642,18 @@ void VBlankIntrWait(void) {
      * (e.g. paused at a breakpoint, OS hitch), snap forward so we
      * don't burn CPU catching up. */
     if (!sFastForward) {
-        const u64 frameTimeNs = Port_Config_FrameTimeNs();
+        u64 frameTimeNs = Port_Config_FrameTimeNs();
+        /* Practice slow-motion: stretch the target frame interval. Factor is
+         * in (0,1]; 1.0 = normal speed, 0.5 = half speed. When the target is
+         * uncapped (0), synthesise a 60fps base so slow-mo still applies.
+         * Bypassed during TAB fast-forward (we're inside !sFastForward). */
+        {
+            float sm = Port_Config_GetPracticeSlowmo();
+            if (sm > 0.0f && sm < 0.999f) {
+                u64 base = frameTimeNs ? frameTimeNs : 16666667ULL;
+                frameTimeNs = (u64)((double)base / sm);
+            }
+        }
         if (frameTimeNs != 0) {
             u64 deadline = lastFrameNs + frameTimeNs;
             u64 now = SDL_GetTicksNS();
@@ -622,10 +700,7 @@ void VBlankIntrWait(void) {
      * port_imgui_menu.cpp; when the user picks Save & Quit or Quit
      * Without Saving it sets the confirmed flag, which we promote
      * into gQuitRequested here so the loop unwinds normally. */
-    {
-        extern bool Port_ImGui_QuitConfirmed(void);
-        if (Port_ImGui_QuitConfirmed()) gQuitRequested = true;
-    }
+    if (Port_ImGui_QuitConfirmed()) gQuitRequested = true;
 
     if (gQuitRequested) {
         exit(0);
@@ -633,6 +708,10 @@ void VBlankIntrWait(void) {
 
     Port_PumpEvents();
     Port_UpdateInput();
+
+    /* Speedrun practice: advance the IGT frame counter and sample the input
+     * display. After Port_UpdateInput() so the sampled mask is this frame's. */
+    Port_Practice_Tick();
 
     /* Auto-save (no-op unless enabled in F8 menu). Runs at frame
      * boundaries so capture is always at a consistent post-tick state. */
@@ -646,10 +725,6 @@ void VBlankIntrWait(void) {
      * frame calls are cheap. Health is stored as eighths of a heart
      * (24 = 3 hearts), hence the >>3. */
     {
-        extern void Port_DiscordRpc_Update(const char* area_name,
-                                           int hearts_now, int hearts_max,
-                                           int rupees);
-        extern const char* Port_DebugQuery_AreaName(unsigned char area);
         const char* areaName = Port_DebugQuery_AreaName(gRoomControls.area);
         Port_DiscordRpc_Update(
             areaName,

@@ -12,24 +12,38 @@
 #endif
 #include "port_asset_bootstrap.h"
 #include "port_audio.h"
+#include "port_a11y_cues.h"
+#include "port_bugreport.h"
+#include "port_debug_verbose.h"
+#include "port_discord_rpc.h"
 #include "port_gba_mem.h"
+#include "port_gpu_renderer.h"
+#include "port_icon.h"
 #include "port_ppu.h"
 #include "port_rom.h"
+#include "port_rom_picker.h"
 #include "port_runtime_config.h"
 #include "port_tts.h"
 #include "port_types.h"
 #include "port_update_check.h"
+#include "rando/rando_file_menu.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <SDL3/SDL.h>
 #include "port_launcher_bootstrap.h"
+#include "port_imgui_menu.h"
+#include "port_mods.h"
 
 /*
  * Region-specific asset offset header is included based on detected ROM.
  * Both are always available; the correct mapDataBase is selected at runtime.
  */
-#ifdef EU
+#if defined(JP)
+/* ROM-gated: generated from a JP build. Absent until then, so a JP build
+ * fails here with a clear missing-header error. See docs/JP_PORT_ENABLEMENT.md. */
+#include "port_offset_JP.h"
+#elif defined(EU)
 #include "port_offset_EU.h"
 #else
 #include "port_offset_USA.h"
@@ -289,7 +303,6 @@ int main(int argc, char* argv[]) {
 
     fprintf(stderr, "Initializing port layer...\n");
     {
-        extern void Port_DebugVerbose_Init(void);
         Port_DebugVerbose_Init();
     }
 
@@ -298,7 +311,6 @@ int main(int argc, char* argv[]) {
      * port_bugreport.cpp back. Without this, crashes produce no bundle
      * (F9 manual capture still works via port_bios.c). */
     {
-        extern void Port_BugReport_InstallCrashHandlers(void);
         Port_BugReport_InstallCrashHandlers();
     }
 
@@ -306,6 +318,16 @@ int main(int argc, char* argv[]) {
     *(u16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
 
     Port_Config_Load("config.json");
+
+    /* Re-apply persisted runtime toggles that have no window/GPU dependency
+     * (issue #146). Fullscreen, VSync and the shader preset need the window
+     * and renderer, so they are applied after Port_PPU_Init below. */
+    {
+        extern void Port_DiscordRpc_SetEnabled(bool);
+        extern void Port_Reborn_ApplyMask(unsigned);
+        if (Port_Config_GetDiscordRpc()) Port_DiscordRpc_SetEnabled(true);
+        if (Port_Config_HasRebornMask()) Port_Reborn_ApplyMask(Port_Config_GetRebornMask());
+    }
 
     /* Honour the persisted save-profile choice. Default ("tmc.sav") is
      * applied if the config doesn't name one. */
@@ -351,13 +373,22 @@ int main(int argc, char* argv[]) {
             else if (strncmp(argv[i], "--glslp=", 8) == 0) {
                 glslpPath = argv[i] + 8;
             }
+            else if (strcmp(argv[i], "--console-parity") == 0) {
+                /* Force hardware-equivalent behavior for legit runs. Applied
+                 * after Port_Config_Load (line ~316) so it overrides config. */
+                Port_Config_SetConsoleParity(true);
+                fprintf(stderr, "Console-Parity mode ON: edge-cache off, save-states inert, "
+                                "widescreen off, pacing locked to 59.7275 Hz.\n");
+            }
             else if (strcmp(argv[i], "--help") == 0) {
-                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio] [--glslp=<path>]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio] [--glslp=<path>] [--console-parity]\n", argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
                 fprintf(stderr, "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
                 fprintf(stderr, "  --no-audio:             Skip audio init (workaround for agbplay crash)\n");
                 fprintf(stderr, "  --glslp=<path>:         Load a libretro .glslp shader preset (requires --gpu_renderer=y build).\n");
                 fprintf(stderr, "                          Equivalent to setting TMC_GLSLP_PRESET=<path> env var.\n");
+                fprintf(stderr, "  --console-parity:       Force hardware-equivalent behavior for legitimate speedruns\n");
+                fprintf(stderr, "                          (no input edge-cache, no save-states, no widescreen, 59.7275 Hz).\n");
                 fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
             }
@@ -460,7 +491,6 @@ int main(int argc, char* argv[]) {
     /* Set window icon BEFORE first present so the title-bar and
      * taskbar entry never flash the default SDL icon. */
     {
-        extern SDL_Surface* Port_CreateAppIcon(void);
         SDL_Surface* icon = Port_CreateAppIcon();
         if (icon) {
             SDL_SetWindowIcon(window, icon);
@@ -503,9 +533,6 @@ int main(int argc, char* argv[]) {
      * already" / "Wayland display connection closed by server"
      * fatal error). Force-GPU and Auto both want the early init. */
     if (Port_Config_RenderBackend() != PORT_RENDER_BACKEND_SOFTWARE) {
-        extern bool Port_GPU_Init(SDL_Window*);
-        extern bool Port_GPU_ClaimWindow(SDL_Window*, int, int);
-        extern bool Port_GPU_PaintBootSplash(void);
         Port_GPU_Init(window);
         Port_GPU_ClaimWindow(window, MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
         Port_GPU_PaintBootSplash();
@@ -524,7 +551,6 @@ int main(int argc, char* argv[]) {
      * build-flag-off no-op path. */
 #ifndef TMC_GPU_RENDERER
     {
-        extern bool Port_GPU_Init(SDL_Window*);
         Port_GPU_Init(window);
     }
 #endif
@@ -532,7 +558,6 @@ int main(int argc, char* argv[]) {
 
 #ifdef TMC_GPU_RENDERER
     {
-        extern bool Port_GPU_PaintBootSplash(void);
         Port_GPU_PaintBootSplash();
     }
 #else
@@ -540,19 +565,33 @@ int main(int argc, char* argv[]) {
 #endif
     fprintf(stderr, "PPU init complete.\n");
 
+    /* Re-apply persisted window/renderer toggles now that the window, the
+     * renderer, and (on GPU builds) the GPU device all exist (issue #146). */
+    {
+        Port_PPU_SetVSync(Port_Config_GetVSync());
+        if (Port_Config_GetFullscreen() && !Port_PPU_IsFullscreen()) {
+            Port_PPU_ToggleFullscreen();
+        }
+        /* Shader preset: skip if TMC_GLSLP_PRESET already loaded one at GPU
+         * init. Load is a no-op / graceful failure off the SPIR-V backend. */
+        const char* sp = Port_Config_GetShaderPreset();
+        if (sp && sp[0] && !getenv("TMC_GLSLP_PRESET")) {
+            extern int Port_GlslpRuntime_Load(const char*);
+            Port_GlslpRuntime_Load(sp);
+        }
+    }
+
     /* TTS init runs after PPU so ImGui is up (the F8 menu's TTS tab
      * uses it immediately) but well before AgbMain — accessibility
      * announcements for the prelaunch screen need a working backend
      * BEFORE the prelaunch frame loop runs. Idempotent + no-op if no
      * backend is available; never blocks. */
     {
-        extern bool Port_TTS_Init(void);
         Port_TTS_Init();
     }
 
     /* Load persisted accessibility cue toggles into the cue module. */
     {
-        extern void Port_A11y_Init(void);
         Port_A11y_Init();
     }
 
@@ -570,14 +609,6 @@ int main(int argc, char* argv[]) {
      * the partial init we did so far.
      * ==================================================================== */
     {
-        extern bool Port_ImGui_RenderPrelaunch(bool, const char*, const char*, bool*, bool*);
-        extern void Port_ImGui_HandleEvent(const SDL_Event*);
-        extern bool Port_GPU_PresentPrelaunchFrame(void);
-        extern bool Port_GPU_PaintBootSplash(void);
-        extern void Port_GPU_Shutdown(void);
-        extern void Port_DiscordRpc_Shutdown(void);
-        extern int  Port_RomPicker_PromptAndInstall(void);
-
         romPath = Port_FindBaseRomPath();
         fprintf(stderr, "Prelaunch: %s — waiting for user.\n",
                 romPath ? "ROM detected" : "no ROM yet");
@@ -708,8 +739,10 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Prelaunch: Play — loading ROM and assets.\n");
     }
 
-    /* Play pressed and romPath is set. The rest of the original init
-     * order runs now (ROM load → asset extraction → mods → audio). */
+    /* Play pressed and romPath is set. Select the active mod set before
+     * Port_LoadRom touches the asset loader, so TMC_MODS applies to early
+     * table/text/area overrides too. */
+    Port_Mods_Init();
     Port_LoadRom(romPath);
 #ifdef TMC_GPU_RENDERER
     Port_EnsureAssetsReadyWithDisplay(NULL, gRomData, gRomSize);
@@ -717,30 +750,15 @@ int main(int argc, char* argv[]) {
     Port_EnsureAssetsReadyWithDisplay(window, gRomData, gRomSize);
 #endif
     {
-        extern bool RandoLogic_LoadDefaultFiles(void);
-        extern void Port_RandoFileMenu_RestorePersistedSettings(void);
-        RandoLogic_LoadDefaultFiles();
-        /* Re-apply persisted .logic setting overrides (issue #155) so the
-         * randomizer comes back configured the way the player left it. */
         Port_RandoFileMenu_RestorePersistedSettings();
     }
     Port_CheckForUpdates(window);
-
-    /* Mod loader (Tier 1: asset overrides). Scans <exe>/mods/ for
-     * subdirectories whose files shadow runtime asset paths. Active set
-     * controlled by TMC_MODS env var; otherwise all mods/* directories
-     * are loaded in alphabetical order. */
-    {
-        extern void Port_Mods_Init(void);
-        Port_Mods_Init();
-    }
 
     /* Now that the ROM and asset tables are loaded, re-set the window
      * icon — Port_CreateAppIcon prefers the ROM-extracted Ezlo sprite
      * over the procedural fallback once gRomData/gSpritePtrs/gFrameObjLists
      * are populated. */
     {
-        extern SDL_Surface* Port_CreateAppIcon(void);
         SDL_Surface* icon = Port_CreateAppIcon();
         if (icon) {
             SDL_SetWindowIcon(window, icon);
@@ -748,24 +766,44 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    /* Region cross-check between the compile-time `EU` macro and the
-     * runtime-detected ROM region. Mismatch is non-fatal but flags
-     * that asset offsets may be wrong. */
-#ifdef EU
-    if (gRomRegion != ROM_REGION_EU) {
-        fprintf(stderr,
-                "WARNING: This binary was compiled for EU but the ROM is %s.\n"
-                "         Asset offsets may be incorrect. Rebuild with the correct --game_version.\n",
-                gRomRegion == ROM_REGION_USA ? "USA" : "UNKNOWN");
-    }
+    /* Region cross-check between the compile-time region macro and the
+     * runtime-detected ROM region. A mismatch pairs one version's *code*
+     * with another version's *data* — a hybrid that matches no real console,
+     * so RNG manips and offsets diverge. Casual play only warns (the hybrid
+     * is usually playable); Console-Parity treats it as fatal, since a legit
+     * run must not execute on a version-mismatched build. */
+    {
+#if defined(JP)
+        const RomRegion compiledRegion = ROM_REGION_JP;
+        const char* compiledName = "JP";
+#elif defined(EU)
+        const RomRegion compiledRegion = ROM_REGION_EU;
+        const char* compiledName = "EU";
 #else
-    if (gRomRegion != ROM_REGION_USA) {
-        fprintf(stderr,
-                "WARNING: This binary was compiled for USA but the ROM is %s.\n"
-                "         Asset offsets may be incorrect. Rebuild with: xmake f --game_version=EU\n",
-                gRomRegion == ROM_REGION_EU ? "EU" : "UNKNOWN");
-    }
+        const RomRegion compiledRegion = ROM_REGION_USA;
+        const char* compiledName = "USA";
 #endif
+        if (gRomRegion != compiledRegion) {
+            const char* detectedName =
+                gRomRegion == ROM_REGION_USA ? "USA" :
+                gRomRegion == ROM_REGION_EU  ? "EU"  :
+                gRomRegion == ROM_REGION_JP  ? "JP"  : "UNKNOWN";
+            if (Port_Config_GetConsoleParity()) {
+                fprintf(stderr,
+                    "FATAL: Console-Parity requires a region-matched ROM: this binary is %s "
+                    "but the ROM is %s.\n"
+                    "       A version-mismatched hybrid is not console-equivalent. Rebuild for the\n"
+                    "       ROM's region, or relaunch without --console-parity.\n",
+                    compiledName, detectedName);
+                return 1;
+            }
+            fprintf(stderr,
+                "WARNING: This binary was compiled for %s but the ROM is %s.\n"
+                "         Asset offsets may be incorrect; behavior matches neither console version.\n"
+                "         Rebuild with the matching --game_version for a faithful run.\n",
+                compiledName, detectedName);
+        }
+    }
 
     if (noAudio) {
         gMain.muteAudio = 1;
@@ -779,7 +817,6 @@ int main(int argc, char* argv[]) {
      * over. After this the engine drives the frame loop. */
 #ifdef TMC_GPU_RENDERER
     {
-        extern bool Port_GPU_PaintBootSplash(void);
         Port_GPU_PaintBootSplash();
     }
 #else
@@ -790,16 +827,13 @@ int main(int argc, char* argv[]) {
     AgbMain();
 
     {
-        extern void Port_TTS_Shutdown(void);
         Port_TTS_Shutdown();
     }
     {
-        extern void Port_GPU_Shutdown(void);
         Port_GPU_Shutdown();
     }
 
     {
-        extern void Port_DiscordRpc_Shutdown(void);
         Port_DiscordRpc_Shutdown();
     }
     Port_Audio_Shutdown();

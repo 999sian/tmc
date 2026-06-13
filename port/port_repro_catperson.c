@@ -35,6 +35,7 @@
  *   TMC_REPRO_CATPERSON=1 TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy \
  *     SDL_AUDIODRIVER=dummy ./tmc_pc
  */
+#include "port_repro.h"
 
 #include <stdio.h>
 #include <stdlib.h>

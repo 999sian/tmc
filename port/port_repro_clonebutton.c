@@ -27,6 +27,7 @@
  *
  * Combine with TMC_AUTOPLAY=1 and SDL_VIDEODRIVER=dummy for a headless run.
  */
+#include "port_repro.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -38,9 +39,8 @@
 #include "flags.h"    /* CheckRoomFlag, ClearFlag */
 #include "port_gba_mem.h"
 #include "port/port_generic_entity.h" /* GE_FIELD */
+#include "port_debug_actions.h"
 
-extern int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short x, unsigned short y,
-                                 unsigned char layer);
 extern void sub_08081FF8(Entity* this);  /* button.c: push player + clones off a triggered button */
 extern void sub_080977F4(Entity* this);  /* pushableGrave.c: grave fully pushed -> SetFlag(pushedFlag) */
 

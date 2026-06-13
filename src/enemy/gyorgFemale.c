@@ -212,10 +212,10 @@ void GyorgFemale_Action2(GyorgFemaleEntity* this) {
         } else {
             if (this->eyeTimer == 1320) {
                 this->eyesVulnerable = 0;
-#ifndef EU
+                if (!REGION_IS_EU) {
                 this->eyesHit = 0;
                 this->unk_7f = 0;
-#endif
+                }
             }
         }
     }
@@ -226,9 +226,9 @@ void GyorgFemale_Action2(GyorgFemaleEntity* this) {
     if ((((GyorgHeap*)super->myHeap)->boss->unk_6c & 0x38) == 0) {
         super->action = 1;
         this->childrenSpawnTimer = 60;
-#ifndef EU
+        if (!REGION_IS_EU) {
         this->eyesVulnerable = 0;
-#endif
+        }
         this->unk_80 = 0;
     }
 }
@@ -251,22 +251,22 @@ void GyorgFemale_Action3(GyorgFemaleEntity* this) {
         } else {
             if (this->eyeTimer == 1320) {
                 this->eyesVulnerable = 0;
-#ifndef EU
+                if (!REGION_IS_EU) {
                 this->eyesHit = 0;
                 this->unk_7f = 0;
-#endif
+                }
             }
         }
     }
     if (super->health == 0) {
         super->action = 1;
-#ifdef EU
+        if (REGION_IS_EU) {
         this->eyesVulnerable = 0;
-#endif
+        }
         this->childrenSpawnTimer = 60;
-#ifndef EU
+        if (!REGION_IS_EU) {
         this->eyesVulnerable = 0;
-#endif
+        }
         this->unk_80 = 0;
         SoundReq(SFX_BOSS_DIE);
     }
@@ -382,11 +382,11 @@ void GyorgFemale_ChooseEyePattern(GyorgFemaleEntity* this) {
     if (super->health == 0) {
         return;
     }
-#ifndef EU
+    if (!REGION_IS_EU) {
     if (this->eyesVulnerable == 0xFF) {
         return;
     }
-#endif
+    }
     this->eyesVulnerable = gUnk_080D1AF8[Random() & 3];
     this->unk_7f = 0;
     this->damageTakenCycle = 0;
@@ -397,11 +397,11 @@ void GyorgFemale_ProcessEyeHit(GyorgFemaleEntity* this) {
     if (this->eyesHitFrame != 0) {
         this->eyesHit |= this->eyesHitFrame;
         if (super->timer == 0 && this->eyesVulnerable != 0xFF) {
-#ifndef EU
+            if (!REGION_IS_EU) {
             super->timer = 4;
-#else
+            } else {
             super->timer = 3;
-#endif
+            }
         }
         if (sub_08000E62(this->eyesHit) > 2) {
             super->timer = 0;

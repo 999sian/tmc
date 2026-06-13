@@ -639,10 +639,11 @@ void sub_0806FF48(Entity* this, u32 param_2, u32 param_3) {
 }
 
 void SetExtraSpriteFrame(Entity* this, u32 param_2, u32 param_3) {
+    struct_gUnk_020000C0_1* ptr2;
     struct_gUnk_020000C0* ptr1 = GetExtraSpriteStorage(this);
     if (ptr1 == NULL || param_2 >= 4)
         return;
-    struct_gUnk_020000C0_1* ptr2 = &ptr1->unk_00[param_2];
+    ptr2 = &ptr1->unk_00[param_2];
     if (ptr2->unk_01 != param_3) {
         ptr2->unk_01 = param_3;
         ptr2->unk_00.unk3 = 1;
@@ -650,15 +651,20 @@ void SetExtraSpriteFrame(Entity* this, u32 param_2, u32 param_3) {
 }
 
 void SetSpriteSubEntryOffsetData1(Entity* this, u32 param_2, u32 param_3) {
+    struct_gUnk_020000C0_1* ptr2;
+    struct_gUnk_020000C0_1* ptr3;
+    u8* ptr4;
+    u8 val1;
+    u8 val2;
     struct_gUnk_020000C0* ptr1 = GetExtraSpriteStorage(this);
     if (ptr1 == NULL || param_2 >= 4 || param_3 >= 4)
         return;
-    struct_gUnk_020000C0_1* ptr2 = &ptr1->unk_00[param_2];
-    struct_gUnk_020000C0_1* ptr3 = &ptr1->unk_00[param_3];
+    ptr2 = &ptr1->unk_00[param_2];
+    ptr3 = &ptr1->unk_00[param_3];
 
-    u8* ptr4 = GetSpriteSubEntryOffsetDataPointer(ptr2->unk_02, ptr2->unk_01);
-    u8 val1 = ptr2->unk_04.BYTES.byte2;
-    u8 val2 = ptr4[0];
+    ptr4 = GetSpriteSubEntryOffsetDataPointer(ptr2->unk_02, ptr2->unk_01);
+    val1 = ptr2->unk_04.BYTES.byte2;
+    val2 = ptr4[0];
     ptr3->unk_04.BYTES.byte2 = val1 + val2;
     val1 = ptr2->unk_04.BYTES.byte3;
     val2 = ptr4[1];
@@ -676,15 +682,20 @@ void sub_0806FFBC(Entity* this, u32 param_2, u32 param_3, u32 param_4) {
 }
 
 void SetSpriteSubEntryOffsetData2(Entity* this, u32 param_2, u32 param_3) {
+    struct_gUnk_020000C0_1* ptr2;
+    struct_gUnk_020000C0_1* ptr3;
+    u8* ptr4;
+    u8 val1;
+    u8 val2;
     struct_gUnk_020000C0* ptr1 = GetExtraSpriteStorage(this);
     if (ptr1 == NULL || param_2 >= 4 || param_3 >= 4)
         return;
-    struct_gUnk_020000C0_1* ptr2 = &ptr1->unk_00[param_2];
-    struct_gUnk_020000C0_1* ptr3 = &ptr1->unk_00[param_3];
+    ptr2 = &ptr1->unk_00[param_2];
+    ptr3 = &ptr1->unk_00[param_3];
 
-    u8* ptr4 = GetSpriteSubEntryOffsetDataPointer(ptr2->unk_02, ptr2->unk_01);
-    u8 val1 = ptr2->unk_04.BYTES.byte2;
-    u8 val2 = ptr4[2];
+    ptr4 = GetSpriteSubEntryOffsetDataPointer(ptr2->unk_02, ptr2->unk_01);
+    val1 = ptr2->unk_04.BYTES.byte2;
+    val2 = ptr4[2];
     ptr3->unk_04.BYTES.byte2 = val1 + val2;
     val1 = ptr2->unk_04.BYTES.byte3;
     val2 = ptr4[3];
@@ -692,14 +703,14 @@ void SetSpriteSubEntryOffsetData2(Entity* this, u32 param_2, u32 param_3) {
 }
 
 void sub_0807000C(Entity* this) {
+    u32 val;
     struct_gUnk_020000C0* ptr = GetExtraSpriteStorage(this);
     if (ptr == NULL)
         return;
-    u32 val = sub_0807007C(ptr, 0);
+    val = sub_0807007C(ptr, 0);
     val |= sub_0807007C(ptr, 1);
     val |= sub_0807007C(ptr, 2);
     val |= sub_0807007C(ptr, 3);
-
     if (val) {
         GfxSlot* slot = &gGFXSlots.slots[this->spriteAnimation[0]];
         slot->unk_3 = this->spriteAnimation[2];

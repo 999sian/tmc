@@ -261,7 +261,7 @@ void sub_0803E480(VaatiProjectileEntity* this) {
 }
 
 bool32 sub_0803E4A0(VaatiProjectileEntity* this) {
-#ifdef EU
+    if (REGION_IS_EU) {
     bool32 ret;
     if (gRoomTransition.field_0x39 == 0) {
         return TRUE;
@@ -272,7 +272,7 @@ bool32 sub_0803E4A0(VaatiProjectileEntity* this) {
         ret = super->parent->next == NULL;
     }
     return ret;
-#else
+    } else {
     bool32 ret;
     if (gRoomTransition.field_0x39 != 0) {
         if (super->parent == NULL) {
@@ -287,7 +287,7 @@ bool32 sub_0803E4A0(VaatiProjectileEntity* this) {
         return TRUE;
     }
     return ret;
-#endif
+    }
 }
 
 void sub_0803E4D8(VaatiProjectileEntity* this) {

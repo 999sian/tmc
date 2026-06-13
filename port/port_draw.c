@@ -25,6 +25,7 @@
 #include "vram.h"
 
 #include "port_widescreen.h"
+#include "port_rom.h"
 
 #include <setjmp.h>
 #include <stdio.h>
@@ -1004,8 +1005,6 @@ static const u8* sShoesOverlayPtrs[16] = { NULL };
 static int sShoesOverlayTableLoaded = 0;
 
 static const u8* TranslateIwramOrRomPointer(u32 ptr) {
-    extern u8* gRomData;
-    extern u32 gRomSize;
     static const u32 kIwramToRomDeltaUSA = 0x050AC28Cu;
     if (ptr >= 0x03000000u && ptr < 0x03008000u) {
         u32 romFull = ptr + kIwramToRomDeltaUSA;
@@ -1019,7 +1018,6 @@ static const u8* TranslateIwramOrRomPointer(u32 ptr) {
 }
 
 static u32 ReadRomU32LE(u32 offset) {
-    extern u8* gRomData;
     return (u32)gRomData[offset]
          | ((u32)gRomData[offset + 1] << 8)
          | ((u32)gRomData[offset + 2] << 16)
@@ -1027,8 +1025,6 @@ static u32 ReadRomU32LE(u32 offset) {
 }
 
 static void LoadShadowTableFromRom(void) {
-    extern u8* gRomData;
-    extern u32 gRomSize;
     static const u32 kShadowTableRomOffset = 0xB2BD8u;
 
     if (sShadowTableLoaded || gRomData == NULL || gRomSize <= kShadowTableRomOffset + 16u) {
@@ -1042,8 +1038,6 @@ static void LoadShadowTableFromRom(void) {
 }
 
 static void LoadShoesOverlayTableFromRom(void) {
-    extern u8* gRomData;
-    extern u32 gRomSize;
     static const u32 kShoesTableRomOffset = 0xB2B58u;
     if (sShoesOverlayTableLoaded || gRomData == NULL || gRomSize <= kShoesTableRomOffset + 64u) {
         sShoesOverlayTableLoaded = 1;

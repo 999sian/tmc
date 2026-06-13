@@ -285,6 +285,7 @@ void CreateLargeRippleFxRandom(Entity* parent, s32 minDistance, s32 maxDistance)
     sub_080A2AF4(parent, minDistance, maxDistance);
 }
 
+#ifdef PC_PORT
 extern void CreateDrownFX(Entity*);
 extern void CreateLavaDrownFX(Entity*);
 extern void CreateSwampDrownFX(Entity*);
@@ -305,6 +306,7 @@ void CreateSwampDrownFx(Entity* parent) {
 void CreatePitFallFx(Entity* parent) {
     CreatePitFallFX(parent);
 }
+#endif
 
 void CreateSparkle(Entity* entity) {
     Entity* sparkle;

@@ -23,12 +23,12 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include "port_repro.h"
 #include <string.h>
 #include "main.h" /* gMain */
 #include "port_gba_mem.h"
+#include "port_debug_actions.h"
 
-extern int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short x, unsigned short y,
-                                 unsigned char layer);
 extern void sub_08053BE8(void); /* cutscene.c: launch the takeover aux-cutscene */
 
 #define KEYINPUT_REG 0x130

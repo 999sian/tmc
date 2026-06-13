@@ -15,12 +15,13 @@
 #include "item.h"
 #include "transitions.h"
 #include "asm.h"
+#include "port_debug_query.h"
+#include "port_debug_actions.h"
 
 void DoExitTransition(const Transition* data);
 void LoadItemGfx(void);
 extern bool32 Port_IsRoomHeaderPtrReadable(const void* ptr);
 extern void Port_RefreshAreaData(unsigned int area);
-const char* Port_DebugQuery_AreaName(unsigned char area);
 
 #define DEBUG_AREA_COUNT 0x90 /* matches kAreaCount in port_asset_loader.cpp */
 
@@ -273,7 +274,6 @@ int Port_DebugAction_Warp(unsigned char area, unsigned char room,
      * outward from his arrival tile to find a walkable spot if he's
      * landed inside collision. Catches every room, including ones not
      * in the curated override table. See issue #94. */
-    extern void Port_DebugAction_ArmWarpNudge(void);
     Port_DebugAction_ArmWarpNudge();
     return 1;
 }

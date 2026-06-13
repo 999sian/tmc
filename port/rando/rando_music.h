@@ -19,6 +19,10 @@ extern "C" {
  * Out-of-range assignments fall back to vanilla with one warning per area. */
 int Rando_Music_Remap(int area, int song);
 
+void Rando_Music_SetAssignment(int area, int song);
+int Rando_Music_GetAssignment(int area);
+void Rando_Music_ClearAssignments(void);
+
 #ifdef __cplusplus
 }
 #endif

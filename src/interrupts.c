@@ -43,9 +43,15 @@ void EnableVBlankIntr(void) {
 #ifndef PC_PORT
     INTR_VECTOR = ram_IntrMain;
 #endif
+#ifdef PC_PORT
     gba_write16(REG_ADDR_DISPSTAT, DISPSTAT_VCOUNT_INTR | DISPSTAT_VBLANK_INTR | (80 << 8));
     gba_write16(REG_ADDR_IE, INTR_FLAG_VBLANK | INTR_FLAG_VCOUNT | INTR_FLAG_GAMEPAK);
     gba_write16(REG_ADDR_IME, 1);
+#else
+    REG_DISPSTAT = DISPSTAT_VCOUNT_INTR | DISPSTAT_VBLANK_INTR | (80 << 8);
+    REG_IE = INTR_FLAG_VBLANK | INTR_FLAG_VCOUNT | INTR_FLAG_GAMEPAK;
+    REG_IME = 1;
+#endif
 }
 
 void VBlankIntr(void) {

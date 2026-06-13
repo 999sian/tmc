@@ -23,8 +23,6 @@
 #include <stdio.h>
 #include <string.h>
 
-extern u8* gRomData;
-extern u32 gRomSize;
 
 static int AnimRangeHasBytes(const void* ptr, size_t count) {
     uintptr_t start = (uintptr_t)gRomData;

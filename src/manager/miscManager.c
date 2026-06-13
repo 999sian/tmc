@@ -326,9 +326,9 @@ void MiscManager_Type9(MiscManager* this) {
         if (CheckFlags(this->flag2)) {
             sub_080592EC(this);
             sub_0805930C(this);
-#ifndef EU
+            if (!REGION_IS_EU) {
             SoundReq(SFX_16E);
-#endif
+            }
             DeleteThisEntity();
         }
     }
@@ -340,11 +340,11 @@ void sub_080592EC(MiscManager* this) {
 
 void sub_0805930C(MiscManager* this) {
     Entity* tmp;
-#ifdef EU
+    if (REGION_IS_EU) {
     tmp = CreateObject(SPECIAL_FX, FX_BIG_EXPLOSION2, 0x0);
-#else
+    } else {
     tmp = CreateObject(SPECIAL_FX, FX_BIG_EXPLOSION2, 0x40);
-#endif
+    }
     if (!tmp)
         return;
     tmp->x.HALF.HI = this->x + gRoomControls.origin_x;

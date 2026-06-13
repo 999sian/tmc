@@ -7,6 +7,7 @@
 #include "npc.h"
 #include "physics.h"
 #include "room.h"
+#include "script.h"
 #ifdef PC_PORT
 #include "port_entity_ctx.h"
 #ifdef PC_PORT

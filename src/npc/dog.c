@@ -385,15 +385,15 @@ void sub_08069E50(DogEntity* this) {
 
 void sub_08069ECC(DogEntity* this) {
     if (UpdateFuseInteraction(super) != 0) {
-#ifdef EU
+        if (REGION_IS_EU) {
         if (GetInventoryValue(ITEM_QST_DOGFOOD) != 2) {
             super->action = 5;
         } else {
             super->action = 1;
         }
-#else
+        } else {
         super->action = 1;
-#endif
+        }
     }
 }
 

@@ -215,6 +215,7 @@ static bool32 RupeeLike_StealItem_Reborn(u32 item) {
 
 void sub_0802953C(RupeeLikeEntity* this) {
     u8* pbVar3;
+    bool32 outOfReason;
 
     sub_080296C8(this);
     sub_080296C8(this);
@@ -227,10 +228,10 @@ void sub_0802953C(RupeeLikeEntity* this) {
 
 #ifdef PC_PORT
     bool32 rebornMode = Port_Reborn_IsEnabled(/* placeholder for new enum */ 8);
-    bool32 outOfReason = rebornMode ? (sRebornRupeeLikeTicks >= 10)
-                                    : (gSave.stats.rupees == 0);
+    outOfReason = rebornMode ? (sRebornRupeeLikeTicks >= 10)
+                             : (gSave.stats.rupees == 0);
 #else
-    bool32 outOfReason = (gSave.stats.rupees == 0);
+    outOfReason = (gSave.stats.rupees == 0);
 #endif
 
     if (((super->subtimer > 0x2d) || outOfReason) && (super->timer == 0)) {
@@ -364,11 +365,11 @@ void sub_080297F0(RupeeLikeEntity* this) {
     super->spriteSettings.draw = TRUE;
     super->hitType = 0x8e;
     UnloadGFXSlots(super);
-#ifdef EU
+    if (REGION_IS_EU) {
     super->spriteIndex = 0x142;
-#else
+    } else {
     super->spriteIndex = 0x143;
-#endif
+    }
     temp = gUnk_080CCC47[super->type];
     super->palette.b.b0 = temp;
     super->spriteVramOffset = 9;

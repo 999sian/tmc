@@ -18,7 +18,6 @@
  */
 
 #include "rando/rando.h"
-#include "rando/rando_logic.h"
 #include "rando/rando_entrance.h"
 
 #include <stdint.h>
@@ -139,8 +138,6 @@ int8_t sAssign[kEntranceCount];
 int8_t sInverse[kEntranceCount]; /* dungeon -> location */
 bool sEnabled = false;
 bool sCacheValid = false;
-uint64_t sCacheSeed = 0;
-uint32_t sCacheLocCount = 0;
 
 int DungeonFromInteriorArea(uint8_t area) {
     for (int d = 0; d < kEntranceCount; ++d) {
@@ -155,42 +152,19 @@ bool TupleMatches(const EntranceTuple& t, uint8_t area, uint8_t room, int16_t x,
     return t.area == area && t.room == room && (int16_t)t.x == x && (int16_t)t.y == y;
 }
 
-/* Refresh the location->dungeon mapping from the logic engine. Cached per
- * (seed, raw location count); cheap to redo when a new seed is generated. */
 bool EnsureMapping() {
-    if (!Rando_IsActive()) {
-        sCacheValid = false;
-        return false;
-    }
-    uint64_t seed = Rando_GetSeed64();
-    uint32_t loc_count = RandoLogic_GetLocationCountRaw();
-    if (sCacheValid && sCacheSeed == seed && sCacheLocCount == loc_count) return sEnabled;
+    if (sCacheValid) return sEnabled;
 
     sCacheValid = true;
-    sCacheSeed = seed;
-    sCacheLocCount = loc_count;
     sEnabled = false;
     for (int i = 0; i < kEntranceCount; ++i) {
-        sAssign[i] = -1;
         sInverse[i] = -1;
-    }
-
-    for (uint32_t i = 0; i < loc_count; ++i) {
-        const char* name = RandoLogic_GetLocationName(i);
-        if (name == nullptr || name[0] == '\0') continue;
-        for (int l = 0; l < kEntranceCount; ++l) {
-            if (strcmp(name, kLocationNames[l]) != 0) continue;
-            int subtype = RandoLogic_GetEntranceAssignment(i);
-            if (subtype >= 1 && subtype <= kEntranceCount) sAssign[l] = (int8_t)(subtype - 1);
-            break;
-        }
     }
 
     for (int l = 0; l < kEntranceCount; ++l) {
         int d = sAssign[l];
         if (d < 0) continue;
         if (sInverse[d] != -1) {
-            /* Duplicate assignment: corrupt logic state; refuse to remap. */
             fprintf(stderr, "[RANDO] entrance shuffle: duplicate assignment for dungeon %d, disabling\n", d + 1);
             sEnabled = false;
             return false;
@@ -200,8 +174,6 @@ bool EnsureMapping() {
     }
 
     if (sEnabled) {
-        /* Coupled swaps need every exit mapped; a partial assignment set
-         * (some -1) would strand the player. Require a full bijection. */
         for (int l = 0; l < kEntranceCount; ++l) {
             if (sAssign[l] < 0) {
                 fprintf(stderr, "[RANDO] entrance shuffle: incomplete assignment (%s empty), disabling\n",
@@ -306,4 +278,35 @@ extern "C" void Rando_Entrance_RemapGreenWarp(uint8_t cur_area, uint32_t warp_ty
     *x = (int16_t)kGreenWarpXY[loc].x;
     *y = (int16_t)kGreenWarpXY[loc].y;
     fprintf(stderr, "[RANDO] entrance remap: dungeon %d green warp -> %s\n", v + 1, kLocationNames[loc]);
+}
+extern "C" void Rando_Entrance_SetAssignment(int loc_idx, int interior_idx) {
+    if (loc_idx >= 0 && loc_idx < kEntranceCount) {
+        sAssign[loc_idx] = (int8_t)interior_idx;
+        sCacheValid = false;
+    }
+}
+
+extern "C" int Rando_Entrance_GetAssignment(int loc_idx) {
+    if (loc_idx >= 0 && loc_idx < kEntranceCount) {
+        return sAssign[loc_idx];
+    }
+    return -1;
+}
+
+extern "C" int Rando_Entrance_GetInverseAssignment(int interior_idx) {
+    if (!EnsureMapping()) {
+        return -1;
+    }
+    if (interior_idx >= 0 && interior_idx < kEntranceCount) {
+        return sInverse[interior_idx];
+    }
+    return -1;
+}
+
+extern "C" void Rando_Entrance_ClearAssignments(void) {
+    for (int i = 0; i < kEntranceCount; ++i) {
+        sAssign[i] = -1;
+        sInverse[i] = -1;
+    }
+    sCacheValid = false;
 }

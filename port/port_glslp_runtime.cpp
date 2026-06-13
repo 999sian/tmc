@@ -11,6 +11,7 @@
  */
 
 #include "port_glslp_parser.h"
+#include "port_gpu_renderer.h"
 
 #ifdef TMC_GPU_RENDERER
 #include <SDL3/SDL.h>
@@ -161,13 +162,6 @@ static void ResolvePassSize(const PortGlslp::ShaderPass& p,
 
 }  // namespace
 
-#ifdef TMC_GPU_RENDERER
-/* Accessors implemented in port_gpu_renderer.cpp — declared here so
- * we don't pull its full header. */
-extern "C" SDL_GPUDevice*       Port_GPU_GetDevice(void);
-extern "C" SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void);
-extern "C" bool                 Port_GPU_SupportsGlslpRuntime(void);
-#endif
 
 extern "C" int Port_GlslpRuntime_Load(const char* glslp_path) {
     /* Stage 5 MVP load:

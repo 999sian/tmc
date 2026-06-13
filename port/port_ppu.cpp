@@ -1,10 +1,13 @@
 #include "port_ppu.h"
+#include "port_debug_menu.h"
 #include "port_gba_mem.h"
 #include "port_hdma.h"
 #include "port_upscale.h"
 #include "port_runtime_config.h"
 #include "port_filter.h"
 #include "port_gpu_renderer.h"  /* PortGpuFilter for the GPU-backend filter cycle */
+#include "port_imgui_menu.h"
+#include "port_softslots.h"
 #include "port_touch_controls.h"
 #include "port_widescreen.h"
 
@@ -509,9 +512,6 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
      * GPU claim is the safe order — without that, SDL_ClaimWindow
      * returns VK_ERROR_SURFACE_LOST_KHR. If GPU init fails the
      * fallback path re-creates the renderer below. */
-    extern bool Port_GPU_Init(SDL_Window*);
-    extern bool Port_GPU_ClaimWindow(SDL_Window*, int, int);
-    extern bool Port_GPU_IsActive(void);
     (void)Port_GPU_Init;  /* called earlier in port_main.c */
 
     if (SDL_Renderer* existing = SDL_GetRenderer(window)) {
@@ -627,10 +627,8 @@ bind_virtuappu_memory:
      * and uses the SDL_GPU ImGui backend (ImGui_ImplSDLGPU3_*) when the
      * GPU pipeline owns the window. Renderer can be NULL in that case. */
     if (sBackend == RenderBackend::Renderer) {
-        extern void Port_ImGui_Init(SDL_Window*, SDL_Renderer*);
         Port_ImGui_Init(window, sRenderer);
     } else if (sBackend == RenderBackend::Gpu) {
-        extern void Port_ImGui_Init(SDL_Window*, SDL_Renderer*);
         Port_ImGui_Init(window, nullptr);
     }
 }
@@ -783,14 +781,12 @@ extern "C" void Port_PPU_PresentFrame(void) {
      * the renderer presents-then-overlays in one call; SDL_GPU needs
      * the order swapped because the menu draws into the game's pass. */
     if (sBackend == RenderBackend::Gpu) {
-        extern bool Port_ImGui_Render(void);
         Port_ImGui_Render();
 
         SDL_ScaleMode scale = SDL_SCALEMODE_NEAREST;
         if (sPresentMode == PresentMode::XbrzLinear || sPresentMode == PresentMode::LinearRaw) {
             scale = SDL_SCALEMODE_LINEAR;
         }
-        extern void Port_GPU_SetTextureScaleMode(SDL_ScaleMode);
         Port_GPU_SetTextureScaleMode(scale);
         /* xBRZ on the GPU path. Same mutual exclusion with internal
          * scale that the SDL_Renderer branch uses (xBRZ is itself a
@@ -945,12 +941,9 @@ extern "C" void Port_PPU_PresentFrame(void) {
              * failed), fall back to the legacy SDL_RenderDebugText
              * overlay so the menu still works. The soft-slot overlay
              * is a separate HUD layer and always uses SDL primitives. */
-            extern bool Port_ImGui_Render(void);
             if (!Port_ImGui_Render()) {
-                extern void Port_DebugMenu_Render(SDL_Renderer*, int, int);
                 Port_DebugMenu_Render(sRenderer, outW, outH);
             }
-            extern void Port_SoftSlots_RenderOverlay(void*, int, int);
             Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
             Port_TouchControls_Render(sRenderer, outW, outH);
         }
