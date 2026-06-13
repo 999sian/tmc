@@ -18,10 +18,8 @@
 #ifdef PC_PORT
 #include "port/port_generic_entity.h"
 #endif
-#ifndef EU
 #include "vram.h"
 #include "color.h"
-#endif
 
 typedef struct {
     u8 unk_00;

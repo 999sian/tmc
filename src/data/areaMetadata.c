@@ -3,11 +3,13 @@
 #include "message.h"
 #include "sound.h"
 
-#ifdef EU
-#define OVERWORLD_FLAGS AR_IS_OVERWORLD
-#else
-#define OVERWORLD_FLAGS AR_IS_OVERWORLD | AR_ALLOWS_WARP
-#endif
+/* Multi-region uses a single USA-baseline table for all regions. Retail EU's
+ * table omits AR_ALLOWS_WARP on overworld areas (EU folds warp-permission into
+ * AR_IS_OVERWORLD), but EU never observes the bit: AreaAllowsWarp() is called
+ * only on the non-EU path (bird.c), the dynamic warp set is !REGION_IS_EU gated
+ * (roomInit.c), and the overworld equality checks (gameUtils.c) compare against
+ * this same baseline constant. Keeping one table is therefore region-faithful. */
+#define OVERWORLD_FLAGS (AR_IS_OVERWORLD | AR_ALLOWS_WARP)
 
 const AreaHeader gAreaMetadata[] = {
     { OVERWORLD_FLAGS, 18, LOCAL_BANK_1, BGM_MINISH_WOODS },

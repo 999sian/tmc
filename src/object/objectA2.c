@@ -11,9 +11,7 @@
 #include "effects.h"
 #include "physics.h"
 #include "color.h"
-#ifndef EU
 #include "save.h"
-#endif
 
 void ObjectA2_Init(Entity*);
 void ObjectA2_Action1(Entity*);
@@ -55,8 +53,7 @@ void ObjectA2_Init(Entity* this) {
 
 void ObjectA2_Action1(Entity* this) {
     LinearMoveUpdate(this);
-#ifndef EU
-    if (gSaveHeader->language < 2) {
+    if (!REGION_IS_EU && gSaveHeader->language < 2) {
         if (BounceUpdate(this, Q_8_8(32.0)) < BOUNCE_AIRBORNE) {
             this->z.WORD = 0;
             this->action = 2;
@@ -66,7 +63,6 @@ void ObjectA2_Action1(Entity* this) {
             this->timer++;
         }
     } else {
-#endif
         switch (BounceUpdate(this, Q_8_8(32.0))) {
             default:
                 this->timer++;
@@ -80,9 +76,7 @@ void ObjectA2_Action1(Entity* this) {
                 sub_0809F448(this);
                 SoundReq(SFX_186);
         }
-#ifndef EU
     }
-#endif
 }
 
 void ObjectA2_Action2(Entity* this) {
