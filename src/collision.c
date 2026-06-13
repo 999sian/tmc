@@ -59,7 +59,7 @@ typedef struct {
     u8 flags;
 } LinkedList2;
 
-extern LinkedList2 gUnk_03003C70[16];
+LinkedList2 gUnk_03003C70[16];
 extern LinkedList2* gUnk_02018EA0;
 
 void ClearHitboxList(void) {

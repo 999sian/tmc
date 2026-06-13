@@ -315,7 +315,7 @@ TileEntity gSmallChests[8];
 SpecialTileEntry gTilesForSpecialTiles[MAX_SPECIAL_TILES];
 
 // Collision
-u8 gUnk_03003C70[16 * 20] __attribute__((aligned(4)));
+// gUnk_03003C70 now defined in src/collision.c
 
 // IWRAM scratch
 u8 gUnk_03000420[0x800] __attribute__((aligned(4)));

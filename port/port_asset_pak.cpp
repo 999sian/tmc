@@ -147,7 +147,9 @@ bool PakBuilder::Write(const std::filesystem::path& outputPath, std::string* err
     }
 
     for (std::size_t i = 0; i < entries.size(); ++i) {
-        std::memcpy(out.data() + entry_offsets[i], entries[i].data.data(), entries[i].data.size());
+        if (!entries[i].data.empty()) {
+            std::memcpy(out.data() + entry_offsets[i], entries[i].data.data(), entries[i].data.size());
+        }
     }
 
     /* Buffered fwrite-style output; one syscall flush at the end. */
