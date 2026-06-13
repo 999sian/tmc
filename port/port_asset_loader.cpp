@@ -1471,6 +1471,7 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
     AssetLogOnce("palette-group-json:" + std::to_string(group), "palette group %u described by %s/palette_groups.json",
                  group, PathForLog(gAssetGroupCache.assetsRoot).c_str());
 
+    bool loadedAny = false;
     for (const PaletteGroupEntryData& entry : it->second) {
         u32 copiedPalettes = 0;
 
@@ -1483,10 +1484,10 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
             AssetLogOnce("palette-file:" + std::to_string(group) + ":" + std::to_string(entry.destPaletteNum + copiedPalettes) +
                              ":" + ref.file,
                          "palette group %u slot %u <- %s", group, entry.destPaletteNum + copiedPalettes, ref.file.c_str());
-            LoadPalettes(fileData->data() + ref.byteOffset,
-                         static_cast<s32>(entry.destPaletteNum + copiedPalettes),
+            LoadPalettes(fileData->data() + ref.byteOffset, static_cast<s32>(entry.destPaletteNum + copiedPalettes),
                          static_cast<s32>(ref.numPalettes));
             copiedPalettes += ref.numPalettes;
+            loadedAny = true;
         }
 
         if (copiedPalettes != entry.numPalettes) {
@@ -1498,7 +1499,7 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
         }
     }
 
-    return TRUE;
+    return loadedAny ? TRUE : FALSE;
 }
 
 extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
@@ -1514,6 +1515,7 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
     AssetLogOnce("gfx-group-json:" + std::to_string(group), "gfx group %u described by %s/gfx_groups.json", group,
                  PathForLog(gAssetGroupCache.assetsRoot).c_str());
 
+    bool loadedAny = false;
     for (const GfxGroupEntryData& entry : it->second) {
         const GfxLoadDecision decision = EvaluateGfxControl(entry.unknown);
 
@@ -1559,6 +1561,7 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
                 MemCopy(fileData->data(), reinterpret_cast<void*>(static_cast<uintptr_t>(entry.dest)),
                         static_cast<u32>(fileData->size()));
             }
+            loadedAny = true;
         }
 
         if (entry.terminator) {
@@ -1566,7 +1569,7 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
         }
     }
 
-    return TRUE;
+    return loadedAny ? TRUE : FALSE;
 }
 
 extern "C" bool32 Port_LoadAreaTablesFromAssets(void) {

@@ -498,7 +498,7 @@ const RomOffsets kRomOffsets_EU = {
     .bgAnimTable = 0x0B6C84,
     .localFlagBanks = 0x11DB9C,
     .gfxGroupsCount = 133,
-    .paletteGroupsCount = 208,
+    .paletteGroupsCount = 207,
     .objPalettesCount = 360,
     .frameObjListsSize = 200045,
     .fixedTypeGfxCount = 527,
@@ -1356,6 +1356,8 @@ void Port_LoadRom(const char* path) {
      * GBA pointers to GfxItem / PaletteGroup descriptors). On PC these come from
      * the asset pipeline; on N64 (assets stubbed) they MUST be resolved from the
      * ROM here, else LoadGfxGroup/LoadPaletteGroup see NULL and skip every load. */
+    memset(gGfxGroups, 0, sizeof(void*) * GFX_GROUPS_COUNT_MAX);
+    memset(gPaletteGroups, 0, sizeof(void*) * PALETTE_GROUPS_COUNT_MAX);
     ResolveSubTable(&gRomData[R->gfxGroups], (void**)gGfxGroups, R->gfxGroupsCount);
     ResolveSubTable(&gRomData[R->paletteGroups], (void**)gPaletteGroups, R->paletteGroupsCount);
     fprintf(stderr, "gGfxGroups/gPaletteGroups resolved (%u gfx, %u palette) from ROM.\n",
@@ -1393,11 +1395,19 @@ void Port_LoadRom(const char* path) {
         }
     }
 
-    /* gFrameObjLists — from compile-time const data (no ROM read needed) */
-    memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
-    fprintf(stderr, "gFrameObjLists loaded (%u bytes from compile-time table).\n", R->frameObjListsSize);
+    /* Runtime-rendered sprite data must come from the active ROM.
+     * MULTI_REGION binaries are compiled with USA tables, but JP/EU have
+     * different table addresses. Copying the compile-time USA blobs here
+     * corrupts title/UI sprite rendering after a region switch. */
+    if (R->frameObjLists + R->frameObjListsSize <= gRomSize) {
+        memcpy(gFrameObjLists, &gRomData[R->frameObjLists], R->frameObjListsSize);
+        fprintf(stderr, "gFrameObjLists loaded (%u bytes from ROM 0x%X).\n", R->frameObjListsSize, R->frameObjLists);
+    } else {
+        memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
+        fprintf(stderr, "WARNING: gFrameObjLists ROM range invalid; using compile-time fallback.\n");
+    }
 
-    /* gExtraFrameOffsets — self-relative offset table for multi-part sprite positioning */
+    /* gExtraFrameOffsets — self-relative offset table multi-part sprite positioning */
     {
         extern const u8 kExtraFrameOffsetsData[4352];
         extern u8 gExtraFrameOffsets[4352];
@@ -1405,71 +1415,44 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "gExtraFrameOffsets loaded (4352 bytes from compile-time table).\n");
     }
 
-    /* OBJ palette offset table — now compile-time const from src/data/objPalettes.c */
+    /* OBJ palette offset table — now compile-time const src/data/objPalettes.c */
 
-    /* gFixedTypeGfxData — from compile-time const data */
-    memcpy(gFixedTypeGfxData, kFixedTypeGfxInitData, R->fixedTypeGfxCount * 4);
-    fprintf(stderr, "gFixedTypeGfxData loaded (%u entries from compile-time table).\n", R->fixedTypeGfxCount);
+    if (R->fixedTypeGfx + R->fixedTypeGfxCount * 4 <= gRomSize) {
+        memcpy(gFixedTypeGfxData, &gRomData[R->fixedTypeGfx], R->fixedTypeGfxCount * 4);
+        fprintf(stderr, "gFixedTypeGfxData loaded (%u entries from ROM 0x%X).\n", R->fixedTypeGfxCount, R->fixedTypeGfx);
+    } else {
+        memcpy(gFixedTypeGfxData, kFixedTypeGfxInitData, R->fixedTypeGfxCount * 4);
+        fprintf(stderr, "WARNING: gFixedTypeGfxData ROM range invalid; using compile-time fallback.\n");
+    }
 
-    /* gSpritePtrs — resolved from compile-time offset table, then
-     * extended by reading the rest of the table directly from ROM.
-     *
-     * The compile-time kSpritePtrEntries is auto-generated with a
-     * hard cap of 329 entries, but TMC USA references higher indices
-     * (e.g. Moldorm uses 484 — see "TODO sprite index too high" in
-     * src/enemy.c). Without these the OAM lookup returns NULL and
-     * the affected enemies render as invisible (#127, #128, etc.).
-     *
-     * The ROM at R->spritePtrs holds the full table — each entry is
-     * 4 little-endian GBA 32-bit addresses (animations, frames, ptr,
-     * pad). We walk forward until either:
-     *   - we hit a max sentinel count (MAX_SPRITE_PTRS), or
-     *   - the animations slot's GBA addr isn't in the [0x08000000,
-     *     0x08000000 + romSize) range (table end / next region).
-     * The bump from 329 → 600+ keeps the high-index enemies (Moldorm,
-     * Zora, end-game bosses) visible.
-     */
+    /* gSpritePtrs — resolve every entry from the active ROM table. */
     {
+        extern const u32 kMaxSpritePtrs; /* declared in port_linked_stubs.c */
+        extern u32 gSpritePtrsLoadedCount;
+        u32 loaded = 0;
         memset(sSpritePtrsStable, 0, sizeof(sSpritePtrsStable));
-        for (u32 i = 0; i < R->spritePtrsCount; i++) {
-            gSpritePtrs[i].animations = ResolveTableOffset(kSpritePtrEntries[i][0]);
-            gSpritePtrs[i].frames = (SpriteFrame*)ResolveTableOffset(kSpritePtrEntries[i][1]);
-            gSpritePtrs[i].ptr = ResolveTableOffset(kSpritePtrEntries[i][2]);
-            gSpritePtrs[i].pad = kSpritePtrEntries[i][3];
-            sSpritePtrsStable[i] = gSpritePtrs[i];
-        }
-
-        /* MAX_SPRITE_PTRS comes from the gSpritePtrs[] array size
-         * defined in port_linked_stubs.c — we don't want to write
-         * past it. Read 4 GBA-address u32s per entry from ROM. */
-        extern const u32 kMaxSpritePtrs;  /* declared in port_linked_stubs.c */
-        u32 extended = 0;
-        u32 i;
-        for (i = R->spritePtrsCount; i < kMaxSpritePtrs; i++) {
+        for (u32 i = 0; i < kMaxSpritePtrs; i++) {
             const u32 entryRomOffset = R->spritePtrs + i * 16;
             if (entryRomOffset + 16 > gRomSize) break;
-            const u32 animsGba  = Port_ReadU32(&gRomData[entryRomOffset + 0]);
+            const u32 animsGba = Port_ReadU32(&gRomData[entryRomOffset + 0]);
             const u32 framesGba = Port_ReadU32(&gRomData[entryRomOffset + 4]);
-            const u32 ptrGba    = Port_ReadU32(&gRomData[entryRomOffset + 8]);
-            const u32 pad       = Port_ReadU32(&gRomData[entryRomOffset + 12]);
-            /* Sentinel: NULL animations or address not in ROM-region
-             * means we've walked past the real table. Stop. */
-            const bool inRom = (animsGba >= 0x08000000u) &&
-                               (animsGba < 0x08000000u + gRomSize);
-            if (animsGba == 0 || !inRom) break;
-            gSpritePtrs[i].animations = (void*)Port_ResolveRomData(animsGba);
-            gSpritePtrs[i].frames     =
-                (SpriteFrame*)Port_ResolveRomData(framesGba);
-            gSpritePtrs[i].ptr        = (void*)Port_ResolveRomData(ptrGba);
-            gSpritePtrs[i].pad        = pad;
+            const u32 ptrGba = Port_ReadU32(&gRomData[entryRomOffset + 8]);
+            const u32 pad = Port_ReadU32(&gRomData[entryRomOffset + 12]);
+            const bool inRom = (animsGba >= 0x08000000u) && (animsGba < 0x08000000u + gRomSize);
+            if (i >= R->spritePtrsCount && (animsGba == 0 || !inRom)) break;
+            gSpritePtrs[i].animations = inRom ? (void*)Port_ResolveRomData(animsGba) : NULL;
+            gSpritePtrs[i].frames = (framesGba >= 0x08000000u && framesGba < 0x08000000u + gRomSize)
+                ? (SpriteFrame*)Port_ResolveRomData(framesGba)
+                : NULL;
+            gSpritePtrs[i].ptr = (ptrGba >= 0x08000000u && ptrGba < 0x08000000u + gRomSize)
+                ? (void*)Port_ResolveRomData(ptrGba)
+                : NULL;
+            gSpritePtrs[i].pad = pad;
             sSpritePtrsStable[i] = gSpritePtrs[i];
-            extended++;
+            loaded++;
         }
-        extern u32 gSpritePtrsLoadedCount;
-        gSpritePtrsLoadedCount = R->spritePtrsCount + extended;
-        fprintf(stderr,
-            "gSpritePtrs loaded (%u from compile-time table + %u extended from ROM = %u total).\n",
-            R->spritePtrsCount, extended, gSpritePtrsLoadedCount);
+        gSpritePtrsLoadedCount = loaded;
+        fprintf(stderr, "gSpritePtrs loaded (%u entries from ROM 0x%X).\n", gSpritePtrsLoadedCount, R->spritePtrs);
     }
 
     /* gMoreSpritePtrs / gSpriteAnimations_322
