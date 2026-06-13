@@ -42,6 +42,7 @@ void Port_LoadRom(const char* path);
  * (and exit cleanly) before any window is created.
  */
 const char* Port_FindBaseRomPath(void);
+const char* Port_GetLoadedRomPath(void);
 
 // Re-resolve a single area's room/tile/property tables from immutable ROM offsets.
 void Port_RefreshAreaData(u32 area);

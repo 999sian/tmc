@@ -56,6 +56,11 @@ extern long readlink(const char*, char*, unsigned long);
 #endif
 
 u8* gRomData = NULL;
+static char sLoadedRomPath[4096];
+
+const char* Port_GetLoadedRomPath(void) {
+    return sLoadedRomPath[0] ? sLoadedRomPath : NULL;
+}
 u32 gRomSize = 0;
 static SpritePtr sSpritePtrsStable[512];
 
@@ -1163,6 +1168,7 @@ static int LoadRomGaps(void) {
 }
 
 void Port_LoadRom(const char* path) {
+    sLoadedRomPath[0] = '\0';
 #ifndef TMC_N64
     memset(sExtractedPages, 0, sizeof(sExtractedPages));
 
@@ -1260,8 +1266,10 @@ void Port_LoadRom(const char* path) {
                 romLoaded = 1;
             }
             fclose(f);
-            if (romLoaded)
+            if (romLoaded) {
+                snprintf(sLoadedRomPath, sizeof(sLoadedRomPath), "%s", usedPath);
                 fprintf(stderr, "ROM loaded: %u bytes (0x%X) from %s\n", gRomSize, gRomSize, usedPath);
+            }
         }
     }
 
@@ -1763,10 +1771,17 @@ void Port_LoadRom(const char* path) {
 void Port_ApplyLanguage(void) {
     extern void* gTranslations[];
     if (!gSaveHeader) return;
-    int pref = Port_Config_PreferredLanguage();
-    if (pref >= 0 && pref < 6 /* NUM_LANGUAGES */) {
-        if (gTranslations[pref] != NULL) {
-            gSaveHeader->language = (u8)pref;
+
+    int lang = Port_Config_PreferredLanguage();
+    if (lang < 0) {
+        const int current = gSaveHeader->language;
+        if (current >= 0 && current < 6 /* NUM_LANGUAGES */ && gTranslations[current] != NULL) {
+            return;
         }
+        lang = REGION_IS_JP ? 0 /* LANGUAGE_JP */ : 1 /* LANGUAGE_EN */;
+    }
+
+    if (lang >= 0 && lang < 6 /* NUM_LANGUAGES */ && gTranslations[lang] != NULL) {
+        gSaveHeader->language = (u8)lang;
     }
 }
