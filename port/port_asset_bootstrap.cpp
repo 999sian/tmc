@@ -44,6 +44,7 @@
 #include "port_asset_pipeline.hpp"
 
 #include "assets_extractor_api.hpp"
+extern "C" const char* Port_GetLoadedRomPath(void);
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -458,19 +459,16 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
                                                   const u8* rom_data,
                                                   u32 rom_size) {
     const std::filesystem::path root = PreferredAssetRoot();
-    const std::filesystem::path rom = root / "baserom.gba";
+    const char* loadedRomPath = Port_GetLoadedRomPath();
+    const std::filesystem::path rom =
+        (loadedRomPath && loadedRomPath[0]) ? std::filesystem::path(loadedRomPath) : (root / "baserom.gba");
     const bool packMode = !Port_LooseAssetsRequested;
 
     /* Step 1: warm-launch fast path. Same ROM fingerprint + pack
-     * mode as the recorded build → assets/ is current and we can
-     * skip the renderer entirely.
-     *
-     * baserom.gba may not be next to the binary — Port_LoadRom probes
-     * a candidate list that includes cwd-relative and developer-tree
-     * fallbacks (../../baserom.gba). When rom doesn't exist at
-     * exe_dir/baserom.gba, fall back to a buffer-size fingerprint so
-     * the warm-launch check still succeeds against the size we
-     * stamped during the previous run. */
+     * mode recorded in assets/ means current runtime tree matches the
+     * actually loaded ROM. Multi-region builds must not compare JP/EU
+     * runs against root/baserom.gba (usually USA), or stale USA assets
+     * override JP/EU title graphics and text tables. */
     std::error_code rom_ec;
     const bool rom_on_disk = std::filesystem::exists(rom, rom_ec);
     bool up_to_date = false;

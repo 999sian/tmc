@@ -273,10 +273,10 @@ static void HandleTitlescreen(void) {
             }
             break;
         case 2:
-#if defined(JP) || defined(DEMO_JP) || defined(EU)
-            if (GetAdvanceState()) {
+#if defined(DEMO_JP)
+        if (GetAdvanceState()) {
 #else
-            if (--gIntroState.timer == 0) {
+        if ((REGION_IS_JP || REGION_IS_EU) ? (GetAdvanceState() != ADVANCE_NONE) : (--gIntroState.timer == 0)) {
 #endif
                 gIntroState.timer = 3600;
                 gIntroState.state++;
@@ -296,9 +296,9 @@ static void HandleTitlescreen(void) {
                 }
 #endif
             }
-#if defined(USA) || defined(DEMO_USA)
+        if (REGION_IS_USA) {
             UpdatePressStartIcon();
-#endif
+        }
             break;
         default:
             advance = GetAdvanceState();
@@ -311,23 +311,16 @@ static void HandleTitlescreen(void) {
                 AdvanceIntroSequence(advance);
                 SoundReq(SONG_VOL_FADE_OUT);
             }
-#if defined(JP) || defined(DEMO_JP) || defined(DEMO_JP)
-            gOamCmd._4 = 0;
-            gOamCmd._6 = 0;
-            gOamCmd._8 = 0xE020;
-            gOamCmd.x = 120;
-            gOamCmd.y = 152;
-            DrawDirect(511, 1);
-#elif defined(EU)
+        if (REGION_IS_EU) {
             gOamCmd._4 = 0;
             gOamCmd._6 = 0;
             gOamCmd._8 = 0xE020;
             gOamCmd.x = 120;
             gOamCmd.y = 152;
             DrawDirect(510, 1);
-#else
-        UpdatePressStartIcon();
-#endif
+        } else {
+            UpdatePressStartIcon();
+        }
             if ((gIntroState.timer & 0x20) == 0) {
                 gOamCmd._8 = 0xe000;
                 gOamCmd.y = 0x84;
@@ -347,7 +340,6 @@ static void HandleTitlescreen(void) {
     DrawEntities();
 }
 
-#if defined(USA) || defined(DEMO_USA)
 static void UpdatePressStartIcon(void) {
     gOamCmd._4 = 0;
     gOamCmd._6 = 0;
@@ -356,7 +348,6 @@ static void UpdatePressStartIcon(void) {
     gOamCmd.y = 152;
     DrawDirect(511, 1);
 }
-#endif
 
 static void UpdateSwordBgAffineData(void) {
     struct BgAffineSrcData aff;
@@ -393,10 +384,10 @@ static void HandleJapaneseTitlescreenAnimationIntro(void) {
             if (!gFadeControl.active) {
                 gFadeControl.mask = 0xFFFFFFFF;
                 gIntroState.subState++;
-#if defined(JP) || defined(EU) || defined(DEMO_JP)
-                gIntroState.timer = 120;
+#if defined(DEMO_JP)
+            gIntroState.timer = 120;
 #else
-                gIntroState.timer = 90;
+            gIntroState.timer = (REGION_IS_JP || REGION_IS_EU) ? 120 : 90;
 #endif
                 pEVar2 = CreateObject(JAPANESE_SUBTITLE, 0, 0);
                 if (pEVar2 != NULL) {
@@ -408,10 +399,10 @@ static void HandleJapaneseTitlescreenAnimationIntro(void) {
         case 2:
             if (GetAdvanceState() != ADVANCE_NONE) {
                 gIntroState.state++;
-#if defined(JP) || defined(EU) || defined(DEMO_JP)
+#if defined(DEMO_JP)
                 gIntroState.timer = 30;
 #else
-                gIntroState.timer = 60;
+                gIntroState.timer = (REGION_IS_JP || REGION_IS_EU) ? 30 : 60;
 #endif
             }
     }
@@ -452,10 +443,10 @@ static void HandleTitlescreenAnimationIntro(void) {
         default:
             if (!gFadeControl.active && GetAdvanceState() != ADVANCE_NONE) {
                 gIntroState.state++;
-#if defined(JP) || defined(EU) || defined(DEMO_JP)
+#if defined(DEMO_JP)
                 gIntroState.timer = 30;
 #else
-                gIntroState.timer = 60;
+                gIntroState.timer = (REGION_IS_JP || REGION_IS_EU) ? 30 : 60;
 #endif
             }
             break;

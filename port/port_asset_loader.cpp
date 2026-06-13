@@ -1766,15 +1766,19 @@ extern "C" bool32 Port_LoadTextsFromAssets(void) {
     }
 
     bool anyLoaded = false;
+    for (const std::vector<u8>& buffer : gAssetGroupCache.translationBuffers) {
+        if (!buffer.empty()) {
+            anyLoaded = true;
+            break;
+        }
+    }
+    if (!anyLoaded) {
+        return FALSE;
+    }
+
     for (size_t i = 0; i < gAssetGroupCache.translationBuffers.size(); ++i) {
         std::vector<u8>& buffer = gAssetGroupCache.translationBuffers[i];
-        if (buffer.empty()) {
-            gTranslations[i] = nullptr;
-            continue;
-        }
-
-        gTranslations[i] = reinterpret_cast<u32*>(buffer.data());
-        anyLoaded = true;
+        gTranslations[i] = buffer.empty() ? nullptr : reinterpret_cast<u32*>(buffer.data());
     }
 
     if (anyLoaded) {
