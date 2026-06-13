@@ -111,7 +111,7 @@ typedef struct {
     /*0x4A0*/ u32 timer5;                    /**< "timer5" unused */
     /*0x4A4*/ u32 timer6;                    /**< "timer6" unused */
     /*0x4A8*/ u32 demo_timer;                /**< timer for US demo version playtime limit */
-    /*0x4AC*/ u8 filler4ac[8];               /**< unused filler */
+    /*0x4AC*/ u8 filler4ac[0x54];            /**< pad to 0x500 EEPROM size */
 } SaveFile;
 
 /**
