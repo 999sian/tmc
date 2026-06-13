@@ -367,6 +367,7 @@ void LoadPaletteGroup(u32 group) {
     if (Port_LoadPaletteGroupFromAssets(group)) {
         return;
     }
+#ifndef MULTI_REGION
     /* #110 — palette group is missing in the assets/ tree (most often
      * because the user's save header reports a non-English language
      * whose palette files weren't extracted, e.g. group 2 = Japanese
@@ -400,7 +401,9 @@ void LoadPaletteGroup(u32 group) {
             return;
         }
     }
-    Common_AbortMissingAssetGroup("palette", group);
+#endif
+    /* Fall through to ROM-backed group. Multi-region asset packs may contain
+     * sparse/metadata-only groups; the selected ROM is authoritative. */
 #endif
     const PaletteGroup* paletteGroup = gPaletteGroups[group];
 #ifdef PC_PORT
@@ -470,7 +473,8 @@ void LoadGfxGroup(u32 group) {
     if (Port_LoadGfxGroupFromAssets(group)) {
         return;
     }
-    Common_AbortMissingAssetGroup("gfx", group);
+    /* Fall through to ROM-backed group. Multi-region asset packs may contain
+     * sparse/metadata-only groups; the selected ROM is authoritative. */
 #endif
     u32 terminator;
     u32 dmaCtrl;
