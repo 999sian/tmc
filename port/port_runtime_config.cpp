@@ -78,6 +78,8 @@ bool sWidescreenEnabled = false;
  * Default false. Persisted as "console_parity"; CLI --console-parity forces
  * it on after config load. */
 bool sConsoleParity = false;
+int sPreferredRegion = -1;
+int sPreferredLanguage = -1;
 /* Widescreen pillarbox config — applied in port_ppu.cpp's present path.
  * Defaults reproduce the historical behavior: GBA 3:2 frame fills as
  * much of the window as possible, side bars are black. */
@@ -164,6 +166,8 @@ nlohmann::json DefaultsJson(void) {
         { "widescreen_enabled", false },
         /* Console-Parity mode — off by default; legit-run integrity toggle. */
         { "console_parity", false },
+        { "preferred_region", -1 },
+        { "preferred_language", -1 },
         { "aspect_mode", "native" },
         { "bg_fill", "black" },
         { "bg_fill_color", { 0, 0, 0 } },
@@ -612,6 +616,8 @@ extern "C" void Port_Config_Load(const char* path) {
         sVSyncCfg    = j.value("vsync", true);
         sFullscreen  = j.value("fullscreen", false);
         sShaderPreset = j.value("shader_preset", std::string());
+        sPreferredRegion = j.value("preferred_region", -1);
+        sPreferredLanguage = j.value("preferred_language", -1);
         sHasRebornFeatures = j.contains("reborn_features");
         sRebornFeatures = sHasRebornFeatures ? j.value("reborn_features", 0u) : 0u;
 
@@ -812,6 +818,26 @@ extern "C" void Port_Config_SetConsoleParity(bool on) {
 
 extern "C" void Port_Config_ToggleConsoleParity(void) {
     Port_Config_SetConsoleParity(!sConsoleParity);
+}
+
+extern "C" int Port_Config_PreferredRegion(void) {
+    return sPreferredRegion;
+}
+
+extern "C" void Port_Config_SetPreferredRegion(int region) {
+    sPreferredRegion = region;
+    sConfigJson["preferred_region"] = region;
+    SaveConfig();
+}
+
+extern "C" int Port_Config_PreferredLanguage(void) {
+    return sPreferredLanguage;
+}
+
+extern "C" void Port_Config_SetPreferredLanguage(int lang) {
+    sPreferredLanguage = lang;
+    sConfigJson["preferred_language"] = lang;
+    SaveConfig();
 }
 
 extern "C" PortAspectMode Port_Config_AspectMode(void) {

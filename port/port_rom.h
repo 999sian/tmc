@@ -204,3 +204,5 @@ static inline void Port_DecodeMapDataDefinition(const void* entry, MapDataDefini
         memcpy(out, entry, sizeof *out);
     }
 }
+
+void Port_ApplyLanguage(void);
