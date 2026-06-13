@@ -71,9 +71,9 @@ void VaatiProjectile_OnCollision(VaatiProjectileEntity* this) {
     Entity* entity;
 
     if (super->contactFlags == CONTACT_NOW) {
-#ifndef EU
-        if (super->health != 0) {
-#endif
+        /* EU runs the hit body unconditionally; USA/JP gate on health and add a
+         * player-control/parent-collide tail, with an else for the health==0 case. */
+        if (REGION_IS_EU || super->health != 0) {
             super->action = 5;
             COLLISION_OFF(super);
             super->spritePriority.b1 = 0;
@@ -81,18 +81,18 @@ void VaatiProjectile_OnCollision(VaatiProjectileEntity* this) {
             gPlayerEntity.base.spriteOrientation.flipY = super->spriteOrientation.flipY;
             gPlayerEntity.base.spriteRendering.b3 = super->spriteRendering.b3;
             sub_0803E444(this);
-#ifndef EU
-            SetPlayerControl(2);
-            entity = super->parent;
-            if (entity != NULL) {
-                entity->flags = entity->flags & ~ENT_COLLIDE;
+            if (!REGION_IS_EU) {
+                SetPlayerControl(2);
+                entity = super->parent;
+                if (entity != NULL) {
+                    entity->flags = entity->flags & ~ENT_COLLIDE;
+                }
             }
         } else {
             gPlayerState.flags &= ~PL_DISABLE_ITEMS;
             entity = &gPlayerEntity.base;
             entity->flags = gPlayerEntity.base.flags | ENT_COLLIDE;
         }
-#endif
     }
     EnemyFunctionHandlerAfterCollision(super, (EntityActionArray)VaatiProjectile_Functions);
 }

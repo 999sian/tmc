@@ -80,9 +80,9 @@ void WorldEvent_5_2(void) {
             gScreen.controls.alphaBlend = 0x1000;
             gMenu.transitionTimer = 120;
             gMenu.overlayType++;
-#ifndef EU
-            SoundReq(SFX_SECRET_BIG);
-#endif
+            if (!REGION_IS_EU) {
+                SoundReq(SFX_SECRET_BIG);
+            }
         }
     }
 }
