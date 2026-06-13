@@ -3977,7 +3977,7 @@ u32 sub_0807BDB8(Entity* this, u32 param_2) {
 u32 sub_0807BEEC(u32 param_1, u32 param_2, u32 param_3) {
     u32 index;
     RoomResInfo* ptr;
-    if ((gArea.filler3[-1] & 1) != 0) {
+    if (gArea.unk_0c_0 != 0) {
         return gRoomControls.room;
     }
     switch (param_3) {
