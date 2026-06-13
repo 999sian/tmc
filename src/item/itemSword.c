@@ -51,11 +51,11 @@ void sub_08075338(ItemBehavior* this, u32 index) {
                 return;
             }
         }
-#ifndef EU
-        sub_080759B8(this, index);
-        return;
-    } else if (gPlayerEntity.base.z.WORD) {
-#endif
+        if (!REGION_IS_EU) {
+            sub_080759B8(this, index);
+            return;
+        }
+    } else if (!REGION_IS_EU && gPlayerEntity.base.z.WORD) {
         sub_080759B8(this, index);
         return;
     }

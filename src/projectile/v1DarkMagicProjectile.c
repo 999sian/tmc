@@ -204,17 +204,17 @@ void V1DarkMagicProjectile_Action3(V1DarkMagicProjectileEntity* this) {
     if (super->type != 0) {
         super->health = super->parent->health;
     }
-#ifndef EU
-    if (super->parent->action == 2) {
-        if ((super->flags & ENT_COLLIDE) != 0) {
-            COLLISION_OFF(super);
-        }
-    } else {
-        if ((super->flags & ENT_COLLIDE) == 0) {
-            COLLISION_ON(super);
+    if (!REGION_IS_EU) {
+        if (super->parent->action == 2) {
+            if ((super->flags & ENT_COLLIDE) != 0) {
+                COLLISION_OFF(super);
+            }
+        } else {
+            if ((super->flags & ENT_COLLIDE) == 0) {
+                COLLISION_ON(super);
+            }
         }
     }
-#endif
 }
 
 void sub_080AAF74(V1DarkMagicProjectileEntity* this) {

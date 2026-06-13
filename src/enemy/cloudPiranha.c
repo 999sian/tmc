@@ -74,10 +74,8 @@ void CloudPiranha_OnCollision(CloudPiranhaEntity* this) {
                     super->health = 0;
                     break;
             }
-#ifndef EU
-        } else if ((super->contactFlags & 0x3f) == 0x1d) {
+        } else if (!REGION_IS_EU && (super->contactFlags & 0x3f) == 0x1d) {
             sub_08038754(this);
-#endif
         }
     }
 }

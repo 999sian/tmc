@@ -423,9 +423,9 @@ void CutsceneMiscObject_Type6(CutsceneMiscObjectEntity* this) {
                 RemoveInteractableObject(super);
                 gPlayerState.queued_action = PLAYER_EMPTYBOTTLE;
                 gPlayerState.field_0x38 = 54;
-#ifndef EU
-                SetPlayerControl(2);
-#endif
+                if (!REGION_IS_EU) {
+                    SetPlayerControl(2);
+                }
             }
             break;
         case 2:
@@ -444,15 +444,15 @@ void CutsceneMiscObject_Type6(CutsceneMiscObjectEntity* this) {
                     Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DOG_BOTTLE, 0, 0), &item,
                     &subtype);
 #endif
-#ifndef EU
-                if (!CheckGlobalFlag(BIN_DOGFOOD)) {
+                if (!REGION_IS_EU) {
+                    if (!CheckGlobalFlag(BIN_DOGFOOD)) {
+                        CreateItemEntity(item, subtype, 0);
+                        SetGlobalFlag(BIN_DOGFOOD);
+                        super->timer = 60;
+                    }
+                } else {
                     CreateItemEntity(item, subtype, 0);
-                    SetGlobalFlag(BIN_DOGFOOD);
-                    super->timer = 60;
                 }
-#else
-                CreateItemEntity(item, subtype, 0);
-#endif
             }
             break;
 #ifndef EU

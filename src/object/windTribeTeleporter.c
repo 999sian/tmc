@@ -109,17 +109,14 @@ void WindTribeTeleporter_Action2(WindTribeTeleporterEntity* this) {
             break;
         default:
             if (--super->timer == 0) {
-#if defined(DEMO_JP) || defined(JP) || defined(EU)
-#ifdef DEMO_JP
-                SetLocalFlag(0xfc);
-#endif
-                DoExitTransition(&gUnk_0813ADEC[super->type2]);
-#else
-                if (gRoomControls.area == 3) {
-                    SetLocalFlag(0xf9);
+                if (REGION_IS_JP || REGION_IS_EU) {
+                    DoExitTransition(&gUnk_0813ADEC[super->type2]);
+                } else {
+                    if (gRoomControls.area == 3) {
+                        SetLocalFlag(0xf9);
+                    }
+                    DoExitTransition(&gUnk_0813ADEC[super->type2]);
                 }
-                DoExitTransition(&gUnk_0813ADEC[super->type2]);
-#endif
             } else {
                 if ((gRoomTransition.frameCount & 1) == 0) {
                     gPlayerEntity.base.animationState = (gPlayerEntity.base.animationState + 2) & 6;
