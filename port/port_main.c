@@ -644,6 +644,8 @@ int main(int argc, char* argv[]) {
         const Uint64 prelaunchFrameNs = 1000000000ull / 60ull;
         Uint64 nextPrelaunchFrameNs = SDL_GetTicksNS() + prelaunchFrameNs;
         while (!done) {
+            /* Region dropdown changes preferred candidate order before Play. */
+            romPath = Port_FindBaseRomPath();
             /* Re-derive the displayable filename each iteration in case
              * a Change-ROM swap moved the file. */
             char rom_name_buf[1024];

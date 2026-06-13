@@ -483,68 +483,76 @@ static void DoQuitToTitle(bool saveFirst) {
     SetTask(0 /* TASK_TITLE */);
     Port_DebugMenu_Toggle();   /* close the F8 ribbon */
 }
-static void DrawRibbonVersionLanguageSection(void) {
+static bool DrawRegionLanguageControls(bool prelaunch) {
+    bool regionChanged = false;
     ImGui::SeparatorText("ROM Region & Language");
 
-    // 1. Preferred ROM Region
     int preferredRegion = Port_Config_PreferredRegion();
+    if (preferredRegion < -1 || preferredRegion > 2) preferredRegion = -1;
+
     const char* regionNames[] = {
-        "Auto (Use loaded ROM)",
+        "Auto (Use first valid ROM)",
         "USA (baserom.gba)",
         "EU (baserom_eu.gba)",
-        "JP (baserom_jp.gba)"
+        "JP (baserom_jp.gba)",
     };
     int regionIdx = preferredRegion + 1; // map -1..2 to 0..3
-    ImGui::SetNextItemWidth(260);
+    ImGui::SetNextItemWidth(270);
     if (ImGui::Combo("Preferred ROM", &regionIdx, regionNames, 4)) {
         Port_Config_SetPreferredRegion(regionIdx - 1);
+        regionChanged = true;
     }
     ImGui::SameLine();
-    ImGui::TextDisabled("(restart required)");
-    // 2. Preferred Game Language
+    ImGui::TextDisabled(prelaunch ? "(used when Play starts)" : "(restart required)");
+
+    constexpr int kLanguageCount = 6;
     int preferredLanguage = Port_Config_PreferredLanguage();
-    // Options: -1 = Auto, 0..5 = JP, EN, FR, DE, ES, IT
+    if (preferredLanguage < -1 || preferredLanguage >= kLanguageCount) preferredLanguage = -1;
+
     const char* langNames[] = {
-        "Auto (Default)",
+        "Auto (ROM/save default)",
         "Japanese",
         "English",
         "French",
         "German",
         "Spanish",
-        "Italian"
+        "Italian",
     };
-
     int langIdx = preferredLanguage + 1; // map -1..5 to 0..6
-    ImGui::SetNextItemWidth(260);
-    
+
+    ImGui::SetNextItemWidth(270);
     if (ImGui::BeginCombo("Language", langNames[langIdx])) {
         for (int i = 0; i < 7; ++i) {
             bool isSupported = true;
             char label[128];
             std::strcpy(label, langNames[i]);
-            
-            if (i > 0) {
-                int langVal = i - 1;
+
+            if (!prelaunch && i > 0) {
+                const int langVal = i - 1;
                 if (gTranslations[langVal] == nullptr) {
                     isSupported = false;
                     std::strcat(label, " (not supported by loaded ROM)");
                 }
             }
-            
-            bool selected = (i == langIdx);
-            if (!isSupported) {
-                ImGui::BeginDisabled();
-            }
+
+            const bool selected = (i == langIdx);
+            if (!isSupported) ImGui::BeginDisabled();
             if (ImGui::Selectable(label, selected)) {
                 Port_Config_SetPreferredLanguage(i - 1);
-                Port_ApplyLanguage();
+                if (!prelaunch) Port_ApplyLanguage();
             }
-            if (!isSupported) {
-                ImGui::EndDisabled();
-            }
+            if (!isSupported) ImGui::EndDisabled();
         }
         ImGui::EndCombo();
     }
+    if (prelaunch) {
+        ImGui::TextDisabled("Language is applied after the selected ROM loads.");
+    }
+    return regionChanged;
+}
+
+static void DrawRibbonVersionLanguageSection(void) {
+    (void)DrawRegionLanguageControls(false);
 }
 
 static void DrawRibbonSavesTab(void) {
@@ -3537,6 +3545,8 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
             }
             ImGui::PopStyleColor();
         }
+        ImGui::Dummy(ImVec2(0, 14));
+        (void)DrawRegionLanguageControls(true);
 
         ImGui::Dummy(ImVec2(0, 22));
 
