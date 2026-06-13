@@ -181,8 +181,8 @@ u32 sub_08097074(u32 tileType) {
     static const KeyValuePair gUnk_0812327C[] = {
         { SPECIAL_TILE_55, 1 }, { SPECIAL_TILE_56, 1 }, { SPECIAL_TILE_57, 1 },
         { SPECIAL_TILE_58, 1 }, { TILE_TYPE_122, 2 },   { TILE_TYPE_120, 2 },
+        { 0, 0 }
     };
-    static const u16 gUnk_0812327CEnd = 0;
     const KeyValuePair* entry = gUnk_0812327C;
     for (; entry->key != 0; entry++) {
         if (entry->key == tileType) {
