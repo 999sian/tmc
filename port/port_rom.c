@@ -1488,12 +1488,12 @@ void Port_LoadRom(const char* path) {
         }
     }
 
-    /* Font/text data tables — from compile-time const data */
-    memcpy(gUnk_08109244, kFontText09244Data, 4);
-    memcpy(gUnk_0810926C, kFontText0926CData, 64);
-    memcpy(gUnk_081092D4, kFontText092D4Data, 346);
-    memcpy(gUnk_0810942E, kFontText0942EData, 160);
-    memcpy(gUnk_081094CE, kFontText094CEData, 1378);
+    /* Font/text data tables — from active ROM */
+    memcpy(gUnk_08109244, &gRomData[R->text09244], 4);
+    memcpy(gUnk_0810926C, &gRomData[R->text0926C], 64);
+    memcpy(gUnk_081092D4, &gRomData[R->text092D4], 346);
+    memcpy(gUnk_0810942E, &gRomData[R->text0942E], 160);
+    memcpy(gUnk_081094CE, &gRomData[R->text094CE], 1378);
 
     /* UI data — from compile-time const data */
     {
@@ -1514,13 +1514,13 @@ void Port_LoadRom(const char* path) {
         Port_PopulateFigurines();
     }
 
-    /* gTranslations — resolved from compile-time offset table */
+    /* gTranslations — resolved from active ROM */
     for (int i = 0; i < 7; i++) {
-        gTranslations[i] = ResolveTableOffset(kTranslationOffsets[i]);
+        gTranslations[i] = Port_UnpackRomDataPtr(&gRomData[R->translations], i);
     }
-    fprintf(stderr, "gTranslations loaded (7 entries from compile-time offsets).\n");
+    fprintf(stderr, "gTranslations loaded (7 entries from active ROM).\n");
 
-    /* gUnk_08109230 — resolved from compile-time offset table */
+    /* gUnk_08109230 — EWRAM variable pointers */
 #ifdef PC_PORT
     gTextVariableSources[0] = gUnk_020227DC;
     gTextVariableSources[1] = &gUnk_020227E8[0];
@@ -1529,21 +1529,21 @@ void Port_LoadRom(const char* path) {
     gTextVariableSources[4] = gUnk_02022800;
 #else
     for (int i = 0; i < 5; i++) {
-        gTextVariableSources[i] = ResolveTableOffset(kUnk09230Offsets[i]);
+        gTextVariableSources[i] = Port_UnpackRomDataPtr(&gRomData[R->text09230], i);
     }
 #endif
 
-    /* gUnk_08109248 — resolved from compile-time offset table */
+    /* gUnk_08109248 — resolved from active ROM */
     for (int i = 0; i < 9; i++) {
-        gUnk_08109248[i] = ResolveTableOffset(kUnk09248Offsets[i]);
+        gUnk_08109248[i] = Port_UnpackRomDataPtr(&gRomData[R->text09248], i);
     }
-    fprintf(stderr, "gUnk_08109248 font tables loaded (9 entries from compile-time offsets).\n");
+    fprintf(stderr, "gUnk_08109248 font tables loaded (9 entries from active ROM).\n");
 
-    /* gUnk_081092AC — resolved from compile-time offset table */
+    /* gUnk_081092AC — resolved from active ROM */
     for (int i = 0; i < 10; i++) {
-        gUnk_081092AC[i] = ResolveTableOffset(kUnk092ACOffsets[i]);
+        gUnk_081092AC[i] = Port_UnpackRomDataPtr(&gRomData[R->text092AC], i);
     }
-    fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries from compile-time offsets).\n");
+    fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries from active ROM).\n");
 
     /* Load overlay data from compile-time const (no ROM read needed) */
     {
