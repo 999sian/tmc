@@ -772,6 +772,7 @@ int main(int argc, char* argv[]) {
      * so RNG manips and offsets diverge. Casual play only warns (the hybrid
      * is usually playable); Console-Parity treats it as fatal, since a legit
      * run must not execute on a version-mismatched build. */
+#ifndef MULTI_REGION
     {
 #if defined(JP)
         const RomRegion compiledRegion = ROM_REGION_JP;
@@ -804,6 +805,7 @@ int main(int argc, char* argv[]) {
                 compiledName, detectedName);
         }
     }
+#endif
 
     if (noAudio) {
         gMain.muteAudio = 1;
