@@ -19,6 +19,9 @@ extern const Hitbox* const gObjectHitboxes[];
 
 u32 LoadObjectSprite(Entity* this, s32 type, const ObjectDefinition* definition);
 extern const ObjectDefinition gObjectDefinitions[];
+#ifdef MULTI_REGION
+extern const ObjectDefinition gObjectDefinitions_eu[];
+#endif
 
 static Entity* CreateSpeechBubble(Entity*, u32, s32, s32);
 
@@ -70,7 +73,13 @@ Entity* CreateLinkAnimation(Entity* parent, u32 type, u32 type2) {
 }
 
 void ObjectInit(Entity* this) {
-    const ObjectDefinition* definition = &gObjectDefinitions[this->id];
+    const ObjectDefinition* table = gObjectDefinitions;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        table = gObjectDefinitions_eu;
+    }
+#endif
+    const ObjectDefinition* definition = &table[this->id];
     if (LoadObjectSprite(this, this->type, definition) == 2) {
         UpdateSpriteForCollisionLayer(this);
     }
