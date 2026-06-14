@@ -3489,7 +3489,11 @@ void sub_0807B2B8(PlayerEntity* this) {
     GravityUpdate(super, Q_8_8(-32.0));
     UpdateAnimationSingleFrame(super);
     if (super->timer != 0 && --super->timer == 0) {
-        DoExitTransition(&gUnk_0813AD88[this->unk_6d]);
+        const Transition* exitTransitions = gUnk_0813AD88;
+#ifdef MULTI_REGION
+        if (REGION_IS_EU) exitTransitions = gUnk_0813AD88_eu;
+#endif
+        DoExitTransition(&exitTransitions[this->unk_6d]);
     }
 }
 

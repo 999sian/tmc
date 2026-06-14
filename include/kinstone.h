@@ -235,5 +235,18 @@ typedef struct {
     u16 flag;
 } WorldEvent;
 extern const WorldEvent gWorldEvents[];
+#ifdef MULTI_REGION
+// EU/JP retail twin of gWorldEvents (see src/gameData.c). The base table holds the USA
+// baseline in the fat binary; this twin holds the `defined(EU)||defined(JP)||defined(DEMO_JP)`
+// retail layout. Select it at runtime when the active ROM is EU or JP.
+extern const WorldEvent gWorldEvents_eu[];
+static inline const WorldEvent* GetWorldEvents(void) {
+    if (REGION_IS_EU || REGION_IS_JP)
+        return gWorldEvents_eu;
+    return gWorldEvents;
+}
+#else
+#define GetWorldEvents() (gWorldEvents)
+#endif
 
 #endif // KINSTONE_H

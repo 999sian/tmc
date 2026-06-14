@@ -154,7 +154,14 @@ void FigurineMenu0_Type0(void) {
 
 void FigurineMenu0_Type1(void) {
     if (gFadeControl.active == 0) {
-        CreateObject(OBJECT_A2, gUnk_080FC3E4[gFigurineMenu.figure_idx].type, 0);
+        const struct_080FC3E4* sel_080FC3E4 = gUnk_080FC3E4;
+#ifdef MULTI_REGION
+        if (REGION_IS_EU)
+            sel_080FC3E4 = gUnk_080FC3E4_eu;
+        else if (REGION_IS_JP)
+            sel_080FC3E4 = gUnk_080FC3E4_jp;
+#endif
+        CreateObject(OBJECT_A2, sel_080FC3E4[gFigurineMenu.figure_idx].type, 0);
         SetMenuType(2);
     }
 }

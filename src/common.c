@@ -1468,7 +1468,7 @@ void UpdateVisibleFusionMapMarkers(void) {
     for (kinstoneId = 10; kinstoneId <= 100; ++kinstoneId) {
         if (CheckKinstoneFused(kinstoneId) && !CheckFusionMapMarkerDisabled(kinstoneId)) {
             u32 worldEventId = gKinstoneWorldEvents_sel[kinstoneId].worldEventId;
-            const WorldEvent* s = &gWorldEvents[worldEventId];
+            const WorldEvent* s = &GetWorldEvents()[worldEventId];
             u32 flag = s->flag;
             u32 tmp;
             switch (s->condition) {

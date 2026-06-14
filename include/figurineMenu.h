@@ -28,5 +28,13 @@ typedef struct {
     u8 type;  /**< Type of the OBJECT_A2 that is spawned. */
 } struct_080FC3E4;
 extern const struct_080FC3E4 gUnk_080FC3E4[];
+#ifdef MULTI_REGION
+extern const struct_080FC3E4 gUnk_080FC3E4_eu[];
+extern const struct_080FC3E4 gUnk_080FC3E4_jp[];
+#endif
+#ifdef MULTI_REGION
+extern const struct_080FC3E4 gUnk_080FC3E4_eu[];
+extern const struct_080FC3E4 gUnk_080FC3E4_jp[];
+#endif
 
 #endif // FIGURINEMENU_H

@@ -274,7 +274,7 @@ void sub_08018710(u32 previousworldEventId) {
 }
 
 void sub_08018738(u32 kinstoneId, u32 worldEventId) {
-    const WorldEvent* ptr = &gWorldEvents[worldEventId];
+    const WorldEvent* ptr = &GetWorldEvents()[worldEventId];
 
     if (ptr->area == gRoomControls.area && ptr->room == gRoomControls.room) {
         sub_0801876C(worldEventId, CheckKinstoneFused(kinstoneId));
@@ -290,7 +290,7 @@ void sub_0801876C(u32 worldEventId, bool32 isKinstoneFused) {
     u32 uVar5;
     const WorldEvent* ptr;
 
-    ptr = &gWorldEvents[worldEventId];
+    ptr = &GetWorldEvents()[worldEventId];
     switch (ptr->type) {
         case WORLD_EVENT_TYPE_6:
             if (isKinstoneFused == 0) {
@@ -411,7 +411,7 @@ void sub_080189EC(u32 worldEventId) {
     int tilePos;
     const WorldEvent* ptr;
 
-    ptr = &gWorldEvents[worldEventId];
+    ptr = &GetWorldEvents()[worldEventId];
 
     tilePos = (ptr->x >> 4) & 0x3f;
     tilePos |= ((ptr->y >> 4) & 0x3f) << 6;
@@ -435,7 +435,7 @@ void sub_08018A58(u32 worldEventId) {
     int tilePos;
     const WorldEvent* ptr;
 
-    ptr = &gWorldEvents[worldEventId];
+    ptr = &GetWorldEvents()[worldEventId];
 
     tilePos = (ptr->x >> 4) & 0x3f;
     tilePos |= ((ptr->y >> 4) & 0x3f) << 6;
@@ -491,7 +491,7 @@ void sub_08018B50(u32 worldEventId) {
     int tilePos;
     const WorldEvent* ptr;
 
-    ptr = &gWorldEvents[worldEventId];
+    ptr = &GetWorldEvents()[worldEventId];
     if ((ptr->entity_idx & 0x80) == 0) {
         tileType = TILE_TYPE_512;
     } else {
@@ -517,7 +517,7 @@ void sub_08018BB4(u32 worldEventId) {
     u32 position;
 
     MemCopy(gUnk_080FEAC8 + worldEventId, &tileEntity, sizeof(TileEntity));
-    ptr = &gWorldEvents[worldEventId];
+    ptr = &GetWorldEvents()[worldEventId];
     tileEntity.tilePos = (ptr->x >> 4 & 0x3f) | (((ptr->y) >> 4 & 0x3f) << 6);
     LoadSmallChestTile2(&tileEntity);
     if (CheckLocalFlag(tileEntity.localFlag) == 0) {

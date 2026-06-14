@@ -13,6 +13,9 @@ extern const Transition gUnk_0813ABBC;
 extern const Transition gUnk_0813ABD0;
 extern const Transition gUnk_0813ABE4;
 extern const Transition gUnk_0813ABF8;
+#ifdef MULTI_REGION
+extern const Transition gUnk_0813ABF8_eu; // EU/JP twin (guard: defined(EU) || defined(JP))
+#endif
 extern const Transition gUnk_0813AC0C;
 extern const Transition gUnk_0813AC20;
 extern const Transition gUnk_0813AC34;
@@ -33,5 +36,8 @@ extern const Transition gUnk_0813AD4C;
 extern const Transition gUnk_0813AD60;
 extern const Transition gUnk_0813AD74;
 extern const Transition gUnk_0813AD88[];
+#ifdef MULTI_REGION
+extern const Transition gUnk_0813AD88_eu[]; // EU twin (guard: defined(EU))
+#endif
 extern const Transition gUnk_0813ADEC[];
 #endif // SCREENTRANSITIONS_H

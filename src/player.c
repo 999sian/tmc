@@ -3226,9 +3226,13 @@ void sub_08073884(PlayerEntity* this) {
     }
     gPlayerState.animation = sAnims[super->animationState >> 1];
     if (--super->timer == 0) {
-        if (gPlayerState.field_0x39 != 0xff)
-            DoExitTransition(&gUnk_0813AD88[gPlayerState.field_0x39]);
-        else
+        if (gPlayerState.field_0x39 != 0xff) {
+            const Transition* exitTransitions = gUnk_0813AD88;
+#ifdef MULTI_REGION
+            if (REGION_IS_EU) exitTransitions = gUnk_0813AD88_eu;
+#endif
+            DoExitTransition(&exitTransitions[gPlayerState.field_0x39]);
+        } else
             InitParachuteRoom();
     }
     GravityUpdate(super, -((kGravityRate * 3) / 4));

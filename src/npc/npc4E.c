@@ -70,7 +70,13 @@ void NPC4E_ChangeInteractableHitbox(Entity* this, ScriptExecutionContext* contex
 }
 
 void NPC4E_DoScreenTransition(Entity* this, ScriptExecutionContext* context) {
-    DoExitTransitionWithType(gNpc4ETransitions[context->intVariable], gNpc4ETransitionTypes[context->intVariable]);
+    const Transition* transition = gNpc4ETransitions[context->intVariable];
+#ifdef MULTI_REGION
+    // gNpc4ETransitions[3] == &gUnk_0813ABF8, which diverges on EU/JP (guard: defined(EU) || defined(JP))
+    if ((REGION_IS_EU || REGION_IS_JP) && transition == &gUnk_0813ABF8)
+        transition = &gUnk_0813ABF8_eu;
+#endif
+    DoExitTransitionWithType(transition, gNpc4ETransitionTypes[context->intVariable]);
 }
 
 u8 NPC4E_GetKinstoneId(Entity* this) {

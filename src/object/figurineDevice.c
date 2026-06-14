@@ -498,6 +498,12 @@ bool32 sub_08088160(FigurineDeviceEntity* this, s32 param_2) {
 #endif
 
     ptr = &gUnk_080FC3E4[param_2];
+#ifdef MULTI_REGION
+    if (REGION_IS_EU)
+        ptr = &gUnk_080FC3E4_eu[param_2];
+    else if (REGION_IS_JP)
+        ptr = &gUnk_080FC3E4_jp[param_2];
+#endif
     result = FALSE;
     if (this->unk_7c >= ptr->unk_6) {
         result = TRUE;

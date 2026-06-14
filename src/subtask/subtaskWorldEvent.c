@@ -29,7 +29,7 @@ void Subtask_WorldEvent(void) {
 }
 
 void Subtask_WorldEvent_Init(void) {
-    const WorldEvent* ptr = &gWorldEvents[gUI.field_0x3];
+    const WorldEvent* ptr = &GetWorldEvents()[gUI.field_0x3];
     gMenu.field_0x0 = ptr->type;
     gMenu.field_0x3 = ptr->entity_idx;
     gMenu.field_0x4 = gUI.field_0x3;
@@ -84,7 +84,7 @@ void sub_08054968(void) {
 
 // Controls showing the world event cutscene?
 void sub_08054974(u32 worldEventId, bool32 param_2) {
-    const WorldEvent* ptr = &gWorldEvents[worldEventId];
+    const WorldEvent* ptr = &GetWorldEvents()[worldEventId];
     SetCurrentRoomPropertyList(ptr->area, ptr->room);
     gRoomControls.area = ptr->area;
     gRoomControls.room = ptr->room;
@@ -107,7 +107,7 @@ void sub_08054974(u32 worldEventId, bool32 param_2) {
 }
 
 void sub_08054A14(s32 worldEventId) {
-    const WorldEvent* ptr = &gWorldEvents[worldEventId];
+    const WorldEvent* ptr = &GetWorldEvents()[worldEventId];
     if (ptr->bank < 0xe) {
         SetLocalFlagByBank(gLocalFlagBanks[ptr->bank], ptr->flag);
     }
