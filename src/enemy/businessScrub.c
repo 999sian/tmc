@@ -65,6 +65,9 @@ void sub_0802922C(BusinessScrubEntity*);
 void sub_0802925C(BusinessScrubEntity*);
 
 extern const struct SalesOffering gUnk_080CC954[];
+#ifdef MULTI_REGION
+extern const struct SalesOffering gUnk_080CC954_eu[];
+#endif
 extern const u8 kinstoneTypes[];
 extern void (*const BusinessScrub_Functions[])(BusinessScrubEntity*);
 extern void (*const BusinessScrub_Actions[])(BusinessScrubEntity*);
@@ -410,18 +413,31 @@ void BusinessScrub_Action8(BusinessScrubEntity* this) {
 bool32 sub_08029198(const struct SalesOffering*);
 
 void sub_08028E9C(BusinessScrubEntity* this) {
-    const struct SalesOffering* offer = &gUnk_080CC954[super->type];
+    const struct SalesOffering* tbl = gUnk_080CC954;
+    const struct SalesOffering* offer;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        tbl = gUnk_080CC954_eu;
+    }
+#endif
+    offer = &tbl[super->type];
     if (sub_08029198(offer) && (offer->field_0x0 & 2)) {
-        offer = &gUnk_080CC954[offer->local_flag];
+        offer = &tbl[offer->local_flag];
     }
     this->unk_7c = offer;
     this->unk_80 = 0;
 }
 
 void sub_08028EDC(BusinessScrubEntity* this) {
+    const struct SalesOffering* tbl = gUnk_080CC954;
     const struct SalesOffering* offer = this->unk_7c;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        tbl = gUnk_080CC954_eu;
+    }
+#endif
     if (sub_08029198(offer) && (offer->field_0x0 & 2)) {
-        offer = &gUnk_080CC954[offer->local_flag];
+        offer = &tbl[offer->local_flag];
         this->unk_7c = offer;
     }
 }
@@ -640,12 +656,26 @@ const struct SalesOffering gUnk_080CC954[] = {
     {0x04, 0x00,     20, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x10), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x11), ITEM_BOTTLE1, 0xff, 0xffff},
     {0x0c, 0x00, 0xffff, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x12), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x13), 0xff, 0xff, 0x0046},
     {0x04, 0x00,    100, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x13), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_KINSTONE, 0x75, 0xffff},
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
     {0x00, 0x00,    100, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0d), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_KINSTONE, 0xff, 0xffff},
 #else
     {0x00, 0x00,    200, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0d), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_KINSTONE, 0xff, 0xffff},
 #endif
 };
+
+#ifdef MULTI_REGION
+const struct SalesOffering gUnk_080CC954_eu[] = {
+    {0x06, 0x00, 0xffff, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0f), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_BOW, 0xff, 0x0001},
+    {0x04, 0x00,     30, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0e), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_ARROWS30, 0xff, 0xffff},
+    {0x04, 0x00,     30, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0b), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_BOMBS10, 0xff, 0xffff},
+    {0x08, 0x00,     40, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0c), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x11), ITEM_GRIP_RING, 0xff, 0xffff},
+    {0x00, 0x00,    100, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0d), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_KINSTONE, 0xff, 0xffff},
+    {0x04, 0x00,     20, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x10), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x11), ITEM_BOTTLE1, 0xff, 0xffff},
+    {0x0c, 0x00, 0xffff, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x12), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x13), 0xff, 0xff, 0x0046},
+    {0x04, 0x00,    100, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x13), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_KINSTONE, 0x75, 0xffff},
+    {0x00, 0x00,    100, TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x0d), TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x02), ITEM_KINSTONE, 0xff, 0xffff},
+};
+#endif
 
 const u8 kinstoneTypes[] = { 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75 };
 

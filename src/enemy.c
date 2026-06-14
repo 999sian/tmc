@@ -2,8 +2,16 @@
 #include "enemy.h"
 #include "definitions.h"
 #include "hitbox.h"
+#ifdef MULTI_REGION
+#include "region.h"
+#endif
 
 const EnemyDefinition gEnemyDefinitions[];
+#ifdef MULTI_REGION
+const EnemyDefinition gEnemyDefinitions_eu[];
+const EnemyDefinition gEnemyDefinition_D_eu[];
+const EnemyDefinition gEnemyDefinition_1B_eu[];
+#endif
 const EnemyDefinition gEnemyDefinition_1[];
 const EnemyDefinition gEnemyDefinition_2[];
 const EnemyDefinition gEnemyDefinition_9[];

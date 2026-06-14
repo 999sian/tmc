@@ -233,7 +233,9 @@ void InitSaveHeader(void) {
             default:
                 MemCopy(&sDefaultSettings, gSaveHeader, sizeof(SaveHeader));
 #ifdef MULTI_REGION
-                if (REGION_IS_EU) {
+                if (REGION_IS_JP) {
+                    gSaveHeader->language = LANGUAGE_JP;
+                } else if (REGION_IS_EU) {
                     gSaveHeader->language = 2; // TODO in EU 2 is english?
                 }
 #endif
