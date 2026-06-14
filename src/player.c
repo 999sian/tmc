@@ -558,9 +558,9 @@ static void PlayerInit(PlayerEntity* this) {
     super->hitType = 0x79;
     super->hitbox = (Hitbox*)&gPlayerHitbox;
     super->spriteIndex = 1;
-#ifndef EU
-    gPlayerState.animation = ANIM_DEFAULT;
-#endif
+    if (!REGION_IS_EU) {
+        gPlayerState.animation = ANIM_DEFAULT;
+    }
     sub_0806FDA0(super);
     LoadSwapGFX(super, 1, 2);
     InitAnimationForceUpdate(super, 2);

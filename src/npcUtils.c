@@ -16,6 +16,9 @@
 #include "port_rom.h"
 
 extern const NPCDefinition gNPCDefinitions[];
+#ifdef MULTI_REGION
+extern const NPCDefinition gNPCDefinitions_eu[];
+#endif
 
 typedef struct {
     u16 textIndex;
@@ -62,7 +65,13 @@ void sub_0806EC38(void) {
 }
 
 static const NPCDefinition* GetNPCDefinition(Entity* this) {
-    const NPCDefinition* definition = &gNPCDefinitions[this->id];
+    const NPCDefinition* table = gNPCDefinitions;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        table = gNPCDefinitions_eu;
+    }
+#endif
+    const NPCDefinition* definition = &table[this->id];
     if (definition->bitfield.type == 2) {
         definition = &definition->data.definition[this->type];
     }

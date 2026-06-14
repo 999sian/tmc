@@ -68,7 +68,11 @@ void LinkHoldingItem_Action1(LinkHoldingItemEntity* this) {
             break;
         case 2:
             GiveItem(super->type, super->type2);
+#ifdef MULTI_REGION
+            this->unk_68 = (REGION_IS_EU ? gUnk_080FD964_eu : gUnk_080FD964)[super->type].gotItemMessageId;
+#else
             this->unk_68 = gUnk_080FD964[super->type].gotItemMessageId;
+#endif
             SoundReq(SFX_ITEM_GET);
             break;
         case 5:

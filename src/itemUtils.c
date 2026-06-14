@@ -43,12 +43,24 @@ const u8 gQuiverSizes[] = {
 const u16 gUnk_080FD5A8[] = { 1, 5, 20, 50, 100, 200 };
 
 u32 GetSaleItemConfirmMessageID(u32 item) {
-    const struct_080FD964* ptr = &gUnk_080FD964[item];
+    const struct_080FD964* table = gUnk_080FD964;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        table = gUnk_080FD964_eu;
+    }
+#endif
+    const struct_080FD964* ptr = &table[item];
     return ptr->saleItemConfirmMessageId;
 }
 
 s32 GetItemPrice(u32 item) {
-    const struct_080FD964* ptr = &gUnk_080FD964[item];
+    const struct_080FD964* table = gUnk_080FD964;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        table = gUnk_080FD964_eu;
+    }
+#endif
+    const struct_080FD964* ptr = &table[item];
     return ptr->itemPrice;
 }
 
@@ -462,7 +474,11 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
 #if defined(PC_PORT)
         if (REGION_IS_EU) {
             if (r3 == 24) {
+#ifdef MULTI_REGION
                 ptr2 = &gObjectDroptables_eu[8];
+#else
+                ptr2 = &gObjectDroptables[8]; /* single-region EU: canonical table holds EU data */
+#endif
                 ptr4 = &gRoomVars.currentAreaDroptable;
                 r3 = 0;
             } else if (r3 == 25) {

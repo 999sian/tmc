@@ -161,9 +161,9 @@ void sub_080ADE74(u32 index) {
     }
 }
 
-bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
-#ifdef EU
-    GfxSlot* slot;
+#if defined(EU) || defined(MULTI_REGION)
+// EU variant of LoadFixedGFX: no CleanUpGFXSlots retry on a full slot table.
+static bool32 LoadFixedGFX_eu(Entity* entity, u32 gfxIndex) {
     u32 index;
     u32 count;
     u32 result;
@@ -185,7 +185,6 @@ bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
         if (index != 0) {
             ReserveGFXSlots(index, gfxIndex, count);
             sub_080ADDD8(index, data);
-        _080ADFF2:
             sub_080AE0C8(index, entity, GFX_SLOT_RESERVED);
             result = TRUE;
         } else {
@@ -193,9 +192,12 @@ bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
         }
     }
     return result;
-#else
+}
+#endif
 
-    GfxSlot* slot;
+#if !defined(EU) || defined(MULTI_REGION)
+// USA/JP variant of LoadFixedGFX: retries once via CleanUpGFXSlots when full.
+static bool32 LoadFixedGFX_baseline(Entity* entity, u32 gfxIndex) {
     u32 index;
     u32 count;
 
@@ -221,6 +223,19 @@ bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
         sub_080AE0C8(index, entity, GFX_SLOT_RESERVED);
     }
     return TRUE;
+}
+#endif
+
+bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        return LoadFixedGFX_eu(entity, gfxIndex);
+    }
+    return LoadFixedGFX_baseline(entity, gfxIndex);
+#elif defined(EU)
+    return LoadFixedGFX_eu(entity, gfxIndex);
+#else
+    return LoadFixedGFX_baseline(entity, gfxIndex);
 #endif
 }
 

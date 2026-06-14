@@ -82,6 +82,25 @@ static void Port_UpdateInput(void) {
     Port_ApplyLanguage();
     u16 keyinput = 0x03FF;
 
+    /* Generic framebuffer capture for verification: set TMC_CAPTURE_FRAME=N and
+     * TMC_CAPTURE_OUT=<path.png> to dump one PNG of the base framebuffer at frame
+     * N, then exit. Region-agnostic; works under the headless video driver. */
+    {
+        static int sCapFrame = -2; /* -2 unread, -1 disabled */
+        static const char* sCapOut = NULL;
+        if (sCapFrame == -2) {
+            const char* fe = getenv("TMC_CAPTURE_FRAME");
+            sCapOut = getenv("TMC_CAPTURE_OUT");
+            sCapFrame = (fe && sCapOut) ? atoi(fe) : -1;
+        }
+        if (sCapFrame >= 0 && (int)sFrameNum >= sCapFrame) {
+            extern int Port_CaptureBaseFramebufferPNG(const char* path);
+            int ok = Port_CaptureBaseFramebufferPNG(sCapOut);
+            fprintf(stderr, "[capture] frame %u -> %s (ok=%d)\n", sFrameNum, sCapOut, ok);
+            exit(ok ? 0 : 1);
+        }
+    }
+
     /* Headless end-to-end randomizer check (TMC_REPRO_RANDO=1): drives the
      * file-select overlay + generation + the engine item-override hooks and
      * asserts items actually change. Runs BEFORE the overlay input mask so

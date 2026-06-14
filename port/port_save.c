@@ -62,6 +62,10 @@ static u8 sEeprom[EEPROM_SIZE];
 static int sEepromDirty = 0; /* set on write, cleared on flush */
 static int sEepromInited = 0;
 static char sActivePath[SAVE_FILENAME_MAX] = DEFAULT_SAVE_FILENAME;
+/* 1 once the user has explicitly chosen a named profile (config.json), so the
+ * per-region default below must NOT override their choice. 0 in the default
+ * case, where the multi-region build isolates each region into its own file. */
+static int sExplicitProfile = 0;
 
 /* ---- On-disk byte order -------------------------------------------------- */
 
@@ -140,7 +144,39 @@ static int IsManagedProfilePath(const char* path);
 
 /* ---- Persistence -------------------------------------------------------- */
 
+#ifdef MULTI_REGION
+/*
+ * Region-isolated saves (M5). The fat binary plays USA/EU/JP from one executable;
+ * each region's in-game save signature differs ("ZELDA 5" USA vs "ZELDA 3" EU/JP),
+ * so a shared save file makes InitSaveData wipe the other region's data on load.
+ * Give each region its own default store so switching ROMs never wipes or corrupts:
+ *   USA -> tmc.sav (unchanged, back-compat with existing installs)
+ *   EU  -> tmc_eu.sav
+ *   JP  -> tmc_jp.sav
+ * An explicit named profile (config.json) is region-agnostic and left untouched.
+ * Resolved lazily here because the active region is only known after Port_LoadRom,
+ * which runs after the startup Port_Save_SetActivePath() call.
+ */
+static void ResolveRegionDefaultPath(void) {
+    const char* name;
+    if (sExplicitProfile) {
+        return;
+    }
+    if (REGION_IS_EU) {
+        name = "tmc_eu.sav";
+    } else if (REGION_IS_JP) {
+        name = "tmc_jp.sav";
+    } else {
+        name = DEFAULT_SAVE_FILENAME; /* USA baseline keeps tmc.sav */
+    }
+    snprintf(sActivePath, sizeof(sActivePath), "%s", name);
+}
+#endif
+
 static void LoadEepromFile(void) {
+#ifdef MULTI_REGION
+    ResolveRegionDefaultPath();
+#endif
     FILE* f = fopen(sActivePath, "rb");
     if (!f) {
         memset(sEeprom, 0xFF, EEPROM_SIZE); /* blank EEPROM = 0xFF */
@@ -268,6 +304,10 @@ void Port_Save_SetActivePath(const char* path) {
     }
     strncpy(sActivePath, path, sizeof(sActivePath) - 1);
     sActivePath[sizeof(sActivePath) - 1] = '\0';
+    /* A named profile (anything other than the default tmc.sav) is the user's
+     * explicit, region-agnostic choice; the multi-region per-region default
+     * (ResolveRegionDefaultPath) must not override it. */
+    sExplicitProfile = (strcmp(path, DEFAULT_SAVE_FILENAME) != 0);
     /* Force a reload on next access so any read after this point hits
      * the new file. */
     sEepromInited = 0;
