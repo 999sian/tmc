@@ -58,9 +58,11 @@ void Subtask_WorldEvent_Update(void) {
 }
 
 void Subtask_WorldEvent_End(void) {
+    const KinstoneWorldEvent* gKinstoneWorldEvents_sel;
+
     MessageInitialize();
     sub_0806F38C();
-    const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
+    gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
 #ifdef MULTI_REGION
     extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
     extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];

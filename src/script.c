@@ -175,12 +175,16 @@ void ScriptCommand_0807F0C8(Entity* entity, ScriptExecutionContext* context);
 
 typedef void (*ScriptCommand)(Entity*, ScriptExecutionContext*);
 
+#ifdef PC_PORT
 #include "port_rom.h"
 extern const u8 gUnk_08001A7C[];
-
 static u16* GetFusionTextIndices(u32 fuserId) {
     return (u16*)Port_UnpackRomDataPtr(gUnk_08001A7C, fuserId);
 }
+#else
+extern u16* gUnk_08001A7C[];
+#define GetFusionTextIndices(fuserId) (gUnk_08001A7C[fuserId])
+#endif
 extern u8 gUnk_08114F30[];
 extern u8 gUnk_08114F34[];
 extern const u16 gUnk_08016984;

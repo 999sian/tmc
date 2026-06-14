@@ -2,6 +2,7 @@ ENTRY(__start)
 
 gNumMusicPlayers = 0x20;
 gMaxLines = 0;
+gUnk_080012C8 = 0x080012C8;
 
 MEMORY {
     ewram (w!x) : ORIGIN = 0x02000000, LENGTH = 256K

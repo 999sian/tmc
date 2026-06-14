@@ -447,8 +447,10 @@ void (*const gPeahatOnGrabbedSubactions[])(PeahatEntity*) = {
     Peahat_OnGrabbed_Subaction5,
 };
 
+#ifdef PC_PORT
 const s8 gPeahatChargeDirectionOffsets[] = {
     4,
     -4,
 };
+#endif
 // clang-format on

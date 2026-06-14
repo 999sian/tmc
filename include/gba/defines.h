@@ -47,7 +47,11 @@
 #else
 #define PACKED __attribute__((packed))
 #define ALIGNED(n) __attribute__((aligned(n)))
+#if defined(__GNUC__) && (__GNUC__ >= 3)
 #define MAY_ALIAS __attribute__((__may_alias__))
+#else
+#define MAY_ALIAS
+#endif
 #define PACKED_STRUCT_BEGIN
 #define PACKED_STRUCT_END
 #endif

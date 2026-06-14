@@ -25,7 +25,9 @@ extern const Hitbox gUnk_08132B28;
 // TODO spriteAnimations in here
 // TODO sprite frame in here
 
+#ifdef PC_PORT
 static Hitbox sGustJarHitbox;
+#endif
 
 static const u8* GetGustJarAnimData(u32 index) {
 #ifdef PC_PORT
@@ -80,8 +82,12 @@ void PlayerItemGustJar_Init(Entity* this) {
         DeleteThisEntity();
         return;
     }
+#ifdef PC_PORT
     sGustJarHitbox = *hitboxTemplate;
     this->hitbox = &sGustJarHitbox;
+#else
+    this->hitbox = (Hitbox*)hitboxTemplate;
+#endif
     this->hitbox->unk2[2] = 3;
     this->hitbox->unk2[1] = 3;
     this->hitbox->unk2[3] = 6;

@@ -326,6 +326,7 @@ void VaatiTransfiguredType0Action3(VaatiTransfiguredEntity* this) {
     Entity* pEVar3;
     u32 uVar4;
     u32 tmp;
+    const u8* vaatiTransfiguredThresholds;
 
     switch (this->unk_80) {
         case 0:
@@ -344,7 +345,7 @@ void VaatiTransfiguredType0Action3(VaatiTransfiguredEntity* this) {
                 super->hitType = 0x35;
                 super->spriteOffsetX = 0;
             }
-            const u8* vaatiTransfiguredThresholds = gUnk_080D0ABC;
+            vaatiTransfiguredThresholds = gUnk_080D0ABC;
 #ifdef MULTI_REGION
             if (REGION_IS_EU) {
                 vaatiTransfiguredThresholds = gUnk_080D0ABC_eu;

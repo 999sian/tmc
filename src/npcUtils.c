@@ -13,7 +13,9 @@
 #include "save.h"
 #include "vram.h"
 #include "color.h"
+#ifdef PC_PORT
 #include "port_rom.h"
+#endif
 
 extern const NPCDefinition gNPCDefinitions[];
 #ifdef MULTI_REGION
@@ -25,12 +27,16 @@ typedef struct {
     u16 cancelledTextIndex;
     u16 fusingTextIndex;
 } NPCData;
+#ifdef PC_PORT
 #include "port_rom.h"
 extern const u8 gUnk_08001A7C[];
-
 static NPCData* GetFusionNpcData(u32 fuserId) {
     return (NPCData*)Port_UnpackRomDataPtr(gUnk_08001A7C, fuserId);
 }
+#else
+extern NPCData* gUnk_08001A7C[];
+#define GetFusionNpcData(fuserId) (gUnk_08001A7C[fuserId])
+#endif
 
 
 u32 sub_0806EF88(Entity*);

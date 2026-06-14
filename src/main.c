@@ -153,11 +153,8 @@ static void InitOverlays(void) {
 
     DisableInterruptsAndDMA();
     RegisterRamReset(RESET_ALL & ~RESET_EWRAM);
-    //*(vu16*)BG_PLTT = 0x7FFF;
-    gba_write16(BG_PLTT, 0x7FFF);
-
-    // REG_WAITCNT = WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3;
-    gba_write16(REG_ADDR_WAITCNT, WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3);
+    *(vu16*)BG_PLTT = 0x7FFF;
+    *(vu16*)REG_ADDR_WAITCNT = WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3;
     size = 0x3FFD0;
     MemClear(gUnk_02000030, size);
     size = (u32)RAMFUNCS_END - (u32)sub_080B197C;
@@ -188,11 +185,19 @@ void SetTask(u32 task) {
 }
 
 void DisableInterruptsAndDMA(void) {
+#ifdef PC_PORT
     gba_write16(REG_ADDR_IME, 0);
     gba_write16(REG_ADDR_IE, 0);
     gba_write16(REG_ADDR_DISPSTAT, 0);
     gba_write16(REG_ADDR_IF, 0);
     gba_write16(REG_ADDR_IME, 0);
+#else
+    REG_IME = 0;
+    REG_IE = 0;
+    REG_DISPSTAT = 0;
+    REG_IF = 0;
+    REG_IME = 0;
+#endif
 
     DmaStop(0);
     DmaStop(1);

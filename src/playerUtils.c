@@ -4600,9 +4600,13 @@ void sub_0807C9D8(u32* a1) {
 }
 
 u32 FinalizeSave(void) {
+#ifdef PC_PORT
     fprintf(stderr, "[FINALIZE] invalid=%u initialized=%u\n", gSave.invalid, gSave.initialized);
+#endif
     if (gSave.invalid || gSave.initialized != 1) {
+#ifdef PC_PORT
         fprintf(stderr, "[FINALIZE] Setting up new game: area=0x22, room=0x15\n");
+#endif
         gSave.invalid = 0;
         gSave.initialized = 1;
         gSave.global_progress = 1;

@@ -40,6 +40,7 @@ static void HazardNull(Entity* e) {
 }
 
 void sub_08001214(Entity*);
+#ifdef PC_PORT
 void (*const gUnk_080012C8[])(Entity*) = {
     HazardNull,
     sub_08001214,
@@ -47,25 +48,14 @@ void (*const gUnk_080012C8[])(Entity*) = {
     CreateLavaDrownFx,
     CreateSwampDrownFx,
 };
-static HazardFn sHazardTable[5];
-static int sHazardTableInit = 0;
-
-static void InitHazardTable(void) {
-    if (sHazardTableInit)
-        return;
-    sHazardTableInit = 1;
-    sHazardTable[0] = HazardNull;
-    sHazardTable[1] = sub_08001214;
-    sHazardTable[2] = CreateDrownFx;
-    sHazardTable[3] = CreateLavaDrownFx;
-    sHazardTable[4] = CreateSwampDrownFx;
-}
+#else
+extern void (*const gUnk_080012C8[])(Entity*);
+#endif
 
 void sub_08001290(Entity* entity, u32 hazardType) {
-    if (hazardType == 0)
-        return;
-    InitHazardTable();
-    sHazardTable[hazardType](entity);
+    if (hazardType != 0) {
+        gUnk_080012C8[hazardType](entity);
+    }
 }
 
 void sub_08001214(Entity* entity) {
@@ -89,8 +79,7 @@ void EnemyFunctionHandler(Entity* entity, EntityActionArray actions) {
     void (*fn)(Entity*);
 
     if (hazard != 0) {
-        InitHazardTable();
-        fn = sHazardTable[hazard];
+        fn = gUnk_080012C8[hazard];
     } else {
         u32 idx = GetNextFunction(entity);
         fn = actions[idx];
@@ -98,13 +87,11 @@ void EnemyFunctionHandler(Entity* entity, EntityActionArray actions) {
     fn(entity);
 }
 
-static const s8 sConfusedOffsets[] = { 0, 1, 0, -1 };
-
 void GenericConfused(Entity* entity) {
     entity->confusedTime--;
     if (entity->confusedTime < 0x3C) {
         u8 phase = entity->confusedTime & 3;
-        entity->spriteOffsetX = sConfusedOffsets[phase];
+        entity->spriteOffsetX = (phase == 1 ? 1 : (phase == 3 ? -1 : 0));
         if (entity->confusedTime == 0) {
             Entity* fx = ((Enemy*)entity)->child;
             if (fx != NULL && fx->kind == OBJECT && fx->id == 0xF && fx->type == 0x1C) {

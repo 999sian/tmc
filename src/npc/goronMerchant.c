@@ -115,7 +115,7 @@ static u32 GoronMerchant_GetSalePrice(Entity* this) {
     u32 restockCount;
     u32 kinstoneType;
     s32 itemForSale;
-
+    const u16* sel;
     itemForSale = gRoomVars.shopItemType2;
     if (itemForSale > 0x70) {
         kinstoneType = 1;
@@ -140,7 +140,7 @@ static u32 GoronMerchant_GetSalePrice(Entity* this) {
     if (CheckGlobalFlag(GORON_KAKERA_LV5)) {
         restockCount = 4;
     }
-    const u16* sel = sKinstonePrices;
+    sel = sKinstonePrices;
 #ifdef MULTI_REGION
     if (REGION_IS_EU)
         sel = sKinstonePrices_eu;

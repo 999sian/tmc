@@ -218,4 +218,5 @@ struct Entity_;
 typedef u64 (*MultiReturnTypeSingleEntityArg)(struct Entity_*);
 typedef s64 (*MultiReturnTypeTwoS32Arg)(s32, s32);
 
+#include "region.h"
 #endif // GLOBAL_H

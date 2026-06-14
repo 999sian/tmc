@@ -18,7 +18,12 @@ typedef struct {
     u8 initialized;
 } SaveHeader;
 #ifndef gSaveHeader
+#ifdef PC_PORT
+#include "port_gba_mem.h"
 #define gSaveHeader ((SaveHeader*)gba_MemPtr(0x02000000u))
+#else
+#define gSaveHeader ((SaveHeader*)(0x2000000))
+#endif
 #endif
 #endif
 
