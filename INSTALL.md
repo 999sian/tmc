@@ -7,13 +7,14 @@ covers the manual paths and build options for when you want finer control.
 
 ## Supported ROMs
 
-A copy of the original game is required. Place it in the repository root with
-the filename below:
+A copy of the original game is required. Place it in the repository root
+using the filename below:
 
 | Version | Filename         | SHA1                                       |
 |---------|------------------|--------------------------------------------|
 | USA     | `baserom.gba`    | `b4bd50e4131b027c334547b4524e2dbbd4227130` |
 | EU      | `baserom_eu.gba` | `cff199b36ff173fb6faf152653d1bccf87c26fb7` |
+| JP      | `baserom_jp.gba` | `6c5404a1effb17f481f352181d0f1c61a2765c5d` |
 
 This repository does **not** ship the ROM.
 
@@ -34,10 +35,11 @@ them via your package manager is faster and reuses the system copy.
 ## One-shot build (recommended)
 
 ```sh
-python3 build.py            # interactive: choose USA, EU, or both
-python3 build.py --usa      # non-interactive, USA only
-python3 build.py --eur      # non-interactive, EU only
-python3 build.py --slim     # minimal dist (binary only; assets self-extract)
+python3 build.py # interactive: choose USA, EU, JP, or all
+python3 build.py --usa # non-interactive, USA only
+python3 build.py --eur # non-interactive, EU only
+python3 build.py --jp  # non-interactive, JP only
+python3 build.py --slim # minimal dist (binary only; assets self-extract)
 ```
 
 The script:
@@ -45,8 +47,8 @@ The script:
 - Checks dependencies and offers to install missing ones.
 - Initializes git submodules (`libs/ViruaPPU`, `libs/VirtuaAPU`).
 - Scans the repo root, parent directory, and `~/Downloads` for ROMs and
-  verifies their SHA1 against `tmc.sha1` / `tmc_eu.sha1`.
-- Compiles `tmc_pc` and `asset_extractor`.
+  verifies SHA1 against `tmc.sha1`, `tmc_eu.sha1`, or `tmc_jp.sha1`.
+- Compiles the multi-region `tmc_pc` and `asset_extractor`.
 - Extracts a runtime asset cache.
 - Stages the result under `dist/<VERSION>/`.
 
@@ -80,7 +82,9 @@ Configure flags worth knowing:
 |------------------------|-------------------------------------------------------|
 | `--game_version=USA`   | Build for USA (default).                              |
 | `--game_version=EU`    | Build for EU.                                         |
+| `--game_version=JP`    | Build with JP staging defaults.                      |
 | `--pc_avx2=y`          | Enable AVX2 in the PPU renderer (auto on x86-64).     |
+| `--multi_region=y`     | Build one PC binary that selects USA/EU/JP at runtime. |
 
 On Linux, set `XMAKE_USE_SYSTEM_SDL3=1` before configuring to use the
 distro's SDL3 instead of letting xmake build its own. `build.py` does this
@@ -88,10 +92,10 @@ automatically when `pkg-config --exists sdl3` succeeds.
 
 ## Slim builds
 
-`python3 build.py --slim` produces a `dist/<VERSION>/` containing only
-`tmc_pc`. The binary embeds the asset extractor and a fallback `sounds.json`,
-so a bare `tmc_pc + baserom.gba` install is enough — first launch
-self-extracts assets next to the binary in ≈3–5 s, subsequent launches are
+`python3 build.py --slim` produces `dist/<VERSION>/` containing only
+`tmc_pc`. The binary embeds the asset extractor fallback and `sounds.json`,
+so bare `tmc_pc` plus any supported ROM is enough — first launch
+self-extracts assets next to the binary in ≈3–5 s, subsequent launches
 instant.
 
 CI uses this path for the published release tarballs.
