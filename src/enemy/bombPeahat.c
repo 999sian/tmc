@@ -44,6 +44,9 @@ extern void (*const gUnk_080CD140[])(BombPeahatEntity*);
 extern void (*const gUnk_080CD158[])(BombPeahatEntity*);
 
 extern const Hitbox gUnk_080CD16C;
+#ifdef MULTI_REGION
+extern const Hitbox gUnk_080CD16C_eu;
+#endif
 extern const Hitbox gUnk_080CD174;
 extern const Hitbox gUnk_080CD17C;
 
@@ -116,6 +119,11 @@ void sub_0802A924(BombPeahatEntity* this) {
     super->timer = 0;
     super->subtimer = 0;
     super->hitbox = (Hitbox*)&gUnk_080CD16C;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        super->hitbox = (Hitbox*)&gUnk_080CD16C_eu;
+    }
+#endif
     if (REGION_IS_EU) {
     super->collisionFlags |= 0x10;
     }
@@ -937,12 +945,18 @@ void (*const gUnk_080CD158[])(BombPeahatEntity*) = {
 };
 
 const Hitbox gUnk_080CD16C = {
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
     0x00, 0xFD, 0x05, 0x03, 0x03, 0x05, 0x06, 0x06,
 #else
     0x00, 0xFB, 0x05, 0x03, 0x03, 0x05, 0x06, 0x06,
 #endif
 };
+
+#ifdef MULTI_REGION
+const Hitbox gUnk_080CD16C_eu = {
+    0x00, 0xFD, 0x05, 0x03, 0x03, 0x05, 0x06, 0x06,
+};
+#endif
 
 #ifdef EU
 const u8 unk_data[] = { // TODO

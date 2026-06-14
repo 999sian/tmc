@@ -66,6 +66,9 @@ bool32 ProcessMovementInternal(Entity*, s32, s32, u32);
 u32 sub_080176E4(Entity*);
 
 extern const u8 gMapTileTypeToActTile[]; // actTile for tileType?
+// Region-correct read of gMapTileTypeToActTile. In native builds returns the raw
+// table value; in the multi-region fat binary applies the EU divergences at runtime.
+u8 GetMapTileTypeToActTile(u32 tileType);
 
 extern u32 sub_0801766C(Entity*);
 

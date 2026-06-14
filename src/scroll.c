@@ -941,13 +941,12 @@ void UpdateDoorTransition() {
 void FillActTileForLayer(MapLayer* mapLayer) {
     u32 tilePos;
     u16* tileTypes = mapLayer->tileTypes;
-    const u8* ptr = gMapTileTypeToActTile;
     u8* actTiles = mapLayer->actTiles;
     u16* mapData = mapLayer->mapData;
     for (tilePos = 0; tilePos < 0x40 * 0x40; tilePos++) {
         u16 tileIndex = mapData[tilePos];
         if (tileIndex < 0x4000) {
-            mapLayer->actTiles[tilePos] = ptr[tileTypes[tileIndex]];
+            mapLayer->actTiles[tilePos] = GetMapTileTypeToActTile(tileTypes[tileIndex]);
         } else {
             mapLayer->actTiles[tilePos] = gMapSpecialTileToActTile[tileIndex - 0x4000];
         }
@@ -1001,7 +1000,16 @@ void sub_08080CB4(Entity* this) {
     if (this->type != this->animIndex) {
         InitAnimationForceUpdate(this, this->type);
         if (this->type == 0x5c) {
-            const KinstoneWorldEvent* ptr = &gKinstoneWorldEvents[this->type2];
+            const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
+#ifdef MULTI_REGION
+            extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
+            extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
+            if (REGION_IS_EU)
+                gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
+            else if (REGION_IS_JP)
+                gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
+#endif
+            const KinstoneWorldEvent* ptr = &gKinstoneWorldEvents_sel[this->type2];
             tmp = ptr->objPalette;
             tmp2 = tmp & 0xf;
             this->palette.raw = (tmp << 4) | tmp2;

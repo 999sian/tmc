@@ -221,12 +221,23 @@ void sub_080A68D4(void) {
         }
     }
 
+    {
+    const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
+#ifdef MULTI_REGION
+    extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
+    extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
+    if (REGION_IS_EU)
+        gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
+    else if (REGION_IS_JP)
+        gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
+#endif
     for (i = 10; i <= 100; i++) {
         if (CheckKinstoneFused(i) && !CheckFusionMapMarkerDisabled(i)) {
-            uVar4 = gKinstoneWorldEvents[i].mapMarkerIcon;
-            ptr = &gWorldEvents[gKinstoneWorldEvents[i].worldEventId];
+            uVar4 = gKinstoneWorldEvents_sel[i].mapMarkerIcon;
+            ptr = &gWorldEvents[gKinstoneWorldEvents_sel[i].worldEventId];
             sub_080A698C(ptr->_c, ptr->_e, DRAW_DIRECT_SPRITE_INDEX, uVar4 + 100);
         }
+    }
     }
 }
 

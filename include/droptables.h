@@ -29,6 +29,10 @@ static_assert(sizeof(Droptable) == 0x20, "Droptable size incorrect");
 extern const Droptable gEnemyDroptables[];
 extern const Droptable gAreaDroptables[];
 extern const Droptable gObjectDroptables[];
+#ifdef MULTI_REGION
+extern const Droptable gAreaDroptables_eu[];
+extern const Droptable gObjectDroptables_eu[];
+#endif
 extern const Droptable gUnk_0800191C[];
 enum {
     DROPTABLE_NONE,

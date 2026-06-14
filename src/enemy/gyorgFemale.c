@@ -316,7 +316,7 @@ void sub_08046518(void) {
             u16 tileType;
             mapDataOriginal[j] = mapData[j];
             tileType = tileTypes[mapData[j]];
-            actTiles[j] = gMapTileTypeToActTile[tileType];
+            actTiles[j] = GetMapTileTypeToActTile(tileType);
             collisionData[j] = gMapTileTypeToCollisionData[tileType];
         }
         mapData += 0x40;
