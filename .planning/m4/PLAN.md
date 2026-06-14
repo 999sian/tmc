@@ -67,6 +67,17 @@ classification + adversarial reachability verification). Inventory: `.planning/m
 
 ## SLICE 4 — per-region-table (data the non-baseline region observes; needs 2 tables + runtime select, or ternary for #defines)
 
+### Progress (session 2026-06-14)
+- DONE `src/objectDefinitions.c` (51) — include-twice + NAME() idiom (commit 30f59e6d)
+- DONE `src/enemy/vaatiRebornEnemy.c` (1), `src/enemy/vaatiTransfigured.c` (1),
+  `src/itemDefinitions.c` (1, via playerUtils runtime override) — commit a3f4e8da
+- Mechanisms: big interleaved table -> include-twice; small single table -> `_eu`
+  twin + read-site select; single const field, 1 consumer -> runtime override.
+- All guards gate on `MULTI_REGION` (not PC_PORT). Boot runbook verified each commit.
+- REMAINING below (~104 sites). Note `bombPeahat.c:765 sub_0802B1BC_USA` is fn-dispatch
+  (misfiled here), `flags.h` lines are the DEFERRED ordinal-divergence blocker.
+
+
 - `include/flags.h` — lines [192, 218, 224, 241, 267, 342, 368, 382, 451, 676, 680, 894, 897, 1039, 1137]
 - `include/main.h` — lines [31]
 - `src/collision.c` — lines [1031, 1038, 1055, 1062, 1079, 1087, 1103, 1110, 1127, 1135, 1546, 1553, 2250, 2258, 2264]
