@@ -627,6 +627,14 @@ void sub_08077D38(ItemBehavior* this, u32 index) {
     }
 
     this->animPriority = ptr->animPriority;
+#ifdef MULTI_REGION
+    /* EU raises the lantern's animPriority (2 -> 6) so it wins the max-priority
+     * animation select in sub_08079064. gItemDefinitions is the USA/JP baseline
+     * in the fat binary, so apply the EU value at runtime. */
+    if (REGION_IS_EU && (this->behaviorId == ITEM_LANTERN_OFF || this->behaviorId == ITEM_LANTERN_ON)) {
+        this->animPriority = 6;
+    }
+#endif
     if (ptr->isChangingAttackStatus) {
         gPlayerState.attack_status |= (8 >> index) | ((8 >> index) << 4);
     }

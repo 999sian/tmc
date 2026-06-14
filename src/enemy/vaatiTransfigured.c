@@ -97,10 +97,13 @@ typedef struct {
     s8 y;
 } PACKED xy;
 
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
 const u8 gUnk_080D0ABC[] = { 0xf0, 0xd0, 0xb0 };
 #else
 const u8 gUnk_080D0ABC[] = { 0xf0, 0xd0, 0xc0 };
+#endif
+#ifdef MULTI_REGION
+const u8 gUnk_080D0ABC_eu[] = { 0xf0, 0xd0, 0xb0 };
 #endif
 const u8 gUnk_080D0ABF[] = { 0x3c, 0x3c, 0x1e, 0x14, 0x14, 0x14, 0, 0, 0 };
 void (*const vaatiTransfiguredType0Actions[])(VaatiTransfiguredEntity*) = {
@@ -341,7 +344,13 @@ void VaatiTransfiguredType0Action3(VaatiTransfiguredEntity* this) {
                 super->hitType = 0x35;
                 super->spriteOffsetX = 0;
             }
-            if (super->health < gUnk_080D0ABC[super->animationState]) {
+            const u8* vaatiTransfiguredThresholds = gUnk_080D0ABC;
+#ifdef MULTI_REGION
+            if (REGION_IS_EU) {
+                vaatiTransfiguredThresholds = gUnk_080D0ABC_eu;
+            }
+#endif
+            if (super->health < vaatiTransfiguredThresholds[super->animationState]) {
                 tmp = 1;
                 super->timer = 1;
             } else {
