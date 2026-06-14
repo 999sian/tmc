@@ -15,16 +15,29 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u8 unk_78;
     /*0x79*/ u8 unk_79;
     /*0x7a*/ u8 unk_7a;
     /*0x7b*/ u8 unk_7b;
+#ifdef PC_PORT
+    /*0x7c*/ u8 unused2[4 + 4];
+#else
     /*0x7c*/ u8 unused2[4];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u16 unk_82;
 } BombPeahatEntity;
+
+PORT_STATIC_ASSERT_OFFSET(BombPeahatEntity, unk_78, 0x78, 0xA4,
+                          "BombPeahatEntity unk_78 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BombPeahatEntity, unk_80, 0x80, 0xB0,
+                          "BombPeahatEntity unk_80 offset incorrect");
 
 void sub_0802AD1C(BombPeahatEntity*, u32);
 void sub_0802AD54(BombPeahatEntity*);

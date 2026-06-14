@@ -36,7 +36,9 @@ bool Port_RandoFileMenu_IsSeedChar(char c);
 
 /* Built-in graph mode (no .logic file loaded). */
 bool* Port_RandoFileMenu_GlitchlessLogic(void);
+bool* Port_RandoFileMenu_ObscureLocations(void);
 bool* Port_RandoFileMenu_ShuffleKinstones(void);
+bool* Port_RandoFileMenu_ShuffleEntrances(void);
 bool* Port_RandoFileMenu_ShuffleDojos(void);
 bool* Port_RandoFileMenu_OpenWorld(void);
 int Port_RandoFileMenu_Difficulty(void);

@@ -52,9 +52,11 @@ void MP2KContext::m4aSoundMode(uint32_t mode)
     const uint8_t reverb = (mode >> 0) & 0xFF;
     m4aSoundModeReverb(reverb);
 
-    // const uint8_t channels = (mode >> 8) & 0xF;
-    // if (channels != 0)
-    //     ; // there is no channel limit in agbplay
+    const uint8_t channels = (mode >> 8) & 0xF;
+    if (channels != 0) {
+        mp2kSoundMode.maxChannels = channels;
+        sndChannels.clear();
+    }
 
     const uint8_t masterVol = (mode >> 12) & 0xF;
     m4aSoundModePCMVol(masterVol);

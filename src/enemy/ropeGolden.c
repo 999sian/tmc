@@ -16,11 +16,18 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u8 unk_78;
     /*0x79*/ u8 unk_79;
     /*0x7a*/ u8 unk_7a;
 } RopeGoldenEntity;
+
+PORT_STATIC_ASSERT_OFFSET(RopeGoldenEntity, unk_78, 0x78, 0xA4,
+                          "RopeGoldenEntity unk_78 offset incorrect");
 
 void RopeGolden_OnTick(RopeGoldenEntity* this);
 void RopeGolden_OnCollision(RopeGoldenEntity* this);

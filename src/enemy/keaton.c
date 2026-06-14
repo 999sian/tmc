@@ -13,13 +13,22 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u16 unk_74;
     /*0x76*/ u16 unk_76;
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u8 unused2[1];
     /*0x7b*/ u8 unk_7b;
 } KeatonEntity;
+
+PORT_STATIC_ASSERT_OFFSET(KeatonEntity, unk_74, 0x74, 0xA0,
+                          "KeatonEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(KeatonEntity, unk_7b, 0x7b, 0xA7,
+                          "KeatonEntity unk_7b offset incorrect");
 
 void Keaton_OnTick(KeatonEntity*);
 void Keaton_OnCollision(KeatonEntity*);

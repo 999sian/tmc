@@ -133,6 +133,7 @@ static inline void* Port_UnpackRomDataPtr(const void* table, u32 index) {
 void* Port_ResolveAreaTileSetFromRom(u32 area, u32 tileSetId);
 void* Port_ResolveAreaRoomMapFromRom(u32 area, u32 room);
 void* Port_ResolveAreaPropertiesFromRom(u32 area, u32 room);
+void* Port_ResolveAreaExitsFromRom(u32 area, u32 room);
 
 /*
  * Resolve a raw GBA EWRAM address (0x02xxxxxx) to a native PC pointer.

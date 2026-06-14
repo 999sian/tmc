@@ -28,6 +28,7 @@ void Port_ReproCredits_Tick(unsigned int frame);
 void Port_ReproPerfcap_Tick(unsigned int frame);
 void Port_ReproA11y_Tick(unsigned int frame);
 void Port_ReproCatPerson_Tick(unsigned int frame);
+void Port_ReproRoomCap_Tick(unsigned int frame);
 
 #ifdef __cplusplus
 }

@@ -14,14 +14,28 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[18 + 4];
+#else
     /*0x68*/ u8 unused1[18];
+#endif
     /*0x7a*/ u16 unk_7a;
     /*0x7c*/ u16 unk_7c;
     /*0x7e*/ u16 unk_7e;
+#ifdef PC_PORT
+    u8 filler_7c_pc[4];
+#endif
     /*0x80*/ u16 unk_80;
     /*0x82*/ u16 unk_82;
     /*0x84*/ u32 unk_84;
 } FallingBoulderEntity;
+
+PORT_STATIC_ASSERT_OFFSET(FallingBoulderEntity, unk_7a, 0x7a, 0xA6,
+                          "FallingBoulderEntity unk_7a offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(FallingBoulderEntity, unk_80, 0x80, 0xB0,
+                          "FallingBoulderEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(FallingBoulderEntity, unk_84, 0x84, 0xB4,
+                          "FallingBoulderEntity unk_84 offset incorrect");
 
 void sub_0802C4B0(FallingBoulderEntity* this);
 void sub_0802C62C(FallingBoulderEntity* this);

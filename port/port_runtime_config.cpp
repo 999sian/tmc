@@ -119,7 +119,9 @@ bool        sHasRebornFeatures = false;/* was the key present in config.json? */
  * graph settings, and .logic define overrides. Defaults = vanilla. */
 bool sRandoEnabled    = false;
 bool sRandoGlitchless = true;
+bool sRandoObscure    = false;
 bool sRandoKinstones  = true;
+bool sRandoEntrances  = false;
 bool sRandoDojos      = true;
 bool sRandoOpenWorld  = false;
 int  sRandoItemPool   = 0;
@@ -204,7 +206,9 @@ nlohmann::json DefaultsJson(void) {
         { "shader_preset", "" },
         { "rando_enabled", false },
         { "rando_glitchless", true },
+        { "rando_obscure", false },
         { "rando_kinstones", true },
+        { "rando_entrances", false },
         { "rando_dojos", true },
         { "rando_open_world", false },
         { "rando_item_pool", 0 },
@@ -623,7 +627,9 @@ extern "C" void Port_Config_Load(const char* path) {
 
         sRandoEnabled    = j.value("rando_enabled", false);
         sRandoGlitchless = j.value("rando_glitchless", true);
+        sRandoObscure    = j.value("rando_obscure", false);
         sRandoKinstones  = j.value("rando_kinstones", true);
+        sRandoEntrances  = j.value("rando_entrances", false);
         sRandoDojos      = j.value("rando_dojos", true);
         sRandoOpenWorld  = j.value("rando_open_world", false);
         sRandoItemPool   = j.value("rando_item_pool", 0);
@@ -1471,7 +1477,9 @@ extern "C" void Port_Config_SetRandoEnabled(bool on) {
     SaveConfig();
 }
 extern "C" bool Port_Config_GetRandoGlitchless(void) { return sRandoGlitchless; }
+extern "C" bool Port_Config_GetRandoObscure(void) { return sRandoObscure; }
 extern "C" bool Port_Config_GetRandoKinstones(void) { return sRandoKinstones; }
+extern "C" bool Port_Config_GetRandoEntrances(void) { return sRandoEntrances; }
 extern "C" bool Port_Config_GetRandoDojos(void) { return sRandoDojos; }
 extern "C" bool Port_Config_GetRandoOpenWorld(void) { return sRandoOpenWorld; }
 extern "C" int  Port_Config_GetRandoItemPool(void) { return sRandoItemPool; }
@@ -1482,11 +1490,13 @@ extern "C" bool Port_Config_GetRandoInstantText(void) { return sRandoInstantText
 extern "C" int  Port_Config_GetRandoTunicColor(void) { return sRandoTunicColor; }
 extern "C" int  Port_Config_GetRandoHeartColor(void) { return sRandoHeartColor; }
 
-extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, bool open_world,
+extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos, bool open_world,
                                              int item_pool, bool homewarp, bool start_sword, bool early_crests,
                                              bool instant_text, int tunic_color, int heart_color) {
     sRandoGlitchless = glitchless;
+    sRandoObscure    = obscure;
     sRandoKinstones  = kinstones;
+    sRandoEntrances  = entrances;
     sRandoDojos      = dojos;
     sRandoOpenWorld  = open_world;
     sRandoItemPool   = item_pool;
@@ -1497,7 +1507,9 @@ extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bo
     sRandoTunicColor = tunic_color;
     sRandoHeartColor = heart_color;
     sConfigJson["rando_glitchless"] = glitchless;
+    sConfigJson["rando_obscure"]    = obscure;
     sConfigJson["rando_kinstones"]  = kinstones;
+    sConfigJson["rando_entrances"]  = entrances;
     sConfigJson["rando_dojos"]      = dojos;
     sConfigJson["rando_open_world"] = open_world;
     sConfigJson["rando_item_pool"]  = item_pool;

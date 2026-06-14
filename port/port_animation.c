@@ -34,7 +34,18 @@ static int AnimRangeHasBytes(const void* ptr, size_t count) {
     if (gRomData != NULL && p >= start && p <= end) {
         return count <= (size_t)(end - p);
     }
-    return Port_IsLoadedAssetBytes(ptr, (u32)count) || Port_IsValidHostPtr(ptr);
+    /* If ptr lands inside a loaded asset buffer, that buffer's bounds are
+     * authoritative: enforce the count-aware asset check and do NOT fall back
+     * to the count-blind host-pointer check. The fallback ignores `count`, so
+     * it would pass a near-end pointer and let FrameZero read off the end of a
+     * short animation — e.g. the JP file-select objects' 15-byte anim, where a
+     * 4-byte frame read at offset 12 overruns by one byte (heap-buffer-overflow,
+     * port_animation.c:99). Only truly-external pointers (not in any asset) use
+     * the best-effort host check. */
+    if (Port_IsLoadedAssetBytes(ptr, 1)) {
+        return Port_IsLoadedAssetBytes(ptr, (u32)count);
+    }
+    return Port_IsValidHostPtr(ptr);
 }
 
 

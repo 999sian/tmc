@@ -13,10 +13,17 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[24 + 8];
+#else
     /*0x68*/ u8 unused1[24];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
 } SpinyChuchuEntity;
+
+PORT_STATIC_ASSERT_OFFSET(SpinyChuchuEntity, unk_80, 0x80, 0xB0,
+                          "SpinyChuchuEntity unk_80 offset incorrect");
 
 u32 sub_080228CC(SpinyChuchuEntity*);
 u32 sub_080228F0(SpinyChuchuEntity*);

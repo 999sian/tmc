@@ -16,12 +16,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u16 unk_74;
     /*0x76*/ u8 unused2[2];
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
 } LakituCloudEntity;
+
+PORT_STATIC_ASSERT_OFFSET(LakituCloudEntity, unk_74, 0x74, 0xA0,
+                          "LakituCloudEntity unk_74 offset incorrect");
 
 extern void (*const LakituCloud_Functions[6])(LakituCloudEntity*);
 extern void (*const gUnk_080D0430[3])(LakituCloudEntity*);

@@ -20,11 +20,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[8 + 4];
+#else
     /*0x68*/ u8 unused1[8];
+#endif
     /*0x70*/ u16 unk_70;
     /*0x72*/ u8 unused2[6];
     /*0x78*/ u16 unk_78;
+#ifdef PC_PORT
+    /*0x7a*/ u8 unused3[6 + 4];
+#else
     /*0x7a*/ u8 unused3[6];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
@@ -34,6 +42,11 @@ typedef struct {
     /*0x86*/ u8 unk_86;
     /*0x87*/ u8 unk_87;
 } PestoEntity;
+
+PORT_STATIC_ASSERT_OFFSET(PestoEntity, unk_70, 0x70, 0x9C,
+                          "PestoEntity unk_70 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PestoEntity, unk_80, 0x80, 0xB0,
+                          "PestoEntity unk_80 offset incorrect");
 
 void sub_080249F4(PestoEntity*);
 void sub_08024940(PestoEntity*);

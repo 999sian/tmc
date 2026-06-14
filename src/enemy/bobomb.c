@@ -15,12 +15,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[24 + 8];
+#else
     /*0x68*/ u8 unused1[24];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
     /*0x83*/ u8 unk_83;
 } BobombEntity;
+
+PORT_STATIC_ASSERT_OFFSET(BobombEntity, unk_80, 0x80, 0xB0,
+                          "BobombEntity unk_80 offset incorrect");
 
 void sub_0802CB68(BobombEntity* this);
 void sub_0802CBC4(BobombEntity* this);

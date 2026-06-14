@@ -16,9 +16,16 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u16 unk_78;
 } VaatiProjectileEntity;
+
+PORT_STATIC_ASSERT_OFFSET(VaatiProjectileEntity, unk_78, 0x78, 0xA4,
+                          "VaatiProjectileEntity unk_78 offset incorrect");
 
 bool32 sub_0803E4A0(VaatiProjectileEntity*);
 void VaatiProjectile_OnTick(VaatiProjectileEntity*);

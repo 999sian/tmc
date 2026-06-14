@@ -17,13 +17,20 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u8 unk_74;
     /*0x75*/ u8 unk_75;
     /*0x76*/ u8 unk_76;
     /*0x77*/ u8 unk_77;
     /*0x78*/ union SplitWord unk_78;
     /*0x7c*/ union SplitWord unk_7c;
+#ifdef PC_PORT
+    u8 filler_7c_pc[4];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
@@ -33,6 +40,11 @@ typedef struct {
     /*0x86*/ u8 unk_86;
     /*0x87*/ u8 unk_87;
 } VaatiRebornEnemyEntity;
+
+PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_74, 0x74, 0xA0,
+                          "VaatiRebornEnemyEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_80, 0x80, 0xB0,
+                          "VaatiRebornEnemyEntity unk_80 offset incorrect");
 
 void VaatiRebornEnemyType0PreAction(VaatiRebornEnemyEntity*);
 void VaatiRebornEnemyType1PreAction(VaatiRebornEnemyEntity*);

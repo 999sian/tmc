@@ -110,7 +110,7 @@ struct MP2KSoundMode
     uint8_t vol = VOL_AUTO;
     uint8_t rev = 0;
     uint8_t freq = FREQ_AUTO;
-    uint8_t maxChannels = CHN_AUTO;    // currently unused
+    uint8_t maxChannels = CHN_AUTO;
     uint8_t dacConfig = DAC_AUTO;      // currently unused
 };
 

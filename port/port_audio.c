@@ -215,6 +215,11 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
            separately via the backend. */
         if (!__atomic_load_n(&sGbaAccurate, __ATOMIC_ACQUIRE)) {
             Port_Audio_PostProcess(buffer, frames);
+        } else {
+            /* Emulate 9-bit PWM DAC quantization of GBA hardware (SOUNDBIAS=9). */
+            for (int i = 0; i < frames * PORT_AUDIO_CHANNELS; ++i) {
+                buffer[i] = (int16_t)((buffer[i] / 128) * 128);
+            }
         }
         /* Accessibility tone cues: summed on top of the game mix (after the
          * DSP chain so they aren't filtered), clamped inside the mixer. */

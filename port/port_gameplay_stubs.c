@@ -9,6 +9,7 @@
 #include "physics.h"
 #include "player.h"
 #include "gba/defines.h"
+#include "gba/syscall.h"
 #include "port_entity_ctx.h"
 #include "port_audio_mute.h"
 #include "port_gba_mem.h"
@@ -77,6 +78,14 @@ static bool32 FindEntryForKeyInternal(u32 key, const KeyValuePair* list, u16* ou
     return 0;
 }
 
+void sub_08000E92(const void* src, void* dest, u32 size) {
+    (void)size;
+    if (src != NULL && dest != NULL) {
+        LZ77UnCompVram(src, dest);
+    }
+}
+
+
 u32 sub_08000E44(s32 value) {
     if (value == 0) {
         return 0;
@@ -96,6 +105,10 @@ u32 sub_08000E62(u32 value) {
 u32 FindValueForKey(u32 key, const KeyValuePair* keyValuePairList) {
     u16 value;
     return FindEntryForKeyInternal(key, keyValuePairList, &value) ? value : 0;
+}
+
+void sub_08007DCE(PlayerEntity* player) {
+    DoPlayerAction(player);
 }
 
 void EnqueueSFX(u32 sfx) {

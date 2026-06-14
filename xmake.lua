@@ -607,6 +607,13 @@ target("tmc_pc")
             { patch = "viruappu-pitch-culling.patch",
               marker_file = path.join(sub, "include", "cpu", "mode1.h"),
               marker = "virtuappu_mode1_set_frame_geometry" },
+            -- Skip prohibited OAM shape 3 in the mode1 OBJ loop. Shape is a
+            -- 2-bit field (0-3) but the obj width/height tables are [3][4];
+            -- shape 3 (GBA-prohibited) indexed them out of bounds when degraded
+            -- room data fed a shape-3 sprite (UBSan, JP new-game). Applies last.
+            { patch = "viruappu-oam-shape3-guard.patch",
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "OAM shape 3 is prohibited" },
         }
         -- Apply one patch when its marker is absent. -3 tolerates drifted
         -- context (and on shallow submodule clones, where the pre-image blob
@@ -853,6 +860,7 @@ target("tmc_pc")
     add_files("port/port_repro_catperson.c")
     add_files("port/port_repro_rando.c")
     add_files("port/port_repro_a11y.c")
+    add_files("port/port_repro_roomcap.c")  -- generic in-game room capture (TMC_ROOMCAP)
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.

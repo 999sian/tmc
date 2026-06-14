@@ -14,12 +14,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u16 unk_74;
     /*0x76*/ u16 unk_76;
     /*0x78*/ u8 unk_78;
     /*0x79*/ u8 unk_79;
 } LakituEntity;
+
+PORT_STATIC_ASSERT_OFFSET(LakituEntity, unk_74, 0x74, 0xA0,
+                          "LakituEntity unk_74 offset incorrect");
 
 extern void (*const LakituActionFuncs[])(LakituEntity*);
 

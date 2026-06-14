@@ -249,6 +249,13 @@ static void Port_UpdateInput(void) {
         Port_ReproCatPerson_Tick(sFrameNum);
     }
 
+    /* Generic in-game room capture (TMC_ROOMCAP=1): bootstrap to TASK_GAME via
+     * a quicksave snapshot, warp to a target room (re-rendered from the active
+     * ROM), and dump the base framebuffer. Used to compare per-region render. */
+    {
+        Port_ReproRoomCap_Tick(sFrameNum);
+    }
+
     /* Randomizer cosmetic palette overrides (tunic / heart colors from
      * !eventdefine). Content-addressed gPaletteBuffer rewrite; runs before
      * WaitForNextFrame()'s FadeVBlank() upload. No-op without an active
@@ -771,11 +778,14 @@ static size_t Port_GbaRegionBytesLeft(uintptr_t gbaAddr) {
 
 /* If `src` lies inside the loaded ROM image, return one-past-the-last ROM
  * byte so a decompressor can't read off the end of a truncated/corrupt ROM.
- * NULL (unbounded) for asset-resolved sources from our own trusted pipeline. */
+ * For a heap-resolved asset blob (e.g. a compressed tileset from a pak), return
+ * that blob's end: unlike GBA ROM sources, heap blobs have no readable trailing
+ * bytes, so a normally-benign trailing over-read in lz77_decomp runs off the
+ * allocation. NULL (unbounded) only for sources in neither region. */
 static const u8* Port_RomBufferEnd(const void* src) {
     if (gRomData && (const u8*)src >= gRomData && (const u8*)src < gRomData + gRomSize)
         return gRomData + gRomSize;
-    return NULL;
+    return Port_LoadedAssetBytesEnd(src);
 }
 
 /* LZ77 decompressor (SWI 0x11/0x12) */

@@ -12,12 +12,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 filler[0x18 + 8];
+#else
     /*0x68*/ u8 filler[0x18];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
     /*0x83*/ u8 unk_83;
 } MulldozerEntity;
+
+PORT_STATIC_ASSERT_OFFSET(MulldozerEntity, unk_80, 0x80, 0xB0,
+                          "MulldozerEntity unk_80 offset incorrect");
 
 extern void (*const Mulldozer_Functions[])(MulldozerEntity*);
 extern void (*const Mulldozer_Actions[])(MulldozerEntity*);

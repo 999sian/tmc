@@ -889,6 +889,14 @@ void* Port_ResolveAreaPropertiesFromRom(u32 area, u32 room) {
     return table != NULL ? Port_ReadPackedRomPtr(table, room) : NULL;
 }
 
+/* Region-correct room exit list. The compile-time gExitLists in transitions.c is
+ * USA-baseline-sized; EU/JP room indices can exceed it (global-buffer-overflow in
+ * InitRoomResInfo). Resolve from the active ROM's exit-list table instead. */
+void* Port_ResolveAreaExitsFromRom(u32 area, u32 room) {
+    void* table = Port_ResolveAreaFirstLevelTable(gRomOffsets ? gRomOffsets->exitLists : 0, area);
+    return table != NULL ? Port_ReadPackedRomPtr(table, room) : NULL;
+}
+
 /*
  * Port_ResolveEwramPtr — resolve a GBA EWRAM address to a native PC pointer.
  *

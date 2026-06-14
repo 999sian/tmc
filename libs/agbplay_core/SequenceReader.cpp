@@ -26,6 +26,70 @@ const std::map<uint8_t, uint8_t> SequenceReader::delayLut = {
     {0xAD, 88}, {0xAE, 90}, {0xAF, 92}, {0xB0, 96}
 };
 
+namespace {
+
+constexpr uint8_t kMaxDirectSoundChannels = 12;
+
+uint8_t DirectSoundChannelLimit(const MP2KContext &ctx)
+{
+    const uint8_t configuredLimit = ctx.mp2kSoundMode.maxChannels;
+    if (configuredLimit == MP2KSoundMode::CHN_AUTO || configuredLimit == 0)
+        return kMaxDirectSoundChannels;
+    if (configuredLimit > kMaxDirectSoundChannels)
+        return kMaxDirectSoundChannels;
+    return configuredLimit;
+}
+
+bool IsLowerPriorityPcmVictim(const MP2KChnPCM &candidate, const MP2KChnPCM &current)
+{
+    if (candidate.note.priority != current.note.priority)
+        return candidate.note.priority < current.note.priority;
+    return candidate.trackOrg > current.trackOrg;
+}
+
+bool CanStealPcmChannel(const MP2KChnPCM &channel, const Note &note, const MP2KTrack &track)
+{
+    if (channel.IsReleasing())
+        return true;
+    if (channel.note.priority != note.priority)
+        return channel.note.priority < note.priority;
+    return channel.trackOrg >= &track;
+}
+
+bool EnsureDirectSoundChannelSlot(MP2KContext &ctx, const Note &note, const MP2KTrack &track)
+{
+    const uint8_t channelLimit = DirectSoundChannelLimit(ctx);
+    size_t liveChannels = 0;
+    MP2KChnPCM *victim = nullptr;
+    bool victimIsReleasing = false;
+
+    for (MP2KChnPCM &channel : ctx.sndChannels) {
+        if (channel.envState == EnvState::DEAD)
+            continue;
+
+        liveChannels++;
+        if (!CanStealPcmChannel(channel, note, track))
+            continue;
+
+        const bool channelIsReleasing = channel.IsReleasing();
+        if (victim == nullptr || (!victimIsReleasing && channelIsReleasing) ||
+            (victimIsReleasing == channelIsReleasing && IsLowerPriorityPcmVictim(channel, *victim))) {
+            victim = &channel;
+            victimIsReleasing = channelIsReleasing;
+        }
+    }
+
+    if (liveChannels < channelLimit)
+        return true;
+    if (victim == nullptr)
+        return false;
+
+    victim->Kill();
+    return true;
+}
+
+} // namespace
+
 const std::map<uint8_t, uint8_t> SequenceReader::noteLut = {
     {0xCF, 0},  {0xD0, 1},  {0xD1, 2},  {0xD2, 3},  {0xD3, 4},  {0xD4, 5},  {0xD5, 6},  {0xD6, 7},  {0xD7, 8},
     {0xD8, 9},  {0xD9, 10}, {0xDA, 11}, {0xDB, 12}, {0xDC, 13}, {0xDD, 14}, {0xDE, 15}, {0xDF, 16}, {0xE0, 17},
@@ -471,6 +535,9 @@ void SequenceReader::cmdPlayNote(MP2KPlayer &player, MP2KTrack &trk, uint8_t cmd
 
         sinfo.samplePos = samplePos;
         sinfo.samplePtr = static_cast<const int8_t *>(rom.GetPtr(samplePos + 16));
+
+        if (!EnsureDirectSoundChannelSlot(ctx, note, trk))
+            return;
 
         ctx.sndChannels.emplace_back(ctx, &trk, sinfo, adsr, note, instrType & BANKDATA_TYPE_FIX);
         chn = &ctx.sndChannels.back();

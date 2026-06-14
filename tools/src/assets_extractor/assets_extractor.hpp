@@ -248,6 +248,52 @@ inline bool lz77_uncompress(std::span<const uint8_t> compressed_data, std::vecto
     return uncompressed_data.size() == decompressed_size;
 }
 
+/*
+ * Exact compressed byte length of a BIOS LZ77 (type 0x10) stream at `rom_offset`
+ * (4-byte header + tokens). Mirrors lz77_uncompress's token grammar but only
+ * counts consumed input. Compressed map-asset blobs have no explicit length, so
+ * extract_map_definition_sequence used to size them by the next-asset boundary
+ * gap — which is derived from the USA-baked EmbeddedAssetIndex and so mis-sizes
+ * (usually truncates) the blobs on EU/JP ROMs, whose offsets miss that index.
+ * A truncated compressed blob makes the runtime LZ77 decoder stop early, leaving
+ * the tail tiles of a tileset garbled. Sizing to the real stream end fixes that
+ * region-independently. Returns 0 (let the caller fall back) on a malformed or
+ * non-0x10 stream, or if it runs off the ROM.
+ */
+inline uint32_t lz77_compressed_size(uint32_t rom_offset)
+{
+    if (rom_offset + 4 > Rom.size() || Rom[rom_offset] != 0x10) {
+        return 0;
+    }
+    const uint32_t decompressed_size = Rom[rom_offset + 1] | (Rom[rom_offset + 2] << 8) | (Rom[rom_offset + 3] << 16);
+    uint32_t p = rom_offset + 4;
+    uint32_t produced = 0;
+    while (produced < decompressed_size) {
+        if (p >= Rom.size()) {
+            return 0;
+        }
+        uint8_t flags = Rom[p++];
+        for (int i = 0; i < 8 && produced < decompressed_size; ++i) {
+            if ((flags & 0x80) == 0) {
+                if (p >= Rom.size()) {
+                    return 0;
+                }
+                ++p;
+                ++produced;
+            } else {
+                if (p + 1 >= Rom.size()) {
+                    return 0;
+                }
+                const uint8_t first = Rom[p];
+                p += 2;
+                produced += (first >> 4) + 3;
+            }
+            flags <<= 1;
+        }
+    }
+    return p - rom_offset;
+}
+
 inline bool json_asset_matches_variant(const nlohmann::json& asset, const std::string& variant)
 {
     if (!asset.contains("variants")) {
@@ -1608,7 +1654,18 @@ inline nlohmann::json extract_map_definition_sequence(
             const bool compressed = (size & kMapCompressed) != 0;
             const uint32_t data_offset = config.mapDataOffset + (src & 0x7FFFFFFF);
             const uint32_t data_size = size & 0x7FFFFFFF;
-            const uint32_t file_size = compressed ? infer_asset_size(data_offset, lookup, boundaries, data_size) : data_size;
+            /* For compressed blobs prefer the exact LZ77 stream length. The
+             * boundary-gap fallback (infer_asset_size) is derived from the
+             * USA-baked EmbeddedAssetIndex and mis-sizes EU/JP compressed map
+             * assets (offsets miss the index) — truncating tilesets so the
+             * runtime decoder leaves the tail tiles garbled. */
+            uint32_t file_size;
+            if (compressed) {
+                const uint32_t exact = lz77_compressed_size(data_offset);
+                file_size = exact != 0 ? exact : infer_asset_size(data_offset, lookup, boundaries, data_size);
+            } else {
+                file_size = data_size;
+            }
             const std::filesystem::path relative_path =
                 extract_asset_or_raw(data_offset, file_size, lookup, config.outputRoot, config.runtimeOutputRoot,
                                      generated_prefix, &config);
