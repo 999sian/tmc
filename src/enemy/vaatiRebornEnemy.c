@@ -86,10 +86,13 @@ const Coords gUnk_080D04AC[] = { { .HALF = { 0x58, 0x60 } },
                                  { .HALF = { 0xd8, 0x90 } } };
 const u8 gUnk_080D04C0[] = { 2, 0, 0, 2, 2, 2, 4, 4 };
 const xy gUnk_080D04C8[] = { { 10, -29 }, { -10, -29 }, { 15, -21 }, { -15, -21 } };
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
 const u8 gUnk_080D04D0[] = { -12, -20, -32 };
 #else
 const u8 gUnk_080D04D0[] = { -24, -40, -48 };
+#endif
+#ifdef MULTI_REGION
+const u8 gUnk_080D04D0_eu[] = { -12, -20, -32 };
 #endif
 const u8 gUnk_080D04D3[] = { 0, 1, 0, -1 };
 
@@ -713,7 +716,13 @@ void VaatiRebornEnemyType1PreAction(VaatiRebornEnemyEntity* this) {
     parent = super->parent;
     this->unk_77 = 0;
     if ((super->contactFlags & CONTACT_NOW) != 0) {
-        if (gUnk_080D04D0[((VaatiRebornEnemyEntity*)parent)->unk_86] > super->health) {
+        const u8* vaatiRebornThresholds = gUnk_080D04D0;
+#ifdef MULTI_REGION
+        if (REGION_IS_EU) {
+            vaatiRebornThresholds = gUnk_080D04D0_eu;
+        }
+#endif
+        if (vaatiRebornThresholds[((VaatiRebornEnemyEntity*)parent)->unk_86] > super->health) {
             if (2 < ++((VaatiRebornEnemyEntity*)parent)->unk_86) {
                 COLLISION_OFF(super);
                 parent->action = 7;
