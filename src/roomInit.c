@@ -5576,12 +5576,10 @@ void sub_StateChange_HouseInteriors3_StockwellShop(void) {
         }
         if (!GetInventoryValue(ITEM_BOOMERANG) && !GetInventoryValue(ITEM_MAGIC_BOOMERANG)) {
             LoadRoomEntityList(&gUnk_080F5888);
-#ifndef EU
-        } else {
+        } else if (!REGION_IS_EU) {
             if (!CheckLocalFlag(SHOP00_BOMBBAG)) {
                 LoadRoomEntityList(&gUnk_080F58A8);
             }
-#endif
         }
     }
     if (GetInventoryValue(ITEM_BOW) || CheckGlobalFlag(LV3_CLEAR)) {

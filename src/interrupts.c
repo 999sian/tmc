@@ -293,8 +293,21 @@ static void HandlePlayerLife(Entity* this) {
     if ((gPlayerState.controlMode != CONTROL_ENABLED) || (gMessage.state & 0x7f))
         return;
 
-#ifdef EU
-    if ((gHUD.hideFlags == HUD_HIDE_NONE) && gRoomTransition.frameCount % 90 == 0) {
+    if (REGION_IS_EU) {
+        if ((gHUD.hideFlags == HUD_HIDE_NONE) && gRoomTransition.frameCount % 90 == 0) {
+            threshold = gSave.stats.maxHealth / 4;
+            if (threshold > 24)
+                threshold = 24;
+            if (threshold < 8)
+                threshold = 8;
+
+            if (gSave.stats.health <= threshold) {
+                EnqueueSFX(SFX_LOW_HEALTH);
+            }
+        }
+    } else {
+        // TODO: why does message state affect health drops in US/JP?
+        gRoomVars.needHealthDrop = gMessage.state & MESSAGE_ACTIVE;
         threshold = gSave.stats.maxHealth / 4;
         if (threshold > 24)
             threshold = 24;
@@ -302,25 +315,12 @@ static void HandlePlayerLife(Entity* this) {
             threshold = 8;
 
         if (gSave.stats.health <= threshold) {
-            EnqueueSFX(SFX_LOW_HEALTH);
+            gRoomVars.needHealthDrop = TRUE;
+            if ((gHUD.hideFlags == HUD_HIDE_NONE) && gRoomTransition.frameCount % 90 == 0) {
+                EnqueueSFX(SFX_LOW_HEALTH);
+            }
         }
     }
-#else
-    // TODO: why does message state affect health drops in US/JP?
-    gRoomVars.needHealthDrop = gMessage.state & MESSAGE_ACTIVE;
-    threshold = gSave.stats.maxHealth / 4;
-    if (threshold > 24)
-        threshold = 24;
-    if (threshold < 8)
-        threshold = 8;
-
-    if (gSave.stats.health <= threshold) {
-        gRoomVars.needHealthDrop = TRUE;
-        if ((gHUD.hideFlags == HUD_HIDE_NONE) && gRoomTransition.frameCount % 90 == 0) {
-            EnqueueSFX(SFX_LOW_HEALTH);
-        }
-    }
-#endif
 
     if (gSave.stats.charm == 0) {
         gSave.stats.charmTimer = 0;

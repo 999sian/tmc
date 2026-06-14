@@ -313,6 +313,9 @@ typedef struct {
     u16 gotItemMessageId;
 } struct_080FD964;
 extern const struct_080FD964 gUnk_080FD964[];
+#ifdef MULTI_REGION
+extern const struct_080FD964 gUnk_080FD964_eu[];
+#endif
 
 // Defined in gameUtils.c
 extern void ResetTmpFlags(void);
