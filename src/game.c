@@ -100,14 +100,6 @@ void GameTask(void) {
 
     gRoomTransition.frameCount++;
     sStates[gMain.state]();
-#ifdef DEMO_USA
-    if (gSave.demo_timer != 0) {
-        if (--gSave.demo_timer == 0) {
-            SetFade(FADE_IN_OUT | FADE_BLACK_WHITE | FADE_INSTANT, 2);
-            gMain.state = GAMETASK_EXIT;
-        }
-    }
-#endif
 }
 
 static void GameTask_Transition(void) {
@@ -177,9 +169,9 @@ static void GameMain_InitRoom(void) {
     InitRoom();
     InitUI(FALSE);
     InitializeEntities();
-#ifndef EU
-    sub_0801855C();
-#endif
+    if (!REGION_IS_EU) {
+        sub_0801855C();
+    }
 }
 
 static void GameMain_ChangeRoom(void) {
@@ -218,21 +210,34 @@ static void GameMain_ChangeRoom(void) {
     gMain.substate = GAMEMAIN_UPDATE;
     SetPlayerControl(0);
     gPauseMenuOptions.disabled = 0;
-#if defined(USA) || defined(DEMO_USA)
-    {
+#if defined(PC_PORT)
+    if (REGION_IS_USA) {
         bool32 fire_hint = (gArea.unk28.textBaseIndex != 0xff);
-#ifdef PC_PORT
-        /* Reborn-parity "skip Ezlo hint on resume": gPortJustResumed
-         * is set TRUE by Port_QuickLoad / save-load path; we consume
-         * it here on the first area init after resume. */
         extern bool Port_Reborn_IsEnabled(int feat);
         extern bool Port_Reborn_ConsumeJustResumed(void);
         if (fire_hint && Port_Reborn_IsEnabled(3 /*REBORN_FEAT_NO_EZLO_ON_RESUME*/)
             && Port_Reborn_ConsumeJustResumed()) {
-            gArea.unk28.textBaseIndex = 0xff;  /* mark as consumed */
+            gArea.unk28.textBaseIndex = 0xff;
             fire_hint = false;
         }
-#endif
+        if (fire_hint) {
+            sub_0801855C();
+        }
+        CreateMiscManager();
+        CheckAreaDiscovery();
+    } else if (REGION_IS_EU) {
+        CheckAreaDiscovery();
+        sub_0801855C();
+    } else if (REGION_IS_JP) {
+        CheckAreaDiscovery();
+        if (gArea.unk28.textBaseIndex != 0xff) {
+            sub_0801855C();
+        }
+    }
+#else
+#if defined(USA) || defined(DEMO_USA)
+    {
+        bool32 fire_hint = (gArea.unk28.textBaseIndex != 0xff);
         if (fire_hint) {
             sub_0801855C();
         }
@@ -255,6 +260,8 @@ static void GameMain_ChangeRoom(void) {
     }
     CreateMiscManager();
 #endif
+#endif
+
     if (!gRoomVars.didEnterScrolling) {
         RequestPriorityDuration(NULL, 1);
     }
@@ -378,13 +385,8 @@ static void GameMain_ChangeArea(void) {
 }
 
 static void GameTask_Exit(void) {
-#ifdef DEMO_USA
-    if (!gFadeControl.active)
-        DoSoftReset();
-#else
     SetFade(FADE_IN_OUT | FADE_BLACK_WHITE | FADE_INSTANT, 8);
     SetTask(TASK_GAMEOVER);
-#endif
 }
 
 // TODO End of GameTask?

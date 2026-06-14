@@ -111,7 +111,6 @@ void Subtask_KinstoneMenu(void) {
         KinstoneMenu_Type0, KinstoneMenu_Type1, KinstoneMenu_Type2,
         KinstoneMenu_Type3, KinstoneMenu_Type4, KinstoneMenu_Type5,
     };
-#if !(defined(DEMO_USA) || defined(DEMO_JP))
     gRoomTransition.entity_update_type = 2;
     FlushSprites();
     kinstoneMenuTypes[gMenu.menuType]();
@@ -123,7 +122,6 @@ void Subtask_KinstoneMenu(void) {
     DrawEntities();
     CopyOAM();
     gRoomTransition.entity_update_type = 0;
-#endif
 }
 
 const u8 gUnk_081280DC[] = {

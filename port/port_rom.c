@@ -767,14 +767,14 @@ void Port_RefreshAreaData(u32 area) {
         return;
     }
 
-    if (gRomData == NULL) {
+    if (gRomData == NULL || gRomOffsets == NULL) {
         return;
     }
 
-    gAreaRoomHeaders[area] = (RoomHeader*)ResolveTableOffset(kAreaRoomHeaderOffsets[area]);
-    gAreaTiles[area] = ResolveTableOffset(kAreaTilesOffsets[area]);
+    gAreaRoomHeaders[area] = (RoomHeader*)Port_UnpackRomDataPtr(&gRomData[gRomOffsets->areaRoomHeaders], area);
+    gAreaTiles[area] = Port_UnpackRomDataPtr(&gRomData[gRomOffsets->areaTiles], area);
 
-    tileSetBase = ResolveTableOffset(kAreaTileSetOffsets[area]);
+    tileSetBase = Port_UnpackRomDataPtr(&gRomData[gRomOffsets->areaTileSets], area);
     gAreaTileSets[area] = tileSetBase;
     memset(sTileSetsResolved[area], 0, sizeof(sTileSetsResolved[area]));
     subCount = ScanSubArrayCount(tileSetBase);
@@ -783,7 +783,7 @@ void Port_RefreshAreaData(u32 area) {
         gAreaTileSets[area] = sTileSetsResolved[area];
     }
 
-    roomMapBase = ResolveTableOffset(kAreaRoomMapOffsets[area]);
+    roomMapBase = Port_UnpackRomDataPtr(&gRomData[gRomOffsets->areaRoomMaps], area);
     gAreaRoomMaps[area] = roomMapBase;
     memset(sRoomMapsResolved[area], 0, sizeof(sRoomMapsResolved[area]));
     subCount = ScanSubArrayCount(roomMapBase);
@@ -792,7 +792,7 @@ void Port_RefreshAreaData(u32 area) {
         gAreaRoomMaps[area] = sRoomMapsResolved[area];
     }
 
-    areaTableBase = ResolveTableOffset(kAreaTableOffsets[area]);
+    areaTableBase = Port_UnpackRomDataPtr(&gRomData[gRomOffsets->areaTable], area);
     gAreaTable[area] = areaTableBase;
     memset(sAreaTableResolved[area], 0, sizeof(sAreaTableResolved[area]));
     subCount = ScanSubArrayCount(areaTableBase);
@@ -865,6 +865,28 @@ void* Port_ReadPackedRomPtr(const void* base, u32 index) {
         return NULL;
     raw &= ~1u;
     return ResolveRomPtr(raw);
+}
+
+static void* Port_ResolveAreaFirstLevelTable(u32 tableOffset, u32 area) {
+    if (gRomData == NULL || gRomOffsets == NULL || tableOffset == 0 || area >= AREA_COUNT) {
+        return NULL;
+    }
+    return Port_UnpackRomDataPtr(&gRomData[tableOffset], area);
+}
+
+void* Port_ResolveAreaTileSetFromRom(u32 area, u32 tileSetId) {
+    void* table = Port_ResolveAreaFirstLevelTable(gRomOffsets ? gRomOffsets->areaTileSets : 0, area);
+    return table != NULL ? Port_ReadPackedRomPtr(table, tileSetId) : NULL;
+}
+
+void* Port_ResolveAreaRoomMapFromRom(u32 area, u32 room) {
+    void* table = Port_ResolveAreaFirstLevelTable(gRomOffsets ? gRomOffsets->areaRoomMaps : 0, area);
+    return table != NULL ? Port_ReadPackedRomPtr(table, room) : NULL;
+}
+
+void* Port_ResolveAreaPropertiesFromRom(u32 area, u32 room) {
+    void* table = Port_ResolveAreaFirstLevelTable(gRomOffsets ? gRomOffsets->areaTable : 0, area);
+    return table != NULL ? Port_ReadPackedRomPtr(table, room) : NULL;
 }
 
 /*
@@ -1515,10 +1537,17 @@ void Port_LoadRom(const char* path) {
     }
 
     /* gTranslations — resolved from active ROM */
-    for (int i = 0; i < 7; i++) {
-        gTranslations[i] = Port_UnpackRomDataPtr(&gRomData[R->translations], i);
+    memset(gTranslations, 0, sizeof(void*) * 7);
+    if (REGION_IS_JP) {
+        gTranslations[0] = Port_UnpackRomDataPtr(&gRomData[R->translations], 0);
+    } else if (REGION_IS_USA) {
+        gTranslations[1] = Port_UnpackRomDataPtr(&gRomData[R->translations], 1);
+    } else if (REGION_IS_EU) {
+        for (int i = 1; i <= 5; i++) {
+            gTranslations[i] = Port_UnpackRomDataPtr(&gRomData[R->translations], i);
+        }
     }
-    fprintf(stderr, "gTranslations loaded (7 entries from active ROM).\n");
+    fprintf(stderr, "gTranslations loaded (selectively by region from active ROM).\n");
 
     /* gUnk_08109230 — EWRAM variable pointers */
 #ifdef PC_PORT
@@ -1572,23 +1601,23 @@ void Port_LoadRom(const char* path) {
         /* gAreaRoomHeaders — pointer to RoomHeader array per area.
          * RoomHeader contains only u16 fields (no pointers), so we can
          * point directly into gRomData. */
-        /* gAreaRoomHeaders — resolved from compile-time offset table */
+        /* gAreaRoomHeaders — resolved dynamically from active ROM */
         for (u32 i = 0; i < AREA_COUNT; i++) {
-            gAreaRoomHeaders[i] = (RoomHeader*)ResolveTableOffset(kAreaRoomHeaderOffsets[i]);
+            gAreaRoomHeaders[i] = (RoomHeader*)Port_UnpackRomDataPtr(&gRomData[R->areaRoomHeaders], i);
         }
-        fprintf(stderr, "gAreaRoomHeaders loaded (0x%X entries from compile-time offsets).\n", AREA_COUNT);
+        fprintf(stderr, "gAreaRoomHeaders loaded (0x%X entries from active ROM).\n", AREA_COUNT);
 
-        /* First pass: resolve first-level pointers from compile-time offset tables.
+        /* First pass: resolve first-level pointers from active ROM.
          * NOTE: gAreaTileSets now uses the full R->areaTileSetsCount (0x90) entries,
          *       same as the other tables (AREA_COUNT = 0x90). */
         u32 tsCount = R->areaTileSetsCount < AREA_COUNT ? R->areaTileSetsCount : AREA_COUNT;
         for (u32 i = 0; i < AREA_COUNT; i++) {
             if (i < tsCount) {
-                gAreaTileSets[i] = ResolveTableOffset(kAreaTileSetOffsets[i]);
+                gAreaTileSets[i] = Port_UnpackRomDataPtr(&gRomData[R->areaTileSets], i);
             }
-            gAreaRoomMaps[i] = ResolveTableOffset(kAreaRoomMapOffsets[i]);
-            gAreaTable[i] = ResolveTableOffset(kAreaTableOffsets[i]);
-            gAreaTiles[i] = ResolveTableOffset(kAreaTilesOffsets[i]);
+            gAreaRoomMaps[i] = Port_UnpackRomDataPtr(&gRomData[R->areaRoomMaps], i);
+            gAreaTable[i] = Port_UnpackRomDataPtr(&gRomData[R->areaTable], i);
+            gAreaTiles[i] = Port_UnpackRomDataPtr(&gRomData[R->areaTiles], i);
             /* gExitLists — now compile-time const from src/data/transitions.c, no ROM loading needed */
         }
 

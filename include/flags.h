@@ -673,7 +673,7 @@ typedef enum {
     MHOUSE_15_CAP_1,              /**< Ezlo talks about something being unusual in Link's House, bottom left corner of bedroom */
     SHOP_03_CAP_0,                /**< Ezlo talks about pastries in Hyrule Town Bakery */
     MHOUSE_07_CAP_2,              /**< Ezlo talks about library book in Hyrule Town, Julietta's House */
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
     SHOP00_BOMBBAG,               /**< undocumented */
     CAFE_01_CAP_1,                /**< undocumented */
 #endif
@@ -1036,7 +1036,7 @@ typedef enum {
     KOBITO_DOUKUTU_02_H00,        /**< Obtained Heart Piece in Castor Wilds Southeast Water Cave */
     KOBITO_DOUKUTU_01_T0,         /**< Red (> Kinstone Chest Open in Castor Wilds Southeast Water Cave Left Chest */
     YAMADOUKUTU_04_CAP_0,         /**< Ezlo talks about Helmasaurs in Mount Crenel Base Cave */
-#if !defined(EU) && !defined(JP) && !defined(DEMO_JP)
+#if !defined(EU) && !defined(JP) && !defined(DEMO_JP) || defined(PC_PORT)
     KS_B06,                       /**< undocumented */
     KS_B15,                       /**< undocumented */
     KS_B01,                       /**< undocumented */

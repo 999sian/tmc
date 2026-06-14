@@ -665,17 +665,17 @@ static void sub_0805066C(void) {
 
     if (loadNewPalette) {
         paletteOffset = &gGlobalGfxAndPalettes[gUnk_080FC8DE[gMapDataBottomSpecial.unk2]];
-#ifdef EU
-        LoadPalettes(&paletteOffset[0x11A60], 11, 1);
-        LoadPalettes(&paletteOffset[0x11B60], 12, 1);
-        LoadPalettes(&paletteOffset[0x11C60], 13, 1);
-        LoadPalettes(&paletteOffset[0x11D60], 14, 1);
-#else
-        LoadPalettes(&paletteOffset[0x11AA0], 11, 1);
-        LoadPalettes(&paletteOffset[0x11BA0], 12, 1);
-        LoadPalettes(&paletteOffset[0x11CA0], 13, 1);
-        LoadPalettes(&paletteOffset[0x11DA0], 14, 1);
-#endif
+        if (REGION_IS_EU) {
+            LoadPalettes(&paletteOffset[0x11A60], 11, 1);
+            LoadPalettes(&paletteOffset[0x11B60], 12, 1);
+            LoadPalettes(&paletteOffset[0x11C60], 13, 1);
+            LoadPalettes(&paletteOffset[0x11D60], 14, 1);
+        } else {
+            LoadPalettes(&paletteOffset[0x11AA0], 11, 1);
+            LoadPalettes(&paletteOffset[0x11BA0], 12, 1);
+            LoadPalettes(&paletteOffset[0x11CA0], 13, 1);
+            LoadPalettes(&paletteOffset[0x11DA0], 14, 1);
+        }
     }
 }
 
@@ -1079,38 +1079,38 @@ void sub_08050A64(u32 idx) {
     if (GetInventoryValue(ITEM_EARTH_ELEMENT)) {
         gOamCmd.x = 0xA2;
         gOamCmd.y = 0x36;
-#ifdef EU
-        DrawDirect(0x144, 0x24);
-#else
-        DrawDirect(0x145, 0x24);
-#endif
+        if (REGION_IS_EU) {
+            DrawDirect(0x144, 0x24);
+        } else {
+            DrawDirect(0x145, 0x24);
+        }
     }
     if (GetInventoryValue(ITEM_FIRE_ELEMENT)) {
         gOamCmd.x = 0x96;
         gOamCmd.y = 0x3D;
-#ifdef EU
-        DrawDirect(0x144, 0x22);
-#else
-        DrawDirect(0x145, 0x22);
-#endif
+        if (REGION_IS_EU) {
+            DrawDirect(0x144, 0x22);
+        } else {
+            DrawDirect(0x145, 0x22);
+        }
     }
     if (GetInventoryValue(ITEM_WATER_ELEMENT)) {
         gOamCmd.x = 0xAE;
         gOamCmd.y = 0x3D;
-#ifdef EU
-        DrawDirect(0x144, 0x23);
-#else
-        DrawDirect(0x145, 0x23);
-#endif
+        if (REGION_IS_EU) {
+            DrawDirect(0x144, 0x23);
+        } else {
+            DrawDirect(0x145, 0x23);
+        }
     }
     if (GetInventoryValue(ITEM_WIND_ELEMENT)) {
         gOamCmd.x = 0xA2;
         gOamCmd.y = 0x44;
-#ifdef EU
-        DrawDirect(0x144, 0x21);
-#else
-        DrawDirect(0x145, 0x21);
-#endif
+        if (REGION_IS_EU) {
+            DrawDirect(0x144, 0x21);
+        } else {
+            DrawDirect(0x145, 0x21);
+        }
     }
 }
 

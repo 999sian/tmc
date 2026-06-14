@@ -75,11 +75,16 @@ const u8* const demoPointers[] = { demoPointer1, demoPointer2, demoPointer3 };
 #endif
 #else
 
+#ifdef PC_PORT
+#define sSignatureLong (REGION_IS_JP || REGION_IS_EU ? "AGBZELDA:THE MINISH CAP:ZELDA 3" : "AGBZELDA:THE MINISH CAP:ZELDA 5")
+#else
 #if defined(JP) || defined(EU)
 static const char sSignatureLong[32] = "AGBZELDA:THE MINISH CAP:ZELDA 3";
 #else
 static const char sSignatureLong[32] = "AGBZELDA:THE MINISH CAP:ZELDA 5";
 #endif
+#endif
+
 
 // Save file is untouched
 static const SaveFileStatus sSaveDescInit = { 0xffff, 0xffff, 'TINI' };

@@ -511,6 +511,8 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     # Default-on costs ~150 KB of embedded SPIR-V; no runtime impact
     # for users who stay on the software backend.
     configure_cmd.append("--gpu_renderer=y")
+    # Enable multi-region single-binary support
+    configure_cmd.append("--multi_region=y")
 
     # 0.5.0 release cutover: ship the real widescreen build. Direct xmake
     # developer builds still default to 240 unless explicitly configured, but

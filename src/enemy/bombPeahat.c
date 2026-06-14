@@ -241,6 +241,69 @@ void sub_0802AAC0(BombPeahatEntity* this) {
     }
 }
 
+#if defined(PC_PORT)
+void sub_0802AB40_EU(BombPeahatEntity* this) {
+    sub_0802AC40(this);
+    if (--super->timer == 0) {
+        if (this->unk_7a <= 4) {
+            super->action = 5;
+            super->speed = 0;
+            InitializeAnimation(super, super->type + 1);
+        } else {
+            super->timer = 192;
+            super->subtimer = 4;
+            this->unk_80 ^= 1;
+        }
+    } else if (--super->subtimer == 0) {
+        sub_0802ACDC(this, 4);
+    }
+}
+void sub_0802AB40_USA(BombPeahatEntity* this) {
+    sub_0802AC40(this);
+    switch (this->unk_78) {
+        case 0:
+            if (super->z.HALF.HI) {
+                if (--this->unk_79 == 0) {
+                    this->unk_79 = 4;
+                    super->z.HALF.HI++;
+                }
+            } else {
+                this->unk_78 = 1;
+                this->unk_79 = 0x30;
+                super->direction = sub_08049F84(super, 0);
+            }
+            break;
+        case 1:
+            if (--this->unk_79 == 0) {
+                this->unk_78 = 2;
+                this->unk_79 = 4;
+            } else if ((this->unk_79 & 7) == 0) {
+                super->direction = sub_08049F84(super, 0);
+            }
+            break;
+        case 2:
+            if (-0x30 < super->z.HALF.HI) {
+                if (--this->unk_79 == 0) {
+                    this->unk_79 = 4;
+                    super->z.HALF.HI--;
+                    sub_0802ACDC(this, 4);
+                }
+            } else {
+                super->action = 5;
+                super->speed = 0;
+                InitializeAnimation(super, super->type + 1);
+            }
+            break;
+    }
+}
+void sub_0802AB40(BombPeahatEntity* this) {
+    if (REGION_IS_EU) {
+        sub_0802AB40_EU(this);
+    } else {
+        sub_0802AB40_USA(this);
+    }
+}
+#else
 #ifdef EU
 void sub_0802AB40(BombPeahatEntity* this) {
     sub_0802AC40(this);
@@ -297,6 +360,7 @@ void sub_0802AB40(BombPeahatEntity* this) {
             break;
     }
 }
+#endif
 #endif
 
 void sub_0802AC08(BombPeahatEntity* this) {
@@ -422,6 +486,56 @@ void sub_0802AE24(BombPeahatEntity* this) {
     InitializeAnimation(super, 3);
 }
 
+#if defined(PC_PORT)
+void sub_0802AE68_EU(BombPeahatEntity* this) {
+    Entity* entity = super->parent;
+    if (entity == NULL) {
+        super->action = 3;
+        super->spriteSettings.draw = 1;
+        this->unk_80 = 1;
+    }
+
+    if (((BombPeahatEntity*)entity)->unk_81) {
+        CopyPosition(entity, super);
+        super->z.HALF.HI += 8;
+        super->spriteSettings.draw = 0;
+    } else {
+        super->action = 3;
+        this->unk_80 = 1;
+        super->spriteSettings.draw = 1;
+        if (sub_0802B234(this)) {
+            super->spritePriority.b1 = 3;
+        } else {
+            super->spritePriority.b1 = 0;
+        }
+        GetNextFrame(super);
+    }
+}
+void sub_0802AE68_USA(BombPeahatEntity* this) {
+    BombPeahatEntity* entity = sub_0802B250(this);
+    if (entity == NULL) {
+        super->action = 3;
+        this->unk_80 = 1;
+        sub_0802B264(this);
+    } else {
+        if (entity->unk_81) {
+            CopyPosition(&entity->base, super);
+            super->spriteSettings.draw = 0;
+        } else {
+            super->action = 3;
+            this->unk_80 = 1;
+            sub_0802B264(this);
+        }
+    }
+}
+void sub_0802AE68(BombPeahatEntity* this) {
+    if (REGION_IS_EU) {
+        sub_0802AE68_EU(this);
+    } else {
+        sub_0802AE68_USA(this);
+    }
+}
+#else
 #ifdef EU
 void sub_0802AE68(BombPeahatEntity* this) {
     Entity* entity = super->parent;
@@ -466,6 +580,8 @@ void sub_0802AE68(BombPeahatEntity* this) {
     }
 }
 #endif
+#endif
+
 
 void sub_0802AEBC(BombPeahatEntity* this) {
     gUnk_080CD158[super->subAction](this);
@@ -620,6 +736,63 @@ void sub_0802B1A0(BombPeahatEntity* this) {
     InitializeAnimation(super, 0);
 }
 
+#if defined(PC_PORT)
+void sub_0802B1BC_EU(BombPeahatEntity* this) {
+    Entity* entity;
+
+    if (super->timer != 0) {
+        super->timer--;
+    }
+
+    entity = super->parent;
+    if (entity == NULL) {
+        super->action = 2;
+        super->spriteSettings.draw = 1;
+    }
+
+    if (((BombPeahatEntity*)entity)->unk_81) {
+        CopyPosition(entity, super);
+        super->z.HALF.HI += 8;
+    } else {
+        super->action = 2;
+        super->spriteSettings.draw = 1;
+        if (sub_0802B234(this)) {
+            super->spritePriority.b1 = 3;
+        } else {
+            super->spritePriority.b1 = 0;
+        }
+
+        GetNextFrame(super);
+    }
+}
+void sub_0802B1BC_USA(BombPeahatEntity* this) {
+    BombPeahatEntity* entity;
+
+    if (super->timer != 0) {
+        super->timer--;
+    }
+
+    entity = sub_0802B250(this);
+    if (entity == NULL) {
+        super->action = 2;
+        sub_0802B264(this);
+    } else {
+        if (entity->unk_81) {
+            CopyPosition(&entity->base, super);
+        } else {
+            super->action = 2;
+            sub_0802B264(this);
+        }
+    }
+}
+void sub_0802B1BC(BombPeahatEntity* this) {
+    if (REGION_IS_EU) {
+        sub_0802B1BC_EU(this);
+    } else {
+        sub_0802B1BC_USA(this);
+    }
+}
+#else
 #ifdef EU
 void sub_0802B1BC(BombPeahatEntity* this) {
     Entity* entity;
@@ -671,6 +844,8 @@ void sub_0802B1BC(BombPeahatEntity* this) {
     }
 }
 #endif
+#endif
+
 
 void sub_0802B204(BombPeahatEntity* this) {
     if (BounceUpdate(super, Q_8_8(40.0)) == BOUNCE_INIT_NEXT) {
@@ -690,7 +865,7 @@ bool32 sub_0802B234(BombPeahatEntity* this) {
     return ret;
 }
 
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 BombPeahatEntity* sub_0802B250(BombPeahatEntity* this) {
     BombPeahatEntity* parent = (BombPeahatEntity*)super->parent;
     if ((parent != NULL) && (parent->base.next == NULL)) {

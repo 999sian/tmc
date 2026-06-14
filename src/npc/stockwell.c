@@ -23,7 +23,7 @@
 extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
 #endif
 
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 static const Rect gUnk_0810FDA0 = { 0, 8, 10, 16 };
 #endif
 
@@ -230,7 +230,7 @@ static uint32_t Stockwell_RandoKeyForItem(u32 item) {
             return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_300, 0, 0);
         case ITEM_LARGE_QUIVER:
             return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_600, 0, 0);
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
         case ITEM_BOMBBAG:
             return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_STOCKWELL, RANDO_STOCKWELL_SLOT_EXTRA_600, 0, 0);
 #endif
@@ -277,7 +277,7 @@ void sub_08065370(Entity* this, ScriptExecutionContext* context) {
         case ITEM_LARGE_QUIVER:
             localFlag = SHOP00_YAZUTSU;
             break;
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
         case ITEM_BOMBBAG:
             localFlag = SHOP00_BOMBBAG;
             break;

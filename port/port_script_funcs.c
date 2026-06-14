@@ -433,12 +433,12 @@ extern void sub_0807FBB4();
 extern void sub_0807FBC4();
 extern void sub_0807FBCC();
 extern void sub_0807FBD4();
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 extern void sub_0807FBFC();
 #endif
 /* sub_0807FC24 is USA/demo-only in the decomp (src/script.c) — absent in EU
  * and JP, where the equivalent lives at a different, unnamed address. */
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(PC_PORT)
 extern void sub_0807FC24();
 #endif
 extern void sub_0808692C();
@@ -446,11 +446,11 @@ extern void sub_080869A4();
 extern void sub_080873FC();
 extern void sub_08087424();
 extern void sub_0808747C();
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 extern void sub_0808861C();
 #endif
 /* sub_08088658 (figurine device door-check) is !JP in the decomp — also EU-less. */
-#if !defined(EU) && !defined(JP)
+#if (!defined(EU) && !defined(JP)) || defined(PC_PORT)
 extern void sub_08088658();
 #endif
 extern void sub_0808D280();
@@ -905,10 +905,10 @@ static const ScriptFuncEntry sScriptFuncTable[] = {
     { 0x0807FBC5, (void(*)(void))sub_0807FBC4 },
     { 0x0807FBCD, (void(*)(void))sub_0807FBCC },
     { 0x0807FBD5, (void(*)(void))sub_0807FBD4 },
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
     { 0x0807FBFD, (void(*)(void))sub_0807FBFC },
 #endif
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(PC_PORT)
     { 0x0807FC25, (void(*)(void))sub_0807FC24 },
 #endif
     { 0x0808692D, (void(*)(void))sub_0808692C },
@@ -921,12 +921,13 @@ static const ScriptFuncEntry sScriptFuncTable[] = {
     { 0x08088545, (void(*)(void))FigurineDevice_NewFigurinesMessage },
     { 0x08088575, (void(*)(void))FigurineDevice_TryAgainMessage },
     { 0x080885B1, (void(*)(void))FigurineDevice_LostOrFinishedMessage },
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
     { 0x0808861D, (void(*)(void))sub_0808861C },
 #endif
-#if !defined(EU) && !defined(JP)
+#if (!defined(EU) && !defined(JP)) || defined(PC_PORT)
     { 0x08088659, (void(*)(void))sub_08088658 },
 #endif
+
     { 0x0808D281, (void(*)(void))sub_0808D280 },
     { 0x0808D2CD, (void(*)(void))sub_0808D2CC },
     { 0x08094AE9, (void(*)(void))sub_08094AE8 },

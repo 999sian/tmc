@@ -272,7 +272,7 @@ void GyorgFemale_Action3(GyorgFemaleEntity* this) {
     }
 }
 
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 void GyorgFemale_OnEnterRoom(GyorgFemaleEntity* this) {
     MemClear(&gMapDataBottomSpecial, 0x8000);
     MemClear(&gMapDataTopSpecial, 0x8000);

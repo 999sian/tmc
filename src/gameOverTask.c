@@ -65,15 +65,10 @@ void GameOver_FadeIn(void) {
             gMenu.transitionTimer--;
             if (gMenu.transitionTimer == 0) {
                 switch_state(GAMETASK_MAIN);
-#if defined(DEMO_USA) || defined(DEMO_JP)
-                SoundReq(SONG_VOL_FADE_OUT);
-                SetFade(FADE_IN_OUT | FADE_BLACK_WHITE | FADE_INSTANT, 4);
-#else
                 SetPopupState(0, 0);
                 gScreen.lcd.displayControl |= DISPCNT_BG1_ON | DISPCNT_BG2_ON;
                 gFadeControl.mask = 0x0000ffff;
                 SetFade(FADE_INSTANT, 16);
-#endif
             }
         }
     } else {
@@ -81,11 +76,6 @@ void GameOver_FadeIn(void) {
     }
 }
 void GameOver_TextMove(void) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    if (gFadeControl.active == 0) {
-        DoSoftReset();
-    }
-#else
     s32 temp3;
     u32 temp2;
 
@@ -159,7 +149,6 @@ void GameOver_TextMove(void) {
             switch_state(GAMETASK_EXIT);
             return;
     }
-#endif
 }
 void GameOver_Update(void) {
     switch (gMenu.menuType) {

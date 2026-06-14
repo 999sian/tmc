@@ -34,7 +34,7 @@ static int AnimRangeHasBytes(const void* ptr, size_t count) {
     if (gRomData != NULL && p >= start && p <= end) {
         return count <= (size_t)(end - p);
     }
-    return Port_IsLoadedAssetBytes(ptr, (u32)count);
+    return Port_IsLoadedAssetBytes(ptr, (u32)count) || Port_IsValidHostPtr(ptr);
 }
 
 

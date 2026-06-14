@@ -493,7 +493,7 @@ void sub_080880D8(FigurineDeviceEntity* this) {
 bool32 sub_08088160(FigurineDeviceEntity* this, s32 param_2) {
     bool32 result;
     const struct_080FC3E4* ptr;
-#if !defined(JP) && !defined(EU)
+#if !defined(JP) && !defined(EU) || defined(PC_PORT)
     u8 kinstoneId;
 #endif
 
@@ -516,6 +516,37 @@ bool32 sub_08088160(FigurineDeviceEntity* this, s32 param_2) {
                 break;
             case 0x20:
                 switch (ptr->flag) {
+#if defined(PC_PORT)
+                    case 0:
+                        if (REGION_IS_EU || REGION_IS_JP) {
+                            if (CheckKinstoneFused(KINSTONE_20) || CheckKinstoneFused(KINSTONE_10) ||
+                                CheckKinstoneFused(KINSTONE_19))
+                                result = TRUE;
+                        } else {
+                            if (CheckKinstoneFused(KINSTONE_20) || CheckKinstoneFused(KINSTONE_10)) {
+                                result = TRUE;
+                                break;
+                            }
+                            kinstoneId = KINSTONE_19;
+                            goto backward_tail_merge;
+                        }
+                        break;
+                    case 1:
+                        if (REGION_IS_EU || REGION_IS_JP) {
+                            if (this->unk_7c >= 5 && CheckKinstoneFused(KINSTONE_28))
+                                result = TRUE;
+                        } else {
+                            if (this->unk_7c >= 5) {
+                                kinstoneId = KINSTONE_28;
+                                goto backward_tail_merge;
+                            }
+                        }
+                        break;
+                    backward_tail_merge:
+                        if (CheckKinstoneFused(kinstoneId))
+                            result = TRUE;
+                        break;
+#else
 #if defined(JP) || defined(EU)
                     case 0:
                         if (CheckKinstoneFused(KINSTONE_20) || CheckKinstoneFused(KINSTONE_10) ||
@@ -544,6 +575,7 @@ bool32 sub_08088160(FigurineDeviceEntity* this, s32 param_2) {
                         }
                         break;
 #endif
+#endif
                     case 2:
                         if (CheckKinstoneFused(KINSTONE_54) || CheckKinstoneFused(KINSTONE_56) ||
                             CheckKinstoneFused(KINSTONE_3D))
@@ -559,12 +591,15 @@ bool32 sub_08088160(FigurineDeviceEntity* this, s32 param_2) {
                             CheckKinstoneFused(KINSTONE_3C))
                             result = TRUE;
                         break;
-#if !defined(JP) && !defined(EU)
+#if !defined(JP) && !defined(EU) || defined(PC_PORT)
                     case 5:
-                        if (this->unk_7c >= 2 && CheckGlobalFlag(MACHI_MACHIHOKORI))
-                            result = TRUE;
+                        if (!REGION_IS_JP && !REGION_IS_EU) {
+                            if (this->unk_7c >= 2 && CheckGlobalFlag(MACHI_MACHIHOKORI))
+                                result = TRUE;
+                        }
                         break;
 #endif
+
                 }
         }
     }
@@ -822,21 +857,17 @@ void FigurineDevice_LostOrFinishedMessage(void) {
     ClearRoomFlag(7);
 }
 
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 void sub_0808861C(FigurineDeviceEntity* this, ScriptExecutionContext* context) {
     // If I understand this correctly then it checks if the player is at the lever
     context->condition = CheckPlayerInRegion(168, 84, 12, 8);
-#ifdef JP
-    if ((gPlayerEntity.base.animationState != 0)) {
-#else
-    if ((gPlayerEntity.base.animationState != 0) || (gPlayerEntity.base.z.HALF.HI != 0)) {
-#endif
+    if ((gPlayerEntity.base.animationState != 0) || (!REGION_IS_JP && (gPlayerEntity.base.z.HALF.HI != 0))) {
         context->condition = 0;
     }
     gActiveScriptInfo.flags |= 1;
 }
 
-#if !defined(JP)
+#if !defined(JP) || defined(PC_PORT)
 void sub_08088658(FigurineDeviceEntity* this, ScriptExecutionContext* context) {
     context->condition = CheckPlayerInRegion(120, 120, 16, 8); // And this is if the player is at the door
     if (gPlayerEntity.base.z.HALF.HI != 0) {
@@ -845,5 +876,5 @@ void sub_08088658(FigurineDeviceEntity* this, ScriptExecutionContext* context) {
     gActiveScriptInfo.flags |= 1;
 }
 #endif
-
 #endif
+

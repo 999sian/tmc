@@ -451,10 +451,31 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
     if (gRoomVars.randomDropsDisabled != TRUE) {
         ptr2 = &gDroptableModifiers[DROPTABLE_NONE];
         ptr4 = NULL;
+#if defined(PC_PORT)
+        if (REGION_IS_EU) {
+            if (r3 == 24) {
+                ptr2 = &gObjectDroptables[8];
+                ptr4 = &gRoomVars.currentAreaDroptable;
+                r3 = 0;
+            } else if (r3 == 25) {
+                r3 = 0;
+            }
+        } else {
+            if (r3 == 24 || r3 == 25) {
+                r0 = gRoomVars.needHealthDrop;
+                ptr4 = &gUnk_0800191C[0];
+                if (r0) {
+                    ptr4++;
+                }
+                r3 = 0;
+            }
+        }
+#endif
         switch (r3) {
             case 1 ... 12:
                 ptr4 = &gEnemyDroptables[r3];
                 break;
+#ifndef PC_PORT
 #ifndef EU
             case 24:
             case 25:
@@ -473,6 +494,13 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
             case 15:
                 ptr4 = &gRoomVars.currentAreaDroptable;
                 break;
+#else
+            case 16 ... 23:
+                ptr2 = &gObjectDroptables[r3 - 16];
+            case 15:
+                ptr4 = &gRoomVars.currentAreaDroptable;
+                break;
+#endif
             case 0:
             default:
                 break;

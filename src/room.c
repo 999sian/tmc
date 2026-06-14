@@ -285,7 +285,7 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
         areaTable = gAreaTable[area];
         ptr = (const u8*)areaTable;
         if (areaTable == NULL) {
-            return NULL;
+            return (void**)Port_ResolveAreaPropertiesFromRom(area, room);
         }
     }
 
@@ -298,12 +298,12 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
             areaTable = gAreaTable[area];
             ptr = (const u8*)areaTable;
             if (areaTable == NULL) {
-                return NULL;
+                return (void**)Port_ResolveAreaPropertiesFromRom(area, room);
             }
             inRom = (gRomData != NULL && ptr >= gRomData && ptr < gRomData + gRomSize);
             readable = Port_IsAreaTablePtrReadable(area, areaTable);
             if (!readable) {
-                return NULL;
+                return (void**)Port_ResolveAreaPropertiesFromRom(area, room);
             }
         }
         if (inRom) {
@@ -314,7 +314,7 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
 
     {
         void** result = areaTable[room];
-        return result;
+        return result != NULL ? result : (void**)Port_ResolveAreaPropertiesFromRom(area, room);
     }
 }
 
@@ -333,22 +333,29 @@ void sub_0804AFB0(void** properties) {
     u32 i;
 
     gCurrentRoomProperties = properties;
+    if (properties == NULL) {
+        for (i = 0; i < 8; ++i) {
+            gRoomVars.properties[i] = NULL;
+        }
+        return;
+    }
+
     for (i = 0; i < 8; ++i) {
 #ifdef PC_PORT
         void* val = NULL;
         if (i >= 4) {
-            /* Properties 4..7 are usually room callback functions (init / enter
-             * / update / exit). The port keeps those in a hand-built function
-             * table because raw GBA function pointers can't survive ROM
-             * relocation. But some rooms put DATA pointers here too — e.g.
-             * Minish Forest lily pads index a rail array via type2 in 4..7.
-             * Try the func table first, then fall back to a packed ROM read
-             * so non-callback rooms still get their data. */
+            /* Properties 4..7 are usually room callback functions (init
+             * / enter / update / exit). The port keeps those in a
+             * hand-built function table because raw GBA function pointers
+             * cannot survive ROM relocation. But some rooms put DATA
+             * pointers here too — e.g. Minish Forest lily pads index a rail
+             * array via type2 in 4..7. Try the function table first, then
+             * fall back to packed ROM reads so non-callback rooms still get
+             * data. */
             val = Port_GetRoomFuncProp(gRoomControls.area, gRoomControls.room, i);
         }
         if (val == NULL) {
-            val = IsRoomPropertyListInRom(properties) ? Port_ReadPackedRomPtr(properties, i)
-                                                      : properties[i];
+            val = IsRoomPropertyListInRom(properties) ? Port_ReadPackedRomPtr(properties, i) : properties[i];
         }
         gRoomVars.properties[i] = val;
 #else

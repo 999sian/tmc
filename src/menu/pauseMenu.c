@@ -422,12 +422,8 @@ void PauseMenu_ItemMenu_Update(void) {
         switch (gInput.newKeys) {
             case A_BUTTON:
                 if (menuSlot == MENU_SLOT_SAVE_BUTTON) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-                    SoundReq(SFX_MENU_ERROR);
-#else
                     sub_080A4E84(0xb);
                     SoundReq(SFX_TEXTBOX_SELECT);
-#endif
                     break;
                 }
             case B_BUTTON:

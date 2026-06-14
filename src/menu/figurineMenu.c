@@ -95,7 +95,6 @@ void Subtask_FigurineMenu(void) {
         FigurineMenu1_Type2,
         FigurineMenu1_ExitMenu,
     };
-#if !(defined(DEMO_USA) || defined(DEMO_JP))
     FlushSprites();
     if (gUI.field_0x3 == 0xff) {
         figurineMenu0_Types[gMenu.menuType]();
@@ -109,7 +108,6 @@ void Subtask_FigurineMenu(void) {
     FigurineMenu_080A4978();
     CopyOAM();
     sub_080A4B44();
-#endif
 }
 
 void FigurineMenu_080A4608(void) {

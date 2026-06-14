@@ -20,11 +20,17 @@ typedef struct {
     /*0x6c*/ s16 unk_6c;
 } PhonographEntity;
 
+#if defined(PC_PORT)
+void sub_0806EABC_EU(PhonographEntity* this);
+void sub_0806EABC_USA(Entity* this, u32 param);
+#else
 #ifdef EU
 void sub_0806EABC(PhonographEntity* this);
 #else
 void sub_0806EABC(Entity* this, u32 param);
 #endif
+#endif
+
 
 void Phonograph(PhonographEntity* this) {
     if (super->action == 0) {
@@ -48,6 +54,163 @@ static const s16 gUnk_081145E4[] = {
     0x2b, -0x1, 0x2c, -0x1,  0x30, -0x1,  0x31, -0x1,   0x32, -0x1, 0x34, -0x1, 0x36, -0x1,  0x3b, -0x1
 };
 
+#if defined(PC_PORT)
+void sub_0806E964_EU(PhonographEntity* this, ScriptExecutionContext* context) {
+    if (gInput.newKeys & B_BUTTON) {
+        sub_08050384();
+        return;
+    }
+
+    if (context->unk_18 == 0) {
+        context->unk_18++;
+        this->unk_6c = 0;
+        sub_0806EABC_EU(this);
+    }
+
+    if (gInput.menuScrollKeys & (DPAD_UP | DPAD_DOWN)) {
+        s32 val2, val3;
+        s32 val = this->unk_68;
+        if (gInput.menuScrollKeys & DPAD_UP) {
+            val++;
+        } else {
+            val--;
+        }
+
+        if (val <= 0) {
+            val = 1;
+        }
+
+        val2 = 0x1c;
+        if (CheckGlobalFlag(GAMECLEAR)) {
+            val2 = 0x34;
+        }
+
+        if (val > val2) {
+            val = val2;
+        }
+
+        this->unk_68 = val;
+        sub_0806EABC_EU(this);
+        if (this->unk_6c > 0) {
+            this->unk_6c--;
+        }
+    }
+
+    if (gInput.newKeys & A_BUTTON) {
+        if (this->unk_68 != this->unk_6a || this->unk_6c == 0) {
+            const s16* ptr2 = gUnk_081145E4;
+            s32 field_0x68;
+            SoundReq(*(ptr2 + this->unk_68 * 2));
+            this->unk_6a = this->unk_68;
+            field_0x68 = this->unk_68 * 4;
+            ptr2++;
+            this->unk_6c = *(s16*)((((s32)ptr2 + field_0x68)));
+        } else {
+            SoundReq(SONG_STOP_ALL);
+            this->unk_6a = 0;
+        }
+    }
+
+    if (this->unk_6c > 0) {
+        if (--this->unk_6c <= 0) {
+            this->unk_6a = 0;
+            this->unk_6c = 0;
+        }
+    }
+
+    gActiveScriptInfo.commandSize = 0;
+}
+
+void sub_0806E964_USA(PhonographEntity* this, ScriptExecutionContext* context) {
+    s32 val, val2, val3;
+    if (gInput.newKeys & B_BUTTON) {
+        sub_08050384();
+        return;
+    }
+
+    if (context->unk_18 == 0) {
+        context->unk_18++;
+        this->unk_6c = 0;
+        sub_0806EABC_USA(super, this->unk_68);
+    }
+
+    val2 = 0x1c;
+    if (CheckGlobalFlag(GAMECLEAR)) {
+        val2 = 0x34;
+    }
+    val = this->unk_68;
+    if (gInput.newKeys & (DPAD_UP | DPAD_DOWN)) {
+        if (gInput.newKeys & DPAD_UP) {
+            val++;
+        } else {
+            val--;
+        }
+
+        if (val <= 0) {
+            val = val2;
+        }
+
+        if (val > val2) {
+            val = 1;
+        }
+    } else if (gInput.menuScrollKeys & (DPAD_UP | DPAD_DOWN)) {
+        if (gInput.menuScrollKeys & DPAD_UP) {
+            val++;
+        } else {
+            val--;
+        }
+
+        if (val <= 0) {
+            val = 1;
+        }
+
+        if (val > val2) {
+            val = val2;
+        }
+    }
+
+    if (val != this->unk_68) {
+        sub_0806EABC_USA(super, val);
+        if (this->unk_6c > 0) {
+            this->unk_6c--;
+        }
+    }
+
+    this->unk_68 = val;
+
+    if (gInput.newKeys & A_BUTTON) {
+        if (this->unk_68 != this->unk_6a || this->unk_6c == 0) {
+            const s16* ptr2 = gUnk_081145E4;
+            s32 field_0x68;
+            SoundReq(*(ptr2 + this->unk_68 * 2));
+            this->unk_6a = this->unk_68;
+            field_0x68 = this->unk_68 * 4;
+            ptr2++;
+            this->unk_6c = *(s16*)((((s32)ptr2 + field_0x68)));
+        } else {
+            SoundReq(SONG_STOP_ALL);
+            this->unk_6a = 0;
+        }
+    }
+
+    if (this->unk_6c > 0) {
+        if (--this->unk_6c <= 0) {
+            this->unk_6a = 0;
+            this->unk_6c = 0;
+        }
+    }
+
+    gActiveScriptInfo.commandSize = 0;
+}
+
+void sub_0806E964(PhonographEntity* this, ScriptExecutionContext* context) {
+    if (REGION_IS_EU) {
+        sub_0806E964_EU(this, context);
+    } else {
+        sub_0806E964_USA(this, context);
+    }
+}
+#else
 #ifdef EU
 void sub_0806E964(PhonographEntity* this, ScriptExecutionContext* context) {
     if (gInput.newKeys & B_BUTTON) {
@@ -197,11 +360,26 @@ void sub_0806E964(PhonographEntity* this, ScriptExecutionContext* context) {
     gActiveScriptInfo.commandSize = 0;
 }
 #endif
+#endif
 
 const static Font gUnk_081146B8 = {
     (u16*)0x2034fce, (void*)0x0600d000, (void*)0x2000d00, 0, 0xf080, 0xd0, 1, 1, 1, 1, 0, 0, 0, 1, 0
 };
 
+#if defined(PC_PORT)
+void sub_0806EABC_EU(PhonographEntity* this) {
+    sub_08050384();
+    sub_08057044(this->unk_68, gUnk_020227E8, 0x202020);
+    ShowTextBox(0x3302, &gUnk_081146B8);
+    gScreen.bg0.updated = 1;
+}
+void sub_0806EABC_USA(Entity* this, u32 param) {
+    sub_08050384();
+    sub_08057044(param, &gUnk_020227E8[0], 0x202020);
+    ShowTextBox(0x3302, &gUnk_081146B8);
+    gScreen.bg0.updated = 1;
+}
+#else
 #ifdef EU
 void sub_0806EABC(PhonographEntity* this) {
     sub_08050384();
@@ -217,3 +395,5 @@ void sub_0806EABC(Entity* this, u32 param) {
     gScreen.bg0.updated = 1;
 }
 #endif
+#endif
+
