@@ -40,7 +40,7 @@ const ProjectileDefinition gProjectileDefinitions[] = {
     { 32827, 1, { &gHitbox_0 }, SPRITE_SPECIALFX, 0, { 0, 1, 1, 1 }, 65, 0, 74, 3 },
 #else
     { 32827, 1, { &gHitbox_3 }, SPRITE_SPECIALFX, 0, { 0, 1, 1, 1 }, 65, 0, 74, 3 },
-#endif
+#endif // gProjectileDefinitions[12]: JP/EU use gHitbox_0; consumer overrides via gProjectileDefinition_12_alt
     { 518, 1, { &gHitbox_0 }, SPRITE_ARROWPROJECTILE, 0, { 0, 1, 1, 1 }, 66, 768, 26, 11 },
     MULTI_FORM(gProjectileDefinition_E),
     MULTI_FORM(gProjectileDefinition_F),
@@ -57,7 +57,7 @@ const ProjectileDefinition gProjectileDefinitions[] = {
     { 401, 112, { &gHitbox_1 }, 488, 0, { 1, 1, 1, 1 }, 65, 640, 162, 11 }, // TODO sprite index too high
 #else
     { 401, 112, { &gHitbox_1 }, 489, 0, { 1, 1, 1, 1 }, 65, 640, 162, 11 }, // TODO sprite index too high
-#endif
+#endif // gProjectileDefinitions[25]: EU uses sprite 488; consumer overrides via gProjectileDefinition_25_eu
     { 175, 0, { &gHitbox_0 }, SPRITE_GLEEROK_1, 0, { 3, 1, 1, 0 }, 66, 512, 45, 11 },
     MULTI_FORM(gProjectileDefinition_1B),
     { 404, 0, { &gHitbox_0 }, SPRITE_V1EYELASER, 0, { 0, 1, 1, 0 }, 66, 512, 42, 11 },
@@ -70,6 +70,20 @@ const ProjectileDefinition gProjectileDefinitions[] = {
     { 493, 0, { &gHitbox_22 }, SPRITE_GYORGMALEENERGYPROJECTILE, 0, { 0, 1, 1, 1 }, 66, 256, 31, 11 },
     { 418, 1, { &gHitbox_22 }, SPRITE_WRATHEYE, 0, { 1, 1, 1, 1 }, 66, 512, 55, 11 },
 };
+
+#ifdef MULTI_REGION
+// Runtime-override twins for single entries of gProjectileDefinitions that diverge
+// by region. Baseline (USA) stays in the canonical table; consumer in projectileUtils.c
+// redirects to these when the active ROM region matches the original guard.
+// gProjectileDefinitions[12]: JP/EU variant (gHitbox_0 instead of gHitbox_3).
+const ProjectileDefinition gProjectileDefinition_12_alt[] = {
+    { 32827, 1, { &gHitbox_0 }, SPRITE_SPECIALFX, 0, { 0, 1, 1, 1 }, 65, 0, 74, 3 },
+};
+// gProjectileDefinitions[25]: EU variant (sprite 488 instead of 489).
+const ProjectileDefinition gProjectileDefinition_25_eu[] = {
+    { 401, 112, { &gHitbox_1 }, 488, 0, { 1, 1, 1, 1 }, 65, 640, 162, 11 },
+};
+#endif
 
 const ProjectileDefinition gProjectileDefinition_0[] = {
     { 0, 0, { &gHitbox_0 }, 0, 2, { 0, 1, 0, 1 }, 4, 0, 76, 11 },
@@ -127,6 +141,14 @@ const ProjectileDefinition gProjectileDefinition_14[] = {
     { 387, 20, { (Hitbox*)&gUnk_080FD43C }, 487, 4, { 0, 1, 1, 1 }, 65, 640, 88, 5 },
 }; // TODO sprite index too high
 #endif
+#ifdef MULTI_REGION
+// EU twin of gProjectileDefinition_14 (sprite 486 instead of 487); consumer selects
+// this when an EU ROM is active.
+const ProjectileDefinition gProjectileDefinition_14_eu[] = {
+    { 387, 20, { &gHitbox_2 }, 486, 0, { 0, 1, 1, 1 }, 65, 640, 110, 12 },
+    { 387, 20, { (Hitbox*)&gUnk_080FD43C }, 486, 4, { 0, 1, 1, 1 }, 65, 640, 88, 5 },
+};
+#endif
 const ProjectileDefinition gProjectileDefinition_1B[] = {
     { 431, 0, { &gHitbox_1 }, SPRITE_CANNONBALLPROJECTILE, 0, { 1, 1, 1, 0 }, 65, 512, 158, 11 },
     { 432, 0, { &gHitbox_1 }, SPRITE_CANNONBALLPROJECTILE, 0, { 1, 1, 1, 0 }, 65, 512, 158, 11 },
@@ -171,6 +193,14 @@ const ProjectileDefinition gProjectileDefinition_22[] = {
     { 492, 372, { &gHitbox_1 }, 498, 0, { 0, 0, 1, 1 }, 65, 640, 29, 11 },
     { 491, 338, { (Hitbox*)&gHitbox_20 }, 497, 0, { 0, 1, 1, 1 }, 65, 640, 29, 11 },
 }; // TODO sprite index too high
+#endif
+#ifdef MULTI_REGION
+// EU twin of gProjectileDefinition_22 (sprites 497/496 instead of 498/497); consumer
+// selects this when an EU ROM is active.
+const ProjectileDefinition gProjectileDefinition_22_eu[] = {
+    { 492, 372, { &gHitbox_1 }, 497, 0, { 0, 0, 1, 1 }, 65, 640, 29, 11 },
+    { 491, 338, { (Hitbox*)&gHitbox_20 }, 496, 0, { 0, 1, 1, 1 }, 65, 640, 29, 11 },
+};
 #endif
 
 // TODO

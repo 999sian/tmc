@@ -169,8 +169,15 @@ void GraveyardKey_Action3(Entity* this, const struct_gUnk_08123FB0* param_2) {
             }
 #endif
             CreateItemEntity(item, subtype, 0);
-            if (param_2->flag) {
-                SetFlag(param_2->flag);
+            u16 flag = param_2->flag;
+#ifdef MULTI_REGION
+            /* Row index 1 (heart piece) flag diverges: USA 0xd0, JP/EU 0xCD. */
+            if (this->type == 1 && (REGION_IS_JP || REGION_IS_EU)) {
+                flag = 0xCD;
+            }
+#endif
+            if (flag) {
+                SetFlag(flag);
             }
             DeleteThisEntity();
         }

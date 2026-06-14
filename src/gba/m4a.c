@@ -372,7 +372,7 @@ void m4aSongNumStart(u16 n) {
     const MusicPlayer* mplayTable = gMusicPlayers;
     const Song* songTable = gSongTable;
     const Song* song = &songTable[n];
-    const MusicPlayer* mplay = &mplayTable[song->musicPlayerIndex];
+    const MusicPlayer* mplay = &mplayTable[SONG_MPLAYER_INDEX(n)];
 
     MPlayStart(mplay->info, song->header);
 }
@@ -381,7 +381,7 @@ void m4aSongNumStartOrChange(u16 n) {
     const MusicPlayer* mplayTable = gMusicPlayers;
     const Song* songTable = gSongTable;
     const Song* song = &songTable[n];
-    const MusicPlayer* mplay = &mplayTable[song->musicPlayerIndex];
+    const MusicPlayer* mplay = &mplayTable[SONG_MPLAYER_INDEX(n)];
 
     if (mplay->info->songHeader != song->header) {
         MPlayStart(mplay->info, song->header);
@@ -396,7 +396,7 @@ void m4aSongNumStartOrContinue(u16 n) {
     const MusicPlayer* mplayTable = gMusicPlayers;
     const Song* songTable = gSongTable;
     const Song* song = &songTable[n];
-    const MusicPlayer* mplay = &mplayTable[song->musicPlayerIndex];
+    const MusicPlayer* mplay = &mplayTable[SONG_MPLAYER_INDEX(n)];
 
     if (mplay->info->songHeader != song->header)
         MPlayStart(mplay->info, song->header);
@@ -410,7 +410,7 @@ void m4aSongNumStop(u16 n) {
     const MusicPlayer* mplayTable = gMusicPlayers;
     const Song* songTable = gSongTable;
     const Song* song = &songTable[n];
-    const MusicPlayer* mplay = &mplayTable[song->musicPlayerIndex];
+    const MusicPlayer* mplay = &mplayTable[SONG_MPLAYER_INDEX(n)];
 
     if (mplay->info->songHeader == song->header)
         MPlayStop(mplay->info);
@@ -420,7 +420,7 @@ void m4aSongNumContinue(u16 n) {
     const MusicPlayer* mplayTable = gMusicPlayers;
     const Song* songTable = gSongTable;
     const Song* song = &songTable[n];
-    const MusicPlayer* mplay = &mplayTable[song->musicPlayerIndex];
+    const MusicPlayer* mplay = &mplayTable[SONG_MPLAYER_INDEX(n)];
 
     if (mplay->info->songHeader == song->header)
         MPlayContinue(mplay->info);

@@ -41,13 +41,19 @@ void sub_08069FBC(DogEntity*);
 void sub_0806A080(DogEntity*);
 
 const SpriteLoadData gUnk_08111D58[] = {
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
     { 82, 67, 4 }, { 7250, 67, 4 }, { 0, 0, 0 }, { 64, 69, 4 }, { 7232, 69, 4 }, { 0, 0, 0 },
 #else
     { 82, 67, 4 }, { 7250, 67, 4 }, { 0, 0, 0 }, { 1, 69, 4 },  { 7169, 69, 4 }, { 0, 0, 0 },
 #endif
     { 4, 68, 4 },  { 7172, 68, 4 }, { 0, 0, 0 }, { 83, 69, 4 }, { 7251, 69, 4 }, { 0, 0, 0 },
 };
+#ifdef MULTI_REGION
+const SpriteLoadData gUnk_08111D58_eu[] = {
+    { 82, 67, 4 }, { 7250, 67, 4 }, { 0, 0, 0 }, { 64, 69, 4 }, { 7232, 69, 4 }, { 0, 0, 0 },
+    { 4, 68, 4 },  { 7172, 68, 4 }, { 0, 0, 0 }, { 83, 69, 4 }, { 7251, 69, 4 }, { 0, 0, 0 },
+};
+#endif
 
 void sub_08069B44(DogEntity*);
 void sub_08069C40(DogEntity*);
@@ -406,7 +412,13 @@ void sub_08069EE8(DogEntity* this) {
 }
 
 bool32 sub_08069EF0(DogEntity* this) {
-    if (!LoadExtraSpriteData(super, &gUnk_08111D58[super->type * 3])) {
+    const SpriteLoadData* sel = gUnk_08111D58;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        sel = gUnk_08111D58_eu;
+    }
+#endif
+    if (!LoadExtraSpriteData(super, &sel[super->type * 3])) {
         return FALSE;
     }
     super->action = 1;
