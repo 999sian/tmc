@@ -21,9 +21,7 @@
 #include "color.h"
 #include "fade.h"
 #include "projectile.h"
-#if defined USA || defined DEMO_USA || defined DEMO_JP
 #include "save.h"
-#endif
 
 void VaatiWrathType0PreAction(VaatiWrathEntity*);
 u32 sub_08041FCC(VaatiWrathEntity*);
@@ -142,9 +140,9 @@ void VaatiWrath(VaatiWrathEntity* this) {
 }
 
 void VaatiWrathType0(VaatiWrathEntity* this) {
-#if !(defined EU || defined JP)
-    VaatiWrathType0PreAction(this);
-#endif
+    if (!(REGION_IS_EU || REGION_IS_JP)) {
+        VaatiWrathType0PreAction(this);
+    }
     vaatiWrathType0Actions[super->action](this);
 }
 
@@ -1092,7 +1090,7 @@ void sub_0804235C(VaatiWrathEntity* this) {
     InitializeAnimation(((VaatiWrathHeapStruct*)super->myHeap)->type3, 0x1b);
 }
 
-#if defined USA || defined DEMO_USA || defined DEMO_JP
+#if defined USA || defined DEMO_USA || defined DEMO_JP || defined(PC_PORT)
 void VaatiWrathType0PreAction(VaatiWrathEntity* this) {
     int temp;
     if ((gRoomTransition.field_0x38 & 2) == 0) {

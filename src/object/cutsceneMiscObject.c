@@ -455,14 +455,17 @@ void CutsceneMiscObject_Type6(CutsceneMiscObjectEntity* this) {
                 }
             }
             break;
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
         case 4:
-            if (!--super->timer) {
-                super->action = 5;
-                SetPlayerControl(1);
+            if (!REGION_IS_EU) {
+                if (!--super->timer) {
+                    super->action = 5;
+                    SetPlayerControl(1);
+                }
             }
             break;
 #endif
+
     }
 }
 

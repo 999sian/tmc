@@ -1460,9 +1460,7 @@ void UpdateVisibleFusionMapMarkers(void) {
         if (CheckKinstoneFused(kinstoneId) && !CheckFusionMapMarkerDisabled(kinstoneId)) {
             u32 worldEventId = gKinstoneWorldEvents[kinstoneId].worldEventId;
             const WorldEvent* s = &gWorldEvents[worldEventId];
-#if !defined EU && !defined JP
             u32 flag = s->flag;
-#endif
             u32 tmp;
             switch (s->condition) {
                 case CND_0:
@@ -1480,7 +1478,7 @@ void UpdateVisibleFusionMapMarkers(void) {
                 case CND_4:
                     tmp = 0x11;
                     break;
-#if !defined EU && !defined JP
+#if (!defined(EU) && !defined(JP)) || defined(PC_PORT)
                 // Special conditions for BEANDEMO_00 to BEANDEMO_04
                 case CND_5:
                     tmp = LOCAL_BANK_3;
@@ -1510,11 +1508,7 @@ void UpdateVisibleFusionMapMarkers(void) {
 #endif
 #endif
             }
-#if !defined EU && !defined JP
-            if (sub_0807CB24(tmp, flag)) {
-#else
-            if (sub_0807CB24(tmp, s->flag)) {
-#endif
+            if (sub_0807CB24(tmp, (REGION_IS_EU || REGION_IS_JP) ? s->flag : flag)) {
                 WriteBit(&gSave.kinstones.fusionUnmarked, kinstoneId);
             }
         }

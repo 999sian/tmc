@@ -570,9 +570,9 @@ u16 RunTextCommand(TextRender* this) {
             case 0:
                 if (gUnk_02000040.unk_00 == 1) {
                     this->renderStatus = RENDER_ENQUIRY;
-#ifndef EU
-                    SwitchChoice(0, 0);
-#endif
+                    if (!REGION_IS_EU) {
+                        SwitchChoice(0, 0);
+                    }
                 } else {
                     this->renderStatus = RENDER_DIE;
                 }
@@ -753,21 +753,19 @@ void TextDispEnquiry(TextRender* this) {
         doSwitch = 1;
     }
     if (doSwitch) {
-#ifdef EU
-        u32 previousUnk6 = gTextRender._50.unk6;
-        gTextRender._50.unk6 = gMessageChoices.unk_08[lastChoice];
-        sub_0805F8E4(0, &this->_50);
-        gTextRender._50.unk6 = gMessageChoices.unk_08[choiceIdx];
-        sub_0805F8E4(1, &this->_50);
-        gTextRender._50.unk6 = previousUnk6;
-        gTextRender.updateDraw = 1;
-#else
-        SwitchChoice(choiceIdx, lastChoice);
-#endif
+        if (REGION_IS_EU) {
+            u32 previousUnk6 = gTextRender._50.unk6;
+            gTextRender._50.unk6 = gMessageChoices.unk_08[lastChoice];
+            sub_0805F8E4(0, &this->_50);
+            gTextRender._50.unk6 = gMessageChoices.unk_08[choiceIdx];
+            sub_0805F8E4(1, &this->_50);
+            gTextRender._50.unk6 = previousUnk6;
+            gTextRender.updateDraw = 1;
+        } else {
+            SwitchChoice(choiceIdx, lastChoice);
+        }
     }
 }
-
-#ifndef EU
 
 static void SwitchChoice(u32 to, u32 from) {
     u16 t;
@@ -779,8 +777,6 @@ static void SwitchChoice(u32 to, u32 from) {
     gTextRender._50.unk6 = t;
     gTextRender.updateDraw = 1;
 }
-
-#endif
 
 static void TextDispWait(TextRender* this) {
     gMessage.unk = 0;

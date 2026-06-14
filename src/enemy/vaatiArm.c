@@ -584,15 +584,15 @@ static void sub_08042C34(VaatiArmEntity* this) {
         if ((gRoomControls.origin_y + 0x20) > y) {
             y = gRoomControls.origin_y + 0x20;
         }
-#if defined EU || defined JP || defined DEMO_JP
-        if (gRoomControls.origin_y + gRoomControls.height + -0x20 < y) {
-            y = gRoomControls.origin_y + gRoomControls.height + -0x20;
+        if (REGION_IS_EU || REGION_IS_JP) {
+            if (gRoomControls.origin_y + gRoomControls.height + -0x20 < y) {
+                y = gRoomControls.origin_y + gRoomControls.height + -0x20;
+            }
+        } else {
+            if (gRoomControls.origin_y + gRoomControls.height + -0x40 < y) {
+                y = gRoomControls.origin_y + gRoomControls.height + -0x40;
+            }
         }
-#else
-        if (gRoomControls.origin_y + gRoomControls.height + -0x40 < y) {
-            y = gRoomControls.origin_y + gRoomControls.height + -0x40;
-        }
-#endif
         if (((u32)((x - gRoomControls.origin_x) - 0x90) < 0x41) && ((u32)((y - gRoomControls.origin_y) - 8) < 0x41)) {
             x = gRoomControls.origin_x + 0xb0;
             y = gRoomControls.origin_y + 0x40;
@@ -1489,25 +1489,25 @@ static void sub_08043C40(VaatiArmEntity* this, VaatiArm_HeapStruct1* heapStruct)
 }
 
 static bool32 sub_08043C98(VaatiArmEntity* this) {
-#if defined EU || defined JP
-    Entity* e1 = &((VaatiArm_HeapStruct*)super->myHeap)->entities[3]->base;
-    if ((e1->contactFlags == (CONTACT_NOW | 0x1d))) {
-        sub_08043D08(this);
-        return TRUE;
+    if (REGION_IS_EU || REGION_IS_JP) {
+        Entity* e1 = &((VaatiArm_HeapStruct*)super->myHeap)->entities[3]->base;
+        if ((e1->contactFlags == (CONTACT_NOW | 0x1d))) {
+            sub_08043D08(this);
+            return TRUE;
+        } else {
+            return FALSE;
+        }
     } else {
-        return FALSE;
+        Entity* e1 = &((VaatiArm_HeapStruct*)super->myHeap)->entities[2]->base;
+        Entity* e2 = &((VaatiArm_HeapStruct*)super->myHeap)->entities[3]->base;
+        if ((e1->contactFlags == (CONTACT_NOW | 0x1d)) || (e2->contactFlags == (CONTACT_NOW | 0x1d))) {
+            sub_08043D08(this);
+            gRoomTransition.field_0x38 |= 2;
+            return TRUE;
+        } else {
+            return FALSE;
+        }
     }
-#else
-    Entity* e1 = &((VaatiArm_HeapStruct*)super->myHeap)->entities[2]->base;
-    Entity* e2 = &((VaatiArm_HeapStruct*)super->myHeap)->entities[3]->base;
-    if ((e1->contactFlags == (CONTACT_NOW | 0x1d)) || (e2->contactFlags == (CONTACT_NOW | 0x1d))) {
-        sub_08043D08(this);
-        gRoomTransition.field_0x38 |= 2;
-        return TRUE;
-    } else {
-        return FALSE;
-    }
-#endif
 }
 
 static void sub_08043CD4(VaatiArmEntity* this) {

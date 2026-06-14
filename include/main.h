@@ -151,7 +151,7 @@ extern void GameOverTask(void);
 extern void StaffrollTask(void);
 extern void DebugTask(void);
 
-#ifdef DEMO_USA
+#if defined(DEMO_USA) || defined(PC_PORT)
 extern void DemoTask(void);
 #endif
 /// @}

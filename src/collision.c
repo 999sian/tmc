@@ -612,11 +612,8 @@ CollisionResult sub_08017F40(Entity* org, Entity* tgt, u32 direction, ColSetting
     if (tgt->confusedTime == 0) {
         if (org == &gPlayerEntity.base) {
             if (PlayerCanBeMoved() &&
-#ifdef EU
-                (gPlayerState.flags & (PL_MINISH | PL_BUSY)) == 0 &&
-#else
-                (gPlayerState.flags & PL_MINISH) == 0 &&
-#endif
+                (REGION_IS_EU ? (gPlayerState.flags & (PL_MINISH | PL_BUSY)) == 0
+                              : (gPlayerState.flags & PL_MINISH) == 0) &&
                 !gPlayerState.swim_state) {
                 gPlayerState.mobility |= 0x80;
                 gPlayerState.field_0xa |= 0x80;
@@ -708,11 +705,8 @@ CollisionResult sub_08018168(Entity* org, Entity* tgt, u32 direction, ColSetting
     if (tgt->confusedTime == 0) {
         if (org == &gPlayerEntity.base) {
             if (PlayerCanBeMoved() &&
-#ifdef EU
-                (gPlayerState.flags & (PL_MINISH | PL_BUSY)) == 0 &&
-#else
-                (gPlayerState.flags & (PL_MINISH | PL_ROLLING)) == 0 &&
-#endif
+                (REGION_IS_EU ? (gPlayerState.flags & (PL_MINISH | PL_BUSY)) == 0
+                              : (gPlayerState.flags & (PL_MINISH | PL_ROLLING)) == 0) &&
                 gPlayerState.swim_state == 0) {
                 gPlayerState.mobility |= 0x80;
                 gPlayerState.field_0xa |= 0x80;

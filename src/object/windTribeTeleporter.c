@@ -11,7 +11,7 @@
 #include "room.h"
 #include "player.h"
 #include "screenTransitions.h"
-#if defined(DEMO_JP) || defined(USA) || defined(DEMO_USA)
+#if defined(DEMO_JP) || defined(USA) || defined(DEMO_USA) || defined(PC_PORT)
 #include "flags.h"
 #endif
 

@@ -4607,22 +4607,6 @@ u32 FinalizeSave(void) {
     if (gSave.name[0] == 0) {
         MemCopy(gUnk_0811E470, &gSave.name, FILENAME_LENGTH - 1);
     }
-#ifdef DEMO_USA
-    {
-        const u8* tmp;
-        MemCopy(demoPointers[gSaveHeader->saveFileId], &gSave, 0x4B4);
-        if (gSaveHeader->language == 0) {
-            gSave.name[0] = 0x97;
-            gSave.name[1] = 0x7F;
-            gSave.name[2] = 0xDD;
-            gSave.name[3] = 0;
-        }
-        ModHealth(0xA0);
-        ModRupees(-9999);
-        tmp = demoUnknown1 + gUnk_02000010.field_0x7 * 3;
-        gSave.demo_timer = tmp[gSaveHeader->saveFileId] * 3600;
-    }
-#endif
     return 1;
 }
 

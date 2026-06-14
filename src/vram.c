@@ -341,7 +341,7 @@ u32 FindFreeGFXSlots(u32 slotCount) {
     return 0;
 }
 
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 void CleanUpGFXSlots(void) {
     u32 occupiedIndex;
     u32 firstFreeIndex;

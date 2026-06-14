@@ -38,11 +38,7 @@ static bool32 SoftResetKeysPressed(void);
 
 void (*const sTaskHandlers[])(void) = {
     [TASK_TITLE] = TitleTask,
-#ifdef DEMO_USA
-    [TASK_FILE_SELECT] = DemoTask,
-#else
     [TASK_FILE_SELECT] = FileSelectTask,
-#endif
 
     [TASK_GAME] = GameTask,           [TASK_GAMEOVER] = GameOverTask,
     [TASK_STAFFROLL] = StaffrollTask, [TASK_DEBUG] = DebugTask,

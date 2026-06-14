@@ -9,9 +9,7 @@
 #include "player.h"
 #include "script.h"
 #include "physics.h"
-#if defined(USA) || defined(DEMO_USA)
 #include "flags.h"
-#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -42,9 +40,9 @@ void Gina(GinaEntity* this) {
         case 2:
             if (UpdateFuseInteraction(super) != 0) {
                 super->action = 1;
-#if defined(USA) || defined(DEMO_USA)
-                SetLocalFlag(KS_B15);
-#endif
+                if (REGION_IS_USA) {
+                    SetLocalFlag(KS_B15);
+                }
             }
             break;
     }

@@ -375,9 +375,9 @@ extern void sub_08016CA8(BgSettings* bg);
 #endif
 void RestoreGameTask(bool32 loadGfx) {
     LoadGfxGroups();
-#ifndef EU
-    CleanUpGFXSlots();
-#endif
+    if (!REGION_IS_EU) {
+        CleanUpGFXSlots();
+    }
     sub_080ADE24();
     InitUI(TRUE);
     sub_0801AE44(loadGfx);
@@ -427,7 +427,7 @@ void LoadRoomBgm(void) {
     }
 }
 
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 void sub_08052878(void) {
     gArea.bgm = gArea.queued_bgm;
     SoundReq(SONG_STOP_ALL);
@@ -592,7 +592,7 @@ void DisplayEzloMessage(void) {
     MessageAtHeight(gRoomTransition.hint_idx, height);
 }
 
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(PC_PORT)
 void CreateMiscManager(void) {
     Entity* e = NULL;
 
@@ -726,7 +726,13 @@ void InitRoomResInfo(RoomResInfo* info, RoomHeader* r_hdr, u32 area, u32 room) {
         Port_RefreshAreaData(area);
     }
     info->tileSet = ReadAreaSubTableEntry(gAreaTileSets[area], r_hdr->tileSet_id);
+    if (info->tileSet == NULL) {
+        info->tileSet = Port_ResolveAreaTileSetFromRom(area, r_hdr->tileSet_id);
+    }
     info->map = ReadAreaSubTableEntry(gAreaRoomMaps[area], room);
+    if (info->map == NULL) {
+        info->map = Port_ResolveAreaRoomMapFromRom(area, room);
+    }
 #else
     info->tileSet = *(gAreaTileSets[area] + r_hdr->tileSet_id);
     info->map = *(gAreaRoomMaps[area] + room);
@@ -737,6 +743,9 @@ void InitRoomResInfo(RoomResInfo* info, RoomHeader* r_hdr, u32 area, u32 room) {
     if (gAreaTable[area] != NULL) {
 #ifdef PC_PORT
         info->properties = ReadAreaSubTableEntry(gAreaTable[area], room);
+        if (info->properties == NULL) {
+            info->properties = Port_ResolveAreaPropertiesFromRom(area, room);
+        }
 #else
         info->properties = *(gAreaTable[area] + room);
 #endif
@@ -849,7 +858,13 @@ void sub_08052FF4(u32 area, u32 room) {
         Port_RefreshAreaData(area);
     }
     gArea.currentRoomInfo.tileSet = ReadAreaSubTableEntry(gAreaTileSets[area], r_hdr->tileSet_id);
+    if (gArea.currentRoomInfo.tileSet == NULL) {
+        gArea.currentRoomInfo.tileSet = Port_ResolveAreaTileSetFromRom(area, r_hdr->tileSet_id);
+    }
     gArea.currentRoomInfo.map = ReadAreaSubTableEntry(gAreaRoomMaps[area], room);
+    if (gArea.currentRoomInfo.map == NULL) {
+        gArea.currentRoomInfo.map = Port_ResolveAreaRoomMapFromRom(area, room);
+    }
 #else
     gArea.currentRoomInfo.tileSet = *(gAreaTileSets[area] + r_hdr->tileSet_id);
     gArea.currentRoomInfo.map = *(gAreaRoomMaps[area] + room);

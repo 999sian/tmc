@@ -58,6 +58,111 @@ const u32 gUnk_081080A4[0x50] = {
 
 const u8 gUnk_081081E4[] = { 0x16, 0x17, 0x17, 0x18, 0x18 };
 
+#if defined(PC_PORT)
+void MinishVillageTileSetManager_Main_EU(MinishVillageTileSetManager* this) {
+    u32 tmp;
+    const u32* tmp2;
+    s32 tmp3;
+    if (super->action == 0) {
+        super->action = 1;
+        super->timer = 8;
+        this->unk_20 = 0xFF;
+
+        RegisterTransitionHandler(this, sub_08057E30, NULL);
+    }
+    if (gRoomControls.reload_flags)
+        return;
+
+    if (sub_08057E40(this)) {
+        tmp = (u32)gRoomVars.graphicsGroups[0];
+        if (this->unk_20 != tmp) {
+            this->unk_20 = tmp;
+            super->timer = 0;
+        }
+    }
+
+    tmp2 = &gUnk_081080A4[tmp << 4];
+    tmp3 = super->timer;
+    if (tmp3 == 0) {
+        gPauseMenuOptions.disabled = 1;
+        LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], (void*)(uintptr_t)tmp2[1], 0x1000);
+        LoadPaletteGroup(gUnk_081081E4[tmp]);
+        super->timer++;
+    } else {
+        switch (tmp3) {
+            case 0:
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+            case 7:
+                LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]],
+                                  (void*)(uintptr_t)tmp2[(super->timer << 1) + 1], 0x1000);
+                super->timer++;
+                gPauseMenuOptions.disabled = 0;
+            case 8:
+                break;
+        }
+    }
+}
+void MinishVillageTileSetManager_Main_USA(MinishVillageTileSetManager* this) {
+    u32 tmp;
+    const u32* tmp2;
+    if (super->action == 0) {
+        super->action = 1;
+        super->timer = 8;
+        this->unk_20 = 0xFF;
+
+        SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
+        RegisterTransitionHandler(this, sub_08057E30, NULL);
+    }
+    if (sub_08057E40(this)) {
+        tmp = (u32)gRoomVars.graphicsGroups[0];
+        if (this->unk_20 != tmp) {
+            this->unk_20 = tmp;
+            super->timer = 0;
+        }
+    }
+    if (gRoomControls.reload_flags)
+        return;
+    if (!REGION_IS_JP) {
+        tmp = this->unk_20;
+    }
+    tmp2 = &gUnk_081080A4[tmp << 4];
+    switch (super->timer) {
+        case 0:
+            gPauseMenuOptions.disabled = 1;
+            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[0]], (void*)(uintptr_t)tmp2[1], 0x1000);
+            LoadPaletteGroup(gUnk_081081E4[tmp]);
+            super->timer++;
+            break;
+        case 1:
+        case 2:
+        case 3:
+        case 4:
+        case 5:
+        case 6:
+        case 7:
+            LoadResourceAsync(&gGlobalGfxAndPalettes[tmp2[(super->timer << 1)]],
+                              (void*)(uintptr_t)tmp2[(super->timer << 1) + 1], 0x1000);
+            super->timer++;
+            break;
+        case 8:
+            gPauseMenuOptions.disabled = 0;
+            super->timer++;
+            break;
+    }
+}
+void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
+    if (REGION_IS_EU) {
+        MinishVillageTileSetManager_Main_EU(this);
+    } else {
+        MinishVillageTileSetManager_Main_USA(this);
+    }
+}
+#else
 #ifdef EU
 void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
     u32 tmp;
@@ -129,7 +234,7 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
     if (gRoomControls.reload_flags)
         return;
     if (!REGION_IS_JP) {
-    tmp = this->unk_20;
+        tmp = this->unk_20;
     }
     tmp2 = &gUnk_081080A4[tmp << 4];
     switch (super->timer) {
@@ -157,6 +262,8 @@ void MinishVillageTileSetManager_Main(MinishVillageTileSetManager* this) {
     }
 }
 #endif
+#endif
+
 
 void sub_08057E30(void* this) {
     sub_08057E7C(gRoomVars.graphicsGroups[0]);

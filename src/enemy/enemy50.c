@@ -424,7 +424,7 @@ void sub_0804122C(Enemy50Entity* this) {
     ResolveCollisionLayer(super);
 }
 
-#ifndef EU
+#if !defined(EU) || defined(PC_PORT)
 bool32 sub_08041300(Enemy50Entity* this) {
     if ((super->hitType == 0x25) && (super->contactFlags == CONTACT_NOW)) {
         return TRUE;
