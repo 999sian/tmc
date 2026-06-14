@@ -736,7 +736,7 @@ def main():
             )
             tag = "\033[32mROM ready\033[0m" if rom_ready else "\033[31mROM missing\033[0m"
             print(f"  {i}) {v:<6} [{tag}]")
-        print(f"  {len(keys) + 1}) Both")
+        print(f"  {len(keys) + 1}) All")
         print(f"  q) Quit")
 
         valid = [str(i) for i in range(1, len(keys) + 2)] + ["q"]

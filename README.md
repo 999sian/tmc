@@ -13,13 +13,17 @@ rough; please file issues for anything that breaks.
 
 ## Supported ROMs
 
-A copy of the original game is required. This repository does **not** ship the
-ROM.
+A copy of the original game is required. This repository does **not** ship ROMs.
 
 | Version | Filename         | SHA1                                       |
 |---------|------------------|--------------------------------------------|
 | USA     | `baserom.gba`    | `b4bd50e4131b027c334547b4524e2dbbd4227130` |
 | EU      | `baserom_eu.gba` | `cff199b36ff173fb6faf152653d1bccf87c26fb7` |
+| JP      | `baserom_jp.gba` | `6c5404a1effb17f481f352181d0f1c61a2765c5d` |
+
+Current release builds are multi-region: the same `tmc_pc` binary validates
+the loaded ROM by SHA-1 and selects USA, EU, or JP data at runtime. The
+filenames above are the easiest setup path.
 
 ## Pre-built releases (recommended)
 
@@ -32,9 +36,10 @@ tmc_pc      sounds.json      assets/      assets_src/
 
 Setup, once:
 
-1. Download `tmc-usa-{linux,windows,macos}-<version>.tar.gz` and unpack it
-   anywhere.
-2. Drop your own `baserom.gba` next to the binary.
+1. Download the platform tarball
+   (`tmc-*-{linux,windows,macos}-<version>.tar.gz`) and unpack it anywhere.
+2. Drop your own supported ROM next to the binary (`baserom.gba`,
+   `baserom_eu.gba`, or `baserom_jp.gba`).
 3. Run the game:
 
    ```sh
@@ -42,10 +47,10 @@ Setup, once:
    tmc_pc.exe                 # Windows (double-click works)
    ```
 
-The first launch self-extracts a runtime asset cache from the ROM (≈3–5 s,
-shows a progress bar). Every subsequent launch is instant. The binary
-resolves `baserom.gba`, `sounds.json`, and the asset trees relative to its
-own location, so the install directory can live anywhere — no `cd` dance.
+On first launch, the binary self-extracts the runtime asset cache (≈3–5 s,
+with a progress bar). Subsequent launches are instant. The binary resolves
+the ROM, `sounds.json`, and asset trees relative to its own location, so the
+install directory can live anywhere — no `cd` dance.
 
 ## Build from source
 
@@ -60,9 +65,9 @@ The script will:
 - Check and prompt to install missing dependencies (xmake, SDL3, libpng,
   fmt, nlohmann-json)
 - Initialize git submodules automatically
-- Scan for ROM files and verify their checksums
-- Let you choose USA, EU, or both
-- Compile the native binary for your platform
+- Scan ROM files and verify checksums
+- Let you choose USA, EU, JP, or all configured versions
+- Compile the native multi-region binary for your platform
 - Place everything under `dist/<VERSION>/`
 
 Run the result:
