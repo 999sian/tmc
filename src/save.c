@@ -389,7 +389,11 @@ u32 ParseSaveFileStatus(const SaveFileStatus* fileStatus) {
     u32 ret;
     switch (fileStatus->status) {
         case 'MCZ3':
+#ifdef PC_PORT
+            if (fileStatus->checksum2 == (u16)(-fileStatus->checksum1)) {
+#else
             if (fileStatus->checksum1 + fileStatus->checksum2 == 0x10000) {
+#endif
                 ret = 2;
             } else {
                 ret = 0;
