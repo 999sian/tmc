@@ -137,13 +137,24 @@ void CameraTarget_Action2(Entity* this) {
             } else {
                 bVar2 = this->type2;
             }
-            ptr = gKinstoneWorldEvents + bVar2;
+            {
+                const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
+#ifdef MULTI_REGION
+                extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
+                extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
+                if (REGION_IS_EU)
+                    gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
+                else if (REGION_IS_JP)
+                    gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
+#endif
+                ptr = gKinstoneWorldEvents_sel + bVar2;
             bVar1 = ptr->bubbleIcon;
             bVar3 = bVar1 & 1;
             this->palette.b.b0 = bVar3;
             temp = gUnk_0811F744[bVar1] < 0;
             temp2 = (gUnk_0811F744[bVar1] & 0xffffff) | temp;
             sub_080ADDD8(0, temp2 | 0x1000000);
+            }
         }
         GetNextFrame(this);
     }

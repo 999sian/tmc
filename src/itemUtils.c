@@ -422,7 +422,15 @@ void sub_08054524(void) {
     }
 
     bVar1 = gUnk_080FE1C6[bVar1];
-    MemCopy(&gAreaDroptables[bVar1], &gRoomVars.currentAreaDroptable, sizeof(Droptable));
+    {
+        const Droptable* tbl = gAreaDroptables;
+#ifdef MULTI_REGION
+        if (REGION_IS_EU) {
+            tbl = gAreaDroptables_eu;
+        }
+#endif
+        MemCopy(&tbl[bVar1], &gRoomVars.currentAreaDroptable, sizeof(Droptable));
+    }
 }
 
 void DisableRandomDrops(void) {
@@ -454,7 +462,7 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
 #if defined(PC_PORT)
         if (REGION_IS_EU) {
             if (r3 == 24) {
-                ptr2 = &gObjectDroptables[8];
+                ptr2 = &gObjectDroptables_eu[8];
                 ptr4 = &gRoomVars.currentAreaDroptable;
                 r3 = 0;
             } else if (r3 == 25) {
@@ -497,6 +505,11 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
 #else
             case 16 ... 23:
                 ptr2 = &gObjectDroptables[r3 - 16];
+#ifdef MULTI_REGION
+                if (REGION_IS_EU) {
+                    ptr2 = &gObjectDroptables_eu[r3 - 16];
+                }
+#endif
             case 15:
                 ptr4 = &gRoomVars.currentAreaDroptable;
                 break;

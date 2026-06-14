@@ -2303,3 +2303,37 @@ const u8 gMapTileTypeToActTile[] = {
     ACT_TILE_0,   // TILE_TYPE_1395
 
 };
+
+// Region-correct accessor for gMapTileTypeToActTile.
+// In native builds this is just the table read. In the multi-region fat binary the
+// baseline table holds the USA/JP values, so the EU divergences (a small set of
+// tileTypes that map to ACT_TILE_0 under EU instead of ACT_TILE_41) are applied at
+// runtime here. Preserves the original "#ifdef EU" condition (REGION_IS_EU).
+u8 GetMapTileTypeToActTile(u32 tileType) {
+    u8 actTile = gMapTileTypeToActTile[tileType];
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        switch (tileType) {
+            case TILE_TYPE_178:
+            case TILE_TYPE_181:
+            case TILE_TYPE_194:
+            case TILE_TYPE_197:
+            case TILE_TYPE_210:
+            case TILE_TYPE_214:
+            case TILE_TYPE_226:
+            case TILE_TYPE_229:
+            case TILE_TYPE_242:
+            case TILE_TYPE_246:
+            case TILE_TYPE_653:
+            case TILE_TYPE_656:
+            case TILE_TYPE_1349:
+            case TILE_TYPE_1350:
+            case TILE_TYPE_1352:
+            case TILE_TYPE_1354:
+                actTile = ACT_TILE_0;
+                break;
+        }
+    }
+#endif
+    return actTile;
+}

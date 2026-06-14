@@ -232,6 +232,11 @@ void InitSaveHeader(void) {
             case -1:
             default:
                 MemCopy(&sDefaultSettings, gSaveHeader, sizeof(SaveHeader));
+#ifdef MULTI_REGION
+                if (REGION_IS_EU) {
+                    gSaveHeader->language = 2; // TODO in EU 2 is english?
+                }
+#endif
                 WriteSaveHeader(gSaveHeader);
                 break;
         }
@@ -257,7 +262,11 @@ void InitSaveHeader(void) {
 
     if ((gSaveHeader->signature != SIGNATURE) || (gSaveHeader->saveFileId >= NUM_SAVE_SLOTS) ||
         (gSaveHeader->msg_speed >= MAX_MSG_SPEED) || (gSaveHeader->brightness >= MAX_BRIGHTNESS)
-#ifdef EU
+#ifdef MULTI_REGION
+        || (REGION_IS_EU
+                ? ((gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES))
+                : (gSaveHeader->language != GAME_LANGUAGE))
+#elif defined(EU)
         || (gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES)
 #else
         || (gSaveHeader->language != GAME_LANGUAGE)

@@ -1356,7 +1356,7 @@ extern const u8 gMapTileTypeToActTile[];
 extern const u16 gUnk_080B7A3E[]; /* gMapSpecialTileToActTile */
 u32 GetActTileForTileType(u32 tileType) {
     if (tileType < 0x4000)
-        return gMapTileTypeToActTile[tileType];
+        return GetMapTileTypeToActTile(tileType);
     else
         return ((const u8*)gUnk_080B7A3E)[tileType - 0x4000];
 }
@@ -1599,7 +1599,7 @@ void SetTile(u32 tileIndex, u32 tilePos, u32 layer) {
     } else {
         /* Normal tile — look up tile type from tileTypes table */
         u16 tileType = ml->tileTypes[tileIndex];
-        SetActTileAtTilePos(gMapTileTypeToActTile[tileType], pos, layer);
+        SetActTileAtTilePos(GetMapTileTypeToActTile(tileType), pos, layer);
         SetCollisionData(gMapTileTypeToCollisionData[tileType], pos, layer);
         UnregisterInteractTile(pos, layer);
     }

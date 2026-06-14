@@ -612,7 +612,13 @@ void LoadRoomTileEntities(TileEntity* list) {
 }
 
 static void LoadGrassDropTile(TileEntity* tileEntity) {
-    MemCopy(&gAreaDroptables[tileEntity->localFlag], &gRoomVars.currentAreaDroptable, 0x20);
+    const Droptable* tbl = gAreaDroptables;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        tbl = gAreaDroptables_eu;
+    }
+#endif
+    MemCopy(&tbl[tileEntity->localFlag], &gRoomVars.currentAreaDroptable, 0x20);
 }
 
 static void LoadLocationTile(TileEntity* tileEntity) {

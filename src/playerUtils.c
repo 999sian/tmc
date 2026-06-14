@@ -3520,7 +3520,7 @@ void SetTileType(u32 tileType, u32 tilePos, u32 layer) {
         if ((gRoomControls.scroll_flags & 2) != 0) {
             gMapBottom.collisionData[tilePos] = collisionData;
         }
-        mapLayer->actTiles[tilePos] = gMapTileTypeToActTile[tileType];
+        mapLayer->actTiles[tilePos] = GetMapTileTypeToActTile(tileType);
         if ((gRoomControls.scroll_flags & 1) == 0) {
             u32 offset = (tilePos & 0x3f) * 2 + (tilePos & 0xfc0) * 4;
             if (layer != 2) {
@@ -3735,7 +3735,7 @@ void SetTileByIndex(u32 tileIndex, u32 tilePos, u32 layer) {
     mapLayer->mapData[tilePos] = tileIndex;
     tileType = mapLayer->tileTypes[tileIndex];
     mapLayer->collisionData[tilePos] = gMapTileTypeToCollisionData[tileType];
-    mapLayer->actTiles[tilePos] = gMapTileTypeToActTile[tileType];
+    mapLayer->actTiles[tilePos] = GetMapTileTypeToActTile(tileType);
     if ((gRoomControls.scroll_flags & 1) == 0) {
         u32 offset = (tilePos & 0x3f) * 2 + (tilePos & 0xfc0) * 4;
         if (layer != 2) {
@@ -3766,7 +3766,7 @@ void RestorePrevTileEntity(u32 tilePos, u32 layer) {
     mapLayer->mapData[tilePos] = tileIndex = mapLayer->mapDataOriginal[tilePos];
     tileType = mapLayer->tileTypes[tileIndex];
     mapLayer->collisionData[tilePos] = gMapTileTypeToCollisionData[tileType];
-    mapLayer->actTiles[tilePos] = gMapTileTypeToActTile[tileType];
+    mapLayer->actTiles[tilePos] = GetMapTileTypeToActTile(tileType);
     if ((gRoomControls.scroll_flags & 1) == 0) {
         u32 offset = (tilePos & 0x3f) * 2 + (tilePos & 0xfc0) * 4;
         if (layer != 2) {
