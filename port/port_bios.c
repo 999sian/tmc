@@ -790,6 +790,8 @@ static const u8* Port_RomBufferEnd(const void* src) {
 
 /* LZ77 decompressor (SWI 0x11/0x12) */
 static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd) {
+    const u8* dbgSrc0 = src;
+    int dbg = getenv("TMC_DBG_LZ") != NULL;
     if (srcEnd && src + 4 > srcEnd)
         return;
     u32 header = src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
@@ -804,14 +806,18 @@ static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd)
 
     u32 written = 0;
     while (written < decompSize) {
-        if (srcEnd && src >= srcEnd)
+        if (srcEnd && src >= srcEnd) {
+            if (dbg) fprintf(stderr, "[lz] TRUNC@flags decomp=%u written=%u blob=%ld\n", decompSize, written, (long)(srcEnd-dbgSrc0));
             break;
+        }
         u8 flags = *src++;
         for (int i = 7; i >= 0 && written < decompSize; i--) {
             if (flags & (1 << i)) {
                 /* Compressed block: 2 bytes → length + distance */
-                if (srcEnd && src + 2 > srcEnd)
+                if (srcEnd && src + 2 > srcEnd) {
+                    if (dbg) fprintf(stderr, "[lz] TRUNC@ref decomp=%u written=%u blob=%ld\n", decompSize, written, (long)(srcEnd-dbgSrc0));
                     return;
+                }
                 u8 b1 = *src++;
                 u8 b2 = *src++;
                 u32 length = ((b1 >> 4) & 0xF) + 3;
@@ -819,16 +825,20 @@ static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd)
                 distance += 1;
                 /* A back-reference pointing before the output start is
                  * malformed; refuse rather than wild-read host memory. */
-                if (distance > written)
+                if (distance > written) {
+                    if (dbg) fprintf(stderr, "[lz] MALFORMED dist=%u>written=%u decomp=%u blob=%ld\n", distance, written, decompSize, (long)(srcEnd-dbgSrc0));
                     return;
+                }
                 for (u32 j = 0; j < length && written < decompSize; j++) {
                     dst[written] = dst[written - distance];
                     written++;
                 }
             } else {
                 /* Uncompressed byte */
-                if (srcEnd && src >= srcEnd)
+                if (srcEnd && src >= srcEnd) {
+                    if (dbg) fprintf(stderr, "[lz] TRUNC@lit decomp=%u written=%u blob=%ld\n", decompSize, written, (long)(srcEnd-dbgSrc0));
                     return;
+                }
                 dst[written++] = *src++;
             }
         }

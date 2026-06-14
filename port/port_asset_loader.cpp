@@ -1010,12 +1010,6 @@ bool BuildAreaFromAssets(u32 area) {
     if (!gAssetGroupCache.areaTileSets[area].empty()) {
         gAreaTileSets[area] = gAssetGroupCache.areaTileSetPtrs[area].data();
     }
-    if (getenv("TMC_DBG_AREA3") && area == 3) {
-        fprintf(stderr, "[dbg-area3] AFTER tileSetSlots=%zu tileSetPtrs(size=%zu cap=%zu data=%p) gAreaTileSets[3]=%p\n",
-                tileSetSlots, gAssetGroupCache.areaTileSetPtrs[3].size(),
-                gAssetGroupCache.areaTileSetPtrs[3].capacity(), (void*)gAssetGroupCache.areaTileSetPtrs[3].data(),
-                (void*)gAreaTileSets[3]);
-    }
 
     const size_t roomMapSlots = std::max<size_t>(gAssetGroupCache.areaRoomMaps[area].size(), 64);
     gAssetGroupCache.areaRoomMapPtrs[area].assign(roomMapSlots, nullptr);

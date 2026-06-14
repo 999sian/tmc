@@ -1654,6 +1654,13 @@ inline nlohmann::json extract_map_definition_sequence(
             const bool compressed = (size & kMapCompressed) != 0;
             const uint32_t data_offset = config.mapDataOffset + (src & 0x7FFFFFFF);
             const uint32_t data_size = size & 0x7FFFFFFF;
+            /* A valid map asset always lies within the ROM. An out-of-ROM source
+             * means the sequence's terminator was missed (its real last entry's
+             * `multiple` bit looked set) and we are now reading garbage triples;
+             * stop before emitting a bogus asset that would load junk into VRAM. */
+            if (data_offset >= Rom.size()) {
+                break;
+            }
             /* For compressed blobs prefer the exact LZ77 stream length. The
              * boundary-gap fallback (infer_asset_size) is derived from the
              * USA-baked EmbeddedAssetIndex and mis-sizes EU/JP compressed map
