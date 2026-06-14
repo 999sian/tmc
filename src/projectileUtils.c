@@ -5,14 +5,40 @@
 #include "color.h"
 
 extern const ProjectileDefinition gProjectileDefinitions[];
+#ifdef MULTI_REGION
+// Region-divergent twins emitted by projectile.c. Baseline (USA) lives in the
+// canonical tables above; these are selected at runtime when the active ROM
+// matches the original compile-time guard. See projectile.c for byte-exact data.
+extern const ProjectileDefinition gProjectileDefinition_12_alt[]; // gProjectileDefinitions[12], JP||EU
+extern const ProjectileDefinition gProjectileDefinition_25_eu[];  // gProjectileDefinitions[25], EU
+extern const ProjectileDefinition gProjectileDefinition_14_eu[];  // sub-table for id 20, EU
+extern const ProjectileDefinition gProjectileDefinition_22_eu[];  // sub-table for id 34, EU
+#endif
 
 const ProjectileDefinition* GetProjectileDefinition(Entity*);
 bool32 LoadProjectileSprite(Entity*, const ProjectileDefinition*);
 
 const ProjectileDefinition* GetProjectileDefinition(Entity* this) {
     const ProjectileDefinition* definition = &gProjectileDefinitions[this->id];
+#ifdef MULTI_REGION
+    // Single-entry overrides (not MULTI_FORM): redirect the whole entry.
+    if ((REGION_IS_JP || REGION_IS_EU) && this->id == 12) {
+        return &gProjectileDefinition_12_alt[0];
+    }
+    if (REGION_IS_EU && this->id == 25) {
+        return &gProjectileDefinition_25_eu[0];
+    }
+#endif
     if (definition->gfx == 0xffff) {
         definition = &definition->ptr.definition[this->type];
+#ifdef MULTI_REGION
+        // MULTI_FORM sub-table overrides: pick the EU twin sub-entry by type.
+        if (REGION_IS_EU && this->id == 20) {
+            definition = &gProjectileDefinition_14_eu[this->type];
+        } else if (REGION_IS_EU && this->id == 34) {
+            definition = &gProjectileDefinition_22_eu[this->type];
+        }
+#endif
     }
     return definition;
 }

@@ -61,7 +61,7 @@ void sub_08054F64(Entity* this, ScriptExecutionContext* context) {
 extern Script script_GoronKinstone;
 const EntityData gUnk_080FEF48[] = {
     { NPC, 79, GORON, 0, 0, 0x88, 0x368, ENTITY_SCRIPT(script_GoronKinstone) },
-#if defined(USA) || defined(DEMO_USA)
+#if defined(USA) || defined(DEMO_USA) || defined(MULTI_REGION)
     // TODO 0x7c is a flag?
     { MANAGER, 15, MOVEABLE_OBJECT_MANAGER, 0, 0x10e82e00, 0xd8, 0x388, 0x7c1388 },
 #else
@@ -69,6 +69,14 @@ const EntityData gUnk_080FEF48[] = {
 #endif
     { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
 };
+#ifdef MULTI_REGION
+const EntityData gUnk_080FEF48_eu[] = {
+    { NPC, 79, GORON, 0, 0, 0x88, 0x368, ENTITY_SCRIPT(script_GoronKinstone) },
+    // TODO 0x7c is a flag?
+    { MANAGER, 15, MOVEABLE_OBJECT_MANAGER, 0, 0x10e82e00, 0xd8, 0x388, 0x7a1388 },
+    { 0xff, 0, 0, 0, 0, 0x0, 0x0, 0 },
+};
+#endif
 
 extern Script script_Goron1Kinstone2;
 extern Script script_Goron2Kinstone2;
@@ -140,7 +148,15 @@ void WorldEvent_17_0(void) {
     u32 tmp;
 
     ptr = gMenu.field_0xc;
-    LoadRoomEntityList(gUnk_080FF108[ptr[1]]);
+    {
+        const EntityData* entityList = gUnk_080FF108[ptr[1]];
+#ifdef MULTI_REGION
+        if ((REGION_IS_EU || REGION_IS_JP) && ptr[1] == 0) {
+            entityList = gUnk_080FEF48_eu;
+        }
+#endif
+        LoadRoomEntityList(entityList);
+    }
     if (ptr[1] != 0) {
         tmp = 3;
     } else {

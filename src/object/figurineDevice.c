@@ -319,7 +319,7 @@ void sub_08087F58(FigurineDeviceEntity* this) {
 }
 
 void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDifference) {
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
     u32 newAmount;
     u32 newChance;
 
@@ -367,6 +367,63 @@ void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDiffe
     }
 
 #else
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) {
+        u32 euNewAmount;
+        u32 euNewChance;
+
+        euNewChance = this->chance + shellDifference;
+        if (CheckLocalFlag(SHOP07_COMPLETE)) {
+            FigurineDevice_PlayErrorSound(this);
+            return;
+        }
+
+        if (shellDifference < 0) {
+            if (euNewChance < this->prevChance) {
+                if (this->chance != this->prevChance) {
+                    this->chance = this->prevChance;
+                    this->shells = 1;
+                    SoundReq(SFX_TEXTBOX_CHOICE);
+                } else {
+                    FigurineDevice_PlayErrorSound(this);
+                }
+            } else {
+                this->chance = euNewChance;
+                this->shells += shellDifference;
+                SoundReq(SFX_TEXTBOX_CHOICE);
+            }
+            return;
+        }
+        euNewAmount = this->shells + shellDifference;
+        if (euNewAmount > gSave.stats.shells) {
+            if (gSave.stats.shells != this->shells) {
+                euNewAmount = gSave.stats.shells;
+                shellDifference = (gSave.stats.shells - this->shells);
+                euNewChance = this->chance + shellDifference;
+            } else {
+                FigurineDevice_PlayErrorSound(this);
+                return;
+            }
+        } else if (euNewChance > 100) {
+            if (this->chance == 100) {
+                FigurineDevice_PlayErrorSound(this);
+                return;
+            } else {
+                euNewChance = 100;
+                shellDifference = (euNewChance - this->chance);
+                euNewAmount = this->shells + shellDifference;
+            }
+        }
+
+        this->chance = euNewChance;
+        this->shells = euNewAmount;
+        SoundReq(SFX_TEXTBOX_CHOICE);
+        return;
+    }
+#endif
+#ifdef MULTI_REGION
+    {
+#endif
     s32 newAmount;
     s32 newChance;
     s32 prevChance, prevShells;
@@ -402,8 +459,12 @@ void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDiffe
             newAmount = gSave.stats.shells;
             shellDifference = (gSave.stats.shells - this->shells);
             newChance = prevChance + shellDifference;
-#ifdef JP
-            if (newChance > 100) {
+#if defined(MULTI_REGION) || defined(JP)
+            if (
+#ifdef MULTI_REGION
+                REGION_IS_JP &&
+#endif
+                newChance > 100) {
                 newChance = 100;
                 shellDifference = (newChance - prevChance);
                 newAmount = prevShells + shellDifference;
@@ -414,11 +475,44 @@ void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDiffe
             return;
         }
     }
-#ifdef JP
+#if defined(MULTI_REGION)
+    // JP: `else if (newChance > 100)` — the clamp only runs when the first `if`
+    // did not. USA/EU: a plain `if (newChance > 100)` that runs regardless.
+    else if (REGION_IS_JP) {
+        if (newChance > 100) {
+            if (this->chance == 100) {
+                FigurineDevice_PlayErrorSound(this);
+                return;
+            } else {
+                newChance = 100;
+                shellDifference = (newChance - prevChance);
+                newAmount = prevShells + shellDifference;
+            }
+        }
+    }
+    if (!REGION_IS_JP && newChance > 100) {
+        if (this->chance == 100) {
+            FigurineDevice_PlayErrorSound(this);
+            return;
+        } else {
+            newChance = 100;
+            shellDifference = (newChance - prevChance);
+            newAmount = prevShells + shellDifference;
+        }
+    }
+#elif defined(JP)
     else if (newChance > 100) {
+        if (this->chance == 100) {
+            FigurineDevice_PlayErrorSound(this);
+            return;
+        } else {
+            newChance = 100;
+            shellDifference = (newChance - prevChance);
+            newAmount = prevShells + shellDifference;
+        }
+    }
 #else
     if (newChance > 100) {
-#endif
         if (this->chance == 100) {
             FigurineDevice_PlayErrorSound(this);
             return;
@@ -433,6 +527,10 @@ void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDiffe
     this->chance = newChance;
     this->shells = newAmount;
     SoundReq(SFX_TEXTBOX_CHOICE);
+#ifdef MULTI_REGION
+    }
+#endif
+#endif
 }
 
 void FigurineDevice_PlayErrorSound(FigurineDeviceEntity* this) {
@@ -624,7 +722,7 @@ void sub_0808826C(FigurineDeviceEntity* this) {
 }
 
 void sub_080882A8(FigurineDeviceEntity* this) {
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
     static const u8 gUnk_08120AB4[] = {
         206, 79, 3, 2, 0, 208, 0, 6, 0, 13, 0, 2, 0, 0, 0, 0, 128, 240, 104, 56, 2, 0, 1, 0,
     };
@@ -639,8 +737,24 @@ void sub_080882A8(FigurineDeviceEntity* this) {
         206, 79, 3, 2, 0, 208, 0, 6, 0, 13, 0, 2, 0, 0, 0, 0, 128, 240, 208, 139, 2, 0, 1, 0,
     };
 #endif
+#ifdef MULTI_REGION
+    static const u8 gUnk_08120AB4_eu[] = {
+        206, 79, 3, 2, 0, 208, 0, 6, 0, 13, 0, 2, 0, 0, 0, 0, 128, 240, 104, 56, 2, 0, 1, 0,
+    };
+    static const u8 gUnk_08120ACC_eu[] = {
+        206, 79, 3, 2, 0, 208, 0, 6, 0, 13, 0, 2, 0, 0, 0, 0, 128, 240, 208, 59, 2, 0, 1, 0,
+    };
+#endif
     static const u16 gUnk_08120AE4[] = { TEXT_INDEX(TEXT_CARLOV, 0x18), TEXT_INDEX(TEXT_CARLOV, 0x19) };
     u8* ptr;
+#ifdef MULTI_REGION
+    const u8* sel_AB4 = gUnk_08120AB4;
+    const u8* sel_ACC = gUnk_08120ACC;
+    if (REGION_IS_EU) {
+        sel_AB4 = gUnk_08120AB4_eu;
+        sel_ACC = gUnk_08120ACC_eu;
+    }
+#endif
     sub_08050384();
     sub_08057044(this->shells, GetTextVariableSlot(0), 0x202020);
     sub_08057044(this->chance, GetTextVariableSlot(1), 0x202020);
@@ -651,9 +765,17 @@ void sub_080882A8(FigurineDeviceEntity* this) {
     ptr = (u8*)0x02000000;
 #endif
     if (ptr[7] == 0) {
+#ifdef MULTI_REGION
+        ShowTextBox(gUnk_08120AE4[super->type2], (Font*)sel_AB4); // TODO convert data
+#else
         ShowTextBox(gUnk_08120AE4[super->type2], (Font*)&gUnk_08120AB4); // TODO convert data
+#endif
     } else {
+#ifdef MULTI_REGION
+        ShowTextBox(gUnk_08120AE4[super->type2], (Font*)sel_ACC); // TODO convert data
+#else
         ShowTextBox(gUnk_08120AE4[super->type2], (Font*)&gUnk_08120ACC); // TODO convert data
+#endif
     }
     gScreen.bg0.updated = 1;
 }

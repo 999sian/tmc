@@ -79,7 +79,7 @@ static MusicPlayerInfo* ResolveSongPlayer(u16 songId, const SongHeader** outHead
     }
 
     song = &gSongTable[songId];
-    playerIndex = song->musicPlayerIndex;
+    playerIndex = SONG_MPLAYER_INDEX(songId);
     if (playerIndex >= M4A_PLAYER_COUNT) {
         return NULL;
     }

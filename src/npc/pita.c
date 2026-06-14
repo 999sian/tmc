@@ -23,18 +23,31 @@ void Pita(PitaEntity* this) {
         0,
         2,
         { 0, 0, 0, 0 },
-#if EU
+#if EU && !defined(MULTI_REGION)
         6,
 #else
         10,
 #endif
         18,
     };
+#ifdef MULTI_REGION
+    static const Hitbox gUnk_0810C428_eu = {
+        0,
+        2,
+        { 0, 0, 0, 0 },
+        6,
+        18,
+    };
+#endif
     if (super->action == 0) {
         super->action++;
         SetEntityPriority(super, PRIO_MESSAGE);
         SortEntityAbove(super, super);
         super->hitbox = (Hitbox*)&gUnk_0810C428;
+#ifdef MULTI_REGION
+        if (REGION_IS_EU)
+            super->hitbox = (Hitbox*)&gUnk_0810C428_eu;
+#endif
         sub_0807DD64(super);
     }
     ExecuteScriptAndHandleAnimation(super, NULL);

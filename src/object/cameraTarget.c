@@ -24,7 +24,7 @@ void CameraTarget_Init(Entity*);
 void CameraTarget_Action1(Entity*);
 void CameraTarget_Action2(Entity*);
 
-#ifdef EU
+#if defined(EU) && !defined(MULTI_REGION)
 static const s32 gUnk_0811F744[] = {
     0x00027940,
     0x00027B40,
@@ -37,6 +37,14 @@ static const s32 gUnk_0811F744[] = {
     0x00027B80,
     0x00027D80,
     0x00027F80,
+};
+#endif
+#ifdef MULTI_REGION
+static const s32 gUnk_0811F744_eu[] = {
+    0x00027940,
+    0x00027B40,
+    0x00027D40,
+    0x00027F40,
 };
 #endif
 
@@ -151,9 +159,16 @@ void CameraTarget_Action2(Entity* this) {
             bVar1 = ptr->bubbleIcon;
             bVar3 = bVar1 & 1;
             this->palette.b.b0 = bVar3;
-            temp = gUnk_0811F744[bVar1] < 0;
-            temp2 = (gUnk_0811F744[bVar1] & 0xffffff) | temp;
-            sub_080ADDD8(0, temp2 | 0x1000000);
+            {
+                const s32* gUnk_0811F744_sel = gUnk_0811F744;
+#ifdef MULTI_REGION
+                if (REGION_IS_EU)
+                    gUnk_0811F744_sel = gUnk_0811F744_eu;
+#endif
+                temp = gUnk_0811F744_sel[bVar1] < 0;
+                temp2 = (gUnk_0811F744_sel[bVar1] & 0xffffff) | temp;
+                sub_080ADDD8(0, temp2 | 0x1000000);
+            }
             }
         }
         GetNextFrame(this);

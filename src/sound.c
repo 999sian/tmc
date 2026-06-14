@@ -126,7 +126,7 @@ void SoundReq(u32 sound) {
             PlayFadeIn(song);
             return;
         case SONG_PLAY_TEMPO_CONTROL:
-            m4aMPlayTempoControl(gMusicPlayers[gSongTable[ptr->currentBgm].musicPlayerIndex].info, song);
+            m4aMPlayTempoControl(gMusicPlayers[SONG_MPLAYER_INDEX(ptr->currentBgm)].info, song);
             return;
         case SONG_VSYNC_OFF:
             m4aMPlayAllStop();
@@ -182,7 +182,7 @@ void SoundReq(u32 sound) {
 #ifdef PC_PORT
                 if (IsDuckingSfx(song)) {
                     sBgmDuckActive = 1;
-                    sBgmDuckPlayer = (u8)gSongTable[song].musicPlayerIndex;
+                    sBgmDuckPlayer = (u8)SONG_MPLAYER_INDEX(song);
                     sBgmDuckTimer = 0;
                     ptr->volumeBgmTarget = 0;
                 }
@@ -279,7 +279,7 @@ static void doPlaySound(u32 sound) {
         volume = gSoundPlayingInfo.volumeSfx;
     }
     volume = gSoundPlayingInfo.volumeMaster * volume / 0x100;
-    musicPlayerInfo = gMusicPlayers[gSongTable[sound].musicPlayerIndex].info;
+    musicPlayerInfo = gMusicPlayers[SONG_MPLAYER_INDEX(sound)].info;
     m4aMPlayImmInit(musicPlayerInfo);
     m4aMPlayVolumeControl(musicPlayerInfo, 0xffff, volume);
 }
@@ -1458,3 +1458,18 @@ const Song gSongTable[] = {
     [SFX_PICOLYTE] = { &sfx220, MUSIC_PLAYER_18, MUSIC_PLAYER_18 },
     [SFX_221] = { &sfx221, MUSIC_PLAYER_17, MUSIC_PLAYER_17 },
 };
+
+#ifdef MULTI_REGION
+// In the fat binary gSongTable holds the USA baseline. Two entries diverge on EU
+// (their musicPlayerIndex). Mirror the original "#ifdef EU" guards at the table read.
+u16 SongMusicPlayerIndex(u16 n) {
+    u16 index = gSongTable[n].musicPlayerIndex;
+    if (REGION_IS_EU) {
+        if (n == SFX_SECRET)
+            index = MUSIC_PLAYER_10;
+        else if (n == SFX_TASK_COMPLETE)
+            index = MUSIC_PLAYER_17;
+    }
+    return index;
+}
+#endif

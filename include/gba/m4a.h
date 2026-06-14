@@ -173,6 +173,16 @@ typedef struct MusicPlayer {
 extern const MusicPlayer gMusicPlayers[];
 extern const Song gSongTable[];
 
+#ifdef MULTI_REGION
+// gSongTable holds the USA baseline in the fat binary; two entries diverge on EU
+// (musicPlayerIndex of SFX_SECRET / SFX_TASK_COMPLETE). Route every read through
+// this helper so the EU override is applied at runtime.
+u16 SongMusicPlayerIndex(u16 n);
+#define SONG_MPLAYER_INDEX(n) SongMusicPlayerIndex(n)
+#else
+#define SONG_MPLAYER_INDEX(n) (gSongTable[n].musicPlayerIndex)
+#endif
+
 void m4aSoundMain(void);
 void m4aSoundVSync(void);
 void m4aSoundInit(void);
