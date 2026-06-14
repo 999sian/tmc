@@ -23,6 +23,9 @@ extern void (*const gUnk_08111B88[])(Entity*);
 extern void (*const gUnk_08111B98[])(Entity*);
 
 static const u16 sKinstonePrices[];
+#ifdef MULTI_REGION
+static const u16 sKinstonePrices_eu[];
+#endif
 
 extern u32 GetAmountInKinstoneBag(u32);
 
@@ -137,7 +140,12 @@ static u32 GoronMerchant_GetSalePrice(Entity* this) {
     if (CheckGlobalFlag(GORON_KAKERA_LV5)) {
         restockCount = 4;
     }
-    return sKinstonePrices[restockCount * 3 + kinstoneType];
+    const u16* sel = sKinstonePrices;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU)
+        sel = sKinstonePrices_eu;
+#endif
+    return sel[restockCount * 3 + kinstoneType];
 }
 
 #ifdef PC_PORT
@@ -210,8 +218,8 @@ void (*const gUnk_08111B98[])(Entity*) = {
     sub_08069654,
 };
 
+#if defined(EU) && !defined(MULTI_REGION)
 static const u16 sKinstonePrices[] = {
-#ifdef EU
     200,
     100,
     50,
@@ -231,7 +239,9 @@ static const u16 sKinstonePrices[] = {
     600,
     500,
     400,
+};
 #else
+static const u16 sKinstonePrices[] = {
     300,
     200,
     50,
@@ -251,5 +261,29 @@ static const u16 sKinstonePrices[] = {
     300,
     200,
     50,
-#endif
 };
+#endif
+
+#ifdef MULTI_REGION
+static const u16 sKinstonePrices_eu[] = {
+    200,
+    100,
+    50,
+    // prices after restock 1
+    300,
+    200,
+    100,
+    // prices after restock 2
+    400,
+    300,
+    200,
+    // prices after restock 3
+    500,
+    400,
+    300,
+    // prices after restock 4
+    600,
+    500,
+    400,
+};
+#endif

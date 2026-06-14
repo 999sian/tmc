@@ -524,7 +524,10 @@ static bool32 GetSpriteAnimation322Index(u32 item, u32* outIndex) {
     return TRUE;
 }
 
-#ifdef EU
+#ifdef MULTI_REGION
+#define sub_080A5384_draw_constant0 (REGION_IS_EU ? 0x1fa : 0x1fb)
+#define sub_080A5384_draw_constant1 (REGION_IS_EU ? 0x141 : 0x142)
+#elif defined(EU)
 #define sub_080A5384_draw_constant0 0x1fa
 #define sub_080A5384_draw_constant1 0x141
 #else
@@ -1232,7 +1235,9 @@ void sub_080A5CFC(u32 menuType, void* param_2, u32 param_3) {
     DrawDungeonMap(menuType, &gMapDataBottomSpecial, 0x400);
 }
 
-#ifdef EU
+#ifdef MULTI_REGION
+#define SUB_080A5D1C_SPRITE_INDEX (REGION_IS_EU ? 0x143 : 0x144)
+#elif defined(EU)
 #define SUB_080A5D1C_SPRITE_INDEX 0x143
 #else
 #define SUB_080A5D1C_SPRITE_INDEX 0x144

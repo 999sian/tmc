@@ -520,6 +520,36 @@ const Dialog gUnk_08109DC8[][4] = {
     }
 };
 
+#ifdef MULTI_REGION
+/* EU/JP twin of the lone diverging row of gUnk_08109DC8 (row index 14).
+ * Original guard: #if defined(USA) || defined(DEMO_USA) baseline uses KINSTONE_3F;
+ * the #else branch (EU and JP) uses KINSTONE_22. The fat binary keeps the USA
+ * baseline in gUnk_08109DC8, and consumers select this twin row at runtime when
+ * REGION_IS_EU || REGION_IS_JP. */
+const Dialog gUnk_08109DC8_eu[4] = {
+    { KINSTONE_22,
+      DIALOG_KINSTONE,
+      DIALOG_CHECK_FLAG,
+      1,
+      { TEXT_INDEX(TEXT_MINISH, 0xe), TEXT_INDEX(TEXT_MINISH, 0xa) } },
+    { KINSTONE_22,
+      DIALOG_KINSTONE,
+      DIALOG_CHECK_FLAG,
+      1,
+      { TEXT_INDEX(TEXT_MINISH, 0xe), TEXT_INDEX(TEXT_MINISH, 0xa) } },
+    { KINSTONE_22,
+      DIALOG_KINSTONE,
+      DIALOG_CHECK_FLAG,
+      1,
+      { TEXT_INDEX(TEXT_MINISH, 0xe), TEXT_INDEX(TEXT_MINISH, 0xa) } },
+    { KINSTONE_22,
+      DIALOG_KINSTONE,
+      DIALOG_CHECK_FLAG,
+      1,
+      { TEXT_INDEX(TEXT_MINISH, 0xe), TEXT_INDEX(TEXT_MINISH, 0xa) } },
+};
+#endif
+
 const SpriteLoadData gUnk_0810A348[] = {
     { 48, 31, 4 },
     { 8240, 31, 4 },
@@ -679,7 +709,13 @@ void sub_080601D4(Entity* this) {
 }
 
 void sub_08060208(Entity* this) {
-    ShowNPCDialogue(this, gUnk_08109DC8[this->type2]);
+    const Dialog* row = gUnk_08109DC8[this->type2];
+#ifdef MULTI_REGION
+    if ((REGION_IS_EU || REGION_IS_JP) && this->type2 == 14) {
+        row = gUnk_08109DC8_eu;
+    }
+#endif
+    ShowNPCDialogue(this, row);
 }
 
 void sub_0806021C(Entity* this) {
@@ -696,11 +732,25 @@ void sub_0806021C(Entity* this) {
     if (GetInventoryValue(ITEM_MOLE_MITTS)) {
         uVar2 = 3;
     }
-    ShowNPCDialogue(this, &gUnk_08109DC8[this->type2][uVar2]);
+    {
+        const Dialog* row = gUnk_08109DC8[this->type2];
+#ifdef MULTI_REGION
+        if ((REGION_IS_EU || REGION_IS_JP) && this->type2 == 14) {
+            row = gUnk_08109DC8_eu;
+        }
+#endif
+        ShowNPCDialogue(this, &row[uVar2]);
+    }
 }
 
 void sub_0806025C(Entity* this) {
-    ShowNPCDialogue(this, gUnk_08109DC8[this->type2]);
+    const Dialog* row = gUnk_08109DC8[this->type2];
+#ifdef MULTI_REGION
+    if ((REGION_IS_EU || REGION_IS_JP) && this->type2 == 14) {
+        row = gUnk_08109DC8_eu;
+    }
+#endif
+    ShowNPCDialogue(this, row);
 }
 
 void sub_08060270(Entity* this) {

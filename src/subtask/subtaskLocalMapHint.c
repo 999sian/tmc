@@ -53,7 +53,7 @@ void sub_080A6B04(void) {
 #else
     ptr = &gKinstoneWorldEvents[gFuseInfo.kinstoneId];
 #endif
-    ptr2 = &gWorldEvents[ptr->worldEventId];
+    ptr2 = &GetWorldEvents()[ptr->worldEventId];
     bVar1 = ptr->mapMarkerIcon;
     uVar3 = ptr2->_c;
     uVar4 = ptr2->_e;

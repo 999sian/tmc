@@ -35,6 +35,10 @@ const Transition gUnk_0813ABF8 = { WARP_TYPE_AREA, 0, 0, 0x128, 0x1a8, 0, AREA_C
 #else
 const Transition gUnk_0813ABF8 = { WARP_TYPE_AREA, 0, 0, 0x128, 0x1b0, 0, AREA_CASTLE_GARDEN, ROOM_CASTLE_GARDEN_MAIN, 1, 0, 0, 0 };
 #endif
+#ifdef MULTI_REGION
+// EU/JP twin of gUnk_0813ABF8 (endY 0x1a8 vs USA baseline 0x1b0); original guard: defined(EU) || defined(JP)
+const Transition gUnk_0813ABF8_eu = { WARP_TYPE_AREA, 0, 0, 0x128, 0x1a8, 0, AREA_CASTLE_GARDEN, ROOM_CASTLE_GARDEN_MAIN, 1, 0, 0, 0 };
+#endif
 const Transition gUnk_0813AC0C = { WARP_TYPE_AREA, 0, 0, 0xb0, 0xd8, 0, AREA_VAATI_2, ROOM_VAATI_2_0, 2, 0, 0, 0 };
 const Transition gUnk_0813AC20 = { WARP_TYPE_AREA, 0, 0, 0xa8, 0x78, 0, AREA_DARK_HYRULE_CASTLE, ROOM_DARK_HYRULE_CASTLE_3F_TRIPLE_DARKNUT, 1, 0, 0, 0 };
 const Transition gUnk_0813AC34 = { WARP_TYPE_AREA, 0, 0, 0xb0, 0x88, 0, AREA_VAATI_3, ROOM_VAATI_3_0, 1, 0, 0, 0 };
@@ -66,6 +70,17 @@ const Transition gUnk_0813AD88[] = {
     { WARP_TYPE_AREA, 0, 0, 0x200, 0x300, 0, AREA_PALACE_OF_WINDS_BOSS, ROOM_PALACE_OF_WINDS_BOSS_0, 2, 10, 4, 0},
 #endif
 };
+
+#ifdef MULTI_REGION
+// EU twin of gUnk_0813AD88 (last element endY 0x350 vs USA/JP baseline 0x300); original guard: defined(EU)
+const Transition gUnk_0813AD88_eu[] = {
+    { WARP_TYPE_AREA, 0, 0, 0x128, 0x188, 0, AREA_LAKE_HYLIA, ROOM_LAKE_HYLIA_MAIN, 1, 9, 4, 0},
+    { WARP_TYPE_AREA, 0, 0, 0x190, 0x1c0, 0, AREA_CLOUD_TOPS, ROOM_CLOUD_TOPS_CLOUD_BOTTOMS, 1, 10, 4, 0},
+    { WARP_TYPE_AREA, 0, 0, 0x1e8, 0x1f0, 0, AREA_CLOUD_TOPS, ROOM_CLOUD_TOPS_CLOUD_TOPS, 1, 10, 4, 0},
+    { WARP_TYPE_AREA, 0, 0, 0x268, 0x58, 0, AREA_PALACE_OF_WINDS, ROOM_PALACE_OF_WINDS_ENTRANCE_ROOM, 1, 10, 6, 0},
+    { WARP_TYPE_AREA, 0, 0, 0x200, 0x350, 0, AREA_PALACE_OF_WINDS_BOSS, ROOM_PALACE_OF_WINDS_BOSS_0, 2, 10, 4, 0},
+};
+#endif
 
 const Transition gUnk_0813ADEC[] = {
     { WARP_TYPE_AREA, 0, 0, 0xb8, 0x58, 0, AREA_WIND_TRIBE_TOWER, ROOM_WIND_TRIBE_TOWER_ENTRANCE, 1, 0, 4, 0},
