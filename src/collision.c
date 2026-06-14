@@ -2310,7 +2310,14 @@ const u8 gMapTileTypeToActTile[] = {
 // tileTypes that map to ACT_TILE_0 under EU instead of ACT_TILE_41) are applied at
 // runtime here. Preserves the original "#ifdef EU" condition (REGION_IS_EU).
 u8 GetMapTileTypeToActTile(u32 tileType) {
-    u8 actTile = gMapTileTypeToActTile[tileType];
+    u8 actTile;
+    /* Empty/sentinel tile types (0xFFFF) appear when a room resolves with no
+     * tileSet (e.g. JP area 3/room 1 "repaired room info"); they must not index
+     * the table. Out-of-range -> no act tile (collision.c:2313 UBSan OOB). */
+    if (tileType >= sizeof(gMapTileTypeToActTile)) {
+        return ACT_TILE_0;
+    }
+    actTile = gMapTileTypeToActTile[tileType];
 #ifdef MULTI_REGION
     if (REGION_IS_EU) {
         switch (tileType) {

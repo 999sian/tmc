@@ -430,7 +430,7 @@ extern void sub_0807D6D8(u16* mapSpecial, u16* bgBuffer);
 extern const u8 gUnk_0800275C[64];
 #define gCollisionDirectionMasks ((const u16*)gUnk_0800275C)
 
-/* Collision parameter tables (extended tile types, stubbed for now) */
+/* Collision parameter tables used by extended tile collision lookups. */
 extern const u8 gUnk_080082DC[];
 extern const u8 gUnk_0800833C[];
 extern const u8 gUnk_0800839C[];
@@ -485,7 +485,7 @@ static const u8* SelectPlayerCollisionTable(void) {
  *
  * For tile collision type 0xFF: always blocked.
  * For tile collision types 0x10–0xFE: extended pixel-level collision
- *   (returns 0/passable for now since lookup tables are stubbed).
+ * resolves the ROM pointer table through port_resolve_addr().
  */
 static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
     u32 tilePos = ((px & 0x3F0) >> 4) + ((py & 0x3F0) << 2);
@@ -731,8 +731,8 @@ void sub_08008AA0(Entity* ent) {
 
 /*
  * sub_08008AC6 — check if player should respawn (fallen off edge, etc.)
- * (from Thumb asm at 0x08008AC6)
- * Simplified stub: just check swim state and collision for respawn.
+ * Port of Thumb asm at 0x08008AC6; swim/flag guards and
+ * GetNonCollidedSide/RespawnPlayer flow match the original routine.
  */
 static u32 GetNonCollidedSide(Entity* ent) {
     u16 c = ent->collisions;
@@ -960,6 +960,9 @@ int Port_Widescreen_ShouldStretch(void) {
 }
 
 int Port_Widescreen_IsActive(void) {
+    if (gMain.controlMode == CONTROL_DISABLED || (gMessage.state & MESSAGE_ACTIVE) != 0) {
+        return 0;
+    }
     return (gMain.task == TASK_GAME &&
             Port_Config_WidescreenEnabled() &&
             !Port_Widescreen_ShouldStretch()) ? 1 : 0;

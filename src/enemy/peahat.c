@@ -13,7 +13,11 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[24 + 8];
+#else
     /*0x68*/ u8 unused1[24];
+#endif
     /**
      * While flying around the Peahat will gradually change direction using this value.
      * Changes between 2 and -2 at
@@ -33,6 +37,9 @@ typedef struct {
      */
     /*0x83*/ u8 flyTimer;
 } PeahatEntity;
+
+PORT_STATIC_ASSERT_OFFSET(PeahatEntity, directionDelta, 0x80, 0xB0,
+                          "PeahatEntity directionDelta offset incorrect");
 
 enum PeahatActions {
     PeahatActionInitialize,

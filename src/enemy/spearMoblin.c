@@ -18,15 +18,28 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[18 + 4];
+#else
     /*0x68*/ u8 unused1[18];
+#endif
     /*0x7a*/ u8 unk_7a;
     /*0x7b*/ u8 unk_7b;
+#ifdef PC_PORT
+    /*0x7c*/ u8 unused2[4 + 4];
+#else
     /*0x7c*/ u8 unused2[4];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
     /*0x83*/ u8 unk_83;
 } SpearMoblinEntity;
+
+PORT_STATIC_ASSERT_OFFSET(SpearMoblinEntity, unk_7a, 0x7a, 0xA6,
+                          "SpearMoblinEntity unk_7a offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(SpearMoblinEntity, unk_80, 0x80, 0xB0,
+                          "SpearMoblinEntity unk_80 offset incorrect");
 
 void sub_08028604(SpearMoblinEntity*);
 void sub_08028754(SpearMoblinEntity*);

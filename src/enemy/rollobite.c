@@ -15,10 +15,17 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[28 + 8];
+#else
     /*0x68*/ u8 unused1[28];
+#endif
     /*0x84*/ u8 unk_84;
     /*0x85*/ u8 unk_85;
 } RollobiteEntity;
+
+PORT_STATIC_ASSERT_OFFSET(RollobiteEntity, unk_84, 0x84, 0xB4,
+                          "RollobiteEntity unk_84 offset incorrect");
 
 extern void (*const Rollobite_Functions[])(RollobiteEntity*);
 extern void (*const gRollobiteActions[])(RollobiteEntity*);

@@ -4528,6 +4528,20 @@ void sub_0807C8B0(u16* data, u32 width, u32 height) {
     u16* prev_line;
     u32 diff;
 
+#ifdef PC_PORT
+    /* The map buffer is MAX_MAP_SIZE x MAX_MAP_SIZE (64x64, the hardware max) and
+     * the copy below hard-codes a 0x40 (=MAX_MAP_SIZE) row stride. Region/room
+     * data can yield dimensions exceeding 64 tiles (e.g. JP area 0x22), which
+     * makes `data + width*height - 1` run off the end of gMapBottom.mapData into
+     * adjacent globals (global-buffer-overflow, playerUtils.c:4541). Clamp to the
+     * buffer; a no-op for valid <=64x64 rooms. */
+    if (width > MAX_MAP_SIZE) {
+        width = MAX_MAP_SIZE;
+    }
+    if (height > MAX_MAP_SIZE) {
+        height = MAX_MAP_SIZE;
+    }
+#endif
     src_ptr = data + width * height - 1;
     dst_ptr = data + (height - 1) * 0x40 + (width - 1);
 

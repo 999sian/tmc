@@ -25,7 +25,9 @@ typedef struct RandoFileMenuState {
     char seed_text[RANDO_FILE_MENU_SEED_MAX + 1];
     size_t seed_len;
     bool glitchless_logic;
+    bool obscure_locations;
     bool shuffle_kinstones;
+    bool shuffle_entrances;
     bool shuffle_dojos;
     bool open_world;
     RandoItemPoolDifficulty difficulty;
@@ -93,9 +95,18 @@ bool* Port_RandoFileMenu_GlitchlessLogic(void) {
     return &sMenu.glitchless_logic;
 }
 
+bool* Port_RandoFileMenu_ObscureLocations(void) {
+    return &sMenu.obscure_locations;
+}
+
 bool* Port_RandoFileMenu_ShuffleKinstones(void) {
     return &sMenu.shuffle_kinstones;
 }
+
+bool* Port_RandoFileMenu_ShuffleEntrances(void) {
+    return &sMenu.shuffle_entrances;
+}
+
 
 bool* Port_RandoFileMenu_ShuffleDojos(void) {
     return &sMenu.shuffle_dojos;
@@ -130,8 +141,8 @@ static uint64_t CurrentSeedValue(void) {
 }
 
 static void PersistMenuSettings(void) {
-    Port_Config_SetRandoSettings(sMenu.glitchless_logic, sMenu.shuffle_kinstones,
-                                 sMenu.shuffle_dojos, sMenu.open_world, (int)sMenu.difficulty,
+    Port_Config_SetRandoSettings(sMenu.glitchless_logic, sMenu.obscure_locations, sMenu.shuffle_kinstones,
+                                 sMenu.shuffle_entrances, sMenu.shuffle_dojos, sMenu.open_world, (int)sMenu.difficulty,
                                  sMenu.homewarp, sMenu.start_sword, sMenu.early_crests,
                                  sMenu.instant_text, sMenu.tunic_color, sMenu.heart_color);
 }
@@ -141,7 +152,9 @@ void Port_RandoFileMenu_CommitAndStart(void) {
     uint64_t seed;
 
     settings.glitchless_logic = sMenu.glitchless_logic;
+    settings.obscure_locations = sMenu.obscure_locations;
     settings.shuffle_kinstones = sMenu.shuffle_kinstones;
+    settings.shuffle_entrances = sMenu.shuffle_entrances;
     settings.shuffle_dojos = sMenu.shuffle_dojos;
     settings.open_world = sMenu.open_world;
     settings.item_difficulty = sMenu.difficulty;
@@ -198,8 +211,8 @@ void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled) {
     Port_Config_SetRandoEnabled(enabled);
     if (!enabled) {
         RandomizerSettings defaults = Rando_DefaultSettings();
-        Port_Config_SetRandoSettings(defaults.glitchless_logic, defaults.shuffle_kinstones,
-                                     defaults.shuffle_dojos, defaults.open_world,
+        Port_Config_SetRandoSettings(defaults.glitchless_logic, defaults.obscure_locations, defaults.shuffle_kinstones,
+                                     defaults.shuffle_entrances, defaults.shuffle_dojos, defaults.open_world,
                                      (int)defaults.item_difficulty, defaults.homewarp,
                                      defaults.start_sword, defaults.early_crests,
                                      defaults.instant_text, defaults.tunic_color,
@@ -221,7 +234,9 @@ void Port_RandoFileMenu_Open(int save_slot) {
     sMenu.open = true;
     sMenu.save_slot = save_slot;
     sMenu.glitchless_logic = Port_Config_GetRandoGlitchless();
+    sMenu.obscure_locations = Port_Config_GetRandoObscure();
     sMenu.shuffle_kinstones = Port_Config_GetRandoKinstones();
+    sMenu.shuffle_entrances = Port_Config_GetRandoEntrances();
     sMenu.shuffle_dojos = Port_Config_GetRandoDojos();
     sMenu.open_world = Port_Config_GetRandoOpenWorld();
     Port_RandoFileMenu_SetDifficulty(Port_Config_GetRandoItemPool());

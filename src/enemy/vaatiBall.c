@@ -16,7 +16,11 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u8 unk_74;
     /*0x75*/ u8 unused2[2];
     /*0x77*/ u8 unk_77;
@@ -24,6 +28,9 @@ typedef struct {
     /*0x79*/ u8 unk_79;
     /*0x7a*/ u8 unused3[2];
     /*0x7c*/ u32 unk_7c;
+#ifdef PC_PORT
+    u8 filler_7c_pc[4];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unused4[2];
     /*0x83*/ u8 unk_83;
@@ -31,6 +38,13 @@ typedef struct {
     /*0x85*/ u8 unused5[1];
     /*0x86*/ u8 unk_86;
 } VaatiBallEntity;
+
+PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_74, 0x74, 0xA0,
+                          "VaatiBallEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_80, 0x80, 0xB0,
+                          "VaatiBallEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_84, 0x84, 0xB4,
+                          "VaatiBallEntity unk_84 offset incorrect");
 
 typedef struct {
     s8 h, v;

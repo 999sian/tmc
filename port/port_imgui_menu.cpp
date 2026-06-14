@@ -1301,7 +1301,8 @@ static void DrawRandoCosmeticsSection(void) {
     }
 
     if (changed) {
-        Port_Config_SetRandoSettings(Port_Config_GetRandoGlitchless(), Port_Config_GetRandoKinstones(),
+        Port_Config_SetRandoSettings(Port_Config_GetRandoGlitchless(), Port_Config_GetRandoObscure(),
+                                     Port_Config_GetRandoKinstones(), Port_Config_GetRandoEntrances(),
                                      Port_Config_GetRandoDojos(), Port_Config_GetRandoOpenWorld(),
                                      Port_Config_GetRandoItemPool(), Port_Config_GetRandoHomewarp(),
                                      Port_Config_GetRandoStartSword(), Port_Config_GetRandoEarlyCrests(),
@@ -2032,7 +2033,9 @@ static void DrawRandoTrackerOverlay(void) {
 static void DrawRibbonRandomizerTab(void) {
     if (!sRandoUiSettingsInit) {
         sRandoUiSettings.glitchless_logic = Port_Config_GetRandoGlitchless();
+        sRandoUiSettings.obscure_locations = Port_Config_GetRandoObscure();
         sRandoUiSettings.shuffle_kinstones = Port_Config_GetRandoKinstones();
+        sRandoUiSettings.shuffle_entrances = Port_Config_GetRandoEntrances();
         sRandoUiSettings.shuffle_dojos = Port_Config_GetRandoDojos();
         sRandoUiSettings.open_world = Port_Config_GetRandoOpenWorld();
         sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)Port_Config_GetRandoItemPool();
@@ -2134,7 +2137,11 @@ static void DrawRibbonRandomizerTab(void) {
 
     if (ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic)) changed = true;
     ImGui::SameLine();
+    if (ImGui::Checkbox("Obscure spots", &sRandoUiSettings.obscure_locations)) changed = true;
+    ImGui::SameLine();
     if (ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones)) changed = true;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Shuffle entrances", &sRandoUiSettings.shuffle_entrances)) changed = true;
     ImGui::SameLine();
     if (ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos)) changed = true;
 
@@ -2164,7 +2171,8 @@ static void DrawRibbonRandomizerTab(void) {
     }
 
     if (changed) {
-        Port_Config_SetRandoSettings(sRandoUiSettings.glitchless_logic, sRandoUiSettings.shuffle_kinstones,
+        Port_Config_SetRandoSettings(sRandoUiSettings.glitchless_logic, sRandoUiSettings.obscure_locations,
+                                     sRandoUiSettings.shuffle_kinstones, sRandoUiSettings.shuffle_entrances,
                                      sRandoUiSettings.shuffle_dojos, sRandoUiSettings.open_world,
                                      (int)sRandoUiSettings.item_difficulty, sRandoUiSettings.homewarp,
                                      sRandoUiSettings.start_sword, sRandoUiSettings.early_crests,
@@ -3120,7 +3128,11 @@ static void DrawRandoFileMenuModal(void) {
                 }
                 ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
                 ImGui::SameLine();
+                ImGui::Checkbox("Obscure spots", Port_RandoFileMenu_ObscureLocations());
+                ImGui::SameLine();
                 ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
+                ImGui::SameLine();
+                ImGui::Checkbox("Entrances", Port_RandoFileMenu_ShuffleEntrances());
                 ImGui::SameLine();
                 ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
                 ImGui::Checkbox("Open world", Port_RandoFileMenu_OpenWorld());

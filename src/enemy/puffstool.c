@@ -18,12 +18,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u8 unk_7a;
     /*0x7b*/ u8 unk_7b;
     /*0x7c*/ u16 unk_7c;
     /*0x7e*/ u16 unk_7e;
+#ifdef PC_PORT
+    u8 filler_7c_pc[4];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
@@ -31,6 +38,11 @@ typedef struct {
     /*0x84*/ u16 unk_84;
     /*0x86*/ u16 tilePos;
 } PuffstoolEntity;
+
+PORT_STATIC_ASSERT_OFFSET(PuffstoolEntity, unk_78, 0x78, 0xA4,
+                          "PuffstoolEntity unk_78 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PuffstoolEntity, unk_80, 0x80, 0xB0,
+                          "PuffstoolEntity unk_80 offset incorrect");
 
 extern u8 gMapTileTypeToCollisionData[];
 

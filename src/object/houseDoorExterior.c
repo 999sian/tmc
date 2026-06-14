@@ -208,8 +208,14 @@ void HouseDoorExterior_Type2(HouseDoorExteriorEntity* this) {
     }
 
     if (super->flags & ENT_SCRIPTED) {
+#ifdef PC_PORT
+        if (this->context != NULL) {
+#endif
         ExecuteScript(super, this->context);
         sub_080868EC(super, this->context);
+#ifdef PC_PORT
+        }
+#endif
     }
 }
 

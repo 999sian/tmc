@@ -15,10 +15,17 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u8 unk_78;
     /*0x79*/ u8 unk_79;
 } VaatiEyesMacroEntity;
+
+PORT_STATIC_ASSERT_OFFSET(VaatiEyesMacroEntity, unk_78, 0x78, 0xA4,
+                          "VaatiEyesMacroEntity unk_78 offset incorrect");
 
 extern s16 gUnk_080B4488[];
 

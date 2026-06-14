@@ -16,8 +16,14 @@ typedef struct {
     /*0x68*/ u8 unk_68[8];
     /*0x70*/ u16 wasHit; /**< Has this lever been hit before. */
     /*0x72*/ u8 unk_72[0x14];
+#if defined(PC_PORT) && __SIZEOF_POINTER__ == 8
+    u8 filler_pc[4];
+#endif
     /*0x86*/ u16 hitFlag;
 } HittableLeverEntity;
+
+PORT_STATIC_ASSERT_OFFSET(HittableLeverEntity, hitFlag, 0x86, 0xB2,
+                          "HittableLever hitFlag must alias field_0x86");
 
 extern void (*const HittableLever_Actions[])(HittableLeverEntity*);
 extern const Hitbox HittableLever_Hitbox;

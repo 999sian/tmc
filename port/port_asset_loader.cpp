@@ -1010,6 +1010,12 @@ bool BuildAreaFromAssets(u32 area) {
     if (!gAssetGroupCache.areaTileSets[area].empty()) {
         gAreaTileSets[area] = gAssetGroupCache.areaTileSetPtrs[area].data();
     }
+    if (getenv("TMC_DBG_AREA3") && area == 3) {
+        fprintf(stderr, "[dbg-area3] AFTER tileSetSlots=%zu tileSetPtrs(size=%zu cap=%zu data=%p) gAreaTileSets[3]=%p\n",
+                tileSetSlots, gAssetGroupCache.areaTileSetPtrs[3].size(),
+                gAssetGroupCache.areaTileSetPtrs[3].capacity(), (void*)gAssetGroupCache.areaTileSetPtrs[3].data(),
+                (void*)gAreaTileSets[3]);
+    }
 
     const size_t roomMapSlots = std::max<size_t>(gAssetGroupCache.areaRoomMaps[area].size(), 64);
     gAssetGroupCache.areaRoomMapPtrs[area].assign(roomMapSlots, nullptr);
@@ -1875,6 +1881,31 @@ extern "C" bool32 Port_IsLoadedAssetBytes(const void* ptr, u32 size) {
     }
 
     return FALSE;
+}
+
+/*
+ * If `ptr` lands inside a cached asset blob (e.g. a compressed tileset handed
+ * to LZ77UnCompVram), return one-past-the-end of that blob; else NULL. Lets the
+ * BIOS decompressor bound its source read on heap blobs, which — unlike GBA ROM
+ * sources — have no readable trailing bytes, so a normally-benign trailing
+ * over-read runs off the allocation (heap-buffer-overflow in lz77_decomp).
+ */
+extern "C" const u8* Port_LoadedAssetBytesEnd(const void* ptr) {
+    if (ptr == nullptr) {
+        return nullptr;
+    }
+    const u8* at = static_cast<const u8*>(ptr);
+    for (const auto& [_, dataPtr] : gAssetGroupCache.binaryFiles) {
+        if (dataPtr == nullptr || dataPtr->empty()) {
+            continue;
+        }
+        const u8* begin = dataPtr->data();
+        const u8* end = begin + dataPtr->size();
+        if (at >= begin && at < end) {
+            return end;
+        }
+    }
+    return nullptr;
 }
 
 extern "C" const u8* Port_GetMapAssetDataByIndex(u32 assetIndex, u32* size) {

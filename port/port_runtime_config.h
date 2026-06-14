@@ -197,7 +197,9 @@ void        Port_Config_SetRebornMask(unsigned mask);
 bool Port_Config_GetRandoEnabled(void);
 void Port_Config_SetRandoEnabled(bool on);
 bool Port_Config_GetRandoGlitchless(void);
+bool Port_Config_GetRandoObscure(void);
 bool Port_Config_GetRandoKinstones(void);
+bool Port_Config_GetRandoEntrances(void);
 bool Port_Config_GetRandoDojos(void);
 bool Port_Config_GetRandoOpenWorld(void);
 int  Port_Config_GetRandoItemPool(void);
@@ -207,7 +209,7 @@ bool Port_Config_GetRandoEarlyCrests(void);
 bool Port_Config_GetRandoInstantText(void);
 int  Port_Config_GetRandoTunicColor(void);
 int  Port_Config_GetRandoHeartColor(void);
-void Port_Config_SetRandoSettings(bool glitchless, bool kinstones, bool dojos, bool open_world,
+void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos, bool open_world,
                                   int item_pool, bool homewarp, bool start_sword, bool early_crests,
                                   bool instant_text, int tunic_color, int heart_color);
 

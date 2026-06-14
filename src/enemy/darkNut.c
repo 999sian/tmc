@@ -12,7 +12,11 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u8 unk_74;
     /*0x75*/ u8 unk_75;
     /*0x76*/ u16 unk_76;
@@ -24,6 +28,11 @@ typedef struct {
     /*0x7d*/ u8 unused2[7];
     /*0x84*/ u8 unk_84;
 } DarkNutEntity;
+
+PORT_STATIC_ASSERT_OFFSET(DarkNutEntity, unk_74, 0x74, 0xA0,
+                          "DarkNutEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(DarkNutEntity, unk_7c, 0x7c, 0xA8,
+                          "DarkNutEntity unk_7c offset incorrect");
 
 typedef struct {
     u8 field_0x0;

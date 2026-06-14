@@ -15,12 +15,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u16 unk_7a;
     /*0x7c*/ u16 unk_7c;
     /*0x7e*/ u16 unk_7e;
 } DoorMimicEntity;
+
+PORT_STATIC_ASSERT_OFFSET(DoorMimicEntity, unk_78, 0x78, 0xA4,
+                          "DoorMimicEntity unk_78 offset incorrect");
 
 void sub_080221C0(DoorMimicEntity*);
 

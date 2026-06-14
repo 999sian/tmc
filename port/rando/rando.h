@@ -42,10 +42,12 @@ typedef enum {
  * See docs/speedrun-and-rando-port-notes-2026-06-13.md. */
 #define RANDO_TRICK_OCARINA_GLITCH  (1u << 0)  /* OG: Temple of Droplets entry without Flippers (needs Ocarina) */
 #define RANDO_TRICK_CRENEL_CLIP     (1u << 1)  /* Crenel Clip: reach Castor Wilds from Mt. Crenel (needs a Bottle) */
-#define RANDO_TRICK_ALL             (RANDO_TRICK_OCARINA_GLITCH | RANDO_TRICK_CRENEL_CLIP)
+#define RANDO_TRICK_PORTAL_JUMP_STORAGE  (1u << 2)  /* PJS: reach Cloud Tops early without Roc's Cape (needs Ocarina) */
+#define RANDO_TRICK_ALL             (RANDO_TRICK_OCARINA_GLITCH | RANDO_TRICK_CRENEL_CLIP | RANDO_TRICK_PORTAL_JUMP_STORAGE)
 
 typedef struct RandomizerSettings {
     bool glitchless_logic;
+    bool obscure_locations;
     bool shuffle_kinstones;
     bool shuffle_entrances;   /* coupled dungeon-entrance shuffle (was hijacking shuffle_kinstones) */
     bool shuffle_dojos;

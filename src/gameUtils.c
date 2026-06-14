@@ -739,7 +739,17 @@ void InitRoomResInfo(RoomResInfo* info, RoomHeader* r_hdr, u32 area, u32 room) {
 #endif
     info->tiles = gAreaTiles[area];
     info->bg_anim = (void*)gUnk_080B755C[area];
-    info->exits = gExitLists[area][room];
+#ifdef MULTI_REGION
+    /* gExitLists (transitions.c) is USA-baseline-sized; EU/JP room indices can
+     * run past it (global-buffer-overflow). Resolve region-correct exits from the
+     * active ROM instead, and never touch the compile-time table for EU/JP. */
+    if (REGION_IS_EU || REGION_IS_JP) {
+        info->exits = (const Transition*)Port_ResolveAreaExitsFromRom(area, room);
+    } else
+#endif
+    {
+        info->exits = gExitLists[area][room];
+    }
     if (gAreaTable[area] != NULL) {
 #ifdef PC_PORT
         info->properties = ReadAreaSubTableEntry(gAreaTable[area], room);

@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <system_error>
 
@@ -287,23 +288,75 @@ bool ExtractAssets(const Options& opt, std::string* error)
 
     const auto t0 = std::chrono::steady_clock::now();
 
+    /*
+     * Region-aware table offsets. The engine path extracts from the ROM that
+     * was actually loaded (USA/EU/JP), so every ROM-table offset below must
+     * match THAT region. These were previously hardcoded to USA, so loading a
+     * JP (or EU) ROM read its area/gfx/text tables at USA offsets, producing
+     * garbage/empty area_tile_sets/area_room_maps/area_tables. The empty area
+     * data then left gAreaTileSets[area] (etc.) dangling at runtime -> garbled
+     * tiles/palettes (or a heap-use-after-free in ReadAreaSubTableEntry) on the
+     * non-baseline region. Offsets are the retail-map-verified values, i.e. the
+     * same addresses as kRomOffsets_{USA,EU,JP} in port/port_rom.c.
+     */
+    char gameCode[5] = {0};
+    if (opt.rom_buffer.size() >= 0xB0) {
+        std::memcpy(gameCode, opt.rom_buffer.data() + 0xAC, 4);
+    } else if (!opt.rom_path.empty()) {
+        std::ifstream rf(opt.rom_path, std::ios::binary);
+        if (rf) {
+            rf.seekg(0xAC);
+            rf.read(gameCode, 4);
+        }
+    }
+
     Config config;
-    config.gfxGroupsTableOffset = 0x100AA8;
     config.gfxGroupsTableLength = 133;
-    config.paletteGroupsTableOffset = 0x0FF850;
     config.paletteGroupsTableLength = 208;
-    config.globalGfxAndPalettesOffset = 0x5A2E80;
-    config.mapDataOffset = 0x324AE4;
-    config.areaRoomHeadersTableOffset = 0x11E214;
-    config.areaTileSetsTableOffset = 0x10246C;
-    config.areaRoomMapsTableOffset = 0x107988;
-    config.areaTableTableOffset = 0x0D50FC;
-    config.areaTilesTableOffset = 0x10309C;
-    config.spritePtrsTableOffset = 0x0029B4;
     config.spritePtrsCount = 329;
-    config.translationsTableOffset = 0x109214;
     config.language = 1;
-    config.variant = "USA";
+    if (std::memcmp(gameCode, "BZMP", 4) == 0) { /* EU */
+        config.gfxGroupsTableOffset = 0x100204;
+        config.paletteGroupsTableOffset = 0x0FED88;
+        config.globalGfxAndPalettesOffset = 0x5A23D0;
+        config.mapDataOffset = 0x323FEC;
+        config.areaRoomHeadersTableOffset = 0x11D95C;
+        config.areaTileSetsTableOffset = 0x101BC8;
+        config.areaRoomMapsTableOffset = 0x1070E4;
+        config.areaTableTableOffset = 0x0D4828;
+        config.areaTilesTableOffset = 0x1027F8;
+        config.spritePtrsTableOffset = 0x002A5C;
+        config.translationsTableOffset = 0x108968;
+        config.variant = "EU";
+    } else if (std::memcmp(gameCode, "BZMJ", 4) == 0) { /* JP */
+        config.gfxGroupsTableOffset = 0x100770;
+        config.paletteGroupsTableOffset = 0x0FF500;
+        config.globalGfxAndPalettesOffset = 0x5A2B20;
+        config.mapDataOffset = 0x324710;
+        config.areaRoomHeadersTableOffset = 0x11DED8;
+        config.areaTileSetsTableOffset = 0x102134;
+        config.areaRoomMapsTableOffset = 0x107650;
+        config.areaTableTableOffset = 0x0D4E9C;
+        config.areaTilesTableOffset = 0x102D64;
+        config.spritePtrsTableOffset = 0x0029B4;
+        config.translationsTableOffset = 0x108ED8;
+        config.variant = "JP";
+    } else { /* USA (BZME) and unknown fallback */
+        config.gfxGroupsTableOffset = 0x100AA8;
+        config.paletteGroupsTableOffset = 0x0FF850;
+        config.globalGfxAndPalettesOffset = 0x5A2E80;
+        config.mapDataOffset = 0x324AE4;
+        config.areaRoomHeadersTableOffset = 0x11E214;
+        config.areaTileSetsTableOffset = 0x10246C;
+        config.areaRoomMapsTableOffset = 0x107988;
+        config.areaTableTableOffset = 0x0D50FC;
+        config.areaTilesTableOffset = 0x10309C;
+        config.spritePtrsTableOffset = 0x0029B4;
+        config.translationsTableOffset = 0x109214;
+        config.variant = "USA";
+    }
+    std::fprintf(stderr, "[extract] region=%s (game code %.4s) areaTileSets=0x%X\n", config.variant.c_str(), gameCode,
+                 config.areaTileSetsTableOffset);
     config.outputRoot = opt.editable_root;
     config.runtimeOutputRoot = opt.runtime_root;
 

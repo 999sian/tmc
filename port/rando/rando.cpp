@@ -411,7 +411,7 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
         uint32_t tricks = settings->glitchless_logic ? 0u : settings->tricks;
         bool og = (tricks & RANDO_TRICK_OCARINA_GLITCH) && items[ITEM_OCARINA];
         bool crenel_clip = (tricks & RANDO_TRICK_CRENEL_CLIP) && has_bottle;
-
+        bool pjs = (tricks & RANDO_TRICK_PORTAL_JUMP_STORAGE) && items[ITEM_OCARINA];
         UPDATE_HELPER(RH_CRENEL_BASE, has_bombs || has_bottle);
         UPDATE_HELPER(RH_CRENEL, helpers[RH_CRENEL_BASE] && (items[ITEM_GRIP_RING] || has_bottle));
         // Crenel Clip (glitch): Mt. Crenel -> Western Woods -> Castor Wilds without Boots/Flippers.
@@ -421,7 +421,7 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
         UPDATE_HELPER(RH_LON_LON, items[ITEM_QST_LONLON_KEY]);
         UPDATE_HELPER(RH_LAKE_HYLIA, helpers[RH_LON_LON] && (items[ITEM_FLIPPERS] || items[ITEM_OCARINA]));
         UPDATE_HELPER(RH_FALLS, helpers[RH_NORTH_FIELD] && has_sword);
-        UPDATE_HELPER(RH_CLOUD_TOPS, helpers[RH_FALLS] && items[ITEM_GRIP_RING] && items[ITEM_MOLE_MITTS] && items[ITEM_FLIPPERS] && has_bombs && items[ITEM_KINSTONE_BAG]);
+        UPDATE_HELPER(RH_CLOUD_TOPS, (helpers[RH_FALLS] && items[ITEM_GRIP_RING] && items[ITEM_MOLE_MITTS] && items[ITEM_FLIPPERS] && has_bombs && items[ITEM_KINSTONE_BAG]) || (helpers[RH_TOWN] && pjs));
         UPDATE_HELPER(RH_WIND_TRIBE, helpers[RH_CLOUD_TOPS]);
         
         // Dynamic entrance mappings
@@ -455,8 +455,20 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
     }
 }
 
+static bool IsObscureLocation(const RandoLocationDef* loc) {
+    if (strstr(loc->name, "Dig Spot") != NULL) return true;
+    if (strstr(loc->name, "Graveyard") != NULL) return true;
+    if (strstr(loc->name, "Dojo") != NULL) return false;
+    if (strstr(loc->name, "Scrub Reward") != NULL) return true;
+    if (strstr(loc->name, "DHC -") != NULL) return false;
+    if (strstr(loc->name, "Melari Upper") != NULL && strstr(loc->name, "Dig") != NULL) return true;
+    return false;
+}
 static bool LocationEnabled(const RandomizerSettings* settings, const RandoLocationDef* loc) {
     if (!settings->shuffle_dojos && loc->category == RANDO_LOC_CATEGORY_DOJO) {
+        return false;
+    }
+    if (!settings->obscure_locations && IsObscureLocation(loc)) {
         return false;
     }
     return true;
@@ -871,6 +883,7 @@ static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* setting
 extern "C" RandomizerSettings Rando_DefaultSettings(void) {
     RandomizerSettings settings;
     settings.glitchless_logic = true;
+    settings.obscure_locations = false;
     settings.shuffle_kinstones = true;
     settings.shuffle_entrances = false;
     settings.shuffle_dojos = true;
