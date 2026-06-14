@@ -144,7 +144,7 @@
 #else /* !PC_PORT */
 
 /* On GBA, just take the address of the symbol as usual. */
-#define PORT_SCRIPT(name) (&name)
-#define ENTITY_SCRIPT(name) (u32) & name
+#define PORT_SCRIPT(name) ((void*)&name)
+#define ENTITY_SCRIPT(name) (u32)&name
 
 #endif /* PC_PORT */

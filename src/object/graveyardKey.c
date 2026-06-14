@@ -152,6 +152,7 @@ void GraveyardKey_Action2(Entity* this, const struct_gUnk_08123FB0* param_2) {
 
 void GraveyardKey_Action3(Entity* this, const struct_gUnk_08123FB0* param_2) {
     u8 type;
+    u16 flag;
 
     if (gPlayerState.flags & PL_MINISH) {
         sub_0800445C(this);
@@ -169,7 +170,7 @@ void GraveyardKey_Action3(Entity* this, const struct_gUnk_08123FB0* param_2) {
             }
 #endif
             CreateItemEntity(item, subtype, 0);
-            u16 flag = param_2->flag;
+            flag = param_2->flag;
 #ifdef MULTI_REGION
             /* Row index 1 (heart piece) flag diverges: USA 0xd0, JP/EU 0xCD. */
             if (this->type == 1 && (REGION_IS_JP || REGION_IS_EU)) {

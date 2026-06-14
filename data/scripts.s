@@ -6,6 +6,7 @@
 	.include "flags.inc"
 	.include "message.inc"
 	.include "item.inc"
+	.include "item_ids.inc"
 	.include "player.inc"
 	.include "sound.inc"
 	.include "kinstone.inc"

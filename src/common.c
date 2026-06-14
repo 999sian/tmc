@@ -325,7 +325,7 @@ void MemClear(void* dest, u32 size) {
 #ifdef PC_PORT
     memset(port_resolve_addr((uintptr_t)dest), 0, size);
 #else
-    gba_MemClear((u32)dest, size);
+    DmaClear32(3, dest, size);
 #endif
 }
 
@@ -335,7 +335,7 @@ void MemCopy(const void* src, void* dest, u32 size) {
     const void* resolvedSrc = Port_IsLoadedAssetBytes(src, size) ? src : port_resolve_addr((uintptr_t)src);
     memmove(resolvedDest, resolvedSrc, size);
 #else
-    gba_MemCopy((u32)src, (u32)dest, size);
+    DmaCopy32(3, src, dest, size);
 #endif
 }
 
@@ -708,7 +708,11 @@ void DispReset(bool32 refresh) {
     gScreen.vBlankDMA.readyBackup = FALSE;
     gScreen.vBlankDMA.ready = FALSE;
     DmaStop(0);
+#ifdef PC_PORT
     gba_write16(REG_ADDR_DISPCNT, 0);
+#else
+    REG_DISPCNT = 0;
+#endif
     ClearOAM();
     ResetScreenRegs();
 #ifdef PC_PORT
@@ -727,7 +731,11 @@ void ClearOAM(void) {
     for (i = 128; i != 0; --i) {
         *(u16*)d = 0x2A0;
         d += 8;
+#ifdef PC_PORT
         gba_write16((uint32_t)mem, 0x2A0);
+#else
+        *(u16*)mem = 0x2A0;
+#endif
         mem += 8;
     }
 }

@@ -1749,10 +1749,13 @@ u32 sub_unk3_TownMinishHoles_LibraryBookshelf(void) {
  * default `npc_raw` pool of 0x4F → matches every other NPC
  * EntityData in src/cutscene.c / src/worldEvent/*; the `15` in
  * the C transcription was a decomp typo. */
+extern u32 script_TownMinish1;
+#ifdef PC_PORT
 EntityData gUnk_additional_a_TownMinishHoles_LibraryBookshelf[] = {
     { NPC, 0x4F, TOWN_MINISH, 2, 0x200, 0x80, 0x158, ENTITY_SCRIPT(script_TownMinish1) },
     { 0xFF, 0, 0, 0, 0, 0, 0, 0 },
 };
+#endif
 
 extern EntityData gUnk_080DB8F0;
 extern EntityData gUnk_additional_a_TownMinishHoles_LibraryBookshelf[];

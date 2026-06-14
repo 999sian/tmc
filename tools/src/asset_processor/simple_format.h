@@ -45,7 +45,7 @@ inline FormatSpec ParseSpec(const std::string& spec) {
 
 template <typename T>
 inline void AppendValue(std::ostringstream& out, const T& value, const FormatSpec& spec) {
-    if constexpr (std::is_integral_v<T> || std::is_enum_v<T>) {
+    if constexpr ((std::is_integral_v<T> && !std::is_same_v<T, bool>) || std::is_enum_v<T>) {
         using PrintType = std::conditional_t<std::is_signed_v<T>, long long, unsigned long long>;
         const auto printable = static_cast<PrintType>(value);
         const bool useHex = spec.type == 'x' || spec.type == 'X';
@@ -64,6 +64,9 @@ inline void AppendValue(std::ostringstream& out, const T& value, const FormatSpe
             }
             out << std::hex << printable << std::dec;
             out << std::nouppercase << std::setfill(' ');
+            return;
+        } else {
+            out << printable;
             return;
         }
     }

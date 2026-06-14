@@ -650,9 +650,10 @@ u32 sub_080A4418(u32 param_1, u32 param_2) {
     void* src;
     u32 t, t2;
     void* dest;
+    const u32* gUnk_080CA06C_sel;
 
     dest = (void*)(param_2 * 0x20 + 0x6010000);
-    const u32* gUnk_080CA06C_sel = gUnk_080CA06C;
+    gUnk_080CA06C_sel = gUnk_080CA06C;
 #ifdef MULTI_REGION
     extern const u32 gUnk_080CA06C_eu[];
     if (REGION_IS_EU)
