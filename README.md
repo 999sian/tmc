@@ -34,6 +34,12 @@ Each tarball contains:
 tmc_pc      sounds.json      assets/      assets_src/
 ```
 
+The extracted asset cache under `assets/` (and the editable `assets_src/`) is keyed
+per region in a subfolder — `assets/usa/`, `assets/eu/`, `assets/jp/` — so running
+more than one regional ROM from the same install never mixes or corrupts another
+region's data. The cache for each region is built automatically on first launch of
+that ROM. `sounds.json` is shared across regions and stays at the top level.
+
 Setup, once:
 
 1. Download the platform tarball
