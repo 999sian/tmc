@@ -861,6 +861,7 @@ target("tmc_pc")
     add_files("port/port_repro_rando.c")
     add_files("port/port_repro_a11y.c")
     add_files("port/port_repro_roomcap.c")  -- generic in-game room capture (TMC_ROOMCAP)
+    add_files("port/port_repro_introdbg.c") -- Smith's-house intro cutscene diagnostic (TMC_REPRO_INTRODBG)
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.

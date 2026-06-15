@@ -226,6 +226,29 @@ void InitAnimationForceUpdate(Entity* entity, u32 animIndex) {
 /* UpdateAnimationSingleFrame — advance by 1 tick + GFX slot update    */
 /* ------------------------------------------------------------------ */
 void UpdateAnimationSingleFrame(Entity* entity) {
+#ifdef PC_PORT
+    extern unsigned long Port_UASF_Calls;
+    Port_UASF_Calls++;
+    {
+        extern int Port_FselAnimTrace;
+        if (Port_FselAnimTrace) {
+            u8 fd0 = entity->frameDuration, fi0 = entity->frameIndex, ai0 = entity->animIndex;
+            const void* ap0 = entity->animPtr;
+            UpdateAnimationVariableFrames(entity, 1);
+            fprintf(stderr,
+                    "[fselanim] sprite=%u anim=%u fi:%u->%u dur:%u->%u animPtr=%p%s\n",
+                    entity->spriteIndex, ai0, fi0, entity->frameIndex, fd0,
+                    entity->frameDuration, ap0,
+                    (ap0 != entity->animPtr) ? " (animPtr-moved)" : "");
+            u8 fi = entity->frameIndex;
+            u8 lfi = entity->lastFrameIndex;
+            entity->lastFrameIndex = fi;
+            if (fi != lfi)
+                UpdateSpriteGfxSlot(entity, fi, (u16)entity->spriteIndex);
+            return;
+        }
+    }
+#endif
     UpdateAnimationVariableFrames(entity, 1);
 
     u8 fi = entity->frameIndex;
@@ -235,6 +258,11 @@ void UpdateAnimationSingleFrame(Entity* entity) {
         UpdateSpriteGfxSlot(entity, fi, (u16)entity->spriteIndex);
     }
 }
+
+#ifdef PC_PORT
+int Port_FselAnimTrace = 0;
+unsigned long Port_UASF_Calls = 0;
+#endif
 
 /* ------------------------------------------------------------------ */
 /* sub_080042BA — advance by N ticks + GFX slot update                 */
