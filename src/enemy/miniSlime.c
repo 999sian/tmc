@@ -21,6 +21,9 @@ typedef struct {
     /*0x6d*/ u8 unk_6d;
 } MiniSlimeEntity;
 
+PORT_STATIC_ASSERT_OFFSET(MiniSlimeEntity, unk_6c, 0x6c, 0x98,
+                          "MiniSlimeEntity unk_6c offset (Enemy::child +4 pad)");
+
 void sub_08045374(MiniSlimeEntity* this);
 void MiniSlime_OnTick(MiniSlimeEntity* this);
 void MiniSlime_OnCollision(MiniSlimeEntity* this);

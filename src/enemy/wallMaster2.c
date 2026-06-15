@@ -31,6 +31,9 @@ typedef struct {
     /*0x7c*/ u16 unk_7c;
 } WallMaster2Entity;
 
+PORT_STATIC_ASSERT_OFFSET(WallMaster2Entity, unk_74, 0x74, 0xA0,
+                          "WallMaster2Entity unk_74 offset (Enemy::child +4 pad)");
+
 void sub_0802CF64(WallMaster2Entity*);
 void sub_0802CF8C(WallMaster2Entity*);
 void sub_0802CFD8(WallMaster2Entity*);

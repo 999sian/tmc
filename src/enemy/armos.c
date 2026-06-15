@@ -37,6 +37,9 @@ typedef struct {
     /*0x84*/ u32 unk_84;
 } ArmosEntity;
 
+PORT_STATIC_ASSERT_OFFSET(ArmosEntity, unk_78, 0x78, 0xA4,
+                          "ArmosEntity unk_78 offset (Enemy::child +4 pad)");
+
 extern void (*const gUnk_080CE124[])(ArmosEntity*);
 extern void (*const gUnk_080CE13C[])(ArmosEntity*);
 extern const u8 gUnk_080CE160[];

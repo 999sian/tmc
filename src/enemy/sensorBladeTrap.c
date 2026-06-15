@@ -31,6 +31,9 @@ typedef struct {
     /*0x86*/ u16 unk_86;
 } SensorBladeTrapEntity;
 
+PORT_STATIC_ASSERT_OFFSET(SensorBladeTrapEntity, unk_78, 0x78, 0xA4,
+                          "SensorBladeTrapEntity unk_78 offset (Enemy::child +4 pad)");
+
 extern u32 sub_0804A024(Entity*, u32, u32);
 
 void sub_0802BB10(SensorBladeTrapEntity* this);

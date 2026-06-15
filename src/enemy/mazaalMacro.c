@@ -36,6 +36,9 @@ typedef struct {
     /*0x84*/ ScriptExecutionContext* context;
 } MazaalMacroEntity;
 
+PORT_STATIC_ASSERT_OFFSET(MazaalMacroEntity, unk_6d, 0x6d, 0x99,
+                          "MazaalMacroEntity unk_6d offset (Enemy::child +4 pad)");
+
 extern void sub_0807B600(u32);
 
 extern const u16 script_MazaalMacroDefeated[];

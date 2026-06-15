@@ -22,6 +22,9 @@ typedef struct {
     /*0x6c*/ u8 unk_6c;
 } MiniFireballGuyEntity;
 
+PORT_STATIC_ASSERT_OFFSET(MiniFireballGuyEntity, unk_6c, 0x6c, 0x98,
+                          "MiniFireballGuyEntity unk_6c offset (Enemy::child +4 pad)");
+
 extern void sub_08045678(MiniFireballGuyEntity* this);
 void MiniFireballGuy_OnTick(MiniFireballGuyEntity* this);
 void MiniFireballGuy_OnCollision(MiniFireballGuyEntity* this);
