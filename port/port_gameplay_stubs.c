@@ -463,7 +463,13 @@ u32 PlayerCheckNEastTile(void) {
 
 static const s8 sVelocities1[] = { 0, -3, 3, -3, 3, 0, 3, 3, 0, 3, -3, 3, -3, 0, -3, -3 };
 static const s8 sIceVelocities[] = { 0, -10, 10, -10, 10, 0, 10, 10, 0, 10, -10, 10, -10, 0, -10, -10 };
-static const s8 sVelocities3[] = { 0, 6, -6, 0, 0, -6, 6, 0 };
+/* Full 16-byte table from ASM `velocities3` (player.s). It is indexed by
+ * (animationState & ~1), 0..14, reading two consecutive bytes — so it must be
+ * 16 bytes. The earlier port truncated it to 8, making any animationState >= 8
+ * on the jump_status!=0 / diff>4 path read past the array (garbage velocity).
+ * Second half (0x10..0x13 rows) restored to match GBA. */
+static const s8 sVelocities3[] = { 0,  6, -6,  0,  0, -6,  6,  0,
+                                   19, 18, 18, 16, 16, 17, 17, 19 };
 
 static void ClampPlayerVelocityAxis(s16* axis) {
     if (*axis > 0x180) {
