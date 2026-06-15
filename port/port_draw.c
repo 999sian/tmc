@@ -33,6 +33,8 @@
 
 /* Forward declaration of RenderSpritePieces (defined below) */
 static void RenderSpritePieces(const u8* data, s16 baseX, s16 baseY, u32 flags, u16 extra);
+/* Region-select a ROM offset by the loaded ROM's game code (defined below). */
+static u32 RegionRomOffset(u32 usa, u32 eu, u32 jp);
 
 /* Muddy-water sink clip (issue #84). Set by Port_MuddyWaterSinkTick in
  * src/player.c when Link is on a swamp tile; RenderSpritePieces drops
@@ -44,7 +46,7 @@ static int sRenderingPlayer = 0;
 /* Shoes-overlay frame table (loaded from ROM 0x080B2B58, see comment below
  * the table definition). Forward-declared here because ProcessEntityForDraw
  * uses them and is defined above the loader. */
-static const u8* sShoesOverlayPtrs[16];
+static const u8* sShoesOverlayPtrs[32];
 static int sShoesOverlayTableLoaded;
 static void LoadShoesOverlayTableFromRom(void);
 extern u32 gFrameObjLists[50016];
@@ -937,7 +939,9 @@ static void ProcessEntityForDraw(Entity* entity) {
 
         if (actTile == 0x0Fu || actTile == 0x2Fu) {
             u8 ssRaw = *(u8*)&entity->spriteSettings;
-            u8 row = (u8)((ssRaw & 0x30u) >> 2); /* 0x00, 0x04, 0x08, 0x0C */
+            /* GBA uses (ss & 0x30) directly as a BYTE offset into the pointer
+             * table (add r2, r1, r2, lsl #1 ; ldr [table, r2]), NOT (ss>>2). */
+            u32 ssBits = (u32)ssRaw & 0x30u;
             u8 frame;
             s32 overlayY = y;
             if (actTile == 0x0Fu) {
@@ -949,13 +953,22 @@ static void ProcessEntityForDraw(Entity* entity) {
                 overlayY += 2;
             } else {
                 /* Tall grass — position-derived "random" frame so neighbouring
-                 * patches don't all wave in sync. */
-                u8 xb = (u8)(entity->x.HALF.LO >> 8);
-                u8 yb = (u8)(entity->y.HALF.LO >> 8);
+                 * patches don't all wave in sync. Read the INTEGER pixel-position
+                 * bytes x.HALF.HI ^ y.HALF.HI (entity[0x2e] ^ entity[0x32],
+                 * asm/src/intr.s:1390). The previous code read the FRACTIONAL
+                 * bytes (x.HALF.LO>>8 = entity[0x2d]), so the frame jittered with
+                 * sub-pixel motion instead of being stable per tile. */
+                u8 xb = (u8)entity->x.HALF.HI;
+                u8 yb = (u8)entity->y.HALF.HI;
                 frame = (u8)((xb ^ yb) & 6u);
             }
-            u32 idx = (u32)(row + (frame << 1));
-            if (idx < 16u && sShoesOverlayPtrs[idx] != NULL) {
+            /* ldr table[(ss&0x30) + (frame<<1)] is a byte offset into a
+             * 32-pointer table (asm/src/intr.s:1392-1395); pointer index is
+             * that >>2. Water frames (32..38) map to indices 16..31 — the old
+             * 16-entry table with (row>>2 + frame<<1) put them out of range, so
+             * the water overlay never drew. */
+            u32 idx = (ssBits + ((u32)frame << 1)) >> 2;
+            if (idx < 32u && sShoesOverlayPtrs[idx] != NULL) {
                 u16 overlayExtra = (u16)(extra & 0x0C00u); /* keep priority bits only */
                 RenderSpritePieces(sShoesOverlayPtrs[idx], (s16)x, (s16)overlayY, 0, overlayExtra);
             }
@@ -1018,24 +1031,31 @@ static void ProcessDrawList(EntityDrawList* list) {
 static const u8* sShadowFramePtrs[4] = { NULL, NULL, NULL, NULL };
 static int sShadowTableLoaded = 0;
 
-/* Companion table at ROM 0x080B2B58 (16 IWRAM-relative pointers, same
+/* Companion table at ROM 0x080B2B58 (32 IWRAM-relative pointers, same
  * relocation delta) — sprite-frame data for the "shoes overlay" the GBA
  * draws over Link's feet when he steps onto shallow water (act-tile 0x0F)
  * or tall grass (act-tile 0x2F). Without it, Link's shoes don't get
  * obscured by water/grass and the effect is invisible (#24).
  *
- * Layout: 4 rows × 4 frames. Row = (entity->spriteSettings & 0x30) >> 2,
- * frame index within the row is animated:
- *   - shallow water (0x0F): based on gOAMControls field_0x1 (frame counter)
- *   - tall grass    (0x2F): position-derived (entity x byte ^ y byte) & 6 */
+ * The GBA indexes it as a BYTE-offset pointer table:
+ *   ptr = table[(spriteSettings & 0x30) + (frame << 1)]   (then >>2 for index)
+ * Grass frames (0..6) land in indices 0..15; water frames (32..38) land in
+ * indices 16..31 — which is why the table needs all 32 entries (a 16-entry
+ * table dropped the water overlay entirely). */
 /* Definitions for the forward-declared shoes-overlay table above. */
-static const u8* sShoesOverlayPtrs[16] = { NULL };
+static const u8* sShoesOverlayPtrs[32] = { NULL };
 static int sShoesOverlayTableLoaded = 0;
 
 static const u8* TranslateIwramOrRomPointer(u32 ptr) {
-    static const u32 kIwramToRomDeltaUSA = 0x050AC28Cu;
+    /* IWRAM-resident frame data (shadow/shoes tables) is DMA'd from ROM at boot;
+     * map the IWRAM address back to its ROM source (the .iwram section LMA - VMA
+     * delta). The delta is region-specific — using the USA delta against an EU/JP
+     * ROM reads garbage frame data, so the shadow pass renders ~90-180-piece junk
+     * sprites that flood OAM. Deltas derived + verified per region (each resolves
+     * the shadow/shoes tables to valid small piece counts). */
     if (ptr >= 0x03000000u && ptr < 0x03008000u) {
-        u32 romFull = ptr + kIwramToRomDeltaUSA;
+        const u32 delta = RegionRomOffset(0x050AC28Cu, 0x050AB7ECu, 0x050AC02Cu);
+        u32 romFull = ptr + delta;
         if (romFull >= 0x08000000u && romFull < 0x08000000u + gRomSize) {
             return gRomData + (romFull - 0x08000000u);
         }
@@ -1052,8 +1072,27 @@ static u32 ReadRomU32LE(u32 offset) {
          | ((u32)gRomData[offset + 3] << 24);
 }
 
+/*
+ * Region-select a ROM offset by the loaded ROM's game code (@0xAC). The shadow
+ * and shoes-overlay frame-pointer tables live in an unnamed data block whose
+ * address differs per region; using the USA offset against an EU/JP ROM reads
+ * garbage ROM pointers, so DrawEntitySprites' shadow pass renders ~181-piece
+ * garbage sprites that flood OAM (the whole screen fills with junk). Offsets
+ * derived + byte-verified from the retail maps (the resolved entries are the
+ * same IWRAM frame pointers in every region). */
+static u32 RegionRomOffset(u32 usa, u32 eu, u32 jp) {
+    if (gRomData != NULL && gRomSize >= 0xB0 && gRomData[0xAC] == 'B' && gRomData[0xAD] == 'Z' &&
+        gRomData[0xAE] == 'M') {
+        if (gRomData[0xAF] == 'P')
+            return eu;
+        if (gRomData[0xAF] == 'J')
+            return jp;
+    }
+    return usa;
+}
+
 static void LoadShadowTableFromRom(void) {
-    static const u32 kShadowTableRomOffset = 0xB2BD8u;
+    const u32 kShadowTableRomOffset = RegionRomOffset(0xB2BD8u, 0xB2300u, 0xB2978u);
 
     if (sShadowTableLoaded || gRomData == NULL || gRomSize <= kShadowTableRomOffset + 16u) {
         sShadowTableLoaded = 1;
@@ -1066,12 +1105,12 @@ static void LoadShadowTableFromRom(void) {
 }
 
 static void LoadShoesOverlayTableFromRom(void) {
-    static const u32 kShoesTableRomOffset = 0xB2B58u;
-    if (sShoesOverlayTableLoaded || gRomData == NULL || gRomSize <= kShoesTableRomOffset + 64u) {
+    const u32 kShoesTableRomOffset = RegionRomOffset(0xB2B58u, 0xB2280u, 0xB28F8u);
+    if (sShoesOverlayTableLoaded || gRomData == NULL || gRomSize <= kShoesTableRomOffset + 128u) {
         sShoesOverlayTableLoaded = 1;
         return;
     }
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < 32; i++) {
         sShoesOverlayPtrs[i] = TranslateIwramOrRomPointer(ReadRomU32LE(kShoesTableRomOffset + i * 4));
     }
     sShoesOverlayTableLoaded = 1;
@@ -1100,7 +1139,6 @@ static void ProcessDeferredList(void) {
         const u8* frameData = sShadowFramePtrs[listType];
         if (frameData == NULL)
             continue;
-
         RenderSpritePieces(frameData, (s16)screenX, (s16)screenY, 0, extra);
     }
 }

@@ -1238,10 +1238,20 @@ void ScriptCommand_SetPlayerIdle(Entity* entity, ScriptExecutionContext* context
 
 void ScriptCommand_EnablePlayerControl(Entity* entity, ScriptExecutionContext* context) {
     gPlayerState.controlMode = CONTROL_1;
+#ifdef PC_PORT
+    if (getenv("TMC_TRACE_INTRO"))
+        fprintf(stderr, "[introtrace] EnablePlayerControl (entity k=%d id=%d) ctrl->1\n",
+                entity->kind, entity->id);
+#endif
 }
 
 void ScriptCommand_DisablePlayerControl(Entity* entity, ScriptExecutionContext* context) {
     gPlayerState.controlMode = CONTROL_DISABLED;
+#ifdef PC_PORT
+    if (getenv("TMC_TRACE_INTRO"))
+        fprintf(stderr, "[introtrace] DisablePlayerControl (entity k=%d id=%d) ctrl->0\n",
+                entity->kind, entity->id);
+#endif
 }
 
 void ScriptCommand_SetPlayerAction(Entity* entity, ScriptExecutionContext* context) {
