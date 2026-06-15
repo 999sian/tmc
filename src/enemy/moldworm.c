@@ -46,6 +46,9 @@ typedef struct {
     /*0x87*/ u8 unk_87;
 } MoldwormEntity;
 
+PORT_STATIC_ASSERT_OFFSET(MoldwormEntity, unk_74, 0x74, 0xA0,
+                          "MoldwormEntity unk_74 offset (Enemy::child +4 pad)");
+
 extern void SoundReqClipped(Entity*, u32);
 extern bool32 sub_08023A38(u32 tileType);
 

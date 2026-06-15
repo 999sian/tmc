@@ -43,6 +43,9 @@ typedef struct {
     /*0x84*/ u32 unk_84;
 } MoldormEntity;
 
+PORT_STATIC_ASSERT_OFFSET(MoldormEntity, unk_74, 0x74, 0xA0,
+                          "MoldormEntity unk_74 offset (Enemy::child +4 pad)");
+
 void sub_08022EAC(MoldormEntity*);
 void sub_08022F14(MoldormEntity*);
 

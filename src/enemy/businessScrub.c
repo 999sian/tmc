@@ -51,6 +51,9 @@ typedef struct {
     /*0x86*/ u16 flag;
 } BusinessScrubEntity;
 
+PORT_STATIC_ASSERT_OFFSET(BusinessScrubEntity, unk_74, 0x74, 0xA0,
+                          "BusinessScrubEntity unk_74 offset (Enemy::child +4 pad)");
+
 void sub_08028E9C(BusinessScrubEntity*);
 void sub_08028EDC(BusinessScrubEntity*);
 bool32 sub_08028F98(BusinessScrubEntity*, u32);

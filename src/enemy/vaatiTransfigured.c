@@ -44,6 +44,9 @@ typedef struct {
     /*0x86*/ u8 unk_86;
     /*0x87*/ u8 unk_87;
 } VaatiTransfiguredEntity;
+
+PORT_STATIC_ASSERT_OFFSET(VaatiTransfiguredEntity, unk_6d, 0x6d, 0x99,
+                          "VaatiTransfiguredEntity unk_6d offset (Enemy::child +4 pad)");
 #ifdef PC_PORT
 static Entity* VaatiTransfigured_GetLiveParent(VaatiTransfiguredEntity* this) {
     /* #151 follow-up: these child parts assume parent stays valid on GBA; once

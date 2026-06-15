@@ -44,6 +44,9 @@ typedef struct MazaalHeadEntity_ {
     /*0x81*/ u8 unk_81;
 } MazaalHeadEntity;
 
+PORT_STATIC_ASSERT_OFFSET(MazaalHeadEntity, unk_6d, 0x6d, 0x99,
+                          "MazaalHeadEntity unk_6d offset (Enemy::child +4 pad)");
+
 extern void UnloadOBJPalette(Entity*);
 
 void sub_0803499C(MazaalHeadEntity*);

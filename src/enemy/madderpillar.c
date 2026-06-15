@@ -44,6 +44,9 @@ typedef struct {
     /*0x86*/ u8 unk_86;
 } MadderpillarEntity;
 
+PORT_STATIC_ASSERT_OFFSET(MadderpillarEntity, unk_74, 0x74, 0xA0,
+                          "MadderpillarEntity unk_74 offset (Enemy::child +4 pad)");
+
 void sub_08029E0C(MadderpillarEntity* this);
 void sub_08029EEC(MadderpillarEntity* this);
 void sub_0802A098(MadderpillarEntity* this);
