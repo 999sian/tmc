@@ -42,6 +42,7 @@
 #include "port_asset_loader.h"
 #include "port_asset_log.hpp"
 #include "port_asset_pipeline.hpp"
+#include "region.h"   /* RegionAssetSubdir() — per-region cache folder */
 
 #include "assets_extractor_api.hpp"
 extern "C" const char* Port_GetLoadedRomPath(void);
@@ -92,7 +93,9 @@ void MountPaksForRoot(const std::filesystem::path& root) {
         std::fprintf(stderr, "[ASSET] paks present but disabled by --loose-assets\n");
         return;
     }
-    const std::filesystem::path assetsDir = root / "assets";
+    /* Per-region cache: assets/<region>/. Keeps USA/EU/JP paks from clobbering
+     * each other when the same install runs more than one ROM. */
+    const std::filesystem::path assetsDir = root / "assets" / RegionAssetSubdir();
     const int mounted = Port_MountAssetPaks(assetsDir.string().c_str());
     if (mounted > 0) {
         std::fprintf(stderr, "[ASSET] paks mounted: %d (%d entries)\n", mounted,
@@ -464,6 +467,14 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
         (loadedRomPath && loadedRomPath[0]) ? std::filesystem::path(loadedRomPath) : (root / "baserom.gba");
     const bool packMode = !Port_LooseAssetsRequested;
 
+    /* Per-region cache roots: assets/<region>/ and assets_src/<region>/. gRomRegion
+     * was set by Port_LoadRom() before we got here, so RegionAssetSubdir() is valid.
+     * Isolating per region stops a USA/EU/JP swap from reusing or overwriting another
+     * region's extracted tree — the 16 MB size fingerprint alone can't tell them apart. */
+    const char* regionSub = RegionAssetSubdir();
+    const std::filesystem::path runtimeRoot = root / "assets" / regionSub;
+    const std::filesystem::path editableRoot = root / "assets_src" / regionSub;
+
     /* Step 1: warm-launch fast path. Same ROM fingerprint + pack
      * mode recorded in assets/ means current runtime tree matches the
      * actually loaded ROM. Multi-region builds must not compare JP/EU
@@ -473,9 +484,9 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
     const bool rom_on_disk = std::filesystem::exists(rom, rom_ec);
     bool up_to_date = false;
     if (rom_on_disk) {
-        up_to_date = AssetExtractorApi::RuntimeUpToDate(root / "assets", rom, packMode);
+        up_to_date = AssetExtractorApi::RuntimeUpToDate(runtimeRoot, rom, packMode);
     } else if (rom_data != nullptr && rom_size > 0) {
-        up_to_date = AssetExtractorApi::RuntimeUpToDate(root / "assets",
+        up_to_date = AssetExtractorApi::RuntimeUpToDate(runtimeRoot,
                                                        static_cast<std::uint64_t>(rom_size),
                                                        0, packMode);
     }
@@ -520,8 +531,8 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
          * extractor copies bytes into its own vector internally. */
         opt.rom_buffer = std::span<const uint8_t>(rom_data, rom_size);
     }
-    opt.editable_root = root / "assets_src";
-    opt.runtime_root = root / "assets";
+    opt.editable_root = editableRoot;
+    opt.runtime_root = runtimeRoot;
     opt.runtime_only = true;     // engine doesn't need the editable JSON tree
     opt.pack_runtime = packMode;
     opt.force = false;

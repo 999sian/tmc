@@ -8,6 +8,8 @@ extern "C" {
 #include "common.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
+#include "port_config.h"  /* gRomRegion / ROM_REGION_JP for the JP gfx-group gate */
+#include "region.h"       /* RegionAssetSubdir() — per-region cache folder */
 #include "port_asset_index.h"
 #include "structures.h"
 #include "area.h"
@@ -319,30 +321,70 @@ static std::vector<std::filesystem::path> AssetSearchRoots() {
     return roots;
 }
 
+/* The asset cache is keyed per-region: assets/<region>/ and assets_src/<region>/.
+ * gActiveRegion is set at ROM load, so RegionAssetSubdir() is valid here. For USA
+ * we also accept the legacy FLAT assets/ tree (older installs predating per-region
+ * folders) so they aren't forced to re-extract. The flat fallback is USA-only on
+ * purpose: a JP/EU run must never silently pick up a flat USA tree — that is the
+ * exact cross-region corruption this scheme exists to prevent. */
+static bool RegionAllowsLegacyFlat() {
+    return std::string(RegionAssetSubdir()) == "usa";
+}
+
 std::optional<std::filesystem::path> FindEditableAssetsRoot() {
+    const char* sub = RegionAssetSubdir();
+    const auto hasManifests = [](const std::filesystem::path& dir) {
+        return std::filesystem::exists(dir / "gfx_groups.json") &&
+               std::filesystem::exists(dir / "palette_groups.json") &&
+               std::filesystem::exists(dir / "palettes.json");
+    };
     for (const auto& root : AssetSearchRoots()) {
-        const std::filesystem::path candidate = root / "assets_src";
-        if (std::filesystem::exists(candidate / "gfx_groups.json") &&
-            std::filesystem::exists(candidate / "palette_groups.json") &&
-            std::filesystem::exists(candidate / "palettes.json")) {
-            return candidate;
+        const std::filesystem::path regioned = root / "assets_src" / sub;
+        if (hasManifests(regioned)) {
+            return regioned;
+        }
+        if (RegionAllowsLegacyFlat()) {
+            const std::filesystem::path legacy = root / "assets_src";
+            if (hasManifests(legacy)) {
+                return legacy;
+            }
         }
     }
     return std::nullopt;
 }
 
 std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
+    const char* sub = RegionAssetSubdir();
+    const auto hasManifests = [](const std::filesystem::path& dir) {
+        return std::filesystem::exists(dir / "gfx_groups.json") &&
+               std::filesystem::exists(dir / "palette_groups.json");
+    };
     for (const auto& root : AssetSearchRoots()) {
-        const std::filesystem::path candidate = root / "assets";
-        if (std::filesystem::exists(candidate / "gfx_groups.json") &&
-            std::filesystem::exists(candidate / "palette_groups.json")) {
-            return candidate;
+        const std::filesystem::path regioned = root / "assets" / sub;
+        if (hasManifests(regioned)) {
+            return regioned;
+        }
+        if (RegionAllowsLegacyFlat()) {
+            const std::filesystem::path legacy = root / "assets";
+            if (hasManifests(legacy)) {
+                return legacy;
+            }
         }
     }
     return std::nullopt;
 }
 
+/* Map an editable root to its runtime sibling, preserving the region subdir:
+ *   <root>/assets_src/<region>  ->  <root>/assets/<region>
+ *   <root>/assets_src           ->  <root>/assets           (legacy flat) */
 std::filesystem::path RuntimeRootForEditableRoot(const std::filesystem::path& editableRoot) {
+    if (editableRoot.filename() == "assets_src") {
+        return editableRoot.parent_path() / "assets";
+    }
+    const std::filesystem::path base = editableRoot.parent_path();  // expected: .../assets_src
+    if (base.filename() == "assets_src") {
+        return base.parent_path() / "assets" / editableRoot.filename();
+    }
     return editableRoot.parent_path() / "assets";
 }
 
@@ -1294,6 +1336,11 @@ extern "C" void Port_LogAssetLoaderStatus(void) {
  * "EnsureAssetGroupCache failed altogether". */
 extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned int group) {
     std::fprintf(out, "  --- asset environment ---\n");
+    std::fprintf(out, "  active region: %s (cache subdir: assets/%s)\n",
+                 gRomRegion == ROM_REGION_EU ? "EU" :
+                 gRomRegion == ROM_REGION_JP ? "JP" :
+                 gRomRegion == ROM_REGION_USA ? "USA" : "UNKNOWN",
+                 RegionAssetSubdir());
 
     std::error_code ec;
     const auto cwd = std::filesystem::current_path(ec);
@@ -1503,6 +1550,15 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
 }
 
 extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
+    /* The extracted assets/ cache is USA-baseline (asset baseline is USA). It
+     * lacks the JP-specific gfx groups — notably the JP title screen (group 2:
+     * ZELDA logo / ゼルダの伝説 / PRESS START on BG1). Loading the USA group for a
+     * JP ROM leaves BG1 empty (no logo). Skip the asset path for a JP ROM so
+     * LoadGfxGroup falls through to the region-correct ROM gfx (gGfxGroups[group]
+     * resolved from JP offsets). Matches the JP asset-override gate in port_rom.c. */
+    if (gRomRegion == ROM_REGION_JP) {
+        return FALSE;
+    }
     if (!EnsureAssetGroupCache()) {
         return FALSE;
     }

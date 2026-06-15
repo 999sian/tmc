@@ -74,4 +74,26 @@ extern int gActiveRegion;
 
 #endif
 
+/*
+ * Subdirectory name for the active region's extracted asset cache.
+ *
+ * The asset cache is keyed per-region (assets/<sub>/, assets_src/<sub>/) so that
+ * switching ROMs never reuses or overwrites another region's extracted data —
+ * the same isolation the save files use (tmc.sav / tmc_eu.sav / tmc_jp.sav). All
+ * three retail ROMs are 16 MB, so the runtime up-to-date fingerprint cannot tell
+ * them apart by size; a dedicated folder per region removes the ambiguity.
+ *
+ * Works in both modes: REGION_IS_* are runtime reads in MULTI_REGION and folded
+ * constants otherwise. UNKNOWN falls through to "usa" (the asset baseline).
+ *
+ * Guarded to PC_PORT so the byte-matching GBA build stays pure-macro (see above).
+ */
+#ifdef PC_PORT
+static inline const char* RegionAssetSubdir(void) {
+    if (REGION_IS_EU) return "eu";
+    if (REGION_IS_JP) return "jp";
+    return "usa";
+}
+#endif
+
 #endif /* REGION_H */
