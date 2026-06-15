@@ -154,6 +154,14 @@ typedef struct {
 
 extern UpdateContext gUpdateContext;
 
+/* Per-entity enemy-target cache. arm_UpdateEntities zeroes this before every
+ * entity update (the `mov r0,#0; str r0,[r7]` where r7 = &gEnemyTarget, per the
+ * gUnk_080026A4 parameter block, asm/src/code_08001A7C.s:863-873). The cache
+ * (sub_08049DF4) returns it when non-NULL, so without the per-entity reset a
+ * permissive enemy's target leaks into a stricter one (e.g. an enemy that should
+ * only target a minish Link). */
+extern Entity* gEnemyTarget;
+
 /* External function called after each entity update */
 extern void UpdateCollision(Entity* entity);
 
@@ -253,11 +261,13 @@ void ram_UpdateEntities(u32 mode) {
                     break;
                 }
             }
+            /* Clear the enemy-target cache before this entity's update, exactly
+             * as arm_UpdateEntities does (str #0 to gEnemyTarget) before storing
+             * current_entity. Applies to both entity and manager passes. */
+            gEnemyTarget = NULL;
+
             /* Save current entity in context */
             gUpdateContext.current_entity = entity;
-
-            /* Get next before update (in case entity gets deleted) */
-            Entity* next = entity->next;
 
             /* Call appropriate update function based on entity kind */
             u8 kind = entity->kind;
@@ -274,13 +284,31 @@ void ram_UpdateEntities(u32 mode) {
                 sEntityUpdateJmpBufValid = 0;
             }
 
-            /* Update collision if entity is still alive (same as original) */
-            if (gUpdateContext.current_entity == entity) {
+            /* GBA arm_UpdateEntities (asm/src/intr.s:742-746) reloads
+             * current_entity AFTER the update and computes the successor as
+             * current_entity->next — it does NOT snapshot entity->next before
+             * the update (the earlier port did, which diverges from console).
+             * Reading the successor late matters in two ways:
+             *   - self-delete: UnlinkEntity sets current_entity = ent->prev and
+             *     relinks prev->next = ent->next, so current_entity->next is the
+             *     correct successor (src/entity.c:927-963);
+             *   - an entity that deletes its OWN successor during its update: the
+             *     late read skips the now-unlinked node, whereas a pre-captured
+             *     `next` walks into the freed/recycled entity.
+             * Capture current_entity once (matches the single `ldr r0,[r11,#8]`)
+             * and reuse it for the collision check and the advance. */
+            Entity* cur = gUpdateContext.current_entity;
+
+            /* Update collision if entity is still alive (cmp r0,r4; bleq) */
+            if (cur == entity) {
                 UpdateCollision(entity);
             }
 
-            /* Move to next entity */
-            entity = next;
+            /* Advance: current_entity->next, read late (ldr r4,[r0,#4]).
+             * UnlinkEntity never nulls current_entity mid-list, so NULL here
+             * means corruption — stop the walk; the top-of-loop guard re-validates
+             * the result on the next iteration either way. */
+            entity = (cur != NULL) ? cur->next : NULL;
         }
     }
 
