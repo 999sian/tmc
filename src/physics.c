@@ -551,6 +551,13 @@ bool32 LoadExtraSpriteData(Entity* entity, const SpriteLoadData* spriteData) {
     const SpriteLoadData* ptr;
     u32 index;
     struct_gUnk_020000C0_1* ptr2;
+#if defined(PC_PORT)
+    /* Defensive: region-relocated sprite-load pointer tables (e.g. gUnk_0810B6EC) can
+     * leave entries NULL on a non-USA ROM if an offset is mis-resolved. Bail rather than
+     * dereferencing NULL in the loop below. The byte-matching GBA build never compiles this. */
+    if (spriteData == NULL)
+        return FALSE;
+#endif
     if (sub_0806FDA0(entity) == 0)
         return FALSE;
 

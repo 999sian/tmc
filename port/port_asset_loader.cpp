@@ -1977,7 +1977,14 @@ extern "C" const u8* Port_GetMapAssetDataByIndex(u32 assetIndex, u32* size) {
 }
 
 extern "C" const u8* Port_GetSpriteAnimationData(u16 spriteIndex, u32 animIndex) {
-    if (EnsureAssetGroupCache()) {
+    /* JP ROM: the asset cache's sprite-animation buffers are not region-correct for
+     * JP (the asset baseline is USA / JP extraction residual), which made JP entity
+     * animPtrs fail FrameZero's bounds check (hundreds of "animPtr outside/overruns
+     * ROM" warnings → blank/garbled NPC sprites). Port_LoadRom already keeps JP on
+     * region-correct ROM-resolved gSpritePtrs (the "asset override skipped for JP"
+     * gate), so resolve JP animations straight from the ROM below, consistent with
+     * that decision, instead of the asset cache. */
+    if (gRomRegion != ROM_REGION_JP && EnsureAssetGroupCache()) {
         if (!gAssetGroupCache.spritePtrsLoaded) {
             Port_LoadSpritePtrsFromAssets();
         }

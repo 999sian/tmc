@@ -4488,7 +4488,14 @@ extern EntityData gUnk_080EEBAC;
 void sub_StateChange_HyruleTown_0(void) {
     EnableRandomDrops();
     TryLoadPrologueHyruleTown();
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
+#if defined(PC_PORT)
+    /* Retail JP/EU do NOT write this signpost tile-type on town entry (only
+     * USA/DEMO did). The fat binary is built -DUSA, so guard at runtime to restore
+     * JP/EU behavior instead of forcing the USA-only write onto every region. */
+    if (REGION_IS_USA) {
+        SetTileType(TILE_TYPE_374, TILE_POS(43, 25), LAYER_BOTTOM);
+    }
+#elif defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
     SetTileType(TILE_TYPE_374, TILE_POS(43, 25), LAYER_BOTTOM);
 #endif
     if (gSave.global_progress == 1) {
@@ -6836,7 +6843,13 @@ u32 sub_unk3_MtCrenel_Entrance(void) {
 }
 
 void sub_StateChange_MtCrenel_Entrance(void) {
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
+#if defined(PC_PORT)
+    /* USA/DEMO-only signpost tile write; guard at runtime so JP/EU match retail
+     * (see sub_StateChange_HyruleTown_0 above). */
+    if (REGION_IS_USA) {
+        SetTileType(TILE_TYPE_374, TILE_POS(47, 25), LAYER_BOTTOM);
+    }
+#elif defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
     SetTileType(TILE_TYPE_374, TILE_POS(47, 25), LAYER_BOTTOM);
 #endif
 }

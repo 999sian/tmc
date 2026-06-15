@@ -554,9 +554,13 @@ void Port_InitDataStubs(void) {
     u32 count = 0;
     /* gUnk_080046A4 and gUnk_080047F6 — now provided by src/data/data_080046A4.c */
     /* Hitbox data (gUnk_080FD178 through gUnk_080FD588) now provided by src/data/hitbox.c - no ROM loading needed */
-    /* gUnk_0810B6EC @ 0x0810B6EC â€” SpriteLoadData* pointer table, resolve GBA addrs */
+    /* gUnk_0810B6EC — SpriteLoadData* pointer table (Hyrule-Town NPCs), resolve GBA addrs.
+     * The table is region-relocated (USA 0x10B6EC, JP 0x10B3B0, EU 0x10AE40); a fixed USA
+     * offset on a JP/EU ROM yields all-NULL pointers and a NULL-deref crash on town entry.
+     * Source the offset via the region-aware accessor (gen_stubs.py is gone; hand-maintained). */
     {
-        u32 off = 0x10B6ECu;
+        extern u32 Port_TownspersonSpriteLoadPtrsOffset(void);
+        u32 off = Port_TownspersonSpriteLoadPtrsOffset();
         for (u32 i = 0; i < 21; i++) {
             u32 gba_addr;
             memcpy(&gba_addr, &gRomData[off + i * 4], 4);

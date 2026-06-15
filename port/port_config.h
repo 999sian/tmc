@@ -56,6 +56,9 @@ typedef struct {
     u32 exitLists;         /* gExitLists — pointer table (ptr → ptr) (0x90 entries) */
     u32 bgAnimTable;       /* gUnk_080B755C — pointer table (ptr) */
     u32 localFlagBanks;    /* gLocalFlagBanks — u16 array (raw data) */
+    u32 townspersonSpriteLoadPtrs; /* gUnk_0810B6EC — SpriteLoadData* table (21 entries) for
+                                    * Hyrule-Town NPCs. Region-relocated; a USA-pinned offset
+                                    * yields all-NULL ptrs on JP/EU → NULL deref crash on town entry. */
 
     /* Table counts (same for both regions, but kept per-region for safety) */
     u32 gfxGroupsCount;
