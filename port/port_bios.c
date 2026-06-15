@@ -1031,31 +1031,46 @@ void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 c
  * intervals — for OAM (offset=8), that puts the four values in the
  * affineParam field of 4 consecutive OAM entries.
  */
+/* BIOS-accurate sin/cos: the GBA BIOS ObjAffineSet/BgAffineSet quantize the
+ * angle to its high 8 bits (256 steps, low byte discarded) and look up a Q1.14
+ * (0x4000 = 1.0) sine table, then floor the scaled products with `asr`. The
+ * earlier port used full-precision libm cos/sin over all 65536 angles and
+ * truncated toward zero, so rotated affine sprites landed on slightly different
+ * pixels than console. The table is generated once via round(sin·0x4000) — this
+ * matches the BIOS *algorithm* (256-step, Q1.14, floor); individual entries may
+ * differ from Nintendo's hand-built table by at most ~1 LSB. */
+static s16 sBiosSinLut[256];
+static int sBiosSinLutInit = 0;
+
+static void InitBiosSinLut(void) {
+    int k;
+    for (k = 0; k < 256; k++) {
+        double v = sin((double)k * 3.14159265358979323846 * 2.0 / 256.0) * 16384.0;
+        sBiosSinLut[k] = (s16)(v >= 0.0 ? (v + 0.5) : (v - 0.5));
+    }
+    sBiosSinLutInit = 1;
+}
+
 void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset) {
     u8* d = (u8*)dst;
+    if (!sBiosSinLutInit) InitBiosSinLut();
     for (s32 i = 0; i < count; i++) {
         s32 sx = src[i].xScale;
         s32 sy = src[i].yScale;
         u16 theta = src[i].rotation;
-        double angle;
-        double cosA;
-        double sinA;
-        s16 pa;
-        s16 pb;
-        s16 pc;
-        s16 pd;
+        /* High 8 bits of the angle index the 256-entry table; cos = sin(θ+90°). */
+        u32 idx = (theta >> 8) & 0xFFu;
+        s32 cosv = sBiosSinLut[(idx + 0x40u) & 0xFFu];
+        s32 sinv = sBiosSinLut[idx];
 
-        if (sx == 0) sx = 1;
-        if (sy == 0) sy = 1;
-
-        /* GBA angle (0-0xFFFF = 0-360°) → radians */
-        angle = (double)theta * 3.14159265358979323846 * 2.0 / 65536.0;
-        cosA = cos(angle);
-        sinA = sin(angle);
-        pa = (s16)(sx * cosA);
-        pb = (s16)(-sx * sinA);
-        pc = (s16)(sy * sinA);
-        pd = (s16)(sy * cosA);
+        /* sx/sy are 8.8, the LUT is Q1.14, so >>14 returns 8.8. The shift on a
+         * signed product floors (arithmetic), matching the BIOS `asr #14`. No
+         * zero-scale guard: the BIOS has none, and with this pure-multiply form
+         * sx==0 simply yields pa=pb=0 (no division to protect against). */
+        s16 pa = (s16)((sx * cosv) >> 14);
+        s16 pb = (s16)((-sx * sinv) >> 14);
+        s16 pc = (s16)((sy * sinv) >> 14);
+        s16 pd = (s16)((sy * cosv) >> 14);
 
         *(s16*)(d + 0 * offset) = pa;
         *(s16*)(d + 1 * offset) = pb;
