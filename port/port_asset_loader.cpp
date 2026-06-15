@@ -1645,6 +1645,22 @@ extern "C" bool32 Port_LoadAreaTablesFromAssets(void) {
 }
 
 extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
+    /* JP: never reseed gSpritePtrs from the (USA-baseline) asset cache. Doing so
+     * overwrites every gSpritePtrs[i].animations with a *native* heap pointer, which
+     * is fine on USA/EU (Port_GetSpriteAnimationData reads it via the asset-cache
+     * branch) but breaks JP: there Port_GetSpriteAnimationData is gated to the ROM
+     * branch (gRomRegion != ROM_REGION_JP) and validates spr->animations with
+     * IsRomPointer() — a native pointer fails, resolves to NULL, and the entity gets
+     * no animation. With a NULL animPtr FrameZero never runs, so frameIndex stays
+     * 0xFF (sprite invisible — intro Zelda/Smith), animations freeze (file-select
+     * preview sprite 325), and ANIM_DONE is never set so cutscene WaitForAnimDone
+     * blocks forever and never returns control (Link frozen at the intro handover).
+     * port_rom.c:1714 already skips its own override call for JP, but the asset
+     * bootstrap (port_asset_bootstrap.cpp) calls this ungated — gate it here too so
+     * JP keeps its region-correct ROM-resolved gSpritePtrs regardless of caller. */
+    if (gRomRegion == ROM_REGION_JP) {
+        return FALSE;
+    }
     if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasSpritePtrData || gAssetGroupCache.spritePtrs.empty()) {
         return FALSE;
     }
