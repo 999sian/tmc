@@ -17,7 +17,11 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0x10 + 4];
+#else
     u8 filler[0x10];
+#endif
     u16 x_0x78;
     u16 y_0x7a;
     u8 filler2[0x4];
@@ -27,7 +31,10 @@ typedef struct {
     u8 unk_0x84;
 } TakkuriEntity;
 
-PORT_STATIC_ASSERT_SIZE(TakkuriEntity, 0x88, 0xB0, "TakkuriEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(TakkuriEntity, x_0x78, 0x78, 0xa4,
+                          "TakkuriEntity x_0x78 offset (Enemy::child +4 pad)");
+
+PORT_STATIC_ASSERT_SIZE(TakkuriEntity, 0x88, 0xB8, "TakkuriEntity size incorrect");
 
 void (*const Takkuri_Functions[])(Entity*);
 void (*const gUnk_080CFF54[])(TakkuriEntity*);

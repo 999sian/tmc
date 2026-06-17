@@ -19,12 +19,19 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0x10 + 4];
+#else
     u8 filler[0x10];
+#endif
     u16 unk_78;
     u16 unk_7a;
     u8 filler2[8];
     u32 unk_84;
 } BusinessScrubPrologueEntity;
+
+PORT_STATIC_ASSERT_OFFSET(BusinessScrubPrologueEntity, unk_78, 0x78, 0xa4,
+                          "BusinessScrubPrologueEntity unk_78 offset (Enemy::child +4 pad)");
 
 extern void sub_080954AC(Entity*, u32);
 extern u16 script_BusinessScrubIntro[];

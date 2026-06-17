@@ -18,10 +18,17 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0xc + 4];
+#else
     u8 filler[0xc];
+#endif
     u16 tileIndex;
     u8 unk_0x76;
 } FlyingSkullEntity;
+
+PORT_STATIC_ASSERT_OFFSET(FlyingSkullEntity, tileIndex, 0x74, 0xa0,
+                          "FlyingSkullEntity tileIndex offset (Enemy::child +4 pad)");
 
 void (*const FlyingSkull_Functions[])(Entity*);
 void (*const gUnk_080CFB9C[])(FlyingSkullEntity*);

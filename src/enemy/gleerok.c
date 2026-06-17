@@ -46,7 +46,11 @@ typedef struct {
 
 typedef struct {
     Entity base;
+#ifdef PC_PORT
+    u8 filler[0xc + 4];
+#else
     u8 filler[0xc];
+#endif
     u8 unk_74;
     u8 unk_75;
     u8 unk_76;
@@ -62,6 +66,9 @@ typedef struct {
     u8 unk_83;
     Gleerok_HeapStruct* unk_84;
 } GleerokEntity;
+
+PORT_STATIC_ASSERT_OFFSET(GleerokEntity, unk_74, 0x74, 0xa0,
+                          "GleerokEntity unk_74 offset (Enemy::child +4 pad)");
 
 extern void (*const Gleerok_Functions[])(GleerokEntity*);
 extern void (*const gUnk_080CD75C[])(GleerokEntity*);

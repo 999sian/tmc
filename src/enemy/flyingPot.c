@@ -17,9 +17,16 @@ extern Hitbox gUnk_080FD34C;
 
 typedef struct {
     /* 0x00 */ Entity base;
-    /* 0x68 */ u8 filler[0xC];
+    /* 0x68 */ #ifdef PC_PORT
+    u8 filler[0xC + 4];
+#else
+    u8 filler[0xC];
+#endif
     /* 0x74 */ u16 tileIndex;
 } FlyingPotEntity;
+
+PORT_STATIC_ASSERT_OFFSET(FlyingPotEntity, tileIndex, 0x74, 0xa0,
+                          "FlyingPotEntity tileIndex offset (Enemy::child +4 pad)");
 
 enum FlyingPotActions {
     /* 0 */ FLYING_POT_ACTION_0,

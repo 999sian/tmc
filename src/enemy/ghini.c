@@ -14,12 +14,19 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-    /*0x68*/ u8 unk_68[0x10];
+    /*0x68*/ #ifdef PC_PORT
+    u8 unk_68[0x10 + 4];
+#else
+    u8 unk_68[0x10];
+#endif
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u8 unk_7a;
     /*0x7b*/ u8 unk_7b;
     /*0x7c*/ u16 unk_7c;
 } GhiniEntity;
+
+PORT_STATIC_ASSERT_OFFSET(GhiniEntity, unk_78, 0x78, 0xa4,
+                          "GhiniEntity unk_78 offset (Enemy::child +4 pad)");
 
 extern void (*const Ghini_Functions[])(GhiniEntity*);
 extern void (*const Ghini_Actions[])(GhiniEntity*);

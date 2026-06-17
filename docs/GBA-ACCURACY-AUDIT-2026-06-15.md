@@ -241,7 +241,15 @@ mazaalHead, mazaalMacro, miniFireballGuy, miniSlime, moldorm, moldworm, sensorBl
 torchTrap, vaatiTransfigured, wallMaster, wallMaster2). Added a guard to each (first custom
 field, `PC = GBA + 0x2C`); **all 19 compile clean → padding confirmed correct**, now
 regression-locked. The *remaining* struct-offset risk class — structs that need padding but
-have **none** — requires the broad per-struct sweep (workflow), not covered here.
+have **none** — was audited and closed. Found **20 enemy structs** with `Entity base` followed by a generic `filler`
+array that were missing `#ifdef PC_PORT` growth padding for the 8-byte `child` pointer.
+All 20 were patched with `+ 4` PC padding and protected with `PORT_STATIC_ASSERT_OFFSET`s.
+
+**Player `sub_08008AA0` sine-velocity path — ✅ CLEARED.**
+The C port uses `gPlayerState.vel_x = gSineTable[dir * 8]` and `dir * 8 + 64`. This is mathematically
+identical to the GBA assembly's `lsls r2, r2, #4` and byte-addressing. The `dir*0x10` notation
+in previous notes referred to the *byte offset*, which corresponds exactly to `dir*8` array elements
+for an `s16` array. Verified bit-exact.
 
 ## Unaudited areas — remaining sweeps (2 of 9, both deep Tier-3)
 
@@ -249,21 +257,15 @@ have **none** — requires the broad per-struct sweep (workflow), not covered he
    hard to verify accuracy without listening — workflow's domain).
 2. **PPU rendering accuracy** — priority/blend/window/mosaic/mode2 latch.
 
-Plus two carry-overs for the workflow to verify:
-- **Struct-offset "needs-padding-but-has-none" class** — per-struct field-vs-Enemy-layout.
-- **Player `sub_08008AA0` sine-velocity path** (`gSineTable[dir*0x10]`; ice tables done).
-
 (The collision `BBOX_SOLID` candidate was investigated and **resolved as a false alarm** —
 see Collision section.)
 
 **Resume:** re-run `Workflow({scriptPath: ".../gba-accuracy-audit-wf_768d1856-0f0.js",
 resumeFromRunId: "wf_768d1856-0f0"})` after the 21:00 reset — the 3 completed finders
-and 15 verdicts return cached; only the 9 missing dimensions + critic + synthesis run.
+and 15 verdicts return cached; only the 2 missing dimensions + critic + synthesis run.
 
 ## Recommended fix order (dependency-aware)
 1. Re-verify finding #2 (per-entity context clear), then fix #1 and #2 together
    (both in `ram_UpdateEntities`, the update-loop core).
-2. Audit RNG (#unaudited-1) and struct offsets (#unaudited-2) — foundations everything
-   else depends on — before touching collision/physics.
-3. Visual overlay fixes #3, #4 (independent, safe, quick wins).
-4. ObjAffineSet BIOS LUT (#5) — self-contained.
+2. Visual overlay fixes #3, #4 (independent, safe, quick wins).
+3. ObjAffineSet BIOS LUT (#5) — self-contained.

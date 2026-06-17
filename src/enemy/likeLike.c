@@ -17,12 +17,19 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0x18 + 4];
+#else
     u8 filler[0x18];
+#endif
     u8 stolenItem;
     u8 filler2;
     u8 field_0x82;
     u8 prevSpritePriority;
 } LikeLikeEntity;
+
+PORT_STATIC_ASSERT_OFFSET(LikeLikeEntity, stolenItem, 0x80, 0xac,
+                          "LikeLikeEntity stolenItem offset (Enemy::child +4 pad)");
 
 extern bool32 ItemIsShield(u32);
 

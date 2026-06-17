@@ -14,7 +14,11 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0x10 + 4];
+#else
     u8 filler[0x10];
+#endif
     u16 unk_78;
     u8 unk_7a;
     u8 unk_7b;
@@ -23,6 +27,9 @@ typedef struct {
     u8 unk_7e;
     u8 unk_7f;
 } BallChainSoldierEntity;
+
+PORT_STATIC_ASSERT_OFFSET(BallChainSoldierEntity, unk_78, 0x78, 0xa4,
+                          "BallChainSoldierEntity unk_78 offset (Enemy::child +4 pad)");
 
 void (*const BallChainSoldier_Functions[])(BallChainSoldierEntity*);
 void (*const gUnk_080D06F8[])(BallChainSoldierEntity*);

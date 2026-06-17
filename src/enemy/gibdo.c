@@ -14,7 +14,11 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0xc + 4];
+#else
     u8 filler[0xc];
+#endif
     u16 field_0x74;
     u8 field_0x76;
     u8 field_0x77;
@@ -25,6 +29,9 @@ typedef struct {
     Entity* field_0x80;
     Entity* field_0x84;
 } GibdoEntity;
+
+PORT_STATIC_ASSERT_OFFSET(GibdoEntity, field_0x74, 0x74, 0xa0,
+                          "GibdoEntity field_0x74 offset (Enemy::child +4 pad)");
 
 // Gibudo
 void sub_08037794(GibdoEntity*);
