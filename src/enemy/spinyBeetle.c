@@ -17,7 +17,11 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0xc + 4];
+#else
     u8 filler[0xc];
+#endif
     u16 tilePos;
     u16 tileIndex;
     u8 unk_78;
@@ -28,6 +32,9 @@ typedef struct {
     s32 unk_80;
     u16 unk_84;
 } SpinyBeetleEntity;
+
+PORT_STATIC_ASSERT_OFFSET(SpinyBeetleEntity, tilePos, 0x74, 0xa0,
+                          "SpinyBeetleEntity tilePos offset (Enemy::child +4 pad)");
 
 void (*const SpinyBeetle_Functions[])(Entity*);
 void (*const gUnk_080CEC04[])(SpinyBeetleEntity*);

@@ -12,9 +12,16 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-    /*0x68*/ u8 unk_68[0x10];
+    /*0x68*/ #ifdef PC_PORT
+    u8 unk_68[0x10 + 4];
+#else
+    u8 unk_68[0x10];
+#endif
     /*0x78*/ u8 unk_78;
 } GyorgMaleEyeEntity;
+
+PORT_STATIC_ASSERT_OFFSET(GyorgMaleEyeEntity, unk_78, 0x78, 0xa4,
+                          "GyorgMaleEyeEntity unk_78 offset (Enemy::child +4 pad)");
 
 extern void (*const GyorgMaleEye_Functions[])(GyorgMaleEyeEntity*);
 extern void (*const GyorgMaleEye_Actions[])(GyorgMaleEyeEntity*);

@@ -13,10 +13,17 @@
 
 typedef struct {
     /* 0x00 */ Entity base;
-    /* 0x68 */ u8 filler[0x10];
+    /* 0x68 */ #ifdef PC_PORT
+    u8 filler[0x10 + 4];
+#else
+    u8 filler[0x10];
+#endif
     /* 0x78 */ u16 flyTimer;
     /* 0x7a */ u16 sleepTimer;
 } KeeseEntity;
+
+PORT_STATIC_ASSERT_OFFSET(KeeseEntity, flyTimer, 0x78, 0xa4,
+                          "KeeseEntity flyTimer offset (Enemy::child +4 pad)");
 
 typedef enum {
     /* 0 */ KeeseAnimation_Fly,

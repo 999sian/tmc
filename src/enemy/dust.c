@@ -19,11 +19,18 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0xc + 4];
+#else
     u8 filler[0xc];
+#endif
     u8 unk_74;
     u8 unk_75;
     u16 unk_76;
 } DustEntity;
+
+PORT_STATIC_ASSERT_OFFSET(DustEntity, unk_74, 0x74, 0xa0,
+                          "DustEntity unk_74 offset (Enemy::child +4 pad)");
 
 typedef struct {
     s8 unk_0;

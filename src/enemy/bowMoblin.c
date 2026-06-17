@@ -14,7 +14,11 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0x12 + 4];
+#else
     u8 filler[0x12];
+#endif
     u8 unk_0x7a;
     u8 unk_0x7b;
     u8 filter[0x4];
@@ -23,6 +27,9 @@ typedef struct {
     u8 unk_0x82;
     u8 unk_0x83;
 } BowMoblinEntity;
+
+PORT_STATIC_ASSERT_OFFSET(BowMoblinEntity, unk_0x7a, 0x7a, 0xa6,
+                          "BowMoblinEntity unk_0x7a offset (Enemy::child +4 pad)");
 
 void sub_0803C5F0(BowMoblinEntity*);
 void sub_0803C690(BowMoblinEntity*);

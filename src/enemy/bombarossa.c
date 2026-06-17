@@ -14,9 +14,16 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0xe + 4];
+#else
     u8 filler[0xe];
+#endif
     u16 unk_0x76;
 } BombarossaEntity;
+
+PORT_STATIC_ASSERT_OFFSET(BombarossaEntity, unk_0x76, 0x76, 0xa2,
+                          "BombarossaEntity unk_0x76 offset (Enemy::child +4 pad)");
 
 void (*const Bombarossa_Functions[])(Entity*);
 const s8 gUnk_080CEB50[];

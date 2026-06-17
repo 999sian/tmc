@@ -14,12 +14,19 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0x12 + 4];
+#else
     u8 filler[0x12];
+#endif
     u8 unk_7a;
     u8 filler2[5];
     u16 unk_80;
     u8 unk_82;
 } ScissorsBeetleEntity;
+
+PORT_STATIC_ASSERT_OFFSET(ScissorsBeetleEntity, unk_7a, 0x7a, 0xa6,
+                          "ScissorsBeetleEntity unk_7a offset (Enemy::child +4 pad)");
 
 void (*const ScissorsBeetle_Functions[])(Entity*);
 void (*const ScissorsBeetle_Actions[])(ScissorsBeetleEntity*);

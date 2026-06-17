@@ -16,11 +16,18 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-    /*0x68*/ u8 unk_68[0x18];
+    /*0x68*/ #ifdef PC_PORT
+    u8 unk_68[0x18 + 4];
+#else
+    u8 unk_68[0x18];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x82*/ u8 unk_82;
 } CloudPiranhaEntity;
+
+PORT_STATIC_ASSERT_OFFSET(CloudPiranhaEntity, unk_80, 0x80, 0xac,
+                          "CloudPiranhaEntity unk_80 offset (Enemy::child +4 pad)");
 
 void sub_08038754(CloudPiranhaEntity*);
 void sub_080387F0(CloudPiranhaEntity*);

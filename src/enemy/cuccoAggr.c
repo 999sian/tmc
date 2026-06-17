@@ -16,11 +16,18 @@
 
 typedef struct {
     Entity base;
+    #ifdef PC_PORT
+    u8 filler[0x10 + 4];
+#else
     u8 filler[0x10];
+#endif
     u16 unk_78;
     u8 unk_7a;
     u8 unk_7b;
 } CuccoAggrEntity;
+
+PORT_STATIC_ASSERT_OFFSET(CuccoAggrEntity, unk_78, 0x78, 0xa4,
+                          "CuccoAggrEntity unk_78 offset (Enemy::child +4 pad)");
 
 typedef struct {
     u16 x;
