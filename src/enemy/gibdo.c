@@ -11,6 +11,9 @@
 #include "asm.h"
 #include "physics.h"
 #include "player.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 
 typedef struct {
     Entity base;
@@ -26,12 +29,14 @@ typedef struct {
     u16 field_0x7a;
     u8 field_0x7c;
     u8 filler2[3];
-    Entity* field_0x80;
-    Entity* field_0x84;
+    EntityRef field_0x80; /* 4B on both targets (slot on PC) */
+    EntityRef field_0x84;
 } GibdoEntity;
 
 PORT_STATIC_ASSERT_OFFSET(GibdoEntity, field_0x74, 0x74, 0xa0,
                           "GibdoEntity field_0x74 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_SIZE(GibdoEntity, 0x88, 0xB8,
+                        "GibdoEntity must fit the 0xB8 entity pool slot (#127-class)");
 
 // Gibudo
 void sub_08037794(GibdoEntity*);
@@ -392,7 +397,7 @@ void Gibdo_CreateObjects(GibdoEntity* this) {
         object->spriteOffsetY = 0xfc;
         object->parent = super;
     }
-    this->field_0x80 = object;
+    ENTITY_REF_SET(this->field_0x80, object);
 
     object = CreateObject(FLAME, 3, 0);
     if (object != NULL) {
@@ -402,7 +407,7 @@ void Gibdo_CreateObjects(GibdoEntity* this) {
         object->spriteOffsetY = 0xf8;
         object->parent = super;
     }
-    this->field_0x84 = object;
+    ENTITY_REF_SET(this->field_0x84, object);
 
     object = CreateObject(FLAME, 3, 0);
     if (object != NULL) {
@@ -416,14 +421,14 @@ void Gibdo_CreateObjects(GibdoEntity* this) {
 }
 
 void Gibdo_MoveObjectsToStalfos(GibdoEntity* this, Entity* that) {
-    Entity* entity = this->field_0x80;
+    Entity* entity = ENTITY_REF_GET(this->field_0x80);
 
     if (entity != NULL) {
         entity->timer = 15;
         entity->parent = that;
     }
 
-    entity = this->field_0x84;
+    entity = ENTITY_REF_GET(this->field_0x84);
     if (entity != NULL) {
         entity->timer = 15;
         entity->parent = that;

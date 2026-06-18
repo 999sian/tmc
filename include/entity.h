@@ -281,6 +281,22 @@ typedef struct Entity_ {
     /*0x64*/ void* myHeap; /**< Heap data allocated with #zMalloc. */
 } Entity;
 
+/* Portable 4-byte entity reference. On GBA an Entity* is 4 bytes and fits the
+ * original struct fields; on PC it is 8 bytes, which overruns the fixed 0xB8
+ * entity pool slot when a subclass stores one in its tail. EntityRef stores a
+ * 4-byte pool SLOT on PC (Port_EntitySlot / Port_EntityFromSlot, port_entity_ctx.h)
+ * so such fields keep their GBA size. A .c using these macros must include
+ * "port_entity_ctx.h" under PC_PORT. -1 / NULL round-trip safely. */
+#ifdef PC_PORT
+typedef s32 EntityRef; /* pool slot; -1 = none */
+#define ENTITY_REF_SET(ref, ent) ((ref) = Port_EntitySlot((Entity*)(ent)))
+#define ENTITY_REF_GET(ref)      Port_EntityFromSlot(ref)
+#else
+typedef Entity* EntityRef;
+#define ENTITY_REF_SET(ref, ent) ((ref) = (Entity*)(ent))
+#define ENTITY_REF_GET(ref)      (ref)
+#endif
+
 typedef struct {
     GENERIC_ENTITY_FIELDS
 } GenericEntityData;

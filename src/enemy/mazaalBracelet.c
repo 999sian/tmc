@@ -11,6 +11,9 @@
 #include "object.h"
 #include "asm.h"
 #include "script.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 #include "room.h"
 #include "physics.h"
 #include "player.h"
@@ -27,7 +30,7 @@ typedef struct MazaalBraceletEntity_ {
 #endif
     /*0x68*/ u8 unused1[12];
     union {
-        /*0x74*/ struct MazaalBraceletEntity_* entity;
+        /*0x74*/ EntityRef entity; /* 4B both targets (slot on PC) */
         /*0x74*/ u16 u16;
         struct {
             /*0x74*/ u8 unk_74;
@@ -35,7 +38,7 @@ typedef struct MazaalBraceletEntity_ {
         } split;
     } unk_74;
     union {
-        /*0x78*/ struct MazaalBraceletEntity_* entity;
+        /*0x78*/ EntityRef entity; /* 4B both targets (slot on PC) */
         struct {
             /*0x78*/ u16 unk_78;
         } split;
@@ -46,6 +49,22 @@ typedef struct MazaalBraceletEntity_ {
     /*0x82*/ u8 unused4[2];
     /*0x84*/ u8 unk_84;
 } MazaalBraceletEntity;
+
+PORT_STATIC_ASSERT_SIZE(MazaalBraceletEntity, 0x88, 0xB8,
+                        "MazaalBraceletEntity must fit the 0xB8 entity pool slot (#127-class)");
+
+/* The two self-pointer union members above are 4-byte EntityRef slots on PC
+ * (was Entity*, 8 bytes), keeping the struct within the 0xB8 entity pool slot.
+ * MB74/MB78 resolve a ref back to the linked bracelet entity; MB74_SET stores. */
+#ifdef PC_PORT
+#define MB74(x)        ((MazaalBraceletEntity*)ENTITY_REF_GET((x)->unk_74.entity))
+#define MB74_SET(x, e) ENTITY_REF_SET((x)->unk_74.entity, e)
+#define MB78(x)        ((MazaalBraceletEntity*)ENTITY_REF_GET((x)->unk_78.entity))
+#else
+#define MB74(x)        ((x)->unk_74.entity)
+#define MB74_SET(x, e) ((x)->unk_74.entity = (MazaalBraceletEntity*)(e))
+#define MB78(x)        ((x)->unk_78.entity)
+#endif
 
 extern void SoundReqClipped(Entity*, u32);
 
@@ -192,7 +211,7 @@ void MazaalBracelet_OnCollision(MazaalBraceletEntity* this) {
                 entity = (MazaalBraceletEntity*)super->child;
                 entity->base.iframes = super->iframes;
 
-                entity = this->unk_74.entity;
+                entity = MB74(this);
                 entity->base.iframes = super->iframes;
                 SoundReq(SFX_BOSS_HIT);
             }
@@ -200,7 +219,7 @@ void MazaalBracelet_OnCollision(MazaalBraceletEntity* this) {
             entity = (MazaalBraceletEntity*)super->child;
             entity->base.iframes = super->iframes;
 
-            entity = this->unk_74.entity;
+            entity = MB74(this);
             entity->base.iframes = super->iframes;
             InitializeAnimation(super, 0x18);
             InitAnimationForceUpdate(super->child, 9);
@@ -244,7 +263,7 @@ void sub_0803A274(MazaalBraceletEntity* this) {
 #endif
             {
                 entity->parent = super;
-                this->unk_74.entity = (MazaalBraceletEntity*)entity;
+                MB74_SET(this, entity);
             }
 
             entity = CreateObject(MAZAAL_OBJECT, 1, 0);
@@ -282,7 +301,7 @@ void sub_0803A274(MazaalBraceletEntity* this) {
 #endif
             {
                 entity->parent = super;
-                this->unk_74.entity = (MazaalBraceletEntity*)entity;
+                MB74_SET(this, entity);
             }
 
             entity = CreateObject(MAZAAL_OBJECT, 2, 0);
@@ -662,7 +681,7 @@ void sub_0803A978(MazaalBraceletEntity* this) {
         super->action = 0x12;
         super->timer = 3;
         COLLISION_OFF(super);
-        COLLISION_OFF(&this->unk_74.entity->base);
+        COLLISION_OFF(&MB74(this)->base);
         InitializeAnimation(super, 8);
         InitAnimationForceUpdate(super->child, 3);
     }
@@ -705,7 +724,7 @@ void sub_0803AA98(MazaalBraceletEntity* this) {
             super->action = 0x14;
             super->speed = 0x40;
             InitializeAnimation(super, 10);
-            entity = this->unk_74.entity;
+            entity = MB74(this);
             entity->base.flags |= ENT_COLLIDE;
             entity = (MazaalBraceletEntity*)super->child;
             entity->base.hitType = 0x13;
@@ -855,7 +874,7 @@ void sub_0803ADAC(MazaalBraceletEntity* this) {
     if (--super->timer == 0) {
         super->action = 0x16;
         super->spriteSettings.draw = 1;
-        COLLISION_ON(&this->unk_74.entity->base);
+        COLLISION_ON(&MB74(this)->base);
         InitializeAnimation(super, 0xb);
         InitAnimationForceUpdate(super->child, 6);
         sub_0803B798();
@@ -1025,7 +1044,7 @@ void sub_0803B100(MazaalBraceletEntity* this) {
     } else {
         super->hitbox = (Hitbox*)&gUnk_080FD374;
     }
-    entity = this->unk_74.entity;
+    entity = MB74(this);
     entity->base.action = 3;
     entity->unk_74.split.unk_74 = 0x20;
     InitAnimationForceUpdate(super->child, 9);
@@ -1080,7 +1099,7 @@ void sub_0803B1B8(MazaalBraceletEntity* this) {
             PositionRelative(super, entity, Q_16_16(super->hitbox->offset_x), Q_16_16(super->hitbox->offset_y));
         }
 
-        entity = &this->unk_74.entity->base;
+        entity = &MB74(this)->base;
         ((MazaalBraceletEntity*)entity)->unk_74.split.unk_74 = 0x40;
 
         entity = super->parent;
@@ -1089,8 +1108,8 @@ void sub_0803B1B8(MazaalBraceletEntity* this) {
             entity->action = 0xb;
             entity->timer = 120;
             entity->zVelocity = 0;
-            ((MazaalBraceletEntity*)entity)->unk_74.entity->unk_7e = 0x708;
-            ((MazaalBraceletEntity*)entity)->unk_78.entity->unk_7e = 0x708;
+            MB74((MazaalBraceletEntity*)entity)->unk_7e = 0x708;
+            MB78((MazaalBraceletEntity*)entity)->unk_7e = 0x708;
         }
     } else {
         if (--this->unk_7e == 0) {
@@ -1106,7 +1125,7 @@ void sub_0803B2D0(MazaalBraceletEntity* this) {
     if ((super->frame & ANIM_DONE) != 0) {
         super->action = 0x2d;
         super->spriteSettings.draw = 0;
-        entity = this->unk_74.entity;
+        entity = MB74(this);
         entity->base.action = 2;
         entity->unk_74.split.unk_74 = 0;
         entity->unk_78.split.unk_78 = 0;
@@ -1117,7 +1136,7 @@ void sub_0803B2D0(MazaalBraceletEntity* this) {
 void sub_0803B30C(MazaalBraceletEntity* this) {
     Entity* entity;
 
-    entity = &this->unk_74.entity->base;
+    entity = &MB74(this)->base;
     if ((entity->frame & ANIM_DONE) != 0) {
         super->action = 0x2e;
         sub_0803B8E8(this, 0x13);
@@ -1221,14 +1240,14 @@ bool32 sub_0803B4E4(MazaalBraceletEntity* this) {
 
 void sub_0803B538(MazaalBraceletEntity* this) {
     PositionRelative(super, super->child, 0, Q_16_16(-1.0));
-    PositionRelative(super, &this->unk_74.entity->base, 0, Q_16_16(-2.0));
+    PositionRelative(super, &MB74(this)->base, 0, Q_16_16(-2.0));
 }
 
 void sub_0803B55C(MazaalBraceletEntity* this) {
     Entity* entity1;
     Entity* entity2;
 
-    entity2 = &this->unk_74.entity->base;
+    entity2 = &MB74(this)->base;
     entity1 = super->child;
     UpdateAnimationSingleFrame(entity1);
     if ((entity1->frame & 0x10) != 0) {
@@ -1387,7 +1406,7 @@ void sub_0803B8E8(MazaalBraceletEntity* this, u32 unk) {
     Entity* entity;
     entity = super->child;
     entity->hitType = unk;
-    entity = &this->unk_74.entity->base;
+    entity = &MB74(this)->base;
     entity->hitType = unk;
 }
 
@@ -1500,8 +1519,8 @@ void sub_0803BA8C(MazaalBraceletEntity* this, u32 unk) {
     }
     if (palette != 0) {
         ChangeObjPalette(super, palette);
-        ((MazaalBraceletEntity*)super->parent)->unk_78.entity->base.palette.b.b0 = super->palette.raw << 0x1c >> 0x1c;
-        ((MazaalBraceletEntity*)super->parent)->unk_78.entity->base.palette.b.b4 = super->palette.b.b0;
+        MB78((MazaalBraceletEntity*)super->parent)->base.palette.b.b0 = super->palette.raw << 0x1c >> 0x1c;
+        MB78((MazaalBraceletEntity*)super->parent)->base.palette.b.b4 = super->palette.b.b0;
         super->parent->child->palette.b.b0 = super->palette.raw << 0x1c >> 0x1c;
         super->parent->child->palette.b.b4 = super->palette.b.b0;
     }
