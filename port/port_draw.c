@@ -33,6 +33,9 @@
 
 /* Forward declaration of RenderSpritePieces (defined below) */
 static void RenderSpritePieces(const u8* data, s16 baseX, s16 baseY, u32 flags, u16 extra);
+/* Set true only while rendering the player; drives the swamp-sink body clip. */
+static int sRenderingPlayer = 0;
+extern PlayerState gPlayerState;
 /* Region-select a ROM offset by the loaded ROM's game code (defined below). */
 static u32 RegionRomOffset(u32 usa, u32 eu, u32 jp);
 
@@ -431,6 +434,19 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
                 xoff = -xoff; /* h-flip */
         }
 
+        /* Muddy-water sink: progressively hide Link's lower body as he sinks
+         * (head clipped last). The GBA hides the body behind the mud BG and
+         * draws a head-overlay sprite; that overlay isn't wired on PC, so we
+         * clip the player's lower OAM pieces instead. Driven purely by live
+         * engine state (no separate timer -> no #84 double-drown). */
+        if (sRenderingPlayer && gPlayerState.framestate == PL_STATE_SINKING &&
+            gPlayerState.floor_type == SURFACE_SWAMP) {
+            s32 t = (s32)gPlayerState.surfaceTimer;
+            s32 clipY = t < 48 ? 16 : t < 96 ? 0 : t < 144 ? -8 : t < 192 ? -16 : -22;
+            if ((s32)yoff > clipY)
+                continue;
+        }
+
         /* Screen position */
         s32 y = (s32)yoff + (s32)baseY;
         s32 x = (s32)xoff + (s32)baseX;
@@ -788,7 +804,10 @@ static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra
 
     if (renderMode == 0) {
         /* Normal sprite rendering */
+        extern PlayerEntity gPlayerEntity;
+        sRenderingPlayer = (entity == &gPlayerEntity.base);
         LookupAndRenderNormal(entity, x, y, flags, extra);
+        sRenderingPlayer = 0;
     } else if (renderMode < 0) {
         /* Direct frame data from myHeap */
         const u8* frameData = (const u8*)entity->myHeap;
