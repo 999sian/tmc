@@ -960,7 +960,7 @@ int Port_Widescreen_ShouldStretch(void) {
 }
 
 int Port_Widescreen_IsActive(void) {
-    if (gMain.controlMode == CONTROL_DISABLED || (gMessage.state & MESSAGE_ACTIVE) != 0) {
+    if (gPlayerState.controlMode == CONTROL_DISABLED || (gMessage.state & MESSAGE_ACTIVE) != 0) {
         return 0;
     }
     return (gMain.task == TASK_GAME &&
