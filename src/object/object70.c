@@ -26,7 +26,15 @@ void Object70_Init(Entity* this) {
     this->frameIndex = this->type + 0xb;
     if (this->type != 0) {
         SnapToTile(this);
+#ifdef PC_PORT
+        /* Object70's head-overlay sprite isn't wired up on PC yet, so flipY=3
+         * (OBJ priority 3, behind the BG) hides Link entirely with no head
+         * drawn on top -> fully invisible on the stairs / during the swamp
+         * sink. Use flipY=2 to keep him visible until the overlay renders. */
+        gPlayerEntity.base.spriteOrientation.flipY = 2;
+#else
         gPlayerEntity.base.spriteOrientation.flipY = 3;
+#endif
         if ((gPlayerEntity.base.spritePriority.b0) != 7) {
             this->spritePriority.b0 = gPlayerEntity.base.spritePriority.b0 + 1;
         } else {
@@ -52,7 +60,11 @@ void Object70_Action1(Entity* this) {
         this->x = gPlayerEntity.base.x;
         this->y = gPlayerEntity.base.y;
         if (gPlayerState.jump_status == 0) {
+#ifdef PC_PORT
+            gPlayerEntity.base.spriteOrientation.flipY = 2; /* see Object70_Init: head overlay unwired on PC */
+#else
             gPlayerEntity.base.spriteOrientation.flipY = 3;
+#endif
             if (gPlayerEntity.base.spritePriority.b0 != 7) {
                 this->spritePriority.b0 = gPlayerEntity.base.spritePriority.b0 + 1;
             } else {
