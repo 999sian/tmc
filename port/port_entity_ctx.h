@@ -8,6 +8,7 @@
 #define PORT_ENTITY_CTX_H
 
 #include "entity.h"
+#include "player.h"
 #include "script.h"
 
 #ifdef PC_PORT
@@ -33,6 +34,21 @@ static inline int Port_EntitySlot(const Entity* ent) {
                 return 8 + i;
     }
     return -1;
+}
+
+/* Map slot index → entity pointer. Inverse of Port_EntitySlot; slot < 0 → NULL.
+ * Used by the EntityRef macros (entity.h) so over-slot enemy structs can store a
+ * 4-byte slot instead of an 8-byte Entity* (see MoldormEntity/GibdoEntity/etc.). */
+static inline Entity* Port_EntityFromSlot(int slot) {
+    if (slot < 0)
+        return NULL;
+    if (slot == 0)
+        return &gPlayerEntity.base;
+    if (slot < 1 + MAX_AUX_PLAYER_ENTITIES)
+        return &gAuxPlayerEntities[slot - 1].base;
+    if (slot < 1 + MAX_AUX_PLAYER_ENTITIES + MAX_ENTITIES)
+        return &gEntities[slot - (1 + MAX_AUX_PLAYER_ENTITIES)].base;
+    return NULL;
 }
 
 static inline ScriptExecutionContext* Port_GetEntityScriptCtx(Entity* ent) {

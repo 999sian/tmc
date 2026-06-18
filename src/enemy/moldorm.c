@@ -8,6 +8,9 @@
 #include "enemy.h"
 #include "physics.h"
 #include "asm.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -23,7 +26,7 @@ typedef struct {
     /*0x7a*/ u8 unk_7a;
     /*0x7b*/ u8 unk_7b;
     union {
-        /*0x7c*/ Entity* entity;
+        /*0x7c*/ EntityRef entity; /* 4B on both targets (slot on PC) */
         struct {
             /*0x7c*/ u8 unk_7c;
             /*0x7d*/ u8 unk_7d;
@@ -32,7 +35,7 @@ typedef struct {
         } split;
     } unk_7c;
     union {
-        /*0x80*/ Entity* entity;
+        /*0x80*/ EntityRef entity; /* 4B on both targets (slot on PC) */
         struct {
             /*0x80*/ u8 unk_80;
             /*0x81*/ u8 unk_81;
@@ -45,6 +48,8 @@ typedef struct {
 
 PORT_STATIC_ASSERT_OFFSET(MoldormEntity, unk_74, 0x74, 0xA0,
                           "MoldormEntity unk_74 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_SIZE(MoldormEntity, 0x88, 0xB8,
+                        "MoldormEntity must fit the 0xB8 entity pool slot (#127)");
 
 void sub_08022EAC(MoldormEntity*);
 void sub_08022F14(MoldormEntity*);
@@ -84,8 +89,8 @@ void Moldorm_OnCollision(MoldormEntity* this) {
     super->frameIndex = super->animationState;
 
     super->child->iframes = super->iframes;
-    this->unk_7c.entity->iframes = super->iframes;
-    this->unk_80.entity->iframes = super->iframes;
+    ENTITY_REF_GET(this->unk_7c.entity)->iframes = super->iframes;
+    ENTITY_REF_GET(this->unk_80.entity)->iframes = super->iframes;
     EnemyFunctionHandlerAfterCollision(super, Moldorm_Functions);
 }
 
@@ -146,8 +151,8 @@ void sub_08022C58(MoldormEntity* this) {
     COLLISION_ON(super);
     super->parent = super;
     super->child = tail0;
-    this->unk_7c.entity = tail1;
-    this->unk_80.entity = tail2;
+    ENTITY_REF_SET(this->unk_7c.entity, tail1);
+    ENTITY_REF_SET(this->unk_80.entity, tail2);
 
     super->direction = Random() & 0x1f;
     super->animationState = ((super->direction + 2) & 0x1c) >> 2;
