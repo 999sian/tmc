@@ -21,6 +21,7 @@
 
 void DoExitTransition(const Transition* data);
 void LoadItemGfx(void);
+void UpdatePlayerSkills(void);
 extern bool32 Port_IsRoomHeaderPtrReadable(const void* ptr);
 extern void Port_RefreshAreaData(unsigned int area);
 
@@ -47,57 +48,128 @@ static unsigned int GetItem(unsigned int item) {
 }
 
 void Port_DebugAction_GiveAllItems(void) {
-    /* The inventory array uses 2 bits per item, and the *index* range
-     * [0..0x69] covers a mix of: real equipment (sword/bow/boomerang/...)
-     * AND virtual ids used as bottle-contents tags + quest items + drops
-     * + progress flags. Setting every byte to a fixed pattern (0xFF or
-     * 0x55) lights up entries the pause menu doesn't expect to draw
-     * sprites for, which corrupts the inventory grid and the menu
-     * renders black. Whitelist the real equipment items + key progress
-     * items only. */
+    /* Build a COMPLETE file by whitelisting the real items + writing the Stats
+     * / bottle / dungeon fields directly. A blanket inventory fill corrupts the
+     * pause grid: 0xFF makes each 2-bit field 3 (failing the ==1 draw guard, so
+     * items vanish) and 0x55 owns alias ids — bottle-content tags (id>=0x20),
+     * ORBs, TRY_PICKUP_OBJECT, UNUSED_SWORD, quest ids — that light up cells the
+     * menu can't draw. So whitelist only. (Composition researched against the
+     * pause-menu draw + item-use dispatch; see #3 in docs/v0.6-feedback-plan.md.) */
+    int i;
 
-    /* Weapons / equippable items — basic versions only. The "upgrade
-     * pairs" (bombs/remote-bombs, boomerang/magic-boomerang, shield/
-     * mirror-shield, lantern off/on) are mutually exclusive in the
-     * normal upgrade flow; setting both members of a pair confuses the
-     * item-use dispatcher and Link can render with the wrong held-item
-     * sprite (e.g. pot). Only set one member of each pair. */
+    /* Swords: own the FULL progression. They share one grid cell and the engine
+     * resolves the greatest owned (script.c), so the ladder is the natural end
+     * state and the cell renders the Four Sword — no blackout. (Not UNUSED_SWORD.) */
     SetItem(ITEM_SMITH_SWORD, 1);
-    SetItem(ITEM_BOMBS, 1);
+    SetItem(ITEM_GREEN_SWORD, 1);
+    SetItem(ITEM_RED_SWORD, 1);
+    SetItem(ITEM_BLUE_SWORD, 1);
+    SetItem(ITEM_FOURSWORD, 1);
+
+    /* Upgrade pairs. For bombs and boomerang the engine's own grant clears the
+     * basic bit (GiveItem cases 7 / 0x12), so REMOTE_BOMBS / MAGIC_BOOMERANG
+     * alone is the canonical state. The BOW is the exception: Light Arrow's
+     * grant (itemMetaData unk1=0xb) never clears ITEM_BOW, so a real file holds
+     * BOTH bits — and 3 engine sites test ITEM_BOW specifically (Castor Wilds
+     * re-presents the bow pickup; Stockwell gates arrow ammo), so own both.
+     * Shield/lantern sites OR both bits, so the upgraded member alone is fine. */
+    SetItem(ITEM_REMOTE_BOMBS, 1);
     SetItem(ITEM_BOW, 1);
-    SetItem(ITEM_BOOMERANG, 1);
-    SetItem(ITEM_SHIELD, 1);
+    SetItem(ITEM_LIGHT_ARROW, 1);
+    SetItem(ITEM_MAGIC_BOOMERANG, 1);
+    SetItem(ITEM_MIRROR_SHIELD, 1);
     SetItem(ITEM_LANTERN_OFF, 1);
+
+    /* Independent gear. */
     SetItem(ITEM_GUST_JAR, 1);
     SetItem(ITEM_PACCI_CANE, 1);
     SetItem(ITEM_MOLE_MITTS, 1);
     SetItem(ITEM_ROCS_CAPE, 1);
     SetItem(ITEM_PEGASUS_BOOTS, 1);
-    SetItem(ITEM_FIRE_ROD, 1);
     SetItem(ITEM_OCARINA, 1);
+    SetItem(ITEM_FIRE_ROD, 1);
 
-    /* Elements / quest progression. */
+    /* Overworld map ("map" progress — an off-grid inventory bit). */
+    SetItem(ITEM_MAP, 1);
+
+    /* Sword technique scrolls ("scroll" progress). gPlayerState.skills is a
+     * runtime field (not part of the save) that UpdatePlayerSkills() rebuilds
+     * from these inventory bits at player init / room load. Grant the bits here
+     * and call UpdatePlayerSkills() below so the scrolls are usable immediately
+     * instead of only after the next room transition. */
+    SetItem(ITEM_SKILL_SPIN_ATTACK, 1);
+    SetItem(ITEM_SKILL_ROLL_ATTACK, 1);
+    SetItem(ITEM_SKILL_DASH_ATTACK, 1);
+    SetItem(ITEM_SKILL_ROCK_BREAKER, 1);
+    SetItem(ITEM_SKILL_SWORD_BEAM, 1);
+    SetItem(ITEM_SKILL_GREAT_SPIN, 1);
+    SetItem(ITEM_SKILL_DOWN_THRUST, 1);
+    SetItem(ITEM_SKILL_PERIL_BEAM, 1);
+    SetItem(ITEM_SKILL_FAST_SPIN, 1);
+    SetItem(ITEM_SKILL_FAST_SPLIT, 1);
+    SetItem(ITEM_SKILL_LONG_SPIN, 1);
+
+    /* Elements. */
     SetItem(ITEM_EARTH_ELEMENT, 1);
     SetItem(ITEM_FIRE_ELEMENT, 1);
     SetItem(ITEM_WATER_ELEMENT, 1);
     SetItem(ITEM_WIND_ELEMENT, 1);
 
-    /* Movement + reach upgrades. */
+    /* Reach upgrades + capacity bags. */
     SetItem(ITEM_GRIP_RING, 1);
     SetItem(ITEM_POWER_BRACELETS, 1);
     SetItem(ITEM_FLIPPERS, 1);
-
-    /* Capacity upgrades + bag. */
     SetItem(ITEM_WALLET, 1);
     SetItem(ITEM_BOMBBAG, 1);
     SetItem(ITEM_LARGE_QUIVER, 1);
     SetItem(ITEM_KINSTONE_BAG, 1);
 
-    /* LoadItemGfx() chooses bomb/boomerang VRAM gfx based on the
-     * upgraded-or-basic inventory bits and writes them to the slots
-     * Link's item-use entities reference. Without this, the sprite
-     * VRAM still holds whatever the previous area put there (commonly
-     * the pot graphic) and using the boomerang renders Link as a pot. */
+    /* Bottles: own all four; a bottle with content byte 0 is undrawable, so
+     * default each to empty (0x20 == ITEM_BOTTLE_EMPTY). */
+    SetItem(ITEM_BOTTLE1, 1);
+    SetItem(ITEM_BOTTLE2, 1);
+    SetItem(ITEM_BOTTLE3, 1);
+    SetItem(ITEM_BOTTLE4, 1);
+    for (i = 0; i < 4; i++) {
+        gSave.stats.bottles[i] = ITEM_BOTTLE_EMPTY;
+    }
+
+    /* Capacity tiers to max (3) FIRST, then fill counts to those tiers' caps. */
+    gSave.stats.walletType  = 3;
+    gSave.stats.bombBagType = 3;
+    gSave.stats.quiverType  = 3;
+    gSave.stats.rupees     = gWalletSizes[3].size; /* 999 */
+    gSave.stats.bombCount  = gBombBagSizes[3];     /* 99  */
+    gSave.stats.arrowCount = gQuiverSizes[3];      /* 99  */
+    gSave.stats.shells     = 999;
+
+    /* Hearts: 20 containers (maxHealth in eighths, cap 0xA0), full health, and
+     * no dangling heart piece (value 4 would wrap into another container). */
+    gSave.stats.maxHealth   = 0xA0;
+    gSave.stats.health      = gSave.stats.maxHealth;
+    gSave.stats.heartPieces = 0;
+
+    /* Every dungeon: Map+Compass+Big Key (bits 1|2|4 — the gameUtils readers are
+     * authoritative; the save.h field comment is wrong) + a generous key count. */
+    for (i = 0; i < 0x10; i++) {
+        gSave.dungeonItems[i] |= 0x7;
+        gSave.dungeonKeys[i]   = 9;
+    }
+
+    /* Figurines are intentionally NOT granted here: "all figurines" must match
+     * gSave.available_figurines — a per-gallery, region-dependent total set from
+     * device data at runtime (130 USA vs 136 EU) — kept in lockstep with
+     * figurineCount / _hasAllFigurines / hasAllFigurines. Fabricating a static
+     * total desyncs Carlov's gallery, so it stays a follow-up. Kinstone fusions
+     * remain under the separate "All kinstones" action. */
+
+    /* Rebuild the runtime sword-skill bitfield from the granted skill bits so
+     * the scrolls work in the current room (UpdatePlayerSkills normally only
+     * runs on player init / room load). */
+    UpdatePlayerSkills();
+
+    /* Reload held-item VRAM so the upgraded bomb/boomerang variants don't render
+     * with stale gfx (Link-as-pot). */
     LoadItemGfx();
 }
 
