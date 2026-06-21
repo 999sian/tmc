@@ -111,6 +111,9 @@ float       sPracticeSlowmo      = 1.0f;
  * now persist to config.json and are re-applied at startup. */
 bool        sDiscordRpc    = false;
 bool        sVSyncCfg      = true;     /* matches Port_PPU's sVSyncEnabled default */
+bool        sColorCorrect  = true;     /* GBA-LCD colour correction (default on) */
+bool        sLcdPersist    = false;    /* LCD temporal persistence (default off) */
+float       sLcdPersistRho = 0.35f;    /* persistence: fraction of prev frame kept */
 bool        sRibbonCfg     = true;     /* F8 menu style: ribbon (true) vs classic */
 float       sMasterVolume  = 1.0f;     /* game master volume [0,1]; 1.0 = unchanged */
 bool        sHoldAdvanceText = false;  /* hold an advance key to keep paging text */
@@ -209,6 +212,9 @@ nlohmann::json DefaultsJson(void) {
          * to override the compile-time feature defaults. */
         { "discord_rpc", false },
         { "vsync", true },
+        { "color_correction", true },
+        { "lcd_persistence", false },
+        { "lcd_persistence_rho", 0.35 },
         { "ribbon_mode", true },
         { "master_volume", 1.0 },
         { "hold_advance_text", false },
@@ -628,6 +634,9 @@ extern "C" void Port_Config_Load(const char* path) {
 
         sDiscordRpc  = j.value("discord_rpc", false);
         sVSyncCfg    = j.value("vsync", true);
+        sColorCorrect  = j.value("color_correction", true);
+        sLcdPersist    = j.value("lcd_persistence", false);
+        sLcdPersistRho = (float)j.value("lcd_persistence_rho", 0.35);
         sRibbonCfg   = j.value("ribbon_mode", true);
         sMasterVolume = (float)j.value("master_volume", 1.0);
         sHoldAdvanceText = j.value("hold_advance_text", false);
@@ -1497,6 +1506,12 @@ extern "C" bool Port_Config_GetDiscordRpc(void) { return sDiscordRpc; }
 extern "C" void Port_Config_SetDiscordRpc(bool on) { sDiscordRpc = on; sConfigJson["discord_rpc"] = on; SaveConfig(); }
 extern "C" bool Port_Config_GetVSync(void) { return sVSyncCfg; }
 extern "C" void Port_Config_SetVSync(bool on) { sVSyncCfg = on; sConfigJson["vsync"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetColorCorrection(void) { return sColorCorrect; }
+extern "C" void Port_Config_SetColorCorrection(bool on) { sColorCorrect = on; sConfigJson["color_correction"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetLcdPersistence(void) { return sLcdPersist; }
+extern "C" void Port_Config_SetLcdPersistence(bool on) { sLcdPersist = on; sConfigJson["lcd_persistence"] = on; SaveConfig(); }
+extern "C" float Port_Config_GetLcdPersistenceRho(void) { return sLcdPersistRho; }
+extern "C" void Port_Config_SetLcdPersistenceRho(float v) { sLcdPersistRho = v; sConfigJson["lcd_persistence_rho"] = v; SaveConfig(); }
 extern "C" bool Port_Config_GetRibbonEnabled(void) { return sRibbonCfg; }
 extern "C" void Port_Config_SetRibbonEnabled(bool on) { sRibbonCfg = on; sConfigJson["ribbon_mode"] = on; SaveConfig(); }
 extern "C" bool Port_Config_GetHoldToAdvanceText(void) { return sHoldAdvanceText; }

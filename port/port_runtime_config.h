@@ -182,6 +182,14 @@ bool        Port_Config_GetDiscordRpc(void);
 void        Port_Config_SetDiscordRpc(bool on);
 bool        Port_Config_GetVSync(void);
 void        Port_Config_SetVSync(bool on);
+
+/* GBA-LCD display transforms (F8 Display menu). */
+bool        Port_Config_GetColorCorrection(void);
+void        Port_Config_SetColorCorrection(bool on);
+bool        Port_Config_GetLcdPersistence(void);
+void        Port_Config_SetLcdPersistence(bool on);
+float       Port_Config_GetLcdPersistenceRho(void);
+void        Port_Config_SetLcdPersistenceRho(float v);
 bool        Port_Config_GetRibbonEnabled(void);
 void        Port_Config_SetRibbonEnabled(bool on);
 bool        Port_Config_GetHoldToAdvanceText(void);

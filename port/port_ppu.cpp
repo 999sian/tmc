@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -465,6 +466,120 @@ extern "C" bool Port_PPU_VSyncEnabled(void) {
     return sVSyncEnabled;
 }
 
+/* ---- GBA reflective-LCD display transforms (PC port) -----------------------
+ *
+ * Both run as present-time post-processes on the final composited ABGR8888
+ * frame (virtuappu_frame_buffer), after virtuappu_render_frame() and after any
+ * shm publish, so they touch only what reaches the screen and cover every BG
+ * mode plus the engine's blend/brightness output uniformly. Doing this here
+ * rather than inside ViruaPPU keeps the pinned submodule untouched.
+ *
+ * Colour correction: GBA games were authored for a dim, high-gamma reflective
+ * panel and look over-bright/over-saturated when their palettes are shown raw
+ * (the engine expands each 5-bit channel with a plain <<3) on an sRGB monitor.
+ * We decode each channel through the GBA panel display gamma to linear light
+ * and re-encode with the standard sRGB transfer function. Clean-room: the only
+ * constants are the GBA display gamma and the published sRGB OETF -- no
+ * third-party colour tables. Since the source is 5-bit, a 256-entry 8-bit LUT
+ * reproduces a 15-bit table exactly while also correcting blended pixels.
+ *
+ * Persistence: the GBA LCD had slow pixel response, and some TMC-era effects
+ * (dithered / flicker transparency) leaned on it. We keep a per-pixel
+ * accumulator and move it toward each new frame by (1 - rho). Opt-in. */
+#define PORT_GBA_LCD_GAMMA 4.0  /* "classic" GBA reflective-panel display gamma */
+
+static bool     sColorCorrectEnabled = true;
+static uint8_t  sColorLut[256];
+static bool     sColorLutReady = false;
+
+static bool     sPersistEnabled = false;
+static float    sPersistRho = 0.35f;  /* fraction of the previous frame retained */
+static uint32_t sPersistAccum[VIRTUAPPU_FRAME_BUFFER_SIZE];
+static bool     sPersistAccumValid = false;
+
+static double Port_PPU_SrgbOetf(double linear) {
+    if (linear <= 0.0031308) {
+        return 12.92 * linear;
+    }
+    return 1.055 * std::pow(linear, 1.0 / 2.4) - 0.055;
+}
+
+static void Port_PPU_BuildColorLut(void) {
+    for (int v = 0; v < 256; ++v) {
+        double x = static_cast<double>(v) / 255.0;
+        double enc = Port_PPU_SrgbOetf(std::pow(x, PORT_GBA_LCD_GAMMA));
+        if (enc < 0.0) enc = 0.0;
+        if (enc > 1.0) enc = 1.0;
+        sColorLut[v] = static_cast<uint8_t>(enc * 255.0 + 0.5);
+    }
+    sColorLutReady = true;
+}
+
+extern "C" void Port_PPU_SetColorCorrection(bool enabled) {
+    sColorCorrectEnabled = enabled;
+}
+
+extern "C" bool Port_PPU_ColorCorrectionEnabled(void) {
+    return sColorCorrectEnabled;
+}
+
+extern "C" void Port_PPU_SetPersistence(bool enabled, float rho) {
+    sPersistEnabled = enabled;
+    if (rho >= 0.0f && rho < 1.0f) {
+        sPersistRho = rho;
+    }
+    if (!enabled) {
+        sPersistAccumValid = false;  /* drop history so re-enabling starts clean */
+    }
+}
+
+/* Apply colour correction then persistence in place over the first
+ * `pixelCount` ABGR8888 pixels of virtuappu_frame_buffer. Called on the main
+ * thread after the OpenMP scanline render has joined, so no locking needed. */
+static void Port_PPU_ApplyDisplayPostProcess(int pixelCount) {
+    if (pixelCount <= 0) {
+        return;
+    }
+    if (pixelCount > VIRTUAPPU_FRAME_BUFFER_SIZE) {
+        pixelCount = VIRTUAPPU_FRAME_BUFFER_SIZE;
+    }
+
+    if (sColorCorrectEnabled && sColorLutReady) {
+        for (int i = 0; i < pixelCount; ++i) {
+            uint32_t p = virtuappu_frame_buffer[i];
+            uint32_t r = sColorLut[p & 0xFFu];
+            uint32_t g = sColorLut[(p >> 8) & 0xFFu];
+            uint32_t b = sColorLut[(p >> 16) & 0xFFu];
+            virtuappu_frame_buffer[i] = (p & 0xFF000000u) | (b << 16) | (g << 8) | r;
+        }
+    }
+
+    if (sPersistEnabled) {
+        const float add = 1.0f - sPersistRho;
+        if (!sPersistAccumValid) {
+            std::memcpy(sPersistAccum, virtuappu_frame_buffer,
+                        sizeof(uint32_t) * static_cast<size_t>(pixelCount));
+            sPersistAccumValid = true;
+        } else {
+            for (int i = 0; i < pixelCount; ++i) {
+                uint32_t cur = virtuappu_frame_buffer[i];
+                uint32_t acc = sPersistAccum[i];
+                uint32_t out = cur & 0xFF000000u;  /* keep current alpha */
+                for (int s = 0; s <= 16; s += 8) {
+                    float c = static_cast<float>((cur >> s) & 0xFFu);
+                    float a = static_cast<float>((acc >> s) & 0xFFu);
+                    float val = a + (c - a) * add;
+                    if (val < 0.0f) val = 0.0f;
+                    if (val > 255.0f) val = 255.0f;
+                    out |= static_cast<uint32_t>(val + 0.5f) << s;
+                }
+                sPersistAccum[i] = out;
+                virtuappu_frame_buffer[i] = out;
+            }
+        }
+    }
+}
+
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
 #ifdef launcher
@@ -590,6 +705,36 @@ bind_virtuappu_memory:
     virtuappu_registers.frame_width = Port_PPU_VisibleFrameWidth();
     virtuappu_registers.frame_pitch = MODE1_GBA_WIDTH;
     virtuappu_registers.mode = 1;
+
+    /* GBA-LCD display transforms. Source of truth is the persisted config
+     * (F8 Display menu); the TMC_* env vars override it for headless A/B.
+     * Colour correction defaults on, LCD persistence off. The LUT is built
+     * here on the main thread before the first frame, so the render's OpenMP
+     * scanline workers never see a half-filled table. */
+    {
+        bool cc = Port_Config_GetColorCorrection();
+        const char* ccEnv = getenv("TMC_COLOR_CORRECTION");
+        if (ccEnv && ccEnv[0]) {
+            cc = (ccEnv[0] != '0');
+        }
+        sColorCorrectEnabled = cc;
+        Port_PPU_BuildColorLut();
+
+        bool  lcd = Port_Config_GetLcdPersistence();
+        float rho = Port_Config_GetLcdPersistenceRho();
+        const char* lpEnv = getenv("TMC_LCD_PERSISTENCE");
+        if (lpEnv && lpEnv[0]) {
+            lcd = (lpEnv[0] != '0');
+        }
+        const char* rvEnv = getenv("TMC_LCD_PERSISTENCE_RHO");
+        if (rvEnv && *rvEnv) {
+            float v = static_cast<float>(atof(rvEnv));
+            if (v >= 0.0f && v < 1.0f) {
+                rho = v;
+            }
+        }
+        Port_PPU_SetPersistence(lcd, rho);
+    }
 
     if (sBackend == RenderBackend::None) {
         sFrameSurface = SDL_CreateSurfaceFrom(
@@ -760,6 +905,13 @@ extern "C" void Port_PPU_PresentFrame(void) {
             Port_Shm_PublishFramebuffer(compositeSrc, W, H);
         }
     }
+
+    /* GBA-LCD display transforms (colour correction + persistence) over the
+     * final composited frame, after any shm publish so published planes stay
+     * raw game data. No-ops when disabled. Operates on the native render extent
+     * (stride MODE1_GBA_WIDTH x MODE1_GBA_HEIGHT); present-side upscale/xBRZ run
+     * afterwards on the transformed pixels. */
+    Port_PPU_ApplyDisplayPostProcess(MODE1_GBA_WIDTH * MODE1_GBA_HEIGHT);
 
     int presentW = 0;
     int presentH = 0;
