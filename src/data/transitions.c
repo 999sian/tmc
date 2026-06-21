@@ -531,30 +531,6 @@ const Transition gExitList_RoyalValley_Main[] = {
       1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
     TransitionListEnd,
 };
-#ifdef MULTI_REGION
-// EU twin of gExitList_RoyalValley_Main (3rd element startY 0x288 vs USA/JP baseline 0x28c); original guard: #ifndef EU
-const Transition gExitList_RoyalValley_Main_eu[] = {
-    { WARP_TYPE_AREA, 0xf0, 0x28, 0x88, 0x78, TRANSITION_SHAPE_AREA_28x12, AREA_ROYAL_CRYPT, ROOM_ROYAL_CRYPT_ENTRANCE, 1,
-      TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x1a0, 0x198, 0x78, 0x78, TRANSITION_SHAPE_AREA_28x12, AREA_HOUSE_INTERIORS_2, ROOM_HOUSE_INTERIORS_2_DAMPE,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x198, 0x2a8, 0x78, 0xf8, TRANSITION_SHAPE_AREA_12x12, AREA_GREAT_FAIRIES, ROOM_GREAT_FAIRIES_GRAVEYARD,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x58, 0x84, 0x78, 0x78, TRANSITION_SHAPE_AREA_12x12, AREA_ROYAL_VALLEY_GRAVES, ROOM_ROYAL_VALLEY_GRAVES_HEART_PIECE,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x188, 0x84, 0x78, 0x118, TRANSITION_SHAPE_AREA_12x12, AREA_ROYAL_VALLEY_GRAVES, ROOM_ROYAL_VALLEY_GRAVES_GINA,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0xfff, 0x10, TRANSITION_SHAPE_BORDER_SOUTH_WEST, AREA_HYRULE_FIELD, ROOM_HYRULE_FIELD_TRILBY_HIGHLANDS,
-      1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0x8, 0x50, TRANSITION_SHAPE_BORDER_EAST_SOUTH, AREA_HYRULE_FIELD, ROOM_HYRULE_FIELD_NORTH_HYRULE_FIELD,
-      1, TRANSITION_TYPE_NORMAL, 0x2, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x78, 0x288, 0x78, 0x18, TRANSITION_SHAPE_AREA_12x12, AREA_ROYAL_VALLEY, ROOM_ROYAL_VALLEY_FOREST_MAZE,
-      1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x78, 0x328, 0x78, 0x98, TRANSITION_SHAPE_AREA_12x12, AREA_ROYAL_VALLEY, ROOM_ROYAL_VALLEY_FOREST_MAZE,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    TransitionListEnd,
-};
-#endif
 const Transition gExitList_RoyalValley_ForestMaze[] = {
     { WARP_TYPE_BORDER, 0x0, 0x0, 0x78, 0x338, TRANSITION_SHAPE_BORDER_SOUTH, AREA_ROYAL_VALLEY, ROOM_ROYAL_VALLEY_MAIN, 1, TRANSITION_TYPE_NORMAL,
       0x4, 0x0, 0x0, 0x0 },
@@ -2639,47 +2615,15 @@ const Transition gExitList_DeepwoodShrine_StairsToB1[] = {
 const Transition gExitList_DeepwoodShrine_BluePortal[] = {
     TransitionListEnd,
 };
-#ifdef MULTI_REGION
-// EU twin of gExitList_DeepwoodShrine_BluePortal (EU adds one border entry); original guard: #ifdef EU
-const Transition gExitList_DeepwoodShrine_BluePortal_eu[] = {
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0xfff, 0x38, TRANSITION_SHAPE_BORDER_SOUTH, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },
-    TransitionListEnd,
-};
-#endif
 const Transition gExitList_DeepwoodShrine_Map[] = {
     TransitionListEnd,
 };
-#ifdef MULTI_REGION
-// EU twin of gExitList_DeepwoodShrine_Map (EU adds one border entry); original guard: #ifdef EU
-const Transition gExitList_DeepwoodShrine_Map_eu[] = {
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0x18, 0xfff, TRANSITION_SHAPE_BORDER_EAST, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x2, 0x0, 0x0, 0x0 },
-    TransitionListEnd,
-};
-#endif
 const Transition gExitList_DeepwoodShrine_Button[] = {
     TransitionListEnd,
 };
-#ifdef MULTI_REGION
-// EU twin of gExitList_DeepwoodShrine_Button (EU adds one border entry); original guard: #ifdef EU
-const Transition gExitList_DeepwoodShrine_Button_eu[] = {
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0x1b8, 0xfff, TRANSITION_SHAPE_BORDER_WEST, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x6, 0x0, 0x0, 0x0 },
-    TransitionListEnd,
-};
-#endif
 const Transition gExitList_DeepwoodShrine_Lever[] = {
     TransitionListEnd,
 };
-#ifdef MULTI_REGION
-// EU twin of gExitList_DeepwoodShrine_Lever (EU adds one border entry); original guard: #ifdef EU
-const Transition gExitList_DeepwoodShrine_Lever_eu[] = {
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0xfff, 0x168, TRANSITION_SHAPE_BORDER_NORTH, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    TransitionListEnd,
-};
-#endif
 const Transition gExitList_DeepwoodShrine_Barrel[] = {
     { WARP_TYPE_AREA, 0xb8, 0x88, 0x50, 0x38, TRANSITION_SHAPE_AREA_12x12, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_INSIDE_BARREL,
       1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },
@@ -2691,28 +2635,6 @@ const Transition gExitList_DeepwoodShrine_Barrel[] = {
       1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
     TransitionListEnd,
 };
-#ifdef MULTI_REGION
-// EU twin of gExitList_DeepwoodShrine_Barrel (EU adds four border entries after the four baseline area entries); original guard: #ifdef EU
-const Transition gExitList_DeepwoodShrine_Barrel_eu[] = {
-    { WARP_TYPE_AREA, 0xb8, 0x88, 0x50, 0x38, TRANSITION_SHAPE_AREA_12x12, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_INSIDE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x118, 0x88, 0xa0, 0x38, TRANSITION_SHAPE_AREA_12x12, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_INSIDE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0xb8, 0x108, 0x50, 0x70, TRANSITION_SHAPE_AREA_12x12, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_INSIDE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_AREA, 0x118, 0x108, 0xa0, 0x70, TRANSITION_SHAPE_AREA_12x12, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_INSIDE_BARREL,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0xfff, 0xc8, TRANSITION_SHAPE_BORDER_NORTH, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_BLUE_PORTAL,
-      1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0x28, 0xfff, TRANSITION_SHAPE_BORDER_EAST, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_BUTTON,
-      1, TRANSITION_TYPE_NORMAL, 0x2, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0xfff, 0x38, TRANSITION_SHAPE_BORDER_SOUTH, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_LEVER,
-      1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0xe8, 0xfff, TRANSITION_SHAPE_BORDER_WEST, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_MAP, 1,
-      TRANSITION_TYPE_NORMAL, 0x6, 0x0, 0x0, 0x0 },
-    TransitionListEnd,
-};
-#endif
 const Transition gExitList_DeepwoodShrine_Entrance[] = {
     { WARP_TYPE_AREA, 0x48, 0x68, 0x48, 0x78, TRANSITION_SHAPE_AREA_12x12, AREA_DEEPWOOD_SHRINE, ROOM_DEEPWOOD_SHRINE_BOSS_DOOR,
       1, TRANSITION_TYPE_NORMAL, 0x4, 0x0, 0x0, 0x0 },

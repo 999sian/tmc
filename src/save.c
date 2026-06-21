@@ -142,10 +142,6 @@ SaveResult HandleSaveDone(u32 action) {
 }
 
 u32 InitSaveData(void) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    CpuSet(NULL, &gSave, 0x4b4);
-    return 1;
-#else
     const SaveFileEEPROMAddresses* eepromAddresses;
     u32 error;
 
@@ -170,7 +166,6 @@ u32 InitSaveData(void) {
         DataWrite(eepromAddresses->address1, sSignatureLong, eepromAddresses->size);
     }
     return 1;
-#endif
 }
 
 u32 WriteSaveFile(u32 index, SaveFile* saveFile) {
@@ -180,64 +175,37 @@ u32 WriteSaveFile(u32 index, SaveFile* saveFile) {
         Port_RandoSave_SaveActiveSlot((int)index);
     }
 #endif
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    return 1;
-#else
     return DataDoubleWriteWithStatus(index, saveFile);
-#endif
 }
 
 u32 WriteSaveHeader(SaveHeader* saveHeader) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    return 1;
-#else
     return DataDoubleWriteWithStatus(3, saveHeader);
-#endif
 }
 
 u32 sub_0807CF1C(u8* arg0) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    return 1;
-#else
     return DataDoubleWriteWithStatus(5, arg0);
-#endif
 }
 
 s32 ReadSaveFile(u32 index, SaveFile* saveFile) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    return 1;
-#else
     return DataDoubleReadWithStatus(index, saveFile);
-#endif
 }
 
 u32 ReadSaveHeader(SaveHeader* saveHeader) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    return 0;
-#else
     return DataDoubleReadWithStatus(3, saveHeader);
-#endif
 }
 
 u32 sub_0807CF3C(u8* arg0) {
-#if defined(DEMO_USA) || defined(DEMO_JP)
-    return 0;
-#else
     return DataDoubleReadWithStatus(5, arg0);
-#endif
 }
 
 void SetFileStatusDeleted(u32 index) {
-#if !(defined(DEMO_USA) || defined(DEMO_JP))
     const SaveFileEEPROMAddresses* eepromAddresses;
 
     eepromAddresses = GetSaveFileEEPROMAddresses(index);
     WriteSaveFileStatus(eepromAddresses->checksum2, &sSaveDescDeleted);
     WriteSaveFileStatus(eepromAddresses->checksum1, &sSaveDescDeleted);
-#endif
 }
 
-#if !(defined(DEMO_USA) || defined(DEMO_JP))
 void SetFileStatusInit(u32 index) {
     const SaveFileEEPROMAddresses* eepromAddresses;
     const SaveFileStatus* fileStatus;
@@ -467,4 +435,3 @@ bool32 DataCompare(u32 address, const void* data, u32 size) {
     }
     return TRUE;
 }
-#endif

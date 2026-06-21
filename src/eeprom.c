@@ -1,10 +1,6 @@
 #include "global.h"
 #include "gba/eeprom.h"
 
-#if defined(DEMO_USA) || defined(DEMO_JP)
-const u8 unk[] = { 0xff, 0xff, 0xff, 0xff };
-const u8 padding[0x18] = {};
-#else
 typedef struct EEPROMConfig {
     u32 unk_00;
     u16 size;
@@ -255,4 +251,3 @@ u16 EEPROMWrite0_8k_Check(u16 address, const u16* data) {
 
 const char thing[0x1c] = "\xff\xff\xff\xff";
 
-#endif
