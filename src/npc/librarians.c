@@ -32,7 +32,7 @@ void sub_0806BA34(Entity* this, ScriptExecutionContext* context) {
     u32 gotBook3;
     u32 message = TEXT_INDEX(TEXT_LIBRARY, 0x12);
     context->condition = 0;
-    if (CheckLocalFlag(0x73)) {
+    if (CheckLocalFlagB(0x73)) {
         message = TEXT_INDEX(TEXT_LIBRARY, 0x13);
     } else {
         gotBook1 = GetInventoryValue(ITEM_QST_BOOK1);
@@ -41,33 +41,33 @@ void sub_0806BA34(Entity* this, ScriptExecutionContext* context) {
         if (gotBook1 == 1) {
             message = TEXT_INDEX(TEXT_LIBRARY, 0x6);
             context->condition = 1;
-            SetLocalFlag(0x6b);
-            SetLocalFlag(0x6a);
+            SetLocalFlagB(0x6b);
+            SetLocalFlagB(0x6a);
         } else if (gotBook2 == 1) {
             message = TEXT_INDEX(TEXT_LIBRARY, 0x7);
             context->condition = 1;
-            SetLocalFlag(0x6b);
-            SetLocalFlag(0x6a);
+            SetLocalFlagB(0x6b);
+            SetLocalFlagB(0x6a);
         } else if (gotBook3 == 1) {
             message = TEXT_INDEX(TEXT_LIBRARY, 0x8);
             context->condition = 1;
-            SetLocalFlag(0x6b);
-            SetLocalFlag(0x6a);
+            SetLocalFlagB(0x6b);
+            SetLocalFlagB(0x6a);
         } else {
-            if (CheckLocalFlag(0x6a)) {
-                if (!CheckLocalFlag(0x6b)) {
+            if (CheckLocalFlagB(0x6a)) {
+                if (!CheckLocalFlagB(0x6b)) {
                     message = TEXT_INDEX(TEXT_LIBRARY, 0x1);
-                    SetLocalFlag(0x6b);
+                    SetLocalFlagB(0x6b);
                 } else {
                     if (gotBook1 == 0) {
                         message = TEXT_INDEX(TEXT_LIBRARY, 0x2);
-                        SetLocalFlag(0x6b);
+                        SetLocalFlagB(0x6b);
                     } else if (gotBook2 == 0) {
                         message = TEXT_INDEX(TEXT_LIBRARY, 0x3);
-                        SetLocalFlag(0x6d);
+                        SetLocalFlagB(0x6d);
                     } else if (gotBook3 == 0) {
                         message = TEXT_INDEX(TEXT_LIBRARY, 0x4);
-                        SetLocalFlag(0x70);
+                        SetLocalFlagB(0x70);
                     }
                 }
             }
@@ -103,7 +103,7 @@ void sub_0806BB7C(Entity* this, ScriptExecutionContext* context) {
     context->condition = 0;
     if ((GetInventoryValue(ITEM_QST_BOOK1) == 2) && (GetInventoryValue(ITEM_QST_BOOK2) == 2) &&
         (GetInventoryValue(ITEM_QST_BOOK3) == 2)) {
-        SetLocalFlag(0x73);
+        SetLocalFlagB(0x73);
         context->condition = 1;
     }
 }

@@ -204,14 +204,14 @@ void MiscManager_Type3(MiscManager* this) {
     u32 tmp = 0;
     if (super->action == 0) {
         super->action = 1;
-        if (CheckLocalFlag(0x60)) {
+        if (CheckLocalFlagB(0x60)) {
             tmp = 1;
         } else {
-            SetLocalFlag(0x5F);
+            SetLocalFlagB(0x5F);
         }
     } else {
-        if (CheckLocalFlag(0x60)) {
-            ClearLocalFlag(0x5F);
+        if (CheckLocalFlagB(0x60)) {
+            ClearLocalFlagB(0x5F);
             tmp = 1;
         }
     }
@@ -226,14 +226,14 @@ void MiscManager_Type4(MiscManager* this) {
         super->action = 1;
         SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
     }
-    if (CheckLocalFlag(0x6c)) {
-        if (CheckLocalFlag(0x4b)) {
-            SetLocalFlag(0x4a);
+    if (CheckLocalFlagB(0x6c)) {
+        if (CheckLocalFlagB(0x4b)) {
+            SetLocalFlagB(0x4a);
         } else {
-            ClearLocalFlag(0x4a);
+            ClearLocalFlagB(0x4a);
         }
     } else {
-        ClearLocalFlag(0x4a);
+        ClearLocalFlagB(0x4a);
     }
 }
 

@@ -810,7 +810,7 @@ void sub_0806B064(Entity* this, ScriptExecutionContext* context) {
 
     if (CheckGlobalFlag(MIZUKAKI_START)) {
         idx = 1;
-        if (CheckLocalFlag(0x73)) {
+        if (CheckLocalFlagB(0x73)) {
             idx = 2;
         }
     }

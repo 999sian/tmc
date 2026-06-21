@@ -102,7 +102,7 @@ void TempleOfDropletsManager_Type1(TempleOfDropletsManager* this) {
             super->action = 1;
             gScreen.lcd.displayControl &= 0xB7FF;
         } else {
-            if (CheckLocalFlag(0x48)) {
+            if (CheckLocalFlagB(0x48)) {
                 super->action = 4;
             } else {
                 super->action = 3;
@@ -238,12 +238,12 @@ void TempleOfDropletsManager_Type4(TempleOfDropletsManager* this) {
     if (super->action == 0) {
         sub_0805A89C(this);
         this->unk_28 = 0;
-        if (CheckLocalFlag(0x36)) {
+        if (CheckLocalFlagB(0x36)) {
             this->unk_23 = 3;
             super->action = 5;
             gScreen.lcd.displayControl |= DISPCNT_WIN1_ON | DISPCNT_BG3_ON;
         } else {
-            if (CheckLocalFlag(0x34)) {
+            if (CheckLocalFlagB(0x34)) {
                 this->unk_23 = 4;
                 super->action = 3;
                 gScreen.lcd.displayControl |= DISPCNT_WIN1_ON | DISPCNT_BG3_ON;
@@ -274,7 +274,7 @@ void TempleOfDropletsManager_Type4(TempleOfDropletsManager* this) {
 }
 
 void TempleOfDropletsManager_Type4_Action1(TempleOfDropletsManager* this) {
-    if (CheckLocalFlag(0x34)) {
+    if (CheckLocalFlagB(0x34)) {
         super->action = 2;
         sub_0805A4CC(this, 2);
     }
@@ -287,7 +287,7 @@ void TempleOfDropletsManager_Type4_Action2(TempleOfDropletsManager* this) {
 }
 
 void TempleOfDropletsManager_Type4_Action3(TempleOfDropletsManager* this) {
-    if (CheckLocalFlag(0x36)) {
+    if (CheckLocalFlagB(0x36)) {
         super->action = 4;
         this->unk_23 = 3;
         sub_0805A4CC(this, 3);

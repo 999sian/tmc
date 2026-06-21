@@ -82,7 +82,7 @@ void sub_0806CE80(Entity* this) {
     v = gSave.global_progress;
     if (v == 5) {
         if (GetInventoryValue(ITEM_FLIPPERS) == 0) {
-            if (CheckLocalFlag(0x70) != 0) {
+            if (CheckLocalFlagB(0x70) != 0) {
                 v2 = CheckLocalFlag(MIZUKAKI_HINT3_MAYOR);
                 if (v2 == 0) {
                     v = 0xb;

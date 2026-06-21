@@ -59,9 +59,9 @@ void sub_0806B260(Entity* this, ScriptExecutionContext* context) {
         if (CheckGlobalFlag(MIZUKAKI_START)) {
             index = 2;
             context->condition = 1;
-        } else if (!CheckLocalFlag(0x7a)) {
+        } else if (!CheckLocalFlagB(0x7a)) {
             index = 0;
-            SetLocalFlag(0x7a);
+            SetLocalFlagB(0x7a);
         } else {
             index = 1;
         }
@@ -78,7 +78,7 @@ void sub_0806B2B4(Entity* this) {
     };
     u32 index;
 
-    if (CheckLocalFlag(0xb3)) {
+    if (CheckLocalFlagB(0xb3)) {
         if (!CheckRoomFlag(0)) {
             index = 1;
             SetRoomFlag(0);

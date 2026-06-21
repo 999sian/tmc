@@ -195,11 +195,11 @@ void sub_0806387C(Entity* this) {
     s32 r5;
     s32 val, val2;
     u16* ptr;
-    if (CheckLocalFlag(MACHI_MES_50) == 0) {
+    if (CheckLocalFlagB(MACHI_MES_50) == 0) {
         r4 = 0;
-        SetLocalFlag(MACHI_MES_50);
+        SetLocalFlagB(MACHI_MES_50);
     } else {
-        if (CheckLocalFlag(SHOP05_OPEN) == 0) {
+        if (CheckLocalFlagB(SHOP05_OPEN) == 0) {
             r5 = 0;
             for (r4 = 1; r4 <= 0x82; r4++) {
                 if (ReadBit(gSave.figurines, r4)) {
@@ -210,7 +210,7 @@ void sub_0806387C(Entity* this) {
             r4 = 1;
             if (r5 > 0x81) {
                 r4 = 2;
-                SetLocalFlag(SHOP05_OPEN);
+                SetLocalFlagB(SHOP05_OPEN);
                 RestorePrevTileEntity(0xa17, 1);
                 RestorePrevTileEntity(0xa57, 1);
             }
@@ -227,9 +227,9 @@ void sub_0806387C(Entity* this) {
 
 void sub_0806390C(Entity* this) {
     u32 r5 = 1;
-    if (CheckLocalFlag(MACHI_MES_60) == 0) {
+    if (CheckLocalFlagB(MACHI_MES_60) == 0) {
         r5 = 0;
-        SetLocalFlag(MACHI_MES_60);
+        SetLocalFlagB(MACHI_MES_60);
         ((SittingPersonEntity*)this)->unk_84[5] = 1;
     }
 
