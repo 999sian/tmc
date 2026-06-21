@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### Multi-region — one PC binary plays USA, EU, and JP ROMs at runtime
+
+- **A single build now runs any retail region.** The region is detected from
+  the loaded ROM at boot (`gActiveRegion`) instead of being baked in at compile
+  time. The historical `#ifdef EU` / `#ifdef JP` gameplay, data, and text
+  divergences are now runtime `REGION_IS_*` branches (`include/region.h`,
+  force-included); region-exclusive functions are compiled for all regions and
+  dispatched at their call sites, and per-region data tables keep a USA baseline
+  plus `_eu`/`_jp` twins selected at the read site. Enabled by default in
+  `build.py`; `--multi_region=n` still produces a lean single-region build that
+  byte-matches the original decomp.
+- **Save data is region-correct.** The EEPROM save signature is chosen at
+  runtime (`ZELDA 5` for USA, `ZELDA 3` for EU/JP), and saves stay isolated per
+  region (`tmc.sav` / `tmc_eu.sav` / `tmc_jp.sav`).
+- **Save-flag ordinals are remapped per region.** The local-flag banks
+  (`include/flags.h`) enumerate different flags per region, so the same logical
+  flag lands on a different save bit in EU/JP than in USA. A generated
+  baseline->region ordinal remap (`tools/generate_flag_remap.py` ->
+  `port/flag_remap_generated.c`, identity on USA) keeps compiled C flag
+  references in sync with the loaded EU/JP ROM's script/area data — the
+  prerequisite for EU/JP correctness and real-hardware save compatibility.
+- **Region-accurate behavior restored where the port had drifted:** prologue
+  BGM at Castle Garden / Hyrule Field (USA/JP "Climbing the Beanstalk" +
+  CASTLE_BGM flag vs EU's festival theme), the EU figurine-shell drop table (an
+  off-by-one that silently gave EU the USA drop weighting), per-region
+  enemy/projectile/NPC/object data, world-event tables, song-player routing,
+  title-screen timers, and area exit lists (EU/JP exits resolved from the active
+  ROM rather than the USA compile-time tables).
+- Verified: clean build under `--multi_region=y`; USA (BZME), EU (BZMP), and JP
+  (BZMJ) ROMs each boot headless to `AgbMain`, sustain autoplay, and load their
+  own region save (signature round-trip), with no crashes or sanitizer hits.
+  Deep in-game EU/JP gameplay parity still wants a manual play pass.
+
 ### Randomizer — embedded logic database; no external file needed (#155)
 
 - **The randomizer no longer needs a separate `.logic` file.** A new
