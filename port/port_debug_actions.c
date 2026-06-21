@@ -6,6 +6,7 @@
  */
 
 #include "save.h"
+#include "flags.h"
 #include "room.h"
 #include "area.h"
 #include "global.h"
@@ -33,6 +34,16 @@ static void SetItem(unsigned int item, unsigned int value) {
         return;
     }
     gSave.inventory[byteIdx] = (gSave.inventory[byteIdx] & ~(3u << shift)) | ((value & 3u) << shift);
+}
+
+/* Read a single 2-bit inventory slot. Mirrors the engine's GetInventoryValue. */
+static unsigned int GetItem(unsigned int item) {
+    unsigned int byteIdx = item / 4;
+    unsigned int shift = (item % 4) * 2;
+    if (byteIdx >= sizeof(gSave.inventory)) {
+        return 0;
+    }
+    return (gSave.inventory[byteIdx] >> shift) & 3u;
 }
 
 void Port_DebugAction_GiveAllItems(void) {
@@ -393,6 +404,550 @@ int Port_DebugAction_TeleportXY(unsigned short x, unsigned short y) {
     gPlayerEntity.base.x.HALF.HI = x;
     gPlayerEntity.base.y.HALF.HI = y;
     return 1;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Per-item ownership toggles                                        */
+/* ------------------------------------------------------------------ */
+/* Backs the debug menu's "per-item toggle" grid. Each entry is a real
+ * inventory item the player can own/un-own individually. The id is kept
+ * in this C TU (it knows the ITEM_* enum); the C++ menu only sees an
+ * index + name + group, so all item-id knowledge stays on this side of
+ * the C/C++ boundary. Group strings drive the menu's section headers. */
+/* Mutual-exclusivity groups for the per-item toggle. Items sharing the same
+ * nonzero key occupy ONE pause-grid cell (genuine upgrade/variant sets), so
+ * owning one must clear the others. Driven by this explicit key, NOT by
+ * gItemMetaData[].menuSlot: that engine byte is only meaningful for the
+ * activatable grid range (ids 1..0x1F); for elements/upgrades/quest items it
+ * holds reused garbage that aliases the small slot numbers (0..15) and would
+ * cross-clear unrelated held items (e.g. Big Wallet wiping every sword). */
+enum {
+    EXCL_NONE = 0,
+    EXCL_SWORD,
+    EXCL_BOMBS,
+    EXCL_BOW,
+    EXCL_BOOMERANG,
+    EXCL_SHIELD,
+    EXCL_LANTERN,
+};
+
+typedef struct DebugToggleItem {
+    unsigned short id;    /* ITEM_* */
+    const char*    name;  /* display label */
+    const char*    group; /* section heading in the menu */
+    unsigned char  excl;  /* mutual-exclusivity key (EXCL_*); 0 = independent */
+} DebugToggleItem;
+
+static const DebugToggleItem kToggleItems[] = {
+    /* Swords — one grid cell, mutually exclusive. */
+    { ITEM_SMITH_SWORD,     "Smith's Sword",    "Sword",    EXCL_SWORD },
+    { ITEM_GREEN_SWORD,     "Green Sword",      "Sword",    EXCL_SWORD },
+    { ITEM_RED_SWORD,       "Red Sword",        "Sword",    EXCL_SWORD },
+    { ITEM_BLUE_SWORD,      "Blue Sword",       "Sword",    EXCL_SWORD },
+    { ITEM_FOURSWORD,       "Four Sword",       "Sword",    EXCL_SWORD },
+    /* Weapons. Only the genuine upgrade pairs share a grid cell; the rest are
+     * independent items. */
+    { ITEM_BOMBS,           "Bombs",            "Weapons",  EXCL_BOMBS },
+    { ITEM_REMOTE_BOMBS,    "Remote Bombs",     "Weapons",  EXCL_BOMBS },
+    { ITEM_BOW,             "Bow",              "Weapons",  EXCL_BOW },
+    { ITEM_LIGHT_ARROW,     "Light Arrow",      "Weapons",  EXCL_BOW },
+    { ITEM_BOOMERANG,       "Boomerang",        "Weapons",  EXCL_BOOMERANG },
+    { ITEM_MAGIC_BOOMERANG, "Magic Boomerang",  "Weapons",  EXCL_BOOMERANG },
+    { ITEM_GUST_JAR,        "Gust Jar",         "Weapons",  EXCL_NONE },
+    { ITEM_PACCI_CANE,      "Cane of Pacci",    "Weapons",  EXCL_NONE },
+    { ITEM_FIRE_ROD,        "Fire Rod",         "Weapons",  EXCL_NONE },
+    /* Gear. Shield/mirror-shield share a cell; lantern is a single entry. */
+    { ITEM_SHIELD,          "Shield",           "Gear",     EXCL_SHIELD },
+    { ITEM_MIRROR_SHIELD,   "Mirror Shield",    "Gear",     EXCL_SHIELD },
+    { ITEM_LANTERN_OFF,     "Lantern",          "Gear",     EXCL_LANTERN },
+    { ITEM_MOLE_MITTS,      "Mole Mitts",       "Gear",     EXCL_NONE },
+    { ITEM_ROCS_CAPE,       "Roc's Cape",       "Gear",     EXCL_NONE },
+    { ITEM_PEGASUS_BOOTS,   "Pegasus Boots",    "Gear",     EXCL_NONE },
+    { ITEM_OCARINA,         "Ocarina",          "Gear",     EXCL_NONE },
+    /* Bottles — each is its own cell; owning sets a drawable empty content. */
+    { ITEM_BOTTLE1,         "Bottle 1",         "Bottles",  EXCL_NONE },
+    { ITEM_BOTTLE2,         "Bottle 2",         "Bottles",  EXCL_NONE },
+    { ITEM_BOTTLE3,         "Bottle 3",         "Bottles",  EXCL_NONE },
+    { ITEM_BOTTLE4,         "Bottle 4",         "Bottles",  EXCL_NONE },
+    /* Elements. */
+    { ITEM_EARTH_ELEMENT,   "Earth Element",    "Elements", EXCL_NONE },
+    { ITEM_FIRE_ELEMENT,    "Fire Element",     "Elements", EXCL_NONE },
+    { ITEM_WATER_ELEMENT,   "Water Element",    "Elements", EXCL_NONE },
+    { ITEM_WIND_ELEMENT,    "Wind Element",     "Elements", EXCL_NONE },
+    /* Reach + capacity upgrades. */
+    { ITEM_GRIP_RING,       "Grip Ring",        "Upgrades", EXCL_NONE },
+    { ITEM_POWER_BRACELETS, "Power Bracelets",  "Upgrades", EXCL_NONE },
+    { ITEM_FLIPPERS,        "Flippers",         "Upgrades", EXCL_NONE },
+    { ITEM_WALLET,          "Big Wallet",       "Upgrades", EXCL_NONE },
+    { ITEM_BOMBBAG,         "Bomb Bag",         "Upgrades", EXCL_NONE },
+    { ITEM_LARGE_QUIVER,    "Large Quiver",     "Upgrades", EXCL_NONE },
+    { ITEM_KINSTONE_BAG,    "Kinstone Bag",     "Upgrades", EXCL_NONE },
+    /* Quest items (pause page 2) — independent of each other. */
+    { ITEM_QST_SWORD,         "Quest Sword",        "Quest", EXCL_NONE },
+    { ITEM_QST_BROKEN_SWORD,  "Broken Picori Blade","Quest", EXCL_NONE },
+    { ITEM_QST_DOGFOOD,       "Dog Food",           "Quest", EXCL_NONE },
+    { ITEM_QST_LONLON_KEY,    "Lon Lon Key",        "Quest", EXCL_NONE },
+    { ITEM_QST_MUSHROOM,      "Mushroom",           "Quest", EXCL_NONE },
+    { ITEM_QST_BOOK1,         "Library Book 1",     "Quest", EXCL_NONE },
+    { ITEM_QST_BOOK2,         "Library Book 2",     "Quest", EXCL_NONE },
+    { ITEM_QST_BOOK3,         "Library Book 3",     "Quest", EXCL_NONE },
+    { ITEM_QST_GRAVEYARD_KEY, "Graveyard Key",      "Quest", EXCL_NONE },
+    { ITEM_QST_TINGLE_TROPHY, "Tingle Trophy",      "Quest", EXCL_NONE },
+    { ITEM_QST_CARLOV_MEDAL,  "Carlov Medal",       "Quest", EXCL_NONE },
+};
+#define TOGGLE_ITEM_COUNT ((int)(sizeof(kToggleItems) / sizeof(kToggleItems[0])))
+
+int Port_DebugQuery_ToggleItemCount(void) {
+    return TOGGLE_ITEM_COUNT;
+}
+
+const char* Port_DebugQuery_ToggleItemName(int i) {
+    if (i < 0 || i >= TOGGLE_ITEM_COUNT) return NULL;
+    return kToggleItems[i].name;
+}
+
+const char* Port_DebugQuery_ToggleItemGroup(int i) {
+    if (i < 0 || i >= TOGGLE_ITEM_COUNT) return NULL;
+    return kToggleItems[i].group;
+}
+
+int Port_DebugQuery_ToggleItemOwned(int i) {
+    if (i < 0 || i >= TOGGLE_ITEM_COUNT) return 0;
+    return GetItem(kToggleItems[i].id) == 1;
+}
+
+/* Strip the side effects of un-owning an item: drop a dangling A/B equip and
+ * reset bottle content, so an item cleared either explicitly or by exclusivity
+ * never leaves stale equip/bottle state behind. */
+static void UnownItemCleanup(unsigned int id) {
+    if (gSave.stats.equipped[SLOT_A] == id) gSave.stats.equipped[SLOT_A] = ITEM_NONE;
+    if (gSave.stats.equipped[SLOT_B] == id) gSave.stats.equipped[SLOT_B] = ITEM_NONE;
+    if (id >= ITEM_BOTTLE1 && id <= ITEM_BOTTLE4) {
+        gSave.stats.bottles[(int)id - ITEM_BOTTLE1] = 0;
+    }
+}
+
+void Port_DebugAction_SetToggleItem(int i, int owned) {
+    unsigned int id;
+    unsigned char excl;
+    if (i < 0 || i >= TOGGLE_ITEM_COUNT) return;
+    id = kToggleItems[i].id;
+    excl = kToggleItems[i].excl;
+
+    if (owned) {
+        /* Mutual exclusivity within a real upgrade/variant group (swords,
+         * bombs/remote, bow/light-arrow, the two boomerangs, shield/mirror,
+         * lantern): these share one pause-grid cell, so owning one clears the
+         * others — otherwise the cell collides (last write wins -> wrong/black
+         * sprite) and the item-use dispatcher sees two variants. Keyed off the
+         * table's explicit excl group, never gItemMetaData[].menuSlot (which
+         * holds aliasing garbage for non-grid items and would wipe unrelated
+         * inventory). Cleared siblings get the same un-own cleanup. */
+        if (excl != EXCL_NONE) {
+            int j;
+            for (j = 0; j < TOGGLE_ITEM_COUNT; j++) {
+                if (j == i) continue;
+                if (kToggleItems[j].excl == excl) {
+                    SetItem(kToggleItems[j].id, 0);
+                    UnownItemCleanup(kToggleItems[j].id);
+                }
+            }
+        }
+        SetItem(id, 1);
+        /* A bottle with no content byte can't be drawn in the grid; give a
+         * freshly-owned bottle a valid empty content. */
+        if (id >= ITEM_BOTTLE1 && id <= ITEM_BOTTLE4) {
+            int b = (int)id - ITEM_BOTTLE1;
+            if (gSave.stats.bottles[b] == 0) {
+                gSave.stats.bottles[b] = ITEM_BOTTLE_EMPTY;
+            }
+        }
+    } else {
+        SetItem(id, 0);
+        UnownItemCleanup(id);
+    }
+    /* Reload held-item VRAM so toggling bomb/boomerang variants doesn't
+     * leave Link rendering with stale gfx — same call GiveAllItems makes. */
+    LoadItemGfx();
+}
+
+/* ------------------------------------------------------------------ */
+/*  Per-dungeon items / small keys                                    */
+/* ------------------------------------------------------------------ */
+/* dungeonItems[] is a per-dungeon bitmask; bit values are taken from the
+ * gameUtils.c readers (HasDungeonMap/Compass/BigKey), which are
+ * authoritative — the save.h field comment mislabels them.
+ *   bit 0 (1) = Map, bit 1 (2) = Compass, bit 2 (4) = Big Key.
+ * dungeonKeys[] holds the small-key COUNT per dungeon (a byte, not a bit).
+ * Both arrays are indexed by dungeon id (0..0xF); the engine only ever
+ * writes the current area's slot, so the menu writes the arrays directly
+ * to reach any dungeon. */
+#define DUNGEON_BIT_MAP     0x1
+#define DUNGEON_BIT_COMPASS 0x2
+#define DUNGEON_BIT_BIGKEY  0x4
+#define DEBUG_DUNGEON_COUNT 0x10
+
+/* Dungeon id the player is currently inside, or -1 when not in a keyed
+ * dungeon (dungeon_idx is stale outside one — gate on the area's "has
+ * keys" metadata bit, the same signal AreaHasKeys() reads). Used purely
+ * to highlight the current dungeon in the menu. */
+int Port_DebugQuery_CurrentDungeon(void) {
+    if (((gArea.areaMetadata >> 1) & 1) == 0) return -1;
+    return (int)gArea.dungeon_idx;
+}
+
+int Port_DebugQuery_DungeonItems(int dungeon) {
+    if (dungeon < 0 || dungeon >= DEBUG_DUNGEON_COUNT) return 0;
+    return gSave.dungeonItems[dungeon];
+}
+
+int Port_DebugQuery_DungeonKeys(int dungeon) {
+    if (dungeon < 0 || dungeon >= DEBUG_DUNGEON_COUNT) return 0;
+    return gSave.dungeonKeys[dungeon];
+}
+
+void Port_DebugAction_SetDungeonItem(int dungeon, int which, int owned) {
+    unsigned char bit;
+    if (dungeon < 0 || dungeon >= DEBUG_DUNGEON_COUNT) return;
+    switch (which) {
+        case 0:  bit = DUNGEON_BIT_MAP;     break;
+        case 1:  bit = DUNGEON_BIT_COMPASS; break;
+        case 2:  bit = DUNGEON_BIT_BIGKEY;  break;
+        default: return;
+    }
+    if (owned) {
+        gSave.dungeonItems[dungeon] |= bit;
+    } else {
+        gSave.dungeonItems[dungeon] &= (unsigned char)~bit;
+    }
+}
+
+void Port_DebugAction_SetDungeonKeys(int dungeon, int count) {
+    if (dungeon < 0 || dungeon >= DEBUG_DUNGEON_COUNT) return;
+    if (count < 0) count = 0;
+    if (count > 255) count = 255;
+    gSave.dungeonKeys[dungeon] = (unsigned char)count;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Charm / Picolyte timed buffs                                      */
+/* ------------------------------------------------------------------ */
+/* Both effects live in gSave.stats and are counted down once per frame by
+ * HandlePlayerLife() (interrupts.c) — assigning the {type, timer} pair is
+ * the whole activation; no init call is needed. Timers are in frames at
+ * 60fps (charm normal = 3600 = 60s, picolyte normal = 900 = 15s) and the
+ * fields are u16, so 0..65535. The type fields MUST hold only valid ids:
+ * picolyteType is used as an UNCHECKED droptable index (itemUtils.c), and
+ * the charm combat/palette code only switches on the three charm ids — any
+ * other value would read out of bounds / behave undefined. */
+
+void Port_DebugAction_SetCharm(int charmId, int timer) {
+    if (charmId != 0 && (charmId < BOTTLE_CHARM_NAYRU || charmId > BOTTLE_CHARM_DIN)) {
+        return;
+    }
+    if (timer < 0) timer = 0;
+    if (timer > 0xFFFF) timer = 0xFFFF;
+    if (charmId == 0) timer = 0;       /* off => no timer */
+    else if (timer == 0) charmId = 0;  /* zero timer => off */
+    gSave.stats.charm = (unsigned char)charmId;
+    gSave.stats.charmTimer = (unsigned short)timer;
+}
+
+void Port_DebugAction_SetPicolyte(int picoId, int timer) {
+    if (picoId != 0 &&
+        (picoId < ITEM_BOTTLE_PICOLYTE_RED || picoId > ITEM_BOTTLE_PICOLYTE_WHITE)) {
+        return;
+    }
+    if (timer < 0) timer = 0;
+    if (timer > 0xFFFF) timer = 0xFFFF;
+    if (picoId == 0) timer = 0;
+    else if (timer == 0) picoId = 0;
+    gSave.stats.picolyteType = (unsigned char)picoId;
+    gSave.stats.picolyteTimer = (unsigned short)timer;
+}
+
+/* Read current buff state for the menu. Returns 1 when active, 0 when off. */
+int Port_DebugQuery_Charm(int* id, int* timer) {
+    if (id)    *id = gSave.stats.charm;
+    if (timer) *timer = gSave.stats.charmTimer;
+    return gSave.stats.charm != 0;
+}
+
+int Port_DebugQuery_Picolyte(int* id, int* timer) {
+    if (id)    *id = gSave.stats.picolyteType;
+    if (timer) *timer = gSave.stats.picolyteTimer;
+    return gSave.stats.picolyteType != 0;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Adjustable bottle contents                                        */
+/* ------------------------------------------------------------------ */
+/* gSave.stats.bottles[n] stores the content as the raw Item id (itemUtils.c
+ * writes the id directly; 0x20 == ITEM_BOTTLE_EMPTY is the empty sentinel).
+ * Valid contents span ITEM_BOTTLE_EMPTY..BOTTLE_CHARM_DIN. Setting a content
+ * also owns the bottle so it shows in the grid and can be used. */
+typedef struct DebugBottleContent {
+    unsigned short id;
+    const char*    name;
+} DebugBottleContent;
+
+static const DebugBottleContent kBottleContents[] = {
+    { ITEM_BOTTLE_EMPTY,           "Empty" },
+    { ITEM_BOTTLE_RED_POTION,      "Red Potion" },
+    { ITEM_BOTTLE_BLUE_POTION,     "Blue Potion" },
+    { ITEM_BOTTLE_MILK,            "Milk" },
+    { ITEM_BOTTLE_HALF_MILK,       "Half Milk" },
+    { ITEM_BOTTLE_BUTTER,          "Lon Lon Butter" },
+    { ITEM_BOTTLE_WATER,           "Water" },
+    { ITEM_BOTTLE_MINERAL_WATER,   "Mineral Water" },
+    { ITEM_BOTTLE_FAIRY,           "Fairy" },
+    { ITEM_BOTTLE_PICOLYTE_RED,    "Picolyte (Red)" },
+    { ITEM_BOTTLE_PICOLYTE_ORANGE, "Picolyte (Orange)" },
+    { ITEM_BOTTLE_PICOLYTE_YELLOW, "Picolyte (Yellow)" },
+    { ITEM_BOTTLE_PICOLYTE_GREEN,  "Picolyte (Green)" },
+    { ITEM_BOTTLE_PICOLYTE_BLUE,   "Picolyte (Blue)" },
+    { ITEM_BOTTLE_PICOLYTE_WHITE,  "Picolyte (White)" },
+    { BOTTLE_CHARM_NAYRU,          "Charm (Nayru)" },
+    { BOTTLE_CHARM_FARORE,         "Charm (Farore)" },
+    { BOTTLE_CHARM_DIN,            "Charm (Din)" },
+};
+#define BOTTLE_CONTENT_COUNT ((int)(sizeof(kBottleContents) / sizeof(kBottleContents[0])))
+
+int Port_DebugQuery_BottleContentCount(void) {
+    return BOTTLE_CONTENT_COUNT;
+}
+
+const char* Port_DebugQuery_BottleContentName(int i) {
+    if (i < 0 || i >= BOTTLE_CONTENT_COUNT) return NULL;
+    return kBottleContents[i].name;
+}
+
+int Port_DebugQuery_BottleContentId(int i) {
+    if (i < 0 || i >= BOTTLE_CONTENT_COUNT) return 0;
+    return kBottleContents[i].id;
+}
+
+/* Map a content id back to its kBottleContents index (0 = Empty fallback). */
+int Port_DebugQuery_BottleContentIndex(int contentId) {
+    int i;
+    for (i = 0; i < BOTTLE_CONTENT_COUNT; i++) {
+        if (kBottleContents[i].id == contentId) return i;
+    }
+    return 0;
+}
+
+int Port_DebugQuery_BottleOwned(int bottle) {
+    if (bottle < 0 || bottle > 3) return 0;
+    return GetItem(ITEM_BOTTLE1 + bottle) == 1;
+}
+
+int Port_DebugQuery_BottleContent(int bottle) {
+    if (bottle < 0 || bottle > 3) return 0;
+    return gSave.stats.bottles[bottle];
+}
+
+void Port_DebugAction_SetBottleContent(int bottle, int contentId) {
+    if (bottle < 0 || bottle > 3) return;
+    if (contentId < ITEM_BOTTLE_EMPTY || contentId > BOTTLE_CHARM_DIN) return;
+    gSave.stats.bottles[bottle] = (unsigned char)contentId;
+    SetItem(ITEM_BOTTLE1 + bottle, 1); /* a bottle with content must be owned */
+}
+
+/* ------------------------------------------------------------------ */
+/*  Numeric stat / capacity sliders                                   */
+/* ------------------------------------------------------------------ */
+/* A flat list of editable scalar save stats for the menu's slider block.
+ * Bounds are computed in C so the UI stays a dumb min/max/value slider:
+ * counts are capped to the live capacity tier (wallet/bomb-bag/quiver), and
+ * the capacity tiers themselves run 0..3. (Kinstones are intentionally absent
+ * — they're per-type with a separate fusion bitfield; "All kinstones fused"
+ * covers the bulk case without risking a desync.) */
+enum {
+    DBG_STAT_RUPEES,
+    DBG_STAT_SHELLS,
+    DBG_STAT_HEARTS_MAX,
+    DBG_STAT_HEALTH,
+    DBG_STAT_HEART_PIECES,
+    DBG_STAT_BOMBS,
+    DBG_STAT_ARROWS,
+    DBG_STAT_WALLET_TIER,
+    DBG_STAT_BOMBBAG_TIER,
+    DBG_STAT_QUIVER_TIER,
+    DBG_STAT_COUNT
+};
+
+static const char* const kStatNames[DBG_STAT_COUNT] = {
+    "Rupees",
+    "Mysterious Shells",
+    "Max hearts",
+    "Health (eighths)",
+    "Heart pieces",
+    "Bombs",
+    "Arrows",
+    "Wallet tier",
+    "Bomb-bag tier",
+    "Quiver tier",
+};
+
+int Port_DebugQuery_StatCount(void) {
+    return DBG_STAT_COUNT;
+}
+
+const char* Port_DebugQuery_StatName(int i) {
+    if (i < 0 || i >= DBG_STAT_COUNT) return NULL;
+    return kStatNames[i];
+}
+
+int Port_DebugQuery_StatMin(int i) {
+    switch (i) {
+        case DBG_STAT_HEARTS_MAX: return 1; /* never zero out the heart bar */
+        default:                  return 0;
+    }
+}
+
+int Port_DebugQuery_StatMax(int i) {
+    switch (i) {
+        case DBG_STAT_RUPEES:       return gWalletSizes[gSave.stats.walletType & 3].size;
+        case DBG_STAT_SHELLS:       return 999;
+        case DBG_STAT_HEARTS_MAX:   return 20;                 /* 20 hearts == maxHealth 0xA0 */
+        case DBG_STAT_HEALTH:       return gSave.stats.maxHealth;
+        case DBG_STAT_HEART_PIECES: return 3;                  /* 4th piece auto-forms a container */
+        case DBG_STAT_BOMBS:        return gBombBagSizes[gSave.stats.bombBagType & 3];
+        case DBG_STAT_ARROWS:       return gQuiverSizes[gSave.stats.quiverType & 3];
+        case DBG_STAT_WALLET_TIER:  return 3;
+        case DBG_STAT_BOMBBAG_TIER: return 3;
+        case DBG_STAT_QUIVER_TIER:  return 3;
+        default:                    return 0;
+    }
+}
+
+int Port_DebugQuery_StatValue(int i) {
+    switch (i) {
+        case DBG_STAT_RUPEES:       return gSave.stats.rupees;
+        case DBG_STAT_SHELLS:       return gSave.stats.shells;
+        case DBG_STAT_HEARTS_MAX:   return gSave.stats.maxHealth / 8;
+        case DBG_STAT_HEALTH:       return gSave.stats.health;
+        case DBG_STAT_HEART_PIECES: return gSave.stats.heartPieces;
+        case DBG_STAT_BOMBS:        return gSave.stats.bombCount;
+        case DBG_STAT_ARROWS:       return gSave.stats.arrowCount;
+        case DBG_STAT_WALLET_TIER:  return gSave.stats.walletType;
+        case DBG_STAT_BOMBBAG_TIER: return gSave.stats.bombBagType;
+        case DBG_STAT_QUIVER_TIER:  return gSave.stats.quiverType;
+        default:                    return 0;
+    }
+}
+
+void Port_DebugAction_SetStat(int i, int value) {
+    const int lo = Port_DebugQuery_StatMin(i);
+    const int hi = Port_DebugQuery_StatMax(i);
+    if (value < lo) value = lo;
+    if (value > hi) value = hi;
+    switch (i) {
+        case DBG_STAT_RUPEES:       gSave.stats.rupees = (unsigned short)value; break;
+        case DBG_STAT_SHELLS:       gSave.stats.shells = (unsigned short)value; break;
+        case DBG_STAT_HEARTS_MAX:
+            gSave.stats.maxHealth = (unsigned char)(value * 8);
+            if (gSave.stats.health > gSave.stats.maxHealth) {
+                gSave.stats.health = gSave.stats.maxHealth;
+            }
+            break;
+        case DBG_STAT_HEALTH:       gSave.stats.health = (unsigned char)value; break;
+        case DBG_STAT_HEART_PIECES: gSave.stats.heartPieces = (unsigned char)value; break;
+        case DBG_STAT_BOMBS:        gSave.stats.bombCount = (unsigned char)value; break;
+        case DBG_STAT_ARROWS:       gSave.stats.arrowCount = (unsigned char)value; break;
+        case DBG_STAT_WALLET_TIER:  gSave.stats.walletType = (unsigned char)value; break;
+        case DBG_STAT_BOMBBAG_TIER: gSave.stats.bombBagType = (unsigned char)value; break;
+        case DBG_STAT_QUIVER_TIER:  gSave.stats.quiverType = (unsigned char)value; break;
+        default: break;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Raw flag browser                                                  */
+/* ------------------------------------------------------------------ */
+/* gSave.flags[0x200] is a flat 4096-bit array. The engine partitions it into
+ * 13 banks (FLAG_BANK_*, flags.h): bank 0 = global flags, banks 1..12 = the
+ * per-area local-flag pools an area selects via gArea.flag_bank /
+ * .localFlagOffset. A flag is addressed (bank, index); its absolute bit is
+ * kFlagBanks[bank].offset + index. We read/write the raw bit directly: the
+ * engine's Set*ByBank refuses index 0 as a "no flag" sentinel, but a raw
+ * editor should expose every bit. The math is bit-identical to the engine's
+ * ReadBit/WriteBit (LSB-first within each byte, common.c). */
+static const struct {
+    const char*    name;
+    unsigned short offset;
+} kFlagBanks[] = {
+    { "Bank 0 (Global)", FLAG_BANK_0 },
+    { "Bank 1",          FLAG_BANK_1 },
+    { "Bank 2",          FLAG_BANK_2 },
+    { "Bank 3",          FLAG_BANK_3 },
+    { "Bank 4",          FLAG_BANK_4 },
+    { "Bank 5",          FLAG_BANK_5 },
+    { "Bank 6",          FLAG_BANK_6 },
+    { "Bank 7",          FLAG_BANK_7 },
+    { "Bank 8",          FLAG_BANK_8 },
+    { "Bank 9",          FLAG_BANK_9 },
+    { "Bank 10",         FLAG_BANK_10 },
+    { "Bank 11",         FLAG_BANK_11 },
+    { "Bank 12",         FLAG_BANK_12 },
+};
+#define FLAG_BANK_COUNT ((int)(sizeof(kFlagBanks) / sizeof(kFlagBanks[0])))
+#define FLAG_TOTAL_BITS ((int)(sizeof(gSave.flags) * 8))
+
+int Port_DebugQuery_FlagBankCount(void) {
+    return FLAG_BANK_COUNT;
+}
+
+const char* Port_DebugQuery_FlagBankName(int bank) {
+    if (bank < 0 || bank >= FLAG_BANK_COUNT) return NULL;
+    return kFlagBanks[bank].name;
+}
+
+unsigned int Port_DebugQuery_FlagBankOffset(int bank) {
+    if (bank < 0 || bank >= FLAG_BANK_COUNT) return 0;
+    return kFlagBanks[bank].offset;
+}
+
+/* Number of flag indices in a bank = gap to the next bank's offset (the last
+ * bank runs to the end of the array). */
+int Port_DebugQuery_FlagBankSize(int bank) {
+    int next;
+    if (bank < 0 || bank >= FLAG_BANK_COUNT) return 0;
+    next = (bank + 1 < FLAG_BANK_COUNT) ? (int)kFlagBanks[bank + 1].offset : FLAG_TOTAL_BITS;
+    return next - (int)kFlagBanks[bank].offset;
+}
+
+/* Bank the current area's local flags live in, or -1 if it matches none.
+ * gArea.localFlagOffset is the area's bit offset into gSave.flags. */
+int Port_DebugQuery_CurrentFlagBank(void) {
+    unsigned int off = gArea.localFlagOffset;
+    int i;
+    for (i = 0; i < FLAG_BANK_COUNT; i++) {
+        if (kFlagBanks[i].offset == off) return i;
+    }
+    return -1;
+}
+
+int Port_DebugQuery_Flag(int bank, int index) {
+    unsigned int bit;
+    if (bank < 0 || bank >= FLAG_BANK_COUNT) return 0;
+    if (index < 0 || index >= Port_DebugQuery_FlagBankSize(bank)) return 0;
+    bit = (unsigned int)kFlagBanks[bank].offset + (unsigned int)index;
+    if (bit >= (unsigned int)FLAG_TOTAL_BITS) return 0;
+    return (gSave.flags[bit >> 3] >> (bit & 7)) & 1;
+}
+
+void Port_DebugAction_SetFlag(int bank, int index, int on) {
+    unsigned int bit;
+    if (bank < 0 || bank >= FLAG_BANK_COUNT) return;
+    if (index < 0 || index >= Port_DebugQuery_FlagBankSize(bank)) return;
+    bit = (unsigned int)kFlagBanks[bank].offset + (unsigned int)index;
+    if (bit >= (unsigned int)FLAG_TOTAL_BITS) return;
+    if (on) {
+        gSave.flags[bit >> 3] |= (unsigned char)(1u << (bit & 7));
+    } else {
+        gSave.flags[bit >> 3] &= (unsigned char)~(1u << (bit & 7));
+    }
 }
 
 /* ------------------------------------------------------------------ */

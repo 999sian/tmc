@@ -1,5 +1,6 @@
 # build artifacts
 src/*.s
+compile_commands.json
 build/*
 !build/USA/
 build/USA/*
