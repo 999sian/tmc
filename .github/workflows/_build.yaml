@@ -521,6 +521,18 @@ jobs:
           xmake build -y rando_logic_test
           ./build/pc/rando_logic_test
 
+      - name: Build and run debug_actions_test (Linux x86_64)
+        if: matrix.os_name == 'linux' && matrix.arch == 'x86_64'
+        shell: bash
+        # Headless regression test for the F8 debug-menu action layer
+        # (port/port_debug_actions_test.c): asserts the per-item toggle
+        # exclusivity + flag/dungeon/stat/bottle helpers against gSave, with
+        # minimal engine stubs. Exits nonzero on any failure. Reuses the
+        # xmake configuration build.py already set up.
+        run: |
+          xmake build -y debug_actions_test
+          ./build/pc/debug_actions_test
+
       - name: Smoke test tmc_pc headless (Linux)
         if: matrix.os_name == 'linux'
         shell: bash
