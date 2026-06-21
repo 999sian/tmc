@@ -28,6 +28,7 @@
 #include "port_debug_query.h"
 #include "port_debug_actions.h"
 #include "port_widescreen.h"
+#include "item_ids.h"  /* BOTTLE_CHARM_* / ITEM_BOTTLE_PICOLYTE_* enum ids (C++-safe) */
 
 extern "C" {
 
@@ -103,6 +104,15 @@ constexpr unsigned char AREA_PALACE_OF_WINDS           = 0x70;
 
 bool sOpen = false;
 
+/* Classic-menu selection state for the per-dungeon-items and buff sub-pages.
+ * File-scope so the cycle lambdas share one selection that persists across
+ * page re-pushes (the ribbon keeps the equivalent state in its own statics). */
+int sClassicDungeonSel = 0;  /* selected dungeon id, 0..15 */
+int sClassicCharmSel = 1;    /* charm combo index; 0 = Off */
+int sClassicPicoSel = 1;     /* picolyte combo index; 0 = Off */
+int sClassicFlagBank = 0;    /* selected flag bank, 0..12 */
+int sClassicFlagIndex = 0;   /* selected flag index within the bank */
+
 struct MenuItem {
     std::string label;
     std::function<void()> action;
@@ -155,6 +165,12 @@ MenuPage BuildSoftSlotsPage(void);
 MenuPage BuildSaveStatesPage(void);
 MenuPage BuildSaveProfilesPage(void);
 MenuPage BuildMainPage(void);
+MenuPage BuildItemTogglePage(void);
+MenuPage BuildDungeonItemsPage(void);
+MenuPage BuildBuffsPage(void);
+MenuPage BuildStatsPage(void);
+MenuPage BuildBottlesPage(void);
+MenuPage BuildFlagsPage(void);
 
 void Push(MenuPage page) {
     sPageStack.push_back(std::move(page));
@@ -208,7 +224,278 @@ MenuPage BuildItemsPage(void) {
     p.items.push_back({ "999 rupees",            []() { Port_DebugAction_MaxRupees();    Toast("999 rupees");        } });
     p.items.push_back({ "999 mysterious shells", []() { Port_DebugAction_MaxShells();    Toast("999 shells");        } });
     p.items.push_back({ "All kinstones fused",   []() { Port_DebugAction_AllKinstones(); Toast("All kinstones");     } });
+    p.items.push_back({ "Per-item toggle ->",    []() { Push(BuildItemTogglePage());   } });
+    p.items.push_back({ "Counts / capacities ->",[]() { Push(BuildStatsPage());        } });
+    p.items.push_back({ "Bottle contents ->",    []() { Push(BuildBottlesPage());      } });
+    p.items.push_back({ "Dungeon items ->",      []() { Push(BuildDungeonItemsPage()); } });
+    p.items.push_back({ "Charm / Picolyte ->",   []() { Push(BuildBuffsPage());        } });
     p.items.push_back({ "<- Back",               []() { Pop(); } });
+    return p;
+}
+
+/* Per-item ownership toggle list. Items come from the C layer pre-grouped;
+ * the classic menu is a flat list so each row shows "[x]/[ ] Group: Name".
+ * Enter flips ownership; SetToggleItem handles slot exclusivity + gfx. */
+MenuPage BuildItemTogglePage(void) {
+    MenuPage p;
+    p.title = "PER-ITEM TOGGLE";
+    const int count = Port_DebugQuery_ToggleItemCount();
+    for (int i = 0; i < count; ++i) {
+        MenuItem it;
+        it.action = [i]() {
+            Port_DebugAction_SetToggleItem(i, Port_DebugQuery_ToggleItemOwned(i) ? 0 : 1);
+        };
+        it.labelFn = [i]() -> std::string {
+            const char* name = Port_DebugQuery_ToggleItemName(i);
+            const char* grp  = Port_DebugQuery_ToggleItemGroup(i);
+            std::string s = Port_DebugQuery_ToggleItemOwned(i) ? "[x] " : "[ ] ";
+            if (grp) { s += grp; s += ": "; }
+            s += name ? name : "?";
+            return s;
+        };
+        const char* nm = Port_DebugQuery_ToggleItemName(i);
+        it.label = nm ? nm : "?";
+        p.items.push_back(std::move(it));
+    }
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
+/* Any-dungeon Map/Compass/Big Key/Small Key editor. Left/Right on the first
+ * row pick the dungeon id (0..15); the toggle rows and key counter act on
+ * that selection, which the engine indexes by dungeon id directly. */
+MenuPage BuildDungeonItemsPage(void) {
+    MenuPage p;
+    p.title = "DUNGEON ITEMS";
+
+    MenuItem sel;
+    sel.cycleLeft  = []() { sClassicDungeonSel = (sClassicDungeonSel + 15) % 16; };
+    sel.cycleRight = []() { sClassicDungeonSel = (sClassicDungeonSel + 1) % 16; };
+    sel.labelFn = []() -> std::string {
+        char buf[48];
+        const int cur = Port_DebugQuery_CurrentDungeon();
+        std::snprintf(buf, sizeof(buf), "Dungeon: %d%s   (<- ->)", sClassicDungeonSel,
+                      (sClassicDungeonSel == cur) ? " (current)" : "");
+        return buf;
+    };
+    sel.label = "Dungeon";
+    p.items.push_back(std::move(sel));
+
+    struct DBit { const char* name; int which; int bit; };
+    static const DBit kBits[] = { { "Map", 0, 0x1 }, { "Compass", 1, 0x2 }, { "Big Key", 2, 0x4 } };
+    for (const DBit& b : kBits) {
+        const char* name = b.name;
+        const int which = b.which, bit = b.bit;
+        MenuItem it;
+        it.action = [which, bit]() {
+            const int bits = Port_DebugQuery_DungeonItems(sClassicDungeonSel);
+            Port_DebugAction_SetDungeonItem(sClassicDungeonSel, which, (bits & bit) ? 0 : 1);
+        };
+        it.labelFn = [name, bit]() -> std::string {
+            const bool on = (Port_DebugQuery_DungeonItems(sClassicDungeonSel) & bit) != 0;
+            return std::string(on ? "[x] " : "[ ] ") + name;
+        };
+        it.label = name;
+        p.items.push_back(std::move(it));
+    }
+
+    MenuItem keys;
+    keys.cycleLeft  = []() {
+        const int k = Port_DebugQuery_DungeonKeys(sClassicDungeonSel);
+        Port_DebugAction_SetDungeonKeys(sClassicDungeonSel, k > 0 ? k - 1 : 0);
+    };
+    keys.cycleRight = []() {
+        Port_DebugAction_SetDungeonKeys(sClassicDungeonSel,
+                                        Port_DebugQuery_DungeonKeys(sClassicDungeonSel) + 1);
+    };
+    keys.labelFn = []() -> std::string {
+        char buf[40];
+        std::snprintf(buf, sizeof(buf), "Small keys: %d   (<- ->)",
+                      Port_DebugQuery_DungeonKeys(sClassicDungeonSel));
+        return buf;
+    };
+    keys.label = "Small keys";
+    p.items.push_back(std::move(keys));
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
+/* Charm + Picolyte activator. Left/Right pick the type; Enter on the Apply
+ * row writes {type, normal-duration}. Full timer control lives in the ribbon;
+ * the classic fallback applies the standard durations (charm 60s / pico 15s). */
+MenuPage BuildBuffsPage(void) {
+    static const char* const kCharm[]  = { "Off", "Nayru", "Farore", "Din" };
+    static const int         kCharmId[] = { 0, BOTTLE_CHARM_NAYRU, BOTTLE_CHARM_FARORE, BOTTLE_CHARM_DIN };
+    static const char* const kPico[]   = { "Off", "Red", "Orange", "Yellow", "Green", "Blue", "White" };
+    static const int         kPicoId[]  = { 0, ITEM_BOTTLE_PICOLYTE_RED, ITEM_BOTTLE_PICOLYTE_ORANGE,
+                                            ITEM_BOTTLE_PICOLYTE_YELLOW, ITEM_BOTTLE_PICOLYTE_GREEN,
+                                            ITEM_BOTTLE_PICOLYTE_BLUE, ITEM_BOTTLE_PICOLYTE_WHITE };
+
+    MenuPage p;
+    p.title = "CHARM / PICOLYTE";
+
+    MenuItem ct;
+    ct.cycleLeft  = []() { sClassicCharmSel = (sClassicCharmSel + 3) % 4; };
+    ct.cycleRight = []() { sClassicCharmSel = (sClassicCharmSel + 1) % 4; };
+    ct.labelFn = []() -> std::string { return std::string("Charm type: ") + kCharm[sClassicCharmSel]; };
+    ct.label = "Charm type";
+    p.items.push_back(std::move(ct));
+
+    p.items.push_back({ "Apply charm (60s)", []() {
+        Port_DebugAction_SetCharm(kCharmId[sClassicCharmSel], sClassicCharmSel == 0 ? 0 : 3600);
+        Toast(sClassicCharmSel == 0 ? "Charm cleared" : "Charm applied");
+    } });
+
+    MenuItem pt;
+    pt.cycleLeft  = []() { sClassicPicoSel = (sClassicPicoSel + 6) % 7; };
+    pt.cycleRight = []() { sClassicPicoSel = (sClassicPicoSel + 1) % 7; };
+    pt.labelFn = []() -> std::string { return std::string("Picolyte type: ") + kPico[sClassicPicoSel]; };
+    pt.label = "Picolyte type";
+    p.items.push_back(std::move(pt));
+
+    p.items.push_back({ "Apply picolyte (15s)", []() {
+        Port_DebugAction_SetPicolyte(kPicoId[sClassicPicoSel], sClassicPicoSel == 0 ? 0 : 900);
+        Toast(sClassicPicoSel == 0 ? "Picolyte cleared" : "Picolyte applied");
+    } });
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
+/* Numeric count / capacity editor. Left/Right step each stat; the step scales
+ * with the range so wide stats (rupees) move usefully. Bounds + clamping live
+ * in the C layer's Set/Query, so this page just drives them. */
+MenuPage BuildStatsPage(void) {
+    MenuPage p;
+    p.title = "STATS / COUNTS";
+    const int count = Port_DebugQuery_StatCount();
+    for (int i = 0; i < count; ++i) {
+        auto stepOf = [](int idx) {
+            const int span = Port_DebugQuery_StatMax(idx) - Port_DebugQuery_StatMin(idx);
+            return span > 64 ? span / 64 : 1;
+        };
+        MenuItem it;
+        it.cycleLeft  = [i, stepOf]() {
+            Port_DebugAction_SetStat(i, Port_DebugQuery_StatValue(i) - stepOf(i));
+        };
+        it.cycleRight = [i, stepOf]() {
+            Port_DebugAction_SetStat(i, Port_DebugQuery_StatValue(i) + stepOf(i));
+        };
+        it.labelFn = [i]() -> std::string {
+            char buf[64];
+            std::snprintf(buf, sizeof(buf), "%s: %d / %d   (<- ->)",
+                          Port_DebugQuery_StatName(i), Port_DebugQuery_StatValue(i),
+                          Port_DebugQuery_StatMax(i));
+            return buf;
+        };
+        it.label = Port_DebugQuery_StatName(i);
+        p.items.push_back(std::move(it));
+    }
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
+/* Per-bottle content picker. Left/Right cycle the content list; selecting a
+ * content also grants the bottle ("[grant]" marks a bottle not yet owned). */
+MenuPage BuildBottlesPage(void) {
+    MenuPage p;
+    p.title = "BOTTLE CONTENTS";
+    const int n = Port_DebugQuery_BottleContentCount();
+    for (int b = 0; b < 4; ++b) {
+        MenuItem it;
+        it.cycleLeft = [b, n]() {
+            const int idx = Port_DebugQuery_BottleContentIndex(Port_DebugQuery_BottleContent(b));
+            Port_DebugAction_SetBottleContent(b, Port_DebugQuery_BottleContentId((idx + n - 1) % n));
+        };
+        it.cycleRight = [b, n]() {
+            const int idx = Port_DebugQuery_BottleContentIndex(Port_DebugQuery_BottleContent(b));
+            Port_DebugAction_SetBottleContent(b, Port_DebugQuery_BottleContentId((idx + 1) % n));
+        };
+        it.labelFn = [b]() -> std::string {
+            char buf[56];
+            const int idx = Port_DebugQuery_BottleContentIndex(Port_DebugQuery_BottleContent(b));
+            const bool owned = Port_DebugQuery_BottleOwned(b) != 0;
+            std::snprintf(buf, sizeof(buf), "Bottle %d: %s%s   (<- ->)", b + 1,
+                          Port_DebugQuery_BottleContentName(idx), owned ? "" : " [grant]");
+            return buf;
+        };
+        char lbl[16];
+        std::snprintf(lbl, sizeof(lbl), "Bottle %d", b + 1);
+        it.label = lbl;
+        p.items.push_back(std::move(it));
+    }
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
+/* Raw flag browser (wishlist #5). Left/Right pick the bank and the index;
+ * Enter on the toggle row flips the selected flag. The ribbon "Flags" tab has
+ * the full scrollable grid; this is the compact bank+index fallback. */
+MenuPage BuildFlagsPage(void) {
+    MenuPage p;
+    p.title = "FLAG BROWSER";
+    const int nBanks = Port_DebugQuery_FlagBankCount();
+
+    MenuItem bk;
+    bk.cycleLeft = [nBanks]() {
+        sClassicFlagBank = (sClassicFlagBank + nBanks - 1) % nBanks;
+        if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(sClassicFlagBank)) sClassicFlagIndex = 0;
+    };
+    bk.cycleRight = [nBanks]() {
+        sClassicFlagBank = (sClassicFlagBank + 1) % nBanks;
+        if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(sClassicFlagBank)) sClassicFlagIndex = 0;
+    };
+    bk.labelFn = []() -> std::string {
+        const int cur = Port_DebugQuery_CurrentFlagBank();
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%s%s   (<- ->)",
+                      Port_DebugQuery_FlagBankName(sClassicFlagBank),
+                      (sClassicFlagBank == cur) ? " *current area*" : "");
+        return buf;
+    };
+    bk.label = "Bank";
+    p.items.push_back(std::move(bk));
+
+    MenuItem ix;
+    ix.cycleLeft = []() {
+        const int sz = Port_DebugQuery_FlagBankSize(sClassicFlagBank);
+        if (sz > 0) sClassicFlagIndex = (sClassicFlagIndex + sz - 1) % sz;
+    };
+    ix.cycleRight = []() {
+        const int sz = Port_DebugQuery_FlagBankSize(sClassicFlagBank);
+        if (sz > 0) sClassicFlagIndex = (sClassicFlagIndex + 1) % sz;
+    };
+    ix.labelFn = []() -> std::string {
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "Index: %d / %d   (<- ->)",
+                      sClassicFlagIndex, Port_DebugQuery_FlagBankSize(sClassicFlagBank) - 1);
+        return buf;
+    };
+    ix.label = "Index";
+    p.items.push_back(std::move(ix));
+
+    MenuItem tg;
+    tg.action = []() {
+        const int on = Port_DebugQuery_Flag(sClassicFlagBank, sClassicFlagIndex);
+        Port_DebugAction_SetFlag(sClassicFlagBank, sClassicFlagIndex, on ? 0 : 1);
+    };
+    tg.labelFn = []() -> std::string {
+        const bool on = Port_DebugQuery_Flag(sClassicFlagBank, sClassicFlagIndex) != 0;
+        return std::string("Flag = ") + (on ? "ON" : "off") + "   [Enter toggles]";
+    };
+    tg.label = "Toggle flag";
+    p.items.push_back(std::move(tg));
+
+    p.items.push_back({ "Jump to current area bank", []() {
+        const int cur = Port_DebugQuery_CurrentFlagBank();
+        if (cur >= 0) {
+            sClassicFlagBank = cur;
+            if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(cur)) sClassicFlagIndex = 0;
+        }
+    } });
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
     return p;
 }
 
@@ -640,6 +927,7 @@ MenuPage BuildMainPage(void) {
     p.items.push_back({ "Save profiles",     []() { Push(BuildSaveProfilesPage()); } });
     p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
     p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
+    p.items.push_back({ "Flag browser",      []() { Push(BuildFlagsPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
     p.items.push_back({ "Close menu",        []() { Pop(); } });
     return p;
