@@ -189,8 +189,8 @@ void SpecialFx_Init(SpecialFxObject* this) {
     if (super->type2 & 0x80) {
         u8 dropParam = ptr->unk_01;
 #ifdef MULTI_REGION
-        // Table index 84 diverges: unk_01 is 0x18 (USA/JP baseline) vs 0x16 (EU).
-        if (REGION_IS_EU && super->type == 84) {
+        // Table index 83 diverges: unk_01 is 0x18 (USA/JP baseline) vs 0x16 (EU).
+        if (REGION_IS_EU && super->type == 83) {
             dropParam = 0x16;
         }
 #endif
