@@ -224,6 +224,8 @@ MenuPage BuildItemsPage(void) {
     p.items.push_back({ "999 rupees",            []() { Port_DebugAction_MaxRupees();    Toast("999 rupees");        } });
     p.items.push_back({ "999 mysterious shells", []() { Port_DebugAction_MaxShells();    Toast("999 shells");        } });
     p.items.push_back({ "All kinstones fused",   []() { Port_DebugAction_AllKinstones(); Toast("All kinstones");     } });
+    p.items.push_back({ "All figurines (130)",   []() { Port_DebugAction_AllFigurines130(); Toast("All 130 figurines"); } });
+    p.items.push_back({ "Figurines 100% (beaten)", []() { Port_DebugAction_AllFigurines100(); Toast("136 figurines + game cleared"); } });
     p.items.push_back({ "Per-item toggle ->",    []() { Push(BuildItemTogglePage());   } });
     p.items.push_back({ "Counts / capacities ->",[]() { Push(BuildStatsPage());        } });
     p.items.push_back({ "Bottle contents ->",    []() { Push(BuildBottlesPage());      } });

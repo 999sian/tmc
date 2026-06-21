@@ -615,6 +615,14 @@ static void DrawRibbonItemsTab(void) {
             Port_DebugAction_AllKinstones();
             Port_DebugMenu_ToastFromExternal("All kinstones");
         }
+        if (ImGui::Button("All figurines (130)", ImVec2(200, 0))) {
+            Port_DebugAction_AllFigurines130();
+            Port_DebugMenu_ToastFromExternal("All 130 figurines (no game-clear)");
+        }
+        if (ImGui::Button("Figurines 100% (marks beaten)", ImVec2(200, 0))) {
+            Port_DebugAction_AllFigurines100();
+            Port_DebugMenu_ToastFromExternal("136 figurines + game marked cleared");
+        }
 
         ImGui::TableSetColumnIndex(1);
         ImGui::SeparatorText("Recovery & Cheats");
