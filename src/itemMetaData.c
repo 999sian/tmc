@@ -128,9 +128,7 @@ const ItemMetaData gItemMetaData[] = {
 
 /*
  * gUnk_080FD964 (item price / message metadata) diverges between EU and USA/JP
- * (picolyte prices, Shells30/Bombbag price and message). Compiled twice via the
- * NAME()/ITEMMETA_EU_PASS knobs (see objectDefinitions.c). Consumers in
- * itemUtils.c / linkHoldingItem.c select gUnk_080FD964_eu at runtime on EU.
+ * (picolyte prices, Shells30/Bombbag price and message).
  */
 #if defined(EU) && !defined(MULTI_REGION)
 #define ITEMMETA_EU_PASS
@@ -139,11 +137,13 @@ const ItemMetaData gItemMetaData[] = {
 #define NAME(x) x
 #include "itemMetaData_gUnk_080FD964.inc"
 #undef NAME
+#undef ITEMMETA_EU_PASS
 
-/* EU twin: always defined (region-agnostic) so single-region consumers that
- * select gUnk_080FD964_eu under REGION_IS_EU still link. */
+#ifdef MULTI_REGION
+/* EU twin for runtime selection. */
 #define NAME(x) x##_eu
 #define ITEMMETA_EU_PASS
 #include "itemMetaData_gUnk_080FD964.inc"
 #undef ITEMMETA_EU_PASS
 #undef NAME
+#endif

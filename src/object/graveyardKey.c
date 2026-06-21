@@ -49,15 +49,12 @@ void GraveyardKey_Action1(Entity*, const struct_gUnk_08123FB0*);
 void GraveyardKey_Action2(Entity*, const struct_gUnk_08123FB0*);
 void GraveyardKey_Action3(Entity*, const struct_gUnk_08123FB0*);
 
+#if (defined(JP) || defined(DEMO_JP) || defined(EU)) && !defined(MULTI_REGION)
 static const struct_gUnk_08123FB0 gUnk_08123FB0[] = {
     { sub_0809D91C, sub_0809D93C, 0, 0, 0x30, 0x30, 0x1, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x13,
       Q_16_16(1.0), 0x1800, 0x60, 0x40, 0x4021, 0x1, 0x0 },
     { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_HEART_PIECE, ITEM_HEART_PIECE, 0x10, 0, 0x1800, 0, 0x18,
-#if defined(JP) || defined(DEMO_JP) || defined(EU)
       0xCD,
-#else
-      0xd0,
-#endif
       0, 0 },
     { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0xf, Q_16_16(1.0), 0x1800,
       0x60, 0x40, 0x4021, 0x1, 0x0 },
@@ -71,6 +68,47 @@ static const struct_gUnk_08123FB0 gUnk_08123FB0[] = {
       0x60, 0x40, 0x4021, 0x1, 0x0 },
     { NULL, NULL, 0, 0, 0, 0, 0, ITEM_KINSTONE, ITEM_KINSTONE, 0x81, 0, 0x1800, 0x100, 0x20, 0x0, 0x1, 0x0 },
 };
+#else
+static const struct_gUnk_08123FB0 gUnk_08123FB0[] = {
+    { sub_0809D91C, sub_0809D93C, 0, 0, 0x30, 0x30, 0x1, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x13,
+      Q_16_16(1.0), 0x1800, 0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_HEART_PIECE, ITEM_HEART_PIECE, 0x10, 0, 0x1800, 0, 0x18,
+      0xd0,
+      0, 0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0xf, Q_16_16(1.0), 0x1800,
+      0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x2, Q_16_16(1.0), 0x1800,
+      0x140, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0xd, Q_16_16(1.0), 0x1800,
+      0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x1a, Q_16_16(1.0), 0x1800,
+      0x100, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x13, Q_16_16(1.0), 0x1800,
+      0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { NULL, NULL, 0, 0, 0, 0, 0, ITEM_KINSTONE, ITEM_KINSTONE, 0x81, 0, 0x1800, 0x100, 0x20, 0x0, 0x1, 0x0 },
+};
+#endif
+
+#ifdef MULTI_REGION
+static const struct_gUnk_08123FB0 gUnk_08123FB0_jp_eu[] = {
+    { sub_0809D91C, sub_0809D93C, 0, 0, 0x30, 0x30, 0x1, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x13,
+      Q_16_16(1.0), 0x1800, 0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_HEART_PIECE, ITEM_HEART_PIECE, 0x10, 0, 0x1800, 0, 0x18,
+      0xCD,
+      0, 0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0xf, Q_16_16(1.0), 0x1800,
+      0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x2, Q_16_16(1.0), 0x1800,
+      0x140, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0xd, Q_16_16(1.0), 0x1800,
+      0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x1a, Q_16_16(1.0), 0x1800,
+      0x100, 0x40, 0x4021, 0x1, 0x0 },
+    { sub_0809D91C, NULL, 0, 0, 0, 0, 0, ITEM_QST_GRAVEYARD_KEY, ITEM_QST_GRAVEYARD_KEY, 0x13, Q_16_16(1.0), 0x1800,
+      0x60, 0x40, 0x4021, 0x1, 0x0 },
+    { NULL, NULL, 0, 0, 0, 0, 0, ITEM_KINSTONE, ITEM_KINSTONE, 0x81, 0, 0x1800, 0x100, 0x20, 0x0, 0x1, 0x0 },
+};
+#endif
 
 void GraveyardKey(Entity* this) {
     static void (*const GraveyardKey_Actions[])(Entity*, const struct_gUnk_08123FB0*) = {
@@ -79,7 +117,13 @@ void GraveyardKey(Entity* this) {
         GraveyardKey_Action2,
         GraveyardKey_Action3,
     };
-    GraveyardKey_Actions[this->action](this, &gUnk_08123FB0[this->type]);
+    const struct_gUnk_08123FB0* sel = gUnk_08123FB0;
+#ifdef MULTI_REGION
+    if (REGION_IS_JP || REGION_IS_EU) {
+        sel = gUnk_08123FB0_jp_eu;
+    }
+#endif
+    GraveyardKey_Actions[this->action](this, &sel[this->type]);
 }
 
 void GraveyardKey_Init(Entity* this, const struct_gUnk_08123FB0* param_2) {
@@ -171,12 +215,6 @@ void GraveyardKey_Action3(Entity* this, const struct_gUnk_08123FB0* param_2) {
 #endif
             CreateItemEntity(item, subtype, 0);
             flag = param_2->flag;
-#ifdef MULTI_REGION
-            /* Row index 1 (heart piece) flag diverges: USA 0xd0, JP/EU 0xCD. */
-            if (this->type == 1 && (REGION_IS_JP || REGION_IS_EU)) {
-                flag = 0xCD;
-            }
-#endif
             if (flag) {
                 SetFlag(flag);
             }

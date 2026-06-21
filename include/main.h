@@ -28,10 +28,18 @@ typedef enum {
     NUM_LANGUAGES,
 } Language;
 
+#ifdef MULTI_REGION
+/* Fat binary is compiled USA/EU-baseline; GAME_LANGUAGE is the compile-time
+ * default (English) used in the static sDefaultSettings initializer and as a
+ * last-resort text fallback. Runtime region adaptation (JP->LANGUAGE_JP) is
+ * layered on top in InitSaveHeader (src/main.c) and the text.c fallbacks. */
+#define GAME_LANGUAGE LANGUAGE_EN
+#else
 #ifdef ENGLISH
 #define GAME_LANGUAGE LANGUAGE_EN
 #else
 #define GAME_LANGUAGE LANGUAGE_JP
+#endif
 #endif
 
 /** Program tasks. */

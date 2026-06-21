@@ -42,13 +42,10 @@ void MinishPortalCloseup_Init(MinishPortalCloseupEntity* this) {
 }
 
 void MinishPortalCloseup_Action1(MinishPortalCloseupEntity* this) {
-#if defined(EU) && !defined(MULTI_REGION)
+#ifdef EU
     static const u16 gUnk_081216C8[] = { 206, 19, 333, 208, 16, 333, 207, 1, 333, 0 };
 #else
     static const u16 gUnk_081216C8[] = { 206, 19, 334, 208, 16, 334, 207, 1, 334, 0 };
-#endif
-#ifdef MULTI_REGION
-    static const u16 gUnk_081216C8_eu[] = { 206, 19, 333, 208, 16, 333, 207, 1, 333, 0 };
 #endif
     const u16* ptr;
     this->unk_68 -= 2;
@@ -61,12 +58,6 @@ void MinishPortalCloseup_Action1(MinishPortalCloseupEntity* this) {
         ResetPalettes();
         gGFXSlots.unk0 = 1;
         {
-            const u16* sel = gUnk_081216C8;
-#ifdef MULTI_REGION
-            if (REGION_IS_EU) {
-                sel = gUnk_081216C8_eu;
-            }
-#endif
 #ifdef PC_PORT
             /* gUnk_081216C8 holds 3 triples (TREESTUMP/ROCK/PT_2) plus a
              * sentinel 0 — total 10 u16 entries. super->type comes from
@@ -81,14 +72,19 @@ void MinishPortalCloseup_Action1(MinishPortalCloseupEntity* this) {
             if (closeupType > 2) {
                 closeupType = 2;
             }
-            ptr = &sel[closeupType * 3];
+            ptr = &gUnk_081216C8[closeupType * 3];
 #else
-            ptr = &sel[super->type * 3];
+            ptr = &gUnk_081216C8[super->type * 3];
 #endif
         }
         LoadFixedGFX(super, ptr[0]);
         LoadObjPalette(super, ptr[1]);
         super->spriteIndex = ptr[2];
+#ifdef MULTI_REGION
+        if (REGION_IS_EU) {
+            super->spriteIndex = 333;
+        }
+#endif
         if (super->type == 2) {
             super->frameIndex = 2;
         }

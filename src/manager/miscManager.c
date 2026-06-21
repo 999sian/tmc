@@ -36,10 +36,10 @@ void MiscManager_TypeA(MiscManager*);
 void MiscManager_TypeB(MiscManager*);
 void MiscManager_TypeC(MiscManager*);
 void MiscManager_TypeD(MiscManager*);
-#if !defined(EU) || defined(PC_PORT)
+#if !defined(EU) || defined(MULTI_REGION)
 void MiscManager_TypeE(MiscManager*);
 #endif
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(PC_PORT)
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(MULTI_REGION)
 void MiscManager_TypeF(MiscManager*);
 #endif
 
@@ -59,10 +59,10 @@ void (*const MiscManager_Types[])(MiscManager*) = {
     MiscManager_TypeB,
     MiscManager_TypeC,
     MiscManager_TypeD,
-#if !defined(EU) || defined(PC_PORT)
+#if !defined(EU) || defined(MULTI_REGION)
     MiscManager_TypeE,
 #endif
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(PC_PORT)
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(MULTI_REGION)
     MiscManager_TypeF,
 #endif
 };
@@ -413,7 +413,7 @@ void MiscManager_TypeD(MiscManager* this) {
     DeleteThisEntity();
 }
 
-#if !defined(EU) || defined(PC_PORT)
+#if !defined(EU) || defined(MULTI_REGION)
 void MiscManager_TypeE(MiscManager* this) {
     switch (super->action) {
         case 0:
@@ -440,7 +440,7 @@ void MiscManager_TypeE(MiscManager* this) {
 }
 #endif
 
-#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(PC_PORT)
+#if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(MULTI_REGION)
 void MiscManager_TypeF(MiscManager* this) {
     SetEntityPriority((Entity*)this, PRIO_PLAYER_EVENT);
     if (gPlayerEntity.base.action == PLAYER_TALKEZLO) {

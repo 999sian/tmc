@@ -39,14 +39,14 @@ static const s32 gUnk_0811F744[] = {
     0x00027F80,
 };
 #endif
-/* Region-agnostic: defined unconditionally so the (now un-guarded) runtime
- * REGION_IS_EU consumer below compiles in single-region builds too. */
+#ifdef MULTI_REGION
 static const s32 gUnk_0811F744_eu[] = {
     0x00027940,
     0x00027B40,
     0x00027D40,
     0x00027F40,
 };
+#endif
 
 void CameraTarget(Entity* this) {
     static void (*const gUnk_0811F754[])(Entity*) = {
@@ -147,20 +147,24 @@ void CameraTarget_Action2(Entity* this) {
             }
             {
                 const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
+#ifdef MULTI_REGION
                 extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
                 extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
                 if (REGION_IS_EU)
                     gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
                 else if (REGION_IS_JP)
                     gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
+#endif
                 ptr = gKinstoneWorldEvents_sel + bVar2;
             bVar1 = ptr->bubbleIcon;
             bVar3 = bVar1 & 1;
             this->palette.b.b0 = bVar3;
             {
                 const s32* gUnk_0811F744_sel = gUnk_0811F744;
+#ifdef MULTI_REGION
                 if (REGION_IS_EU)
                     gUnk_0811F744_sel = gUnk_0811F744_eu;
+#endif
                 temp = gUnk_0811F744_sel[bVar1] < 0;
                 temp2 = (gUnk_0811F744_sel[bVar1] & 0xffffff) | temp;
                 sub_080ADDD8(0, temp2 | 0x1000000);
