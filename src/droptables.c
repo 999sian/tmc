@@ -512,11 +512,7 @@ const Droptable gAreaDroptables[] = {
         .none = 920,
         .rupee1 = 30,
         .rupee5 = 1,
-#ifdef EU
-        .rupee20 = 0,
-#else
         .rupee20 = -10,
-#endif
         .hearts = 2,
         .fairy = 0,
         .bombs = 1,
@@ -675,7 +671,6 @@ const Droptable gAreaDroptables[] = {
         .none5 = 0,
     } },
 };
-#ifdef MULTI_REGION
 /* EU twin of gAreaDroptables. Identical to the USA baseline except entry [0xa]
  * (.rupee20 = 0 on EU instead of -10). Selected at runtime when REGION_IS_EU. */
 const Droptable gAreaDroptables_eu[] = {
@@ -1022,7 +1017,6 @@ const Droptable gAreaDroptables_eu[] = {
         .none5 = 0,
     } },
 };
-#endif
 const Droptable gObjectDroptables[] = {
     [0] = { {
         .none = 0,
@@ -1132,26 +1126,6 @@ const Droptable gObjectDroptables[] = {
         .none4 = 0,
         .none5 = 0,
     } },
-#ifdef EU
-    { {
-        .none = 0,
-        .rupee1 = -999,
-        .rupee5 = -999,
-        .rupee20 = -999,
-        .hearts = 0,
-        .fairy = -999,
-        .bombs = -999,
-        .arrows = 250,
-        .mysteriousShells = -999,
-        .kinstoneRed = -999,
-        .kinstoneBlue = -999,
-        .kinstoneGreen = -999,
-        .none2 = -999,
-        .none3 = 0,
-        .none4 = 0,
-        .none5 = 0,
-    } },
-#endif
     { {
         .none = 0,
         .rupee1 = -10,
@@ -1189,7 +1163,6 @@ const Droptable gObjectDroptables[] = {
         .none5 = 0,
     } },
 };
-#ifdef MULTI_REGION
 /* EU twin of gObjectDroptables. The EU build inserts an extra entry after [5]
  * (arrows = 250), shifting the trailing two entries to indices [7] and [8].
  * Selected at runtime when REGION_IS_EU; consumers index up to [8] in that case. */
@@ -1357,82 +1330,7 @@ const Droptable gObjectDroptables_eu[] = {
         .none5 = 0,
     } },
 };
-#endif
 const Droptable gUnk_0800191C[] = {
-#ifdef EU
-    { {
-        .none = 0,
-        .rupee1 = 0,
-        .rupee5 = 0,
-        .rupee20 = 0,
-        .hearts = 0,
-        .fairy = 0,
-        .bombs = 0,
-        .arrows = 0,
-        .mysteriousShells = 0,
-        .kinstoneRed = 0,
-        .kinstoneBlue = 0,
-        .kinstoneGreen = 0,
-        .none2 = 0,
-        .none3 = 0,
-        .none4 = 0,
-        .none5 = 0,
-    } },
-    { {
-        .none = 0,
-        .rupee1 = 0,
-        .rupee5 = 0,
-        .rupee20 = 0,
-        .hearts = 0,
-        .fairy = 0,
-        .bombs = 0,
-        .arrows = 0,
-        .mysteriousShells = 0,
-        .kinstoneRed = 0,
-        .kinstoneBlue = 0,
-        .kinstoneGreen = 0,
-        .none2 = 0,
-        .none3 = 0,
-        .none4 = 0,
-        .none5 = 0,
-    } },
-    { {
-        .none = 0,
-        .rupee1 = 0,
-        .rupee5 = 0,
-        .rupee20 = 0,
-        .hearts = 0,
-        .fairy = 0,
-        .bombs = 0,
-        .arrows = 0,
-        .mysteriousShells = 0,
-        .kinstoneRed = 0,
-        .kinstoneBlue = 0,
-        .kinstoneGreen = 0,
-        .none2 = 0,
-        .none3 = 0,
-        .none4 = 0,
-        .none5 = 0,
-    } },
-    { {
-        .none = 0,
-        .rupee1 = 0,
-        .rupee5 = 0,
-        .rupee20 = 0,
-        .hearts = 0,
-        .fairy = 0,
-        .bombs = 0,
-        .arrows = 0,
-        .mysteriousShells = 0,
-        .kinstoneRed = 0,
-        .kinstoneBlue = 0,
-        .kinstoneGreen = 0,
-        .none2 = 0,
-        .none3 = 0,
-        .none4 = 0,
-        .none5 = 0,
-    } },
-#else
     { {
         .none = 78,
         .rupee1 = -999,
@@ -1469,7 +1367,6 @@ const Droptable gUnk_0800191C[] = {
         .none4 = 0,
         .none5 = 0,
     } },
-#endif
     { {
         .none = 0,
         .rupee1 = 0,

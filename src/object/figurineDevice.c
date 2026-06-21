@@ -714,6 +714,22 @@ void sub_0808826C(FigurineDeviceEntity* this) {
     s32 tmp = 100;
     tmp *= this->unk_80 - gSave.stats.figurineCount;
     tmp /= this->unk_80;
+#ifdef PC_PORT
+    /* QoL toggle (REBORN_FEAT_FIGURINE_MIN_RAISED, enum index 5): keep the
+     * single-shell base odds honest near completion. Vanilla runs the
+     * 1-shell chance linearly 100% -> 0% as the collection fills, so the
+     * displayed odds creep toward zero; remap that same curve onto a
+     * 100% -> 20% range so a base roll never drops below 20%. Authored from
+     * the described behaviour against the engine's own formula, independent
+     * of any external source. tmp here is 100*(remaining)/total in [0,100];
+     * compress linearly to [20,100]. */
+    {
+        extern bool Port_Reborn_IsEnabled(int feat);
+        if (Port_Reborn_IsEnabled(5)) {
+            tmp = 20 + (tmp * 80) / 100;
+        }
+    }
+#endif
     if (tmp == 0 && !CheckLocalFlag(SHOP07_COMPLETE)) {
         tmp = 1;
     }
@@ -838,25 +854,11 @@ void FigurineDevice_Draw(FigurineDeviceEntity* this) {
 }
 
 void FigurineDevice_GetChanceBasedOffFigurineCount(FigurineDeviceEntity* this) {
-#ifdef PC_PORT
-    /* Reborn parity: floors raised 3× when toggle is on. */
-    extern bool Port_Reborn_IsEnabled(int feat);
-    int boost = Port_Reborn_IsEnabled(5 /* REBORN_FEAT_FIGURINE_MIN_RAISED */) ? 3 : 1;
-    if (gSave.stats.figurineCount < 50) {
-        u8 floor = 15 * boost;
-        if (this->chance < floor) this->chance = floor;
-    } else if (gSave.stats.figurineCount < 80) {
-        u8 floor = 12 * boost;
-        if (this->chance < floor) this->chance = floor;
-    } else if (gSave.stats.figurineCount < 110) {
-        u8 floor = 9 * boost;
-        if (this->chance < floor) this->chance = floor;
-    } else {
-        u8 floor = 6 * boost;
-        if (this->chance < floor) this->chance = floor;
-    }
-    return;
-#endif
+    /* Faithful GBA floors. The PC-port figurine QoL toggle no longer
+     * multiplies these floors (that 3x approach barely moved the odds until
+     * ~112 figurines were collected); it instead remaps the base 1-shell
+     * curve in sub_0808826C, so this routine stays byte-identical to the
+     * original game on every build. */
     if (gSave.stats.figurineCount < 50) {
         if (this->chance < 15) {
             this->chance = 15;

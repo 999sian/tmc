@@ -23,6 +23,12 @@ int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room,
 void Port_DebugAction_ArmWarpNudge(void);
 void Port_DebugAction_WarpTick(void);
 
+/* Free-coordinate teleport within the current room. TeleportXY drops Link at
+ * world pixel (x, y); returns 1 on success, 0 if not in live gameplay.
+ * PlayerXY reads Link's current position (returns 0 when not in gameplay). */
+int Port_DebugAction_TeleportXY(unsigned short x, unsigned short y);
+int Port_DebugQuery_PlayerXY(unsigned short* x, unsigned short* y);
+
 #ifdef __cplusplus
 }
 #endif

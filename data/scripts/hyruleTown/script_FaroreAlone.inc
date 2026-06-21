@@ -17,4 +17,4 @@ script_0801224E:
 	MessageNoOverlap TEXT_HAPPY_HEARTH, 0x26
 	WaitUntilTextboxCloses
 	SetLocalFlag MHOUSE_FARORE_TALK
-	Jump script_080121B6
+	Jump script_080121B6  @ PC-port QoL: route left-behind Farore into her existing MovedIn charm-offer path

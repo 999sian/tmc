@@ -44,22 +44,18 @@ const u16 gUnk_080FD5A8[] = { 1, 5, 20, 50, 100, 200 };
 
 u32 GetSaleItemConfirmMessageID(u32 item) {
     const struct_080FD964* table = gUnk_080FD964;
-#ifdef MULTI_REGION
     if (REGION_IS_EU) {
         table = gUnk_080FD964_eu;
     }
-#endif
     const struct_080FD964* ptr = &table[item];
     return ptr->saleItemConfirmMessageId;
 }
 
 s32 GetItemPrice(u32 item) {
     const struct_080FD964* table = gUnk_080FD964;
-#ifdef MULTI_REGION
     if (REGION_IS_EU) {
         table = gUnk_080FD964_eu;
     }
-#endif
     const struct_080FD964* ptr = &table[item];
     return ptr->itemPrice;
 }
@@ -436,11 +432,9 @@ void sub_08054524(void) {
     bVar1 = gUnk_080FE1C6[bVar1];
     {
         const Droptable* tbl = gAreaDroptables;
-#ifdef MULTI_REGION
         if (REGION_IS_EU) {
             tbl = gAreaDroptables_eu;
         }
-#endif
         MemCopy(&tbl[bVar1], &gRoomVars.currentAreaDroptable, sizeof(Droptable));
     }
 }
@@ -474,11 +468,7 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
 #if defined(PC_PORT)
         if (REGION_IS_EU) {
             if (r3 == 24) {
-#ifdef MULTI_REGION
                 ptr2 = &gObjectDroptables_eu[8];
-#else
-                ptr2 = &gObjectDroptables[8]; /* single-region EU: canonical table holds EU data */
-#endif
                 ptr4 = &gRoomVars.currentAreaDroptable;
                 r3 = 0;
             } else if (r3 == 25) {
@@ -511,9 +501,6 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
                 break;
 #endif
             case 16 ... 23:
-#ifdef EU
-            case 24:
-#endif
                 ptr2 = &gObjectDroptables[r3 - 16];
             case 15:
                 ptr4 = &gRoomVars.currentAreaDroptable;
@@ -521,11 +508,9 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
 #else
             case 16 ... 23:
                 ptr2 = &gObjectDroptables[r3 - 16];
-#ifdef MULTI_REGION
                 if (REGION_IS_EU) {
                     ptr2 = &gObjectDroptables_eu[r3 - 16];
                 }
-#endif
             case 15:
                 ptr4 = &gRoomVars.currentAreaDroptable;
                 break;

@@ -28,7 +28,7 @@ typedef enum {
     REBORN_FEAT_FIGURINE_MIN_RAISED,   /* raise minimum figurine drop chance */
     REBORN_FEAT_SKIP_EZLO_TUTORIALS,   /* skip most early-game Ezlo tutorials */
     REBORN_FEAT_HERO_MODE,             /* damage doubled — toggleable Hero Mode */
-    REBORN_FEAT_RUPEE_LIKE_OVERHAUL,   /* rupee-likes steal shield, time-out 10t */
+    REBORN_FEAT_RUPEE_LIKE_OVERHAUL,   /* removed feature; slot kept for config-bitmask stability */
     REBORN_FEAT_SECONDARY_LAB,         /* L+A / L+B → use SLOT_LA / SLOT_LB items */
     REBORN_FEAT_SELECT_HOLD_EQUIP,     /* SELECT-hold in pause menu → equip secondary slot */
     REBORN_FEAT_ANALOG_360_MOVEMENT,   /* 360° left-stick movement (32-step snap) */

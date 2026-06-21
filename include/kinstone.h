@@ -44,6 +44,8 @@ typedef struct {
 } KinstoneWorldEvent;
 // Indexed by kinstoneId
 extern const KinstoneWorldEvent gKinstoneWorldEvents[];
+extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
+extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
 
 typedef enum {
     KINSTONE_NONE,

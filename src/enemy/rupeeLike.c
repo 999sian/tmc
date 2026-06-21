@@ -195,31 +195,6 @@ void sub_080294D4(RupeeLikeEntity* this) {
     }
 }
 
-#ifdef PC_PORT
-/* Reborn parity: rupee-like overhaul. Only one rupee-like can grab
- * Link at a time, so a single static counter is safe. Reset when a
- * fresh grab begins (see action handler that transitions to the grab
- * state) and incremented per tick of grab logic. After 10 ticks,
- * Link is released automatically. */
-static s8 sRebornRupeeLikeTicks = 0;
-extern bool Port_Reborn_IsEnabled(int feat);
-
-/* Unequip + decrement inventory of `item`. Returns TRUE if owned. */
-static bool32 RupeeLike_StealItem_Reborn(u32 item) {
-    if (GetInventoryValue(item) >= 1) {
-        for (int i = 0; i < 2; ++i) {
-            if (gSave.stats.equipped[i] == ITEM_SHIELD ||
-                gSave.stats.equipped[i] == ITEM_MIRROR_SHIELD) {
-                gSave.stats.equipped[i] = 0;
-            }
-        }
-        SetInventoryValue(item, GetInventoryValue(item) - 1);
-        return TRUE;
-    }
-    return FALSE;
-}
-#endif
-
 void sub_0802953C(RupeeLikeEntity* this) {
     u8* pbVar3;
     bool32 outOfReason;
@@ -233,13 +208,7 @@ void sub_0802953C(RupeeLikeEntity* this) {
         super->timer--;
     }
 
-#ifdef PC_PORT
-    bool32 rebornMode = Port_Reborn_IsEnabled(/* placeholder for new enum */ 8);
-    outOfReason = rebornMode ? (sRebornRupeeLikeTicks >= 10)
-                             : (gSave.stats.rupees == 0);
-#else
     outOfReason = (gSave.stats.rupees == 0);
-#endif
 
     if (((super->subtimer > 0x2d) || outOfReason) && (super->timer == 0)) {
         sub_080296D8(this);
@@ -257,15 +226,6 @@ void sub_0802953C(RupeeLikeEntity* this) {
                 ModRupees(gUnk_080CCC44[super->type]);
                 this->unk_84 = 1;
             }
-#ifdef PC_PORT
-            else if (rebornMode && RupeeLike_StealItem_Reborn(ITEM_SHIELD)) {
-                MessageFromTarget(TEXT_INDEX(TEXT_ITEM_GET, 0x78));
-                this->unk_84 = 1;
-            } else if (rebornMode) {
-                ModHealth(-1);
-            }
-            if (rebornMode) sRebornRupeeLikeTicks++;
-#endif
         }
     }
 }
@@ -336,10 +296,6 @@ void sub_080296D8(RupeeLikeEntity* this) {
     gPlayerEntity.base.speed = 0x140;
     super->action = 5;
     super->subtimer = 60;
-#ifdef PC_PORT
-    /* Reborn parity: reset per-grab tick counter when the grab starts. */
-    sRebornRupeeLikeTicks = 0;
-#endif
     super->collisionMask |= 3;
     if ((s8)super->iframes == 0) {
         super->iframes = 0xf4;

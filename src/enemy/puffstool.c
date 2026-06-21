@@ -448,25 +448,25 @@ bool32 sub_0802571C(PuffstoolEntity* this) {
 
 bool32 sub_080257EC(PuffstoolEntity* this, u32 x, u32 y) {
     u16 tileType = GetTileTypeAtRoomCoords(x - 0x00, y - 0x00, super->collisionLayer);
-    if (tileType != TILE_TYPE_786 && gMapTileTypeToActTile[tileType] != ACT_TILE_22 &&
+    if (tileType != TILE_TYPE_786 && GetMapTileTypeToActTile(tileType) != ACT_TILE_22 &&
         gMapTileTypeToCollisionData[tileType] == 0) {
         return TRUE;
     }
 
     tileType = GetTileTypeAtRoomCoords(x - 0x10, y - 0x00, super->collisionLayer);
-    if (tileType != TILE_TYPE_786 && gMapTileTypeToActTile[tileType] != ACT_TILE_22 &&
+    if (tileType != TILE_TYPE_786 && GetMapTileTypeToActTile(tileType) != ACT_TILE_22 &&
         gMapTileTypeToCollisionData[tileType] == 0) {
         return TRUE;
     }
 
     tileType = GetTileTypeAtRoomCoords(x - 0x00, y - 0x10, super->collisionLayer);
-    if (tileType != TILE_TYPE_786 && gMapTileTypeToActTile[tileType] != ACT_TILE_22 &&
+    if (tileType != TILE_TYPE_786 && GetMapTileTypeToActTile(tileType) != ACT_TILE_22 &&
         gMapTileTypeToCollisionData[tileType] == 0) {
         return TRUE;
     }
 
     tileType = GetTileTypeAtRoomCoords(x - 0x10, y - 0x10, super->collisionLayer);
-    if (tileType != TILE_TYPE_786 && gMapTileTypeToActTile[tileType] != ACT_TILE_22 &&
+    if (tileType != TILE_TYPE_786 && GetMapTileTypeToActTile(tileType) != ACT_TILE_22 &&
         gMapTileTypeToCollisionData[tileType] == 0) {
         return TRUE;
     }

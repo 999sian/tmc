@@ -17,5 +17,5 @@ script_08012216:
 	MessageNoOverlap TEXT_HAPPY_HEARTH, 0x25
 	WaitUntilTextboxCloses
 	SetLocalFlag MHOUSE_NAYRU_TALK
-	Jump script_0801212A
+	Jump script_0801212A  @ PC-port QoL: route left-behind Nayru into her existing MovedIn charm-offer path
 

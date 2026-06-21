@@ -634,8 +634,12 @@ void VBlankIntrWait(void) {
      * display refresh holding us. */
     {
         u32 targetFps = Port_Config_TargetFps();
-        bool wantVsync = !sFastForward && targetFps != 0 && targetFps <= 60;
-        Port_PPU_SetVSync(wantVsync);
+        /* Honour the user's VSync preference (persisted, #146), but force it
+         * off in the cases where VSync would fight the frame-pacing timer and
+         * leave the FPS preset / fast-forward with no effect (#26): fast-
+         * forward, uncapped, or a target above the display refresh. */
+        bool mustDisable = sFastForward || targetFps == 0 || targetFps > 60;
+        Port_PPU_SetVSync(Port_Config_GetVSync() && !mustDisable);
     }
 
     if (Port_Profile_Enabled()) {

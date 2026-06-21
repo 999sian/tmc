@@ -30,11 +30,13 @@ VERSIONS = {
     "USA": {
         "rom_filename": "baserom.gba",
         "sha1":         _read_sha1_file("tmc.sha1"),
+        "sha256":       _read_sha1_file("tmc.sha256"),
         "game_version": "USA",
     },
     "EU": {
         "rom_filename": "baserom_eu.gba",
         "sha1":         _read_sha1_file("tmc_eu.sha1"),
+        "sha256":       _read_sha1_file("tmc_eu.sha256"),
         "game_version": "EU",
     },
     # JP is ROM-gated: needs a legal BZMJ baserom (tmc_jp.gba, sha1 in
@@ -44,6 +46,7 @@ VERSIONS = {
     "JP": {
         "rom_filename": "baserom_jp.gba",
         "sha1":         _read_sha1_file("tmc_jp.sha1"),
+        "sha256":       _read_sha1_file("tmc_jp.sha256"),
         "game_version": "JP",
     },
 }
@@ -100,6 +103,13 @@ def run_cmd(cmd, env=None, cwd=None, check=True) -> subprocess.CompletedProcess:
 
 def sha1_file(path: Path) -> str:
     h = hashlib.sha1()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
@@ -351,8 +361,10 @@ def ensure_roms(selected: list, found: dict, non_interactive: bool = False) -> d
         meta   = VERSIONS[v]
         target = REPO_ROOT / meta["rom_filename"]
         sha1   = meta["sha1"]
+        sha256 = meta.get("sha256")
 
-        if target.exists() and sha1 and sha1_file(target) == sha1:
+        if (target.exists() and sha1 and sha1_file(target) == sha1
+                and (not sha256 or sha256_file(target) == sha256)):
             ok(f"{v}: {target.name}")
             result[v] = True
             continue
@@ -454,7 +466,7 @@ def make_env() -> dict:
     return env
 
 def build_version(version: str, env: dict, non_interactive: bool = False,
-                  slim: bool = False) -> Optional[Path]:
+                  slim: bool = False, multi_region: bool = True) -> Optional[Path]:
     """Build tmc_pc for `version` and stage it under dist/<version>/.
 
     `slim=True` produces a minimal dist (just the binary). The
@@ -511,8 +523,12 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
     # Default-on costs ~150 KB of embedded SPIR-V; no runtime impact
     # for users who stay on the software backend.
     configure_cmd.append("--gpu_renderer=y")
-    # Enable multi-region single-binary support
-    configure_cmd.append("--multi_region=y")
+    # Enable multi-region single-binary support (the shipped-release default).
+    # --single-region disables it to exercise the per-region build path (and
+    # the GBA-matching decomp config), which surfaces half-flattened
+    # MULTI_REGION guards — an _eu/_jp twin referenced unguarded but defined
+    # only under #ifdef MULTI_REGION — that the fat multi-region build hides.
+    configure_cmd.append("--multi_region=y" if multi_region else "--multi_region=n")
 
     # 0.5.0 release cutover: ship the real widescreen build. Direct xmake
     # developer builds still default to 240 unless explicitly configured, but
@@ -688,12 +704,24 @@ def parse_args() -> argparse.Namespace:
             "its compiled-in sounds.json fallback for audio metadata."
         ),
     )
+    parser.add_argument(
+        "--single-region",
+        action="store_true",
+        help=(
+            "Configure with --multi_region=n (a per-region build) instead of "
+            "the fat single-binary default. Used as a build guard: surfaces "
+            "half-flattened MULTI_REGION guards (an _eu/_jp twin referenced "
+            "unguarded but defined only under #ifdef MULTI_REGION) that the "
+            "default multi-region build hides."
+        ),
+    )
     return parser.parse_args()
 
 def main():
     args = parse_args()
     non_interactive = args.usa or args.eur or args.jp
     slim = args.slim
+    single_region = args.single_region
 
     header("TMC PC Port Builder")
     info(f"Platform : {PLATFORM}")
@@ -790,7 +818,8 @@ def main():
     results = {}
     for v in buildable:
         section(f"Building {v}")
-        results[v] = build_version(v, env, non_interactive=non_interactive, slim=slim)
+        results[v] = build_version(v, env, non_interactive=non_interactive, slim=slim,
+                                   multi_region=not single_region)
 
     section("Done")
     any_ok = False

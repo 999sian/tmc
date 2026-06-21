@@ -105,6 +105,9 @@ struct BackendState {
      * (plain 32 lacked it, which is why the original forced reverb was inert).
      * NORMAL reverb is a PCM-only comb (CGB/PSG voices stay dry by mix order). */
     uint8_t reverbForceByte = 0x00;
+    /* Game master volume [0,1] applied to the final mixed output (F8 -> Audio
+     * "Master volume"). 1.0 = unchanged. */
+    float masterVolume = 1.0f;
 };
 
 BackendState sState;
@@ -578,6 +581,9 @@ static void RenderChunkLocked(void) {
             }
         }
 
+        left  *= sState.masterVolume;
+        right *= sState.masterVolume;
+
         left = std::clamp(left, -1.0f, 1.0f);
         right = std::clamp(right, -1.0f, 1.0f);
 
@@ -762,6 +768,16 @@ bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex) {
         }
     }
     return false;
+}
+
+void Port_M4A_Backend_SetMasterVolume(float volume) {
+    std::lock_guard<std::mutex> lock(sStateMutex);
+    sState.masterVolume = volume < 0.0f ? 0.0f : (volume > 1.0f ? 1.0f : volume);
+}
+
+float Port_M4A_Backend_GetMasterVolume(void) {
+    std::lock_guard<std::mutex> lock(sStateMutex);
+    return sState.masterVolume;
 }
 
 void Port_M4A_Backend_SetGbaAccurate(bool accurate) {

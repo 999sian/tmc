@@ -231,19 +231,19 @@ void UpdateActiveItems(PlayerEntity* this) {
         /* Soft-slots (X/Y/L2/R2) override the B-equipped item without
          * mutating gSave. See port/port_softslots.h. */
         bItem = Port_SoftSlots_GetEffectiveBItem((u8)bItem);
-        /* Reborn-parity: when L is held, A and B fire the items the
-         * user assigned to soft-slots 0 and 1 via SELECT-hold in the
-         * pause menu. Empty soft slot falls back to the primary so
-         * the button isn't dead. */
+        /* Optional L-modifier: while L is held, A and B instead fire the
+         * items bound to the port's two soft slots (assigned via SELECT-
+         * hold in the pause menu). An unbound soft slot falls back to the
+         * normal A/B item so neither button goes dead. Built entirely on
+         * the port's own soft-slot store and the engine item-use path. */
         {
             extern bool Port_Reborn_IsEnabled(int feat);
             extern unsigned char Port_SoftSlots_GetAssignment(int s);
-            if ((gInput.heldKeys & L_BUTTON) &&
-                Port_Reborn_IsEnabled(/* L+A/B secondary */ 9)) {
-                u8 la = Port_SoftSlots_GetAssignment(0);
-                u8 lb = Port_SoftSlots_GetAssignment(1);
-                if (la) aItem = la;
-                if (lb) bItem = lb;
+            if ((gInput.heldKeys & L_BUTTON) && Port_Reborn_IsEnabled(9)) {
+                u8 softA = Port_SoftSlots_GetAssignment(0);
+                u8 softB = Port_SoftSlots_GetAssignment(1);
+                if (softA) aItem = softA;
+                if (softB) bItem = softB;
             }
         }
 #endif
@@ -3490,9 +3490,7 @@ void sub_0807B2B8(PlayerEntity* this) {
     UpdateAnimationSingleFrame(super);
     if (super->timer != 0 && --super->timer == 0) {
         const Transition* exitTransitions = gUnk_0813AD88;
-#ifdef MULTI_REGION
         if (REGION_IS_EU) exitTransitions = gUnk_0813AD88_eu;
-#endif
         DoExitTransition(&exitTransitions[this->unk_6d]);
     }
 }

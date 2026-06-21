@@ -63,14 +63,12 @@ void Subtask_WorldEvent_End(void) {
     MessageInitialize();
     sub_0806F38C();
     gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
     extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
     extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
     if (REGION_IS_EU)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
     else if (REGION_IS_JP)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
     if (gKinstoneWorldEvents_sel[gFuseInfo.kinstoneId].mapMarkerIcon != 0) {
         // Show the map hint.
         MenuFadeIn(SUBTASK_LOCALMAPHINT, gUI.field_0x3);

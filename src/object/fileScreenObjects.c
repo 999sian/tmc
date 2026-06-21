@@ -67,9 +67,7 @@ typedef struct {
 } struct_08121D54;
 
 extern const s32 gUnk_08133368[];
-#ifdef MULTI_REGION
 extern const s32 gUnk_08133368_eu[];
-#endif
 
 void FileScreenObjects(FileScreenObjectsEntity* this) {
     static void (*const FileScreenObjects_Types[])(FileScreenObjectsEntity*) = {
@@ -126,9 +124,7 @@ void FileScreenObjects_Type23_LinkPreview(FileScreenObjectsEntity* this) {
         super->animationState = PAS_SOUTH;
         {
             const s32* objPalTbl = gUnk_08133368;
-#ifdef MULTI_REGION
             if (REGION_IS_EU) objPalTbl = gUnk_08133368_eu;
-#endif
             offset = objPalTbl[GetPlayerPalette(TRUE) - 22] & 0xFFFFFF;
         }
         LoadPalettes(&gGlobalGfxAndPalettes[offset], 31, 1);

@@ -215,11 +215,7 @@ const SaveHeader sDefaultSettings = {
     .saveFileId = 0,
     .msg_speed = 1,
     .brightness = 1,
-#ifdef EU
-    .language = 2, // TODO in EU 2 is english?
-#else
     .language = GAME_LANGUAGE,
-#endif
     .name = "LINK",
     .invalid = 0,
     .initialized = 0,
@@ -237,13 +233,11 @@ void InitSaveHeader(void) {
             case -1:
             default:
                 MemCopy(&sDefaultSettings, gSaveHeader, sizeof(SaveHeader));
-#ifdef MULTI_REGION
                 if (REGION_IS_JP) {
                     gSaveHeader->language = LANGUAGE_JP;
                 } else if (REGION_IS_EU) {
                     gSaveHeader->language = 2; // TODO in EU 2 is english?
                 }
-#endif
                 WriteSaveHeader(gSaveHeader);
                 break;
         }
@@ -269,7 +263,6 @@ void InitSaveHeader(void) {
 
     if ((gSaveHeader->signature != SIGNATURE) || (gSaveHeader->saveFileId >= NUM_SAVE_SLOTS) ||
         (gSaveHeader->msg_speed >= MAX_MSG_SPEED) || (gSaveHeader->brightness >= MAX_BRIGHTNESS)
-#ifdef MULTI_REGION
         /* The multi-region binary is compiled USA-baseline (GAME_LANGUAGE == EN),
          * but the loaded ROM's region is only known at runtime. A JP ROM is
          * Japanese-only: its language-conditional gfx (title, name-entry,
@@ -281,11 +274,6 @@ void InitSaveHeader(void) {
                 ? ((gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES))
                 : REGION_IS_JP ? (gSaveHeader->language != LANGUAGE_JP)
                                : (gSaveHeader->language != GAME_LANGUAGE))
-#elif defined(EU)
-        || (gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES)
-#else
-        || (gSaveHeader->language != GAME_LANGUAGE)
-#endif
         || (gSaveHeader->invalid))
         return FALSE;
 

@@ -31,4 +31,10 @@ float Port_Audio_GetWidth(void);
 void Port_Audio_SetReverbLevel(int level);
 int Port_Audio_GetReverbLevel(void);
 
+/* Game master volume [0,1] applied to the final mixed output. 1.0 = unchanged
+ * (default). Persisted via the port config; active in both accurate and
+ * enhanced modes (a level control, not a tone enhancement). */
+void Port_Audio_SetMasterVolume(float volume);
+float Port_Audio_GetMasterVolume(void);
+
 #endif

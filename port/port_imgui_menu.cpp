@@ -109,6 +109,10 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
     if (!renderer) return;
 #endif
 
+    /* Apply the persisted F8 menu style (ribbon vs classic) now that config
+     * has been loaded (issue #146). */
+    sRibbonEnabled = Port_Config_GetRibbonEnabled();
+
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
@@ -348,6 +352,8 @@ void          Port_Audio_SetWidth(float width);
 float         Port_Audio_GetWidth(void);
 void          Port_Audio_SetReverbLevel(int level);
 int           Port_Audio_GetReverbLevel(void);
+void          Port_Audio_SetMasterVolume(float volume);
+float         Port_Audio_GetMasterVolume(void);
 
 int  Port_QuickSave_SaveSlot(int slot);
 int  Port_QuickSave_LoadSlot(int slot);
@@ -379,6 +385,7 @@ int  Port_Config_BindingCount(int input);
 void Port_Config_BindingLabel(int input, int idx, char* out, int cap);
 void Port_Config_ClearBindings(int input);
 void Port_Config_BeginCaptureBinding(int input);
+void Port_Config_BeginAddBinding(int input);
 int  Port_Config_IsCapturingBinding(void);
 int  Port_Config_CapturingBindingInput(void);
 void Port_Config_CancelCaptureBinding(void);
@@ -833,8 +840,10 @@ static const char* InputLabel(int input) {
 }
 
 static void DrawRibbonControlsTab(void) {
-    ImGui::TextWrapped("Click 'Set' next to an action, then press the new key or controller button. "
-                       "Esc cancels. Mappings save to config.json automatically.");
+    ImGui::TextWrapped("Click 'Set' to replace an action's binding, or 'Add' to bind an extra "
+                       "key/controller button to it, then press the input. Esc cancels. Mappings "
+                       "save to config.json automatically. In Console-Parity mode each physical "
+                       "input maps to only one action.");
     ImGui::Separator();
 
     /* Two-column-ish table: action label | bindings + buttons. */
@@ -869,6 +878,11 @@ static void DrawRibbonControlsTab(void) {
             ImGui::TableSetColumnIndex(2);
             if (ImGui::Button("Set")) {
                 Port_Config_BeginCaptureBinding(i);
+                ImGui::OpenPopup("Capture binding");
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Add")) {
+                Port_Config_BeginAddBinding(i);
                 ImGui::OpenPopup("Capture binding");
             }
             ImGui::SameLine();
@@ -973,6 +987,35 @@ static void DrawRibbonWarpTab(void) {
     ImGui::SameLine();
     ImGui::TextDisabled("L/R bumpers = page jump");
 
+    /* Free-coordinate teleport within the CURRENT room. Pre-fills from Link's
+     * live position; in-game only. (All primitives already exist - this is the
+     * same write WarpTick does.) */
+    ImGui::Separator();
+    {
+        static int sTeleX = 0, sTeleY = 0;
+        unsigned short px = 0, py = 0;
+        const bool inGame = Port_DebugQuery_PlayerXY(&px, &py) != 0;
+        ImGui::TextUnformatted("Teleport (current room):");
+        ImGui::SameLine(); ImGui::SetNextItemWidth(80); ImGui::InputInt("X##tele", &sTeleX, 0);
+        ImGui::SameLine(); ImGui::SetNextItemWidth(80); ImGui::InputInt("Y##tele", &sTeleY, 0);
+        ImGui::BeginDisabled(!inGame);
+        ImGui::SameLine();
+        if (ImGui::Button("Go##tele")) {
+            unsigned short tx = (unsigned short)(sTeleX < 0 ? 0 : sTeleX);
+            unsigned short ty = (unsigned short)(sTeleY < 0 ? 0 : sTeleY);
+            if (Port_DebugAction_TeleportXY(tx, ty)) {
+                char msg[64];
+                std::snprintf(msg, sizeof(msg), "Teleport -> (%u, %u)", tx, ty);
+                Port_DebugMenu_ToastFromExternal(msg);
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Use Link's pos")) { sTeleX = px; sTeleY = py; }
+        ImGui::EndDisabled();
+        if (!inGame) { ImGui::SameLine(); ImGui::TextDisabled("(in-game only)"); }
+    }
+    ImGui::Separator();
+
     /* Letter strip — issue #76. The area list is long (>140 entries)
      * and previously the only way to traverse was one-line-at-a-time
      * scrolling. Buttons here filter to areas whose name starts with
@@ -1062,28 +1105,9 @@ static void DrawRibbonWarpTab(void) {
             ImGui::PushID((int)area);
             if (ImGui::CollapsingHeader(header)) {
                 ImGui::Indent();
-                /* Quick-warp button for the area's first room. Uses the
-                 * curated safe-spawn override when one exists. */
-                if (ImGui::Button("Warp here (room 0)")) {
-                    unsigned short sx = 0x80, sy = 0x80;
-                    unsigned char  slayer = 0;
-                    if (!Port_DebugAction_WarpSpawnOverride(a, 0, &sx, &sy, &slayer)) {
-                        unsigned short w0 = 0, h0 = 0;
-                        if (Port_DebugQuery_RoomDimensions(a, 0, &w0, &h0)) {
-                            sx = w0 ? (unsigned short)(w0 / 2) : 0x80;
-                            sy = h0 ? (unsigned short)(h0 / 2) : 0x80;
-                        }
-                        slayer = 1;
-                    }
-                    if (Port_DebugAction_Warp(a, 0, sx, sy, slayer)) {
-                        char msg[96];
-                        std::snprintf(msg, sizeof(msg), "Warp -> 0x%02X room 0", area);
-                        Port_DebugMenu_ToastFromExternal(msg);
-                    } else {
-                        Port_DebugMenu_ToastFromExternal("Warp ignored: not in gameplay");
-                    }
-                }
-                /* Per-room buttons in a 3-column grid for compactness. */
+                /* Per-room buttons in a 3-column grid for compactness. Room 0
+                 * is simply the first grid entry below — there is no separate
+                 * "Warp here (room 0)" button, which duplicated it (v0.6). */
                 int col = 0;
                 for (int r = 0; r < roomCount; ++r) {
                     unsigned short w = 0, h = 0;
@@ -2323,6 +2347,23 @@ const char* Port_AudioMute_Description(AudioMuteCategory c);
 }
 
 static void DrawRibbonAudioTab(void) {
+    /* Master volume - a basic level control, active in both accurate and
+     * enhanced modes (default 100% leaves the mix unchanged). */
+    {
+        float vol = Port_Audio_GetMasterVolume() * 100.0f;
+        ImGui::SetNextItemWidth(200.0f);
+        if (ImGui::SliderFloat("Master volume", &vol, 0.0f, 100.0f, "%.0f%%")) {
+            float v = vol / 100.0f;
+            Port_Audio_SetMasterVolume(v);
+            Port_Config_SetMasterVolume(v);
+        }
+        RandoUi_HelpTooltip(
+            "Scales the final mixed game audio. 100% = unchanged. Persists "
+            "across launches. Leave at 100% for a faithful level match when "
+            "A/B-testing against hardware in GBA-accurate mode.");
+        ImGui::Separator();
+    }
+
     bool gbaAccurate = Port_Audio_IsGbaAccurate();
     if (ImGui::Checkbox("GBA-accurate audio", &gbaAccurate)) {
         Port_Audio_SetGbaAccurate(gbaAccurate);
@@ -2583,6 +2624,10 @@ static void DrawRibbonRebornTab(void) {
                        "tmc_pc closes.");
     ImGui::Separator();
     for (int i = 0; i < REBORN_FEAT_COUNT; ++i) {
+        /* Slot 8 (rupee-like overhaul) was removed; its enum slot is kept so
+         * the persisted feature bitmask (issue #146) stays stable, but it has
+         * no behaviour and is hidden from this tab. */
+        if (i == REBORN_FEAT_RUPEE_LIKE_OVERHAUL) continue;
         bool on = Port_Reborn_IsEnabled((RebornFeature)i);
         const char* label = Port_Reborn_FeatureLabel((RebornFeature)i);
         const char* desc  = Port_Reborn_FeatureDescription((RebornFeature)i);
@@ -2730,6 +2775,7 @@ static void DrawRibbon(void) {
         bool useRibbon = sRibbonEnabled;
         if (ImGui::Checkbox("Ribbon mode (uncheck for classic menu)", &useRibbon)) {
             sRibbonEnabled = useRibbon;
+            Port_Config_SetRibbonEnabled(useRibbon);   /* persist (#146) */
         }
         ImGui::SameLine();
         ImGui::TextDisabled("(F8 or Select+Start also toggles)");
@@ -3365,6 +3411,18 @@ extern "C" bool Port_ImGui_Render(void) {
             if (depth >= 0) {
                 DrawMenuPage(depth);
             }
+            /* Classic mode has no ribbon footer, so without this it would be a
+             * one-way trap. Offer an explicit way back to ribbon mode. */
+            ImGui::SetNextWindowBgAlpha(0.85f);
+            if (ImGui::Begin("##classic_to_ribbon", nullptr,
+                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize |
+                             ImGuiWindowFlags_NoSavedSettings)) {
+                if (ImGui::SmallButton("Switch to ribbon mode")) {
+                    sRibbonEnabled = true;
+                    Port_Config_SetRibbonEnabled(true);   /* persist (#146) */
+                }
+            }
+            ImGui::End();
         }
     }
 
@@ -3429,6 +3487,67 @@ extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd,
  * backend, presents the frame inline. On the SDL_GPU backend, builds
  * + Render()s the draw data and returns true — the caller must follow
  * up with Port_GPU_PresentPrelaunchFrame() to present it. */
+/* First-launch asset-extraction progress screen for the SDL_GPU backend.
+ * The SDL_Renderer path draws DrawProgressScreen (port_asset_bootstrap.cpp);
+ * GPU builds have no SDL_Renderer, so they previously extracted with no UI
+ * and the window looked hung. This builds + renders one ImGui frame (same
+ * NewFrame structure as the prelaunch card) so it can be presented on the GPU
+ * swapchain via Port_GPU_PresentPrelaunchFrame. Returns true when draw data
+ * is ready to present. `fraction` is 0..1; `phase` is the current phase name. */
+extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase,
+                                                 float fraction,
+                                                 int phase_index,
+                                                 int phase_total) {
+    if (!sImGuiInited || !sImGuiEnabled) return false;
+
+#ifdef TMC_GPU_RENDERER
+    const bool gpuBackend = (sRenderer == nullptr);
+    if (gpuBackend) {
+        ImGui_ImplSDLGPU3_NewFrame();
+    } else
+#endif
+    {
+        ImGui_ImplSDLRenderer3_NewFrame();
+    }
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const ImVec2 center(vp->WorkPos.x + vp->WorkSize.x * 0.5f,
+                        vp->WorkPos.y + vp->WorkSize.y * 0.5f);
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(440, 0), ImGuiCond_Always);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28, 24));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+    if (ImGui::Begin("##extract_progress", nullptr,
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.72f, 0.46f, 1.00f));
+        ImGui::SetWindowFontScale(1.6f);
+        ImGui::TextUnformatted("Extracting game assets");
+        ImGui::SetWindowFontScale(1.0f);
+        ImGui::PopStyleColor();
+
+        ImGui::Dummy(ImVec2(0, 6));
+        float frac = fraction < 0.0f ? 0.0f : (fraction > 1.0f ? 1.0f : fraction);
+        ImGui::ProgressBar(frac, ImVec2(-1.0f, 0.0f));
+        ImGui::Dummy(ImVec2(0, 4));
+
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.78f, 0.70f, 1.00f));
+        ImGui::Text("loading %s   (phase %d/%d)",
+                    (phase && phase[0]) ? phase : "preparing",
+                    phase_index, phase_total);
+        ImGui::PopStyleColor();
+        ImGui::TextDisabled("One-time first-launch extraction. See terminal for detail.");
+    }
+    ImGui::End();
+    ImGui::PopStyleVar(2);
+
+    ImGui::Render();
+    return true;
+}
+
 extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
                                            const char* version,
                                            const char* rom_name,
@@ -3464,12 +3583,17 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
                                  vp->WorkPos.y + vp->WorkSize.y * 0.5f);
     ImGui::SetNextWindowPos(viewport_center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Always);
+    /* Cap the card's auto-height to the visible work area so a small or
+     * default-sized window never pushes the Select ROM / Play buttons
+     * off-screen; with the scrollbar enabled (below) they stay reachable
+     * without having to resize the window first (v0.6 oversight). */
+    ImGui::SetNextWindowSizeConstraints(ImVec2(620, 0.0f), ImVec2(620, vp->WorkSize.y));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(36, 32));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
     if (ImGui::Begin("##prelaunch", nullptr,
                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)) {
+                     ImGuiWindowFlags_NoSavedSettings)) {
         const float win_w = ImGui::GetWindowSize().x;
         const ImVec4 accent(0.40f, 0.72f, 0.46f, 1.00f);
         const ImVec4 subtxt(0.70f, 0.78f, 0.70f, 1.00f);

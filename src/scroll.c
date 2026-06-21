@@ -1001,14 +1001,12 @@ void sub_08080CB4(Entity* this) {
         InitAnimationForceUpdate(this, this->type);
         if (this->type == 0x5c) {
             const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
             extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
             extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
             if (REGION_IS_EU)
                 gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
             else if (REGION_IS_JP)
                 gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
             const KinstoneWorldEvent* ptr = &gKinstoneWorldEvents_sel[this->type2];
             tmp = ptr->objPalette;
             tmp2 = tmp & 0xf;

@@ -375,6 +375,26 @@ void Port_DebugAction_WarpTick(void) {
     gPlayerEntity.base.y.HALF.HI = newY;
 }
 
+/* Read Link's current world position (pixels). Returns 0 (and leaves outputs
+ * untouched) when not in live gameplay, so the UI can grey out / pre-fill. */
+int Port_DebugQuery_PlayerXY(unsigned short* x, unsigned short* y) {
+    if (gSave.stats.health == 0 || gPlayerState.framestate == PL_STATE_DIE) return 0;
+    if (x) *x = (unsigned short)gPlayerEntity.base.x.HALF.HI;
+    if (y) *y = (unsigned short)gPlayerEntity.base.y.HALF.HI;
+    return 1;
+}
+
+/* Drop Link at an arbitrary world position (pixels) in the CURRENT room.
+ * Uses the exact coordinate write WarpTick does, gated to live gameplay so we
+ * never poke the player entity during death / non-gameplay. Returns 1 on
+ * success, 0 if ignored. */
+int Port_DebugAction_TeleportXY(unsigned short x, unsigned short y) {
+    if (gSave.stats.health == 0 || gPlayerState.framestate == PL_STATE_DIE) return 0;
+    gPlayerEntity.base.x.HALF.HI = x;
+    gPlayerEntity.base.y.HALF.HI = y;
+    return 1;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Debug-menu enumeration helpers                                    */
 /* ------------------------------------------------------------------ */
@@ -398,23 +418,29 @@ static RoomHeader* DebugResolveRoomTable(unsigned char area) {
     return table;
 }
 
-/* Count contiguous valid rooms (non-zero pixel_width) starting at index 0.
- * Returns 0 when the area has no room data at all. */
+/* Return one past the highest populated room slot (pixel_width != 0), or 0
+ * when the area has no room data at all.
+ *
+ * This scans every slot rather than stopping at the first empty one: some
+ * areas have an empty (pixel_width==0) slot followed by more valid rooms,
+ * and breaking at the first hole dropped every room after it, so those rooms
+ * went missing from the warp list (v0.6). Both callers (the F8 text menu and
+ * the ImGui Warp tab) iterate 0..count and skip the holes via
+ * Port_DebugQuery_RoomDimensions, so returning the full span is safe. */
 int Port_DebugQuery_AreaRoomCount(unsigned char area) {
     RoomHeader* table = DebugResolveRoomTable(area);
-    int count = 0;
+    int lastValid = -1;
     int r;
 
     if (!table) {
         return 0;
     }
     for (r = 0; r < MAX_ROOMS; r++) {
-        if (table[r].pixel_width == 0) {
-            break;
+        if (table[r].pixel_width != 0) {
+            lastValid = r;
         }
-        count++;
     }
-    return count;
+    return lastValid + 1;
 }
 
 /* Fill *w / *h with room dimensions in pixels. Returns 1 on success, 0

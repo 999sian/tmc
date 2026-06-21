@@ -39,10 +39,7 @@ void sub_080A6B04(void) {
 
     sub_080A4D34();
     sub_080A4DB8(6);
-#ifdef MULTI_REGION
     {
-        extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
-        extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
         const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
         if (REGION_IS_EU)
             gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
@@ -50,9 +47,6 @@ void sub_080A6B04(void) {
             gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
         ptr = &gKinstoneWorldEvents_sel[gFuseInfo.kinstoneId];
     }
-#else
-    ptr = &gKinstoneWorldEvents[gFuseInfo.kinstoneId];
-#endif
     ptr2 = &GetWorldEvents()[ptr->worldEventId];
     bVar1 = ptr->mapMarkerIcon;
     uVar3 = ptr2->_c;

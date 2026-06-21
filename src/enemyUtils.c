@@ -37,9 +37,7 @@ static int Port_IsEntityInPool(const Entity* ptr) {
 extern void ReplaceMonitoredEntity(Entity*, Entity*);
 
 extern EnemyDefinition gEnemyDefinitions[];
-#ifdef MULTI_REGION
 extern EnemyDefinition gEnemyDefinitions_eu[];
-#endif
 
 const EnemyDefinition* GetEnemyDefinition(Entity* entity);
 bool32 LoadEnemySprite(Entity* entity, const EnemyDefinition* definition);
@@ -82,9 +80,7 @@ void EnemyCopyParams(Entity* src, Entity* dest) {
 
 const EnemyDefinition* GetEnemyDefinition(Entity* entity) {
     const EnemyDefinition* table = gEnemyDefinitions;
-#ifdef MULTI_REGION
     if (REGION_IS_EU) table = gEnemyDefinitions_eu;
-#endif
     const EnemyDefinition* definition = &table[entity->id];
     if (definition->gfx == 0xffff) {
         definition = &definition->ptr.definition[entity->type];

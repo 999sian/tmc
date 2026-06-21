@@ -227,7 +227,6 @@ const struct_080FC3E4 gUnk_080FC3E4[] = {
     { 0, 0xffff, 0, 1 },
 };
 
-#ifdef MULTI_REGION
 /* Runtime region twins of gUnk_080FC3E4. Baseline above is USA (the fat
  * binary's static data). EU diverges at five table positions; JP diverges
  * only at the (EU||JP)-guarded entry. Readers default to the baseline table
@@ -520,7 +519,6 @@ const struct_080FC3E4 gUnk_080FC3E4_jp[] = {
     { 0, 0xffff, 0, 1 },
     { 0, 0xffff, 0, 1 },
 };
-#endif
 
 const Font gUnk_080FC844 = {
     &gBG0Buffer[0xcf], BG_TILE_ADDR(0x198), gTextGfxBuffer, 0, 96, 224, 1, 1, 0, 1, 3, 0, 0, 1, 0

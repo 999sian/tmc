@@ -55,14 +55,12 @@ void KinstoneSpark(Entity* this) {
         this->spriteOrientation.flipY = 1;
         {
             const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
             extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
             extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
             if (REGION_IS_EU)
                 gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
             else if (REGION_IS_JP)
                 gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
             ChangeObjPalette(this, gKinstoneWorldEvents_sel[gFuseInfo.kinstoneId].objPalette);
         }
     }
