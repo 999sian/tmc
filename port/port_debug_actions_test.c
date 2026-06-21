@@ -33,8 +33,8 @@ Area gArea;
 /* Capacity tables (4 tiers each, indexed by walletType/bombBagType/quiverType
  * 0..3): realistic caps so the stat-clamp assertions exercise real bounds. */
 const Wallet gWalletSizes[] = { { 100, 0 }, { 300, 0 }, { 500, 0 }, { 999, 0 } };
-const u8 gBombBagSizes[] = { 10, 20, 30, 40 };
-const u8 gQuiverSizes[]  = { 30, 40, 50, 70 };
+const u8 gBombBagSizes[] = { 10, 30, 50, 99 };  /* mirrors src/itemUtils.c */
+const u8 gQuiverSizes[]  = { 30, 50, 70, 99 };  /* mirrors src/itemUtils.c */
 
 /* ---- symbols pulled in only by the warp/teleport/enumeration functions the
  *      test never calls; zero-init definitions + no-op stubs satisfy the link. */
@@ -46,6 +46,7 @@ RoomTransition gRoomTransition;
 RoomHeader* gAreaRoomHeaders[0x90];
 
 void LoadItemGfx(void) {}
+void UpdatePlayerSkills(void) {}
 void DoExitTransition(const Transition* data) { (void)data; }
 u32  GetCollisionDataAtTilePos(u32 tilePos, u32 layer) { (void)tilePos; (void)layer; return 0; }
 bool32 Port_IsRoomHeaderPtrReadable(const void* ptr) { (void)ptr; return 0; }
@@ -58,6 +59,11 @@ static int g_fails = 0;
 } while (0)
 
 static int Owned(int item) { return Port_DebugQuery_ToggleItemOwned(item); }
+
+/* Raw 2-bit inventory read by ITEM_* id (for items not in the toggle table). */
+static int InvBit(int item) {
+    return (gSave.inventory[item / 4] >> ((item % 4) * 2)) & 3;
+}
 
 /* Find a toggle-table index by display name (test reads the table the same way
  * the menu does, so it stays valid if the order changes). */
@@ -143,6 +149,37 @@ int main(void) {
     gSave.stats.walletType = 2; /* cap 500 */
     Port_DebugAction_SetStat(0 /* rupees */, 5000);
     CHECK(gSave.stats.rupees == 500, "rupees clamped to wallet-tier cap (500)");
+
+    /* ---- expanded give-all: complete file with no grid-corrupting ids ---- */
+    memset(&gSave, 0, sizeof(gSave));
+    Port_DebugAction_GiveAllItems();
+    CHECK(InvBit(ITEM_FOURSWORD) == 1 && InvBit(ITEM_SMITH_SWORD) == 1,
+          "give-all owns the full sword progression");
+    CHECK(InvBit(ITEM_UNUSED_SWORD) == 0, "give-all skips UNUSED_SWORD (grid corruptor)");
+    CHECK(InvBit(ITEM_LIGHT_ARROW) == 1 && InvBit(ITEM_BOW) == 1,
+          "give-all owns BOTH bow + light arrow (canonical layered state)");
+    CHECK(InvBit(ITEM_MIRROR_SHIELD) == 1 && InvBit(ITEM_SHIELD) == 0,
+          "give-all owns the upgraded shield member only");
+    CHECK(InvBit(ITEM_REMOTE_BOMBS) == 1 && InvBit(ITEM_BOMBS) == 0,
+          "give-all owns remote bombs only");
+    CHECK(InvBit(ITEM_MAP) == 1, "give-all grants the overworld map");
+    CHECK(InvBit(ITEM_SKILL_LONG_SPIN) == 1 && InvBit(ITEM_SKILL_SPIN_ATTACK) == 1,
+          "give-all grants the sword scrolls");
+    CHECK(InvBit(ITEM_BOTTLE_EMPTY) == 0, "give-all does not own a bottle-content tag id");
+    CHECK(InvBit(ITEM_BOTTLE1) == 1 && gSave.stats.bottles[0] == ITEM_BOTTLE_EMPTY,
+          "give-all owns bottles with drawable content");
+    CHECK(gSave.stats.walletType == 3 && gSave.stats.rupees == 999,
+          "give-all maxes wallet tier + rupees");
+    CHECK(gSave.stats.bombBagType == 3 && gSave.stats.bombCount == 99,
+          "give-all maxes bomb bag + bombs");
+    CHECK(gSave.stats.quiverType == 3 && gSave.stats.arrowCount == 99,
+          "give-all maxes quiver + arrows");
+    CHECK(gSave.stats.maxHealth == 0xA0 && gSave.stats.heartPieces == 0,
+          "give-all maxes hearts with no dangling piece");
+    CHECK((gSave.dungeonItems[7] & 0x7) == 0x7 && gSave.dungeonKeys[7] == 9,
+          "give-all grants every dungeon's items + keys");
+    CHECK(gSave.stats.figurineCount == 0 && gSave.stats.hasAllFigurines == 0,
+          "give-all leaves figurines untouched (deferred, region-dependent)");
 
     if (g_fails == 0) {
         fprintf(stderr, "DEBUG-ACTIONS REGRESSION OK\n");
