@@ -34,6 +34,13 @@ void Port_DebugAction_WarpTick(void);
 int Port_DebugAction_TeleportXY(unsigned short x, unsigned short y);
 int Port_DebugQuery_PlayerXY(unsigned short* x, unsigned short* y);
 
+/* Noclip / walk-through-walls debug toggle. SetNoclip flips it; Query reads it;
+ * NoclipEnabled is the engine-facing predicate (returns 0 under Console-Parity)
+ * consumed by the src/movement.c collision hook. In-memory only. */
+void Port_DebugAction_SetNoclip(int on);
+int  Port_DebugQuery_Noclip(void);
+int  Port_Debug_NoclipEnabled(void);
+
 /* Per-item ownership toggles. The table is enumerated by index 0..count-1;
  * each item exposes a name + group (section label). SetToggleItem enforces
  * pause-grid slot exclusivity, equip-clear, and held-item gfx reload. */

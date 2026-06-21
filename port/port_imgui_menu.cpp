@@ -1275,6 +1275,16 @@ static void DrawRibbonWarpTab(void) {
         ImGui::EndDisabled();
         if (!inGame) { ImGui::SameLine(); ImGui::TextDisabled("(in-game only)"); }
     }
+    {
+        bool noclip = Port_DebugQuery_Noclip() != 0;
+        if (ImGui::Checkbox("Noclip (walk through walls)", &noclip)) {
+            Port_DebugAction_SetNoclip(noclip ? 1 : 0);
+        }
+        if (Port_Config_GetConsoleParity()) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(disabled in Console-Parity)");
+        }
+    }
     ImGui::Separator();
 
     /* Letter strip — issue #76. The area list is long (>140 entries)

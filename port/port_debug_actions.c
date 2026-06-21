@@ -528,6 +528,24 @@ int Port_DebugAction_TeleportXY(unsigned short x, unsigned short y) {
     return 1;
 }
 
+/* Noclip (walk-through-walls). In-memory debug state only (not persisted). The
+ * engine hook in src/movement.c zeroes the player's tile collisions while this
+ * is on; force-disabled under Console-Parity so parity runs stay GBA-faithful. */
+static bool sNoclip = false;
+
+void Port_DebugAction_SetNoclip(int on) {
+    sNoclip = on != 0;
+}
+
+int Port_DebugQuery_Noclip(void) {
+    return sNoclip ? 1 : 0;
+}
+
+int Port_Debug_NoclipEnabled(void) {
+    extern bool Port_Config_GetConsoleParity(void);
+    return (sNoclip && !Port_Config_GetConsoleParity()) ? 1 : 0;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Per-item ownership toggles                                        */
 /* ------------------------------------------------------------------ */

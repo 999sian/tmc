@@ -30,6 +30,10 @@
 #include "port_widescreen.h"
 #include "item_ids.h"  /* BOTTLE_CHARM_* / ITEM_BOTTLE_PICOLYTE_* enum ids (C++-safe) */
 
+/* Console-Parity getter (port_runtime_config.cpp) — used to annotate the
+ * noclip row; avoids pulling the whole runtime-config header in here. */
+extern "C" bool Port_Config_GetConsoleParity(void);
+
 extern "C" {
 
 /* Display / runtime-config knobs — same set the file-select "L Settings"

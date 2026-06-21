@@ -52,6 +52,7 @@ void DoExitTransition(const Transition* data) { (void)data; }
 u32  GetCollisionDataAtTilePos(u32 tilePos, u32 layer) { (void)tilePos; (void)layer; return 0; }
 bool32 Port_IsRoomHeaderPtrReadable(const void* ptr) { (void)ptr; return 0; }
 void Port_RefreshAreaData(unsigned int area) { (void)area; }
+bool Port_Config_GetConsoleParity(void) { return 0; }  /* config module not linked into this test */
 
 /* ---- assertion harness ---- */
 static int g_fails = 0;
@@ -201,6 +202,15 @@ int main(void) {
     CHECK(((gSave.flags[FIGURE_ALLCOMP >> 3] >> (FIGURE_ALLCOMP & 7)) & 1) == 1,
           "all-figurines-100 sets FIGURE_ALLCOMP");
     CHECK(InvBit(ITEM_QST_CARLOV_MEDAL) == 1, "all-figurines-100 grants the Carlov medal");
+
+    /* ---- noclip toggle (the engine movement hook is interactive-only; this
+     *      pins the C action layer + the Console-Parity-gated predicate) ---- */
+    Port_DebugAction_SetNoclip(1);
+    CHECK(Port_DebugQuery_Noclip() == 1, "noclip query reflects on");
+    CHECK(Port_Debug_NoclipEnabled() == 1, "noclip enabled when on + parity off");
+    Port_DebugAction_SetNoclip(0);
+    CHECK(Port_DebugQuery_Noclip() == 0, "noclip query reflects off");
+    CHECK(Port_Debug_NoclipEnabled() == 0, "noclip predicate off when toggle off");
 
     if (g_fails == 0) {
         fprintf(stderr, "DEBUG-ACTIONS REGRESSION OK\n");
