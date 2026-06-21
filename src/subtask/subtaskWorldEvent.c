@@ -23,9 +23,7 @@ void Subtask_WorldEvent_Update(void);
 
 extern void (*const gUnk_080FE2A0[])(void);
 void Subtask_WorldEvent(void) {
-#if !(defined(DEMO_USA) || defined(DEMO_JP))
     gUnk_080FE2A0[gMenu.menuType]();
-#endif
 }
 
 void Subtask_WorldEvent_Init(void) {

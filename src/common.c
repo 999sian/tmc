@@ -1515,12 +1515,10 @@ void UpdateVisibleFusionMapMarkers(void) {
                     tmp = LOCAL_BANK_3;
                     flag = SORA_14_T00;
                     break;
-#ifndef DEMO_JP
                 case CND_10:
                     tmp = LOCAL_BANK_4;
                     flag = KS_B15;
                     break;
-#endif
 #endif
             }
             if (sub_0807CB24(tmp, (REGION_IS_EU || REGION_IS_JP) ? s->flag : flag)) {

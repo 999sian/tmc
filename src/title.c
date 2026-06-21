@@ -186,21 +186,6 @@ static void HandleNintendoCapcomLogos(void) {
         gScreen.bg1.updated = 1;
         SetFade(FADE_BLACK_WHITE | FADE_INSTANT, 8);
         advance = ADVANCE_NONE;
-#if defined(DEMO_USA)
-        if (gUnk_02000010.listenForKeyPresses == 0) {
-            if ((gInput.heldKeys & (L_BUTTON | SELECT_BUTTON)) == (L_BUTTON | SELECT_BUTTON)) {
-                gUnk_02000010.field_0x7 = 1;
-                SoundReq(SFX_SECRET_BIG);
-            } else {
-                if ((gInput.heldKeys & (R_BUTTON | SELECT_BUTTON)) == (R_BUTTON | SELECT_BUTTON)) {
-                    gUnk_02000010.field_0x7 = 2;
-                    SoundReq(SFX_TASK_COMPLETE);
-                } else {
-                    gUnk_02000010.field_0x7 = 0;
-                }
-            }
-        }
-#endif
 
     } else {
         if (advance == ADVANCE_TIMER_EXPIRED) {
@@ -273,11 +258,7 @@ static void HandleTitlescreen(void) {
             }
             break;
         case 2:
-#if defined(DEMO_JP)
-        if (GetAdvanceState()) {
-#else
         if ((REGION_IS_JP || REGION_IS_EU) ? (GetAdvanceState() != ADVANCE_NONE) : (--gIntroState.timer == 0)) {
-#endif
                 gIntroState.timer = 3600;
                 gIntroState.state++;
 #ifdef PC_PORT
@@ -384,11 +365,7 @@ static void HandleJapaneseTitlescreenAnimationIntro(void) {
             if (!gFadeControl.active) {
                 gFadeControl.mask = 0xFFFFFFFF;
                 gIntroState.subState++;
-#if defined(DEMO_JP)
-            gIntroState.timer = 120;
-#else
             gIntroState.timer = (REGION_IS_JP || REGION_IS_EU) ? 120 : 90;
-#endif
                 pEVar2 = CreateObject(JAPANESE_SUBTITLE, 0, 0);
                 if (pEVar2 != NULL) {
                     pEVar2->x.HALF.HI = 0;
@@ -399,11 +376,7 @@ static void HandleJapaneseTitlescreenAnimationIntro(void) {
         case 2:
             if (GetAdvanceState() != ADVANCE_NONE) {
                 gIntroState.state++;
-#if defined(DEMO_JP)
-                gIntroState.timer = 30;
-#else
                 gIntroState.timer = (REGION_IS_JP || REGION_IS_EU) ? 30 : 60;
-#endif
             }
     }
 }
@@ -429,11 +402,7 @@ static void HandleTitlescreenAnimationIntro(void) {
             break;
         case 2:
             if (--gIntroState.timer == 0) {
-#if defined(JP) || defined(EU) || defined(DEMO_JP)
-                gIntroState.timer = 360;
-#else
-                gIntroState.timer = 300;
-#endif
+                gIntroState.timer = (REGION_IS_JP || REGION_IS_EU) ? 360 : 300;
                 gIntroState.subState++;
                 CreateObject(TITLE_SCREEN_OBJECT, 0, 0);
                 SetFade(FADE_BLACK_WHITE | FADE_INSTANT, 16);
@@ -443,23 +412,14 @@ static void HandleTitlescreenAnimationIntro(void) {
         default:
             if (!gFadeControl.active && GetAdvanceState() != ADVANCE_NONE) {
                 gIntroState.state++;
-#if defined(DEMO_JP)
-                gIntroState.timer = 30;
-#else
                 gIntroState.timer = (REGION_IS_JP || REGION_IS_EU) ? 30 : 60;
-#endif
             }
             break;
     }
 }
 static void ExitTitlescreen(void) {
     if (!gFadeControl.active) {
-#ifdef DEMO_JP
-        MemCopy(&gDemoSave, &gSave, sizeof(gSave));
-        SetTask(TASK_GAME);
-#else
         SetTask(TASK_FILE_SELECT);
-#endif
     }
 }
 

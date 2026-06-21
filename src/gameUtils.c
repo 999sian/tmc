@@ -599,9 +599,7 @@ void CreateMiscManager(void) {
     if (gRoomTransition.field31)
         return;
     gRoomTransition.field31 = 1;
-#ifndef DEMO_JP
     gRoomTransition.location = gArea.locationIndex;
-#endif
     e = (Entity*)GetEmptyManager();
     if (e == NULL)
         return;
