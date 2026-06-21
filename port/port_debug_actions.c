@@ -206,6 +206,56 @@ void Port_DebugAction_AllKinstones(void) {
     gSave.kinstones.didAllFusions = 1;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Figurine completion                                               */
+/* ------------------------------------------------------------------ */
+/* The figurine gallery is the gSave.figurines[36] bitset (288 bits, 1-based:
+ * figurine N is bit N, bit 0 unused) displayed against a ceiling of
+ * (!gSave.saw_staffroll ? 130 : 136) — figurineMenu.c. The "130 vs 136" split
+ * is PRE-credits vs POST-credits on ALL regions (not USA/EU); the region
+ * branches there only swap sprite/data tables. Two grants are offered because
+ * true 100% is entangled with marking the game beaten (see below). */
+#define FIGURINE_COUNT_PRECREDITS 130
+#define FIGURINE_COUNT_FULL       136
+
+/* Set figurine bits 1..n (bit 0 stays clear). */
+static void DebugSetFigurineBits(int n) {
+    int i;
+    for (i = 1; i <= n; i++) {
+        gSave.figurines[i >> 3] |= (unsigned char)(1u << (i & 7));
+    }
+}
+
+/* Grant every pre-credits figurine (130) WITHOUT touching game-clear state.
+ * The gallery (bitset-driven) shows all 130; figurineCount drives Carlov's
+ * dialog. saw_staffroll / hasAllFigurines stay 0 — true 100% needs 136, which
+ * requires marking the game beaten. CAVEAT: Carlov's machine recomputes the
+ * obtainable count on each visit, so on a low-progress save it may still offer
+ * draws (the 130 set is only deterministically stable once saw_staffroll opens
+ * every gate). Harmless — the gallery still shows all 130. */
+void Port_DebugAction_AllFigurines130(void) {
+    DebugSetFigurineBits(FIGURINE_COUNT_PRECREDITS);
+    gSave.stats.figurineCount = FIGURINE_COUNT_PRECREDITS;
+}
+
+/* Grant true 100% figurines (136). The engine ties the 136 ceiling to
+ * saw_staffroll, and setting saw_staffroll makes the device's obtainable-recount
+ * pass all 136 gates — so this is the only deterministically self-consistent
+ * complete state, but it ALSO marks the game beaten (post-credits world state).
+ * Reproduces the engine end-state: all bits, count, both completion flags, the
+ * FIGURE_ALLCOMP global flag (bank 0, so its value is the absolute bit) and the
+ * Carlov medal. (SHOP07_COMPLETE is an area-local flag the device self-manages
+ * on the next visit, so it isn't set here.) */
+void Port_DebugAction_AllFigurines100(void) {
+    gSave.saw_staffroll = 1;
+    DebugSetFigurineBits(FIGURINE_COUNT_FULL);
+    gSave.stats.figurineCount = FIGURINE_COUNT_FULL;
+    gSave.stats._hasAllFigurines = 0xFF;
+    gSave.stats.hasAllFigurines = 1;
+    gSave.flags[FIGURE_ALLCOMP >> 3] |= (unsigned char)(1u << (FIGURE_ALLCOMP & 7));
+    SetItem(ITEM_QST_CARLOV_MEDAL, 1);
+}
+
 /* Known-broken named areas — these have entries in kAreaNames but
  * triggering the area-warp path crashes during room load (Port_Read-
  * PackedRomPtr failures, entity-table walks past valid memory, etc.).

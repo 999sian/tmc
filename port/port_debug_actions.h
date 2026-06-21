@@ -11,6 +11,11 @@ void Port_DebugAction_HealFull(void);
 void Port_DebugAction_MaxRupees(void);
 void Port_DebugAction_MaxShells(void);
 void Port_DebugAction_AllKinstones(void);
+/* Figurine completion. The 130 variant grants all pre-credits figurines without
+ * touching game-clear state; the 100 variant grants true 100% (136) but also
+ * marks the game beaten (saw_staffroll), the only self-consistent full state. */
+void Port_DebugAction_AllFigurines130(void);
+void Port_DebugAction_AllFigurines100(void);
 
 int Port_DebugAction_Warp(unsigned char area, unsigned char room,
                           unsigned short x, unsigned short y,

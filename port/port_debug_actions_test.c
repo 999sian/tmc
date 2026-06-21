@@ -24,6 +24,7 @@
 #include "room.h"        /* RoomControls / RoomHeader / gRoomControls */
 #include "transitions.h" /* Transition / RoomTransition / gRoomTransition */
 #include "item_ids.h"
+#include "flags.h"        /* FIGURE_ALLCOMP */
 #include "port_debug_actions.h"
 
 /* ---- engine state the action layer reads (the bits the test exercises) ---- */
@@ -179,7 +180,27 @@ int main(void) {
     CHECK((gSave.dungeonItems[7] & 0x7) == 0x7 && gSave.dungeonKeys[7] == 9,
           "give-all grants every dungeon's items + keys");
     CHECK(gSave.stats.figurineCount == 0 && gSave.stats.hasAllFigurines == 0,
-          "give-all leaves figurines untouched (deferred, region-dependent)");
+          "give-all leaves figurines untouched (granted by the separate actions)");
+
+    /* ---- figurine completion: 130 (no game-clear) vs 100% (marks beaten) ---- */
+    memset(&gSave, 0, sizeof(gSave));
+    Port_DebugAction_AllFigurines130();
+    CHECK(gSave.stats.figurineCount == 130, "all-figurines-130 sets count 130");
+    CHECK(((gSave.figurines[130 >> 3] >> (130 & 7)) & 1) == 1, "figurine bit 130 set");
+    CHECK((gSave.figurines[0] & 1) == 0, "figurine bit 0 stays clear (130)");
+    CHECK(gSave.saw_staffroll == 0 && gSave.stats.hasAllFigurines == 0,
+          "all-figurines-130 does NOT mark the game beaten");
+
+    memset(&gSave, 0, sizeof(gSave));
+    Port_DebugAction_AllFigurines100();
+    CHECK(gSave.stats.figurineCount == 136, "all-figurines-100 sets count 136");
+    CHECK(((gSave.figurines[136 >> 3] >> (136 & 7)) & 1) == 1, "figurine bit 136 set");
+    CHECK((gSave.figurines[0] & 1) == 0, "figurine bit 0 stays clear (100)");
+    CHECK(gSave.saw_staffroll == 1 && gSave.stats.hasAllFigurines == 1 &&
+          gSave.stats._hasAllFigurines == 0xFF, "all-figurines-100 marks complete + beaten");
+    CHECK(((gSave.flags[FIGURE_ALLCOMP >> 3] >> (FIGURE_ALLCOMP & 7)) & 1) == 1,
+          "all-figurines-100 sets FIGURE_ALLCOMP");
+    CHECK(InvBit(ITEM_QST_CARLOV_MEDAL) == 1, "all-figurines-100 grants the Carlov medal");
 
     if (g_fails == 0) {
         fprintf(stderr, "DEBUG-ACTIONS REGRESSION OK\n");
