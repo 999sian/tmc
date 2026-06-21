@@ -4689,25 +4689,19 @@ extern EntityData gUnk_080F0920;
 void sub_StateChange_CastleGarden_Main(void) {
     if (!CheckGlobalFlag(TABIDACHI)) {
         LoadRoomEntityList(&gUnk_080F0650);
-#if defined(EU) || defined(PC_PORT)
-        /* PC port follows EU behaviour: prologue Castle Garden continues the
-         * toned-down Picori Festival theme (BGM_FESTIVAL_APPROACH). The USA
-         * GBA original incorrectly substituted BGM_BEANSTALK ("Climbing the
-         * Beanstalk") here — confirmed wrong against the canonical festival
-         * track. */
-        gArea.queued_bgm = BGM_FESTIVAL_APPROACH;
-#else
-        gArea.queued_bgm = BGM_BEANSTALK;
-        SetGlobalFlag(CASTLE_BGM);
-    } else {
-        if (CheckGlobalFlag(CASTLE_BGM)) {
-#if defined(JP) || defined(DEMO_JP)
-            gArea.queued_bgm = gArea.bgm;
-#else
-            gArea.queued_bgm = BGM_HYRULE_CASTLE_NOINTRO;
-#endif
+        if (REGION_IS_EU) {
+            /* EU: prologue Castle Garden continues the toned-down Picori
+             * Festival theme (BGM_FESTIVAL_APPROACH). USA/JP retail use
+             * BGM_BEANSTALK ("Climbing the Beanstalk") + CASTLE_BGM here. */
+            gArea.queued_bgm = BGM_FESTIVAL_APPROACH;
+        } else {
+            gArea.queued_bgm = BGM_BEANSTALK;
+            SetGlobalFlag(CASTLE_BGM);
         }
-#endif
+    } else if (!REGION_IS_EU) {
+        if (CheckGlobalFlag(CASTLE_BGM)) {
+            gArea.queued_bgm = REGION_IS_JP ? gArea.bgm : BGM_HYRULE_CASTLE_NOINTRO;
+        }
     }
     if (!CheckLocalFlagB(SOUGEN_08_TORITSUKI)) {
         LoadRoomEntityList(&gUnk_080F0800);
@@ -5971,12 +5965,8 @@ void sub_StateChange_HyruleField_OutsideCastle(void) {
         SetTileType(TILE_TYPE_372, TILE_POS(39, 30), LAYER_BOTTOM);
     }
     if (!CheckGlobalFlag(TABIDACHI)) {
-#if defined(EU) || defined(PC_PORT)
-        /* See sub_StateChange_CastleGarden_Main — port follows EU. */
-        gArea.queued_bgm = BGM_FESTIVAL_APPROACH;
-#else
-        gArea.queued_bgm = BGM_BEANSTALK;
-#endif
+        /* EU follows the festival theme; USA/JP retail use BGM_BEANSTALK. */
+        gArea.queued_bgm = REGION_IS_EU ? BGM_FESTIVAL_APPROACH : BGM_BEANSTALK;
     }
 }
 
