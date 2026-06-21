@@ -175,6 +175,7 @@ MenuPage BuildBuffsPage(void);
 MenuPage BuildStatsPage(void);
 MenuPage BuildBottlesPage(void);
 MenuPage BuildFlagsPage(void);
+MenuPage BuildEntitiesPage(void);
 
 void Push(MenuPage page) {
     sPageStack.push_back(std::move(page));
@@ -924,6 +925,38 @@ MenuPage BuildSaveProfilesPage(void) {
     return p;
 }
 
+/* Read-only entity viewer. Snapshot taken when the page is built; "Refresh"
+ * re-snapshots in place (Pop+Push). Rows are non-actionable. */
+MenuPage BuildEntitiesPage(void) {
+    MenuPage p;
+    p.title = "ENTITIES";
+    const int n = Port_DebugQuery_RefreshEntities();
+
+    MenuItem hdr;
+    hdr.label = "Refresh";
+    hdr.labelFn = []() -> std::string {
+        char b[48];
+        std::snprintf(b, sizeof(b), "Live: %d  (select to refresh)",
+                      Port_DebugQuery_EntitySnapshotCount());
+        return std::string(b);
+    };
+    hdr.action = []() { Pop(); Push(BuildEntitiesPage()); };
+    p.items.push_back(std::move(hdr));
+
+    for (int i = 0; i < n; ++i) {
+        const PortEntityInfo* e = Port_DebugQuery_Entity(i);
+        if (!e) continue;
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "L%d %s id%02X t%02X (%d,%d) hp%u",
+                      e->listIndex, Port_DebugQuery_EntityKindName(e->kind),
+                      (unsigned)e->id, (unsigned)e->type, e->x, e->y, (unsigned)e->health);
+        p.items.push_back({ std::string(buf), []() {} });
+    }
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
@@ -934,6 +967,7 @@ MenuPage BuildMainPage(void) {
     p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
     p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
     p.items.push_back({ "Flag browser",      []() { Push(BuildFlagsPage()); } });
+    p.items.push_back({ "Entity viewer",     []() { Push(BuildEntitiesPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
     p.items.push_back({ "Close menu",        []() { Pop(); } });
     return p;

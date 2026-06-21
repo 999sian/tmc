@@ -41,6 +41,25 @@ void Port_DebugAction_SetNoclip(int on);
 int  Port_DebugQuery_Noclip(void);
 int  Port_Debug_NoclipEnabled(void);
 
+/* Read-only entity viewer (impl in port_debug_entities.c). RefreshEntities
+ * snapshots every live entity across the nine gEntityLists into a flat array;
+ * Entity(i) reads a row; KindName maps an EntityKind to a label. The walk is
+ * bounded + validated so it can't spin or fault on a corrupted list. */
+typedef struct {
+    int           listIndex; /* 0..8 (gEntityLists index) */
+    unsigned char kind;      /* EntityKind */
+    unsigned char id;
+    unsigned char type;
+    int           x;         /* world pixel (x.HALF.HI) */
+    int           y;
+    unsigned char health;
+} PortEntityInfo;
+
+int                   Port_DebugQuery_RefreshEntities(void);
+int                   Port_DebugQuery_EntitySnapshotCount(void);
+const PortEntityInfo* Port_DebugQuery_Entity(int i);
+const char*           Port_DebugQuery_EntityKindName(int kind);
+
 /* Per-item ownership toggles. The table is enumerated by index 0..count-1;
  * each item exposes a name + group (section label). SetToggleItem enforces
  * pause-grid slot exclusivity, equip-clear, and held-item gfx reload. */
