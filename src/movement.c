@@ -9,6 +9,11 @@
 #include "physics.h"
 #include "transitions.h"
 
+#ifdef PC_PORT
+#include "player.h"  /* gPlayerEntity for the debug noclip hook */
+extern int Port_Debug_NoclipEnabled(void);
+#endif
+
 bool32 sub_080AF0C8(Entity*);
 
 /** The type of the movement/collision? that is done. */
@@ -1691,6 +1696,14 @@ void CalculateEntityTileCollisions(Entity* this, u32 direction, u32 collisionTyp
         colResult |= IsTileCollision(collisionData, xMin - hitboxUnkX, temp, collisionType);
         colResult <<= 1;
     }
+#ifdef PC_PORT
+    /* Noclip debug toggle: report no tile collisions for the player so
+     * ProcessMovementInternal never blocks or redirects its movement. Player
+     * only (enemies/objects still collide); gated off under Console-Parity. */
+    if (this == &gPlayerEntity.base && Port_Debug_NoclipEnabled()) {
+        colResult = COL_NONE;
+    }
+#endif
     this->collisions = colResult;
 }
 
