@@ -34,6 +34,34 @@ extern u32 ClearBit(void*, u32);
 
 extern const u16 gLocalFlagBanks[];
 
+/*
+ * Region-baseline flag helpers (M4 multi-region fix). In the MULTI_REGION fat
+ * binary these remap a USA-baseline flag ordinal to the loaded ROM's ordinal
+ * (identity on USA, and outside the one diverging bank LocalFlags1). Use the *B
+ * variant at C call sites whose flag argument is a BASELINE ordinal: a numeric
+ * literal, a named flag enum, or a field of a compiled C const table. Leave the
+ * plain variants for ROM-sourced ordinals (entity/room data loaded from the
+ * active ROM), which are already region-correct. See tools/generate_flag_remap.py.
+ */
+#if defined(PC_PORT) && defined(MULTI_REGION)
+u32 Port_RemapBaselineLocalFlag(u32 offset, u32 ord);
+bool32 CheckLocalFlagB(u32 ord);
+bool32 CheckLocalFlagsB(u32 ord, u32 count);
+void SetLocalFlagB(u32 ord);
+void ClearLocalFlagB(u32 ord);
+bool32 CheckFlagsB(u32 flag);
+void SetFlagB(u32 flag);
+void ClearFlagB(u32 flag);
+#else
+#define CheckLocalFlagB  CheckLocalFlag
+#define CheckLocalFlagsB CheckLocalFlags
+#define SetLocalFlagB    SetLocalFlag
+#define ClearLocalFlagB  ClearLocalFlag
+#define CheckFlagsB      CheckFlags
+#define SetFlagB         SetFlag
+#define ClearFlagB       ClearFlag
+#endif
+
 /**
  * For indexing into gLocalFlagBanks.
  * Annoyingly they are offset by 1. Needs to be taken into account whereever gLocalFlagBanks is used.

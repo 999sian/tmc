@@ -125,19 +125,19 @@ void NPC4E_MakeFuserInteractable(Entity* this) {
 void NPC4E_SetPinwheelFlag(Entity* this) {
     switch (this->type - 1) {
         case 0:
-            SetLocalFlag(KUMOUE_02_AWASE_01);
+            SetLocalFlagB(KUMOUE_02_AWASE_01);
             break;
         case 1:
-            SetLocalFlag(KUMOUE_02_AWASE_02);
+            SetLocalFlagB(KUMOUE_02_AWASE_02);
             break;
         case 2:
-            SetLocalFlag(KUMOUE_02_AWASE_03);
+            SetLocalFlagB(KUMOUE_02_AWASE_03);
             break;
         case 3:
-            SetLocalFlag(KUMOUE_02_AWASE_04);
+            SetLocalFlagB(KUMOUE_02_AWASE_04);
             break;
         case 4:
-            SetLocalFlag(KUMOUE_02_AWASE_05);
+            SetLocalFlagB(KUMOUE_02_AWASE_05);
             break;
     }
 
@@ -147,9 +147,9 @@ void NPC4E_SetPinwheelFlag(Entity* this) {
 void NPC4E_IsEveryPinwheelActivated(Entity* this, ScriptExecutionContext* context) {
     context->condition = 0;
 
-    if (CheckLocalFlag(KUMOUE_02_AWASE_01) && CheckLocalFlag(KUMOUE_02_AWASE_02) &&
-        CheckLocalFlag(KUMOUE_02_AWASE_03) && CheckLocalFlag(KUMOUE_02_AWASE_04) &&
-        CheckLocalFlag(KUMOUE_02_AWASE_05)) {
+    if (CheckLocalFlagB(KUMOUE_02_AWASE_01) && CheckLocalFlagB(KUMOUE_02_AWASE_02) &&
+        CheckLocalFlagB(KUMOUE_02_AWASE_03) && CheckLocalFlagB(KUMOUE_02_AWASE_04) &&
+        CheckLocalFlagB(KUMOUE_02_AWASE_05)) {
 
         context->condition = 1;
     }

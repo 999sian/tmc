@@ -95,7 +95,7 @@ void sub_08067418(CastorWildsStatueEntity* this) {
         super->spriteOrientation.flipY = 1;
         super->spriteRendering.b3 = 1;
         super->spritePriority.b0 = 2;
-        if (CheckLocalFlag(HIKYOU_00_SEKIZOU) == 0) {
+        if (CheckLocalFlagB(HIKYOU_00_SEKIZOU) == 0) {
             SetTile(SPECIAL_TILE_34, TILE_POS(1, 58), LAYER_BOTTOM);
             SetTile(SPECIAL_TILE_34, TILE_POS(2, 58), LAYER_BOTTOM);
             SetTile(SPECIAL_TILE_34, TILE_POS(3, 58), LAYER_BOTTOM);

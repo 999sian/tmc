@@ -132,7 +132,7 @@ void VaatiRebornEnemyType0Action0(VaatiRebornEnemyEntity* this) {
     Entity* entity;
     const xy* ptr;
 
-    if (CheckLocalFlag(0x7b) != 0) {
+    if (CheckLocalFlagB(0x7b) != 0) {
         DeleteThisEntity();
     }
     sub_0804A720(super);

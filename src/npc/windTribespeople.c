@@ -196,7 +196,7 @@ void sub_0806C944(Entity* this, ScriptExecutionContext* context) {
     if (iVar1 == 0) {
         iVar2 = 0;
     } else {
-        iVar1 = CheckLocalFlag(0x63);
+        iVar1 = CheckLocalFlagB(0x63);
         iVar2 = 2;
         if (iVar1 != 0) {
             iVar2 = 1;
@@ -241,7 +241,7 @@ void sub_0806C9D0(Entity* this, ScriptExecutionContext* context) {
         TEXT_INDEX(TEXT_WIND_TRIBE, 0x13),
     };
     u32 tmp = 0;
-    if (CheckLocalFlag(100) == 0) {
+    if (CheckLocalFlagB(100) == 0) {
         tmp = 1;
     }
     MessageNoOverlap(messageIndices[tmp], this);

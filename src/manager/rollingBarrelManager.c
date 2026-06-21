@@ -65,7 +65,7 @@ void RollingBarrelManager_Main(RollingBarrelManager* this) {
 void RollingBarrelManager_Init(RollingBarrelManager* this) {
     super->action = 1;
     this->unk_28 = 0x1234;
-    super->timer = CheckLocalFlags(0x15, 0x2) != 0;
+    super->timer = CheckLocalFlagsB(0x15, 0x2) != 0;
     sub_08058CB0(this);
 #ifdef PC_PORT
     RegisterTransitionHandler(this, RollingBarrelManager_OnEnterRoom, RollingBarrelManager_OnExitRoom);

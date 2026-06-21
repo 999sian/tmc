@@ -141,9 +141,9 @@ void sub_0806464C(Entity* this) {
     s32 tmp;
     if (CheckGlobalFlag(TABIDACHI) != 0) {
         tmp = 2;
-    } else if (CheckLocalFlag(CASTLE_04_MAID_TALK) == 0) {
+    } else if (CheckLocalFlagB(CASTLE_04_MAID_TALK) == 0) {
         tmp = 0;
-        SetLocalFlag(CASTLE_04_MAID_TALK);
+        SetLocalFlagB(CASTLE_04_MAID_TALK);
     } else {
         tmp = 1;
     }

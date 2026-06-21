@@ -164,11 +164,11 @@ void sub_0806B540(Entity* this) {
     switch (context->unk_18) {
         case 0:
             MessageNoOverlap(TEXT_INDEX(TEXT_PERCY, 0x12), this);
-            if (CheckLocalFlag(0x3f) != 0) {
+            if (CheckLocalFlagB(0x3f) != 0) {
                 return;
             }
             context->unk_18++;
-            SetLocalFlag(0x3f);
+            SetLocalFlagB(0x3f);
             break;
         case 1:
             if ((gMessage.state & MESSAGE_ACTIVE) == 0) {
