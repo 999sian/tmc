@@ -43,6 +43,9 @@ extern void script_MinishVillageObjectRightStoneOpening; // Cutscene data type?
 
 const Hitbox gUnk_08114154;
 const InteractCollisionData gNpc4ECollisionData[];
+#ifdef MULTI_REGION
+extern const InteractCollisionData gNpc4ECollisionData_eu[];
+#endif
 const Transition* const gNpc4ETransitions[];
 const u8 gNpc4ETransitionTypes[];
 const u16 gUnk_081141F4[];
@@ -65,7 +68,11 @@ void NPC4E(Entity* this) {
 }
 
 void NPC4E_ChangeInteractableHitbox(Entity* this, ScriptExecutionContext* context) {
-    const InteractCollisionData* data = &gNpc4ECollisionData[context->intVariable];
+    const InteractCollisionData* sel = gNpc4ECollisionData;
+#ifdef MULTI_REGION
+    if (REGION_IS_EU) sel = gNpc4ECollisionData_eu;
+#endif
+    const InteractCollisionData* data = &sel[context->intVariable];
     SetInteractableObjectCollision(this, 1, data->interactDirections, data);
 }
 
@@ -266,14 +273,27 @@ void NPC4E_Fusion(Entity* this) {
 
 const Hitbox gUnk_08114154 = { 0, -8, 0, 0, 0, 0, 24, 8 };
 
+#if defined(EU) && !defined(MULTI_REGION)
+const InteractCollisionData gNpc4ECollisionData[] = { //
+    { 0, 0, 8, 8, 0x0E, 0, 0, 0 },   { 0, 0, 26, 8, 0x0E, 0, 0, 0 },  { 0, 0, 16, 4, 0x0E, 0, 0, 0 },
+    { 0, 0, 10, 10, 0x00, 0, 0, 0 }, { 0, 0, 10, 10, 0x00, 0, 0, 0 }, { 0, 0, 6, 4, 0x0E, 0, 0, 0 },
+    { 0, 8, 16, 4, 0x0E, 0, 0, 0 },  { 0, -8, 24, 8, 0x0E, 0, 0, 0 }
+};
+#else
 const InteractCollisionData gNpc4ECollisionData[] = { //
     { 0, 0, 8, 8, 0x0E, 0, 0, 0 },   { 0, 0, 26, 8, 0x0E, 0, 0, 0 },  { 0, 0, 16, 4, 0x0E, 0, 0, 0 },
     { 0, 0, 10, 10, 0x00, 0, 0, 0 }, { 0, 0, 10, 10, 0x00, 0, 0, 0 }, { 0, 0, 6, 4, 0x0E, 0, 0, 0 },
     { 0, 8, 16, 4, 0x0E, 0, 0, 0 },  { 0, -8, 24, 8, 0x0E, 0, 0, 0 },
-#ifndef EU
     { 0, 0, 88, 8, 0x0E, 0, 0, 0 }
-#endif
 };
+#endif
+#ifdef MULTI_REGION
+const InteractCollisionData gNpc4ECollisionData_eu[] = { //
+    { 0, 0, 8, 8, 0x0E, 0, 0, 0 },   { 0, 0, 26, 8, 0x0E, 0, 0, 0 },  { 0, 0, 16, 4, 0x0E, 0, 0, 0 },
+    { 0, 0, 10, 10, 0x00, 0, 0, 0 }, { 0, 0, 10, 10, 0x00, 0, 0, 0 }, { 0, 0, 6, 4, 0x0E, 0, 0, 0 },
+    { 0, 8, 16, 4, 0x0E, 0, 0, 0 },  { 0, -8, 24, 8, 0x0E, 0, 0, 0 }
+};
+#endif
 
 // Array of pointers to Transition
 const Transition* const gNpc4ETransitions[] = { //
