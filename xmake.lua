@@ -1167,6 +1167,23 @@ target_end()
 
 
 -- ====================
+-- Debug-menu action-layer regression test (guards per-item toggle exclusivity
+-- + flag/dungeon/stat/bottle helpers; see port_debug_actions_test.c)
+-- ====================
+target("debug_actions_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs(".")
+    add_includedirs("port")
+    add_includedirs("include")
+    add_defines("PC_PORT")
+    add_files("port/port_debug_actions.c")
+    add_files("port/port_debug_actions_test.c")
+target_end()
+
+
+-- ====================
 -- ROM Build Task
 -- ====================
 task("rom")
