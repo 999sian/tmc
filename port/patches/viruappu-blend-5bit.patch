@@ -1,0 +1,120 @@
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -152,61 +152,71 @@
+ 
+ static uint32_t mode1_alpha_blend(uint32_t top_abgr, uint32_t bottom_abgr, int eva, int evb)
+ {
+-    int top_r = (int)((top_abgr >> 0u) & 0xFFu);
+-    int top_g = (int)((top_abgr >> 8u) & 0xFFu);
+-    int top_b = (int)((top_abgr >> 16u) & 0xFFu);
+-    int bottom_r = (int)((bottom_abgr >> 0u) & 0xFFu);
+-    int bottom_g = (int)((bottom_abgr >> 8u) & 0xFFu);
+-    int bottom_b = (int)((bottom_abgr >> 16u) & 0xFFu);
+-    int out_r = (top_r * eva + bottom_r * evb) / 16;
+-    int out_g = (top_g * eva + bottom_g * evb) / 16;
+-    int out_b = (top_b * eva + bottom_b * evb) / 16;
+-
+-    if (out_r > 255) {
+-        out_r = 255;
++    /* VIRTUAPPU_BLEND_5BIT: GBA alpha blend is defined on 5-bit channels
++     * (GBATEK: I = MIN(31, I1*eva + I2*evb), eva/evb already clamped 0..16 by
++     * the caller). The framebuffer is 8-bit (palette value <<3), so recover the
++     * 5-bit intensity (>>3), blend with a truncating >>4 exactly as the
++     * hardware does, clamp to 31, then re-expand (<<3). This reproduces the
++     * GBA's quantised blend banding instead of a smoother 8-bit-domain blend. */
++    int top_r = (int)((top_abgr >> 0u) & 0xFFu) >> 3;
++    int top_g = (int)((top_abgr >> 8u) & 0xFFu) >> 3;
++    int top_b = (int)((top_abgr >> 16u) & 0xFFu) >> 3;
++    int bottom_r = (int)((bottom_abgr >> 0u) & 0xFFu) >> 3;
++    int bottom_g = (int)((bottom_abgr >> 8u) & 0xFFu) >> 3;
++    int bottom_b = (int)((bottom_abgr >> 16u) & 0xFFu) >> 3;
++    int out_r = (top_r * eva + bottom_r * evb) >> 4;
++    int out_g = (top_g * eva + bottom_g * evb) >> 4;
++    int out_b = (top_b * eva + bottom_b * evb) >> 4;
++
++    if (out_r > 31) {
++        out_r = 31;
+     }
+-    if (out_g > 255) {
+-        out_g = 255;
++    if (out_g > 31) {
++        out_g = 31;
+     }
+-    if (out_b > 255) {
+-        out_b = 255;
++    if (out_b > 31) {
++        out_b = 31;
+     }
+ 
+-    return 0xFF000000u | ((uint32_t)out_b << 16u) | ((uint32_t)out_g << 8u) | (uint32_t)out_r;
++    return 0xFF000000u | ((uint32_t)(out_b << 3) << 16u) | ((uint32_t)(out_g << 3) << 8u) | (uint32_t)(out_r << 3);
+ }
+ 
+ static uint32_t mode1_brighten(uint32_t abgr, int evy)
+ {
+-    int r = (int)((abgr >> 0u) & 0xFFu);
+-    int g = (int)((abgr >> 8u) & 0xFFu);
+-    int b = (int)((abgr >> 16u) & 0xFFu);
++    /* GBA brightness-increase on 5-bit channels (GBATEK):
++     * I = I + (31-I)*evy/16, truncating; evy already clamped 0..16. */
++    int r = (int)((abgr >> 0u) & 0xFFu) >> 3;
++    int g = (int)((abgr >> 8u) & 0xFFu) >> 3;
++    int b = (int)((abgr >> 16u) & 0xFFu) >> 3;
+ 
+-    r = r + ((255 - r) * evy) / 16;
+-    g = g + ((255 - g) * evy) / 16;
+-    b = b + ((255 - b) * evy) / 16;
++    r = r + (((31 - r) * evy) >> 4);
++    g = g + (((31 - g) * evy) >> 4);
++    b = b + (((31 - b) * evy) >> 4);
+ 
+-    if (r > 255) {
+-        r = 255;
++    if (r > 31) {
++        r = 31;
+     }
+-    if (g > 255) {
+-        g = 255;
++    if (g > 31) {
++        g = 31;
+     }
+-    if (b > 255) {
+-        b = 255;
++    if (b > 31) {
++        b = 31;
+     }
+ 
+-    return 0xFF000000u | ((uint32_t)b << 16u) | ((uint32_t)g << 8u) | (uint32_t)r;
++    return 0xFF000000u | ((uint32_t)(b << 3) << 16u) | ((uint32_t)(g << 3) << 8u) | (uint32_t)(r << 3);
+ }
+ 
+ static uint32_t mode1_darken(uint32_t abgr, int evy)
+ {
+-    int r = (int)((abgr >> 0u) & 0xFFu);
+-    int g = (int)((abgr >> 8u) & 0xFFu);
+-    int b = (int)((abgr >> 16u) & 0xFFu);
+-
+-    r -= (r * evy) / 16;
+-    g -= (g * evy) / 16;
+-    b -= (b * evy) / 16;
++    /* GBA brightness-decrease on 5-bit channels (GBATEK):
++     * I = I - I*evy/16, truncating; evy already clamped 0..16. */
++    int r = (int)((abgr >> 0u) & 0xFFu) >> 3;
++    int g = (int)((abgr >> 8u) & 0xFFu) >> 3;
++    int b = (int)((abgr >> 16u) & 0xFFu) >> 3;
++
++    r -= ((r * evy) >> 4);
++    g -= ((g * evy) >> 4);
++    b -= ((b * evy) >> 4);
+ 
+     if (r < 0) {
+         r = 0;
+@@ -218,7 +228,7 @@
+         b = 0;
+     }
+ 
+-    return 0xFF000000u | ((uint32_t)b << 16u) | ((uint32_t)g << 8u) | (uint32_t)r;
++    return 0xFF000000u | ((uint32_t)(b << 3) << 16u) | ((uint32_t)(g << 3) << 8u) | (uint32_t)(r << 3);
+ }
+ 
+ void virtuappu_mode1_bind_gba_memory(const VirtuaPPUMode1GbaMemory *memory)

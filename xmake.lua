@@ -614,6 +614,17 @@ target("tmc_pc")
             { patch = "viruappu-oam-shape3-guard.patch",
               marker_file = path.join(sub, "src", "mode1.c"),
               marker = "OAM shape 3 is prohibited" },
+            -- GBA-accurate alpha-blend / brightness on 5-bit channels. Upstream
+            -- blends the 8-bit (palette<<3) framebuffer values, producing finer
+            -- gradients than hardware; the GBA blends 5-bit intensities with a
+            -- truncating >>4 and clamps to 31 (GBATEK). Recover 5-bit (>>3),
+            -- blend, clamp, re-expand — reproduces the GBA's quantised blend
+            -- banding (fades, semi-transparent OBJs, light effects). Touches
+            -- only the three blend helpers, so order vs other mode1.c patches
+            -- is irrelevant.
+            { patch = "viruappu-blend-5bit.patch",
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "VIRTUAPPU_BLEND_5BIT" },
         }
         -- Apply one patch when its marker is absent. -3 tolerates drifted
         -- context (and on shallow submodule clones, where the pre-image blob
