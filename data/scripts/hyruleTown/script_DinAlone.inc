@@ -17,5 +17,5 @@ script_080121DE:
 	MessageNoOverlap TEXT_HAPPY_HEARTH, 0x27
 	WaitUntilTextboxCloses
 	SetLocalFlag MHOUSE_DIN_TALK
-	Jump script_0801209E
+	Jump script_0801209E  @ PC-port QoL: route left-behind Din into her existing MovedIn charm-offer path
 

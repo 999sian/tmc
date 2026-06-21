@@ -7,6 +7,16 @@ The canonical randomizer is a **native location graph** generated in-process
 project's native runtime keys. With no `.logic` file imported, none of the
 import machinery runs and the native graph alone drives generation.
 
+> **Implementation status (current).** The `.logic` import engine
+> (`rando_logic.cpp`) is presently a **stub**: every `RandoLogic_*` entry point
+> returns trivial values, `RandoLogic_LoadText` does not parse, and
+> `RandoLogic_Generate` ignores the imported table and defers to the native
+> graph (`Rando_GenerateSeed`). **Seed generation therefore always uses the
+> native location graph**, regardless of any `.logic` / `native.logic` file.
+> The parser, expression VM, reachability, settings, and event-defines
+> described below are the *intended* format — a spec, not yet-shipped
+> behaviour.
+
 > **Provenance / independence.** `port/rando/` is an independent reimplementation.
 > Its numeric location data (area/room/flag keys, chest identities) is derived
 > from the USA baserom and the decompilation — not copied from any external

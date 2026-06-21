@@ -13,7 +13,19 @@
 #endif
 
 #define MESSAGE_ADVANCE_KEYS (A_BUTTON | B_BUTTON | DPAD_ANY | R_BUTTON)
+#ifdef PC_PORT
+/* Port QoL (default off): when "hold to advance text" is enabled, a HELD
+ * advance key keeps pages turning, not just a fresh press. Default off keeps
+ * GBA-identical timing (one fresh press per page, important for timed
+ * cutscenes). Both message-advance sites read this macro. */
+extern bool Port_Config_GetHoldToAdvanceText(void);
+#define MESSAGE_PRESS_ANY_ADVANCE_KEYS                  \
+    (((gInput.newKeys & MESSAGE_ADVANCE_KEYS) != 0) ||  \
+     (Port_Config_GetHoldToAdvanceText() &&             \
+      (gInput.heldKeys & MESSAGE_ADVANCE_KEYS) != 0))
+#else
 #define MESSAGE_PRESS_ANY_ADVANCE_KEYS ((gInput.newKeys & MESSAGE_ADVANCE_KEYS) != 0)
+#endif
 
 #define MESSAGE_WIDTH 0x20
 #define MESSAGE_POSITION_INDEX(window) ((window).yPos * MESSAGE_WIDTH + (window).xPos)

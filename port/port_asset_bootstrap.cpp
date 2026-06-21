@@ -363,6 +363,17 @@ void DrawProgressScreen(SDL_Window* window, SDL_Renderer* renderer,
     SDL_RenderPresent(renderer);
 }
 
+#ifdef TMC_GPU_RENDERER
+/* Implemented in port_gpu_renderer.cpp / port_imgui_menu.cpp. Declared here so
+ * the GPU branch of RunWithProgressScreen can present an ImGui progress frame
+ * on the SDL_GPU swapchain (GPU builds have no SDL_Renderer to draw into). */
+extern "C" bool Port_GPU_IsActive(void);
+extern "C" bool Port_GPU_PresentPrelaunchFrame(void);
+extern "C" bool Port_GPU_PaintBootSplash(void);
+extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase, float fraction,
+                                                 int phase_index, int phase_total);
+#endif
+
 template <typename Task>
 bool RunWithProgressScreen(SDL_Window* window, ProgressSnapshot& snap, Task task) {
     /* Adopt the renderer that SDL_CreateWindowAndRenderer made at
@@ -372,11 +383,52 @@ bool RunWithProgressScreen(SDL_Window* window, ProgressSnapshot& snap, Task task
      * is exactly how the EXTRACTING ASSETS bar disappeared after
      * the atomic-create switch. Fall back to creating one only if
      * for some reason the window doesn't have a renderer yet. */
-    SDL_Renderer* renderer = SDL_GetRenderer(window);
-    if (!renderer) {
+    SDL_Renderer* renderer = window ? SDL_GetRenderer(window) : nullptr;
+    if (!renderer && window) {
         renderer = SDL_CreateRenderer(window, nullptr);
     }
     if (!renderer) {
+#ifdef TMC_GPU_RENDERER
+        /* GPU build: the window is owned by the SDL_GPU swapchain and has no
+         * SDL_Renderer, so the SDL_Renderer bar below can't draw. Drive an
+         * ImGui progress screen on the GPU swapchain instead of extracting
+         * blind — the window otherwise just sat there and read as a hang. */
+        if (Port_GPU_IsActive()) {
+            auto future = std::async(std::launch::async, std::forward<Task>(task));
+            auto paint = [&snap]() {
+                std::string phaseName;
+                {
+                    std::lock_guard<std::mutex> lk(snap.name_mu);
+                    phaseName = snap.phase_name;
+                }
+                const std::size_t done  = snap.done.load(std::memory_order_acquire);
+                const std::size_t total = snap.total.load(std::memory_order_acquire);
+                const int phaseIdx = snap.phase_index.load(std::memory_order_acquire);
+                const int phaseDen = std::max(kExpectedPhaseCount, phaseIdx + 1);
+                const double inPhase = (total == 0) ? 1.0
+                    : static_cast<double>(done) / static_cast<double>(total);
+                const double overall = std::clamp(
+                    (static_cast<double>(phaseIdx) + std::clamp(inPhase, 0.0, 1.0)) /
+                        static_cast<double>(phaseDen), 0.0, 1.0);
+                const bool built = Port_ImGui_RenderExtractProgress(
+                    phaseName.empty() ? "preparing" : phaseName.c_str(),
+                    static_cast<float>(overall),
+                    std::min(phaseIdx + 1, phaseDen), phaseDen);
+                if (built) Port_GPU_PresentPrelaunchFrame();
+                else       Port_GPU_PaintBootSplash();
+            };
+            while (future.wait_for(std::chrono::milliseconds(33)) !=
+                   std::future_status::ready) {
+                /* Drain events so the OS doesn't flag the window unresponsive;
+                 * ignore QUIT so a half-written install can't happen here. */
+                SDL_Event ev;
+                while (SDL_PollEvent(&ev)) { }
+                paint();
+            }
+            paint(); /* one last frame so the bar lands near 100% */
+            return future.get();
+        }
+#endif
         return task();
     }
 

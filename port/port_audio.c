@@ -318,6 +318,14 @@ int Port_Audio_GetReverbLevel(void) {
     return Port_M4A_Backend_GetReverbLevel();
 }
 
+void Port_Audio_SetMasterVolume(float volume) {
+    Port_M4A_Backend_SetMasterVolume(volume);
+}
+
+float Port_Audio_GetMasterVolume(void) {
+    return Port_M4A_Backend_GetMasterVolume();
+}
+
 void Port_Audio_OnFifoWrite(uint32_t addr, uint32_t value) {
     (void)addr;
     (void)value;

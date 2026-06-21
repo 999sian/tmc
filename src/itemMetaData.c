@@ -140,10 +140,10 @@ const ItemMetaData gItemMetaData[] = {
 #include "itemMetaData_gUnk_080FD964.inc"
 #undef NAME
 
-#ifdef MULTI_REGION
+/* EU twin: always defined (region-agnostic) so single-region consumers that
+ * select gUnk_080FD964_eu under REGION_IS_EU still link. */
 #define NAME(x) x##_eu
 #define ITEMMETA_EU_PASS
 #include "itemMetaData_gUnk_080FD964.inc"
 #undef ITEMMETA_EU_PASS
 #undef NAME
-#endif

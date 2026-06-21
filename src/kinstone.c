@@ -237,14 +237,12 @@ void sub_080186EC(u32 param_1) {
     const KinstoneWorldEvent* psVar1;
     u32 i;
     const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
     extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
     extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
     if (REGION_IS_EU)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
     else if (REGION_IS_JP)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
 
     for (i = 0, psVar1 = gKinstoneWorldEvents_sel; i <= 100; psVar1++, i++) {
         if (psVar1->subtask == SUBTASK_WORLDEVENT) {
@@ -257,14 +255,12 @@ void sub_08018710(u32 previousworldEventId) {
     const KinstoneWorldEvent* psVar1;
     u32 i;
     const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
     extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
     extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
     if (REGION_IS_EU)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
     else if (REGION_IS_JP)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
 
     for (i = 0, psVar1 = gKinstoneWorldEvents_sel; i <= 100; psVar1++, i++) {
         if (psVar1->subtask == SUBTASK_WORLDEVENT && previousworldEventId != psVar1->worldEventId) {

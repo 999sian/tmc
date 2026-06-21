@@ -530,7 +530,7 @@ bool32 sub_08023A38(u32 tileType) {
     if (tileType == TILE_TYPE_26 || tileType == TILE_TYPE_41) {
         return TRUE;
     } else {
-        tileType = gMapTileTypeToActTile[tileType];
+        tileType = GetMapTileTypeToActTile(tileType);
         if (tileType == ACT_TILE_9 || tileType == ACT_TILE_11 || tileType == ACT_TILE_10 || tileType == ACT_TILE_12) {
             return TRUE;
         } else {

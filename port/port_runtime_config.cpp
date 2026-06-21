@@ -111,6 +111,9 @@ float       sPracticeSlowmo      = 1.0f;
  * now persist to config.json and are re-applied at startup. */
 bool        sDiscordRpc    = false;
 bool        sVSyncCfg      = true;     /* matches Port_PPU's sVSyncEnabled default */
+bool        sRibbonCfg     = true;     /* F8 menu style: ribbon (true) vs classic */
+float       sMasterVolume  = 1.0f;     /* game master volume [0,1]; 1.0 = unchanged */
+bool        sHoldAdvanceText = false;  /* hold an advance key to keep paging text */
 bool        sFullscreen    = false;
 std::string sShaderPreset;             /* path to active .glslp, empty = none */
 unsigned    sRebornFeatures   = 0;     /* bitmask of enabled Reborn features */
@@ -137,6 +140,10 @@ std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
  * "Controls" tab toggles this and shows a modal "Press a key..." popup
  * while it's non-negative. */
 int sCapturingInput = -1;
+/* While capturing: true = append the new bind to this action's existing list
+ * (multiple bindings per action); false = replace. Set by BeginAddBinding /
+ * BeginCaptureBinding respectively. */
+bool sCaptureAppend = false;
 /* Edge-detection cache. Set when the corresponding SDL key/button event
  * arrives during the frame; cleared by Port_Config_ClearInputEdges()
  * after KEYINPUT is committed. Catches sub-frame taps (press+release
@@ -159,7 +166,7 @@ nlohmann::json DefaultsJson(void) {
         { "window_scale", 3 },
         { "internal_scale", 1 },
         { "upscale_method", "nearest" },
-        { "frame_time_ns", 0 },
+        { "frame_time_ns", kDefaultFrameTimeNs }, /* default to a 60 FPS cap; uncapped is unstable for frame-tied logic */
         { "port_settings_menu", true },
         { "active_save_profile", "tmc.sav" },
         { "autosave_enabled", true },
@@ -202,6 +209,9 @@ nlohmann::json DefaultsJson(void) {
          * to override the compile-time feature defaults. */
         { "discord_rpc", false },
         { "vsync", true },
+        { "ribbon_mode", true },
+        { "master_volume", 1.0 },
+        { "hold_advance_text", false },
         { "fullscreen", false },
         { "shader_preset", "" },
         { "rando_enabled", false },
@@ -618,6 +628,9 @@ extern "C" void Port_Config_Load(const char* path) {
 
         sDiscordRpc  = j.value("discord_rpc", false);
         sVSyncCfg    = j.value("vsync", true);
+        sRibbonCfg   = j.value("ribbon_mode", true);
+        sMasterVolume = (float)j.value("master_volume", 1.0);
+        sHoldAdvanceText = j.value("hold_advance_text", false);
         sFullscreen  = j.value("fullscreen", false);
         sShaderPreset = j.value("shader_preset", std::string());
         sPreferredRegion = j.value("preferred_region", -1);
@@ -1084,6 +1097,7 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
             if (e->key.key == SDLK_ESCAPE) {
                 /* Cancel without binding. */
                 sCapturingInput = -1;
+                sCaptureAppend = false;
                 return;
             }
             newBind.key = e->key.key;
@@ -1097,10 +1111,31 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
             captured = true;
         }
         if (captured) {
-            sBinds[target].clear();
+            /* Speedrun integrity (Console-Parity): a physical key/button/axis
+             * must map to at most one action, so strip the captured input from
+             * every OTHER action before assigning it here. */
+            if (sConsoleParity) {
+                for (size_t j = 0; j < PORT_INPUT_COUNT; j++) {
+                    if ((int)j == (int)target) continue;
+                    std::vector<Bind>& v = sBinds[j];
+                    bool changed = false;
+                    for (size_t k = 0; k < v.size();) {
+                        const Bind& b = v[k];
+                        const bool same =
+                            (newBind.key  != SDLK_UNKNOWN                && b.key  == newBind.key) ||
+                            (newBind.pad  != SDL_GAMEPAD_BUTTON_INVALID  && b.pad  == newBind.pad) ||
+                            (newBind.axis != SDL_GAMEPAD_AXIS_INVALID    && b.axis == newBind.axis);
+                        if (same) { v.erase(v.begin() + (long)k); changed = true; }
+                        else { ++k; }
+                    }
+                    if (changed) PersistBinds((PortInput)j);
+                }
+            }
+            if (!sCaptureAppend) sBinds[target].clear();
             sBinds[target].push_back(newBind);
             PersistBinds(target);
             sCapturingInput = -1;
+            sCaptureAppend = false;
             return;
         }
     }
@@ -1332,6 +1367,13 @@ extern "C" void Port_Config_ClearBindings(PortInput input) {
 extern "C" void Port_Config_BeginCaptureBinding(PortInput input) {
     if (input < 0 || input >= PORT_INPUT_COUNT) return;
     sCapturingInput = (int)input;
+    sCaptureAppend = false;   /* replace this action's bindings */
+}
+
+extern "C" void Port_Config_BeginAddBinding(PortInput input) {
+    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    sCapturingInput = (int)input;
+    sCaptureAppend = true;    /* append a binding, keep existing ones */
 }
 
 extern "C" int Port_Config_IsCapturingBinding(void) {
@@ -1344,6 +1386,7 @@ extern "C" PortInput Port_Config_CapturingBindingInput(void) {
 
 extern "C" void Port_Config_CancelCaptureBinding(void) {
     sCapturingInput = -1;
+    sCaptureAppend = false;
 }
 
 extern "C" void Port_Config_ResetAllBindings(void) {
@@ -1454,6 +1497,12 @@ extern "C" bool Port_Config_GetDiscordRpc(void) { return sDiscordRpc; }
 extern "C" void Port_Config_SetDiscordRpc(bool on) { sDiscordRpc = on; sConfigJson["discord_rpc"] = on; SaveConfig(); }
 extern "C" bool Port_Config_GetVSync(void) { return sVSyncCfg; }
 extern "C" void Port_Config_SetVSync(bool on) { sVSyncCfg = on; sConfigJson["vsync"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetRibbonEnabled(void) { return sRibbonCfg; }
+extern "C" void Port_Config_SetRibbonEnabled(bool on) { sRibbonCfg = on; sConfigJson["ribbon_mode"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetHoldToAdvanceText(void) { return sHoldAdvanceText; }
+extern "C" void Port_Config_SetHoldToAdvanceText(bool on) { sHoldAdvanceText = on; sConfigJson["hold_advance_text"] = on; SaveConfig(); }
+extern "C" float Port_Config_GetMasterVolume(void) { return sMasterVolume; }
+extern "C" void Port_Config_SetMasterVolume(float v) { if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f; sMasterVolume = v; sConfigJson["master_volume"] = (double)v; SaveConfig(); }
 extern "C" bool Port_Config_GetFullscreen(void) { return sFullscreen; }
 extern "C" void Port_Config_SetFullscreen(bool on) { sFullscreen = on; sConfigJson["fullscreen"] = on; SaveConfig(); }
 extern "C" const char* Port_Config_GetShaderPreset(void) { return sShaderPreset.c_str(); }

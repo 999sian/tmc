@@ -280,6 +280,19 @@ jobs:
           package-cache-key: ${{ matrix.os_name }}-${{ matrix.arch }}
           project-path: '.'
 
+      # Single-region build guard. The shipped binary is a fat multi-region
+      # build (build.py forces --multi_region=y), which HIDES half-flattened
+      # MULTI_REGION guards — an _eu/_jp twin referenced unguarded but defined
+      # only under `#ifdef MULTI_REGION` — plus any code that compiles only
+      # when the region twins exist. Those silently break the per-region build
+      # AND the byte-matching GBA decomp. This compiles a per-region (USA)
+      # build (--slim: no ROM/private assets needed) so such breaks fail CI
+      # here. Runs before the artifact build, which reconfigures back to
+      # multi-region. x86_64-only so it runs once.
+      - name: Single-region build guard (Linux)
+        if: matrix.os_name == 'linux' && matrix.arch == 'x86_64'
+        run: python build.py --usa --slim --single-region
+
       - name: Probe for ASSETS_TOKEN
         id: probe_assets
         shell: bash
@@ -554,7 +567,10 @@ jobs:
           ARCH="${{ matrix.arch }}"
           [ -z "$ARCH" ] && ARCH="x86_64"
           ARCHIVE_BASE="tmc-${{ matrix.region }}-${{ matrix.os_name }}-${ARCH}-${VERSION_LABEL}"
-          tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact .
+          # Name the single payload file explicitly rather than ".", so tar
+          # does not store a leading "./" member that some extractors surface
+          # as a phantom top-level "." folder (v0.6 release oversight).
+          tar -czf "${ARCHIVE_BASE}.tar.gz" -C artifact "${{ matrix.exe_name }}"
           echo "archive_name=${ARCHIVE_BASE}.tar.gz" >> "$GITHUB_ENV"
 
       - name: Upload artifact

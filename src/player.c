@@ -3073,9 +3073,7 @@ void sub_08073884(PlayerEntity* this) {
     if (--super->timer == 0) {
         if (gPlayerState.field_0x39 != 0xff) {
             const Transition* exitTransitions = gUnk_0813AD88;
-#ifdef MULTI_REGION
             if (REGION_IS_EU) exitTransitions = gUnk_0813AD88_eu;
-#endif
             DoExitTransition(&exitTransitions[gPlayerState.field_0x39]);
         } else
             InitParachuteRoom();

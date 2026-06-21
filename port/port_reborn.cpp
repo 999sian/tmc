@@ -65,15 +65,15 @@ struct {
         false,
         "Hero Mode (2× damage)",
         "Enemies and hazards deal double damage. Toggleable mid-run; takes "
-        "effect from the next hit. (No save-format change.)",
+        "effect from the next hit.",
     },
-    /* REBORN_FEAT_RUPEE_LIKE_OVERHAUL */
+    /* REBORN_FEAT_RUPEE_LIKE_OVERHAUL — removed feature. Slot kept so the
+     * persisted feature bitmask (issue #146) keeps its bit positions; the
+     * entry is hidden from the Reborn tab and read by nothing. */
     {
         false,
-        "Rupee Like overhaul",
-        "Rupee Likes steal your shield (or damage you 1 HP/tick) instead of "
-        "harmlessly draining rupees, and auto-release after 10 ticks. More "
-        "punishing — off by default.",
+        "Rupee Like overhaul (removed)",
+        "",
     },
     /* REBORN_FEAT_SECONDARY_LAB */
     {

@@ -45,6 +45,12 @@ static void DrawRibbonDisplayTab(void) {
         if (ImGui::Button("<##iscale")) Port_Config_CycleInternalScale(-1);
         ImGui::SameLine(); ImGui::Text("%ux", (unsigned)Port_Config_InternalScale()); ImGui::SameLine();
         if (ImGui::Button(">##iscale")) Port_Config_CycleInternalScale(+1);
+        RandoUi_HelpTooltip(
+            "Renders the GBA frame at this integer multiple internally before "
+            "the final upscale. It only changes sampling quality when a shader "
+            "or the widescreen path resamples the image - with the default "
+            "nearest-neighbour 2D output it has no visible effect. Leave at 1x "
+            "unless a shader you're using benefits from supersampling.");
 
         // Aspect ratio
         ImGui::TableNextRow();
@@ -249,5 +255,20 @@ static void DrawRibbonDisplayTab(void) {
         Port_DiscordRpc_SetEnabled(drp);
         Port_Config_SetDiscordRpc(drp);                       /* persist (#146) */
     }
-    RandoUi_HelpTooltip("Publishes current area + heart/rupee count to Discord...");
+    RandoUi_HelpTooltip(
+        "Publishes your current area and heart/rupee count to Discord as a "
+        "Rich Presence status.\n\n"
+        "Requires a Discord application ID compiled into the build "
+        "(discord_app_id.txt, not shipped by default), so it stays inactive in "
+        "release builds that ship without one. Also currently a no-op on "
+        "Windows (the named-pipe IPC client is not yet implemented).");
+
+    bool holdAdv = Port_Config_GetHoldToAdvanceText();
+    if (ImGui::Checkbox("Hold to advance text", &holdAdv)) {
+        Port_Config_SetHoldToAdvanceText(holdAdv);
+    }
+    RandoUi_HelpTooltip(
+        "When on, holding an advance button (A / B / R / D-pad) keeps text "
+        "pages turning instead of needing a fresh press each page. Default off "
+        "preserves GBA-accurate timing for timed cutscenes.");
 }

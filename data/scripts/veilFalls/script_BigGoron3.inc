@@ -11,7 +11,7 @@ script_0800934E:
 	Call sub_0806D638
 	SetScrollSpeed 1
 	CameraTargetEntity
-	CheckGlobalFlag EZERO_1ST  @ Reborn parity: was GAMECLEAR — Mirror Shield available after meeting Ezlo
+	CheckGlobalFlag EZERO_1ST  @ PC-port QoL: gate Mirror Shield on first Ezlo meeting (EZERO_1ST) instead of game clear
 	JumpIf script_BigGoronTalk
 	MessageNoOverlap TEXT_GORONS, 0x01
 	WaitUntilTextboxCloses

@@ -44,6 +44,8 @@ bool Port_M4A_Backend_GetGbaAccurate(void);
  * Forced fully dry whenever GBA-accurate mode is on. */
 void Port_M4A_Backend_SetReverbLevel(int level);
 int Port_M4A_Backend_GetReverbLevel(void);
+void Port_M4A_Backend_SetMasterVolume(float volume);
+float Port_M4A_Backend_GetMasterVolume(void);
 
 #ifdef __cplusplus
 }

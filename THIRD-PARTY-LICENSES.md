@@ -17,7 +17,11 @@ their respective licenses.
 > derived from the decompilation/ROM, which can optionally import the public
 > `.logic` text format but does not bundle, link, or translate the GPL-3.0
 > minishmaker/randomizer. It is format-compatible with that project by design,
-> not a strict isolated clean-room.
+> not a strict isolated clean-room. The optional *Minish Cap Reborn*-parity
+> quality-of-life features are likewise first-party: each is an independent
+> implementation written against the decompilation and the port's own
+> subsystems, with no Admentus64/The-Minish-Cap-Reborn (GPL-3.0) source
+> incorporated — see [`docs/reborn-parity.md`](docs/reborn-parity.md).
 
 ## Copyleft components (GPL / LGPL family)
 

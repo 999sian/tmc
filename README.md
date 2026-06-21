@@ -246,7 +246,9 @@ reimplementation** — a native location graph whose data is derived from the
 decompilation and ROM. It can *optionally* import the public `.logic` text
 format, but it does **not** bundle, link, or translate the GPL-3.0
 minishmaker/randomizer. It is an independent reimplementation, format-compatible
-with that project by design, not a strict isolated clean-room.
+with that project by design, not a strict isolated clean-room. (The optional
+`.logic` importer is currently a stub — seed generation always uses the native
+location graph; see `port/rando/README.md`.)
 
 This project also builds on the zeldaret/tmc decompilation of a copyrighted
 game. All Nintendo intellectual property remains owned by Nintendo; a

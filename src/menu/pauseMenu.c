@@ -430,20 +430,16 @@ void PauseMenu_ItemMenu_Update(void) {
                 if (gPauseMenu.items[menuSlot] != 0) {
                     u32 slot = !!(gInput.newKeys ^ A_BUTTON);
 #ifdef PC_PORT
-                    /* Reborn-parity: SELECT-hold writes the cursor's
-                     * item into one of the port's soft slots instead
-                     * of the primary A/B slots. Soft slot 0 ← A,
-                     * soft slot 1 ← B. Reuses the existing soft-slot
-                     * storage (port config file, no save mutation,
-                     * proper persistence) instead of carving out our
-                     * own SLOT_LA/SLOT_LB storage. Press X/Y/L2/R2 in
-                     * game to fire the soft-slot items (or L+A / L+B
-                     * if the L-shortcut toggle is on). */
+                    /* Optional SELECT-hold gesture: holding SELECT while
+                     * pressing A/B on the cursor item binds it to a port
+                     * soft slot (A -> slot 0, B -> slot 1) rather than the
+                     * primary A/B equip. Persists through the port config,
+                     * never the save file; fire it in-game via X/Y/L2/R2 or
+                     * the L-modifier. Uses the port's own soft-slot store. */
                     {
                         extern bool Port_Reborn_IsEnabled(int feat);
                         extern void Port_SoftSlots_SetAssignment(int s, unsigned char id);
-                        if ((gInput.heldKeys & SELECT_BUTTON) &&
-                            Port_Reborn_IsEnabled(/* SELECT-hold equip */ 10)) {
+                        if ((gInput.heldKeys & SELECT_BUTTON) && Port_Reborn_IsEnabled(10)) {
                             Port_SoftSlots_SetAssignment((int)slot,
                                                          (unsigned char)gPauseMenu.items[menuSlot]);
                             SoundReq(SFX_TEXTBOX_SELECT);
@@ -524,16 +520,8 @@ static bool32 GetSpriteAnimation322Index(u32 item, u32* outIndex) {
     return TRUE;
 }
 
-#ifdef MULTI_REGION
 #define sub_080A5384_draw_constant0 (REGION_IS_EU ? 0x1fa : 0x1fb)
 #define sub_080A5384_draw_constant1 (REGION_IS_EU ? 0x141 : 0x142)
-#elif defined(EU)
-#define sub_080A5384_draw_constant0 0x1fa
-#define sub_080A5384_draw_constant1 0x141
-#else
-#define sub_080A5384_draw_constant0 0x1fb
-#define sub_080A5384_draw_constant1 0x142
-#endif
 void PauseMenu_ItemMenu_Draw(void) {
     u32 tmp;
     u32 i;
@@ -1235,13 +1223,7 @@ void sub_080A5CFC(u32 menuType, void* param_2, u32 param_3) {
     DrawDungeonMap(menuType, &gMapDataBottomSpecial, 0x400);
 }
 
-#ifdef MULTI_REGION
 #define SUB_080A5D1C_SPRITE_INDEX (REGION_IS_EU ? 0x143 : 0x144)
-#elif defined(EU)
-#define SUB_080A5D1C_SPRITE_INDEX 0x143
-#else
-#define SUB_080A5D1C_SPRITE_INDEX 0x144
-#endif
 
 // Actually draw the sprites for the dungeon map.
 void DrawDungeonMapActually(void) {

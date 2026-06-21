@@ -72,9 +72,7 @@ const KeyButtonLayout gUnk_0812813C = {
 extern u8 gUnk_020344A0[8];
 
 extern const struct_08128AD8 gUnk_08128AD8[];
-#ifdef MULTI_REGION
 extern const struct_08128AD8 gUnk_08128AD8_eu[];
-#endif
 
 Subtask FigurineMenu0_Type0;
 Subtask FigurineMenu0_Type1;
@@ -155,12 +153,10 @@ void FigurineMenu0_Type0(void) {
 void FigurineMenu0_Type1(void) {
     if (gFadeControl.active == 0) {
         const struct_080FC3E4* sel_080FC3E4 = gUnk_080FC3E4;
-#ifdef MULTI_REGION
         if (REGION_IS_EU)
             sel_080FC3E4 = gUnk_080FC3E4_eu;
         else if (REGION_IS_JP)
             sel_080FC3E4 = gUnk_080FC3E4_jp;
-#endif
         CreateObject(OBJECT_A2, sel_080FC3E4[gFigurineMenu.figure_idx].type, 0);
         SetMenuType(2);
     }
@@ -328,20 +324,14 @@ typedef struct {
 
 extern const Figurine gFigurines[];
 
-#ifdef EU
-#define sub_080A4978_draw_constant_default 0x1fb
-#else
 #define sub_080A4978_draw_constant_default 0x1fc
-#endif
 void FigurineMenu_080A4978(void) {
     int r0, maxFigurines, r4, r6;
     int sub_080A4978_draw_constant = sub_080A4978_draw_constant_default;
 
-#ifdef MULTI_REGION
     if (REGION_IS_EU) {
         sub_080A4978_draw_constant = 0x1fb;
     }
-#endif
 
     gOamCmd._4 = 0;
     gOamCmd._6 = 0;
@@ -701,9 +691,7 @@ void sub_080A4DB8(u32 param_1) {
     gMenu.field_0x3 = gPauseMenuOptions.unk2[param_1];
     {
         const struct_08128AD8* sel_08128AD8 = gUnk_08128AD8;
-#ifdef MULTI_REGION
         if (REGION_IS_EU) sel_08128AD8 = gUnk_08128AD8_eu;
-#endif
         ptr = &sel_08128AD8[gUnk_08128A38[param_1].unk0];
     }
     gScreen.lcd.displayControl = ptr->unk2 | 0x1940;

@@ -245,14 +245,12 @@ void KinstoneMenu_Type2(void) {
         gFuseInfo.fusionState = FUSION_STATE_6;
         {
             const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
             extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
             extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
             if (REGION_IS_EU)
                 gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
             else if (REGION_IS_JP)
                 gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
             ptr = &gKinstoneWorldEvents_sel[gFuseInfo.kinstoneId];
         }
         if (ptr->subtask != 0) {
@@ -290,14 +288,12 @@ void KinstoneMenu_Type3_Overlay0(void) {
 
 void KinstoneMenu_Type3_Overlay1(void) {
     const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
     extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
     extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
     if (REGION_IS_EU)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
     else if (REGION_IS_JP)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
     u32 temp = gKinstoneWorldEvents_sel[gKinstoneMenu.unk2a].shape;
     if (temp != gKinstoneWorldEvents_sel[gFuseInfo.kinstoneId].shape) {
         SoundReq(SFX_ITEM_SHIELD_BOUNCE);
@@ -566,14 +562,12 @@ void sub_080A42E0(u32 kinstoneId, u32 param_2) {
     s32 iVar4;
 
     const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;
-#ifdef MULTI_REGION
     extern const KinstoneWorldEvent gKinstoneWorldEvents_eu[];
     extern const KinstoneWorldEvent gKinstoneWorldEvents_jp[];
     if (REGION_IS_EU)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_eu;
     else if (REGION_IS_JP)
         gKinstoneWorldEvents_sel = gKinstoneWorldEvents_jp;
-#endif
     const KinstoneWorldEvent* ptr = &gKinstoneWorldEvents_sel[kinstoneId];
 
     if (param_2 == 0xff) {
@@ -654,11 +648,9 @@ u32 sub_080A4418(u32 param_1, u32 param_2) {
 
     dest = (void*)(param_2 * 0x20 + 0x6010000);
     gUnk_080CA06C_sel = gUnk_080CA06C;
-#ifdef MULTI_REGION
     extern const u32 gUnk_080CA06C_eu[];
     if (REGION_IS_EU)
         gUnk_080CA06C_sel = gUnk_080CA06C_eu;
-#endif
     t = gUnk_080CA06C_sel[param_1];
     t2 = t & 0x80000000;
     src = (void*)&gGlobalGfxAndPalettes[~t2 & t];

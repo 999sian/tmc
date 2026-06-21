@@ -319,6 +319,10 @@ int main(int argc, char* argv[]) {
 
     Port_Config_Load("config.json");
 
+    /* Apply the persisted game master volume to the audio backend (audio is
+     * initialised before config load above). */
+    Port_Audio_SetMasterVolume(Port_Config_GetMasterVolume());
+
     /* Re-apply persisted runtime toggles that have no window/GPU dependency
      * (issue #146). Fullscreen, VSync and the shader preset need the window
      * and renderer, so they are applied after Port_PPU_Init below. */

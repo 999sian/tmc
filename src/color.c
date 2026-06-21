@@ -21,9 +21,7 @@ void sub_0801D48C(u32, u32);
 static void sub_0801CFD0(u32 a1);
 
 extern union SplitWord gUnk_08133368[];
-#ifdef MULTI_REGION
 extern union SplitWord gUnk_08133368_eu[];
-#endif
 
 typedef struct {
     u8 _0_0 : 4;
@@ -97,9 +95,7 @@ u32 LoadObjPalette(Entity* entity, u32 objPaletteId) {
         } else {
             {
                 union SplitWord* objPalTbl = gUnk_08133368;
-#ifdef MULTI_REGION
                 if (REGION_IS_EU) objPalTbl = gUnk_08133368_eu;
-#endif
                 uVar3 = objPalTbl[(objPaletteId - 0x16)].BYTES.byte3;
             }
             uVar3 &= 0xf;
@@ -312,9 +308,7 @@ void LoadObjPaletteAtIndex(u32 objPaletteId, u32 paletteIndex) {
             LoadPalettes((u8*)(gPaletteBuffer + (objPaletteId - 6) * 16), paletteIndex + 16, 1);
         } else {
             union SplitWord* objPalTbl = gUnk_08133368;
-#ifdef MULTI_REGION
             if (REGION_IS_EU) objPalTbl = gUnk_08133368_eu;
-#endif
             u32 offset = objPalTbl[(objPaletteId - 0x16)].WORD_U;
             u32 numPalettes = (offset >> 0x18) & 0xf;
             offset &= 0xffffff;
