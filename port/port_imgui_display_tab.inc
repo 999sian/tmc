@@ -263,6 +263,34 @@ static void DrawRibbonDisplayTab(void) {
         "release builds that ship without one. Also currently a no-op on "
         "Windows (the named-pipe IPC client is not yet implemented).");
 
+    bool colourCorrect = Port_PPU_ColorCorrectionEnabled();
+    if (ImGui::Checkbox("GBA colour correction", &colourCorrect)) {
+        Port_PPU_SetColorCorrection(colourCorrect);           /* live */
+        Port_Config_SetColorCorrection(colourCorrect);        /* persist */
+    }
+    RandoUi_HelpTooltip(
+        "Remaps the raw 15-bit palette through the GBA's dim, high-gamma "
+        "reflective-LCD response so colours match the handheld instead of "
+        "looking over-bright on a modern sRGB display. Default on.");
+
+    bool lcdPersist = Port_Config_GetLcdPersistence();
+    if (ImGui::Checkbox("LCD persistence", &lcdPersist)) {
+        Port_Config_SetLcdPersistence(lcdPersist);            /* persist */
+        Port_PPU_SetPersistence(lcdPersist, Port_Config_GetLcdPersistenceRho());
+    }
+    RandoUi_HelpTooltip(
+        "Reproduces the slow pixel response (ghosting) of the GBA LCD by "
+        "blending each frame into the previous one. Some flicker/dither "
+        "transparency effects were designed around it. Default off.");
+    if (lcdPersist) {
+        float rho = Port_Config_GetLcdPersistenceRho();
+        ImGui::SetNextItemWidth(160.0f);
+        if (ImGui::SliderFloat("Persistence strength", &rho, 0.0f, 0.95f, "%.2f")) {
+            Port_Config_SetLcdPersistenceRho(rho);            /* persist */
+            Port_PPU_SetPersistence(true, rho);               /* live */
+        }
+    }
+
     bool holdAdv = Port_Config_GetHoldToAdvanceText();
     if (ImGui::Checkbox("Hold to advance text", &holdAdv)) {
         Port_Config_SetHoldToAdvanceText(holdAdv);

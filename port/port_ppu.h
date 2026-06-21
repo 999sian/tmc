@@ -46,6 +46,15 @@ const char* Port_PPU_FilterName(void);
 void Port_PPU_SetVSync(bool enabled);
 bool Port_PPU_VSyncEnabled(void);
 
+// GBA reflective-LCD display transforms applied at present time to the final
+// composited frame (see port_ppu.cpp). Colour correction defaults on
+// (TMC_COLOR_CORRECTION=0 disables); LCD temporal persistence is opt-in
+// (TMC_LCD_PERSISTENCE=1, TMC_LCD_PERSISTENCE_RHO=0..0.99). rho is the
+// fraction of the previous frame retained; values outside [0,1) are ignored.
+void Port_PPU_SetColorCorrection(bool enabled);
+bool Port_PPU_ColorCorrectionEnabled(void);
+void Port_PPU_SetPersistence(bool enabled, float rho);
+
 // Cleanup
 void Port_PPU_Shutdown(void);
 
