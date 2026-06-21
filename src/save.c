@@ -41,39 +41,10 @@ u32 DataCompare(u32 address, const void* data, u32 size);
 
 const char gUnk_0811E470[4] = "LINK";
 
-#if defined(DEMO_USA) || defined(DEMO_JP)
-const u8 demoUnknown0 = 0x0;
-#ifdef DEMO_USA
-const u8 demoUnknown1[] = {
-    // demo_timer for the three save files
-    0x0f, 0x0a, 0x0a, // gUnk_02000010.field_0x7 == 0
-    0x0f, 0x0f, 0x0f, // gUnk_02000010.field_0x7 == 1
-    0x08, 0x05, 0x05, // gUnk_02000010.field_0x7 == 2
-    0x00, 0x00
-};
-#else
-const u8 demoUnknown1[] = { 0 };
-#endif
-#else
 const u8 padding[2] = { 0, 0 };
-#endif
 
 static SaveResult (*const sSaveHandlers[])(u32) = { HandleSaveInit, HandleSaveInProgress, HandleSaveDone };
 
-#if defined(DEMO_USA) || defined(DEMO_JP)
-
-#ifdef DEMO_USA
-asm("demoPointer1: .incbin \"demo/save1.bin\"");
-asm("demoPointer2: .incbin \"demo/save2.bin\"");
-asm("demoPointer3: .incbin \"demo/save3.bin\"");
-
-extern const u8 demoPointer1[];
-extern const u8 demoPointer2[];
-extern const u8 demoPointer3[];
-
-const u8* const demoPointers[] = { demoPointer1, demoPointer2, demoPointer3 };
-#endif
-#else
 
 #ifdef PC_PORT
 #define sSignatureLong (REGION_IS_JP || REGION_IS_EU ? "AGBZELDA:THE MINISH CAP:ZELDA 3" : "AGBZELDA:THE MINISH CAP:ZELDA 5")
@@ -108,7 +79,6 @@ const SaveFileEEPROMAddresses gSaveFileEEPROMAddresses[] = { //
     // 6: ? unused?
     { 0x8, 0xfa0, 0x1fa0, 0xfa0, 0x1fa0 }
 };
-#endif
 
 void sub_0807CD9C(void) {
     UpdateGlobalProgress();

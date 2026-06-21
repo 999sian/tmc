@@ -2534,11 +2534,7 @@ void sub_0807FBFC(Entity* entity, ScriptExecutionContext* context) {
 
 #if defined(USA) || defined(DEMO_USA) || defined(DEMO_JP) || defined(PC_PORT)
 void sub_0807FC24(Entity* entity, ScriptExecutionContext* context) {
-#if defined(DEMO_JP)
-    u32 idx = gRoomControls.room == 1 ? 0xcf : 0xd0;
-#else
     u32 idx = gRoomControls.room == 1 ? 0xcf : 0xd1;
-#endif
     SetLocalFlag(idx);
 }
 #endif

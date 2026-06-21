@@ -837,21 +837,12 @@ void sub_080A56A0(void) {
                     }
                 }
                 break;
-#if !defined(DEMO_USA) && !defined(DEMO_JP)
             case 4:
                 iVar1 = 9;
                 break;
             case 5:
                 iVar1 = 10;
                 break;
-#else
-            case 4:
-                SoundReq(SFX_MENU_ERROR);
-                break;
-            case 5:
-                SoundReq(SFX_MENU_ERROR);
-                break;
-#endif
         }
         if (iVar1 != 0) {
             sub_080A4E84(iVar1);
