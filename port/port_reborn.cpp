@@ -1,7 +1,10 @@
 /*
  * port/port_reborn.cpp — implementation of the Reborn-parity feature
  * toggle store. Process-local; resets to defaults on each launch.
- * Persistence to the on-disk config can be wired later.
+ *
+ * Reborn-parity QoL features are ported from / modeled on The Minish Cap
+ * Reborn by Admentus64 (GPL-3.0); distributed under the GPL-3.0 with
+ * attribution. See THIRD-PARTY-LICENSES.md.
  */
 
 #include "port_reborn.h"

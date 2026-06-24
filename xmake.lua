@@ -844,8 +844,8 @@ target("tmc_pc")
     add_files("port/port_asset_pak_loader.cpp")
     add_files("port/port_debug_verbose.c")  -- per-frame log gate, env-controlled
     add_files("port/port_rom_picker.c")     -- SDL3 file picker when no ROM is found
-    -- In-process native randomizer (port/rando/). Independent C++; pulls in
-    -- item.h via the same include path as the rest of port/.
+    -- In-process randomizer (port/rando/), derived from the GPL-3.0 Minish Cap
+    -- randomizer (minishmaker/randomizer); GPL-3.0, see THIRD-PARTY-LICENSES.md.
     add_files("port/rando/rando.cpp")
     add_files("port/rando/rando_logic.cpp")
     add_files("port/rando/rando_file_menu.c")
@@ -856,8 +856,8 @@ target("tmc_pc")
     add_files("port/rando/rando_cosmetic.cpp") -- tunic / heart color eventdefines
     add_files("port/rando/rando_music.c")    -- MUSIC_RANDO area-BGM remap
     add_files("port/rando/rando_keymap.c")   -- curated ground-item location keys (area-room-flag)
-    -- Minish Cap Reborn parity toggles (clean-room from upstream
-    -- README description — does NOT include any Reborn source).
+    -- Minish Cap Reborn parity toggles, ported from Admentus64/The-Minish-Cap-
+    -- Reborn (GPL-3.0); GPL-3.0, see THIRD-PARTY-LICENSES.md.
     add_files("port/port_reborn.cpp")
     -- Issue #99 auto-repro harness (env-gated, no-op when off).
     add_files("port/port_repro_mazaal.c")

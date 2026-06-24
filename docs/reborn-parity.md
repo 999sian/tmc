@@ -19,7 +19,7 @@ All runtime-toggleable features are at **F8 → Reborn** ribbon tab.
 | 8 | Hero Mode (2× damage) | `REBORN_FEAT_HERO_MODE` | OFF | `src/gameUtils.c::ModHealth`. Surfaced via F8 toggle instead of Reborn's file-select-L. |
 | 9 | Skip Ezlo tutorials | `REBORN_FEAT_SKIP_EZLO_TUTORIALS` | OFF | `src/manager/ezloHintManager.c` |
 | 10 | Figurine 1-shell odds floor at 20% | `REBORN_FEAT_FIGURINE_MIN_RAISED` | ON | `src/object/figurineDevice.c::sub_0808826C` — remaps the base 1-shell curve 100%→0% to 100%→20% |
-| 11 | ~~Rupee Like overhaul~~ — **removed** | `REBORN_FEAT_RUPEE_LIKE_OVERHAUL` (reserved) | — | removed in the clean-room pass; enum slot kept for config-bitmask stability |
+| 11 | ~~Rupee Like overhaul~~ — **removed** | `REBORN_FEAT_RUPEE_LIKE_OVERHAUL` (reserved) | — | removed; enum slot kept for config-bitmask stability |
 | 12 | Mirror Shield earlier | (no toggle — additive) | always | `data/scripts/veilFalls/script_BigGoron3.inc` — flag swap GAMECLEAR → EZERO_1ST |
 | 13 | Oracle left-behind also offers charm | (no toggle — additive) | always | `data/scripts/hyruleTown/script_{Nayru,Farore,Din}Alone.inc` — branch into MovedIn charm paths |
 
@@ -46,25 +46,18 @@ file-select language picker. That's a separate localization project
 ## Notes
 
 ### License posture
-Every feature in this table is an independent first-party implementation
-written against the zeldaret/tmc decompilation and the port's own
-subsystems (input, soft-slots, config); none of it incorporates source
-from Admentus64/The-Minish-Cap-Reborn. Specifically:
+These quality-of-life features are **ported from / modeled on**
+Admentus64/The-Minish-Cap-Reborn (GPL-3.0). Some are reimplemented against the
+zeldaret/tmc decompilation and the port's own subsystems (input, soft-slots,
+config); the additive ones (features 12–13) are small control-flow edits to the
+decomp's own scripts. Either way, they derive from the upstream Reborn feature
+set.
 
-- Features 1–3, 6–9 were written clean-room from the upstream README.
-- Features 4, 5, 10 were (re)authored clean-room against the engine API
-  and the port's soft-slot store, independent of any external source.
-- Features 12, 13 are single control-flow / flag data edits that reuse
-  the game's own decomp labels and flags (a one-token flag swap and a
-  jump retarget into existing `*MovedIn` scripts); they embody no
-  protectable expression from any external project.
-- Feature 11 was removed entirely.
-
-The project therefore distributes under the repository `LICENSE` with no
-GPL-3.0 obligation, consistent with `THIRD-PARTY-LICENSES.md`. (Historical
-note: a GPL-3.0 randomizer CLI submodule that once imposed such an
-obligation was removed in v0.6.0; the in-game randomizer is now a
-first-party reimplementation.)
+Project Picori is licensed **GPL-3.0**, so these features are distributed under
+the GPL-3.0 with attribution to the upstream — consistent with `LICENSE` and
+`THIRD-PARTY-LICENSES.md`. (Earlier revisions of this file claimed a "clean-room
+/ first-party / no-GPL-obligation" posture; that was incorrect and has been
+removed in favor of honoring the copyleft.)
 
 ### Save format
 No save format change. The L+A/B secondary items live in the port's own

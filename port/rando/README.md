@@ -17,14 +17,12 @@ import machinery runs and the native graph alone drives generation.
 > described below are the *intended* format — a spec, not yet-shipped
 > behaviour.
 
-> **Provenance / independence.** `port/rando/` is an independent reimplementation.
-> Its numeric location data (area/room/flag keys, chest identities) is derived
-> from the USA baserom and the decompilation — not copied from any external
-> project. The optional importer parses a *public text format*; it does not
-> translate GPL C# code and vendors no `.logic` data file. It is, however,
-> format- and behaviour-aware of the upstream randomizer by design (so imported
-> files work), so this is best described as an *independent reimplementation*,
-> not a strict isolated clean-room.
+> **Provenance.** `port/rando/` is **derived from** the GPL-3.0 Minish Cap
+> randomizer (`minishmaker/randomizer`): it shares that project's `.logic` text
+> format and reproduces its randomization behaviour. Its numeric location data
+> (area/room/flag keys, chest identities) is taken from the USA baserom and the
+> decompilation. It is distributed under the **GPL-3.0** with attribution — see
+> the repository `LICENSE` and `THIRD-PARTY-LICENSES.md`.
 
 Native randomizer logic that runs inside `tmc_pc`. It does not patch a GBA
 ROM, shell out to the GPL C# randomizer, or allocate heap containers during
@@ -76,7 +74,7 @@ Rando_OverrideLocationKey(0x000001, &item_type, &item_subtype);
   `rando/default.logic`, then `default.logic`, then falls back to the
   **embedded `native.logic`**. The GPL logic file is not vendored.
 - `native.logic` — the embedded logic database (bin2c'd into the binary).
-  ORIGINAL CONTENT authored for this port: 196 items, 244 locations
+  authored for this port from the decompilation: 196 items, 244 locations
   (every engine-derived runtime key in `rando_keymap.c` — 138 ground items
   + 73 scripted rewards — binds 1:1), 33 helpers, and the settings the
   runtime consumes (OPENWORLD dropdown, sleep-warp, start sword, early
@@ -113,9 +111,9 @@ The location graph is deliberately native and data-oriented:
 
 ## `.logic` import format support
 
-The optional `.logic` importer is an independent reimplementation of the
-documented public text format (written from the public spec block at the top of
-a `.logic` file, not from the GPL C# source).
+The optional `.logic` importer reads the same public text format as the upstream
+GPL-3.0 randomizer, for interoperability. This port is distributed under the
+GPL-3.0.
 
 Implemented and tested (`rando_logic_test`):
 - expression grammar: base-level AND (`,`), `(| …)`, `(& …)`, weighted count

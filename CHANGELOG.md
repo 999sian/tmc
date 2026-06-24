@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Relicensed to GPL-3.0; honest attribution for randomizer & Reborn features
+
+- **The project is now licensed under the GNU General Public License v3.0**
+  (previously the Anti-Capitalist Software License v1.4). See `LICENSE`.
+- **The randomizer (`port/rando/`) and the "Reborn"-parity QoL features are now
+  attributed as derivatives of their GPL-3.0 upstreams** — the Minish Cap
+  randomizer (`minishmaker/randomizer`) and Admentus64/The-Minish-Cap-Reborn —
+  and are distributed under the GPL-3.0. See `THIRD-PARTY-LICENSES.md` and
+  `docs/reborn-parity.md`.
+- **Removed the earlier "first-party / clean-room / no GPL-3.0 obligation"
+  framing** from `LICENSE`, `THIRD-PARTY-LICENSES.md`, `README.md`, and in-code
+  comments. That characterization was incorrect: the features derive from
+  GPL-3.0 projects, and the project now honors the copyleft by being GPL-3.0
+  with attribution rather than reimplementing to avoid it.
+- `libs/ViruaPPU` / `libs/VirtuaAPU` (authored by collaborator MatheoVignaud)
+  still need a GPL-compatible license for a fully license-clean GPL build —
+  tracked as an open item.
+
 ### Multi-region — one PC binary plays USA, EU, and JP ROMs at runtime
 
 - **A single build now runs any retail region.** The region is detected from
@@ -45,12 +63,13 @@
   `rando_keymap.c` bind 1:1 — with the settings the runtime consumes
   (OPENWORLD dropdown, sleep warp, start sword, early wind crests, fast
   text).
-- **Licensing stays clean**: the embedded database is ORIGINAL content
-  authored for this port against the decompilation; the GPL
-  `default.logic` is still never vendored. A user-supplied upstream file
-  (`TMC_RANDO_LOGIC=/path` or `assets/rando/default.logic`) keeps
-  precedence and still offers its full 882-location coverage;
-  `TMC_RANDO_LOGIC=none` falls back to the old built-in graph.
+- **Licensing**: the randomizer derives from the GPL-3.0 Minish Cap randomizer
+  and is distributed under the GPL-3.0 with attribution (see `LICENSE` /
+  `THIRD-PARTY-LICENSES.md`); the embedded database is authored for this port
+  from the decompilation. A user-supplied upstream file
+  (`TMC_RANDO_LOGIC=/path` or `assets/rando/default.logic`) keeps precedence
+  and still offers its full 882-location coverage; `TMC_RANDO_LOGIC=none`
+  falls back to the old built-in graph.
 - Softlock-free by construction: requirements err strict, quest-gated NPC
   rewards only ever hold non-progression items, dungeon keys stay vanilla,
   and the smith's sword is granted at file creation. Open world pre-solves
@@ -109,12 +128,11 @@
   documented that the leading strings are import-only aliases while the
   canonical identity is the engine-native runtime key (derived from the USA
   baserom + decompilation).
-- Corrected provenance language throughout (`port/rando/README.md`, source
-  headers, `LICENSE`, `README.md`, `THIRD-PARTY-LICENSES.md`): dropped
-  "clean-room" / "1:1 parity with MinishMaker" overclaims in favour of the
-  accurate **"independent reimplementation, format-compatible by design, not a
-  strict isolated clean-room."** No code is copied or translated from the
-  GPL-3.0 randomizer and no `.logic` data file is vendored.
+- Provenance language across `port/rando/README.md`, source headers, `LICENSE`,
+  `README.md`, and `THIRD-PARTY-LICENSES.md` now describes the randomizer as
+  **derived from the GPL-3.0 Minish Cap randomizer (`minishmaker/randomizer`),
+  distributed under the GPL-3.0 with attribution** (superseding earlier
+  "independent reimplementation / clean-room" wording).
 - No generation behaviour change: `rando_logic_test` and the native graph
   (36 locations) pass unchanged; `tmc_pc` builds clean.
 
