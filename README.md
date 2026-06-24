@@ -226,14 +226,13 @@ larger work so we can coordinate.
 
 ## License
 
-Project Picori's own code is released under the **Anti-Capitalist Software
-License v1.4** — see [`LICENSE`](LICENSE). It is free to use, modify, and
-distribute for individuals, non-profits, educational institutions, and
-worker-owned/cooperative organizations, but not for organizations organized
-along capitalist lines, nor for law enforcement or military.
+Project Picori is released under the **GNU General Public License v3.0
+(GPL-3.0)** — see [`LICENSE`](LICENSE). You are free to use, study, modify, and
+redistribute it; derivative works must remain under the GPL-3.0 and ship their
+source.
 
-This license applies only to the project's **own** code. Bundled, linked, and
-invoked third-party components keep their own licenses — see
+The project as a whole is distributed under the GPL-3.0. Bundled, linked, and
+invoked third-party components keep their own (GPL-compatible) licenses — see
 [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md) for the full list.
 Notably:
 
@@ -241,14 +240,13 @@ Notably:
   https://github.com/ipatix/agbplay) is **LGPL-3.0**; those files remain under
   the LGPL and the larger work is not relicensed by linking it.
 
-The in-game randomizer (`port/rando/`) is the project's own **independent
-reimplementation** — a native location graph whose data is derived from the
-decompilation and ROM. It can *optionally* import the public `.logic` text
-format, but it does **not** bundle, link, or translate the GPL-3.0
-minishmaker/randomizer. It is an independent reimplementation, format-compatible
-with that project by design, not a strict isolated clean-room. (The optional
-`.logic` importer is currently a stub — seed generation always uses the native
-location graph; see `port/rando/README.md`.)
+The in-game randomizer (`port/rando/`) is **derived from** the GPL-3.0 Minish
+Cap randomizer (`minishmaker/randomizer`) — it shares that project's `.logic`
+text format and randomization behaviour — and the Reborn-parity QoL features
+are **ported from** Admentus64/The-Minish-Cap-Reborn (GPL-3.0). Both are
+distributed here under the GPL-3.0, with attribution; see
+[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md) and
+[`docs/reborn-parity.md`](docs/reborn-parity.md).
 
 This project also builds on the zeldaret/tmc decompilation of a copyrighted
 game. All Nintendo intellectual property remains owned by Nintendo; a

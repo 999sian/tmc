@@ -1,33 +1,36 @@
 # Third-Party Licenses & Notices
 
-Project Picori's own code is licensed under the **Anti-Capitalist Software
-License v1.4** (see [`LICENSE`](LICENSE)). That license applies **only** to the
-original work authored by this project's contributors.
+Project Picori's own code is licensed under the **GNU General Public License
+v3.0 (GPL-3.0)** (see [`LICENSE`](LICENSE)). It applies to the original work
+authored by this project's contributors, and the project as a whole is
+distributed under the GPL-3.0.
 
-This project also **uses, links, bundles, or invokes** the third-party
-components listed below. **Each retains its own license**, and those terms — not
-the ACSL — govern those components. They are reproduced/redistributed here under
-their respective licenses.
+This project also **uses, links, bundles, derives from, or invokes** the
+third-party and upstream components listed below. **Each retains its own
+license**, and those terms govern those components. They are
+reproduced/redistributed here under their respective licenses.
 
-> ⚠️ **Copyleft note.** This project links **LGPL-3.0** code (agbplay). agbplay
-> is linked into `tmc_pc` in relinkable form, as LGPL permits, while the larger
-> work carries its own license. The project does **not** bundle, link, or invoke
-> any GPL-3.0 component: the randomizer feature is the project's own independent
-> reimplementation under `port/rando/` — a native location graph with data
-> derived from the decompilation/ROM, which can optionally import the public
-> `.logic` text format but does not bundle, link, or translate the GPL-3.0
-> minishmaker/randomizer. It is format-compatible with that project by design,
-> not a strict isolated clean-room. The optional *Minish Cap Reborn*-parity
-> quality-of-life features are likewise first-party: each is an independent
-> implementation written against the decompilation and the port's own
-> subsystems, with no Admentus64/The-Minish-Cap-Reborn (GPL-3.0) source
-> incorporated — see [`docs/reborn-parity.md`](docs/reborn-parity.md).
+> **Copyleft note.** Project Picori is licensed **GPL-3.0**, and it both links
+> and derives from copyleft works:
+>
+> - **agbplay** (LGPL-3.0) is linked into `tmc_pc` in relinkable form.
+> - The in-game randomizer under `port/rando/` is **derived from** the GPL-3.0
+>   Minish Cap randomizer (`minishmaker/randomizer`): it shares that project's
+>   `.logic` text format and reproduces its randomization behaviour. It is
+>   treated as a derivative work, distributed here under the GPL-3.0 with
+>   attribution.
+> - The optional *Minish Cap Reborn*-parity quality-of-life features are
+>   **ported from** Admentus64/The-Minish-Cap-Reborn (GPL-3.0) — see
+>   [`docs/reborn-parity.md`](docs/reborn-parity.md) — and are likewise
+>   distributed under the GPL-3.0 with attribution.
 
 ## Copyleft components (GPL / LGPL family)
 
 | Component | Path | Upstream | License | Linkage |
 |-----------|------|----------|---------|---------|
 | **agbplay** (agbplay_core) | `libs/agbplay_core` | https://github.com/ipatix/agbplay | **LGPL-3.0** | Linked into `tmc_pc` in relinkable form. See `libs/agbplay_core/LICENSE`. |
+| **Minish Cap randomizer** | `port/rando` (derived) | https://github.com/MinishMaker/randomizer | **GPL-3.0** | `port/rando/` derives from it (shared `.logic` format + randomization behaviour); distributed under GPL-3.0 with attribution. |
+| **The Minish Cap Reborn** | QoL parity hooks (derived) | https://github.com/Admentus64/The-Minish-Cap-Reborn | **GPL-3.0** | QoL features ported from it (see `docs/reborn-parity.md`); distributed under GPL-3.0 with attribution. |
 
 ## Permissively-licensed components
 
@@ -75,8 +78,11 @@ https://github.com/CLIUtils/CLI11), and cpp-best-practices/project_options
 ## Components without a published license
 
 These submodules currently ship **without a license file** and are therefore
-"all rights reserved" by default. Use is by arrangement with their author
-(MatheoVignaud). Track upstream for license clarification before redistributing.
+"all rights reserved" by default. They are authored by MatheoVignaud, a
+collaborator on this port, and used by arrangement; because Project Picori is
+now GPL-3.0, a GPL-compatible license must be added to these submodules for a
+fully license-clean distribution. This is pending with the author — resolve it
+before redistributing binaries.
 
 | Component | Path | Upstream | License |
 |-----------|------|----------|---------|

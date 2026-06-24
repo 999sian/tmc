@@ -1,7 +1,9 @@
 /*
- * port/rando/rando.cpp — fixed-array native graph randomizer.
+ * port/rando/rando.cpp — fixed-array graph randomizer for Project Picori.
  *
- * Fully custom, native randomizer implementation for Project Picori.
+ * Derived from the GPL-3.0 Minish Cap randomizer (MinishMaker,
+ * minishmaker/randomizer): shares its .logic format and randomization
+ * behaviour. Distributed under the GPL-3.0; see THIRD-PARTY-LICENSES.md.
  */
 
 #include "rando.h"

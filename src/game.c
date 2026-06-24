@@ -272,7 +272,7 @@ extern bool Port_Reborn_IsEnabled(int feat);
 #define _REBORN_LR_BOOTS         1
 #define _REBORN_LSELECT_OCARINA  2
 
-/* Reborn parity (clean-room from README description, not source-copy):
+/* Reborn-parity (ported from Minish Cap Reborn, GPL-3.0):
  * in-game equip shortcuts. Press R while holding L → equip Pegasus
  * Boots in slot A. Press SELECT while holding L → equip Ocarina in
  * slot A. Both gated on the item being in inventory + a state where

@@ -2889,10 +2889,9 @@ static void DrawRibbonAccessibilityTab(void) {
 
 
 static void DrawRibbonRebornTab(void) {
-    ImGui::TextWrapped("Quality-of-life features cherry-picked from "
-                       "Minish Cap Reborn (clean-room - does NOT include "
-                       "Reborn's GPL-3 source). Toggles persist until "
-                       "tmc_pc closes.");
+    ImGui::TextWrapped("Quality-of-life features ported from Minish Cap Reborn "
+                       "(GPL-3.0); see THIRD-PARTY-LICENSES.md. Toggles persist "
+                       "until tmc_pc closes.");
     ImGui::Separator();
     for (int i = 0; i < REBORN_FEAT_COUNT; ++i) {
         /* Slot 8 (rupee-like overhaul) was removed; its enum slot is kept so

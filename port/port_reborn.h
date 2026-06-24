@@ -1,11 +1,15 @@
 /*
  * port/port_reborn.h — runtime toggles for Minish Cap Reborn parity
- * features. Each cherry-picked Reborn enhancement (clean-room from the
- * upstream README description) checks its toggle at the call site, so
- * users can flip individual features on or off without rebuilding.
+ * features.
+ *
+ * These quality-of-life features are ported from / modeled on
+ * The Minish Cap Reborn by Admentus64 (GPL-3.0):
+ *   https://github.com/Admentus64/The-Minish-Cap-Reborn
+ * Distributed under the GPL-3.0 with attribution; see THIRD-PARTY-LICENSES.md.
+ * Each feature checks its toggle at the call site, so users can flip
+ * individual features on or off at runtime.
  *
  * Defaults: all ON (these are quality-of-life wins).
- *
  * Surface in F8 ribbon → "Reborn" tab.
  */
 

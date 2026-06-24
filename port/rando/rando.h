@@ -1,8 +1,10 @@
 /*
- * port/rando/rando.h — in-process native randomizer.
+ * port/rando/rando.h — in-process randomizer for Project Picori.
  *
- * Fully custom, native randomizer implementation for Project Picori.
- * Defines all locations, items, logical connections, and settings natively.
+ * Derived from the GPL-3.0 Minish Cap randomizer (MinishMaker,
+ * minishmaker/randomizer). Distributed under the GPL-3.0 with attribution;
+ * see THIRD-PARTY-LICENSES.md. Defines locations, items, logical connections,
+ * and settings.
  */
 
 #ifndef PORT_RANDO_RANDO_H
