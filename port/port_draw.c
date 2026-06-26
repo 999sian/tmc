@@ -408,6 +408,33 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
     const u8* sizeTab = &sSizeTable[tableOff];
 
     u8 updated = gOAMControls.updated;
+
+    /* --- Swamp-sink per-pixel waterline clip (ViruaPPU obj-clip-y patch) ---
+     * GBA hides Link's lower body in the swamp by omitting his lower sprite rows
+     * (the swamp BG is opaque over his whole sprite, so OBJ priority can't do a
+     * partial hide). We mark Link's OAM entries and a waterline screen-Y; ViruaPPU
+     * drops those entries' pixels at scanline >= waterline, so the line rises
+     * feet->head smoothly as the sink timer climbs. Reset once per frame (the
+     * first emitted sprite has updated==0, since FlushSprites zeroes it). */
+    extern u8 virtuappu_mode1_obj_clip_mark[128];
+    extern int virtuappu_mode1_obj_clip_y;
+    extern int virtuappu_mode1_obj_clip_enable;
+    extern PlayerEntity gPlayerEntity;
+    if (updated == 0) {
+        memset(virtuappu_mode1_obj_clip_mark, 0, 128);
+        virtuappu_mode1_obj_clip_enable = 0;
+    }
+    int sSwampClipActive = (sRenderingPlayer && gPlayerState.floor_type == SURFACE_SWAMP &&
+                            gPlayerState.jump_status == 0 && gPlayerEntity.base.z.HALF.HI <= 0);
+    if (sSwampClipActive) {
+        /* Waterline rises feet->head as the sink timer climbs. Tune here:
+         * bigger divisor = slower cover; lower cap = less of him buried. */
+        s32 sub = 2 + ((s32)gPlayerState.surfaceTimer / 48); /* slow, shallow climb */
+        if (sub > 8)
+            sub = 8; /* keep him ~knee/waist deep at most — never head-only */
+        virtuappu_mode1_obj_clip_y = (int)baseY - sub;
+        virtuappu_mode1_obj_clip_enable = 1;
+    }
     /* OAM entries start at offset 0x20 in OAMControls, each 8 bytes */
     u8* oamBase = (u8*)&gOAMControls.oam[0];
     u8* ip = oamBase + updated * 8;
@@ -432,19 +459,6 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
                 yoff = -yoff; /* v-flip */
             if (flags & 0x10000000)
                 xoff = -xoff; /* h-flip */
-        }
-
-        /* Muddy-water sink: progressively hide Link's lower body as he sinks
-         * (head clipped last). The GBA hides the body behind the mud BG and
-         * draws a head-overlay sprite; that overlay isn't wired on PC, so we
-         * clip the player's lower OAM pieces instead. Driven purely by live
-         * engine state (no separate timer -> no #84 double-drown). */
-        if (sRenderingPlayer && gPlayerState.framestate == PL_STATE_SINKING &&
-            gPlayerState.floor_type == SURFACE_SWAMP) {
-            s32 t = (s32)gPlayerState.surfaceTimer;
-            s32 clipY = t < 48 ? 16 : t < 96 ? 0 : t < 144 ? -8 : t < 192 ? -16 : -22;
-            if ((s32)yoff > clipY)
-                continue;
         }
 
         /* Screen position */
@@ -501,6 +515,11 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
 
         memcpy(ip, &attr2, sizeof(attr2));
         ip += 4; /* skip affineParam (2 bytes attr2 + 2 bytes padding) */
+
+        /* Swamp sink: mark this player OAM entry for the per-pixel waterline
+         * clip in ViruaPPU (see RenderSpritePieces top + port_gba_mem). */
+        if (sSwampClipActive)
+            virtuappu_mode1_obj_clip_mark[updated & 0x7F] = 1;
 
         updated++;
     }
@@ -802,12 +821,14 @@ static void LookupAndRenderNormal(Entity* entity, s32 x, s32 y, u32 flags, u16 e
 static void DrawEntitySprites(Entity* entity, s32 x, s32 y, u32 flags, u16 extra) {
     s8 renderMode = (s8)entity->spriteAnimation[2]; /* offset 0x28 */
 
+    extern PlayerEntity gPlayerEntity;
+    /* Set for ALL render paths (the player uses the multi-part path renderMode==1),
+     * so the swamp-sink OAM marking below covers Link's composite sprite. */
+    sRenderingPlayer = (entity == &gPlayerEntity.base);
+
     if (renderMode == 0) {
         /* Normal sprite rendering */
-        extern PlayerEntity gPlayerEntity;
-        sRenderingPlayer = (entity == &gPlayerEntity.base);
         LookupAndRenderNormal(entity, x, y, flags, extra);
-        sRenderingPlayer = 0;
     } else if (renderMode < 0) {
         /* Direct frame data from myHeap */
         const u8* frameData = (const u8*)entity->myHeap;

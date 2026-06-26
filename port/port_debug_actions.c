@@ -634,6 +634,22 @@ static const DebugToggleItem kToggleItems[] = {
     { ITEM_QST_GRAVEYARD_KEY, "Graveyard Key",      "Quest", EXCL_NONE },
     { ITEM_QST_TINGLE_TROPHY, "Tingle Trophy",      "Quest", EXCL_NONE },
     { ITEM_QST_CARLOV_MEDAL,  "Carlov Medal",       "Quest", EXCL_NONE },
+    /* Sword-technique scrolls — independent of each other. Each is an inventory
+     * bit; toggling one calls UpdatePlayerSkills() (see SetToggleItem) so the
+     * technique is usable/removed immediately, not only after the next room load.
+     * Keep this group contiguous: the menu opens one CollapsingHeader per run of
+     * same-group rows. */
+    { ITEM_SKILL_SPIN_ATTACK, "Spin Attack",        "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_ROLL_ATTACK, "Roll Attack",        "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_DASH_ATTACK, "Dash Attack",        "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_ROCK_BREAKER,"Rock Breaker",       "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_SWORD_BEAM,  "Sword Beam",         "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_GREAT_SPIN,  "Great Spin Attack",  "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_DOWN_THRUST, "Down Thrust",        "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_PERIL_BEAM,  "Peril Beam",         "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_FAST_SPIN,   "Fast Spin",          "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_FAST_SPLIT,  "Fast Split",         "Sword Techniques", EXCL_NONE },
+    { ITEM_SKILL_LONG_SPIN,   "Long Spin",          "Sword Techniques", EXCL_NONE },
 };
 #define TOGGLE_ITEM_COUNT ((int)(sizeof(kToggleItems) / sizeof(kToggleItems[0])))
 
@@ -709,6 +725,15 @@ void Port_DebugAction_SetToggleItem(int i, int owned) {
     /* Reload held-item VRAM so toggling bomb/boomerang variants doesn't
      * leave Link rendering with stale gfx — same call GiveAllItems makes. */
     LoadItemGfx();
+
+    /* Sword-technique scrolls feed gPlayerState.skills, a runtime field that
+     * UpdatePlayerSkills() rebuilds from these inventory bits. Rebuild now so a
+     * toggled technique becomes usable (or is removed) immediately, not only
+     * after the next room load. */
+    if (kToggleItems[i].group != NULL &&
+        strcmp(kToggleItems[i].group, "Sword Techniques") == 0) {
+        UpdatePlayerSkills();
+    }
 }
 
 /* ------------------------------------------------------------------ */

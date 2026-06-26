@@ -1,0 +1,35 @@
+diff --git a/src/mode1.c b/src/mode1.c
+index 70682b8..c4683ef 100644
+--- a/src/mode1.c
++++ b/src/mode1.c
+@@ -337,6 +337,15 @@ VPPU_TLS uint8_t virtuappu_mode1_obj_semitrans[MODE1_GBA_WIDTH];
+  * with obj_semitrans. */
+ VPPU_TLS uint8_t virtuappu_mode1_obj_window[MODE1_GBA_WIDTH];
+ 
++/* Per-pixel vertical OBJ clip (PC port "swamp sink"): the port marks which OAM
++ * entries to clip (one byte per OAM index) and a waterline scanline; a marked
++ * entry's pixels at line >= waterline are dropped, leaving everything else
++ * untouched. SHARED (not VPPU_TLS): set once per frame by the port before the
++ * render and read-only during the OpenMP-parallel scanline render. */
++uint8_t virtuappu_mode1_obj_clip_mark[MODE1_GBA_OAM_COUNT];
++int virtuappu_mode1_obj_clip_y;
++int virtuappu_mode1_obj_clip_enable;
++
+ uint16_t virtuappu_mode1_io_read16(uint16_t offset)
+ {
+     const uint8_t *src = virtuappu_mode1_io_thread_override
+@@ -684,6 +693,14 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffe
+                 continue;
+             }
+ 
++            /* Per-pixel vertical OBJ clip (swamp sink): drop this marked entry's
++             * pixels at or below the waterline. `i` is the OAM index, `line` the
++             * scanline. */
++            if (virtuappu_mode1_obj_clip_enable && virtuappu_mode1_obj_clip_mark[i] &&
++                line >= virtuappu_mode1_obj_clip_y) {
++                continue;
++            }
++
+             if (bpp8) {
+                 rgb555 = mode1_memory.obj_palette[color_index];
+             } else {
