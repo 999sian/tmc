@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 (2026-06-26)
 
 ### Software PPU vendored in-tree (`port/ppu`); ViruaPPU submodule + patch pipeline removed
 
