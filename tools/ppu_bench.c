@@ -11,8 +11,8 @@
  * checksum as the baseline).
  *
  * Build (match the game's flags):
- *   gcc -O3 -mavx2 -mfma -fopenmp -I libs/ViruaPPU/include \
- *       -DMODE1_GBA_WIDTH=240 tools/ppu_bench.c libs/ViruaPPU/src/mode1.c \
+ *   gcc -O3 -mavx2 -mfma -fopenmp -I port/ppu/include \
+ *       -DMODE1_GBA_WIDTH=240 tools/ppu_bench.c port/ppu/src/mode1.c \
  *       -o /tmp/ppu_bench -lm
  *
  * Run:

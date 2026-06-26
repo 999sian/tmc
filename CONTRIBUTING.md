@@ -56,7 +56,7 @@ byte-matching workflow.
 |------|------------|
 | `src/` | C decompilation of the GBA game. **Edit carefully** — many functions still pattern-match the ARM original and use `super` (= `&this->base`). |
 | `port/` | PC-only glue: main loop, ROM mmap, asset loader, PPU/audio/input bridges, quicksave, bug-report, debug menu. Most port work happens here and in guarded `src/` edits. |
-| `libs/ViruaPPU` | Software GBA PPU renderer (submodule). Don't edit directly — see [Renderer changes](#renderer-changes-viruappu). |
+| `port/ppu/` | Software GBA PPU renderer, vendored first-party (GPL-3.0). Edit directly; guard every change with the parity gate — see [Renderer changes](#renderer-changes-portppu). |
 | `libs/agbplay_core` | GBA M4A audio engine (LGPL-3.0 submodule). |
 | `asm/` | Undecompiled functions, linked alongside `src/` via `linker.ld`. |
 | `data/`, `assets/` | GBA data (`.s`) and the extracted runtime asset trees. |
@@ -74,7 +74,7 @@ below instead of grepping randomly:
 | Runtime config / input | `port_runtime_config.*`, `port_config.h`, `port_bios.c` | `port_runtime_config.*` owns persisted settings and gamepad/key bindings. `port_bios.c` polls SDL events and handles global hotkeys (`F5` save, `F6` load/TTS stop, `F7` TTS, `F8` menu, `F9` bug report, `F10` accessibility scan, `F12` upscaler). |
 | ROM / native address bridge | `port_rom.*`, `port_gba_mem.*`, `port_offset_*.h` | Converts ROM/GBA addresses into native pointers. Use these helpers; never cast a raw `0x08...` address. |
 | Assets / mods | `port_asset_bootstrap.*`, `port_asset_loader.*`, `port_asset_pak*`, `port_asset_pipeline.*`, `port_mods.*` | Asset lookup is: mod override → mounted `.pak` → loose `assets/` file → ROM fallback at the caller. Mods are Tier 1 asset replacements; see `mods/README.md`. |
-| Rendering | `port_ppu.*`, `port_gpu_renderer.*`, `port_filter.*`, `port_upscale.*`, `port_glslp_*`, `libs/ViruaPPU/src/*` | `port_ppu.cpp` owns presentation. SDL_GPU is an optional backend. ViruaPPU changes must be patches in `port/patches/`. |
+| Rendering | `port_ppu.*`, `port/ppu/src/*`, `port_gpu_renderer.*`, `port_filter.*`, `port_upscale.*`, `port_glslp_*` | `port_ppu.cpp` owns presentation; `port/ppu/` is the vendored software PPU (edit directly, guard with the parity gate). SDL_GPU is an optional backend. |
 | Audio | `port_audio.*`, `port_m4a_backend.*`, `port_m4a_stubs.c`, `port_audio_mute.*` | `port_audio.c` owns SDL audio device/thread plumbing; `port_m4a_backend.cpp` adapts agbplay/M4A data. |
 | Debug/UI | `port_imgui_menu.cpp`, `port_debug_menu.*`, `port_debug_actions.c`, `port_bugreport.*`, `port_repro_*.c` | `port_imgui_menu.cpp` draws the modern F8 UI; `port_debug_menu.*` is the legacy page model still used by keyboard/controller navigation. Repro files are env-gated harnesses for specific bugs. |
 | Randomizer | `port/rando/*` | Best documented subsystem; read `port/rando/README.md` before touching it. `rando_logic_test` is a focused self-test target. |
@@ -189,17 +189,25 @@ for `PC_PORT`) are the best reference when you hit one.
 5. **Commit one fix per commit**, message style `fix(port): <short description>`
    (reference an issue number when there is one).
 
-## Renderer changes (ViruaPPU)
+## Renderer changes (port/ppu)
 
-`libs/ViruaPPU` is a submodule, so **direct edits to its source are lost** on
-`xmake clean` or a fresh checkout. Port-side PPU changes live as patches in
-`port/patches/viruappu-*.patch`, applied (idempotently) at configure time. To
-author one: edit the working-tree submodule source, build to verify, extract
-*only your delta* as a patch, and wire it into `xmake.lua`. **Test a new or
-edited patch with a full `git -C libs/ViruaPPU reset --hard HEAD` then rebuild —
-never a partial one-file checkout** (other patches edit the same file but keep
-their marker elsewhere, so a partial reset leaves them un-re-applied and
-produces false conflicts).
+The software GBA PPU lives in-tree at `port/ppu/` (vendored, GPL-3.0-or-later;
+it was formerly a patched `libs/ViruaPPU` submodule — see `port/ppu/README.md`).
+**Edit the source directly** — no patches, no submodule reset.
+
+Every render change MUST be guarded by the byte-exact parity gate:
+
+```sh
+tools/ppu_parity_check.sh        # must PASS before and after a change you intend to be render-neutral
+```
+
+The renderer is integer-only, so the golden hashes in
+`tools/ppu_golden_hashes.txt` are portable (the same gate runs in CI). If a
+change *intentionally* alters output, regenerate the golden
+(`tools/ppu_parity_check.sh --update`) and justify it in the commit. The
+committed corpus is hermetic (boot/title screens); for gameplay coverage that
+needs a save, point `PPU_CORPUS`/`PPU_GOLDEN` at a local corpus (see the header
+of `tools/ppu_corpus.txt`).
 
 ## Submitting changes
 

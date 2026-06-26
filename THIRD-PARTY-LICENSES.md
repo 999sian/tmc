@@ -84,9 +84,13 @@ now GPL-3.0, a GPL-compatible license must be added to these submodules for a
 fully license-clean distribution. This is pending with the author — resolve it
 before redistributing binaries.
 
+> **Resolved for the software PPU:** the former `libs/ViruaPPU` submodule has
+> been vendored first-party into `port/ppu/` as GPL-3.0-or-later (derived from
+> VirtuaPPU `5cf5e99` plus this project's patches; see `port/ppu/README.md`).
+> It is no longer an unlicensed third-party dependency.
+
 | Component | Path | Upstream | License |
 |-----------|------|----------|---------|
-| ViruaPPU / VirtuaPPU | `libs/ViruaPPU` | https://github.com/MatheoVignaud/VirtuaPPU | none published |
 | VirtuaAPU | `libs/VirtuaAPU` | https://github.com/MatheoVignaud/VirtuaAPU | none published |
 | tmc-Modern-Launcher | `libs/tmc-Modern-Launcher` | https://github.com/MatheoVignaud/tmc-Modern-Launcher | none published |
 | tmc-Android-Experimental | `libs/tmc-Android-Experimental` | https://github.com/MatheoVignaud/tmc-Android-Experimental | none published |
