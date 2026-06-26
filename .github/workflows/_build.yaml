@@ -556,6 +556,24 @@ jobs:
           grep -q "PPU init complete" smoke.log
           echo "OK: binary booted headless and parked in prelaunch (killed by timeout as expected)."
 
+      # Byte-exact PPU render parity gate (Phase 0 oracle). For each scene in
+      # tools/ppu_corpus.txt it captures a deterministic snapshot from a
+      # headless run and hashes the render two ways (static mode1/mode2 +
+      # end-to-end live frame), comparing against tools/ppu_golden_hashes.txt.
+      # The renderer is integer-only (no floating point), so the golden hashes
+      # are portable across compilers/CPUs. Guards every PPU change against
+      # silent render regressions. x86_64-only (matches the other golden gates;
+      # the SIMD-built bench needs AVX2) and needs the private ROMs.
+      - name: PPU render parity regression (Linux x86_64)
+        if: matrix.os_name == 'linux' && matrix.arch == 'x86_64' && steps.probe_assets.outputs.have_assets == 'true'
+        shell: bash
+        run: |
+          export TMC_PC="$PWD/build/pc/${{ matrix.exe_name }}"
+          TMC_REGION=usa TMC_BASEROM="$PWD/baserom.gba" tools/ppu_parity_check.sh
+          if [ -f "$PWD/baserom_eu.gba" ]; then
+            TMC_REGION=eu TMC_BASEROM="$PWD/baserom_eu.gba" tools/ppu_parity_check.sh
+          fi
+
       - name: Prepare artifact payload
         shell: bash
         run: |

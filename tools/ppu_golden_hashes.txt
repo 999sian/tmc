@@ -1,0 +1,7 @@
+# region	name	tierA(static)	tierB(e2e)
+eu	intro_logo	0x19be41d4a87f6e73	0x19be41d4a87f6e73
+eu	title	0x373ac17ac40cc08b	0x373ac17ac40cc08b
+jp	intro_logo	0xf4bea72ddd5fc9bb	0xf4bea72ddd5fc9bb
+jp	title	0x6b4b8e61da3302db	0x6b4b8e61da3302db
+usa	intro_logo	0x7d7d9e2cde85b393	0x7d7d9e2cde85b393
+usa	title	0x1dec0c73f65d112b	0x1dec0c73f65d112b
