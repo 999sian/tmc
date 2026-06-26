@@ -12,6 +12,7 @@
 #include "cpu/mode1.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,6 +45,33 @@ typedef enum Mode1BlendEffect {
     MODE1_BLEND_DARKEN = 3
 } Mode1BlendEffect;
 
+/* ---------------------------------------------------------------------------
+ * PPU module state & threading contract (single reference).
+ *
+ * Bound GBA memory:
+ *   mode1_default_*        backing buffers used until the engine binds real
+ *                          memory, or when a NULL pointer is bound (see
+ *                          virtuappu_mode1_bind_gba_memory — it validates each
+ *                          pointer and falls back to these defaults).
+ *   mode1_memory           the live binding (engine arrays or the defaults).
+ *   mode1_frame_width/_pitch  render geometry (set per frame by
+ *                          virtuappu_mode1_set_frame_geometry).
+ *
+ * Per-frame render threading (virtuappu_mode1_render_frame is OpenMP-parallel
+ * over scanlines):
+ *   TLS (VPPU_TLS, per render thread): io_thread_override, obj_semitrans,
+ *       obj_window. Each thread owns a whole scanline; these must NOT be shared.
+ *       IO regs are read via virtuappu_mode1_io_read16/32, which honour the
+ *       per-thread override snapshot — never read mode1_memory.io_mem directly
+ *       in render code or you get the wrong scanline's registers.
+ *   SHARED, read-only during render (set once per frame by the port before the
+ *       render): obj_clip_* (swamp sink), ws_shadow* (widescreen Option A),
+ *       and the precomputed affine reference arrays.
+ *
+ * OOB safety: bound pointers are trusted for size; every VRAM/OAM/palette
+ * access is range-clamped against the MODE1_*_SIZE constants at use sites, so
+ * degraded/short room data can't read out of bounds.
+ * ------------------------------------------------------------------------- */
 static uint8_t mode1_default_io_mem[MODE1_IO_MEM_SIZE];
 static uint8_t mode1_default_vram[MODE1_VRAM_SIZE];
 static uint16_t mode1_default_bg_palette[MODE1_PALETTE_COLORS];
@@ -300,11 +328,31 @@ static uint32_t mode1_darken(uint32_t abgr, int evy)
 
 void virtuappu_mode1_bind_gba_memory(const VirtuaPPUMode1GbaMemory *memory)
 {
+    /* Validate at bind: any missing pointer falls back to a (zeroed) default
+     * buffer so render never dereferences NULL. A fallback means the engine's
+     * memory wasn't wired up — surface it once instead of silently rendering a
+     * blank/garbage frame. (Per-access range clamps remain the OOB guard for
+     * the bound buffers themselves; see the module-state contract above.) */
+    const bool fell_back =
+        memory == NULL || memory->io_mem == NULL || memory->vram == NULL ||
+        memory->bg_palette == NULL || memory->obj_palette == NULL || memory->oam_mem == NULL;
+
     mode1_memory.io_mem = (memory != NULL && memory->io_mem != NULL) ? memory->io_mem : mode1_default_io_mem;
     mode1_memory.vram = (memory != NULL && memory->vram != NULL) ? memory->vram : mode1_default_vram;
     mode1_memory.bg_palette = (memory != NULL && memory->bg_palette != NULL) ? memory->bg_palette : mode1_default_bg_palette;
     mode1_memory.obj_palette = (memory != NULL && memory->obj_palette != NULL) ? memory->obj_palette : mode1_default_obj_palette;
     mode1_memory.oam_mem = (memory != NULL && memory->oam_mem != NULL) ? memory->oam_mem : mode1_default_oam_mem;
+
+    if (fell_back) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            fprintf(stderr,
+                "[ppu] WARNING: bind_gba_memory received a NULL pointer; using zeroed "
+                "default buffer(s). The PPU will render blank until real GBA memory is "
+                "bound.\n");
+        }
+    }
 }
 
 void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory *memory)
