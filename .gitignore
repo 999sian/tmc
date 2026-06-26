@@ -146,3 +146,10 @@ tools/retail_maps/
 # PPU parity: local (save-dependent) gameplay corpus + its golden — not portable
 tools/ppu_corpus.local.txt
 tools/ppu_golden_hashes.local*
+
+# Vulkan ray-tracing experiment (standalone spike, not part of the tmc_pc
+# build). Its compiled binary + .spv shader blobs are regenerable via the
+# dir's README; never commit them. Scoped here so the stock SDL_GPU shaders
+# in port/shaders/build/*.spv (bin2c-embedded into tmc_pc) stay tracked.
+port/vk_rt_experiment/vkrt_demo
+port/vk_rt_experiment/shaders/*.spv

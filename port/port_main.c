@@ -291,6 +291,16 @@ static void Port_ReserveGbaAddressSpace(void) {
 static void Port_ReserveGbaAddressSpace(void) { /* not needed on Linux/macOS */ }
 #endif
 
+/* Boot-splash present, hiding the GPU vs SDL_Renderer split. */
+static void PaintSplash(SDL_Window* window, const char* msg) {
+#ifdef TMC_GPU_RENDERER
+    (void)window; (void)msg;
+    Port_GPU_PaintBootSplash();
+#else
+    Port_PaintBootSplash(window, msg);
+#endif
+}
+
 int main(int argc, char* argv[]) {
 
     /* Must run before any std::vector / new / malloc that could land in
@@ -359,7 +369,7 @@ int main(int argc, char* argv[]) {
     const char* glslpPath = NULL;
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
-            if (strcmp(argv[i], "--window_scale=") == 0 || strncmp(argv[i], "--window_scale=", 15) == 0) {
+            if (strncmp(argv[i], "--window_scale=", 15) == 0) {
                 const char* valueStr = argv[i] + 15;
                 int value = atoi(valueStr);
                 if (value >= 1 && value <= 10) {
@@ -560,13 +570,7 @@ int main(int argc, char* argv[]) {
 #endif
     Port_PPU_Init(window);
 
-#ifdef TMC_GPU_RENDERER
-    {
-        Port_GPU_PaintBootSplash();
-    }
-#else
-    Port_PaintBootSplash(window, "LOADING");
-#endif
+    PaintSplash(window, "LOADING");
     fprintf(stderr, "PPU init complete.\n");
 
     /* Re-apply persisted window/renderer toggles now that the window, the
@@ -823,13 +827,7 @@ int main(int argc, char* argv[]) {
 
     /* Last bridging splash before the game's title fade-in takes
      * over. After this the engine drives the frame loop. */
-#ifdef TMC_GPU_RENDERER
-    {
-        Port_GPU_PaintBootSplash();
-    }
-#else
-    Port_PaintBootSplash(window, "STARTING");
-#endif
+    PaintSplash(window, "STARTING");
     fprintf(stderr, "Port layer initialized. Entering AgbMain...\n");
 
     AgbMain();

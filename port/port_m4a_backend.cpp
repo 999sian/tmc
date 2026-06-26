@@ -15,6 +15,7 @@
 
 #include <filesystem>
 #include <optional>
+#include "port_exe_path.hpp"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -155,18 +156,6 @@ static AgbplaySoundMode MakeAgbplayMode(void) {
     return mode;
 }
 
-static size_t SongHeaderToRomPos(const SongHeader* songHeader) {
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(songHeader);
-
-    if (songHeader == nullptr || gRomData == nullptr) {
-        return 0;
-    }
-    if (ptr < gRomData || ptr >= gRomData + gRomSize) {
-        return 0;
-    }
-    return static_cast<size_t>(ptr - gRomData);
-}
-
 static const char* GetCurrentVariantName(void) {
     switch (gRomRegion) {
         case ROM_REGION_EU:
@@ -190,35 +179,7 @@ static std::string LoadTextFile(const char* path) {
 }
 
 static std::optional<std::filesystem::path> ExeDirForSounds() {
-#ifdef _WIN32
-    std::wstring buf(MAX_PATH, L'\0');
-    DWORD len = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
-    if (len == 0) return std::nullopt;
-    while (len >= buf.size() - 1) {
-        buf.resize(buf.size() * 2);
-        len = GetModuleFileNameW(nullptr, buf.data(), static_cast<DWORD>(buf.size()));
-        if (len == 0) return std::nullopt;
-    }
-    buf.resize(len);
-    return std::filesystem::path(buf).parent_path();
-#elif defined(__APPLE__)
-    uint32_t size = 0;
-    _NSGetExecutablePath(nullptr, &size);
-    std::string buf(size, '\0');
-    if (_NSGetExecutablePath(buf.data(), &size) == 0) {
-        std::error_code ec;
-        std::filesystem::path canonical = std::filesystem::weakly_canonical(buf.c_str(), ec);
-        if (!ec) return canonical.parent_path();
-    }
-    return std::nullopt;
-#else
-    char buf[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf));
-    if (len > 0 && static_cast<size_t>(len) < sizeof(buf)) {
-        return std::filesystem::path(std::string(buf, static_cast<size_t>(len))).parent_path();
-    }
-    return std::nullopt;
-#endif
+    return port::ExecutableDir();
 }
 
 static std::string LoadSoundsJson(void) {
@@ -686,26 +647,6 @@ bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId) {
     } catch (const std::exception& e) {
         AudioGuardWarn("StartSongById", e.what());
         return false;
-    }
-}
-
-void Port_M4A_Backend_StartSong(uint8_t playerIndex, const SongHeader* songHeader) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
-    try {
-        const size_t songPos = SongHeaderToRomPos(songHeader);
-
-        if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
-            return;
-        }
-
-        if (songPos == 0) {
-            sState.ctx->m4aMPlayStop(playerIndex);
-            return;
-        }
-
-        sState.ctx->m4aMPlayStart(playerIndex, songPos);
-    } catch (const std::exception& e) {
-        AudioGuardWarn("StartSong", e.what());
     }
 }
 

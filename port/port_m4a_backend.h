@@ -17,7 +17,6 @@ void Port_M4A_Backend_SoundInit(uint32_t soundMode);
 void Port_M4A_Backend_SetSoundMode(uint32_t soundMode);
 void Port_M4A_Backend_SetVSyncEnabled(bool enabled);
 bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId);
-void Port_M4A_Backend_StartSong(uint8_t playerIndex, const SongHeader* songHeader);
 void Port_M4A_Backend_StopPlayer(uint8_t playerIndex);
 void Port_M4A_Backend_ContinuePlayer(uint8_t playerIndex);
 void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, uint16_t volume);

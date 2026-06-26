@@ -30,6 +30,7 @@
 #include <setjmp.h>
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 
 /* Forward declaration of RenderSpritePieces (defined below) */
 static void RenderSpritePieces(const u8* data, s16 baseX, s16 baseY, u32 flags, u16 extra);
@@ -53,26 +54,15 @@ static inline u32 ReadU32Unaligned(const void* p) {
     return v;
 }
 
-/* ---- Struct layout diagnostic (one-time) ---- */
-static void Port_CheckStructLayouts(void) {
-    static int done = 0;
-    if (done) return;
-    done = 1;
-
-    /* Verify the 4 sprite fields at offset 0x18 (GBA) are contiguous.
-     * This is critical: ResolveEntitySpriteParams reads them as a single u32.
-     * If any padding exists between them, sprite rendering breaks completely. */
-    Entity e;
-    ptrdiff_t ssOff = (char*)&e.spriteSettings - (char*)&e;
-    ptrdiff_t srOff = (char*)&e.spriteRendering - (char*)&e;
-    ptrdiff_t palOff = (char*)&e.palette - (char*)&e;
-    ptrdiff_t soOff = (char*)&e.spriteOrientation - (char*)&e;
-    if (srOff != ssOff + 1 || palOff != ssOff + 2 || soOff != ssOff + 3) {
-        fprintf(stderr, "FATAL: Entity spriteSettings block not contiguous! "
-                "offsets: ss=%td sr=%td pal=%td so=%td (expected +1,+2,+3)\n",
-                ssOff, srOff, palOff, soOff);
-    }
-}
+/* ---- Struct layout invariant (compile-time) ----
+ * ResolveEntitySpriteParams reads the 4 sprite fields at offset 0x18 (GBA) as
+ * a single u32; any padding between them breaks sprite rendering completely. */
+_Static_assert(offsetof(Entity, spriteRendering) == offsetof(Entity, spriteSettings) + 1,
+               "Entity.spriteRendering must immediately follow spriteSettings");
+_Static_assert(offsetof(Entity, palette) == offsetof(Entity, spriteSettings) + 2,
+               "Entity.palette must be 2 bytes after spriteSettings");
+_Static_assert(offsetof(Entity, spriteOrientation) == offsetof(Entity, spriteSettings) + 3,
+               "Entity.spriteOrientation must be 3 bytes after spriteSettings");
 
 /* ---- Size/clipping table from ROM overlay (ram_0x80b2be8) ----
  * 60 entries × 4 bytes = 240 bytes.
@@ -195,9 +185,6 @@ void ram_UpdateEntities(u32 mode) {
         extern void Port_CheckOrchIntegrity(unsigned phase, const char* where);
         Port_CheckOrchIntegrity(mode, "before-update");
     }
-
-    /* One-time struct layout check */
-    Port_CheckStructLayouts();
 
     /* Initialize function table on first call */
     InitEntityUpdateFuncs();

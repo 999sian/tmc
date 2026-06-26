@@ -1,5 +1,6 @@
 #include "port_mods.h"
 #include "port_asset_loader.h"
+#include "port_exe_path.hpp"
 
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -21,44 +22,9 @@
 namespace {
 
 std::filesystem::path ExecutableDirectory() {
-    /* Mirrors port_asset_bootstrap.cpp::GetExecutableDirectory. Kept
-     * local to avoid pulling in port_asset_bootstrap.hpp's full deps.
-     * Each platform has a different API for "where is my exe":
-     *   Linux  → readlink("/proc/self/exe")
-     *   macOS  → _NSGetExecutablePath  (+ weakly_canonical to resolve symlinks)
-     *   Windows → GetModuleFileNameW
-     * The cwd fallback is for unusual layouts (e.g. someone running a
-     * launch wrapper) where the platform query fails. */
-#if defined(_WIN32)
-    std::wstring buffer(MAX_PATH, L'\0');
-    DWORD len = GetModuleFileNameW(nullptr, buffer.data(),
-                                   static_cast<DWORD>(buffer.size()));
-    while (len > 0 && len >= buffer.size() - 1) {
-        buffer.resize(buffer.size() * 2);
-        len = GetModuleFileNameW(nullptr, buffer.data(),
-                                 static_cast<DWORD>(buffer.size()));
+    if (auto dir = port::ExecutableDir()) {
+        return *dir;
     }
-    if (len > 0) {
-        buffer.resize(len);
-        return std::filesystem::path(buffer).parent_path();
-    }
-#elif defined(__APPLE__)
-    uint32_t size = 0;
-    _NSGetExecutablePath(nullptr, &size);
-    std::string buf2(size, '\0');
-    if (_NSGetExecutablePath(buf2.data(), &size) == 0) {
-        std::error_code ec;
-        auto canonical = std::filesystem::weakly_canonical(buf2.c_str(), ec);
-        if (!ec) return canonical.parent_path();
-    }
-#elif defined(__linux__)
-    char buf[4096];
-    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf));
-    if (len > 0 && static_cast<size_t>(len) < sizeof(buf)) {
-        buf[len] = '\0';
-        return std::filesystem::path(buf).parent_path();
-    }
-#endif
     std::error_code ec;
     auto cwd = std::filesystem::current_path(ec);
     return ec ? std::filesystem::path(".") : cwd;

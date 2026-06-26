@@ -220,14 +220,6 @@ static int run_real_logic_chest_probe(void) {
       return 1;
 }
 
-static int run_real_logic_menu_test(void) {
-    return 1;
-}
-
-static int run_real_logic_openworld_test(void) {
-    return 1;
-}
-
 extern SDL_Window* Port_PPU_ActiveWindow(void);
 
 static void commit_random_seed_from_menu(void) {
@@ -382,8 +374,6 @@ void Port_ReproRando_Tick(unsigned int frame) {
         if (!run_logic_key_path()) { sDone = 1; exit(1); }
         if (!run_world_open_test()) { sDone = 1; exit(1); }
         if (!run_real_logic_chest_probe()) { sDone = 1; exit(1); }
-        if (!run_real_logic_menu_test()) { sDone = 1; exit(1); }
-        if (!run_real_logic_openworld_test()) { sDone = 1; exit(1); }
     }
 
     if (frame > 200) {

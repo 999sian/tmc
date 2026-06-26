@@ -96,7 +96,6 @@ const char* Port_DebugMenu_Toast(void);                 /* NULL if expired */
 }
 
 static bool sImGuiInited = false;
-static bool sImGuiEnabled = true;          /* runtime toggle */
 static bool sRibbonEnabled = true;         /* Office-style ribbon at top */
 static SDL_Window* sWindow = nullptr;
 static SDL_Renderer* sRenderer = nullptr;
@@ -291,7 +290,7 @@ extern "C" void Port_ImGui_Shutdown(void) {
  * (file-select randomizer setup) check this so they never open an
  * invisible modal over a masked game (= softlock). */
 extern "C" bool Port_ImGui_CanPresent(void) {
-    if (!sImGuiInited || !sImGuiEnabled) return false;
+    if (!sImGuiInited) return false;
 #ifndef TMC_GPU_RENDERER
     if (!sRenderer) return false;
 #endif
@@ -309,12 +308,11 @@ extern "C" bool Port_ImGui_WantsTextInput(void) {
 }
 
 extern "C" void Port_ImGui_HandleEvent(const SDL_Event* event) {
-    if (!sImGuiInited || !sImGuiEnabled) return;
+    if (!sImGuiInited) return;
     ImGui_ImplSDL3_ProcessEvent(event);
 }
 
-extern "C" bool Port_ImGui_IsEnabled(void) { return sImGuiEnabled; }
-extern "C" void Port_ImGui_SetEnabled(bool enabled) { sImGuiEnabled = enabled; }
+extern "C" bool Port_ImGui_IsEnabled(void) { return true; }
 extern "C" bool Port_ImGui_RibbonEnabled(void) { return sRibbonEnabled; }
 extern "C" void Port_ImGui_SetRibbonEnabled(bool enabled) { sRibbonEnabled = enabled; }
 
@@ -507,6 +505,41 @@ static void DrawRibbonDungeonItems(void) {
     }
 }
 
+extern "C" {
+typedef void (*PortBuffApplyFn)(int, int);
+typedef int  (*PortBuffQueryFn)(int*, int*);
+}
+
+/* Charm and picolyte share the same combo + frames-slider + Apply + live-
+ * status shape; only the labels, id list, default state, and apply/query
+ * hooks differ. Selection + frames state is caller-owned so the two buffs
+ * don't share it. */
+static void DrawTimedBuff(const char* label, const char* lname, const char* applyId,
+                          const char** names, const int* ids, int count,
+                          int* sel, int* frames,
+                          PortBuffApplyFn apply, PortBuffQueryFn query) {
+    char tag[32];
+    ImGui::SetNextItemWidth(200);
+    std::snprintf(tag, sizeof(tag), "%s type", label);
+    ImGui::Combo(tag, sel, names, count);
+    ImGui::SetNextItemWidth(200);
+    std::snprintf(tag, sizeof(tag), "%s frames", label);
+    ImGui::SliderInt(tag, frames, 0, 65535, "%d", ImGuiSliderFlags_Logarithmic);
+    ImGui::SameLine();
+    std::snprintf(tag, sizeof(tag), "Apply##%s", applyId);
+    if (ImGui::Button(tag)) {
+        apply(ids[*sel], *frames);
+        char toast[40];
+        std::snprintf(toast, sizeof(toast), "%s %s", label, *sel == 0 ? "cleared" : "applied");
+        Port_DebugMenu_ToastFromExternal(toast);
+    }
+    int id = 0, timer = 0;
+    if (query(&id, &timer))
+        ImGui::TextDisabled("%s active: id %d, %d frames (%.1fs left)", lname, id, timer, timer / 60.0f);
+    else
+        ImGui::TextDisabled("%s: inactive", lname);
+}
+
 /* Charm + Picolyte activator. The combo + slider compose a buff to apply on
  * the button; the live line shows what's currently ticking (the engine
  * counts the timer down each frame, so the slider isn't bound to it). */
@@ -516,21 +549,8 @@ static void DrawRibbonBuffs(void) {
     static const int   kCharmIds[]   = { 0, BOTTLE_CHARM_NAYRU, BOTTLE_CHARM_FARORE, BOTTLE_CHARM_DIN };
     static int sCharmSel = 1;
     static int sCharmFrames = 3600;
-
-    ImGui::SetNextItemWidth(200);
-    ImGui::Combo("Charm type", &sCharmSel, kCharmNames, IM_ARRAYSIZE(kCharmNames));
-    ImGui::SetNextItemWidth(200);
-    ImGui::SliderInt("Charm frames", &sCharmFrames, 0, 65535, "%d", ImGuiSliderFlags_Logarithmic);
-    ImGui::SameLine();
-    if (ImGui::Button("Apply##charm")) {
-        Port_DebugAction_SetCharm(kCharmIds[sCharmSel], sCharmFrames);
-        Port_DebugMenu_ToastFromExternal(sCharmSel == 0 ? "Charm cleared" : "Charm applied");
-    }
-    int cId = 0, cTimer = 0;
-    if (Port_DebugQuery_Charm(&cId, &cTimer))
-        ImGui::TextDisabled("charm active: id %d, %d frames (%.1fs left)", cId, cTimer, cTimer / 60.0f);
-    else
-        ImGui::TextDisabled("charm: inactive");
+    DrawTimedBuff("Charm", "charm", "charm", kCharmNames, kCharmIds, IM_ARRAYSIZE(kCharmNames),
+                  &sCharmSel, &sCharmFrames, Port_DebugAction_SetCharm, Port_DebugQuery_Charm);
 
     ImGui::Spacing();
 
@@ -540,21 +560,8 @@ static void DrawRibbonBuffs(void) {
                                         ITEM_BOTTLE_PICOLYTE_BLUE, ITEM_BOTTLE_PICOLYTE_WHITE };
     static int sPicoSel = 1;
     static int sPicoFrames = 900;
-
-    ImGui::SetNextItemWidth(200);
-    ImGui::Combo("Picolyte type", &sPicoSel, kPicoNames, IM_ARRAYSIZE(kPicoNames));
-    ImGui::SetNextItemWidth(200);
-    ImGui::SliderInt("Picolyte frames", &sPicoFrames, 0, 65535, "%d", ImGuiSliderFlags_Logarithmic);
-    ImGui::SameLine();
-    if (ImGui::Button("Apply##pico")) {
-        Port_DebugAction_SetPicolyte(kPicoIds[sPicoSel], sPicoFrames);
-        Port_DebugMenu_ToastFromExternal(sPicoSel == 0 ? "Picolyte cleared" : "Picolyte applied");
-    }
-    int pId = 0, pTimer = 0;
-    if (Port_DebugQuery_Picolyte(&pId, &pTimer))
-        ImGui::TextDisabled("picolyte active: id %d, %d frames (%.1fs left)", pId, pTimer, pTimer / 60.0f);
-    else
-        ImGui::TextDisabled("picolyte: inactive");
+    DrawTimedBuff("Picolyte", "picolyte", "pico", kPicoNames, kPicoIds, IM_ARRAYSIZE(kPicoNames),
+                  &sPicoSel, &sPicoFrames, Port_DebugAction_SetPicolyte, Port_DebugQuery_Picolyte);
 }
 
 /* Numeric count / capacity sliders. Bounds come from the C layer (counts clamp
@@ -819,10 +826,6 @@ static bool DrawRegionLanguageControls(bool prelaunch) {
     return regionChanged;
 }
 
-static void DrawRibbonVersionLanguageSection(void) {
-    (void)DrawRegionLanguageControls(false);
-}
-
 static void DrawRibbonSavesTab(void) {
     /* Quit-to-title actions at the top of the tab — high-visibility
      * because the existing pause menu doesn't expose them. */
@@ -956,7 +959,7 @@ static void DrawRibbonSavesTab(void) {
         ImGui::EndTable();
     }
     ImGui::Separator();
-    DrawRibbonVersionLanguageSection();
+    (void)DrawRegionLanguageControls(false);
 }
 
 static void DrawRibbonProfilesTab(void) {
@@ -1187,6 +1190,14 @@ static void DrawRibbonControlsTab(void) {
     ImGui::PopStyleColor(2);
 }
 
+/* The < / > soft-slot assignment cycler, shared by the Equip tab and the
+ * in-game soft-slot config overlay (caller draws the surrounding row). */
+static void DrawSoftSlotCycleButtons(int slot) {
+    if (ImGui::Button("<")) Port_SoftSlots_CycleAssignment(slot, -1);
+    ImGui::SameLine();
+    if (ImGui::Button(">")) Port_SoftSlots_CycleAssignment(slot, +1);
+}
+
 static void DrawRibbonEquipTab(void) {
     if (ImGui::BeginTable("##equip_table", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Slot", ImGuiTableColumnFlags_WidthFixed, 60.0f);
@@ -1211,9 +1222,7 @@ static void DrawRibbonEquipTab(void) {
 
             // Column 3: Buttons
             ImGui::TableSetColumnIndex(2);
-            if (ImGui::Button("<")) Port_SoftSlots_CycleAssignment(s, -1);
-            ImGui::SameLine();
-            if (ImGui::Button(">")) Port_SoftSlots_CycleAssignment(s, +1);
+            DrawSoftSlotCycleButtons(s);
 
             ImGui::PopID();
         }
@@ -1522,6 +1531,15 @@ static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
     return st;
 }
 
+/* Shared override-mutation tail: reparse the .logic, persist the sidecar, and
+ * - while a seed is live - rebind the location keymap + re-evaluate cosmetics
+ * so nothing silently desyncs. */
+static void RandoUi_ReparseAndRebind(void) {
+    RandoLogic_Reparse();
+    Port_RandoFileMenu_PersistLogicOverrides();
+    if (Rando_IsActive()) { Rando_Keymap_Apply(); Rando_Cosmetic_Apply(); }
+}
+
 static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
     char value[48]; /* 8 sets x "XXXX," fits; engine caps stored values at 31 */
     size_t len = 0;
@@ -1536,15 +1554,11 @@ static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
                      st->define, (unsigned)len);
     }
     RandoLogic_SetOverride(st->define, value);
-    RandoLogic_Reparse();
-    Port_RandoFileMenu_PersistLogicOverrides();
     st->dirty = true;
-    /* Cosmetics cache keys on (active, seed64); force a re-evaluation so the
-     * edit shows up live instead of waiting for the next seed roll. */
     /* A reparse clears the bound ground-item/scripted location keys that only
-     * seed activation rebinds, so without this a cosmetic edit silently
-     * reverts dungeon items to vanilla. Rebind, then re-evaluate cosmetics. */
-    if (Rando_IsActive()) { Rando_Keymap_Apply(); Rando_Cosmetic_Apply(); }
+     * seed activation rebinds, so RandoUi_ReparseAndRebind re-binds the keymap
+     * + re-evaluates cosmetics while a seed is active - making the edit live. */
+    RandoUi_ReparseAndRebind();
     std::fprintf(stderr, "[RANDO] color override %s = %s\n", st->define, value);
 }
 
@@ -1569,9 +1583,7 @@ static void RandoUi_RemoveOverride(const char* define) {
     }
     RandoLogic_ClearOverrides();
     for (uint32_t i = 0; i < kept; ++i) RandoLogic_SetOverride(names[i], values[i]);
-    RandoLogic_Reparse();
-    Port_RandoFileMenu_PersistLogicOverrides();
-    if (Rando_IsActive()) { Rando_Keymap_Apply(); Rando_Cosmetic_Apply(); }
+    RandoUi_ReparseAndRebind();
     std::fprintf(stderr, "[RANDO] color override %s cleared (vanilla)\n", define);
 }
 
@@ -1627,12 +1639,7 @@ static void DrawRandoCosmeticsSection(void) {
 
 static void RandoUi_ApplyOverride(const char* define, const char* value) {
     RandoLogic_SetOverride(define, value);
-    RandoLogic_Reparse();
-    Port_RandoFileMenu_PersistLogicOverrides();
-    if (Rando_IsActive()) {
-        Rando_Keymap_Apply();
-        Rando_Cosmetic_Apply();
-    }
+    RandoUi_ReparseAndRebind();
 }
 
 static bool RandoUi_SettingModified(const RandoLogicSetting* s) {
@@ -1675,30 +1682,6 @@ static void RandoUi_HelpTooltip(const char* text) {
     }
 }
 
-/* Effective-state fingerprint: hashes every generation-relevant setting's
- * current value (colors excluded - cosmetic only). Two players comparing
- * race seeds can match seed + fingerprint instead of diffing 200 settings. */
-static uint64_t RandoUi_SettingsFingerprint(void) {
-    uint64_t h = 0xcbf29ce484222325ull; /* FNV-1a 64 */
-    const uint32_t count = RandoLogic_GetSettingCount();
-    for (uint32_t i = 0; i < count; ++i) {
-        const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-        if (s == NULL || s->type == RANDO_SETTING_COLOR) continue;
-        char value[40];
-        switch (s->type) {
-        case RANDO_SETTING_FLAG: std::snprintf(value, sizeof(value), "%d", s->flag_on ? 1 : 0); break;
-        case RANDO_SETTING_DROPDOWN: std::snprintf(value, sizeof(value), "%d", s->option_index); break;
-        case RANDO_SETTING_NUMBER: std::snprintf(value, sizeof(value), "%d", s->number); break;
-        default: value[0] = '\0'; break;
-        }
-        for (const char* p = s->define; *p; ++p) { h ^= (uint8_t)*p; h *= 0x100000001b3ull; }
-        h ^= (uint8_t)'=';
-        h *= 0x100000001b3ull;
-        for (const char* p = value; *p; ++p) { h ^= (uint8_t)*p; h *= 0x100000001b3ull; }
-    }
-    return h;
-}
-
 static int RandoUi_ModifiedSettingCount(void) {
     int n = 0;
     const uint32_t count = RandoLogic_GetSettingCount();
@@ -1720,12 +1703,7 @@ static void RandoUi_ResetSettingsToDefaults(void) {
         RandoUi_SettingDefaultValue(s, value, sizeof(value));
         RandoLogic_SetOverride(s->define, value);
     }
-    RandoLogic_Reparse();
-    Port_RandoFileMenu_PersistLogicOverrides();
-    if (Rando_IsActive()) {
-        Rando_Keymap_Apply();
-        Rando_Cosmetic_Apply();
-    }
+    RandoUi_ReparseAndRebind();
 }
 
 /* ---- Presets (OoTR convention: load changes everything except cosmetics).
@@ -1794,12 +1772,7 @@ static void RandoUi_ApplyPreset(int preset_index) {
         RandoLogic_SetOverride(s->define, value);
     }
     for (int i = 0; i < p->count; ++i) RandoLogic_SetOverride(p->pairs[i].define, p->pairs[i].value);
-    RandoLogic_Reparse();
-    Port_RandoFileMenu_PersistLogicOverrides();
-    if (Rando_IsActive()) {
-        Rando_Keymap_Apply();
-        Rando_Cosmetic_Apply();
-    }
+    RandoUi_ReparseAndRebind();
     std::fprintf(stderr, "[RANDO] preset applied: %s\n", p->name);
 }
 
@@ -2082,6 +2055,13 @@ static bool RandoUi_LocationChecked(uint32_t loc_idx) {
 
 static bool sShowRandoTracker = false;
 
+/* One tracker grid/element cell: bracketed label, accent-colored when owned,
+ * dimmed when not. */
+static void TrackerCell(const char* label, bool owned, const ImVec4& color) {
+    if (owned) ImGui::TextColored(color, "[ %s ]", label);
+    else       ImGui::TextDisabled("[ %s ]", label);
+}
+
 static void DrawRandoTrackerOverlay(void) {
     if (!sShowRandoTracker) return;
 
@@ -2122,12 +2102,7 @@ static void DrawRandoTrackerOverlay(void) {
                     for (int i = 0; i < 10; ++i) {
                         if ((i % 5) == 0) ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(i % 5);
-                        bool owned = RandoUi_CheckItemOwned(kMainItems[i].sym);
-                        if (owned) {
-                            ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "[ %s ]", kMainItems[i].label);
-                        } else {
-                            ImGui::TextDisabled("[ %s ]", kMainItems[i].label);
-                        }
+                        TrackerCell(kMainItems[i].label, RandoUi_CheckItemOwned(kMainItems[i].sym), ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
                     }
                     ImGui::EndTable();
                 }
@@ -2175,20 +2150,13 @@ static void DrawRandoTrackerOverlay(void) {
                 if (ImGui::BeginTable("##tracker_elements", 4, ImGuiTableFlags_SizingFixedFit)) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    if (RandoUi_CheckItemOwned("Items.EarthElement")) ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "[ Earth Element ]");
-                    else ImGui::TextDisabled("[ Earth Element ]");
-
+                    TrackerCell("Earth Element", RandoUi_CheckItemOwned("Items.EarthElement"), ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
                     ImGui::TableSetColumnIndex(1);
-                    if (RandoUi_CheckItemOwned("Items.FireElement")) ImGui::TextColored(ImVec4(0.9f, 0.4f, 0.4f, 1.0f), "[ Fire Element ]");
-                    else ImGui::TextDisabled("[ Fire Element ]");
-
+                    TrackerCell("Fire Element", RandoUi_CheckItemOwned("Items.FireElement"), ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
                     ImGui::TableSetColumnIndex(2);
-                    if (RandoUi_CheckItemOwned("Items.WaterElement")) ImGui::TextColored(ImVec4(0.4f, 0.6f, 0.9f, 1.0f), "[ Water Element ]");
-                    else ImGui::TextDisabled("[ Water Element ]");
-
+                    TrackerCell("Water Element", RandoUi_CheckItemOwned("Items.WaterElement"), ImVec4(0.4f, 0.6f, 0.9f, 1.0f));
                     ImGui::TableSetColumnIndex(3);
-                    if (RandoUi_CheckItemOwned("Items.WindElement")) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "[ Wind Element ]");
-                    else ImGui::TextDisabled("[ Wind Element ]");
+                    TrackerCell("Wind Element", RandoUi_CheckItemOwned("Items.WindElement"), ImVec4(0.95f, 0.8f, 0.2f, 1.0f));
 
                     ImGui::EndTable();
                 }
@@ -2504,8 +2472,8 @@ static void DrawRibbonRandomizerTab(void) {
         ImGui::PushTextWrapPos(360.0f);
         ImGui::TextUnformatted(
             "Rolls a fresh random seed and keeps the spoiler log hidden, "
-            "following the usual race convention. Share the seed number and "
-            "the settings fingerprint with the other racers.");
+            "following the usual race convention. Share the seed number with "
+            "the other racers.");
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
@@ -2916,6 +2884,7 @@ static void DrawRibbonRebornTab(void) {
             }
         }
     }
+
 }
 
 /* Defined alongside DrawPracticeOverlay below; used here in the ribbon tab. */
@@ -3598,7 +3567,7 @@ static void DrawRandoFileMenuModal(void) {
 }
 
 extern "C" bool Port_ImGui_Render(void) {
-    if (!sImGuiInited || !sImGuiEnabled) return false;
+    if (!sImGuiInited) return false;
     /* SDL_Renderer path needs a renderer; SDL_GPU path runs with
      * sRenderer == nullptr (NewFrame uses ImGui_ImplSDLGPU3 instead
      * and PresentFrame consumes the draw data via the *_Gpu helpers
@@ -3681,9 +3650,7 @@ extern "C" bool Port_ImGui_Render(void) {
                 ImGui::PushID(s);
                 ImGui::Text("%s", Port_SoftSlots_GetSlotLabel(s));
                 ImGui::SameLine(260.0f);
-                if (ImGui::Button("<")) Port_SoftSlots_CycleAssignment(s, -1);
-                ImGui::SameLine();
-                if (ImGui::Button(">")) Port_SoftSlots_CycleAssignment(s, +1);
+                DrawSoftSlotCycleButtons(s);
                 ImGui::PopID();
             }
             ImGui::Separator();
@@ -3770,7 +3737,7 @@ extern "C" bool Port_ImGui_Render(void) {
  * vertex/index buffers (must happen before BeginGPURenderPass), and
  * RenderDrawData issues the actual draw commands inside the pass. */
 extern "C" void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer* cmd) {
-    if (!sImGuiInited || !sImGuiEnabled) return;
+    if (!sImGuiInited) return;
     if (sRenderer != nullptr) return;  /* SDL_Renderer path doesn't use this */
     ImDrawData* dd = ImGui::GetDrawData();
     if (!dd) return;
@@ -3779,7 +3746,7 @@ extern "C" void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer* cmd) {
 
 extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd,
                                              SDL_GPURenderPass* rp) {
-    if (!sImGuiInited || !sImGuiEnabled) return;
+    if (!sImGuiInited) return;
     if (sRenderer != nullptr) return;
     ImDrawData* dd = ImGui::GetDrawData();
     if (!dd) return;
@@ -3809,7 +3776,7 @@ extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase,
                                                  float fraction,
                                                  int phase_index,
                                                  int phase_total) {
-    if (!sImGuiInited || !sImGuiEnabled) return false;
+    if (!sImGuiInited) return false;
 
 #ifdef TMC_GPU_RENDERER
     const bool gpuBackend = (sRenderer == nullptr);
@@ -3859,6 +3826,12 @@ extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase,
     return true;
 }
 
+/* Horizontally center a single line of text in the current window. */
+static void CenteredText(const char* t) {
+    ImGui::SetCursorPosX((ImGui::GetWindowSize().x - ImGui::CalcTextSize(t).x) * 0.5f);
+    ImGui::TextUnformatted(t);
+}
+
 extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
                                            const char* version,
                                            const char* rom_name,
@@ -3866,7 +3839,7 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
                                            bool* out_change_rom) {
     if (out_play) *out_play = false;
     if (out_change_rom) *out_change_rom = false;
-    if (!sImGuiInited || !sImGuiEnabled) return false;
+    if (!sImGuiInited) return false;
 
     /* Lazy-load the logo on the first frame. Safe on both backends —
      * the loader picks the right path based on which pointer is
@@ -3922,22 +3895,12 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
 
         ImGui::PushStyleColor(ImGuiCol_Text, accent);
         ImGui::SetWindowFontScale(2.4f);
-        {
-            const char* t = "PROJECT PICORI";
-            float t_w = ImGui::CalcTextSize(t).x;
-            ImGui::SetCursorPosX((win_w - t_w) * 0.5f);
-            ImGui::TextUnformatted(t);
-        }
+        CenteredText("PROJECT PICORI");
         ImGui::SetWindowFontScale(1.0f);
         ImGui::PopStyleColor();
 
         ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
-        {
-            const char* s = "Minish Cap PC Port";
-            float s_w = ImGui::CalcTextSize(s).x;
-            ImGui::SetCursorPosX((win_w - s_w) * 0.5f);
-            ImGui::TextUnformatted(s);
-        }
+        CenteredText("Minish Cap PC Port");
         ImGui::PopStyleColor();
 
         ImGui::Dummy(ImVec2(0, 16));
@@ -3972,24 +3935,9 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
              * "Select your Minish Cap ROM" prompt + big button. No Play
              * yet — there's nothing to play. */
             ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
-            {
-                const char* h = "No ROM found.";
-                float hw = ImGui::CalcTextSize(h).x;
-                ImGui::SetCursorPosX((win_w - hw) * 0.5f);
-                ImGui::TextUnformatted(h);
-            }
-            {
-                const char* h2 = "Project Picori needs your own Minish Cap dump (.gba).";
-                float hw = ImGui::CalcTextSize(h2).x;
-                ImGui::SetCursorPosX((win_w - hw) * 0.5f);
-                ImGui::TextUnformatted(h2);
-            }
-            {
-                const char* h3 = "We identify it by SHA-1 - filename is irrelevant.";
-                float hw = ImGui::CalcTextSize(h3).x;
-                ImGui::SetCursorPosX((win_w - hw) * 0.5f);
-                ImGui::TextUnformatted(h3);
-            }
+            CenteredText("No ROM found.");
+            CenteredText("Project Picori needs your own Minish Cap dump (.gba).");
+            CenteredText("We identify it by SHA-1 - filename is irrelevant.");
             ImGui::PopStyleColor();
         }
         ImGui::Dummy(ImVec2(0, 14));
@@ -4028,14 +3976,8 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
 
         ImGui::Dummy(ImVec2(0, 6));
         ImGui::PushStyleColor(ImGuiCol_Text, subtxt);
-        {
-            const char* hint = rom_present
-                ? "Press Enter or click Play to start"
-                : "Press Enter or click to pick your .gba file";
-            float h_w = ImGui::CalcTextSize(hint).x;
-            ImGui::SetCursorPosX((win_w - h_w) * 0.5f);
-            ImGui::TextUnformatted(hint);
-        }
+        CenteredText(rom_present ? "Press Enter or click Play to start"
+                                 : "Press Enter or click to pick your .gba file");
         ImGui::PopStyleColor();
     }
     ImGui::End();

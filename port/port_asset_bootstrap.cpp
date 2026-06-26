@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "port_asset_bootstrap.h"
 #include "port_asset_pipeline.hpp"
+#include "port_exe_path.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -106,44 +107,7 @@ void MountPaksForRoot(const std::filesystem::path& root) {
 }
 
 std::optional<std::filesystem::path> GetExecutableDirectory() {
-#ifdef _WIN32
-    std::wstring buffer(MAX_PATH, L'\0');
-    DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (len == 0) {
-        return std::nullopt;
-    }
-    while (len >= buffer.size() - 1) {
-        buffer.resize(buffer.size() * 2);
-        len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-        if (len == 0) {
-            return std::nullopt;
-        }
-    }
-    buffer.resize(len);
-    return std::filesystem::path(buffer).parent_path();
-#elif defined(__APPLE__)
-    /* macOS has no /proc filesystem; readlink("/proc/self/exe") fails.
-     * _NSGetExecutablePath returns the launch path which may include
-     * symlinks/relative segments, so realpath() it for a canonical form. */
-    uint32_t size = 0;
-    _NSGetExecutablePath(nullptr, &size);
-    std::string buffer(size, '\0');
-    if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
-        std::error_code ec;
-        std::filesystem::path canonical = std::filesystem::weakly_canonical(buffer.c_str(), ec);
-        if (!ec) {
-            return canonical.parent_path();
-        }
-    }
-    return std::nullopt;
-#else
-    char buffer[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer));
-    if (len > 0 && static_cast<size_t>(len) < sizeof(buffer)) {
-        return std::filesystem::path(std::string(buffer, static_cast<size_t>(len))).parent_path();
-    }
-    return std::nullopt;
-#endif
+    return port::ExecutableDir();
 }
 
 std::filesystem::path PreferredAssetRoot() {
@@ -167,35 +131,6 @@ std::filesystem::path PreferredAssetRoot() {
     std::error_code ec;
     const auto cwd = std::filesystem::current_path(ec);
     return ec ? std::filesystem::path(".") : cwd;
-}
-
-bool EnsureSoundsMetadata(const std::filesystem::path& root, std::string& error) {
-    if (std::filesystem::exists(root / "sounds.json") || std::filesystem::exists(root / "assets" / "sounds.json")) {
-        return true;
-    }
-
-    for (std::filesystem::path probe = root; !probe.empty(); probe = probe.parent_path()) {
-        const std::filesystem::path source = probe / "assets" / "sounds.json";
-        if (std::filesystem::exists(source)) {
-            std::error_code ec;
-            std::filesystem::copy_file(
-                source, root / "sounds.json", std::filesystem::copy_options::overwrite_existing, ec
-            );
-            if (ec) {
-                error = "failed to copy sounds.json: " + ec.message();
-                return false;
-            }
-            return true;
-        }
-
-        const std::filesystem::path parent = probe.parent_path();
-        if (parent == probe) {
-            break;
-        }
-    }
-
-    error = "sounds.json was not found";
-    return false;
 }
 
 /* ----------------------------------------------------------------
@@ -286,81 +221,123 @@ float MeasureText(std::string_view text, float scale) {
     return w;
 }
 
-void DrawProgressScreen(SDL_Window* window, SDL_Renderer* renderer,
-                        const ProgressSnapshot& snap) {
+/* Shared splash/progress frame scaffolding: resolve the window's
+ * renderer (creating one only as a fallback), compute fw/fh and the
+ * UI scale every painter used, clear to bgColor, run the caller's draw
+ * body, then present. No-op if there's no renderer. */
+template <typename Body>
+void PaintFrame(SDL_Window* window, SDL_Color bgColor, Body&& body) {
+    if (!window) return;
+    SDL_Renderer* renderer = SDL_GetRenderer(window);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer(window, nullptr);
+    }
+    if (!renderer) return;
+
     int width = 0;
     int height = 0;
     SDL_GetWindowSize(window, &width, &height);
-
-    SDL_SetRenderDrawColor(renderer, 12, 16, 22, 255);
-    SDL_RenderClear(renderer);
-
     const float fw = static_cast<float>(width);
     const float fh = static_cast<float>(height);
     const float scale = std::max(2.0f, std::round(fw / 240.0f));
 
-    /* Header line, drawn once and unaffected by the ticking phase. */
-    constexpr std::string_view kHeader = "EXTRACTING ASSETS";
-    const float headerW = MeasureText(kHeader, scale);
-    DrawText(renderer, kHeader, (fw - headerW) * 0.5f, fh * 0.30f, scale);
-
-    /* Phase label (snapshot under lock since std::string isn't atomic). */
-    std::string phaseName;
-    {
-        std::lock_guard<std::mutex> lk(const_cast<std::mutex&>(snap.name_mu));
-        phaseName = snap.phase_name.empty() ? std::string("preparing") : snap.phase_name;
-    }
-    const std::string phaseLine = std::string("loading ") + phaseName;
-    const float phaseScale = std::max(1.5f, scale * 0.7f);
-    const float phaseW = MeasureText(phaseLine, phaseScale);
-    DrawText(renderer, phaseLine, (fw - phaseW) * 0.5f, fh * 0.46f, phaseScale,
-             {180, 200, 220, 255});
-
-    /* Progress bar geometry. */
-    const float barWidth = fw * 0.65f;
-    const float barHeight = std::max(8.0f * scale, fh * 0.04f);
-    const float barX = (fw - barWidth) * 0.5f;
-    const float barY = fh * 0.55f;
-
-    const std::size_t done = snap.done.load(std::memory_order_acquire);
-    const std::size_t total = snap.total.load(std::memory_order_acquire);
-    const int phaseIdx = snap.phase_index.load(std::memory_order_acquire);
-    const int phaseDen = std::max(kExpectedPhaseCount, phaseIdx + 1);
-
-    const double inPhase = (total == 0) ? 1.0
-                                        : static_cast<double>(done) / static_cast<double>(total);
-    /* Stage-aware fraction: each completed phase is worth 1/phaseDen
-     * of the bar, the active phase contributes its own internal
-     * percentage. Clamped because the last phase often completes
-     * with done > total when EndPhase fires before the GUI re-snaps. */
-    const double overall =
-        std::clamp((static_cast<double>(phaseIdx) + std::clamp(inPhase, 0.0, 1.0)) /
-                       static_cast<double>(phaseDen),
-                   0.0, 1.0);
-
-    /* Bar border (light) + fill (warm accent). */
-    SDL_SetRenderDrawColor(renderer, 60, 70, 80, 255);
-    SDL_FRect border = { barX - 2.0f, barY - 2.0f, barWidth + 4.0f, barHeight + 4.0f };
-    SDL_RenderFillRect(renderer, &border);
-    SDL_SetRenderDrawColor(renderer, 18, 24, 32, 255);
-    SDL_FRect inner = { barX, barY, barWidth, barHeight };
-    SDL_RenderFillRect(renderer, &inner);
-    SDL_SetRenderDrawColor(renderer, 86, 168, 124, 255);
-    SDL_FRect fill = { barX, barY, static_cast<float>(barWidth * overall), barHeight };
-    SDL_RenderFillRect(renderer, &fill);
-
-    /* Footer: "PHASE n/m   pp%" */
-    char footer[64];
-    std::snprintf(footer, sizeof(footer), "%d/%d  %d%%",
-                  std::min(phaseIdx + 1, phaseDen), phaseDen,
-                  static_cast<int>(overall * 100.0 + 0.5));
-    const float footerScale = std::max(1.5f, scale * 0.6f);
-    const float footerW = MeasureText(footer, footerScale);
-    DrawText(renderer, footer, (fw - footerW) * 0.5f,
-             barY + barHeight + 1.5f * scale, footerScale,
-             {160, 175, 195, 255});
-
+    SDL_SetRenderDrawColor(renderer, bgColor.r, bgColor.g, bgColor.b, bgColor.a);
+    SDL_RenderClear(renderer);
+    body(renderer, fw, fh, scale);
     SDL_RenderPresent(renderer);
+}
+
+/* One horizontally-centred text line plus the vertical gap that follows
+ * it, for DrawCenteredTextBlock. */
+struct TextBlockLine {
+    std::string_view text;
+    float scale;
+    SDL_Color color;
+    float gapAfter;
+};
+
+/* Vertically-centre a stack of horizontally-centred lines. Block height
+ * is the sum of each line's glyph height (7*scale) plus its gapAfter, so
+ * the last line's gapAfter is included — callers reproduce their exact
+ * original spacing by setting it. */
+void DrawCenteredTextBlock(SDL_Renderer* renderer, float fw, float fh,
+                           const std::vector<TextBlockLine>& lines) {
+    float blockH = 0.0f;
+    for (const auto& ln : lines) {
+        blockH += 7.0f * ln.scale + ln.gapAfter;
+    }
+    float y = (fh - blockH) * 0.5f;
+    for (const auto& ln : lines) {
+        const float w = MeasureText(ln.text, ln.scale);
+        DrawText(renderer, ln.text, (fw - w) * 0.5f, y, ln.scale, ln.color);
+        y += 7.0f * ln.scale + ln.gapAfter;
+    }
+}
+
+void DrawProgressScreen(SDL_Window* window, const ProgressSnapshot& snap) {
+    PaintFrame(window, SDL_Color{12, 16, 22, 255},
+               [&snap](SDL_Renderer* renderer, float fw, float fh, float scale) {
+        /* Header line, drawn once and unaffected by the ticking phase. */
+        constexpr std::string_view kHeader = "EXTRACTING ASSETS";
+        const float headerW = MeasureText(kHeader, scale);
+        DrawText(renderer, kHeader, (fw - headerW) * 0.5f, fh * 0.30f, scale);
+
+        /* Phase label (snapshot under lock since std::string isn't atomic). */
+        std::string phaseName;
+        {
+            std::lock_guard<std::mutex> lk(const_cast<std::mutex&>(snap.name_mu));
+            phaseName = snap.phase_name.empty() ? std::string("preparing") : snap.phase_name;
+        }
+        const std::string phaseLine = std::string("loading ") + phaseName;
+        const float phaseScale = std::max(1.5f, scale * 0.7f);
+        const float phaseW = MeasureText(phaseLine, phaseScale);
+        DrawText(renderer, phaseLine, (fw - phaseW) * 0.5f, fh * 0.46f, phaseScale,
+                 {180, 200, 220, 255});
+
+        /* Progress bar geometry. */
+        const float barWidth = fw * 0.65f;
+        const float barHeight = std::max(8.0f * scale, fh * 0.04f);
+        const float barX = (fw - barWidth) * 0.5f;
+        const float barY = fh * 0.55f;
+
+        const std::size_t done = snap.done.load(std::memory_order_acquire);
+        const std::size_t total = snap.total.load(std::memory_order_acquire);
+        const int phaseIdx = snap.phase_index.load(std::memory_order_acquire);
+        const int phaseDen = std::max(kExpectedPhaseCount, phaseIdx + 1);
+
+        const double inPhase = (total == 0) ? 1.0
+                                            : static_cast<double>(done) / static_cast<double>(total);
+        /* Stage-aware fraction: each completed phase is worth 1/phaseDen
+         * of the bar, the active phase contributes its own internal
+         * percentage. Clamped because the last phase often completes
+         * with done > total when EndPhase fires before the GUI re-snaps. */
+        const double overall =
+            std::clamp((static_cast<double>(phaseIdx) + std::clamp(inPhase, 0.0, 1.0)) /
+                           static_cast<double>(phaseDen),
+                       0.0, 1.0);
+
+        /* Bar border (light) + fill (warm accent). */
+        SDL_SetRenderDrawColor(renderer, 60, 70, 80, 255);
+        SDL_FRect border = { barX - 2.0f, barY - 2.0f, barWidth + 4.0f, barHeight + 4.0f };
+        SDL_RenderFillRect(renderer, &border);
+        SDL_SetRenderDrawColor(renderer, 18, 24, 32, 255);
+        SDL_FRect inner = { barX, barY, barWidth, barHeight };
+        SDL_RenderFillRect(renderer, &inner);
+        SDL_SetRenderDrawColor(renderer, 86, 168, 124, 255);
+        SDL_FRect fill = { barX, barY, static_cast<float>(barWidth * overall), barHeight };
+        SDL_RenderFillRect(renderer, &fill);
+
+        /* Footer: "PHASE n/m   pp%" */
+        char footer[64];
+        std::snprintf(footer, sizeof(footer), "%d/%d  %d%%",
+                      std::min(phaseIdx + 1, phaseDen), phaseDen,
+                      static_cast<int>(overall * 100.0 + 0.5));
+        const float footerScale = std::max(1.5f, scale * 0.6f);
+        const float footerW = MeasureText(footer, footerScale);
+        DrawText(renderer, footer, (fw - footerW) * 0.5f,
+                 barY + barHeight + 1.5f * scale, footerScale,
+                 {160, 175, 195, 255});
+    });
 }
 
 #ifdef TMC_GPU_RENDERER
@@ -440,7 +417,7 @@ bool RunWithProgressScreen(SDL_Window* window, ProgressSnapshot& snap, Task task
                 /* Keep extracting so the install isn't left half-written. */
             }
         }
-        DrawProgressScreen(window, renderer, snap);
+        DrawProgressScreen(window, snap);
     }
 
     /* One final paint so the bar visibly reaches 100% before we
@@ -451,30 +428,12 @@ bool RunWithProgressScreen(SDL_Window* window, ProgressSnapshot& snap, Task task
      * closed, game window opened". Port_PPU_Init now adopts this
      * renderer via SDL_GetRenderer(window), and PPU shutdown owns
      * its lifetime from then on. */
-    DrawProgressScreen(window, renderer, snap);
+    DrawProgressScreen(window, snap);
     const bool ok = future.get();
     SDL_SetRenderTarget(renderer, nullptr);
     SDL_SetRenderClipRect(renderer, nullptr);
     return ok;
 }
-
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-/* Phase name -> phase-gate categories. Mirrors the producer-side
- * BeginPhase names emitted by the extractor; anything unmapped is
- * treated as Misc (gate 8). 'paks' opens everything because the
- * writer pass covers all categories. Called only at phase
- * transitions, so the cost of the if/else cascade is negligible. */
-void OpenGatesForCompletedPhase(std::string_view phase) {
-    const auto open = [](int idx) { Port_AssetLoader_OpenGate(idx); };
-    if (phase == "palettes" || phase == "palette_groups") open(1);
-    else if (phase == "gfx") open(0);
-    else if (phase == "tilemaps") open(4);
-    else if (phase == "areas") { open(5); open(6); open(7); }
-    else if (phase == "sprites") { open(3); open(2); }
-    else if (phase == "texts") open(8);
-    else if (phase == "sweep" || phase == "paks") Port_AssetLoader_OpenAllGates();
-}
-#endif
 
 void InstallReporterCallback(ProgressSnapshot& snap) {
     /* Snapshot writer. Runs on the extractor's worker threads under
@@ -491,12 +450,6 @@ void InstallReporterCallback(ProgressSnapshot& snap) {
             if (incoming != snap.last_phase_name) {
                 if (!snap.last_phase_name.empty()) {
                     snap.phase_index.fetch_add(1, std::memory_order_acq_rel);
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-                    /* Phase boundary observed: the previous phase
-                     * is finished, so re-open its gate(s) before we
-                     * even hit the next BeginPhase event. */
-                    OpenGatesForCompletedPhase(snap.last_phase_name);
-#endif
                 }
                 snap.last_phase_name = incoming;
                 snap.phase_name = incoming;
@@ -567,14 +520,6 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
     ProgressSnapshot snap;
     InstallReporterCallback(snap);
 
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-    /* Phase 7: shut all phase gates before extraction starts so the
-     * engine threads block in LoadBinaryFileCached until the
-     * relevant category is on disk. The phase_done callback below
-     * re-opens them per-category as the extractor finishes. */
-    Port_AssetLoader_BeginGated();
-#endif
-
     AssetExtractorApi::Options opt;
     opt.rom_path = rom;
     if (rom_data != nullptr && rom_size > 0) {
@@ -597,14 +542,6 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
     });
 
     ClearReporterCallback();
-
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-    /* Failsafe: if extraction errored partway through, open every
-     * gate so engine threads waiting on LoadBinaryFileCached unblock
-     * (and propagate the failure via the message box below) instead
-     * of deadlocking. Idempotent if everything already succeeded. */
-    Port_AssetLoader_OpenAllGates();
-#endif
 
     if (ok) {
 #ifdef __ANDROID__
@@ -630,55 +567,30 @@ extern "C" void Port_EnsureAssetsReadyWithDisplay(SDL_Window* window,
 }
 
 extern "C" void Port_PaintBootSplash(SDL_Window* window, const char* message) {
-    if (!window) return;
-    /* Reuse whichever renderer is already attached to the window
-     * (one we created earlier in this function on the first call,
-     * the bootstrap progress UI's, or PPU's). If none exists yet —
-     * which is the common case on warm launch when this is the
-     * first paint of the run — create one here so the window stops
-     * being a blank black rectangle for the ~1.4 s it would
-     * otherwise take to reach Port_PPU_Init. PPU later adopts this
-     * same renderer via SDL_GetRenderer(window). */
-    SDL_Renderer* renderer = SDL_GetRenderer(window);
-    if (!renderer) {
-        /* Fallback: only triggers if main forgot to use
-         * SDL_CreateWindowAndRenderer. Recreating the renderer
-         * here on Linux/X11 forces SDL to re-add SDL_WINDOW_OPENGL
-         * to the window, which destroys and recreates the X11
-         * window — visible to the user as "first window closes,
-         * second opens." Keep main's atomic-create path. */
-        renderer = SDL_CreateRenderer(window, nullptr);
-    }
-    if (!renderer) return;
-
-    int width = 0;
-    int height = 0;
-    SDL_GetWindowSize(window, &width, &height);
-    const float fw = static_cast<float>(width);
-    const float fh = static_cast<float>(height);
-    const float scale = std::max(2.0f, std::round(fw / 240.0f));
+    /* Reuse whichever renderer is already attached to the window (the
+     * bootstrap progress UI's, or PPU's) via PaintFrame; on warm launch
+     * none exists yet so PaintFrame creates one here, so the window stops
+     * being a blank black rectangle for the ~1.4 s it would otherwise
+     * take to reach Port_PPU_Init. PPU later adopts the same renderer via
+     * SDL_GetRenderer(window). */
+    const std::string title = "PROJECT PICORI";
+    const std::string text = message ? std::string(message) : std::string("STARTING");
 
     /* Project Picori boot splash — matches the green-themed ImGui
      * chrome so the boot frame flows visually into the F8 menu without
      * a colour-tone flip. RGB (15, 18, 18) is the bgBase shade from
      * port_imgui_menu.cpp scaled into 8-bit space. */
-    SDL_SetRenderDrawColor(renderer, 15, 18, 18, 255);
-    SDL_RenderClear(renderer);
-
-    /* Title above the status line, status line below. The title is the
-     * project name (stable across launches); the status line is
-     * "LOADING" / "STARTING" / etc. passed by main.c. */
-    const std::string title = "PROJECT PICORI";
-    const std::string text = message ? std::string(message) : std::string("STARTING");
-    const float titleScale = scale * 1.6f;
-    const float titleW = MeasureText(title, titleScale);
-    const float bodyW  = MeasureText(text, scale);
-    const float titleY = (fh - (7.0f * titleScale + 7.0f * scale + 16.0f)) * 0.5f;
-    const float bodyY  = titleY + 7.0f * titleScale + 16.0f;
-    DrawText(renderer, title, (fw - titleW) * 0.5f, titleY, titleScale);
-    DrawText(renderer, text,  (fw - bodyW)  * 0.5f, bodyY,  scale);
-
-    SDL_RenderPresent(renderer);
+    PaintFrame(window, SDL_Color{15, 18, 18, 255},
+               [&](SDL_Renderer* renderer, float fw, float fh, float scale) {
+        /* Title above the status line, status line below. The title is the
+         * project name (stable across launches); the status line is
+         * "LOADING" / "STARTING" / etc. passed by main.c. */
+        const float titleScale = scale * 1.6f;
+        DrawCenteredTextBlock(renderer, fw, fh, {
+            {title, titleScale, SDL_Color{235, 240, 245, 255}, 16.0f},
+            {text,  scale,      SDL_Color{235, 240, 245, 255}, 0.0f},
+        });
+    });
 }
 
 /* Project Picori prelaunch frame — repaints the boot splash with
@@ -695,23 +607,6 @@ extern "C" void Port_PaintPrelaunch(SDL_Window* window,
                                     const char* version,
                                     const char* rom_name,
                                     int countdown_seconds) {
-    if (!window) return;
-    SDL_Renderer* renderer = SDL_GetRenderer(window);
-    if (!renderer) {
-        renderer = SDL_CreateRenderer(window, nullptr);
-    }
-    if (!renderer) return;
-
-    int width = 0;
-    int height = 0;
-    SDL_GetWindowSize(window, &width, &height);
-    const float fw = static_cast<float>(width);
-    const float fh = static_cast<float>(height);
-    const float scale = std::max(2.0f, std::round(fw / 240.0f));
-
-    SDL_SetRenderDrawColor(renderer, 15, 18, 18, 255);
-    SDL_RenderClear(renderer);
-
     const std::string title = "PROJECT PICORI";
     const std::string sub   = "MINISH CAP PC PORT";
     const std::string ver   = version  ? std::string("VERSION ") + version    : std::string("VERSION ?");
@@ -726,33 +621,19 @@ extern "C" void Port_PaintPrelaunch(SDL_Window* window,
     }
     const SDL_Color accent  = { 105, 184, 117, 255 };  /* Minish-green */
     const SDL_Color subText = { 180, 195, 180, 255 };
+    const SDL_Color body    = { 235, 240, 245, 255 };
 
-    const float titleScale = scale * 1.8f;
-    const float subScale   = scale * 0.9f;
-
-    const float titleW = MeasureText(title, titleScale);
-    const float subW   = MeasureText(sub,   subScale);
-    const float verW   = MeasureText(ver,   scale);
-    const float romW   = MeasureText(rom,   scale);
-    const float prW    = MeasureText(prompt, scale);
-
-    const float gap = 12.0f;
-    const float blockH = 7.0f * titleScale + gap
-                       + 7.0f * subScale   + gap * 2.0f
-                       + 7.0f * scale      + gap
-                       + 7.0f * scale      + gap * 2.0f
-                       + 7.0f * scale;
-    float y = (fh - blockH) * 0.5f;
-
-    DrawText(renderer, title,  (fw - titleW) * 0.5f, y, titleScale, accent);
-    y += 7.0f * titleScale + gap;
-    DrawText(renderer, sub,    (fw - subW)   * 0.5f, y, subScale,   subText);
-    y += 7.0f * subScale + gap * 2.0f;
-    DrawText(renderer, ver,    (fw - verW)   * 0.5f, y, scale);
-    y += 7.0f * scale + gap;
-    DrawText(renderer, rom,    (fw - romW)   * 0.5f, y, scale);
-    y += 7.0f * scale + gap * 2.0f;
-    DrawText(renderer, prompt, (fw - prW)    * 0.5f, y, scale, subText);
-
-    SDL_RenderPresent(renderer);
+    PaintFrame(window, SDL_Color{15, 18, 18, 255},
+               [&](SDL_Renderer* renderer, float fw, float fh, float scale) {
+        const float titleScale = scale * 1.8f;
+        const float subScale   = scale * 0.9f;
+        const float gap = 12.0f;
+        DrawCenteredTextBlock(renderer, fw, fh, {
+            {title,                    titleScale, accent,  gap},
+            {sub,                      subScale,   subText, gap * 2.0f},
+            {ver,                      scale,      body,    gap},
+            {rom,                      scale,      body,    gap * 2.0f},
+            {std::string_view(prompt), scale,      subText, 0.0f},
+        });
+    });
 }

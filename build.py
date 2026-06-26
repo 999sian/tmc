@@ -568,8 +568,6 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
             err(str(exc))
             return None
 
-    import shutil
-
     if not slim:
         # Copy ROM so the standalone asset_extractor can find it next
         # to itself and pre-populate build/pc/assets/ — a convenience

@@ -2,6 +2,28 @@
  * per-tab UI code stays in smaller, navigable chunks. This file is
  * included into the same translation unit and intentionally relies on
  * the surrounding ImGui/Port_* declarations already visible there. */
+extern "C" { typedef void (*PortStepCycle)(int); }
+typedef const char* (*PortStepValue)(char* buf, size_t cap);
+
+/* One Display-tab settings row: label, then a <value> stepper flanked by
+ * < / > buttons. getValue() is read *between* the buttons so a click's new
+ * value shows the same frame, matching the hand-written rows. */
+static void StepperRow(const char* label, const char* id,
+                       PortStepValue getValue, PortStepCycle onCycle) {
+    char tag[24];
+    ImGui::TableNextRow();
+    ImGui::TableSetColumnIndex(0); ImGui::Text("%s", label);
+    ImGui::TableSetColumnIndex(1);
+    std::snprintf(tag, sizeof(tag), "<##%s", id);
+    if (ImGui::Button(tag)) onCycle(-1);
+    ImGui::SameLine();
+    char buf[24];
+    ImGui::Text("%s", getValue(buf, sizeof(buf)));
+    ImGui::SameLine();
+    std::snprintf(tag, sizeof(tag), ">##%s", id);
+    if (ImGui::Button(tag)) onCycle(+1);
+}
+
 static void DrawRibbonDisplayTab(void) {
     const bool gpuActive = Port_GPU_IsActive();
 
@@ -9,7 +31,7 @@ static void DrawRibbonDisplayTab(void) {
         ImGui::TableSetupColumn("Label", ImGuiTableColumnFlags_WidthFixed, 150.0f);
         ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
-        // Window scale
+        // Window scale - value captured before the buttons (read-before).
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex(0); ImGui::Text("Window scale");
         ImGui::TableSetColumnIndex(1);
@@ -18,33 +40,25 @@ static void DrawRibbonDisplayTab(void) {
         ImGui::SameLine(); ImGui::Text("%dx", scale); ImGui::SameLine();
         if (ImGui::Button(">##scale")) Port_PPU_CycleWindowScale(+1);
 
-        // Filter
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Filter");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##filter")) Port_PPU_CyclePresentationMode(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_PPU_PresentationModeName()); ImGui::SameLine();
-        if (ImGui::Button(">##filter")) Port_PPU_CyclePresentationMode(+1);
+        StepperRow("Filter", "filter",
+                   [](char*, size_t) { return Port_PPU_PresentationModeName(); },
+                   Port_PPU_CyclePresentationMode);
 
-        // Target FPS
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Target FPS");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##fps")) Port_Config_CycleTargetFps(-1);
-        ImGui::SameLine();
-        unsigned fps = Port_Config_TargetFps();
-        if (fps == 0) ImGui::Text("uncapped");
-        else          ImGui::Text("%u", fps);
-        ImGui::SameLine();
-        if (ImGui::Button(">##fps")) Port_Config_CycleTargetFps(+1);
+        StepperRow("Target FPS", "fps",
+                   [](char* b, size_t n) -> const char* {
+                       unsigned fps = Port_Config_TargetFps();
+                       if (fps == 0) return "uncapped";
+                       std::snprintf(b, n, "%u", fps);
+                       return b;
+                   },
+                   Port_Config_CycleTargetFps);
 
-        // Internal scale
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Internal scale");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##iscale")) Port_Config_CycleInternalScale(-1);
-        ImGui::SameLine(); ImGui::Text("%ux", (unsigned)Port_Config_InternalScale()); ImGui::SameLine();
-        if (ImGui::Button(">##iscale")) Port_Config_CycleInternalScale(+1);
+        StepperRow("Internal scale", "iscale",
+                   [](char* b, size_t n) -> const char* {
+                       std::snprintf(b, n, "%ux", (unsigned)Port_Config_InternalScale());
+                       return b;
+                   },
+                   Port_Config_CycleInternalScale);
         RandoUi_HelpTooltip(
             "Renders the GBA frame at this integer multiple internally before "
             "the final upscale. It only changes sampling quality when a shader "
@@ -52,38 +66,22 @@ static void DrawRibbonDisplayTab(void) {
             "nearest-neighbour 2D output it has no visible effect. Leave at 1x "
             "unless a shader you're using benefits from supersampling.");
 
-        // Aspect ratio
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Aspect ratio");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##aspect")) Port_Config_CycleAspectMode(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_Config_AspectModeName(Port_Config_AspectMode())); ImGui::SameLine();
-        if (ImGui::Button(">##aspect")) Port_Config_CycleAspectMode(+1);
+        StepperRow("Aspect ratio", "aspect",
+                   [](char*, size_t) { return Port_Config_AspectModeName(Port_Config_AspectMode()); },
+                   Port_Config_CycleAspectMode);
 
-        // Renderer
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Renderer");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##renderer")) Port_Config_CycleRenderBackend(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_Config_RenderBackendName(Port_Config_RenderBackend())); ImGui::SameLine();
-        if (ImGui::Button(">##renderer")) Port_Config_CycleRenderBackend(+1);
+        StepperRow("Renderer", "renderer",
+                   [](char*, size_t) { return Port_Config_RenderBackendName(Port_Config_RenderBackend()); },
+                   Port_Config_CycleRenderBackend);
         ImGui::SameLine(); ImGui::TextDisabled("(restart)");
 
-        // Background
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Background");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##bgfill")) Port_Config_CycleBgFill(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_Config_BgFillName(Port_Config_BgFill())); ImGui::SameLine();
-        if (ImGui::Button(">##bgfill")) Port_Config_CycleBgFill(+1);
+        StepperRow("Background", "bgfill",
+                   [](char*, size_t) { return Port_Config_BgFillName(Port_Config_BgFill()); },
+                   Port_Config_CycleBgFill);
 
-        // CRT filter
-        ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("CRT filter");
-        ImGui::TableSetColumnIndex(1);
-        if (ImGui::Button("<##crt")) Port_PPU_CycleFilter(-1);
-        ImGui::SameLine(); ImGui::Text("%s", Port_PPU_FilterName()); ImGui::SameLine();
-        if (ImGui::Button(">##crt")) Port_PPU_CycleFilter(+1);
+        StepperRow("CRT filter", "crt",
+                   [](char*, size_t) { return Port_PPU_FilterName(); },
+                   Port_PPU_CycleFilter);
 
         ImGui::EndTable();
     }
@@ -142,7 +140,6 @@ static void DrawRibbonDisplayTab(void) {
             roots.emplace_back("shaders");
             roots.emplace_back("glslp");
             roots.emplace_back(".");
-            roots.emplace_back("/tmp/glslp_demo");
             for (const auto& root : roots) {
                 std::error_code dec;
                 if (!std::filesystem::is_directory(root, dec)) continue;

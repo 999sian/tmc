@@ -10,9 +10,6 @@ set_xmakever("2.7.0")
 add_rules("mode.debug", "mode.release")
 set_defaultmode("release")
 
--- Force MinGW toolchain
--- set_toolchains("mingw")
-
 -- Game version options
 option("game_version")
     set_default("USA")
@@ -664,6 +661,7 @@ target("tmc_pc")
     add_files("port/port_asset_log.cpp")
     add_files("port/port_asset_pak.cpp")
     add_files("port/port_asset_pak_loader.cpp")
+    add_files("port/port_exe_path.cpp")   -- shared executable-directory query (C++)
     add_files("port/port_debug_verbose.c")  -- per-frame log gate, env-controlled
     add_files("port/port_rom_picker.c")     -- SDL3 file picker when no ROM is found
     -- In-process randomizer (port/rando/), derived from the GPL-3.0 Minish Cap
@@ -681,21 +679,11 @@ target("tmc_pc")
     -- Minish Cap Reborn parity toggles, ported from Admentus64/The-Minish-Cap-
     -- Reborn (GPL-3.0); GPL-3.0, see THIRD-PARTY-LICENSES.md.
     add_files("port/port_reborn.cpp")
-    -- Issue #99 auto-repro harness (env-gated, no-op when off).
-    add_files("port/port_repro_mazaal.c")
-    add_files("port/port_repro_litarea.c")
-    add_files("port/port_repro_clonebutton.c")
-    add_files("port/port_repro_takeover.c")
-    add_files("port/port_repro_jailbars.c")
-    add_files("port/port_repro_angrystatue.c")
-    add_files("port/port_repro_vaati.c")
-    add_files("port/port_repro_credits.c")
+    -- Env-gated auto-repro / capture harnesses (no-op when off).
     add_files("port/port_repro_perfcap.c")
-    add_files("port/port_repro_catperson.c")
     add_files("port/port_repro_rando.c")
     add_files("port/port_repro_a11y.c")
     add_files("port/port_repro_roomcap.c")  -- generic in-game room capture (TMC_ROOMCAP)
-    add_files("port/port_repro_introdbg.c") -- Smith's-house intro cutscene diagnostic (TMC_REPRO_INTRODBG)
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
@@ -866,7 +854,6 @@ target("tmc_pc")
 
     
     -- GBA library (m4a sound) - skipped for PC, using stubs
-    -- add_files("src/gba/m4a.c")
     
     -- libpng + zlib are needed by port_bugreport.cpp for F9 screenshot
     -- PNG encoding. imgui drives the F8/ribbon menus (HEAD).
