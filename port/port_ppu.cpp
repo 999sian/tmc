@@ -792,11 +792,15 @@ extern "C" void Port_PPU_PresentFrame(void) {
     dispcnt = (uint16_t)(gIoMem[0x00] | (gIoMem[0x01] << 8));
     gbaMode = (uint8_t)(dispcnt & 0x07);
 
-    /* GBA mode 1 = BG0/BG1 text + BG2 affine + OBJ. VirtuaPPU's mode 2
-     * matches that hardware behaviour; routing GBA mode 1 to VirtuaPPU mode
-     * 1 reads BG2 with text-BG indexing and the title-screen affine sword
-     * comes out as garbage tiles. Keep GBA mode 0 on VirtuaPPU mode 1.
-     * (Originally fixed in ad9b4d94, regressed in matheo merge dec390c2.) */
+    /* GBA->VPPU render-mode routing. The vendored PPU has exactly two render
+     * paths: mode 1 = tiled/text (mode1.c), mode 2 = affine (mode2.c).
+     *   GBA mode 0          -> VPPU 1  (4 text BGs + OBJ)
+     *   GBA mode 1 (and 2)  -> VPPU 2  (BG0/BG1 text + BG2 affine + OBJ)
+     * Routing GBA mode 1 to VPPU 1 instead would read BG2 with text-BG
+     * indexing and the title-screen affine sword renders as garbage tiles.
+     * (Originally fixed in ad9b4d94, regressed in matheo merge dec390c2.)
+     * Guarded by the `title` scene in the PPU parity corpus, which is GBA
+     * mode 1 -> VPPU 2 (tools/ppu_corpus.txt). */
     switch (gbaMode) {
         case 0:
             virtuappu_registers.mode = 1;

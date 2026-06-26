@@ -26,20 +26,20 @@ void virtuappu_reset(void)
     memset(&virtuappu_registers, 0, sizeof(virtuappu_registers));
 }
 
+/* VPPU render-mode selector — set by port_ppu.cpp from the GBA DISPCNT mode:
+ *   1 = tiled renderer  (mode1.c) — GBA mode 0: 4 text BGs + OBJ
+ *   2 = affine renderer (mode2.c) — GBA modes 1/2: affine BG2 + text BGs + OBJ
+ * The Minish Cap only ever uses GBA modes 0 and 1, so only these two paths
+ * exist. The former VPPU mode 0 (a black-fill stub) and mode 7 (a misnamed
+ * Game Boy DMG renderer) were dead on this path and have been removed. */
 void virtuappu_render_frame(void)
 {
     switch (virtuappu_registers.mode) {
-    case 0:
-        virtuappu_mode0_render_frame(&virtuappu_registers);
-        break;
     case 1:
         virtuappu_mode1_render_frame(&virtuappu_registers);
         break;
     case 2:
         virtuappu_mode2_render_frame(&virtuappu_registers);
-        break;
-    case 7:
-        virtuappu_mode7_render_frame(&virtuappu_registers);
         break;
     default:
         break;
