@@ -190,6 +190,16 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
     }
 
     if (warp_done && cap_frame && (int)frame >= cap_frame) {
+        /* TMC_ROOMCAP_SAVE: write a quicksave (state_quick.bin) at the warped
+         * spot so it can be F6-loaded interactively, then exit. */
+        if (getenv("TMC_ROOMCAP_SAVE")) {
+            extern int Port_QuickSave(void);
+            int sv = Port_QuickSave();
+            fprintf(stderr, "[roomcap] quicksave -> %d (state_quick.bin) area=0x%02x room=0x%02x\n", sv,
+                    (unsigned)gRoomControls.area, (unsigned)gRoomControls.room);
+            fflush(stderr);
+            _Exit(sv ? 0 : 4);
+        }
         const char* out = getenv("TMC_ROOMCAP_OUT");
         if (!out || !*out)
             out = "roomcap.png";

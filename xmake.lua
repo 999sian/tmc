@@ -625,6 +625,12 @@ target("tmc_pc")
             { patch = "viruappu-blend-5bit.patch",
               marker_file = path.join(sub, "src", "mode1.c"),
               marker = "VIRTUAPPU_BLEND_5BIT" },
+            -- Per-pixel vertical OBJ clip (Castor Wilds swamp-sink). The port marks
+            -- Link's OAM entries + a waterline scanline; mode1 drops those entries'
+            -- pixels at/below the line so his lower body hides feet->head as he sinks.
+            { patch = "viruappu-obj-clip-y.patch",
+              marker_file = path.join(sub, "src", "mode1.c"),
+              marker = "virtuappu_mode1_obj_clip_mark" },
         }
         -- Apply one patch when its marker is absent. -3 tolerates drifted
         -- context (and on shallow submodule clones, where the pre-image blob
