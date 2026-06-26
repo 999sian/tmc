@@ -12,4 +12,3 @@
 #pragma once
 
 #include "cpu/mode1.h"
-#include "cpu/mode2.h"

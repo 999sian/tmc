@@ -139,6 +139,24 @@ void virtuappu_mode1_composite_line(
     uint8_t obj_priority[MODE1_GBA_WIDTH],
     uint16_t dispcnt);
 void virtuappu_mode1_render_frame(const PPUMemory *ppu);
+
+/* Precompute the per-line affine BG2 internal reference point for one frame
+ * (the #132 hardware latch). Pure function over per-line, post-HBlank-DMA
+ * inputs, so the result can be consumed by the parallel render pass:
+ *   - reload the internal reference from BG2X/BG2Y whenever a line's I/O value
+ *     differs from the previous line's (a CPU/DMA write, e.g. the Deepwood
+ *     barrel's per-scanline HBlank DMA);
+ *   - otherwise advance it by dmx(pb)/dmy(pd) each scanline.
+ * init_ref_{x,y} is the frame-start (pre-callback) reference; line_ref_{x,y}
+ * are the post-callback references per line; out_ref_{x,y} receive the value to
+ * render each line with. Exposed for unit testing (tools/ppu_affine_test.c). */
+void virtuappu_mode1_affine_precompute(
+    int height,
+    int32_t init_ref_x, int32_t init_ref_y,
+    const int32_t *line_ref_x, const int32_t *line_ref_y,
+    const int16_t *line_pb, const int16_t *line_pd,
+    int32_t *out_ref_x, int32_t *out_ref_y);
+
 /* Sub-pixel re-render of OAM affine sprites into a (240*scale x 160*scale)
  * buffer. Called by the PC port at internal-render-scale > 1 after the
  * standard frame has been S*S nearest-replicated into `dst`. */

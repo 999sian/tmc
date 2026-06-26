@@ -1154,12 +1154,109 @@ void virtuappu_mode1_render_affine_obj_overlay(uint32_t *dst, int dst_w, int dst
         }
     }
 }
+static inline int32_t mode1_sign_extend_28(uint32_t v)
+{
+    int32_t s = (int32_t)v;
+    if ((v & 0x08000000u) != 0u) {
+        s |= (int32_t)0xF0000000u;
+    }
+    return s;
+}
+
+void virtuappu_mode1_affine_precompute(
+    int height,
+    int32_t init_ref_x, int32_t init_ref_y,
+    const int32_t *line_ref_x, const int32_t *line_ref_y,
+    const int16_t *line_pb, const int16_t *line_pd,
+    int32_t *out_ref_x, int32_t *out_ref_y)
+{
+    int32_t aint_x = init_ref_x;
+    int32_t aint_y = init_ref_y;
+    int32_t aprev_x = init_ref_x;
+    int32_t aprev_y = init_ref_y;
+    for (int line = 0; line < height; ++line) {
+        const int32_t rx = line_ref_x[line];
+        const int32_t ry = line_ref_y[line];
+        /* A write to BG2X/BG2Y (e.g. the rolling barrel's per-scanline HBlank
+         * DMA) reloads the internal reference; otherwise it keeps the value
+         * advanced by pb/pd. */
+        if (rx != aprev_x) { aint_x = rx; }
+        if (ry != aprev_y) { aint_y = ry; }
+        aprev_x = rx;
+        aprev_y = ry;
+        out_ref_x[line] = aint_x;
+        out_ref_y[line] = aint_y;
+        aint_x += line_pb[line];
+        aint_y += line_pd[line];
+    }
+}
+
+/* Render one scanline of the affine BG2 (GBA modes 1/2) from a precomputed
+ * internal reference (virtuappu_mode1_affine_precompute). Reads pa/pc and
+ * BG2CNT through the IO accessors — in the parallel pass the thread override
+ * points at this line's snapshot — so it is independent per line. Byte-for-byte
+ * the former mode2.c inner loop. */
+static void mode1_render_affine_bg2_line(
+    int frame_width, int32_t ref_x, int32_t ref_y,
+    uint32_t *line_buffer, uint8_t *priority_buffer)
+{
+    static const int affine_sizes[4] = {128, 256, 512, 1024};
+    VirtuaPPUMode1GbaMemory memory;
+    virtuappu_mode1_get_bound_gba_memory(&memory);
+
+    const uint16_t bgcnt = virtuappu_mode1_io_read16(MODE1_IO_BG2CNT);
+    const uint8_t bg_priority_value = (uint8_t)(bgcnt & 3u);
+    const uint32_t char_base = (uint32_t)((bgcnt >> 2u) & 3u) * 0x4000u;
+    const uint32_t screen_base = (uint32_t)((bgcnt >> 8u) & 0x1Fu) * 0x800u;
+    const bool wrap = ((bgcnt >> 13u) & 1u) != 0u;
+    const uint16_t size_flag = (uint16_t)((bgcnt >> 14u) & 3u);
+    const int map_size = affine_sizes[size_flag];
+    const int map_tiles = map_size / 8;
+    const int16_t pa = (int16_t)virtuappu_mode1_io_read16(0x20u);
+    const int16_t pc = (int16_t)virtuappu_mode1_io_read16(0x24u);
+
+    for (int x = 0; x < frame_width; ++x) {
+        int32_t src_x = (ref_x + pa * x) >> 8;
+        int32_t src_y = (ref_y + pc * x) >> 8;
+
+        if (wrap) {
+            src_x = ((src_x % map_size) + map_size) % map_size;
+            src_y = ((src_y % map_size) + map_size) % map_size;
+        } else if (src_x < 0 || src_x >= map_size || src_y < 0 || src_y >= map_size) {
+            continue;
+        }
+
+        const int tile_col = src_x / 8;
+        const int tile_row = src_y / 8;
+        const int pixel_x = src_x % 8;
+        const int pixel_y = src_y % 8;
+        const uint32_t map_addr = screen_base + (uint32_t)(tile_row * map_tiles + tile_col);
+        const uint8_t tile_index = (map_addr < MODE1_VRAM_SIZE) ? memory.vram[map_addr] : 0u;
+        const uint32_t tile_addr =
+            char_base + (uint32_t)tile_index * 64u + (uint32_t)pixel_y * 8u + (uint32_t)pixel_x;
+        const uint8_t color_index = (tile_addr < MODE1_VRAM_SIZE) ? memory.vram[tile_addr] : 0u;
+
+        if (color_index == 0u) {
+            continue;
+        }
+
+        line_buffer[x] = virtuappu_mode1_rgb555_to_abgr8888(memory.bg_palette[color_index]);
+        priority_buffer[x] = bg_priority_value;
+    }
+}
+
 void virtuappu_mode1_render_frame(const PPUMemory *ppu)
 {
     uint16_t dispcnt;
     int line;
+    /* VPPU mode 2 = GBA affine (BG2 is rotation/scaling); mode 1 = all-tiled.
+     * The two formerly lived in separate render_frame functions (mode1.c vs
+     * mode2.c); they now share this one loop, differing only in how BG2 is
+     * drawn and that the affine path latches DISPCNT once per frame. */
+    const bool affine = (ppu->mode == 2);
 
     virtuappu_mode1_set_frame_geometry(ppu);
+    const int frame_width = mode1_frame_width;
 
     dispcnt = virtuappu_mode1_io_read16(MODE1_IO_DISPCNT);
     if ((dispcnt & MODE1_DISP_FORCED_BLANK) != 0u) {
@@ -1183,6 +1280,23 @@ void virtuappu_mode1_render_frame(const PPUMemory *ppu)
     static uint8_t io_snapshots[MODE1_GBA_HEIGHT][MODE1_IO_MEM_SIZE];
     uint16_t per_line_dispcnt[MODE1_GBA_HEIGHT];
 
+    /* Affine BG2 carries an internal reference point across scanlines (#132).
+     * Gather per-line, post-callback inputs during the sequential pass and
+     * precompute the per-line reference so the parallel pass stays independent. */
+    const bool do_affine_bg2 = affine && ((dispcnt & MODE1_DISP_BG2_ON) != 0u);
+    int32_t aff_ref_x[MODE1_GBA_HEIGHT];
+    int32_t aff_ref_y[MODE1_GBA_HEIGHT];
+    int32_t aff_line_ref_x[MODE1_GBA_HEIGHT];
+    int32_t aff_line_ref_y[MODE1_GBA_HEIGHT];
+    int16_t aff_pb[MODE1_GBA_HEIGHT];
+    int16_t aff_pd[MODE1_GBA_HEIGHT];
+    int32_t aff_init_x = 0;
+    int32_t aff_init_y = 0;
+    if (do_affine_bg2) {
+        aff_init_x = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x28u));
+        aff_init_y = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x2Cu));
+    }
+
     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
         if (virtuappu_mode1_pre_line_callback != NULL) {
             virtuappu_mode1_pre_line_callback(line);
@@ -1195,11 +1309,26 @@ void virtuappu_mode1_render_frame(const PPUMemory *ppu)
             (uint16_t)io_snapshots[line][MODE1_IO_DISPCNT] |
             ((uint16_t)io_snapshots[line][MODE1_IO_DISPCNT + 1] << 8);
 #endif
+        if (do_affine_bg2) {
+            /* Live IO is this line's post-callback state here (== the snapshot),
+             * matching what the old mode2.c read inline. */
+            aff_line_ref_x[line] = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x28u));
+            aff_line_ref_y[line] = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x2Cu));
+            aff_pb[line] = (int16_t)virtuappu_mode1_io_read16(0x22u);
+            aff_pd[line] = (int16_t)virtuappu_mode1_io_read16(0x26u);
+        }
+    }
+    if (do_affine_bg2) {
+        virtuappu_mode1_affine_precompute(MODE1_GBA_HEIGHT, aff_init_x, aff_init_y,
+            aff_line_ref_x, aff_line_ref_y, aff_pb, aff_pd, aff_ref_x, aff_ref_y);
     }
 
 #pragma omp parallel for schedule(static)
     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
-        uint16_t line_dispcnt = per_line_dispcnt[line];
+        /* Affine (mode 2) renders every scanline against the frame-start DISPCNT
+         * (GBA latches BGMODE once per frame; matches the former mode2.c). The
+         * tiled path honours per-line DISPCNT for HBlank-DMA changes. */
+        uint16_t line_dispcnt = affine ? dispcnt : per_line_dispcnt[line];
         uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
         uint8_t bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
         uint32_t obj_layer[MODE1_GBA_WIDTH];
@@ -1222,11 +1351,18 @@ void virtuappu_mode1_render_frame(const PPUMemory *ppu)
         if ((line_dispcnt & MODE1_DISP_BG1_ON) != 0u) {
             virtuappu_mode1_render_text_bg_line(1, line, bg_layers[1], bg_priority[1]);
         }
-        if ((line_dispcnt & MODE1_DISP_BG2_ON) != 0u) {
-            virtuappu_mode1_render_text_bg_line(2, line, bg_layers[2], bg_priority[2]);
-        }
-        if ((line_dispcnt & MODE1_DISP_BG3_ON) != 0u) {
-            virtuappu_mode1_render_text_bg_line(3, line, bg_layers[3], bg_priority[3]);
+        if (affine) {
+            if ((line_dispcnt & MODE1_DISP_BG2_ON) != 0u) {
+                mode1_render_affine_bg2_line(frame_width, aff_ref_x[line], aff_ref_y[line],
+                                             bg_layers[2], bg_priority[2]);
+            }
+        } else {
+            if ((line_dispcnt & MODE1_DISP_BG2_ON) != 0u) {
+                virtuappu_mode1_render_text_bg_line(2, line, bg_layers[2], bg_priority[2]);
+            }
+            if ((line_dispcnt & MODE1_DISP_BG3_ON) != 0u) {
+                virtuappu_mode1_render_text_bg_line(3, line, bg_layers[3], bg_priority[3]);
+            }
         }
         if ((line_dispcnt & MODE1_DISP_OBJ_ON) != 0u) {
             virtuappu_mode1_render_obj_line(line, obj_1d, obj_layer, obj_priority);

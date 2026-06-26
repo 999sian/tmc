@@ -29,7 +29,6 @@
 #include <string.h>
 
 #include "cpu/mode1.h"
-#include "cpu/mode2.h"
 #include "virtuappu.h"
 
 /* virtuappu_frame_buffer / virtuappu_vram / virtuappu_registers are defined
