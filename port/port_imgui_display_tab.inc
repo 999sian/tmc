@@ -240,6 +240,13 @@ static void DrawRibbonDisplayTab(void) {
     }
     ImGui::SameLine();
 
+    bool hideCur = Port_Config_GetFullscreenHideCursor();
+    if (ImGui::Checkbox("Hide cursor in fullscreen", &hideCur)) {
+        Port_Config_SetFullscreenHideCursor(hideCur);         /* persist */
+        Port_PPU_ApplyCursorVisibility();                     /* live, if already fullscreen */
+    }
+    ImGui::SameLine();
+
     bool vsync = Port_PPU_VSyncEnabled();
     if (ImGui::Checkbox("VSync", &vsync)) {
         Port_PPU_SetVSync(vsync);

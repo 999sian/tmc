@@ -1117,6 +1117,8 @@ extern "C" void Port_PPU_SetWindowTitle(const char* title) {
     SDL_SetWindowTitle(sWindow, title);
 }
 
+extern "C" void Port_PPU_ApplyCursorVisibility(void); /* defined just below */
+
 extern "C" void Port_PPU_ToggleFullscreen(void) {
     SDL_Window* w = Port_PPU_ActiveWindow();
     if (!w) {
@@ -1126,14 +1128,12 @@ extern "C" void Port_PPU_ToggleFullscreen(void) {
     bool wantFullscreen = (flags & SDL_WINDOW_FULLSCREEN) == 0;
     SDL_SetWindowFullscreen(w, wantFullscreen);
     SDL_SyncWindow(w);
-    /* Hide the cursor while fullscreen, show it again in windowed mode.
-     * The bare-mouse cursor floating over Hyrule Town gets distracting
-     * fast — flagged by nayyar in the suggestions thread. */
-    if (wantFullscreen) {
-        SDL_HideCursor();
-    } else {
-        SDL_ShowCursor();
-    }
+    /* Hide the cursor while fullscreen, show it again in windowed mode — the
+     * bare-mouse cursor floating over Hyrule Town gets distracting fast
+     * (flagged by nayyar in the suggestions thread). The hide is now opt-out
+     * via the "Hide cursor in fullscreen" display setting; the policy lives in
+     * Port_PPU_ApplyCursorVisibility so a mid-fullscreen toggle can re-apply. */
+    Port_PPU_ApplyCursorVisibility();
 }
 
 extern "C" bool Port_PPU_IsFullscreen(void) {
@@ -1142,6 +1142,18 @@ extern "C" bool Port_PPU_IsFullscreen(void) {
         return false;
     }
     return (SDL_GetWindowFlags(w) & SDL_WINDOW_FULLSCREEN) != 0;
+}
+
+/* Cursor-visibility policy for the current window state: in fullscreen the OS
+ * cursor is hidden when the "hide cursor in fullscreen" setting is on (the
+ * default), and always shown in windowed mode. Called on every fullscreen
+ * transition and whenever the setting is toggled in the display menu. */
+extern "C" void Port_PPU_ApplyCursorVisibility(void) {
+    if (Port_PPU_IsFullscreen() && Port_Config_GetFullscreenHideCursor()) {
+        SDL_HideCursor();
+    } else {
+        SDL_ShowCursor();
+    }
 }
 
 extern "C" unsigned char Port_PPU_WindowScale(void) {

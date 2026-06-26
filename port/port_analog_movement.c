@@ -27,10 +27,11 @@
 #include <math.h>
 #include <stdbool.h>
 
-/* Stick magnitudes below this deadzone don't trigger movement — the
- * stock D-pad input remains authoritative. ~30% lets the user rest
- * thumb-on-stick without phantom walking. */
-#define ANALOG_DEADZONE 0.30f
+/* Stick magnitudes below the deadzone don't trigger movement — the stock
+ * D-pad input remains authoritative. The threshold is user-configurable
+ * (Port_Config_GetAnalogDeadzone, default 0.30 ~= 30%, range [0..0.95]) so a
+ * worn or drifty stick can be tuned without rebuilding; ~30% lets most users
+ * rest a thumb on the stick without phantom walking. */
 
 /* C11 doesn't guarantee M_PI without a feature-test macro and we'd
  * rather not pull _GNU_SOURCE into a leaf file. */
@@ -46,7 +47,9 @@ bool Port_AnalogMovement_Apply(u32* heldInputOut, u32* directionOut) {
         return false;
     }
     const float magSq = sx * sx + sy * sy;
-    const float dz = ANALOG_DEADZONE;
+    float dz = Port_Config_GetAnalogDeadzone();
+    if (dz < 0.0f) dz = 0.0f;
+    if (dz > 0.95f) dz = 0.95f;
     if (magSq < dz * dz) {
         return false;
     }

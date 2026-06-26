@@ -649,6 +649,7 @@ target("tmc_pc")
     add_files("docs/picori-logo.png", {rule = "utils.bin2c", nozeroend = true})
     add_files("port/port_debug_actions.c")
     add_files("port/port_debug_entities.c")
+    add_files("port/port_debug_memory_watch.c")  -- live GBA memory-watch list (F8 Memory tab)
     add_files("port/port_quicksave.c")
     add_files("port/port_practice.c")   -- Speedrun practice mode (timer/inputs/reload/slow-mo)
     add_files("port/port_inline_ptrs.c")
@@ -1000,6 +1001,23 @@ target("debug_actions_test")
     add_defines("PC_PORT")
     add_files("port/port_debug_actions.c")
     add_files("port/port_debug_actions_test.c")
+target_end()
+
+
+-- ====================
+-- Memory-watch list regression test (fault-safe little-endian reads + watch
+-- bookkeeping; see port_memory_watch_test.c)
+-- ====================
+target("memory_watch_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs(".")
+    add_includedirs("port")
+    add_includedirs("include")
+    add_defines("PC_PORT")
+    add_files("port/port_debug_memory_watch.c")
+    add_files("port/port_memory_watch_test.c")
 target_end()
 
 
