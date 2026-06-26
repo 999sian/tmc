@@ -49,18 +49,6 @@ int Port_PakEntryCount(void);
  * the disk. Idempotent. */
 void Port_AssetLoader_Reload(void);
 
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-/* Phase 7 hooks (compiled in only when the overlap-extract-init
- * build flag is set). The bootstrap calls BeginGated to shut all
- * phase gates before kicking off a cold-launch extraction, calls
- * OpenGate(category) as each pak category finishes, and calls
- * OpenAllGates once the entire extraction is done (or as a
- * failsafe on error). */
-void Port_AssetLoader_BeginGated(void);
-void Port_AssetLoader_OpenGate(int phaseGateIndex);
-void Port_AssetLoader_OpenAllGates(void);
-#endif
-
 #ifdef __cplusplus
 }
 #endif

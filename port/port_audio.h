@@ -10,7 +10,6 @@
 bool Port_Audio_Init(void);
 void Port_Audio_Shutdown(void);
 void Port_Audio_Reset(void);
-void Port_Audio_OnFifoWrite(uint32_t addr, uint32_t value);
 
 /* GBA-accurate audio toggle (F8 → Audio). This is the single front door:
  * it records the flag the audio thread reads to bypass the output-DSP

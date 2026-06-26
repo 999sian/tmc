@@ -178,27 +178,18 @@ extern "C" SDL_Surface* Port_ExtractEzloFromRom(void) {
     if (!gRomData) return nullptr;
 
     int figIdx = kFigurineEzloHat;
-    if (const char* override_idx = SDL_getenv("TMC_ICON_FIGURINE")) {
-        figIdx = SDL_atoi(override_idx);
-    }
     const Figurine& fig = gFigurines[figIdx];
     if (!fig.pal || !fig.gfx || fig.size <= 0) return nullptr;
 
-    /* size = N tiles × 32 bytes. Use that to size the surface as a square-ish
-     * grid; aspect override available via TMC_ICON_TILES_W. */
+    /* size = N tiles × 32 bytes. Use that to size the surface as a
+     * square-ish grid. */
     int numTiles = fig.size / 32;
     int tilesW = kFigurineTilesW;
-    if (const char* override_w = SDL_getenv("TMC_ICON_TILES_W")) {
-        tilesW = SDL_atoi(override_w);
-    }
     if (tilesW <= 0) tilesW = 4;
     int totalH = numTiles / tilesW;
     if (totalH <= 0) return nullptr;
 
     int skipRows = kFigurineSkipRows;
-    if (const char* override_skip = SDL_getenv("TMC_ICON_SKIP_ROWS")) {
-        skipRows = SDL_atoi(override_skip);
-    }
     if (skipRows < 0) skipRows = 0;
     if (skipRows >= totalH) skipRows = 0; /* skip discards everything — fall back to full */
     int tilesH = totalH - skipRows;

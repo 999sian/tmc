@@ -157,61 +157,39 @@ void Port_SoftSlots_Load(void) {
  * _ON at runtime. ITEM_BOMBS / _BOW / _BOOMERANG / _SHIELD / _LANTERN
  * pair up with their upgraded variants — owning the upgraded variant
  * implies ownership of the base one for our purposes. */
-static const uint8_t kEquippable[] = {
+static const struct { uint8_t id; const char* name; } kEquippable[] = {
     /* values mirror include/item.h enum positions 1..0x21 */
-    1,  /* ITEM_SMITH_SWORD       */
-    2,  /* ITEM_GREEN_SWORD       */
-    3,  /* ITEM_RED_SWORD         */
-    4,  /* ITEM_BLUE_SWORD        */
-    7,  /* ITEM_BOMBS             */
-    8,  /* ITEM_REMOTE_BOMBS      */
-    9,  /* ITEM_BOW               */
-    10, /* ITEM_LIGHT_ARROW       */
-    11, /* ITEM_BOOMERANG         */
-    12, /* ITEM_MAGIC_BOOMERANG   */
-    13, /* ITEM_SHIELD            */
-    14, /* ITEM_MIRROR_SHIELD     */
-    15, /* ITEM_LANTERN_OFF       */
-    17, /* ITEM_GUST_JAR          */
-    18, /* ITEM_PACCI_CANE        */
-    19, /* ITEM_MOLE_MITTS        */
-    20, /* ITEM_ROCS_CAPE         */
-    21, /* ITEM_PEGASUS_BOOTS     */
-    23, /* ITEM_OCARINA           */
-    28, /* ITEM_BOTTLE1           */
-    29, /* ITEM_BOTTLE2           */
-    30, /* ITEM_BOTTLE3           */
-    31, /* ITEM_BOTTLE4           */
+    { 1,  "Sword (Smith)"   }, /* ITEM_SMITH_SWORD     */
+    { 2,  "Sword (Green)"   }, /* ITEM_GREEN_SWORD     */
+    { 3,  "Sword (Red)"     }, /* ITEM_RED_SWORD       */
+    { 4,  "Sword (Blue)"    }, /* ITEM_BLUE_SWORD      */
+    { 7,  "Bombs"           }, /* ITEM_BOMBS           */
+    { 8,  "Remote Bombs"    }, /* ITEM_REMOTE_BOMBS    */
+    { 9,  "Bow"             }, /* ITEM_BOW             */
+    { 10, "Light Arrow"     }, /* ITEM_LIGHT_ARROW     */
+    { 11, "Boomerang"       }, /* ITEM_BOOMERANG       */
+    { 12, "Magic Boomerang" }, /* ITEM_MAGIC_BOOMERANG */
+    { 13, "Shield"          }, /* ITEM_SHIELD          */
+    { 14, "Mirror Shield"   }, /* ITEM_MIRROR_SHIELD   */
+    { 15, "Lantern"         }, /* ITEM_LANTERN_OFF     */
+    { 17, "Gust Jar"        }, /* ITEM_GUST_JAR        */
+    { 18, "Pacci Cane"      }, /* ITEM_PACCI_CANE      */
+    { 19, "Mole Mitts"      }, /* ITEM_MOLE_MITTS      */
+    { 20, "Roc's Cape"      }, /* ITEM_ROCS_CAPE       */
+    { 21, "Pegasus Boots"   }, /* ITEM_PEGASUS_BOOTS   */
+    { 23, "Ocarina"         }, /* ITEM_OCARINA         */
+    { 28, "Bottle 1"        }, /* ITEM_BOTTLE1         */
+    { 29, "Bottle 2"        }, /* ITEM_BOTTLE2         */
+    { 30, "Bottle 3"        }, /* ITEM_BOTTLE3         */
+    { 31, "Bottle 4"        }, /* ITEM_BOTTLE4         */
 };
 
 static const char* ItemDisplayName(uint8_t id) {
-    switch (id) {
-        case 0:  return "(unassigned)";
-        case 1:  return "Sword (Smith)";
-        case 2:  return "Sword (Green)";
-        case 3:  return "Sword (Red)";
-        case 4:  return "Sword (Blue)";
-        case 7:  return "Bombs";
-        case 8:  return "Remote Bombs";
-        case 9:  return "Bow";
-        case 10: return "Light Arrow";
-        case 11: return "Boomerang";
-        case 12: return "Magic Boomerang";
-        case 13: return "Shield";
-        case 14: return "Mirror Shield";
-        case 15: return "Lantern";
-        case 17: return "Gust Jar";
-        case 18: return "Pacci Cane";
-        case 19: return "Mole Mitts";
-        case 20: return "Roc's Cape";
-        case 21: return "Pegasus Boots";
-        case 23: return "Ocarina";
-        case 28: return "Bottle 1";
-        case 29: return "Bottle 2";
-        case 30: return "Bottle 3";
-        case 31: return "Bottle 4";
-        default: return "?";
+    if (id == 0) return "(unassigned)";
+    for (size_t i = 0; i < sizeof(kEquippable) / sizeof(kEquippable[0]); i++) {
+        if (kEquippable[i].id == id) return kEquippable[i].name;
     }
+    return "?";
 }
 
 const char* Port_SoftSlots_GetSlotLabel(int slot) {
@@ -227,7 +205,7 @@ const char* Port_SoftSlots_GetSlotLabel(int slot) {
 static int CycleIndexOf(uint8_t id) {
     if (id == 0) return -1; /* "unassigned" lives outside the table */
     for (size_t i = 0; i < sizeof(kEquippable) / sizeof(kEquippable[0]); i++) {
-        if (kEquippable[i] == id) return (int)i;
+        if (kEquippable[i].id == id) return (int)i;
     }
     return -1;
 }
@@ -248,7 +226,7 @@ void Port_SoftSlots_CycleAssignment(int slot, int direction) {
         } else if (idx < -1) {
             idx = n - 1;
         }
-        uint8_t cand = idx < 0 ? 0 : kEquippable[idx];
+        uint8_t cand = idx < 0 ? 0 : kEquippable[idx].id;
         if (cand == 0 || GetInventoryValue(cand) == 1) {
             Port_SoftSlots_SetAssignment(slot, cand);
             return;
@@ -331,362 +309,14 @@ static const char* SlotValueLabel(int slot) {
      * looks intentional rather than crashed. */
     uint8_t id = sAssignments[slot];
     if (id == 0) return "---";
-    /* Reuse ItemDisplayName via the same switch the cycle code drives. */
+    /* Reuse ItemDisplayName — the same name table the cycle code drives. */
     static char buf[32];
     SDL_strlcpy(buf, ItemDisplayName(id), sizeof(buf));
     return buf;
 }
 
-/* The framebuffer info bar and the OAM letter-badge sprite injection
- * both lived here at one point. They're gone — the framebuffer bar
- * was occluding the engine's item-name display and the OAM injection
- * was leaking into pause-menu sprite tiles. The remaining UI is the
- * SDL `\` configuration overlay (RenderConfigOverlay, below) and the
- * F8 → "Extra equip slots" page in the debug menu. */
-
-#if 0  /* disabled — kept for reference */
-static const uint8_t kGlyph_dot[5]   = { 0b000, 0b000, 0b000, 0b000, 0b010 };
-static const uint8_t kGlyph_dash[5]  = { 0b000, 0b000, 0b111, 0b000, 0b000 };
-static const uint8_t kGlyph_colon[5] = { 0b000, 0b010, 0b000, 0b010, 0b000 };
-static const uint8_t kGlyph_lb[5]    = { 0b110, 0b100, 0b100, 0b100, 0b110 };
-static const uint8_t kGlyph_rb[5]    = { 0b011, 0b001, 0b001, 0b001, 0b011 };
-static const uint8_t kGlyph_space[5] = { 0, 0, 0, 0, 0 };
-static const uint8_t kGlyph_qmark[5] = { 0b110, 0b001, 0b010, 0b000, 0b010 };
-static const uint8_t kGlyph_apos[5]  = { 0b010, 0b010, 0b000, 0b000, 0b000 };
-
-static const uint8_t kGlyph_0[5] = { 0b111, 0b101, 0b101, 0b101, 0b111 };
-static const uint8_t kGlyph_1[5] = { 0b010, 0b110, 0b010, 0b010, 0b111 };
-static const uint8_t kGlyph_2[5] = { 0b110, 0b001, 0b010, 0b100, 0b111 };
-static const uint8_t kGlyph_3[5] = { 0b110, 0b001, 0b110, 0b001, 0b110 };
-static const uint8_t kGlyph_4[5] = { 0b101, 0b101, 0b111, 0b001, 0b001 };
-
-static const uint8_t kGlyph_A[5] = { 0b010, 0b101, 0b111, 0b101, 0b101 };
-static const uint8_t kGlyph_B[5] = { 0b110, 0b101, 0b110, 0b101, 0b110 };
-static const uint8_t kGlyph_C[5] = { 0b011, 0b100, 0b100, 0b100, 0b011 };
-static const uint8_t kGlyph_D[5] = { 0b110, 0b101, 0b101, 0b101, 0b110 };
-static const uint8_t kGlyph_E[5] = { 0b111, 0b100, 0b110, 0b100, 0b111 };
-static const uint8_t kGlyph_F[5] = { 0b111, 0b100, 0b110, 0b100, 0b100 };
-static const uint8_t kGlyph_G[5] = { 0b011, 0b100, 0b101, 0b101, 0b011 };
-static const uint8_t kGlyph_H[5] = { 0b101, 0b101, 0b111, 0b101, 0b101 };
-static const uint8_t kGlyph_I[5] = { 0b111, 0b010, 0b010, 0b010, 0b111 };
-static const uint8_t kGlyph_J[5] = { 0b001, 0b001, 0b001, 0b101, 0b010 };
-static const uint8_t kGlyph_K[5] = { 0b101, 0b101, 0b110, 0b101, 0b101 };
-static const uint8_t kGlyph_L[5] = { 0b100, 0b100, 0b100, 0b100, 0b111 };
-static const uint8_t kGlyph_M[5] = { 0b101, 0b111, 0b111, 0b101, 0b101 };
-static const uint8_t kGlyph_N[5] = { 0b101, 0b111, 0b111, 0b111, 0b101 };
-static const uint8_t kGlyph_O[5] = { 0b010, 0b101, 0b101, 0b101, 0b010 };
-static const uint8_t kGlyph_P[5] = { 0b110, 0b101, 0b110, 0b100, 0b100 };
-static const uint8_t kGlyph_Q[5] = { 0b010, 0b101, 0b101, 0b111, 0b011 };
-static const uint8_t kGlyph_R[5] = { 0b110, 0b101, 0b110, 0b101, 0b101 };
-static const uint8_t kGlyph_S[5] = { 0b011, 0b100, 0b010, 0b001, 0b110 };
-static const uint8_t kGlyph_T[5] = { 0b111, 0b010, 0b010, 0b010, 0b010 };
-static const uint8_t kGlyph_U[5] = { 0b101, 0b101, 0b101, 0b101, 0b011 };
-static const uint8_t kGlyph_V[5] = { 0b101, 0b101, 0b101, 0b101, 0b010 };
-static const uint8_t kGlyph_W[5] = { 0b101, 0b101, 0b111, 0b111, 0b101 };
-static const uint8_t kGlyph_X[5] = { 0b101, 0b101, 0b010, 0b101, 0b101 };
-static const uint8_t kGlyph_Y[5] = { 0b101, 0b101, 0b010, 0b010, 0b010 };
-static const uint8_t kGlyph_Z[5] = { 0b111, 0b001, 0b010, 0b100, 0b111 };
-
-static const uint8_t* PickGlyph(char c) {
-    if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
-    switch (c) {
-        case 'A': return kGlyph_A; case 'B': return kGlyph_B; case 'C': return kGlyph_C;
-        case 'D': return kGlyph_D; case 'E': return kGlyph_E; case 'F': return kGlyph_F;
-        case 'G': return kGlyph_G; case 'H': return kGlyph_H; case 'I': return kGlyph_I;
-        case 'J': return kGlyph_J; case 'K': return kGlyph_K; case 'L': return kGlyph_L;
-        case 'M': return kGlyph_M; case 'N': return kGlyph_N; case 'O': return kGlyph_O;
-        case 'P': return kGlyph_P; case 'Q': return kGlyph_Q; case 'R': return kGlyph_R;
-        case 'S': return kGlyph_S; case 'T': return kGlyph_T; case 'U': return kGlyph_U;
-        case 'V': return kGlyph_V; case 'W': return kGlyph_W; case 'X': return kGlyph_X;
-        case 'Y': return kGlyph_Y; case 'Z': return kGlyph_Z;
-        case '0': return kGlyph_0; case '1': return kGlyph_1; case '2': return kGlyph_2;
-        case '3': return kGlyph_3; case '4': return kGlyph_4;
-        case '.': return kGlyph_dot;
-        case '-': return kGlyph_dash;
-        case ':': return kGlyph_colon;
-        case '[': return kGlyph_lb;
-        case ']': return kGlyph_rb;
-        case ' ': return kGlyph_space;
-        case '\'': return kGlyph_apos;
-        default:  return kGlyph_qmark;
-    }
-}
-
-#define FB_W 240
-#define FB_H 160
-#define GLYPH_W 3
-#define GLYPH_H 5
-#define CHAR_PITCH 4   /* 3px glyph + 1px gap */
-#define LINE_PITCH 6   /* 5px glyph + 1px gap */
-
-static void DrawGlyph(uint32_t* fb, int x, int y, char c, uint32_t color) {
-    const uint8_t* glyph = PickGlyph(c);
-    for (int row = 0; row < GLYPH_H; row++) {
-        int py = y + row;
-        if (py < 0 || py >= FB_H) continue;
-        uint8_t bits = glyph[row];
-        for (int col = 0; col < GLYPH_W; col++) {
-            int px = x + col;
-            if (px < 0 || px >= FB_W) continue;
-            /* MSB of the 3-bit row is the leftmost pixel. */
-            if (bits & (1u << (GLYPH_W - 1 - col))) {
-                fb[py * FB_W + px] = color;
-            }
-        }
-    }
-}
-
-static int DrawString(uint32_t* fb, int x, int y, const char* s, uint32_t color) {
-    int dx = 0;
-    while (*s) {
-        DrawGlyph(fb, x + dx, y, *s, color);
-        dx += CHAR_PITCH;
-        s++;
-    }
-    return dx;
-}
-
-static void FillRect(uint32_t* fb, int x, int y, int w, int h, uint32_t color) {
-    for (int py = y; py < y + h; py++) {
-        if (py < 0 || py >= FB_H) continue;
-        for (int px = x; px < x + w; px++) {
-            if (px < 0 || px >= FB_W) continue;
-            fb[py * FB_W + px] = color;
-        }
-    }
-}
-
-void Port_SoftSlots_DrawInfoIntoFramebuffer(uint32_t* fb) {
-    if (!fb) return;
-    if (!Port_SoftSlots_IsPauseActive()) return;
-    if (sConfigOpen) return; /* config overlay is the modal focus */
-
-    /* Layout: a row of four "[X]Lantern" cells along the bottom of the
-     * 240x160 frame, plus a one-line hint underneath. We sit in y=146..159
-     * which on the TMC pause menu is below the active panel art.
-     *
-     * ABGR8888 little-endian: 0xAABBGGRR. The TMC pause menu uses a dark
-     * blue background for its panel, so we use a translucent-feeling
-     * dark grey backdrop and TMC-yellow for the slot labels. */
-    const uint32_t kBgColor      = 0xFF101018u; /* near-black, slight blue */
-    const uint32_t kBorderColor  = 0xFF6080A0u; /* slate */
-    const uint32_t kLabelColor   = 0xFF40D0FFu; /* cyan-ish for slot tags */
-    const uint32_t kValueColor   = 0xFFFFFFFFu;
-    const uint32_t kEmptyColor   = 0xFF606060u;
-    const uint32_t kHintColor    = 0xFFA0A0A0u;
-
-    const int barY = 146;
-    const int barH = 14; /* 5px glyph + 1px padding * 2 + 2px frame */
-    FillRect(fb, 1, barY, FB_W - 2, barH, kBgColor);
-    /* 1-pixel border top + bottom */
-    FillRect(fb, 1, barY, FB_W - 2, 1, kBorderColor);
-    FillRect(fb, 1, barY + barH - 1, FB_W - 2, 1, kBorderColor);
-
-    /* Four cells, ~58 px each, evenly spaced. */
-    const int cellW = (FB_W - 2) / 4;
-    for (int i = 0; i < PORT_SOFTSLOT_COUNT; i++) {
-        int cellX = 1 + i * cellW;
-        /* Vertical separator between cells */
-        if (i > 0) FillRect(fb, cellX, barY + 1, 1, barH - 2, kBorderColor);
-
-        /* Slot tag at left side of cell. */
-        char tag[8];
-        snprintf(tag, sizeof(tag), "[%s]", Port_SoftSlots_SlotName(i));
-        int textY = barY + 4;
-        int tagWidth = DrawString(fb, cellX + 3, textY, tag, kLabelColor);
-
-        /* Item name (uppercased by the font, truncated to fit). */
-        const char* full = SlotValueLabel(i);
-        int avail = cellW - tagWidth - 6; /* 3 left, 3 right pad */
-        int maxChars = avail / CHAR_PITCH;
-        if (maxChars < 1) maxChars = 1;
-        char buf[16];
-        int n = 0;
-        for (; full[n] && n < (int)sizeof(buf) - 1 && n < maxChars; n++) {
-            buf[n] = full[n];
-        }
-        buf[n] = '\0';
-        bool empty = (full[0] == '-' || full[0] == 0);
-        DrawString(fb, cellX + 3 + tagWidth + 1, textY, buf,
-                   empty ? kEmptyColor : kValueColor);
-    }
-
-    /* Randomizer homewarp hint (issue #155): shown only on the Quest
-     * Status screen of an active homewarp-enabled seed, right-aligned
-     * just above the slot bar. */
-    {
-        extern bool Rando_Homewarp_HintVisible(void);
-        if (Rando_Homewarp_HintVisible()) {
-            static const char kHint[] = "SELECT: SLEEP (WARP HOME)";
-            int w = (int)(sizeof(kHint) - 1) * CHAR_PITCH;
-            int x = FB_W - 3 - w;
-            int y = barY - 9;
-            FillRect(fb, x - 2, y - 1, w + 4, 8, kBgColor);
-            DrawString(fb, x, y, kHint, kHintColor);
-        }
-    }
-    /* No persistent hint otherwise — first run users see the F8 menu and
-     * the config key (\\) is also documented in the F8 page. */
-}
-
-/* ---- Pause-menu sprite badges (X / Y / L / R) ---------------------- *
- *
- * Hand-rolled 8x8 4bpp tile data for the four letter glyphs, designed
- * to mimic the engine's existing A indicator: red filled square with a
- * yellow letter inside. Palette indices used:
- *   0 = transparent
- *   1 = red (background fill)
- *   2 = yellow (letter)
- *
- * Each tile is encoded as 8 rows of 4 bytes; each byte holds two
- * pixels (low nibble = leftmost pixel). Palette colour is picked from
- * the engine's existing OBJ palette 0, which the pause-menu sprites
- * already use — entries 1 and 2 there happen to be red/orange and
- * yellow on TMC's UI palette, giving us native-matching colours
- * without loading custom palette data. */
-
-/* Pretty-print convention: each row is two bytes plus two bytes ==
- * 8 pixels. Read R/Y left-to-right and the tile is the obvious shape. */
-#define R 1u  /* red    */
-#define Y 2u  /* yellow */
-#define _ 0u  /* transparent — currently unused; full 8x8 fill */
-
-#define ROW(p0,p1,p2,p3,p4,p5,p6,p7) \
-    (uint8_t)(((p1) << 4) | (p0)), \
-    (uint8_t)(((p3) << 4) | (p2)), \
-    (uint8_t)(((p5) << 4) | (p4)), \
-    (uint8_t)(((p7) << 4) | (p6))
-
-static const uint8_t kGlyphTilesXYLR[4][32] = {
-    /* X */ {
-        ROW(R,R,R,R,R,R,R,R),
-        ROW(R,Y,R,R,R,R,Y,R),
-        ROW(R,R,Y,R,R,Y,R,R),
-        ROW(R,R,R,Y,Y,R,R,R),
-        ROW(R,R,R,Y,Y,R,R,R),
-        ROW(R,R,Y,R,R,Y,R,R),
-        ROW(R,Y,R,R,R,R,Y,R),
-        ROW(R,R,R,R,R,R,R,R),
-    },
-    /* Y */ {
-        ROW(R,R,R,R,R,R,R,R),
-        ROW(R,Y,R,R,R,R,Y,R),
-        ROW(R,R,Y,R,R,Y,R,R),
-        ROW(R,R,R,Y,Y,R,R,R),
-        ROW(R,R,R,R,Y,R,R,R),
-        ROW(R,R,R,R,Y,R,R,R),
-        ROW(R,R,R,R,Y,R,R,R),
-        ROW(R,R,R,R,R,R,R,R),
-    },
-    /* L */ {
-        ROW(R,R,R,R,R,R,R,R),
-        ROW(R,Y,R,R,R,R,R,R),
-        ROW(R,Y,R,R,R,R,R,R),
-        ROW(R,Y,R,R,R,R,R,R),
-        ROW(R,Y,R,R,R,R,R,R),
-        ROW(R,Y,R,R,R,R,R,R),
-        ROW(R,Y,Y,Y,Y,Y,Y,R),
-        ROW(R,R,R,R,R,R,R,R),
-    },
-    /* R */ {
-        ROW(R,R,R,R,R,R,R,R),
-        ROW(R,Y,Y,Y,Y,R,R,R),
-        ROW(R,Y,R,R,R,Y,R,R),
-        ROW(R,Y,Y,Y,Y,R,R,R),
-        ROW(R,Y,R,Y,R,R,R,R),
-        ROW(R,Y,R,R,Y,R,R,R),
-        ROW(R,Y,R,R,R,Y,R,R),
-        ROW(R,R,R,R,R,R,R,R),
-    },
-};
-
-#undef R
-#undef Y
-#undef _
-#undef ROW
-
-/* Sprite VRAM destination tile index. 1024 tiles available in 4bpp
- * mode; we sit at 0x3FC..0x3FF (the last four) on the assumption that
- * the engine's pause-menu UI sprites don't use the very top of sprite
- * VRAM. We re-inject every frame the badges render so a transient
- * eviction by another sprite loader self-corrects on the next frame. */
-#define PORT_SOFTSLOT_GLYPH_BASE_TILE 0x3FC
-
-/* OAM slots — picked from the high end of the 128-slot OAM array on
- * the assumption the engine's pause-menu OAM dispatch fills from
- * slot 0 upward. Same self-correction story as VRAM: we push every
- * frame so transient overlap with other consumers doesn't stick. */
-#define PORT_SOFTSLOT_OAM_SLOT 124
-
-/* Forward decls for the GBA video memory the port owns. Declared here
- * to avoid pulling port_gba_mem.h's ABI assumptions into other parts
- * of this file. */
-extern uint8_t  gVram[];
-extern uint16_t gOamMem[];
-
-static void InjectGlyphTilesToVRAM(void) {
-    /* Sprite tile data lives in VRAM 0x06010000+. In the port that's
-     * gVram offset 0x10000. Tiles are 32 bytes each in 4bpp mode. */
-    uint8_t* sprite_vram = gVram + 0x10000;
-    for (int i = 0; i < 4; i++) {
-        memcpy(sprite_vram + (PORT_SOFTSLOT_GLYPH_BASE_TILE + i) * 32,
-               kGlyphTilesXYLR[i], 32);
-    }
-}
-
-void Port_SoftSlots_PushBadge(int s, int icon_x, int icon_y) {
-    if (s < 0 || s >= 4) return;
-
-    /* Lazily refresh the tiles every time we draw — robust against
-     * the engine reloading sprite VRAM between frames. */
-    InjectGlyphTilesToVRAM();
-
-    /* Position offsets: place the four badges in distinct corners of
-     * the item icon so they don't stack on top of each other or on
-     * the engine's existing A/B indicator (which uses the icon's
-     * upper-right corner). */
-    int dx, dy;
-    switch (s) {
-        case 0: dx =  0; dy =  0; break; /* X — upper-left */
-        case 1: dx =  0; dy =  8; break; /* Y — lower-left */
-        case 2: dx =  8; dy =  8; break; /* L — lower-right */
-        case 3: dx =  8; dy =  0; break; /* R — upper-right (may overlap A) */
-    }
-
-    int slot = PORT_SOFTSLOT_OAM_SLOT + s;
-    if (slot >= 128) return;
-
-    int x = icon_x + dx;
-    int y = icon_y + dy;
-
-    /* GBA OAM attributes:
-     *   attr0 bits  0-7  : y (8 bits)
-     *   attr0 bits  8-9  : OBJ mode (00 = normal)
-     *   attr0 bits 10-11 : effects (00 = none)
-     *   attr0 bit   12   : mosaic
-     *   attr0 bit   13   : 16-color (0) / 256-color (1)
-     *   attr0 bits 14-15 : shape (00 = square)
-     *
-     *   attr1 bits  0-8  : x (9 bits)
-     *   attr1 bits 14-15 : size (00 = 8x8 with shape=square)
-     *
-     *   attr2 bits  0-9  : tile number
-     *   attr2 bits 10-11 : priority (lower = drawn over higher)
-     *   attr2 bits 12-15 : palette
-     */
-    uint16_t attr0 = (uint16_t)(y & 0xFF);
-    uint16_t attr1 = (uint16_t)(x & 0x1FF);
-    uint16_t attr2 = (uint16_t)((PORT_SOFTSLOT_GLYPH_BASE_TILE + s) & 0x3FF);
-    /* Palette 0 — same the existing A/B indicator sprite uses; gives us
-     * the same red/yellow colour scheme. Priority 0 so we draw over
-     * the item icon and the cursor brackets. */
-
-    gOamMem[slot * 4 + 0] = attr0;
-    gOamMem[slot * 4 + 1] = attr1;
-    gOamMem[slot * 4 + 2] = attr2;
-    /* attr3 (gOamMem[*4 + 3]) is the affine padding; leave alone. */
-}
-#endif /* disabled — see comment near top of this section */
+/* The visible UI is the SDL `\` configuration overlay (RenderConfigOverlay,
+ * below) and the F8 → "Extra equip slots" page in the debug menu. */
 
 static void RenderConfigOverlay(SDL_Renderer* r, int winW, int winH) {
     /* Centered modal: 4 stacked rows, one per slot, with arrow hints. */

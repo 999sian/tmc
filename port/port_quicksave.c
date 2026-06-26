@@ -293,6 +293,16 @@ static int WriteSlotToDisk(int slot) {
     return 1;
 }
 
+/* Reads the fixed 4-field slot header (magic, version, total, saved_at).
+ * Returns 1 if all four fields read, 0 on short read. Field values are
+ * not validated and no diagnostics are emitted — callers decide. */
+static int ReadSlotHeader(FILE* f, u32* magic, u32* version, u32* total, u64* saved_at) {
+    return fread(magic, sizeof(*magic), 1, f) == 1 &&
+           fread(version, sizeof(*version), 1, f) == 1 &&
+           fread(total, sizeof(*total), 1, f) == 1 &&
+           fread(saved_at, sizeof(*saved_at), 1, f) == 1;
+}
+
 static int ReadSlotFromDisk(int slot) {
     if (slot < 0 || slot >= NUM_SLOTS) return 0;
     char path[64];
@@ -302,10 +312,7 @@ static int ReadSlotFromDisk(int slot) {
     u32 magic = 0, version = 0, total = 0;
     u64 saved_at = 0;
     u64 saved_entities_base = 0;
-    if (fread(&magic, sizeof(magic), 1, f) != 1 ||
-        fread(&version, sizeof(version), 1, f) != 1 ||
-        fread(&total, sizeof(total), 1, f) != 1 ||
-        fread(&saved_at, sizeof(saved_at), 1, f) != 1) {
+    if (!ReadSlotHeader(f, &magic, &version, &total, &saved_at)) {
         fprintf(stderr, "[quicksave] short read on %s header, ignoring slot file\n", path);
         fclose(f);
         return 0;
@@ -454,10 +461,7 @@ u64 Port_QuickSave_SlotTimestamp(int slot) {
     if (!f) return 0;
     u32 magic = 0, version = 0, total = 0;
     u64 saved_at = 0;
-    if (fread(&magic, sizeof(magic), 1, f) == 1 &&
-        fread(&version, sizeof(version), 1, f) == 1 &&
-        fread(&total, sizeof(total), 1, f) == 1 &&
-        fread(&saved_at, sizeof(saved_at), 1, f) == 1) {
+    if (ReadSlotHeader(f, &magic, &version, &total, &saved_at)) {
         fclose(f);
         return saved_at;
     }

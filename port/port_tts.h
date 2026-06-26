@@ -113,11 +113,6 @@ const char* Port_TTS_GetBackendName(void);
  * Implementation lives in src/message.c (needs Token / GetCharacter). */
 void Port_TTS_SpeakTextIndex(unsigned int textIndex);
 
-/* Voice enumeration — returns the number of voices the backend
- * advertises (capped at the buffer size). Each `out[i]` is a
- * NUL-terminated voice id. NULL backend or no enumerator → 0. */
-size_t Port_TTS_ListVoices(char* out[], size_t max_count, size_t each_max_len);
-
 #ifdef __cplusplus
 }
 #endif

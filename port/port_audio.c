@@ -325,8 +325,3 @@ void Port_Audio_SetMasterVolume(float volume) {
 float Port_Audio_GetMasterVolume(void) {
     return Port_M4A_Backend_GetMasterVolume();
 }
-
-void Port_Audio_OnFifoWrite(uint32_t addr, uint32_t value) {
-    (void)addr;
-    (void)value;
-}

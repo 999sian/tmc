@@ -43,6 +43,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 /* How far out the scan looks, and how many items it reads at most. A
  * full GBA screen is ~15x10 tiles; 12 tiles covers a bit beyond the
@@ -67,18 +68,6 @@ extern int Port_IsValidEntityAddr(const void* p); /* entity.c */
 /* ------------------------------------------------------------------ */
 /* Geometry helpers                                                   */
 /* ------------------------------------------------------------------ */
-
-static int A11y_ISqrt(int v) {
-    int x, y;
-    if (v <= 0) return 0;
-    x = v;
-    y = (x + 1) / 2;
-    while (y < x) {
-        x = y;
-        y = (x + v / x) / 2;
-    }
-    return x;
-}
 
 /* 8-way compass label for a delta in screen space (x east-positive,
  * y south-positive — the GBA convention). */
@@ -275,6 +264,29 @@ static int A11y_CollectNearest(int px, int py, int radiusPx) {
     return A11y_ScanExits(px, py, radiusPx);
 }
 
+/* Format one nearby POI as "label, dir, very close." / "label, dir, N tiles."
+ * into buf (size n); returns snprintf's count (may exceed n on truncation,
+ * matching the originals). Shared by the scan and the cycle action. */
+static int A11y_FormatPoi(char* buf, size_t n, const A11yPoi* poi) {
+    int tiles = ((int)sqrtf((float)poi->dist2) + 8) / 16;
+    const char* dir = A11y_DirName(poi->dx, poi->dy);
+    if (tiles <= 0)
+        return snprintf(buf, n, "%s, %s, very close.", poi->label, dir);
+    return snprintf(buf, n, "%s, %s, %d tile%s.", poi->label, dir, tiles, tiles == 1 ? "" : "s");
+}
+
+/* Append "Exits: north, east, ..." for the set edge bits. Mirrors the original
+ * inline decode: only the "Exits:" lead is pos-guarded, the per-direction
+ * writes rely on snprintf's own bound (bufsz - *pos). */
+static void A11y_AppendExits(char* buf, size_t bufsz, int* pos, int edgeMask) {
+    if (edgeMask == 0 || *pos >= (int)bufsz) return;
+    *pos += snprintf(buf + *pos, bufsz - *pos, "Exits: ");
+    if (edgeMask & EDGE_N) *pos += snprintf(buf + *pos, bufsz - *pos, "north, ");
+    if (edgeMask & EDGE_E) *pos += snprintf(buf + *pos, bufsz - *pos, "east, ");
+    if (edgeMask & EDGE_S) *pos += snprintf(buf + *pos, bufsz - *pos, "south, ");
+    if (edgeMask & EDGE_W) *pos += snprintf(buf + *pos, bufsz - *pos, "west, ");
+}
+
 /* ------------------------------------------------------------------ */
 /* Public entry point                                                 */
 /* ------------------------------------------------------------------ */
@@ -311,24 +323,12 @@ void Port_A11y_ScanSurroundings(void) {
     }
 
     for (i = 0; i < sNearestCount && pos < (int)sizeof(buf); i++) {
-        int tiles = (A11y_ISqrt(sNearest[i].dist2) + 8) / 16;
-        const char* dir = A11y_DirName(sNearest[i].dx, sNearest[i].dy);
-        if (tiles <= 0) {
-            pos += snprintf(buf + pos, sizeof(buf) - pos, "%s, %s, very close. ",
-                            sNearest[i].label, dir);
-        } else {
-            pos += snprintf(buf + pos, sizeof(buf) - pos, "%s, %s, %d tile%s. ",
-                            sNearest[i].label, dir, tiles, tiles == 1 ? "" : "s");
-        }
+        pos += A11y_FormatPoi(buf + pos, sizeof(buf) - pos, &sNearest[i]);
+        if (pos < (int)sizeof(buf))
+            pos += snprintf(buf + pos, sizeof(buf) - pos, " ");
     }
 
-    if (edgeMask != 0 && pos < (int)sizeof(buf)) {
-        pos += snprintf(buf + pos, sizeof(buf) - pos, "Exits: ");
-        if (edgeMask & EDGE_N) pos += snprintf(buf + pos, sizeof(buf) - pos, "north, ");
-        if (edgeMask & EDGE_E) pos += snprintf(buf + pos, sizeof(buf) - pos, "east, ");
-        if (edgeMask & EDGE_S) pos += snprintf(buf + pos, sizeof(buf) - pos, "south, ");
-        if (edgeMask & EDGE_W) pos += snprintf(buf + pos, sizeof(buf) - pos, "west, ");
-    }
+    A11y_AppendExits(buf, sizeof(buf), &pos, edgeMask);
 
     /* URGENT + no dedupe so a fresh scan replaces an in-flight one and
      * repeated presses always speak. */
@@ -392,7 +392,7 @@ void Port_A11y_Init(void) {
  * tonal radar conveys left/right + distance; the spoken F10 scan gives
  * the full cardinal direction. */
 static void A11y_PanPitchFor(int dx, int dy, float* pan, float* freq) {
-    int dist = A11y_ISqrt(dx * dx + dy * dy);
+    int dist = (int)sqrtf((float)(dx * dx + dy * dy));
     int tiles;
     float p;
     if (dist < 1) dist = 1;
@@ -482,7 +482,7 @@ void Port_A11y_Update(void) {
 
     /* Footsteps: one tick per ~14px travelled, tinted by surface. */
     if (sCueFootsteps && moved > 0) {
-        sStepAccum += A11y_ISqrt(moved);
+        sStepAccum += (int)sqrtf((float)moved);
         if (sStepAccum >= 14) {
             sStepAccum = 0;
             A11y_FootstepTone(gPlayerState.floor_type);
@@ -551,7 +551,7 @@ static int sCycleIndex;
 void Port_A11y_CycleNext(void) {
     Entity* player = &gPlayerEntity.base;
     A11yPoi* p;
-    int tiles, px, py;
+    int px, py;
     float pan, freq;
     char buf[128];
     PortTtsOptions opts;
@@ -571,12 +571,7 @@ void Port_A11y_CycleNext(void) {
     p = &sNearest[sCycleIndex];
     sCycleIndex++;
 
-    tiles = (A11y_ISqrt(p->dist2) + 8) / 16;
-    if (tiles <= 0)
-        snprintf(buf, sizeof(buf), "%s, %s, very close.", p->label, A11y_DirName(p->dx, p->dy));
-    else
-        snprintf(buf, sizeof(buf), "%s, %s, %d tile%s.", p->label, A11y_DirName(p->dx, p->dy),
-                 tiles, tiles == 1 ? "" : "s");
+    A11y_FormatPoi(buf, sizeof(buf), p);
 
     A11y_PanPitchFor(p->dx, p->dy, &pan, &freq);
     Port_A11yAudio_Beep(pan, freq, 70, 0.30f, A11Y_WAVE_SINE);
@@ -624,13 +619,7 @@ void Port_A11y_LookAround(void) {
     /* Reuse the exit edge decode (resets sNearest as a side effect). */
     sNearestCount = 0;
     edgeMask = A11y_ScanExits(px, py, A11Y_SCAN_RADIUS_TILES * 16);
-    if (edgeMask && pos < (int)sizeof(buf)) {
-        pos += snprintf(buf + pos, sizeof(buf) - pos, "Exits: ");
-        if (edgeMask & EDGE_N) pos += snprintf(buf + pos, sizeof(buf) - pos, "north, ");
-        if (edgeMask & EDGE_E) pos += snprintf(buf + pos, sizeof(buf) - pos, "east, ");
-        if (edgeMask & EDGE_S) pos += snprintf(buf + pos, sizeof(buf) - pos, "south, ");
-        if (edgeMask & EDGE_W) pos += snprintf(buf + pos, sizeof(buf) - pos, "west, ");
-    }
+    A11y_AppendExits(buf, sizeof(buf), &pos, edgeMask);
 
     if (A11y_DebugEnabled()) { fprintf(stderr, "[a11y] look: %s\n", buf); fflush(stderr); }
 

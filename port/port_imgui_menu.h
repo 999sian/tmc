@@ -15,7 +15,6 @@ bool Port_ImGui_WantsTextInput(void);
 void Port_ImGui_HandleEvent(const SDL_Event* event);
 
 bool Port_ImGui_IsEnabled(void);
-void Port_ImGui_SetEnabled(bool enabled);
 bool Port_ImGui_RibbonEnabled(void);
 void Port_ImGui_SetRibbonEnabled(bool enabled);
 

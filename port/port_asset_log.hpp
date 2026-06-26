@@ -4,7 +4,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -54,24 +53,16 @@ class Reporter
     Reporter(const Reporter&) = delete;
     Reporter& operator=(const Reporter&) = delete;
 
-    void RedrawLocked(bool force);
-    void ClearLineLocked();
-    std::string FormatBarLocked(double fraction) const;
-
     void FireProgressLocked();
 
     std::mutex mutex_;
     std::atomic<bool> verbose_{false};
-    bool tty_{false};
-    bool color_{false};
 
     std::string phase_;
     std::size_t total_{0};
     std::atomic<std::size_t> count_{0};
-    std::chrono::steady_clock::time_point phase_start_{};
     std::chrono::steady_clock::time_point last_redraw_{};
     bool phase_active_{false};
-    bool line_dirty_{false};
 
     ProgressCallback progress_cb_;
     /* Lock-free hint so Tick's fast path can short-circuit when no
@@ -85,25 +76,20 @@ std::size_t WorkerCount();
 
 /* BackgroundWriter
  *
- * Single-worker thread that owns serialisation + write of pretty-printed
- * JSON. The extractor's hot phases (parallel-fanout over palettes, gfx,
- * tilemaps, sprites, areas, texts) each end with a multi-megabyte JSON
- * dump(4) + ofstream::write — both slow, both serial. Submitting them
- * here lets the main thread immediately start the next phase while the
- * pretty-printer runs concurrently.
- *
- * One worker (not WorkerCount()) on purpose: aggregate JSON dumps run
- * one-at-a-time anyway (we only have ~9 of them total), and a single
- * worker means at most one pending serialisation in flight, bounding
- * peak memory.
+ * Off-thread serialisation + write of pretty-printed JSON. The
+ * extractor's hot phases each end with a multi-megabyte JSON dump(4) +
+ * ofstream::write — both slow, both serial. Submit() fires each one on
+ * its own std::async task so the main thread can start the next phase
+ * while the pretty-printer runs concurrently.
  *
  * Submit() takes the JSON by value (callers can std::move into it) and
- * the indent (typically 4 for assets_src/, 0 for assets/). Wait()
- * blocks until the queue is drained — call before WriteBuildStateFile
- * so the build state observes the final on-disk shape.
+ * the indent (typically 4 for assets_src/, 0 for assets/). Wait() blocks
+ * until every pending task has finished — call it before
+ * WriteBuildStateFile so the build state observes the final on-disk shape.
  *
- * Errors are captured per-task and rethrown from Wait(), the same
- * "first error wins, all tasks complete" semantics as ParallelFor. */
+ * Errors are captured per-task in the returned future and rethrown from
+ * Wait() (first submitted error wins, all tasks still complete) — the
+ * same semantics as ParallelFor. */
 class BackgroundWriter
 {
   public:
@@ -111,34 +97,25 @@ class BackgroundWriter
 
     /* Submit a pretty-printed JSON dump + write. indent>0 = pretty
      * (assets_src/), indent==0 = compact (assets/). The path's parent
-     * directory is ensured via EnsureDir on the worker. */
+     * directory is ensured via EnsureDir on the task. */
     void Submit(std::filesystem::path output_path, nlohmann::json json, int indent);
 
-    /* Block until the queue is drained. Safe to call multiple times.
-     * Re-throws the first exception encountered on the worker, if any. */
+    /* Block until all pending tasks finish. Safe to call multiple times.
+     * Re-throws the first error encountered, if any. */
     void Wait();
 
-    /* Idle the worker permanently. Called automatically at process exit
-     * via static destruction; safe to call manually too. */
+    /* Wait for all pending tasks and drop them, swallowing errors. Called
+     * automatically at process exit via static destruction. */
     void Shutdown();
 
   private:
-    BackgroundWriter();
+    BackgroundWriter() = default;
     ~BackgroundWriter();
     BackgroundWriter(const BackgroundWriter&) = delete;
     BackgroundWriter& operator=(const BackgroundWriter&) = delete;
 
-    void WorkerMain();
-
-    struct Task;
     std::mutex mutex_;
-    std::condition_variable cv_;
-    std::condition_variable drain_cv_;
-    std::vector<Task> queue_;
-    std::size_t in_flight_{0};
-    bool stop_{false};
-    std::exception_ptr first_error_;
-    std::thread worker_;
+    std::vector<std::future<void>> futures_;
 };
 
 // Thread-safe cache around std::filesystem::create_directories. Each unique

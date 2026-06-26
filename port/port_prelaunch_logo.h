@@ -16,8 +16,6 @@ extern "C" {
 
 bool Port_PrelaunchLogo_EnsureLoaded(SDL_Renderer* renderer, SDL_GPUDevice* gpu_device);
 ImTextureID Port_PrelaunchLogo_GetTexId(void);
-int Port_PrelaunchLogo_GetWidth(void);
-int Port_PrelaunchLogo_GetHeight(void);
 void Port_PrelaunchLogo_Shutdown(void);
 
 #ifdef __cplusplus

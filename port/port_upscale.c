@@ -74,13 +74,6 @@ static inline uint32_t blend2(uint32_t a, uint32_t b) {
     return ((a >> 1) & 0x7F7F7F7Fu) + ((b >> 1) & 0x7F7F7F7Fu);
 }
 
-/* 75/25 blend (3*a + b) / 4. Used for corner anti-aliasing. */
-static inline uint32_t blend3(uint32_t a, uint32_t b) {
-    uint32_t lo = (a & 0xFEFEFEFEu) >> 1;
-    uint32_t mid = lo + ((b & 0xFEFEFEFEu) >> 1);
-    return ((a & 0xFEFEFEFEu) >> 1) + ((mid & 0xFEFEFEFEu) >> 1);
-}
-
 void Port_Upscale_xBRZ_2x_Pitch(const uint32_t* src, int srcW, int srcH,
                                 int srcPitchPixels, uint32_t* dst) {
     int x;

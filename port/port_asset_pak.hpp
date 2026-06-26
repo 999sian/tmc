@@ -8,7 +8,7 @@
  * source data is already optimised for the GBA hardware and we want
  * zero-copy access from the engine.
  *
- * On-disk layout:
+ * On-disk layout (little-endian; 40-byte header):
  *
  *   offset  size  field
  *   ------  ----  -------------------------------
@@ -19,22 +19,13 @@
  *     16     4    name_table_size (u32)
  *     20     4    data_offset (u32, page-aligned to 4 KiB)
  *     24     8    data_size (u64)
- *     32     4    flags (u32, bit 0 = sorted-by-name)
- *     36     4    reserved (u32, must be 0)
- *     40    16*N  entries[entry_count] (16 bytes each, sorted by name)
+ *     32     8    reserved (zero padding up to kHeaderSize = 40)
+ *     40    24*N  entries[entry_count] (24 bytes each, sorted by name)
  *
- * Entry layout (16 bytes, little-endian):
+ * Entry layout (24 bytes, little-endian):
  *
  *      0     4    name_offset (u32, relative to name_table_offset)
  *      4     4    name_length (u32, bytes, no null terminator)
- *      8     8    data_offset (u64, absolute file offset)
- *     <NOT 16 bytes — see real layout below>
- *
- * Real entry layout (kept compact at 24 bytes so we can binary-search
- * cheaply but still address files anywhere in the blob):
- *
- *      0     4    name_offset (u32, relative to name_table_offset)
- *      4     4    name_length (u32)
  *      8     8    data_offset (u64, absolute file offset)
  *     16     4    data_size (u32, single 32-bit size; no asset > 4 GiB)
  *     20     4    reserved (u32, must be 0)
@@ -56,23 +47,9 @@ namespace PortAssetPak {
 
 constexpr uint32_t kMagic = 0x50434D54; // "TMCP" little-endian
 constexpr uint32_t kVersion = 1;
-constexpr uint32_t kFlagSortedByName = 1u << 0;
 constexpr uint32_t kHeaderSize = 40;
 constexpr uint32_t kEntrySize = 24;
 constexpr uint32_t kDataAlignment = 4096;
-
-struct Header {
-    uint32_t magic;
-    uint32_t version;
-    uint32_t entry_count;
-    uint32_t name_table_offset;
-    uint32_t name_table_size;
-    uint32_t data_offset;
-    uint64_t data_size;
-    uint32_t flags;
-    uint32_t reserved;
-};
-static_assert(sizeof(Header) == kHeaderSize, "TMC Pak header layout mismatch");
 
 #pragma pack(push, 1)
 struct Entry {

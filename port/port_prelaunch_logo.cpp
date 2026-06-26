@@ -113,8 +113,6 @@ std::optional<DecodedImage> DecodePng(const Uint8* bytes, size_t len) {
  * call and held until process exit. */
 bool            sAttempted    = false;
 ImTextureID     sTexId        = 0;
-int             sLogoW        = 0;
-int             sLogoH        = 0;
 SDL_Texture*    sRendererTex  = nullptr;
 SDL_GPUTexture* sGpuTex       = nullptr;
 SDL_GPUDevice*  sOwnerDevice  = nullptr;
@@ -222,9 +220,6 @@ extern "C" bool Port_PrelaunchLogo_EnsureLoaded(SDL_Renderer*  renderer,
         return false;
     }
 
-    sLogoW = img->width;
-    sLogoH = img->height;
-
     if (renderer) {
         return UploadToSDLRenderer(renderer, *img);
     }
@@ -236,8 +231,6 @@ extern "C" bool Port_PrelaunchLogo_EnsureLoaded(SDL_Renderer*  renderer,
 }
 
 extern "C" ImTextureID Port_PrelaunchLogo_GetTexId(void) { return sTexId; }
-extern "C" int Port_PrelaunchLogo_GetWidth(void)  { return sLogoW; }
-extern "C" int Port_PrelaunchLogo_GetHeight(void) { return sLogoH; }
 
 extern "C" void Port_PrelaunchLogo_Shutdown(void) {
     if (sRendererTex) {
@@ -249,6 +242,5 @@ extern "C" void Port_PrelaunchLogo_Shutdown(void) {
         sGpuTex = nullptr;
     }
     sTexId = 0;
-    sLogoW = sLogoH = 0;
     sAttempted = false;
 }

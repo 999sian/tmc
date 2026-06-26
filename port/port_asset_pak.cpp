@@ -112,26 +112,16 @@ bool PakBuilder::Write(const std::filesystem::path& outputPath, std::string* err
      * cheaper than streaming many small writes. */
     std::vector<uint8_t> out(static_cast<std::size_t>(cursor), 0);
 
-    Header header{};
-    header.magic = kMagic;
-    header.version = kVersion;
-    header.entry_count = entry_count;
-    header.name_table_offset = name_table_offset;
-    header.name_table_size = name_table_size;
-    header.data_offset = static_cast<uint32_t>(data_offset);
-    header.data_size = data_size;
-    header.flags = kFlagSortedByName;
-    header.reserved = 0;
-
-    WriteU32LE(out.data() + 0, header.magic);
-    WriteU32LE(out.data() + 4, header.version);
-    WriteU32LE(out.data() + 8, header.entry_count);
-    WriteU32LE(out.data() + 12, header.name_table_offset);
-    WriteU32LE(out.data() + 16, header.name_table_size);
-    WriteU32LE(out.data() + 20, header.data_offset);
-    WriteU64LE(out.data() + 24, header.data_size);
-    WriteU32LE(out.data() + 32, header.flags);
-    WriteU32LE(out.data() + 36, header.reserved);
+    /* Serialise the 40-byte header field-by-field; offsets match the
+     * layout doc in port_asset_pak.hpp. Offsets 32-39 stay zero (from
+     * the zero-filled buffer) — the loader never reads them. */
+    WriteU32LE(out.data() + 0, kMagic);
+    WriteU32LE(out.data() + 4, kVersion);
+    WriteU32LE(out.data() + 8, entry_count);
+    WriteU32LE(out.data() + 12, name_table_offset);
+    WriteU32LE(out.data() + 16, name_table_size);
+    WriteU32LE(out.data() + 20, static_cast<uint32_t>(data_offset));
+    WriteU64LE(out.data() + 24, data_size);
 
     uint32_t name_cursor = 0;
     for (uint32_t i = 0; i < entry_count; ++i) {

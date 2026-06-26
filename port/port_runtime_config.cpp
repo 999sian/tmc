@@ -164,78 +164,97 @@ constexpr u64 kDefaultFrameTimeNs = 1000000000ULL / 60;
  * i.e. 16777216/280896 = 59.7275 Hz -> 280896/16777216 s = 16742706 ns. */
 constexpr u64 kGbaFrameTimeNs = 16742706ULL;
 
+/* ----------------------------------------------------------------------
+ * Single source of truth binding each config.json key to its typed static
+ * and default. DefaultsJson() writes e.def into the json; apply() loads
+ * json→static. Replaces the two formerly hand-synced key lists. Settings
+ * with bespoke parse/typing (enum strings, bg_fill_color, frame_time_ns,
+ * autosave_interval_ms, reborn_features, bindings) stay inline at their
+ * sites — see DefaultsJson() and apply(). */
+struct BoolCfg  { const char* key; bool*        var; bool        def; };
+struct IntCfg   { const char* key; int*         var; int         def; };
+struct StrCfg   { const char* key; std::string* var; const char* def; };
+struct FloatCfg { const char* key; float*       var; double      def; };
+struct ScaleCfg { const char* key; u8*          var; int def; int lo; int hi; };
+
+const BoolCfg kBoolCfg[] = {
+    { "port_settings_menu",    &sPortSettingsMenuEnabled, true  },
+    { "autosave_enabled",      &sAutosaveEnabled,         true  },
+    { "widescreen_enabled",    &sWidescreenEnabled,       false },
+    { "console_parity",        &sConsoleParity,           false },
+    { "tts_enabled",           &sTtsEnabled,              true  },
+    { "a11y_cues",             &sA11yCues,                true  },
+    { "a11y_footsteps",        &sA11yFootsteps,           true  },
+    { "a11y_hazards",          &sA11yHazards,             true  },
+    { "a11y_radar",            &sA11yRadar,               true  },
+    { "a11y_walls",            &sA11yWalls,               true  },
+    { "practice_show_timer",   &sPracticeShowTimer,       false },
+    { "practice_show_inputs",  &sPracticeShowInputs,      false },
+    { "practice_show_history", &sPracticeShowHistory,     false },
+    { "discord_rpc",           &sDiscordRpc,              false },
+    { "vsync",                 &sVSyncCfg,                true  },
+    { "color_correction",      &sColorCorrect,            true  },
+    { "lcd_persistence",       &sLcdPersist,              false },
+    { "ribbon_mode",           &sRibbonCfg,               true  },
+    { "hold_advance_text",     &sHoldAdvanceText,         false },
+    { "fullscreen",            &sFullscreen,              false },
+    { "rando_enabled",         &sRandoEnabled,            false },
+    { "rando_glitchless",      &sRandoGlitchless,         true  },
+    { "rando_obscure",         &sRandoObscure,            false },
+    { "rando_kinstones",       &sRandoKinstones,          true  },
+    { "rando_entrances",       &sRandoEntrances,          false },
+    { "rando_dojos",           &sRandoDojos,              true  },
+    { "rando_open_world",      &sRandoOpenWorld,          false },
+    { "rando_homewarp",        &sRandoHomewarp,           true  },
+    { "rando_start_sword",     &sRandoStartSword,         true  },
+    { "rando_early_crests",    &sRandoEarlyCrests,        true  },
+    { "rando_instant_text",    &sRandoInstantText,        true  },
+};
+const IntCfg kIntCfg[] = {
+    { "preferred_region",   &sPreferredRegion,   -1 },
+    { "preferred_language", &sPreferredLanguage, -1 },
+    { "rando_item_pool",    &sRandoItemPool,      0 },
+    { "rando_tunic_color",  &sRandoTunicColor,    0 },
+    { "rando_heart_color",  &sRandoHeartColor,    0 },
+};
+const StrCfg kStrCfg[] = {
+    { "upscale_method",      &sUpscaleMethod,     "nearest" },
+    { "active_save_profile", &sActiveSaveProfile, "tmc.sav" },
+    { "tts_voice",           &sTtsVoice,          ""        },
+    { "tts_language",        &sTtsLanguage,       ""        },
+    { "shader_preset",       &sShaderPreset,      ""        },
+};
+const FloatCfg kFloatCfg[] = {
+    { "tts_rate",            &sTtsRate,        0.5  },
+    { "tts_pitch",           &sTtsPitch,       0.5  },
+    { "tts_volume",          &sTtsVolume,      0.8  },
+    { "practice_slowmo",     &sPracticeSlowmo, 1.0  },
+    { "lcd_persistence_rho", &sLcdPersistRho,  0.35 },
+    { "master_volume",       &sMasterVolume,   1.0  },
+};
+const ScaleCfg kScaleCfg[] = {
+    { "window_scale",   &sScale,         3, 1, 10 },
+    { "internal_scale", &sInternalScale, 1, 1, 10 },
+};
+
 nlohmann::json DefaultsJson(void) {
-    nlohmann::json j = {
-        { "window_scale", 3 },
-        { "internal_scale", 1 },
-        { "upscale_method", "nearest" },
-        { "frame_time_ns", kDefaultFrameTimeNs }, /* default to a 60 FPS cap; uncapped is unstable for frame-tied logic */
-        { "port_settings_menu", true },
-        { "active_save_profile", "tmc.sav" },
-        { "autosave_enabled", true },
-        { "autosave_interval_ms", 60000 },
-        { "touch_scheme", "joystick" },
-        { "widescreen_enabled", false },
-        /* Console-Parity mode — off by default; legit-run integrity toggle. */
-        { "console_parity", false },
-        { "preferred_region", -1 },
-        { "preferred_language", -1 },
-        { "aspect_mode", "native" },
-        { "bg_fill", "black" },
-        { "bg_fill_color", { 0, 0, 0 } },
-        { "render_backend", "auto" },
-        /* TTS accessibility — default ON for the accessibility-focused
-         * test build so screen-reader users hear feedback at first
-         * launch (title screen → file select → gameplay) without
-         * having to find F7 first. Rate/pitch/volume in [0,1];
-         * voice/language empty = backend default. */
-        { "tts_enabled", true },
-        { "tts_rate", 0.5 },
-        { "tts_pitch", 0.5 },
-        { "tts_volume", 0.8 },
-        { "tts_voice", "" },
-        { "tts_language", "" },
-        /* Accessibility passive navigation cues (Phase 2) — default ON to
-         * match the TTS-on accessibility build. */
-        { "a11y_cues", true },
-        { "a11y_footsteps", true },
-        { "a11y_hazards", true },
-        { "a11y_radar", true },
-        { "a11y_walls", true },
-        /* Speedrun practice mode — overlays off, slow-mo at normal speed. */
-        { "practice_show_timer", false },
-        { "practice_show_inputs", false },
-        { "practice_show_history", false },
-        { "practice_slowmo", 1.0 },
-        /* Persisted runtime toggles (issue #146). reborn_features is
-         * intentionally absent from defaults — its presence is the signal
-         * to override the compile-time feature defaults. */
-        { "discord_rpc", false },
-        { "vsync", true },
-        { "color_correction", true },
-        { "lcd_persistence", false },
-        { "lcd_persistence_rho", 0.35 },
-        { "ribbon_mode", true },
-        { "master_volume", 1.0 },
-        { "hold_advance_text", false },
-        { "fullscreen", false },
-        { "shader_preset", "" },
-        { "rando_enabled", false },
-        { "rando_glitchless", true },
-        { "rando_obscure", false },
-        { "rando_kinstones", true },
-        { "rando_entrances", false },
-        { "rando_dojos", true },
-        { "rando_open_world", false },
-        { "rando_item_pool", 0 },
-        { "rando_homewarp", true },
-        { "rando_start_sword", true },
-        { "rando_early_crests", true },
-        { "rando_instant_text", true },
-        { "rando_tunic_color", 0 },
-        { "rando_heart_color", 0 },
-        { "bindings", nlohmann::json::object() },
-    };
+    nlohmann::json j;
+    for (const auto& e : kScaleCfg) j[e.key] = e.def;
+    for (const auto& e : kIntCfg)   j[e.key] = e.def;
+    for (const auto& e : kBoolCfg)  j[e.key] = e.def;
+    for (const auto& e : kStrCfg)   j[e.key] = e.def;
+    for (const auto& e : kFloatCfg) j[e.key] = e.def;
+    /* Bespoke-default keys (custom parse/typing in apply()). */
+    j["frame_time_ns"]        = kDefaultFrameTimeNs; /* 60 FPS cap; uncapped is unstable for frame-tied logic */
+    j["autosave_interval_ms"] = 60000;
+    j["touch_scheme"]         = "joystick";
+    j["aspect_mode"]          = "native";
+    j["bg_fill"]              = "black";
+    j["bg_fill_color"]        = { 0, 0, 0 };
+    j["render_backend"]       = "auto";
+    /* reborn_features is intentionally absent — its presence is the signal
+     * to override the compile-time feature defaults. */
+    j["bindings"] = nlohmann::json::object();
     for (const auto& d : kDefaults) {
         j["bindings"][d.name] = nlohmann::json::array();
         for (const char* bind : d.binds) {
@@ -288,29 +307,29 @@ u64 FrameTimeForFps(u32 fps) {
     return 1000000000ULL / fps;
 }
 
-#ifdef launcher
-static std::string SerializeBindToken(const Bind& b) {
-    char buf[96];
+/* Serialize a Bind to the config.json token shape (`SDLK:0x...`,
+ * `SDL_GAMEPAD:0x...`, `SDL_AXIS:0x...`). Shared by the capture/persist
+ * path and (under launcher) the rebind writers. */
+std::string FormatBindForJson(const Bind& b) {
+    char buf[40];
     if (b.key != SDLK_UNKNOWN) {
-        std::snprintf(buf, sizeof(buf), "SDLK:0x%08x", static_cast<unsigned>(b.key));
-        return buf;
+        std::snprintf(buf, sizeof(buf), "SDLK:0x%08x", (unsigned)b.key);
+    } else if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
+        std::snprintf(buf, sizeof(buf), "SDL_GAMEPAD:0x%08x", (unsigned)b.pad);
+    } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
+        std::snprintf(buf, sizeof(buf), "SDL_AXIS:0x%08x", (unsigned)b.axis);
+    } else {
+        return std::string();
     }
-    if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
-        std::snprintf(buf, sizeof(buf), "SDL_GAMEPAD:0x%08x", static_cast<unsigned>(b.pad));
-        return buf;
-    }
-    if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
-        std::snprintf(buf, sizeof(buf), "SDL_AXIS:0x%08x", static_cast<unsigned>(b.axis));
-        return buf;
-    }
-    return {};
+    return std::string(buf);
 }
 
+#ifdef launcher
 static void WriteBindingsJsonFromState(void) {
     for (const auto& d : kDefaults) {
         nlohmann::json arr = nlohmann::json::array();
         for (const Bind& b : sBinds[d.input]) {
-            std::string tok = SerializeBindToken(b);
+            std::string tok = FormatBindForJson(b);
             if (!tok.empty()) {
                 arr.push_back(std::move(tok));
             }
@@ -349,7 +368,11 @@ extern "C" const char* Port_Config_InputUiLabel(PortInput input) {
     return kLabels[input];
 }
 
-extern "C" void Port_Config_FormatBindingsLine(PortInput input, char* out, size_t outCap) {
+/* Shared formatter for the launcher bindings rows. padOnly skips keyboard
+ * binds so the gamepad column lists only pad/axis entries; otherwise every
+ * bind (keyboard + pad + axis) is shown. Output byte-identical to the two
+ * former hand-copied functions. */
+static void FormatBindingsLineImpl(PortInput input, char* out, size_t outCap, bool padOnly) {
     if (!out || outCap == 0) {
         return;
     }
@@ -360,6 +383,7 @@ extern "C" void Port_Config_FormatBindingsLine(PortInput input, char* out, size_
     size_t pos = 0;
     bool first = true;
     for (const Bind& b : sBinds[input]) {
+        if (padOnly && b.key != SDLK_UNKNOWN) continue;
         char piece[112];
         piece[0] = '\0';
         if (b.key != SDLK_UNKNOWN) {
@@ -408,6 +432,10 @@ extern "C" void Port_Config_FormatBindingsLine(PortInput input, char* out, size_
     }
 }
 
+extern "C" void Port_Config_FormatBindingsLine(PortInput input, char* out, size_t outCap) {
+    FormatBindingsLineImpl(input, out, outCap, false);
+}
+
 extern "C" void Port_Config_SetKeyboardBindExclusive(PortInput input, int sdl_keycode) {
     if (input < 0 || input >= PORT_INPUT_COUNT) {
         return;
@@ -430,56 +458,7 @@ extern "C" void Port_Config_SetKeyboardBindExclusive(PortInput input, int sdl_ke
 }
 
 extern "C" void Port_Config_FormatGamepadBindingsLine(PortInput input, char* out, size_t outCap) {
-    if (!out || outCap == 0) {
-        return;
-    }
-    out[0] = '\0';
-    if (input < 0 || input >= PORT_INPUT_COUNT) {
-        return;
-    }
-    size_t pos = 0;
-    bool first = true;
-    for (const Bind& b : sBinds[input]) {
-        if (b.key != SDLK_UNKNOWN) continue;
-        char piece[112];
-        piece[0] = '\0';
-        if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
-            const char* nm = SDL_GetGamepadStringForButton(b.pad);
-            if (nm && nm[0] != '\0') {
-                std::snprintf(piece, sizeof(piece), "%s", nm);
-            } else {
-                std::snprintf(piece, sizeof(piece), "pad btn %u", static_cast<unsigned>(b.pad));
-            }
-        } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
-            const char* nm = SDL_GetGamepadStringForAxis(b.axis);
-            if (nm && nm[0] != '\0') {
-                std::snprintf(piece, sizeof(piece), "%s", nm);
-            } else {
-                std::snprintf(piece, sizeof(piece), "axis %u", static_cast<unsigned>(b.axis));
-            }
-        }
-        if (piece[0] == '\0') {
-            continue;
-        }
-        if (!first) {
-            if (pos + 2 < outCap) {
-                out[pos++] = ',';
-                out[pos++] = ' ';
-                out[pos] = '\0';
-            }
-        }
-        first = false;
-        const size_t plen = std::strlen(piece);
-        if (pos + plen >= outCap) {
-            break;
-        }
-        std::memcpy(out + pos, piece, plen);
-        pos += plen;
-        out[pos] = '\0';
-    }
-    if (out[0] == '\0' && outCap > 1) {
-        std::snprintf(out, outCap, "(none)");
-    }
+    FormatBindingsLineImpl(input, out, outCap, true);
 }
 
 extern "C" void Port_Config_SetGamepadBindExclusive(PortInput input, int sdl_gamepad_button) {
@@ -559,16 +538,19 @@ extern "C" void Port_Config_Load(const char* path) {
      * degrades to defaults instead of terminating the process. The lambda
      * param shadows the outer j so it can be re-run against defaults. */
     auto apply = [](const nlohmann::json& j) {
-        int scale = j.value("window_scale", 3);
-        sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
-        int iscale = j.value("internal_scale", 1);
-        sInternalScale = iscale >= 1 && iscale <= 10 ? (u8)iscale : 1;
-        sUpscaleMethod = j.value("upscale_method", "nearest");
+        for (const auto& e : kBoolCfg)  *e.var = j.value(e.key, e.def);
+        for (const auto& e : kIntCfg)   *e.var = j.value(e.key, e.def);
+        for (const auto& e : kStrCfg)   *e.var = j.value(e.key, std::string(e.def));
+        for (const auto& e : kFloatCfg) *e.var = (float)j.value(e.key, e.def);
+        for (const auto& e : kScaleCfg) {
+            int v = j.value(e.key, e.def);
+            *e.var = (v >= e.lo && v <= e.hi) ? (u8)v : (u8)e.def;
+        }
+        /* frame_time_ns: apply default (0 = uncapped) differs from
+         * DefaultsJson's 60 FPS cap on purpose — a missing key means
+         * uncapped, a fresh config gets the cap. Kept inline for that. */
         sFrameTimeNs = j.value("frame_time_ns", 0ULL);
-        sPortSettingsMenuEnabled = j.value("port_settings_menu", true);
-        sActiveSaveProfile = j.value("active_save_profile", std::string("tmc.sav"));
-        sAutosaveEnabled = j.value("autosave_enabled", true);
-        sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u);
+        sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u); // ponytail: lone u32, not worth a table
         {
             std::string ts = j.value("touch_scheme", std::string("joystick"));
             for (char& c : ts) {
@@ -576,8 +558,6 @@ extern "C" void Port_Config_Load(const char* path) {
             }
             sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
         }
-        sWidescreenEnabled = j.value("widescreen_enabled", false);
-        sConsoleParity = j.value("console_parity", false);
         {
             std::string am = j.value("aspect_mode", std::string("native"));
             for (char& c : am) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
@@ -611,56 +591,10 @@ extern "C" void Port_Config_Load(const char* path) {
             else if (rb == "gpu")                       sRenderBackend = PORT_RENDER_BACKEND_GPU;
             else                                         sRenderBackend = PORT_RENDER_BACKEND_AUTO;
         }
-
-        /* TTS settings — read-once at Port_TTS_Init; setters from the
-         * F8 menu write back via Port_Config_SetTts* below. Default ON
-         * matches DefaultsJson — accessibility-friendly first launch. */
-        sTtsEnabled  = j.value("tts_enabled", true);
-        sTtsRate     = (float)j.value("tts_rate",   0.5);
-        sTtsPitch    = (float)j.value("tts_pitch",  0.5);
-        sTtsVolume   = (float)j.value("tts_volume", 0.8);
-        sTtsVoice    = j.value("tts_voice",    std::string());
-        sTtsLanguage = j.value("tts_language", std::string());
-        sA11yCues      = j.value("a11y_cues", true);
-        sA11yFootsteps = j.value("a11y_footsteps", true);
-        sA11yHazards   = j.value("a11y_hazards", true);
-        sA11yRadar     = j.value("a11y_radar", true);
-        sA11yWalls     = j.value("a11y_walls", true);
-
-        sPracticeShowTimer   = j.value("practice_show_timer", false);
-        sPracticeShowInputs  = j.value("practice_show_inputs", false);
-        sPracticeShowHistory = j.value("practice_show_history", false);
-        sPracticeSlowmo      = (float)j.value("practice_slowmo", 1.0);
-
-        sDiscordRpc  = j.value("discord_rpc", false);
-        sVSyncCfg    = j.value("vsync", true);
-        sColorCorrect  = j.value("color_correction", true);
-        sLcdPersist    = j.value("lcd_persistence", false);
-        sLcdPersistRho = (float)j.value("lcd_persistence_rho", 0.35);
-        sRibbonCfg   = j.value("ribbon_mode", true);
-        sMasterVolume = (float)j.value("master_volume", 1.0);
-        sHoldAdvanceText = j.value("hold_advance_text", false);
-        sFullscreen  = j.value("fullscreen", false);
-        sShaderPreset = j.value("shader_preset", std::string());
-        sPreferredRegion = j.value("preferred_region", -1);
-        sPreferredLanguage = j.value("preferred_language", -1);
+        /* reborn_features: absent from DefaultsJson on purpose — presence is
+         * the signal that the user overrode the compile-time feature mask. */
         sHasRebornFeatures = j.contains("reborn_features");
         sRebornFeatures = sHasRebornFeatures ? j.value("reborn_features", 0u) : 0u;
-
-        sRandoEnabled    = j.value("rando_enabled", false);
-        sRandoGlitchless = j.value("rando_glitchless", true);
-        sRandoObscure    = j.value("rando_obscure", false);
-        sRandoKinstones  = j.value("rando_kinstones", true);
-        sRandoEntrances  = j.value("rando_entrances", false);
-        sRandoDojos      = j.value("rando_dojos", true);
-        sRandoOpenWorld  = j.value("rando_open_world", false);
-        sRandoItemPool   = j.value("rando_item_pool", 0);
-        sRandoHomewarp   = j.value("rando_homewarp", true);
-        sRandoStartSword = j.value("rando_start_sword", true);
-        sRandoEarlyCrests = j.value("rando_early_crests", true);
-        sRandoInstantText = j.value("rando_instant_text", true);
-        sRandoTunicColor = j.value("rando_tunic_color", 0);
-        sRandoHeartColor = j.value("rando_heart_color", 0);
 
         for (auto& v : sBinds) {
             v.clear();
@@ -1044,24 +978,6 @@ extern "C" void Port_Config_OpenGamepads(void) {
         return;
     }
     Port_Config_RescanGamepads(true);
-}
-
-/* Helper for the capture path: serialize a Bind to the same string
- * shape (`SDLK:0x...`, `SDL_GAMEPAD:0x...`, `SDL_AXIS:0x...`) used in
- * config.json so the new binding round-trips cleanly through Save +
- * Load on next launch. */
-static std::string FormatBindForJson(const Bind& b) {
-    char buf[40];
-    if (b.key != SDLK_UNKNOWN) {
-        std::snprintf(buf, sizeof(buf), "SDLK:0x%08x", (unsigned)b.key);
-    } else if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
-        std::snprintf(buf, sizeof(buf), "SDL_GAMEPAD:0x%08x", (unsigned)b.pad);
-    } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
-        std::snprintf(buf, sizeof(buf), "SDL_AXIS:0x%08x", (unsigned)b.axis);
-    } else {
-        return std::string();
-    }
-    return std::string(buf);
 }
 
 /* Re-serialize sBinds[input] back into sConfigJson["bindings"][name]

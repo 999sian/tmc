@@ -683,14 +683,3 @@ extern "C" void Port_TTS_SetLanguage(const char* v) {
 }
 
 extern "C" const char* Port_TTS_GetBackendName(void) { return BackendName(g_state.backend); }
-
-extern "C" size_t Port_TTS_ListVoices(char* out[], size_t max_count, size_t each_max_len) {
-    /* For the initial cut, voice enumeration is left to the user to
-     * type in (their backend's voice IDs vary widely — espeak uses
-     * `en+f2`, spd-say uses module/voice pairs, SAPI uses display
-     * names). Returning 0 lets the F8 menu show a free-text input
-     * instead of a dropdown. Plumbing per-backend `--list-voices`
-     * parsing is a follow-up. */
-    (void)out; (void)max_count; (void)each_max_len;
-    return 0;
-}

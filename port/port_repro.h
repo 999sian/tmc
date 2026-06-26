@@ -17,19 +17,9 @@ extern "C" {
 
 void Port_ReproRando_Tick(unsigned int frame);
 void Port_ReproRando_LateTick(void);
-void Port_ReproMazaal_Tick(unsigned int frame);
-void Port_ReproLitArea_Tick(unsigned int frame);
-void Port_ReproCloneButton_Tick(unsigned int frame);
-void Port_ReproTakeover_Tick(unsigned int frame);
-void Port_ReproJailBars_Tick(unsigned int frame);
-void Port_ReproAngryStatue_Tick(unsigned int frame);
-void Port_ReproVaati_Tick(unsigned int frame);
-void Port_ReproCredits_Tick(unsigned int frame);
 void Port_ReproPerfcap_Tick(unsigned int frame);
 void Port_ReproA11y_Tick(unsigned int frame);
-void Port_ReproCatPerson_Tick(unsigned int frame);
 void Port_ReproRoomCap_Tick(unsigned int frame);
-void Port_ReproIntroDbg_Tick(unsigned int frame);
 
 #ifdef __cplusplus
 }

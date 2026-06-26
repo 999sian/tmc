@@ -172,63 +172,6 @@ static void Port_UpdateInput(void) {
         Port_ReproRando_LateTick();
     }
 
-    /* Issue #99 auto-repro harness. Set TMC_REPRO_MAZAAL=1 to drive
-     * the game from the title screen into the FoW boss room mid-
-     * phase-3 so the [mazaal] diagnostic logs in mazaalMacro.c
-     * capture the pillar-spawn state on the broken path without
-     * needing a human to navigate. Exits at frame 4000. */
-    {
-        Port_ReproMazaal_Tick(sFrameNum);
-    }
-
-    /* Issues #138/#79 auto-repro harness. Set TMC_REPRO_LITAREA=1 to warp
-     * into a litArea OBJ-window dark room and capture the framebuffer. */
-    {
-        Port_ReproLitArea_Tick(sFrameNum);
-    }
-
-    /* Four Sword Sanctuary clone/button crash repro (followup to #130).
-     * Set TMC_REPRO_CLONEBUTTON=1 to warp into the sanctuary and exercise
-     * sub_08081FF8 with a NULL-hitbox clone in gPlayerClones[]. */
-    {
-        Port_ReproCloneButton_Tick(sFrameNum);
-    }
-
-    /* Vaati Castle takeover cutscene repro (#93/#109). Set TMC_REPRO_TAKEOVER=1
-     * to launch the takeover aux-cutscene and watch the inner orchestrator's
-     * [orch-pc] trace (native script drives it by default; TMC_TAKEOVER_WD=1
-     * forces the old sub_08053BBC fallback watchdog). */
-    {
-        Port_ReproTakeover_Tick(sFrameNum);
-    }
-
-    /* JailBars prison-door texture repro (#149). Set TMC_REPRO_JAILBARS=1 to
-     * warp into DHC B2 Prison, open the door via its flag, and confirm the
-     * door reaches action 3 (open frame) instead of stalling in action 2. */
-    {
-        Port_ReproJailBars_Tick(sFrameNum);
-    }
-
-    /* AngryStatue reward-flag repro (#77). Set TMC_REPRO_ANGRYSTATUE=1 to warp
-     * into DHC 1F Loop Left, destroy the four statues at once, and confirm the
-     * manager's completion flag (field_0x3e) is populated and gets set. */
-    {
-        Port_ReproAngryStatue_Tick(sFrameNum);
-    }
-
-    /* Vaati transform crash repro (#151). Set TMC_REPRO_VAATI=1 (+ TMC_VAATI_SLOT)
-     * to restore a boss-fight save-state snapshot and let the transform run. */
-    {
-        Port_ReproVaati_Tick(sFrameNum);
-    }
-
-    /* "Credits don't load" repro. Set TMC_REPRO_CREDITS=1 to force the
-     * staffroll task (the ending script's SetTask(TASK_STAFFROLL)) and
-     * snapshot the credits framebuffer headless. */
-    {
-        Port_ReproCredits_Tick(sFrameNum);
-    }
-
     /* Performance-capture harness (TMC_PERFCAP=1): drive into gameplay and
      * dump a complete PPU snapshot for the standalone render microbench. */
     {
@@ -241,27 +184,11 @@ static void Port_UpdateInput(void) {
         Port_ReproA11y_Tick(sFrameNum);
     }
 
-    /* "Crash talking to the cat woman" repro (#152). Set TMC_REPRO_CATPERSON=1
-     * to drive in-game and invoke the cat person's talk handler (sub_08062048,
-     * type 0x0e, global_progress 5) — the DIALOG_CALL_FUNC path that jumped to a
-     * raw GBA address before the fix. */
-    {
-        Port_ReproCatPerson_Tick(sFrameNum);
-    }
-
     /* Generic in-game room capture (TMC_ROOMCAP=1): bootstrap to TASK_GAME via
      * a quicksave snapshot, warp to a target room (re-rendered from the active
      * ROM), and dump the base framebuffer. Used to compare per-region render. */
     {
         Port_ReproRoomCap_Tick(sFrameNum);
-    }
-
-    /* Smith's-house intro cutscene diagnostic (TMC_REPRO_INTRODBG=1): bootstrap a
-     * fresh new game at the Smith house and let the natural room load run the
-     * intro cutscene (no warp), logging control mode / syncFlags / NPC visibility
-     * per frame to localize the JP-only freeze/invisible-NPC divergence. */
-    {
-        Port_ReproIntroDbg_Tick(sFrameNum);
     }
 
     /* Randomizer cosmetic palette overrides (tunic / heart colors from

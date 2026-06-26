@@ -2,6 +2,7 @@
 #include "port_asset_pipeline.hpp"
 #include "port_asset_pak_loader.hpp"
 #include "port_debug_verbose.h"  /* Port_DebugVerbose flag */
+#include "port_exe_path.hpp"
 
 extern "C" {
 #define this this_
@@ -37,15 +38,11 @@ extern Frame* gSpriteAnimations_322[];
 #include <nlohmann/json.hpp>
 
 #include <array>
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -62,39 +59,16 @@ extern Frame* gSpriteAnimations_322[];
 #include <unistd.h>
 #endif
 
-/* Optimized cold-cache file reader for low-end hardware.
- *
- * std::ifstream + std::istreambuf_iterator copies byte-by-byte through
- * the streambuf with virtual-call overhead per byte — fine on a fast
- * SSD with deep prefetch, miserable on eMMC / SD / HDD where the per-
- * byte work prevents the kernel from running ahead. This helper:
- *
- *   1. file_size() to size the vector exactly (one stat, no growth).
- *   2. Single fread() of the whole file — kernel sees full length up
- *      front and prefetches optimally.
- *
- * Returns nullptr on any I/O failure. Caller owns the unique_ptr. */
+/* Thin wrapper over PortAssetPipeline::ReadFileBytes (the bulk-read
+ * helper shared with the extractor's ReadBinaryFile) that hands back an
+ * owning buffer. Returns nullptr on any I/O failure; an empty file
+ * yields a non-null empty vector. Caller owns the unique_ptr. */
 static std::unique_ptr<std::vector<u8>>
 PortAssetLoader_ReadFileFast(const std::filesystem::path& path) {
-    std::error_code ec;
-    auto fsize = std::filesystem::file_size(path, ec);
-    if (ec) return nullptr;
-    if (fsize > (1ull << 30)) return nullptr;  /* 1 GiB sanity cap */
-    auto buf = std::make_unique<std::vector<u8>>(static_cast<size_t>(fsize));
-    if (fsize == 0) return buf;
-    FILE* fp = nullptr;
-#ifdef _WIN32
-    /* path.string() on Windows is the OS narrow code page (~CP1252),
-     * not UTF-8 — silently fails on Cyrillic / CJK / accented usernames.
-     * Route through _wfopen with the wide native string. */
-    fp = _wfopen(path.native().c_str(), L"rb");
-#else
-    fp = std::fopen(path.string().c_str(), "rb");
-#endif
-    if (!fp) return nullptr;
-    size_t got = std::fread(buf->data(), 1, static_cast<size_t>(fsize), fp);
-    std::fclose(fp);
-    if (got != static_cast<size_t>(fsize)) return nullptr;
+    auto buf = std::make_unique<std::vector<u8>>();
+    if (!PortAssetPipeline::ReadFileBytes(path, *buf)) {
+        return nullptr;
+    }
     return buf;
 }
 
@@ -204,30 +178,6 @@ struct AssetGroupCache {
      * mode auto-discovery is disabled so unlisted mods cannot affect a run. */
     bool modExplicitSelection = false;
     std::vector<std::filesystem::path> modRoots;
-
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-    /* Per-pak-category gates so the engine can run
-     * Port_PPU_Init and AgbMain title-screen rendering in parallel
-     * with extraction. Each gate starts "open" (done=true) for the
-     * common warm-launch case; cold-launch flips them shut at the
-     * start of extraction and re-opens them as each phase finishes.
-     * LoadBinaryFileCached blocks on the relevant gate before
-     * touching the pak/loose tree.
-     *
-     * Sized to match assets_extractor.hpp's kPakCategoryCount = 9
-     * (Gfx, Palettes, Animations, Sprites, Tilemaps, Maps,
-     * RoomProps, Data, Misc). Kept as a literal here rather than
-     * pulling in the full extractor header to avoid leaking a
-     * 2k-line .hpp into the engine TU. */
-    static constexpr std::size_t kPhaseGateCount = 9;
-    struct PhaseGate {
-        std::atomic<bool> done{true};
-        std::mutex mu;
-        std::condition_variable cv;
-    };
-    std::array<PhaseGate, kPhaseGateCount> phaseGates;
-    PhaseGate aggregatesReady;
-#endif
 };
 
 AssetGroupCache gAssetGroupCache;
@@ -263,40 +213,12 @@ void AssetLogOnce(const std::string& key, const char* fmt, ...) {
 // authoritative answer; cwd just happens to coincide with it when launched
 // from a terminal in the same dir.
 std::optional<std::filesystem::path> GetExecutableDirectory() {
+    if (auto dir = port::ExecutableDir()) {
+        return dir;
+    }
 #ifdef _WIN32
-    std::wstring buffer(MAX_PATH, L'\0');
-    DWORD len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-    if (len == 0) {
-        return std::nullopt;
-    }
-    while (len >= buffer.size() - 1) {
-        buffer.resize(buffer.size() * 2);
-        len = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
-        if (len == 0) {
-            return std::nullopt;
-        }
-    }
-    buffer.resize(len);
-    return std::filesystem::path(buffer).parent_path();
-#elif defined(__APPLE__)
-    uint32_t size = 0;
-    _NSGetExecutablePath(nullptr, &size);
-    std::string buffer(size, '\0');
-    if (_NSGetExecutablePath(buffer.data(), &size) == 0) {
-        std::error_code ec;
-        std::filesystem::path canonical = std::filesystem::weakly_canonical(buffer.c_str(), ec);
-        if (!ec) {
-            return canonical.parent_path();
-        }
-    }
-    std::error_code ec;
-    return std::filesystem::current_path(ec);
+    return std::nullopt;
 #else
-    char buffer[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer));
-    if (len > 0 && static_cast<size_t>(len) < sizeof(buffer)) {
-        return std::filesystem::path(std::string(buffer, static_cast<size_t>(len))).parent_path();
-    }
     std::error_code ec;
     return std::filesystem::current_path(ec);
 #endif
@@ -331,20 +253,28 @@ static bool RegionAllowsLegacyFlat() {
     return std::string(RegionAssetSubdir()) == "usa";
 }
 
-std::optional<std::filesystem::path> FindEditableAssetsRoot() {
+/* Shared search for an asset tree: probe <root>/<subdir>/<region> for
+ * every manifest in `manifests`, then (USA only) the legacy flat
+ * <root>/<subdir>. Editable trees live under "assets_src" and require
+ * palettes.json too; runtime trees live under "assets". */
+std::optional<std::filesystem::path>
+FindAssetsRoot(const char* subdir, std::initializer_list<const char*> manifests) {
     const char* sub = RegionAssetSubdir();
-    const auto hasManifests = [](const std::filesystem::path& dir) {
-        return std::filesystem::exists(dir / "gfx_groups.json") &&
-               std::filesystem::exists(dir / "palette_groups.json") &&
-               std::filesystem::exists(dir / "palettes.json");
+    const auto hasManifests = [&](const std::filesystem::path& dir) {
+        for (const char* m : manifests) {
+            if (!std::filesystem::exists(dir / m)) {
+                return false;
+            }
+        }
+        return true;
     };
     for (const auto& root : AssetSearchRoots()) {
-        const std::filesystem::path regioned = root / "assets_src" / sub;
+        const std::filesystem::path regioned = root / subdir / sub;
         if (hasManifests(regioned)) {
             return regioned;
         }
         if (RegionAllowsLegacyFlat()) {
-            const std::filesystem::path legacy = root / "assets_src";
+            const std::filesystem::path legacy = root / subdir;
             if (hasManifests(legacy)) {
                 return legacy;
             }
@@ -353,25 +283,12 @@ std::optional<std::filesystem::path> FindEditableAssetsRoot() {
     return std::nullopt;
 }
 
+std::optional<std::filesystem::path> FindEditableAssetsRoot() {
+    return FindAssetsRoot("assets_src", {"gfx_groups.json", "palette_groups.json", "palettes.json"});
+}
+
 std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
-    const char* sub = RegionAssetSubdir();
-    const auto hasManifests = [](const std::filesystem::path& dir) {
-        return std::filesystem::exists(dir / "gfx_groups.json") &&
-               std::filesystem::exists(dir / "palette_groups.json");
-    };
-    for (const auto& root : AssetSearchRoots()) {
-        const std::filesystem::path regioned = root / "assets" / sub;
-        if (hasManifests(regioned)) {
-            return regioned;
-        }
-        if (RegionAllowsLegacyFlat()) {
-            const std::filesystem::path legacy = root / "assets";
-            if (hasManifests(legacy)) {
-                return legacy;
-            }
-        }
-    }
-    return std::nullopt;
+    return FindAssetsRoot("assets", {"gfx_groups.json", "palette_groups.json"});
 }
 
 /* Map an editable root to its runtime sibling, preserving the region subdir:
@@ -879,54 +796,11 @@ void ParseTexts(const nlohmann::json& root) {
     }
 }
 
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-/* Mirror of pak_route_for() in assets_extractor.hpp, kept in this TU
- * to avoid including the full extractor header into the engine.
- * Order matches AssetGroupCache::phaseGates and the extractor's
- * PakCategory enum (Gfx, Palettes, Animations, Sprites, Tilemaps,
- * Maps, RoomProps, Data, Misc). */
-std::size_t PhaseGateIndexForRelative(const std::string& relativePath) {
-    auto starts_with = [&](const char* prefix) {
-        return relativePath.rfind(prefix, 0) == 0;
-    };
-    if (starts_with("gfx/")) return 0;
-    if (starts_with("palettes/")) return 1;
-    if (starts_with("animations/") || starts_with("generated/animations/")) return 2;
-    if (starts_with("sprites/") || starts_with("generated/sprites/")) return 3;
-    if (starts_with("tilemaps/")) return 4;
-    if (starts_with("maps/")) return 5;
-    if (starts_with("room_properties/")) return 6;
-    if (starts_with("data_") || starts_with("data/")) return 7;
-    return 8;  // Misc
-}
-
-void WaitForPhaseGate(std::size_t idx) {
-    auto& gate = gAssetGroupCache.phaseGates[idx];
-    if (gate.done.load(std::memory_order_acquire)) {
-        return;
-    }
-    std::unique_lock<std::mutex> lk(gate.mu);
-    /* Bounded wait so a missed phase_done event surfaces as a
-     * warning instead of an indefinite freeze. 5 s is generous —
-     * the slowest phase observed locally is sprites at ~900 ms. */
-    if (!gate.cv.wait_for(lk, std::chrono::seconds(5),
-                          [&]{ return gate.done.load(std::memory_order_acquire); })) {
-        std::fprintf(stderr,
-                     "[ASSET] phase gate %zu timed out (%s); proceeding anyway\n",
-                     idx, "asset may not be ready yet");
-    }
-}
-#endif
-
 const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
     auto it = gAssetGroupCache.binaryFiles.find(relativePath);
     if (it != gAssetGroupCache.binaryFiles.end()) {
         return it->second.get();
     }
-
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-    WaitForPhaseGate(PhaseGateIndexForRelative(relativePath));
-#endif
 
     /* Mod overrides — matheo's hash-lookup approach (O(1) per lookup
      * via the pre-scanned modReplacements map) wins over our linear
@@ -2060,46 +1934,6 @@ extern "C" bool32 Port_PaksMounted(void) {
 extern "C" int Port_PakEntryCount(void) {
     return static_cast<int>(gAssetGroupCache.paks.TotalEntries());
 }
-
-#ifdef TMC_OVERLAP_EXTRACT_INIT
-/* Phase 7: feature-flagged hooks the bootstrap calls during a
- * cold-launch extraction. With the flag off these are unreferenced
- * and elided by the linker. */
-extern "C" void Port_AssetLoader_BeginGated(void) {
-    for (auto& gate : gAssetGroupCache.phaseGates) {
-        gate.done.store(false, std::memory_order_release);
-    }
-    gAssetGroupCache.aggregatesReady.done.store(false, std::memory_order_release);
-}
-
-extern "C" void Port_AssetLoader_OpenAllGates(void) {
-    for (auto& gate : gAssetGroupCache.phaseGates) {
-        {
-            std::lock_guard<std::mutex> lk(gate.mu);
-            gate.done.store(true, std::memory_order_release);
-        }
-        gate.cv.notify_all();
-    }
-    {
-        std::lock_guard<std::mutex> lk(gAssetGroupCache.aggregatesReady.mu);
-        gAssetGroupCache.aggregatesReady.done.store(true, std::memory_order_release);
-    }
-    gAssetGroupCache.aggregatesReady.cv.notify_all();
-}
-
-extern "C" void Port_AssetLoader_OpenGate(int phaseGateIndex) {
-    if (phaseGateIndex < 0 ||
-        static_cast<std::size_t>(phaseGateIndex) >= gAssetGroupCache.phaseGates.size()) {
-        return;
-    }
-    auto& gate = gAssetGroupCache.phaseGates[static_cast<std::size_t>(phaseGateIndex)];
-    {
-        std::lock_guard<std::mutex> lk(gate.mu);
-        gate.done.store(true, std::memory_order_release);
-    }
-    gate.cv.notify_all();
-}
-#endif
 
 extern "C" void Port_AssetLoader_Reload(void) {
     /* Reset everything except the binary file cache (cheap to refill)
