@@ -342,6 +342,17 @@ jobs:
           cc -I port -O2 -o /tmp/rng_golden_test port/port_rng_golden_test.c
           /tmp/rng_golden_test
 
+      - name: PPU affine-latch unit test (Linux)
+        if: matrix.os_name == 'linux'
+        shell: bash
+        # Locks the #132 BG2 reference latch (per-scanline HBlank-DMA affine);
+        # the safety net for the mode1/mode2 render-loop unification. No ROM needed.
+        run: |
+          cc -O2 -fopenmp -I port/ppu/include -DMODE1_GBA_WIDTH=240 \
+             tools/ppu_affine_test.c port/ppu/src/mode1.c port/ppu/src/virtuappu.c \
+             -o /tmp/ppu_affine_test -lm
+          /tmp/ppu_affine_test
+
       - name: Resolve MinGW POSIX path (Windows)
         if: matrix.os_name == 'windows'
         shell: bash
