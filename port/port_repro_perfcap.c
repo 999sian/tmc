@@ -31,8 +31,31 @@
 #include "port_gba_mem.h" /* gIoMem, gVram, gBgPltt, gObjPltt, gOamMem */
 #include "room.h"        /* gRoomControls, gRoomVars.properties[] */
 #include "port_debug_actions.h"
+#include "virtuappu.h"   /* virtuappu_frame_buffer, virtuappu_registers (Tier B hash) */
 
 extern int Port_CaptureBaseFramebufferPNG(const char* path); /* shim in port_bugreport.cpp */
+
+/* Tier B end-to-end oracle: FNV-1a 64 over the LIVE composited framebuffer,
+ * i.e. the frame the engine just presented THIS scene — which (unlike the
+ * static tools/ppu_parity render of the memory snapshot) reflects per-scanline
+ * HBlank-DMA effects, mode2 affine accumulation, and the full composite. For a
+ * renderer-pure hash, capture with TMC_COLOR_CORRECTION=0 so no post-process
+ * has mutated the buffer in place. Deterministic because the settle frame is
+ * fixed. Matches the byte order of tools/ppu_parity's fb_checksum. */
+static uint64_t perfcap_frame_hash(void) {
+    int w = virtuappu_registers.frame_width ? virtuappu_registers.frame_width : 240;
+    int pitch = virtuappu_registers.frame_pitch ? virtuappu_registers.frame_pitch : w;
+    const int h = 160;
+    uint64_t hsh = 1469598103934665603ULL;
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            uint32_t v = virtuappu_frame_buffer[(size_t)y * pitch + x];
+            hsh ^= v;
+            hsh *= 1099511628211ULL;
+        }
+    }
+    return hsh;
+}
 
 #define KEYINPUT_REG 0x130
 #define A_BUTTON 0x0001
@@ -58,6 +81,9 @@ static void perfcap_dump(const char* path) {
         const uint16_t dispcnt = (uint16_t)(gIoMem[0] | (gIoMem[1] << 8));
         fprintf(stderr, "[perfcap] dumped PPU snapshot -> %s (dispcnt=0x%04x mode=%u)\n",
                 path, dispcnt, (unsigned)(dispcnt & 7u));
+        /* Tier B end-to-end parity oracle (see perfcap_frame_hash). */
+        fprintf(stderr, "[perfcap] frame_hash=0x%016llx\n",
+                (unsigned long long)perfcap_frame_hash());
     }
 }
 
@@ -71,11 +97,15 @@ void Port_ReproPerfcap_Tick(unsigned int frame) {
     static int settle_frame = 0;
     static int dumped = 0;
     static unsigned char last_task = 255;
+    static int at_frame = 0; /* TMC_PERFCAP_AT_FRAME: capture at this frame, no warp/mash */
 
     if (active < 0) {
         const char* env = getenv("TMC_PERFCAP");
         active = (env && *env && env[0] != '0') ? 1 : 0;
         if (active) {
+            const char* af = getenv("TMC_PERFCAP_AT_FRAME");
+            if (af && *af)
+                at_frame = atoi(af);
             const char* w = getenv("TMC_PERFCAP_WARP");
             if (w && *w) {
                 unsigned int a, r, x, y, l;
@@ -93,6 +123,26 @@ void Port_ReproPerfcap_Tick(unsigned int frame) {
     }
     if (!active)
         return;
+
+    /* TMC_PERFCAP_AT_FRAME=N: capture whatever is on screen at frame N with no
+     * title-mash and no warp. Lets the corpus include screens the warp path
+     * can't reach — e.g. the title screen, which uses a GBA affine mode (VPPU
+     * mode 2) and is otherwise mashed past on the way to gameplay. */
+    if (at_frame > 0) {
+        if ((int)frame >= at_frame && !dumped) {
+            const char* out = getenv("TMC_PERFCAP_DUMP");
+            if (!out || !*out)
+                out = "/tmp/tmc_ppu_snapshot.bin";
+            dumped = 1;
+            perfcap_dump(out);
+            Port_CaptureBaseFramebufferPNG("/tmp/tmc_perfcap_scene.png");
+            if (!getenv("TMC_PROFILE")) {
+                fflush(stderr);
+                _Exit(0);
+            }
+        }
+        return;
+    }
 
     if (gMain.task != last_task) {
         fprintf(stderr, "[perfcap] frame %u: task %u -> %u\n", frame, (unsigned)last_task, (unsigned)gMain.task);

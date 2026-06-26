@@ -142,3 +142,7 @@ tools/retail_maps/
 
 # Temporary build/run artifacts
 .tmp/
+
+# PPU parity: local (save-dependent) gameplay corpus + its golden — not portable
+tools/ppu_corpus.local.txt
+tools/ppu_golden_hashes.local*
