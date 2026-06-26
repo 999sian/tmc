@@ -44,6 +44,17 @@ extern virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback;
  * (CheckOnScreen / per-entity bounds), not by clipping here. */
 #define MODE1_GBA_VIEWPORT_X MODE1_GBA_WIDTH
 #define MODE1_GBA_BG_CLIP_X  240
+
+/* PPU/engine boundary for true widescreen: the renderer here is already
+ * width-agnostic — set MODE1_GBA_WIDTH > 240 and a frame_width via
+ * set_frame_geometry and it composites a wider viewport (verified
+ * byte-identical at 240). What it CANNOT invent is world that the engine never
+ * streamed: revealed columns reference BG char/screen data the per-area tileset
+ * managers only load for the 240-wide GBA view, so beyond the shadow-tilemap
+ * reveal the data simply isn't in VRAM. Expanding "more world" on the sides is
+ * therefore an ENGINE char-VRAM-streaming change (hyruleTownTileSetManager et
+ * al.), not a renderer change. Keep width/pitch first-class here; do the world
+ * extension in the engine. */
 enum {
     MODE1_GBA_HEIGHT = 160,
     MODE1_GBA_BG_COUNT = 4,
