@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Software PPU vendored in-tree (`port/ppu`); ViruaPPU submodule + patch pipeline removed
+
+- **The software GBA PPU is now first-party source under `port/ppu/`**, licensed
+  GPL-3.0-or-later. It replaces the `libs/ViruaPPU` git submodule and the
+  `xmake.lua` `before_build` step that re-applied 15 `port/patches/viruappu-*.patch`
+  on every build. This **resolves the PPU's license blocker** (the submodule
+  published no license — incompatible with the project's GPL-3.0) and eliminates
+  the fragile dirty-submodule + `git apply` model (the patch set no longer cleanly
+  re-applied onto pinned upstream `5cf5e99`; the `mode2-affine-latch` hunk
+  conflicted). Provenance and the 15 patches are recorded in `port/ppu/README.md`
+  and git history. See `THIRD-PARTY-LICENSES.md`.
+- **Verified byte-exact.** A new two-tier parity oracle (`tools/ppu_parity.c` +
+  `tools/ppu_parity_check.sh`, golden in `tools/ppu_golden_hashes.txt`) confirms
+  the vendored build produces identical render output to the previous
+  submodule+patches build across USA/EU/JP. The renderer is integer-only so the
+  hashes are portable; a CI gate runs it on every Linux x86_64 build with ROMs.
+  `TMC_PERFCAP_AT_FRAME=N` was added to the perfcap harness to capture
+  boot/title screens (incl. the GBA affine title) for the corpus.
+- Contributor workflow change: edit `port/ppu/` directly (no patches, no
+  submodule reset) and guard changes with `tools/ppu_parity_check.sh`. See
+  `CONTRIBUTING.md` → "Renderer changes (port/ppu)".
+
 ### Relicensed to GPL-3.0; honest attribution for randomizer & Reborn features
 
 - **The project is now licensed under the GNU General Public License v3.0**

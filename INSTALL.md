@@ -45,7 +45,7 @@ python3 build.py --slim # minimal dist (binary only; assets self-extract)
 The script:
 
 - Checks dependencies and offers to install missing ones.
-- Initializes git submodules (`libs/ViruaPPU`, `libs/VirtuaAPU`).
+- Initializes git submodules (`libs/VirtuaAPU`, `libs/agbplay_core`). The software PPU is vendored in-tree at `port/ppu/` (no submodule).
 - Scans the repo root, parent directory, and `~/Downloads` for ROMs and
   verifies SHA1 against `tmc.sha1`, `tmc_eu.sha1`, or `tmc_jp.sha1`.
 - Compiles the multi-region `tmc_pc` and `asset_extractor`.

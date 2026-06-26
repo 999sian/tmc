@@ -489,11 +489,10 @@ target("tmc_pc")
         arch_supports_avx2 = (arch_l == "x64" or arch_l == "x86_64" or arch_l == "amd64")
     end
 
-    -- Apply the ViruaPPU patches before compilation. The submodule is
-    -- intentionally pinned at upstream; each patch is idempotent and
-    -- skipped when its marker symbol is already present in the target file.
-    -- If a patch was applied with an older revision, reset the submodule
-    -- (`git -C libs/ViruaPPU checkout -- .`) so the patches reapply cleanly.
+    -- The software GBA PPU is now vendored first-party under port/ppu/ (see
+    -- port/ppu/README.md); there is no longer a ViruaPPU submodule to patch at
+    -- build time. This before_build only regenerates the embedded sounds blob
+    -- and logs the AVX2 decision.
     before_build(function (target)
         -- Regenerate port/generated_sounds_embed.cpp from
         -- assets/sounds.json so the binary always carries an
@@ -523,189 +522,6 @@ target("tmc_pc")
                     }
                 end
             end
-        end
-
-        local sub = path.join(os.projectdir(), "libs", "ViruaPPU")
-        local patches_dir = path.join(os.projectdir(), "port", "patches")
-        local patches = {
-            -- HDMA per-line callback hook in mode1.c and mode2.c render loops.
-            { patch = "viruappu-hdma-hook.patch",
-              marker_file = path.join(sub, "src", "mode2.c"),
-              marker = "virtuappu_mode1_pre_line_callback" },
-            { patch = "viruappu-mosaic.patch",
-              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
-              marker = "MODE1_IO_MOSAIC" },
-            -- Sub-pixel OAM affine overlay used by the internal-render-scale
-            -- path in port_ppu.cpp.
-            { patch = "viruappu-internal-scale.patch",
-              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
-              marker = "virtuappu_mode1_render_affine_obj_overlay" },
-            -- Widescreen layout constants in mode1.h + per-scanline
-            -- `#pragma omp parallel for` in the mode1 render loop. Without
-            -- this, mode1 (Hyrule Town's BG mode) renders single-threaded
-            -- on fresh checkouts; existing dirty-submodule worktrees may
-            -- still have it applied historically, but new clones did not.
-            { patch = "viruappu-widescreen.patch",
-              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
-              marker = "MODE1_GBA_BG_CLIP_X" },
-            -- Runtime WIP widescreen HUD anchoring: BG0 right-side HUD
-            -- tiles (rupees/keys) are shifted to the wide viewport's right
-            -- edge only when the runtime widescreen option is active.
-            { patch = "viruappu-widescreen-hud-anchor.patch",
-              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
-              marker = "virtuappu_mode1_ws_hud_right_anchor" },
-            -- Stable BG-priority sort in the mode1 composite. GBA hardware
-            -- orders equal-priority BGs by BG index (lower drawn on top); the
-            -- upstream selection sort swapped non-adjacent entries, so a
-            -- disabled BG left at a lower priority could reorder two
-            -- equal-priority BGs (#139: ToGrimblade's BG1 flame braziers were
-            -- hidden behind the BG2 bowl after a dark-room round-trip left
-            -- BG3CNT at priority 0).
-            { patch = "viruappu-bg-priority-sort.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "key_pri" },
-            -- Semi-transparent OBJ (attr0 mode 1) forced alpha-blend in the
-            -- mode1 composite. GBA treats a mode-1 sprite as an unconditional
-            -- blend 1st-target; without this, see-through sprites (Great Fairy,
-            -- steam, ghosts, portal stones, etc.) render fully opaque.
-            { patch = "viruappu-obj-semitrans.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "virtuappu_mode1_obj_semitrans" },
-            -- OBJ-window (attr0 mode 2) support in the mode1 composite. A
-            -- mode-2 sprite is invisible and only carves the OBJ window;
-            -- WINOUT's high byte then selects which layers show inside it.
-            -- Without this, src/object/litArea.c's dark-room light circles
-            -- (Stockwell, ToD lantern rooms, Palace of Winds entrance, Royal
-            -- Valley graves) draw as opaque blobs and the dark mask is lost.
-            { patch = "viruappu-objwin.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "virtuappu_mode1_obj_window" },
-            -- Vertical window wraparound (WIN0V/WIN1V top > bottom). The
-            -- horizontal path already wraps; the vertical path disabled the
-            -- window on inversion, blanking the digging-cave iris spotlight
-            -- (src/scroll.c Scroll5Sub2/Sub5) on small-iris frames. Now mirrors
-            -- the horizontal wrap: active for (line >= top || line < bottom).
-            { patch = "viruappu-winv-wrap.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "win0_v_wrap" },
-            -- #132: affine BG2 internal-reference latch — fixes the Deepwood
-            -- Shrine rolling barrel rendering ~2x too many wooden panels (the
-            -- old "ref_io + pd*line" formula double-counted the vertical step
-            -- when the barrel's per-scanline HBlank DMA reloads BG2X/BG2Y).
-            { patch = "viruappu-mode2-affine-latch.patch",
-              marker_file = path.join(sub, "src", "mode2.c"),
-              marker = "affine_internal_y" },
-            -- N64/bare-metal mode1 portability + cheap text-BG inner-loop
-            -- cleanup. Must apply after widescreen/OBJ-window patches because
-            -- it replaces their TLS declarations and tilemap read path.
-            { patch = "viruappu-n64-mode1-perf.patch",
-              marker_file = path.join(sub, "include", "virtuappu.h"),
-              marker = "TMC_N64" },
-            -- Pitch-aware framebuffer rows + visible-width culling. Must
-            -- apply after the mode1 perf/widescreen patches so it can reuse
-            -- their TLS scratch and widescreen clip constants.
-            { patch = "viruappu-pitch-culling.patch",
-              marker_file = path.join(sub, "include", "cpu", "mode1.h"),
-              marker = "virtuappu_mode1_set_frame_geometry" },
-            -- Skip prohibited OAM shape 3 in the mode1 OBJ loop. Shape is a
-            -- 2-bit field (0-3) but the obj width/height tables are [3][4];
-            -- shape 3 (GBA-prohibited) indexed them out of bounds when degraded
-            -- room data fed a shape-3 sprite (UBSan, JP new-game). Applies last.
-            { patch = "viruappu-oam-shape3-guard.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "OAM shape 3 is prohibited" },
-            -- GBA-accurate alpha-blend / brightness on 5-bit channels. Upstream
-            -- blends the 8-bit (palette<<3) framebuffer values, producing finer
-            -- gradients than hardware; the GBA blends 5-bit intensities with a
-            -- truncating >>4 and clamps to 31 (GBATEK). Recover 5-bit (>>3),
-            -- blend, clamp, re-expand — reproduces the GBA's quantised blend
-            -- banding (fades, semi-transparent OBJs, light effects). Touches
-            -- only the three blend helpers, so order vs other mode1.c patches
-            -- is irrelevant.
-            { patch = "viruappu-blend-5bit.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "VIRTUAPPU_BLEND_5BIT" },
-            -- Per-pixel vertical OBJ clip (Castor Wilds swamp-sink). The port marks
-            -- Link's OAM entries + a waterline scanline; mode1 drops those entries'
-            -- pixels at/below the line so his lower body hides feet->head as he sinks.
-            { patch = "viruappu-obj-clip-y.patch",
-              marker_file = path.join(sub, "src", "mode1.c"),
-              marker = "virtuappu_mode1_obj_clip_mark" },
-        }
-        -- Apply one patch when its marker is absent. -3 tolerates drifted
-        -- context (and on shallow submodule clones, where the pre-image blob
-        -- is missing, falls back to a plain apply); --ignore-whitespace
-        -- tolerates CRLF on Windows checkouts.
-        local function apply_one(p)
-            local patch_file = path.join(patches_dir, p.patch)
-            if not (os.isfile(p.marker_file) and os.isfile(patch_file)) then
-                return
-            end
-            local content = io.readfile(p.marker_file)
-            if content and content:find(p.marker, 1, true) then
-                print("[viruappu] %s: marker present, skipping", p.patch)
-                return
-            end
-            local rel = path.relative(patch_file, os.projectdir())
-            local applied = try {
-                function ()
-                    os.execv("git", {"-C", sub, "apply", "-3", "--ignore-whitespace", patch_file})
-                    return true
-                end
-            }
-            if applied then
-                print("[viruappu] applied %s", rel)
-            else
-                print("[viruappu] WARN: %s did not apply yet (drift?)", rel)
-            end
-        end
-
-        for _, p in ipairs(patches) do
-            apply_one(p)
-        end
-
-        -- Verify every required marker landed. A missing marker means a
-        -- renderer patch silently failed to apply and the build would ship a
-        -- visibly-wrong PPU. This is exactly how the Windows release shipped
-        -- issues #138/#79 (src/object/litArea.c's OBJ-window light circles
-        -- drew as opaque blobs): `git apply` hit drift / a shallow-clone blob
-        -- gap and the step "continued without it". Self-heal once via the
-        -- documented clean submodule reset, then HARD-FAIL rather than ship a
-        -- broken renderer.
-        local function missing_markers()
-            local miss = {}
-            for _, p in ipairs(patches) do
-                if os.isfile(p.marker_file) then
-                    local c = io.readfile(p.marker_file)
-                    local present = c and c:find(p.marker, 1, true)
-                    -- A 3-way apply conflict leaves the marker string inside a
-                    -- <<<<<<< / ======= / >>>>>>> block: the marker "looks
-                    -- present" but the file is corrupt and won't compile. Treat
-                    -- a conflicted file as not-applied, so the self-heal reset +
-                    -- final hard-fail catch it instead of compiling garbage.
-                    local conflicted = c and (c:find("<<<<<<<", 1, true) or c:find(">>>>>>>", 1, true))
-                    if (not present) or conflicted then
-                        table.insert(miss, p.patch)
-                    end
-                end
-            end
-            return miss
-        end
-
-        local miss = missing_markers()
-        if #miss > 0 then
-            print("[viruappu] markers missing (%s) — resetting submodule to a clean base and reapplying",
-                  table.concat(miss, ", "))
-            os.execv("git", {"-C", sub, "checkout", "--", "."})
-            for _, p in ipairs(patches) do
-                apply_one(p)
-            end
-            miss = missing_markers()
-        end
-        if #miss > 0 then
-            raise("[viruappu] FATAL: required renderer patch(es) did not apply: " .. table.concat(miss, ", ") ..
-                  ".\n  The build would render incorrectly (e.g. issues #138/#79 — litArea OBJ-window light " ..
-                  "circles draw as opaque blobs).\n  Fix: git -C libs/ViruaPPU reset --hard HEAD   (then rebuild).")
         end
 
         print("[tmc_pc] arch=%s pc_avx2=%s", target_arch ~= "" and target_arch or "auto", use_avx2 and "on" or "off")
@@ -796,7 +612,7 @@ target("tmc_pc")
     add_includedirs("port")
     add_includedirs(".")
     add_includedirs("build/" .. pc_game_version) -- For assets/map_offsets.h etc (USA, EU, or JP)
-    add_includedirs("libs/ViruaPPU/include")     -- ViruaPPU PPU renderer
+    add_includedirs("port/ppu/include")          -- vendored software GBA PPU
     add_includedirs("libs/VirtuaAPU/include")
     add_includedirs("libs/agbplay_core")
     add_includedirs("tools/src/assets_extractor") -- AssetExtractorApi linked in-process
@@ -947,7 +763,7 @@ target("tmc_pc")
     add_files("port/port_analog_movement.c") -- 360° left-stick movement bridge (REBORN_FEAT_ANALOG_360_MOVEMENT)
     add_files("port/port_audio_mute.cpp")    -- per-category SFX mute toggles (F8 → Audio)
     add_files("port/port_discord_rpc.c")     -- Discord Rich Presence (Unix IPC, F8 → Display toggle)
-    add_files("libs/ViruaPPU/src/*.c")
+    add_files("port/ppu/src/*.c")            -- vendored software GBA PPU (was libs/ViruaPPU)
     add_files("libs/VirtuaAPU/src/*.c")
     add_files("libs/agbplay_core/*.cpp")
     
@@ -1088,15 +904,13 @@ target("tmc_pc")
     add_cflags("/J", {tools = {"cl"}})
     add_cxxflags("/J", {tools = {"cl"}})
 
-    -- OpenMP scanline parallelism for ViruaPPU mode1.
+    -- OpenMP scanline parallelism for the vendored PPU mode1.
     --
-    -- libs/ViruaPPU/src/mode1.c contains `#pragma omp parallel for
-    -- schedule(static)` over the 160-row render loop (applied via
-    -- port/patches/viruappu-widescreen.patch). Because the .c files
-    -- are pulled into this target directly via add_files() — not
-    -- linked from the submodule's own xmake target — the submodule's
-    -- own -fopenmp flag never reaches the compiler here, and the
-    -- pragmas compile as silent no-ops. Wire -fopenmp explicitly so
+    -- port/ppu/src/mode1.c contains `#pragma omp parallel for
+    -- schedule(static)` over the 160-row render loop. The .c files are
+    -- pulled into this target directly via add_files(), so -fopenmp must
+    -- be wired explicitly here or the pragmas compile as silent no-ops.
+    -- Wire -fopenmp explicitly so
     -- the render actually runs on every core. The HDMA pre-line
     -- callback still runs serially (with per-line IO snapshot) so
     -- water-FX / BLDY fades stay correct; only the BG+OBJ+composite

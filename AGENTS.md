@@ -5,18 +5,18 @@ Project Picori is a native PC port of **The Legend of Zelda: The Minish Cap**. I
 
 ## Architecture & Data Flow
 - Entry flow: `port/port_main.c` initializes SDL3, assets, audio, input, and PPU, then enters `AgbMain()` in `src/main.c`.
-- Game loop: input read -> task dispatcher (`TITLE`, `FILE_SELECT`, `GAME`, etc.) -> entity/script/UI/audio updates -> ViruaPPU render -> SDL3 present.
+- Game loop: input read -> task dispatcher (`TITLE`, `FILE_SELECT`, `GAME`, etc.) -> entity/script/UI/audio updates -> PPU render (`port/ppu`) -> SDL3 present.
 - Core state is GBA-style global data: `gMain`, `gScreen`, `gUI`, `gSave`, `gRoomControls`, `gRoomVars`, `gEntityLists`.
 - Entity system: fixed pool, max 72 entities, kinds include player, enemies, projectiles, objects, NPCs, player items, and managers. See `include/entity.h`, `src/entity.c`.
-- Rendering: GBA VRAM/OAM/palettes -> `libs/ViruaPPU/src/mode*.c` -> `port/port_ppu.cpp` -> SDL_Renderer or optional SDL_GPU (`port/port_gpu_renderer.cpp`).
+- Rendering: GBA VRAM/OAM/palettes -> `port/ppu/src/mode*.c` -> `port/port_ppu.cpp` -> SDL_Renderer or optional SDL_GPU (`port/port_gpu_renderer.cpp`).
 - Assets: ROM -> `asset_extractor`/asset pipeline -> `assets/` or `dist/<version>/assets/`; runtime fallback can self-extract in slim builds.
-- Submodule patching: VirtuaPPU changes should be represented as patches under `port/patches/` and registered in `xmake.lua` so fresh submodule checkouts receive them.
+- PPU changes: the software PPU is vendored in-tree at `port/ppu/` — edit it directly and guard with `tools/ppu_parity_check.sh` (byte-exact render parity gate). No submodule, no patches.
 
 ## Key Directories
 - `src/` — decompiled game logic: tasks, entities, enemies, objects, NPCs, UI, rooms, scripts, sound.
 - `include/` — shared GBA engine structs, globals, entity/save/screen/map definitions.
 - `port/` — PC port layer: SDL3 entry, renderer, audio, ROM loading, assets, config, ImGui/debug UI, save, crash reports.
-- `libs/ViruaPPU/` — GBA PPU software renderer submodule.
+- `port/ppu/` — vendored software GBA PPU renderer (GPL-3.0; was the `libs/ViruaPPU` submodule).
 - `libs/VirtuaAPU/`, `libs/agbplay_core/` — audio emulation/playback components.
 - `tools/` — build-time tools and asset utilities; `tools/CMakeLists.txt` builds many helper binaries.
 - `scripts/` — developer/debug helpers such as `scripts/mazaal_gdb.gdb`.
@@ -72,7 +72,7 @@ TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy ./dist/USA/tmc_pc --n
 - `port/port_main.c` — native process entry and SDL/bootstrap flow.
 - `port/port_ppu.cpp` — PPU presentation, scale/filter/aspect handling.
 - `port/port_gpu_renderer.cpp` / `.h` — optional SDL_GPU presentation path.
-- `libs/ViruaPPU/src/mode1.c`, `mode2.c` — primary GBA renderer paths.
+- `port/ppu/src/mode1.c`, `mode2.c` — primary GBA renderer paths.
 - `port/port_runtime_config.cpp` / `.h` — config defaults, input bindings, renderer/upscale/runtime options.
 - `port/port_rom.c` — ROM loading, SHA1/region handling, ROM-derived data setup.
 - `port/port_asset_loader.cpp` — runtime asset lookup and fallback behavior.

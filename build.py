@@ -278,15 +278,14 @@ def check_deps(non_interactive: bool = False) -> bool:
     # The xmake build gates optional submodules (tmc-Modern-Launcher,
     # tmc-Android-Experimental — both private MatheoVignaud repos) on
     # working-tree presence, so a fork without push access to those
-    # repos still builds tmc_pc fine. Treat only ViruaPPU + VirtuaAPU as
-    # build-blocking; fetch the others best-effort and continue on
-    # failure (private clone returns "could not read Username for
-    # https://github.com" when no PAT is configured — that's expected on
-    # public forks). Matches the workflow's no-token path in
-    # .github/workflows/_build.yaml.
-    virua  = REPO_ROOT / "libs" / "ViruaPPU"
+    # repos still builds tmc_pc fine. The software PPU is now vendored
+    # in-tree (port/ppu), so only VirtuaAPU remains build-blocking; fetch
+    # the others best-effort and continue on failure (private clone returns
+    # "could not read Username for https://github.com" when no PAT is
+    # configured — that's expected on public forks). Matches the workflow's
+    # no-token path in .github/workflows/_build.yaml.
     virtua = REPO_ROOT / "libs" / "VirtuaAPU"
-    REQUIRED_SUBMODULES = {"libs/ViruaPPU", "libs/VirtuaAPU"}
+    REQUIRED_SUBMODULES = {"libs/VirtuaAPU"}
 
     submodule_paths = []
     gitmodules = REPO_ROOT / ".gitmodules"

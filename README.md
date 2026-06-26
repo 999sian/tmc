@@ -5,7 +5,7 @@
 # Project Picori — Minish Cap PC Port
 
 A native PC port of *The Legend of Zelda: The Minish Cap* (GBA, 2004) built on
-SDL3, a software PPU renderer (`libs/ViruaPPU`), and the agbplay audio engine.
+SDL3, a vendored software PPU renderer (`port/ppu`), and the agbplay audio engine.
 Targets **x86-64 Linux, Windows, and macOS** (Apple Silicon and Intel).
 
 The port is **work in progress** — many rendering and gameplay paths are still
@@ -172,7 +172,7 @@ filing issues.
 
 ## Renderer & shaders
 
-The default renderer is the software PPU (`libs/ViruaPPU`) presented through
+The default renderer is the vendored software PPU (`port/ppu`) presented through
 SDL. An optional **SDL_GPU** backend adds post-processing shader presets (CRT,
 LCD, scanline looks, …). In the **F8** menu:
 

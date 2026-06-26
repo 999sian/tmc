@@ -100,13 +100,9 @@ jobs:
         shell: bash
         run: |
           # Windows runners default to core.autocrlf=true, which converts
-          # checked-out text files to CRLF.  The viruappu-*.patch files
-          # are authored against LF source; with CRLF in the submodule
-          # working tree, `git apply` rejects them ("patch does not
-          # apply") even though content matches.  Force LF on checkout
-          # on every platform — a no-op where the default is already LF,
-          # and it keeps the `git apply` patch flow byte-identical across
-          # all runners.
+          # checked-out text files to CRLF. Force LF on every platform so the
+          # source tree (incl. the vendored port/ppu/ PPU) is byte-identical
+          # across runners — a no-op where the default is already LF.
           git config --global core.autocrlf false
           git config --global core.eol lf
 
@@ -135,9 +131,9 @@ jobs:
             # No token (forks): try a plain init so any public submodule
             # still gets fetched. Each submodule is initialised
             # individually so one private/missing entry doesn't take
-            # down the rest. Critical submodules (ViruaPPU) are checked
-            # explicitly after the loop and the step fails only if
-            # those are missing.
+            # down the rest. The critical submodule (VirtuaAPU) is checked
+            # explicitly after the loop and the step fails only if it is
+            # missing. (The software PPU is now vendored in-tree at port/ppu.)
             git submodule sync --recursive || true
             git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | \
               awk '{print $2}' | while read -r p; do
@@ -146,10 +142,12 @@ jobs:
                   echo "::warning::failed to fetch submodule $p — continuing"
                 echo "::endgroup::"
               done
-            if [ ! -e libs/ViruaPPU/CMakeLists.txt ] && \
-               [ ! -e libs/ViruaPPU/xmake.lua ] && \
-               [ ! -d libs/ViruaPPU/src ]; then
-              echo "::error::libs/ViruaPPU is empty after submodule init — build cannot proceed."
+            if [ ! -d libs/VirtuaAPU/src ]; then
+              echo "::error::libs/VirtuaAPU is empty after submodule init — build cannot proceed."
+              exit 1
+            fi
+            if [ ! -d port/ppu/src ]; then
+              echo "::error::port/ppu/src missing — the in-tree software PPU is absent."
               exit 1
             fi
           fi
