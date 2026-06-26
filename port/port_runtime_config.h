@@ -198,6 +198,11 @@ float       Port_Config_GetMasterVolume(void);
 void        Port_Config_SetMasterVolume(float v);
 bool        Port_Config_GetFullscreen(void);
 void        Port_Config_SetFullscreen(bool on);
+/* Hide the OS mouse cursor while the window is fullscreen (default on). When
+ * off, the cursor stays visible in fullscreen. Read by Port_PPU's cursor-
+ * visibility policy on every fullscreen transition. */
+bool        Port_Config_GetFullscreenHideCursor(void);
+void        Port_Config_SetFullscreenHideCursor(bool on);
 const char* Port_Config_GetShaderPreset(void);
 void        Port_Config_SetShaderPreset(const char* path);
 int         Port_Config_HasRebornMask(void);
@@ -246,6 +251,13 @@ bool Port_Config_SoftSlotPressed(int slot);
  * when no pad is attached. Used by the 360° analog movement toggle in
  * src/code_0805EC04.c::UpdatePlayerInput. */
 bool Port_Config_GetLeftStick(float* outX, float* outY);
+
+/* 360° analog-movement deadzone magnitude, range [0..0.95]. Left-stick
+ * displacements below this keep the D-pad authoritative (no phantom walking
+ * with a thumb resting on the stick). Read by port_analog_movement.c; only
+ * meaningful when REBORN_FEAT_ANALOG_360_MOVEMENT is enabled. Default 0.30. */
+float Port_Config_GetAnalogDeadzone(void);
+void  Port_Config_SetAnalogDeadzone(float v);
 
 /* Clear the per-input "pressed this frame" edge cache. Call after the
  * port has committed KEYINPUT and the engine has read it, so the next

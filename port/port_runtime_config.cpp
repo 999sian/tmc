@@ -118,6 +118,8 @@ bool        sRibbonCfg     = true;     /* F8 menu style: ribbon (true) vs classi
 float       sMasterVolume  = 1.0f;     /* game master volume [0,1]; 1.0 = unchanged */
 bool        sHoldAdvanceText = false;  /* hold an advance key to keep paging text */
 bool        sFullscreen    = false;
+bool        sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
+float       sAnalogDeadzone = 0.30f;   /* 360° stick deadzone magnitude [0..0.95] */
 std::string sShaderPreset;             /* path to active .glslp, empty = none */
 unsigned    sRebornFeatures   = 0;     /* bitmask of enabled Reborn features */
 bool        sHasRebornFeatures = false;/* was the key present in config.json? */
@@ -198,6 +200,7 @@ const BoolCfg kBoolCfg[] = {
     { "ribbon_mode",           &sRibbonCfg,               true  },
     { "hold_advance_text",     &sHoldAdvanceText,         false },
     { "fullscreen",            &sFullscreen,              false },
+    { "fullscreen_hide_cursor",&sFullscreenHideCursor,    true  },
     { "rando_enabled",         &sRandoEnabled,            false },
     { "rando_glitchless",      &sRandoGlitchless,         true  },
     { "rando_obscure",         &sRandoObscure,            false },
@@ -231,6 +234,7 @@ const FloatCfg kFloatCfg[] = {
     { "practice_slowmo",     &sPracticeSlowmo, 1.0  },
     { "lcd_persistence_rho", &sLcdPersistRho,  0.35 },
     { "master_volume",       &sMasterVolume,   1.0  },
+    { "analog_deadzone",     &sAnalogDeadzone, 0.30 },
 };
 const ScaleCfg kScaleCfg[] = {
     { "window_scale",   &sScale,         3, 1, 10 },
@@ -1436,6 +1440,10 @@ extern "C" float Port_Config_GetMasterVolume(void) { return sMasterVolume; }
 extern "C" void Port_Config_SetMasterVolume(float v) { if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f; sMasterVolume = v; sConfigJson["master_volume"] = (double)v; SaveConfig(); }
 extern "C" bool Port_Config_GetFullscreen(void) { return sFullscreen; }
 extern "C" void Port_Config_SetFullscreen(bool on) { sFullscreen = on; sConfigJson["fullscreen"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetFullscreenHideCursor(void) { return sFullscreenHideCursor; }
+extern "C" void Port_Config_SetFullscreenHideCursor(bool on) { sFullscreenHideCursor = on; sConfigJson["fullscreen_hide_cursor"] = on; SaveConfig(); }
+extern "C" float Port_Config_GetAnalogDeadzone(void) { return sAnalogDeadzone; }
+extern "C" void Port_Config_SetAnalogDeadzone(float v) { if (v < 0.0f) v = 0.0f; if (v > 0.95f) v = 0.95f; sAnalogDeadzone = v; sConfigJson["analog_deadzone"] = (double)v; SaveConfig(); }
 extern "C" const char* Port_Config_GetShaderPreset(void) { return sShaderPreset.c_str(); }
 extern "C" void Port_Config_SetShaderPreset(const char* path) {
     sShaderPreset = (path && path[0]) ? path : "";

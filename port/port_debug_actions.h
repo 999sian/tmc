@@ -119,6 +119,23 @@ int          Port_DebugQuery_CurrentFlagBank(void);
 int          Port_DebugQuery_Flag(int bank, int index);
 void         Port_DebugAction_SetFlag(int bank, int index, int on);
 
+/* Memory-watch list (impl in port_debug_memory_watch.c). Watch arbitrary GBA
+ * addresses live — EWRAM (0x02xxxxxx), IWRAM (0x03xxxxxx), I/O, palette, VRAM
+ * (0x06xxxxxx), OAM and ROM are all readable. Up to 32 entries, session-only
+ * (not persisted). width: 0 = u8, 1 = u16, 2 = u32. MemRead resolves any
+ * address fault-safely: it returns 1 and writes the little-endian value on a
+ * mapped address, or returns 0 (and *outValue = 0) for an unmapped one, so a
+ * watch on a now-invalid address shows "<unmapped>" instead of faulting.
+ * MemWatchAdd returns the new (or existing, on de-dup) index, or -1 if full. */
+int          Port_DebugQuery_MemWatchCount(void);
+int          Port_DebugAction_MemWatchAdd(unsigned int addr, int width);
+void         Port_DebugAction_MemWatchRemove(int index);
+void         Port_DebugAction_MemWatchClear(void);
+unsigned int Port_DebugQuery_MemWatchAddr(int index);
+int          Port_DebugQuery_MemWatchWidth(int index);
+int          Port_DebugQuery_MemRead(unsigned int addr, int width, unsigned int* outValue);
+const char*  Port_DebugQuery_MemWidthName(int width);
+
 #ifdef __cplusplus
 }
 #endif

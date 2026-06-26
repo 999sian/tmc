@@ -116,6 +116,10 @@ int sClassicCharmSel = 1;    /* charm combo index; 0 = Off */
 int sClassicPicoSel = 1;     /* picolyte combo index; 0 = Off */
 int sClassicFlagBank = 0;    /* selected flag bank, 0..12 */
 int sClassicFlagIndex = 0;   /* selected flag index within the bank */
+/* Memory-watch candidate (the address being composed before "Add watch"). */
+unsigned int sClassicMemAddr = 0x03000000u; /* IWRAM base — a sane starting point */
+int sClassicMemWidth = 0;    /* 0=u8 1=u16 2=u32 */
+int sClassicMemStepIdx = 0;  /* address step = 1 << (4*idx): 1,0x10,...,0x10000000 */
 
 struct MenuItem {
     std::string label;
@@ -135,6 +139,13 @@ struct MenuPage {
     /* Viewport: index of the topmost visible item. Renderer + key handler
      * together keep `cursor` inside [viewportTop, viewportTop + visible). */
     int viewportTop = 0;
+    /* Optional self-rebuilder for pages whose item SET changes in response to
+     * an action (e.g. the memory-watch list growing/shrinking). An action calls
+     * RequestRebuild(); ApplyPendingMutations() then replaces this page with
+     * rebuild() at the safe deferred point. Needed because Pop()+Push() can't
+     * replace the current page — the deferred pop runs from the top and would
+     * discard the just-pushed page. */
+    std::function<MenuPage()> rebuild;
 };
 
 /* Maximum number of items shown at once on a page. Larger pages scroll —
@@ -153,6 +164,10 @@ unsigned int sToastUntilTicks = 0;
  * top-level HandleKey caller via these flags. */
 int sPendingPops = 0;
 bool sPendingClose = false;
+/* Set by RequestRebuild() when an action mutates the current page's item set.
+ * Applied (top page replaced via its rebuild closure) in ApplyPendingMutations,
+ * after the action lambda has returned — same deferral discipline as the pops. */
+bool sPendingRebuild = false;
 
 void Toast(const std::string& msg) {
     sToast = msg;
@@ -176,6 +191,7 @@ MenuPage BuildStatsPage(void);
 MenuPage BuildBottlesPage(void);
 MenuPage BuildFlagsPage(void);
 MenuPage BuildEntitiesPage(void);
+MenuPage BuildMemWatchPage(void);
 
 void Push(MenuPage page) {
     sPageStack.push_back(std::move(page));
@@ -191,10 +207,15 @@ void Pop(void) {
     }
 }
 
+void RequestRebuild(void) {
+    sPendingRebuild = true;
+}
+
 void ApplyPendingMutations(void) {
     if (sPendingClose) {
         sPendingClose = false;
         sPendingPops = 0;
+        sPendingRebuild = false;
         sOpen = false;
         sPageStack.clear();
         return;
@@ -204,6 +225,22 @@ void ApplyPendingMutations(void) {
         --sPendingPops;
     }
     sPendingPops = 0;
+    /* Replace the (post-pop) top page with a freshly built copy, preserving the
+     * cursor where the new item count allows. Copy the closure out first so the
+     * assignment doesn't free the std::function whose body just ran. */
+    if (sPendingRebuild) {
+        sPendingRebuild = false;
+        if (!sPageStack.empty() && sPageStack.back().rebuild) {
+            const int savedCursor = sPageStack.back().cursor;
+            const int savedTop = sPageStack.back().viewportTop;
+            std::function<MenuPage()> fn = sPageStack.back().rebuild;
+            sPageStack.back() = fn();
+            MenuPage& pg = sPageStack.back();
+            const int count = static_cast<int>(pg.items.size());
+            pg.cursor = (savedCursor < count) ? savedCursor : (count > 0 ? count - 1 : 0);
+            pg.viewportTop = (savedTop < count) ? savedTop : 0; /* renderer re-clamps */
+        }
+    }
 }
 
 void DoWarp(unsigned char area, unsigned char room,
@@ -957,6 +994,97 @@ MenuPage BuildEntitiesPage(void) {
     return p;
 }
 
+/* Live memory-watch list. The top rows compose a candidate (address / step /
+ * width) and "Add watch" appends it; below, each stored watch shows its live
+ * value (labelFn re-reads every frame via the fault-safe Port_DebugQuery_MemRead)
+ * and Enter removes it. The ribbon "Memory" tab has the hex-input equivalent;
+ * this is the cycle-based fallback for the classic menu. */
+MenuPage BuildMemWatchPage(void) {
+    MenuPage p;
+    p.title = "MEMORY WATCH";
+    p.rebuild = []() { return BuildMemWatchPage(); }; /* add/remove rebuild this page in place */
+
+    MenuItem ad;
+    ad.cycleLeft  = []() { sClassicMemAddr -= (1u << (4 * sClassicMemStepIdx)); };
+    ad.cycleRight = []() { sClassicMemAddr += (1u << (4 * sClassicMemStepIdx)); };
+    ad.labelFn = []() -> std::string {
+        unsigned int v = 0;
+        const int ok = Port_DebugQuery_MemRead(sClassicMemAddr, sClassicMemWidth, &v);
+        const char* wn = Port_DebugQuery_MemWidthName(sClassicMemWidth);
+        char buf[80];
+        if (ok) {
+            std::snprintf(buf, sizeof(buf), "Addr 0x%08X = 0x%0*X (%s)   (<- ->)",
+                          sClassicMemAddr, (1 << sClassicMemWidth) * 2, v, wn);
+        } else {
+            std::snprintf(buf, sizeof(buf), "Addr 0x%08X = <unmapped> (%s)   (<- ->)",
+                          sClassicMemAddr, wn);
+        }
+        return buf;
+    };
+    ad.label = "Address";
+    p.items.push_back(std::move(ad));
+
+    MenuItem st;
+    st.cycleLeft  = []() { sClassicMemStepIdx = (sClassicMemStepIdx + 7) % 8; };
+    st.cycleRight = []() { sClassicMemStepIdx = (sClassicMemStepIdx + 1) % 8; };
+    st.labelFn = []() -> std::string {
+        char buf[40];
+        std::snprintf(buf, sizeof(buf), "Step: 0x%X   (<- ->)",
+                      (unsigned)(1u << (4 * sClassicMemStepIdx)));
+        return buf;
+    };
+    st.label = "Step";
+    p.items.push_back(std::move(st));
+
+    MenuItem wd;
+    wd.cycleLeft  = []() { sClassicMemWidth = (sClassicMemWidth + 2) % 3; };
+    wd.cycleRight = []() { sClassicMemWidth = (sClassicMemWidth + 1) % 3; };
+    wd.labelFn = []() -> std::string {
+        return std::string("Width: ") + Port_DebugQuery_MemWidthName(sClassicMemWidth) + "   (<- ->)";
+    };
+    wd.label = "Width";
+    p.items.push_back(std::move(wd));
+
+    p.items.push_back({ "Add watch", []() {
+        const int idx = Port_DebugAction_MemWatchAdd(sClassicMemAddr, sClassicMemWidth);
+        Toast(idx >= 0 ? "Watch added" : "Watch list full (32 max)");
+        RequestRebuild();
+    } });
+
+    const int n = Port_DebugQuery_MemWatchCount();
+    if (n > 0) {
+        p.items.push_back({ "Clear all watches", []() {
+            Port_DebugAction_MemWatchClear();
+            Toast("Watches cleared");
+            RequestRebuild();
+        } });
+    }
+    for (int i = 0; i < n; ++i) {
+        MenuItem it;
+        it.labelFn = [i]() -> std::string {
+            const unsigned int a = Port_DebugQuery_MemWatchAddr(i);
+            const int w = Port_DebugQuery_MemWatchWidth(i);
+            unsigned int v = 0;
+            const int ok = Port_DebugQuery_MemRead(a, w, &v);
+            const char* wn = Port_DebugQuery_MemWidthName(w);
+            char buf[80];
+            if (ok) {
+                std::snprintf(buf, sizeof(buf), "0x%08X (%s) = 0x%0*X   [Enter removes]",
+                              a, wn, (1 << w) * 2, v);
+            } else {
+                std::snprintf(buf, sizeof(buf), "0x%08X (%s) = <unmapped>   [Enter removes]", a, wn);
+            }
+            return buf;
+        };
+        it.action = [i]() { Port_DebugAction_MemWatchRemove(i); RequestRebuild(); };
+        it.label = "watch";
+        p.items.push_back(std::move(it));
+    }
+
+    p.items.push_back({ "<- Back", []() { Pop(); } });
+    return p;
+}
+
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
@@ -968,6 +1096,7 @@ MenuPage BuildMainPage(void) {
     p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
     p.items.push_back({ "Flag browser",      []() { Push(BuildFlagsPage()); } });
     p.items.push_back({ "Entity viewer",     []() { Push(BuildEntitiesPage()); } });
+    p.items.push_back({ "Memory watch",      []() { Push(BuildMemWatchPage()); } });
     p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
     p.items.push_back({ "Close menu",        []() { Pop(); } });
     return p;
