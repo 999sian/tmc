@@ -16,6 +16,7 @@
 #include "port_rom.h"
 #include "port_practice.h"
 #include "port_runtime_config.h"
+#include "port_roll_attack_macro.h"
 #include "port_softslots.h"
 #include "port_touch_controls.h"
 #include "port_tts.h"
@@ -136,7 +137,8 @@ static void Port_UpdateInput(void) {
      * which item to spawn lives in src/playerUtils.c via
      * Port_SoftSlots_GetEffectiveBItem(); the save data is untouched. */
     Port_SoftSlots_Update();
-    if (Port_SoftSlots_IsBHeld()) {
+    Port_RollAttackMacro_Tick(&keyinput);
+    if (Port_SoftSlots_IsBHeld() || Port_RollAttackMacro_IsBHeld()) {
         keyinput &= ~B_BUTTON;
     }
 

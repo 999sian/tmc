@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Roll attack macro (PC port QoL)
+
+- One-button **start-of-roll attack**: hold a direction and press the bind
+  (default **D** / **R3** right-stick click). Uses your best owned sword
+  without changing A/B equip — same virtual-item pattern as soft slots.
+- Toggle in **F8 → Controls** (`roll_attack_macro` in `config.json`).
+- Rebindable under **F8 → Controls → Roll attack**.
+
 ## v0.7.0 (2026-06-26)
 
 ### Software PPU vendored in-tree (`port/ppu`); ViruaPPU submodule + patch pipeline removed

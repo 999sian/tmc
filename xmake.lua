@@ -740,6 +740,7 @@ target("tmc_pc")
     add_files("port/port_upscale.c") -- xBRZ-style pixel-art upscaler
     add_files("port/port_save.c")        -- EEPROM save emulation
     add_files("port/port_softslots.c")   -- Extra item-equip buttons (X/Y/L2/R2)
+    add_files("port/port_roll_attack_macro.c") -- One-button roll attack (default: D)
     add_files("port/port_touch_controls.cpp")
     add_files("port/port_filter.c")      -- CRT/LCD post-process filters
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)

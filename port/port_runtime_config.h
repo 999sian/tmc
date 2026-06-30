@@ -29,6 +29,8 @@ typedef enum {
     PORT_INPUT_SOFT_Y,
     PORT_INPUT_SOFT_L2,
     PORT_INPUT_SOFT_R2,
+    /* One-button roll attack (port_roll_attack_macro.c). Default keyboard D. */
+    PORT_INPUT_ROLL_ATTACK,
     PORT_INPUT_COUNT,
 } PortInput;
 
@@ -194,6 +196,8 @@ bool        Port_Config_GetRibbonEnabled(void);
 void        Port_Config_SetRibbonEnabled(bool on);
 bool        Port_Config_GetHoldToAdvanceText(void);
 void        Port_Config_SetHoldToAdvanceText(bool on);
+bool        Port_Config_GetRollAttackMacroEnabled(void);
+void        Port_Config_SetRollAttackMacroEnabled(bool on);
 float       Port_Config_GetMasterVolume(void);
 void        Port_Config_SetMasterVolume(float v);
 bool        Port_Config_GetFullscreen(void);

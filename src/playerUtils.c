@@ -31,7 +31,13 @@
 #include "port_gba_mem.h"
 #include "port_rom.h"
 #include "port_softslots.h"
+#include "port_roll_attack_macro.h"
 #include <string.h>
+
+static u32 Port_PcEffectiveBItem(u32 bItem) {
+    bItem = Port_SoftSlots_GetEffectiveBItem((u8)bItem);
+    return Port_RollAttackMacro_GetEffectiveBItem((u8)bItem);
+}
 #endif
 
 static void sub_08077E54(ItemBehavior* beh);
@@ -230,7 +236,7 @@ void UpdateActiveItems(PlayerEntity* this) {
 #ifdef PC_PORT
         /* Soft-slots (X/Y/L2/R2) override the B-equipped item without
          * mutating gSave. See port/port_softslots.h. */
-        bItem = Port_SoftSlots_GetEffectiveBItem((u8)bItem);
+        bItem = Port_PcEffectiveBItem(bItem);
         /* Optional L-modifier: while L is held, A and B instead fire the
          * items bound to the port's two soft slots (assigned via SELECT-
          * hold in the pause menu). An unbound soft slot falls back to the
@@ -731,6 +737,9 @@ bool32 IsItemActiveByInput(ItemBehavior* this, PlayerInputState input) {
     if (Port_SoftSlots_IsBHeld() && Port_SoftSlots_GetEffectiveBItem(0xFF) == id) {
         return (INPUT_USE_ITEM2 & input) ? TRUE : FALSE;
     }
+    if (Port_RollAttackMacro_IsBHeld() && Port_RollAttackMacro_GetEffectiveBItem(0xFF) == id) {
+        return (INPUT_USE_ITEM2 & input) ? TRUE : FALSE;
+    }
 #endif
     if (stats->equipped[SLOT_A] == id) {
         val = INPUT_USE_ITEM1;
@@ -1046,7 +1055,7 @@ bool32 sub_08078008(ChargeState* state) {
     } else {
         u32 bItem = gSave.stats.equipped[SLOT_B];
 #ifdef PC_PORT
-        bItem = Port_SoftSlots_GetEffectiveBItem(bItem);
+        bItem = Port_PcEffectiveBItem(bItem);
 #endif
         if (ItemIsSword(bItem) != ITEM_NONE) {
             swordType = bItem;
@@ -2757,7 +2766,7 @@ bool32 HasSwordEquipped(void) {
     } else {
         u32 bItem = gSave.stats.equipped[SLOT_B];
 #ifdef PC_PORT
-        bItem = Port_SoftSlots_GetEffectiveBItem(bItem);
+        bItem = Port_PcEffectiveBItem(bItem);
 #endif
         return ItemIsSword(bItem);
     }

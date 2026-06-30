@@ -50,6 +50,9 @@ const std::array<Def, PORT_INPUT_COUNT> kDefaults = {{
     { PORT_INPUT_SOFT_Y,  "soft_y",  { "SDLK:0x00000076", "SDL_GAMEPAD:0x00000003" } },
     { PORT_INPUT_SOFT_L2, "soft_l2", { "SDLK:0x00000071", "SDL_AXIS:0x00000004" } },
     { PORT_INPUT_SOFT_R2, "soft_r2", { "SDLK:0x00000065", "SDL_AXIS:0x00000005" } },
+    /* Roll attack: keyboard D + R3 (right stick click). R3 is unused by the
+     * base game and sits near the movement stick for a direction+macro press. */
+    { PORT_INPUT_ROLL_ATTACK, "roll_attack", { "SDLK:0x00000064", "SDL_GAMEPAD:0x00000008" } },
 }};
 
 u8 sScale = 3;
@@ -117,6 +120,7 @@ float       sLcdPersistRho = 0.35f;    /* persistence: fraction of prev frame ke
 bool        sRibbonCfg     = true;     /* F8 menu style: ribbon (true) vs classic */
 float       sMasterVolume  = 1.0f;     /* game master volume [0,1]; 1.0 = unchanged */
 bool        sHoldAdvanceText = false;  /* hold an advance key to keep paging text */
+bool        sRollAttackMacroEnabled = true;
 bool        sFullscreen    = false;
 bool        sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
 float       sAnalogDeadzone = 0.30f;   /* 360° stick deadzone magnitude [0..0.95] */
@@ -199,6 +203,7 @@ const BoolCfg kBoolCfg[] = {
     { "lcd_persistence",       &sLcdPersist,              false },
     { "ribbon_mode",           &sRibbonCfg,               true  },
     { "hold_advance_text",     &sHoldAdvanceText,         false },
+    { "roll_attack_macro",     &sRollAttackMacroEnabled,  true  },
     { "fullscreen",            &sFullscreen,              false },
     { "fullscreen_hide_cursor",&sFullscreenHideCursor,    true  },
     { "rando_enabled",         &sRandoEnabled,            false },
@@ -365,6 +370,7 @@ extern "C" const char* Port_Config_InputUiLabel(PortInput input) {
         "Soft slot Y",
         "Soft slot L2 / LT",
         "Soft slot R2 / RT",
+        "Roll attack",
     };
     if (input < 0 || input >= PORT_INPUT_COUNT) {
         return "?";
@@ -1436,6 +1442,8 @@ extern "C" bool Port_Config_GetRibbonEnabled(void) { return sRibbonCfg; }
 extern "C" void Port_Config_SetRibbonEnabled(bool on) { sRibbonCfg = on; sConfigJson["ribbon_mode"] = on; SaveConfig(); }
 extern "C" bool Port_Config_GetHoldToAdvanceText(void) { return sHoldAdvanceText; }
 extern "C" void Port_Config_SetHoldToAdvanceText(bool on) { sHoldAdvanceText = on; sConfigJson["hold_advance_text"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetRollAttackMacroEnabled(void) { return sRollAttackMacroEnabled; }
+extern "C" void Port_Config_SetRollAttackMacroEnabled(bool on) { sRollAttackMacroEnabled = on; sConfigJson["roll_attack_macro"] = on; SaveConfig(); }
 extern "C" float Port_Config_GetMasterVolume(void) { return sMasterVolume; }
 extern "C" void Port_Config_SetMasterVolume(float v) { if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f; sMasterVolume = v; sConfigJson["master_volume"] = (double)v; SaveConfig(); }
 extern "C" bool Port_Config_GetFullscreen(void) { return sFullscreen; }
