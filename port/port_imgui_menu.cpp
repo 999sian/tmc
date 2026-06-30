@@ -1100,11 +1100,25 @@ static const char* InputLabel(int input) {
         case PORT_INPUT_SOFT_Y:  return "Soft slot Y";
         case PORT_INPUT_SOFT_L2: return "Soft slot L2";
         case PORT_INPUT_SOFT_R2: return "Soft slot R2";
+        case PORT_INPUT_ROLL_ATTACK: return "Roll attack (D / R3)";
         default:                 return Port_Config_InputName(input);
     }
 }
 
 static void DrawRibbonControlsTab(void) {
+    {
+        bool on = Port_Config_GetRollAttackMacroEnabled();
+        if (ImGui::Checkbox("Roll attack macro", &on)) {
+            Port_Config_SetRollAttackMacroEnabled(on);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip(
+                "Hold a direction and press the Roll attack bind to perform a "
+                "start-of-roll attack with your best sword, regardless of A/B "
+                "equip.\nDefault: keyboard D, controller R3 (right stick click).");
+        }
+    }
+    ImGui::Separator();
     ImGui::TextWrapped("Click 'Set' to replace an action's binding, or 'Add' to bind an extra "
                        "key/controller button to it, then press the input. Esc cancels. Mappings "
                        "save to config.json automatically. In Console-Parity mode each physical "
