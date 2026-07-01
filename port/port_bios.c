@@ -16,6 +16,7 @@
 #include "port_rom.h"
 #include "port_practice.h"
 #include "port_runtime_config.h"
+#include "port_roll_attack_macro.h"
 #include "port_softslots.h"
 #include "port_touch_controls.h"
 #include "port_tts.h"
@@ -110,6 +111,13 @@ static void Port_UpdateInput(void) {
         Port_ReproRando_Tick(sFrameNum);
     }
 
+    /* Roll-attack macro end-to-end test (TMC_REPRO_ROLL_MACRO=1). Runs BEFORE
+     * Port_RollAttackMacro_Tick() below so its forced UP + ROLL_ATTACK edges
+     * are visible to the macro through the real input path this same frame. */
+    {
+        Port_ReproRollMacro_Tick(sFrameNum);
+    }
+
     {
         /* While either overlay is open, hold all GBA buttons released so
          * the game doesn't observe stray input from key presses we routed
@@ -136,7 +144,8 @@ static void Port_UpdateInput(void) {
      * which item to spawn lives in src/playerUtils.c via
      * Port_SoftSlots_GetEffectiveBItem(); the save data is untouched. */
     Port_SoftSlots_Update();
-    if (Port_SoftSlots_IsBHeld()) {
+    Port_RollAttackMacro_Tick(&keyinput);
+    if (Port_SoftSlots_IsBHeld() || Port_RollAttackMacro_IsBHeld()) {
         keyinput &= ~B_BUTTON;
     }
 

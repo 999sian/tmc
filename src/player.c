@@ -31,6 +31,7 @@
 #include "port_scripts.h"
 #ifdef PC_PORT
 #include "port_softslots.h"
+#include "port_roll_attack_macro.h"
 #endif
 #include "save.h"
 #include "scroll.h"
@@ -3623,6 +3624,7 @@ void SurfaceAction_CloneTile(PlayerEntity* this) {
              * result stays a sword, preserving the GBA item domain. */
             {
                 u32 eff = Port_SoftSlots_GetEffectiveBItem(item);
+                eff = Port_RollAttackMacro_GetEffectiveBItem((u8)eff);
                 if (ItemIsSword(eff))
                     item = eff;
             }

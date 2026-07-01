@@ -685,6 +685,7 @@ target("tmc_pc")
     add_files("port/port_repro_rando.c")
     add_files("port/port_repro_a11y.c")
     add_files("port/port_repro_roomcap.c")  -- generic in-game room capture (TMC_ROOMCAP)
+    add_files("port/port_repro_roll_macro.c") -- roll-attack macro e2e test (TMC_REPRO_ROLL_MACRO)
     -- Link the asset extractor implementation directly so tmc_pc can
     -- run extraction in-process at startup (no shell-out) and share
     -- the engine's already-loaded ROM buffer.
@@ -740,6 +741,7 @@ target("tmc_pc")
     add_files("port/port_upscale.c") -- xBRZ-style pixel-art upscaler
     add_files("port/port_save.c")        -- EEPROM save emulation
     add_files("port/port_softslots.c")   -- Extra item-equip buttons (X/Y/L2/R2)
+    add_files("port/port_roll_attack_macro.c") -- One-button roll attack (default: D)
     add_files("port/port_touch_controls.cpp")
     add_files("port/port_filter.c")      -- CRT/LCD post-process filters
     add_files("port/port_animation.c")   -- Animation system (ported from ASM)

@@ -20,6 +20,7 @@
 
 #ifdef PC_PORT
 #include "port_softslots.h"
+#include "port_roll_attack_macro.h"
 #endif
 
 const Wallet gWalletSizes[] = {
@@ -289,6 +290,9 @@ EquipSlot IsItemEquipped(u32 itemId) {
      * item, report it as B-equipped so held-item code paths (lantern stay-
      * lit, magic boomerang return, gust-jar charge) behave normally. */
     if (Port_SoftSlots_IsBHeld() && Port_SoftSlots_GetEffectiveBItem(0xFF) == itemId) {
+        return EQUIP_SLOT_B;
+    }
+    if (Port_RollAttackMacro_IsBHeld() && Port_RollAttackMacro_GetEffectiveBItem(0xFF) == itemId) {
         return EQUIP_SLOT_B;
     }
 #endif
