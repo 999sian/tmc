@@ -20,6 +20,7 @@ void Port_ReproRando_LateTick(void);
 void Port_ReproPerfcap_Tick(unsigned int frame);
 void Port_ReproA11y_Tick(unsigned int frame);
 void Port_ReproRoomCap_Tick(unsigned int frame);
+void Port_ReproRollMacro_Tick(unsigned int frame);
 
 #ifdef __cplusplus
 }

@@ -159,6 +159,11 @@ single-target invocation, and other build options.
 | Capture bug report             | F9               | —              |
 | Quicksave                      | F5               | —              |
 | Quickload (also stops speech)  | F6               | —              |
+| Roll attack macro              | D                | R3 (RS click)  |
+
+Hold a direction, then press the roll-attack bind for a start-of-roll sword
+attack (uses your best sword regardless of A/B equip). Toggle in **F8 →
+Controls**. Rebindable there.
 
 The **F8** debug menu also covers warp, items, heal, internal render scale,
 the renderer/shader toggles (see *Renderer & shaders*) and an Accessibility tab
