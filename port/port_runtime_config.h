@@ -268,6 +268,12 @@ void  Port_Config_SetAnalogDeadzone(float v);
  * frame's polled state isn't stuck reporting the previous tap. */
 void Port_Config_ClearInputEdges(void);
 
+/* Test-only: stamp the per-frame edge cache for `input` (see
+ * Port_Config_TestForceEdge in the .cpp). Used exclusively by env-gated
+ * repro harnesses; the bit is wiped by Port_Config_ClearInputEdges() each
+ * frame, so it never persists into normal play. */
+void Port_Config_TestForceEdge(PortInput input);
+
 int  Port_Config_PreferredRegion(void);
 void Port_Config_SetPreferredRegion(int region);
 int  Port_Config_PreferredLanguage(void);

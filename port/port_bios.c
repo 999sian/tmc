@@ -111,6 +111,13 @@ static void Port_UpdateInput(void) {
         Port_ReproRando_Tick(sFrameNum);
     }
 
+    /* Roll-attack macro end-to-end test (TMC_REPRO_ROLL_MACRO=1). Runs BEFORE
+     * Port_RollAttackMacro_Tick() below so its forced UP + ROLL_ATTACK edges
+     * are visible to the macro through the real input path this same frame. */
+    {
+        Port_ReproRollMacro_Tick(sFrameNum);
+    }
+
     {
         /* While either overlay is open, hold all GBA buttons released so
          * the game doesn't observe stray input from key presses we routed

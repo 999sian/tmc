@@ -1122,6 +1122,18 @@ extern "C" void Port_Config_ClearInputEdges(void) {
     sEdgePressed.fill(false);
 }
 
+/* Test-only input seam. Stamps the per-frame edge cache for `input` exactly
+ * as an SDL KEY_DOWN would, so headless repro harnesses (see
+ * port_repro_roll_macro.c) drive edge/held reads through the real
+ * Port_Config_InputPressed / Port_Config_InputEdgePressed path. Wiped every
+ * frame by Port_Config_ClearInputEdges() after KEYINPUT is committed, so a
+ * forced bit never survives past the frame it is set on. */
+extern "C" void Port_Config_TestForceEdge(PortInput input) {
+    if (input >= 0 && input < PORT_INPUT_COUNT) {
+        sEdgePressed[input] = true;
+    }
+}
+
 extern "C" bool Port_Config_InputEdgePressed(PortInput input) {
     /* Parity mode disables the sub-frame edge cache: a press is only seen
      * on the frame the engine actually polls it, matching hardware 1-frame
