@@ -328,7 +328,6 @@ bool Port_RandoSave_LoadSlot(int slot) {
     if (rec->item_difficulty < RANDO_ITEM_POOL_COUNT) {
         settings.item_difficulty = (RandoItemPoolDifficulty)rec->item_difficulty;
     }
-    settings.tricks = rec->tricks;
     if (sLoadedVersion >= 6) {
         settings.obscure_locations = rec->obscure_locations;
         settings.homewarp = rec->homewarp;

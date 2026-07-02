@@ -14,6 +14,7 @@ extern void Rando_Cosmetic_Apply(void);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h> /* time() — quick-seed entropy mix */
 
 extern void Port_FileSelectRando_StartSlot(int slot);
 extern bool Port_ImGui_CanPresent(void);
@@ -46,6 +47,7 @@ static bool sRandoOptionEnabled = false;
 static bool sRandoOptionLoaded = false;
 static bool sShowSidebar = false;
 static uint64_t sQuickSeedCounter = 0x853c49e6748fea9bull;
+static bool sQuickSeedSeeded = false;
 
 static void EnsureRandoOptionLoaded(void) {
     if (sRandoOptionLoaded)
@@ -73,6 +75,14 @@ void Port_RandoFileMenu_SetSeed(const char* text) {
 }
 
 void Port_RandoFileMenu_RandomizeSeed(void) {
+    if (!sQuickSeedSeeded) {
+        /* The fixed init constant made the Nth "Randomize" click produce the
+         * same seed on every install. Mix real entropy once at first use. */
+        sQuickSeedCounter ^= (uint64_t)time(NULL) * 0x9e3779b97f4a7c15ull;
+        sQuickSeedCounter ^= SDL_GetPerformanceCounter();
+        sQuickSeedCounter ^= (uint64_t)(uintptr_t)&sMenu >> 4;
+        sQuickSeedSeeded = true;
+    }
     SplitMix64_NextLocal(&sQuickSeedCounter);
     uint32_t val = (uint32_t)(sQuickSeedCounter & 0xFFFFFFFFu);
     char buf[16];
