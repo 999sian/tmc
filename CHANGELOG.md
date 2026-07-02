@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.7.1.1 (2026-07-02)
+
+### Cave of Flames: rollobite-switch gate fixed (issue #159, regression in v0.7.0)
+
+- **Hitting the seated cog-lever in the Cave of Flames rollobite room now
+  opens the bollard gate again.** v0.7.0 moved `HittableLeverEntity.hitFlag`
+  to the 64-bit-safe offset (PC 0xB2, aliasing the loader's
+  `field_0x86` union) but missed the *runtime* spawn path: when the pushed
+  cog seats and converts itself into a hittable lever
+  (`objectOnPillar.c` → `CreateObject(HITTABLE_LEVER)`), the flag was still
+  written at the old offset (0xAE). The lever then read hitFlag = 0, toggled
+  local flag 0 instead of the gate flag, and the SECRET_MANAGER → bollard
+  chain never fired — blocking dungeon progress. ROM-placed levers (e.g. the
+  rail switch in the main cart room) were unaffected, which is why only this
+  room broke. `EntityWithHitFlag` now mirrors the lever struct's PC padding,
+  pinned by a static assert.
+- New env-gated repro probes (`TMC_ROOMCAP_COF_PROBE`,
+  `TMC_ROOMCAP_LEVER_PROBE`) verify the seated-chest open path and the
+  lever → secret → bollard chain headlessly.
+
 ## v0.7.1 (2026-07-02)
 
 ### EU: global color corruption fixed (every faded palette, all EU rendering)
