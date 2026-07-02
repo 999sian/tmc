@@ -4,11 +4,11 @@
 
 #define HDMA_CHANNELS 4
 
-#define DMA_CNT_DEST_FIXED  0x0040
+#define DMA_CNT_DEST_FIXED 0x0040
 #define DMA_CNT_DEST_RELOAD 0x0060
-#define DMA_CNT_DEST_MASK   0x0060
-#define DMA_CNT_SRC_FIXED   0x0100
-#define DMA_CNT_32BIT       0x0400
+#define DMA_CNT_DEST_MASK 0x0060
+#define DMA_CNT_SRC_FIXED 0x0100
+#define DMA_CNT_32BIT 0x0400
 
 /* Three GBA destination-increment modes per scanline:
  *   FIXED:  no increment during transfer, no reload between transfers
@@ -29,17 +29,15 @@ typedef struct {
     const uint8_t* src;
     uint8_t* dest_orig;
     uint8_t* dest;
-    uint16_t count;     // units per HBlank transfer
-    uint8_t  unit;      // 2 or 4 bytes
-    uint8_t  src_fixed;
-    uint8_t  dest_mode; // HdmaDestMode
+    uint16_t count; // units per HBlank transfer
+    uint8_t unit;   // 2 or 4 bytes
+    uint8_t src_fixed;
+    uint8_t dest_mode; // HdmaDestMode
 } HdmaChannel;
 
 static HdmaChannel s_channels[HDMA_CHANNELS];
 
-void port_hdma_register(int channel, const void* src, void* dest,
-                        uint16_t cnt_h, uint16_t count)
-{
+void port_hdma_register(int channel, const void* src, void* dest, uint16_t cnt_h, uint16_t count) {
     HdmaChannel* c;
     uint16_t dm;
 
@@ -63,16 +61,14 @@ void port_hdma_register(int channel, const void* src, void* dest,
     }
 }
 
-void port_hdma_unregister(int channel)
-{
+void port_hdma_unregister(int channel) {
     if (channel < 0 || channel >= HDMA_CHANNELS) {
         return;
     }
     s_channels[channel].active = 0;
 }
 
-int port_hdma_has_active_channels(void)
-{
+int port_hdma_has_active_channels(void) {
     int ch;
 
     for (ch = 0; ch < HDMA_CHANNELS; ++ch) {
@@ -83,8 +79,33 @@ int port_hdma_has_active_channels(void)
     return 0;
 }
 
-void port_hdma_step_line(int line)
-{
+int port_hdma_dest_overlaps(const void* lo, const void* hi) {
+    int ch;
+
+    for (ch = 0; ch < HDMA_CHANNELS; ++ch) {
+        const HdmaChannel* c = &s_channels[ch];
+        const uint8_t* d_lo;
+        const uint8_t* d_hi;
+        size_t span;
+
+        if (!c->active) {
+            continue;
+        }
+        /* Per-line write footprint starting at dest_orig. FIXED writes one
+         * unit in place; INC/RELOAD advance across `count` units. INC also
+         * drifts across lines, but TMC's affine users are RELOAD/FIXED —
+         * treat the first-line footprint as the footprint. */
+        span = (size_t)(c->dest_mode == DEST_FIXED ? c->unit : c->unit * c->count);
+        d_lo = c->dest_orig;
+        d_hi = c->dest_orig + span;
+        if (d_lo < (const uint8_t*)hi && d_hi > (const uint8_t*)lo) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void port_hdma_step_line(int line) {
     int ch;
 
     (void)line;
@@ -113,8 +134,7 @@ void port_hdma_step_line(int line)
     }
 }
 
-void port_hdma_vblank_reset(void)
-{
+void port_hdma_vblank_reset(void) {
     int ch;
 
     /*
