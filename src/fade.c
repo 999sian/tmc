@@ -34,7 +34,12 @@ typedef void (*fptrMakeFadeBuff256)(u8*, u8*, u16, u8);
  */
 
 /* Compile-time fade lookup table offsets (from data_08000F54.s).
- * 3 brightness levels, each with {R_offset, G_offset, B_offset} into gRomData. */
+ * 3 brightness levels, each with {R_offset, G_offset, B_offset} into gRomData.
+ * The 9-table block (3 x RGB, 0x40 bytes each) sits at 0xF84 on USA/JP but
+ * 0xFCC on EU (+0x48 code shift; verified byte-identical content in all three
+ * retail ROMs). Reading the USA offsets from an EU ROM pushed every palette
+ * row through garbage LUTs — the "garbled EU title BG" M6 bug, which really
+ * corrupted EVERY faded palette on EU. */
 #define NUM_FADE_BRIGHTNESS 3
 static const u32 sFadeTableOffsets[NUM_FADE_BRIGHTNESS][3] = {
     { 0x0F84, 0x0FC4, 0x1004 }, /* brightness 0 */
@@ -63,10 +68,16 @@ static void Port_MakeFadeBuff256(u8* src, u8* dest, u16 intensity, u8 color) {
         brightness = 0;
 
     /* Resolve fade lookup tables directly from known ROM offsets
-     * (avoids chasing GBA ROM pointers in the pointer table at 0xF54). */
-    u16* tableR = (u16*)(gRomData + sFadeTableOffsets[brightness][0]);
-    u16* tableG = (u16*)(gRomData + sFadeTableOffsets[brightness][1]);
-    u16* tableB = (u16*)(gRomData + sFadeTableOffsets[brightness][2]);
+     * (avoids chasing GBA ROM pointers in the pointer table at 0xF54).
+     * EU's block sits +0x48 later (see sFadeTableOffsets comment). */
+    u32 region_shift = 0;
+#if defined(MULTI_REGION) || defined(EU)
+    if (REGION_IS_EU)
+        region_shift = 0x48;
+#endif
+    u16* tableR = (u16*)(gRomData + sFadeTableOffsets[brightness][0] + region_shift);
+    u16* tableG = (u16*)(gRomData + sFadeTableOffsets[brightness][1] + region_shift);
+    u16* tableB = (u16*)(gRomData + sFadeTableOffsets[brightness][2] + region_shift);
 
     u16* srcPtr = (u16*)src;
     /* dest is a GBA palette RAM address — resolve it */
@@ -91,7 +102,9 @@ static void Port_MakeFadeBuff256(u8* src, u8* dest, u16 intensity, u8 color) {
         }
         sCacheBrightness = (int)brightness;
     }
-    tableR = sCacheR; tableG = sCacheG; tableB = sCacheB;
+    tableR = sCacheR;
+    tableG = sCacheG;
+    tableB = sCacheB;
 #endif
 
     for (int i = 0; i < 16; i++) {
@@ -170,11 +183,8 @@ void SetFadeProgress(u32 arg0) {
 void SetFade(u32 type, u32 speed) {
 #ifdef PC_PORT
     {
-        extern void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
-                                     u32 priorType, u32 priorActive, u32 priorProg);
-        Port_LogFadeCall("SetFade", type, speed,
-                         gFadeControl.type, gFadeControl.active,
-                         gFadeControl.progress);
+        extern void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2, u32 priorType, u32 priorActive, u32 priorProg);
+        Port_LogFadeCall("SetFade", type, speed, gFadeControl.type, gFadeControl.active, gFadeControl.progress);
     }
 #endif
     gFadeControl.speed = speed;
@@ -207,11 +217,8 @@ void SetFade(u32 type, u32 speed) {
 void SetFadeInverted(u32 speed) {
 #ifdef PC_PORT
     {
-        extern void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
-                                     u32 priorType, u32 priorActive, u32 priorProg);
-        Port_LogFadeCall("SetFadeInverted", speed, 0,
-                         gFadeControl.type, gFadeControl.active,
-                         gFadeControl.progress);
+        extern void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2, u32 priorType, u32 priorActive, u32 priorProg);
+        Port_LogFadeCall("SetFadeInverted", speed, 0, gFadeControl.type, gFadeControl.active, gFadeControl.progress);
     }
 #endif
     gFadeControl.speed = speed;
