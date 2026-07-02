@@ -991,7 +991,9 @@ MenuPage BuildSaveProfilesPage(void) {
 }
 
 /* Read-only entity viewer. Snapshot taken when the page is built; "Refresh"
- * re-snapshots in place (Pop+Push). Rows are non-actionable. */
+ * re-snapshots via the deferred rebuild (RequestRebuild + page.rebuild), since
+ * Pop()+Push() would let the deferred pop discard the just-pushed page.
+ * Rows are non-actionable. */
 MenuPage BuildEntitiesPage(void) {
     MenuPage p;
     p.title = "ENTITIES";

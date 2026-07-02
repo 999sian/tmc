@@ -17,6 +17,13 @@
 
 namespace PortAssetPipeline {
 
+/* Version of the extracted-asset output (schema + content). MUST be bumped
+ * whenever the extractor's output format or content changes, so caches
+ * stamped by an older binary are treated as stale. Checked by both the
+ * JSON-tree rebuild path (RuntimeAssetsNeedRebuild) and the warm-launch
+ * stamp check (AssetExtractorApi::RuntimeUpToDate). */
+inline constexpr int kBuildStateVersion = 3; /* v3: EU paletteGroups 208 -> 207 */
+
 /* Read the whole file at `path` into `out`, resized to its size.
  * Returns true on success; a 0-byte file succeeds with `out` empty. On
  * any I/O failure `out` is cleared and false is returned. A single bulk
@@ -32,7 +39,7 @@ inline bool ReadFileBytes(const std::filesystem::path& path, std::vector<uint8_t
         out.clear();
         return false;
     }
-    if (fsize > (1ull << 30)) {  /* 1 GiB sanity cap */
+    if (fsize > (1ull << 30)) { /* 1 GiB sanity cap */
         out.clear();
         return false;
     }
@@ -53,8 +60,7 @@ inline bool ReadFileBytes(const std::filesystem::path& path, std::vector<uint8_t
     return true;
 }
 
-std::vector<uint8_t> DecodeGbaTiledGfx(std::span<const uint8_t> gfxData, uint16_t width, uint16_t height,
-                                       uint8_t bpp);
+std::vector<uint8_t> DecodeGbaTiledGfx(std::span<const uint8_t> gfxData, uint16_t width, uint16_t height, uint8_t bpp);
 std::vector<uint8_t> EncodeGbaTiledGfx(const std::vector<uint8_t>& pixels, uint16_t width, uint16_t height,
                                        uint8_t bpp);
 

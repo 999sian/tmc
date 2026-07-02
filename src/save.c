@@ -45,9 +45,9 @@ const u8 padding[2] = { 0, 0 };
 
 static SaveResult (*const sSaveHandlers[])(u32) = { HandleSaveInit, HandleSaveInProgress, HandleSaveDone };
 
-
 #ifdef PC_PORT
-#define sSignatureLong (REGION_IS_JP || REGION_IS_EU ? "AGBZELDA:THE MINISH CAP:ZELDA 3" : "AGBZELDA:THE MINISH CAP:ZELDA 5")
+#define sSignatureLong \
+    (REGION_IS_JP || REGION_IS_EU ? "AGBZELDA:THE MINISH CAP:ZELDA 3" : "AGBZELDA:THE MINISH CAP:ZELDA 5")
 #else
 #if defined(JP) || defined(EU)
 static const char sSignatureLong[32] = "AGBZELDA:THE MINISH CAP:ZELDA 3";
@@ -55,7 +55,6 @@ static const char sSignatureLong[32] = "AGBZELDA:THE MINISH CAP:ZELDA 3";
 static const char sSignatureLong[32] = "AGBZELDA:THE MINISH CAP:ZELDA 5";
 #endif
 #endif
-
 
 // Save file is untouched
 static const SaveFileStatus sSaveDescInit = { 0xffff, 0xffff, 'TINI' };
@@ -224,6 +223,15 @@ u32 DataDoubleWriteWithStatus(u32 index, const void* data) {
     bool32 write1success, write2success;
     u16 checksum;
 
+#ifdef PC_PORT
+    /* One save = ~324 EEPROM block writes; flush the backing file once at
+     * the end of the burst instead of per block (port_save.c, #19). */
+    {
+        extern void Port_Save_BeginTransaction(void);
+        Port_Save_BeginTransaction();
+    }
+#endif
+
     eepromAddresses = GetSaveFileEEPROMAddresses(index);
 
     fileStatus.status = 'MCZ3';
@@ -244,6 +252,16 @@ u32 DataDoubleWriteWithStatus(u32 index, const void* data) {
     if (write1success || write2success) {
         ret = 1;
     }
+#ifdef PC_PORT
+    /* Single durable flush; a failed flush (ENOSPC/EIO) downgrades the save
+     * to SAVE_ERROR in the HandleSave UI instead of lying (#20). */
+    {
+        extern int Port_Save_EndTransaction(void);
+        if (!Port_Save_EndTransaction()) {
+            ret = 0;
+        }
+    }
+#endif
     return ret;
 }
 

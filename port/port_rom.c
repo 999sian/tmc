@@ -1811,16 +1811,27 @@ void Port_LoadRom(const char* path) {
 
 void Port_ApplyLanguage(void) {
     extern void* gTranslations[];
+    /* Called every frame (port_bios.c Port_UpdateInput). A configured
+     * preference must apply when SET or CHANGED (F8 menu calls this right
+     * after updating the config) — but NOT re-assert every frame, which
+     * overwrote the user's in-game language choice (EU options menu). */
+    static int sLastAppliedPref = -2; /* -2 = never applied */
     if (!gSaveHeader)
         return;
 
     int lang = Port_Config_PreferredLanguage();
+    if (lang == sLastAppliedPref && lang >= 0)
+        return; /* preference unchanged — leave the in-game choice alone */
+
     if (lang < 0) {
+        sLastAppliedPref = lang;
         const int current = gSaveHeader->language;
         if (current >= 0 && current < 6 /* NUM_LANGUAGES */ && gTranslations[current] != NULL) {
             return;
         }
         lang = REGION_IS_JP ? 0 /* LANGUAGE_JP */ : 1 /* LANGUAGE_EN */;
+    } else {
+        sLastAppliedPref = lang;
     }
 
     if (lang >= 0 && lang < 6 /* NUM_LANGUAGES */ && gTranslations[lang] != NULL) {

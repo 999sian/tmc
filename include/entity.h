@@ -9,6 +9,12 @@
 #define MAX_MANAGERS 32
 #define MAX_AUX_PLAYER_ENTITIES 7
 
+/* Capacity of gCollidableList: the player, all aux player entities and the
+ * whole entity pool can register in one frame. Matches the GBA buffer —
+ * linker.ld reserves 0xE10..0xF50 (320 bytes = 80 pointers) and the asm
+ * UpdateCollision (asm/src/intr.s) has no bounds check at all. */
+#define MAX_COLLIDABLE_ENTITIES (1 + MAX_AUX_PLAYER_ENTITIES + MAX_ENTITIES)
+
 /** Kinds of Entity's supported by the game. */
 typedef enum {
     PLAYER = 1,      /**< There is only one id assigned to the Player kind.
