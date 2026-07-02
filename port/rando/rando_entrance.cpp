@@ -112,25 +112,28 @@ const WarpXY kElementWarpXY[kEntranceCount] = {
  * gUnk_0813AB6C and gUnk_0813ABBC, fired through npc4E -> DoExitTransition).
  * x == 0 marks "none". */
 const EntranceTuple kElementWarpVanilla[kEntranceCount] = {
-    {}, {},
+    {},
+    {},
     { 0x05, 0x04, 0x198, 0x068, 1, 0, 4 }, /* FoW after Wind Element  */
-    {}, /* ToD: ends on green warp */
+    {},                                    /* ToD: ends on green warp */
     { 0x09, 0x00, 0x0F0, 0x0BC, 1, 0, 4 }, /* Crypt after King's gift */
-    {}, {}, {},
+    {},
+    {},
+    {},
 };
 
 /* Interior area sets per dungeon (main + boss/sub areas), used to decide
  * which dungeon the player is leaving. 0 terminates (area 0 = Minish Woods
  * is never a dungeon interior). */
 const uint8_t kInteriorAreas[kEntranceCount][5] = {
-    { 0x48, 0x49, 0, 0, 0 },          /* DWS, DWS boss                       */
-    { 0x50, 0x51, 0, 0, 0 },          /* CoF, CoF boss                       */
-    { 0x18, 0x58, 0x59, 0x5A, 0 },    /* Outer FoW, FoW, FoW top, In. Mazaal */
-    { 0x60, 0, 0, 0, 0 },             /* ToD                                 */
-    { 0x68, 0, 0, 0, 0 },             /* Royal Crypt                         */
-    { 0x70, 0x71, 0, 0, 0 },          /* PoW, PoW boss                       */
-    { 0x88, 0x89, 0x8D, 0, 0 },       /* DHC, DHC outside, DHC bridge        */
-    { 0x43, 0, 0, 0, 0 },             /* Hyrule Castle cellar                */
+    { 0x48, 0x49, 0, 0, 0 },       /* DWS, DWS boss                       */
+    { 0x50, 0x51, 0, 0, 0 },       /* CoF, CoF boss                       */
+    { 0x18, 0x58, 0x59, 0x5A, 0 }, /* Outer FoW, FoW, FoW top, In. Mazaal */
+    { 0x60, 0, 0, 0, 0 },          /* ToD                                 */
+    { 0x68, 0, 0, 0, 0 },          /* Royal Crypt                         */
+    { 0x70, 0x71, 0, 0, 0 },       /* PoW, PoW boss                       */
+    { 0x88, 0x89, 0x8D, 0, 0 },    /* DHC, DHC outside, DHC bridge        */
+    { 0x43, 0, 0, 0, 0 },          /* Hyrule Castle cellar                */
 };
 
 /* assignment: location -> dungeon (entrance item subtype - 1), -1 = none. */
@@ -142,7 +145,8 @@ bool sCacheValid = false;
 int DungeonFromInteriorArea(uint8_t area) {
     for (int d = 0; d < kEntranceCount; ++d) {
         for (int i = 0; i < 5 && kInteriorAreas[d][i] != 0; ++i) {
-            if (kInteriorAreas[d][i] == area) return d;
+            if (kInteriorAreas[d][i] == area)
+                return d;
         }
     }
     return -1;
@@ -153,7 +157,8 @@ bool TupleMatches(const EntranceTuple& t, uint8_t area, uint8_t room, int16_t x,
 }
 
 bool EnsureMapping() {
-    if (sCacheValid) return sEnabled;
+    if (sCacheValid)
+        return sEnabled;
 
     sCacheValid = true;
     sEnabled = false;
@@ -163,7 +168,8 @@ bool EnsureMapping() {
 
     for (int l = 0; l < kEntranceCount; ++l) {
         int d = sAssign[l];
-        if (d < 0) continue;
+        if (d < 0)
+            continue;
         if (sInverse[d] != -1) {
             fprintf(stderr, "[RANDO] entrance shuffle: duplicate assignment for dungeon %d, disabling\n", d + 1);
             sEnabled = false;
@@ -206,17 +212,23 @@ void WriteTuple(const EntranceTuple& t, uint8_t* area, uint8_t* room, int16_t* x
 
 extern "C" void Rando_Entrance_RemapExit(uint8_t cur_area, uint8_t* area, uint8_t* room, int16_t* x, int16_t* y,
                                          uint8_t* layer, uint8_t* spawn_type, uint8_t* facing) {
-    if (!EnsureMapping()) return;
+    if (!Rando_IsActive())
+        return;
+    if (!EnsureMapping())
+        return;
 
     /* Entering a dungeon door: destination matches the vanilla interior
      * entry of dungeon d0 == door of location l0=d0 (vanilla pairing). The
      * source-area guard keeps in-dungeon warps that share the entrance-room
      * destination (e.g. the Royal Crypt wallmaster) untouched. */
     for (int d0 = 0; d0 < kEntranceCount; ++d0) {
-        if (!TupleMatches(kEnter[d0], *area, *room, *x, *y)) continue;
-        if (DungeonFromInteriorArea(cur_area) == d0) return; /* internal warp */
+        if (!TupleMatches(kEnter[d0], *area, *room, *x, *y))
+            continue;
+        if (DungeonFromInteriorArea(cur_area) == d0)
+            return; /* internal warp */
         int target = sAssign[d0];
-        if (target < 0 || target == d0) return;
+        if (target < 0 || target == d0)
+            return;
         WriteTuple(kEnter[target], area, room, x, y, layer, spawn_type, facing);
         fprintf(stderr, "[RANDO] entrance remap: door %s -> dungeon %d\n", kLocationNames[d0], target + 1);
         return;
@@ -225,9 +237,11 @@ extern "C" void Rando_Entrance_RemapExit(uint8_t cur_area, uint8_t* area, uint8_
     /* Leaving dungeon V (door exit or element-get warp): redirect to the
      * exterior of the location V is assigned to. */
     int v = DungeonFromInteriorArea(cur_area);
-    if (v < 0) return;
+    if (v < 0)
+        return;
     int loc = sInverse[v];
-    if (loc < 0 || loc == v) return;
+    if (loc < 0 || loc == v)
+        return;
 
     if (TupleMatches(kExterior[v], *area, *room, *x, *y)) {
         WriteTuple(kExterior[loc], area, room, x, y, layer, spawn_type, facing);
@@ -246,14 +260,20 @@ extern "C" void Rando_Entrance_RemapExit(uint8_t cur_area, uint8_t* area, uint8_
 
 extern "C" void Rando_Entrance_RemapHole(uint8_t cur_area, uint8_t* area, uint8_t* room, uint8_t* layer, int16_t* x,
                                          int16_t* y) {
-    if (!EnsureMapping()) return;
+    if (!Rando_IsActive())
+        return;
+    if (!EnsureMapping())
+        return;
     /* Palace of Winds entrance-room ledge jump: vanilla hole lands on the
      * Wind Tribe tower roof (kExterior[5]). The GBA randomizer rewrites only
      * area/room/layer/x/y of this gHoleTransitions entry. */
-    if (cur_area != kEnter[5].area) return;
-    if (!TupleMatches(kExterior[5], *area, *room, *x, *y)) return;
+    if (cur_area != kEnter[5].area)
+        return;
+    if (!TupleMatches(kExterior[5], *area, *room, *x, *y))
+        return;
     int loc = sInverse[5];
-    if (loc < 0 || loc == 5) return;
+    if (loc < 0 || loc == 5)
+        return;
     *area = kExterior[loc].area;
     *room = kExterior[loc].room;
     *layer = 1;
@@ -264,12 +284,18 @@ extern "C" void Rando_Entrance_RemapHole(uint8_t cur_area, uint8_t* area, uint8_
 
 extern "C" void Rando_Entrance_RemapGreenWarp(uint8_t cur_area, uint32_t warp_type, uint8_t* area, uint8_t* room,
                                               int16_t* x, int16_t* y) {
-    if (warp_type != 2) return; /* only the post-boss (green) warp leaves */
-    if (!EnsureMapping()) return;
+    if (warp_type != 2)
+        return; /* only the post-boss (green) warp leaves */
+    if (!Rando_IsActive())
+        return;
+    if (!EnsureMapping())
+        return;
     int v = DungeonFromInteriorArea(cur_area);
-    if (v < 0) return;
+    if (v < 0)
+        return;
     int loc = sInverse[v];
-    if (loc < 0) return;
+    if (loc < 0)
+        return;
     /* The GBA randomizer rewrites the in-dungeon green warp unconditionally for
      * every shuffled dungeon (ToD's even points back inside in vanilla), so
      * identity assignments are normalized to the exterior pad as well. */
@@ -281,7 +307,7 @@ extern "C" void Rando_Entrance_RemapGreenWarp(uint8_t cur_area, uint32_t warp_ty
 }
 extern "C" void Rando_Entrance_SetAssignment(int loc_idx, int interior_idx) {
     if (loc_idx >= 0 && loc_idx < kEntranceCount) {
-        sAssign[loc_idx] = (int8_t)interior_idx;
+        sAssign[loc_idx] = (interior_idx >= 0 && interior_idx < kEntranceCount) ? (int8_t)interior_idx : -1;
         sCacheValid = false;
     }
 }

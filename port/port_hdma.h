@@ -18,9 +18,13 @@
 extern "C" {
 #endif
 
-void port_hdma_register(int channel, const void* src, void* dest,
-                        uint16_t cnt_h, uint16_t count);
+void port_hdma_register(int channel, const void* src, void* dest, uint16_t cnt_h, uint16_t count);
 int port_hdma_has_active_channels(void);
+/* 1 if any ACTIVE channel's per-line destination range overlaps [lo, hi).
+ * Used by the PPU glue to strobe the affine BG2X/BG2Y reference latch: a
+ * write EVENT must reload the internal reference even when the written
+ * value is unchanged (constant-value HDMA pins the layer on hardware). */
+int port_hdma_dest_overlaps(const void* lo, const void* hi);
 void port_hdma_unregister(int channel);
 void port_hdma_step_line(int line);
 void port_hdma_vblank_reset(void);

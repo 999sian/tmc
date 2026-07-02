@@ -12,6 +12,16 @@
 #      mode2 affine / full composite);
 #   3. compares both against tools/ppu_golden_hashes.txt.
 #
+# Determinism: captures run from a scratch working directory so the box's
+# config.json (LCD persistence, widescreen toggle, color correction, ...)
+# and tmc.sav can never leak into the hashes, and every output-affecting
+# TMC_* knob is pinned explicitly below. Never run --update with ad-hoc
+# TMC_* overrides exported.
+#
+# Known limitation: the committed corpus covers only 2 hermetic boot frames
+# (title/logo). "Byte-faithful" claims beyond those scenes need the richer
+# save-dependent local corpus (PPU_CORPUS/PPU_GOLDEN overrides).
+#
 # Usage:
 #   tools/ppu_parity_check.sh            # check against golden; nonzero on mismatch
 #   tools/ppu_parity_check.sh --update   # (re)generate the golden file
@@ -32,6 +42,9 @@ cd "$ROOT"
 MODE1_GBA_WIDTH="${MODE1_GBA_WIDTH:-240}"
 TMC_PC="${TMC_PC:-build/pc/tmc_pc}"
 TMC_BASEROM="${TMC_BASEROM:-$ROOT/baserom.gba}"
+# Captures run from a scratch cwd — both paths must survive the chdir.
+TMC_PC="$(readlink -f "$TMC_PC" 2>/dev/null || echo "$TMC_PC")"
+TMC_BASEROM="$(readlink -f "$TMC_BASEROM" 2>/dev/null || echo "$TMC_BASEROM")"
 TMC_REGION="${TMC_REGION:-usa}"
 # Overridable so a richer, save-dependent local corpus can be used for
 # same-machine before/after phase verification (PPU_CORPUS / PPU_GOLDEN),
@@ -74,15 +87,22 @@ capture() {
         atframe=*) atframe="${spec#atframe=}";;
         *) echo "[parity] bad spec: $spec" >&2; return 1;;
     esac
+    # Scratch cwd: config.json is read from $PWD, so the box's display
+    # settings (LCD persistence rho, widescreen, ...) and tmc.sav must not
+    # be visible to the capture. Assets resolve from the exe dir, not cwd.
+    local capdir="$WORK/capcwd"
+    mkdir -p "$capdir"
     timeout -s KILL 90 env \
         TMC_AUTOPLAY=1 TMC_PERFCAP=1 \
         ${warp:+TMC_PERFCAP_WARP="$warp"} \
         ${atframe:+TMC_PERFCAP_AT_FRAME="$atframe"} \
         TMC_PERFCAP_DUMP="$out" \
         TMC_COLOR_CORRECTION=0 \
+        TMC_LCD_PERSISTENCE=0 \
+        TMC_NO_UPDATE_CHECK=1 \
         SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
         TMC_BASEROM="$TMC_BASEROM" \
-        "$TMC_PC" --no-audio >"$log" 2>&1 || true
+        sh -c "cd '$capdir' && exec '$TMC_PC' --no-audio" >"$log" 2>&1 || true
     grep -oE 'frame_hash=0x[0-9a-f]+' "$log" | tail -1 | sed 's/frame_hash=//'
 }
 

@@ -59,25 +59,32 @@ final values + provenance live in `port_rom.c`. Count/size fields are content-in
 
 ## Remaining gaps (JP runs but is not yet speedrun-faithful)
 
-The game boots and core gameplay (rendering, RNG, rooms, movement, area data) is
-correct. Still USA-specific and needing JP treatment:
+The game boots and core gameplay — rendering, RNG, rooms, movement, area data,
+and scripted cutscenes/NPCs — is correct.
 
-1. **Japanese text rendering.** The port has no Japanese glyph support; menus/dialogue
-   render wrong. The low-level blitter (`port_text_render.c`) is encoding-agnostic and
-   reads font tiles from ROM, so it may serve JP unchanged — the open question is the
-   JP text *system* (kanji 2-byte encoding, font widths/layout). Investigate against
-   this now-working JP build.
-2. **`port/port_scripts.h`** — `GBA_script_*` are hardcoded **USA** ROM addresses.
-   JP scripted sequences that resolve through these will point at the wrong ROM data.
-   Needs a JP address set (the JP ROM is now available to derive them, same anchoring
-   method as the offsets, or from the JP script labels).
-3. **`port/port_script_funcs.c`** — the script-address→native-function table is entirely
-   **USA** addresses; JP scripts live at different addresses, so these native overrides
-   won't match under JP. Needs JP script addresses (and the 2 USA-only functions have no
-   JP equivalent in this decomp — they're currently excluded for JP).
+Resolved since the original writeup:
 
-These three are the path from "JP boots" to "JP speedrun-faithful". Pair a JP build with
-`--console-parity` for hardware-equivalent JP runs once they land.
+- **Script addresses (was: `port/port_scripts.h` hardcoded USA).**
+  `Port_TranslateScriptAddr` (`port/port_script_addrs.c`) now remaps the
+  **entire** script bytecode section — all 576 data scripts, USA→EU/JP by exact
+  symbol lookup in the retail maps — not just the ~100 `GBA_script_*` macros.
+  This covers scripts referenced only by raw entity-data blobs in
+  `port/data_const_stubs.c` (e.g. `script_ZeldaOutsideLinksHouse`, the prologue
+  Business Scrub orchestrators). Those were previously untranslated and ran
+  garbage bytecode on JP/EU — the cause of the intro Zelda "wrong position" and
+  the prologue scrub not spitting.
+- **`port/port_script_funcs.c` native-call table.** Has per-region tables
+  (`sScriptFuncTable_JP` / `_EU`, selected at runtime via `REGION_IS_*`); the
+  two USA-only functions are excluded for JP.
+
+Still needing JP treatment:
+
+1. **Japanese text rendering.** Basic kana render (the intro `こっちよ` textbox
+   is correct), but the full JP text *system* (kanji 2-byte encoding, font
+   widths/layout) is unverified — audit menus/dialogue against this JP build.
+
+This is the remaining path from "JP boots" to "JP speedrun-faithful". Pair a JP
+build with `--console-parity` for hardware-equivalent JP runs.
 
 ## Related
 

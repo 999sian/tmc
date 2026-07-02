@@ -33,7 +33,6 @@
 #endif
 #include <stdio.h>
 
-
 // copy, erase, start
 #define NUM_FILE_OPERATIONS 3
 
@@ -560,8 +559,8 @@ extern void HandleFileStart(void);
 static void HandleFileRandoConfig(void);
 #endif
 static void (*const sFileScreenSubHandlers[])(void) = {
-    HandleFileSelect, HandleFileNew,  HandleFileLanguageSelect, HandleFileOptions,
-    HandleFileView,   HandleFileCopy, HandleFileDelete,         HandleFileStart,
+    HandleFileSelect,      HandleFileNew,  HandleFileLanguageSelect, HandleFileOptions,
+    HandleFileView,        HandleFileCopy, HandleFileDelete,         HandleFileStart,
 #ifdef PC_PORT
     HandleFileRandoConfig,
 #endif
@@ -594,7 +593,6 @@ static const u16 gUnk_080FC8DE[] = {
     0x01, 0x00, 0x20, 0x40, 0x60, 0x80, 0xa0, 0xc0, 0xe0, 0xc0, 0xa0, 0x80, 0x60, 0x40, 0x20,
 };
 
-
 #ifdef PC_PORT
 #define PORT_SETTINGS_OPEN gChooseFileState.unk_0x0
 #define PORT_SETTINGS_DIRTY gChooseFileState.unk_0x10
@@ -609,9 +607,9 @@ static const u16 gUnk_080FC8DE[] = {
 #define PORT_SETTINGS_ROW_COUNT 5
 #define PORT_PROFILE_ROW 4
 extern const char* Port_Save_GetActivePath(void);
-extern void        Port_Save_SetActivePath(const char* path);
-extern int         Port_Save_ListProfiles(char (*out)[64], int max);
-extern void        Port_Config_SetActiveSaveProfile(const char* path);
+extern void Port_Save_SetActivePath(const char* path);
+extern int Port_Save_ListProfiles(char (*out)[64], int max);
+extern void Port_Config_SetActiveSaveProfile(const char* path);
 
 /* Forward decl — defined later in this file. We need it for the
  * profile cycler so the slot tiles refresh on switch. */
@@ -620,12 +618,16 @@ static void ResetEmptyOrDeletedSaveFile(u32 index);
 static void Port_FileSelect_CycleProfile(int direction) {
     char profiles[32][64];
     const int n = Port_Save_ListProfiles(profiles, 32);
-    if (n == 0) return;
+    if (n == 0)
+        return;
 
     const char* active = Port_Save_GetActivePath();
     int cur = 0;
     for (int i = 0; i < n; ++i) {
-        if (strcmp(profiles[i], active) == 0) { cur = i; break; }
+        if (strcmp(profiles[i], active) == 0) {
+            cur = i;
+            break;
+        }
     }
     cur = (cur + direction + n) % n;
 
@@ -646,7 +648,6 @@ static const char* Port_FileSelect_ActiveProfileName(void) {
 #define PORT_SETTINGS_ROW_COUNT 4
 #endif
 
-
 static void sub_08050848(void);
 static void sub_0805086C(void);
 static void sub_08050940(void);
@@ -654,8 +655,8 @@ static void sub_08050940(void);
 extern bool Port_RandoSave_LoadSlot(int slot);
 extern void Rando_Reset(void);
 extern bool Rando_IsActive(void);
-extern void Rando_Runtime_OnNewFile(void);   /* port/rando/rando_runtime.c */
-extern void Rando_Runtime_Refresh(void);     /* port/rando/rando_runtime.c */
+extern void Rando_Runtime_OnNewFile(void);               /* port/rando/rando_runtime.c */
+extern void Rando_Runtime_Refresh(void);                 /* port/rando/rando_runtime.c */
 extern u32 WriteSaveFile(u32 index, SaveFile* saveFile); /* src/save.c */
 #endif
 
@@ -738,14 +739,30 @@ void SetFileSelectState(FileSelectState mode) {
     {
         const char* name = NULL;
         switch (mode) {
-            case STATE_NONE:        name = "File select. Choose a save file."; break;
-            case STATE_NEW:         name = "New file. Enter a name."; break;
-            case STATE_CHOOSE_LANG: name = "Language select."; break;
-            case STATE_OPTIONS:     name = "Options."; break;
-            case STATE_VIEW:        name = "File details. Press A to start, B to go back."; break;
-            case STATE_COPY:        name = "Copy file."; break;
-            case STATE_ERASE:       name = "Erase file."; break;
-            case STATE_START:       name = "Starting game."; break;
+            case STATE_NONE:
+                name = "File select. Choose a save file.";
+                break;
+            case STATE_NEW:
+                name = "New file. Enter a name.";
+                break;
+            case STATE_CHOOSE_LANG:
+                name = "Language select.";
+                break;
+            case STATE_OPTIONS:
+                name = "Options.";
+                break;
+            case STATE_VIEW:
+                name = "File details. Press A to start, B to go back.";
+                break;
+            case STATE_COPY:
+                name = "Copy file.";
+                break;
+            case STATE_ERASE:
+                name = "Erase file.";
+                break;
+            case STATE_START:
+                name = "Starting game.";
+                break;
 #ifdef PC_PORT
             case STATE_RANDOMIZER_CONFIG:
                 name = "Randomizer settings.";
@@ -753,7 +770,7 @@ void SetFileSelectState(FileSelectState mode) {
 #endif
         }
         if (name) {
-            PortTtsOptions opts = {0};
+            PortTtsOptions opts = { 0 };
             opts.priority = PORT_TTS_PRIO_URGENT;
             opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
             opts.dedupe = true;
@@ -792,6 +809,19 @@ void SetActiveSave(u32 idx) {
     if (idx < NUM_SAVE_SLOTS) {
         if (!Port_RandoSave_LoadSlot((int)idx)) {
             Rando_Reset();
+        } else if (Rando_IsActive() && !CheckGlobalFlag(EZERO_1ST)) {
+            /* Crash-window heal: the sidecar was written before the first
+             * EEPROM write of the new-file flow (Port_FileSelectRando_
+             * StartSlot), and a crash in between leaves an ACTIVE seed on a
+             * save that never received its one-shot grants (start inventory,
+             * story-skip globals — a documented softlock). Every granted
+             * rando save has EZERO_1ST set from birth (ApplyStorySkip), so
+             * its absence identifies the torn state; grants are idempotent
+             * flag/inventory writes, safe to re-apply. */
+            fprintf(stderr, "[RANDO] slot %u: active seed without new-file grants (torn commit) — re-applying\n", idx);
+            Rando_Runtime_OnNewFile();
+            MemCopy(&gSave, &gMapDataBottomSpecial.saves[idx], sizeof(gSave));
+            WriteSaveFile(idx, &gSave);
         }
     } else {
         Rando_Reset();
@@ -1211,7 +1241,6 @@ void sub_08050940(void) {
     }
 }
 
-
 #ifdef PC_PORT
 static void DrawFileSelectSettingsHint(void) {
     static const u8 sSettingsHintText[] = "L Settings";
@@ -1310,7 +1339,6 @@ static void DrawPortSettingsMenu(void) {
     s32 row;
     u32 fps;
 
-
     row = PORT_SETTINGS_ROW;
     fps = Port_Config_TargetFps();
     if (fps == 0) {
@@ -1327,23 +1355,21 @@ static void DrawPortSettingsMenu(void) {
              "%c Fullscreen %s\n"
              "%c Profile %s\n\n"
              "A Change  B Back",
-             row == 0 ? '>' : ' ', (unsigned)Port_PPU_WindowScale(),
-             row == 1 ? '>' : ' ', Port_PPU_PresentationModeName(),
-             row == 2 ? '>' : ' ', sFpsText,
-             row == 3 ? '>' : ' ', Port_PPU_IsFullscreen() ? "on" : "off",
-             row == PORT_PROFILE_ROW ? '>' : ' ', Port_FileSelect_ActiveProfileName());
+             row == 0 ? '>' : ' ', (unsigned)Port_PPU_WindowScale(), row == 1 ? '>' : ' ',
+             Port_PPU_PresentationModeName(), row == 2 ? '>' : ' ', sFpsText, row == 3 ? '>' : ' ',
+             Port_PPU_IsFullscreen() ? "on" : "off", row == PORT_PROFILE_ROW ? '>' : ' ',
+             Port_FileSelect_ActiveProfileName());
 #else
-    snprintf(sPortSettingsText, sizeof(sPortSettingsText),
-             "PORT SETTINGS\n\n"
-             "%c Scale %ux\n"
-             "%c Filter %s\n"
-             "%c FPS %s\n"
-             "%c Fullscreen %s\n\n"
-             "A Change  B Back",
-             row == 0 ? '>' : ' ', (unsigned)Port_PPU_WindowScale(),
-             row == 1 ? '>' : ' ', Port_PPU_PresentationModeName(),
-             row == 2 ? '>' : ' ', sFpsText,
-             row == 3 ? '>' : ' ', Port_PPU_IsFullscreen() ? "on" : "off");
+                snprintf(sPortSettingsText, sizeof(sPortSettingsText),
+                         "PORT SETTINGS\n\n"
+                         "%c Scale %ux\n"
+                         "%c Filter %s\n"
+                         "%c FPS %s\n"
+                         "%c Fullscreen %s\n\n"
+                         "A Change  B Back",
+                         row == 0 ? '>' : ' ', (unsigned)Port_PPU_WindowScale(), row == 1 ? '>' : ' ',
+                         Port_PPU_PresentationModeName(), row == 2 ? '>' : ' ', sFpsText, row == 3 ? '>' : ' ',
+                         Port_PPU_IsFullscreen() ? "on" : "off");
 #endif
 
     MemClear(&gBG0Buffer, sizeof(gBG0Buffer));
@@ -1357,7 +1383,6 @@ static void DrawPortSettingsMenu(void) {
     gScreen.bg0.updated = 1;
 }
 #endif
-
 
 void sub_08050A64(u32 idx) {
     if (idx >= NUM_SAVE_SLOTS || gMapDataBottomSpecial.saveStatus[idx] != SAVE_VALID) {
@@ -1427,15 +1452,21 @@ void sub_08050AFC(u32 idx) {
         if (idx < NUM_SAVE_SLOTS) {
             const char* status = "empty";
             switch ((SaveStatus)gMapDataBottomSpecial.saveStatus[idx]) {
-                case SAVE_VALID:   status = "in progress"; break;
-                case SAVE_DELETED: status = "deleted"; break;
-                case SAVE_EMPTY:   status = "empty"; break;
+                case SAVE_VALID:
+                    status = "in progress";
+                    break;
+                case SAVE_DELETED:
+                    status = "deleted";
+                    break;
+                case SAVE_EMPTY:
+                    status = "empty";
+                    break;
             }
             snprintf(buf, sizeof(buf), "File %u, %s.", (unsigned)(idx + 1), status);
         } else {
             snprintf(buf, sizeof(buf), "Language select.");
         }
-        PortTtsOptions opts = {0};
+        PortTtsOptions opts = { 0 };
         opts.priority = PORT_TTS_PRIO_URGENT;
         opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
         opts.dedupe = true;

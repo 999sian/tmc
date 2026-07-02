@@ -317,7 +317,8 @@ void Scroll5Sub1(RoomControls* controls) {
     controls->scrollSubAction = 2;
     controls->unk_18 = sub_080803D0() + 6;
     gUnk_0200B640 = sub_08080278();
-    LoadMapData(gCaveBorderMapData[gDiggingCaveEntranceTransition.entrance->type][0]);
+    /* gCaveBorderMapData is a compiled table — baked USA offsets need remap. */
+    LoadMapDataB(gCaveBorderMapData[gDiggingCaveEntranceTransition.entrance->type][0]);
     sub_0807C8B0(gMapTop.mapData, controls->width >> 4, controls->height >> 4);
     RenderMapLayerToSubTileMap(gMapDataTopSpecial, &gMapTop);
 }
@@ -641,7 +642,8 @@ const Transition* FindApplicableAreaTransition(u32 pos_x, u32 pos_y) {
     }
     while (transition->warp_type != WARP_TYPE_END_OF_LIST) {
         u32 warpType = transition->warp_type;
-        if (warpType < 32 && ((1U << warpType) & warp_types) != 0 && IsPosInTransitionRect(transition, pos_x, pos_y, 0)) {
+        if (warpType < 32 && ((1U << warpType) & warp_types) != 0 &&
+            IsPosInTransitionRect(transition, pos_x, pos_y, 0)) {
             return transition;
         }
         transition++;
@@ -805,14 +807,17 @@ void sub_08080974(u32 arg0, u32 arg1) {
     {
         extern int Port_Widescreen_ShouldStretch(void);
         s32 stretch = Port_Widescreen_ShouldStretch();
-        s32 half  = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
+        s32 half = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
         s32 viewW = stretch ? 240 : MODE1_GBA_WIDTH;
         s32 want = (s32)arg0 - half;
         s32 lo = (s32)var0;
         s32 hi = (s32)var0 + (s32)roomControls->width - viewW;
-        if (hi < lo) hi = lo;
-        if (want < lo) want = lo;
-        if (want > hi) want = hi;
+        if (hi < lo)
+            hi = lo;
+        if (want < lo)
+            want = lo;
+        if (want > hi)
+            want = hi;
         roomControls->scroll_x = (s16)want;
     }
 #else
@@ -859,14 +864,17 @@ void sub_080809D4(void) {
     {
         extern int Port_Widescreen_ShouldStretch(void);
         s32 stretch = Port_Widescreen_ShouldStretch();
-        s32 half  = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
+        s32 half = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
         s32 viewW = stretch ? 240 : MODE1_GBA_WIDTH;
         s32 want = (s32)x - half;
         s32 lo = (s32)var0;
         s32 hi = (s32)var0 + (s32)roomControls->width - viewW;
-        if (hi < lo) hi = lo;          /* room narrower than the view → pin left */
-        if (want < lo) want = lo;
-        if (want > hi) want = hi;
+        if (hi < lo)
+            hi = lo; /* room narrower than the view → pin left */
+        if (want < lo)
+            want = lo;
+        if (want > hi)
+            want = hi;
         roomControls->scroll_x = (s16)want;
     }
 #else
@@ -985,7 +993,8 @@ void UpdateScreenShake(void) {
 }
 
 void sub_08080C80(MapDataDefinition* dataDefinition) {
-    LoadMapData(dataDefinition);
+    /* Sole caller passes compiled gCaveBorderMapData rows (baked USA offsets). */
+    LoadMapDataB(dataDefinition);
     sub_0807C8B0(gMapBottom.mapData, gRoomControls.width / 16, gRoomControls.height / 16);
     sub_0807C8B0(gMapTop.mapData, gRoomControls.width / 16, gRoomControls.height / 16);
 }

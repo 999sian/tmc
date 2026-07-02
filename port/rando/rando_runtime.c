@@ -21,28 +21,21 @@
 #include <string.h>
 
 #define RANDO_WINDCREST_SHIFT 24
-static_assert(WINDCREST_MT_CRENEL == 24 && WINDCREST_MINISH_WOODS == 31,
-              "windcrest bit layout changed");
+static_assert(WINDCREST_MT_CRENEL == 24 && WINDCREST_MINISH_WOODS == 31, "windcrest bit layout changed");
 
 /* First-pickup "seen" latches */
 static const u8 kSeenItems[] = {
-    ITEM_NONE,
-    ITEM_MAP,
-    ITEM_KINSTONE_BAG,
-    ITEM_SHELLS,
-    ITEM_DUNGEON_MAP, ITEM_COMPASS, ITEM_BIG_KEY, ITEM_SMALL_KEY,
-    ITEM_RUPEE1, ITEM_RUPEE5, ITEM_RUPEE20, ITEM_RUPEE50, ITEM_RUPEE100, ITEM_RUPEE200,
-    ITEM_KINSTONE, ITEM_BOMBS5, ITEM_ARROWS5, ITEM_HEART,
-    ITEM_FAIRY, ITEM_SHELLS30, ITEM_HEART_CONTAINER, ITEM_HEART_PIECE,
-    ITEM_WALLET, ITEM_BOMBBAG, ITEM_LARGE_QUIVER,
-    ITEM_BOMBS10, ITEM_BOMBS30, ITEM_ARROWS10, ITEM_ARROWS30,
+    ITEM_NONE,         ITEM_MAP,       ITEM_KINSTONE_BAG,    ITEM_SHELLS,      ITEM_DUNGEON_MAP, ITEM_COMPASS,
+    ITEM_BIG_KEY,      ITEM_SMALL_KEY, ITEM_RUPEE1,          ITEM_RUPEE5,      ITEM_RUPEE20,     ITEM_RUPEE50,
+    ITEM_RUPEE100,     ITEM_RUPEE200,  ITEM_KINSTONE,        ITEM_BOMBS5,      ITEM_ARROWS5,     ITEM_HEART,
+    ITEM_FAIRY,        ITEM_SHELLS30,  ITEM_HEART_CONTAINER, ITEM_HEART_PIECE, ITEM_WALLET,      ITEM_BOMBBAG,
+    ITEM_LARGE_QUIVER, ITEM_BOMBS10,   ITEM_BOMBS30,         ITEM_ARROWS10,    ITEM_ARROWS30,
 };
 
 static const u16 kDigFlags[] = {
-    FLAG_BANK_1 + KUMOUE_01_T4, FLAG_BANK_1 + KUMOUE_01_T5, FLAG_BANK_1 + KUMOUE_01_T6,
-    FLAG_BANK_1 + KUMOUR_01_K0, FLAG_BANK_1 + KUMOUR_01_K1, FLAG_BANK_1 + KUMOUR_01_K2,
-    FLAG_BANK_1 + KUMOUR_01_K3,
-    FLAG_BANK_2 + KOBITOYAMA_00_R00, FLAG_BANK_2 + KOBITOYAMA_00_R02,
+    FLAG_BANK_1 + KUMOUE_01_T4,      FLAG_BANK_1 + KUMOUE_01_T5,      FLAG_BANK_1 + KUMOUE_01_T6,
+    FLAG_BANK_1 + KUMOUR_01_K0,      FLAG_BANK_1 + KUMOUR_01_K1,      FLAG_BANK_1 + KUMOUR_01_K2,
+    FLAG_BANK_1 + KUMOUR_01_K3,      FLAG_BANK_2 + KOBITOYAMA_00_R00, FLAG_BANK_2 + KOBITOYAMA_00_R02,
     FLAG_BANK_2 + KOBITOYAMA_00_R05, FLAG_BANK_2 + KOBITOYAMA_00_R07,
 };
 
@@ -212,7 +205,7 @@ void Rando_Runtime_Refresh(void) {
     if (!sRuntime.active) {
         return;
     }
-    
+
     RandomizerSettings settings = Rando_GetSettings();
     sRuntime.allow_homewarp = settings.homewarp;
     sRuntime.open_tingle = settings.open_world;
@@ -270,22 +263,27 @@ void Rando_Runtime_OnNewFile(void) {
 unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestIndex) {
     TileEntity* te = (TileEntity*)GetRoomProperty(area, room, 3);
     int index = 0;
-    if (te == NULL) return 0xFF;
-    for (int i = 0; te[i].tilePos != 0; ++i) {
-        if (te[i].type != SMALL_CHEST && te[i].type != BIG_CHEST) continue;
-        if (index == (int)chestIndex) return te[i].localFlag;
+    if (te == NULL)
+        return 0xFF;
+    for (int i = 0; i < 256 && te[i].type != 0; ++i) {
+        if (te[i].type != SMALL_CHEST && te[i].type != BIG_CHEST)
+            continue;
+        if (index == (int)chestIndex)
+            return te[i].localFlag;
         index++;
     }
     return 0xFF;
 }
 
 unsigned Rando_GetDungeonKeyCount(unsigned dungeon_idx) {
-    if (dungeon_idx >= 16) return 0;
+    if (dungeon_idx >= 16)
+        return 0;
     return gSave.dungeonKeys[dungeon_idx];
 }
 
 bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx) {
-    if (dungeon_idx >= 16) return false;
+    if (dungeon_idx >= 16)
+        return false;
     return (gSave.dungeonItems[dungeon_idx] & 2) != 0;
 }
 
@@ -318,8 +316,7 @@ bool Rando_Homewarp_Request(void) {
 }
 
 bool Rando_Homewarp_HintVisible(void) {
-    return Rando_Runtime_AllowHomewarp() &&
-           gPauseMenuOptions.screen == PauseMenuScreen_2 &&
+    return Rando_Runtime_AllowHomewarp() && gPauseMenuOptions.screen == PauseMenuScreen_2 &&
            !(gPlayerState.flags & PL_MINISH);
 }
 

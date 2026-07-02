@@ -150,7 +150,7 @@ BgAnimation gBgAnimations[MAX_BG_ANIMATIONS];
 u8 gTextGfxBuffer[0xD00];
 u8 gPaletteBufferBackup[0x400];
 u8 gCollidableCount;
-Entity* gCollidableList[MAX_ENTITIES];
+Entity* gCollidableList[MAX_COLLIDABLE_ENTITIES]; /* GBA reserves 80 slots — see entity.h */
 u32 gUnk_02000020;
 
 // gFrameObjLists — sprite frame data (200KB, self-relative offsets)
@@ -336,9 +336,9 @@ u8 gUnk_03001020[sizeof(Screen)] __attribute__((aligned(4)));
  * subtaskFastTravel.c NULL-deref (#53 second-stage). Caught with a
  * tripwire pinpointing m4aSoundInit. */
 #include "gba/m4a.h"
-#define M4A_MAX_INFO_INDEX  0x1C  /* gMPlayInfos uses 0x00..0x1B */
-#define M4A_MAX_INFO2_INDEX 0x4   /* gMPlayInfos2 uses 0x0..0x3 */
-#define M4A_MAX_TRACK_INDEX 0x52  /* gMPlayTracks uses 0x00..0x51 (BGM = 0x46+12) */
+#define M4A_MAX_INFO_INDEX 0x1C  /* gMPlayInfos uses 0x00..0x1B */
+#define M4A_MAX_INFO2_INDEX 0x4  /* gMPlayInfos2 uses 0x0..0x3 */
+#define M4A_MAX_TRACK_INDEX 0x52 /* gMPlayTracks uses 0x00..0x51 (BGM = 0x46+12) */
 u8 gMPlayInfos[M4A_MAX_INFO_INDEX * sizeof(MusicPlayerInfo)] __attribute__((aligned(8)));
 u8 gMPlayInfos2[M4A_MAX_INFO2_INDEX * sizeof(MusicPlayerInfo)] __attribute__((aligned(8)));
 u8 gMPlayTracks[M4A_MAX_TRACK_INDEX * sizeof(MusicPlayerTrack)] __attribute__((aligned(8)));
@@ -963,9 +963,7 @@ int Port_Widescreen_IsActive(void) {
     if (gPlayerState.controlMode == CONTROL_DISABLED || (gMessage.state & MESSAGE_ACTIVE) != 0) {
         return 0;
     }
-    return (gMain.task == TASK_GAME &&
-            Port_Config_WidescreenEnabled() &&
-            !Port_Widescreen_ShouldStretch()) ? 1 : 0;
+    return (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled() && !Port_Widescreen_ShouldStretch()) ? 1 : 0;
 }
 
 int Port_Widescreen_EffectiveViewWidth(void) {
@@ -1015,15 +1013,15 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
     /* First reveal world tile col, continuing the native edge:
      * 2*col16 + CLIP/8 + (BGHOFS>=8) == (xdiff>>3) + CLIP/8. */
     s32 ws_base_world_col = (xdiff >> 3) + (MODE1_GBA_BG_CLIP_X / 8);
-    virtuappu_mode1_ws_shadow_base_tile[bg_index] =
-        (MODE1_GBA_BG_CLIP_X / 8) + (((xdiff & 0xf) >= 8) ? 1 : 0);
+    virtuappu_mode1_ws_shadow_base_tile[bg_index] = (MODE1_GBA_BG_CLIP_X / 8) + (((xdiff & 0xf) >= 8) ? 1 : 0);
 
     enum { kMapStride = 128, kMapRows = 128 };
     for (int sr = 0; sr < MODE1_WS_SHADOW_ROWS; sr++) {
         u16* row_dst = shadow + (size_t)sr * MODE1_WS_SHADOW_COLS;
         s32 world_row = 2 * row16 - 1 + sr;
         if (world_row < 0 || world_row >= kMapRows) {
-            for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++) row_dst[C] = 0;
+            for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++)
+                row_dst[C] = 0;
             continue;
         }
         u16* row_src = mapSpecial + (size_t)world_row * kMapStride;
@@ -1043,16 +1041,21 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
  * hardcoded shadow[1]=bottom/shadow[2]=top was swapped and showed garbage.) */
 static int Port_WidescreenPpuBgForControl(u32 control) {
     u32 sb = (control >> 8) & 0x1fu;
-    if (((gScreen.bg0.control >> 8) & 0x1fu) == sb) return 0;
-    if (((gScreen.bg1.control >> 8) & 0x1fu) == sb) return 1;
-    if (((gScreen.bg2.control >> 8) & 0x1fu) == sb) return 2;
-    if (((gScreen.bg3.control >> 8) & 0x1fu) == sb) return 3;
+    if (((gScreen.bg0.control >> 8) & 0x1fu) == sb)
+        return 0;
+    if (((gScreen.bg1.control >> 8) & 0x1fu) == sb)
+        return 1;
+    if (((gScreen.bg2.control >> 8) & 0x1fu) == sb)
+        return 2;
+    if (((gScreen.bg3.control >> 8) & 0x1fu) == sb)
+        return 3;
     return -1;
 }
 
 /* Called per-VBlank from src/interrupts.c::UpdateDisplayControls. */
 void Port_Widescreen_UpdateShadows(void) {
-    for (int i = 0; i < MODE1_GBA_BG_COUNT; i++) virtuappu_mode1_ws_shadow[i] = NULL;
+    for (int i = 0; i < MODE1_GBA_BG_COUNT; i++)
+        virtuappu_mode1_ws_shadow[i] = NULL;
     virtuappu_mode1_ws_hud_right_anchor = 0;
 
     if (!Port_Widescreen_IsActive()) {
@@ -1062,19 +1065,30 @@ void Port_Widescreen_UpdateShadows(void) {
 
     if (gMapBottom.bgSettings != NULL) {
         int bg = Port_WidescreenPpuBgForControl(gMapBottom.bgSettings->control);
-        if (bg >= 0) Port_WidescreenShadow_Populate(bg, gMapDataBottomSpecial, sWsShadowBG1);
+        if (bg >= 0)
+            Port_WidescreenShadow_Populate(bg, gMapDataBottomSpecial, sWsShadowBG1);
     }
     if (gMapTop.bgSettings != NULL) {
         int bg = Port_WidescreenPpuBgForControl(gMapTop.bgSettings->control);
-        if (bg >= 0) Port_WidescreenShadow_Populate(bg, gMapDataTopSpecial, sWsShadowBG2);
+        if (bg >= 0)
+            Port_WidescreenShadow_Populate(bg, gMapDataTopSpecial, sWsShadowBG2);
     }
 }
 #else
-void Port_Widescreen_UpdateShadows(void) { /* no-op at native 240 */ }
-int Port_Widescreen_ShouldStretch(void) { return 0; }
-int Port_Widescreen_IsActive(void) { return 0; }
-int Port_Widescreen_EffectiveViewWidth(void) { return 240; }
-int Port_Widescreen_HudRightAnchor(void) { return 0; }
+void Port_Widescreen_UpdateShadows(void) { /* no-op at native 240 */
+}
+int Port_Widescreen_ShouldStretch(void) {
+    return 0;
+}
+int Port_Widescreen_IsActive(void) {
+    return 0;
+}
+int Port_Widescreen_EffectiveViewWidth(void) {
+    return 240;
+}
+int Port_Widescreen_HudRightAnchor(void) {
+    return 0;
+}
 #endif
 
 /*
@@ -1770,11 +1784,7 @@ extern void Subtask_FastTravel_2(void);
 extern void Subtask_FastTravel_3(void);
 extern void Subtask_FastTravel_4(void);
 void (*const Subtask_FastTravel_Functions[])(void) = {
-    Subtask_FastTravel_0,
-    Subtask_FastTravel_1,
-    Subtask_FastTravel_2,
-    Subtask_FastTravel_3,
-    Subtask_FastTravel_4,
+    Subtask_FastTravel_0, Subtask_FastTravel_1, Subtask_FastTravel_2, Subtask_FastTravel_3, Subtask_FastTravel_4,
 };
 /* Subtask_MapHint_Functions — the matching usage in src/subtask/subtaskMapHint.c
  * defines a *static local* array of the same name with proper native
@@ -1958,4 +1968,3 @@ u32 CheckRectOnScreen(s32 x, s32 y, u32 halfW, u32 halfH) {
         return 0;
     return 1;
 }
-

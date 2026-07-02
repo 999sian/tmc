@@ -227,9 +227,9 @@ void FigurineDevice_Action3(FigurineDeviceEntity* this) {
             if (!CheckRoomFlag(2)) {
                 super->spriteSettings.draw = 0;
                 if (REGION_IS_EU) {
-                ClearRoomFlag(9);
+                    ClearRoomFlag(9);
                 } else {
-                ClearRoomFlag(4);
+                    ClearRoomFlag(4);
                 }
                 DeleteThisEntity();
             }
@@ -269,34 +269,34 @@ void FigurineDevice_Action4(FigurineDeviceEntity* this) {
             }
             old_81 = this->shells;
             if (!REGION_IS_EU) {
-            if ((gInput.heldKeys & R_BUTTON) != 0) {
-                tmp = 10;
+                if ((gInput.heldKeys & R_BUTTON) != 0) {
+                    tmp = 10;
+                } else {
+                    tmp = 1;
+                }
+                switch (REGION_IS_JP ? gInput.menuScrollKeys : gInput.menuScrollKeys & ~R_BUTTON) {
+                    case DPAD_UP:
+                        FigurineDevice_ChangeShellAmount(this, tmp);
+                        break;
+                    case DPAD_DOWN:
+                        FigurineDevice_ChangeShellAmount(this, -tmp);
+                        break;
+                }
+                if (old_81 != this->shells) {
+                    sub_080882A8(this);
+                }
             } else {
-                tmp = 1;
-            }
-            switch (REGION_IS_JP ? gInput.menuScrollKeys : gInput.menuScrollKeys & ~R_BUTTON) {
-                case DPAD_UP:
-                    FigurineDevice_ChangeShellAmount(this, tmp);
-                    break;
-                case DPAD_DOWN:
-                    FigurineDevice_ChangeShellAmount(this, -tmp);
-                    break;
-            }
-            if (old_81 != this->shells) {
-                sub_080882A8(this);
-            }
-            } else {
-            switch (gInput.menuScrollKeys) {
-                case DPAD_UP:
-                    FigurineDevice_ChangeShellAmount(this, 1);
-                    break;
-                case DPAD_DOWN:
-                    FigurineDevice_ChangeShellAmount(this, -1);
-                    break;
-            }
-            if (old_81 != this->shells) {
-                sub_080882A8(this);
-            }
+                switch (gInput.menuScrollKeys) {
+                    case DPAD_UP:
+                        FigurineDevice_ChangeShellAmount(this, 1);
+                        break;
+                    case DPAD_DOWN:
+                        FigurineDevice_ChangeShellAmount(this, -1);
+                        break;
+                }
+                if (old_81 != this->shells) {
+                    sub_080882A8(this);
+                }
             }
             break;
         case 2:
@@ -305,8 +305,8 @@ void FigurineDevice_Action4(FigurineDeviceEntity* this) {
             SetRoomFlag(3);
             MessageFromTarget(TEXT_INDEX(TEXT_CARLOV, 0x1a));
             if (!REGION_IS_EU) {
-            gMessage.textWindowPosX = 1;
-            gMessage.textWindowPosY = 0xc;
+                gMessage.textWindowPosX = 1;
+                gMessage.textWindowPosY = 0xc;
             }
             gMessage.rupees = this->shells;
             break;
@@ -430,62 +430,73 @@ void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDiffe
 #ifdef MULTI_REGION
     {
 #endif
-    s32 newAmount;
-    s32 newChance;
-    s32 prevChance, prevShells;
+        s32 newAmount;
+        s32 newChance;
+        s32 prevChance, prevShells;
 
-    if (CheckLocalFlag(SHOP07_COMPLETE)) {
-        FigurineDevice_PlayErrorSound(this);
-        return;
-    }
-
-    // This could probably be done without prevChance and prevShells
-    prevChance = this->chance;
-    newChance = prevChance + shellDifference;
-    if (shellDifference < 0) {
-        if (newChance < this->prevChance) {
-            if (this->chance != this->prevChance) {
-                this->chance = this->prevChance;
-                this->shells = 1;
-                SoundReq(SFX_TEXTBOX_CHOICE);
-            } else {
-                FigurineDevice_PlayErrorSound(this);
-            }
-        } else {
-            this->chance = newChance;
-            this->shells += shellDifference;
-            SoundReq(SFX_TEXTBOX_CHOICE);
-        }
-        return;
-    }
-    prevShells = this->shells;
-    newAmount = prevShells + shellDifference;
-    if (newAmount > gSave.stats.shells) {
-        if (gSave.stats.shells != this->shells) {
-            newAmount = gSave.stats.shells;
-            shellDifference = (gSave.stats.shells - this->shells);
-            newChance = prevChance + shellDifference;
-#if defined(MULTI_REGION) || defined(JP)
-            if (
-#ifdef MULTI_REGION
-                REGION_IS_JP &&
-#endif
-                newChance > 100) {
-                newChance = 100;
-                shellDifference = (newChance - prevChance);
-                newAmount = prevShells + shellDifference;
-            }
-#endif
-        } else {
+        if (CheckLocalFlag(SHOP07_COMPLETE)) {
             FigurineDevice_PlayErrorSound(this);
             return;
         }
-    }
+
+        // This could probably be done without prevChance and prevShells
+        prevChance = this->chance;
+        newChance = prevChance + shellDifference;
+        if (shellDifference < 0) {
+            if (newChance < this->prevChance) {
+                if (this->chance != this->prevChance) {
+                    this->chance = this->prevChance;
+                    this->shells = 1;
+                    SoundReq(SFX_TEXTBOX_CHOICE);
+                } else {
+                    FigurineDevice_PlayErrorSound(this);
+                }
+            } else {
+                this->chance = newChance;
+                this->shells += shellDifference;
+                SoundReq(SFX_TEXTBOX_CHOICE);
+            }
+            return;
+        }
+        prevShells = this->shells;
+        newAmount = prevShells + shellDifference;
+        if (newAmount > gSave.stats.shells) {
+            if (gSave.stats.shells != this->shells) {
+                newAmount = gSave.stats.shells;
+                shellDifference = (gSave.stats.shells - this->shells);
+                newChance = prevChance + shellDifference;
+#if defined(MULTI_REGION) || defined(JP)
+                if (
+#ifdef MULTI_REGION
+                    REGION_IS_JP &&
+#endif
+                    newChance > 100) {
+                    newChance = 100;
+                    shellDifference = (newChance - prevChance);
+                    newAmount = prevShells + shellDifference;
+                }
+#endif
+            } else {
+                FigurineDevice_PlayErrorSound(this);
+                return;
+            }
+        }
 #if defined(MULTI_REGION)
-    // JP: `else if (newChance > 100)` — the clamp only runs when the first `if`
-    // did not. USA/EU: a plain `if (newChance > 100)` that runs regardless.
-    else if (REGION_IS_JP) {
-        if (newChance > 100) {
+        // JP: `else if (newChance > 100)` — the clamp only runs when the first `if`
+        // did not. USA/EU: a plain `if (newChance > 100)` that runs regardless.
+        else if (REGION_IS_JP) {
+            if (newChance > 100) {
+                if (this->chance == 100) {
+                    FigurineDevice_PlayErrorSound(this);
+                    return;
+                } else {
+                    newChance = 100;
+                    shellDifference = (newChance - prevChance);
+                    newAmount = prevShells + shellDifference;
+                }
+            }
+        }
+        if (!REGION_IS_JP && newChance > 100) {
             if (this->chance == 100) {
                 FigurineDevice_PlayErrorSound(this);
                 return;
@@ -495,17 +506,6 @@ void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDiffe
                 newAmount = prevShells + shellDifference;
             }
         }
-    }
-    if (!REGION_IS_JP && newChance > 100) {
-        if (this->chance == 100) {
-            FigurineDevice_PlayErrorSound(this);
-            return;
-        } else {
-            newChance = 100;
-            shellDifference = (newChance - prevChance);
-            newAmount = prevShells + shellDifference;
-        }
-    }
 #elif defined(JP)
     else if (newChance > 100) {
         if (this->chance == 100) {
@@ -530,9 +530,9 @@ void FigurineDevice_ChangeShellAmount(FigurineDeviceEntity* this, s32 shellDiffe
     }
 #endif
 
-    this->chance = newChance;
-    this->shells = newAmount;
-    SoundReq(SFX_TEXTBOX_CHOICE);
+        this->chance = newChance;
+        this->shells = newAmount;
+        SoundReq(SFX_TEXTBOX_CHOICE);
 #ifdef MULTI_REGION
     }
 #endif
@@ -560,7 +560,7 @@ void sub_0808804C(FigurineDeviceEntity* this) {
         result = 4;
     } else if (CheckGlobalFlag(LV3_CLEAR)) {
         result = 3;
-    } else if (CheckLocalFlagByBank(FLAG_BANK_1, SOUGEN_08_TORITSUKI)) {
+    } else if (CheckLocalFlagByBankB(FLAG_BANK_1, SOUGEN_08_TORITSUKI)) {
         result = 2;
     } else if (CheckGlobalFlag(LV2_CLEAR)) {
         result = 1;
@@ -615,7 +615,8 @@ bool32 sub_08088160(FigurineDeviceEntity* this, s32 param_2) {
         switch (ptr->unk_6) {
             case 0x8:
             case 0x40:
-                if (CheckLocalFlagByBank(ptr->bank, ptr->flag))
+                /* gUnk_080FC3E4[_eu/_jp] are compiled USA-baseline tables. */
+                if (CheckLocalFlagByBankB(ptr->bank, ptr->flag))
                     result = TRUE;
                 break;
             case 0x10:
@@ -709,7 +710,6 @@ bool32 sub_08088160(FigurineDeviceEntity* this, s32 param_2) {
                         }
                         break;
 #endif
-
                 }
         }
     }
@@ -918,7 +918,7 @@ void FigurineDevice_NoFigurinesLeftMessage(void) {
         gMessage.rupees = 5;
     }
     if (!REGION_IS_EU) {
-    gPlayerEntity.base.animationState = 6;
+        gPlayerEntity.base.animationState = 6;
     }
 }
 
@@ -983,8 +983,7 @@ void FigurineDevice_LostOrFinishedMessage(void) {
         gSave.stats.hasAllFigurines = 1;
 #ifdef PC_PORT
         (void)Rando_OverrideLocationKey(
-            Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0), &item,
-            &subtype);
+            Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0), &item, &subtype);
 #endif
         CreateItemEntity(item, subtype, 0);
         SetGlobalFlag(FIGURE_ALLCOMP);
@@ -1013,4 +1012,3 @@ void sub_08088658(FigurineDeviceEntity* this, ScriptExecutionContext* context) {
 }
 #endif
 #endif
-

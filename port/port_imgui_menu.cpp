@@ -27,9 +27,9 @@
 
 /* .glslp runtime hooks (port_glslp_runtime.cpp). File-scope so the F8
  * preset-picker lambda below can call them through C linkage. */
-extern "C" int  Port_GlslpRuntime_Load(const char*);
+extern "C" int Port_GlslpRuntime_Load(const char*);
 extern "C" void Port_GlslpRuntime_Unload(void);
-extern "C" int  Port_GlslpRuntime_IsActive(void);
+extern "C" int Port_GlslpRuntime_IsActive(void);
 #include <backends/imgui_impl_sdl3.h>
 #include <backends/imgui_impl_sdlrenderer3.h>
 #ifdef TMC_GPU_RENDERER
@@ -39,10 +39,10 @@ extern "C" int  Port_GlslpRuntime_IsActive(void);
 
 #include "port_debug_query.h"
 #include "port_debug_actions.h"
-#include "port_runtime_config.h"  /* PortInput enum (PORT_INPUT_*) */
-#include "item_ids.h"             /* ITEM_* / BOTTLE_CHARM_* enum ids (C++-safe split header) */
-#include <cstring>                /* strcmp — group-header breaks in the item toggle list */
-#include <cstdio>                 /* snprintf — dungeon selector labels */
+#include "port_runtime_config.h" /* PortInput enum (PORT_INPUT_*) */
+#include "item_ids.h"            /* ITEM_* / BOTTLE_CHARM_* enum ids (C++-safe split header) */
+#include <cstring>               /* strcmp — group-header breaks in the item toggle list */
+#include <cstdio>                /* snprintf — dungeon selector labels */
 
 extern "C" const u8* gTranslations[];
 extern "C" void Port_ApplyLanguage(void);
@@ -51,9 +51,9 @@ extern "C" void Port_ApplyLanguage(void);
 #include "port_gpu_renderer.h"
 #include "port_prelaunch_logo.h"
 #include "port_reborn.h"
-#include "port_discord_rpc.h"     /* Port_DiscordRpc_IsEnabled / SetEnabled */
-#include "port_tts.h"             /* Port_TTS_* — accessibility tab + focus reader */
-#include "port_a11y_cues.h"       /* Port_A11y_ScanSurroundings — navigation cues */
+#include "port_discord_rpc.h" /* Port_DiscordRpc_IsEnabled / SetEnabled */
+#include "port_tts.h"         /* Port_TTS_* — accessibility tab + focus reader */
+#include "port_a11y_cues.h"   /* Port_A11y_ScanSurroundings — navigation cues */
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
 #include "rando/rando_file_menu.h"
@@ -83,11 +83,11 @@ bool CheckGlobalFlag(unsigned flag);
  * legacy file exposes a small accessor API just for us. */
 extern "C" {
 bool Port_DebugMenu_IsOpen(void);
-int  Port_DebugMenu_PageDepth(void);
+int Port_DebugMenu_PageDepth(void);
 const char* Port_DebugMenu_PageTitle(int depth);
-int  Port_DebugMenu_PageItemCount(int depth);
+int Port_DebugMenu_PageItemCount(int depth);
 const char* Port_DebugMenu_PageItemLabel(int depth, int idx);
-int  Port_DebugMenu_PageCursor(int depth);
+int Port_DebugMenu_PageCursor(int depth);
 void Port_DebugMenu_PageSetCursor(int depth, int idx);
 void Port_DebugMenu_PageActivate(int depth, int idx);   /* Enter on item */
 void Port_DebugMenu_PageCycleLeft(int depth, int idx);  /* Left arrow */
@@ -96,19 +96,22 @@ const char* Port_DebugMenu_Toast(void);                 /* NULL if expired */
 }
 
 static bool sImGuiInited = false;
-static bool sRibbonEnabled = true;         /* Office-style ribbon at top */
+static bool sRibbonEnabled = true; /* Office-style ribbon at top */
 static SDL_Window* sWindow = nullptr;
 static SDL_Renderer* sRenderer = nullptr;
 
 extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
-    if (sImGuiInited) return;
-    if (!window) return;
+    if (sImGuiInited)
+        return;
+    if (!window)
+        return;
     /* On GPU builds renderer is intentionally NULL — Port_PPU_Init passes
      * null when the SDL_GPU pipeline owns the swapchain. The GPU branch
      * below handles that case; the SDL_Renderer branch still requires
      * a non-null renderer. */
 #ifndef TMC_GPU_RENDERER
-    if (!renderer) return;
+    if (!renderer)
+        return;
 #endif
 
     /* Apply the persisted F8 menu style (ribbon vs classic) now that config
@@ -118,7 +121,7 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr;  /* don't write imgui.ini next to binary */
+    io.IniFilename = nullptr; /* don't write imgui.ini next to binary */
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     /* Gamepad nav so Steam Deck users (and anyone on a controller) can
      * drive the menu without keyboard/mouse. SDL3 backend forwards the
@@ -149,14 +152,14 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
     style.ScrollbarRounding = 10.0f;
     style.TabRounding = 8.0f;
     style.GrabRounding = 8.0f;
-    style.WindowBorderSize = 0.0f;               /* card look — solid fills, no outline */
+    style.WindowBorderSize = 0.0f; /* card look — solid fills, no outline */
     style.FrameBorderSize = 0.0f;
     style.PopupBorderSize = 0.0f;
     style.WindowPadding = ImVec2(18, 16);
-    style.FramePadding = ImVec2(14, 9);          /* bigger touch targets */
+    style.FramePadding = ImVec2(14, 9); /* bigger touch targets */
     style.ItemSpacing = ImVec2(12, 10);
     style.ItemInnerSpacing = ImVec2(10, 6);
-    style.ScrollbarSize = 18.0f;                 /* finger-draggable */
+    style.ScrollbarSize = 18.0f; /* finger-draggable */
     style.GrabMinSize = 18.0f;
     style.IndentSpacing = 22.0f;
     /* Bump the global font size 1.4× without re-loading a font atlas.
@@ -167,52 +170,52 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
     ImVec4* colors = style.Colors;
     /* Greens — primary accent (a deep, slightly-warm green that
      * reads as "Minish leaf"), with brighter / dimmer variants. */
-    const ImVec4 accentDim  = ImVec4(0.18f, 0.32f, 0.22f, 1.00f);
-    const ImVec4 accent     = ImVec4(0.28f, 0.55f, 0.34f, 1.00f);
-    const ImVec4 accentLit  = ImVec4(0.40f, 0.72f, 0.46f, 1.00f);
+    const ImVec4 accentDim = ImVec4(0.18f, 0.32f, 0.22f, 1.00f);
+    const ImVec4 accent = ImVec4(0.28f, 0.55f, 0.34f, 1.00f);
+    const ImVec4 accentLit = ImVec4(0.40f, 0.72f, 0.46f, 1.00f);
     /* Surface — near-black with a faint cool tint so the green pops. */
-    const ImVec4 bgBase     = ImVec4(0.058f, 0.07f, 0.07f, 0.96f);
-    const ImVec4 bgChild    = ImVec4(0.085f, 0.10f, 0.10f, 1.00f);
-    const ImVec4 bgFrame    = ImVec4(0.13f, 0.15f, 0.15f, 1.00f);
-    const ImVec4 bgFrameH   = ImVec4(0.17f, 0.21f, 0.20f, 1.00f);
+    const ImVec4 bgBase = ImVec4(0.058f, 0.07f, 0.07f, 0.96f);
+    const ImVec4 bgChild = ImVec4(0.085f, 0.10f, 0.10f, 1.00f);
+    const ImVec4 bgFrame = ImVec4(0.13f, 0.15f, 0.15f, 1.00f);
+    const ImVec4 bgFrameH = ImVec4(0.17f, 0.21f, 0.20f, 1.00f);
 
-    colors[ImGuiCol_WindowBg]            = bgBase;
-    colors[ImGuiCol_ChildBg]             = bgChild;
-    colors[ImGuiCol_PopupBg]             = bgBase;
-    colors[ImGuiCol_FrameBg]             = bgFrame;
-    colors[ImGuiCol_FrameBgHovered]      = bgFrameH;
-    colors[ImGuiCol_FrameBgActive]       = accentDim;
-    colors[ImGuiCol_TitleBg]             = ImVec4(0.07f, 0.10f, 0.09f, 1.00f);
-    colors[ImGuiCol_TitleBgActive]       = accentDim;
-    colors[ImGuiCol_TitleBgCollapsed]    = ImVec4(0.05f, 0.07f, 0.06f, 0.75f);
-    colors[ImGuiCol_MenuBarBg]           = ImVec4(0.10f, 0.12f, 0.11f, 1.00f);
-    colors[ImGuiCol_Header]              = ImVec4(accent.x, accent.y, accent.z, 0.32f);
-    colors[ImGuiCol_HeaderHovered]       = ImVec4(accent.x, accent.y, accent.z, 0.60f);
-    colors[ImGuiCol_HeaderActive]        = accent;
-    colors[ImGuiCol_Button]              = bgFrame;
-    colors[ImGuiCol_ButtonHovered]       = accent;
-    colors[ImGuiCol_ButtonActive]        = accentLit;
-    colors[ImGuiCol_Tab]                 = ImVec4(0.10f, 0.13f, 0.11f, 1.00f);
-    colors[ImGuiCol_TabHovered]          = accent;
-    colors[ImGuiCol_TabActive]           = accentDim;
-    colors[ImGuiCol_TabUnfocused]        = ImVec4(0.07f, 0.09f, 0.08f, 1.00f);
-    colors[ImGuiCol_TabUnfocusedActive]  = ImVec4(0.13f, 0.18f, 0.15f, 1.00f);
-    colors[ImGuiCol_Separator]           = ImVec4(0.20f, 0.24f, 0.22f, 1.00f);
-    colors[ImGuiCol_SeparatorHovered]    = accent;
-    colors[ImGuiCol_SeparatorActive]     = accentLit;
-    colors[ImGuiCol_ResizeGrip]          = ImVec4(accent.x, accent.y, accent.z, 0.25f);
-    colors[ImGuiCol_ResizeGripHovered]   = ImVec4(accent.x, accent.y, accent.z, 0.55f);
-    colors[ImGuiCol_ResizeGripActive]    = accent;
-    colors[ImGuiCol_SliderGrab]          = accent;
-    colors[ImGuiCol_SliderGrabActive]    = accentLit;
-    colors[ImGuiCol_CheckMark]           = accentLit;
-    colors[ImGuiCol_ScrollbarBg]         = ImVec4(0.05f, 0.06f, 0.06f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrab]       = ImVec4(0.20f, 0.24f, 0.22f, 1.00f);
-    colors[ImGuiCol_ScrollbarGrabHovered]= accentDim;
+    colors[ImGuiCol_WindowBg] = bgBase;
+    colors[ImGuiCol_ChildBg] = bgChild;
+    colors[ImGuiCol_PopupBg] = bgBase;
+    colors[ImGuiCol_FrameBg] = bgFrame;
+    colors[ImGuiCol_FrameBgHovered] = bgFrameH;
+    colors[ImGuiCol_FrameBgActive] = accentDim;
+    colors[ImGuiCol_TitleBg] = ImVec4(0.07f, 0.10f, 0.09f, 1.00f);
+    colors[ImGuiCol_TitleBgActive] = accentDim;
+    colors[ImGuiCol_TitleBgCollapsed] = ImVec4(0.05f, 0.07f, 0.06f, 0.75f);
+    colors[ImGuiCol_MenuBarBg] = ImVec4(0.10f, 0.12f, 0.11f, 1.00f);
+    colors[ImGuiCol_Header] = ImVec4(accent.x, accent.y, accent.z, 0.32f);
+    colors[ImGuiCol_HeaderHovered] = ImVec4(accent.x, accent.y, accent.z, 0.60f);
+    colors[ImGuiCol_HeaderActive] = accent;
+    colors[ImGuiCol_Button] = bgFrame;
+    colors[ImGuiCol_ButtonHovered] = accent;
+    colors[ImGuiCol_ButtonActive] = accentLit;
+    colors[ImGuiCol_Tab] = ImVec4(0.10f, 0.13f, 0.11f, 1.00f);
+    colors[ImGuiCol_TabHovered] = accent;
+    colors[ImGuiCol_TabActive] = accentDim;
+    colors[ImGuiCol_TabUnfocused] = ImVec4(0.07f, 0.09f, 0.08f, 1.00f);
+    colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.13f, 0.18f, 0.15f, 1.00f);
+    colors[ImGuiCol_Separator] = ImVec4(0.20f, 0.24f, 0.22f, 1.00f);
+    colors[ImGuiCol_SeparatorHovered] = accent;
+    colors[ImGuiCol_SeparatorActive] = accentLit;
+    colors[ImGuiCol_ResizeGrip] = ImVec4(accent.x, accent.y, accent.z, 0.25f);
+    colors[ImGuiCol_ResizeGripHovered] = ImVec4(accent.x, accent.y, accent.z, 0.55f);
+    colors[ImGuiCol_ResizeGripActive] = accent;
+    colors[ImGuiCol_SliderGrab] = accent;
+    colors[ImGuiCol_SliderGrabActive] = accentLit;
+    colors[ImGuiCol_CheckMark] = accentLit;
+    colors[ImGuiCol_ScrollbarBg] = ImVec4(0.05f, 0.06f, 0.06f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrab] = ImVec4(0.20f, 0.24f, 0.22f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered] = accentDim;
     colors[ImGuiCol_ScrollbarGrabActive] = accent;
-    colors[ImGuiCol_Text]                = ImVec4(0.93f, 0.94f, 0.92f, 1.00f);
-    colors[ImGuiCol_TextDisabled]        = ImVec4(0.50f, 0.54f, 0.50f, 1.00f);
-    colors[ImGuiCol_TextSelectedBg]      = ImVec4(accent.x, accent.y, accent.z, 0.40f);
+    colors[ImGuiCol_Text] = ImVec4(0.93f, 0.94f, 0.92f, 1.00f);
+    colors[ImGuiCol_TextDisabled] = ImVec4(0.50f, 0.54f, 0.50f, 1.00f);
+    colors[ImGuiCol_TextSelectedBg] = ImVec4(accent.x, accent.y, accent.z, 0.40f);
 
 #ifdef TMC_GPU_RENDERER
     /* GPU path: renderer arg is NULL (Port_PPU_Init passed null when the
@@ -233,9 +236,9 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
             return;
         }
         ImGui_ImplSDLGPU3_InitInfo info = {};
-        info.Device            = dev;
+        info.Device = dev;
         info.ColorTargetFormat = fmt;
-        info.MSAASamples       = SDL_GPU_SAMPLECOUNT_1;
+        info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
         if (!ImGui_ImplSDLGPU3_Init(&info)) {
             fprintf(stderr, "[imgui] ImGui_ImplSDLGPU3_Init failed\n");
             ImGui_ImplSDL3_Shutdown();
@@ -243,7 +246,7 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
             return;
         }
         sWindow = window;
-        sRenderer = nullptr;  /* GPU backend signals "no SDL_Renderer" */
+        sRenderer = nullptr; /* GPU backend signals "no SDL_Renderer" */
         sImGuiInited = true;
         fprintf(stderr, "[imgui] initialized (v%s, SDL_GPU backend)\n", IMGUI_VERSION);
         return;
@@ -269,7 +272,8 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
 }
 
 extern "C" void Port_ImGui_Shutdown(void) {
-    if (!sImGuiInited) return;
+    if (!sImGuiInited)
+        return;
 #ifdef TMC_GPU_RENDERER
     if (!sRenderer) {
         ImGui_ImplSDLGPU3_Shutdown();
@@ -290,9 +294,11 @@ extern "C" void Port_ImGui_Shutdown(void) {
  * (file-select randomizer setup) check this so they never open an
  * invisible modal over a masked game (= softlock). */
 extern "C" bool Port_ImGui_CanPresent(void) {
-    if (!sImGuiInited) return false;
+    if (!sImGuiInited)
+        return false;
 #ifndef TMC_GPU_RENDERER
-    if (!sRenderer) return false;
+    if (!sRenderer)
+        return false;
 #endif
     return true;
 }
@@ -303,18 +309,26 @@ extern "C" bool Port_ImGui_CanPresent(void) {
  * char) close the file-select setup sidebar, so typing a seed isn't
  * interrupted. */
 extern "C" bool Port_ImGui_WantsTextInput(void) {
-    if (!sImGuiInited) return false;
+    if (!sImGuiInited)
+        return false;
     return ImGui::GetIO().WantTextInput;
 }
 
 extern "C" void Port_ImGui_HandleEvent(const SDL_Event* event) {
-    if (!sImGuiInited) return;
+    if (!sImGuiInited)
+        return;
     ImGui_ImplSDL3_ProcessEvent(event);
 }
 
-extern "C" bool Port_ImGui_IsEnabled(void) { return true; }
-extern "C" bool Port_ImGui_RibbonEnabled(void) { return sRibbonEnabled; }
-extern "C" void Port_ImGui_SetRibbonEnabled(bool enabled) { sRibbonEnabled = enabled; }
+extern "C" bool Port_ImGui_IsEnabled(void) {
+    return true;
+}
+extern "C" bool Port_ImGui_RibbonEnabled(void) {
+    return sRibbonEnabled;
+}
+extern "C" void Port_ImGui_SetRibbonEnabled(bool enabled) {
+    sRibbonEnabled = enabled;
+}
 
 static void RandoUi_HelpTooltip(const char* text);
 /* ------------------------------------------------------------------ */
@@ -332,41 +346,41 @@ void Port_DebugAction_MaxRupees(void);
 void Port_DebugAction_MaxShells(void);
 void Port_DebugAction_AllKinstones(void);
 
-void          Port_PPU_ToggleFullscreen(void);
-bool          Port_PPU_IsFullscreen(void);
-void          Port_PPU_ApplyCursorVisibility(void);
-void          Port_PPU_SetVSync(bool enabled);
-bool          Port_PPU_VSyncEnabled(void);
-void          Port_PPU_SetColorCorrection(bool enabled);
-bool          Port_PPU_ColorCorrectionEnabled(void);
-void          Port_PPU_SetPersistence(bool enabled, float rho);
-void          Port_PPU_CycleWindowScale(int direction);
-void          Port_PPU_ApplyWindowScale(void);
+void Port_PPU_ToggleFullscreen(void);
+bool Port_PPU_IsFullscreen(void);
+void Port_PPU_ApplyCursorVisibility(void);
+void Port_PPU_SetVSync(bool enabled);
+bool Port_PPU_VSyncEnabled(void);
+void Port_PPU_SetColorCorrection(bool enabled);
+bool Port_PPU_ColorCorrectionEnabled(void);
+void Port_PPU_SetPersistence(bool enabled, float rho);
+void Port_PPU_CycleWindowScale(int direction);
+void Port_PPU_ApplyWindowScale(void);
 unsigned char Port_PPU_WindowScale(void);
-void          Port_PPU_CyclePresentationMode(int direction);
-const char*   Port_PPU_PresentationModeName(void);
-void          Port_PPU_CycleFilter(int direction);
-const char*   Port_PPU_FilterName(void);
-unsigned int  Port_Config_TargetFps(void);
-void          Port_Config_CycleTargetFps(int direction);
+void Port_PPU_CyclePresentationMode(int direction);
+const char* Port_PPU_PresentationModeName(void);
+void Port_PPU_CycleFilter(int direction);
+const char* Port_PPU_FilterName(void);
+unsigned int Port_Config_TargetFps(void);
+void Port_Config_CycleTargetFps(int direction);
 unsigned char Port_Config_InternalScale(void);
-void          Port_Config_CycleInternalScale(int direction);
-void          Port_Audio_SetGbaAccurate(bool accurate);
-bool          Port_Audio_IsGbaAccurate(void);
-void          Port_Audio_SetWidth(float width);
-float         Port_Audio_GetWidth(void);
-void          Port_Audio_SetReverbLevel(int level);
-int           Port_Audio_GetReverbLevel(void);
-void          Port_Audio_SetMasterVolume(float volume);
-float         Port_Audio_GetMasterVolume(void);
+void Port_Config_CycleInternalScale(int direction);
+void Port_Audio_SetGbaAccurate(bool accurate);
+bool Port_Audio_IsGbaAccurate(void);
+void Port_Audio_SetWidth(float width);
+float Port_Audio_GetWidth(void);
+void Port_Audio_SetReverbLevel(int level);
+int Port_Audio_GetReverbLevel(void);
+void Port_Audio_SetMasterVolume(float volume);
+float Port_Audio_GetMasterVolume(void);
 
-int  Port_QuickSave_SaveSlot(int slot);
-int  Port_QuickSave_LoadSlot(int slot);
-int  Port_QuickSave_HasSlot(int slot);
+int Port_QuickSave_SaveSlot(int slot);
+int Port_QuickSave_LoadSlot(int slot);
+int Port_QuickSave_HasSlot(int slot);
 unsigned long long Port_QuickSave_SlotTimestamp(int slot);
-int  Port_QuickSave_SlotCount(void);
-int  Port_QuickSave_AutoSlotBase(void);
-int  Port_QuickSave_AutoEnabled(void);
+int Port_QuickSave_SlotCount(void);
+int Port_QuickSave_AutoSlotBase(void);
+int Port_QuickSave_AutoEnabled(void);
 void Port_QuickSave_SetAutoEnabled(int enabled);
 unsigned int Port_QuickSave_AutoIntervalMs(void);
 void Port_QuickSave_SetAutoIntervalMs(unsigned int ms);
@@ -375,27 +389,26 @@ void Port_Config_SetAutosaveEnabled(bool enabled);
 void Port_Config_SetAutosaveIntervalMs(unsigned int ms);
 
 const char* Port_Save_GetActivePath(void);
-void        Port_Save_SetActivePath(const char* path);
-int         Port_Save_SaveAsProfile(const char* path);
-int         Port_Save_ListProfiles(char (*out)[64], int max);
-int         Port_Save_DeleteProfile(const char* path);
-int         Port_Save_RenameProfile(const char* oldPath, const char* newPath);
-void        Port_Config_SetActiveSaveProfile(const char* path);
+void Port_Save_SetActivePath(const char* path);
+int Port_Save_SaveAsProfile(const char* path);
+int Port_Save_ListProfiles(char (*out)[64], int max);
+int Port_Save_DeleteProfile(const char* path);
+int Port_Save_RenameProfile(const char* oldPath, const char* newPath);
+void Port_Config_SetActiveSaveProfile(const char* path);
 
 const char* Port_SoftSlots_GetSlotLabel(int slot);
-void        Port_SoftSlots_CycleAssignment(int slot, int direction);
+void Port_SoftSlots_CycleAssignment(int slot, int direction);
 
 const char* Port_Config_InputName(int input);
-int  Port_Config_BindingCount(int input);
+int Port_Config_BindingCount(int input);
 void Port_Config_BindingLabel(int input, int idx, char* out, int cap);
 void Port_Config_ClearBindings(int input);
 void Port_Config_BeginCaptureBinding(int input);
 void Port_Config_BeginAddBinding(int input);
-int  Port_Config_IsCapturingBinding(void);
-int  Port_Config_CapturingBindingInput(void);
+int Port_Config_IsCapturingBinding(void);
+int Port_Config_CapturingBindingInput(void);
 void Port_Config_CancelCaptureBinding(void);
 void Port_Config_ResetAllBindings(void);
-
 
 void Port_DebugMenu_Toggle(void);
 
@@ -407,14 +420,14 @@ bool Port_Practice_TimerRunning(void);
 void Port_Practice_TimerReset(void);
 void Port_Practice_TimerToggle(void);
 void Port_Practice_AddSplit(void);
-int  Port_Practice_SplitCount(void);
+int Port_Practice_SplitCount(void);
 unsigned long long Port_Practice_SplitAt(int i);
 void Port_Practice_ClearSplits(void);
 unsigned short Port_Practice_CurrentInputMask(void);
 unsigned short Port_Practice_HistoryAt(int index);
-int  Port_Practice_HistoryCount(void);
-int  Port_Practice_SetPoint(void);
-int  Port_Practice_LoadPoint(void);
+int Port_Practice_HistoryCount(void);
+int Port_Practice_SetPoint(void);
+int Port_Practice_LoadPoint(void);
 bool Port_Practice_HasPoint(void);
 bool Port_Practice_IsPaused(void);
 void Port_Practice_TogglePause(void);
@@ -441,12 +454,14 @@ static void DrawRibbonItemToggles(void) {
     bool groupOpen = false;
     for (int i = 0; i < count; ++i) {
         const char* group = Port_DebugQuery_ToggleItemGroup(i);
-        if (!group) continue;
+        if (!group)
+            continue;
         if (!curGroup || strcmp(group, curGroup) != 0) {
             curGroup = group;
             groupOpen = ImGui::CollapsingHeader(group);
         }
-        if (!groupOpen) continue;
+        if (!groupOpen)
+            continue;
         bool owned = Port_DebugQuery_ToggleItemOwned(i) != 0;
         ImGui::PushID(i);
         if (ImGui::Checkbox(Port_DebugQuery_ToggleItemName(i), &owned)) {
@@ -469,56 +484,63 @@ static const char* DungeonLabel(int d, int cur) {
 static void DrawRibbonDungeonItems(void) {
     static int sDungeon = 0;
     const int cur = Port_DebugQuery_CurrentDungeon();
-    if (sDungeon < 0 || sDungeon > 15) sDungeon = 0;
+    if (sDungeon < 0 || sDungeon > 15)
+        sDungeon = 0;
 
     ImGui::SetNextItemWidth(180);
     if (ImGui::BeginCombo("Dungeon", DungeonLabel(sDungeon, cur))) {
         for (int d = 0; d < 16; ++d) {
             const bool sel = (d == sDungeon);
             ImGui::PushID(d);
-            if (ImGui::Selectable(DungeonLabel(d, cur), sel)) sDungeon = d;
-            if (sel) ImGui::SetItemDefaultFocus();
+            if (ImGui::Selectable(DungeonLabel(d, cur), sel))
+                sDungeon = d;
+            if (sel)
+                ImGui::SetItemDefaultFocus();
             ImGui::PopID();
         }
         ImGui::EndCombo();
     }
     if (cur >= 0) {
         ImGui::SameLine();
-        if (ImGui::SmallButton("Jump to current")) sDungeon = cur;
+        if (ImGui::SmallButton("Jump to current"))
+            sDungeon = cur;
     }
 
     const int bits = Port_DebugQuery_DungeonItems(sDungeon);
-    bool map  = (bits & 0x1) != 0;
+    bool map = (bits & 0x1) != 0;
     bool comp = (bits & 0x2) != 0;
-    bool big  = (bits & 0x4) != 0;
-    if (ImGui::Checkbox("Map", &map))      Port_DebugAction_SetDungeonItem(sDungeon, 0, map);
+    bool big = (bits & 0x4) != 0;
+    if (ImGui::Checkbox("Map", &map))
+        Port_DebugAction_SetDungeonItem(sDungeon, 0, map);
     ImGui::SameLine();
-    if (ImGui::Checkbox("Compass", &comp)) Port_DebugAction_SetDungeonItem(sDungeon, 1, comp);
+    if (ImGui::Checkbox("Compass", &comp))
+        Port_DebugAction_SetDungeonItem(sDungeon, 1, comp);
     ImGui::SameLine();
-    if (ImGui::Checkbox("Big Key", &big))  Port_DebugAction_SetDungeonItem(sDungeon, 2, big);
+    if (ImGui::Checkbox("Big Key", &big))
+        Port_DebugAction_SetDungeonItem(sDungeon, 2, big);
 
     int keys = Port_DebugQuery_DungeonKeys(sDungeon);
     ImGui::SetNextItemWidth(120);
     if (ImGui::InputInt("Small keys", &keys)) {
-        if (keys < 0) keys = 0;
-        if (keys > 255) keys = 255;
+        if (keys < 0)
+            keys = 0;
+        if (keys > 255)
+            keys = 255;
         Port_DebugAction_SetDungeonKeys(sDungeon, keys);
     }
 }
 
 extern "C" {
 typedef void (*PortBuffApplyFn)(int, int);
-typedef int  (*PortBuffQueryFn)(int*, int*);
+typedef int (*PortBuffQueryFn)(int*, int*);
 }
 
 /* Charm and picolyte share the same combo + frames-slider + Apply + live-
  * status shape; only the labels, id list, default state, and apply/query
  * hooks differ. Selection + frames state is caller-owned so the two buffs
  * don't share it. */
-static void DrawTimedBuff(const char* label, const char* lname, const char* applyId,
-                          const char** names, const int* ids, int count,
-                          int* sel, int* frames,
-                          PortBuffApplyFn apply, PortBuffQueryFn query) {
+static void DrawTimedBuff(const char* label, const char* lname, const char* applyId, const char** names, const int* ids,
+                          int count, int* sel, int* frames, PortBuffApplyFn apply, PortBuffQueryFn query) {
     char tag[32];
     ImGui::SetNextItemWidth(200);
     std::snprintf(tag, sizeof(tag), "%s type", label);
@@ -545,24 +567,28 @@ static void DrawTimedBuff(const char* label, const char* lname, const char* appl
  * the button; the live line shows what's currently ticking (the engine
  * counts the timer down each frame, so the slider isn't bound to it). */
 static void DrawRibbonBuffs(void) {
-    static const char* kCharmNames[] = { "Off", "Nayru (1/4 dmg taken)",
-                                         "Farore (1/2 dmg taken)", "Din (2x dmg dealt)" };
-    static const int   kCharmIds[]   = { 0, BOTTLE_CHARM_NAYRU, BOTTLE_CHARM_FARORE, BOTTLE_CHARM_DIN };
+    static const char* kCharmNames[] = { "Off", "Nayru (1/4 dmg taken)", "Farore (1/2 dmg taken)",
+                                         "Din (2x dmg dealt)" };
+    static const int kCharmIds[] = { 0, BOTTLE_CHARM_NAYRU, BOTTLE_CHARM_FARORE, BOTTLE_CHARM_DIN };
     static int sCharmSel = 1;
     static int sCharmFrames = 3600;
-    DrawTimedBuff("Charm", "charm", "charm", kCharmNames, kCharmIds, IM_ARRAYSIZE(kCharmNames),
-                  &sCharmSel, &sCharmFrames, Port_DebugAction_SetCharm, Port_DebugQuery_Charm);
+    DrawTimedBuff("Charm", "charm", "charm", kCharmNames, kCharmIds, IM_ARRAYSIZE(kCharmNames), &sCharmSel,
+                  &sCharmFrames, Port_DebugAction_SetCharm, Port_DebugQuery_Charm);
 
     ImGui::Spacing();
 
     static const char* kPicoNames[] = { "Off", "Red", "Orange", "Yellow", "Green", "Blue", "White" };
-    static const int   kPicoIds[]   = { 0, ITEM_BOTTLE_PICOLYTE_RED, ITEM_BOTTLE_PICOLYTE_ORANGE,
-                                        ITEM_BOTTLE_PICOLYTE_YELLOW, ITEM_BOTTLE_PICOLYTE_GREEN,
-                                        ITEM_BOTTLE_PICOLYTE_BLUE, ITEM_BOTTLE_PICOLYTE_WHITE };
+    static const int kPicoIds[] = { 0,
+                                    ITEM_BOTTLE_PICOLYTE_RED,
+                                    ITEM_BOTTLE_PICOLYTE_ORANGE,
+                                    ITEM_BOTTLE_PICOLYTE_YELLOW,
+                                    ITEM_BOTTLE_PICOLYTE_GREEN,
+                                    ITEM_BOTTLE_PICOLYTE_BLUE,
+                                    ITEM_BOTTLE_PICOLYTE_WHITE };
     static int sPicoSel = 1;
     static int sPicoFrames = 900;
-    DrawTimedBuff("Picolyte", "picolyte", "pico", kPicoNames, kPicoIds, IM_ARRAYSIZE(kPicoNames),
-                  &sPicoSel, &sPicoFrames, Port_DebugAction_SetPicolyte, Port_DebugQuery_Picolyte);
+    DrawTimedBuff("Picolyte", "picolyte", "pico", kPicoNames, kPicoIds, IM_ARRAYSIZE(kPicoNames), &sPicoSel,
+                  &sPicoFrames, Port_DebugAction_SetPicolyte, Port_DebugQuery_Picolyte);
 }
 
 /* Numeric count / capacity sliders. Bounds come from the C layer (counts clamp
@@ -598,7 +624,8 @@ static void DrawRibbonBottles(void) {
                 if (ImGui::Selectable(Port_DebugQuery_BottleContentName(i), sel)) {
                     Port_DebugAction_SetBottleContent(b, Port_DebugQuery_BottleContentId(i));
                 }
-                if (sel) ImGui::SetItemDefaultFocus();
+                if (sel)
+                    ImGui::SetItemDefaultFocus();
             }
             ImGui::EndCombo();
         }
@@ -685,7 +712,8 @@ static void DrawRibbonItemsTab(void) {
 static void DrawRibbonFlagsTab(void) {
     static int sBank = 0;
     const int nBanks = Port_DebugQuery_FlagBankCount();
-    if (sBank < 0 || sBank >= nBanks) sBank = 0;
+    if (sBank < 0 || sBank >= nBanks)
+        sBank = 0;
     const int cur = Port_DebugQuery_CurrentFlagBank();
 
     ImGui::TextUnformatted("Raw save flags (gSave.flags). Bank 0 = global; 1-12 = local pools.");
@@ -695,17 +723,19 @@ static void DrawRibbonFlagsTab(void) {
             const bool selected = (b == sBank);
             ImGui::PushID(b);
             char lbl[64];
-            snprintf(lbl, sizeof(lbl), "%s%s", Port_DebugQuery_FlagBankName(b),
-                     (b == cur) ? "  (current area)" : "");
-            if (ImGui::Selectable(lbl, selected)) sBank = b;
-            if (selected) ImGui::SetItemDefaultFocus();
+            snprintf(lbl, sizeof(lbl), "%s%s", Port_DebugQuery_FlagBankName(b), (b == cur) ? "  (current area)" : "");
+            if (ImGui::Selectable(lbl, selected))
+                sBank = b;
+            if (selected)
+                ImGui::SetItemDefaultFocus();
             ImGui::PopID();
         }
         ImGui::EndCombo();
     }
     if (cur >= 0) {
         ImGui::SameLine();
-        if (ImGui::SmallButton("Jump to current area")) sBank = cur;
+        if (ImGui::SmallButton("Jump to current area"))
+            sBank = cur;
     }
 
     const int size = Port_DebugQuery_FlagBankSize(sBank);
@@ -733,7 +763,6 @@ static void DrawRibbonFlagsTab(void) {
 
 #include "port_imgui_display_tab.inc"
 
-
 /* Save current game to EEPROM, then drop the player back at the
  * title screen. Issue #92 / "sleep menu goes back to title".
  *
@@ -746,7 +775,7 @@ extern "C" {
 void SetTask(unsigned int task);
 }
 extern "C" int Port_QuickSave_SaveSlot(int slot);
-extern "C" int  Port_QuickSave_AutoOnAreaChangeEnabled(void);
+extern "C" int Port_QuickSave_AutoOnAreaChangeEnabled(void);
 extern "C" void Port_QuickSave_SetAutoOnAreaChange(int on);
 
 static void DoQuitToTitle(bool saveFirst) {
@@ -757,14 +786,15 @@ static void DoQuitToTitle(bool saveFirst) {
         Port_QuickSave_SaveSlot(0);
     }
     SetTask(0 /* TASK_TITLE */);
-    Port_DebugMenu_Toggle();   /* close the F8 ribbon */
+    Port_DebugMenu_Toggle(); /* close the F8 ribbon */
 }
 static bool DrawRegionLanguageControls(bool prelaunch) {
     bool regionChanged = false;
     ImGui::SeparatorText("ROM Region & Language");
 
     int preferredRegion = Port_Config_PreferredRegion();
-    if (preferredRegion < -1 || preferredRegion > 2) preferredRegion = -1;
+    if (preferredRegion < -1 || preferredRegion > 2)
+        preferredRegion = -1;
 
     const char* regionNames[] = {
         "Auto (Use first valid ROM)",
@@ -783,16 +813,11 @@ static bool DrawRegionLanguageControls(bool prelaunch) {
 
     constexpr int kLanguageCount = 6;
     int preferredLanguage = Port_Config_PreferredLanguage();
-    if (preferredLanguage < -1 || preferredLanguage >= kLanguageCount) preferredLanguage = -1;
+    if (preferredLanguage < -1 || preferredLanguage >= kLanguageCount)
+        preferredLanguage = -1;
 
     const char* langNames[] = {
-        "Auto (ROM/save default)",
-        "Japanese",
-        "English",
-        "French",
-        "German",
-        "Spanish",
-        "Italian",
+        "Auto (ROM/save default)", "Japanese", "English", "French", "German", "Spanish", "Italian",
     };
     int langIdx = preferredLanguage + 1; // map -1..5 to 0..6
 
@@ -812,12 +837,15 @@ static bool DrawRegionLanguageControls(bool prelaunch) {
             }
 
             const bool selected = (i == langIdx);
-            if (!isSupported) ImGui::BeginDisabled();
+            if (!isSupported)
+                ImGui::BeginDisabled();
             if (ImGui::Selectable(label, selected)) {
                 Port_Config_SetPreferredLanguage(i - 1);
-                if (!prelaunch) Port_ApplyLanguage();
+                if (!prelaunch)
+                    Port_ApplyLanguage();
             }
-            if (!isSupported) ImGui::EndDisabled();
+            if (!isSupported)
+                ImGui::EndDisabled();
         }
         ImGui::EndCombo();
     }
@@ -830,14 +858,16 @@ static bool DrawRegionLanguageControls(bool prelaunch) {
 static void DrawRibbonSavesTab(void) {
     /* Quit-to-title actions at the top of the tab — high-visibility
      * because the existing pause menu doesn't expose them. */
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.35f, 0.55f, 0.30f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.55f, 0.30f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.45f, 0.70f, 0.40f, 1.0f));
-    if (ImGui::Button("Save & Quit to Title")) DoQuitToTitle(true);
+    if (ImGui::Button("Save & Quit to Title"))
+        DoQuitToTitle(true);
     ImGui::PopStyleColor(2);
     ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.35f, 0.30f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.35f, 0.30f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.45f, 0.40f, 1.0f));
-    if (ImGui::Button("Quit to Title (no save)")) DoQuitToTitle(false);
+    if (ImGui::Button("Quit to Title (no save)"))
+        DoQuitToTitle(false);
     ImGui::PopStyleColor(2);
     ImGui::Separator();
 
@@ -865,8 +895,7 @@ static void DrawRibbonSavesTab(void) {
             ImGui::EndTooltip();
         }
         if (parity) {
-            ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.25f, 1.0f),
-                               "Save-states disabled while Console-Parity is ON.");
+            ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.25f, 1.0f), "Save-states disabled while Console-Parity is ON.");
         }
     }
     ImGui::Separator();
@@ -919,23 +948,33 @@ static void DrawRibbonSavesTab(void) {
             ImGui::TableSetColumnIndex(0);
             const char* tag;
             char tagbuf[16];
-            if (s == 0) tag = "Quick";
-            else if (s < autoBase) { std::snprintf(tagbuf, sizeof(tagbuf), "Slot %d", s); tag = tagbuf; }
-            else { std::snprintf(tagbuf, sizeof(tagbuf), "Auto %d", s - autoBase + 1); tag = tagbuf; }
+            if (s == 0)
+                tag = "Quick";
+            else if (s < autoBase) {
+                std::snprintf(tagbuf, sizeof(tagbuf), "Slot %d", s);
+                tag = tagbuf;
+            } else {
+                std::snprintf(tagbuf, sizeof(tagbuf), "Auto %d", s - autoBase + 1);
+                tag = tagbuf;
+            }
             ImGui::Text("%s", tag);
 
             // Column 2: Actions
             ImGui::TableSetColumnIndex(1);
             if (ImGui::Button("Save")) {
-                if (Port_QuickSave_SaveSlot(s)) Port_DebugMenu_ToastFromExternal("Saved");
+                if (Port_QuickSave_SaveSlot(s))
+                    Port_DebugMenu_ToastFromExternal("Saved");
             }
             ImGui::SameLine();
             if (Port_QuickSave_HasSlot(s)) {
                 if (ImGui::Button("Load")) {
-                    if (Port_QuickSave_LoadSlot(s)) Port_DebugMenu_ToastFromExternal("Loaded");
+                    if (Port_QuickSave_LoadSlot(s))
+                        Port_DebugMenu_ToastFromExternal("Loaded");
                 }
             } else {
-                ImGui::BeginDisabled(); ImGui::Button("Load"); ImGui::EndDisabled();
+                ImGui::BeginDisabled();
+                ImGui::Button("Load");
+                ImGui::EndDisabled();
             }
 
             // Column 3: Timestamp
@@ -974,8 +1013,8 @@ static void DrawRibbonProfilesTab(void) {
     /* Rename buffer keyed by index, so each row has its own inline
      * editor that survives across frames while the user is typing. */
     static char sRenameBuf[32][64] = {};
-    static int  sRenameRow = -1;
-    static int  sConfirmDeleteRow = -1;
+    static int sRenameRow = -1;
+    static int sConfirmDeleteRow = -1;
 
     if (ImGui::BeginTable("##profiles_table", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Profile File", ImGuiTableColumnFlags_WidthFixed, 180.0f);
@@ -1016,7 +1055,8 @@ static void DrawRibbonProfilesTab(void) {
                     snprintf(sRenameBuf[i], sizeof(sRenameBuf[i]), "%s", names[i]);
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Delete")) sConfirmDeleteRow = i;
+                if (ImGui::Button("Delete"))
+                    sConfirmDeleteRow = i;
             }
 
             if (sRenameRow == i) {
@@ -1035,7 +1075,8 @@ static void DrawRibbonProfilesTab(void) {
                     sRenameRow = -1;
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("X")) sRenameRow = -1;
+                if (ImGui::Button("X"))
+                    sRenameRow = -1;
             }
             if (sConfirmDeleteRow == i) {
                 ImGui::TableNextRow();
@@ -1052,7 +1093,8 @@ static void DrawRibbonProfilesTab(void) {
                     sRenameRow = -1;
                 }
                 ImGui::SameLine();
-                if (ImGui::Button("Cancel")) sConfirmDeleteRow = -1;
+                if (ImGui::Button("Cancel"))
+                    sConfirmDeleteRow = -1;
             }
             ImGui::PopID();
         }
@@ -1066,10 +1108,12 @@ static void DrawRibbonProfilesTab(void) {
         for (; k <= 99; ++k) {
             std::snprintf(name, sizeof(name), "tmc_%d.sav", k);
             FILE* probe = std::fopen(name, "rb");
-            if (!probe) break;
+            if (!probe)
+                break;
             std::fclose(probe);
         }
-        if (k > 99) Port_DebugMenu_ToastFromExternal("No free profile slots (1-99)");
+        if (k > 99)
+            Port_DebugMenu_ToastFromExternal("No free profile slots (1-99)");
         else if (Port_Save_SaveAsProfile(name)) {
             char msg[96];
             std::snprintf(msg, sizeof(msg), "Saved current as %s", name);
@@ -1080,28 +1124,43 @@ static void DrawRibbonProfilesTab(void) {
     }
 }
 
-
 /* Friendly display name for each action — matches the GBA button names
  * users actually think in. The Port_Config side stores them as
  * short ids ("a", "b", "soft_l2") for config.json compactness. */
 static const char* InputLabel(int input) {
     switch (input) {
-        case PORT_INPUT_A:       return "A button (action)";
-        case PORT_INPUT_B:       return "B button (sword)";
-        case PORT_INPUT_SELECT:  return "Select";
-        case PORT_INPUT_START:   return "Start (pause)";
-        case PORT_INPUT_RIGHT:   return "D-pad Right";
-        case PORT_INPUT_LEFT:    return "D-pad Left";
-        case PORT_INPUT_UP:      return "D-pad Up";
-        case PORT_INPUT_DOWN:    return "D-pad Down";
-        case PORT_INPUT_R:       return "R (item slot 2)";
-        case PORT_INPUT_L:       return "L (item slot 1)";
-        case PORT_INPUT_SOFT_X:  return "Soft slot X";
-        case PORT_INPUT_SOFT_Y:  return "Soft slot Y";
-        case PORT_INPUT_SOFT_L2: return "Soft slot L2";
-        case PORT_INPUT_SOFT_R2: return "Soft slot R2";
-        case PORT_INPUT_ROLL_ATTACK: return "Roll attack (D / R3)";
-        default:                 return Port_Config_InputName(input);
+        case PORT_INPUT_A:
+            return "A button (action)";
+        case PORT_INPUT_B:
+            return "B button (sword)";
+        case PORT_INPUT_SELECT:
+            return "Select";
+        case PORT_INPUT_START:
+            return "Start (pause)";
+        case PORT_INPUT_RIGHT:
+            return "D-pad Right";
+        case PORT_INPUT_LEFT:
+            return "D-pad Left";
+        case PORT_INPUT_UP:
+            return "D-pad Up";
+        case PORT_INPUT_DOWN:
+            return "D-pad Down";
+        case PORT_INPUT_R:
+            return "R (item slot 2)";
+        case PORT_INPUT_L:
+            return "L (item slot 1)";
+        case PORT_INPUT_SOFT_X:
+            return "Soft slot X";
+        case PORT_INPUT_SOFT_Y:
+            return "Soft slot Y";
+        case PORT_INPUT_SOFT_L2:
+            return "Soft slot L2";
+        case PORT_INPUT_SOFT_R2:
+            return "Soft slot R2";
+        case PORT_INPUT_ROLL_ATTACK:
+            return "Roll attack (D / R3)";
+        default:
+            return Port_Config_InputName(input);
     }
 }
 
@@ -1112,10 +1171,9 @@ static void DrawRibbonControlsTab(void) {
             Port_Config_SetRollAttackMacroEnabled(on);
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip(
-                "Hold a direction and press the Roll attack bind to perform a "
-                "start-of-roll attack with your best sword, regardless of A/B "
-                "equip.\nDefault: keyboard D, controller R3 (right stick click).");
+            ImGui::SetTooltip("Hold a direction and press the Roll attack bind to perform a "
+                              "start-of-roll attack with your best sword, regardless of A/B "
+                              "equip.\nDefault: keyboard D, controller R3 (right stick click).");
         }
     }
     ImGui::Separator();
@@ -1126,8 +1184,7 @@ static void DrawRibbonControlsTab(void) {
     ImGui::Separator();
 
     /* Two-column-ish table: action label | bindings + buttons. */
-    if (ImGui::BeginTable("##controls", 3,
-                          ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
+    if (ImGui::BeginTable("##controls", 3, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 200.0f);
         ImGui::TableSetupColumn("Bindings", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed, 180.0f);
@@ -1147,7 +1204,8 @@ static void DrawRibbonControlsTab(void) {
                 for (int b = 0; b < n; ++b) {
                     char label[64];
                     Port_Config_BindingLabel(i, b, label, sizeof(label));
-                    if (b > 0) ImGui::SameLine(0, 6);
+                    if (b > 0)
+                        ImGui::SameLine(0, 6);
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.30f, 0.45f, 1.0f));
                     ImGui::Button(label);
                     ImGui::PopStyleColor();
@@ -1176,14 +1234,12 @@ static void DrawRibbonControlsTab(void) {
             ImVec2 center = ImGui::GetMainViewport()->GetCenter();
             ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
             if (ImGui::BeginPopupModal("Capture binding", nullptr,
-                                       ImGuiWindowFlags_AlwaysAutoResize |
-                                       ImGuiWindowFlags_NoMove)) {
+                                       ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
                 ImGui::Text("Press a key or controller button for:");
                 ImGui::TextColored(ImVec4(1, 0.94f, 0.25f, 1), "%s", InputLabel(i));
                 ImGui::Text("Esc cancels.");
                 ImGui::Separator();
-                if (ImGui::Button("Cancel") ||
-                    !Port_Config_IsCapturingBinding()) {
+                if (ImGui::Button("Cancel") || !Port_Config_IsCapturingBinding()) {
                     Port_Config_CancelCaptureBinding();
                     ImGui::CloseCurrentPopup();
                 }
@@ -1196,7 +1252,7 @@ static void DrawRibbonControlsTab(void) {
     }
 
     ImGui::Separator();
-    ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.30f, 0.20f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.30f, 0.20f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.40f, 0.30f, 1.0f));
     if (ImGui::Button("Reset all to defaults")) {
         Port_Config_ResetAllBindings();
@@ -1208,9 +1264,11 @@ static void DrawRibbonControlsTab(void) {
 /* The < / > soft-slot assignment cycler, shared by the Equip tab and the
  * in-game soft-slot config overlay (caller draws the surrounding row). */
 static void DrawSoftSlotCycleButtons(int slot) {
-    if (ImGui::Button("<")) Port_SoftSlots_CycleAssignment(slot, -1);
+    if (ImGui::Button("<"))
+        Port_SoftSlots_CycleAssignment(slot, -1);
     ImGui::SameLine();
-    if (ImGui::Button(">")) Port_SoftSlots_CycleAssignment(slot, +1);
+    if (ImGui::Button(">"))
+        Port_SoftSlots_CycleAssignment(slot, +1);
 }
 
 static void DrawRibbonEquipTab(void) {
@@ -1232,7 +1290,8 @@ static void DrawRibbonEquipTab(void) {
             const char* label = Port_SoftSlots_GetSlotLabel(s);
             const char* colon = std::strchr(label, ':');
             const char* item_name = colon ? colon + 1 : label;
-            while (*item_name == ' ') ++item_name;
+            while (*item_name == ' ')
+                ++item_name;
             ImGui::Text("%s", item_name);
 
             // Column 3: Buttons
@@ -1244,7 +1303,6 @@ static void DrawRibbonEquipTab(void) {
         ImGui::EndTable();
     }
 }
-
 
 static char sWarpFilter[64] = "";
 
@@ -1263,10 +1321,10 @@ static void DrawRibbonWarpTab(void) {
      * everything. Case-insensitive substring match. Steam Deck users
      * can ignore the filter and just scroll. */
     ImGui::SetNextItemWidth(280);
-    ImGui::InputTextWithHint("##warpFilter", "filter by area name (e.g. 'castle')",
-                             sWarpFilter, sizeof(sWarpFilter));
+    ImGui::InputTextWithHint("##warpFilter", "filter by area name (e.g. 'castle')", sWarpFilter, sizeof(sWarpFilter));
     ImGui::SameLine();
-    if (ImGui::Button("Clear")) sWarpFilter[0] = '\0';
+    if (ImGui::Button("Clear"))
+        sWarpFilter[0] = '\0';
     ImGui::SameLine();
     ImGui::TextDisabled("|");
     ImGui::SameLine();
@@ -1281,8 +1339,12 @@ static void DrawRibbonWarpTab(void) {
         unsigned short px = 0, py = 0;
         const bool inGame = Port_DebugQuery_PlayerXY(&px, &py) != 0;
         ImGui::TextUnformatted("Teleport (current room):");
-        ImGui::SameLine(); ImGui::SetNextItemWidth(80); ImGui::InputInt("X##tele", &sTeleX, 0);
-        ImGui::SameLine(); ImGui::SetNextItemWidth(80); ImGui::InputInt("Y##tele", &sTeleY, 0);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80);
+        ImGui::InputInt("X##tele", &sTeleX, 0);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(80);
+        ImGui::InputInt("Y##tele", &sTeleY, 0);
         ImGui::BeginDisabled(!inGame);
         ImGui::SameLine();
         if (ImGui::Button("Go##tele")) {
@@ -1295,9 +1357,15 @@ static void DrawRibbonWarpTab(void) {
             }
         }
         ImGui::SameLine();
-        if (ImGui::Button("Use Link's pos")) { sTeleX = px; sTeleY = py; }
+        if (ImGui::Button("Use Link's pos")) {
+            sTeleX = px;
+            sTeleY = py;
+        }
         ImGui::EndDisabled();
-        if (!inGame) { ImGui::SameLine(); ImGui::TextDisabled("(in-game only)"); }
+        if (!inGame) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(in-game only)");
+        }
     }
     {
         bool noclip = Port_DebugQuery_Noclip() != 0;
@@ -1318,17 +1386,20 @@ static void DrawRibbonWarpTab(void) {
     static char sLetterFilter = 0; /* 0 = no letter filter */
     {
         const char* kLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        if (ImGui::SmallButton("All##warpLet")) sLetterFilter = 0;
+        if (ImGui::SmallButton("All##warpLet"))
+            sLetterFilter = 0;
         for (const char* p = kLetters; *p; ++p) {
             ImGui::SameLine();
             char id[6];
             std::snprintf(id, sizeof(id), "%c##wl", *p);
             if (sLetterFilter == *p) {
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.55f, 0.30f, 1.0f));
-                if (ImGui::SmallButton(id)) sLetterFilter = 0;
+                if (ImGui::SmallButton(id))
+                    sLetterFilter = 0;
                 ImGui::PopStyleColor();
             } else {
-                if (ImGui::SmallButton(id)) sLetterFilter = *p;
+                if (ImGui::SmallButton(id))
+                    sLetterFilter = *p;
             }
         }
     }
@@ -1339,8 +1410,7 @@ static void DrawRibbonWarpTab(void) {
      * keyboard / gamepad nav too. */
     ImGui::Separator();
     const float listH = ImGui::GetContentRegionAvail().y - 4.0f;
-    if (ImGui::BeginChild("##warpList", ImVec2(0, listH), ImGuiChildFlags_NavFlattened,
-                          0)) {
+    if (ImGui::BeginChild("##warpList", ImVec2(0, listH), ImGuiChildFlags_NavFlattened, 0)) {
         /* L1/R1 bumpers = page jump while this child is focused/hovered.
          * PgUp / PgDn keys give the same shortcut on keyboard. Home /
          * End jump to the ends of the list. Issue #76. */
@@ -1348,12 +1418,10 @@ static void DrawRibbonWarpTab(void) {
                                  ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
         if (listFocused) {
             const float pageStep = listH * 0.9f;
-            if (ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false) ||
-                ImGui::IsKeyPressed(ImGuiKey_PageUp,   false)) {
+            if (ImGui::IsKeyPressed(ImGuiKey_GamepadL1, false) || ImGui::IsKeyPressed(ImGuiKey_PageUp, false)) {
                 ImGui::SetScrollY(ImGui::GetScrollY() - pageStep);
             }
-            if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) ||
-                ImGui::IsKeyPressed(ImGuiKey_PageDown, false)) {
+            if (ImGui::IsKeyPressed(ImGuiKey_GamepadR1, false) || ImGui::IsKeyPressed(ImGuiKey_PageDown, false)) {
                 ImGui::SetScrollY(ImGui::GetScrollY() + pageStep);
             }
             if (ImGui::IsKeyPressed(ImGuiKey_Home, false)) {
@@ -1365,35 +1433,41 @@ static void DrawRibbonWarpTab(void) {
         }
         const std::string filter = sWarpFilter[0] ? std::string(sWarpFilter) : std::string();
         std::string filter_lower = filter;
-        for (auto& c : filter_lower) c = (char)std::tolower((unsigned char)c);
+        for (auto& c : filter_lower)
+            c = (char)std::tolower((unsigned char)c);
 
         int shown = 0;
         for (unsigned int area = 0; area < 0x90; ++area) {
             unsigned char a = (unsigned char)area;
             int roomCount = Port_DebugQuery_AreaRoomCount(a);
-            if (roomCount <= 0) continue;
+            if (roomCount <= 0)
+                continue;
 
             const char* name = Port_DebugQuery_AreaName(a);
             /* Skip areas that aren't warpable: no friendly name (AREA_
              * NULL_*, numeric AREA_40-style slots) OR named-but-known-
              * broken (Simon's Sim, etc.). Same predicate the dispatch
              * layer uses so list + action stay in sync. See issue #94. */
-            if (!Port_DebugAction_AreaIsWarpable(a)) continue;
+            if (!Port_DebugAction_AreaIsWarpable(a))
+                continue;
             char header[96];
-            std::snprintf(header, sizeof(header), "0x%02X  %s  (%d rooms)",
-                          area, name, roomCount);
+            std::snprintf(header, sizeof(header), "0x%02X  %s  (%d rooms)", area, name, roomCount);
 
             if (!filter_lower.empty()) {
                 std::string hl(header);
-                for (auto& c : hl) c = (char)std::tolower((unsigned char)c);
-                if (hl.find(filter_lower) == std::string::npos) continue;
+                for (auto& c : hl)
+                    c = (char)std::tolower((unsigned char)c);
+                if (hl.find(filter_lower) == std::string::npos)
+                    continue;
             }
             /* Letter strip — match against the first letter of the
              * area name itself (skip the "0xNN  " prefix). */
             if (sLetterFilter && name) {
                 char first = name[0];
-                if (first >= 'a' && first <= 'z') first = (char)(first - 'a' + 'A');
-                if (first != sLetterFilter) continue;
+                if (first >= 'a' && first <= 'z')
+                    first = (char)(first - 'a' + 'A');
+                if (first != sLetterFilter)
+                    continue;
             }
             shown++;
 
@@ -1406,15 +1480,15 @@ static void DrawRibbonWarpTab(void) {
                 int col = 0;
                 for (int r = 0; r < roomCount; ++r) {
                     unsigned short w = 0, h = 0;
-                    if (!Port_DebugQuery_RoomDimensions(a, (unsigned char)r, &w, &h)) continue;
+                    if (!Port_DebugQuery_RoomDimensions(a, (unsigned char)r, &w, &h))
+                        continue;
                     char roomLabel[48];
                     std::snprintf(roomLabel, sizeof(roomLabel), "Room 0x%02X", r);
                     ImGui::PushID(r);
                     if (ImGui::Button(roomLabel, ImVec2(120, 0))) {
                         unsigned short cx = 0, cy = 0;
-                        unsigned char  layer = 1;
-                        if (!Port_DebugAction_WarpSpawnOverride(a, (unsigned char)r,
-                                                                &cx, &cy, &layer)) {
+                        unsigned char layer = 1;
+                        if (!Port_DebugAction_WarpSpawnOverride(a, (unsigned char)r, &cx, &cy, &layer)) {
                             cx = w ? (unsigned short)(w / 2) : 0x80;
                             cy = h ? (unsigned short)(h / 2) : 0x80;
                             layer = 1;
@@ -1428,7 +1502,8 @@ static void DrawRibbonWarpTab(void) {
                         }
                     }
                     ImGui::PopID();
-                    if ((col % 3) != 2) ImGui::SameLine();
+                    if ((col % 3) != 2)
+                        ImGui::SameLine();
                     col++;
                 }
                 ImGui::Unindent();
@@ -1448,11 +1523,11 @@ static void DrawRibbonWarpTab(void) {
  * the new permutation immediately. */
 extern "C" const char* Port_FindBaseRomPath(void);
 
-static char sRandoSeedBuf[64] = "";        /* empty/0 = engine picks; text is hashed */
-static char sRandoResult[192] = {0};       /* last roll outcome line */
+static char sRandoSeedBuf[64] = "";    /* empty/0 = engine picks; text is hashed */
+static char sRandoResult[192] = { 0 }; /* last roll outcome line */
 static bool sRandoResultOk = true;
-static char sRandoSpoiler[4096] = {0};
-static bool sRandoSpoilerHidden = false;   /* race-seed convention: hide until revealed */
+static char sRandoSpoiler[4096] = { 0 };
+static bool sRandoSpoilerHidden = false;    /* race-seed convention: hide until revealed */
 static ImGuiTextFilter sRandoSpoilerFilter; /* spoiler log line filter */
 static RandomizerSettings sRandoUiSettings;
 static bool sRandoUiSettingsInit = false;
@@ -1464,8 +1539,8 @@ static bool sRandoUiSettingsInit = false;
  * (e.g. "7C1F,03E0"). Per the `.logic` spec, defaults never set defines:
  * the override only exists once the player actually edits a color, so an
  * enabled-but-untouched setting still rolls vanilla. */
-extern "C" void Rando_Cosmetic_Apply(void); /* rando_cosmetic.cpp — live palette re-apply */
-extern "C" void Rando_Keymap_Apply(void);   /* rando_keymap.c — rebind ground-item keys */
+extern "C" void Rando_Cosmetic_Apply(void);                           /* rando_cosmetic.cpp — live palette re-apply */
+extern "C" void Rando_Keymap_Apply(void);                             /* rando_keymap.c — rebind ground-item keys */
 extern "C" void Rando_SetCosmetics(int tunic_color, int heart_color); /* rando.cpp — live cosmetic settings */
 
 typedef struct RandoColorUiState {
@@ -1483,9 +1558,9 @@ static bool RandoUi_FindOverrideValue(const char* define, const char** out_value
     for (uint32_t i = 0; i < n; ++i) {
         const char* name = NULL;
         const char* value = NULL;
-        if (RandoLogic_GetOverride(i, &name, &value) && name != NULL &&
-            std::strcmp(name, define) == 0) {
-            if (out_value != NULL) *out_value = value;
+        if (RandoLogic_GetOverride(i, &name, &value) && name != NULL && std::strcmp(name, define) == 0) {
+            if (out_value != NULL)
+                *out_value = value;
             return true;
         }
     }
@@ -1504,8 +1579,10 @@ static unsigned RandoUi_FloatToRgb555(const float in[3]) {
     unsigned c[3];
     for (int i = 0; i < 3; ++i) {
         float f = in[i];
-        if (f < 0.0f) f = 0.0f;
-        if (f > 1.0f) f = 1.0f;
+        if (f < 0.0f)
+            f = 0.0f;
+        if (f > 1.0f)
+            f = 1.0f;
         c[i] = (unsigned)(f * 31.0f + 0.5f);
     }
     return (c[2] << 10) | (c[1] << 5) | c[0];
@@ -1515,7 +1592,8 @@ static unsigned RandoUi_FloatToRgb555(const float in[3]) {
  * into opt_value[] (those always hold the file defaults after a reparse). */
 static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
     for (int i = 0; i < sRandoColorUiCount; ++i) {
-        if (std::strcmp(sRandoColorUi[i].define, s->define) == 0) return &sRandoColorUi[i];
+        if (std::strcmp(sRandoColorUi[i].define, s->define) == 0)
+            return &sRandoColorUi[i];
     }
     if (sRandoColorUiCount >= (int)(sizeof(sRandoColorUi) / sizeof(sRandoColorUi[0]))) {
         return NULL;
@@ -1524,7 +1602,8 @@ static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
     std::snprintf(st->define, sizeof(st->define), "%s", s->define);
     for (int j = 0; j < RANDO_LOGIC_MAX_COLOR_SETS; ++j) {
         unsigned v = 0x7FFF; /* spec: white when no default given */
-        if (j < s->option_count) v = (unsigned)std::strtoul(s->opt_value[j], NULL, 16);
+        if (j < s->option_count)
+            v = (unsigned)std::strtoul(s->opt_value[j], NULL, 16);
         RandoUi_Rgb555ToFloat(v, st->col[j]);
     }
     /* Pre-existing override (sidecar restore / earlier session): adopt it. */
@@ -1537,10 +1616,12 @@ static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
         while (*p != '\0' && j < RANDO_LOGIC_MAX_COLOR_SETS) {
             char* end = NULL;
             unsigned v = (unsigned)std::strtoul(p, &end, 16);
-            if (end == p) break;
+            if (end == p)
+                break;
             RandoUi_Rgb555ToFloat(v, st->col[j++]);
             p = end;
-            while (*p == ',' || *p == ' ') ++p;
+            while (*p == ',' || *p == ' ')
+                ++p;
         }
     }
     return st;
@@ -1552,21 +1633,24 @@ static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
 static void RandoUi_ReparseAndRebind(void) {
     RandoLogic_Reparse();
     Port_RandoFileMenu_PersistLogicOverrides();
-    if (Rando_IsActive()) { Rando_Keymap_Apply(); Rando_Cosmetic_Apply(); }
+    if (Rando_IsActive()) {
+        Rando_Keymap_Apply();
+        Rando_Cosmetic_Apply();
+    }
 }
 
 static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
     char value[48]; /* 8 sets x "XXXX," fits; engine caps stored values at 31 */
     size_t len = 0;
     for (int j = 0; j < set_count && j < RANDO_LOGIC_MAX_COLOR_SETS; ++j) {
-        len += (size_t)std::snprintf(value + len, sizeof(value) - len, "%s%04X",
-                                     j ? "," : "", RandoUi_FloatToRgb555(st->col[j]));
-        if (len >= sizeof(value) - 1) break;
+        len += (size_t)std::snprintf(value + len, sizeof(value) - len, "%s%04X", j ? "," : "",
+                                     RandoUi_FloatToRgb555(st->col[j]));
+        if (len >= sizeof(value) - 1)
+            break;
     }
     if (len > 31) {
-        std::fprintf(stderr,
-                     "[RANDO] color override %s exceeds engine value cap (%u chars) - truncated\n",
-                     st->define, (unsigned)len);
+        std::fprintf(stderr, "[RANDO] color override %s exceeds engine value cap (%u chars) - truncated\n", st->define,
+                     (unsigned)len);
     }
     RandoLogic_SetOverride(st->define, value);
     st->dirty = true;
@@ -1590,21 +1674,25 @@ static void RandoUi_RemoveOverride(const char* define) {
     for (uint32_t i = 0; i < n && kept < RANDO_LOGIC_MAX_SETTINGS; ++i) {
         const char* name = NULL;
         const char* value = NULL;
-        if (!RandoLogic_GetOverride(i, &name, &value) || name == NULL) continue;
-        if (std::strcmp(name, define) == 0) continue;
+        if (!RandoLogic_GetOverride(i, &name, &value) || name == NULL)
+            continue;
+        if (std::strcmp(name, define) == 0)
+            continue;
         std::snprintf(names[kept], sizeof(names[0]), "%s", name);
         std::snprintf(values[kept], sizeof(values[0]), "%s", value ? value : "");
         kept++;
     }
     RandoLogic_ClearOverrides();
-    for (uint32_t i = 0; i < kept; ++i) RandoLogic_SetOverride(names[i], values[i]);
+    for (uint32_t i = 0; i < kept; ++i)
+        RandoLogic_SetOverride(names[i], values[i]);
     RandoUi_ReparseAndRebind();
     std::fprintf(stderr, "[RANDO] color override %s cleared (vanilla)\n", define);
 }
 
 static void DrawRandoCosmeticsSection(void) {
     ImGui::Spacing();
-    if (!ImGui::CollapsingHeader("Cosmetics", ImGuiTreeNodeFlags_DefaultOpen)) return;
+    if (!ImGui::CollapsingHeader("Cosmetics", ImGuiTreeNodeFlags_DefaultOpen))
+        return;
 
     static const char* kTunicColors[] = { "Green (Vanilla)", "Red", "Blue", "Purple", "Orange", "Grey", "Random" };
     static const char* kHeartColors[] = { "Red (Vanilla)", "Blue", "Green", "Yellow", "Purple", "Rainbow", "Random" };
@@ -1623,12 +1711,11 @@ static void DrawRandoCosmeticsSection(void) {
     }
 
     if (changed) {
-        Port_Config_SetRandoSettings(Port_Config_GetRandoGlitchless(), Port_Config_GetRandoObscure(),
-                                     Port_Config_GetRandoKinstones(), Port_Config_GetRandoEntrances(),
-                                     Port_Config_GetRandoDojos(), Port_Config_GetRandoOpenWorld(),
-                                     Port_Config_GetRandoItemPool(), Port_Config_GetRandoHomewarp(),
-                                     Port_Config_GetRandoStartSword(), Port_Config_GetRandoEarlyCrests(),
-                                     Port_Config_GetRandoInstantText(), tunic, heart);
+        Port_Config_SetRandoSettings(
+            Port_Config_GetRandoGlitchless(), Port_Config_GetRandoObscure(), Port_Config_GetRandoKinstones(),
+            Port_Config_GetRandoEntrances(), Port_Config_GetRandoDojos(), Port_Config_GetRandoOpenWorld(),
+            Port_Config_GetRandoItemPool(), Port_Config_GetRandoHomewarp(), Port_Config_GetRandoStartSword(),
+            Port_Config_GetRandoEarlyCrests(), Port_Config_GetRandoInstantText(), tunic, heart);
         /* Keep the F8 roll-settings struct in sync so a subsequent "Roll new
          * seed" carries the picked colors. */
         sRandoUiSettings.tunic_color = tunic;
@@ -1659,29 +1746,33 @@ static void RandoUi_ApplyOverride(const char* define, const char* value) {
 
 static bool RandoUi_SettingModified(const RandoLogicSetting* s) {
     switch (s->type) {
-    case RANDO_SETTING_FLAG: return s->flag_on != s->default_flag;
-    case RANDO_SETTING_DROPDOWN: return s->option_index != s->default_option;
-    case RANDO_SETTING_NUMBER: return s->number != s->default_number;
-    default: return false;
+        case RANDO_SETTING_FLAG:
+            return s->flag_on != s->default_flag;
+        case RANDO_SETTING_DROPDOWN:
+            return s->option_index != s->default_option;
+        case RANDO_SETTING_NUMBER:
+            return s->number != s->default_number;
+        default:
+            return false;
     }
 }
 
 static void RandoUi_SettingDefaultValue(const RandoLogicSetting* s, char* out, size_t out_len) {
     switch (s->type) {
-    case RANDO_SETTING_FLAG:
-        std::snprintf(out, out_len, "%s", s->default_flag ? "true" : "false");
-        break;
-    case RANDO_SETTING_DROPDOWN:
-        std::snprintf(out, out_len, "%s",
-                      (s->default_option >= 0 && s->default_option < s->option_count)
-                          ? s->opt_value[s->default_option] : "");
-        break;
-    case RANDO_SETTING_NUMBER:
-        std::snprintf(out, out_len, "%d", s->default_number);
-        break;
-    default:
-        out[0] = '\0';
-        break;
+        case RANDO_SETTING_FLAG:
+            std::snprintf(out, out_len, "%s", s->default_flag ? "true" : "false");
+            break;
+        case RANDO_SETTING_DROPDOWN:
+            std::snprintf(
+                out, out_len, "%s",
+                (s->default_option >= 0 && s->default_option < s->option_count) ? s->opt_value[s->default_option] : "");
+            break;
+        case RANDO_SETTING_NUMBER:
+            std::snprintf(out, out_len, "%d", s->default_number);
+            break;
+        default:
+            out[0] = '\0';
+            break;
     }
 }
 
@@ -1702,7 +1793,8 @@ static int RandoUi_ModifiedSettingCount(void) {
     const uint32_t count = RandoLogic_GetSettingCount();
     for (uint32_t i = 0; i < count; ++i) {
         const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-        if (s != NULL && s->type != RANDO_SETTING_COLOR && RandoUi_SettingModified(s)) ++n;
+        if (s != NULL && s->type != RANDO_SETTING_COLOR && RandoUi_SettingModified(s))
+            ++n;
     }
     return n;
 }
@@ -1713,7 +1805,8 @@ static void RandoUi_ResetSettingsToDefaults(void) {
     const uint32_t count = RandoLogic_GetSettingCount();
     for (uint32_t i = 0; i < count; ++i) {
         const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-        if (s == NULL || s->type == RANDO_SETTING_COLOR || !RandoUi_SettingModified(s)) continue;
+        if (s == NULL || s->type == RANDO_SETTING_COLOR || !RandoUi_SettingModified(s))
+            continue;
         char value[40];
         RandoUi_SettingDefaultValue(s, value, sizeof(value));
         RandoLogic_SetOverride(s->define, value);
@@ -1723,7 +1816,10 @@ static void RandoUi_ResetSettingsToDefaults(void) {
 
 /* ---- Presets (OoTR convention: load changes everything except cosmetics).
  * Each preset starts from file defaults, then applies its pairs. */
-typedef struct RandoUiPresetPair { const char* define; const char* value; } RandoUiPresetPair;
+typedef struct RandoUiPresetPair {
+    const char* define;
+    const char* value;
+} RandoUiPresetPair;
 typedef struct RandoUiPreset {
     const char* name;
     const char* desc;
@@ -1732,18 +1828,27 @@ typedef struct RandoUiPreset {
 } RandoUiPreset;
 
 static const RandoUiPresetPair kRandoPresetStandard[] = {
-    { "RUPEEMANIA", "true" },      { "SPECIALPOTS", "true" },    { "DIGGING", "true" },
-    { "UNDERWATER", "true" },      { "GOLDEN_ENEMY", "true" },   { "OPEN_TINGLE", "true" },
-    { "OPEN_LIBRARY", "true" },    { "CUCCO_SETTING", "CUCCO_5" },
-    { "GORON_SETTING", "GORON_5" },{ "BIGGORON_SETTING", "BIGGORON_NORMAL" },
+    { "RUPEEMANIA", "true" },       { "SPECIALPOTS", "true" },
+    { "DIGGING", "true" },          { "UNDERWATER", "true" },
+    { "GOLDEN_ENEMY", "true" },     { "OPEN_TINGLE", "true" },
+    { "OPEN_LIBRARY", "true" },     { "CUCCO_SETTING", "CUCCO_5" },
+    { "GORON_SETTING", "GORON_5" }, { "BIGGORON_SETTING", "BIGGORON_NORMAL" },
 };
 static const RandoUiPresetPair kRandoPresetKeysanity[] = {
-    { "RUPEEMANIA", "true" },      { "SPECIALPOTS", "true" },    { "DIGGING", "true" },
-    { "UNDERWATER", "true" },      { "GOLDEN_ENEMY", "true" },   { "OPEN_TINGLE", "true" },
-    { "OPEN_LIBRARY", "true" },    { "CUCCO_SETTING", "CUCCO_5" },
-    { "GORON_SETTING", "GORON_5" },{ "BIGGORON_SETTING", "BIGGORON_NORMAL" },
-    { "SMALL_KEYS_SETTING", "SMALL_KEYSANITY" }, { "BIG_KEYS_SETTING", "BIG_KEYSANITY" },
-    { "MAP_SETTING", "MAP_KEYSANITY" },          { "COMPASS_SETTING", "COMPASS_KEYSANITY" },
+    { "RUPEEMANIA", "true" },
+    { "SPECIALPOTS", "true" },
+    { "DIGGING", "true" },
+    { "UNDERWATER", "true" },
+    { "GOLDEN_ENEMY", "true" },
+    { "OPEN_TINGLE", "true" },
+    { "OPEN_LIBRARY", "true" },
+    { "CUCCO_SETTING", "CUCCO_5" },
+    { "GORON_SETTING", "GORON_5" },
+    { "BIGGORON_SETTING", "BIGGORON_NORMAL" },
+    { "SMALL_KEYS_SETTING", "SMALL_KEYSANITY" },
+    { "BIG_KEYS_SETTING", "BIG_KEYSANITY" },
+    { "MAP_SETTING", "MAP_KEYSANITY" },
+    { "COMPASS_SETTING", "COMPASS_KEYSANITY" },
 };
 static const RandoUiPresetPair kRandoPresetOpen[] = {
     { "OPENWORLD", "OPENWORLD_ON" }, { "OPEN_WIND_TRIBE", "true" }, { "OPEN_TINGLE", "true" },
@@ -1775,18 +1880,21 @@ static const RandoUiPreset kRandoPresets[] = {
 };
 
 static void RandoUi_ApplyPreset(int preset_index) {
-    if (preset_index < 0 || preset_index >= (int)(sizeof(kRandoPresets) / sizeof(kRandoPresets[0]))) return;
+    if (preset_index < 0 || preset_index >= (int)(sizeof(kRandoPresets) / sizeof(kRandoPresets[0])))
+        return;
     const RandoUiPreset* p = &kRandoPresets[preset_index];
     /* Start from file defaults so presets are absolute, not additive. */
     const uint32_t count = RandoLogic_GetSettingCount();
     for (uint32_t i = 0; i < count; ++i) {
         const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-        if (s == NULL || s->type == RANDO_SETTING_COLOR || !RandoUi_SettingModified(s)) continue;
+        if (s == NULL || s->type == RANDO_SETTING_COLOR || !RandoUi_SettingModified(s))
+            continue;
         char value[40];
         RandoUi_SettingDefaultValue(s, value, sizeof(value));
         RandoLogic_SetOverride(s->define, value);
     }
-    for (int i = 0; i < p->count; ++i) RandoLogic_SetOverride(p->pairs[i].define, p->pairs[i].value);
+    for (int i = 0; i < p->count; ++i)
+        RandoLogic_SetOverride(p->pairs[i].define, p->pairs[i].value);
     RandoUi_ReparseAndRebind();
     std::fprintf(stderr, "[RANDO] preset applied: %s\n", p->name);
 }
@@ -1797,7 +1905,8 @@ static void DrawRandoPresetsRow(void) {
     ImGui::SetNextItemWidth(220);
     if (ImGui::BeginCombo("##rando_preset", kRandoPresets[sPresetIdx].name)) {
         for (int i = 0; i < preset_count; ++i) {
-            if (ImGui::Selectable(kRandoPresets[i].name, i == sPresetIdx)) sPresetIdx = i;
+            if (ImGui::Selectable(kRandoPresets[i].name, i == sPresetIdx))
+                sPresetIdx = i;
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
                 ImGui::BeginTooltip();
                 ImGui::PushTextWrapPos(360.0f);
@@ -1809,7 +1918,8 @@ static void DrawRandoPresetsRow(void) {
         ImGui::EndCombo();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Load preset")) RandoUi_ApplyPreset(sPresetIdx);
+    if (ImGui::Button("Load preset"))
+        RandoUi_ApplyPreset(sPresetIdx);
     RandoUi_HelpTooltip(kRandoPresets[sPresetIdx].desc);
 }
 
@@ -1823,46 +1933,49 @@ static void DrawRandoSettingRow(const RandoLogicSetting* s, int idx) {
         ImGui::SameLine(0.0f, 4.0f);
     }
     switch (s->type) {
-    case RANDO_SETTING_FLAG: {
-        bool v = s->flag_on;
-        if (ImGui::Checkbox(s->label, &v)) RandoUi_ApplyOverride(s->define, v ? "true" : "false");
-        break;
-    }
-    case RANDO_SETTING_DROPDOWN: {
-        const int oi = s->option_index;
-        const char* preview = (oi >= 0 && oi < s->option_count) ? s->opt_label[oi] : "?";
-        ImGui::SetNextItemWidth(200);
-        if (ImGui::BeginCombo(s->label, preview)) {
-            for (int o = 0; o < s->option_count; ++o) {
-                const bool sel = (o == oi);
-                if (ImGui::Selectable(s->opt_label[o], sel)) RandoUi_ApplyOverride(s->define, s->opt_value[o]);
-                if (sel) ImGui::SetItemDefaultFocus();
+        case RANDO_SETTING_FLAG: {
+            bool v = s->flag_on;
+            if (ImGui::Checkbox(s->label, &v))
+                RandoUi_ApplyOverride(s->define, v ? "true" : "false");
+            break;
+        }
+        case RANDO_SETTING_DROPDOWN: {
+            const int oi = s->option_index;
+            const char* preview = (oi >= 0 && oi < s->option_count) ? s->opt_label[oi] : "?";
+            ImGui::SetNextItemWidth(200);
+            if (ImGui::BeginCombo(s->label, preview)) {
+                for (int o = 0; o < s->option_count; ++o) {
+                    const bool sel = (o == oi);
+                    if (ImGui::Selectable(s->opt_label[o], sel))
+                        RandoUi_ApplyOverride(s->define, s->opt_value[o]);
+                    if (sel)
+                        ImGui::SetItemDefaultFocus();
+                }
+                ImGui::EndCombo();
             }
-            ImGui::EndCombo();
+            break;
         }
-        break;
-    }
-    case RANDO_SETTING_NUMBER: {
-        /* Commit on release - every commit reparses the whole .logic file,
-         * far too heavy per drag pixel. */
-        static int sNumEditIdx = -1;
-        static int sNumEditVal = 0;
-        int v = (sNumEditIdx == idx) ? sNumEditVal : s->number;
-        ImGui::SetNextItemWidth(200);
-        if (ImGui::SliderInt(s->label, &v, s->num_min, s->num_max)) {
-            sNumEditIdx = idx;
-            sNumEditVal = v;
+        case RANDO_SETTING_NUMBER: {
+            /* Commit on release - every commit reparses the whole .logic file,
+             * far too heavy per drag pixel. */
+            static int sNumEditIdx = -1;
+            static int sNumEditVal = 0;
+            int v = (sNumEditIdx == idx) ? sNumEditVal : s->number;
+            ImGui::SetNextItemWidth(200);
+            if (ImGui::SliderInt(s->label, &v, s->num_min, s->num_max)) {
+                sNumEditIdx = idx;
+                sNumEditVal = v;
+            }
+            if (ImGui::IsItemDeactivatedAfterEdit() && sNumEditIdx == idx) {
+                char text[32];
+                std::snprintf(text, sizeof(text), "%d", sNumEditVal);
+                RandoUi_ApplyOverride(s->define, text);
+                sNumEditIdx = -1;
+            }
+            break;
         }
-        if (ImGui::IsItemDeactivatedAfterEdit() && sNumEditIdx == idx) {
-            char text[32];
-            std::snprintf(text, sizeof(text), "%d", sNumEditVal);
-            RandoUi_ApplyOverride(s->define, text);
-            sNumEditIdx = -1;
-        }
-        break;
-    }
-    default:
-        break;
+        default:
+            break;
     }
     if (ImGui::BeginPopupContextItem("##setting_ctx")) {
         ImGui::TextDisabled("%s", s->define);
@@ -1873,7 +1986,8 @@ static void DrawRandoSettingRow(const RandoLogicSetting* s, int idx) {
         }
         ImGui::EndPopup();
     }
-    if (s->tooltip[0]) RandoUi_HelpTooltip(s->tooltip);
+    if (s->tooltip[0])
+        RandoUi_HelpTooltip(s->tooltip);
     ImGui::PopID();
 }
 
@@ -1889,7 +2003,8 @@ static void DrawRandoLogicSettingsBrowser(float height) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.95f, 0.75f, 0.25f, 1.0f), "* %d changed", modified);
         ImGui::SameLine();
-        if (ImGui::SmallButton("Reset all")) ImGui::OpenPopup("##rando_reset_all");
+        if (ImGui::SmallButton("Reset all"))
+            ImGui::OpenPopup("##rando_reset_all");
         if (ImGui::BeginPopup("##rando_reset_all")) {
             ImGui::TextUnformatted("Reset every setting to the file defaults?");
             if (ImGui::Button("Reset")) {
@@ -1897,7 +2012,8 @@ static void DrawRandoLogicSettingsBrowser(float height) {
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Keep")) ImGui::CloseCurrentPopup();
+            if (ImGui::Button("Keep"))
+                ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
         }
     }
@@ -1909,10 +2025,11 @@ static void DrawRandoLogicSettingsBrowser(float height) {
     bool tab_open = true;
     for (uint32_t i = 0; i < count; ++i) {
         const RandoLogicSetting* s = RandoLogic_GetSetting(i);
-        if (s == NULL || s->type == RANDO_SETTING_COLOR) continue;
+        if (s == NULL || s->type == RANDO_SETTING_COLOR)
+            continue;
         if (filtering) {
-            if (!sFilter.PassFilter(s->label) && !sFilter.PassFilter(s->define) &&
-                !sFilter.PassFilter(s->group) && !sFilter.PassFilter(s->tab)) {
+            if (!sFilter.PassFilter(s->label) && !sFilter.PassFilter(s->define) && !sFilter.PassFilter(s->group) &&
+                !sFilter.PassFilter(s->tab)) {
                 continue;
             }
             /* Flat results with tab > group breadcrumbs between sections. */
@@ -1932,21 +2049,24 @@ static void DrawRandoLogicSettingsBrowser(float height) {
                 int tab_changed = 0;
                 for (uint32_t j = i; j < count; ++j) {
                     const RandoLogicSetting* t = RandoLogic_GetSetting(j);
-                    if (t == NULL) continue;
-                    if (std::strcmp(t->tab, s->tab) != 0) break; /* tabs are contiguous in file order */
-                    if (t->type != RANDO_SETTING_COLOR && RandoUi_SettingModified(t)) ++tab_changed;
+                    if (t == NULL)
+                        continue;
+                    if (std::strcmp(t->tab, s->tab) != 0)
+                        break; /* tabs are contiguous in file order */
+                    if (t->type != RANDO_SETTING_COLOR && RandoUi_SettingModified(t))
+                        ++tab_changed;
                 }
                 char header[64];
                 if (tab_changed > 0) {
-                    std::snprintf(header, sizeof(header), "%s (* %d changed)###tab_%s", s->tab,
-                                  tab_changed, s->tab);
+                    std::snprintf(header, sizeof(header), "%s (* %d changed)###tab_%s", s->tab, tab_changed, s->tab);
                 } else {
                     std::snprintf(header, sizeof(header), "%s###tab_%s", s->tab, s->tab);
                 }
                 tab_open = ImGui::CollapsingHeader(
                     header, (std::strcmp(s->tab, "Main Settings") == 0) ? ImGuiTreeNodeFlags_DefaultOpen : 0);
             }
-            if (!tab_open) continue;
+            if (!tab_open)
+                continue;
             if (std::strcmp(cur_group, s->group) != 0) {
                 std::snprintf(cur_group, sizeof(cur_group), "%s", s->group);
                 ImGui::SeparatorText(s->group);
@@ -1963,53 +2083,87 @@ static void DrawRandoLogicSettingsBrowser(float height) {
  * dungeon key status, and a list of reachable checks grouped by area. */
 
 static bool RandoUi_CheckItemOwned(const char* name) {
-    if (name == nullptr || std::strlen(name) < 7) return false;
-    if (std::strncmp(name, "Items.", 6) != 0) return false;
+    if (name == nullptr || std::strlen(name) < 7)
+        return false;
+    if (std::strncmp(name, "Items.", 6) != 0)
+        return false;
     const char* item = name + 6;
 
     /* Unique progress items */
-    if (std::strcmp(item, "GustJar") == 0) return GetInventoryValue(ITEM_GUST_JAR) != 0;
-    if (std::strcmp(item, "PacciCane") == 0) return GetInventoryValue(ITEM_PACCI_CANE) != 0;
-    if (std::strcmp(item, "MoleMitts") == 0) return GetInventoryValue(ITEM_MOLE_MITTS) != 0;
-    if (std::strcmp(item, "PegasusBoots") == 0) return GetInventoryValue(ITEM_PEGASUS_BOOTS) != 0;
-    if (std::strcmp(item, "RocsCape") == 0) return GetInventoryValue(ITEM_ROCS_CAPE) != 0;
-    if (std::strcmp(item, "Ocarina") == 0) return GetInventoryValue(ITEM_OCARINA) != 0;
-    if (std::strcmp(item, "Lantern") == 0) return GetInventoryValue(ITEM_LANTERN_ON) != 0 || GetInventoryValue(ITEM_LANTERN_OFF) != 0;
-    if (std::strcmp(item, "Flippers") == 0) return GetInventoryValue(ITEM_FLIPPERS) != 0;
-    if (std::strcmp(item, "PowerBracelets") == 0) return GetInventoryValue(ITEM_POWER_BRACELETS) != 0;
-    if (std::strcmp(item, "GripRing") == 0) return GetInventoryValue(ITEM_GRIP_RING) != 0;
+    if (std::strcmp(item, "GustJar") == 0)
+        return GetInventoryValue(ITEM_GUST_JAR) != 0;
+    if (std::strcmp(item, "PacciCane") == 0)
+        return GetInventoryValue(ITEM_PACCI_CANE) != 0;
+    if (std::strcmp(item, "MoleMitts") == 0)
+        return GetInventoryValue(ITEM_MOLE_MITTS) != 0;
+    if (std::strcmp(item, "PegasusBoots") == 0)
+        return GetInventoryValue(ITEM_PEGASUS_BOOTS) != 0;
+    if (std::strcmp(item, "RocsCape") == 0)
+        return GetInventoryValue(ITEM_ROCS_CAPE) != 0;
+    if (std::strcmp(item, "Ocarina") == 0)
+        return GetInventoryValue(ITEM_OCARINA) != 0;
+    if (std::strcmp(item, "Lantern") == 0)
+        return GetInventoryValue(ITEM_LANTERN_ON) != 0 || GetInventoryValue(ITEM_LANTERN_OFF) != 0;
+    if (std::strcmp(item, "Flippers") == 0)
+        return GetInventoryValue(ITEM_FLIPPERS) != 0;
+    if (std::strcmp(item, "PowerBracelets") == 0)
+        return GetInventoryValue(ITEM_POWER_BRACELETS) != 0;
+    if (std::strcmp(item, "GripRing") == 0)
+        return GetInventoryValue(ITEM_GRIP_RING) != 0;
 
     /* Progressive items (Sword/Shield/Bow/Boomerang/Bombs) */
-    if (std::strcmp(item, "SmithSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 1;
-    if (std::strcmp(item, "GreenSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 2;
-    if (std::strcmp(item, "RedSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 3;
-    if (std::strcmp(item, "BlueSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 4;
-    if (std::strcmp(item, "FourSword") == 0) return GetInventoryValue(ITEM_SMITH_SWORD) >= 5;
+    if (std::strcmp(item, "SmithSword") == 0)
+        return GetInventoryValue(ITEM_SMITH_SWORD) != 0;
+    if (std::strcmp(item, "GreenSword") == 0)
+        return GetInventoryValue(ITEM_GREEN_SWORD) != 0;
+    if (std::strcmp(item, "RedSword") == 0)
+        return GetInventoryValue(ITEM_RED_SWORD) != 0;
+    if (std::strcmp(item, "BlueSword") == 0)
+        return GetInventoryValue(ITEM_BLUE_SWORD) != 0;
+    if (std::strcmp(item, "FourSword") == 0)
+        return GetInventoryValue(ITEM_FOURSWORD) != 0;
 
-    if (std::strcmp(item, "Shield") == 0) return GetInventoryValue(ITEM_SHIELD) >= 1;
-    if (std::strcmp(item, "MirrorShield") == 0) return GetInventoryValue(ITEM_SHIELD) >= 2;
+    if (std::strcmp(item, "Shield") == 0)
+        return GetInventoryValue(ITEM_SHIELD) != 0;
+    if (std::strcmp(item, "MirrorShield") == 0)
+        return GetInventoryValue(ITEM_MIRROR_SHIELD) != 0;
 
-    if (std::strcmp(item, "Bow") == 0) return GetInventoryValue(ITEM_BOW) >= 1;
-    if (std::strcmp(item, "LightArrow") == 0) return GetInventoryValue(ITEM_BOW) >= 2;
+    if (std::strcmp(item, "Bow") == 0)
+        return GetInventoryValue(ITEM_BOW) != 0;
+    if (std::strcmp(item, "LightArrow") == 0)
+        return GetInventoryValue(ITEM_LIGHT_ARROW) != 0;
 
-    if (std::strcmp(item, "Bombs") == 0) return GetInventoryValue(ITEM_BOMBS) >= 1;
-    if (std::strcmp(item, "RemoteBombs") == 0) return GetInventoryValue(ITEM_REMOTE_BOMBS) >= 1;
+    if (std::strcmp(item, "Bombs") == 0)
+        return GetInventoryValue(ITEM_BOMBS) >= 1;
+    if (std::strcmp(item, "RemoteBombs") == 0)
+        return GetInventoryValue(ITEM_REMOTE_BOMBS) >= 1;
 
-    if (std::strcmp(item, "Boomerang") == 0) return GetInventoryValue(ITEM_BOOMERANG) >= 1;
-    if (std::strcmp(item, "MagicBoomerang") == 0) return GetInventoryValue(ITEM_BOOMERANG) >= 2;
+    if (std::strcmp(item, "Boomerang") == 0)
+        return GetInventoryValue(ITEM_BOOMERANG) != 0;
+    if (std::strcmp(item, "MagicBoomerang") == 0)
+        return GetInventoryValue(ITEM_MAGIC_BOOMERANG) != 0;
 
     /* Elements */
-    if (std::strcmp(item, "EarthElement") == 0) return GetInventoryValue(ITEM_EARTH_ELEMENT) != 0;
-    if (std::strcmp(item, "FireElement") == 0) return GetInventoryValue(ITEM_FIRE_ELEMENT) != 0;
-    if (std::strcmp(item, "WaterElement") == 0) return GetInventoryValue(ITEM_WATER_ELEMENT) != 0;
-    if (std::strcmp(item, "WindElement") == 0) return GetInventoryValue(ITEM_WIND_ELEMENT) != 0;
+    if (std::strcmp(item, "EarthElement") == 0)
+        return GetInventoryValue(ITEM_EARTH_ELEMENT) != 0;
+    if (std::strcmp(item, "FireElement") == 0)
+        return GetInventoryValue(ITEM_FIRE_ELEMENT) != 0;
+    if (std::strcmp(item, "WaterElement") == 0)
+        return GetInventoryValue(ITEM_WATER_ELEMENT) != 0;
+    if (std::strcmp(item, "WindElement") == 0)
+        return GetInventoryValue(ITEM_WIND_ELEMENT) != 0;
 
     /* Quest Items */
-    if (std::strcmp(item, "GraveyardKey") == 0) return GetInventoryValue(ITEM_QST_GRAVEYARD_KEY) != 0;
-    if (std::strcmp(item, "LonLonKey") == 0) return GetInventoryValue(ITEM_QST_LONLON_KEY) != 0;
-    if (std::strcmp(item, "WakeUpMushroom") == 0) return GetInventoryValue(ITEM_QST_MUSHROOM) != 0;
-    if (std::strcmp(item, "JabberNut") == 0) return GetInventoryValue(ITEM_JABBERNUT) != 0;
-    if (std::strcmp(item, "CarlovMedal") == 0) return GetInventoryValue(ITEM_QST_CARLOV_MEDAL) != 0;
+    if (std::strcmp(item, "GraveyardKey") == 0)
+        return GetInventoryValue(ITEM_QST_GRAVEYARD_KEY) != 0;
+    if (std::strcmp(item, "LonLonKey") == 0)
+        return GetInventoryValue(ITEM_QST_LONLON_KEY) != 0;
+    if (std::strcmp(item, "WakeUpMushroom") == 0)
+        return GetInventoryValue(ITEM_QST_MUSHROOM) != 0;
+    if (std::strcmp(item, "JabberNut") == 0)
+        return GetInventoryValue(ITEM_JABBERNUT) != 0;
+    if (std::strcmp(item, "CarlovMedal") == 0)
+        return GetInventoryValue(ITEM_QST_CARLOV_MEDAL) != 0;
 
     /* Dungeon Keys: format Items.SmallKey.0x180, Items.SmallKey.0x181... */
     if (std::strncmp(item, "SmallKey.0x", 11) == 0 && std::strlen(item) >= 14) {
@@ -2036,19 +2190,20 @@ static bool RandoUi_CheckItemOwned(const char* name) {
 
 static bool RandoUi_LocationChecked(uint32_t loc_idx) {
     uint32_t key = RandoLogic_GetLocationKeyAt(loc_idx);
-    if (key == UINT32_MAX) return false;
+    if (key == UINT32_MAX)
+        return false;
 
     if (key & 0x80000000u) {
         uint32_t group = (key >> 16) & 0x7FFF;
         uint32_t subkey = key & 0xFFFF;
         if (group == RANDO_SCRIPTED_KEY_SPECIAL) {
             switch (subkey) {
-            case RANDO_SPECIAL_KEY_BELL_HP:
-                return CheckLocalFlagByBank(GetFlagBankOffset(2), 0xd0); /* Hyrule Town local flag 0xd0 */
-            case RANDO_SPECIAL_KEY_TINGLE_TROPHY:
-                return GetInventoryValue(ITEM_QST_TINGLE_TROPHY) != 0;
-            case RANDO_SPECIAL_KEY_FORTRESS_PRIZE:
-                return GetInventoryValue(ITEM_OCARINA) != 0;
+                case RANDO_SPECIAL_KEY_BELL_HP:
+                    return CheckLocalFlagByBank(GetFlagBankOffset(2), 0xd0); /* Hyrule Town local flag 0xd0 */
+                case RANDO_SPECIAL_KEY_TINGLE_TROPHY:
+                    return GetInventoryValue(ITEM_QST_TINGLE_TROPHY) != 0;
+                case RANDO_SPECIAL_KEY_FORTRESS_PRIZE:
+                    return GetInventoryValue(ITEM_OCARINA) != 0;
             }
         }
         return false;
@@ -2073,19 +2228,22 @@ static bool sShowRandoTracker = false;
 /* One tracker grid/element cell: bracketed label, accent-colored when owned,
  * dimmed when not. */
 static void TrackerCell(const char* label, bool owned, const ImVec4& color) {
-    if (owned) ImGui::TextColored(color, "[ %s ]", label);
-    else       ImGui::TextDisabled("[ %s ]", label);
+    if (owned)
+        ImGui::TextColored(color, "[ %s ]", label);
+    else
+        ImGui::TextDisabled("[ %s ]", label);
 }
 
 static void DrawRandoTrackerOverlay(void) {
-    if (!sShowRandoTracker) return;
+    if (!sShowRandoTracker)
+        return;
 
     static bool sReached[RANDO_LOGIC_MAX_LOCATIONS] = {};
     static bool sChecked[RANDO_LOGIC_MAX_LOCATIONS] = {};
-    static int sFrameThrottle = 0;
+    static int sFrameThrottle = 15;
     const uint32_t count = RandoLogic_GetLocationCountRaw();
 
-    if (++sFrameThrottle >= 15 || sFrameThrottle == 1) {
+    if (++sFrameThrottle >= 15) {
         sFrameThrottle = 0;
         const uint16_t* active_table = Rando_GetRandomizedItemTable();
         RandoLogic_EvaluateReachability(active_table, RandoUi_CheckItemOwned, sReached, count);
@@ -2098,7 +2256,10 @@ static void DrawRandoTrackerOverlay(void) {
     if (ImGui::Begin("Randomizer HUD Tracker", &sShowRandoTracker, ImGuiWindowFlags_NoCollapse)) {
         if (ImGui::BeginTabBar("##tracker_tabs")) {
             if (ImGui::BeginTabItem("Items")) {
-                struct TrackerItem { const char* label; const char* sym; };
+                struct TrackerItem {
+                    const char* label;
+                    const char* sym;
+                };
                 static const TrackerItem kMainItems[] = {
                     { "Gust Jar", "Items.GustJar" },
                     { "Cane of Pacci", "Items.PacciCane" },
@@ -2115,9 +2276,11 @@ static void DrawRandoTrackerOverlay(void) {
                 ImGui::SeparatorText("Key Items");
                 if (ImGui::BeginTable("##tracker_items_grid", 5, ImGuiTableFlags_SizingFixedFit)) {
                     for (int i = 0; i < 10; ++i) {
-                        if ((i % 5) == 0) ImGui::TableNextRow();
+                        if ((i % 5) == 0)
+                            ImGui::TableNextRow();
                         ImGui::TableSetColumnIndex(i % 5);
-                        TrackerCell(kMainItems[i].label, RandoUi_CheckItemOwned(kMainItems[i].sym), ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
+                        TrackerCell(kMainItems[i].label, RandoUi_CheckItemOwned(kMainItems[i].sym),
+                                    ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
                     }
                     ImGui::EndTable();
                 }
@@ -2128,35 +2291,54 @@ static void DrawRandoTrackerOverlay(void) {
                     ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
 
                     ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::Text("Sword");
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Sword");
                     ImGui::TableSetColumnIndex(1);
-                    if (RandoUi_CheckItemOwned("Items.FourSword")) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Four Sword (Infused)");
-                    else if (RandoUi_CheckItemOwned("Items.BlueSword")) ImGui::Text("Blue Sword");
-                    else if (RandoUi_CheckItemOwned("Items.RedSword")) ImGui::Text("Red Sword");
-                    else if (RandoUi_CheckItemOwned("Items.GreenSword")) ImGui::Text("Green Sword");
-                    else if (RandoUi_CheckItemOwned("Items.SmithSword")) ImGui::Text("Smith's Sword");
-                    else ImGui::TextDisabled("None");
+                    if (RandoUi_CheckItemOwned("Items.FourSword"))
+                        ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Four Sword (Infused)");
+                    else if (RandoUi_CheckItemOwned("Items.BlueSword"))
+                        ImGui::Text("Blue Sword");
+                    else if (RandoUi_CheckItemOwned("Items.RedSword"))
+                        ImGui::Text("Red Sword");
+                    else if (RandoUi_CheckItemOwned("Items.GreenSword"))
+                        ImGui::Text("Green Sword");
+                    else if (RandoUi_CheckItemOwned("Items.SmithSword"))
+                        ImGui::Text("Smith's Sword");
+                    else
+                        ImGui::TextDisabled("None");
 
                     ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::Text("Shield");
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Shield");
                     ImGui::TableSetColumnIndex(1);
-                    if (RandoUi_CheckItemOwned("Items.MirrorShield")) ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.95f, 1.0f), "Mirror Shield");
-                    else if (RandoUi_CheckItemOwned("Items.Shield")) ImGui::Text("Small Shield");
-                    else ImGui::TextDisabled("None");
+                    if (RandoUi_CheckItemOwned("Items.MirrorShield"))
+                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.95f, 1.0f), "Mirror Shield");
+                    else if (RandoUi_CheckItemOwned("Items.Shield"))
+                        ImGui::Text("Small Shield");
+                    else
+                        ImGui::TextDisabled("None");
 
                     ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::Text("Bow");
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Bow");
                     ImGui::TableSetColumnIndex(1);
-                    if (RandoUi_CheckItemOwned("Items.LightArrow")) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Light Bow");
-                    else if (RandoUi_CheckItemOwned("Items.Bow")) ImGui::Text("Bow");
-                    else ImGui::TextDisabled("None");
+                    if (RandoUi_CheckItemOwned("Items.LightArrow"))
+                        ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Light Bow");
+                    else if (RandoUi_CheckItemOwned("Items.Bow"))
+                        ImGui::Text("Bow");
+                    else
+                        ImGui::TextDisabled("None");
 
                     ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0); ImGui::Text("Bombs");
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::Text("Bombs");
                     ImGui::TableSetColumnIndex(1);
-                    if (RandoUi_CheckItemOwned("Items.RemoteBombs")) ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.95f, 1.0f), "Remote Bombs");
-                    else if (RandoUi_CheckItemOwned("Items.Bombs")) ImGui::Text("Normal Bombs");
-                    else ImGui::TextDisabled("None");
+                    if (RandoUi_CheckItemOwned("Items.RemoteBombs"))
+                        ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.95f, 1.0f), "Remote Bombs");
+                    else if (RandoUi_CheckItemOwned("Items.Bombs"))
+                        ImGui::Text("Normal Bombs");
+                    else
+                        ImGui::TextDisabled("None");
 
                     ImGui::EndTable();
                 }
@@ -2165,13 +2347,17 @@ static void DrawRandoTrackerOverlay(void) {
                 if (ImGui::BeginTable("##tracker_elements", 4, ImGuiTableFlags_SizingFixedFit)) {
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    TrackerCell("Earth Element", RandoUi_CheckItemOwned("Items.EarthElement"), ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
+                    TrackerCell("Earth Element", RandoUi_CheckItemOwned("Items.EarthElement"),
+                                ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
                     ImGui::TableSetColumnIndex(1);
-                    TrackerCell("Fire Element", RandoUi_CheckItemOwned("Items.FireElement"), ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
+                    TrackerCell("Fire Element", RandoUi_CheckItemOwned("Items.FireElement"),
+                                ImVec4(0.9f, 0.4f, 0.4f, 1.0f));
                     ImGui::TableSetColumnIndex(2);
-                    TrackerCell("Water Element", RandoUi_CheckItemOwned("Items.WaterElement"), ImVec4(0.4f, 0.6f, 0.9f, 1.0f));
+                    TrackerCell("Water Element", RandoUi_CheckItemOwned("Items.WaterElement"),
+                                ImVec4(0.4f, 0.6f, 0.9f, 1.0f));
                     ImGui::TableSetColumnIndex(3);
-                    TrackerCell("Wind Element", RandoUi_CheckItemOwned("Items.WindElement"), ImVec4(0.95f, 0.8f, 0.2f, 1.0f));
+                    TrackerCell("Wind Element", RandoUi_CheckItemOwned("Items.WindElement"),
+                                ImVec4(0.95f, 0.8f, 0.2f, 1.0f));
 
                     ImGui::EndTable();
                 }
@@ -2179,9 +2365,13 @@ static void DrawRandoTrackerOverlay(void) {
             }
 
             if (ImGui::BeginTabItem("Dungeons")) {
-                static const struct { const char* name; int idx; const char* elem; } kDungeonInfo[] = {
+                static const struct {
+                    const char* name;
+                    int idx;
+                    const char* elem;
+                } kDungeonInfo[] = {
                     { "Deepwood Shrine", 1, "Items.EarthElement" },
-                    { "Cave of Flames",  2, "Items.FireElement" },
+                    { "Cave of Flames", 2, "Items.FireElement" },
                     { "Fortress of Winds", 3, "Items.WindElement" },
                     { "Temple of Droplets", 4, "Items.WaterElement" },
                     { "Palace of Winds", 6, "Items.WindElement" },
@@ -2189,7 +2379,9 @@ static void DrawRandoTrackerOverlay(void) {
                     { "Royal Crypt", 5, "" },
                 };
 
-                if (ImGui::BeginTable("##tracker_dungeons", 5, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter)) {
+                if (ImGui::BeginTable("##tracker_dungeons", 5,
+                                      ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg |
+                                          ImGuiTableFlags_BordersOuter)) {
                     ImGui::TableSetupColumn("Dungeon", ImGuiTableColumnFlags_WidthFixed, 180.0f);
                     ImGui::TableSetupColumn("Element", ImGuiTableColumnFlags_WidthFixed, 80.0f);
                     ImGui::TableSetupColumn("Keys", ImGuiTableColumnFlags_WidthFixed, 80.0f);
@@ -2206,27 +2398,35 @@ static void DrawRandoTrackerOverlay(void) {
                         ImGui::TableSetColumnIndex(1);
                         if (kDungeonInfo[i].elem[0]) {
                             bool has_el = RandoUi_CheckItemOwned(kDungeonInfo[i].elem);
-                            if (has_el) ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Yes");
-                            else        ImGui::TextDisabled("-");
+                            if (has_el)
+                                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Yes");
+                            else
+                                ImGui::TextDisabled("-");
                         } else {
                             ImGui::TextDisabled("N/A");
                         }
 
                         ImGui::TableSetColumnIndex(2);
                         unsigned keys = Rando_GetDungeonKeyCount(idx);
-                        if (keys > 0) ImGui::Text("%u keys", keys);
-                        else          ImGui::TextDisabled("0");
+                        if (keys > 0)
+                            ImGui::Text("%u keys", keys);
+                        else
+                            ImGui::TextDisabled("0");
 
                         ImGui::TableSetColumnIndex(3);
                         bool has_bk = Rando_GetDungeonHasBigKey(idx);
-                        if (has_bk) ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Yes");
-                        else        ImGui::TextDisabled("-");
+                        if (has_bk)
+                            ImGui::TextColored(ImVec4(0.95f, 0.8f, 0.2f, 1.0f), "Yes");
+                        else
+                            ImGui::TextDisabled("-");
 
                         ImGui::TableSetColumnIndex(4);
                         if (idx <= 6) {
                             bool cleared = CheckGlobalFlag(idx);
-                            if (cleared) ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Defeated");
-                            else         ImGui::TextDisabled("-");
+                            if (cleared)
+                                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.4f, 1.0f), "Defeated");
+                            else
+                                ImGui::TextDisabled("-");
                         } else {
                             ImGui::TextDisabled("N/A");
                         }
@@ -2248,18 +2448,23 @@ static void DrawRandoTrackerOverlay(void) {
 
                 for (uint32_t i = 0; i < count; ++i) {
                     RandoLogicLocationType t = RandoLogic_GetLocationType(i);
-                    if (t == RANDO_LOGIC_LOCATION_HELPER) continue;
+                    if (t == RANDO_LOGIC_LOCATION_HELPER)
+                        continue;
 
                     const char* name = RandoLogic_GetLocationName(i);
-                    if (name == nullptr || name[0] == '\0') continue;
+                    if (name == nullptr || name[0] == '\0')
+                        continue;
 
                     bool checked = sChecked[i];
-                    if (checked) continue;
+                    if (checked)
+                        continue;
 
                     bool reached = sReached[i];
-                    if (!reached) continue;
+                    if (!reached)
+                        continue;
 
-                    if (sLocFilter.IsActive() && !sLocFilter.PassFilter(name)) continue;
+                    if (sLocFilter.IsActive() && !sLocFilter.PassFilter(name))
+                        continue;
 
                     char area_name[48] = "Overworld";
                     const char* under = std::strchr(name, '_');
@@ -2273,10 +2478,14 @@ static void DrawRandoTrackerOverlay(void) {
                         int avail = 0;
                         for (uint32_t j = i; j < count; ++j) {
                             const char* n = RandoLogic_GetLocationName(j);
-                            if (n == nullptr || RandoLogic_GetLocationType(j) == RANDO_LOGIC_LOCATION_HELPER) continue;
-                            if (sChecked[j] || !sReached[j]) continue;
-                            if (sLocFilter.IsActive() && !sLocFilter.PassFilter(n)) continue;
-                            if (std::strncmp(n, cur_area, std::strlen(cur_area)) == 0 && n[std::strlen(cur_area)] == '_') {
+                            if (n == nullptr || RandoLogic_GetLocationType(j) == RANDO_LOGIC_LOCATION_HELPER)
+                                continue;
+                            if (sChecked[j] || !sReached[j])
+                                continue;
+                            if (sLocFilter.IsActive() && !sLocFilter.PassFilter(n))
+                                continue;
+                            if (std::strncmp(n, cur_area, std::strlen(cur_area)) == 0 &&
+                                n[std::strlen(cur_area)] == '_') {
                                 ++avail;
                             }
                         }
@@ -2287,7 +2496,8 @@ static void DrawRandoTrackerOverlay(void) {
 
                     if (area_open) {
                         const char* label = name;
-                        if (std::strncmp(label, cur_area, std::strlen(cur_area)) == 0 && label[std::strlen(cur_area)] == '_') {
+                        if (std::strncmp(label, cur_area, std::strlen(cur_area)) == 0 &&
+                            label[std::strlen(cur_area)] == '_') {
                             label += std::strlen(cur_area) + 1;
                         }
                         ImGui::Bullet();
@@ -2328,7 +2538,7 @@ static void DrawRibbonRandomizerTab(void) {
 
     const char* src_rom = Port_FindBaseRomPath();
     const char* region_label = "(unknown)";
-    char region[5] = {0};
+    char region[5] = { 0 };
     if (src_rom) {
         FILE* f = std::fopen(src_rom, "rb");
         if (f) {
@@ -2336,10 +2546,14 @@ static void DrawRibbonRandomizerTab(void) {
             const size_t got = std::fread(region, 1, 4, f);
             std::fclose(f);
             if (got == 4) {
-                if (std::strcmp(region, "BZME") == 0)       region_label = "USA (BZME)";
-                else if (std::strcmp(region, "BZMP") == 0)  region_label = "EU (BZMP)";
-                else if (std::strcmp(region, "BZMJ") == 0)  region_label = "JP (BZMJ) - not supported";
-                else                                        region_label = region;
+                if (std::strcmp(region, "BZME") == 0)
+                    region_label = "USA (BZME)";
+                else if (std::strcmp(region, "BZMP") == 0)
+                    region_label = "EU (BZMP)";
+                else if (std::strcmp(region, "BZMJ") == 0)
+                    region_label = "JP (BZMJ) - not supported";
+                else
+                    region_label = region;
             }
         }
     }
@@ -2350,13 +2564,12 @@ static void DrawRibbonRandomizerTab(void) {
     if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
-            "Rolls a seed and resolves rewards live through a fixed location "
-            "table - no ROM files written, no restart needed. Progression, "
-            "major, and junk pools are forward-filled against the "
-            "reachability graph and a playthrough is simulated before the "
-            "seed activates, so rolled seeds are always beatable. The active "
-            "seed persists per save slot in a .randomizer sidecar.");
+        ImGui::TextUnformatted("Rolls a seed and resolves rewards live through a fixed location "
+                               "table - no ROM files written, no restart needed. Progression, "
+                               "major, and junk pools are forward-filled against the "
+                               "reachability graph and a playthrough is simulated before the "
+                               "seed activates, so rolled seeds are always beatable. The active "
+                               "seed persists per save slot in a .randomizer sidecar.");
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
@@ -2369,10 +2582,8 @@ static void DrawRibbonRandomizerTab(void) {
     if (Rando_IsActive()) {
         static const char* kPoolNames[RANDO_ITEM_POOL_COUNT] = { "Normal", "Hard", "Chaos" };
         const RandomizerSettings active = Rando_GetSettings();
-        const int pool = (active.item_difficulty < RANDO_ITEM_POOL_COUNT)
-                             ? (int)active.item_difficulty : 0;
-        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
-                           "Active seed: %llu - %s pool%s",
+        const int pool = (active.item_difficulty < RANDO_ITEM_POOL_COUNT) ? (int)active.item_difficulty : 0;
+        ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "Active seed: %llu - %s pool%s",
                            (unsigned long long)Rando_GetSeed64(), kPoolNames[pool],
                            active.glitchless_logic ? ", glitchless" : "");
         ImGui::SameLine();
@@ -2402,60 +2613,65 @@ static void DrawRibbonRandomizerTab(void) {
         sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)difficulty;
         changed = true;
     }
-    RandoUi_HelpTooltip(
-        "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
-        "heart pieces - progression untouched.\n"
-        "Hard: also shuffles non-gating majors (bottles, upgrades, "
-        "skills).\n"
-        "Chaos: also shuffles dungeon-gating progression.\n"
-        "Hard/Chaos scrambling of majors and progression applies to "
-        "story gifts too, which cannot be verified beatable - so it "
-        "requires Glitchless logic OFF. With Glitchless ON those items "
-        "stay vanilla and only collectibles are scrambled.");
+    RandoUi_HelpTooltip("Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
+                        "heart pieces - progression untouched.\n"
+                        "Hard: also shuffles non-gating majors (bottles, upgrades, "
+                        "skills).\n"
+                        "Chaos: also shuffles dungeon-gating progression.\n"
+                        "Hard/Chaos scrambling of majors and progression applies to "
+                        "story gifts too, which cannot be verified beatable - so it "
+                        "requires Glitchless logic OFF. With Glitchless ON those items "
+                        "stay vanilla and only collectibles are scrambled.");
 
-    if (ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic)) changed = true;
+    if (ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic))
+        changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Obscure spots", &sRandoUiSettings.obscure_locations)) changed = true;
+    if (ImGui::Checkbox("Obscure spots", &sRandoUiSettings.obscure_locations))
+        changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones)) changed = true;
+    if (ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones))
+        changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Shuffle entrances", &sRandoUiSettings.shuffle_entrances)) changed = true;
+    if (ImGui::Checkbox("Shuffle entrances", &sRandoUiSettings.shuffle_entrances))
+        changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos)) changed = true;
+    if (ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos))
+        changed = true;
 
-    if (ImGui::Checkbox("Open world", &sRandoUiSettings.open_world)) changed = true;
-    RandoUi_HelpTooltip(
-        "Starts with every permanently solvable obstacle pre-solved: cut "
-        "trees, cracked blocks, bomb walls, boulder shortcuts, non-key "
-        "doors, bean vines, switches, levers, chest spawns, and "
-        "extendable bridges (1:1 with the GBA randomizer's World "
-        "Settings \"Open\"). Less walking, shorter seeds.");
+    if (ImGui::Checkbox("Open world", &sRandoUiSettings.open_world))
+        changed = true;
+    RandoUi_HelpTooltip("Starts with every permanently solvable obstacle pre-solved: cut "
+                        "trees, cracked blocks, bomb walls, boulder shortcuts, non-key "
+                        "doors, bean vines, switches, levers, chest spawns, and "
+                        "extendable bridges (1:1 with the GBA randomizer's World "
+                        "Settings \"Open\"). Less walking, shorter seeds.");
 
     ImGui::SameLine();
-    if (ImGui::Checkbox("Sleep warp (homewarp)", &sRandoUiSettings.homewarp)) changed = true;
+    if (ImGui::Checkbox("Sleep warp (homewarp)", &sRandoUiSettings.homewarp))
+        changed = true;
 
-    if (ImGui::Checkbox("Start with Smith's Sword", &sRandoUiSettings.start_sword)) changed = true;
+    if (ImGui::Checkbox("Start with Smith's Sword", &sRandoUiSettings.start_sword))
+        changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Early Wind Crests", &sRandoUiSettings.early_crests)) changed = true;
+    if (ImGui::Checkbox("Early Wind Crests", &sRandoUiSettings.early_crests))
+        changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Fast text (instant text)", &sRandoUiSettings.instant_text)) changed = true;
+    if (ImGui::Checkbox("Fast text (instant text)", &sRandoUiSettings.instant_text))
+        changed = true;
 
-    if (sRandoUiSettings.glitchless_logic &&
-        sRandoUiSettings.item_difficulty > RANDO_ITEM_POOL_NORMAL) {
+    if (sRandoUiSettings.glitchless_logic && sRandoUiSettings.item_difficulty > RANDO_ITEM_POOL_NORMAL) {
         ImGui::TextDisabled("Glitchless ON: %s pool only scrambles collectibles "
                             "(guaranteed beatable).",
-                            sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS
-                                ? "Chaos" : "Hard");
+                            sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS ? "Chaos" : "Hard");
     }
 
     if (changed) {
-        Port_Config_SetRandoSettings(sRandoUiSettings.glitchless_logic, sRandoUiSettings.obscure_locations,
-                                     sRandoUiSettings.shuffle_kinstones, sRandoUiSettings.shuffle_entrances,
-                                     sRandoUiSettings.shuffle_dojos, sRandoUiSettings.open_world,
-                                     (int)sRandoUiSettings.item_difficulty, sRandoUiSettings.homewarp,
-                                     sRandoUiSettings.start_sword, sRandoUiSettings.early_crests,
-                                     sRandoUiSettings.instant_text, sRandoUiSettings.tunic_color,
-                                     sRandoUiSettings.heart_color);
+        Port_Config_SetRandoSettings(
+            sRandoUiSettings.glitchless_logic, sRandoUiSettings.obscure_locations, sRandoUiSettings.shuffle_kinstones,
+            sRandoUiSettings.shuffle_entrances, sRandoUiSettings.shuffle_dojos, sRandoUiSettings.open_world,
+            (int)sRandoUiSettings.item_difficulty, sRandoUiSettings.homewarp, sRandoUiSettings.start_sword,
+            sRandoUiSettings.early_crests, sRandoUiSettings.instant_text, sRandoUiSettings.tunic_color,
+            sRandoUiSettings.heart_color);
     }
 
     DrawRandoCosmeticsSection();
@@ -2463,13 +2679,14 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::Spacing();
     ImGui::SetNextItemWidth(280);
     ImGui::InputText("Seed (empty = random)", sRandoSeedBuf, sizeof(sRandoSeedBuf));
-    RandoUi_HelpTooltip(
-        "Decimal numbers are used as-is; any other text is hashed to a "
-        "64-bit seed, so phrases work and are shareable.");
+    RandoUi_HelpTooltip("Decimal numbers are used as-is; any other text is hashed to a "
+                        "64-bit seed, so phrases work and are shareable.");
     ImGui::SameLine();
     if (ImGui::SmallButton("Random")) {
         uint64_t r = (uint64_t)ImGui::GetTime() * 0x9E3779B97F4A7C15ull ^ Rando_GetSeed64();
-        r ^= r >> 30; r *= 0xBF58476D1CE4E5B9ull; r ^= r >> 27;
+        r ^= r >> 30;
+        r *= 0xBF58476D1CE4E5B9ull;
+        r ^= r >> 27;
         std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu", (unsigned long long)r);
     }
     ImGui::SameLine();
@@ -2485,10 +2702,9 @@ static void DrawRibbonRandomizerTab(void) {
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted(
-            "Rolls a fresh random seed and keeps the spoiler log hidden, "
-            "following the usual race convention. Share the seed number with "
-            "the other racers.");
+        ImGui::TextUnformatted("Rolls a fresh random seed and keeps the spoiler log hidden, "
+                               "following the usual race convention. Share the seed number with "
+                               "the other racers.");
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
@@ -2505,37 +2721,32 @@ static void DrawRibbonRandomizerTab(void) {
         ImGui::TextDisabled("(locked during gameplay)");
     }
     if (rolled_normal || rolled_race) {
-        if (rolled_race) sRandoSeedBuf[0] = '\0';
-        const uint64_t requested =
-            sRandoSeedBuf[0] ? Rando_SeedFromString(sRandoSeedBuf) : 0;
+        if (rolled_race)
+            sRandoSeedBuf[0] = '\0';
+        const uint64_t requested = sRandoSeedBuf[0] ? Rando_SeedFromString(sRandoSeedBuf) : 0;
         uint64_t chosen = 0;
-        const RandoStatus status =
-            Rando_GenerateSeed(requested, &sRandoUiSettings, &chosen);
+        const RandoStatus status = Rando_GenerateSeed(requested, &sRandoUiSettings, &chosen);
         sRandoResultOk = (status == RANDO_OK);
         switch (status) {
-        case RANDO_OK:
-            std::snprintf(sRandoResult, sizeof(sRandoResult),
-                          "Rolled seed %llu - verified beatable.%s",
-                          (unsigned long long)chosen,
-                          rolled_race ? " Spoiler log hidden (race)." : "");
-            std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu",
-                          (unsigned long long)chosen);
-            Rando_GetSpoiler(sRandoSpoiler, sizeof(sRandoSpoiler));
-            sRandoSpoilerHidden = rolled_race;
-            break;
-        case RANDO_UNBEATABLE:
-            std::snprintf(sRandoResult, sizeof(sRandoResult),
-                          "No beatable arrangement found for this seed/settings "
-                          "(32 attempts) - previous state kept.");
-            break;
-        case RANDO_BAD_SETTINGS:
-            std::snprintf(sRandoResult, sizeof(sRandoResult),
-                          "Rejected: invalid settings combination.");
-            break;
-        default:
-            std::snprintf(sRandoResult, sizeof(sRandoResult),
-                          "Generation failed (internal error) - see stderr log.");
-            break;
+            case RANDO_OK:
+                std::snprintf(sRandoResult, sizeof(sRandoResult), "Rolled seed %llu - verified beatable.%s",
+                              (unsigned long long)chosen, rolled_race ? " Spoiler log hidden (race)." : "");
+                std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu", (unsigned long long)chosen);
+                Rando_GetSpoiler(sRandoSpoiler, sizeof(sRandoSpoiler));
+                sRandoSpoilerHidden = rolled_race;
+                break;
+            case RANDO_UNBEATABLE:
+                std::snprintf(sRandoResult, sizeof(sRandoResult),
+                              "No beatable arrangement found for this seed/settings "
+                              "(32 attempts) - previous state kept.");
+                break;
+            case RANDO_BAD_SETTINGS:
+                std::snprintf(sRandoResult, sizeof(sRandoResult), "Rejected: invalid settings combination.");
+                break;
+            default:
+                std::snprintf(sRandoResult, sizeof(sRandoResult),
+                              "Generation failed (internal error) - see stderr log.");
+                break;
         }
     }
 
@@ -2553,7 +2764,8 @@ static void DrawRibbonRandomizerTab(void) {
         if (sRandoSpoilerHidden) {
             ImGui::TextDisabled("Spoiler log hidden (race seed).");
             ImGui::SameLine();
-            if (ImGui::SmallButton("Reveal anyway")) sRandoSpoilerHidden = false;
+            if (ImGui::SmallButton("Reveal anyway"))
+                sRandoSpoilerHidden = false;
         } else if (ImGui::CollapsingHeader("Spoiler log")) {
             if (ImGui::SmallButton("Copy to clipboard")) {
                 ImGui::SetClipboardText(sRandoSpoiler);
@@ -2573,7 +2785,8 @@ static void DrawRibbonRandomizerTab(void) {
                     const size_t copy = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
                     std::memcpy(line, p, copy);
                     line[copy] = '\0';
-                    if (sRandoSpoilerFilter.PassFilter(line)) ImGui::TextUnformatted(line);
+                    if (sRandoSpoilerFilter.PassFilter(line))
+                        ImGui::TextUnformatted(line);
                     p += len + (nl ? 1 : 0);
                 }
             } else {
@@ -2583,7 +2796,6 @@ static void DrawRibbonRandomizerTab(void) {
         }
     }
 }
-
 
 /* Forward decl pulled from port_audio_mute.h, kept local so this file
  * doesn't depend on the new header for the rest of its surface area. */
@@ -2611,10 +2823,9 @@ static void DrawRibbonAudioTab(void) {
             Port_Audio_SetMasterVolume(v);
             Port_Config_SetMasterVolume(v);
         }
-        RandoUi_HelpTooltip(
-            "Scales the final mixed game audio. 100% = unchanged. Persists "
-            "across launches. Leave at 100% for a faithful level match when "
-            "A/B-testing against hardware in GBA-accurate mode.");
+        RandoUi_HelpTooltip("Scales the final mixed game audio. 100% = unchanged. Persists "
+                            "across launches. Leave at 100% for a faithful level match when "
+                            "A/B-testing against hardware in GBA-accurate mode.");
         ImGui::Separator();
     }
 
@@ -2622,13 +2833,12 @@ static void DrawRibbonAudioTab(void) {
     if (ImGui::Checkbox("GBA-accurate audio", &gbaAccurate)) {
         Port_Audio_SetGbaAccurate(gbaAccurate);
     }
-    RandoUi_HelpTooltip(
-        "On: NEAREST resampling (the hardware's no-interpolation "
-        "sample-and-hold 'crunch') and the output is handed straight to "
-        "the device with no post-process DSP - for A/B comparison against "
-        "real hardware / mGBA.\n\n"
-        "Off (default): SINC resampling plus the DC-blocker / low-pass / "
-        "stereo-widen / soft-clip chain tuned for modern speakers.");
+    RandoUi_HelpTooltip("On: NEAREST resampling (the hardware's no-interpolation "
+                        "sample-and-hold 'crunch') and the output is handed straight to "
+                        "the device with no post-process DSP - for A/B comparison against "
+                        "real hardware / mGBA.\n\n"
+                        "Off (default): SINC resampling plus the DC-blocker / low-pass / "
+                        "stereo-widen / soft-clip chain tuned for modern speakers.");
 
     ImGui::Separator();
 
@@ -2642,34 +2852,34 @@ static void DrawRibbonAudioTab(void) {
 
         // Stereo width
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Stereo width");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Stereo width");
         ImGui::TableSetColumnIndex(1);
         float width = Port_Audio_GetWidth();
         ImGui::SetNextItemWidth(200.0f);
         if (ImGui::SliderFloat("##width", &width, 1.00f, 1.50f, "%.2f")) {
             Port_Audio_SetWidth(width);
         }
-        RandoUi_HelpTooltip(
-            "Mid/side stereo widening. 1.00 = mono image (reference), "
-            "1.20 = default. The mid is never altered, so mono playback always "
-            "collapses cleanly to the original mix. Lower values (~1.12) reduce "
-            "hard-panned peak overshoot. No effect in GBA-accurate mode.");
+        RandoUi_HelpTooltip("Mid/side stereo widening. 1.00 = mono image (reference), "
+                            "1.20 = default. The mid is never altered, so mono playback always "
+                            "collapses cleanly to the original mix. Lower values (~1.12) reduce "
+                            "hard-panned peak overshoot. No effect in GBA-accurate mode.");
 
         // Reverb
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Reverb");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Reverb");
         ImGui::TableSetColumnIndex(1);
         int reverb = Port_Audio_GetReverbLevel();
         ImGui::SetNextItemWidth(200.0f);
         if (ImGui::SliderInt("##reverb", &reverb, 0, 24)) {
             Port_Audio_SetReverbLevel(reverb);
         }
-        RandoUi_HelpTooltip(
-            "Adds a short room tail to sampled (PCM) voices - drums, bass, "
-            "some leads - while the chiptune PSG/CGB voices stay dry by the "
-            "synth's mix order, so it adds space without muddying the melody. "
-            "0 = off (default). ~12 is a gentle, musical amount. Applies live "
-            "(does not restart the music). No effect in GBA-accurate mode.");
+        RandoUi_HelpTooltip("Adds a short room tail to sampled (PCM) voices - drums, bass, "
+                            "some leads - while the chiptune PSG/CGB voices stay dry by the "
+                            "synth's mix order, so it adds space without muddying the melody. "
+                            "0 = off (default). ~12 is a gentle, musical amount. Applies live "
+                            "(does not restart the music). No effect in GBA-accurate mode.");
 
         ImGui::EndTable();
     }
@@ -2687,12 +2897,13 @@ static void DrawRibbonAudioTab(void) {
         ImGui::TableSetupColumn("Right", ImGuiTableColumnFlags_WidthStretch);
 
         for (int i = 0; i < (int)AUDIO_MUTE_COUNT; ++i) {
-            if ((i % 2) == 0) ImGui::TableNextRow();
+            if ((i % 2) == 0)
+                ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(i % 2);
 
             bool on = Port_AudioMute_IsEnabled((AudioMuteCategory)i);
             const char* label = Port_AudioMute_Label((AudioMuteCategory)i);
-            const char* desc  = Port_AudioMute_Description((AudioMuteCategory)i);
+            const char* desc = Port_AudioMute_Description((AudioMuteCategory)i);
             if (ImGui::Checkbox(label, &on)) {
                 Port_AudioMute_SetEnabled((AudioMuteCategory)i, on);
             }
@@ -2705,13 +2916,12 @@ static void DrawRibbonAudioTab(void) {
 }
 
 static void DrawRibbonAccessibilityTab(void) {
-    Port_TTS_Init();  /* idempotent — safe if main.c already initialised */
+    Port_TTS_Init(); /* idempotent — safe if main.c already initialised */
     const char* backendName = Port_TTS_GetBackendName();
 
-    ImGui::TextWrapped(
-        "Text-to-speech reads important UI labels aloud (focused "
-        "buttons, dialogs, errors). Toggle off at any time. Default "
-        "off; settings persist across launches.");
+    ImGui::TextWrapped("Text-to-speech reads important UI labels aloud (focused "
+                       "buttons, dialogs, errors). Toggle off at any time. Default "
+                       "off; settings persist across launches.");
     ImGui::Separator();
 
     if (ImGui::BeginTable("##tts_table", 2, ImGuiTableFlags_SizingFixedFit)) {
@@ -2720,7 +2930,8 @@ static void DrawRibbonAccessibilityTab(void) {
 
         // Backend row
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Backend");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Backend");
         ImGui::TableSetColumnIndex(1);
         if (backendName) {
             ImGui::TextUnformatted(backendName);
@@ -2734,7 +2945,8 @@ static void DrawRibbonAccessibilityTab(void) {
 
         // Enable Row
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Enable TTS");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Enable TTS");
         ImGui::TableSetColumnIndex(1);
         bool on = Port_TTS_GetEnabled();
         if (ImGui::Checkbox("##enable_tts", &on)) {
@@ -2745,7 +2957,8 @@ static void DrawRibbonAccessibilityTab(void) {
 
         // Rate
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Rate");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Rate");
         ImGui::TableSetColumnIndex(1);
         float rate = Port_TTS_GetRate();
         ImGui::SetNextItemWidth(200.0f);
@@ -2755,7 +2968,8 @@ static void DrawRibbonAccessibilityTab(void) {
 
         // Pitch
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Pitch");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Pitch");
         ImGui::TableSetColumnIndex(1);
         float pitch = Port_TTS_GetPitch();
         ImGui::SetNextItemWidth(200.0f);
@@ -2765,7 +2979,8 @@ static void DrawRibbonAccessibilityTab(void) {
 
         // Volume
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Volume");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Volume");
         ImGui::TableSetColumnIndex(1);
         float volume = Port_TTS_GetVolume();
         ImGui::SetNextItemWidth(200.0f);
@@ -2781,11 +2996,12 @@ static void DrawRibbonAccessibilityTab(void) {
             const char* v = Port_TTS_GetVoice();
             const char* l = Port_TTS_GetLanguage();
             std::strncpy(voiceBuf, v ? v : "", sizeof(voiceBuf) - 1);
-            std::strncpy(langBuf,  l ? l : "", sizeof(langBuf) - 1);
+            std::strncpy(langBuf, l ? l : "", sizeof(langBuf) - 1);
             inited = true;
         }
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Voice");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Voice");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(200.0f);
         if (ImGui::InputText("##voice", voiceBuf, sizeof(voiceBuf))) {
@@ -2794,7 +3010,8 @@ static void DrawRibbonAccessibilityTab(void) {
 
         // Language
         ImGui::TableNextRow();
-        ImGui::TableSetColumnIndex(0); ImGui::Text("Language");
+        ImGui::TableSetColumnIndex(0);
+        ImGui::Text("Language");
         ImGui::TableSetColumnIndex(1);
         ImGui::SetNextItemWidth(100.0f);
         if (ImGui::InputText("##lang", langBuf, sizeof(langBuf))) {
@@ -2803,18 +3020,16 @@ static void DrawRibbonAccessibilityTab(void) {
 
         ImGui::EndTable();
     }
-    ImGui::TextDisabled(
-        "Voice IDs vary by backend (espeak: 'en+f2', say: 'Samantha', SAPI: 'Microsoft David').");
+    ImGui::TextDisabled("Voice IDs vary by backend (espeak: 'en+f2', say: 'Samantha', SAPI: 'Microsoft David').");
 
     ImGui::Separator();
     if (ImGui::Button("Test voice")) {
         PortTtsOptions o = {};
-        o.rate = o.pitch = o.volume = 0.0f/0.0f;
+        o.rate = o.pitch = o.volume = 0.0f / 0.0f;
         o.dedupe = false;
-        Port_TTS_Speak(
-            "This is the Project Picori text-to-speech test. "
-            "If you hear this, T T S is wired up.",
-            &o);
+        Port_TTS_Speak("This is the Project Picori text-to-speech test. "
+                       "If you hear this, T T S is wired up.",
+                       &o);
     }
     ImGui::SameLine();
     if (ImGui::Button("Stop")) {
@@ -2826,50 +3041,57 @@ static void DrawRibbonAccessibilityTab(void) {
     }
 
     ImGui::Separator();
-    ImGui::TextWrapped(
-        "Navigation cues (for blind / low-vision players). On-demand keys "
-        "in game: F10 scans nearby points of interest (chests, items, NPCs, "
-        "animals, enemies, exits); Shift+F10 steps through them one at a "
-        "time; Ctrl+F10 reads the surface under you, walls around you, and "
-        "exits.");
-    if (ImGui::Button("Scan surroundings (F10)")) { Port_A11y_ScanSurroundings(); }
+    ImGui::TextWrapped("Navigation cues (for blind / low-vision players). On-demand keys "
+                       "in game: F10 scans nearby points of interest (chests, items, NPCs, "
+                       "animals, enemies, exits); Shift+F10 steps through them one at a "
+                       "time; Ctrl+F10 reads the surface under you, walls around you, and "
+                       "exits.");
+    if (ImGui::Button("Scan surroundings (F10)")) {
+        Port_A11y_ScanSurroundings();
+    }
     ImGui::SameLine();
-    if (ImGui::Button("Cycle (Shift+F10)"))       { Port_A11y_CycleNext(); }
+    if (ImGui::Button("Cycle (Shift+F10)")) {
+        Port_A11y_CycleNext();
+    }
     ImGui::SameLine();
-    if (ImGui::Button("Look around (Ctrl+F10)"))  { Port_A11y_LookAround(); }
+    if (ImGui::Button("Look around (Ctrl+F10)")) {
+        Port_A11y_LookAround();
+    }
 
     ImGui::Spacing();
-    ImGui::TextWrapped(
-        "Passive cues play automatically as you move: a tonal enemy radar "
-        "(stereo pan = direction, pitch = distance), footstep sounds tinted "
-        "by surface, fall-hazard warnings, and wall bumps.");
+    ImGui::TextWrapped("Passive cues play automatically as you move: a tonal enemy radar "
+                       "(stereo pan = direction, pitch = distance), footstep sounds tinted "
+                       "by surface, fall-hazard warnings, and wall bumps.");
     {
         bool b;
         b = Port_A11y_GetPassiveEnabled();
-        if (ImGui::Checkbox("Passive cues", &b)) Port_A11y_SetPassiveEnabled(b);
+        if (ImGui::Checkbox("Passive cues", &b))
+            Port_A11y_SetPassiveEnabled(b);
         b = Port_A11y_GetFootstepsEnabled();
-        if (ImGui::Checkbox("Footsteps", &b))    Port_A11y_SetFootstepsEnabled(b);
+        if (ImGui::Checkbox("Footsteps", &b))
+            Port_A11y_SetFootstepsEnabled(b);
         ImGui::SameLine();
         b = Port_A11y_GetHazardsEnabled();
-        if (ImGui::Checkbox("Hazards", &b))      Port_A11y_SetHazardsEnabled(b);
+        if (ImGui::Checkbox("Hazards", &b))
+            Port_A11y_SetHazardsEnabled(b);
         ImGui::SameLine();
         b = Port_A11y_GetRadarEnabled();
-        if (ImGui::Checkbox("Enemy radar", &b))  Port_A11y_SetRadarEnabled(b);
+        if (ImGui::Checkbox("Enemy radar", &b))
+            Port_A11y_SetRadarEnabled(b);
         ImGui::SameLine();
         b = Port_A11y_GetWallsEnabled();
-        if (ImGui::Checkbox("Walls", &b))        Port_A11y_SetWallsEnabled(b);
+        if (ImGui::Checkbox("Walls", &b))
+            Port_A11y_SetWallsEnabled(b);
     }
 
     ImGui::Separator();
-    ImGui::TextWrapped(
-        "Manual test plan:\n"
-        "  1. Enable above, click Test voice - hear the test line.\n"
-        "  2. Tab through this tab's controls - each label announces.\n"
-        "  3. F7 toggles TTS without opening the menu.\n"
-        "  4. F6 stops mid-utterance.\n"
-        "  5. Open a save-overwrite dialog - modal is announced.");
+    ImGui::TextWrapped("Manual test plan:\n"
+                       "  1. Enable above, click Test voice - hear the test line.\n"
+                       "  2. Tab through this tab's controls - each label announces.\n"
+                       "  3. F7 toggles TTS without opening the menu.\n"
+                       "  4. F6 stops mid-utterance.\n"
+                       "  5. Open a save-overwrite dialog - modal is announced.");
 }
-
 
 static void DrawRibbonRebornTab(void) {
     ImGui::TextWrapped("Quality-of-life features ported from Minish Cap Reborn "
@@ -2880,10 +3102,11 @@ static void DrawRibbonRebornTab(void) {
         /* Slot 8 (rupee-like overhaul) was removed; its enum slot is kept so
          * the persisted feature bitmask (issue #146) stays stable, but it has
          * no behaviour and is hidden from this tab. */
-        if (i == REBORN_FEAT_RUPEE_LIKE_OVERHAUL) continue;
+        if (i == REBORN_FEAT_RUPEE_LIKE_OVERHAUL)
+            continue;
         bool on = Port_Reborn_IsEnabled((RebornFeature)i);
         const char* label = Port_Reborn_FeatureLabel((RebornFeature)i);
-        const char* desc  = Port_Reborn_FeatureDescription((RebornFeature)i);
+        const char* desc = Port_Reborn_FeatureDescription((RebornFeature)i);
         if (ImGui::Checkbox(label, &on)) {
             Port_Reborn_SetEnabled((RebornFeature)i, on);
         }
@@ -2914,11 +3137,10 @@ static void DrawRibbonRebornTab(void) {
         if (ImGui::IsItemHovered()) {
             ImGui::BeginTooltip();
             ImGui::PushTextWrapPos(360.0f);
-            ImGui::TextUnformatted(
-                "Left-stick displacement below this fraction is ignored, so the "
-                "D-pad stays authoritative and a thumb resting on the stick won't "
-                "drift. Raise it for a worn/drifty stick; lower it for a lighter "
-                "touch. Default 0.30.");
+            ImGui::TextUnformatted("Left-stick displacement below this fraction is ignored, so the "
+                                   "D-pad stays authoritative and a thumb resting on the stick won't "
+                                   "drift. Raise it for a worn/drifty stick; lower it for a lighter "
+                                   "touch. Default 0.30.");
             ImGui::PopTextWrapPos();
             ImGui::EndTooltip();
         }
@@ -2936,29 +3158,35 @@ static void DrawRibbonPracticeTab(void) {
 
     ImGui::SeparatorText("Overlays");
     bool t = Port_Config_GetPracticeShowTimer();
-    if (ImGui::Checkbox("Show IGT timer", &t)) Port_Config_SetPracticeShowTimer(t);
+    if (ImGui::Checkbox("Show IGT timer", &t))
+        Port_Config_SetPracticeShowTimer(t);
     bool in = Port_Config_GetPracticeShowInputs();
-    if (ImGui::Checkbox("Show input display", &in)) Port_Config_SetPracticeShowInputs(in);
+    if (ImGui::Checkbox("Show input display", &in))
+        Port_Config_SetPracticeShowInputs(in);
     bool h = Port_Config_GetPracticeShowHistory();
-    if (ImGui::Checkbox("Show input history", &h)) Port_Config_SetPracticeShowHistory(h);
+    if (ImGui::Checkbox("Show input history", &h))
+        Port_Config_SetPracticeShowHistory(h);
 
     ImGui::SeparatorText("Timer");
     char buf[32];
     Practice_FormatFrames(Port_Practice_ElapsedFrames(), buf, sizeof(buf));
-    ImGui::Text("Elapsed: %s  (%llu frames)", buf,
-                (unsigned long long)Port_Practice_ElapsedFrames());
-    if (ImGui::Button(Port_Practice_TimerRunning() ? "Stop" : "Start")) Port_Practice_TimerToggle();
+    ImGui::Text("Elapsed: %s  (%llu frames)", buf, (unsigned long long)Port_Practice_ElapsedFrames());
+    if (ImGui::Button(Port_Practice_TimerRunning() ? "Stop" : "Start"))
+        Port_Practice_TimerToggle();
     ImGui::SameLine();
-    if (ImGui::Button("Reset timer")) Port_Practice_TimerReset();
+    if (ImGui::Button("Reset timer"))
+        Port_Practice_TimerReset();
     ImGui::SameLine();
-    if (ImGui::Button("Split")) Port_Practice_AddSplit();
+    if (ImGui::Button("Split"))
+        Port_Practice_AddSplit();
 
     int nsplits = Port_Practice_SplitCount();
     if (nsplits > 0) {
         ImGui::SameLine();
-        if (ImGui::Button("Clear splits")) Port_Practice_ClearSplits();
+        if (ImGui::Button("Clear splits"))
+            Port_Practice_ClearSplits();
         if (ImGui::BeginTable("##splits", 3,
-                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+                              ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
             ImGui::TableSetupColumn("#");
             ImGui::TableSetupColumn("Time");
             ImGui::TableSetupColumn("Delta");
@@ -2970,9 +3198,12 @@ static void DrawRibbonPracticeTab(void) {
                 Practice_FormatFrames(f, tbuf, sizeof(tbuf));
                 Practice_FormatFrames(f - prev, dbuf, sizeof(dbuf));
                 ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0); ImGui::Text("%d", i + 1);
-                ImGui::TableSetColumnIndex(1); ImGui::TextUnformatted(tbuf);
-                ImGui::TableSetColumnIndex(2); ImGui::Text("+%s", dbuf);
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%d", i + 1);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(tbuf);
+                ImGui::TableSetColumnIndex(2);
+                ImGui::Text("+%s", dbuf);
                 prev = f;
             }
             ImGui::EndTable();
@@ -2981,13 +3212,13 @@ static void DrawRibbonPracticeTab(void) {
 
     ImGui::SeparatorText("Practice point");
     if (ImGui::Button("Set point")) {
-        if (Port_Practice_SetPoint()) Port_DebugMenu_ToastFromExternal("Practice point set");
+        if (Port_Practice_SetPoint())
+            Port_DebugMenu_ToastFromExternal("Practice point set");
     }
     ImGui::SameLine();
     ImGui::BeginDisabled(!Port_Practice_HasPoint());
     if (ImGui::Button("Reload point")) {
-        Port_DebugMenu_ToastFromExternal(
-            Port_Practice_LoadPoint() ? "Practice point loaded" : "Reload failed");
+        Port_DebugMenu_ToastFromExternal(Port_Practice_LoadPoint() ? "Practice point loaded" : "Reload failed");
     }
     ImGui::EndDisabled();
     ImGui::SameLine();
@@ -2999,13 +3230,14 @@ static void DrawRibbonPracticeTab(void) {
         Port_Config_SetPracticeSlowmo(sm);
     }
     ImGui::SameLine();
-    if (ImGui::Button("1x")) Port_Config_SetPracticeSlowmo(1.0f);
-    if (ImGui::Button(Port_Practice_IsPaused() ? "Resume" : "Pause")) Port_Practice_TogglePause();
+    if (ImGui::Button("1x"))
+        Port_Config_SetPracticeSlowmo(1.0f);
+    if (ImGui::Button(Port_Practice_IsPaused() ? "Resume" : "Pause"))
+        Port_Practice_TogglePause();
 
     ImGui::SeparatorText("Hotkeys");
-    ImGui::TextDisabled(
-        "Keyboard:  [ set point   ] reload   P pause   . frame-advance   ' reset   ; split\n"
-        "Gamepad:   hold Select + A reload / B set / X pause / Y advance / D-Up reset / D-Down split");
+    ImGui::TextDisabled("Keyboard:  [ set point   ] reload   P pause   . frame-advance   ' reset   ; split\n"
+                        "Gamepad:   hold Select + A reload / B set / X pause / Y advance / D-Up reset / D-Down split");
 }
 
 /* Read-only entity viewer (#feature). Snapshots all live entities each frame
@@ -3017,8 +3249,8 @@ static void DrawRibbonEntitiesTab(void) {
     ImGui::SameLine();
     ImGui::TextDisabled("(snapshot, refreshed each frame)");
     if (ImGui::BeginTable("##entities", 6,
-                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+                              ImGuiTableFlags_SizingFixedFit,
                           ImVec2(0, 320))) {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("List");
@@ -3033,14 +3265,21 @@ static void DrawRibbonEntitiesTab(void) {
         while (clipper.Step()) {
             for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
                 const PortEntityInfo* e = Port_DebugQuery_Entity(i);
-                if (!e) continue;
+                if (!e)
+                    continue;
                 ImGui::TableNextRow();
-                ImGui::TableNextColumn(); ImGui::Text("%d", e->listIndex);
-                ImGui::TableNextColumn(); ImGui::TextUnformatted(Port_DebugQuery_EntityKindName(e->kind));
-                ImGui::TableNextColumn(); ImGui::Text("0x%02X", (unsigned)e->id);
-                ImGui::TableNextColumn(); ImGui::Text("0x%02X", (unsigned)e->type);
-                ImGui::TableNextColumn(); ImGui::Text("%d, %d", e->x, e->y);
-                ImGui::TableNextColumn(); ImGui::Text("%u", (unsigned)e->health);
+                ImGui::TableNextColumn();
+                ImGui::Text("%d", e->listIndex);
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(Port_DebugQuery_EntityKindName(e->kind));
+                ImGui::TableNextColumn();
+                ImGui::Text("0x%02X", (unsigned)e->id);
+                ImGui::TableNextColumn();
+                ImGui::Text("0x%02X", (unsigned)e->type);
+                ImGui::TableNextColumn();
+                ImGui::Text("%d, %d", e->x, e->y);
+                ImGui::TableNextColumn();
+                ImGui::Text("%u", (unsigned)e->health);
             }
         }
         ImGui::EndTable();
@@ -3053,14 +3292,13 @@ static void DrawRibbonEntitiesTab(void) {
  * rather than faulting. Session-only — watches are intentionally not persisted
  * (a stale address from a previous build would be misleading). */
 static void DrawRibbonMemoryTab(void) {
-    ImGui::TextUnformatted(
-        "Watch arbitrary GBA memory live: EWRAM 0x02xxxxxx, IWRAM 0x03xxxxxx, "
-        "I/O 0x04xxxxxx, palette 0x05xxxxxx, VRAM 0x06xxxxxx, OAM 0x07xxxxxx, ROM 0x08xxxxxx.");
+    ImGui::TextUnformatted("Watch arbitrary GBA memory live: EWRAM 0x02xxxxxx, IWRAM 0x03xxxxxx, "
+                           "I/O 0x04xxxxxx, palette 0x05xxxxxx, VRAM 0x06xxxxxx, OAM 0x07xxxxxx, ROM 0x08xxxxxx.");
     ImGui::TextDisabled("Session-only: watches are not saved to config.");
     ImGui::Separator();
 
     static char sAddrBuf[16] = "03000000";
-    static int  sWidth = 0; /* 0=u8 1=u16 2=u32 */
+    static int sWidth = 0; /* 0=u8 1=u16 2=u32 */
     static const char* const kWidthNames[3] = { "u8", "u16", "u32" };
 
     ImGui::SetNextItemWidth(110);
@@ -3090,11 +3328,12 @@ static void DrawRibbonMemoryTab(void) {
     const int n = Port_DebugQuery_MemWatchCount();
     ImGui::Text("Watches: %d / 32", n);
     ImGui::SameLine();
-    if (ImGui::SmallButton("Clear all")) Port_DebugAction_MemWatchClear();
+    if (ImGui::SmallButton("Clear all"))
+        Port_DebugAction_MemWatchClear();
 
     if (ImGui::BeginTable("##memwatch", 4,
-                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+                              ImGuiTableFlags_SizingFixedFit,
                           ImVec2(0, 280))) {
         ImGui::TableSetupScrollFreeze(0, 1);
         ImGui::TableSetupColumn("Address");
@@ -3110,17 +3349,23 @@ static void DrawRibbonMemoryTab(void) {
             const int ok = Port_DebugQuery_MemRead(a, w, &v);
             ImGui::PushID(i);
             ImGui::TableNextRow();
-            ImGui::TableNextColumn(); ImGui::Text("0x%08X", a);
-            ImGui::TableNextColumn(); ImGui::TextUnformatted(Port_DebugQuery_MemWidthName(w));
             ImGui::TableNextColumn();
-            if (ok) ImGui::Text("0x%0*X  (%u)", (1 << w) * 2, v, v);
-            else    ImGui::TextDisabled("<unmapped>");
+            ImGui::Text("0x%08X", a);
             ImGui::TableNextColumn();
-            if (ImGui::SmallButton("X")) removeIdx = i;
+            ImGui::TextUnformatted(Port_DebugQuery_MemWidthName(w));
+            ImGui::TableNextColumn();
+            if (ok)
+                ImGui::Text("0x%0*X  (%u)", (1 << w) * 2, v, v);
+            else
+                ImGui::TextDisabled("<unmapped>");
+            ImGui::TableNextColumn();
+            if (ImGui::SmallButton("X"))
+                removeIdx = i;
             ImGui::PopID();
         }
         ImGui::EndTable();
-        if (removeIdx >= 0) Port_DebugAction_MemWatchRemove(removeIdx);
+        if (removeIdx >= 0)
+            Port_DebugAction_MemWatchRemove(removeIdx);
     }
 }
 
@@ -3131,9 +3376,9 @@ static void DrawRibbon(void) {
     ImGui::SetNextWindowSize(ImVec2(ribbonW, 0), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     if (ImGui::Begin("##ribbon", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize |
+                         ImGuiWindowFlags_NoCollapse)) {
         /* Close button anchored to the top-right of the ribbon. The
          * persistent corner trigger sits behind the ribbon when it's
          * open, so without this button users on mouse-only or who
@@ -3141,30 +3386,75 @@ static void DrawRibbon(void) {
          * it BEFORE the tab bar so it sits at the very top edge. */
         const float closeW = 80.0f;
         ImGui::SameLine(ImGui::GetWindowWidth() - closeW - 12.0f);
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.55f, 0.20f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.20f, 0.20f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.75f, 0.30f, 0.30f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.85f, 0.35f, 0.35f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.35f, 0.35f, 1.0f));
         if (ImGui::Button("Close X", ImVec2(closeW, 0))) {
             Port_DebugMenu_Toggle();
         }
         ImGui::PopStyleColor(3);
 
         if (ImGui::BeginTabBar("##ribbonTabs", ImGuiTabBarFlags_None)) {
-            if (ImGui::BeginTabItem("Items"))      { DrawRibbonItemsTab();      ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Display"))    { DrawRibbonDisplayTab();    ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Saves"))      { DrawRibbonSavesTab();      ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Profiles"))   { DrawRibbonProfilesTab();   ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Equip"))      { DrawRibbonEquipTab();      ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Controls"))   { DrawRibbonControlsTab();   ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Warp"))       { DrawRibbonWarpTab();       ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Entities"))   { DrawRibbonEntitiesTab();   ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Flags"))      { DrawRibbonFlagsTab();      ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Memory"))     { DrawRibbonMemoryTab();     ImGui::EndTabItem(); }
-            if ((!Rando_IsInGameplay() || Rando_IsActive()) && ImGui::BeginTabItem("Randomizer")) { DrawRibbonRandomizerTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Audio"))      { DrawRibbonAudioTab();      ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Accessibility")) { DrawRibbonAccessibilityTab(); ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Reborn"))     { DrawRibbonRebornTab();     ImGui::EndTabItem(); }
-            if (ImGui::BeginTabItem("Practice"))   { DrawRibbonPracticeTab();   ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Items")) {
+                DrawRibbonItemsTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Display")) {
+                DrawRibbonDisplayTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Saves")) {
+                DrawRibbonSavesTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Profiles")) {
+                DrawRibbonProfilesTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Equip")) {
+                DrawRibbonEquipTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Controls")) {
+                DrawRibbonControlsTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Warp")) {
+                DrawRibbonWarpTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Entities")) {
+                DrawRibbonEntitiesTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Flags")) {
+                DrawRibbonFlagsTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Memory")) {
+                DrawRibbonMemoryTab();
+                ImGui::EndTabItem();
+            }
+            if ((!Rando_IsInGameplay() || Rando_IsActive()) && ImGui::BeginTabItem("Randomizer")) {
+                DrawRibbonRandomizerTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Audio")) {
+                DrawRibbonAudioTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Accessibility")) {
+                DrawRibbonAccessibilityTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Reborn")) {
+                DrawRibbonRebornTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Practice")) {
+                DrawRibbonPracticeTab();
+                ImGui::EndTabItem();
+            }
             ImGui::EndTabBar();
         }
         /* Footer with the mode toggle + hotkey hint. */
@@ -3172,7 +3462,7 @@ static void DrawRibbon(void) {
         bool useRibbon = sRibbonEnabled;
         if (ImGui::Checkbox("Ribbon mode (uncheck for classic menu)", &useRibbon)) {
             sRibbonEnabled = useRibbon;
-            Port_Config_SetRibbonEnabled(useRibbon);   /* persist (#146) */
+            Port_Config_SetRibbonEnabled(useRibbon); /* persist (#146) */
         }
         ImGui::SameLine();
         ImGui::TextDisabled("(F8 or Select+Start also toggles)");
@@ -3184,18 +3474,18 @@ static void DrawRibbon(void) {
 /* Layout helpers — keep all the styling decisions in one place so it's
  * easy to tweak the look without hunting through draw code. */
 static void DrawToast(const char* text) {
-    if (!text || !*text) return;
+    if (!text || !*text)
+        return;
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 vpSize = io.DisplaySize;
     const float pad = 12.0f;
     ImGui::SetNextWindowBgAlpha(0.85f);
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.94f, 0.25f, 1.0f));
-    ImGui::SetNextWindowPos(ImVec2(vpSize.x * 0.5f, vpSize.y - pad - 24.0f),
-                            ImGuiCond_Always, ImVec2(0.5f, 0.0f));
+    ImGui::SetNextWindowPos(ImVec2(vpSize.x * 0.5f, vpSize.y - pad - 24.0f), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     if (ImGui::Begin("##toast", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
-                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoInputs)) {
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing |
+                         ImGuiWindowFlags_NoInputs)) {
         ImGui::TextUnformatted(text);
     }
     ImGui::End();
@@ -3208,7 +3498,7 @@ static void DrawToast(const char* text) {
  * display + rolling history bottom-centre. All state from port_practice.c. */
 
 static void Practice_FormatFrames(unsigned long long frames, char* out, size_t cap) {
-    unsigned long long totalMs = frames * 1000ull / 60ull;   /* 60 fps IGT */
+    unsigned long long totalMs = frames * 1000ull / 60ull; /* 60 fps IGT */
     unsigned ms = (unsigned)(totalMs % 1000);
     unsigned long long totalS = totalMs / 1000;
     unsigned s = (unsigned)(totalS % 60);
@@ -3217,11 +3507,12 @@ static void Practice_FormatFrames(unsigned long long frames, char* out, size_t c
 }
 
 /* Button rows shared by the held-glyph line and the history grid. */
-static const struct { int bit; const char* name; } kPracticeBtns[] = {
-    { PORT_INPUT_A, "A" }, { PORT_INPUT_B, "B" },
-    { PORT_INPUT_L, "L" }, { PORT_INPUT_R, "R" },
-    { PORT_INPUT_UP, "^" }, { PORT_INPUT_DOWN, "v" },
-    { PORT_INPUT_LEFT, "<" }, { PORT_INPUT_RIGHT, ">" },
+static const struct {
+    int bit;
+    const char* name;
+} kPracticeBtns[] = {
+    { PORT_INPUT_A, "A" },      { PORT_INPUT_B, "B" },       { PORT_INPUT_L, "L" },    { PORT_INPUT_R, "R" },
+    { PORT_INPUT_UP, "^" },     { PORT_INPUT_DOWN, "v" },    { PORT_INPUT_LEFT, "<" }, { PORT_INPUT_RIGHT, ">" },
     { PORT_INPUT_START, "St" }, { PORT_INPUT_SELECT, "Se" },
 };
 static const int kPracticeBtnCount = (int)(sizeof(kPracticeBtns) / sizeof(kPracticeBtns[0]));
@@ -3229,15 +3520,15 @@ static const int kPracticeBtnCount = (int)(sizeof(kPracticeBtns) / sizeof(kPract
 static void Practice_DrawHeldGlyphs(unsigned short mask) {
     for (int i = 0; i < kPracticeBtnCount; ++i) {
         bool on = (mask & (unsigned short)(1u << kPracticeBtns[i].bit)) != 0;
-        ImVec4 col = on ? ImVec4(0.30f, 0.85f, 0.45f, 1.0f)
-                        : ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
+        ImVec4 col = on ? ImVec4(0.30f, 0.85f, 0.45f, 1.0f) : ImVec4(0.35f, 0.35f, 0.35f, 1.0f);
         ImGui::TextColored(col, "%s", kPracticeBtns[i].name);
-        if (i != kPracticeBtnCount - 1) ImGui::SameLine();
+        if (i != kPracticeBtnCount - 1)
+            ImGui::SameLine();
     }
 }
 
 static void Practice_DrawHistory(void) {
-    const int cols = 60;                  /* ~1 second of frames */
+    const int cols = 60; /* ~1 second of frames */
     const float cw = 4.0f, ch = 9.0f, labelW = 16.0f;
     ImDrawList* dl = ImGui::GetWindowDrawList();
     ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -3249,8 +3540,7 @@ static void Practice_DrawHistory(void) {
             unsigned short m = Port_Practice_HistoryAt(cols - 1 - c);
             if (m & (unsigned short)(1u << kPracticeBtns[r].bit)) {
                 float x = origin.x + labelW + c * cw;
-                dl->AddRectFilled(ImVec2(x, y), ImVec2(x + cw - 1.0f, y + ch - 1.0f),
-                                  IM_COL32(80, 200, 120, 255));
+                dl->AddRectFilled(ImVec2(x, y), ImVec2(x + cw - 1.0f, y + ch - 1.0f), IM_COL32(80, 200, 120, 255));
             }
         }
     }
@@ -3258,19 +3548,18 @@ static void Practice_DrawHistory(void) {
 }
 
 static void DrawPracticeOverlay(void) {
-    const bool showTimer   = Port_Config_GetPracticeShowTimer();
-    const bool showInputs  = Port_Config_GetPracticeShowInputs();
+    const bool showTimer = Port_Config_GetPracticeShowTimer();
+    const bool showInputs = Port_Config_GetPracticeShowInputs();
     const bool showHistory = Port_Config_GetPracticeShowHistory();
-    if (!showTimer && !showInputs && !showHistory) return;
+    if (!showTimer && !showInputs && !showHistory)
+        return;
 
     ImGuiIO& io = ImGui::GetIO();
     const ImVec2 vp = io.DisplaySize;
     const float pad = 10.0f;
-    const ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize |
-        ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
-        ImGuiWindowFlags_NoInputs;
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing |
+                                   ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs;
 
     if (showTimer) {
         char buf[32];
@@ -3298,9 +3587,11 @@ static void DrawPracticeOverlay(void) {
         ImGui::SetNextWindowBgAlpha(0.70f);
         ImGui::SetNextWindowPos(ImVec2(vp.x * 0.5f, vp.y - pad), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
         if (ImGui::Begin("##practice_inputs", nullptr, flags)) {
-            if (showInputs) Practice_DrawHeldGlyphs(Port_Practice_CurrentInputMask());
+            if (showInputs)
+                Practice_DrawHeldGlyphs(Port_Practice_CurrentInputMask());
             if (showHistory) {
-                if (showInputs) ImGui::Spacing();
+                if (showInputs)
+                    ImGui::Spacing();
                 Practice_DrawHistory();
             }
         }
@@ -3312,24 +3603,26 @@ static void DrawMenuPage(int depth) {
     const char* title = Port_DebugMenu_PageTitle(depth);
     const int count = Port_DebugMenu_PageItemCount(depth);
     const int cursor = Port_DebugMenu_PageCursor(depth);
-    if (!title || count <= 0) return;
+    if (!title || count <= 0)
+        return;
 
     ImGuiIO& io = ImGui::GetIO();
     const float panelW = 460.0f;
     const float maxH = io.DisplaySize.y * 0.85f;
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f),
-                            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Always,
+                            ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(panelW, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSizeConstraints(ImVec2(panelW, 0), ImVec2(panelW, maxH));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(panelW, 0));
     if (ImGui::Begin(title, nullptr,
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
-        if (ImGui::BeginChild("##items", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 22.0f),
-                              false, ImGuiWindowFlags_None)) {
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (ImGui::BeginChild("##items", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 22.0f), false,
+                              ImGuiWindowFlags_None)) {
             for (int i = 0; i < count; ++i) {
                 const char* label = Port_DebugMenu_PageItemLabel(depth, i);
-                if (!label) continue;
+                if (!label)
+                    continue;
                 bool selected = i == cursor;
 
                 /* Render as a Selectable so it gets a hover background.
@@ -3384,8 +3677,7 @@ static void DrawMenuTrigger(void) {
     ImGuiIO& io = ImGui::GetIO();
     const bool open = Port_DebugMenu_IsOpen();
     const float pad = 6.0f;
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - pad, pad),
-                            ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - pad, pad), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
 
     /* Closed: 12% alpha background, ~minimal padding, single-glyph
      * label — so the trigger reads as a faint corner dot rather than
@@ -3400,19 +3692,19 @@ static void DrawMenuTrigger(void) {
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
         /* Make the closed-state button itself low-alpha too; ImGui's
          * hover state will bump it on its own when the cursor lands. */
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.22f, 0.28f, 0.30f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.22f, 0.28f, 0.30f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.45f, 0.65f, 1.00f));
-        ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.92f, 0.92f, 0.92f, 0.50f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.92f, 0.92f, 0.92f, 0.50f));
     }
 
     /* NoNavInputs + NoNavFocus keep gamepad/keyboard nav from ever
      * targeting this button, so A on the controller can't accidentally
      * open the menu during gameplay. Mouse/touch click still works. */
     if (ImGui::Begin("##menu_trigger", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                     ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing |
-                     ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus)) {
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize |
+                         ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNavInputs |
+                         ImGuiWindowFlags_NoNavFocus)) {
         /* Closed: single triple-bar ASCII '=' stacked into a hamburger
          * shape (the default ImGui font doesn't ship U+2261 ≡). Open:
          * spelled-out label so the close target reads clearly. */
@@ -3443,12 +3735,15 @@ static void DrawMenuTrigger(void) {
  * because ImGui::BeginPopupModal needs to be called every frame while
  * it's open. */
 static bool sQuitModalArmed = false;
-static bool sQuitModalConfirmed = false;  /* set to true on "Save & Quit" or "Quit" — main loop polls and exits */
-extern "C" bool Port_ImGui_QuitConfirmed(void) { return sQuitModalConfirmed; }
+static bool sQuitModalConfirmed = false; /* set to true on "Save & Quit" or "Quit" — main loop polls and exits */
+extern "C" bool Port_ImGui_QuitConfirmed(void) {
+    return sQuitModalConfirmed;
+}
 extern "C" void Port_ImGui_RequestQuitModal(void) {
     /* If a previous confirm already fired, honour it and let the host
      * exit. This catches the rare double-click on the X button. */
-    if (sQuitModalConfirmed) return;
+    if (sQuitModalConfirmed)
+        return;
     sQuitModalArmed = true;
 }
 
@@ -3460,9 +3755,7 @@ static void DrawQuitModal(void) {
     /* Centre the popup. */
     const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    if (ImGui::BeginPopupModal("Quit?", nullptr,
-                               ImGuiWindowFlags_AlwaysAutoResize |
-                               ImGuiWindowFlags_NoCollapse)) {
+    if (ImGui::BeginPopupModal("Quit?", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse)) {
         ImGui::TextUnformatted("Save before quitting?");
         ImGui::Separator();
         ImGui::TextWrapped("Save & Quit writes the current game state to "
@@ -3497,8 +3790,7 @@ static void DrawQuitModal(void) {
  * holds KEYINPUT released and swallows SDL events). */
 static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
     if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter) {
-        if (data->EventChar < 128 &&
-            Port_RandoFileMenu_IsSeedChar((char)data->EventChar)) {
+        if (data->EventChar < 128 && Port_RandoFileMenu_IsSeedChar((char)data->EventChar)) {
             return 0;
         }
         return 1;
@@ -3506,27 +3798,23 @@ static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
-
-
 static void DrawRandoFileMenuModal(void) {
     bool forceOpen = Port_RandoFileMenu_IsModalOpen();
     bool shouldShow = forceOpen || (Rando_IsInFileSelect() && Port_RandoFileMenu_IsSidebarOpen());
-    if (!shouldShow) return;
+    if (!shouldShow)
+        return;
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     const float padding = 12.0f;
     const float sidebarW = 380.0f;
     const float sidebarH = vp->WorkSize.y - 2 * padding;
 
-    ImGui::SetNextWindowPos(
-        ImVec2(vp->Pos.x + vp->Size.x - sidebarW - padding, vp->Pos.y + padding),
-        ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x - sidebarW - padding, vp->Pos.y + padding), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(sidebarW, sidebarH), ImGuiCond_Always);
 
     if (ImGui::Begin("##port_setup_sidebar", nullptr,
-                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
-                     ImGuiWindowFlags_NoSavedSettings)) {
+                     ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings)) {
 
         ImGui::TextColored(ImVec4(0.78f, 0.95f, 0.78f, 1.0f), "PORT & RANDOMIZER SETUP");
         ImGui::Separator();
@@ -3536,10 +3824,9 @@ static void DrawRandoFileMenuModal(void) {
         if (ImGui::Checkbox("Enable Randomizer Mode", &randoEnabled)) {
             Port_RandoFileMenu_SetRandoOptionEnabled(randoEnabled);
         }
-        RandoUi_HelpTooltip(
-            "On: Starting a new save slot will roll a randomized seed using "
-            "the settings below.\n\n"
-            "Off (default): New slots start as a normal, unmodified vanilla game.");
+        RandoUi_HelpTooltip("On: Starting a new save slot will roll a randomized seed using "
+                            "the settings below.\n\n"
+                            "Off (default): New slots start as a normal, unmodified vanilla game.");
 
         ImGui::Separator();
 
@@ -3547,23 +3834,21 @@ static void DrawRandoFileMenuModal(void) {
         if (randoEnabled) {
             if (ImGui::CollapsingHeader("Randomizer Setup", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::SetNextItemWidth(180);
-                if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(),
-                                     RANDO_FILE_MENU_SEED_MAX + 1,
-                                     ImGuiInputTextFlags_CallbackCharFilter |
-                                         ImGuiInputTextFlags_EnterReturnsTrue,
+                if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(), RANDO_FILE_MENU_SEED_MAX + 1,
+                                     ImGuiInputTextFlags_CallbackCharFilter | ImGuiInputTextFlags_EnterReturnsTrue,
                                      RandoSeedCharFilter)) {
                     Port_RandoFileMenu_SeedEdited();
                     Port_RandoFileMenu_CommitAndStart();
                 }
-                if (ImGui::IsItemEdited()) Port_RandoFileMenu_SeedEdited();
+                if (ImGui::IsItemEdited())
+                    Port_RandoFileMenu_SeedEdited();
                 ImGui::SameLine();
-                if (ImGui::Button("Randomize")) Port_RandoFileMenu_RandomizeSeed();
+                if (ImGui::Button("Randomize"))
+                    Port_RandoFileMenu_RandomizeSeed();
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("Logic: built-in native graph (%d locations)", RANDO_LOCATION_COUNT);
-                static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-                    "Normal", "Hard", "Chaos"
-                };
+                static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = { "Normal", "Hard", "Chaos" };
                 int difficulty = Port_RandoFileMenu_Difficulty();
                 ImGui::SetNextItemWidth(160);
                 if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
@@ -3579,10 +3864,9 @@ static void DrawRandoFileMenuModal(void) {
                 ImGui::SameLine();
                 ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
                 ImGui::Checkbox("Open world", Port_RandoFileMenu_OpenWorld());
-                RandoUi_HelpTooltip(
-                    "Every permanent obstacle (trees, cracked blocks, bomb "
-                    "walls, switches, non-key doors, ...) starts pre-solved, "
-                    "matching the GBA randomizer's World Settings \"Open\".");
+                RandoUi_HelpTooltip("Every permanent obstacle (trees, cracked blocks, bomb "
+                                    "walls, switches, non-key doors, ...) starts pre-solved, "
+                                    "matching the GBA randomizer's World Settings \"Open\".");
                 ImGui::SameLine();
                 ImGui::Checkbox("Sleep warp", Port_RandoFileMenu_Homewarp());
                 ImGui::Checkbox("Start Sword", Port_RandoFileMenu_StartSword());
@@ -3590,7 +3874,7 @@ static void DrawRandoFileMenuModal(void) {
                 ImGui::Checkbox("Early Crests", Port_RandoFileMenu_EarlyCrests());
                 ImGui::SameLine();
                 ImGui::Checkbox("Fast Text", Port_RandoFileMenu_InstantText());
-                
+
                 static const char* kTunicColors[] = { "Green", "Red", "Blue", "Purple", "Orange", "Grey", "Random" };
                 static const char* kHeartColors[] = { "Red", "Blue", "Green", "Yellow", "Purple", "Rainbow", "Random" };
                 ImGui::SetNextItemWidth(160);
@@ -3648,12 +3932,11 @@ static void DrawRandoFileMenuModal(void) {
          * closes on a second press of the GBA L button, but that press is
          * masked here (port_bios.c swallows game input while the menu is
          * open) so it is handled in Port_PumpEvents instead. */
-        const bool popupOpen =
-            ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
+        const bool popupOpen = ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel);
 
         if (!popupOpen && !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused()) {
-            const bool esc_pressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false) ||
-                                     ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
+            const bool esc_pressed =
+                ImGui::IsKeyPressed(ImGuiKey_Escape, false) || ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false);
 
             if (esc_pressed) {
                 if (forceOpen) {
@@ -3666,10 +3949,8 @@ static void DrawRandoFileMenuModal(void) {
         }
 
         if (forceOpen) {
-            if (Port_RandoFileMenu_IsOpen() && !popupOpen &&
-                !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused() &&
-                (ImGui::IsKeyPressed(ImGuiKey_Enter, false) ||
-                 ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))) {
+            if (Port_RandoFileMenu_IsOpen() && !popupOpen && !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemFocused() &&
+                (ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false))) {
                 Port_RandoFileMenu_CommitAndStart();
             }
         } else {
@@ -3684,13 +3965,15 @@ static void DrawRandoFileMenuModal(void) {
 }
 
 extern "C" bool Port_ImGui_Render(void) {
-    if (!sImGuiInited) return false;
+    if (!sImGuiInited)
+        return false;
     /* SDL_Renderer path needs a renderer; SDL_GPU path runs with
      * sRenderer == nullptr (NewFrame uses ImGui_ImplSDLGPU3 instead
      * and PresentFrame consumes the draw data via the *_Gpu helpers
      * below). */
 #ifndef TMC_GPU_RENDERER
-    if (!sRenderer) return false;
+    if (!sRenderer)
+        return false;
 #endif
 
     /* Gamepad nav gated on overlay-open state. When no overlay is open,
@@ -3752,15 +4035,12 @@ extern "C" bool Port_ImGui_Render(void) {
     extern void Port_SoftSlots_ConfigClose(void);
     if (Port_SoftSlots_ConfigIsOpen()) {
         const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(
-            ImVec2(vp->Pos.x + vp->Size.x * 0.5f,
-                   vp->Pos.y + vp->Size.y * 0.5f),
-            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowPos(ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f), ImGuiCond_Always,
+                                ImVec2(0.5f, 0.5f));
         ImGui::SetNextWindowSize(ImVec2(380, 0));
         if (ImGui::Begin("##softslot_config", nullptr,
-                         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
-                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar |
-                         ImGuiWindowFlags_NoSavedSettings)) {
+                         ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoSavedSettings)) {
             ImGui::TextColored(ImVec4(0.78f, 0.86f, 1.0f, 1.0f), "EXTRA EQUIP SLOTS");
             ImGui::Separator();
             for (int s = 0; s < 4; ++s) {
@@ -3811,10 +4091,10 @@ extern "C" bool Port_ImGui_Render(void) {
             ImGui::SetNextWindowBgAlpha(0.85f);
             if (ImGui::Begin("##classic_to_ribbon", nullptr,
                              ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize |
-                             ImGuiWindowFlags_NoSavedSettings)) {
+                                 ImGuiWindowFlags_NoSavedSettings)) {
                 if (ImGui::SmallButton("Switch to ribbon mode")) {
                     sRibbonEnabled = true;
-                    Port_Config_SetRibbonEnabled(true);   /* persist (#146) */
+                    Port_Config_SetRibbonEnabled(true); /* persist (#146) */
                 }
             }
             ImGui::End();
@@ -3854,23 +4134,27 @@ extern "C" bool Port_ImGui_Render(void) {
  * vertex/index buffers (must happen before BeginGPURenderPass), and
  * RenderDrawData issues the actual draw commands inside the pass. */
 extern "C" void Port_ImGui_PrepareDrawDataGpu(SDL_GPUCommandBuffer* cmd) {
-    if (!sImGuiInited) return;
-    if (sRenderer != nullptr) return;  /* SDL_Renderer path doesn't use this */
+    if (!sImGuiInited)
+        return;
+    if (sRenderer != nullptr)
+        return; /* SDL_Renderer path doesn't use this */
     ImDrawData* dd = ImGui::GetDrawData();
-    if (!dd) return;
+    if (!dd)
+        return;
     ImGui_ImplSDLGPU3_PrepareDrawData(dd, cmd);
 }
 
-extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd,
-                                             SDL_GPURenderPass* rp) {
-    if (!sImGuiInited) return;
-    if (sRenderer != nullptr) return;
+extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd, SDL_GPURenderPass* rp) {
+    if (!sImGuiInited)
+        return;
+    if (sRenderer != nullptr)
+        return;
     ImDrawData* dd = ImGui::GetDrawData();
-    if (!dd) return;
+    if (!dd)
+        return;
     ImGui_ImplSDLGPU3_RenderDrawData(dd, cmd, rp, /*pipeline=*/nullptr);
 }
 #endif
-
 
 /* Project Picori prelaunch — builds and presents a centred ImGui
  * card with embedded logo, title / subtitle, version, ROM filename,
@@ -3889,11 +4173,9 @@ extern "C" void Port_ImGui_RenderDrawDataGpu(SDL_GPUCommandBuffer* cmd,
  * NewFrame structure as the prelaunch card) so it can be presented on the GPU
  * swapchain via Port_GPU_PresentPrelaunchFrame. Returns true when draw data
  * is ready to present. `fraction` is 0..1; `phase` is the current phase name. */
-extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase,
-                                                 float fraction,
-                                                 int phase_index,
-                                                 int phase_total) {
-    if (!sImGuiInited) return false;
+extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase, float fraction, int phase_index, int phase_total) {
+    if (!sImGuiInited)
+        return false;
 
 #ifdef TMC_GPU_RENDERER
     const bool gpuBackend = (sRenderer == nullptr);
@@ -3908,16 +4190,15 @@ extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase,
     ImGui::NewFrame();
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
-    const ImVec2 center(vp->WorkPos.x + vp->WorkSize.x * 0.5f,
-                        vp->WorkPos.y + vp->WorkSize.y * 0.5f);
+    const ImVec2 center(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f);
     ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(440, 0), ImGuiCond_Always);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28, 24));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
     if (ImGui::Begin("##extract_progress", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar)) {
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings |
+                         ImGuiWindowFlags_NoScrollbar)) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.40f, 0.72f, 0.46f, 1.00f));
         ImGui::SetWindowFontScale(1.6f);
         ImGui::TextUnformatted("Extracting game assets");
@@ -3930,9 +4211,7 @@ extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase,
         ImGui::Dummy(ImVec2(0, 4));
 
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.78f, 0.70f, 1.00f));
-        ImGui::Text("loading %s   (phase %d/%d)",
-                    (phase && phase[0]) ? phase : "preparing",
-                    phase_index, phase_total);
+        ImGui::Text("loading %s   (phase %d/%d)", (phase && phase[0]) ? phase : "preparing", phase_index, phase_total);
         ImGui::PopStyleColor();
         ImGui::TextDisabled("One-time first-launch extraction. See terminal for detail.");
     }
@@ -3949,14 +4228,14 @@ static void CenteredText(const char* t) {
     ImGui::TextUnformatted(t);
 }
 
-extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
-                                           const char* version,
-                                           const char* rom_name,
-                                           bool* out_play,
+extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present, const char* version, const char* rom_name, bool* out_play,
                                            bool* out_change_rom) {
-    if (out_play) *out_play = false;
-    if (out_change_rom) *out_change_rom = false;
-    if (!sImGuiInited) return false;
+    if (out_play)
+        *out_play = false;
+    if (out_change_rom)
+        *out_change_rom = false;
+    if (!sImGuiInited)
+        return false;
 
     /* Lazy-load the logo on the first frame. Safe on both backends —
      * the loader picks the right path based on which pointer is
@@ -3980,8 +4259,7 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
     ImGui::NewFrame();
 
     const ImGuiViewport* vp = ImGui::GetMainViewport();
-    const ImVec2 viewport_center(vp->WorkPos.x + vp->WorkSize.x * 0.5f,
-                                 vp->WorkPos.y + vp->WorkSize.y * 0.5f);
+    const ImVec2 viewport_center(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f);
     ImGui::SetNextWindowPos(viewport_center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowSize(ImVec2(620, 0), ImGuiCond_Always);
     /* Cap the card's auto-height to the visible work area so a small or
@@ -3992,9 +4270,8 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(36, 32));
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 14.0f);
     if (ImGui::Begin("##prelaunch", nullptr,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
-                     ImGuiWindowFlags_NoSavedSettings)) {
+                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+                         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings)) {
         const float win_w = ImGui::GetWindowSize().x;
         const ImVec4 accent(0.40f, 0.72f, 0.46f, 1.00f);
         const ImVec4 subtxt(0.70f, 0.78f, 0.70f, 1.00f);
@@ -4044,7 +4321,8 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
                 float pad = ImGui::GetStyle().WindowPadding.x;
                 ImGui::SameLine(win_w - pad - bw);
                 if (ImGui::Button(lbl)) {
-                    if (out_change_rom) *out_change_rom = true;
+                    if (out_change_rom)
+                        *out_change_rom = true;
                 }
             }
         } else {
@@ -4069,21 +4347,20 @@ extern "C" bool Port_ImGui_RenderPrelaunch(bool rom_present,
             const char* lbl = is_select ? "Select ROM..." : "Play";
             const ImVec2 sz(is_select ? 260.0f : 220.0f, 48.0f);
             ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12.0f);
-            ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.18f, 0.42f, 0.24f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.42f, 0.24f, 1.0f));
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.28f, 0.55f, 0.34f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.40f, 0.72f, 0.46f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.40f, 0.72f, 0.46f, 1.0f));
             ImGui::SetCursorPosX((win_w - sz.x) * 0.5f);
             ImGui::SetWindowFontScale(1.4f);
-            const bool clicked =
-                ImGui::Button(lbl, sz) ||
-                ImGui::IsKeyPressed(ImGuiKey_Enter) ||
-                ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) ||
-                ImGui::IsKeyPressed(ImGuiKey_Space);
+            const bool clicked = ImGui::Button(lbl, sz) || ImGui::IsKeyPressed(ImGuiKey_Enter) ||
+                                 ImGui::IsKeyPressed(ImGuiKey_KeypadEnter) || ImGui::IsKeyPressed(ImGuiKey_Space);
             if (clicked) {
                 if (is_select) {
-                    if (out_change_rom) *out_change_rom = true;
+                    if (out_change_rom)
+                        *out_change_rom = true;
                 } else {
-                    if (out_play) *out_play = true;
+                    if (out_play)
+                        *out_play = true;
                 }
             }
             ImGui::SetWindowFontScale(1.0f);

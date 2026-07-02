@@ -60,6 +60,15 @@
 
 static u8 sEeprom[EEPROM_SIZE];
 static int sEepromDirty = 0; /* set on write, cleared on flush */
+/* >0 while inside a game save transaction (HandleSaveInProgress). Block
+ * writes inside a transaction only mark dirty; the single atomic flush
+ * happens at Port_Save_EndTransaction(). Outside a transaction (boot-time
+ * InitSaveData, status repair) writes keep the old flush-immediately
+ * behavior. */
+static int sSaveTxnDepth = 0;
+/* 1 after a failed flush, reset on success — so a persistent ENOSPC/EIO
+ * logs once per failure burst instead of once per write. */
+static int sFlushFailedLast = 0;
 static int sEepromInited = 0;
 static char sActivePath[SAVE_FILENAME_MAX] = DEFAULT_SAVE_FILENAME;
 /* 1 once the user has explicitly chosen a named profile (config.json), so the
@@ -111,11 +120,15 @@ static int WriteEepromAtomic(const char* path) {
 
     int ok = WriteEepromDiskOrder(f);
     if (ok) {
-        fflush(f);
+        /* #20: a full buffer + failed flush/sync is exactly the ENOSPC/EIO
+         * case — treat it as a failed write instead of reporting success. */
+        ok = fflush(f) == 0;
 #ifdef _WIN32
-        _commit(_fileno(f));
+        if (ok)
+            ok = _commit(_fileno(f)) == 0;
 #else
-        fsync(fileno(f));
+        if (ok)
+            ok = fsync(fileno(f)) == 0;
 #endif
     }
     if (fclose(f) != 0)
@@ -186,8 +199,8 @@ static void LoadEepromFile(void) {
     const size_t got = fread(sEeprom, 1, EEPROM_SIZE, f);
     fclose(f);
     if (got != EEPROM_SIZE) {
-        fprintf(stderr, "[SAVE] ERROR: short read on %s (%zu/%d bytes), starting fresh.\n",
-                sActivePath, got, EEPROM_SIZE);
+        fprintf(stderr, "[SAVE] ERROR: short read on %s (%zu/%d bytes), starting fresh.\n", sActivePath, got,
+                EEPROM_SIZE);
         memset(sEeprom, 0xFF, EEPROM_SIZE); /* blank EEPROM = 0xFF */
         return;
     }
@@ -203,8 +216,8 @@ static void LoadEepromFile(void) {
             backedUp = fwrite(sEeprom, 1, EEPROM_SIZE, bf) == EEPROM_SIZE;
             backedUp &= fclose(bf) == 0;
         }
-        fprintf(stderr, "[SAVE] Migrating %s to mGBA byte order (backup: %s)%s.\n",
-                sActivePath, bak, backedUp ? "" : " — BACKUP FAILED");
+        fprintf(stderr, "[SAVE] Migrating %s to mGBA byte order (backup: %s)%s.\n", sActivePath, bak,
+                backedUp ? "" : " — BACKUP FAILED");
         sEepromDirty = 1;
         FlushEepromFile();
     } else {
@@ -220,11 +233,38 @@ static void FlushEepromFile(void) {
         return;
     if (WriteEepromAtomic(sActivePath)) {
         sEepromDirty = 0;
+        if (sFlushFailedLast) {
+            fprintf(stderr, "[SAVE] atomic write of %s recovered.\n", sActivePath);
+            sFlushFailedLast = 0;
+        }
     } else {
-        /* Keep the dirty flag so the next flush retries. */
-        fprintf(stderr, "[SAVE] ERROR: atomic write of %s failed; will retry.\n",
-                sActivePath);
+        /* Keep the dirty flag so the next flush retries; log once per
+         * failure burst, not once per block write. */
+        if (!sFlushFailedLast) {
+            fprintf(stderr, "[SAVE] ERROR: atomic write of %s failed; will retry.\n", sActivePath);
+            sFlushFailedLast = 1;
+        }
     }
+}
+
+/* ---- Save transactions (#19) --------------------------------------------
+ * A single in-game save is ~324 back-to-back EEPROMWrite0_8k_Check calls
+ * (two full SaveFile copies + status blocks). Flushing the 8 KB file
+ * atomically (temp+fsync+rename) per BLOCK meant ~324 fsync'd rewrites on
+ * the game thread — a 150 ms..multi-second hitch. The game's save entry
+ * points (src/save.c DataDoubleWriteWithStatus) bracket the burst so the
+ * whole transaction flushes exactly once at the end. */
+void Port_Save_BeginTransaction(void) {
+    sSaveTxnDepth++;
+}
+
+/* Returns 1 when everything the transaction wrote is durably on disk. */
+int Port_Save_EndTransaction(void) {
+    if (sSaveTxnDepth > 0)
+        sSaveTxnDepth--;
+    if (sSaveTxnDepth == 0)
+        FlushEepromFile();
+    return !sEepromDirty;
 }
 
 /* ---- EEPROM BIOS API ---------------------------------------------------- */
@@ -262,8 +302,10 @@ u16 EEPROMWrite0_8k_Check(u16 block, const u16* src) {
     memcpy(&sEeprom[block * EEPROM_BLOCK], src, EEPROM_BLOCK);
     sEepromDirty = 1;
 
-    /* Flush to disk immediately to avoid data loss on crash */
-    FlushEepromFile();
+    /* Flush immediately (crash safety) unless a save transaction is open —
+     * then the single flush happens at Port_Save_EndTransaction(). */
+    if (sSaveTxnDepth == 0)
+        FlushEepromFile();
     return 0; /* success */
 }
 
@@ -293,8 +335,7 @@ void Port_Save_SetActivePath(const char* path) {
         /* The active-profile name comes from config.json (user-editable);
          * refuse anything outside the tmc.sav / tmc_<name>.sav lane so a
          * crafted value can't redirect saves elsewhere on disk. */
-        fprintf(stderr, "[SAVE] Ignoring unmanaged save profile '%s'; using %s.\n",
-                path, DEFAULT_SAVE_FILENAME);
+        fprintf(stderr, "[SAVE] Ignoring unmanaged save profile '%s'; using %s.\n", path, DEFAULT_SAVE_FILENAME);
         path = DEFAULT_SAVE_FILENAME;
     }
     /* If the EEPROM was already loaded under the old path, flush it
@@ -323,10 +364,12 @@ const char* Port_Save_GetActivePath(void) {
  * profile" — keep playing in the current profile while the named copy
  * captures right-now state. Returns 0 on failure. */
 int Port_Save_SaveAsProfile(const char* path) {
-    if (path == NULL || path[0] == '\0') return 0;
+    if (path == NULL || path[0] == '\0')
+        return 0;
     /* Only allow writing into the managed profile lane so the "save as"
      * UI can't be pointed at an arbitrary host path. */
-    if (!IsManagedProfilePath(path)) return 0;
+    if (!IsManagedProfilePath(path))
+        return 0;
     /* Ensure EEPROM was loaded at least once so we have meaningful data
      * to copy. (Right after launch, before any read, sEeprom is zeroed.) */
     if (!sEepromInited) {
@@ -344,12 +387,13 @@ int Port_Save_ListProfiles(char out[][SAVE_FILENAME_MAX], int max) {
 #ifdef _WIN32
     WIN32_FIND_DATAA fd;
     HANDLE h = FindFirstFileA("tmc*.sav", &fd);
-    if (h == INVALID_HANDLE_VALUE) return 0;
+    if (h == INVALID_HANDLE_VALUE)
+        return 0;
     do {
-        if (n >= max) break;
+        if (n >= max)
+            break;
         const char* name = fd.cFileName;
-        if (strcmp(name, DEFAULT_SAVE_FILENAME) == 0 ||
-            strncmp(name, "tmc_", 4) == 0) {
+        if (strcmp(name, DEFAULT_SAVE_FILENAME) == 0 || strncmp(name, "tmc_", 4) == 0) {
             strncpy(out[n], name, SAVE_FILENAME_MAX - 1);
             out[n][SAVE_FILENAME_MAX - 1] = '\0';
             n++;
@@ -358,17 +402,19 @@ int Port_Save_ListProfiles(char out[][SAVE_FILENAME_MAX], int max) {
     FindClose(h);
 #else
     DIR* d = opendir(".");
-    if (!d) return 0;
+    if (!d)
+        return 0;
     struct dirent* ent;
     while ((ent = readdir(d)) != NULL) {
-        if (n >= max) break;
+        if (n >= max)
+            break;
         const char* name = ent->d_name;
         const size_t len = strlen(name);
-        if (len < 4) continue;
+        if (len < 4)
+            continue;
         /* Match `tmc.sav` exactly OR `tmc_*.sav`. */
         if (strcmp(name, DEFAULT_SAVE_FILENAME) == 0 ||
-            (strncmp(name, "tmc_", 4) == 0 && len > 8 &&
-             strcmp(name + len - 4, ".sav") == 0)) {
+            (strncmp(name, "tmc_", 4) == 0 && len > 8 && strcmp(name + len - 4, ".sav") == 0)) {
             strncpy(out[n], name, SAVE_FILENAME_MAX - 1);
             out[n][SAVE_FILENAME_MAX - 1] = '\0';
             n++;
@@ -379,22 +425,32 @@ int Port_Save_ListProfiles(char out[][SAVE_FILENAME_MAX], int max) {
     return n;
 }
 
-int Port_Save_FilenameMax(void) { return SAVE_FILENAME_MAX; }
+int Port_Save_FilenameMax(void) {
+    return SAVE_FILENAME_MAX;
+}
 
 /* Returns 1 if the path is something we created and should be willing
  * to delete or rename — tmc.sav or tmc_<name>.sav. Anything else gets
  * refused so a stray ../../etc/passwd argument can't escape the
  * profile lane. */
 static int IsManagedProfilePath(const char* path) {
-    if (path == NULL || path[0] == '\0') return 0;
-    if (strchr(path, '/') != NULL) return 0;
-    if (strchr(path, '\\') != NULL) return 0;
-    if (strstr(path, "..") != NULL) return 0;
-    if (strcmp(path, DEFAULT_SAVE_FILENAME) == 0) return 1;
-    if (strncmp(path, "tmc_", 4) != 0) return 0;
+    if (path == NULL || path[0] == '\0')
+        return 0;
+    if (strchr(path, '/') != NULL)
+        return 0;
+    if (strchr(path, '\\') != NULL)
+        return 0;
+    if (strstr(path, "..") != NULL)
+        return 0;
+    if (strcmp(path, DEFAULT_SAVE_FILENAME) == 0)
+        return 1;
+    if (strncmp(path, "tmc_", 4) != 0)
+        return 0;
     const size_t len = strlen(path);
-    if (len <= 8) return 0; /* "tmc_X.sav" minimum */
-    if (strcmp(path + len - 4, ".sav") != 0) return 0;
+    if (len <= 8)
+        return 0; /* "tmc_X.sav" minimum */
+    if (strcmp(path + len - 4, ".sav") != 0)
+        return 0;
     return 1;
 }
 
@@ -402,8 +458,10 @@ static int IsManagedProfilePath(const char* path) {
  * (caller should switch first) or if the name doesn't look like one
  * of ours. Returns 1 on success. */
 int Port_Save_DeleteProfile(const char* path) {
-    if (!IsManagedProfilePath(path)) return 0;
-    if (strcmp(path, sActivePath) == 0) return 0; /* refuse to delete active */
+    if (!IsManagedProfilePath(path))
+        return 0;
+    if (strcmp(path, sActivePath) == 0)
+        return 0; /* refuse to delete active */
     return remove(path) == 0 ? 1 : 0;
 }
 
@@ -412,15 +470,23 @@ int Port_Save_DeleteProfile(const char* path) {
  * for fresh installs). If renaming the active profile, also updates
  * sActivePath so subsequent reads/writes hit the new name. */
 int Port_Save_RenameProfile(const char* oldPath, const char* newPath) {
-    if (!IsManagedProfilePath(oldPath)) return 0;
-    if (!IsManagedProfilePath(newPath)) return 0;
-    if (strcmp(oldPath, DEFAULT_SAVE_FILENAME) == 0) return 0; /* don't rename default away */
-    if (strcmp(oldPath, newPath) == 0) return 1; /* no-op */
+    if (!IsManagedProfilePath(oldPath))
+        return 0;
+    if (!IsManagedProfilePath(newPath))
+        return 0;
+    if (strcmp(oldPath, DEFAULT_SAVE_FILENAME) == 0)
+        return 0; /* don't rename default away */
+    if (strcmp(oldPath, newPath) == 0)
+        return 1; /* no-op */
     /* Refuse clobbering an existing file — fail-stop is safer than
      * silently replacing somebody else's save. */
     FILE* probe = fopen(newPath, "rb");
-    if (probe) { fclose(probe); return 0; }
-    if (rename(oldPath, newPath) != 0) return 0;
+    if (probe) {
+        fclose(probe);
+        return 0;
+    }
+    if (rename(oldPath, newPath) != 0)
+        return 0;
     if (strcmp(oldPath, sActivePath) == 0) {
         strncpy(sActivePath, newPath, SAVE_FILENAME_MAX - 1);
         sActivePath[SAVE_FILENAME_MAX - 1] = '\0';

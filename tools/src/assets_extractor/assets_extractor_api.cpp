@@ -27,8 +27,7 @@ struct RomFingerprint {
     int64_t mtime = 0;
 };
 
-RomFingerprint ComputeRomFingerprint(const std::filesystem::path& rom_path)
-{
+RomFingerprint ComputeRomFingerprint(const std::filesystem::path& rom_path) {
     RomFingerprint fp;
     std::error_code ec;
     fp.size = std::filesystem::file_size(rom_path, ec);
@@ -42,10 +41,7 @@ RomFingerprint ComputeRomFingerprint(const std::filesystem::path& rom_path)
     return fp;
 }
 
-bool RuntimeAssetsUpToDateImpl(const std::filesystem::path& runtime_root,
-                               const RomFingerprint& fp,
-                               bool pack_runtime)
-{
+bool RuntimeAssetsUpToDateImpl(const std::filesystem::path& runtime_root, const RomFingerprint& fp, bool pack_runtime) {
     const std::filesystem::path state_path = runtime_root / ".asset_build_state.json";
     if (!std::filesystem::exists(state_path)) {
         return false;
@@ -57,6 +53,14 @@ bool RuntimeAssetsUpToDateImpl(const std::filesystem::path& runtime_root,
     try {
         nlohmann::json state;
         in >> state;
+        /* Extractor schema version. A stamp without the field (older
+         * binary) or with a different value (extractor output changed)
+         * is stale: upgrading the binary must not keep consuming caches
+         * extracted by an incompatible pipeline. */
+        if (!state.contains("builder_version") || !state["builder_version"].is_number_integer() ||
+            state["builder_version"].get<int>() != PortAssetPipeline::kBuildStateVersion) {
+            return false;
+        }
         if (!state.contains("rom_size") || !state.contains("rom_mtime")) {
             return false;
         }
@@ -79,26 +83,24 @@ bool RuntimeAssetsUpToDateImpl(const std::filesystem::path& runtime_root,
             return false;
         }
         return true;
-    } catch (...) {
-        return false;
-    }
+    } catch (...) { return false; }
 }
 
-void StampRomFingerprint(const std::filesystem::path& runtime_root,
-                         const RomFingerprint& fp,
-                         bool pack_runtime)
-{
+void StampRomFingerprint(const std::filesystem::path& runtime_root, const RomFingerprint& fp, bool pack_runtime) {
     const std::filesystem::path state_path = runtime_root / ".asset_build_state.json";
     nlohmann::json state;
     if (std::filesystem::exists(state_path)) {
         std::ifstream in(state_path);
         if (in) {
-            try { in >> state; } catch (...) { state = nlohmann::json::object(); }
+            try {
+                in >> state;
+            } catch (...) { state = nlohmann::json::object(); }
         }
     }
     if (!state.is_object()) {
         state = nlohmann::json::object();
     }
+    state["builder_version"] = PortAssetPipeline::kBuildStateVersion;
     state["rom_size"] = fp.size;
     state["rom_mtime"] = fp.mtime;
     state["pack_format"] = pack_runtime ? "v1" : "loose";
@@ -113,8 +115,7 @@ void StampRomFingerprint(const std::filesystem::path& runtime_root,
 /* Wipe stale outputs so a mode switch (loose <-> pak) doesn't leave
  * orphan files in runtime_root. baserom.gba and the build-state file
  * are preserved so callers don't accidentally nuke the user's ROM. */
-void WipeStaleRuntime(const std::filesystem::path& runtime_root, bool pack_runtime)
-{
+void WipeStaleRuntime(const std::filesystem::path& runtime_root, bool pack_runtime) {
     std::error_code ec;
     if (pack_runtime) {
         for (const auto& entry : std::filesystem::directory_iterator(runtime_root, ec)) {
@@ -130,7 +131,8 @@ void WipeStaleRuntime(const std::filesystem::path& runtime_root, bool pack_runti
         }
     } else {
         for (const auto& entry : std::filesystem::directory_iterator(runtime_root, ec)) {
-            if (!entry.is_regular_file(ec)) continue;
+            if (!entry.is_regular_file(ec))
+                continue;
             if (entry.path().extension() == ".pak") {
                 std::filesystem::remove(entry.path(), ec);
             }
@@ -138,10 +140,9 @@ void WipeStaleRuntime(const std::filesystem::path& runtime_root, bool pack_runti
     }
 }
 
-}  // namespace
+} // namespace
 
-std::filesystem::path FindExecutableDirectory(const std::filesystem::path& argv0)
-{
+std::filesystem::path FindExecutableDirectory(const std::filesystem::path& argv0) {
     /* Prefer the OS-provided "where am I" mechanism over argv[0]: under some
      * launchers (most notably AppImage-wrapped IDE terminals) argv[0] and
      * the inherited cwd both point at the launcher's working directory
@@ -182,10 +183,8 @@ std::filesystem::path FindExecutableDirectory(const std::filesystem::path& argv0
     return absolute_path.parent_path();
 }
 
-bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
-                     const std::filesystem::path& rom_path,
-                     bool pack_runtime)
-{
+bool RuntimeUpToDate(const std::filesystem::path& runtime_root, const std::filesystem::path& rom_path,
+                     bool pack_runtime) {
     const RomFingerprint fp = ComputeRomFingerprint(rom_path);
     if (fp.size == 0) {
         return false;
@@ -193,11 +192,8 @@ bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
     return RuntimeAssetsUpToDateImpl(runtime_root, fp, pack_runtime);
 }
 
-bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
-                     std::uint64_t rom_size,
-                     std::int64_t rom_mtime,
-                     bool pack_runtime)
-{
+bool RuntimeUpToDate(const std::filesystem::path& runtime_root, std::uint64_t rom_size, std::int64_t rom_mtime,
+                     bool pack_runtime) {
     if (rom_size == 0) {
         return false;
     }
@@ -207,10 +203,10 @@ bool RuntimeUpToDate(const std::filesystem::path& runtime_root,
     return RuntimeAssetsUpToDateImpl(runtime_root, fp, pack_runtime);
 }
 
-bool ExtractAssets(const Options& opt, std::string* error)
-{
+bool ExtractAssets(const Options& opt, std::string* error) {
     auto fail = [&](std::string msg) {
-        if (error) *error = std::move(msg);
+        if (error)
+            *error = std::move(msg);
         return false;
     };
 
@@ -242,8 +238,7 @@ bool ExtractAssets(const Options& opt, std::string* error)
         rom_fp.mtime = 0;
     }
 
-    if (!opt.force && rom_fp.size > 0 &&
-        RuntimeAssetsUpToDateImpl(opt.runtime_root, rom_fp, opt.pack_runtime)) {
+    if (!opt.force && rom_fp.size > 0 && RuntimeAssetsUpToDateImpl(opt.runtime_root, rom_fp, opt.pack_runtime)) {
         reporter.Finish("assets are up to date");
         return true;
     }
@@ -299,7 +294,7 @@ bool ExtractAssets(const Options& opt, std::string* error)
      * non-baseline region. Offsets are the retail-map-verified values, i.e. the
      * same addresses as kRomOffsets_{USA,EU,JP} in port/port_rom.c.
      */
-    char gameCode[5] = {0};
+    char gameCode[5] = { 0 };
     if (opt.rom_buffer.size() >= 0xB0) {
         std::memcpy(gameCode, opt.rom_buffer.data() + 0xAC, 4);
     } else if (!opt.rom_path.empty()) {
@@ -318,6 +313,11 @@ bool ExtractAssets(const Options& opt, std::string* error)
     if (std::memcmp(gameCode, "BZMP", 4) == 0) { /* EU */
         config.gfxGroupsTableOffset = 0x100204;
         config.paletteGroupsTableOffset = 0x0FED88;
+        /* EU's table really has 207 entries — [207] reads past the end
+         * (0x8731F680, not a ROM pointer; verified against baserom_eu).
+         * port_rom.c's 207 is correct; 208 made the two paths disagree
+         * about a garbage trailing entry. */
+        config.paletteGroupsTableLength = 207;
         config.globalGfxAndPalettesOffset = 0x5A23D0;
         config.mapDataOffset = 0x323FEC;
         config.areaRoomHeadersTableOffset = 0x11D95C;
@@ -374,9 +374,7 @@ bool ExtractAssets(const Options& opt, std::string* error)
      * before we record the build state or hand off to BuildRuntimeAssets. */
     try {
         PortAssetLog::BackgroundWriter::Instance().Wait();
-    } catch (const std::exception& e) {
-        return fail(fmt::format("background JSON writer failed: {}", e.what()));
-    }
+    } catch (const std::exception& e) { return fail(fmt::format("background JSON writer failed: {}", e.what())); }
 
     if (opt.pack_runtime) {
         const auto& names = pak_category_names();
@@ -400,7 +398,8 @@ bool ExtractAssets(const Options& opt, std::string* error)
                 return fail(fmt::format("pak write failed ({}): {}", names[i], pak_errors[i]));
             }
         }
-        if (opt.phase_done) opt.phase_done("paks");
+        if (opt.phase_done)
+            opt.phase_done("paks");
     }
 
     std::string build_error;
@@ -426,9 +425,8 @@ bool ExtractAssets(const Options& opt, std::string* error)
     return true;
 }
 
-std::span<const uint8_t> LoadedRomBytes()
-{
+std::span<const uint8_t> LoadedRomBytes() {
     return Rom;
 }
 
-}  // namespace AssetExtractorApi
+} // namespace AssetExtractorApi

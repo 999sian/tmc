@@ -13,6 +13,7 @@
 #include "tiles.h"
 #include "game.h"
 #include "assets/gfx_offsets.h"
+#include "port_offset_remap.h"
 #include "player.h"
 
 void HyruleTownTileSetManager_UpdateLoadGfxGroups(HyruleTownTileSetManager*);
@@ -185,15 +186,23 @@ bool32 HyruleTownTileSetManager_UpdateRoomGfxGroup(HyruleTownTileSetManager* thi
 
 void HyruleTownTileSetManager_LoadGfxGroup(u32 gfxIndex, u32 gfxGroup) {
     const HyruleTownTileSetManagerGfxInfo* gfxInfo;
+    u32 base;
+    u32 adj;
 
     gRoomVars.graphicsGroups[gfxIndex] = gfxGroup;
     if (gRoomControls.area != AREA_FESTIVAL_TOWN) {
         gfxInfo = &gHyruleTownTileSetManagerGfxInfos[gfxGroup];
+        base = offset_gUnk_086D4460;
     } else {
         gfxInfo = &gHyruleTownTileSetManagerGfxInfosFestival[gfxGroup];
+        base = offset_gUnk_086E8460;
     }
-    LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo->gfx1], gfxInfo->dest1, BG_SCREEN_SIZE * 2);
-    LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo->gfx2], gfxInfo->dest2, BG_SCREEN_SIZE * 2);
+    /* gfx1/gfx2 are compiled `base + delta` offsets into gGlobalGfxAndPalettes;
+     * the base symbol shifts on EU (assets/gfx_offsets.h is USA-baseline in
+     * the fat binary) — wrong Hyrule Town tiles without the remap. */
+    adj = Port_RemapGfxOffset(base) - base;
+    LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo->gfx1 + adj], gfxInfo->dest1, BG_SCREEN_SIZE * 2);
+    LoadResourceAsync(&gGlobalGfxAndPalettes[gfxInfo->gfx2 + adj], gfxInfo->dest2, BG_SCREEN_SIZE * 2);
 }
 
 void TryLoadPrologueHyruleTown(void) {

@@ -7,7 +7,8 @@
 #include "gfx.h"
 #include "fade.h"
 #ifdef PC_PORT
-#include <stdio.h>   /* fprintf for the per-frame palette-walker cycle warning */
+#include <stdio.h> /* fprintf for the per-frame palette-walker cycle warning */
+#include "port_offset_remap.h"
 #endif
 
 extern Palette gUnk_02001A3C;
@@ -95,7 +96,8 @@ u32 LoadObjPalette(Entity* entity, u32 objPaletteId) {
         } else {
             {
                 union SplitWord* objPalTbl = gUnk_08133368;
-                if (REGION_IS_EU) objPalTbl = gUnk_08133368_eu;
+                if (REGION_IS_EU)
+                    objPalTbl = gUnk_08133368_eu;
                 uVar3 = objPalTbl[(objPaletteId - 0x16)].BYTES.byte3;
             }
             uVar3 &= 0xf;
@@ -124,8 +126,8 @@ u32 LoadObjPalette(Entity* entity, u32 objPaletteId) {
     SetEntityObjPalette(entity, slot);
 #ifdef PC_PORT
     if (slot == 3 && objPaletteId != 3) {
-        fprintf(stderr, "[PAL] WARNING: slot=3 but objPaletteId=%u for kind=%d id=%d type=%d\n",
-                objPaletteId, entity->kind, entity->id, entity->type);
+        fprintf(stderr, "[PAL] WARNING: slot=3 but objPaletteId=%u for kind=%d id=%d type=%d\n", objPaletteId,
+                entity->kind, entity->id, entity->type);
     }
 #endif
     return slot;
@@ -308,10 +310,13 @@ void LoadObjPaletteAtIndex(u32 objPaletteId, u32 paletteIndex) {
             LoadPalettes((u8*)(gPaletteBuffer + (objPaletteId - 6) * 16), paletteIndex + 16, 1);
         } else {
             union SplitWord* objPalTbl = gUnk_08133368;
-            if (REGION_IS_EU) objPalTbl = gUnk_08133368_eu;
+            if (REGION_IS_EU)
+                objPalTbl = gUnk_08133368_eu;
             u32 offset = objPalTbl[(objPaletteId - 0x16)].WORD_U;
             u32 numPalettes = (offset >> 0x18) & 0xf;
-            offset &= 0xffffff;
+            /* Compiled USA-baseline gGlobalGfxAndPalettes offset — remap for EU
+             * (palette rows >= ~3388 shift by -0x40 on the EU blob). */
+            offset = Port_RemapGfxOffset(offset & 0xffffff);
             LoadPalettes(&gGlobalGfxAndPalettes[offset], paletteIndex + 16, numPalettes);
         }
     }
@@ -386,9 +391,8 @@ void CleanUpObjPalettes(void) {
                 const unsigned long mask = 1UL << (index2 & 31);
                 if (!(sWarned & mask)) {
                     sWarned |= mask;
-                    fprintf(stderr,
-                        "[color] cycle detected on gEntityLists[%d] in palette pass; bailing.\n",
-                        (int)index2);
+                    fprintf(stderr, "[color] cycle detected on gEntityLists[%d] in palette pass; bailing.\n",
+                            (int)index2);
                 }
                 break;
             }

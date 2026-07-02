@@ -528,11 +528,28 @@ u32 CreateRandomItemDrop(Entity* arg0, u32 arg1) {
                 // nop
                 ptr3 = &gDroptableModifiers[DROPTABLE_NONE];
             } else {
-                if (REGION_IS_EU) {
-                ptr3 = &gEnemyDroptables[r1 + 9];
+#ifdef PC_PORT
+                /* GBA reads gEnemyDroptables[picolyteType + 6 (USA/JP) / + 9 (EU)],
+                 * deliberately indexing PAST the table into the six picolyte
+                 * modifier rows (gUnk_0800191C[2..7]; the retail delta differs
+                 * because EU inserts 3 extra rows upstream — verified against
+                 * baserom/baserom_eu bytes). The PC compile inserted the
+                 * *_eu twin tables into that address chain, so BOTH deltas now
+                 * land in the wrong array. Index the modifier rows directly;
+                 * they are identical in all regions. */
+                if (r1 >= ITEM_BOTTLE_PICOLYTE_RED && r1 <= ITEM_BOTTLE_PICOLYTE_WHITE) {
+                    ptr3 = &gUnk_0800191C[2 + (r1 - ITEM_BOTTLE_PICOLYTE_RED)];
                 } else {
-                ptr3 = &gEnemyDroptables[r1 + 6];
+                    /* save-derived field out of range (corrupt .sav) */
+                    ptr3 = &gDroptableModifiers[DROPTABLE_NONE];
                 }
+#else
+#ifdef EU
+                ptr3 = &gEnemyDroptables[r1 + 9];
+#else
+                ptr3 = &gEnemyDroptables[r1 + 6];
+#endif
+#endif
             }
             // vector addition, s0 = ptr4 + ptr2 + ptr3
             SumDropProbabilities(droptable.a, ptr4->a, ptr2->a, ptr3->a);

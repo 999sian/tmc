@@ -107,6 +107,9 @@ void sub_08054974(u32 worldEventId, bool32 param_2) {
 void sub_08054A14(s32 worldEventId) {
     const WorldEvent* ptr = &GetWorldEvents()[worldEventId];
     if (ptr->bank < 0xe) {
-        SetLocalFlagByBank(gLocalFlagBanks[ptr->bank], ptr->flag);
+        /* WorldEvent tables are compiled USA-baseline (gWorldEvents/_eu in
+         * gameData.c use USA flag enums) — remap for EU/JP so fusion rewards
+         * hit the right bit. */
+        SetLocalFlagByBankB(gLocalFlagBanks[ptr->bank], ptr->flag);
     }
 }
