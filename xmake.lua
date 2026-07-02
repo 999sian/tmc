@@ -23,10 +23,15 @@ option_end()
 -- game_version still controls the asset/offset baseline used for the build
 -- (USA by default); only behavior sites already converted to REGION_IS_* are
 -- runtime-driven. No effect on the matching GBA ROM build.
+-- DEFAULT ON (M7): the shipped release has been the fat binary since v0.7.0;
+-- defaulting dev builds to match removes the config drift between what
+-- developers test and what users run. `--multi_region=n` (or build.py
+-- --single-region) still builds the per-region binary — CI keeps it as a
+-- guard against half-flattened MULTI_REGION #ifdefs.
 option("multi_region")
-    set_default(false)
+    set_default(true)
     set_showmenu(true)
-    set_description("Build one PC binary supporting USA/EU/JP at runtime")
+    set_description("Build one PC binary supporting USA/EU/JP at runtime (default; =n for per-region)")
 option_end()
 
 option("pc_avx2")
