@@ -16,14 +16,24 @@
 #define RANDO_MUSIC_MAX_AREAS 256
 
 static int16_t sMusicAssignments[RANDO_MUSIC_MAX_AREAS];
+static bool sMusicInitialized = false;
+static void EnsureInit(void) {
+    if (sMusicInitialized)
+        return;
+    sMusicInitialized = true;
+    for (int i = 0; i < RANDO_MUSIC_MAX_AREAS; ++i)
+        sMusicAssignments[i] = -1;
+}
 
 void Rando_Music_SetAssignment(int area, int song) {
+    EnsureInit();
     if (area >= 0 && area < RANDO_MUSIC_MAX_AREAS) {
         sMusicAssignments[area] = (int16_t)song;
     }
 }
 
 int Rando_Music_GetAssignment(int area) {
+    EnsureInit();
     if (area >= 0 && area < RANDO_MUSIC_MAX_AREAS) {
         return sMusicAssignments[area];
     }
@@ -31,12 +41,14 @@ int Rando_Music_GetAssignment(int area) {
 }
 
 void Rando_Music_ClearAssignments(void) {
+    sMusicInitialized = true;
     for (int i = 0; i < RANDO_MUSIC_MAX_AREAS; ++i) {
         sMusicAssignments[i] = -1;
     }
 }
 
 int Rando_Music_Remap(int area, int song) {
+    EnsureInit();
     static uint8_t warned[RANDO_MUSIC_MAX_AREAS / 8];
     int assigned;
 

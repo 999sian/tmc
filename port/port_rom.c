@@ -31,7 +31,7 @@
 #elif defined(__APPLE__)
 #include <dirent.h>
 #include <mach-o/dyld.h>
-#include <stdlib.h>      /* realpath */
+#include <stdlib.h> /* realpath */
 #include <sys/stat.h>
 #elif !defined(TMC_N64)
 #include <dirent.h>
@@ -47,7 +47,9 @@ extern long readlink(const char* path, char* buf, unsigned long bufsiz);
  * skips file I/O) and are dropped by --gc-sections, but must still COMPILE,
  * so provide just enough declarations. */
 typedef struct __n64_DIR DIR;
-struct dirent { char d_name[256]; };
+struct dirent {
+    char d_name[256];
+};
 DIR* opendir(const char*);
 struct dirent* readdir(DIR*);
 int closedir(DIR*);
@@ -70,14 +72,14 @@ static SpritePtr sSpritePtrsStable[512];
  * Bare filenames are also probed under the binary's own directory so
  * release-tarball layouts work regardless of the user's cwd. */
 static const char* kRomCandidates[] = {
-    "baserom.gba",            /* USA default */
-    "baserom_eu.gba",         /* EU default */
-    "baserom_jp.gba",         /* JP default */
-    "synthetic_baserom.gba",  /* generated from extracted assets */
-    "build/pc/baserom.gba",   /* copied to build dir */
+    "baserom.gba",           /* USA default */
+    "baserom_eu.gba",        /* EU default */
+    "baserom_jp.gba",        /* JP default */
+    "synthetic_baserom.gba", /* generated from extracted assets */
+    "build/pc/baserom.gba",  /* copied to build dir */
     "build/pc/baserom_eu.gba",
     "build/pc/baserom_jp.gba",
-    "tmc.gba",                /* common alternate names */
+    "tmc.gba", /* common alternate names */
     "tmc_eu.gba",
     "tmc_jp.gba",
     /* Developer-tree fallbacks for `cd build/pc && ./tmc_pc`. */
@@ -91,26 +93,13 @@ static const char* kRomCandidates[] = {
 #define ROM_CANDIDATE_COUNT ((int)(sizeof(kRomCandidates) / sizeof(kRomCandidates[0])))
 
 static const char* kRomCandidates_USA[] = {
-    "baserom.gba",
-    "synthetic_baserom.gba",
-    "build/pc/baserom.gba",
-    "tmc.gba",
-    "../../baserom.gba",
-    "../../tmc.gba",
+    "baserom.gba", "synthetic_baserom.gba", "build/pc/baserom.gba", "tmc.gba", "../../baserom.gba", "../../tmc.gba",
 };
 static const char* kRomCandidates_EU[] = {
-    "baserom_eu.gba",
-    "build/pc/baserom_eu.gba",
-    "tmc_eu.gba",
-    "../../baserom_eu.gba",
-    "../../tmc_eu.gba",
+    "baserom_eu.gba", "build/pc/baserom_eu.gba", "tmc_eu.gba", "../../baserom_eu.gba", "../../tmc_eu.gba",
 };
 static const char* kRomCandidates_JP[] = {
-    "baserom_jp.gba",
-    "build/pc/baserom_jp.gba",
-    "tmc_jp.gba",
-    "../../baserom_jp.gba",
-    "../../tmc_jp.gba",
+    "baserom_jp.gba", "build/pc/baserom_jp.gba", "tmc_jp.gba", "../../baserom_jp.gba", "../../tmc_jp.gba",
 };
 
 /* Forward declaration so FatalRomError + Port_FindBaseRomPath can
@@ -158,11 +147,14 @@ const char* Port_FindBaseRomPath(void) {
     FILE* f = NULL;
     int preferred = Port_Config_PreferredRegion();
     if (preferred == 0 /* USA */) {
-        f = TryOpenRom(kRomCandidates_USA, (int)(sizeof(kRomCandidates_USA) / sizeof(kRomCandidates_USA[0])), sFoundPath, (int)sizeof(sFoundPath));
+        f = TryOpenRom(kRomCandidates_USA, (int)(sizeof(kRomCandidates_USA) / sizeof(kRomCandidates_USA[0])),
+                       sFoundPath, (int)sizeof(sFoundPath));
     } else if (preferred == 1 /* EU */) {
-        f = TryOpenRom(kRomCandidates_EU, (int)(sizeof(kRomCandidates_EU) / sizeof(kRomCandidates_EU[0])), sFoundPath, (int)sizeof(sFoundPath));
+        f = TryOpenRom(kRomCandidates_EU, (int)(sizeof(kRomCandidates_EU) / sizeof(kRomCandidates_EU[0])), sFoundPath,
+                       (int)sizeof(sFoundPath));
     } else if (preferred == 2 /* JP */) {
-        f = TryOpenRom(kRomCandidates_JP, (int)(sizeof(kRomCandidates_JP) / sizeof(kRomCandidates_JP[0])), sFoundPath, (int)sizeof(sFoundPath));
+        f = TryOpenRom(kRomCandidates_JP, (int)(sizeof(kRomCandidates_JP) / sizeof(kRomCandidates_JP[0])), sFoundPath,
+                       (int)sizeof(sFoundPath));
     }
     if (!f) {
         f = TryOpenRom(kRomCandidates, ROM_CANDIDATE_COUNT, sFoundPath, (int)sizeof(sFoundPath));
@@ -594,9 +586,8 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
         /* JP binary (or fat multi-region binary): use JP offsets, but refuse to
          * proceed if the table is still the unpopulated placeholder. */
         if (kRomOffsets_JP.gfxAndPalettes == 0) {
-            fprintf(stderr,
-                "FATAL: JP offsets unpopulated. Fill kRomOffsets_JP "
-                "(see docs/JP_PORT_ENABLEMENT.md).\n");
+            fprintf(stderr, "FATAL: JP offsets unpopulated. Fill kRomOffsets_JP "
+                            "(see docs/JP_PORT_ENABLEMENT.md).\n");
             exit(1);
         }
         gRomOffsets = &kRomOffsets_JP;
@@ -604,8 +595,7 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
         /* JP ROM fed to a single-region non-JP binary: code/data version
          * mismatch. Keep USA offsets so the region cross-check in port_main.c
          * reports the mismatch instead of crashing on the JP table. */
-        fprintf(stderr,
-            "WARNING: JP ROM in a non-JP binary — rebuild with --game_version=JP.\n");
+        fprintf(stderr, "WARNING: JP ROM in a non-JP binary — rebuild with --game_version=JP.\n");
         gRomOffsets = &kRomOffsets_USA;
 #endif
     } else {
@@ -616,11 +606,13 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
 #if defined(PC_PORT) && defined(MULTI_REGION)
     /* Fat binary: publish the detected region to the runtime REGION_IS_* macros
      * so the converted gameplay-behavior branches follow the loaded ROM. */
-    gActiveRegion = (gRomRegion == ROM_REGION_EU) ? TMC_REGION_EU :
-                    (gRomRegion == ROM_REGION_JP) ? TMC_REGION_JP : TMC_REGION_USA;
+    gActiveRegion = (gRomRegion == ROM_REGION_EU)   ? TMC_REGION_EU
+                    : (gRomRegion == ROM_REGION_JP) ? TMC_REGION_JP
+                                                    : TMC_REGION_USA;
     fprintf(stderr, "Active region set to %s (multi-region binary).\n",
-            gActiveRegion == TMC_REGION_EU ? "EU" :
-            gActiveRegion == TMC_REGION_JP ? "JP" : "USA");
+            gActiveRegion == TMC_REGION_EU   ? "EU"
+            : gActiveRegion == TMC_REGION_JP ? "JP"
+                                             : "USA");
 #endif
     return gRomRegion;
 }
@@ -813,7 +805,8 @@ void Port_RefreshAreaData(u32 area) {
     }
 
     fprintf(stderr, "[AREA] refreshed area data area=%u headers=%p tilesets=%p roomMaps=%p table=%p tiles=%p\n", area,
-            (void*)gAreaRoomHeaders[area], gAreaTileSets[area], gAreaRoomMaps[area], gAreaTable[area], gAreaTiles[area]);
+            (void*)gAreaRoomHeaders[area], gAreaTileSets[area], gAreaRoomMaps[area], gAreaTable[area],
+            gAreaTiles[area]);
 }
 
 /* Font data tables (data_stubs_autogen.c) */
@@ -975,13 +968,13 @@ void Port_DecodeFontGBA(const void* gba_data, Font* out) {
     const u8* r = (const u8*)gba_data;
 
     /* Read 32-bit little-endian GBA pointer values */
-    u32 dest_gba       = r[0]  | (r[1]  << 8) | (r[2]  << 16) | (r[3]  << 24);
-    u32 gfx_dest_gba   = r[4]  | (r[5]  << 8) | (r[6]  << 16) | (r[7]  << 24);
-    u32 buffer_loc_gba = r[8]  | (r[9]  << 8) | (r[10] << 16) | (r[11] << 24);
+    u32 dest_gba = r[0] | (r[1] << 8) | (r[2] << 16) | (r[3] << 24);
+    u32 gfx_dest_gba = r[4] | (r[5] << 8) | (r[6] << 16) | (r[7] << 24);
+    u32 buffer_loc_gba = r[8] | (r[9] << 8) | (r[10] << 16) | (r[11] << 24);
 
     /* Resolve pointer fields to native addresses */
-    out->dest       = (u16*)gba_TryMemPtr(dest_gba);
-    out->gfx_dest   = gba_TryMemPtr(gfx_dest_gba);
+    out->dest = (u16*)gba_TryMemPtr(dest_gba);
+    out->gfx_dest = gba_TryMemPtr(gfx_dest_gba);
 
     /* gTextGfxBuffer is a standalone array on PC, not inside gEwram.
      * GBA address 0x02000D00 = EWRAM offset 0xD00 = gTextGfxBuffer on GBA. */
@@ -992,18 +985,18 @@ void Port_DecodeFontGBA(const void* gba_data, Font* out) {
     }
 
     /* Non-pointer fields: read from their 32-bit layout offsets */
-    out->_c         = r[12] | (r[13] << 8) | (r[14] << 16) | (r[15] << 24);
-    out->gfx_src    = r[16] | (r[17] << 8);
-    out->width      = r[18];
+    out->_c = r[12] | (r[13] << 8) | (r[14] << 16) | (r[15] << 24);
+    out->gfx_src = r[16] | (r[17] << 8);
+    out->width = r[18];
     out->right_align = (r[19] >> 0) & 1;
-    out->sm_border   = (r[19] >> 1) & 1;
-    out->unused      = (r[19] >> 2) & 1;
+    out->sm_border = (r[19] >> 1) & 1;
+    out->unused = (r[19] >> 2) & 1;
     out->draw_border = (r[19] >> 3) & 1;
     out->border_type = (r[19] >> 4) & 0xF;
-    out->fill_type  = r[20];
-    out->charColor  = r[21];
-    out->_16        = r[22];
-    out->stylized   = r[23];
+    out->fill_type = r[20];
+    out->charColor = r[21];
+    out->_16 = r[22];
+    out->stylized = r[23];
 }
 
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
@@ -1013,18 +1006,18 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
      * count for early calls before the extension finished. */
     extern u32 gSpritePtrsLoadedCount;
     if (Port_AreSpritePtrsLoadedFromAssets()) {
-        if (!gRomOffsets) return NULL;
-        const u32 cap = gSpritePtrsLoadedCount
-                        ? gSpritePtrsLoadedCount
-                        : gRomOffsets->spritePtrsCount;
-        if (sprite_idx >= cap) return NULL;
+        if (!gRomOffsets)
+            return NULL;
+        const u32 cap = gSpritePtrsLoadedCount ? gSpritePtrsLoadedCount : gRomOffsets->spritePtrsCount;
+        if (sprite_idx >= cap)
+            return NULL;
         return &gSpritePtrs[sprite_idx];
     }
-    if (!gRomOffsets) return NULL;
-    const u32 cap = gSpritePtrsLoadedCount
-                    ? gSpritePtrsLoadedCount
-                    : gRomOffsets->spritePtrsCount;
-    if (sprite_idx >= cap) return NULL;
+    if (!gRomOffsets)
+        return NULL;
+    const u32 cap = gSpritePtrsLoadedCount ? gSpritePtrsLoadedCount : gRomOffsets->spritePtrsCount;
+    if (sprite_idx >= cap)
+        return NULL;
     return &sSpritePtrsStable[sprite_idx];
 }
 
@@ -1109,8 +1102,7 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
             }
             FILE* f = fopen(prefixed, "rb");
             if (f) {
-                if (foundPath &&
-                    snprintf(foundPath, foundPathLen, "%s", prefixed) >= foundPathLen)
+                if (foundPath && snprintf(foundPath, foundPathLen, "%s", prefixed) >= foundPathLen)
                     fprintf(stderr, "WARNING: ROM path truncated in foundPath (%s)\n", prefixed);
                 return f;
             }
@@ -1121,8 +1113,7 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
     for (int i = 0; i < count; i++) {
         FILE* f = fopen(paths[i], "rb");
         if (f) {
-            if (foundPath &&
-                snprintf(foundPath, foundPathLen, "%s", paths[i]) >= foundPathLen)
+            if (foundPath && snprintf(foundPath, foundPathLen, "%s", paths[i]) >= foundPathLen)
                 fprintf(stderr, "WARNING: ROM path truncated in foundPath (%s)\n", paths[i]);
             return f;
         }
@@ -1186,8 +1177,8 @@ static int LoadRomGaps(void) {
     for (u32 i = 0; i < chunkCount; i++) {
         u32 offset, size;
         if (fread(&offset, 4, 1, f) != 1 || fread(&size, 4, 1, f) != 1) {
-            fprintf(stderr, "WARNING: %s truncated at chunk %u/%u header; aborting gap load\n",
-                    usedPath, i, chunkCount);
+            fprintf(stderr, "WARNING: %s truncated at chunk %u/%u header; aborting gap load\n", usedPath, i,
+                    chunkCount);
             break;
         }
         if (offset + size > gRomSize) {
@@ -1257,11 +1248,14 @@ void Port_LoadRom(const char* path) {
             /* Try preferred region next */
             int preferred = Port_Config_PreferredRegion();
             if (preferred == 0 /* USA */) {
-                f = TryOpenRom(kRomCandidates_USA, (int)(sizeof(kRomCandidates_USA) / sizeof(kRomCandidates_USA[0])), usedPath, (int)sizeof(usedPath));
+                f = TryOpenRom(kRomCandidates_USA, (int)(sizeof(kRomCandidates_USA) / sizeof(kRomCandidates_USA[0])),
+                               usedPath, (int)sizeof(usedPath));
             } else if (preferred == 1 /* EU */) {
-                f = TryOpenRom(kRomCandidates_EU, (int)(sizeof(kRomCandidates_EU) / sizeof(kRomCandidates_EU[0])), usedPath, (int)sizeof(usedPath));
+                f = TryOpenRom(kRomCandidates_EU, (int)(sizeof(kRomCandidates_EU) / sizeof(kRomCandidates_EU[0])),
+                               usedPath, (int)sizeof(usedPath));
             } else if (preferred == 2 /* JP */) {
-                f = TryOpenRom(kRomCandidates_JP, (int)(sizeof(kRomCandidates_JP) / sizeof(kRomCandidates_JP[0])), usedPath, (int)sizeof(usedPath));
+                f = TryOpenRom(kRomCandidates_JP, (int)(sizeof(kRomCandidates_JP) / sizeof(kRomCandidates_JP[0])),
+                               usedPath, (int)sizeof(usedPath));
             }
         }
         if (!f) {
@@ -1293,8 +1287,8 @@ void Port_LoadRom(const char* path) {
                     gRomSize = fileSize;
                     romLoaded = 1;
                 } else {
-                    fprintf(stderr, "ERROR: short read on ROM %s (%zu/%u bytes); ignoring ROM file\n",
-                            usedPath, got, fileSize);
+                    fprintf(stderr, "ERROR: short read on ROM %s (%zu/%u bytes); ignoring ROM file\n", usedPath, got,
+                            fileSize);
                     if (allocatedHere) {
                         free(gRomData);
                         gRomData = NULL;
@@ -1341,18 +1335,15 @@ void Port_LoadRom(const char* path) {
      * as a fatal dialog rather than letting the engine boot into a
      * black screen. */
     if (!romLoaded) {
-        FatalRomError(
-            "Minish Cap PC Port - ROM not found",
-            "Could not load baserom.gba.\n\n"
-            "Place baserom.gba (USA) or baserom_eu.gba (EU) next to tmc_pc and try again.\n"
-            "Supported names: baserom.gba, baserom_eu.gba, tmc.gba, tmc_eu.gba.");
+        FatalRomError("Minish Cap PC Port - ROM not found",
+                      "Could not load baserom.gba.\n\n"
+                      "Place baserom.gba (USA) or baserom_eu.gba (EU) next to tmc_pc and try again.\n"
+                      "Supported names: baserom.gba, baserom_eu.gba, tmc.gba, tmc_eu.gba.");
     }
 
     if (!gRomData || gRomSize == 0) {
-        FatalRomError(
-            "Minish Cap PC Port - ROM load failed",
-            "No ROM data available after loading.\n\n"
-            "The ROM file may be empty or unreadable.");
+        FatalRomError("Minish Cap PC Port - ROM load failed", "No ROM data available after loading.\n\n"
+                                                              "The ROM file may be empty or unreadable.");
     }
 #else
     /* #N64: gRomData/gRomSize already point at the embedded cart ROM (set by
@@ -1367,24 +1358,34 @@ void Port_LoadRom(const char* path) {
     Port_DetectRomRegion(gRomData, gRomSize);
     const RomOffsets* R = gRomOffsets;
 
+    if (gRomSize < R->expectedRomSize) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "ROM file is truncated or invalid (size %u < expected %u).", gRomSize,
+                 R->expectedRomSize);
+        FatalRomError("Minish Cap PC Port - ROM invalid", msg);
+    }
     fprintf(stderr, "Using offsets for %s (game code: %.4s)\n",
-            gRomRegion == ROM_REGION_EU ? "EU" :
-            gRomRegion == ROM_REGION_JP ? "JP" : "USA",
+            gRomRegion == ROM_REGION_EU   ? "EU"
+            : gRomRegion == ROM_REGION_JP ? "JP"
+                                          : "USA",
             R->gameCode);
 
 #ifdef TMC_N64
-    {   /* Byte-order / alignment probe: compare against known GBA header bytes.
-         * Logo@0x04 is the fixed sequence 24 FF AE 51 69 9A A2 21; gamecode@0xAC
-         * is 'BZME' = 42 5A 4D 45. Mismatch => cart CPU byte reads are swapped or
-         * gRomData is misaligned. */
+    { /* Byte-order / alignment probe: compare against known GBA header bytes.
+       * Logo@0x04 is the fixed sequence 24 FF AE 51 69 9A A2 21; gamecode@0xAC
+       * is 'BZME' = 42 5A 4D 45. Mismatch => cart CPU byte reads are swapped or
+       * gRomData is misaligned. */
         const u8* h = gRomData;
-        fprintf(stderr, "[romdump] hdr[0..7]=%02x %02x %02x %02x %02x %02x %02x %02x  logo[4..11]=%02x %02x %02x %02x %02x %02x %02x %02x (expect 24 FF AE 51 69 9A A2 21)\n",
-                h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7], h[4],h[5],h[6],h[7],h[8],h[9],h[10],h[11]);
-        fprintf(stderr, "[romdump] gamecode[AC..AF]=%02x %02x %02x %02x (expect 42 5A 4D 45 'BZME')\n",
-                h[0xAC],h[0xAD],h[0xAE],h[0xAF]);
+        fprintf(stderr,
+                "[romdump] hdr[0..7]=%02x %02x %02x %02x %02x %02x %02x %02x  logo[4..11]=%02x %02x %02x %02x %02x "
+                "%02x %02x %02x (expect 24 FF AE 51 69 9A A2 21)\n",
+                h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[4], h[5], h[6], h[7], h[8], h[9], h[10], h[11]);
+        fprintf(stderr, "[romdump] gamecode[AC..AF]=%02x %02x %02x %02x (expect 42 5A 4D 45 'BZME')\n", h[0xAC],
+                h[0xAD], h[0xAE], h[0xAF]);
         const u8* g = &gRomData[R->gfxGroups];
-        fprintf(stderr, "[romdump] gfxGroups@0x%X [0..11]=%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
-                R->gfxGroups, g[0],g[1],g[2],g[3],g[4],g[5],g[6],g[7],g[8],g[9],g[10],g[11]);
+        fprintf(stderr,
+                "[romdump] gfxGroups@0x%X [0..11]=%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                R->gfxGroups, g[0], g[1], g[2], g[3], g[4], g[5], g[6], g[7], g[8], g[9], g[10], g[11]);
     }
 #endif
 
@@ -1401,8 +1402,8 @@ void Port_LoadRom(const char* path) {
     memset(gPaletteGroups, 0, sizeof(void*) * PALETTE_GROUPS_COUNT_MAX);
     ResolveSubTable(&gRomData[R->gfxGroups], (void**)gGfxGroups, R->gfxGroupsCount);
     ResolveSubTable(&gRomData[R->paletteGroups], (void**)gPaletteGroups, R->paletteGroupsCount);
-    fprintf(stderr, "gGfxGroups/gPaletteGroups resolved (%u gfx, %u palette) from ROM.\n",
-            R->gfxGroupsCount, R->paletteGroupsCount);
+    fprintf(stderr, "gGfxGroups/gPaletteGroups resolved (%u gfx, %u palette) from ROM.\n", R->gfxGroupsCount,
+            R->paletteGroupsCount);
 
     /* gPalette_549 — Mt Crenel weather-change reads a 26-palette contiguous
      * block starting here. Copy it out of gGlobalGfxAndPalettes (offset 0x44A0
@@ -1413,8 +1414,7 @@ void Port_LoadRom(const char* path) {
     {
         extern u16 gPalette_549[0x1A0];
         memcpy(gPalette_549, gGlobalGfxAndPalettes + 0x44A0, sizeof(gPalette_549));
-        fprintf(stderr, "gPalette_549 loaded (%zu bytes from gGlobalGfxAndPalettes + 0x44A0).\n",
-                sizeof(gPalette_549));
+        fprintf(stderr, "gPalette_549 loaded (%zu bytes from gGlobalGfxAndPalettes + 0x44A0).\n", sizeof(gPalette_549));
     }
 
     /* gLilypadRails — USA: a 3-entry .4byte pointer table at 0x080FED98 (rail
@@ -1460,7 +1460,8 @@ void Port_LoadRom(const char* path) {
 
     if (R->fixedTypeGfx + R->fixedTypeGfxCount * 4 <= gRomSize) {
         memcpy(gFixedTypeGfxData, &gRomData[R->fixedTypeGfx], R->fixedTypeGfxCount * 4);
-        fprintf(stderr, "gFixedTypeGfxData loaded (%u entries from ROM 0x%X).\n", R->fixedTypeGfxCount, R->fixedTypeGfx);
+        fprintf(stderr, "gFixedTypeGfxData loaded (%u entries from ROM 0x%X).\n", R->fixedTypeGfxCount,
+                R->fixedTypeGfx);
     } else {
         memcpy(gFixedTypeGfxData, kFixedTypeGfxInitData, R->fixedTypeGfxCount * 4);
         fprintf(stderr, "WARNING: gFixedTypeGfxData ROM range invalid; using compile-time fallback.\n");
@@ -1474,20 +1475,21 @@ void Port_LoadRom(const char* path) {
         memset(sSpritePtrsStable, 0, sizeof(sSpritePtrsStable));
         for (u32 i = 0; i < kMaxSpritePtrs; i++) {
             const u32 entryRomOffset = R->spritePtrs + i * 16;
-            if (entryRomOffset + 16 > gRomSize) break;
+            if (entryRomOffset + 16 > gRomSize)
+                break;
             const u32 animsGba = Port_ReadU32(&gRomData[entryRomOffset + 0]);
             const u32 framesGba = Port_ReadU32(&gRomData[entryRomOffset + 4]);
             const u32 ptrGba = Port_ReadU32(&gRomData[entryRomOffset + 8]);
             const u32 pad = Port_ReadU32(&gRomData[entryRomOffset + 12]);
             const bool inRom = (animsGba >= 0x08000000u) && (animsGba < 0x08000000u + gRomSize);
-            if (i >= R->spritePtrsCount && (animsGba == 0 || !inRom)) break;
+            if (i >= R->spritePtrsCount && (animsGba == 0 || !inRom))
+                break;
             gSpritePtrs[i].animations = inRom ? (void*)Port_ResolveRomData(animsGba) : NULL;
             gSpritePtrs[i].frames = (framesGba >= 0x08000000u && framesGba < 0x08000000u + gRomSize)
-                ? (SpriteFrame*)Port_ResolveRomData(framesGba)
-                : NULL;
-            gSpritePtrs[i].ptr = (ptrGba >= 0x08000000u && ptrGba < 0x08000000u + gRomSize)
-                ? (void*)Port_ResolveRomData(ptrGba)
-                : NULL;
+                                        ? (SpriteFrame*)Port_ResolveRomData(framesGba)
+                                        : NULL;
+            gSpritePtrs[i].ptr =
+                (ptrGba >= 0x08000000u && ptrGba < 0x08000000u + gRomSize) ? (void*)Port_ResolveRomData(ptrGba) : NULL;
             gSpritePtrs[i].pad = pad;
             sSpritePtrsStable[i] = gSpritePtrs[i];
             loaded++;
@@ -1709,27 +1711,23 @@ void Port_LoadRom(const char* path) {
      * data resolved above with USA content (JP gTranslations[0] gets NULLed and
      * English supplied in slot 1 → JP text renders as English, and JP font/area
      * tables go garbage → file-select font crash). Skip the override for a JP ROM;
-     * USA (and EU, which has a separate pre-existing palette issue) keep their
-     * prior behaviour. */
-    if (gRomRegion != ROM_REGION_JP) {
-        if (Port_LoadTextsFromAssets()) {
-            fprintf(stderr, "gTranslations overridden from extracted assets.\n");
-        }
+     * Asset overriding for JP ROMs is now gated inside the loader functions. */
+    if (Port_LoadTextsFromAssets()) {
+        fprintf(stderr, "gTranslations overridden from extracted assets.\n");
+    }
 
-        if (Port_LoadSpritePtrsFromAssets()) {
-            fprintf(stderr, "gSpritePtrs overridden from extracted assets.\n");
-        }
+    if (Port_LoadSpritePtrsFromAssets()) {
+        fprintf(stderr, "gSpritePtrs overridden from extracted assets.\n");
+    }
 
-        if (Port_LoadAreaTablesFromAssets()) {
-            fprintf(stderr, "Area data tables overridden from extracted assets.\n");
-        }
-    } else {
-        fprintf(stderr, "Asset override skipped for JP ROM; using region-correct ROM data.\n");
+    if (Port_LoadAreaTablesFromAssets()) {
+        fprintf(stderr, "Area data tables overridden from extracted assets.\n");
     }
 
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gFrameObjLists).\n",
-            gRomRegion == ROM_REGION_EU ? "EU" :
-            gRomRegion == ROM_REGION_JP ? "JP" : "USA");
+            gRomRegion == ROM_REGION_EU   ? "EU"
+            : gRomRegion == ROM_REGION_JP ? "JP"
+                                          : "USA");
 
     /* Initialize data stubs with ROM datas */
     {
@@ -1813,7 +1811,8 @@ void Port_LoadRom(const char* path) {
 
 void Port_ApplyLanguage(void) {
     extern void* gTranslations[];
-    if (!gSaveHeader) return;
+    if (!gSaveHeader)
+        return;
 
     int lang = Port_Config_PreferredLanguage();
     if (lang < 0) {
