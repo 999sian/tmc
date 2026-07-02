@@ -21,6 +21,7 @@
 #include "save.h"       /* SaveFile, gSave */
 #include "fileselect.h" /* gMapDataBottomSpecial, ResetSaveFile */
 #include "room.h"       /* gRoomControls */
+#include "message.h"    /* gMessage, MessageRequest (TMC_ROOMCAP_MSG hook) */
 #include "port_repro.h"
 #include "port_gba_mem.h" /* gIoMem, gVram, gBgPltt, gObjPltt, gOamMem */
 #include "port_debug_actions.h"
@@ -374,6 +375,24 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
             }
             if (lstage < 5)
                 return;
+        }
+    }
+
+    /* TMC_ROOMCAP_MSG=<index>[,posY]: open a textbox <settle/2> frames after
+     * the warp so the capture shows live dialogue (widescreen centering
+     * test). Optional posY overrides the box row (1 = top-anchored). */
+    {
+        static int msg_done = 0;
+        const char* m = getenv("TMC_ROOMCAP_MSG");
+        if (m && *m && !msg_done && warp_done && cap_frame && (int)frame >= cap_frame - settle / 2) {
+            unsigned int idx = 0;
+            int posY = -1;
+            sscanf(m, "%i,%i", &idx, &posY);
+            MessageRequest(idx);
+            if (posY >= 0)
+                gMessage.textWindowPosY = (u8)posY;
+            fprintf(stderr, "[roomcap] frame %u: opened message 0x%x posY=%d\n", frame, idx, posY);
+            msg_done = 1;
         }
     }
 

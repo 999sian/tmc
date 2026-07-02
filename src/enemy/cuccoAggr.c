@@ -14,9 +14,18 @@
 #include "physics.h"
 #include "asm.h"
 
+/* Widescreen (PC): cull against the live view width instead of the GBA 240.
+ * Collapses to the original 0x108 (= 240 + 0x18) at native width / GBA. */
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#define WS_VIEW_W ((u32)Port_Widescreen_EffectiveViewWidth())
+#else
+#define WS_VIEW_W 240u
+#endif
+
 typedef struct {
     Entity base;
-    #ifdef PC_PORT
+#ifdef PC_PORT
     u8 filler[0x10 + 4];
 #else
     u8 filler[0x10];
@@ -26,8 +35,7 @@ typedef struct {
     u8 unk_7b;
 } CuccoAggrEntity;
 
-PORT_STATIC_ASSERT_OFFSET(CuccoAggrEntity, unk_78, 0x78, 0xa4,
-                          "CuccoAggrEntity unk_78 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_OFFSET(CuccoAggrEntity, unk_78, 0x78, 0xa4, "CuccoAggrEntity unk_78 offset (Enemy::child +4 pad)");
 
 typedef struct {
     u16 x;
@@ -299,7 +307,7 @@ void sub_08039140(CuccoAggrEntity* this) {
 }
 
 bool32 CuccoAggr_IsOutsideScroll(CuccoAggrEntity* this) {
-    if ((u32)super->x.HALF.HI - 0xc - gRoomControls.scroll_x > 0x108)
+    if ((u32)super->x.HALF.HI - 0xc - gRoomControls.scroll_x > WS_VIEW_W + 0x18)
         return 1;
     if ((u32)super->y.HALF.HI - 0xc - gRoomControls.scroll_y > 0xb8)
         return 1;

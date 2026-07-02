@@ -157,11 +157,10 @@ bool WriteScreenshotPNG(const std::filesystem::path& path) {
         return false;
     }
 
-    const int outW = Port_Widescreen_IsActive() ? kFrameW : 240;
+    const int outW = (Port_Widescreen_IsActive() && Port_Widescreen_ShadowsLive()) ? kFrameW : 240;
 
     png_init_io(png, fp);
-    png_set_IHDR(png, info, outW, kFrameH, 8, PNG_COLOR_TYPE_RGB,
-                 PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
+    png_set_IHDR(png, info, outW, kFrameH, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
                  PNG_FILTER_TYPE_DEFAULT);
     png_write_info(png, info);
 
@@ -170,9 +169,9 @@ bool WriteScreenshotPNG(const std::filesystem::path& path) {
         const uint32_t* src = &virtuappu_frame_buffer[y * kFrameW];
         for (int x = 0; x < outW; x++) {
             uint32_t p = src[x];
-            row[x * 3 + 0] = static_cast<uint8_t>(p & 0xFF);          /* R (ABGR LE: byte0=R) */
-            row[x * 3 + 1] = static_cast<uint8_t>((p >> 8) & 0xFF);   /* G */
-            row[x * 3 + 2] = static_cast<uint8_t>((p >> 16) & 0xFF);  /* B */
+            row[x * 3 + 0] = static_cast<uint8_t>(p & 0xFF);         /* R (ABGR LE: byte0=R) */
+            row[x * 3 + 1] = static_cast<uint8_t>((p >> 8) & 0xFF);  /* G */
+            row[x * 3 + 2] = static_cast<uint8_t>((p >> 16) & 0xFF); /* B */
         }
         png_write_row(png, row);
     }
@@ -191,8 +190,7 @@ extern "C" int Port_CaptureBaseFramebufferPNG(const char* path) {
 
 bool CopySaveFile(const std::filesystem::path& dest) {
     std::error_code ec;
-    std::filesystem::copy_file("tmc.sav", dest,
-                               std::filesystem::copy_options::overwrite_existing, ec);
+    std::filesystem::copy_file("tmc.sav", dest, std::filesystem::copy_options::overwrite_existing, ec);
     if (ec) {
         std::fprintf(stderr, "[BUG] copy save: %s\n", ec.message().c_str());
         return false;
@@ -206,14 +204,11 @@ bool CopyProcMaps(const std::filesystem::path& dest) {
      * offset). The handler can't safely call dladdr to do this online —
      * /proc reads are async-signal-safe via plain syscalls. */
     std::error_code ec;
-    std::filesystem::copy_file("/proc/self/maps", dest,
-                               std::filesystem::copy_options::overwrite_existing, ec);
+    std::filesystem::copy_file("/proc/self/maps", dest, std::filesystem::copy_options::overwrite_existing, ec);
     return !ec;
 }
 
-bool WriteStateText(const std::filesystem::path& path,
-                    const PortBugReportState& s,
-                    const char* reason) {
+bool WriteStateText(const std::filesystem::path& path, const PortBugReportState& s, const char* reason) {
     std::ofstream out(path);
     if (!out) {
         return false;
@@ -226,8 +221,8 @@ bool WriteStateText(const std::filesystem::path& path,
     out << "Area:      0x" << std::hex << static_cast<unsigned>(s.area) << "\n";
     out << "Room:      0x" << std::hex << static_cast<unsigned>(s.room) << std::dec << "\n";
     out << "Pos:       (" << s.playerX << ", " << s.playerY << ", " << s.playerZ << ")\n";
-    out << "HP:        " << static_cast<unsigned>(s.playerHealth) << " / "
-        << static_cast<unsigned>(s.playerMaxHealth) << "\n";
+    out << "HP:        " << static_cast<unsigned>(s.playerHealth) << " / " << static_cast<unsigned>(s.playerMaxHealth)
+        << "\n";
     out << "Frame:     " << s.frameCount << "\n";
     out << "ROM size:  " << gRomSize << " bytes\n";
 
@@ -238,7 +233,8 @@ bool WriteStateText(const std::filesystem::path& path,
     {
         auto sum_region = [](size_t off, size_t len) -> uint64_t {
             uint64_t s = 0;
-            for (size_t i = 0; i < len; ++i) s += gVram[off + i];
+            for (size_t i = 0; i < len; ++i)
+                s += gVram[off + i];
             return s;
         };
         uint16_t dispCtl = static_cast<uint16_t>(gIoMem[0x00] | (gIoMem[0x01] << 8));
@@ -254,19 +250,20 @@ bool WriteStateText(const std::filesystem::path& path,
             int pal = (firstEntry >> 12) & 0xF;
             unsigned palZero = 0;
             for (int i = 0; i < 16; ++i) {
-                if (gBgPltt[pal * 16 + i] == 0) palZero++;
+                if (gBgPltt[pal * 16 + i] == 0)
+                    palZero++;
             }
-            out << std::hex
-                << "BG" << b << " ctl=0x" << ctl << std::dec
-                << " scroll=(" << hofs << "," << vofs << ")"
+            out << std::hex << "BG" << b << " ctl=0x" << ctl << std::dec << " scroll=(" << hofs << "," << vofs << ")"
                 << " cb" << cb << "(sum=" << sum_region(cb * 0x4000u, 0x4000) << ")"
                 << " sb" << sb << "(sum=" << sum_region(sb * 0x800u, 0x800) << ")"
-                << " firstTile=0x" << std::hex << firstEntry << std::dec
-                << " pal" << pal << "(zero=" << palZero << "/16)"
+                << " firstTile=0x" << std::hex << firstEntry << std::dec << " pal" << pal << "(zero=" << palZero
+                << "/16)"
                 << "\n";
         }
         unsigned bgZero = 0;
-        for (int i = 0; i < 256; ++i) if (gBgPltt[i] == 0) bgZero++;
+        for (int i = 0; i < 256; ++i)
+            if (gBgPltt[i] == 0)
+                bgZero++;
         out << "gBgPltt zero entries: " << bgZero << " / 256\n";
     }
 
@@ -275,10 +272,10 @@ bool WriteStateText(const std::filesystem::path& path,
 
 #if defined(__linux__) || defined(__APPLE__)
 struct CrashRegs {
-    void* ip;   /* RIP / PC at fault */
-    void* sp;   /* RSP / SP at fault */
-    void* bp;   /* RBP / FP at fault (may be omitted by -O3) */
-    void* lr;   /* link register on aarch64; nullptr on x86-64 */
+    void* ip; /* RIP / PC at fault */
+    void* sp; /* RSP / SP at fault */
+    void* bp; /* RBP / FP at fault (may be omitted by -O3) */
+    void* lr; /* link register on aarch64; nullptr on x86-64 */
 };
 
 CrashRegs ExtractCrashRegs(void* ucontext) {
@@ -365,32 +362,21 @@ void WriteResolvedAddr(FILE* fp, const char* label, void* addr) {
         uintptr_t base = reinterpret_cast<uintptr_t>(info.dli_fbase);
         uintptr_t offs = reinterpret_cast<uintptr_t>(addr) - base;
         if (info.dli_sname) {
-            uintptr_t sym_off = reinterpret_cast<uintptr_t>(addr)
-                              - reinterpret_cast<uintptr_t>(info.dli_saddr);
-            std::fprintf(fp, "%s 0x%lx %s(+0x%lx) [%s+0x%lx]\n",
-                         label,
-                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(addr)),
-                         info.dli_fname,
-                         static_cast<unsigned long>(offs),
-                         info.dli_sname,
-                         static_cast<unsigned long>(sym_off));
+            uintptr_t sym_off = reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(info.dli_saddr);
+            std::fprintf(fp, "%s 0x%lx %s(+0x%lx) [%s+0x%lx]\n", label,
+                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(addr)), info.dli_fname,
+                         static_cast<unsigned long>(offs), info.dli_sname, static_cast<unsigned long>(sym_off));
         } else {
-            std::fprintf(fp, "%s 0x%lx %s(+0x%lx)\n",
-                         label,
-                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(addr)),
-                         info.dli_fname,
+            std::fprintf(fp, "%s 0x%lx %s(+0x%lx)\n", label,
+                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(addr)), info.dli_fname,
                          static_cast<unsigned long>(offs));
         }
     } else {
-        std::fprintf(fp, "%s 0x%lx (unmapped)\n",
-                     label,
-                     static_cast<unsigned long>(reinterpret_cast<uintptr_t>(addr)));
+        std::fprintf(fp, "%s 0x%lx (unmapped)\n", label, static_cast<unsigned long>(reinterpret_cast<uintptr_t>(addr)));
     }
 }
 
-void WriteBacktracePosix(const std::filesystem::path& path,
-                         const CrashRegs& regs,
-                         void* fault_addr) {
+void WriteBacktracePosix(const std::filesystem::path& path, const CrashRegs& regs, void* fault_addr) {
     FILE* fp = std::fopen(path.string().c_str(), "wb");
     if (!fp) {
         return;
@@ -405,37 +391,35 @@ void WriteBacktracePosix(const std::filesystem::path& path,
      * the absolute IP is enough for `addr2line -e tmc_pc <ip>` since
      * the binary is the only thing in the address range we care about. */
     if (regs.ip) {
-        std::fprintf(fp, "Crash IP:    0x%lx\n",
-                     static_cast<unsigned long>(reinterpret_cast<uintptr_t>(regs.ip)));
+        std::fprintf(fp, "Crash IP:    0x%lx\n", static_cast<unsigned long>(reinterpret_cast<uintptr_t>(regs.ip)));
     } else {
         std::fprintf(fp, "Crash IP:    0x0 (program jumped to NULL — likely a NULL function-pointer call)\n");
     }
-    std::fprintf(fp, "Fault addr:  0x%lx\n",
-                 static_cast<unsigned long>(reinterpret_cast<uintptr_t>(fault_addr)));
+    std::fprintf(fp, "Fault addr:  0x%lx\n", static_cast<unsigned long>(reinterpret_cast<uintptr_t>(fault_addr)));
     std::fflush(fp); /* CHECKPOINT 1 */
 
 #if defined(__x86_64__) || defined(_M_X64)
     {
         void* caller = SafeReadPointer(regs.sp);
         if (caller) {
-            std::fprintf(fp, "Caller (*sp):0x%lx\n",
-                         static_cast<unsigned long>(reinterpret_cast<uintptr_t>(caller)));
+            std::fprintf(fp, "Caller (*sp):0x%lx\n", static_cast<unsigned long>(reinterpret_cast<uintptr_t>(caller)));
         }
         void* fp_link = regs.bp;
         for (int i = 0; i < 16 && fp_link; i++) {
             void* saved_rbp = SafeReadPointer(fp_link);
             void* saved_ret = SafeReadPointer(static_cast<char*>(fp_link) + 8);
-            if (!saved_ret) break;
+            if (!saved_ret)
+                break;
             std::fprintf(fp, "fp[%d]:       0x%lx\n", i,
                          static_cast<unsigned long>(reinterpret_cast<uintptr_t>(saved_ret)));
-            if (saved_rbp == fp_link) break;
+            if (saved_rbp == fp_link)
+                break;
             fp_link = saved_rbp;
         }
     }
 #elif defined(__aarch64__)
     if (regs.lr) {
-        std::fprintf(fp, "Caller (lr): 0x%lx\n",
-                     static_cast<unsigned long>(reinterpret_cast<uintptr_t>(regs.lr)));
+        std::fprintf(fp, "Caller (lr): 0x%lx\n", static_cast<unsigned long>(reinterpret_cast<uintptr_t>(regs.lr)));
     }
 #endif
     std::fflush(fp); /* CHECKPOINT 2 — raw frame chain durable */
@@ -455,11 +439,13 @@ void WriteBacktracePosix(const std::filesystem::path& path,
     std::fflush(fp);
 
     std::fprintf(fp, "\n--- symbolicated (best-effort) ---\n");
-    if (regs.ip) WriteResolvedAddr(fp, "Crash IP:    ", regs.ip);
+    if (regs.ip)
+        WriteResolvedAddr(fp, "Crash IP:    ", regs.ip);
 #if defined(__x86_64__) || defined(_M_X64)
     {
         void* caller = SafeReadPointer(regs.sp);
-        if (caller) WriteResolvedAddr(fp, "Caller (*sp):", caller);
+        if (caller)
+            WriteResolvedAddr(fp, "Caller (*sp):", caller);
     }
 #endif
     std::fprintf(fp, "\nHandler stack (backtrace() — does not cross the signal frame):\n");
@@ -502,13 +488,10 @@ void WriteBacktraceWindows(const std::filesystem::path& path, CONTEXT* ctx) {
         DWORD64 addr = reinterpret_cast<DWORD64>(frames[i]);
         DWORD64 displ = 0;
         if (SymFromAddr(proc, addr, &displ, sym)) {
-            std::fprintf(fp, "  [%2u] 0x%llx %s+0x%llx\n", i,
-                         static_cast<unsigned long long>(addr),
-                         sym->Name,
+            std::fprintf(fp, "  [%2u] 0x%llx %s+0x%llx\n", i, static_cast<unsigned long long>(addr), sym->Name,
                          static_cast<unsigned long long>(displ));
         } else {
-            std::fprintf(fp, "  [%2u] 0x%llx (no symbol)\n", i,
-                         static_cast<unsigned long long>(addr));
+            std::fprintf(fp, "  [%2u] 0x%llx (no symbol)\n", i, static_cast<unsigned long long>(addr));
         }
     }
     std::fclose(fp);
@@ -517,7 +500,7 @@ void WriteBacktraceWindows(const std::filesystem::path& path, CONTEXT* ctx) {
 
 /* Re-entry guard: a fault while we're already capturing should not loop.
  * 0 = idle, 1 = capturing. compare_exchange flips to 1 on entry. */
-std::atomic<int> g_capturing{0};
+std::atomic<int> g_capturing{ 0 };
 
 #if defined(__linux__) || defined(__APPLE__)
 /* Set by CrashHandlerPosix right before it calls Port_BugReport_Capture so that
@@ -527,7 +510,7 @@ std::atomic<int> g_capturing{0};
  * most valuable artifact, so it must escape first. Cleared after the early
  * write; the F9 manual-capture path never sets it (and gets no backtrace, as
  * before). */
-std::atomic<bool> g_crashBacktracePending{false};
+std::atomic<bool> g_crashBacktracePending{ false };
 CrashRegs g_crashRegs{};
 void* g_crashFaultAddr = nullptr;
 #endif
@@ -540,7 +523,9 @@ extern "C" char* Port_BugReport_Capture(const char* reason) {
         return nullptr;
     }
     struct Releaser {
-        ~Releaser() { g_capturing.store(0); }
+        ~Releaser() {
+            g_capturing.store(0);
+        }
     } releaser;
 
     const std::string ts = TimestampString();
@@ -561,8 +546,7 @@ extern "C" char* Port_BugReport_Capture(const char* reason) {
      * — not strictly async-signal-safe — but ordering it first is a strict
      * improvement over writing it only after the heavy bundle steps succeed. */
     if (g_crashBacktracePending.load()) {
-        WriteBacktracePosix(std::filesystem::path(dirname) / "backtrace.txt",
-                            g_crashRegs, g_crashFaultAddr);
+        WriteBacktracePosix(std::filesystem::path(dirname) / "backtrace.txt", g_crashRegs, g_crashFaultAddr);
         g_crashBacktracePending.store(false);
     }
 #endif
@@ -580,8 +564,8 @@ extern "C" char* Port_BugReport_Capture(const char* reason) {
     CopyProcMaps(std::filesystem::path(dirname) / "maps.txt");
 #endif
 
-    std::fprintf(stderr, "[BUG] Captured %s (ok=%d, reason=%s)\n",
-                 dirname.c_str(), ok ? 1 : 0, reason ? reason : "user");
+    std::fprintf(stderr, "[BUG] Captured %s (ok=%d, reason=%s)\n", dirname.c_str(), ok ? 1 : 0,
+                 reason ? reason : "user");
 
     char* out = static_cast<char*>(std::malloc(dirname.size() + 1));
     if (out) {
@@ -598,12 +582,18 @@ namespace {
 
 const char* SignalName(int sig) {
     switch (sig) {
-        case SIGSEGV: return "SIGSEGV";
-        case SIGABRT: return "SIGABRT";
-        case SIGFPE:  return "SIGFPE";
-        case SIGILL:  return "SIGILL";
-        case SIGBUS:  return "SIGBUS";
-        default:      return "SIG?";
+        case SIGSEGV:
+            return "SIGSEGV";
+        case SIGABRT:
+            return "SIGABRT";
+        case SIGFPE:
+            return "SIGFPE";
+        case SIGILL:
+            return "SIGILL";
+        case SIGBUS:
+            return "SIGBUS";
+        default:
+            return "SIG?";
     }
 }
 
@@ -618,8 +608,7 @@ void CrashHandlerPosix(int sig, siginfo_t* info, void* ucontext) {
     void* fault_addr = info ? info->si_addr : nullptr;
 
     char reason[96];
-    std::snprintf(reason, sizeof(reason), "crash:%s@%p ip=%p",
-                  SignalName(sig), fault_addr, regs.ip);
+    std::snprintf(reason, sizeof(reason), "crash:%s@%p ip=%p", SignalName(sig), fault_addr, regs.ip);
 
     /* Hand the crash context to Port_BugReport_Capture so it writes
      * backtrace.txt BEFORE its heavier (non-async-signal-safe) steps, in case
@@ -629,7 +618,7 @@ void CrashHandlerPosix(int sig, siginfo_t* info, void* ucontext) {
     g_crashBacktracePending.store(true);
 
     char* dir = Port_BugReport_Capture(reason);
-    g_crashBacktracePending.store(false);  /* clear if Capture bailed pre-write */
+    g_crashBacktracePending.store(false); /* clear if Capture bailed pre-write */
     if (dir) {
         /* backtrace.txt was already written (early, inside Capture). Report the
          * path on stderr. Deliberately NO SDL_ShowSimpleMessageBox here:
@@ -639,13 +628,11 @@ void CrashHandlerPosix(int sig, siginfo_t* info, void* ucontext) {
          * still produces an OS core dump. */
         char abs[4096];
         const char* shown = realpath(dir, abs) ? abs : dir;
-        std::fprintf(stderr, "\n[BUG] CRASH (%s) — bundle saved to:\n    %s\n",
-                     SignalName(sig), shown);
+        std::fprintf(stderr, "\n[BUG] CRASH (%s) — bundle saved to:\n    %s\n", SignalName(sig), shown);
         std::fflush(stderr);
         std::free(dir);
     } else {
-        std::fprintf(stderr, "[BUG] CRASH (%s) but bug-report capture FAILED.\n",
-                     SignalName(sig));
+        std::fprintf(stderr, "[BUG] CRASH (%s) but bug-report capture FAILED.\n", SignalName(sig));
         std::fflush(stderr);
     }
 
@@ -673,7 +660,7 @@ void InstallPosixHandlers() {
     ss.ss_flags = 0;
     sigaltstack(&ss, nullptr);
 
-    struct sigaction sa {};
+    struct sigaction sa{};
     sa.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
     sigemptyset(&sa.sa_mask);
     sa.sa_sigaction = CrashHandlerPosix;
@@ -692,13 +679,11 @@ LONG WINAPI CrashHandlerWindows(EXCEPTION_POINTERS* ep) {
     char reason[96];
     DWORD code = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionCode : 0;
     void* addr = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionAddress : nullptr;
-    std::snprintf(reason, sizeof(reason), "crash:0x%08lx@%p",
-                  static_cast<unsigned long>(code), addr);
+    std::snprintf(reason, sizeof(reason), "crash:0x%08lx@%p", static_cast<unsigned long>(code), addr);
 
     char* dir = Port_BugReport_Capture(reason);
     if (dir) {
-        WriteBacktraceWindows(std::filesystem::path(dir) / "backtrace.txt",
-                              ep ? ep->ContextRecord : nullptr);
+        WriteBacktraceWindows(std::filesystem::path(dir) / "backtrace.txt", ep ? ep->ContextRecord : nullptr);
         std::free(dir);
     }
 
@@ -712,7 +697,7 @@ void InstallWindowsHandler() {
 
 #endif /* _WIN32 */
 
-std::atomic<int> g_handlers_installed{0};
+std::atomic<int> g_handlers_installed{ 0 };
 
 } // namespace
 

@@ -31,6 +31,12 @@ typedef struct Mode1TilemapEntry {
 uint16_t* virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT] = { NULL, NULL, NULL, NULL };
 int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT] = { 0, 0, 0, 0 };
 int virtuappu_mode1_ws_hud_right_anchor = 0;
+/* Widescreen message-box centering (see mode1.h). All zero = inactive. */
+int virtuappu_mode1_ws_msg_shift = 0;
+int virtuappu_mode1_ws_msg_x0 = 0;
+int virtuappu_mode1_ws_msg_x1 = 0;
+int virtuappu_mode1_ws_msg_y0 = 0;
+int virtuappu_mode1_ws_msg_y1 = 0;
 
 typedef struct Mode1OAMAttr {
     uint16_t attr0;
@@ -431,8 +437,16 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
     const bool ws_hud_right_anchor =
         (bg_index == 0) && (virtuappu_mode1_ws_hud_right_anchor != 0) && (frame_width > MODE1_GBA_BG_CLIP_X);
     const int ws_hud_right_dst_x = frame_width - (MODE1_GBA_BG_CLIP_X - MODE1_WS_HUD_RIGHT_NATIVE_X);
+    /* Message-box centering: on BG0 lines inside the published box band,
+     * draw the box's native columns shifted right by ws_msg_shift and skip
+     * them at their native position (see mode1.h). */
+    const int ws_msg_shift = virtuappu_mode1_ws_msg_shift;
+    const bool ws_msg_line = (bg_index == 0) && (ws_msg_shift != 0) && (frame_width > MODE1_GBA_BG_CLIP_X) &&
+                             (line >= virtuappu_mode1_ws_msg_y0) && (line < virtuappu_mode1_ws_msg_y1);
+    const int ws_msg_x0 = virtuappu_mode1_ws_msg_x0;
+    const int ws_msg_x1 = virtuappu_mode1_ws_msg_x1;
 
-    if (ws_hud_right_anchor) {
+    if (ws_hud_right_anchor || ws_msg_line) {
         render_max_x = frame_width;
     }
     /* N64 perf: the tilemap screen-entry read + its address math are constant
@@ -448,12 +462,25 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
 
     for (x = 0; x < render_max_x; ++x) {
         int sample_x = x;
-        if (ws_hud_right_anchor) {
+        if (ws_msg_line && x >= ws_msg_x0 + ws_msg_shift && x < ws_msg_x1 + ws_msg_shift) {
+            /* Inside the shifted box: sample the box's native columns. */
+            sample_x = x - ws_msg_shift;
+        } else if (ws_msg_line && x >= ws_msg_x0 && x < ws_msg_x1) {
+            /* The box's native columns are suppressed (moved right). */
+            continue;
+        } else if (ws_hud_right_anchor && !ws_msg_line) {
+            /* Anchor is suspended on box lines: a top-anchored box overlaps
+             * the rupee rows, and remapping cols 176..239 there would draw a
+             * second copy of the box fragment at the far right. */
             if (x >= ws_hud_right_dst_x) {
                 sample_x = x - (frame_width - MODE1_GBA_BG_CLIP_X);
             } else if (x >= MODE1_WS_HUD_RIGHT_NATIVE_X) {
                 continue;
             }
+        } else if (ws_msg_line && x >= MODE1_GBA_BG_CLIP_X) {
+            /* Box lines extend past 240 only for the shifted box copy;
+             * everything else on the line keeps native clipping. */
+            continue;
         }
         int eff_x = (mosaic_h == 1) ? sample_x : (sample_x / mosaic_h) * mosaic_h;
         int src_x = (eff_x + scroll_x) & (map_width_tiles * 8 - 1);

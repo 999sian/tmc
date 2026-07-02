@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Widescreen: dialogue no longer snaps the viewport; cutscene overlays fixed
+
+- **Textboxes keep the wide frame.** Opening any dialogue used to snap the
+  viewport 384→240 (and back on close) — the single most jarring widescreen
+  artifact. The world now stays wide during messages and the PPU centers the
+  BG0 textbox in the wide frame (native columns suppressed, box redrawn
+  shifted by `(W-240)/2`). Hearts stay top-left, rupees stay right-anchored;
+  the right-anchor is suspended on box scanlines so a top-anchored box can't
+  double-draw over the rupee rows.
+- **Overlay screens no longer show a black right third.** The prologue
+  storybook (and any screen that swaps the map BGs out, e.g. pause) now
+  falls back to a native 240 crop via a shadow-liveness check
+  (`Port_Widescreen_ShadowsLive`) instead of presenting a wide frame with
+  dead columns.
+- **Enemy edge behavior widened.** cuccoAggr despawn, gyorgChild fly-off,
+  bombPeahat/takkuri re-entry now key off the live view width instead of
+  hardcoded 240-based literals — no more enemies vanishing or popping in
+  mid-screen inside the widescreen reveal. All collapse to the GBA values at
+  native width.
+- F9 bug-report captures now match the presented width during overlays.
+
 ## v0.7.1.1 (2026-07-02)
 
 ### Cave of Flames: rollobite-switch gate fixed (issue #159, regression in v0.7.0)
