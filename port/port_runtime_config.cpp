@@ -32,7 +32,7 @@ struct Def {
     std::initializer_list<const char*> binds;
 };
 
-const std::array<Def, PORT_INPUT_COUNT> kDefaults = {{
+const std::array<Def, PORT_INPUT_COUNT> kDefaults = { {
     { PORT_INPUT_A, "a", { "SDLK:0x00000078", "SDL_GAMEPAD:0x00000000" } },
     { PORT_INPUT_B, "b", { "SDLK:0x0000007a", "SDL_GAMEPAD:0x00000001" } },
     { PORT_INPUT_SELECT, "select", { "SDLK:0x00000008", "SDL_GAMEPAD:0x00000004" } },
@@ -46,14 +46,14 @@ const std::array<Def, PORT_INPUT_COUNT> kDefaults = {{
     /* Soft-slots: keyboard CV/QE + face-buttons WEST/NORTH + triggers L2/R2.
      * Numeric values: SDL_GAMEPAD_BUTTON_WEST=2, NORTH=3,
      * SDL_GAMEPAD_AXIS_LEFT_TRIGGER=4, RIGHT_TRIGGER=5. */
-    { PORT_INPUT_SOFT_X,  "soft_x",  { "SDLK:0x00000063", "SDL_GAMEPAD:0x00000002" } },
-    { PORT_INPUT_SOFT_Y,  "soft_y",  { "SDLK:0x00000076", "SDL_GAMEPAD:0x00000003" } },
+    { PORT_INPUT_SOFT_X, "soft_x", { "SDLK:0x00000063", "SDL_GAMEPAD:0x00000002" } },
+    { PORT_INPUT_SOFT_Y, "soft_y", { "SDLK:0x00000076", "SDL_GAMEPAD:0x00000003" } },
     { PORT_INPUT_SOFT_L2, "soft_l2", { "SDLK:0x00000071", "SDL_AXIS:0x00000004" } },
     { PORT_INPUT_SOFT_R2, "soft_r2", { "SDLK:0x00000065", "SDL_AXIS:0x00000005" } },
     /* Roll attack: keyboard D + R3 (right stick click). R3 is unused by the
      * base game and sits near the movement stick for a direction+macro press. */
     { PORT_INPUT_ROLL_ATTACK, "roll_attack", { "SDLK:0x00000064", "SDL_GAMEPAD:0x00000008" } },
-}};
+} };
 
 u8 sScale = 3;
 u8 sInternalScale = 1;
@@ -69,11 +69,15 @@ std::string sActiveSaveProfile = "tmc.sav";
  * the in-game tetra statue / file-save flow that requires getting
  * back to a save point first. */
 bool sAutosaveEnabled = true;
-u32  sAutosaveIntervalMs = 60000;
+u32 sAutosaveIntervalMs = 60000;
 /* Touch input scheme from matheo's launcher integration — kept for
  * Android compatibility. */
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
-bool sWidescreenEnabled = false;
+/* Widescreen reveal default-ON since the dialogue-centering + overlay
+ * fallback pass (2026-07-02): wide builds now degrade gracefully in every
+ * verified scenario (dialogue, choices, prologue, pause, narrow rooms).
+ * Console-Parity still forces this off; native-240 builds ignore it. */
+bool sWidescreenEnabled = true;
 /* Console-Parity mode. When true the port suppresses every feature that
  * gives the player an edge over real GBA hardware, so a run is provably
  * console-equivalent: sub-frame input edge leniency off, save-states inert,
@@ -87,62 +91,62 @@ int sPreferredLanguage = -1;
  * Defaults reproduce the historical behavior: GBA 3:2 frame fills as
  * much of the window as possible, side bars are black. */
 PortAspectMode sAspectMode = PORT_ASPECT_NATIVE_3_2;
-PortBgFill     sBgFill = PORT_BG_FILL_BLACK;
+PortBgFill sBgFill = PORT_BG_FILL_BLACK;
 u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
 /* Renderer backend selection — read once at PPU init; menu writes
  * here but a restart is needed to apply because the window's
  * swapchain owner is set once and is not live-switchable. */
 PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
-bool        sTtsEnabled  = true;
-float       sTtsRate     = 0.5f;
-float       sTtsPitch    = 0.5f;
-float       sTtsVolume   = 0.8f;
+bool sTtsEnabled = true;
+float sTtsRate = 0.5f;
+float sTtsPitch = 0.5f;
+float sTtsVolume = 0.8f;
 std::string sTtsVoice;
 std::string sTtsLanguage;
-bool        sA11yCues      = true;
-bool        sA11yFootsteps = true;
-bool        sA11yHazards   = true;
-bool        sA11yRadar     = true;
-bool        sA11yWalls     = true;
+bool sA11yCues = true;
+bool sA11yFootsteps = true;
+bool sA11yHazards = true;
+bool sA11yRadar = true;
+bool sA11yWalls = true;
 /* Speedrun practice mode (port_practice.c). Overlays default off so normal
  * play stays uncluttered; slow-mo defaults to 1.0 (normal speed). */
-bool        sPracticeShowTimer   = false;
-bool        sPracticeShowInputs  = false;
-bool        sPracticeShowHistory = false;
-float       sPracticeSlowmo      = 1.0f;
+bool sPracticeShowTimer = false;
+bool sPracticeShowInputs = false;
+bool sPracticeShowHistory = false;
+float sPracticeSlowmo = 1.0f;
 /* Runtime toggles that previously lived only in memory (issue #146): they
  * now persist to config.json and are re-applied at startup. */
-bool        sDiscordRpc    = false;
-bool        sVSyncCfg      = true;     /* matches Port_PPU's sVSyncEnabled default */
-bool        sColorCorrect  = true;     /* GBA-LCD colour correction (default on) */
-bool        sLcdPersist    = false;    /* LCD temporal persistence (default off) */
-float       sLcdPersistRho = 0.35f;    /* persistence: fraction of prev frame kept */
-bool        sRibbonCfg     = true;     /* F8 menu style: ribbon (true) vs classic */
-float       sMasterVolume  = 1.0f;     /* game master volume [0,1]; 1.0 = unchanged */
-bool        sHoldAdvanceText = false;  /* hold an advance key to keep paging text */
-bool        sRollAttackMacroEnabled = true;
-bool        sFullscreen    = false;
-bool        sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
-float       sAnalogDeadzone = 0.30f;   /* 360° stick deadzone magnitude [0..0.95] */
-std::string sShaderPreset;             /* path to active .glslp, empty = none */
-unsigned    sRebornFeatures   = 0;     /* bitmask of enabled Reborn features */
-bool        sHasRebornFeatures = false;/* was the key present in config.json? */
+bool sDiscordRpc = false;
+bool sVSyncCfg = true;         /* matches Port_PPU's sVSyncEnabled default */
+bool sColorCorrect = true;     /* GBA-LCD colour correction (default on) */
+bool sLcdPersist = false;      /* LCD temporal persistence (default off) */
+float sLcdPersistRho = 0.35f;  /* persistence: fraction of prev frame kept */
+bool sRibbonCfg = true;        /* F8 menu style: ribbon (true) vs classic */
+float sMasterVolume = 1.0f;    /* game master volume [0,1]; 1.0 = unchanged */
+bool sHoldAdvanceText = false; /* hold an advance key to keep paging text */
+bool sRollAttackMacroEnabled = true;
+bool sFullscreen = false;
+bool sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
+float sAnalogDeadzone = 0.30f;     /* 360° stick deadzone magnitude [0..0.95] */
+std::string sShaderPreset;         /* path to active .glslp, empty = none */
+unsigned sRebornFeatures = 0;      /* bitmask of enabled Reborn features */
+bool sHasRebornFeatures = false;   /* was the key present in config.json? */
 /* Randomizer persistence (issue #155) — file-select toggle, built-in
  * graph settings, and .logic define overrides. Defaults = vanilla. */
-bool sRandoEnabled    = false;
+bool sRandoEnabled = false;
 bool sRandoGlitchless = true;
-bool sRandoObscure    = false;
-bool sRandoKinstones  = true;
-bool sRandoEntrances  = false;
-bool sRandoDojos      = true;
-bool sRandoOpenWorld  = false;
-int  sRandoItemPool   = 0;
-bool sRandoHomewarp   = true;
+bool sRandoObscure = false;
+bool sRandoKinstones = true;
+bool sRandoEntrances = false;
+bool sRandoDojos = true;
+bool sRandoOpenWorld = false;
+int sRandoItemPool = 0;
+bool sRandoHomewarp = true;
 bool sRandoStartSword = true;
 bool sRandoEarlyCrests = true;
 bool sRandoInstantText = true;
-int  sRandoTunicColor = 0;
-int  sRandoHeartColor = 0;
+int sRandoTunicColor = 0;
+int sRandoHeartColor = 0;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -177,90 +181,115 @@ constexpr u64 kGbaFrameTimeNs = 16742706ULL;
  * with bespoke parse/typing (enum strings, bg_fill_color, frame_time_ns,
  * autosave_interval_ms, reborn_features, bindings) stay inline at their
  * sites — see DefaultsJson() and apply(). */
-struct BoolCfg  { const char* key; bool*        var; bool        def; };
-struct IntCfg   { const char* key; int*         var; int         def; };
-struct StrCfg   { const char* key; std::string* var; const char* def; };
-struct FloatCfg { const char* key; float*       var; double      def; };
-struct ScaleCfg { const char* key; u8*          var; int def; int lo; int hi; };
+struct BoolCfg {
+    const char* key;
+    bool* var;
+    bool def;
+};
+struct IntCfg {
+    const char* key;
+    int* var;
+    int def;
+};
+struct StrCfg {
+    const char* key;
+    std::string* var;
+    const char* def;
+};
+struct FloatCfg {
+    const char* key;
+    float* var;
+    double def;
+};
+struct ScaleCfg {
+    const char* key;
+    u8* var;
+    int def;
+    int lo;
+    int hi;
+};
 
 const BoolCfg kBoolCfg[] = {
-    { "port_settings_menu",    &sPortSettingsMenuEnabled, true  },
-    { "autosave_enabled",      &sAutosaveEnabled,         true  },
-    { "widescreen_enabled",    &sWidescreenEnabled,       false },
-    { "console_parity",        &sConsoleParity,           false },
-    { "tts_enabled",           &sTtsEnabled,              true  },
-    { "a11y_cues",             &sA11yCues,                true  },
-    { "a11y_footsteps",        &sA11yFootsteps,           true  },
-    { "a11y_hazards",          &sA11yHazards,             true  },
-    { "a11y_radar",            &sA11yRadar,               true  },
-    { "a11y_walls",            &sA11yWalls,               true  },
-    { "practice_show_timer",   &sPracticeShowTimer,       false },
-    { "practice_show_inputs",  &sPracticeShowInputs,      false },
-    { "practice_show_history", &sPracticeShowHistory,     false },
-    { "discord_rpc",           &sDiscordRpc,              false },
-    { "vsync",                 &sVSyncCfg,                true  },
-    { "color_correction",      &sColorCorrect,            true  },
-    { "lcd_persistence",       &sLcdPersist,              false },
-    { "ribbon_mode",           &sRibbonCfg,               true  },
-    { "hold_advance_text",     &sHoldAdvanceText,         false },
-    { "roll_attack_macro",     &sRollAttackMacroEnabled,  true  },
-    { "fullscreen",            &sFullscreen,              false },
-    { "fullscreen_hide_cursor",&sFullscreenHideCursor,    true  },
-    { "rando_enabled",         &sRandoEnabled,            false },
-    { "rando_glitchless",      &sRandoGlitchless,         true  },
-    { "rando_obscure",         &sRandoObscure,            false },
-    { "rando_kinstones",       &sRandoKinstones,          true  },
-    { "rando_entrances",       &sRandoEntrances,          false },
-    { "rando_dojos",           &sRandoDojos,              true  },
-    { "rando_open_world",      &sRandoOpenWorld,          false },
-    { "rando_homewarp",        &sRandoHomewarp,           true  },
-    { "rando_start_sword",     &sRandoStartSword,         true  },
-    { "rando_early_crests",    &sRandoEarlyCrests,        true  },
-    { "rando_instant_text",    &sRandoInstantText,        true  },
+    { "port_settings_menu", &sPortSettingsMenuEnabled, true },
+    { "autosave_enabled", &sAutosaveEnabled, true },
+    { "widescreen_enabled", &sWidescreenEnabled, true },
+    { "console_parity", &sConsoleParity, false },
+    { "tts_enabled", &sTtsEnabled, true },
+    { "a11y_cues", &sA11yCues, true },
+    { "a11y_footsteps", &sA11yFootsteps, true },
+    { "a11y_hazards", &sA11yHazards, true },
+    { "a11y_radar", &sA11yRadar, true },
+    { "a11y_walls", &sA11yWalls, true },
+    { "practice_show_timer", &sPracticeShowTimer, false },
+    { "practice_show_inputs", &sPracticeShowInputs, false },
+    { "practice_show_history", &sPracticeShowHistory, false },
+    { "discord_rpc", &sDiscordRpc, false },
+    { "vsync", &sVSyncCfg, true },
+    { "color_correction", &sColorCorrect, true },
+    { "lcd_persistence", &sLcdPersist, false },
+    { "ribbon_mode", &sRibbonCfg, true },
+    { "hold_advance_text", &sHoldAdvanceText, false },
+    { "roll_attack_macro", &sRollAttackMacroEnabled, true },
+    { "fullscreen", &sFullscreen, false },
+    { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
+    { "rando_enabled", &sRandoEnabled, false },
+    { "rando_glitchless", &sRandoGlitchless, true },
+    { "rando_obscure", &sRandoObscure, false },
+    { "rando_kinstones", &sRandoKinstones, true },
+    { "rando_entrances", &sRandoEntrances, false },
+    { "rando_dojos", &sRandoDojos, true },
+    { "rando_open_world", &sRandoOpenWorld, false },
+    { "rando_homewarp", &sRandoHomewarp, true },
+    { "rando_start_sword", &sRandoStartSword, true },
+    { "rando_early_crests", &sRandoEarlyCrests, true },
+    { "rando_instant_text", &sRandoInstantText, true },
 };
 const IntCfg kIntCfg[] = {
-    { "preferred_region",   &sPreferredRegion,   -1 },
-    { "preferred_language", &sPreferredLanguage, -1 },
-    { "rando_item_pool",    &sRandoItemPool,      0 },
-    { "rando_tunic_color",  &sRandoTunicColor,    0 },
-    { "rando_heart_color",  &sRandoHeartColor,    0 },
+    { "preferred_region", &sPreferredRegion, -1 }, { "preferred_language", &sPreferredLanguage, -1 },
+    { "rando_item_pool", &sRandoItemPool, 0 },     { "rando_tunic_color", &sRandoTunicColor, 0 },
+    { "rando_heart_color", &sRandoHeartColor, 0 },
 };
 const StrCfg kStrCfg[] = {
-    { "upscale_method",      &sUpscaleMethod,     "nearest" },
+    { "upscale_method", &sUpscaleMethod, "nearest" },
     { "active_save_profile", &sActiveSaveProfile, "tmc.sav" },
-    { "tts_voice",           &sTtsVoice,          ""        },
-    { "tts_language",        &sTtsLanguage,       ""        },
-    { "shader_preset",       &sShaderPreset,      ""        },
+    { "tts_voice", &sTtsVoice, "" },
+    { "tts_language", &sTtsLanguage, "" },
+    { "shader_preset", &sShaderPreset, "" },
 };
 const FloatCfg kFloatCfg[] = {
-    { "tts_rate",            &sTtsRate,        0.5  },
-    { "tts_pitch",           &sTtsPitch,       0.5  },
-    { "tts_volume",          &sTtsVolume,      0.8  },
-    { "practice_slowmo",     &sPracticeSlowmo, 1.0  },
-    { "lcd_persistence_rho", &sLcdPersistRho,  0.35 },
-    { "master_volume",       &sMasterVolume,   1.0  },
-    { "analog_deadzone",     &sAnalogDeadzone, 0.30 },
+    { "tts_rate", &sTtsRate, 0.5 },
+    { "tts_pitch", &sTtsPitch, 0.5 },
+    { "tts_volume", &sTtsVolume, 0.8 },
+    { "practice_slowmo", &sPracticeSlowmo, 1.0 },
+    { "lcd_persistence_rho", &sLcdPersistRho, 0.35 },
+    { "master_volume", &sMasterVolume, 1.0 },
+    { "analog_deadzone", &sAnalogDeadzone, 0.30 },
 };
 const ScaleCfg kScaleCfg[] = {
-    { "window_scale",   &sScale,         3, 1, 10 },
+    { "window_scale", &sScale, 3, 1, 10 },
     { "internal_scale", &sInternalScale, 1, 1, 10 },
 };
 
 nlohmann::json DefaultsJson(void) {
     nlohmann::json j;
-    for (const auto& e : kScaleCfg) j[e.key] = e.def;
-    for (const auto& e : kIntCfg)   j[e.key] = e.def;
-    for (const auto& e : kBoolCfg)  j[e.key] = e.def;
-    for (const auto& e : kStrCfg)   j[e.key] = e.def;
-    for (const auto& e : kFloatCfg) j[e.key] = e.def;
+    for (const auto& e : kScaleCfg)
+        j[e.key] = e.def;
+    for (const auto& e : kIntCfg)
+        j[e.key] = e.def;
+    for (const auto& e : kBoolCfg)
+        j[e.key] = e.def;
+    for (const auto& e : kStrCfg)
+        j[e.key] = e.def;
+    for (const auto& e : kFloatCfg)
+        j[e.key] = e.def;
     /* Bespoke-default keys (custom parse/typing in apply()). */
-    j["frame_time_ns"]        = kDefaultFrameTimeNs; /* 60 FPS cap; uncapped is unstable for frame-tied logic */
+    j["frame_time_ns"] = kDefaultFrameTimeNs; /* 60 FPS cap; uncapped is unstable for frame-tied logic */
     j["autosave_interval_ms"] = 60000;
-    j["touch_scheme"]         = "joystick";
-    j["aspect_mode"]          = "native";
-    j["bg_fill"]              = "black";
-    j["bg_fill_color"]        = { 0, 0, 0 };
-    j["render_backend"]       = "auto";
+    j["touch_scheme"] = "joystick";
+    j["aspect_mode"] = "native";
+    j["bg_fill"] = "black";
+    j["bg_fill_color"] = { 0, 0, 0 };
+    j["render_backend"] = "auto";
     /* reborn_features is intentionally absent — its presence is the signal
      * to override the compile-time feature defaults. */
     j["bindings"] = nlohmann::json::object();
@@ -302,8 +331,7 @@ void LoadBinds(PortInput input, const nlohmann::json& v) {
 void SaveConfig(void) {
     try {
         std::ofstream(sConfigPath) << sConfigJson.dump(4) << '\n';
-    } catch (...) {
-    }
+    } catch (...) {}
 }
 
 u64 FrameTimeForFps(u32 fps) {
@@ -356,21 +384,9 @@ extern "C" void Port_Config_SetPortSettingsMenuEnabled(bool enabled) {
 
 extern "C" const char* Port_Config_InputUiLabel(PortInput input) {
     static const char* const kLabels[PORT_INPUT_COUNT] = {
-        "A (jump / talk)",
-        "B (attack / cancel)",
-        "Select",
-        "Start",
-        "D-pad Right",
-        "D-pad Left",
-        "D-pad Up",
-        "D-pad Down",
-        "R",
-        "L",
-        "Soft slot X",
-        "Soft slot Y",
-        "Soft slot L2 / LT",
-        "Soft slot R2 / RT",
-        "Roll attack",
+        "A (jump / talk)",   "B (attack / cancel)", "Select",      "Start", "D-pad Right", "D-pad Left",
+        "D-pad Up",          "D-pad Down",          "R",           "L",     "Soft slot X", "Soft slot Y",
+        "Soft slot L2 / LT", "Soft slot R2 / RT",   "Roll attack",
     };
     if (input < 0 || input >= PORT_INPUT_COUNT) {
         return "?";
@@ -393,7 +409,8 @@ static void FormatBindingsLineImpl(PortInput input, char* out, size_t outCap, bo
     size_t pos = 0;
     bool first = true;
     for (const Bind& b : sBinds[input]) {
-        if (padOnly && b.key != SDLK_UNKNOWN) continue;
+        if (padOnly && b.key != SDLK_UNKNOWN)
+            continue;
         char piece[112];
         piece[0] = '\0';
         if (b.key != SDLK_UNKNOWN) {
@@ -493,7 +510,7 @@ extern "C" void Port_Config_SetGamepadBindExclusive(PortInput input, int sdl_gam
 }
 #endif
 
-} 
+} // namespace
 
 static SDL_Gamepad* OpenGamepad(SDL_JoystickID id) {
     for (SDL_Gamepad* pad : sPads) {
@@ -532,9 +549,7 @@ extern "C" void Port_Config_Load(const char* path) {
     if (std::filesystem::exists(p)) {
         try {
             std::ifstream(p) >> j;
-        } catch (...) {
-            j = DefaultsJson();
-        }
+        } catch (...) { j = DefaultsJson(); }
     } else {
         std::ofstream(p) << j.dump(4) << '\n';
     }
@@ -548,10 +563,14 @@ extern "C" void Port_Config_Load(const char* path) {
      * degrades to defaults instead of terminating the process. The lambda
      * param shadows the outer j so it can be re-run against defaults. */
     auto apply = [](const nlohmann::json& j) {
-        for (const auto& e : kBoolCfg)  *e.var = j.value(e.key, e.def);
-        for (const auto& e : kIntCfg)   *e.var = j.value(e.key, e.def);
-        for (const auto& e : kStrCfg)   *e.var = j.value(e.key, std::string(e.def));
-        for (const auto& e : kFloatCfg) *e.var = (float)j.value(e.key, e.def);
+        for (const auto& e : kBoolCfg)
+            *e.var = j.value(e.key, e.def);
+        for (const auto& e : kIntCfg)
+            *e.var = j.value(e.key, e.def);
+        for (const auto& e : kStrCfg)
+            *e.var = j.value(e.key, std::string(e.def));
+        for (const auto& e : kFloatCfg)
+            *e.var = (float)j.value(e.key, e.def);
         for (const auto& e : kScaleCfg) {
             int v = j.value(e.key, e.def);
             *e.var = (v >= e.lo && v <= e.hi) ? (u8)v : (u8)e.def;
@@ -564,29 +583,45 @@ extern "C" void Port_Config_Load(const char* path) {
         {
             std::string ts = j.value("touch_scheme", std::string("joystick"));
             for (char& c : ts) {
-                if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+                if (c >= 'A' && c <= 'Z')
+                    c = static_cast<char>(c - 'A' + 'a');
             }
             sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
         }
         {
             std::string am = j.value("aspect_mode", std::string("native"));
-            for (char& c : am) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
-            if      (am == "16:9" || am == "widescreen")       sAspectMode = PORT_ASPECT_WIDESCREEN_16_9;
-            else if (am == "21:9" || am == "ultrawide")        sAspectMode = PORT_ASPECT_ULTRAWIDE_21_9;
-            else if (am == "32:9" || am == "super_ultrawide")  sAspectMode = PORT_ASPECT_SUPER_ULTRAWIDE_32_9;
-            else                                                sAspectMode = PORT_ASPECT_NATIVE_3_2;
+            for (char& c : am) {
+                if (c >= 'A' && c <= 'Z')
+                    c = static_cast<char>(c - 'A' + 'a');
+            }
+            if (am == "16:9" || am == "widescreen")
+                sAspectMode = PORT_ASPECT_WIDESCREEN_16_9;
+            else if (am == "21:9" || am == "ultrawide")
+                sAspectMode = PORT_ASPECT_ULTRAWIDE_21_9;
+            else if (am == "32:9" || am == "super_ultrawide")
+                sAspectMode = PORT_ASPECT_SUPER_ULTRAWIDE_32_9;
+            else
+                sAspectMode = PORT_ASPECT_NATIVE_3_2;
 
             std::string bf = j.value("bg_fill", std::string("black"));
-            for (char& c : bf) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
-            if      (bf == "solid"   || bf == "solid_color")   sBgFill = PORT_BG_FILL_SOLID_COLOR;
-            else if (bf == "blurred" || bf == "blurred_frame") sBgFill = PORT_BG_FILL_BLURRED_FRAME;
-            else                                                sBgFill = PORT_BG_FILL_BLACK;
+            for (char& c : bf) {
+                if (c >= 'A' && c <= 'Z')
+                    c = static_cast<char>(c - 'A' + 'a');
+            }
+            if (bf == "solid" || bf == "solid_color")
+                sBgFill = PORT_BG_FILL_SOLID_COLOR;
+            else if (bf == "blurred" || bf == "blurred_frame")
+                sBgFill = PORT_BG_FILL_BLURRED_FRAME;
+            else
+                sBgFill = PORT_BG_FILL_BLACK;
 
             const auto& col = j.contains("bg_fill_color") ? j["bg_fill_color"] : nlohmann::json::array();
             if (col.is_array() && col.size() >= 3) {
                 auto clamp_u8 = [](int v) -> u8 {
-                    if (v < 0)   return 0;
-                    if (v > 255) return 255;
+                    if (v < 0)
+                        return 0;
+                    if (v > 255)
+                        return 255;
                     return (u8)v;
                 };
                 sBgFillR = clamp_u8(col[0].is_number() ? col[0].get<int>() : 0);
@@ -596,10 +631,16 @@ extern "C" void Port_Config_Load(const char* path) {
         }
         {
             std::string rb = j.value("render_backend", std::string("auto"));
-            for (char& c : rb) { if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); }
-            if      (rb == "software" || rb == "sw")    sRenderBackend = PORT_RENDER_BACKEND_SOFTWARE;
-            else if (rb == "gpu")                       sRenderBackend = PORT_RENDER_BACKEND_GPU;
-            else                                         sRenderBackend = PORT_RENDER_BACKEND_AUTO;
+            for (char& c : rb) {
+                if (c >= 'A' && c <= 'Z')
+                    c = static_cast<char>(c - 'A' + 'a');
+            }
+            if (rb == "software" || rb == "sw")
+                sRenderBackend = PORT_RENDER_BACKEND_SOFTWARE;
+            else if (rb == "gpu")
+                sRenderBackend = PORT_RENDER_BACKEND_GPU;
+            else
+                sRenderBackend = PORT_RENDER_BACKEND_AUTO;
         }
         /* reborn_features: absent from DefaultsJson on purpose — presence is
          * the signal that the user overrode the compile-time feature mask. */
@@ -684,8 +725,10 @@ extern "C" u32 Port_Config_AutosaveIntervalMs(void) {
 }
 
 extern "C" void Port_Config_SetAutosaveIntervalMs(u32 ms) {
-    if (ms < 5000) ms = 5000;
-    if (ms > 600000) ms = 600000;
+    if (ms < 5000)
+        ms = 5000;
+    if (ms > 600000)
+        ms = 600000;
     sAutosaveIntervalMs = ms;
     sConfigJson["autosave_interval_ms"] = ms;
     SaveConfig();
@@ -712,8 +755,10 @@ extern "C" void Port_Config_SetInternalScale(u8 scale) {
        frame loop and are not bounded by the static virtuappu_frame_buffer.
        At 10×, native output is 2400×1600 = 15 MB and ~3.8 Mpx copied per
        frame, so the practical limit is SDL_Texture max / fill-rate. */
-    if (scale < 1) scale = 1;
-    if (scale > 10) scale = 10;
+    if (scale < 1)
+        scale = 1;
+    if (scale > 10)
+        scale = 10;
     sInternalScale = scale;
     sConfigJson["internal_scale"] = static_cast<int>(scale);
     SaveConfig();
@@ -721,8 +766,10 @@ extern "C" void Port_Config_SetInternalScale(u8 scale) {
 
 extern "C" void Port_Config_CycleInternalScale(int direction) {
     int next = (int)sInternalScale + (direction < 0 ? -1 : 1);
-    if (next < 1) next = 10;
-    if (next > 10) next = 1;
+    if (next < 1)
+        next = 10;
+    if (next > 10)
+        next = 1;
     Port_Config_SetInternalScale((u8)next);
 }
 
@@ -818,24 +865,37 @@ extern "C" PortAspectMode Port_Config_AspectMode(void) {
 
 extern "C" const char* Port_Config_AspectModeName(PortAspectMode mode) {
     switch (mode) {
-        case PORT_ASPECT_WIDESCREEN_16_9:      return "Widescreen 16:9";
-        case PORT_ASPECT_ULTRAWIDE_21_9:       return "Ultrawide 21:9";
-        case PORT_ASPECT_SUPER_ULTRAWIDE_32_9: return "Super Ultrawide 32:9";
+        case PORT_ASPECT_WIDESCREEN_16_9:
+            return "Widescreen 16:9";
+        case PORT_ASPECT_ULTRAWIDE_21_9:
+            return "Ultrawide 21:9";
+        case PORT_ASPECT_SUPER_ULTRAWIDE_32_9:
+            return "Super Ultrawide 32:9";
         case PORT_ASPECT_NATIVE_3_2:
-        default:                                return "Native 3:2 (GBA)";
+        default:
+            return "Native 3:2 (GBA)";
     }
 }
 
 extern "C" void Port_Config_SetAspectMode(PortAspectMode mode) {
-    if (mode < 0 || mode >= PORT_ASPECT_COUNT) mode = PORT_ASPECT_NATIVE_3_2;
+    if (mode < 0 || mode >= PORT_ASPECT_COUNT)
+        mode = PORT_ASPECT_NATIVE_3_2;
     sAspectMode = mode;
     const char* name = "native";
     switch (mode) {
-        case PORT_ASPECT_WIDESCREEN_16_9:      name = "16:9"; break;
-        case PORT_ASPECT_ULTRAWIDE_21_9:       name = "21:9"; break;
-        case PORT_ASPECT_SUPER_ULTRAWIDE_32_9: name = "32:9"; break;
+        case PORT_ASPECT_WIDESCREEN_16_9:
+            name = "16:9";
+            break;
+        case PORT_ASPECT_ULTRAWIDE_21_9:
+            name = "21:9";
+            break;
+        case PORT_ASPECT_SUPER_ULTRAWIDE_32_9:
+            name = "32:9";
+            break;
         case PORT_ASPECT_NATIVE_3_2:
-        default:                                name = "native"; break;
+        default:
+            name = "native";
+            break;
     }
     sConfigJson["aspect_mode"] = name;
     SaveConfig();
@@ -843,8 +903,10 @@ extern "C" void Port_Config_SetAspectMode(PortAspectMode mode) {
 
 extern "C" void Port_Config_CycleAspectMode(int direction) {
     int next = (int)sAspectMode + (direction < 0 ? -1 : 1);
-    if (next < 0) next = PORT_ASPECT_COUNT - 1;
-    if (next >= PORT_ASPECT_COUNT) next = 0;
+    if (next < 0)
+        next = PORT_ASPECT_COUNT - 1;
+    if (next >= PORT_ASPECT_COUNT)
+        next = 0;
     Port_Config_SetAspectMode((PortAspectMode)next);
 }
 
@@ -854,22 +916,32 @@ extern "C" PortBgFill Port_Config_BgFill(void) {
 
 extern "C" const char* Port_Config_BgFillName(PortBgFill fill) {
     switch (fill) {
-        case PORT_BG_FILL_SOLID_COLOR:   return "Solid color";
-        case PORT_BG_FILL_BLURRED_FRAME: return "Blurred frame";
+        case PORT_BG_FILL_SOLID_COLOR:
+            return "Solid color";
+        case PORT_BG_FILL_BLURRED_FRAME:
+            return "Blurred frame";
         case PORT_BG_FILL_BLACK:
-        default:                          return "Black";
+        default:
+            return "Black";
     }
 }
 
 extern "C" void Port_Config_SetBgFill(PortBgFill fill) {
-    if (fill < 0 || fill >= PORT_BG_FILL_COUNT) fill = PORT_BG_FILL_BLACK;
+    if (fill < 0 || fill >= PORT_BG_FILL_COUNT)
+        fill = PORT_BG_FILL_BLACK;
     sBgFill = fill;
     const char* name = "black";
     switch (fill) {
-        case PORT_BG_FILL_SOLID_COLOR:   name = "solid";   break;
-        case PORT_BG_FILL_BLURRED_FRAME: name = "blurred"; break;
+        case PORT_BG_FILL_SOLID_COLOR:
+            name = "solid";
+            break;
+        case PORT_BG_FILL_BLURRED_FRAME:
+            name = "blurred";
+            break;
         case PORT_BG_FILL_BLACK:
-        default:                          name = "black";   break;
+        default:
+            name = "black";
+            break;
     }
     sConfigJson["bg_fill"] = name;
     SaveConfig();
@@ -877,19 +949,26 @@ extern "C" void Port_Config_SetBgFill(PortBgFill fill) {
 
 extern "C" void Port_Config_CycleBgFill(int direction) {
     int next = (int)sBgFill + (direction < 0 ? -1 : 1);
-    if (next < 0) next = PORT_BG_FILL_COUNT - 1;
-    if (next >= PORT_BG_FILL_COUNT) next = 0;
+    if (next < 0)
+        next = PORT_BG_FILL_COUNT - 1;
+    if (next >= PORT_BG_FILL_COUNT)
+        next = 0;
     Port_Config_SetBgFill((PortBgFill)next);
 }
 
 extern "C" void Port_Config_BgFillColor(u8* r, u8* g, u8* b) {
-    if (r) *r = sBgFillR;
-    if (g) *g = sBgFillG;
-    if (b) *b = sBgFillB;
+    if (r)
+        *r = sBgFillR;
+    if (g)
+        *g = sBgFillG;
+    if (b)
+        *b = sBgFillB;
 }
 
 extern "C" void Port_Config_SetBgFillColor(u8 r, u8 g, u8 b) {
-    sBgFillR = r; sBgFillG = g; sBgFillB = b;
+    sBgFillR = r;
+    sBgFillG = g;
+    sBgFillB = b;
     sConfigJson["bg_fill_color"] = nlohmann::json::array({ (int)r, (int)g, (int)b });
     SaveConfig();
 }
@@ -900,22 +979,32 @@ extern "C" PortRenderBackend Port_Config_RenderBackend(void) {
 
 extern "C" const char* Port_Config_RenderBackendName(PortRenderBackend b) {
     switch (b) {
-        case PORT_RENDER_BACKEND_SOFTWARE: return "Software";
-        case PORT_RENDER_BACKEND_GPU:      return "GPU";
+        case PORT_RENDER_BACKEND_SOFTWARE:
+            return "Software";
+        case PORT_RENDER_BACKEND_GPU:
+            return "GPU";
         case PORT_RENDER_BACKEND_AUTO:
-        default:                            return "Auto";
+        default:
+            return "Auto";
     }
 }
 
 extern "C" void Port_Config_SetRenderBackend(PortRenderBackend b) {
-    if (b < 0 || b >= PORT_RENDER_BACKEND_COUNT) b = PORT_RENDER_BACKEND_AUTO;
+    if (b < 0 || b >= PORT_RENDER_BACKEND_COUNT)
+        b = PORT_RENDER_BACKEND_AUTO;
     sRenderBackend = b;
     const char* name = "auto";
     switch (b) {
-        case PORT_RENDER_BACKEND_SOFTWARE: name = "software"; break;
-        case PORT_RENDER_BACKEND_GPU:      name = "gpu";      break;
+        case PORT_RENDER_BACKEND_SOFTWARE:
+            name = "software";
+            break;
+        case PORT_RENDER_BACKEND_GPU:
+            name = "gpu";
+            break;
         case PORT_RENDER_BACKEND_AUTO:
-        default:                            name = "auto";     break;
+        default:
+            name = "auto";
+            break;
     }
     sConfigJson["render_backend"] = name;
     SaveConfig();
@@ -923,8 +1012,10 @@ extern "C" void Port_Config_SetRenderBackend(PortRenderBackend b) {
 
 extern "C" void Port_Config_CycleRenderBackend(int direction) {
     int next = (int)sRenderBackend + (direction < 0 ? -1 : 1);
-    if (next < 0) next = PORT_RENDER_BACKEND_COUNT - 1;
-    if (next >= PORT_RENDER_BACKEND_COUNT) next = 0;
+    if (next < 0)
+        next = PORT_RENDER_BACKEND_COUNT - 1;
+    if (next >= PORT_RENDER_BACKEND_COUNT)
+        next = 0;
     Port_Config_SetRenderBackend((PortRenderBackend)next);
 }
 
@@ -994,16 +1085,22 @@ extern "C" void Port_Config_OpenGamepads(void) {
  * and persist. Keeps the JSON in sync with runtime mutations so the
  * next launch picks up the user's rebinds. */
 static void PersistBinds(PortInput input) {
-    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    if (input < 0 || input >= PORT_INPUT_COUNT)
+        return;
     const char* name = nullptr;
     for (const auto& d : kDefaults) {
-        if (d.input == input) { name = d.name; break; }
+        if (d.input == input) {
+            name = d.name;
+            break;
+        }
     }
-    if (!name) return;
+    if (!name)
+        return;
     nlohmann::json arr = nlohmann::json::array();
     for (const Bind& b : sBinds[input]) {
         std::string s = FormatBindForJson(b);
-        if (!s.empty()) arr.push_back(s);
+        if (!s.empty())
+            arr.push_back(s);
     }
     if (!sConfigJson.contains("bindings") || !sConfigJson["bindings"].is_object()) {
         sConfigJson["bindings"] = nlohmann::json::object();
@@ -1040,8 +1137,7 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
         } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
             newBind.pad = (SDL_GamepadButton)e->gbutton.button;
             captured = true;
-        } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
-                   e->gaxis.value > kAxisThreshold) {
+        } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e->gaxis.value > kAxisThreshold) {
             newBind.axis = (SDL_GamepadAxis)e->gaxis.axis;
             captured = true;
         }
@@ -1051,22 +1147,28 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
              * every OTHER action before assigning it here. */
             if (sConsoleParity) {
                 for (size_t j = 0; j < PORT_INPUT_COUNT; j++) {
-                    if ((int)j == (int)target) continue;
+                    if ((int)j == (int)target)
+                        continue;
                     std::vector<Bind>& v = sBinds[j];
                     bool changed = false;
                     for (size_t k = 0; k < v.size();) {
                         const Bind& b = v[k];
-                        const bool same =
-                            (newBind.key  != SDLK_UNKNOWN                && b.key  == newBind.key) ||
-                            (newBind.pad  != SDL_GAMEPAD_BUTTON_INVALID  && b.pad  == newBind.pad) ||
-                            (newBind.axis != SDL_GAMEPAD_AXIS_INVALID    && b.axis == newBind.axis);
-                        if (same) { v.erase(v.begin() + (long)k); changed = true; }
-                        else { ++k; }
+                        const bool same = (newBind.key != SDLK_UNKNOWN && b.key == newBind.key) ||
+                                          (newBind.pad != SDL_GAMEPAD_BUTTON_INVALID && b.pad == newBind.pad) ||
+                                          (newBind.axis != SDL_GAMEPAD_AXIS_INVALID && b.axis == newBind.axis);
+                        if (same) {
+                            v.erase(v.begin() + (long)k);
+                            changed = true;
+                        } else {
+                            ++k;
+                        }
                     }
-                    if (changed) PersistBinds((PortInput)j);
+                    if (changed)
+                        PersistBinds((PortInput)j);
                 }
             }
-            if (!sCaptureAppend) sBinds[target].clear();
+            if (!sCaptureAppend)
+                sBinds[target].clear();
             sBinds[target].push_back(newBind);
             PersistBinds(target);
             sCapturingInput = -1;
@@ -1096,20 +1198,17 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
         Port_TouchControls_NotifyGamepadUsed();
         for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
             for (const Bind& b : sBinds[i]) {
-                if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT &&
-                    b.pad == (SDL_GamepadButton)e->gbutton.button) {
+                if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT && b.pad == (SDL_GamepadButton)e->gbutton.button) {
                     sEdgePressed[i] = true;
                     break;
                 }
             }
         }
-    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
-               e->gaxis.value > kAxisThreshold) {
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e->gaxis.value > kAxisThreshold) {
         Port_TouchControls_NotifyGamepadUsed();
         for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
             for (const Bind& b : sBinds[i]) {
-                if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
-                    b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
+                if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
                     sEdgePressed[i] = true;
                     break;
                 }
@@ -1165,16 +1264,13 @@ extern "C" bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input
         }
     } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
         for (const Bind& b : sBinds[input]) {
-            if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT &&
-                b.pad == (SDL_GamepadButton)e->gbutton.button) {
+            if (b.pad >= 0 && b.pad < SDL_GAMEPAD_BUTTON_COUNT && b.pad == (SDL_GamepadButton)e->gbutton.button) {
                 return true;
             }
         }
-    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
-               e->gaxis.value > kAxisThreshold) {
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e->gaxis.value > kAxisThreshold) {
         for (const Bind& b : sBinds[input]) {
-            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
-                b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
+            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
                 return true;
             }
         }
@@ -1217,8 +1313,7 @@ extern "C" bool Port_Config_InputPressed(PortInput input) {
                 Port_TouchControls_NotifyGamepadUsed();
                 return true;
             }
-            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
-                SDL_GetGamepadAxis(pad, b.axis) > kAxisThreshold) {
+            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && SDL_GetGamepadAxis(pad, b.axis) > kAxisThreshold) {
                 Port_TouchControls_NotifyGamepadUsed();
                 return true;
             }
@@ -1229,10 +1324,13 @@ extern "C" bool Port_Config_InputPressed(PortInput input) {
 
 extern "C" bool Port_Config_SoftSlotPressed(int slot) {
     static const PortInput kMap[4] = {
-        PORT_INPUT_SOFT_X, PORT_INPUT_SOFT_Y,
-        PORT_INPUT_SOFT_L2, PORT_INPUT_SOFT_R2,
+        PORT_INPUT_SOFT_X,
+        PORT_INPUT_SOFT_Y,
+        PORT_INPUT_SOFT_L2,
+        PORT_INPUT_SOFT_R2,
     };
-    if (slot < 0 || slot >= 4) return false;
+    if (slot < 0 || slot >= 4)
+        return false;
     return Port_Config_InputPressed(kMap[slot]);
 }
 
@@ -1251,8 +1349,10 @@ extern "C" bool Port_Config_GetLeftStick(float* outX, float* outY) {
      * origin), so no sign flip is required despite intuition. */
     const int16_t rawX = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTX);
     const int16_t rawY = SDL_GetGamepadAxis(pad, SDL_GAMEPAD_AXIS_LEFTY);
-    if (outX) *outX = (float)rawX / 32767.0f;
-    if (outY) *outY = (float)rawY / 32767.0f;
+    if (outX)
+        *outX = (float)rawX / 32767.0f;
+    if (outY)
+        *outY = (float)rawY / 32767.0f;
     return true;
 }
 
@@ -1268,15 +1368,18 @@ extern "C" void Port_Config_CloseGamepads(void) {
 /* ============================================================ */
 
 extern "C" const char* Port_Config_InputName(PortInput input) {
-    if (input < 0 || input >= PORT_INPUT_COUNT) return "?";
+    if (input < 0 || input >= PORT_INPUT_COUNT)
+        return "?";
     for (const auto& d : kDefaults) {
-        if (d.input == input) return d.name;
+        if (d.input == input)
+            return d.name;
     }
     return "?";
 }
 
 extern "C" int Port_Config_BindingCount(PortInput input) {
-    if (input < 0 || input >= PORT_INPUT_COUNT) return 0;
+    if (input < 0 || input >= PORT_INPUT_COUNT)
+        return 0;
     return (int)sBinds[input].size();
 }
 
@@ -1286,41 +1389,51 @@ extern "C" int Port_Config_BindingCount(PortInput input) {
  * trigger / stick name; keyboard keys use SDL_GetKeyName. Falls back
  * to the raw numeric code if any of those return null. */
 extern "C" void Port_Config_BindingLabel(PortInput input, int idx, char* out, int cap) {
-    if (!out || cap <= 0) return;
+    if (!out || cap <= 0)
+        return;
     out[0] = '\0';
-    if (input < 0 || input >= PORT_INPUT_COUNT) return;
-    if (idx < 0 || idx >= (int)sBinds[input].size()) return;
+    if (input < 0 || input >= PORT_INPUT_COUNT)
+        return;
+    if (idx < 0 || idx >= (int)sBinds[input].size())
+        return;
     const Bind& b = sBinds[input][idx];
     if (b.key != SDLK_UNKNOWN) {
         const char* name = SDL_GetKeyName(b.key);
         std::snprintf(out, cap, "%s", (name && *name) ? name : "Key");
     } else if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
         const char* name = SDL_GetGamepadStringForButton(b.pad);
-        if (name && *name) std::snprintf(out, cap, "Pad: %s", name);
-        else                std::snprintf(out, cap, "Pad button %d", (int)b.pad);
+        if (name && *name)
+            std::snprintf(out, cap, "Pad: %s", name);
+        else
+            std::snprintf(out, cap, "Pad button %d", (int)b.pad);
     } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
         const char* name = SDL_GetGamepadStringForAxis(b.axis);
-        if (name && *name) std::snprintf(out, cap, "Axis: %s", name);
-        else                std::snprintf(out, cap, "Pad axis %d", (int)b.axis);
+        if (name && *name)
+            std::snprintf(out, cap, "Axis: %s", name);
+        else
+            std::snprintf(out, cap, "Pad axis %d", (int)b.axis);
     }
 }
 
 extern "C" void Port_Config_ClearBindings(PortInput input) {
-    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    if (input < 0 || input >= PORT_INPUT_COUNT)
+        return;
     sBinds[input].clear();
     PersistBinds(input);
 }
 
 extern "C" void Port_Config_BeginCaptureBinding(PortInput input) {
-    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    if (input < 0 || input >= PORT_INPUT_COUNT)
+        return;
     sCapturingInput = (int)input;
-    sCaptureAppend = false;   /* replace this action's bindings */
+    sCaptureAppend = false; /* replace this action's bindings */
 }
 
 extern "C" void Port_Config_BeginAddBinding(PortInput input) {
-    if (input < 0 || input >= PORT_INPUT_COUNT) return;
+    if (input < 0 || input >= PORT_INPUT_COUNT)
+        return;
     sCapturingInput = (int)input;
-    sCaptureAppend = true;    /* append a binding, keep existing ones */
+    sCaptureAppend = true; /* append a binding, keep existing ones */
 }
 
 extern "C" int Port_Config_IsCapturingBinding(void) {
@@ -1340,7 +1453,8 @@ extern "C" void Port_Config_ResetAllBindings(void) {
     /* Re-populate sBinds from the kDefaults table and persist the
      * resulting JSON. Mirrors what Port_Config_Load does on a missing
      * config — same code path. */
-    for (auto& v : sBinds) v.clear();
+    for (auto& v : sBinds)
+        v.clear();
     for (const auto& d : kDefaults) {
         for (const char* bind : d.binds) {
             AddBind(d.input, bind);
@@ -1352,7 +1466,8 @@ extern "C" void Port_Config_ResetAllBindings(void) {
         nlohmann::json arr = nlohmann::json::array();
         for (const Bind& bind : sBinds[d.input]) {
             std::string s = FormatBindForJson(bind);
-            if (!s.empty()) arr.push_back(s);
+            if (!s.empty())
+                arr.push_back(s);
         }
         b[d.name] = arr;
     }
@@ -1368,29 +1483,37 @@ extern "C" void Port_Config_ResetAllBindings(void) {
 /*  caches these in port_tts.cpp and re-reads on init.                */
 /* ------------------------------------------------------------------ */
 
-extern "C" bool Port_Config_GetTtsEnabled(void) { return sTtsEnabled; }
+extern "C" bool Port_Config_GetTtsEnabled(void) {
+    return sTtsEnabled;
+}
 extern "C" void Port_Config_SetTtsEnabled(bool on) {
     sTtsEnabled = on;
     sConfigJson["tts_enabled"] = on;
     SaveConfig();
 }
 
-extern "C" float Port_Config_GetTtsRate(void) { return sTtsRate; }
-extern "C" void  Port_Config_SetTtsRate(float v) {
+extern "C" float Port_Config_GetTtsRate(void) {
+    return sTtsRate;
+}
+extern "C" void Port_Config_SetTtsRate(float v) {
     sTtsRate = v;
     sConfigJson["tts_rate"] = (double)v;
     SaveConfig();
 }
 
-extern "C" float Port_Config_GetTtsPitch(void) { return sTtsPitch; }
-extern "C" void  Port_Config_SetTtsPitch(float v) {
+extern "C" float Port_Config_GetTtsPitch(void) {
+    return sTtsPitch;
+}
+extern "C" void Port_Config_SetTtsPitch(float v) {
     sTtsPitch = v;
     sConfigJson["tts_pitch"] = (double)v;
     SaveConfig();
 }
 
-extern "C" float Port_Config_GetTtsVolume(void) { return sTtsVolume; }
-extern "C" void  Port_Config_SetTtsVolume(float v) {
+extern "C" float Port_Config_GetTtsVolume(void) {
+    return sTtsVolume;
+}
+extern "C" void Port_Config_SetTtsVolume(float v) {
     sTtsVolume = v;
     sConfigJson["tts_volume"] = (double)v;
     SaveConfig();
@@ -1414,114 +1537,285 @@ extern "C" void Port_Config_SetTtsLanguage(const char* v) {
     SaveConfig();
 }
 
-extern "C" bool Port_Config_GetA11yCues(void) { return sA11yCues; }
-extern "C" void Port_Config_SetA11yCues(bool on) { sA11yCues = on; sConfigJson["a11y_cues"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetA11yFootsteps(void) { return sA11yFootsteps; }
-extern "C" void Port_Config_SetA11yFootsteps(bool on) { sA11yFootsteps = on; sConfigJson["a11y_footsteps"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetA11yHazards(void) { return sA11yHazards; }
-extern "C" void Port_Config_SetA11yHazards(bool on) { sA11yHazards = on; sConfigJson["a11y_hazards"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetA11yRadar(void) { return sA11yRadar; }
-extern "C" void Port_Config_SetA11yRadar(bool on) { sA11yRadar = on; sConfigJson["a11y_radar"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetA11yWalls(void) { return sA11yWalls; }
-extern "C" void Port_Config_SetA11yWalls(bool on) { sA11yWalls = on; sConfigJson["a11y_walls"] = on; SaveConfig(); }
+extern "C" bool Port_Config_GetA11yCues(void) {
+    return sA11yCues;
+}
+extern "C" void Port_Config_SetA11yCues(bool on) {
+    sA11yCues = on;
+    sConfigJson["a11y_cues"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetA11yFootsteps(void) {
+    return sA11yFootsteps;
+}
+extern "C" void Port_Config_SetA11yFootsteps(bool on) {
+    sA11yFootsteps = on;
+    sConfigJson["a11y_footsteps"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetA11yHazards(void) {
+    return sA11yHazards;
+}
+extern "C" void Port_Config_SetA11yHazards(bool on) {
+    sA11yHazards = on;
+    sConfigJson["a11y_hazards"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetA11yRadar(void) {
+    return sA11yRadar;
+}
+extern "C" void Port_Config_SetA11yRadar(bool on) {
+    sA11yRadar = on;
+    sConfigJson["a11y_radar"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetA11yWalls(void) {
+    return sA11yWalls;
+}
+extern "C" void Port_Config_SetA11yWalls(bool on) {
+    sA11yWalls = on;
+    sConfigJson["a11y_walls"] = on;
+    SaveConfig();
+}
 
 /* ---- Speedrun practice mode ------------------------------------------- */
-extern "C" bool Port_Config_GetPracticeShowTimer(void) { return sPracticeShowTimer; }
-extern "C" void Port_Config_SetPracticeShowTimer(bool on) { sPracticeShowTimer = on; sConfigJson["practice_show_timer"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetPracticeShowInputs(void) { return sPracticeShowInputs; }
-extern "C" void Port_Config_SetPracticeShowInputs(bool on) { sPracticeShowInputs = on; sConfigJson["practice_show_inputs"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetPracticeShowHistory(void) { return sPracticeShowHistory; }
-extern "C" void Port_Config_SetPracticeShowHistory(bool on) { sPracticeShowHistory = on; sConfigJson["practice_show_history"] = on; SaveConfig(); }
-extern "C" float Port_Config_GetPracticeSlowmo(void) { return sPracticeSlowmo; }
+extern "C" bool Port_Config_GetPracticeShowTimer(void) {
+    return sPracticeShowTimer;
+}
+extern "C" void Port_Config_SetPracticeShowTimer(bool on) {
+    sPracticeShowTimer = on;
+    sConfigJson["practice_show_timer"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetPracticeShowInputs(void) {
+    return sPracticeShowInputs;
+}
+extern "C" void Port_Config_SetPracticeShowInputs(bool on) {
+    sPracticeShowInputs = on;
+    sConfigJson["practice_show_inputs"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetPracticeShowHistory(void) {
+    return sPracticeShowHistory;
+}
+extern "C" void Port_Config_SetPracticeShowHistory(bool on) {
+    sPracticeShowHistory = on;
+    sConfigJson["practice_show_history"] = on;
+    SaveConfig();
+}
+extern "C" float Port_Config_GetPracticeSlowmo(void) {
+    return sPracticeSlowmo;
+}
 extern "C" void Port_Config_SetPracticeSlowmo(float v) {
-    if (v < 0.05f) v = 0.05f;
-    if (v > 1.0f)  v = 1.0f;
-    sPracticeSlowmo = v; sConfigJson["practice_slowmo"] = v; SaveConfig();
+    if (v < 0.05f)
+        v = 0.05f;
+    if (v > 1.0f)
+        v = 1.0f;
+    sPracticeSlowmo = v;
+    sConfigJson["practice_slowmo"] = v;
+    SaveConfig();
 }
 
 /* ---- Persisted runtime toggles (issue #146) --------------------------- */
-extern "C" bool Port_Config_GetDiscordRpc(void) { return sDiscordRpc; }
-extern "C" void Port_Config_SetDiscordRpc(bool on) { sDiscordRpc = on; sConfigJson["discord_rpc"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetVSync(void) { return sVSyncCfg; }
-extern "C" void Port_Config_SetVSync(bool on) { sVSyncCfg = on; sConfigJson["vsync"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetColorCorrection(void) { return sColorCorrect; }
-extern "C" void Port_Config_SetColorCorrection(bool on) { sColorCorrect = on; sConfigJson["color_correction"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetLcdPersistence(void) { return sLcdPersist; }
-extern "C" void Port_Config_SetLcdPersistence(bool on) { sLcdPersist = on; sConfigJson["lcd_persistence"] = on; SaveConfig(); }
-extern "C" float Port_Config_GetLcdPersistenceRho(void) { return sLcdPersistRho; }
-extern "C" void Port_Config_SetLcdPersistenceRho(float v) { sLcdPersistRho = v; sConfigJson["lcd_persistence_rho"] = v; SaveConfig(); }
-extern "C" bool Port_Config_GetRibbonEnabled(void) { return sRibbonCfg; }
-extern "C" void Port_Config_SetRibbonEnabled(bool on) { sRibbonCfg = on; sConfigJson["ribbon_mode"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetHoldToAdvanceText(void) { return sHoldAdvanceText; }
-extern "C" void Port_Config_SetHoldToAdvanceText(bool on) { sHoldAdvanceText = on; sConfigJson["hold_advance_text"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetRollAttackMacroEnabled(void) { return sRollAttackMacroEnabled; }
-extern "C" void Port_Config_SetRollAttackMacroEnabled(bool on) { sRollAttackMacroEnabled = on; sConfigJson["roll_attack_macro"] = on; SaveConfig(); }
-extern "C" float Port_Config_GetMasterVolume(void) { return sMasterVolume; }
-extern "C" void Port_Config_SetMasterVolume(float v) { if (v < 0.0f) v = 0.0f; if (v > 1.0f) v = 1.0f; sMasterVolume = v; sConfigJson["master_volume"] = (double)v; SaveConfig(); }
-extern "C" bool Port_Config_GetFullscreen(void) { return sFullscreen; }
-extern "C" void Port_Config_SetFullscreen(bool on) { sFullscreen = on; sConfigJson["fullscreen"] = on; SaveConfig(); }
-extern "C" bool Port_Config_GetFullscreenHideCursor(void) { return sFullscreenHideCursor; }
-extern "C" void Port_Config_SetFullscreenHideCursor(bool on) { sFullscreenHideCursor = on; sConfigJson["fullscreen_hide_cursor"] = on; SaveConfig(); }
-extern "C" float Port_Config_GetAnalogDeadzone(void) { return sAnalogDeadzone; }
-extern "C" void Port_Config_SetAnalogDeadzone(float v) { if (v < 0.0f) v = 0.0f; if (v > 0.95f) v = 0.95f; sAnalogDeadzone = v; sConfigJson["analog_deadzone"] = (double)v; SaveConfig(); }
-extern "C" const char* Port_Config_GetShaderPreset(void) { return sShaderPreset.c_str(); }
+extern "C" bool Port_Config_GetDiscordRpc(void) {
+    return sDiscordRpc;
+}
+extern "C" void Port_Config_SetDiscordRpc(bool on) {
+    sDiscordRpc = on;
+    sConfigJson["discord_rpc"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetVSync(void) {
+    return sVSyncCfg;
+}
+extern "C" void Port_Config_SetVSync(bool on) {
+    sVSyncCfg = on;
+    sConfigJson["vsync"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetColorCorrection(void) {
+    return sColorCorrect;
+}
+extern "C" void Port_Config_SetColorCorrection(bool on) {
+    sColorCorrect = on;
+    sConfigJson["color_correction"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetLcdPersistence(void) {
+    return sLcdPersist;
+}
+extern "C" void Port_Config_SetLcdPersistence(bool on) {
+    sLcdPersist = on;
+    sConfigJson["lcd_persistence"] = on;
+    SaveConfig();
+}
+extern "C" float Port_Config_GetLcdPersistenceRho(void) {
+    return sLcdPersistRho;
+}
+extern "C" void Port_Config_SetLcdPersistenceRho(float v) {
+    sLcdPersistRho = v;
+    sConfigJson["lcd_persistence_rho"] = v;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetRibbonEnabled(void) {
+    return sRibbonCfg;
+}
+extern "C" void Port_Config_SetRibbonEnabled(bool on) {
+    sRibbonCfg = on;
+    sConfigJson["ribbon_mode"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetHoldToAdvanceText(void) {
+    return sHoldAdvanceText;
+}
+extern "C" void Port_Config_SetHoldToAdvanceText(bool on) {
+    sHoldAdvanceText = on;
+    sConfigJson["hold_advance_text"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetRollAttackMacroEnabled(void) {
+    return sRollAttackMacroEnabled;
+}
+extern "C" void Port_Config_SetRollAttackMacroEnabled(bool on) {
+    sRollAttackMacroEnabled = on;
+    sConfigJson["roll_attack_macro"] = on;
+    SaveConfig();
+}
+extern "C" float Port_Config_GetMasterVolume(void) {
+    return sMasterVolume;
+}
+extern "C" void Port_Config_SetMasterVolume(float v) {
+    if (v < 0.0f)
+        v = 0.0f;
+    if (v > 1.0f)
+        v = 1.0f;
+    sMasterVolume = v;
+    sConfigJson["master_volume"] = (double)v;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetFullscreen(void) {
+    return sFullscreen;
+}
+extern "C" void Port_Config_SetFullscreen(bool on) {
+    sFullscreen = on;
+    sConfigJson["fullscreen"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetFullscreenHideCursor(void) {
+    return sFullscreenHideCursor;
+}
+extern "C" void Port_Config_SetFullscreenHideCursor(bool on) {
+    sFullscreenHideCursor = on;
+    sConfigJson["fullscreen_hide_cursor"] = on;
+    SaveConfig();
+}
+extern "C" float Port_Config_GetAnalogDeadzone(void) {
+    return sAnalogDeadzone;
+}
+extern "C" void Port_Config_SetAnalogDeadzone(float v) {
+    if (v < 0.0f)
+        v = 0.0f;
+    if (v > 0.95f)
+        v = 0.95f;
+    sAnalogDeadzone = v;
+    sConfigJson["analog_deadzone"] = (double)v;
+    SaveConfig();
+}
+extern "C" const char* Port_Config_GetShaderPreset(void) {
+    return sShaderPreset.c_str();
+}
 extern "C" void Port_Config_SetShaderPreset(const char* path) {
     sShaderPreset = (path && path[0]) ? path : "";
-    sConfigJson["shader_preset"] = sShaderPreset; SaveConfig();
+    sConfigJson["shader_preset"] = sShaderPreset;
+    SaveConfig();
 }
-extern "C" int      Port_Config_HasRebornMask(void) { return sHasRebornFeatures ? 1 : 0; }
-extern "C" unsigned Port_Config_GetRebornMask(void) { return sRebornFeatures; }
-extern "C" void     Port_Config_SetRebornMask(unsigned mask) {
-    sRebornFeatures = mask; sHasRebornFeatures = true;
-    sConfigJson["reborn_features"] = mask; SaveConfig();
+extern "C" int Port_Config_HasRebornMask(void) {
+    return sHasRebornFeatures ? 1 : 0;
+}
+extern "C" unsigned Port_Config_GetRebornMask(void) {
+    return sRebornFeatures;
+}
+extern "C" void Port_Config_SetRebornMask(unsigned mask) {
+    sRebornFeatures = mask;
+    sHasRebornFeatures = true;
+    sConfigJson["reborn_features"] = mask;
+    SaveConfig();
 }
 
 /* ---- Randomizer persistence (issue #155) ------------------------------ */
 
-extern "C" bool Port_Config_GetRandoEnabled(void) { return sRandoEnabled; }
+extern "C" bool Port_Config_GetRandoEnabled(void) {
+    return sRandoEnabled;
+}
 extern "C" void Port_Config_SetRandoEnabled(bool on) {
     sRandoEnabled = on;
     sConfigJson["rando_enabled"] = on;
     SaveConfig();
 }
-extern "C" bool Port_Config_GetRandoGlitchless(void) { return sRandoGlitchless; }
-extern "C" bool Port_Config_GetRandoObscure(void) { return sRandoObscure; }
-extern "C" bool Port_Config_GetRandoKinstones(void) { return sRandoKinstones; }
-extern "C" bool Port_Config_GetRandoEntrances(void) { return sRandoEntrances; }
-extern "C" bool Port_Config_GetRandoDojos(void) { return sRandoDojos; }
-extern "C" bool Port_Config_GetRandoOpenWorld(void) { return sRandoOpenWorld; }
-extern "C" int  Port_Config_GetRandoItemPool(void) { return sRandoItemPool; }
-extern "C" bool Port_Config_GetRandoHomewarp(void) { return sRandoHomewarp; }
-extern "C" bool Port_Config_GetRandoStartSword(void) { return sRandoStartSword; }
-extern "C" bool Port_Config_GetRandoEarlyCrests(void) { return sRandoEarlyCrests; }
-extern "C" bool Port_Config_GetRandoInstantText(void) { return sRandoInstantText; }
-extern "C" int  Port_Config_GetRandoTunicColor(void) { return sRandoTunicColor; }
-extern "C" int  Port_Config_GetRandoHeartColor(void) { return sRandoHeartColor; }
+extern "C" bool Port_Config_GetRandoGlitchless(void) {
+    return sRandoGlitchless;
+}
+extern "C" bool Port_Config_GetRandoObscure(void) {
+    return sRandoObscure;
+}
+extern "C" bool Port_Config_GetRandoKinstones(void) {
+    return sRandoKinstones;
+}
+extern "C" bool Port_Config_GetRandoEntrances(void) {
+    return sRandoEntrances;
+}
+extern "C" bool Port_Config_GetRandoDojos(void) {
+    return sRandoDojos;
+}
+extern "C" bool Port_Config_GetRandoOpenWorld(void) {
+    return sRandoOpenWorld;
+}
+extern "C" int Port_Config_GetRandoItemPool(void) {
+    return sRandoItemPool;
+}
+extern "C" bool Port_Config_GetRandoHomewarp(void) {
+    return sRandoHomewarp;
+}
+extern "C" bool Port_Config_GetRandoStartSword(void) {
+    return sRandoStartSword;
+}
+extern "C" bool Port_Config_GetRandoEarlyCrests(void) {
+    return sRandoEarlyCrests;
+}
+extern "C" bool Port_Config_GetRandoInstantText(void) {
+    return sRandoInstantText;
+}
+extern "C" int Port_Config_GetRandoTunicColor(void) {
+    return sRandoTunicColor;
+}
+extern "C" int Port_Config_GetRandoHeartColor(void) {
+    return sRandoHeartColor;
+}
 
-extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos, bool open_world,
-                                             int item_pool, bool homewarp, bool start_sword, bool early_crests,
-                                             bool instant_text, int tunic_color, int heart_color) {
+extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos,
+                                             bool open_world, int item_pool, bool homewarp, bool start_sword,
+                                             bool early_crests, bool instant_text, int tunic_color, int heart_color) {
     sRandoGlitchless = glitchless;
-    sRandoObscure    = obscure;
-    sRandoKinstones  = kinstones;
-    sRandoEntrances  = entrances;
-    sRandoDojos      = dojos;
-    sRandoOpenWorld  = open_world;
-    sRandoItemPool   = item_pool;
-    sRandoHomewarp   = homewarp;
+    sRandoObscure = obscure;
+    sRandoKinstones = kinstones;
+    sRandoEntrances = entrances;
+    sRandoDojos = dojos;
+    sRandoOpenWorld = open_world;
+    sRandoItemPool = item_pool;
+    sRandoHomewarp = homewarp;
     sRandoStartSword = start_sword;
     sRandoEarlyCrests = early_crests;
     sRandoInstantText = instant_text;
     sRandoTunicColor = tunic_color;
     sRandoHeartColor = heart_color;
     sConfigJson["rando_glitchless"] = glitchless;
-    sConfigJson["rando_obscure"]    = obscure;
-    sConfigJson["rando_kinstones"]  = kinstones;
-    sConfigJson["rando_entrances"]  = entrances;
-    sConfigJson["rando_dojos"]      = dojos;
+    sConfigJson["rando_obscure"] = obscure;
+    sConfigJson["rando_kinstones"] = kinstones;
+    sConfigJson["rando_entrances"] = entrances;
+    sConfigJson["rando_dojos"] = dojos;
     sConfigJson["rando_open_world"] = open_world;
-    sConfigJson["rando_item_pool"]  = item_pool;
-    sConfigJson["rando_homewarp"]   = homewarp;
+    sConfigJson["rando_item_pool"] = item_pool;
+    sConfigJson["rando_homewarp"] = homewarp;
     sConfigJson["rando_start_sword"] = start_sword;
     sConfigJson["rando_early_crests"] = early_crests;
     sConfigJson["rando_instant_text"] = instant_text;

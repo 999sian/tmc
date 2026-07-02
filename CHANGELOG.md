@@ -22,6 +22,12 @@
   mid-screen inside the widescreen reveal. All collapse to the GBA values at
   native width.
 - F9 bug-report captures now match the presented width during overlays.
+- **Widescreen is now ON by default.** With the dialogue snap gone, overlay
+  fallback in place, choice dialogs verified (the `▶Buy / Don't buy`
+  selector is BG0 text and centers with the box), and per-room narrow
+  fallback already shipping, the reveal is default-enabled on wide builds.
+  Existing `config.json` preferences are respected; Console-Parity mode
+  still forces it off; F8 → Display toggles it as before.
 
 ## v0.7.1.1 (2026-07-02)
 

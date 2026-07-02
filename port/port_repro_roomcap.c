@@ -383,6 +383,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
      * test). Optional posY overrides the box row (1 = top-anchored). */
     {
         static int msg_done = 0;
+        static unsigned int msg_opened_at = 0;
         const char* m = getenv("TMC_ROOMCAP_MSG");
         if (m && *m && !msg_done && warp_done && cap_frame && (int)frame >= cap_frame - settle / 2) {
             unsigned int idx = 0;
@@ -393,6 +394,17 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                 gMessage.textWindowPosY = (u8)posY;
             fprintf(stderr, "[roomcap] frame %u: opened message 0x%x posY=%d\n", frame, idx, posY);
             msg_done = 1;
+            msg_opened_at = frame;
+        }
+        /* TMC_ROOMCAP_MSG_ADVANCE=1: tap A every ~40 frames after the box
+         * opens so multi-page text rolls forward — but stop on the enquiry
+         * (choice) page so the capture shows the live selector instead of
+         * confirming through it. renderStatus 5 == RENDER_ENQUIRY. */
+        const char* adv = getenv("TMC_ROOMCAP_MSG_ADVANCE");
+        if (msg_done && adv && *adv && strcmp(adv, "0") != 0 && gTextRender.renderStatus != 5 &&
+            frame > msg_opened_at + 30 && (frame - msg_opened_at) % 40 < 2) {
+            extern void Port_Config_TestForceEdge(int input);
+            Port_Config_TestForceEdge(0 /* PORT_INPUT_A */);
         }
     }
 
