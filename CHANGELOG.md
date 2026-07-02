@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.1 (2026-07-02)
 
 ### EU: global color corruption fixed (every faded palette, all EU rendering)
 
