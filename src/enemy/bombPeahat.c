@@ -13,6 +13,15 @@
 #include "physics.h"
 #include "player.h"
 
+/* Widescreen (PC): re-enter from the live right edge, not GBA 240's.
+ * 0x100 = 240 + 0x10 — collapses to the original at native width / GBA. */
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#define WS_VIEW_W ((s32)Port_Widescreen_EffectiveViewWidth())
+#else
+#define WS_VIEW_W 240
+#endif
+
 typedef struct {
     /*0x00*/ Entity base;
 #ifdef PC_PORT
@@ -34,10 +43,8 @@ typedef struct {
     /*0x82*/ u16 unk_82;
 } BombPeahatEntity;
 
-PORT_STATIC_ASSERT_OFFSET(BombPeahatEntity, unk_78, 0x78, 0xA4,
-                          "BombPeahatEntity unk_78 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(BombPeahatEntity, unk_80, 0x80, 0xB0,
-                          "BombPeahatEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BombPeahatEntity, unk_78, 0x78, 0xA4, "BombPeahatEntity unk_78 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BombPeahatEntity, unk_80, 0x80, 0xB0, "BombPeahatEntity unk_80 offset incorrect");
 
 void sub_0802AD1C(BombPeahatEntity*, u32);
 void sub_0802AD54(BombPeahatEntity*);
@@ -138,7 +145,7 @@ void sub_0802A924(BombPeahatEntity* this) {
     }
 #endif
     if (REGION_IS_EU) {
-    super->collisionFlags |= 0x10;
+        super->collisionFlags |= 0x10;
     }
     super->z.HALF.HI = -0x30;
     this->unk_80 = Random() & 1;
@@ -147,8 +154,8 @@ void sub_0802A924(BombPeahatEntity* this) {
     this->unk_81 = 0;
     this->unk_7a = 0;
     if (!REGION_IS_EU) {
-    this->unk_78 = 0;
-    this->unk_79 = 0;
+        this->unk_78 = 0;
+        this->unk_79 = 0;
     }
     super->collisionLayer = 3;
     super->spriteOrientation.flipY = 1;
@@ -178,7 +185,7 @@ void sub_0802A9A8(BombPeahatEntity* this) {
                 super->x.HALF.HI = gRoomControls.scroll_x - 0x10;
                 super->direction = DirectionEast;
             } else {
-                super->x.HALF.HI = gRoomControls.scroll_x + 0x100;
+                super->x.HALF.HI = gRoomControls.scroll_x + WS_VIEW_W + 0x10;
                 super->direction = DirectionWest;
             }
             super->y.HALF.HI = gRoomControls.scroll_y + 0x40;
@@ -254,9 +261,9 @@ void sub_0802AAC0(BombPeahatEntity* this) {
         super->subtimer = 4;
         this->unk_80 ^= 1;
         if (!REGION_IS_EU) {
-        this->unk_78 = 0;
-        this->unk_79 = 4;
-        super->direction = DIR_NONE;
+            this->unk_78 = 0;
+            this->unk_79 = 4;
+            super->direction = DIR_NONE;
         }
         InitializeAnimation(super, 0);
     }
@@ -418,13 +425,13 @@ void sub_0802AC40(BombPeahatEntity* this) {
         if (sub_0802B234(this)) {
             this->unk_7a = 1;
             if (!REGION_IS_EU) {
-            if (super->z.HALF.HI == 0) {
-                super->spritePriority.b1 = 1;
+                if (super->z.HALF.HI == 0) {
+                    super->spritePriority.b1 = 1;
+                } else {
+                    super->spritePriority.b1 = 3;
+                }
             } else {
                 super->spritePriority.b1 = 3;
-            }
-            } else {
-            super->spritePriority.b1 = 3;
             }
         }
     }
@@ -485,7 +492,7 @@ void sub_0802ADDC(BombPeahatEntity* this) {
         super->child = entity;
         CopyPosition(super, entity);
         if (REGION_IS_EU) {
-        entity->z.HALF.HI += 8;
+            entity->z.HALF.HI += 8;
         }
         this->unk_81 = 1;
         if (super->type == 0) {
@@ -602,7 +609,6 @@ void sub_0802AE68(BombPeahatEntity* this) {
 }
 #endif
 #endif
-
 
 void sub_0802AEBC(BombPeahatEntity* this) {
     gUnk_080CD158[super->subAction](this);
@@ -866,7 +872,6 @@ void sub_0802B1BC(BombPeahatEntity* this) {
 }
 #endif
 #endif
-
 
 void sub_0802B204(BombPeahatEntity* this) {
     if (BounceUpdate(super, Q_8_8(40.0)) == BOUNCE_INIT_NEXT) {

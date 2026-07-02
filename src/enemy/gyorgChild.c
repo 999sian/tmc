@@ -11,6 +11,16 @@
 #include "physics.h"
 #include "sound.h"
 
+/* Widescreen (PC): the fly-off / despawn tests use the live view width so
+ * children exit fully off-screen on a wide frame. 0x108/0x118 = 240+0x18/
+ * 240+0x28 — collapse to the originals at native width / GBA. */
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#define WS_VIEW_W ((s32)Port_Widescreen_EffectiveViewWidth())
+#else
+#define WS_VIEW_W 240
+#endif
+
 void GyorgChild_OnTick(GyorgChildEntity*);
 void GyorgChild_OnCollision(GyorgChildEntity*);
 void GyorgChild_OnGrabbed(GyorgChildEntity*);
@@ -125,7 +135,7 @@ void GyorgChild_Action1(GyorgChildEntity* this) {
             }
             break;
         case 1:
-            if (super->x.HALF.HI < gRoomControls.scroll_x + 0x108) {
+            if (super->x.HALF.HI < gRoomControls.scroll_x + WS_VIEW_W + 0x18) {
                 return;
             }
             break;
@@ -186,7 +196,7 @@ void GyorgChild_Action3(GyorgChildEntity* this) {
             }
             break;
         case 1:
-            if (super->x.HALF.HI < gRoomControls.scroll_x + 0x118) {
+            if (super->x.HALF.HI < gRoomControls.scroll_x + WS_VIEW_W + 0x28) {
                 return;
             }
             break;

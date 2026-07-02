@@ -960,9 +960,13 @@ int Port_Widescreen_ShouldStretch(void) {
 }
 
 int Port_Widescreen_IsActive(void) {
-    if (gPlayerState.controlMode == CONTROL_DISABLED || (gMessage.state & MESSAGE_ACTIVE) != 0) {
-        return 0;
-    }
+    /* No message/controlMode gate here: snapping the viewport 384->240 for
+     * every textbox (and back on close) was the single worst widescreen UX
+     * issue. Dialogue now stays wide — the PPU centers the BG0 textbox via
+     * the ws_msg_* knobs (published in Port_Widescreen_UpdateShadows), and
+     * overlay screens that replace the map BGs (prologue storybook, pause
+     * menu, ...) are caught by Port_Widescreen_ShadowsLive() instead: no
+     * matching BG -> no shadow -> present native 240. */
     return (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled() && !Port_Widescreen_ShouldStretch()) ? 1 : 0;
 }
 
@@ -970,11 +974,27 @@ int Port_Widescreen_EffectiveViewWidth(void) {
     return Port_Widescreen_IsActive() ? MODE1_GBA_WIDTH : 240;
 }
 
+/* True while at least one BG shadow is registered for the current frame —
+ * i.e. the map BGs are actually what the PPU is rendering. Overlay screens
+ * (prologue storybook, pause/menu subscreens) swap the BG control regs away
+ * from the map settings, the shadow match fails, and this drops to 0 so the
+ * present path falls back to a native 240 frame instead of showing a black
+ * right third. */
+int Port_Widescreen_ShadowsLive(void) {
+    int i;
+    for (i = 0; i < MODE1_GBA_BG_COUNT; i++) {
+        if (virtuappu_mode1_ws_shadow[i] != NULL) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int Port_Widescreen_HudRightAnchor(void) {
     if (!Port_Widescreen_IsActive()) {
         return 0;
     }
-    if ((gMessage.state & MESSAGE_ACTIVE) != 0 || gHUD.hideFlags != HUD_HIDE_NONE) {
+    if (gHUD.hideFlags != HUD_HIDE_NONE) {
         return 0;
     }
     return 1;
@@ -1057,11 +1077,38 @@ void Port_Widescreen_UpdateShadows(void) {
     for (int i = 0; i < MODE1_GBA_BG_COUNT; i++)
         virtuappu_mode1_ws_shadow[i] = NULL;
     virtuappu_mode1_ws_hud_right_anchor = 0;
+    virtuappu_mode1_ws_msg_shift = 0;
 
     if (!Port_Widescreen_IsActive()) {
         return;
     }
     virtuappu_mode1_ws_hud_right_anchor = Port_Widescreen_HudRightAnchor();
+
+    /* Publish the live textbox rect so the PPU can center it (BG0 composes
+     * the box for a 240-px canvas). gMessage.textWindow* are tile coords;
+     * pad one tile on every side for the border rows/cols DispMessageFrame
+     * draws around the text area, then clamp to the native canvas. */
+    if ((gMessage.state & MESSAGE_ACTIVE) != 0) {
+        int x0 = ((int)gMessage.textWindowPosX - 1) * 8;
+        int x1 = ((int)gMessage.textWindowPosX + (int)gMessage.textWindowWidth + 1) * 8;
+        int y0 = ((int)gMessage.textWindowPosY - 1) * 8;
+        int y1 = ((int)gMessage.textWindowPosY + (int)gMessage.textWindowHeight + 1) * 8;
+        if (x0 < 0)
+            x0 = 0;
+        if (x1 > 240)
+            x1 = 240;
+        if (y0 < 0)
+            y0 = 0;
+        if (y1 > 160)
+            y1 = 160;
+        if (x1 > x0 && y1 > y0) {
+            virtuappu_mode1_ws_msg_x0 = x0;
+            virtuappu_mode1_ws_msg_x1 = x1;
+            virtuappu_mode1_ws_msg_y0 = y0;
+            virtuappu_mode1_ws_msg_y1 = y1;
+            virtuappu_mode1_ws_msg_shift = (MODE1_GBA_WIDTH - 240) / 2;
+        }
+    }
 
     if (gMapBottom.bgSettings != NULL) {
         int bg = Port_WidescreenPpuBgForControl(gMapBottom.bgSettings->control);
@@ -1087,6 +1134,9 @@ int Port_Widescreen_EffectiveViewWidth(void) {
     return 240;
 }
 int Port_Widescreen_HudRightAnchor(void) {
+    return 0;
+}
+int Port_Widescreen_ShadowsLive(void) {
     return 0;
 }
 #endif

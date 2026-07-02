@@ -43,7 +43,7 @@
  * widened: the engine's main loop assumes 160-line frames for timing and
  * BG preload (see docs/widescreen-phase2-design.md, Step C-3), so only
  * the horizontal extent generalises. */
-#define PORT_VIEW_WIDTH  (MODE1_GBA_WIDTH)
+#define PORT_VIEW_WIDTH (MODE1_GBA_WIDTH)
 #define PORT_VIEW_HEIGHT 160
 
 #ifdef __cplusplus
@@ -56,6 +56,9 @@ int Port_Widescreen_ShouldStretch(void);
 int Port_Widescreen_IsActive(void);
 int Port_Widescreen_EffectiveViewWidth(void);
 int Port_Widescreen_HudRightAnchor(void);
+/* True while the map BGs are what the PPU renders (>=1 shadow registered);
+ * overlay screens (storybook, pause) drop this to 0 -> present native 240. */
+int Port_Widescreen_ShadowsLive(void);
 
 #ifdef __cplusplus
 }

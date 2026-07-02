@@ -35,6 +35,24 @@ Fix (all in `port/port_linked_stubs.c`, gated `#if MODE1_GBA_WIDTH > 240`):
    can't fill the reveal, so it falls back to stretched native-240. Direct,
    per-room, flicker-free (no settle/measurement).
 
+**Update (2026-07-02):** the two worst runtime UX gaps are fixed:
+- *Dialogue width-snap*: `Port_Widescreen_IsActive()` no longer gates on
+  `MESSAGE_ACTIVE`/`CONTROL_DISABLED`. Dialogue stays wide; the PPU centers
+  the BG0 textbox via the `virtuappu_mode1_ws_msg_*` rect knobs (published
+  per-VBlank from `Port_Widescreen_UpdateShadows`, rect from
+  `gMessage.textWindow*` + 1-tile border pad). The box's native columns are
+  suppressed and redrawn shifted by `(W-240)/2`; the HUD right-anchor is
+  suspended on box lines to avoid doubled fragments when a top-anchored box
+  overlaps the rupee rows.
+- *Overlay black-third (prologue storybook, pause)*: the present path now
+  requires `Port_Widescreen_ShadowsLive()` (>=1 BG shadow registered this
+  frame) before presenting wide. Overlay screens swap the BG control regs
+  away from the maps, the shadow match fails, and the frame falls back to a
+  native 240 crop.
+- *Enemy cull literals*: cuccoAggr / gyorgChild / bombPeahat / takkuri
+  edge tests now use `Port_Widescreen_EffectiveViewWidth()` (collapse to the
+  GBA literals at 240).
+
 Known limitations:
 - A *wide* room with *narrow content* (e.g. a 400px festival room whose floor
   ends ~30px short of the viewport) stays in widescreen and shows a thin border

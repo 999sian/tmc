@@ -123,7 +123,15 @@ static size_t sUpscale2xPixels = 0;
 static size_t sUpscale4xPixels = 0;
 
 static int Port_PPU_VisibleFrameWidth(void) {
-    if (MODE1_GBA_WIDTH == 240 || (gMain[2] == 2 /* TASK_GAME */ && Port_Widescreen_IsActive())) {
+    if (MODE1_GBA_WIDTH == 240) {
+        return MODE1_GBA_WIDTH;
+    }
+    /* Wide present requires: gameplay widescreen on AND the map BGs actually
+     * feeding the frame (ShadowsLive). Overlay screens inside TASK_GAME
+     * (prologue storybook, pause menu) swap the BG control regs away from
+     * the maps, the shadow match fails, and we fall back to a native 240
+     * crop instead of showing a black right third. */
+    if (gMain[2] == 2 /* TASK_GAME */ && Port_Widescreen_IsActive() && Port_Widescreen_ShadowsLive()) {
         return MODE1_GBA_WIDTH;
     }
     return 240;
