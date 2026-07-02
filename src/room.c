@@ -253,9 +253,10 @@ void sub_0804AF0C(Entity* ent, const EntityData* dat) {
             ent->y.HALF.HI = dat->yPos + gRoomControls.origin_y;
 #ifdef PC_PORT
             {
-                /* dat->spritePtr holds a baked USA script address (ENTITY_SCRIPT);
-                 * translate to the active region before resolving into ROM data. */
-                void* resolved = (void*)Port_ResolveScript(dat->spritePtr);
+                /* dat may be a compiled table (baked USA script addr) or a
+                 * ROM-resolved entity list (region-native addr) — resolve by
+                 * provenance so native EU/JP addrs skip the USA-key lookup. */
+                void* resolved = Port_ResolveEntityScript(dat, dat->spritePtr);
                 ScriptExecutionContext* ctx = StartCutscene(ent, (u16*)resolved);
                 if (!ctx)
                     DeleteEntity(ent);
@@ -546,7 +547,7 @@ void* GetCurrentRoomProperty(u32 idx) {
     } else {
 #ifdef PC_PORT
         return IsRoomPropertyListInRom(gCurrentRoomProperties) ? Port_ReadPackedRomPtr(gCurrentRoomProperties, idx)
-                                                                : gCurrentRoomProperties[idx];
+                                                               : gCurrentRoomProperties[idx];
 #else
         return gCurrentRoomProperties[idx];
 #endif
@@ -584,8 +585,7 @@ void LoadRoomTileEntities(TileEntity* list) {
                 break;
             case DARKNESS:
 #ifdef PC_PORT
-                fprintf(stderr,
-                        "[ROOM] DARKNESS area=%u room=%u light=%u tilePos=0x%03X layer=%u\n",
+                fprintf(stderr, "[ROOM] DARKNESS area=%u room=%u light=%u tilePos=0x%03X layer=%u\n",
                         gRoomControls.area, gRoomControls.room, t->_3, t->tilePos, t->_2);
 #endif
                 LoadDarknessTile(t);
@@ -598,9 +598,8 @@ void LoadRoomTileEntities(TileEntity* list) {
                 break;
             case LOCATION_CHANGER:
 #ifdef PC_PORT
-                fprintf(stderr,
-                        "[ROOM] LOCATION_CHANGER area=%u room=%u -> location=%u\n",
-                        gRoomControls.area, gRoomControls.room, t->localFlag);
+                fprintf(stderr, "[ROOM] LOCATION_CHANGER area=%u room=%u -> location=%u\n", gRoomControls.area,
+                        gRoomControls.room, t->localFlag);
 #endif
                 LoadLocationTile(t);
                 break;

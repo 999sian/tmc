@@ -159,7 +159,8 @@ bool32 sub_080185B4(const struct_gUnk_080B3D20* param_1) {
     if (param_1->unk0 == CHECK_KINSTONE) {
         return CheckKinstoneFused(param_1->unk1);
     }
-    return CheckLocalFlagByBank(gLocalFlagBanks[param_1->unk0], param_1->unk1);
+    /* gUnk_080B3D20 is a compiled USA-baseline table — remap for EU/JP. */
+    return CheckLocalFlagByBankB(gLocalFlagBanks[param_1->unk0], param_1->unk1);
 }
 
 void sub_080185F8(void) {
@@ -390,7 +391,7 @@ void sub_0801876C(u32 worldEventId, bool32 isKinstoneFused) {
             break;
         case WORLD_EVENT_TYPE_17:
             if (isKinstoneFused != 0) {
-                SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_05_BOMB_00);
+                SetLocalFlagByBankB(FLAG_BANK_1, SOUGEN_05_BOMB_00);
                 LoadRoomEntityList(gUnk_080FEE38);
             }
             break;

@@ -242,8 +242,10 @@ void UpdateActiveItems(PlayerEntity* this) {
             if ((gInput.heldKeys & L_BUTTON) && Port_Reborn_IsEnabled(9)) {
                 u8 softA = Port_SoftSlots_GetAssignment(0);
                 u8 softB = Port_SoftSlots_GetAssignment(1);
-                if (softA) aItem = softA;
-                if (softB) bItem = softB;
+                if (softA)
+                    aItem = softA;
+                if (softB)
+                    bItem = softB;
             }
         }
 #endif
@@ -957,7 +959,9 @@ const KeyValuePair gUnk_0811C254[] = { { 43, 1 }, { 38, 1 }, { 0, 0 } };
 const u16 gUnk_0811C254End = 0;
 const KeyValuePair gUnk_0811C25E[] = { { 44, 1 }, { 39, 1 }, { 0, 0 } };
 const u16 gUnk_0811C25EEnd = 0;
-const KeyValuePair gUnk_0811C268[] = { { ACT_TILE_16, 1 }, { ACT_TILE_90, 1 }, { ACT_TILE_17, 1 }, { ACT_TILE_19, 1 }, { 0, 0 } };
+const KeyValuePair gUnk_0811C268[] = {
+    { ACT_TILE_16, 1 }, { ACT_TILE_90, 1 }, { ACT_TILE_17, 1 }, { ACT_TILE_19, 1 }, { 0, 0 }
+};
 const u16 gUnk_0811C268EEnd = 0;
 
 void sub_0807B114(PlayerEntity*);
@@ -3147,8 +3151,7 @@ void sub_0807AAF8(Entity* this, u32 tilePos) {
 void sub_0807AB44(Entity* this, s32 xOffset, s32 yOffset) {
     Entity* object;
     u32 useLayer = this->collisionLayer;
-    const u16* ptr =
-        sub_0806FC50(GetTileTypeAtTilePos(COORD_TO_TILE_OFFSET(this, -xOffset, -yOffset), useLayer), 0xb);
+    const u16* ptr = sub_0806FC50(GetTileTypeAtTilePos(COORD_TO_TILE_OFFSET(this, -xOffset, -yOffset), useLayer), 0xb);
 #ifdef PC_PORT
     /* Issue #139: lightable torch tiles (TILE_TYPE_117) in some rooms
      * (Grimblade dojo, area 0x25 room 5) only exist on LAYER_TOP while
@@ -3158,8 +3161,7 @@ void sub_0807AB44(Entity* this, s32 xOffset, s32 yOffset) {
      * LightLevelSetManager watches. */
     if (ptr == NULL) {
         u32 other = (useLayer == 2) ? 1 : 2;
-        const u16* alt = sub_0806FC50(
-            GetTileTypeAtTilePos(COORD_TO_TILE_OFFSET(this, -xOffset, -yOffset), other), 0xb);
+        const u16* alt = sub_0806FC50(GetTileTypeAtTilePos(COORD_TO_TILE_OFFSET(this, -xOffset, -yOffset), other), 0xb);
         if (alt != NULL) {
             ptr = alt;
             useLayer = other;
@@ -3490,7 +3492,8 @@ void sub_0807B2B8(PlayerEntity* this) {
     UpdateAnimationSingleFrame(super);
     if (super->timer != 0 && --super->timer == 0) {
         const Transition* exitTransitions = gUnk_0813AD88;
-        if (REGION_IS_EU) exitTransitions = gUnk_0813AD88_eu;
+        if (REGION_IS_EU)
+            exitTransitions = gUnk_0813AD88_eu;
         DoExitTransition(&exitTransitions[this->unk_6d]);
     }
 }
@@ -4241,8 +4244,8 @@ void sub_0807C4F8(void) {
          * (0x02019EE0) and gMapDataTopSpecial (0x02002F00). */
         {
             void* mapPtr = (void*)(gArea.pCurrentRoomInfo)->map;
-            bool isPackedRomData = mapPtr != NULL && gRomData != NULL &&
-                                   (u8*)mapPtr >= gRomData && (u8*)mapPtr < gRomData + gRomSize;
+            bool isPackedRomData =
+                mapPtr != NULL && gRomData != NULL && (u8*)mapPtr >= gRomData && (u8*)mapPtr < gRomData + gRomSize;
             MapDataDefinition temp;
             int iter = 0;
 
@@ -4260,7 +4263,8 @@ void sub_0807C4F8(void) {
                         LoadMapData(&temp);
                     }
                     raw += 12;
-                    if (++iter > 32) break;
+                    if (++iter > 32)
+                        break;
                 } while ((s32)Port_ReadU32(raw - 12) < 0);
             } else if (mapPtr != NULL) {
                 MapDataDefinition* nptr = (MapDataDefinition*)mapPtr;
@@ -4273,7 +4277,8 @@ void sub_0807C4F8(void) {
                         LoadMapData(&temp);
                     }
                     nptr++;
-                    if (++iter > 32) break;
+                    if (++iter > 32)
+                        break;
                 } while ((s32)(nptr - 1)->src < 0);
             }
         }
@@ -4688,7 +4693,9 @@ bool32 sub_0807CB24(s32 param_1, u32 param_2) {
         case 0xb:
         case 0xc:
         case 0xd:
-            result = CheckLocalFlagByBank(gLocalFlagBanks[param_1], param_2);
+            /* Callers (world-event marker checks, subtask.c pair table) pass
+             * compiled USA-baseline ordinals — remap for EU/JP. */
+            result = CheckLocalFlagByBankB(gLocalFlagBanks[param_1], param_2);
             break;
         case 0xf:
             result = GetInventoryValue(param_2) != 0;

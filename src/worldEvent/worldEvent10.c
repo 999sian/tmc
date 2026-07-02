@@ -28,7 +28,9 @@ void WorldEvent_Beanstalk(void) {
 
 void WorldEvent_Beanstalk_0(void) {
     u8* ptr = gMenu.field_0xc;
-    SetLocalFlagByBank(gLocalFlagBanks[gMenu.field_0xc[0x11]], (u32) * (u16*)(gMenu.field_0xc + 0x12));
+    /* field_0xc points at a compiled USA-baseline WorldEvent (gWorldEvents/_eu)
+     * — bank at +0x11, baseline flag ordinal at +0x12; remap for EU/JP. */
+    SetLocalFlagByBankB(gLocalFlagBanks[gMenu.field_0xc[0x11]], (u32) * (u16*)(gMenu.field_0xc + 0x12));
     sub_0804B0E8(ptr[2], ptr[3]);
     LoadGfxGroup(0x11);
     sub_08055B70(gMenu.field_0x4, 0, 0, 0);

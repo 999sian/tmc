@@ -106,7 +106,9 @@ void sub_08019698(void) {
     Entity* object;
     const u16* ptr;
     ptr = &gUnk_080B4410[gUI.field_0x3 * 7];
-    SetLocalFlagByBank(FLAG_BANK_1, ptr[2]);
+    /* gUnk_080B4410 is a compiled USA blob (port/data_const_stubs.c) — the
+     * flag ordinal at ptr[2] is USA-baseline; remap for EU/JP. */
+    SetLocalFlagByBankB(FLAG_BANK_1, ptr[2]);
     LoadAuxiliaryRoom(ptr[0], ptr[1]);
     gRoomControls.scroll_x += ptr[3];
     gRoomControls.scroll_y += ptr[4];
@@ -153,6 +155,40 @@ void SetBGDefaults(void) {
     gMapTop.bgSettings = &gScreen.bg1;
     gMapTop.bgSettings->control = gUnk_080B77C0[1];
 }
+
+#if defined(PC_PORT) && defined(MULTI_REGION)
+#include "port_offset_remap.h"
+
+/* See beanstalkSubtask.h. Translates the whole MAP_MULTIPLE chain of a
+ * compiled table into a stack copy with region-remapped src offsets, then
+ * feeds it to LoadMapData. */
+void LoadMapDataB(const MapDataDefinition* dataDefinition) {
+    /* Longest compiled chain today is 2 (cave borders, gyorg mappings). */
+    MapDataDefinition xlat[8];
+    int i = 0;
+
+    if (dataDefinition == NULL) {
+        LoadMapData(NULL);
+        return;
+    }
+    do {
+        u32 src = dataDefinition[i].src;
+        if (i == (int)(sizeof(xlat) / sizeof(xlat[0]))) {
+            /* Fail closed: loading untranslated USA offsets on EU/JP would
+             * paint garbage into VRAM — skip the load and log instead. */
+            fprintf(stderr, "LoadMapDataB: compiled chain exceeds %d entries — refusing to load\n", i);
+            return;
+        }
+        xlat[i] = dataDefinition[i];
+        if ((src & MAP_SRC_FILE) == 0) {
+            /* remap only the offset payload; keep flag bits */
+            xlat[i].src = (src & ~0x7fffffffu) | Port_RemapMapOffset(src & 0x7fffffff);
+        }
+        i++;
+    } while ((dataDefinition[i - 1].src & MAP_MULTIPLE) != 0);
+    LoadMapData(xlat);
+}
+#endif
 
 void LoadMapData(MapDataDefinition* dataDefinition) {
     u32 uVar1;
@@ -216,9 +252,10 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
             bool destIsVram = rawDestValue >= 0x06000000u && rawDestValue < 0x06018000u;
             dest = useGbaDest ? Port_ResolveEwramPtr((u32)rawDestValue) : dataDefinition->dest;
             if (dest != NULL) {
-                u32 assetSize = 0;  /* real file byte count, 0 for the in-memory gMapData path */
+                u32 assetSize = 0; /* real file byte count, 0 for the in-memory gMapData path */
                 if ((dataDefinition->src & MAP_SRC_FILE) != 0) {
-                    src = (u8*)Port_GetMapAssetDataByIndex(dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE), &assetSize);
+                    src = (u8*)Port_GetMapAssetDataByIndex(dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE),
+                                                           &assetSize);
                     if (src == NULL) {
                         fprintf(stderr, "LoadMapData: missing map asset index %u area=%u room=%u\n",
                                 dataDefinition->src & ~(MAP_MULTIPLE | MAP_SRC_FILE), gRoomControls.area,
@@ -587,13 +624,13 @@ u32 UpdatePlayerCollision(void) {
             }
             {
                 u32 cloneMask = ((BeanstalkPlayerCloneEntity*)gPlayerClones[0])->unk6c;
-            while (index < 3) {
-                if ((gPlayerClones[index] != NULL) && ((cloneMask & (1 << index)) != 0) &&
-                    (sub_0801A570(gPlayerClones[index], 0) == position)) {
-                    tmp3++;
+                while (index < 3) {
+                    if ((gPlayerClones[index] != NULL) && ((cloneMask & (1 << index)) != 0) &&
+                        (sub_0801A570(gPlayerClones[index], 0) == position)) {
+                        tmp3++;
+                    }
+                    index++;
                 }
-                index++;
-            }
             }
             if (tmp3 < tmp2) {
                 return 0;
