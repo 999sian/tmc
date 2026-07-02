@@ -54,11 +54,18 @@ Fix (all in `port/port_linked_stubs.c`, gated `#if MODE1_GBA_WIDTH > 240`):
   GBA literals at 240).
 
 Known limitations:
-- A *wide* room with *narrow content* (e.g. a 400px festival room whose floor
-  ends ~30px short of the viewport) stays in widescreen and shows a thin border
-  edge at the far right — identical to the May 31 build (which had no hybrid).
-  Catching those would need a content-width signal (rightmost non-empty
-  bottom-map column per room), not just `gRoomControls.width`.
+- ~~A *wide* room with *narrow content* stays in widescreen and shows a thin
+  border edge at the far right.~~ **Resolved (2026-07-03):** the content-width
+  signal exists — `Port_WidescreenScanContentPx` finds the rightmost
+  non-empty tile column (both maps, room rect), ratcheted per room, and
+  `ShouldStretch` falls back to stretched-240 when content < view width.
+  Survey result: the suspect rooms (field 0x03/0x08 = 480px, festival
+  0x15/0x00 = 400px) actually paint edge-to-edge, so TMC may have no
+  counterexample — the guard is a safety net. `TMC_WS_TRACE=1` logs
+  width/content/mode per room. The *visible* artifact that motivated this
+  item was actually stale-buffer leakage: the shadow fill clamped to the
+  128-tile buffer instead of the room rect, sampling the previous room's
+  tiles past the current room's extent — fixed alongside.
 - Widescreen is still a build-time width (`--widescreen_width=N`) plus runtime
   toggle, not a fully dynamic renderer resize. Native-width builds show the
   toggle as unavailable.
