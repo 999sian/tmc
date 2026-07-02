@@ -1965,21 +1965,34 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
         int pow_door = Rando_Entrance_GetInverseAssignment(5);
         int dhc_door = Rando_Entrance_GetInverseAssignment(6);
 
-        UPDATE_HELPER(RH_DEEPWOOD, helpers[dws_door >= 0 ? ExteriorHelperForDoor(dws_door) : RH_MINISH_WOODS]);
+        /* #14: door-location gates. Reaching a PHYSICAL door = the exterior
+         * area helper AND any door-local requirement. The vanilla ToD door
+         * (door 3) sits in Lake Hylia water: Flippers (or doorway Ocarina
+         * Glitch) gate the DOOR, no matter which dungeon is shuffled behind
+         * it. Previously the Flippers term sat on the ToD dungeon row, so a
+         * dungeon shuffled onto door 3 was considered reachable without
+         * Flippers — assumed fill could verify unbeatable seeds. Interior
+         * requirements (ToD Gust Jar lilypads, PoW Roc's Cape) stay on the
+         * dungeon rows. */
+        auto door_reachable = [&](int door_idx) -> bool {
+            if (!helpers[ExteriorHelperForDoor(door_idx)])
+                return false;
+            if (door_idx == 3)
+                return items[ITEM_FLIPPERS] || og;
+            return true;
+        };
+
+        UPDATE_HELPER(RH_DEEPWOOD, door_reachable(dws_door >= 0 ? dws_door : 0));
         UPDATE_HELPER(RH_DEEPWOOD_BOSS, helpers[RH_DEEPWOOD] && items[ITEM_GUST_JAR] && has_sword);
-        UPDATE_HELPER(RH_COF, helpers[cof_door >= 0 ? ExteriorHelperForDoor(cof_door) : RH_CRENEL]);
+        UPDATE_HELPER(RH_COF, door_reachable(cof_door >= 0 ? cof_door : 1));
         UPDATE_HELPER(RH_COF_BOSS, helpers[RH_COF] && items[ITEM_PACCI_CANE] && has_bombs && has_sword);
-        UPDATE_HELPER(RH_FORTRESS, helpers[fow_door >= 0 ? ExteriorHelperForDoor(fow_door) : RH_WIND_RUINS]);
+        UPDATE_HELPER(RH_FORTRESS, door_reachable(fow_door >= 0 ? fow_door : 2));
         UPDATE_HELPER(RH_FORTRESS_BOSS, helpers[RH_FORTRESS] && items[ITEM_MOLE_MITTS] && items[ITEM_BOW] && has_sword);
-        // Ocarina Glitch (glitch): doorway OG reaches the Temple of Droplets interior without Flippers.
-        UPDATE_HELPER(RH_DROPLETS, helpers[tod_door >= 0 ? ExteriorHelperForDoor(tod_door) : RH_LAKE_HYLIA] &&
-                                       (items[ITEM_FLIPPERS] || og) && items[ITEM_GUST_JAR]);
+        UPDATE_HELPER(RH_DROPLETS, door_reachable(tod_door >= 0 ? tod_door : 3) && items[ITEM_GUST_JAR]);
         UPDATE_HELPER(RH_DROPLETS_BOSS,
                       helpers[RH_DROPLETS] && items[ITEM_LANTERN_OFF] && items[ITEM_GUST_JAR] && has_sword);
-        UPDATE_HELPER(RH_ROYAL_CRYPT,
-                      helpers[cry_door >= 0 ? ExteriorHelperForDoor(cry_door) : RH_ROYAL_VALLEY] && has_sword);
-        UPDATE_HELPER(RH_PALACE, helpers[pow_door >= 0 ? ExteriorHelperForDoor(pow_door) : RH_CLOUD_TOPS] &&
-                                     items[ITEM_ROCS_CAPE]);
+        UPDATE_HELPER(RH_ROYAL_CRYPT, door_reachable(cry_door >= 0 ? cry_door : 4) && has_sword);
+        UPDATE_HELPER(RH_PALACE, door_reachable(pow_door >= 0 ? pow_door : 5) && items[ITEM_ROCS_CAPE]);
         UPDATE_HELPER(RH_PALACE_BOSS, helpers[RH_PALACE] && items[ITEM_ROCS_CAPE] && items[ITEM_BOW] && has_sword);
 
         bool four_elements = items[ITEM_EARTH_ELEMENT] && items[ITEM_FIRE_ELEMENT] && items[ITEM_WATER_ELEMENT] &&
@@ -1987,7 +2000,7 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
         UPDATE_HELPER(RH_FOUR_ELEMENTS, four_elements);
         UPDATE_HELPER(RH_DHC, helpers[RH_FOUR_ELEMENTS] && has_sword && has_bombs && items[ITEM_BOW] &&
                                   items[ITEM_ROCS_CAPE] && items[ITEM_LANTERN_OFF] &&
-                                  helpers[dhc_door >= 0 ? ExteriorHelperForDoor(dhc_door) : RH_NORTH_FIELD]);
+                                  door_reachable(dhc_door >= 0 ? dhc_door : 6));
         UPDATE_HELPER(RH_GOAL, helpers[RH_DHC]);
 
 #undef UPDATE_HELPER
@@ -2595,6 +2608,9 @@ extern "C" bool GenerateSeed(uint64_t seed, RandomizerSettings settings) {
     return Rando_GenerateSeed(seed, &settings, NULL) == RANDO_OK;
 }
 
+/* #13 latch (defined below, near the award hooks). */
+static bool sLocationAwardPending;
+
 extern "C" void Rando_Reset(void) {
     EnsureInitialized();
     sSeed = 0;
@@ -2610,6 +2626,7 @@ extern "C" void Rando_Reset(void) {
     extern void Rando_Music_ClearAssignments(void);
     Rando_Entrance_ClearAssignments();
     Rando_Music_ClearAssignments();
+    sLocationAwardPending = false;
     sSpoiler[0] = '\0';
     fprintf(stderr, "[RANDO] reset to vanilla\n");
 }
@@ -2668,6 +2685,24 @@ extern "C" uint16_t Rando_ResolveLocationItem(RandoLocationId location, uint16_t
     return randomized_item_table[(unsigned)location];
 }
 
+/*
+ * #13 double-randomization fix: a location-keyed award is the VERIFIED
+ * placement — the spoiler log and beatability check ran against exactly
+ * this item. The generic give-item hook (Rando_OverrideItem, below) applies
+ * the seeded junk bijection meant only for NON-location-keyed incidental
+ * sources; letting it fire on top of a location-keyed award moves items
+ * after verification (Hard/Chaos remap progression → 'verified beatable'
+ * can be false and the spoiler lies).
+ *
+ * Every location-keyed callsite feeds the awarded {type,subtype} into
+ * GiveItemWithCutscene/CreateItemEntity within the same call stack
+ * (playerItemUtils.c, script.c, NPC/object sources — verified), so a
+ * one-shot tuple latch is safe: OverrideItem consumes it only when the
+ * incoming tuple matches the just-awarded one, otherwise remaps as before.
+ */
+static uint8_t sLocationAwardType = 0;
+static uint8_t sLocationAwardSubtype = 0;
+
 extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, uint8_t* subtype) {
     EnsureInitialized();
     if (!sActive || type == NULL)
@@ -2683,6 +2718,9 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
             *type = (uint8_t)item;
             if (subtype != NULL)
                 *subtype = item_subtype;
+            sLocationAwardPending = true;
+            sLocationAwardType = (uint8_t)item;
+            sLocationAwardSubtype = item_subtype;
             return true;
         }
     }
@@ -2703,10 +2741,17 @@ extern "C" bool Rando_VerifyCurrentSeed(void) {
 }
 
 extern "C" bool Rando_OverrideItem(uint8_t* type, uint8_t* subtype) {
-    (void)subtype;
     EnsureInitialized();
     if (!sActive || type == NULL)
         return false;
+    if (sLocationAwardPending && *type == sLocationAwardType &&
+        (subtype == NULL || *subtype == sLocationAwardSubtype)) {
+        /* This is the location-keyed award flowing into the give-item path —
+         * already verified; do NOT re-randomize (see latch comment above). */
+        sLocationAwardPending = false;
+        return false;
+    }
+    sLocationAwardPending = false;
     uint8_t val = *type;
     if (val < RANDO_ARRAY_COUNT(sCompatibilityRemap)) {
         *type = (uint8_t)sCompatibilityRemap[val];
