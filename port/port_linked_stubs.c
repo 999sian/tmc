@@ -952,11 +952,53 @@ static u16 sWsShadowBG2[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
  * the wider camera/reveal. Disabled, non-gameplay, and rooms narrower than
  * MODE1_GBA_WIDTH all fall back to a native 240x160 frame; the camera/culling
  * helpers below report 240 in that state so the engine remains GBA-clean. */
+/* ---- Per-room content width (issue: wide room, narrow content) ----------
+ * gRoomControls.width can exceed the actual painted map (e.g. a 480-px room
+ * whose floor ends ~270 px in). Widescreen then parks void columns on screen
+ * permanently (a GBA player only saw them transiently at the right edge).
+ * Scan both map buffers for the rightmost non-empty tile column inside the
+ * room rect; if that content can't fill the wide view even with the camera
+ * pinned left (content < MODE1_GBA_WIDTH), fall back to stretched-240 —
+ * which shows exactly what GBA showed. Ratcheted per room (only grows) so
+ * late-streaming map data can't flip the mode back and forth mid-room. */
+static u32 sWsContentKey = 0xffffffffu;
+static s32 sWsContentPx = 0;
+
+static s32 Port_WidescreenScanContentPx(void) {
+    enum { kMapStride = 128, kMapRows = 128 };
+    s32 tiles_w = (s32)gRoomControls.width / 8;
+    s32 tiles_h = (s32)gRoomControls.height / 8;
+    s32 c, r;
+    if (tiles_w > kMapStride)
+        tiles_w = kMapStride;
+    if (tiles_h > kMapRows)
+        tiles_h = kMapRows;
+    for (c = tiles_w - 1; c >= 0; c--) {
+        const u16* bot = gMapDataBottomSpecial + c;
+        const u16* top = gMapDataTopSpecial + c;
+        for (r = 0; r < tiles_h; r++) {
+            if (bot[(size_t)r * kMapStride] != 0 || top[(size_t)r * kMapStride] != 0) {
+                return (c + 1) * 8;
+            }
+        }
+    }
+    return 0;
+}
+
 int Port_Widescreen_ShouldStretch(void) {
     if (!Port_Config_WidescreenEnabled()) {
         return 1;
     }
-    return ((s32)gRoomControls.width < MODE1_GBA_WIDTH) ? 1 : 0;
+    if ((s32)gRoomControls.width < MODE1_GBA_WIDTH) {
+        return 1;
+    }
+    /* Wide room, narrow content: the painted map can't fill the wide view
+     * even at camera-left -> permanent void strip. Present stretched-240
+     * instead (GBA-identical framing). 0 = not scanned yet -> trust width. */
+    if (sWsContentPx > 0 && sWsContentPx < MODE1_GBA_WIDTH) {
+        return 1;
+    }
+    return 0;
 }
 
 int Port_Widescreen_IsActive(void) {
@@ -1036,10 +1078,21 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
     virtuappu_mode1_ws_shadow_base_tile[bg_index] = (MODE1_GBA_BG_CLIP_X / 8) + (((xdiff & 0xf) >= 8) ? 1 : 0);
 
     enum { kMapStride = 128, kMapRows = 128 };
+    /* Clamp to the ROOM rect, not just the 128-tile buffer: the buffers are
+     * reused across rooms without clearing, so cells past the current room's
+     * extent hold the previous room's tiles — sampling them leaked stale
+     * graphics into the reveal near room edges. Outside the room = entry 0
+     * (transparent; composite force-blacks it), same as GBA's void. */
+    s32 room_tiles_w = (s32)gRoomControls.width / 8;
+    s32 room_tiles_h = (s32)gRoomControls.height / 8;
+    if (room_tiles_w > kMapStride)
+        room_tiles_w = kMapStride;
+    if (room_tiles_h > kMapRows)
+        room_tiles_h = kMapRows;
     for (int sr = 0; sr < MODE1_WS_SHADOW_ROWS; sr++) {
         u16* row_dst = shadow + (size_t)sr * MODE1_WS_SHADOW_COLS;
         s32 world_row = 2 * row16 - 1 + sr;
-        if (world_row < 0 || world_row >= kMapRows) {
+        if (world_row < 0 || world_row >= room_tiles_h) {
             for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++)
                 row_dst[C] = 0;
             continue;
@@ -1047,7 +1100,7 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
         u16* row_src = mapSpecial + (size_t)world_row * kMapStride;
         for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++) {
             s32 world_col = ws_base_world_col + C;
-            u16 entry = (world_col >= 0 && world_col < kMapStride) ? row_src[world_col] : (u16)0;
+            u16 entry = (world_col >= 0 && world_col < room_tiles_w) ? row_src[world_col] : (u16)0;
             row_dst[C] = entry;
         }
     }
@@ -1078,6 +1131,28 @@ void Port_Widescreen_UpdateShadows(void) {
         virtuappu_mode1_ws_shadow[i] = NULL;
     virtuappu_mode1_ws_hud_right_anchor = 0;
     virtuappu_mode1_ws_msg_shift = 0;
+
+    /* Refresh the per-room content-width signal BEFORE the IsActive gate
+     * (ShouldStretch consumes it). Keyed on area|room|origin; ratcheted so
+     * late-streaming map data can only widen, never flip wide->stretch
+     * mid-room. ~16K u16 reads worst case, once per vblank — negligible. */
+    if (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled()) {
+        u32 key = ((u32)gRoomControls.area << 24) | ((u32)gRoomControls.room << 16) |
+                  ((u32)(u16)gRoomControls.origin_x ^ ((u32)(u16)gRoomControls.origin_y << 1));
+        if (key != sWsContentKey) {
+            sWsContentKey = key;
+            sWsContentPx = 0;
+        }
+        s32 px = Port_WidescreenScanContentPx();
+        if (px > sWsContentPx) {
+            sWsContentPx = px;
+            if (getenv("TMC_WS_TRACE") != NULL) {
+                fprintf(stderr, "[ws] area=0x%02x room=0x%02x width=%d content_px=%d -> %s\n",
+                        (unsigned)gRoomControls.area, (unsigned)gRoomControls.room, (int)gRoomControls.width,
+                        (int)sWsContentPx, Port_Widescreen_ShouldStretch() ? "stretch-240" : "wide");
+            }
+        }
+    }
 
     if (!Port_Widescreen_IsActive()) {
         return;

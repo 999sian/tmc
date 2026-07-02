@@ -28,6 +28,20 @@
   fallback already shipping, the reveal is default-enabled on wide builds.
   Existing `config.json` preferences are respected; Console-Parity mode
   still forces it off; F8 → Display toggles it as before.
+- **Reveal no longer leaks stale tiles at room edges.** The shadow-tilemap
+  fill clamped only to the 128-tile map buffer, but the buffer is reused
+  across rooms without clearing — reveal columns past the current room's
+  rect could sample the *previous* room's tiles (stray bushes in the void).
+  Now clamped to the room rect; outside = transparent, force-blacked like
+  GBA's own void.
+- **Per-room content-width guard.** If a room's painted map can't fill the
+  wide view even with the camera pinned left (rightmost non-empty tile
+  column < view width), widescreen falls back to stretched-240 for that
+  room — GBA-identical framing instead of a permanent void strip. Ratcheted
+  per room so late-streaming map data can't flip modes mid-room. (Survey of
+  the suspect rooms — field 480px, festival 400px — showed TMC paints
+  edge-to-edge, so this is a safety net, but `TMC_WS_TRACE=1` logs the
+  signal per room for anyone hunting a counterexample.)
 
 ## v0.7.1.1 (2026-07-02)
 
