@@ -80,11 +80,11 @@ Configure flags worth knowing:
 
 | Flag                   | Effect                                                |
 |------------------------|-------------------------------------------------------|
-| `--game_version=USA`   | Build for USA (default).                              |
-| `--game_version=EU`    | Build for EU.                                         |
-| `--game_version=JP`    | Build with JP staging defaults.                      |
+| `--game_version=USA`   | Asset/offset baseline for the build (default).       |
+| `--game_version=EU`    | EU baseline (per-region builds only).                 |
+| `--game_version=JP`    | JP staging defaults (per-region builds only).         |
 | `--pc_avx2=y`          | Enable AVX2 in the PPU renderer (auto on x86-64).     |
-| `--multi_region=y`     | Build one PC binary that selects USA/EU/JP at runtime. |
+| `--multi_region=y`     | One binary that selects USA/EU/JP at runtime (**default**). `=n` builds the classic per-region binary. |
 
 On Linux, set `XMAKE_USE_SYSTEM_SDL3=1` before configuring to use the
 distro's SDL3 instead of letting xmake build its own. `build.py` does this

@@ -2,6 +2,87 @@
 
 ## Unreleased
 
+### EU: global color corruption fixed (every faded palette, all EU rendering)
+
+- **The long-standing "garbled EU title screen" was two stacked bugs and was
+  never title-specific** — colors were subtly-to-badly wrong across all EU
+  rendering:
+  - The palette fade engine resolved its brightness/fade lookup tables at the
+    USA/JP ROM offset (`0xF84`); EU's tables sit at `0xFCC`. Every palette row
+    that passed through a fade on EU (i.e. nearly everything) was translated
+    through garbage tables. Now region-corrected.
+  - The extracted EU asset cache slices palette-group data half a palette off;
+    EU palette groups now load from the ROM directly (always exact).
+- EU title + intro now render pixel-identical to USA. USA/JP were never
+  affected.
+
+### Multi-region is now the default everywhere (M7)
+
+- `xmake` builds default to the fat multi-region binary (`--multi_region=n`
+  restores the classic per-region build); dev builds now match releases.
+- Release artifacts renamed **`tmc-usa-*` → `tmc-multi-*`** — the binary has
+  been multi-region since v0.7.0; the filename now says so. One download plays
+  USA, EU, and JP ROMs.
+- CI now boots the built binary headless against every available region ROM
+  and requires each to reach the game main loop, and runs the PPU parity gate
+  for JP in addition to USA/EU.
+
+### Multi-region correctness (EU/JP)
+
+- **Fusion rewards fixed on EU/JP**: kinstone fusion reward flags (chest
+  spawns, map markers, world events) were written to the wrong save bits.
+- **Pause-menu dungeon maps fixed** (EU everywhere; JP in Palace of Winds and
+  Dark Hyrule Castle), **EU Hyrule Town tiles**, and **EU+JP Gyorg boss room
+  layouts** — compiled USA data offsets are now remapped to the loaded
+  region's layout at runtime.
+- **Dust/poof effects restored on EU/JP** (a generated script-function table
+  dropped `CreateDust` for both regions).
+- **Picolyte drop bonuses actually work now** — the drop-modifier table
+  lookup was reading unrelated data on all regions of the PC port.
+- ROM-sourced NPC scripts no longer mis-translate through the USA script
+  address table (30 EU / 5 JP address collisions).
+- EU in-game language choice is no longer overwritten every frame.
+
+### Randomizer correctness
+
+- **Verified-beatable seeds are now actually beatable on Hard/Chaos**: items
+  at named locations were re-randomized a second time at pickup, desyncing
+  the spoiler log and the beatability check from what you actually receive.
+- **Entrance shuffle: Temple of Droplets door gate fixed** — the Flippers
+  requirement now applies to the physical door in Lake Hylia's water, not to
+  whichever dungeon got shuffled there (seeds could otherwise place required
+  progression behind an unreachable door).
+- Fresh vanilla saves no longer inherit entrance/music shuffle from a
+  previously played seed; sidecar saves persist and restore the full settings
+  (homewarp, obscure locations, starting sword, ...).
+- A crash between seed creation and the first save no longer leaves a
+  softlocked grant-less file (self-heals on next load).
+- "Randomize" seed button no longer produces the same sequence on every
+  install.
+
+### Save & stability (PC port)
+
+- **In-game saves no longer hitch**: one save wrote the save file ~324 times
+  back-to-back (up to multi-second stalls on slow disks); it now writes once.
+- Disk-full / IO errors during save are reported as a failed save in-game
+  instead of silently pretending success.
+- Savestates are region-tagged with per-region filenames — a USA state can no
+  longer load into a JP session and contaminate the JP save.
+- Entity collision list capacity now matches the GBA (fixes rare
+  non-collidable entities in packed rooms); Moldorm no longer crashes when
+  the entity pool is full mid-split.
+
+### PPU accuracy
+
+- Sprite-vs-sprite overlap now resolves by OAM index like hardware (fixes the
+  classic wrong-sprite-on-top quirk).
+- Semi-transparent sprites now fade correctly during brightness fades.
+- OBJ-window contents no longer go stale when sprites are disabled mid-frame.
+- Affine backgrounds pinned by constant HBlank-DMA now latch like hardware.
+- **OBJ mosaic implemented** (attr0 bit 12 — previously ignored).
+- Perf: wrap-around affine backgrounds dropped two divisions per pixel;
+  ~150K dead stores removed per frame.
+
 ### Roll attack macro (PC port QoL)
 
 - One-button **start-of-roll attack**: hold a direction and press the bind

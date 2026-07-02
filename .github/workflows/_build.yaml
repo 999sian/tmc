@@ -42,32 +42,32 @@ jobs:
           # Use Ubuntu 22.04 (glibc 2.35) so the Linux binary runs on
           # older distros — Nobara 43, Fedora 43, Kubuntu 25.10. Building
           # on ubuntu-latest pins glibc 2.43+ which excludes most users.
-          linux='{"runner":"ubuntu-22.04","os_name":"linux","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          linux='{"runner":"ubuntu-22.04","os_name":"linux","arch":"x86_64","region":"multi","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           # Linux ARM64 (aarch64) via GitHub's native arm64 runner. Same
           # ubuntu-22.04 glibc-2.35 baseline as x86_64. In "all": the
           # C/C++ is ARM-clean (macOS arm64 already ships) and the apt +
           # build.py path is arch-neutral on a native runner.
-          linux_arm='{"runner":"ubuntu-22.04-arm","os_name":"linux","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          linux_arm='{"runner":"ubuntu-22.04-arm","os_name":"linux","arch":"arm64","region":"multi","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           # Pin to windows-2022: GitHub rolled `windows-latest` to Server
           # 2025 with a different VS/MinGW tooling layout, which broke
           # xmake-repo's libpng install step (exit 127 at the post-compile
           # install). The v0.1.6.x release built fine on windows-2022.
-          windows='{"runner":"windows-2022","os_name":"windows","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          windows='{"runner":"windows-2022","os_name":"windows","arch":"x86_64","region":"multi","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
           # Windows ARM64 (aarch64) via the native windows-11-arm runner +
           # llvm-mingw (dedicated install step). In "all": validated green
           # (the x86 MinGW path — choco gcc, -mno-ms-bitfields, libgomp —
           # doesn't apply, so it uses aarch64 clang + -static; OpenMP is
           # degraded to serial there). Also reachable via os_filter
           # windows-arm or arm.
-          windows_arm='{"runner":"windows-11-arm","os_name":"windows","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
+          windows_arm='{"runner":"windows-11-arm","os_name":"windows","arch":"arm64","region":"multi","flag":"--usa","exe_name":"tmc_pc.exe","extractor_name":"asset_extractor.exe"}'
           # macos-14 = Apple Silicon arm64; macos-15-intel = Intel x86_64.
           # Use the explicit Intel label: older Intel image aliases can remain
           # queued indefinitely once GitHub-hosted runner capacity/labels move.
           # Both keep os_name="macos" so the brew dep-install step's condition
           # (`matrix.os_name == 'macos'`) covers both runners. Archive name uses
           # ${matrix.arch} to disambiguate the assets.
-          macos_arm='{"runner":"macos-14","os_name":"macos","arch":"arm64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
-          macos_x86='{"runner":"macos-15-intel","os_name":"macos","arch":"x86_64","region":"usa","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          macos_arm='{"runner":"macos-14","os_name":"macos","arch":"arm64","region":"multi","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
+          macos_x86='{"runner":"macos-15-intel","os_name":"macos","arch":"x86_64","region":"multi","flag":"--usa","exe_name":"tmc_pc","extractor_name":"asset_extractor"}'
           # Full release/CI coverage is six native hosted targets:
           #   x86_64: Linux, Windows, macOS Intel
           #   arm64:  Linux, Windows, macOS Apple Silicon
@@ -322,6 +322,10 @@ jobs:
           if [ -f "_assets/baserom_eu.gba" ]; then
             cp _assets/baserom_eu.gba ./baserom_eu.gba
           fi
+          # JP is optional — boots + parity run for it only when present.
+          if [ -f "_assets/baserom_jp.gba" ]; then
+            cp _assets/baserom_jp.gba ./baserom_jp.gba
+          fi
           test -f ./baserom.gba
           test -f ./baserom_eu.gba
 
@@ -460,11 +464,10 @@ jobs:
           # don't need ROM data at compile time. The "Prepare artifact"
           # step below pulls the freshly-built tmc_pc + asset_extractor
           # out of build/pc/ along with assets/sounds.json.
-          REGION_FLAG="--usa"
-          if [ "${{ matrix.region }}" = "eur" ]; then
-            REGION_FLAG="--eur"
-          fi
-          python3 build.py "$REGION_FLAG" --slim
+          # --usa selects the ASSET/OFFSET BASELINE only: build.py
+          # defaults to --multi_region=y, so this is the fat binary that
+          # plays USA/EU/JP at runtime (hence the "multi" artifact name).
+          python3 build.py --usa --slim
 
       - name: Dump xmake install logs (Windows, post-build on failure)
         if: failure() && matrix.os_name == 'windows'
@@ -565,6 +568,64 @@ jobs:
           grep -q "PPU init complete" smoke.log
           echo "OK: binary booted headless and parked in prelaunch (killed by timeout as expected)."
 
+      # M7 multi-region runtime gate: the shipped binary is ONE fat build that
+      # must boot every retail region. Boot it headless against each available
+      # ROM and require the port's success marker ("Entering AgbMain") — this
+      # is what turns "multi-region works on the dev box" into "multi-region
+      # ships". Uses a scratch cwd per region so config.json / saves / the
+      # extracted assets of one region never leak into the next boot; asset
+      # self-extraction on first boot is covered by the generous timeout.
+      # x86_64-only (one runtime gate is enough; the other legs still smoke-
+      # boot the no-ROM path above). JP runs only when the assets repo has
+      # baserom_jp.gba.
+      - name: Multi-region boot gate (Linux x86_64)
+        if: matrix.os_name == 'linux' && matrix.arch == 'x86_64' && steps.probe_assets.outputs.have_assets == 'true'
+        shell: bash
+        run: |
+          BIN="$PWD/build/pc/${{ matrix.exe_name }}"
+          test -f "$BIN"
+          for rom in baserom.gba baserom_eu.gba baserom_jp.gba; do
+            if [ ! -f "$PWD/$rom" ]; then
+              echo "skip: $rom not in assets repo"
+              continue
+            fi
+            BOOT_DIR=$(mktemp -d)
+            env TMC_BASEROM="$PWD/$rom" TMC_AUTOPLAY=1 \
+              SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+              sh -c "cd '$BOOT_DIR' && exec '$BIN' --no-audio" > "$BOOT_DIR/boot.log" 2>&1 &
+            pid=$!
+            # The game loop never self-exits — poll for the success marker
+            # (up to 180 s: first boot self-extracts the region's assets),
+            # then kill. Early exit = crash = fail below.
+            ok=0
+            for i in $(seq 1 180); do
+              if grep -q "Entering AgbMain" "$BOOT_DIR/boot.log" 2>/dev/null; then
+                ok=1; break
+              fi
+              if ! kill -0 "$pid" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            if [ "$ok" != 1 ]; then
+              echo "FAIL: $rom never reached AgbMain. Log tail:"
+              tail -40 "$BOOT_DIR/boot.log"
+              exit 1
+            fi
+            # A stale/misconfigured SINGLE-region binary also reaches AgbMain
+            # (it just plays the wrong data) — require the fat-binary marker
+            # so the gate proves what ships is actually multi-region.
+            if ! grep -q "multi-region binary" "$BOOT_DIR/boot.log"; then
+              echo "FAIL: $rom booted but not as a multi-region binary. Log tail:"
+              tail -40 "$BOOT_DIR/boot.log"
+              exit 1
+            fi
+            grep "Active region" "$BOOT_DIR/boot.log" | head -1
+            echo "OK: $rom boots to AgbMain (multi-region)."
+          done
+
       # Byte-exact PPU render parity gate (Phase 0 oracle). For each scene in
       # tools/ppu_corpus.txt it captures a deterministic snapshot from a
       # headless run and hashes the render two ways (static mode1/mode2 +
@@ -581,6 +642,9 @@ jobs:
           TMC_REGION=usa TMC_BASEROM="$PWD/baserom.gba" tools/ppu_parity_check.sh
           if [ -f "$PWD/baserom_eu.gba" ]; then
             TMC_REGION=eu TMC_BASEROM="$PWD/baserom_eu.gba" tools/ppu_parity_check.sh
+          fi
+          if [ -f "$PWD/baserom_jp.gba" ]; then
+            TMC_REGION=jp TMC_BASEROM="$PWD/baserom_jp.gba" tools/ppu_parity_check.sh
           fi
 
       - name: Prepare artifact payload
