@@ -1,0 +1,5 @@
+# OMP project-local config for tmc (Minish Cap / Project Picori decomp).
+# format-on-write keeps agent edits conformant with the repo's .clang-format.
+# Scoped here (not global) so other repos are never auto-reformatted on write.
+lsp:
+  formatOnWrite: true
