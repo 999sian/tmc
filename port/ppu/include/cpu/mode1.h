@@ -43,7 +43,7 @@ extern virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback;
  * off-screen sprites are kept out by the DISPLAY_WIDTH-relative culling
  * (CheckOnScreen / per-entity bounds), not by clipping here. */
 #define MODE1_GBA_VIEWPORT_X MODE1_GBA_WIDTH
-#define MODE1_GBA_BG_CLIP_X  240
+#define MODE1_GBA_BG_CLIP_X 240
 
 /* PPU/engine boundary for true widescreen: the renderer here is already
  * width-agnostic — set MODE1_GBA_WIDTH > 240 and a frame_width via
@@ -74,7 +74,7 @@ enum {
  * headroom); ROWS=32 mirrors the engine's mod-32 vertical row rolling. */
 #define MODE1_WS_SHADOW_ROWS 32
 #define MODE1_WS_SHADOW_COLS (((MODE1_GBA_WIDTH - 240) / 8) + 4)
-extern uint16_t *virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT];
+extern uint16_t* virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT];
 extern int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT];
 
 /* Runtime WIP widescreen HUD anchor. BG0 stays 32 tiles wide, but gameplay
@@ -125,53 +125,59 @@ enum {
 };
 
 typedef struct VirtuaPPUMode1GbaMemory {
-    uint8_t *io_mem;
-    uint8_t *vram;
-    uint16_t *bg_palette;
-    uint16_t *obj_palette;
-    uint16_t *oam_mem;
+    uint8_t* io_mem;
+    uint8_t* vram;
+    uint16_t* bg_palette;
+    uint16_t* obj_palette;
+    uint16_t* oam_mem;
 } VirtuaPPUMode1GbaMemory;
 
-void virtuappu_mode1_bind_gba_memory(const VirtuaPPUMode1GbaMemory *memory);
-void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory *memory);
-void virtuappu_mode1_set_frame_geometry(const PPUMemory *ppu);
+void virtuappu_mode1_bind_gba_memory(const VirtuaPPUMode1GbaMemory* memory);
+void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory* memory);
+void virtuappu_mode1_set_frame_geometry(const PPUMemory* ppu);
 int virtuappu_mode1_frame_width(void);
 int virtuappu_mode1_frame_pitch(void);
 uint16_t virtuappu_mode1_io_read16(uint16_t offset);
 uint32_t virtuappu_mode1_io_read32(uint16_t offset);
 uint32_t virtuappu_mode1_rgb555_to_abgr8888(uint16_t color);
-void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t *line_buffer, uint8_t *priority_buffer);
-void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t *line_buffer, uint8_t *priority_buffer);
-void virtuappu_mode1_composite_line(
-    int line,
-    uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH],
-    uint8_t bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH],
-    uint32_t obj_layer[MODE1_GBA_WIDTH],
-    uint8_t obj_priority[MODE1_GBA_WIDTH],
-    uint16_t dispcnt);
-void virtuappu_mode1_render_frame(const PPUMemory *ppu);
+void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_buffer, uint8_t* priority_buffer);
+void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t* line_buffer, uint8_t* priority_buffer);
+void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH],
+                                    uint8_t bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH],
+                                    uint32_t obj_layer[MODE1_GBA_WIDTH], uint8_t obj_priority[MODE1_GBA_WIDTH],
+                                    uint16_t dispcnt);
+void virtuappu_mode1_render_frame(const PPUMemory* ppu);
+
+/* Host-set write strobes for the affine BG2X/BG2Y reference latch. On GBA,
+ * ANY write to BG2X/BG2Y reloads the internal reference — including a write
+ * of the SAME value (constant-value HBlank DMA pins the layer to one line's
+ * reference on hardware). The precompute below can only see per-line VALUES,
+ * so an idempotent write is invisible to it; the host (port_ppu.cpp) sets
+ * these when an active HBlank-DMA channel targets BG2X / BG2Y this frame. */
+extern bool virtuappu_mode1_bg2x_hdma_strobe;
+extern bool virtuappu_mode1_bg2y_hdma_strobe;
 
 /* Precompute the per-line affine BG2 internal reference point for one frame
  * (the #132 hardware latch). Pure function over per-line, post-HBlank-DMA
  * inputs, so the result can be consumed by the parallel render pass:
  *   - reload the internal reference from BG2X/BG2Y whenever a line's I/O value
  *     differs from the previous line's (a CPU/DMA write, e.g. the Deepwood
- *     barrel's per-scanline HBlank DMA);
+ *     barrel's per-scanline HBlank DMA), or unconditionally when the
+ *     corresponding reload_*_every_line strobe says a write EVENT happens
+ *     each line (idempotent HDMA);
  *   - otherwise advance it by dmx(pb)/dmy(pd) each scanline.
  * init_ref_{x,y} is the frame-start (pre-callback) reference; line_ref_{x,y}
  * are the post-callback references per line; out_ref_{x,y} receive the value to
  * render each line with. Exposed for unit testing (tools/ppu_affine_test.c). */
-void virtuappu_mode1_affine_precompute(
-    int height,
-    int32_t init_ref_x, int32_t init_ref_y,
-    const int32_t *line_ref_x, const int32_t *line_ref_y,
-    const int16_t *line_pb, const int16_t *line_pd,
-    int32_t *out_ref_x, int32_t *out_ref_y);
+void virtuappu_mode1_affine_precompute(int height, int32_t init_ref_x, int32_t init_ref_y, const int32_t* line_ref_x,
+                                       const int32_t* line_ref_y, const int16_t* line_pb, const int16_t* line_pd,
+                                       bool reload_x_every_line, bool reload_y_every_line, int32_t* out_ref_x,
+                                       int32_t* out_ref_y);
 
 /* Sub-pixel re-render of OAM affine sprites into a (240*scale x 160*scale)
  * buffer. Called by the PC port at internal-render-scale > 1 after the
  * standard frame has been S*S nearest-replicated into `dst`. */
-void virtuappu_mode1_render_affine_obj_overlay(uint32_t *dst, int dst_w, int dst_h, int scale);
+void virtuappu_mode1_render_affine_obj_overlay(uint32_t* dst, int dst_w, int dst_h, int scale);
 
 #ifdef __cplusplus
 }

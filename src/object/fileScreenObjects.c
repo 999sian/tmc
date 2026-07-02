@@ -15,6 +15,7 @@
 #include "player.h"
 #include "gfx.h"
 #include "vram.h"
+#include "port_offset_remap.h"
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -124,8 +125,10 @@ void FileScreenObjects_Type23_LinkPreview(FileScreenObjectsEntity* this) {
         super->animationState = PAS_SOUTH;
         {
             const s32* objPalTbl = gUnk_08133368;
-            if (REGION_IS_EU) objPalTbl = gUnk_08133368_eu;
-            offset = objPalTbl[GetPlayerPalette(TRUE) - 22] & 0xFFFFFF;
+            if (REGION_IS_EU)
+                objPalTbl = gUnk_08133368_eu;
+            /* Compiled USA-baseline blob offset — remap for EU. */
+            offset = Port_RemapGfxOffset(objPalTbl[GetPlayerPalette(TRUE) - 22] & 0xFFFFFF);
         }
         LoadPalettes(&gGlobalGfxAndPalettes[offset], 31, 1);
     }
@@ -181,9 +184,9 @@ void FileScreenObjects_Type24(FileScreenObjectsEntity* this) {
     if (super->action == 0) {
         super->action = 1;
         if (REGION_IS_EU) {
-        super->spriteIndex = 0x141;
+            super->spriteIndex = 0x141;
         } else {
-        super->spriteIndex = 0x142;
+            super->spriteIndex = 0x142;
         }
         super->type2 = 0xFF;
         LoadSwapGFX(super, 1, 3);

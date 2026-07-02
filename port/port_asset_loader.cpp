@@ -1,7 +1,7 @@
 #include "port_asset_loader.h"
 #include "port_asset_pipeline.hpp"
 #include "port_asset_pak_loader.hpp"
-#include "port_debug_verbose.h"  /* Port_DebugVerbose flag */
+#include "port_debug_verbose.h" /* Port_DebugVerbose flag */
 #include "port_exe_path.hpp"
 
 extern "C" {
@@ -9,8 +9,8 @@ extern "C" {
 #include "common.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
-#include "port_config.h"  /* gRomRegion / ROM_REGION_JP for the JP gfx-group gate */
-#include "region.h"       /* RegionAssetSubdir() — per-region cache folder */
+#include "port_config.h" /* gRomRegion / ROM_REGION_JP for the JP gfx-group gate */
+#include "region.h"      /* RegionAssetSubdir() — per-region cache folder */
 #include "port_asset_index.h"
 #include "structures.h"
 #include "area.h"
@@ -63,8 +63,7 @@ extern Frame* gSpriteAnimations_322[];
  * helper shared with the extractor's ReadBinaryFile) that hands back an
  * owning buffer. Returns nullptr on any I/O failure; an empty file
  * yields a non-null empty vector. Caller owns the unique_ptr. */
-static std::unique_ptr<std::vector<u8>>
-PortAssetLoader_ReadFileFast(const std::filesystem::path& path) {
+static std::unique_ptr<std::vector<u8>> PortAssetLoader_ReadFileFast(const std::filesystem::path& path) {
     auto buf = std::make_unique<std::vector<u8>>();
     if (!PortAssetPipeline::ReadFileBytes(path, *buf)) {
         return nullptr;
@@ -197,7 +196,8 @@ void AssetLogOnce(const std::string& key, const char* fmt, ...) {
      * — 20k+ formatted lines per boot. Default OFF; set TMC_VERBOSE=1
      * to re-enable. The dedup set is still maintained so re-enabling
      * mid-session doesn't replay everything. */
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
 
     std::va_list args;
     va_start(args, fmt);
@@ -257,8 +257,7 @@ static bool RegionAllowsLegacyFlat() {
  * every manifest in `manifests`, then (USA only) the legacy flat
  * <root>/<subdir>. Editable trees live under "assets_src" and require
  * palettes.json too; runtime trees live under "assets". */
-std::optional<std::filesystem::path>
-FindAssetsRoot(const char* subdir, std::initializer_list<const char*> manifests) {
+std::optional<std::filesystem::path> FindAssetsRoot(const char* subdir, std::initializer_list<const char*> manifests) {
     const char* sub = RegionAssetSubdir();
     const auto hasManifests = [&](const std::filesystem::path& dir) {
         for (const char* m : manifests) {
@@ -284,11 +283,11 @@ FindAssetsRoot(const char* subdir, std::initializer_list<const char*> manifests)
 }
 
 std::optional<std::filesystem::path> FindEditableAssetsRoot() {
-    return FindAssetsRoot("assets_src", {"gfx_groups.json", "palette_groups.json", "palettes.json"});
+    return FindAssetsRoot("assets_src", { "gfx_groups.json", "palette_groups.json", "palettes.json" });
 }
 
 std::optional<std::filesystem::path> FindRuntimeAssetsRoot() {
-    return FindAssetsRoot("assets", {"gfx_groups.json", "palette_groups.json"});
+    return FindAssetsRoot("assets", { "gfx_groups.json", "palette_groups.json" });
 }
 
 /* Map an editable root to its runtime sibling, preserving the region subdir:
@@ -298,7 +297,7 @@ std::filesystem::path RuntimeRootForEditableRoot(const std::filesystem::path& ed
     if (editableRoot.filename() == "assets_src") {
         return editableRoot.parent_path() / "assets";
     }
-    const std::filesystem::path base = editableRoot.parent_path();  // expected: .../assets_src
+    const std::filesystem::path base = editableRoot.parent_path(); // expected: .../assets_src
     if (base.filename() == "assets_src") {
         return base.parent_path() / "assets" / editableRoot.filename();
     }
@@ -369,8 +368,7 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath);
  *
  * Returns the number of bytes appended (0 if ROM lookup fails).
  */
-size_t AppendRomTrailingBytes(const char* assetPath, size_t fileSize,
-                              std::vector<u8>& buf) {
+size_t AppendRomTrailingBytes(const char* assetPath, size_t fileSize, std::vector<u8>& buf) {
     if (gRomData == nullptr || gRomSize == 0)
         return 0;
     const EmbeddedAssetEntry* index = EmbeddedAssetIndex_Get();
@@ -814,12 +812,12 @@ const std::vector<u8>* LoadBinaryFileCached(const std::string& relativePath) {
         if (data) {
             const std::vector<u8>* result = data.get();
             gAssetGroupCache.binaryFiles.emplace(relativePath, std::move(data));
-            AssetLogOnce("mod-file:" + normalizedPath,
-                         "mod override %s <- %s", normalizedPath.c_str(), PathForLog(modIt->second).c_str());
+            AssetLogOnce("mod-file:" + normalizedPath, "mod override %s <- %s", normalizedPath.c_str(),
+                         PathForLog(modIt->second).c_str());
             return result;
         }
-        std::fprintf(stderr, "[MOD] Failed to open replacement for %s: %s\n",
-                     normalizedPath.c_str(), PathForLog(modIt->second).c_str());
+        std::fprintf(stderr, "[MOD] Failed to open replacement for %s: %s\n", normalizedPath.c_str(),
+                     PathForLog(modIt->second).c_str());
     }
 
     /* Pak first when mounted: an mmap lookup beats opening a small
@@ -921,7 +919,8 @@ bool BuildAreaFromAssets(u32 area) {
     const size_t tileSetSlots = std::max<size_t>(gAssetGroupCache.areaTileSets[area].size(), 64);
     gAssetGroupCache.areaTileSetPtrs[area].assign(tileSetSlots, nullptr);
     for (size_t i = 0; i < gAssetGroupCache.areaTileSets[area].size(); ++i) {
-        gAssetGroupCache.areaTileSetPtrs[area][i] = BuildMapDefinitionSequence(gAssetGroupCache.areaTileSets[area][i], area);
+        gAssetGroupCache.areaTileSetPtrs[area][i] =
+            BuildMapDefinitionSequence(gAssetGroupCache.areaTileSets[area][i], area);
     }
     if (!gAssetGroupCache.areaTileSets[area].empty()) {
         gAreaTileSets[area] = gAssetGroupCache.areaTileSetPtrs[area].data();
@@ -930,7 +929,8 @@ bool BuildAreaFromAssets(u32 area) {
     const size_t roomMapSlots = std::max<size_t>(gAssetGroupCache.areaRoomMaps[area].size(), 64);
     gAssetGroupCache.areaRoomMapPtrs[area].assign(roomMapSlots, nullptr);
     for (size_t i = 0; i < gAssetGroupCache.areaRoomMaps[area].size(); ++i) {
-        gAssetGroupCache.areaRoomMapPtrs[area][i] = BuildMapDefinitionSequence(gAssetGroupCache.areaRoomMaps[area][i], area);
+        gAssetGroupCache.areaRoomMapPtrs[area][i] =
+            BuildMapDefinitionSequence(gAssetGroupCache.areaRoomMaps[area][i], area);
     }
     if (!gAssetGroupCache.areaRoomMaps[area].empty()) {
         gAreaRoomMaps[area] = gAssetGroupCache.areaRoomMapPtrs[area].data();
@@ -992,9 +992,8 @@ bool BuildAreaFromAssets(u32 area) {
                 static constexpr const char kPropSuffix[] = ".bin";
                 constexpr size_t kPrefixLen = sizeof(kPropPrefix) - 1;
                 constexpr size_t kSuffixLen = sizeof(kPropSuffix) - 1;
-                if (path.size() > kPrefixLen + kSuffixLen
-                    && path.compare(0, kPrefixLen, kPropPrefix) == 0
-                    && path.compare(path.size() - kSuffixLen, kSuffixLen, kPropSuffix) == 0) {
+                if (path.size() > kPrefixLen + kSuffixLen && path.compare(0, kPrefixLen, kPropPrefix) == 0 &&
+                    path.compare(path.size() - kSuffixLen, kSuffixLen, kPropSuffix) == 0) {
                     const std::string hex = path.substr(kPrefixLen, path.size() - kPrefixLen - kSuffixLen);
                     char* end = nullptr;
                     const unsigned long offset = std::strtoul(hex.c_str(), &end, 16);
@@ -1024,11 +1023,10 @@ bool BuildAreaFromAssets(u32 area) {
 
             if (romPtr != nullptr) {
                 props[i] = romPtr;
-                AssetLogOnce(
-                    "rom-prop:" + std::to_string(area) + ":" +
-                        std::to_string(room) + ":" + std::to_string(i) + ":" + roomEntry.files[i],
-                    "room property area=0x%x room=%zu slot=%zu -> gRomData (%s)",
-                    area, room, i, roomEntry.files[i].c_str());
+                AssetLogOnce("rom-prop:" + std::to_string(area) + ":" + std::to_string(room) + ":" + std::to_string(i) +
+                                 ":" + roomEntry.files[i],
+                             "room property area=0x%x room=%zu slot=%zu -> gRomData (%s)", area, room, i,
+                             roomEntry.files[i].c_str());
             } else {
                 const std::vector<u8>* fileData = LoadBinaryFileCached(roomEntry.files[i]);
                 if (fileData != nullptr && !fileData->empty()) {
@@ -1085,8 +1083,8 @@ bool EnsureAssetGroupCache() {
         const std::filesystem::path runtimeRoot = RuntimeRootForEditableRoot(*editableRoot);
         std::string buildInfo;
         if (!PortAssetPipeline::EnsureRuntimeAssetsBuilt(*editableRoot, runtimeRoot, &buildInfo)) {
-            std::fprintf(stderr, "[ASSET] Failed to build runtime assets from %s: %s\n",
-                         editableRoot->string().c_str(), buildInfo.c_str());
+            std::fprintf(stderr, "[ASSET] Failed to build runtime assets from %s: %s\n", editableRoot->string().c_str(),
+                         buildInfo.c_str());
             return false;
         }
 
@@ -1175,11 +1173,9 @@ extern "C" void Port_LogAssetLoaderStatus(void) {
     const std::optional<std::filesystem::path> runtimeRoot = FindRuntimeAssetsRoot();
 
     AssetLogOnce("startup-banner", "startup asset scan:");
-    AssetLogOnce("startup-editable",
-                 "editable root: %s",
+    AssetLogOnce("startup-editable", "editable root: %s",
                  editableRoot.has_value() ? PathForLog(*editableRoot).c_str() : "<none>");
-    AssetLogOnce("startup-runtime",
-                 "runtime root candidate: %s",
+    AssetLogOnce("startup-runtime", "runtime root candidate: %s",
                  runtimeRoot.has_value() ? PathForLog(*runtimeRoot).c_str() : "<none>");
 
     if (!EnsureAssetGroupCache()) {
@@ -1190,14 +1186,11 @@ extern "C" void Port_LogAssetLoaderStatus(void) {
     AssetLogOnce("startup-root", "selected asset root: %s", PathForLog(gAssetGroupCache.assetsRoot).c_str());
     AssetLogOnce("startup-gfx", "gfx groups: enabled (%zu groups)", gAssetGroupCache.gfxGroups.size());
     AssetLogOnce("startup-pal", "palette groups: enabled (%zu groups)", gAssetGroupCache.paletteGroups.size());
-    AssetLogOnce("startup-sprite",
-                 "sprite_ptrs: %s",
+    AssetLogOnce("startup-sprite", "sprite_ptrs: %s",
                  gAssetGroupCache.hasSpritePtrData ? "enabled via sprite_ptrs.json" : "disabled, ROM fallback");
-    AssetLogOnce("startup-text",
-                 "texts: %s",
+    AssetLogOnce("startup-text", "texts: %s",
                  gAssetGroupCache.hasTextData ? "enabled via texts.json" : "disabled, ROM fallback");
-    AssetLogOnce("startup-area",
-                 "area tables: %s",
+    AssetLogOnce("startup-area", "area tables: %s",
                  gAssetGroupCache.hasAreaData ? "enabled via area_*.json" : "disabled, ROM fallback");
     AssetLogOnce("startup-map-assets", "registered map asset files: %zu", gAssetGroupCache.mapAssetFiles.size());
 }
@@ -1211,17 +1204,17 @@ extern "C" void Port_LogAssetLoaderStatus(void) {
 extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned int group) {
     std::fprintf(out, "  --- asset environment ---\n");
     std::fprintf(out, "  active region: %s (cache subdir: assets/%s)\n",
-                 gRomRegion == ROM_REGION_EU ? "EU" :
-                 gRomRegion == ROM_REGION_JP ? "JP" :
-                 gRomRegion == ROM_REGION_USA ? "USA" : "UNKNOWN",
+                 gRomRegion == ROM_REGION_EU    ? "EU"
+                 : gRomRegion == ROM_REGION_JP  ? "JP"
+                 : gRomRegion == ROM_REGION_USA ? "USA"
+                                                : "UNKNOWN",
                  RegionAssetSubdir());
 
     std::error_code ec;
     const auto cwd = std::filesystem::current_path(ec);
     std::fprintf(out, "  cwd: %s\n", ec ? "<failed>" : PathForLog(cwd).c_str());
     const auto exeDir = GetExecutableDirectory();
-    std::fprintf(out, "  exe dir: %s\n",
-                 exeDir.has_value() ? PathForLog(*exeDir).c_str() : "<unknown>");
+    std::fprintf(out, "  exe dir: %s\n", exeDir.has_value() ? PathForLog(*exeDir).c_str() : "<unknown>");
 
     /* Probe for baserom.gba in the same candidate roots the asset
      * loader uses. If it's missing or the wrong size the auto-extractor
@@ -1233,8 +1226,7 @@ extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned 
             std::error_code rom_ec;
             if (std::filesystem::exists(rom, rom_ec)) {
                 const auto sz = std::filesystem::file_size(rom, rom_ec);
-                std::fprintf(out, "  baserom.gba: %s (%llu bytes)%s\n",
-                             PathForLog(rom).c_str(),
+                std::fprintf(out, "  baserom.gba: %s (%llu bytes)%s\n", PathForLog(rom).c_str(),
                              static_cast<unsigned long long>(rom_ec ? 0 : sz),
                              (sz == 16ULL * 1024 * 1024) ? "" : "  <-- WRONG SIZE, expected 16777216");
                 romFound = true;
@@ -1269,17 +1261,15 @@ extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned 
 
     const std::filesystem::path palJson = gAssetGroupCache.assetsRoot / "palette_groups.json";
     const std::filesystem::path gfxJson = gAssetGroupCache.assetsRoot / "gfx_groups.json";
-    std::fprintf(out, "  palette_groups.json: %s\n",
-                 std::filesystem::exists(palJson, ec) ? "exists" : "MISSING");
-    std::fprintf(out, "  gfx_groups.json:     %s\n",
-                 std::filesystem::exists(gfxJson, ec) ? "exists" : "MISSING");
+    std::fprintf(out, "  palette_groups.json: %s\n", std::filesystem::exists(palJson, ec) ? "exists" : "MISSING");
+    std::fprintf(out, "  gfx_groups.json:     %s\n", std::filesystem::exists(gfxJson, ec) ? "exists" : "MISSING");
 
     if (gAssetGroupCache.paletteGroups.size() < 10) {
         std::fprintf(out, "  WARNING: palette_groups appears truncated\n");
     }
 
     const bool isPalette = (kind && std::strcmp(kind, "palette") == 0);
-    const bool isGfx     = (kind && std::strcmp(kind, "gfx") == 0);
+    const bool isGfx = (kind && std::strcmp(kind, "gfx") == 0);
 
     /* List the first few known indices for the failing kind so the
      * triager can see whether group N is missing specifically vs all
@@ -1307,11 +1297,11 @@ extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned 
                     const std::filesystem::path p = gAssetGroupCache.assetsRoot / ref.file;
                     const bool exists = std::filesystem::exists(p, ec);
                     std::uintmax_t sz = 0;
-                    if (exists) sz = std::filesystem::file_size(p, ec);
+                    if (exists)
+                        sz = std::filesystem::file_size(p, ec);
                     const bool tooSmall = exists && (ref.byteOffset + ref.size > sz);
                     std::fprintf(out, "    %s %s (%llu bytes)%s\n",
-                                 exists ? (tooSmall ? "TRUNCATED" : "ok       ") : "MISSING  ",
-                                 ref.file.c_str(),
+                                 exists ? (tooSmall ? "TRUNCATED" : "ok       ") : "MISSING  ", ref.file.c_str(),
                                  static_cast<unsigned long long>(sz),
                                  tooSmall ? "  <-- file too small for byteOffset+size" : "");
                 }
@@ -1337,10 +1327,9 @@ extern "C" void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned 
                 const std::filesystem::path p = gAssetGroupCache.assetsRoot / entry.file;
                 const bool exists = std::filesystem::exists(p, ec);
                 std::uintmax_t sz = 0;
-                if (exists) sz = std::filesystem::file_size(p, ec);
-                std::fprintf(out, "    %s %s (%llu bytes)\n",
-                             exists ? "ok     " : "MISSING",
-                             entry.file.c_str(),
+                if (exists)
+                    sz = std::filesystem::file_size(p, ec);
+                std::fprintf(out, "    %s %s (%llu bytes)\n", exists ? "ok     " : "MISSING", entry.file.c_str(),
                              static_cast<unsigned long long>(sz));
             }
         }
@@ -1378,7 +1367,6 @@ GfxLoadDecision EvaluateGfxControl(u8 unknown) {
  * than pulling all of main.h into this translation unit. */
 extern "C" u16 gPaletteBuffer[];
 
-
 extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
     if (!EnsureAssetGroupCache()) {
         return FALSE;
@@ -1402,9 +1390,10 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
                 return FALSE;
             }
 
-            AssetLogOnce("palette-file:" + std::to_string(group) + ":" + std::to_string(entry.destPaletteNum + copiedPalettes) +
-                             ":" + ref.file,
-                         "palette group %u slot %u <- %s", group, entry.destPaletteNum + copiedPalettes, ref.file.c_str());
+            AssetLogOnce("palette-file:" + std::to_string(group) + ":" +
+                             std::to_string(entry.destPaletteNum + copiedPalettes) + ":" + ref.file,
+                         "palette group %u slot %u <- %s", group, entry.destPaletteNum + copiedPalettes,
+                         ref.file.c_str());
             LoadPalettes(fileData->data() + ref.byteOffset, static_cast<s32>(entry.destPaletteNum + copiedPalettes),
                          static_cast<s32>(ref.numPalettes));
             copiedPalettes += ref.numPalettes;
@@ -1484,7 +1473,7 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
             if (entry.dest >= 0x02000000u && entry.dest < 0x02040000u) {
                 resolvedDest = Port_ResolveEwramPtr(entry.dest);
             }
-            
+
             if (resolvedDest != nullptr) {
                 std::memcpy(resolvedDest, fileData->data(), fileData->size());
             } else {
@@ -1503,11 +1492,15 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
 }
 
 extern "C" bool32 Port_LoadAreaTablesFromAssets(void) {
+    if (gRomRegion == ROM_REGION_JP)
+        return FALSE;
     if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasAreaData) {
         return FALSE;
     }
 
-    AssetLogOnce("area-data-json", "area tables enabled from %s/{area_room_headers.json,area_tile_sets.json,area_room_maps.json,area_tables.json,area_tiles.json}",
+    AssetLogOnce("area-data-json",
+                 "area tables enabled from "
+                 "%s/{area_room_headers.json,area_tile_sets.json,area_room_maps.json,area_tables.json,area_tiles.json}",
                  PathForLog(gAssetGroupCache.assetsRoot).c_str());
 
     for (u32 area = 0; area < kAreaCount; ++area) {
@@ -1659,8 +1652,7 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
                  * byte, preferring the next animation's first byte
                  * (what the GBA would read). */
                 u8 loopBack = static_cast<u8>(std::min<size_t>(numFrames, 0xFFu));
-                if (a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr &&
-                    !rawAnims[a + 1]->empty()) {
+                if (a + 1 < rawAnims.size() && rawAnims[a + 1] != nullptr && !rawAnims[a + 1]->empty()) {
                     u8 nextByte = (*rawAnims[a + 1])[0];
                     if (nextByte > 0 && nextByte <= numFrames) {
                         loopBack = nextByte;
@@ -1672,8 +1664,7 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
                  * this animation so the engine reads the same data the
                  * GBA would.  We scan forward until the first loop
                  * frame so the engine stays within the buffer. */
-                size_t appended = AppendRomTrailingBytes(
-                    sourceKey.c_str(), dataSize, *buf);
+                size_t appended = AppendRomTrailingBytes(sourceKey.c_str(), dataSize, *buf);
                 if (appended == 0) {
                     /* ROM unavailable — append a safe sentinel frame:
                      * invisible tile (0xFF), 1-tick, ANIM_DONE, self-loop. */
@@ -1710,6 +1701,8 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
 }
 
 extern "C" bool32 Port_LoadTextsFromAssets(void) {
+    if (gRomRegion == ROM_REGION_JP)
+        return FALSE;
     if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasTextData) {
         return FALSE;
     }
@@ -1732,7 +1725,8 @@ extern "C" bool32 Port_LoadTextsFromAssets(void) {
 
     if (anyLoaded) {
         gAssetGroupCache.textsLoaded = true;
-        AssetLogOnce("texts-root", "translations loaded from %s", PathForLog(gAssetGroupCache.assetsRoot / "texts.json").c_str());
+        AssetLogOnce("texts-root", "translations loaded from %s",
+                     PathForLog(gAssetGroupCache.assetsRoot / "texts.json").c_str());
     }
 
     return anyLoaded ? TRUE : FALSE;
@@ -1741,7 +1735,8 @@ extern "C" bool32 Port_LoadTextsFromAssets(void) {
 extern "C" void Port_LogTextLookup(u32 langIndex, u32 textIndex) {
     const std::string key = "text-lookup:" + std::to_string(langIndex) + ":" + std::to_string(textIndex);
 
-    if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasTextData || langIndex >= gAssetGroupCache.textFilesById.size()) {
+    if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasTextData ||
+        langIndex >= gAssetGroupCache.textFilesById.size()) {
         AssetLogOnce(key, "text 0x%04X lang %u <- ROM", textIndex & 0xFFFF, langIndex);
         return;
     }
@@ -1759,6 +1754,8 @@ extern "C" bool32 Port_AreSpritePtrsLoadedFromAssets(void) {
 }
 
 extern "C" bool32 Port_RefreshAreaDataFromAssets(u32 area) {
+    if (gRomRegion == ROM_REGION_JP)
+        return FALSE;
     if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasAreaData || area >= kAreaCount) {
         return FALSE;
     }

@@ -152,9 +152,9 @@ void GyorgFemale_Setup(GyorgFemaleEntity* this) {
     gPlayerEntity.base.collisionLayer = 2;
     UpdateSpriteForCollisionLayer(&gPlayerEntity.base);
     if (!REGION_IS_EU) {
-    RegisterTransitionHandler(this, GyorgFemale_OnEnterRoom, NULL);
+        RegisterTransitionHandler(this, GyorgFemale_OnEnterRoom, NULL);
     } else {
-    RegisterTransitionHandler(this, GyorgFemale_Reset, NULL);
+        RegisterTransitionHandler(this, GyorgFemale_Reset, NULL);
     }
 }
 
@@ -213,8 +213,8 @@ void GyorgFemale_Action2(GyorgFemaleEntity* this) {
             if (this->eyeTimer == 1320) {
                 this->eyesVulnerable = 0;
                 if (!REGION_IS_EU) {
-                this->eyesHit = 0;
-                this->unk_7f = 0;
+                    this->eyesHit = 0;
+                    this->unk_7f = 0;
                 }
             }
         }
@@ -227,7 +227,7 @@ void GyorgFemale_Action2(GyorgFemaleEntity* this) {
         super->action = 1;
         this->childrenSpawnTimer = 60;
         if (!REGION_IS_EU) {
-        this->eyesVulnerable = 0;
+            this->eyesVulnerable = 0;
         }
         this->unk_80 = 0;
     }
@@ -252,8 +252,8 @@ void GyorgFemale_Action3(GyorgFemaleEntity* this) {
             if (this->eyeTimer == 1320) {
                 this->eyesVulnerable = 0;
                 if (!REGION_IS_EU) {
-                this->eyesHit = 0;
-                this->unk_7f = 0;
+                    this->eyesHit = 0;
+                    this->unk_7f = 0;
                 }
             }
         }
@@ -261,11 +261,11 @@ void GyorgFemale_Action3(GyorgFemaleEntity* this) {
     if (super->health == 0) {
         super->action = 1;
         if (REGION_IS_EU) {
-        this->eyesVulnerable = 0;
+            this->eyesVulnerable = 0;
         }
         this->childrenSpawnTimer = 60;
         if (!REGION_IS_EU) {
-        this->eyesVulnerable = 0;
+            this->eyesVulnerable = 0;
         }
         this->unk_80 = 0;
         SoundReq(SFX_BOSS_DIE);
@@ -290,7 +290,8 @@ void GyorgFemale_Reset(GyorgFemaleEntity* this) {
     s32 i;
     u8* src;
     u8* dst;
-    LoadMapData((MapDataDefinition*)gyorgMappings[super->animationState >> 6]);
+    /* gyorgMappings rows are compiled tables — baked USA offsets need remap. */
+    LoadMapDataB(gyorgMappings[super->animationState >> 6]);
     sub_08046518();
     for (i = 0x20, src = ((u8*)&gMapDataBottomSpecial), dst = ((u8*)&gMapDataBottomSpecial) + 0x3260; i != 0; i--) {
         MemCopy(src, dst, 0x40);
@@ -383,9 +384,9 @@ void GyorgFemale_ChooseEyePattern(GyorgFemaleEntity* this) {
         return;
     }
     if (!REGION_IS_EU) {
-    if (this->eyesVulnerable == 0xFF) {
-        return;
-    }
+        if (this->eyesVulnerable == 0xFF) {
+            return;
+        }
     }
     this->eyesVulnerable = gUnk_080D1AF8[Random() & 3];
     this->unk_7f = 0;
@@ -398,9 +399,9 @@ void GyorgFemale_ProcessEyeHit(GyorgFemaleEntity* this) {
         this->eyesHit |= this->eyesHitFrame;
         if (super->timer == 0 && this->eyesVulnerable != 0xFF) {
             if (!REGION_IS_EU) {
-            super->timer = 4;
+                super->timer = 4;
             } else {
-            super->timer = 3;
+                super->timer = 3;
             }
         }
         if (sub_08000E62(this->eyesHit) > 2) {

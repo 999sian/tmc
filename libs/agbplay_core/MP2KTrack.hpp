@@ -19,12 +19,11 @@ struct MP2KChn;
 struct MP2KContext;
 class ReverbEffect;
 
-struct MP2KTrack
-{
-    MP2KTrack(const MP2KContext &ctx, uint8_t trackIdx);
-    MP2KTrack(const MP2KTrack &) = delete;
-    MP2KTrack(MP2KTrack &&) = default;
-    MP2KTrack &operator=(const MP2KTrack &) = delete;
+struct MP2KTrack {
+    MP2KTrack(const MP2KContext& ctx, uint8_t playerIdx, uint8_t trackIdx);
+    MP2KTrack(const MP2KTrack&) = delete;
+    MP2KTrack(MP2KTrack&&) = default;
+    MP2KTrack& operator=(const MP2KTrack&) = delete;
 
     void Init(size_t pos);
     void Stop();
@@ -72,7 +71,13 @@ struct MP2KTrack
     bool updateVolume;
     bool updatePitch;
 
+    /* Stable cross-player ordering key (see SequenceReader's PCM channel
+     * steal): hardware resolves ties by track ADDRESS, which is a fixed
+     * (player, track) order in GBA RAM. The port's tracks live in per-player
+     * heap vectors, so pointer comparison across players is indeterminate —
+     * compare (playerIdx, trackIdx) instead. */
+    const uint8_t playerIdx;
     const uint8_t trackIdx;
 
-    MP2KChn *channels = nullptr;
+    MP2KChn* channels = nullptr;
 };

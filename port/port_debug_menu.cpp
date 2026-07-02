@@ -28,7 +28,7 @@
 #include "port_debug_query.h"
 #include "port_debug_actions.h"
 #include "port_widescreen.h"
-#include "item_ids.h"  /* BOTTLE_CHARM_* / ITEM_BOTTLE_PICOLYTE_* enum ids (C++-safe) */
+#include "item_ids.h" /* BOTTLE_CHARM_* / ITEM_BOTTLE_PICOLYTE_* enum ids (C++-safe) */
 
 /* Console-Parity getter (port_runtime_config.cpp) — used to annotate the
  * noclip row; avoids pulling the whole runtime-config header in here. */
@@ -38,88 +38,88 @@ extern "C" {
 
 /* Display / runtime-config knobs — same set the file-select "L Settings"
  * panel exposes, so the F8 menu can drive them mid-game. */
-void          Port_PPU_ToggleFullscreen(void);
-bool          Port_PPU_IsFullscreen(void);
-void          Port_PPU_CycleWindowScale(int direction);
+void Port_PPU_ToggleFullscreen(void);
+bool Port_PPU_IsFullscreen(void);
+void Port_PPU_CycleWindowScale(int direction);
 unsigned char Port_PPU_WindowScale(void);
-void          Port_PPU_ApplyWindowScale(void);
-void          Port_PPU_CyclePresentationMode(int direction);
-const char*   Port_PPU_PresentationModeName(void);
-void          Port_PPU_CycleFilter(int direction);
-const char*   Port_PPU_FilterName(void);
-unsigned int  Port_Config_TargetFps(void);
-void          Port_Config_CycleTargetFps(int direction);
+void Port_PPU_ApplyWindowScale(void);
+void Port_PPU_CyclePresentationMode(int direction);
+const char* Port_PPU_PresentationModeName(void);
+void Port_PPU_CycleFilter(int direction);
+const char* Port_PPU_FilterName(void);
+unsigned int Port_Config_TargetFps(void);
+void Port_Config_CycleTargetFps(int direction);
 unsigned char Port_Config_InternalScale(void);
-void          Port_Config_CycleInternalScale(int direction);
-bool          Port_Config_WidescreenEnabled(void);
-void          Port_Config_SetWidescreenEnabled(bool enabled);
+void Port_Config_CycleInternalScale(int direction);
+bool Port_Config_WidescreenEnabled(void);
+void Port_Config_SetWidescreenEnabled(bool enabled);
 
 /* Soft-slot equip-button assignments (port_softslots.c). */
-const char*   Port_SoftSlots_GetSlotLabel(int slot);
-void          Port_SoftSlots_CycleAssignment(int slot, int direction);
+const char* Port_SoftSlots_GetSlotLabel(int slot);
+void Port_SoftSlots_CycleAssignment(int slot, int direction);
 
 /* Save-state slots (port_quicksave.c). */
-int  Port_QuickSave_SaveSlot(int slot);
-int  Port_QuickSave_LoadSlot(int slot);
-int  Port_QuickSave_HasSlot(int slot);
+int Port_QuickSave_SaveSlot(int slot);
+int Port_QuickSave_LoadSlot(int slot);
+int Port_QuickSave_HasSlot(int slot);
 unsigned long long Port_QuickSave_SlotTimestamp(int slot);
-int  Port_QuickSave_SlotCount(void);
-int  Port_QuickSave_AutoSlotBase(void);
-int  Port_QuickSave_AutoSlotCount(void);
-int  Port_QuickSave_AutoEnabled(void);
+int Port_QuickSave_SlotCount(void);
+int Port_QuickSave_AutoSlotBase(void);
+int Port_QuickSave_AutoSlotCount(void);
+int Port_QuickSave_AutoEnabled(void);
 void Port_QuickSave_SetAutoEnabled(int enabled);
 unsigned int Port_QuickSave_AutoIntervalMs(void);
 void Port_QuickSave_SetAutoIntervalMs(unsigned int ms);
 /* Persistence wrappers — keep config.json in sync with runtime toggles. */
-bool         Port_Config_AutosaveEnabled(void);
-void         Port_Config_SetAutosaveEnabled(bool enabled);
+bool Port_Config_AutosaveEnabled(void);
+void Port_Config_SetAutosaveEnabled(bool enabled);
 unsigned int Port_Config_AutosaveIntervalMs(void);
-void         Port_Config_SetAutosaveIntervalMs(unsigned int ms);
+void Port_Config_SetAutosaveIntervalMs(unsigned int ms);
 
 /* Save profiles (port_save.c + port_runtime_config.cpp). */
 const char* Port_Save_GetActivePath(void);
-void        Port_Save_SetActivePath(const char* path);
-int         Port_Save_SaveAsProfile(const char* path);
-int         Port_Save_FilenameMax(void);
-int         Port_Save_ListProfiles(char (*out)[64], int max);
+void Port_Save_SetActivePath(const char* path);
+int Port_Save_SaveAsProfile(const char* path);
+int Port_Save_FilenameMax(void);
+int Port_Save_ListProfiles(char (*out)[64], int max);
 const char* Port_Config_ActiveSaveProfile(void);
-void        Port_Config_SetActiveSaveProfile(const char* path);
+void Port_Config_SetActiveSaveProfile(const char* path);
 }
 
 namespace {
 
 /* Mirror a few enum values from include/area.h here so the menu doesn't
  * pull in the game headers. Update if these area indices ever change. */
-constexpr unsigned char AREA_MINISH_WOODS              = 0x00;
-constexpr unsigned char AREA_MINISH_VILLAGE            = 0x01;
-constexpr unsigned char AREA_HYRULE_TOWN               = 0x02;
-constexpr unsigned char AREA_HYRULE_FIELD              = 0x03;
-constexpr unsigned char AREA_MT_CRENEL                 = 0x06;
-constexpr unsigned char AREA_MELARIS_MINE              = 0x10;
-constexpr unsigned char AREA_DEEPWOOD_SHRINE           = 0x48;
-constexpr unsigned char AREA_DEEPWOOD_SHRINE_BOSS      = 0x49;
-constexpr unsigned char AREA_DEEPWOOD_SHRINE_ENTRY     = 0x4A;
-constexpr unsigned char AREA_CAVE_OF_FLAMES            = 0x50;
-constexpr unsigned char AREA_CAVE_OF_FLAMES_BOSS       = 0x51;
-constexpr unsigned char AREA_FORTRESS_OF_WINDS         = 0x58;
-constexpr unsigned char AREA_TEMPLE_OF_DROPLETS        = 0x60;
-constexpr unsigned char AREA_ROYAL_CRYPT               = 0x68;
-constexpr unsigned char AREA_PALACE_OF_WINDS           = 0x70;
+constexpr unsigned char AREA_MINISH_WOODS = 0x00;
+constexpr unsigned char AREA_MINISH_VILLAGE = 0x01;
+constexpr unsigned char AREA_HYRULE_TOWN = 0x02;
+constexpr unsigned char AREA_HYRULE_FIELD = 0x03;
+constexpr unsigned char AREA_MT_CRENEL = 0x06;
+constexpr unsigned char AREA_MELARIS_MINE = 0x10;
+constexpr unsigned char AREA_DEEPWOOD_SHRINE = 0x48;
+constexpr unsigned char AREA_DEEPWOOD_SHRINE_BOSS = 0x49;
+constexpr unsigned char AREA_DEEPWOOD_SHRINE_ENTRY = 0x4A;
+constexpr unsigned char AREA_CAVE_OF_FLAMES = 0x50;
+constexpr unsigned char AREA_CAVE_OF_FLAMES_BOSS = 0x51;
+constexpr unsigned char AREA_FORTRESS_OF_WINDS = 0x58;
+constexpr unsigned char AREA_TEMPLE_OF_DROPLETS = 0x60;
+constexpr unsigned char AREA_ROYAL_CRYPT = 0x68;
+constexpr unsigned char AREA_PALACE_OF_WINDS = 0x70;
 
 bool sOpen = false;
 
 /* Classic-menu selection state for the per-dungeon-items and buff sub-pages.
  * File-scope so the cycle lambdas share one selection that persists across
  * page re-pushes (the ribbon keeps the equivalent state in its own statics). */
-int sClassicDungeonSel = 0;  /* selected dungeon id, 0..15 */
-int sClassicCharmSel = 1;    /* charm combo index; 0 = Off */
-int sClassicPicoSel = 1;     /* picolyte combo index; 0 = Off */
-int sClassicFlagBank = 0;    /* selected flag bank, 0..12 */
-int sClassicFlagIndex = 0;   /* selected flag index within the bank */
+int sClassicDungeonSel = 0; /* selected dungeon id, 0..15 */
+int sClassicCharmSel = 1;   /* charm combo index; 0 = Off */
+int sClassicPicoSel = 1;    /* picolyte combo index; 0 = Off */
+int sClassicFlagBank = 0;   /* selected flag bank, 0..12 */
+int sClassicFlagIndex = 0;  /* selected flag index within the bank */
 /* Memory-watch candidate (the address being composed before "Add watch"). */
 unsigned int sClassicMemAddr = 0x03000000u; /* IWRAM base — a sane starting point */
-int sClassicMemWidth = 0;    /* 0=u8 1=u16 2=u32 */
-int sClassicMemStepIdx = 0;  /* address step = 1 << (4*idx): 1,0x10,...,0x10000000 */
+int sClassicMemWidth = 0;                   /* 0=u8 1=u16 2=u32 */
+int sClassicMemStepIdx = 0;                 /* address step = 1 << (4*idx): 1,0x10,...,0x10000000 */
 
 struct MenuItem {
     std::string label;
@@ -153,7 +153,7 @@ struct MenuPage {
 constexpr int kVisibleItemsMax = 18;
 
 std::vector<MenuPage> sPageStack;
-std::string sToast;            /* Temporary message shown at bottom of screen. */
+std::string sToast; /* Temporary message shown at bottom of screen. */
 unsigned int sToastUntilTicks = 0;
 
 /* Items in sPageStack store std::function lambdas. Clearing the stack
@@ -243,8 +243,7 @@ void ApplyPendingMutations(void) {
     }
 }
 
-void DoWarp(unsigned char area, unsigned char room,
-            unsigned short x = 0x80, unsigned short y = 0x80,
+void DoWarp(unsigned char area, unsigned char room, unsigned short x = 0x80, unsigned short y = 0x80,
             unsigned char layer = 0) {
     if (!Port_DebugAction_Warp(area, room, x, y, layer)) {
         Toast("Warp ignored: not in gameplay");
@@ -260,20 +259,44 @@ void DoWarp(unsigned char area, unsigned char room,
 MenuPage BuildItemsPage(void) {
     MenuPage p;
     p.title = "ITEMS";
-    p.items.push_back({ "Unlock all items",      []() { Port_DebugAction_GiveAllItems(); Toast("All items granted"); } });
-    p.items.push_back({ "Max heart containers",  []() { Port_DebugAction_MaxHearts();    Toast("Hearts maxed");      } });
-    p.items.push_back({ "Heal to full",          []() { Port_DebugAction_HealFull();     Toast("Healed");            } });
-    p.items.push_back({ "999 rupees",            []() { Port_DebugAction_MaxRupees();    Toast("999 rupees");        } });
-    p.items.push_back({ "999 mysterious shells", []() { Port_DebugAction_MaxShells();    Toast("999 shells");        } });
-    p.items.push_back({ "All kinstones fused",   []() { Port_DebugAction_AllKinstones(); Toast("All kinstones");     } });
-    p.items.push_back({ "All figurines (130)",   []() { Port_DebugAction_AllFigurines130(); Toast("All 130 figurines"); } });
-    p.items.push_back({ "Figurines 100% (beaten)", []() { Port_DebugAction_AllFigurines100(); Toast("136 figurines + game cleared"); } });
-    p.items.push_back({ "Per-item toggle ->",    []() { Push(BuildItemTogglePage());   } });
-    p.items.push_back({ "Counts / capacities ->",[]() { Push(BuildStatsPage());        } });
-    p.items.push_back({ "Bottle contents ->",    []() { Push(BuildBottlesPage());      } });
-    p.items.push_back({ "Dungeon items ->",      []() { Push(BuildDungeonItemsPage()); } });
-    p.items.push_back({ "Charm / Picolyte ->",   []() { Push(BuildBuffsPage());        } });
-    p.items.push_back({ "<- Back",               []() { Pop(); } });
+    p.items.push_back({ "Unlock all items", []() {
+                           Port_DebugAction_GiveAllItems();
+                           Toast("All items granted");
+                       } });
+    p.items.push_back({ "Max heart containers", []() {
+                           Port_DebugAction_MaxHearts();
+                           Toast("Hearts maxed");
+                       } });
+    p.items.push_back({ "Heal to full", []() {
+                           Port_DebugAction_HealFull();
+                           Toast("Healed");
+                       } });
+    p.items.push_back({ "999 rupees", []() {
+                           Port_DebugAction_MaxRupees();
+                           Toast("999 rupees");
+                       } });
+    p.items.push_back({ "999 mysterious shells", []() {
+                           Port_DebugAction_MaxShells();
+                           Toast("999 shells");
+                       } });
+    p.items.push_back({ "All kinstones fused", []() {
+                           Port_DebugAction_AllKinstones();
+                           Toast("All kinstones");
+                       } });
+    p.items.push_back({ "All figurines (130)", []() {
+                           Port_DebugAction_AllFigurines130();
+                           Toast("All 130 figurines");
+                       } });
+    p.items.push_back({ "Figurines 100% (beaten)", []() {
+                           Port_DebugAction_AllFigurines100();
+                           Toast("136 figurines + game cleared");
+                       } });
+    p.items.push_back({ "Per-item toggle ->", []() { Push(BuildItemTogglePage()); } });
+    p.items.push_back({ "Counts / capacities ->", []() { Push(BuildStatsPage()); } });
+    p.items.push_back({ "Bottle contents ->", []() { Push(BuildBottlesPage()); } });
+    p.items.push_back({ "Dungeon items ->", []() { Push(BuildDungeonItemsPage()); } });
+    p.items.push_back({ "Charm / Picolyte ->", []() { Push(BuildBuffsPage()); } });
+    p.items.push_back({ "<- Back", []() { Pop(); } });
     return p;
 }
 
@@ -286,14 +309,15 @@ MenuPage BuildItemTogglePage(void) {
     const int count = Port_DebugQuery_ToggleItemCount();
     for (int i = 0; i < count; ++i) {
         MenuItem it;
-        it.action = [i]() {
-            Port_DebugAction_SetToggleItem(i, Port_DebugQuery_ToggleItemOwned(i) ? 0 : 1);
-        };
+        it.action = [i]() { Port_DebugAction_SetToggleItem(i, Port_DebugQuery_ToggleItemOwned(i) ? 0 : 1); };
         it.labelFn = [i]() -> std::string {
             const char* name = Port_DebugQuery_ToggleItemName(i);
-            const char* grp  = Port_DebugQuery_ToggleItemGroup(i);
+            const char* grp = Port_DebugQuery_ToggleItemGroup(i);
             std::string s = Port_DebugQuery_ToggleItemOwned(i) ? "[x] " : "[ ] ";
-            if (grp) { s += grp; s += ": "; }
+            if (grp) {
+                s += grp;
+                s += ": ";
+            }
             s += name ? name : "?";
             return s;
         };
@@ -313,7 +337,7 @@ MenuPage BuildDungeonItemsPage(void) {
     p.title = "DUNGEON ITEMS";
 
     MenuItem sel;
-    sel.cycleLeft  = []() { sClassicDungeonSel = (sClassicDungeonSel + 15) % 16; };
+    sel.cycleLeft = []() { sClassicDungeonSel = (sClassicDungeonSel + 15) % 16; };
     sel.cycleRight = []() { sClassicDungeonSel = (sClassicDungeonSel + 1) % 16; };
     sel.labelFn = []() -> std::string {
         char buf[48];
@@ -325,7 +349,11 @@ MenuPage BuildDungeonItemsPage(void) {
     sel.label = "Dungeon";
     p.items.push_back(std::move(sel));
 
-    struct DBit { const char* name; int which; int bit; };
+    struct DBit {
+        const char* name;
+        int which;
+        int bit;
+    };
     static const DBit kBits[] = { { "Map", 0, 0x1 }, { "Compass", 1, 0x2 }, { "Big Key", 2, 0x4 } };
     for (const DBit& b : kBits) {
         const char* name = b.name;
@@ -344,18 +372,16 @@ MenuPage BuildDungeonItemsPage(void) {
     }
 
     MenuItem keys;
-    keys.cycleLeft  = []() {
+    keys.cycleLeft = []() {
         const int k = Port_DebugQuery_DungeonKeys(sClassicDungeonSel);
         Port_DebugAction_SetDungeonKeys(sClassicDungeonSel, k > 0 ? k - 1 : 0);
     };
     keys.cycleRight = []() {
-        Port_DebugAction_SetDungeonKeys(sClassicDungeonSel,
-                                        Port_DebugQuery_DungeonKeys(sClassicDungeonSel) + 1);
+        Port_DebugAction_SetDungeonKeys(sClassicDungeonSel, Port_DebugQuery_DungeonKeys(sClassicDungeonSel) + 1);
     };
     keys.labelFn = []() -> std::string {
         char buf[40];
-        std::snprintf(buf, sizeof(buf), "Small keys: %d   (<- ->)",
-                      Port_DebugQuery_DungeonKeys(sClassicDungeonSel));
+        std::snprintf(buf, sizeof(buf), "Small keys: %d   (<- ->)", Port_DebugQuery_DungeonKeys(sClassicDungeonSel));
         return buf;
     };
     keys.label = "Small keys";
@@ -369,39 +395,43 @@ MenuPage BuildDungeonItemsPage(void) {
  * row writes {type, normal-duration}. Full timer control lives in the ribbon;
  * the classic fallback applies the standard durations (charm 60s / pico 15s). */
 MenuPage BuildBuffsPage(void) {
-    static const char* const kCharm[]  = { "Off", "Nayru", "Farore", "Din" };
-    static const int         kCharmId[] = { 0, BOTTLE_CHARM_NAYRU, BOTTLE_CHARM_FARORE, BOTTLE_CHARM_DIN };
-    static const char* const kPico[]   = { "Off", "Red", "Orange", "Yellow", "Green", "Blue", "White" };
-    static const int         kPicoId[]  = { 0, ITEM_BOTTLE_PICOLYTE_RED, ITEM_BOTTLE_PICOLYTE_ORANGE,
-                                            ITEM_BOTTLE_PICOLYTE_YELLOW, ITEM_BOTTLE_PICOLYTE_GREEN,
-                                            ITEM_BOTTLE_PICOLYTE_BLUE, ITEM_BOTTLE_PICOLYTE_WHITE };
+    static const char* const kCharm[] = { "Off", "Nayru", "Farore", "Din" };
+    static const int kCharmId[] = { 0, BOTTLE_CHARM_NAYRU, BOTTLE_CHARM_FARORE, BOTTLE_CHARM_DIN };
+    static const char* const kPico[] = { "Off", "Red", "Orange", "Yellow", "Green", "Blue", "White" };
+    static const int kPicoId[] = { 0,
+                                   ITEM_BOTTLE_PICOLYTE_RED,
+                                   ITEM_BOTTLE_PICOLYTE_ORANGE,
+                                   ITEM_BOTTLE_PICOLYTE_YELLOW,
+                                   ITEM_BOTTLE_PICOLYTE_GREEN,
+                                   ITEM_BOTTLE_PICOLYTE_BLUE,
+                                   ITEM_BOTTLE_PICOLYTE_WHITE };
 
     MenuPage p;
     p.title = "CHARM / PICOLYTE";
 
     MenuItem ct;
-    ct.cycleLeft  = []() { sClassicCharmSel = (sClassicCharmSel + 3) % 4; };
+    ct.cycleLeft = []() { sClassicCharmSel = (sClassicCharmSel + 3) % 4; };
     ct.cycleRight = []() { sClassicCharmSel = (sClassicCharmSel + 1) % 4; };
     ct.labelFn = []() -> std::string { return std::string("Charm type: ") + kCharm[sClassicCharmSel]; };
     ct.label = "Charm type";
     p.items.push_back(std::move(ct));
 
     p.items.push_back({ "Apply charm (60s)", []() {
-        Port_DebugAction_SetCharm(kCharmId[sClassicCharmSel], sClassicCharmSel == 0 ? 0 : 3600);
-        Toast(sClassicCharmSel == 0 ? "Charm cleared" : "Charm applied");
-    } });
+                           Port_DebugAction_SetCharm(kCharmId[sClassicCharmSel], sClassicCharmSel == 0 ? 0 : 3600);
+                           Toast(sClassicCharmSel == 0 ? "Charm cleared" : "Charm applied");
+                       } });
 
     MenuItem pt;
-    pt.cycleLeft  = []() { sClassicPicoSel = (sClassicPicoSel + 6) % 7; };
+    pt.cycleLeft = []() { sClassicPicoSel = (sClassicPicoSel + 6) % 7; };
     pt.cycleRight = []() { sClassicPicoSel = (sClassicPicoSel + 1) % 7; };
     pt.labelFn = []() -> std::string { return std::string("Picolyte type: ") + kPico[sClassicPicoSel]; };
     pt.label = "Picolyte type";
     p.items.push_back(std::move(pt));
 
     p.items.push_back({ "Apply picolyte (15s)", []() {
-        Port_DebugAction_SetPicolyte(kPicoId[sClassicPicoSel], sClassicPicoSel == 0 ? 0 : 900);
-        Toast(sClassicPicoSel == 0 ? "Picolyte cleared" : "Picolyte applied");
-    } });
+                           Port_DebugAction_SetPicolyte(kPicoId[sClassicPicoSel], sClassicPicoSel == 0 ? 0 : 900);
+                           Toast(sClassicPicoSel == 0 ? "Picolyte cleared" : "Picolyte applied");
+                       } });
 
     p.items.push_back({ "<- Back", []() { Pop(); } });
     return p;
@@ -420,17 +450,12 @@ MenuPage BuildStatsPage(void) {
             return span > 64 ? span / 64 : 1;
         };
         MenuItem it;
-        it.cycleLeft  = [i, stepOf]() {
-            Port_DebugAction_SetStat(i, Port_DebugQuery_StatValue(i) - stepOf(i));
-        };
-        it.cycleRight = [i, stepOf]() {
-            Port_DebugAction_SetStat(i, Port_DebugQuery_StatValue(i) + stepOf(i));
-        };
+        it.cycleLeft = [i, stepOf]() { Port_DebugAction_SetStat(i, Port_DebugQuery_StatValue(i) - stepOf(i)); };
+        it.cycleRight = [i, stepOf]() { Port_DebugAction_SetStat(i, Port_DebugQuery_StatValue(i) + stepOf(i)); };
         it.labelFn = [i]() -> std::string {
             char buf[64];
-            std::snprintf(buf, sizeof(buf), "%s: %d / %d   (<- ->)",
-                          Port_DebugQuery_StatName(i), Port_DebugQuery_StatValue(i),
-                          Port_DebugQuery_StatMax(i));
+            std::snprintf(buf, sizeof(buf), "%s: %d / %d   (<- ->)", Port_DebugQuery_StatName(i),
+                          Port_DebugQuery_StatValue(i), Port_DebugQuery_StatMax(i));
             return buf;
         };
         it.label = Port_DebugQuery_StatName(i);
@@ -460,8 +485,8 @@ MenuPage BuildBottlesPage(void) {
             char buf[56];
             const int idx = Port_DebugQuery_BottleContentIndex(Port_DebugQuery_BottleContent(b));
             const bool owned = Port_DebugQuery_BottleOwned(b) != 0;
-            std::snprintf(buf, sizeof(buf), "Bottle %d: %s%s   (<- ->)", b + 1,
-                          Port_DebugQuery_BottleContentName(idx), owned ? "" : " [grant]");
+            std::snprintf(buf, sizeof(buf), "Bottle %d: %s%s   (<- ->)", b + 1, Port_DebugQuery_BottleContentName(idx),
+                          owned ? "" : " [grant]");
             return buf;
         };
         char lbl[16];
@@ -484,17 +509,18 @@ MenuPage BuildFlagsPage(void) {
     MenuItem bk;
     bk.cycleLeft = [nBanks]() {
         sClassicFlagBank = (sClassicFlagBank + nBanks - 1) % nBanks;
-        if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(sClassicFlagBank)) sClassicFlagIndex = 0;
+        if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(sClassicFlagBank))
+            sClassicFlagIndex = 0;
     };
     bk.cycleRight = [nBanks]() {
         sClassicFlagBank = (sClassicFlagBank + 1) % nBanks;
-        if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(sClassicFlagBank)) sClassicFlagIndex = 0;
+        if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(sClassicFlagBank))
+            sClassicFlagIndex = 0;
     };
     bk.labelFn = []() -> std::string {
         const int cur = Port_DebugQuery_CurrentFlagBank();
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "%s%s   (<- ->)",
-                      Port_DebugQuery_FlagBankName(sClassicFlagBank),
+        std::snprintf(buf, sizeof(buf), "%s%s   (<- ->)", Port_DebugQuery_FlagBankName(sClassicFlagBank),
                       (sClassicFlagBank == cur) ? " *current area*" : "");
         return buf;
     };
@@ -504,16 +530,18 @@ MenuPage BuildFlagsPage(void) {
     MenuItem ix;
     ix.cycleLeft = []() {
         const int sz = Port_DebugQuery_FlagBankSize(sClassicFlagBank);
-        if (sz > 0) sClassicFlagIndex = (sClassicFlagIndex + sz - 1) % sz;
+        if (sz > 0)
+            sClassicFlagIndex = (sClassicFlagIndex + sz - 1) % sz;
     };
     ix.cycleRight = []() {
         const int sz = Port_DebugQuery_FlagBankSize(sClassicFlagBank);
-        if (sz > 0) sClassicFlagIndex = (sClassicFlagIndex + 1) % sz;
+        if (sz > 0)
+            sClassicFlagIndex = (sClassicFlagIndex + 1) % sz;
     };
     ix.labelFn = []() -> std::string {
         char buf[48];
-        std::snprintf(buf, sizeof(buf), "Index: %d / %d   (<- ->)",
-                      sClassicFlagIndex, Port_DebugQuery_FlagBankSize(sClassicFlagBank) - 1);
+        std::snprintf(buf, sizeof(buf), "Index: %d / %d   (<- ->)", sClassicFlagIndex,
+                      Port_DebugQuery_FlagBankSize(sClassicFlagBank) - 1);
         return buf;
     };
     ix.label = "Index";
@@ -532,12 +560,13 @@ MenuPage BuildFlagsPage(void) {
     p.items.push_back(std::move(tg));
 
     p.items.push_back({ "Jump to current area bank", []() {
-        const int cur = Port_DebugQuery_CurrentFlagBank();
-        if (cur >= 0) {
-            sClassicFlagBank = cur;
-            if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(cur)) sClassicFlagIndex = 0;
-        }
-    } });
+                           const int cur = Port_DebugQuery_CurrentFlagBank();
+                           if (cur >= 0) {
+                               sClassicFlagBank = cur;
+                               if (sClassicFlagIndex >= Port_DebugQuery_FlagBankSize(cur))
+                                   sClassicFlagIndex = 0;
+                           }
+                       } });
 
     p.items.push_back({ "<- Back", []() { Pop(); } });
     return p;
@@ -550,65 +579,62 @@ MenuPage BuildWarpPage(void) {
      * (the Wallmaster screen-transitions table, gWallMasterScreenTransitions)
      * — area, room, endX, endY, layer — so the warp goes through DoExitTransition
      * exactly the way a wallmaster pickup does. Layer=1 across all dungeons. */
-    p.items.push_back({ "Hyrule Town",                  []() { DoWarp(AREA_HYRULE_TOWN, 0x00, 0x80, 0xC0, 1); } });
+    p.items.push_back({ "Hyrule Town", []() { DoWarp(AREA_HYRULE_TOWN, 0x00, 0x80, 0xC0, 1); } });
     /* #65 fix: Link's house lives in SOUTH_HYRULE_FIELD (room 0x01),
      * not Western_Woods_South (room 0x00). Local coords come from the
      * exit list in src/data/transitions.c (gExitList_HouseInteriors2_-
      * LinksHouseEntrance: WARP_TYPE_BORDER -> 0x290, 0x19c). */
-    p.items.push_back({ "Hyrule Field - Link's house",  []() { DoWarp(AREA_HYRULE_FIELD, 0x01, 0x290, 0x19C, 1); } });
-    p.items.push_back({ "Minish Woods",                 []() { DoWarp(AREA_MINISH_WOODS, 0x00, 0x80, 0xC0, 1); } });
-    p.items.push_back({ "Minish Village",               []() { DoWarp(AREA_MINISH_VILLAGE, 0x00, 0x80, 0xC0, 1); } });
-    p.items.push_back({ "Mt Crenel",                    []() { DoWarp(AREA_MT_CRENEL,    0x00, 0x80, 0xC0, 1); } });
+    p.items.push_back({ "Hyrule Field - Link's house", []() { DoWarp(AREA_HYRULE_FIELD, 0x01, 0x290, 0x19C, 1); } });
+    p.items.push_back({ "Minish Woods", []() { DoWarp(AREA_MINISH_WOODS, 0x00, 0x80, 0xC0, 1); } });
+    p.items.push_back({ "Minish Village", []() { DoWarp(AREA_MINISH_VILLAGE, 0x00, 0x80, 0xC0, 1); } });
+    p.items.push_back({ "Mt Crenel", []() { DoWarp(AREA_MT_CRENEL, 0x00, 0x80, 0xC0, 1); } });
     /* Spawn at Mountain Minish 4's coordinates from gUnk_additional_9 — a
      * known-walkable spot near the room's left side (#42/#43 repro). */
-    p.items.push_back({ "Melari's Mines",               []() { DoWarp(AREA_MELARIS_MINE, 0x00, 0x80, 0x130, 1); } });
-    p.items.push_back({ "Deepwood Shrine",              []() { DoWarp(AREA_DEEPWOOD_SHRINE,    0x0B, 0xa8, 0xb8, 1); } });
+    p.items.push_back({ "Melari's Mines", []() { DoWarp(AREA_MELARIS_MINE, 0x00, 0x80, 0x130, 1); } });
+    p.items.push_back({ "Deepwood Shrine", []() { DoWarp(AREA_DEEPWOOD_SHRINE, 0x0B, 0xa8, 0xb8, 1); } });
     /* Boss-room coords match the canonical entry transitions in
      * src/data/transitions.c / src/manager/holeManager.c rather than the
      * placeholder (0x80, 0x80) that left Link off-camera or invisible.
      * Layer matches what the room map expects (CoF boss is a hole drop
      * onto layer 2). */
-    p.items.push_back({ "Deepwood Shrine - boss",       []() { DoWarp(AREA_DEEPWOOD_SHRINE_BOSS, 0x00, 0x88, 0xD8, 1); } });
-    p.items.push_back({ "Cave of Flames",               []() { DoWarp(AREA_CAVE_OF_FLAMES,     0x04, 0x98, 0xa8, 1); } });
+    p.items.push_back({ "Deepwood Shrine - boss", []() { DoWarp(AREA_DEEPWOOD_SHRINE_BOSS, 0x00, 0x88, 0xD8, 1); } });
+    p.items.push_back({ "Cave of Flames", []() { DoWarp(AREA_CAVE_OF_FLAMES, 0x04, 0x98, 0xa8, 1); } });
     /* Room 0x08 = Rollobite lava room (#36 — moving lava platforms).
      * Local coords come from the captured world position (610, 3578) minus the
      * room origin (336, 3200) recorded in area_room_headers.json. */
-    p.items.push_back({ "Cave of Flames - Rollobite",   []() { DoWarp(AREA_CAVE_OF_FLAMES,     0x08, 0x112, 0x17A, 1); } });
-    p.items.push_back({ "Cave of Flames - boss",        []() { DoWarp(AREA_CAVE_OF_FLAMES_BOSS, 0x00, 0xC0, 0xF8, 2); } });
-    p.items.push_back({ "Fortress of Winds",            []() { DoWarp(AREA_FORTRESS_OF_WINDS,  0x21, 0x78, 0xa8, 1); } });
-    p.items.push_back({ "Temple of Droplets",           []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x03, 0x108, 0xf8, 1); } });
-    p.items.push_back({ "Royal Crypt",                  []() { DoWarp(AREA_ROYAL_CRYPT,        0x08, 0x88, 0x78, 1); } });
-    p.items.push_back({ "Palace of Winds",              []() { DoWarp(AREA_PALACE_OF_WINDS,    0x31, 0x238, 0x58, 1); } });
+    p.items.push_back({ "Cave of Flames - Rollobite", []() { DoWarp(AREA_CAVE_OF_FLAMES, 0x08, 0x112, 0x17A, 1); } });
+    p.items.push_back({ "Cave of Flames - boss", []() { DoWarp(AREA_CAVE_OF_FLAMES_BOSS, 0x00, 0xC0, 0xF8, 2); } });
+    p.items.push_back({ "Fortress of Winds", []() { DoWarp(AREA_FORTRESS_OF_WINDS, 0x21, 0x78, 0xa8, 1); } });
+    p.items.push_back({ "Temple of Droplets", []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x03, 0x108, 0xf8, 1); } });
+    p.items.push_back({ "Royal Crypt", []() { DoWarp(AREA_ROYAL_CRYPT, 0x08, 0x88, 0x78, 1); } });
+    p.items.push_back({ "Palace of Winds", []() { DoWarp(AREA_PALACE_OF_WINDS, 0x31, 0x238, 0x58, 1); } });
     /* #58 repro: bakery rafters at the reporter's exact spot. World pos
      * (1864, 117); room 3 origin map_x=0x60 << 4 = 0x600 → local (0x148, 0x75).
      * Area + room constants hardcoded — not yet mirrored above. */
-    p.items.push_back({ "MinishRafters Bakery (#58 repro)",
-                        []() { DoWarp(0x2E, 0x03, 0x148, 0x75, 1); } });
+    p.items.push_back({ "MinishRafters Bakery (#58 repro)", []() { DoWarp(0x2E, 0x03, 0x148, 0x75, 1); } });
     /* #57 repro: Carlov's figurine shop. Area 0x23 = HouseInteriors3,
      * room 7 = Carlov, room header (0x00, 0x0E, 0xF0, 0xA0) → local centre
      * (0x78, 0x50). Walk into the device + insert shells to draw. */
-    p.items.push_back({ "Carlov figurine shop (#57 repro)",
-                        []() { DoWarp(0x23, 0x07, 0x78, 0x50, 1); } });
+    p.items.push_back({ "Carlov figurine shop (#57 repro)", []() { DoWarp(0x23, 0x07, 0x78, 0x50, 1); } });
     /* #101 repro: Scissors Beetle crash room in Temple of Droplets.
      * World pos (1650, 3335) - room origin (1568, 3280) = local (82, 55). */
-    p.items.push_back({ "ToD Scissors Beetle (#101 repro)",
-                        []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x33, 0x52, 0x37, 1); } });
+    p.items.push_back(
+        { "ToD Scissors Beetle (#101 repro)", []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x33, 0x52, 0x37, 1); } });
     /* #78 repro: Wind Ruins / Fortress-of-Winds approach left wizard room.
      * World pos (520, 5379) - room origin (352, 5312) = local (168, 67). */
-    p.items.push_back({ "WindRuins Wizards (#78 repro)",
-                        []() { DoWarp(AREA_FORTRESS_OF_WINDS, 0x23, 0xA8, 0x43, 1); } });
+    p.items.push_back(
+        { "WindRuins Wizards (#78 repro)", []() { DoWarp(AREA_FORTRESS_OF_WINDS, 0x23, 0xA8, 0x43, 1); } });
     /* OBJ-window (mode-2) render test — dark rooms whose light circles are
      * litArea OBJ-window sprites (src/object/litArea.c). Spawn point sits on a
      * litArea coordinate (always-on, no flag gate) so the light reveal is in
      * view immediately. Correct render: dark room + soft circular light, no
      * floating opaque blob. Stockwell = MinishRafters room 0x01 (two candle
      * circles); Madderpillars = ToD room 0x2C (two circles). */
-    p.items.push_back({ "OBJWIN test: Stockwell shop (litArea)",
-                        []() { DoWarp(0x2E, 0x01, 0x64, 0x78, 1); } });
-    p.items.push_back({ "OBJWIN test: ToD Madderpillars (litArea)",
-                        []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x2C, 0xBC, 0x58, 1); } });
+    p.items.push_back({ "OBJWIN test: Stockwell shop (litArea)", []() { DoWarp(0x2E, 0x01, 0x64, 0x78, 1); } });
+    p.items.push_back(
+        { "OBJWIN test: ToD Madderpillars (litArea)", []() { DoWarp(AREA_TEMPLE_OF_DROPLETS, 0x2C, 0xBC, 0x58, 1); } });
     p.items.push_back({ "All areas (raw, by index) ->", []() { Push(BuildAllAreasPage()); } });
-    p.items.push_back({ "<- Back",                      []() { Pop(); } });
+    p.items.push_back({ "<- Back", []() { Pop(); } });
     return p;
 }
 
@@ -628,7 +654,8 @@ MenuPage BuildAllAreasPage(void) {
         const char* name = Port_DebugQuery_AreaName(a);
         /* Match the ribbon UI: skip areas that aren't warpable
          * (unnamed slots + known-broken named areas). */
-        if (!Port_DebugAction_AreaIsWarpable(a)) continue;
+        if (!Port_DebugAction_AreaIsWarpable(a))
+            continue;
         char buf[80];
         std::snprintf(buf, sizeof(buf), "0x%02X %s (%d)", area, name, count);
         p.items.push_back({ buf, [a]() { Push(BuildAreaRoomsPage(a)); } });
@@ -673,7 +700,7 @@ MenuPage BuildDisplaySettingsPage(void) {
     p.title = "DISPLAY SETTINGS";
 
     MenuItem scale;
-    scale.cycleLeft  = []() { Port_PPU_CycleWindowScale(-1); };
+    scale.cycleLeft = []() { Port_PPU_CycleWindowScale(-1); };
     scale.cycleRight = []() { Port_PPU_CycleWindowScale(+1); };
     scale.labelFn = []() {
         char buf[32];
@@ -683,7 +710,7 @@ MenuPage BuildDisplaySettingsPage(void) {
     p.items.push_back(std::move(scale));
 
     MenuItem filter;
-    filter.cycleLeft  = []() { Port_PPU_CyclePresentationMode(-1); };
+    filter.cycleLeft = []() { Port_PPU_CyclePresentationMode(-1); };
     filter.cycleRight = []() { Port_PPU_CyclePresentationMode(+1); };
     filter.labelFn = []() {
         const char* name = Port_PPU_PresentationModeName();
@@ -694,7 +721,7 @@ MenuPage BuildDisplaySettingsPage(void) {
     p.items.push_back(std::move(filter));
 
     MenuItem crtFilter;
-    crtFilter.cycleLeft  = []() { Port_PPU_CycleFilter(-1); };
+    crtFilter.cycleLeft = []() { Port_PPU_CycleFilter(-1); };
     crtFilter.cycleRight = []() { Port_PPU_CycleFilter(+1); };
     crtFilter.labelFn = []() {
         const char* name = Port_PPU_FilterName();
@@ -705,7 +732,7 @@ MenuPage BuildDisplaySettingsPage(void) {
     p.items.push_back(std::move(crtFilter));
 
     MenuItem fps;
-    fps.cycleLeft  = []() { Port_Config_CycleTargetFps(-1); };
+    fps.cycleLeft = []() { Port_Config_CycleTargetFps(-1); };
     fps.cycleRight = []() { Port_Config_CycleTargetFps(+1); };
     fps.labelFn = []() {
         unsigned int v = Port_Config_TargetFps();
@@ -721,7 +748,7 @@ MenuPage BuildDisplaySettingsPage(void) {
 
     MenuItem fs;
     /* Fullscreen is binary, so left/right both toggle. */
-    fs.cycleLeft  = []() { Port_PPU_ToggleFullscreen(); };
+    fs.cycleLeft = []() { Port_PPU_ToggleFullscreen(); };
     fs.cycleRight = []() { Port_PPU_ToggleFullscreen(); };
     fs.labelFn = []() {
         char buf[32];
@@ -731,23 +758,21 @@ MenuPage BuildDisplaySettingsPage(void) {
     p.items.push_back(std::move(fs));
 
     MenuItem internalScale;
-    internalScale.cycleLeft  = []() { Port_Config_CycleInternalScale(-1); };
+    internalScale.cycleLeft = []() { Port_Config_CycleInternalScale(-1); };
     internalScale.cycleRight = []() { Port_Config_CycleInternalScale(+1); };
     internalScale.labelFn = []() {
         char buf[64];
         unsigned s = (unsigned)Port_Config_InternalScale();
         /* Affine OAM is sub-pixel at scale > 1; everything else is S*S
          * replicate. Affine BG2 / mode 7 are still TODO. */
-        std::snprintf(buf, sizeof(buf),
-                      s == 1 ? "Internal    %ux  (off)"
-                             : "Internal    %ux  (affine OBJ sub-pixel)",
+        std::snprintf(buf, sizeof(buf), s == 1 ? "Internal    %ux  (off)" : "Internal    %ux  (affine OBJ sub-pixel)",
                       s);
         return std::string(buf);
     };
     p.items.push_back(std::move(internalScale));
 
     MenuItem widescreen;
-    widescreen.cycleLeft  = []() {
+    widescreen.cycleLeft = []() {
         Port_Config_SetWidescreenEnabled(!Port_Config_WidescreenEnabled());
         Port_PPU_ApplyWindowScale();
     };
@@ -758,8 +783,7 @@ MenuPage BuildDisplaySettingsPage(void) {
     widescreen.labelFn = []() {
         char buf[64];
 #if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
-        std::snprintf(buf, sizeof(buf), "Widescreen  %s (WIP)",
-                      Port_Config_WidescreenEnabled() ? "on" : "off");
+        std::snprintf(buf, sizeof(buf), "Widescreen  %s (WIP)", Port_Config_WidescreenEnabled() ? "on" : "off");
 #else
         std::snprintf(buf, sizeof(buf), "Widescreen  unavailable");
 #endif
@@ -779,7 +803,7 @@ MenuPage BuildSoftSlotsPage(void) {
     p.title = "EXTRA EQUIP SLOTS";
     for (int s = 0; s < 4; ++s) {
         MenuItem it;
-        it.cycleLeft  = [s]() { Port_SoftSlots_CycleAssignment(s, -1); };
+        it.cycleLeft = [s]() { Port_SoftSlots_CycleAssignment(s, -1); };
         it.cycleRight = [s]() { Port_SoftSlots_CycleAssignment(s, +1); };
         it.labelFn = [s]() { return std::string(Port_SoftSlots_GetSlotLabel(s)); };
         p.items.push_back(std::move(it));
@@ -803,8 +827,7 @@ static std::string FormatSlotLabel(int slot) {
         tag = tagbuf;
     } else {
         static char tagbuf[16];
-        std::snprintf(tagbuf, sizeof(tagbuf), "Auto %d ",
-                      slot - Port_QuickSave_AutoSlotBase() + 1);
+        std::snprintf(tagbuf, sizeof(tagbuf), "Auto %d ", slot - Port_QuickSave_AutoSlotBase() + 1);
         tag = tagbuf;
     }
     if (!Port_QuickSave_HasSlot(slot)) {
@@ -834,14 +857,18 @@ MenuPage BuildSaveStatesPage(void) {
     for (int s = 0; s < n; ++s) {
         MenuItem it;
         it.action = [s]() {
-            if (Port_QuickSave_LoadSlot(s)) Toast("Loaded");
-            else Toast("Slot empty");
+            if (Port_QuickSave_LoadSlot(s))
+                Toast("Loaded");
+            else
+                Toast("Slot empty");
         };
         it.cycleLeft = [s]() {
-            if (Port_QuickSave_SaveSlot(s)) Toast("Saved");
+            if (Port_QuickSave_SaveSlot(s))
+                Toast("Saved");
         };
         it.cycleRight = [s]() {
-            if (Port_QuickSave_SaveSlot(s)) Toast("Saved");
+            if (Port_QuickSave_SaveSlot(s))
+                Toast("Saved");
         };
         it.labelFn = [s]() { return FormatSlotLabel(s); };
         p.items.push_back(std::move(it));
@@ -853,13 +880,12 @@ MenuPage BuildSaveStatesPage(void) {
         Port_Config_SetAutosaveEnabled(next);
     };
     MenuItem autoToggle;
-    autoToggle.cycleLeft  = flipAuto;
+    autoToggle.cycleLeft = flipAuto;
     autoToggle.cycleRight = flipAuto;
-    autoToggle.action     = flipAuto;
+    autoToggle.action = flipAuto;
     autoToggle.labelFn = []() {
         char b[64];
-        std::snprintf(b, sizeof(b), "Auto-save   %s",
-                      Port_QuickSave_AutoEnabled() ? "on" : "off");
+        std::snprintf(b, sizeof(b), "Auto-save   %s", Port_QuickSave_AutoEnabled() ? "on" : "off");
         return std::string(b);
     };
     p.items.push_back(std::move(autoToggle));
@@ -917,9 +943,7 @@ MenuPage BuildSaveProfilesPage(void) {
         it.labelFn = [name]() {
             std::string active = Port_Save_GetActivePath();
             char buf[80];
-            std::snprintf(buf, sizeof(buf), "%s %s",
-                          (name == active) ? "*" : " ",
-                          name.c_str());
+            std::snprintf(buf, sizeof(buf), "%s %s", (name == active) ? "*" : " ", name.c_str());
             return std::string(buf);
         };
         p.items.push_back(std::move(it));
@@ -943,10 +967,14 @@ MenuPage BuildSaveProfilesPage(void) {
         for (; n <= 99; ++n) {
             std::snprintf(name, sizeof(name), "tmc_%d.sav", n);
             FILE* probe = std::fopen(name, "rb");
-            if (!probe) break;
+            if (!probe)
+                break;
             std::fclose(probe);
         }
-        if (n > 99) { Toast("No free profile slots (1-99)"); return; }
+        if (n > 99) {
+            Toast("No free profile slots (1-99)");
+            return;
+        }
         if (Port_Save_SaveAsProfile(name)) {
             char msg[96];
             std::snprintf(msg, sizeof(msg), "Saved current as %s", name);
@@ -963,7 +991,9 @@ MenuPage BuildSaveProfilesPage(void) {
 }
 
 /* Read-only entity viewer. Snapshot taken when the page is built; "Refresh"
- * re-snapshots in place (Pop+Push). Rows are non-actionable. */
+ * re-snapshots via the deferred rebuild (RequestRebuild + page.rebuild), since
+ * Pop()+Push() would let the deferred pop discard the just-pushed page.
+ * Rows are non-actionable. */
 MenuPage BuildEntitiesPage(void) {
     MenuPage p;
     p.title = "ENTITIES";
@@ -973,20 +1003,21 @@ MenuPage BuildEntitiesPage(void) {
     hdr.label = "Refresh";
     hdr.labelFn = []() -> std::string {
         char b[48];
-        std::snprintf(b, sizeof(b), "Live: %d  (select to refresh)",
-                      Port_DebugQuery_EntitySnapshotCount());
+        std::snprintf(b, sizeof(b), "Live: %d  (select to refresh)", Port_DebugQuery_EntitySnapshotCount());
         return std::string(b);
     };
-    hdr.action = []() { Pop(); Push(BuildEntitiesPage()); };
+    hdr.action = []() { RequestRebuild(); };
+    p.rebuild = []() { return BuildEntitiesPage(); };
     p.items.push_back(std::move(hdr));
 
     for (int i = 0; i < n; ++i) {
         const PortEntityInfo* e = Port_DebugQuery_Entity(i);
-        if (!e) continue;
+        if (!e)
+            continue;
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "L%d %s id%02X t%02X (%d,%d) hp%u",
-                      e->listIndex, Port_DebugQuery_EntityKindName(e->kind),
-                      (unsigned)e->id, (unsigned)e->type, e->x, e->y, (unsigned)e->health);
+        std::snprintf(buf, sizeof(buf), "L%d %s id%02X t%02X (%d,%d) hp%u", e->listIndex,
+                      Port_DebugQuery_EntityKindName(e->kind), (unsigned)e->id, (unsigned)e->type, e->x, e->y,
+                      (unsigned)e->health);
         p.items.push_back({ std::string(buf), []() {} });
     }
 
@@ -1005,7 +1036,7 @@ MenuPage BuildMemWatchPage(void) {
     p.rebuild = []() { return BuildMemWatchPage(); }; /* add/remove rebuild this page in place */
 
     MenuItem ad;
-    ad.cycleLeft  = []() { sClassicMemAddr -= (1u << (4 * sClassicMemStepIdx)); };
+    ad.cycleLeft = []() { sClassicMemAddr -= (1u << (4 * sClassicMemStepIdx)); };
     ad.cycleRight = []() { sClassicMemAddr += (1u << (4 * sClassicMemStepIdx)); };
     ad.labelFn = []() -> std::string {
         unsigned int v = 0;
@@ -1013,11 +1044,10 @@ MenuPage BuildMemWatchPage(void) {
         const char* wn = Port_DebugQuery_MemWidthName(sClassicMemWidth);
         char buf[80];
         if (ok) {
-            std::snprintf(buf, sizeof(buf), "Addr 0x%08X = 0x%0*X (%s)   (<- ->)",
-                          sClassicMemAddr, (1 << sClassicMemWidth) * 2, v, wn);
+            std::snprintf(buf, sizeof(buf), "Addr 0x%08X = 0x%0*X (%s)   (<- ->)", sClassicMemAddr,
+                          (1 << sClassicMemWidth) * 2, v, wn);
         } else {
-            std::snprintf(buf, sizeof(buf), "Addr 0x%08X = <unmapped> (%s)   (<- ->)",
-                          sClassicMemAddr, wn);
+            std::snprintf(buf, sizeof(buf), "Addr 0x%08X = <unmapped> (%s)   (<- ->)", sClassicMemAddr, wn);
         }
         return buf;
     };
@@ -1025,19 +1055,18 @@ MenuPage BuildMemWatchPage(void) {
     p.items.push_back(std::move(ad));
 
     MenuItem st;
-    st.cycleLeft  = []() { sClassicMemStepIdx = (sClassicMemStepIdx + 7) % 8; };
+    st.cycleLeft = []() { sClassicMemStepIdx = (sClassicMemStepIdx + 7) % 8; };
     st.cycleRight = []() { sClassicMemStepIdx = (sClassicMemStepIdx + 1) % 8; };
     st.labelFn = []() -> std::string {
         char buf[40];
-        std::snprintf(buf, sizeof(buf), "Step: 0x%X   (<- ->)",
-                      (unsigned)(1u << (4 * sClassicMemStepIdx)));
+        std::snprintf(buf, sizeof(buf), "Step: 0x%X   (<- ->)", (unsigned)(1u << (4 * sClassicMemStepIdx)));
         return buf;
     };
     st.label = "Step";
     p.items.push_back(std::move(st));
 
     MenuItem wd;
-    wd.cycleLeft  = []() { sClassicMemWidth = (sClassicMemWidth + 2) % 3; };
+    wd.cycleLeft = []() { sClassicMemWidth = (sClassicMemWidth + 2) % 3; };
     wd.cycleRight = []() { sClassicMemWidth = (sClassicMemWidth + 1) % 3; };
     wd.labelFn = []() -> std::string {
         return std::string("Width: ") + Port_DebugQuery_MemWidthName(sClassicMemWidth) + "   (<- ->)";
@@ -1046,18 +1075,18 @@ MenuPage BuildMemWatchPage(void) {
     p.items.push_back(std::move(wd));
 
     p.items.push_back({ "Add watch", []() {
-        const int idx = Port_DebugAction_MemWatchAdd(sClassicMemAddr, sClassicMemWidth);
-        Toast(idx >= 0 ? "Watch added" : "Watch list full (32 max)");
-        RequestRebuild();
-    } });
+                           const int idx = Port_DebugAction_MemWatchAdd(sClassicMemAddr, sClassicMemWidth);
+                           Toast(idx >= 0 ? "Watch added" : "Watch list full (32 max)");
+                           RequestRebuild();
+                       } });
 
     const int n = Port_DebugQuery_MemWatchCount();
     if (n > 0) {
         p.items.push_back({ "Clear all watches", []() {
-            Port_DebugAction_MemWatchClear();
-            Toast("Watches cleared");
-            RequestRebuild();
-        } });
+                               Port_DebugAction_MemWatchClear();
+                               Toast("Watches cleared");
+                               RequestRebuild();
+                           } });
     }
     for (int i = 0; i < n; ++i) {
         MenuItem it;
@@ -1069,14 +1098,16 @@ MenuPage BuildMemWatchPage(void) {
             const char* wn = Port_DebugQuery_MemWidthName(w);
             char buf[80];
             if (ok) {
-                std::snprintf(buf, sizeof(buf), "0x%08X (%s) = 0x%0*X   [Enter removes]",
-                              a, wn, (1 << w) * 2, v);
+                std::snprintf(buf, sizeof(buf), "0x%08X (%s) = 0x%0*X   [Enter removes]", a, wn, (1 << w) * 2, v);
             } else {
                 std::snprintf(buf, sizeof(buf), "0x%08X (%s) = <unmapped>   [Enter removes]", a, wn);
             }
             return buf;
         };
-        it.action = [i]() { Port_DebugAction_MemWatchRemove(i); RequestRebuild(); };
+        it.action = [i]() {
+            Port_DebugAction_MemWatchRemove(i);
+            RequestRebuild();
+        };
         it.label = "watch";
         p.items.push_back(std::move(it));
     }
@@ -1088,17 +1119,20 @@ MenuPage BuildMemWatchPage(void) {
 MenuPage BuildMainPage(void) {
     MenuPage p;
     p.title = "DEBUG MENU (F8 to close)";
-    p.items.push_back({ "Items / progress",  []() { Push(BuildItemsPage()); } });
-    p.items.push_back({ "Warp",              []() { Push(BuildWarpPage());  } });
-    p.items.push_back({ "Save states",       []() { Push(BuildSaveStatesPage()); } });
-    p.items.push_back({ "Save profiles",     []() { Push(BuildSaveProfilesPage()); } });
-    p.items.push_back({ "Display settings",  []() { Push(BuildDisplaySettingsPage()); } });
+    p.items.push_back({ "Items / progress", []() { Push(BuildItemsPage()); } });
+    p.items.push_back({ "Warp", []() { Push(BuildWarpPage()); } });
+    p.items.push_back({ "Save states", []() { Push(BuildSaveStatesPage()); } });
+    p.items.push_back({ "Save profiles", []() { Push(BuildSaveProfilesPage()); } });
+    p.items.push_back({ "Display settings", []() { Push(BuildDisplaySettingsPage()); } });
     p.items.push_back({ "Extra equip slots", []() { Push(BuildSoftSlotsPage()); } });
-    p.items.push_back({ "Flag browser",      []() { Push(BuildFlagsPage()); } });
-    p.items.push_back({ "Entity viewer",     []() { Push(BuildEntitiesPage()); } });
-    p.items.push_back({ "Memory watch",      []() { Push(BuildMemWatchPage()); } });
-    p.items.push_back({ "Heal to full",      []() { Port_DebugAction_HealFull(); Toast("Healed"); } });
-    p.items.push_back({ "Close menu",        []() { Pop(); } });
+    p.items.push_back({ "Flag browser", []() { Push(BuildFlagsPage()); } });
+    p.items.push_back({ "Entity viewer", []() { Push(BuildEntitiesPage()); } });
+    p.items.push_back({ "Memory watch", []() { Push(BuildMemWatchPage()); } });
+    p.items.push_back({ "Heal to full", []() {
+                           Port_DebugAction_HealFull();
+                           Toast("Healed");
+                       } });
+    p.items.push_back({ "Close menu", []() { Pop(); } });
     return p;
 }
 
@@ -1119,17 +1153,21 @@ extern "C" int Port_DebugMenu_PageDepth(void) {
     return static_cast<int>(sPageStack.size());
 }
 extern "C" const char* Port_DebugMenu_PageTitle(int depth) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return nullptr;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return nullptr;
     return sPageStack[depth].title.c_str();
 }
 extern "C" int Port_DebugMenu_PageItemCount(int depth) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return 0;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return 0;
     return static_cast<int>(sPageStack[depth].items.size());
 }
 extern "C" const char* Port_DebugMenu_PageItemLabel(int depth, int idx) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return nullptr;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return nullptr;
     const auto& page = sPageStack[depth];
-    if (idx < 0 || idx >= (int)page.items.size()) return nullptr;
+    if (idx < 0 || idx >= (int)page.items.size())
+        return nullptr;
     /* labelFn callbacks reconstruct a fresh string each frame; we
      * stash the result in a per-thread static so the c_str() pointer
      * stays valid until the next call. ImGui consumes the pointer
@@ -1140,49 +1178,64 @@ extern "C" const char* Port_DebugMenu_PageItemLabel(int depth, int idx) {
     return sLabelCache.c_str();
 }
 extern "C" int Port_DebugMenu_PageCursor(int depth) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return -1;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return -1;
     return sPageStack[depth].cursor;
 }
 extern "C" void Port_DebugMenu_PageSetCursor(int depth, int idx) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return;
     auto& page = sPageStack[depth];
-    if (idx < 0 || idx >= (int)page.items.size()) return;
+    if (idx < 0 || idx >= (int)page.items.size())
+        return;
     page.cursor = idx;
 }
 extern "C" void Port_DebugMenu_PageActivate(int depth, int idx) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return;
     auto& page = sPageStack[depth];
-    if (idx < 0 || idx >= (int)page.items.size()) return;
+    if (idx < 0 || idx >= (int)page.items.size())
+        return;
     /* Mirror Enter-handling from the legacy key path: prefer .action,
      * fall back to .cycleRight for value-style items. */
     auto& item = page.items[idx];
-    if (item.action) item.action();
-    else if (item.cycleRight) item.cycleRight();
+    if (item.action)
+        item.action();
+    else if (item.cycleRight)
+        item.cycleRight();
     ApplyPendingMutations();
 }
 extern "C" void Port_DebugMenu_PageCycleLeft(int depth, int idx) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return;
     auto& page = sPageStack[depth];
-    if (idx < 0 || idx >= (int)page.items.size()) return;
+    if (idx < 0 || idx >= (int)page.items.size())
+        return;
     auto& item = page.items[idx];
-    if (item.cycleLeft) item.cycleLeft();
+    if (item.cycleLeft)
+        item.cycleLeft();
     ApplyPendingMutations();
 }
 extern "C" void Port_DebugMenu_PageCycleRight(int depth, int idx) {
-    if (depth < 0 || depth >= (int)sPageStack.size()) return;
+    if (depth < 0 || depth >= (int)sPageStack.size())
+        return;
     auto& page = sPageStack[depth];
-    if (idx < 0 || idx >= (int)page.items.size()) return;
+    if (idx < 0 || idx >= (int)page.items.size())
+        return;
     auto& item = page.items[idx];
-    if (item.cycleRight) item.cycleRight();
+    if (item.cycleRight)
+        item.cycleRight();
     ApplyPendingMutations();
 }
 extern "C" const char* Port_DebugMenu_Toast(void) {
-    if (sToast.empty() || SDL_GetTicks() >= sToastUntilTicks) return nullptr;
+    if (sToast.empty() || SDL_GetTicks() >= sToastUntilTicks)
+        return nullptr;
     return sToast.c_str();
 }
 
 extern "C" void Port_DebugMenu_ToastFromExternal(const char* msg) {
-    if (!msg) return;
+    if (!msg)
+        return;
     Toast(msg);
 }
 
@@ -1278,21 +1331,24 @@ extern "C" bool Port_DebugMenu_HandleKey(int sdlKey) {
                      * Enter behaves like Right (forward cycle). */
                     auto& it = page.items[page.cursor];
                     auto fn = it.action ? it.action : it.cycleRight;
-                    if (fn) fn();
+                    if (fn)
+                        fn();
                 }
                 consumed = true;
                 break;
             case SDLK_LEFT:
                 if (page.cursor >= 0 && page.cursor < n) {
                     auto fn = page.items[page.cursor].cycleLeft;
-                    if (fn) fn();
+                    if (fn)
+                        fn();
                 }
                 consumed = true;
                 break;
             case SDLK_RIGHT:
                 if (page.cursor >= 0 && page.cursor < n) {
                     auto fn = page.items[page.cursor].cycleRight;
-                    if (fn) fn();
+                    if (fn)
+                        fn();
                 }
                 consumed = true;
                 break;
@@ -1382,8 +1438,7 @@ extern "C" void Port_DebugMenu_Render(SDL_Renderer* renderer, int winW, int winH
     SDL_SetRenderDrawColor(renderer, 200, 220, 255, 255);
     char titleBuf[160];
     if (total > kVisibleItemsMax) {
-        std::snprintf(titleBuf, sizeof(titleBuf), "%s  [%d/%d]",
-                      page.title.c_str(), page.cursor + 1, total);
+        std::snprintf(titleBuf, sizeof(titleBuf), "%s  [%d/%d]", page.title.c_str(), page.cursor + 1, total);
     } else {
         std::snprintf(titleBuf, sizeof(titleBuf), "%s", page.title.c_str());
     }

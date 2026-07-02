@@ -17,7 +17,7 @@
 #include "screen.h"
 #include "script.h"
 #include "sound.h"
-#include "port_debug_verbose.h"  /* Port_DebugVerbose — gates per-frame diag logs */
+#include "port_debug_verbose.h" /* Port_DebugVerbose — gates per-frame diag logs */
 
 /* execinfo.h ships with glibc and macOS libSystem; MinGW does not have
  * it, so the diagnostic Port_DumpOrchStack() backtrace dump is a no-op
@@ -85,7 +85,6 @@ void sub_08000E92(const void* src, void* dest, u32 size) {
     }
 }
 
-
 u32 sub_08000E44(s32 value) {
     if (value == 0) {
         return 0;
@@ -118,7 +117,8 @@ void EnqueueSFX(u32 sfx) {
      * the per-1.5s low-health beep would still register on the queue
      * even with the mute toggle on, and we'd be wasting a queue slot
      * for nothing. */
-    if (Port_AudioMute_ShouldSuppress((unsigned)sfx)) return;
+    if (Port_AudioMute_ShouldSuppress((unsigned)sfx))
+        return;
 
     u8 count = gUnk_02024048;
     if (count < (u8)ARRAY_COUNT(gUnk_02021F20)) {
@@ -354,7 +354,10 @@ void UpdateCollision(Entity* entity) {
     if ((entity->flags & ENT_COLLIDE) == 0) {
         return;
     }
-    if (gCollidableCount < MAX_ENTITIES) {
+    /* Bound = GBA capacity (see MAX_COLLIDABLE_ENTITIES in entity.h). The old
+     * MAX_ENTITIES (72) cap silently dropped the last registrants in full
+     * rooms, making random entities non-collidable. */
+    if (gCollidableCount < MAX_COLLIDABLE_ENTITIES) {
         gCollidableList[gCollidableCount] = entity;
         gCollidableCount++;
     }
@@ -468,8 +471,7 @@ static const s8 sIceVelocities[] = { 0, -10, 10, -10, 10, 0, 10, 10, 0, 10, -10,
  * 16 bytes. The earlier port truncated it to 8, making any animationState >= 8
  * on the jump_status!=0 / diff>4 path read past the array (garbage velocity).
  * Second half (0x10..0x13 rows) restored to match GBA. */
-static const s8 sVelocities3[] = { 0,  6, -6,  0,  0, -6,  6,  0,
-                                   19, 18, 18, 16, 16, 17, 17, 19 };
+static const s8 sVelocities3[] = { 0, 6, -6, 0, 0, -6, 6, 0, 19, 18, 18, 16, 16, 17, 17, 19 };
 
 static void ClampPlayerVelocityAxis(s16* axis) {
     if (*axis > 0x180) {
@@ -581,12 +583,12 @@ void UpdateIcePlayerVelocity(Entity* entity) {
 
 /* Sync-flag tripwires for #93 cutscene-softlock chase. */
 void Port_DiagSyncFlag(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     static int sCount = 0;
     if (sCount < 256) {
         sCount++;
-        fprintf(stderr, "[sync] %s flag=0x%08X cur=0x%08X (k=%u id=%u type=%u)\n",
-                op, flag, cur, k, id, t);
+        fprintf(stderr, "[sync] %s flag=0x%08X cur=0x%08X (k=%u id=%u type=%u)\n", op, flag, cur, k, id, t);
     }
 }
 /* #93 chase: track orchestrator entities + detect state changes that
@@ -611,18 +613,20 @@ static void* sWatchedAddrs[4] = { NULL, NULL, NULL, NULL };
 static int Port_IsWatched(void* ent) {
     int i;
     for (i = 0; i < 4; i++) {
-        if (sWatchedAddrs[i] == ent) return 1;
+        if (sWatchedAddrs[i] == ent)
+            return 1;
     }
     return 0;
 }
 
 void Port_LogEntityEvent(const char* op, void* ent, unsigned kind, unsigned id, void* prev, void* next) {
-    if (!Port_IsWatched(ent)) return;
-    fprintf(stderr, "[%s] ent=%p kind=%u id=0x%X prev=%p next=%p\n",
-            op, ent, kind, id, prev, next);
+    if (!Port_IsWatched(ent))
+        return;
+    fprintf(stderr, "[%s] ent=%p kind=%u id=0x%X prev=%p next=%p\n", op, ent, kind, id, prev, next);
 }
 void Port_LogPostAction(unsigned action_idx, unsigned kind, unsigned id) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     static unsigned sCount = 0;
     if (sCount < 32) {
         sCount++;
@@ -630,7 +634,8 @@ void Port_LogPostAction(unsigned action_idx, unsigned kind, unsigned id) {
     }
 }
 void Port_LogOrchEvent(const char* op, void* ent) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     fprintf(stderr, "[orch-%s] ent=%p\n", op, ent);
 }
 
@@ -651,9 +656,11 @@ typedef struct {
 static OrchPcSlot sOrchPcSlots[4];
 
 void Port_LogOrchScriptPc(Entity* ent) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     ScriptExecutionContext* ctx = Port_GetEntityScriptCtx(ent);
-    if (!ctx) return;
+    if (!ctx)
+        return;
 
     int i, slot = -1;
     for (i = 0; i < 4; i++) {
@@ -673,7 +680,8 @@ void Port_LogOrchScriptPc(Entity* ent) {
             }
         }
     }
-    if (slot < 0) return;
+    if (slot < 0)
+        return;
 
     OrchPcSlot* s = &sOrchPcSlots[slot];
     void* sip = (void*)ctx->scriptInstructionPointer;
@@ -681,12 +689,9 @@ void Port_LogOrchScriptPc(Entity* ent) {
     u32 postActions = ctx->postScriptActions;
     u32 sync = gActiveScriptInfo.syncFlags;
 
-    if (sip != s->lastSip || wait != s->lastWait ||
-        postActions != s->lastPostActions || sync != s->lastSync) {
-        fprintf(stderr,
-                "[orch-pc] ent=%p kind=%u id=0x%X sip=%p wait=%u postAct=0x%X sync=0x%X\n",
-                (void*)ent, ent->kind, ent->id, sip,
-                (unsigned)wait, postActions, sync);
+    if (sip != s->lastSip || wait != s->lastWait || postActions != s->lastPostActions || sync != s->lastSync) {
+        fprintf(stderr, "[orch-pc] ent=%p kind=%u id=0x%X sip=%p wait=%u postAct=0x%X sync=0x%X\n", (void*)ent,
+                ent->kind, ent->id, sip, (unsigned)wait, postActions, sync);
         s->lastSip = sip;
         s->lastWait = wait;
         s->lastPostActions = postActions;
@@ -714,19 +719,23 @@ void Port_LogOrchScriptPc(Entity* ent) {
  * movement. This shows whether ctlMode/macro/keys-gating is the
  * culprit or whether ConvInputToState / the gUnk_08109202 lookup
  * is producing the wrong value. */
-void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys, unsigned keys,
-                         unsigned state, unsigned direction, int hasMacro) {
-    if (!Port_DebugVerbose) return;
+void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys, unsigned keys, unsigned state, unsigned direction,
+                         int hasMacro) {
+    if (!Port_DebugVerbose)
+        return;
     static unsigned lCtl = 0xFFFFu, lHeld = 0xFFFFu, lKeys = 0xFFFFu;
     static unsigned lState = 0xFFFFu, lDir = 0xFFFFu;
     static int lMacro = -1;
-    if (ctlMode != lCtl || heldKeys != lHeld || keys != lKeys ||
-        state != lState || direction != lDir || hasMacro != lMacro) {
-        fprintf(stderr,
-                "[upi] ctl=%u held=0x%X keys=0x%X state=0x%X dir=0x%X macro=%d\n",
-                ctlMode, heldKeys, keys, state, direction, hasMacro);
-        lCtl = ctlMode; lHeld = heldKeys; lKeys = keys;
-        lState = state; lDir = direction; lMacro = hasMacro;
+    if (ctlMode != lCtl || heldKeys != lHeld || keys != lKeys || state != lState || direction != lDir ||
+        hasMacro != lMacro) {
+        fprintf(stderr, "[upi] ctl=%u held=0x%X keys=0x%X state=0x%X dir=0x%X macro=%d\n", ctlMode, heldKeys, keys,
+                state, direction, hasMacro);
+        lCtl = ctlMode;
+        lHeld = heldKeys;
+        lKeys = keys;
+        lState = state;
+        lDir = direction;
+        lMacro = hasMacro;
     }
 }
 
@@ -735,14 +744,13 @@ void Port_LogPlayerInput(unsigned ctlMode, unsigned heldKeys, unsigned keys,
  * whether PlayerNormal is even being entered (vs DoPlayerAction
  * routing somewhere else). */
 void Port_LogPlayerNormalEnter(unsigned queuedAction) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     static unsigned lastQ = 0xFFFFu;
     static unsigned heartbeat = 0;
     heartbeat++;
     if (queuedAction != lastQ || (heartbeat % 60) == 0) {
-        fprintf(stderr, "[pn-enter] queuedAction=%u%s\n",
-                queuedAction,
-                queuedAction == lastQ ? " (heartbeat)" : "");
+        fprintf(stderr, "[pn-enter] queuedAction=%u%s\n", queuedAction, queuedAction == lastQ ? " (heartbeat)" : "");
         lastQ = queuedAction;
     }
 }
@@ -751,28 +759,31 @@ void Port_LogPlayerNormalEnter(unsigned queuedAction) {
  * v13&2 is what calls UpdatePlayerMovement(). If v13 is 0 or 1
  * post-cutscene, that's why position is frozen. Dedup'd by all inputs
  * so we only see actual transitions. */
-void Port_LogPlayerMovementGate(unsigned v13, unsigned dir, unsigned psDir,
-                                unsigned f7, unsigned fa, unsigned dash,
+void Port_LogPlayerMovementGate(unsigned v13, unsigned dir, unsigned psDir, unsigned f7, unsigned fa, unsigned dash,
                                 unsigned floor, unsigned swordState) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     static unsigned lV13 = 0xFFFFu, lDir = 0xFFFFu, lPsDir = 0xFFFFu;
     static unsigned lF7 = 0xFFFFu, lFa = 0xFFFFu, lDash = 0xFFFFu;
     static unsigned lFloor = 0xFFFFu, lSword = 0xFFFFu;
     static unsigned heartbeat = 0;
     heartbeat++;
-    int changed = v13 != lV13 || dir != lDir || psDir != lPsDir ||
-                  f7 != lF7 || fa != lFa || dash != lDash ||
+    int changed = v13 != lV13 || dir != lDir || psDir != lPsDir || f7 != lF7 || fa != lFa || dash != lDash ||
                   floor != lFloor || swordState != lSword;
     int beat = (heartbeat % 60) == 0;
     if (changed || beat) {
         fprintf(stderr,
                 "[mv-gate] v13=%u superDir=0x%X psDir=0x%X f7=0x%X fa=0x%X "
                 "dash=0x%X floor=%u sword=0x%X%s\n",
-                v13, dir, psDir, f7, fa, dash, floor, swordState,
-                beat && !changed ? " (heartbeat)" : "");
-        lV13 = v13; lDir = dir; lPsDir = psDir;
-        lF7 = f7; lFa = fa; lDash = dash;
-        lFloor = floor; lSword = swordState;
+                v13, dir, psDir, f7, fa, dash, floor, swordState, beat && !changed ? " (heartbeat)" : "");
+        lV13 = v13;
+        lDir = dir;
+        lPsDir = psDir;
+        lF7 = f7;
+        lFa = fa;
+        lDash = dash;
+        lFloor = floor;
+        lSword = swordState;
     }
 }
 
@@ -782,21 +793,19 @@ void Port_LogPlayerMovementGate(unsigned v13, unsigned dir, unsigned psDir,
 void Port_LogPlayerEarlyReturn(const char* tag) {
     static const char* sLastTag = "";
     extern bool Port_DebugVerbose;
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     if (tag != sLastTag) {
         fprintf(stderr, "[pn-ret] %s\n", tag);
         sLastTag = tag;
     }
 }
 
-void Port_LogPlayerState(unsigned action, unsigned controlMode,
-                         unsigned stateFlags, unsigned eventPrio,
-                         unsigned area, unsigned room,
-                         int x, int y, unsigned heldKeys,
-                         unsigned knockback, unsigned jumpStatus,
-                         unsigned swimState, unsigned framestate,
-                         unsigned attackStatus, unsigned spd) {
-    if (!Port_DebugVerbose) return;
+void Port_LogPlayerState(unsigned action, unsigned controlMode, unsigned stateFlags, unsigned eventPrio, unsigned area,
+                         unsigned room, int x, int y, unsigned heldKeys, unsigned knockback, unsigned jumpStatus,
+                         unsigned swimState, unsigned framestate, unsigned attackStatus, unsigned spd) {
+    if (!Port_DebugVerbose)
+        return;
     static unsigned lastAction = 0xFFFFu;
     static unsigned lastCtl = 0xFFFFu;
     static unsigned lastFlags = 0xFFFFu;
@@ -813,13 +822,10 @@ void Port_LogPlayerState(unsigned action, unsigned controlMode,
     static unsigned lastAtk = 0xFFFFu;
     static unsigned lastSpd = 0xFFFFu;
     static unsigned heartbeat = 0;
-    int stateChanged = action != lastAction || controlMode != lastCtl ||
-                       stateFlags != lastFlags || eventPrio != lastPrio ||
-                       area != lastArea || room != lastRoom ||
-                       x != lastX || y != lastY || heldKeys != lastKeys ||
-                       knockback != lastKnock || jumpStatus != lastJump ||
-                       swimState != lastSwim || framestate != lastFs ||
-                       attackStatus != lastAtk || spd != lastSpd;
+    int stateChanged = action != lastAction || controlMode != lastCtl || stateFlags != lastFlags ||
+                       eventPrio != lastPrio || area != lastArea || room != lastRoom || x != lastX || y != lastY ||
+                       heldKeys != lastKeys || knockback != lastKnock || jumpStatus != lastJump ||
+                       swimState != lastSwim || framestate != lastFs || attackStatus != lastAtk || spd != lastSpd;
     heartbeat++;
     int beat = (heartbeat % 60) == 0;
     if (stateChanged || beat) {
@@ -827,11 +833,8 @@ void Port_LogPlayerState(unsigned action, unsigned controlMode,
                 "[player] action=%u ctl=%u flags=0x%X prio=%u area=%u room=%u "
                 "pos=(%d,%d) keys=0x%X knock=%u jump=0x%X swim=0x%X fs=%u "
                 "atk=%u spd=%u%s\n",
-                action, controlMode, stateFlags, eventPrio,
-                area, room, x, y, heldKeys,
-                knockback, jumpStatus, swimState, framestate,
-                attackStatus, spd,
-                beat && !stateChanged ? " (heartbeat)" : "");
+                action, controlMode, stateFlags, eventPrio, area, room, x, y, heldKeys, knockback, jumpStatus,
+                swimState, framestate, attackStatus, spd, beat && !stateChanged ? " (heartbeat)" : "");
         lastAction = action;
         lastCtl = controlMode;
         lastFlags = stateFlags;
@@ -854,25 +857,24 @@ void Port_LogPlayerState(unsigned action, unsigned controlMode,
  * the exact post-cutscene fade chain and find why type ends at 5
  * (fade-OUT to black) instead of 4 (fade-IN to color). NO dedup —
  * every call gets logged. */
-void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2,
-                      u32 priorType, u32 priorActive, u32 priorProg) {
-    if (!Port_DebugVerbose) return;
-    fprintf(stderr,
-            "[fade-call] %s arg1=0x%X arg2=0x%X prior(type=0x%X active=%u prog=%u)\n",
-            fn, arg1, arg2, priorType, priorActive, priorProg);
+void Port_LogFadeCall(const char* fn, u32 arg1, u32 arg2, u32 priorType, u32 priorActive, u32 priorProg) {
+    if (!Port_DebugVerbose)
+        return;
+    fprintf(stderr, "[fade-call] %s arg1=0x%X arg2=0x%X prior(type=0x%X active=%u prog=%u)\n", fn, arg1, arg2,
+            priorType, priorActive, priorProg);
 }
 
 /* #93 chase: log subtask entry. Dedup'd by (name, active, nextToLoad)
  * so we only see actual state changes. Tells us whether
  * Subtask_FadeOut/FadeIn/Init/Die actually run post-cutscene. */
 void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     static const char* sLastName = "";
     static unsigned sLastActive = 0xFFFFu;
     static unsigned sLastNTL = 0xFFFFu;
     if (name != sLastName || active != sLastActive || nextToLoad != sLastNTL) {
-        fprintf(stderr, "[subtask-%s] active=%u nextToLoad=%u\n",
-                name, active, nextToLoad);
+        fprintf(stderr, "[subtask-%s] active=%u nextToLoad=%u\n", name, active, nextToLoad);
         sLastName = name;
         sLastActive = active;
         sLastNTL = nextToLoad;
@@ -883,12 +885,10 @@ void Port_LogSubtaskEntry(const char* name, unsigned active, unsigned nextToLoad
  * Dual orchestrators (id=0x69) hit AppendEntityToList(_, 6) at spawn,
  * but our log shows the parent and child end up in DIFFERENT lists.
  * This logger lets us see exactly which listIndex each one lands in. */
-void Port_LogListOp(const char* op, void* ent, unsigned kind, unsigned id,
-                    unsigned listIdx, void* listAddr) {
-    if (!Port_DebugVerbose) return;
-    fprintf(stderr,
-            "[list-%s] ent=%p kind=%u id=0x%X listIdx=%u listAddr=%p\n",
-            op, ent, kind, id, listIdx, listAddr);
+void Port_LogListOp(const char* op, void* ent, unsigned kind, unsigned id, unsigned listIdx, void* listAddr) {
+    if (!Port_DebugVerbose)
+        return;
+    fprintf(stderr, "[list-%s] ent=%p kind=%u id=0x%X listIdx=%u listAddr=%p\n", op, ent, kind, id, listIdx, listAddr);
 }
 
 /* #93 chase: per-frame snapshot of display state (DISPCNT) + palette
@@ -916,7 +916,8 @@ void Port_LogDisplayFrame(void) {
      * 1.5 KiB hash burns measurable cycles every frame. Skip entirely
      * when TMC_VERBOSE is off. */
     extern bool Port_DebugVerbose;
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
 
     static u16 lastDispCtl = 0xFFFFu;
     static unsigned lastPalHash = 0u;
@@ -931,14 +932,10 @@ void Port_LogDisplayFrame(void) {
      * same across an area transition, the new area's palette never
      * loaded. */
     unsigned palHash = Port_HashBytes(gPaletteBuffer, 0x400);
-    unsigned palRamHash = Port_HashBytes(gBgPltt, 0x200)
-                       ^ Port_HashBytes(gObjPltt, 0x200);
+    unsigned palRamHash = Port_HashBytes(gBgPltt, 0x200) ^ Port_HashBytes(gObjPltt, 0x200);
 
-    if (dispCtl != lastDispCtl || palHash != lastPalHash ||
-        palRamHash != lastPalRamHash) {
-        fprintf(stderr,
-                "[disp] dispCtl=0x%04X palBuf=0x%08X palRam=0x%08X\n",
-                dispCtl, palHash, palRamHash);
+    if (dispCtl != lastDispCtl || palHash != lastPalHash || palRamHash != lastPalRamHash) {
+        fprintf(stderr, "[disp] dispCtl=0x%04X palBuf=0x%08X palRam=0x%08X\n", dispCtl, palHash, palRamHash);
         lastDispCtl = dispCtl;
         lastPalHash = palHash;
         lastPalRamHash = palRamHash;
@@ -951,7 +948,8 @@ void Port_LogDisplayFrame(void) {
  * exit-fade actually flips active=1 with the right type, and whether
  * progress drains back to 0 (visible) or sustains at 0x100 (black). */
 void Port_LogFadeFrame(void) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     static u8 lastActive = 0xFF;
     static u16 lastType = 0xFFFF;
     static u16 lastProgress = 0xFFFF;
@@ -966,12 +964,10 @@ void Port_LogFadeFrame(void) {
     u8 color = gFadeControl.color;
     u32 mask = gFadeControl.mask;
 
-    if (active != lastActive || type != lastType ||
-        progress != lastProgress || sustain != lastSustain ||
+    if (active != lastActive || type != lastType || progress != lastProgress || sustain != lastSustain ||
         color != lastColor || mask != lastMask) {
-        fprintf(stderr,
-                "[fade] active=%u type=0x%X progress=%u sustain=%u color=0x%X mask=0x%X\n",
-                active, type, progress, sustain, color, mask);
+        fprintf(stderr, "[fade] active=%u type=0x%X progress=%u sustain=%u color=0x%X mask=0x%X\n", active, type,
+                progress, sustain, color, mask);
         lastActive = active;
         lastType = type;
         lastProgress = progress;
@@ -982,7 +978,8 @@ void Port_LogFadeFrame(void) {
 }
 
 void Port_DumpOrchStack(const char* tag, void* ent) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
 #if PORT_HAVE_EXECINFO
     void* bt[24];
     int n = backtrace(bt, 24);
@@ -991,7 +988,8 @@ void Port_DumpOrchStack(const char* tag, void* ent) {
     for (int i = 0; i < n; i++) {
         fprintf(stderr, "  #%d %s\n", i, sym ? sym[i] : "?");
     }
-    if (sym) free(sym);
+    if (sym)
+        free(sym);
 #else
     fprintf(stderr, "[orch-stack-%s] ent=%p (no execinfo on this platform)\n", tag, ent);
 #endif
@@ -999,7 +997,8 @@ void Port_DumpOrchStack(const char* tag, void* ent) {
 }
 
 void Port_TrackOrch(Entity* ent) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     int i;
     /* Find existing slot or first empty */
     for (i = 0; i < 4; i++) {
@@ -1027,8 +1026,7 @@ void Port_TrackOrch(Entity* ent) {
             sOrchs[i].next = ent->next;
             sOrchs[i].alive_frames = sOrchTickCount;
             sWatchedAddrs[i] = (void*)ent;
-            fprintf(stderr, "[track] slot=%d ent=%p kind=%u id=0x%X (start)\n",
-                    i, (void*)ent, ent->kind, ent->id);
+            fprintf(stderr, "[track] slot=%d ent=%p kind=%u id=0x%X (start)\n", i, (void*)ent, ent->kind, ent->id);
             return;
         }
     }
@@ -1043,7 +1041,7 @@ void Port_TrackOrch(Entity* ent) {
 static int sTakeoverWdActive = 0;
 static int sTakeoverWdStep = 0;
 static int sTakeoverWdFrame = 0;
-static int sTakeoverWdDone = 0;  /* one-shot: never re-run after first completion */
+static int sTakeoverWdDone = 0; /* one-shot: never re-run after first completion */
 void Port_TakeoverWatchdog(void) {
     /* Disabled — defer to the cutscene.c sub_08053BBC watchdog instead,
      * which fires SetFade + DispReset + menuType++ in the right order for
@@ -1051,27 +1049,31 @@ void Port_TakeoverWatchdog(void) {
      * racing the cutscene-side one and the screen was ending up at full
      * black with the fade-in machinery skipped. Keeping the function so
      * the call from Port_CheckOrchIntegrity is harmless. */
-    if (1) return;
+    if (1)
+        return;
     if (sTakeoverWdDone) {
         if (gActiveScriptInfo.syncFlags & 0x400u) {
             gActiveScriptInfo.syncFlags &= ~0x400u;
         }
         return;
     }
-    static const struct { unsigned setFlag; int frames; } kSeq[] = {
-        { 0x010, 30 },  /* wake Vaati 1 */
-        { 0x004, 30 },  /* wake King 1 */
-        { 0x010, 30 },  /* wake Vaati 2 */
-        { 0x010, 30 },  /* wake Vaati 3 */
-        { 0x004, 30 },  /* wake King 2 */
-        { 0x010, 30 },  /* wake Vaati 4 */
-        { 0x010, 30 },  /* extra */
-        { 0x040, 30 },  /* wake Guards */
-        { 0x001, 30 },  /* wake Minister */
-        { 0x004, 30 },  /* wake King 3 */
-        { 0x200, 15 },  /* signal penultimate */
-        { 0x004, 15 },  /* wake King final */
-        { 0x400, 15 },  /* final cutscene-over */
+    static const struct {
+        unsigned setFlag;
+        int frames;
+    } kSeq[] = {
+        { 0x010, 30 }, /* wake Vaati 1 */
+        { 0x004, 30 }, /* wake King 1 */
+        { 0x010, 30 }, /* wake Vaati 2 */
+        { 0x010, 30 }, /* wake Vaati 3 */
+        { 0x004, 30 }, /* wake King 2 */
+        { 0x010, 30 }, /* wake Vaati 4 */
+        { 0x010, 30 }, /* extra */
+        { 0x040, 30 }, /* wake Guards */
+        { 0x001, 30 }, /* wake Minister */
+        { 0x004, 30 }, /* wake King 3 */
+        { 0x200, 15 }, /* signal penultimate */
+        { 0x004, 15 }, /* wake King final */
+        { 0x400, 15 }, /* final cutscene-over */
     };
     if (!sTakeoverWdActive) {
         if (gActiveScriptInfo.syncFlags & 0x400u) {
@@ -1089,8 +1091,7 @@ void Port_TakeoverWatchdog(void) {
             static int sLogStep = -1;
             if (sLogStep != sTakeoverWdStep) {
                 sLogStep = sTakeoverWdStep;
-                fprintf(stderr, "[wd] step=%d setFlag=0x%X\n",
-                        sTakeoverWdStep, kSeq[sTakeoverWdStep].setFlag);
+                fprintf(stderr, "[wd] step=%d setFlag=0x%X\n", sTakeoverWdStep, kSeq[sTakeoverWdStep].setFlag);
             }
         }
         if (sTakeoverWdFrame >= kSeq[sTakeoverWdStep].frames) {
@@ -1111,7 +1112,8 @@ void Port_TakeoverWatchdog(void) {
 }
 
 void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     int i;
     sOrchTickCount++;
     Port_TakeoverWatchdog();
@@ -1120,14 +1122,12 @@ void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
     Port_LogFadeFrame();
     Port_LogDisplayFrame();
     for (i = 0; i < 4; i++) {
-        if (!sOrchs[i].active) continue;
+        if (!sOrchs[i].active)
+            continue;
         Entity* ent = sOrchs[i].ent;
         /* Check if state changed since last seen */
-        if (ent->kind != sOrchs[i].kind ||
-            ent->id != sOrchs[i].id ||
-            ent->prev != sOrchs[i].prev ||
-            ent->next != sOrchs[i].next ||
-            (unsigned char)ent->flags != sOrchs[i].flags) {
+        if (ent->kind != sOrchs[i].kind || ent->id != sOrchs[i].id || ent->prev != sOrchs[i].prev ||
+            ent->next != sOrchs[i].next || (unsigned char)ent->flags != sOrchs[i].flags) {
             fprintf(stderr,
                     "[track] CHANGE slot=%d ent=%p (%s phase=%u tick=%u age=%u)\n"
                     "        kind: %u -> %u\n"
@@ -1135,13 +1135,9 @@ void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
                     "        flags: 0x%X -> 0x%X\n"
                     "        prev: %p -> %p\n"
                     "        next: %p -> %p\n",
-                    i, (void*)ent, where, phase, sOrchTickCount,
-                    sOrchTickCount - sOrchs[i].alive_frames,
-                    sOrchs[i].kind, ent->kind,
-                    sOrchs[i].id, ent->id,
-                    sOrchs[i].flags, (unsigned)(unsigned char)ent->flags,
-                    sOrchs[i].prev, ent->prev,
-                    sOrchs[i].next, ent->next);
+                    i, (void*)ent, where, phase, sOrchTickCount, sOrchTickCount - sOrchs[i].alive_frames,
+                    sOrchs[i].kind, ent->kind, sOrchs[i].id, ent->id, sOrchs[i].flags,
+                    (unsigned)(unsigned char)ent->flags, sOrchs[i].prev, ent->prev, sOrchs[i].next, ent->next);
             /* Update snapshot to avoid spam */
             sOrchs[i].kind = ent->kind;
             sOrchs[i].id = ent->id;
@@ -1159,7 +1155,8 @@ void Port_CheckOrchIntegrity(unsigned phase, const char* where) {
 }
 
 void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, unsigned id, unsigned t) {
-    if (!Port_DebugVerbose) return;
+    if (!Port_DebugVerbose)
+        return;
     /* Dedupe WAIT/WAIT&CLR events (they fire every frame the wait holds) but
      * NEVER dedupe WAIT-PASS / SET / CLR — those are state transitions we
      * always want to see. */
@@ -1167,13 +1164,15 @@ void Port_DiagSyncWait(const char* op, unsigned flag, unsigned cur, unsigned k, 
     static unsigned sLastCur = 0xFFFFFFFFu;
     static unsigned sLastKid = 0xFFFFFFFFu;
     static const char* sLastOp = "";
-    int alwaysLog = (op[0] == 'W' && op[1] == 'A' && op[2] == 'I' && op[3] == 'T' && op[4] == '-')  /* WAIT-PASS */
-                 || (op[0] == 'S')   /* SET */
-                 || (op[0] == 'C');  /* CLR */
+    int alwaysLog = (op[0] == 'W' && op[1] == 'A' && op[2] == 'I' && op[3] == 'T' && op[4] == '-') /* WAIT-PASS */
+                    || (op[0] == 'S')                                                              /* SET */
+                    || (op[0] == 'C');                                                             /* CLR */
     unsigned kid = (k << 16) | (id << 8) | t;
     if (alwaysLog || flag != sLastFlag || cur != sLastCur || kid != sLastKid || op != sLastOp) {
-        sLastFlag = flag; sLastCur = cur; sLastKid = kid; sLastOp = op;
-        fprintf(stderr, "[sync] %s flag=0x%08X cur=0x%08X (k=%u id=%u type=%u)\n",
-                op, flag, cur, k, id, t);
+        sLastFlag = flag;
+        sLastCur = cur;
+        sLastKid = kid;
+        sLastOp = op;
+        fprintf(stderr, "[sync] %s flag=0x%08X cur=0x%08X (k=%u id=%u type=%u)\n", op, flag, cur, k, id, t);
     }
 }

@@ -683,9 +683,9 @@ void sub_StateChange_HyruleCastle_1(void) {
             LoadRoomEntityList(&gUnk_080D73E0);
         }
         if (!REGION_IS_EU) {
-        if (CheckGlobalFlag(CASTLE_BGM)) {
-            gArea.queued_bgm = gArea.bgm;
-        }
+            if (CheckGlobalFlag(CASTLE_BGM)) {
+                gArea.queued_bgm = gArea.bgm;
+            }
         }
     }
 }
@@ -701,9 +701,9 @@ extern EntityData gUnk_080D7618;
 
 void sub_StateChange_HyruleCastle_2(void) {
     if (!REGION_IS_EU) {
-    if (CheckGlobalFlag(CASTLE_BGM)) {
-        gArea.queued_bgm = gArea.bgm;
-    }
+        if (CheckGlobalFlag(CASTLE_BGM)) {
+            gArea.queued_bgm = gArea.bgm;
+        }
     }
 
     if (CheckGlobalFlag(ENDING)) {
@@ -2187,7 +2187,7 @@ void sub_StateChange_Ruins_TripleTektites(void) {
 }
 
 void sub_unk1_Ruins_TripleTektites(void) {
-    if (CheckLocalFlagByBank(FLAG_BANK_1, LOST_02_00)) {
+    if (CheckLocalFlagByBankB(FLAG_BANK_1, LOST_02_00)) {
         SetDirtTile(0x85);
     }
 }
@@ -2452,7 +2452,7 @@ u32 sub_unk3_DeepwoodShrineEntry_Main(void) {
 extern EntityData gUnk_080DFB78;
 
 void sub_StateChange_DeepwoodShrineEntry_Main(void) {
-    if (CheckGlobalFlag(LV1_CLEAR) && !CheckLocalFlagByBank(FLAG_BANK_1, LV1_CLEAR_MES)) {
+    if (CheckGlobalFlag(LV1_CLEAR) && !CheckLocalFlagByBankB(FLAG_BANK_1, LV1_CLEAR_MES)) {
         LoadRoomEntityList(&gUnk_080DFB78);
     }
 }
@@ -5219,8 +5219,7 @@ void sub_StateChange_LakeHylia_Main(void) {
     }
 #ifdef PC_PORT
     /* issue #155: `openTingleBrothers` spawns the brothers from the start. */
-    if (Rando_Runtime_OpenTingleBrothers() ||
-        ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
+    if (Rando_Runtime_OpenTingleBrothers() || ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
 #else
     if ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST)) {
 #endif
@@ -5576,9 +5575,9 @@ extern EntityData gUnk_080F5B3C;
 
 void sub_StateChange_HouseInteriors3_RemShoeShop(void) {
     if (!REGION_IS_EU) {
-    if (GetInventoryValue(ITEM_QST_MUSHROOM) == 1) {
-        LoadRoomEntityList(&gUnk_080F5B3C);
-    }
+        if (GetInventoryValue(ITEM_QST_MUSHROOM) == 1) {
+            LoadRoomEntityList(&gUnk_080F5B3C);
+        }
     }
 }
 
@@ -5614,7 +5613,7 @@ u32 sub_unk3_HouseInteriors3_FigurineHouse(void) {
 extern EntityData gUnk_080F5E68;
 
 void sub_StateChange_HouseInteriors3_FigurineHouse(void) {
-    if (!CheckLocalFlagByBank(FLAG_BANK_1, SHOP05_OPEN)) {
+    if (!CheckLocalFlagByBankB(FLAG_BANK_1, SHOP05_OPEN)) {
         LoadRoomEntityList(&gUnk_080F5E68);
     }
 }
@@ -5653,7 +5652,7 @@ void sub_StateChange_HouseInteriors3_Borlov(void) {
 }
 
 u32 sub_unk3_WindTribeTower_Entrance(void) {
-    if (CheckGlobalFlag(KUMOTATSUMAKI) && CheckLocalFlagByBank(FLAG_BANK_1, KUMOUE_00_CAP_0)) {
+    if (CheckGlobalFlag(KUMOTATSUMAKI) && CheckLocalFlagByBankB(FLAG_BANK_1, KUMOUE_00_CAP_0)) {
         SetGlobalFlag(WARP_EVENT_END);
     }
     return 1;
@@ -5662,7 +5661,7 @@ u32 sub_unk3_WindTribeTower_Entrance(void) {
 extern EntityData gUnk_080F61BC;
 
 void sub_StateChange_WindTribeTower_Entrance(void) {
-    if (CheckLocalFlagByBank(FLAG_BANK_1, KUMOUE_00_CAP_0)) {
+    if (CheckLocalFlagByBankB(FLAG_BANK_1, KUMOUE_00_CAP_0)) {
         SetLocalFlagB(0x90);
     }
     if (CheckKinstoneFused(KINSTONE_F)) {
@@ -5722,12 +5721,12 @@ extern EntityData gUnk_080F66AC;
 
 void sub_StateChange_WindTribeTowerRoof_Main(void) {
     LoadStaticBackground(5);
-    if (CheckGlobalFlag(LV5_CLEAR) && !CheckLocalFlagByBank(FLAG_BANK_1, 5)) {
+    if (CheckGlobalFlag(LV5_CLEAR) && !CheckLocalFlagByBankB(FLAG_BANK_1, 5)) {
         LoadRoomEntityList(&gUnk_080F66AC);
     }
     SetWorldMapPos(8, 0, 0x1e8, 0x158);
     if (!REGION_IS_EU) {
-    gArea.areaMetadata |= AR_ALLOWS_WARP;
+        gArea.areaMetadata |= AR_ALLOWS_WARP;
     }
 }
 
@@ -5915,8 +5914,7 @@ void sub_StateChange_HyruleField_LonLonRanch(void) {
     }
 #ifdef PC_PORT
     /* issue #155: `openTingleBrothers` spawns the brothers from the start. */
-    if (Rando_Runtime_OpenTingleBrothers() ||
-        ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
+    if (Rando_Runtime_OpenTingleBrothers() || ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
 #else
     if ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST)) {
 #endif
@@ -5940,9 +5938,9 @@ u32 sub_unk3_HyruleField_OutsideCastle(void) {
         gRoomVars.properties[2] = NULL;
     }
     if (!REGION_IS_EU) {
-    if (CheckGlobalFlag(TABIDACHI)) {
-        ClearGlobalFlag(CASTLE_BGM);
-    }
+        if (CheckGlobalFlag(TABIDACHI)) {
+            ClearGlobalFlag(CASTLE_BGM);
+        }
     }
     return 1;
 }
@@ -6129,8 +6127,7 @@ void sub_StateChange_HyruleField_TrilbyHighlands(void) {
     CloudOverlayManager_Main(NULL);
 #ifdef PC_PORT
     /* issue #155: `openTingleBrothers` spawns the brothers from the start. */
-    if (Rando_Runtime_OpenTingleBrothers() ||
-        ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
+    if (Rando_Runtime_OpenTingleBrothers() || ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST))) {
 #else
     if ((gSave.global_progress > 3) && CheckGlobalFlag(TINGLE_TALK1ST)) {
 #endif

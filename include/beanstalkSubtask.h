@@ -21,6 +21,18 @@ typedef struct {
 
 void LoadMapData(MapDataDefinition* dataDefinition);
 
+#if defined(PC_PORT) && defined(MULTI_REGION)
+/*
+ * LoadMapData for COMPILED MapDataDefinition tables (gCaveBorder_*,
+ * gGyorgMapping*): their src offsets are baked USA-baseline gMapData indices
+ * and must be remapped for EU/JP (port/port_offset_remap.h). ROM-native /
+ * asset-derived definitions must keep calling LoadMapData directly.
+ */
+void LoadMapDataB(const MapDataDefinition* dataDefinition);
+#else
+#define LoadMapDataB(def) LoadMapData((MapDataDefinition*)(def))
+#endif
+
 /**
  * Renders a tileMap with 16x16 tiles into a subTileMap with 8x8 tiles.
  *

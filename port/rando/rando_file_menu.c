@@ -14,6 +14,7 @@ extern void Rando_Cosmetic_Apply(void);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h> /* time() — quick-seed entropy mix */
 
 extern void Port_FileSelectRando_StartSlot(int slot);
 extern bool Port_ImGui_CanPresent(void);
@@ -46,9 +47,11 @@ static bool sRandoOptionEnabled = false;
 static bool sRandoOptionLoaded = false;
 static bool sShowSidebar = false;
 static uint64_t sQuickSeedCounter = 0x853c49e6748fea9bull;
+static bool sQuickSeedSeeded = false;
 
 static void EnsureRandoOptionLoaded(void) {
-    if (sRandoOptionLoaded) return;
+    if (sRandoOptionLoaded)
+        return;
     sRandoOptionLoaded = true;
     sRandoOptionEnabled = Port_Config_GetRandoEnabled();
 }
@@ -65,12 +68,21 @@ char* Port_RandoFileMenu_SeedBuffer(void) {
 }
 
 void Port_RandoFileMenu_SetSeed(const char* text) {
-    if (text == NULL) text = "";
+    if (text == NULL)
+        text = "";
     SDL_snprintf(sMenu.seed_text, sizeof(sMenu.seed_text), "%s", text);
     Port_RandoFileMenu_SeedEdited();
 }
 
 void Port_RandoFileMenu_RandomizeSeed(void) {
+    if (!sQuickSeedSeeded) {
+        /* The fixed init constant made the Nth "Randomize" click produce the
+         * same seed on every install. Mix real entropy once at first use. */
+        sQuickSeedCounter ^= (uint64_t)time(NULL) * 0x9e3779b97f4a7c15ull;
+        sQuickSeedCounter ^= SDL_GetPerformanceCounter();
+        sQuickSeedCounter ^= (uint64_t)(uintptr_t)&sMenu >> 4;
+        sQuickSeedSeeded = true;
+    }
     SplitMix64_NextLocal(&sQuickSeedCounter);
     uint32_t val = (uint32_t)(sQuickSeedCounter & 0xFFFFFFFFu);
     char buf[16];
@@ -107,7 +119,6 @@ bool* Port_RandoFileMenu_ShuffleEntrances(void) {
     return &sMenu.shuffle_entrances;
 }
 
-
 bool* Port_RandoFileMenu_ShuffleDojos(void) {
     return &sMenu.shuffle_dojos;
 }
@@ -121,17 +132,31 @@ int Port_RandoFileMenu_Difficulty(void) {
 }
 
 void Port_RandoFileMenu_SetDifficulty(int difficulty) {
-    if (difficulty < 0) difficulty = 0;
-    if (difficulty >= (int)RANDO_ITEM_POOL_COUNT) difficulty = (int)RANDO_ITEM_POOL_COUNT - 1;
+    if (difficulty < 0)
+        difficulty = 0;
+    if (difficulty >= (int)RANDO_ITEM_POOL_COUNT)
+        difficulty = (int)RANDO_ITEM_POOL_COUNT - 1;
     sMenu.difficulty = (RandoItemPoolDifficulty)difficulty;
 }
 
-bool* Port_RandoFileMenu_Homewarp(void) { return &sMenu.homewarp; }
-bool* Port_RandoFileMenu_StartSword(void) { return &sMenu.start_sword; }
-bool* Port_RandoFileMenu_EarlyCrests(void) { return &sMenu.early_crests; }
-bool* Port_RandoFileMenu_InstantText(void) { return &sMenu.instant_text; }
-int*  Port_RandoFileMenu_TunicColor(void) { return &sMenu.tunic_color; }
-int*  Port_RandoFileMenu_HeartColor(void) { return &sMenu.heart_color; }
+bool* Port_RandoFileMenu_Homewarp(void) {
+    return &sMenu.homewarp;
+}
+bool* Port_RandoFileMenu_StartSword(void) {
+    return &sMenu.start_sword;
+}
+bool* Port_RandoFileMenu_EarlyCrests(void) {
+    return &sMenu.early_crests;
+}
+bool* Port_RandoFileMenu_InstantText(void) {
+    return &sMenu.instant_text;
+}
+int* Port_RandoFileMenu_TunicColor(void) {
+    return &sMenu.tunic_color;
+}
+int* Port_RandoFileMenu_HeartColor(void) {
+    return &sMenu.heart_color;
+}
 
 static uint64_t CurrentSeedValue(void) {
     if (sMenu.seed_len == 0) {
@@ -143,14 +168,15 @@ static uint64_t CurrentSeedValue(void) {
 static void PersistMenuSettings(void) {
     Port_Config_SetRandoSettings(sMenu.glitchless_logic, sMenu.obscure_locations, sMenu.shuffle_kinstones,
                                  sMenu.shuffle_entrances, sMenu.shuffle_dojos, sMenu.open_world, (int)sMenu.difficulty,
-                                 sMenu.homewarp, sMenu.start_sword, sMenu.early_crests,
-                                 sMenu.instant_text, sMenu.tunic_color, sMenu.heart_color);
+                                 sMenu.homewarp, sMenu.start_sword, sMenu.early_crests, sMenu.instant_text,
+                                 sMenu.tunic_color, sMenu.heart_color);
 }
 
 void Port_RandoFileMenu_CommitAndStart(void) {
     RandomizerSettings settings;
     uint64_t seed;
 
+    settings.tricks = 0; /* no tricks UI in the sidebar; without this the field is uninitialized stack */
     settings.glitchless_logic = sMenu.glitchless_logic;
     settings.obscure_locations = sMenu.obscure_locations;
     settings.shuffle_kinstones = sMenu.shuffle_kinstones;
@@ -182,7 +208,8 @@ void Port_RandoFileMenu_CommitAndStart(void) {
 }
 
 void Port_RandoFileMenu_Cancel(void) {
-    if (!sMenu.open) return;
+    if (!sMenu.open)
+        return;
     PersistMenuSettings();
     sMenu.open = false;
     Port_FileSelectRando_CancelSlot(sMenu.save_slot);
@@ -206,16 +233,16 @@ bool Port_RandoFileMenu_GetRandoOptionEnabled(void) {
 
 void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled) {
     EnsureRandoOptionLoaded();
-    if (sRandoOptionEnabled == enabled) return;
+    if (sRandoOptionEnabled == enabled)
+        return;
     sRandoOptionEnabled = enabled;
     Port_Config_SetRandoEnabled(enabled);
     if (!enabled) {
         RandomizerSettings defaults = Rando_DefaultSettings();
         Port_Config_SetRandoSettings(defaults.glitchless_logic, defaults.obscure_locations, defaults.shuffle_kinstones,
                                      defaults.shuffle_entrances, defaults.shuffle_dojos, defaults.open_world,
-                                     (int)defaults.item_difficulty, defaults.homewarp,
-                                     defaults.start_sword, defaults.early_crests,
-                                     defaults.instant_text, defaults.tunic_color,
+                                     (int)defaults.item_difficulty, defaults.homewarp, defaults.start_sword,
+                                     defaults.early_crests, defaults.instant_text, defaults.tunic_color,
                                      defaults.heart_color);
     }
 }

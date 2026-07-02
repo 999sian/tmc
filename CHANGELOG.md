@@ -12,6 +12,28 @@
 
 ## v0.7.0 (2026-06-26)
 
+### JP/EU: intro cutscene & prologue Business Scrub fixed (full script-address translation)
+
+- **Fixed two JP-only bugs**: the opening cutscene placed Zelda in the wrong
+  position (the camera follows her, so the whole framing was off), and the
+  prologue Business Scrub never spat its Deku seeds. Root cause was a single
+  gap: the per-region script-address translation (`Port_TranslateScriptAddr`,
+  `port/port_script_addrs.c`) only covered the ~100 `GBA_script_*` macros in
+  `port/port_scripts.h`. Raw entity-data blobs in `port/data_const_stubs.c`
+  embed baked **USA** addresses for many *other* scripts — e.g.
+  `script_ZeldaOutsideLinksHouse` and the scrub orchestrators
+  `script_080157AC` / `script_08015B34` / `script_ZeldaIntroBusinessScrub`.
+  On EU/JP those untranslated addresses resolved to the wrong ROM bytes, so the
+  affected entities ran garbage bytecode (Zelda never positioned herself; the
+  scrub's orchestrator never raised the sync flag its spit script waits on).
+- **Fix**: the translation table now covers the **entire script bytecode
+  section** — all 576 data scripts, derived by exact symbol lookup across the
+  upstream USA/EU/JP maps — so any baked USA script address is remapped to the
+  active region before the ROM-data resolve (335 differ on JP, 575 on EU). USA
+  is unaffected (`Port_TranslateScriptAddr` early-returns); the 102
+  previously-verified entries are unchanged and regression-guarded against
+  `port/port_scripts.h`.
+
 ### Software PPU vendored in-tree (`port/ppu`); ViruaPPU submodule + patch pipeline removed
 
 - **The software GBA PPU is now first-party source under `port/ppu/`**, licensed

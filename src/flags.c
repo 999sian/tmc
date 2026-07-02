@@ -177,18 +177,32 @@ u32 Port_RemapBaselineLocalFlag(u32 offset, u32 ord) {
 }
 
 u32 CheckLocalFlagB(u32 ord) {
-    return CheckLocalFlagByBank(gArea.localFlagOffset,
-                                Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord));
+    return CheckLocalFlagByBank(gArea.localFlagOffset, Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord));
 }
 
 void SetLocalFlagB(u32 ord) {
-    SetLocalFlagByBank(gArea.localFlagOffset,
-                       Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord));
+    SetLocalFlagByBank(gArea.localFlagOffset, Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord));
 }
 
 void ClearLocalFlagB(u32 ord) {
-    ClearLocalFlagByBank(gArea.localFlagOffset,
-                         Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord));
+    ClearLocalFlagByBank(gArea.localFlagOffset, Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord));
+}
+
+/*
+ * Explicit-bank variants for call sites whose bank does not come from
+ * gArea.localFlagOffset (compiled tables carrying a bank + baseline ordinal
+ * pair, e.g. WorldEvent rewards). Identity on USA and outside bank 1.
+ */
+bool32 CheckLocalFlagByBankB(u32 offset, u32 ord) {
+    return CheckLocalFlagByBank(offset, Port_RemapBaselineLocalFlag(offset, ord));
+}
+
+void SetLocalFlagByBankB(u32 offset, u32 ord) {
+    SetLocalFlagByBank(offset, Port_RemapBaselineLocalFlag(offset, ord));
+}
+
+void ClearLocalFlagByBankB(u32 offset, u32 ord) {
+    ClearLocalFlagByBank(offset, Port_RemapBaselineLocalFlag(offset, ord));
 }
 
 /*
@@ -198,8 +212,7 @@ void ClearLocalFlagB(u32 ord) {
  * the same delta — verified by tools/flag_remap_test.py). Identity on USA.
  */
 u32 CheckLocalFlagsB(u32 ord, u32 count) {
-    return CheckLocalFlagsByBank(gArea.localFlagOffset,
-                                 Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord), count);
+    return CheckLocalFlagsByBank(gArea.localFlagOffset, Port_RemapBaselineLocalFlag(gArea.localFlagOffset, ord), count);
 }
 
 /*
