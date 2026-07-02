@@ -39,8 +39,20 @@ extern s16 gUnk_080B4488[];
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68[10 + 0x14];
+#if defined(PC_PORT) && __SIZEOF_POINTER__ == 8
+    /* Issue #159 — must mirror HittableLeverEntity's filler_pc: since
+     * 34b901047 the lever reads hitFlag at PC offset 0xB2 (aliasing the
+     * GenericEntity cutsceneBeh/field_0x86 union, which is void*-aligned).
+     * Without this pad the runtime-spawn path here wrote 0xAE, the lever
+     * read 0xB2 = 0, and the seated cog's lever toggled flag 0 — the
+     * RollobiteSwitch bollard gate never opened. */
+    u8 filler_pc[4];
+#endif
     /*0x86*/ u16 hitFlag;
 } EntityWithHitFlag;
+
+PORT_STATIC_ASSERT_OFFSET(EntityWithHitFlag, hitFlag, 0x86, 0xB2,
+                          "EntityWithHitFlag hitFlag must alias HittableLever hitFlag");
 
 void sub_080970F4(ObjectOnPillarEntity*);
 void sub_080971E0(ObjectOnPillarEntity*);
@@ -178,11 +190,13 @@ bool32 sub_08097008(ObjectOnPillarEntity* this) {
 
 u32 sub_08097074(u32 tileType) {
 
-    static const KeyValuePair gUnk_0812327C[] = {
-        { SPECIAL_TILE_55, 1 }, { SPECIAL_TILE_56, 1 }, { SPECIAL_TILE_57, 1 },
-        { SPECIAL_TILE_58, 1 }, { TILE_TYPE_122, 2 },   { TILE_TYPE_120, 2 },
-        { 0, 0 }
-    };
+    static const KeyValuePair gUnk_0812327C[] = { { SPECIAL_TILE_55, 1 },
+                                                  { SPECIAL_TILE_56, 1 },
+                                                  { SPECIAL_TILE_57, 1 },
+                                                  { SPECIAL_TILE_58, 1 },
+                                                  { TILE_TYPE_122, 2 },
+                                                  { TILE_TYPE_120, 2 },
+                                                  { 0, 0 } };
     const KeyValuePair* entry = gUnk_0812327C;
     for (; entry->key != 0; entry++) {
         if (entry->key == tileType) {
