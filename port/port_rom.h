@@ -93,6 +93,23 @@ static inline void* Port_ResolveScript(u32 gba_addr) {
     return Port_ResolveRomData(Port_TranslateScriptAddr(gba_addr));
 }
 
+/*
+ * Provenance-aware script resolve for EntityData::spritePtr. EntityData can be
+ * (a) a compiled C table / data_const_stubs.c blob — spritePtr is a baked USA
+ * script address that must be translated — or (b) an entity list resolved out
+ * of the loaded ROM — spritePtr is already region-native and translating it
+ * MIS-translates whenever a native EU/JP address collides with a different
+ * script's USA key (30 EU / 5 JP known collisions). Discriminate by where the
+ * EntityData record itself lives.
+ */
+static inline void* Port_ResolveEntityScript(const void* entityData, u32 spritePtr) {
+    uintptr_t p = (uintptr_t)entityData;
+    uintptr_t base = (uintptr_t)gRomData;
+    if (gRomData && p >= base && p < base + gRomSize)
+        return Port_ResolveRomData(spritePtr); /* ROM-native: no translation */
+    return Port_ResolveScript(spritePtr);      /* compiled blob: USA-baseline */
+}
+
 /**
  * Read entry [idx] from a packed-GBA-pointer table stored as a raw u8 array.
  *
@@ -203,7 +220,7 @@ static inline void Port_DecodeMapDataDefinition(const void* entry, MapDataDefini
     const u8* raw = (const u8*)entry;
     if (gRomData && raw >= gRomData && raw < gRomData + gRomSize) {
         u32 dest_gba = Port_ReadU32(raw + 4);
-        out->src  = Port_ReadU32(raw + 0);
+        out->src = Port_ReadU32(raw + 0);
         out->dest = dest_gba ? Port_ResolveEwramPtr(dest_gba) : NULL;
         out->size = Port_ReadU32(raw + 8);
     } else {

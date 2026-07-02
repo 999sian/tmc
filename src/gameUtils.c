@@ -909,7 +909,7 @@ void UpdateGlobalProgress(void) {
         pcnt = 6;
     } else if (CheckGlobalFlag(LV3_CLEAR)) {
         pcnt = 5;
-    } else if (CheckLocalFlagByBank(FLAG_BANK_1, SOUGEN_08_TORITSUKI)) {
+    } else if (CheckLocalFlagByBankB(FLAG_BANK_1, SOUGEN_08_TORITSUKI)) {
         pcnt = 4;
     } else if (CheckGlobalFlag(LV1_CLEAR)) {
         pcnt = 2;
@@ -931,8 +931,8 @@ u32 sub_08053144(void) {
 void CheckAreaDiscovery(void) {
     if (!sub_08053144()) {
 #ifdef PC_PORT
-        fprintf(stderr, "[AREA] no-change area=%u room=%u loc=%u prevLoc=%u\n", gRoomControls.area,
-                gRoomControls.room, gArea.locationIndex, gRoomTransition.location);
+        fprintf(stderr, "[AREA] no-change area=%u room=%u loc=%u prevLoc=%u\n", gRoomControls.area, gRoomControls.room,
+                gArea.locationIndex, gRoomTransition.location);
 #endif
         return;
     }
@@ -946,10 +946,9 @@ void CheckAreaDiscovery(void) {
             e->id = ENTER_ROOM_TEXTBOX_MANAGER;
             AppendEntityToList(e, 8);
 #ifdef PC_PORT
-            fprintf(stderr,
-                    "[AREA] spawn textbox area=%u room=%u loc=%u visited=%u scrolling=%u\n",
-                    gRoomControls.area, gRoomControls.room, gArea.locationIndex,
-                    ReadBit(gSave.areaVisitFlags, gArea.locationIndex), gRoomVars.didEnterScrolling);
+            fprintf(stderr, "[AREA] spawn textbox area=%u room=%u loc=%u visited=%u scrolling=%u\n", gRoomControls.area,
+                    gRoomControls.room, gArea.locationIndex, ReadBit(gSave.areaVisitFlags, gArea.locationIndex),
+                    gRoomVars.didEnterScrolling);
 #endif
             if (!gRoomVars.didEnterScrolling && !ReadBit(gSave.areaVisitFlags, gArea.locationIndex)) {
                 e->type2 = 1;
@@ -1162,6 +1161,7 @@ void ResetTmpFlags(void) {
 void ClearFlagArray(const u16* p) {
     const u16* i;
 
+    /* Compiled bank/ordinal pair tables (USA-baseline) — remap for EU/JP. */
     for (i = p; i[0] != 0xFFFF; i += 2)
-        ClearLocalFlagByBank(i[0], i[1]);
+        ClearLocalFlagByBankB(i[0], i[1]);
 }

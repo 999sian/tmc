@@ -52,6 +52,9 @@ void ClearLocalFlagB(u32 ord);
 bool32 CheckFlagsB(u32 flag);
 void SetFlagB(u32 flag);
 void ClearFlagB(u32 flag);
+bool32 CheckLocalFlagByBankB(u32 offset, u32 ord);
+void SetLocalFlagByBankB(u32 offset, u32 ord);
+void ClearLocalFlagByBankB(u32 offset, u32 ord);
 #else
 #define CheckLocalFlagB  CheckLocalFlag
 #define CheckLocalFlagsB CheckLocalFlags
@@ -60,6 +63,9 @@ void ClearFlagB(u32 flag);
 #define CheckFlagsB      CheckFlags
 #define SetFlagB         SetFlag
 #define ClearFlagB       ClearFlag
+#define CheckLocalFlagByBankB CheckLocalFlagByBank
+#define SetLocalFlagByBankB   SetLocalFlagByBank
+#define ClearLocalFlagByBankB ClearLocalFlagByBank
 #endif
 
 /**

@@ -12,6 +12,7 @@
 #include "area.h"
 #include "asm.h"
 #include "assets/map_offsets.h"
+#include "port_offset_remap.h"
 #include "flags.h"
 #include "functions.h"
 #include "game.h"
@@ -138,7 +139,8 @@ static void Common_AbortMissingAssetGroup(const char* kind, u32 group) {
      * path *below* the PC `assets/` block, not from a PC asset tree. Returning
      * here lets the caller (LoadGfxGroup / LoadPaletteGroup) fall through to
      * that ROM path instead of aborting. */
-    (void)kind; (void)group;
+    (void)kind;
+    (void)group;
     return;
 #endif
     fprintf(stderr, "\n[FATAL] %s group %u not found.\n", kind, group);
@@ -158,7 +160,7 @@ static void Common_AbortMissingAssetGroup(const char* kind, u32 group) {
      * the palette_groups.json in it? Print the cwd + exe-dir so the
      * user can verify the paths we probed. */
     {
-        extern void Port_DumpAssetEnvironment(FILE* out, const char* kind, unsigned int group);
+        extern void Port_DumpAssetEnvironment(FILE * out, const char* kind, unsigned int group);
         Port_DumpAssetEnvironment(stderr, kind, group);
     }
     abort();
@@ -381,12 +383,17 @@ void LoadPaletteGroup(u32 group) {
      * still boots.  A real Japanese / EU build with the right ROM
      * would have those palettes extracted and this path wouldn't
      * fire. */
-    static u8 sWarnedFallback[256] = {0};
+    static u8 sWarnedFallback[256] = { 0 };
     u32 fallback = group;
     switch (group) {
-        case 2: fallback = 1; break;
-        case 4: fallback = 3; break;
-        default: break;
+        case 2:
+            fallback = 1;
+            break;
+        case 4:
+            fallback = 3;
+            break;
+        default:
+            break;
     }
     if (fallback != group) {
         if (group < 256 && !sWarnedFallback[group]) {
@@ -411,7 +418,7 @@ void LoadPaletteGroup(u32 group) {
      * native port; the GBA always had a valid ROM pointer here. Skip rather than
      * NULL-deref (crashes on N64; harmless garbage read on GBA). */
     if (paletteGroup == NULL) {
-        static u8 sSeenNullPg[256] = {0};
+        static u8 sSeenNullPg[256] = { 0 };
         if (group < 256 && !sSeenNullPg[group]) {
             sSeenNullPg[group] = 1;
             fprintf(stderr, "[port] LoadPaletteGroup: group %u unresolved (NULL) — skipping\n", group);
@@ -450,7 +457,8 @@ void LoadPalettes(const u8* src, s32 destPaletteNum, s32 numPalettes) {
     /* DmaCopy32 byte-preserves the GBA little-endian colors; a native u16 read
      * on the big-endian N64 would byte-swap each BGR555 color. Swap in place so
      * the engine and ViruaPPU see correct colors. */
-    for (u32 i = 0; i < size / 2u; i++) dest[i] = (u16)__builtin_bswap16(dest[i]);
+    for (u32 i = 0; i < size / 2u; i++)
+        dest[i] = (u16)__builtin_bswap16(dest[i]);
 #endif
 }
 
@@ -487,7 +495,7 @@ void LoadGfxGroup(u32 group) {
     /* #port bug-class-2: ROM gfx group can be unresolved (NULL) on the native
      * port; skip rather than NULL-deref (crashes on N64). */
     if (gfxItem == NULL) {
-        static u8 sSeenNullGfx[256] = {0};
+        static u8 sSeenNullGfx[256] = { 0 };
         if (group < 256 && !sSeenNullGfx[group]) {
             sSeenNullGfx[group] = 1;
             fprintf(stderr, "[port] LoadGfxGroup: group %u unresolved (NULL) — skipping\n", group);
@@ -902,7 +910,9 @@ void DrawDungeonFeatures(u32 floor, void* data, u32 size) {
         nextLayout = layout + 1;
         if (features != 0) {
             // Copies 0x400 bytes even though the data is less most of the time.
-            DmaCopy32(3, &gMapData + layout->mapDataOffset, &gMapDataBottomSpecial, 0x400);
+            /* gDungeonLayouts is a compiled table — mapDataOffset is a baked
+             * USA gMapData index; remap for EU/JP (garbage pause-menu maps). */
+            DmaCopy32(3, &gMapData + Port_RemapMapOffset(layout->mapDataOffset), &gMapDataBottomSpecial, 0x400);
 
             roomHeader = Common_GetAreaRoomHeaderSafe(layout->area, layout->room);
             if (roomHeader == NULL) {
@@ -1150,11 +1160,11 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
             iVar4 = 0xf0;
         }
         if (((u16)uVar5 & 0xffff) < 0xa0) {
-            base[uVar5 * 2]     = iVar4;
+            base[uVar5 * 2] = iVar4;
             base[uVar5 * 2 + 1] = iVar2;
         }
         if (((u16)uVar7 & 0xffff) < 0xa0) {
-            base[uVar7 * 2]     = iVar4;
+            base[uVar7 * 2] = iVar4;
             base[uVar7 * 2 + 1] = iVar2;
         }
         uVar5--;
@@ -2241,10 +2251,12 @@ const u32 gUnk_080CA06C[] = { 139808, 139808, 140320, 140832, 141344, 141856, 14
                               150560, 151584, 152608, 153632, 154656, 155680, 156704, 157728, 158752, 159776, 160800 };
 
 // Runtime twin: baseline above is the USA body. Select at the reader when REGION_IS_EU.
-const u32 gUnk_080CA06C_eu[] = { 139744, 139744, 140256, 140768, 141280, 141792, 142304, 142816, 143840, 144864, 145888,
-                                 146912, 147936, 148960, 149984, 151008, 152032, 153056, 154080, 155104, 156128, 157152,
-                                 158176, 159200, 160224, 161248, 143328, 144352, 145376, 146400, 147424, 148448, 149472,
-                                 150496, 151520, 152544, 153568, 154592, 155616, 156640, 157664, 158688, 159712, 160736 };
+const u32 gUnk_080CA06C_eu[] = {
+    139744, 139744, 140256, 140768, 141280, 141792, 142304, 142816, 143840, 144864, 145888,
+    146912, 147936, 148960, 149984, 151008, 152032, 153056, 154080, 155104, 156128, 157152,
+    158176, 159200, 160224, 161248, 143328, 144352, 145376, 146400, 147424, 148448, 149472,
+    150496, 151520, 152544, 153568, 154592, 155616, 156640, 157664, 158688, 159712, 160736
+};
 
 const u8 SharedFusions[] = {
     0x18, 0x2D, 0x35, 0x36, 0x37, 0x39, 0x3C, 0x44, 0x46, 0x47, 0x4E, 0x50, 0x53, 0x55, 0x56, 0x58, 0x5F, 0x60, 0, 0,
