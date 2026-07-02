@@ -50,6 +50,7 @@
 #include "entity.h"
 #include "port_gba_mem.h"
 #include "port_runtime_config.h"
+#include "region.h" /* REGION_IS_EU/JP — per-region savestate isolation (#21) */
 
 extern u8 gEwram[];
 extern u8 gIwram[];
@@ -84,55 +85,59 @@ typedef struct {
  * reject files that don't match the current region layout. */
 static StateRegion sRegions[] = {
     { gEwram, 0x40000, "gEwram" },
-    { gIwram, 0x8000,  "gIwram" },
-    { gVram,  0x18000, "gVram"  },
-    { gIoMem, 0x400,   "gIoMem" },
-    { &gSave,           sizeof(gSave),           "gSave" },
-    { &gPlayerEntity,   sizeof(gPlayerEntity),   "gPlayerEntity" },
-    { &gPlayerState,    sizeof(gPlayerState),    "gPlayerState" },
-    { &gMain,           sizeof(gMain),           "gMain" },
-    { &gRoomControls,   sizeof(gRoomControls),   "gRoomControls" },
+    { gIwram, 0x8000, "gIwram" },
+    { gVram, 0x18000, "gVram" },
+    { gIoMem, 0x400, "gIoMem" },
+    { &gSave, sizeof(gSave), "gSave" },
+    { &gPlayerEntity, sizeof(gPlayerEntity), "gPlayerEntity" },
+    { &gPlayerState, sizeof(gPlayerState), "gPlayerState" },
+    { &gMain, sizeof(gMain), "gMain" },
+    { &gRoomControls, sizeof(gRoomControls), "gRoomControls" },
     { &gRoomTransition, sizeof(gRoomTransition), "gRoomTransition" },
-    { gEntities,        sizeof(gEntities),       "gEntities" },
-    { &gRand,           sizeof(gRand),           "gRand" },
-    { &gPracticeFrame,  sizeof(gPracticeFrame),  "gPracticeFrame" },
+    { gEntities, sizeof(gEntities), "gEntities" },
+    { &gRand, sizeof(gRand), "gRand" },
+    { &gPracticeFrame, sizeof(gPracticeFrame), "gPracticeFrame" },
 };
 
-#define NUM_REGIONS  (sizeof(sRegions) / sizeof(sRegions[0]))
-#define NUM_SLOTS    8        /* 0..4 manual + 5..7 auto-save ring */
+#define NUM_REGIONS (sizeof(sRegions) / sizeof(sRegions[0]))
+#define NUM_SLOTS 8 /* 0..4 manual + 5..7 auto-save ring */
 #define AUTO_SLOT_BASE 5
 #define NUM_AUTO_SLOTS 3
-#define MAGIC      0x53434D54u /* "TMCS" little-endian */
-#define VERSION    4u           /* v2: header carries gEntities base address for
-                                 * cross-process pointer-fixup on restore.
-                                 * v3: gRand added to the region list so RNG
-                                 * state round-trips (GBA had it in IWRAM).
-                                 * v4: gPracticeFrame added so the speedrun IGT
-                                 * timer rewinds with the state. */
+#define MAGIC 0x53434D54u /* "TMCS" little-endian */
+#define VERSION                                         \
+    5u /* v2: header carries gEntities base address for \
+        * cross-process pointer-fixup on restore.       \
+        * v3: gRand added to the region list so RNG     \
+        * state round-trips (GBA had it in IWRAM).      \
+        * v4: gPracticeFrame added so the speedrun IGT  \
+        * timer rewinds with the state.                 \
+        * v5: ROM region tag — a USA state restored   \
+        * into a JP session contaminates tmc_jp.sav     \
+        * (#21); cross-region loads are refused. */
 
 typedef struct {
-    u8*     snapshot;       /* heap, NULL if slot empty */
-    size_t  bytes;
-    int     valid;
-    u64     saved_at_unix;  /* clock_gettime CLOCK_REALTIME seconds */
-    u64     saved_entities_base;  /* gEntities address at save time; 0 for in-RAM slots */
+    u8* snapshot; /* heap, NULL if slot empty */
+    size_t bytes;
+    int valid;
+    u64 saved_at_unix;       /* clock_gettime CLOCK_REALTIME seconds */
+    u64 saved_entities_base; /* gEntities address at save time; 0 for in-RAM slots */
 } Slot;
 
 static Slot sSlots[NUM_SLOTS];
-static int  sAutoNextSlot = AUTO_SLOT_BASE;   /* round-robin cursor */
-static u64  sAutoLastSaveTicksMs = 0;
-static int  sAutoEnabled = 1;                 /* on by default — the F8
-                                                 toggle (and config.json)
-                                                 can flip it off. */
-static u32  sAutoIntervalMs = 60000;          /* 60 seconds default */
+static int sAutoNextSlot = AUTO_SLOT_BASE; /* round-robin cursor */
+static u64 sAutoLastSaveTicksMs = 0;
+static int sAutoEnabled = 1;        /* on by default — the F8
+                                       toggle (and config.json)
+                                       can flip it off. */
+static u32 sAutoIntervalMs = 60000; /* 60 seconds default */
 
 /* Area-change auto-save (independent of the interval timer). Tracks
  * the last-observed (area, room) and saves to the ring whenever it
  * changes. Helps with the crash-on-load-then-lose-an-hour case Jester
  * flagged. */
-static int  sAutoOnAreaChange = 1;
-static u8   sLastSeenArea = 0xFF;
-static u8   sLastSeenRoom = 0xFF;
+static int sAutoOnAreaChange = 1;
+static u8 sLastSeenArea = 0xFF;
+static u8 sLastSeenRoom = 0xFF;
 
 static size_t TotalRegionBytes(void) {
     size_t total = 0;
@@ -178,9 +183,11 @@ static int Snapshot_Capture(Slot* s) {
  * pointers) is unmaintainable. Misses the entity-list heads too —
  * those live in gEntityLists which isn't a saved region. */
 static void FixupEntityPointers(u64 saved_base) {
-    if (saved_base == 0) return;
+    if (saved_base == 0)
+        return;
     const uintptr_t cur_base = (uintptr_t)gEntities;
-    if ((uintptr_t)saved_base == cur_base) return;  /* same address, no-op */
+    if ((uintptr_t)saved_base == cur_base)
+        return; /* same address, no-op */
     const uintptr_t saved_lo = (uintptr_t)saved_base;
     const uintptr_t saved_hi = saved_lo + sizeof(gEntities);
     const intptr_t delta = (intptr_t)cur_base - (intptr_t)saved_lo;
@@ -197,9 +204,9 @@ static void FixupEntityPointers(u64 saved_base) {
         }
     }
     fprintf(stderr,
-        "[quicksave] pointer-fixup: %zu pointers shifted by %p "
-        "(saved base %p → current %p)\n",
-        fixed, (void*)delta, (void*)saved_lo, (void*)cur_base);
+            "[quicksave] pointer-fixup: %zu pointers shifted by %p "
+            "(saved base %p → current %p)\n",
+            fixed, (void*)delta, (void*)saved_lo, (void*)cur_base);
 }
 
 static int Snapshot_Restore(const Slot* s) {
@@ -229,8 +236,7 @@ static int Snapshot_Restore(const Slot* s) {
      *     probe / interactable scan deref it without the IsColliding guard.
      * In-process F5/F6 keeps the same base (FixupEntityPointers no-ops), so
      * these are skipped there to leave the fast path untouched. */
-    if (s->saved_entities_base != 0 &&
-        (uintptr_t)s->saved_entities_base != (uintptr_t)gEntities) {
+    if (s->saved_entities_base != 0 && (uintptr_t)s->saved_entities_base != (uintptr_t)gEntities) {
         uintptr_t ct = (uintptr_t)gRoomControls.camera_target;
         uintptr_t lo = (uintptr_t)gEntities;
         uintptr_t hi = lo + sizeof(gEntities);
@@ -242,20 +248,34 @@ static int Snapshot_Restore(const Slot* s) {
     return 1;
 }
 
+/* Region tag for the state header + per-region state filenames. EU/JP get
+ * their own state files (like tmc_eu.sav / tmc_jp.sav) so sessions never
+ * even see another region's states; USA keeps the legacy names. */
+static u32 ActiveRegionTag(void) {
+    if (REGION_IS_EU)
+        return 2;
+    if (REGION_IS_JP)
+        return 3;
+    return 1; /* USA */
+}
+
 static void SlotFilename(int slot, char* out, size_t cap) {
+    const char* prefix = REGION_IS_EU ? "state_eu" : REGION_IS_JP ? "state_jp" : "state";
     if (slot >= AUTO_SLOT_BASE) {
-        snprintf(out, cap, "state_auto_%d.bin", slot - AUTO_SLOT_BASE);
+        snprintf(out, cap, "%s_auto_%d.bin", prefix, slot - AUTO_SLOT_BASE);
     } else if (slot == 0) {
-        snprintf(out, cap, "state_quick.bin");
+        snprintf(out, cap, "%s_quick.bin", prefix);
     } else {
-        snprintf(out, cap, "state_%d.bin", slot);
+        snprintf(out, cap, "%s_%d.bin", prefix, slot);
     }
 }
 
 static int WriteSlotToDisk(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return 0;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return 0;
     Slot* s = &sSlots[slot];
-    if (!s->valid || s->snapshot == NULL) return 0;
+    if (!s->valid || s->snapshot == NULL)
+        return 0;
 
     char path[64];
     SlotFilename(slot, path, sizeof(path));
@@ -275,11 +295,11 @@ static int WriteSlotToDisk(int slot) {
      * them and running the entity-update loop dereferences unmapped
      * memory. */
     const u64 entities_base = (u64)(uintptr_t)gEntities;
-    if (fwrite(&magic, sizeof(magic), 1, f) != 1 ||
-        fwrite(&version, sizeof(version), 1, f) != 1 ||
-        fwrite(&total, sizeof(total), 1, f) != 1 ||
-        fwrite(&saved_at, sizeof(saved_at), 1, f) != 1 ||
-        fwrite(&entities_base, sizeof(entities_base), 1, f) != 1) {
+    const u32 region_tag = ActiveRegionTag();
+    if (fwrite(&magic, sizeof(magic), 1, f) != 1 || fwrite(&version, sizeof(version), 1, f) != 1 ||
+        fwrite(&total, sizeof(total), 1, f) != 1 || fwrite(&saved_at, sizeof(saved_at), 1, f) != 1 ||
+        fwrite(&entities_base, sizeof(entities_base), 1, f) != 1 ||
+        fwrite(&region_tag, sizeof(region_tag), 1, f) != 1) {
         fprintf(stderr, "[quicksave] header write failed for %s\n", path);
         fclose(f);
         return 0;
@@ -297,18 +317,18 @@ static int WriteSlotToDisk(int slot) {
  * Returns 1 if all four fields read, 0 on short read. Field values are
  * not validated and no diagnostics are emitted — callers decide. */
 static int ReadSlotHeader(FILE* f, u32* magic, u32* version, u32* total, u64* saved_at) {
-    return fread(magic, sizeof(*magic), 1, f) == 1 &&
-           fread(version, sizeof(*version), 1, f) == 1 &&
-           fread(total, sizeof(*total), 1, f) == 1 &&
-           fread(saved_at, sizeof(*saved_at), 1, f) == 1;
+    return fread(magic, sizeof(*magic), 1, f) == 1 && fread(version, sizeof(*version), 1, f) == 1 &&
+           fread(total, sizeof(*total), 1, f) == 1 && fread(saved_at, sizeof(*saved_at), 1, f) == 1;
 }
 
 static int ReadSlotFromDisk(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return 0;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return 0;
     char path[64];
     SlotFilename(slot, path, sizeof(path));
     FILE* f = fopen(path, "rb");
-    if (!f) return 0;
+    if (!f)
+        return 0;
     u32 magic = 0, version = 0, total = 0;
     u64 saved_at = 0;
     u64 saved_entities_base = 0;
@@ -333,6 +353,27 @@ static int ReadSlotFromDisk(int slot) {
             return 0;
         }
     } else if (version != VERSION) {
+        fclose(f);
+        return 0;
+    }
+    /* v5+: region tag. Per-region filenames already isolate new states;
+     * this guards hand-copied/renamed files. Pre-v5 files have no tag —
+     * they predate EU/JP support and are accepted for USA only (#21). */
+    if (version >= 5) {
+        u32 region_tag = 0;
+        if (fread(&region_tag, sizeof(region_tag), 1, f) != 1) {
+            fprintf(stderr, "[quicksave] short read on %s v5 header, ignoring slot file\n", path);
+            fclose(f);
+            return 0;
+        }
+        if (region_tag != ActiveRegionTag()) {
+            fprintf(stderr, "[quicksave] %s was saved in a different ROM region (%u != %u) — refusing to load\n", path,
+                    region_tag, ActiveRegionTag());
+            fclose(f);
+            return 0;
+        }
+    } else if (ActiveRegionTag() != 1) {
+        fprintf(stderr, "[quicksave] %s predates region tags (v%u) — refusing in a non-USA session\n", path, version);
         fclose(f);
         return 0;
     }
@@ -366,8 +407,10 @@ static int ReadSlotFromDisk(int slot) {
  * ============================================================ */
 
 int Port_QuickSave_SaveSlot(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return 0;
-    if (!Snapshot_Capture(&sSlots[slot])) return 0;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return 0;
+    if (!Snapshot_Capture(&sSlots[slot]))
+        return 0;
     /* Best-effort disk persistence — failure is non-fatal, the in-memory
      * snapshot still works for the session. */
     WriteSlotToDisk(slot);
@@ -378,8 +421,10 @@ int Port_QuickSave_SaveSlot(int slot) {
 int Port_QuickSave_LoadSlot(int slot) {
     /* Refuse any state restore under Console-Parity — covers the menu/imgui
      * load buttons too, not just the F-key hotkeys. */
-    if (Port_Config_GetConsoleParity()) return 0;
-    if (slot < 0 || slot >= NUM_SLOTS) return 0;
+    if (Port_Config_GetConsoleParity())
+        return 0;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return 0;
     if (!sSlots[slot].valid) {
         /* Try loading from disk first — handles "fresh launch, never
          * saved this session but slot exists on disk from last run". */
@@ -403,14 +448,17 @@ int Port_QuickSave_LoadSlot(int slot) {
 }
 
 int Port_QuickSave_HasSlot(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return 0;
-    if (sSlots[slot].valid) return 1;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return 0;
+    if (sSlots[slot].valid)
+        return 1;
     /* Probe disk so the menu can label populated-on-disk slots correctly
      * before the user touches them. */
     char path[64];
     SlotFilename(slot, path, sizeof(path));
     FILE* f = fopen(path, "rb");
-    if (!f) return 0;
+    if (!f)
+        return 0;
     fclose(f);
     return 1;
 }
@@ -424,13 +472,15 @@ int Port_QuickSave_HasSlot(int slot) {
 static Slot sPracticeSlot;
 
 int Port_QuickSave_SavePractice(void) {
-    if (!Snapshot_Capture(&sPracticeSlot)) return 0;
+    if (!Snapshot_Capture(&sPracticeSlot))
+        return 0;
     fprintf(stderr, "[quicksave] practice point set (%zu bytes)\n", sPracticeSlot.bytes);
     return 1;
 }
 
 int Port_QuickSave_LoadPractice(void) {
-    if (Port_Config_GetConsoleParity()) return 0;
+    if (Port_Config_GetConsoleParity())
+        return 0;
     if (!sPracticeSlot.valid) {
         fprintf(stderr, "[quicksave] practice point empty\n");
         return 0;
@@ -451,14 +501,17 @@ int Port_QuickSave_HasPractice(void) {
 }
 
 u64 Port_QuickSave_SlotTimestamp(int slot) {
-    if (slot < 0 || slot >= NUM_SLOTS) return 0;
-    if (sSlots[slot].valid) return sSlots[slot].saved_at_unix;
+    if (slot < 0 || slot >= NUM_SLOTS)
+        return 0;
+    if (sSlots[slot].valid)
+        return sSlots[slot].saved_at_unix;
     /* Probe the disk file's timestamp header so the menu can show
      * "last saved" even for slots that haven't been loaded into memory. */
     char path[64];
     SlotFilename(slot, path, sizeof(path));
     FILE* f = fopen(path, "rb");
-    if (!f) return 0;
+    if (!f)
+        return 0;
     u32 magic = 0, version = 0, total = 0;
     u64 saved_at = 0;
     if (ReadSlotHeader(f, &magic, &version, &total, &saved_at)) {
@@ -470,9 +523,15 @@ u64 Port_QuickSave_SlotTimestamp(int slot) {
 }
 
 /* Legacy single-slot API — slot 0 is the F5/F6 quicksave. */
-int Port_QuickSave(void)         { return Port_QuickSave_SaveSlot(0); }
-int Port_QuickLoad(void)         { return Port_QuickSave_LoadSlot(0); }
-int Port_QuickSave_HasSnapshot(void) { return Port_QuickSave_HasSlot(0); }
+int Port_QuickSave(void) {
+    return Port_QuickSave_SaveSlot(0);
+}
+int Port_QuickLoad(void) {
+    return Port_QuickSave_LoadSlot(0);
+}
+int Port_QuickSave_HasSnapshot(void) {
+    return Port_QuickSave_HasSlot(0);
+}
 
 /* Auto-save — call once per frame from VBlankIntrWait. Saves to the
  * next slot in the auto-save ring if enabled and the configured
@@ -489,7 +548,8 @@ static void TakeAutoSnapshot(const char* reason) {
 }
 
 void Port_QuickSave_AutoTick(void) {
-    if (!sAutoEnabled) return;
+    if (!sAutoEnabled)
+        return;
     const u64 now = SDL_GetTicks();
 
     /* Area-change trigger. gRoomControls is the engine's source-of-
@@ -519,12 +579,15 @@ void Port_QuickSave_AutoTick(void) {
         sAutoLastSaveTicksMs = now;
         return;
     }
-    if (now - sAutoLastSaveTicksMs < sAutoIntervalMs) return;
+    if (now - sAutoLastSaveTicksMs < sAutoIntervalMs)
+        return;
     sAutoLastSaveTicksMs = now;
     TakeAutoSnapshot("interval");
 }
 
-int Port_QuickSave_AutoOnAreaChangeEnabled(void) { return sAutoOnAreaChange; }
+int Port_QuickSave_AutoOnAreaChangeEnabled(void) {
+    return sAutoOnAreaChange;
+}
 void Port_QuickSave_SetAutoOnAreaChange(int on) {
     sAutoOnAreaChange = on ? 1 : 0;
     /* Reset the seen-area cache when toggled on so the next change
@@ -537,21 +600,34 @@ void Port_QuickSave_SetAutoOnAreaChange(int on) {
 
 void Port_QuickSave_SetAutoEnabled(int enabled) {
     sAutoEnabled = enabled ? 1 : 0;
-    if (enabled) sAutoLastSaveTicksMs = SDL_GetTicks();
+    if (enabled)
+        sAutoLastSaveTicksMs = SDL_GetTicks();
 }
 
-int Port_QuickSave_AutoEnabled(void) { return sAutoEnabled; }
+int Port_QuickSave_AutoEnabled(void) {
+    return sAutoEnabled;
+}
 
 void Port_QuickSave_SetAutoIntervalMs(u32 ms) {
-    if (ms < 5000) ms = 5000;       /* clamp to 5s minimum — anything
-                                       faster would thrash on busy
-                                       frames and risk visible hitches. */
-    if (ms > 600000) ms = 600000;   /* 10 minute cap */
+    if (ms < 5000)
+        ms = 5000; /* clamp to 5s minimum — anything
+                      faster would thrash on busy
+                      frames and risk visible hitches. */
+    if (ms > 600000)
+        ms = 600000; /* 10 minute cap */
     sAutoIntervalMs = ms;
 }
 
-u32 Port_QuickSave_AutoIntervalMs(void) { return sAutoIntervalMs; }
+u32 Port_QuickSave_AutoIntervalMs(void) {
+    return sAutoIntervalMs;
+}
 
-int Port_QuickSave_SlotCount(void)     { return NUM_SLOTS; }
-int Port_QuickSave_AutoSlotBase(void)  { return AUTO_SLOT_BASE; }
-int Port_QuickSave_AutoSlotCount(void) { return NUM_AUTO_SLOTS; }
+int Port_QuickSave_SlotCount(void) {
+    return NUM_SLOTS;
+}
+int Port_QuickSave_AutoSlotBase(void) {
+    return AUTO_SLOT_BASE;
+}
+int Port_QuickSave_AutoSlotCount(void) {
+    return NUM_AUTO_SLOTS;
+}

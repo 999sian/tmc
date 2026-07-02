@@ -6,14 +6,12 @@
 
 #include <cassert>
 
-MP2KTrack::MP2KTrack(const MP2KContext &ctx, uint8_t trackIdx) :
-    loudnessCalculator(LOUDNESS_LP_FREQ, ctx.sampleRate), trackIdx(trackIdx)
-{
+MP2KTrack::MP2KTrack(const MP2KContext& ctx, uint8_t playerIdx, uint8_t trackIdx)
+    : loudnessCalculator(LOUDNESS_LP_FREQ, ctx.sampleRate), playerIdx(playerIdx), trackIdx(trackIdx) {
     Init(0);
 }
 
-void MP2KTrack::Init(size_t pos)
-{
+void MP2KTrack::Init(size_t pos) {
     this->pos = pos;
     patternLevel = 0;
     modt = MODT::PITCH;
@@ -23,7 +21,7 @@ void MP2KTrack::Init(size_t pos)
     lastNoteVel = 0;
     lastNoteLen = 0;
     reptCount = 0;
-    prog = PROG_UNDEFINED;    // TODO replace this with an instrument definition like in original MP2K
+    prog = PROG_UNDEFINED; // TODO replace this with an instrument definition like in original MP2K
     vol = 0;
     mod = 0;
     bendr = 2;
@@ -49,43 +47,38 @@ void MP2KTrack::Init(size_t pos)
     activeVoiceTypes = VoiceFlags::NONE;
 }
 
-void MP2KTrack::Stop()
-{
+void MP2KTrack::Stop() {
     if (!enabled)
         return;
 
-    for (MP2KChn *chn = channels; chn != nullptr; chn = chn->next)
+    for (MP2KChn* chn = channels; chn != nullptr; chn = chn->next)
         chn->Kill();
 
     assert(channels == nullptr);
 }
 
-int16_t MP2KTrack::GetPitch()
-{
+int16_t MP2KTrack::GetPitch() {
     int p = tune + bend * bendr + keyShift * 64;
     if (modt == MODT::PITCH)
         p += lfoValue * 4;
     return static_cast<int16_t>(p);
 }
 
-uint16_t MP2KTrack::GetVol()
-{
+uint16_t MP2KTrack::GetVol() {
     int32_t v = vol << 1;
     if (modt == MODT::VOL)
         v = (v * (lfoValue + 128)) >> 7;
     return static_cast<uint16_t>(v);
 }
 
-int16_t MP2KTrack::GetPan()
-{
+int16_t MP2KTrack::GetPan() {
     int p = pan << 1;
     if (modt == MODT::PAN)
         p += lfoValue;
     return static_cast<int16_t>(p);
 }
 
-void MP2KTrack::ResetLfoValue()
-{
+void MP2KTrack::ResetLfoValue() {
     lfoValue = 0;
     lfoPhase = 0;
 

@@ -15,7 +15,7 @@
 typedef struct {
     /*0x00*/ Entity base;
 #ifdef PC_PORT
-    u8 unused1[12 + 4];  /* #98/#99 pattern: +4 for Enemy::child PC growth */
+    u8 unused1[12 + 4]; /* #98/#99 pattern: +4 for Enemy::child PC growth */
 #else
     /*0x68*/ u8 unused1[12];
 #endif
@@ -46,10 +46,8 @@ typedef struct {
     /*0x84*/ u32 unk_84;
 } MoldormEntity;
 
-PORT_STATIC_ASSERT_OFFSET(MoldormEntity, unk_74, 0x74, 0xA0,
-                          "MoldormEntity unk_74 offset (Enemy::child +4 pad)");
-PORT_STATIC_ASSERT_SIZE(MoldormEntity, 0x88, 0xB8,
-                        "MoldormEntity must fit the 0xB8 entity pool slot (#127)");
+PORT_STATIC_ASSERT_OFFSET(MoldormEntity, unk_74, 0x74, 0xA0, "MoldormEntity unk_74 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_SIZE(MoldormEntity, 0x88, 0xB8, "MoldormEntity must fit the 0xB8 entity pool slot (#127)");
 
 void sub_08022EAC(MoldormEntity*);
 void sub_08022F14(MoldormEntity*);
@@ -88,9 +86,26 @@ void Moldorm_OnCollision(MoldormEntity* this) {
     super->animationState = ((super->direction + 2) & 0x1c) >> 2;
     super->frameIndex = super->animationState;
 
+#ifdef PC_PORT
+    /* #140-class: with a full entity pool the tail creates in sub_08022C58
+     * failed and these refs are NULL — gibdo (Gibdo_MoveObjectsToStalfos)
+     * guards the same pattern; do the same instead of dereferencing. */
+    {
+        Entity* seg;
+        if (super->child != NULL)
+            super->child->iframes = super->iframes;
+        seg = ENTITY_REF_GET(this->unk_7c.entity);
+        if (seg != NULL)
+            seg->iframes = super->iframes;
+        seg = ENTITY_REF_GET(this->unk_80.entity);
+        if (seg != NULL)
+            seg->iframes = super->iframes;
+    }
+#else
     super->child->iframes = super->iframes;
     ENTITY_REF_GET(this->unk_7c.entity)->iframes = super->iframes;
     ENTITY_REF_GET(this->unk_80.entity)->iframes = super->iframes;
+#endif
     EnemyFunctionHandlerAfterCollision(super, Moldorm_Functions);
 }
 
