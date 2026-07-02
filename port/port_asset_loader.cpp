@@ -1368,6 +1368,17 @@ GfxLoadDecision EvaluateGfxControl(u8 unknown) {
 extern "C" u16 gPaletteBuffer[];
 
 extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
+    /* EU: never serve palette GROUPS from the extracted cache. The EU palette
+     * area drops two entries (gPalette_2432/2433) relative to USA, so the
+     * extractor's per-NAME file offsets sit +0x10/-0x40 off the id*32
+     * arithmetic the game's group table actually uses — group loads for
+     * palette ids >= ~2434 come out half-a-palette shifted (magenta/green
+     * garbled EU title BG, M6 bug). The loaded ROM resolves groups exactly
+     * (gGlobalGfxAndPalettes[paletteId * 32]); let LoadPaletteGroup fall
+     * through to it. Same shape as the JP gfx-group gate below. */
+    if (gRomRegion == ROM_REGION_EU) {
+        return FALSE;
+    }
     if (!EnsureAssetGroupCache()) {
         return FALSE;
     }

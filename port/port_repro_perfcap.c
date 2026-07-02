@@ -29,9 +29,9 @@
 
 #include "main.h"         /* gMain */
 #include "port_gba_mem.h" /* gIoMem, gVram, gBgPltt, gObjPltt, gOamMem */
-#include "room.h"        /* gRoomControls, gRoomVars.properties[] */
+#include "room.h"         /* gRoomControls, gRoomVars.properties[] */
 #include "port_debug_actions.h"
-#include "virtuappu.h"   /* virtuappu_frame_buffer, virtuappu_registers (Tier B hash) */
+#include "virtuappu.h" /* virtuappu_frame_buffer, virtuappu_registers (Tier B hash) */
 
 extern int Port_CaptureBaseFramebufferPNG(const char* path); /* shim in port_bugreport.cpp */
 
@@ -77,13 +77,27 @@ static void perfcap_dump(const char* path) {
     fwrite(gObjPltt, 1, 0x200u, f);
     fwrite(gOamMem, 1, 0x400u, f);
     fclose(f);
+    if (getenv("TMC_PAL_TRACE")) {
+        extern uint16_t gPaletteBuffer[];
+        fprintf(
+            stderr,
+            "[perfcap] gPaletteBuffer rows 0/4/15: %04x %04x %04x %04x | %04x %04x %04x %04x | %04x %04x %04x %04x\n",
+            gPaletteBuffer[0], gPaletteBuffer[1], gPaletteBuffer[2], gPaletteBuffer[3], gPaletteBuffer[64],
+            gPaletteBuffer[65], gPaletteBuffer[66], gPaletteBuffer[67], gPaletteBuffer[240], gPaletteBuffer[241],
+            gPaletteBuffer[242], gPaletteBuffer[243]);
+        fprintf(
+            stderr,
+            "[perfcap] gBgPltt        rows 0/4/15: %04x %04x %04x %04x | %04x %04x %04x %04x | %04x %04x %04x %04x\n",
+            ((uint16_t*)gBgPltt)[0], ((uint16_t*)gBgPltt)[1], ((uint16_t*)gBgPltt)[2], ((uint16_t*)gBgPltt)[3],
+            ((uint16_t*)gBgPltt)[64], ((uint16_t*)gBgPltt)[65], ((uint16_t*)gBgPltt)[66], ((uint16_t*)gBgPltt)[67],
+            ((uint16_t*)gBgPltt)[240], ((uint16_t*)gBgPltt)[241], ((uint16_t*)gBgPltt)[242], ((uint16_t*)gBgPltt)[243]);
+    }
     {
         const uint16_t dispcnt = (uint16_t)(gIoMem[0] | (gIoMem[1] << 8));
-        fprintf(stderr, "[perfcap] dumped PPU snapshot -> %s (dispcnt=0x%04x mode=%u)\n",
-                path, dispcnt, (unsigned)(dispcnt & 7u));
+        fprintf(stderr, "[perfcap] dumped PPU snapshot -> %s (dispcnt=0x%04x mode=%u)\n", path, dispcnt,
+                (unsigned)(dispcnt & 7u));
         /* Tier B end-to-end parity oracle (see perfcap_frame_hash). */
-        fprintf(stderr, "[perfcap] frame_hash=0x%016llx\n",
-                (unsigned long long)perfcap_frame_hash());
+        fprintf(stderr, "[perfcap] frame_hash=0x%016llx\n", (unsigned long long)perfcap_frame_hash());
     }
 }
 
@@ -188,8 +202,7 @@ void Port_ReproPerfcap_Tick(unsigned int frame) {
         dumped = 1;
         perfcap_dump(out);
         Port_CaptureBaseFramebufferPNG("/tmp/tmc_perfcap_scene.png");
-        fprintf(stderr,
-                "[perfcap] room area=0x%02x room=0x%02x  prop0=%p prop1=%p prop5(statechange)=%p prop7=%p\n",
+        fprintf(stderr, "[perfcap] room area=0x%02x room=0x%02x  prop0=%p prop1=%p prop5(statechange)=%p prop7=%p\n",
                 gRoomControls.area, gRoomControls.room, gRoomVars.properties[0], gRoomVars.properties[1],
                 gRoomVars.properties[5], gRoomVars.properties[7]);
         fprintf(stderr, "[perfcap] anchor &Port_DebugAction_Warp=%p\n", (void*)Port_DebugAction_Warp);

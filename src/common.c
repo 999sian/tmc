@@ -435,6 +435,14 @@ void LoadPaletteGroup(u32 group) {
         if (numPalettes == 0) {
             numPalettes = 16;
         }
+#ifdef PC_PORT
+        if (getenv("TMC_PAL_TRACE")) {
+            const u8* src = &gGlobalGfxAndPalettes[(pg & 0xFFFF) * 32];
+            fprintf(stderr, "[paltrace] group=%u palId=%u dest=%u n=%u src[0..7]=%02x%02x%02x%02x%02x%02x%02x%02x\n",
+                    group, pg & 0xFFFF, destPaletteNum, numPalettes, src[0], src[1], src[2], src[3], src[4], src[5],
+                    src[6], src[7]);
+        }
+#endif
         LoadPalettes(&gGlobalGfxAndPalettes[(pg & 0xFFFF) * 32], destPaletteNum, numPalettes);
         if (((pg >> 24) & 0x80) == 0) {
             break;
