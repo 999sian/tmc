@@ -153,3 +153,4 @@ tools/ppu_golden_hashes.local*
 # in port/shaders/build/*.spv (bin2c-embedded into tmc_pc) stay tracked.
 port/vk_rt_experiment/vkrt_demo
 port/vk_rt_experiment/shaders/*.spv
+.omp/
