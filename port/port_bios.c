@@ -108,6 +108,11 @@ static void Port_UpdateInput(void) {
      * are visible to the macro through the real input path this same frame. */
     { Port_ReproRollMacro_Tick(sFrameNum); }
 
+    /* NPC-talk end-to-end test (TMC_REPRO_NPC_TALK=1 or a "repro_npc_talk"
+     * marker file, for Android). Walks to the nearest NPC and stamps R
+     * through the real input path; PASS = message box opens. */
+    { Port_ReproNpcTalk_Tick(sFrameNum); }
+
     {
         /* While either overlay is open, hold all GBA buttons released so
          * the game doesn't observe stray input from key presses we routed
