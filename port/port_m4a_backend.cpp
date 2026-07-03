@@ -60,6 +60,7 @@ extern const MusicPlayer gMusicPlayers[];
 #include <cstring>
 #include <fstream>
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <span>
 #include <string>
@@ -113,6 +114,50 @@ struct BackendState {
 
 BackendState sState;
 std::mutex sStateMutex;
+
+/* --- Main-thread → audio-thread command queue (item-get freeze fix) ---------
+ *
+ * The game engine calls the m4a mutators (start/stop/continue song, set track
+ * volume/pan) from the MAIN thread, several per frame. They used to take
+ * sStateMutex directly — the SAME lock the audio thread holds while it renders.
+ * On a contended low-end SoC (Moto G4: 4 fast cores, 3 doing the software PPU),
+ * an item-get fires a storm of these calls in one frame (duck BGM, stop, start
+ * fanfare, per-track volume) while the audio thread is mid-render; each call
+ * then blocks on the lock, and std::mutex is unfair, so the main thread lost the
+ * race repeatedly and the game tick froze for up to ~500 ms (issue: "fps drops
+ * when we get an item").
+ *
+ * Fix: the main thread NEVER touches sStateMutex for these hot mutators. It
+ * pushes a command onto sCmdQueue under sCmdMutex (held for microseconds — no
+ * rendering ever happens under it) and returns immediately. The audio thread
+ * drains the queue and applies the commands under sStateMutex at the top of its
+ * render, in FIFO order, so playback semantics are unchanged (just applied at
+ * the next audio callback — a few ms later, inaudible). */
+enum class M4ACmdType { StartSong, Stop, Continue, SetVolume, SetPan };
+struct M4ACommand {
+    M4ACmdType type;
+    uint8_t playerIndex;
+    uint16_t songId;    /* StartSong */
+    uint16_t trackBits; /* SetVolume / SetPan */
+    uint16_t volume;    /* SetVolume */
+    int8_t pan;         /* SetPan */
+};
+std::vector<M4ACommand> sCmdQueue;
+std::mutex sCmdMutex;
+
+static void PushCommand(const M4ACommand& c) {
+    std::lock_guard<std::mutex> lock(sCmdMutex);
+    sCmdQueue.push_back(c);
+}
+
+/* Lock-free per-player "audibly active" bitmask (bit N = player N live). The
+ * audio thread publishes it each chunk under sStateMutex; the main thread reads
+ * it WITHOUT any lock in Port_M4A_Backend_IsPlayerActive. This existed because
+ * the BGM duck (#22) polls IsPlayerActive EVERY frame while the item-get jingle
+ * plays — a per-frame sStateMutex acquisition that, like the mutators above,
+ * blocked the game tick on the contended audio lock (the residual half of the
+ * item-get freeze). kPlayerCount==32 fits a u32 exactly. */
+std::atomic<uint32_t> sActivePlayerMask{ 0 };
 
 static MP2KSoundMode MakeSoundMode(void) {
     MP2KSoundMode mode;
@@ -215,11 +260,8 @@ static std::string LoadSoundsJson(void) {
      * missing at build time (in which case we fall through to the
      * silent-songs warning below). */
     if (PortSoundsEmbed::kSize > 0) {
-        std::fprintf(stderr,
-                     "[AUDIO] using embedded sounds.json (%zu bytes)\n",
-                     PortSoundsEmbed::kSize);
-        return std::string(reinterpret_cast<const char*>(PortSoundsEmbed::kData),
-                           PortSoundsEmbed::kSize);
+        std::fprintf(stderr, "[AUDIO] using embedded sounds.json (%zu bytes)\n", PortSoundsEmbed::kSize);
+        return std::string(reinterpret_cast<const char*>(PortSoundsEmbed::kData), PortSoundsEmbed::kSize);
     }
 #endif
 
@@ -439,8 +481,7 @@ static PlayerTableInfo BuildPlayerTable(void) {
 static void AudioGuardWarn(const char* where, const char* what) {
     static int warned = 0;
     if (warned < 8) {
-        fprintf(stderr, "[AUDIO] contained exception in %s: %s\n",
-                where, what ? what : "unknown");
+        fprintf(stderr, "[AUDIO] contained exception in %s: %s\n", where, what ? what : "unknown");
         ++warned;
     }
 }
@@ -449,6 +490,14 @@ static void RebuildContextLocked(void) {
     std::span<uint8_t> romSpan;
     SongTableInfo songTableInfo;
 
+    /* Drop any commands queued against the OLD context — the engine re-issues
+     * the room BGM after a reset, so a stale start/volume must not leak onto the
+     * fresh context. Caller holds sStateMutex; taking sCmdMutex here keeps the
+     * sStateMutex→sCmdMutex order used by DrainCommandsLocked (no deadlock). */
+    {
+        std::lock_guard<std::mutex> cmdLock(sCmdMutex);
+        sCmdQueue.clear();
+    }
     sState.pendingSamples.clear();
     sState.pendingFrameOffset = 0;
     sState.ctx.reset();
@@ -468,9 +517,8 @@ static void RebuildContextLocked(void) {
         songTableInfo.count = 0;
         songTableInfo.tableIdx = 0;
 
-        sState.ctx = std::make_unique<MP2KContext>(
-            sState.sampleRate, -1, *sState.rom, MakeSoundMode(), MakeAgbplayMode(), songTableInfo, BuildPlayerTable()
-        );
+        sState.ctx = std::make_unique<MP2KContext>(sState.sampleRate, -1, *sState.rom, MakeSoundMode(),
+                                                   MakeAgbplayMode(), songTableInfo, BuildPlayerTable());
         sState.ctx->m4aSoundMode(sState.soundMode);
     } catch (const std::exception& e) {
         /* Malformed song table / ROM: leave the backend silent rather than
@@ -496,6 +544,30 @@ static bool HasActivePlaybackLocked(void) {
            !sState.ctx->waveChannels.empty() || !sState.ctx->noiseChannels.empty();
 }
 
+/* Recompute + publish the lock-free active-player mask (caller holds
+ * sStateMutex). Same liveness test the old locking IsPlayerActive used: a
+ * player is audibly active while it's playing AND some track is still
+ * sequencing (enabled) or holding ringing notes (activeNotes). */
+static void PublishActivePlayerMaskLocked(void) {
+    uint32_t mask = 0;
+    if (sState.ctx) {
+        const size_t n = std::min<size_t>(kPlayerCount, sState.ctx->players.size());
+        for (size_t p = 0; p < n; ++p) {
+            const auto& player = sState.ctx->players[p];
+            if (!player.playing) {
+                continue;
+            }
+            for (const auto& trk : player.tracks) {
+                if (trk.enabled || trk.activeNotes.any()) {
+                    mask |= (1u << p);
+                    break;
+                }
+            }
+        }
+    }
+    sActivePlayerMask.store(mask, std::memory_order_relaxed);
+}
+
 static void RenderChunkLocked(void) {
     const size_t sampleCount = sState.ctx->mixer.GetSamplesPerBuffer();
 
@@ -507,54 +579,54 @@ static void RenderChunkLocked(void) {
     }
 
     try {
-    sState.ctx->m4aSoundMain();
+        sState.ctx->m4aSoundMain();
 
-    for (size_t sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
-        float left = 0.0f;
-        float right = 0.0f;
+        for (size_t sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
+            float left = 0.0f;
+            float right = 0.0f;
 
-        for (uint32_t playerIndex = 0; playerIndex < std::min<uint32_t>(kPlayerCount, sState.ctx->players.size());
-             playerIndex++) {
-            const auto& player = sState.ctx->players[playerIndex];
+            for (uint32_t playerIndex = 0; playerIndex < std::min<uint32_t>(kPlayerCount, sState.ctx->players.size());
+                 playerIndex++) {
+                const auto& player = sState.ctx->players[playerIndex];
 
-            for (size_t trackIndex = 0; trackIndex < std::min<size_t>(kMaxTracks, player.tracks.size()); trackIndex++) {
-                const auto& track = player.tracks[trackIndex];
-                const float gain = static_cast<float>(sState.trackVolumes[playerIndex][trackIndex]) / 255.0f;
-                const float pan = static_cast<float>(sState.trackPans[playerIndex][trackIndex]) / 64.0f;
-                float trackLeft;
-                float trackRight;
+                for (size_t trackIndex = 0; trackIndex < std::min<size_t>(kMaxTracks, player.tracks.size());
+                     trackIndex++) {
+                    const auto& track = player.tracks[trackIndex];
+                    const float gain = static_cast<float>(sState.trackVolumes[playerIndex][trackIndex]) / 255.0f;
+                    const float pan = static_cast<float>(sState.trackPans[playerIndex][trackIndex]) / 64.0f;
+                    float trackLeft;
+                    float trackRight;
 
-                if (track.muted || track.audioBuffer.size() <= sampleIndex || gain <= 0.0f) {
-                    continue;
+                    if (track.muted || track.audioBuffer.size() <= sampleIndex || gain <= 0.0f) {
+                        continue;
+                    }
+
+                    trackLeft = track.audioBuffer[sampleIndex].left * gain;
+                    trackRight = track.audioBuffer[sampleIndex].right * gain;
+
+                    if (pan > 0.0f) {
+                        trackLeft *= (1.0f - std::min(pan, 1.0f));
+                    } else if (pan < 0.0f) {
+                        trackRight *= (1.0f - std::min(-pan, 1.0f));
+                    }
+
+                    left += trackLeft;
+                    right += trackRight;
                 }
-
-                trackLeft = track.audioBuffer[sampleIndex].left * gain;
-                trackRight = track.audioBuffer[sampleIndex].right * gain;
-
-                if (pan > 0.0f) {
-                    trackLeft *= (1.0f - std::min(pan, 1.0f));
-                } else if (pan < 0.0f) {
-                    trackRight *= (1.0f - std::min(-pan, 1.0f));
-                }
-
-                left += trackLeft;
-                right += trackRight;
             }
+
+            left *= sState.masterVolume;
+            right *= sState.masterVolume;
+
+            left = std::clamp(left, -1.0f, 1.0f);
+            right = std::clamp(right, -1.0f, 1.0f);
+
+            sState.pendingSamples[sampleIndex * 2 + 0] = static_cast<int16_t>(std::lround(left * 32767.0f));
+            sState.pendingSamples[sampleIndex * 2 + 1] = static_cast<int16_t>(std::lround(right * 32767.0f));
         }
-
-        left  *= sState.masterVolume;
-        right *= sState.masterVolume;
-
-        left = std::clamp(left, -1.0f, 1.0f);
-        right = std::clamp(right, -1.0f, 1.0f);
-
-        sState.pendingSamples[sampleIndex * 2 + 0] = static_cast<int16_t>(std::lround(left * 32767.0f));
-        sState.pendingSamples[sampleIndex * 2 + 1] = static_cast<int16_t>(std::lround(right * 32767.0f));
-    }
     } catch (const std::exception& e) {
         AudioGuardWarn("RenderChunkLocked", e.what());
-        std::fill(sState.pendingSamples.begin(), sState.pendingSamples.end(),
-                  static_cast<int16_t>(0));
+        std::fill(sState.pendingSamples.begin(), sState.pendingSamples.end(), static_cast<int16_t>(0));
     }
 }
 
@@ -617,68 +689,57 @@ void Port_M4A_Backend_SetVSyncEnabled(bool enabled) {
     sState.vsyncEnabled = enabled;
 }
 
-bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
+/* ---- *Locked helpers: run on the audio thread with sStateMutex already held,
+ * applied from DrainCommandsLocked. Return value of the start helper is unused
+ * (the public entry point returns optimistically after a synchronous validity
+ * check). ---- */
+static void StartSongLocked(uint8_t playerIndex, uint16_t songId) {
     try {
         const size_t songPos = SongIdToRomPosLocked(songId);
-
         if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
-            return false;
+            return;
         }
         if (songPos == 0 || songPos >= gRomSize) {
             sState.ctx->m4aMPlayStop(playerIndex);
-            if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
-            return false;
+            if (playerIndex < kPlayerCount)
+                sState.currentSongId[playerIndex] = 0;
+            return;
         }
-
         /* Idempotent restart for BGM only (song IDs 1..99): if this player is
          * already running this exact BGM, leave it alone. The engine commonly
          * re-issues the room BGM on every room transition; restarting the
          * playback is audible as music resetting between rooms. SFX (>=100)
          * legitimately re-trigger the same id and must NOT be skipped. */
-        if (songId >= 1 && songId <= 99 && playerIndex < kPlayerCount &&
-            sState.currentSongId[playerIndex] == songId) {
-            return true;
+        if (songId >= 1 && songId <= 99 && playerIndex < kPlayerCount && sState.currentSongId[playerIndex] == songId) {
+            return;
         }
-
         sState.ctx->m4aMPlayStart(playerIndex, songPos);
-        if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = songId;
-        return true;
-    } catch (const std::exception& e) {
-        AudioGuardWarn("StartSongById", e.what());
-        return false;
-    }
+        if (playerIndex < kPlayerCount)
+            sState.currentSongId[playerIndex] = songId;
+    } catch (const std::exception& e) { AudioGuardWarn("StartSongLocked", e.what()); }
 }
 
-void Port_M4A_Backend_StopPlayer(uint8_t playerIndex) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
-
+static void StopPlayerLocked(uint8_t playerIndex) {
     if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
         return;
     }
-
     sState.ctx->m4aMPlayStop(playerIndex);
-    if (playerIndex < kPlayerCount) sState.currentSongId[playerIndex] = 0;
+    if (playerIndex < kPlayerCount)
+        sState.currentSongId[playerIndex] = 0;
 }
 
-void Port_M4A_Backend_ContinuePlayer(uint8_t playerIndex) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
-
+static void ContinuePlayerLocked(uint8_t playerIndex) {
     if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
         return;
     }
-
     sState.ctx->m4aMPlayContinue(playerIndex);
 }
 
-void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, uint16_t volume) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
+static void SetTrackVolumeLocked(uint8_t playerIndex, uint16_t trackBits, uint16_t volume) {
     const uint8_t clamped = volume > 0xff ? 0xff : static_cast<uint8_t>(volume);
-
     if (playerIndex >= kPlayerCount) {
         return;
     }
-
     for (uint32_t trackIndex = 0; trackIndex < kMaxTracks; trackIndex++) {
         if (((trackBits >> trackIndex) & 1u) != 0) {
             sState.trackVolumes[playerIndex][trackIndex] = clamped;
@@ -686,29 +747,97 @@ void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, ui
     }
 }
 
-bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
-    if (!sState.ctx || playerIndex >= sState.ctx->players.size()) {
-        return false;
+static void SetTrackPanLocked(uint8_t playerIndex, uint16_t trackBits, int8_t pan) {
+    if (playerIndex >= kPlayerCount) {
+        return;
     }
-    const auto& player = sState.ctx->players[playerIndex];
-    if (!player.playing) {
-        return false;
-    }
-    /* #22: agbplay leaves `finished` false for one-shot SFX players past their
-     * audible end (it is only set on the sequence's FINE marker, which an
-     * item-get jingle that loops/holds may never hit), so `playing &&
-     * !finished` never goes false — the BGM duck then had to fall back to a
-     * timeout. Use real liveness instead: the player is audibly active only
-     * while a track is still sequencing (`enabled`) or still holding ringing
-     * notes (`activeNotes`). This lets the duck lift exactly when the jingle
-     * ends; the frame-count timeout in src/sound.c is now just a backstop. */
-    for (const auto& trk : player.tracks) {
-        if (trk.enabled || trk.activeNotes.any()) {
-            return true;
+    for (uint32_t trackIndex = 0; trackIndex < kMaxTracks; trackIndex++) {
+        if (((trackBits >> trackIndex) & 1u) != 0) {
+            sState.trackPans[playerIndex][trackIndex] = pan;
         }
     }
-    return false;
+}
+
+/* Audio thread: swap the pending command list out under the short sCmdMutex,
+ * then apply each in order under sStateMutex (already held by the caller). */
+static void DrainCommandsLocked(void) {
+    static std::vector<M4ACommand> local; /* reused; audio thread only */
+    {
+        std::lock_guard<std::mutex> lock(sCmdMutex);
+        if (sCmdQueue.empty()) {
+            return;
+        }
+        local.swap(sCmdQueue);
+    }
+    for (const M4ACommand& c : local) {
+        switch (c.type) {
+            case M4ACmdType::StartSong:
+                StartSongLocked(c.playerIndex, c.songId);
+                break;
+            case M4ACmdType::Stop:
+                StopPlayerLocked(c.playerIndex);
+                break;
+            case M4ACmdType::Continue:
+                ContinuePlayerLocked(c.playerIndex);
+                break;
+            case M4ACmdType::SetVolume:
+                SetTrackVolumeLocked(c.playerIndex, c.trackBits, c.volume);
+                break;
+            case M4ACmdType::SetPan:
+                SetTrackPanLocked(c.playerIndex, c.trackBits, c.pan);
+                break;
+        }
+    }
+    local.clear();
+}
+
+bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId) {
+    /* Enqueue; never block on the audio render lock. Validity is checked when
+     * the audio thread applies it — an invalid song just doesn't play (same
+     * audible result as the old false→MPlayStop path). Return true so the m4a
+     * stub keeps its track bookkeeping consistent with what will play. */
+    M4ACommand c{};
+    c.type = M4ACmdType::StartSong;
+    c.playerIndex = playerIndex;
+    c.songId = songId;
+    PushCommand(c);
+    return true;
+}
+
+void Port_M4A_Backend_StopPlayer(uint8_t playerIndex) {
+    M4ACommand c{};
+    c.type = M4ACmdType::Stop;
+    c.playerIndex = playerIndex;
+    PushCommand(c);
+}
+
+void Port_M4A_Backend_ContinuePlayer(uint8_t playerIndex) {
+    M4ACommand c{};
+    c.type = M4ACmdType::Continue;
+    c.playerIndex = playerIndex;
+    PushCommand(c);
+}
+
+void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, uint16_t volume) {
+    M4ACommand c{};
+    c.type = M4ACmdType::SetVolume;
+    c.playerIndex = playerIndex;
+    c.trackBits = trackBits;
+    c.volume = volume;
+    PushCommand(c);
+}
+
+bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex) {
+    /* Lock-free: read the mask the audio thread publishes each chunk. The BGM
+     * duck (#22) polls this EVERY frame while the item-get jingle plays; taking
+     * sStateMutex here (as it used to) blocked the game tick on the audio render
+     * lock and was the residual half of the item-get freeze. The liveness test
+     * (playing && some track enabled/ringing) now lives in
+     * PublishActivePlayerMaskLocked. */
+    if (playerIndex >= kPlayerCount) {
+        return false;
+    }
+    return (sActivePlayerMask.load(std::memory_order_relaxed) >> playerIndex) & 1u;
 }
 
 void Port_M4A_Backend_SetMasterVolume(float volume) {
@@ -773,38 +902,42 @@ int Port_M4A_Backend_GetReverbLevel(void) {
 }
 
 void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_t pan) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
-
-    if (playerIndex >= kPlayerCount) {
-        return;
-    }
-
-    for (uint32_t trackIndex = 0; trackIndex < kMaxTracks; trackIndex++) {
-        if (((trackBits >> trackIndex) & 1u) != 0) {
-            sState.trackPans[playerIndex][trackIndex] = pan;
-        }
-    }
+    M4ACommand c{};
+    c.type = M4ACmdType::SetPan;
+    c.playerIndex = playerIndex;
+    c.trackBits = trackBits;
+    c.pan = pan;
+    PushCommand(c);
 }
 
 void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute) {
-    std::lock_guard<std::mutex> lock(sStateMutex);
     uint32_t framesRemaining = frameCount;
 
     if (outSamples == nullptr) {
         return;
     }
 
+    /* The main thread no longer takes sStateMutex for song/volume changes (they
+     * go through the command queue) NOR for IsPlayerActive (it reads the atomic
+     * mask published below). Per-chunk locking is retained only for the rare
+     * remaining setters/queries (SetMasterVolume, SetReverbLevel, F8 menu). */
     while (framesRemaining > 0) {
         size_t availableFrames;
         size_t copyFrames;
+        std::lock_guard<std::mutex> lock(sStateMutex);
+
+        DrainCommandsLocked();
 
         if (!sState.ctx) {
-            memset(outSamples, 0, sizeof(int16_t) * frameCount * 2);
+            memset(outSamples, 0, sizeof(int16_t) * framesRemaining * 2);
             return;
         }
 
         if (sState.pendingFrameOffset >= sState.pendingSamples.size() / 2) {
             RenderChunkLocked();
+            /* A chunk advanced player state — republish the lock-free liveness
+             * mask so the main thread's duck sees the jingle end promptly. */
+            PublishActivePlayerMaskLocked();
         }
 
         availableFrames = (sState.pendingSamples.size() / 2) - sState.pendingFrameOffset;
@@ -817,11 +950,7 @@ void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute
         if (mute) {
             memset(outSamples, 0, sizeof(int16_t) * copyFrames * 2);
         } else {
-            memcpy(
-                outSamples,
-                &sState.pendingSamples[sState.pendingFrameOffset * 2],
-                sizeof(int16_t) * copyFrames * 2
-            );
+            memcpy(outSamples, &sState.pendingSamples[sState.pendingFrameOffset * 2], sizeof(int16_t) * copyFrames * 2);
         }
 
         outSamples += copyFrames * 2;
