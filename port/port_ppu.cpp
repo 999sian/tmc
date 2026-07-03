@@ -26,6 +26,11 @@
 
 #ifdef _OPENMP
 #include <omp.h>
+#if defined(__clang__) || defined(__INTEL_COMPILER)
+/* libomp export missing from the NDK's (and stock clang's) omp.h.
+ * Runtime equivalent of KMP_BLOCKTIME; see the Port_PPU_Init block. */
+extern "C" void kmp_set_blocktime(int msec);
+#endif
 #endif
 
 /* Manual access to gMain (the engine's Main struct): including main.h
@@ -615,6 +620,32 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
      * governs it. TMC_RENDER_THREADS forces a value; an explicit
      * OMP_NUM_THREADS is left untouched (power-user override). */
 #ifdef _OPENMP
+    {
+        /* Make the scanline workers SLEEP between frames instead of
+         * spinning. libomp's default KMP_BLOCKTIME is 200 ms and the
+         * render's parallel region recurs every ~16.7 ms, so with the
+         * default policy the 5 worker threads never block — measured
+         * on a Galaxy Tab A7 (simpleperf): >52% of ALL app cycles in
+         * kmp_flag_64::wait spin. On passively-cooled devices that is
+         * heat -> thermal throttle -> jank; on everything it is wasted
+         * power. The wake-up cost on the next frame is microseconds
+         * against a 16 ms budget.
+         *
+         * Env vars (OMP_WAIT_POLICY/KMP_BLOCKTIME) are unreliable here:
+         * libomp snapshots them at runtime init, which static-lib
+         * constructors can trigger before this code runs. The kmp API
+         * takes effect regardless of timing, so prefer it and keep the
+         * env var only for libgomp (GCC builds), where it IS read
+         * lazily at first parallel region. User overrides win. */
+        if (!getenv("OMP_WAIT_POLICY")) {
+            SDL_setenv_unsafe("OMP_WAIT_POLICY", "passive", 1); /* libgomp */
+        }
+#if defined(__clang__) || defined(__INTEL_COMPILER)
+        if (!getenv("KMP_BLOCKTIME")) {
+            kmp_set_blocktime(0); /* declared at file scope above */
+        }
+#endif
+    }
     {
         int n = -1;
         const char* force = getenv("TMC_RENDER_THREADS");
