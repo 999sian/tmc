@@ -65,7 +65,9 @@ static s16 HudButtonTargetX(u32 type) {
 #ifdef PC_PORT
 #if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
     if (Port_Widescreen_HudRightAnchor() && x >= 0 && x < 240) {
-        x += MODE1_GBA_WIDTH - 240;
+        /* Right-anchor to the LIVE view width (window-aspect driven), not
+         * the framebuffer capacity. */
+        x += Port_Widescreen_EffectiveViewWidth() - 240;
     }
 #endif
 #endif

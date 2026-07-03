@@ -157,7 +157,8 @@ bool WriteScreenshotPNG(const std::filesystem::path& path) {
         return false;
     }
 
-    const int outW = (Port_Widescreen_IsActive() && Port_Widescreen_ShadowsLive()) ? kFrameW : 240;
+    const int outW =
+        (Port_Widescreen_IsActive() && Port_Widescreen_ShadowsLive()) ? Port_Widescreen_EffectiveViewWidth() : 240;
 
     png_init_io(png, fp);
     png_set_IHDR(png, info, outW, kFrameH, 8, PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### True widescreen: the view now fits YOUR screen
+
+- **The view width tracks the window's aspect ratio, every frame.** A 16:9
+  monitor fills exactly (288×160 — zero letterboxing), an ultrawide caps at
+  the framebuffer's 384 (2.4:1), and a 3:2/4:3 window gets the authentic
+  GBA 240. Previously the wide frame was a fixed 2.4:1 strip that
+  letterboxed ~26% of a 16:9 screen and pillarboxed in narrow rooms.
+- **World scale is now constant.** Camera, culling, HUD right-anchor and
+  textbox centering all follow the same live view width, so walking from a
+  wide field into a 240-px interior no longer changes the zoom level — the
+  view narrows, the pixels stay the same size.
+- `--widescreen_width=N` now sets only the framebuffer *capacity* (the cap);
+  the presented width is dynamic. Resize the window mid-game and the world
+  reveal follows. `TMC_WS_VIEW_WIDTH=<px>` pins the width for headless
+  captures.
+
 ### Widescreen: dialogue no longer snaps the viewport; cutscene overlays fixed
 
 - **Textboxes keep the wide frame.** Opening any dialogue used to snap the

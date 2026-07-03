@@ -805,10 +805,11 @@ void sub_08080974(u32 arg0, u32 arg1) {
     var0 = roomControls->origin_x;
 #if MODE1_GBA_WIDTH > 240
     {
-        extern int Port_Widescreen_ShouldStretch(void);
-        s32 stretch = Port_Widescreen_ShouldStretch();
-        s32 half = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
-        s32 viewW = stretch ? 240 : MODE1_GBA_WIDTH;
+        /* View width tracks the live window aspect (240..MODE1_GBA_WIDTH);
+         * EffectiveViewWidth returns 240 while stretched/non-gameplay. */
+        extern int Port_Widescreen_EffectiveViewWidth(void);
+        s32 viewW = Port_Widescreen_EffectiveViewWidth();
+        s32 half = viewW / 2;
         s32 want = (s32)arg0 - half;
         s32 lo = (s32)var0;
         s32 hi = (s32)var0 + (s32)roomControls->width - viewW;
@@ -858,14 +859,13 @@ void sub_080809D4(void) {
     x = roomControls->camera_target->x.HALF.HI;
     var0 = roomControls->origin_x;
 #if MODE1_GBA_WIDTH > 240
-    /* Widescreen: center the camera target in the MODE1_GBA_WIDTH-wide view
-     * and clamp the (wider) view to the room. This reduces exactly to the
-     * GBA-original 240-view centering below when MODE1_GBA_WIDTH == 240. */
+    /* Widescreen: center the camera target in the live view width and clamp
+     * the view to the room. Reduces exactly to the GBA-original 240-view
+     * centering below when the effective width is 240. */
     {
-        extern int Port_Widescreen_ShouldStretch(void);
-        s32 stretch = Port_Widescreen_ShouldStretch();
-        s32 half = stretch ? 120 : (MODE1_GBA_WIDTH / 2);
-        s32 viewW = stretch ? 240 : MODE1_GBA_WIDTH;
+        extern int Port_Widescreen_EffectiveViewWidth(void);
+        s32 viewW = Port_Widescreen_EffectiveViewWidth();
+        s32 half = viewW / 2;
         s32 want = (s32)x - half;
         s32 lo = (s32)var0;
         s32 hi = (s32)var0 + (s32)roomControls->width - viewW;

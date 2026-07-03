@@ -985,24 +985,73 @@ static s32 Port_WidescreenScanContentPx(void) {
     return 0;
 }
 
+/* ---- True widescreen: window-aspect-driven view width -------------------
+ * MODE1_GBA_WIDTH is the framebuffer CAPACITY (hard cap); the presented
+ * view width tracks the live window aspect so the frame fills the monitor
+ * exactly: 16:9 -> 288 px, 21:9 -> 373 -> cap, 4:3/3:2 -> 240 (authentic).
+ * Published once per frame from the present path; rounded to a multiple of
+ * 8 so tile/HUD math stays exact. TMC_WS_VIEW_WIDTH=<px> overrides for
+ * headless captures (dummy driver windows don't track a real monitor). */
+static int sWsWindowW = 0;
+static int sWsWindowH = 0;
+
+void Port_Widescreen_SetWindowPixels(int w, int h) {
+    sWsWindowW = w;
+    sWsWindowH = h;
+}
+
+int Port_Widescreen_TargetViewWidth(void) {
+    static int env_w = -1;
+    int w;
+    if (env_w < 0) {
+        const char* e = getenv("TMC_WS_VIEW_WIDTH");
+        env_w = 0;
+        if (e && *e) {
+            int v = atoi(e);
+            if (v >= 240 && v <= MODE1_GBA_WIDTH)
+                env_w = v;
+        }
+    }
+    if (env_w > 0) {
+        return env_w;
+    }
+    if (sWsWindowW <= 0 || sWsWindowH <= 0) {
+        return 240;
+    }
+    /* Exact aspect fit: the width that makes the 160-line frame fill the
+     * window (no rounding — every consumer is pixel-based, and exact fit
+     * beats up-to-7px side bars). */
+    w = (int)(((long long)sWsWindowW * 160) / sWsWindowH);
+    if (w < 240)
+        w = 240;
+    if (w > MODE1_GBA_WIDTH)
+        w = MODE1_GBA_WIDTH;
+    return w;
+}
+
 int Port_Widescreen_ShouldStretch(void) {
+    int target;
     if (!Port_Config_WidescreenEnabled()) {
         return 1;
     }
-    if ((s32)gRoomControls.width < MODE1_GBA_WIDTH) {
+    target = Port_Widescreen_TargetViewWidth();
+    if (target <= 240) {
+        return 1; /* window is 3:2/4:3 — native view already fills it */
+    }
+    if ((s32)gRoomControls.width < target) {
         return 1;
     }
     /* Wide room, narrow content: the painted map can't fill the wide view
      * even at camera-left -> permanent void strip. Present stretched-240
      * instead (GBA-identical framing). 0 = not scanned yet -> trust width. */
-    if (sWsContentPx > 0 && sWsContentPx < MODE1_GBA_WIDTH) {
+    if (sWsContentPx > 0 && sWsContentPx < target) {
         return 1;
     }
     return 0;
 }
 
 int Port_Widescreen_IsActive(void) {
-    /* No message/controlMode gate here: snapping the viewport 384->240 for
+    /* No message/controlMode gate here: snapping the viewport wide->240 for
      * every textbox (and back on close) was the single worst widescreen UX
      * issue. Dialogue now stays wide — the PPU centers the BG0 textbox via
      * the ws_msg_* knobs (published in Port_Widescreen_UpdateShadows), and
@@ -1013,7 +1062,7 @@ int Port_Widescreen_IsActive(void) {
 }
 
 int Port_Widescreen_EffectiveViewWidth(void) {
-    return Port_Widescreen_IsActive() ? MODE1_GBA_WIDTH : 240;
+    return Port_Widescreen_IsActive() ? Port_Widescreen_TargetViewWidth() : 240;
 }
 
 /* True while at least one BG shadow is registered for the current frame —
@@ -1181,7 +1230,7 @@ void Port_Widescreen_UpdateShadows(void) {
             virtuappu_mode1_ws_msg_x1 = x1;
             virtuappu_mode1_ws_msg_y0 = y0;
             virtuappu_mode1_ws_msg_y1 = y1;
-            virtuappu_mode1_ws_msg_shift = (MODE1_GBA_WIDTH - 240) / 2;
+            virtuappu_mode1_ws_msg_shift = (Port_Widescreen_EffectiveViewWidth() - 240) / 2;
         }
     }
 
@@ -1213,6 +1262,13 @@ int Port_Widescreen_HudRightAnchor(void) {
 }
 int Port_Widescreen_ShadowsLive(void) {
     return 0;
+}
+void Port_Widescreen_SetWindowPixels(int w, int h) {
+    (void)w;
+    (void)h;
+}
+int Port_Widescreen_TargetViewWidth(void) {
+    return 240;
 }
 #endif
 
