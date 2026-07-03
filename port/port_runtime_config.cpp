@@ -239,15 +239,15 @@ const BoolCfg kBoolCfg[] = {
     { "practice_show_history", &sPracticeShowHistory, false },
     { "discord_rpc", &sDiscordRpc, false },
     { "vsync", &sVSyncCfg, true },
-    { "color_correction", &sColorCorrect, true },
-    { "lcd_persistence", &sLcdPersist, false },
-    { "ribbon_mode", &sRibbonCfg, true },
-    { "hold_advance_text", &sHoldAdvanceText, false },
 #ifdef __ANDROID__
     { "color_correction", &sColorCorrect, false },
 #else
     { "color_correction", &sColorCorrect, true },
 #endif
+    { "lcd_persistence", &sLcdPersist, false },
+    { "ribbon_mode", &sRibbonCfg, true },
+    { "hold_advance_text", &sHoldAdvanceText, false },
+    { "roll_attack_macro", &sRollAttackMacroEnabled, true },
     { "fullscreen", &sFullscreen, false },
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
     { "rando_enabled", &sRandoEnabled, false },
