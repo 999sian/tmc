@@ -1101,7 +1101,17 @@ extern "C" void Port_PPU_PresentFrame(void) {
             Port_SoftSlots_RenderOverlay(sRenderer, outW, outH);
             Port_TouchControls_Render(sRenderer, outW, outH);
         }
-        SDL_RenderPresent(sRenderer);
+        if (!SDL_RenderPresent(sRenderer)) {
+            /* Log throttled: a failing present on Android (EGL surface loss
+             * after lifecycle churn) otherwise dies silently and the screen
+             * freezes on the last good frame. */
+            static uint32_t sLastPresentErrLog = 0;
+            uint32_t now = SDL_GetTicks();
+            if (now - sLastPresentErrLog > 2000) {
+                sLastPresentErrLog = now;
+                fprintf(stderr, "[ppu] SDL_RenderPresent FAILED: %s\n", SDL_GetError());
+            }
+        }
         return;
     }
 
