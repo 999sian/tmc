@@ -34,8 +34,8 @@
 /* mode1.c references this extern (defined in virtuappu.c in the real build). */
 uint32_t virtuappu_frame_buffer[VIRTUAPPU_FRAME_BUFFER_SIZE];
 
-static uint8_t  s_io[0x400];
-static uint8_t  s_vram[0x18000];
+static uint8_t s_io[0x400];
+static uint8_t s_vram[0x18000];
 static uint16_t s_bgpal[256];
 static uint16_t s_objpal[256];
 static uint16_t s_oam[512];
@@ -60,7 +60,10 @@ static uint64_t fb_checksum(int w, int h) {
 
 static int load_snapshot(const char* path) {
     FILE* f = fopen(path, "rb");
-    if (!f) { perror("open snapshot"); return 0; }
+    if (!f) {
+        perror("open snapshot");
+        return 0;
+    }
     char magic[4];
     uint32_t sz[5];
     if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "PPU1", 4) != 0) {
@@ -68,7 +71,10 @@ static int load_snapshot(const char* path) {
         fclose(f);
         return 0;
     }
-    if (fread(sz, sizeof(uint32_t), 5, f) != 5) { fclose(f); return 0; }
+    if (fread(sz, sizeof(uint32_t), 5, f) != 5) {
+        fclose(f);
+        return 0;
+    }
     size_t n = 0;
     n += fread(s_io, 1, 0x400, f);
     n += fread(s_vram, 1, 0x18000, f);
@@ -82,8 +88,10 @@ static int load_snapshot(const char* path) {
 int main(int argc, char** argv) {
     const char* path = argc > 1 ? argv[1] : "/tmp/tmc_ppu_snapshot.bin";
     int iters = argc > 2 ? atoi(argv[2]) : 2000;
-    if (iters < 1) iters = 1;
-    if (!load_snapshot(path)) return 1;
+    if (iters < 1)
+        iters = 1;
+    if (!load_snapshot(path))
+        return 1;
 
     VirtuaPPUMode1GbaMemory mem = { s_io, s_vram, s_bgpal, s_objpal, s_oam };
     virtuappu_mode1_bind_gba_memory(&mem);
@@ -101,25 +109,37 @@ int main(int argc, char** argv) {
     int maxthreads = 1;
 #endif
 
-    printf("snapshot: dispcnt=0x%04x  BG0=%d BG1=%d BG2=%d BG3=%d OBJ=%d  width=%d  iters=%d\n",
-           dispcnt, bg_on[0], bg_on[1], bg_on[2], bg_on[3], obj_on, MODE1_GBA_WIDTH, iters);
+    printf("snapshot: dispcnt=0x%04x  BG0=%d BG1=%d BG2=%d BG3=%d OBJ=%d  width=%d  iters=%d\n", dispcnt, bg_on[0],
+           bg_on[1], bg_on[2], bg_on[3], obj_on, MODE1_GBA_WIDTH, iters);
+
+    /* render_frame dereferences ppu->mode (mode1/mode2 merge); build a real
+     * PPUMemory from the snapshot dispcnt (BG mode = low 3 bits) at native
+     * geometry. Mode 0/1 -> tiled path, mode 2 -> affine BG2. */
+    PPUMemory ppu = { 0 };
+    ppu.frame_width = MODE1_GBA_WIDTH;
+    ppu.frame_pitch = MODE1_GBA_WIDTH;
+    ppu.mode = (uint8_t)(dispcnt & 0x7u);
 
     /* Warm caches + capture the parity checksum. */
-    for (int i = 0; i < 8; i++) virtuappu_mode1_render_frame(NULL);
+    for (int i = 0; i < 8; i++)
+        virtuappu_mode1_render_frame(&ppu);
     uint64_t csum = fb_checksum(MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT);
 
     /* Full frame, all threads. */
     double t0 = now_ms();
-    for (int i = 0; i < iters; i++) virtuappu_mode1_render_frame(NULL);
+    for (int i = 0; i < iters; i++)
+        virtuappu_mode1_render_frame(&ppu);
     double mt = (now_ms() - t0) / iters;
 
     /* Full frame, single thread (models a P4 / Pi3 core). */
 #ifdef _OPENMP
     omp_set_num_threads(1);
 #endif
-    for (int i = 0; i < 8; i++) virtuappu_mode1_render_frame(NULL);
+    for (int i = 0; i < 8; i++)
+        virtuappu_mode1_render_frame(&ppu);
     t0 = now_ms();
-    for (int i = 0; i < iters; i++) virtuappu_mode1_render_frame(NULL);
+    for (int i = 0; i < iters; i++)
+        virtuappu_mode1_render_frame(&ppu);
     double st = (now_ms() - t0) / iters;
 #ifdef _OPENMP
     omp_set_num_threads(maxthreads);
@@ -130,9 +150,9 @@ int main(int argc, char** argv) {
     double bg_ms = 0, obj_ms = 0, comp_ms = 0;
     {
         static uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
-        static uint8_t  bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
+        static uint8_t bg_priority[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
         static uint32_t obj_layer[MODE1_GBA_WIDTH];
-        static uint8_t  obj_priority[MODE1_GBA_WIDTH];
+        static uint8_t obj_priority[MODE1_GBA_WIDTH];
         int citers = iters / 4 ? iters / 4 : 1;
         for (int it = 0; it < citers; it++) {
             for (int line = 0; line < MODE1_GBA_HEIGHT; line++) {
