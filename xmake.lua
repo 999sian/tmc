@@ -59,9 +59,16 @@ option_end()
 -- per-pixel shader filters (CRT, scanlines, lcd-grid, etc.) without
 -- the CPU-side approximation tradeoff. See port/port_gpu_renderer.{h,cpp}.
 option("gpu_renderer")
-    set_default(false)
+    -- Default ON: GPU (SDL_GPU) presentation is the primary path, with an
+    -- automatic SDL_Renderer software fallback (render_backend=auto tries GPU
+    -- first, falls back cleanly — see port_main.c / port_ppu.cpp). Compiling it
+    -- in everywhere means capable devices use the GPU; devices whose driver
+    -- can't provide a usable backend (e.g. an Adreno 405 GSI with a stub Vulkan
+    -- ICD) fall back to software automatically. Costs ~150 KB embedded SPIR-V.
+    -- Pass --gpu_renderer=n to compile a pure-software binary.
+    set_default(true)
     set_showmenu(true)
-    set_description("Compile the SDL_GPU presentation path (Stage 1: scaffold). Enables fragment-shader filters in future stages.")
+    set_description("Compile the SDL_GPU presentation path (default ON; auto-falls back to SDL_Renderer).")
 option_end()
 
 -- Widescreen: render the GBA frame at a non-native horizontal width by
