@@ -67,6 +67,10 @@ unsigned GetInventoryValue(unsigned item);
 bool CheckLocalFlagByBank(unsigned bankOffset, unsigned flag);
 unsigned GetFlagBankOffset(unsigned area);
 bool CheckGlobalFlag(unsigned flag);
+#include "room.h"
+#include "map.h"
+void SetTileType(u32 tileType, u32 tilePos, u32 layer);
+int Port_DebugQuery_PlayerXY(unsigned short* x, unsigned short* y);
 }
 
 #include <cstdio>
@@ -77,6 +81,8 @@ bool CheckGlobalFlag(unsigned flag);
 #include <string>
 #include <system_error>
 #include <vector>
+#include <fstream>
+#include <nlohmann/json.hpp>
 
 /* The menu state machine lives in port_debug_menu.cpp. We don't include
  * its header (it doesn't expose the page-stack internals) — instead the
@@ -3315,6 +3321,35 @@ static void DrawRibbonEntitiesTab(void) {
     }
 }
 
+extern "C" int Port_PPU_VisibleFrameWidth(void);
+extern "C" u8 gUpdateVisibleTiles;
+extern "C" bool Port_LevelEditor_IsOpen(void);
+extern "C" void Port_LevelEditor_Toggle(void);
+extern "C" void Port_LevelEditor_Render(void* renderer, int winW, int winH);
+
+static void DrawRibbonMapEditorTab(void) {
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Direct Level Editor Mode");
+    ImGui::Separator();
+
+    bool editorOpen = Port_LevelEditor_IsOpen();
+    if (ImGui::Checkbox("Enable Direct Painting Overlay", &editorOpen)) {
+        Port_LevelEditor_Toggle();
+    }
+
+    ImGui::Dummy(ImVec2(0, 10));
+    ImGui::Text("Hotkeys & Controls (Active when overlay is enabled):");
+    ImGui::BulletText("L-Click       : Paint active tile (drag to draw)");
+    ImGui::BulletText("R-Click       : Eyedropper / sample tile under cursor");
+    ImGui::BulletText("L             : Toggle layer (Top / Bottom)");
+    ImGui::BulletText("[ / ]         : Change active tile ID by -1 / +1");
+    ImGui::BulletText("{ / } (Sh+[ / ]): Change active tile ID by -16 / +16");
+    ImGui::BulletText("M / Shift+M   : Cycle Room BGM");
+    ImGui::BulletText("F / Shift+F   : Cycle Fight BGM");
+    ImGui::BulletText("K / Shift+K   : Change Light Level");
+    ImGui::BulletText("S             : Save changes permanently to edited_levels/");
+    ImGui::BulletText("Esc           : Close Level Editor");
+}
+
 /* Live memory-watch tab (#feature). Type a GBA address + width, "Add watch",
  * and each entry shows its value live every frame. Reads are fault-safe
  * (Port_DebugQuery_MemRead), so an unmapped address renders "<unmapped>"
@@ -3399,6 +3434,7 @@ static void DrawRibbonMemoryTab(void) {
 }
 
 static void DrawRibbon(void) {
+
     ImGuiIO& io = ImGui::GetIO();
     const float ribbonW = io.DisplaySize.x;
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
@@ -3454,6 +3490,10 @@ static void DrawRibbon(void) {
             }
             if (ImGui::BeginTabItem("Entities")) {
                 DrawRibbonEntitiesTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Map Editor")) {
+                DrawRibbonMapEditorTab();
                 ImGui::EndTabItem();
             }
             if (ImGui::BeginTabItem("Flags")) {
@@ -4152,6 +4192,11 @@ extern "C" bool Port_ImGui_Render(void) {
         return true;
     }
 #endif
+    if (sRenderer) {
+        int w = 0, h = 0;
+        SDL_GetWindowSize(sWindow, &w, &h);
+        Port_LevelEditor_Render(sRenderer, w, h);
+    }
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sRenderer);
     return true;
 }
