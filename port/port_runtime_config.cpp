@@ -1233,6 +1233,17 @@ extern "C" void Port_Config_TestForceEdge(PortInput input) {
     }
 }
 
+/* Production edge-stamp: the touch overlay calls this on a pointer DOWN that
+ * lands on a button so a sub-frame tap (DOWN+UP delivered in one poll batch —
+ * common with synthesized `adb input` events and fast real taps) still
+ * registers for one game frame, exactly as the keyboard KEY_DOWN path does.
+ * Same cache, same per-frame Port_Config_ClearInputEdges() wipe. */
+extern "C" void Port_Config_StampInputEdge(PortInput input) {
+    if (input >= 0 && input < PORT_INPUT_COUNT) {
+        sEdgePressed[input] = true;
+    }
+}
+
 extern "C" bool Port_Config_InputEdgePressed(PortInput input) {
     /* Parity mode disables the sub-frame edge cache: a press is only seen
      * on the frame the engine actually polls it, matching hardware 1-frame

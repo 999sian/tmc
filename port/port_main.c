@@ -78,10 +78,8 @@ static bool Port_TryInitVideo(const char* videoDriver, const char* renderDriver,
 static void Port_LogVideoDiagnostics(void) {
     int driverCount = SDL_GetNumVideoDrivers();
 
-    fprintf(stderr,
-            "Video env: DISPLAY='%s' WAYLAND_DISPLAY='%s' XDG_SESSION_TYPE='%s'\n",
-            getenv("DISPLAY") ? getenv("DISPLAY") : "",
-            getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY") : "",
+    fprintf(stderr, "Video env: DISPLAY='%s' WAYLAND_DISPLAY='%s' XDG_SESSION_TYPE='%s'\n",
+            getenv("DISPLAY") ? getenv("DISPLAY") : "", getenv("WAYLAND_DISPLAY") ? getenv("WAYLAND_DISPLAY") : "",
             getenv("XDG_SESSION_TYPE") ? getenv("XDG_SESSION_TYPE") : "");
 
     fprintf(stderr, "SDL compiled video drivers:");
@@ -207,15 +205,14 @@ static void Port_ReserveGbaAddressSpace(void) {
     LPVOID whole = VirtualAlloc((LPVOID)range_lo, (SIZE_T)want_bytes, MEM_RESERVE, PAGE_NOACCESS);
     if (whole != NULL) {
         if (getenv("TMC_VERBOSE_GBA_VA")) {
-            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n",
-                    (size_t)range_lo, (size_t)range_hi);
+            fprintf(stderr, "Reserved GBA address window 0x%zx-0x%zx (heap can't land here).\n", (size_t)range_lo,
+                    (size_t)range_hi);
         }
         s_gba_va_reserve_done = 1;
         return;
     }
 
-    fprintf(stderr,
-            "WARN: Single-block GBA VA reserve failed (err=%lu); filling window by sub-regions.\n",
+    fprintf(stderr, "WARN: Single-block GBA VA reserve failed (err=%lu); filling window by sub-regions.\n",
             (unsigned long)GetLastError());
 
     size_t reserved = 0;
@@ -280,26 +277,34 @@ static void Port_ReserveGbaAddressSpace(void) {
                 "WARN: Partial GBA VA reserve %zu / %zu bytes; heap may still use gaps — DmaCopy risk remains.\n",
                 reserved, want_bytes);
     } else {
-        fprintf(stderr,
-                "WARN: Could not reserve GBA address window 0x%zx-0x%zx; DmaCopy may misbehave.\n",
+        fprintf(stderr, "WARN: Could not reserve GBA address window 0x%zx-0x%zx; DmaCopy may misbehave.\n",
                 (size_t)range_lo, (size_t)range_hi);
     }
 
     s_gba_va_reserve_done = 1;
 }
 #else
-static void Port_ReserveGbaAddressSpace(void) { /* not needed on Linux/macOS */ }
+static void Port_ReserveGbaAddressSpace(void) { /* not needed on Linux/macOS */
+}
 #endif
 
 /* Boot-splash present, hiding the GPU vs SDL_Renderer split. */
 static void PaintSplash(SDL_Window* window, const char* msg) {
 #ifdef TMC_GPU_RENDERER
-    (void)window; (void)msg;
+    (void)window;
+    (void)msg;
     Port_GPU_PaintBootSplash();
 #else
     Port_PaintBootSplash(window, msg);
 #endif
 }
+
+#ifdef __ANDROID__
+/* SDL's Java glue (SDLActivity) loads libmain.so and invokes SDL_main; this
+ * include renames main -> SDL_main. Only defined in this TU. */
+#include <SDL3/SDL_main.h>
+#include <unistd.h>
+#endif
 
 int main(int argc, char* argv[]) {
 
@@ -311,18 +316,53 @@ int main(int argc, char* argv[]) {
      * sufficient in practice. */
     Port_ReserveGbaAddressSpace();
 
-    fprintf(stderr, "Initializing port layer...\n");
+#ifdef __ANDROID__
+    /* First thing: fprintf(stderr) goes to /dev/null on Android — bridge it
+     * into logcat (tag "tmc") so every port log line is visible via adb. */
     {
-        Port_DebugVerbose_Init();
+        extern void Port_AndroidLog_Init(void);
+        Port_AndroidLog_Init();
     }
+#endif
+
+#ifdef __ANDROID__
+    /* Every file the port touches (config.json, tmc.sav, assets cache,
+     * quicksaves, bugreports) is CWD-relative. On Android the initial CWD
+     * is / (unwritable); one chdir makes the whole port land its state in
+     * the right place with zero per-file changes.
+     *
+     * Prefer the app's EXTERNAL files dir (/sdcard/Android/data/<pkg>/files):
+     * user-reachable via file manager / adb — which is how the ROM gets in
+     * before the in-app SAF picker lands (M3) — and not size-constrained
+     * like the private data partition (assets cache is ~60 MB). Falls back
+     * to the private pref path when external storage is unavailable.
+     * SDL_Init(0) is cheap and safe before the real subsystem init later. */
+    if (SDL_Init(0)) {
+        const char* ext = SDL_GetAndroidExternalStoragePath();
+        if (ext && (SDL_GetAndroidExternalStorageState() & SDL_ANDROID_EXTERNAL_STORAGE_WRITE) && chdir(ext) == 0) {
+            fprintf(stderr, "[android] data dir (external): %s\n", ext);
+        } else {
+            char* pref = SDL_GetPrefPath("picori", "tmc");
+            if (pref) {
+                if (chdir(pref) != 0) {
+                    fprintf(stderr, "[android] chdir(%s) failed\n", pref);
+                } else {
+                    fprintf(stderr, "[android] data dir (private): %s\n", pref);
+                }
+                SDL_free(pref);
+            }
+        }
+    }
+#endif
+
+    fprintf(stderr, "Initializing port layer...\n");
+    { Port_DebugVerbose_Init(); }
 
     /* Auto-capture on SIGSEGV/SIGABRT/SIGBUS — dropped from port_main.c by
      * upstream refactor 5987bf9b1 and not re-added when #108 brought
      * port_bugreport.cpp back. Without this, crashes produce no bundle
      * (F9 manual capture still works via port_bios.c). */
-    {
-        Port_BugReport_InstallCrashHandlers();
-    }
+    { Port_BugReport_InstallCrashHandlers(); }
 
     // Initialize REG_KEYINPUT to all-keys-released (GBA: 1=not pressed)
     *(u16*)(gIoMem + REG_OFFSET_KEYINPUT) = 0x03FF;
@@ -339,8 +379,10 @@ int main(int argc, char* argv[]) {
     {
         extern void Port_DiscordRpc_SetEnabled(bool);
         extern void Port_Reborn_ApplyMask(unsigned);
-        if (Port_Config_GetDiscordRpc()) Port_DiscordRpc_SetEnabled(true);
-        if (Port_Config_HasRebornMask()) Port_Reborn_ApplyMask(Port_Config_GetRebornMask());
+        if (Port_Config_GetDiscordRpc())
+            Port_DiscordRpc_SetEnabled(true);
+        if (Port_Config_HasRebornMask())
+            Port_Reborn_ApplyMask(Port_Config_GetRebornMask());
     }
 
     /* Honour the persisted save-profile choice. Default ("tmc.sav") is
@@ -354,7 +396,7 @@ int main(int argc, char* argv[]) {
     /* Auto-save defaults to on. Apply the persisted interval too. */
     {
         extern bool Port_Config_AutosaveEnabled(void);
-        extern u32  Port_Config_AutosaveIntervalMs(void);
+        extern u32 Port_Config_AutosaveIntervalMs(void);
         extern void Port_QuickSave_SetAutoEnabled(int enabled);
         extern void Port_QuickSave_SetAutoIntervalMs(u32 ms);
         Port_QuickSave_SetAutoEnabled(Port_Config_AutosaveEnabled() ? 1 : 0);
@@ -362,9 +404,7 @@ int main(int argc, char* argv[]) {
     }
 
     u8 window_scale = Port_Config_WindowScale();
-    int window_base_width = (MODE1_GBA_WIDTH > 240 && Port_Config_WidescreenEnabled())
-                                ? MODE1_GBA_WIDTH
-                                : 240;
+    int window_base_width = (MODE1_GBA_WIDTH > 240 && Port_Config_WidescreenEnabled()) ? MODE1_GBA_WIDTH : 240;
     bool noAudio = false;
     const char* glslpPath = NULL;
     if (argc > 1) {
@@ -377,36 +417,38 @@ int main(int argc, char* argv[]) {
                 } else {
                     fprintf(stderr, "Invalid window scale '%s'. Must be an integer between 1 and 10.\n", valueStr);
                 }
-            }
-            else if (strcmp(argv[i], "--loose-assets") == 0) {
+            } else if (strcmp(argv[i], "--loose-assets") == 0) {
                 Port_LooseAssetsRequested = 1;
-            }
-            else if (strcmp(argv[i], "--no-audio") == 0) {
+            } else if (strcmp(argv[i], "--no-audio") == 0) {
                 noAudio = true;
-            }
-            else if (strncmp(argv[i], "--glslp=", 8) == 0) {
+            } else if (strncmp(argv[i], "--glslp=", 8) == 0) {
                 glslpPath = argv[i] + 8;
-            }
-            else if (strcmp(argv[i], "--console-parity") == 0) {
+            } else if (strcmp(argv[i], "--console-parity") == 0) {
                 /* Force hardware-equivalent behavior for legit runs. Applied
                  * after Port_Config_Load (line ~316) so it overrides config. */
                 Port_Config_SetConsoleParity(true);
                 fprintf(stderr, "Console-Parity mode ON: edge-cache off, save-states inert, "
                                 "widescreen off, pacing locked to 59.7275 Hz.\n");
-            }
-            else if (strcmp(argv[i], "--help") == 0) {
-                fprintf(stderr, "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio] [--glslp=<path>] [--console-parity]\n", argv[0]);
+            } else if (strcmp(argv[i], "--help") == 0) {
+                fprintf(stderr,
+                        "Usage: %s [--window_scale=<value>] [--loose-assets] [--no-audio] [--glslp=<path>] "
+                        "[--console-parity]\n",
+                        argv[0]);
                 fprintf(stderr, "  --window_scale=<value>: Set the window scale (1-10, default is 3)\n");
-                fprintf(stderr, "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
+                fprintf(stderr,
+                        "  --loose-assets:         Ignore assets/*.pak archives and read loose files instead.\n");
                 fprintf(stderr, "  --no-audio:             Skip audio init (workaround for agbplay crash)\n");
-                fprintf(stderr, "  --glslp=<path>:         Load a libretro .glslp shader preset (requires --gpu_renderer=y build).\n");
+                fprintf(stderr, "  --glslp=<path>:         Load a libretro .glslp shader preset (requires "
+                                "--gpu_renderer=y build).\n");
                 fprintf(stderr, "                          Equivalent to setting TMC_GLSLP_PRESET=<path> env var.\n");
-                fprintf(stderr, "  --console-parity:       Force hardware-equivalent behavior for legitimate speedruns\n");
-                fprintf(stderr, "                          (no input edge-cache, no save-states, no widescreen, 59.7275 Hz).\n");
+                fprintf(stderr,
+                        "  --console-parity:       Force hardware-equivalent behavior for legitimate speedruns\n");
+                fprintf(
+                    stderr,
+                    "                          (no input edge-cache, no save-states, no widescreen, 59.7275 Hz).\n");
                 fprintf(stderr, "  config.json: Set window_scale and bindings defaults\n");
                 return 0;
-            }
-            else {
+            } else {
                 fprintf(stderr, "Unknown argument: %s\n", argv[i]);
             }
         }
@@ -481,20 +523,16 @@ int main(int argc, char* argv[]) {
         window_flags |= SDL_WINDOW_VULKAN;
     }
 #endif
-    window = SDL_CreateWindow(window_title,
-                              window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
-                              window_flags);
+    window =
+        SDL_CreateWindow(window_title, window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale, window_flags);
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow Error: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
     }
 #else
-    if (!SDL_CreateWindowAndRenderer(
-            window_title,
-            window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
-            SDL_WINDOW_RESIZABLE,
-            &window, &prerenderer)) {
+    if (!SDL_CreateWindowAndRenderer(window_title, window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
+                                     SDL_WINDOW_RESIZABLE, &window, &prerenderer)) {
         fprintf(stderr, "SDL_CreateWindowAndRenderer Error: %s\n", SDL_GetError());
         SDL_Quit();
         return 1;
@@ -564,9 +602,7 @@ int main(int argc, char* argv[]) {
      * On non-GPU builds the GPU stub still needs to fire for the
      * build-flag-off no-op path. */
 #ifndef TMC_GPU_RENDERER
-    {
-        Port_GPU_Init(window);
-    }
+    { Port_GPU_Init(window); }
 #endif
     Port_PPU_Init(window);
 
@@ -594,14 +630,10 @@ int main(int argc, char* argv[]) {
      * announcements for the prelaunch screen need a working backend
      * BEFORE the prelaunch frame loop runs. Idempotent + no-op if no
      * backend is available; never blocks. */
-    {
-        Port_TTS_Init();
-    }
+    { Port_TTS_Init(); }
 
     /* Load persisted accessibility cue toggles into the cue module. */
-    {
-        Port_A11y_Init();
-    }
+    { Port_A11y_Init(); }
 
     /* ====================================================================
      * Project Picori prelaunch screen.
@@ -618,14 +650,13 @@ int main(int argc, char* argv[]) {
      * ==================================================================== */
     {
         romPath = Port_FindBaseRomPath();
-        fprintf(stderr, "Prelaunch: %s — waiting for user.\n",
-                romPath ? "ROM detected" : "no ROM yet");
+        fprintf(stderr, "Prelaunch: %s — waiting for user.\n", romPath ? "ROM detected" : "no ROM yet");
 
         /* Announce the prelaunch screen for screen-reader users.
          * Port_TTS_Init ran a few lines above so the backend is up;
          * Port_TTS_Speak is a no-op when TTS is disabled in config. */
         {
-            PortTtsOptions opts = {0};
+            PortTtsOptions opts = { 0 };
             opts.priority = PORT_TTS_PRIO_URGENT;
             opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
             opts.dedupe = false;
@@ -662,7 +693,8 @@ int main(int argc, char* argv[]) {
                 const char* slash = strrchr(romPath, '/');
 #ifdef _WIN32
                 const char* bslash = strrchr(romPath, '\\');
-                if (bslash && (!slash || bslash > slash)) slash = bslash;
+                if (bslash && (!slash || bslash > slash))
+                    slash = bslash;
 #endif
                 if (slash && slash[1]) {
                     snprintf(rom_name_buf, sizeof(rom_name_buf), "%s", slash + 1);
@@ -675,9 +707,8 @@ int main(int argc, char* argv[]) {
             const bool rom_present = (romPath != NULL);
             bool play_clicked = false;
             bool change_rom_clicked = false;
-            const bool imgui_built = Port_ImGui_RenderPrelaunch(
-                rom_present, TMC_PC_VERSION, rom_name,
-                &play_clicked, &change_rom_clicked);
+            const bool imgui_built =
+                Port_ImGui_RenderPrelaunch(rom_present, TMC_PC_VERSION, rom_name, &play_clicked, &change_rom_clicked);
 #ifdef TMC_GPU_RENDERER
             if (imgui_built) {
                 Port_GPU_PresentPrelaunchFrame();
@@ -697,18 +728,18 @@ int main(int argc, char* argv[]) {
                 fprintf(stderr, "Prelaunch: picker returned %d.\n", rc);
                 if (rc == 0) {
                     romPath = Port_FindBaseRomPath();
-                    fprintf(stderr, "Prelaunch: post-picker romPath=%s.\n",
-                            romPath ? romPath : "(still NULL)");
+                    fprintf(stderr, "Prelaunch: post-picker romPath=%s.\n", romPath ? romPath : "(still NULL)");
                     /* Re-announce so the user hears the new state
                      * without having to look at the screen. */
                     {
-                        PortTtsOptions opts = {0};
+                        PortTtsOptions opts = { 0 };
                         opts.priority = PORT_TTS_PRIO_URGENT;
                         opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
                         opts.dedupe = false;
                         if (romPath) {
                             Port_TTS_Speak("ROM loaded. Press Enter or "
-                                           "Space to play.", &opts);
+                                           "Space to play.",
+                                           &opts);
                         } else {
                             Port_TTS_Speak("No ROM selected.", &opts);
                         }
@@ -759,9 +790,7 @@ int main(int argc, char* argv[]) {
 #else
     Port_EnsureAssetsReadyWithDisplay(window, gRomData, gRomSize);
 #endif
-    {
-        Port_RandoFileMenu_RestorePersistedSettings();
-    }
+    { Port_RandoFileMenu_RestorePersistedSettings(); }
     Port_CheckForUpdates(window);
 
     /* Now that the ROM and asset tables are loaded, re-set the window
@@ -795,24 +824,24 @@ int main(int argc, char* argv[]) {
         const char* compiledName = "USA";
 #endif
         if (gRomRegion != compiledRegion) {
-            const char* detectedName =
-                gRomRegion == ROM_REGION_USA ? "USA" :
-                gRomRegion == ROM_REGION_EU  ? "EU"  :
-                gRomRegion == ROM_REGION_JP  ? "JP"  : "UNKNOWN";
+            const char* detectedName = gRomRegion == ROM_REGION_USA  ? "USA"
+                                       : gRomRegion == ROM_REGION_EU ? "EU"
+                                       : gRomRegion == ROM_REGION_JP ? "JP"
+                                                                     : "UNKNOWN";
             if (Port_Config_GetConsoleParity()) {
                 fprintf(stderr,
-                    "FATAL: Console-Parity requires a region-matched ROM: this binary is %s "
-                    "but the ROM is %s.\n"
-                    "       A version-mismatched hybrid is not console-equivalent. Rebuild for the\n"
-                    "       ROM's region, or relaunch without --console-parity.\n",
-                    compiledName, detectedName);
+                        "FATAL: Console-Parity requires a region-matched ROM: this binary is %s "
+                        "but the ROM is %s.\n"
+                        "       A version-mismatched hybrid is not console-equivalent. Rebuild for the\n"
+                        "       ROM's region, or relaunch without --console-parity.\n",
+                        compiledName, detectedName);
                 return 1;
             }
             fprintf(stderr,
-                "WARNING: This binary was compiled for %s but the ROM is %s.\n"
-                "         Asset offsets may be incorrect; behavior matches neither console version.\n"
-                "         Rebuild with the matching --game_version for a faithful run.\n",
-                compiledName, detectedName);
+                    "WARNING: This binary was compiled for %s but the ROM is %s.\n"
+                    "         Asset offsets may be incorrect; behavior matches neither console version.\n"
+                    "         Rebuild with the matching --game_version for a faithful run.\n",
+                    compiledName, detectedName);
         }
     }
 #endif
@@ -832,16 +861,10 @@ int main(int argc, char* argv[]) {
 
     AgbMain();
 
-    {
-        Port_TTS_Shutdown();
-    }
-    {
-        Port_GPU_Shutdown();
-    }
+    { Port_TTS_Shutdown(); }
+    { Port_GPU_Shutdown(); }
 
-    {
-        Port_DiscordRpc_Shutdown();
-    }
+    { Port_DiscordRpc_Shutdown(); }
     Port_Audio_Shutdown();
     Port_PPU_Shutdown();
     Port_Config_CloseGamepads();

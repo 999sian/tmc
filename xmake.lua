@@ -481,9 +481,22 @@ task_end()
 -- PC Port Target
 -- ====================
 target("tmc_pc")
-    set_kind("binary")
+    if is_plat("android") then
+        -- Android: SDL's Java glue (SDLActivity) loads the game as a JNI
+        -- shared library named libmain.so and calls its SDL_main. Own
+        -- targetdir per ABI so android/gradle can consume them as jniLibs
+        -- and desktop build/pc is never clobbered.
+        set_kind("shared")
+        set_basename("main")
+        set_targetdir("build/android/" .. (get_config("arch") or "arm64-v8a"))
+        -- Android 15+ requires 16 KB page-aligned segments (same flag the
+        -- SameBoy Android port ships).
+        add_shflags("-Wl,-z,max-page-size=16384", {force = true})
+    else
+        set_kind("binary")
+        set_targetdir("build/pc")
+    end
     set_languages("c11", "cxx20")
-    set_targetdir("build/pc")
 
     local use_avx2 = get_config("pc_avx2")
     if use_avx2 == nil then
@@ -641,6 +654,7 @@ target("tmc_pc")
     end
 
     add_files("port/port_main.c")
+    add_files("port/port_android_log.c") -- stderr->logcat bridge (no-op off Android)
     add_files("port/port_audio.c")
     add_files("port/port_shm_framebuffer.c")  -- publishes GBA framebuffer to shm (opt-in)
     add_files("port/port_runtime_config.cpp")
@@ -939,6 +953,13 @@ target("tmc_pc")
         add_cflags("-fopenmp")
         add_cxxflags("-fopenmp")
         add_ldflags("-fopenmp", {force = true})
+        if is_plat("android") then
+            -- Shared-lib link (libmain.so) uses shflags, and the NDK's
+            -- libomp must be linked STATICALLY (-static-openmp) — devices
+            -- don't ship a system libomp.so.
+            add_shflags("-fopenmp", "-static-openmp", {force = true})
+            add_ldflags("-static-openmp", {force = true})
+        end
     end
 
     -- Optional sanitizer build (xmake f -y --pc_sanitize=y). Catches NULL

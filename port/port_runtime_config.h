@@ -59,7 +59,7 @@ void Port_Config_CycleInternalScale(int direction);
 
 typedef enum {
     PORT_TOUCH_SCHEME_JOYSTICK = 0,
-    PORT_TOUCH_SCHEME_DPAD     = 1,
+    PORT_TOUCH_SCHEME_DPAD = 1,
 } PortTouchScheme;
 PortTouchScheme Port_Config_TouchScheme(void);
 void Port_Config_SetTouchScheme(PortTouchScheme scheme);
@@ -90,16 +90,16 @@ void Port_Config_ToggleConsoleParity(void);
  * fill the whole window. Native means "no constraint, frame fills as
  * much of the window as 3:2 allows" — the historical default. */
 typedef enum {
-    PORT_ASPECT_NATIVE_3_2          = 0,
-    PORT_ASPECT_WIDESCREEN_16_9     = 1,
-    PORT_ASPECT_ULTRAWIDE_21_9      = 2,
+    PORT_ASPECT_NATIVE_3_2 = 0,
+    PORT_ASPECT_WIDESCREEN_16_9 = 1,
+    PORT_ASPECT_ULTRAWIDE_21_9 = 2,
     PORT_ASPECT_SUPER_ULTRAWIDE_32_9 = 3,
     PORT_ASPECT_COUNT,
 } PortAspectMode;
 PortAspectMode Port_Config_AspectMode(void);
-const char*    Port_Config_AspectModeName(PortAspectMode mode);
-void           Port_Config_SetAspectMode(PortAspectMode mode);
-void           Port_Config_CycleAspectMode(int direction);
+const char* Port_Config_AspectModeName(PortAspectMode mode);
+void Port_Config_SetAspectMode(PortAspectMode mode);
+void Port_Config_CycleAspectMode(int direction);
 
 /* Fill style for the area around the GBA frame (the "pillar bars" or
  * "stage background"). Black is the historical default. Solid uses the
@@ -107,18 +107,18 @@ void           Port_Config_CycleAspectMode(int direction);
  * a linearly-filtered copy of the current frame across the stage,
  * giving a soft halo / "ambient mode" effect. */
 typedef enum {
-    PORT_BG_FILL_BLACK         = 0,
-    PORT_BG_FILL_SOLID_COLOR   = 1,
+    PORT_BG_FILL_BLACK = 0,
+    PORT_BG_FILL_SOLID_COLOR = 1,
     PORT_BG_FILL_BLURRED_FRAME = 2,
     PORT_BG_FILL_COUNT,
 } PortBgFill;
-PortBgFill  Port_Config_BgFill(void);
+PortBgFill Port_Config_BgFill(void);
 const char* Port_Config_BgFillName(PortBgFill fill);
-void        Port_Config_SetBgFill(PortBgFill fill);
-void        Port_Config_CycleBgFill(int direction);
+void Port_Config_SetBgFill(PortBgFill fill);
+void Port_Config_CycleBgFill(int direction);
 /* RGB triple, 0..255, used when BgFill == SOLID_COLOR. */
-void        Port_Config_BgFillColor(u8* r, u8* g, u8* b);
-void        Port_Config_SetBgFillColor(u8 r, u8 g, u8 b);
+void Port_Config_BgFillColor(u8* r, u8* g, u8* b);
+void Port_Config_SetBgFillColor(u8 r, u8 g, u8 b);
 
 /* Renderer backend selection. The port has two presentation paths:
  * SDL_GPU (shader pipeline, required for CRT/LCD filters and the
@@ -128,90 +128,90 @@ void        Port_Config_SetBgFillColor(u8 r, u8 g, u8 b);
  * a restart to take effect; the window's swapchain owner is set
  * once at Port_PPU_Init time. */
 typedef enum {
-    PORT_RENDER_BACKEND_AUTO     = 0,
+    PORT_RENDER_BACKEND_AUTO = 0,
     PORT_RENDER_BACKEND_SOFTWARE = 1,
-    PORT_RENDER_BACKEND_GPU      = 2,
+    PORT_RENDER_BACKEND_GPU = 2,
     PORT_RENDER_BACKEND_COUNT,
 } PortRenderBackend;
 PortRenderBackend Port_Config_RenderBackend(void);
-const char*       Port_Config_RenderBackendName(PortRenderBackend b);
-void              Port_Config_SetRenderBackend(PortRenderBackend b);
-void              Port_Config_CycleRenderBackend(int direction);
+const char* Port_Config_RenderBackendName(PortRenderBackend b);
+void Port_Config_SetRenderBackend(PortRenderBackend b);
+void Port_Config_CycleRenderBackend(int direction);
 
 /* Text-to-speech accessibility settings — read by port_tts at startup
  * and re-written on every setter. All persisted to config.json. */
-bool        Port_Config_GetTtsEnabled(void);
-void        Port_Config_SetTtsEnabled(bool on);
-float       Port_Config_GetTtsRate(void);
-void        Port_Config_SetTtsRate(float v);
-float       Port_Config_GetTtsPitch(void);
-void        Port_Config_SetTtsPitch(float v);
-float       Port_Config_GetTtsVolume(void);
-void        Port_Config_SetTtsVolume(float v);
+bool Port_Config_GetTtsEnabled(void);
+void Port_Config_SetTtsEnabled(bool on);
+float Port_Config_GetTtsRate(void);
+void Port_Config_SetTtsRate(float v);
+float Port_Config_GetTtsPitch(void);
+void Port_Config_SetTtsPitch(float v);
+float Port_Config_GetTtsVolume(void);
+void Port_Config_SetTtsVolume(float v);
 const char* Port_Config_GetTtsVoice(void);
-void        Port_Config_SetTtsVoice(const char* v);
+void Port_Config_SetTtsVoice(const char* v);
 const char* Port_Config_GetTtsLanguage(void);
-void        Port_Config_SetTtsLanguage(const char* v);
+void Port_Config_SetTtsLanguage(const char* v);
 
 /* Accessibility passive-cue toggles (Phase 2) — read at Port_A11y_Init,
  * re-written on every setter. All persisted to config.json. */
-bool        Port_Config_GetA11yCues(void);
-void        Port_Config_SetA11yCues(bool on);
-bool        Port_Config_GetA11yFootsteps(void);
-void        Port_Config_SetA11yFootsteps(bool on);
-bool        Port_Config_GetA11yHazards(void);
-void        Port_Config_SetA11yHazards(bool on);
-bool        Port_Config_GetA11yRadar(void);
-void        Port_Config_SetA11yRadar(bool on);
-bool        Port_Config_GetA11yWalls(void);
-void        Port_Config_SetA11yWalls(bool on);
+bool Port_Config_GetA11yCues(void);
+void Port_Config_SetA11yCues(bool on);
+bool Port_Config_GetA11yFootsteps(void);
+void Port_Config_SetA11yFootsteps(bool on);
+bool Port_Config_GetA11yHazards(void);
+void Port_Config_SetA11yHazards(bool on);
+bool Port_Config_GetA11yRadar(void);
+void Port_Config_SetA11yRadar(bool on);
+bool Port_Config_GetA11yWalls(void);
+void Port_Config_SetA11yWalls(bool on);
 
 /* Speedrun practice mode (port_practice.c). Overlay toggles + slow-mo factor
  * (0.05..1.0; 1.0 = normal speed). All persisted to config.json. */
-bool        Port_Config_GetPracticeShowTimer(void);
-void        Port_Config_SetPracticeShowTimer(bool on);
-bool        Port_Config_GetPracticeShowInputs(void);
-void        Port_Config_SetPracticeShowInputs(bool on);
-bool        Port_Config_GetPracticeShowHistory(void);
-void        Port_Config_SetPracticeShowHistory(bool on);
-float       Port_Config_GetPracticeSlowmo(void);
-void        Port_Config_SetPracticeSlowmo(float v);
+bool Port_Config_GetPracticeShowTimer(void);
+void Port_Config_SetPracticeShowTimer(bool on);
+bool Port_Config_GetPracticeShowInputs(void);
+void Port_Config_SetPracticeShowInputs(bool on);
+bool Port_Config_GetPracticeShowHistory(void);
+void Port_Config_SetPracticeShowHistory(bool on);
+float Port_Config_GetPracticeSlowmo(void);
+void Port_Config_SetPracticeSlowmo(float v);
 
 /* Persisted runtime toggles (issue #146). Applied at startup; setters write
  * config.json immediately. reborn_features is a bitmask over RebornFeature;
  * HasRebornMask reports whether the user ever overrode the compile defaults. */
-bool        Port_Config_GetDiscordRpc(void);
-void        Port_Config_SetDiscordRpc(bool on);
-bool        Port_Config_GetVSync(void);
-void        Port_Config_SetVSync(bool on);
+bool Port_Config_GetDiscordRpc(void);
+void Port_Config_SetDiscordRpc(bool on);
+bool Port_Config_GetVSync(void);
+void Port_Config_SetVSync(bool on);
 
 /* GBA-LCD display transforms (F8 Display menu). */
-bool        Port_Config_GetColorCorrection(void);
-void        Port_Config_SetColorCorrection(bool on);
-bool        Port_Config_GetLcdPersistence(void);
-void        Port_Config_SetLcdPersistence(bool on);
-float       Port_Config_GetLcdPersistenceRho(void);
-void        Port_Config_SetLcdPersistenceRho(float v);
-bool        Port_Config_GetRibbonEnabled(void);
-void        Port_Config_SetRibbonEnabled(bool on);
-bool        Port_Config_GetHoldToAdvanceText(void);
-void        Port_Config_SetHoldToAdvanceText(bool on);
-bool        Port_Config_GetRollAttackMacroEnabled(void);
-void        Port_Config_SetRollAttackMacroEnabled(bool on);
-float       Port_Config_GetMasterVolume(void);
-void        Port_Config_SetMasterVolume(float v);
-bool        Port_Config_GetFullscreen(void);
-void        Port_Config_SetFullscreen(bool on);
+bool Port_Config_GetColorCorrection(void);
+void Port_Config_SetColorCorrection(bool on);
+bool Port_Config_GetLcdPersistence(void);
+void Port_Config_SetLcdPersistence(bool on);
+float Port_Config_GetLcdPersistenceRho(void);
+void Port_Config_SetLcdPersistenceRho(float v);
+bool Port_Config_GetRibbonEnabled(void);
+void Port_Config_SetRibbonEnabled(bool on);
+bool Port_Config_GetHoldToAdvanceText(void);
+void Port_Config_SetHoldToAdvanceText(bool on);
+bool Port_Config_GetRollAttackMacroEnabled(void);
+void Port_Config_SetRollAttackMacroEnabled(bool on);
+float Port_Config_GetMasterVolume(void);
+void Port_Config_SetMasterVolume(float v);
+bool Port_Config_GetFullscreen(void);
+void Port_Config_SetFullscreen(bool on);
 /* Hide the OS mouse cursor while the window is fullscreen (default on). When
  * off, the cursor stays visible in fullscreen. Read by Port_PPU's cursor-
  * visibility policy on every fullscreen transition. */
-bool        Port_Config_GetFullscreenHideCursor(void);
-void        Port_Config_SetFullscreenHideCursor(bool on);
+bool Port_Config_GetFullscreenHideCursor(void);
+void Port_Config_SetFullscreenHideCursor(bool on);
 const char* Port_Config_GetShaderPreset(void);
-void        Port_Config_SetShaderPreset(const char* path);
-int         Port_Config_HasRebornMask(void);
-unsigned    Port_Config_GetRebornMask(void);
-void        Port_Config_SetRebornMask(unsigned mask);
+void Port_Config_SetShaderPreset(const char* path);
+int Port_Config_HasRebornMask(void);
+unsigned Port_Config_GetRebornMask(void);
+void Port_Config_SetRebornMask(unsigned mask);
 
 /* Randomizer persistence (issue #155): the file-select "Enable Randomizer
  * Mode" toggle, the built-in graph settings, and .logic define overrides
@@ -225,15 +225,15 @@ bool Port_Config_GetRandoKinstones(void);
 bool Port_Config_GetRandoEntrances(void);
 bool Port_Config_GetRandoDojos(void);
 bool Port_Config_GetRandoOpenWorld(void);
-int  Port_Config_GetRandoItemPool(void);
+int Port_Config_GetRandoItemPool(void);
 bool Port_Config_GetRandoHomewarp(void);
 bool Port_Config_GetRandoStartSword(void);
 bool Port_Config_GetRandoEarlyCrests(void);
 bool Port_Config_GetRandoInstantText(void);
-int  Port_Config_GetRandoTunicColor(void);
-int  Port_Config_GetRandoHeartColor(void);
-void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos, bool open_world,
-                                  int item_pool, bool homewarp, bool start_sword, bool early_crests,
+int Port_Config_GetRandoTunicColor(void);
+int Port_Config_GetRandoHeartColor(void);
+void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos,
+                                  bool open_world, int item_pool, bool homewarp, bool start_sword, bool early_crests,
                                   bool instant_text, int tunic_color, int heart_color);
 
 void Port_Config_OpenGamepads(void);
@@ -261,7 +261,7 @@ bool Port_Config_GetLeftStick(float* outX, float* outY);
  * with a thumb resting on the stick). Read by port_analog_movement.c; only
  * meaningful when REBORN_FEAT_ANALOG_360_MOVEMENT is enabled. Default 0.30. */
 float Port_Config_GetAnalogDeadzone(void);
-void  Port_Config_SetAnalogDeadzone(float v);
+void Port_Config_SetAnalogDeadzone(float v);
 
 /* Clear the per-input "pressed this frame" edge cache. Call after the
  * port has committed KEYINPUT and the engine has read it, so the next
@@ -274,9 +274,14 @@ void Port_Config_ClearInputEdges(void);
  * frame, so it never persists into normal play. */
 void Port_Config_TestForceEdge(PortInput input);
 
-int  Port_Config_PreferredRegion(void);
+/* Production edge-stamp used by the touch overlay: latch a button press onto
+ * the per-frame edge cache so a sub-frame tap (pointer DOWN+UP in one poll
+ * batch) still registers for one game frame. Same cache/wipe as above. */
+void Port_Config_StampInputEdge(PortInput input);
+
+int Port_Config_PreferredRegion(void);
 void Port_Config_SetPreferredRegion(int region);
-int  Port_Config_PreferredLanguage(void);
+int Port_Config_PreferredLanguage(void);
 void Port_Config_SetPreferredLanguage(int lang);
 #ifdef launcher
 void Port_Config_SetPortSettingsMenuEnabled(bool enabled);
