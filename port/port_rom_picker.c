@@ -1,13 +1,16 @@
 /*
  * port/port_rom_picker.c — SDL3 file-picker fallback for "no ROM
- * found." Lets the user point at any .gba file on disk without
- * having to manually rename and place it. We validate the picked
- * file is actually a Minish Cap ROM (16 MiB exactly + BZM[EPJ]
- * region code at offset 0xAC) before accepting it, then copy it
- * next to the running executable as baserom.gba so subsequent
- * launches skip the prompt entirely.
+ * found." Lets the user point at any .gba file without having to
+ * manually rename and place it. We validate the picked file is a
+ * known Minish Cap ROM (SHA-1 + SHA-256), then install it as
+ * baserom.gba — next to the executable on desktop, in the app data
+ * dir (the CWD) on Android — so subsequent launches skip the prompt.
+ *
+ * The picked path is read through SDL_LoadFile: on Android the SAF
+ * picker returns content:// URIs that plain fopen cannot open, and
+ * SDL_IOFromFile routes those through ContentResolver.
  */
-#define _DEFAULT_SOURCE 1   /* readlink(2) on glibc */
+#define _DEFAULT_SOURCE 1 /* readlink(2) on glibc */
 #define _BSD_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 
@@ -36,33 +39,35 @@
 #include <mach-o/dyld.h>
 #endif
 
-/* Outcome of the async picker callback. Polled by the main thread. */
-typedef enum {
+/* Outcome of the async picker callback, published cross-thread: on
+ * Android the callback runs on the Java UI thread (onActivityResult)
+ * while the SDL main thread spins in the wait loop below. SDL atomics
+ * give the release/acquire ordering `volatile` does not. Path bytes
+ * are written before the status flips to a terminal state. */
+enum {
     PICK_PENDING = 0,
     PICK_CANCELLED,
     PICK_SUCCESS,
     PICK_FAILED,
-} PickStatus;
+};
 
-static volatile PickStatus sPickStatus = PICK_PENDING;
+static SDL_AtomicInt sPickStatus;
 static char sPickPath[4096];
 
-static void SDLCALL RomPickerCallback(void* userdata,
-                                       const char* const* filelist,
-                                       int filter)
-{
-    (void)userdata; (void)filter;
+static void SDLCALL RomPickerCallback(void* userdata, const char* const* filelist, int filter) {
+    (void)userdata;
+    (void)filter;
     if (!filelist) {
-        sPickStatus = PICK_FAILED;
+        SDL_SetAtomicInt(&sPickStatus, PICK_FAILED);
         return;
     }
     if (!filelist[0]) {
-        sPickStatus = PICK_CANCELLED;
+        SDL_SetAtomicInt(&sPickStatus, PICK_CANCELLED);
         return;
     }
     strncpy(sPickPath, filelist[0], sizeof(sPickPath) - 1);
     sPickPath[sizeof(sPickPath) - 1] = '\0';
-    sPickStatus = PICK_SUCCESS;
+    SDL_SetAtomicInt(&sPickStatus, PICK_SUCCESS);
 }
 
 /* ------------------------------------------------------------------
@@ -74,11 +79,13 @@ static void SDLCALL RomPickerCallback(void* userdata,
 typedef struct {
     uint32_t state[5];
     uint64_t bitcount;
-    uint8_t  buffer[64];
-    uint8_t  buflen;
+    uint8_t buffer[64];
+    uint8_t buflen;
 } SHA1_CTX;
 
-static uint32_t sha1_rol(uint32_t v, int n) { return (v << n) | (v >> (32 - n)); }
+static uint32_t sha1_rol(uint32_t v, int n) {
+    return (v << n) | (v >> (32 - n));
+}
 
 static void sha1_init(SHA1_CTX* c) {
     c->state[0] = 0x67452301u;
@@ -93,9 +100,7 @@ static void sha1_init(SHA1_CTX* c) {
 static void sha1_transform(SHA1_CTX* c, const uint8_t block[64]) {
     uint32_t w[80];
     for (int i = 0; i < 16; ++i) {
-        w[i] = ((uint32_t)block[i * 4] << 24) |
-               ((uint32_t)block[i * 4 + 1] << 16) |
-               ((uint32_t)block[i * 4 + 2] << 8) |
+        w[i] = ((uint32_t)block[i * 4] << 24) | ((uint32_t)block[i * 4 + 1] << 16) | ((uint32_t)block[i * 4 + 2] << 8) |
                ((uint32_t)block[i * 4 + 3]);
     }
     for (int i = 16; i < 80; ++i) {
@@ -105,15 +110,31 @@ static void sha1_transform(SHA1_CTX* c, const uint8_t block[64]) {
     uint32_t d = c->state[3], e = c->state[4];
     for (int i = 0; i < 80; ++i) {
         uint32_t f, k;
-        if (i < 20)      { f = (b & cc) | ((~b) & d);              k = 0x5A827999u; }
-        else if (i < 40) { f = b ^ cc ^ d;                          k = 0x6ED9EBA1u; }
-        else if (i < 60) { f = (b & cc) | (b & d) | (cc & d);       k = 0x8F1BBCDCu; }
-        else             { f = b ^ cc ^ d;                          k = 0xCA62C1D6u; }
+        if (i < 20) {
+            f = (b & cc) | ((~b) & d);
+            k = 0x5A827999u;
+        } else if (i < 40) {
+            f = b ^ cc ^ d;
+            k = 0x6ED9EBA1u;
+        } else if (i < 60) {
+            f = (b & cc) | (b & d) | (cc & d);
+            k = 0x8F1BBCDCu;
+        } else {
+            f = b ^ cc ^ d;
+            k = 0xCA62C1D6u;
+        }
         uint32_t t = sha1_rol(a, 5) + f + e + k + w[i];
-        e = d; d = cc; cc = sha1_rol(b, 30); b = a; a = t;
+        e = d;
+        d = cc;
+        cc = sha1_rol(b, 30);
+        b = a;
+        a = t;
     }
-    c->state[0] += a; c->state[1] += b; c->state[2] += cc;
-    c->state[3] += d; c->state[4] += e;
+    c->state[0] += a;
+    c->state[1] += b;
+    c->state[2] += cc;
+    c->state[3] += d;
+    c->state[4] += e;
 }
 
 static void sha1_update(SHA1_CTX* c, const uint8_t* data, size_t len) {
@@ -124,7 +145,7 @@ static void sha1_update(SHA1_CTX* c, const uint8_t* data, size_t len) {
         memcpy(c->buffer + c->buflen, data, take);
         c->buflen += (uint8_t)take;
         data += take;
-        len  -= take;
+        len -= take;
         if (c->buflen == 64) {
             sha1_transform(c, c->buffer);
             c->buflen = 0;
@@ -137,38 +158,32 @@ static void sha1_final(SHA1_CTX* c, uint8_t out[20]) {
     uint8_t pad = 0x80;
     sha1_update(c, &pad, 1);
     pad = 0x00;
-    while (c->buflen != 56) sha1_update(c, &pad, 1);
+    while (c->buflen != 56)
+        sha1_update(c, &pad, 1);
     uint8_t lenbe[8];
-    for (int i = 0; i < 8; ++i) lenbe[i] = (uint8_t)(bits >> (56 - i * 8));
+    for (int i = 0; i < 8; ++i)
+        lenbe[i] = (uint8_t)(bits >> (56 - i * 8));
     sha1_update(c, lenbe, 8);
     for (int i = 0; i < 5; ++i) {
-        out[i * 4]     = (uint8_t)(c->state[i] >> 24);
+        out[i * 4] = (uint8_t)(c->state[i] >> 24);
         out[i * 4 + 1] = (uint8_t)(c->state[i] >> 16);
         out[i * 4 + 2] = (uint8_t)(c->state[i] >> 8);
         out[i * 4 + 3] = (uint8_t)(c->state[i]);
     }
 }
 
-static int Sha1HexOfFile(const char* path, char hex_out[41]) {
-    FILE* fp = fopen(path, "rb");
-    if (!fp) return -1;
+static void Sha1HexOfBuffer(const void* data, size_t len, char hex_out[41]) {
     SHA1_CTX c;
     sha1_init(&c);
-    uint8_t buf[1 << 16];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        sha1_update(&c, buf, n);
-    }
-    fclose(fp);
+    sha1_update(&c, (const uint8_t*)data, len);
     uint8_t digest[20];
     sha1_final(&c, digest);
     static const char kHex[] = "0123456789abcdef";
     for (int i = 0; i < 20; ++i) {
-        hex_out[i * 2]     = kHex[digest[i] >> 4];
+        hex_out[i * 2] = kHex[digest[i] >> 4];
         hex_out[i * 2 + 1] = kHex[digest[i] & 0xF];
     }
     hex_out[40] = '\0';
-    return 0;
 }
 
 /* ------------------------------------------------------------------
@@ -181,17 +196,23 @@ static int Sha1HexOfFile(const char* path, char hex_out[41]) {
 typedef struct {
     uint32_t state[8];
     uint64_t bitcount;
-    uint8_t  buffer[64];
-    uint8_t  buflen;
+    uint8_t buffer[64];
+    uint8_t buflen;
 } SHA256_CTX;
 
-static uint32_t sha256_ror(uint32_t v, int n) { return (v >> n) | (v << (32 - n)); }
+static uint32_t sha256_ror(uint32_t v, int n) {
+    return (v >> n) | (v << (32 - n));
+}
 
 static void sha256_init(SHA256_CTX* c) {
-    c->state[0] = 0x6a09e667u; c->state[1] = 0xbb67ae85u;
-    c->state[2] = 0x3c6ef372u; c->state[3] = 0xa54ff53au;
-    c->state[4] = 0x510e527fu; c->state[5] = 0x9b05688cu;
-    c->state[6] = 0x1f83d9abu; c->state[7] = 0x5be0cd19u;
+    c->state[0] = 0x6a09e667u;
+    c->state[1] = 0xbb67ae85u;
+    c->state[2] = 0x3c6ef372u;
+    c->state[3] = 0xa54ff53au;
+    c->state[4] = 0x510e527fu;
+    c->state[5] = 0x9b05688cu;
+    c->state[6] = 0x1f83d9abu;
+    c->state[7] = 0x5be0cd19u;
     c->bitcount = 0;
     c->buflen = 0;
 }
@@ -209,8 +230,8 @@ static void sha256_transform(SHA256_CTX* c, const uint8_t block[64]) {
     };
     uint32_t w[64];
     for (int i = 0; i < 16; ++i) {
-        w[i] = ((uint32_t)block[i * 4] << 24) | ((uint32_t)block[i * 4 + 1] << 16) |
-               ((uint32_t)block[i * 4 + 2] << 8) | ((uint32_t)block[i * 4 + 3]);
+        w[i] = ((uint32_t)block[i * 4] << 24) | ((uint32_t)block[i * 4 + 1] << 16) | ((uint32_t)block[i * 4 + 2] << 8) |
+               ((uint32_t)block[i * 4 + 3]);
     }
     for (int i = 16; i < 64; ++i) {
         uint32_t s0 = sha256_ror(w[i - 15], 7) ^ sha256_ror(w[i - 15], 18) ^ (w[i - 15] >> 3);
@@ -226,10 +247,23 @@ static void sha256_transform(SHA256_CTX* c, const uint8_t block[64]) {
         uint32_t S0 = sha256_ror(a, 2) ^ sha256_ror(a, 13) ^ sha256_ror(a, 22);
         uint32_t maj = (a & b) ^ (a & cc) ^ (b & cc);
         uint32_t t2 = S0 + maj;
-        h = g; g = f; f = e; e = d + t1; d = cc; cc = b; b = a; a = t1 + t2;
+        h = g;
+        g = f;
+        f = e;
+        e = d + t1;
+        d = cc;
+        cc = b;
+        b = a;
+        a = t1 + t2;
     }
-    c->state[0] += a; c->state[1] += b; c->state[2] += cc; c->state[3] += d;
-    c->state[4] += e; c->state[5] += f; c->state[6] += g; c->state[7] += h;
+    c->state[0] += a;
+    c->state[1] += b;
+    c->state[2] += cc;
+    c->state[3] += d;
+    c->state[4] += e;
+    c->state[5] += f;
+    c->state[6] += g;
+    c->state[7] += h;
 }
 
 static void sha256_update(SHA256_CTX* c, const uint8_t* data, size_t len) {
@@ -240,7 +274,7 @@ static void sha256_update(SHA256_CTX* c, const uint8_t* data, size_t len) {
         memcpy(c->buffer + c->buflen, data, take);
         c->buflen += (uint8_t)take;
         data += take;
-        len  -= take;
+        len -= take;
         if (c->buflen == 64) {
             sha256_transform(c, c->buffer);
             c->buflen = 0;
@@ -253,38 +287,32 @@ static void sha256_final(SHA256_CTX* c, uint8_t out[32]) {
     uint8_t pad = 0x80;
     sha256_update(c, &pad, 1);
     pad = 0x00;
-    while (c->buflen != 56) sha256_update(c, &pad, 1);
+    while (c->buflen != 56)
+        sha256_update(c, &pad, 1);
     uint8_t lenbe[8];
-    for (int i = 0; i < 8; ++i) lenbe[i] = (uint8_t)(bits >> (56 - i * 8));
+    for (int i = 0; i < 8; ++i)
+        lenbe[i] = (uint8_t)(bits >> (56 - i * 8));
     sha256_update(c, lenbe, 8);
     for (int i = 0; i < 8; ++i) {
-        out[i * 4]     = (uint8_t)(c->state[i] >> 24);
+        out[i * 4] = (uint8_t)(c->state[i] >> 24);
         out[i * 4 + 1] = (uint8_t)(c->state[i] >> 16);
         out[i * 4 + 2] = (uint8_t)(c->state[i] >> 8);
         out[i * 4 + 3] = (uint8_t)(c->state[i]);
     }
 }
 
-static int Sha256HexOfFile(const char* path, char hex_out[65]) {
-    FILE* fp = fopen(path, "rb");
-    if (!fp) return -1;
+static void Sha256HexOfBuffer(const void* data, size_t len, char hex_out[65]) {
     SHA256_CTX c;
     sha256_init(&c);
-    uint8_t buf[1 << 16];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        sha256_update(&c, buf, n);
-    }
-    fclose(fp);
+    sha256_update(&c, (const uint8_t*)data, len);
     uint8_t digest[32];
     sha256_final(&c, digest);
     static const char kHex[] = "0123456789abcdef";
     for (int i = 0; i < 32; ++i) {
-        hex_out[i * 2]     = kHex[digest[i] >> 4];
+        hex_out[i * 2] = kHex[digest[i] >> 4];
         hex_out[i * 2 + 1] = kHex[digest[i] & 0xF];
     }
     hex_out[64] = '\0';
-    return 0;
 }
 
 /* Known TMC ROM hashes. The picker recognises a file as a TMC ROM if its
@@ -292,108 +320,126 @@ static int Sha256HexOfFile(const char* path, char hex_out[65]) {
  * (SHA-1 alone is collision-broken). Filename is irrelevant. */
 static const struct {
     const char* sha1;
-    const char* sha256;   /* "" = not yet known (demo dumps): SHA-1 only */
+    const char* sha256; /* "" = not yet known (demo dumps): SHA-1 only */
     const char* region;
 } kKnownTmcRoms[] = {
-    { "b4bd50e4131b027c334547b4524e2dbbd4227130", "bedc74df62755f705398273de8ed3bc59be610cf55760d0b9aa277f1f5035e73", "USA"      },
-    { "cff199b36ff173fb6faf152653d1bccf87c26fb7", "c84645731952b7677f514ae222683504066334ab2af904e64a8a84ffc1af46c6", "EU"       },
-    { "6c5404a1effb17f481f352181d0f1c61a2765c5d", "16ac2572ba17e9cb2a70093d41f97ef8cff66c56417e45ea98adacdc51bb4b38", "JP"       },
+    { "b4bd50e4131b027c334547b4524e2dbbd4227130", "bedc74df62755f705398273de8ed3bc59be610cf55760d0b9aa277f1f5035e73",
+      "USA" },
+    { "cff199b36ff173fb6faf152653d1bccf87c26fb7", "c84645731952b7677f514ae222683504066334ab2af904e64a8a84ffc1af46c6",
+      "EU" },
+    { "6c5404a1effb17f481f352181d0f1c61a2765c5d", "16ac2572ba17e9cb2a70093d41f97ef8cff66c56417e45ea98adacdc51bb4b38",
+      "JP" },
     { "63fcad218f9047b6a9edbb68c98bd0dec322d7a1", "", "USA Demo" },
-    { "9cdb56fa79bba13158b81925c1f3641251326412", "", "JP Demo"  },
+    { "9cdb56fa79bba13158b81925c1f3641251326412", "", "JP Demo" },
 };
 
-/* Validate that `path` is a real TMC ROM by SHA-1 hash. Returns the
- * region tag ("USA" / "EU" / "JP" / "USA Demo" / "JP Demo") or NULL.
+/* Validate that `data` is a real TMC ROM by hash. Returns the region
+ * tag ("USA" / "EU" / "JP" / "USA Demo" / "JP Demo") or NULL.
  *
  * Filename is intentionally irrelevant — users pick whatever they
- * named their dump. A fast file-size pre-check (16 MiB ± slop) rules
- * out obvious junk before we pay for the SHA-1 of a 16 MB read. */
-static const char* ValidateRom(const char* path) {
-    FILE* fp = fopen(path, "rb");
-    if (!fp) return NULL;
-    if (fseek(fp, 0, SEEK_END) != 0) { fclose(fp); return NULL; }
-    long sz = ftell(fp);
-    fclose(fp);
-    /* Most TMC dumps are exactly 16 MiB (0x01000000); the demo dumps
-     * are 4 MiB. Reject everything outside a generous envelope. */
-    if (sz < 0x00200000 || sz > 0x01010000) return NULL;
+ * named their dump. A fast size pre-check (16 MiB ± slop, 4 MiB
+ * demos) rules out obvious junk before we pay for the hashes. */
+static const char* ValidateRomBuffer(const void* data, size_t len) {
+    if (len < 0x00200000 || len > 0x01010000)
+        return NULL;
 
     char hex[41];
-    if (Sha1HexOfFile(path, hex) != 0) return NULL;
+    Sha1HexOfBuffer(data, len, hex);
     for (size_t i = 0; i < sizeof(kKnownTmcRoms) / sizeof(kKnownTmcRoms[0]); ++i) {
-        if (strcmp(hex, kKnownTmcRoms[i].sha1) != 0) continue;
+        if (strcmp(hex, kKnownTmcRoms[i].sha1) != 0)
+            continue;
         /* SHA-1 matched. SHA-1 is collision-broken, so when we have a
          * SHA-256 for this dump require it to match too — a forged file
          * cannot collide on both. (Demo dumps have no SHA-256: SHA-1 only.) */
         if (kKnownTmcRoms[i].sha256 && kKnownTmcRoms[i].sha256[0]) {
             char hex256[65];
-            if (Sha256HexOfFile(path, hex256) != 0) return NULL;
-            if (strcmp(hex256, kKnownTmcRoms[i].sha256) != 0) return NULL;
+            Sha256HexOfBuffer(data, len, hex256);
+            if (strcmp(hex256, kKnownTmcRoms[i].sha256) != 0)
+                return NULL;
         }
         return kKnownTmcRoms[i].region;
     }
     return NULL;
 }
 
+#ifndef __ANDROID__
+
 static int GetExeDir(char* out, size_t out_len) {
 #ifdef _WIN32
     DWORD n = GetModuleFileNameA(NULL, out, (DWORD)out_len);
-    if (n == 0 || n >= out_len) return -1;
+    if (n == 0 || n >= out_len)
+        return -1;
     char* slash = strrchr(out, '\\');
-    if (!slash) slash = strrchr(out, '/');
-    if (!slash) return -1;
+    if (!slash)
+        slash = strrchr(out, '/');
+    if (!slash)
+        return -1;
     *slash = '\0';
     return 0;
 #elif defined(__APPLE__)
     uint32_t sz = (uint32_t)out_len;
-    if (_NSGetExecutablePath(out, &sz) != 0) return -1;
+    if (_NSGetExecutablePath(out, &sz) != 0)
+        return -1;
     char* slash = strrchr(out, '/');
-    if (!slash) return -1;
+    if (!slash)
+        return -1;
     *slash = '\0';
     return 0;
 #else
     ssize_t n = readlink("/proc/self/exe", out, out_len - 1);
-    if (n <= 0) return -1;
+    if (n <= 0)
+        return -1;
     out[n] = '\0';
     char* slash = strrchr(out, '/');
-    if (!slash) return -1;
+    if (!slash)
+        return -1;
     *slash = '\0';
     return 0;
 #endif
 }
 
-static int CopyFile_ToPath(const char* src, const char* dst) {
-#ifdef _WIN32
-    /* Win32 CopyFileA accepts narrow strings in the active code page,
-     * which matches what SDL's open-file callback hands us, and it
-     * handles Unicode paths internally. Strictly more reliable than
-     * fopen/fread/fwrite for the rom-copy step on Windows. */
-    return CopyFileA(src, dst, FALSE) ? 0 : -1;
+#endif /* !__ANDROID__ */
+
+/* Resolve where the picked ROM gets installed. Desktop: next to the
+ * executable, matching the release-tarball layout that
+ * Port_FindBaseRomPath probes. Android: the CWD — port_main.c chdir'd
+ * to the app's files dir before any of this runs, and the bare
+ * "baserom.gba" candidate resolves there. The path must be ABSOLUTE:
+ * SDL_IOFromFile on Android resolves relative paths against internal
+ * storage (SDL_GetAndroidInternalStoragePath), not the CWD, so a bare
+ * "baserom.gba" would be written where fopen-based probing never
+ * looks. (The exe dir on Android is an unwritable system path, and
+ * the picked file is a content:// URI that only SDL_IOFromFile can
+ * read anyway.) */
+static int ResolveInstallPath(char* dst, size_t dst_len) {
+#ifdef __ANDROID__
+    char cwd[4096];
+    if (!getcwd(cwd, sizeof(cwd)))
+        return -1;
+    snprintf(dst, dst_len, "%s/baserom.gba", cwd);
+    return 0;
 #else
-    FILE* in = fopen(src, "rb");
-    if (!in) return -1;
-    FILE* out = fopen(dst, "wb");
-    if (!out) { fclose(in); return -1; }
-    char buf[65536];
-    size_t n;
-    int rc = 0;
-    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
-        if (fwrite(buf, 1, n, out) != n) { rc = -1; break; }
-    }
-    fclose(in);
-    fclose(out);
-    return rc;
+    char exedir[4096];
+    if (GetExeDir(exedir, sizeof(exedir)) != 0)
+        return -1;
+    snprintf(dst, dst_len, "%s%cbaserom.gba", exedir,
+#ifdef _WIN32
+             '\\'
+#else
+             '/'
+#endif
+    );
+    return 0;
 #endif
 }
 
 /* Returns 0 if the user picked a valid ROM and we installed it as
- * <exe-dir>/baserom.gba (so the caller can re-run
- * Port_FindBaseRomPath and find it). Returns -1 on cancel/error.
+ * baserom.gba (so the caller can re-run Port_FindBaseRomPath and
+ * find it). Returns -1 on cancel/error.
  *
  * The prelaunch UI shows the user-facing "Pick your ROM" prompt
  * before calling this, so we skip straight to the file dialog. */
-int Port_RomPicker_PromptAndInstall(void)
-{
+int Port_RomPicker_PromptAndInstall(void) {
     fprintf(stderr, "[rom-picker] opening SDL file dialog...\n");
 
     SDL_DialogFileFilter filters[] = {
@@ -401,39 +447,49 @@ int Port_RomPicker_PromptAndInstall(void)
         { "All files", "*" },
     };
 
-    sPickStatus = PICK_PENDING;
+    SDL_SetAtomicInt(&sPickStatus, PICK_PENDING);
     sPickPath[0] = '\0';
-    SDL_ShowOpenFileDialog(RomPickerCallback, NULL, NULL,
-                           filters, 2, NULL, false);
+    SDL_ShowOpenFileDialog(RomPickerCallback, NULL, NULL, filters, 2, NULL, false);
 
     /* Block until the user picks (or cancels). The picker is async on
      * every backend — pump events here so platform-native code can
-     * deliver the callback. */
-    while (sPickStatus == PICK_PENDING) {
+     * deliver the callback (on Android it arrives via onActivityResult
+     * after a round-trip through the system documents UI). */
+    while (SDL_GetAtomicInt(&sPickStatus) == PICK_PENDING) {
         SDL_PumpEvents();
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_EVENT_QUIT) {
-                sPickStatus = PICK_CANCELLED;
+                SDL_SetAtomicInt(&sPickStatus, PICK_CANCELLED);
                 break;
             }
         }
         SDL_Delay(16);
     }
 
-    if (sPickStatus != PICK_SUCCESS) {
+    if (SDL_GetAtomicInt(&sPickStatus) != PICK_SUCCESS) {
         return -1;
     }
 
-    const char* region = ValidateRom(sPickPath);
+    /* One read, validate in memory, one write. SDL_LoadFile routes
+     * through SDL_IOFromFile: plain paths everywhere, content:// URIs
+     * on Android (SAF), UTF-8 -> UTF-16 paths on Windows. A TMC dump
+     * is at most 16 MiB, so the buffer is cheap and transient. */
+    size_t romLen = 0;
+    void* romData = SDL_LoadFile(sPickPath, &romLen);
+    if (!romData) {
+        char msg[4608];
+        snprintf(msg, sizeof(msg), "Could not read the picked file:\n%s\n\n%s", sPickPath, SDL_GetError());
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Read failed", msg, NULL);
+        return -1;
+    }
+
+    const char* region = ValidateRomBuffer(romData, romLen);
     if (!region) {
-        /* Compute the hash again for the error message so the user
-         * can compare against the expected SHA-1s. */
-        char hex[41] = {0};
-        if (Sha1HexOfFile(sPickPath, hex) != 0) {
-            snprintf(hex, sizeof(hex), "(could not read file)");
-        }
-        char msg[2048];
+        char hex[41];
+        Sha1HexOfBuffer(romData, romLen, hex);
+        SDL_free(romData);
+        char msg[5120];
         snprintf(msg, sizeof(msg),
                  "That file's SHA-1 doesn't match any known TMC ROM:\n\n"
                  "  Path:     %s\n"
@@ -447,40 +503,30 @@ int Port_RomPicker_PromptAndInstall(void)
                  "If your dump matches one of these by hash but the picker\n"
                  "still rejects it, something's mangling the bytes on disk.",
                  sPickPath, hex);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                                 "Wrong ROM", msg, NULL);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Wrong ROM", msg, NULL);
         return -1;
     }
 
-    /* Copy the picked file next to the exe as baserom.gba (overwrite
-     * if already exists). Once that's done, Port_FindBaseRomPath
-     * picks it up via the usual candidate list. */
-    char exedir[4096];
-    if (GetExeDir(exedir, sizeof(exedir)) != 0) {
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                                 "Install failed",
+    /* Install as baserom.gba (overwrite if already exists). Once
+     * written, Port_FindBaseRomPath picks it up via the usual
+     * candidate list. */
+    char dst[4096];
+    if (ResolveInstallPath(dst, sizeof(dst)) != 0) {
+        SDL_free(romData);
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Install failed",
                                  "Could not locate this executable's directory.", NULL);
         return -1;
     }
-    char dst[4096];
-    snprintf(dst, sizeof(dst), "%s%cbaserom.gba",
-             exedir,
-#ifdef _WIN32
-             '\\'
-#else
-             '/'
-#endif
-             );
 
-    if (CopyFile_ToPath(sPickPath, dst) != 0) {
-        char msg[1024];
-        snprintf(msg, sizeof(msg),
-                 "Could not write %s. Check disk permissions.", dst);
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                                 "Install failed", msg, NULL);
+    const bool wrote = SDL_SaveFile(dst, romData, romLen);
+    SDL_free(romData);
+    if (!wrote) {
+        char msg[4608];
+        snprintf(msg, sizeof(msg), "Could not write %s:\n%s", dst, SDL_GetError());
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Install failed", msg, NULL);
         return -1;
     }
 
-    fprintf(stderr, "[romPicker] installed %s ROM → %s\n", region, dst);
+    fprintf(stderr, "[rom-picker] installed %s ROM -> %s\n", region, dst);
     return 0;
 }
