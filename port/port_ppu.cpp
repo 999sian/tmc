@@ -127,7 +127,7 @@ alignas(64) static uint32_t sUpscale4xBuf[kMaxXbrz4xPixels]; /* 4x final        
 static size_t sUpscale2xPixels = 0;
 static size_t sUpscale4xPixels = 0;
 
-static int Port_PPU_VisibleFrameWidth(void) {
+extern "C" int Port_PPU_VisibleFrameWidth(void) {
     if (MODE1_GBA_WIDTH == 240) {
         return MODE1_GBA_WIDTH;
     }

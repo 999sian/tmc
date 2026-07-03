@@ -954,9 +954,9 @@ void FillActTileForLayer(MapLayer* mapLayer) {
     for (tilePos = 0; tilePos < 0x40 * 0x40; tilePos++) {
         u16 tileIndex = mapData[tilePos];
         if (tileIndex < 0x4000) {
-            mapLayer->actTiles[tilePos] = GetMapTileTypeToActTile(tileTypes[tileIndex]);
+            mapLayer->actTiles[tilePos] = (tileIndex < 2048) ? GetMapTileTypeToActTile(tileTypes[tileIndex]) : 0;
         } else {
-            mapLayer->actTiles[tilePos] = gMapSpecialTileToActTile[tileIndex - 0x4000];
+            mapLayer->actTiles[tilePos] = (tileIndex - 0x4000 < 151) ? gMapSpecialTileToActTile[tileIndex - 0x4000] : 0;
         }
     }
 }

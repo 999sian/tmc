@@ -581,9 +581,11 @@ PortTtsOptions ResolveOptions(const PortTtsOptions* in) {
     PortTtsOptions o = {};
     o.priority = in ? in->priority : PORT_TTS_PRIO_NORMAL;
     auto useOrDefault = [](float v, float def) { return (v != v /*NaN*/ || v < 0.0f || v > 1.0f) ? def : v; };
-    o.rate = useOrDefault(in ? in->rate : 0.0f / 0.0f, g_state.rate.load());
-    o.pitch = useOrDefault(in ? in->pitch : 0.0f / 0.0f, g_state.pitch.load());
-    o.volume = useOrDefault(in ? in->volume : 0.0f / 0.0f, g_state.volume.load());
+    float zero = 0.0f;
+    float nanVal = zero / zero;
+    o.rate = useOrDefault(in ? in->rate : nanVal, g_state.rate.load());
+    o.pitch = useOrDefault(in ? in->pitch : nanVal, g_state.pitch.load());
+    o.volume = useOrDefault(in ? in->volume : nanVal, g_state.volume.load());
     std::lock_guard<std::mutex> lk(g_state.settings_mu);
     static thread_local std::string voiceCopy;
     static thread_local std::string langCopy;

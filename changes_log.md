@@ -30,3 +30,8 @@ Este archivo registra las soluciones y mejoras implementadas en el port de PC de
 * **Archivo afectado:** `port/port_level_editor.cpp` (función `Port_LevelEditor_OnRoomLoad`)
 * **Problema:** Forzar la carga manual a VRAM de forma síncrona mediante `UpdateScrollVram()` durante la transición de carga de sala (cuando las coordenadas de cámara aún no se han sincronizado con la nueva sala) provocaba fallos de alineación en VRAM y pantalla negra.
 * **Solución:** Se mantuvieron las reconstrucciones de colisiones y mosaicos en la memoria de trabajo (EWRAM) pero se eliminó el renderizado manual de VRAM síncrono, dejando que el bucle principal de frames del juego actualice la VRAM de forma segura al inicio del renderizado del siguiente frame.
+
+### 6. Integración del Menú Debug de ImGui para el Editor de Mapas
+* **Archivo afectado:** `port/port_imgui_menu.cpp`
+* **Problema:** Los controles, atajos de teclado y la pestaña interactiva del Editor de Mapas no estaban accesibles ni expuestos en la interfaz gráfica del menú debug de ImGui del port de PC.
+* **Solución:** Se implementó una nueva pestaña `"Map Editor"` en la barra de pestañas principal (Ribbon) de ImGui con un checkbox para activar el overlay interactivo de pintura y una lista descriptiva de controles y atajos. Adicionalmente, se conectó el renderizado del overlay a la función del puerto de vídeo en `Port_ImGui_Render()`.

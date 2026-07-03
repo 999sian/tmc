@@ -63,6 +63,7 @@ void DungeonMapAsset::buildToBinary() {
     for (size_t i = 0; i < static_cast<size_t>(fileSize); i++) {
         switch (data[i]) {
             case '\n':
+            case '\r':
                 continue;
             case ' ':
                 byte <<= 2;

@@ -22,6 +22,7 @@
 #include "port_tts.h"
 #include "rando/rando_file_menu.h"
 #include "port_types.h"
+#include "port_level_editor.h"
 #include <SDL3/SDL.h>
 #include <math.h>
 #include <setjmp.h>
@@ -216,6 +217,21 @@ static void Port_PumpEvents(void) {
          * stays in sync. ImGui only consumes input when a widget is
          * actively hovered/focused; game input passes through. */
         Port_ImGui_HandleEvent(&e);
+        // Hook Level Editor events
+        if (Port_LevelEditor_IsOpen()) {
+            if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+                if (Port_LevelEditor_HandleKey((int)e.key.key)) {
+                    continue;
+                }
+            } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+                int state = (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) ? 1 : 0;
+                Port_LevelEditor_HandleMouseButton((int)e.button.button, state, e.button.x, e.button.y);
+                continue;
+            } else if (e.type == SDL_EVENT_MOUSE_MOTION) {
+                Port_LevelEditor_HandleMouseMotion(e.motion.x, e.motion.y);
+                continue;
+            }
+        }
         if (e.type == SDL_EVENT_QUIT) {
             /* Route the close-button (X) / OS-quit signal through the
              * ImGui modal first so users get a chance to save. The

@@ -17,6 +17,13 @@
 #include "assets/gfx_offsets.h"
 #include "gfx.h"
 
+#ifndef offset_gfx_unknown_6
+#define offset_gfx_unknown_6 0x1e5c20
+#endif
+#ifndef offset_gfx_unknown_7
+#define offset_gfx_unknown_7 0x1ee420
+#endif
+
 #ifdef PC_PORT
 /* Randomizer dungeon-entrance shuffle: rewrites the Palace of Winds
  * ledge-jump return (port/rando/rando_entrance.cpp). No-op otherwise. */
