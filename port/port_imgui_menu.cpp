@@ -167,6 +167,21 @@ extern "C" void Port_ImGui_Init(SDL_Window* window, SDL_Renderer* renderer) {
      * are crisp enough at native resolution for menu use, and big
      * enough to be readable on the Deck at hand-held distance. */
     io.FontGlobalScale = 1.4f;
+#ifdef __ANDROID__
+    /* Touch pass: a tablet is driven by fingers at arm's length, not a
+     * pointer. Scale the whole style so every hit target clears ~48dp
+     * (Android's minimum comfortable touch target), fatten scrollbars
+     * into real drag handles, and bump the font again over the desktop
+     * 1.4x. ScaleAllSizes multiplies paddings/rounding/grab sizes in
+     * one shot so proportions stay intact. */
+    style.ScaleAllSizes(1.55f);
+    style.ScrollbarSize = 34.0f;                  /* fat, thumb-sized scroll handle  */
+    style.GrabMinSize = 30.0f;                    /* slider grabs                    */
+    style.FramePadding.y += 6.0f;                 /* taller rows = taller tap areas  */
+    style.ItemSpacing.y += 4.0f;                  /* breathing room between rows     */
+    style.TouchExtraPadding = ImVec2(6.0f, 6.0f); /* forgiving hit test */
+    io.FontGlobalScale = 2.0f;
+#endif
     ImVec4* colors = style.Colors;
     /* Greens — primary accent (a deep, slightly-warm green that
      * reads as "Minish leaf"), with brighter / dimmer variants. */
@@ -313,11 +328,33 @@ extern "C" bool Port_ImGui_WantsTextInput(void) {
         return false;
     return ImGui::GetIO().WantTextInput;
 }
-
 extern "C" void Port_ImGui_HandleEvent(const SDL_Event* event) {
     if (!sImGuiInited)
         return;
     ImGui_ImplSDL3_ProcessEvent(event);
+#ifdef __ANDROID__
+    /* Touch drag-to-scroll: ImGui has no native flick/drag scrolling —
+     * on desktop the wheel does it; on a tablet nothing does, and long
+     * tabs (Warp's area list, Items) are unusable. Convert vertical
+     * finger motion into wheel events while a menu is up.
+     *
+     * Deliberately NOT gated on IsAnyItemActive: a finger resting on a
+     * row button activates it instantly, which would veto the very drag
+     * that's supposed to scroll. Buttons commit on RELEASE and ImGui
+     * cancels a press whose item scrolls out from under the pointer, so
+     * scrolling over buttons is safe. Horizontal wheel is dropped —
+     * sliders are horizontal drags; injecting dx would fight them and
+     * almost nothing scrolls horizontally. Text-input focus (drag =
+     * text selection) suppresses injection entirely. */
+    if (event->type == SDL_EVENT_FINGER_MOTION && !ImGui::GetIO().WantTextInput &&
+        (Port_DebugMenu_IsOpen() || Port_RandoFileMenu_IsOpen())) {
+        ImGuiIO& io = ImGui::GetIO();
+        const float dyPx = event->tfinger.dy * io.DisplaySize.y;
+        /* One wheel notch scrolls ~67px in ImGui; convert px so content
+         * tracks the finger 1:1-ish. Sign: finger down = content down. */
+        io.AddMouseWheelEvent(0.0f, dyPx / 67.0f);
+    }
+#endif
 }
 
 extern "C" bool Port_ImGui_IsEnabled(void) {
