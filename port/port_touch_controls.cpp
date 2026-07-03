@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <vector>
 
@@ -611,6 +612,19 @@ extern "C" void Port_TouchControls_NotifyRenderSize(int width, int height) {
     }
 }
 
+/* Latch every currently-held button onto the engine's per-frame edge cache.
+ * Called right after a pointer DOWN resolves held-state so a sub-frame tap
+ * (DOWN+UP in one poll batch — synthesized `adb input`, and fast real taps
+ * that land and lift between two 60 Hz polls) still registers for one game
+ * frame, mirroring the keyboard KEY_DOWN edge path. */
+static void StampHeldEdges() {
+    for (int i = 0; i < PORT_INPUT_COUNT; ++i) {
+        if (sHeld[i]) {
+            Port_Config_StampInputEdge(static_cast<PortInput>(i));
+        }
+    }
+}
+
 extern "C" void Port_TouchControls_HandleEvent(const SDL_Event* event) {
     if (event == nullptr) {
         return;
@@ -624,6 +638,7 @@ extern "C" void Port_TouchControls_HandleEvent(const SDL_Event* event) {
         UpsertTouch(fid, x, y);
         TryAssignJoystick(fid, x, y);
         UpdateHeldState();
+        StampHeldEdges();
     } else if (event->type == SDL_EVENT_FINGER_MOTION) {
         UpsertTouch(static_cast<int64_t>(event->tfinger.fingerID), event->tfinger.x * static_cast<float>(sLastWindowW),
                     event->tfinger.y * static_cast<float>(sLastWindowH));
@@ -636,6 +651,7 @@ extern "C" void Port_TouchControls_HandleEvent(const SDL_Event* event) {
         UpsertTouch(-1, x, y);
         TryAssignJoystick(-1, x, y);
         UpdateHeldState();
+        StampHeldEdges();
     } else if (event->type == SDL_EVENT_MOUSE_MOTION && (event->motion.state & SDL_BUTTON_LMASK) != 0) {
         UpsertTouch(-1, event->motion.x, event->motion.y);
     } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {

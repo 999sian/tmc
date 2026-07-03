@@ -154,3 +154,8 @@ tools/ppu_golden_hashes.local*
 port/vk_rt_experiment/vkrt_demo
 port/vk_rt_experiment/shaders/*.spv
 .omp/
+
+# Android shell (gradle) — local SDK paths + build outputs
+android/local.properties
+android/.gradle/
+android/app/build/
