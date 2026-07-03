@@ -728,6 +728,8 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     if (!sRenderer) {
         printf("Port_PPU_Init: SDL_CreateRenderer failed: %s\n", SDL_GetError());
     } else {
+        const char* rname = SDL_GetRendererName(sRenderer);
+        std::fprintf(stderr, "PPU: SDL_Renderer driver = %s\n", rname ? rname : "?");
         if (!SDL_SetRenderVSync(sRenderer, 1)) {
             printf("Port_PPU_Init: SDL_SetRenderVSync failed: %s\n", SDL_GetError());
         }

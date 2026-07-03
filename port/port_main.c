@@ -95,6 +95,24 @@ static bool Port_InitVideo(void) {
     const char* display = getenv("DISPLAY");
     const char* waylandDisplay = getenv("WAYLAND_DISPLAY");
 
+#ifdef __ANDROID__
+    /* Adreno-405-era devices (Moto G4, msm8952) ship NO Vulkan ICD, so SDL_GPU
+     * cannot initialise and SDL_Renderer is the only path — and it MUST use the
+     * GLES backend. Pin it explicitly instead of trusting SDL's default driver
+     * priority, which could otherwise select the Vulkan-based "gpu" renderer
+     * (fails, no ICD) or silently drop to "software" (CPU blit — slow). The
+     * GLES2 renderer runs fine on the device's GLES 3.2 context; "software" is
+     * kept as the final in-list safety net. An explicit SDL_VIDEODRIVER env
+     * (rare on Android) still overrides via the block below. */
+    if (!(forcedDriver && forcedDriver[0] != '\0')) {
+        if (Port_TryInitVideo(NULL, "opengles2,software", false)) {
+            return true;
+        }
+        err = SDL_GetError();
+        SDL_Quit();
+    }
+#endif
+
     if (forcedDriver && forcedDriver[0] != '\0') {
         if (Port_TryInitVideo(NULL, NULL, false)) {
             return true;
