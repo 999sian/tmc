@@ -2,6 +2,16 @@
 
 Este archivo registra las soluciones y mejoras implementadas en el port de PC de *The Minish Cap* para integrar el editor de niveles y solucionar fallos de estabilidad y visualización (transiciones).
 
+## Nuevas Características
+
+### 0. Incorporación del Editor de Niveles (Direct Painting Overlay)
+* **Archivos agregados/afectados:** `port/port_level_editor.cpp`, `port/port_level_editor.h`
+* **Descripción:** Se integró un completo editor de mapas interactivo en tiempo real integrado en la propia pantalla del juego. Permite:
+  * Pintar baldosas directamente con el ratón (clic izquierdo para pintar, arrastrar para trazar de forma continua).
+  * Gotero/Eyedropper para seleccionar baldosas directamente desde la pantalla de juego usando el clic derecho.
+  * Atajos de teclado para alternar entre las capas superior (Top) e inferior (Bottom), incrementar/decrementar la ID de baldosa seleccionada, cambiar dinámicamente la iluminación y la música de la sala (BGM y Fight BGM).
+  * Guardado instantáneo y persistente en la carpeta local `edited_levels/areaXX_roomXX.bin` con metadatos asociados.
+
 ## Cambios y Correcciones Implementadas
 
 ### 1. Corrección del Crash al Arrancar (Acceso de Memoria Corrupto)
