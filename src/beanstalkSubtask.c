@@ -1182,6 +1182,21 @@ bool32 sub_0801AA58(Entity* this, u32 param_2, u32 param_3) {
     return FALSE;
 }
 
+static u32 GetSafeTileSetIndex(u16 tileIndex, u16 tileIndexOrig, u32 tilePosAndLayer) {
+    u32 tileSetIndex;
+    if (tileIndex < 2048) {
+        tileSetIndex = tileIndex * 4;
+    } else if (tileIndex >= 0x4000) {
+        tileSetIndex = GetTileSetIndexForSpecialTile(tilePosAndLayer, tileIndexOrig);
+        if (tileSetIndex >= 8192) {
+            tileSetIndex = 0;
+        }
+    } else {
+        tileSetIndex = 0;
+    }
+    return tileSetIndex;
+}
+
 void RenderMapLayerToSubTileMap(u16* subTileMap, MapLayer* mapLayer) {
     u16* subTiles;
     u16* mapData;
@@ -1190,7 +1205,6 @@ void RenderMapLayerToSubTileMap(u16* subTileMap, MapLayer* mapLayer) {
     u16 tileX;
     u32 tilePosAndLayer;
     u32 layerIndex;
-    // Index into the tileSet at MapLayer.tiles
     u32 tileSetIndex;
 
     if (mapLayer == &gMapBottom) {
@@ -1206,11 +1220,7 @@ void RenderMapLayerToSubTileMap(u16* subTileMap, MapLayer* mapLayer) {
         for (tileX = 0; tileX < 0x10; tileX++) {
             // inner loop seems to be unrolled four times for some reason?
 
-            if (mapData[0] < 0x4000) {
-                tileSetIndex = mapData[0] * 4;
-            } else {
-                tileSetIndex = GetTileSetIndexForSpecialTile(tilePosAndLayer, mapDataOriginal[0]);
-            }
+            tileSetIndex = GetSafeTileSetIndex(mapData[0], mapDataOriginal[0], tilePosAndLayer);
             subTiles = mapLayer->subTiles + tileSetIndex;
             subTileMap[0] = subTiles[0];
             subTileMap[1] = subTiles[1];
@@ -1218,11 +1228,7 @@ void RenderMapLayerToSubTileMap(u16* subTileMap, MapLayer* mapLayer) {
             subTileMap[0x80 + 1] = subTiles[3];
             subTileMap += 2;
 
-            if (mapData[1] < 0x4000) {
-                tileSetIndex = mapData[1] * 4;
-            } else {
-                tileSetIndex = GetTileSetIndexForSpecialTile(tilePosAndLayer + 1, mapDataOriginal[1]);
-            }
+            tileSetIndex = GetSafeTileSetIndex(mapData[1], mapDataOriginal[1], tilePosAndLayer + 1);
             subTiles = mapLayer->subTiles + tileSetIndex;
             subTileMap[0] = subTiles[0];
             subTileMap[1] = subTiles[1];
@@ -1230,11 +1236,7 @@ void RenderMapLayerToSubTileMap(u16* subTileMap, MapLayer* mapLayer) {
             subTileMap[0x80 + 1] = subTiles[3];
             subTileMap += 2;
 
-            if (mapData[2] < 0x4000) {
-                tileSetIndex = mapData[2] * 4;
-            } else {
-                tileSetIndex = GetTileSetIndexForSpecialTile(tilePosAndLayer + 2, mapDataOriginal[2]);
-            }
+            tileSetIndex = GetSafeTileSetIndex(mapData[2], mapDataOriginal[2], tilePosAndLayer + 2);
             subTiles = mapLayer->subTiles + tileSetIndex;
             subTileMap[0] = subTiles[0];
             subTileMap[1] = subTiles[1];
@@ -1242,11 +1244,7 @@ void RenderMapLayerToSubTileMap(u16* subTileMap, MapLayer* mapLayer) {
             subTileMap[0x80 + 1] = subTiles[3];
             subTileMap += 2;
 
-            if (mapData[3] < 0x4000) {
-                tileSetIndex = mapData[3] * 4;
-            } else {
-                tileSetIndex = GetTileSetIndexForSpecialTile(tilePosAndLayer + 3, mapDataOriginal[3]);
-            }
+            tileSetIndex = GetSafeTileSetIndex(mapData[3], mapDataOriginal[3], tilePosAndLayer + 3);
             subTiles = mapLayer->subTiles + tileSetIndex;
             subTileMap[0] = subTiles[0];
             subTileMap[1] = subTiles[1];

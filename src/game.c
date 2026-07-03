@@ -5,6 +5,7 @@
  * @brief Game task
  */
 #include "game.h"
+#include <stdio.h>
 
 #include "area.h"
 #include "asm.h"
@@ -436,6 +437,10 @@ static void sub_08051D98(void) {
     sub_0804AF90();
     CallRoomProp6();
     LoadRoomGfx();
+#ifdef PC_PORT
+    extern void Port_LevelEditor_OnRoomLoad(void);
+    Port_LevelEditor_OnRoomLoad();
+#endif
     LoadRoomBgm();
     LoadRoom();
     CallRoomProp5And7();
