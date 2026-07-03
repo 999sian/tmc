@@ -75,11 +75,15 @@ u32 sAutosaveIntervalMs = 60000;
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
 float sTouchScale = 1.0f;   /* multiplies the touch layout unit  */
 float sTouchOpacity = 1.0f; /* multiplies every control's alpha  */
-/* Widescreen reveal default-ON since the dialogue-centering + overlay
- * fallback pass (2026-07-02): wide builds now degrade gracefully in every
- * verified scenario (dialogue, choices, prologue, pause, narrow rooms).
- * Console-Parity still forces this off; native-240 builds ignore it. */
+/* Widescreen reveal default-ON for desktop, OFF for Android. Widescreen
+ * draws ~60% more scanline pixels (384x160 vs 240x160), which crushes
+ * low-end ARM chips. Console-Parity still forces this off; native-240
+ * builds ignore it. */
+#ifdef __ANDROID__
+bool sWidescreenEnabled = false;
+#else
 bool sWidescreenEnabled = true;
+#endif
 /* Console-Parity mode. When true the port suppresses every feature that
  * gives the player an edge over real GBA hardware, so a run is provably
  * console-equivalent: sub-frame input edge leniency off, save-states inert,
@@ -119,8 +123,12 @@ float sPracticeSlowmo = 1.0f;
 /* Runtime toggles that previously lived only in memory (issue #146): they
  * now persist to config.json and are re-applied at startup. */
 bool sDiscordRpc = false;
-bool sVSyncCfg = true;         /* matches Port_PPU's sVSyncEnabled default */
-bool sColorCorrect = true;     /* GBA-LCD colour correction (default on) */
+bool sVSyncCfg = true; /* matches Port_PPU's sVSyncEnabled default */
+#ifdef __ANDROID__
+bool sColorCorrect = false; /* Too heavy for low-end ARM by default */
+#else
+bool sColorCorrect = true; /* GBA-LCD colour correction (default on) */
+#endif
 bool sLcdPersist = false;      /* LCD temporal persistence (default off) */
 float sLcdPersistRho = 0.35f;  /* persistence: fraction of prev frame kept */
 bool sRibbonCfg = true;        /* F8 menu style: ribbon (true) vs classic */
@@ -214,7 +222,11 @@ struct ScaleCfg {
 const BoolCfg kBoolCfg[] = {
     { "port_settings_menu", &sPortSettingsMenuEnabled, true },
     { "autosave_enabled", &sAutosaveEnabled, true },
+#ifdef __ANDROID__
+    { "widescreen_enabled", &sWidescreenEnabled, false },
+#else
     { "widescreen_enabled", &sWidescreenEnabled, true },
+#endif
     { "console_parity", &sConsoleParity, false },
     { "tts_enabled", &sTtsEnabled, true },
     { "a11y_cues", &sA11yCues, true },
@@ -231,7 +243,11 @@ const BoolCfg kBoolCfg[] = {
     { "lcd_persistence", &sLcdPersist, false },
     { "ribbon_mode", &sRibbonCfg, true },
     { "hold_advance_text", &sHoldAdvanceText, false },
-    { "roll_attack_macro", &sRollAttackMacroEnabled, true },
+#ifdef __ANDROID__
+    { "color_correction", &sColorCorrect, false },
+#else
+    { "color_correction", &sColorCorrect, true },
+#endif
     { "fullscreen", &sFullscreen, false },
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
     { "rando_enabled", &sRandoEnabled, false },
