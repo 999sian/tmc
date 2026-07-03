@@ -113,6 +113,11 @@ static void Port_UpdateInput(void) {
      * through the real input path; PASS = message box opens. */
     { Port_ReproNpcTalk_Tick(sFrameNum); }
 
+    /* Item-get perf repro (TMC_REPRO_ITEMGET / "repro_itemget" marker):
+     * boots into the forge, settles a baseline profiler window, then fires
+     * one item-get cutscene and holds it so TMC_PROFILE captures the drop. */
+    { Port_ReproItemGet_Tick(sFrameNum); }
+
     {
         /* While either overlay is open, hold all GBA buttons released so
          * the game doesn't observe stray input from key presses we routed
@@ -516,6 +521,8 @@ static u32 sFpsFrameCount = 0;
 static u64 sProfLastPresentEndNs = 0;
 static u64 sProfAccGameNs = 0;
 static u64 sProfAccPresentNs = 0;
+static u64 sProfMaxGameNs = 0;    /* worst single-frame game tick in the window */
+static u64 sProfMaxPresentNs = 0; /* worst single-frame present in the window */
 static u32 sProfFrames = 0;
 u64 gPortProfileRenderNs = 0; /* updated from port_ppu.cpp */
 
@@ -523,7 +530,20 @@ int Port_Profile_Enabled(void) {
     static int en = -1;
     if (en < 0) {
         const char* e = getenv("TMC_PROFILE");
-        en = (e && *e && e[0] != '0') ? 1 : 0;
+        if (e && *e && e[0] != '0') {
+            en = 1;
+        } else {
+            /* Android has no env vars; a marker file in the app data dir (CWD)
+             * enables it, same convention as the 'verbose' marker:
+             *   adb shell touch .../files/profile  */
+            FILE* m = fopen("profile", "rb");
+            if (m) {
+                fclose(m);
+                en = 1;
+            } else {
+                en = 0;
+            }
+        }
     }
     return en;
 }
@@ -565,24 +585,34 @@ void VBlankIntrWait(void) {
     if (Port_Profile_Enabled()) {
         u64 entry = SDL_GetTicksNS();
         if (sProfLastPresentEndNs != 0) {
-            sProfAccGameNs += entry - sProfLastPresentEndNs;
+            u64 g = entry - sProfLastPresentEndNs;
+            sProfAccGameNs += g;
+            if (g > sProfMaxGameNs)
+                sProfMaxGameNs = g;
         }
         Port_PPU_PresentFrame();
         u64 pEnd = SDL_GetTicksNS();
-        sProfAccPresentNs += pEnd - entry;
+        u64 p = pEnd - entry;
+        sProfAccPresentNs += p;
+        if (p > sProfMaxPresentNs)
+            sProfMaxPresentNs = p;
         sProfLastPresentEndNs = pEnd;
-        if (++sProfFrames >= 600) {
+        /* 120-frame (~2s) window so a transient item-get hitch is visible; the
+         * worst-frame maxima catch a single stall an average would smooth away. */
+        if (++sProfFrames >= 120) {
             double n = (double)sProfFrames;
             double game = sProfAccGameNs / 1e6 / n;
             double present = sProfAccPresentNs / 1e6 / n;
             double render = gPortProfileRenderNs / 1e6 / n;
             double total = game + present;
+            double maxGame = sProfMaxGameNs / 1e6;
+            double maxPresent = sProfMaxPresentNs / 1e6;
             fprintf(stderr,
-                    "[profile] %u frames: game=%.3f present=%.3f (render=%.3f) ms/frame | "
-                    "%.0f fps uncapped | render=%.0f%% of frame\n",
-                    sProfFrames, game, present, render, total > 0.0 ? 1000.0 / total : 0.0,
-                    total > 0.0 ? 100.0 * render / total : 0.0);
+                    "[profile] %u frames: game=%.3f present=%.3f (render=%.3f) ms | "
+                    "%.0f fps uncapped | worst: game=%.2f present=%.2f ms\n",
+                    sProfFrames, game, present, render, total > 0.0 ? 1000.0 / total : 0.0, maxGame, maxPresent);
             sProfAccGameNs = sProfAccPresentNs = 0;
+            sProfMaxGameNs = sProfMaxPresentNs = 0;
             gPortProfileRenderNs = 0;
             sProfFrames = 0;
         }
