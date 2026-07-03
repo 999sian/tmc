@@ -169,6 +169,11 @@ add_requires("guilite")
 if is_plat("mingw", "windows") then
     add_requires("libpng")
     add_requires("zlib")
+elseif is_plat("android") then
+    -- NDK triplet has no system packages; build both from source (small,
+    -- cross-compile cleanly).
+    add_requires("libpng", {system = false})
+    add_requires("zlib",   {system = false})
 else
     add_requires("libpng", {system = true, optional = true})
     add_requires("zlib",   {system = true, optional = true})

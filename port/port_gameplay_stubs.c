@@ -24,7 +24,7 @@
  * on Windows. The cutscene-watchdog fix doesn't depend on it — it's
  * only used to identify the call path that deletes orchestrator
  * entities during #93 debug. */
-#if !defined(_WIN32) && !defined(__MINGW32__) && !defined(__MINGW64__) && !defined(TMC_N64)
+#if !defined(_WIN32) && !defined(__MINGW32__) && !defined(__MINGW64__) && !defined(TMC_N64) && !defined(__ANDROID__)
 #include <execinfo.h>
 #define PORT_HAVE_EXECINFO 1
 #else
