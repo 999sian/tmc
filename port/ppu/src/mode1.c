@@ -1395,17 +1395,25 @@ void virtuappu_mode1_render_frame(const PPUMemory* ppu) {
         aff_init_y = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x2Cu));
     }
 
+    /* No HDMA pre-line callback -> IO is identical on every scanline, so the
+     * per-line snapshot is redundant: skip 160x1KB of memcpy on the sequential
+     * critical path and point every thread's override straight at io_mem in the
+     * parallel loop below. Byte-exact: each snapshot equalled io_mem anyway. */
+    const bool per_line_io = (virtuappu_mode1_pre_line_callback != NULL);
     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
-        if (virtuappu_mode1_pre_line_callback != NULL) {
+        if (per_line_io) {
             virtuappu_mode1_pre_line_callback(line);
-        }
-        memcpy(io_snapshots[line], mode1_memory.io_mem, MODE1_IO_MEM_SIZE);
-        per_line_dispcnt[line] =
+            memcpy(io_snapshots[line], mode1_memory.io_mem, MODE1_IO_MEM_SIZE);
+            per_line_dispcnt[line] =
 #ifdef TMC_N64
-            *(const uint16_t*)&io_snapshots[line][MODE1_IO_DISPCNT];
+                *(const uint16_t*)&io_snapshots[line][MODE1_IO_DISPCNT];
 #else
-            (uint16_t)io_snapshots[line][MODE1_IO_DISPCNT] | ((uint16_t)io_snapshots[line][MODE1_IO_DISPCNT + 1] << 8);
+                (uint16_t)io_snapshots[line][MODE1_IO_DISPCNT] |
+                ((uint16_t)io_snapshots[line][MODE1_IO_DISPCNT + 1] << 8);
 #endif
+        } else {
+            per_line_dispcnt[line] = dispcnt;
+        }
         if (do_affine_bg2) {
             /* Live IO is this line's post-callback state here (== the snapshot),
              * matching what the old mode2.c read inline. */
@@ -1433,32 +1441,37 @@ void virtuappu_mode1_render_frame(const PPUMemory* ppu) {
         bool obj_1d = (line_dispcnt & MODE1_DISP_OBJ_1D) != 0u;
         const uint8_t* prev_override = virtuappu_mode1_io_thread_override;
 
-        virtuappu_mode1_io_thread_override = io_snapshots[line];
+        virtuappu_mode1_io_thread_override = per_line_io ? io_snapshots[line] : mode1_memory.io_mem;
 
-        for (int b = 0; b < MODE1_GBA_BG_COUNT; ++b) {
-            memset(bg_layers[b], 0, (size_t)mode1_frame_width * sizeof(uint32_t));
-        }
         memset(obj_layer, 0, (size_t)mode1_frame_width * sizeof(uint32_t));
         memset(obj_priority, 0xFF, (size_t)mode1_frame_width);
 
-        /* BG priority buffers are dead in this path — the composite resolves
-         * BG order from BGCNT directly (bg_order_priority); NULL skips the
-         * per-pixel stores. obj_priority IS live (OBJ-vs-BG resolution). */
+        /* Clear + render only ENABLED BGs: composite reads bg_layers[b][x] only
+         * where bg_enabled[b] (same line_dispcnt), so a disabled BG's buffer is
+         * never touched — clearing all four every line was wasted bandwidth.
+         * BG priority buffers stay NULL (composite resolves order from BGCNT). */
         if ((line_dispcnt & MODE1_DISP_BG0_ON) != 0u) {
+            memset(bg_layers[0], 0, (size_t)mode1_frame_width * sizeof(uint32_t));
             virtuappu_mode1_render_text_bg_line(0, line, bg_layers[0], NULL);
         }
         if ((line_dispcnt & MODE1_DISP_BG1_ON) != 0u) {
+            memset(bg_layers[1], 0, (size_t)mode1_frame_width * sizeof(uint32_t));
             virtuappu_mode1_render_text_bg_line(1, line, bg_layers[1], NULL);
         }
-        if (affine) {
-            if ((line_dispcnt & MODE1_DISP_BG2_ON) != 0u) {
+        if ((line_dispcnt & MODE1_DISP_BG2_ON) != 0u) {
+            memset(bg_layers[2], 0, (size_t)mode1_frame_width * sizeof(uint32_t));
+            if (affine) {
                 mode1_render_affine_bg2_line(frame_width, aff_ref_x[line], aff_ref_y[line], bg_layers[2], NULL);
-            }
-        } else {
-            if ((line_dispcnt & MODE1_DISP_BG2_ON) != 0u) {
+            } else {
                 virtuappu_mode1_render_text_bg_line(2, line, bg_layers[2], NULL);
             }
-            if ((line_dispcnt & MODE1_DISP_BG3_ON) != 0u) {
+        }
+        if ((line_dispcnt & MODE1_DISP_BG3_ON) != 0u) {
+            /* Mode 2 (affine) has no BG3 tile render, but if DISPCNT enables it
+             * the composite still reads bg_layers[3]; keep it cleared to 0 so it
+             * contributes nothing — exactly as the old unconditional memset did. */
+            memset(bg_layers[3], 0, (size_t)mode1_frame_width * sizeof(uint32_t));
+            if (!affine) {
                 virtuappu_mode1_render_text_bg_line(3, line, bg_layers[3], NULL);
             }
         }
