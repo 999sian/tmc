@@ -66,9 +66,20 @@ Known limitations:
   item was actually stale-buffer leakage: the shadow fill clamped to the
   128-tile buffer instead of the room rect, sampling the previous room's
   tiles past the current room's extent — fixed alongside.
-- Widescreen is still a build-time width (`--widescreen_width=N`) plus runtime
-  toggle, not a fully dynamic renderer resize. Native-width builds show the
-  toggle as unavailable.
+- ~~Widescreen is a fixed build-time width~~ **Superseded (2026-07-03) by
+  true widescreen:** the presented view width now tracks the WINDOW's aspect
+  every frame — `viewW = clamp(window_aspect x 160, 240, MODE1_GBA_WIDTH)`
+  (`Port_Widescreen_TargetViewWidth`, fed by the present path via
+  `Port_Widescreen_SetWindowPixels`). A 16:9 monitor fills exactly (288 px,
+  zero letterbox), ultrawide caps at the framebuffer capacity (384 = 2.4:1),
+  and a 3:2/4:3 window gets the authentic 240. Camera clamp, culling, HUD
+  right-anchor, and textbox centering all key off
+  `Port_Widescreen_EffectiveViewWidth()`, so world scale is CONSTANT across
+  window sizes and room widths — no zoom jump at doors, no pillarbox flip.
+  `--widescreen_width=N` now only sets the framebuffer CAPACITY (cap);
+  native-240 builds still compile everything out. Headless captures pin the
+  width with `TMC_WS_VIEW_WIDTH=<px>` (dummy-driver windows have no real
+  monitor aspect).
 
 
 **Historical status (2026-05-26 — superseded, see header):** ALL implementation work REVERTED to the

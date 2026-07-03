@@ -126,13 +126,20 @@ static int Port_PPU_VisibleFrameWidth(void) {
     if (MODE1_GBA_WIDTH == 240) {
         return MODE1_GBA_WIDTH;
     }
-    /* Wide present requires: gameplay widescreen on AND the map BGs actually
-     * feeding the frame (ShadowsLive). Overlay screens inside TASK_GAME
-     * (prologue storybook, pause menu) swap the BG control regs away from
-     * the maps, the shadow match fails, and we fall back to a native 240
-     * crop instead of showing a black right third. */
+    /* True widescreen: publish the live window size so the view width can
+     * track the window's aspect (16:9 -> 288, ultrawide -> cap at
+     * MODE1_GBA_WIDTH, 3:2/4:3 -> 240). Then a wide present additionally
+     * requires gameplay widescreen AND the map BGs actually feeding the
+     * frame (ShadowsLive) — overlay screens inside TASK_GAME (prologue
+     * storybook, pause menu) swap the BG control regs away from the maps,
+     * the shadow match fails, and we fall back to a native 240 crop. */
+    if (sWindow != nullptr) {
+        int w = 0, h = 0;
+        SDL_GetWindowSizeInPixels(sWindow, &w, &h);
+        Port_Widescreen_SetWindowPixels(w, h);
+    }
     if (gMain[2] == 2 /* TASK_GAME */ && Port_Widescreen_IsActive() && Port_Widescreen_ShadowsLive()) {
-        return MODE1_GBA_WIDTH;
+        return Port_Widescreen_EffectiveViewWidth();
     }
     return 240;
 }

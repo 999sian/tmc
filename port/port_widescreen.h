@@ -60,6 +60,19 @@ int Port_Widescreen_HudRightAnchor(void);
  * overlay screens (storybook, pause) drop this to 0 -> present native 240. */
 int Port_Widescreen_ShadowsLive(void);
 
+/* True widescreen: the view width tracks the WINDOW's aspect each frame —
+ * viewW = clamp(round8(window_aspect * 160), 240, MODE1_GBA_WIDTH) — so a
+ * 16:9 monitor fills exactly (~288 px) with a constant world scale, instead
+ * of letterboxing a fixed 2.4:1 frame. MODE1_GBA_WIDTH is the framebuffer
+ * capacity / hard cap, no longer the presented width.
+ *  - Port_Widescreen_SetWindowPixels: present path publishes the live
+ *    window client size (pixels) once per frame.
+ *  - Port_Widescreen_TargetViewWidth: the aspect-fit width (config/task
+ *    independent). TMC_WS_VIEW_WIDTH=<px> overrides for headless captures.
+ * EffectiveViewWidth == TargetViewWidth while active, else 240. */
+void Port_Widescreen_SetWindowPixels(int w, int h);
+int Port_Widescreen_TargetViewWidth(void);
+
 #ifdef __cplusplus
 }
 #endif
