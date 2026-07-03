@@ -73,6 +73,8 @@ u32 sAutosaveIntervalMs = 60000;
 /* Touch input scheme from matheo's launcher integration — kept for
  * Android compatibility. */
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
+float sTouchScale = 1.0f;   /* multiplies the touch layout unit  */
+float sTouchOpacity = 1.0f; /* multiplies every control's alpha  */
 /* Widescreen reveal default-ON since the dialogue-centering + overlay
  * fallback pass (2026-07-02): wide builds now degrade gracefully in every
  * verified scenario (dialogue, choices, prologue, pause, narrow rooms).
@@ -588,6 +590,8 @@ extern "C" void Port_Config_Load(const char* path) {
             }
             sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
         }
+        sTouchScale = std::min(1.6f, std::max(0.6f, j.value("touch_scale", 1.0f)));
+        sTouchOpacity = std::min(1.5f, std::max(0.3f, j.value("touch_opacity", 1.0f)));
         {
             std::string am = j.value("aspect_mode", std::string("native"));
             for (char& c : am) {
@@ -801,6 +805,26 @@ extern "C" void Port_Config_SetTouchScheme(PortTouchScheme scheme) {
 extern "C" void Port_Config_CycleTouchScheme(int /*direction*/) {
     Port_Config_SetTouchScheme(sTouchScheme == PORT_TOUCH_SCHEME_DPAD ? PORT_TOUCH_SCHEME_JOYSTICK
                                                                       : PORT_TOUCH_SCHEME_DPAD);
+}
+
+extern "C" float Port_Config_TouchScale(void) {
+    return sTouchScale;
+}
+
+extern "C" void Port_Config_SetTouchScale(float scale) {
+    sTouchScale = std::min(1.6f, std::max(0.6f, scale));
+    sConfigJson["touch_scale"] = sTouchScale;
+    SaveConfig();
+}
+
+extern "C" float Port_Config_TouchOpacity(void) {
+    return sTouchOpacity;
+}
+
+extern "C" void Port_Config_SetTouchOpacity(float opacity) {
+    sTouchOpacity = std::min(1.5f, std::max(0.3f, opacity));
+    sConfigJson["touch_opacity"] = sTouchOpacity;
+    SaveConfig();
 }
 
 extern "C" bool Port_Config_WidescreenEnabled(void) {
