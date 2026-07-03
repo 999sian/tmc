@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #ifdef __ANDROID__
@@ -74,7 +75,7 @@ float MinDim(int w, int h) {
 }
 
 SDL_FRect MakeCentered(float cx, float cy, float w, float h) {
-    return SDL_FRect{cx - w * 0.5f, cy - h * 0.5f, w, h};
+    return SDL_FRect{ cx - w * 0.5f, cy - h * 0.5f, w, h };
 }
 
 bool HitCircle(float cx, float cy, float r, float x, float y) {
@@ -131,7 +132,7 @@ SettingsBtnGeom BuildSettingsBtnGeom(int w, int h) {
     const float fh = static_cast<float>(std::max(1, h));
     const float unit = LayoutUnit(w, h);
     SettingsBtnGeom g;
-    g.r  = Clamp(unit * 0.50f, 32.f, 60.f);
+    g.r = Clamp(unit * 0.50f, 32.f, 60.f);
     g.cx = g.r + unit * 0.35f;
     g.cy = fh * 0.50f;
     return g;
@@ -145,7 +146,7 @@ DpadGeom BuildDpadGeom(int w, int h) {
     g.cx = fw * 0.19f;
     g.cy = fh * 0.76f;
     g.half = Clamp(unit * 1.20f, 80.0f, 160.0f);
-    g.arm  = g.half * 0.62f;
+    g.arm = g.half * 0.62f;
     return g;
 }
 
@@ -166,14 +167,15 @@ std::array<TouchZone, 6> BuildButtonZones(int w, int h) {
     const float selW = unit * 1.95f;
     const float staW = unit * 1.55f;
 
-    return {{
-        {PORT_INPUT_B,      TouchShape::Circle,  faceX - gap * 0.55f, faceY + gap * 0.35f, faceR, {}, "B"},
-        {PORT_INPUT_A,      TouchShape::Circle,  faceX + gap * 0.55f, faceY - gap * 0.35f, faceR, {}, "A"},
-        {PORT_INPUT_SELECT, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.40f, fh * 0.90f, selW, smallH), "Select"},
-        {PORT_INPUT_START,  TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.58f, fh * 0.90f, staW, smallH), "Start"},
-        {PORT_INPUT_L,      TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.16f, fh * 0.10f, smallW, smallH), "L"},
-        {PORT_INPUT_R,      TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.84f, fh * 0.10f, smallW, smallH), "R"},
-    }};
+    return { {
+        { PORT_INPUT_B, TouchShape::Circle, faceX - gap * 0.55f, faceY + gap * 0.35f, faceR, {}, "B" },
+        { PORT_INPUT_A, TouchShape::Circle, faceX + gap * 0.55f, faceY - gap * 0.35f, faceR, {}, "A" },
+        { PORT_INPUT_SELECT, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.40f, fh * 0.90f, selW, smallH),
+          "Select" },
+        { PORT_INPUT_START, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.58f, fh * 0.90f, staW, smallH), "Start" },
+        { PORT_INPUT_L, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.16f, fh * 0.10f, smallW, smallH), "L" },
+        { PORT_INPUT_R, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.84f, fh * 0.10f, smallW, smallH), "R" },
+    } };
 }
 
 bool HitAnyButtonZone(float x, float y, int w, int h) {
@@ -200,7 +202,7 @@ void FillCircle(SDL_Renderer* ren, float cx, float cy, float rad, Uint8 rr, Uint
             continue;
         }
         const float half = std::sqrt(inner);
-        const SDL_FRect line = {cx - half, static_cast<float>(yi), half * 2.0f, 1.0f};
+        const SDL_FRect line = { cx - half, static_cast<float>(yi), half * 2.0f, 1.0f };
         SDL_RenderFillRect(ren, &line);
     }
 }
@@ -256,7 +258,7 @@ void FillStadium(SDL_Renderer* ren, const SDL_FRect& r, Uint8 rr, Uint8 gg, Uint
         if (x1 <= x0) {
             continue;
         }
-        const SDL_FRect line = {x0, static_cast<float>(yi), x1 - x0, 1.0f};
+        const SDL_FRect line = { x0, static_cast<float>(yi), x1 - x0, 1.0f };
         SDL_RenderFillRect(ren, &line);
     }
 }
@@ -331,12 +333,16 @@ void TestDpadFinger(const DpadGeom& g, float x, float y) {
     const float adx = std::abs(dx);
     const float ady = std::abs(dy);
     if (adx >= dead && adx > ady * 0.42f) {
-        if (dx < 0.f) sHeld[PORT_INPUT_LEFT]  = true;
-        else          sHeld[PORT_INPUT_RIGHT] = true;
+        if (dx < 0.f)
+            sHeld[PORT_INPUT_LEFT] = true;
+        else
+            sHeld[PORT_INPUT_RIGHT] = true;
     }
     if (ady >= dead && ady > adx * 0.42f) {
-        if (dy < 0.f) sHeld[PORT_INPUT_UP]   = true;
-        else          sHeld[PORT_INPUT_DOWN] = true;
+        if (dy < 0.f)
+            sHeld[PORT_INPUT_UP] = true;
+        else
+            sHeld[PORT_INPUT_DOWN] = true;
     }
 }
 
@@ -435,7 +441,7 @@ void UpsertTouch(int64_t id, float x, float y) {
             return;
         }
     }
-    sTouches.push_back({id, x, y});
+    sTouches.push_back({ id, x, y });
     UpdateHeldState();
 }
 
@@ -443,9 +449,9 @@ void RemoveTouch(int64_t id) {
     if (sJoyActive && id == sJoyFinger) {
         ClearJoystick();
     }
-    sTouches.erase(std::remove_if(sTouches.begin(), sTouches.end(),
-                                  [id](const TouchPoint& touch) { return touch.id == id; }),
-                   sTouches.end());
+    sTouches.erase(
+        std::remove_if(sTouches.begin(), sTouches.end(), [id](const TouchPoint& touch) { return touch.id == id; }),
+        sTouches.end());
     UpdateHeldState();
 }
 
@@ -457,13 +463,12 @@ void DrawSettingsButton(SDL_Renderer* ren, int w, int h) {
 
     SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(ren, 232, 236, 242, 225);
-    const float lineW   = g.r * 1.05f;
-    const float lineH   = std::max(2.5f, g.r * 0.13f);
+    const float lineW = g.r * 1.05f;
+    const float lineH = std::max(2.5f, g.r * 0.13f);
     const float spacing = g.r * 0.33f;
     for (int i = -1; i <= 1; ++i) {
-        const SDL_FRect r = {g.cx - lineW * 0.5f,
-                             g.cy + static_cast<float>(i) * spacing - lineH * 0.5f,
-                             lineW, lineH};
+        const SDL_FRect r = { g.cx - lineW * 0.5f, g.cy + static_cast<float>(i) * spacing - lineH * 0.5f, lineW,
+                              lineH };
         SDL_RenderFillRect(ren, &r);
     }
 }
@@ -490,16 +495,17 @@ void DrawDpadArrow(SDL_Renderer* ren, float cx, float cy, float size, int dir, b
     for (int i = 0; i < steps; ++i) {
         const float t = static_cast<float>(i) / static_cast<float>(steps);
         const float halfChord = (h * 0.5f) * (1.0f - t);
-        if (halfChord <= 0.5f) continue;
+        if (halfChord <= 0.5f)
+            continue;
         SDL_FRect strip;
-        if (dir == 0) {  
-            strip = {cx - halfChord, cy + h * 0.5f - t * h, halfChord * 2.0f, 1.0f};
-        } else if (dir == 2) {  
-            strip = {cx - halfChord, cy - h * 0.5f + t * h, halfChord * 2.0f, 1.0f};
-        } else if (dir == 3) {  
-            strip = {cx + h * 0.5f - t * h, cy - halfChord, 1.0f, halfChord * 2.0f};
-        } else {  
-            strip = {cx - h * 0.5f + t * h, cy - halfChord, 1.0f, halfChord * 2.0f};
+        if (dir == 0) {
+            strip = { cx - halfChord, cy + h * 0.5f - t * h, halfChord * 2.0f, 1.0f };
+        } else if (dir == 2) {
+            strip = { cx - halfChord, cy - h * 0.5f + t * h, halfChord * 2.0f, 1.0f };
+        } else if (dir == 3) {
+            strip = { cx + h * 0.5f - t * h, cy - halfChord, 1.0f, halfChord * 2.0f };
+        } else {
+            strip = { cx - h * 0.5f + t * h, cy - halfChord, 1.0f, halfChord * 2.0f };
         }
         SDL_RenderFillRect(ren, &strip);
     }
@@ -521,31 +527,31 @@ void DrawDpad(SDL_Renderer* ren, int w, int h) {
     };
 
     const float thick = arm;
-    SDL_FRect horiz = {g.cx - half, g.cy - thick * 0.5f, half * 2.f, thick};
+    SDL_FRect horiz = { g.cx - half, g.cy - thick * 0.5f, half * 2.f, thick };
     drawArm(horiz, sHeld[PORT_INPUT_LEFT] || sHeld[PORT_INPUT_RIGHT]);
-    SDL_FRect vert = {g.cx - thick * 0.5f, g.cy - half, thick, half * 2.f};
+    SDL_FRect vert = { g.cx - thick * 0.5f, g.cy - half, thick, half * 2.f };
     drawArm(vert, sHeld[PORT_INPUT_UP] || sHeld[PORT_INPUT_DOWN]);
 
     const Uint8 hot = 150;
     SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
     if (sHeld[PORT_INPUT_UP]) {
         SDL_SetRenderDrawColor(ren, 96, 220, 160, hot);
-        SDL_FRect r{g.cx - thick * 0.5f, g.cy - half, thick, half - thick * 0.5f};
+        SDL_FRect r{ g.cx - thick * 0.5f, g.cy - half, thick, half - thick * 0.5f };
         SDL_RenderFillRect(ren, &r);
     }
     if (sHeld[PORT_INPUT_DOWN]) {
         SDL_SetRenderDrawColor(ren, 96, 220, 160, hot);
-        SDL_FRect r{g.cx - thick * 0.5f, g.cy + thick * 0.5f, thick, half - thick * 0.5f};
+        SDL_FRect r{ g.cx - thick * 0.5f, g.cy + thick * 0.5f, thick, half - thick * 0.5f };
         SDL_RenderFillRect(ren, &r);
     }
     if (sHeld[PORT_INPUT_LEFT]) {
         SDL_SetRenderDrawColor(ren, 96, 220, 160, hot);
-        SDL_FRect r{g.cx - half, g.cy - thick * 0.5f, half - thick * 0.5f, thick};
+        SDL_FRect r{ g.cx - half, g.cy - thick * 0.5f, half - thick * 0.5f, thick };
         SDL_RenderFillRect(ren, &r);
     }
     if (sHeld[PORT_INPUT_RIGHT]) {
         SDL_SetRenderDrawColor(ren, 96, 220, 160, hot);
-        SDL_FRect r{g.cx + thick * 0.5f, g.cy - thick * 0.5f, half - thick * 0.5f, thick};
+        SDL_FRect r{ g.cx + thick * 0.5f, g.cy - thick * 0.5f, half - thick * 0.5f, thick };
         SDL_RenderFillRect(ren, &r);
     }
 
@@ -568,7 +574,7 @@ void DrawFaceCircle(SDL_Renderer* ren, const TouchZone& z) {
 
     constexpr float kTw = 8.0f;
     constexpr float kTh = 8.0f;
-    const float textW = static_cast<float>(std::char_traits<char>::length(z.label)) * kTw;
+    const float textW = static_cast<float>(std::strlen(z.label)) * kTw;
     SDL_SetRenderDrawColor(ren, 232, 236, 242, held ? 240 : 205);
     SDL_RenderDebugText(ren, cx - textW * 0.5f, cy - kTh * 0.5f, z.label);
 }
@@ -583,7 +589,7 @@ void DrawStadiumControl(SDL_Renderer* ren, const TouchZone& z) {
 
     constexpr float kTw = 8.0f;
     constexpr float kTh = 8.0f;
-    const float textW = static_cast<float>(std::char_traits<char>::length(z.label)) * kTw;
+    const float textW = static_cast<float>(std::strlen(z.label)) * kTw;
     SDL_SetRenderDrawColor(ren, 232, 236, 242, held ? 240 : 205);
     SDL_RenderDebugText(ren, b.x + (b.w - textW) * 0.5f, b.y + (b.h - kTh) * 0.5f, z.label);
 }
@@ -596,7 +602,7 @@ void DrawButtonZone(SDL_Renderer* ren, const TouchZone& z) {
     DrawFaceCircle(ren, z);
 }
 
-}  // namespace
+} // namespace
 
 extern "C" void Port_TouchControls_NotifyRenderSize(int width, int height) {
     if (width > 0 && height > 0) {
@@ -619,24 +625,20 @@ extern "C" void Port_TouchControls_HandleEvent(const SDL_Event* event) {
         TryAssignJoystick(fid, x, y);
         UpdateHeldState();
     } else if (event->type == SDL_EVENT_FINGER_MOTION) {
-        UpsertTouch(static_cast<int64_t>(event->tfinger.fingerID),
-                    event->tfinger.x * static_cast<float>(sLastWindowW),
+        UpsertTouch(static_cast<int64_t>(event->tfinger.fingerID), event->tfinger.x * static_cast<float>(sLastWindowW),
                     event->tfinger.y * static_cast<float>(sLastWindowH));
     } else if (event->type == SDL_EVENT_FINGER_UP || event->type == SDL_EVENT_FINGER_CANCELED) {
         RemoveTouch(static_cast<int64_t>(event->tfinger.fingerID));
-    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-               event->button.button == SDL_BUTTON_LEFT) {
+    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN && event->button.button == SDL_BUTTON_LEFT) {
         const float x = event->button.x;
         const float y = event->button.y;
         TryTriggerSettings(x, y);
         UpsertTouch(-1, x, y);
         TryAssignJoystick(-1, x, y);
         UpdateHeldState();
-    } else if (event->type == SDL_EVENT_MOUSE_MOTION &&
-               (event->motion.state & SDL_BUTTON_LMASK) != 0) {
+    } else if (event->type == SDL_EVENT_MOUSE_MOTION && (event->motion.state & SDL_BUTTON_LMASK) != 0) {
         UpsertTouch(-1, event->motion.x, event->motion.y);
-    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP &&
-               event->button.button == SDL_BUTTON_LEFT) {
+    } else if (event->type == SDL_EVENT_MOUSE_BUTTON_UP && event->button.button == SDL_BUTTON_LEFT) {
         RemoveTouch(-1);
     }
 }
@@ -691,12 +693,21 @@ extern "C" bool Port_TouchControls_ConsumeSettingsRequest(void) {
 
 #else
 
-extern "C" void Port_TouchControls_NotifyRenderSize(int, int) {}
-extern "C" void Port_TouchControls_HandleEvent(const SDL_Event*) {}
-extern "C" void Port_TouchControls_NotifyGamepadUsed(void) {}
-extern "C" void Port_TouchControls_SetGamepadAvailable(bool) {}
-extern "C" bool Port_TouchControls_InputPressed(PortInput) { return false; }
-extern "C" void Port_TouchControls_Render(SDL_Renderer*, int, int) {}
-extern "C" bool Port_TouchControls_ConsumeSettingsRequest(void) { return false; }
+extern "C" void Port_TouchControls_NotifyRenderSize(int, int) {
+}
+extern "C" void Port_TouchControls_HandleEvent(const SDL_Event*) {
+}
+extern "C" void Port_TouchControls_NotifyGamepadUsed(void) {
+}
+extern "C" void Port_TouchControls_SetGamepadAvailable(bool) {
+}
+extern "C" bool Port_TouchControls_InputPressed(PortInput) {
+    return false;
+}
+extern "C" void Port_TouchControls_Render(SDL_Renderer*, int, int) {
+}
+extern "C" bool Port_TouchControls_ConsumeSettingsRequest(void) {
+    return false;
+}
 
 #endif

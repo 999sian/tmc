@@ -30,7 +30,9 @@
 #include <string>
 
 #if defined(__linux__) || defined(__APPLE__)
-#include <execinfo.h>
+#if !defined(__ANDROID__)
+#include <execinfo.h> /* backtrace(); bionic only grew this at API 33 */
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 #include <dlfcn.h>
@@ -449,11 +451,13 @@ void WriteBacktracePosix(const std::filesystem::path& path, const CrashRegs& reg
             WriteResolvedAddr(fp, "Caller (*sp):", caller);
     }
 #endif
+#if !defined(__ANDROID__)
     std::fprintf(fp, "\nHandler stack (backtrace() — does not cross the signal frame):\n");
     std::fflush(fp);
     void* frames[64];
     int n = backtrace(frames, 64);
     backtrace_symbols_fd(frames, n, fileno(fp));
+#endif
     std::fclose(fp);
 }
 #endif

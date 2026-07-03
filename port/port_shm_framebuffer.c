@@ -37,7 +37,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
 #  include <errno.h>
 #  include <fcntl.h>
 #  include <sys/mman.h>
@@ -52,7 +52,7 @@
 #define TMC_SHM_BG_PLANES 3u          /* BG1 + BG2 + Sprite (OAM-only, alpha=0 outside silhouettes) */
 #define TMC_SHM_PATH    "/tmc_framebuffer"
 
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
 
 static int      sShmFd     = -1;
 static uint8_t* sShmBase   = NULL;
@@ -64,7 +64,7 @@ static uint32_t sFrameSeq  = 0;
  * cycles on the per-BG re-render. Mirrors shmEnabled() but as a real
  * symbol the C++ TU can extern. */
 int Port_Shm_IsActive(void) {
-#if defined(__linux__)
+#if defined(__linux__) && !defined(__ANDROID__)
     extern int shmEnabled(void);
     return shmEnabled();
 #else
