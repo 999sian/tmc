@@ -65,6 +65,15 @@ PortTouchScheme Port_Config_TouchScheme(void);
 void Port_Config_SetTouchScheme(PortTouchScheme scheme);
 void Port_Config_CycleTouchScheme(int direction);
 
+/* Touch-overlay tuning (Android). Scale multiplies every control's
+ * layout unit (0.60..1.60); opacity multiplies every control's alpha
+ * (0.30..1.50, >1 = more opaque than the stock look). Persisted as
+ * touch_scale / touch_opacity in config.json. */
+float Port_Config_TouchScale(void);
+void Port_Config_SetTouchScale(float scale);
+float Port_Config_TouchOpacity(void);
+void Port_Config_SetTouchOpacity(float opacity);
+
 /* True widescreen reveal is still WIP. The build-time
  * --widescreen_width=N only reserves the larger framebuffer; this runtime
  * switch decides whether gameplay uses the wider camera/reveal or falls

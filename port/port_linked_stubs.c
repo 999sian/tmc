@@ -1091,6 +1091,34 @@ int Port_Widescreen_HudRightAnchor(void) {
     return 1;
 }
 
+/* Touch-overlay helper: 1 when the R button currently has a CONTEXT
+ * action (speak/read/check/open/lift/grab/throw/drop/grow/shrink) —
+ * i.e. pressing R right now does something specific. ROLL and NONE
+ * don't count: roll is available during any walk, so highlighting it
+ * would keep the button lit almost permanently and destroy the signal.
+ * rActionPlayerState overrides the interact-object frame when set
+ * (same precedence the HUD renderer uses). Read by the Android touch
+ * overlay to glow the R face button. */
+int Port_TouchControls_RActionAvailable(void) {
+    unsigned r = gHUD.rActionPlayerState != 0 ? gHUD.rActionPlayerState : gHUD.rActionInteractObject;
+    switch (r) {
+        case R_ACTION_CANCEL:
+        case R_ACTION_DROP:
+        case R_ACTION_THROW:
+        case R_ACTION_READ:
+        case R_ACTION_CHECK:
+        case R_ACTION_OPEN:
+        case R_ACTION_SPEAK:
+        case R_ACTION_GRAB:
+        case R_ACTION_LIFT:
+        case R_ACTION_GROW:
+        case R_ACTION_SHRINK:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
 static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* shadow) {
     /* Populate the port-side shadow tilemap the PPU reads for the reveal
      * columns (display x >= MODE1_GBA_BG_CLIP_X). The engine's 32-tile VRAM

@@ -1306,7 +1306,13 @@ extern "C" void Port_OpenInGameSettingsModal(void) {
         SDL_PushEvent(&ev);
     }
 #else
-    /* No launcher: settings UI is not linked. */
+    /* No launcher module linked (public builds): route the touch gear
+     * button to the F8 ribbon menu instead of silently doing nothing —
+     * it carries every setting the modal would have (Display, Controls,
+     * Audio, Saves...). Previously this was a no-op and the gear button
+     * looked broken on Android. */
+    extern void Port_DebugMenu_Toggle(void);
+    Port_DebugMenu_Toggle();
 #endif
 }
 /* True only when the active backend presents the SDL_Renderer 2D overlays

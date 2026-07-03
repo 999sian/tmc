@@ -11,6 +11,10 @@
 
 #ifdef __ANDROID__
 
+/* Engine-side helper (port_linked_stubs.c): 1 while the R button has a
+ * specific context action, driving the R face-button glow. */
+extern "C" int Port_TouchControls_RActionAvailable(void);
+
 namespace {
 
 constexpr float kPi = 3.14159265f;
@@ -64,6 +68,12 @@ bool sJoyActive = false;
 int64_t sJoyFinger = 0;
 float sJoyKnobDx = 0.f;
 float sJoyKnobDy = 0.f;
+/* Floating-stick anchor: set on grab, cleared on release. While set, the
+ * stick's live center is (sJoyFloatX, sJoyFloatY) instead of the home
+ * position from BuildJoyGeom. */
+bool sJoyFloating = false;
+float sJoyFloatX = 0.f;
+float sJoyFloatY = 0.f;
 
 bool sSettingsRequested = false;
 
@@ -108,7 +118,7 @@ bool ZoneContains(const TouchZone& z, float x, float y) {
 }
 
 float LayoutUnit(int w, int h) {
-    return Clamp(MinDim(w, h) * 0.095f, 54.0f, 112.0f);
+    return Clamp(MinDim(w, h) * 0.095f * Port_Config_TouchScale(), 40.0f, 170.0f);
 }
 
 JoyGeom BuildJoyGeom(int w, int h) {
@@ -155,6 +165,11 @@ float JoyMaxTravel(const JoyGeom& g) {
     return std::max(10.0f, g.outerR - g.knobR - 8.0f);
 }
 
+/* Face cluster: B / A / R arranged on the thumb arc. R is TMC's context
+ * action (talk / read / lift / open / roll) — as heavily used as A/B — so
+ * it lives with them instead of a far-corner pill. The engine-driven glow
+ * (Port_TouchControls_RActionAvailable) tells the player when R will do
+ * something specific. */
 std::array<TouchZone, 6> BuildButtonZones(int w, int h) {
     const float fw = static_cast<float>(std::max(1, w));
     const float fh = static_cast<float>(std::max(1, h));
@@ -162,20 +177,20 @@ std::array<TouchZone, 6> BuildButtonZones(int w, int h) {
     const float gap = unit * 0.98f;
     const float faceR = unit * 0.53f;
     const float faceX = fw * 0.83f;
-    const float faceY = fh * 0.75f;
+    const float faceY = fh * 0.72f;
     const float smallH = unit * 0.70f;
     const float smallW = unit * 1.42f;
     const float selW = unit * 1.95f;
     const float staW = unit * 1.55f;
 
     return { {
-        { PORT_INPUT_B, TouchShape::Circle, faceX - gap * 0.55f, faceY + gap * 0.35f, faceR, {}, "B" },
-        { PORT_INPUT_A, TouchShape::Circle, faceX + gap * 0.55f, faceY - gap * 0.35f, faceR, {}, "A" },
+        { PORT_INPUT_B, TouchShape::Circle, faceX - gap * 0.62f, faceY + gap * 0.42f, faceR, {}, "B" },
+        { PORT_INPUT_A, TouchShape::Circle, faceX + gap * 0.45f, faceY - gap * 0.10f, faceR, {}, "A" },
+        { PORT_INPUT_R, TouchShape::Circle, faceX - gap * 0.42f, faceY - gap * 0.62f, faceR, {}, "R" },
         { PORT_INPUT_SELECT, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.40f, fh * 0.90f, selW, smallH),
           "Select" },
         { PORT_INPUT_START, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.58f, fh * 0.90f, staW, smallH), "Start" },
         { PORT_INPUT_L, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.16f, fh * 0.10f, smallW, smallH), "L" },
-        { PORT_INPUT_R, TouchShape::Stadium, 0, 0, 0, MakeCentered(fw * 0.84f, fh * 0.10f, smallW, smallH), "R" },
     } };
 }
 
@@ -303,6 +318,10 @@ void TryTriggerSettings(float x, float y) {
     }
 }
 
+/* Floating joystick: any touch in the left ~45% of the screen (below the
+ * L pill, above the Select pill) grabs the stick and RE-CENTERS it at the
+ * touch point — no more hunting for a fixed circle mid-fight. The visual
+ * circle follows. Falls back to the home position on release. */
 void TryAssignJoystick(int64_t fingerId, float x, float y) {
     if (!sVisible || sJoyActive || sLastWindowW <= 0 || sLastWindowH <= 0) {
         return;
@@ -310,15 +329,26 @@ void TryAssignJoystick(int64_t fingerId, float x, float y) {
     if (IsDpadScheme()) {
         return;
     }
-    const JoyGeom g = BuildJoyGeom(sLastWindowW, sLastWindowH);
-    if (!HitCircle(g.cx, g.cy, g.outerR, x, y)) {
+    const float fw = static_cast<float>(sLastWindowW);
+    const float fh = static_cast<float>(sLastWindowH);
+    if (x > fw * 0.45f || y < fh * 0.22f || y > fh * 0.86f) {
         return;
     }
     if (HitAnyButtonZone(x, y, sLastWindowW, sLastWindowH)) {
         return;
     }
+    /* Keep the settings gear tappable: its hit circle wins. */
+    {
+        const SettingsBtnGeom sg = BuildSettingsBtnGeom(sLastWindowW, sLastWindowH);
+        if (HitCircle(sg.cx, sg.cy, sg.r * 1.2f, x, y)) {
+            return;
+        }
+    }
     sJoyActive = true;
     sJoyFinger = fingerId;
+    sJoyFloatX = x;
+    sJoyFloatY = y;
+    sJoyFloating = true;
 }
 
 void TestDpadFinger(const DpadGeom& g, float x, float y) {
@@ -351,6 +381,17 @@ void ClearJoystick(void) {
     sJoyActive = false;
     sJoyKnobDx = 0.f;
     sJoyKnobDy = 0.f;
+    sJoyFloating = false;
+}
+
+/* Live stick center: the grab point while floating, else the home spot. */
+JoyGeom LiveJoyGeom(int w, int h) {
+    JoyGeom g = BuildJoyGeom(w, h);
+    if (sJoyFloating) {
+        g.cx = sJoyFloatX;
+        g.cy = sJoyFloatY;
+    }
+    return g;
 }
 
 void UpdateJoystickInput(const JoyGeom& g) {
@@ -404,6 +445,10 @@ void UpdateJoystickInput(const JoyGeom& g) {
 }
 
 void UpdateHeldState() {
+    /* Slide-off hysteresis: remember what was held last frame; a zone a
+     * finger is already holding keeps a 1.35x-radius grace hitbox so a
+     * small thumb slide doesn't drop the press mid-action. */
+    std::array<bool, PORT_INPUT_COUNT> prevHeld = sHeld;
     sHeld.fill(false);
     if (!sVisible || sLastWindowW <= 0 || sLastWindowH <= 0) {
         return;
@@ -411,7 +456,7 @@ void UpdateHeldState() {
 
     const bool dpad = IsDpadScheme();
     if (!dpad) {
-        const JoyGeom joyG = BuildJoyGeom(sLastWindowW, sLastWindowH);
+        const JoyGeom joyG = LiveJoyGeom(sLastWindowW, sLastWindowH);
         UpdateJoystickInput(joyG);
     }
 
@@ -425,7 +470,14 @@ void UpdateHeldState() {
             TestDpadFinger(dpadG, touch.x, touch.y);
         }
         for (const TouchZone& z : buttons) {
-            if (ZoneContains(z, touch.x, touch.y)) {
+            bool hit;
+            if (z.shape == TouchShape::Circle) {
+                const float grace = prevHeld[z.input] ? 1.35f : 1.0f;
+                hit = HitCircle(z.cx, z.cy, z.radius * grace, touch.x, touch.y);
+            } else {
+                hit = HitStadium(z.bounds, touch.x, touch.y);
+            }
+            if (hit) {
                 sHeld[z.input] = true;
             }
         }
@@ -456,14 +508,20 @@ void RemoveTouch(int64_t id) {
     UpdateHeldState();
 }
 
+/* Apply the user's opacity multiplier to a base alpha. */
+Uint8 A(int base) {
+    const float v = static_cast<float>(base) * Port_Config_TouchOpacity();
+    return static_cast<Uint8>(Clamp(v, 0.f, 255.f));
+}
+
 void DrawSettingsButton(SDL_Renderer* ren, int w, int h) {
     const SettingsBtnGeom g = BuildSettingsBtnGeom(w, h);
 
-    FillCircle(ren, g.cx, g.cy, g.r, 88, 92, 98, 95);
-    StrokeCircle(ren, g.cx, g.cy, g.r - 0.5f, 118, 122, 130, 115);
+    FillCircle(ren, g.cx, g.cy, g.r, 88, 92, 98, A(95));
+    StrokeCircle(ren, g.cx, g.cy, g.r - 0.5f, 118, 122, 130, A(115));
 
     SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(ren, 232, 236, 242, 225);
+    SDL_SetRenderDrawColor(ren, 232, 236, 242, A(225));
     const float lineW = g.r * 1.05f;
     const float lineH = std::max(2.5f, g.r * 0.13f);
     const float spacing = g.r * 0.33f;
@@ -475,16 +533,18 @@ void DrawSettingsButton(SDL_Renderer* ren, int w, int h) {
 }
 
 void DrawJoystick(SDL_Renderer* ren, int w, int h) {
-    const JoyGeom g = BuildJoyGeom(w, h);
+    const JoyGeom g = LiveJoyGeom(w, h);
 
-    FillCircle(ren, g.cx, g.cy, g.outerR, 88, 92, 98, 78);
-    StrokeCircle(ren, g.cx, g.cy, g.outerR - 0.5f, 118, 122, 130, 95);
+    /* Floating grab shows a slightly hotter ring so the re-centered stick
+     * is obvious; the idle home circle stays subtle. */
+    FillCircle(ren, g.cx, g.cy, g.outerR, 88, 92, 98, A(sJoyFloating ? 92 : 78));
+    StrokeCircle(ren, g.cx, g.cy, g.outerR - 0.5f, 118, 122, 130, A(sJoyFloating ? 115 : 95));
 
     const float kx = g.cx + sJoyKnobDx;
     const float ky = g.cy + sJoyKnobDy;
     const bool deflect = (sJoyKnobDx != 0.f || sJoyKnobDy != 0.f);
-    FillCircle(ren, kx, ky, g.knobR, 96, 100, 108, deflect ? 125 : 92);
-    StrokeCircle(ren, kx, ky, g.knobR - 0.5f, 120, 124, 132, deflect ? 105 : 88);
+    FillCircle(ren, kx, ky, g.knobR, 96, 100, 108, A(deflect ? 125 : 92));
+    StrokeCircle(ren, kx, ky, g.knobR - 0.5f, 120, 124, 132, A(deflect ? 105 : 88));
 }
 
 void DrawDpadArrow(SDL_Renderer* ren, float cx, float cy, float size, int dir, bool held) {
@@ -569,14 +629,26 @@ void DrawFaceCircle(SDL_Renderer* ren, const TouchZone& z) {
     const float cx = z.cx;
     const float cy = z.cy;
 
-    const Uint8 fillA = held ? 125 : 88;
-    FillCircle(ren, cx, cy, r, 88, 92, 98, fillA);
-    StrokeCircle(ren, cx, cy, r - 0.5f, 118, 122, 130, held ? 105 : 82);
+    /* Context glow: when the engine says R currently has a specific
+     * action (speak/read/lift/open/...), tint the R button green — the
+     * touch equivalent of the GBA's R-action HUD icon, which the overlay
+     * itself covers. (Accessor declared at file scope below the includes;
+     * defined in port_linked_stubs.c.) */
+    const bool glow = (z.input == PORT_INPUT_R) && Port_TouchControls_RActionAvailable();
+
+    const Uint8 fillA = A(held ? 125 : (glow ? 110 : 88));
+    if (glow) {
+        FillCircle(ren, cx, cy, r, 66, 150, 104, fillA);
+        StrokeCircle(ren, cx, cy, r - 0.5f, 96, 220, 160, A(held ? 160 : 130));
+    } else {
+        FillCircle(ren, cx, cy, r, 88, 92, 98, fillA);
+        StrokeCircle(ren, cx, cy, r - 0.5f, 118, 122, 130, A(held ? 105 : 82));
+    }
 
     constexpr float kTw = 8.0f;
     constexpr float kTh = 8.0f;
     const float textW = static_cast<float>(std::strlen(z.label)) * kTw;
-    SDL_SetRenderDrawColor(ren, 232, 236, 242, held ? 240 : 205);
+    SDL_SetRenderDrawColor(ren, 232, 236, 242, A(held ? 240 : 205));
     SDL_RenderDebugText(ren, cx - textW * 0.5f, cy - kTh * 0.5f, z.label);
 }
 
@@ -584,14 +656,13 @@ void DrawStadiumControl(SDL_Renderer* ren, const TouchZone& z) {
     const bool held = sHeld[z.input];
     const SDL_FRect& b = z.bounds;
 
-    const Uint8 fillA = held ? 120 : 85;
-    FillStadium(ren, b, 88, 92, 98, fillA);
-    StrokeStadium(ren, b, 118, 122, 130, held ? 102 : 78);
+    FillStadium(ren, b, 88, 92, 98, A(held ? 120 : 85));
+    StrokeStadium(ren, b, 118, 122, 130, A(held ? 102 : 78));
 
     constexpr float kTw = 8.0f;
     constexpr float kTh = 8.0f;
     const float textW = static_cast<float>(std::strlen(z.label)) * kTw;
-    SDL_SetRenderDrawColor(ren, 232, 236, 242, held ? 240 : 205);
+    SDL_SetRenderDrawColor(ren, 232, 236, 242, A(held ? 240 : 205));
     SDL_RenderDebugText(ren, b.x + (b.w - textW) * 0.5f, b.y + (b.h - kTh) * 0.5f, z.label);
 }
 

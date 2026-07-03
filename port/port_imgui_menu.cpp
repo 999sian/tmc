@@ -1165,6 +1165,35 @@ static const char* InputLabel(int input) {
 }
 
 static void DrawRibbonControlsTab(void) {
+#ifdef __ANDROID__
+    if (ImGui::CollapsingHeader("Touch controls", ImGuiTreeNodeFlags_DefaultOpen)) {
+        {
+            int scheme = (Port_Config_TouchScheme() == PORT_TOUCH_SCHEME_DPAD) ? 1 : 0;
+            const char* items[] = { "Joystick (floating)", "D-pad" };
+            if (ImGui::Combo("Movement", &scheme, items, 2)) {
+                Port_Config_SetTouchScheme(scheme == 1 ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK);
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Joystick: touch anywhere on the lower-left of the screen to "
+                                  "plant the stick there.\nD-pad: fixed four-way pad.");
+            }
+        }
+        {
+            float v = Port_Config_TouchScale();
+            if (ImGui::SliderFloat("Button size", &v, 0.6f, 1.6f, "%.2fx")) {
+                Port_Config_SetTouchScale(v);
+            }
+        }
+        {
+            float v = Port_Config_TouchOpacity();
+            if (ImGui::SliderFloat("Overlay opacity", &v, 0.3f, 1.5f, "%.2fx")) {
+                Port_Config_SetTouchOpacity(v);
+            }
+        }
+        ImGui::TextDisabled("The R button glows green when it has an action (talk, read, lift...).");
+    }
+    ImGui::Separator();
+#endif
     {
         bool on = Port_Config_GetRollAttackMacroEnabled();
         if (ImGui::Checkbox("Roll attack macro", &on)) {
