@@ -657,6 +657,9 @@ void VBlankIntrWait(void) {
 #endif
         SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
         Port_PPU_SetWindowTitle(title);
+#ifdef __ANDROID__
+        fprintf(stderr, "[perf] %.1f FPS\n", fps);
+#endif
 
         sFpsWindowStartNs = nowNs;
         sFpsFrameCount = 0;
