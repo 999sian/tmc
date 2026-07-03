@@ -660,8 +660,8 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
              * down to the speed of the slowest core, while maxing out thermals.
              * Cap to 3 threads on Android to stay within the big cluster (leaves 1
              * big core for the main thread/audio). */
-            if (n > 6)
-                n = 6;
+            if (n > 3)
+                n = 3;
 #else
             if (n > 6)
                 n = 6;
