@@ -202,16 +202,34 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
     (void)userdata;
     (void)total_amount;
     if (Port_DebugVerbose || getenv("TMC_AUDIO_TRACE")) {
-        static Uint64 sLastCbNs = 0;
+        /* Zero I/O on the audio callback thread: accumulate in statics and
+         * fprintf at most once per second (off the per-callback hot path).
+         * Logging every callback here blocks the audio thread on the stderr
+         * pipe and MANUFACTURES the underruns it's trying to measure. */
+        static Uint64 sLastCbNs = 0, sWindowNs = 0;
+        static double sMaxGap = 0.0, sReqMs = 0.0;
+        static int sCbCount = 0, sUnderruns = 0;
         Uint64 now = SDL_GetTicksNS();
-        double gapMs = sLastCbNs ? (double)(now - sLastCbNs) / 1e6 : 0.0;
+        if (sLastCbNs) {
+            double gapMs = (double)(now - sLastCbNs) / 1e6;
+            sReqMs = 1000.0 * (additional_amount / PORT_AUDIO_BYTES_PER_FRAME) / (double)PORT_AUDIO_SAMPLE_RATE;
+            if (gapMs > sMaxGap)
+                sMaxGap = gapMs;
+            if (gapMs > sReqMs + 0.5)
+                sUnderruns++; /* time outran the buffer = crackle */
+            sCbCount++;
+        }
         sLastCbNs = now;
-        int queued = SDL_GetAudioStreamQueued(stream);
-        double reqMs = 1000.0 * (additional_amount / PORT_AUDIO_BYTES_PER_FRAME) / PORT_AUDIO_SAMPLE_RATE;
-        double queuedMs = 1000.0 * (queued / PORT_AUDIO_BYTES_PER_FRAME) / PORT_AUDIO_SAMPLE_RATE;
-        /* gap = time since last callback; req = audio this callback must produce;
-         * queued = backlog still in the stream (near 0 => underrun risk). */
-        fprintf(stderr, "[audio] cb gap=%.1fms req=%.1fms queued=%.1fms\n", gapMs, reqMs, queuedMs);
+        if (now - sWindowNs >= 1000000000ULL) {
+            if (sCbCount) {
+                fprintf(stderr, "[audio] 1s: %d cb, req=%.1fms maxgap=%.1fms underruns=%d\n", sCbCount, sReqMs, sMaxGap,
+                        sUnderruns);
+            }
+            sWindowNs = now;
+            sMaxGap = 0.0;
+            sCbCount = 0;
+            sUnderruns = 0;
+        }
     }
 
     while (remaining > 0) {
@@ -262,15 +280,37 @@ bool Port_Audio_Init(void) {
     }
 
 #ifdef __ANDROID__
-    /* Android's default AAudio stream is the high-latency path: the feed
-     * callback pulls ~20 ms (960 frames) per burst, and AAudio double-buffers
-     * on top, so a fresh SFX (item-get fanfare) is heard ~40-60 ms after it
-     * arms — audible as lag against the on-screen event. Request the low-latency
-     * path with a small device buffer so the burst drops to ~5 ms. Kept
-     * Android-only: desktop backends have no such complaint and a tiny buffer
-     * only risks their stability. Measured for underruns on the Moto G4. */
+    /* Android's default AAudio buffer is the high-latency path (~20 ms/960-frame
+     * callback burst + AAudio double-buffer), so a fresh SFX is heard ~40-60 ms
+     * late. A smaller buffer cuts that — BUT the callback gap on this in-order
+     * SoC jitters up to ~10-11 ms under load, and if the buffer PERIOD is
+     * shorter than that gap the device starves and crackles. So the buffer must
+     * stay above the worst gap; 256 frames (5.3 ms) was too small and crackled.
+     * Default: leave SDL's default buffer (crackle-free) and only engage the
+     * low-latency hint. Override the frame count at runtime to tune latency vs
+     * stability without a rebuild: env TMC_AUDIO_FRAMES=<n>, or on-device an
+     * `audio_frames` marker file (first line = frame count) in the data dir. */
     SDL_SetHint(SDL_HINT_ANDROID_LOW_LATENCY_AUDIO, "1");
-    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
+    int frames = 0;
+    const char* fenv = getenv("TMC_AUDIO_FRAMES");
+    if (fenv && *fenv) {
+        frames = atoi(fenv);
+    } else {
+        FILE* mf = fopen("audio_frames", "r");
+        if (mf) {
+            if (fscanf(mf, "%d", &frames) != 1) {
+                frames = 0;
+            }
+            fclose(mf);
+        }
+    }
+    if (frames > 0) {
+        char buf[16];
+        SDL_snprintf(buf, sizeof(buf), "%d", frames);
+        SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, buf);
+        fprintf(stderr, "[audio] SAMPLE_FRAMES override = %d (%.1f ms buffer)\n", frames,
+                1000.0 * frames / PORT_AUDIO_SAMPLE_RATE);
+    }
 #endif
 
     sAudioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, Port_Audio_Feed, NULL);
