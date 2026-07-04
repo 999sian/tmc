@@ -758,10 +758,33 @@ static void SetTrackPanLocked(uint8_t playerIndex, uint16_t trackBits, int8_t pa
     }
 }
 
-/* Audio thread: swap the pending command list out under the short sCmdMutex,
- * then apply each in order under sStateMutex (already held by the caller). */
+/* Apply one command with sStateMutex already held (audio-thread drain or the
+ * main-thread try-lock fast path below). */
+static void ApplyCommandLocked(const M4ACommand& c) {
+    switch (c.type) {
+        case M4ACmdType::StartSong:
+            StartSongLocked(c.playerIndex, c.songId);
+            break;
+        case M4ACmdType::Stop:
+            StopPlayerLocked(c.playerIndex);
+            break;
+        case M4ACmdType::Continue:
+            ContinuePlayerLocked(c.playerIndex);
+            break;
+        case M4ACmdType::SetVolume:
+            SetTrackVolumeLocked(c.playerIndex, c.trackBits, c.volume);
+            break;
+        case M4ACmdType::SetPan:
+            SetTrackPanLocked(c.playerIndex, c.trackBits, c.pan);
+            break;
+    }
+}
+
+/* Swap the pending command list out under the short sCmdMutex, then apply each
+ * in order. Always entered with sStateMutex held (audio-thread render, or the
+ * main-thread fast path), so the reused static is single-threaded in practice. */
 static void DrainCommandsLocked(void) {
-    static std::vector<M4ACommand> local; /* reused; audio thread only */
+    static std::vector<M4ACommand> local;
     {
         std::lock_guard<std::mutex> lock(sCmdMutex);
         if (sCmdQueue.empty()) {
@@ -770,37 +793,40 @@ static void DrainCommandsLocked(void) {
         local.swap(sCmdQueue);
     }
     for (const M4ACommand& c : local) {
-        switch (c.type) {
-            case M4ACmdType::StartSong:
-                StartSongLocked(c.playerIndex, c.songId);
-                break;
-            case M4ACmdType::Stop:
-                StopPlayerLocked(c.playerIndex);
-                break;
-            case M4ACmdType::Continue:
-                ContinuePlayerLocked(c.playerIndex);
-                break;
-            case M4ACmdType::SetVolume:
-                SetTrackVolumeLocked(c.playerIndex, c.trackBits, c.volume);
-                break;
-            case M4ACmdType::SetPan:
-                SetTrackPanLocked(c.playerIndex, c.trackBits, c.pan);
-                break;
-        }
+        ApplyCommandLocked(c);
     }
     local.clear();
 }
 
+/* Main-thread submit. The item-get freeze was the main thread BLOCKING on
+ * sStateMutex (the audio render lock) — several mutators per frame, std::mutex
+ * unfair, tick stalled ~500 ms. try_lock never blocks: if the audio thread is
+ * not mid-render (true for most of each 20 ms callback), apply synchronously so
+ * the sound arms THIS tick (no audible item-get lag); if contended, enqueue and
+ * the audio thread drains it next callback (no freeze). FIFO holds because we
+ * drain anything already queued before applying ours, all under sStateMutex —
+ * the same lock/order the audio drain uses (state→cmd), so no reorder, no
+ * deadlock. */
+static void SubmitCommand(const M4ACommand& c) {
+    std::unique_lock<std::mutex> lock(sStateMutex, std::try_to_lock);
+    if (lock.owns_lock()) {
+        DrainCommandsLocked();
+        ApplyCommandLocked(c);
+        return;
+    }
+    PushCommand(c);
+}
+
 bool Port_M4A_Backend_StartSongById(uint8_t playerIndex, uint16_t songId) {
-    /* Enqueue; never block on the audio render lock. Validity is checked when
-     * the audio thread applies it — an invalid song just doesn't play (same
-     * audible result as the old false→MPlayStop path). Return true so the m4a
-     * stub keeps its track bookkeeping consistent with what will play. */
+    /* Apply now if the audio lock is free (fanfare arms this tick, no lag),
+     * else enqueue — never block on the render lock. Validity is checked at
+     * apply; an invalid song just doesn't play. Return true so the m4a stub
+     * keeps its track bookkeeping consistent with what will play. */
     M4ACommand c{};
     c.type = M4ACmdType::StartSong;
     c.playerIndex = playerIndex;
     c.songId = songId;
-    PushCommand(c);
+    SubmitCommand(c);
     return true;
 }
 
@@ -808,14 +834,14 @@ void Port_M4A_Backend_StopPlayer(uint8_t playerIndex) {
     M4ACommand c{};
     c.type = M4ACmdType::Stop;
     c.playerIndex = playerIndex;
-    PushCommand(c);
+    SubmitCommand(c);
 }
 
 void Port_M4A_Backend_ContinuePlayer(uint8_t playerIndex) {
     M4ACommand c{};
     c.type = M4ACmdType::Continue;
     c.playerIndex = playerIndex;
-    PushCommand(c);
+    SubmitCommand(c);
 }
 
 void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, uint16_t volume) {
@@ -824,7 +850,7 @@ void Port_M4A_Backend_SetTrackVolume(uint8_t playerIndex, uint16_t trackBits, ui
     c.playerIndex = playerIndex;
     c.trackBits = trackBits;
     c.volume = volume;
-    PushCommand(c);
+    SubmitCommand(c);
 }
 
 bool Port_M4A_Backend_IsPlayerActive(uint8_t playerIndex) {
@@ -907,7 +933,7 @@ void Port_M4A_Backend_SetTrackPan(uint8_t playerIndex, uint16_t trackBits, int8_
     c.playerIndex = playerIndex;
     c.trackBits = trackBits;
     c.pan = pan;
-    PushCommand(c);
+    SubmitCommand(c);
 }
 
 void Port_M4A_Backend_Render(int16_t* outSamples, uint32_t frameCount, bool mute) {
