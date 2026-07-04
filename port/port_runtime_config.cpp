@@ -58,7 +58,7 @@ const std::array<Def, PORT_INPUT_COUNT> kDefaults = { {
 u8 sScale = 3;
 u8 sInternalScale = 1;
 std::string sUpscaleMethod = "nearest";
-u64 sFrameTimeNs = 0;
+u64 sFrameTimeNs = 1000000000ULL / 60; /* 60 FPS cap by default (VSync-effective); see kDefaultFrameTimeNs */
 bool sPortSettingsMenuEnabled = true;
 /* Persisted active save-profile filename. Defaults to tmc.sav. The
  * port_save.c EEPROM emulation reads/writes this path; the F8 debug
@@ -593,10 +593,13 @@ extern "C" void Port_Config_Load(const char* path) {
             int v = j.value(e.key, e.def);
             *e.var = (v >= e.lo && v <= e.hi) ? (u8)v : (u8)e.def;
         }
-        /* frame_time_ns: apply default (0 = uncapped) differs from
-         * DefaultsJson's 60 FPS cap on purpose — a missing key means
-         * uncapped, a fresh config gets the cap. Kept inline for that. */
-        sFrameTimeNs = j.value("frame_time_ns", 0ULL);
+        /* frame_time_ns: a MISSING key now defaults to the 60 FPS cap (same as
+         * DefaultsJson) so VSync is enforced by default — an uncapped default
+         * makes Port_Config_TargetFps()==0, which port_bios.c treats as "must
+         * disable VSync" (can't sync above the panel), silently defeating it.
+         * An explicit frame_time_ns:0 in the config is still honoured as a
+         * deliberate uncapped/VSync-off opt-out (the key is present). */
+        sFrameTimeNs = j.value("frame_time_ns", kDefaultFrameTimeNs);
         sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u); // ponytail: lone u32, not worth a table
         {
             std::string ts = j.value("touch_scheme", std::string("joystick"));
