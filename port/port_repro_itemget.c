@@ -27,6 +27,7 @@
 #include "item_ids.h"
 #include "message.h"
 #include "entity.h"
+#include "port_gba_mem.h"
 #include "port_repro.h"
 #include "port_debug_actions.h"
 #include "port_runtime_config.h"
@@ -135,6 +136,35 @@ void Port_ReproItemGet_Tick(unsigned int frame) {
         fprintf(stderr, "[itemget] frame %u: HELD action=%u fs=%u msg=0x%x (%d frames in)\n", frame,
                 (unsigned)gPlayerEntity.base.action, (unsigned)gPlayerState.framestate, (unsigned)gMessage.state,
                 (int)frame - triggered_at);
+    }
+
+    /* One-shot PPU snapshot of the item-get message-box scene (windows + blend
+     * + OBJ — the composite's hardest layer-selection case). Dumped once, ~60
+     * frames in so the box is fully open, when TMC_REPRO_ITEMGET_DUMP is set.
+     * Feeds tools/ppu_bench as a parity oracle for the composite rewrite. */
+    if ((gMessage.state & 0x7f) != 0 && (int)frame - triggered_at > 60) {
+        const char* dump = getenv("TMC_REPRO_ITEMGET_DUMP");
+        static int dumped = 0;
+        if (dump && *dump && !dumped) {
+            dumped = 1;
+            FILE* f = fopen(dump, "wb");
+            if (f) {
+                const char magic[4] = { 'P', 'P', 'U', '1' };
+                const unsigned sizes[5] = { 0x400u, 0x18000u, 0x200u, 0x200u, 0x400u };
+                fwrite(magic, 1, 4, f);
+                fwrite(sizes, sizeof(unsigned), 5, f);
+                fwrite(gIoMem, 1, 0x400u, f);
+                fwrite(gVram, 1, 0x18000u, f);
+                fwrite(gBgPltt, 1, 0x200u, f);
+                fwrite(gObjPltt, 1, 0x200u, f);
+                fwrite(gOamMem, 1, 0x400u, f);
+                fclose(f);
+                fprintf(stderr, "[itemget] dumped msgbox PPU snapshot -> %s (dispcnt=0x%04x)\n", dump,
+                        (unsigned)(gIoMem[0] | (gIoMem[1] << 8)));
+            }
+            fflush(stderr);
+            _Exit(0);
+        }
     }
     if ((int)frame - triggered_at > 900) {
         fprintf(stderr, "[itemget] done (held 900 frames)\n");
