@@ -2,6 +2,7 @@
 #include "port_config.h"
 #include "port_sounds_embed.hpp"
 #include "sound.h"
+#include "port_debug_verbose.h"
 
 #ifdef min
 #undef min
@@ -809,7 +810,11 @@ static void DrainCommandsLocked(void) {
  * deadlock. */
 static void SubmitCommand(const M4ACommand& c) {
     std::unique_lock<std::mutex> lock(sStateMutex, std::try_to_lock);
-    if (lock.owns_lock()) {
+    const bool fast = lock.owns_lock();
+    if (Port_DebugVerbose && c.type == M4ACmdType::StartSong && c.songId >= 100) {
+        fprintf(stderr, "[m4a] SFX start id=%u %s\n", c.songId, fast ? "FAST(sync)" : "QUEUED(defer)");
+    }
+    if (fast) {
         DrainCommandsLocked();
         ApplyCommandLocked(c);
         return;
