@@ -59,6 +59,53 @@
   edge-to-edge, so this is a safety net, but `TMC_WS_TRACE=1` logs the
   signal per room for anyone hunting a counterexample.)
 
+### Android: the port now runs on phones and tablets
+
+- **The Minish Cap PC port is now a native Android app.** The whole engine,
+  software PPU, agbplay audio and ImGui UI cross-compile for the NDK
+  (arm64-v8a / x86_64) and ship as an APK. First launch self-extracts assets
+  from a ROM on device; the game boots to title, audio, file-select and into
+  gameplay entirely by touch.
+- **Touch controls.** A floating analog stick, a face-button cluster with the
+  R button and a context glow, and a finger-draggable, scaled F8 debug menu —
+  designed so a single tap that arrives as a down+up in one input batch still
+  registers.
+- **SAF ROM picker.** Point the app at a ROM through the system file picker;
+  it's copied into app storage and detected on the next launch.
+- Fixes found on real hardware: a first-launch display freeze (a
+  use-after-free that destroyed the live renderer after extraction), and
+  NPC-talk / collision / animation guards that were dead on 39-bit-VA-kernel
+  devices (the pointer check assumed a 64-bit desktop address layout).
+
+### Performance & audio: locked 60 on low-end ARM, VSync on by default
+
+- **Sustained 60 FPS on a 2016 Moto G4 (Snapdragon 617).** Four independent
+  causes fixed: C files were building `-O0`, the OpenMP scanline render
+  oversubscribed the little cores (now capped to 3 workers on the big
+  cluster), widescreen was defaulting on (more pixels than the chip can
+  afford — off on Android), and the GBA-LCD colour filter's per-pixel pass is
+  now off by default there.
+- **Frame pacer no longer busy-waits.** A sleep-based pacer plus passive
+  OpenMP waits replaced two spin loops that burned ~590% CPU on the G4 —
+  heat, throttle and jank on passively-cooled devices.
+- **Software PPU rasteriser optimised, byte-exact.** A per-frame ABGR palette
+  LUT (replaces per-pixel 5→8-bit conversion), the composite layer search
+  collapsed from a per-pixel priority×background double loop into one merged
+  pass (~25% off heavy scenes: message boxes, multi-BG rooms), and per-tile
+  constants hoisted out of the background pixel loop. All gated by a
+  four-scene checksum oracle on x86_64 and ARM — zero rendering change.
+- **VSync is enforced on by default.** The 60 FPS cap now applies to any
+  config without an explicit frame-rate choice, so VSync is actually
+  effective out of the box (an uncapped default silently disabled it). Pick
+  "uncapped" in the FPS menu to opt out; fast-forward still bypasses it.
+- **Item-get audio no longer freezes, lags, or crackles on Android.** The
+  game thread is decoupled from the audio render lock via a try-lock fast
+  path (arms the fanfare on the same tick when the lock is free, never blocks
+  the game tick), and SDL's audio thread is promoted to realtime scheduling
+  so it isn't starved by the render workers on contended low-core devices.
+  A `TMC_AUDIO_FRAMES` override (env or an `audio_frames` file in the data
+  dir) lets a stronger device trade buffer size for lower latency.
+
 ## v0.7.1.1 (2026-07-02)
 
 ### Cave of Flames: rollobite-switch gate fixed (issue #159, regression in v0.7.0)
