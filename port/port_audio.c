@@ -261,6 +261,18 @@ bool Port_Audio_Init(void) {
         return false;
     }
 
+#ifdef __ANDROID__
+    /* Android's default AAudio stream is the high-latency path: the feed
+     * callback pulls ~20 ms (960 frames) per burst, and AAudio double-buffers
+     * on top, so a fresh SFX (item-get fanfare) is heard ~40-60 ms after it
+     * arms — audible as lag against the on-screen event. Request the low-latency
+     * path with a small device buffer so the burst drops to ~5 ms. Kept
+     * Android-only: desktop backends have no such complaint and a tiny buffer
+     * only risks their stability. Measured for underruns on the Moto G4. */
+    SDL_SetHint(SDL_HINT_ANDROID_LOW_LATENCY_AUDIO, "1");
+    SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
+#endif
+
     sAudioStream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, Port_Audio_Feed, NULL);
     if (sAudioStream == NULL) {
         SDL_Log("Port_Audio_Init: SDL_OpenAudioDeviceStream failed: %s", SDL_GetError());
