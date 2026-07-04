@@ -67,6 +67,8 @@ unsigned GetInventoryValue(unsigned item);
 bool CheckLocalFlagByBank(unsigned bankOffset, unsigned flag);
 unsigned GetFlagBankOffset(unsigned area);
 bool CheckGlobalFlag(unsigned flag);
+const char* Port_DebugQuery_FlagName(int bank, int index);
+const char* Port_DebugQuery_FlagDesc(int bank, int index);
 }
 
 #include <cstdio>
@@ -780,17 +782,107 @@ static void DrawRibbonFlagsTab(void) {
     ImGui::Text("%d flags  (bit offset 0x%03X)", size, off);
     ImGui::TextDisabled("Heads-up: some flags fire cutscenes / credits the moment they're set.");
 
+    static char sSearchBuf[128] = "";
+    ImGui::SetNextItemWidth(300);
+    ImGui::InputText("Search Filter", sSearchBuf, sizeof(sSearchBuf));
+    if (sSearchBuf[0] != '\0') {
+        ImGui::SameLine();
+        if (ImGui::Button("Clear")) {
+            sSearchBuf[0] = '\0';
+        }
+    }
+
     ImGui::BeginChild("##flag_list", ImVec2(0, 300), true);
+
+    struct FlagMatch {
+        int bank;
+        int index;
+    };
+    std::vector<FlagMatch> matchingFlags;
+    bool hasSearch = (sSearchBuf[0] != '\0');
+    if (hasSearch) {
+        std::string query = sSearchBuf;
+        std::transform(query.begin(), query.end(), query.begin(), [](unsigned char c) {
+            return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c;
+        });
+
+        int nBanks = Port_DebugQuery_FlagBankCount();
+        for (int b = 0; b < nBanks; ++b) {
+            int bankSize = Port_DebugQuery_FlagBankSize(b);
+            for (int i = 0; i < bankSize; ++i) {
+                const char* name = Port_DebugQuery_FlagName(b, i);
+                const char* desc = Port_DebugQuery_FlagDesc(b, i);
+                
+                std::string nameStr = name ? name : "";
+                std::string descStr = desc ? desc : "";
+                
+                std::transform(nameStr.begin(), nameStr.end(), nameStr.begin(), [](unsigned char c) {
+                    return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c;
+                });
+                std::transform(descStr.begin(), descStr.end(), descStr.begin(), [](unsigned char c) {
+                    return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c;
+                });
+
+                if (nameStr.find(query) != std::string::npos || descStr.find(query) != std::string::npos) {
+                    matchingFlags.push_back({b, i});
+                }
+            }
+        }
+    }
+
+    int displayCount = hasSearch ? (int)matchingFlags.size() : size;
     ImGuiListClipper clipper;
-    clipper.Begin(size);
+    clipper.Begin(displayCount);
     while (clipper.Step()) {
-        for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
-            bool on = Port_DebugQuery_Flag(sBank, i) != 0;
-            ImGui::PushID(i);
-            char lbl[48];
-            snprintf(lbl, sizeof(lbl), "idx %4d (0x%03X)   bit 0x%03X", i, i, off + (unsigned)i);
+        for (int d = clipper.DisplayStart; d < clipper.DisplayEnd; ++d) {
+            int bank = hasSearch ? matchingFlags[d].bank : sBank;
+            int i = hasSearch ? matchingFlags[d].index : d;
+            unsigned int bankOff = Port_DebugQuery_FlagBankOffset(bank);
+            bool on = Port_DebugQuery_Flag(bank, i) != 0;
+            
+            // Push unique ID combining bank and index
+            ImGui::PushID(bank * 100000 + i);
+            
+            const char* flagName = Port_DebugQuery_FlagName(bank, i);
+            const char* flagDesc = Port_DebugQuery_FlagDesc(bank, i);
+            char lbl[128];
+            const char* bankName = Port_DebugQuery_FlagBankName(bank);
+            
+            bool isKnown = flagName && strcmp(flagName, "UNKNOWN") != 0 && strcmp(flagName, "BEGIN") != 0 && strcmp(flagName, "END") != 0 &&
+                strcmp(flagName, "BEGIN_1") != 0 && strcmp(flagName, "END_1") != 0 &&
+                strcmp(flagName, "BEGIN_2") != 0 && strcmp(flagName, "END_2") != 0 &&
+                strcmp(flagName, "BEGIN_3") != 0 && strcmp(flagName, "END_3") != 0 &&
+                strcmp(flagName, "BEGIN_4") != 0 && strcmp(flagName, "END_4") != 0 &&
+                strcmp(flagName, "BEGIN_5") != 0 && strcmp(flagName, "END_5") != 0 &&
+                strcmp(flagName, "BEGIN_6") != 0 && strcmp(flagName, "END_6") != 0 &&
+                strcmp(flagName, "BEGIN_7") != 0 && strcmp(flagName, "END_7") != 0 &&
+                strcmp(flagName, "BEGIN_8") != 0 && strcmp(flagName, "END_8") != 0 &&
+                strcmp(flagName, "BEGIN_9") != 0 && strcmp(flagName, "END_9") != 0 &&
+                strcmp(flagName, "BEGIN_10") != 0 && strcmp(flagName, "END_10") != 0 &&
+                strcmp(flagName, "BEGIN_11") != 0 && strcmp(flagName, "END_11") != 0 &&
+                strcmp(flagName, "BEGIN_12") != 0 && strcmp(flagName, "END_12") != 0;
+                
+            if (hasSearch) {
+                if (isKnown) {
+                    snprintf(lbl, sizeof(lbl), "[%s] idx %4d: %s", bankName, i, flagName);
+                } else {
+                    snprintf(lbl, sizeof(lbl), "[%s] idx %4d (0x%03X)   bit 0x%03X", bankName, i, i, bankOff + (unsigned)i);
+                }
+            } else {
+                if (isKnown) {
+                    snprintf(lbl, sizeof(lbl), "idx %4d (0x%03X): %s", i, i, flagName);
+                } else {
+                    snprintf(lbl, sizeof(lbl), "idx %4d (0x%03X)   bit 0x%03X", i, i, bankOff + (unsigned)i);
+                }
+            }
+            
             if (ImGui::Checkbox(lbl, &on)) {
-                Port_DebugAction_SetFlag(sBank, i, on ? 1 : 0);
+                Port_DebugAction_SetFlag(bank, i, on ? 1 : 0);
+            }
+            if (flagDesc && flagDesc[0] != '\0' && strcmp(flagDesc, "undocumented") != 0) {
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("%s", flagDesc);
+                }
             }
             ImGui::PopID();
         }
