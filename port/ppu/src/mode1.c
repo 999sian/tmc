@@ -482,6 +482,13 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
     int bg_cache_key = -1;
     Mode1TilemapEntry bg_tile_entry;
     bg_tile_entry.raw = 0u;
+    /* Per-tile derived values, recomputed only on a cache refill (tile change).
+     * Constant across a tile's 8 px, so hoisting them out of the per-pixel body
+     * removes ~5 ALU ops/pixel with zero added branches (A53-friendly). */
+    bool bg_hflip = false;
+    int bg_tpy = 0;
+    uint32_t bg_row_base = 0u;
+    size_t bg_pal_bank = 0u;
 
     for (x = 0; x < render_max_x; ++x) {
         int sample_x = x;
@@ -532,21 +539,26 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
                 bg_tile_entry.raw =
                     (uint16_t)mode1_memory.vram[map_addr] | ((uint16_t)mode1_memory.vram[map_addr + 1u] << 8u);
             }
+            /* Derive per-tile constants once (pixel_y is line-invariant, so
+             * tile_pixel_y and the tile's VRAM row base are constant across its
+             * 8 columns). Byte-identical to the former per-pixel recompute. */
+            bg_hflip = mode1_tile_hflip(bg_tile_entry);
+            bg_tpy = mode1_tile_vflip(bg_tile_entry) ? (7 - pixel_y) : pixel_y;
+            if (bpp8) {
+                bg_row_base = char_base + (uint32_t)mode1_tile_index(bg_tile_entry) * 64u + (uint32_t)bg_tpy * 8u;
+            } else {
+                bg_row_base = char_base + (uint32_t)mode1_tile_index(bg_tile_entry) * 32u + (uint32_t)bg_tpy * 4u;
+            }
+            bg_pal_bank = (size_t)mode1_tile_palette(bg_tile_entry) * 16u;
         }
-        Mode1TilemapEntry tile_entry = bg_tile_entry;
-        int tile_pixel_x;
-        int tile_pixel_y;
+        int tile_pixel_x = bg_hflip ? (7 - pixel_x) : pixel_x;
         uint8_t color_index;
-        tile_pixel_x = mode1_tile_hflip(tile_entry) ? (7 - pixel_x) : pixel_x;
-        tile_pixel_y = mode1_tile_vflip(tile_entry) ? (7 - pixel_y) : pixel_y;
 
         if (bpp8) {
-            uint32_t addr = char_base + (uint32_t)mode1_tile_index(tile_entry) * 64u + (uint32_t)tile_pixel_y * 8u +
-                            (uint32_t)tile_pixel_x;
+            uint32_t addr = bg_row_base + (uint32_t)tile_pixel_x;
             color_index = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;
         } else {
-            uint32_t addr = char_base + (uint32_t)mode1_tile_index(tile_entry) * 32u + (uint32_t)tile_pixel_y * 4u +
-                            (uint32_t)(tile_pixel_x / 2);
+            uint32_t addr = bg_row_base + (uint32_t)(tile_pixel_x / 2);
             uint8_t packed = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;
             color_index = (tile_pixel_x & 1) ? (packed >> 4u) : (packed & 0x0Fu);
         }
@@ -558,7 +570,7 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
         /* Palette index into the 256-entry BG LUT (bank*16+idx for 4bpp).
          * Widescreen reveal (x>=240) still needs the raw rgb555 to spot the
          * 0x7C1F "unloaded" sentinel; native pixels skip that read entirely. */
-        size_t pal_idx = bpp8 ? (size_t)color_index : ((size_t)mode1_tile_palette(tile_entry) * 16u + color_index);
+        size_t pal_idx = bpp8 ? (size_t)color_index : (bg_pal_bank + color_index);
 
         if (x >= MODE1_GBA_BG_CLIP_X && (mode1_memory.bg_palette[pal_idx] & 0x7FFFu) == 0x7C1Fu) {
             continue;
