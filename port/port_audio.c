@@ -3,6 +3,7 @@
 #include "main.h"
 #include "port_m4a_backend.h"
 #include "port_a11y_audio.h"
+#include "port_debug_verbose.h"
 
 #include <math.h>
 
@@ -72,7 +73,7 @@ static float sWidth = 1.20f;
 /* High-pass: y[n] = a * (y[n-1] + x[n] - x[n-1]); a = 1 - 2*pi*fc/fs.
  * At fc=30, fs=48000 → a ≈ 0.99607. */
 static const float kHpAlpha = 0.99607f;
-static float sHpPrevInL  = 0.0f, sHpPrevInR  = 0.0f;
+static float sHpPrevInL = 0.0f, sHpPrevInR = 0.0f;
 static float sHpPrevOutL = 0.0f, sHpPrevOutR = 0.0f;
 
 /* Two-pole Butterworth low-pass biquad at fc=16 kHz, fs=48 kHz, Q=0.707.
@@ -92,11 +93,11 @@ static float sHpPrevOutL = 0.0f, sHpPrevOutR = 0.0f;
  * a DC gain of ~3.0 — the soft-clip stage then squashed every loud
  * passage, producing the "horribly compressed" intro audio reported
  * on Linux Bazzite. The canonical sign restores unity DC gain. */
-static const float kLpB0 =  0.4651777f;
-static const float kLpB1 =  0.9303554f;
-static const float kLpB2 =  0.4651777f;
-static const float kLpA1 =  0.6202032f;
-static const float kLpA2 =  0.2403461f;
+static const float kLpB0 = 0.4651777f;
+static const float kLpB1 = 0.9303554f;
+static const float kLpB2 = 0.4651777f;
+static const float kLpA1 = 0.6202032f;
+static const float kLpA2 = 0.2403461f;
 static float sLpX1L = 0.0f, sLpX2L = 0.0f, sLpY1L = 0.0f, sLpY2L = 0.0f;
 static float sLpX1R = 0.0f, sLpX2R = 0.0f, sLpY1R = 0.0f, sLpY2R = 0.0f;
 
@@ -131,8 +132,8 @@ static inline float Port_Audio_SoftClip(float x) {
         return x;
     }
     const float sign = x < 0 ? -1.0f : 1.0f;
-    const float over = (x * sign) - kThreshold;        /* > 0 */
-    const float room = 32767.0f - kThreshold;          /* 7767 */
+    const float over = (x * sign) - kThreshold; /* > 0 */
+    const float room = 32767.0f - kThreshold;   /* 7767 */
     const float bent = room * tanhf(over / room);
     return sign * (kThreshold + bent);
 }
@@ -143,8 +144,10 @@ static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
        defensively to the slider's range in case of an out-of-band write. */
     float w;
     __atomic_load(&sWidth, &w, __ATOMIC_RELAXED);
-    if (w < 1.0f) w = 1.0f;
-    if (w > 1.5f) w = 1.5f;
+    if (w < 1.0f)
+        w = 1.0f;
+    if (w > 1.5f)
+        w = 1.5f;
 
     /* Apply any pending filter-history reset here, on the audio thread, before
        the read loop touches the statics — so the game-thread reset/toggle
@@ -160,20 +163,26 @@ static void Port_Audio_PostProcess(int16_t* buffer, int frames) {
         /* 1. High-pass DC blocker. */
         const float hpL = kHpAlpha * (sHpPrevOutL + l - sHpPrevInL);
         const float hpR = kHpAlpha * (sHpPrevOutR + r - sHpPrevInR);
-        sHpPrevInL = l; sHpPrevOutL = hpL;
-        sHpPrevInR = r; sHpPrevOutR = hpR;
+        sHpPrevInL = l;
+        sHpPrevOutL = hpL;
+        sHpPrevInR = r;
+        sHpPrevOutR = hpR;
 
         /* 2. Two-pole low-pass. */
-        const float lpL = kLpB0 * hpL + kLpB1 * sLpX1L + kLpB2 * sLpX2L
-                        - kLpA1 * sLpY1L - kLpA2 * sLpY2L;
-        const float lpR = kLpB0 * hpR + kLpB1 * sLpX1R + kLpB2 * sLpX2R
-                        - kLpA1 * sLpY1R - kLpA2 * sLpY2R;
-        sLpX2L = sLpX1L; sLpX1L = hpL; sLpY2L = sLpY1L; sLpY1L = lpL;
-        sLpX2R = sLpX1R; sLpX1R = hpR; sLpY2R = sLpY1R; sLpY1R = lpR;
+        const float lpL = kLpB0 * hpL + kLpB1 * sLpX1L + kLpB2 * sLpX2L - kLpA1 * sLpY1L - kLpA2 * sLpY2L;
+        const float lpR = kLpB0 * hpR + kLpB1 * sLpX1R + kLpB2 * sLpX2R - kLpA1 * sLpY1R - kLpA2 * sLpY2R;
+        sLpX2L = sLpX1L;
+        sLpX1L = hpL;
+        sLpY2L = sLpY1L;
+        sLpY1L = lpL;
+        sLpX2R = sLpX1R;
+        sLpX1R = hpR;
+        sLpY2R = sLpY1R;
+        sLpY1R = lpR;
 
         /* 3. Mid/side widen — boost side by 20 %, leave mid alone so
          *    mono playback collapses cleanly to the original mix. */
-        const float mid  = (lpL + lpR) * 0.5f;
+        const float mid = (lpL + lpR) * 0.5f;
         const float side = (lpL - lpR) * 0.5f * w;
         const float wL = mid + side;
         const float wR = mid - side;
@@ -192,6 +201,18 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
     int remaining = additional_amount;
     (void)userdata;
     (void)total_amount;
+    if (Port_DebugVerbose || getenv("TMC_AUDIO_TRACE")) {
+        static Uint64 sLastCbNs = 0;
+        Uint64 now = SDL_GetTicksNS();
+        double gapMs = sLastCbNs ? (double)(now - sLastCbNs) / 1e6 : 0.0;
+        sLastCbNs = now;
+        int queued = SDL_GetAudioStreamQueued(stream);
+        double reqMs = 1000.0 * (additional_amount / PORT_AUDIO_BYTES_PER_FRAME) / PORT_AUDIO_SAMPLE_RATE;
+        double queuedMs = 1000.0 * (queued / PORT_AUDIO_BYTES_PER_FRAME) / PORT_AUDIO_SAMPLE_RATE;
+        /* gap = time since last callback; req = audio this callback must produce;
+         * queued = backlog still in the stream (near 0 => underrun risk). */
+        fprintf(stderr, "[audio] cb gap=%.1fms req=%.1fms queued=%.1fms\n", gapMs, reqMs, queuedMs);
+    }
 
     while (remaining > 0) {
         int frames = remaining / PORT_AUDIO_BYTES_PER_FRAME;
@@ -207,8 +228,7 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
         /* gMain.muteAudio is written on the main thread; read it with a relaxed
            atomic load here on the SDL audio thread to avoid a data race. It is a
            rarely-changing u8 flag, so relaxed ordering is sufficient. */
-        Port_M4A_Backend_Render(buffer, (uint32_t)frames,
-                                __atomic_load_n(&gMain.muteAudio, __ATOMIC_RELAXED) != 0);
+        Port_M4A_Backend_Render(buffer, (uint32_t)frames, __atomic_load_n(&gMain.muteAudio, __ATOMIC_RELAXED) != 0);
         /* GBA-accurate mode hands the synth output straight to SDL — no
            HPF/LPF/widen/soft-clip coloring — for A/B comparison against
            hardware/mGBA. The synth-side knobs (NEAREST resampling) are set
@@ -297,8 +317,10 @@ bool Port_Audio_IsGbaAccurate(void) {
 }
 
 void Port_Audio_SetWidth(float width) {
-    if (width < 1.0f) width = 1.0f;
-    if (width > 1.5f) width = 1.5f;
+    if (width < 1.0f)
+        width = 1.0f;
+    if (width > 1.5f)
+        width = 1.5f;
     __atomic_store(&sWidth, &width, __ATOMIC_RELAXED);
 }
 
