@@ -290,6 +290,14 @@ bool Port_Audio_Init(void) {
      * low-latency hint. Override the frame count at runtime to tune latency vs
      * stability without a rebuild: env TMC_AUDIO_FRAMES=<n>, or on-device an
      * `audio_frames` marker file (first line = frame count) in the data dir. */
+    /* Force SDL's audio callback thread (SDLAudioP*, which runs our MP2K synth)
+     * to a realtime SCHED_FIFO policy. On this 4-fast-core SoC it otherwise
+     * contends with the 3 PPU render workers + main and gets starved — measured
+     * callback gaps up to ~78 ms in steady gameplay, exceeding AAudio's 40 ms
+     * buffer and popping. Realtime priority lets it preempt the render workers,
+     * which is correct: dropping one PPU scanline slice is invisible, a starved
+     * audio thread is audible. Must be set before the audio thread is created. */
+    SDL_SetHint(SDL_HINT_THREAD_PRIORITY_POLICY, "1");
     SDL_SetHint(SDL_HINT_ANDROID_LOW_LATENCY_AUDIO, "1");
     int frames = 0;
     const char* fenv = getenv("TMC_AUDIO_FRAMES");
