@@ -937,7 +937,6 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
         int bottom_layer = 5;
         bool found_top = false;
         bool found_bottom = false;
-        int priority;
 
         if (any_window) {
             win_ctrl = outside_ctrl;
@@ -968,44 +967,50 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
         visible_obj = (win_ctrl & 0x10u) != 0u;
         allow_sfx = (win_ctrl & 0x20u) != 0u;
 
-        for (priority = 0; priority <= 3 && !found_bottom; ++priority) {
+        /* Single merged pass over the priority-sorted bg_order, inserting OBJ at
+         * its priority slot — byte-identical layering to the former
+         * priority(0..3) x bg(0..3) double loop (up to 20 iters/pixel), but ~5
+         * iters and one loop. OBJ is emitted right before the first bg whose
+         * priority >= obj_priority[x] (GBA ties: OBJ over same-priority BG); if
+         * no such bg, OBJ is emitted after the walk. Removing per-pixel work with
+         * no added data-dependent branch is the A53-correct optimisation. */
+        {
+            bool obj_candidate = obj_enabled && visible_obj && (obj_layer[x] != 0u);
+            unsigned obj_p = obj_priority[x];
+            bool obj_emitted = false;
             int order_index;
 
-            if (obj_enabled && visible_obj && obj_layer[x] != 0u && obj_priority[x] == priority) {
-                if (!found_top) {
-                    top_color = obj_layer[x];
-                    top_layer = 4;
-                    found_top = true;
-                } else if (!found_bottom) {
-                    bottom_color = obj_layer[x];
-                    bottom_layer = 4;
-                    found_bottom = true;
-                }
-            }
+#define MODE1_CONSIDER(_color, _layer) \
+    do {                               \
+        if (!found_top) {              \
+            top_color = (_color);      \
+            top_layer = (_layer);      \
+            found_top = true;          \
+        } else {                       \
+            bottom_color = (_color);   \
+            bottom_layer = (_layer);   \
+            found_bottom = true;       \
+        }                              \
+    } while (0)
 
-            for (order_index = 0; order_index < MODE1_GBA_BG_COUNT; ++order_index) {
+            for (order_index = 0; order_index < MODE1_GBA_BG_COUNT && !found_bottom; ++order_index) {
                 int bg = bg_order[order_index];
-                if (!bg_enabled[bg] || !visible_bg[bg]) {
+                if (obj_candidate && !obj_emitted && bg_order_priority[bg] >= obj_p) {
+                    MODE1_CONSIDER(obj_layer[x], 4);
+                    obj_emitted = true;
+                    if (found_bottom) {
+                        break;
+                    }
+                }
+                if (!bg_enabled[bg] || !visible_bg[bg] || bg_layers[bg][x] == 0u) {
                     continue;
                 }
-                if (bg_order_priority[bg] != priority) {
-                    continue;
-                }
-                if (bg_layers[bg][x] == 0u) {
-                    continue;
-                }
-
-                if (!found_top) {
-                    top_color = bg_layers[bg][x];
-                    top_layer = bg;
-                    found_top = true;
-                } else if (!found_bottom) {
-                    bottom_color = bg_layers[bg][x];
-                    bottom_layer = bg;
-                    found_bottom = true;
-                    break;
-                }
+                MODE1_CONSIDER(bg_layers[bg][x], bg);
             }
+            if (obj_candidate && !obj_emitted && !found_bottom) {
+                MODE1_CONSIDER(obj_layer[x], 4);
+            }
+#undef MODE1_CONSIDER
         }
 
         if (allow_sfx) {
