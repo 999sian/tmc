@@ -92,6 +92,21 @@ static void DrawRibbonDisplayTab(void) {
             ImGui::TextDisabled(gpuActive ? "(CPU fallback)" : "(needs GPU backend)");
         }
 
+        /* GLES compute rasterizer — opt-in fallback for devices without Vulkan.
+         * ~5x slower than CPU on weak GLES GPUs (Adreno 405), so default off and
+         * only relevant when the SDL_GPU (Vulkan) backend is NOT active. */
+        if (!gpuActive) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0); ImGui::Text("GLES raster (exp.)");
+            ImGui::TableSetColumnIndex(1);
+            bool gles = Port_Config_GetGpuRasterGles();
+            if (ImGui::Checkbox("##gpu_raster_gles", &gles)) {
+                Port_Config_SetGpuRasterGles(gles);
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(often slower than CPU)");
+        }
+
         StepperRow("Background", "bgfill",
                    [](char*, size_t) { return Port_Config_BgFillName(Port_Config_BgFill()); },
                    Port_Config_CycleBgFill);

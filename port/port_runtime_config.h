@@ -197,6 +197,10 @@ void Port_Config_SetVSync(bool on);
  * CPU rasterizer is the automatic fallback. No-op on non-GPU builds. */
 bool Port_Config_GetGpuRaster(void);
 void Port_Config_SetGpuRaster(bool on);
+/* GLES compute rasterizer — OPT-IN (default off); ~5x slower than CPU on the
+ * Adreno 405. Only consulted when the Vulkan raster is unavailable. */
+bool Port_Config_GetGpuRasterGles(void);
+void Port_Config_SetGpuRasterGles(bool on);
 
 /* GBA-LCD display transforms (F8 Display menu). */
 bool Port_Config_GetColorCorrection(void);
