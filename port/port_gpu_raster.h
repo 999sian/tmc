@@ -43,7 +43,8 @@ typedef struct PortGpuRasterFrame {
     const uint16_t* bg_palette;       /* 256 entries */
     const uint16_t* obj_palette;      /* 256 entries */
     const uint16_t* oam;              /* 512 halfwords */
-    const uint8_t* io_per_line;       /* frame_height * 1024 bytes */
+    const uint8_t* io_per_line;       /* io_uniform ? 1 row : frame_height rows (1024 B each) */
+    bool io_uniform;                  /* true = no per-line HDMA: only row 0 valid, shader reads row 0 */
     const uint16_t* dispcnt_per_line; /* frame_height entries */
     const int32_t* affine_ref_x;      /* frame_height entries, mode2, may be NULL */
     const int32_t* affine_ref_y;      /* frame_height entries, mode2, may be NULL */

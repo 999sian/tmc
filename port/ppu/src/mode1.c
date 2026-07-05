@@ -1407,9 +1407,14 @@ int virtuappu_mode1_prepare_frame(const PPUMemory* ppu, uint8_t* io_per_line, ui
         if (per_line_io) {
             virtuappu_mode1_pre_line_callback(line);
         }
-        /* Always snapshot: the GPU reads a full per-line IO array regardless of
-         * whether HDMA mutated it (constant lines just repeat). */
-        memcpy(&io_per_line[(size_t)line * MODE1_IO_MEM_SIZE], mode1_memory.io_mem, MODE1_IO_MEM_SIZE);
+        /* Snapshot IO for the GPU. When there is no per-line HDMA callback,
+         * io_mem is identical on every scanline, so snapshot ONLY row 0 — the
+         * GPU uploads one row and the shader reads row 0 for all lines. This
+         * removes 159 KB of redundant memcpy + bus transfer per frame. With a
+         * callback, every line can differ, so snapshot them all. */
+        if (per_line_io || line == 0) {
+            memcpy(&io_per_line[(size_t)line * MODE1_IO_MEM_SIZE], mode1_memory.io_mem, MODE1_IO_MEM_SIZE);
+        }
         dispcnt_per_line[line] = affine ? dispcnt
                                         : (uint16_t)((uint16_t)mode1_memory.io_mem[MODE1_IO_DISPCNT] |
                                                      ((uint16_t)mode1_memory.io_mem[MODE1_IO_DISPCNT + 1] << 8));

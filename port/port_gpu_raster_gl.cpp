@@ -328,7 +328,7 @@ extern "C" bool Port_GpuRasterGl_RenderReadback(PortGpuRasterGl* r, const PortGp
 
     static const uint32_t zero = 0;
     upload_ssbo(r, GL_SSBO_BG_PALETTE, f->bg_palette, 256 * (GLsizeiptr)sizeof(uint16_t));
-    upload_ssbo(r, GL_SSBO_IO, f->io_per_line, (GLsizeiptr)H * 0x400);
+    upload_ssbo(r, GL_SSBO_IO, f->io_per_line, (GLsizeiptr)(f->io_uniform ? 1 : H) * 0x400);
     upload_ssbo(r, GL_SSBO_VRAM, f->vram, 0x18000);
     upload_ssbo(r, GL_SSBO_OBJ_PALETTE, f->obj_palette, 256 * (GLsizeiptr)sizeof(uint16_t));
     upload_ssbo(r, GL_SSBO_OAM, f->oam, 512 * (GLsizeiptr)sizeof(uint16_t));
@@ -359,6 +359,7 @@ extern "C" bool Port_GpuRasterGl_RenderReadback(PortGpuRasterGl* r, const PortGp
     p.geom[2] = f->mode;
     p.geom[3] = f->affine ? 1 : 0;
     p.misc[0] = f->frame_dispcnt;
+    p.misc[1] = f->io_uniform ? 1u : 0u;
     p.ws[0] = f->ws_bg_clip_x ? f->ws_bg_clip_x : 240;
     p.ws[1] = f->ws_cols;
     p.ws[2] = f->ws_hud_right_anchor;

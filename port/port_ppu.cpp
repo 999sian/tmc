@@ -1011,6 +1011,9 @@ static bool Port_PPU_TryGpuRaster(void) {
     f.obj_palette = mem.obj_palette;
     f.oam = mem.oam_mem;
     f.io_per_line = sRasterIoPerLine;
+    /* Uniform IO (only row 0 valid) when there's no per-line HDMA callback —
+     * prepare_frame snapshots just row 0 then, and the shader reads row 0. */
+    f.io_uniform = (virtuappu_mode1_pre_line_callback == nullptr);
     f.dispcnt_per_line = sRasterDispcntPerLine;
     f.affine_ref_x = f.affine ? sRasterAffRefX : nullptr;
     f.affine_ref_y = f.affine ? sRasterAffRefY : nullptr;
