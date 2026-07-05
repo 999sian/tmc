@@ -64,11 +64,13 @@ typedef struct PortGpuRasterFrame {
     int ws_shadow_halfwords; /* total halfwords in ws_shadow (4*32*ws_cols) */
 } PortGpuRasterFrame;
 
-/* Create a rasterizer on `device` from SPIR-V vertex/fragment blobs. Returns
- * NULL on any failure (unsupported feature, shader/pipeline build) — the
- * caller then uses the CPU rasterizer. */
-PortGpuRaster* Port_GpuRaster_Create(SDL_GPUDevice* device, const void* vert_spv, size_t vert_len, const void* frag_spv,
-                                     size_t frag_len);
+/* Create a rasterizer on `device` from vertex/fragment shader blobs in
+ * `format` (SPIR-V on Vulkan; MSL on Metal), with `entrypoint` ("main" for
+ * SPIR-V, "main0" for the SDL_GPU MSL convention). Returns NULL on any failure
+ * (unsupported format, shader/pipeline build) — the caller then uses the CPU
+ * rasterizer. */
+PortGpuRaster* Port_GpuRaster_Create(SDL_GPUDevice* device, SDL_GPUShaderFormat format, const char* entrypoint,
+                                     const void* vert, size_t vert_len, const void* frag, size_t frag_len);
 
 void Port_GpuRaster_Destroy(PortGpuRaster* r);
 

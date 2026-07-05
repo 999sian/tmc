@@ -780,7 +780,7 @@ int main(int argc, char** argv) {
     if (!vspv || !fspv) {
         return 2;
     }
-    PortGpuRaster* r = Port_GpuRaster_Create(dev, vspv, vlen, fspv, flen);
+    PortGpuRaster* r = Port_GpuRaster_Create(dev, SDL_GPU_SHADERFORMAT_SPIRV, "main", vspv, vlen, fspv, flen);
     if (!r) {
         std::fprintf(stderr, "Port_GpuRaster_Create failed\n");
         return 2;

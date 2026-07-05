@@ -66,14 +66,15 @@ struct RasterParams {
     int32_t wsbase[4]; /* per-BG shadow_base_tile (<0 = none) */
 };
 
-static SDL_GPUShader* make_shader(SDL_GPUDevice* dev, const void* code, size_t len, SDL_GPUShaderStage stage,
-                                  Uint32 num_storage, Uint32 num_uniform) {
+static SDL_GPUShader* make_shader(SDL_GPUDevice* dev, SDL_GPUShaderFormat format, const char* entrypoint,
+                                  const void* code, size_t len, SDL_GPUShaderStage stage, Uint32 num_storage,
+                                  Uint32 num_uniform) {
     SDL_GPUShaderCreateInfo ci;
     SDL_zero(ci);
     ci.code = static_cast<const Uint8*>(code);
     ci.code_size = len;
-    ci.entrypoint = "main";
-    ci.format = SDL_GPU_SHADERFORMAT_SPIRV;
+    ci.entrypoint = entrypoint;
+    ci.format = format;
     ci.stage = stage;
     ci.num_storage_buffers = num_storage;
     ci.num_uniform_buffers = num_uniform;
@@ -84,10 +85,14 @@ static SDL_GPUShader* make_shader(SDL_GPUDevice* dev, const void* code, size_t l
     return s;
 }
 
-extern "C" PortGpuRaster* Port_GpuRaster_Create(SDL_GPUDevice* device, const void* vert_spv, size_t vert_len,
-                                                const void* frag_spv, size_t frag_len) {
-    if (!device || !vert_spv || !frag_spv) {
+extern "C" PortGpuRaster* Port_GpuRaster_Create(SDL_GPUDevice* device, SDL_GPUShaderFormat format,
+                                                const char* entrypoint, const void* vert, size_t vert_len,
+                                                const void* frag, size_t frag_len) {
+    if (!device || !vert || !frag) {
         return nullptr;
+    }
+    if (!entrypoint) {
+        entrypoint = "main";
     }
     PortGpuRaster* r = new (std::nothrow) PortGpuRaster();
     if (!r) {
@@ -95,8 +100,9 @@ extern "C" PortGpuRaster* Port_GpuRaster_Create(SDL_GPUDevice* device, const voi
     }
     r->device = device;
 
-    r->vert = make_shader(device, vert_spv, vert_len, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
-    r->frag = make_shader(device, frag_spv, frag_len, SDL_GPU_SHADERSTAGE_FRAGMENT, PORT_GPU_RASTER_NUM_SSBO, 1);
+    r->vert = make_shader(device, format, entrypoint, vert, vert_len, SDL_GPU_SHADERSTAGE_VERTEX, 0, 0);
+    r->frag = make_shader(device, format, entrypoint, frag, frag_len, SDL_GPU_SHADERSTAGE_FRAGMENT,
+                          PORT_GPU_RASTER_NUM_SSBO, 1);
     if (!r->vert || !r->frag) {
         Port_GpuRaster_Destroy(r);
         return nullptr;
