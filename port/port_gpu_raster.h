@@ -1,0 +1,72 @@
+#pragma once
+/*
+ * port_gpu_raster.h — GPU PPU rasterizer host side.
+ *
+ * Part of the The Minish Cap PC port — GPL-3.0-or-later.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Renders the GBA frame on the GPU (fragment-shader reimplementation of
+ * port/ppu/src/mode1.c) into an offscreen R8G8B8A8_UNORM texture. The CPU
+ * software rasterizer stays the golden reference and the automatic fallback;
+ * see docs/gpu-rasterizer-design.md.
+ *
+ * Device-agnostic: the caller supplies an SDL_GPUDevice (the game reuses the
+ * presentation device; tools/ppu_gpu_parity creates a headless one) and the
+ * SPIR-V shader blobs (the game embeds them; the harness loads from disk).
+ */
+
+#include <SDL3/SDL.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct PortGpuRaster PortGpuRaster;
+
+/* Inputs for one frame. All pointers are borrowed for the duration of the
+ * Render call (uploaded synchronously); the caller retains ownership.
+ * The per-line arrays are the outputs of the CPU sequential pass
+ * (virtuappu_mode1 prepare): io snapshots, per-line DISPCNT, affine refs. */
+typedef struct PortGpuRasterFrame {
+    int frame_width;        /* visible pixels per line */
+    int frame_height;       /* scanlines (160) */
+    int frame_pitch;        /* readback row stride in pixels */
+    int mode;               /* GBA BG mode from PPUMemory.mode */
+    bool affine;            /* mode == 2 */
+    uint16_t frame_dispcnt; /* frame-start DISPCNT (forced blank + backdrop) */
+
+    const uint8_t* vram;              /* MODE1_VRAM_SIZE bytes */
+    const uint16_t* bg_palette;       /* 256 entries */
+    const uint16_t* obj_palette;      /* 256 entries */
+    const uint16_t* oam;              /* 512 halfwords */
+    const uint8_t* io_per_line;       /* frame_height * 1024 bytes */
+    const uint16_t* dispcnt_per_line; /* frame_height entries */
+    const int32_t* affine_ref_x;      /* frame_height entries, mode2, may be NULL */
+    const int32_t* affine_ref_y;      /* frame_height entries, mode2, may be NULL */
+} PortGpuRasterFrame;
+
+/* Create a rasterizer on `device` from SPIR-V vertex/fragment blobs. Returns
+ * NULL on any failure (unsupported feature, shader/pipeline build) — the
+ * caller then uses the CPU rasterizer. */
+PortGpuRaster* Port_GpuRaster_Create(SDL_GPUDevice* device, const void* vert_spv, size_t vert_len, const void* frag_spv,
+                                     size_t frag_len);
+
+void Port_GpuRaster_Destroy(PortGpuRaster* r);
+
+/* Render one frame into the context's offscreen texture. Returns the texture
+ * (owned by the context, valid until the next Render/Destroy) or NULL on
+ * failure. */
+SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpuRasterFrame* f);
+
+/* Copy the last-rendered texture into `dst` as ABGR8888, honoring `pitch`
+ * (pixels per row). Returns false on failure. Used by the parity harness and
+ * by CPU consumers that need pixels (screenshot/shm/xBRZ). */
+bool Port_GpuRaster_Readback(PortGpuRaster* r, uint32_t* dst, int width, int height, int pitch);
+
+#ifdef __cplusplus
+}
+#endif
