@@ -36,6 +36,15 @@
   fallback stays Vulkan→CPU. Enable per-device via F8 → Display → "GLES raster
   (exp.)" (`gpu_raster_gles`) on a stronger GLES-only GPU. See
   `docs/gpu-rasterizer-parity-notes.md`.
+- **Readback optimized:** the render and framebuffer download now share one
+  command buffer / one fence wait (was two), −12% on the GPU raster path; a
+  deferred double-buffered readback API (`SDL_QueryGPUFence` ring, 1-frame
+  latency) cuts CPU-side cost −62% for callers that opt into the latency.
+  Measured + externally corroborated finding: at native 240×160 the CPU
+  rasterizer still wins (the frame is too small for upload+readback overhead to
+  pay off — the same reason mGBA defaults to software); GPU raster is a latent
+  win for high internal-scale / widescreen / a future direct-present path.
+  Full numbers and citations in `docs/gpu-rasterizer-parity-notes.md`.
 
 ### True widescreen: the view now fits YOUR screen
 

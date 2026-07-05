@@ -110,3 +110,56 @@ GLES-only GPU where it might win. It needs re-benchmarking per device.
 Regenerate the committed shader blobs (SPIR-V always; MSL when spirv-cross is
 installed) with `port/shaders/build.sh`. The GLES backend builds its compute
 program from the committed `ppu_core.glsl` at runtime (no offline step).
+
+## Readback optimization + performance findings
+
+The GPU raster path reads its result back to `virtuappu_frame_buffer` each frame
+(so the present/filter/screenshot/shm consumers are unchanged). That readback is
+the cost centre. Measured on desktop (Intel Arc / Vulkan, 240×160, busy 2-BG
+scene, 2000 iters):
+
+| Path | cost | notes |
+|---|---|---|
+| separate Render + Readback (2 submits/fences) | 2.01 ms | original |
+| **merged RenderReadback (1 submit / 1 fence)** | **1.77 ms** | −12%; current default (`Port_GpuRaster_RenderReadback`) |
+| **deferred (submit N, poll N-1, no CPU stall)** | **0.77 ms CPU-side** | −62%; opt-in API (`Port_GpuRaster_RenderReadbackDeferred`), 1-frame stale |
+| CPU rasterizer (reference, same scene) | ~0.40 ms | — |
+
+**Conclusion (measured + externally corroborated): GPU rasterization of a
+240×160 GBA frame cannot beat a competent CPU rasterizer**, because the frame is
+tiny and the per-frame upload + submit + readback overhead exceeds the actual
+rasterize cost. This is a known result for GBA emulation:
+
+- mGBA and other GBA emulators default to *software* rasterization precisely
+  because "the GBA's internal resolution (240×160) is extremely small... the
+  entire GBA frame can be rasterized in software extremely quickly [and] avoids
+  the latency of transferring data between system RAM and VRAM." GPU (OpenGL)
+  rendering is introduced for *upscaling, clean rotation/scaling (Mode 7), and
+  post-processing shaders* — not to make native-res rendering faster; it can be
+  *slower* than software "despite the GPU's theoretical power." (mGBA docs /
+  emulation-dev consensus.)
+- The readback stall is a pipeline sync point: a texture download "forces the
+  CPU to wait until the GPU has completely finished... serializ[ing] your engine,
+  effectively killing your framerate regardless of how small the texture is."
+  The prescribed fix is double/triple-buffered async readback (PBO
+  ping-ponging), "access the data 2–3 frames later... CPU overhead drops
+  significantly." Our deferred ring (`SDL_QueryGPUFence` over 2 download
+  transfer buffers) is the SDL_GPU equivalent, and the 0.77 ms figure confirms
+  the win.
+
+### What this means for the defaults
+
+- The merge is a strict improvement and is the default GPU-raster path.
+- Same-frame correctness is retained (screenshot/parity/shm see the current
+  frame), so the merged sync path — not the deferred one — is wired into the
+  game.
+- GPU raster remains a **latent** win only where the pixel count grows enough to
+  flip the CPU-vs-upload balance: high internal-scale supersampling, large
+  widescreen, or a future **direct-present** path (render straight into the
+  swapchain via `SDL_WaitAndAcquireGPUSwapchainTexture` / `SDL_BlitGPUTexture`,
+  no readback at all) — which is the only structure that removes the readback
+  entirely, at the cost of reworking the CPU-side frame consumers. Tracked as
+  the next step if/when high-res output is prioritised.
+- For native 240×160 on typical hardware, the CPU rasterizer is the right
+  default; the GPU backends stay opt-in-safe (Vulkan auto where present, GLES
+  opt-in) rather than a guaranteed speedup.
