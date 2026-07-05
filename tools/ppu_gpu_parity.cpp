@@ -196,6 +196,160 @@ static void scene_backdrop_mixed(Scene* s) {
     s->bgpal[0] = 0x3DEF; /* arbitrary */
 }
 
+/* ---- BG helpers (build tiles/tilemaps in VRAM) ---- */
+
+/* Fill a 16-colour palette bank (16 entries) with distinguishable colours. */
+static void fill_palette_bank(uint16_t* pal, int bank, uint16_t backdrop) {
+    if (bank == 0) {
+        pal[0] = backdrop;
+    }
+    for (int i = (bank == 0 ? 1 : 0); i < 16; ++i) {
+        /* spread across rgb555 so index changes are visible */
+        int idx = bank * 16 + i;
+        pal[idx] = (uint16_t)(((idx * 3) & 0x1F) | (((idx * 5) & 0x1F) << 5) | (((idx * 7) & 0x1F) << 10));
+    }
+}
+
+/* Write a 4bpp 8x8 tile at char_base+tile*32. Pixel (px,py) colour index =
+ * pattern(px,py) so hflip/vflip are observable. */
+static void write_tile_4bpp(uint8_t* vram, uint32_t char_base, int tile) {
+    for (int py = 0; py < 8; ++py) {
+        for (int px = 0; px < 8; ++px) {
+            uint8_t ci = (uint8_t)(((px + py * 2) % 15) + 1); /* 1..15, never 0 */
+            uint32_t addr = char_base + (uint32_t)tile * 32u + (uint32_t)py * 4u + (uint32_t)(px / 2);
+            if (px & 1) {
+                vram[addr] = (uint8_t)((vram[addr] & 0x0F) | (ci << 4));
+            } else {
+                vram[addr] = (uint8_t)((vram[addr] & 0xF0) | ci);
+            }
+        }
+    }
+}
+
+/* Write an 8bpp 8x8 tile at char_base+tile*64. */
+static void write_tile_8bpp(uint8_t* vram, uint32_t char_base, int tile) {
+    for (int py = 0; py < 8; ++py) {
+        for (int px = 0; px < 8; ++px) {
+            uint8_t ci = (uint8_t)(((px * 7 + py * 13) % 200) + 1); /* 1..200 */
+            uint32_t addr = char_base + (uint32_t)tile * 64u + (uint32_t)py * 8u + (uint32_t)px;
+            vram[addr] = ci;
+        }
+    }
+}
+
+/* Fill a 32x32 screenblock at screen_base with `entry`. */
+static void fill_screenblock(uint8_t* vram, uint32_t screen_base, uint16_t entry) {
+    for (int i = 0; i < 32 * 32; ++i) {
+        uint32_t a = screen_base + (uint32_t)i * 2u;
+        vram[a] = (uint8_t)(entry & 0xFF);
+        vram[a + 1] = (uint8_t)(entry >> 8);
+    }
+}
+
+/* Basic single-BG0 4bpp tiled scene: char base 0, screen base 0x4000
+ * (block 8), tile 1, palette bank 2, backdrop dark grey. */
+static void scene_bg0_tiled(Scene* s) {
+    scene_clear(s, "bg0_tiled_4bpp");
+    set_io16(s, 0x00, 0x0100);          /* DISPCNT: mode 0, BG0 on */
+    set_io16(s, 0x08, 0x0800 | 0x0080); /* BG0CNT: screen_base block 16? see below */
+    /* BG0CNT: char_base=0 (bits2-3=0), screen_base block = 8 (bits8-12=8 -> *0x800=0x4000),
+     * 4bpp (bit7=0), priority 0. */
+    set_io16(s, 0x08, (uint16_t)(8u << 8));
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12))); /* tile 1, palbank 2 */
+}
+
+/* BG0 with scroll (sub-tile + past-tile). */
+static void scene_bg0_scroll(Scene* s) {
+    scene_bg0_tiled(s);
+    s->name = "bg0_scroll";
+    set_io16(s, 0x10, 13);  /* BG0HOFS = 13 */
+    set_io16(s, 0x12, 100); /* BG0VOFS = 100 */
+}
+
+/* BG0 with per-tile hflip+vflip set in the tilemap entry. */
+static void scene_bg0_flip(Scene* s) {
+    scene_bg0_tiled(s);
+    s->name = "bg0_flip";
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (1u << 10) | (1u << 11) | (2u << 12)));
+}
+
+/* BG0 8bpp. */
+static void scene_bg0_8bpp(Scene* s) {
+    scene_clear(s, "bg0_8bpp");
+    set_io16(s, 0x00, 0x0100);
+    set_io16(s, 0x08, (uint16_t)((8u << 8) | 0x0080)); /* screen block 8, 8bpp */
+    s->bgpal[0] = 0x0421;
+    for (int i = 1; i < 256; ++i) {
+        s->bgpal[i] = (uint16_t)(((i * 3) & 0x1F) | (((i * 5) & 0x1F) << 5) | (((i * 7) & 0x1F) << 10));
+    }
+    write_tile_8bpp(s->vram, 0, 1);
+    fill_screenblock(s->vram, 0x4000, 1);
+}
+
+/* BG0 mosaic (h=4, v=3). */
+static void scene_bg0_mosaic(Scene* s) {
+    scene_bg0_tiled(s);
+    s->name = "bg0_mosaic";
+    set_io16(s, 0x08, (uint16_t)((8u << 8) | 0x0040)); /* BG0CNT + mosaic bit 6 */
+    set_io16(s, 0x4C, (uint16_t)((3u) | (2u << 4)));   /* MOSAIC: h-1=3, v-1=2 */
+}
+
+/* 512x256 BG0 (size flag 1): fill all 2 horizontal blocks + scroll across. */
+static void scene_bg0_512(Scene* s) {
+    scene_clear(s, "bg0_512wide");
+    set_io16(s, 0x00, 0x0100);
+    set_io16(s, 0x08, (uint16_t)((8u << 8) | (1u << 14))); /* screen block 8, size 1 (512x256) */
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    write_tile_4bpp(s->vram, 0, 2);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12))); /* block 8 */
+    fill_screenblock(s->vram, 0x4800, (uint16_t)(2u | (2u << 12))); /* block 9 */
+    set_io16(s, 0x10, 260);                                         /* scroll into 2nd block */
+}
+
+/* Two BGs with different priorities: BG1 (priority 0) over BG0 (priority 1). */
+static void scene_bg_priority(Scene* s) {
+    scene_clear(s, "bg_priority");
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x0200)); /* BG0+BG1 on */
+    /* BG0: screen block 8, priority 1 */
+    set_io16(s, 0x08, (uint16_t)((8u << 8) | 1u));
+    /* BG1: screen block 10, priority 0, char base 1 (0x4000) */
+    set_io16(s, 0x0A, (uint16_t)((10u << 8) | (1u << 2) | 0u));
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    fill_palette_bank(s->bgpal, 3, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);                                 /* BG0 tile, char base 0 */
+    write_tile_4bpp(s->vram, 0x4000, 1);                            /* BG1 tile, char base 0x4000 */
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12))); /* BG0 map block 8 */
+    fill_screenblock(s->vram, 0x5000, (uint16_t)(1u | (3u << 12))); /* BG1 map block 10 */
+}
+
+/* BG0 with a partly-transparent tile (color index 0 shows backdrop). */
+static void scene_bg0_transparent(Scene* s) {
+    scene_clear(s, "bg0_transparent");
+    set_io16(s, 0x00, 0x0100);
+    set_io16(s, 0x08, (uint16_t)(8u << 8));
+    s->bgpal[0] = 0x7FFF; /* white backdrop */
+    fill_palette_bank(s->bgpal, 2, 0x7FFF);
+    /* tile 1: checkerboard of index 0 (transparent) and index 5 */
+    for (int py = 0; py < 8; ++py) {
+        for (int px = 0; px < 8; ++px) {
+            uint8_t ci = ((px + py) & 1) ? 5 : 0;
+            uint32_t addr = 0u + 1u * 32u + (uint32_t)py * 4u + (uint32_t)(px / 2);
+            if (px & 1) {
+                s->vram[addr] = (uint8_t)((s->vram[addr] & 0x0F) | (ci << 4));
+            } else {
+                s->vram[addr] = (uint8_t)((s->vram[addr] & 0xF0) | ci);
+            }
+        }
+    }
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+}
+
 int main(int argc, char** argv) {
     const char* vpath = argc > 1 ? argv[1] : "port/shaders/build/ppu_raster.vert.spv";
     const char* fpath = argc > 2 ? argv[2] : "port/shaders/build/ppu_raster.frag.spv";
@@ -228,7 +382,9 @@ int main(int argc, char** argv) {
     static Scene scene;
     std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H);
 
-    SceneFn scenes[] = { scene_forced_blank, scene_backdrop_blue, scene_backdrop_black, scene_backdrop_mixed };
+    SceneFn scenes[] = { scene_forced_blank, scene_backdrop_blue, scene_backdrop_black, scene_backdrop_mixed,
+                         scene_bg0_tiled,    scene_bg0_scroll,    scene_bg0_flip,       scene_bg0_8bpp,
+                         scene_bg0_mosaic,   scene_bg0_512,       scene_bg_priority,    scene_bg0_transparent };
     int total_diffs = 0;
     for (SceneFn fn : scenes) {
         fn(&scene);
