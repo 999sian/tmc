@@ -32,6 +32,7 @@ extern "C" {
 #include "virtuappu.h"
 }
 #include "port_gpu_raster.h"
+#include "port_gpu_raster_gl.h"
 
 /* ---- synthetic GBA memory for one scene ---- */
 struct Scene {
@@ -93,13 +94,12 @@ static void render_cpu(Scene* s, uint32_t* out, int w, int h) {
         std::memcpy(&out[(size_t)y * w], &virtuappu_frame_buffer[(size_t)y * w], (size_t)w * sizeof(uint32_t));
     }
 }
-
-/* Build the per-line arrays the GPU frame ABI expects (constant across lines
- * when there is no HDMA callback, which is the case for these static scenes). */
-static void render_gpu(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) {
-    static std::vector<uint8_t> io_per_line;
-    static std::vector<uint16_t> dispcnt_per_line;
-    static std::vector<int32_t> aff_x, aff_y;
+/* Build the PortGpuRasterFrame for a scene (shared by the Vulkan + GLES paths).
+ * Per-line arrays live in caller-owned statics so they outlive the call. */
+static void build_frame(Scene* s, int w, int h, PortGpuRasterFrame* fout, std::vector<uint8_t>& io_per_line,
+                        std::vector<uint16_t>& dispcnt_per_line, std::vector<int32_t>& aff_x,
+                        std::vector<int32_t>& aff_y, std::vector<uint16_t>& ws_concat) {
+    PortGpuRasterFrame& f = *fout;
     io_per_line.assign((size_t)h * 0x400, 0);
     dispcnt_per_line.assign((size_t)h, 0);
     aff_x.assign(h, 0);
@@ -122,7 +122,6 @@ static void render_gpu(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) 
     virtuappu_mode1_prepare_frame(&ppu, io_per_line.data(), dispcnt_per_line.data(), aff_x.data(), aff_y.data(),
                                   &frame_dispcnt);
 
-    PortGpuRasterFrame f;
     std::memset(&f, 0, sizeof(f));
     f.frame_width = w;
     f.frame_height = h;
@@ -150,7 +149,6 @@ static void render_gpu(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) 
     f.ws_msg_x1 = virtuappu_mode1_ws_msg_x1;
     f.ws_msg_y0 = virtuappu_mode1_ws_msg_y0;
     f.ws_msg_y1 = virtuappu_mode1_ws_msg_y1;
-    static std::vector<uint16_t> ws_concat;
     bool any_shadow = false;
     for (int b = 0; b < 4; ++b) {
         if (virtuappu_mode1_ws_shadow[b] != NULL) {
@@ -176,16 +174,35 @@ static void render_gpu(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) 
         f.ws_shadow = NULL;
         f.ws_shadow_halfwords = 0;
     }
+}
 
+/* Scratch buffers reused across scenes for both backends. */
+static std::vector<uint8_t> g_io;
+static std::vector<uint16_t> g_dispcnt;
+static std::vector<int32_t> g_affx, g_affy;
+static std::vector<uint16_t> g_wsconcat;
+
+static void render_vk(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) {
+    PortGpuRasterFrame f;
+    build_frame(s, w, h, &f, g_io, g_dispcnt, g_affx, g_affy, g_wsconcat);
     SDL_GPUTexture* tex = Port_GpuRaster_Render(r, &f);
     if (!tex) {
-        std::fprintf(stderr, "  GPU render returned NULL\n");
-        std::memset(out, 0xAB, (size_t)w * h * sizeof(uint32_t)); /* poison -> diff */
+        std::fprintf(stderr, "  VK render returned NULL\n");
+        std::memset(out, 0xAB, (size_t)w * h * sizeof(uint32_t));
         return;
     }
     if (!Port_GpuRaster_Readback(r, out, w, h, w)) {
-        std::fprintf(stderr, "  GPU readback failed\n");
+        std::fprintf(stderr, "  VK readback failed\n");
         std::memset(out, 0xCD, (size_t)w * h * sizeof(uint32_t));
+    }
+}
+
+static void render_gles(PortGpuRasterGl* r, Scene* s, uint32_t* out, int w, int h) {
+    PortGpuRasterFrame f;
+    build_frame(s, w, h, &f, g_io, g_dispcnt, g_affx, g_affy, g_wsconcat);
+    if (!Port_GpuRasterGl_RenderReadback(r, &f, out, w)) {
+        std::fprintf(stderr, "  GLES render/readback failed\n");
+        std::memset(out, 0xEF, (size_t)w * h * sizeof(uint32_t));
     }
 }
 
@@ -786,9 +803,16 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    /* GLES backend: load the shared core GLSL and build the compute rasterizer
+     * (optional — skipped if EGL/GLES 3.1 unavailable). */
+    size_t clen = 0;
+    void* core = load_file("port/shaders/ppu_core.glsl", &clen);
+    PortGpuRasterGl* rgl = core ? Port_GpuRasterGl_Create((const char*)core, (int)clen) : nullptr;
+    std::printf("GLES backend: %s\n", rgl ? "active" : "unavailable (Vulkan-only run)");
+
     const int W = MODE1_GBA_WIDTH, H = 160;
     static Scene scene;
-    std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H);
+    std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H), gles((size_t)W * H);
 
     SceneFn scenes[] = {
         scene_forced_blank,
@@ -837,13 +861,26 @@ int main(int argc, char** argv) {
 #endif
     };
     int total_diffs = 0;
+    char label[64];
     for (SceneFn fn : scenes) {
         fn(&scene);
         render_cpu(&scene, cpu.data(), W, H);
-        render_gpu(r, &scene, gpu.data(), W, H);
-        total_diffs += diff(cpu.data(), gpu.data(), W, H, scene.name);
+        render_vk(r, &scene, gpu.data(), W, H);
+        std::snprintf(label, sizeof(label), "%s [vk]", scene.name);
+        total_diffs += diff(cpu.data(), gpu.data(), W, H, label);
+        if (rgl) {
+            render_gles(rgl, &scene, gles.data(), W, H);
+            std::snprintf(label, sizeof(label), "%s [gles]", scene.name);
+            total_diffs += diff(cpu.data(), gles.data(), W, H, label);
+        }
     }
 
+    if (rgl) {
+        Port_GpuRasterGl_Destroy(rgl);
+    }
+    if (core) {
+        std::free(core);
+    }
     Port_GpuRaster_Destroy(r);
     SDL_DestroyGPUDevice(dev);
     SDL_Quit();

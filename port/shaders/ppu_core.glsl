@@ -158,8 +158,8 @@ uint bg_text_pixel(int bg, int x, int line, out uint pal_index) {
         color_index = vram_u8(addr);
     } else {
         uint addr = char_base + tile_index * 32u + uint(tpy) * 4u + uint(tpx / 2);
-        uint packed = vram_u8(addr);
-        color_index = ((tpx & 1) != 0) ? (packed >> 4u) : (packed & 0xFu);
+        uint pkbyte = vram_u8(addr);
+        color_index = ((tpx & 1) != 0) ? (pkbyte >> 4u) : (pkbyte & 0xFu);
     }
     if (color_index == 0u) {
         return 0u;
@@ -352,8 +352,8 @@ bool obj_resolve(int x, int line, uint line_dispcnt, out uint out_col, out int o
             color_index = vram_u8(addr);
         } else {
             uint addr = OBJ_TILE_BASE + tile_index * 32u + uint(pixel_y) * 4u + uint(pixel_x / 2);
-            uint packed = vram_u8(addr);
-            color_index = ((pixel_x & 1) != 0) ? (packed >> 4u) : (packed & 0xFu);
+            uint pkbyte = vram_u8(addr);
+            color_index = ((pixel_x & 1) != 0) ? (pkbyte >> 4u) : (pkbyte & 0xFu);
         }
         if (color_index == 0u) {
             continue;
