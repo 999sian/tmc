@@ -1232,7 +1232,7 @@ void Port_DebugAction_SetFlag(int bank, int index, int on) {
         } else {
             snprintf(msg, sizeof(msg), "[Flag] %s / idx %d (bit 0x%03X)", bankName, index, (unsigned)bit);
         }
-        printf("%s\n", msg);
+        printf("\033[33m%s\033[0m\n", msg);
         Port_DebugMenu_ToastFromExternal(msg);
     }
 }
@@ -1282,7 +1282,7 @@ void Port_Debug_OnFlagSet(u32 offset, u32 flag) {
         } else {
             snprintf(msg, sizeof(msg), "[Flag] %s / idx %d (bit 0x%03X)", bankName, (int)flag, bit);
         }
-        printf("%s\n", msg);
+        printf("\033[33m%s\033[0m\n", msg);
         Port_DebugMenu_ToastFromExternal(msg);
     }
 }

@@ -282,6 +282,7 @@ const BoolCfg kBoolCfg[] = {
     { "rando_early_crests", &sRandoEarlyCrests, true },
     { "rando_instant_text", &sRandoInstantText, true },
     { "rando_dungeon_items", &sRandoDungeonItems, false },
+    { "debug_flag_notifications", &sDebugFlagNotifications, false },
 };
 const IntCfg kIntCfg[] = {
     { "preferred_region", &sPreferredRegion, -1 },      { "preferred_language", &sPreferredLanguage, -1 },
@@ -1956,4 +1957,6 @@ extern "C" bool Port_Config_GetDebugFlagNotifications(void) {
 }
 extern "C" void Port_Config_SetDebugFlagNotifications(bool on) {
     sDebugFlagNotifications = on;
+    sConfigJson["debug_flag_notifications"] = on;
+    SaveConfig();
 }
