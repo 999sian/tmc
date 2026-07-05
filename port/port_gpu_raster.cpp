@@ -28,11 +28,11 @@ enum {
     SSBO_OBJ_PALETTE = 3,
     SSBO_OAM = 4,
     SSBO_AFFINE_REF = 5,
-    SSBO_SLOT_COUNT = 6
+    SSBO_WS_SHADOW = 6,
+    SSBO_SLOT_COUNT = 7
 };
-
-/* Phase 5 binds all 6: BG palette + IO + VRAM + OBJ palette + OAM + affine ref. */
-#define PORT_GPU_RASTER_NUM_SSBO 6
+/* Phase 6 binds all 7: +widescreen shadow tilemap. */
+#define PORT_GPU_RASTER_NUM_SSBO 7
 struct PortGpuRaster {
     SDL_GPUDevice* device = nullptr;
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
@@ -57,10 +57,13 @@ struct PortGpuRaster {
     std::vector<int32_t> aff_scratch;
 };
 
-/* std140 mirror of ppu_raster.frag's Params (two 16-byte vectors). */
+/* std140 mirror of ppu_raster.frag's Params (five 16-byte vectors). */
 struct RasterParams {
-    int32_t geom[4];  /* width, height, mode, affine */
-    uint32_t misc[4]; /* frame_dispcnt, pad, pad, pad */
+    int32_t geom[4];   /* width, height, mode, affine */
+    uint32_t misc[4];  /* frame_dispcnt, pad, pad, pad */
+    int32_t ws[4];     /* bg_clip_x, ws_cols, hud_right_anchor, hud_right_native_x */
+    int32_t wsmsg[4];  /* msg_shift, msg_x0, msg_x1, (msg_y0<<16|msg_y1) */
+    int32_t wsbase[4]; /* per-BG shadow_base_tile (<0 = none) */
 };
 
 static SDL_GPUShader* make_shader(SDL_GPUDevice* dev, const void* code, size_t len, SDL_GPUShaderStage stage,
@@ -274,6 +277,15 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     ok = ok && stage_upload(r, cp, SSBO_OAM, f->oam, 512u * sizeof(uint16_t));
     ok = ok &&
          stage_upload(r, cp, SSBO_AFFINE_REF, r->aff_scratch.data(), (Uint32)r->aff_scratch.size() * sizeof(int32_t));
+    {
+        static const uint32_t ws_dummy = 0u;
+        const void* ws_src =
+            (f->ws_shadow && f->ws_shadow_halfwords > 0) ? (const void*)f->ws_shadow : (const void*)&ws_dummy;
+        Uint32 ws_size = (f->ws_shadow && f->ws_shadow_halfwords > 0)
+                             ? (Uint32)f->ws_shadow_halfwords * sizeof(uint16_t)
+                             : (Uint32)sizeof(ws_dummy);
+        ok = ok && stage_upload(r, cp, SSBO_WS_SHADOW, ws_src, ws_size);
+    }
     SDL_EndGPUCopyPass(cp);
     if (!ok) {
         SDL_SubmitGPUCommandBuffer(cmd);
@@ -287,6 +299,19 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     p.geom[2] = f->mode;
     p.geom[3] = f->affine ? 1 : 0;
     p.misc[0] = f->frame_dispcnt;
+    p.ws[0] = f->ws_bg_clip_x ? f->ws_bg_clip_x : 240;
+    p.ws[1] = f->ws_cols;
+    p.ws[2] = f->ws_hud_right_anchor;
+    p.ws[3] = f->ws_hud_right_native_x ? f->ws_hud_right_native_x : 176;
+    p.wsmsg[0] = f->ws_msg_shift;
+    p.wsmsg[1] = f->ws_msg_x0;
+    p.wsmsg[2] = f->ws_msg_x1;
+    p.wsmsg[3] = (f->ws_msg_y0 << 16) | (f->ws_msg_y1 & 0xFFFF);
+    for (int i = 0; i < 4; ++i) {
+        /* -1 = "no shadow for this BG" (matches the shader's has_shadow test).
+         * When the caller registered no shadows at all, all four stay -1. */
+        p.wsbase[i] = (f->ws_shadow && f->ws_shadow_base_tile[i] >= 0) ? f->ws_shadow_base_tile[i] : -1;
+    }
 
     SDL_GPUColorTargetInfo ct;
     SDL_zero(ct);

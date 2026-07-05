@@ -31,12 +31,21 @@ layout(set = 2, binding = 2, std430) readonly buffer Vram { uint data[]; } vram;
 layout(set = 2, binding = 3, std430) readonly buffer ObjPalette { uint data[]; } objpal;
 layout(set = 2, binding = 4, std430) readonly buffer Oam { uint data[]; } oam;
 layout(set = 2, binding = 5, std430) readonly buffer AffineRef { int data[]; } aff;
+/* Widescreen Option A shadow tilemaps (4 BGs concatenated), rows=32,
+ * cols=ws_cols. Halfword entries packed in u32 words. */
+layout(set = 2, binding = 6, std430) readonly buffer WsShadow { uint data[]; } wss;
 
 layout(set = 3, binding = 0, std140) uniform Params {
     /* geom: x=frame_width, y=height, z=mode(GBA), w=affine(0/1) */
     ivec4 geom;
     /* misc: x=frame_dispcnt (frame-start DISPCNT; forced-blank + backdrop) */
     uvec4 misc;
+    /* ws: x=bg_clip_x(240), y=ws_cols, z=hud_right_anchor, w=hud_right_native_x(176) */
+    ivec4 ws;
+    /* wsmsg: x=msg_shift, y=msg_x0, z=msg_x1, w=(msg_y0<<16 | msg_y1) */
+    ivec4 wsmsg;
+    /* wsbase: per-BG shadow_base_tile (x=bg0..w=bg3); a value <0 = no shadow */
+    ivec4 wsbase;
 } params;
 
 layout(location = 0) out vec4 oColor;
@@ -91,6 +100,7 @@ vec4 rgb555_to_rgba(uint c) {
 /* Text-BG pixel (native path of virtuappu_mode1_render_text_bg_line).
  * Returns the palette index (0 = transparent) and, when opaque, `abgr`. */
 uint bg_text_pixel(int bg, int x, int line, out uint pal_index) {
+    pal_index = 0u;
     int cnt_off = IO_BG0CNT + bg * 2;
     uint bgcnt = io_u16(line, cnt_off);
     uint char_base = ((bgcnt >> 2u) & 3u) * 0x4000u;
@@ -100,6 +110,39 @@ uint bg_text_pixel(int bg, int x, int line, out uint pal_index) {
     uint size_flag = (bgcnt >> 14u) & 3u;
     int map_w = (size_flag & 1u) != 0u ? 64 : 32;
     int map_h = (size_flag & 2u) != 0u ? 64 : 32;
+
+    /* Widescreen Option A (render_text_bg_line). Inert at width 240. */
+    int fw = params.geom.x;
+    int clip = params.ws.x;       /* MODE1_GBA_BG_CLIP_X (240) */
+    int ws_cols = params.ws.y;
+    int shadow_base = params.wsbase[bg];
+    bool has_shadow = shadow_base >= 0;
+    bool ws_shadow_active = (map_w < 64) && has_shadow;
+    int render_max_x = (map_w >= 64) ? fw : (has_shadow ? fw : clip);
+    if (render_max_x > fw) render_max_x = fw;
+    bool hud_anchor = (bg == 0) && (params.ws.z != 0) && (fw > clip);
+    int hud_native_x = params.ws.w; /* 176 */
+    int hud_dst_x = fw - (clip - hud_native_x);
+    int shift = params.wsmsg.x;
+    int msg_x0 = params.wsmsg.y;
+    int msg_x1 = params.wsmsg.z;
+    int msg_y0 = params.wsmsg.w >> 16;
+    int msg_y1 = params.wsmsg.w & 0xFFFF;
+    bool msg_line = (bg == 0) && (shift != 0) && (fw > clip) && (line >= msg_y0) && (line < msg_y1);
+    if (hud_anchor || msg_line) render_max_x = fw;
+    if (x >= render_max_x) return 0u;
+
+    int sample_x = x;
+    if (msg_line && x >= msg_x0 + shift && x < msg_x1 + shift) {
+        sample_x = x - shift;
+    } else if (msg_line && x >= msg_x0 && x < msg_x1) {
+        return 0u;
+    } else if (hud_anchor && !msg_line) {
+        if (x >= hud_dst_x) { sample_x = x - (fw - clip); }
+        else if (x >= hud_native_x) { return 0u; }
+    } else if (msg_line && x >= clip) {
+        return 0u;
+    }
 
     int scroll_x = int(io_u16(line, IO_BG0HOFS + bg * 4)) & 0x1FF;
     int scroll_y = int(io_u16(line, IO_BG0VOFS + bg * 4)) & 0x1FF;
@@ -112,19 +155,32 @@ uint bg_text_pixel(int bg, int x, int line, out uint pal_index) {
     int tile_row = src_y / 8;
     int pixel_y = src_y % 8;
 
-    int eff_x = (mh == 1) ? x : (x / mh) * mh;
+    int eff_x = (mh == 1) ? sample_x : (sample_x / mh) * mh;
     int src_x = (eff_x + scroll_x) & (map_w * 8 - 1);
     int tile_col = src_x / 8;
     int pixel_x = src_x % 8;
 
-    int screen_block_y = tile_row / 32;
     int local_row = tile_row % 32;
-    int blocks_per_row = map_w / 32;
-    int screen_block_x = tile_col / 32;
-    int local_col = tile_col % 32;
-    int screen_block_index = screen_block_x + screen_block_y * blocks_per_row;
-    uint map_addr = screen_base + uint(screen_block_index) * 0x800u + uint(local_row * 32 + local_col) * 2u;
-    uint entry = vram_u16(map_addr);
+    uint entry;
+    bool use_shadow = ws_shadow_active && x >= clip;
+    if (use_shadow) {
+        int shadow_idx = (tile_col - shadow_base + 32) % 32;
+        if (shadow_idx < ws_cols) {
+            uint hw = uint((bg * 32 + local_row) * ws_cols + shadow_idx);
+            uint word = wss.data[hw >> 1u];
+            entry = (hw & 1u) != 0u ? (word >> 16u) : (word & 0xFFFFu);
+        } else {
+            entry = 0u;
+        }
+    } else {
+        int screen_block_y = tile_row / 32;
+        int blocks_per_row = map_w / 32;
+        int screen_block_x = tile_col / 32;
+        int local_col = tile_col % 32;
+        int screen_block_index = screen_block_x + screen_block_y * blocks_per_row;
+        uint map_addr = screen_base + uint(screen_block_index) * 0x800u + uint(local_row * 32 + local_col) * 2u;
+        entry = vram_u16(map_addr);
+    }
 
     uint tile_index = entry & 0x3FFu;
     bool hflip = ((entry >> 10u) & 1u) != 0u;
@@ -143,10 +199,14 @@ uint bg_text_pixel(int bg, int x, int line, out uint pal_index) {
         color_index = ((tpx & 1) != 0) ? (packed >> 4u) : (packed & 0xFu);
     }
     if (color_index == 0u) {
-        pal_index = 0u;
         return 0u;
     }
-    pal_index = bpp8 ? color_index : (pal_bank * 16u + color_index);
+    uint pi = bpp8 ? color_index : (pal_bank * 16u + color_index);
+    /* Widescreen sentinel: past the clip, an "unloaded" 0x7C1F tile is skipped. */
+    if (x >= clip && (bgpal_u16(int(pi)) & 0x7FFFu) == 0x7C1Fu) {
+        return 0u;
+    }
+    pal_index = pi;
     return color_index;
 }
 
@@ -556,5 +616,18 @@ void main() {
         }
     }
 
+    /* Widescreen composite: past the clip, force black unless a BG drew a real
+     * pixel there (matches composite_line's any_bg_drew_here gate). Inert at 240
+     * because x never reaches clip. */
+    if (x >= params.ws.x) {
+        bool any_bg_drew = false;
+        for (int b = 0; b < 4; ++b) {
+            if (bg_on[b] && bg_op[b]) { any_bg_drew = true; break; }
+        }
+        if (!any_bg_drew) {
+            oColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+        }
+    }
     oColor = rgb555_to_rgba(out_col);
 }

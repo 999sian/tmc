@@ -51,6 +51,17 @@ static void scene_clear(Scene* s, const char* name) {
     for (int i = 0; i < 128; ++i) {
         s->oam[i * 4 + 0] = 0x0200; /* disable bit */
     }
+    /* Reset the CPU widescreen globals so scenes are independent. */
+    for (int b = 0; b < MODE1_GBA_BG_COUNT; ++b) {
+        virtuappu_mode1_ws_shadow[b] = NULL;
+        virtuappu_mode1_ws_shadow_base_tile[b] = 0;
+    }
+    virtuappu_mode1_ws_hud_right_anchor = 0;
+    virtuappu_mode1_ws_msg_shift = 0;
+    virtuappu_mode1_ws_msg_x0 = 0;
+    virtuappu_mode1_ws_msg_x1 = 0;
+    virtuappu_mode1_ws_msg_y0 = 0;
+    virtuappu_mode1_ws_msg_y1 = 0;
 }
 
 static void set_io16(Scene* s, int off, uint16_t v) {
@@ -131,6 +142,44 @@ static void render_gpu(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) 
     } else {
         f.affine_ref_x = NULL;
         f.affine_ref_y = NULL;
+    }
+
+    /* Mirror the CPU's widescreen globals into the GPU frame so both paths see
+     * identical reveal state. All NULL/0/-1 at native 240 (branches inert). */
+    f.ws_bg_clip_x = MODE1_GBA_BG_CLIP_X;
+    f.ws_cols = MODE1_WS_SHADOW_COLS;
+    f.ws_hud_right_anchor = virtuappu_mode1_ws_hud_right_anchor;
+    f.ws_hud_right_native_x = MODE1_WS_HUD_RIGHT_NATIVE_X;
+    f.ws_msg_shift = virtuappu_mode1_ws_msg_shift;
+    f.ws_msg_x0 = virtuappu_mode1_ws_msg_x0;
+    f.ws_msg_x1 = virtuappu_mode1_ws_msg_x1;
+    f.ws_msg_y0 = virtuappu_mode1_ws_msg_y0;
+    f.ws_msg_y1 = virtuappu_mode1_ws_msg_y1;
+    static std::vector<uint16_t> ws_concat;
+    bool any_shadow = false;
+    for (int b = 0; b < 4; ++b) {
+        if (virtuappu_mode1_ws_shadow[b] != NULL) {
+            any_shadow = true;
+        }
+    }
+    if (any_shadow) {
+        int cols = MODE1_WS_SHADOW_COLS;
+        ws_concat.assign((size_t)4 * 32 * cols, 0);
+        for (int b = 0; b < 4; ++b) {
+            f.ws_shadow_base_tile[b] =
+                (virtuappu_mode1_ws_shadow[b] != NULL) ? virtuappu_mode1_ws_shadow_base_tile[b] : -1;
+            if (virtuappu_mode1_ws_shadow[b] != NULL) {
+                std::memcpy(&ws_concat[(size_t)b * 32 * cols], virtuappu_mode1_ws_shadow[b],
+                            (size_t)32 * cols * sizeof(uint16_t));
+            }
+        }
+        f.ws_shadow = ws_concat.data();
+        f.ws_shadow_halfwords = 4 * 32 * cols;
+    } else {
+        for (int b = 0; b < 4; ++b)
+            f.ws_shadow_base_tile[b] = -1;
+        f.ws_shadow = NULL;
+        f.ws_shadow_halfwords = 0;
     }
 
     SDL_GPUTexture* tex = Port_GpuRaster_Render(r, &f);
@@ -656,6 +705,64 @@ static void scene_affine_oob(Scene* s) {
     set_io32(s, 0x2C, 0);
 }
 
+#if MODE1_GBA_WIDTH > 240
+/* ---- widescreen Option A scenes (only meaningful when built >240) ---- */
+/* Persistent shadow storage; the CPU stores the pointer, so it must outlive
+ * the scene setup call. */
+static uint16_t g_ws_shadow0[32 * MODE1_WS_SHADOW_COLS];
+
+/* BG0 32-tile with a shadow tilemap revealing tiles past x=240. */
+static void scene_ws_shadow_reveal(Scene* s) {
+    scene_clear(s, "ws_shadow_reveal");
+    set_io16(s, 0x00, 0x0100);              /* BG0 on, mode 0 */
+    set_io16(s, 0x08, (uint16_t)(8u << 8)); /* BG0 screen block 8, prio 0 */
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    write_tile_4bpp(s->vram, 0, 2);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+    /* Shadow: reveal columns use tile 2, palbank 2. */
+    for (int i = 0; i < 32 * MODE1_WS_SHADOW_COLS; ++i) {
+        g_ws_shadow0[i] = (uint16_t)(2u | (2u << 12));
+    }
+    virtuappu_mode1_ws_shadow[0] = g_ws_shadow0;
+    virtuappu_mode1_ws_shadow_base_tile[0] = MODE1_GBA_BG_CLIP_X / 8;
+}
+/* Some reveal columns unloaded (0x7C1F sentinel) -> skipped -> force black. */
+static void scene_ws_shadow_sentinel(Scene* s) {
+    scene_ws_shadow_reveal(s);
+    s->name = "ws_shadow_sentinel";
+    /* palbank 2 index 2 -> palette entry becomes the sentinel. */
+    s->bgpal[2 * 16 + 2] = 0x7C1F;
+}
+/* HUD right-anchor: BG0 cols 176..239 drawn at the far right. */
+static void scene_ws_hud_anchor(Scene* s) {
+    scene_clear(s, "ws_hud_anchor");
+    set_io16(s, 0x00, 0x0100);
+    set_io16(s, 0x08, (uint16_t)(8u << 8));
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+    virtuappu_mode1_ws_hud_right_anchor = 1;
+}
+/* Message-box centering: shift BG0 box band right by shift px. */
+static void scene_ws_msg_center(Scene* s) {
+    scene_clear(s, "ws_msg_center");
+    set_io16(s, 0x00, 0x0100);
+    set_io16(s, 0x08, (uint16_t)(8u << 8));
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+    virtuappu_mode1_ws_msg_shift = (MODE1_GBA_WIDTH - 240) / 2;
+    virtuappu_mode1_ws_msg_x0 = 8;
+    virtuappu_mode1_ws_msg_x1 = 216;
+    virtuappu_mode1_ws_msg_y0 = 112;
+    virtuappu_mode1_ws_msg_y1 = 152;
+}
+#endif
+
 int main(int argc, char** argv) {
     const char* vpath = argc > 1 ? argv[1] : "port/shaders/build/ppu_raster.vert.spv";
     const char* fpath = argc > 2 ? argv[2] : "port/shaders/build/ppu_raster.frag.spv";
@@ -684,48 +791,56 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    const int W = 240, H = 160;
+    const int W = MODE1_GBA_WIDTH, H = 160;
     static Scene scene;
     std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H);
 
-    SceneFn scenes[] = { scene_forced_blank,
-                         scene_backdrop_blue,
-                         scene_backdrop_black,
-                         scene_backdrop_mixed,
-                         scene_bg0_tiled,
-                         scene_bg0_scroll,
-                         scene_bg0_flip,
-                         scene_bg0_8bpp,
-                         scene_bg0_mosaic,
-                         scene_bg0_512,
-                         scene_bg_priority,
-                         scene_bg0_transparent,
-                         scene_obj_basic,
-                         scene_obj_hflip,
-                         scene_obj_vflip,
-                         scene_obj_8bpp,
-                         scene_obj_2d,
-                         scene_obj_affine,
-                         scene_obj_affine_double,
-                         scene_obj_over_bg,
-                         scene_obj_two_overlap,
-                         scene_obj_wrap,
-                         scene_obj_mosaic,
-                         scene_win0_inside,
-                         scene_win0_hwrap,
-                         scene_win0_vwrap,
-                         scene_win1,
-                         scene_objwin,
-                         scene_blend_alpha,
-                         scene_blend_brighten,
-                         scene_blend_darken,
-                         scene_blend_alpha_backdrop,
-                         scene_obj_semitrans,
-                         scene_affine_identity,
-                         scene_affine_scaled,
-                         scene_affine_rotated,
-                         scene_affine_wrap,
-                         scene_affine_oob };
+    SceneFn scenes[] = {
+        scene_forced_blank,
+        scene_backdrop_blue,
+        scene_backdrop_black,
+        scene_backdrop_mixed,
+        scene_bg0_tiled,
+        scene_bg0_scroll,
+        scene_bg0_flip,
+        scene_bg0_8bpp,
+        scene_bg0_mosaic,
+        scene_bg0_512,
+        scene_bg_priority,
+        scene_bg0_transparent,
+        scene_obj_basic,
+        scene_obj_hflip,
+        scene_obj_vflip,
+        scene_obj_8bpp,
+        scene_obj_2d,
+        scene_obj_affine,
+        scene_obj_affine_double,
+        scene_obj_over_bg,
+        scene_obj_two_overlap,
+        scene_obj_wrap,
+        scene_obj_mosaic,
+        scene_win0_inside,
+        scene_win0_hwrap,
+        scene_win0_vwrap,
+        scene_win1,
+        scene_objwin,
+        scene_blend_alpha,
+        scene_blend_brighten,
+        scene_blend_darken,
+        scene_blend_alpha_backdrop,
+        scene_obj_semitrans,
+        scene_affine_identity,
+        scene_affine_scaled,
+        scene_affine_rotated,
+        scene_affine_wrap,
+        scene_affine_oob,
+#if MODE1_GBA_WIDTH > 240
+        scene_ws_shadow_reveal,
+        scene_ws_shadow_sentinel,
+        scene_ws_hud_anchor,
+        scene_ws_msg_center,
+#endif
+    };
     int total_diffs = 0;
     for (SceneFn fn : scenes) {
         fn(&scene);
