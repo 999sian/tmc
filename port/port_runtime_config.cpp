@@ -128,6 +128,12 @@ bool sVSyncCfg = true; /* matches Port_PPU's sVSyncEnabled default */
  * SDL_GPU presentation path is active; the CPU rasterizer is the automatic
  * fallback. Ignored on SDL_Renderer / software builds. */
 bool sGpuRaster = true;
+/* GLES compute rasterizer: OPT-IN (default off). Measured ~5x slower than the
+ * 3-thread CPU rasterizer on the Adreno 405 (Moto G4) — the archetypal
+ * no-Vulkan device — so it must never auto-enable. Vulkan raster (gpu_raster)
+ * stays default-on since it's a real win. Flip on to try GLES on a stronger
+ * GLES-only GPU. */
+bool sGpuRasterGles = false;
 #ifdef __ANDROID__
 bool sColorCorrect = false; /* Too heavy for low-end ARM by default */
 #else
@@ -244,6 +250,7 @@ const BoolCfg kBoolCfg[] = {
     { "discord_rpc", &sDiscordRpc, false },
     { "vsync", &sVSyncCfg, true },
     { "gpu_raster", &sGpuRaster, true },
+    { "gpu_raster_gles", &sGpuRasterGles, false },
 #ifdef __ANDROID__
     { "color_correction", &sColorCorrect, false },
 #else
@@ -1698,6 +1705,14 @@ extern "C" bool Port_Config_GetGpuRaster(void) {
 extern "C" void Port_Config_SetGpuRaster(bool on) {
     sGpuRaster = on;
     sConfigJson["gpu_raster"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetGpuRasterGles(void) {
+    return sGpuRasterGles;
+}
+extern "C" void Port_Config_SetGpuRasterGles(bool on) {
+    sGpuRasterGles = on;
+    sConfigJson["gpu_raster_gles"] = on;
     SaveConfig();
 }
 extern "C" bool Port_Config_GetColorCorrection(void) {

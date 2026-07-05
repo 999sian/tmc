@@ -975,11 +975,16 @@ static bool Port_PPU_TryGpuRaster(void) {
     if (virtuappu_mode1_obj_clip_enable) {
         return false; /* swamp-sink obj-clip not in the shader */
     }
-    /* Prefer the Vulkan/SDL_GPU raster; fall back to the GLES compute backend
-     * on devices without Vulkan (Adreno 4xx etc.); else the CPU rasterizer. */
+    /* Prefer the Vulkan/SDL_GPU raster (a real win where present). The GLES
+     * compute backend is OPT-IN only: on the archetypal no-Vulkan device
+     * (Adreno 405 / Moto G4) it measured ~5x slower than the 3-thread CPU
+     * rasterizer, so it must never auto-enable — CPU is the default fallback. */
     bool useVk = Port_PPU_RasterEnsure();
     bool useGles = false;
     if (!useVk) {
+        if (!Port_Config_GetGpuRasterGles()) {
+            return false; /* GLES not opted in -> CPU rasterizer */
+        }
         useGles = Port_PPU_GlesEnsure();
         if (!useGles) {
             return false;
