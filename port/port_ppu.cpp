@@ -1052,13 +1052,32 @@ static bool Port_PPU_TryGpuRaster(void) {
         f.ws_shadow_halfwords = 0;
     }
 
-    /* Render on the chosen backend, reading back into virtuappu_frame_buffer so
-     * the existing present path (filters/shm/upscale/screenshot) is unchanged.
-     * Direct-present of the GPU output is a tracked follow-up optimisation. */
+    /* Render on the chosen backend into virtuappu_frame_buffer so the present
+     * path (filters/shm/upscale/screenshot) is unchanged.
+     *
+     * DEFERRED READBACK: in normal play the Vulkan path submits this frame and
+     * returns the PREVIOUS frame's pixels via a non-blocking fence poll, so the
+     * CPU never stalls waiting on the GPU (the per-frame sync point that
+     * otherwise dominates — see docs/gpu-rasterizer-parity-notes.md). Costs 1
+     * frame of latency. Under perfcap we MUST hand back the current frame (the
+     * byte-exact golden hash), so use the synchronous merged path there. */
     const int pitch = virtuappu_mode1_frame_pitch();
+    static int perfcap = -1;
+    if (perfcap < 0) {
+        const char* e = getenv("TMC_PERFCAP");
+        perfcap = (e && *e && e[0] != '0') ? 1 : 0;
+    }
     if (useVk) {
-        if (!Port_GpuRaster_RenderReadback(sGpuRaster, &f, virtuappu_frame_buffer, pitch)) {
-            return false;
+        if (perfcap) {
+            if (!Port_GpuRaster_RenderReadback(sGpuRaster, &f, virtuappu_frame_buffer, pitch)) {
+                return false;
+            }
+        } else {
+            /* Deferred: false only during warm-up (no prior frame ready yet) —
+             * then let the CPU render this one frame. */
+            if (!Port_GpuRaster_RenderReadbackDeferred(sGpuRaster, &f, virtuappu_frame_buffer, pitch)) {
+                return false;
+            }
         }
     } else { /* useGles */
         if (!Port_GpuRasterGl_RenderReadback(sGlesRaster, &f, virtuappu_frame_buffer, pitch)) {
