@@ -6,6 +6,7 @@
 #include "port_runtime_config.h"
 #include "port_filter.h"
 #include "port_gpu_renderer.h" /* PortGpuFilter for the GPU-backend filter cycle */
+#include "port_gpu_raster.h"   /* GPU PPU rasterizer (docs/gpu-rasterizer-design.md) */
 #include "port_imgui_menu.h"
 #include "port_softslots.h"
 #include "port_touch_controls.h"
@@ -827,6 +828,161 @@ bind_virtuappu_memory: {
     }
 }
 
+/* ---------------------------------------------------------------------------
+ * GPU PPU rasterizer bridge (docs/gpu-rasterizer-design.md).
+ *
+ * When the SDL_GPU presentation path owns the window, the frame can be
+ * rasterized on the GPU instead of the CPU. The CPU rasterizer stays the
+ * golden reference and the automatic fallback: any failure here (device
+ * unavailable, pipeline build, unsupported feature, or the obj-clip swamp-sink
+ * which the shader doesn't implement) returns false and the caller runs
+ * virtuappu_render_frame as usual. Compiled out entirely without the GPU path.
+ * ------------------------------------------------------------------------- */
+#ifdef TMC_GPU_RENDERER
+/* swamp-sink obj-clip flag (defined in mode1.c; also externed in port_draw.c). */
+extern "C" int virtuappu_mode1_obj_clip_enable;
+/* Embedded SPIR-V for the PPU rasterizer. The utils.bin2c rule emits a raw
+ * byte-list header (<file>.spv.h) with the include path added automatically;
+ * wrap each in a static array so sizeof gives the length (same idiom as
+ * port_gpu_renderer.cpp). */
+static const unsigned char kPpuRasterVertSpv[] = {
+#include "ppu_raster.vert.spv.h"
+};
+static const unsigned char kPpuRasterFragSpv[] = {
+#include "ppu_raster.frag.spv.h"
+};
+
+static PortGpuRaster* sGpuRaster = nullptr;
+static bool sGpuRasterTried = false;
+static bool sGpuRasterUnavailable = false;
+
+/* Per-frame prepare buffers (the CPU sequential pass output the GPU consumes). */
+static uint8_t sRasterIoPerLine[MODE1_GBA_HEIGHT * MODE1_IO_MEM_SIZE];
+static uint16_t sRasterDispcntPerLine[MODE1_GBA_HEIGHT];
+static int32_t sRasterAffRefX[MODE1_GBA_HEIGHT];
+static int32_t sRasterAffRefY[MODE1_GBA_HEIGHT];
+/* Concatenated 4-BG widescreen shadow tilemap (built per frame when active). */
+static uint16_t sRasterWsShadow[MODE1_GBA_BG_COUNT * MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
+
+static bool Port_PPU_RasterEnsure(void) {
+    if (sGpuRasterUnavailable) {
+        return false;
+    }
+    if (sGpuRaster) {
+        return true;
+    }
+    if (sGpuRasterTried) {
+        return false;
+    }
+    sGpuRasterTried = true;
+    if (!Port_GPU_IsActive()) {
+        sGpuRasterUnavailable = true;
+        return false;
+    }
+    SDL_GPUDevice* dev = Port_GPU_GetDevice();
+    if (!dev) {
+        sGpuRasterUnavailable = true;
+        return false;
+    }
+    sGpuRaster = Port_GpuRaster_Create(dev, kPpuRasterVertSpv, sizeof(kPpuRasterVertSpv), kPpuRasterFragSpv,
+                                       sizeof(kPpuRasterFragSpv));
+    if (!sGpuRaster) {
+        std::fprintf(stderr, "[gpuraster] create failed; using CPU rasterizer.\n");
+        sGpuRasterUnavailable = true;
+        return false;
+    }
+    std::fprintf(stderr, "[gpuraster] GPU PPU rasterizer active.\n");
+    return true;
+}
+
+/* Rasterize the current frame on the GPU into virtuappu_frame_buffer. Returns
+ * false so the caller runs the CPU rasterizer instead. */
+static bool Port_PPU_TryGpuRaster(void) {
+    if (!Port_Config_GetGpuRaster()) {
+        return false;
+    }
+    if (virtuappu_mode1_obj_clip_enable) {
+        return false; /* swamp-sink obj-clip not in the shader */
+    }
+    if (!Port_PPU_RasterEnsure()) {
+        return false;
+    }
+
+    uint16_t frame_dispcnt = 0;
+    virtuappu_mode1_prepare_frame(&virtuappu_registers, sRasterIoPerLine, sRasterDispcntPerLine, sRasterAffRefX,
+                                  sRasterAffRefY, &frame_dispcnt);
+
+    PortGpuRasterFrame f;
+    std::memset(&f, 0, sizeof(f));
+    f.frame_width = virtuappu_mode1_frame_width();
+    f.frame_height = MODE1_GBA_HEIGHT;
+    f.frame_pitch = virtuappu_mode1_frame_pitch();
+    f.mode = virtuappu_registers.mode;
+    f.affine = (virtuappu_registers.mode == 2);
+    f.frame_dispcnt = frame_dispcnt;
+
+    VirtuaPPUMode1GbaMemory mem;
+    virtuappu_mode1_get_bound_gba_memory(&mem);
+    f.vram = mem.vram;
+    f.bg_palette = mem.bg_palette;
+    f.obj_palette = mem.obj_palette;
+    f.oam = mem.oam_mem;
+    f.io_per_line = sRasterIoPerLine;
+    f.dispcnt_per_line = sRasterDispcntPerLine;
+    f.affine_ref_x = f.affine ? sRasterAffRefX : nullptr;
+    f.affine_ref_y = f.affine ? sRasterAffRefY : nullptr;
+
+    /* Widescreen Option A globals -> frame (inert at native 240). */
+    f.ws_bg_clip_x = MODE1_GBA_BG_CLIP_X;
+    f.ws_cols = MODE1_WS_SHADOW_COLS;
+    f.ws_hud_right_native_x = MODE1_WS_HUD_RIGHT_NATIVE_X;
+    f.ws_hud_right_anchor = virtuappu_mode1_ws_hud_right_anchor;
+    f.ws_msg_shift = virtuappu_mode1_ws_msg_shift;
+    f.ws_msg_x0 = virtuappu_mode1_ws_msg_x0;
+    f.ws_msg_x1 = virtuappu_mode1_ws_msg_x1;
+    f.ws_msg_y0 = virtuappu_mode1_ws_msg_y0;
+    f.ws_msg_y1 = virtuappu_mode1_ws_msg_y1;
+    bool any_shadow = false;
+    for (int b = 0; b < MODE1_GBA_BG_COUNT; ++b) {
+        if (virtuappu_mode1_ws_shadow[b] != nullptr) {
+            any_shadow = true;
+        }
+    }
+    if (any_shadow) {
+        const int cols = MODE1_WS_SHADOW_COLS;
+        std::memset(sRasterWsShadow, 0, sizeof(sRasterWsShadow));
+        for (int b = 0; b < MODE1_GBA_BG_COUNT; ++b) {
+            f.ws_shadow_base_tile[b] =
+                (virtuappu_mode1_ws_shadow[b] != nullptr) ? virtuappu_mode1_ws_shadow_base_tile[b] : -1;
+            if (virtuappu_mode1_ws_shadow[b] != nullptr) {
+                std::memcpy(&sRasterWsShadow[(size_t)b * MODE1_WS_SHADOW_ROWS * cols], virtuappu_mode1_ws_shadow[b],
+                            (size_t)MODE1_WS_SHADOW_ROWS * cols * sizeof(uint16_t));
+            }
+        }
+        f.ws_shadow = sRasterWsShadow;
+        f.ws_shadow_halfwords = MODE1_GBA_BG_COUNT * MODE1_WS_SHADOW_ROWS * cols;
+    } else {
+        for (int b = 0; b < MODE1_GBA_BG_COUNT; ++b) {
+            f.ws_shadow_base_tile[b] = -1;
+        }
+        f.ws_shadow = nullptr;
+        f.ws_shadow_halfwords = 0;
+    }
+
+    if (!Port_GpuRaster_Render(sGpuRaster, &f)) {
+        return false;
+    }
+    /* Read the GPU frame back into virtuappu_frame_buffer so the existing
+     * present path (filters/shm/upscale/screenshot) consumes it unchanged.
+     * Direct-present of the GPU texture is a tracked follow-up optimisation. */
+    if (!Port_GpuRaster_Readback(sGpuRaster, virtuappu_frame_buffer, f.frame_width, f.frame_height,
+                                 virtuappu_mode1_frame_pitch())) {
+        return false;
+    }
+    return true;
+}
+#endif /* TMC_GPU_RENDERER */
+
 extern "C" void Port_PPU_PresentFrame(void) {
     uint16_t dispcnt;
     uint8_t gbaMode;
@@ -876,12 +1032,30 @@ extern "C" void Port_PPU_PresentFrame(void) {
     virtuappu_mode1_bg2y_hdma_strobe = port_hdma_dest_overlaps(gIoMem + 0x2C, gIoMem + 0x30) != 0;
 
     {
+        bool gpu_ok = false;
+#ifdef TMC_GPU_RENDERER
         if (Port_Profile_Enabled()) {
             uint64_t t0 = SDL_GetTicksNS();
-            virtuappu_render_frame();
+            gpu_ok = Port_PPU_TryGpuRaster();
             gPortProfileRenderNs += SDL_GetTicksNS() - t0;
         } else {
-            virtuappu_render_frame();
+            gpu_ok = Port_PPU_TryGpuRaster();
+        }
+        if (!gpu_ok) {
+            /* TryGpuRaster may have run the HDMA per-line callback via
+             * prepare_frame before failing; rewind so the CPU render re-runs it
+             * from frame start (port_hdma_vblank_reset is idempotent). */
+            port_hdma_vblank_reset();
+        }
+#endif
+        if (!gpu_ok) {
+            if (Port_Profile_Enabled()) {
+                uint64_t t0 = SDL_GetTicksNS();
+                virtuappu_render_frame();
+                gPortProfileRenderNs += SDL_GetTicksNS() - t0;
+            } else {
+                virtuappu_render_frame();
+            }
         }
     }
 

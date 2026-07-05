@@ -193,6 +193,10 @@ bool Port_Config_GetDiscordRpc(void);
 void Port_Config_SetDiscordRpc(bool on);
 bool Port_Config_GetVSync(void);
 void Port_Config_SetVSync(bool on);
+/* GPU PPU rasterizer toggle (docs/gpu-rasterizer-design.md). Default on; the
+ * CPU rasterizer is the automatic fallback. No-op on non-GPU builds. */
+bool Port_Config_GetGpuRaster(void);
+void Port_Config_SetGpuRaster(bool on);
 
 /* GBA-LCD display transforms (F8 Display menu). */
 bool Port_Config_GetColorCorrection(void);

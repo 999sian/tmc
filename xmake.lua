@@ -728,6 +728,7 @@ target("tmc_pc")
     add_files("port/generated_sounds_embed.cpp")  -- compile-time sounds.json fallback
     add_files("port/port_ppu.cpp")      -- PPU bridge (C++ → ViruaPPU)
     add_files("port/port_gpu_renderer.cpp")  -- SDL_GPU presentation (Stage 1: scaffold; gated on --gpu_renderer=y)
+    add_files("port/port_gpu_raster.cpp")    -- SDL_GPU PPU rasterizer (docs/gpu-rasterizer-design.md; gated on --gpu_renderer=y)
     add_files("port/port_glslp_parser.cpp")  -- libretro .glslp parser — steps 1-4 of the runtime scaffold (Stage 5+C)
     add_files("port/port_glslp_runtime.cpp") -- libretro .glslp runtime — step 5 (load + shader-build; present pending)
 
@@ -753,6 +754,8 @@ target("tmc_pc")
         add_files("port/shaders/build/crt_rf.frag.spv")
         add_files("port/shaders/build/blur5h.frag.spv")
         add_files("port/shaders/build/crt_rf_p2.frag.spv")
+        add_files("port/shaders/build/ppu_raster.vert.spv")
+        add_files("port/shaders/build/ppu_raster.frag.spv")
     end
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/
