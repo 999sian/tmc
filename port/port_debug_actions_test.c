@@ -53,6 +53,10 @@ u32  GetCollisionDataAtTilePos(u32 tilePos, u32 layer) { (void)tilePos; (void)la
 bool32 Port_IsRoomHeaderPtrReadable(const void* ptr) { (void)ptr; return 0; }
 void Port_RefreshAreaData(unsigned int area) { (void)area; }
 bool Port_Config_GetConsoleParity(void) { return 0; }  /* config module not linked into this test */
+/* Notification stubs — these modules are not linked into the test binary. */
+bool Port_Config_GetDebugFlagNotifications(void) { return 0; }
+const char* Port_DebugQuery_FlagName(int bank, int index) { (void)bank; (void)index; return 0; }
+void Port_DebugMenu_ToastFromExternal(const char* msg) { (void)msg; }
 
 /* ---- assertion harness ---- */
 static int g_fails = 0;
