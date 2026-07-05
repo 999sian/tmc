@@ -1,6 +1,8 @@
 # GPU Rasterizer Design — full-PPU rendering on the GPU
 
-**Status:** Design approved 2026-07-05. Phased implementation in progress.
+**Status:** Implemented 2026-07-05 (all phases). Bit-exact vs the CPU rasterizer
+on Vulkan; see `docs/gpu-rasterizer-parity-notes.md`. Enabled by default on the
+SDL_GPU backend with automatic CPU fallback.
 **Author:** Port maintainers.
 **Scope:** Move the GBA PPU *rasterization* (not just presentation) onto the GPU,
 on every supported platform, with the existing software rasterizer retained as an
