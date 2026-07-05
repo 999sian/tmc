@@ -47,6 +47,21 @@ typedef struct PortGpuRasterFrame {
     const uint16_t* dispcnt_per_line; /* frame_height entries */
     const int32_t* affine_ref_x;      /* frame_height entries, mode2, may be NULL */
     const int32_t* affine_ref_y;      /* frame_height entries, mode2, may be NULL */
+
+    /* Widescreen Option A (mirrors virtuappu_mode1_ws_* globals). All zero /
+     * NULL / -1 at native 240; the shader's reveal branches then stay inert. */
+    int ws_bg_clip_x;           /* MODE1_GBA_BG_CLIP_X (240) */
+    int ws_cols;                /* MODE1_WS_SHADOW_COLS */
+    int ws_hud_right_anchor;    /* 0/1 */
+    int ws_hud_right_native_x;  /* MODE1_WS_HUD_RIGHT_NATIVE_X (176) */
+    int ws_msg_shift;           /* px */
+    int ws_msg_x0, ws_msg_x1;   /* native box rect */
+    int ws_msg_y0, ws_msg_y1;   /* box line band */
+    int ws_shadow_base_tile[4]; /* per-BG; <0 = no shadow for that BG */
+    /* Concatenated 4-BG shadow tilemaps: [bg][32 rows][ws_cols] halfwords, or
+     * NULL when no BG has a shadow (then ws_shadow_base_tile are all <0). */
+    const uint16_t* ws_shadow;
+    int ws_shadow_halfwords; /* total halfwords in ws_shadow (4*32*ws_cols) */
 } PortGpuRasterFrame;
 
 /* Create a rasterizer on `device` from SPIR-V vertex/fragment blobs. Returns
