@@ -1372,6 +1372,62 @@ static void mode1_render_affine_bg2_line(int frame_width, int32_t ref_x, int32_t
     }
 }
 
+int virtuappu_mode1_prepare_frame(const PPUMemory* ppu, uint8_t* io_per_line, uint16_t* dispcnt_per_line,
+                                  int32_t* aff_ref_x, int32_t* aff_ref_y, uint16_t* out_frame_dispcnt) {
+    /* Sequential portion of render_frame (see there for the threading contract):
+     * run the per-line HDMA callback, snapshot IO + DISPCNT per line, and
+     * precompute the affine BG2 per-line reference. No parallel render — the GPU
+     * rasterizer does that. Kept byte-identical to render_frame's setup so the
+     * GPU path sees exactly the CPU's per-line inputs. */
+    const bool affine = (ppu->mode == 2);
+    uint16_t dispcnt;
+    int line;
+
+    virtuappu_mode1_set_frame_geometry(ppu);
+
+    dispcnt = virtuappu_mode1_io_read16(MODE1_IO_DISPCNT);
+    if (out_frame_dispcnt != NULL) {
+        *out_frame_dispcnt = dispcnt;
+    }
+
+    const bool do_affine_bg2 = affine && ((dispcnt & MODE1_DISP_BG2_ON) != 0u);
+    int32_t aff_line_ref_x[MODE1_GBA_HEIGHT];
+    int32_t aff_line_ref_y[MODE1_GBA_HEIGHT];
+    int16_t aff_pb[MODE1_GBA_HEIGHT];
+    int16_t aff_pd[MODE1_GBA_HEIGHT];
+    int32_t aff_init_x = 0;
+    int32_t aff_init_y = 0;
+    if (do_affine_bg2) {
+        aff_init_x = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x28u));
+        aff_init_y = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x2Cu));
+    }
+
+    const bool per_line_io = (virtuappu_mode1_pre_line_callback != NULL);
+    for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
+        if (per_line_io) {
+            virtuappu_mode1_pre_line_callback(line);
+        }
+        /* Always snapshot: the GPU reads a full per-line IO array regardless of
+         * whether HDMA mutated it (constant lines just repeat). */
+        memcpy(&io_per_line[(size_t)line * MODE1_IO_MEM_SIZE], mode1_memory.io_mem, MODE1_IO_MEM_SIZE);
+        dispcnt_per_line[line] = affine ? dispcnt
+                                        : (uint16_t)((uint16_t)mode1_memory.io_mem[MODE1_IO_DISPCNT] |
+                                                     ((uint16_t)mode1_memory.io_mem[MODE1_IO_DISPCNT + 1] << 8));
+        if (do_affine_bg2) {
+            aff_line_ref_x[line] = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x28u));
+            aff_line_ref_y[line] = mode1_sign_extend_28(virtuappu_mode1_io_read32(0x2Cu));
+            aff_pb[line] = (int16_t)virtuappu_mode1_io_read16(0x22u);
+            aff_pd[line] = (int16_t)virtuappu_mode1_io_read16(0x26u);
+        }
+    }
+    if (do_affine_bg2 && aff_ref_x != NULL && aff_ref_y != NULL) {
+        virtuappu_mode1_affine_precompute(MODE1_GBA_HEIGHT, aff_init_x, aff_init_y, aff_line_ref_x, aff_line_ref_y,
+                                          aff_pb, aff_pd, virtuappu_mode1_bg2x_hdma_strobe,
+                                          virtuappu_mode1_bg2y_hdma_strobe, aff_ref_x, aff_ref_y);
+    }
+    return (dispcnt & MODE1_DISP_FORCED_BLANK) != 0u;
+}
+
 void virtuappu_mode1_render_frame(const PPUMemory* ppu) {
     uint16_t dispcnt;
     int line;

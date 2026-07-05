@@ -99,50 +99,45 @@ static void render_cpu(Scene* s, uint32_t* out, int w, int h) {
 static void render_gpu(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) {
     static std::vector<uint8_t> io_per_line;
     static std::vector<uint16_t> dispcnt_per_line;
+    static std::vector<int32_t> aff_x, aff_y;
     io_per_line.assign((size_t)h * 0x400, 0);
     dispcnt_per_line.assign((size_t)h, 0);
+    aff_x.assign(h, 0);
+    aff_y.assign(h, 0);
+
+    /* Drive the real prepare pass the game uses: bind memory, set the mode, run
+     * the sequential IO snapshot + affine precompute. No HDMA callback in these
+     * static scenes (matches render_cpu). */
+    VirtuaPPUMode1GbaMemory mem = { s->io, s->vram, s->bgpal, s->objpal, s->oam };
+    virtuappu_mode1_bind_gba_memory(&mem);
+    virtuappu_mode1_pre_line_callback = NULL;
     uint16_t dispcnt = (uint16_t)(s->io[0] | (s->io[1] << 8));
-    for (int y = 0; y < h; ++y) {
-        std::memcpy(&io_per_line[(size_t)y * 0x400], s->io, 0x400);
-        dispcnt_per_line[y] = dispcnt;
-    }
     int gba_mode = dispcnt & 0x7;
+    PPUMemory ppu;
+    std::memset(&ppu, 0, sizeof(ppu));
+    ppu.mode = (gba_mode == 1 || gba_mode == 2) ? 2 : 1;
+    ppu.frame_width = (uint16_t)w;
+    ppu.frame_pitch = (uint16_t)w;
+    uint16_t frame_dispcnt = 0;
+    virtuappu_mode1_prepare_frame(&ppu, io_per_line.data(), dispcnt_per_line.data(), aff_x.data(), aff_y.data(),
+                                  &frame_dispcnt);
 
     PortGpuRasterFrame f;
     std::memset(&f, 0, sizeof(f));
     f.frame_width = w;
     f.frame_height = h;
     f.frame_pitch = w;
-    f.mode = (gba_mode == 1 || gba_mode == 2) ? 2 : 1;
-    f.affine = (f.mode == 2);
-    f.frame_dispcnt = dispcnt;
+    f.mode = ppu.mode;
+    f.affine = (ppu.mode == 2);
+    f.frame_dispcnt = frame_dispcnt;
     f.vram = s->vram;
     f.bg_palette = s->bgpal;
     f.obj_palette = s->objpal;
     f.oam = s->oam;
     f.io_per_line = io_per_line.data();
     f.dispcnt_per_line = dispcnt_per_line.data();
-    /* Affine (mode 2): build the per-line reference via the CPU precompute so
-     * the GPU sees identical inputs (no HDMA in these static scenes). */
-    static std::vector<int32_t> aff_x, aff_y;
-    if (f.affine) {
-        auto io16 = [&](int off) -> uint16_t { return (uint16_t)(s->io[off] | (s->io[off + 1] << 8)); };
-        auto io32 = [&](int off) -> uint32_t { return (uint32_t)io16(off) | ((uint32_t)io16(off + 2) << 16); };
-        auto sx28 = [](uint32_t v) -> int32_t { return (v & 0x08000000u) ? (int32_t)(v | 0xF0000000u) : (int32_t)v; };
-        int32_t init_x = sx28(io32(0x28));
-        int32_t init_y = sx28(io32(0x2C));
-        std::vector<int32_t> lrx(h, init_x), lry(h, init_y);
-        std::vector<int16_t> lpb(h, (int16_t)io16(0x22)), lpd(h, (int16_t)io16(0x26));
-        aff_x.assign(h, 0);
-        aff_y.assign(h, 0);
-        virtuappu_mode1_affine_precompute(h, init_x, init_y, lrx.data(), lry.data(), lpb.data(), lpd.data(), false,
-                                          false, aff_x.data(), aff_y.data());
-        f.affine_ref_x = aff_x.data();
-        f.affine_ref_y = aff_y.data();
-    } else {
-        f.affine_ref_x = NULL;
-        f.affine_ref_y = NULL;
-    }
+    f.affine_ref_x = f.affine ? aff_x.data() : NULL;
+    f.affine_ref_y = f.affine ? aff_y.data() : NULL;
 
     /* Mirror the CPU's widescreen globals into the GPU frame so both paths see
      * identical reveal state. All NULL/0/-1 at native 240 (branches inert). */
