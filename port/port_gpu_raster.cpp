@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstring>
 #include <new>
+#include <vector>
 /* Storage-buffer slots, ordered by feature-onset so each implementation phase
  * binds a contiguous prefix (must match ppu_raster.frag's binding numbers).
  * Bump PORT_GPU_RASTER_NUM_SSBO as phases add layers; keep it equal to the
@@ -30,8 +31,8 @@ enum {
     SSBO_SLOT_COUNT = 6
 };
 
-/* Phase 3 binds BG palette + per-line IO + VRAM + OBJ palette + OAM. */
-#define PORT_GPU_RASTER_NUM_SSBO 5
+/* Phase 5 binds all 6: BG palette + IO + VRAM + OBJ palette + OAM + affine ref. */
+#define PORT_GPU_RASTER_NUM_SSBO 6
 struct PortGpuRaster {
     SDL_GPUDevice* device = nullptr;
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
@@ -50,6 +51,10 @@ struct PortGpuRaster {
 
     SDL_GPUTransferBuffer* download = nullptr;
     Uint32 download_cap = 0;
+
+    /* Interleaved [x0,y0,x1,y1,...] affine reference, rebuilt per frame from
+     * the frame's separate x/y arrays (zeros when non-affine). */
+    std::vector<int32_t> aff_scratch;
 };
 
 /* std140 mirror of ppu_raster.frag's Params (two 16-byte vectors). */
@@ -249,6 +254,16 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
         return nullptr;
     }
 
+    /* Build the interleaved affine reference (zeros when non-affine); slot 5 is
+     * always bound so the buffer must always be valid. */
+    r->aff_scratch.assign((size_t)f->frame_height * 2u, 0);
+    if (f->affine && f->affine_ref_x && f->affine_ref_y) {
+        for (int y = 0; y < f->frame_height; ++y) {
+            r->aff_scratch[(size_t)y * 2u + 0u] = f->affine_ref_x[y];
+            r->aff_scratch[(size_t)y * 2u + 1u] = f->affine_ref_y[y];
+        }
+    }
+
     /* Upload the storage buffers the current phase binds. */
     SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
     bool ok = true;
@@ -257,6 +272,8 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     ok = ok && stage_upload(r, cp, SSBO_VRAM, f->vram, 0x18000u);
     ok = ok && stage_upload(r, cp, SSBO_OBJ_PALETTE, f->obj_palette, 256u * sizeof(uint16_t));
     ok = ok && stage_upload(r, cp, SSBO_OAM, f->oam, 512u * sizeof(uint16_t));
+    ok = ok &&
+         stage_upload(r, cp, SSBO_AFFINE_REF, r->aff_scratch.data(), (Uint32)r->aff_scratch.size() * sizeof(int32_t));
     SDL_EndGPUCopyPass(cp);
     if (!ok) {
         SDL_SubmitGPUCommandBuffer(cmd);

@@ -30,6 +30,7 @@ layout(set = 2, binding = 1, std430) readonly buffer IoPerLine { uint data[]; } 
 layout(set = 2, binding = 2, std430) readonly buffer Vram { uint data[]; } vram;
 layout(set = 2, binding = 3, std430) readonly buffer ObjPalette { uint data[]; } objpal;
 layout(set = 2, binding = 4, std430) readonly buffer Oam { uint data[]; } oam;
+layout(set = 2, binding = 5, std430) readonly buffer AffineRef { int data[]; } aff;
 
 layout(set = 3, binding = 0, std140) uniform Params {
     /* geom: x=frame_width, y=height, z=mode(GBA), w=affine(0/1) */
@@ -151,6 +152,40 @@ uint bg_text_pixel(int bg, int x, int line, out uint pal_index) {
 
 uint bg_priority(int bg, int line) {
     return io_u16(line, IO_BG0CNT + bg * 2) & 3u;
+}
+
+/* Affine BG2 pixel (mode1_render_affine_bg2_line). Always 8bpp, 1-byte tilemap
+ * entries, 64-byte tiles. Uses the precomputed per-line reference (ref_x,ref_y)
+ * + pa/pc. Returns palette index (0 = transparent). */
+uint bg2_affine_pixel(int x, int line) {
+    uint bgcnt = io_u16(line, IO_BG0CNT + 2 * 2); /* BG2CNT at 0x0C */
+    uint char_base = ((bgcnt >> 2u) & 3u) * 0x4000u;
+    uint screen_base = ((bgcnt >> 8u) & 0x1Fu) * 0x800u;
+    bool wrap = ((bgcnt >> 13u) & 1u) != 0u;
+    uint size_flag = (bgcnt >> 14u) & 3u;
+    int map_size = 128 << int(size_flag); /* 128,256,512,1024 */
+    int map_tiles = map_size / 8;
+    int pa = sx16(io_u16(line, 0x20));
+    int pc = sx16(io_u16(line, 0x24));
+    int ref_x = aff.data[line * 2 + 0];
+    int ref_y = aff.data[line * 2 + 1];
+
+    int src_x = (ref_x + pa * x) >> 8;
+    int src_y = (ref_y + pc * x) >> 8;
+    if (wrap) {
+        src_x &= (map_size - 1);
+        src_y &= (map_size - 1);
+    } else if (src_x < 0 || src_x >= map_size || src_y < 0 || src_y >= map_size) {
+        return 0u;
+    }
+    int tile_col = src_x / 8;
+    int tile_row = src_y / 8;
+    int pixel_x = src_x % 8;
+    int pixel_y = src_y % 8;
+    uint map_addr = screen_base + uint(tile_row * map_tiles + tile_col);
+    uint tile_index = vram_u8(map_addr);
+    uint tile_addr = char_base + tile_index * 64u + uint(pixel_y) * 8u + uint(pixel_x);
+    return vram_u8(tile_addr);
 }
 
 /* OBJ shape/size dimension tables (mirror mode1_obj_widths/heights). */
@@ -361,7 +396,10 @@ void main() {
         return;
     }
 
-    uint line_dispcnt = io_u16(line, IO_DISPCNT);
+    /* Affine (GBA modes 1/2): DISPCNT is latched frame-start; BG2 is affine and
+     * BG3 is not rendered (matches render_frame's affine branch). */
+    bool affine = (params.geom.w != 0);
+    uint line_dispcnt = affine ? params.misc.x : io_u16(line, IO_DISPCNT);
     uint backdrop = bgpal_u16(0);
 
     /* Gather BG layers. */
@@ -374,7 +412,19 @@ void main() {
         bg_on[bg] = (line_dispcnt & (DISP_BG0_ON << uint(bg))) != 0u;
         bg_op[bg] = false;
         bg_col[bg] = 0u;
-        if (bg_on[bg]) {
+        if (affine && bg == 3) {
+            bg_on[bg] = false; /* no BG3 in the affine path */
+        }
+        if (!bg_on[bg]) {
+            continue;
+        }
+        if (affine && bg == 2) {
+            uint ci = bg2_affine_pixel(x, line);
+            if (ci != 0u) {
+                bg_op[bg] = true;
+                bg_col[bg] = bgpal_u16(int(ci)); /* affine BG is 8bpp: direct index */
+            }
+        } else {
             uint pal_index;
             uint ci = bg_text_pixel(bg, x, line, pal_index);
             if (ci != 0u) {
