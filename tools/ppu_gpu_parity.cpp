@@ -134,6 +134,7 @@ static void build_frame(Scene* s, int w, int h, PortGpuRasterFrame* fout, std::v
     f.obj_palette = s->objpal;
     f.oam = s->oam;
     f.io_per_line = io_per_line.data();
+    f.io_uniform = true; /* static scenes: no HDMA callback, IO constant per line */
     f.dispcnt_per_line = dispcnt_per_line.data();
     f.affine_ref_x = f.affine ? aff_x.data() : NULL;
     f.affine_ref_y = f.affine ? aff_y.data() : NULL;

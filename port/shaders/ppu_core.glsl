@@ -32,7 +32,10 @@ uint bgpal_u16(int idx) {
     return (bgpal.data[b >> 2u] >> ((b & 2u) * 8u)) & 0xFFFFu;
 }
 uint io_u16(int line, int off) {
-    uint b = uint(line) * 0x400u + uint(off);
+    /* params.misc.y != 0 => IO is frame-uniform (no per-line HDMA): only row 0
+     * was uploaded, so read row 0 for every line. Removes 159 KB/frame upload. */
+    int row = (params.misc.y != 0u) ? 0 : line;
+    uint b = uint(row) * 0x400u + uint(off);
     return (io.data[b >> 2u] >> ((b & 2u) * 8u)) & 0xFFFFu;
 }
 uint vram_u8(uint addr) {

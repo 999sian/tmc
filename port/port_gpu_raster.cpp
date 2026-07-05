@@ -298,7 +298,8 @@ static bool record_frame(PortGpuRaster* r, const PortGpuRasterFrame* f, SDL_GPUC
     SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
     bool ok = true;
     ok = ok && stage_upload(r, cp, SSBO_BG_PALETTE, f->bg_palette, 256u * sizeof(uint16_t));
-    ok = ok && stage_upload(r, cp, SSBO_IO_PER_LINE, f->io_per_line, (Uint32)f->frame_height * 0x400u);
+    ok = ok &&
+         stage_upload(r, cp, SSBO_IO_PER_LINE, f->io_per_line, (f->io_uniform ? 1u : (Uint32)f->frame_height) * 0x400u);
     ok = ok && stage_upload(r, cp, SSBO_VRAM, f->vram, 0x18000u);
     ok = ok && stage_upload(r, cp, SSBO_OBJ_PALETTE, f->obj_palette, 256u * sizeof(uint16_t));
     ok = ok && stage_upload(r, cp, SSBO_OAM, f->oam, 512u * sizeof(uint16_t));
@@ -327,6 +328,7 @@ static bool record_frame(PortGpuRaster* r, const PortGpuRasterFrame* f, SDL_GPUC
     p.geom[2] = f->mode;
     p.geom[3] = f->affine ? 1 : 0;
     p.misc[0] = f->frame_dispcnt;
+    p.misc[1] = f->io_uniform ? 1u : 0u;
     p.ws[0] = f->ws_bg_clip_x ? f->ws_bg_clip_x : 240;
     p.ws[1] = f->ws_cols;
     p.ws[2] = f->ws_hud_right_anchor;
