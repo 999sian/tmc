@@ -75,6 +75,23 @@ static void DrawRibbonDisplayTab(void) {
                    Port_Config_CycleRenderBackend);
         ImGui::SameLine(); ImGui::TextDisabled("(restart)");
 
+        /* GPU PPU rasterizer toggle (docs/gpu-rasterizer-design.md). Only
+         * meaningful on the SDL_GPU backend; the CPU rasterizer is the
+         * automatic fallback. Shown greyed-out otherwise. */
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("GPU rasterizer");
+        ImGui::TableSetColumnIndex(1);
+        {
+            bool raster = Port_Config_GetGpuRaster();
+            ImGui::BeginDisabled(!gpuActive);
+            if (ImGui::Checkbox("##gpu_raster", &raster)) {
+                Port_Config_SetGpuRaster(raster);
+            }
+            ImGui::EndDisabled();
+            ImGui::SameLine();
+            ImGui::TextDisabled(gpuActive ? "(CPU fallback)" : "(needs GPU backend)");
+        }
+
         StepperRow("Background", "bgfill",
                    [](char*, size_t) { return Port_Config_BgFillName(Port_Config_BgFill()); },
                    Port_Config_CycleBgFill);
