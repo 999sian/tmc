@@ -147,19 +147,27 @@ rasterize cost. This is a known result for GBA emulation:
   transfer buffers) is the SDL_GPU equivalent, and the 0.77 ms figure confirms
   the win.
 
-### What this means for the defaults
+### What this means for the defaults (as shipped)
 
-- The merge is a strict improvement and is the default GPU-raster path.
-- Same-frame correctness is retained (screenshot/parity/shm see the current
-  frame), so the merged sync path — not the deferred one — is wired into the
-  game.
-- GPU raster remains a **latent** win only where the pixel count grows enough to
-  flip the CPU-vs-upload balance: high internal-scale supersampling, large
-  widescreen, or a future **direct-present** path (render straight into the
+- **The game's Vulkan raster path uses the DEFERRED readback in normal play**
+  (submit frame N, return frame N-1 via `SDL_QueryGPUFence` — no per-frame CPU
+  stall). Measured live (desktop autoplay): GPU-raster present **~2.4 ms → ~1.2
+  ms**, render timer **~2.1 → ~1.1 ms**, 60 fps. Cost: 1 frame of display
+  latency.
+- **Under `TMC_PERFCAP` it switches to the synchronous merged path** so the
+  byte-exact golden hash reflects the current frame — the parity gate and
+  `tools/ppu_gpu_parity` stay current-frame-exact (intro_logo/title golden,
+  76/76 scenes bit-exact). Screenshot/shm consumers tolerate the 1-frame lag in
+  play.
+- Even fully optimized, native-res GPU raster still costs more CPU than the CPU
+  rasterizer alone (upload ~0.8 ms > CPU raster ~0.45 ms); deferred's value is
+  removing the *stall*, not beating the CPU at 240×160. It hits 60 fps either
+  way on desktop.
+- The remaining structural win is **direct-present** (render straight into the
   swapchain via `SDL_WaitAndAcquireGPUSwapchainTexture` / `SDL_BlitGPUTexture`,
-  no readback at all) — which is the only structure that removes the readback
-  entirely, at the cost of reworking the CPU-side frame consumers. Tracked as
-  the next step if/when high-res output is prioritised.
-- For native 240×160 on typical hardware, the CPU rasterizer is the right
-  default; the GPU backends stay opt-in-safe (Vulkan auto where present, GLES
-  opt-in) rather than a guaranteed speedup.
+  no readback at all) — the only path that removes the bus transfer entirely,
+  and the only one that could make GPU raster a net win. It requires moving the
+  CPU-side frame consumers (colour-correction, LCD persistence, xBRZ,
+  internal-scale, shm) onto the GPU first. Tracked as the next step if/when
+  high-res GPU output is prioritised.
+- GPU backends stay opt-in-safe (Vulkan auto where present, GLES opt-in).
