@@ -350,6 +350,119 @@ static void scene_bg0_transparent(Scene* s) {
     fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
 }
 
+/* ---- OBJ helpers ---- */
+static void set_oam(Scene* s, int i, uint16_t a0, uint16_t a1, uint16_t a2) {
+    s->oam[i * 4 + 0] = a0;
+    s->oam[i * 4 + 1] = a1;
+    s->oam[i * 4 + 2] = a2;
+}
+static void set_affine(Scene* s, int g, int16_t pa, int16_t pb, int16_t pc, int16_t pd) {
+    s->oam[g * 16 + 3] = (uint16_t)pa;
+    s->oam[g * 16 + 7] = (uint16_t)pb;
+    s->oam[g * 16 + 11] = (uint16_t)pc;
+    s->oam[g * 16 + 15] = (uint16_t)pd;
+}
+/* Fill OBJ tiles 0..63 at obj base (0x10000) with the 4bpp/8bpp patterns. */
+static void fill_obj_tiles(Scene* s) {
+    for (int t = 0; t < 64; ++t) {
+        write_tile_4bpp(s->vram, 0x10000, t);
+    }
+    /* OBJ palette: bank 0 for 8bpp direct, plus banks for 4bpp. */
+    for (int i = 1; i < 256; ++i) {
+        s->objpal[i] = (uint16_t)(((i * 7) & 0x1F) | (((i * 3) & 0x1F) << 5) | (((i * 11) & 0x1F) << 10));
+    }
+}
+/* attr0 helpers: y | (affine<<8) | (mode<<10) | (mosaic<<12) | (bpp8<<13) | (shape<<14) */
+static uint16_t A0(int y, int affine, int mode, int mosaic, int bpp8, int shape) {
+    return (uint16_t)((y & 0xFF) | (affine << 8) | (mode << 10) | (mosaic << 12) | (bpp8 << 13) | (shape << 14));
+}
+static uint16_t A0_hidden(int y, int shape) {
+    return (uint16_t)((y & 0xFF) | (1 << 9) | (shape << 14));
+}
+/* attr1 (non-affine): x | (hflip<<12) | (vflip<<13) | (size<<14) */
+static uint16_t A1(int x, int hflip, int vflip, int size) {
+    return (uint16_t)((x & 0x1FF) | (hflip << 12) | (vflip << 13) | (size << 14));
+}
+/* attr1 (affine): x | (group<<9) | (size<<14) */
+static uint16_t A1a(int x, int group, int size) {
+    return (uint16_t)((x & 0x1FF) | (group << 9) | (size << 14));
+}
+/* attr2: tile | (priority<<10) | (palbank<<12) */
+static uint16_t A2(int tile, int prio, int palbank) {
+    return (uint16_t)((tile & 0x3FF) | (prio << 10) | (palbank << 12));
+}
+
+enum { DISP_OBJ_1D_BIT = 0x0040, DISP_OBJ_ENABLE = 0x1000 };
+/* base OBJ scene: backdrop + tiles + 1D mapping, one 16x16 sprite. */
+static void scene_obj_setup(Scene* s, const char* name) {
+    scene_clear(s, name);
+    set_io16(s, 0x00, (uint16_t)(DISP_OBJ_ENABLE | DISP_OBJ_1D_BIT)); /* OBJ on, 1D */
+    s->bgpal[0] = 0x0421;
+    fill_obj_tiles(s);
+}
+
+static void scene_obj_basic(Scene* s) {
+    scene_obj_setup(s, "obj_basic_16x16");
+    set_oam(s, 0, A0(40, 0, 0, 0, 0, 0), A1(50, 0, 0, 1), A2(0, 0, 2)); /* 16x16, palbank 2 */
+}
+static void scene_obj_hflip(Scene* s) {
+    scene_obj_setup(s, "obj_hflip");
+    set_oam(s, 0, A0(40, 0, 0, 0, 0, 0), A1(50, 1, 0, 1), A2(0, 0, 2));
+}
+static void scene_obj_vflip(Scene* s) {
+    scene_obj_setup(s, "obj_vflip");
+    set_oam(s, 0, A0(40, 0, 0, 0, 0, 0), A1(50, 0, 1, 1), A2(0, 0, 2));
+}
+static void scene_obj_8bpp(Scene* s) {
+    scene_obj_setup(s, "obj_8bpp");
+    for (int t = 0; t < 64; ++t)
+        write_tile_8bpp(s->vram, 0x10000, t);
+    set_oam(s, 0, A0(30, 0, 0, 0, 1, 0), A1(60, 0, 0, 1), A2(0, 0, 0)); /* 8bpp 16x16 */
+}
+static void scene_obj_2d(Scene* s) {
+    scene_obj_setup(s, "obj_2d_mapping");
+    set_io16(s, 0x00, DISP_OBJ_ENABLE);                                 /* 2D mapping (no bit6) */
+    set_oam(s, 0, A0(40, 0, 0, 0, 0, 0), A1(50, 0, 0, 2), A2(0, 0, 2)); /* 32x32 */
+}
+static void scene_obj_affine(Scene* s) {
+    scene_obj_setup(s, "obj_affine_rot");
+    /* ~30deg rotation-ish matrix (8.8 fixed): pa=0xE0,pb=-0x80,pc=0x80,pd=0xE0 */
+    set_affine(s, 0, 0x00E0, (int16_t)0xFF80, 0x0080, 0x00E0);
+    set_oam(s, 0, A0(40, 1, 0, 0, 0, 0), A1a(60, 0, 2), A2(0, 0, 2)); /* affine 32x32, group 0 */
+}
+static void scene_obj_affine_double(Scene* s) {
+    scene_obj_setup(s, "obj_affine_double");
+    set_affine(s, 1, 0x0100, 0, 0, 0x0100); /* identity, double-size bounds */
+    /* attr0 affine + double-size (bit9) */
+    uint16_t a0 = (uint16_t)((40 & 0xFF) | (1 << 8) | (1 << 9));
+    set_oam(s, 0, a0, A1a(60, 1, 2), A2(0, 0, 2));
+}
+static void scene_obj_over_bg(Scene* s) {
+    scene_obj_setup(s, "obj_over_bg");
+    set_io16(s, 0x00, (uint16_t)(DISP_OBJ_ENABLE | DISP_OBJ_1D_BIT | 0x0100)); /* + BG0 */
+    set_io16(s, 0x08, (uint16_t)(8u << 8));                                    /* BG0 screen block 8, prio 0 */
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+    set_oam(s, 0, A0(40, 0, 0, 0, 0, 0), A1(50, 0, 0, 1), A2(0, 0, 2)); /* obj prio 0 -> over BG prio 0 */
+}
+static void scene_obj_two_overlap(Scene* s) {
+    scene_obj_setup(s, "obj_two_overlap");
+    /* Two overlapping sprites; lower OAM index (0) must win the overlap. */
+    set_oam(s, 0, A0(40, 0, 0, 0, 0, 0), A1(50, 0, 0, 1), A2(0, 0, 2));
+    set_oam(s, 1, A0(44, 0, 0, 0, 0, 0), A1(54, 0, 0, 1), A2(4, 0, 3));
+}
+static void scene_obj_wrap(Scene* s) {
+    scene_obj_setup(s, "obj_xy_wrap");
+    /* x near right edge wraps via -512; y>=160 wraps via -256. */
+    set_oam(s, 0, A0(250, 0, 0, 0, 0, 1), A1(500, 0, 0, 1), A2(0, 0, 2)); /* y=250 -> -6 */
+}
+static void scene_obj_mosaic(Scene* s) {
+    scene_obj_setup(s, "obj_mosaic");
+    set_io16(s, 0x4C, (uint16_t)((3u << 8) | (2u << 12)));              /* OBJ mosaic h-1=3, v-1=2 */
+    set_oam(s, 0, A0(40, 0, 0, 1, 0, 0), A1(50, 0, 0, 2), A2(0, 0, 2)); /* mosaic bit set, 32x32 */
+}
+
 int main(int argc, char** argv) {
     const char* vpath = argc > 1 ? argv[1] : "port/shaders/build/ppu_raster.vert.spv";
     const char* fpath = argc > 2 ? argv[2] : "port/shaders/build/ppu_raster.frag.spv";
@@ -382,9 +495,12 @@ int main(int argc, char** argv) {
     static Scene scene;
     std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H);
 
-    SceneFn scenes[] = { scene_forced_blank, scene_backdrop_blue, scene_backdrop_black, scene_backdrop_mixed,
-                         scene_bg0_tiled,    scene_bg0_scroll,    scene_bg0_flip,       scene_bg0_8bpp,
-                         scene_bg0_mosaic,   scene_bg0_512,       scene_bg_priority,    scene_bg0_transparent };
+    SceneFn scenes[] = { scene_forced_blank,    scene_backdrop_blue, scene_backdrop_black,    scene_backdrop_mixed,
+                         scene_bg0_tiled,       scene_bg0_scroll,    scene_bg0_flip,          scene_bg0_8bpp,
+                         scene_bg0_mosaic,      scene_bg0_512,       scene_bg_priority,       scene_bg0_transparent,
+                         scene_obj_basic,       scene_obj_hflip,     scene_obj_vflip,         scene_obj_8bpp,
+                         scene_obj_2d,          scene_obj_affine,    scene_obj_affine_double, scene_obj_over_bg,
+                         scene_obj_two_overlap, scene_obj_wrap,      scene_obj_mosaic };
     int total_diffs = 0;
     for (SceneFn fn : scenes) {
         fn(&scene);

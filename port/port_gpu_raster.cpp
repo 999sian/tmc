@@ -30,8 +30,8 @@ enum {
     SSBO_SLOT_COUNT = 6
 };
 
-/* Phase 2 binds BG palette + per-line IO + VRAM. */
-#define PORT_GPU_RASTER_NUM_SSBO 3
+/* Phase 3 binds BG palette + per-line IO + VRAM + OBJ palette + OAM. */
+#define PORT_GPU_RASTER_NUM_SSBO 5
 struct PortGpuRaster {
     SDL_GPUDevice* device = nullptr;
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
@@ -255,6 +255,8 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     ok = ok && stage_upload(r, cp, SSBO_BG_PALETTE, f->bg_palette, 256u * sizeof(uint16_t));
     ok = ok && stage_upload(r, cp, SSBO_IO_PER_LINE, f->io_per_line, (Uint32)f->frame_height * 0x400u);
     ok = ok && stage_upload(r, cp, SSBO_VRAM, f->vram, 0x18000u);
+    ok = ok && stage_upload(r, cp, SSBO_OBJ_PALETTE, f->obj_palette, 256u * sizeof(uint16_t));
+    ok = ok && stage_upload(r, cp, SSBO_OAM, f->oam, 512u * sizeof(uint16_t));
     SDL_EndGPUCopyPass(cp);
     if (!ok) {
         SDL_SubmitGPUCommandBuffer(cmd);
