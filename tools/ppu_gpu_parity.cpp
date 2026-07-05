@@ -111,8 +111,27 @@ static void render_gpu(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) 
     f.oam = s->oam;
     f.io_per_line = io_per_line.data();
     f.dispcnt_per_line = dispcnt_per_line.data();
-    f.affine_ref_x = NULL;
-    f.affine_ref_y = NULL;
+    /* Affine (mode 2): build the per-line reference via the CPU precompute so
+     * the GPU sees identical inputs (no HDMA in these static scenes). */
+    static std::vector<int32_t> aff_x, aff_y;
+    if (f.affine) {
+        auto io16 = [&](int off) -> uint16_t { return (uint16_t)(s->io[off] | (s->io[off + 1] << 8)); };
+        auto io32 = [&](int off) -> uint32_t { return (uint32_t)io16(off) | ((uint32_t)io16(off + 2) << 16); };
+        auto sx28 = [](uint32_t v) -> int32_t { return (v & 0x08000000u) ? (int32_t)(v | 0xF0000000u) : (int32_t)v; };
+        int32_t init_x = sx28(io32(0x28));
+        int32_t init_y = sx28(io32(0x2C));
+        std::vector<int32_t> lrx(h, init_x), lry(h, init_y);
+        std::vector<int16_t> lpb(h, (int16_t)io16(0x22)), lpd(h, (int16_t)io16(0x26));
+        aff_x.assign(h, 0);
+        aff_y.assign(h, 0);
+        virtuappu_mode1_affine_precompute(h, init_x, init_y, lrx.data(), lry.data(), lpb.data(), lpd.data(), false,
+                                          false, aff_x.data(), aff_y.data());
+        f.affine_ref_x = aff_x.data();
+        f.affine_ref_y = aff_y.data();
+    } else {
+        f.affine_ref_x = NULL;
+        f.affine_ref_y = NULL;
+    }
 
     SDL_GPUTexture* tex = Port_GpuRaster_Render(r, &f);
     if (!tex) {
@@ -564,6 +583,79 @@ static void scene_obj_semitrans(Scene* s) {
     set_oam(s, 0, A0(40, 0, 1, 0, 0, 0), A1(50, 0, 0, 1), A2(0, 0, 2)); /* mode1 semi-trans 16x16 */
 }
 
+/* ---- affine BG2 (GBA mode 1/2) scenes ---- */
+/* Affine BG uses 8bpp 64-byte tiles and 1-byte tilemap entries. */
+static void affine_bg2_setup(Scene* s, const char* name, int size_flag, int wrap) {
+    scene_clear(s, name);
+    /* DISPCNT mode 1 (affine), BG2 on. */
+    set_io16(s, 0x00, (uint16_t)(1u | 0x0400));
+    /* BG2CNT: char base 0, screen base block 8 (0x4000), size, wrap, prio 0. */
+    set_io16(s, 0x0C, (uint16_t)((8u << 8) | (uint16_t)(size_flag << 14) | (uint16_t)(wrap << 13)));
+    /* 8bpp palette. */
+    s->bgpal[0] = 0x0421;
+    for (int i = 1; i < 256; ++i) {
+        s->bgpal[i] = (uint16_t)(((i * 3) & 0x1F) | (((i * 5) & 0x1F) << 5) | (((i * 7) & 0x1F) << 10));
+    }
+    /* 8bpp tiles 0..63 at char base 0. */
+    for (int t = 0; t < 64; ++t)
+        write_tile_8bpp(s->vram, 0, t);
+    /* Affine tilemap at 0x4000: 1 byte/entry. Fill map_tiles*map_tiles. */
+    int map_size = 128 << size_flag;
+    int map_tiles = map_size / 8;
+    for (int i = 0; i < map_tiles * map_tiles; ++i) {
+        s->vram[0x4000 + i] = (uint8_t)((i % 63) + 1);
+    }
+}
+static void set_io32(Scene* s, int off, uint32_t v) {
+    set_io16(s, off, (uint16_t)(v & 0xFFFF));
+    set_io16(s, off + 2, (uint16_t)(v >> 16));
+}
+static void scene_affine_identity(Scene* s) {
+    affine_bg2_setup(s, "affine_identity", 1, 0); /* 256x256, no wrap */
+    set_io16(s, 0x20, 0x0100);                    /* PA = 1.0 */
+    set_io16(s, 0x22, 0x0000);                    /* PB = 0 */
+    set_io16(s, 0x24, 0x0000);                    /* PC = 0 */
+    set_io16(s, 0x26, 0x0100);                    /* PD = 1.0 */
+    set_io32(s, 0x28, 0);                         /* BG2X = 0 */
+    set_io32(s, 0x2C, 0);                         /* BG2Y = 0 */
+}
+static void scene_affine_scaled(Scene* s) {
+    affine_bg2_setup(s, "affine_scaled", 1, 0);
+    set_io16(s, 0x20, 0x0080); /* PA = 0.5 -> 2x zoom */
+    set_io16(s, 0x22, 0x0000);
+    set_io16(s, 0x24, 0x0000);
+    set_io16(s, 0x26, 0x0080);
+    set_io32(s, 0x28, 0);
+    set_io32(s, 0x2C, 0);
+}
+static void scene_affine_rotated(Scene* s) {
+    affine_bg2_setup(s, "affine_rotated", 1, 0);
+    set_io16(s, 0x20, 0x00E0);           /* PA */
+    set_io16(s, 0x22, (uint16_t)0xFF80); /* PB = -0.5 */
+    set_io16(s, 0x24, 0x0080);           /* PC = 0.5 */
+    set_io16(s, 0x26, 0x00E0);           /* PD */
+    set_io32(s, 0x28, 0x00000800);       /* BG2X = 8.0 */
+    set_io32(s, 0x2C, 0x00001000);       /* BG2Y = 16.0 */
+}
+static void scene_affine_wrap(Scene* s) {
+    affine_bg2_setup(s, "affine_wrap", 0, 1); /* 128x128, wrap on */
+    set_io16(s, 0x20, 0x0100);
+    set_io16(s, 0x22, 0x0000);
+    set_io16(s, 0x24, 0x0000);
+    set_io16(s, 0x26, 0x0100);
+    set_io32(s, 0x28, 0x00004000); /* BG2X = 64.0 -> wraps within 128 */
+    set_io32(s, 0x2C, 0x00004000);
+}
+static void scene_affine_oob(Scene* s) {
+    affine_bg2_setup(s, "affine_oob_transparent", 1, 0); /* no wrap: OOB -> backdrop */
+    set_io16(s, 0x20, 0x0100);
+    set_io16(s, 0x22, 0x0000);
+    set_io16(s, 0x24, 0x0000);
+    set_io16(s, 0x26, 0x0100);
+    set_io32(s, 0x28, (uint32_t)(-0x00002000)); /* BG2X negative -> left cols OOB */
+    set_io32(s, 0x2C, 0);
+}
+
 int main(int argc, char** argv) {
     const char* vpath = argc > 1 ? argv[1] : "port/shaders/build/ppu_raster.vert.spv";
     const char* fpath = argc > 2 ? argv[2] : "port/shaders/build/ppu_raster.frag.spv";
@@ -628,7 +720,12 @@ int main(int argc, char** argv) {
                          scene_blend_brighten,
                          scene_blend_darken,
                          scene_blend_alpha_backdrop,
-                         scene_obj_semitrans };
+                         scene_obj_semitrans,
+                         scene_affine_identity,
+                         scene_affine_scaled,
+                         scene_affine_rotated,
+                         scene_affine_wrap,
+                         scene_affine_oob };
     int total_diffs = 0;
     for (SceneFn fn : scenes) {
         fn(&scene);
