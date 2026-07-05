@@ -2,6 +2,12 @@
 #include "main.h"
 #include <stdbool.h>
 #include "port_config.h"
+#ifdef _WIN32
+#include <windows.h>
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
+#endif
 /* Set by xmake (-DMODE1_GBA_WIDTH=N); falls back to GBA-native 240. */
 #ifndef MODE1_GBA_WIDTH
 #define MODE1_GBA_WIDTH 240
@@ -325,6 +331,17 @@ static void PaintSplash(SDL_Window* window, const char* msg) {
 #endif
 
 int main(int argc, char* argv[]) {
+#ifdef _WIN32
+    // Enable ANSI escape sequences in Windows console/terminal
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+#endif
 
     /* Must run before any std::vector / new / malloc that could land in
      * the GBA window. Static initializers in C++ files are constructed
