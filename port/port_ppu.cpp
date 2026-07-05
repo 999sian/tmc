@@ -1057,10 +1057,7 @@ static bool Port_PPU_TryGpuRaster(void) {
      * Direct-present of the GPU output is a tracked follow-up optimisation. */
     const int pitch = virtuappu_mode1_frame_pitch();
     if (useVk) {
-        if (!Port_GpuRaster_Render(sGpuRaster, &f)) {
-            return false;
-        }
-        if (!Port_GpuRaster_Readback(sGpuRaster, virtuappu_frame_buffer, f.frame_width, f.frame_height, pitch)) {
+        if (!Port_GpuRaster_RenderReadback(sGpuRaster, &f, virtuappu_frame_buffer, pitch)) {
             return false;
         }
     } else { /* useGles */

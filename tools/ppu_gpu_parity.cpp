@@ -185,14 +185,8 @@ static std::vector<uint16_t> g_wsconcat;
 static void render_vk(PortGpuRaster* r, Scene* s, uint32_t* out, int w, int h) {
     PortGpuRasterFrame f;
     build_frame(s, w, h, &f, g_io, g_dispcnt, g_affx, g_affy, g_wsconcat);
-    SDL_GPUTexture* tex = Port_GpuRaster_Render(r, &f);
-    if (!tex) {
-        std::fprintf(stderr, "  VK render returned NULL\n");
-        std::memset(out, 0xAB, (size_t)w * h * sizeof(uint32_t));
-        return;
-    }
-    if (!Port_GpuRaster_Readback(r, out, w, h, w)) {
-        std::fprintf(stderr, "  VK readback failed\n");
+    if (!Port_GpuRaster_RenderReadback(r, &f, out, w)) {
+        std::fprintf(stderr, "  VK render/readback failed\n");
         std::memset(out, 0xCD, (size_t)w * h * sizeof(uint32_t));
     }
 }
@@ -813,6 +807,52 @@ int main(int argc, char** argv) {
     const int W = MODE1_GBA_WIDTH, H = 160;
     static Scene scene;
     std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H), gles((size_t)W * H);
+
+    /* PPU_BENCH=<iters>: micro-benchmark the Vulkan raster phases (render =
+     * upload+dispatch+fence, readback = 2nd submit+fence+map+copy) on a busy
+     * scene, to isolate where time goes before optimizing. */
+    if (const char* bn = getenv("PPU_BENCH")) {
+        int iters = atoi(bn);
+        if (iters < 1)
+            iters = 500;
+        scene_bg_priority(&scene); /* 2 BGs + composite, representative */
+        PortGpuRasterFrame f;
+        build_frame(&scene, W, H, &f, g_io, g_dispcnt, g_affx, g_affy, g_wsconcat);
+        /* warmup */
+        for (int i = 0; i < 20; ++i) {
+            Port_GpuRaster_Render(r, &f);
+            Port_GpuRaster_Readback(r, gpu.data(), W, H, W);
+        }
+        double t_render = 0, t_read = 0, t_merged = 0;
+        for (int i = 0; i < iters; ++i) {
+            uint64_t a = SDL_GetTicksNS();
+            Port_GpuRaster_Render(r, &f);
+            uint64_t b = SDL_GetTicksNS();
+            Port_GpuRaster_Readback(r, gpu.data(), W, H, W);
+            uint64_t c = SDL_GetTicksNS();
+            Port_GpuRaster_RenderReadback(r, &f, gpu.data(), W);
+            uint64_t d = SDL_GetTicksNS();
+            t_render += (b - a) / 1e6;
+            t_read += (c - b) / 1e6;
+            t_merged += (d - c) / 1e6;
+        }
+        double t_defer = 0;
+        for (int i = 0; i < iters; ++i) {
+            uint64_t a = SDL_GetTicksNS();
+            Port_GpuRaster_RenderReadbackDeferred(r, &f, gpu.data(), W);
+            t_defer += (SDL_GetTicksNS() - a) / 1e6;
+        }
+        std::printf("[bench] %dx %dx%d vk: SEPARATE render=%.4f + readback=%.4f = %.4f ms | MERGED=%.4f ms | DEFERRED "
+                    "(CPU-side, no stall)=%.4f ms\n",
+                    iters, W, H, t_render / iters, t_read / iters, (t_render + t_read) / iters, t_merged / iters,
+                    t_defer / iters);
+        Port_GpuRaster_Destroy(r);
+        if (rgl)
+            Port_GpuRasterGl_Destroy(rgl);
+        SDL_DestroyGPUDevice(dev);
+        SDL_Quit();
+        return 0;
+    }
 
     SceneFn scenes[] = {
         scene_forced_blank,

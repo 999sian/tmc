@@ -51,8 +51,20 @@ struct PortGpuRaster {
     int target_w = 0;
     int target_h = 0;
 
-    SDL_GPUTransferBuffer* download = nullptr;
+    SDL_GPUTransferBuffer* download = nullptr; /* sync path */
     Uint32 download_cap = 0;
+
+    /* Deferred (double-buffered) readback ring: submit frame N without waiting,
+     * read frame N-1 next call via SDL_QueryGPUFence — the CPU never stalls on
+     * the GPU. Costs 1 frame of latency (opt-in). */
+    enum { DEFER_RING = 2 };
+    SDL_GPUTransferBuffer* defer_xfer[DEFER_RING] = {};
+    SDL_GPUFence* defer_fence[DEFER_RING] = {};
+    int defer_w[DEFER_RING] = {};
+    int defer_h[DEFER_RING] = {};
+    Uint32 defer_cap[DEFER_RING] = {};
+    int defer_head = 0;        /* next slot to submit into */
+    bool defer_primed = false; /* a prior frame is in flight */
 
     /* Interleaved [x0,y0,x1,y1,...] affine reference, rebuilt per frame from
      * the frame's separate x/y arrays (zeros when non-affine). */
@@ -148,6 +160,15 @@ extern "C" void Port_GpuRaster_Destroy(PortGpuRaster* r) {
         }
         if (r->download) {
             SDL_ReleaseGPUTransferBuffer(d, r->download);
+        }
+        for (int i = 0; i < PortGpuRaster::DEFER_RING; ++i) {
+            if (r->defer_fence[i]) {
+                SDL_WaitForGPUFences(d, true, &r->defer_fence[i], 1);
+                SDL_ReleaseGPUFence(d, r->defer_fence[i]);
+            }
+            if (r->defer_xfer[i]) {
+                SDL_ReleaseGPUTransferBuffer(d, r->defer_xfer[i]);
+            }
         }
         if (r->target) {
             SDL_ReleaseGPUTexture(d, r->target);
@@ -254,19 +275,10 @@ static bool ensure_target(PortGpuRaster* r, int w, int h) {
     return true;
 }
 
-extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpuRasterFrame* f) {
-    if (!r || !f || f->frame_width <= 0 || f->frame_height <= 0) {
-        return nullptr;
-    }
-    if (!ensure_target(r, f->frame_width, f->frame_height)) {
-        return nullptr;
-    }
-
-    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(r->device);
-    if (!cmd) {
-        return nullptr;
-    }
-
+/* Record the per-frame upload + params + render pass into `cmd` (up to but not
+ * including submit). Shared by Render and RenderReadback. Returns false if a
+ * buffer upload failed (caller must still submit `cmd` to release it). */
+static bool record_frame(PortGpuRaster* r, const PortGpuRasterFrame* f, SDL_GPUCommandBuffer* cmd) {
     /* Build the interleaved affine reference (zeros when non-affine); slot 5 is
      * always bound so the buffer must always be valid. */
     r->aff_scratch.assign((size_t)f->frame_height * 2u, 0);
@@ -281,7 +293,8 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     r->cull_scratch.assign((size_t)f->frame_height * PORT_GPU_OBJ_CULL_STRIDE, 0);
     Port_GpuObjCull_Build(f->oam, f->frame_width, f->frame_height, r->cull_scratch.data());
 
-    /* Upload the storage buffers the current phase binds. */
+    /* Upload the storage buffers (cycle=true so re-uploading while a prior
+     * frame is still in flight rotates internal buffers, no manual sync). */
     SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
     bool ok = true;
     ok = ok && stage_upload(r, cp, SSBO_BG_PALETTE, f->bg_palette, 256u * sizeof(uint16_t));
@@ -304,8 +317,7 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
          stage_upload(r, cp, SSBO_OBJ_CULL, r->cull_scratch.data(), (Uint32)r->cull_scratch.size() * sizeof(uint32_t));
     SDL_EndGPUCopyPass(cp);
     if (!ok) {
-        SDL_SubmitGPUCommandBuffer(cmd);
-        return nullptr;
+        return false;
     }
 
     RasterParams p;
@@ -324,8 +336,6 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     p.wsmsg[2] = f->ws_msg_x1;
     p.wsmsg[3] = (f->ws_msg_y0 << 16) | (f->ws_msg_y1 & 0xFFFF);
     for (int i = 0; i < 4; ++i) {
-        /* -1 = "no shadow for this BG" (matches the shader's has_shadow test).
-         * When the caller registered no shadows at all, all four stay -1. */
         p.wsbase[i] = (f->ws_shadow && f->ws_shadow_base_tile[i] >= 0) ? f->ws_shadow_base_tile[i] : -1;
     }
 
@@ -345,13 +355,205 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     SDL_BindGPUFragmentStorageBuffers(rp, 0, bind, PORT_GPU_RASTER_NUM_SSBO);
     SDL_DrawGPUPrimitives(rp, 4, 1, 0, 0);
     SDL_EndGPURenderPass(rp);
+    return true;
+}
+
+/* Ensure the persistent download transfer buffer holds >= `need` bytes. */
+static bool ensure_download(PortGpuRaster* r, Uint32 need) {
+    if (r->download && r->download_cap >= need) {
+        return true;
+    }
+    if (r->download) {
+        SDL_ReleaseGPUTransferBuffer(r->device, r->download);
+        r->download = nullptr;
+    }
+    SDL_GPUTransferBufferCreateInfo tci;
+    SDL_zero(tci);
+    tci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+    tci.size = need;
+    r->download = SDL_CreateGPUTransferBuffer(r->device, &tci);
+    if (!r->download) {
+        std::fprintf(stderr, "[gpuraster] download alloc failed: %s\n", SDL_GetError());
+        return false;
+    }
+    r->download_cap = need;
+    return true;
+}
+
+extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpuRasterFrame* f) {
+    if (!r || !f || f->frame_width <= 0 || f->frame_height <= 0) {
+        return nullptr;
+    }
+    if (!ensure_target(r, f->frame_width, f->frame_height)) {
+        return nullptr;
+    }
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    if (!cmd) {
+        return nullptr;
+    }
+    bool ok = record_frame(r, f, cmd);
+    SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    if (fence) {
+        SDL_WaitForGPUFences(r->device, true, &fence, 1);
+        SDL_ReleaseGPUFence(r->device, fence);
+    }
+    return ok ? r->target : nullptr;
+}
+
+extern "C" bool Port_GpuRaster_RenderReadback(PortGpuRaster* r, const PortGpuRasterFrame* f, uint32_t* dst, int pitch) {
+    if (!r || !f || !dst || f->frame_width <= 0 || f->frame_height <= 0) {
+        return false;
+    }
+    if (!ensure_target(r, f->frame_width, f->frame_height)) {
+        return false;
+    }
+    const int W = f->frame_width, H = f->frame_height;
+    if (!ensure_download(r, (Uint32)W * (Uint32)H * 4u)) {
+        return false;
+    }
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    if (!cmd) {
+        return false;
+    }
+    if (!record_frame(r, f, cmd)) {
+        SDL_SubmitGPUCommandBuffer(cmd);
+        return false;
+    }
+    /* Download the just-rendered target in the SAME command buffer — the render
+     * pass ended above, so this copy pass is legal and executes after it on the
+     * GPU timeline. One submit, one fence: no second round-trip. */
+    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUTextureRegion reg;
+    SDL_zero(reg);
+    reg.texture = r->target;
+    reg.w = (Uint32)W;
+    reg.h = (Uint32)H;
+    reg.d = 1;
+    SDL_GPUTextureTransferInfo dti;
+    SDL_zero(dti);
+    dti.transfer_buffer = r->download;
+    dti.pixels_per_row = (Uint32)W;
+    dti.rows_per_layer = (Uint32)H;
+    SDL_DownloadFromGPUTexture(cp, &reg, &dti);
+    SDL_EndGPUCopyPass(cp);
 
     SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
     if (fence) {
         SDL_WaitForGPUFences(r->device, true, &fence, 1);
         SDL_ReleaseGPUFence(r->device, fence);
     }
-    return r->target;
+    const uint32_t* src = (const uint32_t*)SDL_MapGPUTransferBuffer(r->device, r->download, false);
+    if (!src) {
+        return false;
+    }
+    if (pitch <= 0) {
+        pitch = W;
+    }
+    for (int y = 0; y < H; ++y) {
+        std::memcpy(&dst[(size_t)y * (size_t)pitch], &src[(size_t)y * W], (size_t)W * sizeof(uint32_t));
+    }
+    SDL_UnmapGPUTransferBuffer(r->device, r->download);
+    return true;
+}
+
+/* Read one slot's completed download into dst (assumes fence already signaled). */
+static bool defer_copy_out(PortGpuRaster* r, int slot, uint32_t* dst, int pitch) {
+    const uint32_t* src = (const uint32_t*)SDL_MapGPUTransferBuffer(r->device, r->defer_xfer[slot], false);
+    if (!src) {
+        return false;
+    }
+    int w = r->defer_w[slot], h = r->defer_h[slot];
+    if (pitch <= 0) {
+        pitch = w;
+    }
+    for (int y = 0; y < h; ++y) {
+        std::memcpy(&dst[(size_t)y * (size_t)pitch], &src[(size_t)y * w], (size_t)w * sizeof(uint32_t));
+    }
+    SDL_UnmapGPUTransferBuffer(r->device, r->defer_xfer[slot]);
+    return true;
+}
+
+extern "C" bool Port_GpuRaster_RenderReadbackDeferred(PortGpuRaster* r, const PortGpuRasterFrame* f, uint32_t* dst,
+                                                      int pitch) {
+    if (!r || !f || !dst || f->frame_width <= 0 || f->frame_height <= 0) {
+        return false;
+    }
+    if (!ensure_target(r, f->frame_width, f->frame_height)) {
+        return false;
+    }
+    const int W = f->frame_width, H = f->frame_height;
+    const Uint32 need = (Uint32)W * (Uint32)H * 4u;
+    const int slot = r->defer_head;
+
+    /* The slot we're about to submit into may still hold an in-flight download
+     * from DEFER_RING frames ago; its fence must be retired before we overwrite
+     * its transfer buffer. It's almost always already signaled (2 frames old),
+     * so this poll rarely blocks. */
+    if (r->defer_fence[slot]) {
+        SDL_WaitForGPUFences(r->device, true, &r->defer_fence[slot], 1);
+        SDL_ReleaseGPUFence(r->device, r->defer_fence[slot]);
+        r->defer_fence[slot] = nullptr;
+    }
+    if (r->defer_cap[slot] < need) {
+        if (r->defer_xfer[slot]) {
+            SDL_ReleaseGPUTransferBuffer(r->device, r->defer_xfer[slot]);
+            r->defer_xfer[slot] = nullptr;
+        }
+        SDL_GPUTransferBufferCreateInfo tci;
+        SDL_zero(tci);
+        tci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;
+        tci.size = need;
+        r->defer_xfer[slot] = SDL_CreateGPUTransferBuffer(r->device, &tci);
+        if (!r->defer_xfer[slot]) {
+            return false;
+        }
+        r->defer_cap[slot] = need;
+    }
+
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(r->device);
+    if (!cmd) {
+        return false;
+    }
+    if (!record_frame(r, f, cmd)) {
+        SDL_SubmitGPUCommandBuffer(cmd);
+        return false;
+    }
+    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
+    SDL_GPUTextureRegion reg;
+    SDL_zero(reg);
+    reg.texture = r->target;
+    reg.w = (Uint32)W;
+    reg.h = (Uint32)H;
+    reg.d = 1;
+    SDL_GPUTextureTransferInfo dti;
+    SDL_zero(dti);
+    dti.transfer_buffer = r->defer_xfer[slot];
+    dti.pixels_per_row = (Uint32)W;
+    dti.rows_per_layer = (Uint32)H;
+    SDL_DownloadFromGPUTexture(cp, &reg, &dti);
+    SDL_EndGPUCopyPass(cp);
+
+    /* Submit WITHOUT waiting — the CPU does not stall on this frame's GPU work. */
+    r->defer_fence[slot] = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+    r->defer_w[slot] = W;
+    r->defer_h[slot] = H;
+
+    /* Produce the PREVIOUS frame from the other ring slot if it's ready. */
+    bool produced = false;
+    if (r->defer_primed) {
+        const int prev = (slot + PortGpuRaster::DEFER_RING - 1) % PortGpuRaster::DEFER_RING;
+        if (r->defer_fence[prev] && r->defer_w[prev] == W && r->defer_h[prev] == H) {
+            /* Non-blocking: only consume if the GPU already finished it. */
+            if (SDL_QueryGPUFence(r->device, r->defer_fence[prev])) {
+                produced = defer_copy_out(r, prev, dst, pitch);
+                SDL_ReleaseGPUFence(r->device, r->defer_fence[prev]);
+                r->defer_fence[prev] = nullptr;
+            }
+        }
+    }
+    r->defer_primed = true;
+    r->defer_head = (slot + 1) % PortGpuRaster::DEFER_RING;
+    return produced;
 }
 
 extern "C" bool Port_GpuRaster_Readback(PortGpuRaster* r, uint32_t* dst, int width, int height, int pitch) {

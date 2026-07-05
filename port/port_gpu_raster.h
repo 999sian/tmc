@@ -84,6 +84,24 @@ SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpuRasterFrame
  * by CPU consumers that need pixels (screenshot/shm/xBRZ). */
 bool Port_GpuRaster_Readback(PortGpuRaster* r, uint32_t* dst, int width, int height, int pitch);
 
+/* Render frame `f` AND read it back into `dst` (ABGR8888, `pitch` px/row) in a
+ * SINGLE command buffer with ONE fence wait — the render pass and the download
+ * copy pass share one submit, eliminating the second GPU->CPU round-trip that
+ * separate Render + Readback calls incur. This is the preferred per-frame entry
+ * point; Render + Readback remain for callers that need the texture handle.
+ * Returns false on any failure (caller uses the CPU rasterizer). */
+bool Port_GpuRaster_RenderReadback(PortGpuRaster* r, const PortGpuRasterFrame* f, uint32_t* dst, int pitch);
+
+/* Deferred (double-buffered) render+readback: submits frame N and returns the
+ * PREVIOUS frame's pixels (checked non-blocking via a fence poll), so the CPU
+ * NEVER stalls on the GPU — the ~2ms same-frame fence wait disappears. Costs 1
+ * frame of display latency. Returns true if `dst` was filled with a (1-frame-
+ * stale) frame; false if not yet available (first frame, or GPU still busy) —
+ * the caller should keep the prior framebuffer or use the CPU path that frame.
+ * `dst`/`pitch` sized for the CURRENT frame; the returned stale frame must have
+ * matched dimensions (it does while width is stable). */
+bool Port_GpuRaster_RenderReadbackDeferred(PortGpuRaster* r, const PortGpuRasterFrame* f, uint32_t* dst, int pitch);
+
 #ifdef __cplusplus
 }
 #endif
