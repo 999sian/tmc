@@ -34,6 +34,9 @@ layout(set = 2, binding = 5, std430) readonly buffer AffineRef { int data[]; } a
 /* Widescreen Option A shadow tilemaps (4 BGs concatenated), rows=32,
  * cols=ws_cols. Halfword entries packed in u32 words. */
 layout(set = 2, binding = 6, std430) readonly buffer WsShadow { uint data[]; } wss;
+/* Per-line OBJ candidate lists (port_gpu_obj_cull): stride 129, slot 0 = count,
+ * slots 1..count = OAM indices ascending. */
+layout(set = 2, binding = 7, std430) readonly buffer ObjCull { uint data[]; } objcull;
 
 layout(set = 3, binding = 0, std140) uniform Params {
     /* geom: x=frame_width, y=height, z=mode(GBA), w=affine(0/1) */
@@ -270,7 +273,14 @@ bool obj_resolve(int x, int line, uint line_dispcnt, out uint out_col, out int o
     int mos_h = int((mosaic_reg >> 8u) & 0xFu) + 1;
     int mos_v = int((mosaic_reg >> 12u) & 0xFu) + 1;
 
-    for (int i = 0; i < 128; ++i) {
+    /* Loop only this line's OBJ candidates (port_gpu_obj_cull, stride 129:
+     * slot 0 = count, then ascending OAM indices). The candidates already
+     * passed the sprite-level + vertical + horizontal tests; the per-pixel
+     * tests below still run, so output is identical to the full 0..127 scan. */
+    uint cull_base = uint(line) * 129u;
+    uint cull_count = objcull.data[cull_base];
+    for (uint ci = 0u; ci < cull_count; ++ci) {
+        int i = int(objcull.data[cull_base + 1u + ci]);
         uint attr0 = oam_u16(i * 4 + 0);
         uint attr1 = oam_u16(i * 4 + 1);
         uint attr2 = oam_u16(i * 4 + 2);

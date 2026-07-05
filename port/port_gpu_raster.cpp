@@ -10,6 +10,7 @@
  */
 
 #include "port_gpu_raster.h"
+#include "port_gpu_obj_cull.h"
 
 #include <SDL3/SDL_gpu.h>
 
@@ -29,10 +30,11 @@ enum {
     SSBO_OAM = 4,
     SSBO_AFFINE_REF = 5,
     SSBO_WS_SHADOW = 6,
-    SSBO_SLOT_COUNT = 7
+    SSBO_OBJ_CULL = 7,
+    SSBO_SLOT_COUNT = 8
 };
-/* Phase 6 binds all 7: +widescreen shadow tilemap. */
-#define PORT_GPU_RASTER_NUM_SSBO 7
+/* Binds all 8: +per-line OBJ candidate cull. */
+#define PORT_GPU_RASTER_NUM_SSBO 8
 struct PortGpuRaster {
     SDL_GPUDevice* device = nullptr;
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
@@ -55,6 +57,8 @@ struct PortGpuRaster {
     /* Interleaved [x0,y0,x1,y1,...] affine reference, rebuilt per frame from
      * the frame's separate x/y arrays (zeros when non-affine). */
     std::vector<int32_t> aff_scratch;
+    /* Per-line OBJ candidate lists, rebuilt per frame (stride 129). */
+    std::vector<uint32_t> cull_scratch;
 };
 
 /* std140 mirror of ppu_raster.frag's Params (five 16-byte vectors). */
@@ -273,6 +277,10 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
         }
     }
 
+    /* Build the per-line OBJ candidate lists (stride 129). */
+    r->cull_scratch.assign((size_t)f->frame_height * PORT_GPU_OBJ_CULL_STRIDE, 0);
+    Port_GpuObjCull_Build(f->oam, f->frame_width, f->frame_height, r->cull_scratch.data());
+
     /* Upload the storage buffers the current phase binds. */
     SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
     bool ok = true;
@@ -292,6 +300,8 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
                              : (Uint32)sizeof(ws_dummy);
         ok = ok && stage_upload(r, cp, SSBO_WS_SHADOW, ws_src, ws_size);
     }
+    ok = ok &&
+         stage_upload(r, cp, SSBO_OBJ_CULL, r->cull_scratch.data(), (Uint32)r->cull_scratch.size() * sizeof(uint32_t));
     SDL_EndGPUCopyPass(cp);
     if (!ok) {
         SDL_SubmitGPUCommandBuffer(cmd);
