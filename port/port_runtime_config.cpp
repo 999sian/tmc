@@ -124,6 +124,10 @@ float sPracticeSlowmo = 1.0f;
  * now persist to config.json and are re-applied at startup. */
 bool sDiscordRpc = false;
 bool sVSyncCfg = true; /* matches Port_PPU's sVSyncEnabled default */
+/* GPU PPU rasterizer (docs/gpu-rasterizer-design.md): default on where the
+ * SDL_GPU presentation path is active; the CPU rasterizer is the automatic
+ * fallback. Ignored on SDL_Renderer / software builds. */
+bool sGpuRaster = true;
 #ifdef __ANDROID__
 bool sColorCorrect = false; /* Too heavy for low-end ARM by default */
 #else
@@ -239,6 +243,7 @@ const BoolCfg kBoolCfg[] = {
     { "practice_show_history", &sPracticeShowHistory, false },
     { "discord_rpc", &sDiscordRpc, false },
     { "vsync", &sVSyncCfg, true },
+    { "gpu_raster", &sGpuRaster, true },
 #ifdef __ANDROID__
     { "color_correction", &sColorCorrect, false },
 #else
@@ -1685,6 +1690,14 @@ extern "C" bool Port_Config_GetVSync(void) {
 extern "C" void Port_Config_SetVSync(bool on) {
     sVSyncCfg = on;
     sConfigJson["vsync"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetGpuRaster(void) {
+    return sGpuRaster;
+}
+extern "C" void Port_Config_SetGpuRaster(bool on) {
+    sGpuRaster = on;
+    sConfigJson["gpu_raster"] = on;
     SaveConfig();
 }
 extern "C" bool Port_Config_GetColorCorrection(void) {
