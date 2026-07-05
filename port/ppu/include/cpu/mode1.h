@@ -162,6 +162,19 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
                                     uint16_t dispcnt);
 void virtuappu_mode1_render_frame(const PPUMemory* ppu);
 
+/* GPU-raster prepare pass: run ONLY the sequential portion of render_frame —
+ * the per-line HDMA callback + IO snapshot, per-line DISPCNT, and the affine
+ * per-line reference precompute — into caller-owned buffers, WITHOUT the CPU
+ * parallel render. The GPU rasterizer (port/port_gpu_raster.*) consumes these
+ * to render the frame on the GPU. Buffers must hold MODE1_GBA_HEIGHT entries:
+ *   io_per_line      : MODE1_GBA_HEIGHT * MODE1_IO_MEM_SIZE bytes
+ *   dispcnt_per_line : MODE1_GBA_HEIGHT uint16_t
+ *   aff_ref_x/y      : MODE1_GBA_HEIGHT int32_t (filled only when affine)
+ * `out_frame_dispcnt` receives the frame-start DISPCNT. Returns nonzero if
+ * forced-blank is set (the GPU shader handles it, but the host may skip). */
+int virtuappu_mode1_prepare_frame(const PPUMemory* ppu, uint8_t* io_per_line, uint16_t* dispcnt_per_line,
+                                  int32_t* aff_ref_x, int32_t* aff_ref_y, uint16_t* out_frame_dispcnt);
+
 /* Host-set write strobes for the affine BG2X/BG2Y reference latch. On GBA,
  * ANY write to BG2X/BG2Y reloads the internal reference — including a write
  * of the SAME value (constant-value HBlank DMA pins the layer to one line's
