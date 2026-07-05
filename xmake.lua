@@ -1065,6 +1065,28 @@ target_end()
 
 
 -- ====================
+-- GPU-vs-CPU PPU parity harness (docs/gpu-rasterizer-design.md). Renders
+-- synthetic GBA memory states through the CPU software rasterizer and the
+-- GPU rasterizer and diffs them pixel-for-pixel. Headless SDL_GPU on the
+-- `offscreen` video driver. The PPU .c files build as C (matching the game)
+-- and link against the C++ GPU raster module.
+-- ====================
+target("ppu_gpu_parity")
+    set_kind("binary")
+    set_languages("c11", "cxx17")
+    set_targetdir("build/pc")
+    add_includedirs("port")
+    add_includedirs("port/ppu/include")
+    add_files("tools/ppu_gpu_parity.cpp")
+    add_files("port/port_gpu_raster.cpp")
+    add_files("port/ppu/src/virtuappu.c")
+    add_files("port/ppu/src/mode1.c")
+    add_packages("libsdl3")
+    add_mingw_static_cpp_runtime()
+target_end()
+
+
+-- ====================
 -- ROM Build Task
 -- ====================
 task("rom")
