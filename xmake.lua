@@ -640,6 +640,7 @@ target("tmc_pc")
     add_includedirs(".")
     add_includedirs("build/" .. pc_game_version) -- For assets/map_offsets.h etc (USA, EU, or JP)
     add_includedirs("port/ppu/include")          -- vendored software GBA PPU
+    add_includedirs("port/shaders/build")        -- generated MSL .inl for the GPU rasterizer (optional)
     add_includedirs("libs/VirtuaAPU/include")
     add_includedirs("libs/agbplay_core")
     add_includedirs("tools/src/assets_extractor") -- AssetExtractorApi linked in-process

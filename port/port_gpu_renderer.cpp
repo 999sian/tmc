@@ -24,21 +24,42 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
     return true; /* no-op stub when GPU path disabled at build time */
 }
 extern "C" bool Port_GPU_ClaimWindow(SDL_Window* w, int fw, int fh) {
-    (void)w; (void)fw; (void)fh; return false;
+    (void)w;
+    (void)fw;
+    (void)fh;
+    return false;
 }
 extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int w, int h, int pitch_bytes) {
-    (void)fb; (void)w; (void)h; (void)pitch_bytes; return false;
+    (void)fb;
+    (void)w;
+    (void)h;
+    (void)pitch_bytes;
+    return false;
 }
-extern "C" bool Port_GPU_PaintBootSplash(void) { return false; }
-extern "C" bool Port_GPU_IsActive(void) { return false; }
-extern "C" bool Port_GPU_SupportsGlslpRuntime(void) { return false; }
-extern "C" void Port_GPU_Shutdown(void) {}
-extern "C" void Port_GPU_SetFilter(PortGpuFilter f) { (void)f; }
-extern "C" PortGpuFilter Port_GPU_GetFilter(void) { return PORT_GPU_FILTER_NONE; }
+extern "C" bool Port_GPU_PaintBootSplash(void) {
+    return false;
+}
+extern "C" bool Port_GPU_IsActive(void) {
+    return false;
+}
+extern "C" bool Port_GPU_SupportsGlslpRuntime(void) {
+    return false;
+}
+extern "C" void Port_GPU_Shutdown(void) {
+}
+extern "C" void Port_GPU_SetFilter(PortGpuFilter f) {
+    (void)f;
+}
+extern "C" PortGpuFilter Port_GPU_GetFilter(void) {
+    return PORT_GPU_FILTER_NONE;
+}
 extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
-    (void)f; return "Off";
+    (void)f;
+    return "Off";
 }
-extern "C" void Port_GPU_SetTextureScaleMode(SDL_ScaleMode mode) { (void)mode; }
+extern "C" void Port_GPU_SetTextureScaleMode(SDL_ScaleMode mode) {
+    (void)mode;
+}
 
 #else
 
@@ -84,26 +105,26 @@ static const unsigned char kBlur5hFragSpv[] = {
 static const unsigned char kCrtRfP2FragSpv[] = {
 #include "crt_rf_p2.frag.spv.h"
 };
-static constexpr size_t kPassthroughVertSpvSize  = sizeof(kPassthroughVertSpv);
-static constexpr size_t kPassthroughFragSpvSize  = sizeof(kPassthroughFragSpv);
-static constexpr size_t kLcdGridFragSpvSize      = sizeof(kLcdGridFragSpv);
-static constexpr size_t kScanlineFragSpvSize     = sizeof(kScanlineFragSpv);
-static constexpr size_t kHandheldFragSpvSize     = sizeof(kHandheldFragSpv);
-static constexpr size_t kVignetteFragSpvSize     = sizeof(kVignetteFragSpv);
+static constexpr size_t kPassthroughVertSpvSize = sizeof(kPassthroughVertSpv);
+static constexpr size_t kPassthroughFragSpvSize = sizeof(kPassthroughFragSpv);
+static constexpr size_t kLcdGridFragSpvSize = sizeof(kLcdGridFragSpv);
+static constexpr size_t kScanlineFragSpvSize = sizeof(kScanlineFragSpv);
+static constexpr size_t kHandheldFragSpvSize = sizeof(kHandheldFragSpv);
+static constexpr size_t kVignetteFragSpvSize = sizeof(kVignetteFragSpv);
 static constexpr size_t kCrtCompositeFragSpvSize = sizeof(kCrtCompositeFragSpv);
-static constexpr size_t kCrtRfFragSpvSize        = sizeof(kCrtRfFragSpv);
-static constexpr size_t kBlur5hFragSpvSize       = sizeof(kBlur5hFragSpv);
-static constexpr size_t kCrtRfP2FragSpvSize      = sizeof(kCrtRfP2FragSpv);
+static constexpr size_t kCrtRfFragSpvSize = sizeof(kCrtRfFragSpv);
+static constexpr size_t kBlur5hFragSpvSize = sizeof(kBlur5hFragSpv);
+static constexpr size_t kCrtRfP2FragSpvSize = sizeof(kCrtRfP2FragSpv);
 
 #if defined(__APPLE__)
 #include "port_gpu_msl_shaders.inl"
 #endif
 
-static SDL_GPUDevice*           sDevice    = nullptr;
-static SDL_GPUShader*           sVertShader = nullptr;
+static SDL_GPUDevice* sDevice = nullptr;
+static SDL_GPUShader* sVertShader = nullptr;
 /* Stage 3: one fragment shader + one graphics pipeline per filter mode. */
-static SDL_GPUShader*           sFragShaders[PORT_GPU_FILTER_COUNT] = {};
-static SDL_GPUGraphicsPipeline* sPipelines[PORT_GPU_FILTER_COUNT]   = {};
+static SDL_GPUShader* sFragShaders[PORT_GPU_FILTER_COUNT] = {};
+static SDL_GPUGraphicsPipeline* sPipelines[PORT_GPU_FILTER_COUNT] = {};
 
 /* Stage 5+A — multi-pass infrastructure. A filter can declare a
  * `prePassShader` (e.g. blur5.frag) that renders source → sIntermediateTex
@@ -113,30 +134,34 @@ static SDL_GPUGraphicsPipeline* sPipelines[PORT_GPU_FILTER_COUNT]   = {};
  * for the existing CRT prepass family. A future Stage 6 may need
  * larger intermediates for viewport-scale prepasses; for now keep
  * source-scale to minimise upload/render cost. */
-static SDL_GPUShader*           sPrePassFragShaders[PORT_GPU_FILTER_COUNT] = {};
-static SDL_GPUGraphicsPipeline* sPrePassPipelines[PORT_GPU_FILTER_COUNT]   = {};
-static SDL_GPUTexture*          sIntermediateTex = nullptr;
-static SDL_GPUTextureFormat     sIntermediateFmt = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+static SDL_GPUShader* sPrePassFragShaders[PORT_GPU_FILTER_COUNT] = {};
+static SDL_GPUGraphicsPipeline* sPrePassPipelines[PORT_GPU_FILTER_COUNT] = {};
+static SDL_GPUTexture* sIntermediateTex = nullptr;
+static SDL_GPUTextureFormat sIntermediateFmt = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
 
-static SDL_Window*              sWindow    = nullptr;
-static SDL_GPUSampler*          sSamplerNearest = nullptr;
-static SDL_GPUSampler*          sSamplerLinear  = nullptr;
-static bool                     sUseNearest     = false;
-static SDL_GPUTexture*          sSourceTexture  = nullptr;
-static SDL_GPUTransferBuffer*   sTransferBuffer = nullptr;
-static int                      sSourceW = 0;
-static int                      sSourceH = 0;
-static bool                     sWindowClaimed = false;
-static SDL_GPUTextureFormat     sSwapFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
-static PortGpuFilter            sActiveFilter = PORT_GPU_FILTER_NONE;
-static SDL_GPUShaderFormat      sShaderFormat = SDL_GPU_SHADERFORMAT_INVALID;
+static SDL_Window* sWindow = nullptr;
+static SDL_GPUSampler* sSamplerNearest = nullptr;
+static SDL_GPUSampler* sSamplerLinear = nullptr;
+static bool sUseNearest = false;
+static SDL_GPUTexture* sSourceTexture = nullptr;
+static SDL_GPUTransferBuffer* sTransferBuffer = nullptr;
+static int sSourceW = 0;
+static int sSourceH = 0;
+static bool sWindowClaimed = false;
+static SDL_GPUTextureFormat sSwapFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+static PortGpuFilter sActiveFilter = PORT_GPU_FILTER_NONE;
+static SDL_GPUShaderFormat sShaderFormat = SDL_GPU_SHADERFORMAT_INVALID;
 
 static const char* Port_GPU_ShaderFormatName(SDL_GPUShaderFormat format) {
     switch (format) {
-        case SDL_GPU_SHADERFORMAT_SPIRV:    return "SPIR-V";
-        case SDL_GPU_SHADERFORMAT_MSL:      return "MSL";
-        case SDL_GPU_SHADERFORMAT_METALLIB: return "metallib";
-        default:                            return "?";
+        case SDL_GPU_SHADERFORMAT_SPIRV:
+            return "SPIR-V";
+        case SDL_GPU_SHADERFORMAT_MSL:
+            return "MSL";
+        case SDL_GPU_SHADERFORMAT_METALLIB:
+            return "metallib";
+        default:
+            return "?";
     }
 }
 
@@ -180,8 +205,7 @@ static SDL_GPUDevice* Port_GPU_CreateDevice(SDL_GPUShaderFormat* out_format) {
 #if defined(__APPLE__)
 #define TMC_GPU_SHADER_CODE(msl_code, spv_code) \
     ((sShaderFormat == SDL_GPU_SHADERFORMAT_MSL) ? reinterpret_cast<const unsigned char*>(msl_code) : (spv_code))
-#define TMC_GPU_SHADER_SIZE(msl_size, spv_size) \
-    ((sShaderFormat == SDL_GPU_SHADERFORMAT_MSL) ? (msl_size) : (spv_size))
+#define TMC_GPU_SHADER_SIZE(msl_size, spv_size) ((sShaderFormat == SDL_GPU_SHADERFORMAT_MSL) ? (msl_size) : (spv_size))
 #else
 #define TMC_GPU_SHADER_CODE(msl_code, spv_code) (spv_code)
 #define TMC_GPU_SHADER_SIZE(msl_size, spv_size) (spv_size)
@@ -189,8 +213,15 @@ static SDL_GPUDevice* Port_GPU_CreateDevice(SDL_GPUShaderFormat* out_format) {
 
 /* Accessors for port_imgui_menu.cpp so it can wire its SDL_GPU backend
  * against the same device and matching swapchain format. */
-extern "C" SDL_GPUDevice* Port_GPU_GetDevice(void)             { return sDevice; }
-extern "C" SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void) { return sSwapFormat; }
+extern "C" SDL_GPUDevice* Port_GPU_GetDevice(void) {
+    return sDevice;
+}
+extern "C" SDL_GPUTextureFormat Port_GPU_GetSwapchainFormat(void) {
+    return sSwapFormat;
+}
+extern "C" SDL_GPUShaderFormat Port_GPU_GetShaderFormat(void) {
+    return sShaderFormat;
+}
 extern "C" bool Port_GPU_SupportsGlslpRuntime(void) {
     return sShaderFormat == SDL_GPU_SHADERFORMAT_SPIRV;
 }
@@ -198,14 +229,13 @@ extern "C" bool Port_GPU_SupportsGlslpRuntime(void) {
 /* .glslp runtime hooks (port_glslp_runtime.cpp). Declared at file
  * scope; the runtime's defining TU is also compiled with extern "C"
  * linkage on these symbols. */
-extern "C" int  Port_GlslpRuntime_IsActive(void);
-extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer*,
-                                               SDL_GPUTexture*,
-                                               SDL_GPUTexture*,
-                                               int, int, int, int, uint32_t);
+extern "C" int Port_GlslpRuntime_IsActive(void);
+extern "C" bool Port_GlslpRuntime_PresentFrame(SDL_GPUCommandBuffer*, SDL_GPUTexture*, SDL_GPUTexture*, int, int, int,
+                                               int, uint32_t);
 
 extern "C" bool Port_GPU_Init(SDL_Window* window) {
-    if (sDevice) return true; /* idempotent */
+    if (sDevice)
+        return true; /* idempotent */
 
     sDevice = Port_GPU_CreateDevice(&sShaderFormat);
     if (!sDevice) {
@@ -213,8 +243,7 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
         return false;
     }
     const char* backend = SDL_GetGPUDeviceDriver(sDevice);
-    std::fprintf(stderr, "[gpu] device created (backend=%s, shader=%s)\n",
-                 backend ? backend : "?",
+    std::fprintf(stderr, "[gpu] device created (backend=%s, shader=%s)\n", backend ? backend : "?",
                  Port_GPU_ShaderFormatName(sShaderFormat));
 
     /* Stage 1: don't ClaimWindow yet. SDL_Renderer already owns the
@@ -233,11 +262,11 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
      * from vertex_id / gl_VertexIndex), no per-vertex sampler/uniform
      * inputs. */
     SDL_GPUShaderCreateInfo vci = {};
-    vci.code_size   = TMC_GPU_SHADER_SIZE(kPassthroughVertMslSize, kPassthroughVertSpvSize);
-    vci.code        = TMC_GPU_SHADER_CODE(kPassthroughVertMsl, kPassthroughVertSpv);
-    vci.entrypoint  = Port_GPU_ShaderEntrypoint();
-    vci.format      = sShaderFormat;
-    vci.stage       = SDL_GPU_SHADERSTAGE_VERTEX;
+    vci.code_size = TMC_GPU_SHADER_SIZE(kPassthroughVertMslSize, kPassthroughVertSpvSize);
+    vci.code = TMC_GPU_SHADER_CODE(kPassthroughVertMsl, kPassthroughVertSpv);
+    vci.entrypoint = Port_GPU_ShaderEntrypoint();
+    vci.format = sShaderFormat;
+    vci.stage = SDL_GPU_SHADERSTAGE_VERTEX;
     sVertShader = SDL_CreateGPUShader(sDevice, &vci);
     if (!sVertShader) {
         std::fprintf(stderr, "[gpu] vertex shader load failed: %s\n", SDL_GetError());
@@ -259,86 +288,86 @@ extern "C" bool Port_GPU_Init(SDL_Window* window) {
      * Stage 6 onward will port more shaders into the multi-pass slot. */
     struct {
         const unsigned char* code;
-        size_t               size;
-        unsigned             num_uniforms;
-        const char*          label;
+        size_t size;
+        unsigned num_uniforms;
+        const char* label;
     } fragSpec[PORT_GPU_FILTER_COUNT] = {
-        { TMC_GPU_SHADER_CODE(kPassthroughFragMsl,  kPassthroughFragSpv),
-          TMC_GPU_SHADER_SIZE(kPassthroughFragMslSize,  kPassthroughFragSpvSize),  0, "passthrough"   },
-        { TMC_GPU_SHADER_CODE(kLcdGridFragMsl,      kLcdGridFragSpv),
-          TMC_GPU_SHADER_SIZE(kLcdGridFragMslSize,      kLcdGridFragSpvSize),      1, "lcd_grid"      },
-        { TMC_GPU_SHADER_CODE(kScanlineFragMsl,     kScanlineFragSpv),
-          TMC_GPU_SHADER_SIZE(kScanlineFragMslSize,     kScanlineFragSpvSize),     1, "scanline"      },
-        { TMC_GPU_SHADER_CODE(kHandheldFragMsl,     kHandheldFragSpv),
-          TMC_GPU_SHADER_SIZE(kHandheldFragMslSize,     kHandheldFragSpvSize),     1, "handheld"      },
-        { TMC_GPU_SHADER_CODE(kVignetteFragMsl,     kVignetteFragSpv),
-          TMC_GPU_SHADER_SIZE(kVignetteFragMslSize,     kVignetteFragSpvSize),     1, "vignette"      },
+        { TMC_GPU_SHADER_CODE(kPassthroughFragMsl, kPassthroughFragSpv),
+          TMC_GPU_SHADER_SIZE(kPassthroughFragMslSize, kPassthroughFragSpvSize), 0, "passthrough" },
+        { TMC_GPU_SHADER_CODE(kLcdGridFragMsl, kLcdGridFragSpv),
+          TMC_GPU_SHADER_SIZE(kLcdGridFragMslSize, kLcdGridFragSpvSize), 1, "lcd_grid" },
+        { TMC_GPU_SHADER_CODE(kScanlineFragMsl, kScanlineFragSpv),
+          TMC_GPU_SHADER_SIZE(kScanlineFragMslSize, kScanlineFragSpvSize), 1, "scanline" },
+        { TMC_GPU_SHADER_CODE(kHandheldFragMsl, kHandheldFragSpv),
+          TMC_GPU_SHADER_SIZE(kHandheldFragMslSize, kHandheldFragSpvSize), 1, "handheld" },
+        { TMC_GPU_SHADER_CODE(kVignetteFragMsl, kVignetteFragSpv),
+          TMC_GPU_SHADER_SIZE(kVignetteFragMslSize, kVignetteFragSpvSize), 1, "vignette" },
         { TMC_GPU_SHADER_CODE(kCrtCompositeFragMsl, kCrtCompositeFragSpv),
           TMC_GPU_SHADER_SIZE(kCrtCompositeFragMslSize, kCrtCompositeFragSpvSize), 1, "crt_composite" },
-        { TMC_GPU_SHADER_CODE(kCrtRfP2FragMsl,      kCrtRfP2FragSpv),
-          TMC_GPU_SHADER_SIZE(kCrtRfP2FragMslSize,      kCrtRfP2FragSpvSize),      1, "crt_rf_p2"     },
+        { TMC_GPU_SHADER_CODE(kCrtRfP2FragMsl, kCrtRfP2FragSpv),
+          TMC_GPU_SHADER_SIZE(kCrtRfP2FragMslSize, kCrtRfP2FragSpvSize), 1, "crt_rf_p2" },
     };
     /* Prepass spec — same layout. nullptr code = single-pass filter. */
     struct {
         const unsigned char* code;
-        size_t               size;
-        unsigned             num_uniforms;
-        const char*          label;
+        size_t size;
+        unsigned num_uniforms;
+        const char* label;
     } prePassSpec[PORT_GPU_FILTER_COUNT] = {
-        { nullptr, 0, 0, nullptr },                                  /* NONE          */
-        { nullptr, 0, 0, nullptr },                                  /* LCD_GRID      */
-        { nullptr, 0, 0, nullptr },                                  /* SCANLINE      */
-        { nullptr, 0, 0, nullptr },                                  /* HANDHELD      */
-        { nullptr, 0, 0, nullptr },                                  /* VIGNETTE      */
-        { nullptr, 0, 0, nullptr },                                  /* CRT_COMPOSITE */
+        { nullptr, 0, 0, nullptr }, /* NONE          */
+        { nullptr, 0, 0, nullptr }, /* LCD_GRID      */
+        { nullptr, 0, 0, nullptr }, /* SCANLINE      */
+        { nullptr, 0, 0, nullptr }, /* HANDHELD      */
+        { nullptr, 0, 0, nullptr }, /* VIGNETTE      */
+        { nullptr, 0, 0, nullptr }, /* CRT_COMPOSITE */
         { TMC_GPU_SHADER_CODE(kBlur5hFragMsl, kBlur5hFragSpv),
           TMC_GPU_SHADER_SIZE(kBlur5hFragMslSize, kBlur5hFragSpvSize), 0, "blur5h" }, /* CRT_RF */
     };
     for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
         SDL_GPUShaderCreateInfo fci = {};
-        fci.code_size            = fragSpec[i].size;
-        fci.code                 = fragSpec[i].code;
-        fci.entrypoint           = Port_GPU_ShaderEntrypoint();
-        fci.format               = sShaderFormat;
-        fci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
-        fci.num_samplers         = 1;
-        fci.num_uniform_buffers  = fragSpec[i].num_uniforms;
+        fci.code_size = fragSpec[i].size;
+        fci.code = fragSpec[i].code;
+        fci.entrypoint = Port_GPU_ShaderEntrypoint();
+        fci.format = sShaderFormat;
+        fci.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+        fci.num_samplers = 1;
+        fci.num_uniform_buffers = fragSpec[i].num_uniforms;
         sFragShaders[i] = SDL_CreateGPUShader(sDevice, &fci);
         if (!sFragShaders[i]) {
-            std::fprintf(stderr, "[gpu] fragment shader '%s' load failed: %s\n",
-                         fragSpec[i].label, SDL_GetError());
+            std::fprintf(stderr, "[gpu] fragment shader '%s' load failed: %s\n", fragSpec[i].label, SDL_GetError());
             Port_GPU_Shutdown();
             return false;
         }
         /* Prepass shader (optional). */
         if (prePassSpec[i].code) {
             SDL_GPUShaderCreateInfo pci = {};
-            pci.code_size            = prePassSpec[i].size;
-            pci.code                 = prePassSpec[i].code;
-            pci.entrypoint           = Port_GPU_ShaderEntrypoint();
-            pci.format               = sShaderFormat;
-            pci.stage                = SDL_GPU_SHADERSTAGE_FRAGMENT;
-            pci.num_samplers         = 1;
-            pci.num_uniform_buffers  = prePassSpec[i].num_uniforms;
+            pci.code_size = prePassSpec[i].size;
+            pci.code = prePassSpec[i].code;
+            pci.entrypoint = Port_GPU_ShaderEntrypoint();
+            pci.format = sShaderFormat;
+            pci.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+            pci.num_samplers = 1;
+            pci.num_uniform_buffers = prePassSpec[i].num_uniforms;
             sPrePassFragShaders[i] = SDL_CreateGPUShader(sDevice, &pci);
             if (!sPrePassFragShaders[i]) {
-                std::fprintf(stderr, "[gpu] prepass shader '%s' load failed: %s\n",
-                             prePassSpec[i].label, SDL_GetError());
+                std::fprintf(stderr, "[gpu] prepass shader '%s' load failed: %s\n", prePassSpec[i].label,
+                             SDL_GetError());
                 Port_GPU_Shutdown();
                 return false;
             }
         }
     }
 
-    std::fprintf(stderr,
-        "[gpu] shaders loaded (format=%s; vert %zu B; %d fragment filters)\n",
-        Port_GPU_ShaderFormatName(sShaderFormat), vci.code_size, (int)PORT_GPU_FILTER_COUNT);
+    std::fprintf(stderr, "[gpu] shaders loaded (format=%s; vert %zu B; %d fragment filters)\n",
+                 Port_GPU_ShaderFormatName(sShaderFormat), vci.code_size, (int)PORT_GPU_FILTER_COUNT);
     return true;
 }
 
 extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_height) {
-    if (!sDevice || !window) return false;
-    if (sWindowClaimed) return true;  /* idempotent */
+    if (!sDevice || !window)
+        return false;
+    if (sWindowClaimed)
+        return true; /* idempotent */
 
     if (!SDL_ClaimWindowForGPUDevice(sDevice, window)) {
         std::fprintf(stderr, "[gpu] ClaimWindow failed: %s\n", SDL_GetError());
@@ -358,13 +387,13 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
      * SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM byte order. */
     {
         SDL_GPUTextureCreateInfo tci = {};
-        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.type = SDL_GPU_TEXTURETYPE_2D;
         tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        tci.width  = (Uint32)fb_width;
+        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width = (Uint32)fb_width;
         tci.height = (Uint32)fb_height;
         tci.layer_count_or_depth = 1;
-        tci.num_levels           = 1;
+        tci.num_levels = 1;
         sSourceTexture = SDL_CreateGPUTexture(sDevice, &tci);
         if (!sSourceTexture) {
             std::fprintf(stderr, "[gpu] source texture create failed: %s\n", SDL_GetError());
@@ -379,18 +408,18 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
      * pick nearest vs linear (and per-shader-pass overrides) via the F8 cycle. */
     {
         SDL_GPUSamplerCreateInfo sci = {};
-        sci.min_filter     = SDL_GPU_FILTER_LINEAR;
-        sci.mag_filter     = SDL_GPU_FILTER_LINEAR;
-        sci.mipmap_mode    = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+        sci.min_filter = SDL_GPU_FILTER_LINEAR;
+        sci.mag_filter = SDL_GPU_FILTER_LINEAR;
+        sci.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
         sci.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         sci.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         sci.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
         sSamplerLinear = SDL_CreateGPUSampler(sDevice, &sci);
-        
-        sci.min_filter     = SDL_GPU_FILTER_NEAREST;
-        sci.mag_filter     = SDL_GPU_FILTER_NEAREST;
+
+        sci.min_filter = SDL_GPU_FILTER_NEAREST;
+        sci.mag_filter = SDL_GPU_FILTER_NEAREST;
         sSamplerNearest = SDL_CreateGPUSampler(sDevice, &sci);
-        
+
         if (!sSamplerLinear || !sSamplerNearest) {
             std::fprintf(stderr, "[gpu] sampler create failed: %s\n", SDL_GetError());
             Port_GPU_Shutdown();
@@ -405,7 +434,7 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
     {
         SDL_GPUTransferBufferCreateInfo tbci = {};
         tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        tbci.size  = (Uint32)(fb_width * fb_height * (int)sizeof(uint32_t));
+        tbci.size = (Uint32)(fb_width * fb_height * (int)sizeof(uint32_t));
         sTransferBuffer = SDL_CreateGPUTransferBuffer(sDevice, &tbci);
         if (!sTransferBuffer) {
             std::fprintf(stderr, "[gpu] transfer buffer create failed: %s\n", SDL_GetError());
@@ -430,11 +459,11 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         /* Main pipelines (target = swapchain). */
         for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
             SDL_GPUGraphicsPipelineCreateInfo gpci = {};
-            gpci.vertex_shader            = sVertShader;
-            gpci.fragment_shader          = sFragShaders[i];
-            gpci.primitive_type           = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
-            gpci.rasterizer_state.fill_mode  = SDL_GPU_FILLMODE_FILL;
-            gpci.rasterizer_state.cull_mode  = SDL_GPU_CULLMODE_NONE;
+            gpci.vertex_shader = sVertShader;
+            gpci.fragment_shader = sFragShaders[i];
+            gpci.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
+            gpci.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+            gpci.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
             gpci.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
             gpci.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
             gpci.target_info = target_info;
@@ -455,13 +484,14 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
         inter_info.num_color_targets = 1;
         inter_info.color_target_descriptions = &inter_target;
         for (int i = 0; i < PORT_GPU_FILTER_COUNT; ++i) {
-            if (!sPrePassFragShaders[i]) continue;
+            if (!sPrePassFragShaders[i])
+                continue;
             SDL_GPUGraphicsPipelineCreateInfo gpci = {};
-            gpci.vertex_shader            = sVertShader;
-            gpci.fragment_shader          = sPrePassFragShaders[i];
-            gpci.primitive_type           = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
-            gpci.rasterizer_state.fill_mode  = SDL_GPU_FILLMODE_FILL;
-            gpci.rasterizer_state.cull_mode  = SDL_GPU_CULLMODE_NONE;
+            gpci.vertex_shader = sVertShader;
+            gpci.fragment_shader = sPrePassFragShaders[i];
+            gpci.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLESTRIP;
+            gpci.rasterizer_state.fill_mode = SDL_GPU_FILLMODE_FILL;
+            gpci.rasterizer_state.cull_mode = SDL_GPU_CULLMODE_NONE;
             gpci.rasterizer_state.front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
             gpci.multisample_state.sample_count = SDL_GPU_SAMPLECOUNT_1;
             gpci.target_info = inter_info;
@@ -481,13 +511,13 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
      * main pass samples. */
     {
         SDL_GPUTextureCreateInfo tci = {};
-        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.type = SDL_GPU_TEXTURETYPE_2D;
         tci.format = sIntermediateFmt;
-        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
-        tci.width  = (Uint32)fb_width;
+        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
+        tci.width = (Uint32)fb_width;
         tci.height = (Uint32)fb_height;
         tci.layer_count_or_depth = 1;
-        tci.num_levels           = 1;
+        tci.num_levels = 1;
         sIntermediateTex = SDL_CreateGPUTexture(sDevice, &tci);
         if (!sIntermediateTex) {
             std::fprintf(stderr, "[gpu] intermediate texture create failed: %s\n", SDL_GetError());
@@ -507,8 +537,7 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
                 std::fprintf(stderr, "[gpu] glslp runtime active for '%s'\n", preset_path);
             }
         } else {
-            std::fprintf(stderr,
-                         "[gpu] ignoring TMC_GLSLP_PRESET on %s shader backend; .glslp runtime needs SPIR-V\n",
+            std::fprintf(stderr, "[gpu] ignoring TMC_GLSLP_PRESET on %s shader backend; .glslp runtime needs SPIR-V\n",
                          Port_GPU_ShaderFormatName(sShaderFormat));
         }
     }
@@ -517,19 +546,25 @@ extern "C" bool Port_GPU_ClaimWindow(SDL_Window* window, int fb_width, int fb_he
      * without rebuilding. Recognised values: "off" (default),
      * "lcd_grid", "scanline", "handheld", "vignette". */
     if (const char* f = std::getenv("TMC_GPU_FILTER")) {
-        if      (std::strcmp(f, "lcd_grid")      == 0) sActiveFilter = PORT_GPU_FILTER_LCD_GRID;
-        else if (std::strcmp(f, "scanline")      == 0) sActiveFilter = PORT_GPU_FILTER_SCANLINE;
-        else if (std::strcmp(f, "handheld")      == 0) sActiveFilter = PORT_GPU_FILTER_HANDHELD;
-        else if (std::strcmp(f, "vignette")      == 0) sActiveFilter = PORT_GPU_FILTER_VIGNETTE;
-        else if (std::strcmp(f, "crt_composite") == 0) sActiveFilter = PORT_GPU_FILTER_CRT_COMPOSITE;
-        else if (std::strcmp(f, "crt_rf")        == 0) sActiveFilter = PORT_GPU_FILTER_CRT_RF;
+        if (std::strcmp(f, "lcd_grid") == 0)
+            sActiveFilter = PORT_GPU_FILTER_LCD_GRID;
+        else if (std::strcmp(f, "scanline") == 0)
+            sActiveFilter = PORT_GPU_FILTER_SCANLINE;
+        else if (std::strcmp(f, "handheld") == 0)
+            sActiveFilter = PORT_GPU_FILTER_HANDHELD;
+        else if (std::strcmp(f, "vignette") == 0)
+            sActiveFilter = PORT_GPU_FILTER_VIGNETTE;
+        else if (std::strcmp(f, "crt_composite") == 0)
+            sActiveFilter = PORT_GPU_FILTER_CRT_COMPOSITE;
+        else if (std::strcmp(f, "crt_rf") == 0)
+            sActiveFilter = PORT_GPU_FILTER_CRT_RF;
         if (sActiveFilter != PORT_GPU_FILTER_NONE) {
             std::fprintf(stderr, "[gpu] filter at startup: %s\n", Port_GPU_FilterName(sActiveFilter));
         }
     }
 
-    std::fprintf(stderr, "[gpu] pipeline ready — %dx%d source, swapchain fmt=%u\n",
-                 sSourceW, sSourceH, (unsigned)swap_fmt);
+    std::fprintf(stderr, "[gpu] pipeline ready — %dx%d source, swapchain fmt=%u\n", sSourceW, sSourceH,
+                 (unsigned)swap_fmt);
     return true;
 }
 
@@ -537,9 +572,9 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
     /* shm publish moved to port_ppu.cpp so the RT consumer always sees
      * the GBA-native 240×160 framebuffer + BG/sprite planes at matching
      * dims, regardless of InternalScale.  Don't republish here. */
-    if (!sWindowClaimed || !sPipelines[sActiveFilter]) return false;
-    if (!fb || fb_w <= 0 || fb_h <= 0 ||
-        fb_pitch_bytes < fb_w * (int)sizeof(uint32_t)) {
+    if (!sWindowClaimed || !sPipelines[sActiveFilter])
+        return false;
+    if (!fb || fb_w <= 0 || fb_h <= 0 || fb_pitch_bytes < fb_w * (int)sizeof(uint32_t)) {
         return false;
     }
 
@@ -552,26 +587,29 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * is exactly the active region. */
     if (fb_w != sSourceW || fb_h != sSourceH) {
         SDL_WaitForGPUIdle(sDevice);
-        if (sSourceTexture)  SDL_ReleaseGPUTexture(sDevice, sSourceTexture);
-        if (sTransferBuffer) SDL_ReleaseGPUTransferBuffer(sDevice, sTransferBuffer);
-        if (sIntermediateTex) SDL_ReleaseGPUTexture(sDevice, sIntermediateTex);
-        sSourceTexture   = nullptr;
-        sTransferBuffer  = nullptr;
+        if (sSourceTexture)
+            SDL_ReleaseGPUTexture(sDevice, sSourceTexture);
+        if (sTransferBuffer)
+            SDL_ReleaseGPUTransferBuffer(sDevice, sTransferBuffer);
+        if (sIntermediateTex)
+            SDL_ReleaseGPUTexture(sDevice, sIntermediateTex);
+        sSourceTexture = nullptr;
+        sTransferBuffer = nullptr;
         sIntermediateTex = nullptr;
 
         SDL_GPUTextureCreateInfo tci = {};
-        tci.type   = SDL_GPU_TEXTURETYPE_2D;
+        tci.type = SDL_GPU_TEXTURETYPE_2D;
         tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
-        tci.usage  = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        tci.width  = (Uint32)fb_w;
+        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width = (Uint32)fb_w;
         tci.height = (Uint32)fb_h;
         tci.layer_count_or_depth = 1;
-        tci.num_levels           = 1;
+        tci.num_levels = 1;
         sSourceTexture = SDL_CreateGPUTexture(sDevice, &tci);
 
         SDL_GPUTransferBufferCreateInfo tbci = {};
         tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-        tbci.size  = (Uint32)(fb_w * fb_h * (int)sizeof(uint32_t));
+        tbci.size = (Uint32)(fb_w * fb_h * (int)sizeof(uint32_t));
         sTransferBuffer = SDL_CreateGPUTransferBuffer(sDevice, &tbci);
 
         tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER | SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;
@@ -579,8 +617,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         sIntermediateTex = SDL_CreateGPUTexture(sDevice, &tci);
 
         if (!sSourceTexture || !sTransferBuffer || !sIntermediateTex) {
-            std::fprintf(stderr, "[gpu] resize to %dx%d failed: %s\n",
-                         fb_w, fb_h, SDL_GetError());
+            std::fprintf(stderr, "[gpu] resize to %dx%d failed: %s\n", fb_w, fb_h, SDL_GetError());
             return false;
         }
         sSourceW = fb_w;
@@ -589,7 +626,8 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
     }
 
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sDevice);
-    if (!cmd) return false;
+    if (!cmd)
+        return false;
 
     /* Acquire the swapchain target for this frame. Use the Wait variant
      * so we don't busy-loop when the queue is full — the deadline-based
@@ -600,7 +638,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         /* Swapchain not ready (window minimised, resizing). Cancel the
          * command buffer and skip this present — the GBA continues, the
          * frame just doesn't render. */
-        SDL_SubmitGPUCommandBuffer(cmd);  /* a no-op submit cleans up the cmd */
+        SDL_SubmitGPUCommandBuffer(cmd); /* a no-op submit cleans up the cmd */
         return false;
     }
 
@@ -616,8 +654,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
             std::memcpy(dst_bytes, src_bytes, row_bytes * (size_t)fb_h);
         } else {
             for (int y = 0; y < fb_h; ++y) {
-                std::memcpy(dst_bytes + (size_t)y * row_bytes,
-                            src_bytes + (size_t)y * (size_t)fb_pitch_bytes,
+                std::memcpy(dst_bytes + (size_t)y * row_bytes, src_bytes + (size_t)y * (size_t)fb_pitch_bytes,
                             row_bytes);
             }
         }
@@ -626,9 +663,9 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
         SDL_GPUTextureTransferInfo src = {};
         src.transfer_buffer = sTransferBuffer;
-        src.offset          = 0;
-        src.pixels_per_row  = (Uint32)fb_w;
-        src.rows_per_layer  = (Uint32)fb_h;
+        src.offset = 0;
+        src.pixels_per_row = (Uint32)fb_w;
+        src.rows_per_layer = (Uint32)fb_h;
         SDL_GPUTextureRegion dst = {};
         dst.texture = sSourceTexture;
         dst.w = (Uint32)fb_w;
@@ -652,19 +689,17 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * to the swapchain texture, and we re-open an EndRenderPass-friendly
      * render pass for ImGui). */
     static uint32_t s_frame_counter = 0;
-    if (Port_GlslpRuntime_IsActive() &&
-        Port_GlslpRuntime_PresentFrame(cmd, sSourceTexture, swap_tex,
-                                       (int)swap_w, (int)swap_h,
-                                       fb_w, fb_h, s_frame_counter++)) {
+    if (Port_GlslpRuntime_IsActive() && Port_GlslpRuntime_PresentFrame(cmd, sSourceTexture, swap_tex, (int)swap_w,
+                                                                       (int)swap_h, fb_w, fb_h, s_frame_counter++)) {
         /* ImGui still wants to draw after the runtime's last pass.
          * Open one more clear-and-load render pass on the swapchain
          * (load_op = LOAD so we keep the runtime's output) and run
          * the menu overlay through it. */
         SDL_GPUColorTargetInfo ovl = {};
-        ovl.texture     = swap_tex;
-        ovl.clear_color = SDL_FColor{0.0f, 0.0f, 0.0f, 1.0f};
-        ovl.load_op     = SDL_GPU_LOADOP_LOAD;
-        ovl.store_op    = SDL_GPU_STOREOP_STORE;
+        ovl.texture = swap_tex;
+        ovl.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, 1.0f };
+        ovl.load_op = SDL_GPU_LOADOP_LOAD;
+        ovl.store_op = SDL_GPU_STOREOP_STORE;
         SDL_GPURenderPass* orp = SDL_BeginGPURenderPass(cmd, &ovl, 1, nullptr);
         Port_ImGui_RenderDrawDataGpu(cmd, orp);
         SDL_EndGPURenderPass(orp);
@@ -678,15 +713,18 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
     const bool hasPrepass = (sPrePassPipelines[sActiveFilter] != nullptr);
     if (hasPrepass) {
         SDL_GPUColorTargetInfo pre_color = {};
-        pre_color.texture     = sIntermediateTex;
-        pre_color.clear_color = SDL_FColor{0.0f, 0.0f, 0.0f, 1.0f};
-        pre_color.load_op     = SDL_GPU_LOADOP_CLEAR;
-        pre_color.store_op    = SDL_GPU_STOREOP_STORE;
+        pre_color.texture = sIntermediateTex;
+        pre_color.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, 1.0f };
+        pre_color.load_op = SDL_GPU_LOADOP_CLEAR;
+        pre_color.store_op = SDL_GPU_STOREOP_STORE;
         SDL_GPURenderPass* pre_rp = SDL_BeginGPURenderPass(cmd, &pre_color, 1, nullptr);
         SDL_GPUViewport pre_vp = {};
-        pre_vp.x = 0.0f; pre_vp.y = 0.0f;
-        pre_vp.w = (float)fb_w; pre_vp.h = (float)fb_h;
-        pre_vp.min_depth = 0.0f; pre_vp.max_depth = 1.0f;
+        pre_vp.x = 0.0f;
+        pre_vp.y = 0.0f;
+        pre_vp.w = (float)fb_w;
+        pre_vp.h = (float)fb_h;
+        pre_vp.min_depth = 0.0f;
+        pre_vp.max_depth = 1.0f;
         SDL_SetGPUViewport(pre_rp, &pre_vp);
         SDL_BindGPUGraphicsPipeline(pre_rp, sPrePassPipelines[sActiveFilter]);
         SDL_GPUTextureSamplerBinding pre_tsb = {};
@@ -707,7 +745,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * mode adds pillarbox bars. Black for BLACK / unsupported modes;
      * persisted RGB for SOLID_COLOR. BLURRED_FRAME isn't implemented
      * on the GPU path yet — falls back to black. */
-    SDL_FColor clearColor{0.0f, 0.0f, 0.0f, 1.0f};
+    SDL_FColor clearColor{ 0.0f, 0.0f, 0.0f, 1.0f };
     {
         const PortBgFill bf = Port_Config_BgFill();
         if (bf == PORT_BG_FILL_SOLID_COLOR) {
@@ -719,10 +757,10 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         }
     }
     SDL_GPUColorTargetInfo color = {};
-    color.texture     = swap_tex;
+    color.texture = swap_tex;
     color.clear_color = clearColor;
-    color.load_op     = SDL_GPU_LOADOP_CLEAR;
-    color.store_op    = SDL_GPU_STOREOP_STORE;
+    color.load_op = SDL_GPU_LOADOP_CLEAR;
+    color.store_op = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
 
     /* Aspect-preserving viewport — mirrors Port_PPU_ComputeViewportRects
@@ -742,11 +780,23 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         int aspW = FW, aspH = FH;
         const PortAspectMode mode = Port_Config_AspectMode();
         switch (mode) {
-            case PORT_ASPECT_WIDESCREEN_16_9:      aspW = 16; aspH = 9; break;
-            case PORT_ASPECT_ULTRAWIDE_21_9:       aspW = 21; aspH = 9; break;
-            case PORT_ASPECT_SUPER_ULTRAWIDE_32_9: aspW = 32; aspH = 9; break;
+            case PORT_ASPECT_WIDESCREEN_16_9:
+                aspW = 16;
+                aspH = 9;
+                break;
+            case PORT_ASPECT_ULTRAWIDE_21_9:
+                aspW = 21;
+                aspH = 9;
+                break;
+            case PORT_ASPECT_SUPER_ULTRAWIDE_32_9:
+                aspW = 32;
+                aspH = 9;
+                break;
             case PORT_ASPECT_NATIVE_3_2:
-            default:                                aspW = FW; aspH = FH; break;
+            default:
+                aspW = FW;
+                aspH = FH;
+                break;
         }
         const int w = (int)swap_w;
         const int h = (int)swap_h;
@@ -785,8 +835,7 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * sSampler (LINEAR min/mag) gives the soft "ambient mode" halo
      * that the SDL_Renderer path achieves via SDL_RenderTexture into
      * the stage rect. */
-    if (Port_Config_BgFill() == PORT_BG_FILL_BLURRED_FRAME &&
-        (stageW != frameW || stageH != frameH)) {
+    if (Port_Config_BgFill() == PORT_BG_FILL_BLURRED_FRAME && (stageW != frameW || stageH != frameH)) {
         SDL_GPUViewport vp = {};
         vp.x = (float)stageX;
         vp.y = (float)stageY;
@@ -796,12 +845,12 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
         vp.max_depth = 1.0f;
         SDL_SetGPUViewport(rp, &vp);
         SDL_BindGPUGraphicsPipeline(rp, sPipelines[PORT_GPU_FILTER_NONE]);
-        
+
         SDL_GPUTextureSamplerBinding tsb_bg = {};
         tsb_bg.texture = sSourceTexture;
         tsb_bg.sampler = sSamplerLinear; /* Blurred halo always uses linear */
         SDL_BindGPUFragmentSamplers(rp, 0, &tsb_bg, 1);
-        
+
         SDL_DrawGPUPrimitives(rp, /*num_vertices=*/4, /*num_instances=*/1, 0, 0);
     }
 
@@ -827,7 +876,10 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
      * alignment on a vec2; the trailing pad keeps the struct size
      * aligned. */
     if (sActiveFilter != PORT_GPU_FILTER_NONE) {
-        struct { float viewport[2]; float _pad[2]; } u;
+        struct {
+            float viewport[2];
+            float _pad[2];
+        } u;
         /* Match the frame rect we set on the viewport so the
          * shader's cell stride / row stride / radial centre line
          * up with the actual draw area. */
@@ -869,10 +921,12 @@ extern "C" bool Port_GPU_PaintBootSplash(void) {
      * texture-atlas glyph cache that's outside this stage's scope).
      * Compared to the SDL_Renderer path: no "LOADING" label, but the
      * window is visibly NOT broken/black during the boot phase. */
-    if (!sWindowClaimed) return false;
+    if (!sWindowClaimed)
+        return false;
 
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sDevice);
-    if (!cmd) return false;
+    if (!cmd)
+        return false;
 
     SDL_GPUTexture* swap_tex = nullptr;
     Uint32 sw = 0, sh = 0;
@@ -882,13 +936,13 @@ extern "C" bool Port_GPU_PaintBootSplash(void) {
     }
 
     SDL_GPUColorTargetInfo color = {};
-    color.texture     = swap_tex;
+    color.texture = swap_tex;
     /* Picori-green-tinted dark: matches port_imgui_menu.cpp's bgBase
      * (rgb 0.058 / 0.07 / 0.07) so the boot frame visually flows into
      * the F8 menu's chrome under the new Project Picori theme. */
-    color.clear_color = SDL_FColor{0.058f, 0.07f, 0.07f, 1.0f};
-    color.load_op     = SDL_GPU_LOADOP_CLEAR;
-    color.store_op    = SDL_GPU_STOREOP_STORE;
+    color.clear_color = SDL_FColor{ 0.058f, 0.07f, 0.07f, 1.0f };
+    color.load_op = SDL_GPU_LOADOP_CLEAR;
+    color.store_op = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
     SDL_EndGPURenderPass(rp);
     SDL_SubmitGPUCommandBuffer(cmd);
@@ -901,10 +955,12 @@ extern "C" bool Port_GPU_PaintBootSplash(void) {
  * draw data via ImGui::Render() so PrepareDrawData can upload buffers
  * before BeginRenderPass. */
 extern "C" bool Port_GPU_PresentPrelaunchFrame(void) {
-    if (!sWindowClaimed) return false;
+    if (!sWindowClaimed)
+        return false;
 
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(sDevice);
-    if (!cmd) return false;
+    if (!cmd)
+        return false;
 
     /* Vertex/index buffer uploads happen via copy passes that can't
      * run inside a render pass — do them first. */
@@ -918,10 +974,10 @@ extern "C" bool Port_GPU_PresentPrelaunchFrame(void) {
     }
 
     SDL_GPUColorTargetInfo color = {};
-    color.texture     = swap_tex;
-    color.clear_color = SDL_FColor{0.058f, 0.07f, 0.07f, 1.0f};
-    color.load_op     = SDL_GPU_LOADOP_CLEAR;
-    color.store_op    = SDL_GPU_STOREOP_STORE;
+    color.texture = swap_tex;
+    color.clear_color = SDL_FColor{ 0.058f, 0.07f, 0.07f, 1.0f };
+    color.load_op = SDL_GPU_LOADOP_CLEAR;
+    color.store_op = SDL_GPU_STOREOP_STORE;
     SDL_GPURenderPass* rp = SDL_BeginGPURenderPass(cmd, &color, 1, nullptr);
 
     Port_ImGui_RenderDrawDataGpu(cmd, rp);
@@ -936,19 +992,30 @@ extern "C" bool Port_GPU_IsActive(void) {
 }
 
 extern "C" void Port_GPU_SetFilter(PortGpuFilter f) {
-    if ((unsigned)f < PORT_GPU_FILTER_COUNT) sActiveFilter = f;
+    if ((unsigned)f < PORT_GPU_FILTER_COUNT)
+        sActiveFilter = f;
 }
-extern "C" PortGpuFilter Port_GPU_GetFilter(void) { return sActiveFilter; }
+extern "C" PortGpuFilter Port_GPU_GetFilter(void) {
+    return sActiveFilter;
+}
 extern "C" const char* Port_GPU_FilterName(PortGpuFilter f) {
     switch (f) {
-        case PORT_GPU_FILTER_NONE:          return "Off";
-        case PORT_GPU_FILTER_LCD_GRID:      return "LCD Grid (GPU)";
-        case PORT_GPU_FILTER_SCANLINE:      return "Scanlines (GPU)";
-        case PORT_GPU_FILTER_HANDHELD:      return "Handheld Grid (GPU)";
-        case PORT_GPU_FILTER_VIGNETTE:      return "Vignette (GPU)";
-        case PORT_GPU_FILTER_CRT_COMPOSITE: return "CRT Composite (GPU)";
-        case PORT_GPU_FILTER_CRT_RF:        return "CRT RF (GPU)";
-        default: return "?";
+        case PORT_GPU_FILTER_NONE:
+            return "Off";
+        case PORT_GPU_FILTER_LCD_GRID:
+            return "LCD Grid (GPU)";
+        case PORT_GPU_FILTER_SCANLINE:
+            return "Scanlines (GPU)";
+        case PORT_GPU_FILTER_HANDHELD:
+            return "Handheld Grid (GPU)";
+        case PORT_GPU_FILTER_VIGNETTE:
+            return "Vignette (GPU)";
+        case PORT_GPU_FILTER_CRT_COMPOSITE:
+            return "CRT Composite (GPU)";
+        case PORT_GPU_FILTER_CRT_RF:
+            return "CRT RF (GPU)";
+        default:
+            return "?";
     }
 }
 
