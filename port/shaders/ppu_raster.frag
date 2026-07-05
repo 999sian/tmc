@@ -309,6 +309,49 @@ bool obj_resolve(int x, int line, uint line_dispcnt, out uint out_col, out int o
     return found;
 }
 
+/* ---- window + blend (composite_line) ---- */
+const int IO_WIN0H = 0x40;
+const int IO_WIN1H = 0x42;
+const int IO_WIN0V = 0x44;
+const int IO_WIN1V = 0x46;
+const int IO_WININ = 0x48;
+const int IO_WINOUT = 0x4A;
+const int IO_BLDCNT = 0x50;
+const int IO_BLDALPHA = 0x52;
+const int IO_BLDY = 0x54;
+const uint DISP_WIN0_ON = 0x2000u;
+const uint DISP_WIN1_ON = 0x4000u;
+const uint DISP_OBJWIN_ON = 0x8000u;
+
+bool is_first_target(uint bldcnt, int layer) { return ((bldcnt >> uint(layer)) & 1u) != 0u; }
+bool is_second_target(uint bldcnt, int layer) { return ((bldcnt >> uint(layer + 8)) & 1u) != 0u; }
+
+/* All three operate in 5-bit rgb555 space and return rgb555, matching the
+ * CPU's mode1_alpha_blend / brighten / darken exactly (which recover 5-bit
+ * via >>3 from the 8-bit channels — identical to the rgb555 channels here). */
+uint blend_alpha(uint top, uint bot, int eva, int evb) {
+    int tr = int(top & 0x1Fu), tg = int((top >> 5u) & 0x1Fu), tb = int((top >> 10u) & 0x1Fu);
+    int br = int(bot & 0x1Fu), bg = int((bot >> 5u) & 0x1Fu), bb = int((bot >> 10u) & 0x1Fu);
+    int r = (tr * eva + br * evb) >> 4; if (r > 31) r = 31;
+    int g = (tg * eva + bg * evb) >> 4; if (g > 31) g = 31;
+    int b = (tb * eva + bb * evb) >> 4; if (b > 31) b = 31;
+    return uint(r) | (uint(g) << 5u) | (uint(b) << 10u);
+}
+uint blend_brighten(uint c, int evy) {
+    int r = int(c & 0x1Fu), g = int((c >> 5u) & 0x1Fu), b = int((c >> 10u) & 0x1Fu);
+    r += ((31 - r) * evy) >> 4; if (r > 31) r = 31;
+    g += ((31 - g) * evy) >> 4; if (g > 31) g = 31;
+    b += ((31 - b) * evy) >> 4; if (b > 31) b = 31;
+    return uint(r) | (uint(g) << 5u) | (uint(b) << 10u);
+}
+uint blend_darken(uint c, int evy) {
+    int r = int(c & 0x1Fu), g = int((c >> 5u) & 0x1Fu), b = int((c >> 10u) & 0x1Fu);
+    r -= (r * evy) >> 4; if (r < 0) r = 0;
+    g -= (g * evy) >> 4; if (g < 0) g = 0;
+    b -= (b * evy) >> 4; if (b < 0) b = 0;
+    return uint(r) | (uint(g) << 5u) | (uint(b) << 10u);
+}
+
 void main() {
     int x = int(gl_FragCoord.x);
     int line = int(gl_FragCoord.y);
@@ -349,6 +392,50 @@ void main() {
     bool obj_window = false;
     bool obj_found = obj_on && obj_resolve(x, line, line_dispcnt, obj_col, obj_pri, obj_semi, obj_window);
 
+    int frame_width = params.geom.x;
+
+    /* Window resolution (composite_line): pick the control byte for this pixel
+     * in priority order outside < objwin < win1 < win0. */
+    bool win0_on = (line_dispcnt & DISP_WIN0_ON) != 0u;
+    bool win1_on = (line_dispcnt & DISP_WIN1_ON) != 0u;
+    bool objwin_on = (line_dispcnt & DISP_OBJWIN_ON) != 0u;
+    bool any_window = win0_on || win1_on || objwin_on;
+    uint win_ctrl = 0x3Fu;
+    if (any_window) {
+        uint winin = io_u16(line, IO_WININ);
+        uint winout = io_u16(line, IO_WINOUT);
+        uint win0h = io_u16(line, IO_WIN0H);
+        uint win0v = io_u16(line, IO_WIN0V);
+        uint win1h = io_u16(line, IO_WIN1H);
+        uint win1v = io_u16(line, IO_WIN1V);
+        int w0l = int(win0h >> 8u), w0r = int(win0h & 0xFFu);
+        int w0t = int(win0v >> 8u), w0b = int(win0v & 0xFFu);
+        int w1l = int(win1h >> 8u), w1r = int(win1h & 0xFFu);
+        int w1t = int(win1v >> 8u), w1b = int(win1v & 0xFFu);
+        if (w0r > frame_width) w0r = frame_width;
+        if (w0b > 160) w0b = 160;
+        if (w1r > frame_width) w1r = frame_width;
+        if (w1b > 160) w1b = 160;
+        bool w0hw = w0l > w0r, w0vw = w0t > w0b;
+        bool w1hw = w1l > w1r, w1vw = w1t > w1b;
+        bool w0va = win0_on && (w0vw ? (line >= w0t || line < w0b) : (line >= w0t && line < w0b));
+        bool w1va = win1_on && (w1vw ? (line >= w1t || line < w1b) : (line >= w1t && line < w1b));
+        win_ctrl = winout & 0x3Fu;
+        if (objwin_on && obj_window) { win_ctrl = (winout >> 8u) & 0x3Fu; }
+        if (w1va) {
+            bool in_h = w1hw ? (x >= w1l || x < w1r) : (x >= w1l && x < w1r);
+            if (in_h) { win_ctrl = (winin >> 8u) & 0x3Fu; }
+        }
+        if (w0va) {
+            bool in_h = w0hw ? (x >= w0l || x < w0r) : (x >= w0l && x < w0r);
+            if (in_h) { win_ctrl = winin & 0x3Fu; }
+        }
+    }
+    bool vis_bg[4] = bool[4]((win_ctrl & 0x01u) != 0u, (win_ctrl & 0x02u) != 0u,
+                             (win_ctrl & 0x04u) != 0u, (win_ctrl & 0x08u) != 0u);
+    bool vis_obj = (win_ctrl & 0x10u) != 0u;
+    bool allow_sfx = (win_ctrl & 0x20u) != 0u;
+
     /* Stable priority sort of BG indices (index tie-break). */
     int order[4] = int[4](0, 1, 2, 3);
     for (int i = 1; i < 4; ++i) {
@@ -362,15 +449,14 @@ void main() {
         order[j + 1] = key;
     }
 
-    /* Merged walk: top + bottom layer (composite_line). Phase 3: no windows
-     * (all layers visible) and no blend; output = top. */
+    /* Merged walk producing top + bottom layer (composite_line). */
     uint top_col = backdrop;
     int top_layer = 5;
     uint bot_col = backdrop;
     int bot_layer = 5;
     bool found_top = false;
     bool found_bottom = false;
-    bool obj_candidate = obj_found;
+    bool obj_candidate = obj_found && vis_obj;
     bool obj_emitted = false;
 
     for (int oi = 0; oi < 4 && !found_bottom; ++oi) {
@@ -381,7 +467,7 @@ void main() {
             obj_emitted = true;
             if (found_bottom) { break; }
         }
-        if (!bg_on[bg] || !bg_op[bg]) {
+        if (!bg_on[bg] || !vis_bg[bg] || !bg_op[bg]) {
             continue;
         }
         if (!found_top) { top_col = bg_col[bg]; top_layer = bg; found_top = true; }
@@ -392,5 +478,33 @@ void main() {
         else { bot_col = obj_col; bot_layer = 4; found_bottom = true; }
     }
 
-    oColor = rgb555_to_rgba(top_col);
+    /* Blend (composite_line SFX). */
+    uint bldcnt = io_u16(line, IO_BLDCNT);
+    int effect = int((bldcnt >> 6u) & 3u);
+    int eva = int(io_u16(line, IO_BLDALPHA) & 0x1Fu); if (eva > 16) eva = 16;
+    int evb = int((io_u16(line, IO_BLDALPHA) >> 8u) & 0x1Fu); if (evb > 16) evb = 16;
+    int evy = int(io_u16(line, IO_BLDY) & 0x1Fu); if (evy > 16) evy = 16;
+    uint out_col = top_col;
+    if (allow_sfx) {
+        if (top_layer == 4 && obj_semi) {
+            /* Semi-transparent OBJ is a forced alpha 1st target. */
+            if (is_second_target(bldcnt, bot_layer)) {
+                out_col = blend_alpha(top_col, bot_col, eva, evb);
+            } else if (effect == 2) {
+                out_col = blend_brighten(top_col, evy);
+            } else if (effect == 3) {
+                out_col = blend_darken(top_col, evy);
+            }
+        } else if (effect == 1) {
+            if (is_first_target(bldcnt, top_layer) && is_second_target(bldcnt, bot_layer)) {
+                out_col = blend_alpha(top_col, bot_col, eva, evb);
+            }
+        } else if (effect == 2) {
+            if (is_first_target(bldcnt, top_layer)) { out_col = blend_brighten(top_col, evy); }
+        } else if (effect == 3) {
+            if (is_first_target(bldcnt, top_layer)) { out_col = blend_darken(top_col, evy); }
+        }
+    }
+
+    oColor = rgb555_to_rgba(out_col);
 }

@@ -463,6 +463,107 @@ static void scene_obj_mosaic(Scene* s) {
     set_oam(s, 0, A0(40, 0, 0, 1, 0, 0), A1(50, 0, 0, 2), A2(0, 0, 2)); /* mosaic bit set, 32x32 */
 }
 
+/* ---- composite: window + blend scenes ---- */
+/* Two BGs so blends/windows have both a first and second target. BG0 (prio 1,
+ * palbank 2) and BG1 (prio 2, palbank 3), both opaque. */
+static void two_bg_setup(Scene* s, const char* name) {
+    scene_clear(s, name);
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x0200));             /* BG0+BG1 on */
+    set_io16(s, 0x08, (uint16_t)((8u << 8) | 1u));              /* BG0 block 8, prio 1 */
+    set_io16(s, 0x0A, (uint16_t)((10u << 8) | (1u << 2) | 2u)); /* BG1 block 10, char 0x4000, prio 2 */
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    fill_palette_bank(s->bgpal, 3, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    write_tile_4bpp(s->vram, 0x4000, 1);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+    fill_screenblock(s->vram, 0x5000, (uint16_t)(1u | (3u << 12)));
+}
+static void scene_win0_inside(Scene* s) {
+    two_bg_setup(s, "win0_inside");
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x0200 | 0x2000)); /* +WIN0 */
+    set_io16(s, 0x40, (uint16_t)((40u << 8) | 200u));        /* WIN0H: left 40, right 200 */
+    set_io16(s, 0x44, (uint16_t)((30u << 8) | 130u));        /* WIN0V: top 30, bottom 130 */
+    set_io16(s, 0x48, (uint16_t)(0x01));                     /* WININ: inside shows BG0 only */
+    set_io16(s, 0x4A, (uint16_t)(0x02));                     /* WINOUT: outside shows BG1 only */
+}
+static void scene_win0_hwrap(Scene* s) {
+    two_bg_setup(s, "win0_hwrap");
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x0200 | 0x2000));
+    set_io16(s, 0x40, (uint16_t)((200u << 8) | 40u)); /* left>right: wrap span */
+    set_io16(s, 0x44, (uint16_t)((0u << 8) | 160u));
+    set_io16(s, 0x48, (uint16_t)(0x01));
+    set_io16(s, 0x4A, (uint16_t)(0x0F));
+}
+static void scene_win0_vwrap(Scene* s) {
+    two_bg_setup(s, "win0_vwrap");
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x0200 | 0x2000));
+    set_io16(s, 0x40, (uint16_t)((0u << 8) | 240u));
+    set_io16(s, 0x44, (uint16_t)((120u << 8) | 40u)); /* top>bottom: wrap span */
+    set_io16(s, 0x48, (uint16_t)(0x01));
+    set_io16(s, 0x4A, (uint16_t)(0x02));
+}
+static void scene_win1(Scene* s) {
+    two_bg_setup(s, "win1");
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x0200 | 0x4000)); /* WIN1 */
+    set_io16(s, 0x42, (uint16_t)((60u << 8) | 180u));        /* WIN1H */
+    set_io16(s, 0x46, (uint16_t)((20u << 8) | 140u));        /* WIN1V */
+    set_io16(s, 0x48, (uint16_t)(0x02 << 8));                /* WININ high byte = win1 ctrl */
+    set_io16(s, 0x4A, (uint16_t)(0x01));
+}
+static void scene_objwin(Scene* s) {
+    two_bg_setup(s, "objwin");
+    fill_obj_tiles(s);
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x0200 | 0x1000 | 0x0040 | 0x8000)); /* OBJ on + OBJWIN */
+    /* mode-2 (window) sprite carves the OBJ window. */
+    set_oam(s, 0, A0(40, 0, 2, 0, 0, 0), A1(50, 0, 0, 2), A2(0, 0, 2)); /* 16x16 mode2 */
+    set_io16(s, 0x48, (uint16_t)(0x01));                                /* WININ (unused here) */
+    set_io16(s, 0x4A, (uint16_t)(0x02 | (0x01 << 8)));                  /* WINOUT: outside BG1; objwin inside BG0 */
+}
+static void scene_blend_alpha(Scene* s) {
+    two_bg_setup(s, "blend_alpha");
+    /* alpha effect (1), BG0 1st target, BG1 2nd target, eva=8 evb=8. */
+    set_io16(s, 0x50, (uint16_t)((1u << 6) | 0x01 | (0x02 << 8))); /* BLDCNT: effect1, tgt1=BG0, tgt2=BG1 */
+    set_io16(s, 0x52, (uint16_t)(8u | (8u << 8)));                 /* BLDALPHA eva=8 evb=8 */
+}
+static void scene_blend_brighten(Scene* s) {
+    two_bg_setup(s, "blend_brighten");
+    set_io16(s, 0x50, (uint16_t)((2u << 6) | 0x01)); /* effect2 brighten, tgt1=BG0 */
+    set_io16(s, 0x54, (uint16_t)10u);                /* BLDY evy=10 */
+}
+static void scene_blend_darken(Scene* s) {
+    two_bg_setup(s, "blend_darken");
+    set_io16(s, 0x50, (uint16_t)((3u << 6) | 0x01)); /* effect3 darken, tgt1=BG0 */
+    set_io16(s, 0x54, (uint16_t)20u);                /* BLDY evy=20 (clamps to 16) */
+}
+static void scene_blend_alpha_backdrop(Scene* s) {
+    /* alpha with BG over backdrop (2nd-target BD bit). */
+    scene_clear(s, "blend_alpha_backdrop");
+    set_io16(s, 0x00, 0x0100);
+    set_io16(s, 0x08, (uint16_t)((8u << 8) | 0u));
+    s->bgpal[0] = 0x3DEF;
+    fill_palette_bank(s->bgpal, 2, 0x3DEF);
+    write_tile_4bpp(s->vram, 0, 1);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+    set_io16(s, 0x50, (uint16_t)((1u << 6) | 0x01 | (0x20 << 8))); /* effect1, tgt1=BG0, tgt2=BD */
+    set_io16(s, 0x52, (uint16_t)(10u | (6u << 8)));
+}
+static void scene_obj_semitrans(Scene* s) {
+    /* Semi-transparent OBJ (mode 1) over an opaque BG that is a 2nd target. */
+    scene_clear(s, "obj_semitrans");
+    fill_obj_tiles(s);
+    set_io16(s, 0x00, (uint16_t)(0x0100 | 0x1000 | 0x0040)); /* BG0 + OBJ 1D */
+    set_io16(s, 0x08, (uint16_t)((8u << 8) | 1u));           /* BG0 prio 1 */
+    s->bgpal[0] = 0x0421;
+    fill_palette_bank(s->bgpal, 2, 0x0421);
+    write_tile_4bpp(s->vram, 0, 1);
+    fill_screenblock(s->vram, 0x4000, (uint16_t)(1u | (2u << 12)));
+    set_io16(s, 0x50, (uint16_t)(0x20 << 8));                           /* BLDCNT: tgt2 = BG0? no; set BG0 2nd target */
+    set_io16(s, 0x50, (uint16_t)((0x01 << 8)));                         /* 2nd target = BG0 (bit 8) */
+    set_io16(s, 0x52, (uint16_t)(9u | (7u << 8)));                      /* eva/evb for the forced obj-alpha */
+    set_oam(s, 0, A0(40, 0, 1, 0, 0, 0), A1(50, 0, 0, 1), A2(0, 0, 2)); /* mode1 semi-trans 16x16 */
+}
+
 int main(int argc, char** argv) {
     const char* vpath = argc > 1 ? argv[1] : "port/shaders/build/ppu_raster.vert.spv";
     const char* fpath = argc > 2 ? argv[2] : "port/shaders/build/ppu_raster.frag.spv";
@@ -495,12 +596,39 @@ int main(int argc, char** argv) {
     static Scene scene;
     std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H);
 
-    SceneFn scenes[] = { scene_forced_blank,    scene_backdrop_blue, scene_backdrop_black,    scene_backdrop_mixed,
-                         scene_bg0_tiled,       scene_bg0_scroll,    scene_bg0_flip,          scene_bg0_8bpp,
-                         scene_bg0_mosaic,      scene_bg0_512,       scene_bg_priority,       scene_bg0_transparent,
-                         scene_obj_basic,       scene_obj_hflip,     scene_obj_vflip,         scene_obj_8bpp,
-                         scene_obj_2d,          scene_obj_affine,    scene_obj_affine_double, scene_obj_over_bg,
-                         scene_obj_two_overlap, scene_obj_wrap,      scene_obj_mosaic };
+    SceneFn scenes[] = { scene_forced_blank,
+                         scene_backdrop_blue,
+                         scene_backdrop_black,
+                         scene_backdrop_mixed,
+                         scene_bg0_tiled,
+                         scene_bg0_scroll,
+                         scene_bg0_flip,
+                         scene_bg0_8bpp,
+                         scene_bg0_mosaic,
+                         scene_bg0_512,
+                         scene_bg_priority,
+                         scene_bg0_transparent,
+                         scene_obj_basic,
+                         scene_obj_hflip,
+                         scene_obj_vflip,
+                         scene_obj_8bpp,
+                         scene_obj_2d,
+                         scene_obj_affine,
+                         scene_obj_affine_double,
+                         scene_obj_over_bg,
+                         scene_obj_two_overlap,
+                         scene_obj_wrap,
+                         scene_obj_mosaic,
+                         scene_win0_inside,
+                         scene_win0_hwrap,
+                         scene_win0_vwrap,
+                         scene_win1,
+                         scene_objwin,
+                         scene_blend_alpha,
+                         scene_blend_brighten,
+                         scene_blend_darken,
+                         scene_blend_alpha_backdrop,
+                         scene_obj_semitrans };
     int total_diffs = 0;
     for (SceneFn fn : scenes) {
         fn(&scene);
