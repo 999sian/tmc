@@ -731,6 +731,7 @@ target("tmc_pc")
     add_files("port/port_gpu_renderer.cpp")  -- SDL_GPU presentation (Stage 1: scaffold; gated on --gpu_renderer=y)
     add_files("port/port_gpu_raster.cpp")    -- SDL_GPU PPU rasterizer (docs/gpu-rasterizer-design.md; gated on --gpu_renderer=y)
     add_files("port/port_gpu_obj_cull.c")    -- per-line OBJ candidate cull (shared by GPU raster backends)
+    add_files("port/port_gpu_raster_gl.cpp") -- GLES 3.1 compute PPU rasterizer (no-Vulkan devices; docs/gpu-rasterizer-design.md)
     add_files("port/port_glslp_parser.cpp")  -- libretro .glslp parser — steps 1-4 of the runtime scaffold (Stage 5+C)
     add_files("port/port_glslp_runtime.cpp") -- libretro .glslp runtime — step 5 (load + shader-build; present pending)
 
@@ -745,7 +746,7 @@ target("tmc_pc")
         -- entries with .spv suffix — re-specifying `rule = "utils.bin2c"`
         -- on the add_files line was registering them twice and
         -- triggered xmake's "job has already been added" warning.
-        add_rules("utils.bin2c", {extensions = {".spv"}, nozeroend = true})
+        add_rules("utils.bin2c", {extensions = {".spv", ".glsl"}, nozeroend = true})
         add_files("port/shaders/build/passthrough.vert.spv")
         add_files("port/shaders/build/passthrough.frag.spv")
         add_files("port/shaders/build/lcd_grid.frag.spv")
@@ -758,6 +759,8 @@ target("tmc_pc")
         add_files("port/shaders/build/crt_rf_p2.frag.spv")
         add_files("port/shaders/build/ppu_raster.vert.spv")
         add_files("port/shaders/build/ppu_raster.frag.spv")
+        -- GLES compute backend: embed the shared core GLSL (built at runtime).
+        add_files("port/shaders/ppu_core.glsl")
     end
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/
@@ -921,6 +924,12 @@ target("tmc_pc")
     -- Math library
     if is_plat("linux", "macosx") then
         add_links("m")
+    end
+
+    -- GLES compute rasterizer backend (port_gpu_raster_gl.cpp) needs EGL + GLES
+    -- on Linux/Android; it's a no-op stub on Windows/macOS (Vulkan/Metal there).
+    if has_config("gpu_renderer") and is_plat("linux", "android") then
+        add_syslinks("EGL", "GLESv2")
     end
 
     -- Compiler flags

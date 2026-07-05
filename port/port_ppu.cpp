@@ -862,9 +862,21 @@ static const unsigned char kPpuRasterFragSpv[] = {
 #endif
 #endif
 
+/* GLES compute rasterizer (port_gpu_raster_gl.*): the fallback GPU backend for
+ * devices without Vulkan (Adreno 4xx etc.). The shared core GLSL is embedded as
+ * a NUL-terminated blob (utils.bin2c). No-op stub on Windows/macOS. */
+#include "port_gpu_raster_gl.h"
+static const char kPpuCoreGlsl[] = {
+#include "ppu_core.glsl.h"
+    , 0
+};
+
 static PortGpuRaster* sGpuRaster = nullptr;
 static bool sGpuRasterTried = false;
 static bool sGpuRasterUnavailable = false;
+static PortGpuRasterGl* sGlesRaster = nullptr;
+static bool sGlesRasterTried = false;
+static bool sGlesRasterUnavailable = false;
 
 /* Per-frame prepare buffers (the CPU sequential pass output the GPU consumes). */
 static uint8_t sRasterIoPerLine[MODE1_GBA_HEIGHT * MODE1_IO_MEM_SIZE];
@@ -932,6 +944,28 @@ static bool Port_PPU_RasterEnsure(void) {
     return true;
 }
 
+/* Ensure the GLES compute rasterizer (fallback backend for no-Vulkan devices).
+ * Tried only when the Vulkan/SDL_GPU raster is unavailable. */
+static bool Port_PPU_GlesEnsure(void) {
+    if (sGlesRasterUnavailable) {
+        return false;
+    }
+    if (sGlesRaster) {
+        return true;
+    }
+    if (sGlesRasterTried) {
+        return false;
+    }
+    sGlesRasterTried = true;
+    /* sizeof-1: the embedded core blob is NUL-terminated (see kPpuCoreGlsl). */
+    sGlesRaster = Port_GpuRasterGl_Create(kPpuCoreGlsl, (int)(sizeof(kPpuCoreGlsl) - 1));
+    if (!sGlesRaster) {
+        sGlesRasterUnavailable = true;
+        return false;
+    }
+    return true;
+}
+
 /* Rasterize the current frame on the GPU into virtuappu_frame_buffer. Returns
  * false so the caller runs the CPU rasterizer instead. */
 static bool Port_PPU_TryGpuRaster(void) {
@@ -941,8 +975,15 @@ static bool Port_PPU_TryGpuRaster(void) {
     if (virtuappu_mode1_obj_clip_enable) {
         return false; /* swamp-sink obj-clip not in the shader */
     }
-    if (!Port_PPU_RasterEnsure()) {
-        return false;
+    /* Prefer the Vulkan/SDL_GPU raster; fall back to the GLES compute backend
+     * on devices without Vulkan (Adreno 4xx etc.); else the CPU rasterizer. */
+    bool useVk = Port_PPU_RasterEnsure();
+    bool useGles = false;
+    if (!useVk) {
+        useGles = Port_PPU_GlesEnsure();
+        if (!useGles) {
+            return false;
+        }
     }
 
     uint16_t frame_dispcnt = 0;
@@ -1006,15 +1047,21 @@ static bool Port_PPU_TryGpuRaster(void) {
         f.ws_shadow_halfwords = 0;
     }
 
-    if (!Port_GpuRaster_Render(sGpuRaster, &f)) {
-        return false;
-    }
-    /* Read the GPU frame back into virtuappu_frame_buffer so the existing
-     * present path (filters/shm/upscale/screenshot) consumes it unchanged.
-     * Direct-present of the GPU texture is a tracked follow-up optimisation. */
-    if (!Port_GpuRaster_Readback(sGpuRaster, virtuappu_frame_buffer, f.frame_width, f.frame_height,
-                                 virtuappu_mode1_frame_pitch())) {
-        return false;
+    /* Render on the chosen backend, reading back into virtuappu_frame_buffer so
+     * the existing present path (filters/shm/upscale/screenshot) is unchanged.
+     * Direct-present of the GPU output is a tracked follow-up optimisation. */
+    const int pitch = virtuappu_mode1_frame_pitch();
+    if (useVk) {
+        if (!Port_GpuRaster_Render(sGpuRaster, &f)) {
+            return false;
+        }
+        if (!Port_GpuRaster_Readback(sGpuRaster, virtuappu_frame_buffer, f.frame_width, f.frame_height, pitch)) {
+            return false;
+        }
+    } else { /* useGles */
+        if (!Port_GpuRasterGl_RenderReadback(sGlesRaster, &f, virtuappu_frame_buffer, pitch)) {
+            return false;
+        }
     }
     return true;
 }
