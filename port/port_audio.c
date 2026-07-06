@@ -201,14 +201,17 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
     int remaining = additional_amount;
     (void)userdata;
     (void)total_amount;
-    if (Port_DebugVerbose || getenv("TMC_AUDIO_TRACE")) {
+    const bool trace = (Port_DebugVerbose || getenv("TMC_AUDIO_TRACE"));
+    /* Trace statics (see below); also used to report render work-time. */
+    static Uint64 sLastCbNs = 0, sWindowNs = 0;
+    static double sMaxGap = 0.0, sReqMs = 0.0, sMaxWorkMs = 0.0, sSumWorkMs = 0.0;
+    static int sCbCount = 0, sUnderruns = 0;
+    Uint64 workStart = 0;
+    if (trace) {
         /* Zero I/O on the audio callback thread: accumulate in statics and
          * fprintf at most once per second (off the per-callback hot path).
          * Logging every callback here blocks the audio thread on the stderr
          * pipe and MANUFACTURES the underruns it's trying to measure. */
-        static Uint64 sLastCbNs = 0, sWindowNs = 0;
-        static double sMaxGap = 0.0, sReqMs = 0.0;
-        static int sCbCount = 0, sUnderruns = 0;
         Uint64 now = SDL_GetTicksNS();
         if (sLastCbNs) {
             double gapMs = (double)(now - sLastCbNs) / 1e6;
@@ -220,13 +223,17 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
             sCbCount++;
         }
         sLastCbNs = now;
+        workStart = now;
         if (now - sWindowNs >= 1000000000ULL) {
             if (sCbCount) {
-                fprintf(stderr, "[audio] 1s: %d cb, req=%.1fms maxgap=%.1fms underruns=%d\n", sCbCount, sReqMs, sMaxGap,
-                        sUnderruns);
+                fprintf(stderr,
+                        "[audio] 1s: %d cb, req=%.1fms maxgap=%.1fms underruns=%d | work avg=%.1fms max=%.1fms\n",
+                        sCbCount, sReqMs, sMaxGap, sUnderruns, sSumWorkMs / sCbCount, sMaxWorkMs);
             }
             sWindowNs = now;
             sMaxGap = 0.0;
+            sMaxWorkMs = 0.0;
+            sSumWorkMs = 0.0;
             sCbCount = 0;
             sUnderruns = 0;
         }
@@ -265,6 +272,12 @@ static void Port_Audio_Feed(void* userdata, SDL_AudioStream* stream, int additio
         SDL_PutAudioStreamData(stream, buffer, frames * PORT_AUDIO_BYTES_PER_FRAME);
         remaining -= frames * PORT_AUDIO_BYTES_PER_FRAME;
     }
+    if (trace && workStart) {
+        double workMs = (double)(SDL_GetTicksNS() - workStart) / 1e6;
+        sSumWorkMs += workMs;
+        if (workMs > sMaxWorkMs)
+            sMaxWorkMs = workMs;
+    }
 }
 
 bool Port_Audio_Init(void) {
@@ -280,23 +293,24 @@ bool Port_Audio_Init(void) {
     }
 
 #ifdef __ANDROID__
-    /* Android's default AAudio buffer is the high-latency path (~20 ms/960-frame
-     * callback burst + AAudio double-buffer), so a fresh SFX is heard ~40-60 ms
-     * late. A smaller buffer cuts that — BUT the callback gap on this in-order
-     * SoC jitters up to ~10-11 ms under load, and if the buffer PERIOD is
-     * shorter than that gap the device starves and crackles. So the buffer must
-     * stay above the worst gap; 256 frames (5.3 ms) was too small and crackled.
-     * Default: leave SDL's default buffer (crackle-free) and only engage the
-     * low-latency hint. Override the frame count at runtime to tune latency vs
-     * stability without a rebuild: env TMC_AUDIO_FRAMES=<n>, or on-device an
-     * `audio_frames` marker file (first line = frame count) in the data dir. */
-    /* Force SDL's audio callback thread (SDLAudioP*, which runs our MP2K synth)
-     * to a realtime SCHED_FIFO policy. On this 4-fast-core SoC it otherwise
-     * contends with the 3 PPU render workers + main and gets starved — measured
-     * callback gaps up to ~78 ms in steady gameplay, exceeding AAudio's 40 ms
-     * buffer and popping. Realtime priority lets it preempt the render workers,
-     * which is correct: dropping one PPU scanline slice is invisible, a starved
-     * audio thread is audible. Must be set before the audio thread is created. */
+    /* Audio buffer size on Android is a latency-vs-stability tradeoff. A small
+     * buffer (SDL default ~960 frames / 20 ms) keeps SFX latency low, but the
+     * agbplay synth is CPU-heavy: MEASURED at ~15-17 ms of render work per 20 ms
+     * buffer on a Moto G4 (Cortex-A53) during music (~75-85% of realtime), so
+     * with a 20 ms buffer any scheduling jitter underruns -> crackle/lag. A
+     * bigger buffer gives absolute slack to ride out that jitter. But it costs
+     * latency, and strong SoCs (fast out-of-order big cores) don't need it, so
+     * scale it to the hardware: on a WEAK cluster (max CPU freq below ~1.8 GHz,
+     * i.e. the low-clocked in-order A53 class like the G4) default to a larger
+     * buffer; leave the low-latency default on faster devices (e.g. Tab A7's
+     * 2.0 GHz A73s). Together with the LINEAR resampler (port_m4a_backend.cpp)
+     * this cut G4 underruns from ~8-35/s to ~3-6/s. Explicit override always
+     * wins: env TMC_AUDIO_FRAMES=<n> or an `audio_frames` marker file. */
+    /* NOTE: SDL_HINT_THREAD_PRIORITY_POLICY was intended to give the audio
+     * thread SCHED_FIFO, but Android denies realtime scheduling to unprivileged
+     * apps — verified on-device the SDLAudioP thread stays SCHED_OTHER — so it
+     * cannot preempt the render/main threads. The buffer slack above is the
+     * portable mitigation. The hint is left set (harmless; helps where allowed). */
     SDL_SetHint(SDL_HINT_THREAD_PRIORITY_POLICY, "1");
     SDL_SetHint(SDL_HINT_ANDROID_LOW_LATENCY_AUDIO, "1");
     int frames = 0;
@@ -312,11 +326,34 @@ bool Port_Audio_Init(void) {
             fclose(mf);
         }
     }
+    if (frames == 0) {
+        /* No override: pick a default from the CPU's top clock. Read the highest
+         * cpuinfo_max_freq across cores; a weak in-order-class cluster (< 1.8 GHz)
+         * gets the larger, jitter-tolerant buffer. */
+        long maxkhz = 0;
+        for (int c = 0; c < 16; ++c) {
+            char path[96];
+            SDL_snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", c);
+            FILE* cf = fopen(path, "r");
+            if (!cf) {
+                break;
+            }
+            long v = 0;
+            if (fscanf(cf, "%ld", &v) == 1 && v > maxkhz) {
+                maxkhz = v;
+            }
+            fclose(cf);
+        }
+        if (maxkhz > 0 && maxkhz < 1800000) {
+            frames = 1920; /* ~40 ms — weak SoC needs the slack */
+            fprintf(stderr, "[audio] weak CPU (%.2f GHz) -> larger audio buffer\n", maxkhz / 1e6);
+        }
+    }
     if (frames > 0) {
         char buf[16];
         SDL_snprintf(buf, sizeof(buf), "%d", frames);
         SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, buf);
-        fprintf(stderr, "[audio] SAMPLE_FRAMES override = %d (%.1f ms buffer)\n", frames,
+        fprintf(stderr, "[audio] SAMPLE_FRAMES = %d (%.1f ms buffer)\n", frames,
                 1000.0 * frames / PORT_AUDIO_SAMPLE_RATE);
     }
 #endif

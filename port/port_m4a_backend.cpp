@@ -184,7 +184,21 @@ static AgbplaySoundMode MakeAgbplayMode(void) {
      * "crunch". The default enhanced path uses SINC, the bandlimited resampler
      * proper, which removes virtually all imaging artefacts for a few hundred
      * extra MAC ops per audio frame (negligible on PC). */
-    const ResamplerType rs = sState.gbaAccurate ? ResamplerType::NEAREST : ResamplerType::SINC;
+    /* Resampler cost on weak in-order ARM: SINC is a few-hundred-MAC bandlimited
+     * filter per audio frame — negligible on desktop, but MEASURED at ~17-20 ms
+     * of synth work per 20 ms buffer on a Moto G4 (Cortex-A53) once several PCM
+     * channels are live (e.g. the item-get fanfare), i.e. ~85-100% of realtime,
+     * so any scheduling jitter underran the audio (audible crackle/lag). LINEAR
+     * is a 2-tap interpolation — a fraction of SINC's cost — and still avoids
+     * NEAREST's raw aliasing, so the enhanced path stays smooth on Android while
+     * fitting the CPU budget. Desktop keeps SINC (the cleanest resampler; cost is
+     * irrelevant there). GBA-accurate mode is NEAREST everywhere (hardware exact). */
+#ifdef __ANDROID__
+    const ResamplerType enhancedRs = ResamplerType::LINEAR;
+#else
+    const ResamplerType enhancedRs = ResamplerType::SINC;
+#endif
+    const ResamplerType rs = sState.gbaAccurate ? ResamplerType::NEAREST : enhancedRs;
     mode.resamplerTypeNormal = rs;
     mode.resamplerTypeFixed = rs;
     mode.reverbType = ReverbType::NORMAL;
@@ -894,7 +908,11 @@ void Port_M4A_Backend_SetGbaAccurate(bool accurate) {
      * is captured into each ReverbEffect's cached intensity, refreshed only by
      * SoundMixer::UpdateReverb() — so set the field AND call UpdateReverb() to
      * apply it live. MakeAgbplayMode also honours these on a later rebuild. */
+#ifdef __ANDROID__
+    const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::LINEAR;
+#else
     const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::SINC;
+#endif
     sState.ctx->agbplaySoundMode.resamplerTypeNormal = rs;
     sState.ctx->agbplaySoundMode.resamplerTypeFixed = rs;
     sState.ctx->agbplaySoundMode.reverbForce = accurate ? 0 : sState.reverbForceByte;
