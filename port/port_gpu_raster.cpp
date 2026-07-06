@@ -361,6 +361,7 @@ static bool record_frame(PortGpuRaster* r, const PortGpuRasterFrame* f, SDL_GPUC
     p.geom[3] = f->affine ? 1 : 0;
     p.misc[0] = f->frame_dispcnt;
     p.misc[1] = f->io_uniform ? 1u : 0u;
+    p.misc[2] = (uint32_t)(f->scale > 1 ? f->scale : 1);
     p.ws[0] = f->ws_bg_clip_x ? f->ws_bg_clip_x : 240;
     p.ws[1] = f->ws_cols;
     p.ws[2] = f->ws_hud_right_anchor;
@@ -418,7 +419,8 @@ extern "C" SDL_GPUTexture* Port_GpuRaster_Render(PortGpuRaster* r, const PortGpu
     if (!r || !f || f->frame_width <= 0 || f->frame_height <= 0) {
         return nullptr;
     }
-    if (!ensure_target(r, f->frame_width, f->frame_height)) {
+    const int S = f->scale > 1 ? f->scale : 1;
+    if (!ensure_target(r, f->frame_width * S, f->frame_height * S)) {
         return nullptr;
     }
     SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(r->device);
@@ -438,10 +440,11 @@ extern "C" bool Port_GpuRaster_RenderReadback(PortGpuRaster* r, const PortGpuRas
     if (!r || !f || !dst || f->frame_width <= 0 || f->frame_height <= 0) {
         return false;
     }
-    if (!ensure_target(r, f->frame_width, f->frame_height)) {
+    const int S = f->scale > 1 ? f->scale : 1;
+    const int W = f->frame_width * S, H = f->frame_height * S;
+    if (!ensure_target(r, W, H)) {
         return false;
     }
-    const int W = f->frame_width, H = f->frame_height;
     if (!ensure_download(r, (Uint32)W * (Uint32)H * 4u)) {
         return false;
     }

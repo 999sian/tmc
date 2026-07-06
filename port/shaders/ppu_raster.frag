@@ -41,5 +41,18 @@ layout(location = 0) out vec4 oColor;
 #include "ppu_core.glsl"
 
 void main() {
-    oColor = ppu_pixel(int(gl_FragCoord.x), int(gl_FragCoord.y));
+    /* params.misc.z = supersample scale S (target is S*W x S*H). Map this
+     * fragment to its native pixel (nearest for tile/text) + sub-pixel offset
+     * in [0,S) that the affine samplers use. S<=1 -> native, bit-exact. */
+    int S = int(params.misc.z);
+    if (S <= 1) {
+        oColor = ppu_pixel(int(gl_FragCoord.x), int(gl_FragCoord.y));
+        return;
+    }
+    gPpuScale = S;
+    int fx = int(gl_FragCoord.x);
+    int fy = int(gl_FragCoord.y);
+    gSubX = fx % S;
+    gSubY = fy % S;
+    oColor = ppu_pixel(fx / S, fy / S);
 }
