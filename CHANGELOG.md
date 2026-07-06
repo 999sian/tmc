@@ -53,6 +53,18 @@
   GLES/low-end (the G4 can't afford the extra pixels — measured ~16% idle);
   bit-exact at scale 1 (all 76 harness scenes + ROM golden hashes unchanged).
   Skipped under LCD-persistence/perfcap and xBRZ (which owns its own upscaler).
+- **GPU rasterizer is now scale-aware (auto CPU raster at native scale).** The
+  GPU PPU rasterizer only engages when it produces the supersampled present
+  buffer (internal scale > 1, a raw present mode, no LCD-persistence) — the one
+  case where its compute amortizes the upload+readback. At scale 1 it now falls
+  back to the CPU rasterizer automatically. Measured on-device (Galaxy Tab A7,
+  Adreno 610, Vulkan) the old default-on GPU raster cost ~8 ms render / 58 fps
+  in the forge; the CPU raster is ~2.6–4 ms / a solid 60 fps with byte-identical
+  output — the same small-frame readback-overhead reason mGBA defaults to
+  software. Perfcap keeps the GPU path live for its golden-hash parity (gate is
+  a no-op there; parity hashes unchanged). Net: the quality win at high scale is
+  kept, the silent fps regression at scale 1 is gone, on every device measured
+  (G4 no-Vulkan, Tab A7 Vulkan). Manual override still via F8 → Display.
 - **CPU rasterizer scales across more cores.** The software-PPU scanline pool
   was hard-capped at 6 threads — a stale 8-core-era value. On many-core hosts
   a heavy widescreen (384px) frame scales ~2× further (measured on a 22-core
