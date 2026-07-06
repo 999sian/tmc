@@ -75,15 +75,16 @@
   is thread-count-invariant, and the parity gate hashes are unchanged at every
   thread count. Desktop is normally VSync-bound so fps is unaffected there; the
   win is the CPU-bound case (weak many-core HW, uncapped fps, heavy geometry).
-  `TMC_RENDER_THREADS=N` still forces a value. Android stays at 3: measured
-  on-device (Moto G4 / Snapdragon 617, 4 big A53 + 4 LITTLE) more threads DO
-  render ~14% faster in isolation but the phone is already VSync-locked at 60
-  fps in the heaviest scene (forge item-get, 4 BG + OBJ + textbox: render 3.9 ms
-  of a 16.7 ms frame), total CPU stays flat (185%→191%, workers sleep between
-  frames), so extra threads buy no visible fps and only tie up the slow LITTLE
-  cluster. A new `render_threads` marker file (a decimal count in the app data
-  dir, same convention as `profile`/`verbose`) forces the count on Android for
-  per-device tuning without a rebuild.
+  `TMC_RENDER_THREADS=N` still forces a value. Android caps at 4 (the big-cluster
+  size on the common 4+4 layout), measured per-device in-game (forge, CPU raster):
+  Galaxy Tab A7 (4× Cortex-A73 @2.0 + 4× A53) renders 4.50 ms @ 3 threads →
+  **3.13 ms @ 4** (−30%; one thread per fast A73, 5+ spill to the slow A53s and
+  regress); Moto G4 (8× A53, weak big cluster) is a wash (3.89 → 3.94 ms), so 4 is
+  neutral there. Both hold 60 fps (VSync-bound) — the win is render headroom and
+  cooler thermals (blocktime=0 sleeps the pool once the frame is done), not fps.
+  A `render_threads` marker file (a decimal count in the app data dir, same
+  convention as `profile`/`verbose`) overrides the count on Android without a
+  rebuild, for devices off the 4+4 layout.
 
 ### True widescreen: the view now fits YOUR screen
 
