@@ -619,6 +619,58 @@ static void Port_PPU_ApplyDisplayPostProcess(int pixelCount) {
         }
     }
 }
+#ifdef __ANDROID__
+/* Count the "performance" CPU cores at runtime so the scanline render pool can
+ * fill the fast cluster and stop — the measured Android policy (see the cap
+ * below). On heterogeneous ARM (big.LITTLE / tri-cluster) the slow cores are
+ * in-order (A53/A55); spilling scanlines onto them makes the OpenMP barrier
+ * wait on the slowest worker, a net regression. So: read each core's
+ * cpuinfo_max_freq, find the slowest cluster's freq, and count every core
+ * faster than it (the big — and, on tri-cluster, prime+gold — cores). A
+ * uniform SoC (all cores same freq) returns 0, signalling "no distinct fast
+ * cluster" so the caller uses its uniform-core policy. Best-effort: any /sys
+ * read failure returns 0 (caller falls back). */
+static int Port_CountPerfCores(void) {
+    long freq[64];
+    int ncpu = 0;
+    for (int c = 0; c < 64; ++c) {
+        char path[96];
+        std::snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", c);
+        FILE* f = std::fopen(path, "rb");
+        if (!f) {
+            break; /* no more cores enumerated */
+        }
+        long v = 0;
+        if (std::fscanf(f, "%ld", &v) != 1) {
+            v = 0;
+        }
+        std::fclose(f);
+        freq[ncpu++] = v;
+    }
+    if (ncpu < 2) {
+        return 0; /* single core or unreadable -> let caller decide */
+    }
+    long lo = freq[0];
+    long hi = freq[0];
+    for (int i = 1; i < ncpu; ++i) {
+        if (freq[i] < lo)
+            lo = freq[i];
+        if (freq[i] > hi)
+            hi = freq[i];
+    }
+    if (lo <= 0 || hi == lo) {
+        return 0; /* uniform (or unreadable) -> not heterogeneous */
+    }
+    /* Count cores above the slowest cluster's frequency: the fast core(s). */
+    int perf = 0;
+    for (int i = 0; i < ncpu; ++i) {
+        if (freq[i] > lo) {
+            ++perf;
+        }
+    }
+    return perf;
+}
+#endif
 
 extern "C" void Port_PPU_Init(SDL_Window* window) {
     sWindow = window;
@@ -697,21 +749,33 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         } else if (getenv("OMP_NUM_THREADS") == nullptr) {
             n = omp_get_num_procs() - 1;
 #ifdef __ANDROID__
-            /* On 8-core mobile SoCs (4 big + 4 LITTLE) the render pool should
-             * fill the BIG cluster and stop: spilling scanline work onto the slow
-             * LITTLE cores makes the OpenMP barrier wait on them, and near-full
-             * subscription starves main/audio. Cap at 4 = the big-cluster size on
-             * the common layout. Measured in-game (forge, CPU raster):
+            /* Fill the fast CPU cluster, then stop. On heterogeneous ARM the
+             * slow cores are in-order (A53/A55); spilling scanline work onto
+             * them makes the OpenMP barrier wait on the slowest worker (a net
+             * regression), and near-full subscription starves main/audio. So
+             * scale the pool to the detected performance-core count instead of a
+             * fixed number, so it tracks the actual SoC (dual/quad/hexa big
+             * cluster, or prime+gold on tri-cluster) rather than assuming 4+4.
+             * Measured in-game (forge, CPU raster), one thread per fast core:
              *   Galaxy Tab A7 (4x A73 @2.0 + 4x A53): 3t=4.50 ms, 4t=3.13 ms
-             *     (-30%), 5t=4.18, 6t=4.14, 8t=4.71 -> 4 is the clear optimum
-             *     (one thread per fast A73; 5+ spill to A53 and regress).
-             *   Moto G4 (8x A53, weak big cluster): 3t=3.89 ms, 4t=3.94 ms (a
-             *     wash) -> 4 is neutral there, not a regression.
-             * Both hold 60 fps (VSync-bound); the win is render headroom + cooler
-             * thermals (blocktime=0 means the pool sleeps once the frame is done).
-             * render_threads marker / TMC_RENDER_THREADS overrides for outliers. */
-            if (n > 4)
-                n = 4;
+             *     (-30%), 5t=4.18, 6t=4.14, 8t=4.71 -> 4 (=perf cores) optimal;
+             *     5+ spill onto the A53s and regress.
+             *   Moto G4 (8x A53, weak higher-clocked big cluster): 4 perf cores,
+             *     3t=3.89 ms vs 4t=3.94 ms -> 4 neutral, not a regression.
+             * A uniform SoC (no distinct fast cluster) returns 0 -> fall back to
+             * ncores-1. Everything is then capped at the 160-scanline knee (12)
+             * like desktop. render_threads marker / TMC_RENDER_THREADS override. */
+            {
+                int perf = Port_CountPerfCores();
+                if (perf >= 1) {
+                    n = perf; /* fill exactly the fast cluster */
+                }
+                std::fprintf(stderr, "[render] perf-core detection: %d fast core(s) of %d\n", perf,
+                             omp_get_num_procs());
+                /* perf==0: heterogeneity undetectable -> keep ncores-1 from above */
+            }
+            if (n > 12)
+                n = 12;
 #else
             if (n > 12)
                 n = 12;
