@@ -1017,6 +1017,29 @@ static bool Port_PPU_TryGpuRaster(void) {
     if (virtuappu_mode1_obj_clip_enable) {
         return false; /* swamp-sink obj-clip not in the shader */
     }
+    static int perfcap = -1;
+    if (perfcap < 0) {
+        const char* e = getenv("TMC_PERFCAP");
+        perfcap = (e && *e && e[0] != '0') ? 1 : 0;
+    }
+    /* Scale-aware default. The GPU rasterizer only pays off when it produces
+     * the supersampled present buffer below (internal scale > 1, a raw present
+     * mode, no LCD-persistence). At scale 1 it rasterizes the native frame and
+     * reads it back — measured ~2x SLOWER than the multi-threaded CPU
+     * rasterizer on an Adreno 610 (Galaxy Tab A7: render ~8 ms vs ~4 ms, 58 vs
+     * 60 fps) with byte-identical output, the same small-frame readback-overhead
+     * reason mGBA defaults to software. So outside a perfcap capture (which must
+     * keep the GPU path live for its golden-hash parity), fall back to the CPU
+     * rasterizer whenever the supersample path below wouldn't engage — CPU wins
+     * there on every device measured (G4 no-Vulkan, Tab A7 Vulkan @ scale 1). */
+    if (!perfcap) {
+        const int scaleAware = (int)Port_Config_InternalScale();
+        const bool supersample = (scaleAware > 1 && scaleAware <= kMaxInternalScale && !sPersistEnabled &&
+                                  (sPresentMode == PresentMode::NearestRaw || sPresentMode == PresentMode::LinearRaw));
+        if (!supersample) {
+            return false;
+        }
+    }
     /* Prefer the Vulkan/SDL_GPU raster (a real win where present). The GLES
      * compute backend is OPT-IN only: on the archetypal no-Vulkan device
      * (Adreno 405 / Moto G4) it measured ~5x slower than the 3-thread CPU
@@ -1107,11 +1130,6 @@ static bool Port_PPU_TryGpuRaster(void) {
      * frame of latency. Under perfcap we MUST hand back the current frame (the
      * byte-exact golden hash), so use the synchronous merged path there. */
     const int pitch = virtuappu_mode1_frame_pitch();
-    static int perfcap = -1;
-    if (perfcap < 0) {
-        const char* e = getenv("TMC_PERFCAP");
-        perfcap = (e && *e && e[0] != '0') ? 1 : 0;
-    }
     if (useVk) {
         if (perfcap) {
             if (!Port_GpuRaster_RenderReadback(sGpuRaster, &f, virtuappu_frame_buffer, pitch)) {
