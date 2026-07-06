@@ -75,16 +75,22 @@
   is thread-count-invariant, and the parity gate hashes are unchanged at every
   thread count. Desktop is normally VSync-bound so fps is unaffected there; the
   win is the CPU-bound case (weak many-core HW, uncapped fps, heavy geometry).
-  `TMC_RENDER_THREADS=N` still forces a value. Android caps at 4 (the big-cluster
-  size on the common 4+4 layout), measured per-device in-game (forge, CPU raster):
-  Galaxy Tab A7 (4× Cortex-A73 @2.0 + 4× A53) renders 4.50 ms @ 3 threads →
-  **3.13 ms @ 4** (−30%; one thread per fast A73, 5+ spill to the slow A53s and
-  regress); Moto G4 (8× A53, weak big cluster) is a wash (3.89 → 3.94 ms), so 4 is
-  neutral there. Both hold 60 fps (VSync-bound) — the win is render headroom and
-  cooler thermals (blocktime=0 sleeps the pool once the frame is done), not fps.
-  A `render_threads` marker file (a decimal count in the app data dir, same
-  convention as `profile`/`verbose`) overrides the count on Android without a
-  rebuild, for devices off the 4+4 layout.
+  `TMC_RENDER_THREADS=N` still forces a value. On Android the pool now sizes
+  itself to the **detected performance-core count** at runtime — it reads each
+  core's `cpuinfo_max_freq` and counts the cores above the slowest cluster (the
+  big — and, on tri-cluster SoCs, prime+gold — cores), so it fills the fast
+  cluster and never spills scanlines onto the slow in-order LITTLE cores (whose
+  barrier wait is a net regression). This tracks the actual SoC instead of a
+  hardcoded number: a quad-big phone gets 4, a hexa-big 6, a dual-big 2; a
+  uniform SoC falls back to ncores−1. All capped at the 160-scanline knee (12).
+  Measured per-device in-game (forge, CPU raster): Galaxy Tab A7 (4× Cortex-A73
+  @2.0 + 4× A53) detects 4 and renders 4.50 ms @ 3 threads → **3.13 ms @ 4**
+  (−30%; 5+ spill to the A53s and regress); Moto G4 (8× A53) detects 4, a wash
+  (3.89 → 3.94 ms), neutral. Both hold 60 fps (VSync-bound) — the win is render
+  headroom and cooler thermals (blocktime=0 sleeps the pool once the frame is
+  done), not fps. A `render_threads` marker file (a decimal count in the app
+  data dir, same convention as `profile`/`verbose`) overrides the detected count
+  without a rebuild, for devices the heuristic misreads.
 
 ### True widescreen: the view now fits YOUR screen
 
