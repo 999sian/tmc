@@ -33,6 +33,7 @@ extern "C" {
 }
 #include "port_gpu_raster.h"
 #include "port_gpu_raster_gl.h"
+#include "port_gpu_obj_cull.h"
 
 /* ---- synthetic GBA memory for one scene ---- */
 struct Scene {
@@ -843,10 +844,38 @@ int main(int argc, char** argv) {
             Port_GpuRaster_RenderReadbackDeferred(r, &f, gpu.data(), W);
             t_defer += (SDL_GetTicksNS() - a) / 1e6;
         }
-        std::printf("[bench] %dx %dx%d vk: SEPARATE render=%.4f + readback=%.4f = %.4f ms | MERGED=%.4f ms | DEFERRED "
-                    "(CPU-side, no stall)=%.4f ms\n",
-                    iters, W, H, t_render / iters, t_read / iters, (t_render + t_read) / iters, t_merged / iters,
-                    t_defer / iters);
+        /* CPU-side pieces the live game pays every frame (bench builds the
+         * frame once, so isolate them here). */
+        double t_cull = 0, t_prep = 0;
+        static std::vector<uint32_t> cullbuf((size_t)H * PORT_GPU_OBJ_CULL_STRIDE);
+        for (int i = 0; i < iters; ++i) {
+            uint64_t a = SDL_GetTicksNS();
+            Port_GpuObjCull_Build(scene.oam, W, H, cullbuf.data());
+            t_cull += (SDL_GetTicksNS() - a) / 1e6;
+        }
+        for (int i = 0; i < iters; ++i) {
+            PortGpuRasterFrame ff;
+            uint64_t a = SDL_GetTicksNS();
+            build_frame(&scene, W, H, &ff, g_io, g_dispcnt, g_affx, g_affy, g_wsconcat);
+            t_prep += (SDL_GetTicksNS() - a) / 1e6;
+        }
+        /* Bare submit+fence floor: acquire an empty command buffer, submit,
+         * wait. Isolates the driver's per-frame command-submission cost. */
+        double t_bare = 0;
+        for (int i = 0; i < iters; ++i) {
+            uint64_t a = SDL_GetTicksNS();
+            SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(dev);
+            SDL_GPUFence* fn = SDL_SubmitGPUCommandBufferAndAcquireFence(cb);
+            if (fn) {
+                SDL_WaitForGPUFences(dev, true, &fn, 1);
+                SDL_ReleaseGPUFence(dev, fn);
+            }
+            t_bare += (SDL_GetTicksNS() - a) / 1e6;
+        }
+        std::printf("[bench] %dx %dx%d vk: SEPARATE=%.4f MERGED=%.4f DEFERRED(submit)=%.4f | cull=%.4f prep=%.4f "
+                    "bare_submit+fence=%.4f ms\n",
+                    iters, W, H, (t_render + t_read) / iters, t_merged / iters, t_defer / iters, t_cull / iters,
+                    t_prep / iters, t_bare / iters);
         Port_GpuRaster_Destroy(r);
         if (rgl)
             Port_GpuRasterGl_Destroy(rgl);

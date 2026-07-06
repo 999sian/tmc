@@ -41,11 +41,15 @@ struct PortGpuRaster {
     SDL_GPUShader* vert = nullptr;
     SDL_GPUShader* frag = nullptr;
 
-    /* Persistent per-slot storage buffers + upload transfer buffers, grown on
-     * demand to the frame's requirement. */
+    /* Persistent per-slot storage buffers (GPU-side), grown on demand. */
     SDL_GPUBuffer* ssbo[SSBO_SLOT_COUNT] = {};
-    SDL_GPUTransferBuffer* upload[SSBO_SLOT_COUNT] = {};
     Uint32 ssbo_cap[SSBO_SLOT_COUNT] = {};
+
+    /* ONE coalesced upload arena for all SSBOs — mapped once per frame, then
+     * one GPU-timeline copy per slot from a sub-offset. Replaces 8 separate
+     * map/unmap pairs (each a driver sync point ~= the whole raster's cost). */
+    SDL_GPUTransferBuffer* arena = nullptr;
+    Uint32 arena_cap = 0;
 
     SDL_GPUTexture* target = nullptr;
     int target_w = 0;
@@ -154,9 +158,9 @@ extern "C" void Port_GpuRaster_Destroy(PortGpuRaster* r) {
             if (r->ssbo[i]) {
                 SDL_ReleaseGPUBuffer(d, r->ssbo[i]);
             }
-            if (r->upload[i]) {
-                SDL_ReleaseGPUTransferBuffer(d, r->upload[i]);
-            }
+        }
+        if (r->arena) {
+            SDL_ReleaseGPUTransferBuffer(d, r->arena);
         }
         if (r->download) {
             SDL_ReleaseGPUTransferBuffer(d, r->download);
@@ -186,8 +190,7 @@ extern "C" void Port_GpuRaster_Destroy(PortGpuRaster* r) {
     delete r;
 }
 
-/* Ensure slot `i` has a storage buffer + upload transfer buffer of >= `size`
- * bytes. Returns false on allocation failure. */
+/* Ensure slot `i`'s GPU storage buffer holds >= `size` bytes. */
 static bool ensure_ssbo(PortGpuRaster* r, int i, Uint32 size) {
     if (size == 0) {
         size = 4;
@@ -199,21 +202,12 @@ static bool ensure_ssbo(PortGpuRaster* r, int i, Uint32 size) {
         SDL_ReleaseGPUBuffer(r->device, r->ssbo[i]);
         r->ssbo[i] = nullptr;
     }
-    if (r->upload[i]) {
-        SDL_ReleaseGPUTransferBuffer(r->device, r->upload[i]);
-        r->upload[i] = nullptr;
-    }
     SDL_GPUBufferCreateInfo bci;
     SDL_zero(bci);
     bci.usage = SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ;
     bci.size = size;
     r->ssbo[i] = SDL_CreateGPUBuffer(r->device, &bci);
-    SDL_GPUTransferBufferCreateInfo tci;
-    SDL_zero(tci);
-    tci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    tci.size = size;
-    r->upload[i] = SDL_CreateGPUTransferBuffer(r->device, &tci);
-    if (!r->ssbo[i] || !r->upload[i]) {
+    if (!r->ssbo[i]) {
         std::fprintf(stderr, "[gpuraster] ssbo alloc failed (slot %d, %u bytes): %s\n", i, size, SDL_GetError());
         return false;
     }
@@ -221,30 +215,74 @@ static bool ensure_ssbo(PortGpuRaster* r, int i, Uint32 size) {
     return true;
 }
 
-/* Map, copy `src`→`size` into slot `i`'s upload buffer, and record an upload in
- * `cp`. Returns false on map failure. */
-static bool stage_upload(PortGpuRaster* r, SDL_GPUCopyPass* cp, int i, const void* src, Uint32 size) {
-    if (!ensure_ssbo(r, i, size)) {
+static bool ensure_arena(PortGpuRaster* r, Uint32 size) {
+    if (r->arena && r->arena_cap >= size) {
+        return true;
+    }
+    if (r->arena) {
+        SDL_ReleaseGPUTransferBuffer(r->device, r->arena);
+        r->arena = nullptr;
+    }
+    SDL_GPUTransferBufferCreateInfo tci;
+    SDL_zero(tci);
+    tci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    tci.size = size;
+    r->arena = SDL_CreateGPUTransferBuffer(r->device, &tci);
+    if (!r->arena) {
+        std::fprintf(stderr, "[gpuraster] arena alloc failed (%u bytes): %s\n", size, SDL_GetError());
         return false;
     }
-    void* map = SDL_MapGPUTransferBuffer(r->device, r->upload[i], false);
-    if (!map) {
-        std::fprintf(stderr, "[gpuraster] map upload slot %d failed: %s\n", i, SDL_GetError());
-        return false;
-    }
-    std::memcpy(map, src, size);
-    SDL_UnmapGPUTransferBuffer(r->device, r->upload[i]);
+    r->arena_cap = size;
+    return true;
+}
 
-    SDL_GPUTransferBufferLocation loc;
-    SDL_zero(loc);
-    loc.transfer_buffer = r->upload[i];
-    loc.offset = 0;
-    SDL_GPUBufferRegion reg;
-    SDL_zero(reg);
-    reg.buffer = r->ssbo[i];
-    reg.offset = 0;
-    reg.size = size;
-    SDL_UploadToGPUBuffer(cp, &loc, &reg, false);
+/* One pending SSBO upload (slot + source bytes), packed into the arena. */
+struct PendingUpload {
+    int slot;
+    const void* src;
+    Uint32 size;
+    Uint32 off;
+};
+
+/* Upload all pending SSBOs through ONE arena transfer buffer: map once, memcpy
+ * every region, unmap once, then one GPU-timeline copy per slot. Replaces N
+ * separate map/unmap pairs (the raster path's dominant cost). */
+static bool flush_uploads(PortGpuRaster* r, SDL_GPUCopyPass* cp, PendingUpload* up, int n) {
+    Uint32 total = 0;
+    for (int i = 0; i < n; ++i) {
+        Uint32 sz = up[i].size ? up[i].size : 4u;
+        up[i].off = total;
+        total += (sz + 15u) & ~15u; /* 16-byte align each region */
+        if (!ensure_ssbo(r, up[i].slot, up[i].size)) {
+            return false;
+        }
+    }
+    if (!ensure_arena(r, total)) {
+        return false;
+    }
+    uint8_t* base = static_cast<uint8_t*>(SDL_MapGPUTransferBuffer(r->device, r->arena, /*cycle=*/true));
+    if (!base) {
+        std::fprintf(stderr, "[gpuraster] map arena failed: %s\n", SDL_GetError());
+        return false;
+    }
+    for (int i = 0; i < n; ++i) {
+        if (up[i].size) {
+            std::memcpy(base + up[i].off, up[i].src, up[i].size);
+        }
+    }
+    SDL_UnmapGPUTransferBuffer(r->device, r->arena);
+    for (int i = 0; i < n; ++i) {
+        SDL_GPUTransferBufferLocation loc;
+        SDL_zero(loc);
+        loc.transfer_buffer = r->arena;
+        loc.offset = up[i].off;
+        SDL_GPUBufferRegion reg;
+        SDL_zero(reg);
+        reg.buffer = r->ssbo[up[i].slot];
+        reg.offset = 0;
+        reg.size = up[i].size ? up[i].size : 4u;
+        SDL_UploadToGPUBuffer(cp, &loc, &reg, false);
+    }
     return true;
 }
 
@@ -293,29 +331,23 @@ static bool record_frame(PortGpuRaster* r, const PortGpuRasterFrame* f, SDL_GPUC
     r->cull_scratch.assign((size_t)f->frame_height * PORT_GPU_OBJ_CULL_STRIDE, 0);
     Port_GpuObjCull_Build(f->oam, f->frame_width, f->frame_height, r->cull_scratch.data());
 
-    /* Upload the storage buffers (cycle=true so re-uploading while a prior
-     * frame is still in flight rotates internal buffers, no manual sync). */
+    /* Coalesce all SSBO uploads into one arena (one map/unmap), then one copy
+     * per slot — replaces 8 separate map/unmap pairs, the raster's hot cost. */
+    static const uint32_t ws_dummy = 0u;
+    const bool has_ws = (f->ws_shadow && f->ws_shadow_halfwords > 0);
+    PendingUpload up[SSBO_SLOT_COUNT] = {
+        { SSBO_BG_PALETTE, f->bg_palette, 256u * (Uint32)sizeof(uint16_t), 0 },
+        { SSBO_IO_PER_LINE, f->io_per_line, (f->io_uniform ? 1u : (Uint32)f->frame_height) * 0x400u, 0 },
+        { SSBO_VRAM, f->vram, 0x18000u, 0 },
+        { SSBO_OBJ_PALETTE, f->obj_palette, 256u * (Uint32)sizeof(uint16_t), 0 },
+        { SSBO_OAM, f->oam, 512u * (Uint32)sizeof(uint16_t), 0 },
+        { SSBO_AFFINE_REF, r->aff_scratch.data(), (Uint32)(r->aff_scratch.size() * sizeof(int32_t)), 0 },
+        { SSBO_WS_SHADOW, has_ws ? (const void*)f->ws_shadow : (const void*)&ws_dummy,
+          has_ws ? (Uint32)(f->ws_shadow_halfwords * (int)sizeof(uint16_t)) : (Uint32)sizeof(ws_dummy), 0 },
+        { SSBO_OBJ_CULL, r->cull_scratch.data(), (Uint32)(r->cull_scratch.size() * sizeof(uint32_t)), 0 },
+    };
     SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cmd);
-    bool ok = true;
-    ok = ok && stage_upload(r, cp, SSBO_BG_PALETTE, f->bg_palette, 256u * sizeof(uint16_t));
-    ok = ok &&
-         stage_upload(r, cp, SSBO_IO_PER_LINE, f->io_per_line, (f->io_uniform ? 1u : (Uint32)f->frame_height) * 0x400u);
-    ok = ok && stage_upload(r, cp, SSBO_VRAM, f->vram, 0x18000u);
-    ok = ok && stage_upload(r, cp, SSBO_OBJ_PALETTE, f->obj_palette, 256u * sizeof(uint16_t));
-    ok = ok && stage_upload(r, cp, SSBO_OAM, f->oam, 512u * sizeof(uint16_t));
-    ok = ok &&
-         stage_upload(r, cp, SSBO_AFFINE_REF, r->aff_scratch.data(), (Uint32)r->aff_scratch.size() * sizeof(int32_t));
-    {
-        static const uint32_t ws_dummy = 0u;
-        const void* ws_src =
-            (f->ws_shadow && f->ws_shadow_halfwords > 0) ? (const void*)f->ws_shadow : (const void*)&ws_dummy;
-        Uint32 ws_size = (f->ws_shadow && f->ws_shadow_halfwords > 0)
-                             ? (Uint32)f->ws_shadow_halfwords * sizeof(uint16_t)
-                             : (Uint32)sizeof(ws_dummy);
-        ok = ok && stage_upload(r, cp, SSBO_WS_SHADOW, ws_src, ws_size);
-    }
-    ok = ok &&
-         stage_upload(r, cp, SSBO_OBJ_CULL, r->cull_scratch.data(), (Uint32)r->cull_scratch.size() * sizeof(uint32_t));
+    bool ok = flush_uploads(r, cp, up, SSBO_SLOT_COUNT);
     SDL_EndGPUCopyPass(cp);
     if (!ok) {
         return false;
