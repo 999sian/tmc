@@ -56,6 +56,15 @@ uint oam_u16(int idx) {
 }
 int sx16(uint v) { return (v & 0x8000u) != 0u ? int(v) - 0x10000 : int(v); }
 
+/* Supersample state — set by the wrapper's main() from params.misc.z (scale)
+ * and the fragment/invocation coord. At scale 1, gSubX=gSubY=0 so every path
+ * below is bit-exact vs the native render; only the affine samplers consume the
+ * sub-pixel offset (tile/text BGs stay nearest to preserve pixel art). The GLES
+ * compute wrapper never writes these, so it keeps the scale-1 defaults. */
+int gPpuScale = 1;
+int gSubX = 0;
+int gSubY = 0;
+
 vec4 rgb555_to_rgba(uint c) {
     uint r = (c & 0x1Fu) << 3u;
     uint g = ((c >> 5u) & 0x1Fu) << 3u;
@@ -193,11 +202,17 @@ uint bg2_affine_pixel(int x, int line) {
     int map_tiles = map_size / 8;
     int pa = sx16(io_u16(line, 0x20));
     int pc = sx16(io_u16(line, 0x24));
+    int pb = sx16(io_u16(line, 0x22));
+    int pd = sx16(io_u16(line, 0x26));
     int ref_x = aff.data[line * 2 + 0];
     int ref_y = aff.data[line * 2 + 1];
 
-    int src_x = (ref_x + pa * x) >> 8;
-    int src_y = (ref_y + pc * x) >> 8;
+    /* Sub-pixel supersample offset (8.8 fixed), zero at scale 1 -> bit-exact.
+     * pa/pc scale sub-x within the line; pb/pd scale sub-y between lines. */
+    int add_x = (pa * gSubX + pb * gSubY) / gPpuScale;
+    int add_y = (pc * gSubX + pd * gSubY) / gPpuScale;
+    int src_x = (ref_x + pa * x + add_x) >> 8;
+    int src_y = (ref_y + pc * x + add_y) >> 8;
     if (wrap) {
         src_x &= (map_size - 1);
         src_y &= (map_size - 1);
@@ -317,8 +332,11 @@ bool obj_resolve(int x, int line, uint line_dispcnt, out uint out_col, out int o
             int pc = sx16(oam_u16(int(grp) * 16 + 11));
             int pd = sx16(oam_u16(int(grp) * 16 + 15));
             int input_rel_x = eff_sx - half_w;
-            tex_x = ((pa * input_rel_x + pb * input_rel_y) >> 8) + sprite_half_w;
-            tex_y = ((pc * input_rel_x + pd * input_rel_y) >> 8) + sprite_half_h;
+            /* Sub-pixel supersample offset (zero at scale 1 -> bit-exact). */
+            int oadd_x = (pa * gSubX + pb * gSubY) / gPpuScale;
+            int oadd_y = (pc * gSubX + pd * gSubY) / gPpuScale;
+            tex_x = ((pa * input_rel_x + pb * input_rel_y + oadd_x) >> 8) + sprite_half_w;
+            tex_y = ((pc * input_rel_x + pd * input_rel_y + oadd_y) >> 8) + sprite_half_h;
             if (tex_x < 0 || tex_x >= obj_w || tex_y < 0 || tex_y >= obj_h) {
                 continue;
             }

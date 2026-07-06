@@ -45,6 +45,14 @@
   pay off — the same reason mGBA defaults to software); GPU raster is a latent
   win for high internal-scale / widescreen / a future direct-present path.
   Full numbers and citations in `docs/gpu-rasterizer-parity-notes.md`.
+- **GPU supersampling — sharper rotated/scaled scenes at internal-scale.** With
+  GPU raster active and internal render scale > 1, the whole PPU shader now runs
+  at S× native (e.g. 960×640 at 4×) with true sub-pixel affine sampling, so
+  affine backgrounds (rotating rooms, scaled effects) are genuinely finer
+  instead of the old nearest-replicate blocks. Desktop-Vulkan only, off on
+  GLES/low-end (the G4 can't afford the extra pixels — measured ~16% idle);
+  bit-exact at scale 1 (all 76 harness scenes + ROM golden hashes unchanged).
+  Skipped under LCD-persistence/perfcap and xBRZ (which owns its own upscaler).
 
 ### True widescreen: the view now fits YOUR screen
 

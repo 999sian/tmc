@@ -92,6 +92,13 @@ alignas(64) static uint32_t sScaledBufStorage[kMaxScaledPixels];
 static int sScaledBufW = 0;
 static int sScaledBufH = 0;
 static int sScaledBufScale = 0;
+/* GPU supersample present: TryGpuRaster renders the whole scene at Sx into
+ * sScaledBufStorage (sub-pixel affine, unlike BuildScaledFrame's nearest
+ * replicate). Mutually exclusive with the BuildScaledFrame path per frame, so
+ * the buffer is shared. Valid only for the frame TryGpuRaster set it. */
+static bool sSuperValid = false;
+static int sSuperW = 0;
+static int sSuperH = 0;
 static SDL_Window* sWindow = nullptr;
 
 static int Port_PPU_WindowBaseWidth(void) {
@@ -556,6 +563,23 @@ extern "C" void Port_PPU_SetPersistence(bool enabled, float rho) {
     }
 }
 
+/* Colour-correct `count` ABGR8888 pixels in place via the per-channel LUT.
+ * No-op when disabled. Shared by the native post-process and the GPU
+ * supersample buffer (per-pixel LUT commutes with S*S replication, so applying
+ * it to the S*S buffer matches applying it to the native frame then scaling). */
+static void Port_PPU_ColorCorrectBuffer(uint32_t* buf, int count) {
+    if (!sColorCorrectEnabled || !sColorLutReady) {
+        return;
+    }
+    for (int i = 0; i < count; ++i) {
+        uint32_t p = buf[i];
+        uint32_t r = sColorLut[p & 0xFFu];
+        uint32_t g = sColorLut[(p >> 8) & 0xFFu];
+        uint32_t b = sColorLut[(p >> 16) & 0xFFu];
+        buf[i] = (p & 0xFF000000u) | (b << 16) | (g << 8) | r;
+    }
+}
+
 /* Apply colour correction then persistence in place over the first
  * `pixelCount` ABGR8888 pixels of virtuappu_frame_buffer. Called on the main
  * thread after the OpenMP scanline render has joined, so no locking needed. */
@@ -567,15 +591,7 @@ static void Port_PPU_ApplyDisplayPostProcess(int pixelCount) {
         pixelCount = VIRTUAPPU_FRAME_BUFFER_SIZE;
     }
 
-    if (sColorCorrectEnabled && sColorLutReady) {
-        for (int i = 0; i < pixelCount; ++i) {
-            uint32_t p = virtuappu_frame_buffer[i];
-            uint32_t r = sColorLut[p & 0xFFu];
-            uint32_t g = sColorLut[(p >> 8) & 0xFFu];
-            uint32_t b = sColorLut[(p >> 16) & 0xFFu];
-            virtuappu_frame_buffer[i] = (p & 0xFF000000u) | (b << 16) | (g << 8) | r;
-        }
-    }
+    Port_PPU_ColorCorrectBuffer(virtuappu_frame_buffer, pixelCount);
 
     if (sPersistEnabled) {
         const float add = 1.0f - sPersistRho;
@@ -1082,6 +1098,27 @@ static bool Port_PPU_TryGpuRaster(void) {
                 return false;
             }
         }
+        /* GPU supersample present (desktop quality): render the whole scene at
+         * Sx with sub-pixel affine into the shared scaled buffer, colour-correct
+         * it, and flag it for the present path — sharper rotated/scaled (affine)
+         * BGs than BuildScaledFrame's nearest replicate. Gated: no persistence
+         * (native-sized accumulator), no perfcap (needs the native golden hash),
+         * and only the raw present modes (xBRZ owns its own 4x upscaler). */
+        int S = (int)Port_Config_InternalScale();
+        if (S > 1 && S <= kMaxInternalScale && !perfcap && !sPersistEnabled &&
+            (sPresentMode == PresentMode::NearestRaw || sPresentMode == PresentMode::LinearRaw)) {
+            const int sw = f.frame_width * S, sh = f.frame_height * S;
+            if ((size_t)sw * (size_t)sh <= kMaxScaledPixels) {
+                PortGpuRasterFrame sf = f;
+                sf.scale = S;
+                if (Port_GpuRaster_RenderReadback(sGpuRaster, &sf, sScaledBufStorage, sw)) {
+                    Port_PPU_ColorCorrectBuffer(sScaledBufStorage, sw * sh);
+                    sSuperW = sw;
+                    sSuperH = sh;
+                    sSuperValid = true;
+                }
+            }
+        }
     } else { /* useGles */
         if (!Port_GpuRasterGl_RenderReadback(sGlesRaster, &f, virtuappu_frame_buffer, pitch)) {
             return false;
@@ -1098,6 +1135,9 @@ extern "C" void Port_PPU_PresentFrame(void) {
     if (sBackend == RenderBackend::None) {
         return;
     }
+#ifdef TMC_GPU_RENDERER
+    sSuperValid = false; /* set true only if TryGpuRaster renders the Sx buffer this frame */
+#endif
 
     virtuappu_registers.frame_width = Port_PPU_VisibleFrameWidth();
     virtuappu_registers.frame_pitch = MODE1_GBA_WIDTH;
@@ -1304,6 +1344,12 @@ extern "C" void Port_PPU_PresentFrame(void) {
          * buffer to PresentFrame is enough; PresentFrame recreates
          * its source texture when fb_w/fb_h change. Falls back to
          * the native frame at scale==1 (no allocation, fast path). */
+        /* GPU supersampled buffer (sub-pixel affine) takes precedence over the
+         * nearest-replicate scaler when TryGpuRaster produced it this frame. */
+        if (sSuperValid) {
+            Port_GPU_PresentFrame(sScaledBufStorage, sSuperW, sSuperH, sSuperW * (int)sizeof(uint32_t));
+            return;
+        }
         const int gpuScale = (int)Port_Config_InternalScale();
         if (gpuScale > 1) {
             int sw = 0, sh = 0;

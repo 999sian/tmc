@@ -38,6 +38,7 @@ typedef struct PortGpuRasterFrame {
     int mode;               /* GBA BG mode from PPUMemory.mode */
     bool affine;            /* mode == 2 */
     uint16_t frame_dispcnt; /* frame-start DISPCNT (forced blank + backdrop) */
+    int scale;              /* supersample factor S>=1; target is S*W x S*H (S=1 = native, bit-exact) */
 
     const uint8_t* vram;              /* MODE1_VRAM_SIZE bytes */
     const uint16_t* bg_palette;       /* 256 entries */

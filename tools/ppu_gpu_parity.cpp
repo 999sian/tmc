@@ -810,6 +810,41 @@ int main(int argc, char** argv) {
     static Scene scene;
     std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H), gles((size_t)W * H);
 
+    /* PPU_SSDUMP=<scale>: render the rotated-affine scene at 1x and Sx via the
+     * GPU supersampler, dump raw RGBA (W H then pixels) to /tmp for a visual
+     * before/after. Proves sub-pixel affine BG quality vs nearest-replicate. */
+    if (const char* sd = getenv("PPU_SSDUMP")) {
+        int S = atoi(sd);
+        if (S < 2)
+            S = 4;
+        scene_affine_rotated(&scene);
+        auto dump = [&](int scale, const char* path) {
+            PortGpuRasterFrame f;
+            build_frame(&scene, W, H, &f, g_io, g_dispcnt, g_affx, g_affy, g_wsconcat);
+            f.scale = scale;
+            std::vector<uint32_t> buf((size_t)W * scale * H * scale);
+            if (!Port_GpuRaster_RenderReadback(r, &f, buf.data(), W * scale)) {
+                std::fprintf(stderr, "  SSDUMP scale %d failed\n", scale);
+                return;
+            }
+            FILE* fp = fopen(path, "wb");
+            int dw = W * scale, dh = H * scale;
+            fwrite(&dw, sizeof(int), 1, fp);
+            fwrite(&dh, sizeof(int), 1, fp);
+            fwrite(buf.data(), sizeof(uint32_t), buf.size(), fp);
+            fclose(fp);
+            std::printf("  dumped %dx%d -> %s\n", dw, dh, path);
+        };
+        dump(1, "/tmp/ss_native.raw");
+        dump(S, "/tmp/ss_super.raw");
+        Port_GpuRaster_Destroy(r);
+        if (rgl)
+            Port_GpuRasterGl_Destroy(rgl);
+        SDL_DestroyGPUDevice(dev);
+        SDL_Quit();
+        return 0;
+    }
+
     /* PPU_BENCH=<iters>: micro-benchmark the Vulkan raster phases (render =
      * upload+dispatch+fence, readback = 2nd submit+fence+map+copy) on a busy
      * scene, to isolate where time goes before optimizing. */
