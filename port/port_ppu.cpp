@@ -697,14 +697,21 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         } else if (getenv("OMP_NUM_THREADS") == nullptr) {
             n = omp_get_num_procs() - 1;
 #ifdef __ANDROID__
-            /* On 8-core mobile SoCs (big.LITTLE), spawning 6 or 7 threads forces
-             * heavy scanline rendering onto the slow LITTLE cores. The OpenMP barrier
-             * then waits for them, effectively slowing the entire render pipeline
-             * down to the speed of the slowest core, while maxing out thermals.
-             * Cap to 3 threads on Android to stay within the big cluster (leaves 1
-             * big core for the main thread/audio). */
-            if (n > 3)
-                n = 3;
+            /* On 8-core mobile SoCs (4 big + 4 LITTLE) the render pool should
+             * fill the BIG cluster and stop: spilling scanline work onto the slow
+             * LITTLE cores makes the OpenMP barrier wait on them, and near-full
+             * subscription starves main/audio. Cap at 4 = the big-cluster size on
+             * the common layout. Measured in-game (forge, CPU raster):
+             *   Galaxy Tab A7 (4x A73 @2.0 + 4x A53): 3t=4.50 ms, 4t=3.13 ms
+             *     (-30%), 5t=4.18, 6t=4.14, 8t=4.71 -> 4 is the clear optimum
+             *     (one thread per fast A73; 5+ spill to A53 and regress).
+             *   Moto G4 (8x A53, weak big cluster): 3t=3.89 ms, 4t=3.94 ms (a
+             *     wash) -> 4 is neutral there, not a regression.
+             * Both hold 60 fps (VSync-bound); the win is render headroom + cooler
+             * thermals (blocktime=0 means the pool sleeps once the frame is done).
+             * render_threads marker / TMC_RENDER_THREADS overrides for outliers. */
+            if (n > 4)
+                n = 4;
 #else
             if (n > 12)
                 n = 12;
