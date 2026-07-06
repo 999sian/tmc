@@ -825,6 +825,13 @@ int main(int argc, char** argv) {
             Port_GpuRaster_Render(r, &f);
             Port_GpuRaster_Readback(r, gpu.data(), W, H, W);
         }
+        /* CPU rasterizer cost for the same scene — the bar GPU must beat. */
+        double t_cpu = 0;
+        for (int i = 0; i < iters; ++i) {
+            uint64_t a = SDL_GetTicksNS();
+            render_cpu(&scene, cpu.data(), W, H);
+            t_cpu += (SDL_GetTicksNS() - a) / 1e6;
+        }
         double t_render = 0, t_read = 0, t_merged = 0;
         for (int i = 0; i < iters; ++i) {
             uint64_t a = SDL_GetTicksNS();
@@ -872,10 +879,10 @@ int main(int argc, char** argv) {
             }
             t_bare += (SDL_GetTicksNS() - a) / 1e6;
         }
-        std::printf("[bench] %dx %dx%d vk: SEPARATE=%.4f MERGED=%.4f DEFERRED(submit)=%.4f | cull=%.4f prep=%.4f "
-                    "bare_submit+fence=%.4f ms\n",
-                    iters, W, H, (t_render + t_read) / iters, t_merged / iters, t_defer / iters, t_cull / iters,
-                    t_prep / iters, t_bare / iters);
+        std::printf("[bench] %dx %dx%d: CPU=%.4f | vk DEFERRED(submit)=%.4f MERGED=%.4f | "
+                    "bare_submit=%.4f cull=%.4f prep=%.4f ms\n",
+                    iters, W, H, t_cpu / iters, t_defer / iters, t_merged / iters, t_bare / iters, t_cull / iters,
+                    t_prep / iters);
         Port_GpuRaster_Destroy(r);
         if (rgl)
             Port_GpuRasterGl_Destroy(rgl);
