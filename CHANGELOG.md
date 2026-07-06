@@ -53,6 +53,25 @@
   GLES/low-end (the G4 can't afford the extra pixels — measured ~16% idle);
   bit-exact at scale 1 (all 76 harness scenes + ROM golden hashes unchanged).
   Skipped under LCD-persistence/perfcap and xBRZ (which owns its own upscaler).
+- **CPU rasterizer scales across more cores.** The software-PPU scanline pool
+  was hard-capped at 6 threads — a stale 8-core-era value. On many-core hosts
+  a heavy widescreen (384px) frame scales ~2× further (measured on a 22-core
+  Ultra 7 155H, `ppu_bench`: 0.33 ms at 6 threads → 0.17 ms at 12), so the cap
+  now scales with cores up to the workload's knee (12; the fixed 160-scanline
+  work stops dividing usefully past ~16, and near-full subscription regresses
+  it). Timing-only and bit-exact: `schedule(static)` over independent scanlines
+  is thread-count-invariant, and the parity gate hashes are unchanged at every
+  thread count. Desktop is normally VSync-bound so fps is unaffected there; the
+  win is the CPU-bound case (weak many-core HW, uncapped fps, heavy geometry).
+  `TMC_RENDER_THREADS=N` still forces a value. Android stays at 3: measured
+  on-device (Moto G4 / Snapdragon 617, 4 big A53 + 4 LITTLE) more threads DO
+  render ~14% faster in isolation but the phone is already VSync-locked at 60
+  fps in the heaviest scene (forge item-get, 4 BG + OBJ + textbox: render 3.9 ms
+  of a 16.7 ms frame), total CPU stays flat (185%→191%, workers sleep between
+  frames), so extra threads buy no visible fps and only tie up the slow LITTLE
+  cluster. A new `render_threads` marker file (a decimal count in the app data
+  dir, same convention as `profile`/`verbose`) forces the count on Android for
+  per-device tuning without a rebuild.
 
 ### True widescreen: the view now fits YOUR screen
 

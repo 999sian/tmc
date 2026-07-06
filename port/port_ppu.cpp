@@ -628,14 +628,23 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     Port_PPU_LoadConfig();
 
     /* Cap the OpenMP scanline-render pool. virtuappu_mode1_render_frame
-     * parallelizes 160 scanlines with a spin-wait barrier; using ALL physical
-     * cores oversubscribes against the main + audio threads and the barrier
-     * thrashes — measured on an 8-core (no HT): 8 threads = 5.0 ms/frame vs
-     * 6 threads = 0.28 ms (a ~16x cliff at full subscription). Reserve a core
-     * (ncores-1) and cap at 6 (the 160-line workload sees no gain past that).
+     * parallelizes 160 scanlines with a barrier; using ALL physical cores
+     * oversubscribes against the main + audio threads and the barrier thrashes.
+     * Reserve a core (ncores-1) and cap at the workload's scaling knee. The
+     * parallelism dimension is a FIXED 160 scanlines, so the knee is set by
+     * lines-per-thread, not core count. Measured on a 22-core Ultra 7 155H
+     * (ppu_bench): a heavy widescreen (384px) frame scales 0.85 ms (1t) ->
+     * 0.33 ms (6t) -> 0.23 ms (8t) -> 0.17 ms (12t) -> 0.16 ms (16t) — the
+     * per-thread marginal gain collapses from 51 us/thread (6->8) to 3 us/thread
+     * (12->16), so 12 captures ~all of the win. Past ~16 it REGRESSES (per-thread
+     * work < 10 lines; fork/join + near-full subscription dominate). Was
+     * hard-capped at 6 (a stale 8-core-era value that left heavy scenes ~2x
+     * slower than they scale to on many-core hosts). Desktop is normally
+     * VSync-bound (render ~0.4 ms of a 16.7 ms frame), so this only matters for
+     * the CPU-bound case: weak many-core HW, uncapped fps, or heavy geometry.
      * The render pragma has no num_threads clause, so this nthreads default
-     * governs it. TMC_RENDER_THREADS forces a value; an explicit
-     * OMP_NUM_THREADS is left untouched (power-user override). */
+     * governs it. TMC_RENDER_THREADS forces a value; an explicit OMP_NUM_THREADS
+     * is left untouched (power-user override). */
 #ifdef _OPENMP
     {
         /* Make the scanline workers SLEEP between frames instead of
@@ -666,6 +675,23 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
     {
         int n = -1;
         const char* force = getenv("TMC_RENDER_THREADS");
+        char marker_buf[16];
+        if (!force || !*force) {
+            /* Android has no shell env; a 'render_threads' marker file in the
+             * app data dir (CWD) holding a decimal count forces the value, same
+             * convention as the 'profile'/'verbose' markers. Lets thread count
+             * be A/B-tuned in-game on a device:
+             *   adb shell "echo 4 > .../files/render_threads"  (rm to restore) */
+            FILE* mf = std::fopen("render_threads", "rb");
+            if (mf) {
+                size_t got = std::fread(marker_buf, 1, sizeof(marker_buf) - 1, mf);
+                marker_buf[got] = '\0';
+                std::fclose(mf);
+                if (got > 0 && (marker_buf[0] >= '0' && marker_buf[0] <= '9')) {
+                    force = marker_buf;
+                }
+            }
+        }
         if (force && *force) {
             n = atoi(force);
         } else if (getenv("OMP_NUM_THREADS") == nullptr) {
@@ -680,8 +706,8 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
             if (n > 3)
                 n = 3;
 #else
-            if (n > 6)
-                n = 6;
+            if (n > 12)
+                n = 12;
 #endif
         }
         if (n >= 1) {
