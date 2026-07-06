@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Audio: crackle/lag on weak Android devices (Moto G4-class)
+
+- **Fixed audio underruns on low-end Android.** On a Moto G4 (Cortex-A53) the
+  music/SFX crackled and lagged under load. Profiled on-device: the agbplay/MP2K
+  synth needs **~15-17 ms of CPU to render a 20 ms audio buffer** on the A53
+  (~75-85% of realtime) once several PCM channels are live, so any scheduler
+  jitter overran the buffer. It is **not** GPU-offloadable (audio is a tiny
+  serial low-latency stream; a GPU round-trip adds more latency than it saves),
+  not a render-thread-count problem (1-4 threads all underran), and not fixable
+  by priority alone (Android denies SCHED_FIFO to unprivileged apps — the audio
+  thread stays SCHED_OTHER, verified on-device).
+- **Two targeted, hardware-scaled mitigations** (desktop and strong devices are
+  unaffected): (1) the enhanced resampler drops from SINC to **LINEAR on Android**
+  — a fraction of the MAC cost, still interpolated (no raw aliasing), imperceptible
+  on a phone speaker; desktop keeps SINC. (2) The audio buffer **scales to the
+  CPU**: a weak cluster (max clock < 1.8 GHz, the low-clocked in-order A53 class)
+  gets a larger, jitter-tolerant buffer; faster SoCs (e.g. Galaxy Tab A7's 2.0 GHz
+  A73s) keep the low-latency default. Together these cut G4 underruns from ~8-35/s
+  to ~0-6/s. `TMC_AUDIO_FRAMES` / an `audio_frames` marker still override the buffer.
+- GBA-accurate mode is unchanged (NEAREST resampling, hardware-exact) on all platforms.
+
 ### GPU rasterizer: the whole PPU now renders on the GPU (CPU is the fallback)
 
 - **The GBA picture processor is reimplemented as a GPU fragment shader.**
