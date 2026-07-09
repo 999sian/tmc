@@ -3839,17 +3839,17 @@ void sub_0807BBE4(void) {
         tileIndex = *bottomMap;
         bottomMap++;
         if (tileIndex < 0x4000) {
-            *bottomCollision = gMapTileTypeToCollisionData[bottomTiles[tileIndex]];
+            *bottomCollision = (tileIndex < 2048) ? gMapTileTypeToCollisionData[bottomTiles[tileIndex]] : 0;
         } else {
-            *bottomCollision = gMapSpecialTileToCollisionData[tileIndex - 0x4000];
+            *bottomCollision = (tileIndex - 0x4000 < 151) ? gMapSpecialTileToCollisionData[tileIndex - 0x4000] : 0;
         }
         bottomCollision++;
         tileIndex = (u32)*topMap;
         topMap++;
         if (tileIndex < 0x4000) {
-            *topCollision = gMapTileTypeToCollisionData[topTiles[tileIndex]];
+            *topCollision = (tileIndex < 2048) ? gMapTileTypeToCollisionData[topTiles[tileIndex]] : 0;
         } else {
-            *topCollision = gMapSpecialTileToCollisionData[tileIndex - 0x4000];
+            *topCollision = (tileIndex - 0x4000 < 151) ? gMapSpecialTileToCollisionData[tileIndex - 0x4000] : 0;
         }
         topCollision++;
     }
