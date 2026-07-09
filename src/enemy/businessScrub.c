@@ -21,6 +21,8 @@
 #ifdef PC_PORT
 #include "rando/rando_keymap.h"
 extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+extern bool Rando_IsActive(void);
+extern bool Rando_IsCollectedByKey(u32 location_key);
 #endif
 struct SalesOffering {
     u8 field_0x0;
@@ -36,7 +38,7 @@ struct SalesOffering {
 typedef struct {
     /*0x00*/ Entity base;
 #ifdef PC_PORT
-    u8 unused1[12 + 4];  /* #98/#99 pattern: +4 for Enemy::child PC growth */
+    u8 unused1[12 + 4]; /* #98/#99 pattern: +4 for Enemy::child PC growth */
 #else
     /*0x68*/ u8 unused1[12];
 #endif
@@ -558,6 +560,16 @@ bool32 sub_0802915C(BusinessScrubEntity* this) {
 
     switch (offer->offeredItem) {
         case ITEM_GRIP_RING:
+#ifdef PC_PORT
+            if (Rando_IsActive()) {
+                /* audit C6: offer until THIS scrub location is collected, not
+                 * until the vanilla grip ring is owned — its shuffled reward
+                 * may not be the grip ring, which would re-sell forever. */
+                if (!Rando_IsCollectedByKey(BusinessScrub_RandoKey(offer)))
+                    return TRUE;
+                break;
+            }
+#endif
             if (GetInventoryValue(ITEM_GRIP_RING) == 0)
                 return TRUE;
             break;
@@ -582,7 +594,15 @@ bool32 sub_08029198(const struct SalesOffering* offer) {
                 tmp = CheckGlobalFlag(AKINDO_BOTTLE_SELL);
                 break;
             case ITEM_BOW:
+                tmp = GetInventoryValue(offer->offeredItem);
+                break;
             case ITEM_GRIP_RING:
+#ifdef PC_PORT
+                if (Rando_IsActive()) {
+                    tmp = Rando_IsCollectedByKey(BusinessScrub_RandoKey(offer)) ? 1 : 0;
+                    break;
+                }
+#endif
                 tmp = GetInventoryValue(offer->offeredItem);
                 break;
             default:

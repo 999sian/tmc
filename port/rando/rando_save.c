@@ -35,8 +35,14 @@ extern int fileno(FILE*);
  * v4: per-location reward subtypes (shell counts, kinstone piece ids, dungeon
  * item ids) so same-item placements restore exactly across reloads.
  * v5: shuffle_entrances flag (decoupled from shuffle_kinstones) + tricks
- * bitmask (glitch-logic tier) so a seed's logic tier restores exactly. */
-#define RANDO_SIDECAR_VERSION 6u
+ * bitmask (glitch-logic tier) so a seed's logic tier restores exactly.
+ * v6: obscure/homewarp/start_sword/early_crests/instant_text/tunic/heart +
+ * shuffle_dungeon_items (in the former reserved3 byte).
+ * v7: per-slot location-collected bitset appended AFTER the slots array (a
+ * RandoSidecarFile appendix, NOT a slot field), so the slot layout is
+ * byte-identical to v6 and older files migrate with the collected set
+ * zeroed (dojos/scrubs re-derive from empty, harmless). */
+#define RANDO_SIDECAR_VERSION 7u
 #define RANDO_SIDECAR_MAX_OVERRIDES 64
 #define RANDO_SIDECAR_MAX_ENTRANCES 16
 #define RANDO_SIDECAR_MUSIC_AREAS 256
@@ -87,6 +93,10 @@ typedef struct RandoSidecarSlot {
 
 typedef struct RandoSidecarFile {
     RandoSidecarSlot slots[RANDO_SIDECAR_SLOTS];
+    /* v7 appendix: per-slot location-collected bitset. Kept OUT of
+     * RandoSidecarSlot so the slot layout stays byte-identical to v6 and the
+     * per-slot read size is unchanged; read only when version >= 7. */
+    uint8_t collected[RANDO_SIDECAR_SLOTS][RANDO_COLLECTED_BYTES];
 } RandoSidecarFile;
 
 static RandoSidecarFile sSidecar;
@@ -136,6 +146,15 @@ static bool LoadAll(void) {
             if (fread(&sSidecar.slots[i], slot_size, 1, f) != 1) {
                 ok = false;
                 break;
+            }
+        }
+        /* v7 appendix: per-slot collected bitset, right after the slots. A
+         * v6 file ends here (guard skips the read, collected stays zeroed).
+         * A truncated v7 appendix is non-fatal: keep the valid slots and
+         * re-derive collected from empty. */
+        if (ok && version >= 7) {
+            if (fread(sSidecar.collected, sizeof(sSidecar.collected), 1, f) != 1) {
+                memset(sSidecar.collected, 0, sizeof(sSidecar.collected));
             }
         }
     }
@@ -320,6 +339,10 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
         rec->music[a] = (int16_t)Rando_Music_GetAssignment(a);
     }
 
+    /* Capture the live collected set for this slot (v7 appendix). LoadAll
+     * above preserved the other slots' sets; this overwrites only ours. */
+    Rando_GetCollectedSet(sSidecar.collected[slot], RANDO_COLLECTED_BYTES);
+
     if (!SaveAll())
         return false;
     fprintf(stderr, "[RANDO] saved sidecar slot %d (%u locations)\n", slot, rec->count);
@@ -364,6 +387,10 @@ bool Port_RandoSave_LoadSlot(int slot) {
 
     if (!Rando_ActivateTable(rec->seed, settings, rec->table, rec->subtype_table, rec->count))
         return false;
+
+    /* Restore the collected set (Rando_ActivateTable cleared it). v6-and-older
+     * loads leave it zeroed, so dojos/scrubs re-derive from empty. */
+    Rando_SetCollectedSet(sSidecar.collected[slot], RANDO_COLLECTED_BYTES);
 
     /* Restore entrance and music assignments */
     Rando_Entrance_ClearAssignments();

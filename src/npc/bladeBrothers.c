@@ -21,6 +21,8 @@
 #ifdef PC_PORT
 #include "rando/rando_keymap.h"
 extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+extern bool Rando_IsActive(void);
+extern bool Rando_IsCollectedByKey(u32 location_key);
 #endif
 typedef struct {
     /*0x00*/ Entity base;
@@ -145,6 +147,14 @@ const u16 gUnk_08111664[] = {
     TEXT_INDEX(TEXT_BLADE_MASTERS, 0x34), TEXT_INDEX(TEXT_BLADE_MASTERS, 0x3d), TEXT_INDEX(TEXT_BLADE_MASTERS, 0x46),
     TEXT_INDEX(TEXT_BLADE_MASTERS, 0x50), TEXT_INDEX(TEXT_BLADE_MASTERS, 0x5a),
 };
+#ifdef PC_PORT
+/* audit C6: in rando a dojo grants a SHUFFLED item, so "owns skill X" no
+ * longer means "completed this dojo". Ask the rando collected-set whether
+ * the dojo lesson at this timer was taken instead. */
+static bool BladeBrothers_DojoCollected(u8 timer) {
+    return Rando_IsCollectedByKey(Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_DOJO, timer, 0, 0));
+}
+#endif
 
 const u16 gUnk_0811167A[] = {
     TEXT_INDEX(TEXT_BLADE_MASTERS, 0x02), TEXT_INDEX(TEXT_BLADE_MASTERS, 0x0a), TEXT_INDEX(TEXT_BLADE_MASTERS, 0x12),
@@ -379,6 +389,19 @@ static void sub_08068BEC(Entity* this, u32 unused) {
 void sub_08068C28(Entity* this) {
     this->timer = gUnk_08111623[this->type];
     if (this->type == 1) {
+#ifdef PC_PORT
+        if (Rando_IsActive()) {
+            /* Town-dojo tier = count of chain lessons already collected
+             * (prefix 0..3), not vanilla skill ownership (audit C6): an
+             * out-of-order vanilla skill pickup must not skip a tier, and a
+             * shuffled non-skill reward must still advance it. */
+            u8 n = 0;
+            while (n < 3 && BladeBrothers_DojoCollected(n))
+                ++n;
+            this->timer = n;
+            return;
+        }
+#endif
         if (GetInventoryValue(ITEM_SKILL_SPIN_ATTACK)) {
             if (!GetInventoryValue(ITEM_SKILL_ROCK_BREAKER)) {
                 this->timer = 1;
@@ -417,6 +440,22 @@ void sub_08068CA0(Entity* this, ScriptExecutionContext* context) {
     u8 bVar1;
     u32 uVar2;
 
+#ifdef PC_PORT
+    if (Rando_IsActive()) {
+        /* "Dojo exhausted?" keyed on collected lessons, not vanilla skills
+         * (audit C6): a dojo whose shuffled reward is not its vanilla skill
+         * would otherwise re-offer (and re-grant) forever. */
+        if (this->type == 1) {
+            context->condition = (BladeBrothers_DojoCollected(0) && BladeBrothers_DojoCollected(1) &&
+                                  BladeBrothers_DojoCollected(2) && BladeBrothers_DojoCollected(3))
+                                     ? 1
+                                     : 0;
+        } else {
+            context->condition = BladeBrothers_DojoCollected(this->timer) ? 1 : 0;
+        }
+        return;
+    }
+#endif
     bVar1 = this->type;
     if (bVar1 == 1) {
         context->condition = bVar1;
