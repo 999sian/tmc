@@ -93,10 +93,6 @@ void Port_RandoFileMenu_RandomizeSeed(void) {
     Port_RandoFileMenu_SetSeed(buf);
 }
 
-bool Port_RandoFileMenu_IsSeedChar(char c) {
-    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-}
-
 void Port_RandoFileMenu_SeedEdited(void) {
     sMenu.seed_text[RANDO_FILE_MENU_SEED_MAX] = '\0';
     sMenu.seed_len = SDL_strlen(sMenu.seed_text);
