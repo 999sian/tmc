@@ -1240,8 +1240,7 @@ void ScriptCommand_EnablePlayerControl(Entity* entity, ScriptExecutionContext* c
     gPlayerState.controlMode = CONTROL_1;
 #ifdef PC_PORT
     if (getenv("TMC_TRACE_INTRO"))
-        fprintf(stderr, "[introtrace] EnablePlayerControl (entity k=%d id=%d) ctrl->1\n",
-                entity->kind, entity->id);
+        fprintf(stderr, "[introtrace] EnablePlayerControl (entity k=%d id=%d) ctrl->1\n", entity->kind, entity->id);
 #endif
 }
 
@@ -1249,8 +1248,7 @@ void ScriptCommand_DisablePlayerControl(Entity* entity, ScriptExecutionContext* 
     gPlayerState.controlMode = CONTROL_DISABLED;
 #ifdef PC_PORT
     if (getenv("TMC_TRACE_INTRO"))
-        fprintf(stderr, "[introtrace] DisablePlayerControl (entity k=%d id=%d) ctrl->0\n",
-                entity->kind, entity->id);
+        fprintf(stderr, "[introtrace] DisablePlayerControl (entity k=%d id=%d) ctrl->0\n", entity->kind, entity->id);
 #endif
 }
 
@@ -1723,8 +1721,8 @@ static uint32_t ScriptCommand_RandoKeyForItem(const Entity* entity, u8 item) {
                                                       0);
                     }
                     if (item == ITEM_REMOTE_BOMBS) {
-                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
-                                                      RANDO_SPECIAL_KEY_BOMB_MINISH_REMOTES, 0, 0);
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BOMB_MINISH_REMOTES,
+                                                      0, 0);
                     }
                     break;
                 case SYRUP:
@@ -1743,8 +1741,8 @@ static uint32_t ScriptCommand_RandoKeyForItem(const Entity* entity, u8 item) {
                                                       0);
                     }
                     if (item == ITEM_LIGHT_ARROW) {
-                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
-                                                      RANDO_SPECIAL_KEY_GREGAL_LIGHT_ARROW, 0, 0);
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_GREGAL_LIGHT_ARROW,
+                                                      0, 0);
                     }
                     break;
                 case TOWN_MINISH:
@@ -1772,14 +1770,14 @@ static uint32_t ScriptCommand_RandoKeyForItem(const Entity* entity, u8 item) {
             if (entity->id == GREAT_FAIRY) {
                 switch (item) {
                     case ITEM_WALLET:
-                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
-                                                      RANDO_SPECIAL_KEY_MINISH_GREAT_FAIRY, 0, 0);
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_MINISH_GREAT_FAIRY,
+                                                      0, 0);
                     case ITEM_BOMBBAG:
-                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
-                                                      RANDO_SPECIAL_KEY_CRENEL_GREAT_FAIRY, 0, 0);
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CRENEL_GREAT_FAIRY,
+                                                      0, 0);
                     case ITEM_LARGE_QUIVER:
-                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL,
-                                                      RANDO_SPECIAL_KEY_VALLEY_GREAT_FAIRY, 0, 0);
+                        return Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_VALLEY_GREAT_FAIRY,
+                                                      0, 0);
                 }
             }
             break;
@@ -1805,8 +1803,10 @@ static inline void ScriptCommand_RandoOverrideItem(const Entity* entity, u8* ite
 #endif
 #ifdef PC_PORT
 static uint32_t ScriptCommand_RandoKeyForKinstone(const Entity* entity, u8 subtype) {
-    if (entity == NULL) return UINT32_MAX;
-    if (entity->kind != NPC) return UINT32_MAX;
+    if (entity == NULL)
+        return UINT32_MAX;
+    if (entity->kind != NPC)
+        return UINT32_MAX;
     switch (entity->id) {
         case KING_GUSTAF:
             if (subtype == 0x6D) {
@@ -1822,7 +1822,6 @@ static uint32_t ScriptCommand_RandoKeyForKinstone(const Entity* entity, u8 subty
     return UINT32_MAX;
 }
 #endif
-
 
 void ScriptCommand_GivePlayerItem(Entity* entity, ScriptExecutionContext* context) {
     u8 item = context->scriptInstructionPointer[1];
@@ -2161,13 +2160,25 @@ void WaitForCameraTouchRoomBorder(Entity* entity, ScriptExecutionContext* contex
     s32 bottom;
 
     if (gRoomControls.camera_target != NULL) {
+#if MODE1_GBA_WIDTH > 240
+        /* This command busy-waits for scroll_x EQUALITY with the camera's
+         * rest position. The follow camera (Scroll1) centers in the live
+         * view width, so recomputing `left` with the GBA 240-px constants
+         * here never matches in wide view — the intro festival pan and the
+         * Zelda/Business-Scrub talk froze forever on this wait. Use THE
+         * shared rest formula (port_widescreen.h). */
+        extern int Port_Widescreen_CameraRestX(int target_x);
+        left = Port_Widescreen_CameraRestX(gRoomControls.camera_target->x.HALF.HI);
+#else
         left = gRoomControls.camera_target->x.HALF.HI - DISPLAY_WIDTH / 2;
-        bottom = gRoomControls.camera_target->y.HALF.HI - DISPLAY_HEIGHT / 2;
 
         if (left < gRoomControls.origin_x)
             left = gRoomControls.origin_x;
         if (left > gRoomControls.origin_x + gRoomControls.width - DISPLAY_WIDTH)
             left = gRoomControls.origin_x + gRoomControls.width - DISPLAY_WIDTH;
+#endif
+        bottom = gRoomControls.camera_target->y.HALF.HI - DISPLAY_HEIGHT / 2;
+
         if (bottom < gRoomControls.origin_y)
             bottom = gRoomControls.origin_y;
         if (bottom > gRoomControls.origin_y + gRoomControls.height - DISPLAY_HEIGHT)

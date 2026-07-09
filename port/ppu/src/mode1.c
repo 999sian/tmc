@@ -490,100 +490,98 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
     uint32_t bg_row_base = 0u;
     size_t bg_pal_bank = 0u;
 
-    for (x = 0; x < render_max_x; ++x) {
-        int sample_x = x;
-        if (ws_msg_line && x >= ws_msg_x0 + ws_msg_shift && x < ws_msg_x1 + ws_msg_shift) {
-            /* Inside the shifted box: sample the box's native columns. */
-            sample_x = x - ws_msg_shift;
-        } else if (ws_msg_line && x >= ws_msg_x0 && x < ws_msg_x1) {
-            /* The box's native columns are suppressed (moved right). */
-            continue;
-        } else if (ws_hud_right_anchor && !ws_msg_line) {
-            /* Anchor is suspended on box lines: a top-anchored box overlaps
-             * the rupee rows, and remapping cols 176..239 there would draw a
-             * second copy of the box fragment at the far right. */
-            if (x >= ws_hud_right_dst_x) {
-                sample_x = x - (frame_width - MODE1_GBA_BG_CLIP_X);
-            } else if (x >= MODE1_WS_HUD_RIGHT_NATIVE_X) {
+    /* The per-pixel body is identical for the fast (native / no-remap) and the
+     * widescreen-remap paths; keep it in one macro so the two loops can never
+     * drift. `_sx` is the tilemap SAMPLE column; the loop var `x` is always the
+     * destination column (and drives the x>=240 shadow/sentinel guards). */
+#define MODE1_BG_PIXEL(_sx)                                                                                            \
+    do {                                                                                                               \
+        int eff_x = (mosaic_h == 1) ? (_sx) : ((_sx) / mosaic_h) * mosaic_h;                                           \
+        int src_x = (eff_x + scroll_x) & (map_width_tiles * 8 - 1);                                                    \
+        int tile_col = src_x / 8;                                                                                      \
+        int pixel_x = src_x % 8;                                                                                       \
+        int cache_use_shadow = (ws_shadow_active && x >= MODE1_GBA_BG_CLIP_X) ? 1 : 0;                                 \
+        int cache_key = (tile_col << 1) | cache_use_shadow;                                                            \
+        if (cache_key != bg_cache_key) {                                                                               \
+            bg_cache_key = cache_key;                                                                                  \
+            if (cache_use_shadow) {                                                                                    \
+                int shadow_idx = (tile_col - ws_shadow_base + 32) % 32;                                                \
+                bg_tile_entry.raw = (shadow_idx < MODE1_WS_SHADOW_COLS)                                                \
+                                        ? ws_shadow[(size_t)local_row * MODE1_WS_SHADOW_COLS + shadow_idx]             \
+                                        : (uint16_t)0u;                                                                \
+            } else {                                                                                                   \
+                int screen_block_x = tile_col / 32;                                                                    \
+                int screen_block_index = screen_block_x + screen_block_y * blocks_per_row;                             \
+                int local_col = tile_col % 32;                                                                         \
+                uint32_t map_addr =                                                                                    \
+                    screen_base + (uint32_t)screen_block_index * 0x800u + (uint32_t)(local_row * 32 + local_col) * 2u; \
+                bg_tile_entry.raw =                                                                                    \
+                    (uint16_t)mode1_memory.vram[map_addr] | ((uint16_t)mode1_memory.vram[map_addr + 1u] << 8u);        \
+            }                                                                                                          \
+            bg_hflip = mode1_tile_hflip(bg_tile_entry);                                                                \
+            bg_tpy = mode1_tile_vflip(bg_tile_entry) ? (7 - pixel_y) : pixel_y;                                        \
+            if (bpp8) {                                                                                                \
+                bg_row_base = char_base + (uint32_t)mode1_tile_index(bg_tile_entry) * 64u + (uint32_t)bg_tpy * 8u;     \
+            } else {                                                                                                   \
+                bg_row_base = char_base + (uint32_t)mode1_tile_index(bg_tile_entry) * 32u + (uint32_t)bg_tpy * 4u;     \
+            }                                                                                                          \
+            bg_pal_bank = (size_t)mode1_tile_palette(bg_tile_entry) * 16u;                                             \
+        }                                                                                                              \
+        int tile_pixel_x = bg_hflip ? (7 - pixel_x) : pixel_x;                                                         \
+        uint8_t color_index;                                                                                           \
+        if (bpp8) {                                                                                                    \
+            uint32_t addr = bg_row_base + (uint32_t)tile_pixel_x;                                                      \
+            color_index = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;                                     \
+        } else {                                                                                                       \
+            uint32_t addr = bg_row_base + (uint32_t)(tile_pixel_x / 2);                                                \
+            uint8_t packed = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;                                  \
+            color_index = (tile_pixel_x & 1) ? (packed >> 4u) : (packed & 0x0Fu);                                      \
+        }                                                                                                              \
+        if (color_index != 0u) {                                                                                       \
+            size_t pal_idx = bpp8 ? (size_t)color_index : (bg_pal_bank + color_index);                                 \
+            if (!(x >= MODE1_GBA_BG_CLIP_X && (mode1_memory.bg_palette[pal_idx] & 0x7FFFu) == 0x7C1Fu)) {              \
+                line_buffer[x] = mode1_bg_abgr_lut[pal_idx];                                                           \
+                if (priority_buffer != NULL) {                                                                         \
+                    priority_buffer[x] = priority;                                                                     \
+                }                                                                                                      \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0)
+
+    if (!ws_msg_line && !ws_hud_right_anchor) {
+        /* Fast path: no widescreen column remap, so sample_x == x. Hoists the
+         * per-pixel remap dispatch (its two flags are per-line invariants) out
+         * of the hot loop entirely — A53 win, zero added per-pixel branch. */
+        for (x = 0; x < render_max_x; ++x) {
+            MODE1_BG_PIXEL(x);
+        }
+    } else {
+        for (x = 0; x < render_max_x; ++x) {
+            int sample_x = x;
+            if (ws_msg_line && x >= ws_msg_x0 + ws_msg_shift && x < ws_msg_x1 + ws_msg_shift) {
+                /* Inside the shifted box: sample the box's native columns. */
+                sample_x = x - ws_msg_shift;
+            } else if (ws_msg_line && x >= ws_msg_x0 && x < ws_msg_x1) {
+                /* The box's native columns are suppressed (moved right). */
+                continue;
+            } else if (ws_hud_right_anchor && !ws_msg_line) {
+                /* Anchor is suspended on box lines: a top-anchored box overlaps
+                 * the rupee rows, and remapping cols 176..239 there would draw a
+                 * second copy of the box fragment at the far right. */
+                if (x >= ws_hud_right_dst_x) {
+                    sample_x = x - (frame_width - MODE1_GBA_BG_CLIP_X);
+                } else if (x >= MODE1_WS_HUD_RIGHT_NATIVE_X) {
+                    continue;
+                }
+            } else if (ws_msg_line && x >= MODE1_GBA_BG_CLIP_X) {
+                /* Box lines extend past 240 only for the shifted box copy;
+                 * everything else on the line keeps native clipping. */
                 continue;
             }
-        } else if (ws_msg_line && x >= MODE1_GBA_BG_CLIP_X) {
-            /* Box lines extend past 240 only for the shifted box copy;
-             * everything else on the line keeps native clipping. */
-            continue;
-        }
-        int eff_x = (mosaic_h == 1) ? sample_x : (sample_x / mosaic_h) * mosaic_h;
-        int src_x = (eff_x + scroll_x) & (map_width_tiles * 8 - 1);
-        int tile_col = src_x / 8;
-        int pixel_x = src_x % 8;
-        int cache_use_shadow = (ws_shadow_active && x >= MODE1_GBA_BG_CLIP_X) ? 1 : 0;
-        int cache_key = (tile_col << 1) | cache_use_shadow;
-        if (cache_key != bg_cache_key) {
-            bg_cache_key = cache_key;
-            if (cache_use_shadow) {
-                /* (tile_col - base + 32) % 32 handles BGHOFS sub-tile wrap so a
-                 * scroll past a mod-32 boundary still indexes the right cell. */
-                int shadow_idx = (tile_col - ws_shadow_base + 32) % 32;
-                bg_tile_entry.raw = (shadow_idx < MODE1_WS_SHADOW_COLS)
-                                        ? ws_shadow[(size_t)local_row * MODE1_WS_SHADOW_COLS + shadow_idx]
-                                        : (uint16_t)0u;
-            } else {
-                /* Tilemap entries are GBA little-endian in VRAM (ROM-sourced via
-                 * DmaSet is byte-preserving). Read LE byte-wise — correct on any
-                 * host. (IO regs stay native: written via the engine REG_* path.) */
-                int screen_block_x = tile_col / 32;
-                int screen_block_index = screen_block_x + screen_block_y * blocks_per_row;
-                int local_col = tile_col % 32;
-                uint32_t map_addr =
-                    screen_base + (uint32_t)screen_block_index * 0x800u + (uint32_t)(local_row * 32 + local_col) * 2u;
-                bg_tile_entry.raw =
-                    (uint16_t)mode1_memory.vram[map_addr] | ((uint16_t)mode1_memory.vram[map_addr + 1u] << 8u);
-            }
-            /* Derive per-tile constants once (pixel_y is line-invariant, so
-             * tile_pixel_y and the tile's VRAM row base are constant across its
-             * 8 columns). Byte-identical to the former per-pixel recompute. */
-            bg_hflip = mode1_tile_hflip(bg_tile_entry);
-            bg_tpy = mode1_tile_vflip(bg_tile_entry) ? (7 - pixel_y) : pixel_y;
-            if (bpp8) {
-                bg_row_base = char_base + (uint32_t)mode1_tile_index(bg_tile_entry) * 64u + (uint32_t)bg_tpy * 8u;
-            } else {
-                bg_row_base = char_base + (uint32_t)mode1_tile_index(bg_tile_entry) * 32u + (uint32_t)bg_tpy * 4u;
-            }
-            bg_pal_bank = (size_t)mode1_tile_palette(bg_tile_entry) * 16u;
-        }
-        int tile_pixel_x = bg_hflip ? (7 - pixel_x) : pixel_x;
-        uint8_t color_index;
-
-        if (bpp8) {
-            uint32_t addr = bg_row_base + (uint32_t)tile_pixel_x;
-            color_index = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;
-        } else {
-            uint32_t addr = bg_row_base + (uint32_t)(tile_pixel_x / 2);
-            uint8_t packed = (addr < MODE1_VRAM_SIZE) ? mode1_memory.vram[addr] : 0u;
-            color_index = (tile_pixel_x & 1) ? (packed >> 4u) : (packed & 0x0Fu);
-        }
-
-        if (color_index == 0u) {
-            continue;
-        }
-
-        /* Palette index into the 256-entry BG LUT (bank*16+idx for 4bpp).
-         * Widescreen reveal (x>=240) still needs the raw rgb555 to spot the
-         * 0x7C1F "unloaded" sentinel; native pixels skip that read entirely. */
-        size_t pal_idx = bpp8 ? (size_t)color_index : (bg_pal_bank + color_index);
-
-        if (x >= MODE1_GBA_BG_CLIP_X && (mode1_memory.bg_palette[pal_idx] & 0x7FFFu) == 0x7C1Fu) {
-            continue;
-        }
-
-        line_buffer[x] = mode1_bg_abgr_lut[pal_idx];
-        if (priority_buffer != NULL) {
-            /* Dead in the frame path (composite resolves BG order from BGCNT,
-             * not per-pixel priority) — callers there pass NULL to skip
-             * ~150K stores/frame. External tools still get the values. */
-            priority_buffer[x] = priority;
+            MODE1_BG_PIXEL(sample_x);
         }
     }
+#undef MODE1_BG_PIXEL
 }
 
 void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t* line_buffer, uint8_t* priority_buffer) {

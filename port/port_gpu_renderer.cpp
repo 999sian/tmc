@@ -42,6 +42,10 @@ extern "C" bool Port_GPU_PaintBootSplash(void) {
 extern "C" bool Port_GPU_IsActive(void) {
     return false;
 }
+extern "C" bool Port_GPU_SetVSync(bool enabled) {
+    (void)enabled;
+    return false;
+}
 extern "C" bool Port_GPU_SupportsGlslpRuntime(void) {
     return false;
 }
@@ -989,6 +993,39 @@ extern "C" bool Port_GPU_PresentPrelaunchFrame(void) {
 
 extern "C" bool Port_GPU_IsActive(void) {
     return sWindowClaimed && sPipelines[PORT_GPU_FILTER_NONE] != nullptr;
+}
+
+extern "C" bool Port_GPU_SetVSync(bool enabled) {
+    if (!sDevice || !sWindow || !sWindowClaimed) {
+        return false;
+    }
+    if (enabled) {
+        bool ok = SDL_SetGPUSwapchainParameters(sDevice, sWindow, SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                                                SDL_GPU_PRESENTMODE_VSYNC);
+        std::fprintf(stderr, "[gpu] present mode -> VSYNC (%s)\n", ok ? "ok" : SDL_GetError());
+        return ok;
+    }
+    /* IMMEDIATE (tearing, lowest latency) preferred; MAILBOX (no tear,
+     * uncapped) as fallback. Both count as "vsync off" for pacing purposes —
+     * neither blocks the frame loop on the display. */
+    if (SDL_WindowSupportsGPUPresentMode(sDevice, sWindow, SDL_GPU_PRESENTMODE_IMMEDIATE)) {
+        bool ok = SDL_SetGPUSwapchainParameters(sDevice, sWindow, SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                                                SDL_GPU_PRESENTMODE_IMMEDIATE);
+        std::fprintf(stderr, "[gpu] present mode -> IMMEDIATE (%s)\n", ok ? "ok" : SDL_GetError());
+        if (ok) {
+            return true;
+        }
+    }
+    if (SDL_WindowSupportsGPUPresentMode(sDevice, sWindow, SDL_GPU_PRESENTMODE_MAILBOX)) {
+        bool ok = SDL_SetGPUSwapchainParameters(sDevice, sWindow, SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
+                                                SDL_GPU_PRESENTMODE_MAILBOX);
+        std::fprintf(stderr, "[gpu] present mode -> MAILBOX (%s)\n", ok ? "ok" : SDL_GetError());
+        if (ok) {
+            return true;
+        }
+    }
+    std::fprintf(stderr, "[gpu] vsync off unsupported (driver refuses IMMEDIATE and MAILBOX)\n");
+    return false;
 }
 
 extern "C" void Port_GPU_SetFilter(PortGpuFilter f) {

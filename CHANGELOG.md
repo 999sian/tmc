@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### Widescreen: textbox borders no longer torn; right-edge black band gone
+
+- **Fixed the centered dialogue box rendering with a missing right border and
+  a torn bottom border in widescreen.** The rect published to the PPU for the
+  message-box centering remap was one tile short of the engine's real frame on
+  every edge (`DispMessageFrame` draws the border *inward* from
+  `textWindowPos`, not around it). The shifted copy overdrew its own right
+  border and the bottom border row fell outside the remap band, where the
+  HUD right-anchor split it in two. Affects both the CPU and GPU rasterizers
+  (one shared publisher).
+- **Fixed the permanent black band on the right of the frame (which also
+  swallowed the right-anchored HUD) when standing near a room's right edge.**
+  The per-frame camera follow (`Scroll1`) and the room-entry camera
+  (`InitializeCamera`) still centered/clamped for a 240 px view, so in wide
+  view the camera parked up to `viewW-240` px short of the room's right edge
+  and the remainder rendered as void. Both now center the target in the live
+  view width and clamp the view to the room, matching the already-fixed snap
+  camera (`sub_080809D4`); the follow target is also clamped so a camera
+  parked past the live limit pans smoothly back instead of deadlocking.
+  Native-240 builds keep the exact GBA branches.
+- **Fixed widescreen cutscene freezes (intro festival pan over Hyrule Town,
+  Zelda talk during the Business Scrub scene).** Scripted pans park the camera
+  and then busy-wait (`WaitForCameraTouchRoomBorder`) for `scroll_x` to
+  **equal** a rest position the script recomputes with GBA 240-px constants —
+  while the widescreen follow camera rests at the live-view-width center, so
+  the two never matched and the cutscene waited forever. All camera-rest
+  producers (`Scroll1`, `InitializeCamera`, `sub_08080974`, `sub_080809D4`)
+  and the script wait now share one formula
+  (`Port_Widescreen_CameraRestX`), so they can't drift again. Regression
+  probe: `TMC_ROOMCAP_PAN_PROBE=1` (deadlocks on the old code, passes now).
+
+### VSync toggle now works on the SDL_GPU backend
+
+- **The F8 → Display → VSync checkbox previously did nothing on GPU builds**
+  (the default desktop configuration): `Port_PPU_SetVSync` only knew how to
+  set vsync on the SDL_Renderer backend, and the SDL_GPU swapchain stayed in
+  its default VSYNC present mode forever. The setter now dispatches per
+  backend — SDL_GPU via `SDL_SetGPUSwapchainParameters` (IMMEDIATE preferred,
+  MAILBOX fallback when the driver refuses tearing), SDL_Renderer via
+  `SDL_SetRenderVSync`, window-surface fallback via
+  `SDL_SetWindowSurfaceVSync`. This also makes fast-forward's temporary
+  vsync-off actually take effect on GPU builds.
+
 ### Audio: crackle/lag on weak Android devices (Moto G4-class)
 
 - **Fixed audio underruns on low-end Android.** On a Moto G4 (Cortex-A53) the

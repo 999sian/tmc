@@ -4467,6 +4467,17 @@ void InitializeCamera() {
         targetY = 0;
     }
 
+#if MODE1_GBA_WIDTH > 240
+    /* THE shared camera-rest formula (port_widescreen.h) — must match
+     * Scroll1/sub_080809D4/WaitForCameraTouchRoomBorder so room entry lands
+     * exactly where the follow camera (and the script equality wait) rests.
+     * targetX is room-relative here; origin is added below, so convert to
+     * absolute for the helper and strip the origin from its result. */
+    {
+        extern int Port_Widescreen_CameraRestX(int target_x);
+        roomControls->scroll_x = Port_Widescreen_CameraRestX(targetX + roomControls->origin_x) - roomControls->origin_x;
+    }
+#else
     if (targetX < 0x78) {
         roomControls->scroll_x = 0;
     } else {
@@ -4476,6 +4487,7 @@ void InitializeCamera() {
             roomControls->scroll_x = targetX - 0x78;
         }
     }
+#endif
     roomControls->scroll_x += roomControls->origin_x;
 
     if (targetY < 0x50) {
