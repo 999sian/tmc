@@ -1202,6 +1202,40 @@ static const char* InputLabel(int input) {
 }
 
 static void DrawRibbonControlsTab(void) {
+    if (ImGui::CollapsingHeader("Keyboard shortcuts")) {
+        struct HotkeyRow {
+            const char* key;
+            const char* action;
+        };
+        static const HotkeyRow kHotkeys[] = {
+            { "F8", "Open / close this settings menu (gamepad: Select+Start)" },
+            { "F5 / F6", "Quicksave / quickload" },
+            { "F1-F4", "Load save-state slot 1-4  (Shift+Fn = save to slot)" },
+            { "F7", "Toggle text-to-speech" },
+            { "F9", "Capture a bug report (screenshot + save + state)" },
+            { "F10", "Speak nearby points of interest  (Shift: next, Ctrl: orient)" },
+            { "F11 / Alt+Enter", "Toggle fullscreen" },
+            { "F12", "Cycle the display filter / smoothing" },
+            { "Tab (hold)", "Fast-forward" },
+            { "[  ]", "Practice: set / reload practice point" },
+            { "P  .", "Practice: pause / frame-advance while paused" },
+            { "'  ;", "Practice: reset timer / record split" },
+        };
+        if (ImGui::BeginTable("##hotkeys", 2,
+                              ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH)) {
+            ImGui::TableSetupColumn("Key", ImGuiTableColumnFlags_WidthFixed, 130.0f);
+            ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthStretch);
+            for (const HotkeyRow& row : kHotkeys) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextColored(ImVec4(0.6f, 0.85f, 1.0f, 1.0f), "%s", row.key);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(row.action);
+            }
+            ImGui::EndTable();
+        }
+        ImGui::TextDisabled("Save-states (F1-F6) are disabled in Console-Parity mode.");
+    }
 #ifdef __ANDROID__
     if (ImGui::CollapsingHeader("Touch controls", ImGuiTreeNodeFlags_DefaultOpen)) {
         {
@@ -3597,6 +3631,7 @@ static void DrawRibbon(void) {
         }
         ImGui::SameLine();
         ImGui::TextDisabled("(F8 or Select+Start also toggles)");
+        ImGui::TextDisabled("F5/F6 quicksave/load   F9 bug report   -   see the Controls tab for all hotkeys");
     }
     ImGui::End();
     ImGui::PopStyleVar();
@@ -3791,6 +3826,8 @@ static void DrawMenuPage(int depth) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.6f, 0.6f, 0.6f, 1.0f));
         ImGui::TextUnformatted("Up/Dn move  Enter activate  L/R cycle  Esc back");
         ImGui::TextUnformatted("Double-click activate  Right-click cycle");
+        if (depth == 0)
+            ImGui::TextUnformatted("F5/F6 quicksave/load   F9 bug report   (Controls tab: all keys)");
         ImGui::PopStyleColor();
     }
     ImGui::End();
@@ -3807,16 +3844,31 @@ static void DrawMenuPage(int depth) {
 static void DrawMenuTrigger(void) {
     ImGuiIO& io = ImGui::GetIO();
     const bool open = Port_DebugMenu_IsOpen();
+    /* One-shot discovery hint: mark it seen the moment the menu is first
+     * opened by ANY path (F8, gamepad Select+Start, or this button), so it
+     * never nags a returning player again. */
+    if (open && !Port_Config_GetMenuHintSeen()) {
+        Port_Config_SetMenuHintSeen(true);
+    }
+    const bool showHint = !open && !Port_Config_GetMenuHintSeen();
     const float pad = 6.0f;
     ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - pad, pad), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
 
-    /* Closed: 12% alpha background, ~minimal padding, single-glyph
-     * label — so the trigger reads as a faint corner dot rather than
-     * an opaque UI element overlapping the player's eye-line. The
-     * frame highlights on hover (ImGui handles that for us). */
+    /* Closed: 12% alpha background, ~minimal padding, single-glyph label —
+     * so the trigger reads as a faint corner dot rather than an opaque UI
+     * element overlapping the player's eye-line. First run (showHint): draw
+     * it boldly with a spelled-out label + the F8 key so a new player learns
+     * the settings door exists. */
     if (open) {
         ImGui::SetNextWindowBgAlpha(0.85f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 4));
+    } else if (showHint) {
+        ImGui::SetNextWindowBgAlpha(0.85f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6, 3));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.35f, 0.55f, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.30f, 0.45f, 0.65f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.00f, 1.00f, 1.00f, 1.00f));
     } else {
         ImGui::SetNextWindowBgAlpha(0.12f);
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 2));
@@ -3837,9 +3889,9 @@ static void DrawMenuTrigger(void) {
                          ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNavInputs |
                          ImGuiWindowFlags_NoNavFocus)) {
         /* Closed: single triple-bar ASCII '=' stacked into a hamburger
-         * shape (the default ImGui font doesn't ship U+2261 ≡). Open:
-         * spelled-out label so the close target reads clearly. */
-        const char* label = open ? " CLOSE MENU " : "[=]";
+         * shape (the default ImGui font doesn't ship U+2261 ≡). First run:
+         * spelled-out "Settings (F8)". Open: clear close label. */
+        const char* label = open ? " CLOSE MENU " : (showHint ? " Settings  (F8) " : "[=]");
         if (ImGui::Button(label)) {
             Port_DebugMenu_Toggle();
         }
