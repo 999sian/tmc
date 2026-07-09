@@ -252,6 +252,12 @@ static int run_fingerprint_test(void) {
         fprintf(stderr, "rando_test: changing accessibility did not change fingerprint\n");
         return 0;
     }
+    RandomizerSettings dungeon_items = base; /* default false → flip to true */
+    dungeon_items.shuffle_dungeon_items = !base.shuffle_dungeon_items;
+    if (Rando_SettingsFingerprint(&dungeon_items) == fp) {
+        fprintf(stderr, "rando_test: toggling shuffle_dungeon_items did not change fingerprint\n");
+        return 0;
+    }
 
     /* (c) cosmetic / runtime-only fields the fingerprint excludes must NOT
      *     move it, even all toggled at once. */

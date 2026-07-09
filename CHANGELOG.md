@@ -11,7 +11,9 @@
   the origin rides in the item subtype byte (`0x80 | dungeon_idx`) through the
   give path (`itemUtils.c` cases 5/6, `itemOnGround.c`), and the solver tracks
   each as a virtual item id (0x80..0xBF) so reachability tells Palace's big key
-  from Deepwood's. Sidecar bumps to v7.
+  from Deepwood's. Sidecar bumps to v7. Toggle it in the file-select overlay
+  or the F8 → Randomizer tab (**"Shuffle dungeon items"**); persisted as
+  `rando_dungeon_items` (default off).
 - **Accessibility modes** matching the upstream dropdown: `GOAL` (historical —
   only the final boss must be reachable), `ALL_NONKEYS` (every enabled non-key
   check reachable), `ALL_LOCATIONS` (every enabled check reachable). Verifier
@@ -19,16 +21,26 @@
   Selectable in the file-select overlay and the F8 → Randomizer tab; persisted
   as `rando_accessibility`.
 - **Seed fingerprint** (`Rando_SettingsFingerprint`): FNV-1a over every
-  placement-affecting setting, shown in the F8 tab. Two players with the same
-  seed AND the same fingerprint are generating the identical placement — the
-  shareable "are we on the same seed" check. Pure cosmetics and runtime-only
-  QoL are excluded (they never change placement).
+  placement-affecting setting, shown in the F8 tab **and the file-select
+  sidebar before you generate**, so racers can confirm settings parity up
+  front. Two players with the same seed AND the same fingerprint are
+  generating the identical placement. Pure cosmetics and runtime-only QoL are
+  excluded (they never change placement).
 - **Glitch tricks are now individually selectable** in the F8 tab when
   glitchless logic is off (Ocarina Glitch / Crenel Clip / Portal Jump Storage),
   persisted as `rando_tricks`.
+- **Fixed non-reproducible seeds from the file-select overlay.** The commit
+  path built its settings from uninitialized stack memory for
+  `shuffle_dungeon_items`, so the same seed+settings could generate a
+  different world and a different fingerprint across launches; it now
+  initializes from `Rando_DefaultSettings()`.
+- **The file-select seed field no longer defaults to a fixed word.** It was
+  pre-filled with `MINISH`, so every untouched file rolled the *same* world;
+  it now starts empty and an empty field rolls a fresh random seed (matching
+  the F8 tab).
 - Verified: `rando_logic_test` (228 locations; accessibility beatable /
   strengthening-monotonic / reachability, and fingerprint stability +
-  per-setting sensitivity) ALL PASS.
+  per-setting sensitivity incl. dungeon-items) ALL PASS.
 
 ### Widescreen: textbox borders no longer torn; right-edge black band gone
 

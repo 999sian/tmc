@@ -2,6 +2,7 @@
 #define PORT_RANDO_FILE_MENU_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,12 +35,18 @@ void Port_RandoFileMenu_SetSeed(const char* text);
 void Port_RandoFileMenu_RandomizeSeed(void);
 bool Port_RandoFileMenu_IsSeedChar(char c);
 
+/* FNV-1a fingerprint of the settings the sidebar is about to commit — lets
+ * racers agree on settings parity BEFORE generating (mirrors the F8 tab's
+ * post-roll fingerprint). */
+uint32_t Port_RandoFileMenu_Fingerprint(void);
+
 /* Built-in graph mode (no .logic file loaded). */
 bool* Port_RandoFileMenu_GlitchlessLogic(void);
 bool* Port_RandoFileMenu_ObscureLocations(void);
 bool* Port_RandoFileMenu_ShuffleKinstones(void);
 bool* Port_RandoFileMenu_ShuffleEntrances(void);
 bool* Port_RandoFileMenu_ShuffleDojos(void);
+bool* Port_RandoFileMenu_ShuffleDungeonItems(void);
 bool* Port_RandoFileMenu_OpenWorld(void);
 int Port_RandoFileMenu_Difficulty(void);
 void Port_RandoFileMenu_SetDifficulty(int difficulty);
