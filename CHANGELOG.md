@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Randomizer setup UX: roll-lock on file screen, L hint, unified labels
+
+- **Rolling from the F8 tab on the file-select screen no longer silently
+  discards the roll.** There the roll button activated a transient global
+  seed, but creating the new file re-rolls from the sidebar's own state — so
+  the F8 "verified beatable" result was a lie on that screen. The F8 roll/reset
+  buttons are now locked while on the file screen (as they already are during
+  gameplay), with a note pointing to the L sidebar — the path that actually
+  binds the seed to the new save slot.
+- **The file-select screen now shows a "Press L for Port & Randomizer setup"
+  hint.** The entire randomizer was previously reachable only by pressing L by
+  luck or reading docs; the hint appears whenever the sidebar is closed and the
+  port settings menu is enabled.
+- **The F8 tab and the file-select sidebar now share one label/tooltip table.**
+  The two entry points had drifted apart — the sidebar showed bare "Normal /
+  Hard / Chaos" and "Ocarina Glitch" with no explanation while F8 had the full
+  descriptions. Both now render the same self-explanatory pool/accessibility
+  combo strings, glitch-trick labels, and help tooltips.
+
 ### Randomizer: dungeon-item shuffle, accessibility modes, seed fingerprint
 
 - **Dungeon items (maps, compasses, big keys) can now join the shuffle.**
