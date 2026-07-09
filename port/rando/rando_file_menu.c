@@ -30,6 +30,7 @@ typedef struct RandoFileMenuState {
     bool shuffle_kinstones;
     bool shuffle_entrances;
     bool shuffle_dojos;
+    bool shuffle_dungeon_items;
     bool open_world;
     RandoItemPoolDifficulty difficulty;
     bool homewarp;
@@ -125,6 +126,10 @@ bool* Port_RandoFileMenu_ShuffleDojos(void) {
     return &sMenu.shuffle_dojos;
 }
 
+bool* Port_RandoFileMenu_ShuffleDungeonItems(void) {
+    return &sMenu.shuffle_dungeon_items;
+}
+
 bool* Port_RandoFileMenu_OpenWorld(void) {
     return &sMenu.open_world;
 }
@@ -180,12 +185,11 @@ static void PersistMenuSettings(void) {
                                  sMenu.tunic_color, sMenu.heart_color);
     Port_Config_SetRandoTricks(sMenu.tricks);
     Port_Config_SetRandoAccessibility(sMenu.accessibility);
+    Port_Config_SetRandoDungeonItems(sMenu.shuffle_dungeon_items);
 }
 
-void Port_RandoFileMenu_CommitAndStart(void) {
+static RandomizerSettings BuildMenuSettings(void) {
     RandomizerSettings settings = Rando_DefaultSettings();
-    uint64_t seed;
-
     settings.tricks = (uint32_t)sMenu.tricks;
     settings.accessibility = (RandoAccessibility)sMenu.accessibility;
     settings.glitchless_logic = sMenu.glitchless_logic;
@@ -193,6 +197,7 @@ void Port_RandoFileMenu_CommitAndStart(void) {
     settings.shuffle_kinstones = sMenu.shuffle_kinstones;
     settings.shuffle_entrances = sMenu.shuffle_entrances;
     settings.shuffle_dojos = sMenu.shuffle_dojos;
+    settings.shuffle_dungeon_items = sMenu.shuffle_dungeon_items;
     settings.open_world = sMenu.open_world;
     settings.item_difficulty = sMenu.difficulty;
     settings.homewarp = sMenu.homewarp;
@@ -201,7 +206,17 @@ void Port_RandoFileMenu_CommitAndStart(void) {
     settings.instant_text = sMenu.instant_text;
     settings.tunic_color = sMenu.tunic_color;
     settings.heart_color = sMenu.heart_color;
+    return settings;
+}
 
+uint32_t Port_RandoFileMenu_Fingerprint(void) {
+    RandomizerSettings settings = BuildMenuSettings();
+    return Rando_SettingsFingerprint(&settings);
+}
+
+void Port_RandoFileMenu_CommitAndStart(void) {
+    RandomizerSettings settings = BuildMenuSettings();
+    uint64_t seed;
     PersistMenuSettings();
 
     seed = CurrentSeedValue();
@@ -257,6 +272,7 @@ void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled) {
                                      defaults.heart_color);
         Port_Config_SetRandoTricks((int)defaults.tricks);
         Port_Config_SetRandoAccessibility((int)defaults.accessibility);
+        Port_Config_SetRandoDungeonItems(defaults.shuffle_dungeon_items);
     }
 }
 
@@ -288,7 +304,10 @@ void Port_RandoFileMenu_Open(int save_slot) {
     sMenu.heart_color = Port_Config_GetRandoHeartColor();
     sMenu.tricks = Port_Config_GetRandoTricks();
     sMenu.accessibility = Port_Config_GetRandoAccessibility();
-    Port_RandoFileMenu_SetSeed("MINISH");
+    sMenu.shuffle_dungeon_items = Port_Config_GetRandoDungeonItems();
+    /* Leave the seed empty (zeroed by the memset above) so Generate rolls a
+     * fresh random seed by default, matching the F8 tab. A fixed default made
+     * every untouched file the same world. */
 }
 
 void Port_RandoFileMenu_Close(void) {

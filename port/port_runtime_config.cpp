@@ -169,6 +169,7 @@ int sRandoTunicColor = 0;
 int sRandoHeartColor = 0;
 int sRandoTricks = 0;
 int sRandoAccessibility = 0;
+bool sRandoDungeonItems = false;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -275,6 +276,7 @@ const BoolCfg kBoolCfg[] = {
     { "rando_start_sword", &sRandoStartSword, true },
     { "rando_early_crests", &sRandoEarlyCrests, true },
     { "rando_instant_text", &sRandoInstantText, true },
+    { "rando_dungeon_items", &sRandoDungeonItems, false },
 };
 const IntCfg kIntCfg[] = {
     { "preferred_region", &sPreferredRegion, -1 },      { "preferred_language", &sPreferredLanguage, -1 },
@@ -1890,6 +1892,14 @@ extern "C" int Port_Config_GetRandoAccessibility(void) {
 extern "C" void Port_Config_SetRandoAccessibility(int accessibility) {
     sRandoAccessibility = accessibility;
     sConfigJson["rando_accessibility"] = accessibility;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetRandoDungeonItems(void) {
+    return sRandoDungeonItems;
+}
+extern "C" void Port_Config_SetRandoDungeonItems(bool dungeon_items) {
+    sRandoDungeonItems = dungeon_items;
+    sConfigJson["rando_dungeon_items"] = dungeon_items;
     SaveConfig();
 }
 

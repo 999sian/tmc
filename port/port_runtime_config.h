@@ -259,6 +259,10 @@ int Port_Config_GetRandoTricks(void);
 void Port_Config_SetRandoTricks(int tricks);
 int Port_Config_GetRandoAccessibility(void);
 void Port_Config_SetRandoAccessibility(int accessibility);
+/* Whether big keys / maps / compasses join the shuffle (default off = pinned
+ * vanilla). Persisted independently of the positional setter above. */
+bool Port_Config_GetRandoDungeonItems(void);
+void Port_Config_SetRandoDungeonItems(bool dungeon_items);
 
 void Port_Config_OpenGamepads(void);
 #ifndef TMC_N64

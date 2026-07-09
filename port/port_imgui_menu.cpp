@@ -2601,6 +2601,7 @@ static void DrawRibbonRandomizerTab(void) {
         sRandoUiSettings.heart_color = Port_Config_GetRandoHeartColor();
         sRandoUiSettings.tricks = (uint32_t)Port_Config_GetRandoTricks();
         sRandoUiSettings.accessibility = (RandoAccessibility)Port_Config_GetRandoAccessibility();
+        sRandoUiSettings.shuffle_dungeon_items = Port_Config_GetRandoDungeonItems();
         sRandoUiSettingsInit = true;
     }
 
@@ -2714,6 +2715,12 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::SameLine();
     if (ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos))
         changed = true;
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Shuffle dungeon items", &sRandoUiSettings.shuffle_dungeon_items))
+        changed = true;
+    RandoUi_HelpTooltip("Off (default): each dungeon's map, compass, and big key stay in "
+                        "their vanilla chests. On: they join the shuffle and can be found in "
+                        "any dungeon - each is credited to its home dungeon when picked up.");
 
     if (ImGui::Checkbox("Open world", &sRandoUiSettings.open_world))
         changed = true;
@@ -2783,6 +2790,7 @@ static void DrawRibbonRandomizerTab(void) {
             sRandoUiSettings.heart_color);
         Port_Config_SetRandoTricks((int)sRandoUiSettings.tricks);
         Port_Config_SetRandoAccessibility((int)sRandoUiSettings.accessibility);
+        Port_Config_SetRandoDungeonItems(sRandoUiSettings.shuffle_dungeon_items);
     }
 
     DrawRandoCosmeticsSection();
@@ -3945,7 +3953,8 @@ static void DrawRandoFileMenuModal(void) {
         if (randoEnabled) {
             if (ImGui::CollapsingHeader("Randomizer Setup", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::SetNextItemWidth(180);
-                if (ImGui::InputText("Seed", Port_RandoFileMenu_SeedBuffer(), RANDO_FILE_MENU_SEED_MAX + 1,
+                if (ImGui::InputText("Seed (empty = random)", Port_RandoFileMenu_SeedBuffer(),
+                                     RANDO_FILE_MENU_SEED_MAX + 1,
                                      ImGuiInputTextFlags_CallbackCharFilter | ImGuiInputTextFlags_EnterReturnsTrue,
                                      RandoSeedCharFilter)) {
                     Port_RandoFileMenu_SeedEdited();
@@ -3974,6 +3983,10 @@ static void DrawRandoFileMenuModal(void) {
                 ImGui::Checkbox("Entrances", Port_RandoFileMenu_ShuffleEntrances());
                 ImGui::SameLine();
                 ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
+                ImGui::Checkbox("Dungeon items", Port_RandoFileMenu_ShuffleDungeonItems());
+                RandoUi_HelpTooltip("Off (default): each dungeon's map, compass, and big key stay "
+                                    "in their vanilla chests. On: they join the shuffle and can be "
+                                    "found in any dungeon (each is credited to its home dungeon).");
                 ImGui::Checkbox("Open world", Port_RandoFileMenu_OpenWorld());
                 RandoUi_HelpTooltip("Every permanent obstacle (trees, cracked blocks, bomb "
                                     "walls, switches, non-key doors, ...) starts pre-solved, "
@@ -4024,6 +4037,18 @@ static void DrawRandoFileMenuModal(void) {
                 const char* status = Port_RandoFileMenu_Status();
                 if (status[0]) {
                     ImGui::TextColored(ImVec4(1.0f, 0.44f, 0.44f, 1.0f), "%s", status);
+                }
+
+                {
+                    char sfp[16];
+                    std::snprintf(sfp, sizeof(sfp), "%08X", Port_RandoFileMenu_Fingerprint());
+                    ImGui::Text("Fingerprint: %s", sfp);
+                    RandoUi_HelpTooltip("Hash of every placement-affecting setting. Share it with "
+                                        "a friend: same seed AND same fingerprint = identical world.");
+                    ImGui::SameLine();
+                    if (ImGui::SmallButton("Copy##fpsidebar")) {
+                        ImGui::SetClipboardText(sfp);
+                    }
                 }
 
                 if (forceOpen) {
