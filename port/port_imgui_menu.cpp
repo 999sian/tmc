@@ -4430,7 +4430,11 @@ extern "C" bool Port_ImGui_RenderExtractProgress(const char* phase, float fracti
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.78f, 0.70f, 1.00f));
         ImGui::Text("loading %s   (phase %d/%d)", (phase && phase[0]) ? phase : "preparing", phase_index, phase_total);
         ImGui::PopStyleColor();
+#ifdef __ANDROID__
+        ImGui::TextDisabled("One-time setup - this can take a minute on first launch.");
+#else
         ImGui::TextDisabled("One-time first-launch extraction. See terminal for detail.");
+#endif
     }
     ImGui::End();
     ImGui::PopStyleVar(2);

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### First-launch extraction message on Android; dead-code cleanup
+
+- **The first-launch asset-extraction screen no longer tells Android users to
+  "See terminal for detail"** — a phone has no terminal, and a minutes-long
+  bar with no context read as a hang. Android now shows "One-time setup - this
+  can take a minute on first launch."; desktop keeps the terminal hint.
+- Removed dead code: `Port_PaintPrelaunch` (a countdown-splash renderer with
+  zero callers - the live prelaunch is the ImGui card).
+
 ### Randomizer: shared seeds no longer silently mismatch between the two setups
 
 - **The file-select sidebar seed field now accepts the same characters as the
