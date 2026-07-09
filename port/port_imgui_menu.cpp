@@ -4010,7 +4010,8 @@ static void DrawRandoFileMenuModal(void) {
                 if (ImGui::InputText("Seed (empty = random)", Port_RandoFileMenu_SeedBuffer(),
                                      RANDO_FILE_MENU_SEED_MAX + 1, ImGuiInputTextFlags_EnterReturnsTrue)) {
                     Port_RandoFileMenu_SeedEdited();
-                    Port_RandoFileMenu_CommitAndStart();
+                    if (forceOpen) /* commit only when the new-file flow armed a slot */
+                        Port_RandoFileMenu_CommitAndStart();
                 }
                 if (ImGui::IsItemEdited())
                     Port_RandoFileMenu_SeedEdited();

@@ -10,6 +10,7 @@
 #include "rando/rando.h"
 #include "rando/rando_entrance.h"
 #include "rando/rando_music.h"
+#include "item_ids.h" /* ITEM_SKILL_LONG_SPIN: last real engine item id */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -160,6 +161,21 @@ static bool LoadAll(void) {
             rec->override_count > RANDO_SIDECAR_MAX_OVERRIDES || rec->entrance_count > RANDO_SIDECAR_MAX_ENTRANCES) {
             fprintf(stderr, "[rando] warning: sidecar slot %d corrupt (count=%u, difficulty=%u); cleared\n", i,
                     rec->count, rec->item_difficulty);
+            memset(rec, 0, sizeof(*rec));
+            continue;
+        }
+        /* Placed rewards are engine item ids (virtual big-key ids live only
+         * in subtypes); anything past the metadata table's last entry would
+         * index gItemMetaData[] out of bounds on award. */
+        bool table_ok = true;
+        for (uint32_t t = 0; t < rec->count; ++t) {
+            if (rec->table[t] > ITEM_SKILL_LONG_SPIN) {
+                table_ok = false;
+                break;
+            }
+        }
+        if (!table_ok) {
+            fprintf(stderr, "[rando] warning: sidecar slot %d has out-of-range item id; cleared\n", i);
             memset(rec, 0, sizeof(*rec));
             continue;
         }
