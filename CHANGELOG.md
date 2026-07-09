@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Region-mismatched ROM errors are now visible in the GUI, not just stderr
+
+- **A version-mismatched ROM no longer fails invisibly** on single-region
+  (developer / CI-guard) builds. Previously the region cross-check only wrote
+  to stderr — invisible to a double-click or Android user: Console-Parity
+  mode did `return 1` (window silently vanished) and casual mode played a
+  broken USA/EU hybrid with no notice. Now Console-Parity shows a fatal
+  message box explaining the mismatch before exiting, and casual mode shows a
+  non-fatal warning box ("graphics, text, and RNG may be wrong") then
+  continues. The shared `Port_FatalRomError` helper (stderr + SDL message box)
+  is exported from `port_rom.c` and reused for both.
+- **A Japanese (BZMJ) ROM on a build without populated JP data tables now
+  shows a clear message box** ("JP not yet supported - use a USA or EU ROM")
+  instead of exiting with only a stderr `FATAL` line and a vanished window.
+
 ### Randomizer setup UX: roll-lock on file screen, L hint, unified labels
 
 - **Rolling from the F8 tab on the file-select screen no longer silently

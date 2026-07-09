@@ -53,6 +53,12 @@ void Port_LoadRom(const char* path);
 const char* Port_FindBaseRomPath(void);
 const char* Port_GetLoadedRomPath(void);
 
+/* Surface a fatal ROM error as a stderr line + SDL message box, then exit.
+ * Safe before SDL_CreateWindow (NULL parent). Reused by the region
+ * cross-check in port_main.c so a mismatch is visible in the GUI, not just
+ * on stderr. */
+void Port_FatalRomError(const char* title, const char* message);
+
 // Re-resolve a single area's room/tile/property tables from immutable ROM offsets.
 void Port_RefreshAreaData(u32 area);
 
