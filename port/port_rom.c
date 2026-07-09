@@ -111,8 +111,9 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
  * SDL message box, then exit. Replaces the bare abort() calls that
  * previously left the user with a black screen and no UI feedback.
  * Safe to call before SDL_CreateWindow — SDL_ShowSimpleMessageBox
- * accepts a NULL parent. */
-static void FatalRomError(const char* title, const char* message) {
+ * accepts a NULL parent. Exported (declared in port_rom.h) so the
+ * region cross-check in port_main.c can reuse it. */
+void Port_FatalRomError(const char* title, const char* message) {
     fprintf(stderr, "ERROR: %s\n", message);
     fflush(stderr);
 #ifndef TMC_N64
@@ -586,9 +587,11 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
         /* JP binary (or fat multi-region binary): use JP offsets, but refuse to
          * proceed if the table is still the unpopulated placeholder. */
         if (kRomOffsets_JP.gfxAndPalettes == 0) {
-            fprintf(stderr, "FATAL: JP offsets unpopulated. Fill kRomOffsets_JP "
-                            "(see docs/JP_PORT_ENABLEMENT.md).\n");
-            exit(1);
+            Port_FatalRomError("Minish Cap PC Port - JP not yet supported",
+                               "This is a Japanese (BZMJ) ROM, but this build's JP data tables "
+                               "are not populated yet.\n\n"
+                               "Use a USA (BZME) or EU (BZMP) ROM for now. See "
+                               "docs/JP_PORT_ENABLEMENT.md for the JP status.");
         }
         gRomOffsets = &kRomOffsets_JP;
 #else
@@ -1278,7 +1281,7 @@ void Port_LoadRom(const char* path) {
                              "Failed to allocate %u bytes for ROM.\n\n"
                              "The system is out of memory.",
                              gRomSize);
-                    FatalRomError("Minish Cap PC Port - ROM allocation failed", msg);
+                    Port_FatalRomError("Minish Cap PC Port - ROM allocation failed", msg);
                 }
             }
             if (fileSize <= gRomSize) {
@@ -1335,15 +1338,15 @@ void Port_LoadRom(const char* path) {
      * as a fatal dialog rather than letting the engine boot into a
      * black screen. */
     if (!romLoaded) {
-        FatalRomError("Minish Cap PC Port - ROM not found",
-                      "Could not load baserom.gba.\n\n"
-                      "Place baserom.gba (USA) or baserom_eu.gba (EU) next to tmc_pc and try again.\n"
-                      "Supported names: baserom.gba, baserom_eu.gba, tmc.gba, tmc_eu.gba.");
+        Port_FatalRomError("Minish Cap PC Port - ROM not found",
+                           "Could not load baserom.gba.\n\n"
+                           "Place baserom.gba (USA) or baserom_eu.gba (EU) next to tmc_pc and try again.\n"
+                           "Supported names: baserom.gba, baserom_eu.gba, tmc.gba, tmc_eu.gba.");
     }
 
     if (!gRomData || gRomSize == 0) {
-        FatalRomError("Minish Cap PC Port - ROM load failed", "No ROM data available after loading.\n\n"
-                                                              "The ROM file may be empty or unreadable.");
+        Port_FatalRomError("Minish Cap PC Port - ROM load failed", "No ROM data available after loading.\n\n"
+                                                                   "The ROM file may be empty or unreadable.");
     }
 #else
     /* #N64: gRomData/gRomSize already point at the embedded cart ROM (set by
@@ -1362,7 +1365,7 @@ void Port_LoadRom(const char* path) {
         char msg[256];
         snprintf(msg, sizeof(msg), "ROM file is truncated or invalid (size %u < expected %u).", gRomSize,
                  R->expectedRomSize);
-        FatalRomError("Minish Cap PC Port - ROM invalid", msg);
+        Port_FatalRomError("Minish Cap PC Port - ROM invalid", msg);
     }
     fprintf(stderr, "Using offsets for %s (game code: %.4s)\n",
             gRomRegion == ROM_REGION_EU   ? "EU"

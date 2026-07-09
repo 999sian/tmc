@@ -847,19 +847,28 @@ int main(int argc, char* argv[]) {
                                        : gRomRegion == ROM_REGION_JP ? "JP"
                                                                      : "UNKNOWN";
             if (Port_Config_GetConsoleParity()) {
-                fprintf(stderr,
-                        "FATAL: Console-Parity requires a region-matched ROM: this binary is %s "
-                        "but the ROM is %s.\n"
-                        "       A version-mismatched hybrid is not console-equivalent. Rebuild for the\n"
-                        "       ROM's region, or relaunch without --console-parity.\n",
-                        compiledName, detectedName);
-                return 1;
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "Console-Parity requires a region-matched ROM: this build is %s but the "
+                         "ROM is %s.\n\n"
+                         "A version-mismatched hybrid is not console-equivalent. Use a %s ROM, or "
+                         "relaunch without Console-Parity.",
+                         compiledName, detectedName, compiledName);
+                Port_FatalRomError("Minish Cap PC Port - region mismatch", msg);
             }
-            fprintf(stderr,
-                    "WARNING: This binary was compiled for %s but the ROM is %s.\n"
-                    "         Asset offsets may be incorrect; behavior matches neither console version.\n"
-                    "         Rebuild with the matching --game_version for a faithful run.\n",
-                    compiledName, detectedName);
+            {
+                char msg[512];
+                snprintf(msg, sizeof(msg),
+                         "This build is %s but the ROM is %s.\n\n"
+                         "Graphics, text, and RNG may be wrong - the game runs as a hybrid that "
+                         "matches neither console version. Use a %s ROM for a faithful game.",
+                         compiledName, detectedName, compiledName);
+                fprintf(stderr, "WARNING: %s\n", msg);
+                fflush(stderr);
+#ifndef TMC_N64
+                SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, "Minish Cap PC Port - region mismatch", msg, window);
+#endif
+            }
         }
     }
 #endif
