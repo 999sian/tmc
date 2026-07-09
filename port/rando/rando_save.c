@@ -82,7 +82,7 @@ typedef struct RandoSidecarSlot {
     uint8_t instant_text;
     uint8_t tunic_color;
     uint8_t heart_color;
-    uint8_t reserved3;
+    uint8_t shuffle_dungeon_items; /* v6 byte, was reserved3 (always 0 == off) */
 } RandoSidecarSlot;
 
 typedef struct RandoSidecarFile {
@@ -303,6 +303,7 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
     rec->instant_text = settings.instant_text;
     rec->tunic_color = (uint8_t)settings.tunic_color;
     rec->heart_color = (uint8_t)settings.heart_color;
+    rec->shuffle_dungeon_items = settings.shuffle_dungeon_items ? 1 : 0;
     /* Save entrance assignments */
     rec->entrance_count = 0;
     for (int i = 0; i < 8; ++i) {
@@ -356,6 +357,7 @@ bool Port_RandoSave_LoadSlot(int slot) {
         settings.instant_text = rec->instant_text;
         settings.tunic_color = rec->tunic_color;
         settings.heart_color = rec->heart_color;
+        settings.shuffle_dungeon_items = rec->shuffle_dungeon_items != 0;
     }
 
     // No logic define overrides to restore anymore

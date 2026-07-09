@@ -2079,6 +2079,16 @@ void sub_080513C0(void) {
         case 1:
             gMapDataBottomSpecial.saveStatus[gMapDataBottomSpecial.unk6] = 1;
 #ifdef PC_PORT
+            {
+                /* New file in this slot: drop any stale rando sidecar left by
+                 * a previous occupant, so a vanilla file cannot be silently
+                 * rando-ized by the crash-window heal (audit R2). A rando
+                 * new-file commit rewrites the sidecar afterwards via
+                 * Port_RandoSave_SaveActiveSlot (later frame), so this clear
+                 * never races the legitimate seed. */
+                extern void Port_RandoSave_ClearSlot(int slot);
+                Port_RandoSave_ClearSlot((int)gMapDataBottomSpecial.unk6);
+            }
             if (Port_RandoFileMenu_ShouldOpenForNewFile()) {
                 SetFileSelectState(STATE_RANDOMIZER_CONFIG);
                 break;
