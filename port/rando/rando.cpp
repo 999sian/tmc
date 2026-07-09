@@ -1985,6 +1985,10 @@ static bool sActive = false;
 static bool sInitialized = false;
 static char sSpoiler[8192];
 static uint64_t sAutoSeedCounter = 0x9e3779b97f4a7c15ull;
+/* Per-seed location-collected bitset (audit C6). Indexed by kLocations[]
+ * position; cleared on activate/reset, set at each location-keyed award,
+ * persisted via the save sidecar. */
+static uint8_t sCollected[RANDO_COLLECTED_BYTES];
 
 static uint64_t SplitMix64_Next(SplitMix64* rng) {
     uint64_t z = (rng->state += 0x9e3779b97f4a7c15ull);
@@ -2961,6 +2965,7 @@ static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* setting
     sSettings = *settings;
     sSeed = seed;
     sActive = true;
+    memset(sCollected, 0, sizeof(sCollected));
     BuildCompatibilityRemap();
     BuildSpoiler(seed, settings);
     fprintf(stderr, "[RANDO] seed %llu generated (native logic, %s pool, %zu locations)\n", (unsigned long long)seed,
@@ -3070,6 +3075,7 @@ extern "C" void Rando_Reset(void) {
     extern void Rando_Music_ClearAssignments(void);
     Rando_Entrance_ClearAssignments();
     Rando_Music_ClearAssignments();
+    memset(sCollected, 0, sizeof(sCollected));
     sLocationAwardPending = false;
     sSpoiler[0] = '\0';
     fprintf(stderr, "[RANDO] reset to vanilla\n");
@@ -3165,6 +3171,7 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
             sLocationAwardPending = true;
             sLocationAwardType = (uint8_t)item;
             sLocationAwardSubtype = item_subtype;
+            sCollected[i >> 3] |= (uint8_t)(1u << (i & 7));
             return true;
         }
     }
@@ -3178,6 +3185,34 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
  * {type,subtype} would wrongly skip its remap once (audit R4). */
 extern "C" void Rando_ClearAwardLatch(void) {
     sLocationAwardPending = false;
+}
+
+extern "C" bool Rando_IsCollectedByKey(uint32_t location_key) {
+    EnsureInitialized();
+    if (!sActive)
+        return false;
+    for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
+        if (kLocations[i].key == location_key)
+            return (sCollected[i >> 3] & (1u << (i & 7))) != 0;
+    }
+    return false;
+}
+
+extern "C" void Rando_GetCollectedSet(uint8_t* out, size_t out_len) {
+    if (out == NULL)
+        return;
+    size_t n = out_len < sizeof(sCollected) ? out_len : sizeof(sCollected);
+    memcpy(out, sCollected, n);
+    if (out_len > n)
+        memset(out + n, 0, out_len - n);
+}
+
+extern "C" void Rando_SetCollectedSet(const uint8_t* in, size_t in_len) {
+    memset(sCollected, 0, sizeof(sCollected));
+    if (in == NULL)
+        return;
+    size_t n = in_len < sizeof(sCollected) ? in_len : sizeof(sCollected);
+    memcpy(sCollected, in, n);
 }
 
 extern "C" bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
