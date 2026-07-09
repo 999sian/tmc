@@ -296,6 +296,20 @@ struct State {
 #else
     std::atomic<HANDLE> current_proc{ nullptr };
 #endif
+
+    /* exit() paths (e.g. the repro harnesses) skip Port_TTS_Shutdown; a
+     * joinable worker at static destruction is std::terminate (SIGABRT).
+     * Idempotent: after a normal Shutdown the thread is already joined. */
+    ~State() {
+        quitting.store(true);
+        {
+            std::lock_guard<std::mutex> lk(queue_mu);
+            queue.clear();
+        }
+        queue_cv.notify_all();
+        if (worker.joinable())
+            worker.join();
+    }
 };
 
 State g_state;
