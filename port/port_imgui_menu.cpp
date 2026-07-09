@@ -3971,16 +3971,6 @@ static void DrawQuitModal(void) {
  * on new-file creation (STATE_RANDOMIZER_CONFIG); closes via Start/Cancel,
  * Escape, or gamepad B. Game input stays masked while open (port_bios.c
  * holds KEYINPUT released and swallows SDL events). */
-static int RandoSeedCharFilter(ImGuiInputTextCallbackData* data) {
-    if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter) {
-        if (data->EventChar < 128 && Port_RandoFileMenu_IsSeedChar((char)data->EventChar)) {
-            return 0;
-        }
-        return 1;
-    }
-    return 0;
-}
-
 static void DrawRandoFileMenuModal(void) {
     bool forceOpen = Port_RandoFileMenu_IsModalOpen();
     bool shouldShow = forceOpen || (Rando_IsInFileSelect() && Port_RandoFileMenu_IsSidebarOpen());
@@ -4018,9 +4008,7 @@ static void DrawRandoFileMenuModal(void) {
             if (ImGui::CollapsingHeader("Randomizer Setup", ImGuiTreeNodeFlags_DefaultOpen)) {
                 ImGui::SetNextItemWidth(180);
                 if (ImGui::InputText("Seed (empty = random)", Port_RandoFileMenu_SeedBuffer(),
-                                     RANDO_FILE_MENU_SEED_MAX + 1,
-                                     ImGuiInputTextFlags_CallbackCharFilter | ImGuiInputTextFlags_EnterReturnsTrue,
-                                     RandoSeedCharFilter)) {
+                                     RANDO_FILE_MENU_SEED_MAX + 1, ImGuiInputTextFlags_EnterReturnsTrue)) {
                     Port_RandoFileMenu_SeedEdited();
                     Port_RandoFileMenu_CommitAndStart();
                 }

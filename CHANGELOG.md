@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Randomizer: shared seeds no longer silently mismatch between the two setups
+
+- **The file-select sidebar seed field now accepts the same characters as the
+  F8 tab.** It filtered input to letters and digits only, silently dropping
+  spaces and punctuation — so a friend's phrase seed like `cool seed` became
+  `coolseed` and generated a different world, with no error. Both fields now
+  hash the raw text identically. The sidebar field also matches the F8 buffer
+  length (63 chars, was 32), so a long shared phrase can't truncate differently
+  either.
+
 ### Settings menu & hotkeys are now discoverable
 
 - **First-launch "Settings (F8)" hint.** Nothing in-game ever told a new

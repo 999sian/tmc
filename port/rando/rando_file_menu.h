@@ -9,8 +9,10 @@ extern "C" {
 #endif
 
 /* Seed text capacity (excluding the NUL). The ImGui InputText writes into
- * Port_RandoFileMenu_SeedBuffer(), which is this + 1 bytes. */
-#define RANDO_FILE_MENU_SEED_MAX 32
+ * Port_RandoFileMenu_SeedBuffer(), which is this + 1 bytes. Matches the F8
+ * tab's seed buffer (64) so a shared phrase seed hashes identically in both
+ * entry points instead of truncating differently. */
+#define RANDO_FILE_MENU_SEED_MAX 63
 
 /* Lifecycle — driven by src/fileselect.c (STATE_RANDOMIZER_CONFIG). */
 bool Port_RandoFileMenu_ShouldOpenForNewFile(void);
@@ -33,7 +35,6 @@ char* Port_RandoFileMenu_SeedBuffer(void);
 void Port_RandoFileMenu_SeedEdited(void); /* resync after direct buffer edit */
 void Port_RandoFileMenu_SetSeed(const char* text);
 void Port_RandoFileMenu_RandomizeSeed(void);
-bool Port_RandoFileMenu_IsSeedChar(char c);
 
 /* FNV-1a fingerprint of the settings the sidebar is about to commit — lets
  * racers agree on settings parity BEFORE generating (mirrors the F8 tab's
