@@ -155,6 +155,13 @@ void FourElements_Action2(FourElementsEntity* this) {
         }
 #endif
         InitItemGetSequence(item, subtype, 1);
+        /* Set the dungeon-clear + prize-collected flags at GRANT time, not
+         * after the ~450-frame ceremony (Action6). A Save&Quit mid-ceremony
+         * otherwise persists the awarded item while the dungeon reads
+         * uncleared, so the next visit re-runs the prize and re-awards it
+         * (audit R3). Idempotent, so Action6's calls remain harmless. */
+        FourElements_SetDungeonClearFlag(super->type);
+        SetRoomFlag(0);
         sub_0808C650(super, 1);
         SetFade(FADE_BLACK_WHITE | FADE_INSTANT, 2);
         SoundReq(SFX_F8);
