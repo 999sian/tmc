@@ -669,6 +669,7 @@ static void DrawPortSettingsMenu(void);
 extern bool Port_RandoFileMenu_ShouldOpenForNewFile(void);
 extern void Port_RandoFileMenu_Open(int save_slot);
 extern bool Port_RandoFileMenu_IsOpen(void);
+extern bool Port_RandoFileMenu_IsModalOpen(void);
 #endif
 
 void sub_08051358(void);
@@ -2425,7 +2426,10 @@ void sub_080518E4(void) {
 
 #ifdef PC_PORT
 static void HandleFileRandoConfig(void) {
-    if (!Port_RandoFileMenu_IsOpen()) {
+    /* Gate on the armed modal, not IsOpen(): IsOpen() ORs in the manually
+     * L-toggled sidebar, and a pre-opened sidebar must not suppress arming
+     * the modal for the slot the new-file flow just created. */
+    if (!Port_RandoFileMenu_IsModalOpen()) {
         Port_RandoFileMenu_Open((int)gMapDataBottomSpecial.unk6);
     }
 }
