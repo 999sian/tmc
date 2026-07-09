@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Randomizer: fixed Hyrule Town softlock in the Picori-festival window
+
+- **A story-skipped file could softlock on entering Hyrule Town.** Until Deepwood
+  Shrine is cleared the engine keeps `global_progress == 1`, and Hyrule Town's
+  room init treats that as "Picori Festival in progress" — redirecting the town
+  to the festival area and re-arming the Zelda-chase. In the randomizer the intro
+  is already over (the story-skip sets `TABIDACHI`), so the town loaded in
+  festival state while its exits were post-festival: walking out the north edge
+  stranded the player. Town entry now suppresses the festival redirect once the
+  intro is over (`TABIDACHI` set), loading the normal post-festival town. GBA
+  behavior is unchanged (the guard is PC-port only); regression probe
+  `TMC_ROOMCAP_TOWN_PROBE` covers both the fix and the intact intro path.
+
 ### First-launch extraction message on Android; dead-code cleanup
 
 - **The first-launch asset-extraction screen no longer tells Android users to

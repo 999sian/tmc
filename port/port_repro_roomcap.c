@@ -468,6 +468,64 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         }
     }
 
+    /* ---- TMC_ROOMCAP_TOWN_PROBE: rando festival-softlock repro ---------
+     * Story-skip leaves global_progress==1 (until Deepwood) with TABIDACHI
+     * set. sub_unk3_HyruleTown_0 must NOT redirect the real Hyrule Town
+     * (area 0x02) to the festival town (0x15) once TABIDACHI is set, or the
+     * town loads in Picori-festival state while its exits are post-festival
+     * -> softlock. Warp to town: TMC_ROOMCAP_WARP=0x02,0,<x>,<y>.
+     *   =1  set TABIDACHI  -> PASS if the town stays area 0x02 (the fix)
+     *   =2  leave it clear -> PASS if it still redirects to 0x15 (intro intact)
+     * Exits 0 (pass) / 5 (fail). */
+    {
+        static int tprobe = -1, tstage = 0;
+        extern void SetGlobalFlag(u32 flag);
+        extern u32 CheckGlobalFlag(u32 flag);
+        if (tprobe < 0) {
+            const char* e = getenv("TMC_ROOMCAP_TOWN_PROBE");
+            tprobe = (e && *e) ? atoi(e) : 0;
+        }
+        if (tprobe && warp_done) {
+            switch (tstage) {
+                case 0: {
+                    extern void ClearGlobalFlag(u32 flag);
+                    if (tprobe == 1)
+                        SetGlobalFlag(0x15); /* TABIDACHI = intro over */
+                    /* Clear the residue of the bootstrap warp's redirect so
+                     * ZELDA_CHASE becomes a clean signal: the fix leaves it
+                     * clear (redirect not taken); the control re-sets it. */
+                    ClearGlobalFlag(0x1c); /* ZELDA_CHASE */
+                    tstage = 1;
+                    break;
+                }
+                case 1: {
+                    /* Re-warp so sub_unk3_HyruleTown_0 re-evaluates with the
+                     * flag now in its intended (post-intro) state. */
+                    int rc = Port_DebugAction_Warp(2, 0, (unsigned short)x, (unsigned short)y, (unsigned char)l);
+                    if (rc == 1) {
+                        tstage = 2;
+                        cap_frame = (int)(frame + 90);
+                    }
+                    break;
+                }
+                case 2:
+                    if ((int)frame >= cap_frame) {
+                        unsigned area = (unsigned)gRoomControls.area;
+                        int chase = (int)CheckGlobalFlag(0x1c); /* ZELDA_CHASE */
+                        unsigned want = (tprobe == 1) ? 0x02u : 0x15u;
+                        fprintf(stderr, "[town-probe] mode=%d area=0x%02x zelda_chase=%d (want area=0x%02x)\n", tprobe,
+                                area, chase, want);
+                        fflush(stderr);
+                        _Exit(area == want ? 0 : 5);
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return; /* probe owns the run */
+        }
+    }
+
     /* TMC_ROOMCAP_MSG=<index>[,posY]: open a textbox <settle/2> frames after
      * the warp so the capture shows live dialogue (widescreen centering
      * test). Optional posY overrides the box row (1 = top-anchored). */

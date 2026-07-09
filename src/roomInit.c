@@ -4402,7 +4402,19 @@ u32 sub_unk3_HyruleTown_0(void) {
         (void**)(Area_HyruleTown[gSave.global_progress])
 #endif
     );
+#ifdef PC_PORT
+    /* Rando/story-skip fix: global_progress stays 1 until Deepwood Shrine is
+     * cleared, but once the intro is over (TABIDACHI set) the Picori Festival
+     * must not re-trigger. Without this, entering the real Hyrule Town (area 2)
+     * at gp==1 redirects to the festival town (AREA_FESTIVAL_TOWN) and re-arms
+     * ZELDA_CHASE, while the overworld exits are already post-festival — a
+     * softlock. Load the normal town instead. The GBA build keeps the exact
+     * vanilla gp==1 festival redirect (there, gp==1 with TABIDACHI set can only
+     * occur mid-intro, where the redirect is still wanted). */
+    if (gSave.global_progress != 1 || CheckGlobalFlag(TABIDACHI)) {
+#else
     if (gSave.global_progress != 1) {
+#endif
 #ifdef PC_PORT
         gCurrentRoomProperties = (void**)(((void**)gAreaTable[2])[0]);
 #else
@@ -4464,7 +4476,14 @@ void sub_StateChange_HyruleTown_0(void) {
 #elif defined(USA) || defined(DEMO_USA) || defined(DEMO_JP)
     SetTileType(TILE_TYPE_374, TILE_POS(43, 25), LAYER_BOTTOM);
 #endif
+#ifdef PC_PORT
+    /* Matches the redirect gate in sub_unk3_HyruleTown_0: once the intro is
+     * over (TABIDACHI), load the normal town's entities instead of the festival
+     * fade-only path, so the story-skipped town isn't left empty. */
+    if (gSave.global_progress == 1 && !CheckGlobalFlag(TABIDACHI)) {
+#else
     if (gSave.global_progress == 1) {
+#endif
         sub_0801D000(0);
     } else {
         sub_08018C58(0xdb4);
