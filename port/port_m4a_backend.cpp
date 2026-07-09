@@ -596,42 +596,53 @@ static void RenderChunkLocked(void) {
     try {
         sState.ctx->m4aSoundMain();
 
-        for (size_t sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
-            float left = 0.0f;
-            float right = 0.0f;
+        // Track-outer / sample-inner: gain/pan are per-track invariants, so they
+        // (and the muted/silent skip) are computed once per track instead of once
+        // per sample. Track summation order is preserved, so the float result is
+        // bit-identical to the old per-sample loop (pan factor folds to *1.0f when
+        // inactive, which is exact in IEEE754).
+        static std::vector<float> accL;
+        static std::vector<float> accR;
+        accL.assign(sampleCount, 0.0f);
+        accR.assign(sampleCount, 0.0f);
 
-            for (uint32_t playerIndex = 0; playerIndex < std::min<uint32_t>(kPlayerCount, sState.ctx->players.size());
-                 playerIndex++) {
-                const auto& player = sState.ctx->players[playerIndex];
+        const uint32_t playerCount =
+            std::min<uint32_t>(kPlayerCount, static_cast<uint32_t>(sState.ctx->players.size()));
 
-                for (size_t trackIndex = 0; trackIndex < std::min<size_t>(kMaxTracks, player.tracks.size());
-                     trackIndex++) {
-                    const auto& track = player.tracks[trackIndex];
-                    const float gain = static_cast<float>(sState.trackVolumes[playerIndex][trackIndex]) / 255.0f;
-                    const float pan = static_cast<float>(sState.trackPans[playerIndex][trackIndex]) / 64.0f;
-                    float trackLeft;
-                    float trackRight;
+        for (uint32_t playerIndex = 0; playerIndex < playerCount; playerIndex++) {
+            const auto& player = sState.ctx->players[playerIndex];
+            const size_t trackCount = std::min<size_t>(kMaxTracks, player.tracks.size());
 
-                    if (track.muted || track.audioBuffer.size() <= sampleIndex || gain <= 0.0f) {
-                        continue;
-                    }
+            for (size_t trackIndex = 0; trackIndex < trackCount; trackIndex++) {
+                const auto& track = player.tracks[trackIndex];
+                const float gain = static_cast<float>(sState.trackVolumes[playerIndex][trackIndex]) / 255.0f;
 
-                    trackLeft = track.audioBuffer[sampleIndex].left * gain;
-                    trackRight = track.audioBuffer[sampleIndex].right * gain;
+                if (track.muted || gain <= 0.0f) {
+                    continue;
+                }
 
-                    if (pan > 0.0f) {
-                        trackLeft *= (1.0f - std::min(pan, 1.0f));
-                    } else if (pan < 0.0f) {
-                        trackRight *= (1.0f - std::min(-pan, 1.0f));
-                    }
+                const float pan = static_cast<float>(sState.trackPans[playerIndex][trackIndex]) / 64.0f;
+                float panL = 1.0f;
+                float panR = 1.0f;
+                if (pan > 0.0f) {
+                    panL = 1.0f - std::min(pan, 1.0f);
+                } else if (pan < 0.0f) {
+                    panR = 1.0f - std::min(-pan, 1.0f);
+                }
 
-                    left += trackLeft;
-                    right += trackRight;
+                const size_t n = std::min(sampleCount, track.audioBuffer.size());
+                const auto* buf = track.audioBuffer.data();
+                for (size_t sampleIndex = 0; sampleIndex < n; sampleIndex++) {
+                    accL[sampleIndex] += buf[sampleIndex].left * gain * panL;
+                    accR[sampleIndex] += buf[sampleIndex].right * gain * panR;
                 }
             }
+        }
 
-            left *= sState.masterVolume;
-            right *= sState.masterVolume;
+        const float masterVolume = sState.masterVolume;
+        for (size_t sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
+            float left = accL[sampleIndex] * masterVolume;
+            float right = accR[sampleIndex] * masterVolume;
 
             left = std::clamp(left, -1.0f, 1.0f);
             right = std::clamp(right, -1.0f, 1.0f);
