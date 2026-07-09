@@ -2239,6 +2239,14 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
                 return false;
             if (door_idx == 3)
                 return items[ITEM_FLIPPERS] || og;
+            /* Door 6 is the DHC castle-garden entrance: it only exists once
+             * the castle transforms (four elements placed). Model it on the
+             * elements so entrance shuffle can't rate a dungeon behind it
+             * reachable from the start (audit R5). Door 7 (cellar) stays
+             * open. */
+            if (door_idx == 6)
+                return items[ITEM_EARTH_ELEMENT] && items[ITEM_FIRE_ELEMENT] && items[ITEM_WATER_ELEMENT] &&
+                       items[ITEM_WIND_ELEMENT];
             return true;
         };
 
@@ -2295,8 +2303,30 @@ static bool IsObscureLocation(const RandoLocationDef* loc) {
         return true;
     return false;
 }
+/* Interim logic-modeling pins (audit C3/C5): these scripted locations are
+ * reachable in the solver's model but gated in-engine by state the solver
+ * does not yet track, so progression placed there can verify beatable yet
+ * deadlock. Kept vanilla (out of the pool) until the gates are modeled:
+ *  - Goron Merchant tiers 2-5 (a>=1): each unlocks one tier per room load
+ *    AND only after LV1..LV4_CLEAR (goronMerchantShopManager.c).
+ *  - Cucco rounds 1-9 (a<=8): the new-file baseline pins the game at round
+ *    10, so only CUCCO(9) ("Level 10 Reward") ever keys (cuccoMinigame.c). */
+static bool RandoInterimGated(const RandoLocationDef* loc) {
+    if ((loc->key & 0x80000000u) == 0)
+        return false;
+    uint32_t group = (loc->key >> 24) & 0x7f;
+    uint32_t a = (loc->key >> 16) & 0xff;
+    if (group == RANDO_SCRIPTED_KEY_GORON_MERCHANT && a >= 1)
+        return true;
+    if (group == RANDO_SCRIPTED_KEY_CUCCO && a <= 8)
+        return true;
+    return false;
+}
 static bool LocationEnabled(const RandomizerSettings* settings, const RandoLocationDef* loc) {
     if (!settings->shuffle_dojos && loc->category == RANDO_LOC_CATEGORY_DOJO) {
+        return false;
+    }
+    if (RandoInterimGated(loc)) {
         return false;
     }
     if (!settings->obscure_locations && IsObscureLocation(loc)) {
@@ -3139,6 +3169,15 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
         }
     }
     return false;
+}
+
+/* A location-keyed award arms the one-shot latch so the generic junk
+ * bijection (Rando_OverrideItem) does not re-randomize it. Give paths that
+ * do NOT route through Rando_OverrideItem (the silent GiveItem branch in
+ * itemOnGround.c) must disarm it, or a later incidental item with the same
+ * {type,subtype} would wrongly skip its remap once (audit R4). */
+extern "C" void Rando_ClearAwardLatch(void) {
+    sLocationAwardPending = false;
 }
 
 extern "C" bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
