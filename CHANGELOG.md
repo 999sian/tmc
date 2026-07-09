@@ -92,6 +92,11 @@
   gets a larger, jitter-tolerant buffer; faster SoCs (e.g. Galaxy Tab A7's 2.0 GHz
   A73s) keep the low-latency default. Together these cut G4 underruns from ~8-35/s
   to ~0-6/s. `TMC_AUDIO_FRAMES` / an `audio_frames` marker still override the buffer.
+- **Mixer hot loop reordered** to track-outer / sample-inner so per-track gain
+  and pan (loop invariants) are computed once per track instead of once per
+  sample, and the muted/silent skip happens before the sample loop. Track
+  summation order is preserved, so the float output is bit-identical. Trims
+  per-buffer mixing cost, which matters most on the weak-cluster path above.
 - GBA-accurate mode is unchanged (NEAREST resampling, hardware-exact) on all platforms.
 
 ### GPU rasterizer: the whole PPU now renders on the GPU (CPU is the fallback)
