@@ -252,6 +252,13 @@ int Port_Config_GetRandoHeartColor(void);
 void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos,
                                   bool open_world, int item_pool, bool homewarp, bool start_sword, bool early_crests,
                                   bool instant_text, int tunic_color, int heart_color);
+/* Glitch-logic trick bitmask (RANDO_TRICK_*) and verifier accessibility level
+ * (RandoAccessibility). Persisted independently of the positional setter above
+ * so adding logic tiers never reshuffles that argument list. */
+int Port_Config_GetRandoTricks(void);
+void Port_Config_SetRandoTricks(int tricks);
+int Port_Config_GetRandoAccessibility(void);
+void Port_Config_SetRandoAccessibility(int accessibility);
 
 void Port_Config_OpenGamepads(void);
 #ifndef TMC_N64

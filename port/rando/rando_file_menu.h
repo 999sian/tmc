@@ -29,7 +29,7 @@ void Port_RandoFileMenu_ToggleSidebar(void);
  * headless repro harness (port_repro_rando.c) calls the same helpers. */
 const char* Port_RandoFileMenu_Status(void);
 char* Port_RandoFileMenu_SeedBuffer(void);
-void Port_RandoFileMenu_SeedEdited(void);     /* resync after direct buffer edit */
+void Port_RandoFileMenu_SeedEdited(void); /* resync after direct buffer edit */
 void Port_RandoFileMenu_SetSeed(const char* text);
 void Port_RandoFileMenu_RandomizeSeed(void);
 bool Port_RandoFileMenu_IsSeedChar(char c);
@@ -47,8 +47,10 @@ bool* Port_RandoFileMenu_Homewarp(void);
 bool* Port_RandoFileMenu_StartSword(void);
 bool* Port_RandoFileMenu_EarlyCrests(void);
 bool* Port_RandoFileMenu_InstantText(void);
-int*  Port_RandoFileMenu_TunicColor(void);
-int*  Port_RandoFileMenu_HeartColor(void);
+int* Port_RandoFileMenu_TunicColor(void);
+int* Port_RandoFileMenu_HeartColor(void);
+int* Port_RandoFileMenu_Tricks(void);        /* RANDO_TRICK_* bitmask */
+int* Port_RandoFileMenu_Accessibility(void); /* RandoAccessibility */
 /* Commit paths: generate + start the slot, or back out to file select. */
 void Port_RandoFileMenu_CommitAndStart(void);
 void Port_RandoFileMenu_Cancel(void);

@@ -284,7 +284,40 @@ unsigned Rando_GetDungeonKeyCount(unsigned dungeon_idx) {
 bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx) {
     if (dungeon_idx >= 16)
         return false;
-    return (gSave.dungeonItems[dungeon_idx] & 2) != 0;
+    /* Big key is bit 2 (0x4) of dungeonItems; bit1 (0x2) is the compass,
+     * bit0 (0x1) the map — see gameUtils.c HasDungeonBigKey/Compass/Map and
+     * itemMetaData.c. (The save.h field comment mislabels these.) */
+    return (gSave.dungeonItems[dungeon_idx] & 4) != 0;
+}
+
+/* GiveItem (itemUtils.c cases 5/6) origin routing: a rando-shuffled dungeon
+ * item carries 0x80|origin_dungeon in its subtype (RANDO_DUNGEON_ORIGIN_SUBTYPE)
+ * and must credit THAT dungeon's save slot — the vanilla give path credits
+ * gArea.dungeon_idx, which is wrong (or out of range) anywhere outside the
+ * item's home dungeon. Returns true when the credit was applied here. */
+bool Rando_RouteDungeonItem(u32 item, u32 subtype) {
+    if (!Rando_IsActive() || !RANDO_SUBTYPE_HAS_ORIGIN(subtype))
+        return false;
+    unsigned origin = RANDO_SUBTYPE_ORIGIN(subtype);
+    if (origin == 0 || origin >= 16)
+        return false;
+    switch (item) {
+        case ITEM_SMALL_KEY:
+            if (gSave.dungeonKeys[origin] < 99)
+                gSave.dungeonKeys[origin]++;
+            return true;
+        case ITEM_DUNGEON_MAP:
+            gSave.dungeonItems[origin] |= 0x1;
+            return true;
+        case ITEM_COMPASS:
+            gSave.dungeonItems[origin] |= 0x2;
+            return true;
+        case ITEM_BIG_KEY:
+            gSave.dungeonItems[origin] |= 0x4;
+            return true;
+        default:
+            return false;
+    }
 }
 
 bool Rando_IsInGameplay(void) {

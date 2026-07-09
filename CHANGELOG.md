@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Randomizer: dungeon-item shuffle, accessibility modes, seed fingerprint
+
+- **Dungeon items (maps, compasses, big keys) can now join the shuffle.**
+  New `shuffle_dungeon_items` setting (default off = pinned vanilla) adds 17
+  dungeon-item chests to the pool (211 → 228 locations). A dungeon item found
+  outside its home dungeon credits its ORIGIN dungeon, not the current area:
+  the origin rides in the item subtype byte (`0x80 | dungeon_idx`) through the
+  give path (`itemUtils.c` cases 5/6, `itemOnGround.c`), and the solver tracks
+  each as a virtual item id (0x80..0xBF) so reachability tells Palace's big key
+  from Deepwood's. Sidecar bumps to v7.
+- **Accessibility modes** matching the upstream dropdown: `GOAL` (historical —
+  only the final boss must be reachable), `ALL_NONKEYS` (every enabled non-key
+  check reachable), `ALL_LOCATIONS` (every enabled check reachable). Verifier
+  is strengthening-only: a stronger mode never accepts a seed `GOAL` rejects.
+  Selectable in the file-select overlay and the F8 → Randomizer tab; persisted
+  as `rando_accessibility`.
+- **Seed fingerprint** (`Rando_SettingsFingerprint`): FNV-1a over every
+  placement-affecting setting, shown in the F8 tab. Two players with the same
+  seed AND the same fingerprint are generating the identical placement — the
+  shareable "are we on the same seed" check. Pure cosmetics and runtime-only
+  QoL are excluded (they never change placement).
+- **Glitch tricks are now individually selectable** in the F8 tab when
+  glitchless logic is off (Ocarina Glitch / Crenel Clip / Portal Jump Storage),
+  persisted as `rando_tricks`.
+- Verified: `rando_logic_test` (228 locations; accessibility beatable /
+  strengthening-monotonic / reachability, and fingerprint stability +
+  per-setting sensitivity) ALL PASS.
+
 ### Widescreen: textbox borders no longer torn; right-edge black band gone
 
 - **Fixed the centered dialogue box rendering with a missing right border and

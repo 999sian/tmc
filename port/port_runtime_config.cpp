@@ -167,6 +167,8 @@ bool sRandoEarlyCrests = true;
 bool sRandoInstantText = true;
 int sRandoTunicColor = 0;
 int sRandoHeartColor = 0;
+int sRandoTricks = 0;
+int sRandoAccessibility = 0;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -275,9 +277,10 @@ const BoolCfg kBoolCfg[] = {
     { "rando_instant_text", &sRandoInstantText, true },
 };
 const IntCfg kIntCfg[] = {
-    { "preferred_region", &sPreferredRegion, -1 }, { "preferred_language", &sPreferredLanguage, -1 },
-    { "rando_item_pool", &sRandoItemPool, 0 },     { "rando_tunic_color", &sRandoTunicColor, 0 },
-    { "rando_heart_color", &sRandoHeartColor, 0 },
+    { "preferred_region", &sPreferredRegion, -1 },      { "preferred_language", &sPreferredLanguage, -1 },
+    { "rando_item_pool", &sRandoItemPool, 0 },          { "rando_tunic_color", &sRandoTunicColor, 0 },
+    { "rando_heart_color", &sRandoHeartColor, 0 },      { "rando_tricks", &sRandoTricks, 0 },
+    { "rando_accessibility", &sRandoAccessibility, 0 },
 };
 const StrCfg kStrCfg[] = {
     { "upscale_method", &sUpscaleMethod, "nearest" },
@@ -1872,6 +1875,22 @@ extern "C" int Port_Config_GetRandoTunicColor(void) {
 }
 extern "C" int Port_Config_GetRandoHeartColor(void) {
     return sRandoHeartColor;
+}
+extern "C" int Port_Config_GetRandoTricks(void) {
+    return sRandoTricks;
+}
+extern "C" void Port_Config_SetRandoTricks(int tricks) {
+    sRandoTricks = tricks;
+    sConfigJson["rando_tricks"] = tricks;
+    SaveConfig();
+}
+extern "C" int Port_Config_GetRandoAccessibility(void) {
+    return sRandoAccessibility;
+}
+extern "C" void Port_Config_SetRandoAccessibility(int accessibility) {
+    sRandoAccessibility = accessibility;
+    sConfigJson["rando_accessibility"] = accessibility;
+    SaveConfig();
 }
 
 extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos,

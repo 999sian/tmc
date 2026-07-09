@@ -1745,6 +1745,151 @@ static const RandoLocationDef kLocations[RANDO_LOCATION_COUNT] = {
       false,
       false,
       { ITEM_GUST_JAR, ITEM_NONE, ITEM_NONE } },
+    /* --- Dungeon-item chests (maps / compasses / big keys) ---------------
+     * Keys extracted from data/map/entity_headers.s TileEntity tables
+     * (area<<16 | room<<8 | chestIndex, chestIndex = 0-based order among
+     * SMALL/BIG chest TileEntities in the room). Requirements deliberately
+     * OVER-gate with the dungeon's full boss kit (minus the big key): a
+     * chest deeper than the entrance can never be under-gated, so a
+     * progression item placed here is never logically reachable before it
+     * is physically reachable. Big keys stay out of their own gate (the
+     * boss row owns that term) to avoid self-locks. */
+    { 0x00480500u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Deepwood Shrine - Map Chest",
+      ITEM_DUNGEON_MAP,
+      RH_DEEPWOOD,
+      true,
+      false,
+      { ITEM_GUST_JAR, ITEM_NONE, ITEM_NONE } },
+    { 0x00481100u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Deepwood Shrine - Big Key Chest",
+      ITEM_BIG_KEY,
+      RH_DEEPWOOD,
+      true,
+      false,
+      { ITEM_GUST_JAR, ITEM_NONE, ITEM_NONE } },
+    { 0x00481201u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Deepwood Shrine - Compass Chest",
+      ITEM_COMPASS,
+      RH_DEEPWOOD,
+      true,
+      false,
+      { ITEM_GUST_JAR, ITEM_NONE, ITEM_NONE } },
+    { 0x00500901u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Cave of Flames - Map Chest",
+      ITEM_DUNGEON_MAP,
+      RH_COF,
+      true,
+      true,
+      { ITEM_PACCI_CANE, ITEM_NONE, ITEM_NONE } },
+    { 0x00501500u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Cave of Flames - Compass Chest",
+      ITEM_COMPASS,
+      RH_COF,
+      true,
+      true,
+      { ITEM_PACCI_CANE, ITEM_NONE, ITEM_NONE } },
+    { 0x00501702u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Cave of Flames - Big Key Chest",
+      ITEM_BIG_KEY,
+      RH_COF,
+      true,
+      true,
+      { ITEM_PACCI_CANE, ITEM_NONE, ITEM_NONE } },
+    { 0x00580000u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Fortress of Winds - Compass Chest",
+      ITEM_COMPASS,
+      RH_FORTRESS,
+      true,
+      false,
+      { ITEM_MOLE_MITTS, ITEM_BOW, ITEM_NONE } },
+    { 0x00581900u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Fortress of Winds - Map Chest",
+      ITEM_DUNGEON_MAP,
+      RH_FORTRESS,
+      true,
+      false,
+      { ITEM_MOLE_MITTS, ITEM_BOW, ITEM_NONE } },
+    { 0x00581B00u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Fortress of Winds - Big Key Chest",
+      ITEM_BIG_KEY,
+      RH_FORTRESS,
+      true,
+      false,
+      { ITEM_MOLE_MITTS, ITEM_BOW, ITEM_NONE } },
+    { 0x00600D00u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Temple of Droplets - Map Chest",
+      ITEM_DUNGEON_MAP,
+      RH_DROPLETS,
+      true,
+      false,
+      { ITEM_LANTERN_OFF, ITEM_GUST_JAR, ITEM_NONE } },
+    { 0x00603201u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Temple of Droplets - Compass Chest",
+      ITEM_COMPASS,
+      RH_DROPLETS,
+      true,
+      false,
+      { ITEM_LANTERN_OFF, ITEM_GUST_JAR, ITEM_NONE } },
+    { 0x00700100u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Palace of Winds - Big Key Chest",
+      ITEM_BIG_KEY,
+      RH_PALACE,
+      true,
+      false,
+      { ITEM_ROCS_CAPE, ITEM_BOW, ITEM_NONE } },
+    { 0x00701C00u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Palace of Winds - Map Chest",
+      ITEM_DUNGEON_MAP,
+      RH_PALACE,
+      true,
+      false,
+      { ITEM_ROCS_CAPE, ITEM_BOW, ITEM_NONE } },
+    { 0x00703200u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Palace of Winds - Compass Chest",
+      ITEM_COMPASS,
+      RH_PALACE,
+      true,
+      false,
+      { ITEM_ROCS_CAPE, ITEM_BOW, ITEM_NONE } },
+    { 0x00880900u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Dark Hyrule Castle - Big Key Chest",
+      ITEM_BIG_KEY,
+      RH_DHC,
+      true,
+      true,
+      { ITEM_BOW, ITEM_ROCS_CAPE, ITEM_LANTERN_OFF } },
+    { 0x00882000u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Dark Hyrule Castle - Compass Chest",
+      ITEM_COMPASS,
+      RH_DHC,
+      true,
+      true,
+      { ITEM_BOW, ITEM_ROCS_CAPE, ITEM_LANTERN_OFF } },
+    { 0x00883700u,
+      RANDO_LOC_CATEGORY_CHEST,
+      "Dark Hyrule Castle - Map Chest",
+      ITEM_DUNGEON_MAP,
+      RH_DHC,
+      true,
+      true,
+      { ITEM_BOW, ITEM_ROCS_CAPE, ITEM_LANTERN_OFF } },
 };
 
 static const uint16_t kProgressionItems[] = { ITEM_GREEN_SWORD,
@@ -1908,6 +2053,121 @@ extern "C" RandoHelperId ExteriorHelperForDoor(int door_idx) {
     }
 }
 
+/* --- Per-dungeon dungeon-item identity (see rando.h) ---------------------- */
+
+static bool IsDungeonItem(uint16_t item) {
+    return item == ITEM_BIG_KEY || item == ITEM_DUNGEON_MAP || item == ITEM_COMPASS;
+}
+
+/* Engine dungeon_idx (gSave.dungeonKeys/dungeonItems index) for a location's
+ * region helper: areaMetadata locations 24..30 - 23 => Deepwood=1, CoF=2,
+ * Fortress=3, ToD=4, Palace=5, DHC=6, Royal Crypt=7. 0 = not a dungeon. */
+static unsigned RegionDungeonIdx(uint8_t helper) {
+    switch (helper) {
+        case RH_DEEPWOOD:
+        case RH_DEEPWOOD_BOSS:
+            return 1;
+        case RH_COF:
+        case RH_COF_BOSS:
+            return 2;
+        case RH_FORTRESS:
+        case RH_FORTRESS_BOSS:
+            return 3;
+        case RH_DROPLETS:
+        case RH_DROPLETS_BOSS:
+            return 4;
+        case RH_PALACE:
+        case RH_PALACE_BOSS:
+            return 5;
+        case RH_DHC:
+            return 6;
+        case RH_ROYAL_CRYPT:
+            return 7;
+        default:
+            return 0;
+    }
+}
+
+static unsigned VirtualDungeonItemId(uint16_t item, unsigned origin) {
+    switch (item) {
+        case ITEM_BIG_KEY:
+            return RANDO_VITEM_BIG_KEY(origin);
+        case ITEM_DUNGEON_MAP:
+            return RANDO_VITEM_MAP(origin);
+        case ITEM_COMPASS:
+            return RANDO_VITEM_COMPASS(origin);
+        default:
+            return 0;
+    }
+}
+
+/* Static scan of kLocations: dungeon-item instances (index + origin dungeon)
+ * and the per-dungeon "big key is location-modeled" mask. Dungeons whose big
+ * key is NOT a modeled location keep their vanilla in-engine key, so their
+ * boss helpers must NOT gate on a virtual id (it could never be credited). */
+#define RANDO_MAX_DUNGEON_ITEM_LOCS 24
+static uint8_t sDungeonItemLocCount = 0;
+static uint16_t sDungeonItemLocIndex[RANDO_MAX_DUNGEON_ITEM_LOCS];
+static uint8_t sDungeonItemLocOrigin[RANDO_MAX_DUNGEON_ITEM_LOCS];
+static bool sBigKeyModeled[16];
+static bool sDungeonItemScanDone = false;
+
+static void EnsureDungeonItemScan(void) {
+    if (sDungeonItemScanDone)
+        return;
+    sDungeonItemScanDone = true;
+    for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
+        if (!IsDungeonItem(kLocations[i].vanilla_item))
+            continue;
+        unsigned origin = RegionDungeonIdx(kLocations[i].helper);
+        if (origin == 0) {
+            fprintf(stderr, "[RANDO] warning: dungeon item at non-dungeon location %zu (%s); left vanilla\n", i,
+                    kLocations[i].name);
+            continue;
+        }
+        if (sDungeonItemLocCount >= RANDO_MAX_DUNGEON_ITEM_LOCS) {
+            fprintf(stderr, "[RANDO] warning: dungeon-item location overflow; %s left vanilla\n", kLocations[i].name);
+            continue;
+        }
+        sDungeonItemLocIndex[sDungeonItemLocCount] = (uint16_t)i;
+        sDungeonItemLocOrigin[sDungeonItemLocCount] = (uint8_t)origin;
+        sDungeonItemLocCount++;
+        if (kLocations[i].vanilla_item == ITEM_BIG_KEY)
+            sBigKeyModeled[origin] = true;
+    }
+}
+
+static bool IsDungeonItemLocation(size_t index) {
+    EnsureDungeonItemScan();
+    for (uint8_t j = 0; j < sDungeonItemLocCount; ++j) {
+        if (sDungeonItemLocIndex[j] == index)
+            return true;
+    }
+    return false;
+}
+
+static unsigned LocationOriginDungeon(size_t index) {
+    EnsureDungeonItemScan();
+    for (uint8_t j = 0; j < sDungeonItemLocCount; ++j) {
+        if (sDungeonItemLocIndex[j] == index)
+            return sDungeonItemLocOrigin[j];
+    }
+    return 0;
+}
+
+/* The solver-side credited id for collecting location `i` holding `item` with
+ * placement subtype `subtype`: dungeon items map to their per-dungeon virtual
+ * id (origin from the placement subtype when tagged, else the location's own
+ * dungeon for pinned-vanilla), everything else is the real id. */
+static unsigned CreditedItemId(size_t i, uint16_t item, uint8_t subtype) {
+    if (!IsDungeonItem(item))
+        return item;
+    unsigned origin = RANDO_SUBTYPE_HAS_ORIGIN(subtype) ? RANDO_SUBTYPE_ORIGIN(subtype) : LocationOriginDungeon(i);
+    if (origin == 0)
+        return item;
+    return VirtualDungeonItemId(item, origin);
+}
+
 static void EvaluateHelpers(const RandomizerSettings* settings, const bool* items, bool* helpers) {
     helpers[RH_SOUTH_FIELD] = true;
     helpers[RH_TOWN] = true;
@@ -1982,18 +2242,31 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
             return true;
         };
 
+        /* Each dungeon's boss door is a BIG-KEY door in-engine
+         * (HasDungeonBigKey on dungeonItems[idx]). Where that dungeon's big
+         * key is a modeled location (sBigKeyModeled — all six with the chest
+         * table, plus ToD's iceblock), the boss row additionally requires
+         * owning THAT dungeon's (virtual) big key. Unmodeled dungeons keep
+         * vanilla in-engine keys and gain no gate. DHC's big key gates the
+         * path to Vaati, so it lands on RH_GOAL, not RH_DHC (the King and
+         * the DHC interior chests sit before the boss door). */
+        auto big_key_ok = [&](unsigned d) -> bool { return !sBigKeyModeled[d] || items[RANDO_VITEM_BIG_KEY(d)]; };
+
         UPDATE_HELPER(RH_DEEPWOOD, door_reachable(dws_door >= 0 ? dws_door : 0));
-        UPDATE_HELPER(RH_DEEPWOOD_BOSS, helpers[RH_DEEPWOOD] && items[ITEM_GUST_JAR] && has_sword);
+        UPDATE_HELPER(RH_DEEPWOOD_BOSS, helpers[RH_DEEPWOOD] && items[ITEM_GUST_JAR] && has_sword && big_key_ok(1));
         UPDATE_HELPER(RH_COF, door_reachable(cof_door >= 0 ? cof_door : 1));
-        UPDATE_HELPER(RH_COF_BOSS, helpers[RH_COF] && items[ITEM_PACCI_CANE] && has_bombs && has_sword);
+        UPDATE_HELPER(RH_COF_BOSS,
+                      helpers[RH_COF] && items[ITEM_PACCI_CANE] && has_bombs && has_sword && big_key_ok(2));
         UPDATE_HELPER(RH_FORTRESS, door_reachable(fow_door >= 0 ? fow_door : 2));
-        UPDATE_HELPER(RH_FORTRESS_BOSS, helpers[RH_FORTRESS] && items[ITEM_MOLE_MITTS] && items[ITEM_BOW] && has_sword);
+        UPDATE_HELPER(RH_FORTRESS_BOSS,
+                      helpers[RH_FORTRESS] && items[ITEM_MOLE_MITTS] && items[ITEM_BOW] && has_sword && big_key_ok(3));
         UPDATE_HELPER(RH_DROPLETS, door_reachable(tod_door >= 0 ? tod_door : 3) && items[ITEM_GUST_JAR]);
-        UPDATE_HELPER(RH_DROPLETS_BOSS,
-                      helpers[RH_DROPLETS] && items[ITEM_LANTERN_OFF] && items[ITEM_GUST_JAR] && has_sword);
+        UPDATE_HELPER(RH_DROPLETS_BOSS, helpers[RH_DROPLETS] && items[ITEM_LANTERN_OFF] && items[ITEM_GUST_JAR] &&
+                                            has_sword && big_key_ok(4));
         UPDATE_HELPER(RH_ROYAL_CRYPT, door_reachable(cry_door >= 0 ? cry_door : 4) && has_sword);
         UPDATE_HELPER(RH_PALACE, door_reachable(pow_door >= 0 ? pow_door : 5) && items[ITEM_ROCS_CAPE]);
-        UPDATE_HELPER(RH_PALACE_BOSS, helpers[RH_PALACE] && items[ITEM_ROCS_CAPE] && items[ITEM_BOW] && has_sword);
+        UPDATE_HELPER(RH_PALACE_BOSS,
+                      helpers[RH_PALACE] && items[ITEM_ROCS_CAPE] && items[ITEM_BOW] && has_sword && big_key_ok(5));
 
         bool four_elements = items[ITEM_EARTH_ELEMENT] && items[ITEM_FIRE_ELEMENT] && items[ITEM_WATER_ELEMENT] &&
                              items[ITEM_WIND_ELEMENT];
@@ -2001,7 +2274,7 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
         UPDATE_HELPER(RH_DHC, helpers[RH_FOUR_ELEMENTS] && has_sword && has_bombs && items[ITEM_BOW] &&
                                   items[ITEM_ROCS_CAPE] && items[ITEM_LANTERN_OFF] &&
                                   door_reachable(dhc_door >= 0 ? dhc_door : 6));
-        UPDATE_HELPER(RH_GOAL, helpers[RH_DHC]);
+        UPDATE_HELPER(RH_GOAL, helpers[RH_DHC] && big_key_ok(6));
 
 #undef UPDATE_HELPER
     }
@@ -2188,6 +2461,7 @@ static const char* ItemName(uint16_t item) {
 static void EnsureInitialized(void) {
     if (sInitialized)
         return;
+    EnsureDungeonItemScan();
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         randomized_item_table[i] = kLocations[i].vanilla_item;
         randomized_item_subtype_table[i] = 0;
@@ -2200,7 +2474,11 @@ static void EnsureInitialized(void) {
     sInitialized = true;
 }
 
-static bool VerifyTable(const uint16_t* table, const RandomizerSettings* settings) {
+static bool IsUnshuffledSmallKey(const RandoLocationDef* loc) {
+    return loc->category == RANDO_LOC_CATEGORY_CHEST && loc->vanilla_item == ITEM_SMALL_KEY;
+}
+
+static bool VerifyTable(const uint16_t* table, const uint8_t* subtypes, const RandomizerSettings* settings) {
     bool collected[RANDO_LOCATION_COUNT];
     bool helpers[RH_COUNT];
     bool current_items[256];
@@ -2222,18 +2500,23 @@ static bool VerifyTable(const uint16_t* table, const RandomizerSettings* setting
                 continue;
             if (!LocationEnabled(settings, &kLocations[i]))
                 continue;
-            if (kLocations[i].category == RANDO_LOC_CATEGORY_CHEST && kLocations[i].vanilla_item == ITEM_SMALL_KEY) {
-                // Skip unshuffled small keys in verification (they stay vanilla)
-                continue;
-            }
             if (!CanAccessLocation(kLocations[i], helpers, current_items))
                 continue;
 
+            /* Reachable: mark collected even for unshuffled small keys, so the
+             * accessibility scan below sees an accurate reachability map. Keys
+             * stay vanilla, so they grant no shuffled item into the inventory
+             * (identical goal result to the historical skip-before-collect). */
             collected[i] = true;
+            if (IsUnshuffledSmallKey(&kLocations[i]))
+                continue;
             uint16_t item = table[i];
-            if (item != ITEM_NONE && !current_items[item]) {
-                current_items[item] = true;
-                progressed = true;
+            if (item != ITEM_NONE) {
+                unsigned credited = CreditedItemId(i, item, subtypes ? subtypes[i] : 0);
+                if (credited != 0 && credited < 256 && !current_items[credited]) {
+                    current_items[credited] = true;
+                    progressed = true;
+                }
             }
         }
         if (progressed) {
@@ -2241,14 +2524,33 @@ static bool VerifyTable(const uint16_t* table, const RandomizerSettings* setting
         }
     } while (progressed);
 
-    return helpers[RH_GOAL];
+    if (!helpers[RH_GOAL])
+        return false;
+    if (settings->accessibility == RANDO_ACCESS_GOAL)
+        return true;
+
+    /* Stronger accessibility: every enabled check must be reachable.
+     * ALL_NONKEYS exempts unshuffled small-key chests (they can self-lock
+     * behind their own dungeon doors, which the region logic does not model);
+     * ALL_LOCATIONS includes them — sound because keys stay vanilla, so a
+     * reachable dungeon region guarantees the chest is obtainable in normal
+     * key order. */
+    for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
+        if (!LocationEnabled(settings, &kLocations[i]))
+            continue;
+        if (settings->accessibility == RANDO_ACCESS_ALL_NONKEYS && IsUnshuffledSmallKey(&kLocations[i]))
+            continue;
+        if (!collected[i])
+            return false;
+    }
+    return true;
 }
 
 // Forward reachability sweep: from a base inventory, repeatedly collect items
 // from reachable already-filled locations until no new location opens, filling
 // out_reachable for every location index. Shared by assumed fill.
 static void SweepReachable(const RandomizerSettings* settings, const bool* base_items, const uint16_t* table,
-                           const bool* filled, bool* out_reachable) {
+                           const uint8_t* subtypes, const bool* filled, bool* out_reachable) {
     bool owned[256];
     bool helpers[RH_COUNT];
     bool progressed;
@@ -2270,9 +2572,12 @@ static void SweepReachable(const RandomizerSettings* settings, const bool* base_
             out_reachable[i] = true;
             if (filled[i]) {
                 uint16_t item = table[i];
-                if (item != ITEM_NONE && item < 256 && !owned[item]) {
-                    owned[item] = true;
-                    progressed = true;
+                if (item != ITEM_NONE) {
+                    unsigned credited = CreditedItemId(i, item, subtypes ? subtypes[i] : 0);
+                    if (credited != 0 && credited < 256 && !owned[credited]) {
+                        owned[credited] = true;
+                        progressed = true;
+                    }
                 }
             }
         }
@@ -2319,6 +2624,12 @@ static RandoStatus BuildSeedAttempt(uint64_t attempt_seed, const RandomizerSetti
         if (kLocations[i].category == RANDO_LOC_CATEGORY_CHEST && kLocations[i].vanilla_item == ITEM_SMALL_KEY) {
             filled[i] = true;
         }
+        /* Dungeon items (big key / map / compass): pinned vanilla unless
+         * shuffle_dungeon_items — the engine give path credits the location's
+         * own dungeon for a pinned item, so subtype stays 0 here. */
+        if (!settings->shuffle_dungeon_items && IsDungeonItemLocation(i)) {
+            filled[i] = true;
+        }
         // Disabled locations stay vanilla/empty
         if (!LocationEnabled(settings, &kLocations[i])) {
             filled[i] = true;
@@ -2335,18 +2646,52 @@ static RandoStatus BuildSeedAttempt(uint64_t attempt_seed, const RandomizerSetti
         assumed_items[it] = true;
     }
 
-    uint16_t progression[RANDO_ARRAY_COUNT(kProgressionItems)];
-    memcpy(progression, kProgressionItems, sizeof(kProgressionItems));
-    ShuffleU16(progression, RANDO_ARRAY_COUNT(progression), &rng);
+    /* Progression pool = regular singletons + (when shuffling dungeon items)
+     * one big-key instance per modeled dungeon. Each instance carries its
+     * origin in the placement subtype, and is assumed/credited as its
+     * per-dungeon VIRTUAL id so reachability can tell them apart. */
+    uint16_t progression[RANDO_ARRAY_COUNT(kProgressionItems) + RANDO_MAX_DUNGEON_ITEM_LOCS];
+    uint8_t prog_subtype[RANDO_ARRAY_COUNT(kProgressionItems) + RANDO_MAX_DUNGEON_ITEM_LOCS];
+    size_t prog_count = 0;
+    for (uint16_t it : kProgressionItems) {
+        progression[prog_count] = it;
+        prog_subtype[prog_count] = 0;
+        prog_count++;
+    }
+    if (settings->shuffle_dungeon_items) {
+        EnsureDungeonItemScan();
+        for (uint8_t j = 0; j < sDungeonItemLocCount; ++j) {
+            if (kLocations[sDungeonItemLocIndex[j]].vanilla_item != ITEM_BIG_KEY)
+                continue;
+            unsigned origin = sDungeonItemLocOrigin[j];
+            progression[prog_count] = ITEM_BIG_KEY;
+            prog_subtype[prog_count] = RANDO_DUNGEON_ORIGIN_SUBTYPE(origin);
+            prog_count++;
+            assumed_items[RANDO_VITEM_BIG_KEY(origin)] = true;
+        }
+    }
+    /* Joint Fisher-Yates so item and subtype stay paired. */
+    for (size_t k = prog_count - 1; k > 0; --k) {
+        size_t j = RngBounded(&rng, (uint32_t)(k + 1));
+        uint16_t ti = progression[k];
+        progression[k] = progression[j];
+        progression[j] = ti;
+        uint8_t ts = prog_subtype[k];
+        prog_subtype[k] = prog_subtype[j];
+        prog_subtype[j] = ts;
+    }
 
     bool reachable[RANDO_LOCATION_COUNT];
     uint16_t candidates[RANDO_LOCATION_COUNT];
 
-    for (size_t p = 0; p < RANDO_ARRAY_COUNT(progression); ++p) {
+    for (size_t p = 0; p < prog_count; ++p) {
         uint16_t item = progression[p];
+        uint8_t subtype = prog_subtype[p];
 
         // Remove the item we are about to place from the assumed inventory.
-        assumed_items[item] = false;
+        unsigned assumed_id =
+            RANDO_SUBTYPE_HAS_ORIGIN(subtype) ? VirtualDungeonItemId(item, RANDO_SUBTYPE_ORIGIN(subtype)) : item;
+        assumed_items[assumed_id] = false;
 
         bool base_items[256];
         memcpy(base_items, assumed_items, sizeof(base_items));
@@ -2354,7 +2699,7 @@ static RandoStatus BuildSeedAttempt(uint64_t attempt_seed, const RandomizerSetti
             base_items[ITEM_SMITH_SWORD] = true;
         }
 
-        SweepReachable(settings, base_items, out_table, filled, reachable);
+        SweepReachable(settings, base_items, out_table, out_subtypes, filled, reachable);
 
         size_t candidate_count = 0;
         for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
@@ -2369,6 +2714,7 @@ static RandoStatus BuildSeedAttempt(uint64_t attempt_seed, const RandomizerSetti
 
         uint16_t chosen = candidates[RngBounded(&rng, (uint32_t)candidate_count)];
         out_table[chosen] = item;
+        out_subtypes[chosen] = subtype;
         filled[chosen] = true;
     }
 
@@ -2379,34 +2725,70 @@ static RandoStatus BuildSeedAttempt(uint64_t attempt_seed, const RandomizerSetti
             empty_count++;
     }
 
-    uint16_t* remaining_pool = new uint16_t[empty_count];
+    /* empty_count <= RANDO_LOCATION_COUNT by construction (one slot per unfilled
+     * location), so a fixed stack array replaces the former new[]/delete[] and
+     * keeps generation heap-free as documented. */
+    uint16_t remaining_pool[RANDO_LOCATION_COUNT];
+    uint8_t remaining_subtype[RANDO_LOCATION_COUNT];
     size_t pool_idx = 0;
 
     // Add major items
     for (uint16_t item : kMajorItems) {
-        if (pool_idx < empty_count)
-            remaining_pool[pool_idx++] = item;
+        if (pool_idx < empty_count) {
+            remaining_pool[pool_idx] = item;
+            remaining_subtype[pool_idx] = 0;
+            pool_idx++;
+        }
     }
     if (settings->shuffle_dojos) {
         for (uint16_t item : kDojoSkills) {
-            if (pool_idx < empty_count)
-                remaining_pool[pool_idx++] = item;
+            if (pool_idx < empty_count) {
+                remaining_pool[pool_idx] = item;
+                remaining_subtype[pool_idx] = 0;
+                pool_idx++;
+            }
+        }
+    }
+    if (settings->shuffle_dungeon_items) {
+        /* Maps/compasses: gate nothing in logic, but each instance carries its
+         * origin so the engine credits the right dungeon's map/compass bit. */
+        for (uint8_t j = 0; j < sDungeonItemLocCount; ++j) {
+            uint16_t vi = kLocations[sDungeonItemLocIndex[j]].vanilla_item;
+            if (vi != ITEM_DUNGEON_MAP && vi != ITEM_COMPASS)
+                continue;
+            if (pool_idx < empty_count) {
+                remaining_pool[pool_idx] = vi;
+                remaining_subtype[pool_idx] = RANDO_DUNGEON_ORIGIN_SUBTYPE(sDungeonItemLocOrigin[j]);
+                pool_idx++;
+            }
         }
     }
 
     // Top up with filler items
     while (pool_idx < empty_count) {
-        uint16_t filler = kFillerPool[RngBounded(&rng, RANDO_ARRAY_COUNT(kFillerPool))];
-        remaining_pool[pool_idx++] = filler;
+        remaining_pool[pool_idx] = kFillerPool[RngBounded(&rng, RANDO_ARRAY_COUNT(kFillerPool))];
+        remaining_subtype[pool_idx] = 0;
+        pool_idx++;
     }
 
-    ShuffleU16(remaining_pool, empty_count, &rng);
+    /* Joint shuffle keeps (item, origin-subtype) pairs intact. */
+    for (size_t k = empty_count - 1; k > 0; --k) {
+        size_t j = (size_t)RngBounded(&rng, (uint32_t)(k + 1));
+        uint16_t ti = remaining_pool[k];
+        remaining_pool[k] = remaining_pool[j];
+        remaining_pool[j] = ti;
+        uint8_t ts = remaining_subtype[k];
+        remaining_subtype[k] = remaining_subtype[j];
+        remaining_subtype[j] = ts;
+    }
 
     // Place remaining pool
     size_t place_idx = 0;
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         if (!filled[i]) {
-            out_table[i] = remaining_pool[place_idx++];
+            out_table[i] = remaining_pool[place_idx];
+            out_subtypes[i] = remaining_subtype[place_idx];
+            place_idx++;
 
             if (out_table[i] == ITEM_KINSTONE) {
                 static const uint8_t kKinstoneSubtypes[] = { 0x70, 0x71, 0x72, 0x73, 0x74, 0x75 };
@@ -2415,9 +2797,7 @@ static RandoStatus BuildSeedAttempt(uint64_t attempt_seed, const RandomizerSetti
         }
     }
 
-    delete[] remaining_pool;
-
-    return VerifyTable(out_table, settings) ? RANDO_OK : RANDO_UNBEATABLE;
+    return VerifyTable(out_table, out_subtypes, settings) ? RANDO_OK : RANDO_UNBEATABLE;
 }
 
 static void RemapPool(const uint16_t* pool, size_t n, SplitMix64* rng) {
@@ -2487,15 +2867,47 @@ static const char* DifficultyName(RandoItemPoolDifficulty difficulty) {
     }
 }
 
+/* FNV-1a over placement-affecting settings only (see header). Feeding raw
+ * bytes of individual fields keeps it stable regardless of struct padding. */
+extern "C" uint32_t Rando_SettingsFingerprint(const RandomizerSettings* settings) {
+    uint32_t h = 2166136261u;
+#define FP_MIX(byte)           \
+    do {                       \
+        h ^= (uint32_t)(byte); \
+        h *= 16777619u;        \
+    } while (0)
+    FP_MIX(settings->glitchless_logic ? 1u : 0u);
+    FP_MIX(settings->obscure_locations ? 1u : 0u);
+    FP_MIX(settings->shuffle_kinstones ? 1u : 0u);
+    FP_MIX(settings->shuffle_entrances ? 1u : 0u);
+    FP_MIX(settings->shuffle_dojos ? 1u : 0u);
+    FP_MIX(settings->open_world ? 1u : 0u);
+    FP_MIX((uint32_t)settings->item_difficulty);
+    /* Tricks only matter when glitchless is off — mask so two seeds that both
+     * ignore tricks fingerprint identically regardless of stale trick bits. */
+    uint32_t eff_tricks = settings->glitchless_logic ? 0u : settings->tricks;
+    FP_MIX(eff_tricks & 0xFFu);
+    FP_MIX((eff_tricks >> 8) & 0xFFu);
+    FP_MIX((eff_tricks >> 16) & 0xFFu);
+    FP_MIX((eff_tricks >> 24) & 0xFFu);
+    FP_MIX((uint32_t)settings->accessibility);
+    FP_MIX(settings->shuffle_dungeon_items ? 1u : 0u);
+    FP_MIX(settings->start_sword ? 1u : 0u);
+#undef FP_MIX
+    return h;
+}
+
 static void BuildSpoiler(uint64_t seed, const RandomizerSettings* settings) {
     size_t pos = 0;
     SpoilerAppend(&pos, "Seed: %llu\n", (unsigned long long)seed);
-    SpoilerAppend(
-        &pos,
-        "Settings: Pool=%s Glitchless=%d Tricks=0x%X Kinstones=%d Entrances=%d Dojos=%d OpenWorld=%d Homewarp=%d\n\n",
-        DifficultyName(settings->item_difficulty), settings->glitchless_logic,
-        (unsigned)(settings->glitchless_logic ? 0u : settings->tricks), settings->shuffle_kinstones,
-        settings->shuffle_entrances, settings->shuffle_dojos, settings->open_world, settings->homewarp);
+    SpoilerAppend(&pos,
+                  "Settings: Pool=%s Glitchless=%d Tricks=0x%X Kinstones=%d Entrances=%d Dojos=%d "
+                  "OpenWorld=%d Access=%d DungeonItems=%d Homewarp=%d\n",
+                  DifficultyName(settings->item_difficulty), settings->glitchless_logic,
+                  (unsigned)(settings->glitchless_logic ? 0u : settings->tricks), settings->shuffle_kinstones,
+                  settings->shuffle_entrances, settings->shuffle_dojos, settings->open_world,
+                  (int)settings->accessibility, settings->shuffle_dungeon_items, settings->homewarp);
+    SpoilerAppend(&pos, "Fingerprint: %08X\n\n", Rando_SettingsFingerprint(settings));
 
     SpoilerAppend(&pos, "Locations:\n");
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
@@ -2536,6 +2948,8 @@ extern "C" RandomizerSettings Rando_DefaultSettings(void) {
     settings.open_world = false;
     settings.item_difficulty = RANDO_ITEM_POOL_NORMAL;
     settings.tricks = 0u;
+    settings.accessibility = RANDO_ACCESS_GOAL;
+    settings.shuffle_dungeon_items = false;
     settings.homewarp = true;
     settings.start_sword = true;
     settings.early_crests = true;
@@ -2737,7 +3151,7 @@ extern "C" bool Rando_VerifyCurrentSeed(void) {
     EnsureInitialized();
     if (!sActive)
         return false;
-    return VerifyTable(randomized_item_table, &sSettings);
+    return VerifyTable(randomized_item_table, randomized_item_subtype_table, &sSettings);
 }
 
 extern "C" bool Rando_OverrideItem(uint8_t* type, uint8_t* subtype) {
