@@ -1598,6 +1598,38 @@ static ImGuiTextFilter sRandoSpoilerFilter; /* spoiler log line filter */
 static RandomizerSettings sRandoUiSettings;
 static bool sRandoUiSettingsInit = false;
 
+/* Shared player-facing strings for rando settings, referenced by BOTH the F8
+ * tab and the file-select sidebar so the two entry points can never drift
+ * apart on labels/wording (a prior UX bug). */
+static const char* const kRandoPoolCombo[RANDO_ITEM_POOL_COUNT] = {
+    "Normal - collectibles only",
+    "Hard - + non-gating majors",
+    "Chaos - + gating progression",
+};
+static const char* const kRandoPoolTooltip =
+    "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and heart pieces "
+    "- progression untouched.\nHard: also shuffles non-gating majors (bottles, "
+    "upgrades, skills).\nChaos: also shuffles dungeon-gating progression.\n"
+    "Hard/Chaos scrambling of majors and progression applies to story gifts too, "
+    "which cannot be verified beatable - so it requires Glitchless logic OFF. "
+    "With Glitchless ON those items stay vanilla and only collectibles are scrambled.";
+static const char* const kRandoAccessCombo[RANDO_ACCESS_COUNT] = {
+    "Goal only (fastest generation)",
+    "All non-key checks reachable",
+    "All checks reachable",
+};
+static const char* const kRandoAccessTooltip =
+    "Goal only: just the final boss must be reachable (a seed may bury optional "
+    "checks behind items you never need). All non-key: every check except "
+    "unshuffled small keys must be reachable. All: every check reachable. "
+    "Stronger modes reject more seeds during generation but never make a seed "
+    "unbeatable.";
+static const char* const kRandoTrickOcarina = "Ocarina Glitch - ToD entry without Flippers";
+static const char* const kRandoTrickCrenel = "Crenel Clip - Mt. Crenel to Castor Wilds";
+static const char* const kRandoTrickPjs = "Portal Jump Storage - early Cloud Tops";
+static const char* const kRandoTrickTooltip = "Glitch-logic tier: progression may be placed behind these documented "
+                                              "speedrun glitches. Requires Glitchless logic OFF.";
+
 /* ---- Cosmetics (.logic !color settings) ----------------------------------
  * A RANDO_SETTING_COLOR setting carries option_count default color sets
  * (RGB555 hex strings in opt_value[]). The override value consumed by
@@ -2678,28 +2710,15 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::Spacing();
     ImGui::SeparatorText("Settings");
 
-    static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-        "Normal - collectibles only",
-        "Hard - + non-gating majors",
-        "Chaos - + gating progression",
-    };
     int difficulty = (int)sRandoUiSettings.item_difficulty;
     bool changed = false;
 
     ImGui::SetNextItemWidth(280);
-    if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+    if (ImGui::Combo("Item pool", &difficulty, kRandoPoolCombo, RANDO_ITEM_POOL_COUNT)) {
         sRandoUiSettings.item_difficulty = (RandoItemPoolDifficulty)difficulty;
         changed = true;
     }
-    RandoUi_HelpTooltip("Normal: shuffles rupees, hearts, kinstones, ammo, shells, and "
-                        "heart pieces - progression untouched.\n"
-                        "Hard: also shuffles non-gating majors (bottles, upgrades, "
-                        "skills).\n"
-                        "Chaos: also shuffles dungeon-gating progression.\n"
-                        "Hard/Chaos scrambling of majors and progression applies to "
-                        "story gifts too, which cannot be verified beatable - so it "
-                        "requires Glitchless logic OFF. With Glitchless ON those items "
-                        "stay vanilla and only collectibles are scrambled.");
+    RandoUi_HelpTooltip(kRandoPoolTooltip);
 
     if (ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic))
         changed = true;
@@ -2749,33 +2768,21 @@ static void DrawRibbonRandomizerTab(void) {
                             sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS ? "Chaos" : "Hard");
     }
 
-    static const char* kAccessCombo[RANDO_ACCESS_COUNT] = {
-        "Goal only (fastest generation)",
-        "All non-key checks reachable",
-        "All checks reachable",
-    };
     int access = (int)sRandoUiSettings.accessibility;
     ImGui::SetNextItemWidth(280);
-    if (ImGui::Combo("Accessibility", &access, kAccessCombo, RANDO_ACCESS_COUNT)) {
+    if (ImGui::Combo("Accessibility", &access, kRandoAccessCombo, RANDO_ACCESS_COUNT)) {
         sRandoUiSettings.accessibility = (RandoAccessibility)access;
         changed = true;
     }
-    RandoUi_HelpTooltip("Goal only: just the final boss must be reachable (a seed may bury "
-                        "optional checks behind items you never need). All non-key: every "
-                        "check except unshuffled small keys must be reachable. All: every "
-                        "check reachable. Stronger modes reject more seeds during generation "
-                        "but never make a seed unbeatable.");
+    RandoUi_HelpTooltip(kRandoAccessTooltip);
 
     if (!sRandoUiSettings.glitchless_logic) {
         ImGui::SeparatorText("Glitch tricks (progression may be placed behind these)");
-        if (ImGui::CheckboxFlags("Ocarina Glitch - ToD entry without Flippers", &sRandoUiSettings.tricks,
-                                 RANDO_TRICK_OCARINA_GLITCH))
+        if (ImGui::CheckboxFlags(kRandoTrickOcarina, &sRandoUiSettings.tricks, RANDO_TRICK_OCARINA_GLITCH))
             changed = true;
-        if (ImGui::CheckboxFlags("Crenel Clip - Mt. Crenel to Castor Wilds", &sRandoUiSettings.tricks,
-                                 RANDO_TRICK_CRENEL_CLIP))
+        if (ImGui::CheckboxFlags(kRandoTrickCrenel, &sRandoUiSettings.tricks, RANDO_TRICK_CRENEL_CLIP))
             changed = true;
-        if (ImGui::CheckboxFlags("Portal Jump Storage - early Cloud Tops", &sRandoUiSettings.tricks,
-                                 RANDO_TRICK_PORTAL_JUMP_STORAGE))
+        if (ImGui::CheckboxFlags(kRandoTrickPjs, &sRandoUiSettings.tricks, RANDO_TRICK_PORTAL_JUMP_STORAGE))
             changed = true;
     } else {
         ImGui::TextDisabled("Glitch tricks are selectable when Glitchless logic is OFF.");
@@ -2814,7 +2821,9 @@ static void DrawRibbonRandomizerTab(void) {
     }
 
     ImGui::Spacing();
-    ImGui::BeginDisabled(Rando_IsInGameplay());
+    const bool rollInGameplay = Rando_IsInGameplay();
+    const bool rollInFileSelect = !rollInGameplay && Rando_IsInFileSelect();
+    ImGui::BeginDisabled(rollInGameplay || rollInFileSelect);
     const bool rolled_normal = ImGui::Button("Roll new seed", ImVec2(150, 0));
     ImGui::SameLine();
     const bool rolled_race = ImGui::Button("Roll race seed", ImVec2(150, 0));
@@ -2835,9 +2844,12 @@ static void DrawRibbonRandomizerTab(void) {
         sRandoSpoilerHidden = false;
     }
     ImGui::EndDisabled();
-    if (Rando_IsInGameplay()) {
+    if (rollInGameplay) {
         ImGui::SameLine();
         ImGui::TextDisabled("(locked during gameplay)");
+    } else if (rollInFileSelect) {
+        ImGui::TextDisabled("On the file screen, roll from the L sidebar - it binds the seed to "
+                            "the new save slot. A roll here would be discarded.");
     }
     if (rolled_normal || rolled_race) {
         if (rolled_race)
@@ -3968,12 +3980,12 @@ static void DrawRandoFileMenuModal(void) {
 
                 ImGui::Spacing();
                 ImGui::TextDisabled("Logic: built-in native graph (%d locations)", RANDO_LOCATION_COUNT);
-                static const char* kPoolCombo[RANDO_ITEM_POOL_COUNT] = { "Normal", "Hard", "Chaos" };
                 int difficulty = Port_RandoFileMenu_Difficulty();
                 ImGui::SetNextItemWidth(160);
-                if (ImGui::Combo("Item pool", &difficulty, kPoolCombo, RANDO_ITEM_POOL_COUNT)) {
+                if (ImGui::Combo("Item pool", &difficulty, kRandoPoolCombo, RANDO_ITEM_POOL_COUNT)) {
                     Port_RandoFileMenu_SetDifficulty(difficulty);
                 }
+                RandoUi_HelpTooltip(kRandoPoolTooltip);
                 ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
                 ImGui::SameLine();
                 ImGui::Checkbox("Obscure spots", Port_RandoFileMenu_ObscureLocations());
@@ -4006,25 +4018,15 @@ static void DrawRandoFileMenuModal(void) {
                 ImGui::SetNextItemWidth(160);
                 ImGui::Combo("Heart color", Port_RandoFileMenu_HeartColor(), kHeartColors, 7);
 
-                static const char* kAccessCombo[RANDO_ACCESS_COUNT] = {
-                    "Goal only",
-                    "All non-key checks",
-                    "All checks",
-                };
                 ImGui::SetNextItemWidth(160);
-                ImGui::Combo("Accessibility", Port_RandoFileMenu_Accessibility(), kAccessCombo, RANDO_ACCESS_COUNT);
-                RandoUi_HelpTooltip("Goal only: just the final boss must be reachable. All non-key: "
-                                    "every check except unshuffled small keys reachable. All: every "
-                                    "check reachable. Stronger modes never make a seed unbeatable.");
+                ImGui::Combo("Accessibility", Port_RandoFileMenu_Accessibility(), kRandoAccessCombo,
+                             RANDO_ACCESS_COUNT);
+                RandoUi_HelpTooltip(kRandoAccessTooltip);
                 if (!*Port_RandoFileMenu_GlitchlessLogic()) {
-                    ImGui::CheckboxFlags("Ocarina Glitch", Port_RandoFileMenu_Tricks(), RANDO_TRICK_OCARINA_GLITCH);
-                    ImGui::SameLine();
-                    ImGui::CheckboxFlags("Crenel Clip", Port_RandoFileMenu_Tricks(), RANDO_TRICK_CRENEL_CLIP);
-                    ImGui::SameLine();
-                    ImGui::CheckboxFlags("Portal Jump Storage", Port_RandoFileMenu_Tricks(),
-                                         RANDO_TRICK_PORTAL_JUMP_STORAGE);
-                    RandoUi_HelpTooltip("Glitch-logic tier: progression may be placed behind these "
-                                        "documented speedrun glitches. Requires Glitchless logic OFF.");
+                    ImGui::CheckboxFlags(kRandoTrickOcarina, Port_RandoFileMenu_Tricks(), RANDO_TRICK_OCARINA_GLITCH);
+                    ImGui::CheckboxFlags(kRandoTrickCrenel, Port_RandoFileMenu_Tricks(), RANDO_TRICK_CRENEL_CLIP);
+                    ImGui::CheckboxFlags(kRandoTrickPjs, Port_RandoFileMenu_Tricks(), RANDO_TRICK_PORTAL_JUMP_STORAGE);
+                    RandoUi_HelpTooltip(kRandoTrickTooltip);
                 }
 
                 if (*Port_RandoFileMenu_GlitchlessLogic() &&
@@ -4219,6 +4221,24 @@ extern "C" bool Port_ImGui_Render(void) {
     /* File-select randomizer setup modal — drawn here (per-frame ImGui
      * pass) so it presents on every backend, independent of the F8 menu. */
     DrawRandoFileMenuModal();
+
+    /* File-select discoverability: the L button opens the Port & Randomizer
+     * setup sidebar, but nothing on the vanilla file screen says so. Show a
+     * small bottom hint whenever we're on the file screen with the sidebar
+     * closed and the L gate enabled. */
+    if (Rando_IsInFileSelect() && !Port_RandoFileMenu_IsSidebarOpen() && !Port_RandoFileMenu_IsModalOpen() &&
+        Port_Config_PortSettingsMenuEnabled()) {
+        const ImGuiViewport* fvp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowBgAlpha(0.55f);
+        ImGui::SetNextWindowPos(ImVec2(fvp->Pos.x + fvp->Size.x * 0.5f, fvp->Pos.y + fvp->Size.y - 10.0f),
+                                ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        if (ImGui::Begin("##rando_l_hint", nullptr,
+                         ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoNav |
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextColored(ImVec4(0.85f, 0.95f, 0.85f, 1.0f), "Press  L  for Port & Randomizer setup");
+        }
+        ImGui::End();
+    }
 
     /* Toast survives the menu being closed (e.g. after a warp). */
     DrawToast(Port_DebugMenu_Toast());
