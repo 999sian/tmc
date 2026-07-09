@@ -64,6 +64,8 @@ void DungeonMapAsset::buildToBinary() {
         switch (data[i]) {
             case '\n':
                 continue;
+            case '\r':
+                continue;
             case ' ':
                 byte <<= 2;
                 pixels++;
