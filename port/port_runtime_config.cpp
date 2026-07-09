@@ -142,6 +142,7 @@ bool sColorCorrect = true; /* GBA-LCD colour correction (default on) */
 bool sLcdPersist = false;      /* LCD temporal persistence (default off) */
 float sLcdPersistRho = 0.35f;  /* persistence: fraction of prev frame kept */
 bool sRibbonCfg = true;        /* F8 menu style: ribbon (true) vs classic */
+bool sMenuHintSeen = false;    /* set once the F8/settings menu is first opened */
 float sMasterVolume = 1.0f;    /* game master volume [0,1]; 1.0 = unchanged */
 bool sHoldAdvanceText = false; /* hold an advance key to keep paging text */
 bool sRollAttackMacroEnabled = true;
@@ -261,6 +262,7 @@ const BoolCfg kBoolCfg[] = {
 #endif
     { "lcd_persistence", &sLcdPersist, false },
     { "ribbon_mode", &sRibbonCfg, true },
+    { "menu_hint_seen", &sMenuHintSeen, false },
     { "hold_advance_text", &sHoldAdvanceText, false },
     { "roll_attack_macro", &sRollAttackMacroEnabled, true },
     { "fullscreen", &sFullscreen, false },
@@ -1750,6 +1752,16 @@ extern "C" bool Port_Config_GetRibbonEnabled(void) {
 extern "C" void Port_Config_SetRibbonEnabled(bool on) {
     sRibbonCfg = on;
     sConfigJson["ribbon_mode"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetMenuHintSeen(void) {
+    return sMenuHintSeen;
+}
+extern "C" void Port_Config_SetMenuHintSeen(bool seen) {
+    if (sMenuHintSeen == seen)
+        return;
+    sMenuHintSeen = seen;
+    sConfigJson["menu_hint_seen"] = seen;
     SaveConfig();
 }
 extern "C" bool Port_Config_GetHoldToAdvanceText(void) {

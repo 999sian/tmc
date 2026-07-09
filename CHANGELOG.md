@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Settings menu & hotkeys are now discoverable
+
+- **First-launch "Settings (F8)" hint.** Nothing in-game ever told a new
+  player the settings menu existed or which key opens it. The always-present
+  corner trigger now renders a bold "Settings (F8)" label until the menu is
+  opened once (by any path — F8, gamepad Select+Start, or clicking it), then
+  reverts to the faint corner glyph. Persisted as `menu_hint_seen` so it
+  never nags a returning player.
+- **Keyboard shortcuts reference.** The F8 → Controls tab gains a "Keyboard
+  shortcuts" section listing every hotkey (F1-F12, Tab fast-forward, practice
+  keys) with what each does — previously the ~10 function keys were documented
+  nowhere in-game. Notes that F1-F6 are disabled in Console-Parity mode.
+- **Save/load hotkeys in the menu footers.** Both the ribbon and classic F8
+  menu footers now show "F5/F6 quicksave/load, F9 bug report" and point to the
+  Controls tab; previously only the off-by-default classic renderer hinted at
+  save/load and the default ribbon footer listed none.
+
 ### Region-mismatched ROM errors are now visible in the GUI, not just stderr
 
 - **A version-mismatched ROM no longer fails invisibly** on single-region

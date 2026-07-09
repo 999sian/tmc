@@ -211,6 +211,10 @@ float Port_Config_GetLcdPersistenceRho(void);
 void Port_Config_SetLcdPersistenceRho(float v);
 bool Port_Config_GetRibbonEnabled(void);
 void Port_Config_SetRibbonEnabled(bool on);
+/* One-shot "Press F8 for settings" discovery hint: false until the settings
+ * menu is first opened, then persisted true so it never nags again. */
+bool Port_Config_GetMenuHintSeen(void);
+void Port_Config_SetMenuHintSeen(bool seen);
 bool Port_Config_GetHoldToAdvanceText(void);
 void Port_Config_SetHoldToAdvanceText(bool on);
 bool Port_Config_GetRollAttackMacroEnabled(void);
