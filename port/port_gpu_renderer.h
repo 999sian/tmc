@@ -61,6 +61,11 @@ bool Port_GPU_PaintBootSplash(void);
  * to Port_GPU_PresentFrame instead of the SDL_Renderer path. */
 bool Port_GPU_IsActive(void);
 
+/* Set the swapchain present mode: vsync on = VSYNC, off = IMMEDIATE
+ * (fallback MAILBOX when unsupported). Returns false when the GPU path
+ * is inactive or the driver refuses both non-synced modes. */
+bool Port_GPU_SetVSync(bool enabled);
+
 /* True when the active GPU shader format can load runtime .glslp
  * presets. The current .glslp compiler emits SPIR-V, so Metal-backed
  * macOS GPU builds use stock filters but disable preset loading. */

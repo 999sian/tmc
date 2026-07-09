@@ -104,11 +104,30 @@ void Scroll1(RoomControls* controls) {
     s32 unused;
     s32 uVar5;
     s32 targetValue;
+#if MODE1_GBA_WIDTH > 240
+    /* Live view width (240 while stretched/non-gameplay); the right-edge
+     * movement gate below keeps the view inside the room. The follow target
+     * itself comes from Port_Widescreen_CameraRestX — THE shared rest
+     * formula (port_widescreen.h), which WaitForCameraTouchRoomBorder also
+     * checks for exact scroll_x equality: computing it locally here is how
+     * cutscene deadlocks happen. Reduces exactly to the GBA constants
+     * (0x78 / width - 0xf0) at an effective width of 240. */
+    extern int Port_Widescreen_EffectiveViewWidth(void);
+    extern int Port_Widescreen_CameraRestX(int target_x);
+    s32 wsViewW = Port_Widescreen_EffectiveViewWidth();
+#endif
 
     if (controls->camera_target != NULL) {
         // Scroll in x direction.
         unused = controls->scroll_x;
+#if MODE1_GBA_WIDTH > 240
+        /* Pre-clamped rest target: a camera parked past the live clamp
+         * (room entry, view-width change) pans back instead of deadlocking
+         * against the right-edge gate. */
+        targetValue = Port_Widescreen_CameraRestX(controls->camera_target->x.HALF.HI);
+#else
         targetValue = controls->camera_target->x.HALF.HI - 0x78;
+#endif
         diff = controls->scroll_x - targetValue;
         if (diff != 0) {
             uVar5 = controls->scroll_x & 7;
@@ -127,7 +146,14 @@ void Scroll1(RoomControls* controls) {
                     }
                 }
             } else {
+#if MODE1_GBA_WIDTH > 240
+                uVar2 = controls->origin_x + controls->width - wsViewW;
+                if (uVar2 < controls->origin_x) {
+                    uVar2 = controls->origin_x; /* room narrower than view */
+                }
+#else
                 uVar2 = controls->origin_x + controls->width - 0xf0;
+#endif
                 if (controls->scroll_x < uVar2) {
                     if (-controls->scrollSpeed >= diff) {
                         diff = -controls->scrollSpeed;
@@ -805,21 +831,10 @@ void sub_08080974(u32 arg0, u32 arg1) {
     var0 = roomControls->origin_x;
 #if MODE1_GBA_WIDTH > 240
     {
-        /* View width tracks the live window aspect (240..MODE1_GBA_WIDTH);
-         * EffectiveViewWidth returns 240 while stretched/non-gameplay. */
-        extern int Port_Widescreen_EffectiveViewWidth(void);
-        s32 viewW = Port_Widescreen_EffectiveViewWidth();
-        s32 half = viewW / 2;
-        s32 want = (s32)arg0 - half;
-        s32 lo = (s32)var0;
-        s32 hi = (s32)var0 + (s32)roomControls->width - viewW;
-        if (hi < lo)
-            hi = lo;
-        if (want < lo)
-            want = lo;
-        if (want > hi)
-            want = hi;
-        roomControls->scroll_x = (s16)want;
+        /* THE shared camera-rest formula (port_widescreen.h) — must match
+         * Scroll1 and WaitForCameraTouchRoomBorder exactly. */
+        extern int Port_Widescreen_CameraRestX(int target_x);
+        roomControls->scroll_x = (s16)Port_Widescreen_CameraRestX((s32)arg0);
     }
 #else
     if (arg0 <= var0 + 120) {
@@ -859,23 +874,11 @@ void sub_080809D4(void) {
     x = roomControls->camera_target->x.HALF.HI;
     var0 = roomControls->origin_x;
 #if MODE1_GBA_WIDTH > 240
-    /* Widescreen: center the camera target in the live view width and clamp
-     * the view to the room. Reduces exactly to the GBA-original 240-view
-     * centering below when the effective width is 240. */
+    /* THE shared camera-rest formula (port_widescreen.h) — must match
+     * Scroll1 and WaitForCameraTouchRoomBorder exactly. */
     {
-        extern int Port_Widescreen_EffectiveViewWidth(void);
-        s32 viewW = Port_Widescreen_EffectiveViewWidth();
-        s32 half = viewW / 2;
-        s32 want = (s32)x - half;
-        s32 lo = (s32)var0;
-        s32 hi = (s32)var0 + (s32)roomControls->width - viewW;
-        if (hi < lo)
-            hi = lo; /* room narrower than the view → pin left */
-        if (want < lo)
-            want = lo;
-        if (want > hi)
-            want = hi;
-        roomControls->scroll_x = (s16)want;
+        extern int Port_Widescreen_CameraRestX(int target_x);
+        roomControls->scroll_x = (s16)Port_Widescreen_CameraRestX(x);
     }
 #else
     if (x <= var0 + 120) {

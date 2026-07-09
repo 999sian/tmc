@@ -117,23 +117,8 @@ static u32 PortCalcCollision(Entity* thisEntity, Entity* other) {
     if (handlerIdx >= COL_NUM_HANDLERS)
         handlerIdx = 0;
 
-    /* Debug: log collision matrix lookup for seed/scrub interactions */
-    if (other->hitType == 0x68 || (other->kind == 3 && other->id == 0x5b) ||
-        (thisEntity->kind == 3 && thisEntity->id == 0x5b)) {
-        fprintf(stderr, "[CALC] org=k%d/id%d(hr%d) tgt=k%d/id%d(ht%d) matIdx=%u romOff=0x%X handler=%u\n",
-                thisEntity->kind, thisEntity->id, thisEntity->hurtType,
-                other->kind, other->id, other->hitType,
-                matIdx, romOff, handlerIdx);
-    }
-
     /* 3. Call collision handler (applies damage, knockback, iframes, …) */
     u32 result = gCollisionHandlers[handlerIdx](thisEntity, other, direction, settings);
-
-    /* Debug: log handler result for seed/scrub interactions */
-    if (other->hitType == 0x68 || (other->kind == 3 && other->id == 0x5b) ||
-        (thisEntity->kind == 3 && thisEntity->id == 0x5b)) {
-        fprintf(stderr, "[CALC] result=%u (org hp=%d tgt hp=%d)\n", result, thisEntity->health, other->health);
-    }
 
     if (result == COL_RESULT_NONE)
         return 0;
@@ -679,15 +664,6 @@ u32 ram_CollideAll(void) {
              * If the handler returns NO_COLLISION, skip contactFlags. */
             if (!PortCalcCollision(thisEntity, other)) {
                 continue;
-            }
-
-            /* Debug: log collisions involving the business scrub (id=0x5b) or projectiles */
-            if ((thisEntity->kind == 3 && thisEntity->id == 0x5b) ||
-                (other->kind == 3 && other->id == 0x5b) ||
-                (thisEntity->kind == 4) || (other->kind == 4)) {
-                fprintf(stderr, "[COL] org=k%d/id%d(ht%d/hr%d) tgt=k%d/id%d(ht%d/hr%d)\n",
-                        thisEntity->kind, thisEntity->id, thisEntity->hitType, thisEntity->hurtType,
-                        other->kind, other->id, other->hitType, other->hurtType);
             }
 
             if ((other->contactFlags & 0x80) == 0) {

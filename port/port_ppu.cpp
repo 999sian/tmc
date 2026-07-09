@@ -479,15 +479,31 @@ static void Port_PPU_PresentSurfaceFrame(void) {
 static bool sVSyncEnabled = true;
 
 extern "C" void Port_PPU_SetVSync(bool enabled) {
-    if (sRenderer == nullptr) {
-        sVSyncEnabled = enabled;
-        return;
-    }
     if (sVSyncEnabled == enabled) {
         return;
     }
     sVSyncEnabled = enabled;
-    SDL_SetRenderVSync(sRenderer, enabled ? 1 : 0);
+    switch (sBackend) {
+        case RenderBackend::Renderer:
+            if (sRenderer != nullptr) {
+                SDL_SetRenderVSync(sRenderer, enabled ? 1 : 0);
+            }
+            break;
+        case RenderBackend::Gpu:
+            /* SDL_GPU swapchain: present mode is per-window, not per-renderer.
+             * Previously this case silently did nothing, so the F8 VSync
+             * checkbox (and fast-forward's forced vsync-off) never took
+             * effect on GPU builds. */
+            Port_GPU_SetVSync(enabled);
+            break;
+        case RenderBackend::Surface:
+            if (sWindow != nullptr) {
+                SDL_SetWindowSurfaceVSync(sWindow, enabled ? 1 : 0);
+            }
+            break;
+        case RenderBackend::None:
+            break; /* flag recorded; backend init applies it */
+    }
 }
 
 extern "C" bool Port_PPU_VSyncEnabled(void) {

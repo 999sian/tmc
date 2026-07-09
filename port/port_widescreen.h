@@ -73,6 +73,17 @@ int Port_Widescreen_ShadowsLive(void);
 void Port_Widescreen_SetWindowPixels(int w, int h);
 int Port_Widescreen_TargetViewWidth(void);
 
+/* Camera rest position for a target at absolute world x (origin included):
+ * target centered in the live view width, clamped so the view stays inside
+ * the room. THE single formula for "where the camera stops" — used by the
+ * follow camera (Scroll1), the snap cameras (InitializeCamera,
+ * sub_08080974, sub_080809D4) and the script wait
+ * (WaitForCameraTouchRoomBorder, which busy-waits for scroll_x EQUALITY:
+ * any drift between producers and that check deadlocks a cutscene).
+ * Reduces to the GBA `x - 120` clamped to [origin, origin+width-240] at an
+ * effective view width of 240. */
+int Port_Widescreen_CameraRestX(int target_x);
+
 #ifdef __cplusplus
 }
 #endif

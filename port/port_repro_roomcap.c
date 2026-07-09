@@ -22,6 +22,7 @@
 #include "fileselect.h" /* gMapDataBottomSpecial, ResetSaveFile */
 #include "room.h"       /* gRoomControls */
 #include "message.h"    /* gMessage, MessageRequest (TMC_ROOMCAP_MSG hook) */
+#include "script.h"     /* gActiveScriptInfo, ScriptExecutionContext (TMC_ROOMCAP_PAN_PROBE) */
 #include "port_repro.h"
 #include "port_gba_mem.h" /* gIoMem, gVram, gBgPltt, gObjPltt, gOamMem */
 #include "port_debug_actions.h"
@@ -375,6 +376,95 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
             }
             if (lstage < 5)
                 return;
+        }
+    }
+
+    /* ---- TMC_ROOMCAP_PAN_PROBE: scripted-pan camera wait (widescreen) ----
+     * Reproduces the WaitForCameraTouchRoomBorder deadlock headlessly: the
+     * intro festival pan / Zelda-talk scripts CameraTargetEntity onto an
+     * orchestrator, Scroll1 pans, then the script busy-waits for scroll_x to
+     * EQUAL the rest position it recomputes itself. Teleport the player (the
+     * camera target) across the room, let Scroll1 pan, and evaluate the
+     * script's own wait each frame via its command handler. PASS = the wait
+     * sets flags bit0 within the window; FAIL = deadlock (the reported
+     * freeze). Exits 0/5. */
+    {
+        static int pprobe = -1;
+        static int pstage = 0;
+        static unsigned int pdeadline = 0;
+        static Entity panTarget; /* physics-free coordinate holder, like the
+                                  * CUTSCENE_ORCHESTRATOR the intro scripts
+                                  * CameraTargetEntity onto */
+        if (pprobe < 0)
+            pprobe = (getenv("TMC_ROOMCAP_PAN_PROBE") != NULL) ? 1 : 0;
+        if (pprobe && warp_done) {
+            extern void WaitForCameraTouchRoomBorder(Entity * entity, ScriptExecutionContext * context);
+            extern int Port_Widescreen_EffectiveViewWidth(void);
+            switch (pstage) {
+                case 0: /* park the pan target at an interior rest position */
+                    if ((int)frame >= cap_frame - settle + 120) {
+                        /* The deadlock under test only exists with the
+                         * widescreen option ON (persisted config may have it
+                         * off, e.g. toggled off by a user escaping the very
+                         * freeze this reproduces). Force it for the probe. */
+                        extern void Port_Config_SetWidescreenEnabled(bool enabled);
+                        Port_Config_SetWidescreenEnabled(true);
+                    }
+                    if ((int)frame >= cap_frame - settle + 120) {
+                        /* Interior rest: in a 480px room at viewW=384 the
+                         * camera rests at target-192 (in (0, 96)) while the
+                         * pre-fix wait recomputed target-120 — guaranteed
+                         * mismatch, so this probe FAILS on the old code. An
+                         * edge target would NOT discriminate (both formulas
+                         * clamp to the same bound there). */
+                        memset(&panTarget, 0, sizeof(panTarget));
+                        panTarget.x.HALF.HI = (s16)(gRoomControls.origin_x + 240);
+                        panTarget.y.HALF.HI = (s16)(gRoomControls.origin_y + 0x138);
+                        gRoomControls.camera_target = &panTarget;
+                        gRoomControls.scrollSpeed = 4;
+                        pdeadline = frame + 600; /* 480px room / 4px per frame << 600 */
+                        fprintf(stderr, "[pan-probe] frame %u: target -> x=%d (scroll_x=%d viewW=%d), panning\n", frame,
+                                (int)panTarget.x.HALF.HI, (int)gRoomControls.scroll_x,
+                                Port_Widescreen_EffectiveViewWidth());
+                        pstage = 1;
+                    }
+                    break;
+                case 1: { /* evaluate the script wait every frame */
+                    ScriptExecutionContext ctx;
+                    memset(&ctx, 0, sizeof(ctx));
+                    gActiveScriptInfo.flags &= ~1u;
+                    WaitForCameraTouchRoomBorder(NULL, &ctx);
+                    if ((frame % 20) == 0) {
+                        extern int Port_Widescreen_ShouldStretch(void);
+                        extern int Port_Widescreen_TargetViewWidth(void);
+                        extern bool Port_Config_WidescreenEnabled(void);
+                        fprintf(stderr,
+                                "[pan-probe] frame %u: scroll_x=%d target_x=%d viewW=%d task=%u cfg=%d stretch=%d "
+                                "targetW=%d roomW=%d\n",
+                                frame, (int)gRoomControls.scroll_x, (int)panTarget.x.HALF.HI,
+                                Port_Widescreen_EffectiveViewWidth(), (unsigned)gMain.task,
+                                (int)Port_Config_WidescreenEnabled(), Port_Widescreen_ShouldStretch(),
+                                Port_Widescreen_TargetViewWidth(), (int)gRoomControls.width);
+                    }
+                    if (gActiveScriptInfo.flags & 1) {
+                        fprintf(stderr, "[pan-probe] frame %u: PASS wait satisfied (scroll_x=%d viewW=%d)\n", frame,
+                                (int)gRoomControls.scroll_x, Port_Widescreen_EffectiveViewWidth());
+                        fflush(stderr);
+                        _Exit(0);
+                    }
+                    if (frame >= pdeadline) {
+                        fprintf(stderr, "[pan-probe] frame %u: FAIL deadlock (scroll_x=%d target_x=%d viewW=%d)\n",
+                                frame, (int)gRoomControls.scroll_x, (int)panTarget.x.HALF.HI,
+                                Port_Widescreen_EffectiveViewWidth());
+                        fflush(stderr);
+                        _Exit(5);
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+            return; /* probe owns the run; skip capture */
         }
     }
 
