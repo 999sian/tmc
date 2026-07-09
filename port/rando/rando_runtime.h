@@ -56,12 +56,14 @@ bool Rando_IsInGameplay(void);
 bool Rando_IsInFileSelect(void);
 void Rando_PlayCancelSfx(void);
 
-
 /* Query a chest's localFlag by room property 3 (tile entities list).
  * Returns 0xFF if not found. */
 unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestIndex);
 unsigned Rando_GetDungeonKeyCount(unsigned dungeon_idx);
 bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx);
+/* GiveItem origin routing for rando-shuffled dungeon items (see rando.h
+ * RANDO_DUNGEON_ORIGIN_SUBTYPE). True = credit applied to origin dungeon. */
+bool Rando_RouteDungeonItem(unsigned item, unsigned subtype);
 
 #ifdef __cplusplus
 }

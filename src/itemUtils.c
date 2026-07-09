@@ -21,6 +21,11 @@
 #ifdef PC_PORT
 #include "port_softslots.h"
 #include "port_roll_attack_macro.h"
+#include <stdbool.h>
+/* port/rando/rando_runtime.c — credits a shuffled dungeon item (small key /
+ * map / compass / big key) to its ORIGIN dungeon when the subtype carries the
+ * rando origin tag; returns false for vanilla subtypes (no tag). */
+extern bool Rando_RouteDungeonItem(u32 item, u32 subtype);
 #endif
 
 const Wallet gWalletSizes[] = {
@@ -126,10 +131,25 @@ u32 GiveItem(Item item, u32 param_2) {
             SoundReq(SFX_ITEM_GET);
             break;
         case 5:
+#ifdef PC_PORT
+            /* Randomizer: a shuffled small key carries its ORIGIN dungeon in
+             * the subtype (bit7 | idx) and must credit that dungeon, not the
+             * current area (see port/rando/rando.h). Vanilla keys (subtype 0)
+             * keep the historical current-area behaviour. */
+            if (Rando_RouteDungeonItem(item, param_2)) {
+                SoundReq(SFX_103);
+                break;
+            }
+#endif
             ModDungeonKeys(1);
             SoundReq(SFX_103);
             break;
-        case 6: // TODO dungeon item?
+        case 6: // dungeon item (map 0x1 / compass 0x2 / big key 0x4)
+#ifdef PC_PORT
+            if (Rando_RouteDungeonItem(item, param_2)) {
+                break;
+            }
+#endif
             gSave.dungeonItems[gArea.dungeon_idx] |= metaData->unk2;
             break;
         case 0xd:

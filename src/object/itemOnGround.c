@@ -390,6 +390,11 @@ bool32 sub_08081420(ItemOnGroundEntity* this) {
         u32 key = ((u32)gRoomControls.area << 16) | ((u32)gRoomControls.room << 8) | (this->flag & 0xff);
         if (Rando_OverrideLocationKey(key, &item, &subtype)) {
             super->type = item;
+            /* Keep the routed subtype: the non-cutscene branch below calls
+             * GiveItem(super->type, super->type2), and a shuffled dungeon
+             * item's ORIGIN dungeon rides in the subtype (rando.h). Dropping
+             * it would credit the current area instead. */
+            super->type2 = subtype;
         }
     }
 #endif

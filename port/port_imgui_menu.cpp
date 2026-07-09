@@ -2599,6 +2599,8 @@ static void DrawRibbonRandomizerTab(void) {
         sRandoUiSettings.instant_text = Port_Config_GetRandoInstantText();
         sRandoUiSettings.tunic_color = Port_Config_GetRandoTunicColor();
         sRandoUiSettings.heart_color = Port_Config_GetRandoHeartColor();
+        sRandoUiSettings.tricks = (uint32_t)Port_Config_GetRandoTricks();
+        sRandoUiSettings.accessibility = (RandoAccessibility)Port_Config_GetRandoAccessibility();
         sRandoUiSettingsInit = true;
     }
 
@@ -2657,6 +2659,15 @@ static void DrawRibbonRandomizerTab(void) {
             char text[32];
             std::snprintf(text, sizeof(text), "%llu", (unsigned long long)Rando_GetSeed64());
             ImGui::SetClipboardText(text);
+        }
+        char fp[16];
+        std::snprintf(fp, sizeof(fp), "%08X", Rando_SettingsFingerprint(&active));
+        ImGui::Text("Fingerprint: %s", fp);
+        RandoUi_HelpTooltip("Hash of every placement-affecting setting. Two players with the "
+                            "same seed AND the same fingerprint are playing the identical seed.");
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Copy fingerprint")) {
+            ImGui::SetClipboardText(fp);
         }
         ImGui::Checkbox("Show HUD Tracker", &sShowRandoTracker);
     } else {
@@ -2731,6 +2742,38 @@ static void DrawRibbonRandomizerTab(void) {
                             sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS ? "Chaos" : "Hard");
     }
 
+    static const char* kAccessCombo[RANDO_ACCESS_COUNT] = {
+        "Goal only (fastest generation)",
+        "All non-key checks reachable",
+        "All checks reachable",
+    };
+    int access = (int)sRandoUiSettings.accessibility;
+    ImGui::SetNextItemWidth(280);
+    if (ImGui::Combo("Accessibility", &access, kAccessCombo, RANDO_ACCESS_COUNT)) {
+        sRandoUiSettings.accessibility = (RandoAccessibility)access;
+        changed = true;
+    }
+    RandoUi_HelpTooltip("Goal only: just the final boss must be reachable (a seed may bury "
+                        "optional checks behind items you never need). All non-key: every "
+                        "check except unshuffled small keys must be reachable. All: every "
+                        "check reachable. Stronger modes reject more seeds during generation "
+                        "but never make a seed unbeatable.");
+
+    if (!sRandoUiSettings.glitchless_logic) {
+        ImGui::SeparatorText("Glitch tricks (progression may be placed behind these)");
+        if (ImGui::CheckboxFlags("Ocarina Glitch - ToD entry without Flippers", &sRandoUiSettings.tricks,
+                                 RANDO_TRICK_OCARINA_GLITCH))
+            changed = true;
+        if (ImGui::CheckboxFlags("Crenel Clip - Mt. Crenel to Castor Wilds", &sRandoUiSettings.tricks,
+                                 RANDO_TRICK_CRENEL_CLIP))
+            changed = true;
+        if (ImGui::CheckboxFlags("Portal Jump Storage - early Cloud Tops", &sRandoUiSettings.tricks,
+                                 RANDO_TRICK_PORTAL_JUMP_STORAGE))
+            changed = true;
+    } else {
+        ImGui::TextDisabled("Glitch tricks are selectable when Glitchless logic is OFF.");
+    }
+
     if (changed) {
         Port_Config_SetRandoSettings(
             sRandoUiSettings.glitchless_logic, sRandoUiSettings.obscure_locations, sRandoUiSettings.shuffle_kinstones,
@@ -2738,6 +2781,8 @@ static void DrawRibbonRandomizerTab(void) {
             (int)sRandoUiSettings.item_difficulty, sRandoUiSettings.homewarp, sRandoUiSettings.start_sword,
             sRandoUiSettings.early_crests, sRandoUiSettings.instant_text, sRandoUiSettings.tunic_color,
             sRandoUiSettings.heart_color);
+        Port_Config_SetRandoTricks((int)sRandoUiSettings.tricks);
+        Port_Config_SetRandoAccessibility((int)sRandoUiSettings.accessibility);
     }
 
     DrawRandoCosmeticsSection();
@@ -3947,6 +3992,27 @@ static void DrawRandoFileMenuModal(void) {
                 ImGui::Combo("Tunic color", Port_RandoFileMenu_TunicColor(), kTunicColors, 7);
                 ImGui::SetNextItemWidth(160);
                 ImGui::Combo("Heart color", Port_RandoFileMenu_HeartColor(), kHeartColors, 7);
+
+                static const char* kAccessCombo[RANDO_ACCESS_COUNT] = {
+                    "Goal only",
+                    "All non-key checks",
+                    "All checks",
+                };
+                ImGui::SetNextItemWidth(160);
+                ImGui::Combo("Accessibility", Port_RandoFileMenu_Accessibility(), kAccessCombo, RANDO_ACCESS_COUNT);
+                RandoUi_HelpTooltip("Goal only: just the final boss must be reachable. All non-key: "
+                                    "every check except unshuffled small keys reachable. All: every "
+                                    "check reachable. Stronger modes never make a seed unbeatable.");
+                if (!*Port_RandoFileMenu_GlitchlessLogic()) {
+                    ImGui::CheckboxFlags("Ocarina Glitch", Port_RandoFileMenu_Tricks(), RANDO_TRICK_OCARINA_GLITCH);
+                    ImGui::SameLine();
+                    ImGui::CheckboxFlags("Crenel Clip", Port_RandoFileMenu_Tricks(), RANDO_TRICK_CRENEL_CLIP);
+                    ImGui::SameLine();
+                    ImGui::CheckboxFlags("Portal Jump Storage", Port_RandoFileMenu_Tricks(),
+                                         RANDO_TRICK_PORTAL_JUMP_STORAGE);
+                    RandoUi_HelpTooltip("Glitch-logic tier: progression may be placed behind these "
+                                        "documented speedrun glitches. Requires Glitchless logic OFF.");
+                }
 
                 if (*Port_RandoFileMenu_GlitchlessLogic() &&
                     Port_RandoFileMenu_Difficulty() > (int)RANDO_ITEM_POOL_NORMAL) {

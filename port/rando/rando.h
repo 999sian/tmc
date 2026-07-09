@@ -26,7 +26,7 @@ typedef enum {
     RANDO_BAD_SETTINGS,
 } RandoStatus;
 
-#define RANDO_LOCATION_COUNT 211
+#define RANDO_LOCATION_COUNT 228
 
 typedef enum {
     RANDO_ITEM_POOL_NORMAL = 0,
@@ -42,20 +42,58 @@ typedef enum {
  * every seed completable without glitches. This is the on-ramp for mapping the
  * speedrun glitch set into rando logic — add a bit + an edge in EvaluateHelpers.
  * See docs/speedrun-and-rando-port-notes-2026-06-13.md. */
-#define RANDO_TRICK_OCARINA_GLITCH  (1u << 0)  /* OG: Temple of Droplets entry without Flippers (needs Ocarina) */
-#define RANDO_TRICK_CRENEL_CLIP     (1u << 1)  /* Crenel Clip: reach Castor Wilds from Mt. Crenel (needs a Bottle) */
-#define RANDO_TRICK_PORTAL_JUMP_STORAGE  (1u << 2)  /* PJS: reach Cloud Tops early without Roc's Cape (needs Ocarina) */
-#define RANDO_TRICK_ALL             (RANDO_TRICK_OCARINA_GLITCH | RANDO_TRICK_CRENEL_CLIP | RANDO_TRICK_PORTAL_JUMP_STORAGE)
+#define RANDO_TRICK_OCARINA_GLITCH (1u << 0)      /* OG: Temple of Droplets entry without Flippers (needs Ocarina) */
+#define RANDO_TRICK_CRENEL_CLIP (1u << 1)         /* Crenel Clip: reach Castor Wilds from Mt. Crenel (needs a Bottle) */
+#define RANDO_TRICK_PORTAL_JUMP_STORAGE (1u << 2) /* PJS: reach Cloud Tops early without Roc's Cape (needs Ocarina) */
+#define RANDO_TRICK_ALL (RANDO_TRICK_OCARINA_GLITCH | RANDO_TRICK_CRENEL_CLIP | RANDO_TRICK_PORTAL_JUMP_STORAGE)
+
+/* Accessibility guarantee applied by the seed verifier (VerifyTable).
+ * GOAL is the historical behaviour: only the goal (Vaati/DHC) must be
+ * reachable, so a seed can bury non-progression checks behind items you
+ * never need. The stronger modes reject any seed that leaves an enabled
+ * check unreachable, matching the upstream randomizer's ACCESSIBILITY
+ * dropdown. Strengthening only: a mode above GOAL can reject a seed GOAL
+ * would accept, but never accepts a seed GOAL would reject. */
+typedef enum {
+    RANDO_ACCESS_GOAL = 0,      /* only the goal must be reachable (default) */
+    RANDO_ACCESS_ALL_NONKEYS,   /* every enabled non-key check reachable */
+    RANDO_ACCESS_ALL_LOCATIONS, /* every enabled check reachable */
+    RANDO_ACCESS_COUNT,
+} RandoAccessibility;
+
+/* --- Per-dungeon dungeon-item identity -----------------------------------
+ * The engine stores small keys / big keys / maps / compasses PER DUNGEON
+ * (gSave.dungeonKeys[16] / gSave.dungeonItems[16], indexed by
+ * gArea.dungeon_idx = area location - 23). A dungeon item collected outside
+ * its home dungeon must credit its ORIGIN dungeon, not the current area —
+ * the vanilla give path (itemUtils.c GiveItem cases 5/6) always credits the
+ * current area, so shuffled dungeon items ride an origin tag in the item
+ * SUBTYPE byte: 0x80 | origin_dungeon_idx. Vanilla gives use subtype 0, so
+ * bit 7 doubles as the "rando origin present" sentinel. Kinstone subtypes
+ * (0x70..0x75) never set bit 7.
+ *
+ * Inside the SOLVER ONLY (never in the item table or on the wire), a placed
+ * dungeon item is tracked as a VIRTUAL item id so reachability distinguishes
+ * e.g. Palace's big key from Deepwood's: real ids end at 0x75 and the drop
+ * sentinels start at 0xFC, so 0x80..0xBF is free. */
+#define RANDO_DUNGEON_ORIGIN_SUBTYPE(d) ((uint8_t)(0x80u | ((d) & 0x0Fu)))
+#define RANDO_SUBTYPE_HAS_ORIGIN(s) (((s) & 0x80u) != 0)
+#define RANDO_SUBTYPE_ORIGIN(s) ((unsigned)((s) & 0x0Fu))
+#define RANDO_VITEM_BIG_KEY(d) (0x80u + ((d) & 0x0Fu)) /* 0x80..0x8F */
+#define RANDO_VITEM_MAP(d) (0x90u + ((d) & 0x0Fu))     /* 0x90..0x9F */
+#define RANDO_VITEM_COMPASS(d) (0xA0u + ((d) & 0x0Fu)) /* 0xA0..0xAF */
 
 typedef struct RandomizerSettings {
     bool glitchless_logic;
     bool obscure_locations;
     bool shuffle_kinstones;
-    bool shuffle_entrances;   /* coupled dungeon-entrance shuffle (was hijacking shuffle_kinstones) */
+    bool shuffle_entrances; /* coupled dungeon-entrance shuffle (was hijacking shuffle_kinstones) */
     bool shuffle_dojos;
     bool open_world;
     RandoItemPoolDifficulty item_difficulty;
-    uint32_t tricks;          /* RANDO_TRICK_* bitmask; ignored when glitchless_logic is true */
+    uint32_t tricks;                  /* RANDO_TRICK_* bitmask; ignored when glitchless_logic is true */
+    RandoAccessibility accessibility; /* verifier strength; RANDO_ACCESS_GOAL = historical */
+    bool shuffle_dungeon_items;       /* big keys/maps/compasses join the pool (default off = pinned vanilla) */
     bool homewarp;
     bool start_sword;
     bool early_crests;
@@ -287,6 +325,26 @@ typedef enum {
     RANDO_LOC_CLOUD_TOPS_SOUTH_EAST_BOTTOM_DIG_SPOT = 208,
     RANDO_LOC_WIND_TRIBE_2F_GREGAL_REWARD_1 = 209,
     RANDO_LOC_WIND_TRIBE_2F_GREGAL_REWARD_2 = 210,
+    /* Dungeon-item chests (maps / compasses / big keys), appended so all
+     * prior ids stay stable. Shuffled only when shuffle_dungeon_items;
+     * pinned vanilla otherwise. Sidecar v7. */
+    RANDO_LOC_DEEPWOOD_SHRINE_MAP_CHEST = 211,
+    RANDO_LOC_DEEPWOOD_SHRINE_BIG_KEY_CHEST = 212,
+    RANDO_LOC_DEEPWOOD_SHRINE_COMPASS_CHEST = 213,
+    RANDO_LOC_CAVE_OF_FLAMES_MAP_CHEST = 214,
+    RANDO_LOC_CAVE_OF_FLAMES_COMPASS_CHEST = 215,
+    RANDO_LOC_CAVE_OF_FLAMES_BIG_KEY_CHEST = 216,
+    RANDO_LOC_FORTRESS_OF_WINDS_COMPASS_CHEST = 217,
+    RANDO_LOC_FORTRESS_OF_WINDS_MAP_CHEST = 218,
+    RANDO_LOC_FORTRESS_OF_WINDS_BIG_KEY_CHEST = 219,
+    RANDO_LOC_TEMPLE_OF_DROPLETS_MAP_CHEST = 220,
+    RANDO_LOC_TEMPLE_OF_DROPLETS_COMPASS_CHEST = 221,
+    RANDO_LOC_PALACE_OF_WINDS_BIG_KEY_CHEST = 222,
+    RANDO_LOC_PALACE_OF_WINDS_MAP_CHEST = 223,
+    RANDO_LOC_PALACE_OF_WINDS_COMPASS_CHEST = 224,
+    RANDO_LOC_DARK_HYRULE_CASTLE_BIG_KEY_CHEST = 225,
+    RANDO_LOC_DARK_HYRULE_CASTLE_COMPASS_CHEST = 226,
+    RANDO_LOC_DARK_HYRULE_CASTLE_MAP_CHEST = 227,
 } RandoLocationId;
 
 typedef struct RandoLocationDef {
@@ -306,6 +364,15 @@ extern uint8_t randomized_item_subtype_table[RANDO_LOCATION_COUNT];
 RandomizerSettings Rando_DefaultSettings(void);
 uint64_t Rando_SeedFromString(const char* text);
 
+/* Stable FNV-1a hash over every generation-relevant setting (glitchless,
+ * obscure, kinstones, entrances, dojos, open_world, item_difficulty,
+ * effective tricks, accessibility, start_sword). Two players with the same
+ * seed AND the same fingerprint are generating the identical placement, so
+ * it is the shareable "are we on the same seed" check. Pure cosmetics and
+ * runtime-only QoL (tunic/heart, homewarp, instant_text, early_crests) are
+ * excluded because they never change placement. */
+uint32_t Rando_SettingsFingerprint(const RandomizerSettings* settings);
+
 /* Required API for the file-select UI. */
 bool GenerateSeed(uint64_t seed, RandomizerSettings settings);
 
@@ -321,8 +388,8 @@ const uint8_t* Rando_GetRandomizedItemSubtypeTable(void);
 size_t Rando_GetLocationCount(void);
 const RandoLocationDef* Rando_GetLocationDef(RandoLocationId id);
 uint16_t Rando_ResolveLocationItem(RandoLocationId location, uint16_t vanilla_item);
-bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table, const uint8_t* subtype_table,
-                         size_t count);
+bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
+                         const uint8_t* subtype_table, size_t count);
 
 bool Rando_VerifyCurrentSeed(void);
 

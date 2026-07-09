@@ -964,6 +964,14 @@ static u16 sWsShadowBG2[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 static u32 sWsContentKey = 0xffffffffu;
 static s32 sWsContentPx = 0;
 
+/* Key identifying the room the content cache belongs to. Checked by
+ * ShouldStretch so a stale cache (previous room) is never consulted —
+ * InitializeCamera runs at room entry BEFORE the next vblank rescan. */
+static u32 Port_WidescreenRoomKey(void) {
+    return ((u32)gRoomControls.area << 24) | ((u32)gRoomControls.room << 16) |
+           ((u32)(u16)gRoomControls.origin_x ^ ((u32)(u16)gRoomControls.origin_y << 1));
+}
+
 static s32 Port_WidescreenScanContentPx(void) {
     enum { kMapStride = 128, kMapRows = 128 };
     s32 tiles_w = (s32)gRoomControls.width / 8;
@@ -1043,8 +1051,9 @@ int Port_Widescreen_ShouldStretch(void) {
     }
     /* Wide room, narrow content: the painted map can't fill the wide view
      * even at camera-left -> permanent void strip. Present stretched-240
-     * instead (GBA-identical framing). 0 = not scanned yet -> trust width. */
-    if (sWsContentPx > 0 && sWsContentPx < target) {
+     * instead (GBA-identical framing). 0 = not scanned yet -> trust width.
+     * Key mismatch = cache belongs to the PREVIOUS room -> trust width. */
+    if (sWsContentKey == Port_WidescreenRoomKey() && sWsContentPx > 0 && sWsContentPx < target) {
         return 1;
     }
     return 0;
@@ -1063,6 +1072,22 @@ int Port_Widescreen_IsActive(void) {
 
 int Port_Widescreen_EffectiveViewWidth(void) {
     return Port_Widescreen_IsActive() ? Port_Widescreen_TargetViewWidth() : 240;
+}
+
+/* Single source of truth for the camera's rest x (see port_widescreen.h).
+ * Clamp order (lo wins over hi) matches the GBA branches it replaces. */
+int Port_Widescreen_CameraRestX(int target_x) {
+    int viewW = Port_Widescreen_EffectiveViewWidth();
+    int lo = (int)gRoomControls.origin_x;
+    int hi = lo + (int)gRoomControls.width - viewW;
+    int want = target_x - viewW / 2;
+    if (want > hi) {
+        want = hi;
+    }
+    if (want < lo) {
+        want = lo;
+    }
+    return want;
 }
 
 /* True while at least one BG shadow is registered for the current frame —
@@ -1214,8 +1239,7 @@ void Port_Widescreen_UpdateShadows(void) {
      * late-streaming map data can only widen, never flip wide->stretch
      * mid-room. ~16K u16 reads worst case, once per vblank — negligible. */
     if (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled()) {
-        u32 key = ((u32)gRoomControls.area << 24) | ((u32)gRoomControls.room << 16) |
-                  ((u32)(u16)gRoomControls.origin_x ^ ((u32)(u16)gRoomControls.origin_y << 1));
+        u32 key = Port_WidescreenRoomKey();
         if (key != sWsContentKey) {
             sWsContentKey = key;
             sWsContentPx = 0;
@@ -1237,14 +1261,18 @@ void Port_Widescreen_UpdateShadows(void) {
     virtuappu_mode1_ws_hud_right_anchor = Port_Widescreen_HudRightAnchor();
 
     /* Publish the live textbox rect so the PPU can center it (BG0 composes
-     * the box for a 240-px canvas). gMessage.textWindow* are tile coords;
-     * pad one tile on every side for the border rows/cols DispMessageFrame
-     * draws around the text area, then clamp to the native canvas. */
+     * the box for a 240-px canvas). The engine frame (DispMessageFrame /
+     * DeleteWindow, src/message.c) spans (W+2) x (H+2) BG0 tiles STARTING at
+     * tile (textWindowPosX, textWindowPosY) — border tiles are drawn inward
+     * from that corner, not around it. Publishing a rect short of the real
+     * frame left the right border outside the shifted copy (overdrawn by the
+     * interior) and the bottom border row outside the y-band (torn by the
+     * HUD right-anchor remap). Clamp to the native canvas. */
     if ((gMessage.state & MESSAGE_ACTIVE) != 0) {
-        int x0 = ((int)gMessage.textWindowPosX - 1) * 8;
-        int x1 = ((int)gMessage.textWindowPosX + (int)gMessage.textWindowWidth + 1) * 8;
-        int y0 = ((int)gMessage.textWindowPosY - 1) * 8;
-        int y1 = ((int)gMessage.textWindowPosY + (int)gMessage.textWindowHeight + 1) * 8;
+        int x0 = (int)gMessage.textWindowPosX * 8;
+        int x1 = ((int)gMessage.textWindowPosX + (int)gMessage.textWindowWidth + 2) * 8;
+        int y0 = (int)gMessage.textWindowPosY * 8;
+        int y1 = ((int)gMessage.textWindowPosY + (int)gMessage.textWindowHeight + 2) * 8;
         if (x0 < 0)
             x0 = 0;
         if (x1 > 240)
@@ -1297,6 +1325,19 @@ void Port_Widescreen_SetWindowPixels(int w, int h) {
 }
 int Port_Widescreen_TargetViewWidth(void) {
     return 240;
+}
+int Port_Widescreen_CameraRestX(int target_x) {
+    /* GBA-exact: center at 120, clamp view inside the room. */
+    int lo = (int)gRoomControls.origin_x;
+    int hi = lo + (int)gRoomControls.width - 240;
+    int want = target_x - 120;
+    if (want > hi) {
+        want = hi;
+    }
+    if (want < lo) {
+        want = lo;
+    }
+    return want;
 }
 #endif
 

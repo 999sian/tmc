@@ -38,6 +38,8 @@ typedef struct RandoFileMenuState {
     bool instant_text;
     int tunic_color;
     int heart_color;
+    int tricks;        /* RANDO_TRICK_* bitmask (glitch tier); edited via CheckboxFlags */
+    int accessibility; /* RandoAccessibility; edited via Combo */
     char status[96];
 } RandoFileMenuState;
 
@@ -157,6 +159,12 @@ int* Port_RandoFileMenu_TunicColor(void) {
 int* Port_RandoFileMenu_HeartColor(void) {
     return &sMenu.heart_color;
 }
+int* Port_RandoFileMenu_Tricks(void) {
+    return &sMenu.tricks;
+}
+int* Port_RandoFileMenu_Accessibility(void) {
+    return &sMenu.accessibility;
+}
 
 static uint64_t CurrentSeedValue(void) {
     if (sMenu.seed_len == 0) {
@@ -170,13 +178,16 @@ static void PersistMenuSettings(void) {
                                  sMenu.shuffle_entrances, sMenu.shuffle_dojos, sMenu.open_world, (int)sMenu.difficulty,
                                  sMenu.homewarp, sMenu.start_sword, sMenu.early_crests, sMenu.instant_text,
                                  sMenu.tunic_color, sMenu.heart_color);
+    Port_Config_SetRandoTricks(sMenu.tricks);
+    Port_Config_SetRandoAccessibility(sMenu.accessibility);
 }
 
 void Port_RandoFileMenu_CommitAndStart(void) {
-    RandomizerSettings settings;
+    RandomizerSettings settings = Rando_DefaultSettings();
     uint64_t seed;
 
-    settings.tricks = 0; /* no tricks UI in the sidebar; without this the field is uninitialized stack */
+    settings.tricks = (uint32_t)sMenu.tricks;
+    settings.accessibility = (RandoAccessibility)sMenu.accessibility;
     settings.glitchless_logic = sMenu.glitchless_logic;
     settings.obscure_locations = sMenu.obscure_locations;
     settings.shuffle_kinstones = sMenu.shuffle_kinstones;
@@ -244,6 +255,8 @@ void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled) {
                                      (int)defaults.item_difficulty, defaults.homewarp, defaults.start_sword,
                                      defaults.early_crests, defaults.instant_text, defaults.tunic_color,
                                      defaults.heart_color);
+        Port_Config_SetRandoTricks((int)defaults.tricks);
+        Port_Config_SetRandoAccessibility((int)defaults.accessibility);
     }
 }
 
@@ -273,6 +286,8 @@ void Port_RandoFileMenu_Open(int save_slot) {
     sMenu.instant_text = Port_Config_GetRandoInstantText();
     sMenu.tunic_color = Port_Config_GetRandoTunicColor();
     sMenu.heart_color = Port_Config_GetRandoHeartColor();
+    sMenu.tricks = Port_Config_GetRandoTricks();
+    sMenu.accessibility = Port_Config_GetRandoAccessibility();
     Port_RandoFileMenu_SetSeed("MINISH");
 }
 

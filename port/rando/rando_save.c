@@ -64,7 +64,7 @@ typedef struct RandoSidecarSlot {
     uint16_t override_count;
     uint16_t entrance_count;
     uint8_t shuffle_entrances;     /* v5: was reserved2[0] */
-    uint8_t reserved2;             /* v5: was reserved2[1] */
+    uint8_t accessibility;         /* v6: was reserved2 (always 0 == RANDO_ACCESS_GOAL, so no bump) */
     uint32_t tricks;               /* v5: RANDO_TRICK_* bitmask (glitch-logic tier) */
     uint32_t logic_location_count; /* parse fingerprint for index validity */
     uint64_t seed;
@@ -273,6 +273,7 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
     rec->open_world = settings.open_world ? 1 : 0;
     rec->item_difficulty = (uint8_t)settings.item_difficulty;
     rec->tricks = settings.tricks;
+    rec->accessibility = (uint8_t)settings.accessibility;
     rec->seed = Rando_GetSeed64();
     rec->count = (uint32_t)count;
     memcpy(rec->table, table, count * sizeof(rec->table[0]));
@@ -325,6 +326,9 @@ bool Port_RandoSave_LoadSlot(int slot) {
     settings.shuffle_dojos = rec->shuffle_dojos != 0;
     settings.open_world = rec->open_world != 0;
     settings.tricks = rec->tricks;
+    if (rec->accessibility < RANDO_ACCESS_COUNT) {
+        settings.accessibility = (RandoAccessibility)rec->accessibility;
+    }
     if (rec->item_difficulty < RANDO_ITEM_POOL_COUNT) {
         settings.item_difficulty = (RandoItemPoolDifficulty)rec->item_difficulty;
     }
