@@ -18,6 +18,12 @@ void Port_PPU_Init(SDL_Window* window);
 // then present it to the SDL window. Call once per VBlank.
 void Port_PPU_PresentFrame(void);
 
+// Decoupled pacing: whether the next PresentFrame is the first present of
+// the current game tick. Temporal effects (LCD persistence) fold their
+// accumulators only then; repeat presents of the same tick read them
+// without writing.
+void Port_PPU_SetPresentIsFirstOfTick(bool first);
+
 // Update the SDL window title used by the port.
 void Port_PPU_SetWindowTitle(const char* title);
 
@@ -45,6 +51,11 @@ const char* Port_PPU_FilterName(void);
 // > 60 are limited by the display, not by the busy-wait timer.
 void Port_PPU_SetVSync(bool enabled);
 bool Port_PPU_VSyncEnabled(void);
+
+// Current refresh rate (Hz, rounded) of the display the window is on;
+// 0 when unknown (headless/dummy driver, no window yet). Cached, re-queried
+// every ~2 s so moving the window between monitors is tracked.
+unsigned Port_PPU_DisplayRefreshRate(void);
 
 // GBA reflective-LCD display transforms applied at present time to the final
 // composited frame (see port_ppu.cpp). Colour correction defaults on

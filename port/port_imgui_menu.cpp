@@ -3713,6 +3713,49 @@ static void Practice_DrawHistory(void) {
     ImGui::Dummy(ImVec2(labelW + cols * cw, kPracticeBtnCount * ch));
 }
 
+/* ---- FPS counter overlay ----------------------------------------------
+ * Top-right HUD gated by show_fps. Under decoupled pacing render rate and
+ * game speed are separate numbers, so both are shown: FPS is what the
+ * display gets, TPS is how fast the game is actually running (60 = correct
+ * speed regardless of the FPS cap). Rates refresh once per second in
+ * port_bios.c. */
+extern "C" {
+extern double gPortPaceFps;
+extern double gPortPaceTps;
+extern bool gPortPaceDecoupled;
+}
+
+static void DrawFpsOverlay(void) {
+    if (!Port_Config_GetShowFps())
+        return;
+
+    /* Foreground draw list: on top of every ImGui window (incl. the F8
+     * menu), MangoHud-style, and costs no window/focus bookkeeping. */
+    char fpsTxt[24], tpsTxt[24];
+    snprintf(fpsTxt, sizeof(fpsTxt), "%.0f FPS", gPortPaceFps);
+    snprintf(tpsTxt, sizeof(tpsTxt), " / %.0f TPS", gPortPaceTps);
+
+    ImDrawList* dl = ImGui::GetForegroundDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+    const float pad = 10.0f;
+    const float inset = 5.0f;
+    ImVec2 fpsSz = ImGui::CalcTextSize(fpsTxt);
+    ImVec2 tpsSz = gPortPaceDecoupled ? ImGui::CalcTextSize(tpsTxt) : ImVec2(0, 0);
+    ImVec2 boxMax = ImVec2(io.DisplaySize.x - pad, pad + fpsSz.y + inset * 2);
+    ImVec2 boxMin = ImVec2(boxMax.x - (fpsSz.x + tpsSz.x + inset * 2), pad);
+    dl->AddRectFilled(boxMin, boxMax, IM_COL32(0, 0, 0, 150), 4.0f);
+    ImVec2 cur = ImVec2(boxMin.x + inset, boxMin.y + inset);
+    dl->AddText(cur, IM_COL32(90, 230, 115, 255), fpsTxt);
+    if (gPortPaceDecoupled) {
+        cur.x += fpsSz.x;
+        /* Game speed: yellow at the correct rate (60, or 59.73 parity),
+         * red when it deviates (overloaded machine or fast-forward). */
+        bool nominal = gPortPaceTps > 58.0 && gPortPaceTps < 62.0;
+        ImU32 col = nominal ? IM_COL32(255, 240, 76, 255) : IM_COL32(255, 115, 90, 255);
+        dl->AddText(cur, col, tpsTxt);
+    }
+}
+
 static void DrawPracticeOverlay(void) {
     const bool showTimer = Port_Config_GetPracticeShowTimer();
     const bool showInputs = Port_Config_GetPracticeShowInputs();
@@ -4329,6 +4372,7 @@ extern "C" bool Port_ImGui_Render(void) {
 
     DrawRandoTrackerOverlay();
     DrawPracticeOverlay();
+    DrawFpsOverlay();
     ImGui::Render();
 #ifdef TMC_GPU_RENDERER
     if (gpuBackend) {
