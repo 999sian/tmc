@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Widescreen in more scenes, never stretched
+
+- **Rooms narrower than the monitor's widescreen target now render true-wide
+  at their full room width** instead of dropping back to the native 240px
+  view. 256px and 272px rooms — most dungeon rooms and larger interiors —
+  show their whole width with only thin pillarbox bars (e.g. a 272px room on
+  a 16:9 monitor leaves ~6px per side) rather than none of the extra world.
+- **Scenes that cannot be widened are presented at their correct aspect,
+  never stretched.** The title screen, file select, pause/menu overlays, and
+  one-screen 240px rooms (Link's house and other small interiors) have no
+  extra world data to reveal, so they render the GBA-native canvas centered
+  and undistorted.
+- **The space the game can't fill now defaults to a blurred ambient fill**
+  (a soft stretched copy of the scene behind the sharp frame), so every
+  scene fills the whole monitor without stretching the game itself. The
+  fill also covers the window in the default Native aspect mode, where it
+  previously never showed. F8 → Display → "Background" switches back to
+  plain black bars or a solid color (existing configs that explicitly saved
+  a style keep it).
+
 ### Game speed decoupled from the framerate
 
 - **Game logic now runs on its own fixed clock, independent of Target FPS and

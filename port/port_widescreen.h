@@ -51,8 +51,17 @@ extern "C" {
 #endif
 
 /* Runtime state for a wide-width build. These collapse to native no-ops when
- * MODE1_GBA_WIDTH == 240 or the WIP widescreen option is disabled. */
-int Port_Widescreen_ShouldStretch(void);
+ * MODE1_GBA_WIDTH == 240 or the WIP widescreen option is disabled.
+ *
+ * FallbackNative == 1 means this scene renders the GBA-native 240px canvas
+ * and the presenter fits it at its correct 3:2 aspect (pillarbox bars) —
+ * fixed canvases are NEVER stretched to the widescreen target.
+ *
+ * EffectiveViewWidth is additionally capped by the current room's width:
+ * rooms narrower than the window-aspect target but wider than 240 (256 and
+ * 272px rooms — most dungeons/interiors with any extra world) run true
+ * widescreen at their full room width, pillarboxing only the remainder. */
+int Port_Widescreen_FallbackNative(void);
 int Port_Widescreen_IsActive(void);
 int Port_Widescreen_EffectiveViewWidth(void);
 int Port_Widescreen_HudRightAnchor(void);
@@ -61,15 +70,18 @@ int Port_Widescreen_HudRightAnchor(void);
 int Port_Widescreen_ShadowsLive(void);
 
 /* True widescreen: the view width tracks the WINDOW's aspect each frame —
- * viewW = clamp(round8(window_aspect * 160), 240, MODE1_GBA_WIDTH) — so a
- * 16:9 monitor fills exactly (~288 px) with a constant world scale, instead
+ * viewW = clamp(floor(window_width * 160 / window_height), 240,
+ * MODE1_GBA_WIDTH) — so a 16:9 monitor fills exactly (~284 px) with a
+ * constant world scale, instead
  * of letterboxing a fixed 2.4:1 frame. MODE1_GBA_WIDTH is the framebuffer
  * capacity / hard cap, no longer the presented width.
  *  - Port_Widescreen_SetWindowPixels: present path publishes the live
  *    window client size (pixels) once per frame.
  *  - Port_Widescreen_TargetViewWidth: the aspect-fit width (config/task
  *    independent). TMC_WS_VIEW_WIDTH=<px> overrides for headless captures.
- * EffectiveViewWidth == TargetViewWidth while active, else 240. */
+ * EffectiveViewWidth == min(TargetViewWidth, room width) while active, else
+ * 240 — always use EffectiveViewWidth for camera/layout math, never the raw
+ * target (see the room-cap note above). */
 void Port_Widescreen_SetWindowPixels(int w, int h);
 int Port_Widescreen_TargetViewWidth(void);
 

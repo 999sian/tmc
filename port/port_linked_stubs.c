@@ -949,23 +949,26 @@ static u16 sWsShadowBG2[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 /* ---- Runtime widescreen gate --------------------------------------------
  * `--widescreen_width=N` only reserves a wider framebuffer. True widescreen
  * is still WIP, so a persisted runtime option decides whether gameplay uses
- * the wider camera/reveal. Disabled, non-gameplay, and rooms narrower than
- * MODE1_GBA_WIDTH all fall back to a native 240x160 frame; the camera/culling
- * helpers below report 240 in that state so the engine remains GBA-clean. */
+ * the wider camera/reveal. Disabled, non-gameplay, one-screen (<=240px)
+ * rooms, and rooms whose painted content can't fill the room-capped view all
+ * fall back to a native 240x160 frame (presented pillarboxed, never
+ * stretched); rooms between 240px and the window target run true-wide at
+ * their full room width. The camera/culling helpers below report 240 in the
+ * fallback state so the engine remains GBA-clean. */
 /* ---- Per-room content width (issue: wide room, narrow content) ----------
  * gRoomControls.width can exceed the actual painted map (e.g. a 480-px room
  * whose floor ends ~270 px in). Widescreen then parks void columns on screen
  * permanently (a GBA player only saw them transiently at the right edge).
  * Scan both map buffers for the rightmost non-empty tile column inside the
  * room rect; if that content can't fill the wide view even with the camera
- * pinned left (content < MODE1_GBA_WIDTH), fall back to stretched-240 —
+ * pinned left, fall back to a native 240 frame (presented pillarboxed) —
  * which shows exactly what GBA showed. Ratcheted per room (only grows) so
  * late-streaming map data can't flip the mode back and forth mid-room. */
 static u32 sWsContentKey = 0xffffffffu;
 static s32 sWsContentPx = 0;
 
 /* Key identifying the room the content cache belongs to. Checked by
- * ShouldStretch so a stale cache (previous room) is never consulted —
+ * FallbackNative so a stale cache (previous room) is never consulted —
  * InitializeCamera runs at room entry BEFORE the next vblank rescan. */
 static u32 Port_WidescreenRoomKey(void) {
     return ((u32)gRoomControls.area << 24) | ((u32)gRoomControls.room << 16) |
@@ -996,7 +999,7 @@ static s32 Port_WidescreenScanContentPx(void) {
 /* ---- True widescreen: window-aspect-driven view width -------------------
  * MODE1_GBA_WIDTH is the framebuffer CAPACITY (hard cap); the presented
  * view width tracks the live window aspect so the frame fills the monitor
- * exactly: 16:9 -> 288 px, 21:9 -> 373 -> cap, 4:3/3:2 -> 240 (authentic).
+ * exactly: 16:9 -> 284 px, 21:9 -> 373 -> cap, 4:3/3:2 -> 240 (authentic).
  * Published once per frame from the present path; rounded to a multiple of
  * 8 so tile/HUD math stays exact. TMC_WS_VIEW_WIDTH=<px> overrides for
  * headless captures (dummy driver windows don't track a real monitor). */
@@ -1037,23 +1040,38 @@ int Port_Widescreen_TargetViewWidth(void) {
     return w;
 }
 
-int Port_Widescreen_ShouldStretch(void) {
-    int target;
+/* Widest view the current room can honestly feed: the window-aspect target
+ * capped by the room's own width. Rooms narrower than the window target but
+ * wider than 240 (0x100/0x110 rooms — most dungeons and larger interiors)
+ * still get true widescreen at their full room width; the presenter
+ * pillarboxes the small remainder instead of stretching. */
+static s32 Port_WidescreenEffectiveTarget(void) {
+    s32 target = Port_Widescreen_TargetViewWidth();
+    s32 roomW = (s32)gRoomControls.width;
+    if (roomW < target) {
+        target = roomW;
+    }
+    return target;
+}
+
+int Port_Widescreen_FallbackNative(void) {
+    s32 eff;
     if (!Port_Config_WidescreenEnabled()) {
         return 1;
     }
-    target = Port_Widescreen_TargetViewWidth();
-    if (target <= 240) {
+    if (Port_Widescreen_TargetViewWidth() <= 240) {
         return 1; /* window is 3:2/4:3 — native view already fills it */
     }
-    if ((s32)gRoomControls.width < target) {
-        return 1;
+    eff = Port_WidescreenEffectiveTarget();
+    if (eff <= 240) {
+        return 1; /* one-screen room (<=240px): no extra world to reveal */
     }
-    /* Wide room, narrow content: the painted map can't fill the wide view
-     * even at camera-left -> permanent void strip. Present stretched-240
-     * instead (GBA-identical framing). 0 = not scanned yet -> trust width.
-     * Key mismatch = cache belongs to the PREVIOUS room -> trust width. */
-    if (sWsContentKey == Port_WidescreenRoomKey() && sWsContentPx > 0 && sWsContentPx < target) {
+    /* Room wider than its painted content: the map can't fill even the
+     * room-capped view with the camera pinned left -> permanent void strip.
+     * Render native 240 (GBA-identical framing, presented pillarboxed).
+     * 0 = not scanned yet -> trust width. Key mismatch = cache belongs to
+     * the PREVIOUS room -> trust width. */
+    if (sWsContentKey == Port_WidescreenRoomKey() && sWsContentPx > 0 && sWsContentPx < eff) {
         return 1;
     }
     return 0;
@@ -1067,11 +1085,16 @@ int Port_Widescreen_IsActive(void) {
      * overlay screens that replace the map BGs (prologue storybook, pause
      * menu, ...) are caught by Port_Widescreen_ShadowsLive() instead: no
      * matching BG -> no shadow -> present native 240. */
-    return (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled() && !Port_Widescreen_ShouldStretch()) ? 1 : 0;
+    return (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled() && !Port_Widescreen_FallbackNative()) ? 1 : 0;
 }
 
 int Port_Widescreen_EffectiveViewWidth(void) {
-    return Port_Widescreen_IsActive() ? Port_Widescreen_TargetViewWidth() : 240;
+    s32 eff;
+    if (!Port_Widescreen_IsActive()) {
+        return 240;
+    }
+    eff = Port_WidescreenEffectiveTarget();
+    return eff > 240 ? (int)eff : 240;
 }
 
 /* Single source of truth for the camera's rest x (see port_widescreen.h).
@@ -1235,8 +1258,8 @@ void Port_Widescreen_UpdateShadows(void) {
     virtuappu_mode1_ws_msg_shift = 0;
 
     /* Refresh the per-room content-width signal BEFORE the IsActive gate
-     * (ShouldStretch consumes it). Keyed on area|room|origin; ratcheted so
-     * late-streaming map data can only widen, never flip wide->stretch
+     * (FallbackNative consumes it). Keyed on area|room|origin; ratcheted so
+     * late-streaming map data can only widen, never flip wide->native
      * mid-room. ~16K u16 reads worst case, once per vblank — negligible. */
     if (gMain.task == TASK_GAME && Port_Config_WidescreenEnabled()) {
         u32 key = Port_WidescreenRoomKey();
@@ -1250,7 +1273,7 @@ void Port_Widescreen_UpdateShadows(void) {
             if (getenv("TMC_WS_TRACE") != NULL) {
                 fprintf(stderr, "[ws] area=0x%02x room=0x%02x width=%d content_px=%d -> %s\n",
                         (unsigned)gRoomControls.area, (unsigned)gRoomControls.room, (int)gRoomControls.width,
-                        (int)sWsContentPx, Port_Widescreen_ShouldStretch() ? "stretch-240" : "wide");
+                        (int)sWsContentPx, Port_Widescreen_FallbackNative() ? "native-240" : "wide");
             }
         }
     }
@@ -1304,8 +1327,8 @@ void Port_Widescreen_UpdateShadows(void) {
 #else
 void Port_Widescreen_UpdateShadows(void) { /* no-op at native 240 */
 }
-int Port_Widescreen_ShouldStretch(void) {
-    return 0;
+int Port_Widescreen_FallbackNative(void) {
+    return 1;
 }
 int Port_Widescreen_IsActive(void) {
     return 0;

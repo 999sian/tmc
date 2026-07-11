@@ -435,15 +435,15 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                     gActiveScriptInfo.flags &= ~1u;
                     WaitForCameraTouchRoomBorder(NULL, &ctx);
                     if ((frame % 20) == 0) {
-                        extern int Port_Widescreen_ShouldStretch(void);
+                        extern int Port_Widescreen_FallbackNative(void);
                         extern int Port_Widescreen_TargetViewWidth(void);
                         extern bool Port_Config_WidescreenEnabled(void);
                         fprintf(stderr,
-                                "[pan-probe] frame %u: scroll_x=%d target_x=%d viewW=%d task=%u cfg=%d stretch=%d "
+                                "[pan-probe] frame %u: scroll_x=%d target_x=%d viewW=%d task=%u cfg=%d fallback=%d "
                                 "targetW=%d roomW=%d\n",
                                 frame, (int)gRoomControls.scroll_x, (int)panTarget.x.HALF.HI,
                                 Port_Widescreen_EffectiveViewWidth(), (unsigned)gMain.task,
-                                (int)Port_Config_WidescreenEnabled(), Port_Widescreen_ShouldStretch(),
+                                (int)Port_Config_WidescreenEnabled(), Port_Widescreen_FallbackNative(),
                                 Port_Widescreen_TargetViewWidth(), (int)gRoomControls.width);
                     }
                     if (gActiveScriptInfo.flags & 1) {

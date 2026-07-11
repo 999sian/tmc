@@ -101,10 +101,12 @@ bool sShowFps = false;
 int sPreferredRegion = -1;
 int sPreferredLanguage = -1;
 /* Widescreen pillarbox config — applied in port_ppu.cpp's present path.
- * Defaults reproduce the historical behavior: GBA 3:2 frame fills as
- * much of the window as possible, side bars are black. */
+ * The frame fills as much of the window as its aspect allows; whatever the
+ * frame can't cover (title screen, one-screen 240px rooms) defaults to the
+ * blurred ambient fill so no scene shows dead black bars. "black" restores
+ * the historical plain-bars look. */
 PortAspectMode sAspectMode = PORT_ASPECT_NATIVE_3_2;
-PortBgFill sBgFill = PORT_BG_FILL_BLACK;
+PortBgFill sBgFill = PORT_BG_FILL_BLURRED_FRAME;
 u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
 /* Renderer backend selection — read once at PPU init; menu writes
  * here but a restart is needed to apply because the window's
@@ -333,7 +335,7 @@ nlohmann::json DefaultsJson(void) {
     j["autosave_interval_ms"] = 60000;
     j["touch_scheme"] = "joystick";
     j["aspect_mode"] = "native";
-    j["bg_fill"] = "black";
+    j["bg_fill"] = "blurred";
     j["bg_fill_color"] = { 0, 0, 0 };
     j["render_backend"] = "auto";
     /* reborn_features is intentionally absent — its presence is the signal
@@ -654,7 +656,7 @@ extern "C" void Port_Config_Load(const char* path) {
             else
                 sAspectMode = PORT_ASPECT_NATIVE_3_2;
 
-            std::string bf = j.value("bg_fill", std::string("black"));
+            std::string bf = j.value("bg_fill", std::string("blurred"));
             for (char& c : bf) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
