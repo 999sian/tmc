@@ -1232,7 +1232,16 @@ void Port_DebugAction_SetFlag(int bank, int index, int on) {
         } else {
             snprintf(msg, sizeof(msg), "[Flag] %s / idx %d (bit 0x%03X)", bankName, index, (unsigned)bit);
         }
-        printf("\033[33m%s\033[0m\n", msg);
+        if (flagName && flagName[0] != '\0') {
+            const char* flagDesc = Port_DebugQuery_FlagDesc(bank, index);
+            if (flagDesc && flagDesc[0] != '\0') {
+                printf("\033[33m%s -> %s\033[0m\n", msg, flagDesc);
+            } else {
+                printf("\033[33m%s\033[0m\n", msg);
+            }
+        } else {
+            printf("\033[33m%s\033[0m\n", msg);
+        }
         Port_DebugMenu_ToastFromExternal(msg);
     }
 }
@@ -1282,7 +1291,16 @@ void Port_Debug_OnFlagSet(u32 offset, u32 flag) {
         } else {
             snprintf(msg, sizeof(msg), "[Flag] %s / idx %d (bit 0x%03X)", bankName, (int)flag, bit);
         }
-        printf("\033[33m%s\033[0m\n", msg);
+        if (flagName && flagName[0] != '\0') {
+            const char* flagDesc = Port_DebugQuery_FlagDesc(bank, (int)flag);
+            if (flagDesc && flagDesc[0] != '\0') {
+                printf("\033[33m%s -> %s\033[0m\n", msg, flagDesc);
+            } else {
+                printf("\033[33m%s\033[0m\n", msg);
+            }
+        } else {
+            printf("\033[33m%s\033[0m\n", msg);
+        }
         Port_DebugMenu_ToastFromExternal(msg);
     }
 }
