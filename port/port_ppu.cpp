@@ -478,6 +478,34 @@ static void Port_PPU_PresentSurfaceFrame(void) {
 
 static bool sVSyncEnabled = true;
 
+/* Current display refresh rate (Hz, rounded), 0 when unknown (headless /
+ * dummy driver / no window yet). Re-queried every ~2 s so dragging the
+ * window to another monitor is picked up; SDL's mode lookup is cheap but
+ * this is called once per engine tick. */
+extern "C" unsigned Port_PPU_DisplayRefreshRate(void) {
+    static unsigned cached = 0;
+    static int countdown = 0;
+    if (--countdown <= 0) {
+        countdown = 120;
+        cached = 0;
+        SDL_Window* win = sWindow;
+#ifdef launcher
+        if (win == nullptr)
+            win = sBootstrapWindow;
+#endif
+        if (win != nullptr) {
+            SDL_DisplayID disp = SDL_GetDisplayForWindow(win);
+            if (disp != 0) {
+                const SDL_DisplayMode* m = SDL_GetCurrentDisplayMode(disp);
+                if (m != nullptr && m->refresh_rate > 0.0f) {
+                    cached = (unsigned)std::lround(m->refresh_rate);
+                }
+            }
+        }
+    }
+    return cached;
+}
+
 extern "C" void Port_PPU_SetVSync(bool enabled) {
     if (sVSyncEnabled == enabled) {
         return;
@@ -540,6 +568,14 @@ static bool sPersistEnabled = false;
 static float sPersistRho = 0.35f; /* fraction of the previous frame retained */
 static uint32_t sPersistAccum[VIRTUAPPU_FRAME_BUFFER_SIZE];
 static bool sPersistAccumValid = false;
+/* Decoupled pacing (port_bios.c) can present the same game tick several
+ * times. Persistence rho is defined per GBA frame, so the accumulator only
+ * folds on the first present of each tick; repeats read it without writing
+ * (otherwise 144 Hz presents would over-decay the ghost ~2.4x). */
+static bool sPresentFirstOfTick = true;
+extern "C" void Port_PPU_SetPresentIsFirstOfTick(bool first) {
+    sPresentFirstOfTick = first;
+}
 
 static double Port_PPU_SrgbOetf(double linear) {
     if (linear <= 0.0031308) {
@@ -629,7 +665,8 @@ static void Port_PPU_ApplyDisplayPostProcess(int pixelCount) {
                         val = 255.0f;
                     out |= static_cast<uint32_t>(val + 0.5f) << s;
                 }
-                sPersistAccum[i] = out;
+                if (sPresentFirstOfTick)
+                    sPersistAccum[i] = out;
                 virtuappu_frame_buffer[i] = out;
             }
         }
