@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 (2026-07-12)
 
 ### Widescreen in more scenes, never stretched
 
@@ -403,6 +403,12 @@
   (arm64-v8a / x86_64) and ship as an APK. First launch self-extracts assets
   from a ROM on device; the game boots to title, audio, file-select and into
   gameplay entirely by touch.
+- **Releases now ship a ready-to-install APK** (`tmc-multi-android-vX.Y.Z.apk`,
+  arm64-v8a + x86_64 in one file, multi-region like the desktop builds).
+  Install it, place your ROM via the in-app file picker (or push
+  `baserom.gba` to `Android/data/dev.picori.tmc/files/`), and the first
+  launch extracts assets on device. Release APKs share one signing key, so
+  future versions install straight over the old one.
 - **Touch controls.** A floating analog stick, a face-button cluster with the
   R button and a context glow, and a finger-draggable, scaled F8 debug menu —
   designed so a single tap that arrives as a down+up in one input batch still
