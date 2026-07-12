@@ -1,6 +1,61 @@
 # Changelog
 
-## Unreleased
+## v0.8.0 (2026-07-12)
+
+### Widescreen in more scenes, never stretched
+
+- **Rooms narrower than the monitor's widescreen target now render true-wide
+  at their full room width** instead of dropping back to the native 240px
+  view. 256px and 272px rooms — most dungeon rooms and larger interiors —
+  show their whole width with only thin pillarbox bars (e.g. a 272px room on
+  a 16:9 monitor leaves ~6px per side) rather than none of the extra world.
+- **Scenes that cannot be widened are presented at their correct aspect,
+  never stretched.** The title screen, file select, pause/menu overlays, and
+  one-screen 240px rooms (Link's house and other small interiors) have no
+  extra world data to reveal, so they render the GBA-native canvas centered
+  and undistorted.
+- **The space the game can't fill now defaults to a blurred ambient fill**
+  (a soft stretched copy of the scene behind the sharp frame), so every
+  scene fills the whole monitor without stretching the game itself. The
+  fill also covers the window in the default Native aspect mode, where it
+  previously never showed. F8 → Display → "Background" switches back to
+  plain black bars or a solid color (existing configs that explicitly saved
+  a style keep it).
+
+### Game speed decoupled from the framerate
+
+- **Game logic now runs on its own fixed clock, independent of Target FPS and
+  VSync** (`decouple_render`, default on; F8 → Display → "Decouple game
+  speed"). The engine ticks at 60 Hz — or the GBA-exact 59.7275 Hz in
+  Console-Parity mode — while the Target FPS preset only paces how often
+  frames are presented: above 60 the port re-presents (or interpolates)
+  between ticks, below 60 it skips whole presents without slowing the game.
+  Previously the FPS cap paced the engine directly, so a 120 preset ran the
+  game at 2x and a 30 preset at half speed; that behavior remains available
+  by turning the toggle off (and is what the capture/repro harnesses pin via
+  `TMC_LEGACY_PACING`/`TMC_PERFCAP`/`TMC_ROOMCAP`/`TMC_CAPTURE_FRAME`).
+  Anyone who used a >60 preset as a speed boost should use fast-forward (TAB)
+  or the uncapped preset instead. The window title now shows both rates
+  ("FPS / TPS"), and `TMC_PACE_LOG=1` prints them per second for testing.
+- **Fast-forward is much faster.** Uncapped ticks no longer rasterize every
+  frame — presents are throttled to a real-time 60 Hz cadence, so TAB /
+  uncapped speed is bound by the engine alone (~13,500 ticks/s headless vs.
+  render-bound before).
+- LCD-persistence ghosting now accumulates once per game tick instead of once
+  per present, so its decay no longer speeds up at high render rates; paused
+  practice re-presents also rewind the HBlank-DMA line clock correctly (fixes
+  per-line affine effects rendering wrong while paused).
+- **VSync is no longer force-disabled above 60 FPS on high-refresh displays.**
+  The "VSync would cap the FPS preset" override (#26) now compares the target
+  against the actual refresh rate of the display the window is on, not a
+  hardcoded 60 — so 75/90/120 targets on a 120 Hz panel keep VSync and stop
+  tearing. On a fixed-refresh panel a target matching the panel rate (e.g.
+  120 on 120 Hz) gives the most even cadence: a 90-in-120 cadence cannot
+  divide evenly and shows as slight judder even without tearing. With VSync
+  active the pacer presents whenever the render grid is due (the blocking
+  present is the throttle) instead of second-guessing the tick deadline with
+  a cost estimate inflated by the vsync wait; a genuinely overloaded tick
+  (more than half a tick late) falls back to conservative pacing briefly.
 
 ### Randomizer: fixed Hyrule Town softlock in the Picori-festival window
 
@@ -348,6 +403,12 @@
   (arm64-v8a / x86_64) and ship as an APK. First launch self-extracts assets
   from a ROM on device; the game boots to title, audio, file-select and into
   gameplay entirely by touch.
+- **Releases now ship a ready-to-install APK** (`tmc-multi-android-vX.Y.Z.apk`,
+  arm64-v8a + x86_64 in one file, multi-region like the desktop builds).
+  Install it, place your ROM via the in-app file picker (or push
+  `baserom.gba` to `Android/data/dev.picori.tmc/files/`), and the first
+  launch extracts assets on device. Release APKs share one signing key, so
+  future versions install straight over the old one.
 - **Touch controls.** A floating analog stick, a face-button cluster with the
   R button and a context glow, and a finger-draggable, scaled F8 debug menu —
   designed so a single tap that arrives as a down+up in one input batch still

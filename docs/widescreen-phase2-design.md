@@ -30,10 +30,12 @@ Fix (all in `port/port_linked_stubs.c`, gated `#if MODE1_GBA_WIDTH > 240`):
    == VRAM tile_col of the first reveal column == `CLIP_X/8 + (BGHOFS>=8?1:0)`
    (was `ws_base_world_col & 31`, which drifted with the camera → far-edge wrap
    into stale cells). Verified: filled shadow == engine `gBG1Buffer` byte-for-byte.
-3. Residency gate deleted. Hybrid signal simplified to `Port_Widescreen_ShouldStretch
-   = (gRoomControls.width < MODE1_GBA_WIDTH)` — a room narrower than the viewport
-   can't fill the reveal, so it falls back to stretched native-240. Direct,
-   per-room, flicker-free (no settle/measurement).
+3. Residency gate deleted. Hybrid signal simplified to a per-room width test —
+   direct, per-room, flicker-free (no settle/measurement). *(2026-07-10: the
+   signal is now `Port_Widescreen_FallbackNative`; the view width is capped at
+   the ROOM width instead of falling back outright, so 256/272px rooms run
+   true-wide at their full room width, and the fallback renders native 240
+   presented pillarboxed at 3:2 — the stretched-240 fallback is gone.)*
 
 **Update (2026-07-02):** the two worst runtime UX gaps are fixed:
 - *Dialogue width-snap*: `Port_Widescreen_IsActive()` no longer gates on
@@ -58,7 +60,9 @@ Known limitations:
   border edge at the far right.~~ **Resolved (2026-07-03):** the content-width
   signal exists — `Port_WidescreenScanContentPx` finds the rightmost
   non-empty tile column (both maps, room rect), ratcheted per room, and
-  `ShouldStretch` falls back to stretched-240 when content < view width.
+  `Port_Widescreen_FallbackNative` (né ShouldStretch) falls back to native
+  240 — presented pillarboxed, not stretched — when content < the room-capped
+  view width.
   Survey result: the suspect rooms (field 0x03/0x08 = 480px, festival
   0x15/0x00 = 400px) actually paint edge-to-edge, so TMC may have no
   counterexample — the guard is a safety net. `TMC_WS_TRACE=1` logs

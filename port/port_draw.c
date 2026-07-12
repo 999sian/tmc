@@ -34,6 +34,7 @@
 
 /* Forward declaration of RenderSpritePieces (defined below) */
 static void RenderSpritePieces(const u8* data, s16 baseX, s16 baseY, u32 flags, u16 extra);
+
 /* Set true only while rendering the player; drives the swamp-sink body clip. */
 static int sRenderingPlayer = 0;
 extern PlayerState gPlayerState;

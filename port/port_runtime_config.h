@@ -39,6 +39,11 @@ u8 Port_Config_WindowScale(void);
 const char* Port_Config_UpscaleMethod(void);
 u64 Port_Config_FrameTimeNs(void);
 u32 Port_Config_TargetFps(void);
+u64 Port_Config_TickTimeNs(void);
+bool Port_Config_GetDecoupleRender(void);
+void Port_Config_SetDecoupleRender(bool on);
+bool Port_Config_GetShowFps(void);
+void Port_Config_SetShowFps(bool on);
 bool Port_Config_PortSettingsMenuEnabled(void);
 void Port_Config_SetWindowScale(u8 scale);
 void Port_Config_SetUpscaleMethod(const char* method);
@@ -92,12 +97,14 @@ bool Port_Config_GetConsoleParity(void);
 void Port_Config_SetConsoleParity(bool on);
 void Port_Config_ToggleConsoleParity(void);
 
-/* Aspect-ratio mode for the on-screen viewport. The GBA frame is always
- * rendered at its native 3:2 aspect — this knob picks the *stage* it
- * sits inside. Modes wider than 3:2 add pillar bars around the frame
- * (filled per PortBgFill); modes equal to the window's natural aspect
- * fill the whole window. Native means "no constraint, frame fills as
- * much of the window as 3:2 allows" — the historical default. */
+/* Aspect-ratio mode for the on-screen viewport. The game frame is always
+ * rendered at its own aspect (3:2 native, wider in true widescreen) — this
+ * knob picks the *stage* it sits inside. The area between frame and stage
+ * is filled per PortBgFill. Native means "no constraint": the stage spans
+ * the whole window, so the frame fills as much of it as its aspect allows
+ * and the fill covers the rest — the default. Fixed-ratio modes constrain
+ * the stage (e.g. pin a 16:9 play area on an ultrawide monitor); outside
+ * the stage is always black. */
 typedef enum {
     PORT_ASPECT_NATIVE_3_2 = 0,
     PORT_ASPECT_WIDESCREEN_16_9 = 1,
@@ -111,10 +118,12 @@ void Port_Config_SetAspectMode(PortAspectMode mode);
 void Port_Config_CycleAspectMode(int direction);
 
 /* Fill style for the area around the GBA frame (the "pillar bars" or
- * "stage background"). Black is the historical default. Solid uses the
- * persisted RGB triple from Port_Config_BgFillColor*. Blurred stretches
- * a linearly-filtered copy of the current frame across the stage,
- * giving a soft halo / "ambient mode" effect. */
+ * "stage background"). Blurred is the default: it stretches a
+ * linearly-filtered copy of the current frame across the stage for a soft
+ * halo / "ambient mode" effect, so fixed-canvas scenes (title, one-screen
+ * rooms) fill the monitor without distorting the game. Black restores the
+ * historical plain bars. Solid uses the persisted RGB triple from
+ * Port_Config_BgFillColor*. */
 typedef enum {
     PORT_BG_FILL_BLACK = 0,
     PORT_BG_FILL_SOLID_COLOR = 1,

@@ -31,6 +31,7 @@ on:
           - macos
           - macos-arm
           - macos-x86
+          - android
 
 # Least privilege: the reusable build job only needs read; the release-
 # creation job below elevates to contents: write for just its own scope.
@@ -51,6 +52,8 @@ jobs:
       ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
       PRIVATE_SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
       TMC_DISCORD_APP_ID: ${{ secrets.TMC_DISCORD_APP_ID }}
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
   create-release:
     runs-on: ubuntu-latest
@@ -70,9 +73,10 @@ jobs:
           # step from .zip to .tar.gz ("works on all hosted runners");
           # the v0.3.0-experimental release CI surfaced that this step
           # never got the matching update. Match both so a future
-          # platform-specific .zip still works.
+          # platform-specific .zip still works. .apk is the Android
+          # release artifact (built by _build.yaml's build-android job).
           mkdir -p uploads
-          find release-assets -type f \( -name '*.tar.gz' -o -name '*.zip' \) \
+          find release-assets -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.apk' \) \
               -exec cp {} uploads/ \;
 
       - name: Create GitHub release
@@ -80,6 +84,8 @@ jobs:
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
           name: "Project Picori ${{ inputs.tag || github.ref_name }}"
-          files: uploads/*.tar.gz
+          files: |
+            uploads/*.tar.gz
+            uploads/*.apk
           generate_release_notes: true
           fail_on_unmatched_files: true

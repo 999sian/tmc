@@ -52,6 +52,46 @@ static void DrawRibbonDisplayTab(void) {
                        return b;
                    },
                    Port_Config_CycleTargetFps);
+        RandoUi_HelpTooltip(
+            "How often frames are presented to the display. With 'Decouple game "
+            "speed' on (default) this only changes display smoothness - the game "
+            "always runs at normal speed, and 'uncapped' acts as a persistent "
+            "fast-forward. With it off, this paces the engine directly, so 120 "
+            "runs the game at 2x speed.");
+
+        /* Decoupled pacing: game logic on a fixed tick grid, presents on the
+         * Target FPS grid (port_bios.c). Off = legacy coupled loop. */
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Decouple game speed");
+        ImGui::TableSetColumnIndex(1);
+        {
+            bool dec = Port_Config_GetDecoupleRender();
+            if (ImGui::Checkbox("##decouple_render", &dec)) {
+                Port_Config_SetDecoupleRender(dec);
+            }
+        }
+        RandoUi_HelpTooltip(
+            "Runs game logic at a fixed 60 Hz (or the exact GBA rate in "
+            "Console-Parity mode) no matter what Target FPS or VSync do. "
+            "Fast-forward gets faster too: the engine skips rendering the "
+            "frames it doesn't show.");
+
+        /* On-screen FPS/TPS counter (DrawFpsOverlay, port_imgui_menu.cpp). */
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0); ImGui::Text("Show FPS counter");
+        ImGui::TableSetColumnIndex(1);
+        {
+            bool sf = Port_Config_GetShowFps();
+            if (ImGui::Checkbox("##show_fps", &sf)) {
+                Port_Config_SetShowFps(sf);
+            }
+        }
+        RandoUi_HelpTooltip(
+            "Top-right overlay. FPS = frames shown per second (render rate); "
+            "TPS = game logic ticks per second. With decoupling on, TPS "
+            "staying at 60 while FPS follows your Target FPS is the split "
+            "working. TPS turns red when the game runs off-speed "
+            "(fast-forward, or the machine can't keep up).");
 
         StepperRow("Internal scale", "iscale",
                    [](char* b, size_t n) -> const char* {
