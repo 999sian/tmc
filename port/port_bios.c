@@ -518,13 +518,168 @@ static u32 sFpsFrameCount = 0;
  * game-tick (engine + entity update), present (all of Port_PPU_PresentFrame),
  * and the PPU rasterizer (virtuappu_render_frame, accumulated by
  * port_ppu.cpp). Reports a rolling average to stderr every 600 frames. */
-static u64 sProfLastPresentEndNs = 0;
 static u64 sProfAccGameNs = 0;
 static u64 sProfAccPresentNs = 0;
 static u64 sProfMaxGameNs = 0;    /* worst single-frame game tick in the window */
 static u64 sProfMaxPresentNs = 0; /* worst single-frame present in the window */
 static u32 sProfFrames = 0;
+static u32 sProfPresents = 0;     /* decoupled pacing: presents != ticks */
+static u64 sProfWindowExitNs = 0; /* decoupled pacing: game-time stamp */
 u64 gPortProfileRenderNs = 0; /* updated from port_ppu.cpp */
+
+/* --- Decoupled tick/render pacing state ---
+ * Game-logic ticks run on a fixed deadline grid (Port_Config_TickTimeNs:
+ * 60 Hz, or GBA-exact 59.7275 Hz under console parity) while presents run on
+ * their own wall-clock grid derived from the Target FPS cap. Legacy mode
+ * (decouple_render=false) keeps the historical loop where the FPS cap paces
+ * the engine itself and therefore changes game speed. */
+static u64 sNextPresentNs = 0;          /* render-cadence grid deadline */
+static u64 sLastPresentEndNs = 0;       /* starvation guard timestamp */
+static u64 sPresentCostEmaNs = 2000000; /* rolling present cost, seeds 2 ms */
+/* Tick windows left in conservative (EMA fit-check) presenting after a tick
+ * closed late under eager-VSync presenting; 0 = eager. See decoupled loop. */
+static u32 sVsyncOverloadHold = 0;
+static u32 sPresentsThisSec = 0;        /* presents in the 1 s FPS-title window */
+
+/* Live rates for the on-screen FPS counter (port_imgui_menu.cpp externs
+ * these). Refreshed once per second alongside the window title. */
+double gPortPaceFps = 0.0;
+double gPortPaceTps = 0.0;
+bool gPortPaceDecoupled = false;
+
+int Port_Profile_Enabled(void); /* defined below */
+
+/* TMC_TEST_INPUT="420:start,480:a,520:down": fire synthetic input edges at
+ * exact engine ticks through the same test-only seam the repro harnesses
+ * use (Port_Config_TestForceEdge). Lets scripted test runs drive menus on
+ * compositors where no display-server input injection reaches the window
+ * (e.g. XWayland under KWin). Buttons: a b select start right left up down
+ * r l. */
+static void Port_TestInputTick(u32 tick) {
+    static int parsed = -1;
+    static struct {
+        u32 tick;
+        PortInput input;
+    } seq[32];
+    static int n = 0;
+    int i;
+
+    if (parsed < 0) {
+        const char* e = getenv("TMC_TEST_INPUT");
+        parsed = 1;
+        if (e && *e) {
+            static const struct {
+                const char* name;
+                PortInput input;
+            } kMap[] = {
+                { "a", PORT_INPUT_A },         { "b", PORT_INPUT_B },       { "select", PORT_INPUT_SELECT },
+                { "start", PORT_INPUT_START }, { "right", PORT_INPUT_RIGHT }, { "left", PORT_INPUT_LEFT },
+                { "up", PORT_INPUT_UP },       { "down", PORT_INPUT_DOWN }, { "r", PORT_INPUT_R },
+                { "l", PORT_INPUT_L },
+            };
+            char buf[512];
+            char* tok = buf;
+            strncpy(buf, e, sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            while (tok && n < (int)(sizeof(seq) / sizeof(seq[0]))) {
+                char* next = strchr(tok, ',');
+                char* colon;
+                size_t k;
+                if (next)
+                    *next++ = '\0';
+                colon = strchr(tok, ':');
+                if (colon) {
+                    *colon = '\0';
+                    for (k = 0; k < sizeof(kMap) / sizeof(kMap[0]); k++) {
+                        if (strcmp(colon + 1, kMap[k].name) == 0) {
+                            seq[n].tick = (u32)strtoul(tok, NULL, 0);
+                            seq[n].input = kMap[k].input;
+                            n++;
+                            break;
+                        }
+                    }
+                }
+                tok = next;
+            }
+        }
+    }
+    for (i = 0; i < n; i++) {
+        if (seq[i].tick == tick) {
+            Port_Config_TestForceEdge(seq[i].input);
+        }
+    }
+}
+
+static bool Port_PacingForceLegacy(void) {
+    static int f = -1;
+    if (f < 0) {
+        /* Capture/repro/parity harnesses dump or hash the framebuffer at
+         * exact tick numbers (and perfcap measures raster throughput), so
+         * they need the one-rasterization-per-tick coupling. Pin them to the
+         * legacy loop so their outputs stay comparable across versions.
+         * TMC_LEGACY_PACING is the manual escape hatch. */
+        f = (getenv("TMC_CAPTURE_FRAME") || getenv("TMC_PERFCAP") || getenv("TMC_ROOMCAP") ||
+             getenv("TMC_LEGACY_PACING"))
+                ? 1
+                : 0;
+    }
+    return f != 0;
+}
+
+/* One full presentation (rasterize + post-process + SDL present), plus the
+ * HBlank-DMA rewind so a re-rasterization of the same game frame re-runs
+ * per-line effects from scanline 0. Maintains the present-cost EMA the
+ * decoupled pacer uses to decide whether another present still fits before
+ * the next tick deadline (EMA weight 1/8: one vsync-blocked outlier must not
+ * whip the budget around). */
+static void Port_PresentOnce(bool firstOfTick) {
+    u64 t0 = SDL_GetTicksNS();
+    u64 end, dt;
+    /* LCD persistence accumulates once per tick (rho is defined per GBA
+     * frame); repeat presents blend against the accumulator read-only. */
+    Port_PPU_SetPresentIsFirstOfTick(firstOfTick);
+    Port_PPU_PresentFrame();
+    port_hdma_vblank_reset();
+    end = SDL_GetTicksNS();
+    dt = end - t0;
+    sPresentCostEmaNs += (u64)(((s64)dt - (s64)sPresentCostEmaNs) / 8);
+    sLastPresentEndNs = end;
+    sPresentsThisSec++;
+    if (Port_Profile_Enabled()) {
+        sProfAccPresentNs += dt;
+        if (dt > sProfMaxPresentNs)
+            sProfMaxPresentNs = dt;
+        sProfPresents++;
+    }
+}
+
+/* Emit the rolling TMC_PROFILE report once per 120 ticks. Shared by the
+ * legacy and decoupled paths; under decoupling `presents` can differ from
+ * the tick count (repeat-presents above 60 FPS, frameskip below / during
+ * fast-forward), so it's reported alongside. */
+static void Port_ProfileReportMaybe(void) {
+    /* 120-frame (~2s) window so a transient item-get hitch is visible; the
+     * worst-frame maxima catch a single stall an average would smooth away. */
+    if (++sProfFrames >= 120) {
+        double n = (double)sProfFrames;
+        double game = sProfAccGameNs / 1e6 / n;
+        double present = sProfAccPresentNs / 1e6 / n;
+        double render = gPortProfileRenderNs / 1e6 / n;
+        double total = game + present;
+        double maxGame = sProfMaxGameNs / 1e6;
+        double maxPresent = sProfMaxPresentNs / 1e6;
+        fprintf(stderr,
+                "[profile] %u frames: game=%.3f present=%.3f (render=%.3f) ms | "
+                "%.0f fps uncapped | worst: game=%.2f present=%.2f ms | presents=%u\n",
+                sProfFrames, game, present, render, total > 0.0 ? 1000.0 / total : 0.0, maxGame, maxPresent,
+                sProfPresents);
+        sProfAccGameNs = sProfAccPresentNs = 0;
+        sProfMaxGameNs = sProfMaxPresentNs = 0;
+        gPortProfileRenderNs = 0;
+        sProfFrames = 0;
+        sProfPresents = 0;
+    }
+}
 
 int Port_Profile_Enabled(void) {
     static int en = -1;
@@ -550,6 +705,7 @@ int Port_Profile_Enabled(void) {
 
 void VBlankIntrWait(void) {
     u64 nowNs;
+    bool decoupled;
 
     /* Practice-mode pause: hold the engine here, presenting and pumping
      * events only (no Port_UpdateInput, so the game state can't advance),
@@ -557,7 +713,11 @@ void VBlankIntrWait(void) {
      * menu and the practice overlay stay live while the game is frozen;
      * Port_Practice_ConsumeStep() lets exactly one frame through per step. */
     while (Port_Practice_IsPaused() && !Port_Practice_ConsumeStep()) {
-        Port_PPU_PresentFrame();
+        /* Port_PresentOnce (not a bare PresentFrame) so the HBlank-DMA line
+         * clock is rewound between re-rasterizations of the same frame —
+         * without it, per-line effects (affine wobble) rendered wrong from
+         * the second paused present onward. */
+        Port_PresentOnce(true);
         Port_PumpEvents();
         if (Port_ImGui_QuitConfirmed())
             gQuitRequested = true;
@@ -577,94 +737,218 @@ void VBlankIntrWait(void) {
         /* Honour the user's VSync preference (persisted, #146), but force it
          * off in the cases where VSync would fight the frame-pacing timer and
          * leave the FPS preset / fast-forward with no effect (#26): fast-
-         * forward, uncapped, or a target above the display refresh. */
-        bool mustDisable = sFastForward || targetFps == 0 || targetFps > 60;
+         * forward, uncapped, or a target above the display refresh. The
+         * ceiling is the REAL refresh, not 60: on a 120 Hz panel a 75/90/120
+         * target fits under VSync fine, and forcing it off there just tears
+         * (visible as horizontal shear while walking with Smooth motion).
+         * Unknown refresh (headless/dummy) keeps the old 60 Hz assumption. */
+        unsigned refresh = Port_PPU_DisplayRefreshRate();
+        u32 vsyncCeiling = refresh > 0 ? (u32)refresh : 60;
+        bool mustDisable = sFastForward || targetFps == 0 || targetFps > vsyncCeiling;
         Port_PPU_SetVSync(Port_Config_GetVSync() && !mustDisable);
     }
 
-    if (Port_Profile_Enabled()) {
-        u64 entry = SDL_GetTicksNS();
-        if (sProfLastPresentEndNs != 0) {
-            u64 g = entry - sProfLastPresentEndNs;
-            sProfAccGameNs += g;
-            if (g > sProfMaxGameNs)
-                sProfMaxGameNs = g;
-        }
-        Port_PPU_PresentFrame();
-        u64 pEnd = SDL_GetTicksNS();
-        u64 p = pEnd - entry;
-        sProfAccPresentNs += p;
-        if (p > sProfMaxPresentNs)
-            sProfMaxPresentNs = p;
-        sProfLastPresentEndNs = pEnd;
-        /* 120-frame (~2s) window so a transient item-get hitch is visible; the
-         * worst-frame maxima catch a single stall an average would smooth away. */
-        if (++sProfFrames >= 120) {
-            double n = (double)sProfFrames;
-            double game = sProfAccGameNs / 1e6 / n;
-            double present = sProfAccPresentNs / 1e6 / n;
-            double render = gPortProfileRenderNs / 1e6 / n;
-            double total = game + present;
-            double maxGame = sProfMaxGameNs / 1e6;
-            double maxPresent = sProfMaxPresentNs / 1e6;
-            fprintf(stderr,
-                    "[profile] %u frames: game=%.3f present=%.3f (render=%.3f) ms | "
-                    "%.0f fps uncapped | worst: game=%.2f present=%.2f ms\n",
-                    sProfFrames, game, present, render, total > 0.0 ? 1000.0 / total : 0.0, maxGame, maxPresent);
-            sProfAccGameNs = sProfAccPresentNs = 0;
-            sProfMaxGameNs = sProfMaxPresentNs = 0;
-            gPortProfileRenderNs = 0;
-            sProfFrames = 0;
-        }
-    } else {
-        Port_PPU_PresentFrame();
-    }
-    port_hdma_vblank_reset();
+    decoupled = Port_Config_GetDecoupleRender() && !Port_PacingForceLegacy();
 
-    /* Deadline-based pacing: each frame's target is the previous
-     * frame's target + frameTimeNs (a fixed cadence on an ideal grid),
-     * not "now + frameTimeNs" (which drifts as game-tick work load
-     * varies). The drift version produced visible micro-stutter when
-     * a heavy frame consumed a few ms more than usual; deadline pacing
-     * absorbs that variance into the next wait without lagging the
-     * cadence. If we fall more than one frame behind real time
-     * (e.g. paused at a breakpoint, OS hitch), snap forward so we
-     * don't burn CPU catching up. */
-    if (!sFastForward) {
-        u64 frameTimeNs = Port_Config_FrameTimeNs();
-        /* Practice slow-motion: stretch the target frame interval. Factor is
-         * in (0,1]; 1.0 = normal speed, 0.5 = half speed. When the target is
-         * uncapped (0), synthesise a 60fps base so slow-mo still applies.
-         * Bypassed during TAB fast-forward (we're inside !sFastForward). */
-        {
-            float sm = Port_Config_GetPracticeSlowmo();
-            if (sm > 0.0f && sm < 0.999f) {
-                u64 base = frameTimeNs ? frameTimeNs : 16666667ULL;
-                frameTimeNs = (u64)((double)base / sm);
+    if (!decoupled) {
+        /* ---- Legacy coupled loop: one present per engine tick, then pace
+         * the tick itself. The FPS cap IS the game speed here (a 120 cap
+         * runs the game at 2x); kept for the capture/repro harnesses and as
+         * a config escape hatch. ---- */
+        if (Port_Profile_Enabled()) {
+            u64 entry = SDL_GetTicksNS();
+            if (sLastPresentEndNs != 0) {
+                u64 g = entry - sLastPresentEndNs;
+                sProfAccGameNs += g;
+                if (g > sProfMaxGameNs)
+                    sProfMaxGameNs = g;
             }
+            Port_PresentOnce(true);
+            Port_ProfileReportMaybe();
+        } else {
+            Port_PresentOnce(true);
         }
-        if (frameTimeNs != 0) {
-            u64 deadline = lastFrameNs + frameTimeNs;
-            u64 now = SDL_GetTicksNS();
-            if (now > deadline + frameTimeNs) {
-                /* Fell behind the ideal grid by >1 frame — snap forward. */
-                deadline = now;
+
+        /* Deadline-based pacing: each frame's target is the previous
+         * frame's target + frameTimeNs (a fixed cadence on an ideal grid),
+         * not "now + frameTimeNs" (which drifts as game-tick work load
+         * varies). The drift version produced visible micro-stutter when
+         * a heavy frame consumed a few ms more than usual; deadline pacing
+         * absorbs that variance into the next wait without lagging the
+         * cadence. If we fall more than one frame behind real time
+         * (e.g. paused at a breakpoint, OS hitch), snap forward so we
+         * don't burn CPU catching up. */
+        if (!sFastForward) {
+            u64 frameTimeNs = Port_Config_FrameTimeNs();
+            /* Practice slow-motion: stretch the target frame interval. Factor is
+             * in (0,1]; 1.0 = normal speed, 0.5 = half speed. When the target is
+             * uncapped (0), synthesise a 60fps base so slow-mo still applies.
+             * Bypassed during TAB fast-forward (we're inside !sFastForward). */
+            {
+                float sm = Port_Config_GetPracticeSlowmo();
+                if (sm > 0.0f && sm < 0.999f) {
+                    u64 base = frameTimeNs ? frameTimeNs : 16666667ULL;
+                    frameTimeNs = (u64)((double)base / sm);
+                }
             }
-            /* Sleep the bulk of the wait, spin only the sub-ms tail
-             * (SDL_DelayPrecise does exactly that). The previous raw
-             * `while (SDL_GetTicksNS() < deadline)` spin burned the
-             * whole inter-frame gap on one core — ~90% of a core at
-             * 60 fps — which on passively-cooled phones/tablets means
-             * heat, throttling, and then real jank. */
-            if (now < deadline) {
-                SDL_DelayPrecise(deadline - now);
+            if (frameTimeNs != 0) {
+                u64 deadline = lastFrameNs + frameTimeNs;
+                u64 now = SDL_GetTicksNS();
+                if (now > deadline + frameTimeNs) {
+                    /* Fell behind the ideal grid by >1 frame — snap forward. */
+                    deadline = now;
+                }
+                /* Sleep the bulk of the wait, spin only the sub-ms tail
+                 * (SDL_DelayPrecise does exactly that). The previous raw
+                 * `while (SDL_GetTicksNS() < deadline)` spin burned the
+                 * whole inter-frame gap on one core — ~90% of a core at
+                 * 60 fps — which on passively-cooled phones/tablets means
+                 * heat, throttling, and then real jank. */
+                if (now < deadline) {
+                    SDL_DelayPrecise(deadline - now);
+                }
+                lastFrameNs = deadline;
+            } else {
+                lastFrameNs = SDL_GetTicksNS();
             }
-            lastFrameNs = deadline;
         } else {
             lastFrameNs = SDL_GetTicksNS();
         }
     } else {
-        lastFrameNs = SDL_GetTicksNS();
+        /* ---- Decoupled pacing: the engine ticks on a fixed grid
+         * (Port_Config_TickTimeNs — game speed never follows the FPS cap)
+         * and presents run on their own wall-clock grid (the FPS cap,
+         * reinterpreted as render cadence). Above the tick rate that means
+         * re-presenting the same game frame (identical until interpolation
+         * lands; still keeps the menu overlay and VRR displays fed); below
+         * it, or during fast-forward, whole presents are skipped — which is
+         * also what makes fast-forward fast, since raster+present dominates
+         * an engine tick. ---- */
+        u64 entryNs = SDL_GetTicksNS();
+        u32 targetFps = Port_Config_TargetFps();
+        bool uncappedTicks = sFastForward || targetFps == 0;
+        u64 tickPeriodNs = 0;
+        u64 renderPeriodNs;
+        u64 now;
+
+        if (Port_Profile_Enabled() && sProfWindowExitNs != 0) {
+            u64 g = entryNs - sProfWindowExitNs;
+            sProfAccGameNs += g;
+            if (g > sProfMaxGameNs)
+                sProfMaxGameNs = g;
+        }
+
+        if (!uncappedTicks) {
+            tickPeriodNs = Port_Config_TickTimeNs();
+            /* Practice slow-motion stretches the tick period only; presents
+             * keep their real-time cadence, so slow-mo stays visually fluid. */
+            float sm = Port_Config_GetPracticeSlowmo();
+            if (sm > 0.0f && sm < 0.999f) {
+                tickPeriodNs = (u64)((double)tickPeriodNs / sm);
+            }
+        }
+        /* Render cadence. During fast-forward / uncapped ticks the preset
+         * has no meaningful relation to ticks, so present at a fixed 60 Hz
+         * real-time cadence for feedback while the engine runs free. Under
+         * console parity Port_Config_FrameTimeNs pins this to the GBA rate,
+         * which intentionally also pins presentation to one-per-tick. */
+        renderPeriodNs = (targetFps != 0 && !sFastForward) ? Port_Config_FrameTimeNs() : 16666667ULL;
+
+        now = entryNs;
+        if (tickPeriodNs == 0) {
+            /* Uncapped ticks: run the engine flat out; present only when the
+             * render grid comes due. "now + period" (not grid + period): with
+             * most presents skipped there is no cadence to preserve, and grid
+             * catch-up would burst-present. */
+            if (now >= sNextPresentNs) {
+                Port_PresentOnce(true);
+                sNextPresentNs = SDL_GetTicksNS() + renderPeriodNs;
+            }
+            lastFrameNs = SDL_GetTicksNS();
+        } else {
+            u64 deadline = lastFrameNs + tickPeriodNs;
+            if (now > deadline + tickPeriodNs) {
+                /* Fell behind the tick grid by >1 tick (breakpoint, OS
+                 * hitch, sustained overload) — snap forward rather than
+                 * burn CPU catching up. */
+                deadline = now;
+            }
+            /* Present-and-wait until the tick deadline. Each pass either
+             * presents (render grid due AND the present is expected to fit
+             * before the deadline, judged by the cost EMA) or sleeps to the
+             * nearer of the two grids. The starvation override trades
+             * display rate for game speed under oversubscription — correct
+             * speed at a lower FPS — but never lets more than ~100 ms pass
+             * without showing a frame. */
+            bool firstOfTick = true;
+            for (;;) {
+                now = SDL_GetTicksNS();
+                if (now >= deadline) {
+                    if (now - sLastPresentEndNs > 100000000ULL) {
+                        Port_PresentOnce(firstOfTick);
+                        sNextPresentNs = SDL_GetTicksNS() + renderPeriodNs;
+                    }
+                    /* Closed-loop overload guard for the eager-VSync path
+                     * below. Vsync-blocked presents legitimately fill the
+                     * whole tick window (2 x ~8.3 ms at 120-on-120), so a
+                     * tick closing a few ms late is ROUTINE — game-logic
+                     * spikes of 2-5 ms happen constantly in busy scenes, the
+                     * grid absorbs them, and tripping on them flaps the
+                     * display 120<->60, which reads as rubber-banding (user
+                     * report, Hyrule Field). Only a close more than half a
+                     * tick late — a genuine can't-keep-up signal (GPU stall,
+                     * sustained oversubscription) — drops to the
+                     * conservative EMA fit check (~1 present/tick) for a
+                     * stretch. */
+                    if (now > deadline + tickPeriodNs / 2) {
+                        sVsyncOverloadHold = 8;
+                    } else if (sVsyncOverloadHold > 0) {
+                        sVsyncOverloadHold--;
+                    }
+                    break;
+                }
+                if (now >= sNextPresentNs) {
+                    /* With VSync active the fit check must not apply: the
+                     * measured "cost" is mostly the blocking wait to the next
+                     * refresh boundary, which puts a 120-target on a 120 Hz
+                     * panel exactly on the refusal knife edge (now + ~8.3ms
+                     * EMA vs a deadline ~8.3ms away) — refusing drops a whole
+                     * refresh (visible hitch), while presenting can overrun
+                     * the deadline by at most one refresh, which the tick
+                     * grid absorbs (lastFrameNs advances by deadline, not by
+                     * when we break out). VSync itself paces us — EXCEPT
+                     * while the overload hold (set above) is draining. */
+                    if ((Port_PPU_VSyncEnabled() && sVsyncOverloadHold == 0) ||
+                        now + sPresentCostEmaNs <= deadline ||
+                        now - sLastPresentEndNs > 100000000ULL) {
+                        Port_PresentOnce(firstOfTick);
+                        firstOfTick = false;
+                        /* Advance on the grid while keeping up (even
+                         * cadence); snap forward when behind it. */
+                        sNextPresentNs = (sNextPresentNs + renderPeriodNs > now) ? sNextPresentNs + renderPeriodNs
+                                                                                 : now + renderPeriodNs;
+                        /* Keep the window/menu live between ticks. */
+                        Port_PumpEvents();
+                        continue;
+                    }
+                    /* Present due but wouldn't fit before the deadline:
+                     * hold it for the next window, close this tick out. */
+                    SDL_DelayPrecise(deadline - now);
+                    continue;
+                }
+                {
+                    u64 until = sNextPresentNs < deadline ? sNextPresentNs : deadline;
+                    if (until > now)
+                        SDL_DelayPrecise(until - now);
+                }
+            }
+            lastFrameNs = deadline;
+        }
+
+        if (Port_Profile_Enabled()) {
+            sProfWindowExitNs = SDL_GetTicksNS();
+            Port_ProfileReportMaybe();
+        }
     }
 
     nowNs = lastFrameNs;
@@ -677,15 +961,41 @@ void VBlankIntrWait(void) {
 
     if (nowNs - sFpsWindowStartNs >= 1000000000ULL) {
         double elapsedSec = (double)(nowNs - sFpsWindowStartNs) / 1000000000.0;
-        double fps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
+        /* Under decoupled pacing ticks and presents are separate counts:
+         * "FPS" is what the display sees (presents), "TPS" is game speed. */
+        double tps = (elapsedSec > 0.0) ? (double)sFpsFrameCount / elapsedSec : 0.0;
+        double fps = decoupled ? ((elapsedSec > 0.0) ? (double)sPresentsThisSec / elapsedSec : 0.0) : tps;
         char title[96];
+
+        gPortPaceFps = fps;
+        gPortPaceTps = tps;
+        gPortPaceDecoupled = decoupled;
+
+        /* Headless-verifiable pacing probe: TMC_PACE_LOG=1 prints one line
+         * per second so tests can assert game speed stays at the tick rate
+         * while the render cadence varies. */
+        {
+            static int paceLog = -1;
+            if (paceLog < 0) {
+                const char* e = getenv("TMC_PACE_LOG");
+                paceLog = (e && *e && e[0] != '0') ? 1 : 0;
+            }
+            if (paceLog) {
+                fprintf(stderr, "[pace] tps=%.2f fps=%.2f target=%u decoupled=%d ff=%d\n", tps, fps,
+                        Port_Config_TargetFps(), decoupled ? 1 : 0, sFastForward ? 1 : 0);
+            }
+        }
 
 /* TMC_PORT_VERSION is set by xmake.lua's add_defines; the fallback below
  * is just for IDE indexers that don't see the build flags. */
 #ifndef TMC_PORT_VERSION
 #define TMC_PORT_VERSION "0.5.0"
 #endif
-        SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
+        if (decoupled) {
+            SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS / %.1f TPS", fps, tps);
+        } else {
+            SDL_snprintf(title, sizeof(title), "The Minish Cap " TMC_PORT_VERSION " - %.1f FPS", fps);
+        }
         Port_PPU_SetWindowTitle(title);
 #ifdef __ANDROID__
         fprintf(stderr, "[perf] %.1f FPS\n", fps);
@@ -693,6 +1003,7 @@ void VBlankIntrWait(void) {
 
         sFpsWindowStartNs = nowNs;
         sFpsFrameCount = 0;
+        sPresentsThisSec = 0;
     }
 
     /* The ImGui quit-confirm modal is rendered once per frame from
@@ -708,6 +1019,7 @@ void VBlankIntrWait(void) {
 
     Port_PumpEvents();
     Port_UpdateInput();
+    Port_TestInputTick(gMain.ticks);
 
     /* Speedrun practice: advance the IGT frame counter and sample the input
      * display. After Port_UpdateInput() so the sampled mask is this frame's. */

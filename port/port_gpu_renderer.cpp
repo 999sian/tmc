@@ -798,8 +798,11 @@ extern "C" bool Port_GPU_PresentFrame(const uint32_t* fb, int fb_w, int fb_h, in
                 break;
             case PORT_ASPECT_NATIVE_3_2:
             default:
-                aspW = FW;
-                aspH = FH;
+                /* "No constraint": stage spans the whole swapchain (see
+                 * Port_PPU_ComputeViewportRects — identical for black fill,
+                 * lets solid/blurred fills cover the entire monitor). */
+                aspW = (int)swap_w;
+                aspH = (int)swap_h;
                 break;
         }
         const int w = (int)swap_w;

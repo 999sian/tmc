@@ -135,17 +135,21 @@ alignas(64) static uint32_t sUpscale4xBuf[kMaxXbrz4xPixels]; /* 4x final        
 static size_t sUpscale2xPixels = 0;
 static size_t sUpscale4xPixels = 0;
 
+/* Width VirtuaPPU can render safely from scene data this frame. Map-backed
+ * gameplay can use the live widescreen width; fixed 240px canvases (title,
+ * menus, narrow rooms, overlays) intentionally stay native here and are
+ * presented aspect-correct (pillarboxed), never stretched. */
 static int Port_PPU_VisibleFrameWidth(void) {
     if (MODE1_GBA_WIDTH == 240) {
         return MODE1_GBA_WIDTH;
     }
     /* True widescreen: publish the live window size so the view width can
-     * track the window's aspect (16:9 -> 288, ultrawide -> cap at
+     * track the window's aspect (16:9 -> 284, ultrawide -> cap at
      * MODE1_GBA_WIDTH, 3:2/4:3 -> 240). Then a wide present additionally
      * requires gameplay widescreen AND the map BGs actually feeding the
      * frame (ShadowsLive) — overlay screens inside TASK_GAME (prologue
      * storybook, pause menu) swap the BG control regs away from the maps,
-     * the shadow match fails, and we fall back to a native 240 crop. */
+     * the shadow match fails, and we fall back to a native 240 frame. */
     if (sWindow != nullptr) {
         int w = 0, h = 0;
         SDL_GetWindowSizeInPixels(sWindow, &w, &h);
@@ -290,8 +294,8 @@ static void Port_PPU_FitAspectRect(int w, int h, int aspW, int aspH, int* outX, 
 // Compute both the "stage" rect (the visible area honoring the user's
 // configured aspect mode — gets the chosen background fill) and the
 // GBA "frame" rect that sits centered inside the stage. Outside the
-// stage is always black. For PORT_ASPECT_NATIVE_3_2 the stage equals
-// the GBA frame and there is no background fill region.
+// stage is always black. For PORT_ASPECT_NATIVE_3_2 the stage spans the
+// whole window, so the background fill covers everything around the frame.
 static void Port_PPU_ComputeViewportRects(int outW, int outH, int fbW, int fbH, int* stageX, int* stageY, int* stageW,
                                           int* stageH, int* frameX, int* frameY, int* frameW, int* frameH) {
     const int FW = fbW;
@@ -315,8 +319,13 @@ static void Port_PPU_ComputeViewportRects(int outW, int outH, int fbW, int fbH, 
             break;
         case PORT_ASPECT_NATIVE_3_2:
         default:
-            aspW = FW;
-            aspH = FH;
+            /* "No constraint": the stage spans the whole window. With the
+             * historical black fill this is pixel-identical to the old
+             * stage==frame behavior; with solid/blurred fills it lets the
+             * ambient backdrop cover the entire monitor, so fixed-canvas
+             * scenes (title, one-screen rooms) have no dead black bars. */
+            aspW = outW;
+            aspH = outH;
             break;
     }
     Port_PPU_FitAspectRect(outW, outH, aspW, aspH, stageX, stageY, stageW, stageH);
@@ -478,6 +487,34 @@ static void Port_PPU_PresentSurfaceFrame(void) {
 
 static bool sVSyncEnabled = true;
 
+/* Current display refresh rate (Hz, rounded), 0 when unknown (headless /
+ * dummy driver / no window yet). Re-queried every ~2 s so dragging the
+ * window to another monitor is picked up; SDL's mode lookup is cheap but
+ * this is called once per engine tick. */
+extern "C" unsigned Port_PPU_DisplayRefreshRate(void) {
+    static unsigned cached = 0;
+    static int countdown = 0;
+    if (--countdown <= 0) {
+        countdown = 120;
+        cached = 0;
+        SDL_Window* win = sWindow;
+#ifdef launcher
+        if (win == nullptr)
+            win = sBootstrapWindow;
+#endif
+        if (win != nullptr) {
+            SDL_DisplayID disp = SDL_GetDisplayForWindow(win);
+            if (disp != 0) {
+                const SDL_DisplayMode* m = SDL_GetCurrentDisplayMode(disp);
+                if (m != nullptr && m->refresh_rate > 0.0f) {
+                    cached = (unsigned)std::lround(m->refresh_rate);
+                }
+            }
+        }
+    }
+    return cached;
+}
+
 extern "C" void Port_PPU_SetVSync(bool enabled) {
     if (sVSyncEnabled == enabled) {
         return;
@@ -540,6 +577,14 @@ static bool sPersistEnabled = false;
 static float sPersistRho = 0.35f; /* fraction of the previous frame retained */
 static uint32_t sPersistAccum[VIRTUAPPU_FRAME_BUFFER_SIZE];
 static bool sPersistAccumValid = false;
+/* Decoupled pacing (port_bios.c) can present the same game tick several
+ * times. Persistence rho is defined per GBA frame, so the accumulator only
+ * folds on the first present of each tick; repeats read it without writing
+ * (otherwise 144 Hz presents would over-decay the ghost ~2.4x). */
+static bool sPresentFirstOfTick = true;
+extern "C" void Port_PPU_SetPresentIsFirstOfTick(bool first) {
+    sPresentFirstOfTick = first;
+}
 
 static double Port_PPU_SrgbOetf(double linear) {
     if (linear <= 0.0031308) {
@@ -629,7 +674,8 @@ static void Port_PPU_ApplyDisplayPostProcess(int pixelCount) {
                         val = 255.0f;
                     out |= static_cast<uint32_t>(val + 0.5f) << s;
                 }
-                sPersistAccum[i] = out;
+                if (sPresentFirstOfTick)
+                    sPersistAccum[i] = out;
                 virtuappu_frame_buffer[i] = out;
             }
         }
