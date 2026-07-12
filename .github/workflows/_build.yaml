@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       os_filter:
-        description: "all | x86 | arm | linux | linux-arm | windows | windows-arm | macos | macos-arm | macos-x86 — restrict build matrix"
+        description: "all | x86 | arm | linux | linux-arm | windows | windows-arm | macos | macos-arm | macos-x86 | android — restrict build matrix"
         required: false
         type: string
         default: all
@@ -22,6 +22,10 @@ on:
       PRIVATE_SUBMODULES_TOKEN:
         required: false
       TMC_DISCORD_APP_ID:
+        required: false
+      ANDROID_KEYSTORE_B64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
         required: false
 
 jobs:
@@ -33,6 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
+      desktop: ${{ steps.compute.outputs.desktop }}
     steps:
       - id: compute
         shell: bash
@@ -73,6 +78,10 @@ jobs:
           #   arm64:  Linux, Windows, macOS Apple Silicon
           # macOS Intel can queue longer than Apple Silicon, but include it in
           # "all" so tagged releases always ship the complete platform set.
+          # os_filter=android builds only the APK job below — the desktop
+          # matrix is skipped via the `desktop` output (an empty include
+          # array would fail the matrix expansion, so gate the job instead).
+          desktop=true
           case "${OS_FILTER:-all}" in
             linux)       matrix="{\"include\":[$linux]}" ;;
             linux-arm)   matrix="{\"include\":[$linux_arm]}" ;;
@@ -83,14 +92,17 @@ jobs:
             macos)       matrix="{\"include\":[$macos_x86,$macos_arm]}" ;;
             macos-arm)   matrix="{\"include\":[$macos_arm]}" ;;
             macos-x86)   matrix="{\"include\":[$macos_x86]}" ;;
+            android)     matrix="{\"include\":[$linux]}"; desktop=false ;;
             all|"")      matrix="{\"include\":[$linux,$linux_arm,$windows,$windows_arm,$macos_x86,$macos_arm]}" ;;
-            *)           echo "::error::unknown os_filter: $OS_FILTER (expected: all, x86, arm, linux, linux-arm, windows, windows-arm, macos, macos-arm, macos-x86)"; exit 1 ;;
+            *)           echo "::error::unknown os_filter: $OS_FILTER (expected: all, x86, arm, linux, linux-arm, windows, windows-arm, macos, macos-arm, macos-x86, android)"; exit 1 ;;
           esac
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "desktop=$desktop" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.region }} on ${{ matrix.os_name }} ${{ matrix.arch }}
     needs: set-matrix
+    if: needs.set-matrix.outputs.desktop == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -686,4 +698,141 @@ jobs:
         with:
           name: ${{ env.archive_name }}
           path: ${{ env.archive_name }}
+          if-no-files-found: error
+
+  # Android APK. xmake cross-compiles libmain.so per ABI (arm64-v8a for
+  # real devices, x86_64 for Waydroid/ChromeOS/emulators); Gradle only
+  # packages the two libs — no externalNativeBuild, jniLibs points at
+  # build/android/ (see android/app/build.gradle). Same slim model as the
+  # desktop legs: CI has no ROM, the APK self-extracts assets on device
+  # from the user's baserom.gba. Runs under os_filter "all" (pushes/PRs
+  # compile-guard the NDK build) or "android".
+  build-android:
+    name: Build multi on android (arm64-v8a + x86_64 APK)
+    if: inputs.os_filter == 'all' || inputs.os_filter == 'android' || inputs.os_filter == ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: false
+          clean: false
+          persist-credentials: false
+
+      - name: Checkout submodules
+        shell: bash
+        env:
+          SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
+        run: |
+          # Same fallback pattern as the desktop job: authenticated when the
+          # token exists, per-submodule best-effort otherwise, with the
+          # critical VirtuaAPU (audio core) checked explicitly.
+          if [ -n "$SUBMODULES_TOKEN" ]; then
+            url_cfg="url.https://x-access-token:${SUBMODULES_TOKEN}@github.com/.insteadOf"
+            git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+                -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+                submodule sync --recursive
+            git -c "$url_cfg=https://github.com/" -c "$url_cfg=https://github.com" \
+                -c "$url_cfg=git@github.com:" -c "$url_cfg=ssh://git@github.com/" \
+                submodule update --init --recursive --depth 1 || true
+          else
+            git submodule sync --recursive || true
+            git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | \
+              awk '{print $2}' | while read -r p; do
+                echo "::group::submodule $p"
+                git submodule update --init --recursive --depth 1 -- "$p" || \
+                  echo "::warning::failed to fetch submodule $p — continuing"
+                echo "::endgroup::"
+              done
+          fi
+          if [ ! -d libs/VirtuaAPU/src ]; then
+            echo "::error::libs/VirtuaAPU is empty after submodule init — build cannot proceed."
+            exit 1
+          fi
+          if [ ! -d port/ppu/src ]; then
+            echo "::error::port/ppu/src missing — the in-tree software PPU is absent."
+            exit 1
+          fi
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1
+        with:
+          xmake-version: latest
+          actions-cache-folder: '.xmake-cache'
+          actions-cache-key: android-apk
+          package-cache: true
+          package-cache-key: android-apk
+          project-path: '.'
+
+      - name: Install pinned Android NDK
+        shell: bash
+        run: |
+          # Pin the NDK the port is developed against (r26d) instead of the
+          # runner's preinstalled one, which rolls forward over time and
+          # would make APK builds non-reproducible.
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;26.3.11579264"
+          echo "TMC_NDK=$ANDROID_SDK_ROOT/ndk/26.3.11579264" >> "$GITHUB_ENV"
+
+      - name: Build libmain.so (arm64-v8a + x86_64)
+        shell: bash
+        run: |
+          # Mirrors the local recipe: multi-region fat build (xmake default),
+          # 384px widescreen baseline — the on-device default. Each ABI drops
+          # its lib into build/android/<abi>/ where Gradle's jniLibs looks.
+          for abi in arm64-v8a x86_64; do
+            xmake f -y -p android -a "$abi" --ndk="$TMC_NDK" \
+              --game_version=USA --widescreen_width=384
+            xmake build -y tmc_pc
+            test -f "build/android/$abi/libmain.so"
+          done
+
+      - name: Decode release keystore
+        shell: bash
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          # Same probe pattern as ASSETS_TOKEN — secrets can't gate a
+          # step-level `if:`. Without the secret (forks) Gradle falls back
+          # to debug signing: still installable, just not upgrade-stable.
+          if [ -z "$KS_B64" ]; then
+            echo "No ANDROID_KEYSTORE_B64 secret — release APK will be debug-signed."
+            exit 0
+          fi
+          printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/tmc-release.keystore"
+          echo "TMC_KEYSTORE_FILE=$RUNNER_TEMP/tmc-release.keystore" >> "$GITHUB_ENV"
+          echo "TMC_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          cd android
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Verify APK (signature + both ABIs)
+        shell: bash
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          BT=$(ls -d "$ANDROID_SDK_ROOT"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK"
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libmain.so'
+          unzip -l "$APK" | grep -q 'lib/x86_64/libmain.so'
+          echo "OK: APK signed and carries both ABIs."
+
+      - name: Name APK artifact
+        shell: bash
+        env:
+          VERSION_LABEL: ${{ inputs.version_label }}
+        run: |
+          APK_NAME="tmc-multi-android-${VERSION_LABEL}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          echo "apk_name=$APK_NAME" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ env.apk_name }}
+          path: ${{ env.apk_name }}
           if-no-files-found: error
