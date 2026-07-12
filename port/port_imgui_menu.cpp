@@ -1477,6 +1477,20 @@ static void DrawRibbonWarpTab(void) {
             ImGui::TextDisabled("(disabled in Console-Parity)");
         }
     }
+    {
+        unsigned short px = 0, py = 0;
+        const bool inGame = Port_DebugQuery_PlayerXY(&px, &py) != 0;
+        const bool isMinish = inGame && (Port_DebugQuery_IsMinish() != 0);
+        ImGui::BeginDisabled(!inGame);
+        if (ImGui::Button(isMinish ? "Grow to Normal Size" : "Shrink to Minish")) {
+            Port_DebugAction_ToggleMinish();
+        }
+        ImGui::EndDisabled();
+        if (!inGame) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(in-game only)");
+        }
+    }
     ImGui::Separator();
 
     /* Letter strip — issue #76. The area list is long (>140 entries)
