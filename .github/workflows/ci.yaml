@@ -28,6 +28,7 @@ on:
           - macos
           - macos-arm
           - macos-x86
+          - android
   # Cross-platform-parity safety net: CI compiles the active branch across
   # Linux, Windows, and macOS on both x86_64 and ARM64 (the matrix is defined
   # in _build.yaml under os_filter=all). Any architecture/OS-specific break
@@ -59,3 +60,5 @@ jobs:
       ASSETS_TOKEN: ${{ secrets.ASSETS_TOKEN }}
       PRIVATE_SUBMODULES_TOKEN: ${{ secrets.PRIVATE_SUBMODULES_TOKEN }}
       TMC_DISCORD_APP_ID: ${{ secrets.TMC_DISCORD_APP_ID }}
+      ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
