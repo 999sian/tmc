@@ -270,8 +270,12 @@ bool32 sub_0804AD18(void) {
             if (!CheckGlobalFlag(ENTRANCE_0 + gArea.portal_type)) {
                 return FALSE;
             }
+#ifdef PC_PORT
+            return TRUE;
+#else
             // else: return TRUE implicitely, because it's stored in r0. But does not match if returning explicitely.
             break;
+#endif
         case PT_TOD:
             return FALSE;
         case PT_DUNGEON:
