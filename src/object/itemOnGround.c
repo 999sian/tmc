@@ -23,6 +23,7 @@
 #ifdef PC_PORT
 #include <stdbool.h>
 extern bool Rando_OverrideLocationKey(u32 location_key, u8* type, u8* subtype);
+extern void Rando_ClearAwardLatch(void);
 #endif
 
 void sub_08081150(ItemOnGroundEntity* this);
@@ -406,6 +407,12 @@ bool32 sub_08081420(ItemOnGroundEntity* this) {
         return TRUE;
     } else {
         GiveItem(super->type, super->type2);
+#ifdef PC_PORT
+        /* GiveItem does not route through Rando_OverrideItem, so disarm the
+         * location-award latch a preceding Rando_OverrideLocationKey may have
+         * set (audit R4). */
+        Rando_ClearAwardLatch();
+#endif
         return FALSE;
     }
 }

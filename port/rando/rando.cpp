@@ -1985,6 +1985,10 @@ static bool sActive = false;
 static bool sInitialized = false;
 static char sSpoiler[8192];
 static uint64_t sAutoSeedCounter = 0x9e3779b97f4a7c15ull;
+/* Per-seed location-collected bitset (audit C6). Indexed by kLocations[]
+ * position; cleared on activate/reset, set at each location-keyed award,
+ * persisted via the save sidecar. */
+static uint8_t sCollected[RANDO_COLLECTED_BYTES];
 
 static uint64_t SplitMix64_Next(SplitMix64* rng) {
     uint64_t z = (rng->state += 0x9e3779b97f4a7c15ull);
@@ -2239,6 +2243,14 @@ static void EvaluateHelpers(const RandomizerSettings* settings, const bool* item
                 return false;
             if (door_idx == 3)
                 return items[ITEM_FLIPPERS] || og;
+            /* Door 6 is the DHC castle-garden entrance: it only exists once
+             * the castle transforms (four elements placed). Model it on the
+             * elements so entrance shuffle can't rate a dungeon behind it
+             * reachable from the start (audit R5). Door 7 (cellar) stays
+             * open. */
+            if (door_idx == 6)
+                return items[ITEM_EARTH_ELEMENT] && items[ITEM_FIRE_ELEMENT] && items[ITEM_WATER_ELEMENT] &&
+                       items[ITEM_WIND_ELEMENT];
             return true;
         };
 
@@ -2295,8 +2307,30 @@ static bool IsObscureLocation(const RandoLocationDef* loc) {
         return true;
     return false;
 }
+/* Interim logic-modeling pins (audit C3/C5): these scripted locations are
+ * reachable in the solver's model but gated in-engine by state the solver
+ * does not yet track, so progression placed there can verify beatable yet
+ * deadlock. Kept vanilla (out of the pool) until the gates are modeled:
+ *  - Goron Merchant tiers 2-5 (a>=1): each unlocks one tier per room load
+ *    AND only after LV1..LV4_CLEAR (goronMerchantShopManager.c).
+ *  - Cucco rounds 1-9 (a<=8): the new-file baseline pins the game at round
+ *    10, so only CUCCO(9) ("Level 10 Reward") ever keys (cuccoMinigame.c). */
+static bool RandoInterimGated(const RandoLocationDef* loc) {
+    if ((loc->key & 0x80000000u) == 0)
+        return false;
+    uint32_t group = (loc->key >> 24) & 0x7f;
+    uint32_t a = (loc->key >> 16) & 0xff;
+    if (group == RANDO_SCRIPTED_KEY_GORON_MERCHANT && a >= 1)
+        return true;
+    if (group == RANDO_SCRIPTED_KEY_CUCCO && a <= 8)
+        return true;
+    return false;
+}
 static bool LocationEnabled(const RandomizerSettings* settings, const RandoLocationDef* loc) {
     if (!settings->shuffle_dojos && loc->category == RANDO_LOC_CATEGORY_DOJO) {
+        return false;
+    }
+    if (RandoInterimGated(loc)) {
         return false;
     }
     if (!settings->obscure_locations && IsObscureLocation(loc)) {
@@ -2931,6 +2965,7 @@ static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* setting
     sSettings = *settings;
     sSeed = seed;
     sActive = true;
+    memset(sCollected, 0, sizeof(sCollected));
     BuildCompatibilityRemap();
     BuildSpoiler(seed, settings);
     fprintf(stderr, "[RANDO] seed %llu generated (native logic, %s pool, %zu locations)\n", (unsigned long long)seed,
@@ -3040,6 +3075,7 @@ extern "C" void Rando_Reset(void) {
     extern void Rando_Music_ClearAssignments(void);
     Rando_Entrance_ClearAssignments();
     Rando_Music_ClearAssignments();
+    memset(sCollected, 0, sizeof(sCollected));
     sLocationAwardPending = false;
     sSpoiler[0] = '\0';
     fprintf(stderr, "[RANDO] reset to vanilla\n");
@@ -3135,10 +3171,48 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
             sLocationAwardPending = true;
             sLocationAwardType = (uint8_t)item;
             sLocationAwardSubtype = item_subtype;
+            sCollected[i >> 3] |= (uint8_t)(1u << (i & 7));
             return true;
         }
     }
     return false;
+}
+
+/* A location-keyed award arms the one-shot latch so the generic junk
+ * bijection (Rando_OverrideItem) does not re-randomize it. Give paths that
+ * do NOT route through Rando_OverrideItem (the silent GiveItem branch in
+ * itemOnGround.c) must disarm it, or a later incidental item with the same
+ * {type,subtype} would wrongly skip its remap once (audit R4). */
+extern "C" void Rando_ClearAwardLatch(void) {
+    sLocationAwardPending = false;
+}
+
+extern "C" bool Rando_IsCollectedByKey(uint32_t location_key) {
+    EnsureInitialized();
+    if (!sActive)
+        return false;
+    for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
+        if (kLocations[i].key == location_key)
+            return (sCollected[i >> 3] & (1u << (i & 7))) != 0;
+    }
+    return false;
+}
+
+extern "C" void Rando_GetCollectedSet(uint8_t* out, size_t out_len) {
+    if (out == NULL)
+        return;
+    size_t n = out_len < sizeof(sCollected) ? out_len : sizeof(sCollected);
+    memcpy(out, sCollected, n);
+    if (out_len > n)
+        memset(out + n, 0, out_len - n);
+}
+
+extern "C" void Rando_SetCollectedSet(const uint8_t* in, size_t in_len) {
+    memset(sCollected, 0, sizeof(sCollected));
+    if (in == NULL)
+        return;
+    size_t n = in_len < sizeof(sCollected) ? in_len : sizeof(sCollected);
+    memcpy(sCollected, in, n);
 }
 
 extern "C" bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,

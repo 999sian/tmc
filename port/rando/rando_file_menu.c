@@ -213,6 +213,8 @@ uint32_t Port_RandoFileMenu_Fingerprint(void) {
 void Port_RandoFileMenu_CommitAndStart(void) {
     RandomizerSettings settings = BuildMenuSettings();
     uint64_t seed;
+    if (!sMenu.open)
+        return; /* only an armed slot (Port_RandoFileMenu_Open) may commit */
     PersistMenuSettings();
 
     seed = CurrentSeedValue();

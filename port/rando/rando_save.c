@@ -10,6 +10,7 @@
 #include "rando/rando.h"
 #include "rando/rando_entrance.h"
 #include "rando/rando_music.h"
+#include "item_ids.h" /* ITEM_SKILL_LONG_SPIN: last real engine item id */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -34,8 +35,14 @@ extern int fileno(FILE*);
  * v4: per-location reward subtypes (shell counts, kinstone piece ids, dungeon
  * item ids) so same-item placements restore exactly across reloads.
  * v5: shuffle_entrances flag (decoupled from shuffle_kinstones) + tricks
- * bitmask (glitch-logic tier) so a seed's logic tier restores exactly. */
-#define RANDO_SIDECAR_VERSION 6u
+ * bitmask (glitch-logic tier) so a seed's logic tier restores exactly.
+ * v6: obscure/homewarp/start_sword/early_crests/instant_text/tunic/heart +
+ * shuffle_dungeon_items (in the former reserved3 byte).
+ * v7: per-slot location-collected bitset appended AFTER the slots array (a
+ * RandoSidecarFile appendix, NOT a slot field), so the slot layout is
+ * byte-identical to v6 and older files migrate with the collected set
+ * zeroed (dojos/scrubs re-derive from empty, harmless). */
+#define RANDO_SIDECAR_VERSION 7u
 #define RANDO_SIDECAR_MAX_OVERRIDES 64
 #define RANDO_SIDECAR_MAX_ENTRANCES 16
 #define RANDO_SIDECAR_MUSIC_AREAS 256
@@ -81,11 +88,15 @@ typedef struct RandoSidecarSlot {
     uint8_t instant_text;
     uint8_t tunic_color;
     uint8_t heart_color;
-    uint8_t reserved3;
+    uint8_t shuffle_dungeon_items; /* v6 byte, was reserved3 (always 0 == off) */
 } RandoSidecarSlot;
 
 typedef struct RandoSidecarFile {
     RandoSidecarSlot slots[RANDO_SIDECAR_SLOTS];
+    /* v7 appendix: per-slot location-collected bitset. Kept OUT of
+     * RandoSidecarSlot so the slot layout stays byte-identical to v6 and the
+     * per-slot read size is unchanged; read only when version >= 7. */
+    uint8_t collected[RANDO_SIDECAR_SLOTS][RANDO_COLLECTED_BYTES];
 } RandoSidecarFile;
 
 static RandoSidecarFile sSidecar;
@@ -137,6 +148,15 @@ static bool LoadAll(void) {
                 break;
             }
         }
+        /* v7 appendix: per-slot collected bitset, right after the slots. A
+         * v6 file ends here (guard skips the read, collected stays zeroed).
+         * A truncated v7 appendix is non-fatal: keep the valid slots and
+         * re-derive collected from empty. */
+        if (ok && version >= 7) {
+            if (fread(sSidecar.collected, sizeof(sSidecar.collected), 1, f) != 1) {
+                memset(sSidecar.collected, 0, sizeof(sSidecar.collected));
+            }
+        }
     }
     fclose(f);
     if (!ok) {
@@ -160,6 +180,21 @@ static bool LoadAll(void) {
             rec->override_count > RANDO_SIDECAR_MAX_OVERRIDES || rec->entrance_count > RANDO_SIDECAR_MAX_ENTRANCES) {
             fprintf(stderr, "[rando] warning: sidecar slot %d corrupt (count=%u, difficulty=%u); cleared\n", i,
                     rec->count, rec->item_difficulty);
+            memset(rec, 0, sizeof(*rec));
+            continue;
+        }
+        /* Placed rewards are engine item ids (virtual big-key ids live only
+         * in subtypes); anything past the metadata table's last entry would
+         * index gItemMetaData[] out of bounds on award. */
+        bool table_ok = true;
+        for (uint32_t t = 0; t < rec->count; ++t) {
+            if (rec->table[t] > ITEM_SKILL_LONG_SPIN) {
+                table_ok = false;
+                break;
+            }
+        }
+        if (!table_ok) {
+            fprintf(stderr, "[rando] warning: sidecar slot %d has out-of-range item id; cleared\n", i);
             memset(rec, 0, sizeof(*rec));
             continue;
         }
@@ -287,6 +322,7 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
     rec->instant_text = settings.instant_text;
     rec->tunic_color = (uint8_t)settings.tunic_color;
     rec->heart_color = (uint8_t)settings.heart_color;
+    rec->shuffle_dungeon_items = settings.shuffle_dungeon_items ? 1 : 0;
     /* Save entrance assignments */
     rec->entrance_count = 0;
     for (int i = 0; i < 8; ++i) {
@@ -302,6 +338,10 @@ bool Port_RandoSave_SaveActiveSlot(int slot) {
     for (uint32_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) {
         rec->music[a] = (int16_t)Rando_Music_GetAssignment(a);
     }
+
+    /* Capture the live collected set for this slot (v7 appendix). LoadAll
+     * above preserved the other slots' sets; this overwrites only ours. */
+    Rando_GetCollectedSet(sSidecar.collected[slot], RANDO_COLLECTED_BYTES);
 
     if (!SaveAll())
         return false;
@@ -340,12 +380,17 @@ bool Port_RandoSave_LoadSlot(int slot) {
         settings.instant_text = rec->instant_text;
         settings.tunic_color = rec->tunic_color;
         settings.heart_color = rec->heart_color;
+        settings.shuffle_dungeon_items = rec->shuffle_dungeon_items != 0;
     }
 
     // No logic define overrides to restore anymore
 
     if (!Rando_ActivateTable(rec->seed, settings, rec->table, rec->subtype_table, rec->count))
         return false;
+
+    /* Restore the collected set (Rando_ActivateTable cleared it). v6-and-older
+     * loads leave it zeroed, so dojos/scrubs re-derive from empty. */
+    Rando_SetCollectedSet(sSidecar.collected[slot], RANDO_COLLECTED_BYTES);
 
     /* Restore entrance and music assignments */
     Rando_Entrance_ClearAssignments();

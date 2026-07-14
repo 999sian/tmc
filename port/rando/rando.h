@@ -399,6 +399,17 @@ bool Rando_OverrideItem(uint8_t* type, uint8_t* subtype);
 
 size_t Rando_GetSpoiler(char* buf, size_t buflen);
 
+/* Per-seed "location collected" set (audit C6). Marks any location-keyed
+ * award as taken, so gates that vanilla-check skill/item inventory (town
+ * dojos, grip-ring scrub) can instead ask whether THIS shuffled location
+ * was collected. Without it a shuffled reward that is not the vanilla item
+ * re-offers forever (dupe), and an out-of-order vanilla pickup skips a
+ * tier permanently (missable). Persisted in the save sidecar (v7). */
+#define RANDO_COLLECTED_BYTES ((RANDO_LOCATION_COUNT + 7) / 8)
+bool Rando_IsCollectedByKey(uint32_t location_key);
+void Rando_GetCollectedSet(uint8_t* out, size_t out_len);
+void Rando_SetCollectedSet(const uint8_t* in, size_t in_len);
+
 #ifdef __cplusplus
 }
 #endif

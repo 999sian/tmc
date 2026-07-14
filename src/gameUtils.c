@@ -33,6 +33,9 @@
 #include <stdint.h>
 /* rando: MUSIC_RANDO area-BGM remap (port/rando/rando_music.c) */
 extern int Rando_Music_Remap(int area, int song);
+#include <stdbool.h>
+/* rando: LV*_CLEAR sanitizer bypass (see ResetTmpFlags) */
+extern bool Rando_IsActive(void);
 #endif
 
 u32 StairsAreValid(void);
@@ -1150,6 +1153,14 @@ void ResetTmpFlags(void) {
 
     if (!CheckGlobalFlag(WATERBEAN_PUT))
         ClearGlobalFlag(WATERBEAN_OUT);
+#ifdef PC_PORT
+    /* Rando shuffles element prizes: "element not held" no longer implies
+     * "dungeon not cleared". Wiping LV*_CLEAR on every load re-arms bosses
+     * (prize re-awards, item dupes) and stalls the goron-restock/kinstone
+     * chains gated on these flags. Vanilla saves keep the sanitizer. */
+    if (Rando_IsActive())
+        return;
+#endif
     if (!GetInventoryValue(ITEM_EARTH_ELEMENT))
         ClearGlobalFlag(LV1_CLEAR);
     if (!GetInventoryValue(ITEM_FIRE_ELEMENT))

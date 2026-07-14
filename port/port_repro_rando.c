@@ -13,6 +13,7 @@
 #include "port_debug_actions.h"
 #include "room.h"
 #include "rando/rando_save.h"
+#include "rando/rando_keymap.h"
 #include "rando/rando_runtime.h"
 #include "save.h"
 #include "flags.h"
@@ -220,6 +221,77 @@ static int run_real_logic_chest_probe(void) {
       return 1;
 }
 
+/* audit C6: directly verify the per-seed location-collected set — the anti-dupe /
+ * anti-missable signal that drives dojo and grip-ring-scrub gates. Prior coverage
+ * only inferred it from a sidecar file-size check; this exercises the real
+ * mark-on-grant, per-location isolation, reset, and save/load round-trip. */
+static int run_collected_persistence(void) {
+    RandomizerSettings s = Rando_DefaultSettings();
+    if (!GenerateSeed(0xC061u, s) || !Rando_IsActive()) {
+        fprintf(stderr, "[rando-repro] FAIL: collected-set generation failed\n");
+        return 0;
+    }
+
+    uint32_t collected_key = Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SCRUB, RANDO_SCRUB_KEY_GRIP, 0, 0);
+    uint32_t witness_key = 0x002211E0u; /* a real chest location, never granted here */
+
+    /* (1) fresh seed => nothing collected */
+    if (Rando_IsCollectedByKey(collected_key)) {
+        fprintf(stderr, "[rando-repro] FAIL: scrub key 0x%08X collected on a fresh seed\n", collected_key);
+        return 0;
+    }
+    if (Rando_IsCollectedByKey(witness_key)) {
+        fprintf(stderr, "[rando-repro] FAIL: witness chest 0x%08X collected on a fresh seed\n", witness_key);
+        return 0;
+    }
+
+    /* (2) Rando_OverrideLocationKey marks the location collected as a side effect */
+    unsigned char type = 0, sub = 0;
+    if (!Rando_OverrideLocationKey(collected_key, &type, &sub)) {
+        fprintf(stderr, "[rando-repro] FAIL: override did not fire for scrub key 0x%08X (location not in pool?)\n",
+                collected_key);
+        return 0;
+    }
+    if (!Rando_IsCollectedByKey(collected_key)) {
+        fprintf(stderr, "[rando-repro] FAIL: scrub key 0x%08X not marked collected after award\n", collected_key);
+        return 0;
+    }
+
+    /* (3) marking is per-location, not global — an ungranted key stays uncollected */
+    if (Rando_IsCollectedByKey(witness_key)) {
+        fprintf(stderr, "[rando-repro] FAIL: witness chest 0x%08X wrongly marked after scrub award\n", witness_key);
+        return 0;
+    }
+
+    /* (4) persistence round-trip: save -> reset (clears) -> load (restores) */
+    if (!Port_RandoSave_SaveActiveSlot(0)) {
+        fprintf(stderr, "[rando-repro] FAIL: collected-set sidecar save failed\n");
+        return 0;
+    }
+    Rando_Reset();
+    if (Rando_IsCollectedByKey(collected_key)) {
+        fprintf(stderr, "[rando-repro] FAIL: scrub key 0x%08X still collected after Rando_Reset\n", collected_key);
+        return 0;
+    }
+    if (!Port_RandoSave_LoadSlot(0) || !Rando_IsActive()) {
+        fprintf(stderr, "[rando-repro] FAIL: collected-set sidecar reload failed\n");
+        return 0;
+    }
+    if (!Rando_IsCollectedByKey(collected_key)) {
+        fprintf(stderr, "[rando-repro] FAIL: scrub key 0x%08X not restored as collected after reload\n", collected_key);
+        return 0;
+    }
+    if (Rando_IsCollectedByKey(witness_key)) {
+        fprintf(stderr, "[rando-repro] FAIL: witness chest 0x%08X wrongly collected after reload\n", witness_key);
+        return 0;
+    }
+
+    fprintf(stderr, "[rando-repro] collected-persistence OK: scrub key 0x%08X marks/resets/round-trips, "
+                    "witness chest 0x%08X stays uncollected\n",
+            collected_key, witness_key);
+    return 1;
+}
+
 extern SDL_Window* Port_PPU_ActiveWindow(void);
 
 static void commit_random_seed_from_menu(void) {
@@ -374,6 +446,7 @@ void Port_ReproRando_Tick(unsigned int frame) {
         if (!run_logic_key_path()) { sDone = 1; exit(1); }
         if (!run_world_open_test()) { sDone = 1; exit(1); }
         if (!run_real_logic_chest_probe()) { sDone = 1; exit(1); }
+        if (!run_collected_persistence()) { sDone = 1; exit(1); }
     }
 
     if (frame > 200) {
