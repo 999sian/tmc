@@ -25,7 +25,7 @@ extern void DisableVBlankDMA(void);
 
 static const u8 gUnk_08108D74[] = { 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x0 };
 
-extern struct BgAffineDstData MAY_ALIAS gUnk_02017AA0[];
+extern u16 MAY_ALIAS gUnk_02017AA0[];
 
 void VaatiAppearingManager_Main(VaatiAppearingManager* this) {
     static void (*const VaatiAppearingManager_Actions[])(VaatiAppearingManager*) = {
@@ -182,7 +182,7 @@ void sub_0805D9D8(VaatiAppearingManager* this) {
 
 void sub_0805DA08(u32 x, u32 y, u32 param_3) {
     u32 i;
-    struct BgAffineDstData* affineDstData = &gUnk_02017AA0[gUnk_03003DE4[0] * 0xa0];
+    struct BgAffineDstData* affineDstData = &((struct BgAffineDstData*)gUnk_02017AA0)[gUnk_03003DE4[0] * 0xa0];
     for (i = 0; i < 0xa0; ++i, y += 0x17) {
         affineDstData->pa = ((gSineTable[(param_3 + i + y) & 0xff] * x) >> 8) + gScreen.bg3.xOffset;
         affineDstData = (struct BgAffineDstData*)&affineDstData->pb;

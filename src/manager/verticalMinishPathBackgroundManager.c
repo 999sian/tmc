@@ -13,7 +13,7 @@
 extern void VerticalMinishPathBackgroundManager_OnEnterRoom(void*);
 extern void sub_0805754C(VerticalMinishPathBackgroundManager*);
 
-extern u8 gMapDataTopSpecial[];
+extern u16 gMapDataTopSpecial[];
 
 #ifdef PC_PORT
 /* Same-family fix as bigGoron / horizontalMinishPath / minishRafters
@@ -30,8 +30,10 @@ static inline s32 VMP_ClampBgDelta(s32 bgOffset, s32 baseAdd) {
     s32 delta = (bgOffset / 0x40) * 0x200;
     s32 lo = -baseAdd;
     s32 hi = 0x7800 - baseAdd;
-    if (delta < lo) delta = lo;
-    if (delta > hi) delta = hi;
+    if (delta < lo)
+        delta = lo;
+    if (delta > hi)
+        delta = hi;
     return delta;
 }
 #endif
@@ -88,9 +90,9 @@ void sub_080575C8(u32 param) {
     gScreen.bg3.yOffset = bgOffset & 0x3f;
     gScreen.bg3.xOffset = 0;
 #ifdef PC_PORT
-    gScreen.bg3.subTileMap = &gMapDataTopSpecial[VMP_ClampBgDelta(bgOffset, 0)];
+    gScreen.bg3.subTileMap = (u16*)((u8*)gMapDataTopSpecial + VMP_ClampBgDelta(bgOffset, 0));
 #else
-    gScreen.bg3.subTileMap = &gMapDataTopSpecial[(bgOffset / 0x40) * 0x200];
+    gScreen.bg3.subTileMap = (u16*)((u8*)gMapDataTopSpecial + (bgOffset / 0x40) * 0x200);
 #endif
     gScreen.bg3.control = BGCNT_SCREENBASE(29) | BGCNT_PRIORITY(1) | BGCNT_CHARBASE(2) | BGCNT_MOSAIC;
     gScreen.bg3.updated = 1;
@@ -100,9 +102,9 @@ void sub_080575C8(u32 param) {
     gScreen.bg1.yOffset = bgOffset & 0x3f;
     gScreen.bg1.xOffset = 0;
 #ifdef PC_PORT
-    gScreen.bg1.subTileMap = &gMapDataTopSpecial[0x2000 + VMP_ClampBgDelta(bgOffset, 0x2000)];
+    gScreen.bg1.subTileMap = (u16*)((u8*)gMapDataTopSpecial + 0x2000 + VMP_ClampBgDelta(bgOffset, 0x2000));
 #else
-    gScreen.bg1.subTileMap = &gMapDataTopSpecial[0x2000 + (bgOffset / 0x40) * 0x200];
+    gScreen.bg1.subTileMap = (u16*)((u8*)gMapDataTopSpecial + 0x2000 + (bgOffset / 0x40) * 0x200);
 #endif
     gScreen.bg1.control = BGCNT_SCREENBASE(30) | BGCNT_PRIORITY(1) | BGCNT_CHARBASE(2) | BGCNT_MOSAIC;
     gScreen.bg1.updated = 1;

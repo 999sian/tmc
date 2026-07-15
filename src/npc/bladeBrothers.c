@@ -50,23 +50,23 @@ void (*const gUnk_081115D0[])(BladeBrothersEntity*) = {
 
 const u16 gUnk_081115DC[] = { 183, 184, 185, 186, 187, 188, 189, 190 };
 
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers0;
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers1;
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers2;
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers3;
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers4;
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers5;
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers6;
-extern const PlayerMacroEntry gPlayerMacroBladeBrothers7;
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers0[];
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers1[];
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers2[];
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers3[];
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers4[];
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers5[];
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers6[];
+extern const PlayerMacroEntry gPlayerMacroBladeBrothers7[];
 const PlayerMacroEntry* const BladeBrothers_PlayerMacros[] = {
-    &gPlayerMacroBladeBrothers0,
-    &gPlayerMacroBladeBrothers1,
-    &gPlayerMacroBladeBrothers2,
-    &gPlayerMacroBladeBrothers3,
-    &gPlayerMacroBladeBrothers4,
-    &gPlayerMacroBladeBrothers5,
-    &gPlayerMacroBladeBrothers6,
-    &gPlayerMacroBladeBrothers7,
+    gPlayerMacroBladeBrothers0,
+    gPlayerMacroBladeBrothers1,
+    gPlayerMacroBladeBrothers2,
+    gPlayerMacroBladeBrothers3,
+    gPlayerMacroBladeBrothers4,
+    gPlayerMacroBladeBrothers5,
+    gPlayerMacroBladeBrothers6,
+    gPlayerMacroBladeBrothers7,
     NULL,
     NULL,
     NULL,

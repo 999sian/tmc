@@ -123,8 +123,8 @@ void PauseMenu_Variant2(void) {
      * "SLEEP option on the QUEST STATUS screen". SELECT on the quest
      * page arms the deferred warp (Rando_Homewarp_Tick fires it after
      * the menu closes) and requests the normal menu-exit path. */
-    if (sub_080A51F4() && gPauseMenuOptions.screen == PauseMenuScreen_2 &&
-        (gInput.newKeys & SELECT_BUTTON) && Rando_Homewarp_Request()) {
+    if (sub_080A51F4() && gPauseMenuOptions.screen == PauseMenuScreen_2 && (gInput.newKeys & SELECT_BUTTON) &&
+        Rando_Homewarp_Request()) {
         SoundReq(SFX_TEXTBOX_OPEN);
         gPauseMenuOptions.screen2 = 0xe; /* request menu close */
     }
@@ -262,9 +262,9 @@ void sub_080A5128(void) {
     gOamCmd.x = p[0].x;
     gOamCmd.y = p[0].y;
     if (REGION_IS_EU) {
-    r5 = 0x1fa;
+        r5 = 0x1fa;
     } else {
-    r5 = 0x1fb;
+        r5 = 0x1fb;
     }
     DrawDirect(r5, 0);
     gOamCmd.x = p[1].x;
@@ -440,8 +440,7 @@ void PauseMenu_ItemMenu_Update(void) {
                         extern bool Port_Reborn_IsEnabled(int feat);
                         extern void Port_SoftSlots_SetAssignment(int s, unsigned char id);
                         if ((gInput.heldKeys & SELECT_BUTTON) && Port_Reborn_IsEnabled(10)) {
-                            Port_SoftSlots_SetAssignment((int)slot,
-                                                         (unsigned char)gPauseMenu.items[menuSlot]);
+                            Port_SoftSlots_SetAssignment((int)slot, (unsigned char)gPauseMenu.items[menuSlot]);
                             SoundReq(SFX_TEXTBOX_SELECT);
                             break;
                         }
@@ -676,7 +675,6 @@ extern KeyButtonLayout gUnk_08128D60;
 void DrawDungeonMapActually();
 void sub_080A5CFC(u32, void*, u32);
 void DrawDungeonFeatures(u32, void*, u32);
-extern void DrawDungeonMap(u32 floor, struct_02019EE0* data, u32 size);
 extern void LoadDungeonMap(void);
 bool32 sub_080A5F24(void);
 extern void sub_080A42E0(u32, u32);
@@ -950,9 +948,9 @@ void sub_080A57F4(void) {
                     continue;
                 }
                 if (REGION_IS_EU) {
-                spriteIndex = 0x141;
+                    spriteIndex = 0x141;
                 } else {
-                spriteIndex = 0x142;
+                    spriteIndex = 0x142;
                 }
             }
             DrawDirect(spriteIndex, uVar5);
@@ -1085,11 +1083,11 @@ void sub_080A5AF4(void) {
     gMenu.field_0x3 = 0;
     SetPopupState(2, 0);
     if (!REGION_IS_EU) {
-    if (gSaveHeader->language == 0) {
-        gScreen.bg1.yOffset = -4;
-    } else {
-        gScreen.bg1.yOffset = 0;
-    }
+        if (gSaveHeader->language == 0) {
+            gScreen.bg1.yOffset = -4;
+        } else {
+            gScreen.bg1.yOffset = 0;
+        }
     }
     SetMenuType(1);
 }
@@ -1211,7 +1209,7 @@ void sub_080A5C9C(void) {
 void sub_080A5CFC(u32 menuType, void* param_2, u32 param_3) {
     DrawDungeonFeatures(menuType, param_2, param_3);
     LoadDungeonMap();
-    DrawDungeonMap(menuType, &gMapDataBottomSpecial, 0x400);
+    DrawDungeonMap(menuType, (DungeonMapObject*)gMapDataBottomSpecial, 0x400);
 }
 
 #define SUB_080A5D1C_SPRITE_INDEX (REGION_IS_EU ? 0x143 : 0x144)

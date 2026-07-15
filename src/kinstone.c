@@ -22,7 +22,7 @@ extern const EntityData gUnk_080FEE38[];
 extern const EntityData gUnk_080FEE18[];
 extern const EntityData gUnk_080FEE48[];
 extern const EntityData gUnk_080FEE58[];
-extern const void* gLilypadRails[];
+extern void* gLilypadRails[];
 
 void sub_08018AB4(int);
 void sub_08018BB4(u32 worldEventId);
@@ -234,7 +234,7 @@ void sub_080186D4(void) {
     }
 }
 
-void sub_080186EC(u32 param_1) {
+void sub_080186EC(void) {
     const KinstoneWorldEvent* psVar1;
     u32 i;
     const KinstoneWorldEvent* gKinstoneWorldEvents_sel = gKinstoneWorldEvents;

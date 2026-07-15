@@ -12,7 +12,7 @@
 static Entity* GiveItemWithCutscene(u32, u32, u32);
 static void InitTileMessage(u32, u32);
 
-void SetPlayerItemGetState(Entity*, u32, u32);
+void SetPlayerItemGetState(Entity*, u8, u8);
 
 void CreateItemEntity(u32 type, u32 type2, u32 delay) {
     Entity* e = GiveItemWithCutscene(type, type2, delay);
@@ -49,7 +49,7 @@ static Entity* GiveItemWithCutscene(u32 item, u32 type2, u32 delay) {
     {
         u8 t = (u8)item, s = (u8)type2;
         if (Rando_OverrideItem(&t, &s)) {
-            item  = t;
+            item = t;
             type2 = s;
         }
     }

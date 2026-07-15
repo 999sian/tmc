@@ -54,8 +54,13 @@ typedef struct {
     u16 unk10[4];
 } struct_gUnk_02034330;
 
+#ifdef PC_PORT
+struct_gUnk_02034330 gUnk_02034330;
+WStruct gUnk_02036540[4];
+#else
 extern struct_gUnk_02034330 gUnk_02034330;
 extern WStruct gUnk_02036540[4];
+#endif
 
 extern u32* gTranslations[];
 #ifdef PC_PORT
@@ -64,11 +69,11 @@ extern u8* gTextVariableSources[];
 extern u8* gUnk_08109230[];
 #define gTextVariableSources gUnk_08109230
 #endif
-extern u32 gUnk_08109244;   // TODO structure?
+extern u32 gUnk_08109244; // TODO structure?
 extern u32* gUnk_08109248[];
 extern u32 gUnk_0810926C[];
 extern void* gUnk_081092AC[]; // TODO structure?
-extern u16 gUnk_081092D4;     // TODO array?
+extern u8 gUnk_081092D4[];
 typedef struct {
     u8 filler0[12][16];
 } VStruct;
@@ -649,8 +654,7 @@ bool32 sub_0805F5CC(Font* param_1, Token* param_2, WStruct* param_3) {
     fontStr = GetFontStrWith(param_2, 0);
     param_3->unk6 = param_1->right_align ? ((8 - ((fontStr + 1) >> 1)) & 7) : 0;
 
-    puVar5 = (u16*)sub_0805F6A4(param_2, param_3);
-    if (puVar5) {
+    if (sub_0805F6A4(param_2, param_3) != 0) {
         iVar4 = (s32)(param_3->unk6 + 7) / 8;
         puVar5 = param_1->dest;
         if (param_1->right_align) {
@@ -894,7 +898,7 @@ void sub_0805F918(u32 idx, u32 idx2, void* dest) {
 
 u32 sub_0805F9A0(u32 r0) {
     if (gSaveHeader->language == 0) {
-        u16* val = &gUnk_081092D4;
+        u16* val = (u16*)gUnk_081092D4;
         u32 i = 0;
 
         do {

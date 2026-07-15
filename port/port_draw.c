@@ -133,14 +133,6 @@ static void InitEntityUpdateFuncs(void) {
     sEntityUpdateFuncsInited = 1;
 }
 
-/* UpdateContext matches the structure from entity.c */
-typedef struct {
-    void* table;
-    void* list_top;
-    Entity* current_entity;
-    void* restore_sp;
-} UpdateContext;
-
 extern UpdateContext gUpdateContext;
 
 /* Per-entity enemy-target cache. arm_UpdateEntities zeroes this before every
@@ -234,16 +226,17 @@ void ram_UpdateEntities(u32 mode) {
                 if (!in_pool) {
                     for (int k = 0; k < 9; ++k) {
                         if (entity == (Entity*)&gEntityLists[k]) {
-                            in_pool = 1; break;
+                            in_pool = 1;
+                            break;
                         }
                     }
                 }
                 if (!in_pool) {
                     fprintf(stderr,
-                        "[ram_UpdateEntities] stale entity pointer %p in "
-                        "list %d — bailing out (likely v1 quicksave or "
-                        "list corruption)\n",
-                        (void*)entity, listIdx);
+                            "[ram_UpdateEntities] stale entity pointer %p in "
+                            "list %d — bailing out (likely v1 quicksave or "
+                            "list corruption)\n",
+                            (void*)entity, listIdx);
                     break;
                 }
             }
@@ -368,7 +361,7 @@ static void RenderSpritePieces(const u8* data, /* pointer to frame data (count b
      * (Overlay callers pass small fixed internal buffers, not ROM data.) */
     {
         const u8* fobBase = (const u8*)gFrameObjLists;
-        const u8* fobEnd  = fobBase + sizeof(gFrameObjLists);
+        const u8* fobEnd = fobBase + sizeof(gFrameObjLists);
         if (data >= fobBase && data < fobEnd) {
             size_t maxPieces = (size_t)(fobEnd - data) / 5u;
             if ((size_t)count > maxPieces)
@@ -1062,10 +1055,8 @@ static const u8* TranslateIwramOrRomPointer(u32 ptr) {
 }
 
 static u32 ReadRomU32LE(u32 offset) {
-    return (u32)gRomData[offset]
-         | ((u32)gRomData[offset + 1] << 8)
-         | ((u32)gRomData[offset + 2] << 16)
-         | ((u32)gRomData[offset + 3] << 24);
+    return (u32)gRomData[offset] | ((u32)gRomData[offset + 1] << 8) | ((u32)gRomData[offset + 2] << 16) |
+           ((u32)gRomData[offset + 3] << 24);
 }
 
 /*

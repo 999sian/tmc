@@ -5,15 +5,11 @@
 #include "entity.h"
 #include "port_gba_mem.h"
 #include "port_types.h"
+#include "player.h"
 #include "projectile.h"
 #include <stdint.h>
 #include <string.h>
 
-typedef struct {
-    Entity base;
-} PlayerEntity;
-
-extern PlayerEntity gPlayerEntity;
 extern u32 PlayerCanBeMoved(void);
 extern u32 GetTileHazardType(Entity* entity);
 extern u32 GetActTileAtEntity(Entity* entity);
@@ -248,7 +244,7 @@ u32 CalcCollisionStaticEntity(Entity* target, Entity* origin) {
 /* GetCollisionDataAtWorldCoords -- implemented in port_linked_stubs.c */
 /* GetCollisionDataRelativeTo -- implemented in port_linked_stubs.c */
 /* GetFacingDirection -- implemented in port_linked_stubs.c */
-u64 GetFuserId(Entity* entity) {
+static u64 GetFuserData(Entity* entity) {
     static const u32 sEntityTypeBitmasks[4] = {
         0x00FFFFFF, /* id + type + type2 must match */
         0x00FFFF00, /* id + type must match */
@@ -291,6 +287,14 @@ u64 GetFuserId(Entity* entity) {
     }
 
     return 0;
+}
+
+u32 GetFuserId(Entity* entity) {
+    return (u32)GetFuserData(entity);
+}
+
+u64 Port_GetFuserIdAndTextId(Entity* entity) {
+    return GetFuserData(entity);
 }
 /* GetNextFrame — implemented in port_animation.c */
 /* GetNextFunction — implemented in port_linked_stubs.c */

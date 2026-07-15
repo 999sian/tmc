@@ -30,9 +30,7 @@ typedef struct {
     /*0x84*/ u32 unk_84;
 } ChuchuBossStartParticleEntity;
 #else
-typedef struct {
-    Entity base;
-} ChuchuBossStartParticleEntity;
+typedef GenericEntity ChuchuBossStartParticleEntity;
 
 static inline u32* ChuchuBossStartParticle_U32Field(ChuchuBossStartParticleEntity* this, size_t geFieldOffset) {
     return (u32*)Port_GEFieldAddr(&this->base, geFieldOffset);

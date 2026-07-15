@@ -20,6 +20,7 @@
 #endif
 #include "vram.h"
 #include "color.h"
+#include "gba/syscall.h"
 
 typedef struct {
     u8 unk_00;
@@ -1502,8 +1503,8 @@ void sub_0802757C(ChuchuBossEntity* this) {
             if ((s8)this->unk_82.HALF.HI >= (s8)this->unk_81) {
                 CHB_STATE85(this) = 0;
                 if (super->type == 1) {
-                    this->unk_7d = (((ChuchuBossEntity*)super->parent)->unk_81 << 8) /
-                                       CHB_STATE86((ChuchuBossEntity*)super->parent) +
+                    this->unk_7d = Div(((ChuchuBossEntity*)super->parent)->unk_81 << 8,
+                                       CHB_STATE86((ChuchuBossEntity*)super->parent)) +
                                    1;
                 } else {
                     this->unk_7d = 1;
@@ -1516,8 +1517,8 @@ void sub_0802757C(ChuchuBossEntity* this) {
                 cVar2 = 1;
                 CHB_STATE85(this) = cVar2;
                 if (super->type == 1) {
-                    this->unk_7d = (((ChuchuBossEntity*)super->parent)->unk_81 << 8) /
-                                       CHB_STATE86((ChuchuBossEntity*)super->parent) +
+                    this->unk_7d = Div(((ChuchuBossEntity*)super->parent)->unk_81 << 8,
+                                       CHB_STATE86((ChuchuBossEntity*)super->parent)) +
                                    1;
                 } else {
                     this->unk_7d = 1;

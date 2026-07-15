@@ -17,6 +17,7 @@
 #include "kinstone.h"
 #include "main.h"
 #include "map.h"
+#include "manager/diggingCaveEntranceManager.h"
 #include "menu.h"
 #include "message.h"
 #include "npc.h"
@@ -65,33 +66,29 @@ struct_02000040 gUnk_02000040;
 void* gUnk_020000B0 = NULL; /* Entity* pointer (8 bytes on 64-bit) */
 struct_gUnk_020000C0 gUnk_020000C0[0x30];
 Palette gUnk_02001A3C;
-u8 gUnk_02006F00[0x4000] __attribute__((aligned(4))); /* BG tilemap buffer (16 KB) */
-u16 gUnk_0200B640;                                    /* scroll state scalar */
-u16 gUnk_02017830[0x138] __attribute__((aligned(4))); /* palette rotation buffer (624 bytes) */
-u8 gUnk_02017AA0[0x1400] __attribute__((aligned(4))); /* HBlank DMA double buffer, 2×0xA00 */
-u8 gUnk_02017BA0[0x1400]
-    __attribute__((aligned(4))); /* BG2 affine ref lines (TODO: aliases gUnk_02017AA0+0x100 on GBA) */
-void* gUnk_02018EA0 = NULL;      /* LinkedList2* pointer */
+u8 gUnk_02006F00[0x4000] __attribute__((aligned(4)));                    /* BG tilemap buffer (16 KB) */
+u16 gUnk_0200B640;                                                       /* scroll state scalar */
+u16 gUnk_02017830[0x138] __attribute__((aligned(4)));                    /* palette rotation buffer (624 bytes) */
+u16 gUnk_02017AA0[0xA00] __attribute__((aligned(4)));                    /* HBlank DMA double buffer, 2×0xA00 bytes */
+struct BgAffineDstData gUnk_02017BA0[0x140] __attribute__((aligned(4))); /* BG2 affine ref lines */
+LinkedList2* gUnk_02018EA0 = NULL;
 struct_02018EB0 gUnk_02018EB0;
-u8 gUnk_02018EE0[0x1000] __attribute__((aligned(4))); /* window rasterization scratch (s16[], 0x780 used, 0x1000 gap) */
+s16 gUnk_02018EE0[0x800] __attribute__((aligned(4))); /* window rasterization scratch */
 u16 gUnk_02021F00[0x10];                              /* lever timer→length map (32 bytes) */
 u8 gUnk_020227DC[0xC];                                /* text number buffer slot 0 */
 struct_020227E8 gUnk_020227E8[1];                     /* text variable slot 1 (8 bytes) */
 u8 gUnk_020227F0[0x8];                                /* text variable slot 2 (8 bytes) */
 u8 gUnk_020227F8[0x8];                                /* text variable slot 3 (8 bytes) */
 u8 gUnk_02022800[0x20] __attribute__((aligned(4)));   /* text variable slot 4 (larger backing buffer) */
-u8 gUnk_02022830[0x1800] __attribute__((aligned(4))); /* u16[0xc00] on GBA; also reused as temp MapDataDefinition */
+u16 gUnk_02022830[0xC00] __attribute__((aligned(4))); /* also reused as a temporary MapDataDefinition */
 u8 gUnk_02024048 = 0;                                 /* pending sound count (used by DrawEntity) */
-u8 gUnk_020246B0[0x1800] __attribute__((aligned(4))); /* u16[0xc00] scroll tilemap buffer */
-u8 gUnk_02033290[0x1000] __attribute__((aligned(8))); /* Manager pool: 32 Temp structs (128 bytes each on 64-bit) */
+u16 gUnk_020246B0[0xC00] __attribute__((aligned(4))); /* scroll tilemap buffer */
 u8 gUnk_020342F8[0x100] __attribute__((aligned(4)));  /* delayedEntityLoad array */
-u8 gUnk_02034330[0x20] __attribute__((aligned(4)));   /* struct_gUnk_02034330 (24 bytes) */
 struct_02034480 gUnk_02034480;
 u8 gUnk_02034492[0x10] __attribute__((aligned(4))); /* u8 array (pauseMenu) */
-u8 gUnk_020344A0[0x10] __attribute__((aligned(4))); /* u8[8] (figurineMenu) */
+u8 gUnk_020344A0[8] __attribute__((aligned(4)));    /* figurineMenu */
 struct_020354C0 gUnk_020354C0[32];
 /* gUnk_02035542 is aliased to gzHeap+2 via macro in common.c (PC_PORT) */
-u8 gUnk_02036540[0x80] __attribute__((aligned(8))); /* WStruct[4] (text slot pool, 64 bytes on 64-bit) */
 /* Aliased to gEwram[0x36A58] in text.c */
 u32 gUnk_02036A58_storage = 0x02036A58;
 /* Aliased to gEwram[0x36AD8] in text.c */
@@ -178,7 +175,7 @@ u8 gMapData[0xE00000] __attribute__((aligned(4))); /* ~14 MB */
 // bytes and copy from ROM during Port_InitCollisionMtx().
 u8 gCollisionMtx[173 * 34 * 12];
 
-u8 gUpdateContext[64] __attribute__((aligned(4)));
+UpdateContext gUpdateContext;
 
 u8 gInteractableObjects[0x300]
     __attribute__((aligned(8))); /* 32 InteractableObject entries * 24 bytes on 64-bit = 768 = 0x300 */
@@ -345,22 +342,69 @@ u8 gMPlayTracks[M4A_MAX_TRACK_INDEX * sizeof(MusicPlayerTrack)] __attribute__((a
 u8 gMPlayMemAccArea[0x10] __attribute__((aligned(4)));
 
 // BGM song headers (ROM data stubs)
-u8 bgmBeanstalk[0x10], bgmBeatVaati[0x10], bgmBossTheme[0x10], bgmCastleCollapse[0x10];
-u8 bgmCastleMotif[0x10], bgmCastleTournament[0x10], bgmCastorWilds[0x10], bgmCaveOfFlames[0x10];
-u8 bgmCloudTops[0x10], bgmCredits[0x10], bgmCrenelStorm[0x10], bgmCuccoMinigame[0x10];
-u8 bgmDarkHyruleCastle[0x10], bgmDeepwoodShrine[0x10], bgmDiggingCave[0x10], bgmDungeon[0x10];
-u8 bgmElementGet[0x10], bgmElementTheme[0x10], bgmElementalSanctuary[0x10], bgmEzloGet[0x10];
-u8 bgmEzloStory[0x10], bgmEzloTheme[0x10], bgmFairyFountain[0x10], bgmFairyFountain2[0x10];
-u8 bgmFestivalApproach[0x10], bgmFightTheme[0x10], bgmFightTheme2[0x10], bgmFileSelect[0x10];
-u8 bgmFortressOfWinds[0x10], bgmGameover[0x10], bgmHouse[0x10], bgmHyruleCastle[0x10];
-u8 bgmHyruleCastleNointro[0x10], bgmHyruleField[0x10], bgmHyruleTown[0x10], bgmIntroCutscene[0x10];
-u8 bgmLearnScroll[0x10], bgmLostWoods[0x10], bgmLttpTitle[0x10], bgmMinishCap[0x10];
-u8 bgmMinishVillage[0x10], bgmMinishWoods[0x10], bgmMtCrenel[0x10], bgmPalaceOfWinds[0x10];
-u8 bgmPicoriFestival[0x10], bgmRoyalCrypt[0x10], bgmRoyalValley[0x10], bgmSavingZelda[0x10];
-u8 bgmSecretCastleEntrance[0x10], bgmStory[0x10], bgmSwiftbladeDojo[0x10], bgmSyrupTheme[0x10];
-u8 bgmTempleOfDroplets[0x10], bgmTitleScreen[0x10], bgmUnused[0x10], bgmVaatiMotif[0x10];
-u8 bgmVaatiReborn[0x10], bgmVaatiTheme[0x10], bgmVaatiTransfigured[0x10], bgmVaatiWrath[0x10];
-u8 bgmWindRuins[0x10];
+#define SONG_STUB(name) const SongHeader name = { 0 }
+SONG_STUB(bgmBeanstalk);
+SONG_STUB(bgmBeatVaati);
+SONG_STUB(bgmBossTheme);
+SONG_STUB(bgmCastleCollapse);
+SONG_STUB(bgmCastleMotif);
+SONG_STUB(bgmCastleTournament);
+SONG_STUB(bgmCastorWilds);
+SONG_STUB(bgmCaveOfFlames);
+SONG_STUB(bgmCloudTops);
+SONG_STUB(bgmCredits);
+SONG_STUB(bgmCrenelStorm);
+SONG_STUB(bgmCuccoMinigame);
+SONG_STUB(bgmDarkHyruleCastle);
+SONG_STUB(bgmDeepwoodShrine);
+SONG_STUB(bgmDiggingCave);
+SONG_STUB(bgmDungeon);
+SONG_STUB(bgmElementGet);
+SONG_STUB(bgmElementTheme);
+SONG_STUB(bgmElementalSanctuary);
+SONG_STUB(bgmEzloGet);
+SONG_STUB(bgmEzloStory);
+SONG_STUB(bgmEzloTheme);
+SONG_STUB(bgmFairyFountain);
+SONG_STUB(bgmFairyFountain2);
+SONG_STUB(bgmFestivalApproach);
+SONG_STUB(bgmFightTheme);
+SONG_STUB(bgmFightTheme2);
+SONG_STUB(bgmFileSelect);
+SONG_STUB(bgmFortressOfWinds);
+SONG_STUB(bgmGameover);
+SONG_STUB(bgmHouse);
+SONG_STUB(bgmHyruleCastle);
+SONG_STUB(bgmHyruleCastleNointro);
+SONG_STUB(bgmHyruleField);
+SONG_STUB(bgmHyruleTown);
+SONG_STUB(bgmIntroCutscene);
+SONG_STUB(bgmLearnScroll);
+SONG_STUB(bgmLostWoods);
+SONG_STUB(bgmLttpTitle);
+SONG_STUB(bgmMinishCap);
+SONG_STUB(bgmMinishVillage);
+SONG_STUB(bgmMinishWoods);
+SONG_STUB(bgmMtCrenel);
+SONG_STUB(bgmPalaceOfWinds);
+SONG_STUB(bgmPicoriFestival);
+SONG_STUB(bgmRoyalCrypt);
+SONG_STUB(bgmRoyalValley);
+SONG_STUB(bgmSavingZelda);
+SONG_STUB(bgmSecretCastleEntrance);
+SONG_STUB(bgmStory);
+SONG_STUB(bgmSwiftbladeDojo);
+SONG_STUB(bgmSyrupTheme);
+SONG_STUB(bgmTempleOfDroplets);
+SONG_STUB(bgmTitleScreen);
+SONG_STUB(bgmUnused);
+SONG_STUB(bgmVaatiMotif);
+SONG_STUB(bgmVaatiReborn);
+SONG_STUB(bgmVaatiTheme);
+SONG_STUB(bgmVaatiTransfigured);
+SONG_STUB(bgmVaatiWrath);
+SONG_STUB(bgmWindRuins);
+#undef SONG_STUB
 
 // Linker symbols (unused on PC)
 u8 RAMFUNCS_END[4];
@@ -2072,7 +2116,6 @@ void* Subtask_MapHint_Functions[16];
 // Various game data
 u32 gFixedTypeGfxData[528];
 // gCaveBorderMapData — now provided by src/data/caveBorderMapData.c
-u8 gMessageChoices[32] __attribute__((aligned(4)));
 // gOverworldLocations — now provided by src/data/areaMetadata.c
 u16* gMoreSpritePtrs[16];
 u8 gExtraFrameOffsets[4352];
@@ -2093,47 +2136,56 @@ void* gLilypadRails[32];
  * Allocate the full 416-color (832-byte) block; port_rom.c populates it
  * from gGlobalGfxAndPalettes after ROM load. */
 u16 gPalette_549[0x1A0];
-void* gTranslations[16];
+u32* gTranslations[16];
 // gWallMasterScreenTransitions — now provided by src/data/screenTransitions.c
-void* gZeldaFollowerText[8];
+u16* gZeldaFollowerText[8];
 Frame* gSpriteAnimations_322[128];
 u32 gSpriteAnimations_GhostBrothers[64];
-u8 gDiggingCaveEntranceTransition[32] __attribute__((aligned(4)));
+DiggingCaveEntranceTransition gDiggingCaveEntranceTransition;
 u8 RupeeKeyDigits[16];
 
 // Player macros — now provided by src/data/data_080046A4.c
 
 // Entity data (ROM data — all zero-init stubs)
-u8 Entities_HouseInteriors1_Mayor_080D6210[64];
-u8 Entities_MinishPaths_MayorsCabin_gUnk_080D6138[64];
-u8 UpperInn_Din[64], UpperInn_Farore[64], UpperInn_Nayru[64];
-u8 UpperInn_NoDin[64], UpperInn_NoFarore[64], UpperInn_NoNayru[64], UpperInn_Oracles[64];
-u8 gUnk_additional_8_DeepwoodShrine_StairsToB1[64];
-u8 gUnk_additional_8_HouseInteriors1_Library1F[64];
-u8 gUnk_additional_8_HouseInteriors3_BorlovEntrance[64];
-u8 gUnk_additional_8_HyruleCastle_3[64];
+#define ENTITY_DATA_STUB(name, bytes)                     \
+    u8 name##_storage[bytes] __attribute__((aligned(4))); \
+    extern EntityData name __attribute__((alias(#name "_storage")))
+ENTITY_DATA_STUB(Entities_HouseInteriors1_Mayor_080D6210, 64);
+ENTITY_DATA_STUB(Entities_MinishPaths_MayorsCabin_gUnk_080D6138, 64);
+ENTITY_DATA_STUB(UpperInn_Din, 64);
+ENTITY_DATA_STUB(UpperInn_Farore, 64);
+ENTITY_DATA_STUB(UpperInn_Nayru, 64);
+ENTITY_DATA_STUB(UpperInn_NoDin, 64);
+ENTITY_DATA_STUB(UpperInn_NoFarore, 64);
+ENTITY_DATA_STUB(UpperInn_NoNayru, 64);
+ENTITY_DATA_STUB(UpperInn_Oracles, 64);
+ENTITY_DATA_STUB(gUnk_additional_8_DeepwoodShrine_StairsToB1, 64);
+ENTITY_DATA_STUB(gUnk_additional_8_HouseInteriors1_Library1F, 64);
+ENTITY_DATA_STUB(gUnk_additional_8_HouseInteriors3_BorlovEntrance, 64);
+ENTITY_DATA_STUB(gUnk_additional_8_HyruleCastle_3, 64);
 /* gUnk_additional_8_MelarisMine_Main needs at least 96 bytes for the
  * post-state-change entity list (2 mountain minishes + Melari himself
  * + 2 cutscene-sword objects + terminator). The smaller default size
  * truncated past Melari, leaving the room with garbage entities the
  * runtime parsed as kind=GROUND_ITEM (visible as the "double heart
  * containers" in #42). */
-u8 gUnk_additional_8_MelarisMine_Main[128];
-u8 gUnk_additional_8_PalaceOfWinds_GyorgTornado[64];
+ENTITY_DATA_STUB(gUnk_additional_8_MelarisMine_Main, 128);
+ENTITY_DATA_STUB(gUnk_additional_8_PalaceOfWinds_GyorgTornado, 64);
 /* ASan caught this at startup: Port_InitDataStubs (data_stubs_autogen.c:653)
  * copies 0x50 (80) bytes here from ROM, but the storage was sized 64 — the
  * memcpy overflowed 16 bytes into gUnk_additional_9_HouseInteriors2_Percy. */
-u8 gUnk_additional_9_HouseInteriors1_Library1F[128];
-u8 gUnk_additional_9_HouseInteriors2_Percy[64];
-u8 gUnk_additional_9_HouseInteriors3_BorlovEntrance[64];
-u8 gUnk_additional_9_MelarisMine_Main[64];
-u8 gUnk_additional_9_PalaceOfWinds_GyorgTornado[64];
-u8 gUnk_additional_a_CaveOfFlamesBoss_Main[64];
-u8 gUnk_additional_a_DeepwoodShrineBoss_Main[64];
-u8 gUnk_additional_a_HouseInteriors2_Percy[64];
-u8 gUnk_additional_a_HouseInteriors3_BorlovEntrance[64];
-u8 gUnk_additional_a_TempleOfDroplets_BigOcto[64];
-u8 gUnk_additional_c_HouseInteriors2_Romio[64];
+ENTITY_DATA_STUB(gUnk_additional_9_HouseInteriors1_Library1F, 128);
+ENTITY_DATA_STUB(gUnk_additional_9_HouseInteriors2_Percy, 64);
+ENTITY_DATA_STUB(gUnk_additional_9_HouseInteriors3_BorlovEntrance, 64);
+ENTITY_DATA_STUB(gUnk_additional_9_MelarisMine_Main, 64);
+ENTITY_DATA_STUB(gUnk_additional_9_PalaceOfWinds_GyorgTornado, 64);
+ENTITY_DATA_STUB(gUnk_additional_a_CaveOfFlamesBoss_Main, 64);
+ENTITY_DATA_STUB(gUnk_additional_a_DeepwoodShrineBoss_Main, 64);
+ENTITY_DATA_STUB(gUnk_additional_a_HouseInteriors2_Percy, 64);
+ENTITY_DATA_STUB(gUnk_additional_a_HouseInteriors3_BorlovEntrance, 64);
+ENTITY_DATA_STUB(gUnk_additional_a_TempleOfDroplets_BigOcto, 64);
+ENTITY_DATA_STUB(gUnk_additional_c_HouseInteriors2_Romio, 64);
+#undef ENTITY_DATA_STUB
 u32 Enemies_LakeHylia_Main;
 u32 Area_HyruleTown[16];
 
@@ -2142,18 +2194,35 @@ u16 script_08012C48;
 u16 script_08015B14;
 u16 script_BedAtSimons;
 u16 script_BedInLinksRoom;
-u8 script_BombMinish[32], script_BombMinishKinstone[32];
+#define SCRIPT_STUB(name) Script name
+SCRIPT_STUB(script_BombMinish);
+SCRIPT_STUB(script_BombMinishKinstone);
 u16 script_BusinessScrubIntro[16];
 u16 script_CutsceneMiscObjectSwordInChest;
 u16 script_CutsceneMiscObjectTheLittleHat;
 u16 script_EzloTalkOcarina[16];
-u8 script_ForestMinish1[32], script_ForestMinish2[32], script_ForestMinish3[32];
-u8 script_ForestMinish4[32], script_ForestMinish5[32], script_ForestMinish6[32];
-u8 script_ForestMinish7[32], script_ForestMinish8[32], script_ForestMinish9[32];
-u8 script_ForestMinish10[32], script_ForestMinish11[32], script_ForestMinish12[32];
-u8 script_ForestMinish13[32], script_ForestMinish14[32], script_ForestMinish15[32];
-u8 script_ForestMinish16[32], script_ForestMinish17[32], script_ForestMinish18[32];
-u8 script_ForestMinish19[32], script_ForestMinish20[32], script_ForestMinish21[32];
+SCRIPT_STUB(script_ForestMinish1);
+SCRIPT_STUB(script_ForestMinish2);
+SCRIPT_STUB(script_ForestMinish3);
+SCRIPT_STUB(script_ForestMinish4);
+SCRIPT_STUB(script_ForestMinish5);
+SCRIPT_STUB(script_ForestMinish6);
+SCRIPT_STUB(script_ForestMinish7);
+SCRIPT_STUB(script_ForestMinish8);
+SCRIPT_STUB(script_ForestMinish9);
+SCRIPT_STUB(script_ForestMinish10);
+SCRIPT_STUB(script_ForestMinish11);
+SCRIPT_STUB(script_ForestMinish12);
+SCRIPT_STUB(script_ForestMinish13);
+SCRIPT_STUB(script_ForestMinish14);
+SCRIPT_STUB(script_ForestMinish15);
+SCRIPT_STUB(script_ForestMinish16);
+SCRIPT_STUB(script_ForestMinish17);
+SCRIPT_STUB(script_ForestMinish18);
+SCRIPT_STUB(script_ForestMinish19);
+SCRIPT_STUB(script_ForestMinish20);
+SCRIPT_STUB(script_ForestMinish21);
+#undef SCRIPT_STUB
 u16 script_MazaalBossObjectMazaal[16];
 u16 script_MazaalMacroDefeated[16];
 u8 script_MinishVillageObjectLeftStoneOpening[4];

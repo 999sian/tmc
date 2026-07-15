@@ -85,7 +85,7 @@ typedef struct {
 typedef struct {
     u8 filler[0xA00];
 } struct_02017AA0;
-extern struct_02017AA0 MAY_ALIAS gUnk_02017AA0[];
+extern u16 MAY_ALIAS gUnk_02017AA0[];
 
 extern const PaletteGroup* gPaletteGroups[];
 #ifdef PC_PORT
@@ -103,9 +103,9 @@ void SortKinstoneBag(void);
 
 extern void* GetRoomProperty(u32, u32, u32);
 
-extern u8 gMapData;
+extern u8 gMapData[];
 extern const DungeonLayout* const* const gDungeonLayouts[];
-extern u8 gMapDataBottomSpecial[];
+extern u16 gMapDataBottomSpecial[];
 
 u32 sub_0801DF10(const DungeonLayout* lyt);
 bool32 IsRoomVisited(TileEntity* tileEntity, u32 bank);
@@ -123,12 +123,6 @@ enum DungeonMapObjectTypes {
     DMO_TYPE_ENTRY,
     DMO_TYPE_BOSS,
 };
-
-typedef struct {
-    u8 type; /**< @see DungeonMapObjectTypes */
-    u8 x;
-    u8 y;
-} PACKED DungeonMapObject;
 
 #ifdef PC_PORT
 #define COMMON_AREA_TABLE_COUNT 0x90
@@ -920,7 +914,7 @@ void DrawDungeonFeatures(u32 floor, void* data, u32 size) {
             // Copies 0x400 bytes even though the data is less most of the time.
             /* gDungeonLayouts is a compiled table — mapDataOffset is a baked
              * USA gMapData index; remap for EU/JP (garbage pause-menu maps). */
-            DmaCopy32(3, &gMapData + Port_RemapMapOffset(layout->mapDataOffset), &gMapDataBottomSpecial, 0x400);
+            DmaCopy32(3, gMapData + Port_RemapMapOffset(layout->mapDataOffset), gMapDataBottomSpecial, 0x400);
 
             roomHeader = Common_GetAreaRoomHeaderSafe(layout->area, layout->room);
             if (roomHeader == NULL) {
@@ -936,7 +930,7 @@ void DrawDungeonFeatures(u32 floor, void* data, u32 size) {
             tmp = (width + 3) / 4;
 
             for (y = 0; y < height; y++) {
-                ptr = gMapDataBottomSpecial + y * tmp;
+                ptr = (u8*)gMapDataBottomSpecial + y * tmp;
                 for (x = 0; x < width; x++) {
                     tmp2 = mapX + x;
                     color = sub_0801DF78(sub_0801DF60(x, ptr), features);
@@ -1095,9 +1089,9 @@ void sub_0801E154(u32 a1) {
 }
 
 void sub_0801E160(u32 a1, u32 a2, u32 a3) {
-    MemClear(&gUnk_02017AA0[gUnk_03003DE4[0]], sizeof(gUnk_02017AA0[gUnk_03003DE4[0]]));
+    MemClear(&((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]], sizeof(struct_02017AA0));
     sub_0801E290(a1, a2, a3);
-    SetVBlankDMA((u16*)&gUnk_02017AA0[gUnk_03003DE4[0]], (u16*)REG_ADDR_WIN0H,
+    SetVBlankDMA((u16*)&((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]], (u16*)REG_ADDR_WIN0H,
                  ((DMA_ENABLE | DMA_START_HBLANK | DMA_16BIT | DMA_REPEAT | DMA_SRC_INC | DMA_DEST_RELOAD) << 16) +
                      0x1);
 }
@@ -1111,10 +1105,10 @@ void sub_0801E1B8(u32 a1, u32 a2) {
 }
 
 void sub_0801E1EC(u32 a1, u32 a2, u32 a3) {
-    MemClear(&gUnk_02017AA0[gUnk_03003DE4[0]], sizeof(gUnk_02017AA0[gUnk_03003DE4[0]]));
+    MemClear(&((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]], sizeof(struct_02017AA0));
     sub_0801E24C(a3, 0);
     sub_0801E290(a1, a2, a3);
-    SetVBlankDMA((u16*)&gUnk_02017AA0[gUnk_03003DE4[0]], (u16*)REG_ADDR_WIN0H,
+    SetVBlankDMA((u16*)&((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]], (u16*)REG_ADDR_WIN0H,
                  ((DMA_ENABLE | DMA_START_HBLANK | DMA_16BIT | DMA_REPEAT | DMA_SRC_INC | DMA_DEST_RELOAD) << 16) +
                      0x1);
 }
@@ -1153,7 +1147,7 @@ void sub_0801E290(u32 param_1, u32 param_2, u32 count) {
     /* On GBA, pointer arithmetic wraps at 32 bits, so starting from filler[-2]
      * (param_2=0xFFFFFFFF) works. On 64-bit, that produces an invalid address.
      * Use index-based access instead of pointer incrementing. */
-    u8* base = gUnk_02017AA0[gUnk_03003DE4[0]].filler;
+    u8* base = ((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler;
     uVar5 = uVar7 = param_2;
     puVar6 = gUnk_02018EE0;
 
@@ -1286,9 +1280,9 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
     sub_0801E64C(x1, y1, x2, y2, 0);
     sub_0801E64C(x1, y1, x3, y3, 1);
     sub_0801E64C(x2, y2, x3, y3, 2);
-    MemClear(gUnk_02017AA0[gUnk_03003DE4[0]].filler, 0xa00);
+    MemClear(((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler, 0xa00);
     ptr1 = (u32*)gUnk_02018EE0;
-    ptr2 = gUnk_02017AA0[gUnk_03003DE4[0]].filler;
+    ptr2 = ((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler;
     for (y1 = 0xa0; y1 > 0; y1--, ptr2 += 2) {
         x1 = ptr1[0];
         x2 = ptr1[1];
@@ -1318,7 +1312,7 @@ void sub_0801E49C(s32 baseX, s32 baseY, s32 radius, u32 baseAngle) {
             }
         }
     }
-    SetVBlankDMA((u16*)(gUnk_02017AA0[gUnk_03003DE4[0]].filler), (u16*)REG_ADDR_WIN0H,
+    SetVBlankDMA((u16*)((struct_02017AA0*)gUnk_02017AA0)[gUnk_03003DE4[0]].filler, (u16*)REG_ADDR_WIN0H,
                  ((DMA_ENABLE | DMA_START_HBLANK | DMA_16BIT | DMA_REPEAT | DMA_SRC_INC | DMA_DEST_RELOAD) << 16) +
                      0x1);
 }

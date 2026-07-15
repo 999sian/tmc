@@ -8,81 +8,6 @@
 #include "physics.h"
 #include "room.h"
 #include "script.h"
-#ifdef PC_PORT
-#include "port_entity_ctx.h"
-#ifdef PC_PORT
-#include <stdio.h>   /* fprintf for the entity-list cycle warning in GetEmptyEntity */
-
-/* Bounded-iteration safety shared by every gEntityLists walker in this
- * file. The Lake Hylia warp repro produced a `next`-pointer cycle that
- * didn't include the list head sentinel, so the unguarded `i != list`
- * checks spun forever. Cap at 4× MAX_ENTITIES so any real list (< 80
- * entries) is well within bounds; once-per-list-per-session diagnostic
- * lets us find the corruption source from stderr without gdb. Same
- * defensive style as the #93 NULL-guard above. */
-#define ENT_WALK_CAP 256
-#define ENT_WALK_TRIPPED(_n) ((_n) >= ENT_WALK_CAP)
-static inline void Port_LogEntityListCycle_(const char* fn, int listIdx,
-                                            void* lastEnt, unsigned kind,
-                                            unsigned id, unsigned flags) {
-    /* One bit per (function, list-index) pair so a misbehaving cycle
-     * doesn't spam stderr every frame, but we still see new sites. */
-    static unsigned long sWarned = 0;
-    const unsigned bit = ((unsigned)((uintptr_t)fn >> 4) ^ (unsigned)listIdx) & 63u;
-    const unsigned long mask = 1UL << bit;
-    if (sWarned & mask) return;
-    sWarned |= mask;
-    fprintf(stderr,
-            "[entity] %s: cycle detected on gEntityLists[%d] after %d steps; "
-            "last_ent=%p kind=%u id=0x%x flags=0x%x. Bailing.\n",
-            fn, listIdx, ENT_WALK_CAP, lastEnt, kind, id, flags);
-}
-#define ENT_WALK_WARN(_lst, _ent) \
-    Port_LogEntityListCycle_(__func__, \
-        (int)((LinkedList*)(_lst) - gEntityLists), \
-        (void*)(_ent), \
-        (_ent) ? (unsigned)(_ent)->kind  : 0u, \
-        (_ent) ? (unsigned)(_ent)->id    : 0u, \
-        (_ent) ? (unsigned)(_ent)->flags : 0u)
-
-/* Pointer-range sanity check. Lake Hylia warp repro showed an entity
- * list with a `next` pointing at 0x1100 (a stray GBA EWRAM-relative
- * value that escaped widening) — dereferencing that crashes. Any
- * Entity* we walk must live in one of the four legitimate pools:
- *   - gPlayerEntity              (single GenericEntity)
- *   - gAuxPlayerEntities[0..6]   (7 GenericEntities)
- *   - gEntities[0..MAX_ENTITIES-1]
- *   - &gEntityLists[0..8]        (sentinels — the doubly-linked-list
- *                                  walkers compare against them to stop)
- * If a `next` falls outside all four, the list is corrupt; treat as
- * end-of-list and let the cycle-cap log + repair kick in. */
-int Port_IsValidEntityAddr(const void* p) {
-    if (p == NULL) return 0;
-    const uintptr_t a = (uintptr_t)p;
-    if (a == (uintptr_t)(void*)&gPlayerEntity) return 1;
-    if (a >= (uintptr_t)(void*)&gAuxPlayerEntities[0] &&
-        a <= (uintptr_t)(void*)&gAuxPlayerEntities[MAX_AUX_PLAYER_ENTITIES - 1]) return 1;
-    if (a >= (uintptr_t)(void*)&gEntities[0] &&
-        a <= (uintptr_t)(void*)&gEntities[MAX_ENTITIES - 1]) return 1;
-    if (a >= (uintptr_t)(void*)&gEntityLists[0] &&
-        a <  (uintptr_t)(void*)&gEntityLists[9]) return 1;
-    /* Manager pool — gUnk_02033290 holds 32 Temp entries of 128 bytes
-     * each on PC (4096 bytes total). Without this entry the entity-list
-     * walker mis-classifies live managers (TempleOfDropletsManager etc.)
-     * as out-of-pool garbage and resets the lists, orphaning them out
-     * of the pool. Manifested as Temple of Droplets sunbeam never
-     * appearing in room 0x21 (#75). gUnk_02033290 is declared as
-     * `extern Manager gUnk_02033290;` later in this file so we reuse it. */
-    {
-        extern Manager gUnk_02033290;
-        const uintptr_t mgrBase = (uintptr_t)(void*)&gUnk_02033290;
-        const uintptr_t mgrEnd  = mgrBase + 32u * 128u;
-        if (a >= mgrBase && a < mgrEnd) return 1;
-    }
-    return 0;
-}
-#endif
-#endif
 
 typedef struct Temp {
     void* prev;
@@ -99,10 +24,92 @@ typedef struct Temp {
     u8 _0[0x38];
 #endif
 } Temp;
+
+#ifdef PC_PORT
+Temp gUnk_02033290[32] __attribute__((aligned(8)));
+#endif
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#ifdef PC_PORT
+#include <stdio.h> /* fprintf for the entity-list cycle warning in GetEmptyEntity */
+
+/* Bounded-iteration safety shared by every gEntityLists walker in this
+ * file. The Lake Hylia warp repro produced a `next`-pointer cycle that
+ * didn't include the list head sentinel, so the unguarded `i != list`
+ * checks spun forever. Cap at 4× MAX_ENTITIES so any real list (< 80
+ * entries) is well within bounds; once-per-list-per-session diagnostic
+ * lets us find the corruption source from stderr without gdb. Same
+ * defensive style as the #93 NULL-guard above. */
+#define ENT_WALK_CAP 256
+#define ENT_WALK_TRIPPED(_n) ((_n) >= ENT_WALK_CAP)
+static inline void Port_LogEntityListCycle_(const char* fn, int listIdx, void* lastEnt, unsigned kind, unsigned id,
+                                            unsigned flags) {
+    /* One bit per (function, list-index) pair so a misbehaving cycle
+     * doesn't spam stderr every frame, but we still see new sites. */
+    static unsigned long sWarned = 0;
+    const unsigned bit = ((unsigned)((uintptr_t)fn >> 4) ^ (unsigned)listIdx) & 63u;
+    const unsigned long mask = 1UL << bit;
+    if (sWarned & mask)
+        return;
+    sWarned |= mask;
+    fprintf(stderr,
+            "[entity] %s: cycle detected on gEntityLists[%d] after %d steps; "
+            "last_ent=%p kind=%u id=0x%x flags=0x%x. Bailing.\n",
+            fn, listIdx, ENT_WALK_CAP, lastEnt, kind, id, flags);
+}
+#define ENT_WALK_WARN(_lst, _ent)                                                                      \
+    Port_LogEntityListCycle_(__func__, (int)((LinkedList*)(_lst) - gEntityLists), (void*)(_ent),       \
+                             (_ent) ? (unsigned)(_ent)->kind : 0u, (_ent) ? (unsigned)(_ent)->id : 0u, \
+                             (_ent) ? (unsigned)(_ent)->flags : 0u)
+
+/* Pointer-range sanity check. Lake Hylia warp repro showed an entity
+ * list with a `next` pointing at 0x1100 (a stray GBA EWRAM-relative
+ * value that escaped widening) — dereferencing that crashes. Any
+ * Entity* we walk must live in one of the four legitimate pools:
+ *   - gPlayerEntity              (single GenericEntity)
+ *   - gAuxPlayerEntities[0..6]   (7 GenericEntities)
+ *   - gEntities[0..MAX_ENTITIES-1]
+ *   - &gEntityLists[0..8]        (sentinels — the doubly-linked-list
+ *                                  walkers compare against them to stop)
+ * If a `next` falls outside all four, the list is corrupt; treat as
+ * end-of-list and let the cycle-cap log + repair kick in. */
+int Port_IsValidEntityAddr(const void* p) {
+    if (p == NULL)
+        return 0;
+    const uintptr_t a = (uintptr_t)p;
+    if (a == (uintptr_t)(void*)&gPlayerEntity)
+        return 1;
+    if (a >= (uintptr_t)(void*)&gAuxPlayerEntities[0] &&
+        a <= (uintptr_t)(void*)&gAuxPlayerEntities[MAX_AUX_PLAYER_ENTITIES - 1])
+        return 1;
+    if (a >= (uintptr_t)(void*)&gEntities[0] && a <= (uintptr_t)(void*)&gEntities[MAX_ENTITIES - 1])
+        return 1;
+    if (a >= (uintptr_t)(void*)&gEntityLists[0] && a < (uintptr_t)(void*)&gEntityLists[9])
+        return 1;
+    /* Manager pool — gUnk_02033290 holds 32 Temp entries of 128 bytes
+     * each on PC (4096 bytes total). Without this entry the entity-list
+     * walker mis-classifies live managers (TempleOfDropletsManager etc.)
+     * as out-of-pool garbage and resets the lists, orphaning them out
+     * of the pool. Manifested as Temple of Droplets sunbeam never
+     * appearing in room 0x21 (#75). */
+    {
+        extern Temp gUnk_02033290[32];
+        const uintptr_t mgrBase = (uintptr_t)(void*)&gUnk_02033290;
+        const uintptr_t mgrEnd = mgrBase + 32u * 128u;
+        if (a >= mgrBase && a < mgrEnd)
+            return 1;
+    }
+    return 0;
+}
+#endif
+#endif
+
 #include "tiles.h"
 
 extern u8 gUpdateVisibleTiles;
+#ifndef PC_PORT
 extern Manager gUnk_02033290;
+#endif
 void UpdatePlayerInput(void);
 void ClearHitboxList(void);
 void sub_0805EE88(void);
@@ -121,12 +128,6 @@ static void UpdatePriorityTimer(void);
 static void ReleaseTransitionManager(void*);
 static void UnlinkEntity(Entity*);
 
-typedef struct {
-    void* table;
-    void* list_top;
-    Entity* current_entity;
-    void* restore_sp;
-} UpdateContext;
 extern UpdateContext gUpdateContext;
 
 // List by entity kind.
@@ -445,9 +446,7 @@ Entity* GetEmptyEntity() {
 #endif
         while ((intptr_t)currentEnt != (intptr_t)listPtr
 #ifdef PC_PORT
-               && currentEnt != NULL
-               && safety < kMaxSteps
-               && Port_IsValidEntityAddr(currentEnt)
+               && currentEnt != NULL && safety < kMaxSteps && Port_IsValidEntityAddr(currentEnt)
 #endif
         ) {
             if (currentEnt->base.kind != MANAGER &&
@@ -474,34 +473,30 @@ Entity* GetEmptyEntity() {
          * eliminated the largest source — the post-warp lists being
          * iterated by stale `properties[1]` — but at least one more
          * remains). */
-        if (safety >= kMaxSteps
-            || (currentEnt != NULL
-                && (intptr_t)currentEnt != (intptr_t)listPtr
-                && !Port_IsValidEntityAddr(currentEnt))) {
+        if (safety >= kMaxSteps ||
+            (currentEnt != NULL && (intptr_t)currentEnt != (intptr_t)listPtr && !Port_IsValidEntityAddr(currentEnt))) {
             static unsigned char sWarned = 0;
             const int listIdx = (int)(listPtr - gEntityLists);
             const unsigned char bit = (unsigned char)(1u << (listIdx & 7));
             if (!(sWarned & bit)) {
                 sWarned |= bit;
                 fprintf(stderr,
-                    "[entity] GetEmptyEntity: %s on gEntityLists[%d] "
-                    "after %d steps; last_ent=%p. Repairing list.\n",
-                    (safety >= kMaxSteps) ? "cycle detected" : "out-of-pool next",
-                    listIdx, safety, (void*)currentEnt);
+                        "[entity] GetEmptyEntity: %s on gEntityLists[%d] "
+                        "after %d steps; last_ent=%p. Repairing list.\n",
+                        (safety >= kMaxSteps) ? "cycle detected" : "out-of-pool next", listIdx, safety,
+                        (void*)currentEnt);
             }
             /* Splice the cycle/garbage point back to the sentinel.
              * Only do this if currentEnt is a writable pool address —
              * writing through an out-of-pool pointer corrupts unrelated
              * memory. If it's out-of-pool we can't safely splice; reset
              * the list head instead. */
-            if (currentEnt != NULL
-                && (intptr_t)currentEnt != (intptr_t)listPtr
-                && Port_IsValidEntityAddr(currentEnt)) {
+            if (currentEnt != NULL && (intptr_t)currentEnt != (intptr_t)listPtr && Port_IsValidEntityAddr(currentEnt)) {
                 currentEnt->base.next = (Entity*)listPtr;
                 listPtr->last = (Entity*)currentEnt;
             } else {
                 listPtr->first = (Entity*)listPtr;
-                listPtr->last  = (Entity*)listPtr;
+                listPtr->last = (Entity*)listPtr;
             }
         }
 #endif
@@ -536,12 +531,15 @@ Entity* GetEmptyEntity() {
             Entity* ent = &gEntities[i].base;
             /* Live (kind!=0 or flags set) but orphaned (prev/next outside
              * all valid entity pool ranges) → recover. */
-            if (ent == gUpdateContext.current_entity) continue;
+            if (ent == gUpdateContext.current_entity)
+                continue;
             const int liveFlag = (ent->flags & 0xFF) != 0 || ent->kind != 0;
-            if (!liveFlag) continue;
+            if (!liveFlag)
+                continue;
             const int prevOk = Port_IsValidEntityAddr(ent->prev) || ent->prev == NULL;
             const int nextOk = Port_IsValidEntityAddr(ent->next) || ent->next == NULL;
-            if (prevOk && nextOk) continue;
+            if (prevOk && nextOk)
+                continue;
             /* Orphan. Reclaim it. */
             ent->prev = (Entity*)(intptr_t)-1;
             ent->next = NULL;
@@ -556,15 +554,14 @@ Entity* GetEmptyEntity() {
             if (!sLoggedRecovery) {
                 sLoggedRecovery = 1;
                 fprintf(stderr,
-                    "[entity] GetEmptyEntity: recovered %d orphaned pool slots "
-                    "(gEntCount now=%u). One-time warning.\n",
-                    recovered, (unsigned)gEntCount);
+                        "[entity] GetEmptyEntity: recovered %d orphaned pool slots "
+                        "(gEntCount now=%u). One-time warning.\n",
+                        recovered, (unsigned)gEntCount);
             }
             /* Try the first available recovered slot. */
             for (i = 0; i < MAX_ENTITIES; i++) {
                 Entity* ent = &gEntities[i].base;
-                if ((intptr_t)ent->prev < 0 && (ent->flags & ENT_UNUSED1) &&
-                    ent != gUpdateContext.current_entity) {
+                if ((intptr_t)ent->prev < 0 && (ent->flags & ENT_UNUSED1) && ent != gUpdateContext.current_entity) {
                     ClearDeletedEntity(ent);
                     return ent;
                 }
@@ -748,8 +745,8 @@ void DeleteManager(void* ent) {
 #ifdef PC_PORT
     if (manager->id == 0x2e) {
         fprintf(stderr, "[ToD-mgr] DeleteManager id=0x2e mgr=%p kind=0x%x type=0x%x action=0x%x area=%u room=%u\n",
-                (void*)manager, (unsigned)manager->kind, (unsigned)manager->type,
-                (unsigned)manager->action, (unsigned)gRoomControls.area, (unsigned)gRoomControls.room);
+                (void*)manager, (unsigned)manager->kind, (unsigned)manager->type, (unsigned)manager->action,
+                (unsigned)gRoomControls.area, (unsigned)gRoomControls.room);
     }
 #endif
     if (manager->next == NULL)
@@ -809,11 +806,14 @@ void RecycleEntities(void) {
          * iterations in this file by adding `i != NULL &&` to the
          * loop condition (covers the "first ent's next pointer is
          * NULL mid-iteration" variant of the same bug). */
-        if (list->first == NULL || list->last == NULL) continue;
+        if (list->first == NULL || list->last == NULL)
+            continue;
 #endif
 #ifdef PC_PORT
         int _w = 0;
-        for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i); i = i->next, ++_w) {
+        for (i = list->first;
+             i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i);
+             i = i->next, ++_w) {
 #else
         for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
 #endif
@@ -823,7 +823,8 @@ void RecycleEntities(void) {
             }
         }
 #ifdef PC_PORT
-        if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, i);
+        if (ENT_WALK_TRIPPED(_w))
+            ENT_WALK_WARN(list, i);
 #endif
     } while (++list < &gEntityLists[9]);
 }
@@ -836,11 +837,14 @@ void DeleteSleepingEntities(void) {
     list = &gEntityLists[0];
     do {
 #ifdef PC_PORT
-        if (list->first == NULL || list->last == NULL) continue;
+        if (list->first == NULL || list->last == NULL)
+            continue;
 #endif
 #ifdef PC_PORT
         int _w = 0;
-        for (ent = list->first; ent != NULL && (intptr_t)ent != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(ent); ent = next, ++_w) {
+        for (ent = list->first;
+             ent != NULL && (intptr_t)ent != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(ent);
+             ent = next, ++_w) {
 #else
         for (ent = list->first; ent != NULL && (intptr_t)ent != (intptr_t)list; ent = next) {
 #endif
@@ -849,7 +853,8 @@ void DeleteSleepingEntities(void) {
                 DeleteEntityAny(ent);
         }
 #ifdef PC_PORT
-        if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, ent);
+        if (ENT_WALK_TRIPPED(_w))
+            ENT_WALK_WARN(list, ent);
 #endif
     } while (++list < &gEntityLists[9]);
 }
@@ -884,10 +889,9 @@ void AppendEntityToList(Entity* entity, u32 listIndex) {
      * see which list orchestrators (id=0x69) land in, and catch the
      * moment one gets re-listed mid-cutscene. */
     if (entity->kind == 6) {
-        extern void Port_LogListOp(const char* op, void* ent, unsigned kind,
-                                   unsigned id, unsigned listIdx, void* listAddr);
-        Port_LogListOp("append", (void*)entity, entity->kind, entity->id,
-                       listIndex, (void*)list);
+        extern void Port_LogListOp(const char* op, void* ent, unsigned kind, unsigned id, unsigned listIdx,
+                                   void* listAddr);
+        Port_LogListOp("append", (void*)entity, entity->kind, entity->id, listIndex, (void*)list);
     }
 #endif
 }
@@ -909,10 +913,9 @@ void PrependEntityToList(Entity* entity, u32 listIndex) {
     list->first = entity;
 #ifdef PC_PORT
     if (entity->kind == 6) {
-        extern void Port_LogListOp(const char* op, void* ent, unsigned kind,
-                                   unsigned id, unsigned listIdx, void* listAddr);
-        Port_LogListOp("prepend", (void*)entity, entity->kind, entity->id,
-                       listIndex, (void*)list);
+        extern void Port_LogListOp(const char* op, void* ent, unsigned kind, unsigned id, unsigned listIdx,
+                                   void* listAddr);
+        Port_LogListOp("prepend", (void*)entity, entity->kind, entity->id, listIndex, (void*)list);
     }
 #endif
 }
@@ -943,18 +946,13 @@ static void UnlinkEntity(Entity* ent) {
      * Log the corruption so we can chase the writer separately. */
     {
         extern int Port_IsValidEntityAddr(const void*);
-        const bool prevOk =
-            ent->prev == NULL ||
-            (intptr_t)ent->prev == -1 ||
-            Port_IsValidEntityAddr(ent->prev);
-        const bool nextOk =
-            ent->next == NULL ||
-            Port_IsValidEntityAddr(ent->next);
+        const bool prevOk = ent->prev == NULL || (intptr_t)ent->prev == -1 || Port_IsValidEntityAddr(ent->prev);
+        const bool nextOk = ent->next == NULL || Port_IsValidEntityAddr(ent->next);
         if (!prevOk || !nextOk) {
             fprintf(stderr,
-                "[ENT-GUARD] UnlinkEntity skipped: ent=%p kind=%u id=0x%X "
-                "prev=%p next=%p (one or both invalid)\n",
-                (void*)ent, ent->kind, ent->id, ent->prev, ent->next);
+                    "[ENT-GUARD] UnlinkEntity skipped: ent=%p kind=%u id=0x%X "
+                    "prev=%p next=%p (one or both invalid)\n",
+                    (void*)ent, ent->kind, ent->id, ent->prev, ent->next);
             return;
         }
     }
@@ -971,7 +969,9 @@ bool32 EntityHasDuplicateID(Entity* ent) {
     do {
 #ifdef PC_PORT
         int _w = 0;
-        for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i); i = i->next, ++_w) {
+        for (i = list->first;
+             i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i);
+             i = i->next, ++_w) {
 #else
         for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
 #endif
@@ -980,7 +980,8 @@ bool32 EntityHasDuplicateID(Entity* ent) {
             }
         }
 #ifdef PC_PORT
-        if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, i);
+        if (ENT_WALK_TRIPPED(_w))
+            ENT_WALK_WARN(list, i);
 #endif
     } while (++list < &gEntityLists[9]);
 
@@ -994,7 +995,9 @@ Entity* FindEntityByID(u32 kind, u32 id, u32 listIndex) {
     list = &gEntityLists[listIndex];
 #ifdef PC_PORT
     int _w = 0;
-    for (it = list->first; it != NULL && (intptr_t)it != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(it); it = it->next, ++_w) {
+    for (it = list->first;
+         it != NULL && (intptr_t)it != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(it);
+         it = it->next, ++_w) {
 #else
     for (it = list->first; it != NULL && (intptr_t)it != (intptr_t)list; it = it->next) {
 #endif
@@ -1002,7 +1005,8 @@ Entity* FindEntityByID(u32 kind, u32 id, u32 listIndex) {
             return it;
     }
 #ifdef PC_PORT
-    if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, it);
+    if (ENT_WALK_TRIPPED(_w))
+        ENT_WALK_WARN(list, it);
 #endif
     return NULL;
 }
@@ -1014,7 +1018,9 @@ Entity* FindEntity(u32 kind, u32 id, u32 listIndex, u32 type, u32 type2) {
     list = &gEntityLists[listIndex];
 #ifdef PC_PORT
     int _w = 0;
-    for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i); i = i->next, ++_w) {
+    for (i = list->first;
+         i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i);
+         i = i->next, ++_w) {
 #else
     for (i = list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
 #endif
@@ -1022,7 +1028,8 @@ Entity* FindEntity(u32 kind, u32 id, u32 listIndex, u32 type, u32 type2) {
             return i;
     }
 #ifdef PC_PORT
-    if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, i);
+    if (ENT_WALK_TRIPPED(_w))
+        ENT_WALK_WARN(list, i);
 #endif
     return NULL;
 }
@@ -1042,7 +1049,8 @@ Entity* FindNextDuplicateID(Entity* ent, int listIndex) {
             return i;
     }
 #ifdef PC_PORT
-    if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, i);
+    if (ENT_WALK_TRIPPED(_w))
+        ENT_WALK_WARN(list, i);
 #endif
     return NULL;
 }
@@ -1055,7 +1063,9 @@ Entity* DeepFindEntityByID(u32 kind, u32 id) {
     do {
 #ifdef PC_PORT
         int _w = 0;
-        for (i = (Entity*)list->first; i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i); i = i->next, ++_w) {
+        for (i = (Entity*)list->first;
+             i != NULL && (intptr_t)i != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(i);
+             i = i->next, ++_w) {
 #else
         for (i = (Entity*)list->first; i != NULL && (intptr_t)i != (intptr_t)list; i = i->next) {
 #endif
@@ -1063,7 +1073,8 @@ Entity* DeepFindEntityByID(u32 kind, u32 id) {
                 return i;
         }
 #ifdef PC_PORT
-        if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, i);
+        if (ENT_WALK_TRIPPED(_w))
+            ENT_WALK_WARN(list, i);
 #endif
     } while (++list < &gEntityLists[9]);
 
@@ -1079,7 +1090,9 @@ void DeleteAllEnemies(void) {
     do {
 #ifdef PC_PORT
         int _w = 0;
-        for (ent = list->first; ent != NULL && (intptr_t)ent != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(ent); ent = next, ++_w) {
+        for (ent = list->first;
+             ent != NULL && (intptr_t)ent != (intptr_t)list && !ENT_WALK_TRIPPED(_w) && Port_IsValidEntityAddr(ent);
+             ent = next, ++_w) {
 #else
         for (ent = list->first; ent != NULL && (intptr_t)ent != (intptr_t)list; ent = next) {
 #endif
@@ -1088,7 +1101,8 @@ void DeleteAllEnemies(void) {
                 DeleteEntity(ent);
         }
 #ifdef PC_PORT
-        if (ENT_WALK_TRIPPED(_w)) ENT_WALK_WARN(list, ent);
+        if (ENT_WALK_TRIPPED(_w))
+            ENT_WALK_WARN(list, ent);
 #endif
     } while (++list < &gEntityLists[9]);
     ClearAllDeletedEntities();

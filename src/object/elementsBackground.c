@@ -9,7 +9,7 @@
 
 void ElementsBackground_Init(Entity*);
 void ElementsBackground_Action1(Entity*);
-void sub_080A04E8();
+void sub_080A04E8(Entity*);
 
 void ElementsBackground(Entity* this) {
     static void (*const ElementsBackground_Actions[])(Entity*) = {
@@ -28,11 +28,11 @@ void ElementsBackground_Init(Entity* this) {
     this->spritePriority.b0 = 7;
     this->z.WORD = 0;
     this->spriteRendering.alphaBlend = 1;
-    sub_080A04E8();
+    sub_080A04E8(this);
 }
 
 void ElementsBackground_Action1(Entity* this) {
-    sub_080A04E8();
+    sub_080A04E8(this);
 }
 
 void sub_080A04E8(Entity* this) {
