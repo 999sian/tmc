@@ -21,8 +21,7 @@ typedef struct {
     /*0x84*/ u8 unk_84;
 } FireballGuyEntity;
 
-PORT_STATIC_ASSERT_OFFSET(FireballGuyEntity, unk_84, 0x84, 0xB4,
-                          "FireballGuyEntity unk_84 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(FireballGuyEntity, unk_84, 0x84, 0xB4, "FireballGuyEntity unk_84 offset incorrect");
 
 typedef struct {
     s8 h, v;
@@ -93,8 +92,11 @@ void FireballGuy_Action1(FireballGuyEntity* this) {
 void FireballGuy_Action2(FireballGuyEntity* this) {
     // Entity count per form
     static const u8 typeEntityCount[4] = { 2, 3, 4, 5 };
-    static const PosOffset gUnk_080D1810[4] = { { 6, 0 }, { -6, 0 }, { 0, 6 }, { 0, -6 } };
-    Entity* entities[4];
+    /* Five entries: type 3 spawns 5 children (typeEntityCount max). The GBA read
+     * the 5th offset from the byte past this table in ROM (0x080D1818 = {0,2});
+     * pin it explicitly so the host doesn't read/write one slot out of bounds. */
+    static const PosOffset gUnk_080D1810[5] = { { 6, 0 }, { -6, 0 }, { 0, 6 }, { 0, -6 }, { 0, 2 } };
+    Entity* entities[5];
     Entity* entity;
     s32 count, i;
     const PosOffset* off;

@@ -32,14 +32,10 @@ typedef struct {
 } ButtonEntity;
 
 PORT_STATIC_ASSERT_SIZE(ButtonEntity, 0x88, 0xB0, "ButtonEntity size incorrect");
-PORT_STATIC_ASSERT_OFFSET(ButtonEntity, unk_70, 0x70, 0x98,
-                        "ButtonEntity unk_70 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(ButtonEntity, tilePos, 0x74, 0x9C,
-                        "ButtonEntity tilePos offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(ButtonEntity, unk_84, 0x84, 0xAC,
-                        "ButtonEntity unk_84 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(ButtonEntity, flag, 0x86, 0xAE,
-                        "ButtonEntity flag offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(ButtonEntity, unk_70, 0x70, 0x98, "ButtonEntity unk_70 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(ButtonEntity, tilePos, 0x74, 0x9C, "ButtonEntity tilePos offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(ButtonEntity, unk_84, 0x84, 0xAC, "ButtonEntity unk_84 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(ButtonEntity, flag, 0x86, 0xAE, "ButtonEntity flag offset incorrect");
 
 #ifdef PC_PORT
 #define BTN_UNK70(this) (GE_FIELD(&((this)->base), field_0x70)->HALF_U.LO)
@@ -94,7 +90,7 @@ void Button_Init(ButtonEntity* this) {
         super->collisionLayer = BTN_UNK84(this);
     }
     BTN_TILEPOS(this) = (((super->x.HALF.HI - gRoomControls.origin_x) >> 4) & 0x3F) |
-                       ((((super->y.HALF.HI - gRoomControls.origin_y) >> 4) & 0x3F) << 6);
+                        ((((super->y.HALF.HI - gRoomControls.origin_y) >> 4) & 0x3F) << 6);
     tileType = GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer);
 #ifdef PC_PORT
     if (!Button_IsTileTypePressable(tileType)) {
@@ -112,20 +108,17 @@ void Button_Init(ButtonEntity* this) {
     BTN_UNK72(this) = tileType;
 #ifdef PC_PORT
     if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_BUTTON) {
-        fprintf(stderr,
-                "[BUTTON7] Init flag=0x%04X type=%u tilePos=0x%03X layer=%u tileType=0x%X x=%d y=%d\n",
+        fprintf(stderr, "[BUTTON7] Init flag=0x%04X type=%u tilePos=0x%03X layer=%u tileType=0x%X x=%d y=%d\n",
                 BTN_FLAG(this), super->type, BTN_TILEPOS(this), super->collisionLayer, BTN_UNK72(this),
                 super->x.HALF.HI, super->y.HALF.HI);
     }
     if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_POT_BRIDGE) {
-        fprintf(stderr,
-                "[POTBRIDGE] Button_Init flag=0x%04X type=%u tilePos=0x%03X layer=%u tileType=0x%X x=%d y=%d\n",
+        fprintf(stderr, "[POTBRIDGE] Button_Init flag=0x%04X type=%u tilePos=0x%03X layer=%u tileType=0x%X x=%d y=%d\n",
                 BTN_FLAG(this), super->type, BTN_TILEPOS(this), super->collisionLayer, BTN_UNK72(this),
                 super->x.HALF.HI, super->y.HALF.HI);
     }
     if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
-        fprintf(stderr,
-                "[TORCH] Button_Init flag=0x%04X type=%u tilePos=0x%03X layer=%u tileType=0x%X\n",
+        fprintf(stderr, "[TORCH] Button_Init flag=0x%04X type=%u tilePos=0x%03X layer=%u tileType=0x%X\n",
                 BTN_FLAG(this), super->type, BTN_TILEPOS(this), super->collisionLayer, BTN_UNK72(this));
     }
 #endif
@@ -172,20 +165,17 @@ void Button_Action2(ButtonEntity* this) {
     if (sub_08081CB0(this)) {
 #ifdef PC_PORT
         if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_BUTTON) {
-            fprintf(stderr,
-                    "[BUTTON7] Action2 trigger flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X child=%p\n",
+            fprintf(stderr, "[BUTTON7] Action2 trigger flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X child=%p\n",
                     BTN_FLAG(this), BTN_TILEPOS(this), super->collisionLayer,
                     GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer), (void*)super->child);
         }
         if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_POT_BRIDGE) {
-            fprintf(stderr,
-                    "[POTBRIDGE] Button_Trigger flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X child=%p\n",
+            fprintf(stderr, "[POTBRIDGE] Button_Trigger flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X child=%p\n",
                     BTN_FLAG(this), BTN_TILEPOS(this), super->collisionLayer,
                     GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer), (void*)super->child);
         }
         if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
-            fprintf(stderr,
-                    "[TORCH] Button_Action2 trigger flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X\n",
+            fprintf(stderr, "[TORCH] Button_Action2 trigger flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X\n",
                     BTN_FLAG(this), BTN_TILEPOS(this), super->collisionLayer,
                     GetTileTypeAtTilePos(BTN_TILEPOS(this), super->collisionLayer));
         }
@@ -352,7 +342,7 @@ u32 sub_08081E3C(ButtonEntity* this) {
 
 u32 sub_08081F00(u32*, u32*);
 
-extern u16 MAY_ALIAS gMapDataTopSpecial[0x2000];
+extern u16 MAY_ALIAS gMapDataTopSpecial[0x4000];
 
 extern u16 MAY_ALIAS gMapDataBottomSpecial[];
 
@@ -424,8 +414,7 @@ bool32 sub_08081F7C(ButtonEntity* this, u32 tileType) {
                         tileType, (void*)super->child);
             }
             if (gRoomControls.area == AREA_DEEPWOOD_SHRINE && gRoomControls.room == ROOM_DEEPWOOD_SHRINE_TORCHES) {
-                fprintf(stderr,
-                        "[TORCH] Button_SetFlag flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X\n",
+                fprintf(stderr, "[TORCH] Button_SetFlag flag=0x%04X tilePos=0x%03X layer=%u tileType=0x%X\n",
                         BTN_FLAG(this), BTN_TILEPOS(this), super->collisionLayer, tileType);
             }
 #endif

@@ -23,9 +23,10 @@ typedef struct MazaalBraceletEntity_ {
     /*0x00*/ Entity base;
 #ifdef PC_PORT
     /* #99 fix: same #98 pattern. Pad 4 bytes after Entity base so the
-       unk_74 / unk_78 union pointers below land at PC 0xA0 / 0xA8
-       (= Enemy::field_0x74 / field_0x7c), matching the GBA layout the
-       C decomp assumes. */
+       unk_74 / unk_78 union slots below land at PC 0xA0 / 0xA4, matching
+       the GBA layout the C decomp assumes. mazaalHead.c type-puns these
+       slots through MazaalHeadEntity (issue #162), so both structs MUST
+       keep identical offsets and the 4-byte EntityRef representation. */
     u8 _pc_pad[4];
 #endif
     /*0x68*/ u8 unused1[12];
@@ -52,18 +53,22 @@ typedef struct MazaalBraceletEntity_ {
 
 PORT_STATIC_ASSERT_SIZE(MazaalBraceletEntity, 0x88, 0xB8,
                         "MazaalBraceletEntity must fit the 0xB8 entity pool slot (#127-class)");
+PORT_STATIC_ASSERT_OFFSET(MazaalBraceletEntity, unk_74, 0x74, 0xA0,
+                          "MazaalBraceletEntity unk_74 must alias MazaalHeadEntity unk_74 (#162)");
+PORT_STATIC_ASSERT_OFFSET(MazaalBraceletEntity, unk_78, 0x78, 0xA4,
+                          "MazaalBraceletEntity unk_78 must alias MazaalHeadEntity unk_78 (#162)");
 
 /* The two self-pointer union members above are 4-byte EntityRef slots on PC
  * (was Entity*, 8 bytes), keeping the struct within the 0xB8 entity pool slot.
  * MB74/MB78 resolve a ref back to the linked bracelet entity; MB74_SET stores. */
 #ifdef PC_PORT
-#define MB74(x)        ((MazaalBraceletEntity*)ENTITY_REF_GET((x)->unk_74.entity))
+#define MB74(x) ((MazaalBraceletEntity*)ENTITY_REF_GET((x)->unk_74.entity))
 #define MB74_SET(x, e) ENTITY_REF_SET((x)->unk_74.entity, e)
-#define MB78(x)        ((MazaalBraceletEntity*)ENTITY_REF_GET((x)->unk_78.entity))
+#define MB78(x) ((MazaalBraceletEntity*)ENTITY_REF_GET((x)->unk_78.entity))
 #else
-#define MB74(x)        ((x)->unk_74.entity)
+#define MB74(x) ((x)->unk_74.entity)
 #define MB74_SET(x, e) ((x)->unk_74.entity = (MazaalBraceletEntity*)(e))
-#define MB78(x)        ((x)->unk_78.entity)
+#define MB78(x) ((x)->unk_78.entity)
 #endif
 
 extern void SoundReqClipped(Entity*, u32);

@@ -18,7 +18,7 @@
 typedef struct {
     /*0x00*/ Entity base;
 #ifdef PC_PORT
-    u8 unused1[12 + 4];  /* #98/#99 pattern: +4 for Enemy::child PC growth */
+    u8 unused1[12 + 4]; /* #98/#99 pattern: +4 for Enemy::child PC growth */
 #else
     /*0x68*/ u8 unused1[12];
 #endif
@@ -46,8 +46,9 @@ typedef struct {
     /*0x87*/ u8 unk_87;
 } MoldwormEntity;
 
-PORT_STATIC_ASSERT_OFFSET(MoldwormEntity, unk_74, 0x74, 0xA0,
-                          "MoldwormEntity unk_74 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_OFFSET(MoldwormEntity, unk_74, 0x74, 0xA0, "MoldwormEntity unk_74 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_SIZE(MoldwormEntity, 0x88, 0xB8, "MoldwormEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(MoldwormEntity, unk_87, 0x87, 0xB7, "MoldwormEntity tail offset incorrect");
 
 extern void SoundReqClipped(Entity*, u32);
 extern bool32 sub_08023A38(u32 tileType);

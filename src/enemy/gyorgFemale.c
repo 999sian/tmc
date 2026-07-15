@@ -19,7 +19,7 @@
 #include "room.h"
 
 extern u8 gEntCount;
-extern u8 gMapDataTopSpecial[];
+extern u16 gMapDataTopSpecial[];
 
 extern u16 MAY_ALIAS gMapDataBottomSpecial[];
 

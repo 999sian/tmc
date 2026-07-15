@@ -32,7 +32,7 @@ void PlayerItemBoomerang_Action2(PlayerItemBoomerangEntity* this);
 void PlayerItemBoomerang_Action3(PlayerItemBoomerangEntity* this);
 
 extern Entity* DoTileInteractionOffset(Entity*, u32, s32, s32);
-extern bool32 sub_080040E2(Entity*, u8*);
+extern bool32 sub_080040E2(Entity*, const u8*);
 extern Hitbox gUnk_081271CC;
 extern u8 gUnk_08003E44;
 

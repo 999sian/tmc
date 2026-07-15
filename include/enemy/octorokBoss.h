@@ -18,6 +18,9 @@ typedef struct {
     /*0x20*/ OctorokBossEntity* legObjects[4];
 } OctorokBossHeap;
 PORT_STATIC_ASSERT_SIZE(OctorokBossHeap, 0x30, 0x58, "OctorokBossHeap size incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossHeap, mouthObject, 0x08, 0x08, "OctorokBossHeap mouth offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossHeap, tailObjects, 0x0c, 0x10, "OctorokBossHeap tails offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossHeap, legObjects, 0x20, 0x38, "OctorokBossHeap legs offset incorrect");
 
 struct OctorokBossEntity {
     /*0x00*/ Entity base;
@@ -45,6 +48,11 @@ struct OctorokBossEntity {
     /*0x82*/ union SplitHWord angularSpeed;
     /*0x84*/ OctorokBossHeap* heap; /**< Heap data allocated with #zMalloc. */
 };
+PORT_STATIC_ASSERT_SIZE(OctorokBossEntity, 0x88, 0xB8, "OctorokBossEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossEntity, unk_74, 0x74, 0x9C, "OctorokBossEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossEntity, attackWaitTurns, 0x78, 0xA0,
+                          "OctorokBossEntity attack timer offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossEntity, heap, 0x84, 0xB0, "OctorokBossEntity heap offset incorrect");
 
 enum OctorokRotation { ROTATION_CW, ROTATION_CCW, NO_ROTATION = 0xff };
 

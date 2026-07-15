@@ -17,6 +17,7 @@
 #include "port/port_generic_entity.h"
 #endif
 
+#ifndef PC_PORT
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unused1[12];
@@ -25,6 +26,9 @@ typedef struct {
     /*0x84*/ u16 flag1;
     /*0x86*/ u16 flag2;
 } LightableSwitchEntity;
+#else
+typedef GenericEntity LightableSwitchEntity;
+#endif
 
 #ifdef PC_PORT
 #define LS_UNK74(this) (GE_FIELD(&((this)->base), field_0x74)->HWORD)
@@ -105,13 +109,14 @@ static void sub_0809EABC(LightableSwitchEntity* this) {
 }
 
 static void sub_0809EAD8(LightableSwitchEntity* this) {
-    u8 bVar1;
-    Entity* pEVar2;
+    u16 railTimer;
 
     if (super->type2 != 0) {
 
         super->child = GetCurrentRoomProperty(super->type2);
-        UpdateRailMovement(super, (u16**)&super->child, &LS_UNK74(this));
+        railTimer = LS_UNK74(this);
+        UpdateRailMovement(super, (u16**)&super->child, &railTimer);
+        LS_UNK74(this) = railTimer;
 
     } else {
         SetTile(SPECIAL_TILE_80, COORD_TO_TILE(super), super->collisionLayer);
@@ -119,17 +124,17 @@ static void sub_0809EAD8(LightableSwitchEntity* this) {
 }
 
 static void sub_0809EB30(LightableSwitchEntity* this) {
-    u16 uVar1;
-    u16* puVar2;
+    u16 railTimer;
 
     if (super->type2 != 0) {
         if ((super->direction & 0x80) == 0) {
             LinearMoveUpdate(super);
         }
-        puVar2 = &LS_UNK74(this);
-        if (!--*puVar2) {
-            UpdateRailMovement(super, (u16**)&super->child, puVar2);
+        railTimer = LS_UNK74(this);
+        if (!--railTimer) {
+            UpdateRailMovement(super, (u16**)&super->child, &railTimer);
         }
+        LS_UNK74(this) = railTimer;
     }
 }
 

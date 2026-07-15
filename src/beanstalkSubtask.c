@@ -28,7 +28,7 @@ extern void LoadRoomGfx(void);
 extern void LoadRoomTileSet(void);
 extern void sub_0807C4F8(void);
 
-extern void gMapData;
+extern u8 gMapData[];
 extern u8 gUpdateVisibleTiles;
 extern u16 MAY_ALIAS gMapDataTopSpecial[];
 extern u16 MAY_ALIAS gMapDataBottomSpecial[];
@@ -64,8 +64,8 @@ extern const s16 gUnk_080B4490[]; // TODO struct xy
 extern const u16 gUnk_080B44A0[];
 extern const s16 gUnk_080B44A8[]; // TODO struct xy
 extern const u32 gUnk_080B44B8[]; // TODO actually function pointers?
-extern const Data gUnk_080B44C0[];
-extern const Data gUnk_080B44C2[];
+extern const u16 gUnk_080B44C0[];
+extern const u16 gUnk_080B44C2[];
 
 void sub_0801AD6C(const Data*, u32);
 bool32 sub_0801A4F8(void);
@@ -76,7 +76,7 @@ u32 GetTileSetIndexForSpecialTile(u32 position, u32 tileIndex);
 
 extern u32 sub_0807BDB8(Entity* this, u32 param_2);
 extern void sub_0804B388(u32 a1, u32 a2);
-extern u32 sub_080A7CFC(u32 a1, u32 tmp); // TODO does this really have a second param?
+extern u32 sub_080A7CFC(u32 a1);
 extern void OpenSmallChest(u32 pos, u32 layer);
 extern bool32 sub_08079778();
 extern Transition* FindApplicableAreaTransition(u32, u32);
@@ -228,7 +228,7 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
                     raw += 12;
                     continue;
                 }
-                src = (u8*)&gMapData + (field_src & 0x7fffffff);
+                src = gMapData + (field_src & 0x7fffffff);
                 if ((field_size & MAP_COMPRESSED) != 0) {
                     if ((field_dest_gba >> 0x18) == 6) {
                         LZ77UnCompVram(src, dest);
@@ -264,7 +264,7 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
                         continue;
                     }
                 } else {
-                    src = (u8*)&gMapData + (dataDefinition->src & 0x7fffffff);
+                    src = gMapData + (dataDefinition->src & 0x7fffffff);
                 }
                 if ((dataDefinition->size & MAP_COMPRESSED) != 0) {
                     /* A truncated compressed asset over-reads with no length
@@ -308,7 +308,7 @@ void LoadMapData(MapDataDefinition* dataDefinition) {
     do {
         dest = dataDefinition->dest;
         if (dest != NULL) {
-            src = &gMapData + (dataDefinition->src & 0x7fffffff);
+            src = gMapData + (dataDefinition->src & 0x7fffffff);
             if ((dataDefinition->size & MAP_COMPRESSED) != 0) {
                 if ((u32)dest >> 0x18 == 6) {
                     LZ77UnCompVram(src, dest);
@@ -488,7 +488,7 @@ u32 UpdatePlayerCollision(void) {
                 return 0;
             }
             gPlayerState.mobility = 1;
-            sub_080A7CFC(position, gPlayerEntity.base.collisionLayer);
+            sub_080A7CFC(position);
             return 1;
         case ACT_TILE_26:
             if ((animationState1 & 0xff) != 0) {
@@ -1291,7 +1291,7 @@ void sub_0801AC98(void) {
 
     for (indexY = 0; indexY < height; indexY++) {
         for (indexX = 0; indexX < width; indexX++, position++) {
-            for (ptr = gUnk_080B44C0; ptr->tileType != 0xffff; ptr++) {
+            for (ptr = (const Data*)gUnk_080B44C0; ptr->tileType != 0xffff; ptr++) {
                 if (ptr->tileType == GetTileTypeAtTilePos(position, 1)) {
                     if (gUnk_080B44B8[ptr->unk_a] != 0) {
                         sub_0801AD6C(ptr, position);
@@ -1300,7 +1300,7 @@ void sub_0801AC98(void) {
                 }
             }
 
-            for (ptr = gUnk_080B44C2; ptr->tileType != 0xffff; ptr++) {
+            for (ptr = (const Data*)gUnk_080B44C2; ptr->tileType != 0xffff; ptr++) {
                 if (ptr->tileType == GetTileTypeAtTilePos(position, 2)) {
                     if (gUnk_080B44B8[ptr->unk_a] != 0) {
                         sub_0801AD6C(ptr, position);
@@ -1345,9 +1345,18 @@ void sub_0801AD6C(const Data* param_1, u32 tilePos) {
             manager->type2 = (u8)param_1->type2;
             // TODO are these fields common for all managers or does this usually create managers of certain types?
             tmpX2 = ((u16)tilePos & 0x3f) * 0x10 + 8;
+#ifdef PC_PORT
+            /* GBA wrote &manager[1].timer+10/+12 = manager+0x38/0x3a (base 0x20).
+             * The manager struct is larger on 64-bit, so translate to the same
+             * logical tail field: base+0x18/0x1a (FlameManager.x/y). */
+            *(u16*)((u8*)manager + sizeof(Manager) + 0x18) = tmpX2 + gRoomControls.origin_x;
+            tmpY2 = (s16)((tilePos & 0xfc0) >> 2) + 8;
+            *(u16*)((u8*)manager + sizeof(Manager) + 0x1a) = tmpY2 + gRoomControls.origin_y;
+#else
             *(u16*)(&manager[1].timer + 10) = tmpX2 + gRoomControls.origin_x;
             tmpY2 = (s16)((tilePos & 0xfc0) >> 2) + 8;
             *(u16*)(&manager[1].timer + 12) = tmpY2 + gRoomControls.origin_y;
+#endif
             AppendEntityToList((Entity*)manager, gEntityListLUT[manager->kind]);
         }
     }

@@ -15,9 +15,16 @@ typedef struct {
     u8 unk6;
     u8 menuScrollTimer;
 } Input;
+
+typedef struct {
+    u8 type;
+    u8 x;
+    u8 y;
+} PACKED DungeonMapObject;
 extern Input gInput; /**< Input instance. */
 
 void LoadPalettes(const u8* src, s32 destPaletteNum, s32 numPalettes);
+void DrawDungeonMap(u32 floor, DungeonMapObject* specialData, u32 size);
 
 /**
  * Loads a packed group of palettes.

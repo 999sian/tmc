@@ -18,7 +18,7 @@
 #include "asm.h"
 #include "fade.h"
 
-extern struct BgAffineDstData MAY_ALIAS gUnk_02017AA0[];
+extern u16 MAY_ALIAS gUnk_02017AA0[];
 extern struct BgAffineDstData gUnk_02017BA0[];
 extern u8 gUpdateVisibleTiles;
 extern u32 gUsedPalettes;
@@ -58,7 +58,7 @@ void RollingBarrelManager_Main(RollingBarrelManager* this) {
     u32 tmp;
     RollingBarrelManager_Actions[super->action](this);
     sub_08058BC8(this);
-    SetVBlankDMA((u16*)&gUnk_02017AA0[gUnk_03003DE4[0] * 0xA0], (u16*)REG_ADDR_BG2PA,
+    SetVBlankDMA((u16*)&((struct BgAffineDstData*)gUnk_02017AA0)[gUnk_03003DE4[0] * 0xA0], (u16*)REG_ADDR_BG2PA,
                  ((DMA_ENABLE | DMA_START_HBLANK | DMA_16BIT | DMA_REPEAT | DMA_SRC_INC | DMA_DEST_RELOAD) << 16) +
                      0x8);
 }
@@ -167,8 +167,8 @@ void sub_08058A04(RollingBarrelManager* this) {
 #else
     angleOk = (this->unk_20 - 0x118 < 0xDu);
 #endif
-    if (angleOk && CheckGlobalFlag(LV1TARU_OPEN) && (tmp - 0x6d < 0x17u) &&
-        (tmp2 - 0x45 < 0x17u) && (gPlayerEntity.base.z.HALF.HI == 0)) {
+    if (angleOk && CheckGlobalFlag(LV1TARU_OPEN) && (tmp - 0x6d < 0x17u) && (tmp2 - 0x45 < 0x17u) &&
+        (gPlayerEntity.base.z.HALF.HI == 0)) {
         gPlayerState.queued_action = PLAYER_FALL;
         gPlayerState.field_0x38 = 0;
         gPlayerEntity.base.x.HALF.HI = gRoomControls.origin_x + 0x78;
@@ -228,7 +228,7 @@ void sub_08058B5C(RollingBarrelManager* this, u32 unk1) {
 }
 
 void sub_08058BC8(RollingBarrelManager* this) {
-    struct BgAffineDstData* tmp = &gUnk_02017AA0[gUnk_03003DE4[0] * 0xA0];
+    struct BgAffineDstData* tmp = &((struct BgAffineDstData*)gUnk_02017AA0)[gUnk_03003DE4[0] * 0xA0];
     struct BgAffineSrcData tmp2;
     s32 tmp3;
     tmp2.texX = 0x10000;
@@ -257,7 +257,7 @@ void sub_08058BC8(RollingBarrelManager* this) {
      * silently zero-ing BG2's affine register snapshot — visible glitch
      * during the Deepwood Shrine rolling-barrel cutscene. Route the
      * read through the buffer that actually got written. */
-    tmp = &gUnk_02017AA0[gUnk_03003DE4[0] * 0xA0 + 0x10];
+    tmp = &((struct BgAffineDstData*)gUnk_02017AA0)[gUnk_03003DE4[0] * 0xA0 + 0x10];
 #else
     tmp = &gUnk_02017BA0[gUnk_03003DE4[0] * 0xA0];
 #endif

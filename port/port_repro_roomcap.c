@@ -179,7 +179,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
     /* At file-select, bootstrap a clean new game whose start room is the target,
      * then jump straight into TASK_GAME (skips the intro cutscene entirely). */
     if (!booted && gMain.task == TASK_FILE_SELECT && frame > 60) {
-        SaveFile* sv = &gMapDataBottomSpecial.saves[0];
+        SaveFile* sv = &gFileSelectState.saves[0];
         ResetSaveFile(0);
         sv->initialized = 1;
         sv->name[0] = 'A'; /* non-empty: skip FinalizeSave's default-name copy */
@@ -188,7 +188,7 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         sv->saved_status.start_pos_x = (s16)x;
         sv->saved_status.start_pos_y = (s16)y;
         sv->saved_status.layer = (u8)l;
-        gMapDataBottomSpecial.saveStatus[0] = 1; /* SAVE_VALID */
+        gFileSelectState.saveStatus[0] = 1; /* SAVE_VALID */
         SetActiveSave(0);
         SetTask(TASK_GAME);
         booted = 1;

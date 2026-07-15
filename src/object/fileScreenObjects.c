@@ -118,8 +118,8 @@ void FileScreenObjects_Type23_LinkPreview(FileScreenObjectsEntity* this) {
         return;
     }
 
-    if (super->type2 != gMapDataBottomSpecial.unk6) {
-        super->type2 = gMapDataBottomSpecial.unk6;
+    if (super->type2 != gFileSelectState.unk6) {
+        super->type2 = gFileSelectState.unk6;
         this->unk_68 = CheckGlobalFlag(EZERO_1ST) == 0 ? ANIM_DEFAULT_NOCAP : ANIM_DEFAULT;
         this->unk_70 = 4;
         super->animationState = PAS_SOUTH;
@@ -174,7 +174,7 @@ static bool32 sub_0808E950(void) {
         case 5:
         case 6:
         case 7:
-            result = gMapDataBottomSpecial.saveStatus[gMapDataBottomSpecial.unk6] == 1;
+            result = gFileSelectState.saveStatus[gFileSelectState.unk6] == 1;
             break;
     }
     return result;
@@ -232,11 +232,11 @@ void FileScreenObjects_Type0(FileScreenObjectsEntity* this) {
         }
     }
 
-    if (super->type == gMapDataBottomSpecial.unk6) {
+    if (super->type == gFileSelectState.unk6) {
         var0 = 12;
         var1 = 1;
     } else {
-        if (gUI.lastState == 5 && super->type == gMapDataBottomSpecial.unk7) {
+        if (gUI.lastState == 5 && super->type == gFileSelectState.unk7) {
             var0 = 13;
             var1 = 2;
         } else {
@@ -248,13 +248,13 @@ void FileScreenObjects_Type0(FileScreenObjectsEntity* this) {
     super->palette.b.b0 = var0;
     super->spriteRendering.b3 = var1;
     sub_0808EABC(this);
-    gMapDataBottomSpecial.isTransitioning |= sub_0808EF6C(this);
+    gFileSelectState.isTransitioning |= sub_0808EF6C(this);
 }
 
 void sub_0808EABC(FileScreenObjectsEntity* this) {
     s32 var0 = -72;
     s32 var1 = super->type * 32 + 40;
-    s32 var2 = gMapDataBottomSpecial.unk6 == super->type;
+    s32 var2 = gFileSelectState.unk6 == super->type;
     switch (gUI.lastState) {
         case 0:
             var0 = 24;
@@ -301,7 +301,7 @@ void sub_0808EABC(FileScreenObjectsEntity* this) {
 }
 
 void FileScreenObjects_Type15(FileScreenObjectsEntity* this) {
-    Entity* entity = sub_0808EC80(gMapDataBottomSpecial.unk6);
+    Entity* entity = sub_0808EC80(gFileSelectState.unk6);
     if (entity != NULL) {
         super->x.WORD = entity->x.WORD;
         super->y.WORD = entity->y.WORD;
@@ -348,7 +348,7 @@ void FileScreenObjects_Type16(FileScreenObjectsEntity* this) {
             x = 112;
             break;
         case 2:
-            var0 = gMapDataBottomSpecial.unk7;
+            var0 = gFileSelectState.unk7;
             if (var0 == 4) {
                 var0 = 7;
             }
@@ -399,7 +399,7 @@ void FileScreenObjects_Type4(FileScreenObjectsEntity* this) {
             var1 = 1;
             break;
         case 5:
-            var0 = gMapDataBottomSpecial.unk7;
+            var0 = gFileSelectState.unk7;
             var1 = 2;
             break;
         case 6:
@@ -423,7 +423,7 @@ void FileScreenObjects_Type4(FileScreenObjectsEntity* this) {
         super->palette.b.b0 = 14;
     }
 
-    gMapDataBottomSpecial.isTransitioning |= sub_0808EF6C(this);
+    gFileSelectState.isTransitioning |= sub_0808EF6C(this);
 }
 
 void FileScreenObjects_Type8(FileScreenObjectsEntity* this) {
@@ -483,7 +483,7 @@ void FileScreenObjects_Type10(FileScreenObjectsEntity* this) {
 
     this->unk_6a = var2;
     super->palette.b.b0 = gGenericMenu.unk10.a[1] == 5 && var1 == gGenericMenu.unk10.a[2] ? 11 : 9;
-    gMapDataBottomSpecial.isTransitioning |= sub_0808EF6C(this);
+    gFileSelectState.isTransitioning |= sub_0808EF6C(this);
 }
 
 void FileScreenObjects_Type17(FileScreenObjectsEntity* this) {

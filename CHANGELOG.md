@@ -1,5 +1,100 @@
 # Changelog
 
+## Unreleased
+
+### Follow-up crash hardening
+
+- Fixed four additional GBA-to-64-bit hazards found while auditing the boss
+  crashes: Gentari's curtain now searches the auxiliary-player and entity pools
+  separately instead of reading past the first array; Octorok and Moldworm
+  layouts now preserve their pointer/tail offsets and enforce them with static
+  assertions; Postman's route selection handles empty route tables without
+  modulo-by-zero; and the manager pool is now a real 32-entry `Temp` array
+  instead of a byte buffer accessed through a mismatched declaration.
+
+### Codebase-wide sweep for the same GBA-to-64-bit bug family
+
+- Audited `src/`, `include/`, and `port/` for the failure patterns behind the
+  boss crashes (fixed-array overflows, GBA/64-bit layout offsets, cross-TU type
+  mismatches, host-trapping arithmetic). Two live host bugs fixed:
+  - **Fireball Guy split (`fireballGuy.c`).** A type-3 Fireball Guy spawns 5
+    children, but the child-pointer array and position-offset table held only 4
+    entries — the 5th write/read ran one slot past a stack array and past a
+    rodata table (SIGSEGV / corruption on x86/ARM; the sibling `slime.c` splitter
+    was already correctly sized). Both are now 5 entries; the 5th offset is the
+    real ROM byte at `0x080D1818` (`{0, 2}`), so behavior matches GBA exactly.
+  - **Room-tile manager spawn (`beanstalkSubtask.c`).** The generic manager
+    spawner wrote a manager's world x/y through `&manager[1].timer + 10/12`,
+    which lands on GBA offset 0x38/0x3a but 0x58/0x5a on the larger 64-bit
+    `Manager` — so e.g. a tile-placed Flame Manager loaded coordinates of 0 and
+    mishandled its torch tile. It now writes the translated tail offset
+    (`sizeof(Manager)+0x18/0x1a`), matching the `tileChangeObserveManager` pattern.
+- Added a Linux x86_64 GCC LTO CI gate that turns cross-translation-unit
+  declaration drift into build failures; reconciled the mismatches it exposed
+  while excluding raw ROM blob storage that is intentionally type-punned.
+
+### Deepwood Shrine: crash when the first boss dies (Big Green ChuChu)
+
+- **Killing the Deepwood Shrine boss no longer crashes.** Two decomp bugs in
+  the death sequence, both latent on GBA and fatal on x86:
+  - **SIGFPE (divide by zero)** in the ChuChu wobble math (`chuchuBoss.c`). The
+    boss's gather/merge state — part of the death animation — seeds a wobble
+    divisor to 0 from a `{0,0}` data-table entry; the split ChuChu then divides
+    by it. GBA's soft-division returns 0 without trapping; x86 raises SIGFPE.
+    Both divide sites now go through `Div()` (the port's hardware-faithful
+    divide, 0 on divide-by-zero) instead of a raw `/`.
+  - **SIGSEGV** in the post-boss element-get cutscene (`elementsBackground.c`).
+    `sub_080A04E8` was declared and called with no arguments but its definition
+    takes `Entity* this` and dereferences `this->parent`. On GBA the entity
+    pointer happened to survive in a register across the call; on x86 the
+    "parameter" read garbage and faulted. The declaration and both call sites
+    now pass `this`.
+  - Verified with a deterministic headless repro (warp into the boss arena,
+    force the boss to 0 HP): SIGFPE→SIGSEGV chain before, full death + element
+    cutscene to the cleared room after.
+
+### Cave of Flames: cane-flip freeze fixed (Gleerok soft-lock)
+
+- **Using the Cane of Pacci on Gleerok's cooled, downed head no longer freezes
+  the fight.** The flip is a real vanilla mechanic: the head pops up, lands
+  flipped, and the boss lays its neck flat so the back crystal becomes
+  attackable. The neck-extension array really has six segments, but the decomp
+  declared five and reached the sixth by indexing one past the array into the
+  adjacent struct fields — undefined behavior the GBA tolerated. On the PC
+  build the optimizer was free to misplace that sixth-segment access, which
+  turned the neck lay-out solver into a non-converging tug-of-war: the boss
+  spun forever "laying out" the neck while Link could still walk around. The
+  array is now declared with all six segments (identical byte layout, pinned
+  by a static assert), and the lay-out converges — verified with a
+  deterministic headless repro (3/3 freezes before, 3/3 clean crystal-phase
+  progressions after).
+- The Gleerok flip/lay-out state machine now has `TMC_VERBOSE`-gated stderr
+  tracing (`[gleerok]` lines) covering the cane hit, the flip handshake, and
+  the segment solver, for future fight triage.
+- **Follow-up crash after the flip fixed too (SIGFPE).** The flip-debris
+  particles (`gleerokParticle.c`) divide by their affine scale to size their
+  hitboxes; the settled state left the divisors uninitialized (GBA read stack
+  garbage through its non-trapping soft division; x86 faults when that garbage
+  is 0), and the shrink path can legitimately pass through scale 0 for one
+  frame. The divisors are now seeded from the live scales and the zero frame
+  keeps the previous hitbox size, matching GBA intent without the trap.
+
+### Fortress of Winds: Mazaal boss-entry crash fixed (issue #162, regression in v0.7.0)
+
+- **Re-entering the Mazaal arena no longer crashes.** The boss head and its
+  bracelets link to each other through type-punned struct fields (GBA offsets
+  0x74/0x78). v0.7.0's #127-class fix converted the bracelet's links to 4-byte
+  EntityRef slots, but the head kept 8-byte raw pointers — so when the head
+  woke its arms (mid-fight re-entry from Inner Mazaal, or restoring a
+  save state taken in the arena), it read a bracelet's slot *index* as a
+  pointer and dereferenced it: SIGSEGV in `mazaalHead.c` the moment the hands
+  should rise. The head now uses the same EntityRef slots at the same PC
+  offsets, pinned by cross-struct static asserts on both sides; arm commands
+  also skip cleanly when a link never spawned (full entity pool).
+- This also fixes silent bracelet-state corruption: the head's old 8-byte
+  pointer write clobbered the bracelet's adjacent fields (`unk_7c`/`unk_7e`),
+  and the bracelet palette-sync path read back a garbage head link.
+
 ## v0.8.0 (2026-07-12)
 
 ### Widescreen in more scenes, never stretched

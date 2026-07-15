@@ -42,6 +42,15 @@ typedef enum {
     RESULT_COLLISION_WITHOUT_SET = 2,
 } CollisionResult;
 
+typedef struct LinkedList2 {
+    void* last;
+    void* first;
+    void* node;
+    u8 flags;
+} LinkedList2;
+
+extern LinkedList2* gUnk_02018EA0;
+
 /**
  * @brief
  *

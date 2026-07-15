@@ -815,7 +815,7 @@ void Port_RefreshAreaData(u32 area) {
 /* Font data tables (data_stubs_autogen.c) */
 extern void* gTextVariableSources[];
 extern u8 gUnk_08109244[];
-extern void* gTranslations[];
+extern u32* gTranslations[];
 extern void* gUnk_08109248[];
 extern u8 gUnk_0810926C[];
 extern void* gUnk_081092AC[];
@@ -1813,7 +1813,7 @@ void Port_LoadRom(const char* path) {
 }
 
 void Port_ApplyLanguage(void) {
-    extern void* gTranslations[];
+    extern u32* gTranslations[];
     /* Called every frame (port_bios.c Port_UpdateInput). A configured
      * preference must apply when SET or CHANGED (F8 menu calls this right
      * after updating the config) — but NOT re-assert every frame, which

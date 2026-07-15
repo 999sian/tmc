@@ -113,6 +113,7 @@ void Subtask_FigurineMenu(void) {
 
 void FigurineMenu_080A4608(void) {
     s32 iVar2, r1, maxFigurines;
+    u8* menuBytes;
 
     SetBgmVolume(0x80);
     sub_080A4DA8(3);
@@ -125,8 +126,9 @@ void FigurineMenu_080A4608(void) {
     gScreen.controls.windowInsideControl = 0x1f;
     gScreen.controls.windowOutsideControl = 0x1d;
     gScreen.bg1.updated = 1;
+    menuBytes = (u8*)&gFigurineMenu;
     for (iVar2 = 0; iVar2 < 0x10; iVar2++) {
-        gFigurineMenu.unk10.a[iVar2] = 0xee;
+        menuBytes[offsetof(FigurineMenu, unk10) + iVar2] = 0xee;
     }
 
     r1 = gUI.field_0x3;
@@ -316,13 +318,13 @@ u32 FigurineMenu_isFigurineOwned(s32 figurineIndex) {
 }
 
 typedef struct {
-    u8* pal;
-    u8* gfx;
+    const u8* pal;
+    const u8* gfx;
     int size;
     int zero;
 } Figurine;
 
-extern const Figurine gFigurines[];
+extern Figurine gFigurines[];
 
 #define sub_080A4978_draw_constant_default 0x1fc
 void FigurineMenu_080A4978(void) {
@@ -398,7 +400,7 @@ void FigurineMenu_080A4978(void) {
             DrawDirect(sub_080A4978_draw_constant - 4, gFigurineMenu.figure_idx - 1);
             if (gFigurineMenu.unk1d != gFigurineMenu.figure_idx) {
                 const Figurine* fig;
-                u8* gfx;
+                const u8* gfx;
                 gFigurineMenu.unk1d = gFigurineMenu.figure_idx;
                 fig = &gFigurines[gFigurineMenu.figure_idx];
                 LoadPalettes(fig->pal, 0x16, 9);
@@ -457,14 +459,13 @@ const struct_0812816C gUnk_0812816C =
     {
         .dest = (u16*)0x02001b40,
         .gfx_dest = (void*)0x0600a000,
-        .buffer_loc = (void*)0x02000D00,   /* gTextGfxBuffer on GBA */
+        .buffer_loc = (void*)0x02000D00, /* gTextGfxBuffer on GBA */
         .gfx_src = 0xf100,
         .width = 0x88,
         .fill_type = 0x4,
     };
 #else
-    { (u16*)0x02001b40, 0x0600a000, { 0u, 0xdu, 0u, 0x2u, 0u, 0u, 0u, 0u },
-      0xf100, { 0x88u, 0u }, 0x4u };
+    { (u16*)0x02001b40, 0x0600a000, { 0u, 0xdu, 0u, 0x2u, 0u, 0u, 0u, 0u }, 0xf100, { 0x88u, 0u }, 0x4u };
 #endif
 
 typedef struct {
@@ -569,8 +570,7 @@ const struct_0812816C gUnk_08128190 =
         .fill_type = 0x5,
     };
 #else
-    { (u16*)0x02021f72, 0x06004000, { 0u, 0xdu, 0u, 0x2u, 0u, 0u, 0u, 0u },
-      0xc200, { 0xe0u, 0u }, 0x5u };
+    { (u16*)0x02021f72, 0x06004000, { 0u, 0xdu, 0u, 0x2u, 0u, 0u, 0u, 0u }, 0xc200, { 0xe0u, 0u }, 0x5u };
 #endif
 
 u32 sub_080A4CBC(u32 figurineIndex) {
@@ -667,20 +667,41 @@ void sub_080A4DB8(u32 param_1) {
     {
         const char* tab_name = NULL;
         switch (param_1) {
-            case PauseMenuScreen_1:  tab_name = "Items"; break;
-            case PauseMenuScreen_2:  tab_name = "Quest Status"; break;
-            case PauseMenuScreen_4:  tab_name = "Map"; break;
-            case PauseMenuScreen_5:  tab_name = "Dungeon Map"; break;
-            case PauseMenuScreen_6:  tab_name = "Map Detail"; break;
-            case PauseMenuScreen_7:  tab_name = "Kinstone Pieces"; break;
-            case PauseMenuScreen_8:  tab_name = "Sword Techniques"; break;
-            case PauseMenuScreen_9:  tab_name = "Save"; break;
-            case PauseMenuScreen_10: tab_name = "Save Confirmation"; break;
-            case PauseMenuScreen_11: tab_name = "Save Confirmation"; break;
-            default: break;
+            case PauseMenuScreen_1:
+                tab_name = "Items";
+                break;
+            case PauseMenuScreen_2:
+                tab_name = "Quest Status";
+                break;
+            case PauseMenuScreen_4:
+                tab_name = "Map";
+                break;
+            case PauseMenuScreen_5:
+                tab_name = "Dungeon Map";
+                break;
+            case PauseMenuScreen_6:
+                tab_name = "Map Detail";
+                break;
+            case PauseMenuScreen_7:
+                tab_name = "Kinstone Pieces";
+                break;
+            case PauseMenuScreen_8:
+                tab_name = "Sword Techniques";
+                break;
+            case PauseMenuScreen_9:
+                tab_name = "Save";
+                break;
+            case PauseMenuScreen_10:
+                tab_name = "Save Confirmation";
+                break;
+            case PauseMenuScreen_11:
+                tab_name = "Save Confirmation";
+                break;
+            default:
+                break;
         }
         if (tab_name) {
-            PortTtsOptions opts = {0};
+            PortTtsOptions opts = { 0 };
             opts.priority = PORT_TTS_PRIO_URGENT;
             opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
             opts.dedupe = false;
@@ -691,7 +712,8 @@ void sub_080A4DB8(u32 param_1) {
     gMenu.field_0x3 = gPauseMenuOptions.unk2[param_1];
     {
         const struct_08128AD8* sel_08128AD8 = gUnk_08128AD8;
-        if (REGION_IS_EU) sel_08128AD8 = gUnk_08128AD8_eu;
+        if (REGION_IS_EU)
+            sel_08128AD8 = gUnk_08128AD8_eu;
         ptr = &sel_08128AD8[gUnk_08128A38[param_1].unk0];
     }
     gScreen.lcd.displayControl = ptr->unk2 | 0x1940;

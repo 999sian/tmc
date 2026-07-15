@@ -31,6 +31,6 @@ typedef enum {
     PLAYER_ITEM_CELL_OVERWRITE_SET2,
 } PlayerItem;
 
-extern u32 sub_080040D8(struct Entity_*, u8*, s32, s32);
+extern u32 sub_080040D8(struct Entity_*, const u8*, s32, s32);
 
 #endif // PLAYERITEM_H

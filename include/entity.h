@@ -312,6 +312,13 @@ typedef struct {
     GENERIC_ENTITY_FIELDS
 } GenericEntity;
 
+typedef struct UpdateContext {
+    void* table;
+    void* list_top;
+    Entity* current_entity;
+    void* restore_sp;
+} UpdateContext;
+
 PORT_STATIC_ASSERT_SIZE(Entity, 0x68, 0x90, "Entity size incorrect");
 PORT_STATIC_ASSERT_OFFSET(Entity, hitbox, 0x48, 0x50, "Entity hitbox offset incorrect");
 PORT_STATIC_ASSERT_OFFSET(Entity, parent, 0x50, 0x60, "Entity parent offset incorrect");

@@ -96,17 +96,24 @@ void sub_080921BC(GentariCurtainEntity* this) {
     GenericEntity* pEVar1;
     GenericEntity* end;
 
-    pEVar1 = (GenericEntity*)gAuxPlayerEntities;
-    end = pEVar1 + 0x4f;
+    pEVar1 = gAuxPlayerEntities;
+    end = pEVar1 + ARRAY_COUNT(gAuxPlayerEntities);
 
     do {
-        if (pEVar1->base.kind == OBJECT) {
-            if (pEVar1->base.id == MINISH_SIZED_ARCHWAY) {
-                if (pEVar1->base.type == 2) {
-                    super->child = (Entity*)pEVar1;
-                    return;
-                }
-            }
+        if (pEVar1->base.kind == OBJECT && pEVar1->base.id == MINISH_SIZED_ARCHWAY && pEVar1->base.type == 2) {
+            super->child = &pEVar1->base;
+            return;
+        }
+        pEVar1++;
+    } while (pEVar1 < end);
+
+    pEVar1 = gEntities;
+    end = pEVar1 + ARRAY_COUNT(gEntities);
+
+    do {
+        if (pEVar1->base.kind == OBJECT && pEVar1->base.id == MINISH_SIZED_ARCHWAY && pEVar1->base.type == 2) {
+            super->child = &pEVar1->base;
+            return;
         }
         pEVar1++;
     } while (pEVar1 < end);
