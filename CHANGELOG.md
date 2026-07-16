@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.8.1 (2026-07-15)
 
 ### Follow-up crash hardening
 
@@ -94,6 +94,28 @@
 - This also fixes silent bracelet-state corruption: the head's old 8-byte
   pointer write clobbered the bracelet's adjacent fields (`unk_7c`/`unk_7e`),
   and the bracelet palette-sync path read back a garbage head link.
+
+### More GBA-to-PC fixes (PR #169 + follow-ups)
+
+- **Royal Valley light-overflow softlock fixed** (`miscManager.c`, #169).
+  `MiscManager_Type7`'s light-region loop relied on a separate global sitting
+  immediately after its data table as a terminator; PC layout broke that
+  adjacency, so the loop ran off the end, read garbage into `gRoomVars.lightLevel`
+  and froze Link. An explicit in-array `{0xFFFF, …}` sentinel now stops the loop
+  in bounds. (Contributed by @alfonsoalvarohervas-sudo.)
+- **Minish portal cutscene skip restored** (`enterPortalSubtask.c`, #169).
+  `sub_0804AD18` now returns `TRUE` explicitly on PC instead of relying on the
+  GBA implicit-register return, so pressing R/B skips the transition again.
+  (Contributed by @alfonsoalvarohervas-sudo.)
+- **F8 Debug Menu -> Warp: "Shrink to Minish" toggle** (#169) transforms Link in
+  and out of Minish size, wiring scale, hitboxes, priority and shadows through
+  the engine's `PLAYER_MINISH` state machine. (Contributed by
+  @alfonsoalvarohervas-sudo.)
+- **Same-class follow-ups from the audit:** the steam-overlay room handler
+  (`sub_08059F9C`) now returns explicitly on its entity-delete paths instead of
+  an indeterminate register value, and the demo/attract logo draw
+  (`sub_080A30AC`) resolves its frame pointers against the live ROM instead of
+  reading megabytes past a 4 KB data slice.
 
 ## v0.8.0 (2026-07-12)
 
