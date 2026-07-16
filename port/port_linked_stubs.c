@@ -2146,10 +2146,19 @@ u8 RupeeKeyDigits[16];
 
 // Player macros — now provided by src/data/data_080046A4.c
 
-// Entity data (ROM data — all zero-init stubs)
+// Entity data (ROM data — all zero-init stubs).
+// On Linux the LTO type gate (pc_lto_type_check) compares these against the
+// game's `extern EntityData name` declarations, so back a correctly-typed
+// EntityData symbol with oversized storage via an ELF alias. Mach-O (macOS)
+// has no `alias` attribute — and runs no gate — so define plain oversized
+// storage there (the pre-gate form; the linker matches purely by name).
+#if defined(__linux__)
 #define ENTITY_DATA_STUB(name, bytes)                     \
     u8 name##_storage[bytes] __attribute__((aligned(4))); \
     extern EntityData name __attribute__((alias(#name "_storage")))
+#else
+#define ENTITY_DATA_STUB(name, bytes) u8 name[bytes] __attribute__((aligned(4)))
+#endif
 ENTITY_DATA_STUB(Entities_HouseInteriors1_Mayor_080D6210, 64);
 ENTITY_DATA_STUB(Entities_MinishPaths_MayorsCabin_gUnk_080D6138, 64);
 ENTITY_DATA_STUB(UpperInn_Din, 64);
