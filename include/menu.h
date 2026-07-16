@@ -27,6 +27,18 @@ typedef struct {
     u8 rButtonX;
     u8 rButtonY;
     u8 rButtonText;
+    /* Variable-length trailing list of {x, y} UI-element pairs, terminated by
+     * an x byte of 0xFF, walked by sub_080A70AC (subtask.c). On GBA these
+     * bytes sit in ROM right after the 9-byte header; this zero-length FAM
+     * just names that region.
+     *
+     * FOOTGUN (PC): never define a KeyButtonLayout global as a plain
+     * `const KeyButtonLayout x = { ... }` — GCC emits no storage for a
+     * zero-length flexible-array member, so the {x,y}… entries and the 0xFF
+     * terminator would be absent and sub_080A70AC reads out of bounds (same
+     * class as the miscManager gUnk_08108354 adjacent-terminator bug). Add PC
+     * globals as a raw `const u8[]` ending in 0xFF (see the #ifdef PC_PORT
+     * gUnk_080FC8D0 / gUnk_0812813C forms) or keep them ROM-backed. */
     u8 settingDict[0];
 } PACKED KeyButtonLayout;
 
