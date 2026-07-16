@@ -158,7 +158,6 @@ void sub_080A2FD0(void) {
 void sub_080A30AC(void) {
     s32 unk_0x10;
     u8* ptr;
-    u8* currentPtr;
     u32 offset;
     gOamCmd._4 = 0x2000;
     gOamCmd._6 = 0;
@@ -167,25 +166,36 @@ void sub_080A30AC(void) {
     unk_0x10 = (s16)gGenericMenu.unk10.h[0];
     gOamCmd.x = -0x128 - unk_0x10;
 #ifdef PC_PORT
-    offset = Port_ReadU32(gUnk_08A068BF);
-    ptr = gUnk_08A068BF - 0xc;
-    sub_080ADA04(&gOamCmd, ptr + offset);
-    gOamCmd.x = -0xc0 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
-    gOamCmd.x = -0x58 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
-    gOamCmd.x = 0x10 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(gUnk_08A068BF));
-    gOamCmd.x = 0x78 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
-    gOamCmd.x = 0xe0 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
-    gOamCmd.x = 0x148 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(gUnk_08A068BF));
-    gOamCmd.x = 0x1b0 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
-    gOamCmd.x = 0x218 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
+    /* GBA reads three u32 frame-object offsets from a table at
+     * gUnk_08A068BF-0xc (the first two entries sit BEFORE gUnk_08A068BF) and
+     * draws each 3x; the offsets are ROM-relative to that table base. On PC
+     * gUnk_08A068BF is a standalone .rodata slice, so both the -0xc arithmetic
+     * and adding a ROM-relative offset (~0x3C0100) leave the object and read
+     * out of bounds. Resolve the table and every target against the live ROM
+     * instead. 0x08A068B3 = 0x08A068BF - 0xc. */
+    ptr = (u8*)Port_ResolveRomData(0x08A068B3u);
+    if (ptr != NULL) {
+        u32 off4 = Port_ReadU32(ptr + 4);
+        u32 off8 = Port_ReadU32(ptr + 8);
+        offset = Port_ReadU32(ptr + 0xc);
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + offset));
+        gOamCmd.x = -0xc0 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off4));
+        gOamCmd.x = -0x58 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off8));
+        gOamCmd.x = 0x10 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + offset));
+        gOamCmd.x = 0x78 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off4));
+        gOamCmd.x = 0xe0 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off8));
+        gOamCmd.x = 0x148 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + offset));
+        gOamCmd.x = 0x1b0 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off4));
+        gOamCmd.x = 0x218 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off8));
+    }
 #else
     offset = *(u32*)gUnk_08A068BF;
     ptr = gUnk_08A068BF - 0xc;

@@ -554,6 +554,8 @@ void ram_DrawDirect(OAMCommand* cmd, u32 spriteIndex, u32 frameIndex) {
  */
 void ram_sub_080ADA04(OAMCommand* cmd, void* frameDataPtr) {
     const u8* frameData = (const u8*)frameDataPtr;
+    if (frameData == NULL) /* Port_ResolveRomData can hand us NULL; the GBA ROM path never did */
+        return;
     u8 count = frameData[0];
     if (count == 0)
         return;
