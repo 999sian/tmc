@@ -437,8 +437,21 @@ u32* sub_0805F25C(u32 param_1) {
             break;
     }
     {
+#ifdef PC_PORT
+        /* Bank nibble comes from the text stream (ROM/asset/mod data); the
+         * switch handles banks 0..8 and gUnk_08109248 has exactly 9 host
+         * entries. GBA read adjacent ROM for 9..15; on PC that's a garbage
+         * host pointer — clamp to bank 0. */
+        u32* result;
+        if (uVar1 >= 9) {
+            uVar1 = 0;
+        }
+        result = gUnk_08109248[uVar1] + param_1 * 0x10;
+        return result;
+#else
         u32* result = gUnk_08109248[uVar1] + param_1 * 0x10;
         return result;
+#endif
     }
 }
 

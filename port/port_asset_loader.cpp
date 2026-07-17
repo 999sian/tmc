@@ -879,6 +879,13 @@ MapDataDefinition* BuildMapDefinitionSequence(const std::vector<MapDefinitionRef
         defs[i].size = ref.size | (ref.compressed ? MAP_COMPRESSED : 0u);
     }
 
+    /* The engine's LoadMapData walk (beanstalkSubtask.c) continues while the
+     * PREVIOUS def carries MAP_MULTIPLE — the terminator lives inside the
+     * data. A truncated/modded JSON whose last entry still says
+     * "multiple":true would walk off this exact-size array; force the last
+     * def to terminate the chain. */
+    defs[refs.size() - 1].src &= ~static_cast<u32>(MAP_MULTIPLE);
+
     MapDataDefinition* result = defs.get();
     gAssetGroupCache.mapDefStorage[area].push_back(std::move(defs));
     return result;

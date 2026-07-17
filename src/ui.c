@@ -748,6 +748,15 @@ void ItemUIElement(UIElement* element) {
     }
 
     if (element->unk_8 != itemId) {
+#ifdef PC_PORT
+        /* itemId comes raw from gSave (equipped items / bottles); the host
+         * gSpriteAnimations_322 table has 128 slots and the fetched Frame*
+         * is dereferenced immediately. pauseMenu's GetSpriteAnimation322
+         * already rejects >= 128; this HUD path lacked the same bound. */
+        if (itemId >= 128) {
+            return;
+        }
+#endif
         element->unk_8 = itemId;
         sub_0801CAB8(element, gSpriteAnimations_322[itemId]);
     }
