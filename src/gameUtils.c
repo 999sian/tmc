@@ -115,6 +115,17 @@ static void* ReadAreaSubTableEntry(void** table, u32 index) {
         return Port_ReadPackedRomPtr(table, index);
     }
 
+    /* Host-side tables (asset-cache slot vectors, port_rom.c shadow arrays)
+     * hold at least MAX_ROOMS slots — never more valid ones. Unused rooms in
+     * original data carry junk ids (tree interiors rooms 1..15 have
+     * tileSet_id=0xFFF3): on GBA that read returned harmless garbage, on PC
+     * it faults ~512KB past the table (#0.8.1 crash entering the North
+     * Hyrule Field tree). Reject and let the bounds-checked ROM fallback
+     * resolve it. */
+    if (index >= MAX_ROOMS) {
+        return NULL;
+    }
+
     return table[index];
 }
 #endif
