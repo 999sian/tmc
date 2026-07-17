@@ -436,17 +436,32 @@ static void ram_sub_080B197C_c(u16* mapSpecial, u16* bgBuffer) {
     u32 row16 = ydiff >> 4;
     u8* src = (u8*)mapSpecial + (col16 + row16 * 128) * 4;
 
+    /* On GBA gMapDataTopSpecial/gMapDataBottomSpecial are adjacent EWRAM and
+     * deep scroll positions deliberately walked this copy off one buffer into
+     * its neighbor (stable garbage on the offscreen seam). On PC they are
+     * separate globals — clamp each 64-byte row to the 0x8000-byte buffer;
+     * skipped rows leave zeros (transparent tiles) on the seam instead. */
+    const u8* lo = (const u8*)mapSpecial;
+    const u8* hi = lo + 0x8000;
+
+#define COPY_ROW_CLAMPED()                 \
+    do {                                   \
+        if (src >= lo && src + 64 <= hi) { \
+            memcpy(dst, src, 64);          \
+        }                                  \
+    } while (0)
+
     /* bgBuffer was passed as gBGxBuffer + 0x20 (in u16 units).
      * The original code does "subs r1, #0x40" to get to row 0. */
     u16* dst = bgBuffer - 0x20;
 
     if (ydiff < 8) {
         /* First row: copy without advancing src */
-        memcpy(dst, src, 64); /* 32 u16 = 64 bytes */
+        COPY_ROW_CLAMPED(); /* 32 u16 = 64 bytes */
         dst += 32;
         /* 22 more rows: first reuses same src, then advances */
         for (int i = 0; i < 22; i++) {
-            memcpy(dst, src, 64);
+            COPY_ROW_CLAMPED();
             src += 0x100; /* next 8×8 map row = 128 u16 = 256 bytes */
             dst += 32;
         }
@@ -455,11 +470,12 @@ static void ram_sub_080B197C_c(u16* mapSpecial, u16* bgBuffer) {
         src -= 0x100;
         /* 23 consecutive rows */
         for (int i = 0; i < 23; i++) {
-            memcpy(dst, src, 64);
+            COPY_ROW_CLAMPED();
             src += 0x100;
             dst += 32;
         }
     }
+#undef COPY_ROW_CLAMPED
 }
 
 /* Declared in screenTileMap.c (already compiled as C on PC) */

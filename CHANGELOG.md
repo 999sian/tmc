@@ -38,6 +38,11 @@
     stays GBA-identical instead of linker-dependent.
   - Asset loader force-terminates map-definition chains so a truncated or
     modded `area_*.json` cannot walk the engine off a heap array.
+  - The special-layer scroll copy (`ram_sub_080B197C_c`) clamps its 64-byte
+    rows to the map buffer: on GBA the two special tilemaps are adjacent
+    EWRAM and deep scroll offsets deliberately walked off one into the
+    other; on PC they are separate globals (caught by ASan in Hyrule Town
+    Underground).
 - **Nine per-room entity lists were never filled from ROM** (zero `.bss`
   stubs): the Mayor's house state change, the Mayor's cabin on the Minish
   path, and all seven Happy Hearth Inn 2F oracle lists (the Din/Nayru/Farore
