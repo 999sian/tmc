@@ -4,6 +4,16 @@
 
 ### Fixed
 
+- **Android crash on launch (v0.8.1).** The CI's unpinned SDL3 package
+  floated from 3.4.4 to 3.4.12 between releases, and SDL 3.4.12 changed the
+  `onNativePadDown` JNI signature (added a `scancode` argument). The vendored
+  Java glue still declared the old signature, so JNI registration failed and
+  ART aborted with `NoSuchMethodError` before the game could start — on every
+  device. The Java glue is now synced to SDL release-3.4.12 (including the
+  new `SDLSensorManager.java`) and the `libsdl3` package is pinned to 3.4.12
+  so the two sides can only be bumped together. Verified on a Galaxy Tab A7:
+  release 0.8.1 APK aborts at registration, fixed build reaches `SDL_main`
+  and runs.
 - **Crash entering trees (e.g. North Hyrule Field fairy fountain).** Unused
   rooms in some area room-header tables carry a junk tileset id (`0xFFF3`);
   the GBA read it as harmless garbage, but on PC it indexed ~512KB past the

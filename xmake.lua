@@ -168,7 +168,12 @@ else
     -- recorded a NEEDED dep on libfmt.so.12, which broke on Fedora 43
     -- (ships fmt 11.x).
     add_requires("fmt", {system = false, configs = {header_only = true}})
-    add_requires("libsdl3", {configs = {shared = false}})
+    -- Pinned: the Android Java glue in android/app/src/main/java/org/libsdl/
+    -- is vendored from this exact SDL release. A floating version desyncs the
+    -- JNI signatures (3.4.12 added a scancode arg to onNativePadDown; the
+    -- 3.4.4-era glue shipped in v0.8.1 crashed every Android launch with
+    -- NoSuchMethodError at registration). Bump BOTH together.
+    add_requires("libsdl3 3.4.12", {configs = {shared = false}})
 end
 add_requires("guilite")
 
