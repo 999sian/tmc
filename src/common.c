@@ -492,8 +492,22 @@ void LoadGfxGroup(u32 group) {
     const u8* src;
     u32 dest;
     int size;
-    const GfxItem* gfxItem = gGfxGroups[group];
+    const GfxItem* gfxItem;
 #ifdef PC_PORT
+    /* group is a raw byte (room data / gRoomVars.graphicsGroups, whose "none"
+     * sentinel is 0xFF); gGfxGroups has 133 slots (GFX_GROUPS_COUNT_MAX,
+     * port_rom.c). GBA walked adjacent ROM as a GfxItem list — on PC the
+     * neighboring globals hold non-NULL pointers, defeating the NULL check
+     * below and ending in a wild gfx copy. */
+    if (group >= 133) {
+        static u8 sSeenBadGfxGroup[256] = { 0 };
+        if (!sSeenBadGfxGroup[(u8)group]) {
+            sSeenBadGfxGroup[(u8)group] = 1;
+            fprintf(stderr, "[port] LoadGfxGroup: group %u out of range — skipping\n", group);
+        }
+        return;
+    }
+    gfxItem = gGfxGroups[group];
     /* #port bug-class-2: ROM gfx group can be unresolved (NULL) on the native
      * port; skip rather than NULL-deref (crashes on N64). */
     if (gfxItem == NULL) {
@@ -504,6 +518,8 @@ void LoadGfxGroup(u32 group) {
         }
         return;
     }
+#else
+    gfxItem = gGfxGroups[group];
 #endif
     while (1) {
         u32 loadGfx = FALSE;

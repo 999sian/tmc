@@ -11,6 +11,33 @@
   depending on heap layout, which is why the crash was intermittent.
   `ReadAreaSubTableEntry` now rejects indices past the table and falls back
   to the bounds-checked ROM resolver.
+- **Out-of-bounds sweep for the same bug family** (data-driven index into a
+  fixed host-side table; GBA read harmless garbage, PC faults). Found via
+  parallel static audit plus an ASan warp tour over every area:
+  - Room exit lists are now resolved from the ROM on all regions (previously
+    EU/JP only) — the compile-time `gExitLists` sub-arrays are sized to the
+    rooms the decomp names, and e.g. Hyrule Town's ROM header table has more
+    rooms than exit entries, so room-info init read past the const array
+    (caught live by ASan entering area 0x02/0x08).
+  - `GetAreaRoomPropertyList` and `GetCurrentRoomProperty` host-table reads
+    now bound the room/property index like the tileset fix.
+  - `GetCurrentRoomInfo` clamps a junk room id instead of handing out a
+    garbage `RoomResInfo` whose `properties` pointer gets dereferenced.
+  - `InitRoom` clamps a junk area id (crafted saves) before it feeds the
+    metadata/flag-bank/dungeon-key chain; `dungeon_idx` can no longer wrap
+    and write past `gSave.dungeonKeys`.
+  - The HUD item renderer bounds save-derived item ids against the 128-slot
+    animation table (the pause menu already did).
+  - `LoadGfxGroup` rejects out-of-range gfx group ids (including the 0xFF
+    "none" sentinel) instead of walking a garbage GfxItem list.
+  - Text glyph lookup clamps font bank nibbles 9–15 to bank 0 (9 host font
+    banks exist; GBA read adjacent ROM).
+  - Physics surface-flag table: tiles mapping to rows 60–68 read past the
+    60-row table even on GBA (landing in the player-macro bytes that follow
+    in ROM); the PC build now appends those ROM bytes verbatim so behavior
+    stays GBA-identical instead of linker-dependent.
+  - Asset loader force-terminates map-definition chains so a truncated or
+    modded `area_*.json` cannot walk the engine off a heap array.
 
 ## v0.8.1 (2026-07-15)
 

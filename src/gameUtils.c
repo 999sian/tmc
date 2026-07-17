@@ -668,10 +668,28 @@ void InitRoom(void) {
     const AreaHeader* a_hdr = NULL;
 
     MemClear(&gArea, sizeof gArea);
+#ifdef PC_PORT
+    /* area is a raw u8 from save/exit data. gAreaMetadata has 153 rows; a
+     * junk area reads a garbage row whose flag_bank/location feed
+     * gLocalFlagBanks[] and dungeon_idx below — ending in flag WRITES at
+     * garbage bit offsets. Clamp once here, the first consumer. */
+    if (gRoomControls.area >= AREA_TABLE_COUNT) {
+        fprintf(stderr, "[AREA] InitRoom: junk area 0x%02x, clamping to 0\n", gRoomControls.area);
+        gRoomControls.area = 0;
+    }
+#endif
     a_hdr = &gAreaMetadata[gRoomControls.area];
     gArea.areaMetadata = a_hdr->flags;
     gArea.locationIndex = a_hdr->location;
     gArea.dungeon_idx = a_hdr->location - 23;
+#ifdef PC_PORT
+    /* location is a raw metadata byte; HAS_KEYS areas with location < 23
+     * wrap dungeon_idx to ~233 and ModDungeonKeys then WRITES past
+     * gSave.dungeonKeys[0x10] — in-save corruption. */
+    if (gArea.dungeon_idx >= 0x10) {
+        gArea.dungeon_idx = 0;
+    }
+#endif
     gArea.localFlagOffset = gLocalFlagBanks[a_hdr->flag_bank];
     gArea.flag_bank = a_hdr->flag_bank;
     gArea.portal_timer = 180;
@@ -748,17 +766,18 @@ void InitRoomResInfo(RoomResInfo* info, RoomHeader* r_hdr, u32 area, u32 room) {
 #endif
     info->tiles = gAreaTiles[area];
     info->bg_anim = (void*)gUnk_080B755C[area];
-#ifdef MULTI_REGION
-    /* gExitLists (transitions.c) is USA-baseline-sized; EU/JP room indices can
-     * run past it (global-buffer-overflow). Resolve region-correct exits from the
-     * active ROM instead, and never touch the compile-time table for EU/JP. */
-    if (REGION_IS_EU || REGION_IS_JP) {
-        info->exits = (const Transition*)Port_ResolveAreaExitsFromRom(area, room);
-    } else
+#ifdef PC_PORT
+    /* gExitLists (transitions.c) sub-arrays are sized to the rooms the decomp
+     * names, but ROM room-header tables can hold more valid headers (e.g.
+     * Hyrule Town: 2 headers, 1 exit list) — gExitLists[area][room] then reads
+     * past the const array into whatever the linker placed next. Resolve exits
+     * from the active ROM for every region instead: byte-identical for named
+     * rooms (the decomp tables were extracted from this ROM), NULL for junk
+     * rooms (all consumers NULL-check). */
+    info->exits = (const Transition*)Port_ResolveAreaExitsFromRom(area, room);
+#else
+    info->exits = gExitLists[area][room];
 #endif
-    {
-        info->exits = gExitLists[area][room];
-    }
     if (gAreaTable[area] != NULL) {
 #ifdef PC_PORT
         info->properties = ReadAreaSubTableEntry(gAreaTable[area], room);
@@ -772,6 +791,15 @@ void InitRoomResInfo(RoomResInfo* info, RoomHeader* r_hdr, u32 area, u32 room) {
 }
 
 RoomResInfo* GetCurrentRoomInfo(void) {
+#ifdef PC_PORT
+    /* room is a raw u8 from save/exit data; roomResInfos has MAX_ROOMS slots.
+     * A junk room hands out garbage past gArea whose ->properties pointer is
+     * then dereferenced (room.c sub_0804AFB0) — SIGSEGV on PC, EWRAM garbage
+     * on GBA. */
+    if (gRoomControls.room >= MAX_ROOMS) {
+        return &gArea.roomResInfos[0];
+    }
+#endif
     return &gArea.roomResInfos[gRoomControls.room];
 }
 
