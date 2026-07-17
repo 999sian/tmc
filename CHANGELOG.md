@@ -38,6 +38,16 @@
     stays GBA-identical instead of linker-dependent.
   - Asset loader force-terminates map-definition chains so a truncated or
     modded `area_*.json` cannot walk the engine off a heap array.
+- **Nine per-room entity lists were never filled from ROM** (zero `.bss`
+  stubs): the Mayor's house state change, the Mayor's cabin on the Minish
+  path, and all seven Happy Hearth Inn 2F oracle lists (the Din/Nayru/Farore
+  house-renting sidequest). The `kind != 0xFF` walk ran off the empty arrays
+  (caught by ASan in the Mayor's house) and the real NPCs never spawned.
+  Filled from ROM like the other per-room lists; two stubs were also too
+  small to hold their terminator and were resized.
+- ASan builds no longer alias entity-data stubs to a 16-byte typed view —
+  the alias made every legitimate walk past the first entry report a bogus
+  global-buffer-overflow, hiding real findings.
 
 ## v0.8.1 (2026-07-15)
 
