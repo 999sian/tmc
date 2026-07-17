@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Crash entering trees (e.g. North Hyrule Field fairy fountain).** Unused
+  rooms in some area room-header tables carry a junk tileset id (`0xFFF3`);
+  the GBA read it as harmless garbage, but on PC it indexed ~512KB past the
+  64-slot host tileset table — an out-of-bounds read that crashed or not
+  depending on heap layout, which is why the crash was intermittent.
+  `ReadAreaSubTableEntry` now rejects indices past the table and falls back
+  to the bounds-checked ROM resolver.
+
 ## v0.8.1 (2026-07-15)
 
 ### Follow-up crash hardening
