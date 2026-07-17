@@ -2152,15 +2152,29 @@ u8 RupeeKeyDigits[16];
 // EntityData symbol with oversized storage via an ELF alias. Mach-O (macOS)
 // has no `alias` attribute — and runs no gate — so define plain oversized
 // storage there (the pre-gate form; the linker matches purely by name).
-#if defined(__linux__)
+/* The Linux alias gives debuggers a typed EntityData view of the storage.
+ * Under ASan the alias's 16-byte type poisons a redzone INSIDE the real
+ * storage, so every sentinel-walk past the first entry (room.c
+ * LoadRoomEntityList) and the Port_InitDataStubs memcpy report a bogus
+ * global-buffer-overflow. Use the plain byte array there. */
+#if defined(__SANITIZE_ADDRESS__)
+#define TMC_ASAN_BUILD 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define TMC_ASAN_BUILD 1
+#endif
+#endif
+#if defined(__linux__) && !defined(TMC_ASAN_BUILD)
 #define ENTITY_DATA_STUB(name, bytes)                     \
     u8 name##_storage[bytes] __attribute__((aligned(4))); \
     extern EntityData name __attribute__((alias(#name "_storage")))
 #else
 #define ENTITY_DATA_STUB(name, bytes) u8 name[bytes] __attribute__((aligned(4)))
 #endif
-ENTITY_DATA_STUB(Entities_HouseInteriors1_Mayor_080D6210, 64);
-ENTITY_DATA_STUB(Entities_MinishPaths_MayorsCabin_gUnk_080D6138, 64);
+/* Real ROM lists are 80 and 96 bytes (4 and 5 entities + 0xFF terminator);
+ * 64 bytes cut the terminator off both. */
+ENTITY_DATA_STUB(Entities_HouseInteriors1_Mayor_080D6210, 80);
+ENTITY_DATA_STUB(Entities_MinishPaths_MayorsCabin_gUnk_080D6138, 96);
 ENTITY_DATA_STUB(UpperInn_Din, 64);
 ENTITY_DATA_STUB(UpperInn_Farore, 64);
 ENTITY_DATA_STUB(UpperInn_Nayru, 64);

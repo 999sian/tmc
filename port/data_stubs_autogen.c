@@ -622,6 +622,15 @@ void Port_InitDataStubs(void) {
         extern EntityData gUnk_additional_8_HouseInteriors3_BorlovEntrance;
         extern EntityData gUnk_additional_9_HouseInteriors3_BorlovEntrance;
         extern EntityData gUnk_additional_a_HouseInteriors3_BorlovEntrance;
+        extern EntityData Entities_MinishPaths_MayorsCabin_gUnk_080D6138;
+        extern EntityData Entities_HouseInteriors1_Mayor_080D6210;
+        extern EntityData UpperInn_Oracles;
+        extern EntityData UpperInn_NoFarore;
+        extern EntityData UpperInn_NoDin;
+        extern EntityData UpperInn_NoNayru;
+        extern EntityData UpperInn_Din;
+        extern EntityData UpperInn_Nayru;
+        extern EntityData UpperInn_Farore;
         struct PerRoomEntityListInit {
             const char* name;
             u32 rom_offset;
@@ -629,7 +638,8 @@ void Port_InitDataStubs(void) {
             u8* dest;
         };
         struct PerRoomEntityListInit entries[] = {
-            { "gUnk_additional_a_DeepwoodShrineBoss_Main", 0xDF94Cu, 0x30u, (u8*)&gUnk_additional_a_DeepwoodShrineBoss_Main },
+            { "gUnk_additional_a_DeepwoodShrineBoss_Main", 0xDF94Cu, 0x30u,
+              (u8*)&gUnk_additional_a_DeepwoodShrineBoss_Main },
             /* Melari's Mines main room: state-change loads the additional_8
              * NPC list (2 minishes + Melari + 2 cutscene swords) and the
              * additional_9 helper-minish list. With zeroed stubs the
@@ -656,22 +666,45 @@ void Port_InitDataStubs(void) {
             { "gUnk_additional_9_HouseInteriors1_Library1F", 0xD6734u, 0x50u,
               (u8*)&gUnk_additional_9_HouseInteriors1_Library1F },
             { "gUnk_additional_8_HyruleCastle_3", 0xD7690u, 0x40u, (u8*)&gUnk_additional_8_HyruleCastle_3 },
-            { "gUnk_additional_a_CaveOfFlamesBoss_Main", 0xE1814u, 0x30u, (u8*)&gUnk_additional_a_CaveOfFlamesBoss_Main },
+            { "gUnk_additional_a_CaveOfFlamesBoss_Main", 0xE1814u, 0x30u,
+              (u8*)&gUnk_additional_a_CaveOfFlamesBoss_Main },
             { "gUnk_additional_a_TempleOfDroplets_BigOcto", 0xE49F4u, 0x30u,
               (u8*)&gUnk_additional_a_TempleOfDroplets_BigOcto },
             { "gUnk_additional_8_PalaceOfWinds_GyorgTornado", 0xE72E4u, 0x30u,
               (u8*)&gUnk_additional_8_PalaceOfWinds_GyorgTornado },
             { "gUnk_additional_9_PalaceOfWinds_GyorgTornado", 0xE7314u, 0x30u,
               (u8*)&gUnk_additional_9_PalaceOfWinds_GyorgTornado },
-            { "gUnk_additional_c_HouseInteriors2_Romio", 0xF236Cu, 0x20u, (u8*)&gUnk_additional_c_HouseInteriors2_Romio },
-            { "gUnk_additional_9_HouseInteriors2_Percy", 0xF2718u, 0x40u, (u8*)&gUnk_additional_9_HouseInteriors2_Percy },
-            { "gUnk_additional_a_HouseInteriors2_Percy", 0xF2758u, 0x40u, (u8*)&gUnk_additional_a_HouseInteriors2_Percy },
+            { "gUnk_additional_c_HouseInteriors2_Romio", 0xF236Cu, 0x20u,
+              (u8*)&gUnk_additional_c_HouseInteriors2_Romio },
+            { "gUnk_additional_9_HouseInteriors2_Percy", 0xF2718u, 0x40u,
+              (u8*)&gUnk_additional_9_HouseInteriors2_Percy },
+            { "gUnk_additional_a_HouseInteriors2_Percy", 0xF2758u, 0x40u,
+              (u8*)&gUnk_additional_a_HouseInteriors2_Percy },
             { "gUnk_additional_8_HouseInteriors3_BorlovEntrance", 0xF5F38u, 0x20u,
               (u8*)&gUnk_additional_8_HouseInteriors3_BorlovEntrance },
             { "gUnk_additional_9_HouseInteriors3_BorlovEntrance", 0xF5F58u, 0x20u,
               (u8*)&gUnk_additional_9_HouseInteriors3_BorlovEntrance },
             { "gUnk_additional_a_HouseInteriors3_BorlovEntrance", 0xF5F78u, 0x20u,
               (u8*)&gUnk_additional_a_HouseInteriors3_BorlovEntrance },
+            /* Nine stubs that were never in this table — zero .bss, so the
+             * kind!=0xFF walk ran off the array (ASan: Mayor's house rear
+             * entry, area 0x21) and the real NPCs never spawned: Mayor's
+             * house state change, Mayor's cabin (Minish path), and all
+             * seven Happy Hearth Inn 2F oracle lists (Din/Nayru/Farore
+             * house-renting sidequest). Offsets from tools/retail_maps/
+             * usa.map, sizes measured to the 0xFF terminator. USA
+             * addresses, same limitation as the rest of this table. */
+            { "Entities_MinishPaths_MayorsCabin_gUnk_080D6138", 0xD6138u, 0x60u,
+              (u8*)&Entities_MinishPaths_MayorsCabin_gUnk_080D6138 },
+            { "Entities_HouseInteriors1_Mayor_080D6210", 0xD6210u, 0x50u,
+              (u8*)&Entities_HouseInteriors1_Mayor_080D6210 },
+            { "UpperInn_Oracles", 0xD6BF4u, 0x40u, (u8*)&UpperInn_Oracles },
+            { "UpperInn_NoFarore", 0xD6C34u, 0x30u, (u8*)&UpperInn_NoFarore },
+            { "UpperInn_NoDin", 0xD6C64u, 0x30u, (u8*)&UpperInn_NoDin },
+            { "UpperInn_NoNayru", 0xD6C94u, 0x30u, (u8*)&UpperInn_NoNayru },
+            { "UpperInn_Din", 0xD6CC4u, 0x20u, (u8*)&UpperInn_Din },
+            { "UpperInn_Nayru", 0xD6CE4u, 0x20u, (u8*)&UpperInn_Nayru },
+            { "UpperInn_Farore", 0xD6D04u, 0x20u, (u8*)&UpperInn_Farore },
         };
         for (size_t i = 0; i < sizeof(entries) / sizeof(entries[0]); i++) {
             if (entries[i].rom_offset + entries[i].size <= gRomSize) {
