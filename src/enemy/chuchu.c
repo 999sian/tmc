@@ -43,7 +43,7 @@ extern void (*const gUnk_080CA234[])(ChuchuEntity*);
 extern void (*const gUnk_080CA25C[])(ChuchuEntity*);
 extern void (*const gUnk_080CA288[])(ChuchuEntity*);
 
-extern const s8 gUnk_080CA2B4[];
+extern const u8 gUnk_080CA2B4[];
 
 void Chuchu(ChuchuEntity* this) {
     s32 index;
@@ -354,14 +354,14 @@ void sub_0801F428(ChuchuEntity* this) {
     super->subtimer = 30;
 
     if (REGION_IS_EU) {
-    super->direction = sub_08049F84(super, 1);
+        super->direction = sub_08049F84(super, 1);
     }
 
     COLLISION_ON(super);
     super->spritePriority.b1 = 3;
 
     if (!REGION_IS_EU) {
-    super->spriteSettings.draw = 1;
+        super->spriteSettings.draw = 1;
     }
 
     InitializeAnimation(super, 2);
@@ -689,7 +689,7 @@ void sub_0801FB14(ChuchuEntity* this) {
 
 void sub_0801FB34(ChuchuEntity* this) {
     if (this->unk_68) {
-        sub_0806FA90(super, this->unk_68, gUnk_080CA2B4[super->frame & 0xf], 1);
+        sub_0806FA90(super, this->unk_68, (s8)gUnk_080CA2B4[super->frame & 0xf], 1);
         (this->unk_68)->spriteOffsetY--;
     }
 }

@@ -570,7 +570,7 @@ Entity* GetEmptyEntity() {
     }
 #endif
 
-    return &rv->base;
+    return rv != NULL ? &rv->base : NULL;
 }
 
 Entity* CreateAuxPlayerEntity(void) {
