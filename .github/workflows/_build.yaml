@@ -283,7 +283,12 @@ jobs:
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1
         with:
-          xmake-version: latest
+          # Pinned: xmake `latest` floated to v3.0.9, whose bin2c codegen
+          # intermittently aborts with "double free or corruption (out)"
+          # (SIGABRT) during parallel shader-blob generation, failing the
+          # build nondeterministically. v3.0.8 is the last release before
+          # the regression and builds this tree cleanly. Bump deliberately.
+          xmake-version: v3.0.8
           # Cache the xmake install itself plus the xmake package cache
           # (libpng/SDL3/fmt/... build artifacts). Keys are scoped per
           # os+arch so llvm-mingw (windows-arm64), choco MinGW
@@ -768,7 +773,8 @@ jobs:
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1
         with:
-          xmake-version: latest
+          # Pinned to v3.0.8 — see the desktop Setup xmake step above for why.
+          xmake-version: v3.0.8
           actions-cache-folder: '.xmake-cache'
           actions-cache-key: android-apk
           package-cache: true
