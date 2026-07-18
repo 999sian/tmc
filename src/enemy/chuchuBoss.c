@@ -435,37 +435,47 @@ void sub_08025DD8(ChuchuBossEntity* this) {
                 this->unk_84->unk_04 = 0;
                 this->unk_84->unk_0e = super->x.HALF.HI;
                 this->unk_68 = (ChuchuBossEntity*)CreateEnemy(CHUCHU_BOSS, super->type | 3);
-                if (this->unk_68) {
-                    this->unk_68->base.collisionLayer = super->collisionLayer;
-                    this->unk_68->base.x.HALF.HI = super->x.HALF.HI;
-                    this->unk_68->base.y.HALF.HI = super->y.HALF.HI - 0xE;
-                    this->unk_68->base.timer = 0xE;
-                    this->unk_68->base.parent = super;
-                    MEMORY_BARRIER;
-                    this->unk_68->unk_68 = this;
-                }
                 super->parent = CreateEnemy(CHUCHU_BOSS, super->type | 2);
-                if (super->parent) {
-                    super->parent->collisionLayer = super->collisionLayer;
-                    super->parent->x.HALF.HI = super->x.HALF.HI;
-                    super->parent->y.HALF.HI = this->unk_68->base.y.HALF.HI - 0x12;
-                    super->parent->timer = 0x12;
-                    super->parent->parent = (Entity*)this->unk_68;
-                    MEMORY_BARRIER;
-                    this->unk_68->base.child = super->parent;
-                    ((ChuchuBossEntity*)super->parent)->unk_68 = this;
-                }
                 super->child = CreateEnemy(CHUCHU_BOSS, super->type | 1);
-                if (super->child) {
-                    super->child->collisionLayer = super->collisionLayer;
-                    super->child->x.HALF.HI = super->x.HALF.HI;
-                    super->child->y.HALF.HI = super->parent->y.HALF.HI - 0xe;
-                    super->child->timer = 0xe;
-                    super->child->parent = super->parent;
-                    super->child->child = super;
-                    super->parent->child = super->child;
-                    ((ChuchuBossEntity*)super->child)->unk_68 = this;
+                if (this->unk_68 == NULL || super->parent == NULL || super->child == NULL) {
+                    if (this->unk_68 != NULL) {
+                        DeleteEntity(&this->unk_68->base);
+                    }
+                    if (super->parent != NULL) {
+                        DeleteEntity(super->parent);
+                    }
+                    if (super->child != NULL) {
+                        DeleteEntity(super->child);
+                    }
+                    this->unk_68 = NULL;
+                    super->parent = NULL;
+                    super->child = NULL;
+                    DeleteEntity(super);
+                    return;
                 }
+                this->unk_68->base.collisionLayer = super->collisionLayer;
+                this->unk_68->base.x.HALF.HI = super->x.HALF.HI;
+                this->unk_68->base.y.HALF.HI = super->y.HALF.HI - 0xE;
+                this->unk_68->base.timer = 0xE;
+                this->unk_68->base.parent = super;
+                MEMORY_BARRIER;
+                this->unk_68->unk_68 = this;
+                super->parent->collisionLayer = super->collisionLayer;
+                super->parent->x.HALF.HI = super->x.HALF.HI;
+                super->parent->y.HALF.HI = this->unk_68->base.y.HALF.HI - 0x12;
+                super->parent->timer = 0x12;
+                super->parent->parent = (Entity*)this->unk_68;
+                MEMORY_BARRIER;
+                this->unk_68->base.child = super->parent;
+                ((ChuchuBossEntity*)super->parent)->unk_68 = this;
+                super->child->collisionLayer = super->collisionLayer;
+                super->child->x.HALF.HI = super->x.HALF.HI;
+                super->child->y.HALF.HI = super->parent->y.HALF.HI - 0xe;
+                super->child->timer = 0xe;
+                super->child->parent = super->parent;
+                super->child->child = super;
+                super->parent->child = super->child;
+                ((ChuchuBossEntity*)super->child)->unk_68 = this;
                 {
                     Entity* tmp;
                     tmp = CreateEnemy(CHUCHU_BOSS, 8);
@@ -998,8 +1008,8 @@ void sub_080269CC(ChuchuBossEntity* this) {
         if (entity != NULL) {
             entity->base.spriteIndex = 0xc9;
             if (REGION_IS_EU) {
-            entity->base.spriteVramOffset = super->spriteVramOffset;
-            entity->base.palette.b.b0 = super->palette.b.b0;
+                entity->base.spriteVramOffset = super->spriteVramOffset;
+                entity->base.palette.b.b0 = super->palette.b.b0;
             }
             entity->base.animIndex = 1;
             entity->base.y.HALF.HI += 0x10;
@@ -1012,12 +1022,12 @@ void sub_080269CC(ChuchuBossEntity* this) {
                 entity->base.x.HALF.HI += 0x38;
             }
             if (!REGION_IS_EU) {
-            LoadFixedGFX(&entity->base, 0x3e);
-            if (super->type2 == 0) {
-                LoadObjPalette(&entity->base, 0x2b);
-            } else {
-                LoadObjPalette(&entity->base, 0x2c);
-            }
+                LoadFixedGFX(&entity->base, 0x3e);
+                if (super->type2 == 0) {
+                    LoadObjPalette(&entity->base, 0x2b);
+                } else {
+                    LoadObjPalette(&entity->base, 0x2c);
+                }
             }
         }
         pEVar6 = (ChuchuBossEntity*)super->parent;
@@ -1900,18 +1910,18 @@ Entity* sub_08027D20(ChuchuBossEntity* this) {
     if (r4 != NULL) {
         r4->spriteIndex = 0xc9;
         if (REGION_IS_EU) {
-        r4->spriteVramOffset = super->spriteVramOffset;
-        r4->palette.b.b0 = super->palette.b.b0;
+            r4->spriteVramOffset = super->spriteVramOffset;
+            r4->palette.b.b0 = super->palette.b.b0;
         }
         r4->y.HALF.HI++;
         r4->spriteOffsetY = 8;
         if (!REGION_IS_EU) {
-        LoadFixedGFX(r4, 0x3e);
-        if (super->type2 == 0) {
-            LoadObjPalette(r4, 0x2b);
-        } else {
-            LoadObjPalette(r4, 0x2c);
-        }
+            LoadFixedGFX(r4, 0x3e);
+            if (super->type2 == 0) {
+                LoadObjPalette(r4, 0x2b);
+            } else {
+                LoadObjPalette(r4, 0x2c);
+            }
         }
     }
     return r4;

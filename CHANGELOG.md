@@ -72,6 +72,11 @@
 - ASan builds no longer alias entity-data stubs to a 16-byte typed view —
   the alias made every legitimate walk past the first entry report a bogus
   global-buffer-overflow, hiding real findings.
+- **ChuChu-family allocation hardening.** Big Green ChuChu now abandons
+  construction cleanly if any linked body segment cannot be allocated;
+  previously a missing middle segment was dereferenced immediately. Full
+  entity-pool allocation now returns `NULL` directly instead of forming a
+  member address from a null pointer (an UBSan abort).
 
 ## v0.8.1 (2026-07-15)
 
