@@ -14,6 +14,15 @@
   so the two sides can only be bumped together. Verified on a Galaxy Tab A7:
   release 0.8.1 APK aborts at registration, fixed build reaches `SDL_main`
   and runs.
+- **Vaati fight 1 (Vaati Reborn) freeze / boss drifting out of bounds.** When
+  the final phase threshold fires, the boss enters its defeat sequence — but
+  another eye could still hold a pending stagger timer or take a hit that
+  frame. Its timer expiry rewrote the boss back into fight state with a phase
+  counter (3) the attack-selection switch has no case for, leaving Vaati
+  inert and drifting; any further eye hit also read one byte past the
+  3-entry phase-threshold table. Both verified live under a sanitizer via
+  state injection; eyes now stand down once the defeat has triggered.
+  (Latent on GBA too — the stray read hit adjacent ROM there.)
 - **Crash entering trees (e.g. North Hyrule Field fairy fountain).** Unused
   rooms in some area room-header tables carry a junk tileset id (`0xFFF3`);
   the GBA read it as harmless garbage, but on PC it indexed ~512KB past the

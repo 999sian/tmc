@@ -41,10 +41,8 @@ typedef struct {
     /*0x87*/ u8 unk_87;
 } VaatiRebornEnemyEntity;
 
-PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_74, 0x74, 0xA0,
-                          "VaatiRebornEnemyEntity unk_74 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_80, 0x80, 0xB0,
-                          "VaatiRebornEnemyEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_74, 0x74, 0xA0, "VaatiRebornEnemyEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_80, 0x80, 0xB0, "VaatiRebornEnemyEntity unk_80 offset incorrect");
 
 void VaatiRebornEnemyType0PreAction(VaatiRebornEnemyEntity*);
 void VaatiRebornEnemyType1PreAction(VaatiRebornEnemyEntity*);
@@ -554,7 +552,7 @@ void VaatiRebornEnemyType0Action7(VaatiRebornEnemyEntity* this) {
                     fx->x.HALF.HI = ((tmp & 0xff) - 0x20) + fx->x.HALF.HI;
                     fx->y.HALF.HI = ((tmp >> 8) & 0xff) - 0x20 + fx->y.HALF.HI;
                     if (!REGION_IS_EU) {
-                    fx->spritePriority.b0 = 2;
+                        fx->spritePriority.b0 = 2;
                     }
                 }
             }
@@ -726,6 +724,21 @@ void VaatiRebornEnemyType1PreAction(VaatiRebornEnemyEntity* this) {
         return;
     }
     parent = super->parent;
+#ifdef PC_PORT
+    /* Once the final phase threshold fires (unk_86 -> 3, parent action 7 =
+     * defeat sequence), another eye can still hold a pending stagger timer
+     * or take contact this frame. Letting it run (a) reads
+     * vaatiRebornThresholds[3] past the 3-entry table, and (b) on timer
+     * expiry below rewrites parent->action = 1 — yanking the boss out of
+     * its defeat sequence with a phase the attack-selection switch has no
+     * case for: the boss floats inert and can drift out of the arena
+     * (reported as "freeze / clip out of bounds" in Vaati fight 1). Latent
+     * on GBA (read hit adjacent ROM; same softlock possible). */
+    if (((VaatiRebornEnemyEntity*)parent)->unk_86 > 2) {
+        super->timer = 0;
+        return;
+    }
+#endif
     this->unk_77 = 0;
     if ((super->contactFlags & CONTACT_NOW) != 0) {
         const u8* vaatiRebornThresholds = gUnk_080D04D0;
