@@ -83,18 +83,18 @@ void GyorgBossObject_SetupStart(GyorgBossObjectEntity* this) {
     tmp = CreateEnemy(GYORG_MALE, 0);
     tmp->x.HALF.HI = gRoomControls.origin_x + 0x200;
     if (REGION_IS_EU) {
-    tmp->y.HALF.HI = gRoomControls.origin_y + 0x380;
+        tmp->y.HALF.HI = gRoomControls.origin_y + 0x380;
     } else {
-    tmp->y.HALF.HI = gRoomControls.origin_y + 0x330;
+        tmp->y.HALF.HI = gRoomControls.origin_y + 0x330;
     }
     tmp->myHeap = heap;
     heap->male1 = (GyorgMaleEntity*)tmp;
     tmp = CreateEnemy(GYORG_MALE, 1);
     tmp->x.HALF.HI = gRoomControls.origin_x + 0x260;
     if (REGION_IS_EU) {
-    tmp->y.HALF.HI = gRoomControls.origin_y + 0x360;
+        tmp->y.HALF.HI = gRoomControls.origin_y + 0x360;
     } else {
-    tmp->y.HALF.HI = gRoomControls.origin_y + 0x310;
+        tmp->y.HALF.HI = gRoomControls.origin_y + 0x310;
     }
     tmp->myHeap = heap;
     heap->male2 = (GyorgMaleEntity*)tmp;
@@ -111,8 +111,8 @@ void GyorgBossObject_SetupStart(GyorgBossObjectEntity* this) {
     gPlayerState.startPosX = gRoomControls.origin_x + 0x200;
     gPlayerState.startPosY = gRoomControls.origin_y + 0x210;
     if (!REGION_IS_EU) {
-    SoundReq(SONG_STOP_BGM);
-    gArea.bgm = gArea.queued_bgm;
+        SoundReq(SONG_STOP_BGM);
+        gArea.bgm = gArea.queued_bgm;
     }
 }
 
@@ -151,8 +151,7 @@ void GyorgBossObject_MalePhase1(GyorgBossObjectEntity* this) {
      * BIOS garbage here; PC SIGSEGVs. A gone male1 means "defeated": fall into
      * the NULL-safe sub_080A20B8 path (it already returns 1 for NULL) so the
      * fight advances, and skip the else branch's male1 deref. */
-    if (((GyorgHeap*)super->myHeap)->male1 == NULL ||
-        ((GyorgHeap*)super->myHeap)->male1->base.health == 0) {
+    if (((GyorgHeap*)super->myHeap)->male1 == NULL || ((GyorgHeap*)super->myHeap)->male1->base.health == 0) {
 #else
     if (((GyorgHeap*)super->myHeap)->male1->base.health == 0) {
 #endif
@@ -198,7 +197,11 @@ void GyorgBossObject_FemalePhase2(GyorgBossObjectEntity* this) {
 
 void GyorgBossObject_MalePhase2(GyorgBossObjectEntity* this) {
     sub_080A1FF0(this);
+#ifdef PC_PORT
+    if (((GyorgHeap*)super->myHeap)->male2 == NULL || ((GyorgHeap*)super->myHeap)->male2->base.health == 0) {
+#else
     if (((GyorgHeap*)super->myHeap)->male2->base.health == 0) {
+#endif
         if (sub_080A20B8(this, ((GyorgHeap*)super->myHeap)->male2)) {
             // start female phase 3
             super->action = 6;
@@ -218,7 +221,10 @@ void GyorgBossObject_MalePhase2(GyorgBossObjectEntity* this) {
 void GyorgBossObject_FemalePhase3(GyorgBossObjectEntity* this) {
     if (((GyorgHeap*)super->myHeap)->female->base.health == 0) {
         // start male phase 3
-        ((GyorgHeap*)super->myHeap)->male2->base.health = 12;
+#ifdef PC_PORT
+        if (((GyorgHeap*)super->myHeap)->male2 != NULL)
+#endif
+            ((GyorgHeap*)super->myHeap)->male2->base.health = 12;
         super->action = 7;
         super->timer = 35;
         this->unk_6c = 0x104;
@@ -235,8 +241,7 @@ void GyorgBossObject_MalePhase3(GyorgBossObjectEntity* this) {
 #ifdef PC_PORT
     /* Issue #140 — as in MalePhase1: male2 nulls its heap slot when it finishes
      * dying; treat a gone male2 as defeated so the NULL-safe path advances. */
-    if (((GyorgHeap*)super->myHeap)->male2 == NULL ||
-        ((GyorgHeap*)super->myHeap)->male2->base.health == 0) {
+    if (((GyorgHeap*)super->myHeap)->male2 == NULL || ((GyorgHeap*)super->myHeap)->male2->base.health == 0) {
 #else
     if (((GyorgHeap*)super->myHeap)->male2->base.health == 0) {
 #endif
@@ -382,17 +387,20 @@ void sub_080A1DCC(GyorgBossObjectEntity* this) {
             tmp = ((GyorgHeap*)super->myHeap)->tail;
             tmp->base.flags &= ~0x80;
 #ifdef PC_PORT
-            if (tmp->base.child == NULL) return;
+            if (tmp->base.child == NULL)
+                return;
 #endif
             tmp = (GenericEntity*)tmp->base.child;
             tmp->base.flags &= ~0x80;
 #ifdef PC_PORT
-            if (tmp->base.child == NULL) return;
+            if (tmp->base.child == NULL)
+                return;
 #endif
             tmp = (GenericEntity*)tmp->base.child;
             tmp->base.flags &= ~0x80;
 #ifdef PC_PORT
-            if (tmp->base.child == NULL) return;
+            if (tmp->base.child == NULL)
+                return;
 #endif
             tmp = (GenericEntity*)tmp->base.child;
             tmp->base.flags &= ~0x80;
@@ -403,17 +411,20 @@ void sub_080A1DCC(GyorgBossObjectEntity* this) {
     tmp = ((GyorgHeap*)super->myHeap)->tail;
     tmp->base.flags |= 0x80;
 #ifdef PC_PORT
-    if (tmp->base.child == NULL) return;
+    if (tmp->base.child == NULL)
+        return;
 #endif
     tmp = (GenericEntity*)tmp->base.child;
     tmp->base.flags |= 0x80;
 #ifdef PC_PORT
-    if (tmp->base.child == NULL) return;
+    if (tmp->base.child == NULL)
+        return;
 #endif
     tmp = (GenericEntity*)tmp->base.child;
     tmp->base.flags |= 0x80;
 #ifdef PC_PORT
-    if (tmp->base.child == NULL) return;
+    if (tmp->base.child == NULL)
+        return;
 #endif
     tmp = (GenericEntity*)tmp->base.child;
     tmp->base.flags |= 0x80;

@@ -15,9 +15,17 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused[27 + 8];
+#else
     /*0x68*/ u8 unused[27];
+#endif
     /*0x83*/ u8 unk_83;
 } DirtBallProjectileEntity;
+
+PORT_STATIC_ASSERT_SIZE(DirtBallProjectileEntity, 0x84, 0xB8, "DirtBallProjectileEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(DirtBallProjectileEntity, unk_83, 0x83, 0xB3,
+                          "DirtBallProjectileEntity unk_83 offset incorrect");
 
 extern void (*const DirtBallProjectile_Functions[])(Entity*);
 extern void (*const DirtBallProjectile_Actions[])(Entity*);

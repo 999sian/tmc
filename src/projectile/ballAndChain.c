@@ -11,13 +11,23 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[19 + 4];
+#else
     /*0x68*/ u8 unused1[19];
+#endif
     /*0x7b*/ u8 unk_7b;
     /*0x7c*/ u8 unk_7c;
     /*0x7d*/ u8 unused2;
     /*0x7e*/ u8 unk_7e;
     /*0x7f*/ s8 unk_7f;
 } BallAndChainEntity;
+
+PORT_STATIC_ASSERT_SIZE(BallAndChainEntity, 0x80, 0xB0, "BallAndChainEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(BallAndChainEntity, unk_7b, 0x7B, 0xA7, "BallAndChainEntity unk_7b offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BallAndChainEntity, unk_7c, 0x7C, 0xA8, "BallAndChainEntity unk_7c offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BallAndChainEntity, unk_7e, 0x7E, 0xAA, "BallAndChainEntity unk_7e offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(BallAndChainEntity, unk_7f, 0x7F, 0xAB, "BallAndChainEntity unk_7f offset incorrect");
 
 typedef struct {
     s8 x;

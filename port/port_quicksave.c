@@ -105,15 +105,17 @@ static StateRegion sRegions[] = {
 #define NUM_AUTO_SLOTS 3
 #define MAGIC 0x53434D54u /* "TMCS" little-endian */
 #define VERSION                                         \
-    5u /* v2: header carries gEntities base address for \
+    6u /* v2: header carries gEntities base address for \
         * cross-process pointer-fixup on restore.       \
-        * v3: gRand added to the region list so RNG     \
+        * v3: gRand added to region list so RNG         \
         * state round-trips (GBA had it in IWRAM).      \
-        * v4: gPracticeFrame added so the speedrun IGT  \
-        * timer rewinds with the state.                 \
-        * v5: ROM region tag — a USA state restored   \
+        * v4: gPracticeFrame added so speedrun IGT      \
+        * timer rewinds with state.                     \
+        * v5: ROM region tag — USA state restored     \
         * into a JP session contaminates tmc_jp.sav     \
-        * (#21); cross-region loads are refused. */
+        * (#21); cross-region loads are refused.        \
+        * v6: entity subclass layouts changed; older    \
+        * snapshots are rejected. */
 
 typedef struct {
     u8* snapshot; /* heap, NULL if slot empty */
@@ -167,6 +169,37 @@ static int Snapshot_Capture(Slot* s) {
     }
     s->valid = 1;
     s->saved_at_unix = (u64)time(NULL);
+    return 1;
+}
+
+static int Snapshot_MatchesCurrent(const Slot* s, const char** region, size_t* offset, u8* expected, u8* actual) {
+    const u8* src;
+    size_t i;
+
+    if (!s->valid || s->snapshot == NULL || s->bytes != TotalRegionBytes()) {
+        *region = "snapshot";
+        *offset = 0;
+        *expected = 0;
+        *actual = 0;
+        return 0;
+    }
+
+    src = s->snapshot;
+    for (i = 0; i < NUM_REGIONS; i++) {
+        const u8* current = (const u8*)sRegions[i].ptr;
+        size_t j;
+
+        if (memcmp(src, current, sRegions[i].size) == 0) {
+            src += sRegions[i].size;
+            continue;
+        }
+        for (j = 0; j < sRegions[i].size && src[j] == current[j]; j++) {}
+        *region = sRegions[i].name;
+        *offset = j;
+        *expected = src[j];
+        *actual = current[j];
+        return 0;
+    }
     return 1;
 }
 
@@ -245,6 +278,89 @@ static int Snapshot_Restore(const Slot* s) {
         }
         Port_RestorePlayerHitbox();
     }
+    return 1;
+}
+
+/* Headless deterministic restore/replay gate. With no external input, advance
+ * the same 120 engine frames twice from one snapshot and require every saved
+ * byte to agree. Runs here so capture/restore stays on a frame boundary. */
+static int QuickSaveReplayTestTick(void) {
+    enum {
+        SETTLE_FRAMES = 30,
+        DEFAULT_REPLAY_FRAMES = 120,
+        MAX_REPLAY_FRAMES = 3600,
+    };
+    static int enabled = -1;
+    static int phase = 0;
+    static unsigned int phaseFrame = 0;
+    static unsigned int replayFrames = DEFAULT_REPLAY_FRAMES;
+    static Slot start;
+    static Slot expectedEnd;
+    const char* region;
+    size_t offset;
+    u8 expected;
+    u8 actual;
+
+    if (enabled < 0) {
+        const char* env = getenv("TMC_REPRO_QUICKSAVE_ROUNDTRIP");
+        enabled = env != NULL && env[0] != '\0' && strcmp(env, "0") != 0;
+        if (enabled) {
+            const char* frames = getenv("TMC_REPRO_QUICKSAVE_FRAMES");
+            char* end;
+            unsigned long requested = frames != NULL ? strtoul(frames, &end, 10) : 0;
+            if (frames != NULL && requested > 0 && requested <= MAX_REPLAY_FRAMES && end != frames && *end == '\0') {
+                replayFrames = (unsigned int)requested;
+            }
+            fprintf(stderr, "[quicksave-test] enabled: settle=%d replay=%u frames\n", SETTLE_FRAMES, replayFrames);
+        }
+    }
+    if (!enabled) {
+        return 0;
+    }
+
+    if (phase == 0 && gMain.task != TASK_GAME) {
+        phaseFrame = 0;
+        return 1;
+    }
+
+    phaseFrame++;
+    if (phase == 0 && phaseFrame >= SETTLE_FRAMES) {
+        if (!Snapshot_Capture(&start)) {
+            fprintf(stderr, "[quicksave-test] FAIL: initial capture failed\n");
+            fflush(stderr);
+            _Exit(1);
+        }
+        fprintf(stderr, "[quicksave-test] captured start (%zu bytes)\n", start.bytes);
+        phase = 1;
+        phaseFrame = 0;
+    } else if (phase == 1 && phaseFrame >= replayFrames) {
+        if (!Snapshot_Capture(&expectedEnd) || !Snapshot_Restore(&start)) {
+            fprintf(stderr, "[quicksave-test] FAIL: endpoint capture or restore failed\n");
+            fflush(stderr);
+            _Exit(1);
+        }
+        if (!Snapshot_MatchesCurrent(&start, &region, &offset, &expected, &actual)) {
+            fprintf(stderr, "[quicksave-test] FAIL: restore mismatch %s+0x%zx expected=%02x actual=%02x\n", region,
+                    offset, (unsigned)expected, (unsigned)actual);
+            fflush(stderr);
+            _Exit(1);
+        }
+        fprintf(stderr, "[quicksave-test] restored start; replaying\n");
+        phase = 2;
+        phaseFrame = 0;
+    } else if (phase == 2 && phaseFrame >= replayFrames) {
+        if (!Snapshot_MatchesCurrent(&expectedEnd, &region, &offset, &expected, &actual)) {
+            fprintf(stderr, "[quicksave-test] FAIL: replay mismatch %s+0x%zx expected=%02x actual=%02x\n", region,
+                    offset, (unsigned)expected, (unsigned)actual);
+            fflush(stderr);
+            _Exit(1);
+        }
+        fprintf(stderr, "[quicksave-test] PASS: %u-frame replay byte-identical (%zu bytes)\n", replayFrames,
+                expectedEnd.bytes);
+        fflush(stderr);
+        _Exit(0);
+    }
+
     return 1;
 }
 
@@ -337,45 +453,28 @@ static int ReadSlotFromDisk(int slot) {
         fclose(f);
         return 0;
     }
-    if (magic != MAGIC || total != (u32)TotalRegionBytes()) {
+    if (magic != MAGIC || version != VERSION || total != (u32)TotalRegionBytes()) {
         fclose(f);
         return 0;
     }
-    /* Version-2 files carry a gEntities base address for pointer-fixup
-     * across process restarts (different ASLR layouts). Older files
-     * have no base and only round-trip safely within a single process
-     * — Restore() refuses them when their pointers would point outside
-     * the current gEntities range. */
-    if (version >= 2) {
-        if (fread(&saved_entities_base, sizeof(saved_entities_base), 1, f) != 1) {
-            fprintf(stderr, "[quicksave] short read on %s v2 header, ignoring slot file\n", path);
-            fclose(f);
-            return 0;
-        }
-    } else if (version != VERSION) {
+    if (fread(&saved_entities_base, sizeof(saved_entities_base), 1, f) != 1) {
+        fprintf(stderr, "[quicksave] short read on %s entity-base header, ignoring slot file\n", path);
         fclose(f);
         return 0;
     }
-    /* v5+: region tag. Per-region filenames already isolate new states;
-     * this guards hand-copied/renamed files. Pre-v5 files have no tag —
-     * they predate EU/JP support and are accepted for USA only (#21). */
-    if (version >= 5) {
+    {
         u32 region_tag = 0;
         if (fread(&region_tag, sizeof(region_tag), 1, f) != 1) {
-            fprintf(stderr, "[quicksave] short read on %s v5 header, ignoring slot file\n", path);
+            fprintf(stderr, "[quicksave] short read on %s region header, ignoring slot file\n", path);
             fclose(f);
             return 0;
         }
         if (region_tag != ActiveRegionTag()) {
-            fprintf(stderr, "[quicksave] %s was saved in a different ROM region (%u != %u) — refusing to load\n", path,
+            fprintf(stderr, "[quicksave] %s was saved in a different ROM region (%u != %u) — refusing load\n", path,
                     region_tag, ActiveRegionTag());
             fclose(f);
             return 0;
         }
-    } else if (ActiveRegionTag() != 1) {
-        fprintf(stderr, "[quicksave] %s predates region tags (v%u) — refusing in a non-USA session\n", path, version);
-        fclose(f);
-        return 0;
     }
     Slot* s = &sSlots[slot];
     if (s->snapshot == NULL || s->bytes != total) {
@@ -548,7 +647,7 @@ static void TakeAutoSnapshot(const char* reason) {
 }
 
 void Port_QuickSave_AutoTick(void) {
-    if (!sAutoEnabled)
+    if (QuickSaveReplayTestTick() || !sAutoEnabled)
         return;
     const u64 now = SDL_GetTicks();
 

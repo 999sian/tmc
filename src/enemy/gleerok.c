@@ -523,6 +523,18 @@ void sub_0802D3B8(GleerokEntity* this) {
                 heap->filler2[5].unk0.HALF.HI = 0;
                 heap->unk_30[5] = 0;
             }
+#ifdef PC_PORT
+            if (heap->entities[0] == NULL || heap->entities[1] == NULL || heap->entities[2] == NULL ||
+                heap->entities[3] == NULL || heap->entities[4] == NULL || heap->entities[5] == NULL) {
+                for (tmp1 = 0; tmp1 < 6; tmp1++) {
+                    if (heap->entities[tmp1] != NULL) {
+                        DeleteEntity(heap->entities[tmp1]);
+                    }
+                }
+                DeleteEntity(super);
+                return;
+            }
+#endif
             if (!REGION_IS_EU) {
                 gPlayerState.controlMode = CONTROL_DISABLED;
             }

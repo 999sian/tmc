@@ -77,11 +77,14 @@ void Port_ReproNpcTalk_Tick(unsigned int frame) {
     static int last_log = 0;
     static int mash_a = 0;
     static int hold_dir = -1;
+    static int bootstrap_only = 0;
     static unsigned int a = 0x22, r = 0x11, x = 0x78, y = 0x88, l = 0;
 
     if (active < 0) {
         const char* env = getenv("TMC_REPRO_NPC_TALK");
-        active = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
+        const char* roundtrip = getenv("TMC_REPRO_QUICKSAVE_ROUNDTRIP");
+        bootstrap_only = roundtrip && *roundtrip && strcmp(roundtrip, "0") != 0;
+        active = (env && *env && strcmp(env, "0") != 0) || bootstrap_only;
         if (!active) {
             FILE* marker = fopen("repro_npc_talk", "rb");
             if (marker) {
@@ -148,6 +151,10 @@ void Port_ReproNpcTalk_Tick(unsigned int frame) {
         SetTask(TASK_GAME);
         booted = 1;
         fprintf(stderr, "[npc-talk] frame %u: bootstrapped -> TASK_GAME\n", frame);
+    }
+
+    if (bootstrap_only && booted) {
+        return;
     }
 
     if (booted && !warped && gMain.task == TASK_GAME && frame % 20 == 0) {

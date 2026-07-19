@@ -513,6 +513,16 @@ void VaatiRebornEnemyType0Action6(VaatiRebornEnemyEntity* this) {
                     PositionRelative(super, target, 0, Q_16_16(-16.0));
                     target->parent = super;
                 }
+#ifdef PC_PORT
+                else {
+                    /* Complete the canonical spinner-eye cleanup even though
+                     * no projectile exists to signal it. */
+                    this->unk_74 = 3;
+                    super->timer = 0;
+                    super->subtimer = 0;
+                    return;
+                }
+#endif
             } else if (super->timer == 0x40) {
                 SoundReq(SFX_196);
             }
@@ -947,7 +957,39 @@ u32 sub_0803DEE0(VaatiRebornEnemyEntity* this) {
 
 void VaatiRebornEnemyType0PreAction(VaatiRebornEnemyEntity* this) {
     u32 bVar1;
+#ifdef PC_PORT
+    u32 i;
+    Entity* projectile;
+#endif
 
+#ifdef PC_PORT
+    /* v0.8.2 prevents new phase-3 zombies, but older quick/autosaves can
+     * restore one. Phase 3 has no valid combat actions; resume defeat. */
+    if (this->unk_86 > 2 && super->action != 7) {
+        super->action = 7;
+        super->flags &= ~ENT_COLLIDE;
+        super->timer = 128;
+        super->spriteOffsetX = 0;
+        super->direction = DIR_NONE;
+    }
+    /* A failed dark-magic projectile allocation leaves action 6 / step 2
+     * waiting for a completion signal that can never arrive. Drive the normal
+     * spinner-eye cleanup, including collision restoration. */
+    if (super->action == 6 && this->unk_74 == 2) {
+        for (i = 0; i < MAX_ENTITIES; i++) {
+            projectile = (Entity*)&gEntities[i];
+            if (projectile->next != NULL && projectile->kind == PROJECTILE &&
+                projectile->id == V1_DARK_MAGIC_PROJECTILE && projectile->type == 0 && projectile->parent == super) {
+                break;
+            }
+        }
+        if (i == MAX_ENTITIES) {
+            this->unk_74 = 3;
+            super->timer = 0;
+            super->subtimer = 0;
+        }
+    }
+#endif
     if (super->action != 0) {
         this->unk_78 = super->x;
         this->unk_7c = super->y;

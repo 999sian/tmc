@@ -16,15 +16,31 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[12 + 4];
+#else
     /*0x68*/ u8 unused1[12];
+#endif
     /*0x74*/ u8 unk_74;
+#ifdef PC_PORT
+    /*0x75*/ u8 unused2[11 + 4];
+#else
     /*0x75*/ u8 unused2[11];
+#endif
     /*0x80*/ u8 unk_80;
     /*0x81*/ u8 unk_81;
     /*0x92*/ u8 unused3[2];
     /*0x84*/ u16 unk_84;
     /*0x86*/ u8 unk_86;
 } V1DarkMagicProjectileEntity;
+
+PORT_STATIC_ASSERT_SIZE(V1DarkMagicProjectileEntity, 0x88, 0xB8, "V1DarkMagicProjectileEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(V1DarkMagicProjectileEntity, unk_74, 0x74, 0xA0,
+                          "V1DarkMagicProjectileEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(V1DarkMagicProjectileEntity, unk_80, 0x80, 0xB0,
+                          "V1DarkMagicProjectileEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(V1DarkMagicProjectileEntity, unk_84, 0x84, 0xB4,
+                          "V1DarkMagicProjectileEntity unk_84 offset incorrect");
 
 extern void SoundReqClipped(Entity*, u32);
 

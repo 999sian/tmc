@@ -15,10 +15,18 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[28 + 4];
+#else
     /*0x68*/ u8 unused1[28];
+#endif
     /*0x84*/ u8 unk_84;
     /*0x85*/ u8 unk_85;
 } V3ElectricProjectileEntity;
+
+PORT_STATIC_ASSERT_SIZE(V3ElectricProjectileEntity, 0x88, 0xB8, "V3ElectricProjectileEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(V3ElectricProjectileEntity, unk_84, 0x84, 0xB0,
+                          "V3ElectricProjectileEntity unk_84 offset incorrect");
 
 extern void (*const V3ElectricProjectile_Functions[])(V3ElectricProjectileEntity*);
 extern void (*const V3ElectricProjectile_Actions[])(V3ElectricProjectileEntity*);
@@ -79,7 +87,8 @@ void V3ElectricProjectile_Init(V3ElectricProjectileEntity* this) {
 
 void V3ElectricProjectile_Action1(V3ElectricProjectileEntity* this) {
 #ifdef PC_PORT
-    if (super->parent == NULL) return; /* #136 family */
+    if (super->parent == NULL)
+        return; /* #136 family */
 #endif
     if (super->parent->next == NULL) {
         DeleteThisEntity();

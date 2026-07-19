@@ -932,7 +932,7 @@ void sub_08034B38(MazaalHeadEntity* this) {
                 target->direction = super->timer + 0x58;
             }
             ptr = &gUnk_080CED84[target->type * 2];
-            PositionRelative(super, target, Q_16_16(*(ptr++)), Q_16_16(*ptr));
+            PositionRelative(super, target, Q_16_16(ptr[0]), Q_16_16(ptr[1]));
         }
     }
 }

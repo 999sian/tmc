@@ -12,7 +12,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-    /*0x68*/ #ifdef PC_PORT
+/*0x68*/ #ifdef PC_PORT
     u8 unk_68[0x10 + 4];
 #else
     u8 unk_68[0x10];
@@ -76,12 +76,22 @@ void GyorgMaleEye_OnCollision(GyorgMaleEyeEntity* this) {
         }
         if (super->iframes > 0) {
             entity->iframes = super->iframes;
+#ifdef PC_PORT
+            for (tmp = 0; tmp < 3; tmp++) {
+                entity = entity->child;
+                if (entity == NULL) {
+                    break;
+                }
+                entity->iframes = super->iframes;
+            }
+#else
             entity = entity->child;
             entity->iframes = super->iframes;
             entity = entity->child;
             entity->iframes = super->iframes;
             entity = entity->child;
             entity->iframes = super->iframes;
+#endif
         }
         super->health = 0xff;
     }
