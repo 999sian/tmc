@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.8.3 (2026-07-19)
+
+### Fixed
+
+- **Vaati fight 1 no longer freezes, drifts away, or leaves Gust Jar/laser
+  spinner eyes invulnerable.** The PC dark-magic projectile struct was missing
+  two padding fields, so its death callback wrote controller and eye state four
+  to eight bytes early. The overlay now matches both parents, allocation
+  failures run normal eye cleanup, and impossible phase-3 states self-heal.
+- **Incompatible v0.8.1/v0.8.2 quicksaves and autosaves are now rejected.**
+  Their live entity layouts predate the corrected 64-bit overlays and cannot be
+  restored safely. Normal `tmc.sav` progress is unaffected.
+- **Fixed seven additional 64-bit entity-overlay mismatches.** Pesto's pot and
+  dirt-ball state, Scissors Beetle mandibles, ball-and-chain geometry, Vaati
+  Wrath electric attacks, Enemy64's Gyorg tail, and Big Green ChuChu start
+  particles now use the real PC fields while retaining the original GBA layouts.
+
 ## v0.8.2 (2026-07-18)
 
 ### Fixed
