@@ -39,12 +39,9 @@ typedef struct {
     /*0x86*/ u8 unk_86;
 } VaatiBallEntity;
 
-PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_74, 0x74, 0xA0,
-                          "VaatiBallEntity unk_74 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_80, 0x80, 0xB0,
-                          "VaatiBallEntity unk_80 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_84, 0x84, 0xB4,
-                          "VaatiBallEntity unk_84 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_74, 0x74, 0xA0, "VaatiBallEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_80, 0x80, 0xB0, "VaatiBallEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiBallEntity, unk_84, 0x84, 0xB4, "VaatiBallEntity unk_84 offset incorrect");
 
 typedef struct {
     s8 h, v;
@@ -72,6 +69,13 @@ void VaatiBall(VaatiBallEntity* this) {
     if (parent == NULL) {
         DeleteThisEntity();
         return;
+    }
+#endif
+#ifdef PC_PORT
+    /* Older snapshots can retain the laser-active latch after OnDeath already
+     * restored this hit type through the misaligned parent overlay. */
+    if (this->unk_84 && super->hitType == 0x2b) {
+        this->unk_84 = 0;
     }
 #endif
     if (super->action && super->action != 3) {

@@ -10,6 +10,10 @@
 #include "physics.h"
 #include "projectile.h"
 #include "sound.h"
+#ifdef PC_PORT
+#include "enemy.h"
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -40,7 +44,8 @@ void GyorgTail(GyorgTailEntity* this) {
     GyorgTailEntity* parent;
 
 #ifdef PC_PORT
-    if (super->parent == NULL) return; /* #136 family */
+    if (super->parent == NULL)
+        return; /* #136 family */
 #endif
     if (super->parent->next == NULL) {
         DeleteThisEntity();
@@ -191,69 +196,57 @@ void sub_080AC560(GyorgTailEntity* this) {
 }
 
 bool32 sub_080AC5E4(GyorgTailEntity* this) {
-    GyorgTailEntity* entity;
-    GyorgTailEntity* entity2;
-    GyorgTailEntity* entity3;
+    GyorgTailEntity* tails[4];
+    u32 i;
+    u32 count;
 
     if (super->type == 0) {
         if (gEntCount > 0x43) {
             return FALSE;
         }
         this->unk_79 = 0x11;
-        entity = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
-        entity->base.type = super->type;
-        entity->base.type2 = 1;
-        entity->base.parent = super->parent;
-        entity->unk_79 = 0x12;
-        super->child = &entity->base;
-
-        entity2 = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
-        entity2->base.type = super->type;
-        entity2->base.type2 = 2;
-        entity2->base.parent = super->parent;
-        entity2->unk_79 = 0x14;
-        entity->base.child = &entity2->base;
-
-        entity3 = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
-        entity3->base.type = super->type;
-        entity3->base.type2 = 3;
-        entity3->base.parent = super->parent;
-        entity3->base.child = NULL;
-        entity3->unk_79 = 0;
-        entity2->base.child = &entity3->base;
-
-        entity = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
-        entity->base.type = super->type;
-        entity->base.type2 = 4;
-        entity->base.parent = super->parent;
-        entity->base.child = super;
-        entity->unk_79 = 0x14;
+        count = 4;
     } else {
         if (gEntCount > 0x44) {
             return FALSE;
         }
         this->unk_79 = 0xf;
-        entity = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
-        entity->base.type = super->type;
-        entity->base.type2 = 1;
-        entity->base.parent = super->parent;
-        entity->unk_79 = 0x10;
-        super->child = &entity->base;
+        count = 3;
+    }
 
-        entity2 = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
-        entity2->base.type = super->type;
-        entity2->base.type2 = 2;
-        entity2->base.parent = super->parent;
-        entity2->base.child = NULL;
-        entity2->unk_79 = 0x20;
-        entity->base.child = &entity2->base;
+    for (i = 0; i < count; i++) {
+        tails[i] = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
+        if (tails[i] == NULL) {
+            while (i != 0) {
+                i--;
+                DeleteEntity(&tails[i]->base);
+            }
+            return FALSE;
+        }
+        tails[i]->base.type = super->type;
+        tails[i]->base.parent = super->parent;
+    }
 
-        entity = (GyorgTailEntity*)CreateProjectile(GYORG_TAIL);
-        entity->base.type = super->type;
-        entity->base.type2 = 4;
-        entity->base.parent = super->parent;
-        entity->base.child = super;
-        entity->unk_79 = 0x10;
+    super->child = &tails[0]->base;
+    tails[0]->base.type2 = 1;
+    tails[0]->unk_79 = super->type == 0 ? 0x12 : 0x10;
+    tails[1]->base.type2 = 2;
+    tails[1]->unk_79 = super->type == 0 ? 0x14 : 0x20;
+    tails[0]->base.child = &tails[1]->base;
+
+    if (super->type == 0) {
+        tails[2]->base.type2 = 3;
+        tails[2]->unk_79 = 0;
+        tails[3]->base.type2 = 4;
+        tails[3]->unk_79 = 0x14;
+        tails[1]->base.child = &tails[2]->base;
+        tails[2]->base.child = &tails[3]->base;
+        tails[3]->base.child = super;
+    } else {
+        tails[2]->base.type2 = 4;
+        tails[2]->unk_79 = 0x10;
+        tails[1]->base.child = &tails[2]->base;
+        tails[2]->base.child = super;
     }
     return TRUE;
 }
@@ -378,8 +371,19 @@ void sub_080AC7C4(GyorgTailEntity* this) {
 }
 
 void sub_080AC884(GyorgTailEntity* this) {
-    if (((GyorgTailEntity*)super->parent)->unk_72 != 0) {
-        ((GyorgTailEntity*)super->parent)->unk_72 = 0;
+    u16* parentState;
+
+#ifdef PC_PORT
+    if (super->parent->id == ENEMY_64) {
+        parentState = &GE_FIELD(super->parent, field_0x70)->HALF_U.HI;
+    } else
+#endif
+    {
+        parentState = &((GyorgTailEntity*)super->parent)->unk_72;
+    }
+
+    if (*parentState != 0) {
+        *parentState = 0;
         super->action = 2;
         super->timer = 60;
         super->subtimer = 86;

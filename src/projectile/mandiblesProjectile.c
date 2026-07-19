@@ -17,12 +17,22 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    /*0x68*/ u8 unused1[16 + 4];
+#else
     /*0x68*/ u8 unused1[16];
+#endif
     /*0x78*/ u16 unk_78;
     /*0x7a*/ u8 unused2[6];
     /*0x80*/ u16 unk_80;
     /*0x82*/ u8 unk_82;
 } MandiblesProjectileEntity;
+
+PORT_STATIC_ASSERT_SIZE(MandiblesProjectileEntity, 0x84, 0xB0, "MandiblesProjectileEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(MandiblesProjectileEntity, unk_80, 0x80, 0xAC,
+                          "MandiblesProjectileEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(MandiblesProjectileEntity, unk_82, 0x82, 0xAE,
+                          "MandiblesProjectileEntity unk_82 offset incorrect");
 
 extern void (*const MandiblesProjectile_Functions[])(MandiblesProjectileEntity*);
 extern void (*const MandiblesProjectile_Actions[])(MandiblesProjectileEntity*);
@@ -53,8 +63,7 @@ void MandiblesProjectile(MandiblesProjectileEntity* this) {
      * the COLLISION_ON gating in that case — it's only an
      * iframes/collide-toggle convenience and the projectile will
      * shortly delete itself via the next-NULL checks elsewhere. */
-    if (entity != NULL && (entity->confusedTime == 0) &&
-        ((super->flags & ENT_COLLIDE) == 0)) {
+    if (entity != NULL && (entity->confusedTime == 0) && ((super->flags & ENT_COLLIDE) == 0)) {
         COLLISION_ON(super);
     }
 #else
@@ -95,7 +104,8 @@ void MandiblesProjectile_OnCollision(MandiblesProjectileEntity* this) {
                 parent = super->parent;
 #ifdef PC_PORT
                 /* #101 — same NULL-parent hazard as sub_080AA270. */
-                if (parent == NULL) break;
+                if (parent == NULL)
+                    break;
 #endif
                 parent->iframes = super->iframes;
                 parent->knockbackDirection = super->knockbackDirection;
@@ -290,13 +300,15 @@ void sub_080AA270(MandiblesProjectileEntity* this) {
      * BIOS-at-0 reads; PC SIGSEGVs. Skip the anim-state update — the
      * projectile will self-delete via the entity->next == NULL checks
      * elsewhere shortly. */
-    if (parent == NULL) return;
+    if (parent == NULL)
+        return;
 #endif
     animationState = parent->animationState;
     if (super->animationState == 0xff) {
         /* #91 / #97 pattern: gUnk_08129CF4 has 8 entries; parent's raw
          * animationState may exceed 7 during transient states. Clamp. */
-        if (animationState >= 8) animationState = 7;
+        if (animationState >= 8)
+            animationState = 7;
         super->animationState = animationState;
         super->hitbox = (Hitbox*)gUnk_08129CF4[animationState];
         sub_080AA3E0(this, 0);

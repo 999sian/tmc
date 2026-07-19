@@ -413,11 +413,15 @@ void sub_08025DD8(ChuchuBossEntity* this) {
             case 0:
                 super->type2 = super->type;
                 this->unk_84 = zMalloc(sizeof(Helper));
-                if (!this->unk_84 || !AllocMutableHitbox(super)) {
+                if (!this->unk_84) {
                     GenericDeath(super);
                     return;
                 }
                 super->myHeap = this->unk_84;
+                if (!AllocMutableHitbox(super)) {
+                    GenericDeath(super);
+                    return;
+                }
                 super->hitbox->offset_x = gUnk_080FD238.offset_x;
                 super->hitbox->offset_y = gUnk_080FD238.offset_y;
                 super->hitbox->unk2[0] = gUnk_080FD238.unk2[0];

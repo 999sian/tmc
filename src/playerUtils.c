@@ -1629,7 +1629,7 @@ u32 sub_080789A8(void) {
 
     if (!(gPlayerState.flags & PL_MINISH)) {
         uVar4 = GetCollisionDataAtEntity(&gPlayerEntity.base);
-        if (uVar4 >= 0x10 && (gUnk_080084BC[uVar4 - 0x10] == 0xf))
+        if (uVar4 >= 0x10 && uVar4 < 0x70 && gUnk_080084BC[uVar4 - 0x10] == 0xf)
             return 0;
         if (gPlayerState.floor_type == 0x12)
             return 0;
