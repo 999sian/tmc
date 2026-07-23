@@ -59,6 +59,7 @@ bool Port_Config_GetConsoleParity(void) { return 0; }  /* config module not link
 /* Notification stubs — these modules are not linked into the test binary. */
 bool Port_Config_GetDebugFlagNotifications(void) { return 0; }
 const char* Port_DebugQuery_FlagName(int bank, int index) { (void)bank; (void)index; return 0; }
+const char* Port_DebugQuery_FlagDesc(int bank, int index) { (void)bank; (void)index; return 0; }
 void Port_DebugMenu_ToastFromExternal(const char* msg) { (void)msg; }
 
 /* ---- assertion harness ---- */
