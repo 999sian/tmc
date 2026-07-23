@@ -17,6 +17,9 @@
 #include "player.h"
 #include "playeritem.h"
 #include "save.h"
+#ifdef PC_PORT
+#include "port/port_generic_entity.h"
+#endif
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -43,10 +46,8 @@ typedef struct {
     /*0x87*/ u8 unk_87;
 } PestoEntity;
 
-PORT_STATIC_ASSERT_OFFSET(PestoEntity, unk_70, 0x70, 0x9C,
-                          "PestoEntity unk_70 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(PestoEntity, unk_80, 0x80, 0xB0,
-                          "PestoEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PestoEntity, unk_70, 0x70, 0x9C, "PestoEntity unk_70 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(PestoEntity, unk_80, 0x80, 0xB0, "PestoEntity unk_80 offset incorrect");
 
 void sub_080249F4(PestoEntity*);
 void sub_08024940(PestoEntity*);
@@ -464,7 +465,12 @@ void sub_080244E8(PestoEntity* this) {
                             super->timer = 12;
                             this->unk_83 &= ~0x80;
                             entity = super->child;
+#ifdef PC_PORT
+                            SetTile(GE_FIELD(entity, field_0x70)->HALF_U.LO, COORD_TO_TILE(entity),
+                                    entity->collisionLayer);
+#else
                             SetTile(((PestoEntity*)entity)->unk_70, COORD_TO_TILE(entity), entity->collisionLayer);
+#endif
                             DeleteEntity(entity);
                             super->z.HALF.HI -= 0xe;
                             this->unk_78 -= 0xe;

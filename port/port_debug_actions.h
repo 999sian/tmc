@@ -41,6 +41,11 @@ void Port_DebugAction_SetNoclip(int on);
 int  Port_DebugQuery_Noclip(void);
 int  Port_Debug_NoclipEnabled(void);
 
+/* Minish transformation debug toggles. */
+void Port_DebugAction_ToggleMinish(void);
+int  Port_DebugQuery_IsMinish(void);
+
+
 /* Read-only entity viewer (impl in port_debug_entities.c). RefreshEntities
  * snapshots every live entity across the nine gEntityLists into a flat array;
  * Entity(i) reads a row; KindName maps an EntityKind to a label. The walk is

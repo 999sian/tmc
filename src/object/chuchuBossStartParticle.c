@@ -30,9 +30,7 @@ typedef struct {
     /*0x84*/ u32 unk_84;
 } ChuchuBossStartParticleEntity;
 #else
-typedef struct {
-    Entity base;
-} ChuchuBossStartParticleEntity;
+typedef GenericEntity ChuchuBossStartParticleEntity;
 
 static inline u32* ChuchuBossStartParticle_U32Field(ChuchuBossStartParticleEntity* this, size_t geFieldOffset) {
     return (u32*)Port_GEFieldAddr(&this->base, geFieldOffset);
@@ -45,6 +43,23 @@ static inline u32* ChuchuBossStartParticle_U32Field(ChuchuBossStartParticleEntit
 #define CBSP_UNK_7F(this) (GE_FIELD(&((this)->base), field_0x7c)->BYTES.byte3)
 #define CBSP_UNK_84(this) (*ChuchuBossStartParticle_U32Field((this), offsetof(GenericEntity, cutsceneBeh)))
 #endif
+
+typedef struct {
+    /*0x00*/ Entity base;
+    /*0x68*/ Entity* unused_68;
+    /*0x6c*/ u8 unused_6c;
+    /*0x6d*/ u8 unk_6d;
+    /*0x6e*/ u8 unused_6e[0x10];
+    /*0x7e*/ union SplitHWord unk_7e;
+} ChuchuBossStartParticleParentEntity;
+
+PORT_STATIC_ASSERT_OFFSET(ChuchuBossStartParticleParentEntity, unk_6d, 0x6D, 0x99,
+                          "ChuchuBossStartParticleParentEntity unk_6d offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(ChuchuBossStartParticleParentEntity, unk_7e, 0x7E, 0xAA,
+                          "ChuchuBossStartParticleParentEntity unk_7e offset incorrect");
+
+#define CBSP_PARENT_UNK_6D(ent) (((ChuchuBossStartParticleParentEntity*)(ent))->unk_6d)
+#define CBSP_PARENT_UNK_7F(ent) (((ChuchuBossStartParticleParentEntity*)(ent))->unk_7e.HALF.HI)
 
 #ifndef PC_PORT
 #define CBSP_UNK_6D(this) ((this)->unk_6d)
@@ -179,9 +194,9 @@ void sub_0808F244(ChuchuBossStartParticleEntity* this) {
     super->z.WORD = 0;
     CBSP_UNK_74(this) = 0x80 - super->parent->z.HALF.HI;
     CBSP_UNK_78(this) = 0x100 - super->parent->z.HALF.HI;
-    CBSP_UNK_70(this) = CBSP_UNK_7F((ChuchuBossStartParticleEntity*)super->parent);
+    CBSP_UNK_70(this) = CBSP_PARENT_UNK_7F(super->parent);
     sub_0808F2B0(this);
-    if ((CBSP_UNK_6D((ChuchuBossStartParticleEntity*)super->parent) & 2) != 0) {
+    if ((CBSP_PARENT_UNK_6D(super->parent) & 2) != 0) {
         DeleteThisEntity();
     }
 }

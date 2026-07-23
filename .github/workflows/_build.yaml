@@ -283,7 +283,12 @@ jobs:
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1
         with:
-          xmake-version: latest
+          # Pinned: xmake `latest` floated to v3.0.9, whose bin2c codegen
+          # intermittently aborts with "double free or corruption (out)"
+          # (SIGABRT) during parallel shader-blob generation, failing the
+          # build nondeterministically. v3.0.8 is the last release before
+          # the regression and builds this tree cleanly. Bump deliberately.
+          xmake-version: v3.0.8
           # Cache the xmake install itself plus the xmake package cache
           # (libpng/SDL3/fmt/... build artifacts). Keys are scoped per
           # os+arch so llvm-mingw (windows-arm64), choco MinGW
@@ -700,6 +705,17 @@ jobs:
           path: ${{ env.archive_name }}
           if-no-files-found: error
 
+      # Whole-program ABI gate (GCC LTO -Werror=lto-type-mismatch). Runs last:
+      # it force-rebuilds tmc_pc, and set_targetdir pins the binary to build/pc,
+      # so it would clobber the shipped binary if run before the artifact is
+      # captured. Separate object dir keeps the incremental cache clean.
+      - name: Check host cross-translation-unit ABI (Linux x86_64)
+        if: matrix.os_name == 'linux' && matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          xmake f -y -o build/abi-check --pc_lto_type_check=y
+          xmake build -r -y tmc_pc
+
   # Android APK. xmake cross-compiles libmain.so per ABI (arm64-v8a for
   # real devices, x86_64 for Waydroid/ChromeOS/emulators); Gradle only
   # packages the two libs — no externalNativeBuild, jniLibs points at
@@ -757,7 +773,8 @@ jobs:
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1
         with:
-          xmake-version: latest
+          # Pinned to v3.0.8 — see the desktop Setup xmake step above for why.
+          xmake-version: v3.0.8
           actions-cache-folder: '.xmake-cache'
           actions-cache-key: android-apk
           package-cache: true

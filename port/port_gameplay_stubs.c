@@ -192,12 +192,12 @@ static u32 ReadCollisionBitAtPosition(Entity* entity, const u16* slopeTable, u32
     return bits & 1;
 }
 
-u32 sub_080040D8(Entity* entity, const u16* slopeTable, s32 worldX, s32 worldY) {
-    return ReadCollisionBitAtPosition(entity, slopeTable, (u32)worldX, (u32)worldY);
+u32 sub_080040D8(Entity* entity, const u8* slopeTable, s32 worldX, s32 worldY) {
+    return ReadCollisionBitAtPosition(entity, (const u16*)slopeTable, (u32)worldX, (u32)worldY);
 }
 
-u32 sub_080040E2(Entity* entity, const u16* slopeTable) {
-    return ReadCollisionBitAtPosition(entity, slopeTable, (u16)entity->x.HALF.HI, (u16)entity->y.HALF.HI);
+u32 sub_080040E2(Entity* entity, const u8* slopeTable) {
+    return ReadCollisionBitAtPosition(entity, (const u16*)slopeTable, (u16)entity->x.HALF.HI, (u16)entity->y.HALF.HI);
 }
 
 void SnapToTile(Entity* entity) {

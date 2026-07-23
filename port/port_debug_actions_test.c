@@ -45,7 +45,10 @@ PlayerEntity gPlayerEntity;
 RoomControls gRoomControls;
 RoomTransition gRoomTransition;
 RoomHeader* gAreaRoomHeaders[0x90];
+Hitbox gPlayerHitbox;
 
+bool32 SetAffineInfo(Entity* entity, u32 x, u32 y, u32 z) { (void)entity; (void)x; (void)y; (void)z; return 0; }
+void PlayerSetNormalAndCollide(void) {}
 void LoadItemGfx(void) {}
 void UpdatePlayerSkills(void) {}
 void DoExitTransition(const Transition* data) { (void)data; }

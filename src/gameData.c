@@ -668,7 +668,7 @@ extern EntityData gUnk_080FEC28[];
 extern const EntityData gUnk_080FED18[];
 extern EntityData gUnk_080FED58[];
 // TODO need to find out what gRoomVars.entityRails[ptr->entity_idx] is.
-extern const void* gLilypadRails[];
+extern void* gLilypadRails[];
 // gUnk_080FEDA4
 // gUnk_080FEDDA
 // gUnk_080FEDF8

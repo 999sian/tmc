@@ -314,7 +314,11 @@ static void** GetAreaRoomPropertyList(u32 area, u32 room) {
     }
 
     {
-        void** result = areaTable[room];
+        /* Host-side tables (asset-cache slot vectors, port_rom.c shadow
+         * arrays) hold at least MAX_ROOMS slots — same bound as the
+         * ReadAreaSubTableEntry fix in gameUtils.c; junk indices fall back
+         * to the ROM resolver, which bounds-checks against gRomSize. */
+        void** result = room < MAX_ROOMS ? areaTable[room] : NULL;
         return result != NULL ? result : (void**)Port_ResolveAreaPropertiesFromRom(area, room);
     }
 }
@@ -546,8 +550,13 @@ void* GetCurrentRoomProperty(u32 idx) {
         return gRoomVars.properties[idx];
     } else {
 #ifdef PC_PORT
-        return IsRoomPropertyListInRom(gCurrentRoomProperties) ? Port_ReadPackedRomPtr(gCurrentRoomProperties, idx)
-                                                               : gCurrentRoomProperties[idx];
+        /* Native (asset-cache) property lists hold max(N,64) slots; idx is an
+         * entity-data byte that can reach 0x7F. ROM lists are bounds-checked
+         * by Port_ReadPackedRomPtr; bound the host read the same way. */
+        if (!IsRoomPropertyListInRom(gCurrentRoomProperties)) {
+            return idx < MAX_ROOMS ? gCurrentRoomProperties[idx] : NULL;
+        }
+        return Port_ReadPackedRomPtr(gCurrentRoomProperties, idx);
 #else
         return gCurrentRoomProperties[idx];
 #endif

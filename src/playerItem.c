@@ -1,4 +1,5 @@
 #include "global.h"
+#include "definitions.h"
 #include "player.h"
 #include "playeritem.h"
 
@@ -25,17 +26,8 @@ PlayerItemFunc PlayerItemSpiralBeam;
 PlayerItemFunc PlayerItemFireRodProjectile;
 PlayerItemFunc PlayerItemNulled2;
 
-typedef struct {
-    u8 bitfield;
-    u8 index;
-    u8 firstItemIndex;
-    u8 hurtType;
-    u8 hitType;
-    u8 spriteIndex;
-    u16 gfx;
-} PlayerItemDefinition;
-extern const PlayerItemDefinition gPlayerItemDefinitions[];
-extern const PlayerItemDefinition* gAdditionalPlayerItemDefinitions[3];
+extern const SpriteDataC gPlayerItemDefinitions[];
+extern const SpriteDataC* const gAdditionalPlayerItemDefinitions[];
 
 PlayerItemFunc* const gPlayerItemFunctions[] = {
     [PLAYER_ITEM_NONE] = DeleteEntity,
@@ -86,9 +78,9 @@ void ItemUpdate(Entity* this) {
 
 void ItemInit(Entity* this) {
     u32 tmp2, tmp3;
-    const PlayerItemDefinition* definition = &gPlayerItemDefinitions[this->id];
+    const SpriteDataC* definition = &gPlayerItemDefinitions[this->id];
     if (definition->bitfield == 0xff) {
-        u32 tmp = definition->firstItemIndex;
+        u32 tmp = (u8)definition->unk;
         definition = gAdditionalPlayerItemDefinitions[definition->index];
         definition = &definition[((GenericEntity*)this)->field_0x68.HALF.LO - tmp];
     }
@@ -96,13 +88,13 @@ void ItemInit(Entity* this) {
     tmp2 = tmp3 & 0xf;
     this->palette.raw = (tmp3 << 4) | (tmp2);
     this->damage = definition->index;
-    this->hurtType = definition->hurtType;
-    this->hitType = definition->hitType;
+    this->hurtType = definition->unk >> 8;
+    this->hitType = definition->unk2;
     this->spriteIndex = definition->spriteIndex;
-    if (definition->gfx == 0) {
+    if (definition->gfxLoadBitfield == 0) {
         this->spriteVramOffset = gPlayerEntity.base.spriteVramOffset;
     } else {
-        this->spriteVramOffset = definition->gfx & 0x3ff;
+        this->spriteVramOffset = definition->gfxLoadBitfield & 0x3ff;
     }
     if (this->animationState == IdleNorth) {
         this->animationState = gPlayerEntity.base.animationState & 6;

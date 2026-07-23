@@ -85,7 +85,9 @@ void V3TennisBallProjectile_Action2(Entity* this) {
 bool32 sub_080ACB40(Entity* this) {
     Entity* r1_grandparent;
     Entity* child;
+#ifndef PC_PORT
     Entity* tmp;
+#endif
     /* #97 pattern: parent or grandparent may have died this frame. */
     if (this->parent == NULL || this->parent->parent == NULL) {
         return FALSE;
@@ -110,6 +112,9 @@ bool32 sub_080ACB40(Entity* this) {
             continue;
         }
         tmp = tmp->child;
+        if (tmp == NULL) {
+            continue;
+        }
         if (tmp != this && child == tmp->child) {
             return FALSE;
         }

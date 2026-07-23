@@ -16,6 +16,9 @@
 #include "player.h"
 #include "roomid.h"
 #include "screen.h"
+#ifdef PC_PORT
+#include "port_entity_ctx.h"
+#endif
 
 typedef struct MazaalHeadEntity_ {
     /*0x00*/ Entity base;
@@ -35,8 +38,19 @@ typedef struct MazaalHeadEntity_ {
 #endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unused2[6];
-    /*0x74*/ struct MazaalHeadEntity_* unk_74;
-    /*0x78*/ struct MazaalHeadEntity_* unk_78;
+    /* Issue #162: these two links are read/written CROSS-STRUCT — the head
+       writes/reads a MazaalBraceletEntity's slots through this struct's layout
+       (the GBA decomp type-puns both at 0x74/0x78). MazaalBraceletEntity stores
+       them as 4-byte EntityRef slots (#127-class, must fit the 0xB8 pool slot),
+       so the head MUST use the identical representation and offsets (PC
+       0xA0/0xA4), or a bracelet's slot index gets dereferenced as a pointer —
+       the Fortress of Winds boss-entry SIGSEGV. */
+    union {
+        /*0x74*/ EntityRef entity; /* 4B both targets (slot on PC) */
+    } unk_74;
+    union {
+        /*0x78*/ EntityRef entity; /* 4B both targets (slot on PC) */
+    } unk_78;
     /*0x7c*/ u8 unk_7c;
     /*0x7d*/ u8 unk_7d;
     /*0x7e*/ u16 unk_7e;
@@ -44,8 +58,26 @@ typedef struct MazaalHeadEntity_ {
     /*0x81*/ u8 unk_81;
 } MazaalHeadEntity;
 
-PORT_STATIC_ASSERT_OFFSET(MazaalHeadEntity, unk_6d, 0x6d, 0x99,
-                          "MazaalHeadEntity unk_6d offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_OFFSET(MazaalHeadEntity, unk_6d, 0x6d, 0x99, "MazaalHeadEntity unk_6d offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_OFFSET(MazaalHeadEntity, unk_74, 0x74, 0xA0,
+                          "MazaalHeadEntity unk_74 must alias MazaalBraceletEntity unk_74 (#162)");
+PORT_STATIC_ASSERT_OFFSET(MazaalHeadEntity, unk_78, 0x78, 0xA4,
+                          "MazaalHeadEntity unk_78 must alias MazaalBraceletEntity unk_78 (#162)");
+
+/* Link accessors (same shape as mazaalBracelet.c's MB74/MB78). On PC these
+ * resolve/store 4-byte EntityRef slots; on GBA they compile to the original
+ * raw pointer accesses. */
+#ifdef PC_PORT
+#define MH74(x) ((MazaalHeadEntity*)ENTITY_REF_GET((x)->unk_74.entity))
+#define MH74_SET(x, e) ENTITY_REF_SET((x)->unk_74.entity, e)
+#define MH78(x) ((MazaalHeadEntity*)ENTITY_REF_GET((x)->unk_78.entity))
+#define MH78_SET(x, e) ENTITY_REF_SET((x)->unk_78.entity, e)
+#else
+#define MH74(x) ((MazaalHeadEntity*)(x)->unk_74.entity)
+#define MH74_SET(x, e) ((x)->unk_74.entity = (EntityRef)(e))
+#define MH78(x) ((MazaalHeadEntity*)(x)->unk_78.entity)
+#define MH78_SET(x, e) ((x)->unk_78.entity = (EntityRef)(e))
+#endif
 
 extern void UnloadOBJPalette(Entity*);
 
@@ -210,8 +242,8 @@ void sub_08033F3C(MazaalHeadEntity* this) {
 #endif
             {
                 pEVar2->parent = super;
-                ((MazaalHeadEntity*)pEVar2)->unk_78 = this;
-                this->unk_74 = (MazaalHeadEntity*)pEVar2;
+                MH78_SET((MazaalHeadEntity*)pEVar2, this);
+                MH74_SET(this, pEVar2);
             }
             pEVar2 = CreateEnemy(MAZAAL_BRACELET, 1);
 #ifdef PC_PORT
@@ -220,8 +252,8 @@ void sub_08033F3C(MazaalHeadEntity* this) {
 #endif
             {
                 pEVar2->parent = super;
-                ((MazaalHeadEntity*)pEVar2)->unk_78 = (MazaalHeadEntity*)pEVar1;
-                this->unk_78 = (MazaalHeadEntity*)pEVar2;
+                MH78_SET((MazaalHeadEntity*)pEVar2, pEVar1);
+                MH78_SET(this, pEVar2);
             }
             pEVar2 = CreateEnemy(MAZAAL_HEAD, 4);
 #ifdef PC_PORT
@@ -248,10 +280,23 @@ void sub_08033FFC(MazaalHeadEntity* this) {
         case 1:
             super->subAction = 2;
             super->timer = 30;
-            entity = this->unk_74->unk_74;
-            entity->base.subAction = 1;
-            entity = this->unk_78->unk_74;
-            entity->base.subAction = 1;
+            /* #162: links resolve through EntityRef slots now; a NULL means the
+               bracelet (or its arm piece) never spawned (full pool) — GBA wrote
+               harmlessly to BIOS here, PC must skip. */
+            entity = MH74(this);
+            if (entity != NULL) {
+                entity = MH74(entity);
+            }
+            if (entity != NULL) {
+                entity->base.subAction = 1;
+            }
+            entity = MH78(this);
+            if (entity != NULL) {
+                entity = MH74(entity);
+            }
+            if (entity != NULL) {
+                entity->base.subAction = 1;
+            }
             UnloadOBJPalette(super);
             break;
         case 3:
@@ -269,14 +314,22 @@ void sub_08033FFC(MazaalHeadEntity* this) {
         case 6:
             super->subAction = 7;
             super->timer = 0;
-            entity = this->unk_74;
-            entity->base.subAction = 1;
-            entity = entity->unk_74;
-            entity->base.subAction = 4;
-            entity = this->unk_78;
-            entity->base.subAction = 1;
-            entity = entity->unk_74;
-            entity->base.subAction = 4;
+            entity = MH74(this);
+            if (entity != NULL) {
+                entity->base.subAction = 1;
+                entity = MH74(entity);
+            }
+            if (entity != NULL) {
+                entity->base.subAction = 4;
+            }
+            entity = MH78(this);
+            if (entity != NULL) {
+                entity->base.subAction = 1;
+                entity = MH74(entity);
+            }
+            if (entity != NULL) {
+                entity->base.subAction = 4;
+            }
             gScreen.controls.layerFXControl = 0xf40;
             gScreen.controls.alphaBlend = 0x1000;
             break;
@@ -285,20 +338,28 @@ void sub_08033FFC(MazaalHeadEntity* this) {
             gScreen.controls.alphaBlend = (temp) | (0x10 - (temp)) * 0x100;
             if (super->timer > 31) {
                 super->subAction = 8;
-                entity = this->unk_74;
-                entity->base.subAction = 3;
-                entity = entity->unk_74;
-                entity->base.subAction = 6;
-                entity = this->unk_78;
-                entity->base.subAction = 3;
-                entity = entity->unk_74;
-                entity->base.subAction = 6;
+                entity = MH74(this);
+                if (entity != NULL) {
+                    entity->base.subAction = 3;
+                    entity = MH74(entity);
+                }
+                if (entity != NULL) {
+                    entity->base.subAction = 6;
+                }
+                entity = MH78(this);
+                if (entity != NULL) {
+                    entity->base.subAction = 3;
+                    entity = MH74(entity);
+                }
+                if (entity != NULL) {
+                    entity->base.subAction = 6;
+                }
                 super->spriteRendering.alphaBlend = 0;
                 gScreen.controls.layerFXControl = 0;
             }
             break;
         default:
-            if (((this->unk_74)->base.flags & ENT_COLLIDE) != 0) {
+            if (MH74(this) != NULL && (MH74(this)->base.flags & ENT_COLLIDE) != 0) {
                 gRoomControls.camera_target = &gPlayerEntity.base;
                 sub_08034420(this);
                 gPlayerState.controlMode = CONTROL_1;
@@ -522,31 +583,31 @@ void sub_08034558(MazaalHeadEntity* this) {
 void sub_08034578(MazaalHeadEntity* this) {
     super->action = 3;
     this->unk_7d = 0;
-    sub_080348A4(this, this->unk_74, 0);
-    sub_080348A4(this, this->unk_78, 0);
+    sub_080348A4(this, MH74(this), 0);
+    sub_080348A4(this, MH78(this), 0);
 }
 
 void sub_080345A0(MazaalHeadEntity* this) {
     super->action = 5;
     this->unk_7d = 1;
-    sub_080348A4(this, this->unk_78, 1);
+    sub_080348A4(this, MH78(this), 1);
 }
 
 void sub_080345B8(MazaalHeadEntity* this) {
     super->action = 5;
     this->unk_7d = 2;
-    sub_080348A4(this, this->unk_74, 1);
+    sub_080348A4(this, MH74(this), 1);
 }
 
 void sub_080345D0(MazaalHeadEntity* this) {
     super->action = 6;
     if ((Random() & 1) != 0) {
-        if (sub_080348A4(this, this->unk_74, 2) == 0) {
-            sub_080348A4(this, this->unk_78, 2);
+        if (sub_080348A4(this, MH74(this), 2) == 0) {
+            sub_080348A4(this, MH78(this), 2);
         }
     } else {
-        if (sub_080348A4(this, this->unk_78, 2) == 0) {
-            sub_080348A4(this, this->unk_74, 2);
+        if (sub_080348A4(this, MH78(this), 2) == 0) {
+            sub_080348A4(this, MH74(this), 2);
         }
     }
 }
@@ -555,20 +616,20 @@ void sub_08034618(MazaalHeadEntity* this) {
     super->action = 7;
     this->unk_7d = 1;
     this->unk_7e = 0xb4;
-    sub_080348A4(this, this->unk_78, 3);
+    sub_080348A4(this, MH78(this), 3);
 }
 
 void sub_08034638(MazaalHeadEntity* this) {
     super->action = 7;
     this->unk_7d = 2;
     this->unk_7e = 0xb4;
-    sub_080348A4(this, this->unk_74, 3);
+    sub_080348A4(this, MH74(this), 3);
 }
 
 void sub_08034658(MazaalHeadEntity* this) {
     super->action = 8;
     this->unk_7d = 0;
-    if (sub_080348A4(this, this->unk_78, 4) == 0) {
+    if (sub_080348A4(this, MH78(this), 4) == 0) {
         this->unk_7d |= 0x40;
     }
 }
@@ -576,7 +637,7 @@ void sub_08034658(MazaalHeadEntity* this) {
 void sub_0803467C(MazaalHeadEntity* this) {
     super->action = 8;
     this->unk_7d = 0;
-    if (sub_080348A4(this, this->unk_74, 4) == 0) {
+    if (sub_080348A4(this, MH74(this), 4) == 0) {
         this->unk_7d |= 0x40;
     }
 }
@@ -584,8 +645,8 @@ void sub_0803467C(MazaalHeadEntity* this) {
 void sub_080346A0(MazaalHeadEntity* this) {
     super->action = 9;
     this->unk_7d = 0;
-    sub_080348A4(this, this->unk_74, 6);
-    sub_080348A4(this, this->unk_78, 6);
+    sub_080348A4(this, MH74(this), 6);
+    sub_080348A4(this, MH78(this), 6);
 }
 
 void sub_080346C8(MazaalHeadEntity* this) {
@@ -594,20 +655,20 @@ void sub_080346C8(MazaalHeadEntity* this) {
     super->action = 10;
     this->unk_7e = 0;
     if ((Random() & 1) != 0) {
-        if (sub_080348A4(this, this->unk_74, 8) != 0) {
-            hand = this->unk_78;
+        if (sub_080348A4(this, MH74(this), 8) != 0) {
+            hand = MH78(this);
             sub_080348A4(this, hand, 7);
         } else {
-            sub_080348A4(this, this->unk_74, 7);
-            sub_080348A4(this, this->unk_78, 8);
+            sub_080348A4(this, MH74(this), 7);
+            sub_080348A4(this, MH78(this), 8);
         }
     } else {
-        if (sub_080348A4(this, this->unk_78, 8) != 0) {
-            hand = this->unk_74;
+        if (sub_080348A4(this, MH78(this), 8) != 0) {
+            hand = MH74(this);
             sub_080348A4(this, hand, 7);
         } else {
-            sub_080348A4(this, this->unk_74, 8);
-            sub_080348A4(this, this->unk_78, 7);
+            sub_080348A4(this, MH74(this), 8);
+            sub_080348A4(this, MH78(this), 7);
         }
     }
 }
@@ -617,12 +678,12 @@ void sub_0803473C(MazaalHeadEntity* this) {
     u32 roomX;
 
     if ((this->unk_7d & 0x10) != 0) {
-        if (0x28 < (this->unk_74)->base.action) {
+        if (MH74(this) == NULL || 0x28 < MH74(this)->base.action) {
             return;
         }
         playerX = gPlayerEntity.base.x.HALF.HI - 0x60;
     } else {
-        if (0x28 < (this->unk_78)->base.action) {
+        if (MH78(this) == NULL || 0x28 < MH78(this)->base.action) {
             return;
         }
         playerX = gPlayerEntity.base.x.HALF.HI + 0x60;
@@ -667,9 +728,9 @@ void sub_080347B4(MazaalHeadEntity* this) {
 
 void sub_080347FC(MazaalHeadEntity* this) {
     if ((this->unk_7d & 0x10) != 0) {
-        sub_080348A4(this, this->unk_78, 5);
+        sub_080348A4(this, MH78(this), 5);
     } else {
-        sub_080348A4(this, this->unk_74, 5);
+        sub_080348A4(this, MH74(this), 5);
     }
     this->unk_7d |= 0x20;
 }
@@ -687,9 +748,9 @@ void sub_08034830(MazaalHeadEntity* this) {
             } else {
                 this->unk_7d |= 0x20;
                 if ((this->unk_7d & 0x10) != 0) {
-                    sub_080348A4(this, this->unk_78, 2);
+                    sub_080348A4(this, MH78(this), 2);
                 } else {
-                    sub_080348A4(this, this->unk_74, 2);
+                    sub_080348A4(this, MH74(this), 2);
                 }
             }
         }
@@ -698,6 +759,14 @@ void sub_08034830(MazaalHeadEntity* this) {
 
 u32 sub_080348A4(MazaalHeadEntity* this, MazaalHeadEntity* hand_, u32 unk) {
     u32 bVar1;
+
+#ifdef PC_PORT
+    /* #162/#140-class: link may be unset (full pool at spawn). GBA read BIOS
+     * bytes here harmlessly; treat as "arm unavailable". */
+    if (hand_ == NULL) {
+        return 0;
+    }
+#endif
 
     if (hand_->base.type == 0) {
         bVar1 = 5;
@@ -805,7 +874,8 @@ u32 sub_08034A10(MazaalHeadEntity* this) {
 
 void sub_08034A84(MazaalHeadEntity* this) {
 #ifdef PC_PORT
-    if (super->parent == NULL) return; /* #136 family */
+    if (super->parent == NULL)
+        return; /* #136 family */
 #endif
     if (super->parent->next == NULL) {
         DeleteEntity(super);
@@ -862,7 +932,7 @@ void sub_08034B38(MazaalHeadEntity* this) {
                 target->direction = super->timer + 0x58;
             }
             ptr = &gUnk_080CED84[target->type * 2];
-            PositionRelative(super, target, Q_16_16(*(ptr++)), Q_16_16(*ptr));
+            PositionRelative(super, target, Q_16_16(ptr[0]), Q_16_16(ptr[1]));
         }
     }
 }

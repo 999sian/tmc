@@ -37,8 +37,7 @@ static bool32 SoftResetKeysPressed(void);
 /*static*/ void InitSaveHeader(void);
 
 void (*const sTaskHandlers[])(void) = {
-    [TASK_TITLE] = TitleTask,
-    [TASK_FILE_SELECT] = FileSelectTask,
+    [TASK_TITLE] = TitleTask,         [TASK_FILE_SELECT] = FileSelectTask,
 
     [TASK_GAME] = GameTask,           [TASK_GAMEOVER] = GameOverTask,
     [TASK_STAFFROLL] = StaffrollTask, [TASK_DEBUG] = DebugTask,
@@ -115,7 +114,13 @@ void AgbMain(void) {
                 gMain.ticks++;
                 sTaskHandlers[gMain.task]();
 #ifdef TMC_N64
-        { static int s_once = 0; if (!s_once) { s_once = 1; n64_post(22); } }
+                {
+                    static int s_once = 0;
+                    if (!s_once) {
+                        s_once = 1;
+                        n64_post(22);
+                    }
+                }
 #endif
 
                 MessageMain();
@@ -262,7 +267,8 @@ void InitSaveHeader(void) {
 /*static*/ u32 CheckHeaderValid(void) {
 
     if ((gSaveHeader->signature != SIGNATURE) || (gSaveHeader->saveFileId >= NUM_SAVE_SLOTS) ||
-        (gSaveHeader->msg_speed >= MAX_MSG_SPEED) || (gSaveHeader->brightness >= MAX_BRIGHTNESS)
+        (gSaveHeader->msg_speed >= MAX_MSG_SPEED) ||
+        (gSaveHeader->brightness >= MAX_BRIGHTNESS)
         /* The multi-region binary is compiled USA-baseline (GAME_LANGUAGE == EN),
          * but the loaded ROM's region is only known at runtime. A JP ROM is
          * Japanese-only: its language-conditional gfx (title, name-entry,
@@ -270,11 +276,10 @@ void InitSaveHeader(void) {
          * (e.g. a USA tmc.sav) loads English gfx the JP ROM lacks. Require JP
          * language on a JP ROM so an English-flagged header is reset to
          * LANGUAGE_JP by InitSaveHeader's default path. */
-        || (REGION_IS_EU
-                ? ((gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES))
-                : REGION_IS_JP ? (gSaveHeader->language != LANGUAGE_JP)
-                               : (gSaveHeader->language != GAME_LANGUAGE))
-        || (gSaveHeader->invalid))
+        || (REGION_IS_EU   ? ((gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES))
+            : REGION_IS_JP ? (gSaveHeader->language != LANGUAGE_JP)
+                           : (gSaveHeader->language != GAME_LANGUAGE)) ||
+        (gSaveHeader->invalid))
         return FALSE;
 
     return TRUE;
@@ -315,7 +320,7 @@ void DisableVBlankDMA(void) {
 }
 
 void SetSleepMode(void) {
-    //simulate a sleep
+    // simulate a sleep
     Main* main;
 
     REG_DISPCNT = DISPCNT_FORCED_BLANK;
@@ -329,7 +334,7 @@ void SetSleepMode(void) {
     } while (REG_KEYINPUT == 0x03FF);
 
     main = &gMain;
-    *(vu8*)&main->sleepStatus; 
+    *(vu8*)&main->sleepStatus;
     main->sleepStatus = DEFAULT;
     return;
 }
@@ -359,10 +364,10 @@ u32 CheckRegionsOnScreen(const u16* arr) {
     return 0xff;
 }
 
-void PlayerItemNulled2(void) {
+void PlayerItemNulled2(Entity* this) {
     DeleteThisEntity();
 }
 
-void PlayerItemNulled(void) {
+void PlayerItemNulled(Entity* this) {
     DeleteThisEntity();
 }

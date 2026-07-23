@@ -13,6 +13,7 @@
 #include "common.h"
 #include "main.h"
 #include "player.h"
+#include "hitbox.h"
 #include "item.h"
 #include "transitions.h"
 #include "asm.h"
@@ -575,6 +576,33 @@ int Port_Debug_NoclipEnabled(void) {
     extern bool Port_Config_GetConsoleParity(void);
     return (sNoclip && !Port_Config_GetConsoleParity()) ? 1 : 0;
 }
+
+void Port_DebugAction_ToggleMinish(void) {
+    if (gMain.task != TASK_GAME)
+        return;
+    if (gSave.stats.health == 0 || gPlayerState.framestate == PL_STATE_DIE)
+        return;
+
+    if (gPlayerState.flags & PL_MINISH) {
+        gPlayerState.flags &= ~PL_MINISH;
+        gPlayerEntity.base.hitbox = (Hitbox*)&gPlayerHitbox;
+        gPlayerEntity.base.spritePriority.b1 = 1;
+        gPlayerEntity.base.spriteSettings.shadow = 1;
+        gPlayerEntity.base.spriteRendering.b0 = 3;
+        SetAffineInfo(&gPlayerEntity.base, 0x100, 0x100, 0);
+        PlayerSetNormalAndCollide();
+    } else {
+        gPlayerEntity.base.action = PLAYER_MINISH;
+        gPlayerEntity.base.subAction = 0;
+    }
+}
+
+int Port_DebugQuery_IsMinish(void) {
+    if (gMain.task != TASK_GAME)
+        return 0;
+    return (gPlayerState.flags & PL_MINISH) ? 1 : 0;
+}
+
 
 /* ------------------------------------------------------------------ */
 /*  Per-item ownership toggles                                        */

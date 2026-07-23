@@ -43,7 +43,7 @@
 #include "port_runtime_config.h"
 
 extern void SetActiveSave(u32 idx);
-extern bool Port_IsValidEntityAddr(const void* p);
+extern int Port_IsValidEntityAddr(const void* p);
 
 /* Message globals (engine): gMessage.state bit 0 = message active. */
 extern Message gMessage;
@@ -75,11 +75,16 @@ void Port_ReproNpcTalk_Tick(unsigned int frame) {
     static int booted = 0, warped = 0;
     static int adjacent_since = 0, r_stamped_at = 0;
     static int last_log = 0;
+    static int mash_a = 0;
+    static int hold_dir = -1;
+    static int bootstrap_only = 0;
     static unsigned int a = 0x22, r = 0x11, x = 0x78, y = 0x88, l = 0;
 
     if (active < 0) {
         const char* env = getenv("TMC_REPRO_NPC_TALK");
-        active = (env && *env && strcmp(env, "0") != 0) ? 1 : 0;
+        const char* roundtrip = getenv("TMC_REPRO_QUICKSAVE_ROUNDTRIP");
+        bootstrap_only = roundtrip && *roundtrip && strcmp(roundtrip, "0") != 0;
+        active = (env && *env && strcmp(env, "0") != 0) || bootstrap_only;
         if (!active) {
             FILE* marker = fopen("repro_npc_talk", "rb");
             if (marker) {
@@ -91,31 +96,65 @@ void Port_ReproNpcTalk_Tick(unsigned int frame) {
             const char* w = getenv("TMC_REPRO_NPC_TALK_WARP");
             if (w && *w)
                 sscanf(w, "%i,%i,%i,%i,%i", &a, &r, &x, &y, &l);
+            mash_a = getenv("TMC_REPRO_MASH_A") != NULL; /* ponytail: debug knob — mash A every 40f */
+            {
+                /* ponytail: debug knob — hold a direction every frame (walk through doors) */
+                const char* hd = getenv("TMC_REPRO_HOLD_DIR");
+                if (hd && *hd) {
+                    hold_dir = (*hd == 'u')   ? PORT_INPUT_UP
+                               : (*hd == 'd') ? PORT_INPUT_DOWN
+                               : (*hd == 'l') ? PORT_INPUT_LEFT
+                                              : PORT_INPUT_RIGHT;
+                }
+            }
             fprintf(stderr, "[npc-talk] active warp=0x%02x/0x%02x (%u,%u) layer=%u\n", a, r, x, y, l);
         }
     }
     if (!active)
         return;
 
+    if (mash_a && warped && frame % 40 < 2) {
+        Port_Config_TestForceEdge(PORT_INPUT_A);
+        if (getenv("TMC_REPRO_MASH_B")) /* ponytail: debug knob — sword mash for boss-fight repros */
+            Port_Config_TestForceEdge(PORT_INPUT_B);
+    }
+    if (hold_dir >= 0 && gMain.task == TASK_GAME)
+        Port_Config_TestForceEdge(hold_dir);
+
     if (!booted && gMain.task == TASK_TITLE && frame >= 30 && (frame & 0xF) < 3) {
         Port_Config_TestForceEdge(PORT_INPUT_START);
     }
 
     if (!booted && gMain.task == TASK_FILE_SELECT && frame > 60) {
-        SaveFile* sv = &gMapDataBottomSpecial.saves[0];
-        ResetSaveFile(0);
-        sv->initialized = 1;
-        sv->name[0] = 'A';
-        sv->saved_status.area_next = (u8)a;
-        sv->saved_status.room_next = (u8)r;
-        sv->saved_status.start_pos_x = (s16)x;
-        sv->saved_status.start_pos_y = (s16)y;
-        sv->saved_status.layer = (u8)l;
-        gMapDataBottomSpecial.saveStatus[0] = 1;
-        SetActiveSave(0);
+        SaveFile* sv = &gFileSelectState.saves[0];
+        int slot = 0;
+        /* ponytail: debug knob — keep the on-disk saves (real player data,
+           first initialized slot) instead of synthesizing; warp still applies. */
+        if (getenv("TMC_REPRO_KEEP_SAVE")) {
+            while (slot < 2 && !gFileSelectState.saves[slot].initialized) {
+                slot++;
+            }
+            fprintf(stderr, "[npc-talk] keep-save: using slot %d (init=%d)\n", slot,
+                    (int)gFileSelectState.saves[slot].initialized);
+        } else {
+            ResetSaveFile(0);
+            sv->initialized = 1;
+            sv->name[0] = 'A';
+            sv->saved_status.area_next = (u8)a;
+            sv->saved_status.room_next = (u8)r;
+            sv->saved_status.start_pos_x = (s16)x;
+            sv->saved_status.start_pos_y = (s16)y;
+            sv->saved_status.layer = (u8)l;
+            gFileSelectState.saveStatus[0] = 1;
+        }
+        SetActiveSave(slot);
         SetTask(TASK_GAME);
         booted = 1;
         fprintf(stderr, "[npc-talk] frame %u: bootstrapped -> TASK_GAME\n", frame);
+    }
+
+    if (bootstrap_only && booted) {
+        return;
     }
 
     if (booted && !warped && gMain.task == TASK_GAME && frame % 20 == 0) {

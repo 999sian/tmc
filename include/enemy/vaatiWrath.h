@@ -4,7 +4,11 @@
 
 typedef struct {
     /*0x00*/ Entity base;
+#ifdef PC_PORT
+    u8 unused1[5 + 4];
+#else
     /*0x68*/ u8 unused1[5];
+#endif
     /*0x6d*/ u8 unk_6d;
     /*0x6e*/ u8 unused2[10];
     /*0x78*/ u8 unk_78;
@@ -16,5 +20,7 @@ typedef struct {
     /*0x80*/ u8 unused4[4];
     /*0x84*/ u8 unk_84;
 } VaatiWrathEntity;
+
+PORT_STATIC_ASSERT_OFFSET(VaatiWrathEntity, unk_6d, 0x6d, 0x99, "VaatiWrathEntity unk_6d offset incorrect");
 
 #endif // VAATIWRATH_H

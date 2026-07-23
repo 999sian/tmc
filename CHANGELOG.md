@@ -1,5 +1,217 @@
 # Changelog
 
+## v0.8.3 (2026-07-19)
+
+### Fixed
+
+- **Vaati fight 1 no longer freezes, drifts away, or leaves Gust Jar/laser
+  spinner eyes invulnerable.** The PC dark-magic projectile struct was missing
+  two padding fields, so its death callback wrote controller and eye state four
+  to eight bytes early. The overlay now matches both parents, allocation
+  failures run normal eye cleanup, and impossible phase-3 states self-heal.
+- **Incompatible v0.8.1/v0.8.2 quicksaves and autosaves are now rejected.**
+  Their live entity layouts predate the corrected 64-bit overlays and cannot be
+  restored safely. Normal `tmc.sav` progress is unaffected.
+- **Fixed seven additional 64-bit entity-overlay mismatches.** Pesto's pot and
+  dirt-ball state, Scissors Beetle mandibles, ball-and-chain geometry, Vaati
+  Wrath electric attacks, Enemy64's Gyorg tail, and Big Green ChuChu start
+  particles now use the real PC fields while retaining the original GBA layouts.
+
+## v0.8.2 (2026-07-18)
+
+### Fixed
+
+- **Android crash on launch (v0.8.1).** The CI's unpinned SDL3 package
+  floated from 3.4.4 to 3.4.12 between releases, and SDL 3.4.12 changed the
+  `onNativePadDown` JNI signature (added a `scancode` argument). The vendored
+  Java glue still declared the old signature, so JNI registration failed and
+  ART aborted with `NoSuchMethodError` before the game could start — on every
+  device. The Java glue is now synced to SDL release-3.4.12 (including the
+  new `SDLSensorManager.java`) and the `libsdl3` package is pinned to 3.4.12
+  so the two sides can only be bumped together. Verified on a Galaxy Tab A7:
+  release 0.8.1 APK aborts at registration, fixed build reaches `SDL_main`
+  and runs.
+- **Vaati fight 1 (Vaati Reborn) freeze / boss drifting out of bounds.** When
+  the final phase threshold fires, the boss enters its defeat sequence — but
+  another eye could still hold a pending stagger timer or take a hit that
+  frame. Its timer expiry rewrote the boss back into fight state with a phase
+  counter (3) the attack-selection switch has no case for, leaving Vaati
+  inert and drifting; any further eye hit also read one byte past the
+  3-entry phase-threshold table. Both verified live under a sanitizer via
+  state injection; eyes now stand down once the defeat has triggered.
+  (Latent on GBA too — the stray read hit adjacent ROM there.)
+- **Crash entering trees (e.g. North Hyrule Field fairy fountain).** Unused
+  rooms in some area room-header tables carry a junk tileset id (`0xFFF3`);
+  the GBA read it as harmless garbage, but on PC it indexed ~512KB past the
+  64-slot host tileset table — an out-of-bounds read that crashed or not
+  depending on heap layout, which is why the crash was intermittent.
+  `ReadAreaSubTableEntry` now rejects indices past the table and falls back
+  to the bounds-checked ROM resolver.
+- **Out-of-bounds sweep for the same bug family** (data-driven index into a
+  fixed host-side table; GBA read harmless garbage, PC faults). Found via
+  parallel static audit plus an ASan warp tour over every area:
+  - Room exit lists are now resolved from the ROM on all regions (previously
+    EU/JP only) — the compile-time `gExitLists` sub-arrays are sized to the
+    rooms the decomp names, and e.g. Hyrule Town's ROM header table has more
+    rooms than exit entries, so room-info init read past the const array
+    (caught live by ASan entering area 0x02/0x08).
+  - `GetAreaRoomPropertyList` and `GetCurrentRoomProperty` host-table reads
+    now bound the room/property index like the tileset fix.
+  - `GetCurrentRoomInfo` clamps a junk room id instead of handing out a
+    garbage `RoomResInfo` whose `properties` pointer gets dereferenced.
+  - `InitRoom` clamps a junk area id (crafted saves) before it feeds the
+    metadata/flag-bank/dungeon-key chain; `dungeon_idx` can no longer wrap
+    and write past `gSave.dungeonKeys`.
+  - The HUD item renderer bounds save-derived item ids against the 128-slot
+    animation table (the pause menu already did).
+  - `LoadGfxGroup` rejects out-of-range gfx group ids (including the 0xFF
+    "none" sentinel) instead of walking a garbage GfxItem list.
+  - Text glyph lookup clamps font bank nibbles 9–15 to bank 0 (9 host font
+    banks exist; GBA read adjacent ROM).
+  - Physics surface-flag table: tiles mapping to rows 60–68 read past the
+    60-row table even on GBA (landing in the player-macro bytes that follow
+    in ROM); the PC build now appends those ROM bytes verbatim so behavior
+    stays GBA-identical instead of linker-dependent.
+  - Asset loader force-terminates map-definition chains so a truncated or
+    modded `area_*.json` cannot walk the engine off a heap array.
+  - The special-layer scroll copy (`ram_sub_080B197C_c`) clamps its 64-byte
+    rows to the map buffer: on GBA the two special tilemaps are adjacent
+    EWRAM and deep scroll offsets deliberately walked off one into the
+    other; on PC they are separate globals (caught by ASan in Hyrule Town
+    Underground).
+- **Nine per-room entity lists were never filled from ROM** (zero `.bss`
+  stubs): the Mayor's house state change, the Mayor's cabin on the Minish
+  path, and all seven Happy Hearth Inn 2F oracle lists (the Din/Nayru/Farore
+  house-renting sidequest). The `kind != 0xFF` walk ran off the empty arrays
+  (caught by ASan in the Mayor's house) and the real NPCs never spawned.
+  Filled from ROM like the other per-room lists; two stubs were also too
+  small to hold their terminator and were resized.
+- ASan builds no longer alias entity-data stubs to a 16-byte typed view —
+  the alias made every legitimate walk past the first entry report a bogus
+  global-buffer-overflow, hiding real findings.
+- **ChuChu-family allocation hardening.** Big Green ChuChu now abandons
+  construction cleanly if any linked body segment cannot be allocated;
+  previously a missing middle segment was dereferenced immediately. Full
+  entity-pool allocation now returns `NULL` directly instead of forming a
+  member address from a null pointer (an UBSan abort).
+
+## v0.8.1 (2026-07-15)
+
+### Follow-up crash hardening
+
+- Fixed four additional GBA-to-64-bit hazards found while auditing the boss
+  crashes: Gentari's curtain now searches the auxiliary-player and entity pools
+  separately instead of reading past the first array; Octorok and Moldworm
+  layouts now preserve their pointer/tail offsets and enforce them with static
+  assertions; Postman's route selection handles empty route tables without
+  modulo-by-zero; and the manager pool is now a real 32-entry `Temp` array
+  instead of a byte buffer accessed through a mismatched declaration.
+
+### Codebase-wide sweep for the same GBA-to-64-bit bug family
+
+- Audited `src/`, `include/`, and `port/` for the failure patterns behind the
+  boss crashes (fixed-array overflows, GBA/64-bit layout offsets, cross-TU type
+  mismatches, host-trapping arithmetic). Two live host bugs fixed:
+  - **Fireball Guy split (`fireballGuy.c`).** A type-3 Fireball Guy spawns 5
+    children, but the child-pointer array and position-offset table held only 4
+    entries — the 5th write/read ran one slot past a stack array and past a
+    rodata table (SIGSEGV / corruption on x86/ARM; the sibling `slime.c` splitter
+    was already correctly sized). Both are now 5 entries; the 5th offset is the
+    real ROM byte at `0x080D1818` (`{0, 2}`), so behavior matches GBA exactly.
+  - **Room-tile manager spawn (`beanstalkSubtask.c`).** The generic manager
+    spawner wrote a manager's world x/y through `&manager[1].timer + 10/12`,
+    which lands on GBA offset 0x38/0x3a but 0x58/0x5a on the larger 64-bit
+    `Manager` — so e.g. a tile-placed Flame Manager loaded coordinates of 0 and
+    mishandled its torch tile. It now writes the translated tail offset
+    (`sizeof(Manager)+0x18/0x1a`), matching the `tileChangeObserveManager` pattern.
+- Added a Linux x86_64 GCC LTO CI gate that turns cross-translation-unit
+  declaration drift into build failures; reconciled the mismatches it exposed
+  while excluding raw ROM blob storage that is intentionally type-punned.
+
+### Deepwood Shrine: crash when the first boss dies (Big Green ChuChu)
+
+- **Killing the Deepwood Shrine boss no longer crashes.** Two decomp bugs in
+  the death sequence, both latent on GBA and fatal on x86:
+  - **SIGFPE (divide by zero)** in the ChuChu wobble math (`chuchuBoss.c`). The
+    boss's gather/merge state — part of the death animation — seeds a wobble
+    divisor to 0 from a `{0,0}` data-table entry; the split ChuChu then divides
+    by it. GBA's soft-division returns 0 without trapping; x86 raises SIGFPE.
+    Both divide sites now go through `Div()` (the port's hardware-faithful
+    divide, 0 on divide-by-zero) instead of a raw `/`.
+  - **SIGSEGV** in the post-boss element-get cutscene (`elementsBackground.c`).
+    `sub_080A04E8` was declared and called with no arguments but its definition
+    takes `Entity* this` and dereferences `this->parent`. On GBA the entity
+    pointer happened to survive in a register across the call; on x86 the
+    "parameter" read garbage and faulted. The declaration and both call sites
+    now pass `this`.
+  - Verified with a deterministic headless repro (warp into the boss arena,
+    force the boss to 0 HP): SIGFPE→SIGSEGV chain before, full death + element
+    cutscene to the cleared room after.
+
+### Cave of Flames: cane-flip freeze fixed (Gleerok soft-lock)
+
+- **Using the Cane of Pacci on Gleerok's cooled, downed head no longer freezes
+  the fight.** The flip is a real vanilla mechanic: the head pops up, lands
+  flipped, and the boss lays its neck flat so the back crystal becomes
+  attackable. The neck-extension array really has six segments, but the decomp
+  declared five and reached the sixth by indexing one past the array into the
+  adjacent struct fields — undefined behavior the GBA tolerated. On the PC
+  build the optimizer was free to misplace that sixth-segment access, which
+  turned the neck lay-out solver into a non-converging tug-of-war: the boss
+  spun forever "laying out" the neck while Link could still walk around. The
+  array is now declared with all six segments (identical byte layout, pinned
+  by a static assert), and the lay-out converges — verified with a
+  deterministic headless repro (3/3 freezes before, 3/3 clean crystal-phase
+  progressions after).
+- The Gleerok flip/lay-out state machine now has `TMC_VERBOSE`-gated stderr
+  tracing (`[gleerok]` lines) covering the cane hit, the flip handshake, and
+  the segment solver, for future fight triage.
+- **Follow-up crash after the flip fixed too (SIGFPE).** The flip-debris
+  particles (`gleerokParticle.c`) divide by their affine scale to size their
+  hitboxes; the settled state left the divisors uninitialized (GBA read stack
+  garbage through its non-trapping soft division; x86 faults when that garbage
+  is 0), and the shrink path can legitimately pass through scale 0 for one
+  frame. The divisors are now seeded from the live scales and the zero frame
+  keeps the previous hitbox size, matching GBA intent without the trap.
+
+### Fortress of Winds: Mazaal boss-entry crash fixed (issue #162, regression in v0.7.0)
+
+- **Re-entering the Mazaal arena no longer crashes.** The boss head and its
+  bracelets link to each other through type-punned struct fields (GBA offsets
+  0x74/0x78). v0.7.0's #127-class fix converted the bracelet's links to 4-byte
+  EntityRef slots, but the head kept 8-byte raw pointers — so when the head
+  woke its arms (mid-fight re-entry from Inner Mazaal, or restoring a
+  save state taken in the arena), it read a bracelet's slot *index* as a
+  pointer and dereferenced it: SIGSEGV in `mazaalHead.c` the moment the hands
+  should rise. The head now uses the same EntityRef slots at the same PC
+  offsets, pinned by cross-struct static asserts on both sides; arm commands
+  also skip cleanly when a link never spawned (full entity pool).
+- This also fixes silent bracelet-state corruption: the head's old 8-byte
+  pointer write clobbered the bracelet's adjacent fields (`unk_7c`/`unk_7e`),
+  and the bracelet palette-sync path read back a garbage head link.
+
+### More GBA-to-PC fixes (PR #169 + follow-ups)
+
+- **Royal Valley light-overflow softlock fixed** (`miscManager.c`, #169).
+  `MiscManager_Type7`'s light-region loop relied on a separate global sitting
+  immediately after its data table as a terminator; PC layout broke that
+  adjacency, so the loop ran off the end, read garbage into `gRoomVars.lightLevel`
+  and froze Link. An explicit in-array `{0xFFFF, …}` sentinel now stops the loop
+  in bounds. (Contributed by @alfonsoalvarohervas-sudo.)
+- **Minish portal cutscene skip restored** (`enterPortalSubtask.c`, #169).
+  `sub_0804AD18` now returns `TRUE` explicitly on PC instead of relying on the
+  GBA implicit-register return, so pressing R/B skips the transition again.
+  (Contributed by @alfonsoalvarohervas-sudo.)
+- **F8 Debug Menu -> Warp: "Shrink to Minish" toggle** (#169) transforms Link in
+  and out of Minish size, wiring scale, hitboxes, priority and shadows through
+  the engine's `PLAYER_MINISH` state machine. (Contributed by
+  @alfonsoalvarohervas-sudo.)
+- **Same-class follow-ups from the audit:** the steam-overlay room handler
+  (`sub_08059F9C`) now returns explicitly on its entity-delete paths instead of
+  an indeterminate register value, and the demo/attract logo draw
+  (`sub_080A30AC`) resolves its frame pointers against the live ROM instead of
+  reading megabytes past a 4 KB data slice.
+
 ## v0.8.0 (2026-07-12)
 
 ### Widescreen in more scenes, never stretched

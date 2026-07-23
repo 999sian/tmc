@@ -66,7 +66,7 @@ static void sub_0804C128(void);
 
 extern void** gCurrentRoomProperties;
 
-u32 sub_unk3_ArmosInteriors_RuinsEntranceNorth(u32 arg0) {
+u32 sub_unk3_ArmosInteriors_RuinsEntranceNorth(void) {
     return 1;
 }
 
