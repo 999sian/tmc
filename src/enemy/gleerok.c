@@ -34,15 +34,23 @@ typedef struct {
 
 typedef struct {
     /*0x00*/ Gleerok_HeapStruct2 filler[6];
-    /*0x00*/ Gleerok_HeapStruct2 filler2[5];
-    /*0x2c*/ union SplitHWord unk_2c;
-    /*0x2e*/ u16 filler_2e;
+    /* The neck-extension array REALLY has 6 segments: the GBA decomp declared
+       5 and aliased the 6th through the adjacent "unk_2c"/"filler_2e" fields
+       (init even writes filler2[5] directly, and sub_0802EB08 walks pairs
+       [i..i+1] up to i==4). That out-of-bounds indexing is UB on PC — the
+       optimizer is free to misplace the [5] access, which turned the cane-flip
+       neck lay-out into a non-converging limit cycle (Cave of Flames freeze).
+       Declare all 6; the old unk_2c is filler2[5].unk0, same offsets. */
+    /*0x18*/ Gleerok_HeapStruct2 filler2[6];
     /*0x30*/ u8 unk_30[6];
     /*0x36*/ u8 filler_36[0x2];
     /*0x38*/ Entity* entity1;
-    /*0x3c*/ Entity* entities[5];
-    /*0x50*/ Entity* ent2;
+    /*0x3c*/ Entity* entities[6]; /* entities[5] is the head (formerly ent2). */
 } Gleerok_HeapStruct;
+
+/* Same byte layout as the old 5+unk_2c+filler_2e shape, both targets. */
+PORT_STATIC_ASSERT_EXPR(offsetof(Gleerok_HeapStruct, unk_30), 0x30, 0x30,
+                        "Gleerok_HeapStruct filler2[6] must end at 0x30 (was filler2[5]+unk_2c+filler_2e)");
 
 typedef struct {
     Entity base;
@@ -67,8 +75,7 @@ typedef struct {
     Gleerok_HeapStruct* unk_84;
 } GleerokEntity;
 
-PORT_STATIC_ASSERT_OFFSET(GleerokEntity, unk_74, 0x74, 0xa0,
-                          "GleerokEntity unk_74 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_OFFSET(GleerokEntity, unk_74, 0x74, 0xa0, "GleerokEntity unk_74 offset (Enemy::child +4 pad)");
 
 extern void (*const Gleerok_Functions[])(GleerokEntity*);
 extern void (*const gUnk_080CD75C[])(GleerokEntity*);
@@ -114,7 +121,8 @@ static void (*const gleerok_subactions_gUnk_080CD828[])(GleerokEntity*) = {
     sub_0802DFC0, sub_0802E034, sub_0802E034, sub_0802E0B8, sub_0802E1D0, sub_0802E300,
 };
 static void (*const gleerok_subactions_gUnk_080CD848[])(GleerokEntity*) = {
-    sub_0802E448, sub_0802E4C0,
+    sub_0802E448,
+    sub_0802E4C0,
 };
 #define GLEEROK_FN(table, idx) (gleerok_subactions_##table[(idx)])
 #else
@@ -147,6 +155,24 @@ extern const u8* gUnk_080CD86C[];
 extern const u8* gUnk_080CD878[];
 #define GUNK_080CD86C_PTR(idx) gUnk_080CD86C[(idx)]
 #define GUNK_080CD878_PTR(idx) gUnk_080CD878[(idx)]
+#endif
+
+#ifdef PC_PORT
+/* Issue: Cave-of-Flames cane-flip freeze (0.7→0.8 regression report).
+ * Throttled TMC_VERBOSE tracing of the flip handshake chain:
+ * form-3 cane hit → form-4 conversion → parent rotate/settle → unk_7b.
+ * Zero overhead unless verbose. */
+extern bool Port_DebugVerbose;
+#define GLEEROK_DIAG(rate_field, fmt, ...)                           \
+    do {                                                             \
+        if (Port_DebugVerbose) {                                     \
+            static unsigned _c;                                      \
+            if ((_c++ % (rate_field)) == 0)                          \
+                fprintf(stderr, "[gleerok] " fmt "\n", __VA_ARGS__); \
+        }                                                            \
+    } while (0)
+#else
+#define GLEEROK_DIAG(rate_field, fmt, ...)
 #endif
 
 extern u32 sub_0806FC80(Entity*, Entity*, s32);
@@ -229,7 +255,16 @@ extern u8 gUnk_080CD884[];
 */
 
 void Gleerok(GleerokEntity* this) {
-    Gleerok_Functions[GetNextFunction(super)](this);
+    u32 fn = GetNextFunction(super);
+#ifdef PC_PORT
+    /* Freeze triage: the flip-wait parent (subAction 4) must keep reaching
+       OnTick(0); any other dispatch starves the unk_7b handshake consumer. */
+    if (super->type == 0 && super->subAction == 4 && fn != 0) {
+        GLEEROK_DIAG(60, "parent dispatch hijacked: fn=%d confused=%d knockback=%d contact=0x%x gj=%d", fn,
+                     super->confusedTime, super->knockbackDuration, super->contactFlags, super->gustJarState);
+    }
+#endif
+    Gleerok_Functions[fn](this);
 }
 
 void Gleerok_OnDeath(GleerokEntity* this) {
@@ -309,13 +344,13 @@ void sub_0802D170(GleerokEntity* this) {
         super->action = 3;
         this->unk_80 = 0;
 #ifdef PC_PORT
-        /* #140-class: the decompiler spelled heap->ent2 as ((Entity*)heap)->parent
+        /* #140-class: the decompiler spelled heap->entities[5] as ((Entity*)heap)->parent
          * because Entity.parent and ent2 both sit at 0x50 under 4-byte GBA
          * pointers. On PC Entity.parent is 0x60 (8-byte pointers), which aliases
          * entities[4] instead — so this set the wrong segment's timer and ent2
          * (the head) never got it, breaking the fight. Use the real field
-         * (identical to the ->ent2->timer writes at lines 588/603). */
-        this->unk_84->ent2->timer = 24;
+         * (identical to the ->entities[5]->timer writes at lines 588/603). */
+        this->unk_84->entities[5]->timer = 24;
 #else
         ((Entity*)this->unk_84)->parent->timer = 24;
 #endif
@@ -334,7 +369,7 @@ void sub_0802D218(GleerokEntity* this) {
 #ifdef PC_PORT
     /* #140-class: see line 304 — ((Entity*)heap)->parent aliases ent2 only on
      * GBA (both at 0x50); on PC parent is 0x60, which lands in entities[4]. */
-    this->unk_84->ent2->timer = 12;
+    this->unk_84->entities[5]->timer = 12;
 #else
     ((Entity*)(this->unk_84))->parent->timer = 12;
 #endif
@@ -385,8 +420,7 @@ void sub_0802D258(GleerokEntity* this) {
          * Replace with proper field access keeping the same sparse {0,1,4,5}
          * sample distribution. */
         u32 rand = Random() & 5;
-        Entity* target = (rand == 5) ? this->unk_84->ent2
-                                     : this->unk_84->entities[rand];
+        Entity* target = (rand == 5) ? this->unk_84->entities[5] : this->unk_84->entities[rand];
         Entity* fx = target ? CreateFx(target, FX_GIANT_EXPLOSION3, 0) : NULL;
         if (fx) {
             fx->spritePriority.b0 = 0;
@@ -413,10 +447,10 @@ void sub_0802D33C(GleerokEntity* this) {
         unk_84->entities[i]->health = 0;
         ((Enemy*)(unk_84->entities[i]))->enemyFlags |= EM_FLAG_BOSS;
     }
-    if (unk_84->ent2) {
-        unk_84->ent2->health = 0;
-        unk_84->ent2->type2 = 0;
-        unk_84->ent2->spriteSettings.draw &= ~1;
+    if (unk_84->entities[5]) {
+        unk_84->entities[5]->health = 0;
+        unk_84->entities[5]->type2 = 0;
+        unk_84->entities[5]->spriteSettings.draw &= ~1;
     }
     DeleteThisEntity();
 }
@@ -484,13 +518,25 @@ void sub_0802D3B8(GleerokEntity* this) {
                 super->child->parent = super;
                 ((GleerokEntity*)super->child)->unk_84 = this->unk_84;
                 MEMORY_BARRIER;
-                heap->ent2 = super->child;
+                heap->entities[5] = super->child;
                 heap->filler[5].unk0.HALF.HI = 0x10;
                 heap->filler2[5].unk0.HALF.HI = 0;
                 heap->unk_30[5] = 0;
             }
+#ifdef PC_PORT
+            if (heap->entities[0] == NULL || heap->entities[1] == NULL || heap->entities[2] == NULL ||
+                heap->entities[3] == NULL || heap->entities[4] == NULL || heap->entities[5] == NULL) {
+                for (tmp1 = 0; tmp1 < 6; tmp1++) {
+                    if (heap->entities[tmp1] != NULL) {
+                        DeleteEntity(heap->entities[tmp1]);
+                    }
+                }
+                DeleteEntity(super);
+                return;
+            }
+#endif
             if (!REGION_IS_EU) {
-            gPlayerState.controlMode = CONTROL_DISABLED;
+                gPlayerState.controlMode = CONTROL_DISABLED;
             }
             InitializeAnimation(super, 0x4c);
             break;
@@ -539,7 +585,7 @@ void sub_0802D3B8(GleerokEntity* this) {
 
 void sub_0802D650(GleerokEntity* this) {
     if (REGION_IS_EU) {
-    PausePlayer();
+        PausePlayer();
     }
 
     GLEEROK_FN(gUnk_080CD7E4, super->subAction)(this);
@@ -608,7 +654,7 @@ void sub_0802D714(GleerokEntity* this) {
         ((GleerokEntity*)(super->child))->unk_84 = heap;
     }
 
-    heap->ent2->timer = 24;
+    heap->entities[5]->timer = 24;
 }
 
 void sub_0802D77C(GleerokEntity* this) {
@@ -623,7 +669,7 @@ void sub_0802D77C(GleerokEntity* this) {
     super->subtimer = 0;
     super->timer = 0;
     super->subAction = 4;
-    this->unk_84->ent2->timer = 12;
+    this->unk_84->entities[5]->timer = 12;
 }
 
 void sub_0802D7B4(GleerokEntity* this) {
@@ -633,10 +679,10 @@ void sub_0802D7B4(GleerokEntity* this) {
             super->timer = 0;
             super->action = 1;
             super->subAction = 0;
-            this->unk_84->ent2->timer = 24;
+            this->unk_84->entities[5]->timer = 24;
             gRoomControls.camera_target = &gPlayerEntity.base;
             if (!REGION_IS_EU) {
-            gPlayerState.controlMode = CONTROL_1;
+                gPlayerState.controlMode = CONTROL_1;
             }
             gPauseMenuOptions.disabled = 0;
             SoundReq(BGM_BOSS_THEME);
@@ -700,14 +746,20 @@ void sub_0802D86C(GleerokEntity* this) {
             break;
         case 4:
             if (super->frame == 0) {
+                GLEEROK_DIAG(120, "form4 waiting on anim frame0 (animIndex=%d frameDuration=%d)", super->animIndex,
+                             super->frameDuration);
                 UpdateAnimationSingleFrame(super);
                 return;
             }
 
-            if (GravityUpdate(super, Q_8_8(24.0)))
+            if (GravityUpdate(super, Q_8_8(24.0))) {
+                GLEEROK_DIAG(120, "form4 airborne z=%d zvel=%d", super->z.HALF.HI, super->zVelocity);
                 return;
+            }
 
             ((GleerokEntity*)(super->parent))->unk_7b = 1;
+            GLEEROK_DIAG(1, "form4 landed -> parent unk_7b=1 (parent subAction=%d type2=%d)", super->parent->subAction,
+                         super->parent->type2);
             super->timer = 0;
 
             do {
@@ -774,6 +826,7 @@ void sub_0802D86C(GleerokEntity* this) {
             }
 
             if ((super->contactFlags & CONTACT_NOW) && this->unk_74 == 0) {
+                GLEEROK_DIAG(1, "form3 contact 0x%x (cane=0x1d)", super->contactFlags & 0x7f);
                 if ((super->contactFlags & 0x7f) == 0x1d) {
                     super->zVelocity = Q_16_16(3.0);
                     super->parent->subAction = 4;
@@ -806,6 +859,7 @@ void sub_0802D86C(GleerokEntity* this) {
                 return;
 
             super->child = CreateEnemy(GLEEROK, 4);
+            GLEEROK_DIAG(1, "form3 flip landing: form4 child=%p entCount=%d", (void*)super->child, gEntCount);
             if (super->child) {
                 super->child->parent = super->parent;
                 this->unk_84->entity1 = super->child;
@@ -830,6 +884,9 @@ void sub_0802DB84(GleerokEntity* this) {
         this->unk_78 = 0;
         return;
     }
+
+    GLEEROK_DIAG(240, "head-track: neck=0x%x facing=0x%x (exact match required)", this->unk_84->filler[0].unk0.HALF.HI,
+                 super->direction);
 
     if (((this->unk_84->filler[0].unk0.HALF.HI - super->direction) & 0x1f) > 0x10) {
         timer = 0;
@@ -864,12 +921,12 @@ void sub_0802DC1C(GleerokEntity* this) {
     if (diff > 0x10) {
         if (diff <= 0x1d) {
             super->subAction = 0;
-            this->unk_84->ent2->timer = 0;
+            this->unk_84->entities[5]->timer = 0;
             return;
         }
     } else if (diff >= 3) {
         super->subAction = 0;
-        this->unk_84->ent2->timer = 0;
+        this->unk_84->entities[5]->timer = 0;
         return;
     }
     if (this->unk_78) {
@@ -901,10 +958,10 @@ void sub_0802DC1C(GleerokEntity* this) {
 }
 
 void sub_0802DCE0(GleerokEntity* this) {
-    if (this->unk_84->ent2->timer != 12) {
+    if (this->unk_84->entities[5]->timer != 12) {
         super->direction = GetFacingDirection(super, &gPlayerEntity.base);
         if (this->unk_84->filler[5].unk0.HALF.HI == super->direction) {
-            this->unk_84->ent2->timer = 12;
+            this->unk_84->entities[5]->timer = 12;
             this->unk_82 = 4;
             super->subtimer = 0;
         } else {
@@ -928,17 +985,17 @@ void sub_0802DCE0(GleerokEntity* this) {
                 this->unk_82--;
             }
         } else {
-            if (this->unk_84->ent2->subtimer == 0) {
+            if (this->unk_84->entities[5]->subtimer == 0) {
                 super->child = EnemyCreateProjectile(super, GLEEROK_PROJECTILE, 0);
 
                 if (super->child != NULL) {
                     super->child->direction = this->unk_84->filler[5].unk0.HALF.HI;
-                    super->child->type2 = this->unk_84->ent2->frame & 0xf;
-                    super->child->parent = this->unk_84->ent2;
+                    super->child->type2 = this->unk_84->entities[5]->frame & 0xf;
+                    super->child->parent = this->unk_84->entities[5];
                     super->child->child = this->unk_84->entities[0];
                 }
 
-                this->unk_84->ent2->timer = 0;
+                this->unk_84->entities[5]->timer = 0;
                 if (this->unk_74 == 0) {
                     this->unk_74 = 1;
                 } else {
@@ -996,12 +1053,12 @@ void sub_0802DDD8(GleerokEntity* this) {
                     r4 = 0;
                 }
 
-                if (this->unk_84->ent2->subtimer == 1) {
+                if (this->unk_84->entities[5]->subtimer == 1) {
                     super->child = EnemyCreateProjectile(super, GLEEROK_PROJECTILE, r2);
                     if (super->child != NULL) {
                         super->child->direction = this->unk_84->filler[5].unk0.HALF.HI;
-                        super->child->type2 = this->unk_84->ent2->frame & 0xf;
-                        super->child->parent = this->unk_84->ent2;
+                        super->child->type2 = this->unk_84->entities[5]->frame & 0xf;
+                        super->child->parent = this->unk_84->entities[5];
                         super->child->child = this->unk_84->entities[0];
                     }
                 }
@@ -1041,10 +1098,10 @@ void sub_0802DDD8(GleerokEntity* this) {
                         super->timer &= 0xfe;
                     }
 
-                    this->unk_84->ent2->timer = 12;
+                    this->unk_84->entities[5]->timer = 12;
                 } else {
                     super->subAction = 0;
-                    this->unk_84->ent2->timer = 0;
+                    this->unk_84->entities[5]->timer = 0;
                     sub_0802EB9C(this);
                 }
             }
@@ -1067,14 +1124,22 @@ void sub_0802DFC0(GleerokEntity* this) {
             super->direction = 1;
         }
 
+        GLEEROK_DIAG(120, "flip-wait rotate: filler0=0x%x dir=%d", this->unk_84->filler[0].unk0.HALF.HI,
+                     super->direction);
         sub_0802EA48(this->unk_84, 0, 0x20, super->direction);
         sub_0802EA88(this->unk_84);
     } else {
-        if (sub_0802EA88(this->unk_84) == 0) {
+        /* sub_0802EA88 MUTATES the neck segments — call exactly once per
+           frame (as the original did) and branch/log on the cached result. */
+        bool32 settling = sub_0802EA88(this->unk_84);
+        GLEEROK_DIAG(120, "flip-wait settle: settled=%d unk_7b=%d filler0=0x%x", settling == 0, this->unk_7b,
+                     this->unk_84->filler[0].unk0.HALF.HI);
+        if (settling == 0) {
             if (this->unk_7b) {
                 COLLISION_ON(super);
                 super->type2 = 1;
-                this->unk_84->ent2->timer = 24;
+                GLEEROK_DIAG(1, "flip handshake consumed -> type2=1 (neck lay-out begins)%s", "");
+                this->unk_84->entities[5]->timer = 24;
                 SoundReq(SFX_BOSS_HIT);
             }
         }
@@ -1095,6 +1160,9 @@ void sub_0802E034(GleerokEntity* this) {
         val = gUnk_080CD840[heap->filler[0].unk0.HALF.HI >> 3];
     }
 
+    GLEEROK_DIAG(120, "neck lay-out: type2=%d val=0x%x filler2={%04x %04x %04x %04x %04x %04x}", super->type2, val,
+                 heap->filler2[0].unk0.HWORD, heap->filler2[1].unk0.HWORD, heap->filler2[2].unk0.HWORD,
+                 heap->filler2[3].unk0.HWORD, heap->filler2[4].unk0.HWORD, heap->filler2[5].unk0.HWORD);
     if (val != heap->filler2[0].unk0.HALF.HI) {
         sub_0802EA68(heap, 0, 0x40, super->direction);
         sub_0802EB08(heap, 0x40, 2);
@@ -1103,10 +1171,11 @@ void sub_0802E034(GleerokEntity* this) {
             if (super->type2 == 2) {
                 this->unk_7c.HALF.LO = 0x168;
                 this->unk_80 = 1;
-                heap->ent2->timer = 0;
+                heap->entities[5]->timer = 0;
             }
 
             super->type2++;
+            GLEEROK_DIAG(1, "neck lay-out step done -> type2=%d", super->type2);
             heap->filler2[0].unk0.HALF.HI = 1;
         }
     }
@@ -1120,6 +1189,8 @@ void sub_0802E0B8(GleerokEntity* this) {
     super->y.HALF.HI -= 4;
     sub_0800445C(super);
     super->y.HALF.HI += 4;
+
+    GLEEROK_DIAG(240, "crystal phase: health=%d unk_79=0x%x frame=0x%x", super->health, this->unk_79, super->frame);
 
     val = super->frame & 0x3f;
     if (val) {
@@ -1307,7 +1378,7 @@ void sub_0802E300(GleerokEntity* this) {
             ((GleerokEntity*)super->child)->unk_84 = heap;
         }
 
-        heap->ent2->timer = 24;
+        heap->entities[5]->timer = 24;
     } else {
         if ((gRoomTransition.frameCount & 0xf) == 0) {
             EnemyCreateProjectile(super, GLEEROK_PROJECTILE, 0x3);
@@ -1339,7 +1410,7 @@ void sub_0802E448(GleerokEntity* this) {
         }
     }
 
-    if (heap->unk_2c.HALF.HI <= 9) {
+    if (heap->filler2[5].unk0.HALF.HI <= 9) {
         sub_0802EA68(heap, 5, 0x40, 3);
     }
 
@@ -1402,23 +1473,23 @@ void sub_0802E518(GleerokEntity* this) {
         heap->entities[r6 + 1]->y.WORD -= FixedDiv(result, 0x100) << 8;
     }
 
-    if (heap->ent2->timer == 24) {
+    if (heap->entities[5]->timer == 24) {
         r7 = (heap->filler[5].unk0.HALF.HI >> 3) << 2;
-        if (heap->unk_2c.HALF.HI > 0xc) {
+        if (heap->filler2[5].unk0.HALF.HI > 0xc) {
             r7 += 3;
         } else {
-            r7 += heap->unk_2c.HALF.HI >> 2;
+            r7 += heap->filler2[5].unk0.HALF.HI >> 2;
         }
 
-        if (heap->ent2->animIndex != r7 + 0x18) {
-            InitAnimationForceUpdate(heap->ent2, r7 + 0x18);
+        if (heap->entities[5]->animIndex != r7 + 0x18) {
+            InitAnimationForceUpdate(heap->entities[5], r7 + 0x18);
         }
     } else {
         if (this->unk_80 == 0) {
             sub_0802E7CC(heap, 5, 0, 0);
-            r7 = (heap->ent2->animationState + (heap->ent2->animationState >> 1));
+            r7 = (heap->entities[5]->animationState + (heap->entities[5]->animationState >> 1));
             r7 >>= 2;
-            r7 += heap->ent2->timer;
+            r7 += heap->entities[5]->timer;
         } else {
             if (super->iframes == 0) {
                 if ((super->animIndex != (heap->filler[5].unk0.HALF.HI >> 3) + 0x2f)) {
@@ -1433,10 +1504,10 @@ void sub_0802E518(GleerokEntity* this) {
             }
         }
 
-        if (heap->ent2->animIndex != r7) {
-            InitAnimationForceUpdate(heap->ent2, r7);
+        if (heap->entities[5]->animIndex != r7) {
+            InitAnimationForceUpdate(heap->entities[5], r7);
         } else {
-            UpdateAnimationSingleFrame(heap->ent2);
+            UpdateAnimationSingleFrame(heap->entities[5]);
         }
     }
 
@@ -1506,7 +1577,7 @@ void sub_0802E7E4(Gleerok_HeapStruct* this) {
     u32 i;
     u32 bVar6;
 
-    if ((this->ent2->frame & 0x40) != 0) {
+    if ((this->entities[5]->frame & 0x40) != 0) {
         bVar6 = 0;
         for (i = 0; i < 6; i++) {
             this->entities[i]->spritePriority.b0 = bVar6++;
@@ -1574,11 +1645,11 @@ void sub_0802E9B0(GleerokEntity* this) {
         }
     }
     heap = this->unk_84;
-    if (iVar2 != heap->unk_2c.HALF.HI) {
-        if (iVar2 > heap->unk_2c.HALF.HI) {
-            heap->unk_2c.HWORD = (heap->unk_2c.HWORD + 0x20) & 0x1fff;
+    if (iVar2 != heap->filler2[5].unk0.HALF.HI) {
+        if (iVar2 > heap->filler2[5].unk0.HALF.HI) {
+            heap->filler2[5].unk0.HWORD = (heap->filler2[5].unk0.HWORD + 0x20) & 0x1fff;
         } else {
-            heap->unk_2c.HWORD = (heap->unk_2c.HWORD - 0x20) & 0x1fff;
+            heap->filler2[5].unk0.HWORD = (heap->filler2[5].unk0.HWORD - 0x20) & 0x1fff;
         }
     }
 }

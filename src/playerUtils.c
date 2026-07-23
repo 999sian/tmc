@@ -44,7 +44,7 @@ static void sub_08077E54(ItemBehavior* beh);
 
 extern void sub_0800857C(Entity*);
 extern void InitDefaultPriority(Entity*);
-extern void sub_0809D738(Entity*);
+extern void sub_0809D738(void);
 extern s32 Mod(s32, s32);
 extern u32 sub_08003FDE(Entity*, Entity*, u32, u32);
 extern u32 sub_080B1B84(u32, u32);
@@ -52,7 +52,7 @@ extern void UpdateScreenShake(void);
 void sub_080790E4(Entity* this);
 void sub_08079064(Entity*);
 
-extern u8 gMapData;
+extern u8 gMapData[];
 extern const u8 gUnk_0800851C[];
 extern const u8 gUnk_080084BC[];
 extern const u8 gUnk_0800845C[];
@@ -199,7 +199,7 @@ extern u8 gUnk_080082DC[];
 extern u32 sub_08004202(Entity*, u8*, u32);
 
 // This just reuses the first 12 bytes of gUnk_02022830 to store a MapDataDefinition there temporarily.
-extern MapDataDefinition gUnk_02022830;
+extern u16 gUnk_02022830[];
 #ifdef PC_PORT
 extern u8 gUnk_0800823C[];
 #else
@@ -1629,7 +1629,7 @@ u32 sub_080789A8(void) {
 
     if (!(gPlayerState.flags & PL_MINISH)) {
         uVar4 = GetCollisionDataAtEntity(&gPlayerEntity.base);
-        if (uVar4 >= 0x10 && (gUnk_080084BC[uVar4 - 0x10] == 0xf))
+        if (uVar4 >= 0x10 && uVar4 < 0x70 && gUnk_080084BC[uVar4 - 0x10] == 0xf)
             return 0;
         if (gPlayerState.floor_type == 0x12)
             return 0;
@@ -3510,7 +3510,7 @@ void sub_0807B2B8(PlayerEntity* this) {
 void sub_0807B2F8(PlayerEntity* this) {
     if (this->unk_6e == 0) {
         this->unk_6e++;
-        sub_0809D738(super);
+        sub_0809D738();
     }
 }
 
@@ -4292,7 +4292,7 @@ void sub_0807C4F8(void) {
             }
         }
 #else
-        ptr1 = &gUnk_02022830;
+        ptr1 = (MapDataDefinition*)gUnk_02022830;
         ptr2 = (MapDataDefinition*)(gArea.pCurrentRoomInfo)->map;
         ptr2 -= 1;
         do {
@@ -4610,7 +4610,7 @@ void LoadCompressedMapData(void* dest, u32 offset) {
     void* src;
 
     if (offset != -1) {
-        src = (u8*)&gMapData + (offset & 0x7fffffff);
+        src = gMapData + (offset & 0x7fffffff);
         if ((uintptr_t)dest >> 0x18 == 6) {
             LZ77UnCompVram(src, (void*)dest);
         } else {

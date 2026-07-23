@@ -237,9 +237,15 @@ void GleerokParticle_Action2(GleerokParticleEntity* this) {
     }
 
     if (super->hitbox != NULL) {
-        super->hitbox->width = (u32)(0x10000 / (s32)uVar2) >> 3;
-        super->hitbox = super->hitbox;
-        super->hitbox->height = (u32)(0x10000 / (s32)uVar5) >> 3;
+        /* PC: the shrinking scale can land exactly on 0 for a frame; GBA's
+           soft division returned garbage harmlessly, x86 SIGFPEs. Keep the
+           previous frame's dimension for that frame. */
+        if ((s32)uVar2 != 0) {
+            super->hitbox->width = (u32)(0x10000 / (s32)uVar2) >> 3;
+        }
+        if ((s32)uVar5 != 0) {
+            super->hitbox->height = (u32)(0x10000 / (s32)uVar5) >> 3;
+        }
         super->hitbox->offset_x = super->spriteOffsetX;
         super->hitbox->offset_y = super->spriteOffsetY;
     }
@@ -254,8 +260,14 @@ void GleerokParticle_Action3(GleerokParticleEntity* this) {
 }
 
 void GleerokParticle_Action4(GleerokParticleEntity* this) {
-    u32 uVar2;
-    u32 uVar3;
+    /* PC: the terminal branch below (unk80 scale reached +/-0x100) leaves
+       these uninitialized on GBA, and the unconditional hitbox division at
+       the bottom divides by stack garbage — no trap on GBA's soft division,
+       but x86 raises SIGFPE when that garbage is 0 (post-cane-flip crash in
+       the Cave of Flames). Seed from the live absolute scales; the grow/
+       shrink branch overwrites them exactly as before. */
+    u32 uVar2 = (this->unk80.HALF.HI < 0) ? (u32) - this->unk80.HALF.HI : this->unk80.HALF_U.HI;
+    u32 uVar3 = (this->unk84.HALF.HI < 0) ? (u32) - this->unk84.HALF.HI : this->unk84.HALF_U.HI;
 
     if ((this->unk80.HALF_U.HI == 0x100) || (this->unk80.HALF.HI == -0x100)) {
         if (this->unk7c == 0) {
@@ -288,8 +300,14 @@ void GleerokParticle_Action4(GleerokParticleEntity* this) {
     }
 
     if (super->hitbox != NULL) {
-        super->hitbox->width = (u32)(0x10000 / (s32)uVar2) >> 3;
-        super->hitbox->height = (u32)(0x10000 / (s32)uVar3) >> 3;
+        /* PC: guard the zero-scale frame like Action2 — GBA's soft division
+           returned garbage harmlessly, x86 SIGFPEs. */
+        if ((s32)uVar2 != 0) {
+            super->hitbox->width = (u32)(0x10000 / (s32)uVar2) >> 3;
+        }
+        if ((s32)uVar3 != 0) {
+            super->hitbox->height = (u32)(0x10000 / (s32)uVar3) >> 3;
+        }
         super->hitbox->offset_x = super->spriteOffsetX;
         super->hitbox->offset_y = super->spriteOffsetY;
     }

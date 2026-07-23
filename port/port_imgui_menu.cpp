@@ -44,7 +44,7 @@ extern "C" int Port_GlslpRuntime_IsActive(void);
 #include <cstring>               /* strcmp — group-header breaks in the item toggle list */
 #include <cstdio>                /* snprintf — dungeon selector labels */
 
-extern "C" const u8* gTranslations[];
+extern "C" u32* gTranslations[];
 extern "C" void Port_ApplyLanguage(void);
 
 #include "port_widescreen.h"
@@ -64,9 +64,9 @@ extern "C" void Port_ApplyLanguage(void);
 
 extern "C" {
 unsigned GetInventoryValue(unsigned item);
-bool CheckLocalFlagByBank(unsigned bankOffset, unsigned flag);
+unsigned CheckLocalFlagByBank(unsigned bankOffset, unsigned flag);
 unsigned GetFlagBankOffset(unsigned area);
-bool CheckGlobalFlag(unsigned flag);
+unsigned CheckGlobalFlag(unsigned flag);
 const char* Port_DebugQuery_FlagName(int bank, int index);
 const char* Port_DebugQuery_FlagDesc(int bank, int index);
 }
@@ -438,12 +438,12 @@ void Port_Config_SetActiveSaveProfile(const char* path);
 const char* Port_SoftSlots_GetSlotLabel(int slot);
 void Port_SoftSlots_CycleAssignment(int slot, int direction);
 
-const char* Port_Config_InputName(int input);
-int Port_Config_BindingCount(int input);
-void Port_Config_BindingLabel(int input, int idx, char* out, int cap);
-void Port_Config_ClearBindings(int input);
-void Port_Config_BeginCaptureBinding(int input);
-void Port_Config_BeginAddBinding(int input);
+const char* Port_Config_InputName(PortInput input);
+int Port_Config_BindingCount(PortInput input);
+void Port_Config_BindingLabel(PortInput input, int idx, char* out, int cap);
+void Port_Config_ClearBindings(PortInput input);
+void Port_Config_BeginCaptureBinding(PortInput input);
+void Port_Config_BeginAddBinding(PortInput input);
 int Port_Config_IsCapturingBinding(void);
 int Port_Config_CapturingBindingInput(void);
 void Port_Config_CancelCaptureBinding(void);
@@ -1305,7 +1305,7 @@ static const char* InputLabel(int input) {
         case PORT_INPUT_ROLL_ATTACK:
             return "Roll attack (D / R3)";
         default:
-            return Port_Config_InputName(input);
+            return Port_Config_InputName((PortInput)input);
     }
 }
 
@@ -1405,13 +1405,13 @@ static void DrawRibbonControlsTab(void) {
             ImGui::TextUnformatted(InputLabel(i));
 
             ImGui::TableSetColumnIndex(1);
-            const int n = Port_Config_BindingCount(i);
+            const int n = Port_Config_BindingCount((PortInput)i);
             if (n == 0) {
                 ImGui::TextDisabled("(unbound)");
             } else {
                 for (int b = 0; b < n; ++b) {
                     char label[64];
-                    Port_Config_BindingLabel(i, b, label, sizeof(label));
+                    Port_Config_BindingLabel((PortInput)i, b, label, sizeof(label));
                     if (b > 0)
                         ImGui::SameLine(0, 6);
                     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.18f, 0.30f, 0.45f, 1.0f));
@@ -1422,17 +1422,17 @@ static void DrawRibbonControlsTab(void) {
 
             ImGui::TableSetColumnIndex(2);
             if (ImGui::Button("Set")) {
-                Port_Config_BeginCaptureBinding(i);
+                Port_Config_BeginCaptureBinding((PortInput)i);
                 ImGui::OpenPopup("Capture binding");
             }
             ImGui::SameLine();
             if (ImGui::Button("Add")) {
-                Port_Config_BeginAddBinding(i);
+                Port_Config_BeginAddBinding((PortInput)i);
                 ImGui::OpenPopup("Capture binding");
             }
             ImGui::SameLine();
             if (ImGui::Button("Clear")) {
-                Port_Config_ClearBindings(i);
+                Port_Config_ClearBindings((PortInput)i);
             }
 
             /* Modal popup that hangs around until the capture path
@@ -1583,6 +1583,20 @@ static void DrawRibbonWarpTab(void) {
         if (Port_Config_GetConsoleParity()) {
             ImGui::SameLine();
             ImGui::TextDisabled("(disabled in Console-Parity)");
+        }
+    }
+    {
+        unsigned short px = 0, py = 0;
+        const bool inGame = Port_DebugQuery_PlayerXY(&px, &py) != 0;
+        const bool isMinish = inGame && (Port_DebugQuery_IsMinish() != 0);
+        ImGui::BeginDisabled(!inGame);
+        if (ImGui::Button(isMinish ? "Grow to Normal Size" : "Shrink to Minish")) {
+            Port_DebugAction_ToggleMinish();
+        }
+        ImGui::EndDisabled();
+        if (!inGame) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(in-game only)");
         }
     }
     ImGui::Separator();

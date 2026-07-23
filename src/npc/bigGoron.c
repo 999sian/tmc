@@ -35,7 +35,7 @@ static const u16 goronSounds[] = {
     SFX_VO_GORON4,
 };
 
-extern u8 gMapDataTopSpecial[];
+extern u16 gMapDataTopSpecial[];
 extern u8 gUnk_02006F00[];
 
 void sub_0806D520(BigGoronEntity* this, u32);
@@ -178,7 +178,7 @@ void sub_0806D0F8(void) {
 }
 
 void sub_0806D110(void) {
-    u8* tmp = gMapDataTopSpecial;
+    u8* tmp = (u8*)gMapDataTopSpecial;
 #ifdef PC_PORT
     /* Issue #102 — `tmp + 0x4000` was meant to address gUnk_02006F00 via
      * the GBA EWRAM layout (gMapDataTopSpecial @ 0x02002F00 + 0x4000 =

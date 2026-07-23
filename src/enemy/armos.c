@@ -23,7 +23,7 @@
 typedef struct {
     /*0x00*/ Entity base;
 #ifdef PC_PORT
-    u8 unk_68[0x10 + 4];  /* #98/#99 pattern: +4 for Enemy::child PC growth */
+    u8 unk_68[0x10 + 4]; /* #98/#99 pattern: +4 for Enemy::child PC growth */
 #else
     /*0x68*/ u8 unk_68[0x10];
 #endif
@@ -37,8 +37,7 @@ typedef struct {
     /*0x84*/ u32 unk_84;
 } ArmosEntity;
 
-PORT_STATIC_ASSERT_OFFSET(ArmosEntity, unk_78, 0x78, 0xA4,
-                          "ArmosEntity unk_78 offset (Enemy::child +4 pad)");
+PORT_STATIC_ASSERT_OFFSET(ArmosEntity, unk_78, 0x78, 0xA4, "ArmosEntity unk_78 offset (Enemy::child +4 pad)");
 
 extern void (*const gUnk_080CE124[])(ArmosEntity*);
 extern void (*const gUnk_080CE13C[])(ArmosEntity*);
@@ -436,8 +435,9 @@ bool32 sub_0803086C(ArmosEntity* this) {
             centerX = super->x.HALF_U.HI - gRoomControls.origin_x;
             centerY = super->y.HALF_U.HI - gRoomControls.origin_y;
             // TODO for some reason the 0x3f of COORD_TO_TILE(super) needs to be forced to r2 here.
-            tilePos = ((((((super)->x.HALF.HI) - gRoomControls.origin_x) >> 4) & (r2 = 0x3f)) |
-                       (((((super)->y.HALF.HI) - gRoomControls.origin_y) >> 4) & r2) << 6);
+            r2 = 0x3f;
+            tilePos = (((super->x.HALF.HI - gRoomControls.origin_x) >> 4) & r2) |
+                      ((((super->y.HALF.HI - gRoomControls.origin_y) >> 4) & r2) << 6);
 
             if (GetTileTypeAtTilePos(tilePos, super->collisionLayer) == SPECIAL_TILE_73) {
                 if (CheckPlayerInRegion(centerX, centerY, 2, 0xc) != 0) {

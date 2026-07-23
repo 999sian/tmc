@@ -23,7 +23,12 @@ extern void LoadResourceAsync(const void* src, void* dest, u32 size);
  * match upstream — callers needing both halves use GetFuserIdAndFuserTextId,
  * which reinterpret-casts the function pointer and is unaffected by this type. */
 extern u32 GetFuserId(struct Entity_*);
+#ifdef PC_PORT
+extern u64 Port_GetFuserIdAndTextId(struct Entity_*);
+#define GetFuserIdAndFuserTextId(ent) ((union SplitDWord)Port_GetFuserIdAndTextId(ent))
+#else
 #define GetFuserIdAndFuserTextId(ent) ((union SplitDWord)(*(MultiReturnTypeSingleEntityArg)(&GetFuserId))(ent))
+#endif
 extern u32 CheckPlayerInRegion(u32 centerX, u32 centerY, u32 radiusX, u32 radiusY);
 extern u32 GravityUpdate(struct Entity_* entity, u32 gravity);
 enum {

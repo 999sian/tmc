@@ -55,7 +55,7 @@ void HyruleTownTileSetManager_BuildSecondOracleHouse(void);
 
 bool32 HyruleTownTileSetManager_UpdateRoomGfxGroup(HyruleTownTileSetManager*, u32, u8*, const u16*);
 
-extern u32 gUnk_086E8460;
+extern const u8 gUnk_086E8460[];
 
 typedef struct {
     u32 gfx1;
@@ -157,7 +157,7 @@ void HyruleTownTileSetManager_BuildSecondOracleHouse(void) {
         }
         SetTileByIndex(TILE_TYPE_214, TILE_POS(2, 23), LAYER_TOP);
         SetTileByIndex(TILE_TYPE_215, TILE_POS(3, 23), LAYER_TOP);
-        LoadResourceAsync(&gUnk_086E8460, BG_SCREEN_ADDR(3), BG_SCREEN_SIZE);
+        LoadResourceAsync(gUnk_086E8460, BG_SCREEN_ADDR(3), BG_SCREEN_SIZE);
     } else {
         if (CheckGlobalFlag(TATEKAKE_TOCHU) != 0) {
             for (loopVar = 0; loopVar < 5; ++loopVar) {

@@ -52,15 +52,7 @@ extern void SoundReqClipped(Entity*, u32);
 void sub_08079D84(void);
 void sub_080180BC(Entity*, Entity*);
 
-typedef struct {
-    void* last;
-    void* first;
-    void* node;
-    u8 flags;
-} LinkedList2;
-
 LinkedList2 gUnk_03003C70[16];
-extern LinkedList2* gUnk_02018EA0;
 
 void ClearHitboxList(void) {
     gCollidableCount = 0;

@@ -41,10 +41,8 @@ typedef struct {
     /*0x87*/ u8 unk_87;
 } VaatiRebornEnemyEntity;
 
-PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_74, 0x74, 0xA0,
-                          "VaatiRebornEnemyEntity unk_74 offset incorrect");
-PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_80, 0x80, 0xB0,
-                          "VaatiRebornEnemyEntity unk_80 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_74, 0x74, 0xA0, "VaatiRebornEnemyEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(VaatiRebornEnemyEntity, unk_80, 0x80, 0xB0, "VaatiRebornEnemyEntity unk_80 offset incorrect");
 
 void VaatiRebornEnemyType0PreAction(VaatiRebornEnemyEntity*);
 void VaatiRebornEnemyType1PreAction(VaatiRebornEnemyEntity*);
@@ -515,6 +513,16 @@ void VaatiRebornEnemyType0Action6(VaatiRebornEnemyEntity* this) {
                     PositionRelative(super, target, 0, Q_16_16(-16.0));
                     target->parent = super;
                 }
+#ifdef PC_PORT
+                else {
+                    /* Complete the canonical spinner-eye cleanup even though
+                     * no projectile exists to signal it. */
+                    this->unk_74 = 3;
+                    super->timer = 0;
+                    super->subtimer = 0;
+                    return;
+                }
+#endif
             } else if (super->timer == 0x40) {
                 SoundReq(SFX_196);
             }
@@ -554,7 +562,7 @@ void VaatiRebornEnemyType0Action7(VaatiRebornEnemyEntity* this) {
                     fx->x.HALF.HI = ((tmp & 0xff) - 0x20) + fx->x.HALF.HI;
                     fx->y.HALF.HI = ((tmp >> 8) & 0xff) - 0x20 + fx->y.HALF.HI;
                     if (!REGION_IS_EU) {
-                    fx->spritePriority.b0 = 2;
+                        fx->spritePriority.b0 = 2;
                     }
                 }
             }
@@ -726,6 +734,21 @@ void VaatiRebornEnemyType1PreAction(VaatiRebornEnemyEntity* this) {
         return;
     }
     parent = super->parent;
+#ifdef PC_PORT
+    /* Once the final phase threshold fires (unk_86 -> 3, parent action 7 =
+     * defeat sequence), another eye can still hold a pending stagger timer
+     * or take contact this frame. Letting it run (a) reads
+     * vaatiRebornThresholds[3] past the 3-entry table, and (b) on timer
+     * expiry below rewrites parent->action = 1 — yanking the boss out of
+     * its defeat sequence with a phase the attack-selection switch has no
+     * case for: the boss floats inert and can drift out of the arena
+     * (reported as "freeze / clip out of bounds" in Vaati fight 1). Latent
+     * on GBA (read hit adjacent ROM; same softlock possible). */
+    if (((VaatiRebornEnemyEntity*)parent)->unk_86 > 2) {
+        super->timer = 0;
+        return;
+    }
+#endif
     this->unk_77 = 0;
     if ((super->contactFlags & CONTACT_NOW) != 0) {
         const u8* vaatiRebornThresholds = gUnk_080D04D0;
@@ -934,7 +957,39 @@ u32 sub_0803DEE0(VaatiRebornEnemyEntity* this) {
 
 void VaatiRebornEnemyType0PreAction(VaatiRebornEnemyEntity* this) {
     u32 bVar1;
+#ifdef PC_PORT
+    u32 i;
+    Entity* projectile;
+#endif
 
+#ifdef PC_PORT
+    /* v0.8.2 prevents new phase-3 zombies, but older quick/autosaves can
+     * restore one. Phase 3 has no valid combat actions; resume defeat. */
+    if (this->unk_86 > 2 && super->action != 7) {
+        super->action = 7;
+        super->flags &= ~ENT_COLLIDE;
+        super->timer = 128;
+        super->spriteOffsetX = 0;
+        super->direction = DIR_NONE;
+    }
+    /* A failed dark-magic projectile allocation leaves action 6 / step 2
+     * waiting for a completion signal that can never arrive. Drive the normal
+     * spinner-eye cleanup, including collision restoration. */
+    if (super->action == 6 && this->unk_74 == 2) {
+        for (i = 0; i < MAX_ENTITIES; i++) {
+            projectile = (Entity*)&gEntities[i];
+            if (projectile->next != NULL && projectile->kind == PROJECTILE &&
+                projectile->id == V1_DARK_MAGIC_PROJECTILE && projectile->type == 0 && projectile->parent == super) {
+                break;
+            }
+        }
+        if (i == MAX_ENTITIES) {
+            this->unk_74 = 3;
+            super->timer = 0;
+            super->subtimer = 0;
+        }
+    }
+#endif
     if (super->action != 0) {
         this->unk_78 = super->x;
         this->unk_7c = super->y;

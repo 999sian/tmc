@@ -70,7 +70,7 @@ void Port_ReproItemGet_Tick(unsigned int frame) {
         Port_Config_TestForceEdge(PORT_INPUT_START);
     }
     if (!booted && gMain.task == TASK_FILE_SELECT && frame > 60) {
-        SaveFile* sv = &gMapDataBottomSpecial.saves[0];
+        SaveFile* sv = &gFileSelectState.saves[0];
         ResetSaveFile(0);
         sv->initialized = 1;
         sv->name[0] = 'A';
@@ -79,7 +79,7 @@ void Port_ReproItemGet_Tick(unsigned int frame) {
         sv->saved_status.start_pos_x = (s16)x;
         sv->saved_status.start_pos_y = (s16)y;
         sv->saved_status.layer = (u8)l;
-        gMapDataBottomSpecial.saveStatus[0] = 1;
+        gFileSelectState.saveStatus[0] = 1;
         SetActiveSave(0);
         SetTask(TASK_GAME);
         booted = 1;

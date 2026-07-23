@@ -102,6 +102,14 @@ u32 sub_08059F9C(SteamOverlayManager* this) {
         default:
             return 0;
     }
+#ifdef PC_PORT
+    /* Rooms 1 & 7 delete the entity and break out of the switch; on GBA the
+     * value left in r0 is returned implicitly. Return explicitly on PC so the
+     * caller (SteamOverlayManager_Action4) isn't branched on an indeterminate
+     * value — same class as enterPortalSubtask sub_0804AD18 (PR #169). The
+     * entity is being deleted in these cases, so 0 (fade-out branch) is inert. */
+    return 0;
+#endif
 }
 
 void SteamOverlayManager_Action1(SteamOverlayManager* this) {

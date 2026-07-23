@@ -365,6 +365,10 @@ void sub_0806076C(PostmanEntity* this, ScriptExecutionContext* context) {
                 pbVar10++;
                 uVar9 = pbVar10[0];
                 pbVar10++;
+                if (uVar9 == 0) {
+                    this->unk_69 = 0;
+                    return;
+                }
                 iVar4 = (s32)Random() % uVar9;
                 this->unk_68 = pbVar10[iVar4];
                 this->unk_69 = 0;
@@ -385,6 +389,10 @@ void sub_0806076C(PostmanEntity* this, ScriptExecutionContext* context) {
             case 0:
                 pbVar10++;
                 uVar9 = *pbVar10++;
+                if (uVar9 == 0) {
+                    this->unk_69 = 0;
+                    return;
+                }
                 local_24 = ((s32)Random()) % uVar9;
 
                 for (uVar6 = 0; uVar6 < uVar9; uVar6++) {

@@ -25,6 +25,10 @@ typedef struct HelperStruct {
     Entity* tailObjects[5];
     Entity* legObjects[4];
 } HelperStruct;
+PORT_STATIC_ASSERT_SIZE(HelperStruct, 0x30, 0x58, "OctorokBoss helper size incorrect");
+PORT_STATIC_ASSERT_OFFSET(HelperStruct, mouthObject, 0x08, 0x08, "OctorokBoss helper mouth offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(HelperStruct, tailObjects, 0x0c, 0x10, "OctorokBoss helper tails offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(HelperStruct, legObjects, 0x20, 0x38, "OctorokBoss helper legs offset incorrect");
 
 typedef struct {
     /*0x00*/ Entity base;
@@ -37,6 +41,13 @@ typedef struct {
     /*0x82*/ u16 unk_82;
     /*0x84*/ HelperStruct* helper;
 } OctorokBossObjectEntity;
+PORT_STATIC_ASSERT_SIZE(OctorokBossObjectEntity, 0x88, 0xB8, "OctorokBossObjectEntity size incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossObjectEntity, unk_74, 0x74, 0x9C,
+                          "OctorokBossObjectEntity unk_74 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossObjectEntity, unk_78, 0x78, 0xA0,
+                          "OctorokBossObjectEntity unk_78 offset incorrect");
+PORT_STATIC_ASSERT_OFFSET(OctorokBossObjectEntity, helper, 0x84, 0xB0,
+                          "OctorokBossObjectEntity helper offset incorrect");
 
 extern void (*const OctorokBossObject_Actions[])(OctorokBossObjectEntity*);
 extern const u16 gUnk_0812384C[];

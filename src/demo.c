@@ -25,14 +25,16 @@ void sub_080A2E40(void);
 void sub_080A2FD0(void);
 void sub_080A2F8C(void);
 
+#ifndef PC_PORT
 extern u8 gUnk_02000004;
+#endif
 void sub_080A3198(u32, u32);
 
 extern u8 gUnk_08A05751[];
 
 // sprite_table
-extern void gUnk_089FD1B4;
-extern void gUnk_089FD2F4;
+extern const u8 gUnk_089FD1B4[];
+extern const u8 gUnk_089FD2F4[];
 
 extern u8 gUnk_08A068BF[129];
 
@@ -62,10 +64,10 @@ void sub_080A2E40(void) {
     LoadGfxGroups();
     LoadPaletteGroup(0xb5);
     LoadGfxGroup(0x56);
-    MemCopy(&gUnk_089FD1B4, gPaletteBuffer + 96, 0x100);
-    MemCopy(&gUnk_089FD1B4, gPaletteBuffer + 352, 0x100);
-    MemCopy(&gUnk_089FD2F4, (void*)0x6000000, 0x8000);
-    MemCopy(&gUnk_089FD2F4, (void*)0x6010000, 0x8000);
+    MemCopy(gUnk_089FD1B4, gPaletteBuffer + 96, 0x100);
+    MemCopy(gUnk_089FD1B4, gPaletteBuffer + 352, 0x100);
+    MemCopy(gUnk_089FD2F4, (void*)0x6000000, 0x8000);
+    MemCopy(gUnk_089FD2F4, (void*)0x6010000, 0x8000);
     MemCopy(&gUnk_08A05751, &gBG1Buffer, 0x800);
     MemCopy(&gUnk_08A05751[0x800], &gBG2Buffer, 0x800);
     gScreen.lcd.displayControl = 0x1f00;
@@ -77,11 +79,9 @@ void sub_080A2E40(void) {
     gScreen.bg3.updated = 1;
     gScreen.controls.layerFXControl = 0x1044;
     gScreen.controls.alphaBlend = 0xb04;
-    {
-        // TODO write to 0x2000004
-        u32 addr = (0x80 << 0x12);
-        *(u8*)(addr + 4) = 0;
-    }
+#ifndef PC_PORT
+    gUnk_02000004 = 0;
+#endif
     sub_080A3198(0, 0);
     gMain.state = GAMETASK_INIT;
     SoundReq(BGM_FILE_SELECT);
@@ -93,12 +93,10 @@ void sub_080A2F8C(void) {
         switch (gMain.substate) {
             case GAMEMAIN_INITROOM:
                 gMain.substate = GAMEMAIN_CHANGEROOM;
-                {
-                    // TODO write to 0x2000005
-                    u32 addr = (0x80 << 0x12);
-                    *(u8*)(addr + 5) = 1;
-                    *(u8*)(addr + 6) = 1;
-                }
+#ifndef PC_PORT
+                *(u8*)0x02000005 = 1;
+                *(u8*)0x02000006 = 1;
+#endif
                 gMain.state = GAMETASK_MAIN;
                 SetFade(FADE_IN_OUT | FADE_INSTANT, 8);
                 break;
@@ -160,7 +158,6 @@ void sub_080A2FD0(void) {
 void sub_080A30AC(void) {
     s32 unk_0x10;
     u8* ptr;
-    u8* currentPtr;
     u32 offset;
     gOamCmd._4 = 0x2000;
     gOamCmd._6 = 0;
@@ -169,25 +166,36 @@ void sub_080A30AC(void) {
     unk_0x10 = (s16)gGenericMenu.unk10.h[0];
     gOamCmd.x = -0x128 - unk_0x10;
 #ifdef PC_PORT
-    offset = Port_ReadU32(gUnk_08A068BF);
-    ptr = gUnk_08A068BF - 0xc;
-    sub_080ADA04(&gOamCmd, ptr + offset);
-    gOamCmd.x = -0xc0 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
-    gOamCmd.x = -0x58 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
-    gOamCmd.x = 0x10 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(gUnk_08A068BF));
-    gOamCmd.x = 0x78 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
-    gOamCmd.x = 0xe0 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
-    gOamCmd.x = 0x148 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(gUnk_08A068BF));
-    gOamCmd.x = 0x1b0 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 4));
-    gOamCmd.x = 0x218 - unk_0x10;
-    sub_080ADA04(&gOamCmd, ptr + Port_ReadU32(ptr + 8));
+    /* GBA reads three u32 frame-object offsets from a table at
+     * gUnk_08A068BF-0xc (the first two entries sit BEFORE gUnk_08A068BF) and
+     * draws each 3x; the offsets are ROM-relative to that table base. On PC
+     * gUnk_08A068BF is a standalone .rodata slice, so both the -0xc arithmetic
+     * and adding a ROM-relative offset (~0x3C0100) leave the object and read
+     * out of bounds. Resolve the table and every target against the live ROM
+     * instead. 0x08A068B3 = 0x08A068BF - 0xc. */
+    ptr = (u8*)Port_ResolveRomData(0x08A068B3u);
+    if (ptr != NULL) {
+        u32 off4 = Port_ReadU32(ptr + 4);
+        u32 off8 = Port_ReadU32(ptr + 8);
+        offset = Port_ReadU32(ptr + 0xc);
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + offset));
+        gOamCmd.x = -0xc0 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off4));
+        gOamCmd.x = -0x58 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off8));
+        gOamCmd.x = 0x10 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + offset));
+        gOamCmd.x = 0x78 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off4));
+        gOamCmd.x = 0xe0 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off8));
+        gOamCmd.x = 0x148 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + offset));
+        gOamCmd.x = 0x1b0 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off4));
+        gOamCmd.x = 0x218 - unk_0x10;
+        sub_080ADA04(&gOamCmd, Port_ResolveRomData(0x08A068B3u + off8));
+    }
 #else
     offset = *(u32*)gUnk_08A068BF;
     ptr = gUnk_08A068BF - 0xc;

@@ -16,8 +16,8 @@ u32 sub_08058244(int);
 void sub_080582A0(u32, u32*, u16*);
 void sub_080582F8(u8*, u8*);
 
-extern u8 gMapDataTopSpecial[];
-extern u32 gUnk_02006F00[];
+extern u16 gMapDataTopSpecial[];
+extern u8 gUnk_02006F00[];
 
 void MinishRaftersBackgroundManager_Main(MinishRaftersBackgroundManager* this) {
     sub_08058210(this);
@@ -37,7 +37,7 @@ void sub_08058210(MinishRaftersBackgroundManager* this) {
     if (this->unk_3c == tmp)
         return;
     this->unk_3c = tmp;
-    sub_080582A0(tmp, gUnk_02006F00, gBG3Buffer);
+    sub_080582A0(tmp, (u32*)gUnk_02006F00, gBG3Buffer);
     gScreen.bg1.updated = 1;
 }
 
@@ -69,8 +69,7 @@ void sub_080582A0(u32 unk, u32* unk2, u16* unk3) {
      * would push the trailing 0x2000-byte read out of bounds. */
     {
         u32 startBytes = (unk >> 4) * 4;
-        if ((u8*)unk2 < (u8*)gUnk_02006F00 ||
-            (u8*)unk2 >= (u8*)gUnk_02006F00 + 0x4000 ||
+        if ((u8*)unk2 < (u8*)gUnk_02006F00 || (u8*)unk2 >= (u8*)gUnk_02006F00 + 0x4000 ||
             startBytes + 0x2000u > 0x4000u - (u32)((u8*)unk2 - (u8*)gUnk_02006F00))
             return;
     }
@@ -84,7 +83,7 @@ void sub_080582A0(u32 unk, u32* unk2, u16* unk3) {
 }
 
 void sub_080582D0(void) {
-    u8* tmp = gMapDataTopSpecial;
+    u8* tmp = (u8*)gMapDataTopSpecial;
 #ifdef PC_PORT
     /* Same-class fix as bigGoron.c::sub_0806D110 (issue #102).
      * On GBA `tmp + 0x4000` resolves to gUnk_02006F00 (16 KB BG tilemap
@@ -117,7 +116,7 @@ void sub_08058324(u32 unk) {
     LoadPaletteGroup(unk + 0x86);
     LoadGfxGroup(unk + 0x36);
     sub_080582D0();
-    sub_080582A0(sub_08058244(unk), gUnk_02006F00, gBG3Buffer);
+    sub_080582A0(sub_08058244(unk), (u32*)gUnk_02006F00, gBG3Buffer);
     gScreen.bg1.control = 0x1D47;
     gScreen.bg1.subTileMap = gBG3Buffer;
     gScreen.bg1.updated = 1;

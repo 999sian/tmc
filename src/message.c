@@ -19,10 +19,9 @@
  * GBA-identical timing (one fresh press per page, important for timed
  * cutscenes). Both message-advance sites read this macro. */
 extern bool Port_Config_GetHoldToAdvanceText(void);
-#define MESSAGE_PRESS_ANY_ADVANCE_KEYS                  \
-    (((gInput.newKeys & MESSAGE_ADVANCE_KEYS) != 0) ||  \
-     (Port_Config_GetHoldToAdvanceText() &&             \
-      (gInput.heldKeys & MESSAGE_ADVANCE_KEYS) != 0))
+#define MESSAGE_PRESS_ANY_ADVANCE_KEYS                 \
+    (((gInput.newKeys & MESSAGE_ADVANCE_KEYS) != 0) || \
+     (Port_Config_GetHoldToAdvanceText() && (gInput.heldKeys & MESSAGE_ADVANCE_KEYS) != 0))
 #else
 #define MESSAGE_PRESS_ANY_ADVANCE_KEYS ((gInput.newKeys & MESSAGE_ADVANCE_KEYS) != 0)
 #endif
@@ -50,7 +49,7 @@ enum {
 extern void WriteBit(u32*, u32);
 extern bool32 sub_0805EF40(Token* tok, const u8*);
 extern void sub_0805F918(u32, u32, void*);
-extern u32 DecToHex(u32, u8*, u32);
+extern u32 DecToHex(u32);
 
 u32 sub_08056FEC(u32, u8*);
 u32 GetCharacter(Token* tok);
@@ -70,8 +69,8 @@ extern u8* gUnk_08107BE0[];
  * speaks exactly what's visible in the current text window instead
  * of the whole dialog at once. */
 static Token sTtsToken;
-static u8    sTtsLineNo;    /* mirrors gTextRender._98.bytes.lineNo */
-static bool  sTtsActive;    /* false once we've spoken the final page or dialog ended */
+static u8 sTtsLineNo;   /* mirrors gTextRender._98.bytes.lineNo */
+static bool sTtsActive; /* false once we've spoken the final page or dialog ended */
 
 /* Walk sTtsToken forward, collecting printable bytes into a buffer
  * until we hit a page boundary:
@@ -128,8 +127,8 @@ static void PortTTSSpeakCurrentPage(void) {
         return;
     buf[pos] = '\0';
 
-    PortTtsOptions opts = {0};
-    opts.priority = PORT_TTS_PRIO_URGENT;  /* cut off prior page if still speaking */
+    PortTtsOptions opts = { 0 };
+    opts.priority = PORT_TTS_PRIO_URGENT; /* cut off prior page if still speaking */
     opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
     opts.dedupe = false;
     Port_TTS_Speak(buf, &opts);
@@ -192,7 +191,7 @@ void Port_TTS_SpeakTextIndex(u32 textIndex) {
         return;
     buf[pos] = '\0';
 
-    PortTtsOptions opts = {0};
+    PortTtsOptions opts = { 0 };
     opts.priority = PORT_TTS_PRIO_URGENT;
     opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
     opts.dedupe = true;
@@ -269,7 +268,7 @@ extern Window gCurrentWindow;
 extern Window gNewWindow;
 #endif
 
-extern struct {
+typedef struct {
     u8 unk_00;
     u8 unk_01[1];
     s8 choiceCount;
@@ -277,7 +276,12 @@ extern struct {
     u8 unk_04[4];
     u16 unk_08[4];
     u16 unk_10[4];
-} gMessageChoices;
+} MessageChoices;
+#ifdef PC_PORT
+MessageChoices gMessageChoices;
+#else
+extern MessageChoices gMessageChoices;
+#endif
 
 extern u8 gTextGfxBuffer[0xD00];
 
@@ -1057,7 +1061,7 @@ u32 sub_08056FEC(u32 this, u8* param_2) {
     int iVar4;
     u8 local_1c[8];
 
-    uVar1 = DecToHex(this, param_2, this);
+    uVar1 = DecToHex(this);
     uVar1 = uVar1 & 0xfffffff;
     iVar4 = 0;
     do {
