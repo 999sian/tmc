@@ -420,7 +420,7 @@ static void Port_PumpEvents(void) {
              * suppress further handling so the game itself doesn't see
              * the keystroke. */
             {
-                if (Port_DebugMenu_IsOpen() && Port_DebugMenu_HandleKey((int)e.key.key)) {
+                if (Port_DebugMenu_IsOpen() && !Port_ImGui_WantsTextInput() && Port_DebugMenu_HandleKey((int)e.key.key)) {
                     continue;
                 }
             }
