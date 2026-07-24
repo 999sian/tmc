@@ -541,6 +541,15 @@ int main(int argc, char* argv[]) {
         window_flags |= SDL_WINDOW_VULKAN;
     }
 #endif
+#ifdef __ANDROID__
+    /* No windowed mode on a handheld — request fullscreen at creation time
+     * rather than toggling after the fact. SDL's Android backend sizes the
+     * native window to the requested w/h and only syncs system-bar/immersive
+     * state through SDLActivity on the initial SDL_CreateWindow flags, so a
+     * later SDL_SetWindowFullscreen (see Port_PPU_ToggleFullscreen) leaves the
+     * nav bar showing and the surface short by its height. */
+    window_flags |= SDL_WINDOW_FULLSCREEN;
+#endif
     window =
         SDL_CreateWindow(window_title, window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale, window_flags);
     if (!window) {
@@ -549,11 +558,17 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 #else
-    if (!SDL_CreateWindowAndRenderer(window_title, window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
-                                     SDL_WINDOW_RESIZABLE, &window, &prerenderer)) {
-        fprintf(stderr, "SDL_CreateWindowAndRenderer Error: %s\n", SDL_GetError());
-        SDL_Quit();
-        return 1;
+    {
+        SDL_WindowFlags window_flags = SDL_WINDOW_RESIZABLE;
+#ifdef __ANDROID__
+        window_flags |= SDL_WINDOW_FULLSCREEN;
+#endif
+        if (!SDL_CreateWindowAndRenderer(window_title, window_base_width * window_scale, MODE1_GBA_HEIGHT * window_scale,
+                                         window_flags, &window, &prerenderer)) {
+            fprintf(stderr, "SDL_CreateWindowAndRenderer Error: %s\n", SDL_GetError());
+            SDL_Quit();
+            return 1;
+        }
     }
     (void)prerenderer; /* Owned by the window; retrieved via SDL_GetRenderer(window) later. */
 #endif

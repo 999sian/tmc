@@ -106,12 +106,24 @@ int sPreferredLanguage = -1;
  * blurred ambient fill so no scene shows dead black bars. "black" restores
  * the historical plain-bars look. */
 PortAspectMode sAspectMode = PORT_ASPECT_NATIVE_3_2;
+#ifdef __ANDROID__
+PortBgFill sBgFill = PORT_BG_FILL_BLACK; /* "blurred" reads as glitchy duplicated tiles on real widescreen panels */
+#else
 PortBgFill sBgFill = PORT_BG_FILL_BLURRED_FRAME;
+#endif
 u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
 /* Renderer backend selection — read once at PPU init; menu writes
  * here but a restart is needed to apply because the window's
  * swapchain owner is set once and is not live-switchable. */
+#ifdef __ANDROID__
+/* "Auto" picks the SDL_GPU/Vulkan backend on capable Adreno GPUs (e.g. AYN
+ * Thor), whose ImGui/swapchain path has an unresolved resize bug that leaves
+ * everything past the pre-fullscreen window width unpainted. Force the
+ * SDL_Renderer path until that's fixed upstream. */
+PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_SOFTWARE;
+#else
 PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
+#endif
 bool sTtsEnabled = true;
 float sTtsRate = 0.5f;
 float sTtsPitch = 0.5f;
@@ -155,7 +167,11 @@ bool sMenuHintSeen = false;    /* set once the F8/settings menu is first opened 
 float sMasterVolume = 1.0f;    /* game master volume [0,1]; 1.0 = unchanged */
 bool sHoldAdvanceText = false; /* hold an advance key to keep paging text */
 bool sRollAttackMacroEnabled = true;
+#ifdef __ANDROID__
+bool sFullscreen = true; /* no windowed mode on a handheld; avoid a visible nav bar */
+#else
 bool sFullscreen = false;
+#endif
 bool sFullscreenHideCursor = true; /* hide the OS cursor while fullscreen */
 float sAnalogDeadzone = 0.30f;     /* 360° stick deadzone magnitude [0..0.95] */
 std::string sShaderPreset;         /* path to active .glslp, empty = none */
@@ -276,7 +292,11 @@ const BoolCfg kBoolCfg[] = {
     { "menu_hint_seen", &sMenuHintSeen, false },
     { "hold_advance_text", &sHoldAdvanceText, false },
     { "roll_attack_macro", &sRollAttackMacroEnabled, true },
+#ifdef __ANDROID__
+    { "fullscreen", &sFullscreen, true },
+#else
     { "fullscreen", &sFullscreen, false },
+#endif
     { "fullscreen_hide_cursor", &sFullscreenHideCursor, true },
     { "rando_enabled", &sRandoEnabled, false },
     { "rando_glitchless", &sRandoGlitchless, true },
@@ -335,9 +355,17 @@ nlohmann::json DefaultsJson(void) {
     j["autosave_interval_ms"] = 60000;
     j["touch_scheme"] = "joystick";
     j["aspect_mode"] = "native";
+#ifdef __ANDROID__
+    j["bg_fill"] = "black";
+#else
     j["bg_fill"] = "blurred";
+#endif
     j["bg_fill_color"] = { 0, 0, 0 };
+#ifdef __ANDROID__
+    j["render_backend"] = "software";
+#else
     j["render_backend"] = "auto";
+#endif
     /* reborn_features is intentionally absent — its presence is the signal
      * to override the compile-time feature defaults. */
     j["bindings"] = nlohmann::json::object();

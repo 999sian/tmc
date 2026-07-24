@@ -11,6 +11,7 @@ Makefile text eol=lf
 *.sha1 text eol=lf
 *.sed text eol=lf
 *.sh text eol=lf
+android/gradlew text eol=lf
 *.json text eol=lf
 *.patch text eol=lf
 *.lua text eol=lf
