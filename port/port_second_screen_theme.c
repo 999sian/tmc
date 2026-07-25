@@ -4,6 +4,7 @@
 #include "region.h"
 #include "structures.h"
 
+#include <math.h>
 #include <string.h>
 
 /*
@@ -244,6 +245,22 @@ static int sChipTilesOk[SS_CHIP_STYLE_COUNT];
 static const u8* sFontGlyphs = NULL;
 static u8 sTextLut[SS_TEXT_STYLE_COUNT][32]; /* [0..15] even cols, [16..31] odd */
 static uint32_t sMsgPal[16];
+
+/* Stylized banner font: glyph bank 8 — the fat lettering of the area-name
+ * banners ("South Hyrule Field"). Each glyph is TWO 8x16 cells (128 bytes,
+ * banks > 4 double the cell offset in sub_0805F25C), each cell with its
+ * own row-0 metrics; ShowTextBox's stylized path advances by both cell
+ * widths minus one so adjacent glyphs share an outline column. The banner
+ * Font (gUnk_08128FC0) renders it with the identity color LUT (fill 0 /
+ * color 0) through BG palette bank 1 (its tilemap entries start at
+ * gfx_src 0x1080 -> palette nibble 1), which is where the navy-outline /
+ * silver-shade / white-body scheme lives. Glyph pixel values used by the
+ * art: 1 navy outline, 10..13 shades, 14 body, 15 black rim. Styles other
+ * than the authentic white recolor those roles through the message
+ * palette (sBigPal below). */
+static const u8* sBigFontGlyphs = NULL;
+static int sBigFontOk = 0;
+static uint32_t sBigPal[SS_TEXT_STYLE_COUNT][16]; /* value -> RGBA, 0 = skip */
 
 static uint32_t Rgb555ToRgba8888(uint16_t c) {
     uint8_t r = (uint8_t)((c & 0x1Fu) << 3);
@@ -960,18 +977,52 @@ static void BuildMenuTheme(void) {
         }
     }
 
-    /* Message font: glyph bank 0 plus the four style LUT pairs. Bank 0 is
+    /* Message font: glyph bank 0 plus the style LUT pairs. Bank 0 is
      * the latin/ASCII face on USA and EU (sub_0805F25C routes plain A-Z
      * there for every EU language); the JP ROM's bank 0 is its own script,
      * so JP keeps the procedural label fallback instead of mojibake. */
     {
-        static const u8 kStyleFill[SS_TEXT_STYLE_COUNT] = { 7, 5, 5, 5 };
-        static const u8 kStyleColor[SS_TEXT_STYLE_COUNT] = { 0, 0, 1, 2 };
+        static const u8 kStyleFill[SS_TEXT_STYLE_COUNT] = { 7, 5, 5, 5, 7 };
+        static const u8 kStyleColor[SS_TEXT_STYLE_COUNT] = { 0, 0, 1, 2, 0 };
         sFontGlyphs = (const u8*)gUnk_08109248[0];
         for (i = 0; i < SS_TEXT_STYLE_COUNT; i++) {
             memcpy(sTextLut[i], TextLutPtr(kStyleFill[i], kStyleColor[i]), 32);
         }
         sFontOk = sFontGlyphs != NULL && !REGION_IS_JP;
+    }
+
+    /* Stylized banner font (bank 8) + its per-style color tables. The
+     * authentic scheme is the identity map through BG bank 1 as composed
+     * above (same bank state on the item and map screens — group 181's
+     * span covers it); the other styles recolor the glyph value roles
+     * (see the sBigFontGlyphs comment) with message-palette colors so the
+     * same letterforms read as ink/red/green/navy on light surfaces.
+     * Same JP guard as bank 0: the JP stylized bank is kana. */
+    {
+        uint32_t bank1[16];
+        for (i = 0; i < 16; i++) {
+            bank1[i] = Rgb555ToRgba8888(bgPal[16 + i]);
+        }
+        memset(sBigPal, 0, sizeof(sBigPal));
+        for (i = 1; i < 16; i++) {
+            sBigPal[SS_TEXT_WHITE][i] = bank1[i]; /* the banner's own colors */
+        }
+        /* Role slots: 14 body, 12/13 (+10/11) shades, 1 outline, 15 rim. */
+        sBigPal[SS_TEXT_INK][14] = sMsgPal[15];
+        sBigPal[SS_TEXT_INK][12] = sBigPal[SS_TEXT_INK][13] = sBigPal[SS_TEXT_INK][10] =
+            sBigPal[SS_TEXT_INK][11] = sMsgPal[11];
+        sBigPal[SS_TEXT_RED][14] = sMsgPal[8];
+        sBigPal[SS_TEXT_RED][12] = sBigPal[SS_TEXT_RED][13] = sBigPal[SS_TEXT_RED][10] =
+            sBigPal[SS_TEXT_RED][11] = sMsgPal[7];
+        sBigPal[SS_TEXT_GREEN][14] = sMsgPal[2];
+        sBigPal[SS_TEXT_GREEN][12] = sBigPal[SS_TEXT_GREEN][13] = sBigPal[SS_TEXT_GREEN][10] =
+            sBigPal[SS_TEXT_GREEN][11] = sMsgPal[1];
+        sBigPal[SS_TEXT_NAVY][14] = bank1[1];
+        sBigPal[SS_TEXT_NAVY][12] = sBigPal[SS_TEXT_NAVY][13] = sBigPal[SS_TEXT_NAVY][10] =
+            sBigPal[SS_TEXT_NAVY][11] = bank1[2];
+        sColors[SSC_BANNER_NAVY] = bank1[1];
+        sBigFontGlyphs = (const u8*)gUnk_08109248[8];
+        sBigFontOk = sBigFontGlyphs != NULL && !REGION_IS_JP;
     }
 }
 
@@ -1091,6 +1142,7 @@ int Port_SecondScreenTheme_Ready(void) {
     sColors[SSC_MENU_BLACK] = 0xFF000000u;
     sColors[SSC_MENU_WHITE] = 0xFFF8F8F8u;
     sColors[SSC_MENU_RED] = 0xFF2838C8u;        /* brick red */
+    sColors[SSC_BANNER_NAVY] = 0xFF903018u;     /* dark navy */
 
     /* The one ingredient everything needs: the HUD/message palette. If
      * it (or the HUD tiles) aren't resolved yet the ROM isn't ready —
@@ -1289,12 +1341,15 @@ void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t
         for (c = 0; c < 4; c++) {
             float dx = corner[c][0] - DOODLE_SRC_X;
             float dy = corner[c][1] - DOODLE_SRC_Y;
-            float fi = (dy - 2.0f * dx) / 128.0f;
-            float fj = (2.0f * dx + 7.0f * dy) / 384.0f;
-            if ((int32_t)fi - 1 < iMin) iMin = (int32_t)fi - 1;
-            if ((int32_t)fi + 1 > iMax) iMax = (int32_t)fi + 1;
-            if ((int32_t)fj - 1 < jMin) jMin = (int32_t)fj - 1;
-            if ((int32_t)fj + 1 > jMax) jMax = (int32_t)fj + 1;
+            /* floorf, not the int cast: truncation rounds negatives UP
+             * and dropped a doodle row/column near the surface origin,
+             * which read as a bare seam along the top/left edges. */
+            int32_t fi = (int32_t)floorf((dy - 2.0f * dx) / 128.0f);
+            int32_t fj = (int32_t)floorf((2.0f * dx + 7.0f * dy) / 384.0f);
+            if (fi - 1 < iMin) iMin = fi - 1;
+            if (fi + 1 > iMax) iMax = fi + 1;
+            if (fj - 1 < jMin) jMin = fj - 1;
+            if (fj + 1 > jMax) jMax = fj + 1;
         }
         for (j = jMin; j <= jMax; j++) {
             for (i = iMin; i <= iMax; i++) {
@@ -1604,6 +1659,116 @@ int32_t Port_SecondScreenTheme_DrawText(uint32_t* pixels, int32_t bufW, int32_t 
             }
         }
         x += gw * scale;
+    }
+    return x - startX;
+}
+
+/* -------------------------------------------------------------------- */
+/*  Stylized banner font (bank 8)                                        */
+/* -------------------------------------------------------------------- */
+
+/* ASCII passthrough like the small font — sub_0805F9A0 maps a non-JP
+ * character to bank 8 at its own code. Control chars clamp to '?'; the
+ * bank's coverage is A-Z a-z 0-9 - . , : ' ! ? (checked on USA — codes
+ * like % / ( ) hold kana there, so panel strings avoid them). */
+static const u8* BigGlyphData(char c) {
+    u8 code = (u8)c;
+    if (code < 0x20) {
+        code = '?';
+    }
+    return sBigFontGlyphs + (size_t)code * 128u;
+}
+
+#define BIG_SPACE_ADVANCE 8 /* the tokenizer's fixed word gap (case 0xc) */
+
+int32_t Port_SecondScreenTheme_BigTextWidth(const char* str, int32_t scale) {
+    int32_t w = 0, gs, gw, adv;
+    if (!sBuilt || !sBigFontOk || str == NULL) {
+        return 0;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    for (; *str; str++) {
+        if (*str == ' ') {
+            w += BIG_SPACE_ADVANCE;
+            continue;
+        }
+        {
+            const u8* g = BigGlyphData(*str);
+            GlyphMetrics(g, &gs, &gw);
+            adv = gw;
+            GlyphMetrics(g + 64, &gs, &gw);
+            adv += gw;
+            if (adv > 1) {
+                adv--; /* stylized glyphs share one outline column */
+            }
+            w += adv;
+        }
+    }
+    return w * scale;
+}
+
+int32_t Port_SecondScreenTheme_DrawBigText(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                           int32_t x, int32_t y, int32_t scale, int style,
+                                           const char* str) {
+    const uint32_t* pal;
+    int32_t startX = x;
+    if (!sBuilt || !sBigFontOk || str == NULL) {
+        return 0;
+    }
+    if (style < 0 || style >= SS_TEXT_STYLE_COUNT) {
+        style = SS_TEXT_INK;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    pal = sBigPal[style];
+
+    for (; *str; str++) {
+        const u8* glyph;
+        int32_t cell, adv = 0;
+        if (*str == ' ') {
+            x += BIG_SPACE_ADVANCE * scale;
+            continue;
+        }
+        glyph = BigGlyphData(*str);
+        /* Two 8x16 cells drawn back to back at their own metric spans —
+         * the exact double sub_0805F820 call of sub_0805F7DC. Zero-value
+         * pixels are skipped (sub_080026F2's transparent merge), which is
+         * also what lets the shared outline columns overlap cleanly. */
+        for (cell = 0; cell < 2; cell++) {
+            const u8* cp = glyph + cell * 64;
+            int32_t gs, gw, col, row2, ex, ey;
+            GlyphMetrics(cp, &gs, &gw);
+            for (row2 = 1; row2 < 16; row2++) {
+                for (col = gs; col < gs + gw && col < 8; col++) {
+                    u8 packed = cp[row2 * 4 + (col >> 1)];
+                    u8 pix = (col & 1) ? (u8)(packed >> 4) : (u8)(packed & 0x0Fu);
+                    uint32_t rgba = pal[pix];
+                    if (pix == 0 || rgba == 0) {
+                        continue;
+                    }
+                    for (ey = 0; ey < scale; ey++) {
+                        int32_t dy = y + row2 * scale + ey;
+                        if (dy < 0 || dy >= bufH) {
+                            continue;
+                        }
+                        for (ex = 0; ex < scale; ex++) {
+                            int32_t dx = x + (adv + col - gs) * scale + ex;
+                            if (dx >= 0 && dx < bufW) {
+                                pixels[(size_t)dy * (size_t)stride + dx] = rgba;
+                            }
+                        }
+                    }
+                }
+            }
+            adv += gw;
+        }
+        if (adv > 1) {
+            adv--; /* next glyph overlaps this one's outline column */
+        }
+        x += adv * scale;
     }
     return x - startX;
 }
