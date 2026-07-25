@@ -4,6 +4,8 @@
 #include "port_rom.h"          /* gRomData/gRomSize, Port_ReadU16/U32 */
 #include "area.h"              /* AreaHeader/gAreaMetadata, RoomHeader/gAreaRoomHeaders, Transition */
 #include "kinstone.h"          /* KinstoneWorldEvent/WorldEvent tables + GetWorldEvents() */
+#include "game.h"              /* OverworldLocation/gOverworldLocations — the map screen's zoom grid */
+#include "subtask.h"           /* GetOverworldLocation, gUnk_08128E94 (screen 6's per-region geometry) */
 #include "region.h"            /* REGION_IS_EU/JP — ROM-derived, not save state */
 
 #include <stddef.h>
@@ -309,16 +311,16 @@ static void ApplyPaletteGroup(u32 group, uint16_t* bgPal) {
  * MemClear'd gBGxBuffer holds on console. Color 0 is transparent, tile ids
  * beyond the loaded tile blob are skipped (console would show stale VRAM
  * there; real map tilemaps never reference unloaded tiles). */
-static void DrawBgLayer(uint32_t* dst, const u8* tilemap, u32 tilemapLen, const u8* tiles, u32 tilesLen,
-                        const uint16_t* bgPal, int32_t yShift) {
+static void DrawBgLayerSized(uint32_t* dst, int32_t dstW, int32_t dstH, const u8* tilemap, u32 tilemapLen,
+                             const u8* tiles, u32 tilesLen, const uint16_t* bgPal, int32_t yShift) {
     u32 tileCount = tilesLen / 32u;
     int32_t x, y;
 
-    for (y = 0; y < WORLDMAP_IMAGE_H; y++) {
+    for (y = 0; y < dstH; y++) {
         int32_t mapY = (y - yShift) & 0xFF;
         u32 tileRow = ((u32)mapY >> 3) & 31u;
         int32_t rowInTile = mapY & 7;
-        for (x = 0; x < WORLDMAP_IMAGE_W; x++) {
+        for (x = 0; x < dstW; x++) {
             u32 tileCol = ((u32)x >> 3) & 31u;
             u32 entryOff = (tileRow * 32u + tileCol) * 2u;
             u16 entry = (entryOff + 2u <= tilemapLen) ? Port_ReadU16(tilemap + entryOff) : 0;
@@ -341,10 +343,16 @@ static void DrawBgLayer(uint32_t* dst, const u8* tilemap, u32 tilemapLen, const 
             if (colorIndex == 0) {
                 continue;
             }
-            dst[(size_t)y * WORLDMAP_IMAGE_W + (size_t)x] =
+            dst[(size_t)y * (size_t)dstW + (size_t)x] =
                 Rgb555ToRgba8888(bgPal[(((u32)entry >> 12) & 0xFu) * 16u + colorIndex]);
         }
     }
+}
+
+static void DrawBgLayer(uint32_t* dst, const u8* tilemap, u32 tilemapLen, const u8* tiles, u32 tilesLen,
+                        const uint16_t* bgPal, int32_t yShift) {
+    DrawBgLayerSized(dst, WORLDMAP_IMAGE_W, WORLDMAP_IMAGE_H, tilemap, tilemapLen, tiles, tilesLen, bgPal,
+                     yShift);
 }
 
 static int BuildWorldMapImage(void) {
@@ -512,17 +520,42 @@ static u32 SaveBit(const uint8_t* arr, u32 bit) {
 int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones,
                                                    const uint8_t* fusionUnmarked,
                                                    int32_t* outMapXY, int32_t maxPairs) {
-    /* The pause map's own marker pass, ported: sub_080A68D4 (src/menu/
+    /* The game's own fusion-marker pass, ported: sub_080A68D4 (src/menu/
      * pauseMenuScreen6.c) walks kinstone ids 10..100 (1..9 are the golden-
      * kinstone story fusions, which the game's pass also skips) and shows a
-     * marker exactly when CheckKinstoneFused && !CheckFusionMapMarkerDisabled.
+     * marker exactly when CheckKinstoneFused && !CheckFusionMapMarkerDisabled
+     * — the same pair of bitfields UpdateVisibleFusionMapMarkers maintains.
      * Each id's location is ROM-constant: gKinstoneWorldEvents[id]
      * .worldEventId -> gWorldEvents[..]._c/._e, the event's overworld pixel
-     * position; events without one carry (0, 0) and are skipped, the same
-     * "no location" rule sub_080A69E0 applies. Positions then go through
-     * the pause map's player-dot world->map transform (sub_080A6378). Table
-     * variants are per-region twins selected like src/kinstone.c does —
-     * REGION_IS_* is ROM identity, not live save state. */
+     * position, which sub_080A698C hands straight to sub_080A69E0.
+     *
+     * Which screen this pass belongs to matters, because the two map screens
+     * are NOT interchangeable: sub_080A68D4 runs on pause screen 6, the
+     * ENLARGED regional map, and every marker is dropped there unless it
+     * lands in the region being viewed. The world map (pause screen 4,
+     * PauseMenu_Screen_4 -> sub_080A6378) has no fusion pass at all; the
+     * red check it shows is a map HINT, gUnk_08128F58 stamped at pre-baked
+     * screen coordinates by sub_080A6438 and gated by gSave.map_hints &
+     * sub_080A6F40() — live flag state this module deliberately cannot read,
+     * so hint checks are not reproduced here. What the world map and the
+     * fusion pass do share is the placement: sub_080A69E0 and the pause
+     * map's player dot both read the same overworld pixel space, and
+     * gUnk_08128F58's pre-baked screen positions match WorldToMapX/Y of its
+     * own world coordinates to within a pixel, which is what pins this
+     * transform down.
+     *
+     * The rest of sub_080A69E0's "no location" rule is applied here too: a
+     * fusion is skipped when its event carries (0, 0) AND when its position
+     * falls outside the overworld's region grid, which is the function's
+     * other -1 return (GetOverworldLocation == NULL). Table variants are
+     * per-region twins selected like src/kinstone.c does — REGION_IS_* is
+     * ROM identity, not live save state.
+     *
+     * Several fusions share one world event position (ids 37/38/41/42/43/47
+     * all sit on the Hyrule Town well), and the game simply stamps its
+     * markers on top of each other. Coincident positions are collapsed to
+     * one pair so a caller sizing a marker budget sees distinct places, not
+     * invisible duplicates. */
     const KinstoneWorldEvent* kinstoneEvents = gKinstoneWorldEvents;
     const WorldEvent* worldEvents = GetWorldEvents();
     int32_t count = 0;
@@ -542,28 +575,49 @@ int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones
 
     for (id = 10; id <= 100 && count < maxPairs; id++) {
         const WorldEvent* event;
+        int32_t mx, my, i;
+        int duplicate = 0;
+
         if (!SaveBit(fusedKinstones, id) || SaveBit(fusionUnmarked, id)) {
             continue;
         }
         event = &worldEvents[kinstoneEvents[id].worldEventId];
-        if (((u32)event->_c | (u32)event->_e) == 0) {
+        if (((u32)event->_c | (u32)event->_e) == 0 || GetOverworldLocation(event->_c, event->_e) == NULL) {
             continue; /* fusion with no map location (sub_080A69E0's -1) */
         }
-        outMapXY[count * 2 + 0] = ClampMapX(WorldToMapX(event->_c));
-        outMapXY[count * 2 + 1] = ClampMapY(WorldToMapY(event->_e));
+        mx = ClampMapX(WorldToMapX(event->_c));
+        my = ClampMapY(WorldToMapY(event->_e));
+        for (i = 0; i < count; i++) {
+            if (outMapXY[i * 2] == mx && outMapXY[i * 2 + 1] == my) {
+                duplicate = 1;
+                break;
+            }
+        }
+        if (duplicate) {
+            continue;
+        }
+        outMapXY[count * 2 + 0] = mx;
+        outMapXY[count * 2 + 1] = my;
         count++;
     }
     return count;
 }
 
 /* The red-check marker art: DrawDirect frame 0x5B of the direct sprite
- * sheet — the frame gUnk_08128F58's world-map hint entries stamp on pause
- * screen 4 (sub_080A6438), and byte-identical to the regional map's check
- * (frame 0x70): one 16x16 piece, OBJ tile 588, palette row 0, anchored at
- * (-8, -8). Tiles come from gfx group 94's OBJ entry (the map tab loads its
- * marker art together with the map itself) and the palette from the same
- * group ladder the BG layers use, most recent load first — the exact VRAM/
- * palette state the frame's attr2 indexes on the real screen. */
+ * sheet — the map screen's own check glyph, the frame gUnk_08128F58's
+ * world-map hint entries stamp on pause screen 4 (sub_080A6438). One 16x16
+ * piece anchored at (-8, -8), tiles from gfx group 94's OBJ entry (the map
+ * tab loads its marker art together with the map itself, at 0x06014000) and
+ * the palette from the same group ladder the BG layers use, most recent load
+ * first — the exact VRAM/palette state the frame's attr2 indexes on the real
+ * screen.
+ *
+ * Note the game's regional map does NOT use one glyph for every fusion: its
+ * pass draws frame gKinstoneWorldEvents[id].mapMarkerIcon + 100, an icon per
+ * fusion kind (frames 0x64..0x6C). Those live in gfx group 129's OBJ span at
+ * 0x06010800, a language-conditional record that can only be resolved with
+ * the live save's language byte, and the header's stamp face carries no
+ * marker id anyway — so every marker gets the check glyph. */
 #define DIRECT_SPRITE_INDEX (REGION_IS_EU ? 0x1fau : 0x1fbu)
 #define FUSION_CHECK_FRAME 0x5Bu
 #define FUSION_CHECK_PX 16
@@ -722,47 +776,318 @@ int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outM
     return 1;
 }
 
-/* --- Regional zoom seams ------------------------------------------------
- * Stubs for now: the tile grid and per-region artwork land as their own
- * change. Returning "not ready" keeps callers on the world view. */
+/* --- Regional zoom ------------------------------------------------------
+ *
+ * The map screen's zoom grid is gOverworldLocations (src/data/areaMetadata.c):
+ * 17 rects over the overworld's 16px tile grid, one per WindcrestID, and the
+ * id the whole map screen family indexes by (gMenu.field_0x3). The world map
+ * draws its cursor brackets on them — frame gMenu.field_0x3 * 3 + 0x26 at
+ * gUnk_08128DE8[id].unk6/unk7 — and pressing A opens pause screen 6, the
+ * enlarged map of that one region.
+ *
+ * Screen 6's artwork recipe comes out of sub_080A67C4 (src/menu/
+ * pauseMenuScreen6.c) plus the screen's row in gUnk_08128AD8 (screen 6 ->
+ * { paletteGroup 185, gfxGroup 129, dispcnt, bg1Control 0x1C0A, bg2Control
+ * 0x1D03 }, src/data/figurineMenuData.c):
+ *
+ *   LoadPaletteGroup(region + 0xBA)  -> palette group 186 + region, applied
+ *                                       after the 11 / 12 / 181 / 185 ladder
+ *                                       the pause menu already ran.
+ *   LoadGfxGroup(region + 0x5F)      -> gfx group 95 + region: 32 KB of 4bpp
+ *                                       tiles to 0x06000000 (bg2Control
+ *                                       0x1D03 = charBase 0) plus a 32x32
+ *                                       tilemap into gBG2Buffer. BG1 is the
+ *                                       menu chrome here, not the map, so
+ *                                       only BG2 is decoded.
+ *
+ * The map layer is bigger than the screen and screen 6 scrolls it (gMenu
+ * .field_0xa, capped by gUnk_08128E94[region].unk2), so the artwork's own
+ * rect inside that 32x32 tilemap has to be recovered rather than screenshot:
+ *
+ *   origin: sub_080A66D0 places a marker at screen x = localX + unk7 and
+ *           y = localY + unk3 - scroll, so the artwork's own (0, 0) sits at
+ *           tilemap (unk7, unk3).
+ *   size:   sub_080A69E0 scales region-local world pixels by 100 / 0x23A,
+ *           so the artwork is (worldSpan * 100 / 0x23A) on each axis — the
+ *           span being the region rect minus that function's own origin
+ *           fixups (regions 4 and 7 start at area 9 / area 7 room 0's map_y
+ *           instead of the rect top; region 15 starts 0x108 right of the
+ *           rect edge, where row 12's overlapping reach ends).
+ *
+ * Decoding all 17 tilemaps and measuring where the artwork actually sits
+ * agrees: nine regions land on the rect to the pixel and the rest sit within
+ * a few pixels of edge decoration, including regions 4, 7 and 15, whose
+ * sizes only come out right with those fixups applied. The scroll caps in
+ * gUnk_08128E94 corroborate the scale independently (region 0: 210 px tall,
+ * 160 visible, unk2 = 88 of scroll; region 7: 92 px, unk2 = 0 — no scroll).
+ *
+ * Regions whose gfx group has save-dependent variants (sub_080A67C4's
+ * switch: region 9 after TATEKAKE_HOUSE, region 11 after KINSTONE_E, region
+ * 14 while inside area 8) always decode the base variant — the alternates
+ * need live flags, and the difference is a few tiles of scenery. */
 
-int Port_SecondScreenWorldMap_GetRegionAt(int32_t mapX, int32_t mapY, int32_t* outRegion,
-                                          int32_t* outX0, int32_t* outY0, int32_t* outX1,
-                                          int32_t* outY1) {
-    (void)mapX;
-    (void)mapY;
-    (void)outRegion;
-    (void)outX0;
-    (void)outY0;
-    (void)outX1;
-    (void)outY1;
+#define WORLDMAP_REGION_COUNT 17       /* gOverworldLocations, one row per WindcrestID */
+#define REGION_GFX_GROUP_BASE 95u      /* sub_080A67C4: LoadGfxGroup(region + 0x5F) */
+#define REGION_PALETTE_GROUP_BASE 186u /* sub_080A67C4: LoadPaletteGroup(region + 0xBA) */
+#define REGION_SCALE_NUM 100           /* sub_080A69E0's world -> enlarged-map scale */
+#define REGION_SCALE_DEN 0x23A
+#define REGION_CANVAS_W 256             /* the 32x32 text-BG tilemap group 95+ fills */
+#define REGION_CANVAS_H 256
+#define DEST_REGION_TILEMAP 0x020344B0u /* gBG2Buffer — the group's 2nd EWRAM entry */
+
+static const uint32_t* volatile sRegionImage[WORLDMAP_REGION_COUNT];
+static int32_t sRegionW[WORLDMAP_REGION_COUNT], sRegionH[WORLDMAP_REGION_COUNT];
+
+/* The gOverworldLocations row for a WindcrestID, or NULL. Rows are keyed by
+ * windcrestId (and today listed in that order); looked up by key so the two
+ * never have to agree. */
+static const OverworldLocation* RegionLocation(int32_t region) {
+    const OverworldLocation* loc;
+
+    if (region < 0 || region >= WORLDMAP_REGION_COUNT) {
+        return NULL;
+    }
+    for (loc = gOverworldLocations; loc->minX != 0xFF; loc++) {
+        if (loc->windcrestId == (u8)region) {
+            return loc;
+        }
+    }
+    return NULL;
+}
+
+/* Everything the enlarged map of one region needs, all of it sub_080A69E0's
+ * and sub_080A66D0's own arithmetic: the overworld pixel the artwork's
+ * (0, 0) stands for (including that function's per-region origin fixups),
+ * the artwork's size at its 100 / 0x23A scale, and where it sits inside the
+ * region's 256x256 tilemap. Returns 0 when the region id is unknown or the
+ * fixups' room headers aren't readable yet. */
+typedef struct {
+    int32_t worldX, worldY; /* overworld pixel at artwork (0, 0) */
+    int32_t artX, artY;     /* artwork origin within the 32x32 tilemap */
+    int32_t artW, artH;     /* artwork size in enlarged-map pixels */
+} RegionGeometry;
+
+static int GetRegionGeometry(int32_t region, RegionGeometry* out) {
+    const OverworldLocation* loc = RegionLocation(region);
+    const struct_gUnk_08128E94* geom;
+
+    if (loc == NULL) {
+        return 0;
+    }
+    geom = &gUnk_08128E94[region];
+    out->worldX = (int32_t)loc->minX * 0x10;
+    out->worldY = (int32_t)loc->minY * 0x10;
+    if (region == 4 || region == 7) {
+        const RoomHeader* table = gAreaRoomHeaders[region == 4 ? 9 : 7];
+        if (!Port_IsRoomHeaderPtrReadable(table)) {
+            return 0;
+        }
+        out->worldY += table[0].map_y;
+    } else if (region == 15) {
+        out->worldX += 0x108;
+    }
+    out->artX = geom->unk7;
+    out->artY = geom->unk3;
+    out->artW = (((int32_t)loc->maxX + 1) * 0x10 - out->worldX) * REGION_SCALE_NUM / REGION_SCALE_DEN;
+    out->artH = (((int32_t)loc->maxY + 1) * 0x10 - out->worldY) * REGION_SCALE_NUM / REGION_SCALE_DEN;
+    return out->artW > 0 && out->artH > 0;
+}
+
+int Port_SecondScreenWorldMap_GetRegionAt(int32_t mapX, int32_t mapY, int32_t* outRegion, int32_t* outX0,
+                                          int32_t* outY0, int32_t* outX1, int32_t* outY1) {
+    /* GetOverworldLocation's own walk (src/menu/pauseMenuScreen6.c), just
+     * run in world-map pixels instead of overworld tiles: first row whose
+     * rect contains the point wins, which is what makes the one overlap in
+     * the table (row 12 reaches into rows 14-16's column) resolve the way
+     * the game resolves it. The rect is half-open — (x1, y1) is the first
+     * pixel of the next tile, so neighbouring rects share an edge and tile
+     * outlines tile the map without gaps or double-drawn columns. */
+    const OverworldLocation* loc;
+
+    for (loc = gOverworldLocations; loc->minX != 0xFF; loc++) {
+        int32_t x0 = WorldToMapX((int32_t)loc->minX * 16);
+        int32_t x1 = WorldToMapX(((int32_t)loc->maxX + 1) * 16);
+        int32_t y0 = WorldToMapY((int32_t)loc->minY * 16);
+        int32_t y1 = WorldToMapY(((int32_t)loc->maxY + 1) * 16);
+
+        if (mapX < x0 || mapX >= x1 || mapY < y0 || mapY >= y1) {
+            continue;
+        }
+        if (outRegion) {
+            *outRegion = loc->windcrestId;
+        }
+        if (outX0) {
+            *outX0 = x0;
+        }
+        if (outY0) {
+            *outY0 = y0;
+        }
+        if (outX1) {
+            *outX1 = x1;
+        }
+        if (outY1) {
+            *outY1 = y1;
+        }
+        return 1;
+    }
     return 0;
+}
+
+/* Decode one region's enlarged map into an owned buffer and publish it.
+ * Same discipline as the world map image: built by whoever asks first, the
+ * pointer only stored once the pixels are complete, immutable afterwards,
+ * and every not-ready path leaves the slot NULL so the caller just retries. */
+static int BuildRegionImage(int32_t region) {
+    RegionGeometry g;
+    GfxBlob tiles = { 0 }, tilemap = { 0 };
+    uint16_t bgPal[16 * 16];
+    uint32_t* canvas;
+    uint32_t* art = NULL;
+    int32_t x, y;
+    size_t i;
+
+    if (gRomData == NULL || gRomSize == 0 || gGlobalGfxAndPalettes == NULL) {
+        return 0;
+    }
+    if (!GetRegionGeometry(region, &g)) {
+        return 0;
+    }
+    if (g.artX < 0 || g.artY < 0 || g.artX + g.artW > REGION_CANVAS_W || g.artY + g.artH > REGION_CANVAS_H) {
+        return 0;
+    }
+    for (i = 0; i < sizeof(sWorldMapPaletteGroups); i++) {
+        if (gPaletteGroups[sWorldMapPaletteGroups[i]] == NULL) {
+            return 0;
+        }
+    }
+    if (gPaletteGroups[REGION_PALETTE_GROUP_BASE + (u32)region] == NULL) {
+        return 0;
+    }
+
+    if (FetchGfxGroupEntryRobust(REGION_GFX_GROUP_BASE + (u32)region, DEST_MAP_TILES, -1, &tiles) &&
+        FetchGfxGroupEntryRobust(REGION_GFX_GROUP_BASE + (u32)region, DEST_REGION_TILEMAP, 1, &tilemap)) {
+        /* One frame's scratch: 256 KB is far too much for the stack a render
+         * thread runs on, and the finished crop is a fraction of it. */
+        canvas = (uint32_t*)calloc((size_t)REGION_CANVAS_W * REGION_CANVAS_H, sizeof(uint32_t));
+        if (canvas != NULL) {
+            memset(bgPal, 0, sizeof(bgPal));
+            for (i = 0; i < sizeof(sWorldMapPaletteGroups); i++) {
+                ApplyPaletteGroup(sWorldMapPaletteGroups[i], bgPal);
+            }
+            ApplyPaletteGroup(REGION_PALETTE_GROUP_BASE + (u32)region, bgPal);
+
+            DrawBgLayerSized(canvas, REGION_CANVAS_W, REGION_CANVAS_H, tilemap.data, tilemap.len, tiles.data,
+                             tiles.len, bgPal, 0);
+
+            art = (uint32_t*)calloc((size_t)g.artW * g.artH, sizeof(uint32_t));
+            if (art != NULL) {
+                for (y = 0; y < g.artH; y++) {
+                    for (x = 0; x < g.artW; x++) {
+                        art[(size_t)y * g.artW + x] =
+                            canvas[(size_t)(g.artY + y) * REGION_CANVAS_W + (size_t)(g.artX + x)];
+                    }
+                }
+            }
+            free(canvas);
+        }
+    }
+
+    FreeGfxBlob(&tiles);
+    FreeGfxBlob(&tilemap);
+    if (art == NULL) {
+        return 0;
+    }
+    sRegionW[region] = g.artW;
+    sRegionH[region] = g.artH;
+    sRegionImage[region] = art; /* publish only the finished image */
+    return 1;
+}
+
+static const uint32_t* RegionImage(int32_t region, int32_t* outW, int32_t* outH) {
+    const uint32_t* image;
+
+    if (region < 0 || region >= WORLDMAP_REGION_COUNT) {
+        return NULL;
+    }
+    image = sRegionImage[region];
+    if (image == NULL) {
+        if (!BuildRegionImage(region)) {
+            return NULL;
+        }
+        image = sRegionImage[region];
+    }
+    *outW = sRegionW[region];
+    *outH = sRegionH[region];
+    return image;
 }
 
 int Port_SecondScreenWorldMap_DrawRegion(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                          int32_t dstX, int32_t dstY, int32_t dstW, int32_t dstH,
                                          int32_t region) {
-    (void)pixels;
-    (void)bufW;
-    (void)bufH;
-    (void)stride;
-    (void)dstX;
-    (void)dstY;
-    (void)dstW;
-    (void)dstH;
-    (void)region;
-    return 0;
+    int32_t srcW = 0, srcH = 0, x, y;
+    const uint32_t* art;
+
+    if (pixels == NULL || bufW <= 0 || bufH <= 0 || stride <= 0 || dstW <= 0 || dstH <= 0) {
+        return 0;
+    }
+    art = RegionImage(region, &srcW, &srcH);
+    if (art == NULL || srcW <= 0 || srcH <= 0) {
+        return 0;
+    }
+    for (y = 0; y < dstH; y++) {
+        int32_t destY = dstY + y;
+        int32_t sy = y * srcH / dstH;
+        if (destY < 0 || destY >= bufH) {
+            continue;
+        }
+        for (x = 0; x < dstW; x++) {
+            int32_t destX = dstX + x;
+            uint32_t c;
+            if (destX < 0 || destX >= bufW) {
+                continue;
+            }
+            /* Color 0 is the BG's transparency, and on screen 6 the backdrop
+             * behind it is whatever the pause menu left in palette entry 0 —
+             * not something this module can speak for. Leave those pixels to
+             * the caller's own background instead of punching holes in it. */
+            c = art[(size_t)sy * srcW + (size_t)(x * srcW / dstW)];
+            if ((c >> 24) == 0) {
+                continue;
+            }
+            pixels[(size_t)destY * (size_t)stride + (size_t)destX] = c;
+        }
+    }
+    return 1;
 }
 
 int Port_SecondScreenWorldMap_LocateInRegion(int32_t region, uint8_t area, int32_t areaX, int32_t areaY,
                                              int32_t dstW, int32_t dstH, int32_t* outX, int32_t* outY) {
-    (void)region;
-    (void)area;
-    (void)areaX;
-    (void)areaY;
-    (void)dstW;
-    (void)dstH;
-    (void)outX;
-    (void)outY;
-    return 0;
+    /* sub_080A69E0 verbatim, minus the -1 returns the caller expresses as
+     * "not in this region": the overworld position must resolve to a region
+     * row and that row must be the one being drawn. The function's own
+     * per-region origin fixups live in GetRegionGeometry, so the local
+     * position and the drawn artwork can never drift apart. */
+    const OverworldLocation* here;
+    RegionGeometry g;
+    int32_t lx, ly;
+
+    if (outX == NULL || outY == NULL || dstW <= 0 || dstH <= 0) {
+        return 0;
+    }
+    if (area >= 153 || gAreaMetadata[area].flags != (AR_IS_OVERWORLD | AR_ALLOWS_WARP)) {
+        return 0; /* CheckAreaOverworld, as in LocatePlayer */
+    }
+    if ((areaX | areaY) == 0) {
+        return 0;
+    }
+    here = GetOverworldLocation((u32)areaX, (u32)areaY);
+    if (here == NULL || here->windcrestId != (u8)region || !GetRegionGeometry(region, &g)) {
+        return 0;
+    }
+
+    lx = (areaX - g.worldX) * REGION_SCALE_NUM / REGION_SCALE_DEN * dstW / g.artW;
+    ly = (areaY - g.worldY) * REGION_SCALE_NUM / REGION_SCALE_DEN * dstH / g.artH;
+    *outX = lx < 0 ? 0 : (lx >= dstW ? dstW - 1 : lx);
+    *outY = ly < 0 ? 0 : (ly >= dstH ? dstH - 1 : ly);
+    return 1;
 }
