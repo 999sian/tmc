@@ -52,6 +52,10 @@ extern Frame* gSpriteAnimations_322[];
 #define PIECE_ORIGIN_X 8
 #define PIECE_ORIGIN_Y 13
 
+/* Palette bank PauseMenu_ItemMenu_Draw's OAM command carries (its
+ * `color = 3`), the default for callers drawing the item screen's grid. */
+#define ITEM_SCREEN_CMD_PAL_BANK 3u
+
 /* Standard GBA OBJ dimensions by (shape, size) — hardware constants. */
 static const u8 kObjW[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
 static const u8 kObjH[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
@@ -112,6 +116,13 @@ static void DrawPiece(uint32_t* pixels, int32_t bufWidth, int32_t bufHeight, int
 
 void Port_SecondScreenRender_DrawItemIcon(uint32_t* pixels, int32_t bufWidth, int32_t bufHeight, int32_t stride,
                                            int32_t x, int32_t y, int32_t scale, uint8_t itemId) {
+    Port_SecondScreenRender_DrawItemIconBank(pixels, bufWidth, bufHeight, stride, x, y, scale, itemId,
+                                             ITEM_SCREEN_CMD_PAL_BANK);
+}
+
+void Port_SecondScreenRender_DrawItemIconBank(uint32_t* pixels, int32_t bufWidth, int32_t bufHeight,
+                                              int32_t stride, int32_t x, int32_t y, int32_t scale,
+                                              uint8_t itemId, uint32_t cmdPalBank) {
     if (scale < 1) {
         scale = 1;
     }
@@ -155,10 +166,11 @@ void Port_SecondScreenRender_DrawItemIcon(uint32_t* pixels, int32_t bufWidth, in
         int hflip = (p[2] & 0x04) != 0;
         int vflip = (p[2] & 0x08) != 0;
         uint32_t tileIdx = (uint32_t)p[3] + (((uint32_t)p[4] & 3u) << 8);
-        /* Piece bank; bit0 drops the command bank (the menu's color 3/4),
-         * which every icon piece sets — the `3 +` branch is kept for
-         * fidelity with RenderSpritePieces' attr2 math. */
-        uint32_t palBank = ((((uint32_t)p[2] & 1u) ? 0u : 3u) + ((uint32_t)p[4] >> 4)) & 15u;
+        /* Piece bank, per RenderSpritePieces' attr2 math: bit0 drops the
+         * OAM command's bank so the piece's own is absolute, and almost
+         * every icon piece sets it. The elements' crystal is the one that
+         * does not, which is why the command bank is a parameter. */
+        uint32_t palBank = ((((uint32_t)p[2] & 1u) ? 0u : cmdPalBank) + ((uint32_t)p[4] >> 4)) & 15u;
         const uint16_t* pal16 = Port_SecondScreenTheme_ObjPalette(palBank);
 
         if (shape == 3 || pal16 == NULL) {

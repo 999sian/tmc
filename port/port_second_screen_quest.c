@@ -46,20 +46,24 @@
  * stamped on top at their own table positions, and the result is scaled into
  * the caller's rect.
  *
- * What the snapshot can fill, and what it cannot. sub_080A5594 fills sixteen
- * slots; the published snapshot carries only two of those quantities:
- *   slot 0     kinstone bag    <- kinstoneBag / kinstoneFused
- *   slots 9-12 four elements   <- elements, placed through the same
- *                                gItemMetaData[item].menuSlot the menu uses
- * The rest (heart pieces, sword-technique count, shells / Carlov medal, the
- * three carried quest items, grip ring / bracelets / flippers) are not in
- * SecondScreenSnapshot and are not derivable from what is, so their wells
- * stay empty — which is exactly how the real screen looks before those are
- * collected. They are omitted rather than guessed on purpose: this module
- * reads ROM constants and its parameters only, never live engine state.
+ * What the snapshot fills. sub_080A5594 fills sixteen slots, and every one
+ * of them is reachable from the published snapshot:
+ *   slot 0     kinstone bag tier, or the Tingle trophy once it replaces the
+ *              bag in that well   <- tingleTrophy / kinstoneBagOwned / kinstoneBag
+ *   slot 1     heart pieces       <- heartPieces (drawn as heartPieces + 1)
+ *   slot 2     sword techniques   <- swordSkills, one fixed frame plus the count
+ *   slot 3     Carlov medal, else the shell counter <- carlovMedal / shellsOwned / shells
+ *   slots 4-5  SLEEP / SAVE plates — save-independent, part of the static layer
+ *   slots 6-8  the carried quest items <- questItems[], already in the order
+ *              sub_080A5594's rolling counter drops them into the tray
+ *   slots 9-12 four elements     <- elements
+ *   slots 13-15 grip ring, bracelets, flippers <- passives
+ * Everything but the tray goes to its well through the same
+ * gItemMetaData[item].menuSlot the menu uses; the tray's three items share
+ * one menu slot, so their order is the snapshot's, not the metadata's.
  *
- * Also deliberately absent: the blinking slot cursor. It marks the pause
- * menu's selection, and a panel that cannot be navigated has none.
+ * Deliberately absent: the blinking slot cursor. It marks the pause menu's
+ * selection, and a panel that cannot be navigated has none.
  *
  * Threading: the layer is built lazily by whoever draws first — by design
  * only the second-screen render thread — into a private buffer that is
@@ -116,17 +120,47 @@ static const u8 kQuestVramGroups[] = { 91u, 86u, 23u, 16u };
 #define CHROME_OAM_EXTRA 0x400u
 
 /* sub_080A57F4's slot draws: gOamCmd._8 = 0xE800 for the frames that come
- * straight out of OBJ VRAM (the counters and the two button plates). */
+ * straight out of OBJ VRAM (the counters and the two button plates). The
+ * item icons get slot * 8 + 0xEB80 instead — a per-slot tile base this
+ * module has no use for (it reads the sprite sheet directly, like the DMA
+ * that fills those tiles does), but the same palette bank 14, which is the
+ * one the element crystal's piece keeps. */
 #define SLOT_OAM_EXTRA 0xE800u
+#define ITEM_CMD_PAL_BANK 0xEu
 
 #define SLOT_KINSTONE_BAG 0
+#define SLOT_HEART_PIECES 1
+#define SLOT_SWORD_SKILLS 2
+#define SLOT_SHELLS 3
 #define SLOT_SLEEP 4
 #define SLOT_SAVE 5
+#define SLOT_QUEST_ITEM 6 /* 6, 7, 8 — sub_080A5594's carried-item tray */
+#define QUEST_TRAY_SLOTS 3
 #define SLOT_BUTTON_VALUE 1 /* both button slots hold 1 */
 #define QUEST_SLOT_COUNT 16
 
-/* Frame id for a slot's contents, per sub_080A57F4: value + 9 + unk5. */
+/* Frame id for a slot's contents, per sub_080A57F4: value + 9 + unk5. The
+ * technique slot is the one exception — it draws one fixed frame whatever
+ * the count is, and prints the count beside it as a digit. */
 #define SLOT_FRAME(entry, value) ((u32)(value) + 9u + (u32)(entry)[5])
+#define SKILL_FRAME(entry) ((u32)(entry)[5] + 10u)
+
+/* The counter digits: DrawDirect(0, 1) with gOamCmd._8 = digit + 0x800, the
+ * glyphs being consecutive tiles from the frame's own base. Both counters
+ * sit at a fixed offset from their slot's table position, and the shell one
+ * prints three digits right to left, leading zeros included. */
+#define DIGIT_SPRITE 0u
+#define DIGIT_FRAME 1u
+#define DIGIT_OAM_EXTRA 0x800u
+#define SKILL_DIGIT_DX 9
+#define SKILL_DIGIT_DY 7
+#define SHELL_DIGIT_DX 8
+#define SHELL_DIGIT_DY 8
+#define SHELL_DIGIT_COUNT 3
+
+/* sub_080A57F4 nudges two of the item icons down inside their well. */
+#define TROPHY_ICON_DY 0xD
+#define MEDAL_ICON_DY 8
 
 /* The icon renderer maps a 16x16 box origin onto the game's OAM command
  * position: the body piece sits at (-8, -13) of it. */
@@ -353,12 +387,11 @@ static int BuildStaticLayer(void) {
     return opaque >= QUEST_W * QUEST_H / 4;
 }
 
-/* Kinstone bag tier, the ladder sub_080A5594 walks over the bag's contents.
- * Owning the bag is what puts anything in the slot at all; the snapshot has
- * no "owns bag" flag, so any piece held or fused stands in for it — the same
- * evidence the player already has on screen. */
+/* Kinstone bag tier, the ladder sub_080A5594 walks over the bag's contents
+ * once the bag itself is owned (without it the well stays empty however many
+ * pieces the save happens to hold). */
 static u32 KinstoneBagTier(const SecondScreenSnapshot* snap) {
-    if (snap->kinstoneBag == 0 && snap->kinstoneFused == 0) {
+    if (!snap->kinstoneBagOwned) {
         return 0;
     }
     if (snap->kinstoneBag >= 0x50) {
@@ -373,37 +406,110 @@ static u32 KinstoneBagTier(const SecondScreenSnapshot* snap) {
     return 1;
 }
 
-/* Stamps the save-dependent slots onto the working copy of the layer. */
+/* An item in its well, the >= 0x34 arm of sub_080A57F4: the item's own
+ * sprite-322 frame at the slot's table position, with the two nudges that
+ * function applies to the trophy and the medal. */
+static void DrawSlotItem(int slot, u32 item) {
+    const u8* entry = SlotEntry(slot);
+    int32_t dy = 0;
+
+    if (entry == NULL || item == 0) {
+        return;
+    }
+    if (item == (u32)ITEM_QST_TINGLE_TROPHY) {
+        dy = TROPHY_ICON_DY;
+    } else if (item == (u32)ITEM_QST_CARLOV_MEDAL) {
+        dy = MEDAL_ICON_DY;
+    }
+    Port_SecondScreenRender_DrawItemIconBank(sFrame, QUEST_W, QUEST_H, QUEST_W,
+                                             (int32_t)entry[6] - ICON_BOX_DX,
+                                             (int32_t)entry[7] + dy - ICON_BOX_DY, 1, (uint8_t)item,
+                                             ITEM_CMD_PAL_BANK);
+}
+
+/* An item in the well gItemMetaData sends it to — how sub_080A5594 places
+ * everything except the shared carried-item tray. */
+static void DrawMetaSlotItem(u32 item) {
+    DrawSlotItem((int)gItemMetaData[item].menuSlot, item);
+}
+
+/* One counter digit, sub_080A57F4's DrawDirect(0, 1). */
+static void DrawDigit(int32_t x, int32_t y, u32 digit) {
+    DrawObjFrame(sFrame, DIGIT_SPRITE, DIGIT_FRAME, x, y, DIGIT_OAM_EXTRA + digit);
+}
+
+/* Stamps the save-dependent slots onto the working copy of the layer, slot
+ * by slot in the order sub_080A5594 fills them. */
 static void DrawLiveSlots(const SecondScreenSnapshot* snap) {
-    u32 tier = KinstoneBagTier(snap);
+    const u8* entry;
     u32 i;
 
-    if (tier != 0) {
-        const u8* entry = SlotEntry(SLOT_KINSTONE_BAG);
-        if (entry != NULL) {
+    /* Slot 0: the trophy takes the bag's well once it is won, and while it
+     * is anywhere in the inventory the bag tier stays off the screen. */
+    if (snap->tingleTrophy == 1) {
+        DrawSlotItem(SLOT_KINSTONE_BAG, ITEM_QST_TINGLE_TROPHY);
+    } else if (snap->tingleTrophy == 0) {
+        u32 tier = KinstoneBagTier(snap);
+        entry = SlotEntry(SLOT_KINSTONE_BAG);
+        if (tier != 0 && entry != NULL) {
             DrawObjFrame(sFrame, SPRITE_PAUSE_MISC, SLOT_FRAME(entry, tier), entry[6], entry[7],
                          SLOT_OAM_EXTRA);
         }
     }
 
-    /* The four elements, placed the way sub_080A5594 places every quest item:
-     * gItemMetaData[item].menuSlot picks the well, and the icon is the item's
-     * own sprite-322 frame (the >= 0x34 arm of sub_080A57F4). */
+    /* Slot 1: the heart-piece well is never empty — no pieces is its own
+     * frame, the empty heart the game shows on a fresh file. */
+    entry = SlotEntry(SLOT_HEART_PIECES);
+    if (entry != NULL) {
+        DrawObjFrame(sFrame, SPRITE_PAUSE_MISC, SLOT_FRAME(entry, snap->heartPieces + 1u), entry[6],
+                     entry[7], SLOT_OAM_EXTRA);
+    }
+
+    /* Slot 2: one scroll frame whatever the count, and the count itself as a
+     * single digit beside it. */
+    entry = SlotEntry(SLOT_SWORD_SKILLS);
+    if (entry != NULL && snap->swordSkills != 0) {
+        DrawObjFrame(sFrame, SPRITE_PAUSE_MISC, SKILL_FRAME(entry), entry[6], entry[7], SLOT_OAM_EXTRA);
+        DrawDigit((int32_t)entry[6] + SKILL_DIGIT_DX, (int32_t)entry[7] + SKILL_DIGIT_DY,
+                  snap->swordSkills);
+    }
+
+    /* Slot 3, both ways sub_080A5594 can fill it: the medal lands there
+     * through the item loop, and the shell counter takes the well when the
+     * medal has not (the loop's own arm covers a medal in the spent state). */
+    if (snap->carlovMedal == 1) {
+        DrawMetaSlotItem(ITEM_QST_CARLOV_MEDAL);
+    } else if (snap->shellsOwned == 1 || (snap->carlovMedal == 0 && snap->shellsOwned != 0)) {
+        entry = SlotEntry(SLOT_SHELLS);
+        DrawMetaSlotItem(ITEM_SHELLS);
+        if (entry != NULL) {
+            u32 shells = snap->shells;
+            int32_t x = (int32_t)entry[6] + SHELL_DIGIT_DX;
+            for (i = 0; i < SHELL_DIGIT_COUNT; i++) {
+                DrawDigit(x, (int32_t)entry[7] + SHELL_DIGIT_DY, shells % 10u);
+                shells /= 10u;
+                x -= 8;
+            }
+        }
+    }
+
+    /* Slots 6-8: the carried quest items, already in tray order. They all
+     * share one menu slot, so the snapshot's order is what places them. */
+    for (i = 0; i < QUEST_TRAY_SLOTS; i++) {
+        DrawSlotItem(SLOT_QUEST_ITEM + (int)i, snap->questItems[i]);
+    }
+
+    /* Slots 9-12 and 13-15: the four elements and the passive gear, each in
+     * the well its own metadata names. */
     for (i = 0; i < 4; i++) {
-        u32 item = (u32)ITEM_EARTH_ELEMENT + i;
-        u32 slot;
-        const u8* entry;
-        if ((snap->elements & (1u << i)) == 0) {
-            continue;
+        if (snap->elements & (1u << i)) {
+            DrawMetaSlotItem((u32)ITEM_EARTH_ELEMENT + i);
         }
-        slot = gItemMetaData[item].menuSlot;
-        entry = SlotEntry((int)slot);
-        if (entry == NULL) {
-            continue;
+    }
+    for (i = 0; i < 3; i++) {
+        if (snap->passives & (1u << i)) {
+            DrawMetaSlotItem((u32)ITEM_GRIP_RING + i);
         }
-        Port_SecondScreenRender_DrawItemIcon(sFrame, QUEST_W, QUEST_H, QUEST_W,
-                                             (int32_t)entry[6] - ICON_BOX_DX,
-                                             (int32_t)entry[7] - ICON_BOX_DY, 1, (uint8_t)item);
     }
 }
 
