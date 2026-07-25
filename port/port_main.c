@@ -23,6 +23,7 @@
 #include "port_rom.h"
 #include "port_rom_picker.h"
 #include "port_runtime_config.h"
+#include "port_second_screen.h"
 #include "port_tts.h"
 #include "port_types.h"
 #include "port_update_check.h"
@@ -494,6 +495,7 @@ int main(int argc, char* argv[]) {
     }
 
     Port_Config_OpenGamepads();
+    Port_SecondScreen_Init();
 
     /* ROM probe deferred — the prelaunch screen (rendered after PPU
      * init below) handles ROM selection via Port_RomPicker_PromptAndInstall.

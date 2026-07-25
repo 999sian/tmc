@@ -445,6 +445,38 @@ void LoadPaletteGroup(u32 group) {
     }
 }
 
+#ifdef PC_PORT
+/* Second-screen HUD (port_second_screen_render.c) needs stable, ROM-level
+ * icon colors independent of whatever's currently sitting in the live,
+ * shared gPaletteBuffer — pause-menu screens reload/repurpose those banks
+ * constantly for different UI contexts, so "read gPaletteBuffer bank N"
+ * would show whatever the *main* screen last put there, not reliably item
+ * icon colors. Mirrors LoadPaletteGroup's single-entry resolution above but
+ * returns a raw pointer instead of DMA'ing into gPaletteBuffer — placed
+ * here (not in port/) because gPaletteGroups/PaletteGroup are file-private
+ * to this translation unit. Only resolves the first chained entry; that's
+ * sufficient for a single 16-color icon palette (icon graphics don't use
+ * multi-group chaining). */
+const u8* Port_GetRawPaletteGroupData(u32 group, u32* outNumColors) {
+    const PaletteGroup* paletteGroup = gPaletteGroups[group];
+    if (paletteGroup == NULL) {
+        if (outNumColors) {
+            *outNumColors = 0;
+        }
+        return NULL;
+    }
+    u32 pg = ROM_U32(*(const u32*)paletteGroup);
+    u32 numPalettes = (pg >> 24) & 0xF;
+    if (numPalettes == 0) {
+        numPalettes = 16;
+    }
+    if (outNumColors) {
+        *outNumColors = numPalettes * 16;
+    }
+    return &gGlobalGfxAndPalettes[(pg & 0xFFFF) * 32];
+}
+#endif
+
 void LoadPalettes(const u8* src, s32 destPaletteNum, s32 numPalettes) {
     u16* dest;
     u32 size = numPalettes * 32;
