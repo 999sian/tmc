@@ -184,6 +184,16 @@ void Port_Config_SetA11yRadar(bool on);
 bool Port_Config_GetA11yWalls(void);
 void Port_Config_SetA11yWalls(bool on);
 
+/* Second-screen (AYN Thor bottom panel) map-behavior toggles — the rows on
+ * that screen's own settings tab. Read by port_second_screen.c each frame,
+ * written from its tap handler. All persisted to config.json, default on. */
+bool Port_Config_GetSecondScreenFollowCam(void);
+void Port_Config_SetSecondScreenFollowCam(bool on);
+bool Port_Config_GetSecondScreenCrestPins(void);
+void Port_Config_SetSecondScreenCrestPins(bool on);
+bool Port_Config_GetSecondScreenFloorReturn(void);
+void Port_Config_SetSecondScreenFloorReturn(bool on);
+
 /* Speedrun practice mode (port_practice.c). Overlay toggles + slow-mo factor
  * (0.05..1.0; 1.0 = normal speed). All persisted to config.json. */
 bool Port_Config_GetPracticeShowTimer(void);
