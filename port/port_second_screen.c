@@ -5,17 +5,20 @@
  * design the project treats as reference — dressed in TMC's own art:
  *
  *   - MAP area top-left, full bleed (no inner box): outdoors the decoded
- *     Hyrule map with a gliding follow-cam (tap toggles the whole-map view,
- *     long press drops/removes a personal pin, windcrest warps draw as
- *     pins); in dungeons the authentic floor map with tappable floor
- *     plaques (preview auto-returns to Link's floor) and a name banner.
- *   - SIDEBAR right: hearts on top, the A/B equip rings in the middle
- *     (tap a ring to arm it, then tap an item to assign that slot), the
- *     rupee/keys chip at the bottom.
- *   - TAB BAR bottom: [GEAR][MAP][ITEMS] plus a square settings button,
- *     all ending well above the Android gesture zone.
- *   - ITEMS / GEAR / SETTINGS tabs replace the map area with menu-style
- *     panels: the 4x4 equip grid, the quest status card, and the
+ *     Hyrule map with a gliding follow-cam (tap toggles the whole-map
+ *     view; from there a tap on a map tile brackets it and zooms into the
+ *     game's own enlarged regional map, windcrest warps draw as pins); in
+ *     dungeons the authentic floor map with tappable floor plaques
+ *     (preview auto-returns to Link's floor) and a name banner.
+ *   - SIDEBAR right: hearts on top, the game's contextual R prompt under
+ *     them (the cue a hidden top HUD would otherwise cost), the A/B equip
+ *     rings in the middle (tap a ring to arm it, then tap an item to
+ *     assign that slot), the rupee/keys chip at the bottom.
+ *   - TAB BAR bottom: [QUEST][MAP][ITEMS] plus a square settings button,
+ *     all in the pause menu's own button plate and all ending well above
+ *     the Android gesture zone.
+ *   - ITEMS / QUEST / SETTINGS tabs replace the map area with menu-style
+ *     panels: the 4x4 equip grid, the quest-status screen, and the
  *     second screen's own toggles (persisted via port_runtime_config).
  *
  * Every metric scales with u = min(w,h)/720 — the same rule (and largely
@@ -39,6 +42,7 @@
 
 #include "port_second_screen.h"
 #include "port_second_screen_dungeonmap.h"
+#include "port_second_screen_quest.h"
 #include "port_second_screen_render.h"
 #include "port_second_screen_state.h"
 #include "port_second_screen_theme.h"
@@ -100,10 +104,12 @@ static const int8_t kDungeonTopFloor[7] = { 2, 3, 3, 5, 2, 7, 5 };
 /*  UI state shared with the tap handler                               */
 /* ------------------------------------------------------------------ */
 
-enum { SS_TAB_MAP = 0, SS_TAB_ITEMS, SS_TAB_GEAR, SS_TAB_SETTINGS };
+enum { SS_TAB_MAP = 0, SS_TAB_ITEMS, SS_TAB_QUEST, SS_TAB_SETTINGS };
 
 /* What a tap target does when hit. arg meaning per action: item id,
- * tab id, ring (1 = A, 2 = B), plaque display-floor index, settings row. */
+ * tab id, ring (1 = A, 2 = B), plaque display-floor index, settings row.
+ * SS_ACT_MAPVIEW is the map's own back affordance (region view -> whole
+ * map, whole map -> follow cam) and carries no argument. */
 enum {
     SS_ACT_ITEM = 1,
     SS_ACT_TAB,
@@ -111,6 +117,7 @@ enum {
     SS_ACT_PLAQUE,
     SS_ACT_SETTING,
     SS_ACT_MAP,
+    SS_ACT_MAPVIEW,
 };
 
 /* Settings rows, top to bottom. The second-screen-only toggles persist
@@ -142,9 +149,14 @@ extern void Port_Config_SetAutosaveEnabled(bool enabled);
 extern void Port_PPU_SetColorCorrection(bool enabled);
 
 #define SS_MAX_TARGETS 48
-#define SS_MAX_PINS 20
 #define SS_NO_FLOOR (-128)
 #define SS_FLOOR_RETURN_TICKS 120 /* 6 s at the 20 Hz paint rate */
+
+/* Map-tile zoom states. The bracket beat exists so the zoom reads without
+ * a cursor: the tapped tile is outlined on the whole map for a moment
+ * (0.35 s at the 20 Hz paint rate) before the regional map replaces it. */
+enum { SS_REGION_OFF = 0, SS_REGION_BRACKET, SS_REGION_VIEW };
+#define SS_REGION_BRACKET_TICKS 7
 
 typedef struct {
     int32_t x0, y0, x1, y1;
@@ -161,8 +173,8 @@ typedef struct {
  * The layout moves with surface size, so hit boxes are captured at paint
  * time and consumed by Port_SecondScreen_OnTap on the JNI thread; the same
  * lock guards the small state that thread mutates (active tab, map view,
- * pins...). Own mutex on Android (not the window mutex): taps must never
- * wait out a whole frame paint. Off Android everything runs on one thread
+ * region zoom...). Own mutex on Android (not the window mutex): taps must
+ * never wait out a whole frame paint. Off Android everything runs on one thread
  * (the host harness), so the lock compiles away. */
 static TapTarget sTapTargets[SS_MAX_TARGETS];
 static int sTapTargetCount = 0;
@@ -180,14 +192,20 @@ static struct {
     uint8_t curDungeon;
     uint32_t lastTick;
     /* Overworld map transform of the last painted frame, so a tap can be
-     * turned back into map-image coordinates (pin placement). */
+     * turned back into map-image coordinates (region picking). */
     uint8_t mapLive;
     float mapOx, mapOy, mapScale, mapU;
     int32_t mapImgW, mapImgH;
-    /* Personal "come back here" pins, world-map image coordinates. */
-    int32_t pinCount;
-    int16_t pinX[SS_MAX_PINS], pinY[SS_MAX_PINS];
-    uint8_t pinsLoaded;
+    /* Map-tile zoom: SS_REGION_* state, the picked tile's region id, and
+     * its rect in world-map image pixels (what the bracket outlines). */
+    uint8_t regionState;
+    int32_t regionId;
+    int32_t regionX0, regionY0, regionX1, regionY1;
+    uint32_t regionTick;
+    /* Set by paint when the zoom grid answers, so the tap handler knows
+     * whether a map tap can zoom at all (stub -> plain follow/whole
+     * toggle, exactly the behavior before the zoom existed). */
+    uint8_t regionGridReady;
 } sUi = { .floorPreview = SS_NO_FLOOR, .playerFloorDisp = SS_NO_FLOOR };
 
 #ifdef __ANDROID__
@@ -319,27 +337,60 @@ static void FillCircle(const SSurf* s, int32_t cx, int32_t cy, int32_t r, uint32
     FillRing(s, cx, cy, r, 0, color);
 }
 
-/* Filled rounded rectangle (quarter-circle corners) — the base stroke of
- * the tab chips; nesting three insets gives border / highlight ring /
- * fill like the game's own map-screen tags. */
-static void FillRoundRect(const SSurf* s, float x0, float y0, float x1, float y1, float r,
-                          uint32_t color) {
+/* Horizontal inset of a rounded rect's edge at scanline center `yc`. */
+static float RoundRectInset(float y0, float y1, float r, float yc) {
+    float dy = 0;
+    if (yc < y0 + r) {
+        dy = y0 + r - yc;
+    } else if (yc > y1 - r) {
+        dy = yc - (y1 - r);
+    }
+    if (dy <= 0) {
+        return 0;
+    }
+    float t2 = r * r - dy * dy;
+    return r - (t2 > 0 ? sqrtf(t2) : 0);
+}
+
+static float ClampRadius(float x0, float y0, float x1, float y1, float r) {
     if (r < 0) r = 0;
     if (r > (y1 - y0) / 2) r = (y1 - y0) / 2;
     if (r > (x1 - x0) / 2) r = (x1 - x0) / 2;
+    return r;
+}
+
+/* Filled rounded rectangle (quarter-circle corners) — the base stroke of
+ * the menu button plate; nesting insets gives keyline / keyline / fill
+ * like the game's own SLEEP/SAVE buttons. */
+static void FillRoundRect(const SSurf* s, float x0, float y0, float x1, float y1, float r,
+                          uint32_t color) {
+    r = ClampRadius(x0, y0, x1, y1, r);
     for (int32_t y = (int32_t)y0; y < (int32_t)y1; y++) {
-        float dy = 0;
-        if (y + 0.5f < y0 + r) {
-            dy = y0 + r - (y + 0.5f);
-        } else if (y + 0.5f > y1 - r) {
-            dy = (y + 0.5f) - (y1 - r);
-        }
-        float dx = 0;
-        if (dy > 0) {
-            float t2 = r * r - dy * dy;
-            dx = r - (t2 > 0 ? sqrtf(t2) : 0);
-        }
+        float dx = RoundRectInset(y0, y1, r, y + 0.5f);
         FillRect(s, (int32_t)(x0 + dx), y, (int32_t)(x1 - dx + 0.5f), y + 1, color);
+    }
+}
+
+/* Rounded-rect keyline of thickness t, drawn without touching what it
+ * encloses — so it can be laid over already-composed art (the active
+ * tab's gold line over the button plate, the map's tile bracket). */
+static void StrokeRoundRect(const SSurf* s, float x0, float y0, float x1, float y1, float r, float t,
+                            uint32_t color) {
+    if (t <= 0 || x1 - x0 <= 2 * t || y1 - y0 <= 2 * t) {
+        return;
+    }
+    float ro = ClampRadius(x0, y0, x1, y1, r);
+    float ri = ClampRadius(x0 + t, y0 + t, x1 - t, y1 - t, r - t);
+    for (int32_t y = (int32_t)y0; y < (int32_t)y1; y++) {
+        float yc = y + 0.5f;
+        float dxo = RoundRectInset(y0, y1, ro, yc);
+        if (yc < y0 + t || yc > y1 - t) {
+            FillRect(s, (int32_t)(x0 + dxo), y, (int32_t)(x1 - dxo + 0.5f), y + 1, color);
+            continue;
+        }
+        float dxi = t + RoundRectInset(y0 + t, y1 - t, ri, yc);
+        FillRect(s, (int32_t)(x0 + dxo), y, (int32_t)(x0 + dxi + 0.5f), y + 1, color);
+        FillRect(s, (int32_t)(x1 - dxi), y, (int32_t)(x1 - dxo + 0.5f), y + 1, color);
     }
 }
 
@@ -570,12 +621,64 @@ static void DrawAmmoCount(const SSurf* s, int32_t x, int32_t y, int32_t scale, u
 }
 
 /* ------------------------------------------------------------------ */
+/*  Menu button (tab bar + R glyph plate)                              */
+/* ------------------------------------------------------------------ */
+
+/* The pause menu's SLEEP/SAVE button, procedurally: pale near-white
+ * plate, slate-blue outer keyline, a paler blue keyline inside it, blue
+ * lettering. Only the stand-in for Port_SecondScreenTheme_DrawMenuButton
+ * until that art decodes — same rect, same height, and `pressed` changes
+ * nothing but the plate's shading, so a button never moves or resizes
+ * between its states. Every tone is mixed from the decoded banner/menu
+ * palette rather than invented. */
+static void DrawButtonPlateFallback(const SSurf* s, float x0, float y0, float x1, float y1, int pressed,
+                                    int32_t bts) {
+    uint32_t navy = Port_SecondScreenTheme_Color(SSC_BANNER_NAVY);
+    uint32_t white = Port_SecondScreenTheme_Color(SSC_MENU_WHITE);
+    float bt = (float)bts;
+    float r = 5.0f * bts;
+    /* Pressed reads as the plate sinking: the interior takes a touch more
+     * of the keyline's blue and the inner keyline brightens to white. */
+    uint32_t keyline = MixColor(navy, white, 96);
+    uint32_t inner = pressed ? white : MixColor(white, navy, 40);
+    uint32_t fill = MixColor(white, navy, pressed ? 34u : 6u);
+    FillRoundRect(s, x0, y0, x1, y1, r, keyline);
+    FillRoundRect(s, x0 + bt, y0 + bt, x1 - bt, y1 - bt, r - bt, inner);
+    FillRoundRect(s, x0 + 2 * bt, y0 + 2 * bt, x1 - 2 * bt, y1 - 2 * bt, r - 2 * bt, fill);
+}
+
+/* One tab-bar-style button: the game's own art when it decodes, the
+ * stand-in plate otherwise, plus (for the tab that owns the panel) a thin
+ * gold keyline inside the plate edge. Label drawing stays on this side
+ * only for the fallback — the authentic call letters its own button. */
+static void DrawMenuButton(const SSurf* s, float x0, float y0, float x1, float y1, const char* label,
+                           int pressed, int accent, float u, int32_t ts) {
+    int32_t bts = (int32_t)((y1 - y0) / 26.0f);
+    if (bts < 1) bts = 1;
+    if (bts > ts) bts = ts;
+
+    if (!Port_SecondScreenTheme_DrawMenuButton(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)y0,
+                                               (int32_t)(x1 - x0), (int32_t)(y1 - y0), label, pressed)) {
+        DrawButtonPlateFallback(s, x0, y0, x1, y1, pressed, bts);
+        if (label != NULL && label[0] != '\0') {
+            int32_t ms = (int32_t)(1.8f * u);
+            if (ms < 1) ms = 1;
+            MenuTextCentered(s, label, (x0 + x1) / 2.0f, (y0 + y1) / 2.0f, ms, SS_TEXT_NAVY);
+        }
+    }
+    if (accent) {
+        StrokeRoundRect(s, x0 + 2 * bts, y0 + 2 * bts, x1 - 2 * bts, y1 - 2 * bts, 4.0f * bts,
+                        (float)bts, Port_SecondScreenTheme_Color(SSC_GOLD));
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Pin + cog pixel art                                                */
 /* ------------------------------------------------------------------ */
 
-/* A pinned spot: a little pennant on a pole, foot at the marked spot —
- * drawn on a pixel grid so it sits next to the decoded HUD art instead of
- * looking like a vector overlay. (Original art, from the reference mod.) */
+/* A windcrest warp point: a little pennant on a pole, foot at the marked
+ * spot — drawn on a pixel grid so it sits next to the decoded HUD art
+ * instead of looking like a vector overlay. (Original art.) */
 static const char* const kPinArt[12] = {
     "########", "########", "#######.", "######..", "#####...", "###.....",
     "##......", "##......", "##......", "##......", "##......", "##......",
@@ -597,44 +700,6 @@ static const char* const kCogArt[9] = {
     ".###.....", "#########", ".###.....", ".....###.", "#########",
     ".....###.", "..###....", "#########", "..###....",
 };
-
-/* ------------------------------------------------------------------ */
-/*  Pins persistence                                                   */
-/* ------------------------------------------------------------------ */
-
-/* Pins live in second_screen_pins.txt next to config.json (the port
- * chdir()s to its data dir at startup), one "x,y" map-image coordinate
- * pair per line — human-fixable, like the reference's map_pins.txt. */
-static const char* kPinsFile = "second_screen_pins.txt";
-
-static void LoadPinsLocked(void) {
-    sUi.pinsLoaded = 1;
-    FILE* f = fopen(kPinsFile, "r");
-    if (f == NULL) {
-        return;
-    }
-    int x, y;
-    while (sUi.pinCount < SS_MAX_PINS && fscanf(f, "%d,%d", &x, &y) == 2) {
-        if (x < 0 || y < 0 || x > 4096 || y > 4096) {
-            continue;
-        }
-        sUi.pinX[sUi.pinCount] = (int16_t)x;
-        sUi.pinY[sUi.pinCount] = (int16_t)y;
-        sUi.pinCount++;
-    }
-    fclose(f);
-}
-
-static void SavePins(const int16_t* xs, const int16_t* ys, int count) {
-    FILE* f = fopen(kPinsFile, "w");
-    if (f == NULL) {
-        return;
-    }
-    for (int i = 0; i < count; i++) {
-        fprintf(f, "%d,%d\n", xs[i], ys[i]);
-    }
-    fclose(f);
-}
 
 /* ------------------------------------------------------------------ */
 /*  Target list                                                        */
@@ -804,10 +869,32 @@ static void BlitMapRegion(const SSurf* s, const uint32_t* img, int32_t imgW, int
     }
 }
 
+/* A small dark message chip with a banner-font word — the furniture the
+ * game floats over its own map screen. Used for the map's view/back
+ * affordance. Returns the rect it covered so callers can make it tappable. */
+static void DrawMapChip(const SSurf* s, const char* label, float cx, float cyBottom, float u, float* out) {
+    int32_t ms = (int32_t)(1.6f * u);
+    if (ms < 1) ms = 1;
+    int32_t tw = MenuTextWidth(label, ms);
+    float ch = MENU_TEXT_BOX * ms + 16 * u;
+    float x0 = cx - tw / 2.0f - 18 * u, x1 = cx + tw / 2.0f + 18 * u;
+    float y1 = cyBottom, y0 = y1 - ch;
+    int32_t cts = (int32_t)(ch / 24.0f);
+    if (cts < 1) cts = 1;
+    Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)y0,
+                                    (int32_t)(x1 - x0), (int32_t)(y1 - y0), cts, SS_CHIP_DARK);
+    MenuTextCentered(s, label, cx, (y0 + y1) / 2.0f, ms, SS_TEXT_WHITE);
+    out[0] = x0;
+    out[1] = y0;
+    out[2] = x1;
+    out[3] = y1;
+}
+
 /* The interactive overworld map, full-bleed in the map area: a gliding
  * follow-cam centered on Link, tap to toggle the whole-map fitted view,
- * long press to drop/remove a personal pin; windcrest warp points draw as
- * small pins. While Link is indoors the marker holds the doorway fix. */
+ * and from the whole view a tap on a map tile brackets it and zooms into
+ * that region; windcrest warp points draw as small pins. While Link is
+ * indoors the marker holds the doorway fix. */
 static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl, float rx0,
                            float ry0, float rx1, float ry1, float u, uint32_t tick, int wholeMap,
                            int followCfg, int crestCfg, uint32_t tickForPulse) {
@@ -879,7 +966,7 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
                   (int32_t)ry1);
 
     /* Active kinstone-fusion markers — the red checks the pause map
-     * stamps — right above the map art, below every pin and the player
+     * stamps — right above the map art, below the crest pins and the player
      * marker. Both worldmap calls degrade to 0 while their data/sprite
      * isn't decodable, and the markers simply skip that frame. */
     {
@@ -921,23 +1008,6 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
         }
     }
 
-    /* The player's own pins, gold, above the windcrests. */
-    int pinCount;
-    int16_t pinX[SS_MAX_PINS], pinY[SS_MAX_PINS];
-    UI_LOCK();
-    pinCount = sUi.pinCount;
-    memcpy(pinX, sUi.pinX, sizeof(pinX));
-    memcpy(pinY, sUi.pinY, sizeof(pinY));
-    UI_UNLOCK();
-    for (int i = 0; i < pinCount; i++) {
-        float px = ox + (pinX[i] + 0.5f) * sCam.scale;
-        float py = oy + (pinY[i] + 0.5f) * sCam.scale;
-        if (px >= rx0 && px < rx1 && py >= ry0 && py < ry1) {
-            DrawPin(s, px, py, (wantWhole ? 0.9f : 1.1f) * u, Port_SecondScreenTheme_Color(SSC_GOLD),
-                    Port_SecondScreenTheme_Color(SSC_MENU_INK));
-        }
-    }
-
     /* Player marker: a pulsing gold diamond (live it also blinks white,
      * like the game's own map dot; the frozen doorway fix holds steady). */
     if (sLastFix.valid) {
@@ -952,28 +1022,47 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
         DrawMapMarker(s, (int32_t)px, (int32_t)py, base, c);
     }
 
-    /* A hold-to-pin nudge along the bottom edge, since nothing else hints
-     * at it; it goes away as soon as the player has a pin anywhere. Uses
-     * the pause menu's dark name chip — the same furniture the game
-     * floats over its own map screen. */
-    if (pinCount == 0) {
-        const char* hint = "HOLD TO PIN";
-        int32_t ms = (int32_t)(1.6f * u);
-        if (ms < 1) ms = 1;
-        int32_t hw = MenuTextWidth(hint, ms);
-        float cx = (rx0 + rx1) / 2.0f;
-        float ch = MENU_TEXT_BOX * ms + 16 * u;
-        int32_t cts = (int32_t)(ch / 24.0f);
-        if (cts < 1) cts = 1;
-        float bx0 = cx - hw / 2.0f - 18 * u, bx1 = cx + hw / 2.0f + 18 * u;
-        float by1 = ry1 - 12 * u, by0 = by1 - ch;
-        Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)bx0, (int32_t)by0,
-                                        (int32_t)(bx1 - bx0), (int32_t)(by1 - by0), cts, SS_CHIP_DARK);
-        MenuTextCentered(s, hint, cx, (by0 + by1) / 2.0f, ms, SS_TEXT_WHITE);
+    /* Zoom-grid availability, asked once per frame at the view center: the
+     * map screen's own tile grid answering means a tap can zoom, which is
+     * also what decides whether the view chip below is worth showing. */
+    int32_t probeRegion, probeRect[4];
+    int gridReady = Port_SecondScreenWorldMap_GetRegionAt(
+        WMAP_CROP_X0 + (int32_t)(cw / 2), WMAP_CROP_Y0 + (int32_t)(chh / 2), &probeRegion, &probeRect[0],
+        &probeRect[1], &probeRect[2], &probeRect[3]);
+
+    /* The tapped tile, bracketed on the map for a beat before the zoom —
+     * the game's cursor brackets are the model, so the zoom reads as a
+     * place you picked rather than a view that just swapped. */
+    uint8_t regionState;
+    float br[4];
+    uint32_t sinceTap;
+    UI_LOCK();
+    regionState = sUi.regionState;
+    br[0] = (float)sUi.regionX0;
+    br[1] = (float)sUi.regionY0;
+    br[2] = (float)sUi.regionX1;
+    br[3] = (float)sUi.regionY1;
+    sinceTap = tick - sUi.regionTick;
+    UI_UNLOCK();
+    if (regionState == SS_REGION_BRACKET) {
+        float bx0 = ox + br[0] * sCam.scale, by0 = oy + br[1] * sCam.scale;
+        float bx1 = ox + br[2] * sCam.scale, by1 = oy + br[3] * sCam.scale;
+        float t = (float)u;
+        if (t < 1) t = 1;
+        StrokeRoundRect(s, bx0 - t, by0 - t, bx1 + t, by1 + t, 2 * t, t,
+                        Port_SecondScreenTheme_Color(SSC_MENU_INK));
+        StrokeRoundRect(s, bx0, by0, bx1, by1, 2 * t, t, Port_SecondScreenTheme_Color(SSC_GOLD));
+        if (sinceTap >= SS_REGION_BRACKET_TICKS) {
+            UI_LOCK();
+            if (sUi.regionState == SS_REGION_BRACKET) {
+                sUi.regionState = SS_REGION_VIEW;
+            }
+            UI_UNLOCK();
+        }
     }
 
-    /* Publish the transform for the tap handler (pin placement) and the
-     * map rect as one big toggle target. */
+    /* Publish the transform (a tap becomes map-image coordinates for the
+     * tile pick) and the map rect as one big view target. */
     UI_LOCK();
     sUi.mapLive = 1;
     sUi.mapOx = ox;
@@ -982,8 +1071,55 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
     sUi.mapU = u;
     sUi.mapImgW = imgW;
     sUi.mapImgH = imgH;
+    sUi.regionGridReady = (uint8_t)(gridReady != 0);
     UI_UNLOCK();
+
+    /* Once tiles are tappable a plain tap zooms, so the way back to the
+     * follow cam gets its own chip — added ahead of the map's own target
+     * so it wins the hit test. Before that the map keeps exactly the bare
+     * tap-to-toggle it always had, with nothing extra on it. */
+    if (gridReady && wantWhole && followCfg && sLastFix.valid) {
+        float chip[4];
+        DrawMapChip(s, "FOLLOW", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
+        AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_MAPVIEW, 0);
+    }
     AddTarget(tl, rx0, ry0, rx1, ry1, SS_ACT_MAP, 0);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Regional map (MAP tab, after a tile zoom)                          */
+/* ------------------------------------------------------------------ */
+
+/* The enlarged map of one zoom-grid tile — the screen the game opens when
+ * the player puts the map cursor on a tile — filling the map area, with
+ * Link's marker where that region places him and a BACK chip in the
+ * game's own chip furniture. Returns 0 when the region can't be drawn, and
+ * the caller simply stays on the world map (so a not-ready art module can
+ * never leave the panel on a blank view). */
+static int PaintRegion(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl, float rx0,
+                       float ry0, float rx1, float ry1, float u, uint32_t tick, int32_t region) {
+    int32_t dx = (int32_t)rx0, dy = (int32_t)ry0;
+    int32_t dw = (int32_t)(rx1 - rx0), dh = (int32_t)(ry1 - ry0);
+    if (dw <= 0 || dh <= 0 ||
+        !Port_SecondScreenWorldMap_DrawRegion(s->px, s->w, s->h, s->stride, dx, dy, dw, dh, region)) {
+        return 0;
+    }
+
+    int32_t px, py;
+    if (Port_SecondScreenWorldMap_LocateInRegion(region, snap->area, snap->playerX, snap->playerY, dw, dh,
+                                                 &px, &py)) {
+        int32_t base = (int32_t)(7.0f * u);
+        uint32_t gold = Port_SecondScreenTheme_Color(SSC_GOLD);
+        DrawMapMarker(s, dx + px, dy + py, base, (tick & 8) ? RGB(0xF8, 0xF8, 0xF8) : gold);
+    }
+
+    float chip[4];
+    DrawMapChip(s, "BACK", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
+    AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_MAPVIEW, 0);
+    /* Anywhere else on the region map goes back too — the same "tap again"
+     * gesture that opened it. */
+    AddTarget(tl, rx0, ry0, rx1, ry1, SS_ACT_MAP, 0);
+    return 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1230,17 +1366,28 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 }
 
 /* ------------------------------------------------------------------ */
-/*  Gear panel (quest status)                                          */
+/*  Quest status panel                                                 */
 /* ------------------------------------------------------------------ */
 
-/* GEAR tab: TMC quest status — the four elements, the kinstone bag and
- * fusion tally, the figurine collection, and (inside a dungeon) that
- * dungeon's map/compass/big-key haul with its key count. Same row grammar
- * as the settings tab (recessed well, ink label left, content right) so
- * the two info panels read as one family — and as the quest-status
- * screen's own slab-and-wells look. */
-static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
-                           float rx1, float ry1, float u, int32_t ts) {
+/* One quest row: recessed well, ink label on the left; the caller fills
+ * the right side. Returns the row's vertical middle. */
+static float DrawQuestRow(const SSurf* s, const char* label, float rl, float rr, float rowY, float rowH,
+                          float u, int32_t lms, int32_t wts) {
+    float cyMid = rowY + rowH / 2;
+    Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)rl, (int32_t)rowY,
+                                    (int32_t)(rr - rl), (int32_t)rowH, wts);
+    MenuTextDraw(s, label, (int32_t)(rl + 22 * u), (int32_t)(cyMid - 8 * lms), lms, SS_TEXT_INK);
+    return cyMid;
+}
+
+/* Stand-in quest status, for while the real screen isn't decodable: the
+ * four elements, the kinstone bag and fusion tally, the figurine
+ * collection, and (inside a dungeon) that dungeon's map/compass/big-key
+ * haul with its key count. Same row grammar as the settings tab (recessed
+ * well, ink label left, content right) so the two info panels read as one
+ * family — and as the quest screen's own slab-and-wells look. */
+static void PaintQuestFallback(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
+                               float rx1, float ry1, float u, int32_t ts) {
     Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
                                      (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
     float inset = 12 * ts;
@@ -1254,7 +1401,7 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
     int32_t ck = (int32_t)(2.2f * u); /* HUD digit scale for the counters */
     if (ck < 1) ck = 1;
 
-    DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "QUEST", hms, u);
+    DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "QUEST STATUS", hms, u);
 
     int isDungeon = (snap->areaFlags & (SECOND_SCREEN_AR_IS_DUNGEON | SECOND_SCREEN_AR_HAS_KEYS)) != 0;
     float rowH = 96 * u, gap = 18 * u;
@@ -1262,18 +1409,9 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
     float rl = ix0 + 10 * u, rr = ix1 - 10 * u;
     int32_t wts = ts > 3 ? 3 : ts; /* well rim scale for the rows */
 
-    /* Shared row scaffolding: one recessed well per row, ink label left;
-     * content is right-aligned by each block below. */
-#define GEAR_ROW(label)                                                                                 \
-    float cyMid = rowY + rowH / 2;                                                                      \
-    Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)rl, (int32_t)rowY,           \
-                                    (int32_t)(rr - rl), (int32_t)rowH, wts);                            \
-    MenuTextDraw(s, label, (int32_t)(rl + 22 * u), (int32_t)(cyMid - 8 * lms), lms, SS_TEXT_INK);       \
-    rowY += rowH + gap;
-
     /* Row 1: elements, in the idle emblem's own hues. */
     {
-        GEAR_ROW("ELEMENTS");
+        float cyMid = DrawQuestRow(s, "ELEMENTS", rl, rr, rowY, rowH, u, lms, wts);
         static const uint32_t kElemCols[4] = { COL_ELEM_EARTH, COL_ELEM_FIRE, COL_ELEM_WATER,
                                                COL_ELEM_WIND };
         int32_t r = (int32_t)(18 * u);
@@ -1287,12 +1425,13 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
             FillDiamond(s, ex, (int32_t)cyMid, r + (int32_t)u, ink);
             FillDiamond(s, ex, (int32_t)cyMid, r, c);
         }
+        rowY += rowH + gap;
     }
 
     /* Row 2: kinstones — bag count with the piece icon, then the fusion
      * tally, laid right-to-left from the row edge. */
     {
-        GEAR_ROW("KINSTONES");
+        float cyMid = DrawQuestRow(s, "KINSTONES", rl, rr, rowY, rowH, u, lms, wts);
         int32_t cy = (int32_t)(cyMid - 8 * ck);
         uint32_t bag = snap->kinstoneBag > 999 ? 999 : snap->kinstoneBag;
         int32_t xl = DrawHudNumber(s, (int32_t)(rr - 24 * u), cy, ck, snap->kinstoneFused, 1, 0);
@@ -1301,18 +1440,20 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
         xl = DrawHudNumber(s, xl - (int32_t)(40 * u), cy, ck, bag, 1, 0);
         Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, xl - 16 * ck - 4, cy, ck,
                                              ITEMID_KINSTONE);
+        rowY += rowH + gap;
     }
 
     /* Row 3: figurine collection. */
     {
-        GEAR_ROW("FIGURINES");
+        float cyMid = DrawQuestRow(s, "FIGURINES", rl, rr, rowY, rowH, u, lms, wts);
         DrawHudNumber(s, (int32_t)(rr - 24 * u), (int32_t)(cyMid - 8 * ck), ck, snap->figurineCount, 1,
                       0);
+        rowY += rowH + gap;
     }
 
     /* Row 4 (dungeons only): keys + the dungeon inventory pips. */
     if (isDungeon) {
-        GEAR_ROW("DUNGEON");
+        float cyMid = DrawQuestRow(s, "DUNGEON", rl, rr, rowY, rowH, u, lms, wts);
         int32_t cy = (int32_t)(cyMid - 8 * ck);
         static const uint8_t kPipItems[3] = { ITEMID_DUNGEON_MAP, ITEMID_COMPASS, ITEMID_BIG_KEY };
         static const uint8_t kPipBits[3] = { 1, 2, 4 };
@@ -1330,7 +1471,16 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
         int32_t xl = DrawHudNumber(s, (int32_t)(px - 28 * u), cy, ck, snap->dungeonKeys, 1, 0);
         BlitSprite(s, Port_SecondScreenTheme_Get(SST_KEY), xl - 16 * ck - 4, cy, ck);
     }
-#undef GEAR_ROW
+}
+
+/* QUEST tab: the pause menu's own quest-status screen when its art module
+ * can draw it, the row stand-in above until then. */
+static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
+                            float rx1, float ry1, float u, int32_t ts, uint32_t tick) {
+    if (!Port_SecondScreenQuest_Draw(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
+                                     (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), snap, tick)) {
+        PaintQuestFallback(s, snap, rx0, ry0, rx1, ry1, u, ts);
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1461,8 +1611,14 @@ static void DrawItemRing(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     FillCircle(s, (int32_t)cx, (int32_t)cy, (int32_t)r,
                Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK));
 
-    /* Icon first, rings after: a big icon's corners tuck under the gold
-     * band instead of poking out of the disc. */
+    /* Icon first, rings after, and sized to fit INSIDE the gold band: the
+     * item art is a 16x16 square, so what has to clear the band is its
+     * diagonal, not its side (owner feedback — icons with corner ink, like
+     * the sword, poked out of the ring). The innermost band edge sits at
+     * r - 6u; keep a pixel of daylight inside that, then take the largest
+     * integer nearest-neighbor scale whose circumscribed circle still
+     * fits. Capped like the item grid, which also keeps the icon clear of
+     * the shoulder badge. */
     uint8_t itemId = isA ? snap->equippedA : snap->equippedB;
     if (itemId >= ITEMID_BOTTLE1 && itemId < ITEMID_BOTTLE1 + 4) {
         uint8_t content = snap->bottleContents[itemId - ITEMID_BOTTLE1];
@@ -1471,8 +1627,10 @@ static void DrawItemRing(const SSurf* s, const SecondScreenSnapshot* snap, Targe
         }
     }
     if (itemId != 0) {
-        int32_t iconScale = (int32_t)(r * 1.5f / 16.0f);
+        float rFit = r - 7.0f * u;
+        int32_t iconScale = (int32_t)(rFit / (8.0f * 1.41421356f));
         if (iconScale < 1) iconScale = 1;
+        if (iconScale > 6) iconScale = 6; /* GBA icons turn to mush past 6x */
         Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, (int32_t)(cx - 8 * iconScale),
                                              (int32_t)(cy - 8 * iconScale), iconScale, itemId);
     }
@@ -1481,11 +1639,12 @@ static void DrawItemRing(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)(r - 3 * u), (int32_t)(r - 4.5f * u), goldDim);
     FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)(r - 4.5f * u), (int32_t)(r - 6 * u), gold);
 
-    /* Button badge on the ring's top-right shoulder. */
+    /* Button badge on the ring's top-right shoulder, sized to sit ON the
+     * band rather than reach into the icon's space. */
     const SecondScreenThemeSprite* badge = Port_SecondScreenTheme_Get(isA ? SST_BUTTON_A : SST_BUTTON_B);
     float bx = cx + r * 0.71f, by = cy - r * 0.71f;
     if (badge != NULL) {
-        int32_t bs = (int32_t)(r * 0.75f / badge->w + 0.5f);
+        int32_t bs = (int32_t)(r * 0.6f / badge->w + 0.5f);
         if (bs < 1) bs = 1;
         BlitSprite(s, badge, (int32_t)(bx - badge->w * bs / 2.0f), (int32_t)(by - badge->h * bs / 2.0f),
                    bs);
@@ -1502,9 +1661,72 @@ static void DrawItemRing(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     AddTarget(tl, cx - r, cy - r, cx + r, cy + r, SS_ACT_RING, isA ? 1 : 2);
 }
 
-/* Sidebar, right edge: hearts on top (the most-glanced info), the A/B
- * equip rings centered in the middle, the rupee/keys chip anchored to the
- * bottom, just above the tab bar. */
+/* ------------------------------------------------------------------ */
+/*  R-button prompt                                                    */
+/* ------------------------------------------------------------------ */
+
+/* The words the HUD's own prompt art spells, by ActionRButton value
+ * (include/player.h). Only the lettering stand-in: once the theme can
+ * stamp the real label frames this table stops being reached. */
+static const char* const kRActionWords[] = {
+    NULL,  "CANCEL", "DROP", "THROW",  "READ", "CHECK", "OPEN",
+    "SPEAK", "GRAB", "LIFT", "GROW", "SHRINK", "ROLL",
+};
+
+/* The game's contextual R prompt, on the panel because the player may be
+ * running with the top HUD hidden. Laid out in a band whose height never
+ * changes, so nothing below it moves when the prompt comes and goes; the
+ * band simply stays empty when there is no action. Authentic art first
+ * (the HUD's R glyph + the game's own label frame), then the panel's own
+ * button plate lettered R plus the word in the banner font. */
+static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float x, float y, float w,
+                        float bandH, float u, int32_t ts) {
+    if (snap->rActionFrame == 0) {
+        return;
+    }
+    int32_t ms = (int32_t)(1.5f * u);
+    if (ms < 1) ms = 1;
+    float gh = bandH - 6 * u; /* glyph height */
+    float gw = gh * 1.35f;    /* shoulder buttons are wider than tall */
+    float cy = y + bandH / 2;
+
+    const char* word = NULL;
+    if (snap->rActionId < (uint8_t)(sizeof(kRActionWords) / sizeof(kRActionWords[0]))) {
+        word = kRActionWords[snap->rActionId];
+    }
+
+    /* Glyph + label center in the sidebar as one unit. The block is laid
+     * out on the lettered width; the art path draws at the same origin
+     * (its frames are the same words at a comparable size), so the two
+     * paths land in the same place. */
+    int32_t scale = (int32_t)(gh / 16.0f);
+    if (scale < 1) scale = 1;
+    float labelW = word != NULL ? (float)MenuTextWidth(word, ms) : 0.0f;
+    float gap = 8 * u;
+    float total = gw + (labelW > 0 ? gap + labelW : 0);
+    float gx = x + (w - total) / 2;
+    if (gx < x) gx = x;
+
+    if (!Port_SecondScreenTheme_DrawRButton(s->px, s->w, s->h, s->stride, (int32_t)gx,
+                                            (int32_t)(cy - gh / 2), scale)) {
+        int32_t bts = (int32_t)(gh / 26.0f);
+        if (bts < 1) bts = 1;
+        if (bts > ts) bts = ts;
+        DrawButtonPlateFallback(s, gx, cy - gh / 2, gx + gw, cy + gh / 2, 0, bts);
+        MenuTextCentered(s, "R", gx + gw / 2, cy, ms, SS_TEXT_NAVY);
+    }
+
+    float lx = gx + gw + gap;
+    if (Port_SecondScreenTheme_DrawActionLabel(s->px, s->w, s->h, s->stride, (int32_t)lx,
+                                               (int32_t)(cy - gh / 2), scale, snap->rActionFrame) == 0 &&
+        word != NULL) {
+        MenuTextDraw(s, word, (int32_t)lx, (int32_t)(cy - 8 * ms), ms, SS_TEXT_INK);
+    }
+}
+
+/* Sidebar, right edge: hearts on top (the most-glanced info), the R
+ * prompt band under them, the A/B equip rings centered in the middle, the
+ * rupee/keys chip anchored to the bottom, just above the tab bar. */
 static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl, float x,
                          float y, float w, float h, float u, int32_t ts, uint32_t tick, int armedRing) {
     int isDungeon = (snap->areaFlags & SECOND_SCREEN_AR_HAS_KEYS) != 0;
@@ -1544,6 +1766,12 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
         }
     }
     float vitalsBottom = hy + rows * 8 * hk + 4 * u;
+
+    /* R prompt band, reserved whether or not there is a prompt so the
+     * rings below never shift when one appears. */
+    float rBandH = 34 * u;
+    DrawRPrompt(s, snap, x, vitalsBottom, w, rBandH, u, ts);
+    vitalsBottom += rBandH;
 
     /* Counters chip anchored to the bottom: rupees always, keys inside
      * key-bearing areas — a recessed stone well like the slab's tray.
@@ -1592,41 +1820,20 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
 /*  Tab bar                                                            */
 /* ------------------------------------------------------------------ */
 
+/* One tab: the pause menu's labelled button (9.png's SLEEP/SAVE plate).
+ * The tab that owns the panel is the SAME button at the SAME geometry,
+ * drawn in the button's own pressed state and wearing a thin gold keyline
+ * — owner feedback: the old red chip differed in look and height from its
+ * neighbours. */
 static void DrawTabButton(const SSurf* s, TargetList* tl, float x0, float y0, float x1, float y1,
                           const char* label, int active, int tabId, float u, int32_t ts) {
-    int32_t bts = (int32_t)((y1 - y0) / 26.0f);
-    if (bts < 1) bts = 1;
-    if (bts > ts) bts = ts;
-    if (active) {
-        /* Active tab: the pause menu's red header chip, as before. */
-        Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)y0,
-                                        (int32_t)(x1 - x0), (int32_t)(y1 - y0), bts, SS_CHIP_RED);
-    } else {
-        /* Idle tabs: the map screen's own tag language (the lavender
-         * "MAP" corner chip / L-R bubbles) — dark navy border, white
-         * highlight ring, pale lavender fill, all from the decoded
-         * banner palette rather than invented hues. */
-        uint32_t navy = Port_SecondScreenTheme_Color(SSC_BANNER_NAVY);
-        uint32_t white = Port_SecondScreenTheme_Color(SSC_MENU_WHITE);
-        float bt = (float)bts;
-        float r = 5.0f * bts;
-        FillRoundRect(s, x0, y0, x1, y1, r, navy);
-        FillRoundRect(s, x0 + bt, y0 + bt, x1 - bt, y1 - bt, r - bt, white);
-        FillRoundRect(s, x0 + 2 * bt, y0 + 2 * bt, x1 - 2 * bt, y1 - 2 * bt, r - 2 * bt,
-                      MixColor(white, navy, 22));
-    }
-    if (label != NULL) {
-        int32_t ms = (int32_t)(1.8f * u);
-        if (ms < 1) ms = 1;
-        MenuTextCentered(s, label, (x0 + x1) / 2.0f, (y0 + y1) / 2.0f, ms,
-                         active ? SS_TEXT_WHITE : SS_TEXT_NAVY);
-    }
+    DrawMenuButton(s, x0, y0, x1, y1, label, active, active, u, ts);
     AddTarget(tl, x0, y0, x1, y1, SS_ACT_TAB, (uint8_t)tabId);
 }
 
-/* Bottom tab bar: [GEAR][MAP][ITEMS] + the square settings button. The
- * 34u dead band underneath keeps every button clear of the Android
- * gesture zone (~30 real px). */
+/* Bottom tab bar: [QUEST][MAP][ITEMS] + the square settings button, all
+ * one button family at one height. The 34u dead band underneath keeps
+ * every button clear of the Android gesture zone (~30 real px). */
 static void PaintTabBar(const SSurf* s, TargetList* tl, float u, int32_t ts, int activeTab) {
     float tabH = 96 * u;
     float y = s->h - tabH + 4 * u;
@@ -1637,16 +1844,17 @@ static void PaintTabBar(const SSurf* s, TargetList* tl, float u, int32_t ts, int
     float x0 = 8 * u, xr = sx0 - 8 * u, gap = 8 * u;
     float bw = (xr - x0 - 2 * gap) / 3.0f;
 
-    DrawTabButton(s, tl, x0, y, x0 + bw, y + bh, "GEAR", activeTab == SS_TAB_GEAR, SS_TAB_GEAR, u, ts);
+    DrawTabButton(s, tl, x0, y, x0 + bw, y + bh, "QUEST", activeTab == SS_TAB_QUEST, SS_TAB_QUEST, u, ts);
     DrawTabButton(s, tl, x0 + bw + gap, y, x0 + 2 * bw + gap, y + bh, "MAP", activeTab == SS_TAB_MAP,
                   SS_TAB_MAP, u, ts);
     DrawTabButton(s, tl, x0 + 2 * (bw + gap), y, x0 + 3 * bw + 2 * gap, y + bh, "ITEMS",
                   activeTab == SS_TAB_ITEMS, SS_TAB_ITEMS, u, ts);
-    DrawTabButton(s, tl, sx0, y, sx1, y + bh, NULL, activeTab == SS_TAB_SETTINGS, SS_TAB_SETTINGS, u, ts);
+    /* Settings keeps its cog glyph instead of a word, on the same plate —
+     * an empty label, not a null one, so the art path never has to guess. */
+    DrawTabButton(s, tl, sx0, y, sx1, y + bh, "", activeTab == SS_TAB_SETTINGS, SS_TAB_SETTINGS, u, ts);
     float cog = bh * 0.5f / 9.0f;
     DrawPixelArt(s, kCogArt, 9, (sx0 + sx1) / 2 - 4.5f * cog, y + bh / 2 - 4.5f * cog, cog,
-                 activeTab == SS_TAB_SETTINGS ? Port_SecondScreenTheme_Color(SSC_MENU_WHITE)
-                                              : Port_SecondScreenTheme_Color(SSC_BANNER_NAVY));
+                 Port_SecondScreenTheme_Color(SSC_BANNER_NAVY));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1667,6 +1875,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
         sUi.armedRing = 0;
         sUi.floorPreview = SS_NO_FLOOR;
         sUi.playerFloorDisp = SS_NO_FLOOR;
+        sUi.regionState = SS_REGION_OFF; /* a zoom never survives a load */
         UI_UNLOCK();
         sLastFix.valid = 0; /* stale fixes must not survive into a new save */
         sCam.valid = 0;
@@ -1679,14 +1888,19 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
      * everything below still renders through its per-element fallbacks. */
     Port_SecondScreenTheme_Ready();
 
-    int tab, armedRing;
+    int isDungeon = (snap->areaFlags & SECOND_SCREEN_AR_IS_DUNGEON) != 0;
+
+    int tab, armedRing, regionState;
+    int32_t regionId;
     UI_LOCK();
-    if (!sUi.pinsLoaded) {
-        LoadPinsLocked();
+    if (isDungeon) {
+        sUi.regionState = SS_REGION_OFF; /* the world map is gone; so is its zoom */
     }
     tab = sUi.tab;
     armedRing = sUi.armedRing;
     int wholeMap = sUi.wholeMap;
+    regionState = sUi.regionState;
+    regionId = sUi.regionId;
     sUi.mapLive = 0; /* set again by PaintOverworld when the map is up */
     UI_UNLOCK();
 
@@ -1713,18 +1927,32 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     float my1 = height - tabH - 4 * u;
 
     TargetList tl = { .n = 0 };
-    int isDungeon = (snap->areaFlags & SECOND_SCREEN_AR_IS_DUNGEON) != 0;
 
     if (tab == SS_TAB_ITEMS) {
         PaintItemsPanel(&s, snap, &tl, mx0, my0, mx1, my1, u, ts, tick, armedRing);
-    } else if (tab == SS_TAB_GEAR) {
-        PaintGearPanel(&s, snap, mx0, my0, mx1, my1, u, ts);
+    } else if (tab == SS_TAB_QUEST) {
+        PaintQuestPanel(&s, snap, mx0, my0, mx1, my1, u, ts, tick);
     } else if (tab == SS_TAB_SETTINGS) {
         PaintSettingsPanel(&s, &tl, mx0, my0, mx1, my1, u, ts);
     } else if (isDungeon) {
         PaintDungeon(&s, snap, &tl, mx0, my0, mx1, my1, u, ts, tick, returnCfg);
     } else {
-        PaintOverworld(&s, snap, &tl, mx0, my0, mx1, my1, u, tick, wholeMap, followCfg, crestCfg, tick);
+        /* A live region zoom replaces the map area; if its art can't be
+         * drawn the view drops straight back to the world map, so the
+         * panel is never left on a blank region. */
+        int drewRegion = 0;
+        if (regionState == SS_REGION_VIEW) {
+            drewRegion = PaintRegion(&s, snap, &tl, mx0, my0, mx1, my1, u, tick, regionId);
+            if (!drewRegion) {
+                UI_LOCK();
+                sUi.regionState = SS_REGION_OFF;
+                UI_UNLOCK();
+            }
+        }
+        if (!drewRegion) {
+            PaintOverworld(&s, snap, &tl, mx0, my0, mx1, my1, u, tick, wholeMap, followCfg, crestCfg,
+                           tick);
+        }
     }
 
     PaintSidebar(&s, snap, &tl, width - sideW + 4 * u, 10 * u, sideW - 14 * u, height - tabH - 14 * u, u,
@@ -1743,51 +1971,36 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
 /*  Tap handling                                                       */
 /* ------------------------------------------------------------------ */
 
-/* Long press on the overworld map: remove the pin under the finger, else
- * drop a new one there. Screen pixels in, map-image coordinates out via
- * the transform of the last painted frame. */
-static void TogglePin(int x, int y) {
-    int16_t xs[SS_MAX_PINS], ys[SS_MAX_PINS];
-    int count = -1;
-
+/* Tap on the whole-Hyrule map: turn screen pixels into map-image
+ * coordinates through the transform of the last painted frame, ask the
+ * map screen's own zoom grid which tile that is, and — when it answers —
+ * bracket that tile for a beat before the regional map opens. Returns 0
+ * when nothing was picked (off-grid, or the grid isn't decodable), which
+ * leaves the caller's plain follow/whole toggle in charge. */
+static int PickMapRegion(int x, int y) {
+    int picked = 0;
     UI_LOCK();
-    if (sUi.mapLive && sUi.mapScale > 0.0f) {
-        float ix = ((float)x - sUi.mapOx) / sUi.mapScale;
-        float iy = ((float)y - sUi.mapOy) / sUi.mapScale;
-        float hit = 26.0f * sUi.mapU / sUi.mapScale;
-        int removed = 0;
-        for (int i = 0; i < sUi.pinCount; i++) {
-            if (fabsf(sUi.pinX[i] - ix) <= hit && fabsf(sUi.pinY[i] - iy) <= hit) {
-                for (int k = i; k < sUi.pinCount - 1; k++) {
-                    sUi.pinX[k] = sUi.pinX[k + 1];
-                    sUi.pinY[k] = sUi.pinY[k + 1];
-                }
-                sUi.pinCount--;
-                removed = 1;
-                break;
-            }
-        }
-        /* New pins only land on the frame crop — the only part of the
-         * composite that ever renders (a tap on the letterbox margins
-         * around the fitted whole view would otherwise pin off-map). */
-        if (!removed && sUi.pinCount < SS_MAX_PINS && ix >= WMAP_CROP_X0 && iy >= WMAP_CROP_Y0 &&
-            ix < WMAP_CROP_X1 && ix < sUi.mapImgW && iy < WMAP_CROP_Y1 && iy < sUi.mapImgH) {
-            sUi.pinX[sUi.pinCount] = (int16_t)ix;
-            sUi.pinY[sUi.pinCount] = (int16_t)iy;
-            sUi.pinCount++;
-            removed = 1; /* something changed either way */
-        }
-        if (removed) {
-            count = sUi.pinCount;
-            memcpy(xs, sUi.pinX, sizeof(xs));
-            memcpy(ys, sUi.pinY, sizeof(ys));
+    if (sUi.mapLive && sUi.regionGridReady && sUi.mapScale > 0.0f) {
+        int32_t ix = (int32_t)(((float)x - sUi.mapOx) / sUi.mapScale);
+        int32_t iy = (int32_t)(((float)y - sUi.mapOy) / sUi.mapScale);
+        int32_t region, rx0, ry0, rx1, ry1;
+        /* Only the frame crop ever renders, so a tap on the letterbox
+         * around the fitted view is not a tap on the map. */
+        if (ix >= WMAP_CROP_X0 && iy >= WMAP_CROP_Y0 && ix < WMAP_CROP_X1 && iy < WMAP_CROP_Y1 &&
+            ix < sUi.mapImgW && iy < sUi.mapImgH &&
+            Port_SecondScreenWorldMap_GetRegionAt(ix, iy, &region, &rx0, &ry0, &rx1, &ry1)) {
+            sUi.regionId = region;
+            sUi.regionX0 = rx0;
+            sUi.regionY0 = ry0;
+            sUi.regionX1 = rx1;
+            sUi.regionY1 = ry1;
+            sUi.regionTick = sUi.lastTick;
+            sUi.regionState = SS_REGION_BRACKET;
+            picked = 1;
         }
     }
     UI_UNLOCK();
-
-    if (count >= 0) {
-        SavePins(xs, ys, count); /* file IO outside the lock */
-    }
+    return picked;
 }
 
 void Port_SecondScreen_OnTap(int x, int y, int longPress) {
@@ -1899,14 +2112,40 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                     break;
             }
             break;
-        case SS_ACT_MAP:
-            if (longPress) {
-                TogglePin(x, y);
-            } else {
+        case SS_ACT_MAP: {
+            /* Region view: any tap goes back up a level. Whole map: a tap
+             * on a zoom-grid tile zooms in; anything else keeps the
+             * long-standing follow/whole toggle. Follow cam: toggle. */
+            uint8_t state;
+            int whole;
+            UI_LOCK();
+            state = sUi.regionState;
+            whole = sUi.wholeMap;
+            UI_UNLOCK();
+            if (state != SS_REGION_OFF) {
                 UI_LOCK();
-                sUi.wholeMap = !sUi.wholeMap;
+                sUi.regionState = SS_REGION_OFF;
                 UI_UNLOCK();
+                break;
             }
+            if (whole && PickMapRegion(x, y)) {
+                break;
+            }
+            UI_LOCK();
+            sUi.wholeMap = !sUi.wholeMap;
+            UI_UNLOCK();
+            break;
+        }
+        case SS_ACT_MAPVIEW:
+            /* The map's own back step: out of the region view first, then
+             * out of the whole map back to the follow cam. */
+            UI_LOCK();
+            if (sUi.regionState != SS_REGION_OFF) {
+                sUi.regionState = SS_REGION_OFF;
+            } else {
+                sUi.wholeMap = 0;
+            }
+            UI_UNLOCK();
             break;
     }
 }
