@@ -5,14 +5,14 @@
  * Second-screen minimap/item-icon compositor (Phase 3d).
  *
  * Deliberately independent of the live PPU: reads item-icon tile graphics
- * and palette data straight from the ROM/asset layer (Port_GetSpritePtr,
- * Port_GetRawPaletteGroupData — the latter defined in src/common.c, next to
- * LoadPaletteGroup, because the ROM palette-group table it reads is
- * file-private there), not from virtuappu_frame_buffer/mode1_memory or the
- * live gPaletteBuffer. See port_second_screen.h's file comment and
- * port_softslots.h's cautionary note about an earlier native-framebuffer/OAM
- * UI attempt that corrupted pause-menu visuals — this module exists to
- * avoid repeating that mistake.
+ * straight from the ROM/asset layer (Port_GetSpritePtr + the frame OBJ
+ * piece lists) and palettes through the theme's pause-time OBJ bank
+ * resolver (Port_SecondScreenTheme_ObjPalette), not from
+ * virtuappu_frame_buffer/mode1_memory or the live gPaletteBuffer. See
+ * port_second_screen.h's file comment and port_softslots.h's cautionary
+ * note about an earlier native-framebuffer/OAM UI attempt that corrupted
+ * pause-menu visuals — this module exists to avoid repeating that
+ * mistake.
  *
  * No Android-specific types in this header on purpose: callers hand in a
  * plain pixel buffer (already locked/owned by whoever's presenting it), so
