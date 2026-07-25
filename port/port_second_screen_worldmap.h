@@ -120,6 +120,11 @@ int Port_SecondScreenWorldMap_GetRegionAt(int32_t mapX, int32_t mapY, int32_t* o
  * zooming into a tile — fitted into the destination rect, nearest-neighbor.
  * Returns 1 when drawn, 0 while that region's data isn't decodable (caller
  * stays on the world view). */
+/* Pixel size of a region's enlarged artwork. Lets the caller letterbox its
+ * rect to the art's aspect rather than stretching to fill. Returns 0 when the
+ * region has no drawable art. */
+int Port_SecondScreenWorldMap_GetRegionSize(int32_t region, int32_t* outW, int32_t* outH);
+
 int Port_SecondScreenWorldMap_DrawRegion(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                          int32_t dstX, int32_t dstY, int32_t dstW, int32_t dstH,
                                          int32_t region);

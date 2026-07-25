@@ -828,6 +828,20 @@ static const uint32_t* RegionImage(int32_t region, int32_t* outW, int32_t* outH)
     return image;
 }
 
+/* The region artwork's own pixel size, so a caller can fit its rect to the
+ * art's aspect instead of stretching the art to the rect. Builds the image on
+ * demand exactly like DrawRegion, so asking is never a reason for the first
+ * draw to miss. */
+int Port_SecondScreenWorldMap_GetRegionSize(int32_t region, int32_t* outW, int32_t* outH) {
+    int32_t srcW = 0, srcH = 0;
+    if (RegionImage(region, &srcW, &srcH) == NULL || srcW <= 0 || srcH <= 0) {
+        return 0;
+    }
+    if (outW != NULL) *outW = srcW;
+    if (outH != NULL) *outH = srcH;
+    return 1;
+}
+
 int Port_SecondScreenWorldMap_DrawRegion(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                          int32_t dstX, int32_t dstY, int32_t dstW, int32_t dstH,
                                          int32_t region) {
