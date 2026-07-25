@@ -89,6 +89,7 @@ enum {
     SSC_MENU_BLACK,      /* message palette black (outlines) */
     SSC_MENU_WHITE,      /* message palette white */
     SSC_MENU_RED,        /* menu red accent (red text body) */
+    SSC_BANNER_NAVY,     /* the banner font's dark outline blue */
     SSC_COUNT
 };
 
@@ -99,6 +100,7 @@ enum {
     SS_TEXT_WHITE,   /* white with silver shading, for dark chips (5 / 0) */
     SS_TEXT_RED,     /* menu red accent (5 / 1) */
     SS_TEXT_GREEN,   /* menu green (5 / 2) */
+    SS_TEXT_NAVY,    /* banner-navy body — big font only (small font: ink) */
     SS_TEXT_STYLE_COUNT
 };
 
@@ -187,6 +189,21 @@ int32_t Port_SecondScreenTheme_DrawText(uint32_t* pixels, int32_t bufW, int32_t 
 
 /* Pixel width DrawText would advance (0 when the font is not ready). */
 int32_t Port_SecondScreenTheme_TextWidth(const char* str, int32_t scale);
+
+/* Text in the game's STYLIZED banner font — the fat white-on-navy
+ * lettering of the area-name banners ("South Hyrule Field"): glyph bank 8
+ * of gUnk_08109248, two 8x16 cells per glyph, replayed exactly like
+ * ShowTextBox's stylized path (sub_0805F9A0 -> sub_0805F25C banks>4 ->
+ * sub_080026F2's transparent-merge column writer, adjacent glyphs
+ * overlapping one outline column). Same SS_TEXT_* color schemes; the
+ * banners' own scheme is SS_TEXT_WHITE-on-chip / SS_TEXT_INK on plates.
+ * y is the glyph-box top (16 rows at `scale`); returns the advance, or 0
+ * when the bank isn't decoded (callers keep their fallback). */
+int32_t Port_SecondScreenTheme_DrawBigText(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                           int32_t x, int32_t y, int32_t scale, int style, const char* str);
+
+/* Pixel width DrawBigText would advance (0 when the bank is not ready). */
+int32_t Port_SecondScreenTheme_BigTextWidth(const char* str, int32_t scale);
 
 #ifdef __cplusplus
 }
