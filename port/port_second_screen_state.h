@@ -88,10 +88,18 @@ typedef struct {
     uint32_t windcrests;
     /* gSave.kinstones fusion-marker state, verbatim: which fusions have
      * happened and which map markers the game has retired — the world-map
-     * module turns these into red-check map positions exactly like the
-     * pause map does (@see CheckKinstoneFused / CheckFusionMapMarkerDisabled). */
+     * module turns these into the enlarged region map's fusion markers
+     * exactly like pause screen 6 does (@see CheckKinstoneFused /
+     * CheckFusionMapMarkerDisabled). */
     uint8_t fusedKinstones[13];
     uint8_t fusionUnmarked[13];
+    /* Map hints currently showing, bit n = row n of gUnk_08128F58: the very
+     * word the pause map's hint pass tests, `gSave.map_hints &
+     * sub_080A6F40()`. The second half is a live predicate over local flags
+     * and inventory (sub_0807CB24), which only the game thread may read —
+     * publishing the resolved mask is what lets the ROM-only world-map
+     * module place hint markers at all. */
+    uint16_t mapHints;
     /* Contextual R-button prompt: the sprite frame id the game's own HUD
      * would draw beside R this frame (SPEAK / READ / LIFT / ...), resolved
      * exactly like TextUIElement does — gHUD.rActionPlayerState, else the

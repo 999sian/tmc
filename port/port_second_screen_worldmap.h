@@ -40,34 +40,71 @@ int Port_SecondScreenWorldMap_LocatePlayer(uint8_t area, int32_t areaX, int32_t 
  * tables the fast-travel screen (src/subtask/subtaskFastTravel.c) uses. */
 int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outMapX, int32_t* outMapY);
 
-/* Active kinstone-fusion map markers (the red checks the pause map shows):
- * writes up to maxPairs (x, y) world-map pixel pairs into outMapXY and
- * returns how many were written, applying the game's own rule to the save
- * bits passed in (fused && marker not retired — the same checks the pause
- * map's marker pass makes, kinstone ids 10..100). Positions are the marker
- * CENTERS, the fusion world events' overworld locations pushed through the
- * pause map's world->map transform. Returns 0 while map/table data isn't
- * ready. fusedKinstones/fusionUnmarked are the 13-byte snapshot arrays,
- * passed through verbatim from gSave.kinstones.
+/* One marker the game's map screens stamp: a position and the DrawDirect
+ * frame that belongs on it. Positions are marker CENTERS — DrawMarker takes
+ * a top-left, so center a stamp with x = marker.x - 8*scale (same for y). */
+typedef struct {
+    int32_t x, y;
+    uint8_t frame;
+} SecondScreenMapMarker;
+
+/* `region` value naming the world map's own marker art rather than an
+ * enlarged region's (the two screens load different tiles to the same VRAM). */
+#define SECOND_SCREEN_WORLDMAP_NO_REGION (-1)
+
+/* The world map's MAP HINTS — the red checks and errand glyphs pause screen
+ * 4 shows (sub_080A6438), NOT kinstone fusions: the world map has no fusion
+ * pass at all, those belong to the enlarged region map below. Writes up to
+ * maxMarkers markers at the hint table's own pre-baked screen positions,
+ * each carrying that row's world-map frame, and returns how many.
+ *
+ * hintMask is the game's own visibility word, bit i = row i of
+ * gUnk_08128F58 is showing: `gSave.map_hints & sub_080A6F40()`, published
+ * from the game thread as SecondScreenSnapshot.mapHints (the predicate reads
+ * local flags and inventory, which this ROM-only module cannot see). Pass 0
+ * and nothing is drawn. Returns 0 while map/table data isn't ready. */
+int32_t Port_SecondScreenWorldMap_GetMapHints(uint32_t hintMask, SecondScreenMapMarker* out,
+                                              int32_t maxMarkers);
+
+/* The markers belonging INSIDE one enlarged region (pause screen 6,
+ * sub_080A68D4), in that drawn region's own pixel space (0..dstW, 0..dstH as
+ * passed to DrawRegion): the same map hints again in their region frames,
+ * then one marker per active kinstone fusion carrying that fusion's own
+ * glyph (gKinstoneWorldEvents[id].mapMarkerIcon + 100 — nine distinct
+ * icons). Markers outside the region being drawn are dropped, exactly as
+ * sub_080A69E0 drops them. Returns how many were written, 0 while data isn't
+ * ready.
+ *
+ * Fusion visibility is the game's own rule applied to the save bits passed
+ * in: fused && marker not retired, kinstone ids 10..100 (1..9 are the
+ * golden-kinstone story fusions the game's pass also skips).
+ * fusedKinstones/fusionUnmarked are the 13-byte snapshot arrays, passed
+ * through verbatim from gSave.kinstones; either may be NULL to ask for
+ * hints only.
  *
  * Known gap, on the stale-not-cheating side: the game refreshes
  * fusionUnmarked from each event's completion flag only when the pause
  * menu opens (UpdateVisibleFusionMapMarkers, src/common.c) — that flag
  * state isn't in these two arrays, so a fusion reward claimed since the
- * last pause keeps its check until the game's own retire pass next runs.
+ * last pause keeps its marker until the game's own retire pass next runs.
  * Stale info the player already had, never an unearned reveal. */
-int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones,
-                                                   const uint8_t* fusionUnmarked,
-                                                   int32_t* outMapXY, int32_t maxPairs);
+int32_t Port_SecondScreenWorldMap_GetRegionMarkers(int32_t region, uint32_t hintMask,
+                                                   const uint8_t* fusedKinstones,
+                                                   const uint8_t* fusionUnmarked, int32_t dstW,
+                                                   int32_t dstH, SecondScreenMapMarker* out,
+                                                   int32_t maxMarkers);
 
-/* Draws the map's red-check fusion marker sprite (decoded from ROM, the
- * exact art the pause map stamps — a 16x16 frame) at (x, y) top-left,
- * nearest-neighbor scaled: the stamp covers 16*scale pixels a side, so
- * callers center it on a marker pair with x = cx - 8*scale (same for y).
- * Returns 1 if drawn, 0 while the sprite isn't decodable yet — callers
- * simply skip markers that frame. */
-int Port_SecondScreenWorldMap_DrawFusionCheck(uint32_t* pixels, int32_t bufW, int32_t bufH,
-                                              int32_t stride, int32_t x, int32_t y, int32_t scale);
+/* Draws one marker glyph (decoded from ROM, the exact 16x16 DrawDirect frame
+ * the map screen stamps) at (x, y) top-left, nearest-neighbor scaled: the
+ * stamp covers 16*scale pixels a side. `frame` is a marker's own frame id;
+ * `region` picks which screen's marker tiles to read —
+ * SECOND_SCREEN_WORLDMAP_NO_REGION for the world map, else the region id
+ * whose enlarged map is being drawn. Returns 1 if drawn, 0 while that glyph
+ * isn't decodable yet — callers simply skip the marker that frame rather
+ * than substituting some other glyph. */
+int Port_SecondScreenWorldMap_DrawMarker(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                         int32_t x, int32_t y, int32_t scale, uint32_t frame,
+                                         int32_t region);
 
 /* The map screen's own zoom grid: the game's map lets the player put the
  * cursor on a tile and open that tile's enlarged regional map. Resolves a
