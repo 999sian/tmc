@@ -42,19 +42,30 @@ int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outM
 
 /* Active kinstone-fusion map markers (the red checks the pause map shows):
  * writes up to maxPairs (x, y) world-map pixel pairs into outMapXY and
- * returns how many are active, applying the game's own rule to the save
+ * returns how many were written, applying the game's own rule to the save
  * bits passed in (fused && marker not retired — the same checks the pause
- * map's marker pass makes). Returns 0 while map/table data isn't ready.
- * fusedKinstones/fusionUnmarked are the 13-byte snapshot arrays, passed
- * through verbatim from gSave.kinstones. */
+ * map's marker pass makes, kinstone ids 10..100). Positions are the marker
+ * CENTERS, the fusion world events' overworld locations pushed through the
+ * pause map's world->map transform. Returns 0 while map/table data isn't
+ * ready. fusedKinstones/fusionUnmarked are the 13-byte snapshot arrays,
+ * passed through verbatim from gSave.kinstones.
+ *
+ * Known gap, on the stale-not-cheating side: the game refreshes
+ * fusionUnmarked from each event's completion flag only when the pause
+ * menu opens (UpdateVisibleFusionMapMarkers, src/common.c) — that flag
+ * state isn't in these two arrays, so a fusion reward claimed since the
+ * last pause keeps its check until the game's own retire pass next runs.
+ * Stale info the player already had, never an unearned reveal. */
 int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones,
                                                    const uint8_t* fusionUnmarked,
                                                    int32_t* outMapXY, int32_t maxPairs);
 
 /* Draws the map's red-check fusion marker sprite (decoded from ROM, the
- * exact art the pause map stamps) at (x, y) top-left, nearest-neighbor
- * scaled. Returns 1 if drawn, 0 while the sprite isn't decodable yet —
- * callers simply skip markers that frame. */
+ * exact art the pause map stamps — a 16x16 frame) at (x, y) top-left,
+ * nearest-neighbor scaled: the stamp covers 16*scale pixels a side, so
+ * callers center it on a marker pair with x = cx - 8*scale (same for y).
+ * Returns 1 if drawn, 0 while the sprite isn't decodable yet — callers
+ * simply skip markers that frame. */
 int Port_SecondScreenWorldMap_DrawFusionCheck(uint32_t* pixels, int32_t bufW, int32_t bufH,
                                               int32_t stride, int32_t x, int32_t y, int32_t scale);
 

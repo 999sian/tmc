@@ -117,6 +117,23 @@ void DrawUIElements(void) {
     }
 }
 
+#ifdef PC_PORT
+/* The gameplay-view face of DrawUIElements, suppressible by the
+ * hide_top_hud runtime flag. Every renderer of the live gameplay frame
+ * (game.c's ChangeRoom/Update/BarrelUpdate/ChangeArea states and
+ * subtask.c's restored-gameplay fade frames) routes through here, so the
+ * button/item icons vanish and reappear with the flag; the pause,
+ * kinstone, figurine and file-select screens call DrawUIElements
+ * directly and keep their own prompts. OAM is rebuilt every frame
+ * (FlushSprites/CopyOAM), so a skipped draw leaves no stale sprites. */
+void DrawUIElementsGameplay(void) {
+    extern bool Port_Config_GetHideTopHud(void);
+    if (!Port_Config_GetHideTopHud()) {
+        DrawUIElements();
+    }
+}
+#endif
+
 void sub_0801C25C(void) {
     s32 index;
     u8 tmp;
@@ -167,11 +184,37 @@ void sub_0801C2F0(u32 dest, u32 param_2) {
 }
 
 void DrawUI(void) {
+#ifdef PC_PORT
+    /* hide_top_hud: present the whole gameplay HUD as hidden to the four
+     * BG0 draw passes below — each one then erases its own tiles through
+     * the game's cutscene-hide paths (the HUD_HIDE_* branches), so no
+     * stale pixels remain and un-hiding repaints via the same machinery
+     * the game's EnablePauseMenu uses (RecoverUI resets the drawn flags;
+     * DrawHearts repaints fully when unk_2 is 0). The override is scoped
+     * to this call: gHUD.hideFlags itself is left alone because gameplay
+     * logic reads it (CheckInitPauseMenu refuses to pause while it's
+     * nonzero, scripts own it during cutscenes). Every DrawUI caller
+     * renders the gameplay view (game.c states + subtask fade frames);
+     * menu screens never call it, so their UI is untouched. */
+    extern bool Port_Config_GetHideTopHud(void);
+    static u8 sPrevHudHidden = 0;
+    u8 savedHideFlags = gHUD.hideFlags;
+    u8 hudHidden = Port_Config_GetHideTopHud() ? 1 : 0;
+    if (hudHidden) {
+        gHUD.hideFlags = HUD_HIDE_ALL;
+    } else if (sPrevHudHidden) {
+        RecoverUI(0, 0);
+    }
+    sPrevHudHidden = hudHidden;
+#endif
     gHUD.unk_0 &= ~gHUD.hideFlags;
     DrawHearts();
     DrawChargeBar();
     DrawRupees();
     DrawKeys();
+#ifdef PC_PORT
+    gHUD.hideFlags = savedHideFlags;
+#endif
     gHUD.unk_0 = 0;
     UpdateUIElements();
 }

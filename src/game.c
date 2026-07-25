@@ -183,7 +183,11 @@ static void GameMain_ChangeRoom(void) {
     DrawUI();
     UpdateManagers();
     FlushSprites();
+#ifdef PC_PORT
+    DrawUIElementsGameplay();
+#else
     DrawUIElements();
+#endif
     UpdateCarriedObject();
     DrawEntities();
     CopyOAM();
@@ -325,7 +329,11 @@ static void GameMain_Update(void) {
     DecreasePortalTimer();
     DrawUI();
     UpdateManagers();
+#ifdef PC_PORT
+    DrawUIElementsGameplay();
+#else
     DrawUIElements();
+#endif
     UpdateCarriedObject();
     DrawEntities();
     CheckRoomExit();
@@ -360,7 +368,11 @@ static void GameMain_BarrelUpdate(void) {
     DrawUI();
     UpdateManagers();
     FlushSprites();
+#ifdef PC_PORT
+    DrawUIElementsGameplay();
+#else
     DrawUIElements();
+#endif
     UpdateCarriedObject();
     DrawEntities();
     CheckRoomExit();
@@ -372,7 +384,11 @@ static void GameMain_BarrelUpdate(void) {
 
 static void GameMain_ChangeArea(void) {
     FlushSprites();
+#ifdef PC_PORT
+    DrawUIElementsGameplay();
+#else
     DrawUIElements();
+#endif
     DrawEntities();
     gMain.pad = 1;
     CopyOAM();

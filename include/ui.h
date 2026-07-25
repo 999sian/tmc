@@ -105,6 +105,12 @@ extern HUD gHUD;
 #endif
 
 extern void DrawUIElements(void);
+#ifdef PC_PORT
+/* DrawUIElements for the gameplay view only — suppressible by the
+ * hide_top_hud runtime flag (src/ui.c). Menu screens keep calling
+ * DrawUIElements directly so their own prompts never disappear. */
+extern void DrawUIElementsGameplay(void);
+#endif
 extern void UpdateUIElements(void);
 extern void CreateUIElement(u32, u32);
 extern void sub_0801C2F0(u32, u32);
