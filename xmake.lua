@@ -804,6 +804,8 @@ target("tmc_pc")
     add_files("port/port_second_screen.c") -- Second-display panel (AYN Thor); no-op off Android
     add_files("port/port_second_screen_state.c") -- Thread-safe gSave/gRoomControls snapshot for the second screen
     add_files("port/port_second_screen_render.c") -- Item-icon compositor for the second screen (reads ROM/asset data directly)
+    add_files("port/port_second_screen_worldmap.c") -- Hyrule map art for the second screen, decoded from ROM at runtime
+    add_files("port/port_second_screen_dungeonmap.c") -- Authentic dungeon-map art for the second screen
     if is_plat("android") then
         -- JNI bridge only — references <jni.h>/<android/native_window_jni.h>,
         -- doesn't compile on other platforms.
