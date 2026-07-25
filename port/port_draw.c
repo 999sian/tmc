@@ -1166,3 +1166,39 @@ void ram_DrawEntities(void) {
          * comment in ram_UpdateEntities. */
     }
 }
+
+/* ---- Second-screen raw-data accessors (port_second_screen_dungeonmap.c) ----
+ * Read-only faces over this file's private sprite plumbing so the second
+ * screen can redraw the game's own DrawDirect marker frames without touching
+ * OAM or any live state. Appended at the end of the file, and kept
+ * append-only, so hand-merging stays a non-event. */
+
+/* Frame piece list for a DrawDirect-style sprite (count byte + 5-byte
+ * pieces; format documented at RenderSpritePieces above), or NULL.
+ * outMaxPieces is how many whole pieces actually fit inside gFrameObjLists
+ * after the count byte — the same clamp RenderSpritePieces applies, exported
+ * so out-of-file renderers can't read past the array on a corrupt or
+ * truncated ROM. */
+const u8* Port_GetDirectSpriteFrame(u32 spriteIndex, u32 frameIndex, u32* outMaxPieces) {
+    const u8* frameData;
+
+    if (outMaxPieces != NULL) {
+        *outMaxPieces = 0;
+    }
+    if (spriteIndex > 0xFFFF || frameIndex > 0xFF) {
+        return NULL;
+    }
+    frameData = LookupFrameData((u16)spriteIndex, (u8)frameIndex);
+    if (frameData != NULL && outMaxPieces != NULL) {
+        const u8* fobEnd = (const u8*)gFrameObjLists + sizeof(gFrameObjLists);
+        *outMaxPieces = (u32)((fobEnd - (frameData + 1)) / 5);
+    }
+    return frameData;
+}
+
+/* The ROM overlay's OAM size/anchor table (60 x {xAnchor, yAnchor, width,
+ * height} bytes; sub-tables per flip/affine mode — see sSizeTable at the top
+ * of this file). NULL until the ROM has been loaded. */
+const u8* Port_GetSpriteSizeTable(void) {
+    return sSizeTableLoaded ? sSizeTable : NULL;
+}
