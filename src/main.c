@@ -15,6 +15,7 @@
 #include "fade.h"
 #ifdef PC_PORT
 #include "port_hdma.h"
+#include "port_second_screen_state.h"
 #include <setjmp.h>
 #endif
 #include "gba/io_reg.h"
@@ -130,6 +131,9 @@ void AgbMain(void) {
                 AudioMain();
                 break;
         }
+#ifdef PC_PORT
+        Port_SecondScreenState_Publish();
+#endif
         WaitForNextFrame();
     }
 }
