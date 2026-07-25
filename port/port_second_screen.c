@@ -29,6 +29,12 @@
  * All art comes from the runtime-decoded theme/render/worldmap/dungeonmap
  * modules — no baked game pixels; every decoded element has a neutral
  * procedural fallback so the panel renders before the ROM is parsed.
+ *
+ * In-game dressing is the pause menu's own: the Ezlo-doodle parchment
+ * backdrop, the carved stone slab as panel plate, its recessed wells as
+ * cells/rows, the message chips for headers, and the game's message font
+ * for every label (dark ink on the light plates, white on chips — the
+ * menu's exact text schemes). Only the cinema screen stays dark.
  */
 
 #include "port_second_screen.h"
@@ -52,11 +58,11 @@
  * channel order mistakes can't creep in per call site. */
 #define RGB(r, g, b) (0xFF000000u | ((uint32_t)(b) << 16) | ((uint32_t)(g) << 8) | (uint32_t)(r))
 
-/* The only colors of our own on the panel: the dark backdrop the TMC
- * windows float on, and the idle screen's four-element hues. Everything
- * inside the windows comes from the decoded theme
- * (port_second_screen_theme.c). */
-#define COL_BG RGB(0x0E, 0x10, 0x0C)      /* dark olive-black backdrop */
+/* In-game the panel dresses as a screen OF the pause menu: parchment
+ * backdrop, stone slab plates, message chips and the message font, all
+ * decoded from ROM by port_second_screen_theme.c. The only colors of our
+ * own are the cinema screen's (kept deliberately dark and quiet) and the
+ * four-element hues. */
 #define COL_IDLE_BG RGB(0x05, 0x06, 0x05) /* idle: near-black */
 #define COL_ELEM_EARTH RGB(0x58, 0xA0, 0x48)
 #define COL_ELEM_FIRE RGB(0xD8, 0x58, 0x28)
@@ -305,11 +311,10 @@ static void DrawPixelArt(const SSurf* s, const char* const* rows, int nRows, flo
 /*  Label font                                                         */
 /* ------------------------------------------------------------------ */
 
-/* Original 5x7 caps font for the panel's labels (tabs, plaques, settings
- * rows). The decoded HUD font is digits-only, and TMC's text engine is a
- * live-VRAM affair this module deliberately never touches — so labels use
- * this hand-drawn face, always light-on-dark with a dark outline like the
- * HUD's own counters. One byte per row, bit 4 = leftmost column. */
+/* Labels render in the game's own message font (decoded from ROM by the
+ * theme module). This original 5x7 caps face exists only as the pre-ROM
+ * stand-in: the first frames before Port_LoadRom finishes, when no glyph
+ * data exists to decode yet. One byte per row, bit 4 = leftmost column. */
 static const uint8_t kFont5x7[][7] = {
     { 0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E }, /* 0 */
     { 0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E }, /* 1 */
@@ -402,6 +407,68 @@ static int32_t TextWidthPx(const char* str, int32_t scale) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Menu text (the game's message font)                                */
+/* ------------------------------------------------------------------ */
+
+/* All label metrics below are in the message font's own units: a glyph
+ * box is 16 rows tall at scale ms (caps ink spans roughly rows 3..13,
+ * so vertical centering uses the box middle at 8*ms). The 5x7 stand-in
+ * only appears pre-ROM; it maps ms onto a similar visual size. */
+#define MENU_TEXT_BOX 16
+
+static int32_t FallbackScale5x7(int32_t ms) {
+    int32_t f = (ms * 3 + 1) / 2;
+    return f < 1 ? 1 : f;
+}
+
+static int32_t MenuTextWidth(const char* str, int32_t ms) {
+    int32_t w = Port_SecondScreenTheme_TextWidth(str, ms);
+    if (w == 0 && str != NULL && *str != '\0') {
+        w = TextWidthPx(str, FallbackScale5x7(ms));
+    }
+    return w;
+}
+
+/* yTop is the glyph-box top. Returns the advance. */
+static int32_t MenuTextDraw(const SSurf* s, const char* str, int32_t x, int32_t yTop, int32_t ms,
+                            int style) {
+    int32_t adv = Port_SecondScreenTheme_DrawText(s->px, s->w, s->h, s->stride, x, yTop, ms, style, str);
+    if (adv == 0 && str != NULL && *str != '\0') {
+        /* Pre-ROM stand-in in the matching palette role. */
+        static const int kColorId[SS_TEXT_STYLE_COUNT] = { SSC_MENU_INK, SSC_MENU_WHITE, SSC_MENU_RED,
+                                                           SSC_RUPEE_GREEN };
+        uint32_t color = Port_SecondScreenTheme_Color(kColorId[style >= 0 && style < SS_TEXT_STYLE_COUNT
+                                                                  ? style
+                                                                  : SS_TEXT_INK]);
+        uint32_t outline = style == SS_TEXT_INK ? Port_SecondScreenTheme_Color(SSC_MENU_CREAM)
+                                                : Port_SecondScreenTheme_Color(SSC_MENU_BLACK);
+        adv = DrawTextStr(s, str, x, yTop + 3 * ms, FallbackScale5x7(ms), color, outline);
+    }
+    return adv;
+}
+
+/* Centered helper: centers the string's caps on (cx, cy). */
+static void MenuTextCentered(const SSurf* s, const char* str, float cx, float cy, int32_t ms, int style) {
+    int32_t w = MenuTextWidth(str, ms);
+    MenuTextDraw(s, str, (int32_t)(cx - w / 2.0f), (int32_t)(cy - 8 * ms), ms, style);
+}
+
+/* Panel header: the pause screens' red name chip, centered at cx with
+ * its top at topY (over the slab's carved top band, like the game hangs
+ * its own screen-name chip). */
+static void DrawPanelHeaderChip(const SSurf* s, float cx, float topY, const char* title, int32_t ms,
+                                float u) {
+    int32_t tw = MenuTextWidth(title, ms);
+    float h = MENU_TEXT_BOX * ms + 12 * u;
+    float x0 = cx - tw / 2.0f - 18 * u, x1 = cx + tw / 2.0f + 18 * u;
+    int32_t cts = (int32_t)(h / 26.0f);
+    if (cts < 1) cts = 1;
+    Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)topY,
+                                    (int32_t)(x1 - x0), (int32_t)h, cts, SS_CHIP_RED);
+    MenuTextCentered(s, title, cx, topY + h / 2.0f, ms, SS_TEXT_WHITE);
+}
+
+/* ------------------------------------------------------------------ */
 /*  HUD-font numbers                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -422,8 +489,8 @@ static int32_t DrawHudNumber(const SSurf* s, int32_t xRight, int32_t y, int32_t 
         } else {
             char digit[2] = { (char)('0' + value % 10), 0 };
             DrawTextStr(s, digit, x + scale, y + 2 * scale, scale + scale / 2,
-                        Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT),
-                        Port_SecondScreenTheme_Color(SSC_BORDER_DARK));
+                        Port_SecondScreenTheme_Color(SSC_MENU_INK),
+                        Port_SecondScreenTheme_Color(SSC_MENU_CREAM));
         }
         value /= 10;
         drawn++;
@@ -569,23 +636,22 @@ static void PaintCinema(const SSurf* s, uint32_t tick) {
 /* ------------------------------------------------------------------ */
 
 static void DrawMapMarker(const SSurf* s, int32_t px, int32_t py, int32_t unit, uint32_t color) {
-    FillDiamond(s, px, py, unit + 1, Port_SecondScreenTheme_Color(SSC_BORDER_DARK));
+    FillDiamond(s, px, py, unit + 1, Port_SecondScreenTheme_Color(SSC_MENU_INK));
     FillDiamond(s, px, py, unit, color);
 }
 
 /* Schematic area map — the styled fallback whenever the authentic art
  * modules report "not ready". Rooms placed by their real in-area geometry
- * (RoomResInfo), toned from the decoded window palette so it reads as part
- * of the theme, not programmer art. In dungeons it obeys the same reveal
- * rule as the real map screen: unvisited rooms only appear once the
- * dungeon map item is owned. */
+ * (RoomResInfo), toned in the menu's stone/ink palette so it reads as part
+ * of the pause-menu theme, not programmer art. In dungeons it obeys the
+ * same reveal rule as the real map screen: unvisited rooms only appear
+ * once the dungeon map item is owned. */
 static void PaintSchematic(const SSurf* s, const SecondScreenSnapshot* snap, int32_t x0, int32_t y0,
                            int32_t x1, int32_t y1, uint32_t tick, int32_t unit) {
-    uint32_t fill = Port_SecondScreenTheme_Color(SSC_WINDOW_FILL);
-    uint32_t light = Port_SecondScreenTheme_Color(SSC_BORDER_LIGHT);
-    uint32_t dark = Port_SecondScreenTheme_Color(SSC_BORDER_DARK);
-    uint32_t colSeen = MixColor(fill, light, 96);
-    uint32_t colUnseen = MixColor(fill, dark, 96);
+    uint32_t fill = Port_SecondScreenTheme_Color(SSC_MENU_STONE);
+    uint32_t dark = Port_SecondScreenTheme_Color(SSC_MENU_INK);
+    uint32_t colSeen = fill;
+    uint32_t colUnseen = MixColor(fill, dark, 72);
     int isDungeon = (snap->areaFlags & SECOND_SCREEN_AR_IS_DUNGEON) != 0;
     int layoutKnown = !isDungeon || (snap->dungeonItemBits & 1) != 0;
 
@@ -746,7 +812,7 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
                 float py = oy + (wy + 0.5f) * sCam.scale;
                 if (px >= rx0 && px < rx1 && py >= ry0 && py < ry1) {
                     DrawPin(s, px, py, 0.8f * u, Port_SecondScreenTheme_Color(SSC_RUPEE_GREEN),
-                            Port_SecondScreenTheme_Color(SSC_BORDER_DARK));
+                            Port_SecondScreenTheme_Color(SSC_MENU_INK));
                 }
             }
         }
@@ -765,7 +831,7 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
         float py = oy + (pinY[i] + 0.5f) * sCam.scale;
         if (px >= rx0 && px < rx1 && py >= ry0 && py < ry1) {
             DrawPin(s, px, py, (wantWhole ? 0.9f : 1.1f) * u, Port_SecondScreenTheme_Color(SSC_GOLD),
-                    Port_SecondScreenTheme_Color(SSC_BORDER_DARK));
+                    Port_SecondScreenTheme_Color(SSC_MENU_INK));
         }
     }
 
@@ -784,22 +850,23 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
     }
 
     /* A hold-to-pin nudge along the bottom edge, since nothing else hints
-     * at it; it goes away as soon as the player has a pin anywhere. */
+     * at it; it goes away as soon as the player has a pin anywhere. Uses
+     * the pause menu's dark name chip — the same furniture the game
+     * floats over its own map screen. */
     if (pinCount == 0) {
         const char* hint = "HOLD TO PIN";
-        int32_t fs = (int32_t)(1.6f * u);
-        if (fs < 1) fs = 1;
-        int32_t hw = TextWidthPx(hint, fs);
+        int32_t ms = (int32_t)(1.4f * u);
+        if (ms < 1) ms = 1;
+        int32_t hw = MenuTextWidth(hint, ms);
         float cx = (rx0 + rx1) / 2.0f;
-        float bx0 = cx - hw / 2.0f - 12 * u, bx1 = cx + hw / 2.0f + 12 * u;
-        float by1 = ry1 - 12 * u, by0 = by1 - 7 * fs - 14 * u;
-        FillRect(s, (int32_t)bx0, (int32_t)by0, (int32_t)bx1, (int32_t)by1, RGB(0x0C, 0x0C, 0x0C));
-        OutlineRect(s, (int32_t)bx0, (int32_t)by0, (int32_t)bx1, (int32_t)by1,
-                    (int32_t)u > 0 ? (int32_t)u : 1,
-                    MixColor(Port_SecondScreenTheme_Color(SSC_GOLD), RGB(0x0C, 0x0C, 0x0C), 110));
-        DrawTextStr(s, hint, (int32_t)(cx - hw / 2.0f), (int32_t)((by0 + by1) / 2 - 3.5f * fs), fs,
-                    Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT),
-                    Port_SecondScreenTheme_Color(SSC_BORDER_DARK));
+        float ch = MENU_TEXT_BOX * ms + 10 * u;
+        int32_t cts = (int32_t)(ch / 24.0f);
+        if (cts < 1) cts = 1;
+        float bx0 = cx - hw / 2.0f - 14 * u, bx1 = cx + hw / 2.0f + 14 * u;
+        float by1 = ry1 - 12 * u, by0 = by1 - ch;
+        Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)bx0, (int32_t)by0,
+                                        (int32_t)(bx1 - bx0), (int32_t)(by1 - by0), cts, SS_CHIP_DARK);
+        MenuTextCentered(s, hint, cx, (by0 + by1) / 2.0f, ms, SS_TEXT_WHITE);
     }
 
     /* Publish the transform for the tap handler (pin placement) and the
@@ -831,9 +898,6 @@ static void PaintDungeon(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     int haveInfo = Port_SecondScreenDungeonMap_GetInfo(snap->dungeonIdx, snap->area, snap->room, &info) &&
                    info.floorCount > 0;
 
-    uint32_t fill = Port_SecondScreenTheme_Color(SSC_WINDOW_FILL);
-    uint32_t light = Port_SecondScreenTheme_Color(SSC_BORDER_LIGHT);
-    uint32_t dark = Port_SecondScreenTheme_Color(SSC_BORDER_DARK);
     uint32_t gold = Port_SecondScreenTheme_Color(SSC_GOLD);
 
     if (!haveInfo) {
@@ -865,25 +929,26 @@ static void PaintDungeon(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     if (viewFloor < 0) viewFloor = 0;
     if (viewFloor >= info.floorCount) viewFloor = info.floorCount - 1;
 
-    /* Name banner, top center — only when a name is available. */
+    /* Name banner, top center — the pause menu's red header chip. */
     float topY = ry0 + 12 * u;
     const char* name = snap->dungeonIdx < 7 ? kDungeonNames[snap->dungeonIdx] : NULL;
     if (name != NULL) {
-        int32_t fs = (int32_t)(2.4f * u);
-        if (fs < 1) fs = 1;
-        int32_t tw = TextWidthPx(name, fs);
+        int32_t ms = (int32_t)(2.2f * u);
+        if (ms < 1) ms = 1;
+        int32_t tw = MenuTextWidth(name, ms);
         float cx = (rx0 + rx1) / 2.0f;
-        float bx0 = cx - tw / 2.0f - 18 * u, bx1 = cx + tw / 2.0f + 18 * u;
-        float by0 = topY, by1 = topY + 7 * fs + 16 * u;
-        FillRect(s, (int32_t)bx0, (int32_t)by0, (int32_t)bx1, (int32_t)by1, MixColor(fill, dark, 96));
-        OutlineRect(s, (int32_t)bx0, (int32_t)by0, (int32_t)bx1, (int32_t)by1,
-                    (int32_t)u > 0 ? (int32_t)u : 1, MixColor(light, dark, 96));
-        DrawTextStr(s, name, (int32_t)(cx - tw / 2.0f), (int32_t)(by0 + 8 * u), fs,
-                    Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT), dark);
+        float bx0 = cx - tw / 2.0f - 22 * u, bx1 = cx + tw / 2.0f + 22 * u;
+        float by0 = topY, by1 = topY + MENU_TEXT_BOX * ms + 18 * u;
+        int32_t cts = (int32_t)((by1 - by0) / 32.0f);
+        if (cts < 1) cts = 1;
+        Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)bx0, (int32_t)by0,
+                                        (int32_t)(bx1 - bx0), (int32_t)(by1 - by0), cts, SS_CHIP_RED);
+        MenuTextCentered(s, name, cx, (by0 + by1) / 2.0f, ms, SS_TEXT_WHITE);
         topY = by1;
     }
 
-    /* Floor plaques, topmost floor first, down the left side. */
+    /* Floor plaques, topmost floor first, down the left side: menu chips
+     * (the previewed floor turns the header red, the rest stay dark). */
     float pw = 100 * u, ph = 50 * u, pgap = 8 * u;
     float px0 = rx0 + 20 * u;
     float py0 = topY + 12 * u;
@@ -892,11 +957,11 @@ static void PaintDungeon(const SSurf* s, const SecondScreenSnapshot* snap, Targe
         float y0 = py0 + i * (ph + pgap);
         int sel = (i == viewFloor);
         int isPlayers = (i == info.currentFloor);
-        FillRect(s, (int32_t)px0, (int32_t)y0, (int32_t)(px0 + pw), (int32_t)(y0 + ph),
-                 sel ? MixColor(fill, light, 110) : MixColor(fill, dark, 72));
-        uint32_t edge = sel ? light : (isPlayers ? gold : MixColor(fill, dark, 160));
-        OutlineRect(s, (int32_t)px0, (int32_t)y0, (int32_t)(px0 + pw), (int32_t)(y0 + ph),
-                    (int32_t)(1.5f * u) > 0 ? (int32_t)(1.5f * u) : 1, edge);
+        int32_t cts = (int32_t)(ph / 26.0f);
+        if (cts < 1) cts = 1;
+        Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)px0, (int32_t)y0,
+                                        (int32_t)pw, (int32_t)ph, cts,
+                                        sel ? SS_CHIP_RED : SS_CHIP_DARK);
         /* Label: nF above ground, B(n) below — see kDungeonTopFloor. */
         int fl = topFloorNum - 2 - i;
         char label[6];
@@ -905,18 +970,14 @@ static void PaintDungeon(const SSurf* s, const SecondScreenSnapshot* snap, Targe
         } else {
             snprintf(label, sizeof(label), "B%d", 1 - fl);
         }
-        int32_t fs = (int32_t)(2.0f * u);
-        if (fs < 1) fs = 1;
-        int32_t tw = TextWidthPx(label, fs);
-        DrawTextStr(s, label, (int32_t)(px0 + pw / 2 - tw / 2.0f + (isPlayers ? 5 * u : 0)),
-                    (int32_t)(y0 + ph / 2 - 3.5f * fs), fs,
-                    sel ? Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT)
-                        : MixColor(Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT), dark, 64),
-                    dark);
+        int32_t ms = (int32_t)(1.7f * u);
+        if (ms < 1) ms = 1;
+        MenuTextCentered(s, label, px0 + pw / 2 + (isPlayers ? 5 * u : 0), y0 + ph / 2, ms,
+                         SS_TEXT_WHITE);
         /* A small gold marker keeps Link's floor obvious while another one
          * is being previewed. */
         if (isPlayers) {
-            DrawMapMarker(s, (int32_t)(px0 + 12 * u), (int32_t)(y0 + ph / 2), (int32_t)(3 * u), gold);
+            DrawMapMarker(s, (int32_t)(px0 + 13 * u), (int32_t)(y0 + ph / 2), (int32_t)(3 * u), gold);
         }
         AddTarget(tl, px0, y0, px0 + pw, y0 + ph, SS_ACT_PLAQUE, (uint8_t)i);
     }
@@ -938,27 +999,26 @@ static void PaintDungeon(const SSurf* s, const SecondScreenSnapshot* snap, Targe
 /*  Items panel                                                        */
 /* ------------------------------------------------------------------ */
 
-/* ITEMS tab: the pause menu's 16 equip slots as a 4x4 touch grid in a
- * menu window over the map area — same slot order as the real Items
- * screen, real item icons, the real blinking gold equip cursor and the
- * HUD's A/B bubbles on the equipped slots. Tap equips to A, hold to B —
- * or to whichever slot an armed sidebar ring selected (that cell breathes
- * while armed). */
+/* ITEMS tab: the pause menu's 16 equip slots as a 4x4 touch grid on the
+ * menu's stone slab — same slot order as the real Items screen, the
+ * slab's own recessed wells as cells, real item icons, the real blinking
+ * gold equip cursor and the HUD's A/B bubbles on the equipped slots. Tap
+ * equips to A, hold to B — or to whichever slot an armed sidebar ring
+ * selected (that cell breathes while armed). */
 static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl, float rx0,
                             float ry0, float rx1, float ry1, float u, int32_t ts, uint32_t tick,
                             int armedRing) {
-    Port_SecondScreenTheme_DrawWindow(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
-                                      (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
-    float inset = 8 * ts + ts;
+    Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
+                                     (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
+    float inset = 12 * ts;
     float ix0 = rx0 + inset, iy0 = ry0 + inset, ix1 = rx1 - inset, iy1 = ry1 - inset;
 
-    int32_t fs = (int32_t)(2.6f * u);
-    if (fs < 1) fs = 1;
-    const char* title = "ITEMS";
-    DrawTextStr(s, title, (int32_t)((rx0 + rx1) / 2 - TextWidthPx(title, fs) / 2.0f),
-                (int32_t)(iy0 + 2 * u), fs, Port_SecondScreenTheme_Color(SSC_GOLD),
-                Port_SecondScreenTheme_Color(SSC_BORDER_DARK));
-    iy0 += 7 * fs + 10 * u;
+    /* Header: the menu's red chip, hung over the slab's top band exactly
+     * like the pause screens hang theirs. */
+    int32_t hms = (int32_t)(1.9f * u);
+    if (hms < 1) hms = 1;
+    DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "ITEMS", hms, u);
+    iy0 += MENU_TEXT_BOX * hms + 16 * u;
 
     const int cols = 4, rows = 4;
     int32_t cellW = (int32_t)(ix1 - ix0) / cols;
@@ -969,13 +1029,10 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
     }
     int32_t gx0 = (int32_t)(ix0 + ((ix1 - ix0) - cell * cols) / 2);
     int32_t gy0 = (int32_t)(iy0 + ((iy1 - iy0) - cell * rows) / 2);
-    int32_t gap = cell / 10;
+    int32_t gap = cell / 12;
     int32_t seam = ts > 2 ? ts / 2 : 1;
 
-    uint32_t fill = Port_SecondScreenTheme_Color(SSC_WINDOW_FILL);
-    uint32_t dark = Port_SecondScreenTheme_Color(SSC_BORDER_DARK);
-    uint32_t plate = MixColor(fill, dark, 64);
-    uint32_t plateEmpty = MixColor(fill, dark, 32);
+    uint32_t stoneDark = Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK);
 
     const SecondScreenThemeSprite* cursor =
         Port_SecondScreenTheme_Get((tick & 8) ? SST_CURSOR_1 : SST_CURSOR_0);
@@ -994,11 +1051,18 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 
         uint8_t itemId = snap->menuItems[slot];
 
-        FillRect(s, cx0, cy0, cx1, cy1, dark);
-        FillRect(s, cx0 + seam, cy0 + seam, cx1 - seam, cy1 - seam, itemId ? plate : plateEmpty);
+        /* The slab's own recessed well; the game shows every slot's well
+         * whether or not something is in it. Well scale follows the cell
+         * so the 8 px rim never dominates small cells. */
+        int32_t wts = (cx1 - cx0) / 40;
+        if (wts < 1) wts = 1;
+        if (wts > ts) wts = ts;
+        Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, cx0, cy0, cx1 - cx0, cy1 - cy0, wts);
         if (slot == pulseSlot) {
-            FillRect(s, cx0 + seam, cy0 + seam, cx1 - seam, cy1 - seam,
-                     MixColor(itemId ? plate : plateEmpty, Port_SecondScreenTheme_Color(SSC_GOLD),
+            /* Armed-ring breath: a gold wash over the well interior. */
+            int32_t in = 3 * wts;
+            FillRect(s, cx0 + in, cy0 + in, cx1 - in, cy1 - in,
+                     MixColor(stoneDark, Port_SecondScreenTheme_Color(SSC_GOLD),
                               (uint32_t)(30 + 90 * pt)));
         }
         if (itemId == 0) {
@@ -1053,8 +1117,8 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
                 int32_t tagS = (int32_t)(1.4f * u) > 0 ? (int32_t)(1.4f * u) : 1;
                 char tag[2] = { isA ? 'A' : 'B', 0 };
                 int32_t tagX = isA ? cx0 + seam : cx1 - seam - 5 * tagS;
-                DrawTextStr(s, tag, tagX, cy0 + seam, tagS, Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT),
-                            dark);
+                DrawTextStr(s, tag, tagX, cy0 + seam, tagS, Port_SecondScreenTheme_Color(SSC_MENU_INK),
+                            Port_SecondScreenTheme_Color(SSC_MENU_CREAM));
             }
         }
 
@@ -1069,44 +1133,39 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 /* GEAR tab: TMC quest status — the four elements, the kinstone bag and
  * fusion tally, the figurine collection, and (inside a dungeon) that
  * dungeon's map/compass/big-key haul with its key count. Same row grammar
- * as the settings tab (label left, content right in an inset well) so the
- * two info panels read as one family. */
+ * as the settings tab (recessed well, ink label left, content right) so
+ * the two info panels read as one family — and as the quest-status
+ * screen's own slab-and-wells look. */
 static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
                            float rx1, float ry1, float u, int32_t ts) {
-    Port_SecondScreenTheme_DrawWindow(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
-                                      (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
-    float inset = 8 * ts + ts;
+    Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
+                                     (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
+    float inset = 12 * ts;
     float ix0 = rx0 + inset, iy0 = ry0 + inset, ix1 = rx1 - inset;
 
-    uint32_t fill = Port_SecondScreenTheme_Color(SSC_WINDOW_FILL);
-    uint32_t dark = Port_SecondScreenTheme_Color(SSC_BORDER_DARK);
-    uint32_t textCol = Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT);
-    uint32_t gold = Port_SecondScreenTheme_Color(SSC_GOLD);
-    int32_t fs = (int32_t)(2.6f * u);
-    if (fs < 1) fs = 1;
-    int32_t lfs = (int32_t)(2.2f * u);
-    if (lfs < 1) lfs = 1;
+    uint32_t ink = Port_SecondScreenTheme_Color(SSC_MENU_INK);
+    int32_t hms = (int32_t)(1.9f * u);
+    if (hms < 1) hms = 1;
+    int32_t lms = (int32_t)(1.6f * u); /* row label scale */
+    if (lms < 1) lms = 1;
     int32_t ck = (int32_t)(2.2f * u); /* HUD digit scale for the counters */
     if (ck < 1) ck = 1;
 
-    const char* title = "QUEST";
-    DrawTextStr(s, title, (int32_t)((rx0 + rx1) / 2 - TextWidthPx(title, fs) / 2.0f),
-                (int32_t)(iy0 + 2 * u), fs, gold, dark);
+    DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "QUEST", hms, u);
 
     int isDungeon = (snap->areaFlags & (SECOND_SCREEN_AR_IS_DUNGEON | SECOND_SCREEN_AR_HAS_KEYS)) != 0;
     float rowH = 96 * u, gap = 18 * u;
-    float rowY = iy0 + 7 * fs + 20 * u;
-    float rl = ix0 + 16 * u, rr = ix1 - 16 * u;
+    float rowY = iy0 + MENU_TEXT_BOX * hms + 26 * u;
+    float rl = ix0 + 10 * u, rr = ix1 - 10 * u;
+    int32_t wts = ts > 3 ? 3 : ts; /* well rim scale for the rows */
 
-    /* Shared row scaffolding: inset well + left label (the settings rows'
-     * look); content is right-aligned by each block below. */
+    /* Shared row scaffolding: one recessed well per row, ink label left;
+     * content is right-aligned by each block below. */
 #define GEAR_ROW(label)                                                                                 \
     float cyMid = rowY + rowH / 2;                                                                      \
-    FillRect(s, (int32_t)rl, (int32_t)rowY, (int32_t)rr, (int32_t)(rowY + rowH),                        \
-             MixColor(fill, dark, 72));                                                                 \
-    OutlineRect(s, (int32_t)rl, (int32_t)rowY, (int32_t)rr, (int32_t)(rowY + rowH),                     \
-                (int32_t)(1.5f * u) > 0 ? (int32_t)(1.5f * u) : 1, MixColor(gold, dark, 140));          \
-    DrawTextStr(s, label, (int32_t)(rl + 20 * u), (int32_t)(cyMid - 3.5f * lfs), lfs, textCol, dark);   \
+    Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)rl, (int32_t)rowY,           \
+                                    (int32_t)(rr - rl), (int32_t)rowH, wts);                            \
+    MenuTextDraw(s, label, (int32_t)(rl + 22 * u), (int32_t)(cyMid - 8 * lms), lms, SS_TEXT_INK);       \
     rowY += rowH + gap;
 
     /* Row 1: elements, in the idle emblem's own hues. */
@@ -1119,8 +1178,10 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
         float ex0 = rr - 24 * u - r - 3 * pitch;
         for (int i = 0; i < 4; i++) {
             int32_t ex = (int32_t)(ex0 + i * pitch);
-            uint32_t c = ((snap->elements >> i) & 1) ? kElemCols[i] : MixColor(fill, dark, 130);
-            FillDiamond(s, ex, (int32_t)cyMid, r + (int32_t)u, dark);
+            uint32_t c = ((snap->elements >> i) & 1)
+                             ? kElemCols[i]
+                             : MixColor(Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK), ink, 48);
+            FillDiamond(s, ex, (int32_t)cyMid, r + (int32_t)u, ink);
             FillDiamond(s, ex, (int32_t)cyMid, r, c);
         }
     }
@@ -1132,9 +1193,8 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
         int32_t cy = (int32_t)(cyMid - 8 * ck);
         uint32_t bag = snap->kinstoneBag > 999 ? 999 : snap->kinstoneBag;
         int32_t xl = DrawHudNumber(s, (int32_t)(rr - 24 * u), cy, ck, snap->kinstoneFused, 1, 0);
-        xl -= 12 * (int32_t)u + TextWidthPx("FUSED", lfs);
-        DrawTextStr(s, "FUSED", xl, (int32_t)(cyMid - 3.5f * lfs), lfs, MixColor(textCol, dark, 72),
-                    dark);
+        xl -= 12 * (int32_t)u + MenuTextWidth("FUSED", lms);
+        MenuTextDraw(s, "FUSED", xl, (int32_t)(cyMid - 8 * lms), lms, SS_TEXT_INK);
         xl = DrawHudNumber(s, xl - (int32_t)(40 * u), cy, ck, bag, 1, 0);
         Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, xl - 16 * ck - 4, cy, ck,
                                              ITEMID_KINSTONE);
@@ -1157,7 +1217,8 @@ static void PaintGearPanel(const SSurf* s, const SecondScreenSnapshot* snap, flo
         float px = rr - 24 * u - 3 * pipPitch + 12 * u;
         for (int i = 0; i < 3; i++) {
             int32_t wx0 = (int32_t)(px + i * pipPitch);
-            FillRect(s, wx0 - 2, cy - 2, wx0 + 16 * ck + 2, cy + 16 * ck + 2, MixColor(fill, dark, 110));
+            FillRect(s, wx0 - 2, cy - 2, wx0 + 16 * ck + 2, cy + 16 * ck + 2,
+                     MixColor(Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK), ink, 40));
             if (snap->dungeonItemBits & kPipBits[i]) {
                 Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, wx0, cy, ck,
                                                      kPipItems[i]);
@@ -1186,41 +1247,36 @@ static int GetSettingValue(int row) {
 }
 
 /* SETTINGS tab: the second screen's own toggles as tappable rows,
- * persisted through the port's runtime config (config.json). */
+ * persisted through the port's runtime config (config.json). Dressed
+ * like the gear rows: wells on the slab, ink labels, the menu's red
+ * accent for an enabled toggle. */
 static void PaintSettingsPanel(const SSurf* s, TargetList* tl, float rx0, float ry0, float rx1, float ry1,
                                float u, int32_t ts) {
-    Port_SecondScreenTheme_DrawWindow(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
-                                      (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
-    float inset = 8 * ts + ts;
+    Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
+                                     (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
+    float inset = 12 * ts;
     float ix0 = rx0 + inset, iy0 = ry0 + inset, ix1 = rx1 - inset;
 
-    uint32_t fill = Port_SecondScreenTheme_Color(SSC_WINDOW_FILL);
-    uint32_t dark = Port_SecondScreenTheme_Color(SSC_BORDER_DARK);
-    uint32_t textCol = Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT);
-    uint32_t gold = Port_SecondScreenTheme_Color(SSC_GOLD);
-    int32_t fs = (int32_t)(2.6f * u);
-    if (fs < 1) fs = 1;
-    int32_t rfs = (int32_t)(2.2f * u);
-    if (rfs < 1) rfs = 1;
+    int32_t hms = (int32_t)(1.9f * u);
+    if (hms < 1) hms = 1;
+    int32_t rms = (int32_t)(1.6f * u);
+    if (rms < 1) rms = 1;
+    int32_t wts = ts > 3 ? 3 : ts;
 
-    const char* title = "SETTINGS";
-    DrawTextStr(s, title, (int32_t)((rx0 + rx1) / 2 - TextWidthPx(title, fs) / 2.0f),
-                (int32_t)(iy0 + 2 * u), fs, gold, dark);
+    DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "SETTINGS", hms, u);
 
     float rowH = 76 * u, gap = 18 * u;
-    float y0 = iy0 + 7 * fs + 20 * u;
+    float y0 = iy0 + MENU_TEXT_BOX * hms + 26 * u;
     for (int i = 0; i < SS_SET_COUNT; i++) {
         float ry = y0 + i * (rowH + gap);
-        float rl = ix0 + 16 * u, rr = ix1 - 16 * u;
-        FillRect(s, (int32_t)rl, (int32_t)ry, (int32_t)rr, (int32_t)(ry + rowH), MixColor(fill, dark, 72));
-        OutlineRect(s, (int32_t)rl, (int32_t)ry, (int32_t)rr, (int32_t)(ry + rowH),
-                    (int32_t)(1.5f * u) > 0 ? (int32_t)(1.5f * u) : 1,
-                    MixColor(gold, dark, 140));
-        float ty = ry + rowH / 2 - 3.5f * rfs;
-        DrawTextStr(s, kSettingLabels[i], (int32_t)(rl + 20 * u), (int32_t)ty, rfs, textCol, dark);
+        float rl = ix0 + 10 * u, rr = ix1 - 10 * u;
+        Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)rl, (int32_t)ry,
+                                        (int32_t)(rr - rl), (int32_t)rowH, wts);
+        float ty = ry + rowH / 2 - 8 * rms;
+        MenuTextDraw(s, kSettingLabels[i], (int32_t)(rl + 22 * u), (int32_t)ty, rms, SS_TEXT_INK);
         const char* v = GetSettingValue(i) ? "ON" : "OFF";
-        DrawTextStr(s, v, (int32_t)(rr - 20 * u - TextWidthPx(v, rfs)), (int32_t)ty, rfs,
-                    GetSettingValue(i) ? gold : MixColor(textCol, dark, 110), dark);
+        MenuTextDraw(s, v, (int32_t)(rr - 22 * u - MenuTextWidth(v, rms)), (int32_t)ty, rms,
+                     GetSettingValue(i) ? SS_TEXT_RED : SS_TEXT_INK);
         AddTarget(tl, rl, ry, rr, ry + rowH, SS_ACT_SETTING, (uint8_t)i);
     }
 }
@@ -1229,24 +1285,28 @@ static void PaintSettingsPanel(const SSurf* s, TargetList* tl, float rx0, float 
 /*  Sidebar                                                            */
 /* ------------------------------------------------------------------ */
 
-/* One equip ring: dark disc, double gold ring, the equipped item's icon,
- * and the HUD's own A/B bubble as the badge. An armed ring breathes. */
+/* One equip ring: recessed stone disc, double gold ring, the equipped
+ * item's icon, and the HUD's own A/B bubble as the badge. An armed ring
+ * breathes. (The quest screen's circular sockets are the model.) */
 static void DrawItemRing(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl, float cx,
                          float cy, float r, int isA, int armed, float u, uint32_t tick) {
-    uint32_t dark = Port_SecondScreenTheme_Color(SSC_BORDER_DARK);
+    uint32_t ink = Port_SecondScreenTheme_Color(SSC_MENU_INK);
+    uint32_t cream = Port_SecondScreenTheme_Color(SSC_MENU_CREAM);
     uint32_t gold = Port_SecondScreenTheme_Color(SSC_GOLD);
-    uint32_t goldDim = MixColor(gold, COL_BG, 120);
+    uint32_t goldDim = MixColor(gold, cream, 96);
 
     if (armed) {
         /* Slow gold breath around the ring while it waits for an item tap. */
         float pt = 0.5f + 0.5f * sinf((float)(tick % 48) * (6.28318f / 48.0f));
         FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)(r + 7 * u), (int32_t)(r + 3 * u),
-                 MixColor(COL_BG, gold, (uint32_t)(60 + 150 * pt)));
+                 MixColor(cream, gold, (uint32_t)(60 + 150 * pt)));
     }
 
-    FillCircle(s, (int32_t)cx, (int32_t)cy, (int32_t)r, RGB(0x0C, 0x0C, 0x0C));
-    FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)r, (int32_t)(r - 4 * u), goldDim);
-    FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)(r - 4 * u), (int32_t)(r - 5.5f * u), gold);
+    FillCircle(s, (int32_t)cx, (int32_t)cy, (int32_t)r,
+               Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK));
+    FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)r, (int32_t)(r - 1.5f * u), ink);
+    FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)(r - 3 * u), (int32_t)(r - 4.5f * u), goldDim);
+    FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)(r - 4.5f * u), (int32_t)(r - 6 * u), gold);
 
     uint8_t itemId = isA ? snap->equippedA : snap->equippedB;
     if (itemId >= ITEMID_BOTTLE1 && itemId < ITEMID_BOTTLE1 + 4) {
@@ -1271,12 +1331,13 @@ static void DrawItemRing(const SSurf* s, const SecondScreenSnapshot* snap, Targe
         BlitSprite(s, badge, (int32_t)(bx - badge->w * bs / 2.0f), (int32_t)(by - badge->h * bs / 2.0f),
                    bs);
     } else {
-        FillCircle(s, (int32_t)bx, (int32_t)by, (int32_t)(10 * u), RGB(0x0C, 0x0C, 0x0C));
+        FillCircle(s, (int32_t)bx, (int32_t)by, (int32_t)(10 * u),
+                   Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK));
         FillRing(s, (int32_t)bx, (int32_t)by, (int32_t)(10 * u), (int32_t)(8.5f * u), gold);
         char tag[2] = { isA ? 'A' : 'B', 0 };
         int32_t tfs = (int32_t)(1.6f * u) > 0 ? (int32_t)(1.6f * u) : 1;
         DrawTextStr(s, tag, (int32_t)(bx - 2.5f * tfs), (int32_t)(by - 3.5f * tfs), tfs,
-                    Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT), dark);
+                    Port_SecondScreenTheme_Color(SSC_MENU_INK), Port_SecondScreenTheme_Color(SSC_MENU_CREAM));
     }
 
     AddTarget(tl, cx - r, cy - r, cx + r, cy + r, SS_ACT_RING, isA ? 1 : 2);
@@ -1326,15 +1387,15 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     float vitalsBottom = hy + rows * 8 * hk + 4 * u;
 
     /* Counters chip anchored to the bottom: rupees always, keys inside
-     * key-bearing areas — in the menu window's own chrome. */
+     * key-bearing areas — a recessed stone well like the slab's tray. */
     int chipRows = isDungeon ? 2 : 1;
     int32_t ck = hk;
     int32_t chipTs = ts > 2 ? 2 : ts;
     float chipPad = 8 * chipTs + 4 * u;
     float chipH = chipRows * 16 * ck + (chipRows - 1) * 6 * u + 2 * chipPad;
     float chipY = y + h - chipH;
-    Port_SecondScreenTheme_DrawWindow(s->px, s->w, s->h, s->stride, (int32_t)x, (int32_t)chipY,
-                                      (int32_t)w, (int32_t)chipH, chipTs);
+    Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)x, (int32_t)chipY, (int32_t)w,
+                                    (int32_t)chipH, chipTs);
     {
         float ry = chipY + chipPad;
         float ixl = x + chipPad;
@@ -1370,32 +1431,19 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
 
 static void DrawTabButton(const SSurf* s, TargetList* tl, float x0, float y0, float x1, float y1,
                           const char* label, int active, int tabId, float u, int32_t ts) {
-    int32_t bts = ts > 2 ? 2 : ts;
-    Port_SecondScreenTheme_DrawWindow(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)y0,
-                                      (int32_t)(x1 - x0), (int32_t)(y1 - y0), bts);
-    uint32_t fill = Port_SecondScreenTheme_Color(SSC_WINDOW_FILL);
-    uint32_t dark = Port_SecondScreenTheme_Color(SSC_BORDER_DARK);
-    uint32_t gold = Port_SecondScreenTheme_Color(SSC_GOLD);
-    float in = 8 * bts * 0.75f;
-    if (active) {
-        /* Warm gold-washed interior + a gold inner keyline. */
-        FillRect(s, (int32_t)(x0 + in), (int32_t)(y0 + in), (int32_t)(x1 - in), (int32_t)(y1 - in),
-                 MixColor(fill, gold, 56));
-        OutlineRect(s, (int32_t)(x0 + in), (int32_t)(y0 + in), (int32_t)(x1 - in), (int32_t)(y1 - in),
-                    (int32_t)(1.5f * u) > 0 ? (int32_t)(1.5f * u) : 1, gold);
-    } else {
-        FillRect(s, (int32_t)(x0 + in), (int32_t)(y0 + in), (int32_t)(x1 - in), (int32_t)(y1 - in),
-                 MixColor(fill, dark, 110));
-    }
+    /* Menu chips: the active tab wears the pause menu's red header chip,
+     * the rest its dark name chips — the exact chip family the game
+     * floats over the parchment. */
+    int32_t bts = (int32_t)((y1 - y0) / 26.0f);
+    if (bts < 1) bts = 1;
+    if (bts > ts) bts = ts;
+    Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)y0,
+                                    (int32_t)(x1 - x0), (int32_t)(y1 - y0), bts,
+                                    active ? SS_CHIP_RED : SS_CHIP_DARK);
     if (label != NULL) {
-        int32_t fs = (int32_t)(2.6f * u);
-        if (fs < 1) fs = 1;
-        int32_t tw = TextWidthPx(label, fs);
-        DrawTextStr(s, label, (int32_t)((x0 + x1) / 2 - tw / 2.0f), (int32_t)((y0 + y1) / 2 - 3.5f * fs),
-                    fs,
-                    active ? Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT)
-                           : MixColor(Port_SecondScreenTheme_Color(SSC_TEXT_LIGHT), dark, 80),
-                    dark);
+        int32_t ms = (int32_t)(1.8f * u);
+        if (ms < 1) ms = 1;
+        MenuTextCentered(s, label, (x0 + x1) / 2.0f, (y0 + y1) / 2.0f, ms, SS_TEXT_WHITE);
     }
     AddTarget(tl, x0, y0, x1, y1, SS_ACT_TAB, (uint8_t)tabId);
 }
@@ -1421,7 +1469,7 @@ static void PaintTabBar(const SSurf* s, TargetList* tl, float u, int32_t ts, int
     DrawTabButton(s, tl, sx0, y, sx1, y + bh, NULL, activeTab == SS_TAB_SETTINGS, SS_TAB_SETTINGS, u, ts);
     float cog = bh * 0.5f / 9.0f;
     DrawPixelArt(s, kCogArt, 9, (sx0 + sx1) / 2 - 4.5f * cog, y + bh / 2 - 4.5f * cog, cog,
-                 RGB(0xF0, 0xF0, 0xF0));
+                 Port_SecondScreenTheme_Color(SSC_MENU_WHITE));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1469,15 +1517,17 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     int crestCfg = Port_Config_GetSecondScreenCrestPins();
     int returnCfg = Port_Config_GetSecondScreenFloorReturn();
 
-    FillRect(&s, 0, 0, s.w, s.h, COL_BG);
-
     /* Scale units: u drives the layout (reference design is a 720p min
-     * axis), ts is the integer chrome tile scale for the theme windows. */
+     * axis), ts is the integer art scale for the decoded menu dressing. */
     float u = (width < height ? width : height) / 720.0f;
     int32_t minAxis = width < height ? width : height;
     int32_t ts = minAxis / 240;
     if (ts < 2) ts = 2;
     if (ts > 6) ts = 6;
+
+    /* The whole surface is the pause menu's parchment; panels lay their
+     * slab/chips over it. (Flat cream until the pattern decodes.) */
+    Port_SecondScreenTheme_DrawBackdrop(s.px, s.w, s.h, s.stride, 0, 0, s.w, s.h, ts);
 
     float tabH = 96 * u;
     float sideW = 200 * u;
