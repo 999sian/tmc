@@ -66,6 +66,8 @@
 /* src/common.c (appended accessors — ROM-const reads only). */
 extern const u8* Port_GetRawPaletteGroupData(u32 group, u32* outNumColors);
 extern const u8* Port_GetRawPaletteGroupBankData(u32 group, u32 destPaletteNum, u32* outNumColors);
+extern const u8* Port_GetRawPaletteGroupEntryData(u32 group, u32 entryIdx, u32* outNumColors,
+                                                  u32* outDestPaletteNum);
 extern const u8* Port_ResolveGfxGroupVram(u32 group, u32 vramAddr, u32* outAvail);
 
 /* src/affine.c — frame OBJ piece list for (sprite, frame); PC path is
@@ -80,6 +82,16 @@ extern void UnpackTextNibbles(void* src_ptr, u8* dest);
 extern void* gUnk_081092AC[]; /* border shape data per border_type */
 extern u8 gUnk_081094CE[];    /* color LUTs, 0xC0 bytes per fill_type */
 extern u32 gUnk_0810926C[];   /* window fill patterns, u32 each */
+extern u8 gUnk_0810942E[];    /* color-table head (first 160 logical bytes) */
+extern void* gUnk_08109248[]; /* message font glyph banks (bank 0 = latin) */
+
+/* Resolved ROM group tables (port_rom.c) — for the group-record walk the
+ * pause-screen tilemap fetch needs (EWRAM-destined records fall outside
+ * Port_ResolveGfxGroupVram's remit on non-USA link maps, so they are
+ * matched by destination region instead; mirrors the walk
+ * port_second_screen_worldmap.c does for the map screen). */
+extern const void* gGfxGroups[];
+extern const u8* gGlobalGfxAndPalettes;
 
 /* HUD digit gfx blob (data_const_stubs.c / ROM) — same symbol src/ui.c
  * reads at runtime for every region. */
@@ -89,6 +101,35 @@ extern const u8 gUnk_085C4620[];
 #define HUD_PALETTE_GROUP 12u       /* -> BG bank 15, MESSAGE_PALETTE */
 #define HUD_BG_CHARBASE 0x0600C000u /* BG0 char base 3 (control 0x1f0c) */
 #define OBJ_VRAM_BASE 0x06010000u
+
+/*
+ * Pause ITEM screen (the light theme's ground truth). PauseMenuScreen_1
+ * selects gUnk_08128AD8[0] = { paletteGroup 182, gfxGroup 90, dispcnt,
+ * bg1Control 0x1C05, bg2Control 0x1D03 } (src/data/figurineMenuData.c,
+ * applied by sub_080A4DB8); sub_080A4D34 loads the shared pause chrome
+ * first (gfx group 86, BG3 control 0x1E0B) plus palette group 181 over
+ * the gameplay groups 11/12. That makes the screen:
+ *
+ *   BG3  Ezlo-doodle parchment backdrop: group 86 tiles @ 0x06008000
+ *        (charBase 2) + its EWRAM tilemap copy (gBG3Buffer).
+ *   BG2  the carved stone slab with the item wells: group 90 tiles @
+ *        0x06000000 (charBase 0) + its EWRAM tilemap copy (gBG2Buffer).
+ *   BG1  off at entry (dispcnt bit 9 clear), BG0 live text — neither is
+ *        part of the static dressing.
+ *
+ * Both layers compose here into private 240x160 RGBA images the draw
+ * calls slice at runtime: the backdrop pattern re-stamped on its own
+ * doodle lattice, the slab nine-sliced for panels, the bottle tray
+ * nine-sliced for wells/rows. Palette load order 11, 12, 181, 182 —
+ * later loads win, like the shared gPaletteBuffer.
+ */
+#define MENU_GFX_GROUP 90u
+#define MENU_PALETTE_GROUP 182u
+#define MENU_TILES_DEST 0x06000000u   /* bg2Control 0x1D03 -> charBase 0 */
+#define CHROME_TILES_DEST 0x06008000u /* bg3Control 0x1E0B -> charBase 2 */
+#define CHROME_GFX_GROUP 86u
+#define MENU_SCREEN_W 240
+#define MENU_SCREEN_H 160
 
 /* OBJ palette state at pause time, most recently loaded group first —
  * 182 (Items tab: OBJ banks 5..10), 181 (pause base: OBJ 0..4), 11
@@ -133,6 +174,55 @@ static int sBuilt = 0;
 static uint32_t sArena[40000];
 static int32_t sArenaUsed = 0;
 
+/* ---- pause-menu layer caches (see MENU_* block above) ---- */
+static uint32_t sMenuBg3[MENU_SCREEN_W * MENU_SCREEN_H]; /* parchment, opaque */
+static uint32_t sMenuBg2[MENU_SCREEN_W * MENU_SCREEN_H]; /* slab, 0 = clear */
+static int sMenuOk = 0;
+static int sSlabOk = 0, sTrayOk = 0, sDoodleOk = 0, sFontOk = 0;
+static int32_t sSlabX0, sSlabY0, sSlabX1, sSlabY1; /* slab bbox, exclusive max */
+
+/* One full Ezlo doodle cut from the backdrop layer, and the diagonal
+ * lattice every doodle of the pattern sits on: SRC + i*A + j*B (verified
+ * against the composed layer — the pattern is not a straight tile grid,
+ * so the backdrop is re-stamped instead of wrap-tiled). */
+#define DOODLE_W 34
+#define DOODLE_H 39
+#define DOODLE_SRC_X 139 /* a doodle fully inside the 240x160 screen */
+#define DOODLE_SRC_Y 13
+#define DOODLE_AX (-56)
+#define DOODLE_AY 16
+#define DOODLE_BX 24
+#define DOODLE_BY 48
+static uint32_t sDoodle[DOODLE_W * DOODLE_H]; /* 0 = transparent */
+
+/* The bottle tray (the slab's one isolated wide well) — nine-slice source
+ * for every recessed well; its rounded rim fits in 8 px corners. Copied
+ * out before the slab is cleaned (below). */
+#define TRAY_X0 48
+#define TRAY_Y0 104
+#define TRAY_X1 156
+#define TRAY_Y1 132
+#define TRAY_W (TRAY_X1 - TRAY_X0)
+#define TRAY_H (TRAY_Y1 - TRAY_Y0)
+#define WELL_CORNER 8
+static uint32_t sTrayPx[TRAY_W * TRAY_H];
+
+/* Slab slicing: 26x44 corner regions keep the triforce blocks intact.
+ * The slab is a PANEL source, not a texture — its interior carries the
+ * item wells, so after the tray/well art is copied out, the interior
+ * (inside the carved side/top/bottom bands) is re-paved with the slab's
+ * own plain stone (the clean speckled patch right of the well grid).
+ * Slices then tile nothing but stone and carvings. */
+#define SLAB_CORNER_W 26
+#define SLAB_CORNER_H 44
+#define SLAB_SIDE_W 28  /* carved side columns end before x 44 / after 196 */
+#define SLAB_TOP_H 15   /* top triangle band rows 17..31 */
+#define SLAB_BOTTOM_H 18
+#define STONE_PATCH_X 190 /* clean speckled stone, right of the well grid */
+#define STONE_PATCH_Y 56
+#define STONE_PATCH_W 8
+#define STONE_PATCH_H 64
+
 static SecondScreenThemeSprite sSprites[SST_COUNT];
 static uint32_t sColors[SSC_COUNT];
 
@@ -142,6 +232,18 @@ enum { CHROME_CORNER, CHROME_H_CORNER, CHROME_H_STRAIGHT, CHROME_V_CORNER, CHROM
        CHROME_FILL, CHROME_TILE_COUNT };
 static uint32_t sChromeTiles[CHROME_TILE_COUNT][64];
 static int sChromeOk = 0;
+
+/* Chip tile sets: the rounded border_type-9 frame in each SS_CHIP_* fill
+ * scheme, built by the same sub_0805F918 replay as the dialog chrome. */
+static uint32_t sChipTiles[SS_CHIP_STYLE_COUNT][CHROME_TILE_COUNT][64];
+static int sChipTilesOk[SS_CHIP_STYLE_COUNT];
+
+/* Message font: glyph bank 0 (latin, 64 bytes per 8x16 glyph, row 0 is a
+ * metrics row) plus the game's text color LUT pair per SS_TEXT_* style
+ * and the message palette (BG bank 15) as RGBA. */
+static const u8* sFontGlyphs = NULL;
+static u8 sTextLut[SS_TEXT_STYLE_COUNT][32]; /* [0..15] even cols, [16..31] odd */
+static uint32_t sMsgPal[16];
 
 static uint32_t Rgb555ToRgba8888(uint16_t c) {
     uint8_t r = (uint8_t)((c & 0x1Fu) << 3);
@@ -519,6 +621,361 @@ static void DeriveColors(void) {
 }
 
 /* -------------------------------------------------------------------- */
+/*  Pause-menu layers (light theme)                                      */
+/* -------------------------------------------------------------------- */
+
+/* First EWRAM-destined record of a gfx group (the menu screens stage
+ * their BG tilemaps through EWRAM buffers whose absolute address is a
+ * per-region link detail, so records are matched by destination region —
+ * the same rule port_second_screen_worldmap.c applies). Uncompressed
+ * records only: both menu groups ship plain data on every known ROM. */
+static const u8* MenuEwramBlob(u32 group, u32* outLen) {
+    const u8* rec;
+    int i;
+
+    *outLen = 0;
+    if (group >= 133u || gGlobalGfxAndPalettes == NULL) { /* GFX_GROUPS_COUNT_MAX */
+        return NULL;
+    }
+    rec = (const u8*)gGfxGroups[group];
+    if (rec == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < 32; i++, rec += 12) {
+        u32 raw0 = Port_ReadU32(rec);
+        u32 ctrl = (raw0 >> 24) & 0xF;
+        u32 dest = Port_ReadU32(rec + 4);
+        s32 size = (s32)Port_ReadU32(rec + 8);
+        if (ctrl == 0xD) {
+            return NULL;
+        }
+        if ((dest >> 24) == 0x02u && size > 0) {
+            *outLen = (u32)size;
+            return gGlobalGfxAndPalettes + (raw0 & 0xFFFFFF);
+        }
+        if (((raw0 >> 24) & 0x80) == 0) {
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+/* Applies one palette group to a 16-bank BG palette (RGB555), skipping
+ * OBJ banks — LoadPaletteGroup's effect on the BG half of gPaletteBuffer,
+ * through the port's chain accessor. */
+static void MenuApplyPaletteGroup(u32 group, uint16_t* bgPal) {
+    u32 e;
+    for (e = 0; e < 8; e++) {
+        u32 numColors = 0, destBank = 0, c;
+        const u8* p = Port_GetRawPaletteGroupEntryData(group, e, &numColors, &destBank);
+        if (p == NULL) {
+            return;
+        }
+        if (destBank >= 16) {
+            continue; /* OBJ bank — the static layers are BG-only */
+        }
+        for (c = 0; c < numColors && destBank * 16u + c < 256u; c++) {
+            bgPal[destBank * 16u + c] = (uint16_t)(p[c * 2] | (p[c * 2 + 1] << 8));
+        }
+    }
+}
+
+/* Paints one 32x20 text-BG tilemap into a 240x160 RGBA image. Color 0 is
+ * skipped so the caller controls layering (backdrop color under BG3, BG3
+ * under BG2 — both menu BGs sit at priority 3 with no scroll). */
+static void MenuDrawLayer(uint32_t* dst, const u8* tilemap, u32 mapLen, const u8* tiles, u32 tilesLen,
+                          const uint16_t* bgPal) {
+    u32 tileCount = tilesLen / 32u;
+    int32_t x, y;
+    for (y = 0; y < MENU_SCREEN_H; y++) {
+        u32 tileRow = ((u32)y >> 3) & 31u;
+        int32_t rowInTile = y & 7;
+        for (x = 0; x < MENU_SCREEN_W; x++) {
+            u32 tileCol = ((u32)x >> 3) & 31u;
+            u32 entryOff = (tileRow * 32u + tileCol) * 2u;
+            u16 entry = (entryOff + 2u <= mapLen) ? Port_ReadU16(tilemap + entryOff) : 0;
+            u32 tileId = entry & 0x3FFu;
+            int32_t inX = x & 7, inY = rowInTile;
+            u8 packed, colorIndex;
+            if (tileId >= tileCount) {
+                continue;
+            }
+            if (entry & 0x400u) inX = 7 - inX;
+            if (entry & 0x800u) inY = 7 - inY;
+            packed = tiles[tileId * 32u + (u32)inY * 4u + ((u32)inX >> 1)];
+            colorIndex = (inX & 1) ? (u8)(packed >> 4) : (u8)(packed & 0xFu);
+            if (colorIndex == 0) {
+                continue;
+            }
+            dst[(size_t)y * MENU_SCREEN_W + (size_t)x] =
+                Rgb555ToRgba8888(bgPal[(((u32)entry >> 12) & 0xFu) * 16u + colorIndex]);
+        }
+    }
+}
+
+/* Most common color of an image region (RGB444 buckets — plenty for GBA
+ * color depth), used to sample the parchment/stone/well tones from the
+ * composed layers instead of hardcoding them. */
+static uint32_t ModeColor(const uint32_t* img, int32_t x0, int32_t y0, int32_t x1, int32_t y1,
+                          uint32_t fallback) {
+    static uint16_t hist[4096]; /* one-time build helper; zeroed per use */
+    uint32_t bestBucket = 0xFFFFFFFFu;
+    uint32_t bestCount = 0;
+    int32_t x, y;
+    memset(hist, 0, sizeof(hist));
+    for (y = y0; y < y1; y++) {
+        for (x = x0; x < x1; x++) {
+            uint32_t c = img[y * MENU_SCREEN_W + x];
+            uint32_t b;
+            if (c == 0) {
+                continue;
+            }
+            b = ((c >> 4) & 0xF) | ((c >> 8) & 0xF0) | ((c >> 12) & 0xF00);
+            if ((uint32_t)++hist[b] > bestCount) {
+                bestCount = hist[b];
+                bestBucket = b;
+            }
+        }
+    }
+    if (bestBucket == 0xFFFFFFFFu) {
+        return fallback;
+    }
+    for (y = y0; y < y1; y++) {
+        for (x = x0; x < x1; x++) {
+            uint32_t c = img[y * MENU_SCREEN_W + x];
+            uint32_t b = ((c >> 4) & 0xF) | ((c >> 8) & 0xF0) | ((c >> 12) & 0xF00);
+            if (c != 0 && b == bestBucket) {
+                return c;
+            }
+        }
+    }
+    return fallback;
+}
+
+/* Text color LUT for (fill_type, charColor) — GetTextColorTablePtr's
+ * head/tail split (src/text.c): logical offsets below 160 read the
+ * gUnk_0810942E head, the rest the gUnk_081094CE tail. 32 bytes: even
+ * columns [0..15] (low nibble), odd columns [16..31] (pre-shifted). */
+static const u8* TextLutPtr(u32 fillType, u32 charColor) {
+    u32 logical = fillType * 0xC0u + charColor * 0x20u;
+    return (logical < 160u) ? &gUnk_0810942E[logical] : &gUnk_081094CE[logical - 160u];
+}
+
+/* Replays sub_0805F918 for one border/fill scheme into a chip tile set —
+ * identical pipeline to BuildChrome, but through the WINDOW color table
+ * (gUnk_081094CE + fill*0xC0 directly, sub_0805F918's own indexing) so
+ * outside pixels stay transparent and the interior takes the scheme's
+ * fill color. Returns 1 when the corner tile decoded something. */
+static int BuildChipSet(u32 borderType, u32 fillType, const uint16_t* pal, u32 numColors,
+                        uint32_t out[CHROME_TILE_COUNT][64]) {
+    const u8* shapes = (const u8*)gUnk_081092AC[borderType];
+    const u8* lutE = &gUnk_081094CE[fillType * 0xC0u];
+    const u8* lutO = lutE + 0x10;
+    u32 sentinel = fillType * 0xC0u + 0xAAu;
+    u8 head = (sentinel < 160u) ? gUnk_0810942E[sentinel] : gUnk_081094CE[sentinel - 160u];
+    u32 fillIdx = gUnk_0810926C[head & 0x0Fu] & 0xFu;
+    uint32_t fill = (fillIdx != 0 && fillIdx < numColors) ? Rgb555ToRgba8888(pal[fillIdx]) : 0xFF000000u;
+    u8 unpacked[128];
+    int32_t block, py, px, opaque = 0;
+
+    if (shapes == NULL) {
+        return 0;
+    }
+    for (block = 0; block < 3; block++) {
+        UnpackTextNibbles((void*)(shapes + block * 0x40), unpacked);
+        for (py = 0; py < 16; py++) {
+            for (px = 0; px < 8; px++) {
+                u32 pix = unpacked[py * 8 + px] & 0x0Fu;
+                u32 colorIdx = (px & 1) ? (u32)(lutO[pix] >> 4) : (u32)(lutE[pix] & 0x0Fu);
+                uint32_t rgba =
+                    (colorIdx == 0 || colorIdx >= numColors) ? 0u : Rgb555ToRgba8888(pal[colorIdx]);
+                out[block * 2 + (py >> 3)][(py & 7) * 8 + px] = rgba;
+                if (block == 0 && py < 8 && rgba != 0) {
+                    opaque++;
+                }
+            }
+        }
+    }
+    for (py = 0; py < 64; py++) {
+        out[CHROME_FILL][py] = fill;
+    }
+    return opaque >= 8;
+}
+
+/* Composes the pause item screen's two static layers and derives every
+ * light-theme ingredient from them (slab bbox, doodle template, tones).
+ * Each ingredient validates independently and degrades on its own. */
+static void BuildMenuTheme(void) {
+    uint16_t bgPal[16 * 16];
+    /* LoadGfxGroups (11, 12) -> sub_080A4D34 (181) -> sub_080A4DB8 (182):
+     * the exact load order on the way into the item screen. */
+    static const u8 kMenuPaletteGroups[] = { 11u, 12u, 181u, MENU_PALETTE_GROUP };
+    u32 slabTilesLen = 0, slabMapLen = 0, backTilesLen = 0, backMapLen = 0;
+    const u8* slabTiles = Port_ResolveGfxGroupVram(MENU_GFX_GROUP, MENU_TILES_DEST, &slabTilesLen);
+    const u8* slabMap = MenuEwramBlob(MENU_GFX_GROUP, &slabMapLen);
+    const u8* backTiles = Port_ResolveGfxGroupVram(CHROME_GFX_GROUP, CHROME_TILES_DEST, &backTilesLen);
+    const u8* backMap = MenuEwramBlob(CHROME_GFX_GROUP, &backMapLen);
+    uint32_t backdrop;
+    size_t i;
+    int32_t x, y;
+
+    sMenuOk = 0;
+    if (slabTiles == NULL || slabMap == NULL || backTiles == NULL || backMap == NULL ||
+        slabTilesLen < 32 || backTilesLen < 32) {
+        return;
+    }
+
+    memset(bgPal, 0, sizeof(bgPal));
+    for (i = 0; i < sizeof(kMenuPaletteGroups); i++) {
+        MenuApplyPaletteGroup(kMenuPaletteGroups[i], bgPal);
+    }
+
+    /* Parchment layer: backdrop color 0 under the pattern (the pattern
+     * tiles are fully opaque in practice; color 0 never shows). */
+    backdrop = Rgb555ToRgba8888(bgPal[0]);
+    for (i = 0; i < (size_t)(MENU_SCREEN_W * MENU_SCREEN_H); i++) {
+        sMenuBg3[i] = backdrop;
+        sMenuBg2[i] = 0;
+    }
+    MenuDrawLayer(sMenuBg3, backMap, backMapLen, backTiles, backTilesLen, bgPal);
+    MenuDrawLayer(sMenuBg2, slabMap, slabMapLen, slabTiles, slabTilesLen, bgPal);
+    sMenuOk = 1;
+
+    /* Slab bbox from the layer's own opacity. */
+    {
+        int32_t minX = MENU_SCREEN_W, minY = MENU_SCREEN_H, maxX = -1, maxY = -1;
+        for (y = 0; y < MENU_SCREEN_H; y++) {
+            for (x = 0; x < MENU_SCREEN_W; x++) {
+                if (sMenuBg2[y * MENU_SCREEN_W + x] != 0) {
+                    if (x < minX) minX = x;
+                    if (x > maxX) maxX = x;
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
+            }
+        }
+        sSlabX0 = minX;
+        sSlabY0 = minY;
+        sSlabX1 = maxX + 1;
+        sSlabY1 = maxY + 1;
+        sSlabOk = (maxX - minX) >= 160 && (maxY - minY) >= 96;
+    }
+
+    /* Colors first (the doodle/tray checks compare against them). */
+    sColors[SSC_MENU_CREAM] = ModeColor(sMenuBg3, 0, 0, MENU_SCREEN_W, MENU_SCREEN_H,
+                                        sColors[SSC_MENU_CREAM]);
+    if (sSlabOk) {
+        sColors[SSC_MENU_STONE] =
+            ModeColor(sMenuBg2, sSlabX0, sSlabY0, sSlabX1, sSlabY1, sColors[SSC_MENU_STONE]);
+    }
+    sColors[SSC_MENU_STONE_DARK] = ModeColor(sMenuBg2, TRAY_X0 + WELL_CORNER, TRAY_Y0 + WELL_CORNER,
+                                             TRAY_X1 - WELL_CORNER, TRAY_Y1 - WELL_CORNER,
+                                             sColors[SSC_MENU_STONE_DARK]);
+
+    /* Bottle-tray well: all four rim corners plus the center must be
+     * opaque slab pixels, or wells fall back to flat tones. The tray is
+     * copied out now because the slab interior is re-paved next. */
+    sTrayOk = sSlabOk && TRAY_X0 >= sSlabX0 && TRAY_X1 <= sSlabX1 && TRAY_Y0 >= sSlabY0 &&
+              TRAY_Y1 <= sSlabY1 && sMenuBg2[TRAY_Y0 * MENU_SCREEN_W + TRAY_X0] != 0 &&
+              sMenuBg2[TRAY_Y0 * MENU_SCREEN_W + TRAY_X1 - 1] != 0 &&
+              sMenuBg2[(TRAY_Y1 - 1) * MENU_SCREEN_W + TRAY_X0] != 0 &&
+              sMenuBg2[(TRAY_Y1 - 1) * MENU_SCREEN_W + TRAY_X1 - 1] != 0 &&
+              sMenuBg2[((TRAY_Y0 + TRAY_Y1) / 2) * MENU_SCREEN_W + (TRAY_X0 + TRAY_X1) / 2] != 0;
+    for (y = 0; y < TRAY_H; y++) {
+        for (x = 0; x < TRAY_W; x++) {
+            sTrayPx[y * TRAY_W + x] = sMenuBg2[(TRAY_Y0 + y) * MENU_SCREEN_W + TRAY_X0 + x];
+        }
+    }
+
+    /* Re-pave the slab interior with its own plain stone so plate slices
+     * never repeat the wells: tile the clean patch over everything inside
+     * the carved bands. The patch must be pure stone (no rim/ink pixels)
+     * or a flat stone fill substitutes. */
+    if (sSlabOk) {
+        uint32_t patch[STONE_PATCH_W * STONE_PATCH_H];
+        int patchOk = 1;
+        u32 stoneLuma = Luma(sColors[SSC_MENU_STONE]);
+        for (y = 0; y < STONE_PATCH_H; y++) {
+            for (x = 0; x < STONE_PATCH_W; x++) {
+                uint32_t c = sMenuBg2[(STONE_PATCH_Y + y) * MENU_SCREEN_W + STONE_PATCH_X + x];
+                patch[y * STONE_PATCH_W + x] = c;
+                if (c == 0 || Luma(c) * 4 < stoneLuma * 3) {
+                    patchOk = 0; /* hit a rim/outline — not plain stone */
+                }
+            }
+        }
+        for (y = sSlabY0 + SLAB_TOP_H; y < sSlabY1 - SLAB_BOTTOM_H; y++) {
+            for (x = sSlabX0 + SLAB_SIDE_W; x < sSlabX1 - SLAB_SIDE_W; x++) {
+                sMenuBg2[y * MENU_SCREEN_W + x] =
+                    patchOk ? patch[(y % STONE_PATCH_H) * STONE_PATCH_W + (x % STONE_PATCH_W)]
+                            : sColors[SSC_MENU_STONE];
+            }
+        }
+    }
+
+    /* Doodle template: cut the known full doodle off the parchment; its
+     * outer ring must be (nearly) flat cream and the cut must contain a
+     * plausible amount of ink, otherwise the backdrop stays plain. */
+    {
+        uint32_t cream = sColors[SSC_MENU_CREAM];
+        int32_t inked = 0, ringInk = 0;
+        for (y = 0; y < DOODLE_H; y++) {
+            for (x = 0; x < DOODLE_W; x++) {
+                uint32_t c = sMenuBg3[(DOODLE_SRC_Y + y) * MENU_SCREEN_W + DOODLE_SRC_X + x];
+                sDoodle[y * DOODLE_W + x] = (c == cream) ? 0u : c;
+                if (c != cream) {
+                    inked++;
+                }
+            }
+        }
+        for (x = -1; x <= DOODLE_W; x++) {
+            if (sMenuBg3[(DOODLE_SRC_Y - 1) * MENU_SCREEN_W + DOODLE_SRC_X + x] != cream) ringInk++;
+            if (sMenuBg3[(DOODLE_SRC_Y + DOODLE_H) * MENU_SCREEN_W + DOODLE_SRC_X + x] != cream) ringInk++;
+        }
+        for (y = 0; y < DOODLE_H; y++) {
+            if (sMenuBg3[(DOODLE_SRC_Y + y) * MENU_SCREEN_W + DOODLE_SRC_X - 1] != cream) ringInk++;
+            if (sMenuBg3[(DOODLE_SRC_Y + y) * MENU_SCREEN_W + DOODLE_SRC_X + DOODLE_W] != cream) ringInk++;
+        }
+        sDoodleOk = inked >= 300 && inked <= 1000 && ringInk <= 8;
+    }
+
+    /* Chips + text colors come from the message palette (BG bank 15). */
+    {
+        u32 numColors = 0;
+        const u8* raw = Port_GetRawPaletteGroupData(HUD_PALETTE_GROUP, &numColors);
+        if (raw != NULL && numColors >= 16) {
+            const uint16_t* pal = (const uint16_t*)raw;
+            for (i = 0; i < 16; i++) {
+                sMsgPal[i] = Rgb555ToRgba8888(((const u8*)raw)[i * 2] | ((const u8*)raw)[i * 2 + 1] << 8);
+            }
+            sChipTilesOk[SS_CHIP_DARK] = BuildChipSet(9, 0, pal, 16, sChipTiles[SS_CHIP_DARK]);
+            sChipTilesOk[SS_CHIP_RED] = BuildChipSet(9, 1, pal, 16, sChipTiles[SS_CHIP_RED]);
+            /* Ink/black/white/red: the exact colors the text LUT styles
+             * resolve to (fill 7 body = index 11, black 15, white 14,
+             * red body = index 8 — see the tail table's charColor maps). */
+            sColors[SSC_MENU_INK] = sMsgPal[11];
+            sColors[SSC_MENU_BLACK] = sMsgPal[15];
+            sColors[SSC_MENU_WHITE] = sMsgPal[14];
+            sColors[SSC_MENU_RED] = sMsgPal[8];
+        }
+    }
+
+    /* Message font: glyph bank 0 plus the four style LUT pairs. Bank 0 is
+     * the latin/ASCII face on USA and EU (sub_0805F25C routes plain A-Z
+     * there for every EU language); the JP ROM's bank 0 is its own script,
+     * so JP keeps the procedural label fallback instead of mojibake. */
+    {
+        static const u8 kStyleFill[SS_TEXT_STYLE_COUNT] = { 7, 5, 5, 5 };
+        static const u8 kStyleColor[SS_TEXT_STYLE_COUNT] = { 0, 0, 1, 2 };
+        sFontGlyphs = (const u8*)gUnk_08109248[0];
+        for (i = 0; i < SS_TEXT_STYLE_COUNT; i++) {
+            memcpy(sTextLut[i], TextLutPtr(kStyleFill[i], kStyleColor[i]), 32);
+        }
+        sFontOk = sFontGlyphs != NULL && !REGION_IS_JP;
+    }
+}
+
+/* -------------------------------------------------------------------- */
 /*  Build                                                                */
 /* -------------------------------------------------------------------- */
 
@@ -606,6 +1063,7 @@ static void BuildAll(const uint16_t* hudPal, u32 hudColors) {
                          sizeof(kPauseObjGfxGroups), SST_CURSOR_1);
 
     DeriveColors();
+    BuildMenuTheme();
 }
 
 int Port_SecondScreenTheme_Ready(void) {
@@ -616,7 +1074,9 @@ int Port_SecondScreenTheme_Ready(void) {
         return 1;
     }
     /* Neutral stand-ins until the ROM tables resolve; overwritten by
-     * DeriveColors. These are design placeholders of ours, not game data. */
+     * DeriveColors / BuildMenuTheme. These are design placeholders of
+     * ours, not game data — the menu set is a plausible parchment/stone
+     * scheme so the panel doesn't flash dark before the decode lands. */
     sColors[SSC_WINDOW_FILL] = 0xFF282420u;
     sColors[SSC_BORDER_LIGHT] = 0xFF78B4C8u;
     sColors[SSC_BORDER_DARK] = 0xFF101820u;
@@ -624,6 +1084,13 @@ int Port_SecondScreenTheme_Ready(void) {
     sColors[SSC_HEART_RED] = 0xFF3030E8u;
     sColors[SSC_RUPEE_GREEN] = 0xFF58C848u;
     sColors[SSC_TEXT_LIGHT] = 0xFFF0F0F0u;
+    sColors[SSC_MENU_CREAM] = 0xFFA8ECF0u;      /* warm parchment */
+    sColors[SSC_MENU_STONE] = 0xFFD0CCD4u;      /* pale stone */
+    sColors[SSC_MENU_STONE_DARK] = 0xFFC0C0C4u; /* recessed stone */
+    sColors[SSC_MENU_INK] = 0xFF383040u;        /* dark warm ink */
+    sColors[SSC_MENU_BLACK] = 0xFF000000u;
+    sColors[SSC_MENU_WHITE] = 0xFFF8F8F8u;
+    sColors[SSC_MENU_RED] = 0xFF2838C8u;        /* brick red */
 
     /* The one ingredient everything needs: the HUD/message palette. If
      * it (or the HUD tiles) aren't resolved yet the ROM isn't ready —
@@ -781,4 +1248,362 @@ void Port_SecondScreenTheme_DrawWindow(uint32_t* pixels, int32_t bufW, int32_t b
                            bufW, yb);
         }
     }
+}
+
+/* -------------------------------------------------------------------- */
+/*  Pause-menu drawing (light theme)                                     */
+/* -------------------------------------------------------------------- */
+
+int Port_SecondScreenTheme_MenuReady(void) {
+    return sBuilt && sMenuOk && sSlabOk;
+}
+
+void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                         int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t scale) {
+    if (scale < 1) {
+        scale = 1;
+    }
+    FillRectTheme(pixels, bufW, bufH, stride, x0, y0, x1, y1, sColors[SSC_MENU_CREAM]);
+    if (!sMenuOk || !sDoodleOk) {
+        return; /* flat parchment until the pattern decodes */
+    }
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > bufW) x1 = bufW;
+    if (y1 > bufH) y1 = bufH;
+    if (x0 >= x1 || y0 >= y1) {
+        return;
+    }
+
+    /* Doodle lattice walk. Solving [dx;dy] = i*A + j*B for the pattern-
+     * space rect corners gives the (i, j) window to stamp (det(A,B) =
+     * -3072): i = (dy - 2 dx) / 128, j = (2 dx + 7 dy) / 384. Pattern
+     * space is surface pixels / scale, anchored at the surface origin so
+     * every panel shares one continuous pattern. */
+    {
+        float px0 = (float)x0 / scale - DOODLE_W, py0 = (float)y0 / scale - DOODLE_H;
+        float px1 = (float)x1 / scale + 1, py1 = (float)y1 / scale + 1;
+        float corner[4][2] = { { px0, py0 }, { px1, py0 }, { px0, py1 }, { px1, py1 } };
+        int32_t iMin = 0x7FFF, iMax = -0x7FFF, jMin = 0x7FFF, jMax = -0x7FFF, i, j;
+        int c;
+        for (c = 0; c < 4; c++) {
+            float dx = corner[c][0] - DOODLE_SRC_X;
+            float dy = corner[c][1] - DOODLE_SRC_Y;
+            float fi = (dy - 2.0f * dx) / 128.0f;
+            float fj = (2.0f * dx + 7.0f * dy) / 384.0f;
+            if ((int32_t)fi - 1 < iMin) iMin = (int32_t)fi - 1;
+            if ((int32_t)fi + 1 > iMax) iMax = (int32_t)fi + 1;
+            if ((int32_t)fj - 1 < jMin) jMin = (int32_t)fj - 1;
+            if ((int32_t)fj + 1 > jMax) jMax = (int32_t)fj + 1;
+        }
+        for (j = jMin; j <= jMax; j++) {
+            for (i = iMin; i <= iMax; i++) {
+                int32_t dpx = (DOODLE_SRC_X + i * DOODLE_AX + j * DOODLE_BX) * scale;
+                int32_t dpy = (DOODLE_SRC_Y + i * DOODLE_AY + j * DOODLE_BY) * scale;
+                int32_t sx, sy, ex, ey;
+                if (dpx >= x1 || dpy >= y1 || dpx + DOODLE_W * scale <= x0 ||
+                    dpy + DOODLE_H * scale <= y0) {
+                    continue;
+                }
+                for (sy = 0; sy < DOODLE_H; sy++) {
+                    for (sx = 0; sx < DOODLE_W; sx++) {
+                        uint32_t col = sDoodle[sy * DOODLE_W + sx];
+                        if (col == 0) {
+                            continue;
+                        }
+                        for (ey = 0; ey < scale; ey++) {
+                            int32_t dy2 = dpy + sy * scale + ey;
+                            if (dy2 < y0 || dy2 >= y1) {
+                                continue;
+                            }
+                            for (ex = 0; ex < scale; ex++) {
+                                int32_t dx2 = dpx + sx * scale + ex;
+                                if (dx2 >= x0 && dx2 < x1) {
+                                    pixels[(size_t)dy2 * (size_t)stride + dx2] = col;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* Nine-slice source mapping for one axis: exact corners, tiled middle.
+ * snap keeps the middle period on the carved art's own rhythm. */
+static int32_t SliceMap(int32_t d, int32_t dstLen, int32_t srcLen, int32_t corner, int32_t snap,
+                        int32_t scale) {
+    int32_t c = corner;
+    int32_t sd, se, span, tspan;
+    if (c * 2 * scale > dstLen) {
+        c = dstLen / (2 * scale);
+        if (c < 1) c = 1;
+    }
+    sd = d / scale;
+    se = (dstLen - 1 - d) / scale;
+    if (sd < c) {
+        return sd;
+    }
+    if (se < c) {
+        return srcLen - 1 - se;
+    }
+    span = srcLen - 2 * corner;
+    if (span <= 0) {
+        return corner;
+    }
+    tspan = (span / snap) * snap;
+    if (tspan <= 0) {
+        tspan = span;
+    }
+    return corner + (sd - c) % tspan;
+}
+
+/* Shared sliced blit off one of the composed menu sources. Transparent
+ * source pixels are skipped (the slab's rounded outline corners). */
+static void DrawSliced(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride, int32_t x, int32_t y,
+                       int32_t w, int32_t h, int32_t scale, const uint32_t* srcImg, int32_t srcStride,
+                       int32_t sx0, int32_t sy0, int32_t sx1, int32_t sy1, int32_t cw, int32_t ch,
+                       int32_t snap) {
+    int32_t dx, dy;
+    if (scale < 1) {
+        scale = 1;
+    }
+    for (dy = 0; dy < h; dy++) {
+        int32_t py = y + dy;
+        int32_t sy;
+        uint32_t* row;
+        if (py < 0 || py >= bufH) {
+            continue;
+        }
+        sy = sy0 + SliceMap(dy, h, sy1 - sy0, ch, snap, scale);
+        row = pixels + (size_t)py * (size_t)stride;
+        for (dx = 0; dx < w; dx++) {
+            int32_t px = x + dx;
+            int32_t sx;
+            uint32_t col;
+            if (px < 0 || px >= bufW) {
+                continue;
+            }
+            sx = sx0 + SliceMap(dx, w, sx1 - sx0, cw, snap, scale);
+            col = srcImg[(size_t)sy * (size_t)srcStride + sx];
+            if (col != 0) {
+                row[px] = col;
+            }
+        }
+    }
+}
+
+void Port_SecondScreenTheme_DrawPlate(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                      int32_t x, int32_t y, int32_t w, int32_t h, int32_t scale) {
+    if (!sMenuOk || !sSlabOk) {
+        /* Palette-toned stand-in: stone fill, ink outline. */
+        uint32_t ink = sColors[SSC_MENU_INK];
+        int32_t t = scale > 0 ? 2 * scale : 2;
+        FillRectTheme(pixels, bufW, bufH, stride, x, y, x + w, y + h, ink);
+        FillRectTheme(pixels, bufW, bufH, stride, x + t, y + t, x + w - t, y + h - t,
+                      sColors[SSC_MENU_STONE]);
+        return;
+    }
+    DrawSliced(pixels, bufW, bufH, stride, x, y, w, h, scale, sMenuBg2, MENU_SCREEN_W, sSlabX0, sSlabY0,
+               sSlabX1, sSlabY1, SLAB_CORNER_W, SLAB_CORNER_H, 16);
+}
+
+void Port_SecondScreenTheme_DrawWell(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                     int32_t x, int32_t y, int32_t w, int32_t h, int32_t scale) {
+    if (!sMenuOk || !sTrayOk) {
+        uint32_t rim = sColors[SSC_MENU_INK];
+        int32_t t = scale > 0 ? scale : 1;
+        FillRectTheme(pixels, bufW, bufH, stride, x, y, x + w, y + h, rim);
+        FillRectTheme(pixels, bufW, bufH, stride, x + t, y + t, x + w - t, y + h - t,
+                      sColors[SSC_MENU_STONE_DARK]);
+        return;
+    }
+    DrawSliced(pixels, bufW, bufH, stride, x, y, w, h, scale, sTrayPx, TRAY_W, 0, 0, TRAY_W, TRAY_H,
+               WELL_CORNER, WELL_CORNER, 8);
+}
+
+/* Chip drawing shares DrawWindow's tile arrangement, just over a chip
+ * tile set. Duplicated loop kept tiny by reusing BlitChromeTile via a
+ * temporary swap of the active tile pointer would hurt readability more
+ * than this small dedicated blitter. */
+static void BlitChipTile(uint32_t* px, int32_t bufW, int32_t bufH, int32_t stride, const uint32_t* tile,
+                         int32_t x, int32_t y, int32_t ts, int hflip, int vflip, int32_t cx1) {
+    int32_t sx, sy, ex, ey;
+    for (sy = 0; sy < 8; sy++) {
+        int32_t srcY = vflip ? 7 - sy : sy;
+        for (sx = 0; sx < 8; sx++) {
+            int32_t srcX = hflip ? 7 - sx : sx;
+            uint32_t c = tile[srcY * 8 + srcX];
+            if (c == 0) {
+                continue;
+            }
+            for (ey = 0; ey < ts; ey++) {
+                int32_t dy = y + sy * ts + ey;
+                if (dy < 0 || dy >= bufH) {
+                    continue;
+                }
+                for (ex = 0; ex < ts; ex++) {
+                    int32_t dx = x + sx * ts + ex;
+                    if (dx >= 0 && dx < bufW && dx < cx1) {
+                        px[(size_t)dy * (size_t)stride + dx] = c;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Port_SecondScreenTheme_DrawChip(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                     int32_t x, int32_t y, int32_t w, int32_t h, int32_t tileScale,
+                                     int style) {
+    const uint32_t(*tiles)[64];
+    int32_t t, cx, cy, xr, yb;
+    if (style < 0 || style >= SS_CHIP_STYLE_COUNT) {
+        style = SS_CHIP_DARK;
+    }
+    if (tileScale < 1) {
+        tileScale = 1;
+    }
+    t = 8 * tileScale;
+    if (!sBuilt || !sChipTilesOk[style] || w < 2 * t || h < 2 * t) {
+        uint32_t fill = style == SS_CHIP_RED ? sColors[SSC_MENU_RED] : sColors[SSC_MENU_BLACK];
+        int32_t o = tileScale;
+        FillRectTheme(pixels, bufW, bufH, stride, x, y, x + w, y + h, sColors[SSC_MENU_WHITE]);
+        FillRectTheme(pixels, bufW, bufH, stride, x + o, y + o, x + w - o, y + h - o, fill);
+        return;
+    }
+    tiles = sChipTiles[style];
+
+    /* Interior under the border ring (same half-tile overlap rule as
+     * DrawWindow so border art always meets fill). */
+    FillRectTheme(pixels, bufW, bufH, stride, x + t / 2, y + t / 2, x + w - t / 2, y + h - t / 2,
+                  tiles[CHROME_FILL][0]);
+
+    xr = x + w - 2 * t;
+    yb = y + h - 2 * t;
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_CORNER], x, y, tileScale, 0, 0, bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_CORNER], x + w - t, y, tileScale, 1, 0, bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_CORNER], x, y + h - t, tileScale, 0, 1, bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_CORNER], x + w - t, y + h - t, tileScale, 1, 1,
+                 bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_H_CORNER], x + t, y, tileScale, 0, 0, bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_H_CORNER], xr, y, tileScale, 1, 0, bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_H_CORNER], x + t, y + h - t, tileScale, 0, 1, bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_H_CORNER], xr, y + h - t, tileScale, 1, 1, bufW);
+    for (cx = x + 2 * t; cx < xr; cx += t) {
+        BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_H_STRAIGHT], cx, y, tileScale, 0, 0, xr);
+        BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_H_STRAIGHT], cx, y + h - t, tileScale, 0, 1,
+                     xr);
+    }
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_V_CORNER], x, y + t, tileScale, 0, 0, bufW);
+    BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_V_CORNER], x + w - t, y + t, tileScale, 1, 0, bufW);
+    if (yb > y + t) {
+        BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_V_CORNER], x, yb, tileScale, 0, 1, bufW);
+        BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_V_CORNER], x + w - t, yb, tileScale, 1, 1,
+                     bufW);
+    }
+    for (cy = y + 2 * t; cy < yb; cy += t) {
+        BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_V_STRAIGHT], x, cy, tileScale, 0, 0, bufW);
+        BlitChipTile(pixels, bufW, bufH, stride, tiles[CHROME_V_STRAIGHT], x + w - t, cy, tileScale, 1, 0,
+                     bufW);
+    }
+}
+
+/* -------------------------------------------------------------------- */
+/*  Message-font text                                                    */
+/* -------------------------------------------------------------------- */
+
+/* Glyph metrics from the 8x16 cell's row 0 (sub_0805F7A0): leading 0xF
+ * nibbles give the start column, the following non-0xF span the width —
+ * the exact advance the game's text renderer uses. */
+static void GlyphMetrics(const u8* glyph, int32_t* outStart, int32_t* outWidth) {
+    u32 row0 = Port_ReadU32(glyph);
+    u32 mask = 0xFu;
+    int32_t i = 0, j;
+    for (; i < 8; i++) {
+        if ((row0 & mask) != mask) {
+            break;
+        }
+        mask <<= 4;
+    }
+    j = i;
+    for (; i < 8 && (row0 & mask) != mask; mask <<= 4, i++) {}
+    *outStart = j;
+    *outWidth = i - j;
+}
+
+/* The USA/EU script is plain ASCII in bank 0 (charmap.txt); anything the
+ * panel never uses falls back to '?' so a stray string cannot index out
+ * of the 256-glyph bank. */
+static const u8* GlyphData(char c) {
+    u8 code = (u8)c;
+    if (code < 0x20) {
+        code = '?';
+    }
+    return sFontGlyphs + (size_t)code * 64u;
+}
+
+int32_t Port_SecondScreenTheme_TextWidth(const char* str, int32_t scale) {
+    int32_t w = 0, gs, gw;
+    if (!sBuilt || !sFontOk || str == NULL) {
+        return 0;
+    }
+    for (; *str; str++) {
+        GlyphMetrics(GlyphData(*str), &gs, &gw);
+        w += gw;
+    }
+    return w * (scale < 1 ? 1 : scale);
+}
+
+int32_t Port_SecondScreenTheme_DrawText(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                        int32_t x, int32_t y, int32_t scale, int style, const char* str) {
+    const u8* lutE;
+    const u8* lutO;
+    int32_t startX = x;
+    if (!sBuilt || !sFontOk || str == NULL) {
+        return 0;
+    }
+    if (style < 0 || style >= SS_TEXT_STYLE_COUNT) {
+        style = SS_TEXT_INK;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    lutE = &sTextLut[style][0];
+    lutO = &sTextLut[style][16];
+
+    for (; *str; str++) {
+        const u8* glyph = GlyphData(*str);
+        int32_t gs, gw, col, row2, ex, ey;
+        GlyphMetrics(glyph, &gs, &gw);
+        /* Rows 1..15 are ink (row 0 is the metrics row); columns clip to
+         * the glyph's own [start, start+width) span like sub_0805F820. */
+        for (row2 = 1; row2 < 16; row2++) {
+            for (col = gs; col < gs + gw && col < 8; col++) {
+                u8 packed = glyph[row2 * 4 + (col >> 1)];
+                u8 pix = (col & 1) ? (u8)(packed >> 4) : (u8)(packed & 0x0Fu);
+                u32 colorIdx = (col & 1) ? (u32)(lutO[pix] >> 4) : (u32)(lutE[pix] & 0x0Fu);
+                uint32_t rgba;
+                if (colorIdx == 0) {
+                    continue;
+                }
+                rgba = sMsgPal[colorIdx];
+                for (ey = 0; ey < scale; ey++) {
+                    int32_t dy = y + row2 * scale + ey;
+                    if (dy < 0 || dy >= bufH) {
+                        continue;
+                    }
+                    for (ex = 0; ex < scale; ex++) {
+                        int32_t dx = x + (col - gs) * scale + ex;
+                        if (dx >= 0 && dx < bufW) {
+                            pixels[(size_t)dy * (size_t)stride + dx] = rgba;
+                        }
+                    }
+                }
+            }
+        }
+        x += gw * scale;
+    }
+    return x - startX;
 }

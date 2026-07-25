@@ -80,7 +80,34 @@ enum {
     SSC_HEART_RED,     /* full-heart red */
     SSC_RUPEE_GREEN,   /* wallet-0 rupee green */
     SSC_TEXT_LIGHT,    /* HUD digit body color */
+    /* Pause-menu screen palette (the light theme): sampled from the
+     * composed item-screen layers and the message palette. */
+    SSC_MENU_CREAM,      /* backdrop parchment (BG3 flat color) */
+    SSC_MENU_STONE,      /* slab plate stone */
+    SSC_MENU_STONE_DARK, /* recessed well interior */
+    SSC_MENU_INK,        /* menu ink (the dark text body color) */
+    SSC_MENU_BLACK,      /* message palette black (outlines) */
+    SSC_MENU_WHITE,      /* message palette white */
+    SSC_MENU_RED,        /* menu red accent (red text body) */
     SSC_COUNT
+};
+
+/* Text styles for the ROM message font — each is a (fill_type, charColor)
+ * pair of the game's own text color tables. */
+enum {
+    SS_TEXT_INK = 0, /* dark ink on light plates (fill 7 / color 0) */
+    SS_TEXT_WHITE,   /* white with silver shading, for dark chips (5 / 0) */
+    SS_TEXT_RED,     /* menu red accent (5 / 1) */
+    SS_TEXT_GREEN,   /* menu green (5 / 2) */
+    SS_TEXT_STYLE_COUNT
+};
+
+/* Chip styles: the rounded message chips of border_type 9, in the game's
+ * own fill schemes (DispMessageFrame family). */
+enum {
+    SS_CHIP_DARK = 0, /* black interior — the pause menu's name chips */
+    SS_CHIP_RED,      /* brick-red interior — the header/selected chip */
+    SS_CHIP_STYLE_COUNT
 };
 
 /* Attempts the one-time lazy build (cheap no-op once decided) and returns
@@ -112,6 +139,54 @@ const uint16_t* Port_SecondScreenTheme_ObjPalette(uint32_t bank);
  * decode. The rect is clipped to the buffer. */
 void Port_SecondScreenTheme_DrawWindow(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                        int32_t x, int32_t y, int32_t w, int32_t h, int32_t tileScale);
+
+/* ------------------------------------------------------------------ *
+ * Pause-menu dressing, decoded from the START menu's own screens      *
+ * (item screen: gfx groups 86 + 90, palette groups 11/12/181/182 —    *
+ * the exact recipe sub_080A4D34 + sub_080A4DB8 run). All built in the *
+ * same lazy Ready() pass; every call degrades to palette-toned        *
+ * procedural stand-ins until then.                                    *
+ * ------------------------------------------------------------------ */
+
+/* 1 once the pause-menu layers decoded (implies Ready()). The light
+ * theme's fully-authentic path; callers may branch to simpler dressing
+ * while 0 (the colors above still return usable neutral stand-ins). */
+int Port_SecondScreenTheme_MenuReady(void);
+
+/* Fills rect with the pause menu's parchment backdrop: flat cream plus
+ * the Ezlo doodle pattern on its original diagonal lattice, anchored to
+ * the surface origin so panels never shift phase. scale is the integer
+ * art scale. */
+void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                         int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t scale);
+
+/* Draws the menu's carved stone slab (the item screen's big plate) over
+ * the rect: nine-sliced from the composed screen so the triforce corners
+ * and carved bands stay pixel-authentic; interiors tile. */
+void Port_SecondScreenTheme_DrawPlate(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                      int32_t x, int32_t y, int32_t w, int32_t h, int32_t scale);
+
+/* Draws one recessed stone well (the item screen's slot/tray art),
+ * nine-sliced from the bottle tray. Used for cells and list rows. */
+void Port_SecondScreenTheme_DrawWell(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                     int32_t x, int32_t y, int32_t w, int32_t h, int32_t scale);
+
+/* Draws a rounded message chip (border_type 9) in the given SS_CHIP_*
+ * fill scheme — the pause menu's name/header chips. */
+void Port_SecondScreenTheme_DrawChip(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                     int32_t x, int32_t y, int32_t w, int32_t h, int32_t tileScale,
+                                     int style);
+
+/* Text in the game's message font (gUnk_08109248 bank 0, per-glyph widths
+ * from the metrics rows), colored through the game's own text LUTs
+ * (SS_TEXT_*). Returns the advance in pixels, or 0 when the font is not
+ * decoded yet (callers keep a procedural fallback). y is the glyph-box
+ * top; visible ink spans rows 1..15 of the 16 px box. */
+int32_t Port_SecondScreenTheme_DrawText(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                        int32_t x, int32_t y, int32_t scale, int style, const char* str);
+
+/* Pixel width DrawText would advance (0 when the font is not ready). */
+int32_t Port_SecondScreenTheme_TextWidth(const char* str, int32_t scale);
 
 #ifdef __cplusplus
 }
