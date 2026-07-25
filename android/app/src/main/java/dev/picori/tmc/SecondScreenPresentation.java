@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.PixelFormat;
 import android.os.Bundle;
 import android.view.Display;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -38,6 +39,33 @@ public class SecondScreenPresentation extends Presentation {
         // always what the native writer expects.
         surfaceView.getHolder().setFormat(PixelFormat.RGBA_8888);
 
+        // Tap-to-equip: a completed tap is forwarded to native with the
+        // press duration collapsed to a boolean — short tap equips the item
+        // to A, press-and-hold to B (mirrors the pause menu's two equip
+        // buttons). Surface pixels == view pixels here (the SurfaceView
+        // fills the display and the native side draws at surface size), so
+        // event coordinates need no transform before hit-testing in C.
+        surfaceView.setOnTouchListener(new android.view.View.OnTouchListener() {
+            private static final long LONG_PRESS_MS = 350;
+            private long mDownTime;
+
+            @Override
+            public boolean onTouch(android.view.View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        mDownTime = event.getEventTime();
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        boolean longPress = event.getEventTime() - mDownTime >= LONG_PRESS_MS;
+                        nativeTap((int) event.getX(), (int) event.getY(), longPress);
+                        v.performClick();
+                        return true;
+                    default:
+                        return false;
+                }
+            }
+        });
+
         surfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
@@ -60,4 +88,5 @@ public class SecondScreenPresentation extends Presentation {
 
     private static native void nativeSurfaceCreated(Surface surface, int width, int height);
     private static native void nativeSurfaceDestroyed();
+    private static native void nativeTap(int x, int y, boolean longPress);
 }
