@@ -140,6 +140,9 @@ bool sA11yWalls = true;
 bool sSecondScreenFollowCam = true;
 bool sSecondScreenCrestPins = true;
 bool sSecondScreenFloorReturn = true;
+/* Hide the game's own HUD on the top screen while the second screen shows
+ * vitals — the engine-side gate lives with DrawUIElements. Default off. */
+bool sHideTopHud = false;
 /* Speedrun practice mode (port_practice.c). Overlays default off so normal
  * play stays uncluttered; slow-mo defaults to 1.0 (normal speed). */
 bool sPracticeShowTimer = false;
@@ -283,6 +286,7 @@ const BoolCfg kBoolCfg[] = {
     { "second_screen_follow_cam", &sSecondScreenFollowCam, true },
     { "second_screen_windcrest_pins", &sSecondScreenCrestPins, true },
     { "second_screen_floor_auto_return", &sSecondScreenFloorReturn, true },
+    { "hide_top_hud", &sHideTopHud, false },
     { "practice_show_timer", &sPracticeShowTimer, false },
     { "practice_show_inputs", &sPracticeShowInputs, false },
     { "practice_show_history", &sPracticeShowHistory, false },
@@ -1748,6 +1752,14 @@ extern "C" bool Port_Config_GetSecondScreenFloorReturn(void) {
 extern "C" void Port_Config_SetSecondScreenFloorReturn(bool on) {
     sSecondScreenFloorReturn = on;
     sConfigJson["second_screen_floor_auto_return"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetHideTopHud(void) {
+    return sHideTopHud;
+}
+extern "C" void Port_Config_SetHideTopHud(bool on) {
+    sHideTopHud = on;
+    sConfigJson["hide_top_hud"] = on;
     SaveConfig();
 }
 

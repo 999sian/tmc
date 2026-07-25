@@ -86,6 +86,12 @@ typedef struct {
     /* gSave.windcrests verbatim; bits 24..31 are the WindcrestID unlock
      * flags (include/windcrest.h) the fast-travel screen checks. */
     uint32_t windcrests;
+    /* gSave.kinstones fusion-marker state, verbatim: which fusions have
+     * happened and which map markers the game has retired — the world-map
+     * module turns these into red-check map positions exactly like the
+     * pause map does (@see CheckKinstoneFused / CheckFusionMapMarkerDisabled). */
+    uint8_t fusedKinstones[13];
+    uint8_t fusionUnmarked[13];
     /* Pause-menu item screen contents: menuItems[menuSlot] = item id, 0 if
      * that slot is empty. Bottles report the ITEM_BOTTLE1..4 container id;
      * bottleContents[] carries what's inside for icon display. */
