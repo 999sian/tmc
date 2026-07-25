@@ -2422,4 +2422,96 @@ const u8* Port_GetRawGfxSpanForVram(u32 group, u32 vramAddr, u32 numBytes) {
 const RoomHeader* Port_GetRoomHeaderSafe(u32 area, u32 room) {
     return Common_GetAreaRoomHeaderSafe(area, room);
 }
+
+/* Second-screen theme accessors (port_second_screen_theme.c) — like
+ * Port_GetRawPaletteGroupData above, these live here because
+ * gPaletteGroups/PaletteGroup and gGfxGroups/GfxItem are file-private to
+ * this translation unit. Read-only walks over ROM-const tables; no live
+ * engine state is touched, so they are safe from the second-screen render
+ * thread once the ROM tables are resolved (NULL before that). */
+
+/* Raw RGB555 colors of one entry of a palette group's chain (entry 0 is
+ * what Port_GetRawPaletteGroupData returns). Needed because pause-menu
+ * palette groups chain several entries at different dest banks (e.g. group
+ * 182: BG chrome banks first, OBJ icon banks second). Returns NULL and
+ * zeroes the outputs when the group/entry doesn't exist. */
+const u8* Port_GetRawPaletteGroupEntryData(u32 group, u32 entryIdx, u32* outNumColors, u32* outDestPaletteNum) {
+    const PaletteGroup* paletteGroup = gPaletteGroups[group];
+    if (outNumColors) {
+        *outNumColors = 0;
+    }
+    if (outDestPaletteNum) {
+        *outDestPaletteNum = 0;
+    }
+    if (paletteGroup == NULL) {
+        return NULL;
+    }
+    while (1) {
+        u32 pg = ROM_U32(*(const u32*)paletteGroup);
+        u32 numPalettes = (pg >> 24) & 0xF;
+        if (numPalettes == 0) {
+            numPalettes = 16;
+        }
+        if (entryIdx == 0) {
+            if (outNumColors) {
+                *outNumColors = numPalettes * 16;
+            }
+            if (outDestPaletteNum) {
+                *outDestPaletteNum = (pg >> 16) & 0xFF;
+            }
+            return &gGlobalGfxAndPalettes[(pg & 0xFFFF) * 32];
+        }
+        if (((pg >> 24) & 0x80) == 0) {
+            return NULL; /* chain ended before entryIdx */
+        }
+        paletteGroup++;
+        entryIdx--;
+    }
+}
+
+/* Resolves a GBA VRAM address to the ROM bytes a gfx group would load
+ * there, without loading anything: walks gGfxGroups[group] like
+ * LoadGfxGroup and returns a pointer into gGlobalGfxAndPalettes for the
+ * first uncompressed entry whose dest span covers vramAddr (outAvail =
+ * bytes remaining in that span). Language-conditional entries are treated
+ * as matching regardless of language — the chrome/HUD tile entries the
+ * second screen needs are all unconditional (ctrl 7), and skipping the
+ * gSaveHeader read keeps this ROM-const for the render thread. Returns
+ * NULL for compressed entries and unresolved groups. */
+const u8* Port_ResolveGfxGroupVram(u32 group, u32 vramAddr, u32* outAvail) {
+    const GfxItem* gfxItem;
+    if (outAvail) {
+        *outAvail = 0;
+    }
+    if (group >= 133) {
+        return NULL;
+    }
+    gfxItem = gGfxGroups[group];
+    if (gfxItem == NULL || gGlobalGfxAndPalettes == NULL) {
+        return NULL;
+    }
+    while (1) {
+        u32 gi = ROM_U32(gfxItem->unk0.raw);
+        u32 ctrl = (gi >> 24) & 0xF;
+        u32 terminator = (gi >> 24) & 0x80;
+        if (ctrl == 0xD) {
+            return NULL;
+        }
+        {
+            u32 dest = ROM_U32(gfxItem->dest);
+            s32 size = (s32)ROM_U32(gfxItem->unk8);
+            if (size > 0 && vramAddr >= dest && vramAddr < dest + (u32)size) {
+                if (outAvail) {
+                    *outAvail = dest + (u32)size - vramAddr;
+                }
+                return &gGlobalGfxAndPalettes[(gi & 0xFFFFFF) + (vramAddr - dest)];
+            }
+        }
+        gfxItem++;
+        if (!terminator) {
+            break;
+        }
+    }
+    return NULL;
+}
 #endif

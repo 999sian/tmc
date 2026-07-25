@@ -71,6 +71,35 @@ void Port_SecondScreenState_Publish(void) {
         next.maxHealth = gSave.stats.maxHealth;
         next.rupees = gSave.stats.rupees;
 
+        /* Area identity + per-dungeon save state, gated exactly like the
+         * engine gates it: dungeonKeys/dungeonItems are only meaningful
+         * where AreaHasKeys() holds (src/gameUtils.c reads them through
+         * gArea.dungeon_idx under that same check). */
+        next.areaFlags = gArea.areaMetadata;
+        next.dungeonIdx = gArea.dungeon_idx;
+        if ((next.areaFlags & SECOND_SCREEN_AR_HAS_KEYS) && next.dungeonIdx < 0x10) {
+            next.dungeonKeys = gSave.dungeonKeys[next.dungeonIdx];
+            next.dungeonItemBits = gSave.dungeonItems[next.dungeonIdx];
+        }
+
+        /* Quest state for the status strip — plain gSave field reads. */
+        for (u32 i = 0; i < 4; i++) {
+            if (GetInventoryValue(ITEM_EARTH_ELEMENT + i) == 1) {
+                next.elements |= (uint8_t)(1u << i);
+            }
+        }
+        next.walletType = gSave.stats.walletType & 3;
+        next.walletMax = gWalletSizes[next.walletType].size;
+        next.bombCount = gSave.stats.bombCount;
+        next.bombMax = gBombBagSizes[gSave.stats.bombBagType & 3];
+        next.arrowCount = gSave.stats.arrowCount;
+        next.arrowMax = gQuiverSizes[gSave.stats.quiverType & 3];
+        next.kinstoneFused = gSave.kinstones.fusedCount;
+        for (u32 i = 0; i < 19; i++) {
+            next.kinstoneBag += gSave.kinstones.amounts[i];
+        }
+        next.windcrests = gSave.windcrests;
+
         /* Mirror of the pause menu's item-screen fill loop
          * (src/menu/pauseMenu.c: PauseMenu_ItemMenu_Init): every owned
          * activatable item lands in its ItemMetaData menu slot; later item
