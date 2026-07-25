@@ -376,7 +376,14 @@ void sub_080A74F4(void) {
     UpdateEntities();
     UpdateManagers();
     DrawUI();
+#ifdef PC_PORT
+    /* Restored-gameplay frames of Subtask_FadeOut/Subtask_Die — the
+     * gameplay view, so hide_top_hud applies here too (no HUD flash
+     * while fading back from the pause menu). */
+    DrawUIElementsGameplay();
+#else
     DrawUIElements();
+#endif
     UpdateCarriedObject();
     DrawEntities();
     CopyOAM();

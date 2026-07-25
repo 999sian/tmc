@@ -3,6 +3,8 @@
 #include "port_asset_loader.h" /* Port_IsRoomHeaderPtrReadable */
 #include "port_rom.h"          /* gRomData/gRomSize, Port_ReadU16/U32 */
 #include "area.h"              /* AreaHeader/gAreaMetadata, RoomHeader/gAreaRoomHeaders, Transition */
+#include "kinstone.h"          /* KinstoneWorldEvent/WorldEvent tables + GetWorldEvents() */
+#include "region.h"            /* REGION_IS_EU/JP — ROM-derived, not save state */
 
 #include <stddef.h>
 #include <stdlib.h>
@@ -75,6 +77,13 @@ extern const Transition gUnk_08128024[];
  * LZ77UnCompWram/Vram always resolve their destination into live GBA
  * regions, which an off-screen decode must not touch). */
 extern void Port_LZ77DecompressToBuffer(const void* src, void* dst, size_t dstCap);
+
+/* Raw-data accessors (src/common.c, port/port_draw.c) — the same read-only
+ * faces port_second_screen_dungeonmap.c redraws its markers through. */
+extern const u8* Port_GetRawGfxSpanForVram(u32 group, u32 vramAddr, u32 numBytes);
+extern const u8* Port_GetRawPaletteGroupBankData(u32 group, u32 destPaletteNum, u32* outNumColors);
+extern const u8* Port_GetDirectSpriteFrame(u32 spriteIndex, u32 frameIndex, u32* outMaxPieces);
+extern const u8* Port_GetSpriteSizeTable(void);
 
 #define WORLDMAP_IMAGE_W 240 /* GBA LCD; menu screens always render the native canvas */
 #define WORLDMAP_IMAGE_H 160
@@ -423,6 +432,10 @@ static int32_t WorldToMapX(int32_t worldX) {
     return worldX * 160 / 0xF90 + 0x28;
 }
 
+static int32_t WorldToMapY(int32_t worldY) {
+    return worldY * 128 / 0xC60 + 0xC;
+}
+
 static int32_t ClampMapX(int32_t x) {
     return x < 0 ? 0 : (x >= WORLDMAP_IMAGE_W ? WORLDMAP_IMAGE_W - 1 : x);
 }
@@ -449,7 +462,7 @@ int Port_SecondScreenWorldMap_LocatePlayer(uint8_t area, int32_t areaX, int32_t 
         *outMapX = ClampMapX(WorldToMapX(areaX));
     }
     if (outMapY) {
-        *outMapY = ClampMapY(areaY * 128 / 0xC60 + 0xC);
+        *outMapY = ClampMapY(WorldToMapY(areaY));
     }
     return 1;
 }
@@ -490,27 +503,207 @@ static int EnsureWindcrestPins(void) {
     return 1;
 }
 
+/* ReadBit (src/common.c): LSB-first within bytes — the exact indexing
+ * CheckKinstoneFused/CheckFusionMapMarkerDisabled apply to these arrays. */
+static u32 SaveBit(const uint8_t* arr, u32 bit) {
+    return (arr[bit >> 3] >> (bit & 7u)) & 1u;
+}
+
 int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones,
                                                    const uint8_t* fusionUnmarked,
                                                    int32_t* outMapXY, int32_t maxPairs) {
-    /* Stub seam — the marker tables + rule land as their own change. */
-    (void)fusedKinstones;
-    (void)fusionUnmarked;
-    (void)outMapXY;
-    (void)maxPairs;
-    return 0;
+    /* The pause map's own marker pass, ported: sub_080A68D4 (src/menu/
+     * pauseMenuScreen6.c) walks kinstone ids 10..100 (1..9 are the golden-
+     * kinstone story fusions, which the game's pass also skips) and shows a
+     * marker exactly when CheckKinstoneFused && !CheckFusionMapMarkerDisabled.
+     * Each id's location is ROM-constant: gKinstoneWorldEvents[id]
+     * .worldEventId -> gWorldEvents[..]._c/._e, the event's overworld pixel
+     * position; events without one carry (0, 0) and are skipped, the same
+     * "no location" rule sub_080A69E0 applies. Positions then go through
+     * the pause map's player-dot world->map transform (sub_080A6378). Table
+     * variants are per-region twins selected like src/kinstone.c does —
+     * REGION_IS_* is ROM identity, not live save state. */
+    const KinstoneWorldEvent* kinstoneEvents = gKinstoneWorldEvents;
+    const WorldEvent* worldEvents = GetWorldEvents();
+    int32_t count = 0;
+    u32 id;
+
+    if (fusedKinstones == NULL || fusionUnmarked == NULL || outMapXY == NULL || maxPairs <= 0) {
+        return 0;
+    }
+    if (gRomData == NULL || gRomSize == 0) {
+        return 0; /* markers annotate the ROM-decoded map; report not-ready with it */
+    }
+    if (REGION_IS_EU) {
+        kinstoneEvents = gKinstoneWorldEvents_eu;
+    } else if (REGION_IS_JP) {
+        kinstoneEvents = gKinstoneWorldEvents_jp;
+    }
+
+    for (id = 10; id <= 100 && count < maxPairs; id++) {
+        const WorldEvent* event;
+        if (!SaveBit(fusedKinstones, id) || SaveBit(fusionUnmarked, id)) {
+            continue;
+        }
+        event = &worldEvents[kinstoneEvents[id].worldEventId];
+        if (((u32)event->_c | (u32)event->_e) == 0) {
+            continue; /* fusion with no map location (sub_080A69E0's -1) */
+        }
+        outMapXY[count * 2 + 0] = ClampMapX(WorldToMapX(event->_c));
+        outMapXY[count * 2 + 1] = ClampMapY(WorldToMapY(event->_e));
+        count++;
+    }
+    return count;
+}
+
+/* The red-check marker art: DrawDirect frame 0x5B of the direct sprite
+ * sheet — the frame gUnk_08128F58's world-map hint entries stamp on pause
+ * screen 4 (sub_080A6438), and byte-identical to the regional map's check
+ * (frame 0x70): one 16x16 piece, OBJ tile 588, palette row 0, anchored at
+ * (-8, -8). Tiles come from gfx group 94's OBJ entry (the map tab loads its
+ * marker art together with the map itself) and the palette from the same
+ * group ladder the BG layers use, most recent load first — the exact VRAM/
+ * palette state the frame's attr2 indexes on the real screen. */
+#define DIRECT_SPRITE_INDEX (REGION_IS_EU ? 0x1fau : 0x1fbu)
+#define FUSION_CHECK_FRAME 0x5Bu
+#define FUSION_CHECK_PX 16
+
+static uint32_t sCheckPixels[FUSION_CHECK_PX * FUSION_CHECK_PX];
+static const uint32_t* volatile sPublishedCheck = NULL;
+
+static const uint16_t* CheckObjPalette(u32 row) {
+    int i;
+    for (i = (int)sizeof(sWorldMapPaletteGroups) - 1; i >= 0; i--) {
+        u32 numColors = 0;
+        const u8* p =
+            Port_GetRawPaletteGroupBankData(sWorldMapPaletteGroups[i], 16u + (row & 15u), &numColors);
+        if (p != NULL && numColors >= 16) {
+            return (const uint16_t*)p;
+        }
+    }
+    return NULL;
+}
+
+/* Decode the check frame once into sCheckPixels (0 = transparent), same
+ * publish-when-complete pattern as the map image. Piece walk mirrors
+ * port_second_screen_dungeonmap.c's DrawMarkerFrame — OAM 1D mapping,
+ * size-table anchors, piece-local flips — with the canvas origin at the
+ * frame's OAM anchor + (8, 8) so the 16x16 art fills the buffer exactly. */
+static int EnsureCheckSprite(void) {
+    const u8* sizeTab = Port_GetSpriteSizeTable();
+    u32 maxPieces = 0;
+    const u8* fd = Port_GetDirectSpriteFrame(DIRECT_SPRITE_INDEX, FUSION_CHECK_FRAME, &maxPieces);
+    u32 count, i;
+    int drewAny = 0;
+
+    if (sPublishedCheck != NULL) {
+        return 1;
+    }
+    if (fd == NULL || sizeTab == NULL) {
+        return 0;
+    }
+    memset(sCheckPixels, 0, sizeof(sCheckPixels));
+    count = fd[0];
+    fd++;
+    if (count > maxPieces) {
+        count = maxPieces;
+    }
+    for (i = 0; i < count; i++, fd += 5) {
+        int32_t xoff = (int8_t)fd[0];
+        int32_t yoff = (int8_t)fd[1];
+        u32 shapeInfo = fd[2];
+        u32 attr2 = (u32)fd[3] | ((u32)fd[4] << 8);
+        u32 tileNo = attr2 & 0x3FFu;
+        u32 palRow = attr2 >> 12;
+        const u8* se = &sizeTab[(shapeInfo & 0xF0u) >> 2];
+        int32_t px = FUSION_CHECK_PX / 2 + xoff - (int32_t)se[0];
+        int32_t py = FUSION_CHECK_PX / 2 + yoff - (int32_t)se[1];
+        int32_t wpx = se[2];
+        int32_t hpx = se[3];
+        int32_t hflip = (shapeInfo & 4u) != 0;
+        int32_t vflip = (shapeInfo & 8u) != 0;
+        const uint16_t* pal = CheckObjPalette(palRow);
+        int32_t tx, ty, sx, sy;
+
+        if (pal == NULL) {
+            return 0; /* palette groups not resolved yet — retry next frame */
+        }
+        for (ty = 0; ty < hpx / 8; ty++) {
+            for (tx = 0; tx < wpx / 8; tx++) {
+                const u8* tile = Port_GetRawGfxSpanForVram(
+                    WORLDMAP_GFX_GROUP, 0x6010000u + (tileNo + (u32)(ty * (wpx / 8) + tx)) * 32u, 32u);
+                if (tile == NULL) {
+                    return 0;
+                }
+                for (sy = 0; sy < 8; sy++) {
+                    for (sx = 0; sx < 8; sx++) {
+                        u8 packed = tile[sy * 4 + sx / 2];
+                        u8 colorIndex = (sx & 1) ? (u8)(packed >> 4) : (u8)(packed & 0xFu);
+                        int32_t ox, oy, cx, cy;
+                        if (colorIndex == 0) {
+                            continue;
+                        }
+                        ox = tx * 8 + sx;
+                        oy = ty * 8 + sy;
+                        cx = px + (hflip ? wpx - 1 - ox : ox);
+                        cy = py + (vflip ? hpx - 1 - oy : oy);
+                        if (cx < 0 || cx >= FUSION_CHECK_PX || cy < 0 || cy >= FUSION_CHECK_PX) {
+                            continue;
+                        }
+                        sCheckPixels[(size_t)cy * FUSION_CHECK_PX + (size_t)cx] =
+                            Rgb555ToRgba8888(pal[colorIndex]);
+                        drewAny = 1;
+                    }
+                }
+            }
+        }
+    }
+    if (!drewAny) {
+        return 0;
+    }
+    sPublishedCheck = sCheckPixels;
+    return 1;
 }
 
 int Port_SecondScreenWorldMap_DrawFusionCheck(uint32_t* pixels, int32_t bufW, int32_t bufH,
                                               int32_t stride, int32_t x, int32_t y, int32_t scale) {
-    (void)pixels;
-    (void)bufW;
-    (void)bufH;
-    (void)stride;
-    (void)x;
-    (void)y;
-    (void)scale;
-    return 0;
+    const uint32_t* art = sPublishedCheck;
+    int32_t sx, sy, dx, dy;
+
+    if (art == NULL) {
+        if (!EnsureCheckSprite()) {
+            return 0;
+        }
+        art = sPublishedCheck;
+    }
+    if (pixels == NULL || bufW <= 0 || bufH <= 0 || stride <= 0) {
+        return 0;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    for (sy = 0; sy < FUSION_CHECK_PX; sy++) {
+        for (sx = 0; sx < FUSION_CHECK_PX; sx++) {
+            uint32_t c = art[(size_t)sy * FUSION_CHECK_PX + (size_t)sx];
+            if (c == 0) {
+                continue;
+            }
+            for (dy = 0; dy < scale; dy++) {
+                int32_t destY = y + sy * scale + dy;
+                if (destY < 0 || destY >= bufH) {
+                    continue;
+                }
+                for (dx = 0; dx < scale; dx++) {
+                    int32_t destX = x + sx * scale + dx;
+                    if (destX < 0 || destX >= bufW) {
+                        continue;
+                    }
+                    pixels[(size_t)destY * (size_t)stride + (size_t)destX] = c;
+                }
+            }
+        }
+    }
+    return 1;
 }
 
 int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outMapX, int32_t* outMapY) {
