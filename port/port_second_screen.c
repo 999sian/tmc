@@ -84,6 +84,14 @@
 #define ITEMID_COMPASS 0x51
 #define ITEMID_BIG_KEY 0x52
 #define ITEMID_KINSTONE 0x5C
+/* Quest-screen ids, same transcription. */
+#define ITEMID_SMITH_SWORD 0x01
+#define ITEMID_QST_TINGLE_TROPHY 0x3D
+#define ITEMID_QST_CARLOV_MEDAL 0x3E
+#define ITEMID_SHELLS 0x3F
+#define ITEMID_EARTH_ELEMENT 0x40 /* +1 fire, +2 water, +3 wind */
+#define ITEMID_GRIP_RING 0x44     /* +1 bracelets, +2 flippers */
+#define ITEMID_KINSTONE_BAG 0x67
 
 /* Dungeon names + top-floor numbers for the plaque labels, transcribed
  * from gDungeonLayouts / gDungeonFloorMetadatas (src/common.c): display
@@ -1101,8 +1109,37 @@ static int PaintRegion(const SSurf* s, const SecondScreenSnapshot* snap, TargetL
                        float ry0, float rx1, float ry1, float u, uint32_t tick, int32_t region) {
     int32_t dx = (int32_t)rx0, dy = (int32_t)ry0;
     int32_t dw = (int32_t)(rx1 - rx0), dh = (int32_t)(ry1 - ry0);
-    if (dw <= 0 || dh <= 0 ||
-        !Port_SecondScreenWorldMap_DrawRegion(s->px, s->w, s->h, s->stride, dx, dy, dw, dh, region)) {
+    if (dw <= 0 || dh <= 0) {
+        return 0;
+    }
+
+    /* Letterbox to the artwork's aspect instead of filling the rect. The map
+     * area is close to square on this panel while the region art is not, so
+     * stretching to fill visibly distorted the tiles — trees and bridges came
+     * out elongated along whichever axis had the surplus.
+     *
+     * The fit is computed ONCE here and then used for the art, the markers and
+     * Link's pin alike. All three scale by the destination size they are
+     * handed, so fitting only the art would slide every marker off the terrain
+     * it belongs to. */
+    {
+        int32_t artW = 0, artH = 0;
+        if (Port_SecondScreenWorldMap_GetRegionSize(region, &artW, &artH) && artW > 0 && artH > 0) {
+            int32_t fitW = dw, fitH = (int32_t)((int64_t)dw * artH / artW);
+            if (fitH > dh) {
+                fitH = dh;
+                fitW = (int32_t)((int64_t)dh * artW / artH);
+            }
+            if (fitW > 0 && fitH > 0) {
+                dx += (dw - fitW) / 2;
+                dy += (dh - fitH) / 2;
+                dw = fitW;
+                dh = fitH;
+            }
+        }
+    }
+
+    if (!Port_SecondScreenWorldMap_DrawRegion(s->px, s->w, s->h, s->stride, dx, dy, dw, dh, region)) {
         return 0;
     }
 
@@ -1391,117 +1428,160 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 /*  Quest status panel                                                 */
 /* ------------------------------------------------------------------ */
 
-/* One quest row: recessed well, ink label on the left; the caller fills
- * the right side. Returns the row's vertical middle. */
-static float DrawQuestRow(const SSurf* s, const char* label, float rl, float rr, float rowY, float rowH,
-                          float u, int32_t lms, int32_t wts) {
-    float cyMid = rowY + rowH / 2;
-    Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)rl, (int32_t)rowY,
-                                    (int32_t)(rr - rl), (int32_t)rowH, wts);
-    MenuTextDraw(s, label, (int32_t)(rl + 22 * u), (int32_t)(cyMid - 8 * lms), lms, SS_TEXT_INK);
-    return cyMid;
-}
+/* QUEST tab: the quest-status contents laid out natively for this panel,
+ * on the same 4x4 well grid the ITEMS tab uses.
+ *
+ * The pause screen's own 240x160 composition (port_second_screen_quest.c) is
+ * still the source of truth for WHAT belongs here, but it is not drawn any
+ * more. That canvas is 3:2 and this panel is close to square, so an integer
+ * scale left it stranded in the middle with two thick empty bands, and it
+ * carried three pieces of furniture a passive panel has no use for: the
+ * QUEST STATUS banner, the L/R tab arrows (this panel has real tabs), and the
+ * SLEEP / SAVE plates (nothing here can sleep or save).
+ *
+ * Sharing the items grid's geometry is the point — the two info tabs are the
+ * same object with different contents, so switching between them moves
+ * nothing. Cells are icon-first with HUD digits in the corner, exactly like
+ * the ammo counts on the items grid.
+ *
+ *   row 0  kinstone bag (fused count) | heart pieces | sword skills | shells
+ *          or the trophies that replace them
+ *   row 1  the three carried quest items
+ *   row 2  the four elements
+ *   row 3  grip ring, bracelets, flippers
+ */
+static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
+                            float rx1, float ry1, float u, int32_t ts, uint32_t tick) {
+    (void)tick; /* nothing here animates: the panel has no selection cursor */
 
-/* Stand-in quest status, for while the real screen isn't decodable: the
- * four elements, the kinstone bag and fusion tally, the figurine
- * collection, and (inside a dungeon) that dungeon's map/compass/big-key
- * haul with its key count. Same row grammar as the settings tab (recessed
- * well, ink label left, content right) so the two info panels read as one
- * family — and as the quest screen's own slab-and-wells look. */
-static void PaintQuestFallback(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
-                               float rx1, float ry1, float u, int32_t ts) {
     Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
                                      (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
     float inset = 12 * ts;
-    float ix0 = rx0 + inset, iy0 = ry0 + inset, ix1 = rx1 - inset;
+    float ix0 = rx0 + inset, iy0 = ry0 + inset, ix1 = rx1 - inset, iy1 = ry1 - inset;
 
-    uint32_t ink = Port_SecondScreenTheme_Color(SSC_MENU_INK);
-    int32_t hms = (int32_t)(2.4f * u);
-    if (hms < 1) hms = 1;
-    int32_t lms = (int32_t)(1.6f * u); /* row label scale */
-    if (lms < 1) lms = 1;
-    int32_t ck = (int32_t)(2.2f * u); /* HUD digit scale for the counters */
-    if (ck < 1) ck = 1;
+    /* No header chip: the tab bar below already says QUEST, and the banner is
+     * what used to eat the top of the slab. */
 
-    DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "QUEST STATUS", hms, u);
+    const int cols = 4, rows = 4;
+    int32_t cellW = (int32_t)(ix1 - ix0) / cols;
+    int32_t cellH = (int32_t)(iy1 - iy0) / rows;
+    int32_t cell = cellW < cellH ? cellW : cellH;
+    if (cell < 24) {
+        return;
+    }
+    int32_t gx0 = (int32_t)(ix0 + ((ix1 - ix0) - cell * cols) / 2);
+    int32_t gy0 = (int32_t)(iy0 + ((iy1 - iy0) - cell * rows) / 2);
+    int32_t gap = cell / 12;
+    int32_t seam = ts > 2 ? ts / 2 : 1;
 
-    int isDungeon = (snap->areaFlags & (SECOND_SCREEN_AR_IS_DUNGEON | SECOND_SCREEN_AR_HAS_KEYS)) != 0;
-    float rowH = 96 * u, gap = 18 * u;
-    float rowY = iy0 + MENU_TEXT_BOX * hms + 32 * u;
-    float rl = ix0 + 10 * u, rr = ix1 - 10 * u;
-    int32_t wts = ts > 3 ? 3 : ts; /* well rim scale for the rows */
+    /* What each of the sixteen cells holds. iconItem 0 means "empty well". */
+    uint8_t iconItem[16];
+    uint16_t count[16];
+    uint8_t hasCount[16];
+    memset(iconItem, 0, sizeof(iconItem));
+    memset(count, 0, sizeof(count));
+    memset(hasCount, 0, sizeof(hasCount));
 
-    /* Row 1: elements, in the idle emblem's own hues. */
-    {
-        float cyMid = DrawQuestRow(s, "ELEMENTS", rl, rr, rowY, rowH, u, lms, wts);
-        static const uint32_t kElemCols[4] = { COL_ELEM_EARTH, COL_ELEM_FIRE, COL_ELEM_WATER,
-                                               COL_ELEM_WIND };
-        int32_t r = (int32_t)(18 * u);
-        float pitch = r * 2 + 16 * u;
-        float ex0 = rr - 24 * u - r - 3 * pitch;
-        for (int i = 0; i < 4; i++) {
-            int32_t ex = (int32_t)(ex0 + i * pitch);
-            uint32_t c = ((snap->elements >> i) & 1)
-                             ? kElemCols[i]
-                             : MixColor(Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK), ink, 48);
-            FillDiamond(s, ex, (int32_t)cyMid, r + (int32_t)u, ink);
-            FillDiamond(s, ex, (int32_t)cyMid, r, c);
+    /* Cell 0: the Tingle trophy takes the bag's well once won; otherwise the
+     * bag itself, and only when owned — pieces without the bag show nothing,
+     * the same rule sub_080A5594 follows. The corner count is fusions made,
+     * which is the number players actually track. */
+    if (snap->tingleTrophy == 1) {
+        iconItem[0] = ITEMID_QST_TINGLE_TROPHY;
+    } else if (snap->kinstoneBagOwned) {
+        iconItem[0] = ITEMID_KINSTONE_BAG;
+        count[0] = snap->kinstoneFused;
+        hasCount[0] = 1;
+    }
+
+    /* Cell 1: heart pieces, drawn as the quarter-heart sprite for the count
+     * so a glance reads the fraction without needing the digits. */
+    /* Cell 2: sword techniques, count only when any are known. */
+    if (snap->swordSkills != 0) {
+        count[2] = snap->swordSkills;
+        hasCount[2] = 1;
+    }
+
+    /* Cell 3: the medal once won, else the shell counter. */
+    if (snap->carlovMedal == 1) {
+        iconItem[3] = ITEMID_QST_CARLOV_MEDAL;
+    } else if (snap->shellsOwned != 0) {
+        iconItem[3] = ITEMID_SHELLS;
+        count[3] = snap->shells;
+        hasCount[3] = 1;
+    }
+
+    /* Row 1: the carried quest items, in the snapshot's own tray order. */
+    for (int i = 0; i < 3; i++) {
+        iconItem[4 + i] = snap->questItems[i];
+    }
+    /* The spare cell carries the figurine tally, which the ROM screen has no
+     * well for but the panel has room for. */
+    if (snap->figurineCount != 0) {
+        count[7] = snap->figurineCount;
+        hasCount[7] = 1;
+    }
+
+    /* Row 2: the four elements. Row 3: grip ring, bracelets, flippers. */
+    for (int i = 0; i < 4; i++) {
+        if (snap->elements & (1u << i)) {
+            iconItem[8 + i] = (uint8_t)(ITEMID_EARTH_ELEMENT + i);
         }
-        rowY += rowH + gap;
+    }
+    for (int i = 0; i < 3; i++) {
+        if (snap->passives & (1u << i)) {
+            iconItem[12 + i] = (uint8_t)(ITEMID_GRIP_RING + i);
+        }
     }
 
-    /* Row 2: kinstones — bag count with the piece icon, then the fusion
-     * tally, laid right-to-left from the row edge. */
-    {
-        float cyMid = DrawQuestRow(s, "KINSTONES", rl, rr, rowY, rowH, u, lms, wts);
-        int32_t cy = (int32_t)(cyMid - 8 * ck);
-        uint32_t bag = snap->kinstoneBag > 999 ? 999 : snap->kinstoneBag;
-        int32_t xl = DrawHudNumber(s, (int32_t)(rr - 24 * u), cy, ck, snap->kinstoneFused, 1, 0);
-        xl -= 12 * (int32_t)u + MenuTextWidth("FUSED", lms);
-        MenuTextDraw(s, "FUSED", xl, (int32_t)(cyMid - 8 * lms), lms, SS_TEXT_INK);
-        xl = DrawHudNumber(s, xl - (int32_t)(40 * u), cy, ck, bag, 1, 0);
-        Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, xl - 16 * ck - 4, cy, ck,
-                                             ITEMID_KINSTONE);
-        rowY += rowH + gap;
-    }
+    for (int slot = 0; slot < 16; slot++) {
+        int32_t cx0 = gx0 + (slot % cols) * cell + gap;
+        int32_t cy0 = gy0 + (slot / cols) * cell + gap;
+        int32_t cx1 = cx0 + cell - 2 * gap;
+        int32_t cy1 = cy0 + cell - 2 * gap;
 
-    /* Row 3: figurine collection. */
-    {
-        float cyMid = DrawQuestRow(s, "FIGURINES", rl, rr, rowY, rowH, u, lms, wts);
-        DrawHudNumber(s, (int32_t)(rr - 24 * u), (int32_t)(cyMid - 8 * ck), ck, snap->figurineCount, 1,
-                      0);
-        rowY += rowH + gap;
-    }
+        int32_t wts = (cx1 - cx0) / 40;
+        if (wts < 1) wts = 1;
+        if (wts > ts) wts = ts;
+        Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, cx0, cy0, cx1 - cx0, cy1 - cy0,
+                                        wts);
 
-    /* Row 4 (dungeons only): keys + the dungeon inventory pips. */
-    if (isDungeon) {
-        float cyMid = DrawQuestRow(s, "DUNGEON", rl, rr, rowY, rowH, u, lms, wts);
-        int32_t cy = (int32_t)(cyMid - 8 * ck);
-        static const uint8_t kPipItems[3] = { ITEMID_DUNGEON_MAP, ITEMID_COMPASS, ITEMID_BIG_KEY };
-        static const uint8_t kPipBits[3] = { 1, 2, 4 };
-        float pipPitch = 16 * ck + 12 * u;
-        float px = rr - 24 * u - 3 * pipPitch + 12 * u;
-        for (int i = 0; i < 3; i++) {
-            int32_t wx0 = (int32_t)(px + i * pipPitch);
-            FillRect(s, wx0 - 2, cy - 2, wx0 + 16 * ck + 2, cy + 16 * ck + 2,
-                     MixColor(Port_SecondScreenTheme_Color(SSC_MENU_STONE_DARK), ink, 40));
-            if (snap->dungeonItemBits & kPipBits[i]) {
-                Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, wx0, cy, ck,
-                                                     kPipItems[i]);
+        int32_t iconScale = (cell - 2 * gap - 4 * seam) / 16;
+        if (iconScale < 1) iconScale = 1;
+        if (iconScale > 6) iconScale = 6; /* GBA icons turn to mush past 6x */
+        int32_t iconX = (cx0 + cx1) / 2 - 8 * iconScale;
+        int32_t iconY = (cy0 + cy1) / 2 - 8 * iconScale;
+
+        if (slot == 1) {
+            /* Heart pieces: the HUD's own quarter-heart faces, so three of
+             * four reads as a three-quarter heart rather than as "3". */
+            int hp = snap->heartPieces > 3 ? 3 : snap->heartPieces;
+            const SecondScreenThemeSprite* heart =
+                Port_SecondScreenTheme_Get(SST_HEART_EMPTY + hp);
+            if (heart != NULL) {
+                int32_t hmax = heart->w > heart->h ? heart->w : heart->h;
+                int32_t hs = (cell - 4 * gap) / (hmax > 0 ? hmax : 8);
+                if (hs < 1) hs = 1;
+                BlitSprite(s, heart, (cx0 + cx1) / 2 - heart->w * hs / 2,
+                           (cy0 + cy1) / 2 - heart->h * hs / 2, hs);
             }
+            continue;
         }
-        int32_t xl = DrawHudNumber(s, (int32_t)(px - 28 * u), cy, ck, snap->dungeonKeys, 1, 0);
-        BlitSprite(s, Port_SecondScreenTheme_Get(SST_KEY), xl - 16 * ck - 4, cy, ck);
-    }
-}
+        if (slot == 2 && hasCount[2]) {
+            /* Sword techniques have no inventory icon of their own — the
+             * player's own sword stands in, with the technique count on it. */
+            Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, iconX, iconY, iconScale,
+                                                 ITEMID_SMITH_SWORD);
+        } else if (iconItem[slot] != 0) {
+            Port_SecondScreenRender_DrawItemIcon(s->px, s->w, s->h, s->stride, iconX, iconY, iconScale,
+                                                 iconItem[slot]);
+        }
 
-/* QUEST tab: the pause menu's own quest-status screen when its art module
- * can draw it, the row stand-in above until then. */
-static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
-                            float rx1, float ry1, float u, int32_t ts, uint32_t tick) {
-    if (!Port_SecondScreenQuest_Draw(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
-                                     (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), snap, tick)) {
-        PaintQuestFallback(s, snap, rx0, ry0, rx1, ry1, u, ts);
+        if (hasCount[slot]) {
+            int32_t ss = (iconScale + 1) / 2;
+            if (ss < 1) ss = 1;
+            DrawAmmoCount(s, iconX, cy1 - seam - 8 * ss, ss, count[slot]);
+        }
     }
 }
 
@@ -1706,9 +1786,9 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
     if (snap->rActionFrame == 0) {
         return;
     }
-    int32_t ms = (int32_t)(1.5f * u);
+    int32_t ms = (int32_t)(1.9f * u);
     if (ms < 1) ms = 1;
-    float gh = bandH - 6 * u; /* glyph height */
+    float gh = bandH - 8 * u; /* glyph height */
     float gw = gh * 1.35f;    /* shoulder buttons are wider than tall */
     float cy = y + bandH / 2;
 
@@ -1721,7 +1801,11 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
      * out on the lettered width; the art path draws at the same origin
      * (its frames are the same words at a comparable size), so the two
      * paths land in the same place. */
-    int32_t scale = (int32_t)(gh / 16.0f);
+    /* Rounded, not floored. The R sprite is 16 px tall, so flooring threw
+     * away most of a whole pixel-step and the glyph came out a size smaller
+     * than the band was built for — next to the A/B rings it read as an
+     * afterthought. */
+    int32_t scale = (int32_t)(gh / 16.0f + 0.5f);
     if (scale < 1) scale = 1;
     float labelW = word != NULL ? (float)MenuTextWidth(word, ms) : 0.0f;
     float gap = 8 * u;
@@ -1791,7 +1875,10 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
 
     /* R prompt band, reserved whether or not there is a prompt so the
      * rings below never shift when one appears. */
-    float rBandH = 34 * u;
+    /* The prompt shares the sidebar with the A/B rings, and at 34u it was
+     * dwarfed by them — this is the one contextual control on the panel, so
+     * it gets a band it can actually be read in. */
+    float rBandH = 52 * u;
     DrawRPrompt(s, snap, x, vitalsBottom, w, rBandH, u, ts);
     vitalsBottom += rBandH;
 
