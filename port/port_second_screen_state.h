@@ -37,6 +37,14 @@ typedef struct {
     uint16_t w, h; /* room size, pixels; w==0 or h==0 -> slot unused */
 } SecondScreenRoom;
 
+/* gArea.areaMetadata bits (include/area.h AreaStateFlags) — republished
+ * verbatim so the render side applies the same gating the engine does
+ * (AreaIsDungeon / AreaHasKeys / AreaHasMap in src/gameUtils.c). */
+#define SECOND_SCREEN_AR_IS_OVERWORLD 0x01
+#define SECOND_SCREEN_AR_HAS_KEYS 0x02
+#define SECOND_SCREEN_AR_IS_DUNGEON 0x04
+#define SECOND_SCREEN_AR_HAS_MAP 0x08
+
 typedef struct {
     uint8_t inGame; /* gMain.task == TASK_GAME; nothing else below is valid otherwise */
     uint8_t area;
@@ -54,6 +62,30 @@ typedef struct {
     uint16_t rupees;
     int32_t playerX; /* area-space pixels */
     int32_t playerY;
+    /* Area identity: SECOND_SCREEN_AR_* bits plus the dungeon slot the
+     * engine's own key/compass logic indexes with. */
+    uint8_t areaFlags;  /* gArea.areaMetadata */
+    uint8_t dungeonIdx; /* gArea.dungeon_idx */
+    /* Current dungeon's save state (zeroed outside key-bearing areas):
+     * key count plus the raw gSave.dungeonItems byte — bit 0 map, bit 1
+     * compass, bit 2 big key, exactly what HasDungeonMap/Compass/BigKey
+     * (src/gameUtils.c) test. */
+    uint8_t dungeonKeys;
+    uint8_t dungeonItemBits;
+    /* Quest state for the status strip. */
+    uint8_t elements;   /* bit n set = ITEM_EARTH_ELEMENT + n owned */
+    uint8_t walletType; /* picks the HUD rupee icon tier */
+    uint16_t walletMax; /* gWalletSizes[walletType].size; maxed => yellow digits */
+    uint8_t bombCount;
+    uint8_t bombMax;
+    uint8_t arrowCount;
+    uint8_t arrowMax;
+    uint8_t kinstoneFused; /* gSave.kinstones.fusedCount */
+    uint8_t pad0;
+    uint16_t kinstoneBag; /* pieces currently in the bag (sum of amounts[]) */
+    /* gSave.windcrests verbatim; bits 24..31 are the WindcrestID unlock
+     * flags (include/windcrest.h) the fast-travel screen checks. */
+    uint32_t windcrests;
     /* Pause-menu item screen contents: menuItems[menuSlot] = item id, 0 if
      * that slot is empty. Bottles report the ITEM_BOTTLE1..4 container id;
      * bottleContents[] carries what's inside for icon display. */
