@@ -2324,3 +2324,102 @@ u32 GetRandomSharedFusion(u8* fuserData) {
     }
     return KINSTONE_JUST_FUSED;
 }
+
+#ifdef PC_PORT
+/* Second-screen raw-data accessors (port/port_second_screen_dungeonmap.c).
+ * Same rationale as Port_GetRawPaletteGroupData next to LoadPaletteGroup
+ * above — the ROM tables and their entry types (gPaletteGroups/PaletteGroup,
+ * gGfxGroups/GfxItem, the room-header helper) are file-private here, so the
+ * raw readers live in this translation unit too. Appended at the end of the
+ * file, and kept append-only, so hand-merging against upstream stays a
+ * non-event. */
+
+/* Raw RGB555 colors LoadPaletteGroup would put in destination palette bank
+ * `destPaletteNum` (0-15 BG, 16-31 OBJ) for `group`, straight from ROM and
+ * independent of the live gPaletteBuffer. Walks the whole chained group —
+ * Port_GetRawPaletteGroupData above resolves only the first entry, which
+ * isn't enough for pause-menu groups whose interesting banks sit in later
+ * chain links (e.g. group 184's dungeon-map bank 12). Later entries win on
+ * overlap, matching load order. Returns NULL when no entry covers the bank;
+ * outNumColors is the 16 colors of that one bank. */
+const u8* Port_GetRawPaletteGroupBankData(u32 group, u32 destPaletteNum, u32* outNumColors) {
+    const PaletteGroup* paletteGroup;
+    const u8* found = NULL;
+    u32 guard;
+
+    if (outNumColors != NULL) {
+        *outNumColors = 0;
+    }
+    if (group >= 208) { /* PALETTE_GROUPS_COUNT_MAX (port_rom.c) */
+        return NULL;
+    }
+    paletteGroup = gPaletteGroups[group];
+    if (paletteGroup == NULL) {
+        return NULL;
+    }
+    for (guard = 0; guard < 64; guard++) {
+        u32 pg = ROM_U32(*(const u32*)paletteGroup);
+        u32 dest = (pg >> 16) & 0xFF;
+        u32 numPalettes = (pg >> 24) & 0xF;
+        if (numPalettes == 0) {
+            numPalettes = 16;
+        }
+        if (destPaletteNum >= dest && destPaletteNum < dest + numPalettes) {
+            found = &gGlobalGfxAndPalettes[((pg & 0xFFFF) + (destPaletteNum - dest)) * 32];
+        }
+        if (((pg >> 24) & 0x80) == 0) {
+            break;
+        }
+        paletteGroup++;
+    }
+    if (found != NULL && outNumColors != NULL) {
+        *outNumColors = 16;
+    }
+    return found;
+}
+
+/* Raw bytes gfx group `group` would DMA to VRAM address `vramAddr`
+ * (LoadGfxGroup's uncompressed path), provided [vramAddr, vramAddr+numBytes)
+ * sits fully inside one entry. Only unconditional entries (ctrl 0x7) count —
+ * the language-gated variants would need gSaveHeader, i.e. live save state,
+ * which these accessors deliberately never read — and LZ77 entries (negative
+ * size) are skipped to keep this a pure pointer lookup. Later entries win on
+ * overlap, matching load order. */
+const u8* Port_GetRawGfxSpanForVram(u32 group, u32 vramAddr, u32 numBytes) {
+    const GfxItem* gfxItem;
+    const u8* found = NULL;
+    u32 guard;
+
+    if (group >= 133) { /* GFX_GROUPS_COUNT_MAX (port_rom.c) */
+        return NULL;
+    }
+    gfxItem = gGfxGroups[group];
+    if (gfxItem == NULL) {
+        return NULL;
+    }
+    for (guard = 0; guard < 64; guard++) {
+        u32 gi = ROM_U32(gfxItem->unk0.raw);
+        u32 ctrl = (gi >> 24) & 0xF;
+        u32 dest = ROM_U32(gfxItem->dest);
+        s32 size = (s32)ROM_U32(gfxItem->unk8);
+        if (ctrl == 0xD) { /* hard list end, as in LoadGfxGroup */
+            break;
+        }
+        if (ctrl == 0x7 && size > 0 && dest <= vramAddr && vramAddr + numBytes <= dest + (u32)size) {
+            found = &gGlobalGfxAndPalettes[(gi & 0xFFFFFF) + (vramAddr - dest)];
+        }
+        if (((gi >> 24) & 0x80) == 0) {
+            break;
+        }
+        gfxItem++;
+    }
+    return found;
+}
+
+/* Room header (map placement + size) for (area, room), bounds- and
+ * ROM-pointer-checked. Common_GetAreaRoomHeaderSafe is static — this is its
+ * exported face for the port layer. */
+const RoomHeader* Port_GetRoomHeaderSafe(u32 area, u32 room) {
+    return Common_GetAreaRoomHeaderSafe(area, room);
+}
+#endif
