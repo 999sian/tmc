@@ -66,6 +66,9 @@ enum {
     /* Pause-menu equip cursor (the gold slot frame), both blink frames. */
     SST_CURSOR_0,
     SST_CURSOR_1,
+    /* HUD shoulder-button glyph (sprite 505 frame 2) — the R badge the game
+     * draws beside its contextual prompts. */
+    SST_BUTTON_R,
     SST_COUNT
 };
 
