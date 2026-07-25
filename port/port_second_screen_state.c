@@ -98,6 +98,18 @@ void Port_SecondScreenState_Publish(void) {
         for (u32 i = 0; i < 19; i++) {
             next.kinstoneBag += gSave.kinstones.amounts[i];
         }
+        {
+            /* Owned figurines = set bits in the save's figurine bitset. */
+            u32 n = 0;
+            for (u32 i = 0; i < sizeof(gSave.figurines); i++) {
+                u8 b = gSave.figurines[i];
+                while (b) {
+                    n += b & 1;
+                    b >>= 1;
+                }
+            }
+            next.figurineCount = n > 255 ? 255 : (uint8_t)n;
+        }
         next.windcrests = gSave.windcrests;
 
         /* Mirror of the pause menu's item-screen fill loop

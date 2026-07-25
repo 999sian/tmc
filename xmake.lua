@@ -801,7 +801,7 @@ target("tmc_pc")
     add_files("port/port_upscale.c") -- xBRZ-style pixel-art upscaler
     add_files("port/port_save.c")        -- EEPROM save emulation
     add_files("port/port_softslots.c")   -- Extra item-equip buttons (X/Y/L2/R2)
-    add_files("port/port_second_screen.c") -- Second-display panel (AYN Thor); no-op off Android
+    add_files("port/port_second_screen.c") -- Second-display panel (AYN Thor); compositor compiles everywhere, surface plumbing is Android-only
     add_files("port/port_second_screen_state.c") -- Thread-safe gSave/gRoomControls snapshot for the second screen
     add_files("port/port_second_screen_render.c") -- Item-icon compositor for the second screen (reads ROM/asset data directly)
     add_files("port/port_second_screen_worldmap.c") -- Hyrule map art for the second screen, decoded from ROM at runtime

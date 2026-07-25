@@ -81,7 +81,7 @@ typedef struct {
     uint8_t arrowCount;
     uint8_t arrowMax;
     uint8_t kinstoneFused; /* gSave.kinstones.fusedCount */
-    uint8_t pad0;
+    uint8_t figurineCount; /* set bits in gSave.figurines[] (owned figurines) */
     uint16_t kinstoneBag; /* pieces currently in the bag (sum of amounts[]) */
     /* gSave.windcrests verbatim; bits 24..31 are the WindcrestID unlock
      * flags (include/windcrest.h) the fast-travel screen checks. */

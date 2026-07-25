@@ -135,6 +135,11 @@ bool sA11yFootsteps = true;
 bool sA11yHazards = true;
 bool sA11yRadar = true;
 bool sA11yWalls = true;
+/* Second-screen (AYN Thor bottom panel) map-behavior toggles, surfaced as
+ * tappable rows on that screen's own settings tab. All default on. */
+bool sSecondScreenFollowCam = true;
+bool sSecondScreenCrestPins = true;
+bool sSecondScreenFloorReturn = true;
 /* Speedrun practice mode (port_practice.c). Overlays default off so normal
  * play stays uncluttered; slow-mo defaults to 1.0 (normal speed). */
 bool sPracticeShowTimer = false;
@@ -275,6 +280,9 @@ const BoolCfg kBoolCfg[] = {
     { "a11y_hazards", &sA11yHazards, false },
     { "a11y_radar", &sA11yRadar, false },
     { "a11y_walls", &sA11yWalls, false },
+    { "second_screen_follow_cam", &sSecondScreenFollowCam, true },
+    { "second_screen_windcrest_pins", &sSecondScreenCrestPins, true },
+    { "second_screen_floor_auto_return", &sSecondScreenFloorReturn, true },
     { "practice_show_timer", &sPracticeShowTimer, false },
     { "practice_show_inputs", &sPracticeShowInputs, false },
     { "practice_show_history", &sPracticeShowHistory, false },
@@ -1714,6 +1722,32 @@ extern "C" bool Port_Config_GetA11yWalls(void) {
 extern "C" void Port_Config_SetA11yWalls(bool on) {
     sA11yWalls = on;
     sConfigJson["a11y_walls"] = on;
+    SaveConfig();
+}
+
+/* ---- Second-screen map behavior --------------------------------------- */
+extern "C" bool Port_Config_GetSecondScreenFollowCam(void) {
+    return sSecondScreenFollowCam;
+}
+extern "C" void Port_Config_SetSecondScreenFollowCam(bool on) {
+    sSecondScreenFollowCam = on;
+    sConfigJson["second_screen_follow_cam"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetSecondScreenCrestPins(void) {
+    return sSecondScreenCrestPins;
+}
+extern "C" void Port_Config_SetSecondScreenCrestPins(bool on) {
+    sSecondScreenCrestPins = on;
+    sConfigJson["second_screen_windcrest_pins"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetSecondScreenFloorReturn(void) {
+    return sSecondScreenFloorReturn;
+}
+extern "C" void Port_Config_SetSecondScreenFloorReturn(bool on) {
+    sSecondScreenFloorReturn = on;
+    sConfigJson["second_screen_floor_auto_return"] = on;
     SaveConfig();
 }
 
