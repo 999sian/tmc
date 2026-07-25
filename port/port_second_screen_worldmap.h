@@ -32,6 +32,14 @@ const uint32_t* Port_SecondScreenWorldMap_GetImage(int32_t* outW, int32_t* outH)
 int Port_SecondScreenWorldMap_LocatePlayer(uint8_t area, int32_t areaX, int32_t areaY,
                                            int32_t* outMapX, int32_t* outMapY);
 
+/* World-map pixel position of a windcrest warp point (WindcrestID bit
+ * index, matching gSave.windcrests' upper-byte flags — the caller decides
+ * from the snapshot which ones are unlocked and how to draw them). Returns
+ * 1 and fills the position when the id is a real windcrest, 0 past the end
+ * or while map data isn't ready. Positions come from the same static
+ * tables the fast-travel screen (src/subtask/subtaskFastTravel.c) uses. */
+int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outMapX, int32_t* outMapY);
+
 #ifdef __cplusplus
 }
 #endif
