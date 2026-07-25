@@ -721,3 +721,48 @@ int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outM
     }
     return 1;
 }
+
+/* --- Regional zoom seams ------------------------------------------------
+ * Stubs for now: the tile grid and per-region artwork land as their own
+ * change. Returning "not ready" keeps callers on the world view. */
+
+int Port_SecondScreenWorldMap_GetRegionAt(int32_t mapX, int32_t mapY, int32_t* outRegion,
+                                          int32_t* outX0, int32_t* outY0, int32_t* outX1,
+                                          int32_t* outY1) {
+    (void)mapX;
+    (void)mapY;
+    (void)outRegion;
+    (void)outX0;
+    (void)outY0;
+    (void)outX1;
+    (void)outY1;
+    return 0;
+}
+
+int Port_SecondScreenWorldMap_DrawRegion(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                         int32_t dstX, int32_t dstY, int32_t dstW, int32_t dstH,
+                                         int32_t region) {
+    (void)pixels;
+    (void)bufW;
+    (void)bufH;
+    (void)stride;
+    (void)dstX;
+    (void)dstY;
+    (void)dstW;
+    (void)dstH;
+    (void)region;
+    return 0;
+}
+
+int Port_SecondScreenWorldMap_LocateInRegion(int32_t region, uint8_t area, int32_t areaX, int32_t areaY,
+                                             int32_t dstW, int32_t dstH, int32_t* outX, int32_t* outY) {
+    (void)region;
+    (void)area;
+    (void)areaX;
+    (void)areaY;
+    (void)dstW;
+    (void)dstH;
+    (void)outX;
+    (void)outY;
+    return 0;
+}

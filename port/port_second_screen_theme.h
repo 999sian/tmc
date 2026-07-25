@@ -205,6 +205,28 @@ int32_t Port_SecondScreenTheme_DrawBigText(uint32_t* pixels, int32_t bufW, int32
 /* Pixel width DrawBigText would advance (0 when the bank is not ready). */
 int32_t Port_SecondScreenTheme_BigTextWidth(const char* str, int32_t scale);
 
+/* The pause menu's own labelled button — the pale plate with the blue-grey
+ * keyline and blue lettering the SLEEP / SAVE buttons use. Draws the frame
+ * fitted to the rect and the label centered in the game's button font.
+ * `pressed` draws the button's own active/held state. Returns 1 when the
+ * authentic art was used, 0 while it isn't decoded (caller falls back). */
+int Port_SecondScreenTheme_DrawMenuButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                          int32_t x, int32_t y, int32_t w, int32_t h, const char* label,
+                                          int pressed);
+
+/* The HUD's R button glyph, at its native size scaled up. Returns 1 when
+ * drawn, 0 while the art isn't decoded. */
+int Port_SecondScreenTheme_DrawRButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                       int32_t x, int32_t y, int32_t scale);
+
+/* One of the HUD's contextual button-prompt labels (SPEAK / READ / LIFT /
+ * ...), by the sprite frame id the snapshot carries in rActionFrame —
+ * the game's own label art, not re-lettered text. Returns the drawn width
+ * in pixels, or 0 when the frame isn't decodable / the id is 0. */
+int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, int32_t bufH,
+                                               int32_t stride, int32_t x, int32_t y, int32_t scale,
+                                               uint8_t frameId);
+
 #ifdef __cplusplus
 }
 #endif
