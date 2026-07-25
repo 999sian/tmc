@@ -12,31 +12,60 @@
  *   window chrome   gUnk_081092AC[0] border shapes + gUnk_081094CE color
  *                   LUT + gUnk_0810926C fill patterns — the exact pipeline
  *                   sub_0805F918 (src/text.c) runs to build the message
- *                   window's 7 tiles, replayed into private RGBA buffers.
- *                   Tile arrangement comes from DispMessageFrame
- *                   (src/message.c) — corner + edge tiles, flips mirroring.
+ *                   window's 7 tiles (fill all seven with the fill_type's
+ *                   nibble pattern, then write the border columns through
+ *                   the LUT), replayed into private RGBA buffers. Tile
+ *                   arrangement comes from DispMessageFrame
+ *                   (src/message.c) — corner + edge tiles, flips
+ *                   mirroring. border_type 0 / fill_type 0 is the plain
+ *                   in-game dialog (MsgOpen passes message.unk3/bgColor,
+ *                   both 0 by default): black interior (bank 15 color 15),
+ *                   silver/white rounded double border.
  *   hearts/rupee/   gfx group 16 (the HUD tile load InitUI performs to BG0
  *   key icons       char base 3, src/ui.c) via Port_ResolveGfxGroupVram;
- *                   tile ids from DrawHearts/DrawRupees/DrawKeys.
- *   digit fonts     gUnk_085C4620 — the same blob RenderDigits/sub_0801C2F0
- *                   DMA into VRAM: +0x000 small ammo digits (tens/ones
- *                   tiles), +0x280 white 8x16 counters, +0x500 yellow
+ *                   tile ids from DrawHearts/DrawRupees/DrawKeys. Heart
+ *                   row truth is gUnk_080C8F2C's tilemap entries: tile
+ *                   0x15 = full, 0x11 = empty, 0x12..0x14 the quarter
+ *                   fills DrawHearts writes as (health&3)+0x11.
+ *   digit fonts     gUnk_085C4620 (a u32[] blob — offsets below in bytes):
+ *                   +0x000 small ammo digits (tens tiles 0..9, ones tiles
+ *                   10..19 — RenderDigits' sibling sub_0801C2F0 DMAs
+ *                   gUnk_085C4620 + digit*8 in u32 units = digit*32
+ *                   bytes), +0x280 white 8x16 counters, +0x500 yellow
  *                   (maxed) variants.
- *   palette         palette group 12 (HUD bank 15 — MESSAGE_PALETTE), the
- *                   one palette the HUD/message tiles above are drawn with.
+ *   palettes        BG bank 15 (MESSAGE_PALETTE) via palette group 12 for
+ *                   everything the HUD writes with 0xF000 tilemap entries
+ *                   (hearts/rupees/keys/counter digits/window chrome).
+ *                   OBJ pieces carry a palette bank in their 5th byte
+ *                   (RenderSpritePieces: bit0 set = absolute bank, else
+ *                   added to the OAM command's bank); banks resolve from
+ *                   the palette-group chain state the pause menu leaves
+ *                   loaded — group 182 (Items tab, OBJ banks 5..10), then
+ *                   181 (pause base, OBJ 0..4), then 11 (gameplay OBJ
+ *                   0..4) — most recently loaded group first, exactly
+ *                   like the shared gPaletteBuffer. The small ammo digits
+ *                   are OBJ tiles whose piece selects bank 4.
  *   A/B buttons     sprite 505 frames 0/1 (gUIElementDefinitions), pieces
- *                   from gFrameObjLists via sub_080AD8F0, tiles from the
- *                   sprite sheet like the HUD's own element DMA.
+ *                   from gFrameObjLists via sub_080AD8F0. The button
+ *                   elements have no sprite sheet (definition unk_e = 1,
+ *                   so sub_0801CB20 never DMAs one): their tiles sit in
+ *                   OBJ VRAM at the element's fixed slot 0x100
+ *                   (definition unk_4), loaded there by gfx group 16's
+ *                   0x06012000 record. Pieces are slot-relative.
  *   equip cursor    pause-menu sprite 0x1FB (0x1FA on EU) frames 4/5 — the
- *                   blinking gold slot frame of the Items screen. Its
- *                   pieces address OBJ VRAM absolutely, so tiles resolve
- *                   through gfx group 90 (the Items screen's OBJ loads).
+ *                   blinking gold slot frame of the Items screen
+ *                   (gItemMenuTable item slots are type 1; the draw uses
+ *                   entry->type + 3/4). Its pieces address OBJ VRAM
+ *                   absolutely (gOamCmd._8 = 0x800, tile base 0); tile
+ *                   0x0E lives in gfx group 86's 0x06010000 record (the
+ *                   pause chrome group sub_080A4D34 loads over the
+ *                   gameplay tiles), so VRAM resolves latest-load-first:
+ *                   group 90, 86, then the gameplay 23/16.
  */
 
 /* src/common.c (appended accessors — ROM-const reads only). */
 extern const u8* Port_GetRawPaletteGroupData(u32 group, u32* outNumColors);
-extern const u8* Port_GetRawPaletteGroupEntryData(u32 group, u32 entryIdx, u32* outNumColors,
-                                                  u32* outDestPaletteNum);
+extern const u8* Port_GetRawPaletteGroupBankData(u32 group, u32 destPaletteNum, u32* outNumColors);
 extern const u8* Port_ResolveGfxGroupVram(u32 group, u32 vramAddr, u32* outAvail);
 
 /* src/affine.c — frame OBJ piece list for (sprite, frame); PC path is
@@ -58,22 +87,41 @@ extern const u8 gUnk_085C4620[];
 
 #define HUD_GFX_GROUP 16u
 #define HUD_PALETTE_GROUP 12u       /* -> BG bank 15, MESSAGE_PALETTE */
-#define OBJ_PALETTE_GROUP 11u       /* -> OBJ banks 0..4 (gameplay set) */
-#define PAUSE_PALETTE_GROUP 182u    /* -> BG 13/14 + OBJ banks 5..10 */
-#define PAUSE_OBJ_GFX_GROUP 90u     /* Items screen OBJ tile loads */
 #define HUD_BG_CHARBASE 0x0600C000u /* BG0 char base 3 (control 0x1f0c) */
 #define OBJ_VRAM_BASE 0x06010000u
 
+/* OBJ palette state at pause time, most recently loaded group first —
+ * 182 (Items tab: OBJ banks 5..10), 181 (pause base: OBJ 0..4), 11
+ * (gameplay: OBJ 0..4). Later loads win on the GBA, so earlier in this
+ * list wins here. */
+static const u8 kObjPaletteGroups[] = { 182u, 181u, 11u };
+
+/* OBJ VRAM state, same latest-load-first rule. Buttons live in the HUD
+ * element block gfx group 16 loads at 0x06012000 (group 86 carries an
+ * identical copy for the pause screens). The equip cursor's tile 0x0E is
+ * group 86's 0x06010000 block, loaded over the gameplay tiles when the
+ * pause menu opens — 23/16 stay as the base layers underneath. */
+static const u8 kHudObjGfxGroups[] = { 16u, 86u };
+static const u8 kPauseObjGfxGroups[] = { 90u, 86u, 23u, 16u };
+
 /* HUD tile ids (BG0 char base 3) — from DrawHearts / DrawRupees /
- * DrawKeys in src/ui.c and gWalletSizes in src/itemUtils.c. */
-#define TILE_HEART_FULL 0x11 /* +1..+3 = quarter fills, 0x15 = empty */
-#define TILE_HEART_EMPTY 0x15
+ * DrawKeys in src/ui.c and gWalletSizes in src/itemUtils.c. The heart
+ * series runs empty -> full: 0x11 empty, 0x12..0x14 quarter fills
+ * ((health & 3) + 0x11), 0x15 full (gUnk_080C8F2C's DMA'd entries). */
+#define TILE_HEART_EMPTY 0x11
+#define TILE_HEART_FULL 0x15
 #define TILE_KEY 0x1C       /* 2x2 */
 #define TILE_RUPEE_W0 0x60  /* 2x2, +4 per wallet tier */
+
+/* OBJ palette bank the ammo-digit pieces select (sprite 322's digit
+ * pieces carry palette 4 with the absolute bit — see the frame OBJ data
+ * for items with counters, e.g. bombs). */
+#define SMALL_DIGIT_OBJ_BANK 4u
 
 /* Sprite indices. */
 #define SPRITE_HUD_BUTTONS 505u
 #define SPRITE_PAUSE_MISC (REGION_IS_EU ? 0x1FAu : 0x1FBu)
+#define BUTTON_VRAM_SLOT 0x100u /* gUIElementDefinitions[BUTTON_*].unk_4 */
 #define CURSOR_FRAME_0 4u
 #define CURSOR_FRAME_1 5u
 
@@ -163,10 +211,17 @@ static const uint32_t* DecodeIcon2x2(const u8* tiles, const uint16_t* pal16, u32
 /* -------------------------------------------------------------------- */
 
 static void BuildChrome(const uint16_t* hudPal, u32 hudColors) {
-    /* fill_type 0 — the plain in-game dialog window's color scheme. */
-    const u8* lut = &gUnk_081094CE[0]; /* even-column half: plain indexes */
-    u8 fillHead = gUnk_081094CE[0x0A]; /* logical offset 0xAA via the split head/tail tables */
-    u32 fillIdx = gUnk_0810926C[fillHead & 0x3F] & 0xFu;
+    /* fill_type 0 — the plain in-game dialog window's color scheme.
+     * Border LUT: sub_0805F918 indexes gUnk_081094CE + fill_type * 0xC0
+     * directly (the tail table, not the head/tail-split text-color view);
+     * even columns read [pixel], odd columns [0x10 + pixel] pre-shifted
+     * <<4 (sub_080026C4's two halves). Fill pattern: the head-sentinel
+     * byte at logical offset 0xAA of the split table — 0xAA lands past
+     * the 160-byte gUnk_0810942E head, i.e. gUnk_081094CE[0x0A] — indexes
+     * gUnk_0810926C (16 fill words, one nibble per pixel). */
+    const u8* lutEven = &gUnk_081094CE[0x00];
+    const u8* lutOdd = &gUnk_081094CE[0x10];
+    u32 fillWord = gUnk_0810926C[gUnk_081094CE[0x0A] & 0x0Fu];
     u8 unpacked[128];
     int32_t border, block, py, px;
 
@@ -182,12 +237,17 @@ static void BuildChrome(const uint16_t* hudPal, u32 hudColors) {
             continue;
         }
         /* Three 0x40-byte blocks, each an 8x16 strip = two stacked tiles:
-         * (corner, h-corner), (h-straight, v-corner), (v-straight, cursor). */
+         * (corner, h-corner), (h-straight, v-corner), (v-straight, cursor).
+         * sub_0805F918 fills the whole strip with the fill pattern first,
+         * then writes every border pixel through the LUT unconditionally —
+         * LUT output 0 = BG color 0 = transparent (the window's outside),
+         * everything else opaque, interior pixels the fill color. */
         for (block = 0; block < 3; block++) {
             UnpackTextNibbles((void*)(shapes + block * 0x40), unpacked);
             for (py = 0; py < 16; py++) {
                 for (px = 0; px < 8; px++) {
-                    u32 colorIdx = lut[unpacked[py * 8 + px] & 0x0Fu] & 0x0Fu;
+                    u32 pix = unpacked[py * 8 + px] & 0x0Fu;
+                    u32 colorIdx = (px & 1) ? (u32)(lutOdd[pix] >> 4) : (u32)(lutEven[pix] & 0x0Fu);
                     uint32_t rgba = (colorIdx == 0 || colorIdx >= hudColors)
                                         ? 0u
                                         : Rgb555ToRgba8888(hudPal[colorIdx]);
@@ -201,9 +261,14 @@ static void BuildChrome(const uint16_t* hudPal, u32 hudColors) {
         sChromeOk = opaque >= 8;
     }
 
-    /* Interior fill tile: the MemFill32 base sub_0805F918 leaves untouched
-     * in the strip's 7th tile (MSG_BACKGROUND). */
+    /* Fill tile (MSG_BACKGROUND, the strip's 7th tile MemFill32 leaves as
+     * the pure pattern). The six border tiles need no fill pass of their
+     * own: the column writer overdraws every pixel, and the border art
+     * already encodes "window interior" as the pixel value whose LUT
+     * entry is the fill index (0xA -> 15 for fill_type 0), so the replay
+     * above lands interior/outside pixels exactly like the game. */
     {
+        u32 fillIdx = fillWord & 0xFu; /* one nibble per pixel; pattern words repeat it */
         uint32_t fill = (fillIdx != 0 && fillIdx < hudColors) ? Rgb555ToRgba8888(hudPal[fillIdx])
                                                               : sColors[SSC_WINDOW_FILL];
         for (py = 0; py < 64; py++) {
@@ -222,25 +287,15 @@ static const u8 kObjW[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 1
 static const u8 kObjH[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
 
 /* OBJ palette bank -> raw RGB555 colors, resolved through the palette
- * groups gameplay/pause keep loaded there (group 11: banks 0-4, group
- * 182's chained entries: banks 5+). */
+ * group chain state the pause menu leaves loaded (kObjPaletteGroups,
+ * latest load first). */
 static const uint16_t* ObjPalBank(u32 bank) {
-    static const u32 kGroups[2] = { OBJ_PALETTE_GROUP, PAUSE_PALETTE_GROUP };
-    u32 g, e;
-    for (g = 0; g < 2; g++) {
-        for (e = 0; e < 4; e++) {
-            u32 numColors = 0, dest = 0;
-            const u8* p = Port_GetRawPaletteGroupEntryData(kGroups[g], e, &numColors, &dest);
-            if (p == NULL) {
-                break;
-            }
-            if (dest >= 16) {
-                u32 bankLo = dest - 16;
-                u32 bankCount = numColors / 16;
-                if (bank >= bankLo && bank < bankLo + bankCount) {
-                    return (const uint16_t*)p + (bank - bankLo) * 16;
-                }
-            }
+    u32 g;
+    for (g = 0; g < sizeof(kObjPaletteGroups); g++) {
+        u32 numColors = 0;
+        const u8* p = Port_GetRawPaletteGroupBankData(kObjPaletteGroups[g], 16u + (bank & 15u), &numColors);
+        if (p != NULL && numColors >= 16) {
+            return (const uint16_t*)p;
         }
     }
     return NULL;
@@ -248,17 +303,19 @@ static const uint16_t* ObjPalBank(u32 bank) {
 
 /* Composites one sprite frame (all its OBJ pieces) into a bbox-cropped
  * RGBA buffer. Piece format is RenderSpritePieces' (port_draw.c): count
- * byte, then 5 bytes per piece {s8 x, s8 y, u8 shape/size/flip, u8 tile
- * low, u8 tile high (tile bits 8-9 + palette in the top nibble)}. Pieces
- * are drawn in reverse so the first (topmost OAM) piece wins overlaps.
- * objVramGroup == 0: tiles come from the sprite sheet (frames[] +
- * firstTileIndex, the UI-element DMA path); nonzero: tile indexes are
- * absolute OBJ VRAM tiles resolved through that gfx group's OBJ loads
- * (the DrawDirect path the pause menu uses). */
-static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 objVramGroup, int outId) {
+ * byte, then 5 bytes per piece {s8 x, s8 y, u8 shape/size/flip/palmode,
+ * u8 tile low, u8 tile high (tile bits 8-9 low, palette bank top
+ * nibble)}. attr2 semantics per the engine (arm sub_080B2874): tile =
+ * baseTile + tileLow + tileHighLow<<8; palette = piece bank, added to
+ * the OAM command's bank unless piece bit0 clears it (all the sprites
+ * here carry bit0, i.e. absolute banks — basePal is the command bank of
+ * the game's own draw for fidelity when a piece doesn't). Tiles are
+ * absolute OBJ VRAM, resolved through the gfx groups the relevant screen
+ * keeps loaded (vramGroups, latest load first). Pieces are drawn in
+ * reverse so the first (topmost OAM) piece wins overlaps. */
+static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 baseTile, u32 basePal, const u8* vramGroups,
+                                u32 numVramGroups, int outId) {
     const u8* frameData = (const u8*)sub_080AD8F0(spriteIdx, frameIdx);
-    const SpritePtr* sp = NULL;
-    const SpriteFrame* frame = NULL;
     u32 count;
     int32_t minX = 0x7FFF, minY = 0x7FFF, maxX = -0x7FFF, maxY = -0x7FFF;
     int32_t w, h, i;
@@ -270,14 +327,6 @@ static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 objVramGroup, i
     count = frameData[0];
     if (count == 0 || count > 16) {
         return 0;
-    }
-
-    if (objVramGroup == 0) {
-        sp = Port_GetSpritePtr((u16)spriteIdx);
-        if (sp == NULL || sp->frames == NULL || sp->ptr == NULL) {
-            return 0;
-        }
-        frame = &sp->frames[frameIdx];
     }
 
     for (i = 0; i < (int32_t)count; i++) {
@@ -314,8 +363,8 @@ static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 objVramGroup, i
         u32 size = (p[2] >> 4) & 3;
         int hflip = (p[2] & 0x04) != 0;
         int vflip = (p[2] & 0x08) != 0;
-        u32 tileIdx = (u32)p[3] | ((u32)(p[4] & 3) << 8);
-        u32 palBank = (u32)p[4] >> 4;
+        u32 tileIdx = baseTile + (u32)p[3] + (((u32)p[4] & 3u) << 8);
+        u32 palBank = (((p[2] & 1u) ? 0u : basePal) + ((u32)p[4] >> 4)) & 15u;
         int32_t px = (int32_t)(s8)p[0] - minX;
         int32_t py = (int32_t)(s8)p[1] - minY;
         int32_t pw = kObjW[shape][size];
@@ -328,16 +377,12 @@ static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 objVramGroup, i
         if (pal == NULL) {
             return 0;
         }
-        if (objVramGroup != 0) {
-            /* Absolute OBJ tiles: the piece can address any block the
-             * menu keeps loaded — the screen's own OBJ load first, then
-             * the always-loaded gameplay sets (LoadGfxGroups' 23/16). */
-            const u32 kVramGroups[3] = { objVramGroup, 23u, HUD_GFX_GROUP };
+        {
             u32 avail = 0;
             u32 g;
             tiles = NULL;
-            for (g = 0; g < 3 && tiles == NULL; g++) {
-                tiles = Port_ResolveGfxGroupVram(kVramGroups[g], OBJ_VRAM_BASE + tileIdx * 32u, &avail);
+            for (g = 0; g < numVramGroups && tiles == NULL; g++) {
+                tiles = Port_ResolveGfxGroupVram(vramGroups[g], OBJ_VRAM_BASE + tileIdx * 32u, &avail);
                 if (tiles != NULL && avail < (u32)(wTiles * hTiles) * 32u) {
                     tiles = NULL;
                 }
@@ -345,8 +390,6 @@ static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 objVramGroup, i
             if (tiles == NULL) {
                 return 0;
             }
-        } else {
-            tiles = (const u8*)sp->ptr + ((u32)frame->firstTileIndex + tileIdx) * 32u;
         }
 
         /* 1D OBJ mapping (the game runs with DISPCNT bit 6 set): a
@@ -413,6 +456,34 @@ static uint32_t CenterPixel(const SecondScreenThemeSprite* s, uint32_t fallback)
     }
 }
 
+/* Most chromatic pixel by a hue score — outlines/shadows (dark) and
+ * sparkles (white) score ~0, so the pick lands on the art's actual body
+ * color regardless of how many shades it spans. */
+static uint32_t MostChromatic(const SecondScreenThemeSprite* s, int32_t (*score)(uint32_t), uint32_t fallback) {
+    uint32_t best = fallback;
+    int32_t bestScore = 0;
+    int32_t i;
+    if (s == NULL || s->px == NULL) {
+        return fallback;
+    }
+    for (i = 0; i < s->w * s->h; i++) {
+        uint32_t c = s->px[i];
+        if (c != 0 && score(c) > bestScore) {
+            bestScore = score(c);
+            best = c;
+        }
+    }
+    return best;
+}
+
+static int32_t GoldScore(uint32_t c) { /* warm-bright: high R+G, low B */
+    return (int32_t)(c & 0xFF) + (int32_t)((c >> 8) & 0xFF) - 2 * (int32_t)((c >> 16) & 0xFF);
+}
+
+static int32_t GreenScore(uint32_t c) {
+    return 2 * (int32_t)((c >> 8) & 0xFF) - (int32_t)(c & 0xFF) - (int32_t)((c >> 16) & 0xFF);
+}
+
 static void DeriveColors(void) {
     int32_t i;
     /* Border light/dark from the corner tile's real colors — used by the
@@ -438,9 +509,12 @@ static void DeriveColors(void) {
         sColors[SSC_BORDER_LIGHT] = light;
         sColors[SSC_BORDER_DARK] = dark;
     }
-    sColors[SSC_GOLD] = BrightestPixel(&sSprites[SST_KEY], sColors[SSC_GOLD]);
+    /* Gold from the maxed-counter digit font (the HUD's own gold text),
+     * not the key sprite — the key's brightest pixel is its white
+     * sparkle. */
+    sColors[SSC_GOLD] = MostChromatic(&sSprites[SST_DIGIT_YELLOW_0 + 8], GoldScore, sColors[SSC_GOLD]);
     sColors[SSC_HEART_RED] = CenterPixel(&sSprites[SST_HEART_FULL], sColors[SSC_HEART_RED]);
-    sColors[SSC_RUPEE_GREEN] = CenterPixel(&sSprites[SST_RUPEE_WALLET0], sColors[SSC_RUPEE_GREEN]);
+    sColors[SSC_RUPEE_GREEN] = MostChromatic(&sSprites[SST_RUPEE_WALLET0], GreenScore, sColors[SSC_RUPEE_GREEN]);
     sColors[SSC_TEXT_LIGHT] = BrightestPixel(&sSprites[SST_DIGIT_WHITE_0], sColors[SSC_TEXT_LIGHT]);
 }
 
@@ -453,11 +527,12 @@ static void BuildAll(const uint16_t* hudPal, u32 hudColors) {
 
     BuildChrome(hudPal, hudColors);
 
-    /* Hearts: full (0x11), quarter fills (0x12..0x14), empty (0x15). */
+    /* Hearts: empty (0x11), quarter fills (0x12..0x14), full (0x15) —
+     * the series order DrawHearts' data uses. */
     for (i = 0; i < 5; i++) {
-        static const int kIds[5] = { SST_HEART_FULL, SST_HEART_Q1, SST_HEART_Q2, SST_HEART_Q3, SST_HEART_EMPTY };
-        static const u32 kTiles[5] = { TILE_HEART_FULL, TILE_HEART_FULL + 1, TILE_HEART_FULL + 2,
-                                       TILE_HEART_FULL + 3, TILE_HEART_EMPTY };
+        static const int kIds[5] = { SST_HEART_EMPTY, SST_HEART_Q1, SST_HEART_Q2, SST_HEART_Q3, SST_HEART_FULL };
+        static const u32 kTiles[5] = { TILE_HEART_EMPTY, TILE_HEART_EMPTY + 1, TILE_HEART_EMPTY + 2,
+                                       TILE_HEART_EMPTY + 3, TILE_HEART_FULL };
         const u8* t = HudTileBytes(kTiles[i], 1);
         uint32_t* out = t ? ArenaAlloc(64) : NULL;
         if (out != NULL) {
@@ -501,22 +576,34 @@ static void BuildAll(const uint16_t* hudPal, u32 hudColors) {
         }
     }
 
-    /* Ammo-count digits, 8x8: tens glyphs [0..9], ones glyphs [10..19]. */
-    for (i = 0; i < 20; i++) {
-        uint32_t* out = ArenaAlloc(64);
-        if (out != NULL) {
-            DecodeTile4bpp(gUnk_085C4620 + (u32)i * 32u, hudPal, hudColors, out);
-            sSprites[SST_SMALL_TENS_0 + i].px = out;
-            sSprites[SST_SMALL_TENS_0 + i].w = 8;
-            sSprites[SST_SMALL_TENS_0 + i].h = 8;
+    /* Ammo-count digits, 8x8: tens glyphs [0..9], ones glyphs [10..19].
+     * These are OBJ tiles (the counter pieces of sprite 322's ammo item
+     * frames), drawn with the OBJ bank the pieces select — not the BG
+     * HUD palette. */
+    {
+        const uint16_t* smallPal = ObjPalBank(SMALL_DIGIT_OBJ_BANK);
+        for (i = 0; smallPal != NULL && i < 20; i++) {
+            uint32_t* out = ArenaAlloc(64);
+            if (out != NULL) {
+                DecodeTile4bpp(gUnk_085C4620 + (u32)i * 32u, smallPal, 16, out);
+                sSprites[SST_SMALL_TENS_0 + i].px = out;
+                sSprites[SST_SMALL_TENS_0 + i].w = 8;
+                sSprites[SST_SMALL_TENS_0 + i].h = 8;
+            }
         }
     }
 
-    /* HUD A/B button bubbles + the pause menu's blinking equip cursor. */
-    BuildSpriteComposite(SPRITE_HUD_BUTTONS, 0, 0, SST_BUTTON_A);
-    BuildSpriteComposite(SPRITE_HUD_BUTTONS, 1, 0, SST_BUTTON_B);
-    BuildSpriteComposite(SPRITE_PAUSE_MISC, CURSOR_FRAME_0, PAUSE_OBJ_GFX_GROUP, SST_CURSOR_0);
-    BuildSpriteComposite(SPRITE_PAUSE_MISC, CURSOR_FRAME_1, PAUSE_OBJ_GFX_GROUP, SST_CURSOR_1);
+    /* HUD A/B button bubbles (slot-relative tiles at the button element's
+     * fixed VRAM block) + the pause menu's blinking equip cursor
+     * (VRAM-absolute tiles; the game draws it with command bank 0). */
+    BuildSpriteComposite(SPRITE_HUD_BUTTONS, 0, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
+                         sizeof(kHudObjGfxGroups), SST_BUTTON_A);
+    BuildSpriteComposite(SPRITE_HUD_BUTTONS, 1, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
+                         sizeof(kHudObjGfxGroups), SST_BUTTON_B);
+    BuildSpriteComposite(SPRITE_PAUSE_MISC, CURSOR_FRAME_0, 0, 0, kPauseObjGfxGroups,
+                         sizeof(kPauseObjGfxGroups), SST_CURSOR_0);
+    BuildSpriteComposite(SPRITE_PAUSE_MISC, CURSOR_FRAME_1, 0, 0, kPauseObjGfxGroups,
+                         sizeof(kPauseObjGfxGroups), SST_CURSOR_1);
 
     DeriveColors();
 }
@@ -564,6 +651,10 @@ uint32_t Port_SecondScreenTheme_Color(int id) {
         return 0xFF000000u;
     }
     return sColors[id];
+}
+
+const uint16_t* Port_SecondScreenTheme_ObjPalette(uint32_t bank) {
+    return ObjPalBank(bank);
 }
 
 /* -------------------------------------------------------------------- */

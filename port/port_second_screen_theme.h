@@ -97,6 +97,14 @@ const SecondScreenThemeSprite* Port_SecondScreenTheme_Get(int id);
  * stand-in before Ready(), the palette-derived value after. */
 uint32_t Port_SecondScreenTheme_Color(int id);
 
+/* Raw RGB555 colors (16 entries) of one OBJ palette bank as the pause
+ * menu leaves it loaded — the bank state sprite OBJ pieces select with
+ * their palette bits (group 182's banks 5..10 over 181/11's banks 0..4).
+ * Shared with the item-icon renderer so both piece decoders resolve
+ * banks identically. Independent of Ready(): NULL only while the ROM
+ * palette tables are still unresolved. */
+const uint16_t* Port_SecondScreenTheme_ObjPalette(uint32_t bank);
+
 /* Draws a TMC message-style window (DispMessageFrame's exact tile
  * arrangement: corner/edge tiles around a solid fill) covering the given
  * rect, border tiles scaled by tileScale (integer, nearest-neighbor).
