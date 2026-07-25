@@ -193,6 +193,11 @@ bool Port_Config_GetSecondScreenCrestPins(void);
 void Port_Config_SetSecondScreenCrestPins(bool on);
 bool Port_Config_GetSecondScreenFloorReturn(void);
 void Port_Config_SetSecondScreenFloorReturn(bool on);
+/* Hide the game's own top-screen HUD (hearts/rupees) while the second
+ * screen carries vitals. Engine gate sits with DrawUIElements; gameplay
+ * only — menus keep their UI. Default off. */
+bool Port_Config_GetHideTopHud(void);
+void Port_Config_SetHideTopHud(bool on);
 
 /* Speedrun practice mode (port_practice.c). Overlay toggles + slow-mo factor
  * (0.05..1.0; 1.0 = normal speed). All persisted to config.json. */

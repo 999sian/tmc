@@ -490,6 +490,29 @@ static int EnsureWindcrestPins(void) {
     return 1;
 }
 
+int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones,
+                                                   const uint8_t* fusionUnmarked,
+                                                   int32_t* outMapXY, int32_t maxPairs) {
+    /* Stub seam — the marker tables + rule land as their own change. */
+    (void)fusedKinstones;
+    (void)fusionUnmarked;
+    (void)outMapXY;
+    (void)maxPairs;
+    return 0;
+}
+
+int Port_SecondScreenWorldMap_DrawFusionCheck(uint32_t* pixels, int32_t bufW, int32_t bufH,
+                                              int32_t stride, int32_t x, int32_t y, int32_t scale) {
+    (void)pixels;
+    (void)bufW;
+    (void)bufH;
+    (void)stride;
+    (void)x;
+    (void)y;
+    (void)scale;
+    return 0;
+}
+
 int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outMapX, int32_t* outMapY) {
     /* windcrestId is the bit index within gSave.windcrests' upper byte:
      * 0 = WINDCREST_MT_CRENEL (bit 24) ... 7 = WINDCREST_MINISH_WOODS

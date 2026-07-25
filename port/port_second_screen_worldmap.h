@@ -40,6 +40,24 @@ int Port_SecondScreenWorldMap_LocatePlayer(uint8_t area, int32_t areaX, int32_t 
  * tables the fast-travel screen (src/subtask/subtaskFastTravel.c) uses. */
 int Port_SecondScreenWorldMap_GetWindcrestPin(int32_t windcrestId, int32_t* outMapX, int32_t* outMapY);
 
+/* Active kinstone-fusion map markers (the red checks the pause map shows):
+ * writes up to maxPairs (x, y) world-map pixel pairs into outMapXY and
+ * returns how many are active, applying the game's own rule to the save
+ * bits passed in (fused && marker not retired — the same checks the pause
+ * map's marker pass makes). Returns 0 while map/table data isn't ready.
+ * fusedKinstones/fusionUnmarked are the 13-byte snapshot arrays, passed
+ * through verbatim from gSave.kinstones. */
+int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones,
+                                                   const uint8_t* fusionUnmarked,
+                                                   int32_t* outMapXY, int32_t maxPairs);
+
+/* Draws the map's red-check fusion marker sprite (decoded from ROM, the
+ * exact art the pause map stamps) at (x, y) top-left, nearest-neighbor
+ * scaled. Returns 1 if drawn, 0 while the sprite isn't decodable yet —
+ * callers simply skip markers that frame. */
+int Port_SecondScreenWorldMap_DrawFusionCheck(uint32_t* pixels, int32_t bufW, int32_t bufH,
+                                              int32_t stride, int32_t x, int32_t y, int32_t scale);
+
 #ifdef __cplusplus
 }
 #endif

@@ -111,6 +111,8 @@ void Port_SecondScreenState_Publish(void) {
             next.figurineCount = n > 255 ? 255 : (uint8_t)n;
         }
         next.windcrests = gSave.windcrests;
+        memcpy(next.fusedKinstones, gSave.kinstones.fusedKinstones, sizeof(next.fusedKinstones));
+        memcpy(next.fusionUnmarked, gSave.kinstones.fusionUnmarked, sizeof(next.fusionUnmarked));
 
         /* Mirror of the pause menu's item-screen fill loop
          * (src/menu/pauseMenu.c: PauseMenu_ItemMenu_Init): every owned
