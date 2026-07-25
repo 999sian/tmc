@@ -23,3 +23,8 @@ extern "C" JNIEXPORT void JNICALL
 Java_dev_picori_tmc_SecondScreenPresentation_nativeSurfaceDestroyed(JNIEnv* /*env*/, jobject /*thiz*/) {
     Port_SecondScreen_OnSurfaceLost();
 }
+
+extern "C" JNIEXPORT void JNICALL Java_dev_picori_tmc_SecondScreenPresentation_nativeTap(
+    JNIEnv* /*env*/, jobject /*thiz*/, jint x, jint y, jboolean longPress) {
+    Port_SecondScreen_OnTap(x, y, longPress ? 1 : 0);
+}

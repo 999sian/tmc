@@ -10,6 +10,12 @@
  * copy, never gSave/gRoomControls/gPlayerEntity directly. Lock is held only
  * for a memcpy on both sides — never around anything that renders or
  * blocks, so the second-screen thread can never stall the game thread.
+ *
+ * Input flows the other way through the same file: the UI thread requests
+ * an equip (tap on the item grid) via Port_SecondScreenState_RequestEquip;
+ * Publish() applies it on the game thread through the engine's own
+ * ForceEquipItem, so the save file is only ever touched from the thread
+ * that owns it.
  */
 
 #include <stdint.h>
@@ -18,25 +24,65 @@
 extern "C" {
 #endif
 
+/* Matches MAX_ROOMS (include/area.h). */
+#define SECOND_SCREEN_MAX_ROOMS 64
+
+/* MENU_SLOT_SWORD..MENU_SLOT_BOTTLE3 (include/itemMetaData.h) — the 16
+ * equipable slots of the pause menu's item screen, excluding the save
+ * button pseudo-slots. */
+#define SECOND_SCREEN_ITEM_SLOTS 16
+
 typedef struct {
+    uint16_t x, y; /* room origin within the area, pixels (RoomResInfo.map_x/y) */
+    uint16_t w, h; /* room size, pixels; w==0 or h==0 -> slot unused */
+} SecondScreenRoom;
+
+typedef struct {
+    uint8_t inGame; /* gMain.task == TASK_GAME; nothing else below is valid otherwise */
     uint8_t area;
     uint8_t room;
-    int32_t playerX;
-    int32_t playerY;
     uint8_t equippedA;
     uint8_t equippedB;
+    /* Menu slot (grid index) each equipped item lives in, 0xFF if none.
+     * Published alongside the raw ids because variants of one item (e.g.
+     * lantern lit/unlit) share a slot but differ in id — highlighting by
+     * slot matches what the real pause menu marks. */
+    uint8_t equippedSlotA;
+    uint8_t equippedSlotB;
+    uint8_t health;    /* 8 units per heart */
+    uint8_t maxHealth;
+    uint16_t rupees;
+    int32_t playerX; /* area-space pixels */
+    int32_t playerY;
+    /* Pause-menu item screen contents: menuItems[menuSlot] = item id, 0 if
+     * that slot is empty. Bottles report the ITEM_BOTTLE1..4 container id;
+     * bottleContents[] carries what's inside for icon display. */
+    uint8_t menuItems[SECOND_SCREEN_ITEM_SLOTS];
+    uint8_t bottleContents[4];
+    /* Rooms of the current area, indexed by room id. */
+    SecondScreenRoom rooms[SECOND_SCREEN_MAX_ROOMS];
+    /* Bit n set = room n of the current area has been entered this session
+     * (port-side automap tracking, zelda3-android "visited rooms" style). */
+    uint64_t visitedMask;
 } SecondScreenSnapshot;
 
 /* Called once per game tick from the main loop (src/main.c). Builds a fresh
- * snapshot from gRoomControls/gPlayerEntity/gSave and swaps it in under a
- * short-held lock. No-op off Android (there is no second-screen thread to
- * publish to). */
+ * snapshot from gRoomControls/gPlayerEntity/gSave/gArea, applies any
+ * pending equip request, and swaps the snapshot in under a short-held
+ * lock. No-op off Android (there is no second-screen thread to publish
+ * to). */
 void Port_SecondScreenState_Publish(void);
 
 /* Called from the second-screen render thread. Copies the most recently
  * published snapshot into `out`. Safe to call even before the first
  * Publish() — returns a zeroed snapshot in that case. */
 void Port_SecondScreenState_Read(SecondScreenSnapshot* out);
+
+/* Called from the UI/JNI thread when the player taps an item on the second
+ * screen. slot: 0 = A button, 1 = B button. Applied (and validated against
+ * the inventory) on the game thread during the next Publish(); redundant
+ * or invalid requests are dropped there. */
+void Port_SecondScreenState_RequestEquip(uint8_t itemId, uint8_t slot);
 
 #ifdef __cplusplus
 }

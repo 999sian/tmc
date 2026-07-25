@@ -34,6 +34,14 @@ void Port_SecondScreen_OnSurfaceReady(void* window, int width, int height);
  * currently held. */
 void Port_SecondScreen_OnSurfaceLost(void);
 
+/* Called from JNI on a completed tap on the second screen, in surface
+ * pixel coordinates. longPress selects the B slot (tap = A, hold = B),
+ * matching the pause menu's A/B assignment. Hit-testing happens against
+ * the layout of the most recently painted frame; a tap that lands on an
+ * item cell files an equip request through
+ * Port_SecondScreenState_RequestEquip. */
+void Port_SecondScreen_OnTap(int x, int y, int longPress);
+
 #ifdef __cplusplus
 }
 #endif
