@@ -159,3 +159,8 @@ port/vk_rt_experiment/shaders/*.spv
 android/local.properties
 android/.gradle/
 android/app/build/
+
+# Local release-signing material (CI gets its keystore from secrets)
+*.jks
+*.keystore
+keystore.properties
