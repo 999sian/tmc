@@ -883,19 +883,22 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
      * marker. Both worldmap calls degrade to 0 while their data/sprite
      * isn't decodable, and the markers simply skip that frame. */
     {
-        int32_t fus[16 * 2];
+        /* Up to 91 fusions can be active at once (ids 10..100) — size for
+         * all of them so a completed save never truncates its markers. */
+        int32_t fus[96 * 2];
         int32_t nFus = Port_SecondScreenWorldMap_GetFusionMarkers(snap->fusedKinstones,
-                                                                  snap->fusionUnmarked, fus, 16);
+                                                                  snap->fusionUnmarked, fus, 96);
         int32_t fscale = (int32_t)(sCam.scale * 0.75f + 0.5f);
         if (fscale < 1) fscale = 1;
         for (int32_t i = 0; i < nFus; i++) {
             float px = ox + (fus[i * 2] + 0.5f) * sCam.scale;
             float py = oy + (fus[i * 2 + 1] + 0.5f) * sCam.scale;
             if (px >= rx0 && px < rx1 && py >= ry0 && py < ry1) {
-                /* The check art is ~8x8; center it on the marker spot. */
+                /* The check stamp is a 16x16 frame drawn from its top-left
+                 * (see port_second_screen_worldmap.h) — center on the spot. */
                 Port_SecondScreenWorldMap_DrawFusionCheck(s->px, s->w, s->h, s->stride,
-                                                          (int32_t)(px - 4 * fscale),
-                                                          (int32_t)(py - 4 * fscale), fscale);
+                                                          (int32_t)(px - 8 * fscale),
+                                                          (int32_t)(py - 8 * fscale), fscale);
             }
         }
     }
