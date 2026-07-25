@@ -57,7 +57,7 @@ void Port_SecondScreen_OnSurfaceLost(void);
  * this once per gesture). Hit-testing happens against the layout of the
  * most recently painted frame: tabs switch panels, rings arm an equip
  * slot, plaques preview a dungeon floor, settings rows toggle, the map
- * toggles follow/whole view (long press drops or removes a personal pin),
+ * toggles follow/whole view and zooms into the tapped map tile,
  * and an item cell files an equip request through
  * Port_SecondScreenState_RequestEquip (tap = A, hold = B — or whichever
  * slot an armed ring selected). Compiled on all platforms so a host

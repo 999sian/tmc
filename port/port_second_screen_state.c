@@ -14,6 +14,11 @@
 #include "player.h"
 #include "room.h"
 #include "save.h"
+#include "ui.h"
+
+/* The HUD's per-language button-label frame offsets (data/const/ui.s),
+ * declared exactly as src/ui.c declares them. */
+extern const u8 gUnk_080C9044[];
 
 static SecondScreenSnapshot sSnapshot;
 static pthread_mutex_t sSnapshotMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -113,6 +118,35 @@ void Port_SecondScreenState_Publish(void) {
         next.windcrests = gSave.windcrests;
         memcpy(next.fusedKinstones, gSave.kinstones.fusedKinstones, sizeof(next.fusedKinstones));
         memcpy(next.fusionUnmarked, gSave.kinstones.fusionUnmarked, sizeof(next.fusionUnmarked));
+
+        /* Contextual R prompt, resolved exactly like TextUIElement's
+         * type2 == 9 branch (src/ui.c): the player-state action wins, else
+         * the area's portal mode names the shrink/grow prompt, else the
+         * interactable under Link. The frame id the HUD would actually
+         * stamp is that value plus the language's label-block offset —
+         * publish both, since the raw action is what names the prompt when
+         * the label art isn't available. */
+        {
+            u32 rAction = gHUD.rActionPlayerState;
+            if (rAction == R_ACTION_NONE) {
+                switch (gArea.portal_mode) {
+                    case 2:
+                        rAction = R_ACTION_SHRINK;
+                        break;
+                    case 3:
+                        rAction = R_ACTION_GROW;
+                        break;
+                    default:
+                        rAction = gHUD.rActionInteractObject;
+                        break;
+                }
+            }
+            next.rActionId = (uint8_t)rAction;
+            if (rAction != 0) {
+                rAction += gUnk_080C9044[gSaveHeader->language];
+            }
+            next.rActionFrame = (uint8_t)rAction;
+        }
 
         /* Mirror of the pause menu's item-screen fill loop
          * (src/menu/pauseMenu.c: PauseMenu_ItemMenu_Init): every owned

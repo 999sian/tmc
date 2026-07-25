@@ -99,6 +99,13 @@ typedef struct {
      * language offset already applied. 0 = no prompt. Published so hiding
      * the top HUD never costs the player that cue. */
     uint8_t rActionFrame;
+    /* The same prompt BEFORE the language offset, i.e. the raw
+     * ActionRButton value (include/player.h): R_ACTION_SPEAK, _LIFT, ...
+     * 0 = none, always 0 exactly when rActionFrame is. The frame id above
+     * indexes the game's own label art; this one is what a caller needs to
+     * name the action itself (the compositor letters the word with the
+     * message font while the art path isn't decoded). */
+    uint8_t rActionId;
     /* Pause-menu item screen contents: menuItems[menuSlot] = item id, 0 if
      * that slot is empty. Bottles report the ITEM_BOTTLE1..4 container id;
      * bottleContents[] carries what's inside for icon display. */
