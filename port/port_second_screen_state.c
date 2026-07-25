@@ -14,6 +14,7 @@
 #include "player.h"
 #include "room.h"
 #include "save.h"
+#include "subtask.h" /* sub_080A6F40 — the map screens' hint-visibility word */
 #include "ui.h"
 
 /* The HUD's per-language button-label frame offsets (data/const/ui.s),
@@ -118,6 +119,20 @@ void Port_SecondScreenState_Publish(void) {
         next.windcrests = gSave.windcrests;
         memcpy(next.fusedKinstones, gSave.kinstones.fusedKinstones, sizeof(next.fusedKinstones));
         memcpy(next.fusionUnmarked, gSave.kinstones.fusionUnmarked, sizeof(next.fusionUnmarked));
+
+        /* Map hints, resolved the way both map screens resolve them:
+         * `gSave.map_hints & sub_080A6F40()` (src/menu/pauseMenu.c
+         * sub_080A6438, src/menu/pauseMenuScreen6.c sub_080A68D4). The
+         * second operand walks gUnk_08128F38's (type, arg) pairs and clears
+         * a hint's bit once sub_0807CB24 says its errand is done — local
+         * flags and inventory, i.e. exactly the live save state the
+         * second-screen render thread must not touch. The engine's own
+         * function is called rather than re-derived: it is a pure predicate
+         * (reads gSave, writes nothing), and a copy here would be one more
+         * place to keep in step with the flag-bank remaps sub_0807CB24
+         * applies on EU/JP. The real menu caches the same value on screen
+         * entry (sub_080A6290); publishing per tick is only fresher. */
+        next.mapHints = (uint16_t)(gSave.map_hints & sub_080A6F40());
 
         /* Contextual R prompt, resolved exactly like TextUIElement's
          * type2 == 9 branch (src/ui.c): the player-state action wins, else

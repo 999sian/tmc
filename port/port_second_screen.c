@@ -965,27 +965,27 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
     BlitMapRegion(s, img, imgW, imgH, ox, oy, sCam.scale, (int32_t)rx0, (int32_t)ry0, (int32_t)rx1,
                   (int32_t)ry1);
 
-    /* Active kinstone-fusion markers — the red checks the pause map
-     * stamps — right above the map art, below the crest pins and the player
-     * marker. Both worldmap calls degrade to 0 while their data/sprite
-     * isn't decodable, and the markers simply skip that frame. */
+    /* Map hints — the red checks and errand glyphs the game's own world map
+     * shows — right above the map art, below the crest pins and the player
+     * marker. Kinstone fusions deliberately do NOT belong here: the game
+     * puts those on the enlarged region map, and so does PaintRegion. Both
+     * worldmap calls degrade to 0 while their data/sprite isn't decodable,
+     * and a marker simply skips that frame. */
     {
-        /* Up to 91 fusions can be active at once (ids 10..100) — size for
-         * all of them so a completed save never truncates its markers. */
-        int32_t fus[96 * 2];
-        int32_t nFus = Port_SecondScreenWorldMap_GetFusionMarkers(snap->fusedKinstones,
-                                                                  snap->fusionUnmarked, fus, 96);
-        int32_t fscale = (int32_t)(sCam.scale * 0.75f + 0.5f);
-        if (fscale < 1) fscale = 1;
-        for (int32_t i = 0; i < nFus; i++) {
-            float px = ox + (fus[i * 2] + 0.5f) * sCam.scale;
-            float py = oy + (fus[i * 2 + 1] + 0.5f) * sCam.scale;
+        SecondScreenMapMarker hints[16];
+        int32_t nHints = Port_SecondScreenWorldMap_GetMapHints(snap->mapHints, hints, 16);
+        int32_t hscale = (int32_t)(sCam.scale * 0.75f + 0.5f);
+        if (hscale < 1) hscale = 1;
+        for (int32_t i = 0; i < nHints; i++) {
+            float px = ox + (hints[i].x + 0.5f) * sCam.scale;
+            float py = oy + (hints[i].y + 0.5f) * sCam.scale;
             if (px >= rx0 && px < rx1 && py >= ry0 && py < ry1) {
-                /* The check stamp is a 16x16 frame drawn from its top-left
+                /* A marker stamp is a 16x16 frame drawn from its top-left
                  * (see port_second_screen_worldmap.h) — center on the spot. */
-                Port_SecondScreenWorldMap_DrawFusionCheck(s->px, s->w, s->h, s->stride,
-                                                          (int32_t)(px - 8 * fscale),
-                                                          (int32_t)(py - 8 * fscale), fscale);
+                Port_SecondScreenWorldMap_DrawMarker(s->px, s->w, s->h, s->stride,
+                                                     (int32_t)(px - 8 * hscale),
+                                                     (int32_t)(py - 8 * hscale), hscale, hints[i].frame,
+                                                     SECOND_SCREEN_WORLDMAP_NO_REGION);
             }
         }
     }
@@ -1091,11 +1091,12 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
 /* ------------------------------------------------------------------ */
 
 /* The enlarged map of one zoom-grid tile — the screen the game opens when
- * the player puts the map cursor on a tile — filling the map area, with
- * Link's marker where that region places him and a BACK chip in the
- * game's own chip furniture. Returns 0 when the region can't be drawn, and
- * the caller simply stays on the world map (so a not-ready art module can
- * never leave the panel on a blank view). */
+ * the player puts the map cursor on a tile — filling the map area, with the
+ * markers that screen carries (map hints in their region glyphs, one glyph
+ * per active kinstone fusion), Link's marker where that region places him
+ * and a BACK chip in the game's own chip furniture. Returns 0 when the
+ * region can't be drawn, and the caller simply stays on the world map (so a
+ * not-ready art module can never leave the panel on a blank view). */
 static int PaintRegion(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl, float rx0,
                        float ry0, float rx1, float ry1, float u, uint32_t tick, int32_t region) {
     int32_t dx = (int32_t)rx0, dy = (int32_t)ry0;
@@ -1103,6 +1104,27 @@ static int PaintRegion(const SSurf* s, const SecondScreenSnapshot* snap, TargetL
     if (dw <= 0 || dh <= 0 ||
         !Port_SecondScreenWorldMap_DrawRegion(s->px, s->w, s->h, s->stride, dx, dy, dw, dh, region)) {
         return 0;
+    }
+
+    /* A region carries few markers even fully fused — the busiest is Minish
+     * Woods at 14 — so this is sized well past any real save; the game's own
+     * marker buffer (gMapDataBottomSpecial) holds 128. */
+    {
+        SecondScreenMapMarker marks[48];
+        int32_t n = Port_SecondScreenWorldMap_GetRegionMarkers(region, snap->mapHints,
+                                                              snap->fusedKinstones, snap->fusionUnmarked,
+                                                              dw, dh, marks, 48);
+        /* The game stamps a 16 px marker on artwork it shows at 1:1; this
+         * view fits the whole region instead, so the stamp is scaled by the
+         * panel's own unit to read at about the same share of the map. */
+        int32_t mscale = (int32_t)(2.5f * u + 0.5f);
+        if (mscale < 1) mscale = 1;
+        for (int32_t i = 0; i < n; i++) {
+            Port_SecondScreenWorldMap_DrawMarker(s->px, s->w, s->h, s->stride,
+                                                 dx + marks[i].x - 8 * mscale,
+                                                 dy + marks[i].y - 8 * mscale, mscale, marks[i].frame,
+                                                 region);
+        }
     }
 
     int32_t px, py;
