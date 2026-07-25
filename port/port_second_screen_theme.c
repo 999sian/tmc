@@ -145,6 +145,10 @@ static const u8 kObjPaletteGroups[] = { 182u, 181u, 11u };
  * pause menu opens — 23/16 stay as the base layers underneath. */
 static const u8 kHudObjGfxGroups[] = { 16u, 86u };
 static const u8 kPauseObjGfxGroups[] = { 90u, 86u, 23u, 16u };
+/* Same rule for the QUEST STATUS screen (pause screen 2, gfx group 91): the
+ * SLEEP/SAVE button plates sit in group 91's 0x06015800 block, the selection
+ * brackets in the shared chrome group's 0x06010000 block. */
+static const u8 kQuestObjGfxGroups[] = { 91u, 86u, 23u, 16u };
 
 /* HUD tile ids (BG0 char base 3) — from DrawHearts / DrawRupees /
  * DrawKeys in src/ui.c and gWalletSizes in src/itemUtils.c. The heart
@@ -166,6 +170,27 @@ static const u8 kPauseObjGfxGroups[] = { 90u, 86u, 23u, 16u };
 #define BUTTON_VRAM_SLOT 0x100u /* gUIElementDefinitions[BUTTON_*].unk_4 */
 #define CURSOR_FRAME_0 4u
 #define CURSOR_FRAME_1 5u
+#define BUTTON_R_FRAME 2u /* ButtonUIElement_Action0: frame == element->type */
+
+/* Contextual R-prompt labels (SPEAK / READ / LIFT / ...): sprite 322, the
+ * same sheet the item icons come from — gUIElementDefinitions[TEXT_R] gives
+ * spriteIndex 322 and OBJ slot 0x10E, and TextUIElement picks the frame from
+ * gHUD.buttonText[2] plus the language offset (the snapshot publishes that
+ * sum, so frameId arrives final). Pieces index tiles relative to the frame's
+ * firstTileIndex, exactly like sub_0801CB20's DMA. */
+#define SPRITE_UI_LABELS 322u
+
+/* Pause-menu labelled button (the SLEEP / SAVE plates of the quest-status
+ * screen, drawn by sub_080A57F4 as sprite SPRITE_PAUSE_MISC frames
+ * 1 + 9 + slotTable[slot].unk5 for slots 4 and 5). Frame 34 is SAVE and
+ * 35 SLEEP; either carries the same plate, so the plate art is nine-sliced
+ * out of one of them and the label re-lettered in the stylized font.
+ * MENU_BRACKET_FRAME is the selection bracket those two slots use
+ * (their unk4 + 9 + 1), reused as the button's own pressed/active mark: 0x1A
+ * in the non-JP slot table, 8 in the language-0 one. */
+#define MENU_BUTTON_FRAME 34u
+#define MENU_BRACKET_FRAME (REGION_IS_JP ? 18u : 36u)
+#define MENU_BUTTON_CORNER 2 /* the plate's rounded rim is 2 px a side */
 
 static int sBuilt = 0;
 
@@ -261,6 +286,19 @@ static uint32_t sMsgPal[16];
 static const u8* sBigFontGlyphs = NULL;
 static int sBigFontOk = 0;
 static uint32_t sBigPal[SS_TEXT_STYLE_COUNT][16]; /* value -> RGBA, 0 = skip */
+
+/* Menu button: the composed SAVE plate, the sub-rect of it the plate itself
+ * occupies (the composite's bbox is the OBJ pieces', which is taller), the
+ * three tones sampled out of that art, and a stylized-font color table that
+ * re-letters arbitrary labels in the plate's own blue. Plus the selection
+ * bracket composite, cut into four corners at draw time. */
+static SecondScreenThemeSprite sBtnPlate;
+static int32_t sBtnX0, sBtnY0, sBtnW, sBtnH;
+static uint32_t sBtnFill, sBtnInk, sBtnHi;
+static int32_t sBtnCleanCol, sBtnCleanRow; /* plate columns/rows free of lettering */
+static uint32_t sBtnPal[16];
+static SecondScreenThemeSprite sBtnBracket;
+static int sBtnOk = 0;
 
 static uint32_t Rgb555ToRgba8888(uint16_t c) {
     uint8_t r = (uint8_t)((c & 0x1Fu) << 3);
@@ -433,7 +471,7 @@ static const uint16_t* ObjPalBank(u32 bank) {
  * keeps loaded (vramGroups, latest load first). Pieces are drawn in
  * reverse so the first (topmost OAM) piece wins overlaps. */
 static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 baseTile, u32 basePal, const u8* vramGroups,
-                                u32 numVramGroups, int outId) {
+                                u32 numVramGroups, SecondScreenThemeSprite* outSprite) {
     const u8* frameData = (const u8*)sub_080AD8F0(spriteIdx, frameIdx);
     u32 count;
     int32_t minX = 0x7FFF, minY = 0x7FFF, maxX = -0x7FFF, maxY = -0x7FFF;
@@ -535,9 +573,9 @@ static int BuildSpriteComposite(u32 spriteIdx, u32 frameIdx, u32 baseTile, u32 b
         }
     }
 
-    sSprites[outId].px = out;
-    sSprites[outId].w = w;
-    sSprites[outId].h = h;
+    outSprite->px = out;
+    outSprite->w = w;
+    outSprite->h = h;
     return 1;
 }
 
@@ -1027,6 +1065,153 @@ static void BuildMenuTheme(void) {
 }
 
 /* -------------------------------------------------------------------- */
+/*  Menu button (the quest screen's SLEEP / SAVE plate)                  */
+/* -------------------------------------------------------------------- */
+
+/* The three tones of the plate, read out of the art rather than named by
+ * palette index: over the plate's interior the fill (near-white) is by far
+ * the most common color, the letter body next, and the letters' highlight
+ * after that. Ordering the two letter tones by luma tells body from
+ * highlight without assuming which palette slot either lives in. */
+static void SampleButtonTones(const uint32_t* px, int32_t stride, int32_t x0, int32_t y0, int32_t w,
+                              int32_t h) {
+    uint32_t colors[24];
+    uint32_t counts[24];
+    int32_t n = 0, x, y, i, best[3] = { -1, -1, -1 };
+
+    for (y = y0; y < y0 + h; y++) {
+        for (x = x0; x < x0 + w; x++) {
+            uint32_t c = px[(size_t)y * (size_t)stride + x];
+            if ((c >> 24) == 0) {
+                continue;
+            }
+            for (i = 0; i < n; i++) {
+                if (colors[i] == c) {
+                    counts[i]++;
+                    break;
+                }
+            }
+            if (i == n && n < (int32_t)(sizeof(colors) / sizeof(colors[0]))) {
+                colors[n] = c;
+                counts[n] = 1;
+                n++;
+            }
+        }
+    }
+    for (i = 0; i < 3; i++) {
+        int32_t k, pick = -1;
+        for (k = 0; k < n; k++) {
+            if (k == best[0] || k == best[1]) {
+                continue;
+            }
+            if (pick < 0 || counts[k] > counts[pick]) {
+                pick = k;
+            }
+        }
+        best[i] = pick;
+    }
+    if (best[0] >= 0) {
+        sBtnFill = colors[best[0]];
+    }
+    if (best[1] >= 0 && best[2] >= 0) {
+        uint32_t a = colors[best[1]], b = colors[best[2]];
+        sBtnInk = (Luma(a) <= Luma(b)) ? a : b;
+        sBtnHi = (Luma(a) <= Luma(b)) ? b : a;
+    } else if (best[1] >= 0) {
+        sBtnInk = sBtnHi = colors[best[1]];
+    }
+}
+
+/* Composes the plate + its selection bracket and derives the label colors.
+ * Everything validates on its own: a missing piece just leaves sBtnOk 0 and
+ * DrawMenuButton reports "not authentic" so the caller keeps its fallback. */
+static void BuildMenuButton(void) {
+    int32_t x, y, minX, minY, maxX, maxY;
+    const uint32_t* px;
+
+    sBtnOk = 0;
+    if (!BuildSpriteComposite(SPRITE_PAUSE_MISC, MENU_BUTTON_FRAME, 0, 0, kQuestObjGfxGroups,
+                              sizeof(kQuestObjGfxGroups), &sBtnPlate)) {
+        return;
+    }
+    px = sBtnPlate.px;
+
+    /* The composite's bbox is the OBJ pieces' (32 px tall); the plate is the
+     * opaque part inside it. */
+    minX = sBtnPlate.w;
+    minY = sBtnPlate.h;
+    maxX = -1;
+    maxY = -1;
+    for (y = 0; y < sBtnPlate.h; y++) {
+        for (x = 0; x < sBtnPlate.w; x++) {
+            if ((px[(size_t)y * (size_t)sBtnPlate.w + x] >> 24) != 0) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+    sBtnX0 = minX;
+    sBtnY0 = minY;
+    sBtnW = maxX - minX + 1;
+    sBtnH = maxY - minY + 1;
+    if (sBtnW < 4 * MENU_BUTTON_CORNER || sBtnH < 4 * MENU_BUTTON_CORNER) {
+        return;
+    }
+
+    sBtnFill = sColors[SSC_MENU_WHITE];
+    sBtnInk = sColors[SSC_BANNER_NAVY];
+    sBtnHi = sColors[SSC_BORDER_LIGHT];
+    SampleButtonTones(px, sBtnPlate.w, sBtnX0 + MENU_BUTTON_CORNER, sBtnY0 + MENU_BUTTON_CORNER,
+                      sBtnW - 2 * MENU_BUTTON_CORNER, sBtnH - 2 * MENU_BUTTON_CORNER);
+
+    /* Re-letter arbitrary labels in the plate's own scheme: the stylized
+     * font's body role takes the letters' body tone, its shade roles the
+     * highlight; the plate's lettering carries no outline, so the outline
+     * and rim roles stay transparent (same shape SS_TEXT_INK uses). */
+    memset(sBtnPal, 0, sizeof(sBtnPal));
+    sBtnPal[14] = sBtnInk;
+    sBtnPal[10] = sBtnPal[11] = sBtnPal[12] = sBtnPal[13] = sBtnHi;
+
+    /* The column and row of pure fill the stretched edges repeat — the plate
+     * carries its label, so the slice sources have to dodge the lettering. */
+    sBtnCleanCol = -1;
+    sBtnCleanRow = -1;
+    for (x = MENU_BUTTON_CORNER; x < sBtnW - MENU_BUTTON_CORNER && sBtnCleanCol < 0; x++) {
+        int clean = 1;
+        for (y = MENU_BUTTON_CORNER; y < sBtnH - MENU_BUTTON_CORNER; y++) {
+            if (px[(size_t)(sBtnY0 + y) * (size_t)sBtnPlate.w + sBtnX0 + x] != sBtnFill) {
+                clean = 0;
+                break;
+            }
+        }
+        if (clean) {
+            sBtnCleanCol = x;
+        }
+    }
+    for (y = MENU_BUTTON_CORNER; y < sBtnH - MENU_BUTTON_CORNER && sBtnCleanRow < 0; y++) {
+        int clean = 1;
+        for (x = MENU_BUTTON_CORNER; x < sBtnW - MENU_BUTTON_CORNER; x++) {
+            if (px[(size_t)(sBtnY0 + y) * (size_t)sBtnPlate.w + sBtnX0 + x] != sBtnFill) {
+                clean = 0;
+                break;
+            }
+        }
+        if (clean) {
+            sBtnCleanRow = y;
+        }
+    }
+    if (sBtnCleanCol < 0 || sBtnCleanRow < 0) {
+        return;
+    }
+
+    BuildSpriteComposite(SPRITE_PAUSE_MISC, MENU_BRACKET_FRAME, 0, 0, kQuestObjGfxGroups,
+                         sizeof(kQuestObjGfxGroups), &sBtnBracket);
+    sBtnOk = 1;
+}
+
+/* -------------------------------------------------------------------- */
 /*  Build                                                                */
 /* -------------------------------------------------------------------- */
 
@@ -1105,16 +1290,19 @@ static void BuildAll(const uint16_t* hudPal, u32 hudColors) {
      * fixed VRAM block) + the pause menu's blinking equip cursor
      * (VRAM-absolute tiles; the game draws it with command bank 0). */
     BuildSpriteComposite(SPRITE_HUD_BUTTONS, 0, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
-                         sizeof(kHudObjGfxGroups), SST_BUTTON_A);
+                         sizeof(kHudObjGfxGroups), &sSprites[SST_BUTTON_A]);
     BuildSpriteComposite(SPRITE_HUD_BUTTONS, 1, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
-                         sizeof(kHudObjGfxGroups), SST_BUTTON_B);
+                         sizeof(kHudObjGfxGroups), &sSprites[SST_BUTTON_B]);
+    BuildSpriteComposite(SPRITE_HUD_BUTTONS, BUTTON_R_FRAME, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
+                         sizeof(kHudObjGfxGroups), &sSprites[SST_BUTTON_R]);
     BuildSpriteComposite(SPRITE_PAUSE_MISC, CURSOR_FRAME_0, 0, 0, kPauseObjGfxGroups,
-                         sizeof(kPauseObjGfxGroups), SST_CURSOR_0);
+                         sizeof(kPauseObjGfxGroups), &sSprites[SST_CURSOR_0]);
     BuildSpriteComposite(SPRITE_PAUSE_MISC, CURSOR_FRAME_1, 0, 0, kPauseObjGfxGroups,
-                         sizeof(kPauseObjGfxGroups), SST_CURSOR_1);
+                         sizeof(kPauseObjGfxGroups), &sSprites[SST_CURSOR_1]);
 
     DeriveColors();
     BuildMenuTheme();
+    BuildMenuButton();
 }
 
 int Port_SecondScreenTheme_Ready(void) {
@@ -1680,6 +1868,8 @@ static const u8* BigGlyphData(char c) {
 }
 
 #define BIG_SPACE_ADVANCE 8 /* the tokenizer's fixed word gap (case 0xc) */
+#define BIG_GLYPH_ROWS 16 /* stylized cell height; ink spans rows 1..15 */
+#define BIG_INK_ROWS 13   /* rows the body/shade roles actually cover */
 
 int32_t Port_SecondScreenTheme_BigTextWidth(const char* str, int32_t scale) {
     int32_t w = 0, gs, gw, adv;
@@ -1709,21 +1899,18 @@ int32_t Port_SecondScreenTheme_BigTextWidth(const char* str, int32_t scale) {
     return w * scale;
 }
 
-int32_t Port_SecondScreenTheme_DrawBigText(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
-                                           int32_t x, int32_t y, int32_t scale, int style,
-                                           const char* str) {
-    const uint32_t* pal;
+/* Shared body of the stylized draw, taking the value->RGBA table directly so
+ * the menu button can letter its labels in the plate's own tones without
+ * those becoming a public SS_TEXT_* style. */
+static int32_t DrawBigTextPal(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride, int32_t x,
+                              int32_t y, int32_t scale, const uint32_t* pal, const char* str) {
     int32_t startX = x;
     if (!sBuilt || !sBigFontOk || str == NULL) {
         return 0;
     }
-    if (style < 0 || style >= SS_TEXT_STYLE_COUNT) {
-        style = SS_TEXT_INK;
-    }
     if (scale < 1) {
         scale = 1;
     }
-    pal = sBigPal[style];
 
     for (; *str; str++) {
         const u8* glyph;
@@ -1773,48 +1960,310 @@ int32_t Port_SecondScreenTheme_DrawBigText(uint32_t* pixels, int32_t bufW, int32
     return x - startX;
 }
 
-/* --- Menu-button and HUD-prompt seams -----------------------------------
- * Stubs for now: the decodes land as their own change. "Not ready" keeps
- * callers on their existing procedural styling. */
+/* -------------------------------------------------------------------- */
+/*  Menu button / R glyph / action label                                 */
+/* -------------------------------------------------------------------- */
+
+int32_t Port_SecondScreenTheme_DrawBigText(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                           int32_t x, int32_t y, int32_t scale, int style,
+                                           const char* str) {
+    if (style < 0 || style >= SS_TEXT_STYLE_COUNT) {
+        style = SS_TEXT_INK;
+    }
+    return DrawBigTextPal(pixels, bufW, bufH, stride, x, y, scale, sBigPal[style], str);
+}
+
+/* Repeats a source patch of the plate over a destination rect at `scale`.
+ * Corner patches land exactly (dw == sw*scale); edge and interior patches
+ * are 1 px along the stretched axis and simply repeat, which is what the
+ * plate's uniform rim and flat fill want. */
+static void PlatePatch(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride, int32_t sx,
+                       int32_t sy, int32_t sw, int32_t sh, int32_t dx, int32_t dy, int32_t dw,
+                       int32_t dh, int32_t scale) {
+    int32_t i, j;
+    if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) {
+        return;
+    }
+    for (j = 0; j < dh; j++) {
+        int32_t py = dy + j;
+        int32_t srcY = sy + (j / scale) % sh;
+        if (py < 0 || py >= bufH) {
+            continue;
+        }
+        for (i = 0; i < dw; i++) {
+            int32_t px = dx + i;
+            uint32_t c;
+            if (px < 0 || px >= bufW) {
+                continue;
+            }
+            c = sBtnPlate.px[(size_t)srcY * (size_t)sBtnPlate.w + sx + (i / scale) % sw];
+            if ((c >> 24) == 0) {
+                continue;
+            }
+            pixels[(size_t)py * (size_t)stride + px] = c;
+        }
+    }
+}
+
+/* Stamps one quadrant of the selection-bracket composite (its art only
+ * occupies the composite's corners) at a destination corner. */
+static void BracketCorner(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride, int right,
+                          int bottom, int32_t dx, int32_t dy, int32_t scale) {
+    int32_t cw = sBtnBracket.w / 2, ch = sBtnBracket.h / 2;
+    int32_t sx = right ? sBtnBracket.w - cw : 0;
+    int32_t sy = bottom ? sBtnBracket.h - ch : 0;
+    int32_t i, j, ex, ey;
+    for (j = 0; j < ch; j++) {
+        for (i = 0; i < cw; i++) {
+            uint32_t c = sBtnBracket.px[(size_t)(sy + j) * (size_t)sBtnBracket.w + sx + i];
+            if ((c >> 24) == 0) {
+                continue;
+            }
+            for (ey = 0; ey < scale; ey++) {
+                int32_t py = dy + j * scale + ey;
+                if (py < 0 || py >= bufH) {
+                    continue;
+                }
+                for (ex = 0; ex < scale; ex++) {
+                    int32_t px = dx + i * scale + ex;
+                    if (px >= 0 && px < bufW) {
+                        pixels[(size_t)py * (size_t)stride + px] = c;
+                    }
+                }
+            }
+        }
+    }
+}
 
 int Port_SecondScreenTheme_DrawMenuButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                           int32_t x, int32_t y, int32_t w, int32_t h, const char* label,
                                           int pressed) {
-    (void)pixels;
-    (void)bufW;
-    (void)bufH;
-    (void)stride;
-    (void)x;
-    (void)y;
-    (void)w;
-    (void)h;
-    (void)label;
-    (void)pressed;
-    return 0;
+    int32_t ps, corner, cleanCol = sBtnCleanCol, cleanRow = sBtnCleanRow;
+    int32_t ls, textW = 0, tx, ty;
+
+    if (!sBuilt || !sBtnOk || pixels == NULL || w <= 0 || h <= 0) {
+        return 0;
+    }
+
+    /* Art scale from the height, so the rim keeps the plate's own
+     * proportions however wide the caller stretches it. */
+    ps = h / sBtnH;
+    if (ps < 1) {
+        ps = 1;
+    }
+    corner = MENU_BUTTON_CORNER;
+    while (corner * 2 * ps > w || corner * 2 * ps > h) {
+        if (ps > 1) {
+            ps--;
+        } else {
+            corner--;
+            if (corner < 1) {
+                return 0;
+            }
+        }
+    }
+
+    {
+        int32_t c = corner * ps;
+        int32_t ix = x + c, iy = y + c, iw = w - 2 * c, ih = h - 2 * c;
+        /* interior fill first, then the four edges, then the corners */
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0 + cleanCol, sBtnY0 + cleanRow, 1, 1, ix, iy, iw, ih,
+                   ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0 + cleanCol, sBtnY0, 1, corner, ix, y, iw, c, ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0 + cleanCol, sBtnY0 + sBtnH - corner, 1, corner, ix,
+                   y + h - c, iw, c, ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0, sBtnY0 + cleanRow, corner, 1, x, iy, c, ih, ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0 + sBtnW - corner, sBtnY0 + cleanRow, corner, 1,
+                   x + w - c, iy, c, ih, ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0, sBtnY0, corner, corner, x, y, c, c, ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0 + sBtnW - corner, sBtnY0, corner, corner, x + w - c,
+                   y, c, c, ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0, sBtnY0 + sBtnH - corner, corner, corner, x,
+                   y + h - c, c, c, ps);
+        PlatePatch(pixels, bufW, bufH, stride, sBtnX0 + sBtnW - corner, sBtnY0 + sBtnH - corner, corner,
+                   corner, x + w - c, y + h - c, c, c, ps);
+
+        /* Label: the stylized font in the plate's own blue, shrunk until it
+         * fits the plate's inner box the way the game's own lettering sits
+         * inside SLEEP / SAVE. */
+        if (label != NULL && label[0] != '\0' && sBigFontOk) {
+            int32_t maxW = iw - 2 * ps, maxH = ih - ps;
+            for (ls = (maxH > 0 ? maxH / BIG_INK_ROWS : 0); ls >= 1; ls--) {
+                textW = Port_SecondScreenTheme_BigTextWidth(label, ls);
+                if (textW > 0 && textW <= maxW) {
+                    break;
+                }
+            }
+            if (ls >= 1 && textW > 0) {
+                tx = x + (w - textW) / 2;
+                /* The body/shade roles cover glyph rows 2..14, so the box
+                 * top sits two rows above the visible band's center. */
+                ty = y + (h - BIG_INK_ROWS * ls) / 2 - 2 * ls;
+                DrawBigTextPal(pixels, bufW, bufH, stride, tx, ty, ls, sBtnPal, label);
+            }
+        }
+
+        /* Pressed/active: the menu's own selection brackets, the mark the
+         * quest screen puts on whichever of SLEEP / SAVE is chosen. */
+        if (pressed && sBtnBracket.px != NULL) {
+            int32_t bw = (sBtnBracket.w / 2) * ps, bh = (sBtnBracket.h / 2) * ps;
+            BracketCorner(pixels, bufW, bufH, stride, 0, 0, x, y, ps);
+            BracketCorner(pixels, bufW, bufH, stride, 1, 0, x + w - bw, y, ps);
+            BracketCorner(pixels, bufW, bufH, stride, 0, 1, x, y + h - bh, ps);
+            BracketCorner(pixels, bufW, bufH, stride, 1, 1, x + w - bw, y + h - bh, ps);
+        }
+    }
+    return 1;
 }
 
 int Port_SecondScreenTheme_DrawRButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                        int32_t x, int32_t y, int32_t scale) {
-    (void)pixels;
-    (void)bufW;
-    (void)bufH;
-    (void)stride;
-    (void)x;
-    (void)y;
-    (void)scale;
-    return 0;
+    const SecondScreenThemeSprite* s = Port_SecondScreenTheme_Get(SST_BUTTON_R);
+    int32_t i, j, ex, ey;
+    if (s == NULL || pixels == NULL) {
+        return 0;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    for (j = 0; j < s->h; j++) {
+        for (i = 0; i < s->w; i++) {
+            uint32_t c = s->px[(size_t)j * (size_t)s->w + i];
+            if ((c >> 24) == 0) {
+                continue;
+            }
+            for (ey = 0; ey < scale; ey++) {
+                int32_t py = y + j * scale + ey;
+                if (py < 0 || py >= bufH) {
+                    continue;
+                }
+                for (ex = 0; ex < scale; ex++) {
+                    int32_t px = x + i * scale + ex;
+                    if (px >= 0 && px < bufW) {
+                        pixels[(size_t)py * (size_t)stride + px] = c;
+                    }
+                }
+            }
+        }
+    }
+    return 1;
 }
+
+/* One decoded label, cropped to its ink: the sprite pieces are a fixed-size
+ * box the words sit inside, so laying an R glyph and a label out side by
+ * side wants the ink extent, not the box. */
+#define ACTION_LABEL_MAX_W 96
+#define ACTION_LABEL_MAX_H 48
+static uint32_t sActionScratch[ACTION_LABEL_MAX_W * ACTION_LABEL_MAX_H];
 
 int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, int32_t bufH,
                                                int32_t stride, int32_t x, int32_t y, int32_t scale,
                                                uint8_t frameId) {
-    (void)pixels;
-    (void)bufW;
-    (void)bufH;
-    (void)stride;
-    (void)x;
-    (void)y;
-    (void)scale;
-    (void)frameId;
-    return 0;
+    const SpritePtr* sprite;
+    const SpriteFrame* frame;
+    const u8* slotTiles;
+    const u8* frameData;
+    u32 count, i;
+    int32_t minX = ACTION_LABEL_MAX_W, minY = ACTION_LABEL_MAX_H, maxX = -1, maxY = -1;
+    int32_t sx, sy, ex, ey;
+
+    if (frameId == 0 || pixels == NULL) {
+        return 0;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    sprite = Port_GetSpritePtr(SPRITE_UI_LABELS);
+    if (sprite == NULL || sprite->frames == NULL || sprite->ptr == NULL) {
+        return 0;
+    }
+    frame = &sprite->frames[frameId];
+    if (frame->numTiles == 0 || frame->firstTileIndex >= 0x4000) {
+        return 0; /* the same emptiness/bounds guards sub_0801CB20 applies */
+    }
+    slotTiles = (const u8*)sprite->ptr + (size_t)frame->firstTileIndex * 32u;
+    frameData = (const u8*)sub_080AD8F0(SPRITE_UI_LABELS, frameId);
+    if (frameData == NULL) {
+        return 0;
+    }
+    count = frameData[0];
+    if (count == 0 || count > 12) {
+        return 0;
+    }
+
+    memset(sActionScratch, 0, sizeof(sActionScratch));
+
+    /* Pieces drawn back to front so the first (topmost OAM) wins overlaps;
+     * tiles are slot-relative, exactly as sub_0801CB20's DMA leaves them,
+     * and every label piece carries its own absolute palette bank (the
+     * element's command bank is 0 — gHUD.elements[].unk_18 is never set for
+     * the text elements). Offsets are biased into the scratch so the OBJ
+     * box, which straddles the command position, lands inside it. */
+    for (i = count; i-- > 0;) {
+        const u8* p = frameData + 1 + i * 5;
+        u32 shape = (p[2] >> 6) & 3, size = (p[2] >> 4) & 3;
+        int hflip = (p[2] & 0x04) != 0, vflip = (p[2] & 0x08) != 0;
+        u32 tileIdx = (u32)p[3] + (((u32)p[4] & 3u) << 8);
+        const uint16_t* pal = ObjPalBank(((u32)p[4] >> 4) & 15u);
+        int32_t pw, ph, wTiles, hTiles, tx, ty2, yy, xx;
+        if (shape == 3 || pal == NULL) {
+            continue;
+        }
+        pw = kObjW[shape][size];
+        ph = kObjH[shape][size];
+        wTiles = pw / 8;
+        hTiles = ph / 8;
+        for (ty2 = 0; ty2 < hTiles; ty2++) {
+            for (tx = 0; tx < wTiles; tx++) {
+                const u8* tile = slotTiles + ((u32)(tileIdx + ty2 * wTiles + tx)) * 32u;
+                for (yy = 0; yy < 8; yy++) {
+                    for (xx = 0; xx < 8; xx++) {
+                        u8 packed = tile[yy * 4 + xx / 2];
+                        u8 idx = (xx & 1) ? (u8)(packed >> 4) : (u8)(packed & 0x0Fu);
+                        int32_t dx = tx * 8 + xx, dy = ty2 * 8 + yy;
+                        if (idx == 0) {
+                            continue;
+                        }
+                        if (hflip) dx = pw - 1 - dx;
+                        if (vflip) dy = ph - 1 - dy;
+                        dx += (int32_t)(int8_t)p[0] + ACTION_LABEL_MAX_W / 2;
+                        dy += (int32_t)(int8_t)p[1] + ACTION_LABEL_MAX_H / 2;
+                        if (dx < 0 || dy < 0 || dx >= ACTION_LABEL_MAX_W || dy >= ACTION_LABEL_MAX_H) {
+                            continue;
+                        }
+                        sActionScratch[dy * ACTION_LABEL_MAX_W + dx] = Rgb555ToRgba8888(pal[idx]);
+                        if (dx < minX) minX = dx;
+                        if (dx > maxX) maxX = dx;
+                        if (dy < minY) minY = dy;
+                        if (dy > maxY) maxY = dy;
+                    }
+                }
+            }
+        }
+    }
+    if (maxX < minX || maxY < minY) {
+        return 0;
+    }
+
+    for (sy = minY; sy <= maxY; sy++) {
+        for (sx = minX; sx <= maxX; sx++) {
+            uint32_t c = sActionScratch[sy * ACTION_LABEL_MAX_W + sx];
+            if ((c >> 24) == 0) {
+                continue;
+            }
+            for (ey = 0; ey < scale; ey++) {
+                int32_t py = y + (sy - minY) * scale + ey;
+                if (py < 0 || py >= bufH) {
+                    continue;
+                }
+                for (ex = 0; ex < scale; ex++) {
+                    int32_t px = x + (sx - minX) * scale + ex;
+                    if (px >= 0 && px < bufW) {
+                        pixels[(size_t)py * (size_t)stride + px] = c;
+                    }
+                }
+            }
+        }
+    }
+    return (maxX - minX + 1) * scale;
 }
