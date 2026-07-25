@@ -1354,3 +1354,14 @@ void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset
         d += 4 * offset;
     }
 }
+
+/* Second-screen ROM decodes (port_second_screen_worldmap.c) need BIOS-format
+ * LZ77 data expanded into a PRIVATE buffer. LZ77UnCompVram/Wram above always
+ * route the destination through port_resolve_addr into live GBA regions, so
+ * they can't be used for an off-screen decode without clobbering whatever the
+ * game currently has in VRAM/EWRAM. Same bounded decoder, caller-owned
+ * destination: dstCap clamps a corrupt/hostile size header, and the source is
+ * fenced to its ROM/asset buffer exactly like the engine paths. */
+void Port_LZ77DecompressToBuffer(const void* src, void* dst, size_t dstCap) {
+    lz77_decomp((const u8*)src, (u8*)dst, dstCap, Port_RomBufferEnd(src));
+}
