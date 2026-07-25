@@ -92,6 +92,13 @@ typedef struct {
      * pause map does (@see CheckKinstoneFused / CheckFusionMapMarkerDisabled). */
     uint8_t fusedKinstones[13];
     uint8_t fusionUnmarked[13];
+    /* Contextual R-button prompt: the sprite frame id the game's own HUD
+     * would draw beside R this frame (SPEAK / READ / LIFT / ...), resolved
+     * exactly like TextUIElement does — gHUD.rActionPlayerState, else the
+     * area's portal mode, else gHUD.rActionInteractObject — with the
+     * language offset already applied. 0 = no prompt. Published so hiding
+     * the top HUD never costs the player that cue. */
+    uint8_t rActionFrame;
     /* Pause-menu item screen contents: menuItems[menuSlot] = item id, 0 if
      * that slot is empty. Bottles report the ITEM_BOTTLE1..4 container id;
      * bottleContents[] carries what's inside for icon display. */

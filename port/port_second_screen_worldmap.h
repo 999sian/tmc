@@ -69,6 +69,32 @@ int32_t Port_SecondScreenWorldMap_GetFusionMarkers(const uint8_t* fusedKinstones
 int Port_SecondScreenWorldMap_DrawFusionCheck(uint32_t* pixels, int32_t bufW, int32_t bufH,
                                               int32_t stride, int32_t x, int32_t y, int32_t scale);
 
+/* The map screen's own zoom grid: the game's map lets the player put the
+ * cursor on a tile and open that tile's enlarged regional map. Resolves a
+ * world-map pixel position to the tile under it — outRegion is the id to
+ * hand DrawRegion, and (x0,y0)-(x1,y1) is the tile's rect in world-map
+ * pixels so callers can outline it like the game's cursor brackets.
+ * Returns 1 on a real tile, 0 off-grid or while data isn't ready. */
+int Port_SecondScreenWorldMap_GetRegionAt(int32_t mapX, int32_t mapY, int32_t* outRegion,
+                                          int32_t* outX0, int32_t* outY0, int32_t* outX1,
+                                          int32_t* outY1);
+
+/* Draws one region's enlarged map — the same artwork the game shows after
+ * zooming into a tile — fitted into the destination rect, nearest-neighbor.
+ * Returns 1 when drawn, 0 while that region's data isn't decodable (caller
+ * stays on the world view). */
+int Port_SecondScreenWorldMap_DrawRegion(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                         int32_t dstX, int32_t dstY, int32_t dstW, int32_t dstH,
+                                         int32_t region);
+
+/* Where the player marker sits inside a region's enlarged map, in that
+ * drawn region's own pixel space (0..w, 0..h as passed to DrawRegion).
+ * Returns 1 when the player is inside this region and the position is
+ * known, 0 otherwise — callers just omit the marker then. `area`, `areaX`
+ * and `areaY` are the same values LocatePlayer takes. */
+int Port_SecondScreenWorldMap_LocateInRegion(int32_t region, uint8_t area, int32_t areaX, int32_t areaY,
+                                             int32_t dstW, int32_t dstH, int32_t* outX, int32_t* outY);
+
 #ifdef __cplusplus
 }
 #endif

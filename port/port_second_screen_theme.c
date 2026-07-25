@@ -1772,3 +1772,49 @@ int32_t Port_SecondScreenTheme_DrawBigText(uint32_t* pixels, int32_t bufW, int32
     }
     return x - startX;
 }
+
+/* --- Menu-button and HUD-prompt seams -----------------------------------
+ * Stubs for now: the decodes land as their own change. "Not ready" keeps
+ * callers on their existing procedural styling. */
+
+int Port_SecondScreenTheme_DrawMenuButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                          int32_t x, int32_t y, int32_t w, int32_t h, const char* label,
+                                          int pressed) {
+    (void)pixels;
+    (void)bufW;
+    (void)bufH;
+    (void)stride;
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+    (void)label;
+    (void)pressed;
+    return 0;
+}
+
+int Port_SecondScreenTheme_DrawRButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                       int32_t x, int32_t y, int32_t scale) {
+    (void)pixels;
+    (void)bufW;
+    (void)bufH;
+    (void)stride;
+    (void)x;
+    (void)y;
+    (void)scale;
+    return 0;
+}
+
+int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, int32_t bufH,
+                                               int32_t stride, int32_t x, int32_t y, int32_t scale,
+                                               uint8_t frameId) {
+    (void)pixels;
+    (void)bufW;
+    (void)bufH;
+    (void)stride;
+    (void)x;
+    (void)y;
+    (void)scale;
+    (void)frameId;
+    return 0;
+}
