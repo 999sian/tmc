@@ -1125,11 +1125,23 @@ static int PaintRegion(const SSurf* s, const SecondScreenSnapshot* snap, TargetL
     {
         int32_t artW = 0, artH = 0;
         if (Port_SecondScreenWorldMap_GetRegionSize(region, &artW, &artH) && artW > 0 && artH > 0) {
-            int32_t fitW = dw, fitH = (int32_t)((int64_t)dw * artH / artW);
-            if (fitH > dh) {
-                fitH = dh;
-                fitW = (int32_t)((int64_t)dh * artW / artH);
+            /* Scale every region by the SAME factor rather than blowing each
+             * one up to fill the panel. The regions differ enormously in size
+             * (the sky is a fraction of Hyrule Field), and fit-to-fill turned
+             * the small ones into a handful of enormous blocks. The game
+             * itself draws them all at 1:1 inside one 240x160 frame, so take
+             * that frame as the reference: the biggest region fills the map
+             * area, the rest stay proportionally smaller — which also keeps
+             * how much of Hyrule a region covers readable at a glance. */
+            float refScale = (float)dw / 240.0f;
+            float byH = (float)dh / 160.0f;
+            if (byH < refScale) {
+                refScale = byH;
             }
+            int32_t fitW = (int32_t)(artW * refScale + 0.5f);
+            int32_t fitH = (int32_t)(artH * refScale + 0.5f);
+            if (fitW > dw) fitW = dw;
+            if (fitH > dh) fitH = dh;
             if (fitW > 0 && fitH > 0) {
                 dx += (dw - fitW) / 2;
                 dy += (dh - fitH) / 2;
@@ -1786,7 +1798,7 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
     if (snap->rActionFrame == 0) {
         return;
     }
-    int32_t ms = (int32_t)(1.9f * u);
+    int32_t ms = (int32_t)(2.6f * u);
     if (ms < 1) ms = 1;
     float gh = bandH - 8 * u; /* glyph height */
     float gw = gh * 1.35f;    /* shoulder buttons are wider than tall */
@@ -1878,7 +1890,7 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     /* The prompt shares the sidebar with the A/B rings, and at 34u it was
      * dwarfed by them — this is the one contextual control on the panel, so
      * it gets a band it can actually be read in. */
-    float rBandH = 52 * u;
+    float rBandH = 76 * u;
     DrawRPrompt(s, snap, x, vitalsBottom, w, rBandH, u, ts);
     vitalsBottom += rBandH;
 
