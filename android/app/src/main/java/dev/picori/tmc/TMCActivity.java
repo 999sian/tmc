@@ -25,15 +25,26 @@ public class TMCActivity extends SDLActivity {
         mSecondScreen = new SecondScreenManager(this);
     }
 
+    // The panel tracks onStart/onStop, not onResume/onPause. onPause also
+    // fires for transient interruptions — permission dialogs, system popups,
+    // display config changes — where tearing the Presentation down just makes
+    // the bottom screen flash to the launcher and back (a zelda3-android
+    // lesson from the same hardware). onStop is the real "user left the app"
+    // boundary, and it is also SDL's own: this SDLActivity glue pauses the
+    // native thread from onStop/onStart when mHasMultiWindow is set (API 24+,
+    // i.e. every device we target), so the panel's Surface comes and goes in
+    // step with the game that feeds it. Keeping the panel up past onStop
+    // would leave the native painter (a free-running ~20 Hz thread, see
+    // port/port_second_screen.c) redrawing a frozen game in the background.
     @Override
-    protected void onResume() {
-        super.onResume();
+    protected void onStart() {
+        super.onStart();
         mSecondScreen.start();
     }
 
     @Override
-    protected void onPause() {
+    protected void onStop() {
         mSecondScreen.stop();
-        super.onPause();
+        super.onStop();
     }
 }
