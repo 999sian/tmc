@@ -21,6 +21,11 @@
  * declared exactly as src/ui.c declares them. */
 extern const u8 gUnk_080C9044[];
 
+/* gItemMetaData menu slot the quest screen treats as "a carried quest
+ * item" rather than a well of its own: sub_080A5594 spreads every item
+ * marked with it across three slots instead of placing it directly. */
+#define QUEST_CARRIED_ITEM_SLOT 1
+
 static SecondScreenSnapshot sSnapshot;
 static pthread_mutex_t sSnapshotMutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -103,6 +108,46 @@ void Port_SecondScreenState_Publish(void) {
         next.kinstoneFused = gSave.kinstones.fusedCount;
         for (u32 i = 0; i < 19; i++) {
             next.kinstoneBag += gSave.kinstones.amounts[i];
+        }
+
+        /* QUEST STATUS screen values, read exactly where sub_080A5594
+         * (src/menu/pauseMenu.c) reads them when it fills that screen's
+         * sixteen slots. Plain gSave and GetInventoryValue reads, no
+         * different in cost or safety from the ones above. */
+        next.heartPieces = gSave.stats.heartPieces;
+        for (u32 i = ITEM_SKILL_SPIN_ATTACK; i <= ITEM_SKILL_PERIL_BEAM; i++) {
+            if (GetInventoryValue(i) != 0) {
+                next.swordSkills++;
+            }
+        }
+        next.shells = gSave.stats.shells;
+        next.shellsOwned = (uint8_t)GetInventoryValue(ITEM_SHELLS);
+        next.carlovMedal = (uint8_t)GetInventoryValue(ITEM_QST_CARLOV_MEDAL);
+        next.tingleTrophy = (uint8_t)GetInventoryValue(ITEM_QST_TINGLE_TROPHY);
+        next.kinstoneBagOwned = GetInventoryValue(ITEM_KINSTONE_BAG) != 0;
+        for (u32 i = 0; i < 3; i++) {
+            if (GetInventoryValue(ITEM_GRIP_RING + i) == 1) {
+                next.passives |= (uint8_t)(1u << i);
+            }
+        }
+        /* The carried-item tray, filled the way sub_080A5594's rolling
+         * counter fills slots 6..8: every quest item whose metadata puts
+         * it in the shared carried-item slot queues up in item-id order,
+         * and once the tray is full the last position keeps whichever is
+         * last owned. Items handed in (inventory value 2) drop out of the
+         * tray, which is why the test is == 1 and not != 0. */
+        {
+            u32 tray = 0;
+            for (u32 item = ITEM_QST_SWORD; item <= ITEM_FLIPPERS; item++) {
+                if (gItemMetaData[item].menuSlot != QUEST_CARRIED_ITEM_SLOT ||
+                    GetInventoryValue(item) != 1) {
+                    continue;
+                }
+                next.questItems[tray] = (uint8_t)item;
+                if (tray < 2) {
+                    tray++;
+                }
+            }
         }
         {
             /* Owned figurines = set bits in the save's figurine bitset. */

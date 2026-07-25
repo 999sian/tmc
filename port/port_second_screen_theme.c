@@ -135,8 +135,11 @@ extern const u8 gUnk_085C4620[];
 /* OBJ palette state at pause time, most recently loaded group first —
  * 182 (Items tab: OBJ banks 5..10), 181 (pause base: OBJ 0..4), 11
  * (gameplay: OBJ 0..4). Later loads win on the GBA, so earlier in this
- * list wins here. */
-static const u8 kObjPaletteGroups[] = { 182u, 181u, 11u };
+ * list wins here. 183 (Quest tab) sits at the tail because it is the only
+ * group that carries OBJ bank 14, the bank that tab's item icons fall back
+ * to; on banks 5..10 — the only others it defines — it is byte-identical
+ * to 182, so where it sits in the list changes nothing else. */
+static const u8 kObjPaletteGroups[] = { 182u, 181u, 11u, 183u };
 
 /* OBJ VRAM state, same latest-load-first rule. Buttons live in the HUD
  * element block gfx group 16 loads at 0x06012000 (group 86 carries an
