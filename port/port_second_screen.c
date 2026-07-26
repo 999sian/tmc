@@ -51,6 +51,7 @@
 #include "port_second_screen_worldmap.h"
 
 #include "port_runtime_config.h"
+#include "port_widescreen.h" /* PORT_VIEW_WIDTH: whether this build has a wide path at all */
 
 #include <math.h>
 #include <stdbool.h>
@@ -139,6 +140,7 @@ enum {
  * there is a single mechanism per setting, not parallel state. */
 enum {
     SS_SET_TOP_HUD = 0,   /* hide_top_hud (engine gate ships separately) */
+    SS_SET_WIDESCREEN,    /* widescreen_enabled; absent from a native-width build */
     SS_SET_FOLLOW,
     SS_SET_CRESTS,
     SS_SET_FLOOR_RETURN,
@@ -160,6 +162,8 @@ extern int Port_QuickSave_AutoEnabled(void);
 extern void Port_QuickSave_SetAutoEnabled(int enabled);
 extern void Port_Config_SetAutosaveEnabled(bool enabled);
 extern void Port_PPU_SetColorCorrection(bool enabled);
+extern bool Port_Config_WidescreenEnabled(void);
+extern void Port_Config_SetWidescreenEnabled(bool enabled);
 
 #define SS_MAX_TARGETS 48
 #define SS_NO_FLOOR (-128)
@@ -1657,9 +1661,25 @@ static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 /* ------------------------------------------------------------------ */
 
 static const char* const kSettingLabels[SS_SET_COUNT] = {
-    "TOP HUD",  "FOLLOW CAM",       "WINDCREST PINS", "FLOOR AUTO RETURN",  "MASTER VOLUME",
-    "AUTOSAVE", "COLOR CORRECTION", "SHOW FPS",       "HOLD TO ADVANCE TEXT",
+    "TOP HUD",   "WIDESCREEN",       "FOLLOW CAM", "WINDCREST PINS",
+    "FLOOR AUTO RETURN",  "MASTER VOLUME", "AUTOSAVE", "COLOR CORRECTION",
+    "SHOW FPS",  "HOLD TO ADVANCE TEXT",
 };
+
+/* Rows this build can actually offer. WIDESCREEN is the only conditional
+ * one: the wide render paths are compiled in by --widescreen_width, and at
+ * the native 240 the config flag exists but nothing reads it, so the row
+ * would be a switch wired to nothing. Returns how many were written. */
+static int VisibleSettingRows(uint8_t* out) {
+    int n = 0;
+    for (int i = 0; i < SS_SET_COUNT; i++) {
+        if (i == SS_SET_WIDESCREEN && PORT_VIEW_WIDTH <= 240) {
+            continue;
+        }
+        out[n++] = (uint8_t)i;
+    }
+    return n;
+}
 
 /* Master volume as the nearest cycle stop (0/25/50/75/100), read from the
  * live mixer exactly like the imgui slider does. */
@@ -1680,6 +1700,7 @@ static int GetSettingState(int row, char* out, int outCap) {
             on = !Port_Config_GetHideTopHud();
             txt = on ? "SHOW" : "HIDE";
             break;
+        case SS_SET_WIDESCREEN: on = Port_Config_WidescreenEnabled(); break;
         case SS_SET_FOLLOW: on = Port_Config_GetSecondScreenFollowCam(); break;
         case SS_SET_CRESTS: on = Port_Config_GetSecondScreenCrestPins(); break;
         case SS_SET_FLOOR_RETURN: on = Port_Config_GetSecondScreenFloorReturn(); break;
@@ -1719,9 +1740,12 @@ static void PaintSettingsPanel(const SSurf* s, TargetList* tl, float rx0, float 
 
     DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "SETTINGS", hms, u);
 
+    uint8_t rows[SS_SET_COUNT];
+    int nRows = VisibleSettingRows(rows);
+
     float gap = 8 * u;
     float y0 = iy0 + MENU_TEXT_BOX * hms + 32 * u;
-    float rowH = ((iy1 - 6 * u - y0) - (SS_SET_COUNT - 1) * gap) / SS_SET_COUNT;
+    float rowH = ((iy1 - 6 * u - y0) - (nRows - 1) * gap) / nRows;
     if (rowH > 64 * u) rowH = 64 * u;
     int32_t rms = (int32_t)(rowH * 0.55f / MENU_TEXT_BOX);
     int32_t rmsMax = (int32_t)(1.8f * u);
@@ -1729,8 +1753,9 @@ static void PaintSettingsPanel(const SSurf* s, TargetList* tl, float rx0, float 
     if (rms > rmsMax) rms = rmsMax;
     if (rms < 1) rms = 1;
 
-    for (int i = 0; i < SS_SET_COUNT; i++) {
-        float ry = y0 + i * (rowH + gap);
+    for (int slot = 0; slot < nRows; slot++) {
+        int i = rows[slot];
+        float ry = y0 + slot * (rowH + gap);
         float rl = ix0 + 10 * u, rr = ix1 - 10 * u;
         char val[8];
         int on = GetSettingState(i, val, sizeof(val));
@@ -2250,6 +2275,12 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                     /* Just the flag — the engine-side DrawUIElements gate
                      * reads it each frame. */
                     Port_Config_SetHideTopHud(!Port_Config_GetHideTopHud());
+                    break;
+                case SS_SET_WIDESCREEN:
+                    /* Just the flag: the PPU's view width and the engine's
+                     * cull bounds both read it per frame, so the wider
+                     * viewport takes effect on the next one. */
+                    Port_Config_SetWidescreenEnabled(!Port_Config_WidescreenEnabled());
                     break;
                 case SS_SET_FOLLOW:
                     Port_Config_SetSecondScreenFollowCam(!Port_Config_GetSecondScreenFollowCam());
