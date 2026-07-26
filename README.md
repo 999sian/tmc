@@ -4,6 +4,8 @@ A dual-screen mod of *The Legend of Zelda: The Minish Cap* for the AYN Thor.
 The handheld's bottom panel becomes a live map, quest status and touch
 inventory, so the top screen can be nothing but the game.
 
+The dual-screen mod was made with the help of Claude Code and opencode.
+
 ![](https://github.com/samyost1/tmc-android/releases/download/v1.0/showcase.png)
 
 Everything on the panel is decoded from your own ROM as the game runs — the
