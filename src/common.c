@@ -2514,4 +2514,54 @@ const u8* Port_ResolveGfxGroupVram(u32 group, u32 vramAddr, u32* outAvail) {
     }
     return NULL;
 }
+
+/* A kinstone piece is 0x80 words of 4bpp tiles (16 tiles, a 32x32 block),
+ * which is the fixed size sub_080A4418 DMAs. */
+#define KINSTONE_PIECE_BYTES (0x80u * sizeof(u32))
+#define KINSTONE_PIECE_GFX_COUNT ARRAY_COUNT(gUnk_080CA06C)
+
+/* One kinstone piece's OBJ tiles, decoded into the caller's buffer.
+ *
+ * The kinstone menus don't load these with a gfx group — sub_080A4418
+ * (src/menu/kinstoneMenu.c) streams the block named by
+ * gKinstoneWorldEvents[id].gfxOffsetPiece straight into an OBJ VRAM slot it
+ * picked at runtime, so there is no group to resolve and the tiles have to
+ * be produced the same way here. gUnk_080CA06C's entries are offsets into
+ * gGlobalGfxAndPalettes with the top bit meaning LZ77-compressed, exactly as
+ * that function reads them; a whole piece is 0x80 words either way.
+ *
+ * Returns the bytes written (KINSTONE_PIECE_BYTES on success, 0 when the
+ * offset is out of range, the ROM tables aren't resolved yet, or the buffer
+ * is too small). ROM-const reads only, so the second-screen render thread
+ * may call it once the ROM is up. */
+u32 Port_GetKinstonePieceTiles(u32 gfxOffset, u8* out, u32 outBytes) {
+    const u32* table = gUnk_080CA06C;
+    u32 entry, compressed;
+    extern const u32 gUnk_080CA06C_eu[];
+
+    if (out == NULL || outBytes < KINSTONE_PIECE_BYTES || gGlobalGfxAndPalettes == NULL) {
+        return 0;
+    }
+    if (REGION_IS_EU) {
+        table = gUnk_080CA06C_eu;
+    }
+    if (table == NULL || gfxOffset >= KINSTONE_PIECE_GFX_COUNT) {
+        return 0;
+    }
+    entry = ROM_U32(table[gfxOffset]);
+    compressed = entry & 0x80000000u;
+    if (compressed) {
+        /* LZ77UnCompVram writes 16 bits at a time and would run past the end
+         * on a malformed header, so the size is checked before unpacking. */
+        const u8* src = &gGlobalGfxAndPalettes[entry & ~0x80000000u];
+        u32 unpacked = (ROM_U32(*(const u32*)src) >> 8) & 0xFFFFFFu;
+        if (unpacked == 0 || unpacked > outBytes) {
+            return 0;
+        }
+        LZ77UnCompVram((void*)src, out);
+        return unpacked;
+    }
+    MemCopy((void*)&gGlobalGfxAndPalettes[entry], out, KINSTONE_PIECE_BYTES);
+    return KINSTONE_PIECE_BYTES;
+}
 #endif
