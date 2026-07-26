@@ -4340,9 +4340,15 @@ extern "C" bool Port_ImGui_Render(void) {
     /* Toast survives the menu being closed (e.g. after a warp). */
     DrawToast(Port_DebugMenu_Toast());
 
-    /* Always show the click-to-open trigger so mouse/touch users have a
-     * way in without the F8 hotkey. */
-    DrawMenuTrigger();
+    /* The click-to-open trigger, so mouse/touch users have a way in without
+     * the F8 hotkey. It rides the touch-overlay switch: it exists for people
+     * with no keyboard, and someone who has turned the on-screen controls
+     * off wants the game screen clear of overlay furniture, this corner
+     * included. F8 and the gamepad chord still open the menu, and on a
+     * handheld the second screen's settings tab switches it back on. */
+    if (Port_Config_GetTouchControls() && Port_Config_PortSettingsMenuEnabled()) {
+        DrawMenuTrigger();
+    }
 
     /* Quit-save confirm modal — only renders when armed by
      * Port_ImGui_RequestQuitModal (called from port_bios.c when SDL
