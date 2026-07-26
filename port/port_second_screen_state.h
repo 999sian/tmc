@@ -107,6 +107,20 @@ typedef struct {
      * 0 = empty. Item ids, since the tray draws each one's own icon. */
     uint8_t questItems[3];
     uint8_t passives; /* bit n set = ITEM_GRIP_RING + n owned (ring, bracelets, flippers) */
+    /* The two lists the quest tab opens from its own wells, published as the
+     * save holds them so the render side can lay them out the way pause
+     * screens 7 and 8 do.
+     *
+     * The bag is a parallel pair of arrays and NOT a fixed table: types[i] is
+     * the kinstone id in bag row i and amounts[i] how many, packed from the
+     * front and terminated by a zero type, which is exactly how
+     * sub_080A6044 walks it. */
+    uint8_t kinstoneTypes[19];
+    uint8_t kinstoneAmounts[19];
+    /* bit n set = the nth sword technique (ITEM_SKILL_SPIN_ATTACK + n) is
+     * learned. swordSkills above is just this word's population count, but
+     * the techniques list has to know WHICH eight. */
+    uint8_t swordSkillBits;
     /* gSave.windcrests verbatim; bits 24..31 are the WindcrestID unlock
      * flags (include/windcrest.h) the fast-travel screen checks. */
     uint32_t windcrests;

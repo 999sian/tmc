@@ -117,7 +117,8 @@ enum { SS_TAB_MAP = 0, SS_TAB_ITEMS, SS_TAB_QUEST, SS_TAB_SETTINGS };
 /* What a tap target does when hit. arg meaning per action: item id,
  * tab id, ring (1 = A, 2 = B), plaque display-floor index, settings row.
  * SS_ACT_MAPVIEW is the map's own back affordance (region view -> whole
- * map, whole map -> follow cam) and carries no argument. */
+ * map, whole map -> follow cam) and carries no argument; SS_ACT_MAPZOOM
+ * opens the enlarged map of whichever region Link is standing in. */
 enum {
     SS_ACT_ITEM = 1,
     SS_ACT_TAB,
@@ -126,6 +127,8 @@ enum {
     SS_ACT_SETTING,
     SS_ACT_MAP,
     SS_ACT_MAPVIEW,
+    SS_ACT_MAPZOOM,
+    SS_ACT_QUESTVIEW, /* arg: which quest screen to show */
 };
 
 /* Settings rows, top to bottom. The second-screen-only toggles persist
@@ -214,7 +217,13 @@ static struct {
      * whether a map tap can zoom at all (stub -> plain follow/whole
      * toggle, exactly the behavior before the zoom existed). */
     uint8_t regionGridReady;
+    /* Quest tab: which of its screens is up — the status screen itself or
+     * one of the two lists it opens, the same step in the pause menu. */
+    uint8_t questView;
 } sUi = { .floorPreview = SS_NO_FLOOR, .playerFloorDisp = SS_NO_FLOOR };
+
+/* sUi.questView */
+enum { SS_QUEST_MAIN = 0, SS_QUEST_KINSTONES, SS_QUEST_TECHNIQUES };
 
 #ifdef __ANDROID__
 #include <pthread.h>
@@ -881,11 +890,13 @@ static void BlitMapRegion(const SSurf* s, const uint32_t* img, int32_t imgW, int
  * game floats over its own map screen. Used for the map's view/back
  * affordance. Returns the rect it covered so callers can make it tappable. */
 static void DrawMapChip(const SSurf* s, const char* label, float cx, float cyBottom, float u, float* out) {
-    int32_t ms = (int32_t)(1.6f * u);
+    /* Sized as a thumb target rather than as map decoration: this is the only
+     * way into a region zoom, and out of the lists the quest tab opens. */
+    int32_t ms = (int32_t)(2.6f * u);
     if (ms < 1) ms = 1;
     int32_t tw = MenuTextWidth(label, ms);
-    float ch = MENU_TEXT_BOX * ms + 16 * u;
-    float x0 = cx - tw / 2.0f - 18 * u, x1 = cx + tw / 2.0f + 18 * u;
+    float ch = MENU_TEXT_BOX * ms + 22 * u;
+    float x0 = cx - tw / 2.0f - 26 * u, x1 = cx + tw / 2.0f + 26 * u;
     float y1 = cyBottom, y0 = y1 - ch;
     int32_t cts = (int32_t)(ch / 24.0f);
     if (cts < 1) cts = 1;
@@ -1082,14 +1093,15 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
     sUi.regionGridReady = (uint8_t)(gridReady != 0);
     UI_UNLOCK();
 
-    /* Once tiles are tappable a plain tap zooms, so the way back to the
-     * follow cam gets its own chip — added ahead of the map's own target
-     * so it wins the hit test. Before that the map keeps exactly the bare
-     * tap-to-toggle it always had, with nothing extra on it. */
-    if (gridReady && wantWhole && followCfg && sLastFix.valid) {
+    /* One chip on the map, and it goes down a level rather than up: ZOOM
+     * opens the enlarged map of whichever region Link is standing in. The
+     * way back out never needed a chip — a tap anywhere on the map already
+     * does it — but finding your own region among seventeen tiles by eye
+     * did. Added ahead of the map's own target so it wins the hit test. */
+    if (gridReady && sLastFix.valid) {
         float chip[4];
-        DrawMapChip(s, "FOLLOW", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
-        AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_MAPVIEW, 0);
+        DrawMapChip(s, "ZOOM", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
+        AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_MAPZOOM, 0);
     }
     AddTarget(tl, rx0, ry0, rx1, ry1, SS_ACT_MAP, 0);
 }
@@ -1457,11 +1469,46 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
  *   row 2  the four elements
  *   row 3  grip ring, bracelets, flippers
  */
-static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
-                            float rx1, float ry1, float u, int32_t ts, uint32_t tick) {
-    if (Port_SecondScreenQuest_Draw(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
-                                    (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), snap, tick)) {
-        return;
+static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl,
+                            float rx0, float ry0, float rx1, float ry1, float u, int32_t ts,
+                            uint32_t tick, int questView) {
+    int32_t px = (int32_t)rx0, py = (int32_t)ry0;
+    int32_t pw = (int32_t)(rx1 - rx0), ph = (int32_t)(ry1 - ry0);
+
+    /* The two lists the bag and the scroll open. Each keeps a BACK chip and
+     * nothing else — the pause menu's own way out is the B button, which
+     * this panel doesn't have. A list that can't draw yet falls through to
+     * the status screen rather than showing an empty plate. */
+    if (questView == SS_QUEST_KINSTONES || questView == SS_QUEST_TECHNIQUES) {
+        int drawn = (questView == SS_QUEST_KINSTONES)
+                        ? Port_SecondScreenQuest_DrawKinstones(s->px, s->w, s->h, s->stride, px, py,
+                                                               pw, ph, snap)
+                        : Port_SecondScreenQuest_DrawTechniques(s->px, s->w, s->h, s->stride, px, py,
+                                                                pw, ph, snap);
+        if (drawn) {
+            float chip[4];
+            DrawMapChip(s, "BACK", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
+            AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_QUESTVIEW, SS_QUEST_MAIN);
+            AddTarget(tl, rx0, ry0, rx1, ry1, SS_ACT_QUESTVIEW, SS_QUEST_MAIN);
+            return;
+        }
+    }
+
+    {
+        SecondScreenQuestHotspots hot;
+        if (Port_SecondScreenQuest_Draw(s->px, s->w, s->h, s->stride, px, py, pw, ph, snap, tick,
+                                        &hot)) {
+            if (hot.bag.w > 0) {
+                AddTarget(tl, (float)hot.bag.x, (float)hot.bag.y, (float)(hot.bag.x + hot.bag.w),
+                          (float)(hot.bag.y + hot.bag.h), SS_ACT_QUESTVIEW, SS_QUEST_KINSTONES);
+            }
+            if (hot.skill.w > 0) {
+                AddTarget(tl, (float)hot.skill.x, (float)hot.skill.y,
+                          (float)(hot.skill.x + hot.skill.w), (float)(hot.skill.y + hot.skill.h),
+                          SS_ACT_QUESTVIEW, SS_QUEST_TECHNIQUES);
+            }
+            return;
+        }
     }
 
     (void)tick; /* nothing here animates: the panel has no selection cursor */
@@ -1997,6 +2044,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
         sUi.floorPreview = SS_NO_FLOOR;
         sUi.playerFloorDisp = SS_NO_FLOOR;
         sUi.regionState = SS_REGION_OFF; /* a zoom never survives a load */
+        sUi.questView = SS_QUEST_MAIN;   /* nor does an open list */
         UI_UNLOCK();
         sLastFix.valid = 0; /* stale fixes must not survive into a new save */
         sCam.valid = 0;
@@ -2019,6 +2067,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     }
     tab = sUi.tab;
     armedRing = sUi.armedRing;
+    int questView = sUi.questView;
     int wholeMap = sUi.wholeMap;
     regionState = sUi.regionState;
     regionId = sUi.regionId;
@@ -2052,7 +2101,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     if (tab == SS_TAB_ITEMS) {
         PaintItemsPanel(&s, snap, &tl, mx0, my0, mx1, my1, u, ts, tick, armedRing);
     } else if (tab == SS_TAB_QUEST) {
-        PaintQuestPanel(&s, snap, mx0, my0, mx1, my1, u, ts, tick);
+        PaintQuestPanel(&s, snap, &tl, mx0, my0, mx1, my1, u, ts, tick, questView);
     } else if (tab == SS_TAB_SETTINGS) {
         PaintSettingsPanel(&s, &tl, mx0, my0, mx1, my1, u, ts);
     } else if (isDungeon) {
@@ -2124,6 +2173,34 @@ static int PickMapRegion(int x, int y) {
     return picked;
 }
 
+/* The ZOOM chip's pick: the same bracket-then-open step, but on the tile
+ * Link is standing in rather than one the player found by eye. Uses the
+ * last good fix, so it still works from inside a house or a dungeon —
+ * that fix is the doorway you came in by, which is the region you want. */
+static int ZoomToPlayerRegion(void) {
+    int picked = 0;
+    UI_LOCK();
+    if (sUi.regionGridReady && sLastFix.valid) {
+        int32_t region, rx0, ry0, rx1, ry1;
+        if (Port_SecondScreenWorldMap_GetRegionAt(sLastFix.mapX, sLastFix.mapY, &region, &rx0, &ry0,
+                                                  &rx1, &ry1)) {
+            sUi.regionId = region;
+            sUi.regionX0 = rx0;
+            sUi.regionY0 = ry0;
+            sUi.regionX1 = rx1;
+            sUi.regionY1 = ry1;
+            sUi.regionTick = sUi.lastTick;
+            /* From the follow cam there is no world view to bracket over,
+             * so open the region outright; from the whole map the bracket
+             * shows which tile it picked. */
+            sUi.regionState = sUi.wholeMap ? SS_REGION_BRACKET : SS_REGION_VIEW;
+            picked = 1;
+        }
+    }
+    UI_UNLOCK();
+    return picked;
+}
+
 void Port_SecondScreen_OnTap(int x, int y, int longPress) {
     TapTarget hit;
     int found = 0;
@@ -2148,7 +2225,13 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
             /* Re-tapping the active panel tab returns to the map — the
              * reference's "toggle back" behavior. */
             sUi.tab = (sUi.tab == hit.arg && hit.arg != SS_TAB_MAP) ? SS_TAB_MAP : hit.arg;
-            sUi.armedRing = 0; /* changing tabs cancels a pending assignment */
+            sUi.armedRing = 0;             /* changing tabs cancels a pending assignment */
+            sUi.questView = SS_QUEST_MAIN; /* ...and closes a list left open */
+            UI_UNLOCK();
+            break;
+        case SS_ACT_QUESTVIEW:
+            UI_LOCK();
+            sUi.questView = hit.arg;
             UI_UNLOCK();
             break;
         case SS_ACT_RING:
@@ -2267,6 +2350,9 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                 sUi.wholeMap = 0;
             }
             UI_UNLOCK();
+            break;
+        case SS_ACT_MAPZOOM:
+            ZoomToPlayerRegion();
             break;
     }
 }

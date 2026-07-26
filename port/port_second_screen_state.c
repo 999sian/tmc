@@ -118,7 +118,13 @@ void Port_SecondScreenState_Publish(void) {
         for (u32 i = ITEM_SKILL_SPIN_ATTACK; i <= ITEM_SKILL_PERIL_BEAM; i++) {
             if (GetInventoryValue(i) != 0) {
                 next.swordSkills++;
+                next.swordSkillBits |= (uint8_t)(1u << (i - ITEM_SKILL_SPIN_ATTACK));
             }
+        }
+        /* The bag rows verbatim, for the pieces list behind the bag's well. */
+        for (u32 i = 0; i < 19; i++) {
+            next.kinstoneTypes[i] = gSave.kinstones.types[i];
+            next.kinstoneAmounts[i] = gSave.kinstones.amounts[i];
         }
         next.shells = gSave.stats.shells;
         next.shellsOwned = (uint8_t)GetInventoryValue(ITEM_SHELLS);
