@@ -18,6 +18,8 @@ screenshot above is a release attachment, not a file in the tree.
 
 - **Map** — Hyrule with a follow cam, ZOOM out to the whole kingdom, tap a
   region to open the game's own enlarged map of it.
+- **Dungeon** — the real automap: floor plaques, explored rooms, Link's
+  position, and the small-key count beside your rupees.
 - **Quest** — the pause menu's quest screen, reflowed for a square panel. Tap
   the bag or the scroll to open the kinstone pieces and sword techniques lists.
 - **Items** — tap a ring to arm it, then tap an item to equip that slot.
