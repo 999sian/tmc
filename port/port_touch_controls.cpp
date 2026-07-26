@@ -700,6 +700,27 @@ extern "C" void Port_TouchControls_HandleEvent(const SDL_Event* event) {
     if (event == nullptr) {
         return;
     }
+    if (!Port_Config_GetTouchControls()) {
+        /* Switched off: the pad and face buttons claim nothing, so a tap on
+         * the game is just a tap on the game. The settings button keeps
+         * working — it is the only way into the port menu on a device with
+         * no keyboard, and it sits in a corner rather than over the play
+         * area. Anything held when the switch flipped is released here, or
+         * it would stay latched with nothing left to release it. */
+        if (std::any_of(sHeld.begin(), sHeld.end(), [](bool h) { return h; })) {
+            sTouches.clear();
+            sHeld.fill(false);
+            ClearJoystick();
+        }
+        if (event->type == SDL_EVENT_FINGER_DOWN) {
+            TryTriggerSettings(event->tfinger.x * static_cast<float>(sLastWindowW),
+                               event->tfinger.y * static_cast<float>(sLastWindowH));
+        } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+                   event->button.button == SDL_BUTTON_LEFT) {
+            TryTriggerSettings(event->button.x, event->button.y);
+        }
+        return;
+    }
 
     if (event->type == SDL_EVENT_FINGER_DOWN) {
         const int64_t fid = static_cast<int64_t>(event->tfinger.fingerID);
@@ -746,11 +767,22 @@ extern "C" void Port_TouchControls_SetGamepadAvailable(bool available) {
 }
 
 extern "C" bool Port_TouchControls_InputPressed(PortInput input) {
+    if (!Port_Config_GetTouchControls()) {
+        return false;
+    }
     return input >= 0 && input < PORT_INPUT_COUNT && sHeld[input];
 }
 
 extern "C" void Port_TouchControls_Render(SDL_Renderer* renderer, int windowWidth, int windowHeight) {
     Port_TouchControls_NotifyRenderSize(windowWidth, windowHeight);
+    if (!Port_Config_GetTouchControls()) {
+        /* No UpdateHeldState: nothing may be held while the pad is off. The
+         * settings button stays, as in HandleEvent above. */
+        if (renderer) {
+            DrawSettingsButton(renderer, windowWidth, windowHeight);
+        }
+        return;
+    }
     UpdateHeldState();
     if (!renderer || !sVisible) {
         return;

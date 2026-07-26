@@ -141,6 +141,7 @@ enum {
 enum {
     SS_SET_TOP_HUD = 0,   /* hide_top_hud (engine gate ships separately) */
     SS_SET_WIDESCREEN,    /* widescreen_enabled; absent from a native-width build */
+    SS_SET_TOUCH_CONTROLS, /* touch_controls: the top screen's on-screen pad */
     SS_SET_FOLLOW,
     SS_SET_CRESTS,
     SS_SET_FLOOR_RETURN,
@@ -1661,9 +1662,9 @@ static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 /* ------------------------------------------------------------------ */
 
 static const char* const kSettingLabels[SS_SET_COUNT] = {
-    "TOP HUD",   "WIDESCREEN",       "FOLLOW CAM", "WINDCREST PINS",
-    "FLOOR AUTO RETURN",  "MASTER VOLUME", "AUTOSAVE", "COLOR CORRECTION",
-    "SHOW FPS",  "HOLD TO ADVANCE TEXT",
+    "TOP HUD",           "WIDESCREEN",       "TOUCH CONTROLS", "FOLLOW CAM",
+    "WINDCREST PINS",    "FLOOR AUTO RETURN", "MASTER VOLUME",  "AUTOSAVE",
+    "COLOR CORRECTION",  "SHOW FPS",          "HOLD TO ADVANCE TEXT",
 };
 
 /* Rows this build can actually offer. WIDESCREEN is the only conditional
@@ -1701,6 +1702,7 @@ static int GetSettingState(int row, char* out, int outCap) {
             txt = on ? "SHOW" : "HIDE";
             break;
         case SS_SET_WIDESCREEN: on = Port_Config_WidescreenEnabled(); break;
+        case SS_SET_TOUCH_CONTROLS: on = Port_Config_GetTouchControls(); break;
         case SS_SET_FOLLOW: on = Port_Config_GetSecondScreenFollowCam(); break;
         case SS_SET_CRESTS: on = Port_Config_GetSecondScreenCrestPins(); break;
         case SS_SET_FLOOR_RETURN: on = Port_Config_GetSecondScreenFloorReturn(); break;
@@ -2275,6 +2277,11 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                     /* Just the flag — the engine-side DrawUIElements gate
                      * reads it each frame. */
                     Port_Config_SetHideTopHud(!Port_Config_GetHideTopHud());
+                    break;
+                case SS_SET_TOUCH_CONTROLS:
+                    /* The overlay reads the flag as it draws and as it
+                     * handles each touch, so it clears on the next frame. */
+                    Port_Config_SetTouchControls(!Port_Config_GetTouchControls());
                     break;
                 case SS_SET_WIDESCREEN:
                     /* Just the flag: the PPU's view width and the engine's
