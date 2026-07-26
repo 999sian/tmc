@@ -5,11 +5,13 @@
  * design the project treats as reference — dressed in TMC's own art:
  *
  *   - MAP area top-left, full bleed (no inner box): outdoors the decoded
- *     Hyrule map with a gliding follow-cam (tap toggles the whole-map
- *     view; from there a tap on a map tile brackets it and zooms into the
- *     game's own enlarged regional map, windcrest warps draw as pins); in
- *     dungeons the authentic floor map with tappable floor plaques
- *     (preview auto-returns to Link's floor) and a name banner.
+ *     Hyrule map with a gliding follow-cam. ZOOM pulls out to the whole of
+ *     Hyrule, where a tap on a map tile brackets it and opens the game's
+ *     own enlarged regional map, and BACK steps back the way it came;
+ *     windcrest warps draw as pins. Taps on the map itself only ever pick
+ *     a tile — the chips are what change the view. In dungeons the
+ *     authentic floor map with tappable floor plaques (preview
+ *     auto-returns to Link's floor) and a name banner.
  *   - SIDEBAR right: hearts on top, the game's contextual R prompt under
  *     them (the cue a hidden top HUD would otherwise cost), the A/B equip
  *     rings in the middle (tap a ring to arm it, then tap an item to
@@ -117,8 +119,8 @@ enum { SS_TAB_MAP = 0, SS_TAB_ITEMS, SS_TAB_QUEST, SS_TAB_SETTINGS };
 /* What a tap target does when hit. arg meaning per action: item id,
  * tab id, ring (1 = A, 2 = B), plaque display-floor index, settings row.
  * SS_ACT_MAPVIEW is the map's own back affordance (region view -> whole
- * map, whole map -> follow cam) and carries no argument; SS_ACT_MAPZOOM
- * opens the enlarged map of whichever region Link is standing in. */
+ * map, whole map -> follow cam) and carries no argument; SS_ACT_MAPZOOM is
+ * its opposite, out to the whole map where the region rectangles are. */
 enum {
     SS_ACT_ITEM = 1,
     SS_ACT_TAB,
@@ -1093,15 +1095,23 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
     sUi.regionGridReady = (uint8_t)(gridReady != 0);
     UI_UNLOCK();
 
-    /* One chip on the map, and it goes down a level rather than up: ZOOM
-     * opens the enlarged map of whichever region Link is standing in. The
-     * way back out never needed a chip — a tap anywhere on the map already
-     * does it — but finding your own region among seventeen tiles by eye
-     * did. Added ahead of the map's own target so it wins the hit test. */
-    if (gridReady && sLastFix.valid) {
+    /* Changing what the map SHOWS is the chip's job and only the chip's:
+     * ZOOM pulls back to the whole of Hyrule, where the region rectangles
+     * are, and BACK returns to the follow cam. Tapping the map itself only
+     * ever picks a rectangle (below) — it used to toggle the view as well,
+     * which meant every miss took you somewhere you hadn't asked to go.
+     * Added ahead of the map's own target so it wins the hit test. */
+    {
         float chip[4];
-        DrawMapChip(s, "ZOOM", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
-        AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_MAPZOOM, 0);
+        if (!wantWhole) {
+            DrawMapChip(s, "ZOOM", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
+            AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_MAPZOOM, 0);
+        } else if (followCfg && sLastFix.valid) {
+            /* Without a fix, or with the follow cam switched off, the whole
+             * map is the only view there is and BACK would go nowhere. */
+            DrawMapChip(s, "BACK", (rx0 + rx1) / 2.0f, ry1 - 12 * u, u, chip);
+            AddTarget(tl, chip[0], chip[1], chip[2], chip[3], SS_ACT_MAPVIEW, 0);
+        }
     }
     AddTarget(tl, rx0, ry0, rx1, ry1, SS_ACT_MAP, 0);
 }
@@ -2173,33 +2183,6 @@ static int PickMapRegion(int x, int y) {
     return picked;
 }
 
-/* The ZOOM chip's pick: the same bracket-then-open step, but on the tile
- * Link is standing in rather than one the player found by eye. Uses the
- * last good fix, so it still works from inside a house or a dungeon —
- * that fix is the doorway you came in by, which is the region you want. */
-static int ZoomToPlayerRegion(void) {
-    int picked = 0;
-    UI_LOCK();
-    if (sUi.regionGridReady && sLastFix.valid) {
-        int32_t region, rx0, ry0, rx1, ry1;
-        if (Port_SecondScreenWorldMap_GetRegionAt(sLastFix.mapX, sLastFix.mapY, &region, &rx0, &ry0,
-                                                  &rx1, &ry1)) {
-            sUi.regionId = region;
-            sUi.regionX0 = rx0;
-            sUi.regionY0 = ry0;
-            sUi.regionX1 = rx1;
-            sUi.regionY1 = ry1;
-            sUi.regionTick = sUi.lastTick;
-            /* From the follow cam there is no world view to bracket over,
-             * so open the region outright; from the whole map the bracket
-             * shows which tile it picked. */
-            sUi.regionState = sUi.wholeMap ? SS_REGION_BRACKET : SS_REGION_VIEW;
-            picked = 1;
-        }
-    }
-    UI_UNLOCK();
-    return picked;
-}
 
 void Port_SecondScreen_OnTap(int x, int y, int longPress) {
     TapTarget hit;
@@ -2317,27 +2300,19 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
             }
             break;
         case SS_ACT_MAP: {
-            /* Region view: any tap goes back up a level. Whole map: a tap
-             * on a zoom-grid tile zooms in; anything else keeps the
-             * long-standing follow/whole toggle. Follow cam: toggle. */
+            /* A tap on the map picks a rectangle to open, and does nothing
+             * else. Changing the view is the chips' job — a tap that misses
+             * a rectangle, or lands on a view with no rectangles in it, is
+             * a miss and stays one. */
             uint8_t state;
             int whole;
             UI_LOCK();
             state = sUi.regionState;
             whole = sUi.wholeMap;
             UI_UNLOCK();
-            if (state != SS_REGION_OFF) {
-                UI_LOCK();
-                sUi.regionState = SS_REGION_OFF;
-                UI_UNLOCK();
-                break;
+            if (state == SS_REGION_OFF && whole) {
+                PickMapRegion(x, y);
             }
-            if (whole && PickMapRegion(x, y)) {
-                break;
-            }
-            UI_LOCK();
-            sUi.wholeMap = !sUi.wholeMap;
-            UI_UNLOCK();
             break;
         }
         case SS_ACT_MAPVIEW:
@@ -2352,7 +2327,11 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
             UI_UNLOCK();
             break;
         case SS_ACT_MAPZOOM:
-            ZoomToPlayerRegion();
+            /* Out to the whole of Hyrule, which is the view that has the
+             * region rectangles in it — from here a tap opens one. */
+            UI_LOCK();
+            sUi.wholeMap = 1;
+            UI_UNLOCK();
             break;
     }
 }
