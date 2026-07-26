@@ -9,7 +9,7 @@ built on the Project Picori port. The handheld's bottom panel becomes a live
 map, quest status and touch inventory, so the top screen can be nothing but
 the game.
 
-![](https://github.com/samyost1/tmc-android/releases/download/v0.1-dual-screen/showcase.png)
+![](https://github.com/samyost1/tmc-android/releases/download/v1.0/showcase.png)
 
 Everything on the panel is decoded from your own ROM at runtime — the map
 artwork, the menu chrome, the item icons, the font. No game data is stored in
