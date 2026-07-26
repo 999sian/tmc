@@ -2,11 +2,41 @@
   <img src="docs/picori-logo.png" alt="Project Picori" width="240">
 </p>
 
-# Project Picori — Minish Cap PC Port
+# Minish Cap — Dual Screen
 
-A native PC port of *The Legend of Zelda: The Minish Cap* (GBA, 2004) built on
-SDL3, a vendored software PPU renderer (`port/ppu`), and the agbplay audio engine.
-Targets **x86-64 Linux, Windows, and macOS** (Apple Silicon and Intel).
+A dual-screen mod of *The Legend of Zelda: The Minish Cap* for the AYN Thor,
+built on the Project Picori port. The handheld's bottom panel becomes a live
+map, quest status and touch inventory, so the top screen can be nothing but
+the game.
+
+![](https://github.com/samyost1/tmc-android/releases/download/v0.1-dual-screen/showcase.png)
+
+Everything on the panel is decoded from your own ROM at runtime — the map
+artwork, the menu chrome, the item icons, the font. No game data is stored in
+this repository, and no rendered ROM frame is committed to it either: the
+screenshot above is a release attachment, not a file in the tree.
+
+- **Map** — Hyrule with a follow cam, ZOOM out to the whole kingdom, tap a
+  region to open the game's own enlarged map of it.
+- **Quest** — the pause menu's quest screen, reflowed for a square panel. Tap
+  the bag or the scroll to open the kinstone pieces and sword techniques lists.
+- **Items** — tap a ring to arm it, then tap an item to equip that slot.
+- **Settings** — the top HUD (hide it and the panel carries your vitals), true
+  widescreen, and the port-wide toggles the desktop F8 menu owns.
+
+Built for the Thor's second display, but it is a plain Android `Presentation`,
+so any device with a second screen will do. The APK is on the
+[Releases page](https://github.com/samyost1/tmc-android/releases); you supply
+your own ROM.
+
+---
+
+## Project Picori — Minish Cap PC Port
+
+The port this mod is built on. A native PC port of *The Legend of Zelda: The
+Minish Cap* (GBA, 2004) built on SDL3, a vendored software PPU renderer
+(`port/ppu`), and the agbplay audio engine. Targets **x86-64 Linux, Windows,
+and macOS** (Apple Silicon and Intel).
 
 The port is **work in progress** — many rendering and gameplay paths are still
 rough; please file issues for anything that breaks.
