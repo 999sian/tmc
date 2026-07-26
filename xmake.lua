@@ -960,6 +960,14 @@ target("tmc_pc")
     -- on Linux/Android; it's a no-op stub on Windows/macOS (Vulkan/Metal there).
     if has_config("gpu_renderer") and is_plat("linux", "android") then
         add_syslinks("EGL", "GLESv2")
+        if is_plat("android") then
+            -- The compute entry points that backend calls (glDispatchCompute,
+            -- glBindBufferBase, glMemoryBarrier, glMapBufferRange,
+            -- glUnmapBuffer) are GLES 3.1, and the NDK puts those in
+            -- libGLESv3 — libGLESv2 stops at 2.0, so the link fails without
+            -- this even though the desktop GL loader resolves them fine.
+            add_syslinks("GLESv3")
+        end
     end
 
     -- Compiler flags
@@ -1139,6 +1147,9 @@ target("ppu_gpu_parity")
     add_files("port/port_gpu_raster_gl.cpp")
     add_packages("libsdl3")
     add_syslinks("EGL", "GLESv2")
+    if is_plat("android") then
+        add_syslinks("GLESv3") -- see the tmc_pc target: GLES 3.1 lives there on the NDK
+    end
     add_mingw_static_cpp_runtime()
 target_end()
 
