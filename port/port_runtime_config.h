@@ -44,6 +44,10 @@ bool Port_Config_GetDecoupleRender(void);
 void Port_Config_SetDecoupleRender(bool on);
 bool Port_Config_GetShowFps(void);
 void Port_Config_SetShowFps(bool on);
+/* Android touch overlay master switch. Off both hides it and stops it
+ * claiming touches, so nothing sits between the player and the game. */
+bool Port_Config_GetTouchControls(void);
+void Port_Config_SetTouchControls(bool on);
 bool Port_Config_PortSettingsMenuEnabled(void);
 void Port_Config_SetWindowScale(u8 scale);
 void Port_Config_SetUpscaleMethod(const char* method);

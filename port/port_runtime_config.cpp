@@ -98,6 +98,10 @@ bool sConsoleParity = false;
 bool sDecoupleRender = true;
 /* On-screen FPS/TPS counter overlay (top-right HUD, port_imgui_menu.cpp). */
 bool sShowFps = false;
+/* The Android touch overlay (port_touch_controls.cpp). Off removes it from
+ * the screen AND stops it consuming touches — a handheld with real buttons
+ * wants neither the clutter over the game nor the dead zones under it. */
+bool sTouchControls = true;
 int sPreferredRegion = -1;
 int sPreferredLanguage = -1;
 /* Widescreen pillarbox config — applied in port_ppu.cpp's present path.
@@ -277,6 +281,7 @@ const BoolCfg kBoolCfg[] = {
     { "console_parity", &sConsoleParity, false },
     { "decouple_render", &sDecoupleRender, true },
     { "show_fps", &sShowFps, false },
+    { "touch_controls", &sTouchControls, true },
     { "tts_enabled", &sTtsEnabled, true },
     { "a11y_cues", &sA11yCues, false },
     { "a11y_footsteps", &sA11yFootsteps, false },
@@ -810,6 +815,14 @@ extern "C" bool Port_Config_GetShowFps(void) {
 extern "C" void Port_Config_SetShowFps(bool on) {
     sShowFps = on;
     sConfigJson["show_fps"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetTouchControls(void) {
+    return sTouchControls;
+}
+extern "C" void Port_Config_SetTouchControls(bool on) {
+    sTouchControls = on;
+    sConfigJson["touch_controls"] = on;
     SaveConfig();
 }
 
