@@ -747,12 +747,29 @@ int main(int argc, char* argv[]) {
      * ==================================================================== */
     {
         romPath = Port_FindBaseRomPath();
-        fprintf(stderr, "Prelaunch: %s — waiting for user.\n", romPath ? "ROM detected" : "no ROM yet");
+        bool done = false;
 
-        /* Announce the prelaunch screen for screen-reader users.
-         * Port_TTS_Init ran a few lines above so the backend is up;
-         * Port_TTS_Speak is a no-op when TTS is disabled in config. */
-        {
+#ifdef __ANDROID__
+        /* The Android package keeps its ROM in app storage, so once that
+         * verified file exists there is nothing useful to choose on every
+         * launch. Keep the picker available for a missing-ROM first run. */
+        if (romPath) {
+            fprintf(stderr, "Prelaunch: Android ROM detected — skipping menu.\n");
+            done = true;
+        }
+#endif
+
+        if (!done && romPath && getenv("TMC_AUTOPLAY")) {
+            fprintf(stderr, "Prelaunch: TMC_AUTOPLAY set — skipping menu.\n");
+            done = true;
+        }
+
+        if (!done) {
+            fprintf(stderr, "Prelaunch: %s — waiting for user.\n", romPath ? "ROM detected" : "no ROM yet");
+
+            /* Announce the prelaunch screen for screen-reader users.
+             * Port_TTS_Init ran a few lines above so the backend is up;
+             * Port_TTS_Speak is a no-op when TTS is disabled in config. */
             PortTtsOptions opts = { 0 };
             opts.priority = PORT_TTS_PRIO_URGENT;
             opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
@@ -769,11 +786,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        bool done = false;
-        if (romPath && getenv("TMC_AUTOPLAY")) {
-            fprintf(stderr, "Prelaunch: TMC_AUTOPLAY set — skipping menu.\n");
-            done = true;
-        }
         /* Deadline pacing keeps the prelaunch menu near 60 Hz without
          * busy-waiting. Fixed SDL_Delay(16) drifts and can spin hot on
          * timer jitter; this yields only until the next frame deadline. */
