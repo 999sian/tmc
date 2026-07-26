@@ -276,8 +276,8 @@ static void DrawBgLayer(const u8* tilemap, u32 mapLen, const u8* tiles, u32 tile
 /* One DrawDirect frame, tiles resolved out of the gfx groups the screen keeps
  * loaded. Piece format and attr2 math per RenderSpritePieces (port_draw.c);
  * pieces are drawn in reverse so the first (topmost OAM) wins overlaps. */
-static void DrawObjFrame(uint32_t* layer, u32 sprite, u32 frame, int32_t cmdX, int32_t cmdY,
-                         u32 oamExtra) {
+static void DrawObjFrame(uint32_t* layer, int32_t canvasW, int32_t canvasH, u32 sprite, u32 frame,
+                         int32_t cmdX, int32_t cmdY, u32 oamExtra) {
     const u8* frameData = (const u8*)sub_080AD8F0(sprite, frame);
     u32 count, baseTile = oamExtra & 0x3FFu, basePal = (oamExtra >> 12) & 0xFu;
     int32_t i;
@@ -331,10 +331,10 @@ static void DrawObjFrame(uint32_t* layer, u32 sprite, u32 frame, int32_t cmdX, i
                         if (vflip) dy = ph - 1 - dy;
                         dx += cmdX + (int32_t)(int8_t)p[0];
                         dy += cmdY + (int32_t)(int8_t)p[1];
-                        if (dx < 0 || dy < 0 || dx >= QUEST_W || dy >= QUEST_H) {
+                        if (dx < 0 || dy < 0 || dx >= canvasW || dy >= canvasH) {
                             continue;
                         }
-                        layer[(size_t)dy * QUEST_W + (size_t)dx] = Rgb555ToRgba8888(pal[idx]);
+                        layer[(size_t)dy * (size_t)canvasW + (size_t)dx] = Rgb555ToRgba8888(pal[idx]);
                     }
                 }
             }
@@ -342,49 +342,137 @@ static void DrawObjFrame(uint32_t* layer, u32 sprite, u32 frame, int32_t cmdX, i
     }
 }
 
-/* Composes the save-independent layer. Returns 1 when the whole screen
- * decoded; a partial result is never published, so callers simply retry. */
-static int BuildStaticLayer(void) {
-    uint16_t bgPal[16 * 16];
-    u32 tilesLen = 0, mapLen = 0;
-    const u8* tiles = Port_ResolveGfxGroupVram(QUEST_GFX_GROUP, QUEST_TILES_DEST, &tilesLen);
-    const u8* tilemap = QuestTilemap(QUEST_GFX_GROUP, &mapLen);
-    const u8* sleepEntry = SlotEntry(SLOT_SLEEP);
-    const u8* saveEntry = SlotEntry(SLOT_SAVE);
-    size_t i;
-    int32_t opaque = 0;
 
-    if (tiles == NULL || tilemap == NULL || tilesLen < 32 || mapLen < 64 || sleepEntry == NULL ||
-        saveEntry == NULL) {
-        return 0;
-    }
+/* ---------------------------------------------------------------------- *
+ * Panel layout                                                            *
+ *                                                                         *
+ * The GBA screen packs sixteen wells into 240x160 around navigation the   *
+ * panel has no use for. Reproducing that arrangement on a near-square     *
+ * touch panel left it an island of tiny art in a large empty rect, so the *
+ * ART is kept and the ARRANGEMENT is not: the same decoded icons, plates  *
+ * and fonts, regrouped into labelled sections sized for this screen —     *
+ * the idiom the panel's ITEMS tab already uses. The pause menu's own      *
+ * SLEEP / SAVE buttons, L/R tab arrows and title banner are dropped with  *
+ * the arrangement; they are navigation furniture for a menu you can move  *
+ * a cursor around, which this panel is not.                               *
+ * ---------------------------------------------------------------------- */
 
-    memset(bgPal, 0, sizeof(bgPal));
-    for (i = 0; i < sizeof(kQuestPaletteGroups); i++) {
-        ApplyPaletteGroup(kQuestPaletteGroups[i], bgPal);
-    }
+/* Scratch big enough for the largest OBJ frame plus its piece offsets.
+ * Elements render here at 1x, then blit scaled into their well — one path
+ * for item icons and pause-screen frames alike, so every cell can be sized
+ * independently of the art's native size. Single-caller (the second-screen
+ * render thread), same contract as the module's other statics. */
+#define CELL_SRC 64
+#define CELL_ORIGIN 24
+static uint32_t sCell[CELL_SRC * CELL_SRC];
 
-    memset(sStatic, 0, sizeof(sStatic));
-    DrawBgLayer(tilemap, mapLen, tiles, tilesLen, bgPal);
+typedef struct {
+    int32_t x, y, w, h; /* ink bounds inside sCell; w == 0 when nothing drew */
+} CellInk;
 
-    /* sub_080A5128's chrome, then the two button plates. */
-    DrawObjFrame(sStatic, SPRITE_PAUSE_MISC, 0, BANNER_X, BANNER_Y, CHROME_OAM_EXTRA);
-    DrawObjFrame(sStatic, SPRITE_PAUSE_MISC, 1, ARROW_L_X, ARROW_Y, CHROME_OAM_EXTRA);
-    DrawObjFrame(sStatic, SPRITE_PAUSE_MISC, 2, ARROW_R_X, ARROW_Y, CHROME_OAM_EXTRA);
-    DrawObjFrame(sStatic, SPRITE_PAUSE_MISC, SLOT_FRAME(sleepEntry, SLOT_BUTTON_VALUE), sleepEntry[6],
-                 sleepEntry[7], SLOT_OAM_EXTRA);
-    DrawObjFrame(sStatic, SPRITE_PAUSE_MISC, SLOT_FRAME(saveEntry, SLOT_BUTTON_VALUE), saveEntry[6],
-                 saveEntry[7], SLOT_OAM_EXTRA);
-
-    /* Sanity: the slab covers most of the canvas. A near-empty layer means a
-     * group record moved and the decode silently produced nothing — better to
-     * leave the caller on its fallback than to publish that. */
-    for (i = 0; i < (size_t)(QUEST_W * QUEST_H); i++) {
-        if ((sStatic[i] >> 24) != 0) {
-            opaque++;
+static CellInk CellBounds(void) {
+    CellInk b;
+    int32_t x, y, minX = CELL_SRC, minY = CELL_SRC, maxX = -1, maxY = -1;
+    for (y = 0; y < CELL_SRC; y++) {
+        for (x = 0; x < CELL_SRC; x++) {
+            if ((sCell[(size_t)y * CELL_SRC + (size_t)x] >> 24) != 0) {
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+            }
         }
     }
-    return opaque >= QUEST_W * QUEST_H / 4;
+    b.x = minX;
+    b.y = minY;
+    b.w = maxX >= minX ? maxX - minX + 1 : 0;
+    b.h = maxY >= minY ? maxY - minY + 1 : 0;
+    return b;
+}
+
+/* One of the pause screen's own OBJ frames (bag tiers, heart-piece states,
+ * the technique scroll) rendered to the scratch. */
+static CellInk RenderFrameCell(u32 frame) {
+    memset(sCell, 0, sizeof(sCell));
+    DrawObjFrame(sCell, CELL_SRC, CELL_SRC, SPRITE_PAUSE_MISC, frame, CELL_ORIGIN, CELL_ORIGIN,
+                 SLOT_OAM_EXTRA);
+    return CellBounds();
+}
+
+/* An inventory item's own icon, through the same sprite-322 path the item
+ * grid uses (bank 14, the bank sub_080A57F4 commands on this screen). */
+static CellInk RenderItemCell(u32 item) {
+    memset(sCell, 0, sizeof(sCell));
+    Port_SecondScreenRender_DrawItemIconBank(sCell, CELL_SRC, CELL_SRC, CELL_SRC, CELL_ORIGIN,
+                                             CELL_ORIGIN, 1, (uint8_t)item, ITEM_CMD_PAL_BANK);
+    return CellBounds();
+}
+
+/* Blits whatever is in the scratch into a well, at the largest integer scale
+ * that fits with a margin, centered. Integer only: every piece of this art is
+ * one-pixel detail and a fractional step eats whole rows of it. */
+static void StampCell(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride, CellInk ink,
+                      int32_t cx, int32_t cy, int32_t cw, int32_t ch) {
+    int32_t scale, drawW, drawH, ox, oy, x, y;
+
+    if (ink.w <= 0 || ink.h <= 0 || cw <= 0 || ch <= 0) {
+        return;
+    }
+    scale = cw / ink.w;
+    if (ch / ink.h < scale) {
+        scale = ch / ink.h;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    drawW = ink.w * scale;
+    drawH = ink.h * scale;
+    ox = cx + (cw - drawW) / 2;
+    oy = cy + (ch - drawH) / 2;
+    for (y = 0; y < drawH; y++) {
+        int32_t py = oy + y;
+        const uint32_t* row = sCell + (size_t)(ink.y + y / scale) * CELL_SRC;
+        if (py < 0 || py >= bufH) {
+            continue;
+        }
+        for (x = 0; x < drawW; x++) {
+            int32_t px = ox + x;
+            uint32_t c = row[ink.x + x / scale];
+            if ((c >> 24) == 0 || px < 0 || px >= bufW) {
+                continue;
+            }
+            pixels[(size_t)py * (size_t)stride + (size_t)px] = c;
+        }
+    }
+}
+
+/* What one well holds: an item icon, one of the screen's own frames, or
+ * nothing (an empty well, exactly as the real screen shows an uncollected
+ * entry). `count` is drawn under the art when non-negative. */
+typedef struct {
+    u32 item;
+    u32 frame;
+    int32_t count;
+} QuestCell;
+
+static QuestCell CellNone(void) {
+    QuestCell c;
+    c.item = 0;
+    c.frame = 0;
+    c.count = -1;
+    return c;
+}
+
+static QuestCell CellItem(u32 item) {
+    QuestCell c = CellNone();
+    c.item = item;
+    return c;
+}
+
+static QuestCell CellFrame(u32 frame) {
+    QuestCell c = CellNone();
+    c.frame = frame;
+    return c;
 }
 
 /* Kinstone bag tier, the ladder sub_080A5594 walks over the bag's contents
@@ -406,109 +494,231 @@ static u32 KinstoneBagTier(const SecondScreenSnapshot* snap) {
     return 1;
 }
 
-/* An item in its well, the >= 0x34 arm of sub_080A57F4: the item's own
- * sprite-322 frame at the slot's table position, with the two nudges that
- * function applies to the trophy and the medal. */
-static void DrawSlotItem(int slot, u32 item) {
-    const u8* entry = SlotEntry(slot);
-    int32_t dy = 0;
+/* The collection row, the only cells whose contents need the save's own
+ * rules (sub_080A5594's arms, kept intact — the trophy displaces the bag,
+ * the medal displaces the shell counter). */
+static QuestCell CollectionCell(int idx, const SecondScreenSnapshot* snap) {
+    const u8* entry;
+    QuestCell c = CellNone();
 
-    if (entry == NULL || item == 0) {
+    switch (idx) {
+        case 0: /* kinstone bag, or the trophy once it is won */
+            if (snap->tingleTrophy == 1) {
+                return CellItem((u32)ITEM_QST_TINGLE_TROPHY);
+            }
+            if (snap->tingleTrophy == 0) {
+                u32 tier = KinstoneBagTier(snap);
+                entry = SlotEntry(SLOT_KINSTONE_BAG);
+                if (tier != 0 && entry != NULL) {
+                    c = CellFrame(SLOT_FRAME(entry, tier));
+                    c.count = (int32_t)snap->kinstoneBag;
+                }
+            }
+            return c;
+        case 1: /* heart pieces — its well is never empty */
+            entry = SlotEntry(SLOT_HEART_PIECES);
+            if (entry != NULL) {
+                c = CellFrame(SLOT_FRAME(entry, snap->heartPieces + 1u));
+            }
+            return c;
+        case 2: /* sword techniques, one scroll plus the count */
+            entry = SlotEntry(SLOT_SWORD_SKILLS);
+            if (entry != NULL && snap->swordSkills != 0) {
+                c = CellFrame(SKILL_FRAME(entry));
+                c.count = (int32_t)snap->swordSkills;
+            }
+            return c;
+        default: /* Carlov medal, else the shell count */
+            if (snap->carlovMedal == 1) {
+                return CellItem((u32)ITEM_QST_CARLOV_MEDAL);
+            }
+            if (snap->shellsOwned == 1 || (snap->carlovMedal == 0 && snap->shellsOwned != 0)) {
+                c = CellItem((u32)ITEM_SHELLS);
+                c.count = (int32_t)snap->shells;
+            }
+            return c;
+    }
+}
+
+static QuestCell SectionCell(int section, int idx, const SecondScreenSnapshot* snap) {
+    switch (section) {
+        case 0:
+            return (snap->elements & (1u << idx)) ? CellItem((u32)ITEM_EARTH_ELEMENT + (u32)idx)
+                                                  : CellNone();
+        case 1:
+            return snap->questItems[idx] != 0 ? CellItem(snap->questItems[idx]) : CellNone();
+        case 2:
+            return (snap->passives & (1u << idx)) ? CellItem((u32)ITEM_GRIP_RING + (u32)idx)
+                                                  : CellNone();
+        default:
+            return CollectionCell(idx, snap);
+    }
+}
+
+static void FormatCount(char* dst, size_t cap, int32_t value) {
+    size_t i = 0, j;
+    char tmp[8];
+    if (value < 0) {
+        dst[0] = 0;
         return;
     }
-    if (item == (u32)ITEM_QST_TINGLE_TROPHY) {
-        dy = TROPHY_ICON_DY;
-    } else if (item == (u32)ITEM_QST_CARLOV_MEDAL) {
-        dy = MEDAL_ICON_DY;
+    do {
+        tmp[i++] = (char)('0' + value % 10);
+        value /= 10;
+    } while (value != 0 && i < sizeof(tmp));
+    for (j = 0; j < i && j + 1 < cap; j++) {
+        dst[j] = tmp[i - 1 - j];
     }
-    Port_SecondScreenRender_DrawItemIconBank(sFrame, QUEST_W, QUEST_H, QUEST_W,
-                                             (int32_t)entry[6] - ICON_BOX_DX,
-                                             (int32_t)entry[7] + dy - ICON_BOX_DY, 1, (uint8_t)item,
-                                             ITEM_CMD_PAL_BANK);
+    dst[j] = 0;
 }
 
-/* An item in the well gItemMetaData sends it to — how sub_080A5594 places
- * everything except the shared carried-item tray. */
-static void DrawMetaSlotItem(u32 item) {
-    DrawSlotItem((int)gItemMetaData[item].menuSlot, item);
-}
+/* One group of wells: the game's own slots, kept in the arrangement the game
+ * gives them (the elements' diamond, the collection's 2x2, the tray's row) but
+ * mapped into a panel-sized box. */
+typedef struct {
+    int section;    /* which SectionCell family the slots belong to */
+    const u8 slots[4]; /* quest-screen slot ids, in section-index order */
+    int count;
+} QuestGroup;
 
-/* One counter digit, sub_080A57F4's DrawDirect(0, 1). */
-static void DrawDigit(int32_t x, int32_t y, u32 digit) {
-    DrawObjFrame(sFrame, DIGIT_SPRITE, DIGIT_FRAME, x, y, DIGIT_OAM_EXTRA + digit);
-}
+/* Turns one axis of slot-table coordinates into lane indices: coordinates
+ * within kLaneSlack of each other are the same lane. The table's own numbers
+ * are icon origins, not a grid — the collection's two columns sit at x 53 and
+ * 54, its two rows at y 56 and 57 — so a plain sort would read four lanes
+ * where the screen shows two. Returns how many lanes there are. */
+#define kLaneSlack 8
+static int32_t LaneRanks(const int32_t* v, int n, int32_t* outLane, int32_t* outPitch) {
+    int32_t rep[4];
+    int32_t lanes = 0;
+    int i, j;
 
-/* Stamps the save-dependent slots onto the working copy of the layer, slot
- * by slot in the order sub_080A5594 fills them. */
-static void DrawLiveSlots(const SecondScreenSnapshot* snap) {
-    const u8* entry;
-    u32 i;
-
-    /* Slot 0: the trophy takes the bag's well once it is won, and while it
-     * is anywhere in the inventory the bag tier stays off the screen. */
-    if (snap->tingleTrophy == 1) {
-        DrawSlotItem(SLOT_KINSTONE_BAG, ITEM_QST_TINGLE_TROPHY);
-    } else if (snap->tingleTrophy == 0) {
-        u32 tier = KinstoneBagTier(snap);
-        entry = SlotEntry(SLOT_KINSTONE_BAG);
-        if (tier != 0 && entry != NULL) {
-            DrawObjFrame(sFrame, SPRITE_PAUSE_MISC, SLOT_FRAME(entry, tier), entry[6], entry[7],
-                         SLOT_OAM_EXTRA);
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < lanes; j++) {
+            if (v[i] - rep[j] < kLaneSlack && rep[j] - v[i] < kLaneSlack) {
+                break;
+            }
+        }
+        if (j == lanes) {
+            rep[lanes++] = v[i];
         }
     }
-
-    /* Slot 1: the heart-piece well is never empty — no pieces is its own
-     * frame, the empty heart the game shows on a fresh file. */
-    entry = SlotEntry(SLOT_HEART_PIECES);
-    if (entry != NULL) {
-        DrawObjFrame(sFrame, SPRITE_PAUSE_MISC, SLOT_FRAME(entry, snap->heartPieces + 1u), entry[6],
-                     entry[7], SLOT_OAM_EXTRA);
+    /* insertion sort, so lane 0 is the leftmost/topmost */
+    for (i = 1; i < lanes; i++) {
+        int32_t key = rep[i];
+        for (j = i - 1; j >= 0 && rep[j] > key; j--) {
+            rep[j + 1] = rep[j];
+        }
+        rep[j + 1] = key;
     }
-
-    /* Slot 2: one scroll frame whatever the count, and the count itself as a
-     * single digit beside it. */
-    entry = SlotEntry(SLOT_SWORD_SKILLS);
-    if (entry != NULL && snap->swordSkills != 0) {
-        DrawObjFrame(sFrame, SPRITE_PAUSE_MISC, SKILL_FRAME(entry), entry[6], entry[7], SLOT_OAM_EXTRA);
-        DrawDigit((int32_t)entry[6] + SKILL_DIGIT_DX, (int32_t)entry[7] + SKILL_DIGIT_DY,
-                  snap->swordSkills);
-    }
-
-    /* Slot 3, both ways sub_080A5594 can fill it: the medal lands there
-     * through the item loop, and the shell counter takes the well when the
-     * medal has not (the loop's own arm covers a medal in the spent state). */
-    if (snap->carlovMedal == 1) {
-        DrawMetaSlotItem(ITEM_QST_CARLOV_MEDAL);
-    } else if (snap->shellsOwned == 1 || (snap->carlovMedal == 0 && snap->shellsOwned != 0)) {
-        entry = SlotEntry(SLOT_SHELLS);
-        DrawMetaSlotItem(ITEM_SHELLS);
-        if (entry != NULL) {
-            u32 shells = snap->shells;
-            int32_t x = (int32_t)entry[6] + SHELL_DIGIT_DX;
-            for (i = 0; i < SHELL_DIGIT_COUNT; i++) {
-                DrawDigit(x, (int32_t)entry[7] + SHELL_DIGIT_DY, shells % 10u);
-                shells /= 10u;
-                x -= 8;
+    for (i = 0; i < n; i++) {
+        outLane[i] = 0;
+        for (j = 0; j < lanes; j++) {
+            if (v[i] - rep[j] < kLaneSlack && rep[j] - v[i] < kLaneSlack) {
+                outLane[i] = j;
+                break;
             }
         }
     }
-
-    /* Slots 6-8: the carried quest items, already in tray order. They all
-     * share one menu slot, so the snapshot's order is what places them. */
-    for (i = 0; i < QUEST_TRAY_SLOTS; i++) {
-        DrawSlotItem(SLOT_QUEST_ITEM + (int)i, snap->questItems[i]);
-    }
-
-    /* Slots 9-12 and 13-15: the four elements and the passive gear, each in
-     * the well its own metadata names. */
-    for (i = 0; i < 4; i++) {
-        if (snap->elements & (1u << i)) {
-            DrawMetaSlotItem((u32)ITEM_EARTH_ELEMENT + i);
+    /* The tightest gap between neighbouring lanes: the cluster's own pitch on
+     * this axis, which is how far apart the game spaces these slots. */
+    *outPitch = 0;
+    for (i = 1; i < lanes; i++) {
+        if (*outPitch == 0 || rep[i] - rep[i - 1] < *outPitch) {
+            *outPitch = rep[i] - rep[i - 1];
         }
     }
-    for (i = 0; i < 3; i++) {
-        if (snap->passives & (1u << i)) {
-            DrawMetaSlotItem((u32)ITEM_GRIP_RING + i);
+    return lanes;
+}
+
+/* A cluster's shape, measured off the game's own slot positions once and then
+ * used both to size the screen and to place the wells. Lane steps are in
+ * quarter cells: a solid grid steps a whole well at a time, but the elements'
+ * diamond does not — the game spaces those four 24px apart across and only
+ * 13px down, which is what makes it a diamond rather than a plus. */
+#define QCELL 8 /* sub-cell units: one full-size well is QCELL of them */
+#define DIAMOND_WELL 6 /* a diamond's wells, in those units — the game draws the
+                        * elements smaller than the collection's plates too */
+typedef struct {
+    int32_t cols, rows; /* lanes the cluster's slots fall into */
+    int32_t col[4], row[4];
+    int32_t well;           /* well size, in QCELL units */
+    int32_t stepX, stepY;   /* units between adjacent lanes */
+    int32_t quartW, quartH; /* footprint, in the same units */
+} GroupShape;
+
+static void MeasureGroup(const QuestGroup* g, GroupShape* out) {
+    int32_t sx[4], sy[4], pitchX = 0, pitchY = 0, base;
+    int solid;
+    int i;
+
+    for (i = 0; i < g->count; i++) {
+        const u8* entry = SlotEntry(g->slots[i]);
+        sx[i] = entry != NULL ? (int32_t)entry[6] : i * 24;
+        sy[i] = entry != NULL ? (int32_t)entry[7] : 0;
+    }
+    out->cols = LaneRanks(sx, g->count, out->col, &pitchX);
+    out->rows = LaneRanks(sy, g->count, out->row, &pitchY);
+
+    /* A cluster with a slot at (nearly) every lane crossing is a solid grid —
+     * the collection's 2x2, the two trays' rows — and gets full-size wells a
+     * full well apart. A sparse one is a diamond: four slots over nine lane
+     * crossings, spaced 24 across but only 13 down, which is what makes it a
+     * diamond rather than a plus. Those keep the game's proportions on smaller
+     * wells, sized so the widest step is exactly one well and no two touch. */
+    solid = out->cols * out->rows <= g->count;
+    base = pitchX > pitchY ? pitchX : pitchY;
+    if (base <= 0) {
+        base = 1;
+    }
+    out->well = solid ? QCELL : DIAMOND_WELL;
+    out->stepX = solid ? QCELL : (pitchX * DIAMOND_WELL + base / 2) / base;
+    out->stepY = solid ? QCELL : (pitchY * DIAMOND_WELL + base / 2) / base;
+    if (out->stepX < 2) out->stepX = 2;
+    if (out->stepY < 2) out->stepY = 2;
+    out->quartW = out->well + (out->cols - 1) * out->stepX;
+    out->quartH = out->well + (out->rows - 1) * out->stepY;
+}
+
+/* Draws a measured cluster with its top-left footprint corner at (bx, by).
+ * `cell` is the one full-size well the whole screen is built from, so the
+ * clusters read as one set of plates the way the items grid does. */
+static void DrawGroup(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                      const QuestGroup* g, const GroupShape* shape,
+                      const SecondScreenSnapshot* snap, int32_t bx, int32_t by, int32_t cell,
+                      int32_t scale) {
+    int32_t well = shape->well * cell / QCELL;
+    int32_t gap = well / 14;
+    int i;
+
+    for (i = 0; i < g->count; i++) {
+        QuestCell content = SectionCell(g->section, i, snap);
+        int32_t cx = bx + shape->col[i] * shape->stepX * cell / QCELL + gap;
+        int32_t cy = by + shape->row[i] * shape->stepY * cell / QCELL + gap;
+        int32_t side = well - 2 * gap;
+        int32_t artH = side;
+        int32_t inset = 3 * scale;
+        CellInk ink;
+
+        Port_SecondScreenTheme_DrawWell(pixels, bufW, bufH, stride, cx, cy, side, side, scale);
+        if (content.count >= 0) {
+            artH = side - 12 * scale; /* the count gets its own line inside the well */
+        }
+        if (content.item != 0) {
+            ink = RenderItemCell(content.item);
+        } else if (content.frame != 0) {
+            ink = RenderFrameCell(content.frame);
+        } else {
+            continue; /* empty well, as the real screen shows an uncollected entry */
+        }
+        StampCell(pixels, bufW, bufH, stride, ink, cx + inset, cy + inset, side - 2 * inset,
+                  artH - 2 * inset);
+        if (content.count >= 0) {
+            char buf[8];
+            int32_t tw;
+            FormatCount(buf, sizeof(buf), content.count);
+            tw = Port_SecondScreenTheme_TextWidth(buf, scale);
+            Port_SecondScreenTheme_DrawText(pixels, bufW, bufH, stride, cx + (side - tw) / 2,
+                                            cy + side - 14 * scale, scale, SS_TEXT_INK, buf);
         }
     }
 }
@@ -516,59 +726,122 @@ static void DrawLiveSlots(const SecondScreenSnapshot* snap) {
 int Port_SecondScreenQuest_Draw(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                 int32_t dstX, int32_t dstY, int32_t dstW, int32_t dstH,
                                 const SecondScreenSnapshot* snap, uint32_t tick) {
-    int32_t scale, drawW, drawH, originX, originY, x, y;
+    /* The screen's four clusters, each keeping the slot ids the game groups
+     * them into: what Link has GATHERED (2x2), the ELEMENTS (their diamond),
+     * what he CARRIES (the tray) and what he WEARS. Laid out the way the game
+     * lays them out — gathered above carried on the left, elements above worn
+     * on the right — just at panel size. */
+    static const QuestGroup kGroups[4] = {
+        { 3, { SLOT_KINSTONE_BAG, SLOT_HEART_PIECES, SLOT_SWORD_SKILLS, SLOT_SHELLS }, 4 },
+        { 0, { 9, 10, 11, 12 }, 4 },
+        { 1, { SLOT_QUEST_ITEM, SLOT_QUEST_ITEM + 1, SLOT_QUEST_ITEM + 2, 0 }, 3 },
+        { 2, { 13, 14, 15, 0 }, 3 },
+    };
+    GroupShape shape[4];
+    int32_t scale, pad, innerX, innerY, innerW, innerH;
+    int32_t quartW, quartH, cell, gridW, gridH, ox, oy, i;
 
-    (void)tick; /* the screen's only animation is its selection cursor */
+    (void)tick; /* the screen's only animation was its selection cursor */
 
     if (pixels == NULL || snap == NULL || dstW <= 0 || dstH <= 0) {
         return 0;
     }
     if (!Port_SecondScreenTheme_Ready()) {
-        return 0; /* the parchment under the slab comes from the theme */
+        return 0; /* plate, wells and font all come from the theme */
     }
-    if (sPublished == NULL) {
-        if (!BuildStaticLayer()) {
-            return 0; /* ROM tables not resolved yet — retry next frame */
+    /* Readiness probe: if the screen's own OBJ tiles aren't resolved yet every
+     * cell would come out empty, which reads as a fresh save rather than as
+     * "not loaded" — better to leave the caller on its fallback. */
+    {
+        const u8* probe = SlotEntry(SLOT_HEART_PIECES);
+        if (probe == NULL || RenderFrameCell(SLOT_FRAME(probe, 1u)).w == 0) {
+            return 0;
         }
-        sPublished = sStatic;
     }
 
-    /* Integer scale only: the slab's rim, the plate keylines and the counter
-     * glyphs are all one art pixel wide, and a fractional nearest-neighbor
-     * step drops whole rows of them. */
-    scale = dstW / QUEST_W;
-    if (dstH / QUEST_H < scale) {
-        scale = dstH / QUEST_H;
-    }
+    /* Art scale for the nine-sliced plate, the wells and the font. Derived
+     * from the panel's short side against the GBA screen's, so the carved
+     * detail grows with the panel instead of staying at its 1x thickness. */
+    scale = (dstW < dstH ? dstW : dstH) / 200;
     if (scale < 1) {
         scale = 1;
     }
-    drawW = QUEST_W * scale;
-    drawH = QUEST_H * scale;
-    originX = dstX + (dstW - drawW) / 2;
-    originY = dstY + (dstH - drawH) / 2;
+    pad = 10 * scale;
 
-    /* The parchment the screen sits on, over the whole rect rather than just
-     * behind the slab, so the doodle lattice runs unbroken across the panel. */
     Port_SecondScreenTheme_DrawBackdrop(pixels, bufW, bufH, stride, dstX, dstY, dstX + dstW,
                                         dstY + dstH, scale);
+    Port_SecondScreenTheme_DrawPlate(pixels, bufW, bufH, stride, dstX, dstY, dstW, dstH, scale);
 
-    memcpy(sFrame, sPublished, sizeof(sFrame));
-    DrawLiveSlots(snap);
+    /* Inside the plate's carved border. The wells are what the player reads,
+     * so the inset is the border's own thickness plus a hair, not a margin
+     * chosen for looks — every pixel spent here comes off the well size. */
+    innerX = dstX + 3 * pad / 2;
+    innerY = dstY + 3 * pad / 2;
+    innerW = dstW - 3 * pad;
+    innerH = dstH - 3 * pad;
 
-    for (y = 0; y < drawH; y++) {
-        int32_t py = originY + y;
-        const uint32_t* row = sFrame + (size_t)(y / scale) * QUEST_W;
-        if (py < 0 || py >= bufH) {
-            continue;
+    for (i = 0; i < 4; i++) {
+        MeasureGroup(&kGroups[i], &shape[i]);
+    }
+
+    /* Three bands stacked down the panel, all sharing one well size:
+     *
+     *     gathered | elements     the game's own top row, side by side
+     *       carried tray          its wide tray, centred under them
+     *        worn gear            the row it puts beside the tray
+     *
+     * The GBA screen is 3:2 and puts the two trays side by side; this panel is
+     * close to square, so they stack instead — same clusters, same reading
+     * order, no dead band down the middle. Band widths are measured in half
+     * cells so the diamond's half-beat lanes count properly. */
+#define BAND_GAP 3 /* sub-cell units of air between bands */
+    {
+        int32_t topH = shape[0].quartH > shape[1].quartH ? shape[0].quartH : shape[1].quartH;
+        int32_t pairW = shape[0].quartW + BAND_GAP + shape[1].quartW;
+
+        quartW = pairW;
+        if (shape[2].quartW > quartW) quartW = shape[2].quartW;
+        if (shape[3].quartW > quartW) quartW = shape[3].quartW;
+        quartH = topH + BAND_GAP + shape[2].quartH + BAND_GAP + shape[3].quartH;
+
+        cell = QCELL * innerW / quartW;
+        if (QCELL * innerH / quartH < cell) {
+            cell = QCELL * innerH / quartH;
         }
-        for (x = 0; x < drawW; x++) {
-            int32_t px = originX + x;
-            uint32_t c = row[x / scale];
-            if ((c >> 24) == 0 || px < 0 || px >= bufW) {
-                continue;
+        if (cell < 16) {
+            return 0; /* nothing legible would come of it — leave the fallback up */
+        }
+        gridW = quartW * cell / QCELL;
+        gridH = quartH * cell / QCELL;
+        ox = innerX + (innerW - gridW) / 2;
+        oy = innerY + (innerH - gridH) / 2;
+
+        {
+            /* The clusters are as wide as the panel lets them get, so on a
+             * squarish panel there is height left over. A quarter of it goes
+             * into each seam and the rest stays as margin: enough to keep the
+             * three bands from stacking up top-heavy, not so much that the
+             * screen reads as three unrelated strips. */
+            int32_t slack = (innerH - gridH) / 4;
+            int32_t pairX = ox + (gridW - pairW * cell / QCELL) / 2;
+            int32_t trayY, wornY;
+
+            if (slack < 0) {
+                slack = 0;
             }
-            pixels[(size_t)py * (size_t)stride + (size_t)px] = c;
+            oy = innerY + (innerH - gridH - 2 * slack) / 2;
+            trayY = oy + (topH + BAND_GAP) * cell / QCELL + slack;
+            wornY = trayY + (shape[2].quartH + BAND_GAP) * cell / QCELL + slack;
+
+            DrawGroup(pixels, bufW, bufH, stride, &kGroups[0], &shape[0], snap, pairX,
+                      oy + (topH - shape[0].quartH) * cell / (2 * QCELL), cell, scale);
+            DrawGroup(pixels, bufW, bufH, stride, &kGroups[1], &shape[1], snap,
+                      pairX + (shape[0].quartW + BAND_GAP) * cell / QCELL,
+                      oy + (topH - shape[1].quartH) * cell / (2 * QCELL), cell, scale);
+            DrawGroup(pixels, bufW, bufH, stride, &kGroups[2], &shape[2], snap,
+                      ox + (gridW - shape[2].quartW * cell / QCELL) / 2, trayY, cell, scale);
+            DrawGroup(pixels, bufW, bufH, stride, &kGroups[3], &shape[3], snap,
+                      ox + (gridW - shape[3].quartW * cell / QCELL) / 2, wornY, cell, scale);
         }
     }
     return 1;
