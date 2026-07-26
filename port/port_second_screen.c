@@ -1440,21 +1440,16 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 /*  Quest status panel                                                 */
 /* ------------------------------------------------------------------ */
 
-/* QUEST tab: the quest-status contents laid out natively for this panel,
- * on the same 4x4 well grid the ITEMS tab uses.
+/* QUEST tab: the pause screen's own quest status, reflowed for this panel by
+ * port_second_screen_quest.c — same wells, same slot art, same clusters the
+ * game groups its entries into, given a near-square panel instead of the GBA's
+ * 3:2 screen. The furniture a passive panel has no use for is dropped there:
+ * the QUEST STATUS banner, the L/R tab arrows (this panel has real tabs) and
+ * the SLEEP / SAVE plates (nothing here can sleep or save).
  *
- * The pause screen's own 240x160 composition (port_second_screen_quest.c) is
- * still the source of truth for WHAT belongs here, but it is not drawn any
- * more. That canvas is 3:2 and this panel is close to square, so an integer
- * scale left it stranded in the middle with two thick empty bands, and it
- * carried three pieces of furniture a passive panel has no use for: the
- * QUEST STATUS banner, the L/R tab arrows (this panel has real tabs), and the
- * SLEEP / SAVE plates (nothing here can sleep or save).
- *
- * Sharing the items grid's geometry is the point — the two info tabs are the
- * same object with different contents, so switching between them moves
- * nothing. Cells are icon-first with HUD digits in the corner, exactly like
- * the ammo counts on the items grid.
+ * Everything below is the fallback for the frames before that screen's OBJ
+ * tiles resolve: the same 4x4 well grid the ITEMS tab uses, so a cold start
+ * shows the tab's contents instead of an empty slab.
  *
  *   row 0  kinstone bag (fused count) | heart pieces | sword skills | shells
  *          or the trophies that replace them
@@ -1464,6 +1459,11 @@ static void PaintItemsPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
  */
 static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, float rx0, float ry0,
                             float rx1, float ry1, float u, int32_t ts, uint32_t tick) {
+    if (Port_SecondScreenQuest_Draw(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
+                                    (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), snap, tick)) {
+        return;
+    }
+
     (void)tick; /* nothing here animates: the panel has no selection cursor */
 
     Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
