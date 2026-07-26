@@ -701,23 +701,17 @@ extern "C" void Port_TouchControls_HandleEvent(const SDL_Event* event) {
         return;
     }
     if (!Port_Config_GetTouchControls()) {
-        /* Switched off: the pad and face buttons claim nothing, so a tap on
-         * the game is just a tap on the game. The settings button keeps
-         * working — it is the only way into the port menu on a device with
-         * no keyboard, and it sits in a corner rather than over the play
-         * area. Anything held when the switch flipped is released here, or
-         * it would stay latched with nothing left to release it. */
+        /* Switched off: the whole overlay goes, settings button included, and
+         * it claims nothing — a tap on the game is just a tap on the game.
+         * The way back is the panel's own settings tab, which turns this
+         * switch on again and brings the button with it, so there is no
+         * state you can strand yourself in. Anything held when the switch
+         * flipped is released here; it would otherwise stay latched with
+         * nothing left to release it. */
         if (std::any_of(sHeld.begin(), sHeld.end(), [](bool h) { return h; })) {
             sTouches.clear();
             sHeld.fill(false);
             ClearJoystick();
-        }
-        if (event->type == SDL_EVENT_FINGER_DOWN) {
-            TryTriggerSettings(event->tfinger.x * static_cast<float>(sLastWindowW),
-                               event->tfinger.y * static_cast<float>(sLastWindowH));
-        } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
-                   event->button.button == SDL_BUTTON_LEFT) {
-            TryTriggerSettings(event->button.x, event->button.y);
         }
         return;
     }
@@ -776,12 +770,7 @@ extern "C" bool Port_TouchControls_InputPressed(PortInput input) {
 extern "C" void Port_TouchControls_Render(SDL_Renderer* renderer, int windowWidth, int windowHeight) {
     Port_TouchControls_NotifyRenderSize(windowWidth, windowHeight);
     if (!Port_Config_GetTouchControls()) {
-        /* No UpdateHeldState: nothing may be held while the pad is off. The
-         * settings button stays, as in HandleEvent above. */
-        if (renderer) {
-            DrawSettingsButton(renderer, windowWidth, windowHeight);
-        }
-        return;
+        return; /* nothing drawn, and no UpdateHeldState: nothing may be held */
     }
     UpdateHeldState();
     if (!renderer || !sVisible) {
