@@ -1931,14 +1931,35 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
                          float y, float w, float h, float u, int32_t ts, uint32_t tick, int armedRing) {
     int isDungeon = (snap->areaFlags & SECOND_SCREEN_AR_HAS_KEYS) != 0;
 
-    /* Hearts: up to TMC's 20, two rows of 10, quarter-heart states exactly
-     * like DrawHearts (health is in eighths; the HUD shows quarters). */
+    /* Base art scale for the sidebar's decoded HUD pieces: the 220u column
+     * fits about 84 art pixels across. */
+    int32_t k = (int32_t)(w / 84.0f);
+    if (k < 1) k = 1;
+
+    /* Hearts: up to TMC's 20, five to a row wrapping to at most four rows,
+     * quarter-heart states exactly like DrawHearts (health is in eighths;
+     * the HUD shows quarters). Ten across meant one row had to span the
+     * whole sidebar, which held the tiles near the base scale — a ~24px
+     * heart on a 1080p panel, too small to read at a glance, which is the
+     * one job the vitals block has. Half the columns buys better than
+     * double the scale out of the sidebar's spare height. */
     int maxHearts = snap->maxHealth / 8;
     if (maxHearts > 20) maxHearts = 20;
     if (maxHearts < 1) maxHearts = 1;
-    int cols = maxHearts > 10 ? 10 : maxHearts;
-    int rows = (maxHearts + 9) / 10;
-    int32_t hk = (int32_t)(w / 84.0f);
+    int cols = maxHearts < 5 ? maxHearts : 5;
+    int rows = (maxHearts + cols - 1) / cols;
+    /* Tiles butt together like the HUD's tilemap, so a row is just cols*8
+     * art pixels wide; 8u of side air keeps it off the sidebar edges.
+     * Early saves narrow the grid and so grow the tile, but only to 6u per
+     * art pixel — past that a three-heart file reads as a title card
+     * rather than a status line. */
+    int32_t hk = (int32_t)((w - 8 * u) / (cols * 8.0f));
+    int32_t hkMax = (int32_t)(6 * u);
+    if (hk > hkMax) hk = hkMax;
+    /* Short panels only: hold the block to a third of the column so the R
+     * band, rings and chip below always keep somewhere to sit. */
+    float blockCap = h / 3;
+    if (rows * 8 * hk > blockCap) hk = (int32_t)(blockCap / (rows * 8));
     if (hk < 1) hk = 1;
     float hx0 = x + (w - cols * 8 * hk) / 2;
     float hy = y + 4 * u;
@@ -1955,8 +1976,8 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
             state = SST_HEART_EMPTY;
         }
         const SecondScreenThemeSprite* hs = Port_SecondScreenTheme_Get(state);
-        int32_t hx = (int32_t)(hx0 + (i % 10) * 8 * hk);
-        int32_t hyy = (int32_t)(hy + (i / 10) * 8 * hk);
+        int32_t hx = (int32_t)(hx0 + (i % cols) * 8 * hk);
+        int32_t hyy = (int32_t)(hy + (i / cols) * 8 * hk);
         if (hs != NULL) {
             BlitSprite(s, hs, hx, hyy, hk);
         } else {
@@ -1978,11 +1999,13 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
 
     /* Counters chip anchored to the bottom: rupees always, keys inside
      * key-bearing areas — a recessed stone well like the slab's tray.
-     * Icons run at twice the heart scale and the digits half again, so
-     * the chip reads from a couch like the rest of the panel. */
+     * Icons run at twice the base scale and the digits half again, so
+     * the chip reads from a couch like the rest of the panel. (Off the
+     * base scale, not the hearts' — the hearts size themselves to their
+     * own grid now and would drag the chip along with them.) */
     int chipRows = isDungeon ? 2 : 1;
-    int32_t ik = 2 * hk;               /* icon scale (16x16 art) */
-    int32_t ck = hk + (hk + 1) / 2;    /* digit scale (8x16 HUD font) */
+    int32_t ik = 2 * k;              /* icon scale (16x16 art) */
+    int32_t ck = k + (k + 1) / 2;    /* digit scale (8x16 HUD font) */
     int32_t chipTs = ts > 2 ? 2 : ts;
     float chipPad = 8 * chipTs + 4 * u;
     float chipH = chipRows * 16 * ik + (chipRows - 1) * 6 * u + 2 * chipPad;
