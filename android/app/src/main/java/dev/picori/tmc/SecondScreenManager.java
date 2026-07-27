@@ -1,18 +1,31 @@
 package dev.picori.tmc;
 
+import android.app.Activity;
+import android.app.ActivityOptions;
 import android.content.Context;
+import android.content.Intent;
 import android.hardware.display.DisplayManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import android.view.Display;
 
 /**
- * Finds Thor's secondary panel (a real Android Display flagged
- * FLAG_PRESENTATION, normally owned by AYN's own launcher when this app
- * isn't targeting it) and shows/hides our SecondScreenPresentation on it as
- * the display attaches/detaches or the activity's own lifecycle changes —
- * and re-shows it if the system ever dismisses it behind our back.
+ * Puts the panel on whichever screen the game is not using, and keeps it
+ * there across display and lifecycle churn.
+ *
+ * Normally that means Thor's secondary panel (a real Android Display
+ * flagged FLAG_PRESENTATION, normally owned by AYN's own launcher when this
+ * app isn't targeting it), shown/hidden as the display attaches/detaches or
+ * the activity's own lifecycle changes — and re-shown if the system ever
+ * dismisses it behind our back.
+ *
+ * With "swap screens" on, {@link TMCLauncherActivity} has already launched
+ * the game onto that secondary display, so the panel goes to the MAIN
+ * display instead. A Presentation is not allowed there (the framework
+ * refuses presentation windows on DEFAULT_DISPLAY), so that case is hosted
+ * by {@link SecondScreenActivity}.
  */
 public class SecondScreenManager implements DisplayManager.DisplayListener {
     private static final String TAG = "SecondScreenManager";
@@ -20,6 +33,8 @@ public class SecondScreenManager implements DisplayManager.DisplayListener {
     private final Context mContext;
     private final DisplayManager mDisplayManager;
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+    /** The display the game's own window is on — the one screen the panel must stay off. */
+    private final int mGameDisplayId;
     private SecondScreenPresentation mPresentation;
     // True outside a start()..stop() window: while stopped the panel must
     // stay down no matter what messages are still in flight. Only touched on
@@ -28,9 +43,18 @@ public class SecondScreenManager implements DisplayManager.DisplayListener {
     // all land there, so no locking is needed.
     private boolean mStopped = true;
 
-    public SecondScreenManager(Context context) {
-        mContext = context.getApplicationContext();
+    public SecondScreenManager(Activity activity) {
+        mContext = activity.getApplicationContext();
         mDisplayManager = (DisplayManager) mContext.getSystemService(Context.DISPLAY_SERVICE);
+        mGameDisplayId = activity.getWindowManager().getDefaultDisplay().getDisplayId();
+        // Tell native which way round the screens actually ended up. The
+        // launcher asks for a display; firmware is free to refuse and hand
+        // back a normal launch, so this is the only honest answer, and the
+        // panel's "swap screens" row needs it to know whether to read ON/OFF
+        // or RESTART. Safe here: SDLActivity.onCreate has already loaded
+        // libmain.so by the time this object is constructed.
+        nativeSetGameOnSecondaryDisplay(mGameDisplayId != Display.DEFAULT_DISPLAY);
+        Log.i(TAG, "game window is on display " + mGameDisplayId);
     }
 
     public void start() {
@@ -52,7 +76,16 @@ public class SecondScreenManager implements DisplayManager.DisplayListener {
     }
 
     private void showOnAttachedDisplays() {
+        if (mGameDisplayId != Display.DEFAULT_DISPLAY) {
+            // Swapped: the game took the secondary display, so the panel
+            // belongs on the main one — as an activity, not a Presentation.
+            startPanelActivity();
+            return;
+        }
         for (Display display : mDisplayManager.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)) {
+            if (display.getDisplayId() == mGameDisplayId) {
+                continue; // never cover the game with the panel
+            }
             showOn(display);
         }
     }
@@ -105,6 +138,28 @@ public class SecondScreenManager implements DisplayManager.DisplayListener {
         }
     }
 
+    /**
+     * Swapped layout: bring the panel up on the main display in its own
+     * task (launching onto a specific display requires one). A refusal here
+     * costs the panel, not the game — the game window is already up on the
+     * other screen and keeps running without it.
+     */
+    private void startPanelActivity() {
+        if (mStopped || SecondScreenActivity.sInstance != null || Build.VERSION.SDK_INT < 26) {
+            return;
+        }
+        Intent intent = new Intent(mContext, SecondScreenActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        ActivityOptions options = ActivityOptions.makeBasic();
+        options.setLaunchDisplayId(Display.DEFAULT_DISPLAY);
+        try {
+            mContext.startActivity(intent, options.toBundle());
+            Log.i(TAG, "showing second-screen panel on the main display (swapped)");
+        } catch (RuntimeException e) {
+            Log.w(TAG, "failed to show the panel on the main display", e);
+        }
+    }
+
     private void dismiss() {
         if (mPresentation != null) {
             mPresentation.dismiss();
@@ -113,12 +168,17 @@ public class SecondScreenManager implements DisplayManager.DisplayListener {
             // listener this teardown was intentional.
             mPresentation = null;
         }
+        SecondScreenActivity panel = SecondScreenActivity.sInstance;
+        if (panel != null) {
+            panel.finish();
+        }
     }
 
     @Override
     public void onDisplayAdded(int displayId) {
         Display display = mDisplayManager.getDisplay(displayId);
-        if (display != null && (display.getFlags() & Display.FLAG_PRESENTATION) != 0) {
+        if (display != null && (display.getFlags() & Display.FLAG_PRESENTATION) != 0
+                && displayId != mGameDisplayId) {
             showOn(display);
         }
     }
@@ -140,4 +200,6 @@ public class SecondScreenManager implements DisplayManager.DisplayListener {
         // No-op for now; revisit if the secondary panel's resolution/state
         // can change while attached (not expected on Thor's fixed hardware).
     }
+
+    private static native void nativeSetGameOnSecondaryDisplay(boolean onSecondary);
 }

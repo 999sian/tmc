@@ -144,6 +144,15 @@ bool sA11yWalls = true;
 bool sSecondScreenFollowCam = true;
 bool sSecondScreenCrestPins = true;
 bool sSecondScreenFloorReturn = true;
+/* Swap the two screens: with this on, the Android shell launches the game
+ * activity onto the secondary display and hosts the panel on the main one.
+ * Read by the Java launcher (TMCLauncherActivity) straight out of
+ * config.json before the game process gets a window, so it only takes
+ * effect at the NEXT launch — SDL's Android backend syncs a window's
+ * system-bar/immersive state from the flags of the SDL_CreateWindow call
+ * that made it, so moving the game between displays live is not a thing
+ * this port can do without recreating that window. Default off. */
+bool sSecondScreenSwap = false;
 /* Hide the game's own HUD on the top screen while the second screen shows
  * vitals — the engine-side gate lives with DrawUIElements. Default off. */
 bool sHideTopHud = false;
@@ -291,6 +300,7 @@ const BoolCfg kBoolCfg[] = {
     { "second_screen_follow_cam", &sSecondScreenFollowCam, true },
     { "second_screen_windcrest_pins", &sSecondScreenCrestPins, true },
     { "second_screen_floor_auto_return", &sSecondScreenFloorReturn, true },
+    { "second_screen_swap", &sSecondScreenSwap, false },
     { "hide_top_hud", &sHideTopHud, false },
     { "practice_show_timer", &sPracticeShowTimer, false },
     { "practice_show_inputs", &sPracticeShowInputs, false },
@@ -1765,6 +1775,16 @@ extern "C" bool Port_Config_GetSecondScreenFloorReturn(void) {
 extern "C" void Port_Config_SetSecondScreenFloorReturn(bool on) {
     sSecondScreenFloorReturn = on;
     sConfigJson["second_screen_floor_auto_return"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetSecondScreenSwap(void) {
+    return sSecondScreenSwap;
+}
+extern "C" void Port_Config_SetSecondScreenSwap(bool on) {
+    sSecondScreenSwap = on;
+    sConfigJson["second_screen_swap"] = on;
+    /* Written straight through: the Java launcher re-reads config.json on
+     * the next cold start, so an unsaved toggle would silently do nothing. */
     SaveConfig();
 }
 extern "C" bool Port_Config_GetHideTopHud(void) {
