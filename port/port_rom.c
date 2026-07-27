@@ -616,6 +616,47 @@ RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
             gActiveRegion == TMC_REGION_EU   ? "EU"
             : gActiveRegion == TMC_REGION_JP ? "JP"
                                              : "USA");
+
+    /* Asset/offset baseline vs loaded ROM (issue #3).
+     *
+     * A MULTI_REGION binary detects the ROM at runtime, but it is still
+     * COMPILED against one region's baseline: the -DUSA/-DEU/-DJP define picked
+     * by --game_version, and with it build/<version>/assets/{map,gfx}_offsets.h
+     * plus every `#ifdef EU` in src/ that has not yet been converted to the
+     * runtime REGION_IS_* form. Divergent compiled blob offsets are translated
+     * at the known call sites (Port_Remap{Map,Gfx}Offset), but the unconverted
+     * preprocessor sites are not — those silently take the baseline region's
+     * behaviour whatever ROM is loaded.
+     *
+     * So "baseline != ROM" is a supported-but-hybrid configuration, not a fatal
+     * one, and the port must not pretend otherwise. Log both identities on one
+     * line: a bug report that opens with a black screen or wrong graphics is
+     * then one logcat grep away from showing which combination produced it,
+     * instead of leaving the reader to guess how the APK was built. */
+    {
+#if defined(JP)
+        const char* baseline = "JP";
+        const RomRegion baselineRegion = ROM_REGION_JP;
+#elif defined(EU)
+        const char* baseline = "EU";
+        const RomRegion baselineRegion = ROM_REGION_EU;
+#else
+        const char* baseline = "USA";
+        const RomRegion baselineRegion = ROM_REGION_USA;
+#endif
+        const char* detected = gRomRegion == ROM_REGION_EU   ? "EU"
+                               : gRomRegion == ROM_REGION_JP ? "JP"
+                                                             : "USA";
+        if (gRomRegion == baselineRegion) {
+            fprintf(stderr, "Region baseline: build=%s rom=%s (matched).\n", baseline, detected);
+        } else {
+            fprintf(stderr,
+                    "WARNING: Region baseline: build=%s rom=%s (MISMATCH). This binary plays %s ROMs, but its "
+                    "compiled asset/offset baseline is %s, so region-specific code paths that are still "
+                    "compile-time follow %s. Build with --game_version=%s for a fully %s port.\n",
+                    baseline, detected, detected, baseline, baseline, detected, detected);
+        }
+    }
 #endif
     return gRomRegion;
 }
