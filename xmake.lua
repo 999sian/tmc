@@ -95,7 +95,17 @@ option_end()
 
 -- Build directories
 local build_dir = "build/$(plat)"
-local tools_bin = "tools/bin"
+-- Host build utilities (asset_processor, gbagfx, preproc, ...). They exist to
+-- be RUN on the machine doing the build, so `tools/bin` must keep host
+-- binaries. A cross build (`-p android`) compiles every target for the target
+-- ABI, and with a shared targetdir it used to overwrite tools/bin/* with
+-- aarch64-Android executables — after which `xmake extract_assets` (and any
+-- other host tool invocation) died with "cannot execute binary file". Park the
+-- cross-built copies somewhere harmless so the host set survives. See #3: this
+-- is what made the EU asset-extraction step impossible to run from an Android
+-- configuration.
+local tools_bin = is_plat("android") and ("build/android/tools/" .. (get_config("arch") or "arm64-v8a"))
+                  or "tools/bin"
 
 -- True when the active target arch is x86-64. ARM (arm64/aarch64) ports
 -- skip x86-only codegen flags (-mavx2, -mno-ms-bitfields) and the GCC-only
@@ -529,9 +539,58 @@ target("tmc_pc")
 
     -- The software GBA PPU is now vendored first-party under port/ppu/ (see
     -- port/ppu/README.md); there is no longer a ViruaPPU submodule to patch at
-    -- build time. This before_build only regenerates the embedded sounds blob
-    -- and logs the AVX2 decision.
+    -- build time. This before_build makes sure the region's blob-offset headers
+    -- exist, regenerates the embedded sounds blob, and logs the AVX2 decision.
     before_build(function (target)
+        -- ---- Per-region blob-offset headers (issue #3) ----
+        -- src/common.c, src/data/objPalettes.c and friends #include
+        -- "assets/map_offsets.h" / "assets/gfx_offsets.h", resolved through
+        -- add_includedirs("build/<game_version>"). Only the USA pair is
+        -- committed (see .gitignore), and they are NOT interchangeable: every
+        -- offset past the first ~30 differs between USA and EU. So building
+        -- --game_version=EU (or JP) on a fresh checkout used to die with a bare
+        --     fatal error: 'assets/map_offsets.h' file not found
+        -- with no hint that an extraction step was missing. Generate them here
+        -- when we can, and otherwise say exactly what to run.
+        do
+            local ver = get_config("game_version") or "USA"
+            local dir = path.join(os.projectdir(), "build", ver, "assets")
+            if not os.isfile(path.join(dir, "map_offsets.h")) or not os.isfile(path.join(dir, "gfx_offsets.h")) then
+                local baseroms = {
+                    USA = "baserom.gba", EU = "baserom_eu.gba", JP = "baserom_jp.gba",
+                    DEMO_USA = "baserom_demo.gba", DEMO_JP = "baserom_demo_jp.gba",
+                }
+                local rom = baseroms[ver] or "baserom.gba"
+                local proc = path.join(os.projectdir(), "tools", "bin", "asset_processor")
+                if is_host("windows") then proc = proc .. ".exe" end
+                local hint = "Generate them on the HOST (they cannot be produced from a cross build):\n"
+                    .. "    xmake f -P . -y -p " .. (is_host("windows") and "windows" or (is_host("macosx") and "macosx" or "linux")) .. "\n"
+                    .. "    xmake build -P . -y asset_processor\n"
+                    .. "    " .. proc .. " extract " .. ver .. " build/" .. ver .. "/assets\n"
+                    .. "then re-run your original configure + build."
+                if not os.isfile(path.join(os.projectdir(), rom)) then
+                    raise("build/" .. ver .. "/assets/{map,gfx}_offsets.h are missing and " .. rom
+                          .. " is not in the project root, so they cannot be generated.\n"
+                          .. "A " .. ver .. " build needs a " .. ver .. " ROM named " .. rom .. ".\n" .. hint)
+                end
+                local generated = os.isfile(proc) and try {
+                    function ()
+                        os.mkdir(dir)
+                        -- Cross-built (e.g. aarch64-Android) copies of the tool
+                        -- live elsewhere now, but a stale one may still be here;
+                        -- os.execv raises on "cannot execute", caught by try.
+                        os.execv(proc, {"extract", ver, path.join("build", ver, "assets")})
+                        return true
+                    end
+                }
+                if not generated or not os.isfile(path.join(dir, "map_offsets.h")) then
+                    raise("build/" .. ver .. "/assets/{map,gfx}_offsets.h are missing and could not be generated"
+                          .. " automatically (no runnable host tools/bin/asset_processor).\n" .. hint)
+                end
+                print("[tmc_pc] generated build/%s/assets/{map,gfx}_offsets.h from %s", ver, rom)
+            end
+        end
+
         -- Regenerate port/generated_sounds_embed.cpp from
         -- assets/sounds.json so the binary always carries an
         -- up-to-date fallback. The Python helper no-ops when the
