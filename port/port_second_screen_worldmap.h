@@ -99,12 +99,15 @@ int32_t Port_SecondScreenWorldMap_GetRegionMarkers(int32_t region, uint32_t hint
  * stamp covers 16*scale pixels a side. `frame` is a marker's own frame id;
  * `region` picks which screen's marker tiles to read —
  * SECOND_SCREEN_WORLDMAP_NO_REGION for the world map, else the region id
- * whose enlarged map is being drawn. Returns 1 if drawn, 0 while that glyph
- * isn't decodable yet — callers simply skip the marker that frame rather
- * than substituting some other glyph. */
+ * whose enlarged map is being drawn. `outline` non-zero first stamps the
+ * glyph's silhouette in that colour, offset one art pixel in all eight
+ * directions, so the marker separates from busy map art; pass 0 for a bare
+ * stamp. Returns 1 if drawn, 0 while that glyph isn't decodable yet —
+ * callers simply skip the marker that frame rather than substituting some
+ * other glyph. */
 int Port_SecondScreenWorldMap_DrawMarker(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                          int32_t x, int32_t y, int32_t scale, uint32_t frame,
-                                         int32_t region);
+                                         int32_t region, uint32_t outline);
 
 /* The map screen's own zoom grid: the game's map lets the player put the
  * cursor on a tile and open that tile's enlarged regional map. Resolves a

@@ -1000,18 +1000,29 @@ static void PaintOverworld(const SSurf* s, const SecondScreenSnapshot* snap, Tar
     {
         SecondScreenMapMarker hints[16];
         int32_t nHints = Port_SecondScreenWorldMap_GetMapHints(snap->mapHints, hints, 16);
-        int32_t hscale = (int32_t)(sCam.scale * 0.75f + 0.5f);
+        /* Stamp size is pinned to the FITTED map scale, never the live camera
+         * scale. Sized off sCam.scale the glyphs inflated along with the
+         * terrain, so the follow view — the one that exists to show detail —
+         * ended up the more crowded of the two: every glyph came out 2.1x
+         * wider than in the fitted view (over four times the area), and
+         * neighbouring hints ran into each other exactly where the extra
+         * detail was meant to show. Held at the fitted size a zoom buys map
+         * rather than bigger markers, and the fitted view is untouched. */
+        int32_t hscale = (int32_t)(wholeScale * 0.75f + 0.5f);
         if (hscale < 1) hscale = 1;
+        uint32_t hintInk = Port_SecondScreenTheme_Color(SSC_MENU_INK);
         for (int32_t i = 0; i < nHints; i++) {
             float px = ox + (hints[i].x + 0.5f) * sCam.scale;
             float py = oy + (hints[i].y + 0.5f) * sCam.scale;
             if (px >= rx0 && px < rx1 && py >= ry0 && py < ry1) {
                 /* A marker stamp is a 16x16 frame drawn from its top-left
-                 * (see port_second_screen_worldmap.h) — center on the spot. */
+                 * (see port_second_screen_worldmap.h) — center on the spot.
+                 * Ringed in the menu's ink, the same separation the crest
+                 * pins below get, because both land on the same busy art. */
                 Port_SecondScreenWorldMap_DrawMarker(s->px, s->w, s->h, s->stride,
                                                      (int32_t)(px - 8 * hscale),
                                                      (int32_t)(py - 8 * hscale), hscale, hints[i].frame,
-                                                     SECOND_SCREEN_WORLDMAP_NO_REGION);
+                                                     SECOND_SCREEN_WORLDMAP_NO_REGION, hintInk);
             }
         }
     }
@@ -1193,11 +1204,15 @@ static int PaintRegion(const SSurf* s, const SecondScreenSnapshot* snap, TargetL
          * panel's own unit to read at about the same share of the map. */
         int32_t mscale = (int32_t)(2.5f * u + 0.5f);
         if (mscale < 1) mscale = 1;
+        uint32_t markInk = Port_SecondScreenTheme_Color(SSC_MENU_INK);
         for (int32_t i = 0; i < n; i++) {
+            /* Ringed in ink like the world map's hints: the enlarged region
+             * art is the busiest surface on the panel, and a fused-kinstone
+             * or errand glyph dropped bare onto a treeline vanished into it. */
             Port_SecondScreenWorldMap_DrawMarker(s->px, s->w, s->h, s->stride,
                                                  dx + marks[i].x - 8 * mscale,
                                                  dy + marks[i].y - 8 * mscale, mscale, marks[i].frame,
-                                                 region);
+                                                 region, markInk);
         }
     }
 
