@@ -37,6 +37,29 @@ in this repository.
 Built for the Thor, but it is a plain Android `Presentation` — any device with
 a second display will do.
 
+## ROM regions
+
+The native port detects the region from the ROM header and switches its data
+tables at runtime, so the released USA APK also **loads** a EU (`BZMP`, SHA-1
+`cff199b36ff173fb6faf152653d1bccf87c26fb7`) or JP (`BZMJ`) ROM — name it
+`baserom_eu.gba` / `baserom_jp.gba` or just `baserom.gba`.
+
+It is not the same as a EU *build*, though. Each APK is compiled against one
+region's baseline: the blob-offset headers in `build/<region>/assets/` and the
+region `#ifdef`s in `src/` that have not yet been converted to the port's
+runtime `REGION_IS_*` form. On a baseline mismatch those compile-time sites
+keep following the baseline region, so a USA APK running a EU ROM is a hybrid —
+expect region-specific text, menu graphics and RNG to be off. The port logs
+which combination it is on startup:
+
+```
+$ adb logcat -s tmc | grep 'Region baseline'
+Region baseline: build=USA rom=EU (MISMATCH). ...
+```
+
+For a faithful EU port, build the EU APK (below). JP additionally needs the
+data tables described in `docs/JP_PORT_ENABLEMENT.md`.
+
 ## Build from source
 
 Needs the Android SDK and NDK r26. Build the native library for both ABIs,
@@ -54,6 +77,21 @@ cd android && ./gradlew assembleRelease
 `--widescreen_width=384` is what compiles the wide render paths in; without it
 the WIDESCREEN row is hidden because the setting would have nothing to switch.
 The APK lands in `android/app/build/outputs/apk/release/`.
+
+Swap `--game_version=USA` for `--game_version=EU` to build the EU APK; the
+tracked `build/EU/assets/*_offsets.h` mean that is the only change needed. For a
+region with no tracked headers (JP, the demos) generate them on the host first —
+the Android toolchain cannot produce them, since `asset_processor` has to *run*
+on your machine:
+
+```sh
+xmake f -P . -y -p linux                     # your host platform
+xmake build -P . -y asset_processor
+tools/bin/asset_processor extract JP build/JP/assets
+```
+
+The build does this for you when it can and otherwise stops with these
+instructions, rather than failing on a missing `assets/map_offsets.h`.
 
 For the desktop port, see [`INSTALL.md`](INSTALL.md).
 
