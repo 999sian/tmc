@@ -158,10 +158,46 @@ void Port_SecondScreenTheme_DrawWindow(uint32_t* pixels, int32_t bufW, int32_t b
  * while 0 (the colors above still return usable neutral stand-ins). */
 int Port_SecondScreenTheme_MenuReady(void);
 
-/* Fills rect with the pause menu's parchment backdrop: flat cream plus
- * the Ezlo doodle pattern on its original diagonal lattice, anchored to
- * the surface origin so panels never shift phase. scale is the integer
- * art scale. */
+/* Panel backdrop styles — what the SETTINGS tab's PANEL BACKDROP row
+ * cycles. PARCHMENT is the pause menu's own dressing and stays the
+ * default; the other two exist because that dressing is busy and bright
+ * behind a map and a vitals column. CREAM keeps the parchment tone but
+ * drops the Ezlo doodle lattice (the busy part); DARK goes to the panel's
+ * idle near-black — the reading-first look the sibling zelda3 port's
+ * bottom screen uses, where the backdrop is ~all black and every piece of
+ * chrome reads as light-on-dark. */
+enum {
+    SS_BACKDROP_PARCHMENT = 0,
+    SS_BACKDROP_CREAM,
+    SS_BACKDROP_DARK,
+    SS_BACKDROP_COUNT
+};
+
+/* The DARK style's flat color as RGBA8888 (A<<24 | B<<16 | G<<8 | R) —
+ * deliberately the cinema screen's near-black, so the panel's two dark
+ * states are the same black rather than two nearly-equal ones.
+ * port_second_screen.c's COL_IDLE_BG is defined from this. */
+#define SS_BACKDROP_DARK_RGBA 0xFF050605u
+
+/* Picks the style DrawBackdrop paints and the queries below answer for.
+ * Out-of-range values clamp to PARCHMENT (config.json is hand-editable).
+ * Written once per frame by the second-screen render thread before it
+ * paints — the same single-caller contract as the rest of this module. */
+void Port_SecondScreenTheme_SetBackdropStyle(int style);
+
+/* The flat color under the current style (the doodles, when drawn, sit on
+ * top of it) and whether that color is the dark one. Anything painted
+ * DIRECTLY on the backdrop keys its ink/blend colors off these: the menu's
+ * own ink and cream are picked to read on parchment and disappear on
+ * near-black. */
+uint32_t Port_SecondScreenTheme_BackdropColor(void);
+int Port_SecondScreenTheme_BackdropIsDark(void);
+
+/* Fills rect with the panel backdrop in the selected style: the pause
+ * menu's parchment (flat cream plus the Ezlo doodle pattern on its
+ * original diagonal lattice, anchored to the surface origin so panels
+ * never shift phase), that cream without the lattice, or the flat
+ * near-black. scale is the integer art scale. */
 void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                          int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t scale);
 

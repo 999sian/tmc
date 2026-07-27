@@ -197,6 +197,12 @@ bool Port_Config_GetSecondScreenCrestPins(void);
 void Port_Config_SetSecondScreenCrestPins(bool on);
 bool Port_Config_GetSecondScreenFloorReturn(void);
 void Port_Config_SetSecondScreenFloorReturn(bool on);
+/* The panel's backdrop dressing, as an SS_BACKDROP_* style id (see
+ * port_second_screen_theme.h). Stored as a plain int rather than an enum
+ * so this header stays independent of the second screen's; the panel is
+ * what sanitises the stored value. Default 0 = the menu's parchment. */
+int Port_Config_GetSecondScreenBackdrop(void);
+void Port_Config_SetSecondScreenBackdrop(int style);
 /* Hide the game's own top-screen HUD (hearts/rupees) while the second
  * screen carries vitals. Engine gate sits with DrawUIElements; gameplay
  * only — menus keep their UI. Default off. */
