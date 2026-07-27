@@ -1177,27 +1177,23 @@ static const uint32_t* MarkerGlyphArt(u32 frame, int32_t region) {
     return slot->px;
 }
 
-int Port_SecondScreenWorldMap_DrawMarker(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
-                                         int32_t x, int32_t y, int32_t scale, uint32_t frame,
-                                         int32_t region) {
-    const uint32_t* art;
+/* One nearest-neighbor stamp of a decoded 16x16 glyph, top-left at (x, y).
+ * `flat` non-zero paints every opaque source pixel that one colour instead
+ * of the art's own — which is how the outline pass below draws the glyph's
+ * silhouette. Transparent source pixels (0) are skipped either way, so 0 is
+ * free to mean "use the art's colours". */
+static void StampMarkerArt(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                           const uint32_t* art, int32_t x, int32_t y, int32_t scale, uint32_t flat) {
     int32_t sx, sy, dx, dy;
 
-    if (pixels == NULL || bufW <= 0 || bufH <= 0 || stride <= 0) {
-        return 0;
-    }
-    art = MarkerGlyphArt(frame, region);
-    if (art == NULL) {
-        return 0;
-    }
-    if (scale < 1) {
-        scale = 1;
-    }
     for (sy = 0; sy < MARKER_PX; sy++) {
         for (sx = 0; sx < MARKER_PX; sx++) {
             uint32_t c = art[(size_t)sy * MARKER_PX + (size_t)sx];
             if (c == 0) {
                 continue;
+            }
+            if (flat != 0) {
+                c = flat;
             }
             for (dy = 0; dy < scale; dy++) {
                 int32_t destY = y + sy * scale + dy;
@@ -1214,5 +1210,42 @@ int Port_SecondScreenWorldMap_DrawMarker(uint32_t* pixels, int32_t bufW, int32_t
             }
         }
     }
+}
+
+int Port_SecondScreenWorldMap_DrawMarker(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
+                                         int32_t x, int32_t y, int32_t scale, uint32_t frame,
+                                         int32_t region, uint32_t outline) {
+    const uint32_t* art;
+
+    if (pixels == NULL || bufW <= 0 || bufH <= 0 || stride <= 0) {
+        return 0;
+    }
+    art = MarkerGlyphArt(frame, region);
+    if (art == NULL) {
+        return 0;
+    }
+    if (scale < 1) {
+        scale = 1;
+    }
+    if (outline != 0) {
+        /* The glyph sits on dense decoded terrain, and the game only ever
+         * stamped it at 1:1 over its own low-contrast map; blown up on the
+         * panel a bare stamp sinks into the art underneath. Ring it with its
+         * own silhouette in the outline colour — eight offsets of one art
+         * pixel, the same trick the sibling port's pins use — which lifts the
+         * marker off the map without introducing any shape of its own to
+         * read as clutter. */
+        int32_t ox, oy;
+        for (oy = -1; oy <= 1; oy++) {
+            for (ox = -1; ox <= 1; ox++) {
+                if (ox == 0 && oy == 0) {
+                    continue;
+                }
+                StampMarkerArt(pixels, bufW, bufH, stride, art, x + ox * scale, y + oy * scale, scale,
+                               outline);
+            }
+        }
+    }
+    StampMarkerArt(pixels, bufW, bufH, stride, art, x, y, scale, 0);
     return 1;
 }
