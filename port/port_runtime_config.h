@@ -197,6 +197,12 @@ bool Port_Config_GetSecondScreenCrestPins(void);
 void Port_Config_SetSecondScreenCrestPins(bool on);
 bool Port_Config_GetSecondScreenFloorReturn(void);
 void Port_Config_SetSecondScreenFloorReturn(bool on);
+/* Swap the game and the panel between the two screens. Applied by the
+ * Android shell at launch (it reads config.json before starting the game
+ * activity, and targets the display this flag asks for), never live — so
+ * the panel row that writes it shows RESTART until it actually took. */
+bool Port_Config_GetSecondScreenSwap(void);
+void Port_Config_SetSecondScreenSwap(bool on);
 /* Hide the game's own top-screen HUD (hearts/rupees) while the second
  * screen carries vitals. Engine gate sits with DrawUIElements; gameplay
  * only — menus keep their UI. Default off. */
