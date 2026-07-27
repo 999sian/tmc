@@ -8,9 +8,11 @@
  * it never touches virtuappu_frame_buffer / mode1_memory / OAM (see the
  * cautionary note in port_softslots.h about an earlier native-framebuffer
  * UI attempt that corrupted pause-menu visuals). The Java side
- * (SecondScreenPresentation.java) owns a Presentation on the secondary
- * Display and hands its Surface to this module via
- * port_second_screen_jni.cpp.
+ * (SecondScreenView.java) owns the SurfaceView this draws into and hands
+ * its Surface to this module via port_second_screen_jni.cpp; what hosts
+ * that view depends on which way round the screens are — a Presentation on
+ * the secondary display normally, a plain Activity on the main one when
+ * the game itself has been swapped onto the secondary display.
  *
  * The compositor itself (Port_SecondScreen_PaintInto + the tap handler) is
  * platform-agnostic C compiled on every platform this port targets — only
@@ -63,6 +65,17 @@ void Port_SecondScreen_OnSurfaceLost(void);
  * slot an armed ring selected). Compiled on all platforms so a host
  * harness can drive the same layout the device shows. */
 void Port_SecondScreen_OnTap(int x, int y, int longPress);
+
+/* Which way round the two screens ended up this launch: nonzero when the
+ * game's own window is on a secondary display and this panel therefore
+ * owns the main one (the "swap screens" setting, applied by the Android
+ * shell at launch — see SecondScreenManager.java, which reports the game's
+ * display here as soon as it knows it). The settings row compares this
+ * against the persisted flag to decide whether it can honestly say ON/OFF
+ * or has to say RESTART: the display the shell asked for is not always the
+ * display it got, since firmware may refuse a launch there outright. */
+void Port_SecondScreen_SetGameOnSecondaryDisplay(int onSecondary);
+int Port_SecondScreen_GameOnSecondaryDisplay(void);
 
 #ifdef __cplusplus
 }

@@ -156,6 +156,7 @@ enum {
     SS_SET_SHOW_FPS,      /* show_fps (overlay reads it per frame) */
     SS_SET_HOLD_ADVANCE,  /* hold_advance_text (message.c reads per frame) */
     SS_SET_BACKDROP,      /* second_screen_backdrop: cycles SS_BACKDROP_* */
+    SS_SET_SWAP_SCREENS,  /* second_screen_swap; applied at the next launch */
     SS_SET_COUNT
 };
 
@@ -171,6 +172,22 @@ extern void Port_Config_SetAutosaveEnabled(bool enabled);
 extern void Port_PPU_SetColorCorrection(bool enabled);
 extern bool Port_Config_WidescreenEnabled(void);
 extern void Port_Config_SetWidescreenEnabled(bool enabled);
+extern bool Port_Config_GetSecondScreenSwap(void);
+extern void Port_Config_SetSecondScreenSwap(bool on);
+
+/* Which display the game's own window landed on this launch, reported by
+ * the Android shell (SecondScreenManager) once it knows. Written once from
+ * the Java main thread before the panel has a surface, read afterwards by
+ * the paint/tap threads — a plain int is enough, no torn value exists. */
+static int sGameOnSecondaryDisplay = 0;
+
+void Port_SecondScreen_SetGameOnSecondaryDisplay(int onSecondary) {
+    sGameOnSecondaryDisplay = onSecondary ? 1 : 0;
+}
+
+int Port_SecondScreen_GameOnSecondaryDisplay(void) {
+    return sGameOnSecondaryDisplay;
+}
 
 #define SS_MAX_TARGETS 48
 #define SS_NO_FLOOR (-128)
@@ -1686,13 +1703,14 @@ static const char* const kSettingLabels[SS_SET_COUNT] = {
     "TOP HUD",           "WIDESCREEN",       "TOUCH CONTROLS", "FOLLOW CAM",
     "WINDCREST PINS",    "FLOOR AUTO RETURN", "MASTER VOLUME",  "AUTOSAVE",
     "COLOR CORRECTION",  "SHOW FPS",          "HOLD TO ADVANCE TEXT",
-    "PANEL BACKDROP",
+    "PANEL BACKDROP",    "SWAP SCREENS",
 };
 
 /* The widest value word any row can show. Every row's value chip is cut to
  * this so the column ends flush (it was "SHOW" until the backdrop row's
- * words joined the set). Keep new value words no longer than this — the
- * label beside it is what gives up the space. */
+ * words joined the set; the swap row's "RESTART" is the same width). Keep
+ * new value words no longer than this — the label beside it is what gives
+ * up the space. */
 #define SS_SET_WIDEST_VALUE "PATTERN"
 
 /* Value words of the PANEL BACKDROP row, indexed by SS_BACKDROP_*. The
@@ -1708,16 +1726,23 @@ static int BackdropStyleCfg(void) {
     return (style > SS_BACKDROP_PARCHMENT && style < SS_BACKDROP_COUNT) ? style : SS_BACKDROP_PARCHMENT;
 }
 
-/* Rows this build can actually offer. WIDESCREEN is the only conditional
- * one: the wide render paths are compiled in by --widescreen_width, and at
- * the native 240 the config flag exists but nothing reads it, so the row
- * would be a switch wired to nothing. Returns how many were written. */
+/* Rows this build can actually offer. The conditional ones are switches
+ * wired to nothing outside their build: WIDESCREEN's wide render paths are
+ * compiled in by --widescreen_width (at the native 240 the config flag
+ * exists but nothing reads it), and SWAP SCREENS is applied by the Android
+ * shell's launcher, so off Android there is nothing to apply it. Returns
+ * how many were written. */
 static int VisibleSettingRows(uint8_t* out) {
     int n = 0;
     for (int i = 0; i < SS_SET_COUNT; i++) {
         if (i == SS_SET_WIDESCREEN && PORT_VIEW_WIDTH <= 240) {
             continue;
         }
+#ifndef __ANDROID__
+        if (i == SS_SET_SWAP_SCREENS) {
+            continue;
+        }
+#endif
         out[n++] = (uint8_t)i;
     }
     return n;
@@ -1764,6 +1789,18 @@ static int GetSettingState(int row, char* out, int outCap) {
             int style = BackdropStyleCfg();
             snprintf(out, (size_t)outCap, "%s", kBackdropWords[style]);
             return style != SS_BACKDROP_PARCHMENT;
+        }
+        case SS_SET_SWAP_SCREENS: {
+            /* Nothing about this one is live: the shell picks the game's
+             * display at launch. So report what is actually true right now
+             * — ON/OFF while the flag matches the screens the player is
+             * looking at, RESTART while it doesn't (just toggled, or the
+             * firmware refused the display the shell asked for and the app
+             * fell back to a normal launch). */
+            int want = Port_Config_GetSecondScreenSwap() ? 1 : 0;
+            int active = Port_SecondScreen_GameOnSecondaryDisplay();
+            snprintf(out, (size_t)outCap, "%s", want != active ? "RESTART" : (want ? "ON" : "OFF"));
+            return want;
         }
     }
     if (row != SS_SET_TOP_HUD) {
@@ -1815,11 +1852,17 @@ static void PaintSettingsPanel(const SSurf* s, TargetList* tl, float rx0, float 
                                         (int32_t)(rr - rl), (int32_t)rowH, wts);
         MenuTextDraw(s, kSettingLabels[i], (int32_t)(rl + 20 * u),
                      (int32_t)(ry + rowH / 2 - 8 * rms), rms, SS_TEXT_INK);
-        /* Right-aligned value chip: sized for the widest value word so every
-         * row's chip ends flush and same-sized; the label centers inside. */
+        /* Right-aligned value chip: floored at the widest value word so every
+         * row's chip ends flush and same-sized; the label centers inside.
+         * A value wider still grows the chip leftward rather than spilling
+         * its text out of the plate — nothing hits that today, it keeps a
+         * longer word added later from breaking the row silently. */
         {
             float ch = rowH - 8 * u;
-            float cw = MenuTextWidth(SS_SET_WIDEST_VALUE, rms) + 24 * u;
+            float cw = MenuTextWidth(val, rms);
+            float cwMin = MenuTextWidth(SS_SET_WIDEST_VALUE, rms);
+            if (cw < cwMin) cw = cwMin;
+            cw += 24 * u;
             float cx1 = rr - 10 * u, cx0 = cx1 - cw;
             float cy0 = ry + (rowH - ch) / 2;
             int32_t cts = (int32_t)(ch / 24.0f);
@@ -2436,6 +2479,13 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                      * the flag: the paint pass hands the stored style to the
                      * theme before it draws, so the next frame wears it. */
                     Port_Config_SetSecondScreenBackdrop((BackdropStyleCfg() + 1) % SS_BACKDROP_COUNT);
+                    break;
+                case SS_SET_SWAP_SCREENS:
+                    /* Persist only. Which display the game's window belongs
+                     * to is fixed when that window is created, so the Java
+                     * launcher applies this on the next cold start; until
+                     * then the row reads RESTART. */
+                    Port_Config_SetSecondScreenSwap(!Port_Config_GetSecondScreenSwap());
                     break;
             }
             break;
