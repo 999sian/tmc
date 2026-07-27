@@ -39,7 +39,10 @@
  * backdrop, the carved stone slab as panel plate, its recessed wells as
  * cells/rows, the message chips for headers, and the game's message font
  * for every label (dark ink on the light plates, white on chips — the
- * menu's exact text schemes). Only the cinema screen stays dark.
+ * menu's exact text schemes). The cinema screen is always dark, and the
+ * backdrop alone is settable — parchment, the same cream without the
+ * doodle lattice, or that same near-black — because the doodles are busy
+ * behind a map and a vitals column.
  */
 
 #include "port_second_screen.h"
@@ -70,7 +73,9 @@
  * decoded from ROM by port_second_screen_theme.c. The only colors of our
  * own are the cinema screen's (kept deliberately dark and quiet) and the
  * four-element hues. */
-#define COL_IDLE_BG RGB(0x05, 0x06, 0x05) /* idle: near-black */
+/* Idle: near-black. Shared with the DARK panel backdrop (the theme owns
+ * the literal) so the two dark states of this panel are one black. */
+#define COL_IDLE_BG SS_BACKDROP_DARK_RGBA
 #define COL_ELEM_EARTH RGB(0x58, 0xA0, 0x48)
 #define COL_ELEM_FIRE RGB(0xD8, 0x58, 0x28)
 #define COL_ELEM_WATER RGB(0x40, 0x70, 0xD0)
@@ -150,6 +155,7 @@ enum {
     SS_SET_COLOR_CORRECTION, /* color_correction + live PPU toggle */
     SS_SET_SHOW_FPS,      /* show_fps (overlay reads it per frame) */
     SS_SET_HOLD_ADVANCE,  /* hold_advance_text (message.c reads per frame) */
+    SS_SET_BACKDROP,      /* second_screen_backdrop: cycles SS_BACKDROP_* */
     SS_SET_COUNT
 };
 
@@ -1680,7 +1686,27 @@ static const char* const kSettingLabels[SS_SET_COUNT] = {
     "TOP HUD",           "WIDESCREEN",       "TOUCH CONTROLS", "FOLLOW CAM",
     "WINDCREST PINS",    "FLOOR AUTO RETURN", "MASTER VOLUME",  "AUTOSAVE",
     "COLOR CORRECTION",  "SHOW FPS",          "HOLD TO ADVANCE TEXT",
+    "PANEL BACKDROP",
 };
+
+/* The widest value word any row can show. Every row's value chip is cut to
+ * this so the column ends flush (it was "SHOW" until the backdrop row's
+ * words joined the set). Keep new value words no longer than this — the
+ * label beside it is what gives up the space. */
+#define SS_SET_WIDEST_VALUE "PATTERN"
+
+/* Value words of the PANEL BACKDROP row, indexed by SS_BACKDROP_*. The
+ * default reads PATTERN rather than "PARCHMENT" because what actually
+ * changes between it and CREAM is the doodle lattice — and because the
+ * longer word would not fit the value chip. */
+static const char* const kBackdropWords[SS_BACKDROP_COUNT] = { "PATTERN", "CREAM", "DARK" };
+
+/* The stored backdrop style, sanitised. config.json is hand-editable and
+ * the style list may grow, so every read of it goes through here. */
+static int BackdropStyleCfg(void) {
+    int style = Port_Config_GetSecondScreenBackdrop();
+    return (style > SS_BACKDROP_PARCHMENT && style < SS_BACKDROP_COUNT) ? style : SS_BACKDROP_PARCHMENT;
+}
 
 /* Rows this build can actually offer. WIDESCREEN is the only conditional
  * one: the wide render paths are compiled in by --widescreen_width, and at
@@ -1730,6 +1756,15 @@ static int GetSettingState(int row, char* out, int outCap) {
         case SS_SET_COLOR_CORRECTION: on = Port_Config_GetColorCorrection(); break;
         case SS_SET_SHOW_FPS: on = Port_Config_GetShowFps(); break;
         case SS_SET_HOLD_ADVANCE: on = Port_Config_GetHoldToAdvanceText(); break;
+        case SS_SET_BACKDROP: {
+            /* A cycle row like MASTER VOLUME: the value names the style and
+             * returns early with its own text. The chip turns red once the
+             * panel is off the menu's own parchment, which is how every
+             * other row reads "not the shipped behaviour". */
+            int style = BackdropStyleCfg();
+            snprintf(out, (size_t)outCap, "%s", kBackdropWords[style]);
+            return style != SS_BACKDROP_PARCHMENT;
+        }
     }
     if (row != SS_SET_TOP_HUD) {
         txt = on ? "ON" : "OFF";
@@ -1774,17 +1809,17 @@ static void PaintSettingsPanel(const SSurf* s, TargetList* tl, float rx0, float 
         int i = rows[slot];
         float ry = y0 + slot * (rowH + gap);
         float rl = ix0 + 10 * u, rr = ix1 - 10 * u;
-        char val[8];
+        char val[16]; /* room for the longest value word, not just "SHOW" */
         int on = GetSettingState(i, val, sizeof(val));
         Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)rl, (int32_t)ry,
                                         (int32_t)(rr - rl), (int32_t)rowH, wts);
         MenuTextDraw(s, kSettingLabels[i], (int32_t)(rl + 20 * u),
                      (int32_t)(ry + rowH / 2 - 8 * rms), rms, SS_TEXT_INK);
-        /* Right-aligned value chip: sized for "SHOW" so every row's chip
-         * ends flush and same-sized; the label centers inside. */
+        /* Right-aligned value chip: sized for the widest value word so every
+         * row's chip ends flush and same-sized; the label centers inside. */
         {
             float ch = rowH - 8 * u;
-            float cw = MenuTextWidth("SHOW", rms) + 24 * u;
+            float cw = MenuTextWidth(SS_SET_WIDEST_VALUE, rms) + 24 * u;
             float cx1 = rr - 10 * u, cx0 = cx1 - cw;
             float cy0 = ry + (rowH - ch) / 2;
             int32_t cts = (int32_t)(ch / 24.0f);
@@ -1813,10 +1848,14 @@ static void DrawItemRing(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     uint32_t goldDim = MixColor(gold, cream, 96);
 
     if (armed) {
-        /* Slow gold breath around the ring while it waits for an item tap. */
+        /* Slow gold breath around the ring while it waits for an item tap.
+         * The band lies outside the ring, on the bare backdrop, so it is
+         * blended out of the BACKDROP color rather than out of cream — on
+         * the dark backdrop a cream-based halo read as a bright smear
+         * around the ring instead of the ring glowing. */
         float pt = 0.5f + 0.5f * sinf((float)(tick % 48) * (6.28318f / 48.0f));
         FillRing(s, (int32_t)cx, (int32_t)cy, (int32_t)(r + 7 * u), (int32_t)(r + 3 * u),
-                 MixColor(cream, gold, (uint32_t)(60 + 150 * pt)));
+                 MixColor(Port_SecondScreenTheme_BackdropColor(), gold, (uint32_t)(60 + 150 * pt)));
     }
 
     FillCircle(s, (int32_t)cx, (int32_t)cy, (int32_t)r,
@@ -1935,7 +1974,13 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
     if (Port_SecondScreenTheme_DrawActionLabel(s->px, s->w, s->h, s->stride, (int32_t)lx,
                                                (int32_t)(cy - gh / 2), scale, snap->rActionFrame) == 0 &&
         word != NULL) {
-        MenuTextDraw(s, word, (int32_t)lx, (int32_t)(cy - 8 * ms), ms, SS_TEXT_INK);
+        /* The one label on this panel lettered straight onto the backdrop
+         * with nothing behind it, so it is the one that has to follow the
+         * backdrop: the menu's dark ink vanishes on the near-black. (The
+         * decoded label art above is HUD sprites — outlined, so it reads on
+         * either.) */
+        MenuTextDraw(s, word, (int32_t)lx, (int32_t)(cy - 8 * ms), ms,
+                     Port_SecondScreenTheme_BackdropIsDark() ? SS_TEXT_WHITE : SS_TEXT_INK);
     }
 }
 
@@ -2159,8 +2204,23 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     if (ts < 2) ts = 2;
     if (ts > 6) ts = 6;
 
-    /* The whole surface is the pause menu's parchment; panels lay their
-     * slab/chips over it. (Flat cream until the pattern decodes.) */
+    /* The backdrop style has to reach the theme before ANY paint: the fill
+     * below reads it, so do the quest sub-screens (which draw their own
+     * backdrop) and the two places that pick a color to sit on it. */
+    Port_SecondScreenTheme_SetBackdropStyle(BackdropStyleCfg());
+
+    /* The whole surface is the panel's backdrop; panels lay their
+     * slab/chips over it. By default that is the pause menu's parchment
+     * (flat cream until the pattern decodes); the settings row can quiet it
+     * to flat cream or to the idle near-black.
+     *
+     * Nothing else needs re-toning for the dark option: the pause menu's
+     * dressing is light art with light outlines — stone slabs, pale button
+     * plates, chips whose border_type-9 frame is light around a dark
+     * interior, and HUD sprites the game already draws over arbitrary
+     * scenes — so it all reads as light-on-dark. The two exceptions are
+     * handled at their sites: the R prompt's lettered fallback (ink) and
+     * the armed ring's breath (blended out of cream). */
     Port_SecondScreenTheme_DrawBackdrop(s.px, s.w, s.h, s.stride, 0, 0, s.w, s.h, ts);
 
     float tabH = 96 * u;
@@ -2370,6 +2430,12 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                 case SS_SET_HOLD_ADVANCE:
                     /* src/message.c polls the flag at every advance. */
                     Port_Config_SetHoldToAdvanceText(!Port_Config_GetHoldToAdvanceText());
+                    break;
+                case SS_SET_BACKDROP:
+                    /* Cycle PARCHMENT -> CREAM -> DARK -> PARCHMENT. Only
+                     * the flag: the paint pass hands the stored style to the
+                     * theme before it draws, so the next frame wears it. */
+                    Port_Config_SetSecondScreenBackdrop((BackdropStyleCfg() + 1) % SS_BACKDROP_COUNT);
                     break;
             }
             break;

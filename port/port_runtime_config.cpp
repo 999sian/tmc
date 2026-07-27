@@ -144,6 +144,9 @@ bool sA11yWalls = true;
 bool sSecondScreenFollowCam = true;
 bool sSecondScreenCrestPins = true;
 bool sSecondScreenFloorReturn = true;
+/* Which dressing the panel paints behind everything (an SS_BACKDROP_*
+ * style id). 0 = the pause menu's parchment, i.e. the original look. */
+int sSecondScreenBackdrop = 0;
 /* Hide the game's own HUD on the top screen while the second screen shows
  * vitals — the engine-side gate lives with DrawUIElements. Default off. */
 bool sHideTopHud = false;
@@ -333,6 +336,7 @@ const IntCfg kIntCfg[] = {
     { "rando_item_pool", &sRandoItemPool, 0 },          { "rando_tunic_color", &sRandoTunicColor, 0 },
     { "rando_heart_color", &sRandoHeartColor, 0 },      { "rando_tricks", &sRandoTricks, 0 },
     { "rando_accessibility", &sRandoAccessibility, 0 },
+    { "second_screen_backdrop", &sSecondScreenBackdrop, 0 },
 };
 const StrCfg kStrCfg[] = {
     { "upscale_method", &sUpscaleMethod, "nearest" },
@@ -1765,6 +1769,14 @@ extern "C" bool Port_Config_GetSecondScreenFloorReturn(void) {
 extern "C" void Port_Config_SetSecondScreenFloorReturn(bool on) {
     sSecondScreenFloorReturn = on;
     sConfigJson["second_screen_floor_auto_return"] = on;
+    SaveConfig();
+}
+extern "C" int Port_Config_GetSecondScreenBackdrop(void) {
+    return sSecondScreenBackdrop;
+}
+extern "C" void Port_Config_SetSecondScreenBackdrop(int style) {
+    sSecondScreenBackdrop = style;
+    sConfigJson["second_screen_backdrop"] = style;
     SaveConfig();
 }
 extern "C" bool Port_Config_GetHideTopHud(void) {
