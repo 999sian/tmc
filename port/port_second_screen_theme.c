@@ -255,6 +255,11 @@ static uint32_t sTrayPx[TRAY_W * TRAY_H];
 static SecondScreenThemeSprite sSprites[SST_COUNT];
 static uint32_t sColors[SSC_COUNT];
 
+/* Selected panel backdrop style (SS_BACKDROP_*). Not part of the lazy
+ * build — it is a live user setting, pushed in by the panel each frame
+ * from the one thread that paints, so it needs no publication either. */
+static int sBackdropStyle = SS_BACKDROP_PARCHMENT;
+
 /* Window chrome: 6 border tiles in sub_0805F918's strip order plus the
  * solid fill tile — index meanings per src/message.c's tile enum. */
 enum { CHROME_CORNER, CHROME_H_CORNER, CHROME_H_STRAIGHT, CHROME_V_CORNER, CHROME_V_STRAIGHT, CHROME_CURSOR,
@@ -1501,14 +1506,32 @@ int Port_SecondScreenTheme_MenuReady(void) {
     return sBuilt && sMenuOk && sSlabOk;
 }
 
+void Port_SecondScreenTheme_SetBackdropStyle(int style) {
+    sBackdropStyle =
+        (style > SS_BACKDROP_PARCHMENT && style < SS_BACKDROP_COUNT) ? style : SS_BACKDROP_PARCHMENT;
+}
+
+uint32_t Port_SecondScreenTheme_BackdropColor(void) {
+    /* Cream comes from the decoded BG3 flat (a neutral stand-in before the
+     * build); the dark one is ours and fixed, so it is the same near-black
+     * whether or not the ROM has been parsed yet. */
+    return sBackdropStyle == SS_BACKDROP_DARK ? SS_BACKDROP_DARK_RGBA : sColors[SSC_MENU_CREAM];
+}
+
+int Port_SecondScreenTheme_BackdropIsDark(void) {
+    return sBackdropStyle == SS_BACKDROP_DARK;
+}
+
 void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
                                          int32_t x0, int32_t y0, int32_t x1, int32_t y1, int32_t scale) {
     if (scale < 1) {
         scale = 1;
     }
-    FillRectTheme(pixels, bufW, bufH, stride, x0, y0, x1, y1, sColors[SSC_MENU_CREAM]);
-    if (!sMenuOk || !sDoodleOk) {
-        return; /* flat parchment until the pattern decodes */
+    FillRectTheme(pixels, bufW, bufH, stride, x0, y0, x1, y1, Port_SecondScreenTheme_BackdropColor());
+    if (sBackdropStyle != SS_BACKDROP_PARCHMENT || !sMenuOk || !sDoodleOk) {
+        /* Flat fill and done: that IS the CREAM and DARK styles, and it is
+         * also what parchment looks like until the pattern decodes. */
+        return;
     }
     if (x0 < 0) x0 = 0;
     if (y0 < 0) y0 = 0;
