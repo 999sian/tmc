@@ -75,15 +75,15 @@ u32 sAutosaveIntervalMs = 60000;
 PortTouchScheme sTouchScheme = PORT_TOUCH_SCHEME_JOYSTICK;
 float sTouchScale = 1.0f;   /* multiplies the touch layout unit  */
 float sTouchOpacity = 1.0f; /* multiplies every control's alpha  */
-/* Widescreen reveal default-ON for desktop, OFF for Android. Widescreen
- * draws ~60% more scanline pixels (384x160 vs 240x160), which crushes
- * low-end ARM chips. Console-Parity still forces this off; native-240
- * builds ignore it. */
-#ifdef __ANDROID__
-bool sWidescreenEnabled = false;
-#else
+/* Widescreen reveal default-ON everywhere. It draws up to ~60% more
+ * scanline pixels (384x160 vs 240x160), which is why this was once off for
+ * Android — but the width tracks the window's aspect rather than always
+ * running the full 384 (Port_Widescreen_TargetViewWidth), so a 16:9 handheld
+ * pays ~18% rather than 60%, and the dual-screen target chip carries it.
+ * Anyone it does cost can turn it off in the panel's SETTINGS; the row is
+ * hidden on native-240 builds, which ignore this flag entirely.
+ * Console-Parity still forces it off. */
 bool sWidescreenEnabled = true;
-#endif
 /* Console-Parity mode. When true the port suppresses every feature that
  * gives the player an edge over real GBA hardware, so a run is provably
  * console-equivalent: sub-frame input edge leniency off, save-states inert,
@@ -285,11 +285,7 @@ struct ScaleCfg {
 const BoolCfg kBoolCfg[] = {
     { "port_settings_menu", &sPortSettingsMenuEnabled, true },
     { "autosave_enabled", &sAutosaveEnabled, true },
-#ifdef __ANDROID__
-    { "widescreen_enabled", &sWidescreenEnabled, false },
-#else
     { "widescreen_enabled", &sWidescreenEnabled, true },
-#endif
     { "console_parity", &sConsoleParity, false },
     { "decouple_render", &sDecoupleRender, true },
     { "show_fps", &sShowFps, false },
