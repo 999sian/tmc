@@ -1511,15 +1511,44 @@ void Port_SecondScreenTheme_SetBackdropStyle(int style) {
         (style > SS_BACKDROP_PARCHMENT && style < SS_BACKDROP_COUNT) ? style : SS_BACKDROP_PARCHMENT;
 }
 
+/* a -> b by t/255. Per-channel, alpha left at a's — every color here is
+ * opaque, and carrying the blend into alpha would only round it down. */
+static uint32_t MixRGBA(uint32_t a, uint32_t b, uint32_t t) {
+    uint32_t out = a & 0xFF000000u;
+    int shift;
+    for (shift = 0; shift <= 16; shift += 8) {
+        uint32_t ca = (a >> shift) & 0xFFu, cb = (b >> shift) & 0xFFu;
+        out |= ((ca * (255u - t) + cb * t) / 255u) << shift;
+    }
+    return out;
+}
+
 uint32_t Port_SecondScreenTheme_BackdropColor(void) {
     /* Cream comes from the decoded BG3 flat (a neutral stand-in before the
      * build); the dark one is ours and fixed, so it is the same near-black
-     * whether or not the ROM has been parsed yet. */
-    return sBackdropStyle == SS_BACKDROP_DARK ? SS_BACKDROP_DARK_RGBA : sColors[SSC_MENU_CREAM];
+     * whether or not the ROM has been parsed yet. The mid-tones are the
+     * chrome's own carving colors, so they track the ROM's palette rather
+     * than being literals that could drift away from the plates. */
+    switch (sBackdropStyle) {
+        case SS_BACKDROP_DARK:  return SS_BACKDROP_DARK_RGBA;
+        case SS_BACKDROP_DIM:   return MixRGBA(sColors[SSC_MENU_CREAM], sColors[SSC_MENU_INK],
+                                               SS_BACKDROP_DIM_MIX);
+        case SS_BACKDROP_STONE: return sColors[SSC_MENU_STONE];
+        case SS_BACKDROP_SLATE: return sColors[SSC_MENU_STONE_DARK];
+        case SS_BACKDROP_NAVY:  return sColors[SSC_BANNER_NAVY];
+        default:                return sColors[SSC_MENU_CREAM];
+    }
 }
 
 int Port_SecondScreenTheme_BackdropIsDark(void) {
-    return sBackdropStyle == SS_BACKDROP_DARK;
+    /* Rec.601 luma on the actual fill, so a style is "dark" because of how
+     * bright it is rather than because it was listed as one. The mid-tones
+     * straddle this: the cream sits far above it and the near-black far
+     * below, so the threshold only has to be sane for the middle — half
+     * scale, i.e. ink-on-light above, light-on-ink below. */
+    uint32_t c = Port_SecondScreenTheme_BackdropColor();
+    uint32_t r = c & 0xFFu, g = (c >> 8) & 0xFFu, b = (c >> 16) & 0xFFu;
+    return (299u * r + 587u * g + 114u * b) / 1000u < 128u;
 }
 
 void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
@@ -1528,9 +1557,11 @@ void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t
         scale = 1;
     }
     FillRectTheme(pixels, bufW, bufH, stride, x0, y0, x1, y1, Port_SecondScreenTheme_BackdropColor());
-    if (sBackdropStyle != SS_BACKDROP_PARCHMENT || !sMenuOk || !sDoodleOk) {
-        /* Flat fill and done: that IS the CREAM and DARK styles, and it is
-         * also what parchment looks like until the pattern decodes. */
+    if ((sBackdropStyle != SS_BACKDROP_PARCHMENT && sBackdropStyle != SS_BACKDROP_DIM) || !sMenuOk ||
+        !sDoodleOk) {
+        /* Flat fill and done: that IS the CREAM, DARK, STONE, SLATE and
+         * NAVY styles, and it is also what the two lattice styles look
+         * like until the pattern decodes. */
         return;
     }
     if (x0 < 0) x0 = 0;
@@ -1547,6 +1578,8 @@ void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t
      * space is surface pixels / scale, anchored at the surface origin so
      * every panel shares one continuous pattern. */
     {
+        int dim = (sBackdropStyle == SS_BACKDROP_DIM);
+        uint32_t dimTo = sColors[SSC_MENU_INK];
         float px0 = (float)x0 / scale - DOODLE_W, py0 = (float)y0 / scale - DOODLE_H;
         float px1 = (float)x1 / scale + 1, py1 = (float)y1 / scale + 1;
         float corner[4][2] = { { px0, py0 }, { px1, py0 }, { px0, py1 }, { px1, py1 } };
@@ -1579,6 +1612,14 @@ void Port_SecondScreenTheme_DrawBackdrop(uint32_t* pixels, int32_t bufW, int32_t
                         uint32_t col = sDoodle[sy * DOODLE_W + sx];
                         if (col == 0) {
                             continue;
+                        }
+                        if (dim) {
+                            /* Same pull as the fill under it, so the
+                             * lattice keeps its contrast against the cream
+                             * instead of standing out as the one thing
+                             * that did not dim. Once per source pixel, not
+                             * per scaled one. */
+                            col = MixRGBA(col, dimTo, SS_BACKDROP_DIM_MIX);
                         }
                         for (ey = 0; ey < scale; ey++) {
                             int32_t dy2 = dpy + sy * scale + ey;

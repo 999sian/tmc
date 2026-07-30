@@ -166,12 +166,30 @@ int Port_SecondScreenTheme_MenuReady(void);
  * idle near-black — the reading-first look the sibling zelda3 port's
  * bottom screen uses, where the backdrop is ~all black and every piece of
  * chrome reads as light-on-dark. */
+/* The four after DARK are the middle ground: dimmer than the menu's own
+ * dressing without going to near-black. DIM is the parchment itself —
+ * lattice and all — blended toward the menu ink, so it stays the same
+ * dressing at lower brightness. STONE, SLATE and NAVY are flat fills
+ * lifted from colors the chrome is already carved from (the slab plate,
+ * the recessed well interior, and the banner font's outline blue), so a
+ * plate sitting on one of them reads as the same material rather than as
+ * art pasted onto a field. New styles APPEND: the value is what lands in
+ * config.json, so renumbering would silently repaint existing configs. */
 enum {
     SS_BACKDROP_PARCHMENT = 0,
     SS_BACKDROP_CREAM,
     SS_BACKDROP_DARK,
+    SS_BACKDROP_DIM,
+    SS_BACKDROP_STONE,
+    SS_BACKDROP_SLATE,
+    SS_BACKDROP_NAVY,
     SS_BACKDROP_COUNT
 };
+
+/* How far DIM pulls the parchment toward the menu ink, 0..255. Picked to
+ * knock the glare off the cream while the doodle lattice stays legible as
+ * texture — past ~150 the pattern muddies into the fill. */
+#define SS_BACKDROP_DIM_MIX 115u
 
 /* The DARK style's flat color as RGBA8888 (A<<24 | B<<16 | G<<8 | R) —
  * deliberately the cinema screen's near-black, so the panel's two dark
@@ -186,10 +204,15 @@ enum {
 void Port_SecondScreenTheme_SetBackdropStyle(int style);
 
 /* The flat color under the current style (the doodles, when drawn, sit on
- * top of it) and whether that color is the dark one. Anything painted
- * DIRECTLY on the backdrop keys its ink/blend colors off these: the menu's
- * own ink and cream are picked to read on parchment and disappear on
- * near-black. */
+ * top of it) and whether that color is dark enough that light-on-dark ink
+ * is the readable choice. Anything painted DIRECTLY on the backdrop keys
+ * its ink/blend colors off these: the menu's own ink and cream are picked
+ * to read on parchment and disappear on near-black.
+ *
+ * IsDark is a luminance test, not a style comparison — the mid-tones
+ * (DIM/STONE/SLATE/NAVY) have to fall on one side or the other of the
+ * same threshold, and a per-style flag would leave them answering for a
+ * brightness they don't have. */
 uint32_t Port_SecondScreenTheme_BackdropColor(void);
 int Port_SecondScreenTheme_BackdropIsDark(void);
 
