@@ -1716,8 +1716,13 @@ static const char* const kSettingLabels[SS_SET_COUNT] = {
 /* Value words of the PANEL BACKDROP row, indexed by SS_BACKDROP_*. The
  * default reads PATTERN rather than "PARCHMENT" because what actually
  * changes between it and CREAM is the doodle lattice — and because the
- * longer word would not fit the value chip. */
-static const char* const kBackdropWords[SS_BACKDROP_COUNT] = { "PATTERN", "CREAM", "DARK" };
+ * longer word would not fit the value chip. Order follows the enum, which
+ * appends so stored config values keep meaning the same style — it is not
+ * a brightness ramp (DARK sits mid-list). Every word here is inside
+ * SS_SET_WIDEST_VALUE, so none of them widen the value chip. */
+static const char* const kBackdropWords[SS_BACKDROP_COUNT] = {
+    "PATTERN", "CREAM", "DARK", "DIM", "STONE", "SLATE", "NAVY"
+};
 
 /* The stored backdrop style, sanitised. config.json is hand-editable and
  * the style list may grow, so every read of it goes through here. */
