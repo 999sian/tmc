@@ -60,6 +60,8 @@ int main(int argc, char** argv) {
     if (!Platform3DS_Init()) return 1;
     Platform3DS_ShowSplash();
 
+    printf("The Minish Cap 3DS v0.2\n\n");
+    printf("Preparing storage...\n");
     if (!PrepareStorage()) {
         Platform3DS_ShowFatal("Storage error", "Could not open " APP_DIR ".");
         Platform3DS_Shutdown();
@@ -87,11 +89,15 @@ int main(int argc, char** argv) {
     }
     fclose(rom);
 
+    printf("Loading ROM and tables...\n");
     Port_Config_Load("tmc3ds.ini");
     Port_LoadRom(romPath);
     Port_PPU_Init(NULL);
-    Port_Audio_Init();
+    if (!Port_Audio_Init()) {
+        printf("Warning: audio is unavailable.\n");
+    }
 
+    printf("Starting engine...\n");
     AgbMain();
 
     Port_PPU_Shutdown();

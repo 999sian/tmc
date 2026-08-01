@@ -18,6 +18,7 @@ int Platform3DS_Init(void) {
     gfxInit(GSP_RGB565_OES, GSP_RGB565_OES, false);
     gfxSet3D(false);
     romfsInit();
+    consoleInit(GFX_BOTTOM, NULL);
 
     osSetSpeedupEnable(true);
     APT_SetAppCpuTimeLimit(89);

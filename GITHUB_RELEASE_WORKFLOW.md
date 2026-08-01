@@ -52,8 +52,8 @@ Build both public packages with:
 Expected outputs:
 
 ```text
-build-3ds/game/tmc-3ds-vX.Y.Z.cia
-build-3ds/game/tmc-3ds-vX.Y.Z.3dsx
+build-3ds/game/tmc-3ds-vX.Y.cia
+build-3ds/game/tmc-3ds-vX.Y.3dsx
 ```
 
 ## Required QA
@@ -110,29 +110,29 @@ worktree.
 
 ## Pre-Releases
 
-Use semantic tags such as `v0.2`. Early public builds must be marked as GitHub
+Use short development tags such as `v0.2`. Early public builds must be marked as GitHub
 pre-releases until gameplay, save, audio, input, and performance testing are
 complete enough for a stable release.
 
 The release title must be:
 
 ```text
-The Minish Cap 3DS vX.Y.Z
+The Minish Cap 3DS vX.Y
 ```
 
 Upload only:
 
 ```text
-tmc-3ds-vX.Y.Z.cia
-tmc-3ds-vX.Y.Z.3dsx
-tmc-3ds-vX.Y.Z-source.zip
-QR-vX.Y.Z-github.png
+tmc-3ds-vX.Y.cia
+tmc-3ds-vX.Y.3dsx
+tmc-3ds-vX.Y-source.zip
+QR-vX.Y-github.png
 ```
 
 The QR image must encode the direct CIA asset URL:
 
 ```text
-https://github.com/EstebanPdN/zelda-tmc-3ds/releases/download/vX.Y.Z/tmc-3ds-vX.Y.Z.cia
+https://github.com/EstebanPdN/zelda-tmc-3ds/releases/download/vX.Y/tmc-3ds-vX.Y.cia
 ```
 
 Release notes should contain a short legal notice, installation requirements,
