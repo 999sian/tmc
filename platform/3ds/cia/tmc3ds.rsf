@@ -107,7 +107,7 @@ AccessControlInfo:
 
 SystemControlInfo:
   SaveDataSize: 0KB
-  RemasterVersion: 1
+  RemasterVersion: 3
   StackSize: 0x40000
   Dependency:
     cfg: 0x0004013000001702

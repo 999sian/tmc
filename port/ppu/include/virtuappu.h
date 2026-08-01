@@ -20,9 +20,9 @@ extern "C" {
 #endif
 
 enum {
-#ifdef TMC_N64
-    /* N64: only the native 240x160 frame is needed; mode1 binds the engine's
-     * gVram, so the 4 MB scratch vram shrinks to the GBA size. Keeps RDRAM use low. */
+#if defined(TMC_N64) || defined(TMC_3DS)
+    /* Console ports only need the native 240x160 frame. Mode 1 binds the
+     * engine's GBA VRAM, so the oversized desktop scratch buffers are unused. */
     VIRTUAPPU_MAX_FRAME_WIDTH = 240,
     VIRTUAPPU_MAX_FRAME_HEIGHT = 160,
     VIRTUAPPU_VRAM_SIZE = 0x18000,

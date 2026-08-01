@@ -32,12 +32,14 @@ their own 3DS SD card.
 - Native NDSP stereo audio.
 - Local save data stored beside the ROM on the SD card.
 - Quick diagnostics: press `L + R + A` to create a dump with top and bottom
-  screenshots plus graphic memory files.
+  physical-screen captures, performance metrics, I/O registers and graphic
+  memory files.
+- Correct HOME Menu lifecycle handling for suspending or closing the port.
 - Public GitHub releases include CIA, 3DSX, QR code and clean source archive.
 
 ## Installation
 
-1. Install `tmc-3ds-v0.2.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.3.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -92,8 +94,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.2.cia
-build-3ds/game/tmc-3ds-v0.2.3dsx
+build-3ds/game/tmc-3ds-v0.3.cia
+build-3ds/game/tmc-3ds-v0.3.3dsx
 ```
 
 The build does not embed a ROM.

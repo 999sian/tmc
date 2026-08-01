@@ -11,7 +11,7 @@ static C3D_Tex sBottomTexture;
 static Tex3DS_SubTexture sTopSubtexture;
 static Tex3DS_SubTexture sBottomSubtexture;
 static uint32_t* sTopUpload;
-static uint32_t* sBottomUpload;
+static uint32_t* sBottomUploads[2];
 static bool sFrameActive;
 static bool sReady;
 
@@ -22,11 +22,11 @@ static u32 TextureTransfer(void) {
            GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO);
 }
 
-static void ConfigureArgbTextureEnv(void) {
+static void ConfigureAbgrTextureEnv(void) {
     C3D_TexEnv* env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
     C3D_TexEnvSrc(env, C3D_RGB, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
-    C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_G, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR);
+    C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_ALPHA, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR);
     C3D_TexEnvFunc(env, C3D_RGB, GPU_MODULATE);
     C3D_TexEnvSrc(env, C3D_Alpha, GPU_CONSTANT, GPU_CONSTANT, GPU_CONSTANT);
     C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
@@ -42,17 +42,22 @@ static void ConfigureArgbTextureEnv(void) {
     env = C3D_GetTexEnv(2);
     C3D_TexEnvInit(env);
     C3D_TexEnvSrc(env, C3D_RGB, GPU_TEXTURE0, GPU_CONSTANT, GPU_PREVIOUS);
-    C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_ALPHA, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR);
+    C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_G, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR);
     C3D_TexEnvFunc(env, C3D_RGB, GPU_MULTIPLY_ADD);
     C3D_TexEnvColor(env, C2D_Color32(0, 0, 255, 255));
 }
 
 bool PlatformGpu3DS_Init(void) {
     sTopUpload = (uint32_t*)linearMemAlign(256u * 256u * sizeof(uint32_t), 0x80);
-    sBottomUpload = (uint32_t*)linearMemAlign(512u * 256u * sizeof(uint32_t), 0x80);
-    if (!sTopUpload || !sBottomUpload) goto fail_linear;
+    sBottomUploads[0] = (uint32_t*)linearMemAlign(512u * 256u * sizeof(uint32_t), 0x80);
+    sBottomUploads[1] = (uint32_t*)linearMemAlign(512u * 256u * sizeof(uint32_t), 0x80);
+    if (!sTopUpload || !sBottomUploads[0] || !sBottomUploads[1]) goto fail_linear;
     memset(sTopUpload, 0, 256u * 256u * sizeof(uint32_t));
-    memset(sBottomUpload, 0, 512u * 256u * sizeof(uint32_t));
+    memset(sBottomUploads[0], 0, 512u * 256u * sizeof(uint32_t));
+    memset(sBottomUploads[1], 0, 512u * 256u * sizeof(uint32_t));
+    GSPGPU_FlushDataCache(sTopUpload, 256u * 256u * sizeof(uint32_t));
+    GSPGPU_FlushDataCache(sBottomUploads[0], 512u * 256u * sizeof(uint32_t));
+    GSPGPU_FlushDataCache(sBottomUploads[1], 512u * 256u * sizeof(uint32_t));
     if (!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE)) goto fail_linear;
     if (!C2D_Init(32)) {
         C3D_Fini();
@@ -88,25 +93,24 @@ fail:
     C2D_Fini();
     C3D_Fini();
 fail_linear:
-    if (sBottomUpload) linearFree(sBottomUpload);
+    if (sBottomUploads[1]) linearFree(sBottomUploads[1]);
+    if (sBottomUploads[0]) linearFree(sBottomUploads[0]);
     if (sTopUpload) linearFree(sTopUpload);
-    sBottomUpload = NULL;
+    sBottomUploads[0] = NULL;
+    sBottomUploads[1] = NULL;
     sTopUpload = NULL;
     return false;
 }
 
 uint32_t* PlatformGpu3DS_TopBuffer(void) { return sTopUpload; }
-uint32_t* PlatformGpu3DS_BottomBuffer(void) { return sBottomUpload; }
-
-void PlatformGpu3DS_FlushTopLines(int first_line, int last_line) {
-    if (!sTopUpload || first_line < 0 || last_line <= first_line || last_line > 160) return;
-    GSPGPU_FlushDataCache(sTopUpload + first_line * 256,
-                          (u32)(last_line - first_line) * 256u * sizeof(uint32_t));
+uint32_t* PlatformGpu3DS_BottomBuffer(unsigned index) {
+    return index < 2 ? sBottomUploads[index] : NULL;
 }
 
 void PlatformGpu3DS_BeginTop(const uint32_t* pixels) {
     if (!sReady || !pixels || !C3D_FrameBegin(0)) return;
     sFrameActive = true;
+    GSPGPU_FlushDataCache(pixels, 256u * 160u * sizeof(uint32_t));
     C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(256, 256),
                             (u32*)sTopTexture.data, GX_BUFFER_DIM(256, 256), TextureTransfer());
     sTopSubtexture = (Tex3DS_SubTexture){
@@ -115,19 +119,19 @@ void PlatformGpu3DS_BeginTop(const uint32_t* pixels) {
     };
     const C2D_Image image = { .tex = &sTopTexture, .subtex = &sTopSubtexture };
     const C2D_DrawParams params = {
-        .pos = { .x = -60.0f, .y = 80.0f, .w = 360.0f, .h = 240.0f },
+        .pos = { .x = 20.0f, .y = 0.0f, .w = 360.0f, .h = 240.0f },
         .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
     };
     C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
-    ConfigureArgbTextureEnv();
+    ConfigureAbgrTextureEnv();
 }
 
 void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
     if (!sFrameActive || !pixels) return;
     if (changed) {
-        GSPGPU_FlushDataCache(pixels, 512u * 256u * sizeof(uint32_t));
+        GSPGPU_FlushDataCache(pixels, 512u * 240u * sizeof(uint32_t));
         C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(512, 256),
                                 (u32*)sBottomTexture.data, GX_BUFFER_DIM(512, 256), TextureTransfer());
     }
@@ -137,13 +141,13 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
     };
     const C2D_Image image = { .tex = &sBottomTexture, .subtex = &sBottomSubtexture };
     const C2D_DrawParams params = {
-        .pos = { .x = -40.0f, .y = 40.0f, .w = 320.0f, .h = 240.0f },
+        .pos = { .x = 0.0f, .y = 0.0f, .w = 320.0f, .h = 240.0f },
         .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
     };
     C2D_TargetClear(sBottomTarget, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(sBottomTarget);
     C2D_DrawImage(image, &params, NULL);
-    ConfigureArgbTextureEnv();
+    ConfigureAbgrTextureEnv();
     C3D_FrameEnd(0);
     sFrameActive = false;
 }
@@ -151,16 +155,18 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
 void PlatformGpu3DS_Shutdown(void) {
     if (!sReady) return;
     if (sFrameActive) C3D_FrameEnd(0);
-    C3D_FrameSync();
+    if (!aptShouldClose()) C3D_FrameSync();
     C3D_RenderTargetDelete(sBottomTarget);
     C3D_RenderTargetDelete(sTopTarget);
     C3D_TexDelete(&sBottomTexture);
     C3D_TexDelete(&sTopTexture);
     C2D_Fini();
     C3D_Fini();
-    linearFree(sBottomUpload);
+    linearFree(sBottomUploads[1]);
+    linearFree(sBottomUploads[0]);
     linearFree(sTopUpload);
-    sBottomUpload = NULL;
+    sBottomUploads[0] = NULL;
+    sBottomUploads[1] = NULL;
     sTopUpload = NULL;
     sFrameActive = false;
     sReady = false;

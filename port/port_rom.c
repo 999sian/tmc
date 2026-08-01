@@ -387,6 +387,11 @@ static int LoadExtractedPages(void) {
 /*  ROM access logging — now also extracts the touched page           */
 /* ------------------------------------------------------------------ */
 void Port_LogRomAccess(u32 gba_addr, const char* caller) {
+#ifdef TMC_3DS
+    (void)gba_addr;
+    (void)caller;
+    return;
+#else
     if (gba_addr < 0x08000000u)
         return;
     u32 offset = gba_addr - 0x08000000u;
@@ -396,9 +401,13 @@ void Port_LogRomAccess(u32 gba_addr, const char* caller) {
         fflush(stderr);
     }
     ExtractPage(page);
+#endif
 }
 
 void Port_PrintRomAccessSummary(void) {
+#ifdef TMC_3DS
+    fprintf(stderr, "\n[ROM] Full ROM is resident in memory; SD page extraction is disabled.\n");
+#else
     int count = 0;
     for (u32 p = 0; p < ROM_MAX_PAGES; p++) {
         if (IsPageExtracted(p))
@@ -406,6 +415,7 @@ void Port_PrintRomAccessSummary(void) {
     }
     fprintf(stderr, "\n[ROM] Summary: %d pages (4 KB each, %d KB total) extracted to " ROM_EXTRACT_DIR "/\n", count,
             count * 4);
+#endif
     fflush(stderr);
 }
 

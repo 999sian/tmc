@@ -21,15 +21,30 @@
 #define GBA_W 240
 #define GBA_H 160
 
-static uint32_t sBottom[320 * 240];
-static uint32_t* sBottomUpload;
+static uint32_t* sBottomUploads[2];
 static uint32_t* sTopUpload;
-static SecondScreenSnapshot sPreviousBottomSnapshot;
 static uint32_t sBottomTick;
 static bool sBottomReady;
+static bool sBottomTextureReady;
+static bool sBottomWorkerPending;
+static int sBottomFrontBuffer;
+static int sBottomWorkerBuffer;
+static uint32_t sBottomWorkerTick;
+static SecondScreenSnapshot sBottomWorkerSnapshot;
+static uint64_t sBottomWorkerLastTicks;
 static bool sGpuPresenterReady;
 static bool sInitialized;
 static uint32_t sFrameNumber;
+static uint64_t sPerfFirstFrameTick;
+static uint64_t sPerfLastFrameTick;
+static uint64_t sPerfRenderTicks;
+static uint64_t sPerfTopTicks;
+static uint64_t sPerfBottomTicks;
+static uint64_t sPerfTotalTicks;
+static uint64_t sPerfSamples;
+static uint64_t sPerfBottomSamples;
+static uint64_t sPerfRenderMaxTicks;
+static uint64_t sPerfBottomMaxTicks;
 #ifdef TMC_3DS_DIAGNOSTICS
 static unsigned sDiagnosticFrames;
 static uint64_t sDiagnosticStartMs;
@@ -49,17 +64,6 @@ static void DumpPpuSnapshot(const char* path) {
     fclose(file);
 }
 #endif
-
-static uint16_t AbgrToRgb565(uint32_t p) {
-    const uint16_t r = (uint16_t)((p & 0xffu) >> 3);
-    const uint16_t g = (uint16_t)(((p >> 8) & 0xffu) >> 2);
-    const uint16_t b = (uint16_t)(((p >> 16) & 0xffu) >> 3);
-    return (uint16_t)((r << 11) | (g << 5) | b);
-}
-
-static uint32_t AbgrToArgb8888(uint32_t p) {
-    return 0xff000000u | ((p & 0xffu) << 16) | (p & 0xff00u) | ((p >> 16) & 0xffu);
-}
 
 static bool WriteBlob(const char* path, const void* data, size_t size) {
     FILE* file = fopen(path, "wb");
@@ -98,52 +102,26 @@ static bool CreateDumpDirectory(char* out, size_t outSize) {
     return false;
 }
 
-static bool SaveArgb8888Bmp(const char* path, const uint32_t* pixels,
-                            int pitchPixels, int width, int height) {
-    if (!path || !pixels || pitchPixels <= 0 || width <= 0 || height <= 0) return false;
-    FILE* file = fopen(path, "wb");
-    if (!file) return false;
-
-    const int rowSize = (width * 3 + 3) & ~3;
-    const uint32_t fileSize = 54u + (uint32_t)rowSize * (uint32_t)height;
-    const uint8_t header[54] = {
-        'B', 'M',
-        (uint8_t)fileSize, (uint8_t)(fileSize >> 8), (uint8_t)(fileSize >> 16), (uint8_t)(fileSize >> 24),
-        0, 0, 0, 0, 54, 0, 0, 0,
-        40, 0, 0, 0,
-        (uint8_t)width, (uint8_t)(width >> 8), (uint8_t)(width >> 16), (uint8_t)(width >> 24),
-        (uint8_t)height, (uint8_t)(height >> 8), (uint8_t)(height >> 16), (uint8_t)(height >> 24),
-        1, 0, 24, 0,
-    };
-    bool ok = fwrite(header, 1, sizeof(header), file) == sizeof(header);
-    uint8_t row[400 * 3];
-    if (rowSize > (int)sizeof(row)) ok = false;
-    for (int y = height - 1; ok && y >= 0; --y) {
-        memset(row, 0, (size_t)rowSize);
-        const uint32_t* src = pixels + (size_t)y * (size_t)pitchPixels;
-        for (int x = 0; x < width; ++x) {
-            const uint32_t c = src[x];
-            row[x * 3 + 0] = (uint8_t)c;
-            row[x * 3 + 1] = (uint8_t)(c >> 8);
-            row[x * 3 + 2] = (uint8_t)(c >> 16);
-        }
-        ok = fwrite(row, 1, (size_t)rowSize, file) == (size_t)rowSize;
-    }
-    if (fclose(file) != 0) ok = false;
-    return ok;
+static double TicksToMilliseconds(uint64_t ticks) {
+    return (double)ticks * 1000.0 / (double)Platform3DS_TicksPerSecond();
 }
 
-static void WriteQuickDump(void) {
+void Port_PPU_3DS_WriteQuickDump(void) {
+    if (!sInitialized) return;
     char dir[128];
     if (!CreateDumpDirectory(dir, sizeof(dir))) return;
 
+    char topPath[192];
+    char bottomPath[192];
+    snprintf(topPath, sizeof(topPath), "%s/top-screen.bmp", dir);
+    snprintf(bottomPath, sizeof(bottomPath), "%s/bottom-screen.bmp", dir);
+    const bool screensOk = Platform3DS_SaveDisplayedScreens(topPath, bottomPath);
+
     char path[192];
-    snprintf(path, sizeof(path), "%s/top-screen.bmp", dir);
-    SaveArgb8888Bmp(path, sTopUpload, 256, GBA_W, GBA_H);
-    snprintf(path, sizeof(path), "%s/bottom-screen.bmp", dir);
-    SaveArgb8888Bmp(path, sBottomUpload, 512, 320, 240);
     snprintf(path, sizeof(path), "%s/vram.bin", dir);
     WriteBlob(path, gVram, sizeof(gVram));
+    snprintf(path, sizeof(path), "%s/io-registers.bin", dir);
+    WriteBlob(path, gIoMem, sizeof(gIoMem));
     snprintf(path, sizeof(path), "%s/palettes.bin", dir);
     WriteBlob(path, gBgPltt, sizeof(gBgPltt));
     snprintf(path, sizeof(path), "%s/oam.bin", dir);
@@ -152,10 +130,33 @@ static void WriteQuickDump(void) {
     snprintf(path, sizeof(path), "%s/info.txt", dir);
     FILE* info = fopen(path, "wb");
     if (info) {
-        fprintf(info, "The Minish Cap 3DS v0.2 quick dump\n");
+        const double sampleCount = sPerfSamples ? (double)sPerfSamples : 1.0;
+        const double bottomSampleCount = sPerfBottomSamples ? (double)sPerfBottomSamples : 1.0;
+        const double elapsedSeconds = sPerfLastFrameTick > sPerfFirstFrameTick
+                                          ? (double)(sPerfLastFrameTick - sPerfFirstFrameTick) /
+                                                (double)Platform3DS_TicksPerSecond()
+                                          : 0.0;
+        const double measuredFps = elapsedSeconds > 0.0 && sPerfSamples > 1
+                                       ? (double)(sPerfSamples - 1u) / elapsedSeconds
+                                       : 0.0;
+        fprintf(info, "The Minish Cap 3DS v" TMC_PORT_VERSION " quick dump\n");
         fprintf(info, "Frame: %lu\n", (unsigned long)sFrameNumber);
-        fprintf(info, "Top screenshot: 240x160 ARGB8888 BMP\n");
-        fprintf(info, "Bottom screenshot: 320x240 ARGB8888 BMP\n");
+        fprintf(info, "Top screenshot: 400x240 displayed framebuffer BMP\n");
+        fprintf(info, "Bottom screenshot: 320x240 displayed framebuffer BMP\n");
+        fprintf(info, "Displayed framebuffer capture: %s\n", screensOk ? "OK" : "FAILED");
+        fprintf(info, "System: %s\n", Platform3DS_IsNew3DS() ? "New Nintendo 3DS" : "Old Nintendo 3DS");
+        fprintf(info, "Core 1 time limit: %u%%\n", Platform3DS_Core1TimeLimit());
+        fprintf(info, "Measured cadence: %.2f FPS\n", measuredFps);
+        fprintf(info, "PPU render: average %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(sPerfRenderTicks) / sampleCount, TicksToMilliseconds(sPerfRenderMaxTicks));
+        fprintf(info, "Top presentation CPU work: average %.3f ms\n",
+                TicksToMilliseconds(sPerfTopTicks) / sampleCount);
+        fprintf(info, "Bottom-screen paint worker: average %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(sPerfBottomTicks) / bottomSampleCount,
+                TicksToMilliseconds(sPerfBottomMaxTicks));
+        fprintf(info, "Main-thread render/presentation CPU work: average %.3f ms\n",
+                TicksToMilliseconds(sPerfTotalTicks) / sampleCount);
+        fprintf(info, "Bottom-screen refresh: 20 Hz\n");
         fprintf(info, "Trigger: L + R + A\n");
         fclose(info);
     }
@@ -165,15 +166,18 @@ static void WriteQuickDump(void) {
     Platform3DS_Debug(message);
 }
 
-void Port_PPU_3DS_PresentLine(int line, const uint32_t* pixels) {
-    if (!pixels) return;
-    for (int sx = 0; sx < GBA_W; ++sx) {
-        sTopUpload[line * 256 + sx] = AbgrToArgb8888(pixels[sx]);
-    }
+void Port_PPU_3DS_RenderBottomWorker(void) {
+    const uint64_t startTick = Platform3DS_SystemTick();
+    Port_SecondScreen_PaintInto(sBottomUploads[sBottomWorkerBuffer], 320, 240, 512,
+                                &sBottomWorkerSnapshot, sBottomWorkerTick);
+    sBottomWorkerLastTicks = Platform3DS_SystemTick() - startTick;
 }
 
-void Port_PPU_3DS_FlushLines(int first_line, int last_line) {
-    PlatformGpu3DS_FlushTopLines(first_line, last_line);
+static void RecordBottomWorkerTiming(void) {
+    if (sFrameNumber < 120u) return;
+    ++sPerfBottomSamples;
+    sPerfBottomTicks += sBottomWorkerLastTicks;
+    if (sBottomWorkerLastTicks > sPerfBottomMaxTicks) sPerfBottomMaxTicks = sBottomWorkerLastTicks;
 }
 
 void Port_PPU_Init(SDL_Window* window) {
@@ -184,18 +188,35 @@ void Port_PPU_Init(SDL_Window* window) {
     virtuappu_registers.frame_pitch = GBA_W;
     virtuappu_registers.mode = 1;
     Port_SecondScreen_Init();
-    memset(sBottom, 0, sizeof(sBottom));
-    memset(&sPreviousBottomSnapshot, 0, sizeof(sPreviousBottomSnapshot));
     sBottomReady = false;
+    sBottomTextureReady = false;
+    sBottomWorkerPending = false;
+    sBottomFrontBuffer = 0;
+    sBottomWorkerBuffer = 1;
+    sBottomTick = 0;
+    sFrameNumber = 0;
+    sPerfFirstFrameTick = 0;
+    sPerfLastFrameTick = 0;
+    sPerfRenderTicks = 0;
+    sPerfTopTicks = 0;
+    sPerfBottomTicks = 0;
+    sPerfTotalTicks = 0;
+    sPerfSamples = 0;
+    sPerfBottomSamples = 0;
+    sPerfRenderMaxTicks = 0;
+    sPerfBottomMaxTicks = 0;
     sGpuPresenterReady = PlatformGpu3DS_Init();
     sTopUpload = PlatformGpu3DS_TopBuffer();
-    sBottomUpload = PlatformGpu3DS_BottomBuffer();
-    sInitialized = sGpuPresenterReady;
+    sBottomUploads[0] = PlatformGpu3DS_BottomBuffer(0);
+    sBottomUploads[1] = PlatformGpu3DS_BottomBuffer(1);
+    sInitialized = sGpuPresenterReady && sTopUpload && sBottomUploads[0] && sBottomUploads[1];
+    virtuappu_mode1_set_output_buffer(sInitialized ? sTopUpload : NULL, 256);
 }
 
 void Port_PPU_PresentFrame(void) {
     if (!sInitialized) return;
     ++sFrameNumber;
+    const uint64_t frameStartTick = Platform3DS_SystemTick();
 
 #ifdef TMC_3DS_DIAGNOSTICS
     const uint64_t frameStart = Platform3DS_Milliseconds();
@@ -210,6 +231,7 @@ void Port_PPU_PresentFrame(void) {
     virtuappu_mode1_bg2y_hdma_strobe = port_hdma_dest_overlaps(gIoMem + 0x2c, gIoMem + 0x30) != 0;
 
     virtuappu_render_frame();
+    const uint64_t renderEndTick = Platform3DS_SystemTick();
 #ifdef TMC_3DS_DIAGNOSTICS
     const uint64_t renderEnd = Platform3DS_Milliseconds();
 
@@ -220,8 +242,8 @@ void Port_PPU_PresentFrame(void) {
         snprintf(message, sizeof(message),
                  "[tmc3ds] frame=%u dispcnt=%04x io=%02x%02x vram=%02x%02x%02x%02x pal=%04x,%04x out=%08lx,%08lx\n",
                  diagnosticFrame, dispcnt, gIoMem[0], gIoMem[1], gVram[0], gVram[1], gVram[2], gVram[3],
-                 gBgPltt[0], gBgPltt[1], (unsigned long)virtuappu_frame_buffer[0],
-                 (unsigned long)virtuappu_frame_buffer[1]);
+                 gBgPltt[0], gBgPltt[1], (unsigned long)sTopUpload[0],
+                 (unsigned long)sTopUpload[1]);
         Platform3DS_Debug(message);
     }
     if (diagnosticFrame == 2) DumpPpuSnapshot("tmc3ds-frame2.ppu1");
@@ -229,27 +251,52 @@ void Port_PPU_PresentFrame(void) {
 #endif
 
     PlatformGpu3DS_BeginTop(sTopUpload);
+    const uint64_t topEndTick = Platform3DS_SystemTick();
 #ifdef TMC_3DS_DIAGNOSTICS
     const uint64_t topEnd = Platform3DS_Milliseconds();
 #endif
 
-    SecondScreenSnapshot snap;
-    Port_SecondScreenState_Read(&snap);
-    const bool bottomChanged = !sBottomReady ||
-                               memcmp(&snap, &sPreviousBottomSnapshot, sizeof(snap)) != 0;
-    if (bottomChanged) {
-        Port_SecondScreen_PaintInto(sBottom, 320, 240, 320, &snap, sBottomTick++);
-        for (int y = 0; y < 240; ++y) {
-            for (int x = 0; x < 320; ++x) {
-                sBottomUpload[y * 512 + x] = AbgrToArgb8888(sBottom[y * 320 + x]);
-            }
-        }
-        sPreviousBottomSnapshot = snap;
+    bool bottomChanged = false;
+    if (sBottomWorkerPending && Platform3DS_TryFinishBottomWorker()) {
+        sBottomFrontBuffer = sBottomWorkerBuffer;
+        sBottomWorkerPending = false;
         sBottomReady = true;
+        bottomChanged = true;
+        RecordBottomWorkerTiming();
     }
-    PlatformGpu3DS_EndBottom(sBottomUpload, bottomChanged);
-    if (Platform3DS_TakeQuickDumpRequest()) {
-        WriteQuickDump();
+
+    const bool bottomUpdateDue = !sBottomReady || (sFrameNumber % 3u) == 0u;
+    if (!sBottomWorkerPending && bottomUpdateDue) {
+        sBottomWorkerBuffer = 1 - sBottomFrontBuffer;
+        Port_SecondScreenState_Read(&sBottomWorkerSnapshot);
+        sBottomWorkerTick = sBottomTick++;
+        if (Platform3DS_SubmitBottomWorker()) {
+            sBottomWorkerPending = true;
+        } else {
+            Port_PPU_3DS_RenderBottomWorker();
+            sBottomFrontBuffer = sBottomWorkerBuffer;
+            sBottomReady = true;
+            bottomChanged = true;
+            RecordBottomWorkerTiming();
+        }
+    }
+    if (!sBottomTextureReady) {
+        bottomChanged = true;
+        sBottomTextureReady = true;
+    }
+    PlatformGpu3DS_EndBottom(sBottomUploads[sBottomFrontBuffer], bottomChanged);
+    const uint64_t frameEndTick = Platform3DS_SystemTick();
+
+    if (sFrameNumber >= 120u) {
+        const uint64_t renderTicks = renderEndTick - frameStartTick;
+        const uint64_t topTicks = topEndTick - renderEndTick;
+        if (sPerfSamples == 0) sPerfFirstFrameTick = frameStartTick;
+        sPerfLastFrameTick = frameStartTick;
+        ++sPerfSamples;
+        sPerfRenderTicks += renderTicks;
+        sPerfTopTicks += topTicks;
+        sPerfTotalTicks += frameEndTick - frameStartTick;
+        if (renderTicks > sPerfRenderMaxTicks) sPerfRenderMaxTicks = renderTicks;
     }
 #ifdef TMC_3DS_DIAGNOSTICS
     if (diagnosticFrame < 8 || diagnosticFrame == 60) {
@@ -290,6 +337,8 @@ void Port_PPU_SetPersistence(bool enabled, float rho) { (void)enabled; (void)rho
 bool Port_PPU_3DS_UsesGpuPresenter(void) { return sGpuPresenterReady; }
 void Port_PPU_Shutdown(void) {
     sInitialized = false;
+    Platform3DS_ShutdownBottomWorker();
+    virtuappu_mode1_set_output_buffer(NULL, 0);
     if (!sGpuPresenterReady) return;
     PlatformGpu3DS_Shutdown();
     sGpuPresenterReady = false;

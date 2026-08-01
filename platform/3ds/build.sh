@@ -2,9 +2,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+VERSION="$(tr -d '\r\n' < "${ROOT}/platform/3ds/version.txt")"
 DEVKITPRO="${DEVKITPRO:-/opt/devkitpro}"
 BUILD="${ROOT}/build-3ds/game"
-TOOLS_ROOT="${TMC3DS_TOOLS_ROOT:-${ROOT}/../../../Link to the Past/Tools/bin}"
+TOOLS_ROOT="${TMC3DS_TOOLS_ROOT:-${ROOT}/../Tools/bin}"
 MAKEROM="${MAKEROM:-${TOOLS_ROOT}/makerom}"
 BANNERTOOL="${BANNERTOOL:-${TOOLS_ROOT}/bannertool}"
 
@@ -33,8 +34,8 @@ if [[ ! -x "${MAKEROM}" || ! -x "${BANNERTOOL}" ]]; then
 fi
 
 "${BANNERTOOL}" makesmdh \
-  -s "The Minish Cap 3DS v0.2" \
-  -l "The Minish Cap 3DS v0.2" \
+  -s "The Minish Cap 3DS v${VERSION}" \
+  -l "The Minish Cap 3DS v${VERSION}" \
   -p "Esteban PDN / Project Picori / samyost1" \
   -i "${ROOT}/platform/3ds/assets/icon-48.png" \
   -f visible,nosavebackups \
@@ -47,7 +48,7 @@ fi
 
 (
 cd "${ROOT}"
-"${MAKEROM}" -f cia -o "${BUILD}/tmc-3ds-v0.2.cia" \
+"${MAKEROM}" -f cia -o "${BUILD}/tmc-3ds-v${VERSION}.cia" \
   -DAPP_ROMFS=build-3ds/game/romfs \
   -rsf "${ROOT}/platform/3ds/cia/tmc3ds.rsf" -target t -exefslogo \
   -elf "${BUILD}/tmc-3ds.elf" -icon "${BUILD}/tmc-3ds.icn" \
@@ -55,4 +56,4 @@ cd "${ROOT}"
 )
 
 printf 'Ready:\n  %s\n  %s\n' \
-  "${BUILD}/tmc-3ds-v0.2.3dsx" "${BUILD}/tmc-3ds-v0.2.cia"
+  "${BUILD}/tmc-3ds-v${VERSION}.3dsx" "${BUILD}/tmc-3ds-v${VERSION}.cia"

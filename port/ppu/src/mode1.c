@@ -93,6 +93,8 @@ static VirtuaPPUMode1GbaMemory mode1_memory = { mode1_default_io_mem, mode1_defa
 
 static int mode1_frame_width = MODE1_GBA_WIDTH;
 static int mode1_frame_pitch = MODE1_GBA_WIDTH;
+static uint32_t* mode1_output_buffer;
+static int mode1_output_pitch;
 
 void virtuappu_mode1_set_frame_geometry(const PPUMemory* ppu) {
     int width = MODE1_GBA_WIDTH;
@@ -118,6 +120,23 @@ void virtuappu_mode1_set_frame_geometry(const PPUMemory* ppu) {
 
     mode1_frame_width = width;
     mode1_frame_pitch = pitch;
+}
+
+void virtuappu_mode1_set_output_buffer(uint32_t* pixels, int pitch) {
+    if (pixels != NULL && pitch >= MODE1_GBA_WIDTH) {
+        mode1_output_buffer = pixels;
+        mode1_output_pitch = pitch;
+    } else {
+        mode1_output_buffer = NULL;
+        mode1_output_pitch = 0;
+    }
+}
+
+static uint32_t* mode1_output_row(int line) {
+    if (mode1_output_buffer != NULL) {
+        return mode1_output_buffer + (size_t)line * (size_t)mode1_output_pitch;
+    }
+    return &virtuappu_frame_buffer[(size_t)line * (size_t)mode1_frame_pitch];
 }
 
 int virtuappu_mode1_frame_width(void) {
@@ -936,7 +955,7 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
 #else
     const int frame_width = mode1_frame_width;
 #endif
-    uint32_t* const out_row = &virtuappu_frame_buffer[(size_t)line * (size_t)mode1_frame_pitch];
+    uint32_t* const out_row = mode1_output_row(line);
 
     (void)bg_priority;
 
@@ -1002,6 +1021,10 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
         bg_order[j + 1] = key;
     }
 
+    const bool native_no_effect_fast_path =
+        frame_width <= MODE1_GBA_BG_CLIP_X && !any_window && effect == MODE1_BLEND_NONE;
+    const bool has_second_targets = (bldcnt & 0x3F00u) != 0u;
+
     for (x = 0; x < frame_width; ++x) {
         uint8_t win_ctrl = 0x3Fu;
         bool visible_bg[MODE1_GBA_BG_COUNT];
@@ -1013,6 +1036,33 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
         int bottom_layer = 5;
         bool found_top = false;
         bool found_bottom = false;
+
+        /* Most gameplay pixels have no window and no color effect. Only the
+         * top layer can affect those pixels, so avoid finding a second layer.
+         * Semi-transparent OBJ pixels retain the full blend path whenever a
+         * possible second target is configured. */
+        if (native_no_effect_fast_path &&
+            !(obj_enabled && obj_layer[x] != 0u && virtuappu_mode1_obj_semitrans[x] && has_second_targets)) {
+            const bool obj_candidate = obj_enabled && obj_layer[x] != 0u;
+            const unsigned obj_p = obj_priority[x];
+
+            for (int order_index = 0; order_index < MODE1_GBA_BG_COUNT; ++order_index) {
+                const int bg = bg_order[order_index];
+                if (obj_candidate && bg_order_priority[bg] >= obj_p) {
+                    top_color = obj_layer[x];
+                    found_top = true;
+                    break;
+                }
+                if (bg_enabled[bg] && bg_layers[bg][x] != 0u) {
+                    top_color = bg_layers[bg][x];
+                    found_top = true;
+                    break;
+                }
+            }
+            if (!found_top && obj_candidate) top_color = obj_layer[x];
+            out_row[x] = top_color;
+            continue;
+        }
 
         if (any_window) {
             win_ctrl = outside_ctrl;
@@ -1554,20 +1604,16 @@ static void mode1_render_lines(const Mode1RenderLinesContext* context, int first
         }
 
         virtuappu_mode1_composite_line(line, bg_layers, NULL, obj_layer, obj_priority, line_dispcnt);
-#ifdef TMC_3DS
-        extern void Port_PPU_3DS_PresentLine(int line, const uint32_t* pixels);
-        Port_PPU_3DS_PresentLine(line, &virtuappu_frame_buffer[(size_t)line * (size_t)mode1_frame_pitch]);
-#endif
         virtuappu_mode1_io_thread_override = prev_override;
     }
 }
 
 #ifdef TMC_3DS
 typedef struct Mode1Worker {
+    LightEvent start;
     LightEvent done;
     Thread thread;
     const Mode1RenderLinesContext* context;
-    volatile uint32_t job_id;
     volatile bool running;
 } Mode1Worker;
 
@@ -1584,22 +1630,16 @@ static void mode1_render_dynamic(const Mode1RenderLinesContext* context) {
                              ? first + MODE1_3DS_LINE_CHUNK
                              : MODE1_GBA_HEIGHT;
         mode1_render_lines(context, first, last);
-        extern void Port_PPU_3DS_FlushLines(int first_line, int last_line);
-        Port_PPU_3DS_FlushLines(first, last);
     }
 }
 
 static void mode1_worker_main(void* argument) {
     Mode1Worker* worker = (Mode1Worker*)argument;
-    uint32_t completed_job = 0;
-    while (__atomic_load_n(&worker->running, __ATOMIC_ACQUIRE)) {
-        const uint32_t job = __atomic_load_n(&worker->job_id, __ATOMIC_ACQUIRE);
-        if (job == completed_job) {
-            __asm__ volatile("yield");
-            continue;
-        }
+    for (;;) {
+        LightEvent_Wait(&worker->start);
+        if (!__atomic_load_n(&worker->running, __ATOMIC_ACQUIRE)) break;
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
         mode1_render_dynamic(worker->context);
-        completed_job = job;
         LightEvent_Signal(&worker->done);
     }
 }
@@ -1610,17 +1650,21 @@ static int mode1_ensure_workers(void) {
     }
     sMode1WorkersInitialized = true;
 
-    bool is_new_3ds = false;
-    APT_CheckNew3DS(&is_new_3ds);
+    extern bool Platform3DS_IsNew3DS(void);
+    extern bool Platform3DS_CanUseCore1(void);
     s32 priority = 0x30;
     svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
 
-    LightEvent_Init(&sMode1Workers[0].done, RESET_ONESHOT);
-    sMode1Workers[0].running = true;
-    sMode1Workers[0].thread = threadCreate(mode1_worker_main, &sMode1Workers[0], 24 * 1024, priority, 1, false);
-    if (!sMode1Workers[0].thread) sMode1Workers[0].running = false;
+    if (Platform3DS_CanUseCore1()) {
+        LightEvent_Init(&sMode1Workers[0].start, RESET_ONESHOT);
+        LightEvent_Init(&sMode1Workers[0].done, RESET_ONESHOT);
+        sMode1Workers[0].running = true;
+        sMode1Workers[0].thread = threadCreate(mode1_worker_main, &sMode1Workers[0], 24 * 1024, priority, 1, false);
+        if (!sMode1Workers[0].thread) sMode1Workers[0].running = false;
+    }
 
-    if (is_new_3ds) {
+    if (Platform3DS_IsNew3DS()) {
+        LightEvent_Init(&sMode1Workers[1].start, RESET_ONESHOT);
         LightEvent_Init(&sMode1Workers[1].done, RESET_ONESHOT);
         sMode1Workers[1].running = true;
         sMode1Workers[1].thread = threadCreate(mode1_worker_main, &sMode1Workers[1], 24 * 1024, priority, 2, false);
@@ -1637,7 +1681,8 @@ static void mode1_render_lines_3ds(const Mode1RenderLinesContext* context) {
         Mode1Worker* worker = &sMode1Workers[i];
         if (!worker->thread) continue;
         worker->context = context;
-        __atomic_add_fetch(&worker->job_id, 1, __ATOMIC_RELEASE);
+        __atomic_thread_fence(__ATOMIC_RELEASE);
+        LightEvent_Signal(&worker->start);
     }
     mode1_render_dynamic(context);
     for (int i = 0; i < 2; ++i) {
@@ -1650,10 +1695,12 @@ void virtuappu_mode1_shutdown_workers(void) {
         Mode1Worker* worker = &sMode1Workers[i];
         if (!worker->thread) continue;
         __atomic_store_n(&worker->running, false, __ATOMIC_RELEASE);
+        LightEvent_Signal(&worker->start);
         threadJoin(worker->thread, 2000000000ULL);
         threadFree(worker->thread);
         worker->thread = NULL;
     }
+    sMode1WorkersInitialized = false;
 }
 #else
 void virtuappu_mode1_shutdown_workers(void) {}
@@ -1678,8 +1725,7 @@ void virtuappu_mode1_render_frame(const PPUMemory* ppu) {
     dispcnt = virtuappu_mode1_io_read16(MODE1_IO_DISPCNT);
     if ((dispcnt & MODE1_DISP_FORCED_BLANK) != 0u) {
         for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
-            memset(&virtuappu_frame_buffer[(size_t)line * (size_t)mode1_frame_pitch], 0xFF,
-                   (size_t)mode1_frame_width * sizeof(uint32_t));
+            memset(mode1_output_row(line), 0xFF, (size_t)mode1_frame_width * sizeof(uint32_t));
         }
         return;
     }
@@ -1721,7 +1767,8 @@ void virtuappu_mode1_render_frame(const PPUMemory* ppu) {
     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
         if (per_line_io) {
             virtuappu_mode1_pre_line_callback(line);
-            memcpy(io_snapshots[line], mode1_memory.io_mem, MODE1_IO_MEM_SIZE);
+            /* Display rendering only reads registers through BLDY (0x54). */
+            memcpy(io_snapshots[line], mode1_memory.io_mem, MODE1_IO_BLDY + 2u);
             per_line_dispcnt[line] =
 #ifdef TMC_N64
                 *(const uint16_t*)&io_snapshots[line][MODE1_IO_DISPCNT];
