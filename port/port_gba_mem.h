@@ -50,7 +50,9 @@ static inline void* gba_TryMemPtr(uint32_t addr) {
     if (addr >= 0x07000000u && addr < 0x07000400u)
         return &gOamMem[(addr - 0x07000000u) >> 1];
     if (gRomData && addr >= 0x08000000u && addr < 0x08000000u + gRomSize) {
+#ifndef TMC_3DS
         Port_LogRomAccess(addr, "gba_TryMemPtr");
+#endif
         return &gRomData[addr - 0x08000000u];
     }
     return NULL;

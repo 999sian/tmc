@@ -149,6 +149,7 @@ typedef struct VirtuaPPUMode1GbaMemory {
 void virtuappu_mode1_bind_gba_memory(const VirtuaPPUMode1GbaMemory* memory);
 void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory* memory);
 void virtuappu_mode1_set_frame_geometry(const PPUMemory* ppu);
+void virtuappu_mode1_set_output_buffer(uint32_t* pixels, int pitch);
 int virtuappu_mode1_frame_width(void);
 int virtuappu_mode1_frame_pitch(void);
 uint16_t virtuappu_mode1_io_read16(uint16_t offset);

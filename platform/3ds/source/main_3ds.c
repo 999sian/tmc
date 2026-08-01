@@ -60,7 +60,10 @@ int main(int argc, char** argv) {
     if (!Platform3DS_Init()) return 1;
     Platform3DS_ShowSplash();
 
-    printf("The Minish Cap 3DS v0.2\n\n");
+    printf("The Minish Cap 3DS v" TMC_PORT_VERSION "\n\n");
+    printf("System: %s\n", Platform3DS_IsNew3DS() ? "New Nintendo 3DS" : "Nintendo 3DS");
+    printf("PPU worker core 1: %u%%\n", Platform3DS_Core1TimeLimit());
+    printf("Extra New 3DS core: %s\n\n", Platform3DS_IsNew3DS() ? "enabled" : "unavailable");
     printf("Preparing storage...\n");
     if (!PrepareStorage()) {
         Platform3DS_ShowFatal("Storage error", "Could not open " APP_DIR ".");

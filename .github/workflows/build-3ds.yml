@@ -32,10 +32,12 @@ jobs:
 
       - name: Verify build outputs and legal files
         run: |
+          VERSION="$(tr -d '\r\n' < platform/3ds/version.txt)"
           test ! -f baserom.gba
-          ! git ls-files | grep -Ei '(^|/)(baserom.*\.gba|.*\.sav|.*\.ppu1|tmc3ds\.log|bugreport_.*)$'
-          test -f build-3ds/game/tmc-3ds-v0.2.3dsx
-          if [ -f build-3ds/game/tmc-3ds-v0.2.cia ]; then
+          ! git ls-files | grep -Ei '(^|/)([^/]*\.gba|[^/]*\.sav|[^/]*\.ppu1|tmc3ds\.log|bugreport_.*)(/|$)'
+          ! git ls-files | grep -E '(^|/)(AGENTS\.md|WORKFLOW\.md|GITHUB_RELEASE_WORKFLOW\.md)$'
+          test -f "build-3ds/game/tmc-3ds-v${VERSION}.3dsx"
+          if [ -f "build-3ds/game/tmc-3ds-v${VERSION}.cia" ]; then
             echo "CIA package was built."
           else
             echo "CIA package skipped because makerom/bannertool are unavailable in CI."
@@ -47,5 +49,5 @@ jobs:
           name: tmc-3ds-packages
           if-no-files-found: error
           path: |
-            build-3ds/game/tmc-3ds-v0.2.3dsx
-            build-3ds/game/tmc-3ds-v0.2.cia
+            build-3ds/game/tmc-3ds-v*.3dsx
+            build-3ds/game/tmc-3ds-v*.cia

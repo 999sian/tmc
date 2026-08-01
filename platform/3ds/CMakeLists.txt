@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
-project(tmc_3ds VERSION 0.2 LANGUAGES C CXX)
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/version.txt" TMC_3DS_VERSION LIMIT_COUNT 1)
+project(tmc_3ds VERSION "${TMC_3DS_VERSION}" LANGUAGES C CXX)
 
 set(TMC_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 
@@ -83,7 +84,7 @@ target_include_directories(tmc-3ds PRIVATE
 
 target_compile_definitions(tmc-3ds PRIVATE
     PC_PORT NON_MATCHING USE_HDMA TMC_3DS USA ENGLISH REVISION=0
-    MODE1_GBA_WIDTH=240 TMC_PORT_VERSION="0.2" TMC_PC_VERSION="0.2"
+    MODE1_GBA_WIDTH=240 TMC_PORT_VERSION="${TMC_3DS_VERSION}" TMC_PC_VERSION="${TMC_3DS_VERSION}"
 )
 target_compile_features(tmc-3ds PRIVATE c_std_11 cxx_std_20)
 set_target_properties(tmc-3ds PROPERTIES
@@ -100,9 +101,17 @@ target_compile_options(tmc-3ds PRIVATE
 set_source_files_properties(
     "${TMC_ROOT}/port/ppu/src/virtuappu.c"
     "${TMC_ROOT}/port/ppu/src/mode1.c"
+    "${TMC_ROOT}/port/port_second_screen.c"
+    "${TMC_ROOT}/port/port_second_screen_render.c"
+    "${TMC_ROOT}/port/port_second_screen_worldmap.c"
+    "${TMC_ROOT}/port/port_second_screen_dungeonmap.c"
+    "${TMC_ROOT}/port/port_second_screen_quest.c"
+    "${TMC_ROOT}/port/port_second_screen_theme.c"
+    "${CMAKE_CURRENT_LIST_DIR}/source/platform_gpu_3ds.c"
+    "${CMAKE_CURRENT_LIST_DIR}/source/port_ppu_3ds.c"
     PROPERTIES COMPILE_OPTIONS "-flto;-fno-semantic-interposition"
 )
-target_link_options(tmc-3ds PRIVATE -Wl,--gc-sections -flto)
+target_link_options(tmc-3ds PRIVATE -O3 -flto -Wl,--gc-sections)
 target_link_libraries(tmc-3ds PRIVATE citro2d citro3d ctru m)
 
 set(TMC_ROMFS "${CMAKE_CURRENT_BINARY_DIR}/romfs")
@@ -116,7 +125,7 @@ configure_file(
 set(TMC_SMDH "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds.smdh")
 ctr_generate_smdh(
     OUTPUT "${TMC_SMDH}"
-    NAME "The Minish Cap 3DS v0.2"
+    NAME "The Minish Cap 3DS v${TMC_3DS_VERSION}"
     DESCRIPTION "Native Nintendo 3DS port"
     AUTHOR "Esteban PDN / Project Picori / samyost1"
     ICON "${CMAKE_CURRENT_LIST_DIR}/assets/icon-48.png"
@@ -124,7 +133,7 @@ ctr_generate_smdh(
 
 ctr_create_3dsx(tmc-3ds-3dsx
     TARGET tmc-3ds
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds-v0.2.3dsx"
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds-v${TMC_3DS_VERSION}.3dsx"
     SMDH "${TMC_SMDH}"
     ROMFS "${TMC_ROMFS}"
 )

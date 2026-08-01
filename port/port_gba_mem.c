@@ -47,7 +47,9 @@ u8 gba_read8(uint32_t addr) {
     if (addr >= 0x06000000u && addr < 0x06018000u)
         return gVram[addr - 0x06000000u];
     if (gRomData && addr >= 0x08000000u && addr < 0x08000000u + gRomSize) {
+#ifndef TMC_3DS
         Port_LogRomAccess(addr, "gba_read8");
+#endif
         return gRomData[addr - 0x08000000u];
     }
 
@@ -114,7 +116,9 @@ u16 gba_read16(uint32_t addr) {
     if (addr >= 0x03000000u && addr < 0x03007FFFu)
         return gIwram[addr - 0x03000000u] | (gIwram[addr - 0x03000000u + 1] << 8);
     if (gRomData && addr >= 0x08000000u) {
+#ifndef TMC_3DS
         Port_LogRomAccess(addr, "gba_read16");
+#endif
         u32 off = addr - 0x08000000u;
         if (off + 1 < gRomSize) {
             return gRomData[off] | (gRomData[off + 1] << 8);
@@ -206,7 +210,9 @@ u32 gba_read32(uint32_t addr) {
         return gIwram[off] | (gIwram[off + 1] << 8) | (gIwram[off + 2] << 16) | (gIwram[off + 3] << 24);
     }
     if (gRomData && addr >= 0x08000000u) {
+#ifndef TMC_3DS
         Port_LogRomAccess(addr, "gba_read32");
+#endif
         u32 off = addr - 0x08000000u;
         if (off + 3 < gRomSize) {
             return gRomData[off] | (gRomData[off + 1] << 8) | (gRomData[off + 2] << 16) | (gRomData[off + 3] << 24);

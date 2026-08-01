@@ -18,6 +18,9 @@
 #include "port_second_screen_state.h"
 #include <setjmp.h>
 #endif
+#ifdef TMC_3DS
+#include "platform_3ds.h"
+#endif
 #include "gba/io_reg.h"
 
 #ifdef TMC_N64
@@ -86,7 +89,13 @@ void AgbMain(void) {
     N64_POST(20);
 
     // Game Loop
-    while (TRUE) {
+    while (
+#ifdef TMC_3DS
+        Platform3DS_IsRunning()
+#else
+        TRUE
+#endif
+    ) {
         ReadKeyInput();
         if (SoftResetKeysPressed()) {
             DoSoftReset();
