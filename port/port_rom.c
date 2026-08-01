@@ -1252,11 +1252,13 @@ void Port_LoadRom(const char* path) {
 #ifndef TMC_N64
     memset(sExtractedPages, 0, sizeof(sExtractedPages));
 
+#ifndef TMC_3DS
     /* ---- Step 1: try loading from rom_data/ extracted pages ---- */
     int pagesLoaded = LoadExtractedPages();
     if (pagesLoaded > 0) {
         fprintf(stderr, "ROM data: loaded %d extracted pages from " ROM_EXTRACT_DIR "/\n", pagesLoaded);
     }
+#endif
 
     /* ---- Step 2: try ROM files (USA first, then EU) ---- */
     /*

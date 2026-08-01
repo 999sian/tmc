@@ -1,7 +1,8 @@
 # Repository Guidelines
 
-Read `GITHUB_RELEASE_WORKFLOW.md` before starting every request. Its legal,
-QA, packaging, and publishing rules are mandatory for this Nintendo 3DS port.
+Read `WORKFLOW.md` and `GITHUB_RELEASE_WORKFLOW.md` before starting every
+request. Their user-preference, legal, QA, packaging, and publishing rules are
+mandatory for this Nintendo 3DS port.
 
 ## Project Overview
 
@@ -11,7 +12,8 @@ code, 3DS platform glue, build scripts, and redistributable artwork only.
 
 The project never distributes a ROM, extracted Nintendo assets, save data,
 runtime dumps, emulator logs, or firmware. Users provide their own clean USA
-ROM on the SD card as `sdmc:/3ds/The Minish Cap 3DS/baserom.gba`.
+ROM on the SD card under `sdmc:/3ds/The Minish Cap 3DS/`. Any `.gba` filename
+is accepted.
 
 ## Main 3DS Areas
 
@@ -51,11 +53,11 @@ bannertool.
 Expected public outputs:
 
 ```text
-build-3ds/game/tmc-3ds-v0.1.0.cia
-build-3ds/game/tmc-3ds-v0.1.0.3dsx
+build-3ds/game/tmc-3ds-v0.2.cia
+build-3ds/game/tmc-3ds-v0.2.3dsx
 ```
 
-The build must not embed `baserom.gba`.
+The build must not embed any ROM.
 
 ## QA Expectations
 
