@@ -25,6 +25,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends cmake make pkg-config zip
+          dkp-pacman -Sy --noconfirm --needed 3dstools bannertool
 
       - name: Build CIA and 3DSX
         run: ./platform/3ds/build.sh
@@ -32,6 +33,7 @@ jobs:
       - name: Verify no ROM is embedded
         run: |
           test ! -f baserom.gba
+          ! git ls-files | grep -Ei '(^|/)(baserom.*\.gba|.*\.sav|.*\.ppu1|tmc3ds\.log|bugreport_.*)$'
           test -f build-3ds/game/tmc-3ds-v0.2.cia
           test -f build-3ds/game/tmc-3ds-v0.2.3dsx
 
