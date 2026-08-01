@@ -8,6 +8,19 @@ TOOLS_ROOT="${TMC3DS_TOOLS_ROOT:-${ROOT}/../../../Link to the Past/Tools/bin}"
 MAKEROM="${MAKEROM:-${TOOLS_ROOT}/makerom}"
 BANNERTOOL="${BANNERTOOL:-${TOOLS_ROOT}/bannertool}"
 
+if [[ ! -x "${MAKEROM}" ]] && command -v makerom >/dev/null 2>&1; then
+  MAKEROM="$(command -v makerom)"
+fi
+if [[ ! -x "${BANNERTOOL}" ]] && command -v bannertool >/dev/null 2>&1; then
+  BANNERTOOL="$(command -v bannertool)"
+fi
+if [[ ! -x "${MAKEROM}" && -x "${DEVKITPRO}/tools/bin/makerom" ]]; then
+  MAKEROM="${DEVKITPRO}/tools/bin/makerom"
+fi
+if [[ ! -x "${BANNERTOOL}" && -x "${DEVKITPRO}/tools/bin/bannertool" ]]; then
+  BANNERTOOL="${DEVKITPRO}/tools/bin/bannertool"
+fi
+
 export DEVKITPRO
 cmake -S "${ROOT}/platform/3ds" -B "${BUILD}" \
   -DCMAKE_TOOLCHAIN_FILE="${DEVKITPRO}/cmake/3DS.cmake" \
