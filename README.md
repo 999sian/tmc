@@ -2,26 +2,37 @@
 
 ![The Minish Cap 3DS splash screen](platform/3ds/assets/splash.png)
 
-A native dual-screen Nintendo 3DS port of *The Legend of Zelda: The Minish
-Cap*, based on the open-source Project Picori engine and samyost1's dual-screen
-Android work.
+Native Nintendo 3DS dual-screen port of *The Legend of Zelda: The Minish Cap*,
+built with help from Codex.
 
-This repository contains no ROM and no extracted game assets. You must provide
-your own legally obtained compatible Game Boy Advance ROM.
+This project is based on open-source work from:
 
-## Current Features
+- Direct dual-screen Android source base:
+  [samyost1/tmc-android](https://github.com/samyost1/tmc-android)
+- Native Minish Cap engine and port infrastructure:
+  [Project Picori](https://github.com/999sian/tmc)
+- Original decompilation:
+  [zeldaret/tmc](https://github.com/zeldaret/tmc)
 
-- Native CIA and Homebrew Launcher 3DSX builds.
-- 360x240 nearest-neighbor gameplay on the top screen.
-- Live map, dungeon information, quest status, and touch item UI on the bottom
-  screen.
-- D-pad and Circle Pad movement.
-- A, B, L, R, Start, and Select controls matching the original GBA layout.
-- PICA200/Citro2D presentation for both screens.
-- Parallel software PPU rendering across the available application cores.
-- New Nintendo 3DS speedup and third-core rendering support.
+No ROM or extracted game asset package is distributed in this repository. Each
+user must provide their own legally obtained compatible Game Boy Advance ROM on
+their own 3DS SD card.
+
+## Features
+
+- Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
+  builds.
+- Fullscreen top-screen gameplay at 360x240 with nearest-neighbor scaling.
+- Bottom screen with live map, dungeon information, quest status and touch item
+  UI.
+- ROM files can use any `.gba` filename.
+- PICA200/Citro2D presentation for the top and bottom screens.
+- Parallel software PPU rendering across the available 3DS application cores.
+- New Nintendo 3DS speedup with 804 MHz, L2 cache and third-core rendering
+  support.
 - Native NDSP stereo audio.
 - Local save data stored beside the ROM on the SD card.
+- Public GitHub releases include CIA, 3DSX, QR code and clean source archive.
 
 The v0.1.0 series is an early pre-release. New Nintendo 3DS is the primary
 60 FPS performance target; measured Old Nintendo 3DS limitations will be
@@ -37,11 +48,8 @@ documented in the release notes.
 sdmc:/3ds/The Minish Cap 3DS/
 ```
 
-3. Place your clean USA ROM there as:
-
-```text
-sdmc:/3ds/The Minish Cap 3DS/baserom.gba
-```
+3. Place your clean USA ROM in that directory. Any `.gba` filename is accepted,
+   though short names are recommended.
 
 The expected ROM SHA-1 is:
 
@@ -54,18 +62,21 @@ The ROM stays on your SD card and is never included in the CIA.
 Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 `Dump DSP firmware` option if homebrew audio is unavailable.
 
-## Controls
+## Releases
 
-| Nintendo 3DS | Game Boy Advance |
-| --- | --- |
-| D-pad / Circle Pad | D-pad |
-| A | A |
-| B | B |
-| L | L |
-| R | R |
-| Start | Start |
-| Select | Select |
-| Touch screen | Bottom-screen UI |
+Every GitHub release includes:
+
+- installable CIA
+- Homebrew Launcher 3DSX
+- QR code for scanning the CIA URL from FBI on a 3DS
+- clean source-code zip for that exact version
+
+Release binaries and QR images are kept on the GitHub Releases page, not in the
+repository source tree.
+
+Latest release:
+
+https://github.com/EstebanPdN/zelda-tmc-3ds/releases/latest
 
 ## Building
 
@@ -89,12 +100,12 @@ build-3ds/game/tmc-3ds-v0.1.0.cia
 build-3ds/game/tmc-3ds-v0.1.0.3dsx
 ```
 
-The build does not embed `baserom.gba`.
+The build does not embed a ROM.
 
 ## Credits
 
-- [samyost1/tmc-android](https://github.com/samyost1/tmc-android) - dual-screen
-  Android project used as the direct porting base.
+- [samyost1/tmc-android](https://github.com/samyost1/tmc-android) - direct
+  dual-screen Android source base for this 3DS port.
 - [Project Picori](https://github.com/999sian/tmc) - native Minish Cap engine,
   software PPU, and port infrastructure.
 - [Raekwon1603/tmc-android](https://github.com/Raekwon1603/tmc-android) - Android

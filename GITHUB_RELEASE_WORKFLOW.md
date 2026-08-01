@@ -24,8 +24,8 @@ development, validation, legal, and release process for the Nintendo 3DS port.
 - Release packages may contain source code, redistributable project artwork,
   configuration, the icon, banner, splash screen, and build metadata.
 - Every user must provide a legally obtained clean USA ROM with SHA-1
-  `b4bd50e4131b027c334547b4524e2dbbd4227130` as
-  `sdmc:/3ds/The Minish Cap 3DS/baserom.gba`.
+  `b4bd50e4131b027c334547b4524e2dbbd4227130` in
+  `sdmc:/3ds/The Minish Cap 3DS/`. Any `.gba` filename is accepted.
 
 Before every commit and release, run:
 
