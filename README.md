@@ -20,23 +20,16 @@ their own 3DS SD card.
 
 ## Features
 
-- Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
+- Native 3DS port with installable CIA and Homebrew Launcher 3DSX
   builds.
 - Fullscreen top-screen gameplay at 360x240 with nearest-neighbor scaling.
 - Bottom screen with live map, dungeon information, quest status and touch item
   UI.
-- ROM files can use any `.gba` filename.
 - PICA200/Citro2D presentation for the top and bottom screens.
 - Parallel software PPU rendering across the available 3DS application cores.
 - New Nintendo 3DS speedup with 804 MHz, L2 cache and third-core rendering
   support.
-- Native NDSP stereo audio.
 - Local save data stored beside the ROM on the SD card.
-- Public GitHub releases include CIA, 3DSX, QR code and clean source archive.
-
-The v0.1.0 series is an early pre-release. New Nintendo 3DS is the primary
-60 FPS performance target; measured Old Nintendo 3DS limitations will be
-documented in the release notes.
 
 ## Installation
 
@@ -70,13 +63,6 @@ Every GitHub release includes:
 - Homebrew Launcher 3DSX
 - QR code for scanning the CIA URL from FBI on a 3DS
 - clean source-code zip for that exact version
-
-Release binaries and QR images are kept on the GitHub Releases page, not in the
-repository source tree.
-
-Latest release:
-
-https://github.com/EstebanPdN/zelda-tmc-3ds/releases/latest
 
 ## Building
 
