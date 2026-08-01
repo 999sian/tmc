@@ -18,7 +18,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #98 fix: on 64-bit PC, Enemy::child is an 8-byte pointer (vs 4 on
        GBA). The Enemy struct's fields therefore sit 4 bytes further from
        the Entity base than this struct's bare 0x68 offset comment

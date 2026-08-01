@@ -64,7 +64,7 @@ void CreateItemIfInputMatches(Item itemId, PlayerInputState input, bool32 forceC
 bool32 IsTryingToPickupObject(void);
 ItemBehavior* CreateItem(u32);
 u32 sub_080789A8(void);
-ItemBehavior* CreateItem1(u32);
+ItemBehavior* CreateItem1(Item);
 void DeleteItemBehavior(ItemBehavior*, u32);
 bool32 sub_08079E90(u32);
 void PlayerMinishSetNormalAndCollide(void);
@@ -267,7 +267,7 @@ void UpdateActiveItems(PlayerEntity* this) {
     }
 }
 
-void CreateItemEquippedAtSlot(EquipSlot equipSlot) {
+void CreateItemEquippedAtSlot(u32 equipSlot) {
     if (equipSlot == EQUIP_SLOT_A) {
         CreateItemIfInputMatches(gSave.stats.equipped[SLOT_A], INPUT_USE_ITEM1, TRUE);
     } else {
@@ -379,7 +379,7 @@ ItemBehavior* (*const gCreateItemsFuncs[])(Item) = {
     CreateItemNone, CreateItem1, CreateItem2, CreateItem3, CreateItem4, CreateItem5,
 };
 
-ItemBehavior* CreateItem(Item itemId) {
+ItemBehavior* CreateItem(u32 itemId) {
     if (((((gPlayerState.queued_action == PLAYER_ROLL) && (itemId != ITEM_TRY_PICKUP_OBJECT)) ||
           (((gPlayerState.flags & (PL_ROLLING | PL_CLONING)) != 0 && (ITEM_FOURSWORD < itemId)))) ||
          ((((gPlayerState.jump_status != 0 || (gPlayerEntity.base.z.WORD != 0)) && (ITEM_FOURSWORD < itemId)) ||
@@ -1489,7 +1489,7 @@ void AddInteractableWhenBigFuser(Entity* ent, KinstoneId kinstoneId) {
     AddInteractableObject(ent, 1, kinstoneId);
 }
 
-void AddInteractableFuser(Entity* ent, KinstoneId kinstoneId) {
+void AddInteractableFuser(Entity* ent, u32 kinstoneId) {
     AddInteractableObject(ent, 2, kinstoneId);
 }
 
@@ -1556,7 +1556,7 @@ void SetInteractableObjectCollision(Entity* arg0, u32 ignoreLayer, u32 interactD
     }
 }
 
-s32 AddInteractableObject(Entity* entity, InteractionType type, KinstoneId kinstoneId) {
+s32 AddInteractableObject(Entity* entity, u32 type, u32 kinstoneId) {
     s32 index;
     entity->interactType = INTERACTION_NONE;
     index = GetInteractableObjectIndex(entity);

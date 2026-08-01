@@ -14,7 +14,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #98 / #99 pattern: Enemy::child is 8 bytes on PC (vs 4 on GBA),
        so without 4 bytes of padding here the framework's
        Enemy::child write stomps unk_6d and the early state bytes.

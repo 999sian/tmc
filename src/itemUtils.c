@@ -66,7 +66,7 @@ s32 GetItemPrice(u32 item) {
     return ptr->itemPrice;
 }
 
-u32 GiveItem(Item item, u32 param_2) {
+u32 GiveItem(u32 item, u32 param_2) {
     u32 uVar4;
     u32 result;
     u32 uVar9;
@@ -302,7 +302,7 @@ void ModArrows(s32 arrows) {
  * 1: B
  * 2: Not equipped
  */
-EquipSlot IsItemEquipped(u32 itemId) {
+u32 IsItemEquipped(u32 itemId) {
     EquipSlot equipSlot;
 
 #ifdef PC_PORT

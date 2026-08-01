@@ -1,116 +1,113 @@
-# Minish Cap — Dual Screen
+# The Minish Cap 3DS
 
-A dual-screen mod of *The Legend of Zelda: The Minish Cap* for the AYN Thor.
-The handheld's bottom panel becomes a live map, quest status and touch
-inventory, so the top screen can be nothing but the game.
+![The Minish Cap 3DS splash screen](platform/3ds/assets/splash.png)
 
-The dual-screen mod was made with the help of Claude Code and opencode.
+A native dual-screen Nintendo 3DS port of *The Legend of Zelda: The Minish
+Cap*, based on the open-source Project Picori engine and samyost1's dual-screen
+Android work.
 
-![](https://github.com/samyost1/tmc-android/releases/download/v1.0/showcase.png)
+This repository contains no ROM and no extracted game assets. You must provide
+your own legally obtained compatible Game Boy Advance ROM.
 
-Everything on the panel is decoded from your own ROM as the game runs — the
-map artwork, the menu chrome, the item icons, the font. No game data is stored
-in this repository.
+## Current Features
 
-## What's on the panel
+- Native CIA and Homebrew Launcher 3DSX builds.
+- 360x240 nearest-neighbor gameplay on the top screen.
+- Live map, dungeon information, quest status, and touch item UI on the bottom
+  screen.
+- D-pad and Circle Pad movement.
+- A, B, L, R, Start, and Select controls matching the original GBA layout.
+- PICA200/Citro2D presentation for both screens.
+- Parallel software PPU rendering across the available application cores.
+- New Nintendo 3DS speedup and third-core rendering support.
+- Native NDSP stereo audio.
+- Local save data stored beside the ROM on the SD card.
 
-- **Map** — Hyrule with a follow cam. ZOOM steps out to the whole kingdom;
-  tap a region to open the game's own enlarged map of it. Windcrest warps
-  show as pins.
-- **Dungeon** — the real automap: floor plaques, explored rooms, Link's
-  position, and the small-key count beside your rupees.
-- **Quest** — the pause menu's quest screen, reflowed for a square panel. Tap
-  the kinstone bag or the technique scroll to open those lists.
-- **Items** — tap a ring to arm it, then tap an item to equip that slot.
-- **Settings** — hide the top HUD (the panel takes over your vitals), true
-  widescreen, and the port-wide toggles the desktop build puts behind F8.
+The v0.1.0 series is an early pre-release. New Nintendo 3DS is the primary
+60 FPS performance target; measured Old Nintendo 3DS limitations will be
+documented in the release notes.
 
-## Install
+## Installation
 
-1. Download the APK from the [Releases page](https://github.com/samyost1/tmc-android/releases)
-   and install it. It is debug-signed, so Android will warn about an unknown
-   developer.
-2. Put your own `baserom.gba` (USA, SHA-1 `b4bd50e4131b027c334547b4524e2dbbd4227130`)
-   in `Android/data/dev.picori.tmc/files/` on internal storage.
-3. Launch. The panel appears on the second display automatically.
+1. Install `tmc-3ds-v0.1.0.cia` with FBI, or copy the 3DSX build to the
+   Homebrew Launcher.
+2. Create this directory on the SD card:
 
-Built for the Thor, but it is a plain Android `Presentation` — any device with
-a second display will do.
-
-## ROM regions
-
-The native port detects the region from the ROM header and switches its data
-tables at runtime, so the released USA APK also **loads** a EU (`BZMP`, SHA-1
-`cff199b36ff173fb6faf152653d1bccf87c26fb7`) or JP (`BZMJ`) ROM — name it
-`baserom_eu.gba` / `baserom_jp.gba` or just `baserom.gba`.
-
-It is not the same as a EU *build*, though. Each APK is compiled against one
-region's baseline: the blob-offset headers in `build/<region>/assets/` and the
-region `#ifdef`s in `src/` that have not yet been converted to the port's
-runtime `REGION_IS_*` form. On a baseline mismatch those compile-time sites
-keep following the baseline region, so a USA APK running a EU ROM is a hybrid —
-expect region-specific text, menu graphics and RNG to be off. The port logs
-which combination it is on startup:
-
-```
-$ adb logcat -s tmc | grep 'Region baseline'
-Region baseline: build=USA rom=EU (MISMATCH). ...
+```text
+sdmc:/3ds/The Minish Cap 3DS/
 ```
 
-For a faithful EU port, build the EU APK (below). JP additionally needs the
-data tables described in `docs/JP_PORT_ENABLEMENT.md`.
+3. Place your clean USA ROM there as:
 
-## Build from source
+```text
+sdmc:/3ds/The Minish Cap 3DS/baserom.gba
+```
 
-Needs the Android SDK and NDK r26. Build the native library for both ABIs,
-then package:
+The expected ROM SHA-1 is:
+
+```text
+b4bd50e4131b027c334547b4524e2dbbd4227130
+```
+
+The ROM stays on your SD card and is never included in the CIA.
+
+Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
+`Dump DSP firmware` option if homebrew audio is unavailable.
+
+## Controls
+
+| Nintendo 3DS | Game Boy Advance |
+| --- | --- |
+| D-pad / Circle Pad | D-pad |
+| A | A |
+| B | B |
+| L | L |
+| R | R |
+| Start | Start |
+| Select | Select |
+| Touch screen | Bottom-screen UI |
+
+## Building
+
+Requirements:
+
+- devkitPro with devkitARM, libctru, Citro2D, and Citro3D
+- CMake and the devkitPro Nintendo 3DS toolchain
+- `makerom` and `bannertool` for CIA packaging
+
+Build:
 
 ```sh
-for abi in arm64-v8a x86_64; do
-  xmake f -y -p android -a $abi --ndk=$ANDROID_NDK_HOME \
-      --game_version=USA --gpu_renderer=y --widescreen_width=384
-  xmake -y
-done
-cd android && ./gradlew assembleRelease
+chmod +x platform/3ds/build.sh
+./platform/3ds/build.sh
 ```
 
-`--widescreen_width=384` is what compiles the wide render paths in; without it
-the WIDESCREEN row is hidden because the setting would have nothing to switch.
-The APK lands in `android/app/build/outputs/apk/release/`.
+Outputs are written to:
 
-Swap `--game_version=USA` for `--game_version=EU` to build the EU APK; the
-tracked `build/EU/assets/*_offsets.h` mean that is the only change needed. For a
-region with no tracked headers (JP, the demos) generate them on the host first —
-the Android toolchain cannot produce them, since `asset_processor` has to *run*
-on your machine:
-
-```sh
-xmake f -P . -y -p linux                     # your host platform
-xmake build -P . -y asset_processor
-tools/bin/asset_processor extract JP build/JP/assets
+```text
+build-3ds/game/tmc-3ds-v0.1.0.cia
+build-3ds/game/tmc-3ds-v0.1.0.3dsx
 ```
 
-The build does this for you when it can and otherwise stops with these
-instructions, rather than failing on a missing `assets/map_offsets.h`.
+The build does not embed `baserom.gba`.
 
-For the desktop port, see [`INSTALL.md`](INSTALL.md).
+## Credits
 
-## Built on
+- [samyost1/tmc-android](https://github.com/samyost1/tmc-android) - dual-screen
+  Android project used as the direct porting base.
+- [Project Picori](https://github.com/999sian/tmc) - native Minish Cap engine,
+  software PPU, and port infrastructure.
+- [Raekwon1603/tmc-android](https://github.com/Raekwon1603/tmc-android) - Android
+  packaging and platform work behind the dual-screen fork.
+- [zeldaret/tmc](https://github.com/zeldaret/tmc) - original decompilation.
+- Esteban PDN - Nintendo 3DS port and release maintenance.
 
-- [Project Picori](https://github.com/999sian/tmc) — the native Minish Cap
-  port this mod extends (SDL3, software PPU, agbplay audio).
-- [Raekwon1603/tmc-android](https://github.com/Raekwon1603/tmc-android) — the
-  Android packaging and second-screen scaffold this forked from.
-- [zeldaret/tmc](https://github.com/zeldaret/tmc) — the decompilation
-  underneath all of it.
+## License And Legal Notice
 
-## License
+Source code is distributed under GPL-3.0; see [LICENSE](LICENSE). Third-party
+components retain their respective compatible licenses as listed in
+[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md).
 
-GPL-3.0 — see [`LICENSE`](LICENSE). Bundled and linked third-party components
-keep their own GPL-compatible licenses, listed in
-[`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md); notably agbplay is
-LGPL-3.0 and is not relicensed by being linked here.
-
-This builds on a decompilation of a copyrighted game. All Nintendo
-intellectual property remains Nintendo's, and a legitimately-owned ROM is
-required to play.
+Nintendo owns *The Legend of Zelda*, *The Minish Cap*, and all associated game
+content. This is an unofficial fan-made port. No Nintendo ROM, extracted game
+asset package, save data, or firmware is distributed by this project.

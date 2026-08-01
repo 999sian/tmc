@@ -161,6 +161,7 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
                                     uint32_t obj_layer[MODE1_GBA_WIDTH], uint8_t obj_priority[MODE1_GBA_WIDTH],
                                     uint16_t dispcnt);
 void virtuappu_mode1_render_frame(const PPUMemory* ppu);
+void virtuappu_mode1_shutdown_workers(void);
 
 /* GPU-raster prepare pass: run ONLY the sequential portion of render_frame —
  * the per-line HDMA callback + IO snapshot, per-line DISPCNT, and the affine

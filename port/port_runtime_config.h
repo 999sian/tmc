@@ -1,7 +1,7 @@
 #pragma once
 
 #include "port_types.h"
-#ifndef TMC_N64
+#if !defined(TMC_N64) && !defined(TMC_3DS)
 #include <SDL3/SDL.h>
 #endif
 #include <stdbool.h>
@@ -309,7 +309,7 @@ bool Port_Config_GetRandoDungeonItems(void);
 void Port_Config_SetRandoDungeonItems(bool dungeon_items);
 
 void Port_Config_OpenGamepads(void);
-#ifndef TMC_N64
+#if !defined(TMC_N64) && !defined(TMC_3DS)
 void Port_Config_HandleEvent(const SDL_Event* e);
 /* True when an SDL event is a fresh press bound to `input` (see .cpp). */
 bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input);

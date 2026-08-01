@@ -18,7 +18,7 @@
 
 typedef struct {
     Entity base;
-    #ifdef PC_PORT
+    #if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     u8 filler[0xc + 4];
 #else
     u8 filler[0xc];

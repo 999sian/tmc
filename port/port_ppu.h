@@ -1,7 +1,11 @@
 #ifndef PORT_PPU_H
 #define PORT_PPU_H
 
+#ifndef TMC_3DS
 #include <SDL3/SDL.h>
+#else
+typedef void SDL_Window;
+#endif
 #include <stdbool.h>
 
 #ifdef __cplusplus

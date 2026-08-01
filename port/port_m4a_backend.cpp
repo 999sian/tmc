@@ -14,9 +14,11 @@
 #undef Stop
 #endif
 
+#ifndef TMC_3DS
 #include <filesystem>
 #include <optional>
 #include "port_exe_path.hpp"
+#endif
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -228,6 +230,7 @@ static const char* GetCurrentVariantName(void) {
     }
 }
 
+#ifndef TMC_3DS
 static std::string LoadTextFile(const char* path) {
     std::ifstream stream(path, std::ios::binary);
 
@@ -241,8 +244,12 @@ static std::string LoadTextFile(const char* path) {
 static std::optional<std::filesystem::path> ExeDirForSounds() {
     return port::ExecutableDir();
 }
+#endif
 
 static std::string LoadSoundsJson(void) {
+#ifdef TMC_3DS
+    return std::string(reinterpret_cast<const char*>(PortSoundsEmbed::kData), PortSoundsEmbed::kSize);
+#else
     /* Search beside the binary first (release-tarball layout), then walk a
      * couple of cwd-relative dev locations. Mirrors the asset loader's
      * lookup pattern so the release zip's sounds.json is found regardless
@@ -282,6 +289,7 @@ static std::string LoadSoundsJson(void) {
 
     std::fprintf(stderr, "[AUDIO] sounds.json not found — songs will be silent\n");
     return {};
+#endif
 }
 
 static bool ParseIntAfterKey(const std::string& text, size_t keyPos, long long& outValue) {

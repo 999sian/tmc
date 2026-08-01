@@ -23,7 +23,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /*0x68*/ u8 unused1[8 + 4];
 #else
     /*0x68*/ u8 unused1[8];
@@ -31,7 +31,7 @@ typedef struct {
     /*0x70*/ u16 unk_70;
     /*0x72*/ u8 unused2[6];
     /*0x78*/ u16 unk_78;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /*0x7a*/ u8 unused3[6 + 4];
 #else
     /*0x7a*/ u8 unused3[6];
