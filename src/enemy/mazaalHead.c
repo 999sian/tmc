@@ -22,7 +22,7 @@
 
 typedef struct MazaalHeadEntity_ {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #99 fix: same #98 pattern as EyegoreEntity. On 64-bit PC,
        Enemy::child is an 8-byte pointer (vs 4 on GBA), so the bytes
        between Entity base and the Enemy::child slot are 4 more on PC.

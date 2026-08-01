@@ -1,0 +1,44 @@
+name: Build 3DS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Nintendo 3DS packages
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake make pkg-config zip
+
+      - name: Build CIA and 3DSX
+        run: ./platform/3ds/build.sh
+
+      - name: Verify no ROM is embedded
+        run: |
+          test ! -f baserom.gba
+          test -f build-3ds/game/tmc-3ds-v0.1.0.cia
+          test -f build-3ds/game/tmc-3ds-v0.1.0.3dsx
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmc-3ds-packages
+          path: |
+            build-3ds/game/tmc-3ds-v0.1.0.cia
+            build-3ds/game/tmc-3ds-v0.1.0.3dsx

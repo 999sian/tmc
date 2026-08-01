@@ -12,7 +12,7 @@
 
 typedef struct {
     Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #98 fix: +4 for Enemy::child PC growth. Without it, unk_82 (the dive
        countdown, GBA 0x82 = the spawn yPos param read-before-write in the
        dive state) aliases Enemy::field_0x7c on PC, so crows dive for the wrong

@@ -171,6 +171,11 @@ android/local.properties
 android/.gradle/
 android/app/build/
 
+# Nintendo 3DS port build and emulator diagnostics
+build-3ds/
+*.ppu1
+tmc3ds.log
+
 # Local release-signing material (CI gets its keystore from secrets)
 *.jks
 *.keystore

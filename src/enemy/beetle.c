@@ -13,7 +13,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #98 fix: +4 for Enemy::child PC growth. Without it, unk_86 (GBA 0x86 =
        spritePtr.hi, 0 for a scriptless beetle, read-before-write as a cooldown
        gate in sub_08021D00) aliases Enemy::field_0x82 = yPos (nonzero) on PC, so

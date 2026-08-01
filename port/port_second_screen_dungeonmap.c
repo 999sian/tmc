@@ -168,7 +168,7 @@ static const uint8_t* MapScreenObjTile(uint32_t tileNo) {
 static const uint16_t* MapScreenObjPalette(uint32_t row) {
     uint32_t i;
     for (i = 0; i < sizeof(kMapScreenPaletteGroups); i++) {
-        uint32_t numColors = 0;
+        u32 numColors = 0;
         const uint8_t* p =
             Port_GetRawPaletteGroupBankData(kMapScreenPaletteGroups[i], 16u + (row & 15u), &numColors);
         if (p != NULL && numColors >= 16) {
@@ -194,7 +194,7 @@ static void CanvasPlot(int32_t x, int32_t y, uint32_t rgba) {
  * from the command, extra/palette override 0). */
 static void DrawMarkerFrame(int32_t mapX, int32_t mapY, uint32_t frameIndex) {
     const uint8_t* sizeTab = Port_GetSpriteSizeTable();
-    uint32_t maxPieces = 0;
+    u32 maxPieces = 0;
     const uint8_t* fd = Port_GetDirectSpriteFrame(DIRECT_SPRITE_INDEX, frameIndex, &maxPieces);
     uint32_t count;
     uint32_t i;
@@ -358,7 +358,7 @@ int Port_SecondScreenDungeonMap_Draw(uint32_t* pixels, int32_t bufW, int32_t buf
     const DungeonLayout* list;
     const DungeonLayout* lyt;
     const uint16_t* bgPal;
-    uint32_t numColors = 0;
+    u32 numColors = 0;
     uint32_t numFloors, f;
     int32_t minX = MAP_PX, minY = MAP_PX, maxX = -1, maxY = -1;
     uint32_t pulseColorIdx;

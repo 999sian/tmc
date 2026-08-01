@@ -77,7 +77,7 @@ param_2:    0: visited overworld area name
             2: overworld area name
             1: dungeon name
 */
-void ShowAreaName(WindcrestID windcrest, u32 type) {
+void ShowAreaName(u32 windcrest, u32 type) {
     extern u16 gDungeonNames[];
     extern Font gUnk_08128FD8;
     extern Font gUnk_08128FC0;

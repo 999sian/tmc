@@ -31,7 +31,9 @@
 #include "port_softslots.h"
 #include "port_runtime_config.h"
 
+#ifndef TMC_3DS
 #include <SDL3/SDL.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 
@@ -278,6 +280,10 @@ void Port_SoftSlots_ConfigClose(void) {
 }
 
 bool Port_SoftSlots_ConfigHandleKey(int sdlKey) {
+#ifdef TMC_3DS
+    (void)sdlKey;
+    return false;
+#else
     if (!sConfigOpen) return false;
     switch (sdlKey) {
         case SDLK_UP:
@@ -300,10 +306,12 @@ bool Port_SoftSlots_ConfigHandleKey(int sdlKey) {
         default:
             return false;
     }
+#endif
 }
 
 /* ---- Rendering ---------------------------------------------------- */
 
+#ifndef TMC_3DS
 static const char* SlotValueLabel(int slot) {
     /* sAssignments stored across runs; render "—" for empty so the panel
      * looks intentional rather than crashed. */
@@ -371,11 +379,18 @@ static void RenderConfigOverlay(SDL_Renderer* r, int winW, int winH) {
     SDL_RenderDebugText(r, box.x + (box.w - footLen * charW) * 0.5f,
                         box.y + box.h - 18.0f, foot);
 }
+#endif
 
 void Port_SoftSlots_RenderOverlay(void* sdl_renderer, int winW, int winH) {
+#ifdef TMC_3DS
+    (void)sdl_renderer;
+    (void)winW;
+    (void)winH;
+#else
     SDL_Renderer* r = (SDL_Renderer*)sdl_renderer;
     if (!r) return;
     if (sConfigOpen) {
         RenderConfigOverlay(r, winW, winH);
     }
+#endif
 }

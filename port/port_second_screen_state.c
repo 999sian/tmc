@@ -2,9 +2,16 @@
 
 #include <string.h>
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(TMC_3DS)
 
+#ifdef __ANDROID__
 #include <pthread.h>
+#else
+typedef int pthread_mutex_t;
+#define PTHREAD_MUTEX_INITIALIZER 0
+#define pthread_mutex_lock(m) ((void)(m))
+#define pthread_mutex_unlock(m) ((void)(m))
+#endif
 
 #include "area.h"
 #include "game.h"
@@ -261,7 +268,7 @@ void Port_SecondScreenState_RequestEquip(uint8_t itemId, uint8_t slot) {
     pthread_mutex_unlock(&sSnapshotMutex);
 }
 
-#else /* !__ANDROID__ — no second-screen thread to publish to. */
+#else /* Platforms without a live second-screen state consumer. */
 
 void Port_SecondScreenState_Publish(void) {}
 

@@ -16,8 +16,10 @@
 #include "port_gba_mem.h"
 #include "structures.h"
 #include "tileMap.h"
-#ifndef TMC_N64
+#if !defined(TMC_N64) && !defined(TMC_3DS)
 #include <SDL3/SDL.h>
+#elif defined(TMC_3DS)
+#include "platform_3ds.h"
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,7 +118,9 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
 void Port_FatalRomError(const char* title, const char* message) {
     fprintf(stderr, "ERROR: %s\n", message);
     fflush(stderr);
-#ifndef TMC_N64
+#if defined(TMC_3DS)
+    Platform3DS_ShowFatal(title, message);
+#elif !defined(TMC_N64)
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
     SDL_Quit();
 #else

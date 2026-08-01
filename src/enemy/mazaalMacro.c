@@ -18,7 +18,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #99 fix: same #98 pattern as EyegoreEntity / MazaalHeadEntity.
        Enemy::child is 8 bytes on PC vs 4 on GBA; pad to keep unk_6d,
        unk_78 and `context` aliased correctly with the GBA layout the

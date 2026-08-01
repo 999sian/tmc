@@ -378,7 +378,7 @@ void MessageMain(void) {
     CreateWindow();
 }
 
-static void StatusUpdate(MessageStatus status) {
+static void StatusUpdate(u32 status) {
     gTextRender.msgStatus = status;
     gTextRender.renderStatus = RENDER_INIT;
 }

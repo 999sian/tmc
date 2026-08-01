@@ -12,7 +12,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #98 fix: Enemy::child is 8 bytes on PC (4 on GBA), shifting the framework-
        written spawn params up 4 bytes. Without the +4 pad, unk_84/unk_86 alias
        Enemy::field_0x80/field_0x82 (xPos/yPos) instead of the spritePtr params

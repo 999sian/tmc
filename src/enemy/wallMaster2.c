@@ -15,7 +15,7 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #119 — same #98/#99 pattern: 4-byte pad so post-Entity fields
        land at Enemy_PC offsets matching GBA (PC = GBA + 0x2C).
        Symptom: floormaster disregards player on TMC PC. */

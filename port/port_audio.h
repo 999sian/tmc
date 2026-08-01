@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#ifndef TMC_N64
+#if !defined(TMC_N64) && !defined(TMC_3DS)
 #include <SDL3/SDL.h>
 #endif
 

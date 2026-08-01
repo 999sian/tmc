@@ -16,13 +16,13 @@
 
 typedef struct {
     /*0x00*/ Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /*0x68*/ u8 unused1[12 + 4];
 #else
     /*0x68*/ u8 unused1[12];
 #endif
     /*0x74*/ u8 unk_74;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /*0x75*/ u8 unused2[11 + 4];
 #else
     /*0x75*/ u8 unused2[11];

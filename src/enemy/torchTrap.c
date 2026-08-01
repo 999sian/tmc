@@ -17,7 +17,7 @@
 
 typedef struct {
     Entity base;
-#ifdef PC_PORT
+#if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
     /* #98 fix: Enemy::child is an 8-byte pointer on PC (4 on GBA), so the spawn
        framework writes this enemy's params (yPos/spritePtr) 4 bytes higher than
        this struct's bare offsets imply. Without the +4 pad, unk_82/unk_84 read

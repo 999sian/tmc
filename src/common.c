@@ -1428,7 +1428,7 @@ void NotifyFusersOnFusionDone(KinstoneId kinstoneId) {
     }
 }
 
-void AddKinstoneToBag(KinstoneId kinstoneId) {
+void AddKinstoneToBag(u32 kinstoneId) {
     s32 index;
     s32 tmp;
 
@@ -1475,14 +1475,14 @@ u32 GetAmountInKinstoneBag(KinstoneId kinstoneId) {
     return gSave.kinstones.amounts[index];
 }
 
-u32 CheckKinstoneFused(KinstoneId kinstoneId) {
+u32 CheckKinstoneFused(u32 kinstoneId) {
     if (kinstoneId - 1 >= 100) {
         return 0;
     }
     return ReadBit(&gSave.kinstones.fusedKinstones, kinstoneId);
 }
 
-bool32 CheckFusionMapMarkerDisabled(KinstoneId kinstoneId) {
+bool32 CheckFusionMapMarkerDisabled(u32 kinstoneId) {
     if (kinstoneId - 1 >= 100) {
         return FALSE;
     }
@@ -1511,7 +1511,7 @@ void SortKinstoneBag(void) {
         }
     }
 }
-s32 GetIndexInKinstoneBag(KinstoneId kinstoneId) {
+s32 GetIndexInKinstoneBag(u32 kinstoneId) {
     u32 i;
 
     for (i = 0; i < 0x12; ++i) {

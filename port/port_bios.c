@@ -1,3 +1,17 @@
+#ifdef TMC_3DS
+#include "gba/io_reg.h"
+#include "main.h"
+#include "port_audio.h"
+#include "port_asset_loader.h"
+#include "port_gba_mem.h"
+#include "port_hdma.h"
+#include "port_ppu.h"
+#include "port_rom.h"
+#include "port_types.h"
+#include "platform_3ds.h"
+#include <math.h>
+#include <setjmp.h>
+#else
 #include "gba/io_reg.h"
 #include "save.h" /* gSave for Discord-RPC stat reads */
 #include "main.h"
@@ -26,6 +40,31 @@
 #include <math.h>
 #include <setjmp.h>
 #include "port_repro.h"
+#endif
+
+#ifdef TMC_3DS
+jmp_buf gPortSoftResetJmp;
+int gPortSoftResetArmed = 0;
+
+static const void* Port_ResolveCopySrc(const void* src, u32 size) {
+    if (Port_IsLoadedAssetBytes(src, size)) {
+        return src;
+    }
+    return port_resolve_addr((uintptr_t)src);
+}
+
+extern Main gMain;
+extern void VBlankIntr(void);
+
+u64 DivAndModCombined(s32 num, s32 denom) {
+    if (denom == 0) {
+        return 0;
+    }
+    const s32 quotient = num / denom;
+    const s32 remainder = num % denom;
+    return ((u64)(u32)remainder << 32) | (u32)quotient;
+}
+#else
 
 static bool gQuitRequested = false;
 static bool sFastForward = false;
@@ -702,8 +741,17 @@ int Port_Profile_Enabled(void) {
     }
     return en;
 }
+#endif
 
 void VBlankIntrWait(void) {
+#ifdef TMC_3DS
+    Port_PPU_SetPresentIsFirstOfTick(true);
+    Port_PPU_PresentFrame();
+    port_hdma_vblank_reset();
+    Platform3DS_WaitForVBlank();
+    gba_write16(REG_ADDR_KEYINPUT, Platform3DS_ReadKeyInput());
+    VBlankIntr();
+#else
     u64 nowNs;
     bool decoupled;
 
@@ -1043,6 +1091,7 @@ void VBlankIntrWait(void) {
     }
 
     VBlankIntr();
+#endif
 }
 
 /* ---- BIOS functions ---- */
