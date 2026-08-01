@@ -32,13 +32,13 @@ jobs:
       - name: Verify no ROM is embedded
         run: |
           test ! -f baserom.gba
-          test -f build-3ds/game/tmc-3ds-v0.1.0.cia
-          test -f build-3ds/game/tmc-3ds-v0.1.0.3dsx
+          test -f build-3ds/game/tmc-3ds-v0.2.cia
+          test -f build-3ds/game/tmc-3ds-v0.2.3dsx
 
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
           name: tmc-3ds-packages
           path: |
-            build-3ds/game/tmc-3ds-v0.1.0.cia
-            build-3ds/game/tmc-3ds-v0.1.0.3dsx
+            build-3ds/game/tmc-3ds-v0.2.cia
+            build-3ds/game/tmc-3ds-v0.2.3dsx

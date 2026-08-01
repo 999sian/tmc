@@ -110,7 +110,7 @@ worktree.
 
 ## Pre-Releases
 
-Use semantic tags such as `v0.1.0`. Early public builds must be marked as GitHub
+Use semantic tags such as `v0.2`. Early public builds must be marked as GitHub
 pre-releases until gameplay, save, audio, input, and performance testing are
 complete enough for a stable release.
 

@@ -20,7 +20,7 @@ their own 3DS SD card.
 
 ## Features
 
-- Native 3DS port with installable CIA and Homebrew Launcher 3DSX
+- Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
   builds.
 - Fullscreen top-screen gameplay at 360x240 with nearest-neighbor scaling.
 - Bottom screen with live map, dungeon information, quest status and touch item
@@ -29,11 +29,15 @@ their own 3DS SD card.
 - Parallel software PPU rendering across the available 3DS application cores.
 - New Nintendo 3DS speedup with 804 MHz, L2 cache and third-core rendering
   support.
+- Native NDSP stereo audio.
 - Local save data stored beside the ROM on the SD card.
+- Quick diagnostics: press `L + R + A` to create a dump with top and bottom
+  screenshots plus graphic memory files.
+- Public GitHub releases include CIA, 3DSX, QR code and clean source archive.
 
 ## Installation
 
-1. Install `tmc-3ds-v0.1.0.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.2.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -54,6 +58,12 @@ The ROM stays on your SD card and is never included in the CIA.
 
 Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 `Dump DSP firmware` option if homebrew audio is unavailable.
+
+Quick dumps are written under:
+
+```text
+sdmc:/3ds/The Minish Cap 3DS/dumps/
+```
 
 ## Releases
 
@@ -82,8 +92,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.1.0.cia
-build-3ds/game/tmc-3ds-v0.1.0.3dsx
+build-3ds/game/tmc-3ds-v0.2.cia
+build-3ds/game/tmc-3ds-v0.2.3dsx
 ```
 
 The build does not embed a ROM.

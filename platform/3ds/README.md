@@ -28,6 +28,8 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 - Bottom screen: 320x240 map, dungeon/status information and touch item UI.
 - Rendering: PICA200/Citro2D presenter fed by the software GBA PPU.
 - New 3DS: requests 804 MHz, L2 cache and access to the extra application core.
+- Diagnostics: press `L + R + A` to create `dumps/dump-*` with top and bottom
+  BMP screenshots, VRAM, palettes, OAM and a small `info.txt`.
 
 The CIA metadata uses a stable title ID and requests SD card access for local
 ROM and save data.
