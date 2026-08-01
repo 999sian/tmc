@@ -1,12 +1,15 @@
 #include "platform_3ds.h"
 
 #include <3ds.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static uint32_t sHeld;
 static uint32_t sDown;
+static bool sQuickDumpRequested;
+static bool sQuickDumpComboWasHeld;
 extern void Port_Audio_3DSPump(void);
 extern void Port_Audio_Shutdown(void);
 extern void Port_SecondScreen_OnTap(int x, int y, int button);
@@ -15,7 +18,6 @@ int Platform3DS_Init(void) {
     gfxInit(GSP_RGB565_OES, GSP_RGB565_OES, false);
     gfxSet3D(false);
     romfsInit();
-    consoleInit(GFX_BOTTOM, NULL);
 
     osSetSpeedupEnable(true);
     APT_SetAppCpuTimeLimit(89);
@@ -77,8 +79,9 @@ static uint16_t MapKeysToGba(uint32_t keys) {
         GBA_R = 1u << 8,
         GBA_L = 1u << 9,
     };
+    const bool quickDumpCombo = (keys & (KEY_L | KEY_R | KEY_A)) == (KEY_L | KEY_R | KEY_A);
     uint16_t input = 0x03ff;
-    if (keys & KEY_A) input &= ~GBA_A;
+    if ((keys & KEY_A) && !quickDumpCombo) input &= ~GBA_A;
     if (keys & KEY_B) input &= ~GBA_B;
     if (keys & KEY_SELECT) input &= ~GBA_SELECT;
     if (keys & KEY_START) input &= ~GBA_START;
@@ -86,8 +89,8 @@ static uint16_t MapKeysToGba(uint32_t keys) {
     if (keys & (KEY_DLEFT | KEY_CPAD_LEFT)) input &= ~GBA_LEFT;
     if (keys & (KEY_DUP | KEY_CPAD_UP)) input &= ~GBA_UP;
     if (keys & (KEY_DDOWN | KEY_CPAD_DOWN)) input &= ~GBA_DOWN;
-    if (keys & KEY_R) input &= ~GBA_R;
-    if (keys & KEY_L) input &= ~GBA_L;
+    if ((keys & KEY_R) && !quickDumpCombo) input &= ~GBA_R;
+    if ((keys & KEY_L) && !quickDumpCombo) input &= ~GBA_L;
     return input;
 }
 
@@ -132,9 +135,13 @@ void Platform3DS_WaitForVBlank(void) {
         hidTouchRead(&touch);
         Port_SecondScreen_OnTap(touch.px, touch.py, 0);
     }
+    const bool quickDumpCombo = (sHeld & (KEY_L | KEY_R | KEY_A)) == (KEY_L | KEY_R | KEY_A);
+    if (quickDumpCombo && !sQuickDumpComboWasHeld) sQuickDumpRequested = true;
+    sQuickDumpComboWasHeld = quickDumpCombo;
 }
 
 void Platform3DS_ShowFatal(const char* title, const char* message) {
+    consoleInit(GFX_BOTTOM, NULL);
     consoleClear();
     printf("%s\n\n%s\n\nPress START to exit.\n", title ? title : "Error", message ? message : "");
     while (aptMainLoop()) {
@@ -142,6 +149,12 @@ void Platform3DS_ShowFatal(const char* title, const char* message) {
         if (hidKeysDown() & KEY_START) break;
         gspWaitForVBlank();
     }
+}
+
+bool Platform3DS_TakeQuickDumpRequest(void) {
+    const bool requested = sQuickDumpRequested;
+    sQuickDumpRequested = false;
+    return requested;
 }
 
 void Platform3DS_Debug(const char* message) {

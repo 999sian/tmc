@@ -1784,6 +1784,7 @@ void Port_LoadRom(const char* path) {
     }
 
     /* ---- Extract all known ROM regions to rom_data/ ---- */
+#ifndef TMC_3DS
     EnsureExtractDir();
 
     /* ROM header (for game code verification) */
@@ -1854,6 +1855,7 @@ void Port_LoadRom(const char* path) {
         }
     }
 
+#endif
     Port_PrintRomAccessSummary();
 }
 

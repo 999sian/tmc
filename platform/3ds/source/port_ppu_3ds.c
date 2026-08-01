@@ -12,8 +12,11 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <time.h>
 
 #define GBA_W 240
 #define GBA_H 160
@@ -26,6 +29,7 @@ static uint32_t sBottomTick;
 static bool sBottomReady;
 static bool sGpuPresenterReady;
 static bool sInitialized;
+static uint32_t sFrameNumber;
 #ifdef TMC_3DS_DIAGNOSTICS
 static unsigned sDiagnosticFrames;
 static uint64_t sDiagnosticStartMs;
@@ -55,6 +59,110 @@ static uint16_t AbgrToRgb565(uint32_t p) {
 
 static uint32_t AbgrToArgb8888(uint32_t p) {
     return 0xff000000u | ((p & 0xffu) << 16) | (p & 0xff00u) | ((p >> 16) & 0xffu);
+}
+
+static bool WriteBlob(const char* path, const void* data, size_t size) {
+    FILE* file = fopen(path, "wb");
+    if (!file) return false;
+    const bool ok = fwrite(data, 1, size, file) == size;
+    if (fclose(file) != 0) return false;
+    return ok;
+}
+
+static void MakeTimestamp(char* stamp, size_t stampSize) {
+    time_t now = time(NULL);
+    struct tm* tmNow = now > 0 ? localtime(&now) : NULL;
+    if (tmNow) {
+        strftime(stamp, stampSize, "%Y%m%d-%H%M%S", tmNow);
+    } else {
+        snprintf(stamp, stampSize, "unknown-time");
+    }
+}
+
+static bool CreateDumpDirectory(char* out, size_t outSize) {
+    if (!out || outSize == 0) return false;
+    if (mkdir("dumps", 0777) != 0 && errno != EEXIST) return false;
+
+    char stamp[32];
+    MakeTimestamp(stamp, sizeof(stamp));
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        if (attempt == 0) {
+            snprintf(out, outSize, "dumps/dump-%s", stamp);
+        } else {
+            snprintf(out, outSize, "dumps/dump-%s-%02d", stamp, attempt);
+        }
+        if (mkdir(out, 0777) == 0) return true;
+        if (errno != EEXIST) break;
+    }
+    out[0] = 0;
+    return false;
+}
+
+static bool SaveArgb8888Bmp(const char* path, const uint32_t* pixels,
+                            int pitchPixels, int width, int height) {
+    if (!path || !pixels || pitchPixels <= 0 || width <= 0 || height <= 0) return false;
+    FILE* file = fopen(path, "wb");
+    if (!file) return false;
+
+    const int rowSize = (width * 3 + 3) & ~3;
+    const uint32_t fileSize = 54u + (uint32_t)rowSize * (uint32_t)height;
+    const uint8_t header[54] = {
+        'B', 'M',
+        (uint8_t)fileSize, (uint8_t)(fileSize >> 8), (uint8_t)(fileSize >> 16), (uint8_t)(fileSize >> 24),
+        0, 0, 0, 0, 54, 0, 0, 0,
+        40, 0, 0, 0,
+        (uint8_t)width, (uint8_t)(width >> 8), (uint8_t)(width >> 16), (uint8_t)(width >> 24),
+        (uint8_t)height, (uint8_t)(height >> 8), (uint8_t)(height >> 16), (uint8_t)(height >> 24),
+        1, 0, 24, 0,
+    };
+    bool ok = fwrite(header, 1, sizeof(header), file) == sizeof(header);
+    uint8_t row[400 * 3];
+    if (rowSize > (int)sizeof(row)) ok = false;
+    for (int y = height - 1; ok && y >= 0; --y) {
+        memset(row, 0, (size_t)rowSize);
+        const uint32_t* src = pixels + (size_t)y * (size_t)pitchPixels;
+        for (int x = 0; x < width; ++x) {
+            const uint32_t c = src[x];
+            row[x * 3 + 0] = (uint8_t)c;
+            row[x * 3 + 1] = (uint8_t)(c >> 8);
+            row[x * 3 + 2] = (uint8_t)(c >> 16);
+        }
+        ok = fwrite(row, 1, (size_t)rowSize, file) == (size_t)rowSize;
+    }
+    if (fclose(file) != 0) ok = false;
+    return ok;
+}
+
+static void WriteQuickDump(void) {
+    char dir[128];
+    if (!CreateDumpDirectory(dir, sizeof(dir))) return;
+
+    char path[192];
+    snprintf(path, sizeof(path), "%s/top-screen.bmp", dir);
+    SaveArgb8888Bmp(path, sTopUpload, 256, GBA_W, GBA_H);
+    snprintf(path, sizeof(path), "%s/bottom-screen.bmp", dir);
+    SaveArgb8888Bmp(path, sBottomUpload, 512, 320, 240);
+    snprintf(path, sizeof(path), "%s/vram.bin", dir);
+    WriteBlob(path, gVram, sizeof(gVram));
+    snprintf(path, sizeof(path), "%s/palettes.bin", dir);
+    WriteBlob(path, gBgPltt, sizeof(gBgPltt));
+    snprintf(path, sizeof(path), "%s/oam.bin", dir);
+    WriteBlob(path, gOamMem, sizeof(gOamMem));
+
+    snprintf(path, sizeof(path), "%s/info.txt", dir);
+    FILE* info = fopen(path, "wb");
+    if (info) {
+        fprintf(info, "The Minish Cap 3DS v0.2 quick dump\n");
+        fprintf(info, "Frame: %lu\n", (unsigned long)sFrameNumber);
+        fprintf(info, "Top screenshot: 240x160 ARGB8888 BMP\n");
+        fprintf(info, "Bottom screenshot: 320x240 ARGB8888 BMP\n");
+        fprintf(info, "Trigger: L + R + A\n");
+        fclose(info);
+    }
+
+    char message[192];
+    snprintf(message, sizeof(message), "[tmc3ds] quick dump written to %s\n", dir);
+    Platform3DS_Debug(message);
 }
 
 void Port_PPU_3DS_PresentLine(int line, const uint32_t* pixels) {
@@ -87,6 +195,7 @@ void Port_PPU_Init(SDL_Window* window) {
 
 void Port_PPU_PresentFrame(void) {
     if (!sInitialized) return;
+    ++sFrameNumber;
 
 #ifdef TMC_3DS_DIAGNOSTICS
     const uint64_t frameStart = Platform3DS_Milliseconds();
@@ -139,6 +248,9 @@ void Port_PPU_PresentFrame(void) {
         sBottomReady = true;
     }
     PlatformGpu3DS_EndBottom(sBottomUpload, bottomChanged);
+    if (Platform3DS_TakeQuickDumpRequest()) {
+        WriteQuickDump();
+    }
 #ifdef TMC_3DS_DIAGNOSTICS
     if (diagnosticFrame < 8 || diagnosticFrame == 60) {
         char message[160];

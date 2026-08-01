@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(tmc_3ds VERSION 0.1.0 LANGUAGES C CXX)
+project(tmc_3ds VERSION 0.2 LANGUAGES C CXX)
 
 set(TMC_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 
@@ -83,7 +83,7 @@ target_include_directories(tmc-3ds PRIVATE
 
 target_compile_definitions(tmc-3ds PRIVATE
     PC_PORT NON_MATCHING USE_HDMA TMC_3DS USA ENGLISH REVISION=0
-    MODE1_GBA_WIDTH=240 TMC_PORT_VERSION="0.1.0" TMC_PC_VERSION="0.1.0"
+    MODE1_GBA_WIDTH=240 TMC_PORT_VERSION="0.2" TMC_PC_VERSION="0.2"
 )
 target_compile_features(tmc-3ds PRIVATE c_std_11 cxx_std_20)
 set_target_properties(tmc-3ds PROPERTIES
@@ -116,7 +116,7 @@ configure_file(
 set(TMC_SMDH "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds.smdh")
 ctr_generate_smdh(
     OUTPUT "${TMC_SMDH}"
-    NAME "The Minish Cap 3DS v0.1.0"
+    NAME "The Minish Cap 3DS v0.2"
     DESCRIPTION "Native Nintendo 3DS port"
     AUTHOR "Esteban PDN / Project Picori / samyost1"
     ICON "${CMAKE_CURRENT_LIST_DIR}/assets/icon-48.png"
@@ -124,7 +124,7 @@ ctr_generate_smdh(
 
 ctr_create_3dsx(tmc-3ds-3dsx
     TARGET tmc-3ds
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds-v0.1.0.3dsx"
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds-v0.2.3dsx"
     SMDH "${TMC_SMDH}"
     ROMFS "${TMC_ROMFS}"
 )

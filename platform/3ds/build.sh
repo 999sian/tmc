@@ -20,8 +20,8 @@ if [[ ! -x "${MAKEROM}" || ! -x "${BANNERTOOL}" ]]; then
 fi
 
 "${BANNERTOOL}" makesmdh \
-  -s "The Minish Cap 3DS v0.1.0" \
-  -l "The Minish Cap 3DS v0.1.0" \
+  -s "The Minish Cap 3DS v0.2" \
+  -l "The Minish Cap 3DS v0.2" \
   -p "Esteban PDN / Project Picori / samyost1" \
   -i "${ROOT}/platform/3ds/assets/icon-48.png" \
   -f visible,nosavebackups \
@@ -34,7 +34,7 @@ fi
 
 (
 cd "${ROOT}"
-"${MAKEROM}" -f cia -o "${BUILD}/tmc-3ds-v0.1.0.cia" \
+"${MAKEROM}" -f cia -o "${BUILD}/tmc-3ds-v0.2.cia" \
   -DAPP_ROMFS=build-3ds/game/romfs \
   -rsf "${ROOT}/platform/3ds/cia/tmc3ds.rsf" -target t -exefslogo \
   -elf "${BUILD}/tmc-3ds.elf" -icon "${BUILD}/tmc-3ds.icn" \
@@ -42,4 +42,4 @@ cd "${ROOT}"
 )
 
 printf 'Ready:\n  %s\n  %s\n' \
-  "${BUILD}/tmc-3ds-v0.1.0.3dsx" "${BUILD}/tmc-3ds-v0.1.0.cia"
+  "${BUILD}/tmc-3ds-v0.2.3dsx" "${BUILD}/tmc-3ds-v0.2.cia"
