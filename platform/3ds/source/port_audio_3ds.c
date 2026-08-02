@@ -1,4 +1,5 @@
 #include "port_audio.h"
+#include "port_audio_3ds.h"
 #include "port_m4a_backend.h"
 
 #include <3ds.h>
@@ -15,8 +16,10 @@ static ndspWaveBuf sWave[BUFFER_COUNT];
 static int16_t* sSamples;
 static bool sInitialized;
 static float sVolume = 1.0f;
+static PortAudio3DSStats sStats;
 
 static void FillBuffer(int index) {
+    const uint64_t startTick = svcGetSystemTick();
     int16_t* dst = sSamples + index * BUFFER_FRAMES * 2;
     Port_M4A_Backend_Render(dst, BUFFER_FRAMES, false);
     if (sVolume < 0.999f) {
@@ -27,6 +30,11 @@ static void FillBuffer(int index) {
     sWave[index].nsamples = BUFFER_FRAMES;
     sWave[index].status = NDSP_WBUF_FREE;
     ndspChnWaveBufAdd(0, &sWave[index]);
+    const uint64_t elapsed = svcGetSystemTick() - startTick;
+    ++sStats.buffersRendered;
+    sStats.renderTicks += elapsed;
+    sStats.renderLastTicks = elapsed;
+    if (elapsed > sStats.renderMaxTicks) sStats.renderMaxTicks = elapsed;
 }
 
 bool Port_Audio_Init(void) {
@@ -49,6 +57,11 @@ bool Port_Audio_Init(void) {
     }
     memset(sWave, 0, sizeof(sWave));
     memset(sSamples, 0, BUFFER_COUNT * BUFFER_FRAMES * 2 * sizeof(int16_t));
+    memset(&sStats, 0, sizeof(sStats));
+    sStats.sampleRate = SAMPLE_RATE;
+    sStats.bufferFrames = BUFFER_FRAMES;
+    sStats.bufferCount = BUFFER_COUNT;
+    sStats.initialized = true;
     sInitialized = true;
     for (int i = 0; i < BUFFER_COUNT; ++i) FillBuffer(i);
     return true;
@@ -56,8 +69,35 @@ bool Port_Audio_Init(void) {
 
 void Port_Audio_3DSPump(void) {
     if (!sInitialized) return;
+    ++sStats.pumps;
+    uint32_t refillCount = 0;
+    if (!ndspChnIsPlaying(0)) ++sStats.underrunObservations;
     for (int i = 0; i < BUFFER_COUNT; ++i) {
-        if (sWave[i].status == NDSP_WBUF_DONE) FillBuffer(i);
+        if (sWave[i].status == NDSP_WBUF_DONE) {
+            FillBuffer(i);
+            ++refillCount;
+        }
+    }
+    if (refillCount > sStats.maxBuffersPerPump) sStats.maxBuffersPerPump = refillCount;
+}
+
+void Port_Audio_3DSGetStats(PortAudio3DSStats* stats) {
+    if (!stats) return;
+    *stats = sStats;
+    stats->initialized = sInitialized;
+    stats->samplePosition = sInitialized ? ndspChnGetSamplePos(0) : 0;
+    stats->channelPlaying = sInitialized && ndspChnIsPlaying(0);
+    stats->freeBuffers = 0;
+    stats->queuedBuffers = 0;
+    stats->playingBuffers = 0;
+    stats->doneBuffers = 0;
+    for (int i = 0; i < BUFFER_COUNT; ++i) {
+        switch (sWave[i].status) {
+            case NDSP_WBUF_FREE: ++stats->freeBuffers; break;
+            case NDSP_WBUF_QUEUED: ++stats->queuedBuffers; break;
+            case NDSP_WBUF_PLAYING: ++stats->playingBuffers; break;
+            case NDSP_WBUF_DONE: ++stats->doneBuffers; break;
+        }
     }
 }
 
@@ -69,6 +109,7 @@ void Port_Audio_Shutdown(void) {
     sSamples = NULL;
     ndspExit();
     sInitialized = false;
+    sStats.initialized = false;
 }
 
 void Port_Audio_Reset(void) { Port_M4A_Backend_Reset(); }

@@ -1,4 +1,5 @@
 #include "platform_3ds.h"
+#include "port_audio_3ds.h"
 
 #include <3ds.h>
 #include <stdbool.h>
@@ -8,6 +9,9 @@
 
 static uint32_t sHeld;
 static uint32_t sDown;
+static circlePosition sCirclePosition;
+static circlePosition sCStickPosition;
+static bool sCStickHeld;
 static bool sQuickDumpRequested;
 static bool sQuickDumpComboWasHeld;
 static bool sRunning;
@@ -17,14 +21,54 @@ static unsigned sCore1TimeLimit;
 static bool sBottomWorkerAttempted;
 static bool sBottomWorkerRunning;
 static bool sBottomWorkerBusy;
+static bool sSpeedupRequested;
+static unsigned sTurboPhase;
+static uint64_t sLogicFrames;
+static uint64_t sPresentedFrames;
+static uint64_t sTurboLogicFrames;
+static uint64_t sTurboSkippedPresentations;
+static uint64_t sEngineWorkTicks;
+static uint64_t sEngineWorkLastTicks;
+static uint64_t sEngineWorkMaxTicks;
+static uint64_t sVblankWaitTicks;
+static uint64_t sVblankWaitLastTicks;
+static uint64_t sVblankWaitMaxTicks;
+static uint64_t sAptChecks;
+static uint64_t sFrameBoundaryEndTick;
+static uintptr_t sStackRegionBase;
+static uintptr_t sStackRegionEnd;
 static Thread sBottomWorkerThread;
 static LightEvent sBottomWorkerStart;
 static LightEvent sBottomWorkerDone;
-extern void Port_Audio_3DSPump(void);
 extern void Port_Audio_Shutdown(void);
 extern void Port_SecondScreen_OnTap(int x, int y, int button);
 
 int Platform3DS_Init(void) {
+    sHeld = 0;
+    sDown = 0;
+    memset(&sCirclePosition, 0, sizeof(sCirclePosition));
+    memset(&sCStickPosition, 0, sizeof(sCStickPosition));
+    sCStickHeld = false;
+    sQuickDumpRequested = false;
+    sQuickDumpComboWasHeld = false;
+    sCore1Available = false;
+    sCore1TimeLimit = 0;
+    sSpeedupRequested = false;
+    sTurboPhase = 0;
+    sLogicFrames = 0;
+    sPresentedFrames = 0;
+    sTurboLogicFrames = 0;
+    sTurboSkippedPresentations = 0;
+    sEngineWorkTicks = 0;
+    sEngineWorkLastTicks = 0;
+    sEngineWorkMaxTicks = 0;
+    sVblankWaitTicks = 0;
+    sVblankWaitLastTicks = 0;
+    sVblankWaitMaxTicks = 0;
+    sAptChecks = 0;
+    sFrameBoundaryEndTick = 0;
+    sStackRegionBase = 0;
+    sStackRegionEnd = 0;
     gfxInit(GSP_RGB565_OES, GSP_RGB565_OES, false);
     gfxSet3D(false);
     romfsInit();
@@ -33,7 +77,10 @@ int Platform3DS_Init(void) {
     aptSetHomeAllowed(true);
     aptSetSleepAllowed(true);
     APT_CheckNew3DS(&sIsNew3DS);
-    if (sIsNew3DS) osSetSpeedupEnable(true);
+    if (sIsNew3DS) {
+        osSetSpeedupEnable(true);
+        sSpeedupRequested = true;
+    }
 
     static const u32 core1Candidates[] = { 80, 70, 50, 30 };
     for (size_t i = 0; i < sizeof(core1Candidates) / sizeof(core1Candidates[0]); ++i) {
@@ -50,6 +97,8 @@ int Platform3DS_Init(void) {
     hidScanInput();
     sHeld = hidKeysHeld();
     sDown = hidKeysDown();
+    hidCircleRead(&sCirclePosition);
+    if (sIsNew3DS) hidCstickRead(&sCStickPosition);
     return 1;
 }
 
@@ -67,6 +116,8 @@ bool Platform3DS_IsRunning(void) { return sRunning; }
 bool Platform3DS_IsNew3DS(void) { return sIsNew3DS; }
 bool Platform3DS_CanUseCore1(void) { return sCore1Available; }
 unsigned Platform3DS_Core1TimeLimit(void) { return sCore1TimeLimit; }
+bool Platform3DS_TurboHeld(void) { return sIsNew3DS && sCStickHeld; }
+unsigned Platform3DS_TurboMultiplier(void) { return 3; }
 
 void Platform3DS_ShowSplash(void) {
     FILE* file = fopen("romfs:/splash.rgb565", "rb");
@@ -134,10 +185,8 @@ uint32_t Platform3DS_KeysHeld(void) {
 }
 
 void Platform3DS_ReadCircle(float* x, float* y) {
-    circlePosition position;
-    hidCircleRead(&position);
-    if (x) *x = position.dx / 156.0f;
-    if (y) *y = -position.dy / 156.0f;
+    if (x) *x = sCirclePosition.dx / 156.0f;
+    if (y) *y = -sCirclePosition.dy / 156.0f;
 }
 
 uint16_t* Platform3DS_GetFramebuffer(int top, uint16_t* width, uint16_t* height) {
@@ -154,6 +203,119 @@ uint64_t Platform3DS_SystemTick(void) {
 
 uint64_t Platform3DS_TicksPerSecond(void) {
     return SYSCLOCK_ARM11;
+}
+
+int Platform3DS_IsNativeAddress(uintptr_t value) {
+    uintptr_t currentSp;
+    __asm__ volatile("mov %0, sp" : "=r"(currentSp));
+
+    if (sStackRegionEnd == 0) {
+        MemInfo stackInfo;
+        PageInfo pageInfo;
+        if (R_FAILED(svcQueryMemory(&stackInfo, &pageInfo, (u32)currentSp)) ||
+            (stackInfo.perm & MEMPERM_WRITE) == 0u) {
+            return 0;
+        }
+        sStackRegionBase = stackInfo.base_addr;
+        sStackRegionEnd = sStackRegionBase + stackInfo.size;
+    }
+
+    if (value >= sStackRegionBase && value < sStackRegionEnd) return 1;
+
+    MemInfo info;
+    PageInfo pageInfo;
+    if (R_FAILED(svcQueryMemory(&info, &pageInfo, (u32)value))) return 0;
+    if (info.base_addr == 0 || info.size == 0) return 0;
+    if (value < info.base_addr || value >= info.base_addr + info.size) return 0;
+    return (info.perm & (MEMPERM_READ | MEMPERM_WRITE)) != 0u;
+}
+
+bool Platform3DS_BeginFrameBoundary(void) {
+    const uint64_t now = svcGetSystemTick();
+    if (sFrameBoundaryEndTick != 0) {
+        sEngineWorkLastTicks = now - sFrameBoundaryEndTick;
+        sEngineWorkTicks += sEngineWorkLastTicks;
+        if (sEngineWorkLastTicks > sEngineWorkMaxTicks) sEngineWorkMaxTicks = sEngineWorkLastTicks;
+    }
+
+    ++sLogicFrames;
+    if (!Platform3DS_TurboHeld()) {
+        sTurboPhase = 0;
+        ++sPresentedFrames;
+        return true;
+    }
+
+    ++sTurboLogicFrames;
+    if (++sTurboPhase >= Platform3DS_TurboMultiplier()) {
+        sTurboPhase = 0;
+        ++sPresentedFrames;
+        return true;
+    }
+    ++sTurboSkippedPresentations;
+    return false;
+}
+
+void Platform3DS_EndFrameBoundary(void) {
+    sFrameBoundaryEndTick = svcGetSystemTick();
+}
+
+static bool PumpLifecycleAndAudio(void) {
+    ++sAptChecks;
+    if (!sRunning || !aptMainLoop()) {
+        sRunning = false;
+        return false;
+    }
+    Port_Audio_3DSPump();
+    return true;
+}
+
+void Platform3DS_PumpWithoutVBlank(void) {
+    PumpLifecycleAndAudio();
+}
+
+void Platform3DS_GetRuntimeStats(Platform3DSRuntimeStats* stats) {
+    if (!stats) return;
+    s32 threadPriority = -1;
+    uintptr_t currentSp;
+    __asm__ volatile("mov %0, sp" : "=r"(currentSp));
+    svcGetThreadPriority(&threadPriority, CUR_THREAD_HANDLE);
+    if (sStackRegionEnd == 0) Platform3DS_IsNativeAddress(currentSp);
+    *stats = (Platform3DSRuntimeStats){
+        .kernelVersion = osGetKernelVersion(),
+        .firmVersion = osGetFirmVersion(),
+        .systemCoreVersion = osGetSystemCoreVersion(),
+        .applicationMemoryType = osGetApplicationMemType(),
+        .mainThreadPriority = threadPriority,
+        .applicationMemoryFree = osGetMemRegionFree(MEMREGION_APPLICATION),
+        .systemMemoryFree = osGetMemRegionFree(MEMREGION_SYSTEM),
+        .baseMemoryFree = osGetMemRegionFree(MEMREGION_BASE),
+        .linearMemoryFree = linearSpaceFree(),
+        .currentStackPointer = currentSp,
+        .stackRegionBase = sStackRegionBase,
+        .stackRegionEnd = sStackRegionEnd,
+        .logicFrames = sLogicFrames,
+        .presentedFrames = sPresentedFrames,
+        .turboLogicFrames = sTurboLogicFrames,
+        .turboSkippedPresentations = sTurboSkippedPresentations,
+        .engineWorkTicks = sEngineWorkTicks,
+        .engineWorkLastTicks = sEngineWorkLastTicks,
+        .engineWorkMaxTicks = sEngineWorkMaxTicks,
+        .vblankWaitTicks = sVblankWaitTicks,
+        .vblankWaitLastTicks = sVblankWaitLastTicks,
+        .vblankWaitMaxTicks = sVblankWaitMaxTicks,
+        .aptChecks = sAptChecks,
+        .keyMaskHeld = sHeld,
+        .keyMaskDown = sDown,
+        .circleX = sCirclePosition.dx,
+        .circleY = sCirclePosition.dy,
+        .cstickX = sCStickPosition.dx,
+        .cstickY = sCStickPosition.dy,
+        .turboHeld = Platform3DS_TurboHeld(),
+        .bottomWorkerRunning = sBottomWorkerRunning,
+        .bottomWorkerBusy = sBottomWorkerBusy,
+        .speedupRequested = sSpeedupRequested,
+        .aptCloseRequested = aptShouldClose(),
+    };
 }
 
 static void BottomWorkerMain(void* argument) {
@@ -179,7 +341,7 @@ static bool EnsureBottomWorker(void) {
     svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
     if (priority < 0x3f) ++priority;
     sBottomWorkerRunning = true;
-    const int core = sIsNew3DS ? 2 : 0;
+    const int core = 0;
     sBottomWorkerThread = threadCreate(BottomWorkerMain, NULL, 64u * 1024u, priority, core, false);
     if (!sBottomWorkerThread) sBottomWorkerRunning = false;
     return sBottomWorkerThread != NULL;
@@ -213,13 +375,9 @@ void Platform3DS_ShutdownBottomWorker(void) {
 }
 
 void Platform3DS_WaitForVBlank(void) {
-    if (!sRunning || !aptMainLoop()) {
-        sRunning = false;
-        return;
-    }
-
-    Port_Audio_3DSPump();
+    if (!PumpLifecycleAndAudio()) return;
     extern bool Port_PPU_3DS_UsesGpuPresenter(void);
+    const uint64_t waitStart = svcGetSystemTick();
     if (Port_PPU_3DS_UsesGpuPresenter()) {
         gspWaitForEvent(GSPGPU_EVENT_VBlank0, false);
     } else {
@@ -227,6 +385,9 @@ void Platform3DS_WaitForVBlank(void) {
         gfxSwapBuffers();
         gspWaitForVBlank();
     }
+    sVblankWaitLastTicks = svcGetSystemTick() - waitStart;
+    sVblankWaitTicks += sVblankWaitLastTicks;
+    if (sVblankWaitLastTicks > sVblankWaitMaxTicks) sVblankWaitMaxTicks = sVblankWaitLastTicks;
     if (sQuickDumpRequested) {
         extern void Port_PPU_3DS_WriteQuickDump(void);
         sQuickDumpRequested = false;
@@ -236,6 +397,15 @@ void Platform3DS_WaitForVBlank(void) {
     hidScanInput();
     sHeld = hidKeysHeld();
     sDown = hidKeysDown();
+    hidCircleRead(&sCirclePosition);
+    if (sIsNew3DS) {
+        hidCstickRead(&sCStickPosition);
+        sCStickHeld = (sHeld & (KEY_CSTICK_UP | KEY_CSTICK_DOWN | KEY_CSTICK_LEFT | KEY_CSTICK_RIGHT)) != 0u ||
+                      abs((int)sCStickPosition.dx) > 24 || abs((int)sCStickPosition.dy) > 24;
+    } else {
+        memset(&sCStickPosition, 0, sizeof(sCStickPosition));
+        sCStickHeld = false;
+    }
     if (sDown & KEY_TOUCH) {
         touchPosition touch;
         hidTouchRead(&touch);
@@ -351,12 +521,44 @@ static bool SaveCapturedFramebufferBmp(const char* path, const GSPGPU_CaptureInf
     return ok;
 }
 
-bool Platform3DS_SaveDisplayedScreens(const char* topPath, const char* bottomPath) {
+static bool SaveCapturedFramebufferRaw(const char* path, const GSPGPU_CaptureInfoEntry* capture,
+                                       int width) {
+    if (!path) return true;
+    if (!capture || !capture->framebuf0_vaddr || capture->framebuf_widthbytesize == 0) return false;
+    const size_t size = (size_t)capture->framebuf_widthbytesize * (size_t)width;
+    GSPGPU_InvalidateDataCache(capture->framebuf0_vaddr, size);
+    FILE* file = fopen(path, "wb");
+    if (!file) return false;
+    const bool ok = fwrite(capture->framebuf0_vaddr, 1, size, file) == size;
+    if (fclose(file) != 0) return false;
+    return ok;
+}
+
+bool Platform3DS_SaveDisplayedScreensDetailed(const char* topPath, const char* bottomPath,
+                                              const char* topRawPath, const char* bottomRawPath,
+                                              Platform3DSCaptureStats* stats) {
     GSPGPU_CaptureInfo capture;
     memset(&capture, 0, sizeof(capture));
     if (R_FAILED(GSPGPU_ImportDisplayCaptureInfo(&capture))) return false;
-    const bool topOk = SaveCapturedFramebufferBmp(topPath, &capture.screencapture[GSP_SCREEN_TOP], 400, 240);
-    const bool bottomOk =
-        SaveCapturedFramebufferBmp(bottomPath, &capture.screencapture[GSP_SCREEN_BOTTOM], 320, 240);
-    return topOk && bottomOk;
+    const GSPGPU_CaptureInfoEntry* top = &capture.screencapture[GSP_SCREEN_TOP];
+    const GSPGPU_CaptureInfoEntry* bottom = &capture.screencapture[GSP_SCREEN_BOTTOM];
+    if (stats) {
+        *stats = (Platform3DSCaptureStats){
+            .topFormat = top->format & 7u,
+            .topStride = top->framebuf_widthbytesize,
+            .bottomFormat = bottom->format & 7u,
+            .bottomStride = bottom->framebuf_widthbytesize,
+            .topAddress = (uintptr_t)top->framebuf0_vaddr,
+            .bottomAddress = (uintptr_t)bottom->framebuf0_vaddr,
+        };
+    }
+    const bool topOk = SaveCapturedFramebufferBmp(topPath, top, 400, 240);
+    const bool bottomOk = SaveCapturedFramebufferBmp(bottomPath, bottom, 320, 240);
+    const bool topRawOk = SaveCapturedFramebufferRaw(topRawPath, top, 400);
+    const bool bottomRawOk = SaveCapturedFramebufferRaw(bottomRawPath, bottom, 320);
+    return topOk && bottomOk && topRawOk && bottomRawOk;
+}
+
+bool Platform3DS_SaveDisplayedScreens(const char* topPath, const char* bottomPath) {
+    return Platform3DS_SaveDisplayedScreensDetailed(topPath, bottomPath, NULL, NULL, NULL);
 }

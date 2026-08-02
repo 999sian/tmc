@@ -146,6 +146,17 @@ typedef struct VirtuaPPUMode1GbaMemory {
     uint16_t* oam_mem;
 } VirtuaPPUMode1GbaMemory;
 
+typedef struct VirtuaPPUMode13DSStats {
+    uint64_t frames;
+    uint64_t mainLastTicks;
+    uint64_t mainMaxTicks;
+    uint64_t workerLastTicks[2];
+    uint64_t workerMaxTicks[2];
+    uint32_t mainLastLines;
+    uint32_t workerLastLines[2];
+    uint32_t workerCount;
+} VirtuaPPUMode13DSStats;
+
 void virtuappu_mode1_bind_gba_memory(const VirtuaPPUMode1GbaMemory* memory);
 void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory* memory);
 void virtuappu_mode1_set_frame_geometry(const PPUMemory* ppu);
@@ -162,6 +173,7 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
                                     uint32_t obj_layer[MODE1_GBA_WIDTH], uint8_t obj_priority[MODE1_GBA_WIDTH],
                                     uint16_t dispcnt);
 void virtuappu_mode1_render_frame(const PPUMemory* ppu);
+void virtuappu_mode1_get_3ds_stats(VirtuaPPUMode13DSStats* stats);
 void virtuappu_mode1_shutdown_workers(void);
 
 /* GPU-raster prepare pass: run ONLY the sequential portion of render_frame —

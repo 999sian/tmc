@@ -2,6 +2,7 @@
 
 #include <3ds.h>
 #include <citro2d.h>
+#include <stddef.h>
 #include <string.h>
 
 static C3D_RenderTarget* sTopTarget;
@@ -12,8 +13,14 @@ static Tex3DS_SubTexture sTopSubtexture;
 static Tex3DS_SubTexture sBottomSubtexture;
 static uint32_t* sTopUpload;
 static uint32_t* sBottomUploads[2];
+static void* sC2dFlushBase;
+static size_t sC2dFlushSize;
 static bool sFrameActive;
 static bool sReady;
+static PlatformGpu3DSStats sStats;
+
+extern u32 __ctru_linear_heap;
+extern u32 __ctru_linear_heap_size;
 
 static u32 TextureTransfer(void) {
     return GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(1) |
@@ -48,6 +55,9 @@ static void ConfigureAbgrTextureEnv(void) {
 }
 
 bool PlatformGpu3DS_Init(void) {
+    memset(&sStats, 0, sizeof(sStats));
+    sC2dFlushBase = NULL;
+    sC2dFlushSize = 0;
     sTopUpload = (uint32_t*)linearMemAlign(256u * 256u * sizeof(uint32_t), 0x80);
     sBottomUploads[0] = (uint32_t*)linearMemAlign(512u * 256u * sizeof(uint32_t), 0x80);
     sBottomUploads[1] = (uint32_t*)linearMemAlign(512u * 256u * sizeof(uint32_t), 0x80);
@@ -64,6 +74,27 @@ bool PlatformGpu3DS_Init(void) {
         goto fail_linear;
     }
     C2D_Prepare();
+    C3D_BufInfo* c2dBuffers = C3D_GetBufInfo();
+    if (c2dBuffers && c2dBuffers->bufCount > 0) {
+        const u32 heapPhysical = osConvertVirtToPhys((void*)__ctru_linear_heap);
+        const u32 vertexPhysical = c2dBuffers->base_paddr + c2dBuffers->buffers[0].offset;
+        const uintptr_t heapStart = (uintptr_t)__ctru_linear_heap;
+        const uintptr_t heapEnd = heapStart + __ctru_linear_heap_size;
+        const uintptr_t vertexAddress = heapStart + (u32)(vertexPhysical - heapPhysical);
+        const uintptr_t flushStart = vertexAddress & ~(uintptr_t)0x7Fu;
+        uintptr_t flushEnd = flushStart + 64u * 1024u;
+        if (flushEnd > heapEnd) flushEnd = heapEnd;
+        if (flushStart >= heapStart && flushStart < flushEnd) {
+            sC2dFlushBase = (void*)flushStart;
+            sC2dFlushSize = flushEnd - flushStart;
+        }
+    }
+    sStats.linearHeapBytes = __ctru_linear_heap_size;
+    sStats.c2dFlushBytes = (uint32_t)sC2dFlushSize;
+    sStats.c2dFlushAddress = (uintptr_t)sC2dFlushBase;
+    sStats.topUploadAddress = (uintptr_t)sTopUpload;
+    sStats.bottomUploadAddress[0] = (uintptr_t)sBottomUploads[0];
+    sStats.bottomUploadAddress[1] = (uintptr_t)sBottomUploads[1];
     if (!C3D_TexInitVRAM(&sTopTexture, 256, 256, GPU_RGBA8)) goto fail;
     if (!C3D_TexInitVRAM(&sBottomTexture, 512, 256, GPU_RGBA8)) goto fail_top_texture;
     C3D_TexSetFilter(&sTopTexture, GPU_NEAREST, GPU_NEAREST);
@@ -108,7 +139,11 @@ uint32_t* PlatformGpu3DS_BottomBuffer(unsigned index) {
 }
 
 void PlatformGpu3DS_BeginTop(const uint32_t* pixels) {
-    if (!sReady || !pixels || !C3D_FrameBegin(0)) return;
+    if (!sReady || !pixels) return;
+    if (!C3D_FrameBegin(0)) {
+        ++sStats.frameBeginFailures;
+        return;
+    }
     sFrameActive = true;
     GSPGPU_FlushDataCache(pixels, 256u * 160u * sizeof(uint32_t));
     C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(256, 256),
@@ -126,6 +161,7 @@ void PlatformGpu3DS_BeginTop(const uint32_t* pixels) {
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
     ConfigureAbgrTextureEnv();
+    ++sStats.topTransfers;
 }
 
 void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
@@ -134,6 +170,7 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
         GSPGPU_FlushDataCache(pixels, 512u * 240u * sizeof(uint32_t));
         C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(512, 256),
                                 (u32*)sBottomTexture.data, GX_BUFFER_DIM(512, 256), TextureTransfer());
+        ++sStats.bottomTransfers;
     }
     sBottomSubtexture = (Tex3DS_SubTexture){
         .width = 320, .height = 240, .left = 0.0f, .top = 1.0f,
@@ -148,13 +185,29 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
     C2D_SceneBegin(sBottomTarget);
     C2D_DrawImage(image, &params, NULL);
     ConfigureAbgrTextureEnv();
-    C3D_FrameEnd(0);
+    C2D_Flush();
+    if (sC2dFlushBase && sC2dFlushSize) {
+        GSPGPU_FlushDataCache(sC2dFlushBase, sC2dFlushSize);
+        sStats.boundedFlushBytes += sC2dFlushSize;
+    }
+    C3D_FrameEnd(GX_CMDLIST_FLUSH);
+    ++sStats.frames;
+    sStats.drawingTime = C3D_GetDrawingTime();
+    sStats.processingTime = C3D_GetProcessingTime();
     sFrameActive = false;
+}
+
+void PlatformGpu3DS_GetStats(PlatformGpu3DSStats* stats) {
+    if (stats) *stats = sStats;
 }
 
 void PlatformGpu3DS_Shutdown(void) {
     if (!sReady) return;
-    if (sFrameActive) C3D_FrameEnd(0);
+    if (sFrameActive) {
+        C2D_Flush();
+        if (sC2dFlushBase && sC2dFlushSize) GSPGPU_FlushDataCache(sC2dFlushBase, sC2dFlushSize);
+        C3D_FrameEnd(GX_CMDLIST_FLUSH);
+    }
     if (!aptShouldClose()) C3D_FrameSync();
     C3D_RenderTargetDelete(sBottomTarget);
     C3D_RenderTargetDelete(sTopTarget);
@@ -168,6 +221,8 @@ void PlatformGpu3DS_Shutdown(void) {
     sBottomUploads[0] = NULL;
     sBottomUploads[1] = NULL;
     sTopUpload = NULL;
+    sC2dFlushBase = NULL;
+    sC2dFlushSize = 0;
     sFrameActive = false;
     sReady = false;
 }

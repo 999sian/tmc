@@ -2,6 +2,7 @@
 
 #include "port_gba_mem.h"
 #include "port_hdma.h"
+#include "port_audio_3ds.h"
 #include "port_second_screen.h"
 #include "port_second_screen_state.h"
 #include "platform_3ds.h"
@@ -9,6 +10,7 @@
 
 #include "virtuappu.h"
 #include "cpu/mode1.h"
+#include "main.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -44,7 +46,16 @@ static uint64_t sPerfTotalTicks;
 static uint64_t sPerfSamples;
 static uint64_t sPerfBottomSamples;
 static uint64_t sPerfRenderMaxTicks;
+static uint64_t sPerfTopMaxTicks;
 static uint64_t sPerfBottomMaxTicks;
+static uint64_t sPerfTotalMaxTicks;
+static uint64_t sPerfIntervalTicks;
+static uint64_t sPerfIntervalLastTicks;
+static uint64_t sPerfIntervalMinTicks;
+static uint64_t sPerfIntervalMaxTicks;
+static uint64_t sPerfIntervalSamples;
+static uint64_t sPerfFramesOver16ms;
+static uint64_t sPerfFramesOver33ms;
 #ifdef TMC_3DS_DIAGNOSTICS
 static unsigned sDiagnosticFrames;
 static uint64_t sDiagnosticStartMs;
@@ -70,6 +81,15 @@ static bool WriteBlob(const char* path, const void* data, size_t size) {
     if (!file) return false;
     const bool ok = fwrite(data, 1, size, file) == size;
     if (fclose(file) != 0) return false;
+    return ok;
+}
+
+static bool WritePalettes(const char* path) {
+    FILE* file = fopen(path, "wb");
+    if (!file) return false;
+    bool ok = fwrite(gBgPltt, 1, sizeof(gBgPltt), file) == sizeof(gBgPltt);
+    ok = fwrite(gObjPltt, 1, sizeof(gObjPltt), file) == sizeof(gObjPltt) && ok;
+    if (fclose(file) != 0) ok = false;
     return ok;
 }
 
@@ -113,25 +133,39 @@ void Port_PPU_3DS_WriteQuickDump(void) {
 
     char topPath[192];
     char bottomPath[192];
+    char topRawPath[192];
+    char bottomRawPath[192];
     snprintf(topPath, sizeof(topPath), "%s/top-screen.bmp", dir);
     snprintf(bottomPath, sizeof(bottomPath), "%s/bottom-screen.bmp", dir);
-    const bool screensOk = Platform3DS_SaveDisplayedScreens(topPath, bottomPath);
+    snprintf(topRawPath, sizeof(topRawPath), "%s/top-screen.raw", dir);
+    snprintf(bottomRawPath, sizeof(bottomRawPath), "%s/bottom-screen.raw", dir);
+    Platform3DSCaptureStats captureStats;
+    memset(&captureStats, 0, sizeof(captureStats));
+    const bool screensOk = Platform3DS_SaveDisplayedScreensDetailed(
+        topPath, bottomPath, topRawPath, bottomRawPath, &captureStats);
 
     char path[192];
+    snprintf(path, sizeof(path), "%s/ewram.bin", dir);
+    WriteBlob(path, gEwram, sizeof(gEwram));
+    snprintf(path, sizeof(path), "%s/iwram.bin", dir);
+    WriteBlob(path, gIwram, sizeof(gIwram));
     snprintf(path, sizeof(path), "%s/vram.bin", dir);
     WriteBlob(path, gVram, sizeof(gVram));
     snprintf(path, sizeof(path), "%s/io-registers.bin", dir);
     WriteBlob(path, gIoMem, sizeof(gIoMem));
     snprintf(path, sizeof(path), "%s/palettes.bin", dir);
-    WriteBlob(path, gBgPltt, sizeof(gBgPltt));
+    WritePalettes(path);
     snprintf(path, sizeof(path), "%s/oam.bin", dir);
     WriteBlob(path, gOamMem, sizeof(gOamMem));
+    snprintf(path, sizeof(path), "%s/main-state.bin", dir);
+    WriteBlob(path, &gMain, sizeof(gMain));
 
     snprintf(path, sizeof(path), "%s/info.txt", dir);
     FILE* info = fopen(path, "wb");
     if (info) {
         const double sampleCount = sPerfSamples ? (double)sPerfSamples : 1.0;
         const double bottomSampleCount = sPerfBottomSamples ? (double)sPerfBottomSamples : 1.0;
+        const double intervalSampleCount = sPerfIntervalSamples ? (double)sPerfIntervalSamples : 1.0;
         const double elapsedSeconds = sPerfLastFrameTick > sPerfFirstFrameTick
                                           ? (double)(sPerfLastFrameTick - sPerfFirstFrameTick) /
                                                 (double)Platform3DS_TicksPerSecond()
@@ -139,24 +173,163 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         const double measuredFps = elapsedSeconds > 0.0 && sPerfSamples > 1
                                        ? (double)(sPerfSamples - 1u) / elapsedSeconds
                                        : 0.0;
+        Platform3DSRuntimeStats runtimeStats;
+        PlatformGpu3DSStats gpuStats;
+        PortAudio3DSStats audioStats;
+        VirtuaPPUMode13DSStats workerStats;
+        Platform3DS_GetRuntimeStats(&runtimeStats);
+        PlatformGpu3DS_GetStats(&gpuStats);
+        Port_Audio_3DSGetStats(&audioStats);
+        virtuappu_mode1_get_3ds_stats(&workerStats);
+        const uint64_t engineSamples = runtimeStats.logicFrames > 1 ? runtimeStats.logicFrames - 1u : 1u;
+        const uint64_t vblankSamples = runtimeStats.presentedFrames ? runtimeStats.presentedFrames : 1u;
+        const uint64_t audioSamples = audioStats.buffersRendered ? audioStats.buffersRendered : 1u;
+        const uint16_t dumpDispcnt = (uint16_t)(gIoMem[0] | (gIoMem[1] << 8));
+        const uint8_t dumpMode = dumpDispcnt & 7u;
+        const uint32_t avoidedFlushBytes = gpuStats.linearHeapBytes > gpuStats.c2dFlushBytes
+                                               ? gpuStats.linearHeapBytes - gpuStats.c2dFlushBytes
+                                               : 0;
+        const double loadIntervalTicks = sPerfIntervalLastTicks
+                                             ? (double)sPerfIntervalLastTicks
+                                             : (double)Platform3DS_TicksPerSecond() / 60.0;
         fprintf(info, "The Minish Cap 3DS v" TMC_PORT_VERSION " quick dump\n");
-        fprintf(info, "Frame: %lu\n", (unsigned long)sFrameNumber);
+        fprintf(info, "\n[System]\n");
+        fprintf(info, "Model: %s\n", Platform3DS_IsNew3DS() ? "New Nintendo 3DS" : "Old Nintendo 3DS");
+        fprintf(info, "CPU profile requested: %s\n", runtimeStats.speedupRequested ? "804 MHz + L2" : "268 MHz");
+        fprintf(info, "Kernel version: 0x%08lX\n", (unsigned long)runtimeStats.kernelVersion);
+        fprintf(info, "FIRM version: 0x%08lX\n", (unsigned long)runtimeStats.firmVersion);
+        fprintf(info, "System core version: %lu\n", (unsigned long)runtimeStats.systemCoreVersion);
+        fprintf(info, "Application memory type: %lu\n", (unsigned long)runtimeStats.applicationMemoryType);
+        fprintf(info, "Main thread priority: %ld\n", (long)runtimeStats.mainThreadPriority);
+        fprintf(info, "Core 1 time limit: %u%%\n", Platform3DS_Core1TimeLimit());
+        fprintf(info, "PPU workers: %lu (core 1: %s, New 3DS core 2: %s)\n",
+                (unsigned long)workerStats.workerCount,
+                Platform3DS_CanUseCore1() ? "enabled" : "unavailable",
+                Platform3DS_IsNew3DS() ? "enabled" : "unavailable");
+        fprintf(info, "Application memory free: %lu bytes\n", (unsigned long)runtimeStats.applicationMemoryFree);
+        fprintf(info, "System memory free: %lu bytes\n", (unsigned long)runtimeStats.systemMemoryFree);
+        fprintf(info, "Base memory free: %lu bytes\n", (unsigned long)runtimeStats.baseMemoryFree);
+        fprintf(info, "Linear memory free: %lu bytes\n", (unsigned long)runtimeStats.linearMemoryFree);
+        fprintf(info, "Stack pointer / region: 0x%08lX / 0x%08lX-0x%08lX\n",
+                (unsigned long)runtimeStats.currentStackPointer,
+                (unsigned long)runtimeStats.stackRegionBase,
+                (unsigned long)runtimeStats.stackRegionEnd);
+        fprintf(info, "ROM loaded: %s, %lu bytes\n", gRomData ? "yes" : "no", (unsigned long)gRomSize);
+
+        fprintf(info, "\n[Lifecycle and input]\n");
+        fprintf(info, "Application running: %s\n", Platform3DS_IsRunning() ? "yes" : "no");
+        fprintf(info, "APT close requested: %s\n", runtimeStats.aptCloseRequested ? "yes" : "no");
+        fprintf(info, "APT lifecycle checks: %llu\n", (unsigned long long)runtimeStats.aptChecks);
+        fprintf(info, "Keys held/down: 0x%08lX / 0x%08lX\n",
+                (unsigned long)runtimeStats.keyMaskHeld, (unsigned long)runtimeStats.keyMaskDown);
+        fprintf(info, "Circle Pad: %d, %d\n", runtimeStats.circleX, runtimeStats.circleY);
+        fprintf(info, "C-stick: %d, %d\n", runtimeStats.cstickX, runtimeStats.cstickY);
+        fprintf(info, "Turbo: %s, multiplier x%u\n",
+                runtimeStats.turboHeld ? "held" : "released", Platform3DS_TurboMultiplier());
+
+        fprintf(info, "\n[Cadence]\n");
+        fprintf(info, "Engine logic frames: %llu\n", (unsigned long long)runtimeStats.logicFrames);
+        fprintf(info, "Presented frames: %llu\n", (unsigned long long)runtimeStats.presentedFrames);
+        fprintf(info, "Turbo logic frames: %llu\n", (unsigned long long)runtimeStats.turboLogicFrames);
+        fprintf(info, "Turbo-skipped presentations: %llu\n",
+                (unsigned long long)runtimeStats.turboSkippedPresentations);
         fprintf(info, "Top screenshot: 400x240 displayed framebuffer BMP\n");
         fprintf(info, "Bottom screenshot: 320x240 displayed framebuffer BMP\n");
+        fprintf(info, "Raw physical framebuffers: top-screen.raw, bottom-screen.raw\n");
         fprintf(info, "Displayed framebuffer capture: %s\n", screensOk ? "OK" : "FAILED");
-        fprintf(info, "System: %s\n", Platform3DS_IsNew3DS() ? "New Nintendo 3DS" : "Old Nintendo 3DS");
-        fprintf(info, "Core 1 time limit: %u%%\n", Platform3DS_Core1TimeLimit());
+        fprintf(info, "Top capture format/stride/address: %lu / %lu / 0x%08lX\n",
+                (unsigned long)captureStats.topFormat, (unsigned long)captureStats.topStride,
+                (unsigned long)captureStats.topAddress);
+        fprintf(info, "Bottom capture format/stride/address: %lu / %lu / 0x%08lX\n",
+                (unsigned long)captureStats.bottomFormat, (unsigned long)captureStats.bottomStride,
+                (unsigned long)captureStats.bottomAddress);
         fprintf(info, "Measured cadence: %.2f FPS\n", measuredFps);
+        fprintf(info, "Frame interval: last %.3f ms, average %.3f ms, minimum %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(sPerfIntervalLastTicks),
+                TicksToMilliseconds(sPerfIntervalTicks) / intervalSampleCount,
+                TicksToMilliseconds(sPerfIntervalMinTicks == UINT64_MAX ? 0 : sPerfIntervalMinTicks),
+                TicksToMilliseconds(sPerfIntervalMaxTicks));
+        fprintf(info, "Frames over 16.67 ms / 33.33 ms: %llu / %llu\n",
+                (unsigned long long)sPerfFramesOver16ms, (unsigned long long)sPerfFramesOver33ms);
+        fprintf(info, "Engine work between frame boundaries: last %.3f ms, average %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(runtimeStats.engineWorkLastTicks),
+                TicksToMilliseconds(runtimeStats.engineWorkTicks) / (double)engineSamples,
+                TicksToMilliseconds(runtimeStats.engineWorkMaxTicks));
+        fprintf(info, "VBlank wait: last %.3f ms, average %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(runtimeStats.vblankWaitLastTicks),
+                TicksToMilliseconds(runtimeStats.vblankWaitTicks) / (double)vblankSamples,
+                TicksToMilliseconds(runtimeStats.vblankWaitMaxTicks));
+
+        fprintf(info, "\n[Renderer]\n");
         fprintf(info, "PPU render: average %.3f ms, maximum %.3f ms\n",
                 TicksToMilliseconds(sPerfRenderTicks) / sampleCount, TicksToMilliseconds(sPerfRenderMaxTicks));
-        fprintf(info, "Top presentation CPU work: average %.3f ms\n",
-                TicksToMilliseconds(sPerfTopTicks) / sampleCount);
+        fprintf(info, "Top presentation CPU work: average %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(sPerfTopTicks) / sampleCount, TicksToMilliseconds(sPerfTopMaxTicks));
         fprintf(info, "Bottom-screen paint worker: average %.3f ms, maximum %.3f ms\n",
                 TicksToMilliseconds(sPerfBottomTicks) / bottomSampleCount,
                 TicksToMilliseconds(sPerfBottomMaxTicks));
-        fprintf(info, "Main-thread render/presentation CPU work: average %.3f ms\n",
-                TicksToMilliseconds(sPerfTotalTicks) / sampleCount);
+        fprintf(info, "Main-thread render/presentation CPU work: average %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(sPerfTotalTicks) / sampleCount, TicksToMilliseconds(sPerfTotalMaxTicks));
+        fprintf(info, "PPU core 0: last %.3f ms, maximum %.3f ms, last lines %lu\n",
+                TicksToMilliseconds(workerStats.mainLastTicks), TicksToMilliseconds(workerStats.mainMaxTicks),
+                (unsigned long)workerStats.mainLastLines);
+        fprintf(info, "PPU core 0 measured load in last frame interval: %.1f%%\n",
+                (double)workerStats.mainLastTicks * 100.0 / loadIntervalTicks);
+        for (int i = 0; i < 2; ++i) {
+            fprintf(info, "PPU core %d: last %.3f ms, maximum %.3f ms, last lines %lu\n", i + 1,
+                    TicksToMilliseconds(workerStats.workerLastTicks[i]),
+                    TicksToMilliseconds(workerStats.workerMaxTicks[i]),
+                    (unsigned long)workerStats.workerLastLines[i]);
+            fprintf(info, "PPU core %d measured load in last frame interval: %.1f%%\n", i + 1,
+                    (double)workerStats.workerLastTicks[i] * 100.0 / loadIntervalTicks);
+        }
+        fprintf(info, "GPU frames / begin failures: %llu / %llu\n",
+                (unsigned long long)gpuStats.frames, (unsigned long long)gpuStats.frameBeginFailures);
+        fprintf(info, "GPU top/bottom transfers: %llu / %llu\n",
+                (unsigned long long)gpuStats.topTransfers, (unsigned long long)gpuStats.bottomTransfers);
+        fprintf(info, "Citro3D drawing/processing time: %.3f / %.3f ms\n",
+                gpuStats.drawingTime, gpuStats.processingTime);
+        fprintf(info, "Linear heap full flush: disabled (%lu bytes avoided per frame)\n",
+                (unsigned long)avoidedFlushBytes);
+        fprintf(info, "Bounded C2D cache flush: %lu bytes per frame, %llu bytes total\n",
+                (unsigned long)gpuStats.c2dFlushBytes, (unsigned long long)gpuStats.boundedFlushBytes);
+        fprintf(info, "C2D flush address: 0x%08lX; upload buffers: 0x%08lX / 0x%08lX / 0x%08lX\n",
+                (unsigned long)gpuStats.c2dFlushAddress, (unsigned long)gpuStats.topUploadAddress,
+                (unsigned long)gpuStats.bottomUploadAddress[0],
+                (unsigned long)gpuStats.bottomUploadAddress[1]);
         fprintf(info, "Bottom-screen refresh: 20 Hz\n");
+
+        fprintf(info, "\n[Audio]\n");
+        fprintf(info, "Initialized/playing: %s / %s\n",
+                audioStats.initialized ? "yes" : "no", audioStats.channelPlaying ? "yes" : "no");
+        fprintf(info, "Sample rate: %lu Hz; buffer geometry: %lu x %lu frames\n",
+                (unsigned long)audioStats.sampleRate, (unsigned long)audioStats.bufferCount,
+                (unsigned long)audioStats.bufferFrames);
+        fprintf(info, "Pumps / rendered buffers / underrun observations: %llu / %llu / %llu\n",
+                (unsigned long long)audioStats.pumps, (unsigned long long)audioStats.buffersRendered,
+                (unsigned long long)audioStats.underrunObservations);
+        fprintf(info, "Audio render: last %.3f ms, average %.3f ms, maximum %.3f ms\n",
+                TicksToMilliseconds(audioStats.renderLastTicks),
+                TicksToMilliseconds(audioStats.renderTicks) / (double)audioSamples,
+                TicksToMilliseconds(audioStats.renderMaxTicks));
+        fprintf(info, "Wave buffers free/queued/playing/done: %lu/%lu/%lu/%lu\n",
+                (unsigned long)audioStats.freeBuffers, (unsigned long)audioStats.queuedBuffers,
+                (unsigned long)audioStats.playingBuffers, (unsigned long)audioStats.doneBuffers);
+        fprintf(info, "Maximum buffers refilled in one pump: %lu; sample position: %lu\n",
+                (unsigned long)audioStats.maxBuffersPerPump, (unsigned long)audioStats.samplePosition);
+
+        fprintf(info, "\n[Game and GBA PPU]\n");
+        fprintf(info, "Task/state/substate/sleep: %u/%u/%u/%u\n",
+                gMain.task, gMain.state, gMain.substate, gMain.sleepStatus);
+        fprintf(info, "Game ticks: %u; pause frames/count/interval: %u/%u/%u\n",
+                gMain.ticks, gMain.pauseFrames, gMain.pauseCount, gMain.pauseInterval);
+        fprintf(info, "DISPCNT: 0x%04X; display mode: %u\n", dumpDispcnt, dumpMode);
+        fprintf(info, "VRAM/EWRAM/IWRAM bytes: %lu/%lu/%lu\n",
+                (unsigned long)sizeof(gVram), (unsigned long)sizeof(gEwram), (unsigned long)sizeof(gIwram));
+
+        fprintf(info, "\n[Files]\n");
+        fprintf(info, "top-screen.bmp, bottom-screen.bmp, top-screen.raw, bottom-screen.raw\n");
+        fprintf(info, "ewram.bin, iwram.bin, vram.bin, io-registers.bin, palettes.bin, oam.bin, main-state.bin\n");
         fprintf(info, "Trigger: L + R + A\n");
         fclose(info);
     }
@@ -204,7 +377,16 @@ void Port_PPU_Init(SDL_Window* window) {
     sPerfSamples = 0;
     sPerfBottomSamples = 0;
     sPerfRenderMaxTicks = 0;
+    sPerfTopMaxTicks = 0;
     sPerfBottomMaxTicks = 0;
+    sPerfTotalMaxTicks = 0;
+    sPerfIntervalTicks = 0;
+    sPerfIntervalLastTicks = 0;
+    sPerfIntervalMinTicks = UINT64_MAX;
+    sPerfIntervalMaxTicks = 0;
+    sPerfIntervalSamples = 0;
+    sPerfFramesOver16ms = 0;
+    sPerfFramesOver33ms = 0;
     sGpuPresenterReady = PlatformGpu3DS_Init();
     sTopUpload = PlatformGpu3DS_TopBuffer();
     sBottomUploads[0] = PlatformGpu3DS_BottomBuffer(0);
@@ -290,13 +472,27 @@ void Port_PPU_PresentFrame(void) {
     if (sFrameNumber >= 120u) {
         const uint64_t renderTicks = renderEndTick - frameStartTick;
         const uint64_t topTicks = topEndTick - renderEndTick;
+        const uint64_t totalTicks = frameEndTick - frameStartTick;
         if (sPerfSamples == 0) sPerfFirstFrameTick = frameStartTick;
+        if (sPerfLastFrameTick != 0) {
+            const uint64_t intervalTicks = frameStartTick - sPerfLastFrameTick;
+            sPerfIntervalLastTicks = intervalTicks;
+            sPerfIntervalTicks += intervalTicks;
+            ++sPerfIntervalSamples;
+            if (intervalTicks < sPerfIntervalMinTicks) sPerfIntervalMinTicks = intervalTicks;
+            if (intervalTicks > sPerfIntervalMaxTicks) sPerfIntervalMaxTicks = intervalTicks;
+            const uint64_t ticksPerSecond = Platform3DS_TicksPerSecond();
+            if (intervalTicks * 60u > ticksPerSecond) ++sPerfFramesOver16ms;
+            if (intervalTicks * 30u > ticksPerSecond) ++sPerfFramesOver33ms;
+        }
         sPerfLastFrameTick = frameStartTick;
         ++sPerfSamples;
         sPerfRenderTicks += renderTicks;
         sPerfTopTicks += topTicks;
-        sPerfTotalTicks += frameEndTick - frameStartTick;
+        sPerfTotalTicks += totalTicks;
         if (renderTicks > sPerfRenderMaxTicks) sPerfRenderMaxTicks = renderTicks;
+        if (topTicks > sPerfTopMaxTicks) sPerfTopMaxTicks = topTicks;
+        if (totalTicks > sPerfTotalMaxTicks) sPerfTotalMaxTicks = totalTicks;
     }
 #ifdef TMC_3DS_DIAGNOSTICS
     if (diagnosticFrame < 8 || diagnosticFrame == 60) {

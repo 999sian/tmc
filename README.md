@@ -18,6 +18,14 @@ No ROM or extracted game asset package is distributed in this repository. Each
 user must provide their own legally obtained compatible Game Boy Advance ROM on
 their own 3DS SD card.
 
+## Join my Discord
+
+https://discord.gg/SMW49UMkw
+
+## Support me:
+
+https://ko-fi.com/estebanpdn
+
 ## Features
 
 - Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
@@ -29,17 +37,19 @@ their own 3DS SD card.
 - Parallel software PPU rendering across the available 3DS application cores.
 - New Nintendo 3DS speedup with 804 MHz, L2 cache and third-core rendering
   support.
+- Hold the New Nintendo 3DS C-stick in any direction for temporary 3x turbo.
 - Native NDSP stereo audio.
 - Local save data stored beside the ROM on the SD card.
-- Quick diagnostics: press `L + R + A` to create a dump with top and bottom
-  physical-screen captures, performance metrics, I/O registers and graphic
-  memory files.
+- Quick diagnostics: press `L + R + A` to capture both physical displays plus
+  raw framebuffers, complete GBA working and graphics memory, system and input
+  state, frame cadence, per-core PPU timings, GPU work, audio health and memory
+  availability.
 - Correct HOME Menu lifecycle handling for suspending or closing the port.
 - Public GitHub releases include CIA, 3DSX, QR code and clean source archive.
 
 ## Installation
 
-1. Install `tmc-3ds-v0.3.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.4.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -94,8 +104,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.3.cia
-build-3ds/game/tmc-3ds-v0.3.3dsx
+build-3ds/game/tmc-3ds-v0.4.cia
+build-3ds/game/tmc-3ds-v0.4.3dsx
 ```
 
 The build does not embed a ROM.

@@ -578,7 +578,7 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
 
     pWVar4 = sub_0805F2C8();
     if (pWVar4 != NULL) {
-#ifdef PC_PORT
+#if defined(PC_PORT) && !defined(TMC_3DS)
         /* Many callers pass 24-byte GBA Font blobs (raw ROM data with 32-bit pointers).
          * On 64-bit, the C Font struct has 8-byte pointers — detect and decode. */
         if (Port_IsFontGBAEncoded(paramFont)) {
@@ -600,6 +600,22 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
             if ((uintptr_t)font.buffer_loc >= 0x02000000u && (uintptr_t)font.buffer_loc < 0x0A000000u) {
                 font.buffer_loc = port_resolve_addr((uintptr_t)font.buffer_loc);
             }
+        }
+#elif defined(TMC_3DS)
+        /* The 3DS build is a 32-bit PC_PORT: native Font and raw GBA Font
+         * blobs have the same field layout. Copy first, then resolve only the
+         * fields that are still GBA memory addresses. The 64-bit PC heuristic
+         * can misclassify native heap/stack fonts on 3DS because those pointers
+         * share the GBA ROM numeric range. */
+        MemCopy(paramFont, &font, sizeof(Font));
+        if ((uintptr_t)font.dest >= 0x02000000u && (uintptr_t)font.dest < 0x0A000000u) {
+            font.dest = (u16*)port_resolve_addr((uintptr_t)font.dest);
+        }
+        if ((uintptr_t)font.gfx_dest >= 0x02000000u && (uintptr_t)font.gfx_dest < 0x0A000000u) {
+            font.gfx_dest = port_resolve_addr((uintptr_t)font.gfx_dest);
+        }
+        if ((uintptr_t)font.buffer_loc >= 0x02000000u && (uintptr_t)font.buffer_loc < 0x0A000000u) {
+            font.buffer_loc = port_resolve_addr((uintptr_t)font.buffer_loc);
         }
 #else
         MemCopy(paramFont, &font, sizeof(Font));
