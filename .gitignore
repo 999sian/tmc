@@ -111,3 +111,6 @@ baserom.gba
 run/
 config.json
 release/
+
+# git worktrees
+.worktrees/
