@@ -1615,21 +1615,30 @@ typedef struct Mode1Worker {
     Thread thread;
     const Mode1RenderLinesContext* context;
     volatile bool running;
+    uint64_t last_ticks;
+    uint64_t max_ticks;
+    uint32_t last_lines;
 } Mode1Worker;
 
 static Mode1Worker sMode1Workers[2];
 static bool sMode1WorkersInitialized;
 static volatile int sMode1NextLine;
+static uint64_t sMode1StatsFrames;
+static uint64_t sMode1MainLastTicks;
+static uint64_t sMode1MainMaxTicks;
+static uint32_t sMode1MainLastLines;
 
-static void mode1_render_dynamic(const Mode1RenderLinesContext* context) {
+static uint32_t mode1_render_dynamic(const Mode1RenderLinesContext* context) {
     enum { MODE1_3DS_LINE_CHUNK = 8 };
+    uint32_t renderedLines = 0;
     for (;;) {
         const int first = __atomic_fetch_add(&sMode1NextLine, MODE1_3DS_LINE_CHUNK, __ATOMIC_RELAXED);
-        if (first >= MODE1_GBA_HEIGHT) return;
+        if (first >= MODE1_GBA_HEIGHT) return renderedLines;
         const int last = first + MODE1_3DS_LINE_CHUNK < MODE1_GBA_HEIGHT
                              ? first + MODE1_3DS_LINE_CHUNK
                              : MODE1_GBA_HEIGHT;
         mode1_render_lines(context, first, last);
+        renderedLines += (uint32_t)(last - first);
     }
 }
 
@@ -1639,7 +1648,10 @@ static void mode1_worker_main(void* argument) {
         LightEvent_Wait(&worker->start);
         if (!__atomic_load_n(&worker->running, __ATOMIC_ACQUIRE)) break;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
-        mode1_render_dynamic(worker->context);
+        const uint64_t startTick = svcGetSystemTick();
+        worker->last_lines = mode1_render_dynamic(worker->context);
+        worker->last_ticks = svcGetSystemTick() - startTick;
+        if (worker->last_ticks > worker->max_ticks) worker->max_ticks = worker->last_ticks;
         LightEvent_Signal(&worker->done);
     }
 }
@@ -1684,9 +1696,28 @@ static void mode1_render_lines_3ds(const Mode1RenderLinesContext* context) {
         __atomic_thread_fence(__ATOMIC_RELEASE);
         LightEvent_Signal(&worker->start);
     }
-    mode1_render_dynamic(context);
+    const uint64_t mainStartTick = svcGetSystemTick();
+    sMode1MainLastLines = mode1_render_dynamic(context);
+    sMode1MainLastTicks = svcGetSystemTick() - mainStartTick;
+    if (sMode1MainLastTicks > sMode1MainMaxTicks) sMode1MainMaxTicks = sMode1MainLastTicks;
     for (int i = 0; i < 2; ++i) {
         if (sMode1Workers[i].thread) LightEvent_Wait(&sMode1Workers[i].done);
+    }
+    ++sMode1StatsFrames;
+}
+
+void virtuappu_mode1_get_3ds_stats(VirtuaPPUMode13DSStats* stats) {
+    if (!stats) return;
+    memset(stats, 0, sizeof(*stats));
+    stats->frames = sMode1StatsFrames;
+    stats->mainLastTicks = sMode1MainLastTicks;
+    stats->mainMaxTicks = sMode1MainMaxTicks;
+    stats->mainLastLines = sMode1MainLastLines;
+    for (int i = 0; i < 2; ++i) {
+        stats->workerLastTicks[i] = sMode1Workers[i].last_ticks;
+        stats->workerMaxTicks[i] = sMode1Workers[i].max_ticks;
+        stats->workerLastLines[i] = sMode1Workers[i].last_lines;
+        if (sMode1Workers[i].thread) ++stats->workerCount;
     }
 }
 
@@ -1700,9 +1731,17 @@ void virtuappu_mode1_shutdown_workers(void) {
         threadFree(worker->thread);
         worker->thread = NULL;
     }
+    memset(sMode1Workers, 0, sizeof(sMode1Workers));
     sMode1WorkersInitialized = false;
+    sMode1StatsFrames = 0;
+    sMode1MainLastTicks = 0;
+    sMode1MainMaxTicks = 0;
+    sMode1MainLastLines = 0;
 }
 #else
+void virtuappu_mode1_get_3ds_stats(VirtuaPPUMode13DSStats* stats) {
+    if (stats) memset(stats, 0, sizeof(*stats));
+}
 void virtuappu_mode1_shutdown_workers(void) {}
 #endif
 

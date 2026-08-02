@@ -745,12 +745,20 @@ int Port_Profile_Enabled(void) {
 
 void VBlankIntrWait(void) {
 #ifdef TMC_3DS
-    Port_PPU_SetPresentIsFirstOfTick(true);
-    Port_PPU_PresentFrame();
+    const bool present = Platform3DS_BeginFrameBoundary();
+    if (present) {
+        Port_PPU_SetPresentIsFirstOfTick(true);
+        Port_PPU_PresentFrame();
+    }
     port_hdma_vblank_reset();
-    Platform3DS_WaitForVBlank();
+    if (present) {
+        Platform3DS_WaitForVBlank();
+    } else {
+        Platform3DS_PumpWithoutVBlank();
+    }
     gba_write16(REG_ADDR_KEYINPUT, Platform3DS_ReadKeyInput());
     VBlankIntr();
+    Platform3DS_EndFrameBoundary();
 #else
     u64 nowNs;
     bool decoupled;

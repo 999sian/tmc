@@ -225,6 +225,17 @@ u32 gba_read32(uint32_t addr) {
 
 void* port_resolve_addr(uintptr_t val)
 {
+#ifdef TMC_3DS
+    /* 3DS heap and stack memory can be mapped inside 0x08000000-0x0A000000,
+     * the same numeric window used by GBA ROM pointers. Trust mapped native
+     * process memory first; otherwise local heap/stack pointers can be
+     * misread as ROM offsets and corrupt 32-bit PC_PORT structs. */
+    if (val >= 0x08000000u && val < 0x0A000000u) {
+        extern int Platform3DS_IsNativeAddress(uintptr_t value);
+        if (Platform3DS_IsNativeAddress(val)) return (void*)val;
+    }
+#endif
+
     /* GBA-range values are address-mapped through gba_TryMemPtr on
      * every platform. The previous Windows-only short-circuit used
      * VirtualQuery to "trust" the raw address if it happened to be a

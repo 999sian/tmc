@@ -28,9 +28,11 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 - Bottom screen: 320x240 map, dungeon/status information and touch item UI.
 - Rendering: PICA200/Citro2D presenter fed by the software GBA PPU.
 - New 3DS: requests 804 MHz, L2 cache and access to the extra application core.
+- New 3DS turbo: hold the C-stick in any direction for temporary 3x game speed.
 - Diagnostics: press `L + R + A` to create `dumps/dump-*` with top and bottom
-  physical-framebuffer BMP captures, I/O registers, VRAM, palettes, OAM and
-  performance data.
+  physical-framebuffer BMP and raw captures, EWRAM, IWRAM, VRAM, palettes, OAM,
+  I/O and game state, frame cadence, per-core PPU timings, GPU work, audio
+  buffer health, memory availability, lifecycle state and complete input data.
 - System lifecycle: HOME, sleep and application close events are handled by the
   regular 3DS applet loop.
 
