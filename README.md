@@ -18,6 +18,12 @@ No ROM or extracted game asset package is distributed in this repository. Each
 user must provide their own legally obtained compatible Game Boy Advance ROM on
 their own 3DS SD card.
 
+## Join my Discord
+https://discord.gg/SMW49UMkw
+
+## Support me:
+https://ko-fi.com/estebanpdn
+
 ## Features
 
 - Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
