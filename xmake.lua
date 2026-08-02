@@ -431,20 +431,30 @@ target("tmc_pc")
             if os.isfile(p.marker_file) and os.isfile(patch_file) then
                 local content = io.readfile(p.marker_file)
                 if not (content and content:find(p.marker, 1, true)) then
-                    -- -3 falls back to a 3-way merge when surrounding lines
-                    -- have drifted (some hunks already in upstream), so the
-                    -- step stays self-healing instead of silently no-oping.
                     local rel = path.relative(patch_file, os.projectdir())
-                    local applied = try {
-                        function ()
-                            os.execv("git", {"-C", sub, "apply", "-3", patch_file})
-                            return true
-                        end
-                    }
-                    if applied then
+
+                    -- Confirming the marker landed is not belt-and-braces, it
+                    -- is the whole check: `git apply` exits 0 having done
+                    -- nothing when the target sits under a submodule gitlink,
+                    -- which is exactly how libs/ViruaPPU is checked out here.
+                    -- Trusting the exit code printed "applied" while building
+                    -- an unpatched renderer. `-3` also hard-fails outside a
+                    -- repository, so fall back to plain patch(1), which does
+                    -- not care about git at all.
+                    local function marker_present()
+                        local after = io.readfile(p.marker_file)
+                        return after ~= nil and after:find(p.marker, 1, true) ~= nil
+                    end
+
+                    try { function () os.execv("git", {"-C", sub, "apply", "-3", patch_file}) end }
+                    if not marker_present() then
+                        try { function () os.execv("patch", {"-p1", "--forward", "-s", "-d", sub, "-i", patch_file}) end }
+                    end
+
+                    if marker_present() then
                         print("[viruappu] applied %s", rel)
                     else
-                        print("[viruappu] WARN: %s did not apply (drift?); continuing without it", rel)
+                        print("[viruappu] WARN: %s did NOT apply (marker '%s' still absent); building without it", rel, p.marker)
                     end
                 end
             end
@@ -490,13 +500,25 @@ target("tmc_pc")
     add_includedirs("libs/agbplay_core")
     add_includedirs("tools/src/assets_extractor") -- AssetExtractorApi linked in-process
 
-    add_defines("launcher", "GUILITE_ON")
-    add_includedirs("libs/tmc-Modern-Launcher/include")
-    add_includedirs("libs/tmc-Modern-Launcher/3p")
-    add_rules("utils.bin2c", {extensions = {".png"}})
-    add_files("libs/tmc-Modern-Launcher/assets/github.png", {rule = "utils.bin2c", nozeroend = true})
-    add_files("libs/tmc-Modern-Launcher/src/launcher_github_icon.cpp")
-    add_files("libs/tmc-Modern-Launcher/src/tmc_launcher.cpp")
+    -- The Modern Launcher lives in a separate submodule that not every
+    -- checkout can clone (it is a private repo). Every launcher call site is
+    -- already behind `#ifdef launcher`, and port_launcher_bootstrap.cpp has an
+    -- #else that just continues straight into the game -- so detect the
+    -- submodule instead of hard-requiring it. Without this the whole target
+    -- fails at 90% on a missing tmc_launcher.h with no way to opt out.
+    local launcher_dir = path.join(os.projectdir(), "libs", "tmc-Modern-Launcher")
+    local have_launcher = os.isfile(path.join(launcher_dir, "src", "tmc_launcher.cpp"))
+    if have_launcher then
+        add_defines("launcher", "GUILITE_ON")
+        add_includedirs("libs/tmc-Modern-Launcher/include")
+        add_includedirs("libs/tmc-Modern-Launcher/3p")
+        add_rules("utils.bin2c", {extensions = {".png"}})
+        add_files("libs/tmc-Modern-Launcher/assets/github.png", {rule = "utils.bin2c", nozeroend = true})
+        add_files("libs/tmc-Modern-Launcher/src/launcher_github_icon.cpp")
+        add_files("libs/tmc-Modern-Launcher/src/tmc_launcher.cpp")
+    else
+        print("[tmc_pc] libs/tmc-Modern-Launcher not present -- building without the launcher")
+    end
     add_files("port/port_launcher_bootstrap.cpp")
 
     add_files("port/port_main.c")

@@ -66,8 +66,10 @@ u8 gUnk_02006F00[0x4000] __attribute__((aligned(4))); /* BG tilemap buffer (16 K
 u16 gUnk_0200B640;                                    /* scroll state scalar */
 u16 gUnk_02017830[0x138] __attribute__((aligned(4))); /* palette rotation buffer (624 bytes) */
 u8 gUnk_02017AA0[0x1400] __attribute__((aligned(4))); /* HBlank DMA double buffer, 2×0xA00 */
-u8 gUnk_02017BA0[0x1400]
-    __attribute__((aligned(4))); /* BG2 affine ref lines (TODO: aliases gUnk_02017AA0+0x100 on GBA) */
+/* gUnk_02017BA0 is NOT a separate object: on GBA 0x02017BA0 == 0x02017AA0 + 0x100,
+ * i.e. entry 16 of the same BgAffineDstData table. Defining it standalone here left
+ * it permanently zero, so the rolling barrel seeded BG2's affine registers with a
+ * degenerate matrix. It is now aliased at its only use site (rollingBarrelManager.c). */
 void* gUnk_02018EA0 = NULL;      /* LinkedList2* pointer */
 struct_02018EB0 gUnk_02018EB0;
 u8 gUnk_02018EE0[0x1000] __attribute__((aligned(4))); /* window rasterization scratch (s16[], 0x780 used, 0x1000 gap) */
@@ -147,7 +149,12 @@ BgAnimation gBgAnimations[MAX_BG_ANIMATIONS];
 u8 gTextGfxBuffer[0xD00];
 u8 gPaletteBufferBackup[0x400];
 u8 gCollidableCount;
-Entity* gCollidableList[MAX_ENTITIES];
+/* Sized to the u8 counter's range, not MAX_ENTITIES (see PORT_MAX_COLLIDABLE
+ * in port_entity_ctx.h). At MAX_ENTITIES the clamp in UpdateCollision()
+ * silently dropped the overflow, so in a crowded scene whatever registered
+ * last simply stopped colliding — no hit detection, no warning. The GBA has
+ * no such cap: its outer loop walks the gUnk_02018EA0 linked list. */
+Entity* gCollidableList[PORT_MAX_COLLIDABLE];
 u32 gUnk_02000020;
 
 // gFrameObjLists — sprite frame data (200KB, self-relative offsets)
@@ -653,7 +660,7 @@ u32 LinearMoveDirectionOLD(Entity* ent, u32 speed, u32 direction) {
 
     /* X movement */
     if (!(masked & 0xEE00)) {
-        s16 sinVal = gSineTable[direction * 8];
+        s16 sinVal = gSineTable[(direction & 0x1F) * 8];
         if (sinVal != 0) {
             moved |= 1;
             s32 dx = FixedMul(sinVal, (s16)speed) << 8;
@@ -663,7 +670,7 @@ u32 LinearMoveDirectionOLD(Entity* ent, u32 speed, u32 direction) {
 
     /* Y movement */
     if (!(masked & 0x00EE)) {
-        s16 cosVal = gSineTable[direction * 8 + 64];
+        s16 cosVal = gSineTable[(direction & 0x1F) * 8 + 64];
         if (cosVal != 0) {
             moved |= 2;
             s32 dy = FixedMul(cosVal, (s16)speed) << 8;
@@ -707,8 +714,8 @@ void sub_08008AA0(Entity* ent) {
     u8 dir = gPlayerState.direction;
     if (dir == 0xFF)
         return;
-    gPlayerState.vel_x = gSineTable[dir * 8];
-    gPlayerState.vel_y = -gSineTable[dir * 8 + 64];
+    gPlayerState.vel_x = gSineTable[(dir & 0x1F) * 8];
+    gPlayerState.vel_y = -gSineTable[(dir & 0x1F) * 8 + 64];
 }
 
 /*

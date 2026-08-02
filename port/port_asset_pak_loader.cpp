@@ -183,14 +183,29 @@ bool PakArchive::Open(const std::filesystem::path& path, std::string* error_out)
     const uint64_t data_size = ReadU64LE(base_ + 24);
     entry_offset_ = kHeaderSize;
 
-    /* Bounds-check header. */
+    /* Bounds-check header. Each limit is written as a subtraction on the
+     * right-hand side so a hostile 64-bit data_size cannot wrap the sum. */
     const uint64_t end_of_entries = static_cast<uint64_t>(entry_offset_) + static_cast<uint64_t>(entry_count_) * kEntrySize;
     if (end_of_entries > size_ || name_table_offset_ < end_of_entries ||
-        static_cast<uint64_t>(name_table_offset_) + name_table_size > size_ ||
-        static_cast<uint64_t>(data_offset) + data_size > size_) {
+        name_table_offset_ > size_ || name_table_size > size_ - name_table_offset_ ||
+        data_offset > size_ || data_size > size_ - data_offset) {
         SetError(error_out, "pak file header out of range: " + path.string());
         Close();
         return false;
+    }
+
+    /* Validate every entry's name slice here, once, rather than on each
+     * binary-search probe: CompareEntry runs on the lookup hot path and
+     * these fields come straight out of the mapping. */
+    for (uint32_t i = 0; i < entry_count_; ++i) {
+        const uint8_t* entry = base_ + entry_offset_ + static_cast<std::size_t>(i) * kEntrySize;
+        const uint32_t name_offset = ReadU32LE(entry + 0);
+        const uint32_t name_length = ReadU32LE(entry + 4);
+        if (name_offset > name_table_size || name_length > name_table_size - name_offset) {
+            SetError(error_out, "pak entry name out of range: " + path.string());
+            Close();
+            return false;
+        }
     }
     return true;
 }
@@ -222,7 +237,9 @@ std::optional<std::span<const uint8_t>> PakArchive::Lookup(std::string_view rela
             const uint8_t* entry = base_ + kHeaderSize + mid * kEntrySize;
             const uint64_t data_offset = ReadU64LE(entry + 8);
             const uint32_t data_size = ReadU32LE(entry + 16);
-            if (data_offset + data_size > size_) {
+            /* data_offset is a full 64-bit file value; subtract instead of
+             * adding so a near-UINT64_MAX offset cannot wrap past the guard. */
+            if (data_offset > size_ || data_size > size_ - data_offset) {
                 return std::nullopt;
             }
             return std::span<const uint8_t>(base_ + data_offset, data_size);

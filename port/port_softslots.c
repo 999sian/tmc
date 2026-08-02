@@ -33,6 +33,10 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
+#include "port_rom.h" /* Port_ResolveExePath, PORT_PATH_MAX */
+#ifdef _WIN32
+#include <windows.h> /* MoveFileExA — rename() refuses to clobber on Win32 */
+#endif
 
 /* Engine-side queries used by the assignment UI. Declared as plain externs
  * so this TU doesn't drag in the full game headers (and the type collisions
@@ -52,6 +56,7 @@ static const char SOFTSLOT_MAGIC[6] = { 'T', 'M', 'C', 'S', 'S', '1' };
 static uint8_t sAssignments[PORT_SOFTSLOT_COUNT];
 static int sActiveSlot = -1;
 static bool sLoaded = false;
+static char sSoftSlotPath[PORT_PATH_MAX];
 
 /* Defined in port_runtime_config.cpp. Returns true if the soft-slot's
  * bound input (keyboard or gamepad button/trigger) is currently held. */
@@ -128,17 +133,66 @@ void Port_SoftSlots_SetAssignment(int slot, uint8_t itemId) {
     Port_SoftSlots_Save();
 }
 
+/* Resolve the assignments file beside the executable rather than the cwd, for
+ * the same reason as the save file in port_save.c: nothing here ever chdirs,
+ * so a shortcut launch would otherwise scatter one file per launch directory.
+ * Compatibility shim: adopt a pre-existing cwd-relative file so an in-place
+ * upgrade keeps the player's existing assignments. */
+static void ResolveSoftSlotPath(void) {
+    FILE* f;
+
+    if (sSoftSlotPath[0] != '\0')
+        return;
+    Port_ResolveExePath(SOFTSLOT_FILENAME, sSoftSlotPath, sizeof(sSoftSlotPath));
+    f = fopen(sSoftSlotPath, "rb");
+    if (f) {
+        fclose(f);
+        return;
+    }
+    f = fopen(SOFTSLOT_FILENAME, "rb");
+    if (f) {
+        fclose(f);
+        snprintf(sSoftSlotPath, sizeof(sSoftSlotPath), "%s", SOFTSLOT_FILENAME);
+    }
+}
+
 void Port_SoftSlots_Save(void) {
-    FILE* f = fopen(SOFTSLOT_FILENAME, "wb");
-    if (!f) return;
-    fwrite(SOFTSLOT_MAGIC, 1, sizeof(SOFTSLOT_MAGIC), f);
-    fwrite(sAssignments, 1, sizeof(sAssignments), f);
-    fclose(f);
+    uint8_t buf[sizeof(SOFTSLOT_MAGIC) + sizeof(sAssignments)];
+    char tmp[PORT_PATH_MAX + 8];
+    FILE* f;
+    int ok, replaced;
+
+    ResolveSoftSlotPath();
+    memcpy(buf, SOFTSLOT_MAGIC, sizeof(SOFTSLOT_MAGIC));
+    memcpy(buf + sizeof(SOFTSLOT_MAGIC), sAssignments, sizeof(sAssignments));
+
+    /* Write-then-rename, same as port_save.c: opening the live file "wb" would
+     * truncate it before a byte is written. Duplicated rather than shared
+     * because a common helper would need a new header for a dozen bytes. */
+    snprintf(tmp, sizeof(tmp), "%s.tmp", sSoftSlotPath);
+    f = fopen(tmp, "wb");
+    if (!f)
+        return;
+    ok = fwrite(buf, 1, sizeof(buf), f) == sizeof(buf);
+    if (fflush(f) != 0)
+        ok = 0;
+    if (fclose(f) != 0)
+        ok = 0;
+#ifdef _WIN32
+    replaced = ok && MoveFileExA(tmp, sSoftSlotPath, MOVEFILE_REPLACE_EXISTING) != 0;
+#else
+    replaced = ok && rename(tmp, sSoftSlotPath) == 0;
+#endif
+    if (!replaced) {
+        remove(tmp);
+        fprintf(stderr, "[SOFTSLOTS] ERROR: Could not write %s\n", sSoftSlotPath);
+    }
 }
 
 void Port_SoftSlots_Load(void) {
     memset(sAssignments, 0, sizeof(sAssignments));
-    FILE* f = fopen(SOFTSLOT_FILENAME, "rb");
+    ResolveSoftSlotPath();
+    FILE* f = fopen(sSoftSlotPath, "rb");
     if (!f) return;
     char magic[sizeof(SOFTSLOT_MAGIC)];
     if (fread(magic, 1, sizeof(magic), f) == sizeof(magic) &&

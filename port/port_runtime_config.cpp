@@ -91,6 +91,21 @@ nlohmann::json DefaultsJson(void) {
     return j;
 }
 
+/* nlohmann's value() throws type_error.302 on a wrong-typed key (and .306
+ * when the document isn't an object). config.json is hand-editable and
+ * Port_Config_Load() is called from main() in a C translation unit, so an
+ * escaping exception means std::terminate. Fall back per-field instead, so
+ * one mangled key doesn't reset every other setting. */
+template <typename T>
+T JsonValue(const nlohmann::json& j, const char* key, const T& fallback) {
+    try {
+        return j.value(key, fallback);
+    } catch (const nlohmann::json::exception& e) {
+        SDL_Log("config.json: ignoring bad \"%s\" (%s); using default", key, e.what());
+        return fallback;
+    }
+}
+
 void AddBind(PortInput input, const std::string& name) {
     Bind b;
     if (name.rfind("SDLK:", 0) == 0) {
@@ -386,10 +401,16 @@ extern "C" void Port_Config_Load(const char* path) {
     const std::filesystem::path p = path ? path : "config.json";
     sConfigPath = p;
 
-    if (std::filesystem::exists(p)) {
+    std::error_code ec;
+    if (std::filesystem::exists(p, ec)) {
         try {
             std::ifstream(p) >> j;
-        } catch (...) {
+        } catch (const nlohmann::json::exception& e) {
+            SDL_Log("config.json: parse failed (%s); using defaults", e.what());
+            j = DefaultsJson();
+        }
+        if (!j.is_object()) {
+            SDL_Log("config.json: top level is not an object; using defaults");
             j = DefaultsJson();
         }
     } else {
@@ -398,15 +419,22 @@ extern "C" void Port_Config_Load(const char* path) {
 
     sConfigJson = j;
 
-    int scale = j.value("window_scale", 3);
+    int scale = JsonValue(j, "window_scale", 3);
     sScale = scale >= 1 && scale <= 10 ? (u8)scale : 3;
-    int iscale = j.value("internal_scale", 1);
+    int iscale = JsonValue(j, "internal_scale", 1);
     sInternalScale = iscale >= 1 && iscale <= 4 ? (u8)iscale : 1;
-    sUpscaleMethod = j.value("upscale_method", "nearest");
-    sFrameTimeNs = j.value("frame_time_ns", kDefaultFrameTimeNs);
-    sPortSettingsMenuEnabled = j.value("port_settings_menu", false);
+    sUpscaleMethod = JsonValue(j, "upscale_method", std::string("nearest"));
+    /* 0 means uncapped; anything else must stay inside FrameTimeForFps()'s
+     * own bounds (1000 fps .. 1 fps). port_bios.c busy-spins on this deadline
+     * without pumping events, so an absurd value wedges the whole process. */
+    sFrameTimeNs = JsonValue(j, "frame_time_ns", kDefaultFrameTimeNs);
+    if (sFrameTimeNs != 0 && (sFrameTimeNs < FrameTimeForFps(1000) || sFrameTimeNs > FrameTimeForFps(1))) {
+        SDL_Log("config.json: frame_time_ns out of range; using default");
+        sFrameTimeNs = kDefaultFrameTimeNs;
+    }
+    sPortSettingsMenuEnabled = JsonValue(j, "port_settings_menu", false);
     {
-        std::string ts = j.value("touch_scheme", std::string("joystick"));
+        std::string ts = JsonValue(j, "touch_scheme", std::string("joystick"));
         for (char& c : ts) {
             if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
         }

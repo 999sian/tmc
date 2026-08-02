@@ -138,3 +138,12 @@ static inline bool Port_IsFontGBAEncoded(const void* data) {
  * Returns NULL if the index is outside the loaded sprite table.
  */
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx);
+
+/*
+ * Resolve `filename` against the directory containing the running executable
+ * and write it to `out`. Use this for any file the port reads or writes
+ * alongside the binary (saves, soft slots) so behaviour does not depend on the
+ * cwd the user happened to launch from. `out` should be PORT_PATH_MAX bytes.
+ */
+#define PORT_PATH_MAX 4352
+void Port_ResolveExePath(const char* filename, char* out, size_t n);

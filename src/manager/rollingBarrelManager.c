@@ -19,7 +19,15 @@
 #include "fade.h"
 
 extern struct BgAffineDstData gUnk_02017AA0[];
+#ifdef PC_PORT
+/* On GBA gUnk_02017BA0 sits at 0x02017AA0 + 0x100 — the same BgAffineDstData
+ * table, 16 entries in (0x100 / sizeof(BgAffineDstData)). The port has no fixed
+ * EWRAM layout, so spell the aliasing out rather than declaring a second object
+ * that nothing ever writes. Same idiom as the gBG*Buffer aliases in vram.h. */
+#define gUnk_02017BA0 (gUnk_02017AA0 + 16)
+#else
 extern struct BgAffineDstData gUnk_02017BA0[];
+#endif
 extern u8 gUpdateVisibleTiles;
 extern u32 gUsedPalettes;
 

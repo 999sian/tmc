@@ -6,6 +6,7 @@
 #include "object.h"
 #include "physics.h"
 #include "player.h"
+#include "port_entity_ctx.h"
 #include "port_gba_mem.h"
 #include "room.h"
 #include "sound.h"
@@ -313,7 +314,11 @@ void UpdateCollision(Entity* entity) {
     if ((entity->flags & ENT_COLLIDE) == 0) {
         return;
     }
-    if (gCollidableCount < MAX_ENTITIES) {
+    /* Bound by the list's real capacity, not MAX_ENTITIES. Everything drawn
+     * registers here — the 80 entity slots plus player items, clones and
+     * registered objects — so a MAX_ENTITIES (72) clamp silently stopped
+     * detecting hits for whatever registered last in a crowded scene. */
+    if (gCollidableCount < PORT_MAX_COLLIDABLE - 1) {
         gCollidableList[gCollidableCount] = entity;
         gCollidableCount++;
     }
@@ -383,8 +388,10 @@ u16* DoTileInteraction(Entity* entity, u32 interaction, u32 worldX, u32 worldY) 
         }
     }
 
-    u32 tileX = ((u16)worldX - gRoomControls.origin_x) >> 4;
-    u32 tileY = ((u16)worldY - gRoomControls.origin_y) >> 4;
+    /* Mask each axis to 6 bits (as WorldToTilePos does for the read above) so the
+       write targets the same tile; worldX/Y left of the room origin wrap otherwise. */
+    u32 tileX = (((u16)worldX - gRoomControls.origin_x) >> 4) & 0x3F;
+    u32 tileY = (((u16)worldY - gRoomControls.origin_y) >> 4) & 0x3F;
     u32 tilePos = tileX + (tileY << 6);
     u32 layer = entity->collisionLayer;
     u16 tileChange = entry->tileChange;

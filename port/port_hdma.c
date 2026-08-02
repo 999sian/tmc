@@ -87,7 +87,18 @@ void port_hdma_step_line(int line)
 {
     int ch;
 
-    (void)line;
+    /*
+     * Hardware fires HBlank DMA at the *end* of a scanline, so the values
+     * loaded during line N's HBlank take effect on line N+1: line 0 renders
+     * from whatever the registers already hold (the game seeds them during
+     * VBlank) and line N renders table entry N-1. This callback runs before
+     * line N is drawn, so skipping line 0 reproduces that one-line phase
+     * instead of applying entry N to line N.
+     */
+    if (line <= 0) {
+        return;
+    }
+
     for (ch = 0; ch < HDMA_CHANNELS; ++ch) {
         HdmaChannel* c = &s_channels[ch];
         uint8_t* d;

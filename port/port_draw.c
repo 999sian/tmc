@@ -825,16 +825,16 @@ static void ProcessEntityForDraw(Entity* entity) {
                  * field_0x1 holds an animation tick on GBA). Bias overlay 2px
                  * lower like GBA does. */
                 u8 fld1 = ((u8*)&gOAMControls)[1];
-                frame = (u8)(((fld1 & 0x18u) + 0x80u) >> 2);
+                frame = (u8)((fld1 >> 3) & 3u);
                 overlayY += 2;
             } else {
                 /* Tall grass — position-derived "random" frame so neighbouring
                  * patches don't all wave in sync. */
                 u8 xb = (u8)(entity->x.HALF.LO >> 8);
                 u8 yb = (u8)(entity->y.HALF.LO >> 8);
-                frame = (u8)((xb ^ yb) & 6u);
+                frame = (u8)((xb ^ yb) & 3u);
             }
-            u32 idx = (u32)(row + (frame << 1));
+            u32 idx = (u32)(row + frame); /* row is already row_index * 4 */
             if (idx < 16u && sShoesOverlayPtrs[idx] != NULL) {
                 u16 overlayExtra = (u16)(extra & 0x0C00u); /* keep priority bits only */
                 RenderSpritePieces(sShoesOverlayPtrs[idx], (s16)x, (s16)overlayY, 0, overlayExtra);
@@ -907,7 +907,7 @@ static int sShadowTableLoaded = 0;
  * Layout: 4 rows × 4 frames. Row = (entity->spriteSettings & 0x30) >> 2,
  * frame index within the row is animated:
  *   - shallow water (0x0F): based on gOAMControls field_0x1 (frame counter)
- *   - tall grass    (0x2F): position-derived (entity x byte ^ y byte) & 6 */
+ *   - tall grass    (0x2F): position-derived (entity x byte ^ y byte) & 3 */
 /* Definitions for the forward-declared shoes-overlay table above. */
 static const u8* sShoesOverlayPtrs[16] = { NULL };
 static int sShoesOverlayTableLoaded = 0;

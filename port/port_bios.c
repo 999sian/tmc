@@ -1,5 +1,6 @@
 #include "gba/io_reg.h"
 #include "main.h"
+#include "physics.h" /* gSineTable, for BgAffineSet's rotation terms */
 #include "port_audio.h"
 #include "port_asset_loader.h"
 #include "port_gba_mem.h"
@@ -71,6 +72,10 @@ static void Port_UpdateInput(void) {
          * on this behaviour while it's the active focus. */
         if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen()) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
+            /* The one-frame edge cache must be cleared on this path too: the
+             * event loop keeps stamping edges for keys/pad buttons the overlays
+             * ignore, and a stale flag would fire the frame the overlay closes. */
+            Port_Config_ClearInputEdges();
             Port_SoftSlots_TickPause();
             sFrameNum++;
             return;
@@ -352,8 +357,8 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
 
 /* CpuFastSet (SWI 0x0C) */
 void CpuFastSet(const void* src, void* dst, u32 cnt) {
-    u32 blockCount = cnt & 0x1FFFFF;
-    u32 wordCount = blockCount * 8;
+    /* The low 21 bits are a WORD count here: include/gba/macro.h passes size/4. */
+    u32 wordCount = cnt & 0x1FFFFF;
     int fill = (cnt >> 24) & 1;
 
     void* resolvedDst = port_resolve_addr((uintptr_t)dst);
@@ -416,12 +421,25 @@ void RegisterRamReset(u32 flags) {
 
 /* Sqrt (SWI 0x08) */
 u16 Sqrt(u32 num) {
-    if (num == 0)
-        return 0;
-    u32 r = 1;
-    while (r * r <= num)
-        r++;
-    return (u16)(r - 1);
+    /* Bit-by-bit integer sqrt: constant-time and overflow-free, unlike the
+     * incremental r*r probe which wrapped mod 2^32 above 65535. */
+    u32 r = 0;
+    u32 bit = 1u << 30;
+
+    while (bit > num)
+        bit >>= 2;
+
+    while (bit != 0) {
+        if (num >= r + bit) {
+            num -= r + bit;
+            r = (r >> 1) + bit;
+        } else {
+            r >>= 1;
+        }
+        bit >>= 2;
+    }
+
+    return (u16)r;
 }
 
 /* Div (SWI 0x06) */
@@ -438,34 +456,62 @@ void SoftReset(u32 flags) {
     exit(0);
 }
 
-/* BgAffineSet (SWI 0x0E) */
+/* BgAffineSet (SWI 0x0E)
+ *
+ * Builds the BG rotation/scaling matrix the hardware applies to screen
+ * coordinates. Only the upper 8 bits of `alpha` are significant — a 256-step
+ * circle, matching gSineTable's layout (sin at [i], cos at [i + 0x40], which
+ * is why that table has 320 entries rather than 256).
+ *
+ *   pa =  sx*cos    pb = -sx*sin
+ *   pc =  sy*sin    pd =  sy*cos
+ *   dx = texX - (pa*scrX + pb*scrY)
+ *   dy = texY - (pc*scrX + pd*scrY)
+ *
+ * sx/sy and the sine table are Q8.8, so each product is shifted back down by
+ * 8. This previously hardcoded pb = pc = 0 and ignored alpha entirely, which
+ * is only correct for alpha == 0.
+ */
 void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 count) {
     for (s32 i = 0; i < count; i++) {
-        dst[i].pa = src[i].sx;
-        dst[i].pb = 0;
-        dst[i].pc = 0;
-        dst[i].pd = src[i].sy;
-        dst[i].dx = src[i].texX - src[i].scrX * src[i].sx;
-        dst[i].dy = src[i].texY - src[i].scrY * src[i].sy;
+        u32 angle = (src[i].alpha >> 8) & 0xFF;
+        s32 sinv = gSineTable[angle];
+        s32 cosv = gSineTable[angle + 0x40];
+        s32 pa = (src[i].sx * cosv) >> 8;
+        s32 pb = -((src[i].sx * sinv) >> 8);
+        s32 pc = (src[i].sy * sinv) >> 8;
+        s32 pd = (src[i].sy * cosv) >> 8;
+
+        dst[i].pa = (s16)pa;
+        dst[i].pb = (s16)pb;
+        dst[i].pc = (s16)pc;
+        dst[i].pd = (s16)pd;
+        dst[i].dx = src[i].texX - (pa * src[i].scrX + pb * src[i].scrY);
+        dst[i].dy = src[i].texY - (pc * src[i].scrX + pd * src[i].scrY);
     }
 }
 
 /* ObjAffineSet (SWI 0x0F)
  *
- * GBA BIOS computes the *inverse* texture-mapping matrix: hardware applies
- * pa/pb/pc/pd to screen-relative coordinates to produce texture coordinates.
- * For a visible scale of sx, the matrix uses 1/sx — so doubling sx halves
- * the sampled-texture step per screen pixel and the sprite *grows*.
+ * Builds the OBJ matrix the hardware applies to screen-relative coordinates to
+ * produce texture coordinates (see virtuappu_mode1_render_obj_line: tex_x =
+ * (pa*rel_x + pb*rel_y) >> 8). Because that mapping is screen -> texture, the
+ * matrix is the *inverse* of the visible transform: a larger xScale steps
+ * further through the texture per screen pixel, so the sprite appears SMALLER.
+ * Callers pass the value they want in the matrix, not the visible scale --
+ * e.g. pullableMushroom's stalk lowers xScale from 0x200 to stretch itself.
  *
- *   pa =  cos(θ) / sx
- *   pb = -sin(θ) / sy
- *   pc =  sin(θ) / sx
- *   pd =  cos(θ) / sy
+ *   pa =  sx*cos(theta)    pb = -sx*sin(theta)
+ *   pc =  sy*sin(theta)    pd =  sy*cos(theta)
  *
  * Inputs sx/sy are 8.8 fixed point (0x100 = 1.0). Output pa/pb/pc/pd are
  * also 8.8 fixed point. Each is written as one s16 at `offset`-byte
- * intervals — for OAM (offset=8), that puts the four values in the
+ * intervals -- for OAM (offset=8), that puts the four values in the
  * affineParam field of 4 consecutive OAM entries.
+ *
+ * NOTE: an earlier version of this comment claimed pa = cos/sx, i.e. the
+ * opposite convention. That contradicted the code below, which is correct --
+ * do not "fix" the code to match a comment again.
  */
 void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset) {
     u8* d = (u8*)dst;

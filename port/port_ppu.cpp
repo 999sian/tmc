@@ -308,6 +308,16 @@ extern "C" void Port_PPU_Init(SDL_Window* window) {
         } else {
             sUpscale2xBuf = (uint32_t*)std::malloc((size_t)480 * 320 * sizeof(uint32_t));
             sUpscale4xBuf = (uint32_t*)std::malloc((size_t)kHiResW * kHiResH * sizeof(uint32_t));
+            if (!sUpscale2xBuf || !sUpscale4xBuf) {
+                /* Without both scratch buffers the xBRZ path would store through
+                 * a null pointer, so degrade to the raw path, which needs neither. */
+                printf("Port_PPU_Init: xBRZ scratch allocation failed, falling back to nearest\n");
+                std::free(sUpscale2xBuf);
+                std::free(sUpscale4xBuf);
+                sUpscale2xBuf = nullptr;
+                sUpscale4xBuf = nullptr;
+                sPresentMode = PresentMode::NearestRaw;
+            }
             sBackend = RenderBackend::Renderer;
         }
     }
@@ -437,7 +447,15 @@ extern "C" void Port_PPU_PresentFrame(void) {
         SDL_Texture* tex;
         SDL_ScaleMode scale;
         const int internalS = (int)Port_Config_InternalScale();
-        switch (sPresentMode) {
+        /* Scratch allocation may have failed at init, and the user can still
+         * cycle onto an xBRZ mode at runtime — present raw instead of storing
+         * through a null buffer. */
+        PresentMode mode = sPresentMode;
+        if ((mode == PresentMode::XbrzLinear || mode == PresentMode::XbrzNearest) &&
+            (sUpscale2xBuf == nullptr || sUpscale4xBuf == nullptr)) {
+            mode = PresentMode::NearestRaw;
+        }
+        switch (mode) {
             case PresentMode::XbrzLinear:
             case PresentMode::XbrzNearest:
                 /* xBRZ owns its own 4x upscaler — internal-render-scale
@@ -453,7 +471,7 @@ extern "C" void Port_PPU_PresentFrame(void) {
                 SDL_UpdateTexture(sHiResTexture, nullptr, sUpscale4xBuf,
                                   kHiResW * (int)sizeof(uint32_t));
                 tex = sHiResTexture;
-                scale = (sPresentMode == PresentMode::XbrzLinear)
+                scale = (mode == PresentMode::XbrzLinear)
                             ? SDL_SCALEMODE_LINEAR : SDL_SCALEMODE_NEAREST;
                 break;
             case PresentMode::LinearRaw:
@@ -637,6 +655,16 @@ extern "C" void Port_PPU_Shutdown(void) {
         std::free(sUpscale4xBuf);
         sUpscale4xBuf = nullptr;
     }
+    if (sScaledTexture) {
+        SDL_DestroyTexture(sScaledTexture);
+        sScaledTexture = nullptr;
+    }
+    sScaledTextureScale = 0;
+    if (sScaledBuf) {
+        std::free(sScaledBuf);
+        sScaledBuf = nullptr;
+    }
+    sScaledBufScale = 0;
     if (sRenderer) {
         SDL_DestroyRenderer(sRenderer);
         sRenderer = nullptr;

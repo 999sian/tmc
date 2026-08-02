@@ -124,7 +124,6 @@ static void ExtractPage(u32 page) {
         return;
     if (IsPageExtracted(page))
         return;
-    MarkPageExtracted(page);
 
     u32 offset = page << ROM_PAGE_SHIFT;
     u32 size = ROM_PAGE_SIZE;
@@ -144,14 +143,21 @@ static void ExtractPage(u32 page) {
         fseek(chk, 0, SEEK_END);
         long existing = ftell(chk);
         fclose(chk);
-        if ((u32)existing == size)
+        if ((u32)existing == size) {
+            MarkPageExtracted(page);
             return;
+        }
     }
 
     FILE* f = fopen(path, "wb");
     if (f) {
-        fwrite(&gRomData[offset], 1, size, f);
+        size_t written = fwrite(&gRomData[offset], 1, size, f);
         fclose(f);
+        /* Mark only once the page is actually on disk: a read-only install
+         * directory must retry next time instead of counting the page as
+         * extracted for the rest of the session. */
+        if (written == size)
+            MarkPageExtracted(page);
     }
 }
 
@@ -439,12 +445,22 @@ extern const u32 kUnk09230Offsets[];
 extern const u32 kUnk09248Offsets[];
 extern const u32 kUnk092ACOffsets[];
 
+/* Bytes the sub-table scanners below walk from a resolved base:
+ * MAX_ROOMS entries of 4-byte packed GBA pointers. */
+#define SUB_TABLE_BYTES (MAX_ROOMS * 4u)
+
 /* Helper: resolve an offset from a compile-time offset table.
- * 0xFFFFFFFF means NULL. */
-static inline void* ResolveTableOffset(u32 offset) {
+ * 0xFFFFFFFF means NULL.
+ *
+ * `need` is how many bytes the caller will actually read from the returned
+ * pointer. Bounding only the first byte was not enough: the sub-table
+ * scanners below walk MAX_ROOMS * 4 bytes from this base, so an offset
+ * landing in the final 256 bytes of the buffer read past the allocation.
+ * The subtraction avoids overflowing on a hostile offset + need. */
+static inline void* ResolveTableOffset(u32 offset, u32 need) {
     if (offset == 0xFFFFFFFF || !gRomData)
         return NULL;
-    if (offset < gRomSize)
+    if (offset <= gRomSize && gRomSize - offset >= need)
         return &gRomData[offset];
     return NULL;
 }
@@ -547,10 +563,10 @@ void Port_RefreshAreaData(u32 area) {
         return;
     }
 
-    gAreaRoomHeaders[area] = (RoomHeader*)ResolveTableOffset(kAreaRoomHeaderOffsets[area]);
-    gAreaTiles[area] = ResolveTableOffset(kAreaTilesOffsets[area]);
+    gAreaRoomHeaders[area] = (RoomHeader*)ResolveTableOffset(kAreaRoomHeaderOffsets[area], sizeof(RoomHeader));
+    gAreaTiles[area] = ResolveTableOffset(kAreaTilesOffsets[area], 4);
 
-    tileSetBase = ResolveTableOffset(kAreaTileSetOffsets[area]);
+    tileSetBase = ResolveTableOffset(kAreaTileSetOffsets[area], SUB_TABLE_BYTES);
     gAreaTileSets[area] = tileSetBase;
     memset(sTileSetsResolved[area], 0, sizeof(sTileSetsResolved[area]));
     subCount = ScanSubArrayCount(tileSetBase);
@@ -559,7 +575,7 @@ void Port_RefreshAreaData(u32 area) {
         gAreaTileSets[area] = sTileSetsResolved[area];
     }
 
-    roomMapBase = ResolveTableOffset(kAreaRoomMapOffsets[area]);
+    roomMapBase = ResolveTableOffset(kAreaRoomMapOffsets[area], SUB_TABLE_BYTES);
     gAreaRoomMaps[area] = roomMapBase;
     memset(sRoomMapsResolved[area], 0, sizeof(sRoomMapsResolved[area]));
     subCount = ScanSubArrayCount(roomMapBase);
@@ -568,7 +584,7 @@ void Port_RefreshAreaData(u32 area) {
         gAreaRoomMaps[area] = sRoomMapsResolved[area];
     }
 
-    areaTableBase = ResolveTableOffset(kAreaTableOffsets[area]);
+    areaTableBase = ResolveTableOffset(kAreaTableOffsets[area], SUB_TABLE_BYTES);
     gAreaTable[area] = areaTableBase;
     memset(sAreaTableResolved[area], 0, sizeof(sAreaTableResolved[area]));
     subCount = ScanSubArrayCount(areaTableBase);
@@ -816,6 +832,26 @@ static int GetExeDir(char* out, size_t n) {
 #endif
 }
 
+/*
+ * Resolve `filename` against the executable's directory.
+ *
+ * Save data must not be cwd-relative: the ROM is already resolved exe-relative
+ * (TryOpenRom pass 1), so a shortcut/launcher start with cwd != exe dir finds
+ * the ROM but would otherwise write the save somewhere else entirely, making
+ * the player's progress appear and disappear depending on how they launched.
+ * Falls back to the bare name when the exe dir can't be determined.
+ */
+void Port_ResolveExePath(const char* filename, char* out, size_t n) {
+    if (!out || n == 0)
+        return;
+    char exeDir[4096];
+    if (GetExeDir(exeDir, sizeof(exeDir)) && exeDir[0] != '\0') {
+        snprintf(out, n, "%s/%s", exeDir, filename);
+    } else {
+        snprintf(out, n, "%s", filename);
+    }
+}
+
 static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foundPathLen) {
     /* Pass 1: exe_dir/<basename> for any candidate that's a bare filename. */
     char exeDir[4096];
@@ -850,77 +886,6 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
         }
     }
     return NULL;
-}
-
-/*
- * LoadRomGaps — load rom_gaps.bin to fill assembled data regions
- * (pointer tables, GfxItem arrays, etc.) that are NOT in asset files.
- *
- * File format: "GAPD" magic, u32 chunk_count,
- *   then for each chunk: u32 offset, u32 size, u8[size] data.
- *
- * Generated by tools/generate_rom_gaps.py from baserom.gba.
- */
-static int LoadRomGaps(void) {
-    const char* candidates[] = {
-        "rom_gaps.bin",       "build/USA/rom_gaps.bin",       "build/pc/rom_gaps.bin",
-        "../../rom_gaps.bin", "../../build/USA/rom_gaps.bin", "../rom_gaps.bin",
-    };
-    FILE* f = NULL;
-    const char* usedPath = NULL;
-    for (int i = 0; i < (int)(sizeof(candidates) / sizeof(candidates[0])); i++) {
-        f = fopen(candidates[i], "rb");
-        if (f) {
-            usedPath = candidates[i];
-            break;
-        }
-    }
-    if (!f)
-        return 0;
-
-    /* Allocate ROM buffer if not already done */
-    if (!gRomData) {
-        gRomSize = ROM_EXPECTED_SIZE;
-        gRomData = (u8*)calloc(1, gRomSize);
-        if (!gRomData) {
-            fclose(f);
-            return 0;
-        }
-    }
-
-    /* Read and verify header */
-    char magic[4];
-    u32 chunkCount;
-    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "GAPD", 4) != 0) {
-        fprintf(stderr, "WARNING: %s has invalid magic\n", usedPath);
-        fclose(f);
-        return 0;
-    }
-    if (fread(&chunkCount, 4, 1, f) != 1) {
-        fclose(f);
-        return 0;
-    }
-
-    /* Read chunks and patch gRomData */
-    u32 loaded = 0;
-    u32 totalBytes = 0;
-    for (u32 i = 0; i < chunkCount; i++) {
-        u32 offset, size;
-        if (fread(&offset, 4, 1, f) != 1 || fread(&size, 4, 1, f) != 1)
-            break;
-        if (offset + size > gRomSize) {
-            fseek(f, (long)size, SEEK_CUR);
-            continue;
-        }
-        if (fread(&gRomData[offset], 1, size, f) != size)
-            break;
-        loaded++;
-        totalBytes += size;
-    }
-
-    fclose(f);
-    fprintf(stderr, "Gap data loaded: %u chunks (%u KB) from %s\n", loaded, totalBytes / 1024, usedPath);
-    return (int)loaded;
 }
 
 void Port_LoadRom(const char* path) {
@@ -970,42 +935,37 @@ void Port_LoadRom(const char* path) {
                     FatalRomError("Minish Cap PC Port - ROM allocation failed", msg);
                 }
             }
-            if (fileSize <= gRomSize) {
-                fread(gRomData, 1, fileSize, f);
-                gRomSize = fileSize;
+            if (fileSize > gRomSize) {
+                char msg[224];
+                snprintf(msg, sizeof(msg),
+                         "The ROM file is %u bytes but the ROM buffer is only %u bytes.\n\n"
+                         "The file is padded or is not a Minish Cap ROM.",
+                         fileSize, gRomSize);
+                FatalRomError("Minish Cap PC Port - ROM too large", msg);
             }
+            /* gRomData is malloc'd, so a short read would leave uninitialised
+             * heap behind while gRomSize still claimed the full length. */
+            size_t bytesRead = fread(gRomData, 1, fileSize, f);
             fclose(f);
+            if (bytesRead != fileSize) {
+                char msg[224];
+                snprintf(msg, sizeof(msg),
+                         "Read only %zu of %u bytes from the ROM file.\n\n"
+                         "The file may be unreadable or truncated.",
+                         bytesRead, fileSize);
+                FatalRomError("Minish Cap PC Port - ROM read failed", msg);
+            }
+            gRomSize = fileSize;
             romLoaded = 1;
             fprintf(stderr, "ROM loaded: %u bytes (0x%X) from %s\n", gRomSize, gRomSize, usedPath);
         }
     }
 
-    /* ---- Step 3: load gap data (assembled tables not in assets) ---- */
-    /*
-     * Assets cover .incbin binary blobs. If a ROM was loaded, the .incbin
-     * regions already have correct data and this is a harmless overwrite.
-     * If no ROM was loaded, assets fill those regions from build output.
-     * NOTE: assembled pointer tables (gGfxGroups, gPaletteGroups, area
-     * tables, etc.) are NOT in assets — they require a ROM file.
-     */
-
-    /*
-     * rom_gaps.bin contains ROM data from regions NOT covered by .incbin
-     * asset files: pointer tables, GfxItem arrays, PaletteGroup structs,
-     * area sub-tables, etc. Generated once from baserom.gba by
-     * tools/generate_rom_gaps.py.
-     */
-    int gapsLoaded = 0;
-    if (!romLoaded) {
-        gapsLoaded = LoadRomGaps();
-    }
-
     /* ---- Check that we have some data ---- */
     /* A full ROM file is required for normal play; extracted pages
-     * (rom_data/) and rom_gaps.bin are only useful as supplemental
-     * sources alongside a real ROM. Surface every "no real ROM" case
-     * as a fatal dialog rather than letting the engine boot into a
-     * black screen. */
+     * (rom_data/) are only useful as a supplemental source alongside a
+     * real ROM. Surface every "no real ROM" case as a fatal dialog
+     * rather than letting the engine boot into a black screen. */
     if (!romLoaded) {
         FatalRomError(
             "Minish Cap PC Port - ROM not found",
@@ -1022,8 +982,29 @@ void Port_LoadRom(const char* path) {
     }
 
     /* ---- Step 3: auto-detect ROM region ---- */
-    Port_DetectRomRegion(gRomData, gRomSize);
+    RomRegion region = Port_DetectRomRegion(gRomData, gRomSize);
     const RomOffsets* R = gRomOffsets;
+    if (region == ROM_REGION_UNKNOWN || R == NULL) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "The ROM file is only %u bytes and has no readable header.\n\n"
+                 "This is usually a Git-LFS pointer stub or a failed download.\n"
+                 "Replace it with a complete Minish Cap ROM.",
+                 gRomSize);
+        FatalRomError("Minish Cap PC Port - ROM not recognised", msg);
+    }
+
+    /* Every offset below indexes gRomData directly (map data, the gfx blob,
+     * the sprite and area tables), so a short ROM reads past the buffer.
+     * Reject it here instead of crashing deep in table resolution. */
+    if (gRomSize < R->expectedRomSize) {
+        char msg[256];
+        snprintf(msg, sizeof(msg),
+                 "The ROM file is %u bytes but %u bytes are required.\n\n"
+                 "The file is truncated or is not a complete Minish Cap ROM.",
+                 gRomSize, R->expectedRomSize);
+        FatalRomError("Minish Cap PC Port - ROM too small", msg);
+    }
 
     fprintf(stderr, "Using offsets for %s (game code: %.4s)\n", gRomRegion == ROM_REGION_EU ? "EU" : "USA",
             R->gameCode);
@@ -1055,9 +1036,9 @@ void Port_LoadRom(const char* path) {
     {
         memset(sSpritePtrsStable, 0, sizeof(sSpritePtrsStable));
         for (u32 i = 0; i < R->spritePtrsCount; i++) {
-            gSpritePtrs[i].animations = ResolveTableOffset(kSpritePtrEntries[i][0]);
-            gSpritePtrs[i].frames = (SpriteFrame*)ResolveTableOffset(kSpritePtrEntries[i][1]);
-            gSpritePtrs[i].ptr = ResolveTableOffset(kSpritePtrEntries[i][2]);
+            gSpritePtrs[i].animations = ResolveTableOffset(kSpritePtrEntries[i][0], 4);
+            gSpritePtrs[i].frames = (SpriteFrame*)ResolveTableOffset(kSpritePtrEntries[i][1], 4);
+            gSpritePtrs[i].ptr = ResolveTableOffset(kSpritePtrEntries[i][2], 4);
             gSpritePtrs[i].pad = kSpritePtrEntries[i][3];
             sSpritePtrsStable[i] = gSpritePtrs[i];
         }
@@ -1126,7 +1107,7 @@ void Port_LoadRom(const char* path) {
 
     /* gTranslations — resolved from compile-time offset table */
     for (int i = 0; i < 7; i++) {
-        gTranslations[i] = ResolveTableOffset(kTranslationOffsets[i]);
+        gTranslations[i] = ResolveTableOffset(kTranslationOffsets[i], 4);
     }
     fprintf(stderr, "gTranslations loaded (7 entries from compile-time offsets).\n");
 
@@ -1139,19 +1120,19 @@ void Port_LoadRom(const char* path) {
     gTextVariableSources[4] = gUnk_02022800;
 #else
     for (int i = 0; i < 5; i++) {
-        gTextVariableSources[i] = ResolveTableOffset(kUnk09230Offsets[i]);
+        gTextVariableSources[i] = ResolveTableOffset(kUnk09230Offsets[i], 4);
     }
 #endif
 
     /* gUnk_08109248 — resolved from compile-time offset table */
     for (int i = 0; i < 9; i++) {
-        gUnk_08109248[i] = ResolveTableOffset(kUnk09248Offsets[i]);
+        gUnk_08109248[i] = ResolveTableOffset(kUnk09248Offsets[i], 4);
     }
     fprintf(stderr, "gUnk_08109248 font tables loaded (9 entries from compile-time offsets).\n");
 
     /* gUnk_081092AC — resolved from compile-time offset table */
     for (int i = 0; i < 10; i++) {
-        gUnk_081092AC[i] = ResolveTableOffset(kUnk092ACOffsets[i]);
+        gUnk_081092AC[i] = ResolveTableOffset(kUnk092ACOffsets[i], 4);
     }
     fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries from compile-time offsets).\n");
 
@@ -1166,7 +1147,7 @@ void Port_LoadRom(const char* path) {
      * Source files compute &gMapData + offset, so we fill the buffer. */
     {
         extern u8 gMapData[];
-        u32 mapDataSize = gRomSize - R->mapDataBase;
+        u32 mapDataSize = (gRomSize > R->mapDataBase) ? gRomSize - R->mapDataBase : 0;
         if (mapDataSize > 0xE00000u)
             mapDataSize = 0xE00000u;
         memcpy(gMapData, &gRomData[R->mapDataBase], mapDataSize);
@@ -1180,7 +1161,7 @@ void Port_LoadRom(const char* path) {
          * point directly into gRomData. */
         /* gAreaRoomHeaders — resolved from compile-time offset table */
         for (u32 i = 0; i < AREA_COUNT; i++) {
-            gAreaRoomHeaders[i] = (RoomHeader*)ResolveTableOffset(kAreaRoomHeaderOffsets[i]);
+            gAreaRoomHeaders[i] = (RoomHeader*)ResolveTableOffset(kAreaRoomHeaderOffsets[i], sizeof(RoomHeader));
         }
         fprintf(stderr, "gAreaRoomHeaders loaded (0x%X entries from compile-time offsets).\n", AREA_COUNT);
 
@@ -1190,11 +1171,11 @@ void Port_LoadRom(const char* path) {
         u32 tsCount = R->areaTileSetsCount < AREA_COUNT ? R->areaTileSetsCount : AREA_COUNT;
         for (u32 i = 0; i < AREA_COUNT; i++) {
             if (i < tsCount) {
-                gAreaTileSets[i] = ResolveTableOffset(kAreaTileSetOffsets[i]);
+                gAreaTileSets[i] = ResolveTableOffset(kAreaTileSetOffsets[i], SUB_TABLE_BYTES);
             }
-            gAreaRoomMaps[i] = ResolveTableOffset(kAreaRoomMapOffsets[i]);
-            gAreaTable[i] = ResolveTableOffset(kAreaTableOffsets[i]);
-            gAreaTiles[i] = ResolveTableOffset(kAreaTilesOffsets[i]);
+            gAreaRoomMaps[i] = ResolveTableOffset(kAreaRoomMapOffsets[i], SUB_TABLE_BYTES);
+            gAreaTable[i] = ResolveTableOffset(kAreaTableOffsets[i], SUB_TABLE_BYTES);
+            gAreaTiles[i] = ResolveTableOffset(kAreaTilesOffsets[i], 4);
             /* gExitLists — now compile-time const from src/data/transitions.c, no ROM loading needed */
         }
 

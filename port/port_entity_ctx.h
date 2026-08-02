@@ -14,6 +14,11 @@
 
 #define PC_MAX_ENTITY_SLOTS 80 /* 1 player + 7 aux + 72 regular */
 
+/* Capacity of gCollidableList (port_linked_stubs.c). Bounded by the u8
+ * gCollidableCount, NOT by MAX_ENTITIES: player items, clones and registered
+ * objects all register on top of the PC_MAX_ENTITY_SLOTS entity slots. */
+#define PORT_MAX_COLLIDABLE 256
+
 extern ScriptExecutionContext* gEntityScriptCtxTable[PC_MAX_ENTITY_SLOTS];
 
 /* Map entity pointer → slot index. Returns -1 if not found. */

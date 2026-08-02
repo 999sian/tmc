@@ -60,7 +60,7 @@ static float sHpPrevOutL = 0.0f, sHpPrevOutR = 0.0f;
 static const float kLpB0 =  0.4651777f;
 static const float kLpB1 =  0.9303554f;
 static const float kLpB2 =  0.4651777f;
-static const float kLpA1 = -0.6202032f;
+static const float kLpA1 =  0.6202032f;
 static const float kLpA2 =  0.2403461f;
 static float sLpX1L = 0.0f, sLpX2L = 0.0f, sLpY1L = 0.0f, sLpY2L = 0.0f;
 static float sLpX1R = 0.0f, sLpX2R = 0.0f, sLpY1R = 0.0f, sLpY2R = 0.0f;
