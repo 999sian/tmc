@@ -20,6 +20,7 @@
 static ndspWaveBuf sWave[BUFFER_COUNT];
 static int16_t* sSamples;
 static bool sInitialized;
+static bool sPaused;
 static volatile bool sAudioThreadRunning;
 static Thread sAudioThread;
 static LightEvent sAudioWake;
@@ -124,6 +125,7 @@ bool Port_Audio_Init(void) {
     sStats.initialized = true;
     sCallbackSignals = 0;
     sInitialized = true;
+    sPaused = false;
     ndspSetCallback(AudioFrameFinished, NULL);
     for (int i = 0; i < BUFFER_COUNT; ++i) FillBuffer(i);
 
@@ -141,6 +143,7 @@ bool Port_Audio_Init(void) {
 
 void Port_Audio_3DSPump(void) {
     if (!sInitialized) return;
+    if (sPaused) return;
     const bool playing = ndspChnIsPlaying(0);
     const uint32_t doneBuffers = CountDoneBuffers();
     const bool callbackMissed = doneBuffers > 0;
@@ -178,6 +181,7 @@ void Port_Audio_3DSGetStats(PortAudio3DSStats* stats) {
     stats->samplePosition = ndspChnGetSamplePos(0);
     stats->channelPlaying = ndspChnIsPlaying(0);
     stats->audioThreadRunning = __atomic_load_n(&sAudioThreadRunning, __ATOMIC_ACQUIRE);
+    stats->paused = sPaused;
     stats->callbackSignals = __atomic_load_n(&sCallbackSignals, __ATOMIC_RELAXED);
     stats->ndspFrames = ndspGetFrameCount();
     stats->ndspDroppedFrames = ndspGetDroppedFrames();
@@ -211,7 +215,15 @@ void Port_Audio_Shutdown(void) {
     sSamples = NULL;
     ndspExit();
     sInitialized = false;
+    sPaused = false;
     sStats.initialized = false;
+}
+
+void Port_Audio_3DSSetPaused(bool paused) {
+    if (!sInitialized || sPaused == paused) return;
+    sPaused = paused;
+    ndspChnSetPaused(0, paused);
+    if (!paused) LightEvent_Signal(&sAudioWake);
 }
 
 void Port_Audio_Reset(void) { Port_M4A_Backend_Reset(); }

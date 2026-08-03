@@ -71,6 +71,7 @@ int Platform3DS_Init(void) {
     sStackRegionEnd = 0;
     gfxInit(GSP_RGB565_OES, GSP_RGB565_OES, false);
     gfxSet3D(false);
+    cfguInit();
     romfsInit();
     consoleInit(GFX_BOTTOM, NULL);
 
@@ -109,6 +110,7 @@ void Platform3DS_Shutdown(void) {
     virtuappu_mode1_shutdown_workers();
     Port_Audio_Shutdown();
     romfsExit();
+    cfguExit();
     gfxExit();
 }
 
@@ -117,7 +119,7 @@ bool Platform3DS_IsNew3DS(void) { return sIsNew3DS; }
 bool Platform3DS_CanUseCore1(void) { return sCore1Available; }
 unsigned Platform3DS_Core1TimeLimit(void) { return sCore1TimeLimit; }
 bool Platform3DS_TurboHeld(void) { return sIsNew3DS && sCStickHeld; }
-unsigned Platform3DS_TurboMultiplier(void) { return 3; }
+unsigned Platform3DS_TurboMultiplier(void) { return 5; }
 
 void Platform3DS_ShowSplash(void) {
     FILE* file = fopen("romfs:/splash.rgb565", "rb");

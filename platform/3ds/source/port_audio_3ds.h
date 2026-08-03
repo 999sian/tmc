@@ -33,9 +33,11 @@ typedef struct PortAudio3DSStats {
     bool initialized;
     bool channelPlaying;
     bool audioThreadRunning;
+    bool paused;
 } PortAudio3DSStats;
 
 void Port_Audio_3DSPump(void);
 void Port_Audio_3DSGetStats(PortAudio3DSStats* stats);
+void Port_Audio_3DSSetPaused(bool paused);
 
 #endif
