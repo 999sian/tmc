@@ -684,14 +684,6 @@ void ExecuteScript(Entity* entity, ScriptExecutionContext* context) {
         uintptr_t addr = (uintptr_t)context->scriptInstructionPointer;
         bool nativePointer =
             gRomData && addr >= (uintptr_t)gRomData && addr < (uintptr_t)(gRomData + gRomSize);
-#ifdef TMC_3DS
-        /* Native 3DS allocations may overlap the numeric GBA ROM window.
-         * Do not remap an already-native script pointer as a GBA address. */
-        if (!nativePointer) {
-            extern int Platform3DS_IsNativeAddress(uintptr_t value);
-            nativePointer = Platform3DS_IsNativeAddress(addr) != 0;
-        }
-#endif
         if (addr >= 0x08000000u && addr < 0x0A000000u && !nativePointer) {
             fprintf(stderr,
                     "[SCRIPT] ERROR: scriptInstructionPointer is unresolved GBA address 0x%08X! entity kind=%d id=%d "

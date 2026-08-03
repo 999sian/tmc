@@ -7,6 +7,8 @@
  * rom_data/ so the game can run without the full ROM after first boot.
  */
 
+#include <stddef.h>
+
 #include "port_rom.h"
 #include "area.h"
 #include "map.h"
@@ -20,6 +22,8 @@
 #include <SDL3/SDL.h>
 #elif defined(TMC_3DS)
 #include "platform_3ds.h"
+extern void* linearAlloc(size_t size);
+extern void linearFree(void* memory);
 #endif
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +71,27 @@ const char* Port_GetLoadedRomPath(void) {
 }
 u32 gRomSize = 0;
 static SpritePtr sSpritePtrsStable[512];
+
+static u8* AllocateRomBuffer(u32 size, int clear) {
+#ifdef TMC_3DS
+    /* libctru's normal heap begins at 0x08000000, exactly where GBA ROM
+     * addresses begin. Keeping the ROM in linear memory gives native ROM
+     * pointers a disjoint address range and removes that ambiguity. */
+    u8* buffer = (u8*)linearAlloc(size);
+    if (buffer && clear) memset(buffer, 0, size);
+    return buffer;
+#else
+    return clear ? (u8*)calloc(1, size) : (u8*)malloc(size);
+#endif
+}
+
+static void FreeRomBuffer(u8* buffer) {
+#ifdef TMC_3DS
+    linearFree(buffer);
+#else
+    free(buffer);
+#endif
+}
 
 /* Single source of truth for "what counts as a baserom file".
  * Probed in order — the first hit wins, both by Port_FindBaseRomPath
@@ -256,7 +281,7 @@ static int LoadExtractedPagesFrom(const char* dir) {
     /* Allocate gRomData if not yet done */
     if (!gRomData) {
         gRomSize = ROM_EXPECTED_SIZE;
-        gRomData = (u8*)calloc(1, gRomSize);
+        gRomData = AllocateRomBuffer(gRomSize, 1);
         if (!gRomData) {
             fprintf(stderr, "ERROR: Failed to allocate %u bytes for ROM buffer\n", gRomSize);
             return 0;
@@ -1208,7 +1233,7 @@ static int LoadRomGaps(void) {
     /* Allocate ROM buffer if not already done */
     if (!gRomData) {
         gRomSize = ROM_EXPECTED_SIZE;
-        gRomData = (u8*)calloc(1, gRomSize);
+        gRomData = AllocateRomBuffer(gRomSize, 1);
         if (!gRomData) {
             fclose(f);
             return 0;
@@ -1330,7 +1355,7 @@ void Port_LoadRom(const char* path) {
             int allocatedHere = 0;
             if (!gRomData) {
                 gRomSize = fileSize;
-                gRomData = (u8*)malloc(gRomSize);
+                gRomData = AllocateRomBuffer(gRomSize, 0);
                 allocatedHere = 1;
                 if (!gRomData) {
                     char msg[160];
@@ -1350,7 +1375,7 @@ void Port_LoadRom(const char* path) {
                     fprintf(stderr, "ERROR: short read on ROM %s (%zu/%u bytes); ignoring ROM file\n", usedPath, got,
                             fileSize);
                     if (allocatedHere) {
-                        free(gRomData);
+                        FreeRomBuffer(gRomData);
                         gRomData = NULL;
                         gRomSize = 0;
                     }

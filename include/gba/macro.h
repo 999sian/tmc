@@ -13,17 +13,8 @@
 #include "port_hdma.h"
 #include <string.h>
 
-#ifdef __cplusplus
-extern "C" u32 Port_IsLoadedAssetBytes(const void* ptr, u32 size);
-#else
-extern u32 Port_IsLoadedAssetBytes(const void* ptr, u32 size);
-#endif
-
 static inline const void* port_resolve_dma_src(const void* src_raw, u32 size) {
-    if (Port_IsLoadedAssetBytes(src_raw, size)) {
-        return src_raw;
-    }
-    return port_resolve_addr((uintptr_t)src_raw);
+    return port_resolve_copy_src(src_raw, size);
 }
 
 /* ---- DmaSet: raw DMA register write emulation ---- */
@@ -38,7 +29,7 @@ static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32
     u32 totalBytes = units * unitSize;
 
     const void* src = port_resolve_dma_src(src_raw, totalBytes);
-    void* dest = port_resolve_addr(dest_raw);
+    void* dest = port_resolve_write_addr(dest_raw);
     if (!src || !dest)
         return;
 
@@ -79,7 +70,7 @@ static inline void port_DmaFillTransfer(uintptr_t dest_raw, u32 control, u32 val
     if (!(cnt & 0x8000))
         return;
     const int is32 = (cnt & 0x0400) != 0;
-    void* dest = port_resolve_addr(dest_raw);
+    void* dest = port_resolve_write_addr(dest_raw);
     if (!dest)
         return;
     if (is32) {

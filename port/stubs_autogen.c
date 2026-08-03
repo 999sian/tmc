@@ -322,9 +322,10 @@ void LoadResourceAsync(const void* src, void* dest, u32 size) {
      * but on PC we have no VBlank timing constraint, and queuing 64-bit native
      * pointers into the 12-byte/32-bit buffer format would truncate them.
      */
-    void* resolvedDest = port_resolve_addr((uintptr_t)dest);
-    if (resolvedDest && src && size > 0) {
-        memcpy(resolvedDest, src, size);
+    void* resolvedDest = port_resolve_write_addr((uintptr_t)dest);
+    const void* resolvedSrc = port_resolve_copy_src(src, size);
+    if (resolvedDest && resolvedSrc && size > 0) {
+        memmove(resolvedDest, resolvedSrc, size);
     }
 }
 /* Mod — implemented in port_linked_stubs.c */

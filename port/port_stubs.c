@@ -32,17 +32,11 @@ u32 GetNextScriptCommandHalfword(u16* ptr) {
             fprintf(stderr, "[SCRIPT] FATAL: GetNextScriptCommandHalfword bad ptr %p (too small)\n", (void*)ptr);
             return 0xFFFF;
         }
-        /* The 3DS application heap is commonly mapped in the GBA ROM
-         * numeric range. A script pointer into gRomData is therefore a
-         * valid native pointer there, not an unresolved 0x08xxxxxx address. */
+        /* Script pointers are either inside the native ROM buffer or still
+         * encoded as GBA addresses. Do not infer provenance from whether a
+         * 3DS virtual page happens to be mapped. */
         bool nativePointer =
             gRomData && addr >= (uintptr_t)gRomData && addr < (uintptr_t)(gRomData + gRomSize);
-#ifdef TMC_3DS
-        if (!nativePointer) {
-            extern int Platform3DS_IsNativeAddress(uintptr_t value);
-            nativePointer = Platform3DS_IsNativeAddress(addr) != 0;
-        }
-#endif
         if (addr >= 0x08000000u && addr < 0x0A000000u && !nativePointer) {
             fprintf(stderr, "[SCRIPT] FATAL: GetNextScriptCommandHalfword called with unresolved GBA addr 0x%08X\n",
                     (unsigned)addr);

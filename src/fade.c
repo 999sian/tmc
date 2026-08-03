@@ -81,7 +81,7 @@ static void Port_MakeFadeBuff256(u8* src, u8* dest, u16 intensity, u8 color) {
 
     u16* srcPtr = (u16*)src;
     /* dest is a GBA palette RAM address — resolve it */
-    u16* dstPtr = (u16*)port_resolve_addr((uintptr_t)dest);
+    u16* dstPtr = (u16*)port_resolve_write_addr((uintptr_t)dest);
 
     if (!dstPtr)
         return; // Safety check

@@ -1169,6 +1169,22 @@ target_end()
 
 
 -- ====================
+-- GBA/native address-resolution regression test.
+-- ====================
+target("gba_mem_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs(".")
+    add_includedirs("port")
+    add_includedirs("include")
+    add_defines("PC_PORT")
+    add_files("port/port_gba_mem.c")
+    add_files("port/port_gba_mem_test.c")
+target_end()
+
+
+-- ====================
 -- Memory-watch list regression test (fault-safe little-endian reads + watch
 -- bookkeeping; see port_memory_watch_test.c)
 -- ====================
