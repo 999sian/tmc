@@ -232,6 +232,17 @@ int Platform3DS_IsNativeAddress(uintptr_t value) {
     return (info.perm & (MEMPERM_READ | MEMPERM_WRITE)) != 0u;
 }
 
+int Platform3DS_IsActiveStackAddress(uintptr_t value) {
+    uintptr_t currentSp;
+    __asm__ volatile("mov %0, sp" : "=r"(currentSp));
+
+    /* GBA ROM addresses may overlap the 3DS stack reservation numerically.
+     * Only objects close to the current frame are unambiguously native stack
+     * pointers; keeping this window small preserves normal GBA ROM mapping. */
+    const uintptr_t window = 64u * 1024u;
+    return value >= currentSp - window && value <= currentSp + window;
+}
+
 bool Platform3DS_BeginFrameBoundary(void) {
     const uint64_t now = svcGetSystemTick();
     if (sFrameBoundaryEndTick != 0) {

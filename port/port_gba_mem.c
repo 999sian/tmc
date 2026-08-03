@@ -225,6 +225,17 @@ u32 gba_read32(uint32_t addr) {
 
 void* port_resolve_addr(uintptr_t val)
 {
+#ifdef TMC_3DS
+    /* Stack-local C objects are passed to shared MemClear/MemCopy helpers.
+     * Their 3DS addresses can overlap the numeric GBA ROM range, but an
+     * active-stack address is distinguishable from a ROM address by its
+     * proximity to the current stack pointer. */
+    if (val >= 0x08000000u && val < 0x0A000000u) {
+        extern int Platform3DS_IsActiveStackAddress(uintptr_t value);
+        if (Platform3DS_IsActiveStackAddress(val)) return (void*)val;
+    }
+#endif
+
     /* GBA-range values are address-mapped through gba_TryMemPtr on
      * every platform. The previous Windows-only short-circuit used
      * VirtualQuery to "trust" the raw address if it happened to be a
