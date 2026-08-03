@@ -4,6 +4,9 @@
 #include "menu.h"
 #include "main.h"
 #include "fileselect.h"
+#ifdef PC_PORT
+#include "port_save.h"
+#endif
 
 typedef struct SaveFileStatus {
     u16 checksum1;
@@ -145,6 +148,9 @@ u32 InitSaveData(void) {
     u32 error;
 
     EEPROMConfigure(0x40);
+#ifdef PC_PORT
+    Port_Save_BeginTransaction();
+#endif
     eepromAddresses = GetSaveFileEEPROMAddresses(4);
     error = 0;
     if (DataCompare(eepromAddresses->address1, sSignatureLong, eepromAddresses->size) == 0) {
@@ -164,7 +170,11 @@ u32 InitSaveData(void) {
         DataWrite(eepromAddresses->address2, sSignatureLong, eepromAddresses->size);
         DataWrite(eepromAddresses->address1, sSignatureLong, eepromAddresses->size);
     }
+#ifdef PC_PORT
+    return Port_Save_EndTransaction() ? 1 : 0;
+#else
     return 1;
+#endif
 }
 
 u32 WriteSaveFile(u32 index, SaveFile* saveFile) {
@@ -226,10 +236,7 @@ u32 DataDoubleWriteWithStatus(u32 index, const void* data) {
 #ifdef PC_PORT
     /* One save = ~324 EEPROM block writes; flush the backing file once at
      * the end of the burst instead of per block (port_save.c, #19). */
-    {
-        extern void Port_Save_BeginTransaction(void);
-        Port_Save_BeginTransaction();
-    }
+    Port_Save_BeginTransaction();
 #endif
 
     eepromAddresses = GetSaveFileEEPROMAddresses(index);
@@ -255,11 +262,8 @@ u32 DataDoubleWriteWithStatus(u32 index, const void* data) {
 #ifdef PC_PORT
     /* Single durable flush; a failed flush (ENOSPC/EIO) downgrades the save
      * to SAVE_ERROR in the HandleSave UI instead of lying (#20). */
-    {
-        extern int Port_Save_EndTransaction(void);
-        if (!Port_Save_EndTransaction()) {
-            ret = 0;
-        }
+    if (!Port_Save_EndTransaction()) {
+        ret = 0;
     }
 #endif
     return ret;

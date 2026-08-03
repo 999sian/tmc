@@ -42,6 +42,10 @@ void MP2KTrack::Init(size_t pos) {
     enabled = pos != 0;
     updateVolume = false;
     updatePitch = false;
+#ifdef TMC_3DS
+    audioBufferActive = false;
+    audioTailBlocks = 0;
+#endif
     channels = nullptr;
     activeNotes.reset();
     activeVoiceTypes = VoiceFlags::NONE;

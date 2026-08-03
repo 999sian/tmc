@@ -52,6 +52,88 @@ void SoundMixer::UpdateFixedModeRate()
 
 void SoundMixer::Process()
 {
+#ifdef TMC_3DS
+    constexpr uint16_t REVERB_TAIL_BLOCKS = 240;
+    const uint8_t reverbLevel = GetReverbLevel();
+
+    for (MP2KPlayer &player : ctx.players) {
+        for (MP2KTrack &trk : player.tracks) {
+            trk.audioBufferActive = trk.audioTailBlocks > 0;
+            if (!trk.audioBufferActive)
+                continue;
+            trk.audioBuffer.resize(samplesPerBuffer);
+            std::fill(trk.audioBuffer.begin(), trk.audioBuffer.end(), sample{0.0f, 0.0f});
+            trk.audioTailBlocks--;
+        }
+    }
+
+    MixingArgs margs;
+    margs.vol = static_cast<float>((ctx.mp2kSoundMode.vol + 1) / 16.0f);
+    margs.fixedModeRate = fixedModeRate;
+    margs.sampleRateInv = 1.0f / static_cast<float>(sampleRate);
+    margs.samplesPerBufferInv = 1.0f / static_cast<float>(samplesPerBuffer);
+
+    auto mixFunc = [&](auto &channels, bool feedsReverb) {
+        for (auto &chn : channels) {
+            MP2KTrack &trk = *chn.trackOrg;
+            if (!trk.audioBufferActive) {
+                trk.audioBuffer.resize(samplesPerBuffer);
+                std::fill(trk.audioBuffer.begin(), trk.audioBuffer.end(), sample{0.0f, 0.0f});
+                trk.audioBufferActive = true;
+            }
+            if (feedsReverb && reverbLevel != 0)
+                trk.audioTailBlocks = REVERB_TAIL_BLOCKS;
+            chn.Process(trk.audioBuffer, margs);
+        }
+    };
+
+    mixFunc(ctx.sndChannels, true);
+
+    if (reverbLevel != 0) {
+        for (MP2KPlayer &player : ctx.players) {
+            for (MP2KTrack &trk : player.tracks) {
+                if (trk.audioBufferActive)
+                    trk.reverb->Process(trk.audioBuffer);
+            }
+        }
+    }
+
+    mixFunc(ctx.sq1Channels, false);
+    mixFunc(ctx.sq2Channels, false);
+    mixFunc(ctx.waveChannels, false);
+    mixFunc(ctx.noiseChannels, false);
+
+    auto removeFunc = [](const auto &chn) { return chn.envState == EnvState::DEAD; };
+    ctx.sndChannels.remove_if(removeFunc);
+    ctx.sq1Channels.remove_if(removeFunc);
+    ctx.sq2Channels.remove_if(removeFunc);
+    ctx.waveChannels.remove_if(removeFunc);
+    ctx.noiseChannels.remove_if(removeFunc);
+
+    float masterFrom = masterVolume;
+    float masterTo = masterVolume;
+    if (fadeMicroframesLeft > 0) {
+        masterFrom = fadePos < 0.f ? 0.f : masterFrom * powf(fadePos, 10.0f / 6.0f);
+        fadePos += fadeStepPerMicroframe;
+        masterTo = fadePos < 0.f ? 0.f : masterTo * powf(fadePos, 10.0f / 6.0f);
+        fadeMicroframesLeft--;
+    }
+
+    for (MP2KPlayer &player : ctx.players) {
+        for (MP2KTrack &trk : player.tracks) {
+            if (!trk.audioBufferActive)
+                continue;
+            const float masterStep = (masterTo - masterFrom) * margs.samplesPerBufferInv;
+            float masterLevel = masterFrom;
+            for (size_t i = 0; i < samplesPerBuffer; i++) {
+                trk.audioBuffer[i].left *= masterLevel;
+                trk.audioBuffer[i].right *= masterLevel;
+                masterLevel += masterStep;
+            }
+        }
+    }
+
+#else
     /* 1. clear the mixing buffer before processing channels */
     ctx.masterAudioBuffer.resize(samplesPerBuffer);
     std::fill(ctx.masterAudioBuffer.begin(), ctx.masterAudioBuffer.end(), sample{0.0f, 0.0f});
@@ -144,6 +226,7 @@ void SoundMixer::Process()
             }
         }
     }
+#endif
 }
 
 size_t SoundMixer::GetSamplesPerBuffer() const

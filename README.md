@@ -38,18 +38,19 @@ https://ko-fi.com/estebanpdn
 - New Nintendo 3DS speedup with 804 MHz, L2 cache and third-core rendering
   support.
 - Hold the New Nintendo 3DS C-stick in any direction for temporary 3x turbo.
-- Native NDSP stereo audio.
-- Local save data stored beside the ROM on the SD card.
+- Native NDSP stereo audio with a dedicated real-time mixer worker.
+- Verified atomic save data stored beside the ROM on the SD card, with automatic
+  recovery from interrupted writes.
 - Quick diagnostics: press `L + R + A` to capture both physical displays plus
   raw framebuffers, complete GBA working and graphics memory, system and input
-  state, frame cadence, per-core PPU timings, GPU work, audio health and memory
-  availability.
+  state, frame cadence, per-core PPU timings, GPU work, audio and save health,
+  and memory availability.
 - Correct HOME Menu lifecycle handling for suspending or closing the port.
 - Public GitHub releases include CIA, 3DSX, QR code and clean source archive.
 
 ## Installation
 
-1. Install `tmc-3ds-v0.4.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.5.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -104,8 +105,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.4.cia
-build-3ds/game/tmc-3ds-v0.4.3dsx
+build-3ds/game/tmc-3ds-v0.5.cia
+build-3ds/game/tmc-3ds-v0.5.3dsx
 ```
 
 The build does not embed a ROM.
