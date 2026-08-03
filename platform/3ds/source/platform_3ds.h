@@ -70,6 +70,7 @@ uint64_t Platform3DS_Milliseconds(void);
 uint64_t Platform3DS_SystemTick(void);
 uint64_t Platform3DS_TicksPerSecond(void);
 int Platform3DS_IsNativeAddress(uintptr_t value);
+int Platform3DS_IsActiveStackAddress(uintptr_t value);
 bool Platform3DS_SubmitBottomWorker(void);
 bool Platform3DS_TryFinishBottomWorker(void);
 void Platform3DS_ShutdownBottomWorker(void);

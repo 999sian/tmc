@@ -21,7 +21,7 @@ their own 3DS SD card.
 
 ## Project Status
 
-Current public line: `v0.7`
+Current public line: `v0.8`
 
 Public repository:
 
@@ -62,7 +62,7 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install `tmc-3ds-v0.7.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.8.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -118,8 +118,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.7.cia
-build-3ds/game/tmc-3ds-v0.7.3dsx
+build-3ds/game/tmc-3ds-v0.8.cia
+build-3ds/game/tmc-3ds-v0.8.3dsx
 ```
 
 The build does not embed a ROM.
