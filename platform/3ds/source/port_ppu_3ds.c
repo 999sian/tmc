@@ -12,6 +12,7 @@
 #include "virtuappu.h"
 #include "cpu/mode1.h"
 #include "main.h"
+#include "menu.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -350,6 +351,9 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "\n[Game and GBA PPU]\n");
         fprintf(info, "Task/state/substate/sleep: %u/%u/%u/%u\n",
                 gMain.task, gMain.state, gMain.substate, gMain.sleepStatus);
+        fprintf(info, "Subtask state: next/load=%u/%u, pause origin=%u, menu=%u/%u/%u\n",
+                gUI.nextToLoad, gUI.state, gUI.pauseFadeIn, gMenu.menuType,
+                gMenu.overlayType, gMenu.transitionTimer);
         fprintf(info, "Game ticks: %u; pause frames/count/interval: %u/%u/%u\n",
                 gMain.ticks, gMain.pauseFrames, gMain.pauseCount, gMain.pauseInterval);
         fprintf(info, "DISPCNT: 0x%04X; display mode: %u\n", dumpDispcnt, dumpMode);

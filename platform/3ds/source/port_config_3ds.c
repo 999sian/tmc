@@ -13,7 +13,10 @@ static bool sHoldText;
 static bool sColorCorrection;
 static bool sAutosave;
 static bool sConsoleParity;
-static bool sPortSettings = true;
+/* The desktop file-select overlay is rendered on the gameplay screen and
+ * has no useful 3DS interaction path. Keep the native second-screen UI
+ * separate and leave this desktop-only overlay disabled. */
+static bool sPortSettings = false;
 static bool sVsync = true;
 static float sVolume = 1.0f;
 static int sBackdrop;
