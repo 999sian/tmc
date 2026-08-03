@@ -2,8 +2,9 @@
 
 ![The Minish Cap 3DS splash screen](platform/3ds/assets/splash.png)
 
-Native Nintendo 3DS dual-screen port of *The Legend of Zelda: The Minish Cap*,
-built with help from Codex.
+Nintendo 3DS dual-screen port of *The Legend of Zelda: The Minish Cap*, based
+on open-source Minish Cap engine work and the dual-screen Android source base
+used for this 3DS port.
 
 This project is based on open-source work from:
 
@@ -17,6 +18,16 @@ This project is based on open-source work from:
 No ROM or extracted game asset package is distributed in this repository. Each
 user must provide their own legally obtained compatible Game Boy Advance ROM on
 their own 3DS SD card.
+
+## Project Status
+
+Current public line: `v0.5`
+
+Public repository:
+
+```text
+https://github.com/EstebanPdN/zelda-tmc-3ds
+```
 
 ## Join my Discord
 
@@ -85,7 +96,8 @@ Every GitHub release includes:
 - installable CIA
 - Homebrew Launcher 3DSX
 - QR code for scanning the CIA URL from FBI on a 3DS
-- clean source-code zip for that exact version
+
+GitHub also provides automatic source archives for each tag.
 
 ## Building
 
