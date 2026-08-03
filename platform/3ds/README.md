@@ -32,7 +32,8 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 - Diagnostics: press `L + R + A` to create `dumps/dump-*` with top and bottom
   physical-framebuffer BMP and raw captures, EWRAM, IWRAM, VRAM, palettes, OAM,
   I/O and game state, frame cadence, per-core PPU timings, GPU work, audio
-  buffer health, memory availability, lifecycle state and complete input data.
+  buffer health, save persistence state, memory availability, lifecycle state
+  and complete input data.
 - System lifecycle: HOME, sleep and application close events are handled by the
   regular 3DS applet loop.
 

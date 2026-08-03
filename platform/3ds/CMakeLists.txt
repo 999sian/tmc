@@ -111,6 +111,11 @@ set_source_files_properties(
     "${CMAKE_CURRENT_LIST_DIR}/source/port_ppu_3ds.c"
     PROPERTIES COMPILE_OPTIONS "-flto;-fno-semantic-interposition"
 )
+set_source_files_properties(
+    "${TMC_ROOT}/port/port_m4a_backend.cpp"
+    ${AGBPLAY_SOURCES}
+    PROPERTIES COMPILE_OPTIONS "-flto;-fno-semantic-interposition;-ffast-math"
+)
 target_link_options(tmc-3ds PRIVATE -O3 -flto -Wl,--gc-sections)
 target_link_libraries(tmc-3ds PRIVATE citro2d citro3d ctru m)
 

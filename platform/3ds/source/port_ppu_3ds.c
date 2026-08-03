@@ -3,6 +3,7 @@
 #include "port_gba_mem.h"
 #include "port_hdma.h"
 #include "port_audio_3ds.h"
+#include "port_save.h"
 #include "port_second_screen.h"
 #include "port_second_screen_state.h"
 #include "platform_3ds.h"
@@ -176,10 +177,12 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         Platform3DSRuntimeStats runtimeStats;
         PlatformGpu3DSStats gpuStats;
         PortAudio3DSStats audioStats;
+        PortSaveStats saveStats;
         VirtuaPPUMode13DSStats workerStats;
         Platform3DS_GetRuntimeStats(&runtimeStats);
         PlatformGpu3DS_GetStats(&gpuStats);
         Port_Audio_3DSGetStats(&audioStats);
+        Port_Save_GetStats(&saveStats);
         virtuappu_mode1_get_3ds_stats(&workerStats);
         const uint64_t engineSamples = runtimeStats.logicFrames > 1 ? runtimeStats.logicFrames - 1u : 1u;
         const uint64_t vblankSamples = runtimeStats.presentedFrames ? runtimeStats.presentedFrames : 1u;
@@ -305,9 +308,15 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "Sample rate: %lu Hz; buffer geometry: %lu x %lu frames\n",
                 (unsigned long)audioStats.sampleRate, (unsigned long)audioStats.bufferCount,
                 (unsigned long)audioStats.bufferFrames);
+        fprintf(info, "Worker running/core/priority: %s / %ld / %ld\n",
+                audioStats.audioThreadRunning ? "yes" : "no", (long)audioStats.threadCore,
+                (long)audioStats.threadPriority);
         fprintf(info, "Pumps / rendered buffers / underrun observations: %llu / %llu / %llu\n",
                 (unsigned long long)audioStats.pumps, (unsigned long long)audioStats.buffersRendered,
                 (unsigned long long)audioStats.underrunObservations);
+        fprintf(info, "Worker wakes / requeues / NDSP callback signals / queue recoveries: %llu / %llu / %llu / %llu\n",
+                (unsigned long long)audioStats.workerWakeups, (unsigned long long)audioStats.workerRequeues,
+                (unsigned long long)audioStats.callbackSignals, (unsigned long long)audioStats.queueRecoveries);
         fprintf(info, "Audio render: last %.3f ms, average %.3f ms, maximum %.3f ms\n",
                 TicksToMilliseconds(audioStats.renderLastTicks),
                 TicksToMilliseconds(audioStats.renderTicks) / (double)audioSamples,
@@ -315,8 +324,28 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "Wave buffers free/queued/playing/done: %lu/%lu/%lu/%lu\n",
                 (unsigned long)audioStats.freeBuffers, (unsigned long)audioStats.queuedBuffers,
                 (unsigned long)audioStats.playingBuffers, (unsigned long)audioStats.doneBuffers);
-        fprintf(info, "Maximum buffers refilled in one pump: %lu; sample position: %lu\n",
-                (unsigned long)audioStats.maxBuffersPerPump, (unsigned long)audioStats.samplePosition);
+        fprintf(info, "Maximum buffers per worker wake / maximum DONE backlog: %lu / %lu\n",
+                (unsigned long)audioStats.maxBuffersPerWake, (unsigned long)audioStats.maxDoneBuffersObserved);
+        fprintf(info, "Fallback renders / sample position: %llu / %lu\n",
+                (unsigned long long)audioStats.fallbackRenders, (unsigned long)audioStats.samplePosition);
+        fprintf(info, "NDSP frames / dropped frames: %lu / %lu\n",
+                (unsigned long)audioStats.ndspFrames, (unsigned long)audioStats.ndspDroppedFrames);
+
+        fprintf(info, "\n[Save storage]\n");
+        fprintf(info, "Active path: %s\n", saveStats.activePath);
+        fprintf(info, "Initialized/dirty/transaction depth: %s / %s / %ld\n",
+                saveStats.initialized ? "yes" : "no", saveStats.dirty ? "yes" : "no",
+                (long)saveStats.transactionDepth);
+        fprintf(info, "Flush attempts / successes / failures: %llu / %llu / %llu\n",
+                (unsigned long long)saveStats.flushAttempts, (unsigned long long)saveStats.flushSuccesses,
+                (unsigned long long)saveStats.flushFailures);
+        fprintf(info, "Interrupted recoveries / rollback restores / rollback failures: %llu / %llu / %llu\n",
+                (unsigned long long)saveStats.interruptedRecoveries,
+                (unsigned long long)saveStats.rollbackRestores,
+                (unsigned long long)saveStats.rollbackFailures);
+        fprintf(info, "Last persistence stage / errno: %s / %ld (%s)\n",
+                Port_Save_StageName(saveStats.lastStage), (long)saveStats.lastErrno,
+                saveStats.lastErrno ? strerror(saveStats.lastErrno) : "none");
 
         fprintf(info, "\n[Game and GBA PPU]\n");
         fprintf(info, "Task/state/substate/sleep: %u/%u/%u/%u\n",

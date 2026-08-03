@@ -70,6 +70,10 @@ struct MP2KTrack {
     bool enabled;
     bool updateVolume;
     bool updatePitch;
+#ifdef TMC_3DS
+    bool audioBufferActive;
+    uint16_t audioTailBlocks;
+#endif
 
     /* Stable cross-player ordering key (see SequenceReader's PCM channel
      * steal): hardware resolves ties by track ADDRESS, which is a fixed

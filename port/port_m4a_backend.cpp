@@ -195,7 +195,11 @@ static AgbplaySoundMode MakeAgbplayMode(void) {
      * NEAREST's raw aliasing, so the enhanced path stays smooth on Android while
      * fitting the CPU budget. Desktop keeps SINC (the cleanest resampler; cost is
      * irrelevant there). GBA-accurate mode is NEAREST everywhere (hardware exact). */
-#ifdef __ANDROID__
+#if defined(TMC_3DS)
+    /* The ARM11 cannot sustain the desktop 32-tap SINC path. NEAREST matches
+     * the GBA's sample-and-hold hardware and leaves CPU time for game/PPU work. */
+    const ResamplerType enhancedRs = ResamplerType::NEAREST;
+#elif defined(__ANDROID__)
     const ResamplerType enhancedRs = ResamplerType::LINEAR;
 #else
     const ResamplerType enhancedRs = ResamplerType::SINC;
@@ -209,7 +213,13 @@ static AgbplaySoundMode MakeAgbplayMode(void) {
      * the user opts in via the F8 slider — see Port_M4A_Backend_SetReverbLevel).
      * GBA-accurate mode forces it fully dry. Honoured here so a context rebuild
      * (ROM reload / area change) preserves the user's chosen level. */
+#if defined(TMC_3DS)
+    /* Force a dry mix on 3DS. Processing a software reverb tail for every
+     * active MP2K track consumes the remaining real-time audio budget. */
+    mode.reverbForce = 0x80;
+#else
     mode.reverbForce = sState.gbaAccurate ? 0 : sState.reverbForceByte;
+#endif
     mode.cgbPolyphony = CGBPolyphony::MONO_STRICT;
     mode.dmaBufferLen = 0x630;
     mode.accurateCh3Quantization = true;
@@ -623,6 +633,11 @@ static void RenderChunkLocked(void) {
 
             for (size_t trackIndex = 0; trackIndex < trackCount; trackIndex++) {
                 const auto& track = player.tracks[trackIndex];
+#ifdef TMC_3DS
+                if (!track.audioBufferActive) {
+                    continue;
+                }
+#endif
                 const float gain = static_cast<float>(sState.trackVolumes[playerIndex][trackIndex]) / 255.0f;
 
                 if (track.muted || gain <= 0.0f) {
@@ -927,14 +942,20 @@ void Port_M4A_Backend_SetGbaAccurate(bool accurate) {
      * is captured into each ReverbEffect's cached intensity, refreshed only by
      * SoundMixer::UpdateReverb() — so set the field AND call UpdateReverb() to
      * apply it live. MakeAgbplayMode also honours these on a later rebuild. */
-#ifdef __ANDROID__
+#if defined(TMC_3DS)
+    const ResamplerType rs = ResamplerType::NEAREST;
+#elif defined(__ANDROID__)
     const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::LINEAR;
 #else
     const ResamplerType rs = accurate ? ResamplerType::NEAREST : ResamplerType::SINC;
 #endif
     sState.ctx->agbplaySoundMode.resamplerTypeNormal = rs;
     sState.ctx->agbplaySoundMode.resamplerTypeFixed = rs;
+#if defined(TMC_3DS)
+    sState.ctx->agbplaySoundMode.reverbForce = 0x80;
+#else
     sState.ctx->agbplaySoundMode.reverbForce = accurate ? 0 : sState.reverbForceByte;
+#endif
     sState.ctx->mixer.UpdateReverb();
 }
 
@@ -960,7 +981,11 @@ void Port_M4A_Backend_SetReverbLevel(int level) {
     /* Apply live: GetReverbLevel reads reverbForce, and UpdateReverb() pushes
      * the new level onto every existing ReverbEffect via SetLevel() — no
      * context rebuild, so the currently-playing song is not restarted. */
+#if defined(TMC_3DS)
+    sState.ctx->agbplaySoundMode.reverbForce = 0x80;
+#else
     sState.ctx->agbplaySoundMode.reverbForce = sState.gbaAccurate ? 0 : sState.reverbForceByte;
+#endif
     sState.ctx->mixer.UpdateReverb();
 }
 

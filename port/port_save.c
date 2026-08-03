@@ -39,6 +39,8 @@
  */
 
 #include "port_types.h"
+#include "port_save.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,20 +59,20 @@
 #define EEPROM_BLOCKS (EEPROM_SIZE / EEPROM_BLOCK) /* 1024 */
 #define DEFAULT_SAVE_FILENAME "tmc.sav"
 #define SAVE_FILENAME_MAX 64
+#define SAVE_AUX_PATH_MAX (SAVE_FILENAME_MAX + 16)
 
 static u8 sEeprom[EEPROM_SIZE];
 static int sEepromDirty = 0; /* set on write, cleared on flush */
-/* >0 while inside a game save transaction (HandleSaveInProgress). Block
- * writes inside a transaction only mark dirty; the single atomic flush
- * happens at Port_Save_EndTransaction(). Outside a transaction (boot-time
- * InitSaveData, status repair) writes keep the old flush-immediately
- * behavior. */
+/* >0 while inside a game save transaction. Block writes inside a transaction
+ * only mark dirty; the single atomic flush happens at EndTransaction(). The
+ * game brackets both initial EEPROM setup and normal file saves. */
 static int sSaveTxnDepth = 0;
 /* 1 after a failed flush, reset on success — so a persistent ENOSPC/EIO
  * logs once per failure burst instead of once per write. */
 static int sFlushFailedLast = 0;
 static int sEepromInited = 0;
 static char sActivePath[SAVE_FILENAME_MAX] = DEFAULT_SAVE_FILENAME;
+static PortSaveStats sSaveStats;
 /* 1 once the user has explicitly chosen a named profile (config.json), so the
  * per-region default below must NOT override their choice. 0 in the default
  * case, where the multi-region build isolates each region into its own file. */
@@ -95,13 +97,103 @@ static void ReverseEepromBlocks(u8* buf) {
     }
 }
 
-/* Write the in-memory EEPROM to f in on-disk order. 1 on full write. */
-static int WriteEepromDiskOrder(FILE* f) {
-    static u8 disk[EEPROM_SIZE];
-    memcpy(disk, sEeprom, EEPROM_SIZE);
-    ReverseEepromBlocks(disk);
-    return fwrite(disk, 1, EEPROM_SIZE, f) == EEPROM_SIZE;
+static u8 sDiskImage[EEPROM_SIZE];
+
+static void BuildEepromDiskImage(void) {
+    memcpy(sDiskImage, sEeprom, EEPROM_SIZE);
+    ReverseEepromBlocks(sDiskImage);
 }
+
+static int FileExists(const char* path) {
+    FILE* file = fopen(path, "rb");
+    if (!file) return 0;
+    fclose(file);
+    return 1;
+}
+
+static int FileHasExactSize(const char* path) {
+    FILE* file = fopen(path, "rb");
+    if (!file) return 0;
+
+    u8 scratch[256];
+    size_t total = 0;
+    while (total < EEPROM_SIZE) {
+        const size_t wanted = EEPROM_SIZE - total < sizeof(scratch) ? EEPROM_SIZE - total : sizeof(scratch);
+        const size_t got = fread(scratch, 1, wanted, file);
+        total += got;
+        if (got != wanted) break;
+    }
+    const int trailing = total == EEPROM_SIZE ? fgetc(file) : EOF;
+    const int closeOk = fclose(file) == 0;
+    return total == EEPROM_SIZE && trailing == EOF && closeOk;
+}
+
+static int FileMatchesDiskImage(const char* path) {
+    FILE* file = fopen(path, "rb");
+    if (!file) return 0;
+
+    u8 scratch[256];
+    size_t offset = 0;
+    int ok = 1;
+    while (offset < EEPROM_SIZE) {
+        const size_t wanted = EEPROM_SIZE - offset < sizeof(scratch) ? EEPROM_SIZE - offset : sizeof(scratch);
+        if (fread(scratch, 1, wanted, file) != wanted || memcmp(scratch, sDiskImage + offset, wanted) != 0) {
+            ok = 0;
+            break;
+        }
+        offset += wanted;
+    }
+    if (ok && fgetc(file) != EOF) ok = 0;
+    if (fclose(file) != 0) ok = 0;
+    return ok;
+}
+
+static void RecordSaveFailure(PortSaveStage stage, int errorCode) {
+    sSaveStats.lastStage = stage;
+    sSaveStats.lastErrno = errorCode != 0 ? errorCode : EIO;
+    ++sSaveStats.flushFailures;
+}
+
+static void MakeAuxiliaryPaths(const char* path, char* temp, char* rollback) {
+    snprintf(temp, SAVE_AUX_PATH_MAX, "%s.tmp", path);
+    snprintf(rollback, SAVE_AUX_PATH_MAX, "%s.rollback", path);
+}
+
+#ifdef TMC_3DS
+static void RecoverInterruptedAtomicWrite(const char* path) {
+    char temp[SAVE_AUX_PATH_MAX];
+    char rollback[SAVE_AUX_PATH_MAX];
+    MakeAuxiliaryPaths(path, temp, rollback);
+
+    if (FileHasExactSize(path)) {
+        remove(temp);
+        remove(rollback);
+        return;
+    }
+
+    const char* candidate = NULL;
+    if (FileHasExactSize(rollback)) {
+        candidate = rollback;
+    } else if (FileHasExactSize(temp)) {
+        candidate = temp;
+    }
+    if (!candidate) return;
+
+    sSaveStats.lastStage = PORT_SAVE_STAGE_RECOVER;
+    if (FileExists(path) && remove(path) != 0) {
+        sSaveStats.lastErrno = errno != 0 ? errno : EIO;
+        return;
+    }
+    if (rename(candidate, path) == 0) {
+        ++sSaveStats.interruptedRecoveries;
+        sSaveStats.lastErrno = 0;
+        remove(temp);
+        remove(rollback);
+    } else {
+        sSaveStats.lastErrno = errno != 0 ? errno : EIO;
+    }
+}
+#endif
 
 /* Write the in-memory EEPROM to `path` atomically: serialize to a sibling
  * temp file, flush it through to disk, then rename over the target. A crash
@@ -110,45 +202,139 @@ static int WriteEepromDiskOrder(FILE* f) {
  * the next load treated as a blank save, silently wiping progress).
  * Returns 1 on success. */
 static int WriteEepromAtomic(const char* path) {
-    char tmp[SAVE_FILENAME_MAX + 8];
-    if ((size_t)snprintf(tmp, sizeof(tmp), "%s.tmp", path) >= sizeof(tmp))
-        return 0;
+    char tmp[SAVE_AUX_PATH_MAX];
+    char rollback[SAVE_AUX_PATH_MAX];
+    MakeAuxiliaryPaths(path, tmp, rollback);
+    ++sSaveStats.flushAttempts;
+    BuildEepromDiskImage();
 
-    FILE* f = fopen(tmp, "wb");
-    if (!f)
+    if (strlen(path) + sizeof(".rollback") > sizeof(rollback)) {
+        RecordSaveFailure(PORT_SAVE_STAGE_OPEN_TEMP, ENAMETOOLONG);
         return 0;
-
-    int ok = WriteEepromDiskOrder(f);
-    if (ok) {
-        /* #20: a full buffer + failed flush/sync is exactly the ENOSPC/EIO
-         * case — treat it as a failed write instead of reporting success. */
-        ok = fflush(f) == 0;
-#ifdef _WIN32
-        if (ok)
-            ok = _commit(_fileno(f)) == 0;
-#else
-        if (ok)
-            ok = fsync(fileno(f)) == 0;
-#endif
     }
-    if (fclose(f) != 0)
+
+    sSaveStats.lastStage = PORT_SAVE_STAGE_OPEN_TEMP;
+    FILE* f = fopen(tmp, "wb");
+    if (!f) {
+        RecordSaveFailure(PORT_SAVE_STAGE_OPEN_TEMP, errno);
+        return 0;
+    }
+
+    sSaveStats.lastStage = PORT_SAVE_STAGE_WRITE_TEMP;
+    int ok = fwrite(sDiskImage, 1, EEPROM_SIZE, f) == EEPROM_SIZE;
+    int failureErrno = ok ? 0 : errno;
+    PortSaveStage failureStage = PORT_SAVE_STAGE_WRITE_TEMP;
+    if (ok) {
+        sSaveStats.lastStage = PORT_SAVE_STAGE_FLUSH_TEMP;
+        ok = fflush(f) == 0;
+        if (!ok) {
+            failureErrno = errno;
+            failureStage = PORT_SAVE_STAGE_FLUSH_TEMP;
+        }
+#ifdef _WIN32
+        if (ok) {
+            sSaveStats.lastStage = PORT_SAVE_STAGE_SYNC_TEMP;
+            ok = _commit(_fileno(f)) == 0;
+        }
+#else
+        if (ok) {
+            sSaveStats.lastStage = PORT_SAVE_STAGE_SYNC_TEMP;
+            ok = fsync(fileno(f)) == 0;
+        }
+#endif
+        if (!ok && failureStage == PORT_SAVE_STAGE_WRITE_TEMP) {
+            failureErrno = errno;
+            failureStage = PORT_SAVE_STAGE_SYNC_TEMP;
+        }
+    }
+    sSaveStats.lastStage = PORT_SAVE_STAGE_CLOSE_TEMP;
+    if (fclose(f) != 0) {
+        if (ok) {
+            failureErrno = errno;
+            failureStage = PORT_SAVE_STAGE_CLOSE_TEMP;
+        }
         ok = 0;
+    }
     if (!ok) {
         remove(tmp);
+        RecordSaveFailure(failureStage, failureErrno);
+        return 0;
+    }
+
+    sSaveStats.lastStage = PORT_SAVE_STAGE_VERIFY_TEMP;
+    if (!FileMatchesDiskImage(tmp)) {
+        const int verifyErrno = errno;
+        remove(tmp);
+        RecordSaveFailure(PORT_SAVE_STAGE_VERIFY_TEMP, verifyErrno);
         return 0;
     }
 
 #ifdef _WIN32
+    sSaveStats.lastStage = PORT_SAVE_STAGE_INSTALL_TEMP;
     if (!MoveFileExA(tmp, path, MOVEFILE_REPLACE_EXISTING)) {
         remove(tmp);
+        RecordSaveFailure(PORT_SAVE_STAGE_INSTALL_TEMP, (int)GetLastError());
         return 0;
     }
-#else
+#elif defined(TMC_3DS)
+    int movedCurrent = 0;
+    if (FileExists(path)) {
+        remove(rollback);
+        sSaveStats.lastStage = PORT_SAVE_STAGE_BACKUP_CURRENT;
+        if (rename(path, rollback) != 0) {
+            const int backupErrno = errno;
+            remove(tmp);
+            RecordSaveFailure(PORT_SAVE_STAGE_BACKUP_CURRENT, backupErrno);
+            return 0;
+        }
+        movedCurrent = 1;
+    }
+
+    sSaveStats.lastStage = PORT_SAVE_STAGE_INSTALL_TEMP;
     if (rename(tmp, path) != 0) {
+        const int installErrno = errno;
+        if (movedCurrent) {
+            sSaveStats.lastStage = PORT_SAVE_STAGE_RESTORE_BACKUP;
+            if (rename(rollback, path) == 0) {
+                ++sSaveStats.rollbackRestores;
+            } else {
+                ++sSaveStats.rollbackFailures;
+            }
+        }
         remove(tmp);
+        RecordSaveFailure(PORT_SAVE_STAGE_INSTALL_TEMP, installErrno);
+        return 0;
+    }
+
+    sSaveStats.lastStage = PORT_SAVE_STAGE_VERIFY_INSTALLED;
+    if (!FileMatchesDiskImage(path)) {
+        const int verifyErrno = errno;
+        remove(path);
+        if (movedCurrent) {
+            sSaveStats.lastStage = PORT_SAVE_STAGE_RESTORE_BACKUP;
+            if (rename(rollback, path) == 0) {
+                ++sSaveStats.rollbackRestores;
+            } else {
+                ++sSaveStats.rollbackFailures;
+            }
+        }
+        RecordSaveFailure(PORT_SAVE_STAGE_VERIFY_INSTALLED, verifyErrno);
+        return 0;
+    }
+    if (movedCurrent) remove(rollback);
+#else
+    sSaveStats.lastStage = PORT_SAVE_STAGE_INSTALL_TEMP;
+    if (rename(tmp, path) != 0) {
+        const int installErrno = errno;
+        remove(tmp);
+        RecordSaveFailure(PORT_SAVE_STAGE_INSTALL_TEMP, installErrno);
         return 0;
     }
 #endif
+
+    sSaveStats.lastStage = PORT_SAVE_STAGE_COMPLETE;
+    sSaveStats.lastErrno = 0;
+    ++sSaveStats.flushSuccesses;
     return 1;
 }
 
@@ -189,6 +375,9 @@ static void ResolveRegionDefaultPath(void) {
 static void LoadEepromFile(void) {
 #ifdef MULTI_REGION
     ResolveRegionDefaultPath();
+#endif
+#ifdef TMC_3DS
+    RecoverInterruptedAtomicWrite(sActivePath);
 #endif
     FILE* f = fopen(sActivePath, "rb");
     if (!f) {
@@ -265,6 +454,34 @@ int Port_Save_EndTransaction(void) {
     if (sSaveTxnDepth == 0)
         FlushEepromFile();
     return !sEepromDirty;
+}
+
+void Port_Save_GetStats(PortSaveStats* stats) {
+    if (!stats) return;
+    *stats = sSaveStats;
+    stats->transactionDepth = sSaveTxnDepth;
+    stats->initialized = sEepromInited != 0;
+    stats->dirty = sEepromDirty != 0;
+    snprintf(stats->activePath, sizeof(stats->activePath), "%s", sActivePath);
+}
+
+const char* Port_Save_StageName(PortSaveStage stage) {
+    switch (stage) {
+        case PORT_SAVE_STAGE_IDLE: return "idle";
+        case PORT_SAVE_STAGE_RECOVER: return "recover";
+        case PORT_SAVE_STAGE_OPEN_TEMP: return "open temp";
+        case PORT_SAVE_STAGE_WRITE_TEMP: return "write temp";
+        case PORT_SAVE_STAGE_FLUSH_TEMP: return "flush temp";
+        case PORT_SAVE_STAGE_SYNC_TEMP: return "sync temp";
+        case PORT_SAVE_STAGE_CLOSE_TEMP: return "close temp";
+        case PORT_SAVE_STAGE_VERIFY_TEMP: return "verify temp";
+        case PORT_SAVE_STAGE_BACKUP_CURRENT: return "backup current";
+        case PORT_SAVE_STAGE_INSTALL_TEMP: return "install temp";
+        case PORT_SAVE_STAGE_VERIFY_INSTALLED: return "verify installed";
+        case PORT_SAVE_STAGE_RESTORE_BACKUP: return "restore backup";
+        case PORT_SAVE_STAGE_COMPLETE: return "complete";
+        default: return "unknown";
+    }
 }
 
 /* ---- EEPROM BIOS API ---------------------------------------------------- */

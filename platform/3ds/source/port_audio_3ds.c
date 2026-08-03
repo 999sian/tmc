@@ -8,13 +8,23 @@
 #include <stdint.h>
 #include <string.h>
 
-#define SAMPLE_RATE 32728
-#define BUFFER_FRAMES 1024
+/* MP2K mode 5 mixes PCM at 15.768 kHz. A nearby DSP-friendly rate keeps the
+ * native mixer workload bounded while NDSP performs final interpolation. */
+#define SAMPLE_RATE 16364
+#define BUFFER_FRAMES 256
 #define BUFFER_COUNT 4
+#define AUDIO_THREAD_STACK (64u * 1024u)
+#define AUDIO_THREAD_CORE 0
+#define AUDIO_RECOVERY_PAUSE_NS 500000LL
 
 static ndspWaveBuf sWave[BUFFER_COUNT];
 static int16_t* sSamples;
 static bool sInitialized;
+static volatile bool sAudioThreadRunning;
+static Thread sAudioThread;
+static LightEvent sAudioWake;
+static LightLock sStatsLock;
+static uint32_t sCallbackSignals;
 static float sVolume = 1.0f;
 static PortAudio3DSStats sStats;
 
@@ -22,19 +32,66 @@ static void FillBuffer(int index) {
     const uint64_t startTick = svcGetSystemTick();
     int16_t* dst = sSamples + index * BUFFER_FRAMES * 2;
     Port_M4A_Backend_Render(dst, BUFFER_FRAMES, false);
-    if (sVolume < 0.999f) {
-        for (int i = 0; i < BUFFER_FRAMES * 2; ++i) dst[i] = (int16_t)(dst[i] * sVolume);
-    }
     DSP_FlushDataCache(dst, BUFFER_FRAMES * 2 * sizeof(int16_t));
     sWave[index].data_pcm16 = dst;
     sWave[index].nsamples = BUFFER_FRAMES;
     sWave[index].status = NDSP_WBUF_FREE;
     ndspChnWaveBufAdd(0, &sWave[index]);
     const uint64_t elapsed = svcGetSystemTick() - startTick;
+    LightLock_Lock(&sStatsLock);
     ++sStats.buffersRendered;
     sStats.renderTicks += elapsed;
     sStats.renderLastTicks = elapsed;
     if (elapsed > sStats.renderMaxTicks) sStats.renderMaxTicks = elapsed;
+    LightLock_Unlock(&sStatsLock);
+}
+
+static uint32_t CountDoneBuffers(void) {
+    uint32_t done = 0;
+    for (int i = 0; i < BUFFER_COUNT; ++i) {
+        if (sWave[i].status == NDSP_WBUF_DONE) ++done;
+    }
+    return done;
+}
+
+static int FindDoneBuffer(void) {
+    for (int i = 0; i < BUFFER_COUNT; ++i) {
+        if (sWave[i].status == NDSP_WBUF_DONE) return i;
+    }
+    return -1;
+}
+
+static void AudioFrameFinished(void* data) {
+    (void)data;
+    if (CountDoneBuffers() == 0) return;
+    __atomic_add_fetch(&sCallbackSignals, 1u, __ATOMIC_RELAXED);
+    LightEvent_Signal(&sAudioWake);
+}
+
+static void AudioThreadMain(void* argument) {
+    (void)argument;
+    while (__atomic_load_n(&sAudioThreadRunning, __ATOMIC_ACQUIRE)) {
+        LightEvent_Wait(&sAudioWake);
+        if (!__atomic_load_n(&sAudioThreadRunning, __ATOMIC_ACQUIRE)) break;
+
+        const uint32_t backlogBefore = CountDoneBuffers();
+        const int bufferIndex = FindDoneBuffer();
+        const uint32_t refillCount = bufferIndex >= 0 ? 1u : 0u;
+        if (bufferIndex >= 0) FillBuffer(bufferIndex);
+        const uint32_t backlogAfter = CountDoneBuffers();
+
+        LightLock_Lock(&sStatsLock);
+        ++sStats.workerWakeups;
+        if (refillCount > sStats.maxBuffersPerWake) sStats.maxBuffersPerWake = refillCount;
+        if (backlogBefore > sStats.maxDoneBuffersObserved) sStats.maxDoneBuffersObserved = backlogBefore;
+        if (backlogAfter > 0) ++sStats.workerRequeues;
+        LightLock_Unlock(&sStatsLock);
+
+        if (backlogAfter > 0) {
+            svcSleepThread(AUDIO_RECOVERY_PAUSE_NS);
+            LightEvent_Signal(&sAudioWake);
+        }
+    }
 }
 
 bool Port_Audio_Init(void) {
@@ -57,36 +114,73 @@ bool Port_Audio_Init(void) {
     }
     memset(sWave, 0, sizeof(sWave));
     memset(sSamples, 0, BUFFER_COUNT * BUFFER_FRAMES * 2 * sizeof(int16_t));
+    LightLock_Init(&sStatsLock);
+    LightEvent_Init(&sAudioWake, RESET_ONESHOT);
     memset(&sStats, 0, sizeof(sStats));
     sStats.sampleRate = SAMPLE_RATE;
     sStats.bufferFrames = BUFFER_FRAMES;
     sStats.bufferCount = BUFFER_COUNT;
+    sStats.threadCore = AUDIO_THREAD_CORE;
     sStats.initialized = true;
+    sCallbackSignals = 0;
     sInitialized = true;
+    ndspSetCallback(AudioFrameFinished, NULL);
     for (int i = 0; i < BUFFER_COUNT; ++i) FillBuffer(i);
+
+    s32 priority = 0x30;
+    svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
+    if (priority < 0x3F) ++priority;
+    sStats.threadPriority = priority;
+    __atomic_store_n(&sAudioThreadRunning, true, __ATOMIC_RELEASE);
+    sAudioThread = threadCreate(AudioThreadMain, NULL, AUDIO_THREAD_STACK, priority, AUDIO_THREAD_CORE, false);
+    if (!sAudioThread) {
+        __atomic_store_n(&sAudioThreadRunning, false, __ATOMIC_RELEASE);
+    }
     return true;
 }
 
 void Port_Audio_3DSPump(void) {
     if (!sInitialized) return;
+    const bool playing = ndspChnIsPlaying(0);
+    const uint32_t doneBuffers = CountDoneBuffers();
+    const bool callbackMissed = doneBuffers > 0;
+
+    LightLock_Lock(&sStatsLock);
     ++sStats.pumps;
-    uint32_t refillCount = 0;
-    if (!ndspChnIsPlaying(0)) ++sStats.underrunObservations;
-    for (int i = 0; i < BUFFER_COUNT; ++i) {
-        if (sWave[i].status == NDSP_WBUF_DONE) {
-            FillBuffer(i);
-            ++refillCount;
-        }
+    if (!playing) ++sStats.underrunObservations;
+    if (callbackMissed) ++sStats.queueRecoveries;
+    if (doneBuffers > sStats.maxDoneBuffersObserved) sStats.maxDoneBuffersObserved = doneBuffers;
+    LightLock_Unlock(&sStatsLock);
+
+    if (callbackMissed) LightEvent_Signal(&sAudioWake);
+
+    if (!sAudioThread) {
+        const int bufferIndex = FindDoneBuffer();
+        const uint32_t refillCount = bufferIndex >= 0 ? 1u : 0u;
+        if (bufferIndex >= 0) FillBuffer(bufferIndex);
+        LightLock_Lock(&sStatsLock);
+        sStats.fallbackRenders += refillCount;
+        if (refillCount > sStats.maxBuffersPerWake) sStats.maxBuffersPerWake = refillCount;
+        LightLock_Unlock(&sStatsLock);
     }
-    if (refillCount > sStats.maxBuffersPerPump) sStats.maxBuffersPerPump = refillCount;
 }
 
 void Port_Audio_3DSGetStats(PortAudio3DSStats* stats) {
     if (!stats) return;
+    if (!sInitialized) {
+        memset(stats, 0, sizeof(*stats));
+        return;
+    }
+    LightLock_Lock(&sStatsLock);
     *stats = sStats;
-    stats->initialized = sInitialized;
-    stats->samplePosition = sInitialized ? ndspChnGetSamplePos(0) : 0;
-    stats->channelPlaying = sInitialized && ndspChnIsPlaying(0);
+    LightLock_Unlock(&sStatsLock);
+    stats->initialized = true;
+    stats->samplePosition = ndspChnGetSamplePos(0);
+    stats->channelPlaying = ndspChnIsPlaying(0);
+    stats->audioThreadRunning = __atomic_load_n(&sAudioThreadRunning, __ATOMIC_ACQUIRE);
+    stats->callbackSignals = __atomic_load_n(&sCallbackSignals, __ATOMIC_RELAXED);
+    stats->ndspFrames = ndspGetFrameCount();
+    stats->ndspDroppedFrames = ndspGetDroppedFrames();
     stats->freeBuffers = 0;
     stats->queuedBuffers = 0;
     stats->playingBuffers = 0;
@@ -103,6 +197,14 @@ void Port_Audio_3DSGetStats(PortAudio3DSStats* stats) {
 
 void Port_Audio_Shutdown(void) {
     if (!sInitialized) return;
+    ndspSetCallback(NULL, NULL);
+    __atomic_store_n(&sAudioThreadRunning, false, __ATOMIC_RELEASE);
+    LightEvent_Signal(&sAudioWake);
+    if (sAudioThread) {
+        threadJoin(sAudioThread, U64_MAX);
+        threadFree(sAudioThread);
+        sAudioThread = NULL;
+    }
     ndspChnWaveBufClear(0);
     Port_M4A_Backend_Shutdown();
     linearFree(sSamples);
