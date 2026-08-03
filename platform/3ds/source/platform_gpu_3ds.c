@@ -18,6 +18,8 @@ static size_t sC2dFlushSize;
 static bool sFrameActive;
 static bool sReady;
 static PlatformGpu3DSStats sStats;
+static C2D_TextBuf sStatusTextBuffer;
+static C2D_Font sStatusFont;
 
 extern u32 __ctru_linear_heap;
 extern u32 __ctru_linear_heap_size;
@@ -73,6 +75,8 @@ bool PlatformGpu3DS_Init(void) {
         C3D_Fini();
         goto fail_linear;
     }
+    sStatusTextBuffer = C2D_TextBufNew(256);
+    sStatusFont = C2D_FontLoadSystem(CFG_REGION_USA);
     C2D_Prepare();
     C3D_BufInfo* c2dBuffers = C3D_GetBufInfo();
     if (c2dBuffers && c2dBuffers->bufCount > 0) {
@@ -121,6 +125,10 @@ fail_targets:
 fail_top_texture:
     C3D_TexDelete(&sTopTexture);
 fail:
+    if (sStatusFont) C2D_FontFree(sStatusFont);
+    if (sStatusTextBuffer) C2D_TextBufDelete(sStatusTextBuffer);
+    sStatusFont = NULL;
+    sStatusTextBuffer = NULL;
     C2D_Fini();
     C3D_Fini();
 fail_linear:
@@ -197,6 +205,54 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
     sFrameActive = false;
 }
 
+void PlatformGpu3DS_ShowDumpingOverlay(void) {
+    if (!sReady || !sTopUpload || !sBottomUploads[0] || !C3D_FrameBegin(0)) return;
+    sFrameActive = true;
+    GSPGPU_FlushDataCache(sTopUpload, 256u * 160u * sizeof(uint32_t));
+    C3D_SyncDisplayTransfer(sTopUpload, GX_BUFFER_DIM(256, 256),
+                            (u32*)sTopTexture.data, GX_BUFFER_DIM(256, 256), TextureTransfer());
+    sTopSubtexture = (Tex3DS_SubTexture){
+        .width = 240, .height = 160, .left = 0.0f, .top = 1.0f,
+        .right = 240.0f / 256.0f, .bottom = 1.0f - 160.0f / 256.0f,
+    };
+    const C2D_Image topImage = { .tex = &sTopTexture, .subtex = &sTopSubtexture };
+    const C2D_DrawParams topParams = {
+        .pos = { .x = 20.0f, .y = 0.0f, .w = 360.0f, .h = 240.0f },
+        .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
+    };
+    C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
+    C2D_SceneBegin(sTopTarget);
+    C2D_DrawImage(topImage, &topParams, NULL);
+    ConfigureAbgrTextureEnv();
+    C2D_DrawRectSolid(122.0f, 12.0f, 0.5f, 156.0f, 34.0f, C2D_Color32(0, 0, 0, 220));
+    if (sStatusTextBuffer && sStatusFont) {
+        C2D_Text text;
+        C2D_TextBufClear(sStatusTextBuffer);
+        C2D_TextFontParse(&text, sStatusFont, sStatusTextBuffer, "DUMPING");
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor | C2D_AlignCenter, 200.0f, 20.0f, 0.6f, 0.8f, 0.8f,
+                     C2D_Color32(255, 255, 255, 255));
+    }
+
+    sBottomSubtexture = (Tex3DS_SubTexture){
+        .width = 320, .height = 240, .left = 0.0f, .top = 1.0f,
+        .right = 320.0f / 512.0f, .bottom = 1.0f - 240.0f / 256.0f,
+    };
+    const C2D_Image bottomImage = { .tex = &sBottomTexture, .subtex = &sBottomSubtexture };
+    const C2D_DrawParams bottomParams = {
+        .pos = { .x = 0.0f, .y = 0.0f, .w = 320.0f, .h = 240.0f },
+        .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
+    };
+    C2D_SceneBegin(sBottomTarget);
+    C2D_DrawImage(bottomImage, &bottomParams, NULL);
+    ConfigureAbgrTextureEnv();
+    C2D_Flush();
+    if (sC2dFlushBase && sC2dFlushSize) GSPGPU_FlushDataCache(sC2dFlushBase, sC2dFlushSize);
+    C3D_FrameEnd(GX_CMDLIST_FLUSH);
+    sFrameActive = false;
+    gspWaitForEvent(GSPGPU_EVENT_VBlank0, false);
+}
+
 void PlatformGpu3DS_GetStats(PlatformGpu3DSStats* stats) {
     if (stats) *stats = sStats;
 }
@@ -213,6 +269,10 @@ void PlatformGpu3DS_Shutdown(void) {
     C3D_RenderTargetDelete(sTopTarget);
     C3D_TexDelete(&sBottomTexture);
     C3D_TexDelete(&sTopTexture);
+    if (sStatusFont) C2D_FontFree(sStatusFont);
+    if (sStatusTextBuffer) C2D_TextBufDelete(sStatusTextBuffer);
+    sStatusFont = NULL;
+    sStatusTextBuffer = NULL;
     C2D_Fini();
     C3D_Fini();
     linearFree(sBottomUploads[1]);

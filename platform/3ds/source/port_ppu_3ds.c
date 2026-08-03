@@ -130,8 +130,12 @@ static double TicksToMilliseconds(uint64_t ticks) {
 
 void Port_PPU_3DS_WriteQuickDump(void) {
     if (!sInitialized) return;
+    Port_Audio_3DSSetPaused(true);
     char dir[128];
-    if (!CreateDumpDirectory(dir, sizeof(dir))) return;
+    if (!CreateDumpDirectory(dir, sizeof(dir))) {
+        Port_Audio_3DSSetPaused(false);
+        return;
+    }
 
     char topPath[192];
     char bottomPath[192];
@@ -145,6 +149,7 @@ void Port_PPU_3DS_WriteQuickDump(void) {
     memset(&captureStats, 0, sizeof(captureStats));
     const bool screensOk = Platform3DS_SaveDisplayedScreensDetailed(
         topPath, bottomPath, topRawPath, bottomRawPath, &captureStats);
+    PlatformGpu3DS_ShowDumpingOverlay();
 
     char path[192];
     snprintf(path, sizeof(path), "%s/ewram.bin", dir);
@@ -219,6 +224,7 @@ void Port_PPU_3DS_WriteQuickDump(void) {
                 (unsigned long)runtimeStats.stackRegionBase,
                 (unsigned long)runtimeStats.stackRegionEnd);
         fprintf(info, "ROM loaded: %s, %lu bytes\n", gRomData ? "yes" : "no", (unsigned long)gRomSize);
+        fprintf(info, "ROM buffer: 0x%08lX\n", (unsigned long)(uintptr_t)gRomData);
 
         fprintf(info, "\n[Lifecycle and input]\n");
         fprintf(info, "Application running: %s\n", Platform3DS_IsRunning() ? "yes" : "no");
@@ -306,6 +312,7 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "\n[Audio]\n");
         fprintf(info, "Initialized/playing: %s / %s\n",
                 audioStats.initialized ? "yes" : "no", audioStats.channelPlaying ? "yes" : "no");
+        fprintf(info, "Paused for quick dump: %s\n", audioStats.paused ? "yes" : "no");
         fprintf(info, "Sample rate: %lu Hz; buffer geometry: %lu x %lu frames\n",
                 (unsigned long)audioStats.sampleRate, (unsigned long)audioStats.bufferCount,
                 (unsigned long)audioStats.bufferFrames);
@@ -370,6 +377,7 @@ void Port_PPU_3DS_WriteQuickDump(void) {
     char message[192];
     snprintf(message, sizeof(message), "[tmc3ds] quick dump written to %s\n", dir);
     Platform3DS_Debug(message);
+    Port_Audio_3DSSetPaused(false);
 }
 
 void Port_PPU_3DS_RenderBottomWorker(void) {

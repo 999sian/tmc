@@ -70,14 +70,36 @@ static inline void port_DmaTransfer(const void* src_raw, uintptr_t dest_raw, u32
     }
 }
 
+/* A DMA fill's source is an implementation-local scalar, often on the 3DS
+ * stack. Do not route it through the GBA-address resolver: the stack can
+ * overlap the numeric GBA ROM window. */
+static inline void port_DmaFillTransfer(uintptr_t dest_raw, u32 control, u32 value) {
+    u16 cnt = (u16)(control >> 16);
+    u32 units = control & 0xFFFF;
+    if (!(cnt & 0x8000))
+        return;
+    const int is32 = (cnt & 0x0400) != 0;
+    void* dest = port_resolve_addr(dest_raw);
+    if (!dest)
+        return;
+    if (is32) {
+        u32* d = (u32*)dest;
+        for (u32 i = 0; i < units; ++i)
+            d[i] = value;
+    } else {
+        u16* d = (u16*)dest;
+        const u16 fill = (u16)value;
+        for (u32 i = 0; i < units; ++i)
+            d[i] = fill;
+    }
+}
+
 #define DmaSet(dmaNum, src, dest, control) port_DmaTransfer((const void*)(src), (uintptr_t)(dest), (u32)(control))
 
-#define DMA_FILL(dmaNum, value, dest, size, bit)                                                              \
-    {                                                                                                         \
-        vu##bit tmp = (vu##bit)(value);                                                                       \
-        port_DmaTransfer(&tmp, (uintptr_t)(dest),                                                             \
-                         (0x8000 | 0x0100 | ((bit) == 32 ? 0x0400 : 0)) << 16 | ((u32)(size) / ((bit) / 8))); \
-    }
+#define DMA_FILL(dmaNum, value, dest, size, bit)                                                               \
+    port_DmaFillTransfer((uintptr_t)(dest),                                                                    \
+                         (0x8000 | 0x0100 | ((bit) == 32 ? 0x0400 : 0)) << 16 | ((u32)(size) / ((bit) / 8)), \
+                         (u32)(value))
 
 #define DMA_COPY(dmaNum, src, dest, size, bit)              \
     port_DmaTransfer((const void*)(src), (uintptr_t)(dest), \
