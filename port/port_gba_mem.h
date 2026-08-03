@@ -98,14 +98,17 @@ static inline void* gba_MemPtr(uint32_t addr) {
 #endif
 }
 
-/*
- * port_resolve_addr — resolve a value that may be a GBA address or native ptr.
- * Used by the DMA emulation layer.
- */
+/* Resolve a GBA address or an already-native pointer for reads. */
 #ifdef __cplusplus
 extern "C" {
 #endif
 void* port_resolve_addr(uintptr_t val);
+/* Resolve a write destination. GBA ROM addresses are never writable, so host
+ * heap and stack pointers in the 0x08xxxxxx range remain native. */
+void* port_resolve_write_addr(uintptr_t val);
+/* Resolve a copy source while preserving known ROM-buffer and active-stack
+ * pointers before interpreting numeric GBA addresses. */
+const void* port_resolve_copy_src(const void* src, u32 size);
 #ifdef __cplusplus
 }
 #endif

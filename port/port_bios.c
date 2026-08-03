@@ -47,10 +47,7 @@ jmp_buf gPortSoftResetJmp;
 int gPortSoftResetArmed = 0;
 
 static const void* Port_ResolveCopySrc(const void* src, u32 size) {
-    if (Port_IsLoadedAssetBytes(src, size)) {
-        return src;
-    }
-    return port_resolve_addr((uintptr_t)src);
+    return port_resolve_copy_src(src, size);
 }
 
 extern Main gMain;
@@ -79,10 +76,7 @@ jmp_buf gPortSoftResetJmp;
 int gPortSoftResetArmed = 0;
 
 static const void* Port_ResolveCopySrc(const void* src, u32 size) {
-    if (Port_IsLoadedAssetBytes(src, size)) {
-        return src;
-    }
-    return port_resolve_addr((uintptr_t)src);
+    return port_resolve_copy_src(src, size);
 }
 
 typedef struct {
@@ -1178,13 +1172,17 @@ static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd)
 }
 
 void LZ77UnCompVram(const void* src, void* dst) {
-    void* resolved = port_resolve_addr((uintptr_t)dst);
-    lz77_decomp((const u8*)src, (u8*)resolved, Port_GbaRegionBytesLeft((uintptr_t)dst), Port_RomBufferEnd(src));
+    const void* resolvedSrc = port_resolve_copy_src(src, 4);
+    void* resolved = port_resolve_write_addr((uintptr_t)dst);
+    lz77_decomp((const u8*)resolvedSrc, (u8*)resolved, Port_GbaRegionBytesLeft((uintptr_t)dst),
+                Port_RomBufferEnd(resolvedSrc));
 }
 
 void LZ77UnCompWram(const void* src, void* dst) {
-    void* resolved = port_resolve_addr((uintptr_t)dst);
-    lz77_decomp((const u8*)src, (u8*)resolved, Port_GbaRegionBytesLeft((uintptr_t)dst), Port_RomBufferEnd(src));
+    const void* resolvedSrc = port_resolve_copy_src(src, 4);
+    void* resolved = port_resolve_write_addr((uintptr_t)dst);
+    lz77_decomp((const u8*)resolvedSrc, (u8*)resolved, Port_GbaRegionBytesLeft((uintptr_t)dst),
+                Port_RomBufferEnd(resolvedSrc));
 }
 
 /* CpuSet (SWI 0x0B) */
@@ -1194,7 +1192,7 @@ void CpuSet(const void* src, void* dst, u32 cnt) {
     int is32 = (cnt >> 26) & 1;
     u32 byteCount = is32 ? wordCount * 4 : wordCount * 2;
 
-    void* resolvedDst = port_resolve_addr((uintptr_t)dst);
+    void* resolvedDst = port_resolve_write_addr((uintptr_t)dst);
     const void* resolvedSrc = Port_ResolveCopySrc(src, byteCount);
 
     if (is32) {
@@ -1219,7 +1217,7 @@ void CpuFastSet(const void* src, void* dst, u32 cnt) {
     u32 wordCount = cnt & 0x1FFFFF; /* low 21 bits = 32-bit word count */
     int fill = (cnt >> 24) & 1;
 
-    void* resolvedDst = port_resolve_addr((uintptr_t)dst);
+    void* resolvedDst = port_resolve_write_addr((uintptr_t)dst);
     const void* resolvedSrc = Port_ResolveCopySrc(src, wordCount * 4);
 
     const u32* s = (const u32*)resolvedSrc;
@@ -1420,5 +1418,6 @@ void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset
  * destination: dstCap clamps a corrupt/hostile size header, and the source is
  * fenced to its ROM/asset buffer exactly like the engine paths. */
 void Port_LZ77DecompressToBuffer(const void* src, void* dst, size_t dstCap) {
-    lz77_decomp((const u8*)src, (u8*)dst, dstCap, Port_RomBufferEnd(src));
+    const void* resolvedSrc = port_resolve_copy_src(src, 4);
+    lz77_decomp((const u8*)resolvedSrc, (u8*)dst, dstCap, Port_RomBufferEnd(resolvedSrc));
 }

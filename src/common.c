@@ -295,7 +295,7 @@ u32 ClearBit(void* src, u32 bit) {
 
 void MemFill16(u32 value, void* dest, u32 size) {
 #ifdef PC_PORT
-    u16* d = (u16*)port_resolve_addr((uintptr_t)dest);
+    u16* d = (u16*)port_resolve_write_addr((uintptr_t)dest);
     u32 i;
     for (i = 0; i < size / 2; i++) {
         d[i] = (u16)value;
@@ -307,7 +307,7 @@ void MemFill16(u32 value, void* dest, u32 size) {
 
 void MemFill32(u32 value, void* dest, u32 size) {
 #ifdef PC_PORT
-    u32* d = (u32*)port_resolve_addr((uintptr_t)dest);
+    u32* d = (u32*)port_resolve_write_addr((uintptr_t)dest);
     u32 i;
     for (i = 0; i < size / 4; i++) {
         d[i] = value;
@@ -319,7 +319,7 @@ void MemFill32(u32 value, void* dest, u32 size) {
 
 void MemClear(void* dest, u32 size) {
 #ifdef PC_PORT
-    memset(port_resolve_addr((uintptr_t)dest), 0, size);
+    memset(port_resolve_write_addr((uintptr_t)dest), 0, size);
 #else
     DmaClear32(3, dest, size);
 #endif
@@ -327,8 +327,8 @@ void MemClear(void* dest, u32 size) {
 
 void MemCopy(const void* src, void* dest, u32 size) {
 #ifdef PC_PORT
-    void* resolvedDest = port_resolve_addr((uintptr_t)dest);
-    const void* resolvedSrc = Port_IsLoadedAssetBytes(src, size) ? src : port_resolve_addr((uintptr_t)src);
+    void* resolvedDest = port_resolve_write_addr((uintptr_t)dest);
+    const void* resolvedSrc = port_resolve_copy_src(src, size);
     memmove(resolvedDest, resolvedSrc, size);
 #else
     DmaCopy32(3, src, dest, size);
