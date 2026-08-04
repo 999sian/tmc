@@ -20,6 +20,7 @@
 #include "main.h"       /* gMain, SetTask, TASK_* */
 #include "save.h"       /* SaveFile, gSave */
 #include "fileselect.h" /* gMapDataBottomSpecial, ResetSaveFile */
+#include "flags.h"      /* SetGlobalFlag, prologue flags */
 #include "room.h"       /* gRoomControls */
 #include "message.h"    /* gMessage, MessageRequest (TMC_ROOMCAP_MSG hook) */
 #include "script.h"     /* gActiveScriptInfo, ScriptExecutionContext (TMC_ROOMCAP_PAN_PROBE) */
@@ -190,6 +191,11 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
         sv->saved_status.layer = (u8)l;
         gFileSelectState.saveStatus[0] = 1; /* SAVE_VALID */
         SetActiveSave(0);
+        if (getenv("TMC_ROOMCAP_STORY_SKIP")) {
+            SetGlobalFlag(START);
+            SetGlobalFlag(EZERO_1ST);
+            SetGlobalFlag(TABIDACHI);
+        }
         SetTask(TASK_GAME);
         booted = 1;
         fprintf(stderr, "[roomcap] frame %u: bootstrapped new game -> TASK_GAME (start 0x%02x/0x%02x)\n", frame, a, r);

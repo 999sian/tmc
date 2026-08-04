@@ -78,6 +78,15 @@ typedef struct {
     /*0xb004*/ u8 actTiles[MAX_MAP_SIZE * MAX_MAP_SIZE];
 } MapLayer;
 
+PORT_STATIC_ASSERT_OFFSET(MapLayer, mapData, 0x0004, 0x0008, "MapLayer.mapData offset drift");
+PORT_STATIC_ASSERT_OFFSET(MapLayer, collisionData, 0x2004, 0x2008, "MapLayer.collisionData offset drift");
+PORT_STATIC_ASSERT_OFFSET(MapLayer, mapDataOriginal, 0x3004, 0x3008, "MapLayer.mapDataOriginal offset drift");
+PORT_STATIC_ASSERT_OFFSET(MapLayer, tileTypes, 0x5004, 0x5008, "MapLayer.tileTypes offset drift");
+PORT_STATIC_ASSERT_OFFSET(MapLayer, tileIndices, 0x6004, 0x6008, "MapLayer.tileIndices offset drift");
+PORT_STATIC_ASSERT_OFFSET(MapLayer, subTiles, 0x7004, 0x7008, "MapLayer.subTiles offset drift");
+PORT_STATIC_ASSERT_OFFSET(MapLayer, actTiles, 0xb004, 0xb008, "MapLayer.actTiles offset drift");
+PORT_STATIC_ASSERT_SIZE(MapLayer, 0xc004, 0xc008, "MapLayer size drift");
+
 extern MapLayer gMapTop;
 extern MapLayer gMapBottom;
 
