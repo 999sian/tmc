@@ -19,6 +19,9 @@ No ROM or extracted game asset package is distributed in this repository. Each
 user must provide their own legally obtained compatible Game Boy Advance ROM on
 their own 3DS SD card.
 
+## Support me
+https://buymeacoffee.com/estebanpdn
+
 ## Project Status
 
 Current development line: `v0.11`
