@@ -167,6 +167,17 @@ void* Port_ResolveAreaRoomMapFromRom(u32 area, u32 room);
 void* Port_ResolveAreaPropertiesFromRom(u32 area, u32 room);
 void* Port_ResolveAreaExitsFromRom(u32 area, u32 room);
 
+/* Translate an offset in the original 32-bit GBA MapLayer layout to the
+ * corresponding offset in the native build. The only layout difference is
+ * the leading bgSettings pointer: four bytes on GBA/3DS and eight on PC64. */
+static inline size_t Port_MapLayerNativeOffset(u32 gbaOffset) {
+    const size_t gbaPointerSize = sizeof(u32);
+    if (gbaOffset < gbaPointerSize) {
+        return gbaOffset;
+    }
+    return (size_t)gbaOffset + offsetof(MapLayer, mapData) - gbaPointerSize;
+}
+
 /*
  * Resolve a raw GBA EWRAM address (0x02xxxxxx) to a native PC pointer.
  *
@@ -176,7 +187,8 @@ void* Port_ResolveAreaExitsFromRom(u32 area, u32 room);
  *
  * This function checks for known EWRAM globals first, applying struct-layout
  * adjustments where needed (e.g. MapLayer's bgSettings pointer is 4 bytes on
- * GBA but 8 on 64-bit PC). Falls back to gba_TryMemPtr for unknown addresses.
+ * GBA/3DS but 8 on 64-bit PC). Falls back to gba_TryMemPtr for unknown
+ * addresses.
  */
 void* Port_ResolveEwramPtr(u32 gba_addr);
 

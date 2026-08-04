@@ -987,14 +987,14 @@ void* Port_ResolveAreaExitsFromRom(u32 area, u32 room) {
 /*
  * Port_ResolveEwramPtr — resolve a GBA EWRAM address to a native PC pointer.
  *
- * On GBA, MapLayer (gMapBottom/gMapTop) starts with a 4-byte pointer bgSettings,
- * so mapData is at offset +4.  On 64-bit PC, bgSettings is 8 bytes, shifting all
- * subsequent fields by +4.  We compensate by adding that delta when the GBA
- * address falls within a MapLayer.
+ * On GBA, MapLayer (gMapBottom/gMapTop) starts with a 4-byte pointer bgSettings.
+ * Native 64-bit builds shift every later field by four bytes; 32-bit targets
+ * such as 3DS keep the original offsets. Translate from the actual native
+ * layout instead of applying the PC64 delta unconditionally.
  *
  * Known EWRAM globals (same addresses for USA and EU):
- *   0x02025EB0  gMapBottom      (MapLayer, ~0xC010 bytes)
- *   0x0200B650  gMapTop         (MapLayer, ~0xC010 bytes)
+ *   0x02025EB0  gMapBottom      (MapLayer, 0xC004 GBA bytes)
+ *   0x0200B650  gMapTop         (MapLayer, 0xC004 GBA bytes)
  *   0x02019EE0  gMapDataBottomSpecial
  *   0x02002F00  gMapDataTopSpecial
  */
@@ -1002,26 +1002,19 @@ void* Port_ResolveEwramPtr(u32 gba_addr) {
     /* --- gMapBottom (MapLayer at GBA 0x02025EB0) --- */
     {
         const u32 GBA_BASE = 0x02025EB0u;
-        const u32 GBA_SIZE = 0xC010u; /* sizeof(MapLayer) on GBA: 4 + 0xC00C = 0xC010 */
+        const u32 GBA_SIZE = 0xC004u;
         if (gba_addr >= GBA_BASE && gba_addr < GBA_BASE + GBA_SIZE) {
             u32 gba_off = gba_addr - GBA_BASE;
-            /*
-             * GBA layout:  bgSettings(4)  mapData(0x2000)  collisionData(0x1000) ...
-             * PC  layout:  bgSettings(8)  mapData(0x2000)  collisionData(0x1000) ...
-             * All fields after bgSettings are shifted by +4 on PC.
-             */
-            u32 pc_off = (gba_off < 4) ? gba_off : gba_off + 4;
-            return (u8*)&gMapBottom + pc_off;
+            return (u8*)&gMapBottom + Port_MapLayerNativeOffset(gba_off);
         }
     }
     /* --- gMapTop (MapLayer at GBA 0x0200B650) --- */
     {
         const u32 GBA_BASE = 0x0200B650u;
-        const u32 GBA_SIZE = 0xC010u;
+        const u32 GBA_SIZE = 0xC004u;
         if (gba_addr >= GBA_BASE && gba_addr < GBA_BASE + GBA_SIZE) {
             u32 gba_off = gba_addr - GBA_BASE;
-            u32 pc_off = (gba_off < 4) ? gba_off : gba_off + 4;
-            return (u8*)&gMapTop + pc_off;
+            return (u8*)&gMapTop + Port_MapLayerNativeOffset(gba_off);
         }
     }
     /* --- gMapDataBottomSpecial at GBA 0x02019EE0 --- */

@@ -5,6 +5,7 @@
 
 #include "port_asset_loader.h"
 #include "port_gba_mem.h"
+#include "port_rom.h"
 
 u8* gRomData;
 u32 gRomSize;
@@ -51,6 +52,13 @@ int main(void) {
     CHECK(port_resolve_copy_src(fakeRom + 16, 4) == fakeRom + 16, "native ROM copy source stays native");
     CHECK(port_resolve_copy_src(&stackValue, sizeof(stackValue)) == &stackValue,
           "ordinary native copy source stays native");
+
+    CHECK(Port_MapLayerNativeOffset(0x0004u) == offsetof(MapLayer, mapData),
+          "GBA MapLayer mapData offset translates to native layout");
+    CHECK(Port_MapLayerNativeOffset(0x7004u) == offsetof(MapLayer, subTiles),
+          "GBA MapLayer subTiles offset translates to native layout");
+    CHECK(Port_MapLayerNativeOffset(0xb004u) == offsetof(MapLayer, actTiles),
+          "GBA MapLayer actTiles offset translates to native layout");
 
     if (sFailures == 0) {
         puts("port_gba_mem_test: ALL PASS");

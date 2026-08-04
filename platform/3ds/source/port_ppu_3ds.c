@@ -12,7 +12,11 @@
 #include "virtuappu.h"
 #include "cpu/mode1.h"
 #include "main.h"
+#include "map.h"
 #include "menu.h"
+#include "room.h"
+#include "tileMap.h"
+#include "vram.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -166,6 +170,24 @@ void Port_PPU_3DS_WriteQuickDump(void) {
     WriteBlob(path, gOamMem, sizeof(gOamMem));
     snprintf(path, sizeof(path), "%s/main-state.bin", dir);
     WriteBlob(path, &gMain, sizeof(gMain));
+    snprintf(path, sizeof(path), "%s/room-controls.bin", dir);
+    WriteBlob(path, &gRoomControls, sizeof(gRoomControls));
+    snprintf(path, sizeof(path), "%s/map-bottom-layer.bin", dir);
+    WriteBlob(path, &gMapBottom, sizeof(gMapBottom));
+    snprintf(path, sizeof(path), "%s/map-top-layer.bin", dir);
+    WriteBlob(path, &gMapTop, sizeof(gMapTop));
+    snprintf(path, sizeof(path), "%s/map-bottom-special.bin", dir);
+    WriteBlob(path, gMapDataBottomSpecial, sizeof(gMapDataBottomSpecial));
+    snprintf(path, sizeof(path), "%s/map-top-special.bin", dir);
+    WriteBlob(path, gMapDataTopSpecial, sizeof(gMapDataTopSpecial));
+    snprintf(path, sizeof(path), "%s/bg0-buffer.bin", dir);
+    WriteBlob(path, gBG0Buffer, sizeof(gBG0Buffer));
+    snprintf(path, sizeof(path), "%s/bg1-buffer.bin", dir);
+    WriteBlob(path, gBG1Buffer, sizeof(gBG1Buffer));
+    snprintf(path, sizeof(path), "%s/bg2-buffer.bin", dir);
+    WriteBlob(path, gBG2Buffer, sizeof(gBG2Buffer));
+    snprintf(path, sizeof(path), "%s/bg3-buffer.bin", dir);
+    WriteBlob(path, gBG3Buffer, sizeof(gBG3Buffer));
 
     snprintf(path, sizeof(path), "%s/info.txt", dir);
     FILE* info = fopen(path, "wb");
@@ -366,10 +388,27 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "DISPCNT: 0x%04X; display mode: %u\n", dumpDispcnt, dumpMode);
         fprintf(info, "VRAM/EWRAM/IWRAM bytes: %lu/%lu/%lu\n",
                 (unsigned long)sizeof(gVram), (unsigned long)sizeof(gEwram), (unsigned long)sizeof(gIwram));
+        fprintf(info, "Native pointer / MapLayer bytes: %lu/%lu\n",
+                (unsigned long)sizeof(void*), (unsigned long)sizeof(MapLayer));
+        fprintf(info, "MapLayer native offsets: map=0x%lX collision=0x%lX original=0x%lX "
+                      "types=0x%lX indices=0x%lX subtiles=0x%lX act=0x%lX\n",
+                (unsigned long)offsetof(MapLayer, mapData), (unsigned long)offsetof(MapLayer, collisionData),
+                (unsigned long)offsetof(MapLayer, mapDataOriginal), (unsigned long)offsetof(MapLayer, tileTypes),
+                (unsigned long)offsetof(MapLayer, tileIndices), (unsigned long)offsetof(MapLayer, subTiles),
+                (unsigned long)offsetof(MapLayer, actTiles));
+        fprintf(info, "Room area/id/origin/size/scroll: 0x%02X/0x%02X, %d,%d, %u,%u, %d,%d\n",
+                gRoomControls.area, gRoomControls.room, gRoomControls.origin_x, gRoomControls.origin_y,
+                gRoomControls.width, gRoomControls.height, gRoomControls.scroll_x, gRoomControls.scroll_y);
+        fprintf(info, "Map BG controls: bottom=0x%04X top=0x%04X\n",
+                gMapBottom.bgSettings ? gMapBottom.bgSettings->control : 0,
+                gMapTop.bgSettings ? gMapTop.bgSettings->control : 0);
 
         fprintf(info, "\n[Files]\n");
         fprintf(info, "top-screen.bmp, bottom-screen.bmp, top-screen.raw, bottom-screen.raw\n");
         fprintf(info, "ewram.bin, iwram.bin, vram.bin, io-registers.bin, palettes.bin, oam.bin, main-state.bin\n");
+        fprintf(info, "room-controls.bin, map-bottom-layer.bin, map-top-layer.bin\n");
+        fprintf(info, "map-bottom-special.bin, map-top-special.bin, bg0-buffer.bin, bg1-buffer.bin, "
+                      "bg2-buffer.bin, bg3-buffer.bin\n");
         fprintf(info, "Trigger: L + R + A\n");
         fclose(info);
     }
