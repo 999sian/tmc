@@ -20,6 +20,12 @@ static bool sReady;
 static PlatformGpu3DSStats sStats;
 static C2D_TextBuf sStatusTextBuffer;
 static C2D_Font sStatusFont;
+static unsigned sTopPresentWidth = 240;
+
+enum {
+    TOP_TEXTURE_WIDTH = 512,
+    TOP_TEXTURE_HEIGHT = 256,
+};
 
 extern u32 __ctru_linear_heap;
 extern u32 __ctru_linear_heap_size;
@@ -60,14 +66,14 @@ bool PlatformGpu3DS_Init(void) {
     memset(&sStats, 0, sizeof(sStats));
     sC2dFlushBase = NULL;
     sC2dFlushSize = 0;
-    sTopUpload = (uint32_t*)linearMemAlign(256u * 256u * sizeof(uint32_t), 0x80);
+    sTopUpload = (uint32_t*)linearMemAlign(TOP_TEXTURE_WIDTH * TOP_TEXTURE_HEIGHT * sizeof(uint32_t), 0x80);
     sBottomUploads[0] = (uint32_t*)linearMemAlign(512u * 256u * sizeof(uint32_t), 0x80);
     sBottomUploads[1] = (uint32_t*)linearMemAlign(512u * 256u * sizeof(uint32_t), 0x80);
     if (!sTopUpload || !sBottomUploads[0] || !sBottomUploads[1]) goto fail_linear;
-    memset(sTopUpload, 0, 256u * 256u * sizeof(uint32_t));
+    memset(sTopUpload, 0, TOP_TEXTURE_WIDTH * TOP_TEXTURE_HEIGHT * sizeof(uint32_t));
     memset(sBottomUploads[0], 0, 512u * 256u * sizeof(uint32_t));
     memset(sBottomUploads[1], 0, 512u * 256u * sizeof(uint32_t));
-    GSPGPU_FlushDataCache(sTopUpload, 256u * 256u * sizeof(uint32_t));
+    GSPGPU_FlushDataCache(sTopUpload, TOP_TEXTURE_WIDTH * TOP_TEXTURE_HEIGHT * sizeof(uint32_t));
     GSPGPU_FlushDataCache(sBottomUploads[0], 512u * 256u * sizeof(uint32_t));
     GSPGPU_FlushDataCache(sBottomUploads[1], 512u * 256u * sizeof(uint32_t));
     if (!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE)) goto fail_linear;
@@ -99,7 +105,7 @@ bool PlatformGpu3DS_Init(void) {
     sStats.topUploadAddress = (uintptr_t)sTopUpload;
     sStats.bottomUploadAddress[0] = (uintptr_t)sBottomUploads[0];
     sStats.bottomUploadAddress[1] = (uintptr_t)sBottomUploads[1];
-    if (!C3D_TexInitVRAM(&sTopTexture, 256, 256, GPU_RGBA8)) goto fail;
+    if (!C3D_TexInitVRAM(&sTopTexture, TOP_TEXTURE_WIDTH, TOP_TEXTURE_HEIGHT, GPU_RGBA8)) goto fail;
     if (!C3D_TexInitVRAM(&sBottomTexture, 512, 256, GPU_RGBA8)) goto fail_top_texture;
     C3D_TexSetFilter(&sTopTexture, GPU_NEAREST, GPU_NEAREST);
     C3D_TexSetFilter(&sBottomTexture, GPU_NEAREST, GPU_NEAREST);
@@ -146,29 +152,39 @@ uint32_t* PlatformGpu3DS_BottomBuffer(unsigned index) {
     return index < 2 ? sBottomUploads[index] : NULL;
 }
 
-void PlatformGpu3DS_BeginTop(const uint32_t* pixels) {
-    if (!sReady || !pixels) return;
-    if (!C3D_FrameBegin(0)) {
-        ++sStats.frameBeginFailures;
-        return;
-    }
-    sFrameActive = true;
-    GSPGPU_FlushDataCache(pixels, 256u * 160u * sizeof(uint32_t));
-    C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(256, 256),
-                            (u32*)sTopTexture.data, GX_BUFFER_DIM(256, 256), TextureTransfer());
+static void DrawTopImage(const uint32_t* pixels, unsigned width) {
+    if (width < 240u) width = 240u;
+    if (width > 266u) width = 266u;
+    sTopPresentWidth = width;
+
+    GSPGPU_FlushDataCache(pixels, TOP_TEXTURE_WIDTH * 160u * sizeof(uint32_t));
+    C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, TOP_TEXTURE_HEIGHT),
+                            (u32*)sTopTexture.data, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, TOP_TEXTURE_HEIGHT),
+                            TextureTransfer());
     sTopSubtexture = (Tex3DS_SubTexture){
-        .width = 240, .height = 160, .left = 0.0f, .top = 1.0f,
-        .right = 240.0f / 256.0f, .bottom = 1.0f - 160.0f / 256.0f,
+        .width = (u16)width, .height = 160, .left = 0.0f, .top = 1.0f,
+        .right = (float)width / TOP_TEXTURE_WIDTH, .bottom = 1.0f - 160.0f / TOP_TEXTURE_HEIGHT,
     };
     const C2D_Image image = { .tex = &sTopTexture, .subtex = &sTopSubtexture };
+    float drawW = width >= 266u ? 400.0f : (float)width * 1.5f;
     const C2D_DrawParams params = {
-        .pos = { .x = 20.0f, .y = 0.0f, .w = 360.0f, .h = 240.0f },
+        .pos = { .x = (400.0f - drawW) * 0.5f, .y = 0.0f, .w = drawW, .h = 240.0f },
         .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
     };
     C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
     ConfigureAbgrTextureEnv();
+}
+
+void PlatformGpu3DS_BeginTop(const uint32_t* pixels, unsigned width) {
+    if (!sReady || !pixels) return;
+    if (!C3D_FrameBegin(0)) {
+        ++sStats.frameBeginFailures;
+        return;
+    }
+    sFrameActive = true;
+    DrawTopImage(pixels, width);
     ++sStats.topTransfers;
 }
 
@@ -208,22 +224,7 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
 void PlatformGpu3DS_ShowDumpingOverlay(void) {
     if (!sReady || !sTopUpload || !sBottomUploads[0] || !C3D_FrameBegin(0)) return;
     sFrameActive = true;
-    GSPGPU_FlushDataCache(sTopUpload, 256u * 160u * sizeof(uint32_t));
-    C3D_SyncDisplayTransfer(sTopUpload, GX_BUFFER_DIM(256, 256),
-                            (u32*)sTopTexture.data, GX_BUFFER_DIM(256, 256), TextureTransfer());
-    sTopSubtexture = (Tex3DS_SubTexture){
-        .width = 240, .height = 160, .left = 0.0f, .top = 1.0f,
-        .right = 240.0f / 256.0f, .bottom = 1.0f - 160.0f / 256.0f,
-    };
-    const C2D_Image topImage = { .tex = &sTopTexture, .subtex = &sTopSubtexture };
-    const C2D_DrawParams topParams = {
-        .pos = { .x = 20.0f, .y = 0.0f, .w = 360.0f, .h = 240.0f },
-        .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
-    };
-    C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
-    C2D_SceneBegin(sTopTarget);
-    C2D_DrawImage(topImage, &topParams, NULL);
-    ConfigureAbgrTextureEnv();
+    DrawTopImage(sTopUpload, sTopPresentWidth);
     C2D_DrawRectSolid(122.0f, 12.0f, 0.5f, 156.0f, 34.0f, C2D_Color32(0, 0, 0, 220));
     if (sStatusTextBuffer && sStatusFont) {
         C2D_Text text;

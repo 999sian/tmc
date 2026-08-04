@@ -70,9 +70,13 @@ PARITY="$WORK/ppu_parity"
 # affect the hash — it just matches the game's release flags on x86).
 SIMD=""
 case "$(uname -m)" in x86_64|amd64) SIMD="-mavx2 -mfma";; esac
+OPENMP=""
+if printf '' | gcc -x c -fopenmp -c -o /dev/null - >/dev/null 2>&1; then
+    OPENMP="-fopenmp"
+fi
 
 echo "[parity] PPU source: $PPU_SRC"
-gcc -O3 $SIMD -fopenmp -I "$PPU_INC" -DMODE1_GBA_WIDTH="$MODE1_GBA_WIDTH" \
+gcc -O3 $SIMD $OPENMP -I "$PPU_INC" -DMODE1_GBA_WIDTH="$MODE1_GBA_WIDTH" \
     "$ROOT/tools/ppu_parity.c" "$PPU_SRC"/virtuappu.c "$PPU_SRC"/mode*.c \
     -o "$PARITY" -lm
 
@@ -82,6 +86,7 @@ gcc -O3 $SIMD -fopenmp -I "$PPU_INC" -DMODE1_GBA_WIDTH="$MODE1_GBA_WIDTH" \
 # capture <spec> <out.bin>  -> echoes the Tier B frame_hash on stdout
 capture() {
     local spec="$1" out="$2" warp="" atframe="" log="$WORK/cap.log"
+    local timeout_cmd=""
     case "$spec" in
         warp=*)    warp="${spec#warp=}";;
         atframe=*) atframe="${spec#atframe=}";;
@@ -92,7 +97,12 @@ capture() {
     # be visible to the capture. Assets resolve from the exe dir, not cwd.
     local capdir="$WORK/capcwd"
     mkdir -p "$capdir"
-    timeout -s KILL 90 env \
+    if command -v timeout >/dev/null 2>&1; then
+        timeout_cmd="timeout -s KILL 90"
+    elif command -v gtimeout >/dev/null 2>&1; then
+        timeout_cmd="gtimeout -s KILL 90"
+    fi
+    $timeout_cmd env \
         TMC_AUTOPLAY=1 TMC_PERFCAP=1 \
         ${warp:+TMC_PERFCAP_WARP="$warp"} \
         ${atframe:+TMC_PERFCAP_AT_FRAME="$atframe"} \
@@ -103,17 +113,11 @@ capture() {
         SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
         TMC_BASEROM="$TMC_BASEROM" \
         sh -c "cd '$capdir' && exec '$TMC_PC' --no-audio" >"$log" 2>&1 || true
-    grep -oE 'frame_hash=0x[0-9a-f]+' "$log" | tail -1 | sed 's/frame_hash=//'
+    grep -oE 'frame_hash=0x[0-9a-f]+' "$log" | tail -1 | sed 's/frame_hash=//' || true
 }
 
-declare -A GOLD_A GOLD_B
 if [ "$UPDATE" = 0 ]; then
     [ -f "$GOLDEN" ] || { echo "[parity] FATAL: no golden file; run --update first"; exit 3; }
-    while IFS=$'\t' read -r reg name a b; do
-        [ "${reg:0:1}" = "#" ] && continue
-        [ -z "${name:-}" ] && continue
-        GOLD_A["$reg/$name"]="$a"; GOLD_B["$reg/$name"]="$b"
-    done < "$GOLDEN"
 fi
 
 TMP_GOLDEN="$WORK/golden.txt"   # data rows only; header prepended at write time
@@ -137,7 +141,14 @@ while IFS=$'\t' read -r name regions spec _desc; do
         printf '%s\t%s\t%s\t%s\n' "$TMC_REGION" "$name" "$tierA" "$tierB" >> "$TMP_GOLDEN"
         echo "[parity] record $key  A=$tierA  B=$tierB"
     else
-        ea="${GOLD_A[$key]:-?}"; eb="${GOLD_B[$key]:-?}"
+        expected="$(awk -F '\t' -v reg="$TMC_REGION" -v scene="$name" \
+            '$1 == reg && $2 == scene { print $3 "\t" $4; exit }' "$GOLDEN")"
+        if [ -n "$expected" ]; then
+            ea="${expected%%$'\t'*}"
+            eb="${expected#*$'\t'}"
+        else
+            ea="?"; eb="?"
+        fi
         if [ "$tierA" = "$ea" ] && [ "$tierB" = "$eb" ]; then
             echo "[parity] PASS $key  A=$tierA  B=$tierB"
         else

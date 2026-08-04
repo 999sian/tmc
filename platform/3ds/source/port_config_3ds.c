@@ -13,6 +13,7 @@ static bool sHoldText;
 static bool sColorCorrection;
 static bool sAutosave;
 static bool sConsoleParity;
+static bool sWidescreen = true;
 /* The desktop file-select overlay is rendered on the gameplay screen and
  * has no useful 3DS interaction path. Keep the native second-screen UI
  * separate and leave this desktop-only overlay disabled. */
@@ -49,9 +50,9 @@ float Port_Config_TouchScale(void) { return 1.0f; }
 void Port_Config_SetTouchScale(float scale) { (void)scale; }
 float Port_Config_TouchOpacity(void) { return 1.0f; }
 void Port_Config_SetTouchOpacity(float opacity) { (void)opacity; }
-bool Port_Config_WidescreenEnabled(void) { return false; }
-void Port_Config_SetWidescreenEnabled(bool enabled) { (void)enabled; }
-void Port_Config_ToggleWidescreen(void) {}
+bool Port_Config_WidescreenEnabled(void) { return sWidescreen; }
+void Port_Config_SetWidescreenEnabled(bool enabled) { sWidescreen = enabled; }
+void Port_Config_ToggleWidescreen(void) { sWidescreen = !sWidescreen; }
 bool Port_Config_GetConsoleParity(void) { return sConsoleParity; }
 void Port_Config_SetConsoleParity(bool on) { sConsoleParity = on; }
 void Port_Config_ToggleConsoleParity(void) { sConsoleParity = !sConsoleParity; }

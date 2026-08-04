@@ -84,7 +84,7 @@ target_include_directories(tmc-3ds PRIVATE
 
 target_compile_definitions(tmc-3ds PRIVATE
     PC_PORT NON_MATCHING USE_HDMA TMC_3DS USA ENGLISH REVISION=0
-    MODE1_GBA_WIDTH=240 TMC_PORT_VERSION="${TMC_3DS_VERSION}" TMC_PC_VERSION="${TMC_3DS_VERSION}"
+    MODE1_GBA_WIDTH=266 TMC_PORT_VERSION="${TMC_3DS_VERSION}" TMC_PC_VERSION="${TMC_3DS_VERSION}"
 )
 target_compile_features(tmc-3ds PRIVATE c_std_11 cxx_std_20)
 set_target_properties(tmc-3ds PROPERTIES

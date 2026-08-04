@@ -10,8 +10,7 @@ extern u32 gRomSize;
 
 #ifdef PC_PORT
 /*
- * Host-pointer plausibility guard. Same range logic as the inline check in
- * src/collision.c::IsColliding (keep the two in sync): reject NULL,
+ * Host-pointer plausibility guard: reject NULL,
  * low/half-pointer-write garbage, raw GBA addresses that leaked through
  * unconverted, kernel-space, and sign-extended negatives; accept anything
  * that could be a live host allocation. Use to gate a deref on paths that
@@ -19,6 +18,10 @@ extern u32 gRomSize;
  * interactable scan in src/playerUtils.c::sub_080784E4.
  *
  * Bounds are per-ABI, NOT per-distro:
+ *  - 3DS: query the ARM11 memory map. Persistent engine pointers cannot live
+ *    in the numeric GBA address window; accepting that window would turn raw
+ *    GBA addresses into host pointers because the application stack overlaps
+ *    cartridge space. The separately allocated ROM buffer is accepted first.
  *  - Windows: user mode is the low 128 TB; heap can sit as low as ~0x10000.
  *  - Other 64-bit (Linux/Android/macOS): accept (4 GiB, 2^48). The old
  *    lower bound of 2^44 was an x86_64-Linux-only artifact — Android
@@ -30,7 +33,17 @@ extern u32 gRomSize;
  */
 static inline int Port_IsValidHostPtr(const void* p) {
     uintptr_t a = (uintptr_t)p;
-#if defined(_WIN32)
+#if defined(TMC_3DS)
+    extern int Platform3DS_IsNativeAddress(uintptr_t value);
+    uintptr_t rom = (uintptr_t)gRomData;
+    if (p == NULL)
+        return 0;
+    if (gRomData != NULL && a >= rom && a < rom + (uintptr_t)gRomSize)
+        return 1;
+    if (a >= 0x02000000u && a < 0x0A000000u)
+        return 0;
+    return Platform3DS_IsNativeAddress(a);
+#elif defined(_WIN32)
     return a >= 0x10000ULL && a < 0x800000000000ULL;
 #else
     return a > 0xFFFFFFFFULL && a < 0x1000000000000ULL;

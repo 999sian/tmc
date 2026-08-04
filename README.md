@@ -34,7 +34,8 @@ https://ko-fi.com/estebanpdn
 
 - Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
   builds.
-- Fullscreen top-screen gameplay at 360x240 with nearest-neighbor scaling.
+- True widescreen gameplay across the 400x240 top screen, with centered
+  360x240 native presentation for fixed-width scenes.
 - Bottom screen with live map, dungeon information, quest status and touch item
   UI.
 - PICA200/Citro2D presentation for the top and bottom screens.
@@ -55,7 +56,7 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install `tmc-3ds-v0.11.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.12.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -111,8 +112,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.11.cia
-build-3ds/game/tmc-3ds-v0.11.3dsx
+build-3ds/game/tmc-3ds-v0.12.cia
+build-3ds/game/tmc-3ds-v0.12.3dsx
 ```
 
 The build does not embed a ROM.

@@ -53,6 +53,30 @@ static uint64_t fb_checksum(int w, int h, int pitch) {
     return hsh;
 }
 
+static int write_ppm(const char* path, int w, int h, int pitch) {
+    FILE* f = fopen(path, "wb");
+    if (!f) {
+        perror("open output");
+        return 0;
+    }
+    fprintf(f, "P6\n%d %d\n255\n", w, h);
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            uint32_t abgr = virtuappu_frame_buffer[(size_t)y * pitch + x];
+            uint8_t rgb[3] = {
+                (uint8_t)(abgr & 0xffu),
+                (uint8_t)((abgr >> 8u) & 0xffu),
+                (uint8_t)((abgr >> 16u) & 0xffu),
+            };
+            if (fwrite(rgb, 1, sizeof(rgb), f) != sizeof(rgb)) {
+                fclose(f);
+                return 0;
+            }
+        }
+    }
+    return fclose(f) == 0;
+}
+
 static int load_snapshot(const char* path) {
     FILE* f = fopen(path, "rb");
     if (!f) { perror("open snapshot"); return 0; }
@@ -94,6 +118,10 @@ int main(int argc, char** argv) {
     virtuappu_render_frame();
 
     uint64_t csum = fb_checksum(MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT, MODE1_GBA_WIDTH);
+
+    if (argc > 2 && !write_ppm(argv[2], MODE1_GBA_WIDTH, MODE1_GBA_HEIGHT, MODE1_GBA_WIDTH)) {
+        return 3;
+    }
 
     fprintf(stderr, "snapshot=%s dispcnt=0x%04x gba_mode=%d vppu_mode=%u width=%d\n",
             path, dispcnt, gba_mode, (unsigned)vppu_mode, MODE1_GBA_WIDTH);
