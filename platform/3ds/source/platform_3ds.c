@@ -37,6 +37,12 @@ static uint64_t sAptChecks;
 static uint64_t sFrameBoundaryEndTick;
 static uintptr_t sStackRegionBase;
 static uintptr_t sStackRegionEnd;
+typedef struct {
+    uintptr_t base;
+    uintptr_t end;
+} NativeMemoryRegion;
+static NativeMemoryRegion sNativeMemoryRegions[8];
+static unsigned sNativeMemoryRegionCount;
 static Thread sBottomWorkerThread;
 static LightEvent sBottomWorkerStart;
 static LightEvent sBottomWorkerDone;
@@ -69,6 +75,8 @@ int Platform3DS_Init(void) {
     sFrameBoundaryEndTick = 0;
     sStackRegionBase = 0;
     sStackRegionEnd = 0;
+    sNativeMemoryRegionCount = 0;
+    memset(sNativeMemoryRegions, 0, sizeof(sNativeMemoryRegions));
     gfxInit(GSP_RGB565_OES, GSP_RGB565_OES, false);
     gfxSet3D(false);
     cfguInit();
@@ -224,12 +232,23 @@ int Platform3DS_IsNativeAddress(uintptr_t value) {
 
     if (value >= sStackRegionBase && value < sStackRegionEnd) return 1;
 
+    for (unsigned i = 0; i < sNativeMemoryRegionCount; ++i) {
+        if (value >= sNativeMemoryRegions[i].base && value < sNativeMemoryRegions[i].end) return 1;
+    }
+
     MemInfo info;
     PageInfo pageInfo;
     if (R_FAILED(svcQueryMemory(&info, &pageInfo, (u32)value))) return 0;
     if (info.base_addr == 0 || info.size == 0) return 0;
     if (value < info.base_addr || value >= info.base_addr + info.size) return 0;
-    return (info.perm & (MEMPERM_READ | MEMPERM_WRITE)) != 0u;
+    if ((info.perm & (MEMPERM_READ | MEMPERM_WRITE)) == 0u) return 0;
+
+    if (sNativeMemoryRegionCount < sizeof(sNativeMemoryRegions) / sizeof(sNativeMemoryRegions[0])) {
+        NativeMemoryRegion* region = &sNativeMemoryRegions[sNativeMemoryRegionCount++];
+        region->base = info.base_addr;
+        region->end = info.base_addr + info.size;
+    }
+    return 1;
 }
 
 int Platform3DS_IsActiveStackAddress(uintptr_t value) {

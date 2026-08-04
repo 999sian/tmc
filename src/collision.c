@@ -15,6 +15,7 @@
 
 #ifdef PC_PORT
 #include "port/port_generic_entity.h"
+#include "port/port_rom.h"
 #else
 #define GE_FIELD(ent, fname) (&((GenericEntity*)(ent))->fname)
 #endif
@@ -188,44 +189,13 @@ bool32 IsColliding(Entity* this, Entity* that) {
         Hitbox* bb_this = this->hitbox;
         Hitbox* bb_that = that->hitbox;
 #ifdef PC_PORT
-        /* Port-side guard: on GBA a NULL/garbage hitbox dereferenced through
-         * 0x000000xx returns BIOS code bytes — odd but doesn't fault. On
-         * PC a stale or unset hitbox is genuine garbage and SIGSEGVs the
-         * first u8 load below. Reject NULL plus "looks bogus" pointers —
-         * a real host pointer on Linux x86_64 lands in the binary's
-         * 0x55xx... or mmap's 0x7Fxx... range, never below 0x10000_00000000.
-         * Catches the half-pointer-write hazard where the
-         * upper 32 bits are garbage but the low 32 look numerically
-         * plausible (e.g. seen here: 0x40201000101).  Same class of fix as
-         * src/npc/cat.c (#91) and src/projectile/darkNutSwordSlash.c (#97). */
+        /* Keep entity collision and the interaction scan on the same
+         * per-platform pointer policy. In particular, 3DS pointers are 32-bit
+         * and must be checked against the ARM11 memory map, not a 64-bit ABI
+         * threshold. */
         {
-            uintptr_t pa = (uintptr_t)bb_this;
-            uintptr_t pb = (uintptr_t)bb_that;
-#if defined(_WIN32)
-            /* Windows / Wine: user-mode pointers are in the low ~128 TB
-             * (heap typically 0x000001XX_XXXXXXXX, exe/DLL 0x00007FFE_...).
-             * The Linux check below would reject *every* valid Windows
-             * pointer (Wine puts entities at ~0x140_XXXXX ≈ 5 GB, way
-             * under 17.5 TB), silently flipping IsColliding to FALSE for
-             * every entity pair — symptom: no enemy damages Link, Link
-             * can't damage enemies. Use a much looser check here that
-             * still rules out NULL + first 64 KB. We lose the Linux
-             * heuristic for half-pointer-write detection, but the
-             * cross-process quicksave path that motivated the guard
-             * doesn't apply on Windows portably anyway. */
-            int pa_bad = pa < 0x10000ULL || pa >= 0x800000000000ULL;
-            int pb_bad = pb < 0x10000ULL || pb >= 0x800000000000ULL;
-#else
-            /* 64-bit Linux/Android/macOS: accept (4 GiB, 2^48). Rejects NULL,
-             * low garbage (half-pointer-write), raw GBA addresses, kernel
-             * space and sign-extended negatives (-6 = 0xFFFF...FFFA). The old
-             * lower bound of 2^44 was an x86_64-Linux artifact: Android
-             * aarch64 commonly runs a 39-bit VA kernel, so EVERY valid
-             * pointer sat below it and all collision died on device. Keep in
-             * sync with Port_IsValidHostPtr (port/port_rom.h). */
-            int pa_bad = pa <= 0xFFFFFFFFULL || pa >= 0x1000000000000ULL;
-            int pb_bad = pb <= 0xFFFFFFFFULL || pb >= 0x1000000000000ULL;
-#endif
+            int pa_bad = !Port_IsValidHostPtr(bb_this);
+            int pb_bad = !Port_IsValidHostPtr(bb_that);
             if (pa_bad || pb_bad) {
                 static int s_warned = 0;
                 if (s_warned < 8) {
@@ -233,9 +203,9 @@ bool32 IsColliding(Entity* this, Entity* that) {
                     fprintf(stderr,
                             "[IsColliding] bad hitbox: this kind=%u id=0x%X type=%u hb=%p%s | "
                             "that kind=%u id=0x%X type=%u hb=%p%s\n",
-                            (unsigned)this->kind, (unsigned)this->id, (unsigned)this->type, (void*)pa,
+                            (unsigned)this->kind, (unsigned)this->id, (unsigned)this->type, (void*)bb_this,
                             pa_bad ? " (BAD)" : "", (unsigned)that->kind, (unsigned)that->id, (unsigned)that->type,
-                            (void*)pb, pb_bad ? " (BAD)" : "");
+                            (void*)bb_that, pb_bad ? " (BAD)" : "");
                 }
                 return FALSE;
             }

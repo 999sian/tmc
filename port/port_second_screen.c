@@ -2115,22 +2115,30 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     int32_t ik = 2 * k;              /* icon scale (16x16 art) */
     int32_t ck = k + (k + 1) / 2;    /* digit scale (8x16 HUD font) */
     int32_t chipTs = ts > 2 ? 2 : ts;
-    float chipPad = 8 * chipTs + 4 * u;
-    float chipH = chipRows * 16 * ik + (chipRows - 1) * 6 * u + 2 * chipPad;
+    float chipPad = 2 * chipTs + 4 * u;
+    float numberW = 3 * 8 * ck;
+    float groupGap = 8 * u;
+    float innerW = w - 2 * chipPad;
+    while (ik > 1 && 16 * ik + groupGap + numberW > innerW) --ik;
+    while (ck > 1 && 16 * ik + groupGap + 3 * 8 * ck > innerW) --ck;
+    numberW = 3 * 8 * ck;
+    float rowH = 16 * (ik > ck ? ik : ck);
+    float chipH = chipRows * rowH + (chipRows - 1) * 6 * u + 2 * chipPad;
     float chipY = y + h - chipH;
     Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)x, (int32_t)chipY, (int32_t)w,
                                     (int32_t)chipH, chipTs);
     {
         float ry = chipY + chipPad;
-        float ixl = x + chipPad;
-        float ixr = x + w - chipPad;
+        float groupW = 16 * ik + groupGap + numberW;
+        float ixl = x + (w - groupW) / 2;
+        float ixr = ixl + groupW;
         float dy = (16 * ik - 16 * ck) / 2.0f; /* digits centered on the icon row */
         BlitSprite(s, Port_SecondScreenTheme_Get(SST_RUPEE_WALLET0 + (snap->walletType & 3)), (int32_t)ixl,
                    (int32_t)ry, ik);
         DrawHudNumber(s, (int32_t)ixr, (int32_t)(ry + dy), ck, snap->rupees, 3,
                       snap->walletMax != 0 && snap->rupees >= snap->walletMax);
         if (isDungeon) {
-            ry += 16 * ik + 6 * u;
+            ry += rowH + 6 * u;
             BlitSprite(s, Port_SecondScreenTheme_Get(SST_KEY), (int32_t)ixl, (int32_t)ry, ik);
             DrawHudNumber(s, (int32_t)ixr, (int32_t)(ry + dy), ck, snap->dungeonKeys, 2, 0);
         }
@@ -2274,7 +2282,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     float tabH = 96 * u;
     float sideW = 220 * u; /* widened for the grown rings/chip; map stays dominant */
     float mx0 = 10 * u, my0 = 10 * u;
-    float mx1 = width - sideW - 4 * u;
+    float mx1 = tab == SS_TAB_SETTINGS ? width - 10 * u : width - sideW - 4 * u;
     float my1 = height - tabH - 4 * u;
 
     TargetList tl = { .n = 0 };
@@ -2306,8 +2314,10 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
         }
     }
 
-    PaintSidebar(&s, snap, &tl, width - sideW + 4 * u, 10 * u, sideW - 14 * u, height - tabH - 14 * u, u,
-                 ts, tick, armedRing);
+    if (tab != SS_TAB_SETTINGS) {
+        PaintSidebar(&s, snap, &tl, width - sideW + 4 * u, 10 * u, sideW - 14 * u, height - tabH - 14 * u, u,
+                     ts, tick, armedRing);
+    }
     PaintTabBar(&s, &tl, u, ts, tab);
 
     /* Publish this frame's hit boxes for the tap thread. */

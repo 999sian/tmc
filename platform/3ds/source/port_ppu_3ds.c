@@ -2,10 +2,12 @@
 
 #include "port_gba_mem.h"
 #include "port_hdma.h"
+#include "port_runtime_config.h"
 #include "port_audio_3ds.h"
 #include "port_save.h"
 #include "port_second_screen.h"
 #include "port_second_screen_state.h"
+#include "port_widescreen.h"
 #include "platform_3ds.h"
 #include "platform_gpu_3ds.h"
 
@@ -26,8 +28,9 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#define GBA_W 240
+#define GBA_NATIVE_W 240
 #define GBA_H 160
+#define TOP_PITCH 512
 
 static uint32_t* sBottomUploads[2];
 static uint32_t* sTopUpload;
@@ -62,6 +65,17 @@ static uint64_t sPerfIntervalMaxTicks;
 static uint64_t sPerfIntervalSamples;
 static uint64_t sPerfFramesOver16ms;
 static uint64_t sPerfFramesOver33ms;
+static int sTopPresentWidth = GBA_NATIVE_W;
+
+static int TopFrameWidth(void) {
+    Port_Widescreen_SetWindowPixels(400, 240);
+    if (Port_Widescreen_IsActive() && Port_Widescreen_ShadowsLive()) {
+        int width = Port_Widescreen_EffectiveViewWidth();
+        if (width > MODE1_GBA_WIDTH) width = MODE1_GBA_WIDTH;
+        if (width > GBA_NATIVE_W) return width;
+    }
+    return GBA_NATIVE_W;
+}
 #ifdef TMC_3DS_DIAGNOSTICS
 static unsigned sDiagnosticFrames;
 static uint64_t sDiagnosticStartMs;
@@ -402,6 +416,9 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "Map BG controls: bottom=0x%04X top=0x%04X\n",
                 gMapBottom.bgSettings ? gMapBottom.bgSettings->control : 0,
                 gMapTop.bgSettings ? gMapTop.bgSettings->control : 0);
+        fprintf(info, "Top rendered width: %d pixels (capacity %d; widescreen %s)\n",
+                sTopPresentWidth, MODE1_GBA_WIDTH,
+                Port_Config_WidescreenEnabled() ? "enabled" : "disabled");
 
         fprintf(info, "\n[Files]\n");
         fprintf(info, "top-screen.bmp, bottom-screen.bmp, top-screen.raw, bottom-screen.raw\n");
@@ -437,8 +454,9 @@ void Port_PPU_Init(SDL_Window* window) {
     (void)window;
     VirtuaPPUMode1GbaMemory memory = { gIoMem, gVram, gBgPltt, gObjPltt, gOamMem };
     virtuappu_mode1_bind_gba_memory(&memory);
-    virtuappu_registers.frame_width = GBA_W;
-    virtuappu_registers.frame_pitch = GBA_W;
+    Port_Widescreen_SetWindowPixels(400, 240);
+    virtuappu_registers.frame_width = GBA_NATIVE_W;
+    virtuappu_registers.frame_pitch = TOP_PITCH;
     virtuappu_registers.mode = 1;
     Port_SecondScreen_Init();
     sBottomReady = false;
@@ -472,7 +490,7 @@ void Port_PPU_Init(SDL_Window* window) {
     sBottomUploads[0] = PlatformGpu3DS_BottomBuffer(0);
     sBottomUploads[1] = PlatformGpu3DS_BottomBuffer(1);
     sInitialized = sGpuPresenterReady && sTopUpload && sBottomUploads[0] && sBottomUploads[1];
-    virtuappu_mode1_set_output_buffer(sInitialized ? sTopUpload : NULL, 256);
+    virtuappu_mode1_set_output_buffer(sInitialized ? sTopUpload : NULL, TOP_PITCH);
 }
 
 void Port_PPU_PresentFrame(void) {
@@ -486,8 +504,9 @@ void Port_PPU_PresentFrame(void) {
     const uint16_t dispcnt = (uint16_t)(gIoMem[0] | (gIoMem[1] << 8));
     const uint8_t mode = (uint8_t)(dispcnt & 7);
     virtuappu_registers.mode = (mode == 1 || mode == 2) ? 2 : 1;
-    virtuappu_registers.frame_width = GBA_W;
-    virtuappu_registers.frame_pitch = GBA_W;
+    sTopPresentWidth = TopFrameWidth();
+    virtuappu_registers.frame_width = sTopPresentWidth;
+    virtuappu_registers.frame_pitch = TOP_PITCH;
     virtuappu_mode1_pre_line_callback = port_hdma_has_active_channels() ? port_hdma_step_line : NULL;
     virtuappu_mode1_bg2x_hdma_strobe = port_hdma_dest_overlaps(gIoMem + 0x28, gIoMem + 0x2c) != 0;
     virtuappu_mode1_bg2y_hdma_strobe = port_hdma_dest_overlaps(gIoMem + 0x2c, gIoMem + 0x30) != 0;
@@ -512,7 +531,7 @@ void Port_PPU_PresentFrame(void) {
     if (diagnosticFrame == 60) DumpPpuSnapshot("tmc3ds-frame60.ppu1");
 #endif
 
-    PlatformGpu3DS_BeginTop(sTopUpload);
+    PlatformGpu3DS_BeginTop(sTopUpload, (unsigned)sTopPresentWidth);
     const uint64_t topEndTick = Platform3DS_SystemTick();
 #ifdef TMC_3DS_DIAGNOSTICS
     const uint64_t topEnd = Platform3DS_Milliseconds();
@@ -601,7 +620,7 @@ unsigned char Port_PPU_WindowScale(void) { return 1; }
 void Port_PPU_ApplyWindowScale(void) {}
 void Port_PPU_ToggleSmoothing(void) {}
 void Port_PPU_CyclePresentationMode(int direction) { (void)direction; }
-const char* Port_PPU_PresentationModeName(void) { return "3DS native"; }
+const char* Port_PPU_PresentationModeName(void) { return "3DS widescreen"; }
 void Port_PPU_CycleFilter(int direction) { (void)direction; }
 const char* Port_PPU_FilterName(void) { return "Off"; }
 void Port_PPU_SetVSync(bool enabled) { (void)enabled; }

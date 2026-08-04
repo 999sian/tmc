@@ -189,7 +189,12 @@ u32 sub_0805EF8C(Token* token) {
 #ifdef PC_PORT
     {
         const u8* rawPtr = token->buf[token->unk01];
-        const u8* ptr = (const u8*)port_resolve_addr((uintptr_t)rawPtr);
+        /* Inline text wrappers are often short-lived stack objects. On ARM11
+         * the active stack can overlap the numeric GBA ROM window, so the
+         * general GBA-address resolver would reinterpret a valid native
+         * pointer as cartridge data. The copy-source resolver preserves an
+         * active-stack pointer while still translating genuine GBA pointers. */
+        const u8* ptr = (const u8*)port_resolve_copy_src(rawPtr, 1);
 
         if (ptr == NULL || (uintptr_t)ptr < 0x10000) {
             /*fprintf(stderr, "[TEXT] sub_0805EF8C: invalid buf[%d]=%p resolved=%p textIndex=0x%04X unk00=%d\n",
