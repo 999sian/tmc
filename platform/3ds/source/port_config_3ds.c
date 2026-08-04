@@ -7,7 +7,6 @@
 #include <unistd.h>
 
 static bool sShowFps;
-static bool sFollow = true;
 static bool sCrests = true;
 static bool sFloorReturn = true;
 static bool sHideHud;
@@ -15,7 +14,8 @@ static bool sHoldText;
 static bool sColorCorrection;
 static bool sAutosave;
 static bool sConsoleParity;
-static bool sWidescreen = true;
+static Port3DSAspectRatio sAspectRatio = PORT_3DS_ASPECT_WIDE;
+static Port3DSDisplayMode sDisplayMode = PORT_3DS_DISPLAY_SCALED;
 /* The desktop file-select overlay is rendered on the gameplay screen and
  * has no useful 3DS interaction path. Keep the native second-screen UI
  * separate and leave this desktop-only overlay disabled. */
@@ -32,6 +32,30 @@ static bool ParseBool(const char* value) {
                              value[0] == 'y' || value[0] == 'Y');
 }
 
+static const char* AspectRatioConfigName(Port3DSAspectRatio mode) {
+    static const char* const names[PORT_3DS_ASPECT_COUNT] = { "wide", "normal", "stretch" };
+    return mode >= 0 && mode < PORT_3DS_ASPECT_COUNT ? names[mode] : names[PORT_3DS_ASPECT_WIDE];
+}
+
+static const char* DisplayModeConfigName(Port3DSDisplayMode mode) {
+    static const char* const names[PORT_3DS_DISPLAY_COUNT] = { "pixel-perfect", "scaled", "blur", "crt" };
+    return mode >= 0 && mode < PORT_3DS_DISPLAY_COUNT ? names[mode] : names[PORT_3DS_DISPLAY_SCALED];
+}
+
+static Port3DSAspectRatio ParseAspectRatio(const char* value) {
+    for (int i = 0; i < PORT_3DS_ASPECT_COUNT; ++i) {
+        if (strcmp(value, AspectRatioConfigName((Port3DSAspectRatio)i)) == 0) return (Port3DSAspectRatio)i;
+    }
+    return PORT_3DS_ASPECT_WIDE;
+}
+
+static Port3DSDisplayMode ParseDisplayMode(const char* value) {
+    for (int i = 0; i < PORT_3DS_DISPLAY_COUNT; ++i) {
+        if (strcmp(value, DisplayModeConfigName((Port3DSDisplayMode)i)) == 0) return (Port3DSDisplayMode)i;
+    }
+    return PORT_3DS_DISPLAY_SCALED;
+}
+
 static void SaveConfig(void) {
     if (!sConfigLoaded) return;
 
@@ -44,14 +68,15 @@ static void SaveConfig(void) {
     if (!file) return;
     fprintf(file, "# The Minish Cap 3DS runtime settings\n");
     fprintf(file, "show_fps=%u\n", sShowFps ? 1u : 0u);
-    fprintf(file, "follow_cam=%u\n", sFollow ? 1u : 0u);
     fprintf(file, "windcrest_pins=%u\n", sCrests ? 1u : 0u);
     fprintf(file, "floor_auto_return=%u\n", sFloorReturn ? 1u : 0u);
     fprintf(file, "hide_top_hud=%u\n", sHideHud ? 1u : 0u);
     fprintf(file, "hold_to_advance_text=%u\n", sHoldText ? 1u : 0u);
     fprintf(file, "color_correction=%u\n", sColorCorrection ? 1u : 0u);
     fprintf(file, "autosave=%u\n", sAutosave ? 1u : 0u);
-    fprintf(file, "widescreen=%u\n", sWidescreen ? 1u : 0u);
+    fprintf(file, "widescreen=%u\n", sAspectRatio == PORT_3DS_ASPECT_WIDE ? 1u : 0u);
+    fprintf(file, "aspect_ratio=%s\n", AspectRatioConfigName(sAspectRatio));
+    fprintf(file, "display_mode=%s\n", DisplayModeConfigName(sDisplayMode));
     fprintf(file, "master_volume=%.2f\n", (double)sVolume);
     fprintf(file, "panel_backdrop=%d\n", sBackdrop);
     fprintf(file, "turbo_multiplier=%u\n", sTurboMultiplier);
@@ -80,6 +105,7 @@ static void SaveConfig(void) {
 void Port_Config_Load(const char* path) {
     if (path != NULL && path[0] != '\0') snprintf(sConfigPath, sizeof(sConfigPath), "%s", path);
 
+    bool hasAspectRatio = false;
     FILE* file = fopen(sConfigPath, "rb");
     if (file) {
         char line[160];
@@ -88,14 +114,20 @@ void Port_Config_Load(const char* path) {
             char value[64];
             if (line[0] == '#' || sscanf(line, " %63[^=]=%63s", key, value) != 2) continue;
             if (strcmp(key, "show_fps") == 0) sShowFps = ParseBool(value);
-            else if (strcmp(key, "follow_cam") == 0) sFollow = ParseBool(value);
             else if (strcmp(key, "windcrest_pins") == 0) sCrests = ParseBool(value);
             else if (strcmp(key, "floor_auto_return") == 0) sFloorReturn = ParseBool(value);
             else if (strcmp(key, "hide_top_hud") == 0) sHideHud = ParseBool(value);
             else if (strcmp(key, "hold_to_advance_text") == 0) sHoldText = ParseBool(value);
             else if (strcmp(key, "color_correction") == 0) sColorCorrection = ParseBool(value);
             else if (strcmp(key, "autosave") == 0) sAutosave = ParseBool(value);
-            else if (strcmp(key, "widescreen") == 0) sWidescreen = ParseBool(value);
+            else if (strcmp(key, "widescreen") == 0 && !hasAspectRatio)
+                sAspectRatio = ParseBool(value) ? PORT_3DS_ASPECT_WIDE : PORT_3DS_ASPECT_NORMAL;
+            else if (strcmp(key, "aspect_ratio") == 0) {
+                sAspectRatio = ParseAspectRatio(value);
+                hasAspectRatio = true;
+            } else if (strcmp(key, "display_mode") == 0) {
+                sDisplayMode = ParseDisplayMode(value);
+            }
             else if (strcmp(key, "master_volume") == 0) sVolume = strtof(value, NULL);
             else if (strcmp(key, "panel_backdrop") == 0) sBackdrop = (int)strtol(value, NULL, 10);
             else if (strcmp(key, "turbo_multiplier") == 0) sTurboMultiplier = (unsigned)strtoul(value, NULL, 10);
@@ -137,9 +169,12 @@ float Port_Config_TouchScale(void) { return 1.0f; }
 void Port_Config_SetTouchScale(float scale) { (void)scale; }
 float Port_Config_TouchOpacity(void) { return 1.0f; }
 void Port_Config_SetTouchOpacity(float opacity) { (void)opacity; }
-bool Port_Config_WidescreenEnabled(void) { return sWidescreen; }
-void Port_Config_SetWidescreenEnabled(bool enabled) { sWidescreen = enabled; SaveConfig(); }
-void Port_Config_ToggleWidescreen(void) { Port_Config_SetWidescreenEnabled(!sWidescreen); }
+bool Port_Config_WidescreenEnabled(void) { return sAspectRatio == PORT_3DS_ASPECT_WIDE; }
+void Port_Config_SetWidescreenEnabled(bool enabled) {
+    sAspectRatio = enabled ? PORT_3DS_ASPECT_WIDE : PORT_3DS_ASPECT_NORMAL;
+    SaveConfig();
+}
+void Port_Config_ToggleWidescreen(void) { Port_Config_SetWidescreenEnabled(!Port_Config_WidescreenEnabled()); }
 bool Port_Config_GetConsoleParity(void) { return sConsoleParity; }
 void Port_Config_SetConsoleParity(bool on) { sConsoleParity = on; }
 void Port_Config_ToggleConsoleParity(void) { sConsoleParity = !sConsoleParity; }
@@ -202,8 +237,8 @@ const char* Port_Config_GetTtsVoice(void) { return ""; }
 void Port_Config_SetTtsVoice(const char* v) { (void)v; }
 const char* Port_Config_GetTtsLanguage(void) { return "en"; }
 void Port_Config_SetTtsLanguage(const char* v) { (void)v; }
-bool Port_Config_GetSecondScreenFollowCam(void) { return sFollow; }
-void Port_Config_SetSecondScreenFollowCam(bool on) { sFollow = on; SaveConfig(); }
+bool Port_Config_GetSecondScreenFollowCam(void) { return true; }
+void Port_Config_SetSecondScreenFollowCam(bool on) { (void)on; }
 bool Port_Config_GetSecondScreenCrestPins(void) { return sCrests; }
 void Port_Config_SetSecondScreenCrestPins(bool on) { sCrests = on; SaveConfig(); }
 bool Port_Config_GetSecondScreenFloorReturn(void) { return sFloorReturn; }
@@ -292,5 +327,27 @@ void Port_Config_SetTurboMultiplier(unsigned multiplier) {
     if (multiplier > 5) multiplier = 5;
     sTurboMultiplier = multiplier;
     Platform3DS_SetTurboMultiplier(multiplier);
+    SaveConfig();
+}
+
+int Port_Config_Get3DSAspectRatio(void) { return (int)sAspectRatio; }
+const char* Port_Config_Get3DSAspectRatioName(void) {
+    static const char* const names[PORT_3DS_ASPECT_COUNT] = { "WIDE", "NORMAL", "STRETCH" };
+    return names[sAspectRatio];
+}
+void Port_Config_Cycle3DSAspectRatio(void) {
+    sAspectRatio = (Port3DSAspectRatio)((sAspectRatio + 1) % PORT_3DS_ASPECT_COUNT);
+    SaveConfig();
+}
+
+int Port_Config_Get3DSDisplayMode(void) { return (int)sDisplayMode; }
+const char* Port_Config_Get3DSDisplayModeName(void) {
+    static const char* const names[PORT_3DS_DISPLAY_COUNT] = {
+        "PIXEL PERFECT", "SCALED", "BLUR", "CRT"
+    };
+    return names[sDisplayMode];
+}
+void Port_Config_Cycle3DSDisplayMode(void) {
+    sDisplayMode = (Port3DSDisplayMode)((sDisplayMode + 1) % PORT_3DS_DISPLAY_COUNT);
     SaveConfig();
 }

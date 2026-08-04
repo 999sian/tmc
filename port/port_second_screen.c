@@ -180,6 +180,8 @@ enum {
     SS_SET_HOLD_ADVANCE,  /* hold_advance_text (message.c reads per frame) */
     SS_SET_BACKDROP,      /* second_screen_backdrop: cycles SS_BACKDROP_* */
     SS_SET_SWAP_SCREENS,  /* second_screen_swap; applied at the next launch */
+    SS_SET_ASPECT_RATIO,  /* 3DS: WIDE / NORMAL / STRETCH */
+    SS_SET_DISPLAY_MODE,  /* 3DS: PIXEL PERFECT / SCALED / BLUR / CRT */
     SS_SET_COUNT
 };
 
@@ -1728,7 +1730,7 @@ static const char* const kSettingLabels[SS_SET_COUNT] = {
     "TOP HUD",          "WIDESCREEN",        "FOLLOW CAM",       "WINDCREST PINS",
     "FLOOR AUTO RETURN", "TURBO SPEED",       "MASTER VOLUME",    "AUTOSAVE",
     "COLOR CORRECTION", "SHOW FPS",           "HOLD TO ADVANCE TEXT",
-    "PANEL BACKDROP",   "SWAP SCREENS",
+    "PANEL BACKDROP",   "SWAP SCREENS",       "ASPECT RATIO",      "FILTER",
 };
 
 /* Value words of the PANEL BACKDROP row, indexed by SS_BACKDROP_*. The
@@ -1752,6 +1754,8 @@ static const char* SettingValueMinWord(int setting) {
         case SS_SET_VOLUME: return "100";
         case SS_SET_BACKDROP: return "PATTERN";
         case SS_SET_SWAP_SCREENS: return "RESTART";
+        case SS_SET_ASPECT_RATIO: return "STRETCH";
+        case SS_SET_DISPLAY_MODE: return "PIXEL PERFECT";
         default: return "OFF";
     }
 }
@@ -1769,13 +1773,20 @@ static int BackdropStyleCfg(void) {
 static int SettingsPageRows(int page, uint8_t* out) {
     int n = 0;
     if (page == SS_SETTINGS_SCREEN) {
+#ifdef TMC_3DS
+        out[n++] = SS_SET_ASPECT_RATIO;
+        out[n++] = SS_SET_COLOR_CORRECTION;
+        out[n++] = SS_SET_TOP_HUD;
+        out[n++] = SS_SET_BACKDROP;
+        out[n++] = SS_SET_DISPLAY_MODE;
+#else
         out[n++] = SS_SET_TOP_HUD;
         if (PORT_VIEW_WIDTH > 240) out[n++] = SS_SET_WIDESCREEN;
-        out[n++] = SS_SET_FOLLOW;
         out[n++] = SS_SET_COLOR_CORRECTION;
         out[n++] = SS_SET_BACKDROP;
 #ifdef __ANDROID__
         out[n++] = SS_SET_SWAP_SCREENS;
+#endif
 #endif
     } else if (page == SS_SETTINGS_GAMEPLAY) {
 #ifdef TMC_3DS
@@ -1898,7 +1909,7 @@ static void PaintDeveloperOverlay(const SSurf* s, const SecondScreenSnapshot* sn
     snprintf(values[2], sizeof(values[2]), "%.0f", currentFps);
     snprintf(values[3], sizeof(values[3]), "%.0f", averageFps);
     snprintf(values[4], sizeof(values[4]), "%u", Platform3DS_Core1TimeLimit());
-    snprintf(values[5], sizeof(values[5]), "%s", Port_Config_WidescreenEnabled() ? "WIDE" : "NATIVE");
+    snprintf(values[5], sizeof(values[5]), "%s", Port_Config_Get3DSAspectRatioName());
 #else
     for (int i = 0; i < 6; ++i) snprintf(values[i], sizeof(values[i]), "N A");
 #endif
@@ -1977,6 +1988,16 @@ static int GetSettingState(int row, char* out, int outCap) {
             snprintf(out, (size_t)outCap, "%s", want != active ? "RESTART" : (want ? "ON" : "OFF"));
             return want;
         }
+#ifdef TMC_3DS
+        case SS_SET_ASPECT_RATIO:
+            snprintf(out, (size_t)outCap, "%s", Port_Config_Get3DSAspectRatioName());
+            return 1;
+        case SS_SET_DISPLAY_MODE: {
+            Port3DSDisplayMode mode = (Port3DSDisplayMode)Port_Config_Get3DSDisplayMode();
+            snprintf(out, (size_t)outCap, "%s", Port_Config_Get3DSDisplayModeName());
+            return mode != PORT_3DS_DISPLAY_SCALED;
+        }
+#endif
     }
     if (row != SS_SET_TOP_HUD) {
         txt = on ? "ON" : "OFF";
@@ -2156,52 +2177,44 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
     if (snap->rActionFrame == 0) {
         return;
     }
-    int32_t ms = (int32_t)(2.6f * u);
+    int32_t ms = (int32_t)(2.2f * u);
     if (ms < 1) ms = 1;
-    float gh = bandH - 8 * u; /* glyph height */
-    float gw = gh * 1.35f;    /* shoulder buttons are wider than tall */
-    float cy = y + bandH / 2;
 
     const char* word = NULL;
     if (snap->rActionId < (uint8_t)(sizeof(kRActionWords) / sizeof(kRActionWords[0]))) {
         word = kRActionWords[snap->rActionId];
     }
 
-    /* Glyph + label center in the sidebar as one unit. The block is laid
-     * out on the lettered width; the art path draws at the same origin
-     * (its frames are the same words at a comparable size), so the two
-     * paths land in the same place. */
-    /* Rounded, not floored. The R sprite is 16 px tall, so flooring threw
-     * away most of a whole pixel-step and the glyph came out a size smaller
-     * than the band was built for — next to the A/B rings it read as an
-     * afterthought. */
-    int32_t scale = (int32_t)(gh / 16.0f + 0.5f);
+    /* Stack the shoulder glyph above the action instead of squeezing both
+     * into one line. The prompt is now a compact control legend: the input
+     * reads first and the contextual verb sits immediately below it. */
+    int32_t scale = (int32_t)(3.0f * u + 0.5f);
     if (scale < 1) scale = 1;
-    float labelW = word != NULL ? (float)MenuTextWidth(word, ms) : 0.0f;
-    float gap = 8 * u;
-    float total = gw + (labelW > 0 ? gap + labelW : 0);
-    float gx = x + (w - total) / 2;
-    if (gx < x) gx = x;
+    const SecondScreenThemeSprite* rSprite = Port_SecondScreenTheme_Get(SST_BUTTON_R);
+    int32_t rw = (rSprite != NULL ? rSprite->w : 18) * scale;
+    int32_t rh = (rSprite != NULL ? rSprite->h : 16) * scale;
+    float gap = 4 * u;
+    float estimatedLabelH = 16 * ms;
+    float top = y + (bandH - rh - gap - estimatedLabelH) / 2;
+    if (top < y) top = y;
+    float gx = x + (w - rw) / 2;
 
     if (!Port_SecondScreenTheme_DrawRButton(s->px, s->w, s->h, s->stride, (int32_t)gx,
-                                            (int32_t)(cy - gh / 2), scale)) {
-        int32_t bts = (int32_t)(gh / 26.0f);
+                                            (int32_t)top, scale)) {
+        int32_t bts = (int32_t)(rh / 26.0f);
         if (bts < 1) bts = 1;
         if (bts > ts) bts = ts;
-        DrawButtonPlateFallback(s, gx, cy - gh / 2, gx + gw, cy + gh / 2, 0, bts);
-        MenuTextCentered(s, "R", gx + gw / 2, cy, ms, SS_TEXT_NAVY);
+        DrawButtonPlateFallback(s, gx, top, gx + rw, top + rh, 0, bts);
+        MenuTextCentered(s, "R", gx + rw / 2, top + rh / 2, ms, SS_TEXT_NAVY);
     }
 
-    float lx = gx + gw + gap;
+    float labelW = word != NULL ? (float)MenuTextWidth(word, ms) : 0.0f;
+    float lx = x + (w - labelW) / 2;
+    float ly = top + rh + gap;
     if (Port_SecondScreenTheme_DrawActionLabel(s->px, s->w, s->h, s->stride, (int32_t)lx,
-                                               (int32_t)(cy - gh / 2), scale, snap->rActionFrame) == 0 &&
+                                               (int32_t)ly, scale, snap->rActionFrame) == 0 &&
         word != NULL) {
-        /* The one label on this panel lettered straight onto the backdrop
-         * with nothing behind it, so it is the one that has to follow the
-         * backdrop: the menu's dark ink vanishes on the near-black. (The
-         * decoded label art above is HUD sprites — outlined, so it reads on
-         * either.) */
-        MenuTextDraw(s, word, (int32_t)lx, (int32_t)(cy - 8 * ms), ms,
+        MenuTextDraw(s, word, (int32_t)lx, (int32_t)ly, ms,
                      Port_SecondScreenTheme_BackdropIsDark() ? SS_TEXT_WHITE : SS_TEXT_INK);
     }
 }
@@ -2244,7 +2257,7 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     if (rows * 8 * hk > blockCap) hk = (int32_t)(blockCap / (rows * 8));
     if (hk < 1) hk = 1;
     float hx0 = x + (w - cols * 8 * hk) / 2;
-    float hy = y + 4 * u;
+    float hy = y + 12 * u;
     int quarters = snap->health == 1 ? 1 : snap->health / 2;
     int fullHearts = quarters / 4;
     int frac = quarters & 3;
@@ -2275,32 +2288,27 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     /* The prompt shares the sidebar with the A/B rings, and at 34u it was
      * dwarfed by them — this is the one contextual control on the panel, so
      * it gets a band it can actually be read in. */
-    float rBandH = 76 * u;
+    float rBandH = 92 * u;
     DrawRPrompt(s, snap, x, vitalsBottom, w, rBandH, u, ts);
     vitalsBottom += rBandH;
 
-    /* Counters chip anchored to the bottom: rupees always, keys inside
-     * key-bearing areas — a recessed stone well like the slab's tray.
-     * Icons run at twice the base scale and the digits half again, so
-     * the chip reads from a couch like the rest of the panel. (Off the
-     * base scale, not the hearts' — the hearts size themselves to their
-     * own grid now and would drag the chip along with them.) */
+    /* Bare counters near the bottom: removing the recessed stone tray lets
+     * the rupee art read as HUD instead of another panel. Reduce the number
+     * scale before the icon when space is tight so the wallet can keep its
+     * larger, more legible tier sprite. */
     int chipRows = isDungeon ? 2 : 1;
     int32_t ik = 2 * k;              /* icon scale (16x16 art) */
     int32_t ck = k + (k + 1) / 2;    /* digit scale (8x16 HUD font) */
-    int32_t chipTs = ts > 2 ? 2 : ts;
-    float chipPad = 2 * chipTs + 4 * u;
+    float chipPad = 2 * u;
     float numberW = 3 * 8 * ck;
-    float groupGap = 8 * u;
+    float groupGap = 6 * u;
     float innerW = w - 2 * chipPad;
-    while (ik > 1 && 16 * ik + groupGap + numberW > innerW) --ik;
     while (ck > 1 && 16 * ik + groupGap + 3 * 8 * ck > innerW) --ck;
+    while (ik > 1 && 16 * ik + groupGap + 3 * 8 * ck > innerW) --ik;
     numberW = 3 * 8 * ck;
     float rowH = 16 * (ik > ck ? ik : ck);
     float chipH = chipRows * rowH + (chipRows - 1) * 6 * u + 2 * chipPad;
-    float chipY = y + h - chipH;
-    Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)x, (int32_t)chipY, (int32_t)w,
-                                    (int32_t)chipH, chipTs);
+    float chipY = y + h - chipH - 30 * u;
     {
         float ry = chipY + chipPad;
         float groupW = 16 * ik + groupGap + numberW;
@@ -2705,6 +2713,14 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                      * then the row reads RESTART. */
                     Port_Config_SetSecondScreenSwap(!Port_Config_GetSecondScreenSwap());
                     break;
+#ifdef TMC_3DS
+                case SS_SET_ASPECT_RATIO:
+                    Port_Config_Cycle3DSAspectRatio();
+                    break;
+                case SS_SET_DISPLAY_MODE:
+                    Port_Config_Cycle3DSDisplayMode();
+                    break;
+#endif
             }
             break;
         case SS_ACT_MAP: {

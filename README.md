@@ -34,8 +34,11 @@ https://ko-fi.com/estebanpdn
 
 - Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
   builds.
-- True widescreen gameplay across the 400x240 top screen, with centered
-  360x240 native presentation for fixed-width scenes.
+- Selectable Wide, Normal, and Stretch aspect-ratio modes for the 400x240 top
+  screen.
+- Four live display modes: true 1x Pixel Perfect, nearest-neighbour Scaled,
+  linearly filtered Blur, and a lightweight PICA200 CRT effect with scanlines
+  and a subtle RGB mask.
 - Bottom screen with live map, dungeon information, quest status and touch item
   UI.
 - PICA200/Citro2D presentation for the top and bottom screens.
@@ -46,6 +49,7 @@ https://ko-fi.com/estebanpdn
   choose 2x through 5x from the bottom-screen Gameplay settings.
 - Minish Cap-themed bottom-screen Settings hierarchy with Screen, Gameplay,
   and Developer submenus. Options apply live and persist across launches.
+- Optional measured FPS counter in the lower-left corner of the top screen.
 - Developer memory-dump command and runtime overlay with version, console
   model, current/average FPS, Core 1 allocation, display mode, area, and room.
 - Native NDSP stereo audio with a dedicated real-time mixer worker.
@@ -61,7 +65,7 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install `tmc-3ds-v0.13.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.14.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -117,8 +121,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.13.cia
-build-3ds/game/tmc-3ds-v0.13.3dsx
+build-3ds/game/tmc-3ds-v0.14.cia
+build-3ds/game/tmc-3ds-v0.14.3dsx
 ```
 
 The build does not embed a ROM.
