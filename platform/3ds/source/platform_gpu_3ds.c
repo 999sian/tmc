@@ -2,7 +2,6 @@
 
 #include <3ds.h>
 #include <citro2d.h>
-#include <math.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -94,63 +93,59 @@ static void DeleteCrtTextures(void) {
     sCrtTexturesReady = false;
 }
 
+static unsigned Morton8(unsigned x, unsigned y) {
+    return ((x & 1u) << 0) | ((y & 1u) << 1) | ((x & 2u) << 1) | ((y & 2u) << 2) |
+           ((x & 4u) << 2) | ((y & 4u) << 3);
+}
+
+static void SetTiledRgba8(C3D_Tex* texture, unsigned x, unsigned y, uint8_t red, uint8_t green,
+                          uint8_t blue) {
+    const unsigned tilesPerRow = texture->width / 8u;
+    const unsigned tile = (y / 8u) * tilesPerRow + x / 8u;
+    const unsigned offset = tile * 64u + Morton8(x & 7u, y & 7u);
+    ((uint32_t*)texture->data)[offset] =
+        0xffu | ((uint32_t)blue << 8) | ((uint32_t)green << 16) | ((uint32_t)red << 24);
+}
+
 /* The PICA200 has no programmable fragment stage suitable for a desktop
  * CRT shader. Two tiny physical-pixel textures reproduce the useful parts
  * instead: one scanline column and one RGB-mask row, multiplied over the
  * finished frame in two fixed-function draws. */
 static bool InitCrtTextures(void) {
-    uint32_t* scan = (uint32_t*)linearMemAlign(CRT_SCAN_WIDTH * CRT_SCAN_HEIGHT * sizeof(uint32_t), 0x80);
-    uint32_t* mask = (uint32_t*)linearMemAlign(CRT_MASK_WIDTH * CRT_MASK_HEIGHT * sizeof(uint32_t), 0x80);
     bool scanReady = false;
-    if (!scan || !mask) goto fail;
-    if (!C3D_TexInitVRAM(&sCrtScanTexture, CRT_SCAN_WIDTH, CRT_SCAN_HEIGHT, GPU_RGBA8)) goto fail;
+    /* Keep startup free of pre-frame GX transfers. A synchronous VRAM upload
+     * here can wait forever for PPF on physical hardware even though emulators
+     * accept it, so build the native tiled layout directly in linear memory. */
+    if (!C3D_TexInit(&sCrtScanTexture, CRT_SCAN_WIDTH, CRT_SCAN_HEIGHT, GPU_RGBA8)) goto fail;
     scanReady = true;
-    if (!C3D_TexInitVRAM(&sCrtMaskTexture, CRT_MASK_WIDTH, CRT_MASK_HEIGHT, GPU_RGBA8)) goto fail;
+    if (!C3D_TexInit(&sCrtMaskTexture, CRT_MASK_WIDTH, CRT_MASK_HEIGHT, GPU_RGBA8)) goto fail;
 
-    const float lineHeight = 240.0f / 160.0f;
-    const float scanDepth = 0.28f * (lineHeight - 1.0f);
     for (int y = 0; y < CRT_SCAN_HEIGHT; ++y) {
-        float brightness = 1.0f;
-        if (y < 240) {
-            const float line = (float)y / lineHeight;
-            const float phase = line - floorf(line);
-            brightness -= scanDepth * (0.5f + 0.5f * cosf(phase * 6.2831853f));
+        const uint8_t value = y < 240 && y % 3 == 2 ? 220 : 255;
+        for (int x = 0; x < CRT_SCAN_WIDTH; ++x) {
+            SetTiledRgba8(&sCrtScanTexture, (unsigned)x, (unsigned)y, value, value, value);
         }
-        const uint8_t value = (uint8_t)(brightness * 255.0f + 0.5f);
-        const uint32_t color = C2D_Color32(value, value, value, 255);
-        for (int x = 0; x < CRT_SCAN_WIDTH; ++x) scan[y * CRT_SCAN_WIDTH + x] = color;
     }
 
     for (int y = 0; y < CRT_MASK_HEIGHT; ++y) {
         for (int x = 0; x < CRT_MASK_WIDTH; ++x) {
             uint8_t rgb[3] = { 224, 224, 224 };
             rgb[x % 3] = 255;
-            mask[y * CRT_MASK_WIDTH + x] = C2D_Color32(rgb[0], rgb[1], rgb[2], 255);
+            SetTiledRgba8(&sCrtMaskTexture, (unsigned)x, (unsigned)y, rgb[0], rgb[1], rgb[2]);
         }
     }
 
-    GSPGPU_FlushDataCache(scan, CRT_SCAN_WIDTH * CRT_SCAN_HEIGHT * sizeof(uint32_t));
-    C3D_SyncDisplayTransfer(scan, GX_BUFFER_DIM(CRT_SCAN_WIDTH, CRT_SCAN_HEIGHT),
-                            (u32*)sCrtScanTexture.data, GX_BUFFER_DIM(CRT_SCAN_WIDTH, CRT_SCAN_HEIGHT),
-                            TextureTransfer());
-    GSPGPU_FlushDataCache(mask, CRT_MASK_WIDTH * CRT_MASK_HEIGHT * sizeof(uint32_t));
-    C3D_SyncDisplayTransfer(mask, GX_BUFFER_DIM(CRT_MASK_WIDTH, CRT_MASK_HEIGHT),
-                            (u32*)sCrtMaskTexture.data, GX_BUFFER_DIM(CRT_MASK_WIDTH, CRT_MASK_HEIGHT),
-                            TextureTransfer());
-
+    C3D_TexFlush(&sCrtScanTexture);
+    C3D_TexFlush(&sCrtMaskTexture);
     C3D_TexSetFilter(&sCrtScanTexture, GPU_NEAREST, GPU_NEAREST);
     C3D_TexSetFilter(&sCrtMaskTexture, GPU_NEAREST, GPU_NEAREST);
     C3D_TexSetWrap(&sCrtScanTexture, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
     C3D_TexSetWrap(&sCrtMaskTexture, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
-    linearFree(mask);
-    linearFree(scan);
     sCrtTexturesReady = true;
     return true;
 
 fail:
     if (scanReady) C3D_TexDelete(&sCrtScanTexture);
-    if (mask) linearFree(mask);
-    if (scan) linearFree(scan);
     return false;
 }
 
