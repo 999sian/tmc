@@ -42,7 +42,12 @@ https://ko-fi.com/estebanpdn
 - Parallel software PPU rendering across the available 3DS application cores.
 - New Nintendo 3DS speedup with 804 MHz, L2 cache and third-core rendering
   support.
-- Hold the New Nintendo 3DS C-stick in any direction for temporary 5x turbo.
+- Hold the New Nintendo 3DS C-stick in any direction for temporary turbo;
+  choose 2x through 5x from the bottom-screen Gameplay settings.
+- Minish Cap-themed bottom-screen Settings hierarchy with Screen, Gameplay,
+  and Developer submenus. Options apply live and persist across launches.
+- Developer memory-dump command and runtime overlay with version, console
+  model, current/average FPS, Core 1 allocation, display mode, area, and room.
 - Native NDSP stereo audio with a dedicated real-time mixer worker.
 - Verified atomic save data stored beside the ROM on the SD card, with automatic
   recovery from interrupted writes.
@@ -56,7 +61,7 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install `tmc-3ds-v0.12.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.13.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -112,8 +117,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.12.cia
-build-3ds/game/tmc-3ds-v0.12.3dsx
+build-3ds/game/tmc-3ds-v0.13.cia
+build-3ds/game/tmc-3ds-v0.13.3dsx
 ```
 
 The build does not embed a ROM.

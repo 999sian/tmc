@@ -751,6 +751,10 @@ void VBlankIntrWait(void) {
         Platform3DS_PumpWithoutVBlank();
     }
     gba_write16(REG_ADDR_KEYINPUT, Platform3DS_ReadKeyInput());
+    {
+        extern void Port_QuickSave_AutoTick(void);
+        Port_QuickSave_AutoTick();
+    }
     VBlankIntr();
     Platform3DS_EndFrameBoundary();
 #else

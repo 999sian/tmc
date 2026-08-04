@@ -62,6 +62,18 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef TMC_3DS
+#include "platform_3ds.h"
+
+extern void Port_PPU_3DS_WriteQuickDump(void);
+extern double Port_PPU_3DS_CurrentFps(void);
+extern double Port_PPU_3DS_AverageFps(void);
+#endif
+
+#ifndef TMC_PORT_VERSION
+#define TMC_PORT_VERSION "DEV"
+#endif
+
 /* Buffer pixel layout is RGBA_8888: as a little-endian u32 that's
  * A<<24 | B<<16 | G<<8 | R (same convention Rgb555ToRgba8888 in
  * port_second_screen_render.c emits). Build every color through this so
@@ -137,6 +149,17 @@ enum {
     SS_ACT_MAPVIEW,
     SS_ACT_MAPZOOM,
     SS_ACT_QUESTVIEW, /* arg: which quest screen to show */
+    SS_ACT_SETTINGS_PAGE,
+    SS_ACT_SETTINGS_BACK,
+    SS_ACT_DEVELOPER_DUMP,
+};
+
+enum {
+    SS_SETTINGS_ROOT = 0,
+    SS_SETTINGS_SCREEN,
+    SS_SETTINGS_GAMEPLAY,
+    SS_SETTINGS_DEVELOPER,
+    SS_SETTINGS_OVERLAY,
 };
 
 /* Settings rows, top to bottom. The second-screen-only toggles persist
@@ -146,10 +169,10 @@ enum {
 enum {
     SS_SET_TOP_HUD = 0,   /* hide_top_hud (engine gate ships separately) */
     SS_SET_WIDESCREEN,    /* widescreen_enabled; absent from a native-width build */
-    SS_SET_TOUCH_CONTROLS, /* touch_controls: the top screen's on-screen pad */
     SS_SET_FOLLOW,
     SS_SET_CRESTS,
     SS_SET_FLOOR_RETURN,
+    SS_SET_TURBO,
     SS_SET_VOLUME,        /* master_volume, cycles 0/25/50/75/100% */
     SS_SET_AUTOSAVE,      /* autosave_enabled via Port_QuickSave */
     SS_SET_COLOR_CORRECTION, /* color_correction + live PPU toggle */
@@ -222,6 +245,7 @@ static int sTapTargetCount = 0;
 
 static struct {
     uint8_t tab;
+    uint8_t settingsPage;
     uint8_t wholeMap;   /* map tab: whole-Hyrule view instead of follow cam */
     uint8_t armedRing;  /* 0 none, 1 = next item tap assigns A, 2 = B */
     int8_t floorPreview; /* plaque-selected display floor, SS_NO_FLOOR = live */
@@ -250,6 +274,7 @@ static struct {
     /* Quest tab: which of its screens is up — the status screen itself or
      * one of the two lists it opens, the same step in the pause menu. */
     uint8_t questView;
+    uint32_t dumpFlashUntil;
 } sUi = { .floorPreview = SS_NO_FLOOR, .playerFloorDisp = SS_NO_FLOOR };
 
 /* sUi.questView */
@@ -1700,18 +1725,11 @@ static void PaintQuestPanel(const SSurf* s, const SecondScreenSnapshot* snap, Ta
 /* ------------------------------------------------------------------ */
 
 static const char* const kSettingLabels[SS_SET_COUNT] = {
-    "TOP HUD",           "WIDESCREEN",       "TOUCH CONTROLS", "FOLLOW CAM",
-    "WINDCREST PINS",    "FLOOR AUTO RETURN", "MASTER VOLUME",  "AUTOSAVE",
-    "COLOR CORRECTION",  "SHOW FPS",          "HOLD TO ADVANCE TEXT",
-    "PANEL BACKDROP",    "SWAP SCREENS",
+    "TOP HUD",          "WIDESCREEN",        "FOLLOW CAM",       "WINDCREST PINS",
+    "FLOOR AUTO RETURN", "TURBO SPEED",       "MASTER VOLUME",    "AUTOSAVE",
+    "COLOR CORRECTION", "SHOW FPS",           "HOLD TO ADVANCE TEXT",
+    "PANEL BACKDROP",   "SWAP SCREENS",
 };
-
-/* The widest value word any row can show. Every row's value chip is cut to
- * this so the column ends flush (it was "SHOW" until the backdrop row's
- * words joined the set; the swap row's "RESTART" is the same width). Keep
- * new value words no longer than this — the label beside it is what gives
- * up the space. */
-#define SS_SET_WIDEST_VALUE "PATTERN"
 
 /* Value words of the PANEL BACKDROP row, indexed by SS_BACKDROP_*. The
  * default reads PATTERN rather than "PARCHMENT" because what actually
@@ -1724,6 +1742,20 @@ static const char* const kBackdropWords[SS_BACKDROP_COUNT] = {
     "PATTERN", "CREAM", "DARK", "DIM", "STONE", "SLATE", "NAVY"
 };
 
+/* Reserve only the width a row can actually use. A single global value
+ * column sized for PATTERN needlessly crowded long GAMEPLAY labels even
+ * though their chips only ever say ON/OFF. */
+static const char* SettingValueMinWord(int setting) {
+    switch (setting) {
+        case SS_SET_TOP_HUD: return "SHOW";
+        case SS_SET_TURBO: return "X5";
+        case SS_SET_VOLUME: return "100";
+        case SS_SET_BACKDROP: return "PATTERN";
+        case SS_SET_SWAP_SCREENS: return "RESTART";
+        default: return "OFF";
+    }
+}
+
 /* The stored backdrop style, sanitised. config.json is hand-editable and
  * the style list may grow, so every read of it goes through here. */
 static int BackdropStyleCfg(void) {
@@ -1731,26 +1763,157 @@ static int BackdropStyleCfg(void) {
     return (style > SS_BACKDROP_PARCHMENT && style < SS_BACKDROP_COUNT) ? style : SS_BACKDROP_PARCHMENT;
 }
 
-/* Rows this build can actually offer. The conditional ones are switches
- * wired to nothing outside their build: WIDESCREEN's wide render paths are
- * compiled in by --widescreen_width (at the native 240 the config flag
- * exists but nothing reads it), and SWAP SCREENS is applied by the Android
- * shell's launcher, so off Android there is nothing to apply it. Returns
- * how many were written. */
-static int VisibleSettingRows(uint8_t* out) {
+/* Group the controls by what they affect. This mirrors the sibling 3DS
+ * port's root -> submenu navigation while retaining Minish Cap's own
+ * settings. Rows that cannot do anything in a build are omitted. */
+static int SettingsPageRows(int page, uint8_t* out) {
     int n = 0;
-    for (int i = 0; i < SS_SET_COUNT; i++) {
-        if (i == SS_SET_WIDESCREEN && PORT_VIEW_WIDTH <= 240) {
-            continue;
-        }
-#ifndef __ANDROID__
-        if (i == SS_SET_SWAP_SCREENS) {
-            continue;
-        }
+    if (page == SS_SETTINGS_SCREEN) {
+        out[n++] = SS_SET_TOP_HUD;
+        if (PORT_VIEW_WIDTH > 240) out[n++] = SS_SET_WIDESCREEN;
+        out[n++] = SS_SET_FOLLOW;
+        out[n++] = SS_SET_COLOR_CORRECTION;
+        out[n++] = SS_SET_BACKDROP;
+#ifdef __ANDROID__
+        out[n++] = SS_SET_SWAP_SCREENS;
 #endif
-        out[n++] = (uint8_t)i;
+    } else if (page == SS_SETTINGS_GAMEPLAY) {
+#ifdef TMC_3DS
+        out[n++] = SS_SET_TURBO;
+#endif
+        out[n++] = SS_SET_CRESTS;
+        out[n++] = SS_SET_FLOOR_RETURN;
+        out[n++] = SS_SET_VOLUME;
+        out[n++] = SS_SET_AUTOSAVE;
+        out[n++] = SS_SET_SHOW_FPS;
+        out[n++] = SS_SET_HOLD_ADVANCE;
     }
     return n;
+}
+
+static const char* SettingsPageTitle(int page) {
+    switch (page) {
+        case SS_SETTINGS_SCREEN: return "SCREEN";
+        case SS_SETTINGS_GAMEPLAY: return "GAMEPLAY";
+        case SS_SETTINGS_DEVELOPER: return "DEVELOPER";
+        case SS_SETTINGS_OVERLAY: return "OVERLAY";
+        default: return "SETTINGS";
+    }
+}
+
+static int SettingsBackPage(int page) {
+    return page == SS_SETTINGS_OVERLAY ? SS_SETTINGS_DEVELOPER : SS_SETTINGS_ROOT;
+}
+
+static void DrawSettingsChevron(const SSurf* s, float cx, float cy, float u) {
+    int32_t step = (int32_t)(5 * u);
+    int32_t thick = (int32_t)(4 * u);
+    if (step < 1) step = 1;
+    if (thick < 1) thick = 1;
+    uint32_t color = Port_SecondScreenTheme_Color(SSC_BANNER_NAVY);
+    for (int i = -3; i <= 3; ++i) {
+        int a = i < 0 ? -i : i;
+        int32_t x = (int32_t)cx - a * step;
+        int32_t y = (int32_t)cy + i * step;
+        FillRect(s, x - thick, y - thick, x + thick + 1, y + thick + 1, color);
+    }
+}
+
+static void DrawSettingsNavRow(const SSurf* s, TargetList* tl, float x0, float y0, float x1, float y1,
+                               const char* label, int page, float u, int32_t ts) {
+    DrawMenuButton(s, x0, y0, x1, y1, "", 0, 0, u, ts);
+    int32_t ms = (int32_t)(2.0f * u);
+    if (ms < 1) ms = 1;
+    MenuTextDraw(s, label, (int32_t)(x0 + 24 * u), (int32_t)((y0 + y1) / 2 - 8 * ms), ms, SS_TEXT_NAVY);
+    DrawSettingsChevron(s, x1 - 28 * u, (y0 + y1) / 2, u);
+    AddTarget(tl, x0, y0, x1, y1, SS_ACT_SETTINGS_PAGE, (uint8_t)page);
+}
+
+static void DrawSettingsBack(const SSurf* s, TargetList* tl, float x0, float y0, float h, int backPage,
+                             float u, int32_t ts) {
+    float w = 154 * u;
+    if (w < 54) w = 54;
+    DrawMenuButton(s, x0, y0, x0 + w, y0 + h, "BACK", 0, 0, u, ts);
+    AddTarget(tl, x0, y0, x0 + w, y0 + h, SS_ACT_SETTINGS_BACK, (uint8_t)backPage);
+}
+
+static int GetSettingState(int row, char* out, int outCap);
+
+static void DrawSettingsValueRow(const SSurf* s, TargetList* tl, float x0, float y0, float x1, float y1,
+                                 int setting, float u, int32_t ts) {
+    char val[16];
+    int on = GetSettingState(setting, val, sizeof(val));
+    DrawMenuButton(s, x0, y0, x1, y1, "", 0, 0, u, ts);
+
+    int32_t ms = (int32_t)(((y1 - y0) * 0.56f) / MENU_TEXT_BOX);
+    if (ms < 1) ms = 1;
+    int32_t maxMs = (int32_t)(1.8f * u);
+    if (maxMs < 1) maxMs = 1;
+    if (ms > maxMs) ms = maxMs;
+
+    float ch = y1 - y0 - 10 * u;
+    if (ch < MENU_TEXT_BOX * ms) ch = MENU_TEXT_BOX * ms;
+    float cw = MenuTextWidth(val, ms);
+    float cwMin = MenuTextWidth(SettingValueMinWord(setting), ms);
+    if (cw < cwMin) cw = cwMin;
+    cw += 20 * u;
+    float cx1 = x1 - 10 * u, cx0 = cx1 - cw;
+    float cy0 = (y0 + y1 - ch) / 2;
+    int32_t cts = (int32_t)(ch / 24.0f);
+    if (cts < 1) cts = 1;
+    Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)cx0, (int32_t)cy0,
+                                    (int32_t)cw, (int32_t)ch, cts, on ? SS_CHIP_RED : SS_CHIP_DARK);
+    MenuTextCentered(s, val, (cx0 + cx1) / 2, cy0 + ch / 2, ms, SS_TEXT_WHITE);
+
+    MenuTextDraw(s, kSettingLabels[setting], (int32_t)(x0 + 18 * u),
+                 (int32_t)((y0 + y1) / 2 - 8 * ms), ms, SS_TEXT_NAVY);
+    AddTarget(tl, x0, y0, x1, y1, SS_ACT_SETTING, (uint8_t)setting);
+}
+
+static void DrawDiagnosticRow(const SSurf* s, float x0, float y0, float x1, float y1, const char* label,
+                              const char* value, float u, int32_t ts) {
+    int32_t wts = ts > 3 ? 3 : ts;
+    Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)y0,
+                                    (int32_t)(x1 - x0), (int32_t)(y1 - y0), wts);
+    int32_t ms = (int32_t)(((y1 - y0) * 0.55f) / MENU_TEXT_BOX);
+    if (ms < 1) ms = 1;
+    int32_t maxMs = (int32_t)(1.7f * u);
+    if (maxMs < 1) maxMs = 1;
+    if (ms > maxMs) ms = maxMs;
+    MenuTextDraw(s, label, (int32_t)(x0 + 18 * u), (int32_t)((y0 + y1) / 2 - 8 * ms), ms, SS_TEXT_INK);
+    MenuTextDraw(s, value, (int32_t)(x1 - 18 * u - MenuTextWidth(value, ms)),
+                 (int32_t)((y0 + y1) / 2 - 8 * ms), ms, SS_TEXT_RED);
+}
+
+static void PaintDeveloperOverlay(const SSurf* s, const SecondScreenSnapshot* snap, float x0, float y0,
+                                  float x1, float y1, float u, int32_t ts) {
+    const char* labels[8] = { "VERSION", "MODEL", "FPS NOW", "FPS AVG", "CORE1", "SCREEN", "AREA", "ROOM" };
+    char values[8][16];
+#ifndef __ANDROID__
+#ifdef TMC_3DS
+    double currentFps = Port_PPU_3DS_CurrentFps();
+    double averageFps = Port_PPU_3DS_AverageFps();
+    snprintf(values[0], sizeof(values[0]), "%s", TMC_PORT_VERSION);
+    snprintf(values[1], sizeof(values[1]), "%s", Platform3DS_IsNew3DS() ? "NEW 3DS" : "OLD 3DS");
+    snprintf(values[2], sizeof(values[2]), "%.0f", currentFps);
+    snprintf(values[3], sizeof(values[3]), "%.0f", averageFps);
+    snprintf(values[4], sizeof(values[4]), "%u", Platform3DS_Core1TimeLimit());
+    snprintf(values[5], sizeof(values[5]), "%s", Port_Config_WidescreenEnabled() ? "WIDE" : "NATIVE");
+#else
+    for (int i = 0; i < 6; ++i) snprintf(values[i], sizeof(values[i]), "N A");
+#endif
+#else
+    for (int i = 0; i < 6; ++i) snprintf(values[i], sizeof(values[i]), "N A");
+#endif
+    snprintf(values[6], sizeof(values[6]), "%02X", snap->area);
+    snprintf(values[7], sizeof(values[7]), "%02X", snap->room);
+
+    float gap = 7 * u;
+    float rowH = (y1 - y0 - 7 * gap) / 8;
+    for (int i = 0; i < 8; ++i) {
+        float ry = y0 + i * (rowH + gap);
+        DrawDiagnosticRow(s, x0, ry, x1, ry + rowH, labels[i], values[i], u, ts);
+    }
 }
 
 /* Master volume as the nearest cycle stop (0/25/50/75/100), read from the
@@ -1773,10 +1936,17 @@ static int GetSettingState(int row, char* out, int outCap) {
             txt = on ? "SHOW" : "HIDE";
             break;
         case SS_SET_WIDESCREEN: on = Port_Config_WidescreenEnabled(); break;
-        case SS_SET_TOUCH_CONTROLS: on = Port_Config_GetTouchControls(); break;
         case SS_SET_FOLLOW: on = Port_Config_GetSecondScreenFollowCam(); break;
         case SS_SET_CRESTS: on = Port_Config_GetSecondScreenCrestPins(); break;
         case SS_SET_FLOOR_RETURN: on = Port_Config_GetSecondScreenFloorReturn(); break;
+        case SS_SET_TURBO:
+#ifdef TMC_3DS
+            snprintf(out, (size_t)outCap, "X%u", Port_Config_GetTurboMultiplier());
+            return 1;
+#else
+            snprintf(out, (size_t)outCap, "N A");
+            return 0;
+#endif
         case SS_SET_VOLUME: {
             int pct = GetVolumeStop();
             snprintf(out, (size_t)outCap, "%d", pct);
@@ -1815,69 +1985,73 @@ static int GetSettingState(int row, char* out, int outCap) {
     return on;
 }
 
-/* SETTINGS tab: this panel's map toggles plus the port-wide switches the
- * F8 menu owns on the top screen, as tappable rows — wells on the slab,
- * banner-font labels, the value as a message chip on the right (red chip
- * = active, dark chip = off, the menu's own accent pairing). Rows size
- * themselves to the panel so all SS_SET_COUNT stay on screen and
- * tappable at every supported surface. */
-static void PaintSettingsPanel(const SSurf* s, TargetList* tl, float rx0, float ry0, float rx1, float ry1,
-                               float u, int32_t ts) {
+/* Root and submenu compositor. Large menu-button plates provide the same
+ * hierarchy and tap language as the sibling port; Minish Cap's decoded
+ * parchment, chips, font, and palette keep it native to this game. */
+static void PaintSettingsPanel(const SSurf* s, const SecondScreenSnapshot* snap, TargetList* tl, float rx0,
+                               float ry0, float rx1, float ry1, float u, int32_t ts, int page, uint32_t tick,
+                               uint32_t dumpFlashUntil) {
     Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)rx0, (int32_t)ry0,
                                      (int32_t)(rx1 - rx0), (int32_t)(ry1 - ry0), ts);
-    float inset = 12 * ts;
+    float inset = 6 * ts;
     float ix0 = rx0 + inset, iy0 = ry0 + inset, ix1 = rx1 - inset, iy1 = ry1 - inset;
 
     int32_t hms = (int32_t)(2.4f * u);
     if (hms < 1) hms = 1;
-    int32_t wts = ts > 3 ? 3 : ts;
+    float headerH = MENU_TEXT_BOX * hms + 24 * u;
+    DrawPanelHeaderChip(s, (rx0 + rx1) / 2, iy0, SettingsPageTitle(page), hms, u);
+    if (page != SS_SETTINGS_ROOT) {
+        DrawSettingsBack(s, tl, ix0 + 4 * u, iy0, headerH, SettingsBackPage(page), u, ts);
+    }
 
-    DrawPanelHeaderChip(s, (rx0 + rx1) / 2.0f, iy0, "SETTINGS", hms, u);
+    float x0 = ix0 + 6 * u, x1 = ix1 - 6 * u;
+    float y0 = iy0 + headerH + 12 * u;
+    if (page == SS_SETTINGS_ROOT) {
+        static const char* const labels[3] = { "SCREEN", "GAMEPLAY", "DEVELOPER" };
+        static const uint8_t pages[3] = { SS_SETTINGS_SCREEN, SS_SETTINGS_GAMEPLAY, SS_SETTINGS_DEVELOPER };
+        float gap = 22 * u;
+        float rowH = (iy1 - y0 - 2 * gap) / 3;
+        if (rowH > 124 * u) rowH = 124 * u;
+        for (int i = 0; i < 3; ++i) {
+            float ry = y0 + i * (rowH + gap);
+            DrawSettingsNavRow(s, tl, x0, ry, x1, ry + rowH, labels[i], pages[i], u, ts);
+        }
+        return;
+    }
+
+    if (page == SS_SETTINGS_DEVELOPER) {
+        float gap = 24 * u;
+        float rowH = (iy1 - y0 - gap) / 2;
+        if (rowH > 122 * u) rowH = 122 * u;
+        char dumpValue[16];
+        snprintf(dumpValue, sizeof(dumpValue), "%s",
+                 (int32_t)(dumpFlashUntil - tick) > 0 ? "DONE" : "WRITE");
+        DrawMenuButton(s, x0, y0, x1, y0 + rowH, "", 0, 0, u, ts);
+        int32_t ms = (int32_t)(2.0f * u);
+        if (ms < 1) ms = 1;
+        MenuTextDraw(s, "MEM DUMP", (int32_t)(x0 + 24 * u), (int32_t)(y0 + rowH / 2 - 8 * ms), ms,
+                     SS_TEXT_NAVY);
+        MenuTextDraw(s, dumpValue, (int32_t)(x1 - 24 * u - MenuTextWidth(dumpValue, ms)),
+                     (int32_t)(y0 + rowH / 2 - 8 * ms), ms, SS_TEXT_RED);
+        AddTarget(tl, x0, y0, x1, y0 + rowH, SS_ACT_DEVELOPER_DUMP, 0);
+        DrawSettingsNavRow(s, tl, x0, y0 + rowH + gap, x1, y0 + 2 * rowH + gap, "OVERLAY",
+                           SS_SETTINGS_OVERLAY, u, ts);
+        return;
+    }
+
+    if (page == SS_SETTINGS_OVERLAY) {
+        PaintDeveloperOverlay(s, snap, x0, y0, x1, iy1, u, ts);
+        return;
+    }
 
     uint8_t rows[SS_SET_COUNT];
-    int nRows = VisibleSettingRows(rows);
-
-    float gap = 8 * u;
-    float y0 = iy0 + MENU_TEXT_BOX * hms + 32 * u;
-    float rowH = ((iy1 - 6 * u - y0) - (nRows - 1) * gap) / nRows;
-    if (rowH > 64 * u) rowH = 64 * u;
-    int32_t rms = (int32_t)(rowH * 0.55f / MENU_TEXT_BOX);
-    int32_t rmsMax = (int32_t)(1.8f * u);
-    if (rmsMax < 1) rmsMax = 1;
-    if (rms > rmsMax) rms = rmsMax;
-    if (rms < 1) rms = 1;
-
-    for (int slot = 0; slot < nRows; slot++) {
-        int i = rows[slot];
+    int nRows = SettingsPageRows(page, rows);
+    float gap = 7 * u;
+    float rowH = (iy1 - y0 - (nRows - 1) * gap) / nRows;
+    if (rowH > 76 * u) rowH = 76 * u;
+    for (int slot = 0; slot < nRows; ++slot) {
         float ry = y0 + slot * (rowH + gap);
-        float rl = ix0 + 10 * u, rr = ix1 - 10 * u;
-        char val[16]; /* room for the longest value word, not just "SHOW" */
-        int on = GetSettingState(i, val, sizeof(val));
-        Port_SecondScreenTheme_DrawWell(s->px, s->w, s->h, s->stride, (int32_t)rl, (int32_t)ry,
-                                        (int32_t)(rr - rl), (int32_t)rowH, wts);
-        MenuTextDraw(s, kSettingLabels[i], (int32_t)(rl + 20 * u),
-                     (int32_t)(ry + rowH / 2 - 8 * rms), rms, SS_TEXT_INK);
-        /* Right-aligned value chip: floored at the widest value word so every
-         * row's chip ends flush and same-sized; the label centers inside.
-         * A value wider still grows the chip leftward rather than spilling
-         * its text out of the plate — nothing hits that today, it keeps a
-         * longer word added later from breaking the row silently. */
-        {
-            float ch = rowH - 8 * u;
-            float cw = MenuTextWidth(val, rms);
-            float cwMin = MenuTextWidth(SS_SET_WIDEST_VALUE, rms);
-            if (cw < cwMin) cw = cwMin;
-            cw += 24 * u;
-            float cx1 = rr - 10 * u, cx0 = cx1 - cw;
-            float cy0 = ry + (rowH - ch) / 2;
-            int32_t cts = (int32_t)(ch / 24.0f);
-            if (cts < 1) cts = 1;
-            Port_SecondScreenTheme_DrawChip(s->px, s->w, s->h, s->stride, (int32_t)cx0, (int32_t)cy0,
-                                            (int32_t)cw, (int32_t)ch, cts,
-                                            on ? SS_CHIP_RED : SS_CHIP_DARK);
-            MenuTextCentered(s, val, (cx0 + cx1) / 2.0f, cy0 + ch / 2.0f, rms, SS_TEXT_WHITE);
-        }
-        AddTarget(tl, rl, ry, rr, ry + rowH, SS_ACT_SETTING, (uint8_t)i);
+        DrawSettingsValueRow(s, tl, x0, ry, x1, ry + rowH, rows[slot], u, ts);
     }
 }
 
@@ -2219,6 +2393,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
         sUi.playerFloorDisp = SS_NO_FLOOR;
         sUi.regionState = SS_REGION_OFF; /* a zoom never survives a load */
         sUi.questView = SS_QUEST_MAIN;   /* nor does an open list */
+        sUi.settingsPage = SS_SETTINGS_ROOT;
         UI_UNLOCK();
         sLastFix.valid = 0; /* stale fixes must not survive into a new save */
         sCam.valid = 0;
@@ -2233,8 +2408,9 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
 
     int isDungeon = (snap->areaFlags & SECOND_SCREEN_AR_IS_DUNGEON) != 0;
 
-    int tab, armedRing, regionState;
+    int tab, armedRing, regionState, settingsPage;
     int32_t regionId;
+    uint32_t dumpFlashUntil;
     UI_LOCK();
     if (isDungeon) {
         sUi.regionState = SS_REGION_OFF; /* the world map is gone; so is its zoom */
@@ -2245,6 +2421,8 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     int wholeMap = sUi.wholeMap;
     regionState = sUi.regionState;
     regionId = sUi.regionId;
+    settingsPage = sUi.settingsPage;
+    dumpFlashUntil = sUi.dumpFlashUntil;
     sUi.mapLive = 0; /* set again by PaintOverworld when the map is up */
     UI_UNLOCK();
 
@@ -2292,7 +2470,8 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     } else if (tab == SS_TAB_QUEST) {
         PaintQuestPanel(&s, snap, &tl, mx0, my0, mx1, my1, u, ts, tick, questView);
     } else if (tab == SS_TAB_SETTINGS) {
-        PaintSettingsPanel(&s, &tl, mx0, my0, mx1, my1, u, ts);
+        PaintSettingsPanel(&s, snap, &tl, mx0, my0, mx1, my1, u, ts, settingsPage, tick,
+                           dumpFlashUntil);
     } else if (isDungeon) {
         PaintDungeon(&s, snap, &tl, mx0, my0, mx1, my1, u, ts, tick, returnCfg);
     } else {
@@ -2391,7 +2570,26 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
             sUi.tab = (sUi.tab == hit.arg && hit.arg != SS_TAB_MAP) ? SS_TAB_MAP : hit.arg;
             sUi.armedRing = 0;             /* changing tabs cancels a pending assignment */
             sUi.questView = SS_QUEST_MAIN; /* ...and closes a list left open */
+            sUi.settingsPage = SS_SETTINGS_ROOT;
             UI_UNLOCK();
+            break;
+        case SS_ACT_SETTINGS_PAGE:
+            UI_LOCK();
+            sUi.settingsPage = hit.arg;
+            UI_UNLOCK();
+            break;
+        case SS_ACT_SETTINGS_BACK:
+            UI_LOCK();
+            sUi.settingsPage = hit.arg;
+            UI_UNLOCK();
+            break;
+        case SS_ACT_DEVELOPER_DUMP:
+            UI_LOCK();
+            sUi.dumpFlashUntil = sUi.lastTick + 40;
+            UI_UNLOCK();
+#ifdef TMC_3DS
+            Port_PPU_3DS_WriteQuickDump();
+#endif
             break;
         case SS_ACT_QUESTVIEW:
             UI_LOCK();
@@ -2434,11 +2632,6 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                      * reads it each frame. */
                     Port_Config_SetHideTopHud(!Port_Config_GetHideTopHud());
                     break;
-                case SS_SET_TOUCH_CONTROLS:
-                    /* The overlay reads the flag as it draws and as it
-                     * handles each touch, so it clears on the next frame. */
-                    Port_Config_SetTouchControls(!Port_Config_GetTouchControls());
-                    break;
                 case SS_SET_WIDESCREEN:
                     /* Just the flag: the PPU's view width and the engine's
                      * cull bounds both read it per frame, so the wider
@@ -2454,6 +2647,16 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                 case SS_SET_FLOOR_RETURN:
                     Port_Config_SetSecondScreenFloorReturn(!Port_Config_GetSecondScreenFloorReturn());
                     break;
+                case SS_SET_TURBO:
+#ifdef TMC_3DS
+                {
+                    unsigned multiplier = Port_Config_GetTurboMultiplier();
+                    Port_Config_SetTurboMultiplier(multiplier >= 5 ? 2 : multiplier + 1);
+                    break;
+                }
+#else
+                    break;
+#endif
                 case SS_SET_VOLUME: {
                     /* Cycle 0 -> 25 -> 50 -> 75 -> 100 -> 0, applied to
                      * the live mixer + persisted — the same call pair as

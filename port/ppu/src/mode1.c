@@ -423,17 +423,29 @@ uint32_t virtuappu_mode1_io_read32(uint16_t offset) {
  * Byte-exact: LUT[i] == rgb555_to_abgr(palette[i]) by construction. */
 static uint32_t mode1_bg_abgr_lut[MODE1_PALETTE_COLORS];
 static uint32_t mode1_obj_abgr_lut[MODE1_PALETTE_COLORS];
+static bool mode1_color_correction;
+static const uint8_t mode1_gba_lcd_lut[32] = {
+    0, 0, 0, 0, 1, 2, 4, 8, 13, 19, 25, 32, 39, 46, 54, 63,
+    71, 80, 90, 100, 110, 120, 131, 142, 154, 165, 178, 190, 203, 216, 229, 243,
+};
 #ifdef TMC_3DS
 static uint8_t mode1_obj_line_indices[MODE1_GBA_HEIGHT][MODE1_GBA_OAM_COUNT];
 static uint8_t mode1_obj_line_counts[MODE1_GBA_HEIGHT];
 #endif
 
 uint32_t virtuappu_mode1_rgb555_to_abgr8888(uint16_t color) {
-    uint8_t r = (uint8_t)((color & 0x1Fu) << 3u);
-    uint8_t g = (uint8_t)(((color >> 5u) & 0x1Fu) << 3u);
-    uint8_t b = (uint8_t)(((color >> 10u) & 0x1Fu) << 3u);
+    uint8_t r5 = (uint8_t)(color & 0x1Fu);
+    uint8_t g5 = (uint8_t)((color >> 5u) & 0x1Fu);
+    uint8_t b5 = (uint8_t)((color >> 10u) & 0x1Fu);
+    uint8_t r = mode1_color_correction ? mode1_gba_lcd_lut[r5] : (uint8_t)(r5 << 3u);
+    uint8_t g = mode1_color_correction ? mode1_gba_lcd_lut[g5] : (uint8_t)(g5 << 3u);
+    uint8_t b = mode1_color_correction ? mode1_gba_lcd_lut[b5] : (uint8_t)(b5 << 3u);
 
     return 0xFF000000u | ((uint32_t)b << 16u) | ((uint32_t)g << 8u) | (uint32_t)r;
+}
+
+void virtuappu_mode1_set_color_correction(bool enabled) {
+    mode1_color_correction = enabled;
 }
 
 /* Convert the current BG + OBJ palette RAM into the ABGR8888 LUTs. Call once

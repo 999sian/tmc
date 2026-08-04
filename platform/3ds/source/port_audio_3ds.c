@@ -29,6 +29,8 @@ static uint32_t sCallbackSignals;
 static float sVolume = 1.0f;
 static PortAudio3DSStats sStats;
 
+extern float Port_Config_GetMasterVolume(void);
+
 static void FillBuffer(int index) {
     const uint64_t startTick = svcGetSystemTick();
     int16_t* dst = sSamples + index * BUFFER_FRAMES * 2;
@@ -113,6 +115,8 @@ bool Port_Audio_Init(void) {
         ndspExit();
         return false;
     }
+    sVolume = fmaxf(0.0f, fminf(1.0f, Port_Config_GetMasterVolume()));
+    Port_M4A_Backend_SetMasterVolume(sVolume);
     memset(sWave, 0, sizeof(sWave));
     memset(sSamples, 0, BUFFER_COUNT * BUFFER_FRAMES * 2 * sizeof(int16_t));
     LightLock_Init(&sStatsLock);

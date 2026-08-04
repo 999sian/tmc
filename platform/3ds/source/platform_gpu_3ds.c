@@ -3,6 +3,7 @@
 #include <3ds.h>
 #include <citro2d.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 static C3D_RenderTarget* sTopTarget;
@@ -29,6 +30,8 @@ enum {
 
 extern u32 __ctru_linear_heap;
 extern u32 __ctru_linear_heap_size;
+extern bool Port_Config_GetShowFps(void);
+extern double Port_PPU_3DS_CurrentFps(void);
 
 static u32 TextureTransfer(void) {
     return GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(1) |
@@ -175,6 +178,17 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
     ConfigureAbgrTextureEnv();
+    if (Port_Config_GetShowFps() && sStatusTextBuffer && sStatusFont) {
+        char label[20];
+        snprintf(label, sizeof(label), "FPS %.0f", Port_PPU_3DS_CurrentFps());
+        C2D_DrawRectSolid(326.0f, 6.0f, 0.5f, 68.0f, 22.0f, C2D_Color32(0, 0, 0, 210));
+        C2D_Text text;
+        C2D_TextBufClear(sStatusTextBuffer);
+        C2D_TextFontParse(&text, sStatusFont, sStatusTextBuffer, label);
+        C2D_TextOptimize(&text);
+        C2D_DrawText(&text, C2D_WithColor | C2D_AlignRight, 390.0f, 9.0f, 0.6f, 0.55f, 0.55f,
+                     C2D_Color32(255, 255, 255, 255));
+    }
 }
 
 void PlatformGpu3DS_BeginTop(const uint32_t* pixels, unsigned width) {

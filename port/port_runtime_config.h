@@ -209,6 +209,12 @@ void Port_Config_SetSecondScreenBackdrop(int style);
  * the panel row that writes it shows RESTART until it actually took. */
 bool Port_Config_GetSecondScreenSwap(void);
 void Port_Config_SetSecondScreenSwap(bool on);
+#ifdef TMC_3DS
+/* New 3DS C-stick turbo multiplier. The device supports 2x through 5x and
+ * applies changes immediately to the frame-boundary scheduler. */
+unsigned Port_Config_GetTurboMultiplier(void);
+void Port_Config_SetTurboMultiplier(unsigned multiplier);
+#endif
 /* Hide the game's own top-screen HUD (hearts/rupees) while the second
  * screen carries vitals. Engine gate sits with DrawUIElements; gameplay
  * only — menus keep their UI. Default off. */

@@ -45,6 +45,7 @@ static SecondScreenSnapshot sBottomWorkerSnapshot;
 static uint64_t sBottomWorkerLastTicks;
 static bool sGpuPresenterReady;
 static bool sInitialized;
+static bool sColorCorrection;
 static uint32_t sFrameNumber;
 static uint64_t sPerfFirstFrameTick;
 static uint64_t sPerfLastFrameTick;
@@ -65,6 +66,8 @@ static uint64_t sPerfIntervalMaxTicks;
 static uint64_t sPerfIntervalSamples;
 static uint64_t sPerfFramesOver16ms;
 static uint64_t sPerfFramesOver33ms;
+static volatile uint32_t sCurrentFpsX100;
+static volatile uint32_t sAverageFpsX100;
 static int sTopPresentWidth = GBA_NATIVE_W;
 
 static int TopFrameWidth(void) {
@@ -454,6 +457,8 @@ void Port_PPU_Init(SDL_Window* window) {
     (void)window;
     VirtuaPPUMode1GbaMemory memory = { gIoMem, gVram, gBgPltt, gObjPltt, gOamMem };
     virtuappu_mode1_bind_gba_memory(&memory);
+    sColorCorrection = Port_Config_GetColorCorrection();
+    virtuappu_mode1_set_color_correction(sColorCorrection);
     Port_Widescreen_SetWindowPixels(400, 240);
     virtuappu_registers.frame_width = GBA_NATIVE_W;
     virtuappu_registers.frame_pitch = TOP_PITCH;
@@ -485,6 +490,8 @@ void Port_PPU_Init(SDL_Window* window) {
     sPerfIntervalSamples = 0;
     sPerfFramesOver16ms = 0;
     sPerfFramesOver33ms = 0;
+    sCurrentFpsX100 = 0;
+    sAverageFpsX100 = 0;
     sGpuPresenterReady = PlatformGpu3DS_Init();
     sTopUpload = PlatformGpu3DS_TopBuffer();
     sBottomUploads[0] = PlatformGpu3DS_BottomBuffer(0);
@@ -581,6 +588,8 @@ void Port_PPU_PresentFrame(void) {
             if (intervalTicks < sPerfIntervalMinTicks) sPerfIntervalMinTicks = intervalTicks;
             if (intervalTicks > sPerfIntervalMaxTicks) sPerfIntervalMaxTicks = intervalTicks;
             const uint64_t ticksPerSecond = Platform3DS_TicksPerSecond();
+            __atomic_store_n(&sCurrentFpsX100, (uint32_t)(ticksPerSecond * 100u / intervalTicks),
+                             __ATOMIC_RELAXED);
             if (intervalTicks * 60u > ticksPerSecond) ++sPerfFramesOver16ms;
             if (intervalTicks * 30u > ticksPerSecond) ++sPerfFramesOver33ms;
         }
@@ -592,6 +601,10 @@ void Port_PPU_PresentFrame(void) {
         if (renderTicks > sPerfRenderMaxTicks) sPerfRenderMaxTicks = renderTicks;
         if (topTicks > sPerfTopMaxTicks) sPerfTopMaxTicks = topTicks;
         if (totalTicks > sPerfTotalMaxTicks) sPerfTotalMaxTicks = totalTicks;
+        if (sPerfIntervalTicks != 0) {
+            uint64_t average = Platform3DS_TicksPerSecond() * sPerfIntervalSamples * 100u / sPerfIntervalTicks;
+            __atomic_store_n(&sAverageFpsX100, (uint32_t)average, __ATOMIC_RELAXED);
+        }
     }
 #ifdef TMC_3DS_DIAGNOSTICS
     if (diagnosticFrame < 8 || diagnosticFrame == 60) {
@@ -612,6 +625,12 @@ void Port_PPU_PresentFrame(void) {
 }
 
 void Port_PPU_SetPresentIsFirstOfTick(bool first) { (void)first; }
+double Port_PPU_3DS_CurrentFps(void) {
+    return (double)__atomic_load_n(&sCurrentFpsX100, __ATOMIC_RELAXED) / 100.0;
+}
+double Port_PPU_3DS_AverageFps(void) {
+    return (double)__atomic_load_n(&sAverageFpsX100, __ATOMIC_RELAXED) / 100.0;
+}
 void Port_PPU_SetWindowTitle(const char* title) { (void)title; }
 void Port_PPU_ToggleFullscreen(void) {}
 bool Port_PPU_IsFullscreen(void) { return true; }
@@ -626,8 +645,11 @@ const char* Port_PPU_FilterName(void) { return "Off"; }
 void Port_PPU_SetVSync(bool enabled) { (void)enabled; }
 bool Port_PPU_VSyncEnabled(void) { return true; }
 unsigned Port_PPU_DisplayRefreshRate(void) { return 60; }
-void Port_PPU_SetColorCorrection(bool enabled) { (void)enabled; }
-bool Port_PPU_ColorCorrectionEnabled(void) { return false; }
+void Port_PPU_SetColorCorrection(bool enabled) {
+    sColorCorrection = enabled;
+    virtuappu_mode1_set_color_correction(enabled);
+}
+bool Port_PPU_ColorCorrectionEnabled(void) { return sColorCorrection; }
 void Port_PPU_SetPersistence(bool enabled, float rho) { (void)enabled; (void)rho; }
 bool Port_PPU_3DS_UsesGpuPresenter(void) { return sGpuPresenterReady; }
 void Port_PPU_Shutdown(void) {

@@ -16,6 +16,7 @@ static bool sQuickDumpRequested;
 static bool sQuickDumpComboWasHeld;
 static bool sRunning;
 static bool sIsNew3DS;
+static unsigned sTurboMultiplier = 5;
 static bool sCore1Available;
 static unsigned sCore1TimeLimit;
 static bool sBottomWorkerAttempted;
@@ -127,7 +128,10 @@ bool Platform3DS_IsNew3DS(void) { return sIsNew3DS; }
 bool Platform3DS_CanUseCore1(void) { return sCore1Available; }
 unsigned Platform3DS_Core1TimeLimit(void) { return sCore1TimeLimit; }
 bool Platform3DS_TurboHeld(void) { return sIsNew3DS && sCStickHeld; }
-unsigned Platform3DS_TurboMultiplier(void) { return 5; }
+unsigned Platform3DS_TurboMultiplier(void) { return sTurboMultiplier; }
+void Platform3DS_SetTurboMultiplier(unsigned multiplier) {
+    sTurboMultiplier = multiplier < 2 ? 2 : (multiplier > 5 ? 5 : multiplier);
+}
 
 void Platform3DS_ShowSplash(void) {
     FILE* file = fopen("romfs:/splash.rgb565", "rb");
