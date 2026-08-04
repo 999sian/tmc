@@ -79,6 +79,7 @@ void Platform3DS_EndFrameBoundary(void);
 void Platform3DS_PumpWithoutVBlank(void);
 bool Platform3DS_TurboHeld(void);
 unsigned Platform3DS_TurboMultiplier(void);
+void Platform3DS_SetTurboMultiplier(unsigned multiplier);
 void Platform3DS_GetRuntimeStats(Platform3DSRuntimeStats* stats);
 void Platform3DS_WaitForVBlank(void);
 void Platform3DS_ShowFatal(const char* title, const char* message);

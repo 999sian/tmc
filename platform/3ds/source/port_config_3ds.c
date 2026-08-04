@@ -2,7 +2,9 @@
 #include "platform_3ds.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static bool sShowFps;
 static bool sFollow = true;
@@ -21,8 +23,93 @@ static bool sPortSettings = false;
 static bool sVsync = true;
 static float sVolume = 1.0f;
 static int sBackdrop;
+static unsigned sTurboMultiplier = 5;
+static bool sConfigLoaded;
+static char sConfigPath[256] = "tmc3ds.ini";
 
-void Port_Config_Load(const char* path) { (void)path; }
+static bool ParseBool(const char* value) {
+    return value != NULL && (value[0] == '1' || value[0] == 't' || value[0] == 'T' ||
+                             value[0] == 'y' || value[0] == 'Y');
+}
+
+static void SaveConfig(void) {
+    if (!sConfigLoaded) return;
+
+    char temp[sizeof(sConfigPath) + 8];
+    char backup[sizeof(sConfigPath) + 8];
+    snprintf(temp, sizeof(temp), "%s.tmp", sConfigPath);
+    snprintf(backup, sizeof(backup), "%s.bak", sConfigPath);
+
+    FILE* file = fopen(temp, "wb");
+    if (!file) return;
+    fprintf(file, "# The Minish Cap 3DS runtime settings\n");
+    fprintf(file, "show_fps=%u\n", sShowFps ? 1u : 0u);
+    fprintf(file, "follow_cam=%u\n", sFollow ? 1u : 0u);
+    fprintf(file, "windcrest_pins=%u\n", sCrests ? 1u : 0u);
+    fprintf(file, "floor_auto_return=%u\n", sFloorReturn ? 1u : 0u);
+    fprintf(file, "hide_top_hud=%u\n", sHideHud ? 1u : 0u);
+    fprintf(file, "hold_to_advance_text=%u\n", sHoldText ? 1u : 0u);
+    fprintf(file, "color_correction=%u\n", sColorCorrection ? 1u : 0u);
+    fprintf(file, "autosave=%u\n", sAutosave ? 1u : 0u);
+    fprintf(file, "widescreen=%u\n", sWidescreen ? 1u : 0u);
+    fprintf(file, "master_volume=%.2f\n", (double)sVolume);
+    fprintf(file, "panel_backdrop=%d\n", sBackdrop);
+    fprintf(file, "turbo_multiplier=%u\n", sTurboMultiplier);
+
+    bool ok = fflush(file) == 0 && fsync(fileno(file)) == 0;
+    if (fclose(file) != 0) ok = false;
+    if (!ok) {
+        remove(temp);
+        return;
+    }
+
+    remove(backup);
+    bool hadCurrent = access(sConfigPath, F_OK) == 0;
+    if (hadCurrent && rename(sConfigPath, backup) != 0) {
+        remove(temp);
+        return;
+    }
+    if (rename(temp, sConfigPath) != 0) {
+        if (hadCurrent) rename(backup, sConfigPath);
+        remove(temp);
+        return;
+    }
+    remove(backup);
+}
+
+void Port_Config_Load(const char* path) {
+    if (path != NULL && path[0] != '\0') snprintf(sConfigPath, sizeof(sConfigPath), "%s", path);
+
+    FILE* file = fopen(sConfigPath, "rb");
+    if (file) {
+        char line[160];
+        while (fgets(line, sizeof(line), file) != NULL) {
+            char key[64];
+            char value[64];
+            if (line[0] == '#' || sscanf(line, " %63[^=]=%63s", key, value) != 2) continue;
+            if (strcmp(key, "show_fps") == 0) sShowFps = ParseBool(value);
+            else if (strcmp(key, "follow_cam") == 0) sFollow = ParseBool(value);
+            else if (strcmp(key, "windcrest_pins") == 0) sCrests = ParseBool(value);
+            else if (strcmp(key, "floor_auto_return") == 0) sFloorReturn = ParseBool(value);
+            else if (strcmp(key, "hide_top_hud") == 0) sHideHud = ParseBool(value);
+            else if (strcmp(key, "hold_to_advance_text") == 0) sHoldText = ParseBool(value);
+            else if (strcmp(key, "color_correction") == 0) sColorCorrection = ParseBool(value);
+            else if (strcmp(key, "autosave") == 0) sAutosave = ParseBool(value);
+            else if (strcmp(key, "widescreen") == 0) sWidescreen = ParseBool(value);
+            else if (strcmp(key, "master_volume") == 0) sVolume = strtof(value, NULL);
+            else if (strcmp(key, "panel_backdrop") == 0) sBackdrop = (int)strtol(value, NULL, 10);
+            else if (strcmp(key, "turbo_multiplier") == 0) sTurboMultiplier = (unsigned)strtoul(value, NULL, 10);
+        }
+        fclose(file);
+    }
+
+    if (sVolume < 0.0f) sVolume = 0.0f;
+    if (sVolume > 1.0f) sVolume = 1.0f;
+    if (sBackdrop < 0 || sBackdrop > 6) sBackdrop = 0;
+    if (sTurboMultiplier < 2 || sTurboMultiplier > 5) sTurboMultiplier = 5;
+    Platform3DS_SetTurboMultiplier(sTurboMultiplier);
+    sConfigLoaded = true;
+}
 void Port_Config_SetActiveSaveProfile(const char* path) { (void)path; }
 u8 Port_Config_WindowScale(void) { return 1; }
 const char* Port_Config_UpscaleMethod(void) { return "nearest"; }
@@ -32,7 +119,7 @@ u64 Port_Config_TickTimeNs(void) { return 16666667ULL; }
 bool Port_Config_GetDecoupleRender(void) { return false; }
 void Port_Config_SetDecoupleRender(bool on) { (void)on; }
 bool Port_Config_GetShowFps(void) { return sShowFps; }
-void Port_Config_SetShowFps(bool on) { sShowFps = on; }
+void Port_Config_SetShowFps(bool on) { sShowFps = on; SaveConfig(); }
 bool Port_Config_GetTouchControls(void) { return false; }
 void Port_Config_SetTouchControls(bool on) { (void)on; }
 bool Port_Config_PortSettingsMenuEnabled(void) { return sPortSettings; }
@@ -51,8 +138,8 @@ void Port_Config_SetTouchScale(float scale) { (void)scale; }
 float Port_Config_TouchOpacity(void) { return 1.0f; }
 void Port_Config_SetTouchOpacity(float opacity) { (void)opacity; }
 bool Port_Config_WidescreenEnabled(void) { return sWidescreen; }
-void Port_Config_SetWidescreenEnabled(bool enabled) { sWidescreen = enabled; }
-void Port_Config_ToggleWidescreen(void) { sWidescreen = !sWidescreen; }
+void Port_Config_SetWidescreenEnabled(bool enabled) { sWidescreen = enabled; SaveConfig(); }
+void Port_Config_ToggleWidescreen(void) { Port_Config_SetWidescreenEnabled(!sWidescreen); }
 bool Port_Config_GetConsoleParity(void) { return sConsoleParity; }
 void Port_Config_SetConsoleParity(bool on) { sConsoleParity = on; }
 void Port_Config_ToggleConsoleParity(void) { sConsoleParity = !sConsoleParity; }
@@ -116,29 +203,32 @@ void Port_Config_SetTtsVoice(const char* v) { (void)v; }
 const char* Port_Config_GetTtsLanguage(void) { return "en"; }
 void Port_Config_SetTtsLanguage(const char* v) { (void)v; }
 bool Port_Config_GetSecondScreenFollowCam(void) { return sFollow; }
-void Port_Config_SetSecondScreenFollowCam(bool on) { sFollow = on; }
+void Port_Config_SetSecondScreenFollowCam(bool on) { sFollow = on; SaveConfig(); }
 bool Port_Config_GetSecondScreenCrestPins(void) { return sCrests; }
-void Port_Config_SetSecondScreenCrestPins(bool on) { sCrests = on; }
+void Port_Config_SetSecondScreenCrestPins(bool on) { sCrests = on; SaveConfig(); }
 bool Port_Config_GetSecondScreenFloorReturn(void) { return sFloorReturn; }
-void Port_Config_SetSecondScreenFloorReturn(bool on) { sFloorReturn = on; }
+void Port_Config_SetSecondScreenFloorReturn(bool on) { sFloorReturn = on; SaveConfig(); }
 int Port_Config_GetSecondScreenBackdrop(void) { return sBackdrop; }
-void Port_Config_SetSecondScreenBackdrop(int style) { sBackdrop = style; }
+void Port_Config_SetSecondScreenBackdrop(int style) { sBackdrop = style; SaveConfig(); }
 bool Port_Config_GetSecondScreenSwap(void) { return false; }
 void Port_Config_SetSecondScreenSwap(bool on) { (void)on; }
 bool Port_Config_GetHideTopHud(void) { return sHideHud; }
-void Port_Config_SetHideTopHud(bool on) { sHideHud = on; }
+void Port_Config_SetHideTopHud(bool on) { sHideHud = on; SaveConfig(); }
 float Port_Config_GetPracticeSlowmo(void) { return 1.0f; }
 void Port_Config_SetPracticeSlowmo(float v) { (void)v; }
 bool Port_Config_GetVSync(void) { return sVsync; }
 void Port_Config_SetVSync(bool on) { sVsync = on; }
 bool Port_Config_GetColorCorrection(void) { return sColorCorrection; }
-void Port_Config_SetColorCorrection(bool on) { sColorCorrection = on; }
+void Port_Config_SetColorCorrection(bool on) { sColorCorrection = on; SaveConfig(); }
 float Port_Config_GetLcdPersistenceRho(void) { return 0.0f; }
 void Port_Config_SetLcdPersistenceRho(float v) { (void)v; }
 bool Port_Config_GetHoldToAdvanceText(void) { return sHoldText; }
-void Port_Config_SetHoldToAdvanceText(bool on) { sHoldText = on; }
+void Port_Config_SetHoldToAdvanceText(bool on) { sHoldText = on; SaveConfig(); }
 float Port_Config_GetMasterVolume(void) { return sVolume; }
-void Port_Config_SetMasterVolume(float v) { sVolume = v; }
+void Port_Config_SetMasterVolume(float v) {
+    sVolume = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+    SaveConfig();
+}
 const char* Port_Config_GetShaderPreset(void) { return ""; }
 void Port_Config_SetShaderPreset(const char* path) { (void)path; }
 int Port_Config_HasRebornMask(void) { return 0; }
@@ -192,6 +282,15 @@ void Port_Config_SetPreferredLanguage(int lang) { (void)lang; }
 void Port_Config_SetPortSettingsMenuEnabled(bool enabled) { sPortSettings = enabled; }
 
 bool Port_Config_AutosaveEnabled(void) { return sAutosave; }
-void Port_Config_SetAutosaveEnabled(bool enabled) { sAutosave = enabled; }
+void Port_Config_SetAutosaveEnabled(bool enabled) { sAutosave = enabled; SaveConfig(); }
 u32 Port_Config_AutosaveIntervalMs(void) { return 300000; }
 void Port_Config_SetAutosaveIntervalMs(u32 ms) { (void)ms; }
+
+unsigned Port_Config_GetTurboMultiplier(void) { return sTurboMultiplier; }
+void Port_Config_SetTurboMultiplier(unsigned multiplier) {
+    if (multiplier < 2) multiplier = 2;
+    if (multiplier > 5) multiplier = 5;
+    sTurboMultiplier = multiplier;
+    Platform3DS_SetTurboMultiplier(multiplier);
+    SaveConfig();
+}
