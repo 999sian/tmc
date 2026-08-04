@@ -210,6 +210,34 @@ void Port_Config_SetSecondScreenBackdrop(int style);
 bool Port_Config_GetSecondScreenSwap(void);
 void Port_Config_SetSecondScreenSwap(bool on);
 #ifdef TMC_3DS
+/* Native 3DS top-screen presentation. WIDE enables the port's extended
+ * 266-pixel gameplay view, NORMAL keeps the GBA frame at 3:2, and STRETCH
+ * fills the complete 400x240 panel. */
+typedef enum {
+    PORT_3DS_ASPECT_WIDE = 0,
+    PORT_3DS_ASPECT_NORMAL,
+    PORT_3DS_ASPECT_STRETCH,
+    PORT_3DS_ASPECT_COUNT,
+} Port3DSAspectRatio;
+int Port_Config_Get3DSAspectRatio(void);
+const char* Port_Config_Get3DSAspectRatioName(void);
+void Port_Config_Cycle3DSAspectRatio(void);
+
+/* Scaling/filter modes for the physical top screen. PIXEL PERFECT is a
+ * true integer 1x presentation; SCALED preserves the current nearest-
+ * neighbour fit, BLUR uses linear filtering, and CRT adds scanlines plus
+ * a subtle RGB mask with the fixed-function 3DS GPU. */
+typedef enum {
+    PORT_3DS_DISPLAY_PIXEL_PERFECT = 0,
+    PORT_3DS_DISPLAY_SCALED,
+    PORT_3DS_DISPLAY_BLUR,
+    PORT_3DS_DISPLAY_CRT,
+    PORT_3DS_DISPLAY_COUNT,
+} Port3DSDisplayMode;
+int Port_Config_Get3DSDisplayMode(void);
+const char* Port_Config_Get3DSDisplayModeName(void);
+void Port_Config_Cycle3DSDisplayMode(void);
+
 /* New 3DS C-stick turbo multiplier. The device supports 2x through 5x and
  * applies changes immediately to the frame-boundary scheduler. */
 unsigned Port_Config_GetTurboMultiplier(void);
