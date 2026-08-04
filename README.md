@@ -22,16 +22,6 @@ their own 3DS SD card.
 ## Support me
 https://buymeacoffee.com/estebanpdn
 
-## Project Status
-
-Current development line: `v0.11`
-
-Public repository:
-
-```text
-https://github.com/EstebanPdN/zelda-tmc-3ds
-```
-
 ## Join my Discord
 
 https://discord.gg/SMW49UMkw
