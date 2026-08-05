@@ -4,11 +4,10 @@ This target builds the native dual-screen Nintendo 3DS frontend.
 
 ## Console Installation
 
-Install the CIA that matches the region of your ROM:
+Install the universal CIA:
 
 ```text
-USA:    tmc-3ds-v0.16.cia
-Europe: tmc-3ds-v0.16-eu.cia
+tmc-3ds-v0.16.cia
 ```
 
 Then create this directory on the SD card:
@@ -18,8 +17,8 @@ sdmc:/3ds/The Minish Cap 3DS/
 ```
 
 Place a legally obtained clean ROM there. Any `.gba` filename is accepted.
-Each package selects only its matching game code, so a USA executable cannot
-silently start with European data or vice versa. Expected SHA-1 values:
+The port detects USA and European game codes at runtime and activates the
+matching internal data profile before boot. Expected SHA-1 values:
 
 ```text
 USA:    b4bd50e4131b027c334547b4524e2dbbd4227130
@@ -44,6 +43,9 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 - Settings: Minish Cap-themed Screen, Gameplay, and Developer submenus with
   persistent options, a manual memory-dump command, and a live diagnostics
   overlay.
+- Randomizer: persistent Project Picori randomizer mode under Gameplay. Mode
+  changes require confirmation, clear only the active profile and related
+  state, keep the ROM, and restart with isolated normal/randomized saves.
 - Show FPS: measured presentation cadence in a compact lower-left top-screen
   box.
 - Diagnostics: press `L + R + A` to pause the game, display `DUMP SAVED`, and
@@ -68,10 +70,8 @@ Run:
 
 ```sh
 chmod +x platform/3ds/build.sh
-platform/3ds/build.sh USA
-platform/3ds/build.sh EU
+platform/3ds/build.sh
 ```
 
-The USA packages are written under `build-3ds/game/`; European packages are
-written under `build-3ds/eu/` with an `-eu` suffix. No ROM, extracted asset
-package or save data is included in any package.
+The universal packages are written under `build-3ds/game/`. No ROM, extracted
+asset package or save data is included in either package.

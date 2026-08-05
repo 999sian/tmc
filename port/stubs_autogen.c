@@ -3,6 +3,7 @@
  */
 
 #include "entity.h"
+#include "port_config.h"
 #include "port_gba_mem.h"
 #include "port_types.h"
 #include "player.h"
@@ -55,7 +56,6 @@ extern u32 gRomSize;
 
 #define COL_MTX_ENTRY_SIZE 12
 #define COL_MTX_STRIDE 34
-#define COL_MTX_ROM_OFFSET 0x000B7B74u /* ROM offset of gCollisionMtx */
 #define COL_NUM_HANDLERS 23
 #define COL_RESULT_NONE 0
 #define COL_RESULT_COLLISION 1
@@ -97,7 +97,8 @@ static u32 PortCalcCollision(Entity* thisEntity, Entity* other) {
      * but the code reads far beyond it into adjacent ROM data for high
      * hitType values (e.g. deku seed hitType=0x68).  gRomData has all that
      * data at the correct offsets. */
-    u32 romOff = COL_MTX_ROM_OFFSET + byteOff;
+    extern u32 Port_CollisionMatrixOffset(void);
+    u32 romOff = Port_CollisionMatrixOffset() + byteOff;
     if (gRomData && romOff + COL_MTX_ENTRY_SIZE <= gRomSize) {
         u8* entry = &gRomData[romOff];
         settings = (PortColSettings*)entry;
@@ -260,9 +261,13 @@ static u64 GetFuserData(Entity* entity) {
     }
 
     if (entity->kind == ENEMY) {
-        table = (const u8*)port_resolve_addr(0x0800232E);
+        table = gRomOffsets && gRomOffsets->fuserEnemyData
+                    ? (const u8*)port_resolve_addr(0x08000000u | gRomOffsets->fuserEnemyData)
+                    : NULL;
     } else if (entity->kind == NPC) {
-        table = (const u8*)port_resolve_addr(0x08002342);
+        table = gRomOffsets && gRomOffsets->fuserNpcData
+                    ? (const u8*)port_resolve_addr(0x08000000u | gRomOffsets->fuserNpcData)
+                    : NULL;
     } else {
         return 0;
     }

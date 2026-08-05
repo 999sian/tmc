@@ -358,15 +358,16 @@ static int IsManagedProfilePath(const char* path);
  */
 static void ResolveRegionDefaultPath(void) {
     const char* name;
+    extern bool Port_Config_GetRandoEnabled(void);
     if (sExplicitProfile) {
         return;
     }
     if (REGION_IS_EU) {
-        name = "tmc_eu.sav";
+        name = Port_Config_GetRandoEnabled() ? "tmc_eu_rando.sav" : "tmc_eu.sav";
     } else if (REGION_IS_JP) {
-        name = "tmc_jp.sav";
+        name = Port_Config_GetRandoEnabled() ? "tmc_jp_rando.sav" : "tmc_jp.sav";
     } else {
-        name = DEFAULT_SAVE_FILENAME; /* USA baseline keeps tmc.sav */
+        name = Port_Config_GetRandoEnabled() ? "tmc_rando.sav" : DEFAULT_SAVE_FILENAME;
     }
     snprintf(sActivePath, sizeof(sActivePath), "%s", name);
 }
@@ -574,6 +575,48 @@ void Port_Save_SetActivePath(const char* path) {
 
 const char* Port_Save_GetActivePath(void) {
     return sActivePath;
+}
+
+/* Destructive mode-switch helper used only after an explicit confirmation.
+ * Clear the complete active profile and every derivative that could carry
+ * normal/randomized state across the boundary. ROM files are never touched. */
+int Port_Save_ClearActiveProfileData(void) {
+    extern int Port_QuickSave_ClearAll(void);
+#ifdef MULTI_REGION
+    ResolveRegionDefaultPath();
+#endif
+    char temp[SAVE_AUX_PATH_MAX];
+    char rollback[SAVE_AUX_PATH_MAX];
+    char backup[SAVE_AUX_PATH_MAX];
+    char sidecar[SAVE_AUX_PATH_MAX];
+    char sidecarTemp[SAVE_AUX_PATH_MAX];
+    char sidecarBackup[SAVE_AUX_PATH_MAX];
+    MakeAuxiliaryPaths(sActivePath, temp, rollback);
+    snprintf(backup, sizeof(backup), "%s.bak", sActivePath);
+    snprintf(sidecar, sizeof(sidecar), "%s", sActivePath);
+    char* extension = strrchr(sidecar, '.');
+    if (extension != NULL) {
+        snprintf(extension, sizeof(sidecar) - (size_t)(extension - sidecar), ".randomizer");
+    } else {
+        strncat(sidecar, ".randomizer", sizeof(sidecar) - strlen(sidecar) - 1);
+    }
+    snprintf(sidecarTemp, sizeof(sidecarTemp), "%s.tmp", sidecar);
+    snprintf(sidecarBackup, sizeof(sidecarBackup), "%s.bak", sidecar);
+
+    const char* files[] = { sActivePath, temp, rollback, backup, sidecar, sidecarTemp, sidecarBackup };
+    int ok = 1;
+    for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); ++i) {
+        if (remove(files[i]) != 0 && errno != ENOENT) ok = 0;
+    }
+
+    if (!Port_QuickSave_ClearAll()) ok = 0;
+
+    memset(sEeprom, 0xFF, sizeof(sEeprom));
+    sEepromDirty = 0;
+    sEepromInited = 0;
+    sSaveTxnDepth = 0;
+    sFlushFailedLast = 0;
+    return ok;
 }
 
 /* Snapshot the in-memory EEPROM into a named profile file without

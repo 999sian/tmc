@@ -513,19 +513,6 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
     int tile_row = src_y / 8;
     int pixel_y = src_y % 8;
     int x;
-#ifdef TMC_3DS
-    const int frame_width = MODE1_GBA_WIDTH;
-    int render_max_x = MODE1_GBA_WIDTH;
-    const bool ws_shadow_active = false;
-    const int ws_shadow_base = 0;
-    uint16_t* const ws_shadow = NULL;
-    const bool ws_hud_right_anchor = false;
-    const int ws_hud_right_dst_x = 0;
-    const int ws_msg_shift = 0;
-    const bool ws_msg_line = false;
-    const int ws_msg_x0 = 0;
-    const int ws_msg_x1 = 0;
-#else
     const int frame_width = mode1_frame_width;
     /* Widescreen Option A: 32-tile BGs have valid VRAM tile data only
      * within the native 240 px. Cull the line to the current visible frame
@@ -549,7 +536,6 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
                              (line >= virtuappu_mode1_ws_msg_y0) && (line < virtuappu_mode1_ws_msg_y1);
     const int ws_msg_x0 = virtuappu_mode1_ws_msg_x0;
     const int ws_msg_x1 = virtuappu_mode1_ws_msg_x1;
-#endif
 
     if (ws_hud_right_anchor || ws_msg_line) {
         render_max_x = frame_width;
@@ -676,11 +662,7 @@ void virtuappu_mode1_render_obj_line(int line, bool obj_1d, uint32_t* line_buffe
     const int mosaic_v = (int)((mosaic_reg >> 12u) & 0x0Fu) + 1;
     int i;
 
-#ifdef TMC_3DS
-    const int obj_frame_width = MODE1_GBA_WIDTH;
-#else
     const int obj_frame_width = mode1_frame_width;
-#endif
     memset(virtuappu_mode1_obj_semitrans, 0, (size_t)obj_frame_width);
     memset(virtuappu_mode1_obj_window, 0, (size_t)obj_frame_width);
 
@@ -962,11 +944,7 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
     uint8_t objwin_ctrl = (uint8_t)((winout >> 8u) & 0x3Fu);
     int i;
     int x;
-#ifdef TMC_3DS
-    const int frame_width = MODE1_GBA_WIDTH;
-#else
     const int frame_width = mode1_frame_width;
-#endif
     uint32_t* const out_row = mode1_output_row(line);
 
     (void)bg_priority;
@@ -1767,11 +1745,7 @@ void virtuappu_mode1_render_frame(const PPUMemory* ppu) {
     const bool affine = (ppu->mode == 2);
 
     virtuappu_mode1_set_frame_geometry(ppu);
-#ifdef TMC_3DS
-    const int frame_width = MODE1_GBA_WIDTH;
-#else
     const int frame_width = mode1_frame_width;
-#endif
 
     dispcnt = virtuappu_mode1_io_read16(MODE1_IO_DISPCNT);
     if ((dispcnt & MODE1_DISP_FORCED_BLANK) != 0u) {

@@ -39,6 +39,33 @@ static const u16 kDigFlags[] = {
     FLAG_BANK_2 + KOBITOYAMA_00_R05, FLAG_BANK_2 + KOBITOYAMA_00_R07,
 };
 
+/* Randomizer tables are compiled from the USA-baseline named flags. Convert
+ * their composed bank+ordinal values to the active ROM's flag numbering before
+ * touching the universal build's save buffer. Global flags are region-stable. */
+static void WriteBaselineFlag(u32 flag) {
+    u32 bank;
+    u32 ordinal;
+    int i;
+
+    if (flag < FLAG_BANK_1) {
+        WriteBit(gSave.flags, flag);
+        return;
+    }
+
+    bank = FLAG_BANK_1;
+    for (i = LOCAL_BANK_12; i >= LOCAL_BANK_1; i--) {
+        if (flag >= gLocalFlagBanks[i]) {
+            bank = gLocalFlagBanks[i];
+            break;
+        }
+    }
+    ordinal = flag - bank;
+#if defined(PC_PORT) && defined(MULTI_REGION)
+    ordinal = Port_RemapBaselineLocalFlag(bank, ordinal);
+#endif
+    WriteBit(gSave.flags, bank + ordinal);
+}
+
 static void ApplyStartInventory(u64 seed) {
     RandomizerSettings settings = Rando_GetSettings();
     u32 granted = 0;
@@ -74,21 +101,21 @@ static void ApplyStorySkip(void) {
     SetGlobalFlag(TABIDACHI);
     SetGlobalFlag(OUTDOOR);
     SetGlobalFlag(ENTRANCE_0);
-    SetLocalFlagByBank(FLAG_BANK_1, MORI_00_KOBITO);
-    SetLocalFlagByBank(FLAG_BANK_1, MORI_ENTRANCE_1ST);
-    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_01_ZELDA);
-    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_WAKAGI_1);
-    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_WAKAGI_2);
-    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_WAKAGI_3);
-    SetLocalFlagByBank(FLAG_BANK_1, SOUGEN_06_AKINDO);
-    SetLocalFlagByBank(FLAG_BANK_1, CASTLE_04_MEZAME);
-    SetLocalFlagByBank(FLAG_BANK_1, MACHI_01_DEMO);
-    SetLocalFlagByBank(FLAG_BANK_2, MHOUSE15_OP1ST);
-    SetLocalFlagByBank(FLAG_BANK_2, M_PRIEST_TALK);
-    SetLocalFlagByBank(FLAG_BANK_2, M_ELDER_TALK1ST);
-    SetLocalFlagByBank(FLAG_BANK_2, M_PRIEST_MOVE);
-    SetLocalFlagByBank(FLAG_BANK_2, KOBITO_MORI_1ST);
-    SetLocalFlagByBank(FLAG_BANK_5, LV1_0B_WALK);
+    SetLocalFlagByBankB(FLAG_BANK_1, MORI_00_KOBITO);
+    SetLocalFlagByBankB(FLAG_BANK_1, MORI_ENTRANCE_1ST);
+    SetLocalFlagByBankB(FLAG_BANK_1, SOUGEN_01_ZELDA);
+    SetLocalFlagByBankB(FLAG_BANK_1, SOUGEN_06_WAKAGI_1);
+    SetLocalFlagByBankB(FLAG_BANK_1, SOUGEN_06_WAKAGI_2);
+    SetLocalFlagByBankB(FLAG_BANK_1, SOUGEN_06_WAKAGI_3);
+    SetLocalFlagByBankB(FLAG_BANK_1, SOUGEN_06_AKINDO);
+    SetLocalFlagByBankB(FLAG_BANK_1, CASTLE_04_MEZAME);
+    SetLocalFlagByBankB(FLAG_BANK_1, MACHI_01_DEMO);
+    SetLocalFlagByBankB(FLAG_BANK_2, MHOUSE15_OP1ST);
+    SetLocalFlagByBankB(FLAG_BANK_2, M_PRIEST_TALK);
+    SetLocalFlagByBankB(FLAG_BANK_2, M_ELDER_TALK1ST);
+    SetLocalFlagByBankB(FLAG_BANK_2, M_PRIEST_MOVE);
+    SetLocalFlagByBankB(FLAG_BANK_2, KOBITO_MORI_1ST);
+    SetLocalFlagByBankB(FLAG_BANK_5, LV1_0B_WALK);
     fprintf(stderr, "[RANDO] story skip: intro flags set (post-Ezlo start)\n");
 }
 
@@ -99,12 +126,12 @@ static void ApplyWorldOpen(void) {
         SetGlobalFlag(WARP_EVENT_END);
         SetGlobalFlag(TINGLE_TALK1ST);
         SetGlobalFlag(MIZUKAKI_START);
-        SetLocalFlagByBank(FLAG_BANK_1, BEANDEMO_00);
-        SetLocalFlagByBank(FLAG_BANK_1, BEANDEMO_01);
-        SetLocalFlagByBank(FLAG_BANK_1, BEANDEMO_02);
-        SetLocalFlagByBank(FLAG_BANK_1, BEANDEMO_03);
-        SetLocalFlagByBank(FLAG_BANK_1, BEANDEMO_04);
-        SetLocalFlagByBank(FLAG_BANK_1, YAMA_04_BOMBWALL0);
+        SetLocalFlagByBankB(FLAG_BANK_1, BEANDEMO_00);
+        SetLocalFlagByBankB(FLAG_BANK_1, BEANDEMO_01);
+        SetLocalFlagByBankB(FLAG_BANK_1, BEANDEMO_02);
+        SetLocalFlagByBankB(FLAG_BANK_1, BEANDEMO_03);
+        SetLocalFlagByBankB(FLAG_BANK_1, BEANDEMO_04);
+        SetLocalFlagByBankB(FLAG_BANK_1, YAMA_04_BOMBWALL0);
         fprintf(stderr, "[RANDO] world open: speed-up flags applied\n");
     }
 }
@@ -115,13 +142,13 @@ static void ApplyBaselineNewFile(u64 seed) {
     size_t i;
 
     for (i = 0; i < count; i++) {
-        WriteBit(gSave.flags, flags[i]);
+        WriteBaselineFlag(flags[i]);
     }
 
-    SetLocalFlagByBank(FLAG_BANK_10, LV6_SOTO_01_00);
-    SetLocalFlagByBank(FLAG_BANK_10, LV6_SOTO_01_01);
-    SetLocalFlagByBank(FLAG_BANK_10, LV6_SOTO_01_02);
-    SetLocalFlagByBank(FLAG_BANK_10, LV6_35_00);
+    SetLocalFlagByBankB(FLAG_BANK_10, LV6_SOTO_01_00);
+    SetLocalFlagByBankB(FLAG_BANK_10, LV6_SOTO_01_01);
+    SetLocalFlagByBankB(FLAG_BANK_10, LV6_SOTO_01_02);
+    SetLocalFlagByBankB(FLAG_BANK_10, LV6_35_00);
 
     // Skip cucco rounds, leaving 1 round
     SetGlobalFlag(ANJU_LV_BIT0);
@@ -147,18 +174,18 @@ static void ApplyBaselineNewFile(u64 seed) {
 }
 
 static void ApplyLocationDisableFlags(void) {
-    WriteBit(gSave.flags, FLAG_BANK_2 + BILL09_YADO2F_POEMN);
-    WriteBit(gSave.flags, FLAG_BANK_8 + LV4_0a_TSUBO);
-    WriteBit(gSave.flags, FLAG_BANK_2 + MHOUSE2_02_KEY);
-    WriteBit(gSave.flags, FLAG_BANK_3 + MOGURA_51_00);
-    WriteBit(gSave.flags, FLAG_BANK_3 + MOGURA_51_01);
-    WriteBit(gSave.flags, FLAG_BANK_1 + HIKYOU_00_M2);
-    WriteBit(gSave.flags, FLAG_BANK_1 + HIKYOU_00_T1);
-    WriteBit(gSave.flags, FLAG_BANK_1 + LOST_00_ENTER);
-    WriteBit(gSave.flags, FLAG_BANK_1 + MIZUUMI_00_H01);
-    WriteBit(gSave.flags, FLAG_BANK_8 + LV4_34_01);
+    WriteBaselineFlag(FLAG_BANK_2 + BILL09_YADO2F_POEMN);
+    WriteBaselineFlag(FLAG_BANK_8 + LV4_0a_TSUBO);
+    WriteBaselineFlag(FLAG_BANK_2 + MHOUSE2_02_KEY);
+    WriteBaselineFlag(FLAG_BANK_3 + MOGURA_51_00);
+    WriteBaselineFlag(FLAG_BANK_3 + MOGURA_51_01);
+    WriteBaselineFlag(FLAG_BANK_1 + HIKYOU_00_M2);
+    WriteBaselineFlag(FLAG_BANK_1 + HIKYOU_00_T1);
+    WriteBaselineFlag(FLAG_BANK_1 + LOST_00_ENTER);
+    WriteBaselineFlag(FLAG_BANK_1 + MIZUUMI_00_H01);
+    WriteBaselineFlag(FLAG_BANK_8 + LV4_34_01);
     for (size_t i = 0; i < (sizeof(kDigFlags) / sizeof(kDigFlags[0])); i++) {
-        WriteBit(gSave.flags, kDigFlags[i]);
+        WriteBaselineFlag(kDigFlags[i]);
     }
 }
 
@@ -173,7 +200,7 @@ static void ApplyOpenWorld(void) {
 
     flags = Rando_NewFile_WorldOpenFlags(&count);
     for (i = 0; i < count; i++) {
-        WriteBit(gSave.flags, flags[i]);
+        WriteBaselineFlag(flags[i]);
     }
 
     gSave.areaVisitFlags[0] |= RANDO_NEWFILE_VISIT_MASK;

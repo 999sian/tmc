@@ -10,9 +10,10 @@
  *    each entry is independently verifiable against src/ (e.g.
  *    SOUGEN_06_HASHIGO is the North Hyrule Field ladder, LV1_*_* are
  *    Deepwood room flags);
- *  - flag NUMBERING is region-dependent (flags.h re-numbers several banks
- *    under EU), so a raw USA byte image would corrupt EU saves. Named
- *    enum constants compile to the right bit per region.
+ *  - flag NUMBERING is region-dependent, so a raw USA byte image would
+ *    corrupt EU saves. The universal build compiles these named constants
+ *    against its USA baseline and rando_runtime.c remaps them to the active
+ *    ROM before writing the save.
  *
  * kRandoNewFileBaselineFlags mirrors upstream's unconditional
  * `startingFlags` blob (116 bytes at gSave.flags): the "banish story"

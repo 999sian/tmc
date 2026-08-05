@@ -43,6 +43,7 @@ void Port_Save_BeginTransaction(void);
 int Port_Save_EndTransaction(void);
 void Port_Save_GetStats(PortSaveStats* stats);
 const char* Port_Save_StageName(PortSaveStage stage);
+int Port_Save_ClearActiveProfileData(void);
 
 #ifdef __cplusplus
 }

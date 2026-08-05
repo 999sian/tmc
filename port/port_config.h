@@ -30,8 +30,16 @@ typedef struct {
     u32 paletteGroups;    /* gPaletteGroups pointer table */
     u32 objPalettes;      /* OBJ palette offset table */
     u32 frameObjLists;    /* gFrameObjLists sprite frame data */
+    u32 extraFrameOffsets; /* gExtraFrameOffsets multipart-sprite positioning */
     u32 fixedTypeGfx;     /* gFixedTypeGfxData */
     u32 spritePtrs;       /* gSpritePtrs */
+    u32 collisionMatrix;  /* gCollisionMtx and adjacent collision settings */
+    u32 figurines;        /* gFigurines packed ROM table */
+    u32 fuserEnemyData;   /* GetFuserData enemy table */
+    u32 fuserNpcData;     /* GetFuserData NPC table */
+    u32 lakeHyliaEnemies; /* Lake Hylia default entity list */
+    u32 lakeHyliaCleared; /* Lake Hylia post-dungeon entity list */
+    u32 lilypadRails;     /* gLilypadRails pointer table */
     u32 songTable;        /* gSongTable */
     u32 translations;     /* gTranslations */
     u32 text09230;        /* font/text pointer table 1 */

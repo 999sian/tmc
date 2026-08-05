@@ -2556,6 +2556,7 @@ static void SweepReachable(const RandomizerSettings* settings, const bool* base_
     bool progressed;
 
     memcpy(owned, base_items, sizeof(owned));
+    memset(helpers, 0, sizeof(helpers));
     memset(out_reachable, 0, sizeof(bool) * RANDO_LOCATION_COUNT);
     EvaluateHelpers(settings, owned, helpers);
 
@@ -2939,7 +2940,7 @@ static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* setting
 }
 
 extern "C" RandomizerSettings Rando_DefaultSettings(void) {
-    RandomizerSettings settings;
+    RandomizerSettings settings = {};
     settings.glitchless_logic = true;
     settings.obscure_locations = false;
     settings.shuffle_kinstones = true;

@@ -36,6 +36,7 @@
  *    mid-cutscene positions.
  */
 
+#include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -427,6 +428,25 @@ static int WriteSlotToDisk(int slot) {
         return 0;
     }
     return 1;
+}
+
+/* Remove every savestate for the active ROM region and invalidate the
+ * in-memory copies. Randomizer mode changes use this after confirmation so a
+ * soft reset cannot restore state from the previous mode. */
+int Port_QuickSave_ClearAll(void) {
+    int ok = 1;
+    for (int slot = 0; slot < NUM_SLOTS; ++slot) {
+        char path[64];
+        SlotFilename(slot, path, sizeof(path));
+        if (remove(path) != 0 && errno != ENOENT) ok = 0;
+        free(sSlots[slot].snapshot);
+        memset(&sSlots[slot], 0, sizeof(sSlots[slot]));
+    }
+    sAutoNextSlot = AUTO_SLOT_BASE;
+    sAutoLastSaveTicksMs = 0;
+    sLastSeenArea = 0xFF;
+    sLastSeenRoom = 0xFF;
+    return ok;
 }
 
 /* Reads the fixed 4-field slot header (magic, version, total, saved_at).

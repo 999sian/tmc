@@ -464,8 +464,16 @@ const RomOffsets kRomOffsets_USA = {
     .paletteGroups = 0x0FF850,
     .objPalettes = 0x133368,
     .frameObjLists = 0x2F3D74,
+    .extraFrameOffsets = 0x9FB770,
     .fixedTypeGfx = 0x132B30,
     .spritePtrs = 0x0029B4,
+    .collisionMatrix = 0x0B7B74,
+    .figurines = 0x1281A8,
+    .fuserEnemyData = 0x00232E,
+    .fuserNpcData = 0x002342,
+    .lakeHyliaEnemies = 0x0F3D44,
+    .lakeHyliaCleared = 0x0F3EA4,
+    .lilypadRails = 0x0FED98,
     .songTable = 0xA11DBC,
     .translations = 0x109214,
     .text09230 = 0x109230,
@@ -507,8 +515,16 @@ const RomOffsets kRomOffsets_EU = {
     .paletteGroups = 0x0FED88,
     .objPalettes = 0x1329B4,
     .frameObjLists = 0x2F3460,
+    .extraFrameOffsets = 0xB07080,
     .fixedTypeGfx = 0x132180,
     .spritePtrs = 0x002A5C,
+    .collisionMatrix = 0x0B729C,
+    .figurines = 0x1278E0,
+    .fuserEnemyData = 0x0023D6,
+    .fuserNpcData = 0x0023EA,
+    .lakeHyliaEnemies = 0x0F3368,
+    .lakeHyliaCleared = 0x0F34C8,
+    .lilypadRails = 0x0FE2DC,
     .songTable = 0xB1D414,
     .translations = 0x108968,
     .text09230 = 0x108984,
@@ -566,8 +582,16 @@ const RomOffsets kRomOffsets_JP = {
     .paletteGroups = 0xFF500,
     .objPalettes = 0x132F94,
     .frameObjLists = 0x2F39A0,
+    .extraFrameOffsets = 0,
     .fixedTypeGfx = 0x13275C,
     .spritePtrs = 0x29B4,
+    .collisionMatrix = 0,
+    .figurines = 0,
+    .fuserEnemyData = 0,
+    .fuserNpcData = 0,
+    .lakeHyliaEnemies = 0,
+    .lakeHyliaCleared = 0,
+    .lilypadRails = 0,
     .songTable = 0,
     .translations = 0x108ED8,
     .text09230 = 0x108EF4,
@@ -608,6 +632,10 @@ const RomOffsets kRomOffsets_JP = {
  * the USA offset before region detection has run. */
 u32 Port_TownspersonSpriteLoadPtrsOffset(void) {
     return gRomOffsets ? gRomOffsets->townspersonSpriteLoadPtrs : 0x10B6ECu;
+}
+
+u32 Port_CollisionMatrixOffset(void) {
+    return (gRomOffsets && gRomOffsets->collisionMatrix) ? gRomOffsets->collisionMatrix : 0x0B7B74u;
 }
 
 RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
@@ -1498,22 +1526,16 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "gPalette_549 loaded (%zu bytes from gGlobalGfxAndPalettes + 0x44A0).\n", sizeof(gPalette_549));
     }
 
-    /* gLilypadRails — USA: a 3-entry .4byte pointer table at 0x080FED98 (rail
-     * command lists for type2>=0x80 lilypads and kinstone-fused lilypad rails,
-     * data/const/game_2.s). The port stub (port_linked_stubs.c) is a zero-init
-     * native array, so without this the rails resolve to NULL and those lilypads
-     * never move along their path. Resolve the 3 ROM pointers into it (same
-     * approach as gPalette_549/gFigurines). USA-only absolute address; EU is
-     * left as the NULL stub (status quo — no regression). */
-    if (gRomRegion == ROM_REGION_USA) {
+    /* Resolve the active region's three lilypad rail command lists. */
+    if (R->lilypadRails != 0 && R->lilypadRails + 12 <= gRomSize) {
         extern void* gLilypadRails[];
-        u8* base = (u8*)Port_ResolveRomData(0x080FED98);
+        u8* base = &gRomData[R->lilypadRails];
         if (base != NULL) {
             int i;
             for (i = 0; i < 3; i++) {
                 gLilypadRails[i] = Port_UnpackRomDataPtr(base, (u32)i);
             }
-            fprintf(stderr, "gLilypadRails loaded (3 rail pointers from 0x080FED98).\n");
+            fprintf(stderr, "gLilypadRails loaded (3 rail pointers from ROM 0x%X).\n", R->lilypadRails);
         }
     }
 
@@ -1529,12 +1551,19 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "WARNING: gFrameObjLists ROM range invalid; using compile-time fallback.\n");
     }
 
-    /* gExtraFrameOffsets — self-relative offset table multi-part sprite positioning */
+    /* gExtraFrameOffsets is region-specific. EU removes one first-level entry
+     * and compensates later in the blob, so a USA copy shifts every multipart
+     * sprite lookup even when the main sprite tables came from the EU ROM. */
     {
         extern const u8 kExtraFrameOffsetsData[4352];
         extern u8 gExtraFrameOffsets[4352];
-        memcpy(gExtraFrameOffsets, kExtraFrameOffsetsData, 4352);
-        fprintf(stderr, "gExtraFrameOffsets loaded (4352 bytes from compile-time table).\n");
+        if (R->extraFrameOffsets != 0 && R->extraFrameOffsets + 4352 <= gRomSize) {
+            memcpy(gExtraFrameOffsets, &gRomData[R->extraFrameOffsets], 4352);
+            fprintf(stderr, "gExtraFrameOffsets loaded (4352 bytes from ROM 0x%X).\n", R->extraFrameOffsets);
+        } else {
+            memcpy(gExtraFrameOffsets, kExtraFrameOffsetsData, 4352);
+            fprintf(stderr, "WARNING: gExtraFrameOffsets unavailable; using compile-time fallback.\n");
+        }
     }
 
     /* OBJ palette offset table — now compile-time const src/data/objPalettes.c */
@@ -1619,10 +1648,14 @@ void Port_LoadRom(const char* path) {
     memcpy(gUnk_0810942E, &gRomData[R->text0942E], 160);
     memcpy(gUnk_081094CE, &gRomData[R->text094CE], 1378);
 
-    /* UI data — from compile-time const data */
+    /* UI data — always from the active ROM profile. */
     {
         extern u8 gUnk_080C9044[];
-        memcpy(gUnk_080C9044, kUiInitData, 8);
+        if (R->uiData + 8 <= gRomSize) {
+            memcpy(gUnk_080C9044, &gRomData[R->uiData], 8);
+        } else {
+            memcpy(gUnk_080C9044, kUiInitData, 8);
+        }
     }
 
     /* UI element definitions (native function pointers) */
@@ -1676,8 +1709,10 @@ void Port_LoadRom(const char* path) {
     }
     fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries from active ROM).\n");
 
-    /* Load overlay data from compile-time const (no ROM read needed) */
-    {
+    /* OBJ size/clipping data also differs by region. */
+    if (R->overlaySizeTable + 240 <= gRomSize) {
+        Port_LoadOverlayData(gRomData, gRomSize, R->overlaySizeTable);
+    } else {
         extern void Port_LoadOverlayDataFromConst(const u8* data, u32 size);
         Port_LoadOverlayDataFromConst(kOverlaySizeData, 240);
     }
