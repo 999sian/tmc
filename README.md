@@ -34,6 +34,9 @@ https://ko-fi.com/estebanpdn
 
 - Native Nintendo 3DS port with installable CIA and Homebrew Launcher 3DSX
   builds.
+- One universal build that detects supported USA and European ROMs at runtime
+  and selects the matching graphics, audio, collision, text, UI, and room-data
+  profile automatically.
 - True widescreen gameplay across the 400x240 top screen, with centered
   360x240 native presentation for fixed-width scenes.
 - Bottom screen with live map, dungeon information, quest status and touch item
@@ -46,6 +49,9 @@ https://ko-fi.com/estebanpdn
   choose 2x through 5x from the bottom-screen Gameplay settings.
 - Minish Cap-themed bottom-screen Settings hierarchy with Screen, Gameplay,
   and Developer submenus. Options apply live and persist across launches.
+- Project Picori Randomizer under Gameplay settings. Changing modes requires
+  confirmation, clears only the active profile and its related state, keeps the
+  ROM untouched, and restarts with isolated normal/randomized save storage.
 - Wide, Original, and Stretch aspect-ratio modes, plus Pixel Perfect, Scaled,
   Blur display styles.
 - Optional measured FPS counter in the lower-left corner of the top screen.
@@ -64,12 +70,11 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install the package that matches your ROM region with FBI, or use its
-   matching 3DSX build in the Homebrew Launcher:
+1. Install the universal CIA with FBI, or use the universal 3DSX build in the
+   Homebrew Launcher:
 
 ```text
-USA:    tmc-3ds-v0.16.cia
-Europe: tmc-3ds-v0.16-eu.cia
+tmc-3ds-v0.16.cia
 ```
 2. Create this directory on the SD card:
 
@@ -77,9 +82,9 @@ Europe: tmc-3ds-v0.16-eu.cia
 sdmc:/3ds/The Minish Cap 3DS/
 ```
 
-3. Place your clean ROM in that directory. Any `.gba` filename is accepted.
-   Each package ignores ROMs from the other region, preventing mixed code and
-   data from starting the game.
+3. Place your clean USA or European ROM in that directory. Any `.gba` filename
+   is accepted. The port detects its region and activates the matching internal
+   profile before game data is loaded.
 
 Expected ROM SHA-1 values:
 
@@ -121,8 +126,7 @@ Build:
 
 ```sh
 chmod +x platform/3ds/build.sh
-./platform/3ds/build.sh USA
-./platform/3ds/build.sh EU
+./platform/3ds/build.sh
 ```
 
 Outputs are written to:
@@ -130,8 +134,6 @@ Outputs are written to:
 ```text
 build-3ds/game/tmc-3ds-v0.16.cia
 build-3ds/game/tmc-3ds-v0.16.3dsx
-build-3ds/eu/tmc-3ds-v0.16-eu.cia
-build-3ds/eu/tmc-3ds-v0.16-eu.3dsx
 ```
 
 The build does not embed a ROM.

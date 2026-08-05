@@ -228,7 +228,11 @@ const Transition* const gExitLists_HyruleTown[] = {
 };
 
 const Transition gExitList_HyruleTown_1[] = {
-    { WARP_TYPE_BORDER, 0x0, 0x0, 0xfff, 0x318, TRANSITION_SHAPE_BORDER_NORTH, AREA_HYRULE_FIELD, ROOM_HYRULE_FIELD_NORTH_HYRULE_FIELD,
+    /* Festival Town is a separate room-coordinate space. Preserving its
+     * absolute X with the 0xfff sentinel places Link west of North Hyrule
+     * Field and leaves the room running with no controllable player. Enter
+     * through the same valid doorway used by normal Hyrule Town instead. */
+    { WARP_TYPE_BORDER, 0x0, 0x0, 0x1f8, 0x318, TRANSITION_SHAPE_BORDER_NORTH, AREA_HYRULE_FIELD, ROOM_HYRULE_FIELD_NORTH_HYRULE_FIELD,
       1, TRANSITION_TYPE_NORMAL, 0x0, 0x0, 0x0, 0x0 },
     TransitionListEnd,
 };

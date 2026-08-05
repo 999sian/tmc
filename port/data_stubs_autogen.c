@@ -3,6 +3,7 @@
  */
 
 #include "gba/m4a.h"
+#include "port_config.h"
 #include "room.h"
 
 /*
@@ -585,7 +586,8 @@ void Port_InitDataStubs(void) {
      * collision handlers with hardcoded indices (like 0x11AA) also work. */
     {
         extern u8 gCollisionMtx[];
-        u32 col_rom_off = 0x000B7B74u;
+        extern u32 Port_CollisionMatrixOffset(void);
+        u32 col_rom_off = Port_CollisionMatrixOffset();
         u32 col_size = 173u * 34u * 12u; /* 70584 bytes */
         if (col_rom_off + col_size <= gRomSize) {
             memcpy(gCollisionMtx, &gRomData[col_rom_off], col_size);
@@ -633,12 +635,13 @@ void Port_InitDataStubs(void) {
         extern EntityData UpperInn_Farore;
         struct PerRoomEntityListInit {
             const char* name;
-            u32 rom_offset;
+            u32 usa_offset;
+            u32 eu_offset;
             u32 size;
             u8* dest;
         };
         struct PerRoomEntityListInit entries[] = {
-            { "gUnk_additional_a_DeepwoodShrineBoss_Main", 0xDF94Cu, 0x30u,
+            { "gUnk_additional_a_DeepwoodShrineBoss_Main", 0xDF94Cu, 0xDF068u, 0x30u,
               (u8*)&gUnk_additional_a_DeepwoodShrineBoss_Main },
             /* Melari's Mines main room: state-change loads the additional_8
              * NPC list (2 minishes + Melari + 2 cutscene swords) and the
@@ -646,10 +649,11 @@ void Port_InitDataStubs(void) {
              * runtime parses 16-byte chunks of zeros as GROUND_ITEM kind=0
              * entities — visible as duplicate heart containers + green
              * warp tile in the room (#42), and Melari himself + his crew
-             * never appear (#43). USA addresses; EU/JP would need different
-             * offsets. */
-            { "gUnk_additional_8_MelarisMine_Main", 0xDD214u, 0x60u, (u8*)&gUnk_additional_8_MelarisMine_Main },
-            { "gUnk_additional_9_MelarisMine_Main", 0xDD274u, 0x20u, (u8*)&gUnk_additional_9_MelarisMine_Main },
+             * never appear (#43). */
+            { "gUnk_additional_8_MelarisMine_Main", 0xDD214u, 0xDC950u, 0x60u,
+              (u8*)&gUnk_additional_8_MelarisMine_Main },
+            { "gUnk_additional_9_MelarisMine_Main", 0xDD274u, 0xDC9B0u, 0x20u,
+              (u8*)&gUnk_additional_9_MelarisMine_Main },
             /* Per-room state-change additional entity lists. Each one is
              * loaded by sub_StateChange_<Room>() in roomInit.c via
              * LoadRoomEntityList() — which iterates EntityData records
@@ -658,57 +662,58 @@ void Port_InitDataStubs(void) {
              * correctly. Crashes covered: #64 (Temple of Droplets big-key
              * area, BigOcto state-change), #68 (Hyrule Town Romio's
              * "Purple House"), and others where the post-state-change
-             * room never loaded its real entity list. USA addresses. */
-            { "gUnk_additional_8_DeepwoodShrine_StairsToB1", 0xDE834u, 0x30u,
+             * room never loaded its real entity list. */
+            { "gUnk_additional_8_DeepwoodShrine_StairsToB1", 0xDE834u, 0xDDF70u, 0x30u,
               (u8*)&gUnk_additional_8_DeepwoodShrine_StairsToB1 },
-            { "gUnk_additional_8_HouseInteriors1_Library1F", 0xD66F4u, 0x20u,
+            { "gUnk_additional_8_HouseInteriors1_Library1F", 0xD66F4u, 0xD5E50u, 0x20u,
               (u8*)&gUnk_additional_8_HouseInteriors1_Library1F },
-            { "gUnk_additional_9_HouseInteriors1_Library1F", 0xD6734u, 0x50u,
+            { "gUnk_additional_9_HouseInteriors1_Library1F", 0xD6734u, 0xD5E90u, 0x50u,
               (u8*)&gUnk_additional_9_HouseInteriors1_Library1F },
-            { "gUnk_additional_8_HyruleCastle_3", 0xD7690u, 0x40u, (u8*)&gUnk_additional_8_HyruleCastle_3 },
-            { "gUnk_additional_a_CaveOfFlamesBoss_Main", 0xE1814u, 0x30u,
+            { "gUnk_additional_8_HyruleCastle_3", 0xD7690u, 0xD6DECu, 0x40u,
+              (u8*)&gUnk_additional_8_HyruleCastle_3 },
+            { "gUnk_additional_a_CaveOfFlamesBoss_Main", 0xE1814u, 0xE0F30u, 0x30u,
               (u8*)&gUnk_additional_a_CaveOfFlamesBoss_Main },
-            { "gUnk_additional_a_TempleOfDroplets_BigOcto", 0xE49F4u, 0x30u,
+            { "gUnk_additional_a_TempleOfDroplets_BigOcto", 0xE49F4u, 0xE40F0u, 0x30u,
               (u8*)&gUnk_additional_a_TempleOfDroplets_BigOcto },
-            { "gUnk_additional_8_PalaceOfWinds_GyorgTornado", 0xE72E4u, 0x30u,
+            { "gUnk_additional_8_PalaceOfWinds_GyorgTornado", 0xE72E4u, 0xE69E0u, 0x30u,
               (u8*)&gUnk_additional_8_PalaceOfWinds_GyorgTornado },
-            { "gUnk_additional_9_PalaceOfWinds_GyorgTornado", 0xE7314u, 0x30u,
+            { "gUnk_additional_9_PalaceOfWinds_GyorgTornado", 0xE7314u, 0xE6A10u, 0x30u,
               (u8*)&gUnk_additional_9_PalaceOfWinds_GyorgTornado },
-            { "gUnk_additional_c_HouseInteriors2_Romio", 0xF236Cu, 0x20u,
+            { "gUnk_additional_c_HouseInteriors2_Romio", 0xF236Cu, 0xF19A0u, 0x20u,
               (u8*)&gUnk_additional_c_HouseInteriors2_Romio },
-            { "gUnk_additional_9_HouseInteriors2_Percy", 0xF2718u, 0x40u,
+            { "gUnk_additional_9_HouseInteriors2_Percy", 0xF2718u, 0xF1D4Cu, 0x40u,
               (u8*)&gUnk_additional_9_HouseInteriors2_Percy },
-            { "gUnk_additional_a_HouseInteriors2_Percy", 0xF2758u, 0x40u,
+            { "gUnk_additional_a_HouseInteriors2_Percy", 0xF2758u, 0xF1D8Cu, 0x40u,
               (u8*)&gUnk_additional_a_HouseInteriors2_Percy },
-            { "gUnk_additional_8_HouseInteriors3_BorlovEntrance", 0xF5F38u, 0x20u,
+            { "gUnk_additional_8_HouseInteriors3_BorlovEntrance", 0xF5F38u, 0xF54F4u, 0x20u,
               (u8*)&gUnk_additional_8_HouseInteriors3_BorlovEntrance },
-            { "gUnk_additional_9_HouseInteriors3_BorlovEntrance", 0xF5F58u, 0x20u,
+            { "gUnk_additional_9_HouseInteriors3_BorlovEntrance", 0xF5F58u, 0xF5514u, 0x20u,
               (u8*)&gUnk_additional_9_HouseInteriors3_BorlovEntrance },
-            { "gUnk_additional_a_HouseInteriors3_BorlovEntrance", 0xF5F78u, 0x20u,
+            { "gUnk_additional_a_HouseInteriors3_BorlovEntrance", 0xF5F78u, 0xF5534u, 0x20u,
               (u8*)&gUnk_additional_a_HouseInteriors3_BorlovEntrance },
             /* Nine stubs that were never in this table — zero .bss, so the
              * kind!=0xFF walk ran off the array (ASan: Mayor's house rear
              * entry, area 0x21) and the real NPCs never spawned: Mayor's
              * house state change, Mayor's cabin (Minish path), and all
              * seven Happy Hearth Inn 2F oracle lists (Din/Nayru/Farore
-             * house-renting sidequest). Offsets from tools/retail_maps/
-             * usa.map, sizes measured to the 0xFF terminator. USA
-             * addresses, same limitation as the rest of this table. */
-            { "Entities_MinishPaths_MayorsCabin_gUnk_080D6138", 0xD6138u, 0x60u,
+             * house-renting sidequest). Sizes are measured through each
+             * region's 0xFF terminator. */
+            { "Entities_MinishPaths_MayorsCabin_gUnk_080D6138", 0xD6138u, 0xD5894u, 0x60u,
               (u8*)&Entities_MinishPaths_MayorsCabin_gUnk_080D6138 },
-            { "Entities_HouseInteriors1_Mayor_080D6210", 0xD6210u, 0x50u,
+            { "Entities_HouseInteriors1_Mayor_080D6210", 0xD6210u, 0xD596Cu, 0x50u,
               (u8*)&Entities_HouseInteriors1_Mayor_080D6210 },
-            { "UpperInn_Oracles", 0xD6BF4u, 0x40u, (u8*)&UpperInn_Oracles },
-            { "UpperInn_NoFarore", 0xD6C34u, 0x30u, (u8*)&UpperInn_NoFarore },
-            { "UpperInn_NoDin", 0xD6C64u, 0x30u, (u8*)&UpperInn_NoDin },
-            { "UpperInn_NoNayru", 0xD6C94u, 0x30u, (u8*)&UpperInn_NoNayru },
-            { "UpperInn_Din", 0xD6CC4u, 0x20u, (u8*)&UpperInn_Din },
-            { "UpperInn_Nayru", 0xD6CE4u, 0x20u, (u8*)&UpperInn_Nayru },
-            { "UpperInn_Farore", 0xD6D04u, 0x20u, (u8*)&UpperInn_Farore },
+            { "UpperInn_Oracles", 0xD6BF4u, 0xD6350u, 0x40u, (u8*)&UpperInn_Oracles },
+            { "UpperInn_NoFarore", 0xD6C34u, 0xD6390u, 0x30u, (u8*)&UpperInn_NoFarore },
+            { "UpperInn_NoDin", 0xD6C64u, 0xD63C0u, 0x30u, (u8*)&UpperInn_NoDin },
+            { "UpperInn_NoNayru", 0xD6C94u, 0xD63F0u, 0x30u, (u8*)&UpperInn_NoNayru },
+            { "UpperInn_Din", 0xD6CC4u, 0xD6420u, 0x20u, (u8*)&UpperInn_Din },
+            { "UpperInn_Nayru", 0xD6CE4u, 0xD6440u, 0x20u, (u8*)&UpperInn_Nayru },
+            { "UpperInn_Farore", 0xD6D04u, 0xD6460u, 0x20u, (u8*)&UpperInn_Farore },
         };
         for (size_t i = 0; i < sizeof(entries) / sizeof(entries[0]); i++) {
-            if (entries[i].rom_offset + entries[i].size <= gRomSize) {
-                memcpy(entries[i].dest, &gRomData[entries[i].rom_offset], entries[i].size);
+            const u32 rom_offset = gRomRegion == ROM_REGION_EU ? entries[i].eu_offset : entries[i].usa_offset;
+            if (rom_offset + entries[i].size <= gRomSize) {
+                memcpy(entries[i].dest, &gRomData[rom_offset], entries[i].size);
                 count++;
             }
         }

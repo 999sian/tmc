@@ -536,12 +536,10 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
 
     /* ---- TMC_ROOMCAP_FESTIVAL_EXIT_PROBE ------------------------------
      * Reproduce the intro route from Festival Town into North Hyrule Field.
-     * The festival room is shifted into Hyrule Town's world coordinates and
-     * its north exit preserves X with the 0xfff marker. A cutscene can leave
-     * camera_target on a cleared script entity even after Link has control;
-     * the preserved coordinate must therefore come from Link, not that stale
-     * camera entity. The probe deliberately supplies a zeroed camera target,
-     * fires the real ROM transition, then verifies Link arrives at x=0x1f8. */
+     * Festival Town has its own coordinate space, so its north exit must use
+     * the valid North Hyrule doorway rather than preserving an incompatible
+     * absolute X. The probe supplies a stale camera target, fires the real
+     * transition, then verifies Link still arrives at x=0x1f8. */
     {
         static int fprobe = -1, fstage = 0, fredirectPrepared = 0;
         static unsigned int fdeadline;

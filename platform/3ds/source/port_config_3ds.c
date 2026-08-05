@@ -1,5 +1,6 @@
 #include "port_runtime_config.h"
 #include "platform_3ds.h"
+#include "rando/rando.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,23 @@ static bool sVsync = true;
 static float sVolume = 1.0f;
 static int sBackdrop;
 static unsigned sTurboMultiplier = 5;
+static bool sRandoEnabled;
+static bool sRandoGlitchless = true;
+static bool sRandoObscure;
+static bool sRandoKinstones = true;
+static bool sRandoEntrances;
+static bool sRandoDojos = true;
+static bool sRandoOpenWorld;
+static bool sRandoHomewarp = true;
+static bool sRandoStartSword = true;
+static bool sRandoEarlyCrests = true;
+static bool sRandoInstantText = true;
+static bool sRandoDungeonItems;
+static int sRandoItemPool;
+static int sRandoTunicColor;
+static int sRandoHeartColor;
+static int sRandoTricks;
+static int sRandoAccessibility;
 static bool sConfigLoaded;
 static char sConfigPath[256] = "tmc3ds.ini";
 
@@ -87,6 +105,23 @@ static void SaveConfig(void) {
     fprintf(file, "master_volume=%.2f\n", (double)sVolume);
     fprintf(file, "panel_backdrop=%d\n", sBackdrop);
     fprintf(file, "turbo_multiplier=%u\n", sTurboMultiplier);
+    fprintf(file, "randomizer=%u\n", sRandoEnabled ? 1u : 0u);
+    fprintf(file, "rando_glitchless=%u\n", sRandoGlitchless ? 1u : 0u);
+    fprintf(file, "rando_obscure=%u\n", sRandoObscure ? 1u : 0u);
+    fprintf(file, "rando_kinstones=%u\n", sRandoKinstones ? 1u : 0u);
+    fprintf(file, "rando_entrances=%u\n", sRandoEntrances ? 1u : 0u);
+    fprintf(file, "rando_dojos=%u\n", sRandoDojos ? 1u : 0u);
+    fprintf(file, "rando_open_world=%u\n", sRandoOpenWorld ? 1u : 0u);
+    fprintf(file, "rando_homewarp=%u\n", sRandoHomewarp ? 1u : 0u);
+    fprintf(file, "rando_start_sword=%u\n", sRandoStartSword ? 1u : 0u);
+    fprintf(file, "rando_early_crests=%u\n", sRandoEarlyCrests ? 1u : 0u);
+    fprintf(file, "rando_instant_text=%u\n", sRandoInstantText ? 1u : 0u);
+    fprintf(file, "rando_dungeon_items=%u\n", sRandoDungeonItems ? 1u : 0u);
+    fprintf(file, "rando_item_pool=%d\n", sRandoItemPool);
+    fprintf(file, "rando_tunic_color=%d\n", sRandoTunicColor);
+    fprintf(file, "rando_heart_color=%d\n", sRandoHeartColor);
+    fprintf(file, "rando_tricks=%d\n", sRandoTricks);
+    fprintf(file, "rando_accessibility=%d\n", sRandoAccessibility);
 
     /* A synchronous SD flush can stall the 3DS main thread for seconds on
      * every Settings change. The temporary file plus close/rename/backup
@@ -142,6 +177,23 @@ void Port_Config_Load(const char* path) {
             else if (strcmp(key, "master_volume") == 0) sVolume = strtof(value, NULL);
             else if (strcmp(key, "panel_backdrop") == 0) sBackdrop = (int)strtol(value, NULL, 10);
             else if (strcmp(key, "turbo_multiplier") == 0) sTurboMultiplier = (unsigned)strtoul(value, NULL, 10);
+            else if (strcmp(key, "randomizer") == 0) sRandoEnabled = ParseBool(value);
+            else if (strcmp(key, "rando_glitchless") == 0) sRandoGlitchless = ParseBool(value);
+            else if (strcmp(key, "rando_obscure") == 0) sRandoObscure = ParseBool(value);
+            else if (strcmp(key, "rando_kinstones") == 0) sRandoKinstones = ParseBool(value);
+            else if (strcmp(key, "rando_entrances") == 0) sRandoEntrances = ParseBool(value);
+            else if (strcmp(key, "rando_dojos") == 0) sRandoDojos = ParseBool(value);
+            else if (strcmp(key, "rando_open_world") == 0) sRandoOpenWorld = ParseBool(value);
+            else if (strcmp(key, "rando_homewarp") == 0) sRandoHomewarp = ParseBool(value);
+            else if (strcmp(key, "rando_start_sword") == 0) sRandoStartSword = ParseBool(value);
+            else if (strcmp(key, "rando_early_crests") == 0) sRandoEarlyCrests = ParseBool(value);
+            else if (strcmp(key, "rando_instant_text") == 0) sRandoInstantText = ParseBool(value);
+            else if (strcmp(key, "rando_dungeon_items") == 0) sRandoDungeonItems = ParseBool(value);
+            else if (strcmp(key, "rando_item_pool") == 0) sRandoItemPool = (int)strtol(value, NULL, 10);
+            else if (strcmp(key, "rando_tunic_color") == 0) sRandoTunicColor = (int)strtol(value, NULL, 10);
+            else if (strcmp(key, "rando_heart_color") == 0) sRandoHeartColor = (int)strtol(value, NULL, 10);
+            else if (strcmp(key, "rando_tricks") == 0) sRandoTricks = (int)strtol(value, NULL, 10);
+            else if (strcmp(key, "rando_accessibility") == 0) sRandoAccessibility = (int)strtol(value, NULL, 10);
         }
         fclose(file);
     }
@@ -150,6 +202,12 @@ void Port_Config_Load(const char* path) {
     if (sVolume > 1.0f) sVolume = 1.0f;
     if (sBackdrop < 0 || sBackdrop > 6) sBackdrop = 0;
     if (sTurboMultiplier < 2 || sTurboMultiplier > 5) sTurboMultiplier = 5;
+    if (sRandoItemPool < 0 || sRandoItemPool >= RANDO_ITEM_POOL_COUNT) sRandoItemPool = RANDO_ITEM_POOL_NORMAL;
+    if (sRandoTunicColor < 0 || sRandoTunicColor > 6) sRandoTunicColor = 0;
+    if (sRandoHeartColor < 0 || sRandoHeartColor > 6) sRandoHeartColor = 0;
+    sRandoTricks &= RANDO_TRICK_ALL;
+    if (sRandoAccessibility < 0 || sRandoAccessibility >= RANDO_ACCESS_COUNT)
+        sRandoAccessibility = RANDO_ACCESS_GOAL;
     Platform3DS_SetTurboMultiplier(sTurboMultiplier);
     sConfigLoaded = true;
 }
@@ -225,18 +283,6 @@ BOOL_CONFIG(MenuHintSeen, true)
 BOOL_CONFIG(RollAttackMacroEnabled, false)
 BOOL_CONFIG(Fullscreen, true)
 BOOL_CONFIG(FullscreenHideCursor, false)
-BOOL_CONFIG(RandoEnabled, false)
-BOOL_CONFIG(RandoGlitchless, false)
-BOOL_CONFIG(RandoObscure, false)
-BOOL_CONFIG(RandoKinstones, false)
-BOOL_CONFIG(RandoEntrances, false)
-BOOL_CONFIG(RandoDojos, false)
-BOOL_CONFIG(RandoOpenWorld, false)
-BOOL_CONFIG(RandoHomewarp, false)
-BOOL_CONFIG(RandoStartSword, false)
-BOOL_CONFIG(RandoEarlyCrests, false)
-BOOL_CONFIG(RandoInstantText, false)
-BOOL_CONFIG(RandoDungeonItems, false)
 
 float Port_Config_GetTtsRate(void) { return 1.0f; }
 void Port_Config_SetTtsRate(float v) { (void)v; }
@@ -280,16 +326,45 @@ void Port_Config_SetShaderPreset(const char* path) { (void)path; }
 int Port_Config_HasRebornMask(void) { return 0; }
 unsigned Port_Config_GetRebornMask(void) { return 0; }
 void Port_Config_SetRebornMask(unsigned mask) { (void)mask; }
-int Port_Config_GetRandoItemPool(void) { return 0; }
-int Port_Config_GetRandoTunicColor(void) { return 0; }
-int Port_Config_GetRandoHeartColor(void) { return 0; }
-void Port_Config_SetRandoSettings(bool a, bool b, bool c, bool d, bool e, bool f, int g, bool h, bool i, bool j, bool k, int l, int m) {
-    (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; (void)g; (void)h; (void)i; (void)j; (void)k; (void)l; (void)m;
+bool Port_Config_GetRandoEnabled(void) { return sRandoEnabled; }
+void Port_Config_SetRandoEnabled(bool on) { sRandoEnabled = on; SaveConfig(); }
+bool Port_Config_GetRandoGlitchless(void) { return sRandoGlitchless; }
+bool Port_Config_GetRandoObscure(void) { return sRandoObscure; }
+bool Port_Config_GetRandoKinstones(void) { return sRandoKinstones; }
+bool Port_Config_GetRandoEntrances(void) { return sRandoEntrances; }
+bool Port_Config_GetRandoDojos(void) { return sRandoDojos; }
+bool Port_Config_GetRandoOpenWorld(void) { return sRandoOpenWorld; }
+bool Port_Config_GetRandoHomewarp(void) { return sRandoHomewarp; }
+bool Port_Config_GetRandoStartSword(void) { return sRandoStartSword; }
+bool Port_Config_GetRandoEarlyCrests(void) { return sRandoEarlyCrests; }
+bool Port_Config_GetRandoInstantText(void) { return sRandoInstantText; }
+bool Port_Config_GetRandoDungeonItems(void) { return sRandoDungeonItems; }
+void Port_Config_SetRandoDungeonItems(bool on) { sRandoDungeonItems = on; SaveConfig(); }
+int Port_Config_GetRandoItemPool(void) { return sRandoItemPool; }
+int Port_Config_GetRandoTunicColor(void) { return sRandoTunicColor; }
+int Port_Config_GetRandoHeartColor(void) { return sRandoHeartColor; }
+void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool kinstones, bool entrances, bool dojos,
+                                  bool openWorld, int itemPool, bool homewarp, bool startSword,
+                                  bool earlyCrests, bool instantText, int tunicColor, int heartColor) {
+    sRandoGlitchless = glitchless;
+    sRandoObscure = obscure;
+    sRandoKinstones = kinstones;
+    sRandoEntrances = entrances;
+    sRandoDojos = dojos;
+    sRandoOpenWorld = openWorld;
+    sRandoItemPool = itemPool;
+    sRandoHomewarp = homewarp;
+    sRandoStartSword = startSword;
+    sRandoEarlyCrests = earlyCrests;
+    sRandoInstantText = instantText;
+    sRandoTunicColor = tunicColor;
+    sRandoHeartColor = heartColor;
+    SaveConfig();
 }
-int Port_Config_GetRandoTricks(void) { return 0; }
-void Port_Config_SetRandoTricks(int tricks) { (void)tricks; }
-int Port_Config_GetRandoAccessibility(void) { return 0; }
-void Port_Config_SetRandoAccessibility(int accessibility) { (void)accessibility; }
+int Port_Config_GetRandoTricks(void) { return sRandoTricks; }
+void Port_Config_SetRandoTricks(int tricks) { sRandoTricks = tricks; SaveConfig(); }
+int Port_Config_GetRandoAccessibility(void) { return sRandoAccessibility; }
+void Port_Config_SetRandoAccessibility(int accessibility) { sRandoAccessibility = accessibility; SaveConfig(); }
 void Port_Config_OpenGamepads(void) {}
 void Port_Config_CloseGamepads(void) {}
 

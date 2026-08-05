@@ -152,6 +152,8 @@ enum {
     SS_ACT_SETTINGS_PAGE,
     SS_ACT_SETTINGS_BACK,
     SS_ACT_DEVELOPER_DUMP,
+    SS_ACT_RANDO_CANCEL,
+    SS_ACT_RANDO_CONFIRM,
 };
 
 enum {
@@ -178,6 +180,7 @@ enum {
     SS_SET_COLOR_CORRECTION, /* color_correction + live PPU toggle */
     SS_SET_SHOW_FPS,      /* show_fps (overlay reads it per frame) */
     SS_SET_HOLD_ADVANCE,  /* hold_advance_text (message.c reads per frame) */
+    SS_SET_RANDOMIZER,
     SS_SET_BACKDROP,      /* second_screen_backdrop: cycles SS_BACKDROP_* */
     SS_SET_SWAP_SCREENS,  /* second_screen_swap; applied at the next launch */
 #ifdef TMC_3DS
@@ -279,6 +282,8 @@ static struct {
      * one of the two lists it opens, the same step in the pause menu. */
     uint8_t questView;
     uint32_t dumpFlashUntil;
+    uint8_t randoConfirmActive;
+    uint8_t randoDesired;
 } sUi = { .floorPreview = SS_NO_FLOOR, .playerFloorDisp = SS_NO_FLOOR };
 
 /* sUi.questView */
@@ -1732,7 +1737,7 @@ static const char* const kSettingLabels[SS_SET_COUNT] = {
     "TOP HUD",          "WIDESCREEN",        "FOLLOW CAM",       "WINDCREST PINS",
     "FLOOR AUTO RETURN", "TURBO SPEED",       "MASTER VOLUME",    "AUTOSAVE",
     "COLOR CORRECTION", "SHOW FPS",           "HOLD TO ADVANCE TEXT",
-    "PANEL BACKDROP",   "SWAP SCREENS",
+    "RANDOMIZER",       "PANEL BACKDROP",     "SWAP SCREENS",
 #ifdef TMC_3DS
     "ASPECT RATIO",     "DISPLAY STYLE",
 #endif
@@ -1806,6 +1811,9 @@ static int SettingsPageRows(int page, uint8_t* out) {
         out[n++] = SS_SET_AUTOSAVE;
         out[n++] = SS_SET_SHOW_FPS;
         out[n++] = SS_SET_HOLD_ADVANCE;
+#ifdef TMC_3DS
+        out[n++] = SS_SET_RANDOMIZER;
+#endif
     }
     return n;
 }
@@ -1975,6 +1983,7 @@ static int GetSettingState(int row, char* out, int outCap) {
         case SS_SET_COLOR_CORRECTION: on = Port_Config_GetColorCorrection(); break;
         case SS_SET_SHOW_FPS: on = Port_Config_GetShowFps(); break;
         case SS_SET_HOLD_ADVANCE: on = Port_Config_GetHoldToAdvanceText(); break;
+        case SS_SET_RANDOMIZER: on = Port_Config_GetRandoEnabled(); break;
         case SS_SET_BACKDROP: {
             /* A cycle row like MASTER VOLUME: the value names the style and
              * returns early with its own text. The chip turns red once the
@@ -2081,6 +2090,47 @@ static void PaintSettingsPanel(const SSurf* s, const SecondScreenSnapshot* snap,
         DrawSettingsValueRow(s, tl, x0, ry, x1, ry + rowH, rows[slot], u, ts);
     }
 }
+
+#ifdef TMC_3DS
+static void PaintRandomizerConfirmation(const SSurf* s, TargetList* tl, float u, int32_t ts, int enable) {
+    tl->n = 0;
+    const float x0 = 18 * u;
+    const float x1 = s->w - 18 * u;
+    const float y0 = 18 * u;
+    const float y1 = s->h - 18 * u;
+    Port_SecondScreenTheme_DrawPlate(s->px, s->w, s->h, s->stride, (int32_t)x0, (int32_t)y0,
+                                     (int32_t)(x1 - x0), (int32_t)(y1 - y0), ts);
+
+    int32_t titleScale = (int32_t)(2.2f * u);
+    if (titleScale < 1) titleScale = 1;
+    MenuTextCentered(s, enable ? "ENABLE RANDOMIZER" : "DISABLE RANDOMIZER", (x0 + x1) / 2,
+                     y0 + 28 * u, titleScale, SS_TEXT_NAVY);
+
+    static const char* const lines[] = {
+        "RANDOMIZER REQUIRES A NEW GAME.",
+        "THE ACTIVE PROFILE SAVE, AUTOSAVES,",
+        "SAVESTATES AND RANDOMIZER DATA",
+        "WILL BE DELETED. THE ROM IS KEPT.",
+        "THE GAME WILL RESTART.",
+    };
+    int32_t textScale = (int32_t)(1.55f * u);
+    if (textScale < 1) textScale = 1;
+    float lineY = y0 + 62 * u;
+    for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); ++i) {
+        MenuTextCentered(s, lines[i], (x0 + x1) / 2, lineY + i * 25 * u, textScale, SS_TEXT_INK);
+    }
+
+    const float gap = 14 * u;
+    const float buttonY1 = y1 - 14 * u;
+    const float buttonY0 = buttonY1 - 58 * u;
+    const float middle = (x0 + x1) / 2;
+    DrawMenuButton(s, x0 + 14 * u, buttonY0, middle - gap / 2, buttonY1, "CANCEL", 0, 0, u, ts);
+    DrawMenuButton(s, middle + gap / 2, buttonY0, x1 - 14 * u, buttonY1, "CONTINUE", 0, 0, u, ts);
+    AddTarget(tl, x0 + 14 * u, buttonY0, middle - gap / 2, buttonY1, SS_ACT_RANDO_CANCEL, 0);
+    AddTarget(tl, middle + gap / 2, buttonY0, x1 - 14 * u, buttonY1, SS_ACT_RANDO_CONFIRM,
+              (uint8_t)(enable != 0));
+}
+#endif
 
 /* ------------------------------------------------------------------ */
 /*  Sidebar                                                            */
@@ -2414,6 +2464,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
         sUi.regionState = SS_REGION_OFF; /* a zoom never survives a load */
         sUi.questView = SS_QUEST_MAIN;   /* nor does an open list */
         sUi.settingsPage = SS_SETTINGS_ROOT;
+        sUi.randoConfirmActive = 0;
         UI_UNLOCK();
         sLastFix.valid = 0; /* stale fixes must not survive into a new save */
         sCam.valid = 0;
@@ -2428,7 +2479,7 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
 
     int isDungeon = (snap->areaFlags & SECOND_SCREEN_AR_IS_DUNGEON) != 0;
 
-    int tab, armedRing, regionState, settingsPage;
+    int tab, armedRing, regionState, settingsPage, randoConfirmActive, randoDesired;
     int32_t regionId;
     uint32_t dumpFlashUntil;
     UI_LOCK();
@@ -2443,6 +2494,8 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
     regionId = sUi.regionId;
     settingsPage = sUi.settingsPage;
     dumpFlashUntil = sUi.dumpFlashUntil;
+    randoConfirmActive = sUi.randoConfirmActive;
+    randoDesired = sUi.randoDesired;
     sUi.mapLive = 0; /* set again by PaintOverworld when the map is up */
     UI_UNLOCK();
 
@@ -2518,6 +2571,11 @@ void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int st
                      ts, tick, armedRing);
     }
     PaintTabBar(&s, &tl, u, ts, tab);
+#ifdef TMC_3DS
+    if (randoConfirmActive) {
+        PaintRandomizerConfirmation(&s, &tl, u, ts, randoDesired);
+    }
+#endif
 
     /* Publish this frame's hit boxes for the tap thread. */
     UI_LOCK();
@@ -2609,6 +2667,22 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
             UI_UNLOCK();
 #ifdef TMC_3DS
             Port_PPU_3DS_WriteQuickDump();
+#endif
+            break;
+        case SS_ACT_RANDO_CANCEL:
+            UI_LOCK();
+            sUi.randoConfirmActive = 0;
+            UI_UNLOCK();
+            break;
+        case SS_ACT_RANDO_CONFIRM:
+            UI_LOCK();
+            sUi.randoConfirmActive = 0;
+            UI_UNLOCK();
+#ifdef TMC_3DS
+            {
+                extern void Port_Rando3DS_ConfirmModeChange(bool enabled);
+                Port_Rando3DS_ConfirmModeChange(hit.arg != 0);
+            }
 #endif
             break;
         case SS_ACT_QUESTVIEW:
@@ -2719,6 +2793,14 @@ void Port_SecondScreen_OnTap(int x, int y, int longPress) {
                 case SS_SET_HOLD_ADVANCE:
                     /* src/message.c polls the flag at every advance. */
                     Port_Config_SetHoldToAdvanceText(!Port_Config_GetHoldToAdvanceText());
+                    break;
+                case SS_SET_RANDOMIZER:
+#ifdef TMC_3DS
+                    UI_LOCK();
+                    sUi.randoDesired = Port_Config_GetRandoEnabled() ? 0 : 1;
+                    sUi.randoConfirmActive = 1;
+                    UI_UNLOCK();
+#endif
                     break;
                 case SS_SET_BACKDROP:
                     /* Cycle PARCHMENT -> CREAM -> DARK -> PARCHMENT. Only

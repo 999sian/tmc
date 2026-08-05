@@ -20,6 +20,7 @@
  */
 #include <string.h>
 
+#include "port_config.h"
 #include "port_types.h"
 #include "port_rom.h"
 
@@ -116,14 +117,27 @@ static const FigurineRomEntry kFigurineEntries[137] = {
     [135] = { 0x005BD440, 0x008BDB60, 0x2580 }, [136] = { 0x005BD520, 0x008C00E0, 0x18E0 },
 };
 
-/* Resolve every entry's pal/gfx address into &gRomData[gba_addr - 0x08000000]
- * after the ROM is mapped. Caller: port_rom.c::Port_LoadRom. */
+static u32 ReadLe32(const u8* p) {
+    return (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
+}
+
+/* Resolve the packed table from the active ROM. The pointed-to palette and
+ * graphics addresses move between USA and EU even though the entry layout is
+ * identical. The compiled table remains only as a guarded fallback. */
 void Port_PopulateFigurines(void) {
     memset(gFigurines, 0, sizeof(gFigurines));
     for (u32 i = 1; i <= 136; i++) {
-        gFigurines[i].pal = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].palAddr);
-        gFigurines[i].gfx = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].gfxAddr);
-        gFigurines[i].size = (int)kFigurineEntries[i].size;
+        if (gRomOffsets != NULL && gRomOffsets->figurines != 0 &&
+            gRomOffsets->figurines + (i + 1) * 16 <= gRomSize) {
+            const u8* entry = &gRomData[gRomOffsets->figurines + i * 16];
+            gFigurines[i].pal = (u8*)Port_ResolveRomData(ReadLe32(entry));
+            gFigurines[i].gfx = (u8*)Port_ResolveRomData(ReadLe32(entry + 4));
+            gFigurines[i].size = (int)ReadLe32(entry + 8);
+        } else {
+            gFigurines[i].pal = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].palAddr);
+            gFigurines[i].gfx = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].gfxAddr);
+            gFigurines[i].size = (int)kFigurineEntries[i].size;
+        }
         gFigurines[i].zero = 0;
     }
 }

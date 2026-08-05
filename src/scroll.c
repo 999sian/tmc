@@ -770,6 +770,14 @@ void DoExitTransition(const Transition* data) {
     status->spawn_type = data->transition_type;
     status->start_anim = data->facing_direction;
 #ifdef PC_PORT
+    /* Festival Town exits come from the active ROM and preserve an absolute
+     * source X. Clamp this one cross-area border to North Hyrule's real center
+     * doorway so stale cutscene coordinates cannot leave Link outside the
+     * destination room with music still running. */
+    if (gRoomControls.area == AREA_FESTIVAL_TOWN && data->area == AREA_HYRULE_FIELD &&
+        data->room == ROOM_HYRULE_FIELD_NORTH_HYRULE_FIELD) {
+        status->start_pos_x = 0x1f8;
+    }
     Rando_Entrance_RemapExit(gRoomControls.area, &status->area_next, &status->room_next, &status->start_pos_x,
                              &status->start_pos_y, &status->layer, &status->spawn_type, &status->start_anim);
 #endif
