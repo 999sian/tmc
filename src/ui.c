@@ -978,6 +978,7 @@ void EzloNagUIElement_Action2(UIElement* element) {
 UIElementDefinition gUIElementDefinitions[11];
 
 void Port_InitUIElementDefinitions(void) {
+    const u16 itemSpriteIndex = Port_RemapSpriteIndex(322);
     /* [0] UI_ELEMENT_BUTTON_A */
     gUIElementDefinitions[0] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 0, 14, 1, 0 };
     /* [1] UI_ELEMENT_BUTTON_B */
@@ -985,21 +986,21 @@ void Port_InitUIElementDefinitions(void) {
     /* [2] UI_ELEMENT_BUTTON_R */
     gUIElementDefinitions[2] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 2, 14, 1, 0 };
     /* [3] UI_ELEMENT_ITEM_A */
-    gUIElementDefinitions[3] = (UIElementDefinition){ 0x0000, 0x0000, 0x011A, 322, ItemUIElement, 0, 8, 0, 0 };
+    gUIElementDefinitions[3] = (UIElementDefinition){ 0x0000, 0x0000, 0x011A, itemSpriteIndex, ItemUIElement, 0, 8, 0, 0 };
     /* [4] UI_ELEMENT_ITEM_B */
-    gUIElementDefinitions[4] = (UIElementDefinition){ 0x0000, 0x0000, 0x0126, 322, ItemUIElement, 1, 8, 0, 0 };
+    gUIElementDefinitions[4] = (UIElementDefinition){ 0x0000, 0x0000, 0x0126, itemSpriteIndex, ItemUIElement, 1, 8, 0, 0 };
     /* [5] UI_ELEMENT_TEXT_R */
-    gUIElementDefinitions[5] = (UIElementDefinition){ 0x0000, 0x0000, 0x010E, 322, TextUIElement, 2, 12, 0, 0 };
+    gUIElementDefinitions[5] = (UIElementDefinition){ 0x0000, 0x0000, 0x010E, itemSpriteIndex, TextUIElement, 2, 12, 0, 0 };
     /* [6] UI_ELEMENT_HEART */
-    gUIElementDefinitions[6] = (UIElementDefinition){ 0x0000, 0x0000, 0x0122, 322, HeartUIElement, 0, 4, 0, 0 };
+    gUIElementDefinitions[6] = (UIElementDefinition){ 0x0000, 0x0000, 0x0122, itemSpriteIndex, HeartUIElement, 0, 4, 0, 0 };
     /* [7] UI_ELEMENT_EZLONAGSTART */
-    gUIElementDefinitions[7] = (UIElementDefinition){ 0x0300, 0x0000, 0x012E, 322, EzloNagUIElement, 0, 8, 0, 0 };
+    gUIElementDefinitions[7] = (UIElementDefinition){ 0x0300, 0x0000, 0x012E, itemSpriteIndex, EzloNagUIElement, 0, 8, 0, 0 };
     /* [8] UI_ELEMENT_EZLONAGACTIVE */
-    gUIElementDefinitions[8] = (UIElementDefinition){ 0x0000, 0x0000, 0x012E, 322, EzloNagUIElement, 0, 8, 0, 0 };
+    gUIElementDefinitions[8] = (UIElementDefinition){ 0x0000, 0x0000, 0x012E, itemSpriteIndex, EzloNagUIElement, 0, 8, 0, 0 };
     /* [9] UI_ELEMENT_TEXT_A */
-    gUIElementDefinitions[9] = (UIElementDefinition){ 0x0000, 0x0000, 0x011A, 322, TextUIElement, 0, 12, 0, 0 };
+    gUIElementDefinitions[9] = (UIElementDefinition){ 0x0000, 0x0000, 0x011A, itemSpriteIndex, TextUIElement, 0, 12, 0, 0 };
     /* [10] UI_ELEMENT_TEXT_B */
-    gUIElementDefinitions[10] = (UIElementDefinition){ 0x0000, 0x0000, 0x0126, 322, TextUIElement, 1, 12, 0, 0 };
+    gUIElementDefinitions[10] = (UIElementDefinition){ 0x0000, 0x0000, 0x0126, itemSpriteIndex, TextUIElement, 1, 12, 0, 0 };
 }
 
 void (*const ButtonUIElement_Actions[])(UIElement*) = {
