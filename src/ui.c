@@ -12,8 +12,8 @@
 #include "affine.h"
 #include "vram.h"
 #include "structures.h"
-#ifdef PC_PORT
 #include "port_rom.h"
+#ifdef PC_PORT
 #include "port_widescreen.h"
 #endif
 
@@ -686,15 +686,11 @@ void sub_0801CAFC(UIElement* element, u32 frameIndex) {
 
 void sub_0801CB20(UIElement* element, UIElementDefinition* definition) {
     if (definition->unk_e == 0) {
-#ifdef PC_PORT
         const SpritePtr* ptr = Port_GetSpritePtr(definition->spriteIndex);
         if (ptr == NULL || ptr->frames == NULL || ptr->ptr == NULL) {
             element->unk_0_2 = 0;
             return;
         }
-#else
-        const SpritePtr* ptr = &gSpritePtrs[definition->spriteIndex];
-#endif
         SpriteFrame* frame = &ptr->frames[element->frameIndex];
         u32* firstTile = (u32*)(ptr->ptr + frame->firstTileIndex * 0x20);
         u8 numTiles = frame->numTiles;

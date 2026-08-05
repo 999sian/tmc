@@ -25,11 +25,11 @@
 #include "sound.h"
 #include "tileMap.h"
 #include "tiles.h"
+#include "port_rom.h"
 
 #ifdef PC_PORT
 #include "port_asset_loader.h"
 #include "port_gba_mem.h"
-#include "port_rom.h"
 #include "port_softslots.h"
 #include "port_roll_attack_macro.h"
 #include <string.h>
@@ -1850,7 +1850,6 @@ void sub_08078E84(Entity* param_1, Entity* param_2) {
         param_1->spriteOffsetX = gPlayerEntity.base.spriteOffsetX;
         param_1->spriteOffsetY = gPlayerEntity.base.spriteOffsetY;
     }
-#ifdef PC_PORT
     {
         const SpritePtr* spr = Port_GetSpritePtr((u16)param_2->spriteIndex);
         if (spr == NULL || spr->frames == NULL) {
@@ -1858,9 +1857,6 @@ void sub_08078E84(Entity* param_1, Entity* param_2) {
         }
         frame = &spr->frames[param_2->frameIndex];
     }
-#else
-    frame = &gSpritePtrs[(u16)param_2->spriteIndex].frames[param_2->frameIndex];
-#endif
     if (frame->unk_1 != 0) {
         sub_0806FEBC(param_2, 1, param_1);
     } else {
