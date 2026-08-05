@@ -3671,25 +3671,12 @@ static int FindRow(const u32* keys, int stride, int count, u32 usa) {
     return -1;
 }
 
-static int FindRowInColumn(const u32* keys, int stride, int count, int column, u32 value) {
-    int i;
-    for (i = 0; i < count; ++i) {
-        if (keys[i * stride + column] == value)
-            return i;
-    }
-    return -1;
-}
-
 u32 Port_RemapMapOffset(u32 usa_offset) {
     int row;
 #if defined(EU)
-    /* EU-baseline multi-region builds compile EU offsets into C tables. */
+    /* An EU-baseline multi-region reference already contains EU offsets. */
     if (gActiveRegion == TMC_REGION_EU)
         return usa_offset;
-    row = FindRowInColumn(&sMapRemap[0][0], 3, (int)(sizeof(sMapRemap) / sizeof(sMapRemap[0])), 1, usa_offset);
-    if (row < 0)
-        return usa_offset;
-    return (gActiveRegion == TMC_REGION_JP) ? sMapRemap[row][2] : sMapRemap[row][0];
 #endif
     if (gActiveRegion == TMC_REGION_USA)
         return usa_offset;
@@ -3702,13 +3689,9 @@ u32 Port_RemapMapOffset(u32 usa_offset) {
 u32 Port_RemapGfxOffset(u32 usa_offset) {
     int row;
 #if defined(EU)
-    /* EU-baseline multi-region builds compile EU offsets into C tables. */
+    /* Avoid treating an EU offset that matches another USA key as USA data. */
     if (gActiveRegion == TMC_REGION_EU)
         return usa_offset;
-    row = FindRowInColumn(&sGfxRemapEU[0][0], 2, (int)(sizeof(sGfxRemapEU) / sizeof(sGfxRemapEU[0])), 1, usa_offset);
-    if (row < 0)
-        return usa_offset;
-    return sGfxRemapEU[row][0];
 #endif
     if (gActiveRegion != TMC_REGION_EU)
         return usa_offset; /* JP gfx blob layout == USA */
