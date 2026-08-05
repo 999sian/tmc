@@ -79,6 +79,27 @@ static int TopFrameWidth(void) {
     }
     return GBA_NATIVE_W;
 }
+
+static void ApplyCrtStyle(uint32_t* pixels, int width) {
+    if (!pixels || Port_Config_Get3DSDisplayStyle() != PORT_3DS_DISPLAY_CRT) return;
+
+    for (int y = 0; y < GBA_H; ++y) {
+        uint32_t* row = pixels + y * TOP_PITCH;
+        const unsigned scanGain = (y & 1) ? 224u : 256u;
+        int maskChannel = 0;
+        for (int x = 0; x < width; ++x) {
+            const uint32_t pixel = row[x];
+            unsigned r = (pixel & 0xffu) * scanGain >> 8;
+            unsigned g = ((pixel >> 8) & 0xffu) * scanGain >> 8;
+            unsigned b = ((pixel >> 16) & 0xffu) * scanGain >> 8;
+            if (maskChannel != 0) r = r * 248u >> 8;
+            if (maskChannel != 1) g = g * 248u >> 8;
+            if (maskChannel != 2) b = b * 248u >> 8;
+            row[x] = (pixel & 0xff000000u) | (b << 16) | (g << 8) | r;
+            if (++maskChannel == 3) maskChannel = 0;
+        }
+    }
+}
 #ifdef TMC_3DS_DIAGNOSTICS
 static unsigned sDiagnosticFrames;
 static uint64_t sDiagnosticStartMs;
@@ -170,8 +191,6 @@ void Port_PPU_3DS_WriteQuickDump(void) {
     memset(&captureStats, 0, sizeof(captureStats));
     const bool screensOk = Platform3DS_SaveDisplayedScreensDetailed(
         topPath, bottomPath, topRawPath, bottomRawPath, &captureStats);
-    PlatformGpu3DS_ShowDumpingOverlay();
-
     char path[192];
     snprintf(path, sizeof(path), "%s/ewram.bin", dir);
     WriteBlob(path, gEwram, sizeof(gEwram));
@@ -436,6 +455,7 @@ void Port_PPU_3DS_WriteQuickDump(void) {
     char message[192];
     snprintf(message, sizeof(message), "[tmc3ds] quick dump written to %s\n", dir);
     Platform3DS_Debug(message);
+    PlatformGpu3DS_ShowDumpSavedOverlay();
     Port_Audio_3DSSetPaused(false);
 }
 
@@ -519,6 +539,7 @@ void Port_PPU_PresentFrame(void) {
     virtuappu_mode1_bg2y_hdma_strobe = port_hdma_dest_overlaps(gIoMem + 0x2c, gIoMem + 0x30) != 0;
 
     virtuappu_render_frame();
+    ApplyCrtStyle(sTopUpload, sTopPresentWidth);
     const uint64_t renderEndTick = Platform3DS_SystemTick();
 #ifdef TMC_3DS_DIAGNOSTICS
     const uint64_t renderEnd = Platform3DS_Milliseconds();

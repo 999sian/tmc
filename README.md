@@ -46,12 +46,15 @@ https://ko-fi.com/estebanpdn
   choose 2x through 5x from the bottom-screen Gameplay settings.
 - Minish Cap-themed bottom-screen Settings hierarchy with Screen, Gameplay,
   and Developer submenus. Options apply live and persist across launches.
+- Wide, Original, and Stretch aspect-ratio modes, plus Pixel Perfect, Scaled,
+  Blur, and lightweight CRT display styles.
+- Optional measured FPS counter in the lower-left corner of the top screen.
 - Developer memory-dump command and runtime overlay with version, console
   model, current/average FPS, Core 1 allocation, display mode, area, and room.
 - Native NDSP stereo audio with a dedicated real-time mixer worker.
 - Verified atomic save data stored beside the ROM on the SD card, with automatic
   recovery from interrupted writes.
-- Quick diagnostics: press `L + R + A` to pause the game, show a `DUMPING`
+- Quick diagnostics: press `L + R + A` to pause the game, show a `DUMP SAVED`
   status message, and capture both physical displays plus
   raw framebuffers, complete GBA working and graphics memory, system and input
   state, frame cadence, per-core PPU timings, GPU work, audio and save health,
@@ -61,7 +64,7 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install `tmc-3ds-v0.13.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.14.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -117,8 +120,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.13.cia
-build-3ds/game/tmc-3ds-v0.13.3dsx
+build-3ds/game/tmc-3ds-v0.14.cia
+build-3ds/game/tmc-3ds-v0.14.3dsx
 ```
 
 The build does not embed a ROM.

@@ -19,8 +19,6 @@ static size_t sC2dFlushSize;
 static bool sFrameActive;
 static bool sReady;
 static PlatformGpu3DSStats sStats;
-static C2D_TextBuf sStatusTextBuffer;
-static C2D_Font sStatusFont;
 static unsigned sTopPresentWidth = 240;
 
 enum {
@@ -31,7 +29,74 @@ enum {
 extern u32 __ctru_linear_heap;
 extern u32 __ctru_linear_heap_size;
 extern bool Port_Config_GetShowFps(void);
+extern int Port_Config_Get3DSAspectRatio(void);
+extern int Port_Config_Get3DSDisplayStyle(void);
 extern double Port_PPU_3DS_CurrentFps(void);
+
+enum {
+    TOP_ASPECT_WIDE = 0,
+    TOP_ASPECT_ORIGINAL,
+    TOP_ASPECT_STRETCH,
+};
+
+enum {
+    TOP_DISPLAY_PIXEL_PERFECT = 0,
+    TOP_DISPLAY_SCALED,
+    TOP_DISPLAY_BLUR,
+    TOP_DISPLAY_CRT,
+};
+
+static const uint8_t* StatusGlyph(char c) {
+    static const uint8_t digits[10][7] = {
+        { 14, 17, 19, 21, 25, 17, 14 }, { 4, 12, 4, 4, 4, 4, 14 },
+        { 14, 17, 1, 2, 4, 8, 31 },     { 30, 1, 1, 14, 1, 1, 30 },
+        { 2, 6, 10, 18, 31, 2, 2 },     { 31, 16, 16, 30, 1, 1, 30 },
+        { 14, 16, 16, 30, 17, 17, 14 }, { 31, 1, 2, 4, 8, 8, 8 },
+        { 14, 17, 17, 14, 17, 17, 14 }, { 14, 17, 17, 15, 1, 1, 14 },
+    };
+    static const uint8_t letters[9][7] = {
+        { 14, 17, 17, 31, 17, 17, 17 }, /* A */
+        { 30, 17, 17, 17, 17, 17, 30 }, /* D */
+        { 31, 16, 16, 30, 16, 16, 31 }, /* E */
+        { 31, 16, 16, 30, 16, 16, 16 }, /* F */
+        { 17, 27, 21, 21, 17, 17, 17 }, /* M */
+        { 30, 17, 17, 30, 16, 16, 16 }, /* P */
+        { 15, 16, 16, 14, 1, 1, 30 },   /* S */
+        { 17, 17, 17, 17, 17, 17, 14 }, /* U */
+        { 17, 17, 17, 17, 17, 10, 4 },  /* V */
+    };
+    static const uint8_t letterIds[26] = {
+        0, 255, 255, 1, 2, 3, 255, 255, 255, 255, 255, 255, 4,
+        255, 255, 5, 255, 255, 6, 255, 7, 8, 255, 255, 255, 255,
+    };
+    if (c >= '0' && c <= '9') return digits[c - '0'];
+    if (c >= 'A' && c <= 'Z') {
+        uint8_t id = letterIds[c - 'A'];
+        if (id != 255) return letters[id];
+    }
+    return NULL;
+}
+
+static void DrawStatusText(float x, float y, float scale, const char* text) {
+    const uint32_t color = C2D_Color32(255, 255, 255, 255);
+    for (; *text; ++text, x += 6.0f * scale) {
+        const uint8_t* glyph = StatusGlyph(*text);
+        if (!glyph) continue;
+        for (int row = 0; row < 7; ++row) {
+            for (int col = 0; col < 5;) {
+                if ((glyph[row] & (1u << (4 - col))) == 0) {
+                    ++col;
+                    continue;
+                }
+                int end = col + 1;
+                while (end < 5 && (glyph[row] & (1u << (4 - end))) != 0) ++end;
+                C2D_DrawRectSolid(x + col * scale, y + row * scale, 0.8f,
+                                  (end - col) * scale, scale, color);
+                col = end;
+            }
+        }
+    }
+}
 
 static u32 TextureTransfer(void) {
     return GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(1) |
@@ -80,12 +145,10 @@ bool PlatformGpu3DS_Init(void) {
     GSPGPU_FlushDataCache(sBottomUploads[0], 512u * 256u * sizeof(uint32_t));
     GSPGPU_FlushDataCache(sBottomUploads[1], 512u * 256u * sizeof(uint32_t));
     if (!C3D_Init(C3D_DEFAULT_CMDBUF_SIZE)) goto fail_linear;
-    if (!C2D_Init(32)) {
+    if (!C2D_Init(128)) {
         C3D_Fini();
         goto fail_linear;
     }
-    sStatusTextBuffer = C2D_TextBufNew(256);
-    sStatusFont = C2D_FontLoadSystem(CFG_REGION_USA);
     C2D_Prepare();
     C3D_BufInfo* c2dBuffers = C3D_GetBufInfo();
     if (c2dBuffers && c2dBuffers->bufCount > 0) {
@@ -134,10 +197,6 @@ fail_targets:
 fail_top_texture:
     C3D_TexDelete(&sTopTexture);
 fail:
-    if (sStatusFont) C2D_FontFree(sStatusFont);
-    if (sStatusTextBuffer) C2D_TextBufDelete(sStatusTextBuffer);
-    sStatusFont = NULL;
-    sStatusTextBuffer = NULL;
     C2D_Fini();
     C3D_Fini();
 fail_linear:
@@ -169,25 +228,41 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
         .right = (float)width / TOP_TEXTURE_WIDTH, .bottom = 1.0f - 160.0f / TOP_TEXTURE_HEIGHT,
     };
     const C2D_Image image = { .tex = &sTopTexture, .subtex = &sTopSubtexture };
-    float drawW = width >= 266u ? 400.0f : (float)width * 1.5f;
+    const int style = Port_Config_Get3DSDisplayStyle();
+    C3D_TexSetFilter(&sTopTexture, style == TOP_DISPLAY_BLUR ? GPU_LINEAR : GPU_NEAREST,
+                     style == TOP_DISPLAY_BLUR ? GPU_LINEAR : GPU_NEAREST);
+
+    float drawW;
+    float drawH;
+    if (style == TOP_DISPLAY_PIXEL_PERFECT) {
+        drawW = (float)width;
+        drawH = 160.0f;
+    } else {
+        drawH = 240.0f;
+        switch (Port_Config_Get3DSAspectRatio()) {
+            case TOP_ASPECT_STRETCH: drawW = 400.0f; break;
+            case TOP_ASPECT_ORIGINAL: drawW = 360.0f; break;
+            case TOP_ASPECT_WIDE:
+            default: drawW = width >= 266u ? 400.0f : 360.0f; break;
+        }
+    }
     const C2D_DrawParams params = {
-        .pos = { .x = (400.0f - drawW) * 0.5f, .y = 0.0f, .w = drawW, .h = 240.0f },
+        .pos = { .x = (400.0f - drawW) * 0.5f, .y = (240.0f - drawH) * 0.5f,
+                 .w = drawW, .h = drawH },
         .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
     };
     C2D_TargetClear(sTopTarget, C2D_Color32(0, 0, 0, 255));
     C2D_SceneBegin(sTopTarget);
     C2D_DrawImage(image, &params, NULL);
     ConfigureAbgrTextureEnv();
-    if (Port_Config_GetShowFps() && sStatusTextBuffer && sStatusFont) {
+    if (Port_Config_GetShowFps()) {
         char label[20];
-        snprintf(label, sizeof(label), "FPS %.0f", Port_PPU_3DS_CurrentFps());
-        C2D_DrawRectSolid(326.0f, 6.0f, 0.5f, 68.0f, 22.0f, C2D_Color32(0, 0, 0, 210));
-        C2D_Text text;
-        C2D_TextBufClear(sStatusTextBuffer);
-        C2D_TextFontParse(&text, sStatusFont, sStatusTextBuffer, label);
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor | C2D_AlignRight, 390.0f, 9.0f, 0.6f, 0.55f, 0.55f,
-                     C2D_Color32(255, 255, 255, 255));
+        double fps = Port_PPU_3DS_CurrentFps();
+        unsigned rounded = fps > 0.0 ? (unsigned)(fps + 0.5) : 0u;
+        if (rounded > 999u) rounded = 999u;
+        snprintf(label, sizeof(label), "FPS %u", rounded);
+        C2D_DrawRectSolid(5.0f, 216.0f, 0.7f, 82.0f, 20.0f, C2D_Color32(0, 0, 0, 210));
+        DrawStatusText(10.0f, 219.0f, 2.0f, label);
     }
 }
 
@@ -235,19 +310,12 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
     sFrameActive = false;
 }
 
-void PlatformGpu3DS_ShowDumpingOverlay(void) {
+void PlatformGpu3DS_ShowDumpSavedOverlay(void) {
     if (!sReady || !sTopUpload || !sBottomUploads[0] || !C3D_FrameBegin(0)) return;
     sFrameActive = true;
     DrawTopImage(sTopUpload, sTopPresentWidth);
-    C2D_DrawRectSolid(122.0f, 12.0f, 0.5f, 156.0f, 34.0f, C2D_Color32(0, 0, 0, 220));
-    if (sStatusTextBuffer && sStatusFont) {
-        C2D_Text text;
-        C2D_TextBufClear(sStatusTextBuffer);
-        C2D_TextFontParse(&text, sStatusFont, sStatusTextBuffer, "DUMPING");
-        C2D_TextOptimize(&text);
-        C2D_DrawText(&text, C2D_WithColor | C2D_AlignCenter, 200.0f, 20.0f, 0.6f, 0.8f, 0.8f,
-                     C2D_Color32(255, 255, 255, 255));
-    }
+    C2D_DrawRectSolid(132.0f, 12.0f, 0.7f, 136.0f, 24.0f, C2D_Color32(0, 0, 0, 220));
+    DrawStatusText(141.0f, 17.0f, 2.0f, "DUMP SAVED");
 
     sBottomSubtexture = (Tex3DS_SubTexture){
         .width = 320, .height = 240, .left = 0.0f, .top = 1.0f,
@@ -266,6 +334,7 @@ void PlatformGpu3DS_ShowDumpingOverlay(void) {
     C3D_FrameEnd(GX_CMDLIST_FLUSH);
     sFrameActive = false;
     gspWaitForEvent(GSPGPU_EVENT_VBlank0, false);
+    svcSleepThread(600000000LL);
 }
 
 void PlatformGpu3DS_GetStats(PlatformGpu3DSStats* stats) {
@@ -284,10 +353,6 @@ void PlatformGpu3DS_Shutdown(void) {
     C3D_RenderTargetDelete(sTopTarget);
     C3D_TexDelete(&sBottomTexture);
     C3D_TexDelete(&sTopTexture);
-    if (sStatusFont) C2D_FontFree(sStatusFont);
-    if (sStatusTextBuffer) C2D_TextBufDelete(sStatusTextBuffer);
-    sStatusFont = NULL;
-    sStatusTextBuffer = NULL;
     C2D_Fini();
     C3D_Fini();
     linearFree(sBottomUploads[1]);
