@@ -25,7 +25,9 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends cmake make pkg-config zip
-          dkp-pacman -Sy --noconfirm --needed 3dstools
+          if ! dkp-pacman -Sy --noconfirm --needed 3dstools; then
+            echo "::warning::devkitPro package sync is unavailable; continuing with the tools bundled in the container."
+          fi
 
       - name: Build CIA and 3DSX
         run: ./platform/3ds/build.sh
