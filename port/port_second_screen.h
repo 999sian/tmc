@@ -40,6 +40,7 @@ void Port_SecondScreen_Init(void);
  * tap targets for the next hit test. */
 void Port_SecondScreen_PaintInto(uint32_t* pixels, int width, int height, int strideInPixels,
                                  const SecondScreenSnapshot* snap, uint32_t tick);
+int Port_SecondScreen_IsDeveloperOverlayOpen(void);
 
 /* Called from JNI when the Presentation's Surface becomes available (or is
  * resized). `window` is an ANativeWindow* on Android; kept as void* here so

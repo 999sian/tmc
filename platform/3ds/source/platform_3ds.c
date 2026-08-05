@@ -375,7 +375,7 @@ static bool EnsureBottomWorker(void) {
     LightEvent_Init(&sBottomWorkerDone, RESET_ONESHOT);
     s32 priority = 0x30;
     svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
-    if (priority < 0x3f) ++priority;
+    if (priority < 0x3e) priority += 2;
     sBottomWorkerRunning = true;
     const int core = 0;
     sBottomWorkerThread = threadCreate(BottomWorkerMain, NULL, 64u * 1024u, priority, core, false);

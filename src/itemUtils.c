@@ -50,18 +50,22 @@ const u16 gUnk_080FD5A8[] = { 1, 5, 20, 50, 100, 200 };
 
 u32 GetSaleItemConfirmMessageID(u32 item) {
     const struct_080FD964* table = gUnk_080FD964;
+#ifdef MULTI_REGION
     if (REGION_IS_EU) {
         table = gUnk_080FD964_eu;
     }
+#endif
     const struct_080FD964* ptr = &table[item];
     return ptr->saleItemConfirmMessageId;
 }
 
 s32 GetItemPrice(u32 item) {
     const struct_080FD964* table = gUnk_080FD964;
+#ifdef MULTI_REGION
     if (REGION_IS_EU) {
         table = gUnk_080FD964_eu;
     }
+#endif
     const struct_080FD964* ptr = &table[item];
     return ptr->itemPrice;
 }

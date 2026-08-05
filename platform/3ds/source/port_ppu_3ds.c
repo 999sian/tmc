@@ -574,7 +574,8 @@ void Port_PPU_PresentFrame(void) {
         RecordBottomWorkerTiming();
     }
 
-    const bool bottomUpdateDue = !sBottomReady || (sFrameNumber % 3u) == 0u;
+    const uint32_t bottomInterval = Port_SecondScreen_IsDeveloperOverlayOpen() ? 30u : 3u;
+    const bool bottomUpdateDue = !sBottomReady || (sFrameNumber % bottomInterval) == 0u;
     if (!sBottomWorkerPending && bottomUpdateDue) {
         sBottomWorkerBuffer = 1 - sBottomFrontBuffer;
         Port_SecondScreenState_Read(&sBottomWorkerSnapshot);

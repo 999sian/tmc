@@ -239,6 +239,10 @@ const SaveHeader sDefaultSettings = {
     .initialized = 0,
 };
 
+/* The EU ROM numbers its language-specific resources from 2 through 6;
+ * value 2 is English even though the shared Language enum names it FR. */
+#define EU_LANGUAGE_EN 2
+
 void InitSaveHeader(void) {
     u32 b;
 
@@ -254,7 +258,7 @@ void InitSaveHeader(void) {
                 if (REGION_IS_JP) {
                     gSaveHeader->language = LANGUAGE_JP;
                 } else if (REGION_IS_EU) {
-                    gSaveHeader->language = 2; // TODO in EU 2 is english?
+                    gSaveHeader->language = EU_LANGUAGE_EN;
                 }
                 WriteSaveHeader(gSaveHeader);
                 break;
@@ -289,7 +293,7 @@ void InitSaveHeader(void) {
          * (e.g. a USA tmc.sav) loads English gfx the JP ROM lacks. Require JP
          * language on a JP ROM so an English-flagged header is reset to
          * LANGUAGE_JP by InitSaveHeader's default path. */
-        || (REGION_IS_EU   ? ((gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES))
+        || (REGION_IS_EU   ? (gSaveHeader->language <= LANGUAGE_EN || gSaveHeader->language > NUM_LANGUAGES)
             : REGION_IS_JP ? (gSaveHeader->language != LANGUAGE_JP)
                            : (gSaveHeader->language != GAME_LANGUAGE)) ||
         (gSaveHeader->invalid))

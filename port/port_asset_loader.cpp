@@ -1431,13 +1431,9 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
 }
 
 extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
-    /* The extracted assets/ cache is USA-baseline (asset baseline is USA). It
-     * lacks the JP-specific gfx groups — notably the JP title screen (group 2:
-     * ZELDA logo / ゼルダの伝説 / PRESS START on BG1). Loading the USA group for a
-     * JP ROM leaves BG1 empty (no logo). Skip the asset path for a JP ROM so
-     * LoadGfxGroup falls through to the region-correct ROM gfx (gGfxGroups[group]
-     * resolved from JP offsets). Matches the JP asset-override gate in port_rom.c. */
-    if (gRomRegion == ROM_REGION_JP) {
+    /* Extracted asset caches use the build-time baseline. A universal build is
+     * USA-based, so non-USA ROMs must retain their runtime-resolved ROM tables. */
+    if (gRomRegion != ROM_REGION_USA) {
         return FALSE;
     }
     if (!EnsureAssetGroupCache()) {
@@ -1510,7 +1506,7 @@ extern "C" bool32 Port_LoadGfxGroupFromAssets(u32 group) {
 }
 
 extern "C" bool32 Port_LoadAreaTablesFromAssets(void) {
-    if (gRomRegion == ROM_REGION_JP)
+    if (gRomRegion != ROM_REGION_USA)
         return FALSE;
     if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasAreaData) {
         return FALSE;
@@ -1530,20 +1526,19 @@ extern "C" bool32 Port_LoadAreaTablesFromAssets(void) {
 }
 
 extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
-    /* JP: never reseed gSpritePtrs from the (USA-baseline) asset cache. Doing so
+    /* Never reseed non-USA sprite pointers from the USA-baseline cache. Doing so
      * overwrites every gSpritePtrs[i].animations with a *native* heap pointer, which
-     * is fine on USA/EU (Port_GetSpriteAnimationData reads it via the asset-cache
-     * branch) but breaks JP: there Port_GetSpriteAnimationData is gated to the ROM
-     * branch (gRomRegion != ROM_REGION_JP) and validates spr->animations with
+     * is fine on USA, but breaks other regions: Port_GetSpriteAnimationData uses its ROM
+     * branch there and validates spr->animations with
      * IsRomPointer() — a native pointer fails, resolves to NULL, and the entity gets
      * no animation. With a NULL animPtr FrameZero never runs, so frameIndex stays
      * 0xFF (sprite invisible — intro Zelda/Smith), animations freeze (file-select
      * preview sprite 325), and ANIM_DONE is never set so cutscene WaitForAnimDone
      * blocks forever and never returns control (Link frozen at the intro handover).
-     * port_rom.c:1714 already skips its own override call for JP, but the asset
+     * port_rom.c already skips its own non-USA override call, but the asset
      * bootstrap (port_asset_bootstrap.cpp) calls this ungated — gate it here too so
-     * JP keeps its region-correct ROM-resolved gSpritePtrs regardless of caller. */
-    if (gRomRegion == ROM_REGION_JP) {
+     * each region keeps its ROM-resolved gSpritePtrs regardless of caller. */
+    if (gRomRegion != ROM_REGION_USA) {
         return FALSE;
     }
     if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasSpritePtrData || gAssetGroupCache.spritePtrs.empty()) {
@@ -1719,7 +1714,7 @@ extern "C" bool32 Port_LoadSpritePtrsFromAssets(void) {
 }
 
 extern "C" bool32 Port_LoadTextsFromAssets(void) {
-    if (gRomRegion == ROM_REGION_JP)
+    if (gRomRegion != ROM_REGION_USA)
         return FALSE;
     if (!EnsureAssetGroupCache() || !gAssetGroupCache.hasTextData) {
         return FALSE;
@@ -1882,14 +1877,13 @@ extern "C" const u8* Port_GetMapAssetDataByIndex(u32 assetIndex, u32* size) {
 }
 
 extern "C" const u8* Port_GetSpriteAnimationData(u16 spriteIndex, u32 animIndex) {
-    /* JP ROM: the asset cache's sprite-animation buffers are not region-correct for
-     * JP (the asset baseline is USA / JP extraction residual), which made JP entity
+    /* Non-USA ROMs: the cache's sprite-animation buffers use the USA baseline,
+     * which made region-specific entity
      * animPtrs fail FrameZero's bounds check (hundreds of "animPtr outside/overruns
-     * ROM" warnings → blank/garbled NPC sprites). Port_LoadRom already keeps JP on
-     * region-correct ROM-resolved gSpritePtrs (the "asset override skipped for JP"
-     * gate), so resolve JP animations straight from the ROM below, consistent with
+     * ROM" warnings → blank/garbled NPC sprites). Port_LoadRom already keeps them on
+     * region-correct ROM-resolved gSpritePtrs, so resolve animations from the ROM,
      * that decision, instead of the asset cache. */
-    if (gRomRegion != ROM_REGION_JP && EnsureAssetGroupCache()) {
+    if (gRomRegion == ROM_REGION_USA && EnsureAssetGroupCache()) {
         if (!gAssetGroupCache.spritePtrsLoaded) {
             Port_LoadSpritePtrsFromAssets();
         }

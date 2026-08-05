@@ -7,7 +7,7 @@ This target builds the native dual-screen Nintendo 3DS frontend.
 Install the universal CIA:
 
 ```text
-tmc-3ds-v0.16.cia
+tmc-3ds-v0.17.cia
 ```
 
 Then create this directory on the SD card:
@@ -40,10 +40,10 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 - New 3DS: requests 804 MHz, L2 cache and access to the extra application core.
 - New 3DS turbo: hold the C-stick in any direction and select 2x through 5x
   game speed from the Gameplay settings.
-- Settings: Minish Cap-themed Screen, Gameplay, and Developer submenus with
+- Settings: Minish Cap-themed Screen, Gameplay, Developer, and Randomizer submenus with
   persistent options, a manual memory-dump command, and a live diagnostics
   overlay.
-- Randomizer: persistent Project Picori randomizer mode under Gameplay. Mode
+- Randomizer: persistent Project Picori randomizer mode in its own submenu. Mode
   changes require confirmation, clear only the active profile and related
   state, keep the ROM, and restart with isolated normal/randomized saves.
 - Show FPS: measured presentation cadence in a compact lower-left top-screen

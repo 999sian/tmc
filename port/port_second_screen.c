@@ -162,6 +162,7 @@ enum {
     SS_SETTINGS_GAMEPLAY,
     SS_SETTINGS_DEVELOPER,
     SS_SETTINGS_OVERLAY,
+    SS_SETTINGS_RANDOMIZER,
 };
 
 /* Settings rows, top to bottom. The second-screen-only toggles persist
@@ -1809,12 +1810,13 @@ static int SettingsPageRows(int page, uint8_t* out) {
         out[n++] = SS_SET_FLOOR_RETURN;
         out[n++] = SS_SET_VOLUME;
         out[n++] = SS_SET_AUTOSAVE;
-        out[n++] = SS_SET_SHOW_FPS;
         out[n++] = SS_SET_HOLD_ADVANCE;
-#ifdef TMC_3DS
-        out[n++] = SS_SET_RANDOMIZER;
-#endif
     }
+#ifdef TMC_3DS
+    else if (page == SS_SETTINGS_RANDOMIZER) {
+        out[n++] = SS_SET_RANDOMIZER;
+    }
+#endif
     return n;
 }
 
@@ -1824,6 +1826,7 @@ static const char* SettingsPageTitle(int page) {
         case SS_SETTINGS_GAMEPLAY: return "GAMEPLAY";
         case SS_SETTINGS_DEVELOPER: return "DEVELOPER";
         case SS_SETTINGS_OVERLAY: return "OVERLAY";
+        case SS_SETTINGS_RANDOMIZER: return "RANDOMIZER";
         default: return "SETTINGS";
     }
 }
@@ -2043,12 +2046,21 @@ static void PaintSettingsPanel(const SSurf* s, const SecondScreenSnapshot* snap,
     float x0 = ix0 + 6 * u, x1 = ix1 - 6 * u;
     float y0 = iy0 + headerH + 12 * u;
     if (page == SS_SETTINGS_ROOT) {
+#ifdef TMC_3DS
+        static const char* const labels[4] = { "SCREEN", "GAMEPLAY", "DEVELOPER", "RANDOMIZER" };
+        static const uint8_t pages[4] = {
+            SS_SETTINGS_SCREEN, SS_SETTINGS_GAMEPLAY, SS_SETTINGS_DEVELOPER, SS_SETTINGS_RANDOMIZER
+        };
+        const int rootRows = 4;
+#else
         static const char* const labels[3] = { "SCREEN", "GAMEPLAY", "DEVELOPER" };
         static const uint8_t pages[3] = { SS_SETTINGS_SCREEN, SS_SETTINGS_GAMEPLAY, SS_SETTINGS_DEVELOPER };
-        float gap = 22 * u;
-        float rowH = (iy1 - y0 - 2 * gap) / 3;
+        const int rootRows = 3;
+#endif
+        float gap = 14 * u;
+        float rowH = (iy1 - y0 - (rootRows - 1) * gap) / rootRows;
         if (rowH > 124 * u) rowH = 124 * u;
-        for (int i = 0; i < 3; ++i) {
+        for (int i = 0; i < rootRows; ++i) {
             float ry = y0 + i * (rowH + gap);
             DrawSettingsNavRow(s, tl, x0, ry, x1, ry + rowH, labels[i], pages[i], u, ts);
         }
@@ -2056,9 +2068,9 @@ static void PaintSettingsPanel(const SSurf* s, const SecondScreenSnapshot* snap,
     }
 
     if (page == SS_SETTINGS_DEVELOPER) {
-        float gap = 24 * u;
-        float rowH = (iy1 - y0 - gap) / 2;
-        if (rowH > 122 * u) rowH = 122 * u;
+        float gap = 10 * u;
+        float rowH = (iy1 - y0 - 2 * gap) / 3;
+        if (rowH > 92 * u) rowH = 92 * u;
         char dumpValue[16];
         snprintf(dumpValue, sizeof(dumpValue), "%s",
                  (int32_t)(dumpFlashUntil - tick) > 0 ? "DONE" : "WRITE");
@@ -2070,7 +2082,9 @@ static void PaintSettingsPanel(const SSurf* s, const SecondScreenSnapshot* snap,
         MenuTextDraw(s, dumpValue, (int32_t)(x1 - 24 * u - MenuTextWidth(dumpValue, ms)),
                      (int32_t)(y0 + rowH / 2 - 8 * ms), ms, SS_TEXT_RED);
         AddTarget(tl, x0, y0, x1, y0 + rowH, SS_ACT_DEVELOPER_DUMP, 0);
-        DrawSettingsNavRow(s, tl, x0, y0 + rowH + gap, x1, y0 + 2 * rowH + gap, "OVERLAY",
+        DrawSettingsValueRow(s, tl, x0, y0 + rowH + gap, x1, y0 + 2 * rowH + gap,
+                             SS_SET_SHOW_FPS, u, ts);
+        DrawSettingsNavRow(s, tl, x0, y0 + 2 * (rowH + gap), x1, y0 + 3 * rowH + 2 * gap, "OVERLAY",
                            SS_SETTINGS_OVERLAY, u, ts);
         return;
     }
@@ -2104,7 +2118,7 @@ static void PaintRandomizerConfirmation(const SSurf* s, TargetList* tl, float u,
     int32_t titleScale = (int32_t)(2.2f * u);
     if (titleScale < 1) titleScale = 1;
     MenuTextCentered(s, enable ? "ENABLE RANDOMIZER" : "DISABLE RANDOMIZER", (x0 + x1) / 2,
-                     y0 + 28 * u, titleScale, SS_TEXT_NAVY);
+                     y0 + 10, titleScale, SS_TEXT_NAVY);
 
     static const char* const lines[] = {
         "RANDOMIZER REQUIRES A NEW GAME.",
@@ -2115,14 +2129,15 @@ static void PaintRandomizerConfirmation(const SSurf* s, TargetList* tl, float u,
     };
     int32_t textScale = (int32_t)(1.55f * u);
     if (textScale < 1) textScale = 1;
-    float lineY = y0 + 62 * u;
+    float lineY = y0 + 38;
+    const float lineStep = MENU_TEXT_BOX * textScale + 2;
     for (size_t i = 0; i < sizeof(lines) / sizeof(lines[0]); ++i) {
-        MenuTextCentered(s, lines[i], (x0 + x1) / 2, lineY + i * 25 * u, textScale, SS_TEXT_INK);
+        MenuTextCentered(s, lines[i], (x0 + x1) / 2, lineY + i * lineStep, textScale, SS_TEXT_INK);
     }
 
-    const float gap = 14 * u;
-    const float buttonY1 = y1 - 14 * u;
-    const float buttonY0 = buttonY1 - 58 * u;
+    const float gap = 8;
+    const float buttonY1 = y1 - 8;
+    const float buttonY0 = buttonY1 - 34;
     const float middle = (x0 + x1) / 2;
     DrawMenuButton(s, x0 + 14 * u, buttonY0, middle - gap / 2, buttonY1, "CANCEL", 0, 0, u, ts);
     DrawMenuButton(s, middle + gap / 2, buttonY0, x1 - 14 * u, buttonY1, "CONTINUE", 0, 0, u, ts);
@@ -2131,6 +2146,14 @@ static void PaintRandomizerConfirmation(const SSurf* s, TargetList* tl, float u,
               (uint8_t)(enable != 0));
 }
 #endif
+
+int Port_SecondScreen_IsDeveloperOverlayOpen(void) {
+    int open;
+    UI_LOCK();
+    open = sUi.tab == SS_TAB_SETTINGS && sUi.settingsPage == SS_SETTINGS_OVERLAY;
+    UI_UNLOCK();
+    return open;
+}
 
 /* ------------------------------------------------------------------ */
 /*  Sidebar                                                            */
