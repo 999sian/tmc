@@ -10,11 +10,12 @@ Install the CIA, then create this directory on the SD card:
 sdmc:/3ds/The Minish Cap 3DS/
 ```
 
-Place a legally obtained clean USA ROM there. Any `.gba` filename is accepted,
-though short names are recommended. The expected SHA-1 is:
+Place a legally obtained clean USA or European ROM there. Any `.gba` filename
+is accepted, though short names are recommended. Expected SHA-1 values:
 
 ```text
-b4bd50e4131b027c334547b4524e2dbbd4227130
+USA:    b4bd50e4131b027c334547b4524e2dbbd4227130
+Europe: cff199b36ff173fb6faf152653d1bccf87c26fb7
 ```
 
 The ROM is read locally from the SD card and is never copied into the CIA.
@@ -26,7 +27,7 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 
 - Top screen: selectable Wide, Original, and Stretch aspect ratios.
 - Display styles: centered one-pixel-per-source-pixel Pixel Perfect, nearest-
-  neighbor Scaled, linearly filtered Blur, and a lightweight CPU CRT pass.
+  neighbor Scaled and linearly filtered Blur.
 - Bottom screen: 320x240 map, dungeon/status information and touch item UI.
 - Rendering: PICA200/Citro2D presenter fed by the software GBA PPU.
 - New 3DS: requests 804 MHz, L2 cache and access to the extra application core.

@@ -47,7 +47,7 @@ https://ko-fi.com/estebanpdn
 - Minish Cap-themed bottom-screen Settings hierarchy with Screen, Gameplay,
   and Developer submenus. Options apply live and persist across launches.
 - Wide, Original, and Stretch aspect-ratio modes, plus Pixel Perfect, Scaled,
-  Blur, and lightweight CRT display styles.
+  Blur display styles.
 - Optional measured FPS counter in the lower-left corner of the top screen.
 - Developer memory-dump command and runtime overlay with version, console
   model, current/average FPS, Core 1 allocation, display mode, area, and room.
@@ -64,7 +64,7 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install `tmc-3ds-v0.14.cia` with FBI, or copy the 3DSX build to the
+1. Install `tmc-3ds-v0.15.cia` with FBI, or copy the 3DSX build to the
    Homebrew Launcher.
 2. Create this directory on the SD card:
 
@@ -72,13 +72,14 @@ https://ko-fi.com/estebanpdn
 sdmc:/3ds/The Minish Cap 3DS/
 ```
 
-3. Place your clean USA ROM in that directory. Any `.gba` filename is accepted,
-   though short names are recommended.
+3. Place your clean USA or European ROM in that directory. Any `.gba` filename
+   is accepted, though short names are recommended.
 
-The expected ROM SHA-1 is:
+Expected ROM SHA-1 values:
 
 ```text
-b4bd50e4131b027c334547b4524e2dbbd4227130
+USA:    b4bd50e4131b027c334547b4524e2dbbd4227130
+Europe: cff199b36ff173fb6faf152653d1bccf87c26fb7
 ```
 
 The ROM stays on your SD card and is never included in the CIA.
@@ -120,8 +121,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.14.cia
-build-3ds/game/tmc-3ds-v0.14.3dsx
+build-3ds/game/tmc-3ds-v0.15.cia
+build-3ds/game/tmc-3ds-v0.15.3dsx
 ```
 
 The build does not embed a ROM.

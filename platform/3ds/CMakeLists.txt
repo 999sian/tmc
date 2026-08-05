@@ -83,7 +83,7 @@ target_include_directories(tmc-3ds PRIVATE
 )
 
 target_compile_definitions(tmc-3ds PRIVATE
-    PC_PORT NON_MATCHING USE_HDMA TMC_3DS USA ENGLISH REVISION=0
+    PC_PORT NON_MATCHING USE_HDMA TMC_3DS MULTI_REGION USA ENGLISH REVISION=0
     MODE1_GBA_WIDTH=266 TMC_PORT_VERSION="${TMC_3DS_VERSION}" TMC_PC_VERSION="${TMC_3DS_VERSION}"
 )
 target_compile_features(tmc-3ds PRIVATE c_std_11 cxx_std_20)
@@ -95,6 +95,7 @@ set_target_properties(tmc-3ds PROPERTIES
     CXX_STANDARD_REQUIRED YES
 )
 target_compile_options(tmc-3ds PRIVATE
+    -include region.h
     -O3 -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -w
     -Wno-unused-parameter -Wno-missing-field-initializers
 )

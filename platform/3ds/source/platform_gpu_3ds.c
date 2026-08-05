@@ -43,7 +43,6 @@ enum {
     TOP_DISPLAY_PIXEL_PERFECT = 0,
     TOP_DISPLAY_SCALED,
     TOP_DISPLAY_BLUR,
-    TOP_DISPLAY_CRT,
 };
 
 static const uint8_t* StatusGlyph(char c) {

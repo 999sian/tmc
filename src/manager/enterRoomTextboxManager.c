@@ -73,6 +73,14 @@ void sub_0805E18C(EnterRoomTextboxManager* this) {
 }
 
 void sub_0805E1D8(EnterRoomTextboxManager* this) {
+    /* A first-visit banner temporarily owns both player control and the event
+     * priority. If another message dismisses it before the normal 60-frame
+     * release, return what the banner owns before deleting the manager. */
+    if (super->type2) {
+        super->type2 = 0;
+        gPlayerState.controlMode = CONTROL_1;
+        ClearEventPriority();
+    }
     MemClear(&gBG0Buffer[0xa0], 0x80);
     gScreen.bg0.updated = 1;
     DeleteThisEntity();
