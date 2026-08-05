@@ -48,8 +48,9 @@ https://ko-fi.com/estebanpdn
 - Hold the New Nintendo 3DS C-stick in any direction for temporary turbo;
   choose 2x through 5x from the bottom-screen Gameplay settings.
 - Minish Cap-themed bottom-screen Settings hierarchy with Screen, Gameplay,
-  and Developer submenus. Options apply live and persist across launches.
-- Project Picori Randomizer under Gameplay settings. Changing modes requires
+  Developer, and Randomizer submenus. Options apply live and persist across
+  launches.
+- Project Picori Randomizer in its own Settings submenu. Changing modes requires
   confirmation, clears only the active profile and its related state, keeps the
   ROM untouched, and restarts with isolated normal/randomized save storage.
 - Wide, Original, and Stretch aspect-ratio modes, plus Pixel Perfect, Scaled,
@@ -74,7 +75,7 @@ https://ko-fi.com/estebanpdn
    Homebrew Launcher:
 
 ```text
-tmc-3ds-v0.16.cia
+tmc-3ds-v0.17.cia
 ```
 2. Create this directory on the SD card:
 
@@ -132,8 +133,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.16.cia
-build-3ds/game/tmc-3ds-v0.16.3dsx
+build-3ds/game/tmc-3ds-v0.17.cia
+build-3ds/game/tmc-3ds-v0.17.3dsx
 ```
 
 The build does not embed a ROM.

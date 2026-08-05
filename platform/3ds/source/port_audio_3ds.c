@@ -135,7 +135,7 @@ bool Port_Audio_Init(void) {
 
     s32 priority = 0x30;
     svcGetThreadPriority(&priority, CUR_THREAD_HANDLE);
-    if (priority < 0x3F) ++priority;
+    if (priority > 0x18) --priority;
     sStats.threadPriority = priority;
     __atomic_store_n(&sAudioThreadRunning, true, __ATOMIC_RELEASE);
     sAudioThread = threadCreate(AudioThreadMain, NULL, AUDIO_THREAD_STACK, priority, AUDIO_THREAD_CORE, false);

@@ -3673,6 +3673,11 @@ static int FindRow(const u32* keys, int stride, int count, u32 usa) {
 
 u32 Port_RemapMapOffset(u32 usa_offset) {
     int row;
+#if defined(EU)
+    /* An EU-baseline multi-region reference already contains EU offsets. */
+    if (gActiveRegion == TMC_REGION_EU)
+        return usa_offset;
+#endif
     if (gActiveRegion == TMC_REGION_USA)
         return usa_offset;
     row = FindRow(&sMapRemap[0][0], 3, (int)(sizeof(sMapRemap) / sizeof(sMapRemap[0])), usa_offset);
@@ -3683,6 +3688,11 @@ u32 Port_RemapMapOffset(u32 usa_offset) {
 
 u32 Port_RemapGfxOffset(u32 usa_offset) {
     int row;
+#if defined(EU)
+    /* Avoid treating an EU offset that matches another USA key as USA data. */
+    if (gActiveRegion == TMC_REGION_EU)
+        return usa_offset;
+#endif
     if (gActiveRegion != TMC_REGION_EU)
         return usa_offset; /* JP gfx blob layout == USA */
     row = FindRow(&sGfxRemapEU[0][0], 2, (int)(sizeof(sGfxRemapEU) / sizeof(sGfxRemapEU[0])), usa_offset);

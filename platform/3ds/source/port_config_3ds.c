@@ -16,8 +16,8 @@ static bool sHoldText;
 static bool sColorCorrection;
 static bool sAutosave;
 static bool sConsoleParity;
-static Port3DSAspectRatio sAspectRatio = PORT_3DS_ASPECT_WIDE;
-static Port3DSDisplayStyle sDisplayStyle = PORT_3DS_DISPLAY_SCALED;
+static Port3DSAspectRatio sAspectRatio = PORT_3DS_ASPECT_STRETCH;
+static Port3DSDisplayStyle sDisplayStyle = PORT_3DS_DISPLAY_BLUR;
 /* The desktop file-select overlay is rendered on the gameplay screen and
  * has no useful 3DS interaction path. Keep the native second-screen UI
  * separate and leave this desktop-only overlay disabled. */
@@ -53,13 +53,13 @@ static bool ParseBool(const char* value) {
 
 static const char* AspectRatioConfigName(Port3DSAspectRatio mode) {
     static const char* const names[PORT_3DS_ASPECT_COUNT] = { "wide", "original", "stretch" };
-    return mode >= 0 && mode < PORT_3DS_ASPECT_COUNT ? names[mode] : names[PORT_3DS_ASPECT_WIDE];
+    return mode >= 0 && mode < PORT_3DS_ASPECT_COUNT ? names[mode] : names[PORT_3DS_ASPECT_STRETCH];
 }
 
 static const char* DisplayStyleConfigName(Port3DSDisplayStyle style) {
     static const char* const names[PORT_3DS_DISPLAY_COUNT] = { "pixel-perfect", "scaled", "blur" };
     return style >= 0 && style < PORT_3DS_DISPLAY_COUNT ? names[style]
-                                                        : names[PORT_3DS_DISPLAY_SCALED];
+                                                        : names[PORT_3DS_DISPLAY_BLUR];
 }
 
 static Port3DSAspectRatio ParseAspectRatio(const char* value) {
@@ -68,7 +68,7 @@ static Port3DSAspectRatio ParseAspectRatio(const char* value) {
             return (Port3DSAspectRatio)i;
         }
     }
-    return PORT_3DS_ASPECT_WIDE;
+    return PORT_3DS_ASPECT_STRETCH;
 }
 
 static Port3DSDisplayStyle ParseDisplayStyle(const char* value) {
@@ -77,7 +77,7 @@ static Port3DSDisplayStyle ParseDisplayStyle(const char* value) {
             return (Port3DSDisplayStyle)i;
         }
     }
-    return PORT_3DS_DISPLAY_SCALED;
+    return PORT_3DS_DISPLAY_BLUR;
 }
 
 static void SaveConfig(void) {

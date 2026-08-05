@@ -82,7 +82,8 @@ static int load_snapshot(const char* path) {
     if (!f) { perror("open snapshot"); return 0; }
     char magic[4];
     uint32_t sz[5];
-    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "PPU1", 4) != 0) {
+    if (fread(magic, 1, 4, f) != 4 ||
+        (memcmp(magic, "PPU1", 4) != 0 && memcmp(magic, "TMCP", 4) != 0)) {
         fprintf(stderr, "bad snapshot magic\n");
         fclose(f);
         return 0;
