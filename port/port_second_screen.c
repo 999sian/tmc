@@ -2183,16 +2183,18 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
     if (snap->rActionFrame == 0) {
         return;
     }
-    int32_t ms = (int32_t)(2.2f * u);
-    if (ms < 1) ms = 1;
-
     const char* word = NULL;
     if (snap->rActionId < (uint8_t)(sizeof(kRActionWords) / sizeof(kRActionWords[0]))) {
         word = kRActionWords[snap->rActionId];
     }
 
-    int32_t scale = (int32_t)(3.0f * u + 0.5f);
+    /* The physical 320x240 screen needs the next whole-pixel art scale to
+     * keep both the R glyph and its action readable. Long fallback labels
+     * shrink independently so they remain inside the sidebar. */
+    int32_t scale = (int32_t)(6.0f * u);
     if (scale < 1) scale = 1;
+    int32_t ms = scale;
+    while (ms > 1 && word != NULL && MenuTextWidth(word, ms) > (int32_t)(w - 4 * u)) --ms;
     const SecondScreenThemeSprite* rSprite = Port_SecondScreenTheme_Get(SST_BUTTON_R);
     int32_t rw = (rSprite != NULL ? rSprite->w : 18) * scale;
     int32_t rh = (rSprite != NULL ? rSprite->h : 16) * scale;
@@ -2296,7 +2298,7 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     /* The prompt shares the sidebar with the A/B rings, and at 34u it was
      * dwarfed by them — this is the one contextual control on the panel, so
      * it gets a band it can actually be read in. */
-    float rBandH = 92 * u;
+    float rBandH = 200 * u;
     DrawRPrompt(s, snap, x, vitalsBottom, w, rBandH, u, ts);
     vitalsBottom += rBandH;
 
