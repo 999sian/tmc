@@ -135,7 +135,8 @@ void Port_SecondScreenRender_DrawItemIconBank(uint32_t* pixels, int32_t bufWidth
         return;
     }
 
-    const SpritePtr* sprite = Port_GetSpritePtr(ITEM_SPRITE);
+    const u16 itemSpriteIndex = Port_RemapSpriteIndex(ITEM_SPRITE);
+    const SpritePtr* sprite = Port_GetSpritePtr(itemSpriteIndex);
     if (sprite == NULL || sprite->frames == NULL || sprite->ptr == NULL) {
         fprintf(stderr, "[second_screen_render] itemId %u: sprite=%p frames=%p ptr=%p\n", itemId, (void*)sprite,
                 sprite ? (void*)sprite->frames : NULL, sprite ? sprite->ptr : NULL);
@@ -148,7 +149,7 @@ void Port_SecondScreenRender_DrawItemIconBank(uint32_t* pixels, int32_t bufWidth
     }
     const uint8_t* slotTiles = (const uint8_t*)sprite->ptr + (size_t)frame->firstTileIndex * 32u;
 
-    const uint8_t* frameData = (const uint8_t*)sub_080AD8F0(ITEM_SPRITE, animation->index);
+    const uint8_t* frameData = (const uint8_t*)sub_080AD8F0(itemSpriteIndex, animation->index);
     if (frameData == NULL) {
         return;
     }

@@ -1112,7 +1112,6 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
      * compile-time spritePtrsCount=329. Falls back to the compile
      * count for early calls before the extension finished. */
     extern u32 gSpritePtrsLoadedCount;
-    sprite_idx = Port_RemapSpriteIndex(sprite_idx);
     if (Port_AreSpritePtrsLoadedFromAssets()) {
         if (!gRomOffsets)
             return NULL;

@@ -7,7 +7,7 @@ This target builds the native dual-screen Nintendo 3DS frontend.
 Install the universal CIA:
 
 ```text
-tmc-3ds-v0.20.cia
+tmc-3ds-v0.21.cia
 ```
 
 Then create this directory on the SD card:
