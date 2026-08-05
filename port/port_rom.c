@@ -1107,6 +1107,7 @@ void Port_DecodeFontGBA(const void* gba_data, Font* out) {
 }
 
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
+    sprite_idx = Port_RemapSpriteIndex(sprite_idx);
     /* Use the runtime-extended count (gSpritePtrsLoadedCount, set
      * after the ROM-walk extension in startup) instead of the
      * compile-time spritePtrsCount=329. Falls back to the compile
@@ -1129,7 +1130,7 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
 }
 
 u16 Port_RemapSpriteIndex(u16 sprite_idx) {
-#if defined(PC_PORT) && defined(MULTI_REGION)
+#if defined(MULTI_REGION)
     if (REGION_IS_EU && sprite_idx >= 322 && sprite_idx <= 328) {
         return sprite_idx - 1;
     }
