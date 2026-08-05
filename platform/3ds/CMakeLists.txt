@@ -85,11 +85,11 @@ add_executable(tmc-3ds
 target_include_directories(tmc-3ds PRIVATE
     "${TMC_ROOT}" "${TMC_ROOT}/include" "${TMC_ROOT}/port"
     "${TMC_ROOT}/port/ppu/include" "${TMC_ROOT}/libs/agbplay_core"
-    "${TMC_ROOT}/build/USA" "${CMAKE_CURRENT_LIST_DIR}/source"
+    "${TMC_ROOT}/build/EU" "${CMAKE_CURRENT_LIST_DIR}/source"
 )
 
 target_compile_definitions(tmc-3ds PRIVATE
-    PC_PORT NON_MATCHING USE_HDMA TMC_3DS MULTI_REGION USA ENGLISH REVISION=0
+    PC_PORT NON_MATCHING USE_HDMA TMC_3DS MULTI_REGION EU ENGLISH REVISION=0
     MODE1_GBA_WIDTH=266 TMC_PORT_VERSION="${TMC_3DS_VERSION}" TMC_PC_VERSION="${TMC_3DS_VERSION}"
 )
 target_compile_features(tmc-3ds PRIVATE c_std_11 cxx_std_20)
