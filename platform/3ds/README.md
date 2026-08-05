@@ -24,8 +24,9 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 
 ## Display
 
-- Top screen: widescreen gameplay across 400x240, with centered 360x240
-  presentation for fixed-width scenes.
+- Top screen: selectable Wide, Original, and Stretch aspect ratios.
+- Display styles: centered one-pixel-per-source-pixel Pixel Perfect, nearest-
+  neighbor Scaled, linearly filtered Blur, and a lightweight CPU CRT pass.
 - Bottom screen: 320x240 map, dungeon/status information and touch item UI.
 - Rendering: PICA200/Citro2D presenter fed by the software GBA PPU.
 - New 3DS: requests 804 MHz, L2 cache and access to the extra application core.
@@ -34,7 +35,9 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 - Settings: Minish Cap-themed Screen, Gameplay, and Developer submenus with
   persistent options, a manual memory-dump command, and a live diagnostics
   overlay.
-- Diagnostics: press `L + R + A` to pause the game, display `DUMPING`, and
+- Show FPS: measured presentation cadence in a compact lower-left top-screen
+  box.
+- Diagnostics: press `L + R + A` to pause the game, display `DUMP SAVED`, and
   create `dumps/dump-*` with top and bottom physical-framebuffer BMP and raw
   captures, EWRAM, IWRAM, VRAM, palettes, OAM, I/O and game state, frame
   cadence, per-core PPU timings, GPU work, audio buffer health, save

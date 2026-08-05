@@ -210,6 +210,28 @@ void Port_Config_SetSecondScreenBackdrop(int style);
 bool Port_Config_GetSecondScreenSwap(void);
 void Port_Config_SetSecondScreenSwap(bool on);
 #ifdef TMC_3DS
+typedef enum {
+    PORT_3DS_ASPECT_WIDE = 0,
+    PORT_3DS_ASPECT_ORIGINAL,
+    PORT_3DS_ASPECT_STRETCH,
+    PORT_3DS_ASPECT_COUNT,
+} Port3DSAspectRatio;
+
+typedef enum {
+    PORT_3DS_DISPLAY_PIXEL_PERFECT = 0,
+    PORT_3DS_DISPLAY_SCALED,
+    PORT_3DS_DISPLAY_BLUR,
+    PORT_3DS_DISPLAY_CRT,
+    PORT_3DS_DISPLAY_COUNT,
+} Port3DSDisplayStyle;
+
+int Port_Config_Get3DSAspectRatio(void);
+const char* Port_Config_Get3DSAspectRatioName(void);
+void Port_Config_Cycle3DSAspectRatio(void);
+int Port_Config_Get3DSDisplayStyle(void);
+const char* Port_Config_Get3DSDisplayStyleName(void);
+void Port_Config_Cycle3DSDisplayStyle(void);
+
 /* New 3DS C-stick turbo multiplier. The device supports 2x through 5x and
  * applies changes immediately to the frame-boundary scheduler. */
 unsigned Port_Config_GetTurboMultiplier(void);

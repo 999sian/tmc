@@ -24,7 +24,7 @@ uint32_t* PlatformGpu3DS_TopBuffer(void);
 uint32_t* PlatformGpu3DS_BottomBuffer(unsigned index);
 void PlatformGpu3DS_BeginTop(const uint32_t* pixels, unsigned width);
 void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed);
-void PlatformGpu3DS_ShowDumpingOverlay(void);
+void PlatformGpu3DS_ShowDumpSavedOverlay(void);
 void PlatformGpu3DS_GetStats(PlatformGpu3DSStats* stats);
 void PlatformGpu3DS_Shutdown(void);
 
