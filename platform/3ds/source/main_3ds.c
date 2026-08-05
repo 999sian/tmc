@@ -16,6 +16,16 @@
 #define APP_DIR "sdmc:/3ds/The Minish Cap 3DS"
 #define ROM_PATH_SIZE 512
 
+#ifndef TMC_3DS_REGION_LABEL
+#define TMC_3DS_REGION_LABEL "USA"
+#endif
+#ifndef TMC_3DS_EXPECTED_GAME_CODE
+#define TMC_3DS_EXPECTED_GAME_CODE "BZME"
+#endif
+#ifndef TMC_3DS_EXPECTED_SHA1
+#define TMC_3DS_EXPECTED_SHA1 "b4bd50e4131b027c334547b4524e2dbbd4227130"
+#endif
+
 extern void AgbMain(void);
 
 static int PrepareStorage(void) {
@@ -34,10 +44,21 @@ static int HasGbaExtension(const char* name) {
            tolower((unsigned char)ext[3]) == 'a';
 }
 
+static int RomMatchesBuild(const char* path) {
+    char gameCode[4];
+    FILE* file = fopen(path, "rb");
+    if (!file) return 0;
+    int ok = fseek(file, 0xAC, SEEK_SET) == 0 && fread(gameCode, 1, sizeof(gameCode), file) == sizeof(gameCode) &&
+             memcmp(gameCode, TMC_3DS_EXPECTED_GAME_CODE, sizeof(gameCode)) == 0;
+    fclose(file);
+    return ok;
+}
+
 static int FindRom(char* out, size_t outSize) {
     DIR* dir = opendir(".");
     if (!dir) return 0;
 
+    int foundGba = 0;
     struct dirent* entry;
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_name[0] == '.') continue;
@@ -45,13 +66,15 @@ static int FindRom(char* out, size_t outSize) {
 
         struct stat info;
         if (stat(entry->d_name, &info) != 0 || !S_ISREG(info.st_mode)) continue;
+        foundGba = 1;
+        if (!RomMatchesBuild(entry->d_name)) continue;
         snprintf(out, outSize, "%s", entry->d_name);
         closedir(dir);
         return 1;
     }
 
     closedir(dir);
-    return 0;
+    return foundGba ? -1 : 0;
 }
 
 int main(int argc, char** argv) {
@@ -72,14 +95,20 @@ int main(int argc, char** argv) {
     }
 
     char romPath[ROM_PATH_SIZE];
-    if (!FindRom(romPath, sizeof(romPath))) {
-        Platform3DS_ShowFatal(
-            "ROM not found",
-            "Copy your clean USA ROM to:\n"
-            APP_DIR "\n\n"
-            "Any .gba filename is accepted.\n\n"
-            "Expected SHA-1:\n"
-            "b4bd50e4131b027c334547b4524e2dbbd4227130");
+    int romResult = FindRom(romPath, sizeof(romPath));
+    if (romResult <= 0) {
+        char message[512];
+        if (romResult < 0) {
+            snprintf(message, sizeof(message),
+                     "This is the %s package, but none of the .gba files in:\n%s\n"
+                     "match game code %s.\n\nExpected SHA-1:\n%s",
+                     TMC_3DS_REGION_LABEL, APP_DIR, TMC_3DS_EXPECTED_GAME_CODE, TMC_3DS_EXPECTED_SHA1);
+        } else {
+            snprintf(message, sizeof(message),
+                     "Copy your clean %s ROM to:\n%s\n\nAny .gba filename is accepted.\n\nExpected SHA-1:\n%s",
+                     TMC_3DS_REGION_LABEL, APP_DIR, TMC_3DS_EXPECTED_SHA1);
+        }
+        Platform3DS_ShowFatal(romResult < 0 ? "ROM region mismatch" : "ROM not found", message);
         Platform3DS_Shutdown();
         return 1;
     }

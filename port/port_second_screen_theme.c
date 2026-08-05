@@ -2184,32 +2184,32 @@ int Port_SecondScreenTheme_DrawMenuButton(uint32_t* pixels, int32_t bufW, int32_
 }
 
 int Port_SecondScreenTheme_DrawRButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
-                                       int32_t x, int32_t y, int32_t scale) {
+                                       int32_t x, int32_t y, int32_t scale2) {
     const SecondScreenThemeSprite* s = Port_SecondScreenTheme_Get(SST_BUTTON_R);
-    int32_t i, j, ex, ey;
+    int32_t dw, dh, dx, dy;
     if (s == NULL || pixels == NULL) {
         return 0;
     }
-    if (scale < 1) {
-        scale = 1;
+    if (scale2 < 2) {
+        scale2 = 2;
     }
-    for (j = 0; j < s->h; j++) {
-        for (i = 0; i < s->w; i++) {
-            uint32_t c = s->px[(size_t)j * (size_t)s->w + i];
+    dw = (s->w * scale2 + 1) / 2;
+    dh = (s->h * scale2 + 1) / 2;
+    for (dy = 0; dy < dh; dy++) {
+        int32_t py = y + dy;
+        int32_t sy = (dy * 2) / scale2;
+        if (py < 0 || py >= bufH) {
+            continue;
+        }
+        for (dx = 0; dx < dw; dx++) {
+            int32_t px = x + dx;
+            int32_t sx = (dx * 2) / scale2;
+            uint32_t c = s->px[(size_t)sy * (size_t)s->w + sx];
             if ((c >> 24) == 0) {
                 continue;
             }
-            for (ey = 0; ey < scale; ey++) {
-                int32_t py = y + j * scale + ey;
-                if (py < 0 || py >= bufH) {
-                    continue;
-                }
-                for (ex = 0; ex < scale; ex++) {
-                    int32_t px = x + i * scale + ex;
-                    if (px >= 0 && px < bufW) {
-                        pixels[(size_t)py * (size_t)stride + px] = c;
-                    }
-                }
+            if (px >= 0 && px < bufW) {
+                pixels[(size_t)py * (size_t)stride + px] = c;
             }
         }
     }
@@ -2224,7 +2224,7 @@ int Port_SecondScreenTheme_DrawRButton(uint32_t* pixels, int32_t bufW, int32_t b
 static uint32_t sActionScratch[ACTION_LABEL_MAX_W * ACTION_LABEL_MAX_H];
 
 int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, int32_t bufH,
-                                               int32_t stride, int32_t x, int32_t y, int32_t scale,
+                                               int32_t stride, int32_t x, int32_t y, int32_t scale2,
                                                uint8_t frameId) {
     const SpritePtr* sprite;
     const SpriteFrame* frame;
@@ -2232,13 +2232,13 @@ int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, i
     const u8* frameData;
     u32 count, i;
     int32_t minX = ACTION_LABEL_MAX_W, minY = ACTION_LABEL_MAX_H, maxX = -1, maxY = -1;
-    int32_t sx, sy, ex, ey;
+    int32_t sx, sy;
 
     if (frameId == 0 || pixels == NULL) {
         return 0;
     }
-    if (scale < 1) {
-        scale = 1;
+    if (scale2 < 2) {
+        scale2 = 2;
     }
     sprite = Port_GetSpritePtr(SPRITE_UI_LABELS);
     if (sprite == NULL || sprite->frames == NULL || sprite->ptr == NULL) {
@@ -2312,25 +2312,27 @@ int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, i
         return 0;
     }
 
-    for (sy = minY; sy <= maxY; sy++) {
-        for (sx = minX; sx <= maxX; sx++) {
-            uint32_t c = sActionScratch[sy * ACTION_LABEL_MAX_W + sx];
-            if ((c >> 24) == 0) {
+    {
+        int32_t sw = maxX - minX + 1;
+        int32_t sh = maxY - minY + 1;
+        int32_t dw = (sw * scale2 + 1) / 2;
+        int32_t dh = (sh * scale2 + 1) / 2;
+        int32_t drawX = x - dw / 2;
+        for (sy = 0; sy < dh; sy++) {
+            int32_t py = y + sy;
+            int32_t srcY = minY + (sy * 2) / scale2;
+            if (py < 0 || py >= bufH) {
                 continue;
             }
-            for (ey = 0; ey < scale; ey++) {
-                int32_t py = y + (sy - minY) * scale + ey;
-                if (py < 0 || py >= bufH) {
-                    continue;
-                }
-                for (ex = 0; ex < scale; ex++) {
-                    int32_t px = x + (sx - minX) * scale + ex;
-                    if (px >= 0 && px < bufW) {
-                        pixels[(size_t)py * (size_t)stride + px] = c;
-                    }
+            for (sx = 0; sx < dw; sx++) {
+                int32_t px = drawX + sx;
+                int32_t srcX = minX + (sx * 2) / scale2;
+                uint32_t c = sActionScratch[(size_t)srcY * ACTION_LABEL_MAX_W + srcX];
+                if ((c >> 24) != 0 && px >= 0 && px < bufW) {
+                    pixels[(size_t)py * (size_t)stride + px] = c;
                 }
             }
         }
+        return dw;
     }
-    return (maxX - minX + 1) * scale;
 }

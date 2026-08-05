@@ -4,14 +4,22 @@ This target builds the native dual-screen Nintendo 3DS frontend.
 
 ## Console Installation
 
-Install the CIA, then create this directory on the SD card:
+Install the CIA that matches the region of your ROM:
+
+```text
+USA:    tmc-3ds-v0.16.cia
+Europe: tmc-3ds-v0.16-eu.cia
+```
+
+Then create this directory on the SD card:
 
 ```text
 sdmc:/3ds/The Minish Cap 3DS/
 ```
 
-Place a legally obtained clean USA or European ROM there. Any `.gba` filename
-is accepted, though short names are recommended. Expected SHA-1 values:
+Place a legally obtained clean ROM there. Any `.gba` filename is accepted.
+Each package selects only its matching game code, so a USA executable cannot
+silently start with European data or vice versa. Expected SHA-1 values:
 
 ```text
 USA:    b4bd50e4131b027c334547b4524e2dbbd4227130
@@ -60,8 +68,10 @@ Run:
 
 ```sh
 chmod +x platform/3ds/build.sh
-platform/3ds/build.sh
+platform/3ds/build.sh USA
+platform/3ds/build.sh EU
 ```
 
-The script creates both public packages under `build-3ds/game/`. No ROM,
-extracted asset package or save data is included in either package.
+The USA packages are written under `build-3ds/game/`; European packages are
+written under `build-3ds/eu/` with an `-eu` suffix. No ROM, extracted asset
+package or save data is included in any package.

@@ -276,17 +276,18 @@ int Port_SecondScreenTheme_DrawMenuButton(uint32_t* pixels, int32_t bufW, int32_
                                           int32_t x, int32_t y, int32_t w, int32_t h, const char* label,
                                           int pressed);
 
-/* The HUD's R button glyph, at its native size scaled up. Returns 1 when
- * drawn, 0 while the art isn't decoded. */
+/* The HUD's R button glyph, nearest-neighbor scaled in half-pixel units
+ * (3 means 1.5x). Returns 1 when drawn, 0 while the art isn't decoded. */
 int Port_SecondScreenTheme_DrawRButton(uint32_t* pixels, int32_t bufW, int32_t bufH, int32_t stride,
-                                       int32_t x, int32_t y, int32_t scale);
+                                       int32_t x, int32_t y, int32_t scale2);
 
 /* One of the HUD's contextual button-prompt labels (SPEAK / READ / LIFT /
  * ...), by the sprite frame id the snapshot carries in rActionFrame —
- * the game's own label art, not re-lettered text. Returns the drawn width
- * in pixels, or 0 when the frame isn't decodable / the id is 0. */
+ * the game's own label art, not re-lettered text. x is the horizontal center.
+ * Returns the drawn width in pixels, or 0 when the frame isn't decodable /
+ * the id is 0. */
 int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, int32_t bufH,
-                                               int32_t stride, int32_t x, int32_t y, int32_t scale,
+                                               int32_t stride, int32_t x, int32_t y, int32_t scale2,
                                                uint8_t frameId);
 
 #ifdef __cplusplus

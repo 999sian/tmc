@@ -17,11 +17,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "area.h"       /* gArea, AREA_* */
 #include "main.h"       /* gMain, SetTask, TASK_* */
 #include "save.h"       /* SaveFile, gSave */
 #include "fileselect.h" /* gMapDataBottomSpecial, ResetSaveFile */
 #include "flags.h"      /* SetGlobalFlag, prologue flags */
 #include "room.h"       /* gRoomControls */
+#include "scroll.h"     /* DoExitTransition */
 #include "message.h"    /* gMessage, MessageRequest (TMC_ROOMCAP_MSG hook) */
 #include "script.h"     /* gActiveScriptInfo, ScriptExecutionContext (TMC_ROOMCAP_PAN_PROBE) */
 #include "port_repro.h"
@@ -529,6 +531,75 @@ void Port_ReproRoomCap_Tick(unsigned int frame) {
                     break;
             }
             return; /* probe owns the run */
+        }
+    }
+
+    /* ---- TMC_ROOMCAP_FESTIVAL_EXIT_PROBE ------------------------------
+     * Reproduce the intro route from Festival Town into North Hyrule Field.
+     * The festival room is shifted into Hyrule Town's world coordinates and
+     * its north exit preserves X with the 0xfff marker. A cutscene can leave
+     * camera_target on a cleared script entity even after Link has control;
+     * the preserved coordinate must therefore come from Link, not that stale
+     * camera entity. The probe deliberately supplies a zeroed camera target,
+     * fires the real ROM transition, then verifies Link arrives at x=0x1f8. */
+    {
+        static int fprobe = -1, fstage = 0, fredirectPrepared = 0;
+        static unsigned int fdeadline;
+        static Entity staleCameraTarget;
+        if (fprobe < 0) {
+            const char* e = getenv("TMC_ROOMCAP_FESTIVAL_EXIT_PROBE");
+            fprobe = (e && *e && strcmp(e, "0") != 0) ? 1 : 0;
+        }
+        if (fprobe && warp_done) {
+            if (!fredirectPrepared && gRoomControls.area == AREA_HYRULE_TOWN) {
+                extern void ClearGlobalFlag(u32 flag);
+                gSave.global_progress = 1;
+                ClearGlobalFlag(TABIDACHI);
+                if (Port_DebugAction_Warp(AREA_HYRULE_TOWN, 0, (unsigned short)x, (unsigned short)y,
+                                          (unsigned char)l) == 1) {
+                    fredirectPrepared = 1;
+                }
+                return;
+            }
+            if (fstage == 0 && gRoomControls.area == AREA_FESTIVAL_TOWN &&
+                gArea.pCurrentRoomInfo != NULL && gArea.pCurrentRoomInfo->exits != NULL) {
+                const Transition* exit = gArea.pCurrentRoomInfo->exits;
+                gPlayerEntity.base.x.HALF.HI = gRoomControls.origin_x + gRoomControls.width / 2;
+                gPlayerEntity.base.y.HALF.HI = gRoomControls.origin_y + gRoomControls.height - 8;
+                memset(&staleCameraTarget, 0, sizeof(staleCameraTarget));
+                gRoomControls.camera_target = &staleCameraTarget;
+                fprintf(stderr,
+                        "[festival-exit] source origin=(%u,%u) player=(%d,%d) camera=(%d,%d) end=(0x%x,0x%x)\n",
+                        gRoomControls.origin_x, gRoomControls.origin_y, gPlayerEntity.base.x.HALF.HI,
+                        gPlayerEntity.base.y.HALF.HI, staleCameraTarget.x.HALF.HI,
+                        staleCameraTarget.y.HALF.HI, exit->endX, exit->endY);
+                DoExitTransition(exit);
+                fstage = 1;
+                fdeadline = frame + 600;
+                return;
+            }
+            if (fstage == 1 && gRoomControls.area == AREA_HYRULE_FIELD &&
+                gRoomControls.room == ROOM_HYRULE_FIELD_NORTH_HYRULE_FIELD) {
+                fstage = 2;
+                fdeadline = frame + 90;
+            }
+            if (fstage == 2 && frame >= fdeadline) {
+                int relativeX = gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x;
+                int pass = relativeX == 0x1f8;
+                fprintf(stderr,
+                        "[festival-exit] %s destination origin=(%u,%u) player=(%d,%d) relativeX=0x%x\n",
+                        pass ? "PASS" : "FAIL", gRoomControls.origin_x, gRoomControls.origin_y,
+                        gPlayerEntity.base.x.HALF.HI, gPlayerEntity.base.y.HALF.HI, relativeX);
+                fflush(stderr);
+                _Exit(pass ? 0 : 5);
+            }
+            if (fstage == 1 && frame >= fdeadline) {
+                fprintf(stderr, "[festival-exit] FAIL transition timeout area=0x%02x room=0x%02x\n",
+                        (unsigned)gRoomControls.area, (unsigned)gRoomControls.room);
+                fflush(stderr);
+                _Exit(5);
+            }
+            return;
         }
     }
 

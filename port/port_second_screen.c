@@ -2188,16 +2188,16 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
         word = kRActionWords[snap->rActionId];
     }
 
-    /* The physical 320x240 screen needs the next whole-pixel art scale to
-     * keep both the R glyph and its action readable. Long fallback labels
-     * shrink independently so they remain inside the sidebar. */
-    int32_t scale = (int32_t)(6.0f * u);
-    if (scale < 1) scale = 1;
-    int32_t ms = scale;
+    /* Half-pixel units give the 3DS panel a true 1.5x prompt: midway
+     * between v0.14's small 1x art and v0.15's oversized 2x art. */
+    int32_t scale2 = (int32_t)(9.0f * u + 0.5f);
+    if (scale2 < 2) scale2 = 2;
+    int32_t ms = scale2 / 2;
+    if (ms < 1) ms = 1;
     while (ms > 1 && word != NULL && MenuTextWidth(word, ms) > (int32_t)(w - 4 * u)) --ms;
     const SecondScreenThemeSprite* rSprite = Port_SecondScreenTheme_Get(SST_BUTTON_R);
-    int32_t rw = (rSprite != NULL ? rSprite->w : 18) * scale;
-    int32_t rh = (rSprite != NULL ? rSprite->h : 16) * scale;
+    int32_t rw = ((rSprite != NULL ? rSprite->w : 18) * scale2 + 1) / 2;
+    int32_t rh = ((rSprite != NULL ? rSprite->h : 16) * scale2 + 1) / 2;
     float gap = 4 * u;
     float labelH = 16 * ms;
     float top = y + (bandH - rh - gap - labelH) / 2;
@@ -2205,7 +2205,7 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
     float gx = x + (w - rw) / 2;
 
     if (!Port_SecondScreenTheme_DrawRButton(s->px, s->w, s->h, s->stride, (int32_t)gx,
-                                            (int32_t)top, scale)) {
+                                            (int32_t)top, scale2)) {
         int32_t bts = (int32_t)(rh / 26.0f);
         if (bts < 1) bts = 1;
         if (bts > ts) bts = ts;
@@ -2213,12 +2213,13 @@ static void DrawRPrompt(const SSurf* s, const SecondScreenSnapshot* snap, float 
         MenuTextCentered(s, "R", gx + rw / 2, top + rh / 2, ms, SS_TEXT_NAVY);
     }
 
-    float labelW = word != NULL ? (float)MenuTextWidth(word, ms) : 0.0f;
-    float lx = x + (w - labelW) / 2;
     float ly = top + rh + gap;
-    if (Port_SecondScreenTheme_DrawActionLabel(s->px, s->w, s->h, s->stride, (int32_t)lx,
-                                               (int32_t)ly, scale, snap->rActionFrame) == 0 &&
+    if (Port_SecondScreenTheme_DrawActionLabel(s->px, s->w, s->h, s->stride,
+                                               (int32_t)(x + w / 2),
+                                               (int32_t)ly, scale2, snap->rActionFrame) == 0 &&
         word != NULL) {
+        float labelW = (float)MenuTextWidth(word, ms);
+        float lx = x + (w - labelW) / 2;
         /* The one label on this panel lettered straight onto the backdrop
          * with nothing behind it, so it is the one that has to follow the
          * backdrop: the menu's dark ink vanishes on the near-black. (The
@@ -2298,7 +2299,7 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     /* The prompt shares the sidebar with the A/B rings, and at 34u it was
      * dwarfed by them — this is the one contextual control on the panel, so
      * it gets a band it can actually be read in. */
-    float rBandH = 200 * u;
+    float rBandH = 144 * u;
     DrawRPrompt(s, snap, x, vitalsBottom, w, rBandH, u, ts);
     vitalsBottom += rBandH;
 
@@ -2341,6 +2342,10 @@ static void PaintSidebar(const SSurf* s, const SecondScreenSnapshot* snap, Targe
     float quarter = (chipY - vitalsBottom) / 4 - 7 * u;
     if (ringR > quarter) ringR = quarter;
     if (ringR >= 10 * u) {
+        float lowerBy = 24 * u;
+        float maxLower = chipY - (mid + 2 * ringR + 6 * u);
+        if (lowerBy > maxLower) lowerBy = maxLower;
+        if (lowerBy > 0) mid += lowerBy;
         float rcx = x + w / 2;
         DrawItemRing(s, snap, tl, rcx, mid - ringR - 6 * u, ringR, 1, armedRing == 1, u, tick);
         DrawItemRing(s, snap, tl, rcx, mid + ringR + 6 * u, ringR, 0, armedRing == 2, u, tick);

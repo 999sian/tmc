@@ -32,6 +32,7 @@ typedef struct {
     u32 frameObjLists;    /* gFrameObjLists sprite frame data */
     u32 fixedTypeGfx;     /* gFixedTypeGfxData */
     u32 spritePtrs;       /* gSpritePtrs */
+    u32 songTable;        /* gSongTable */
     u32 translations;     /* gTranslations */
     u32 text09230;        /* font/text pointer table 1 */
     u32 text09244;        /* font/text raw data 1 */

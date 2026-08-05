@@ -4,6 +4,23 @@ project(tmc_3ds VERSION "${TMC_3DS_VERSION}" LANGUAGES C CXX)
 
 set(TMC_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 
+set(TMC_3DS_REGION "USA" CACHE STRING "Retail ROM baseline for the 3DS package (USA or EU)")
+set_property(CACHE TMC_3DS_REGION PROPERTY STRINGS USA EU)
+string(TOUPPER "${TMC_3DS_REGION}" TMC_3DS_REGION)
+if(TMC_3DS_REGION STREQUAL "EU")
+    set(TMC_3DS_ARTIFACT_SUFFIX "-eu")
+    set(TMC_3DS_REGION_LABEL "Europe")
+    set(TMC_3DS_EXPECTED_GAME_CODE "BZMP")
+    set(TMC_3DS_EXPECTED_SHA1 "cff199b36ff173fb6faf152653d1bccf87c26fb7")
+elseif(TMC_3DS_REGION STREQUAL "USA")
+    set(TMC_3DS_ARTIFACT_SUFFIX "")
+    set(TMC_3DS_REGION_LABEL "USA")
+    set(TMC_3DS_EXPECTED_GAME_CODE "BZME")
+    set(TMC_3DS_EXPECTED_SHA1 "b4bd50e4131b027c334547b4524e2dbbd4227130")
+else()
+    message(FATAL_ERROR "TMC_3DS_REGION must be USA or EU")
+endif()
+
 file(GLOB TMC_ACTOR_SOURCES CONFIGURE_DEPENDS
     "${TMC_ROOT}/src/playerItem/*.c"
     "${TMC_ROOT}/src/enemy/*.c"
@@ -79,12 +96,15 @@ add_executable(tmc-3ds
 target_include_directories(tmc-3ds PRIVATE
     "${TMC_ROOT}" "${TMC_ROOT}/include" "${TMC_ROOT}/port"
     "${TMC_ROOT}/port/ppu/include" "${TMC_ROOT}/libs/agbplay_core"
-    "${TMC_ROOT}/build/USA" "${CMAKE_CURRENT_LIST_DIR}/source"
+    "${TMC_ROOT}/build/${TMC_3DS_REGION}" "${CMAKE_CURRENT_LIST_DIR}/source"
 )
 
 target_compile_definitions(tmc-3ds PRIVATE
-    PC_PORT NON_MATCHING USE_HDMA TMC_3DS MULTI_REGION USA ENGLISH REVISION=0
+    PC_PORT NON_MATCHING USE_HDMA TMC_3DS MULTI_REGION ${TMC_3DS_REGION} ENGLISH REVISION=0
     MODE1_GBA_WIDTH=266 TMC_PORT_VERSION="${TMC_3DS_VERSION}" TMC_PC_VERSION="${TMC_3DS_VERSION}"
+    TMC_3DS_REGION_LABEL="${TMC_3DS_REGION_LABEL}"
+    TMC_3DS_EXPECTED_GAME_CODE="${TMC_3DS_EXPECTED_GAME_CODE}"
+    TMC_3DS_EXPECTED_SHA1="${TMC_3DS_EXPECTED_SHA1}"
 )
 target_compile_features(tmc-3ds PRIVATE c_std_11 cxx_std_20)
 set_target_properties(tmc-3ds PROPERTIES
@@ -131,7 +151,7 @@ configure_file(
 set(TMC_SMDH "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds.smdh")
 ctr_generate_smdh(
     OUTPUT "${TMC_SMDH}"
-    NAME "The Minish Cap 3DS v${TMC_3DS_VERSION}"
+    NAME "The Minish Cap 3DS v${TMC_3DS_VERSION} ${TMC_3DS_REGION_LABEL}"
     DESCRIPTION "Native Nintendo 3DS port"
     AUTHOR "Esteban PDN / Project Picori / samyost1"
     ICON "${CMAKE_CURRENT_LIST_DIR}/assets/icon-48.png"
@@ -139,7 +159,7 @@ ctr_generate_smdh(
 
 ctr_create_3dsx(tmc-3ds-3dsx
     TARGET tmc-3ds
-    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds-v${TMC_3DS_VERSION}.3dsx"
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/tmc-3ds-v${TMC_3DS_VERSION}${TMC_3DS_ARTIFACT_SUFFIX}.3dsx"
     SMDH "${TMC_SMDH}"
     ROMFS "${TMC_ROMFS}"
 )

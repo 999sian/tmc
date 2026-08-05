@@ -29,8 +29,11 @@ jobs:
             echo "::warning::devkitPro package sync is unavailable; continuing with the tools bundled in the container."
           fi
 
-      - name: Build CIA and 3DSX
-        run: ./platform/3ds/build.sh
+      - name: Build USA CIA and 3DSX
+        run: ./platform/3ds/build.sh USA
+
+      - name: Build Europe CIA and 3DSX
+        run: ./platform/3ds/build.sh EU
 
       - name: Verify build outputs and legal files
         run: |
@@ -39,10 +42,16 @@ jobs:
           ! git ls-files | grep -Ei '(^|/)([^/]*\.gba|[^/]*\.sav|[^/]*\.ppu1|tmc3ds\.log|bugreport_.*)(/|$)'
           ! git ls-files | grep -E '(^|/)(AGENTS\.md|WORKFLOW\.md|GITHUB_RELEASE_WORKFLOW\.md)$'
           test -f "build-3ds/game/tmc-3ds-v${VERSION}.3dsx"
+          test -f "build-3ds/eu/tmc-3ds-v${VERSION}-eu.3dsx"
           if [ -f "build-3ds/game/tmc-3ds-v${VERSION}.cia" ]; then
             echo "CIA package was built."
           else
             echo "CIA package skipped because makerom/bannertool are unavailable in CI."
+          fi
+          if [ -f "build-3ds/eu/tmc-3ds-v${VERSION}-eu.cia" ]; then
+            echo "Europe CIA package was built."
+          else
+            echo "Europe CIA package skipped because makerom/bannertool are unavailable in CI."
           fi
 
       - name: Upload packages
@@ -53,3 +62,5 @@ jobs:
           path: |
             build-3ds/game/tmc-3ds-v*.3dsx
             build-3ds/game/tmc-3ds-v*.cia
+            build-3ds/eu/tmc-3ds-v*-eu.3dsx
+            build-3ds/eu/tmc-3ds-v*-eu.cia

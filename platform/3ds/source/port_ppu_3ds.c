@@ -17,6 +17,7 @@
 #include "main.h"
 #include "map.h"
 #include "menu.h"
+#include "player.h"
 #include "room.h"
 #include "tileMap.h"
 #include "vram.h"
@@ -421,6 +422,20 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "Room area/id/origin/size/scroll: 0x%02X/0x%02X, %d,%d, %u,%u, %d,%d\n",
                 gRoomControls.area, gRoomControls.room, gRoomControls.origin_x, gRoomControls.origin_y,
                 gRoomControls.width, gRoomControls.height, gRoomControls.scroll_x, gRoomControls.scroll_y);
+        fprintf(info, "Player position/z: %d,%d,%d; action/subaction: %u/%u; direction/animation: %u/%u\n",
+                gPlayerEntity.base.x.HALF.HI, gPlayerEntity.base.y.HALF.HI, gPlayerEntity.base.z.HALF.HI,
+                gPlayerEntity.base.action, gPlayerEntity.base.subAction, gPlayerEntity.base.direction,
+                gPlayerEntity.base.animationState);
+        fprintf(info, "Player control/framestate/layer/draw/flags: %u/%u/%u/%u/0x%02X\n",
+                gPlayerState.controlMode, gPlayerState.framestate, gPlayerEntity.base.collisionLayer,
+                gPlayerEntity.base.spriteSettings.draw, gPlayerEntity.base.flags);
+        fprintf(info, "Camera target/player pointers: 0x%08lX / 0x%08lX\n",
+                (unsigned long)(uintptr_t)gRoomControls.camera_target,
+                (unsigned long)(uintptr_t)&gPlayerEntity.base);
+        fprintf(info, "Pending transition: out=%u destination=0x%02X/0x%02X position=%d,%d\n",
+                gRoomTransition.transitioningOut, gRoomTransition.player_status.area_next,
+                gRoomTransition.player_status.room_next, gRoomTransition.player_status.start_pos_x,
+                gRoomTransition.player_status.start_pos_y);
         fprintf(info, "Map BG controls: bottom=0x%04X top=0x%04X\n",
                 gMapBottom.bgSettings ? gMapBottom.bgSettings->control : 0,
                 gMapTop.bgSettings ? gMapTop.bgSettings->control : 0);
