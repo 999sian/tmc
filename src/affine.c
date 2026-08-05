@@ -25,7 +25,6 @@ void* sub_080AD8F0(u32 sprite, u32 frame) {
     u32 frameTableOffset;
     u32 frameDataOffset;
 
-    sprite = Port_RemapSpriteIndex((u16)sprite);
     if ((size_t)sprite >= (frameObjSize / sizeof(u32))) {
         return NULL;
     }
@@ -116,9 +115,6 @@ void sub_080ADA04(OAMCommand* cmd, void* dst) {
 }
 
 void DrawDirect(u32 spriteIndex, u32 frameIndex) {
-#ifdef PC_PORT
-    spriteIndex = Port_RemapSpriteIndex((u16)spriteIndex);
-#endif
     void (*fn)(OAMCommand*, u32, u32) = ram_DrawDirect;
     fn(&gOamCmd, spriteIndex, frameIndex);
 }
