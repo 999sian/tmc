@@ -64,16 +64,22 @@ https://ko-fi.com/estebanpdn
 
 ## Installation
 
-1. Install `tmc-3ds-v0.15.cia` with FBI, or copy the 3DSX build to the
-   Homebrew Launcher.
+1. Install the package that matches your ROM region with FBI, or use its
+   matching 3DSX build in the Homebrew Launcher:
+
+```text
+USA:    tmc-3ds-v0.16.cia
+Europe: tmc-3ds-v0.16-eu.cia
+```
 2. Create this directory on the SD card:
 
 ```text
 sdmc:/3ds/The Minish Cap 3DS/
 ```
 
-3. Place your clean USA or European ROM in that directory. Any `.gba` filename
-   is accepted, though short names are recommended.
+3. Place your clean ROM in that directory. Any `.gba` filename is accepted.
+   Each package ignores ROMs from the other region, preventing mixed code and
+   data from starting the game.
 
 Expected ROM SHA-1 values:
 
@@ -115,14 +121,17 @@ Build:
 
 ```sh
 chmod +x platform/3ds/build.sh
-./platform/3ds/build.sh
+./platform/3ds/build.sh USA
+./platform/3ds/build.sh EU
 ```
 
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.15.cia
-build-3ds/game/tmc-3ds-v0.15.3dsx
+build-3ds/game/tmc-3ds-v0.16.cia
+build-3ds/game/tmc-3ds-v0.16.3dsx
+build-3ds/eu/tmc-3ds-v0.16-eu.cia
+build-3ds/eu/tmc-3ds-v0.16-eu.3dsx
 ```
 
 The build does not embed a ROM.

@@ -471,6 +471,19 @@ static void LoadSongMapLocked(void) {
 }
 
 static size_t SongIdToRomPosLocked(uint16_t songId) {
+    if (gRomOffsets != nullptr && gRomOffsets->songTable != 0 && songId < kSongCount) {
+        const size_t entryPos = static_cast<size_t>(gRomOffsets->songTable) + static_cast<size_t>(songId) * 8u;
+
+        if (entryPos + sizeof(u32) <= gRomSize) {
+            const u8* raw = gRomData + entryPos;
+            const u32 gbaAddress = static_cast<u32>(raw[0]) | (static_cast<u32>(raw[1]) << 8) |
+                                   (static_cast<u32>(raw[2]) << 16) | (static_cast<u32>(raw[3]) << 24);
+            if (gbaAddress >= 0x08000000u && gbaAddress < 0x08000000u + gRomSize) {
+                return static_cast<size_t>(gbaAddress - 0x08000000u);
+            }
+        }
+    }
+
     if (!sState.songMapLoaded) {
         LoadSongMapLocked();
     }
@@ -765,7 +778,11 @@ static void StartSongLocked(uint8_t playerIndex, uint16_t songId) {
         sState.ctx->m4aMPlayStart(playerIndex, songPos);
         if (playerIndex < kPlayerCount)
             sState.currentSongId[playerIndex] = songId;
-    } catch (const std::exception& e) { AudioGuardWarn("StartSongLocked", e.what()); }
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "[AUDIO] rejected song player=%u id=%u ROM offset=0x%zX\n", playerIndex, songId,
+                     SongIdToRomPosLocked(songId));
+        AudioGuardWarn("StartSongLocked", e.what());
+    }
 }
 
 static void StopPlayerLocked(uint8_t playerIndex) {

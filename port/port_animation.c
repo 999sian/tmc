@@ -101,7 +101,9 @@ static void FrameZero(Entity* entity) {
     if (!p)
         return; /* Safety: no animation data */
     if (!AnimRangeHasBytes(p, 4)) {
-        fprintf(stderr, "FrameZero: animPtr %p outside/overruns ROM\n", (void*)p);
+        fprintf(stderr,
+                "FrameZero: sprite=%u anim=%u action=%u subAction=%u animPtr=%p outside/overruns ROM\n",
+                entity->spriteIndex, entity->animIndex, entity->action, entity->subAction, (void*)p);
         return;
     }
     entity->frameIndex = p[0];
@@ -113,7 +115,8 @@ static void FrameZero(Entity* entity) {
     /* Check loop flag: bit 7 of frame byte */
     if (entity->frame & 0x80) {
         if (!AnimRangeHasBytes(p, 1)) {
-            fprintf(stderr, "FrameZero: loop byte out of ROM at %p\n", (void*)p);
+            fprintf(stderr, "FrameZero: sprite=%u anim=%u loop byte out of ROM at %p\n", entity->spriteIndex,
+                    entity->animIndex, (void*)p);
             return;
         }
         u8 loopBack = p[0]; /* next byte = backwards distance in 4-byte frames */

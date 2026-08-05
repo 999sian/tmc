@@ -747,17 +747,22 @@ void DoExitTransition(const Transition* data) {
         SetRoomTransitionTypeForBorder2Warp,
     };
     PlayerRoomStatus* status;
+#ifdef PC_PORT
+    Entity* positionTarget = &gPlayerEntity.base;
+#else
+    Entity* positionTarget = gRoomControls.camera_target;
+#endif
     gRoomTransition.transitioningOut = 1;
     status = &gRoomTransition.player_status;
     if (data->endX <= 0x3ff) {
         status->start_pos_x = data->endX;
     } else {
-        status->start_pos_x = gRoomControls.camera_target->x.HALF.HI | 0x8000;
+        status->start_pos_x = positionTarget->x.HALF.HI | 0x8000;
     }
     if (data->endY <= 0x3ff) {
         status->start_pos_y = data->endY;
     } else {
-        status->start_pos_y = gRoomControls.camera_target->y.HALF.HI | 0x8000;
+        status->start_pos_y = positionTarget->y.HALF.HI | 0x8000;
     }
     status->area_next = data->area;
     status->room_next = data->room;

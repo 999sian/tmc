@@ -88,7 +88,10 @@ static void SaveConfig(void) {
     fprintf(file, "panel_backdrop=%d\n", sBackdrop);
     fprintf(file, "turbo_multiplier=%u\n", sTurboMultiplier);
 
-    bool ok = fflush(file) == 0 && fsync(fileno(file)) == 0;
+    /* A synchronous SD flush can stall the 3DS main thread for seconds on
+     * every Settings change. The temporary file plus close/rename/backup
+     * sequence still protects this recoverable preferences file. */
+    bool ok = fflush(file) == 0;
     if (fclose(file) != 0) ok = false;
     if (!ok) {
         remove(temp);
