@@ -554,7 +554,7 @@ const RomOffsets kRomOffsets_EU = {
     .objPalettesCount = 360,
     .frameObjListsSize = 200045,
     .fixedTypeGfxCount = 527,
-    .spritePtrsCount = 329,
+    .spritePtrsCount = 328,
     .expectedRomSize = 0x1000000,
     .gameCode = "BZMP",
 };
@@ -1112,6 +1112,7 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
      * compile-time spritePtrsCount=329. Falls back to the compile
      * count for early calls before the extension finished. */
     extern u32 gSpritePtrsLoadedCount;
+    sprite_idx = Port_RemapSpriteIndex(sprite_idx);
     if (Port_AreSpritePtrsLoadedFromAssets()) {
         if (!gRomOffsets)
             return NULL;
@@ -1126,6 +1127,15 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
     if (sprite_idx >= cap)
         return NULL;
     return &sSpritePtrsStable[sprite_idx];
+}
+
+u16 Port_RemapSpriteIndex(u16 sprite_idx) {
+#if defined(PC_PORT) && defined(MULTI_REGION)
+    if (REGION_IS_EU && sprite_idx >= 322 && sprite_idx <= 328) {
+        return sprite_idx - 1;
+    }
+#endif
+    return sprite_idx;
 }
 
 /*
@@ -1612,11 +1622,13 @@ void Port_LoadRom(const char* path) {
      * On GBA, these are packed 32-bit pointer tables. On PC/64-bit we materialize
      * native pointers to avoid invalid indexing with sizeof(void*) == 8. */
     {
+        extern u32 gSpritePtrsLoadedCount;
         memset(gMoreSpritePtrs, 0, sizeof(gMoreSpritePtrs));
         memset(gSpriteAnimations_322, 0, sizeof(gSpriteAnimations_322));
 
-        if (R->spritePtrsCount > 322) {
-            const SpritePtr* sp322 = &gSpritePtrs[322];
+        const u16 sprite322Index = Port_RemapSpriteIndex(322);
+        if (gSpritePtrsLoadedCount > sprite322Index) {
+            const SpritePtr* sp322 = &gSpritePtrs[sprite322Index];
             gMoreSpritePtrs[0] = (u16*)sp322->animations;
             gMoreSpritePtrs[1] = (u16*)sp322->frames;
             gMoreSpritePtrs[2] = (u16*)sp322->ptr;
@@ -1636,7 +1648,8 @@ void Port_LoadRom(const char* path) {
                     }
                     resolvedCount++;
                 }
-                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[322]).\n", resolvedCount);
+                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[%u]).\n", resolvedCount,
+                        sprite322Index);
             }
         }
     }

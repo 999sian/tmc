@@ -244,6 +244,7 @@ static inline bool Port_IsFontGBAEncoded(const void* data) {
  * Returns NULL if the index is outside the loaded sprite table.
  */
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx);
+u16 Port_RemapSpriteIndex(u16 sprite_idx);
 
 /*
  * Decode one MapDataDefinition entry into a native-layout struct.
