@@ -554,7 +554,7 @@ const RomOffsets kRomOffsets_EU = {
     .objPalettesCount = 360,
     .frameObjListsSize = 200045,
     .fixedTypeGfxCount = 527,
-    .spritePtrsCount = 328,
+    .spritePtrsCount = 329,
     .expectedRomSize = 0x1000000,
     .gameCode = "BZMP",
 };
@@ -1648,8 +1648,7 @@ void Port_LoadRom(const char* path) {
                     }
                     resolvedCount++;
                 }
-                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[%u]).\n", resolvedCount,
-                        sprite322Index);
+                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[322]).\n", resolvedCount);
             }
         }
     }
