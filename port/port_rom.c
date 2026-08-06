@@ -1131,7 +1131,11 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
 
 u16 Port_RemapSpriteIndex(u16 sprite_idx) {
 #if defined(MULTI_REGION)
-    if (REGION_IS_EU && sprite_idx >= 322 && sprite_idx <= 328) {
+    /* EU's item/icon sprite table entry 322 is shifted to 321 in the
+     * retail ROM table; other nearby indices are valid in-place and must
+     * not be shifted, otherwise gameplay entity sprites in that range
+     * regress. */
+    if (REGION_IS_EU && sprite_idx == 322) {
         return sprite_idx - 1;
     }
 #endif
