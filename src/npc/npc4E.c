@@ -26,6 +26,8 @@
 #include "port_scripts.h"
 #endif
 
+#define NPC4E_TRANSITION_COUNT 16
+
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 unk_68;
@@ -77,11 +79,18 @@ void NPC4E_ChangeInteractableHitbox(Entity* this, ScriptExecutionContext* contex
 }
 
 void NPC4E_DoScreenTransition(Entity* this, ScriptExecutionContext* context) {
-    const Transition* transition = gNpc4ETransitions[context->intVariable];
+    const u16 transitionIndex = context->intVariable;
+    const Transition* transition;
+
+    if (transitionIndex >= NPC4E_TRANSITION_COUNT) {
+        return;
+    }
+
+    transition = gNpc4ETransitions[transitionIndex];
     // gNpc4ETransitions[3] == &gUnk_0813ABF8, which diverges on EU/JP (guard: defined(EU) || defined(JP))
     if ((REGION_IS_EU || REGION_IS_JP) && transition == &gUnk_0813ABF8)
         transition = &gUnk_0813ABF8_eu;
-    DoExitTransitionWithType(transition, gNpc4ETransitionTypes[context->intVariable]);
+    DoExitTransitionWithType(transition, gNpc4ETransitionTypes[transitionIndex]);
 }
 
 u8 NPC4E_GetKinstoneId(Entity* this) {
