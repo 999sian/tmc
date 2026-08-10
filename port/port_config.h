@@ -28,6 +28,12 @@ typedef enum {
 #define PORT_COLLISION_SHAPE_PTRS_USA 0x0000823Cu
 #define PORT_COLLISION_SHAPE_PTRS_EU 0x000082D4u
 
+/* u16 tile traversal/layer properties read by sub_080B1B84/1BA4.  The
+ * payload is identical, but EU relocates it after a larger startup pointer
+ * block. */
+#define PORT_TILE_TYPE_PROPERTIES_USA 0x00000360u
+#define PORT_TILE_TYPE_PROPERTIES_EU 0x000003A8u
+
 /* Fixed UI definitions are compiled from the USA baseline in the fat binary.
  * EU removes one sprite-table entry before both the shared item sheet and the
  * HUD button sheet. Gameplay entity indices remain active-ROM-native and
@@ -52,6 +58,7 @@ typedef struct {
     u32 spritePtrs;       /* gSpritePtrs */
     u32 collisionMatrix;  /* gCollisionMtx and adjacent collision settings */
     u32 collisionShapePtrs; /* packed pointers to 16x16 pixel-level collision masks */
+    u32 tileTypeProperties; /* gUnk_08000360: u16 traversal/layer flags by tile type */
     u32 figurines;        /* gFigurines packed ROM table */
     u32 fuserEnemyData;   /* GetFuserData enemy table */
     u32 fuserNpcData;     /* GetFuserData NPC table */

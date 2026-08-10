@@ -31,6 +31,7 @@
 #include "structures.h"
 
 #include "port_entity_ctx.h"
+#include "port_collision_fidelity.h"
 #include "port_gba_mem.h"
 #include "port_rom.h"
 #include "port_runtime_config.h"
@@ -1701,12 +1702,13 @@ u32 GetActTileRelativeToEntity(Entity* entity, s32 xOffset, s32 yOffset) {
  * tileType >= 0x4000 → gMapSpecialTileToActTile[tileType - 0x4000]
  */
 extern const u8 gMapTileTypeToActTile[];
-extern const u16 gUnk_080B7A3E[]; /* gMapSpecialTileToActTile */
+extern const u8 gMapSpecialTileToActTile[];
+extern const u16 gUnk_080B7A3E[];
 u32 GetActTileForTileType(u32 tileType) {
     if (tileType < 0x4000)
         return GetMapTileTypeToActTile(tileType);
     else
-        return ((const u8*)gUnk_080B7A3E)[tileType - 0x4000];
+        return gMapSpecialTileToActTile[tileType - 0x4000];
 }
 
 /* ---------- CollisionData family ---------- */
@@ -1819,8 +1821,7 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
     u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
     const u16* table;
     if (tileType < 0x4000) {
-        /* gUnk_08000360 is at ROM offset 0x360 */
-        table = (const u16*)&gRomData[0x360];
+        return Port_GetTileTypeProperty(tileType);
     } else {
         table = gUnk_080B7A3E;
     }
@@ -1841,19 +1842,18 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
  */
 u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
     u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
-    const u16* table;
+    u32 r;
     if (tileType < 0x4000) {
-        table = (const u16*)&gRomData[0x360];
+        r = Port_GetTileTypeProperty(tileType) & mask;
     } else {
-        table = gUnk_080B7A3E;
+        r = gUnk_080B7A3E[tileType & 0x3FFF] & mask;
     }
-    u32 r = table[tileType & 0x3FFF] & mask;
 #ifdef PC_PORT
-    if (r == 0) {
+    if (r == 0 && Port_ShouldFallbackTilePropertyLayer(mask)) {
         u32 other = (layer == 2) ? 1 : 2;
         u32 tt2 = GetTileTypeAtTilePos(tilePos, other);
-        const u16* t2 = (tt2 < 0x4000) ? (const u16*)&gRomData[0x360] : gUnk_080B7A3E;
-        r = t2[tt2 & 0x3FFF] & mask;
+        r = (tt2 < 0x4000) ? (Port_GetTileTypeProperty(tt2) & mask)
+                           : (gUnk_080B7A3E[tt2 & 0x3FFF] & mask);
     }
 #endif
     return r;
@@ -1974,8 +1974,8 @@ void CloneTile(u32 tileType, u32 tilePos, u32 layer) {
  */
 typedef struct {
     u16 actTile;
-    u8 fromLayer;
-    u8 toLayer;
+    u8 preservedLayer;
+    u8 destinationLayer;
 } TransitionTileEntry;
 
 static const TransitionTileEntry sTransitionTiles[] = {
@@ -2008,7 +2008,7 @@ u32 ResolveCollisionLayer(Entity* entity) {
             const TransitionTileEntry* p = sResolveCollisionLayerTiles;
             while (p->actTile != 0) {
                 if (actTile == p->actTile) {
-                    newLayer = p->toLayer;
+                    newLayer = p->destinationLayer;
                     break;
                 }
                 p++;
@@ -2031,9 +2031,8 @@ u32 CheckOnLayerTransition(Entity* entity) {
     const TransitionTileEntry* p = sTransitionTiles;
     while (p->actTile != 0) {
         if (p->actTile == actTile) {
-            if (entity->collisionLayer == p->fromLayer) {
-                entity->collisionLayer = p->toLayer;
-            }
+            entity->collisionLayer =
+                Port_ApplyCollisionLayerTransition(entity->collisionLayer, p->preservedLayer, p->destinationLayer);
             return actTile;
         }
         p++;
@@ -2045,9 +2044,10 @@ u32 CheckOnLayerTransition(Entity* entity) {
  * UpdateCollisionLayer — check layer transition and update sprite priority.
  * (port of ARM asm at 0x08016AB4)
  */
-void UpdateCollisionLayer(Entity* entity) {
-    CheckOnLayerTransition(entity);
+u32 UpdateCollisionLayer(Entity* entity) {
+    u32 actTile = CheckOnLayerTransition(entity);
     UpdateSpriteForCollisionLayer(entity);
+    return actTile;
 }
 
 /**
@@ -2074,8 +2074,7 @@ u32 GetTileHazardType(Entity* entity) {
     if (entity->action == 0)
         return 0;
 
-    UpdateCollisionLayer(entity);
-    u32 actTile = GetActTileAtEntity(entity);
+    u32 actTile = UpdateCollisionLayer(entity);
 
     /* Check z position — if entity is in the air, no hazard */
     if ((s16)entity->z.HALF.HI < 0)

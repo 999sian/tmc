@@ -192,6 +192,22 @@ static inline const u16* Port_ResolveCollisionShapeFromRom(const u8* romData, u3
     return (const u16*)(romData + dataOffset);
 }
 
+/* Read one u16 traversal/layer-property record from a region-native ROM
+ * table.  USA places this table at 0x360; EU moves it to 0x3A8 because its
+ * startup pointer block is larger. */
+static inline u16 Port_ReadTileTypePropertyFromRom(const u8* romData, u32 romSize, u32 tableOffset, u32 tileType) {
+    u32 entryOffset;
+
+    if (romData == NULL || tableOffset > romSize || tileType > (UINT32_MAX - tableOffset) / sizeof(u16)) {
+        return 0;
+    }
+    entryOffset = tableOffset + tileType * sizeof(u16);
+    if (entryOffset > romSize || sizeof(u16) > romSize - entryOffset) {
+        return 0;
+    }
+    return Port_ReadU16(romData + entryOffset);
+}
+
 /*
  * Read entry [index] from a packed-GBA-pointer ROM table and resolve to
  * a native pointer. Equivalent to Port_PackedRomEntry but kept for the
@@ -284,6 +300,7 @@ u16 Port_RemapSpriteIndex(u16 sprite_idx);
  * packed pointer table. This is region-sensitive even though the mask
  * payloads themselves are region-invariant. */
 const u16* Port_GetCollisionShapeData(u32 index);
+u16 Port_GetTileTypeProperty(u32 tileType);
 
 /*
  * Decode one MapDataDefinition entry into a native-layout struct.
