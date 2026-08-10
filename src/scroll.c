@@ -80,7 +80,7 @@ void SetRoomTransitionTypeForArea2Warp(s32);
 void SetRoomTransitionTypeForBorder2Warp(s32);
 u32 sub_0807BEEC(u32 x, u32 y, u32 direction);
 static bool32 TryDoorAdjacentRoomScroll(Entity* target);
-static bool32 TryHyruleCastleThroneSouthDoorScroll(Entity* target);
+static bool32 TryHyruleCastleVerticalDoorScroll(Entity* target);
 
 extern const s8 gShakeOffsets[];
 
@@ -979,12 +979,12 @@ static bool32 TryDoorAdjacentRoomScroll(Entity* target) {
     }
 
     if ((target->direction & DIR_NOT_MOVING_CHECK) != 0) {
-        return TryHyruleCastleThroneSouthDoorScroll(target);
+        return TryHyruleCastleVerticalDoorScroll(target);
     }
 
     direction = target->direction & DirectionNorthWest;
     if ((direction & 7) != 0) {
-        return TryHyruleCastleThroneSouthDoorScroll(target);
+        return TryHyruleCastleVerticalDoorScroll(target);
     }
 
     relX = target->x.HALF.HI - (s32)gRoomControls.origin_x;
@@ -992,22 +992,22 @@ static bool32 TryDoorAdjacentRoomScroll(Entity* target) {
     switch (direction >> 3) {
         case 0:
             if (relY >= 10) {
-                return TryHyruleCastleThroneSouthDoorScroll(target);
+                return TryHyruleCastleVerticalDoorScroll(target);
             }
             break;
         case 1:
             if (relX <= (s32)gRoomControls.width - 10) {
-                return TryHyruleCastleThroneSouthDoorScroll(target);
+                return TryHyruleCastleVerticalDoorScroll(target);
             }
             break;
         case 2:
             if (relY <= (s32)gRoomControls.height - 10) {
-                return TryHyruleCastleThroneSouthDoorScroll(target);
+                return TryHyruleCastleVerticalDoorScroll(target);
             }
             break;
         case 3:
             if (relX >= 10) {
-                return TryHyruleCastleThroneSouthDoorScroll(target);
+                return TryHyruleCastleVerticalDoorScroll(target);
             }
             break;
     }
@@ -1015,35 +1015,52 @@ static bool32 TryDoorAdjacentRoomScroll(Entity* target) {
     return sub_0807BD14(target, direction >> 3);
 }
 
-static bool32 TryHyruleCastleThroneSouthDoorScroll(Entity* target) {
+static bool32 TryHyruleCastleVerticalDoorScroll(Entity* target) {
+    u32 direction;
+    u32 room;
     s32 relX;
     s32 relY;
 
-    if (target == NULL || gRoomControls.area != AREA_HYRULE_CASTLE ||
-        gRoomControls.room != ROOM_HYRULE_CASTLE_2 ||
-        Direction8FromAnimationState(target->animationState) != DirectionSouth) {
+    if (target == NULL || gRoomControls.area != AREA_HYRULE_CASTLE) {
         return FALSE;
     }
 
     relX = target->x.HALF.HI - (s32)gRoomControls.origin_x;
     relY = target->y.HALF.HI - (s32)gRoomControls.origin_y;
 
-    /* Esteban's physical EU v0.27 dumps caught the post-ceremony throne-room
-     * south doorway stopped on ACT_TILE_41 with direction=255 at room-relative
-     * (136,325) in a 272x352 room. v0.28 incorrectly generalized this into
-     * "any nearby room edge", which could trigger lateral scrolls from other
-     * doors. Keep this fallback scoped to the exact south doorway corridor and
-     * require the original room-header search to resolve the intended room 1. */
-    if (relX < 0x70 || relX > 0xa0 || relY < ((s32)gRoomControls.height - 0x30) ||
-        relY > (s32)gRoomControls.height) {
+    if (relX < 0 || relX > (s32)gRoomControls.width || relY < 0 || relY > (s32)gRoomControls.height) {
         return FALSE;
     }
 
-    if (sub_0807BEEC(target->x.HALF.HI, target->y.HALF.HI, 2) != ROOM_HYRULE_CASTLE_1) {
+    /* Hyrule Castle's early rooms use vertical adjacent-room scrolling for
+     * door-floor ACT_TILE_41 strips that are not represented in Transition[].
+     * The original code assumes another path starts scroll before the player
+     * is left in PLAYER_ROOMTRANSITION. In this port, DoApplicableTransition
+     * can fail first, so start only the same-area vertical scroll implied by
+     * the room-header geometry. Keep east/west excluded: v0.28 proved a broad
+     * four-edge search can pick the wrong neighbor and move Link out of room
+     * bounds. */
+    direction = Direction8FromAnimationState(target->animationState);
+    if (direction == DirectionNorth) {
+        if (relY > 0x30) {
+            return FALSE;
+        }
+        direction = 0;
+    } else if (direction == DirectionSouth) {
+        if (relY < ((s32)gRoomControls.height - 0x30)) {
+            return FALSE;
+        }
+        direction = 2;
+    } else {
         return FALSE;
     }
 
-    return sub_0807BD14(target, 2);
+    room = sub_0807BEEC(target->x.HALF.HI, target->y.HALF.HI, direction);
+    if (room == 0xff || room == gRoomControls.room) {
+        return FALSE;
+    }
+
+    return sub_0807BD14(target, direction);
 }
 
 // fill the actTile for the whole layer
