@@ -77,7 +77,6 @@ void SetRoomTransitionTypeForAreaWarp(s32);
 void SetRoomTransitionTypeForBorderWarp(s32);
 void SetRoomTransitionTypeForArea2Warp(s32);
 void SetRoomTransitionTypeForBorder2Warp(s32);
-u32 sub_0807BEEC(u32 x, u32 y, u32 direction);
 static bool32 TryDoorAdjacentRoomScroll(Entity* target);
 
 extern const s8 gShakeOffsets[];
@@ -968,73 +967,46 @@ void UpdateDoorTransition() {
 }
 
 static bool32 TryDoorAdjacentRoomScroll(Entity* target) {
-    static const u8 sDirections[] = { 0, 1, 2, 3 };
-    u32 facing;
     u32 direction;
-    u32 bestDirection;
-    u32 bestDistance;
-    u32 candidateCount;
     s32 relX;
     s32 relY;
-    s32 distance;
 
-    if (target == NULL || gRoomControls.reload_flags != 0 || (gRoomControls.scroll_flags & 4) != 0) {
+    if (target == NULL || gRoomControls.reload_flags != 0 || (gRoomControls.scroll_flags & 4) != 0 ||
+        (target->direction & DIR_NOT_MOVING_CHECK) != 0) {
+        return FALSE;
+    }
+
+    direction = target->direction & DirectionNorthWest;
+    if ((direction & 7) != 0) {
         return FALSE;
     }
 
     relX = target->x.HALF.HI - (s32)gRoomControls.origin_x;
     relY = target->y.HALF.HI - (s32)gRoomControls.origin_y;
-
-    /* Edge door tiles can stop the player's center well before the 10-pixel
-     * collision border (e.g. the Hyrule Castle throne room south exit stops at
-     * y=341 in a 352-pixel-tall room). Treat the last/first three metatiles as
-     * the edge-door band, but still require a real neighboring room from the
-     * original room-header search before starting scroll. */
-    facing = Direction8FromAnimationState(target->animationState) >> 3;
-    bestDirection = 0xff;
-    bestDistance = 0xffffffff;
-    candidateCount = 0;
-
-    for (u32 i = 0; i < (sizeof(sDirections) / sizeof(sDirections[0])); i++) {
-        direction = sDirections[i];
-        switch (direction) {
-            case 0:
-                distance = relY;
-                break;
-            case 1:
-                distance = (s32)gRoomControls.width - relX;
-                break;
-            case 2:
-                distance = (s32)gRoomControls.height - relY;
-                break;
-            default:
-                distance = relX;
-                break;
-        }
-
-        if (distance < 0 || distance > 0x30) {
-            continue;
-        }
-        if (sub_0807BEEC(target->x.HALF.HI, target->y.HALF.HI, direction) == 0xff) {
-            continue;
-        }
-
-        if (direction == facing) {
-            return sub_0807BD14(target, direction);
-        }
-
-        candidateCount++;
-        if ((u32)distance < bestDistance) {
-            bestDistance = (u32)distance;
-            bestDirection = direction;
-        }
+    switch (direction >> 3) {
+        case 0:
+            if (relY >= 10) {
+                return FALSE;
+            }
+            break;
+        case 1:
+            if (relX <= (s32)gRoomControls.width - 10) {
+                return FALSE;
+            }
+            break;
+        case 2:
+            if (relY <= (s32)gRoomControls.height - 10) {
+                return FALSE;
+            }
+            break;
+        case 3:
+            if (relX >= 10) {
+                return FALSE;
+            }
+            break;
     }
 
-    if (candidateCount == 1 && bestDirection != 0xff) {
-        return sub_0807BD14(target, bestDirection);
-    }
-
-    return FALSE;
+    return sub_0807BD14(target, direction >> 3);
 }
 
 // fill the actTile for the whole layer
