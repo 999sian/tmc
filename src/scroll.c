@@ -77,6 +77,7 @@ void SetRoomTransitionTypeForAreaWarp(s32);
 void SetRoomTransitionTypeForBorderWarp(s32);
 void SetRoomTransitionTypeForArea2Warp(s32);
 void SetRoomTransitionTypeForBorder2Warp(s32);
+static bool32 TryDoorAdjacentRoomScroll(Entity* target);
 
 extern const s8 gShakeOffsets[];
 
@@ -954,11 +955,58 @@ void UpdateDoorTransition() {
                 case ACT_TILE_63:
                 case ACT_TILE_241:
                 case ACT_TILE_40:
-                case ACT_TILE_41:
                     DoApplicableTransition(x, y, 0xff, 10);
+                    break;
+                case ACT_TILE_41:
+                    if (!DoApplicableTransition(x, y, 0xff, 10)) {
+                        TryDoorAdjacentRoomScroll(controls->camera_target);
+                    }
                     break;
             }
     }
+}
+
+static bool32 TryDoorAdjacentRoomScroll(Entity* target) {
+    u32 direction;
+    s32 relX;
+    s32 relY;
+
+    if (target == NULL || gRoomControls.reload_flags != 0 || (gRoomControls.scroll_flags & 4) != 0 ||
+        (target->direction & DIR_NOT_MOVING_CHECK) != 0) {
+        return FALSE;
+    }
+
+    direction = target->direction & DirectionNorthWest;
+    if ((direction & 7) != 0) {
+        return FALSE;
+    }
+
+    relX = target->x.HALF.HI - (s32)gRoomControls.origin_x;
+    relY = target->y.HALF.HI - (s32)gRoomControls.origin_y;
+    switch (direction >> 3) {
+        case 0:
+            if (relY >= 10) {
+                return FALSE;
+            }
+            break;
+        case 1:
+            if (relX <= (s32)gRoomControls.width - 10) {
+                return FALSE;
+            }
+            break;
+        case 2:
+            if (relY <= (s32)gRoomControls.height - 10) {
+                return FALSE;
+            }
+            break;
+        case 3:
+            if (relX >= 10) {
+                return FALSE;
+            }
+            break;
+    }
+
+    return sub_0807BD14(target, direction >> 3);
 }
 
 // fill the actTile for the whole layer
