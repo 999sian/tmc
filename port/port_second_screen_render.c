@@ -123,6 +123,7 @@ void Port_SecondScreenRender_DrawItemIcon(uint32_t* pixels, int32_t bufWidth, in
 void Port_SecondScreenRender_DrawItemIconBank(uint32_t* pixels, int32_t bufWidth, int32_t bufHeight,
                                               int32_t stride, int32_t x, int32_t y, int32_t scale,
                                               uint8_t itemId, uint32_t cmdPalBank) {
+    const u16 itemSpriteIndex = Port_RemapSpriteIndex(ITEM_SPRITE);
     if (scale < 1) {
         scale = 1;
     }
@@ -135,7 +136,6 @@ void Port_SecondScreenRender_DrawItemIconBank(uint32_t* pixels, int32_t bufWidth
         return;
     }
 
-    const u16 itemSpriteIndex = Port_RemapSpriteIndex(ITEM_SPRITE);
     const SpritePtr* sprite = Port_GetSpritePtr(itemSpriteIndex);
     if (sprite == NULL || sprite->frames == NULL || sprite->ptr == NULL) {
         fprintf(stderr, "[second_screen_render] itemId %u: sprite=%p frames=%p ptr=%p\n", itemId, (void*)sprite,

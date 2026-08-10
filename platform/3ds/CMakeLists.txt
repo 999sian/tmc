@@ -102,7 +102,8 @@ set_target_properties(tmc-3ds PROPERTIES
 )
 target_compile_options(tmc-3ds PRIVATE
     -include region.h
-    -O3 -fomit-frame-pointer -ffunction-sections -fdata-sections -fno-strict-aliasing -w
+    -O3 -fomit-frame-pointer -ffunction-sections -fdata-sections
+    -fno-strict-aliasing -fwrapv -fno-strict-overflow -w
     -Wno-unused-parameter -Wno-missing-field-initializers
 )
 set_source_files_properties(

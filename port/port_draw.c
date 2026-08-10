@@ -303,7 +303,6 @@ void ram_ClearAndUpdateEntities(void) {
 }
 
 static const u8* LookupFrameData(u16 spriteIndex, u8 frameIndex) {
-    spriteIndex = Port_RemapSpriteIndex(spriteIndex);
     const size_t frameObjSize = sizeof(gFrameObjLists);
     const u8* base = (const u8*)gFrameObjLists;
 

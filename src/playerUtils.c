@@ -4438,25 +4438,15 @@ void InitializeCamera() {
     s32 targetY;
     Entity* target;
     RoomControls* roomControls;
-    u32 tmp1;
-    u32 tmp2;
 
     LoadRoomTileSet();
     LoadRoomGfx();
     roomControls = &gRoomControls;
     target = gRoomControls.camera_target;
     if (target != NULL) {
-        if ((target->x.HALF_U.HI * 0x10000) < 0) {
-            tmp1 = (target->x.HALF.HI & 0x7fff);
-            tmp1 -= gRoomControls.origin_x;
-            target->x.HALF.HI = tmp1;
-        }
+        target->x.HALF.HI = DecodePreservedTransitionAxis(target->x.HALF_U.HI, gRoomControls.origin_x);
         targetX = target->x.HALF.HI;
-        if ((target->y.HALF_U.HI * 0x10000) < 0) {
-            tmp2 = (target->y.HALF.HI & 0x7fff);
-            tmp2 -= gRoomControls.origin_y;
-            target->y.HALF.HI = tmp2;
-        }
+        target->y.HALF.HI = DecodePreservedTransitionAxis(target->y.HALF_U.HI, gRoomControls.origin_y);
         targetY = target->y.HALF.HI;
     } else {
         targetX = 0;
