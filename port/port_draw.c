@@ -75,18 +75,36 @@ _Static_assert(offsetof(Entity, spriteOrientation) == offsetof(Entity, spriteSet
 static u8 sSizeTable[240];
 static int sSizeTableLoaded = 0;
 
+extern const u8 kOverlaySizeData[240];
+
+static int IsValidSizeTable(const u8* data, u32 size) {
+    /* This overlay table describes the fixed GBA OBJ shapes and sizes.  It is
+     * region-invariant in the retail USA and EU ROMs.  Validate the complete
+     * table so a bad regional offset cannot silently turn nearby code pointers
+     * into clipping anchors again. */
+    return data != NULL && size >= sizeof(sSizeTable) &&
+           memcmp(data, kOverlaySizeData, sizeof(sSizeTable)) == 0;
+}
+
 /* Called from port_rom.c after ROM is loaded */
 void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset) {
     /* Size table at region-specific ROM offset, 240 bytes */
-    if (romSize > overlayOffset + 240) {
+    if (romData != NULL && overlayOffset <= romSize && sizeof(sSizeTable) <= romSize - overlayOffset &&
+        IsValidSizeTable(&romData[overlayOffset], romSize - overlayOffset)) {
         memcpy(sSizeTable, &romData[overlayOffset], 240);
         sSizeTableLoaded = 1;
+    } else {
+        memcpy(sSizeTable, kOverlaySizeData, sizeof(sSizeTable));
+        sSizeTableLoaded = 1;
+        fprintf(stderr,
+                "WARNING: OBJ size table at ROM 0x%X is invalid; using the canonical table.\n",
+                overlayOffset);
     }
 }
 
 /* Called from port_rom.c — load overlay data from compile-time const blob */
 void Port_LoadOverlayDataFromConst(const u8* data, u32 size) {
-    if (data && size >= 240) {
+    if (IsValidSizeTable(data, size)) {
         memcpy(sSizeTable, data, 240);
         sSizeTableLoaded = 1;
     }

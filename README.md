@@ -75,7 +75,7 @@ https://ko-fi.com/estebanpdn
    Homebrew Launcher:
 
 ```text
-tmc-3ds-v0.23.cia
+tmc-3ds-v0.24.cia
 ```
 2. Create this directory on the SD card:
 
@@ -133,8 +133,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.23.cia
-build-3ds/game/tmc-3ds-v0.23.3dsx
+build-3ds/game/tmc-3ds-v0.24.cia
+build-3ds/game/tmc-3ds-v0.24.3dsx
 ```
 
 The build does not embed a ROM.
