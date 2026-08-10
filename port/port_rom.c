@@ -470,6 +470,7 @@ const RomOffsets kRomOffsets_USA = {
     .spritePtrs = 0x0029B4,
     .collisionMatrix = 0x0B7B74,
     .collisionShapePtrs = PORT_COLLISION_SHAPE_PTRS_USA,
+    .tileTypeProperties = PORT_TILE_TYPE_PROPERTIES_USA,
     .figurines = 0x1281A8,
     .fuserEnemyData = 0x00232E,
     .fuserNpcData = 0x002342,
@@ -522,6 +523,7 @@ const RomOffsets kRomOffsets_EU = {
     .spritePtrs = 0x002A5C,
     .collisionMatrix = 0x0B729C,
     .collisionShapePtrs = PORT_COLLISION_SHAPE_PTRS_EU,
+    .tileTypeProperties = PORT_TILE_TYPE_PROPERTIES_EU,
     .figurines = 0x1278E0,
     .fuserEnemyData = 0x0023D6,
     .fuserNpcData = 0x0023EA,
@@ -595,6 +597,7 @@ const RomOffsets kRomOffsets_JP = {
     .spritePtrs = 0x29B4,
     .collisionMatrix = 0,
     .collisionShapePtrs = 0,
+    .tileTypeProperties = 0,
     .figurines = 0,
     .fuserEnemyData = 0,
     .fuserNpcData = 0,
@@ -652,6 +655,13 @@ const u16* Port_GetCollisionShapeData(u32 index) {
         return NULL;
     }
     return Port_ResolveCollisionShapeFromRom(gRomData, gRomSize, gRomOffsets->collisionShapePtrs, index);
+}
+
+u16 Port_GetTileTypeProperty(u32 tileType) {
+    if (gRomOffsets == NULL || gRomOffsets->tileTypeProperties == 0) {
+        return 0;
+    }
+    return Port_ReadTileTypePropertyFromRom(gRomData, gRomSize, gRomOffsets->tileTypeProperties, tileType);
 }
 
 RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
