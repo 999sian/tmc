@@ -32,6 +32,7 @@
 
 #include "port_entity_ctx.h"
 #include "port_gba_mem.h"
+#include "port_rom.h"
 #include "port_runtime_config.h"
 #include "port_widescreen.h"
 
@@ -498,7 +499,6 @@ extern const u8 gUnk_080083FC[];
 extern const u8 gUnk_0800845C[];
 extern const u8 gUnk_080084BC[];
 extern const u8 gUnk_0800851C[];
-extern u8 gUnk_0800823C[];
 
 static const u8* sActiveCollisionParams = gUnk_080082DC;
 u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer);
@@ -545,7 +545,7 @@ static const u8* SelectPlayerCollisionTable(void) {
  *
  * For tile collision type 0xFF: always blocked.
  * For tile collision types 0x10–0xFE: extended pixel-level collision
- * resolves the ROM pointer table through port_resolve_addr().
+ * resolves the packed pointer table through the active ROM profile.
  */
 static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
     u32 tilePos = ((px & 0x3F0) >> 4) + ((py & 0x3F0) << 2);
@@ -571,9 +571,7 @@ static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
     }
 
     u8 idx = sActiveCollisionParams[tileType - 0x10];
-    u32 gbaAddr;
-    memcpy(&gbaAddr, &gUnk_0800823C[(u32)idx << 2], sizeof(gbaAddr));
-    const u16* table = (const u16*)port_resolve_addr((uintptr_t)gbaAddr);
+    const u16* table = Port_GetCollisionShapeData(idx);
     if (table == NULL) {
         return 0;
     }

@@ -469,6 +469,7 @@ const RomOffsets kRomOffsets_USA = {
     .fixedTypeGfx = 0x132B30,
     .spritePtrs = 0x0029B4,
     .collisionMatrix = 0x0B7B74,
+    .collisionShapePtrs = PORT_COLLISION_SHAPE_PTRS_USA,
     .figurines = 0x1281A8,
     .fuserEnemyData = 0x00232E,
     .fuserNpcData = 0x002342,
@@ -520,6 +521,7 @@ const RomOffsets kRomOffsets_EU = {
     .fixedTypeGfx = 0x132180,
     .spritePtrs = 0x002A5C,
     .collisionMatrix = 0x0B729C,
+    .collisionShapePtrs = PORT_COLLISION_SHAPE_PTRS_EU,
     .figurines = 0x1278E0,
     .fuserEnemyData = 0x0023D6,
     .fuserNpcData = 0x0023EA,
@@ -592,6 +594,7 @@ const RomOffsets kRomOffsets_JP = {
     .fixedTypeGfx = 0x13275C,
     .spritePtrs = 0x29B4,
     .collisionMatrix = 0,
+    .collisionShapePtrs = 0,
     .figurines = 0,
     .fuserEnemyData = 0,
     .fuserNpcData = 0,
@@ -642,6 +645,13 @@ u32 Port_TownspersonSpriteLoadPtrsOffset(void) {
 
 u32 Port_CollisionMatrixOffset(void) {
     return (gRomOffsets && gRomOffsets->collisionMatrix) ? gRomOffsets->collisionMatrix : 0x0B7B74u;
+}
+
+const u16* Port_GetCollisionShapeData(u32 index) {
+    if (gRomOffsets == NULL || gRomOffsets->collisionShapePtrs == 0) {
+        return NULL;
+    }
+    return Port_ResolveCollisionShapeFromRom(gRomData, gRomSize, gRomOffsets->collisionShapePtrs, index);
 }
 
 RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
@@ -1135,12 +1145,7 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
 }
 
 u16 Port_RemapSpriteIndex(u16 sprite_idx) {
-#if defined(MULTI_REGION)
-    if (REGION_IS_EU && sprite_idx == 322u) {
-        return sprite_idx - 1u;
-    }
-#endif
-    return sprite_idx;
+    return Port_RemapFixedUiSpriteIndexForRegion(gRomRegion, sprite_idx);
 }
 
 /*

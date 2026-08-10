@@ -22,6 +22,23 @@ typedef enum {
     ROM_REGION_JP,  /* Game code: BZMJ — offsets UNVERIFIED (ROM-gated) */
 } RomRegion;
 
+/* Packed u32 pointers to the 40 pixel-level collision masks used by
+ * sub_080086D8. The mask payloads are identical between USA and EU, but the
+ * EU linker moves both this table and every target by 0x98 bytes. */
+#define PORT_COLLISION_SHAPE_PTRS_USA 0x0000823Cu
+#define PORT_COLLISION_SHAPE_PTRS_EU 0x000082D4u
+
+/* Fixed UI definitions are compiled from the USA baseline in the fat binary.
+ * EU removes one sprite-table entry before both the shared item sheet and the
+ * HUD button sheet. Gameplay entity indices remain active-ROM-native and
+ * must not pass through this helper. */
+static inline u16 Port_RemapFixedUiSpriteIndexForRegion(RomRegion region, u16 spriteIndex) {
+    if (region == ROM_REGION_EU && (spriteIndex == 322u || spriteIndex == 505u)) {
+        return spriteIndex - 1u;
+    }
+    return spriteIndex;
+}
+
 /* ---- Region-specific ROM symbol offsets ---- */
 typedef struct {
     /* Major data tables (absolute ROM offsets, i.e. GBA_addr - 0x08000000) */
@@ -34,6 +51,7 @@ typedef struct {
     u32 fixedTypeGfx;     /* gFixedTypeGfxData */
     u32 spritePtrs;       /* gSpritePtrs */
     u32 collisionMatrix;  /* gCollisionMtx and adjacent collision settings */
+    u32 collisionShapePtrs; /* packed pointers to 16x16 pixel-level collision masks */
     u32 figurines;        /* gFigurines packed ROM table */
     u32 fuserEnemyData;   /* GetFuserData enemy table */
     u32 fuserNpcData;     /* GetFuserData NPC table */

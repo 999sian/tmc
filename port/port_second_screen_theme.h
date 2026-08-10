@@ -60,14 +60,14 @@ enum {
      * (sub_0801C2F0 layout). */
     SST_SMALL_TENS_0 = SST_DIGIT_YELLOW_0 + 10,
     SST_SMALL_ONES_0 = SST_SMALL_TENS_0 + 10,
-    /* HUD button bubbles (sprite 505 frames 0/1) — the A and B badges. */
+    /* HUD button bubbles (USA sprite 505 / EU 504, frames 0/1) — the A and B badges. */
     SST_BUTTON_A = SST_SMALL_ONES_0 + 10,
     SST_BUTTON_B,
     /* Pause-menu equip cursor (the gold slot frame), both blink frames. */
     SST_CURSOR_0,
     SST_CURSOR_1,
-    /* HUD shoulder-button glyph (sprite 505 frame 2) — the R badge the game
-     * draws beside its contextual prompts. */
+    /* HUD shoulder-button glyph (USA sprite 505 / EU 504, frame 2) — the R
+     * badge the game draws beside its contextual prompts. */
     SST_BUTTON_R,
     SST_COUNT
 };

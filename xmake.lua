@@ -1214,6 +1214,21 @@ target_end()
 
 
 -- ====================
+-- Multi-region fixed-UI and collision-pointer regression test.
+-- ====================
+target("region_runtime_data_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs(".")
+    add_includedirs("port")
+    add_includedirs("include")
+    add_defines("PC_PORT", "MULTI_REGION", "USA", "ENGLISH")
+    add_files("port/port_region_runtime_data_test.c")
+target_end()
+
+
+-- ====================
 -- 3DS ARM11 host-pointer regression test. This builds the TMC_3DS branch on
 -- the desktop with a mocked memory-map query.
 -- ====================
