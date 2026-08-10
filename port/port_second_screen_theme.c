@@ -46,7 +46,8 @@
  *                   0..4) — most recently loaded group first, exactly
  *                   like the shared gPaletteBuffer. The small ammo digits
  *                   are OBJ tiles whose piece selects bank 4.
- *   A/B buttons     sprite 505 frames 0/1 (gUIElementDefinitions), pieces
+ *   A/B/R buttons   fixed UI sprite 505 on USA / 504 on EU, frames 0/1/2
+ *                   (gUIElementDefinitions), pieces
  *                   from gFrameObjLists via sub_080AD8F0. The button
  *                   elements have no sprite sheet (definition unk_e = 1,
  *                   so sub_0801CB20 never DMAs one): their tiles sit in
@@ -168,7 +169,7 @@ static const u8 kQuestObjGfxGroups[] = { 91u, 86u, 23u, 16u };
 #define SMALL_DIGIT_OBJ_BANK 4u
 
 /* Sprite indices. */
-#define SPRITE_HUD_BUTTONS 505u
+#define SPRITE_HUD_BUTTONS_RAW 505u
 #define SPRITE_PAUSE_MISC (REGION_IS_EU ? 0x1FAu : 0x1FBu)
 #define BUTTON_VRAM_SLOT 0x100u /* gUIElementDefinitions[BUTTON_*].unk_4 */
 #define CURSOR_FRAME_0 4u
@@ -1297,11 +1298,12 @@ static void BuildAll(const uint16_t* hudPal, u32 hudColors) {
     /* HUD A/B button bubbles (slot-relative tiles at the button element's
      * fixed VRAM block) + the pause menu's blinking equip cursor
      * (VRAM-absolute tiles; the game draws it with command bank 0). */
-    BuildSpriteComposite(SPRITE_HUD_BUTTONS, 0, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
+    const u16 hudButtonSprite = Port_RemapSpriteIndex(SPRITE_HUD_BUTTONS_RAW);
+    BuildSpriteComposite(hudButtonSprite, 0, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
                          sizeof(kHudObjGfxGroups), &sSprites[SST_BUTTON_A]);
-    BuildSpriteComposite(SPRITE_HUD_BUTTONS, 1, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
+    BuildSpriteComposite(hudButtonSprite, 1, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
                          sizeof(kHudObjGfxGroups), &sSprites[SST_BUTTON_B]);
-    BuildSpriteComposite(SPRITE_HUD_BUTTONS, BUTTON_R_FRAME, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
+    BuildSpriteComposite(hudButtonSprite, BUTTON_R_FRAME, BUTTON_VRAM_SLOT, 0, kHudObjGfxGroups,
                          sizeof(kHudObjGfxGroups), &sSprites[SST_BUTTON_R]);
     BuildSpriteComposite(SPRITE_PAUSE_MISC, CURSOR_FRAME_0, 0, 0, kPauseObjGfxGroups,
                          sizeof(kPauseObjGfxGroups), &sSprites[SST_CURSOR_0]);

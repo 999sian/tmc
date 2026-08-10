@@ -200,9 +200,7 @@ extern u32 sub_08004202(Entity*, u8*, u32);
 
 // This just reuses the first 12 bytes of gUnk_02022830 to store a MapDataDefinition there temporarily.
 extern u16 gUnk_02022830[];
-#ifdef PC_PORT
-extern u8 gUnk_0800823C[];
-#else
+#ifndef PC_PORT
 extern u16* gUnk_0800823C[];
 #endif
 
@@ -3001,11 +2999,7 @@ void sub_0807A750(u32 param_1, u32 param_2, const u8* param_3, u32 param_4) {
             }
         }
 #ifdef PC_PORT
-        {
-            u32 gbaAddr;
-            memcpy(&gbaAddr, &gUnk_0800823C[uVar2 * 4], sizeof(gbaAddr));
-            ptr = (const u16*)port_resolve_addr((uintptr_t)gbaAddr);
-        }
+        ptr = Port_GetCollisionShapeData(uVar2);
 #else
         ptr = gUnk_0800823C[uVar2];
 #endif

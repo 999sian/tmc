@@ -165,6 +165,33 @@ static inline u32 Port_ReadU32(const void* data) {
     return (u32)raw[0] | ((u32)raw[1] << 8) | ((u32)raw[2] << 16) | ((u32)raw[3] << 24);
 }
 
+/* Resolve one entry of the ROM's packed collision-mask pointer table. Each
+ * target is a 16-row u16 bitmap. This helper is deliberately buffer-based so
+ * region selection can be regression-tested without a retail ROM. */
+static inline const u16* Port_ResolveCollisionShapeFromRom(const u8* romData, u32 romSize, u32 tableOffset,
+                                                           u32 index) {
+    u32 entryBytes;
+    u32 gbaAddress;
+    u32 dataOffset;
+
+    if (romData == NULL || index >= 40u || tableOffset > romSize) {
+        return NULL;
+    }
+    entryBytes = (index + 1u) * sizeof(u32);
+    if (entryBytes > romSize - tableOffset) {
+        return NULL;
+    }
+    gbaAddress = Port_ReadU32(romData + tableOffset + index * sizeof(u32));
+    if (gbaAddress < 0x08000000u) {
+        return NULL;
+    }
+    dataOffset = gbaAddress - 0x08000000u;
+    if ((dataOffset & 1u) != 0 || dataOffset > romSize || 16u * sizeof(u16) > romSize - dataOffset) {
+        return NULL;
+    }
+    return (const u16*)(romData + dataOffset);
+}
+
 /*
  * Read entry [index] from a packed-GBA-pointer ROM table and resolve to
  * a native pointer. Equivalent to Port_PackedRomEntry but kept for the
@@ -247,10 +274,16 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx);
 
 /*
  * Remap a sprite index used by fixed UI/menu tables for EU ROM layout quirks.
- * EU ROM sprite 322 is shifted to 321, while the gameplay sprite indices are
- * not shifted; only call this from the item/HUD menu path.
+ * EU item sprite 322 is shifted to 321 and HUD-button sprite 505 to 504,
+ * while gameplay sprite indices remain active-ROM-native. Only call this from
+ * fixed item/HUD/menu paths.
  */
 u16 Port_RemapSpriteIndex(u16 sprite_idx);
+
+/* Resolve one 16x16 pixel-level collision mask through the active ROM's own
+ * packed pointer table. This is region-sensitive even though the mask
+ * payloads themselves are region-invariant. */
+const u16* Port_GetCollisionShapeData(u32 index);
 
 /*
  * Decode one MapDataDefinition entry into a native-layout struct.

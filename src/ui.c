@@ -975,12 +975,16 @@ UIElementDefinition gUIElementDefinitions[11];
 
 void Port_InitUIElementDefinitions(void) {
     const u16 itemSpriteIndex = Port_RemapSpriteIndex(322u);
+    const u16 buttonSpriteIndex = Port_RemapSpriteIndex(505u);
     /* [0] UI_ELEMENT_BUTTON_A */
-    gUIElementDefinitions[0] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 0, 14, 1, 0 };
+    gUIElementDefinitions[0] =
+        (UIElementDefinition){ 0x0000, 0x0000, 0x0100, buttonSpriteIndex, ButtonUIElement, 0, 14, 1, 0 };
     /* [1] UI_ELEMENT_BUTTON_B */
-    gUIElementDefinitions[1] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 1, 14, 1, 0 };
+    gUIElementDefinitions[1] =
+        (UIElementDefinition){ 0x0000, 0x0000, 0x0100, buttonSpriteIndex, ButtonUIElement, 1, 14, 1, 0 };
     /* [2] UI_ELEMENT_BUTTON_R */
-    gUIElementDefinitions[2] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 2, 14, 1, 0 };
+    gUIElementDefinitions[2] =
+        (UIElementDefinition){ 0x0000, 0x0000, 0x0100, buttonSpriteIndex, ButtonUIElement, 2, 14, 1, 0 };
     /* [3] UI_ELEMENT_ITEM_A */
     gUIElementDefinitions[3] = (UIElementDefinition){ 0x0000, 0x0000, 0x011A, itemSpriteIndex, ItemUIElement, 0, 8, 0, 0 };
     /* [4] UI_ELEMENT_ITEM_B */
