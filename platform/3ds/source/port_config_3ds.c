@@ -396,9 +396,9 @@ void Port_Config_SetAnalogDeadzone(float v) { (void)v; }
 void Port_Config_ClearInputEdges(void) {}
 void Port_Config_TestForceEdge(PortInput input) { (void)input; }
 void Port_Config_StampInputEdge(PortInput input) { (void)input; }
-int Port_Config_PreferredRegion(void) { return 0; }
+int Port_Config_PreferredRegion(void) { return -1; }
 void Port_Config_SetPreferredRegion(int region) { (void)region; }
-int Port_Config_PreferredLanguage(void) { return 0; }
+int Port_Config_PreferredLanguage(void) { return -1; }
 void Port_Config_SetPreferredLanguage(int lang) { (void)lang; }
 void Port_Config_SetPortSettingsMenuEnabled(bool enabled) { sPortSettings = enabled; }
 

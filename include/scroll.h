@@ -16,6 +16,13 @@ extern struct_02034480 gUnk_02034480;
 extern bool32 DoApplicableTransition(u32, u32, u32, u32);
 extern void DoExitTransitionWithType(const Transition* screenTransition, u32 transitionType);
 
+static inline s16 DecodePreservedTransitionAxis(u16 value, u16 origin) {
+    if ((value & 0x8000u) != 0) {
+        return (s16)((value & 0x7fffu) - origin);
+    }
+    return (s16)value;
+}
+
 void UpdateIsDiggingCave(void);
 void sub_08080930(u32);
 

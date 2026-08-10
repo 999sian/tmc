@@ -1060,16 +1060,17 @@ void RefreshSprite322DerivedTables() {
     memset(gMoreSpritePtrs, 0, sizeof(u16*) * 16);
     memset(gSpriteAnimations_322, 0, sizeof(Frame*) * kSpriteAnim322Count);
 
-    if (gAssetGroupCache.spriteAnimationPtrs.size() <= 322) {
+    const u16 sprite322Index = Port_RemapSpriteIndex(322u);
+    if (gAssetGroupCache.spriteAnimationPtrs.size() <= sprite322Index) {
         return;
     }
 
-    const SpritePtr& sp322 = gSpritePtrs[322];
+    const SpritePtr& sp322 = gSpritePtrs[sprite322Index];
     gMoreSpritePtrs[0] = reinterpret_cast<u16*>(sp322.animations);
     gMoreSpritePtrs[1] = reinterpret_cast<u16*>(sp322.frames);
     gMoreSpritePtrs[2] = reinterpret_cast<u16*>(sp322.ptr);
 
-    const auto& anims = gAssetGroupCache.spriteAnimationPtrs[322];
+    const auto& anims = gAssetGroupCache.spriteAnimationPtrs[sprite322Index];
     const size_t count = std::min(anims.size(), static_cast<size_t>(kSpriteAnim322Count));
     for (size_t i = 0; i < count; ++i) {
         gSpriteAnimations_322[i] = reinterpret_cast<Frame*>(const_cast<u8*>(anims[i]));

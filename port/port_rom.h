@@ -244,6 +244,12 @@ static inline bool Port_IsFontGBAEncoded(const void* data) {
  * Returns NULL if the index is outside the loaded sprite table.
  */
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx);
+
+/*
+ * Remap a sprite index used by fixed UI/menu tables for EU ROM layout quirks.
+ * EU ROM sprite 322 is shifted to 321, while the gameplay sprite indices are
+ * not shifted; only call this from the item/HUD menu path.
+ */
 u16 Port_RemapSpriteIndex(u16 sprite_idx);
 
 /*

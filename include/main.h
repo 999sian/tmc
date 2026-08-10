@@ -7,6 +7,7 @@
 #include "screen.h"
 #include "script.h"
 #include "structures.h"
+#include "region.h"
 
 /** File signature */
 #define SIGNATURE 'MCZ3'
@@ -28,6 +29,17 @@ typedef enum {
     NUM_LANGUAGES,
 } Language;
 
+/*
+ * EU is the odd retail ROM: its language-gated graphics/text resources are
+ * stored in save-header slots 2..6. Slot 2 is English, then FR/DE/ES/IT follow.
+ * USA/JP use the public Language enum directly. Keep this conversion explicit
+ * so a user-facing "English" preference (LANGUAGE_EN == 1) does not make the
+ * EU file-select/title screens load slot 1 graphics.
+ */
+#define EU_LANGUAGE_EN_SLOT LANGUAGE_FR
+#define EU_LANGUAGE_LAST_SLOT NUM_LANGUAGES
+#define LANGUAGE_SLOT_COUNT (NUM_LANGUAGES + 1)
+
 #ifdef MULTI_REGION
 /* Fat binary is compiled USA/EU-baseline; GAME_LANGUAGE is the compile-time
  * default (English) used in the static sDefaultSettings initializer and as a
@@ -41,6 +53,49 @@ typedef enum {
 #define GAME_LANGUAGE LANGUAGE_JP
 #endif
 #endif
+
+static inline u32 RegionLanguageSlotCount(void) {
+    return REGION_IS_EU ? LANGUAGE_SLOT_COUNT : NUM_LANGUAGES;
+}
+
+static inline u8 RegionDefaultLanguage(void) {
+    if (REGION_IS_JP) {
+        return LANGUAGE_JP;
+    }
+    if (REGION_IS_EU) {
+        return EU_LANGUAGE_EN_SLOT;
+    }
+    return GAME_LANGUAGE;
+}
+
+static inline s32 RegionPreferredLanguageToSaveSlot(s32 language) {
+    if (language < 0) {
+        return -1;
+    }
+    if (REGION_IS_JP) {
+        return LANGUAGE_JP;
+    }
+    if (REGION_IS_EU) {
+        if (language <= LANGUAGE_EN) {
+            return EU_LANGUAGE_EN_SLOT;
+        }
+        if (language < NUM_LANGUAGES) {
+            return language + 1;
+        }
+        return -1;
+    }
+    return language < NUM_LANGUAGES ? language : -1;
+}
+
+static inline bool32 RegionSaveLanguageValid(u32 language) {
+    if (REGION_IS_JP) {
+        return language == LANGUAGE_JP;
+    }
+    if (REGION_IS_EU) {
+        return language >= EU_LANGUAGE_EN_SLOT && language <= EU_LANGUAGE_LAST_SLOT;
+    }
+    return language == GAME_LANGUAGE;
+}
 
 /** Program tasks. */
 typedef enum {

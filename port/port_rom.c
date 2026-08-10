@@ -11,6 +11,7 @@
 
 #include "port_rom.h"
 #include "area.h"
+#include "main.h"
 #include "map.h"
 #include "port_asset_loader.h"
 #include "port_config.h"
@@ -1107,7 +1108,6 @@ void Port_DecodeFontGBA(const void* gba_data, Font* out) {
 }
 
 const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
-    sprite_idx = Port_RemapSpriteIndex(sprite_idx);
     /* Use the runtime-extended count (gSpritePtrsLoadedCount, set
      * after the ROM-walk extension in startup) instead of the
      * compile-time spritePtrsCount=329. Falls back to the compile
@@ -1131,12 +1131,8 @@ const SpritePtr* Port_GetSpritePtr(u16 sprite_idx) {
 
 u16 Port_RemapSpriteIndex(u16 sprite_idx) {
 #if defined(MULTI_REGION)
-    /* EU's item/icon sprite table entry 322 is shifted to 321 in the
-     * retail ROM table; other nearby indices are valid in-place and must
-     * not be shifted, otherwise gameplay entity sprites in that range
-     * regress. */
-    if (REGION_IS_EU && sprite_idx == 322) {
-        return sprite_idx - 1;
+    if (REGION_IS_EU && sprite_idx == 322u) {
+        return sprite_idx - 1u;
     }
 #endif
     return sprite_idx;
@@ -1630,7 +1626,7 @@ void Port_LoadRom(const char* path) {
         memset(gMoreSpritePtrs, 0, sizeof(gMoreSpritePtrs));
         memset(gSpriteAnimations_322, 0, sizeof(gSpriteAnimations_322));
 
-        const u16 sprite322Index = Port_RemapSpriteIndex(322);
+        const u16 sprite322Index = Port_RemapSpriteIndex(322u);
         if (gSpritePtrsLoadedCount > sprite322Index) {
             const SpritePtr* sp322 = &gSpritePtrs[sprite322Index];
             gMoreSpritePtrs[0] = (u16*)sp322->animations;
@@ -1652,7 +1648,8 @@ void Port_LoadRom(const char* path) {
                     }
                     resolvedCount++;
                 }
-                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[322]).\n", resolvedCount);
+                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[%u]).\n", resolvedCount,
+                        (unsigned int)sprite322Index);
             }
         }
     }
@@ -1688,13 +1685,13 @@ void Port_LoadRom(const char* path) {
     }
 
     /* gTranslations — resolved from active ROM */
-    memset(gTranslations, 0, sizeof(void*) * 7);
+    memset(gTranslations, 0, sizeof(void*) * LANGUAGE_SLOT_COUNT);
     if (REGION_IS_JP) {
         gTranslations[0] = Port_UnpackRomDataPtr(&gRomData[R->translations], 0);
     } else if (REGION_IS_USA) {
         gTranslations[1] = Port_UnpackRomDataPtr(&gRomData[R->translations], 1);
     } else if (REGION_IS_EU) {
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= EU_LANGUAGE_LAST_SLOT; i++) {
             gTranslations[i] = Port_UnpackRomDataPtr(&gRomData[R->translations], i);
         }
     }
@@ -1960,15 +1957,17 @@ void Port_ApplyLanguage(void) {
     if (lang < 0) {
         sLastAppliedPref = lang;
         const int current = gSaveHeader->language;
-        if (current >= 0 && current < 6 /* NUM_LANGUAGES */ && gTranslations[current] != NULL) {
+        if (current >= 0 && current < (int)RegionLanguageSlotCount() && gTranslations[current] != NULL &&
+            RegionSaveLanguageValid((u32)current)) {
             return;
         }
-        lang = REGION_IS_JP ? 0 /* LANGUAGE_JP */ : 1 /* LANGUAGE_EN */;
+        lang = RegionDefaultLanguage();
     } else {
         sLastAppliedPref = lang;
+        lang = RegionPreferredLanguageToSaveSlot(lang);
     }
 
-    if (lang >= 0 && lang < 6 /* NUM_LANGUAGES */ && gTranslations[lang] != NULL) {
+    if (lang >= 0 && lang < (int)RegionLanguageSlotCount() && gTranslations[lang] != NULL) {
         gSaveHeader->language = (u8)lang;
     }
 }

@@ -974,7 +974,7 @@ void EzloNagUIElement_Action2(UIElement* element) {
 UIElementDefinition gUIElementDefinitions[11];
 
 void Port_InitUIElementDefinitions(void) {
-    const u16 itemSpriteIndex = Port_RemapSpriteIndex(322);
+    const u16 itemSpriteIndex = Port_RemapSpriteIndex(322u);
     /* [0] UI_ELEMENT_BUTTON_A */
     gUIElementDefinitions[0] = (UIElementDefinition){ 0x0000, 0x0000, 0x0100, 505, ButtonUIElement, 0, 14, 1, 0 };
     /* [1] UI_ELEMENT_BUTTON_B */

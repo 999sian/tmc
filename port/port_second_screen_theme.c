@@ -181,7 +181,7 @@ static const u8 kQuestObjGfxGroups[] = { 91u, 86u, 23u, 16u };
  * gHUD.buttonText[2] plus the language offset (the snapshot publishes that
  * sum, so frameId arrives final). Pieces index tiles relative to the frame's
  * firstTileIndex, exactly like sub_0801CB20's DMA. */
-#define SPRITE_UI_LABELS 322u
+#define SPRITE_UI_LABELS_RAW 322u
 
 /* Pause-menu labelled button (the SLEEP / SAVE plates of the quest-status
  * screen, drawn by sub_080A57F4 as sprite SPRITE_PAUSE_MISC frames
@@ -2240,7 +2240,7 @@ int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, i
     if (scale2 < 2) {
         scale2 = 2;
     }
-    sprite = Port_GetSpritePtr(SPRITE_UI_LABELS);
+    sprite = Port_GetSpritePtr(Port_RemapSpriteIndex(SPRITE_UI_LABELS_RAW));
     if (sprite == NULL || sprite->frames == NULL || sprite->ptr == NULL) {
         return 0;
     }
@@ -2249,7 +2249,7 @@ int32_t Port_SecondScreenTheme_DrawActionLabel(uint32_t* pixels, int32_t bufW, i
         return 0; /* the same emptiness/bounds guards sub_0801CB20 applies */
     }
     slotTiles = (const u8*)sprite->ptr + (size_t)frame->firstTileIndex * 32u;
-    frameData = (const u8*)sub_080AD8F0(SPRITE_UI_LABELS, frameId);
+    frameData = (const u8*)sub_080AD8F0(Port_RemapSpriteIndex(SPRITE_UI_LABELS_RAW), frameId);
     if (frameData == NULL) {
         return 0;
     }
