@@ -538,7 +538,12 @@ const RomOffsets kRomOffsets_EU = {
     .text094CE = 0x108C22,
     .uiData = 0x0C876C,
     .fadeData = 0x000F9C,
-    .overlaySizeTable = 0x0B25E8, /* EU overlay size table (shifted) */
+    /* ram_0x80b2be8 is copied from a different position in the EU ROM.
+     * 0x0B25E8 is an adjacent function-pointer table, not OBJ geometry;
+     * treating those pointer bytes as anchors clips and displaces nearly every
+     * multipart sprite.  The 240-byte EU size table is at 0x0B2310 and is
+     * byte-identical to the USA table. */
+    .overlaySizeTable = 0x0B2310,
     .mapDataBase = 0x323FEC,
     .areaRoomHeaders = 0x11D95C,
     .areaTileSets = 0x101BC8,
