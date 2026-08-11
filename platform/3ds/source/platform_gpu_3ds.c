@@ -276,8 +276,8 @@ void PlatformGpu3DS_BeginTop(const uint32_t* pixels, unsigned width) {
     ++sStats.topTransfers;
 }
 
-void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
-    if (!sFrameActive || !pixels) return;
+bool PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
+    if (!sFrameActive || !pixels) return false;
     if (changed) {
         GSPGPU_FlushDataCache(pixels, 512u * 240u * sizeof(uint32_t));
         C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(512, 256),
@@ -307,6 +307,7 @@ void PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
     sStats.drawingTime = C3D_GetDrawingTime();
     sStats.processingTime = C3D_GetProcessingTime();
     sFrameActive = false;
+    return true;
 }
 
 void PlatformGpu3DS_ShowDumpSavedOverlay(void) {

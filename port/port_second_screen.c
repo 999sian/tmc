@@ -246,8 +246,9 @@ typedef struct {
  * time and consumed by Port_SecondScreen_OnTap on the JNI thread; the same
  * lock guards the small state that thread mutates (active tab, map view,
  * region zoom...). Own mutex on Android (not the window mutex): taps must
- * never wait out a whole frame paint. Off Android everything runs on one thread
- * (the host harness), so the lock compiles away. */
+ * never wait out a whole frame paint. The 3DS uses its platform lock because
+ * BottomWorkerMain paints concurrently with touch dispatch on the main thread.
+ * Other host harnesses remain single-threaded, so the lock compiles away. */
 static TapTarget sTapTargets[SS_MAX_TARGETS];
 static int sTapTargetCount = 0;
 
@@ -295,6 +296,13 @@ enum { SS_QUEST_MAIN = 0, SS_QUEST_KINSTONES, SS_QUEST_TECHNIQUES };
 static pthread_mutex_t sTapTargetMutex = PTHREAD_MUTEX_INITIALIZER;
 #define UI_LOCK() pthread_mutex_lock(&sTapTargetMutex)
 #define UI_UNLOCK() pthread_mutex_unlock(&sTapTargetMutex)
+#elif defined(TMC_3DS)
+#include "port_second_screen_sync_3ds.h"
+/* Keep libctru's typedefs out of this engine translation unit: region.h and
+ * libctru intentionally use different underlying C types for GBA-style u32.
+ * The platform adapter owns the LightLock and exposes a type-neutral API. */
+#define UI_LOCK() Port_SecondScreen_3DS_LockUI()
+#define UI_UNLOCK() Port_SecondScreen_3DS_UnlockUI()
 #else
 #define UI_LOCK() ((void)0)
 #define UI_UNLOCK() ((void)0)

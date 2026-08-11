@@ -41,6 +41,8 @@ https://ko-fi.com/estebanpdn
   360x240 native presentation for fixed-width scenes.
 - Bottom screen with live map, dungeon information, quest status and touch item
   UI.
+- Procedural gold-framed Triforce card on title and file-select screens; touch
+  it to open the existing Minish Cap Settings hierarchy.
 - PICA200/Citro2D presentation for the top and bottom screens.
 - Parallel software PPU rendering across the available 3DS application cores.
 - New Nintendo 3DS speedup with 804 MHz, L2 cache and third-core rendering
@@ -75,7 +77,7 @@ https://ko-fi.com/estebanpdn
    Homebrew Launcher:
 
 ```text
-tmc-3ds-v0.31.cia
+tmc-3ds-v0.33.cia
 ```
 2. Create this directory on the SD card:
 
@@ -133,8 +135,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.31.cia
-build-3ds/game/tmc-3ds-v0.31.3dsx
+build-3ds/game/tmc-3ds-v0.33.cia
+build-3ds/game/tmc-3ds-v0.33.3dsx
 ```
 
 The build does not embed a ROM.

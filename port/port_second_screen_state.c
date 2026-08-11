@@ -6,11 +6,16 @@
 
 #ifdef __ANDROID__
 #include <pthread.h>
+#define SNAPSHOT_MUTEX_TYPE pthread_mutex_t
+#define SNAPSHOT_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
+#define SNAPSHOT_MUTEX_LOCK(m) pthread_mutex_lock(m)
+#define SNAPSHOT_MUTEX_UNLOCK(m) pthread_mutex_unlock(m)
 #else
-typedef int pthread_mutex_t;
-#define PTHREAD_MUTEX_INITIALIZER 0
-#define pthread_mutex_lock(m) ((void)(m))
-#define pthread_mutex_unlock(m) ((void)(m))
+#include "port_second_screen_sync_3ds.h"
+#define SNAPSHOT_MUTEX_TYPE unsigned char
+#define SNAPSHOT_MUTEX_INITIALIZER 0
+#define SNAPSHOT_MUTEX_LOCK(m) Port_SecondScreen_3DS_LockSnapshot()
+#define SNAPSHOT_MUTEX_UNLOCK(m) Port_SecondScreen_3DS_UnlockSnapshot()
 #endif
 
 #include "area.h"
@@ -34,7 +39,7 @@ extern const u8 gUnk_080C9044[];
 #define QUEST_CARRIED_ITEM_SLOT 1
 
 static SecondScreenSnapshot sSnapshot;
-static pthread_mutex_t sSnapshotMutex = PTHREAD_MUTEX_INITIALIZER;
+static SNAPSHOT_MUTEX_TYPE sSnapshotMutex = SNAPSHOT_MUTEX_INITIALIZER;
 
 /* Pending tap-to-equip request from the UI thread, consumed by Publish().
  * itemId 0 = nothing pending. Guarded by sSnapshotMutex — same one-memcpy
@@ -61,11 +66,11 @@ void Port_SecondScreenState_Publish(void) {
 
     uint8_t equipItem;
     uint8_t equipSlot;
-    pthread_mutex_lock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_LOCK(&sSnapshotMutex);
     equipItem = sPendingEquipItem;
     equipSlot = sPendingEquipSlot;
     sPendingEquipItem = 0;
-    pthread_mutex_unlock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_UNLOCK(&sSnapshotMutex);
 
     next.inGame = gMain.task == TASK_GAME;
     if (next.inGame) {
@@ -250,22 +255,22 @@ void Port_SecondScreenState_Publish(void) {
         next.visitedMask = sVisitedByArea[next.area];
     }
 
-    pthread_mutex_lock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_LOCK(&sSnapshotMutex);
     sSnapshot = next;
-    pthread_mutex_unlock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_UNLOCK(&sSnapshotMutex);
 }
 
 void Port_SecondScreenState_Read(SecondScreenSnapshot* out) {
-    pthread_mutex_lock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_LOCK(&sSnapshotMutex);
     *out = sSnapshot;
-    pthread_mutex_unlock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_UNLOCK(&sSnapshotMutex);
 }
 
 void Port_SecondScreenState_RequestEquip(uint8_t itemId, uint8_t slot) {
-    pthread_mutex_lock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_LOCK(&sSnapshotMutex);
     sPendingEquipItem = itemId;
     sPendingEquipSlot = slot;
-    pthread_mutex_unlock(&sSnapshotMutex);
+    SNAPSHOT_MUTEX_UNLOCK(&sSnapshotMutex);
 }
 
 #else /* Platforms without a live second-screen state consumer. */

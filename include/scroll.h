@@ -23,6 +23,16 @@ static inline s16 DecodePreservedTransitionAxis(u16 value, u16 origin) {
     return (s16)value;
 }
 
+/*
+ * A room transition may only be selected from coordinates that belong to the
+ * current room.  Expressing both lower- and upper-bound checks as one unsigned
+ * comparison also rejects coordinates before the origin without underflowing
+ * into the opposite edge.
+ */
+static inline bool32 IsPointInsideRoomBounds(s32 x, s32 y, s32 originX, s32 originY, u32 width, u32 height) {
+    return ((u32)x - (u32)originX) < width && ((u32)y - (u32)originY) < height;
+}
+
 void UpdateIsDiggingCave(void);
 void sub_08080930(u32);
 
