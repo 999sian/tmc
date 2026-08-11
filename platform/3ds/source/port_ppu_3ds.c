@@ -7,6 +7,7 @@
 #include "port_audio_3ds.h"
 #include "port_save.h"
 #include "port_second_screen.h"
+#include "port_second_screen_3ds.h"
 #include "port_second_screen_state.h"
 #include "port_widescreen.h"
 #include "platform_3ds.h"
@@ -39,11 +40,13 @@ static uint32_t* sTopUpload;
 static uint32_t sBottomTick;
 static bool sBottomReady;
 static bool sBottomTextureReady;
+static bool sBottomTextureDirty;
 static bool sBottomWorkerPending;
 static int sBottomFrontBuffer;
 static int sBottomWorkerBuffer;
 static uint32_t sBottomWorkerTick;
 static SecondScreenSnapshot sBottomWorkerSnapshot;
+static int sPendingBottomInGame;
 static uint64_t sBottomWorkerLastTicks;
 static bool sGpuPresenterReady;
 static bool sInitialized;
@@ -462,8 +465,8 @@ void Port_PPU_3DS_WriteQuickDump(void) {
 
 void Port_PPU_3DS_RenderBottomWorker(void) {
     const uint64_t startTick = Platform3DS_SystemTick();
-    Port_SecondScreen_PaintInto(sBottomUploads[sBottomWorkerBuffer], 320, 240, 512,
-                                &sBottomWorkerSnapshot, sBottomWorkerTick);
+    Port_SecondScreen_3DS_PaintInto(sBottomUploads[sBottomWorkerBuffer], 320, 240, 512,
+                                    &sBottomWorkerSnapshot, sBottomWorkerTick);
     sBottomWorkerLastTicks = Platform3DS_SystemTick() - startTick;
 }
 
@@ -487,9 +490,11 @@ void Port_PPU_Init(SDL_Window* window) {
     Port_SecondScreen_Init();
     sBottomReady = false;
     sBottomTextureReady = false;
+    sBottomTextureDirty = false;
     sBottomWorkerPending = false;
     sBottomFrontBuffer = 0;
     sBottomWorkerBuffer = 1;
+    sPendingBottomInGame = 0;
     sBottomTick = 0;
     sFrameNumber = 0;
     sPerfFirstFrameTick = 0;
@@ -566,16 +571,19 @@ void Port_PPU_PresentFrame(void) {
 #endif
 
     bool bottomChanged = false;
+    int promotedBottomInGame = -1;
     if (sBottomWorkerPending && Platform3DS_TryFinishBottomWorker()) {
         sBottomFrontBuffer = sBottomWorkerBuffer;
         sBottomWorkerPending = false;
         sBottomReady = true;
         bottomChanged = true;
+        promotedBottomInGame = sBottomWorkerSnapshot.inGame != 0;
         RecordBottomWorkerTiming();
     }
 
     const uint32_t bottomInterval = Port_SecondScreen_IsDeveloperOverlayOpen() ? 30u : 3u;
-    const bool bottomUpdateDue = !sBottomReady || (sFrameNumber % bottomInterval) == 0u;
+    const bool bottomUpdateDue = !sBottomReady || Port_SecondScreen_3DS_NeedsRefresh() ||
+                                 (sFrameNumber % bottomInterval) == 0u;
     if (!sBottomWorkerPending && bottomUpdateDue) {
         sBottomWorkerBuffer = 1 - sBottomFrontBuffer;
         Port_SecondScreenState_Read(&sBottomWorkerSnapshot);
@@ -587,6 +595,7 @@ void Port_PPU_PresentFrame(void) {
             sBottomFrontBuffer = sBottomWorkerBuffer;
             sBottomReady = true;
             bottomChanged = true;
+            promotedBottomInGame = sBottomWorkerSnapshot.inGame != 0;
             RecordBottomWorkerTiming();
         }
     }
@@ -594,7 +603,18 @@ void Port_PPU_PresentFrame(void) {
         bottomChanged = true;
         sBottomTextureReady = true;
     }
-    PlatformGpu3DS_EndBottom(sBottomUploads[sBottomFrontBuffer], bottomChanged);
+    if (promotedBottomInGame >= 0) {
+        sPendingBottomInGame = promotedBottomInGame;
+    }
+    sBottomTextureDirty = sBottomTextureDirty || bottomChanged;
+    if (PlatformGpu3DS_EndBottom(sBottomUploads[sBottomFrontBuffer], sBottomTextureDirty) &&
+        sBottomTextureDirty) {
+        /* A failed C3D_FrameBegin leaves the old physical texture visible.
+         * Keep both the dirty upload and its mode pending until EndBottom
+         * actually submits the frame; only then may touch target that mode. */
+        sBottomTextureDirty = false;
+        Port_SecondScreen_3DS_SetVisibleInGame(sPendingBottomInGame);
+    }
     const uint64_t frameEndTick = Platform3DS_SystemTick();
 
     if (sFrameNumber >= 120u) {

@@ -26,7 +26,10 @@ static Thread sAudioThread;
 static LightEvent sAudioWake;
 static LightLock sStatsLock;
 static uint32_t sCallbackSignals;
-static float sVolume = 1.0f;
+/* The bottom-screen worker reads the live volume label while taps on the main
+ * thread update the mixer. A word-sized atomic prevents a C data race without
+ * putting the real-time audio path behind an SD/configuration lock. */
+static _Atomic float sVolume = 1.0f;
 static PortAudio3DSStats sStats;
 
 extern float Port_Config_GetMasterVolume(void);

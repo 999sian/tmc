@@ -342,7 +342,6 @@ u32 UpdatePlayerCollision(void) {
     s32 framestate;
     u32 tmp2;
     u32 tmp3;
-    u32 edgeCollision;
     // There are some weird assignment necessary to access gPlayerEntity.base.animationState correctly.
     u32 animationState1;
     u32 animationState2;
@@ -368,29 +367,23 @@ u32 UpdatePlayerCollision(void) {
     } else {
         direction = gPlayerState.direction;
     }
-    if (((direction & (DIR_NOT_MOVING_CHECK | 0x3)) == 0) && (gPlayerState.field_0xa == 0)) {
+    if (((direction & (DIR_NOT_MOVING_CHECK | 0x3)) == 0) && (gPlayerState.field_0xa == 0)
+#ifdef PC_PORT
+        /* sub_0807BDB8 uses unsigned room-local coordinates.  If a previous
+         * scroll ever leaves Link before the new origin, that subtraction
+         * underflows and can select the opposite edge (and then a second,
+         * unrelated room).  A point outside the current room cannot be a
+         * valid source for another retail adjacent-room transition. */
+        && IsPointInsideRoomBounds(gPlayerEntity.base.x.HALF.HI, gPlayerEntity.base.y.HALF.HI,
+                                   gRoomControls.origin_x, gRoomControls.origin_y, gRoomControls.width,
+                                   gRoomControls.height)
+#endif
+    ) {
         index = sub_0807BDB8(&gPlayerEntity.base, direction >> 2);
         if (index != 0xff && (gRoomControls.scroll_flags & 4) == 0) {
             ptr1 = &gUnk_080B4490[index * 2];
-            edgeCollision = GetCollisionDataAtTilePos(COORD_TO_TILE_OFFSET(&gPlayerEntity.base, -ptr1[0], -ptr1[1]),
-                                                      gPlayerEntity.base.collisionLayer) == COLLISION_DATA_255;
-#ifdef PC_PORT
-            /* The retail edge-scroll gate starts once Link's origin is inside
-             * the 10 px room-edge band, but the GBA probe table can still look
-             * back inside the current 16 px tile. On the 3DS/PC port this lets
-             * the normal hitbox collide with the generated 0xff room border
-             * before the probe itself observes that border, so ACT_TILE_41
-             * door floors at same-area room joins can trap Link at the edge
-             * (Hyrule Castle throne-room south door). Treat a real door floor
-             * in the edge band as the same transition opportunity; the normal
-             * DoApplicableTransition/sub_0807BD14 checks below still decide
-             * whether an exit or adjacent room actually exists. */
-            if (!edgeCollision && (GetActTileAtEntity(&gPlayerEntity.base) == ACT_TILE_41 ||
-                                   GetActTileInFront(&gPlayerEntity.base) == ACT_TILE_41)) {
-                edgeCollision = TRUE;
-            }
-#endif
-            if (edgeCollision) {
+            if (GetCollisionDataAtTilePos(COORD_TO_TILE_OFFSET(&gPlayerEntity.base, -ptr1[0], -ptr1[1]),
+                                          gPlayerEntity.base.collisionLayer) == COLLISION_DATA_255) {
                 if ((((gPlayerState.flags & (PL_FLAGS10000 | PL_FLAGS2)) != 0) ||
                      ((gPlayerState.sword_state & 0x10) != 0)) ||
                     ((DoApplicableTransition(gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x,

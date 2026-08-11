@@ -1,5 +1,7 @@
 #include "platform_3ds.h"
 #include "port_audio_3ds.h"
+#include "port_second_screen_3ds.h"
+#include "port_second_screen_sync_3ds.h"
 
 #include <3ds.h>
 #include <stdbool.h>
@@ -48,9 +50,9 @@ static Thread sBottomWorkerThread;
 static LightEvent sBottomWorkerStart;
 static LightEvent sBottomWorkerDone;
 extern void Port_Audio_Shutdown(void);
-extern void Port_SecondScreen_OnTap(int x, int y, int button);
 
 int Platform3DS_Init(void) {
+    Port_SecondScreen_3DS_SyncInit();
     sHeld = 0;
     sDown = 0;
     memset(&sCirclePosition, 0, sizeof(sCirclePosition));
@@ -445,7 +447,7 @@ void Platform3DS_WaitForVBlank(void) {
     if (sDown & KEY_TOUCH) {
         touchPosition touch;
         hidTouchRead(&touch);
-        Port_SecondScreen_OnTap(touch.px, touch.py, 0);
+        Port_SecondScreen_3DS_OnTap(touch.px, touch.py, 0);
     }
     const bool quickDumpCombo = (sHeld & (KEY_L | KEY_R | KEY_A)) == (KEY_L | KEY_R | KEY_A);
     if (quickDumpCombo && !sQuickDumpComboWasHeld) sQuickDumpRequested = true;

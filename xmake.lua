@@ -1246,6 +1246,19 @@ target_end()
 
 
 -- ====================
+-- 3DS title/file-select bottom-screen procedural render regression test.
+-- ====================
+target("bottom_idle_3ds_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs("platform/3ds/source")
+    add_files("platform/3ds/source/bottom_idle_3ds.c")
+    add_files("platform/3ds/tests/bottom_idle_3ds_test.c")
+target_end()
+
+
+-- ====================
 -- Memory-watch list regression test (fault-safe little-endian reads + watch
 -- bookkeeping; see port_memory_watch_test.c)
 -- ====================

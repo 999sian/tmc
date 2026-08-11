@@ -7,26 +7,30 @@
 #include <string.h>
 #include <unistd.h>
 
-static bool sShowFps;
-static bool sFollow = true;
-static bool sCrests = true;
-static bool sFloorReturn = true;
-static bool sHideHud;
-static bool sHoldText;
-static bool sColorCorrection;
-static bool sAutosave;
+/* BottomWorkerMain renders the settings panel while the main thread handles
+ * taps and persists changes. Keep every value shared by those two threads
+ * atomic; SaveConfig still performs its file I/O on the main thread and never
+ * holds a compositor lock while touching the SD card. */
+static _Atomic bool sShowFps;
+static _Atomic bool sFollow = true;
+static _Atomic bool sCrests = true;
+static _Atomic bool sFloorReturn = true;
+static _Atomic bool sHideHud;
+static _Atomic bool sHoldText;
+static _Atomic bool sColorCorrection;
+static _Atomic bool sAutosave;
 static bool sConsoleParity;
-static Port3DSAspectRatio sAspectRatio = PORT_3DS_ASPECT_STRETCH;
-static Port3DSDisplayStyle sDisplayStyle = PORT_3DS_DISPLAY_BLUR;
+static _Atomic Port3DSAspectRatio sAspectRatio = PORT_3DS_ASPECT_STRETCH;
+static _Atomic Port3DSDisplayStyle sDisplayStyle = PORT_3DS_DISPLAY_BLUR;
 /* The desktop file-select overlay is rendered on the gameplay screen and
  * has no useful 3DS interaction path. Keep the native second-screen UI
  * separate and leave this desktop-only overlay disabled. */
 static bool sPortSettings = false;
 static bool sVsync = true;
-static float sVolume = 1.0f;
-static int sBackdrop;
-static unsigned sTurboMultiplier = 5;
-static bool sRandoEnabled;
+static _Atomic float sVolume = 1.0f;
+static _Atomic int sBackdrop;
+static _Atomic unsigned sTurboMultiplier = 5;
+static _Atomic bool sRandoEnabled;
 static bool sRandoGlitchless = true;
 static bool sRandoObscure;
 static bool sRandoKinstones = true;

@@ -49,7 +49,7 @@ set(TMC_PORT_SOURCES
     port/data_const_stubs.c port/flag_remap_generated.c port/port_rom_tables.c
     port/port_linked_stubs.c port/port_figurines.c port/port_draw.c
     port/port_gba_mem.c port/port_hdma.c port/port_save.c port/port_softslots.c
-    port/port_second_screen.c port/port_second_screen_state.c
+    port/port_second_screen_state.c
     port/port_second_screen_render.c port/port_second_screen_worldmap.c
     port/port_second_screen_dungeonmap.c port/port_second_screen_quest.c
     port/port_second_screen_theme.c port/port_roll_attack_macro.c
@@ -74,6 +74,9 @@ add_executable(tmc-3ds
     source/main_3ds.c
     source/platform_3ds.c
     source/platform_gpu_3ds.c
+    source/bottom_idle_3ds.c
+    source/port_second_screen_3ds.c
+    source/port_second_screen_sync_3ds.c
     source/port_ppu_3ds.c
     source/port_audio_3ds.c
     source/port_config_3ds.c
@@ -109,7 +112,7 @@ target_compile_options(tmc-3ds PRIVATE
 set_source_files_properties(
     "${TMC_ROOT}/port/ppu/src/virtuappu.c"
     "${TMC_ROOT}/port/ppu/src/mode1.c"
-    "${TMC_ROOT}/port/port_second_screen.c"
+    "${CMAKE_CURRENT_LIST_DIR}/source/port_second_screen_3ds.c"
     "${TMC_ROOT}/port/port_second_screen_render.c"
     "${TMC_ROOT}/port/port_second_screen_worldmap.c"
     "${TMC_ROOT}/port/port_second_screen_dungeonmap.c"
