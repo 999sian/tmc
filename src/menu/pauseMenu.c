@@ -445,7 +445,7 @@ void PauseMenu_ItemMenu_Update(void) {
                             break;
                         }
 
-                        /*works only if pressed softslot was
+                         /*works only if pressed softslot was
                         equipped with anything from debug menu
                         since requires sActiveSlot to be non -1*/
                         if(Port_SoftSlots_IsBHeld()){
