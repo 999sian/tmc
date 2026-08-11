@@ -444,6 +444,15 @@ void PauseMenu_ItemMenu_Update(void) {
                             SoundReq(SFX_TEXTBOX_SELECT);
                             break;
                         }
+
+                        /*works only if pressed softslot was
+                        equipped with anything from debug menu
+                        since requires sActiveSlot to be non -1*/
+                        if(Port_SoftSlots_IsBHeld()){
+                            Port_SoftSlots_SetAssignment(Port_SoftSlots_GetActiveSlot(), (unsigned char)gPauseMenu.items[menuSlot]);
+                            SoundReq(SFX_TEXTBOX_SELECT);
+                            break;
+                        }
                     }
 #endif
                     ForceEquipItem(gPauseMenu.items[menuSlot], slot);

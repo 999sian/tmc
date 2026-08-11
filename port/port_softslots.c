@@ -109,6 +109,10 @@ bool Port_SoftSlots_IsBHeld(void) {
     return sActiveSlot >= 0;
 }
 
+int Port_SoftSlots_GetActiveSlot(void) {
+    return sActiveSlot;
+}
+
 uint8_t Port_SoftSlots_GetEffectiveBItem(uint8_t saved) {
     if (sActiveSlot < 0) return saved;
     uint8_t a = sAssignments[sActiveSlot];
