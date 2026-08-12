@@ -1,6 +1,6 @@
 # The Minish Cap 3DS
 
-![The Minish Cap 3DS splash screen](platform/3ds/assets/splash.png)
+<img width="1672" height="941" alt="minish" src="https://github.com/user-attachments/assets/db99e777-12a2-4222-86c3-7c8f14062586" />
 
 Nintendo 3DS dual-screen port of *The Legend of Zelda: The Minish Cap*, based
 on open-source Minish Cap engine work and the dual-screen Android source base
