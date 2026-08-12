@@ -70,7 +70,7 @@ https://discord.gg/SMW49UMkw
    Homebrew Launcher:
 
 ```text
-tmc-3ds-v0.33.cia
+tmc-3ds-v1.0.cia
 ```
 2. Create this directory on the SD card:
 
@@ -128,8 +128,8 @@ chmod +x platform/3ds/build.sh
 Outputs are written to:
 
 ```text
-build-3ds/game/tmc-3ds-v0.33.cia
-build-3ds/game/tmc-3ds-v0.33.3dsx
+build-3ds/game/tmc-3ds-v1.0.cia
+build-3ds/game/tmc-3ds-v1.0.3dsx
 ```
 
 The build does not embed a ROM.
