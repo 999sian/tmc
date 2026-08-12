@@ -4,7 +4,7 @@
 
 Nintendo 3DS dual-screen port of *The Legend of Zelda: The Minish Cap*, based
 on open-source Minish Cap engine work and the dual-screen Android source base
-used for this 3DS port.
+used for this 3DS port. Made with the help of Codex
 
 This project is based on open-source work from:
 
@@ -19,16 +19,9 @@ No ROM or extracted game asset package is distributed in this repository. Each
 user must provide their own legally obtained compatible Game Boy Advance ROM on
 their own 3DS SD card.
 
-## Support me
-https://buymeacoffee.com/estebanpdn
-
 ## Join my Discord
 
 https://discord.gg/SMW49UMkw
-
-## Support me:
-
-https://ko-fi.com/estebanpdn
 
 ## Features
 
