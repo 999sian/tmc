@@ -31,6 +31,14 @@ https://discord.gg/SMW49UMkw
 * Built-in Project Picori Randomizer support with separate normal and randomized save data.
 * Native stereo audio, persistent settings, reliable save handling, FPS tools, and diagnostic dumps for bug reports.
 
+## Performance
+
+For now, this port is only really playable on **New Nintendo 3DS systems**.
+
+The **Old Nintendo 3DS currently has significant FPS drops**, so I do not recommend using it there yet.
+
+For the next version, I am going to focus heavily on performance optimization and try to improve Old 3DS support as much as possible.
+
 ## Installation
 
 1. Install the CIA with FBI, or use the 3DSX build with the Homebrew Launcher.
