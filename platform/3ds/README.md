@@ -10,7 +10,7 @@ touching it opens the existing Minish Cap Settings hierarchy.
 Install the universal CIA:
 
 ```text
-tmc-3ds-v1.1-E1.cia
+tmc-3ds-v1.1-E2.cia
 ```
 
 Then create this directory on the SD card:
@@ -44,9 +44,13 @@ Audio requires a working 3DS DSP firmware setup. On Luma3DS, use Rosalina's
 - New 3DS: requests 804 MHz, L2 cache and access to the extra application core.
 - New 3DS turbo: hold the C-stick in any direction and select 2x through 5x
   game speed from the Gameplay settings.
-- Old 3DS: experimental adaptive presentation skipping targets 60 Hz engine
-  timing when visual rendering falls behind. Input, touch, audio and lifecycle
-  processing continue on skipped presentation ticks; visual FPS may be lower.
+- Old 3DS: experimental CPU-renderer and audio optimizations plus adaptive
+  presentation skipping target 60 Hz engine timing when visual rendering falls
+  behind. Input, touch, audio and lifecycle processing continue on skipped
+  presentation ticks; visual FPS may be lower.
+- Bottom-screen scheduling: touch state is sampled on every engine tick;
+  interactive hitboxes are promoted with the physically visible buffer, and
+  unchanged static pages avoid redundant paint/upload work.
 - Settings: Minish Cap-themed Screen, Gameplay, Developer, and Randomizer submenus with
   persistent options, a manual memory-dump command, and a live diagnostics
   overlay.

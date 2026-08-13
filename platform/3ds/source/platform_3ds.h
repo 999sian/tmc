@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "old3ds_frame_pacer.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,6 +32,9 @@ typedef struct Platform3DSRuntimeStats {
     uint64_t old3dsSkippedPresentations;
     uint64_t old3dsPacingSleepTicks;
     uint64_t old3dsPacingResyncs;
+    uint64_t old3dsAptDiscontinuities;
+    uint64_t old3dsDumpDiscontinuities;
+    uint64_t old3dsDebtClampEvents;
     int64_t old3dsPresentationDebtTicks;
     uint32_t old3dsMaxConsecutiveSkips;
     uint64_t engineWorkTicks;
@@ -84,6 +89,7 @@ int Platform3DS_IsActiveStackAddress(uintptr_t value);
 bool Platform3DS_SubmitBottomWorker(void);
 bool Platform3DS_TryFinishBottomWorker(void);
 void Platform3DS_ShutdownBottomWorker(void);
+void Platform3DS_MarkFrameDiscontinuity(Old3DSFramePacerDiscontinuity reason);
 bool Platform3DS_BeginFrameBoundary(void);
 void Platform3DS_EndFrameBoundary(void);
 void Platform3DS_PumpWithoutVBlank(void);

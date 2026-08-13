@@ -37,16 +37,16 @@ The port automatically selects a performance profile for the detected console.
 
 **New Nintendo 3DS** keeps the full-presentation path with 804 MHz mode, L2 cache, multi-core rendering, and C-Stick turbo.
 
-**Old Nintendo 3DS** uses an experimental adaptive presentation-skip profile. When rendering cannot sustain 60 visual FPS, the engine can continue advancing near its 60 Hz target instead of slowing the entire game down. Input, touch, audio, and lifecycle handling continue to run on skipped presentation ticks.
+**Old Nintendo 3DS** uses an experimental optimized renderer, lower-overhead audio path, and adaptive presentation-skip profile. When rendering cannot sustain 60 visual FPS, the engine can continue advancing near its 60 Hz target instead of slowing the entire game down. Input, touch, audio, and lifecycle handling continue to run on skipped presentation ticks.
 
-Old 3DS visual FPS can still be lower, and sustained timing requires confirmation on physical hardware. Please treat v1.1-E1 as an experimental testing build rather than a stable 60 FPS guarantee.
+The bottom-screen worker avoids redundant static redraws while keeping touch input sampled on every engine tick. Old 3DS visual FPS can still be lower, and sustained timing requires confirmation on physical hardware. Please treat v1.1-E2 as an experimental testing build rather than a stable 60 FPS guarantee.
 
 ## Installation
 
 1. Install the CIA with FBI, or use the 3DSX build with the Homebrew Launcher.
 
 ```text
-tmc-3ds-v1.1-E1.cia
+tmc-3ds-v1.1-E2.cia
 ```
 
 2. Create this folder on your SD card:
@@ -141,8 +141,8 @@ chmod +x platform/3ds/build.sh
 Builds are generated under:
 
 ```text
-build-3ds/game/tmc-3ds-v1.1-E1.cia
-build-3ds/game/tmc-3ds-v1.1-E1.3dsx
+build-3ds/game/tmc-3ds-v1.1-E2.cia
+build-3ds/game/tmc-3ds-v1.1-E2.3dsx
 ```
 
 The build does not include or embed a ROM.

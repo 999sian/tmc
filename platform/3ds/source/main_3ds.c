@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     printf("System: %s\n", Platform3DS_IsNew3DS() ? "New Nintendo 3DS" : "Nintendo 3DS");
     printf("Performance: %s\n",
            Platform3DS_IsNew3DS() ? "New 3DS full presentation"
-                                  : "Old 3DS adaptive presentation skip (max 2)");
+                                  : "Old 3DS adaptive presentation skip (max 3)");
     printf("PPU worker core 1: %u%%\n", Platform3DS_Core1TimeLimit());
     printf("Extra New 3DS core: %s\n\n", Platform3DS_IsNew3DS() ? "enabled" : "unavailable");
     printf("Preparing storage...\n");
