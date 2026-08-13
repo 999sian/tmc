@@ -23,8 +23,15 @@ typedef struct Platform3DSRuntimeStats {
     uintptr_t stackRegionEnd;
     uint64_t logicFrames;
     uint64_t presentedFrames;
+    uint64_t logicElapsedTicks;
+    uint64_t logicCadenceIntervals;
     uint64_t turboLogicFrames;
     uint64_t turboSkippedPresentations;
+    uint64_t old3dsSkippedPresentations;
+    uint64_t old3dsPacingSleepTicks;
+    uint64_t old3dsPacingResyncs;
+    int64_t old3dsPresentationDebtTicks;
+    uint32_t old3dsMaxConsecutiveSkips;
     uint64_t engineWorkTicks;
     uint64_t engineWorkLastTicks;
     uint64_t engineWorkMaxTicks;
@@ -42,6 +49,8 @@ typedef struct Platform3DSRuntimeStats {
     bool bottomWorkerRunning;
     bool bottomWorkerBusy;
     bool speedupRequested;
+    bool adaptiveFrameskipEnabled;
+    bool gameplayDisplayActive;
     bool aptCloseRequested;
 } Platform3DSRuntimeStats;
 
@@ -61,6 +70,7 @@ bool Platform3DS_IsNew3DS(void);
 bool Platform3DS_CanUseCore1(void);
 unsigned Platform3DS_Core1TimeLimit(void);
 void Platform3DS_ShowSplash(void);
+void Platform3DS_EnterGameplayDisplay(void);
 uint16_t Platform3DS_ReadKeyInput(void);
 uint16_t Platform3DS_ReadKeyDownInput(void);
 uint32_t Platform3DS_KeysHeld(void);
