@@ -235,6 +235,11 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         virtuappu_mode1_get_3ds_stats(&workerStats);
         const uint64_t engineSamples = runtimeStats.logicFrames > 1 ? runtimeStats.logicFrames - 1u : 1u;
         const uint64_t vblankSamples = runtimeStats.presentedFrames ? runtimeStats.presentedFrames : 1u;
+        const double logicElapsedSeconds =
+            (double)runtimeStats.logicElapsedTicks / (double)Platform3DS_TicksPerSecond();
+        const double measuredLogicRate = logicElapsedSeconds > 0.0 && runtimeStats.logicCadenceIntervals != 0
+                                             ? (double)runtimeStats.logicCadenceIntervals / logicElapsedSeconds
+                                             : 0.0;
         const uint64_t audioSamples = audioStats.buffersRendered ? audioStats.buffersRendered : 1u;
         const uint16_t dumpDispcnt = (uint16_t)(gIoMem[0] | (gIoMem[1] << 8));
         const uint8_t dumpMode = dumpDispcnt & 7u;
@@ -248,6 +253,12 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "\n[System]\n");
         fprintf(info, "Model: %s\n", Platform3DS_IsNew3DS() ? "New Nintendo 3DS" : "Old Nintendo 3DS");
         fprintf(info, "CPU profile requested: %s\n", runtimeStats.speedupRequested ? "804 MHz + L2" : "268 MHz");
+        fprintf(info, "Runtime performance profile: %s\n",
+                runtimeStats.adaptiveFrameskipEnabled ? "Old 3DS (60 Hz logic target + adaptive presentation skip)"
+                                                       : "New 3DS (full presentation path)");
+        fprintf(info, "Post-boot stdio target: %s\n",
+                runtimeStats.gameplayDisplayActive ? "bottom framebuffer detached; stderr uses SVC"
+                                                   : "visible boot console");
         fprintf(info, "Kernel version: 0x%08lX\n", (unsigned long)runtimeStats.kernelVersion);
         fprintf(info, "FIRM version: 0x%08lX\n", (unsigned long)runtimeStats.firmVersion);
         fprintf(info, "System core version: %lu\n", (unsigned long)runtimeStats.systemCoreVersion);
@@ -291,6 +302,14 @@ void Port_PPU_3DS_WriteQuickDump(void) {
         fprintf(info, "Turbo logic frames: %llu\n", (unsigned long long)runtimeStats.turboLogicFrames);
         fprintf(info, "Turbo-skipped presentations: %llu\n",
                 (unsigned long long)runtimeStats.turboSkippedPresentations);
+        fprintf(info, "Old 3DS adaptive-skipped presentations: %llu (maximum consecutive: %lu)\n",
+                (unsigned long long)runtimeStats.old3dsSkippedPresentations,
+                (unsigned long)runtimeStats.old3dsMaxConsecutiveSkips);
+        fprintf(info, "Old 3DS pacing sleep: %.3f ms; resyncs: %llu; current debt: %.3f ms\n",
+                TicksToMilliseconds(runtimeStats.old3dsPacingSleepTicks),
+                (unsigned long long)runtimeStats.old3dsPacingResyncs,
+                (double)runtimeStats.old3dsPresentationDebtTicks * 1000.0 /
+                    (double)Platform3DS_TicksPerSecond());
         fprintf(info, "Top screenshot: 400x240 displayed framebuffer BMP\n");
         fprintf(info, "Bottom screenshot: 320x240 displayed framebuffer BMP\n");
         fprintf(info, "Raw physical framebuffers: top-screen.raw, bottom-screen.raw\n");
@@ -302,6 +321,7 @@ void Port_PPU_3DS_WriteQuickDump(void) {
                 (unsigned long)captureStats.bottomFormat, (unsigned long)captureStats.bottomStride,
                 (unsigned long)captureStats.bottomAddress);
         fprintf(info, "Measured cadence: %.2f FPS\n", measuredFps);
+        fprintf(info, "Measured engine logic cadence: %.2f ticks/s\n", measuredLogicRate);
         fprintf(info, "Frame interval: last %.3f ms, average %.3f ms, minimum %.3f ms, maximum %.3f ms\n",
                 TicksToMilliseconds(sPerfIntervalLastTicks),
                 TicksToMilliseconds(sPerfIntervalTicks) / intervalSampleCount,
@@ -355,7 +375,7 @@ void Port_PPU_3DS_WriteQuickDump(void) {
                 (unsigned long)gpuStats.c2dFlushAddress, (unsigned long)gpuStats.topUploadAddress,
                 (unsigned long)gpuStats.bottomUploadAddress[0],
                 (unsigned long)gpuStats.bottomUploadAddress[1]);
-        fprintf(info, "Bottom-screen refresh: 20 Hz\n");
+        fprintf(info, "Bottom-screen periodic refresh: every 3 presentations (20 Hz at 60 FPS; touch refresh immediate)\n");
 
         fprintf(info, "\n[Audio]\n");
         fprintf(info, "Initialized/playing: %s / %s\n",

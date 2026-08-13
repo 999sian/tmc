@@ -75,6 +75,9 @@ int main(int argc, char** argv) {
 
     printf("The Minish Cap 3DS v" TMC_PORT_VERSION "\n\n");
     printf("System: %s\n", Platform3DS_IsNew3DS() ? "New Nintendo 3DS" : "Nintendo 3DS");
+    printf("Performance: %s\n",
+           Platform3DS_IsNew3DS() ? "New 3DS full presentation"
+                                  : "Old 3DS adaptive presentation skip (max 2)");
     printf("PPU worker core 1: %u%%\n", Platform3DS_Core1TimeLimit());
     printf("Extra New 3DS core: %s\n\n", Platform3DS_IsNew3DS() ? "enabled" : "unavailable");
     printf("Preparing storage...\n");
@@ -124,6 +127,7 @@ int main(int argc, char** argv) {
     }
 
     printf("Starting engine...\n");
+    Platform3DS_EnterGameplayDisplay();
     AgbMain();
 
     Port_PPU_Shutdown();

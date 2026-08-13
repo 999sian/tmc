@@ -1229,6 +1229,35 @@ target_end()
 
 
 -- ====================
+-- Retail tile-interaction table regression test.
+-- ====================
+target("tile_interaction_data_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs(".")
+    add_includedirs("port")
+    add_includedirs("include")
+    add_defines("PC_PORT", "USA", "ENGLISH")
+    add_files("port/port_tile_interaction_data_test.c")
+    add_files("src/data/data_080046A4.c")
+target_end()
+
+
+-- ====================
+-- Multi-region Castle Maid script-callback regression test.
+-- ====================
+target("castle_maid_dialog_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs("port")
+    add_includedirs("include")
+    add_files("port/port_castle_maid_dialog_test.c")
+target_end()
+
+
+-- ====================
 -- 3DS ARM11 host-pointer regression test. This builds the TMC_3DS branch on
 -- the desktop with a mocked memory-map query.
 -- ====================
@@ -1255,6 +1284,19 @@ target("bottom_idle_3ds_test")
     add_includedirs("platform/3ds/source")
     add_files("platform/3ds/source/bottom_idle_3ds.c")
     add_files("platform/3ds/tests/bottom_idle_3ds_test.c")
+target_end()
+
+
+-- ====================
+-- Old 3DS 60 Hz logic-target / adaptive presentation pacing regression test.
+-- ====================
+target("old3ds_frame_pacer_test")
+    set_kind("binary")
+    set_languages("c11")
+    set_targetdir("build/pc")
+    add_includedirs("platform/3ds/source")
+    add_files("platform/3ds/source/old3ds_frame_pacer.c")
+    add_files("platform/3ds/tests/old3ds_frame_pacer_test.c")
 target_end()
 
 
