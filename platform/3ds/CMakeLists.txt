@@ -83,6 +83,7 @@ add_executable(tmc-3ds
     source/old3ds_frame_pacer.c
     source/platform_gpu_3ds.c
     source/bottom_idle_3ds.c
+    source/bottom_frame_state_3ds.c
     source/port_second_screen_3ds.c
     source/port_second_screen_sync_3ds.c
     source/port_ppu_3ds.c

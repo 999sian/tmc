@@ -55,8 +55,37 @@ static unsigned sNativeMemoryRegionCount;
 static Thread sBottomWorkerThread;
 static LightEvent sBottomWorkerStart;
 static LightEvent sBottomWorkerDone;
+static aptHookCookie sAptHookCookie;
+static bool sAptHookRegistered;
 extern void Port_Audio_Shutdown(void);
 static void PollInput(void);
+
+void Platform3DS_MarkFrameDiscontinuity(Old3DSFramePacerDiscontinuity reason) {
+    Old3DSFramePacer_MarkDiscontinuity(&sOld3DSFramePacer, reason);
+}
+
+static void OnAptEvent(APT_HookType hook, void* parameter) {
+    (void)parameter;
+    switch (hook) {
+        case APTHOOK_ONSUSPEND:
+        case APTHOOK_ONRESTORE:
+        case APTHOOK_ONSLEEP:
+        case APTHOOK_ONWAKEUP:
+            /* APT is the authority for HOME/lid discontinuities. The atomic
+             * mark is consumed at the next logic boundary, so suspend and
+             * restore callbacks before that boundary coalesce into one resync. */
+            Platform3DS_MarkFrameDiscontinuity(OLD3DS_FRAME_PACER_DISCONTINUITY_APT);
+            break;
+        default:
+            break;
+    }
+}
+
+static void RegisterAptHook(void) {
+    if (sAptHookRegistered) return;
+    aptHook(&sAptHookCookie, OnAptEvent, NULL);
+    sAptHookRegistered = true;
+}
 
 int Platform3DS_Init(void) {
     Port_SecondScreen_3DS_SyncInit();
@@ -100,6 +129,7 @@ int Platform3DS_Init(void) {
     aptSetSleepAllowed(true);
     APT_CheckNew3DS(&sIsNew3DS);
     Old3DSFramePacer_Init(&sOld3DSFramePacer, SYSCLOCK_ARM11);
+    RegisterAptHook();
     if (sIsNew3DS) {
         osSetSpeedupEnable(true);
         sSpeedupRequested = true;
@@ -127,6 +157,10 @@ int Platform3DS_Init(void) {
 
 void Platform3DS_Shutdown(void) {
     sRunning = false;
+    if (sAptHookRegistered) {
+        aptUnhook(&sAptHookCookie);
+        sAptHookRegistered = false;
+    }
     Platform3DS_ShutdownBottomWorker();
     extern void virtuappu_mode1_shutdown_workers(void);
     virtuappu_mode1_shutdown_workers();
@@ -396,6 +430,9 @@ void Platform3DS_GetRuntimeStats(Platform3DSRuntimeStats* stats) {
         .old3dsSkippedPresentations = sOld3DSFramePacer.skippedPresentations,
         .old3dsPacingSleepTicks = sOld3DSFramePacer.requestedSleepTicks,
         .old3dsPacingResyncs = sOld3DSFramePacer.resyncs,
+        .old3dsAptDiscontinuities = sOld3DSFramePacer.aptDiscontinuities,
+        .old3dsDumpDiscontinuities = sOld3DSFramePacer.dumpDiscontinuities,
+        .old3dsDebtClampEvents = sOld3DSFramePacer.debtClampEvents,
         .old3dsPresentationDebtTicks = sOld3DSFramePacer.presentationDebtTicks,
         .old3dsMaxConsecutiveSkips = sOld3DSFramePacer.maxConsecutiveSkipsSeen,
         .engineWorkTicks = sEngineWorkTicks,
@@ -514,6 +551,10 @@ void Platform3DS_WaitForVBlank(void) {
     sVblankWaitLastTicks = svcGetSystemTick() - waitStart;
     sVblankWaitTicks += sVblankWaitLastTicks;
     if (sVblankWaitLastTicks > sVblankWaitMaxTicks) sVblankWaitMaxTicks = sVblankWaitLastTicks;
+    /* EndBottom only marks a bottom generation submitted.  Promote it after
+     * the display boundary and before this tick's HID scan, so touch never
+     * targets a CPU-painted buffer that has not reached a presentation. */
+    Port_SecondScreen_3DS_PromoteSubmitted();
     if (sQuickDumpRequested) {
         extern void Port_PPU_3DS_WriteQuickDump(void);
         sQuickDumpRequested = false;
