@@ -22,6 +22,7 @@ static uint16_t sObjPalette[MODE1_PALETTE_COLORS];
 static uint16_t sOam[MODE1_OAM_HALFWORDS];
 static uint16_t sShadow[MODE1_GBA_BG_COUNT][MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 static uint32_t sFast[MODE1_GBA_WIDTH * MODE1_GBA_HEIGHT];
+static uint32_t sNewFast[MODE1_GBA_WIDTH * MODE1_GBA_HEIGHT];
 static uint32_t sReference[MODE1_GBA_WIDTH * MODE1_GBA_HEIGHT];
 static uint32_t sRandom = 0x6D2B79F5u;
 
@@ -108,7 +109,7 @@ static void BuildState(unsigned scene) {
 
     /* Deterministically include the exact structural profiles of the E2 dump
      * corpus in addition to the randomized states. */
-    if (scene == 0u) {
+    if ((scene % 16u) == 0u || (scene % 16u) == 3u) {
         WriteIo16(MODE1_IO_DISPCNT, 0x1F40u);
         WriteIo16(MODE1_IO_BG0CNT, 0x1F0Cu);
         WriteIo16(MODE1_IO_BG1CNT, 0x1D45u);
@@ -116,12 +117,14 @@ static void BuildState(unsigned scene) {
         WriteIo16(MODE1_IO_BG3CNT, 0x1E05u);
         WriteIo16(MODE1_IO_BLDCNT, 0x3648u);
         WriteIo16(MODE1_IO_BLDALPHA, 0x0E04u);
-    } else if (scene == 1u) {
+        WriteIo16(MODE1_IO_MOSAIC, 0u);
+    } else if ((scene % 16u) == 1u || (scene % 16u) == 2u) {
         WriteIo16(MODE1_IO_DISPCNT, 0x1740u);
         WriteIo16(MODE1_IO_BG0CNT, 0x1F0Cu);
         WriteIo16(MODE1_IO_BG1CNT, 0x1D45u);
         WriteIo16(MODE1_IO_BG2CNT, 0x1C42u);
         WriteIo16(MODE1_IO_BLDCNT, 0u);
+        WriteIo16(MODE1_IO_MOSAIC, 0u);
     }
 
     /* Exercise the actual 266-wide 3DS field path. The GBA's 32-tile
@@ -161,14 +164,20 @@ int main(void) {
     virtuappu_mode1_bind_gba_memory(&memory);
     virtuappu_mode1_pre_line_callback = NULL;
 
-    enum { SCENES = 1024 };
+    enum { SCENES = 4096 };
     for (unsigned scene = 0; scene < SCENES; ++scene) {
         BuildState(scene);
         virtuappu_mode1_set_color_correction((scene & 1u) != 0u);
 
+        virtuappu_mode1_set_old3ds_profile(true);
         virtuappu_mode1_set_native_fast_paths_enabled(true);
         virtuappu_mode1_render_frame(&ppu);
         memcpy(sFast, virtuappu_frame_buffer, sizeof(sFast));
+
+        virtuappu_mode1_set_old3ds_profile(false);
+        virtuappu_mode1_set_native_fast_paths_enabled(true);
+        virtuappu_mode1_render_frame(&ppu);
+        memcpy(sNewFast, virtuappu_frame_buffer, sizeof(sNewFast));
 
         virtuappu_mode1_set_native_fast_paths_enabled(false);
         virtuappu_mode1_render_frame(&ppu);
@@ -180,6 +189,14 @@ int main(void) {
                     "mode1_native_fast_path_test: scene %u pixel (%zu,%zu): fast=%08x reference=%08x\n",
                     scene, pixel % MODE1_GBA_WIDTH, pixel / MODE1_GBA_WIDTH,
                     sFast[pixel], sReference[pixel]);
+            return 1;
+        }
+        for (size_t pixel = 0; pixel < MODE1_GBA_WIDTH * MODE1_GBA_HEIGHT; ++pixel) {
+            if (sNewFast[pixel] == sReference[pixel]) continue;
+            fprintf(stderr,
+                    "mode1_native_fast_path_test: New profile scene %u pixel (%zu,%zu): fast=%08x reference=%08x\n",
+                    scene, pixel % MODE1_GBA_WIDTH, pixel / MODE1_GBA_WIDTH,
+                    sNewFast[pixel], sReference[pixel]);
             return 1;
         }
     }

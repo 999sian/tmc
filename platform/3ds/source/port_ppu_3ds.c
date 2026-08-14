@@ -377,10 +377,23 @@ void Port_PPU_3DS_WriteQuickDump(void) {
             fprintf(info, "PPU core %d measured load in last frame interval: %.1f%%\n", i + 1,
                     (double)workerStats.workerLastTicks[i] * 100.0 / loadIntervalTicks);
         }
+        fprintf(info, "Old 3DS PPU paths last frame (direct/field-alpha/compact/fallback): %lu/%lu/%lu/%lu lines\n",
+                (unsigned long)workerStats.oldPathLastLines[MODE1_OLD_PATH_DIRECT],
+                (unsigned long)workerStats.oldPathLastLines[MODE1_OLD_PATH_FIELD_ALPHA],
+                (unsigned long)workerStats.oldPathLastLines[MODE1_OLD_PATH_COMPACT],
+                (unsigned long)workerStats.oldPathLastLines[MODE1_OLD_PATH_FALLBACK]);
+        fprintf(info, "Old 3DS PPU paths cumulative (direct/field-alpha/compact/fallback): %llu/%llu/%llu/%llu lines\n",
+                (unsigned long long)workerStats.oldPathTotalLines[MODE1_OLD_PATH_DIRECT],
+                (unsigned long long)workerStats.oldPathTotalLines[MODE1_OLD_PATH_FIELD_ALPHA],
+                (unsigned long long)workerStats.oldPathTotalLines[MODE1_OLD_PATH_COMPACT],
+                (unsigned long long)workerStats.oldPathTotalLines[MODE1_OLD_PATH_FALLBACK]);
         fprintf(info, "GPU frames / begin failures: %llu / %llu\n",
                 (unsigned long long)gpuStats.frames, (unsigned long long)gpuStats.frameBeginFailures);
         fprintf(info, "GPU top/bottom transfers: %llu / %llu\n",
                 (unsigned long long)gpuStats.topTransfers, (unsigned long long)gpuStats.bottomTransfers);
+        fprintf(info, "Bottom target draws / unchanged Old 3DS reuses: %llu / %llu\n",
+                (unsigned long long)gpuStats.bottomTargetDraws,
+                (unsigned long long)gpuStats.bottomTargetReuseSkips);
         fprintf(info, "Citro3D drawing/processing time: %.3f / %.3f ms\n",
                 gpuStats.drawingTime, gpuStats.processingTime);
         fprintf(info, "Linear heap full flush: disabled (%lu bytes avoided per frame)\n",
@@ -534,6 +547,7 @@ void Port_PPU_Init(SDL_Window* window) {
     (void)window;
     VirtuaPPUMode1GbaMemory memory = { gIoMem, gVram, gBgPltt, gObjPltt, gOamMem };
     virtuappu_mode1_bind_gba_memory(&memory);
+    virtuappu_mode1_set_old3ds_profile(!Platform3DS_IsNew3DS());
     sColorCorrection = Port_Config_GetColorCorrection();
     virtuappu_mode1_set_color_correction(sColorCorrection);
     Port_Widescreen_SetWindowPixels(400, 240);
@@ -578,7 +592,7 @@ void Port_PPU_Init(SDL_Window* window) {
     sPerfFramesOver33ms = 0;
     sCurrentFpsX100 = 0;
     sAverageFpsX100 = 0;
-    sGpuPresenterReady = PlatformGpu3DS_Init();
+    sGpuPresenterReady = PlatformGpu3DS_Init(!Platform3DS_IsNew3DS());
     sTopUpload = PlatformGpu3DS_TopBuffer();
     sBottomUploads[0] = PlatformGpu3DS_BottomBuffer(0);
     sBottomUploads[1] = PlatformGpu3DS_BottomBuffer(1);

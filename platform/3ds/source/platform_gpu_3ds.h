@@ -9,6 +9,8 @@ typedef struct PlatformGpu3DSStats {
     uint64_t frameBeginFailures;
     uint64_t topTransfers;
     uint64_t bottomTransfers;
+    uint64_t bottomTargetDraws;
+    uint64_t bottomTargetReuseSkips;
     uint64_t boundedFlushBytes;
     uint32_t linearHeapBytes;
     uint32_t c2dFlushBytes;
@@ -19,7 +21,7 @@ typedef struct PlatformGpu3DSStats {
     float processingTime;
 } PlatformGpu3DSStats;
 
-bool PlatformGpu3DS_Init(void);
+bool PlatformGpu3DS_Init(bool old3dsProfile);
 uint32_t* PlatformGpu3DS_TopBuffer(void);
 uint32_t* PlatformGpu3DS_BottomBuffer(unsigned index);
 void PlatformGpu3DS_BeginTop(const uint32_t* pixels, unsigned width);
@@ -27,6 +29,7 @@ void PlatformGpu3DS_BeginTop(const uint32_t* pixels, unsigned width);
 bool PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed);
 void PlatformGpu3DS_ShowDumpSavedOverlay(void);
 void PlatformGpu3DS_GetStats(PlatformGpu3DSStats* stats);
+void PlatformGpu3DS_InvalidateBottomTarget(void);
 void PlatformGpu3DS_Shutdown(void);
 
 #endif
