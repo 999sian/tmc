@@ -1829,15 +1829,17 @@ void Port_ApplyLanguage(void) {
     if (lang < 0) {
         sLastAppliedPref = lang;
         const int current = gSaveHeader->language;
-        if (current >= 0 && current < 6 /* NUM_LANGUAGES */ && gTranslations[current] != NULL) {
+        if (current >= 0 && current < (int)RegionLanguageSlotCount() && gTranslations[current] != NULL &&
+            RegionSaveLanguageValid((u32)current)) {
             return;
         }
-        lang = REGION_IS_JP ? 0 /* LANGUAGE_JP */ : 1 /* LANGUAGE_EN */;
+        lang = RegionDefaultLanguage();
     } else {
         sLastAppliedPref = lang;
+        lang = RegionPreferredLanguageToSaveSlot(lang);
     }
 
-    if (lang >= 0 && lang < 6 /* NUM_LANGUAGES */ && gTranslations[lang] != NULL) {
+    if (lang >= 0 && lang < (int)RegionLanguageSlotCount() && gTranslations[lang] != NULL) {
         gSaveHeader->language = (u8)lang;
     }
 }
