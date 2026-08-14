@@ -95,6 +95,10 @@ static int mode1_frame_width = MODE1_GBA_WIDTH;
 static int mode1_frame_pitch = MODE1_GBA_WIDTH;
 static uint32_t* mode1_output_buffer;
 static int mode1_output_pitch;
+static bool mode1_old3ds_profile;
+static uint8_t mode1_old3ds_field_blend_lut[32][32];
+static bool mode1_old3ds_field_blend_lut_initialized;
+static bool mode1_bg_pair_palette_initialized;
 
 #ifdef VIRTUAPPU_TESTING
 static bool mode1_native_fast_paths_enabled = true;
@@ -105,6 +109,32 @@ void virtuappu_mode1_set_native_fast_paths_enabled(bool enabled) {
 #else
 #define MODE1_NATIVE_FAST_PATHS_ENABLED() true
 #endif
+
+void virtuappu_mode1_set_old3ds_profile(bool enabled) {
+    const bool was_old3ds_profile = mode1_old3ds_profile;
+    mode1_old3ds_profile = enabled;
+    if (was_old3ds_profile && !enabled) {
+        /* A test harness may compare both model profiles in one process. Old
+         * deliberately leaves the 32 KiB color-pair table stale, so force the
+         * next New-profile publication to rebuild it from the live palette. */
+        mode1_bg_pair_palette_initialized = false;
+    }
+    if (!enabled || mode1_old3ds_field_blend_lut_initialized) return;
+
+    /* Hyrule's normal outdoor profile uses BLDALPHA EVA=4, EVB=14. Build the
+     * exact GBA 5-bit channel result once, before any renderer worker starts,
+     * so the Old ARM11 replaces six multiplies and their clamps per blended
+     * pixel with three hot 1 KiB-table reads. The guarded renderer below only
+     * consumes this table when BLDALPHA is exactly 0x0E04. */
+    for (unsigned top = 0; top < 32u; ++top) {
+        for (unsigned bottom = 0; bottom < 32u; ++bottom) {
+            unsigned value = (top * 4u + bottom * 14u) >> 4u;
+            if (value > 31u) value = 31u;
+            mode1_old3ds_field_blend_lut[top][bottom] = (uint8_t)value;
+        }
+    }
+    mode1_old3ds_field_blend_lut_initialized = true;
+}
 
 void virtuappu_mode1_set_frame_geometry(const PPUMemory* ppu) {
     int width = MODE1_GBA_WIDTH;
@@ -435,7 +465,6 @@ static uint32_t mode1_bg_abgr_lut[MODE1_PALETTE_COLORS];
 static uint32_t mode1_obj_abgr_lut[MODE1_PALETTE_COLORS];
 static uint64_t mode1_bg_4bpp_pair_lut[16][256];
 static uint32_t mode1_bg_pair_palette_cache[MODE1_PALETTE_COLORS];
-static bool mode1_bg_pair_palette_initialized;
 static uint32_t mode1_bg_4bpp_token_pair_lut[16][256];
 static bool mode1_bg_token_pairs_initialized;
 static uint16_t mode1_bg_palette_source_cache[MODE1_PALETTE_COLORS];
@@ -495,26 +524,28 @@ static void virtuappu_mode1_publish_palette_luts(void) {
     mode1_palette_source_initialized = true;
     mode1_palette_source_color_correction = mode1_color_correction;
 
-    for (unsigned bank = 0; bg_changed && bank < 16u; ++bank) {
-        const unsigned paletteBase = bank * 16u;
-        if (mode1_bg_pair_palette_initialized &&
-            memcmp(&mode1_bg_pair_palette_cache[paletteBase], &mode1_bg_abgr_lut[paletteBase],
-                   16u * sizeof(uint32_t)) == 0) {
-            continue;
+    if (!mode1_old3ds_profile) {
+        for (unsigned bank = 0; (bg_changed || !mode1_bg_pair_palette_initialized) && bank < 16u; ++bank) {
+            const unsigned paletteBase = bank * 16u;
+            if (mode1_bg_pair_palette_initialized &&
+                memcmp(&mode1_bg_pair_palette_cache[paletteBase], &mode1_bg_abgr_lut[paletteBase],
+                       16u * sizeof(uint32_t)) == 0) {
+                continue;
+            }
+            for (unsigned packed = 0; packed < 256u; ++packed) {
+                const unsigned lo = packed & 0x0Fu;
+                const unsigned hi = packed >> 4u;
+                const uint32_t loColor = lo != 0u ? mode1_bg_abgr_lut[paletteBase + lo] : 0u;
+                const uint32_t hiColor = hi != 0u ? mode1_bg_abgr_lut[paletteBase + hi] : 0u;
+                mode1_bg_4bpp_pair_lut[bank][packed] = (uint64_t)loColor | ((uint64_t)hiColor << 32u);
+            }
+            memcpy(&mode1_bg_pair_palette_cache[paletteBase], &mode1_bg_abgr_lut[paletteBase],
+                   16u * sizeof(uint32_t));
         }
-        for (unsigned packed = 0; packed < 256u; ++packed) {
-            const unsigned lo = packed & 0x0Fu;
-            const unsigned hi = packed >> 4u;
-            const uint32_t loColor = lo != 0u ? mode1_bg_abgr_lut[paletteBase + lo] : 0u;
-            const uint32_t hiColor = hi != 0u ? mode1_bg_abgr_lut[paletteBase + hi] : 0u;
-            mode1_bg_4bpp_pair_lut[bank][packed] = (uint64_t)loColor | ((uint64_t)hiColor << 32u);
-        }
-        memcpy(&mode1_bg_pair_palette_cache[paletteBase], &mode1_bg_abgr_lut[paletteBase],
-               16u * sizeof(uint32_t));
+        mode1_bg_pair_palette_initialized = true;
     }
-    mode1_bg_pair_palette_initialized = true;
 
-    if (!mode1_bg_token_pairs_initialized) {
+    if (!mode1_old3ds_profile && !mode1_bg_token_pairs_initialized) {
         for (unsigned bank = 0; bank < 16u; ++bank) {
             const unsigned paletteBase = bank * 16u;
             for (unsigned packed = 0; packed < 256u; ++packed) {
@@ -589,6 +620,22 @@ static void mode1_store_bg_color_pair(uint32_t* destination, uint64_t colors) {
 #endif
 }
 
+static uint64_t mode1_bg_color_pair(unsigned palette_bank, uint8_t packed_pair) {
+    if (!mode1_old3ds_profile) {
+        return mode1_bg_4bpp_pair_lut[palette_bank][packed_pair];
+    }
+
+    /* The converted-color pair table occupies another 32 KiB. Keep Old 3DS
+     * working from the 1 KiB palette LUT instead of replacing its entire L1
+     * data cache with pair entries that field tile bytes access sparsely. */
+    const unsigned palette_base = palette_bank * 16u;
+    const unsigned lo = packed_pair & 0x0Fu;
+    const unsigned hi = packed_pair >> 4u;
+    const uint32_t lo_color = lo != 0u ? mode1_bg_abgr_lut[palette_base + lo] : 0u;
+    const uint32_t hi_color = hi != 0u ? mode1_bg_abgr_lut[palette_base + hi] : 0u;
+    return (uint64_t)lo_color | ((uint64_t)hi_color << 32u);
+}
+
 static void mode1_render_text_bg_native_4bpp(int bg_index, uint32_t char_base, uint32_t screen_base,
                                              int map_width_tiles, int tile_row, int pixel_y,
                                              int scroll_x, int render_width, uint8_t priority,
@@ -649,7 +696,7 @@ static void mode1_render_text_bg_native_4bpp(int bg_index, uint32_t char_base, u
                     if (hflip) packed_pair = (uint8_t)((packed_pair << 4u) | (packed_pair >> 4u));
                     if (packed_pair == 0u) continue;
 
-                    const uint64_t colors = mode1_bg_4bpp_pair_lut[palette_bank][packed_pair];
+                    const uint64_t colors = mode1_bg_color_pair(palette_bank, packed_pair);
                     uint32_t* const dst = &line_buffer[x + pair_index * 2];
                     if ((packed_pair & 0x0Fu) != 0u && (packed_pair & 0xF0u) != 0u) {
                         mode1_store_bg_color_pair(dst, colors);
@@ -702,6 +749,23 @@ static void mode1_store_bg_token_pair(uint16_t* destination, uint32_t tokens) {
 #else
     memcpy(destination, &tokens, sizeof(tokens));
 #endif
+}
+
+static uint32_t mode1_bg_token_pair(unsigned palette_bank, uint8_t packed_pair) {
+    if (!mode1_old3ds_profile) {
+        return mode1_bg_4bpp_token_pair_lut[palette_bank][packed_pair];
+    }
+
+    /* The v1.1 token LUT is 16 KiB and competes directly with VRAM, OAM,
+     * palette and stack traffic in Old 3DS's 32 KiB L1 data cache (there is no
+     * application L2 on that model). Two nibbles plus the 1 KiB hot palette
+     * identity are cheaper there than a pseudo-random lookup into half of L1. */
+    const unsigned palette_base = palette_bank * 16u;
+    const unsigned lo = packed_pair & 0x0Fu;
+    const unsigned hi = packed_pair >> 4u;
+    const uint16_t lo_token = lo != 0u ? (uint16_t)(palette_base + lo + 1u) : 0u;
+    const uint16_t hi_token = hi != 0u ? (uint16_t)(palette_base + hi + 1u) : 0u;
+    return (uint32_t)lo_token | ((uint32_t)hi_token << 16u);
 }
 
 static void mode1_render_text_bg_native_tokens(int bg_index, int line, uint16_t bgcnt,
@@ -768,7 +832,7 @@ static void mode1_render_text_bg_native_tokens(int bg_index, int line, uint16_t 
                     if (hflip) packed_pair = (uint8_t)((packed_pair << 4u) | (packed_pair >> 4u));
                     if (packed_pair != 0u) {
                         mode1_store_bg_token_pair(&tokens[x + pair_index * 2],
-                                                  mode1_bg_4bpp_token_pair_lut[palette_bank][packed_pair]);
+                                                  mode1_bg_token_pair(palette_bank, packed_pair));
                     }
                 }
                 x += run;
@@ -934,7 +998,12 @@ void virtuappu_mode1_render_text_bg_line(int bg_index, int line, uint32_t* line_
         render_max_x = frame_width;
     }
 
-    if (MODE1_NATIVE_FAST_PATHS_ENABLED() && !mosaic_on && !bpp8 &&
+    /* Enabling BG mosaic with a 1x1 MOSAIC block is an identity operation.
+     * TMC leaves BG1's enable bit set in normal field/castle gameplay while
+     * MOSAIC itself is zero, so key the fast path on the effective dimensions
+     * instead of needlessly falling back on that inert flag. */
+    if (MODE1_NATIVE_FAST_PATHS_ENABLED() && !bpp8 &&
+        (!mosaic_on || (mode1_old3ds_profile && mosaic_h == 1 && mosaic_v == 1)) &&
         !ws_hud_right_anchor && !ws_msg_line) {
         mode1_render_text_bg_native_4bpp(bg_index, char_base, screen_base, map_width_tiles, tile_row, pixel_y,
                                         scroll_x, render_max_x, priority, line_buffer, priority_buffer);
@@ -1717,6 +1786,165 @@ static bool mode1_render_native_direct_no_effect_line(int line, uint16_t dispcnt
     return true;
 }
 
+static uint32_t mode1_old3ds_field_alpha_blend(uint32_t top_abgr, uint32_t bottom_abgr) {
+    const unsigned top_r = (top_abgr & 0xFFu) >> 3u;
+    const unsigned top_g = ((top_abgr >> 8u) & 0xFFu) >> 3u;
+    const unsigned top_b = ((top_abgr >> 16u) & 0xFFu) >> 3u;
+    const unsigned bottom_r = (bottom_abgr & 0xFFu) >> 3u;
+    const unsigned bottom_g = ((bottom_abgr >> 8u) & 0xFFu) >> 3u;
+    const unsigned bottom_b = ((bottom_abgr >> 16u) & 0xFFu) >> 3u;
+    const uint32_t r = mode1_old3ds_field_blend_lut[top_r][bottom_r];
+    const uint32_t g = mode1_old3ds_field_blend_lut[top_g][bottom_g];
+    const uint32_t b = mode1_old3ds_field_blend_lut[top_b][bottom_b];
+    return 0xFF000000u | (b << 19u) | (g << 11u) | (r << 3u);
+}
+
+/* Exact fast path for the profile observed in every supplied outdoor Old 3DS
+ * capture. Hyrule's field renderer has four 4bpp tiled BGs with priorities
+ * 0,1,2,1; BG3 alone is the alpha first target (EVA=4), while BG1/BG2/OBJ/
+ * backdrop are second targets (EVB=14). The generic compact compositor sorts
+ * and discovers two layers for every pixel. Here that fixed hardware order is
+ * expressed directly, and a second layer is found only for BG3 or a forced
+ * semi-transparent OBJ. Any different register value fails closed to the
+ * existing renderer, including New 3DS where this profile flag stays false. */
+static __attribute__((noinline)) bool mode1_render_old3ds_field_alpha_line(int line, uint16_t dispcnt,
+                                                                           int frame_width) {
+    if (!mode1_old3ds_profile || !MODE1_NATIVE_FAST_PATHS_ENABLED() ||
+        (dispcnt & (MODE1_DISP_BG0_ON | MODE1_DISP_BG1_ON | MODE1_DISP_BG2_ON |
+                    MODE1_DISP_BG3_ON)) !=
+            (MODE1_DISP_BG0_ON | MODE1_DISP_BG1_ON | MODE1_DISP_BG2_ON |
+             MODE1_DISP_BG3_ON) ||
+        (dispcnt & (MODE1_DISP_WIN0_ON | MODE1_DISP_WIN1_ON |
+                    MODE1_DISP_OBJWIN_ON)) != 0u) {
+        return false;
+    }
+
+    const uint16_t mosaic = virtuappu_mode1_io_read16(MODE1_IO_MOSAIC);
+    uint16_t bgcnt[MODE1_GBA_BG_COUNT];
+    for (int bg = 0; bg < MODE1_GBA_BG_COUNT; ++bg) {
+        bgcnt[bg] = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0CNT + bg * 2));
+        if ((bgcnt[bg] & 0x0080u) != 0u ||
+            ((bgcnt[bg] & 0x0040u) != 0u && (mosaic & 0x00FFu) != 0u)) {
+            return false;
+        }
+    }
+    if ((bgcnt[0] & 3u) != 0u || (bgcnt[1] & 3u) != 1u ||
+        (bgcnt[2] & 3u) != 2u || (bgcnt[3] & 3u) != 1u) {
+        return false;
+    }
+
+    const uint16_t bldcnt = virtuappu_mode1_io_read16(MODE1_IO_BLDCNT);
+    if (bldcnt != 0x3648u ||
+        virtuappu_mode1_io_read16(MODE1_IO_BLDALPHA) != 0x0E04u) {
+        return false;
+    }
+
+    uint16_t bg_tokens[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
+    for (int bg = 0; bg < MODE1_GBA_BG_COUNT; ++bg) {
+        memset(bg_tokens[bg], 0, (size_t)frame_width * sizeof(uint16_t));
+        mode1_render_text_bg_compact_tokens(bg, line, bgcnt[bg], frame_width,
+                                            bg_tokens[bg]);
+    }
+
+    const bool obj_enabled = (dispcnt & MODE1_DISP_OBJ_ON) != 0u;
+    uint32_t obj_layer[MODE1_GBA_WIDTH];
+    uint8_t obj_priority[MODE1_GBA_WIDTH];
+    if (obj_enabled) {
+        memset(obj_layer, 0, (size_t)frame_width * sizeof(uint32_t));
+        memset(obj_priority, 0xFF, (size_t)frame_width);
+        virtuappu_mode1_render_obj_line(line,
+                                        (dispcnt & MODE1_DISP_OBJ_1D) != 0u,
+                                        obj_layer, obj_priority);
+    } else {
+        memset(virtuappu_mode1_obj_window, 0, (size_t)frame_width);
+        memset(virtuappu_mode1_obj_semitrans, 0, (size_t)frame_width);
+    }
+
+    const uint32_t backdrop = mode1_bg_abgr_lut[0];
+    uint32_t* const out_row = mode1_output_row(line);
+    for (int x = 0; x < frame_width; ++x) {
+        const uint16_t bg0 = bg_tokens[0][x];
+        const uint16_t bg1 = bg_tokens[1][x];
+        const uint16_t bg2 = bg_tokens[2][x];
+        const uint16_t bg3 = bg_tokens[3][x];
+        const bool has_obj = obj_enabled && obj_layer[x] != 0u;
+        const unsigned obj_p = has_obj ? obj_priority[x] : 4u;
+        uint32_t top_color = backdrop;
+        int top_layer = 5;
+
+        /* Exact order for BG priorities 0,1,2,1, with OBJ winning ties. */
+        if (has_obj && obj_p == 0u) {
+            top_color = obj_layer[x];
+            top_layer = 4;
+        } else if (bg0 != 0u) {
+            top_color = mode1_bg_abgr_lut[bg0 - 1u];
+            top_layer = 0;
+        } else if (has_obj && obj_p == 1u) {
+            top_color = obj_layer[x];
+            top_layer = 4;
+        } else if (bg1 != 0u) {
+            top_color = mode1_bg_abgr_lut[bg1 - 1u];
+            top_layer = 1;
+        } else if (bg3 != 0u) {
+            top_color = mode1_bg_abgr_lut[bg3 - 1u];
+            top_layer = 3;
+        } else if (has_obj && obj_p == 2u) {
+            top_color = obj_layer[x];
+            top_layer = 4;
+        } else if (bg2 != 0u) {
+            top_color = mode1_bg_abgr_lut[bg2 - 1u];
+            top_layer = 2;
+        } else if (has_obj) {
+            top_color = obj_layer[x];
+            top_layer = 4;
+        }
+
+        if (top_layer == 3) {
+            uint32_t bottom_color = backdrop;
+            int bottom_layer = 5;
+            if (has_obj && obj_p == 2u) {
+                bottom_color = obj_layer[x];
+                bottom_layer = 4;
+            } else if (bg2 != 0u) {
+                bottom_color = mode1_bg_abgr_lut[bg2 - 1u];
+                bottom_layer = 2;
+            } else if (has_obj) {
+                bottom_color = obj_layer[x];
+                bottom_layer = 4;
+            }
+            if (mode1_is_second_target(bldcnt, bottom_layer)) {
+                top_color = mode1_old3ds_field_alpha_blend(top_color, bottom_color);
+            }
+        } else if (top_layer == 4 && virtuappu_mode1_obj_semitrans[x]) {
+            uint32_t bottom_color = backdrop;
+            int bottom_layer = 5;
+            if (obj_p == 0u && bg0 != 0u) {
+                bottom_color = mode1_bg_abgr_lut[bg0 - 1u];
+                bottom_layer = 0;
+            } else if (obj_p <= 1u && bg1 != 0u) {
+                bottom_color = mode1_bg_abgr_lut[bg1 - 1u];
+                bottom_layer = 1;
+            } else if (obj_p <= 1u && bg3 != 0u) {
+                bottom_color = mode1_bg_abgr_lut[bg3 - 1u];
+                bottom_layer = 3;
+            } else if (obj_p <= 2u && bg2 != 0u) {
+                bottom_color = mode1_bg_abgr_lut[bg2 - 1u];
+                bottom_layer = 2;
+            }
+            if (mode1_is_second_target(bldcnt, bottom_layer)) {
+                top_color = mode1_old3ds_field_alpha_blend(top_color, bottom_color);
+            }
+        }
+
+        if (x >= MODE1_GBA_BG_CLIP_X && bg0 == 0u && bg1 == 0u &&
+            bg2 == 0u && bg3 == 0u) {
+            top_color = 0xFF000000u;
+        }
+        out_row[x] = top_color;
+    }
+    return true;
+}
+
 /* Allocation-free compact path for the exact display profile used by normal
  * native-width gameplay: tiled mode, 4bpp BGs, no BG mosaic, no windows.  The
  * generic renderer remains the fallback for every other GBA feature and is
@@ -1729,6 +1957,7 @@ static bool mode1_render_native_compact_line(int line, uint16_t dispcnt, int fra
         return false;
     }
 
+    const uint16_t mosaic = virtuappu_mode1_io_read16(MODE1_IO_MOSAIC);
     bool bg_enabled[MODE1_GBA_BG_COUNT];
     uint16_t bgcnt[MODE1_GBA_BG_COUNT];
     uint8_t bg_order[MODE1_GBA_BG_COUNT] = { 0u, 1u, 2u, 3u };
@@ -1737,7 +1966,10 @@ static bool mode1_render_native_compact_line(int line, uint16_t dispcnt, int fra
         bg_enabled[bg] = (dispcnt & (uint16_t)(MODE1_DISP_BG0_ON << bg)) != 0u;
         bgcnt[bg] = virtuappu_mode1_io_read16((uint16_t)(MODE1_IO_BG0CNT + bg * 2));
         bg_order_priority[bg] = (uint8_t)(bgcnt[bg] & 3u);
-        if (bg_enabled[bg] && (bgcnt[bg] & 0x00C0u) != 0u) {
+        if (bg_enabled[bg] &&
+            ((bgcnt[bg] & 0x0080u) != 0u ||
+             ((bgcnt[bg] & 0x0040u) != 0u &&
+              (!mode1_old3ds_profile || (mosaic & 0x00FFu) != 0u)))) {
             return false;
         }
     }
@@ -2247,7 +2479,8 @@ typedef struct Mode1RenderLinesContext {
     const int32_t* aff_ref_y;
 } Mode1RenderLinesContext;
 
-static void mode1_render_lines(const Mode1RenderLinesContext* context, int first_line, int last_line) {
+static void mode1_render_lines(const Mode1RenderLinesContext* context, int first_line, int last_line,
+                               uint32_t old_path_lines[MODE1_OLD_PATH_COUNT]) {
     for (int line = first_line; line < last_line; ++line) {
         uint16_t line_dispcnt = context->affine ? context->dispcnt : context->per_line_dispcnt[line];
         const uint8_t* prev_override = virtuappu_mode1_io_thread_override;
@@ -2255,11 +2488,25 @@ static void mode1_render_lines(const Mode1RenderLinesContext* context, int first
         virtuappu_mode1_io_thread_override =
             context->per_line_io ? context->io_snapshots[line] : mode1_memory.io_mem;
 
-        if (!context->affine &&
-            (mode1_render_native_direct_no_effect_line(line, line_dispcnt, context->frame_width) ||
-             mode1_render_native_compact_line(line, line_dispcnt, context->frame_width))) {
-            virtuappu_mode1_io_thread_override = prev_override;
-            continue;
+        if (!context->affine) {
+            int old_path = -1;
+            if (mode1_render_native_direct_no_effect_line(line, line_dispcnt, context->frame_width)) {
+                old_path = MODE1_OLD_PATH_DIRECT;
+            } else if (mode1_old3ds_profile &&
+                       mode1_render_old3ds_field_alpha_line(line, line_dispcnt, context->frame_width)) {
+                old_path = MODE1_OLD_PATH_FIELD_ALPHA;
+            } else if (mode1_render_native_compact_line(line, line_dispcnt, context->frame_width)) {
+                old_path = MODE1_OLD_PATH_COMPACT;
+            }
+            if (old_path >= 0) {
+                if (mode1_old3ds_profile && old_path_lines != NULL) ++old_path_lines[old_path];
+                virtuappu_mode1_io_thread_override = prev_override;
+                continue;
+            }
+        }
+
+        if (mode1_old3ds_profile && old_path_lines != NULL) {
+            ++old_path_lines[MODE1_OLD_PATH_FALLBACK];
         }
 
         uint32_t bg_layers[MODE1_GBA_BG_COUNT][MODE1_GBA_WIDTH];
@@ -2315,6 +2562,7 @@ typedef struct Mode1Worker {
     uint64_t last_ticks;
     uint64_t max_ticks;
     uint32_t last_lines;
+    uint32_t old_path_lines[MODE1_OLD_PATH_COUNT];
 } Mode1Worker;
 
 static Mode1Worker sMode1Workers[2];
@@ -2324,17 +2572,22 @@ static uint64_t sMode1StatsFrames;
 static uint64_t sMode1MainLastTicks;
 static uint64_t sMode1MainMaxTicks;
 static uint32_t sMode1MainLastLines;
+static uint32_t sMode1MainOldPathLines[MODE1_OLD_PATH_COUNT];
+static uint32_t sMode1OldPathLastLines[MODE1_OLD_PATH_COUNT];
+static uint64_t sMode1OldPathTotalLines[MODE1_OLD_PATH_COUNT];
 
-static uint32_t mode1_render_dynamic(const Mode1RenderLinesContext* context) {
+static uint32_t mode1_render_dynamic(const Mode1RenderLinesContext* context,
+                                     uint32_t old_path_lines[MODE1_OLD_PATH_COUNT]) {
     enum { MODE1_3DS_LINE_CHUNK = 8 };
     uint32_t renderedLines = 0;
+    if (old_path_lines != NULL) memset(old_path_lines, 0, MODE1_OLD_PATH_COUNT * sizeof(uint32_t));
     for (;;) {
         const int first = __atomic_fetch_add(&sMode1NextLine, MODE1_3DS_LINE_CHUNK, __ATOMIC_RELAXED);
         if (first >= MODE1_GBA_HEIGHT) return renderedLines;
         const int last = first + MODE1_3DS_LINE_CHUNK < MODE1_GBA_HEIGHT
                              ? first + MODE1_3DS_LINE_CHUNK
                              : MODE1_GBA_HEIGHT;
-        mode1_render_lines(context, first, last);
+        mode1_render_lines(context, first, last, old_path_lines);
         renderedLines += (uint32_t)(last - first);
     }
 }
@@ -2346,7 +2599,7 @@ static void mode1_worker_main(void* argument) {
         if (!__atomic_load_n(&worker->running, __ATOMIC_ACQUIRE)) break;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
         const uint64_t startTick = svcGetSystemTick();
-        worker->last_lines = mode1_render_dynamic(worker->context);
+        worker->last_lines = mode1_render_dynamic(worker->context, worker->old_path_lines);
         worker->last_ticks = svcGetSystemTick() - startTick;
         if (worker->last_ticks > worker->max_ticks) worker->max_ticks = worker->last_ticks;
         LightEvent_Signal(&worker->done);
@@ -2394,11 +2647,20 @@ static void mode1_render_lines_3ds(const Mode1RenderLinesContext* context) {
         LightEvent_Signal(&worker->start);
     }
     const uint64_t mainStartTick = svcGetSystemTick();
-    sMode1MainLastLines = mode1_render_dynamic(context);
+    sMode1MainLastLines = mode1_render_dynamic(context, sMode1MainOldPathLines);
     sMode1MainLastTicks = svcGetSystemTick() - mainStartTick;
     if (sMode1MainLastTicks > sMode1MainMaxTicks) sMode1MainMaxTicks = sMode1MainLastTicks;
     for (int i = 0; i < 2; ++i) {
         if (sMode1Workers[i].thread) LightEvent_Wait(&sMode1Workers[i].done);
+    }
+    memset(sMode1OldPathLastLines, 0, sizeof(sMode1OldPathLastLines));
+    for (int path = 0; path < MODE1_OLD_PATH_COUNT; ++path) {
+        uint32_t lines = sMode1MainOldPathLines[path];
+        for (int i = 0; i < 2; ++i) {
+            if (sMode1Workers[i].thread) lines += sMode1Workers[i].old_path_lines[path];
+        }
+        sMode1OldPathLastLines[path] = lines;
+        sMode1OldPathTotalLines[path] += lines;
     }
     ++sMode1StatsFrames;
 }
@@ -2410,6 +2672,8 @@ void virtuappu_mode1_get_3ds_stats(VirtuaPPUMode13DSStats* stats) {
     stats->mainLastTicks = sMode1MainLastTicks;
     stats->mainMaxTicks = sMode1MainMaxTicks;
     stats->mainLastLines = sMode1MainLastLines;
+    memcpy(stats->oldPathLastLines, sMode1OldPathLastLines, sizeof(stats->oldPathLastLines));
+    memcpy(stats->oldPathTotalLines, sMode1OldPathTotalLines, sizeof(stats->oldPathTotalLines));
     for (int i = 0; i < 2; ++i) {
         stats->workerLastTicks[i] = sMode1Workers[i].last_ticks;
         stats->workerMaxTicks[i] = sMode1Workers[i].max_ticks;
@@ -2434,6 +2698,9 @@ void virtuappu_mode1_shutdown_workers(void) {
     sMode1MainLastTicks = 0;
     sMode1MainMaxTicks = 0;
     sMode1MainLastLines = 0;
+    memset(sMode1MainOldPathLines, 0, sizeof(sMode1MainOldPathLines));
+    memset(sMode1OldPathLastLines, 0, sizeof(sMode1OldPathLastLines));
+    memset(sMode1OldPathTotalLines, 0, sizeof(sMode1OldPathTotalLines));
 }
 #else
 void virtuappu_mode1_get_3ds_stats(VirtuaPPUMode13DSStats* stats) {
@@ -2543,7 +2810,7 @@ void virtuappu_mode1_render_frame(const PPUMemory* ppu) {
 #else
 #pragma omp parallel for schedule(static)
     for (line = 0; line < MODE1_GBA_HEIGHT; ++line) {
-        mode1_render_lines(&render_context, line, line + 1);
+        mode1_render_lines(&render_context, line, line + 1, NULL);
     }
 #endif
 }

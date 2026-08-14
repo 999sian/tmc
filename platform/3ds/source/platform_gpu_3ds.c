@@ -18,6 +18,8 @@ static void* sC2dFlushBase;
 static size_t sC2dFlushSize;
 static bool sFrameActive;
 static bool sReady;
+static bool sOld3DSProfile;
+static bool sBottomTargetValid;
 static PlatformGpu3DSStats sStats;
 static unsigned sTopPresentWidth = 240;
 
@@ -129,8 +131,10 @@ static void ConfigureAbgrTextureEnv(void) {
     C3D_TexEnvColor(env, C2D_Color32(0, 0, 255, 255));
 }
 
-bool PlatformGpu3DS_Init(void) {
+bool PlatformGpu3DS_Init(bool old3dsProfile) {
     memset(&sStats, 0, sizeof(sStats));
+    sOld3DSProfile = old3dsProfile;
+    sBottomTargetValid = false;
     sC2dFlushBase = NULL;
     sC2dFlushSize = 0;
     sTopUpload = (uint32_t*)linearMemAlign(TOP_TEXTURE_WIDTH * TOP_TEXTURE_HEIGHT * sizeof(uint32_t), 0x80);
@@ -219,7 +223,11 @@ static void DrawTopImage(const uint32_t* pixels, unsigned width) {
     sTopPresentWidth = width;
 
     GSPGPU_FlushDataCache(pixels, TOP_TEXTURE_WIDTH * 160u * sizeof(uint32_t));
-    C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, TOP_TEXTURE_HEIGHT),
+    /* Old 3DS only: the CPU renderer publishes 160 rows. Describe that exact
+     * source rectangle so the display engine does not read another 96 unused
+     * RGBA rows. New 3DS retains the established transfer dimensions. */
+    const unsigned sourceHeight = sOld3DSProfile ? 160u : TOP_TEXTURE_HEIGHT;
+    C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, sourceHeight),
                             (u32*)sTopTexture.data, GX_BUFFER_DIM(TOP_TEXTURE_WIDTH, TOP_TEXTURE_HEIGHT),
                             TextureTransfer());
     sTopSubtexture = (Tex3DS_SubTexture){
@@ -280,23 +288,34 @@ bool PlatformGpu3DS_EndBottom(const uint32_t* pixels, bool changed) {
     if (!sFrameActive || !pixels) return false;
     if (changed) {
         GSPGPU_FlushDataCache(pixels, 512u * 240u * sizeof(uint32_t));
-        C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(512, 256),
+        const unsigned sourceHeight = sOld3DSProfile ? 240u : 256u;
+        C3D_SyncDisplayTransfer((u32*)pixels, GX_BUFFER_DIM(512, sourceHeight),
                                 (u32*)sBottomTexture.data, GX_BUFFER_DIM(512, 256), TextureTransfer());
         ++sStats.bottomTransfers;
     }
-    sBottomSubtexture = (Tex3DS_SubTexture){
-        .width = 320, .height = 240, .left = 0.0f, .top = 1.0f,
-        .right = 320.0f / 512.0f, .bottom = 1.0f - 240.0f / 256.0f,
-    };
-    const C2D_Image image = { .tex = &sBottomTexture, .subtex = &sBottomSubtexture };
-    const C2D_DrawParams params = {
-        .pos = { .x = 0.0f, .y = 0.0f, .w = 320.0f, .h = 240.0f },
-        .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
-    };
-    C2D_TargetClear(sBottomTarget, C2D_Color32(0, 0, 0, 255));
-    C2D_SceneBegin(sBottomTarget);
-    C2D_DrawImage(image, &params, NULL);
-    ConfigureAbgrTextureEnv();
+    if (!sOld3DSProfile || changed || !sBottomTargetValid) {
+        sBottomSubtexture = (Tex3DS_SubTexture){
+            .width = 320, .height = 240, .left = 0.0f, .top = 1.0f,
+            .right = 320.0f / 512.0f, .bottom = 1.0f - 240.0f / 256.0f,
+        };
+        const C2D_Image image = { .tex = &sBottomTexture, .subtex = &sBottomSubtexture };
+        const C2D_DrawParams params = {
+            .pos = { .x = 0.0f, .y = 0.0f, .w = 320.0f, .h = 240.0f },
+            .center = { 0.0f, 0.0f }, .depth = 0.0f, .angle = 0.0f,
+        };
+        C2D_TargetClear(sBottomTarget, C2D_Color32(0, 0, 0, 255));
+        C2D_SceneBegin(sBottomTarget);
+        C2D_DrawImage(image, &params, NULL);
+        ConfigureAbgrTextureEnv();
+        sBottomTargetValid = true;
+        ++sStats.bottomTargetDraws;
+    } else {
+        /* The physical bottom image and its hitbox generation are unchanged.
+         * Old 3DS can leave that render target displayed instead of clearing,
+         * drawing and scheduling an identical output transfer on every top
+         * presentation. New 3DS retains the established two-target frame. */
+        ++sStats.bottomTargetReuseSkips;
+    }
     C2D_Flush();
     if (sC2dFlushBase && sC2dFlushSize) {
         GSPGPU_FlushDataCache(sC2dFlushBase, sC2dFlushSize);
@@ -341,6 +360,13 @@ void PlatformGpu3DS_GetStats(PlatformGpu3DSStats* stats) {
     if (stats) *stats = sStats;
 }
 
+void PlatformGpu3DS_InvalidateBottomTarget(void) {
+    /* HOME and lid sleep may invalidate or rotate the physical framebuffer.
+     * Force one opaque redraw after APT resumes before Old 3DS starts reusing
+     * the unchanged target again. */
+    sBottomTargetValid = false;
+}
+
 void PlatformGpu3DS_Shutdown(void) {
     if (!sReady) return;
     if (sFrameActive) {
@@ -365,4 +391,6 @@ void PlatformGpu3DS_Shutdown(void) {
     sC2dFlushSize = 0;
     sFrameActive = false;
     sReady = false;
+    sOld3DSProfile = false;
+    sBottomTargetValid = false;
 }

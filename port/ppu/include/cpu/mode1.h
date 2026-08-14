@@ -155,10 +155,25 @@ typedef struct VirtuaPPUMode13DSStats {
     uint32_t mainLastLines;
     uint32_t workerLastLines[2];
     uint32_t workerCount;
+    uint32_t oldPathLastLines[4];
+    uint64_t oldPathTotalLines[4];
 } VirtuaPPUMode13DSStats;
+
+enum {
+    MODE1_OLD_PATH_DIRECT = 0,
+    MODE1_OLD_PATH_FIELD_ALPHA,
+    MODE1_OLD_PATH_COMPACT,
+    MODE1_OLD_PATH_FALLBACK,
+    MODE1_OLD_PATH_COUNT
+};
 
 void virtuappu_mode1_bind_gba_memory(const VirtuaPPUMode1GbaMemory* memory);
 void virtuappu_mode1_get_bound_gba_memory(VirtuaPPUMode1GbaMemory* memory);
+/* Selects optimizations that are intentionally confined to the Old 3DS
+ * runtime profile. The default is false so every other platform, including
+ * New 3DS, keeps its established renderer path unless the 3DS frontend opts
+ * in after model detection. */
+void virtuappu_mode1_set_old3ds_profile(bool enabled);
 void virtuappu_mode1_set_frame_geometry(const PPUMemory* ppu);
 void virtuappu_mode1_set_output_buffer(uint32_t* pixels, int pitch);
 int virtuappu_mode1_frame_width(void);
