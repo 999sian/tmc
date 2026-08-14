@@ -117,9 +117,9 @@ void sub_0805EEB4(Token* token, u32 textIndex) {
     token->textIndex = (u16)textIndex;
     langIndex = gSaveHeader->language;
 #ifdef PC_PORT
-    if (langIndex >= NUM_LANGUAGES || gTranslations[langIndex] == NULL) {
-        langIndex = REGION_IS_JP ? LANGUAGE_JP : LANGUAGE_EN;
-        if (langIndex >= NUM_LANGUAGES || gTranslations[langIndex] == NULL) {
+    if (langIndex >= RegionLanguageSlotCount() || gTranslations[langIndex] == NULL) {
+        langIndex = RegionDefaultLanguage();
+        if (langIndex >= RegionLanguageSlotCount() || gTranslations[langIndex] == NULL) {
             langIndex = GAME_LANGUAGE;
         }
     }
@@ -403,9 +403,9 @@ u32* sub_0805F25C(u32 param_1) {
     u32 lang = gSaveHeader->language;
 
 #ifdef PC_PORT
-    if (lang >= NUM_LANGUAGES || gTranslations[lang] == NULL) {
-        lang = REGION_IS_JP ? LANGUAGE_JP : LANGUAGE_EN;
-        if (lang >= NUM_LANGUAGES || gTranslations[lang] == NULL) {
+    if (lang >= RegionLanguageSlotCount() || gTranslations[lang] == NULL) {
+        lang = RegionDefaultLanguage();
+        if (lang >= RegionLanguageSlotCount() || gTranslations[lang] == NULL) {
             lang = GAME_LANGUAGE;
         }
     }
