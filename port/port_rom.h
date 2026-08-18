@@ -1,4 +1,5 @@
 #pragma once
+#include <setjmp.h>
 #include <string.h>
 #include "port_types.h"
 #include "port_config.h"
@@ -68,6 +69,42 @@ const char* Port_GetLoadedRomPath(void);
  * cross-check in port_main.c so a mismatch is visible in the GUI, not just
  * on stderr. */
 void Port_FatalRomError(const char* title, const char* message);
+
+/* Recoverable ROM errors.
+ *
+ * Port_FatalRomError exits, which is the right answer on desktop: the
+ * prelaunch card is already on screen, so the user can fix the file and
+ * relaunch. On Android the menu may have been skipped entirely (the ROM
+ * lives in app storage and the launch goes straight to the game), and a
+ * bad file there leaves no reachable UI at all — the app just dies on
+ * every cold start.
+ *
+ * Wrapping a load in a recovery point turns those failures into an
+ * unwind back to the caller, which can then drop into the prelaunch
+ * picker and let the user replace the file in-app:
+ *
+ *     Port_Rom_SetRecoverable(1);
+ *     if (setjmp(*Port_Rom_RecoveryPoint()) == 0) {
+ *         Port_LoadRom(path);
+ *         Port_Rom_SetRecoverable(0);
+ *     } else {
+ *         Port_Rom_SetRecoverable(0);
+ *         ... Port_Rom_LastErrorMessage() ...
+ *         Port_Rom_ResetForRetry();
+ *     }
+ *
+ * Only the ROM-file-validity failures unwind (not found, unreadable,
+ * truncated, unsupported region) — an out-of-memory abort still exits,
+ * since picking a different file cannot fix it. */
+jmp_buf* Port_Rom_RecoveryPoint(void);
+void Port_Rom_SetRecoverable(int on);
+const char* Port_Rom_LastErrorTitle(void);
+const char* Port_Rom_LastErrorMessage(void);
+
+/* Drop the partially-loaded ROM buffer so a following Port_LoadRom
+ * starts clean. Without this the retry reuses the previous (short)
+ * allocation and rejects the replacement file for being too big. */
+void Port_Rom_ResetForRetry(void);
 
 // Re-resolve a single area's room/tile/property tables from immutable ROM offsets.
 void Port_RefreshAreaData(u32 area);

@@ -745,21 +745,28 @@ int main(int argc, char* argv[]) {
      * extraction + audio init. Quit during the loop cleanly shuts down
      * the partial init we did so far.
      * ==================================================================== */
-    {
+    /* Set once a Port_LoadRom attempt has failed. It forces the prelaunch
+     * menu to appear on the next pass even where we would normally skip
+     * it, so a bad ROM always leaves the picker reachable. */
+    volatile bool romLoadFailed = false;
+
+    for (;;) {
         romPath = Port_FindBaseRomPath();
         bool done = false;
 
 #ifdef __ANDROID__
         /* The Android package keeps its ROM in app storage, so once that
-         * verified file exists there is nothing useful to choose on every
-         * launch. Keep the picker available for a missing-ROM first run. */
-        if (romPath) {
+         * file exists there is nothing useful to choose on every launch.
+         * Keep the picker available for a missing-ROM first run — and for
+         * a ROM that turned out not to load, which is the only way back
+         * to the picker on a device with no reachable file manager. */
+        if (romPath && !romLoadFailed) {
             fprintf(stderr, "Prelaunch: Android ROM detected — skipping menu.\n");
             done = true;
         }
 #endif
 
-        if (!done && romPath && getenv("TMC_AUTOPLAY")) {
+        if (!done && !romLoadFailed && romPath && getenv("TMC_AUTOPLAY")) {
             fprintf(stderr, "Prelaunch: TMC_AUTOPLAY set — skipping menu.\n");
             done = true;
         }
@@ -887,13 +894,35 @@ int main(int argc, char* argv[]) {
             }
         }
         fprintf(stderr, "Prelaunch: Play — loading ROM and assets.\n");
+
+        /* Play pressed and romPath is set. Select the active mod set before
+         * Port_LoadRom touches the asset loader, so TMC_MODS applies to early
+         * table/text/area overrides too. */
+        Port_Mods_Init();
+
+        /* A ROM that is missing, unreadable, truncated or an unsupported
+         * region used to exit the process from inside the loader. Catch
+         * those here instead and loop back to the prelaunch card, whose
+         * Change-ROM button can install a replacement. Out-of-memory
+         * still exits — see Port_Rom_SetRecoverable. */
+        Port_Rom_SetRecoverable(1);
+        if (setjmp(*Port_Rom_RecoveryPoint()) == 0) {
+            Port_LoadRom(romPath);
+            Port_Rom_SetRecoverable(0);
+            break;
+        }
+        Port_Rom_SetRecoverable(0);
+
+        fprintf(stderr, "Prelaunch: ROM load failed — returning to the picker.\n");
+        {
+            char msg[1280];
+            snprintf(msg, sizeof(msg), "%s\n\nChoose a different ROM file to continue.", Port_Rom_LastErrorMessage());
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, Port_Rom_LastErrorTitle(), msg, window);
+        }
+        Port_Rom_ResetForRetry();
+        romLoadFailed = true;
     }
 
-    /* Play pressed and romPath is set. Select the active mod set before
-     * Port_LoadRom touches the asset loader, so TMC_MODS applies to early
-     * table/text/area overrides too. */
-    Port_Mods_Init();
-    Port_LoadRom(romPath);
 #ifdef TMC_GPU_RENDERER
     Port_EnsureAssetsReadyWithDisplay(NULL, gRomData, gRomSize);
 #else

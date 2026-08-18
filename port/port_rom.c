@@ -117,9 +117,53 @@ static FILE* TryOpenRom(const char** paths, int count, char* foundPath, int foun
  * Safe to call before SDL_CreateWindow — SDL_ShowSimpleMessageBox
  * accepts a NULL parent. Exported (declared in port_rom.h) so the
  * region cross-check in port_main.c can reuse it. */
+/* Recovery point for ROM-file failures — see port_rom.h. Inactive by
+ * default, so every existing Port_FatalRomError call site keeps its
+ * exit-on-failure behaviour unless a caller opts in. */
+static jmp_buf sRomRecoveryPoint;
+static int sRomRecoverable = 0;
+static char sRomErrorTitle[256];
+static char sRomErrorMessage[1024];
+
+jmp_buf* Port_Rom_RecoveryPoint(void) {
+    return &sRomRecoveryPoint;
+}
+
+void Port_Rom_SetRecoverable(int on) {
+    sRomRecoverable = on;
+}
+
+const char* Port_Rom_LastErrorTitle(void) {
+    return sRomErrorTitle[0] ? sRomErrorTitle : "Minish Cap PC Port - ROM error";
+}
+
+const char* Port_Rom_LastErrorMessage(void) {
+    return sRomErrorMessage[0] ? sRomErrorMessage : "The ROM could not be loaded.";
+}
+
+void Port_Rom_ResetForRetry(void) {
+    if (gRomData) {
+        free(gRomData);
+        gRomData = NULL;
+    }
+    gRomSize = 0;
+    sLoadedRomPath[0] = '\0';
+    /* sExtractedPages is cleared by Port_LoadRom on entry. */
+}
+
 void Port_FatalRomError(const char* title, const char* message) {
     fprintf(stderr, "ERROR: %s\n", message);
     fflush(stderr);
+
+    /* Recoverable: hand the message to the caller and unwind instead of
+     * killing the process. The caller owns the message box, so it can
+     * word the prompt around the ROM picker it is about to show. */
+    if (sRomRecoverable) {
+        snprintf(sRomErrorTitle, sizeof(sRomErrorTitle), "%s", title ? title : "");
+        snprintf(sRomErrorMessage, sizeof(sRomErrorMessage), "%s", message ? message : "");
+        sRomRecoverable = 0;
+        longjmp(sRomRecoveryPoint, 1);
+    }
 #ifndef TMC_N64
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, message, NULL);
     SDL_Quit();
@@ -1368,6 +1412,9 @@ void Port_LoadRom(const char* path) {
                              "Failed to allocate %u bytes for ROM.\n\n"
                              "The system is out of memory.",
                              gRomSize);
+                    /* Out of memory is not something a different ROM
+                     * file can fix, so this one always exits. */
+                    Port_Rom_SetRecoverable(0);
                     Port_FatalRomError("Minish Cap PC Port - ROM allocation failed", msg);
                 }
             }
