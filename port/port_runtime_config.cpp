@@ -25,9 +25,32 @@ struct Bind {
      * not buttons, so the bind table allows binding to an axis. A value
      * past kAxisThreshold counts as "pressed". */
     SDL_GamepadAxis axis = SDL_GAMEPAD_AXIS_INVALID;
+    /* Which way the axis has to travel to count as pressed: +1 for the
+     * positive half, -1 for the negative half.
+     *
+     * Sticks are bipolar — LEFTX reads negative pushed left and positive
+     * pushed right — so an axis alone does not identify an input. Without
+     * this the whole bind path tested `value > threshold` and only ever
+     * saw the positive half, which is why binding a stick in the Controls
+     * tab could capture Right and Down but never Left or Up.
+     *
+     * Triggers are unipolar positive, so +1 is the default and every
+     * previously-saved `SDL_AXIS:` binding keeps its exact behaviour. */
+    Sint8 axisDir = 1;
 };
 
+/* True when `value` is past the threshold on the half `dir` selects. */
+constexpr bool AxisPastThreshold(int value, Sint8 dir, Sint16 threshold) {
+    return dir < 0 ? (value < -(int)threshold) : (value > (int)threshold);
+}
+
 constexpr Sint16 kAxisThreshold = 16384;
+/* Stick halves: left/up reads negative. The old `value > threshold` test
+ * could never see them. */
+static_assert(AxisPastThreshold(-20000, -1, kAxisThreshold), "negative half fires on a negative push");
+static_assert(!AxisPastThreshold(-20000, 1, kAxisThreshold), "positive half ignores a negative push");
+static_assert(AxisPastThreshold(20000, 1, kAxisThreshold), "positive half fires on a positive push");
+static_assert(!AxisPastThreshold(-10000, -1, kAxisThreshold), "a push inside the dead zone does not fire");
 
 struct Def {
     PortInput input;
@@ -393,6 +416,10 @@ void AddBind(PortInput input, const std::string& name) {
     } else if (name.rfind("SDL_GAMEPAD:", 0) == 0) {
         b.pad = static_cast<SDL_GamepadButton>(std::strtoul(name.c_str() + 12, nullptr, 0));
         sBinds[input].push_back(b);
+    } else if (name.rfind("SDL_AXIS-:", 0) == 0) {
+        b.axis = static_cast<SDL_GamepadAxis>(std::strtoul(name.c_str() + 10, nullptr, 0));
+        b.axisDir = -1;
+        sBinds[input].push_back(b);
     } else if (name.rfind("SDL_AXIS:", 0) == 0) {
         b.axis = static_cast<SDL_GamepadAxis>(std::strtoul(name.c_str() + 9, nullptr, 0));
         sBinds[input].push_back(b);
@@ -468,6 +495,32 @@ T JsonValue(const nlohmann::json& j, const char* key, const T& fallback) {
 /* Serialize a Bind to the config.json token shape (`SDLK:0x...`,
  * `SDL_GAMEPAD:0x...`, `SDL_AXIS:0x...`). Shared by the capture/persist
  * path and (under launcher) the rebind writers. */
+/* Human-readable name for an axis binding. Sticks get the direction the
+ * player actually pushed ("Left Stick Left") rather than the raw SDL axis
+ * ("leftx"), which on its own names two opposite inputs. Triggers and any
+ * unknown axis fall back to the SDL name plus a +/- marker. */
+void FormatAxisName(SDL_GamepadAxis axis, Sint8 dir, char* out, size_t cap) {
+    const bool neg = dir < 0;
+    const char* stick = nullptr;
+    switch (axis) {
+        case SDL_GAMEPAD_AXIS_LEFTX:  stick = neg ? "Left Stick Left" : "Left Stick Right"; break;
+        case SDL_GAMEPAD_AXIS_LEFTY:  stick = neg ? "Left Stick Up" : "Left Stick Down"; break;
+        case SDL_GAMEPAD_AXIS_RIGHTX: stick = neg ? "Right Stick Left" : "Right Stick Right"; break;
+        case SDL_GAMEPAD_AXIS_RIGHTY: stick = neg ? "Right Stick Up" : "Right Stick Down"; break;
+        default: break;
+    }
+    if (stick) {
+        std::snprintf(out, cap, "%s", stick);
+        return;
+    }
+    const char* nm = SDL_GetGamepadStringForAxis(axis);
+    if (nm && nm[0] != '\0') {
+        std::snprintf(out, cap, "%s%s", nm, neg ? " -" : "");
+    } else {
+        std::snprintf(out, cap, "axis %u%s", static_cast<unsigned>(axis), neg ? " -" : "");
+    }
+}
+
 std::string FormatBindForJson(const Bind& b) {
     char buf[40];
     if (b.key != SDLK_UNKNOWN) {
@@ -475,7 +528,8 @@ std::string FormatBindForJson(const Bind& b) {
     } else if (b.pad != SDL_GAMEPAD_BUTTON_INVALID) {
         std::snprintf(buf, sizeof(buf), "SDL_GAMEPAD:0x%08x", (unsigned)b.pad);
     } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
-        std::snprintf(buf, sizeof(buf), "SDL_AXIS:0x%08x", (unsigned)b.axis);
+        std::snprintf(buf, sizeof(buf), b.axisDir < 0 ? "SDL_AXIS-:0x%08x" : "SDL_AXIS:0x%08x",
+                      (unsigned)b.axis);
     } else {
         return std::string();
     }
@@ -549,12 +603,7 @@ static void FormatBindingsLineImpl(PortInput input, char* out, size_t outCap, bo
                 std::snprintf(piece, sizeof(piece), "pad btn %u", static_cast<unsigned>(b.pad));
             }
         } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
-            const char* nm = SDL_GetGamepadStringForAxis(b.axis);
-            if (nm && nm[0] != '\0') {
-                std::snprintf(piece, sizeof(piece), "%s", nm);
-            } else {
-                std::snprintf(piece, sizeof(piece), "axis %u", static_cast<unsigned>(b.axis));
-            }
+            FormatAxisName(b.axis, b.axisDir, piece, sizeof(piece));
         }
         if (piece[0] == '\0') {
             continue;
@@ -1360,8 +1409,10 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
         } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
             newBind.pad = (SDL_GamepadButton)e->gbutton.button;
             captured = true;
-        } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e->gaxis.value > kAxisThreshold) {
+        } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+                   (e->gaxis.value > kAxisThreshold || e->gaxis.value < -kAxisThreshold)) {
             newBind.axis = (SDL_GamepadAxis)e->gaxis.axis;
+            newBind.axisDir = e->gaxis.value < 0 ? -1 : 1;
             captured = true;
         }
         if (captured) {
@@ -1378,7 +1429,8 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
                         const Bind& b = v[k];
                         const bool same = (newBind.key != SDLK_UNKNOWN && b.key == newBind.key) ||
                                           (newBind.pad != SDL_GAMEPAD_BUTTON_INVALID && b.pad == newBind.pad) ||
-                                          (newBind.axis != SDL_GAMEPAD_AXIS_INVALID && b.axis == newBind.axis);
+                                          (newBind.axis != SDL_GAMEPAD_AXIS_INVALID && b.axis == newBind.axis &&
+                                           b.axisDir == newBind.axisDir);
                         if (same) {
                             v.erase(v.begin() + (long)k);
                             changed = true;
@@ -1427,11 +1479,13 @@ extern "C" void Port_Config_HandleEvent(const SDL_Event* e) {
                 }
             }
         }
-    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e->gaxis.value > kAxisThreshold) {
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+               (e->gaxis.value > kAxisThreshold || e->gaxis.value < -kAxisThreshold)) {
         Port_TouchControls_NotifyGamepadUsed();
         for (size_t i = 0; i < PORT_INPUT_COUNT; i++) {
             for (const Bind& b : sBinds[i]) {
-                if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
+                if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && b.axis == (SDL_GamepadAxis)e->gaxis.axis &&
+                    AxisPastThreshold(e->gaxis.value, b.axisDir, kAxisThreshold)) {
                     sEdgePressed[i] = true;
                     break;
                 }
@@ -1502,9 +1556,11 @@ extern "C" bool Port_Config_EventIsInputDown(const SDL_Event* e, PortInput input
                 return true;
             }
         }
-    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e->gaxis.value > kAxisThreshold) {
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION &&
+               (e->gaxis.value > kAxisThreshold || e->gaxis.value < -kAxisThreshold)) {
         for (const Bind& b : sBinds[input]) {
-            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && b.axis == (SDL_GamepadAxis)e->gaxis.axis) {
+            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && b.axis == (SDL_GamepadAxis)e->gaxis.axis &&
+                AxisPastThreshold(e->gaxis.value, b.axisDir, kAxisThreshold)) {
                 return true;
             }
         }
@@ -1547,7 +1603,8 @@ extern "C" bool Port_Config_InputPressed(PortInput input) {
                 Port_TouchControls_NotifyGamepadUsed();
                 return true;
             }
-            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT && SDL_GetGamepadAxis(pad, b.axis) > kAxisThreshold) {
+            if (b.axis >= 0 && b.axis < SDL_GAMEPAD_AXIS_COUNT &&
+                AxisPastThreshold(SDL_GetGamepadAxis(pad, b.axis), b.axisDir, kAxisThreshold)) {
                 Port_TouchControls_NotifyGamepadUsed();
                 return true;
             }
@@ -1641,11 +1698,9 @@ extern "C" void Port_Config_BindingLabel(PortInput input, int idx, char* out, in
         else
             std::snprintf(out, cap, "Pad button %d", (int)b.pad);
     } else if (b.axis != SDL_GAMEPAD_AXIS_INVALID) {
-        const char* name = SDL_GetGamepadStringForAxis(b.axis);
-        if (name && *name)
-            std::snprintf(out, cap, "Axis: %s", name);
-        else
-            std::snprintf(out, cap, "Pad axis %d", (int)b.axis);
+        char nm[48];
+        FormatAxisName(b.axis, b.axisDir, nm, sizeof(nm));
+        std::snprintf(out, cap, "Pad: %s", nm);
     }
 }
 
