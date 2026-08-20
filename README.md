@@ -156,8 +156,11 @@ This project was developed with significant AI assistance — including Claude /
 Claude Code, ChatGPT and OpenAI Codex — for code investigation, debugging,
 implementation, code review, documentation and release preparation. Project
 direction, feature decisions, real-hardware testing, visual validation and all
-release decisions were made manually by the maintainer. A full description is
-in [docs/DEVELOPMENT_TRANSPARENCY.md](docs/DEVELOPMENT_TRANSPARENCY.md).
+release decisions were made manually by the maintainer. This describes how
+*this edition* was built; the upstream projects it builds on have their own
+development histories, and no assumptions are made here about the tools or
+workflows their maintainers used. A full description is in
+[docs/DEVELOPMENT_TRANSPARENCY.md](docs/DEVELOPMENT_TRANSPARENCY.md).
 
 ## Maintenance expectations
 

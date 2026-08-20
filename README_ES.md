@@ -164,8 +164,12 @@ Claude / Claude Code, ChatGPT y OpenAI Codex — para investigación de código,
 depuración, implementación, revisión de código, documentación y preparación de
 la publicación. La dirección del proyecto, las decisiones de características,
 las pruebas en hardware real, la validación visual y todas las decisiones de
-publicación las tomó manualmente el mantenedor. La descripción completa está
-en [docs/DEVELOPMENT_TRANSPARENCY.md](docs/DEVELOPMENT_TRANSPARENCY.md).
+publicación las tomó manualmente el mantenedor. Esto describe cómo se
+construyó *esta edición*; los proyectos upstream sobre los que se apoya tienen
+sus propias historias de desarrollo, y aquí no se hace ninguna suposición
+sobre las herramientas o los flujos de trabajo que hayan usado sus
+mantenedores. La descripción completa está en
+[docs/DEVELOPMENT_TRANSPARENCY.md](docs/DEVELOPMENT_TRANSPARENCY.md).
 
 ## Expectativas de mantenimiento
 

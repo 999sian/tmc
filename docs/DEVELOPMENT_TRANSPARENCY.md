@@ -39,12 +39,15 @@ reviewed, built, and hardware-tested before being accepted.
 
 ## What this project is not
 
-- It is **not** an auto-generated codebase. The overwhelming majority of the
-  code is the upstream decompilation and the upstream native-port projects
-  credited in [../CREDITS.md](../CREDITS.md), written by their human authors.
-- AI assistance applies to **this edition's Switch-specific layer and release
-  work**, not to the upstream projects, whose authorship is entirely their
-  own.
+- It is **not** an auto-generated codebase. Most of the project is derived
+  from the upstream decompilation and native-port projects credited in
+  [../CREDITS.md](../CREDITS.md). Those upstream projects have their own
+  development histories and authorship, and this project does not make
+  assumptions about which tools or workflows their maintainers may have used.
+- The AI usage described above is **this project's own**, covering this
+  edition's Switch-specific layer and its release work. It is a statement
+  about how *this* edition was built, not a claim about anyone else's
+  process.
 - Nothing about AI use changes the licensing of upstream code, which remains
   under its original licenses.
 
