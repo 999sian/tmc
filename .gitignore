@@ -1,0 +1,61 @@
+# --- Never publish: game content and user data -----------------------------
+# ROMs and anything ROM-derived. The release NRO is tracked explicitly below.
+*.gba
+*.gb
+*.gbc
+*.z64
+rom_data/
+assets/
+romfs_*/
+
+# Save data and user configuration
+*.sav
+*.srm
+autosave.bin
+tmc.softslots
+config.json
+
+# RetroAchievements credentials and cache
+ra_token*
+ra_badges/
+
+# --- Build / debug artifacts ------------------------------------------------
+*.elf
+*.nso
+*.nacp
+*.o
+*.d
+build/
+artifacts/
+
+# Logs, dumps, diagnostics
+*.log
+crashlogs/
+debuglogs/
+crash_*.bin
+dump-*.zip
+startup.log
+clock.log
+tmc.log
+perf.log
+
+# --- OS / editor noise ------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.stackdump
+.DS_Store
+._*
+.vscode/
+.idea/
+*.swp
+*~
+
+# --- Explicitly tracked -----------------------------------------------------
+# The published release binary and its checksum are part of the repository,
+# so they override the *.elf / artifact rules above.
+!release/tmc_aleks_ultimate_nx_v0.1.0.nro
+!release/SHA256SUMS.txt
+# Documentation screenshots are intentionally tracked.
+!docs/screenshots/**

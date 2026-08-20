@@ -1,0 +1,40 @@
+name: Performance report
+description: Frame drops, stutter, or slow loading
+labels: [performance]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Port version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Display mode
+      options: [NORMAL, DUAL, FLIP 270]
+    validations:
+      required: true
+  - type: input
+    id: clock
+    attributes:
+      label: CPU clock situation
+      description: Stock clocks, or a tool like sys-clk with the value you set (e.g. 1224 MHz)
+      placeholder: stock
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where in the game
+      placeholder: "Minish Woods, walking with MAP tab open"
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What you observed
+      description: Approximate FPS if visible, how often it happens, panel tab in use, handheld/docked, hardware/firmware.
+    validations:
+      required: true

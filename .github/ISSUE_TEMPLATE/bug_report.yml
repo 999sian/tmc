@@ -1,0 +1,39 @@
+name: Bug report
+description: Something is broken or behaves incorrectly
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Port version
+      description: CONFIG → SYSTEM → VERSION
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Display mode when it happened
+      options: [NORMAL, DUAL, FLIP 270, "several / all"]
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware / firmware
+      description: Switch model, system firmware, CFW (e.g. Atmosphère 1.x), application or applet mode, handheld or docked
+      placeholder: "Switch V2, FW 19.0.1, Atmosphère 1.11.2, application mode, handheld"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Where in the game, what you did, what you expected, what happened. Photos/captures help a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Does it survive a restart? Does it also happen in NORMAL? Relevant settings?

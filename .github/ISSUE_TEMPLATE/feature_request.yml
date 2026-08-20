@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an improvement
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please read the maintenance expectations in the README first: this is
+        a personal project that follows the maintainer's own priorities, and
+        forks are warmly encouraged.
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would you like, and how would it improve playing on Switch?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Which display mode / tab it concerns, similar prior art, whether you'd be willing to implement it in a fork.
