@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="docs/images/portada-aleks-version.png"
+       alt="The Legend of Zelda: The Minish Cap – Alek's Ultimate NX Edition"
+       width="460">
+</p>
+
 # The Legend of Zelda: The Minish Cap — Alek's Ultimate NX Edition
 
 **v0.1.0** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
@@ -72,19 +78,44 @@ Desbloqueo real de un logro, en hardware real, en el Santuario del Bosque:
 ### Localización de la interfaz del port
 
 <table>
-<tr>
-<td><a href="docs/screenshots/localization/en.jpg">English</a></td>
-<td><img src="docs/screenshots/localization/es.jpg" alt="Español" width="260"></td>
-<td><img src="docs/screenshots/localization/fr.jpg" alt="Français" width="260"></td>
-</tr>
-<tr>
-<td></td>
-<td><img src="docs/screenshots/localization/de.jpg" alt="Deutsch" width="260"></td>
-<td><img src="docs/screenshots/localization/it.jpg" alt="Italiano" width="260"></td>
-</tr>
+  <tr>
+    <td align="center"><b>English</b></td>
+    <td align="center"><b>Español</b></td>
+    <td align="center"><b>Français</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/localization/en.jpg" alt="Interfaz del port en inglés" width="280"></td>
+    <td><img src="docs/screenshots/localization/es.jpg" alt="Interfaz del port en español" width="280"></td>
+    <td><img src="docs/screenshots/localization/fr.jpg" alt="Interfaz del port en francés" width="280"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Deutsch</b></td>
+    <td align="center"><b>Italiano</b></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/localization/de.jpg" alt="Interfaz del port en alemán" width="280"></td>
+    <td><img src="docs/screenshots/localization/it.jpg" alt="Interfaz del port en italiano" width="280"></td>
+    <td></td>
+  </tr>
 </table>
 
-Más en [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
+La captura en inglés muestra la pestaña MAPA y las otras cuatro muestran
+MISIÓN — en las cinco se ve la interfaz propia del port en ese idioma. Más en
+[docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
+
+### Localización y ROM base
+
+Alek's Ultimate NX Edition está probado principalmente con la **ROM USA** como
+base recomendada. El port añade su propia capa de interfaz multilenguaje para
+los menús y funciones específicas del port en inglés, español, francés, alemán
+e italiano.
+
+El contenido y las traducciones originales del juego siguen perteneciendo a los
+datos originales del juego; este proyecto no se atribuye las traducciones
+oficiales de Nintendo. Poner la interfaz del port en español no convierte una
+ROM USA en otra edición regional — el idioma de los diálogos del juego es el
+que proporcione tu propia ROM.
 
 ## Instalación
 

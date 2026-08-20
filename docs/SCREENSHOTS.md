@@ -33,14 +33,42 @@ during the capture session.
 
 ## Port UI localization
 
-Same scene in the five supported port-UI languages —
-[localization/](screenshots/localization/):
+The same smithy scene with the port UI in each of the five supported
+languages. Each file was checked against its visible UI text before being
+labelled here.
 
-| | | |
-|---|---|---|
-| [en.jpg](screenshots/localization/en.jpg) English | [es.jpg](screenshots/localization/es.jpg) Español | [fr.jpg](screenshots/localization/fr.jpg) Français |
-| | [de.jpg](screenshots/localization/de.jpg) Deutsch | [it.jpg](screenshots/localization/it.jpg) Italiano |
+<table>
+  <tr>
+    <td align="center"><b>English</b></td>
+    <td align="center"><b>Español</b></td>
+    <td align="center"><b>Français</b></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/localization/en.jpg" alt="Port UI in English" width="280"></td>
+    <td><img src="screenshots/localization/es.jpg" alt="Port UI in Spanish" width="280"></td>
+    <td><img src="screenshots/localization/fr.jpg" alt="Port UI in French" width="280"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Deutsch</b></td>
+    <td align="center"><b>Italiano</b></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><img src="screenshots/localization/de.jpg" alt="Port UI in German" width="280"></td>
+    <td><img src="screenshots/localization/it.jpg" alt="Port UI in Italian" width="280"></td>
+    <td></td>
+  </tr>
+</table>
 
-Note: these localize the **port's own interface** (panel, Story Guide,
-settings). The in-game dialogue languages are Nintendo's original
-translations, provided by the game itself.
+What each one shows: **en** — `QUEST | MAP | ITEMS` tabs and `ZOOM` on the MAP
+tab; **es** — `MISIÓN PRINCIPAL` / `UBICACIÓN`, tabs `MISIÓN | MAPA | OBJETOS`;
+**fr** — `QUÊTE PRINCIPALE` / `LIEU`, tabs `QUÊTE | CARTE | OBJETS`; **de** —
+`HAUPTQUEST` / `ORT`, tabs `QUEST | KARTE | ITEMS`; **it** — `MISSIONE
+PRINCIPALE` / `LUOGO`, tabs `MISSIONE | MAPPA | OGGETTI`.
+
+The English capture is on the MAP tab rather than QUEST — it is a genuine
+English capture, just from a different moment in the same session.
+
+Note: these show the **port's own interface** (panel, Story Guide, settings)
+in each language. The in-game dialogue is Nintendo's original translation,
+provided by the ROM itself.

@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="docs/images/portada-aleks-version.png"
+       alt="The Legend of Zelda: The Minish Cap – Alek's Ultimate NX Edition"
+       width="460">
+</p>
+
 # The Legend of Zelda: The Minish Cap — Alek's Ultimate NX Edition
 
 **v0.1.0** · Native Nintendo Switch homebrew port · [Español → README_ES.md](README_ES.md)
@@ -69,19 +75,43 @@ Real achievement unlock, on real hardware, in Deepwood Shrine:
 ### Port UI localization
 
 <table>
-<tr>
-<td><a href="docs/screenshots/localization/en.jpg">English</a></td>
-<td><img src="docs/screenshots/localization/es.jpg" alt="Español" width="260"></td>
-<td><img src="docs/screenshots/localization/fr.jpg" alt="Français" width="260"></td>
-</tr>
-<tr>
-<td></td>
-<td><img src="docs/screenshots/localization/de.jpg" alt="Deutsch" width="260"></td>
-<td><img src="docs/screenshots/localization/it.jpg" alt="Italiano" width="260"></td>
-</tr>
+  <tr>
+    <td align="center"><b>English</b></td>
+    <td align="center"><b>Español</b></td>
+    <td align="center"><b>Français</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/localization/en.jpg" alt="Port UI in English" width="280"></td>
+    <td><img src="docs/screenshots/localization/es.jpg" alt="Port UI in Spanish" width="280"></td>
+    <td><img src="docs/screenshots/localization/fr.jpg" alt="Port UI in French" width="280"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Deutsch</b></td>
+    <td align="center"><b>Italiano</b></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/localization/de.jpg" alt="Port UI in German" width="280"></td>
+    <td><img src="docs/screenshots/localization/it.jpg" alt="Port UI in Italian" width="280"></td>
+    <td></td>
+  </tr>
 </table>
 
-More in [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
+The English capture happens to show the MAP tab, the other four show QUEST —
+all five are the port's own UI in that language. More in
+[docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
+
+### Localization and ROM base
+
+Alek's Ultimate NX Edition is primarily tested with the **USA ROM** as its
+recommended base. The port adds its own multilingual UI layer for port-specific
+menus and features in English, Spanish, French, German and Italian.
+
+The original game's dialogue/localization content remains part of the
+underlying game data; this project does not claim authorship of Nintendo's
+official translations. Using the port UI in Spanish does not convert a USA ROM
+into another regional release — the in-game dialogue language is whatever your
+own ROM provides.
 
 ## Installation
 

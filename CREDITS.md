@@ -43,6 +43,24 @@ port-managed autosave UX, Return to Title, startup-time work, CPU clock
 handling, and assorted rendering fixes (including the mode-2 affine/HBlank-DMA
 per-scanline fix). Much of this builds directly on the layers above.
 
+## Localization
+
+The multilingual layer in this edition covers the **port-owned UI only** —
+the second-screen panel, the settings, the Story Guide and the port's own
+prompts — in English, Spanish, French, German and Italian. It was implemented
+for this edition as part of the Switch-specific work.
+
+Localization implementation and wording were informed by the original regional
+releases and by related community port work
+([HayatoG/tmc](https://github.com/hayatog/tmc),
+[Project Picori](https://github.com/999sian/tmc),
+[samyost1/tmc-android](https://github.com/samyost1/tmc-android),
+[EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds)).
+
+The game's own dialogue and text are Nintendo's original translations, read at
+runtime from the user's ROM. This project does not claim authorship of them,
+and the recommended tested base for v0.1.0 is the USA ROM.
+
 ## Third-party libraries
 
 | Library | Use | License |
