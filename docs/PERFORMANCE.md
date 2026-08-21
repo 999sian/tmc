@@ -1,4 +1,4 @@
-# Performance notes — v0.1.0
+# Performance notes — v0.1.1
 
 All numbers below come from the maintainer's real Nintendo Switch (handheld,
 application mode). Your results may vary with firmware, SD card and scene.
@@ -28,6 +28,11 @@ Notes on that recommendation:
 - How you set the clock is up to you and your setup (e.g. a system-level tool
   such as sys-clk). This project does not include or require an overclocking
   tool, and the port does not present CPU control as a user-facing feature.
+- The port itself does not change the CPU clock, in this or any earlier
+  release. Integrating with external clock managers automatically is still
+  being evaluated: the clock managers in common use do not all speak the same
+  protocol, and a port that guessed wrong would be fighting the user's own
+  configuration for control of their console.
 - If you stay on stock clocks, expect occasional dips in heavy DUAL/FLIP
   scenes; NORMAL is unaffected in normal play.
 

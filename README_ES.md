@@ -6,7 +6,7 @@
 
 # The Legend of Zelda: The Minish Cap — Alek's Ultimate NX Edition
 
-**v0.1.0** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
+**v0.1.1** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
 
 ![Juego a doble pantalla en Nintendo Switch](docs/screenshots/hero/01_hero_dual.jpg)
 
@@ -63,7 +63,7 @@ acreditados — consulta [CREDITS.md](CREDITS.md) para el linaje completo.
   por el mantenedor; el tiempo real puede variar según la tarjeta SD y las
   condiciones del sistema.
 
-El widescreen real **no** forma parte de la v0.1.0.
+El widescreen real **no** forma parte de la v0.1.1.
 
 ## Capturas
 
@@ -136,12 +136,12 @@ tu propio cartucho u obtener el juego legalmente.
 
 ## Compatibilidad de ROM
 
-La versión v0.1.0 está construida para la edición **USA** (cabecera `BZME`).
+La versión v0.1.1 está construida para la edición **USA** (cabecera `BZME`).
 El volcado USA de referencia conocido tiene el SHA-1
 `b4bd50e4131b027c334547b4524e2dbbd4227130` — el port no verifica este hash en
 tiempo de ejecución (identifica el juego por la cabecera), pero ese es el
 volcado con el que esta versión se compiló y probó. El cargador reconoce
-cabeceras EU (`BZMP`), pero la v0.1.0 se compila y prueba como edición USA;
+cabeceras EU (`BZMP`), pero la v0.1.1 se compila y prueba como edición USA;
 usa una ROM USA.
 
 ## Rendimiento
@@ -149,8 +149,9 @@ usa una ROM USA.
 NORMAL funciona a 60 FPS con el mayor margen. DUAL y FLIP son más exigentes
 que NORMAL. En el hardware probado, se recomienda una frecuencia de CPU de
 1224 MHz para acercarse más a una experiencia estable de 60 FPS. Es opcional y
-no garantiza 60 FPS fijos en todas las escenas. Detalles en
-[docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+no garantiza 60 FPS fijos en todas las escenas. El port nunca cambia la
+frecuencia por su cuenta; la integración automática con gestores de reloj sigue
+en evaluación. Detalles en [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Configuración
 

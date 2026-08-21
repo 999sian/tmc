@@ -1,4 +1,4 @@
-# Configuration reference (v0.1.0)
+# Configuration reference (v0.1.1)
 
 Open the second-screen panel and select **CONFIG** (in DUAL/FLIP it is the
 rightmost tab; settings labels follow the selected LANGUAGE). All settings
@@ -62,7 +62,7 @@ just the values that can take effect.
 | LOAD AUTOSAVE | READY (action) | — | Restores the most recent port autosave. A tap with no autosave yet does nothing. |
 | AUDIO MODE | ENHANCED / GBA ACCURATE | ENHANCED | Modern mixing/resampling vs. GBA-faithful audio path. |
 | RETURN TO TITLE | CONFIRM | — | Returns safely to the title screen (with confirmation). Config is preserved; unsaved game progress behaves as a normal reset to title. |
-| VERSION | V0.1.0 | — | Read-only version display. |
+| VERSION | V0.1.1 | — | Read-only version display. |
 
 ## Notes
 

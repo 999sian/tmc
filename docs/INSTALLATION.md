@@ -1,4 +1,4 @@
-# Installation (v0.1.0)
+# Installation (v0.1.1)
 
 *[Versión en español → INSTALLATION_ES.md](INSTALLATION_ES.md)*
 
@@ -16,7 +16,7 @@ the game legally.
 
 ```
 /switch/tmc/
-    tmc_aleks_ultimate_nx_v0.1.0.nro    ← the port
+    tmc_aleks_ultimate_nx_v0.1.1.nro    ← the port
     baserom.gba                         ← your USA ROM (any filename works)
 ```
 
@@ -32,7 +32,7 @@ The filename does **not** matter: the loader scans `/switch/tmc/` for any
 several Minish Cap ROMs are in the folder, the first match wins — keep just
 one to avoid ambiguity.
 
-v0.1.0 targets the **USA** version. The known-good USA dump is SHA-1
+v0.1.1 targets the **USA** version. The known-good USA dump is SHA-1
 `b4bd50e4131b027c334547b4524e2dbbd4227130` (not enforced at runtime, but it is
 what this release was built and tested against).
 
@@ -42,8 +42,10 @@ what this release was built and tested against).
   title) is recommended; applet mode has less memory and is not the tested
   configuration.
 - The first boot prepares a runtime asset cache from your ROM into
-  `/switch/tmc/assets/` with an on-screen progress bar. This happens once;
-  later boots skip it (roughly 13–14 seconds to title on tested hardware).
+  `/switch/tmc/assets/` with an on-screen progress bar. **This may take around
+  a minute or longer depending on the SD card** — let it finish. It happens
+  once; later boots skip it (roughly 13–14 seconds to title on tested
+  hardware).
 - The game then boots to the title screen.
 
 ## Files the port creates

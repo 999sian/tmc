@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.1.1 — clean-install hotfix
+
+A first-run and stability hotfix. No gameplay content changes: everything
+from v0.1.0 is preserved.
+
+### Fixed
+
+- **Clean-install first boot on real Nintendo Switch hardware.** A fresh
+  `/switch/tmc/` containing only the NRO and your own ROM now generates its
+  runtime assets and reaches the title screen.
+- **Build-state path handling on `sdmc:/`.** The Switch device prefix broke
+  path canonicalisation, so a successful extraction was recorded as a
+  failure.
+- **Repeated asset extraction.** The cache state marker was never written,
+  so every launch re-extracted from scratch.
+- **Extraction stability and filesystem durability**, including bounds and
+  overflow hardening in the asset reader and LZ77 self-reference handling.
+- Standard error is routed to an internal sink on Switch; no `/dev/null` is
+  used, which previously could be fatal.
+- The applet message queue is pumped during extraction, so the system no
+  longer sees the app as unresponsive while it works.
+
+### Changed
+
+- **First-run extraction is faster**: development-only editable output is no
+  longer written. Expect around a minute or more on the first launch,
+  depending on SD-card speed; later launches reuse the cache.
+- The contextual Ezlo/hat shortcut now defaults to **Left Stick click
+  (LSTICK)** instead of **L**, so L keeps its normal GBA and menu duties.
+  `CONTEXT L` is still selectable in CONFIG. An existing configuration still
+  on the old default is migrated automatically; a binding you chose yourself
+  is left alone.
+
+### Not in this release
+
+- Automatic CPU clock management. It is still being evaluated and no clock
+  is touched, exactly as in v0.1.0.
+- The update checker, deferred to v0.2.0. Nothing is downloaded or installed
+  by this release.
+
 ## v0.1.0 — first public release
 
 The first public build of Alek's Ultimate NX Edition. Everything below is

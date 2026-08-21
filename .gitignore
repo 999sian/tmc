@@ -56,6 +56,7 @@ $RECYCLE.BIN/
 # The published release binary and its checksum are part of the repository,
 # so they override the *.elf / artifact rules above.
 !release/tmc_aleks_ultimate_nx_v0.1.0.nro
+!release/tmc_aleks_ultimate_nx_v0.1.1.nro
 !release/SHA256SUMS.txt
 # Documentation screenshots are intentionally tracked.
 !docs/screenshots/**

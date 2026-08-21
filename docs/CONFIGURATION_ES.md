@@ -1,4 +1,4 @@
-# Referencia de configuración (v0.1.0)
+# Referencia de configuración (v0.1.1)
 
 Abre el panel de segunda pantalla y selecciona **CONFIG** (en DUAL/FLIP es la
 pestaña de la derecha; las etiquetas siguen el IDIOMA elegido). Todos los
@@ -62,7 +62,7 @@ Las filas específicas de un modo solo aparecen mientras ese modo está activo.
 | CARGAR AUTO | LISTO (acción) | — | Restaura el autoguardado más reciente del port. Sin autoguardado previo, no hace nada. |
 | MODO DE AUDIO | ENHANCED / GBA ACCURATE | ENHANCED | Mezcla moderna vs. ruta de audio fiel a GBA. |
 | VOLVER AL TÍTULO | CONFIRMAR | — | Vuelve de forma segura a la pantalla de título (con confirmación). La configuración se conserva; el progreso no guardado se comporta como un reinicio normal al título. |
-| VERSIÓN | V0.1.0 | — | Indicador de versión (solo lectura). |
+| VERSIÓN | V0.1.1 | — | Indicador de versión (solo lectura). |
 
 ## Notas
 

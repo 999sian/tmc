@@ -1,4 +1,4 @@
-# Instalación (v0.1.0)
+# Instalación (v0.1.1)
 
 *[English version → INSTALLATION.md](INSTALLATION.md)*
 
@@ -17,7 +17,7 @@ cartucho u obtén el juego legalmente.
 
 ```
 /switch/tmc/
-    tmc_aleks_ultimate_nx_v0.1.0.nro    ← el port
+    tmc_aleks_ultimate_nx_v0.1.1.nro    ← el port
     baserom.gba                         ← tu ROM USA (vale cualquier nombre)
 ```
 
@@ -33,7 +33,7 @@ interna (`BZME` = USA). `baserom.gba` es el nombre convencional y se
 encuentra primero. Si hay varias ROMs de Minish Cap en la carpeta, gana la
 primera coincidencia — deja solo una para evitar ambigüedades.
 
-La v0.1.0 está orientada a la versión **USA**. El volcado USA de referencia es
+La v0.1.1 está orientada a la versión **USA**. El volcado USA de referencia es
 SHA-1 `b4bd50e4131b027c334547b4524e2dbbd4227130` (no se comprueba en tiempo de
 ejecución, pero es con el que se compiló y probó esta versión).
 
@@ -43,9 +43,10 @@ ejecución, pero es con el que se compiló y probó esta versión).
   sobre un título completo); el modo applet tiene menos memoria y no es la
   configuración probada.
 - El primer arranque prepara una caché de recursos a partir de tu ROM en
-  `/switch/tmc/assets/`, con una barra de progreso. Ocurre una sola vez; los
-  siguientes arranques la reutilizan (unos 13–14 segundos hasta el título en
-  el hardware probado).
+  `/switch/tmc/assets/`, con una barra de progreso. **Puede tardar alrededor de
+  un minuto o más según la tarjeta SD** — déjalo terminar. Ocurre una sola vez;
+  los siguientes arranques la reutilizan (unos 13–14 segundos hasta el título
+  en el hardware probado).
 - Después el juego arranca a la pantalla de título.
 
 ## Archivos que crea el port

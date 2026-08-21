@@ -30,7 +30,7 @@ Alek's Ultimate NX Edition      this project (Switch-specific work)
 | [zeldaret/tmc](https://github.com/zeldaret/tmc) | **Foundation.** The Minish Cap decompilation. All game logic originates here. |
 | [Project Picori — 999sian/tmc](https://github.com/999sian/tmc) | **Foundation / direct code source.** The native PC port: SDL3 platform layer, the ViruaPPU software renderer approach, agbplay audio integration. GPL-3.0. |
 | [samyost1/tmc-android](https://github.com/samyost1/tmc-android) | **Direct code source.** The dual-screen second-screen concept and implementation (panel, ROM-decoded UI art, touch inventory) that this edition's second screen descends from. GPL-3.0. Itself built on Project Picori and forked from [Raekwon1603/tmc-android](https://github.com/Raekwon1603/tmc-android) (Android packaging / second-screen scaffold). |
-| [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds) | **Reference.** The native 3DS dual-screen adaptation, studied as the console-adaptation reference for this Switch work (including its widescreen research, which is not shipped in v0.1.0). GPL-3.0. |
+| [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds) | **Reference.** The native 3DS dual-screen adaptation, studied as the console-adaptation reference for this Switch work (including its widescreen research, which is not shipped in v0.1.1). GPL-3.0. |
 | [HayatoG/tmc](https://github.com/hayatog/tmc) | **Base fork.** The repository this Switch tree is directly forked from (`origin` of the development tree). |
 
 ## Switch-specific work in this edition
@@ -59,7 +59,7 @@ releases and by related community port work
 
 The game's own dialogue and text are Nintendo's original translations, read at
 runtime from the user's ROM. This project does not claim authorship of them,
-and the recommended tested base for v0.1.0 is the USA ROM.
+and the recommended tested base for v0.1.1 is the USA ROM.
 
 ## Third-party libraries
 
