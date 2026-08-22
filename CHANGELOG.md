@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.1.2 — sword hitbox hotfix
+
+A minimal collision hotfix. No other gameplay, content or configuration
+changes: everything from v0.1.1 is preserved.
+
+### Fixed
+
+- **Sword collision could be mirrored to the wrong side during certain
+  right-facing attacks.** The horizontal mirror applied to the sword's
+  damage hitbox was not taking effect, so those attacks tested collision on
+  the opposite side of Link from the one being attacked.
+- Improved native-port gameplay fidelity.
+
+### Notes
+
+- No save or configuration migration is required.
+
 ## v0.1.1 — clean-install hotfix
 
 A first-run and stability hotfix. No gameplay content changes: everything

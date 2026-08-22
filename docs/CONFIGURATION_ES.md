@@ -1,4 +1,4 @@
-# Referencia de configuración (v0.1.1)
+# Referencia de configuración (v0.1.2)
 
 Abre el panel de segunda pantalla y selecciona **CONFIG** (en DUAL/FLIP es la
 pestaña de la derecha; las etiquetas siguen el IDIOMA elegido). Todos los

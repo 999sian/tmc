@@ -1,4 +1,4 @@
-# Problemas conocidos — v0.1.1
+# Problemas conocidos — v0.1.2
 
 *[English version → KNOWN_ISSUES.md](KNOWN_ISSUES.md)*
 
@@ -28,7 +28,7 @@ aparecen en esta lista.
   marcador del jugador cuando la sala no tiene una posición válida en el mundo
   exterior. Es intencionado, no un marcador perdido.
 
-## Funciones que no están en la v0.1.1
+## Funciones que no están en la v0.1.2
 
 - El **widescreen real** no está disponible en esta versión (investigado y
   previsto para una versión posterior).

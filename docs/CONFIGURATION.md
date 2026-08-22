@@ -1,4 +1,4 @@
-# Configuration reference (v0.1.1)
+# Configuration reference (v0.1.2)
 
 Open the second-screen panel and select **CONFIG** (in DUAL/FLIP it is the
 rightmost tab; settings labels follow the selected LANGUAGE). All settings

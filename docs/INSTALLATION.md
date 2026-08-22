@@ -1,4 +1,4 @@
-# Installation (v0.1.1)
+# Installation (v0.1.2)
 
 *[Versión en español → INSTALLATION_ES.md](INSTALLATION_ES.md)*
 
@@ -16,7 +16,7 @@ the game legally.
 
 ```
 /switch/tmc/
-    tmc_aleks_ultimate_nx_v0.1.1.nro    ← the port
+    tmc_aleks_ultimate_nx_v0.1.2.nro    ← the port
     baserom.gba                         ← your USA ROM (any filename works)
 ```
 
@@ -32,7 +32,7 @@ The filename does **not** matter: the loader scans `/switch/tmc/` for any
 several Minish Cap ROMs are in the folder, the first match wins — keep just
 one to avoid ambiguity.
 
-v0.1.1 targets the **USA** version. The known-good USA dump is SHA-1
+v0.1.2 targets the **USA** version. The known-good USA dump is SHA-1
 `b4bd50e4131b027c334547b4524e2dbbd4227130` (not enforced at runtime, but it is
 what this release was built and tested against).
 

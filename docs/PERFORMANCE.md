@@ -1,4 +1,4 @@
-# Performance notes — v0.1.1
+# Performance notes — v0.1.2
 
 All numbers below come from the maintainer's real Nintendo Switch (handheld,
 application mode). Your results may vary with firmware, SD card and scene.

@@ -6,7 +6,7 @@
 
 # The Legend of Zelda: The Minish Cap — Alek's Ultimate NX Edition
 
-**v0.1.1** · Native Nintendo Switch homebrew port · [Español → README_ES.md](README_ES.md)
+**v0.1.2** · Native Nintendo Switch homebrew port · [Español → README_ES.md](README_ES.md)
 
 ![Dual-screen gameplay on Nintendo Switch](docs/screenshots/hero/01_hero_dual.jpg)
 
@@ -60,7 +60,7 @@ below — please see [CREDITS.md](CREDITS.md) for the full lineage.
   roughly 13–14 seconds on the maintainer's tested hardware; actual startup
   time may vary depending on SD-card and system conditions.
 
-True widescreen is **not** part of v0.1.1.
+True widescreen is **not** part of v0.1.2.
 
 ## Screenshots
 
@@ -130,12 +130,12 @@ or otherwise obtain the game legally.
 
 ## ROM compatibility
 
-The v0.1.1 release build targets the **USA** version (header `BZME`). The
+The v0.1.2 release build targets the **USA** version (header `BZME`). The
 known-good USA reference dump has SHA-1
 `b4bd50e4131b027c334547b4524e2dbbd4227130` — the port does not verify this
 hash at runtime (it identifies the game by header), but that is the dump this
 release was built and tested against. EU (`BZMP`) headers are recognized by
-the loader, but v0.1.1 is built and tested as the USA edition; use a USA ROM.
+the loader, but v0.1.2 is built and tested as the USA edition; use a USA ROM.
 
 ## Performance
 

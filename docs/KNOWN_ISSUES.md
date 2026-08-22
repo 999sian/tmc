@@ -1,4 +1,4 @@
-# Known issues — v0.1.1
+# Known issues — v0.1.2
 
 Current, honestly-stated limitations. Fixed issues are not listed.
 
@@ -24,7 +24,7 @@ Current, honestly-stated limitations. Fixed issues are not listed.
   marker when no valid overworld position exists for the room — this is by
   design, not a lost marker.
 
-## Features not in v0.1.1
+## Features not in v0.1.2
 
 - **True widescreen** is not available in this version (researched, planned
   for a later release).
