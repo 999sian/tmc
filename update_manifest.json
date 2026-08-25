@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "version": "1.0.0",
+  "channel": "stable",
+  "nro_url": "https://github.com/Alexgg1014/The-Legend-of-Zelda-The-Minish-Cap-Alek-s-Ultimate-NX-Edition/releases/download/v1.0.0-test1/tmc_aleks_ultimate_nx_v1.0.0-updatepayloadtest1.nro",
+  "nro_sha256": "60668874fd91965e31e0e8fd4d29fb0e62b0e8b8518b924b2a34d71cc4d84eff",
+  "nro_size": 13870771,
+  "min_updater_schema": 1,
+  "changelog": [
+    "Updater end-to-end test build",
+    "Validates secure staged installation",
+    "Creates a verified backup before install"
+  ]
+}
