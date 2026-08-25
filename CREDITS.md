@@ -16,12 +16,32 @@ Project Picori (999sian/tmc)    native PC port: SDL3, software PPU, agbplay
       │
 samyost1/tmc-android            dual-screen second-screen mod of Picori
       │                         (forked from Raekwon1603/tmc-android packaging)
-      ├── EstebanPdN/zelda-tmc-3ds   3DS dual-screen adaptation (reference)
       │
-HayatoG/tmc                     the direct base fork of this Switch tree
+EstebanPdN/zelda-tmc-3ds        3DS dual-screen adaptation — the native port
+      │                         this tree's core actually descends from
+      │
+HayatoG/tmc                     Switch port of the above; direct `origin` of
+      │                         this development tree
       │
 Alek's Ultimate NX Edition      this project (Switch-specific work)
 ```
+
+### On the EstebanPdN fork point
+
+Earlier releases of this edition listed `EstebanPdN/zelda-tmc-3ds` only as a
+*reference*. That understated it, and this release corrects the record.
+
+The core of this tree derives from `EstebanPdN/zelda-tmc-3ds`, not directly
+from the decompilation: `HayatoG/tmc` branched that project's native port at
+commit `afdde1b7dcebde9b66ada9a63ff0c8d51a1a6ab9` (2026-05-10) and adapted it
+to the Switch. The two repositories share no commit hashes — upstream's history
+was rewritten — so the relationship was re-established by content: hashing every
+blob under `src/` and `include/` and scoring overlap across upstream's history.
+At that commit **742 of 768 core blobs match**, and the score falls off sharply
+on either side, so the fork point is unambiguous.
+
+Esteban's project is therefore a **direct code ancestor** of this edition, and
+is credited as such below.
 
 ## Foundational projects
 
@@ -30,8 +50,8 @@ Alek's Ultimate NX Edition      this project (Switch-specific work)
 | [zeldaret/tmc](https://github.com/zeldaret/tmc) | **Foundation.** The Minish Cap decompilation. All game logic originates here. |
 | [Project Picori — 999sian/tmc](https://github.com/999sian/tmc) | **Foundation / direct code source.** The native PC port: SDL3 platform layer, the ViruaPPU software renderer approach, agbplay audio integration. GPL-3.0. |
 | [samyost1/tmc-android](https://github.com/samyost1/tmc-android) | **Direct code source.** The dual-screen second-screen concept and implementation (panel, ROM-decoded UI art, touch inventory) that this edition's second screen descends from. GPL-3.0. Itself built on Project Picori and forked from [Raekwon1603/tmc-android](https://github.com/Raekwon1603/tmc-android) (Android packaging / second-screen scaffold). |
-| [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds) | **Reference.** The native 3DS dual-screen adaptation, studied as the console-adaptation reference for this Switch work (including its widescreen research, which is not shipped in v0.1.1). GPL-3.0. |
-| [HayatoG/tmc](https://github.com/hayatog/tmc) | **Base fork.** The repository this Switch tree is directly forked from (`origin` of the development tree). |
+| [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds) | **Direct code ancestor.** The native 3DS dual-screen adaptation. This edition's core descends from it: `HayatoG/tmc` branched its native port at `afdde1b7` (2026-05-10) and made it a Switch port, so the great majority of the core C in this tree originates here. Also the console-adaptation reference for this Switch work, including widescreen research that is not shipped. GPL-3.0. |
+| [HayatoG/tmc](https://github.com/hayatog/tmc) | **Base fork.** The repository this Switch tree is directly forked from (`origin` of the development tree), and where the Switch port of Esteban's native port was made. |
 
 ## Switch-specific work in this edition
 

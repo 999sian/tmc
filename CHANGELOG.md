@@ -1,5 +1,70 @@
 # Changelog
 
+## v1.0.0 — the first stable release
+
+The first release this project considers stable. It adds an in-app updater, a
+live position marker on the second-screen map, and a rebuilt autosave store,
+and it corrects the project's attribution of its own lineage.
+
+Everything from v0.1.2 is preserved. No save or configuration migration is
+required: existing `tmc.sav`, autosave data and `config.json` are used as-is.
+
+### Added
+
+- **In-app updater.** The game can now check for, download and install its own
+  updates from the second screen, under SYSTEM. It is deliberately conservative:
+
+  - Update metadata comes from a project-controlled manifest with a **closed
+    schema** — any unknown key, duplicate key, wrong channel, non-HTTPS URL or
+    malformed field causes the whole manifest to be rejected. It is not a
+    GitHub release scrape.
+  - The expected **size and SHA-256 are pinned before a single byte** of the
+    new build is fetched, and the download is verified against them.
+  - Downloads are HTTPS-only, with HTTPS-only redirects and certificate
+    verification.
+  - Installing **creates and verifies a backup** of the current build
+    (`tmc_aleks_ultimate_nx.bak`) before the installed game is touched. If any
+    step fails, the backup is restored automatically and the installed game is
+    left exactly as it was.
+  - Progress is journalled, so an interrupted install is recoverable rather
+    than leaving a half-written game.
+
+  After installing, close the game and open it again to run the new version.
+
+- **Link's position marker on the second-screen MAP tab.** The map now shows
+  where you actually are, live.
+
+### Changed
+
+- **Rebuilt autosave storage.** Autosave now uses a checksummed three-slot ring
+  with an explicit discovery rule, never renames a file into place, and
+  migrates older autosave data forward on first run. The goal is that a crash
+  or a power loss mid-write can never leave you without a readable autosave.
+- **Corrected lineage and attribution.** Earlier releases credited
+  [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds) only
+  as a *reference*. That was wrong. This edition's core actually **descends
+  from that project** — the Switch tree was branched from its native port at
+  commit `afdde1b7` (2026-05-10), where 742 of 768 core source blobs match.
+  It is now credited as a direct code ancestor. See
+  [CREDITS.md](CREDITS.md#on-the-estebanpdn-fork-point).
+
+### Fixed
+
+- **Pause map regressions.** A stale HDMA state is now reset when the pause map
+  is opened, map layer offsets use the native layout, and missing map assets
+  are repaired on the fly instead of rendering wrong.
+- **Autosave recovery.** Autosave data written by older versions is quarantined
+  rather than misread, and recovery no longer depends on write ordering that
+  the SD card does not guarantee.
+- Menu fixes in the figurine viewer and the pause menu.
+- Further native-port gameplay fidelity work, including collision handling.
+
+### Known limitations
+
+- True widescreen is not part of this release.
+- The updater replaces the game NRO only. Your ROM, saves, assets and settings
+  are never touched by it.
+
 ## v0.1.2 — sword hitbox hotfix
 
 A minimal collision hotfix. No other gameplay, content or configuration

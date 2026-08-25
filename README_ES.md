@@ -6,7 +6,7 @@
 
 # The Legend of Zelda: The Minish Cap — Alek's Ultimate NX Edition
 
-**v0.1.2** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
+**v1.0.0** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
 
 ![Juego a doble pantalla en Nintendo Switch](docs/screenshots/hero/01_hero_dual.jpg)
 
@@ -41,8 +41,8 @@ acreditados — consulta [CREDITS.md](CREDITS.md) para el linaje completo.
 - **Panel de segunda pantalla** con cuatro pestañas:
   - **MISIÓN** — misión principal actual, objetivo, pista y ubicación (Guía de
     Historia).
-  - **MAPA** — mapas del mundo y de mazmorras con marcador del jugador en vivo
-    y cámara de seguimiento opcional.
+  - **MAPA** — mapas del mundo y de mazmorras con el marcador de posición de
+    Link en vivo y cámara de seguimiento opcional.
   - **OBJETOS** — vista de equipo con los anillos A/B y los atajos X/Y/ZL/ZR.
   - **CONFIG** — todos los ajustes del port.
 - Interacción **táctil** en el panel (pestañas, ajustes, asignación de objetos).
@@ -52,6 +52,12 @@ acreditados — consulta [CREDITS.md](CREDITS.md) para el linaje completo.
   [retroachievements.org](https://retroachievements.org).
 - **Autoguardado gestionado por el port** y **Cargar Autoguardado** —
   separados del sistema de guardado propio del juego; nunca lo sobrescriben.
+- **Actualizador integrado** — busca, descarga e instala versiones nuevas desde
+  la segunda pantalla (SYSTEM), sin PC. La descarga se verifica contra un
+  tamaño y un SHA-256 fijados de antemano, y se crea una copia de seguridad
+  verificada de tu versión actual antes de reemplazar nada; si algún paso
+  falla, se restaura la copia y tu juego instalado queda intacto. Ver
+  [Actualizar](#actualizar).
 - **Volver al Título** desde el menú.
 - **Interfaz del port localizada** en English, Español, Français, Deutsch e
   Italiano. (La localización de los diálogos originales del juego es de
@@ -63,7 +69,7 @@ acreditados — consulta [CREDITS.md](CREDITS.md) para el linaje completo.
   por el mantenedor; el tiempo real puede variar según la tarjeta SD y las
   condiciones del sistema.
 
-El widescreen real **no** forma parte de la v0.1.2.
+El widescreen real **no** forma parte de la v1.0.0.
 
 ## Capturas
 
@@ -134,14 +140,52 @@ Versión corta — guía completa en
 ROMs y no distribuye contenido del juego con derechos de autor.** Debes volcar
 tu propio cartucho u obtener el juego legalmente.
 
+## Actualizar
+
+A partir de la v1.0.0, el juego puede actualizarse solo. En la segunda pantalla
+ve a **CONFIG → SYSTEM** y usa la fila de actualización:
+
+1. **CHECK FOR UPDATES** — consulta el manifiesto de actualización del proyecto.
+2. **DOWNLOAD UPDATE** — descarga la nueva versión y la verifica.
+3. **INSTALL UPDATE** — hace copia de seguridad de tu versión actual e instala.
+4. **Cierra el juego y vuelve a abrirlo** para ejecutar la versión nueva.
+
+La consola necesita conexión a internet sólo para los pasos 1 y 2.
+
+### Qué toca y qué no
+
+El actualizador reemplaza el programa del juego
+(`tmc_aleks_ultimate_nx.nro`) y nada más. Tu ROM, tus partidas, el
+autoguardado, los assets extraídos y `config.json` no los lee ni los escribe.
+
+Antes de reemplazar el juego instalado, escribe una copia verificada del mismo
+en `/switch/tmc/tmc_aleks_ultimate_nx.bak`. Si la instalación falla en
+cualquier punto, esa copia se restaura automáticamente. Si alguna vez quieres
+volver atrás a mano, copia el `.bak` sobre el `.nro`.
+
+### Por qué está hecho así
+
+Los metadatos de actualización vienen de un manifiesto controlado por el
+proyecto con un esquema cerrado: una clave desconocida, una clave duplicada,
+una URL que no sea HTTPS, un canal incorrecto o un campo malformado hacen que
+se rechace el manifiesto entero en lugar de ignorarse. El tamaño y el SHA-256
+esperados de la nueva versión se fijan en ese manifiesto antes de descargar
+nada, y el archivo descargado se verifica contra ellos antes de acercarse
+siquiera a tu juego instalado. Las descargas son sólo HTTPS, las redirecciones
+sólo HTTPS, y se verifican los certificados.
+
+Si prefieres no usarlo, puedes seguir actualizando a mano: descarga el NRO de
+la [página de releases](../../releases) y cópialo tú sobre
+`/switch/tmc/tmc_aleks_ultimate_nx.nro`.
+
 ## Compatibilidad de ROM
 
-La versión v0.1.2 está construida para la edición **USA** (cabecera `BZME`).
+La versión v1.0.0 está construida para la edición **USA** (cabecera `BZME`).
 El volcado USA de referencia conocido tiene el SHA-1
 `b4bd50e4131b027c334547b4524e2dbbd4227130` — el port no verifica este hash en
 tiempo de ejecución (identifica el juego por la cabecera), pero ese es el
 volcado con el que esta versión se compiló y probó. El cargador reconoce
-cabeceras EU (`BZMP`), pero la v0.1.2 se compila y prueba como edición USA;
+cabeceras EU (`BZMP`), pero la v1.0.0 se compila y prueba como edición USA;
 usa una ROM USA.
 
 ## Rendimiento
