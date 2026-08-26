@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.0.2 — diagnostics in release builds
+
+Makes released builds self-diagnosing, so a bug report can carry evidence
+instead of a description. No gameplay changes.
+
+### Added
+
+- **Boot log in release builds.** Released builds now write
+  `/switch/tmc/tmc.log` (build identity, asset bootstrap, ROM symbol
+  resolution, network bring-up, and any failure along the way) and
+  `/switch/tmc/startup.log` (per-phase boot timings). Previously both were
+  compiled out of release builds, so a player's build could produce no
+  evidence at all.
+
+  This is close to free: every per-frame gameplay trace is still discarded
+  before the game loop starts, exactly as before, so nothing is written to the
+  SD card during play. `tmc.log` self-trims at 2 MiB.
+
+- **Documented crash reporting.** Crash reports were already produced by
+  release builds — that was never a released feature people knew about. If the
+  game crashes it writes `/switch/tmc/crashlogs/`, alongside the system's own
+  report in `/atmosphere/crash_reports/`.
+
+- **[Reporting a bug](README.md#reporting-a-bug)** section in the README, with
+  the exact file paths to attach.
+
+### Notes
+
+- If you are on v1.0.1 nothing is broken; this release only makes future
+  problems easier to diagnose. Updating is still recommended, because any bug
+  you hit afterwards will come with logs attached.
+
 ## v1.0.1 — Mt. Crenel hotfix
 
 Fixes a single rendering bug reported within hours of v1.0.0. Everything from

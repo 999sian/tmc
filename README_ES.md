@@ -6,7 +6,7 @@
 
 # The Legend of Zelda: The Minish Cap — Alek's Ultimate NX Edition
 
-**v1.0.1** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
+**v1.0.2** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
 
 ![Juego a doble pantalla en Nintendo Switch](docs/screenshots/hero/01_hero_dual.jpg)
 
@@ -225,6 +225,26 @@ frecuentes o detenerse. No prometo soporte a largo plazo, ni una hoja de ruta,
 ni respuestas rápidas a los issues. Si quieres llevarlo más lejos, los forks
 son bienvenidos bajo las licencias upstream aplicables — consulta
 [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Reportar un fallo
+
+Las versiones publicadas guardan diagnósticos en la tarjeta, para que un
+reporte pueda llevar pruebas. Adjunta lo que exista de esta lista, junto con la
+versión que aparece en **CONFIG → SYSTEM → BUILD INFO**:
+
+| Archivo | Qué es |
+|---|---|
+| `/switch/tmc/tmc.log` | Registro de arranque: identidad del build, carga de assets, resolución de la ROM, errores. Empieza con una línea `[build]` con la versión exacta — inclúyelo siempre. |
+| `/switch/tmc/startup.log` | Tiempos de arranque por fase. Útil si el juego tarda mucho o se cuelga al arrancar. |
+| `/switch/tmc/crashlogs/` | Solo se escribe si el juego ha crasheado. |
+| `/atmosphere/crash_reports/` | El informe de crash del propio sistema, del mismo momento. |
+
+Una captura ayuda muchísimo en cualquier fallo visual — el arreglo del Monte
+Crenel de la v1.0.1 se diagnosticó a partir de una.
+
+Estos archivos los escribe la v1.0.2 en adelante. En versiones anteriores no
+existen: el registro estaba desactivado al compilar, así que no hay nada que
+buscar.
 
 ## Problemas conocidos
 

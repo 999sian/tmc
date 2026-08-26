@@ -1,13 +1,14 @@
 {
   "schema": 1,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "channel": "stable",
-  "nro_url": "https://github.com/Alexgg1014/The-Legend-of-Zelda-The-Minish-Cap-Alek-s-Ultimate-NX-Edition/releases/download/v1.0.1/tmc_aleks_ultimate_nx_v1.0.1.nro",
-  "nro_sha256": "58649bb6f2d677f95399e501cb09d5cca3503fee7f51f62b5d78ea6523a8ea09",
+  "nro_url": "https://github.com/Alexgg1014/The-Legend-of-Zelda-The-Minish-Cap-Alek-s-Ultimate-NX-Edition/releases/download/v1.0.2/tmc_aleks_ultimate_nx_v1.0.2.nro",
+  "nro_sha256": "e8c71d28170589cde46a32e83e1ded38643b3389ccd802e3d474ed2b2ba5cdd8",
   "nro_size": 13870771,
   "min_updater_schema": 1,
   "changelog": [
-    "Fixes the black background at the top of Mt. Crenel",
-    "No other changes; saves and settings untouched"
+    "Release builds now write boot and crash logs",
+    "Makes future bug reports diagnosable",
+    "No gameplay changes"
   ]
 }
