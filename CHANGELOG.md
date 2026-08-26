@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.0.1 — Mt. Crenel hotfix
+
+Fixes a single rendering bug reported within hours of v1.0.0. Everything from
+v1.0.0 is preserved; no save or configuration migration is required.
+
+**This is also the first update deliverable through the in-app updater** — if
+you are on v1.0.0, the game will offer it to you under CONFIG → SYSTEM.
+
+### Fixed
+
+- **Black background at the top of Mt. Crenel.** At the mountaintop the
+  weather-change manager cross-fades the background palettes from a 26-palette
+  block (`gPalette_549`). The port allocated that block but the code that was
+  supposed to fill it from the ROM's palette data was never written, so it
+  stayed all zeros — and a palette of zeros is pure black. The cross-fade
+  blended the background to black while Link, enemies and the HUD (sprite
+  palettes, untouched by the fade) rendered normally. The block is now
+  populated from the ROM at load, verified against the USA ROM's actual
+  palette data.
+
 ## v1.0.0 — the first stable release
 
 The first release this project considers stable. It adds an in-app updater, a

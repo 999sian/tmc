@@ -1,14 +1,13 @@
 {
   "schema": 1,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "channel": "stable",
-  "nro_url": "https://github.com/Alexgg1014/The-Legend-of-Zelda-The-Minish-Cap-Alek-s-Ultimate-NX-Edition/releases/download/v1.0.0/tmc_aleks_ultimate_nx_v1.0.0.nro",
-  "nro_sha256": "f3308db78e042a326509b5d7972fbb8cb71b9b7b1ed795b06546e8b7939771fc",
+  "nro_url": "https://github.com/Alexgg1014/The-Legend-of-Zelda-The-Minish-Cap-Alek-s-Ultimate-NX-Edition/releases/download/v1.0.1/tmc_aleks_ultimate_nx_v1.0.1.nro",
+  "nro_sha256": "58649bb6f2d677f95399e501cb09d5cca3503fee7f51f62b5d78ea6523a8ea09",
   "nro_size": 13870771,
   "min_updater_schema": 1,
   "changelog": [
-    "In-app updater with verified downloads and backup",
-    "Link's live position marker on the second-screen map",
-    "Rebuilt autosave storage and pause-map fixes"
+    "Fixes the black background at the top of Mt. Crenel",
+    "No other changes; saves and settings untouched"
   ]
 }

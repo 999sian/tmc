@@ -6,7 +6,7 @@
 
 # The Legend of Zelda: The Minish Cap — Alek's Ultimate NX Edition
 
-**v1.0.0** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
+**v1.0.1** · Port homebrew nativo para Nintendo Switch · [English → README.md](README.md)
 
 ![Juego a doble pantalla en Nintendo Switch](docs/screenshots/hero/01_hero_dual.jpg)
 
