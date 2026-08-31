@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.3.0 — Português (Brasil), Cave of Flames, offline achievements
+
+### Added
+
+- **The whole game in Brazilian Portuguese.** 2910 messages across 80 banks —
+  dialogue, signs, item text — not just the menus. Brazilian, not European:
+  *salvar* not *guardar*, *você* not *tu*, *tela* not *ecrã*. Runs on the USA
+  ROM; language and ROM region are independent. Accented glyphs are composed
+  from the existing font at runtime so they match the rest of the text.
+
+- **Offline RetroAchievements.** The session is cached so the achievement set
+  loads with no network, and unlocks earned offline are written to the SD card
+  and sent on reconnect with their original unlock time. Softcore only, the
+  condition RetroAchievements attaches to this pattern. This is the least
+  tested code in the release: offline earning and sync were not verified on
+  hardware before publishing.
+
+### Fixed
+
+- **Cave of Flames B1: the lava platform never appeared**, leaving a crossing
+  that could not be made. The asset index is generated from `.incbin`
+  directives, so a data symbol beginning with a pointer word is recorded four
+  bytes past its true start — that room's platform data was sized as 4 bytes
+  instead of 32, and the spawner walked off the end of the buffer. Both
+  affected symbols now carry their true extent, and the game falls back to the
+  ROM whenever a room property is shorter than the structure it holds, so the
+  fix reaches existing installs without regenerating assets. Logged to
+  `assetfix.log`.
+
+- **The second screen no longer spoils the overworld.** Undiscovered regions
+  are covered and cannot be tapped into, matching the in-game map.
+
+- Minish Path leaves and parallax at the top of vertical rooms.
+- Sword charge graphics facing east; arrow collision in all four directions.
+- Gleerok's fire and neck segment bounds.
+- Pullable mushroom child lifetime.
+- Delayed entity loader spawn-bit ordering.
+- A late-game Vaati progression flag that could leave a save unable to advance.
+- Graphics table bounds hardened against out-of-range indices.
+
 ## v1.0.2 — diagnostics in release builds
 
 Makes released builds self-diagnosing, so a bug report can carry evidence
