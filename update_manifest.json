@@ -1,15 +1,14 @@
 {
   "schema": 1,
-  "version": "1.3.0",
+  "version": "1.3.1",
   "channel": "stable",
-  "nro_url": "https://github.com/Alexgg1014/The-Legend-of-Zelda-The-Minish-Cap-Alek-s-Ultimate-NX-Edition/releases/download/v1.3.0/tmc_aleks_ultimate_nx_v1.3.0.nro",
-  "nro_sha256": "12b3aa9cf2f78007265d5741a2566b0840ab012ffd366f471e3e661ac3883c2f",
+  "nro_url": "https://github.com/Alexgg1014/The-Legend-of-Zelda-The-Minish-Cap-Alek-s-Ultimate-NX-Edition/releases/download/v1.3.1/tmc_aleks_ultimate_nx_v1.3.1.nro",
+  "nro_sha256": "35397c8836022de5df087a7d458dd4760e82ac6a46e72d7c3a112d432320f6d4",
   "nro_size": 14202547,
   "min_updater_schema": 1,
   "changelog": [
-    "The whole game in Brazilian Portuguese",
-    "Cave of Flames B1 lava platform now appears",
-    "Offline RetroAchievements, synced on reconnect",
-    "Second screen no longer spoils undiscovered map regions"
+    "Cave of Flames B2 lava platforms now appear",
+    "Items no longer stop working in those rooms",
+    "Four more truncated data structures repaired"
   ]
 }
