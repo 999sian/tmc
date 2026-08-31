@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.3.1 — Cave of Flames lava platforms, properly this time
+
+Hotfix for two reports against v1.3.0: platforms still missing on B2, and in
+one room the Gust Jar and Cane of Pacci stopping too.
+
+### Fixed
+
+- **Four more under-indexed data symbols.** v1.3.0 fixed one truncated
+  structure and assumed the pattern was "symbol opens with a pointer word".
+  The real rule is that a symbol's extent runs to the next symbol, and the
+  index only ever records its first `.incbin` fragment. Under that rule there
+  are five affected symbols, not two — including Cave of Flames B2's platform
+  group (176 bytes recorded as 32, ten platforms recorded as two) and two
+  outside the dungeon entirely, in Hyrule Town and near Lon Lon Ranch. The
+  build now re-derives the table from the decompilation and fails if a sixth
+  appears.
+
+- **Items no longer die alongside the platforms.** Entities share one 72-slot
+  pool, so a spawner running off the end of a truncated buffer consumed the
+  pool and left the Gust Jar and Cane of Pacci with nowhere to spawn their
+  effects. v1.3.0's runaway cap was 64 — nearly the whole pool, so it stopped
+  the bad reads without saving the items. It is now derived from the pool size
+  (9 of 72).
+
 ## v1.3.0 — Português (Brasil), Cave of Flames, offline achievements
 
 ### Added
