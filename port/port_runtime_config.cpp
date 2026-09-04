@@ -180,6 +180,13 @@ int sRandoHeartColor = 0;
 int sRandoTricks = 0;
 int sRandoAccessibility = 0;
 bool sRandoDungeonItems = false;
+/* RetroAchievements (port_ra.c). Off by default — it is opt-in network
+ * activity. ra_token is the RA session token returned by a successful
+ * password login; the password itself is never stored. */
+bool sRaEnabled = false;
+bool sRaNotifications = true;
+std::string sRaUsername;
+std::string sRaToken;
 std::array<std::vector<Bind>, PORT_INPUT_COUNT> sBinds;
 /* Rebind capture state. -1 = not capturing; otherwise the PortInput
  * whose next key/button/axis press becomes a new binding. The ImGui
@@ -290,6 +297,8 @@ const BoolCfg kBoolCfg[] = {
     { "rando_early_crests", &sRandoEarlyCrests, true },
     { "rando_instant_text", &sRandoInstantText, true },
     { "rando_dungeon_items", &sRandoDungeonItems, false },
+    { "ra_enabled", &sRaEnabled, false },
+    { "ra_notifications", &sRaNotifications, true },
 };
 const IntCfg kIntCfg[] = {
     { "preferred_region", &sPreferredRegion, -1 },      { "preferred_language", &sPreferredLanguage, -1 },
@@ -303,6 +312,8 @@ const StrCfg kStrCfg[] = {
     { "tts_voice", &sTtsVoice, "" },
     { "tts_language", &sTtsLanguage, "" },
     { "shader_preset", &sShaderPreset, "" },
+    { "ra_username", &sRaUsername, "" },
+    { "ra_token", &sRaToken, "" },
 };
 const FloatCfg kFloatCfg[] = {
     { "tts_rate", &sTtsRate, 0.5 },
@@ -2012,5 +2023,39 @@ extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool
     sConfigJson["rando_instant_text"] = instant_text;
     sConfigJson["rando_tunic_color"] = tunic_color;
     sConfigJson["rando_heart_color"] = heart_color;
+    SaveConfig();
+}
+
+/* ---- RetroAchievements (port_ra.c) ----------------------------------- */
+extern "C" bool Port_Config_GetRaEnabled(void) {
+    return sRaEnabled;
+}
+extern "C" void Port_Config_SetRaEnabled(bool on) {
+    sRaEnabled = on;
+    sConfigJson["ra_enabled"] = on;
+    SaveConfig();
+}
+extern "C" bool Port_Config_GetRaNotifications(void) {
+    return sRaNotifications;
+}
+extern "C" void Port_Config_SetRaNotifications(bool on) {
+    sRaNotifications = on;
+    sConfigJson["ra_notifications"] = on;
+    SaveConfig();
+}
+extern "C" const char* Port_Config_GetRaUsername(void) {
+    return sRaUsername.c_str();
+}
+extern "C" void Port_Config_SetRaUsername(const char* v) {
+    sRaUsername = v ? v : "";
+    sConfigJson["ra_username"] = sRaUsername;
+    SaveConfig();
+}
+extern "C" const char* Port_Config_GetRaToken(void) {
+    return sRaToken.c_str();
+}
+extern "C" void Port_Config_SetRaToken(const char* v) {
+    sRaToken = v ? v : "";
+    sConfigJson["ra_token"] = sRaToken;
     SaveConfig();
 }

@@ -14,6 +14,9 @@
 #include "port_imgui_menu.h"
 #include "port_ppu.h"
 #include "port_rom.h"
+#ifdef TMC_RA
+#include "port_ra.h"
+#endif
 #include "port_practice.h"
 #include "port_runtime_config.h"
 #include "port_roll_attack_macro.h"
@@ -1045,6 +1048,15 @@ void VBlankIntrWait(void) {
         Port_DiscordRpc_Update(areaName, (int)(gSave.stats.health >> 3), (int)(gSave.stats.maxHealth >> 3),
                                (int)gSave.stats.rupees);
     }
+
+    /* RetroAchievements: evaluate conditions once per emulated frame. This is
+     * the end of the game's frame — the engine has finished mutating its
+     * native globals (same reason the Discord block above can read gSave
+     * directly) and VBlankIntr() below only does the DMA/OAM upload. No-op
+     * unless ra_enabled is set. */
+#ifdef TMC_RA
+    Port_RA_FrameTick();
+#endif
 
     VBlankIntr();
 }
