@@ -69,6 +69,30 @@ extern u8* gTextVariableSources[];
 extern u8* gUnk_08109230[];
 #define gTextVariableSources gUnk_08109230
 #endif
+
+#ifdef PC_PORT
+/* On GBA gTextVariableSources[0] (0x020227DC) aliases gTextRender.player_name,
+ * which MsgInit fills. The port's globals are separate allocations, so
+ * ShowTextBox callers (both figurine-name screens) expanded {Player} to an
+ * empty string. Format the name into the slot the same way MsgInit does. */
+static void SyncInlineTextPlayerName(void) {
+    u8* dest = gTextVariableSources[0];
+    u32 i;
+
+    if (dest == NULL) {
+        return;
+    }
+    dest[0] = 2;
+    dest[1] = 0xe; // Green text color
+    dest += 2;
+    for (i = 0; i < FILENAME_LENGTH && gSave.name[i] != '\0'; ++i) {
+        *dest++ = gSave.name[i];
+    }
+    dest[0] = 2;
+    dest[1] = 0xf; // White text color
+    dest[2] = '\0';
+}
+#endif
 extern u32 gUnk_08109244; // TODO structure?
 extern u32* gUnk_08109248[];
 extern u32 gUnk_0810926C[];
@@ -576,6 +600,9 @@ u32 ShowTextBox(uintptr_t textIndexOrPtr, const Font* paramFont) {
     u32 temp2;
     u32 temp3;
 
+#ifdef PC_PORT
+    SyncInlineTextPlayerName();
+#endif
     pWVar4 = sub_0805F2C8();
     if (pWVar4 != NULL) {
 #ifdef PC_PORT
