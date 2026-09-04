@@ -76,6 +76,15 @@ bool WriteJsonFile(const std::filesystem::path& path, const nlohmann::json& json
     } else {
         output << json.dump(indent);
     }
+
+    /* Flush before checking: ENOSPC/EFBIG otherwise only surfaces at
+     * destructor time, where the badbit is discarded and we would report a
+     * truncated file as a successful write. */
+    output.flush();
+    if (!output.good()) {
+        SetError(error, "Failed to write JSON file: " + path.string());
+        return false;
+    }
     return true;
 }
 
@@ -2065,6 +2074,30 @@ bool BuildRuntimeAssets(const std::filesystem::path& sourceRoot, const std::file
         !LoadJsonFile(sourceRoot / "palette_groups.json", sourcePaletteGroups, error) ||
         !LoadJsonFile(sourceRoot / "texts.json", sourceTexts, error) ||
         !LoadJsonFile(sourceRoot / "sprite_ptrs.json", sourceSpritePtrs, error)) {
+        return false;
+    }
+
+    /* assets_src/ is user-editable, so a wrong-shaped file is expected input.
+     * The builders below index these containers directly and would throw
+     * out through the extern "C" boundary. */
+    if (!sourceGfxGroups.is_object()) {
+        SetError(error, "gfx_groups.json must be an object: " + (sourceRoot / "gfx_groups.json").string());
+        return false;
+    }
+    if (!sourcePalettes.is_array()) {
+        SetError(error, "palettes.json must be an array: " + (sourceRoot / "palettes.json").string());
+        return false;
+    }
+    if (!sourcePaletteGroups.is_object()) {
+        SetError(error, "palette_groups.json must be an object: " + (sourceRoot / "palette_groups.json").string());
+        return false;
+    }
+    if (!sourceTexts.is_object()) {
+        SetError(error, "texts.json must be an object: " + (sourceRoot / "texts.json").string());
+        return false;
+    }
+    if (!sourceSpritePtrs.is_array()) {
+        SetError(error, "sprite_ptrs.json must be an array: " + (sourceRoot / "sprite_ptrs.json").string());
         return false;
     }
 

@@ -34,6 +34,9 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h> /* MoveFileExA — rename() refuses to clobber on Win32 */
+#endif
 
 /* Engine-side queries used by the assignment UI. Declared as plain externs
  * so this TU doesn't drag in the full game headers (and the type collisions
@@ -131,11 +134,23 @@ void Port_SoftSlots_SetAssignment(int slot, uint8_t itemId) {
 }
 
 void Port_SoftSlots_Save(void) {
-    FILE* f = fopen(SOFTSLOT_FILENAME, "wb");
+    /* Write-then-rename, same as port_save.c: opening the live file "wb"
+     * would truncate it before a byte is written. */
+    FILE* f = fopen(SOFTSLOT_FILENAME ".tmp", "wb");
     if (!f) return;
-    fwrite(SOFTSLOT_MAGIC, 1, sizeof(SOFTSLOT_MAGIC), f);
-    fwrite(sAssignments, 1, sizeof(sAssignments), f);
-    fclose(f);
+    int ok = fwrite(SOFTSLOT_MAGIC, 1, sizeof(SOFTSLOT_MAGIC), f) == sizeof(SOFTSLOT_MAGIC) &&
+             fwrite(sAssignments, 1, sizeof(sAssignments), f) == sizeof(sAssignments);
+    if (fflush(f) != 0) ok = 0;
+    if (fclose(f) != 0) ok = 0;
+#ifdef _WIN32
+    if (ok) ok = MoveFileExA(SOFTSLOT_FILENAME ".tmp", SOFTSLOT_FILENAME, MOVEFILE_REPLACE_EXISTING) != 0;
+#else
+    if (ok) ok = rename(SOFTSLOT_FILENAME ".tmp", SOFTSLOT_FILENAME) == 0;
+#endif
+    if (!ok) {
+        remove(SOFTSLOT_FILENAME ".tmp");
+        fprintf(stderr, "[SOFTSLOTS] ERROR: Could not write %s\n", SOFTSLOT_FILENAME);
+    }
 }
 
 void Port_SoftSlots_Load(void) {
