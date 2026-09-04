@@ -54,6 +54,9 @@ extern "C" void Port_ApplyLanguage(void);
 #include "port_discord_rpc.h" /* Port_DiscordRpc_IsEnabled / SetEnabled */
 #include "port_tts.h"         /* Port_TTS_* — accessibility tab + focus reader */
 #include "port_a11y_cues.h"   /* Port_A11y_ScanSurroundings — navigation cues */
+#ifdef TMC_RA
+#include "port_ra_ui.h" /* Port_RA_UI_DrawTab / DrawOverlay — RetroAchievements */
+#endif
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
 #include "rando/rando_file_menu.h"
@@ -3634,6 +3637,12 @@ static void DrawRibbon(void) {
                 DrawRibbonPracticeTab();
                 ImGui::EndTabItem();
             }
+#ifdef TMC_RA
+            if (ImGui::BeginTabItem("Achievements")) {
+                Port_RA_UI_DrawTab();
+                ImGui::EndTabItem();
+            }
+#endif
             ImGui::EndTabBar();
         }
         /* Footer with the mode toggle + hotkey hint. */
@@ -4387,6 +4396,9 @@ extern "C" bool Port_ImGui_Render(void) {
     DrawRandoTrackerOverlay();
     DrawPracticeOverlay();
     DrawFpsOverlay();
+#ifdef TMC_RA
+    Port_RA_UI_DrawOverlay();
+#endif
     ImGui::Render();
 #ifdef TMC_GPU_RENDERER
     if (gpuBackend) {

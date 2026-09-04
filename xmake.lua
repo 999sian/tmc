@@ -77,6 +77,15 @@ option("gpu_renderer")
     set_description("Compile the SDL_GPU presentation path (default ON; auto-falls back to SDL_Renderer).")
 option_end()
 
+-- RetroAchievements (rcheevos + libcurl). Compiles the vendored MIT
+-- rcheevos client (libs/rcheevos) plus the port's RA glue
+-- (port/port_ra*.c, port/port_gba_shadow.c). Needs libcurl for HTTPS.
+option("ra")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Compile RetroAchievements support (rcheevos + libcurl; default ON)")
+option_end()
+
 -- Widescreen: render the GBA frame at a non-native horizontal width by
 -- overriding MODE1_GBA_WIDTH at compile time.
 --   240: GBA-native (3:2). No widescreen, no pillarbox, no stretch.
@@ -195,6 +204,24 @@ elseif is_plat("android") then
 else
     add_requires("libpng", {system = true, optional = true})
     add_requires("zlib",   {system = true, optional = true})
+end
+
+-- libcurl backs the RetroAchievements HTTPS worker (port_ra_net.c).
+-- Linux/macOS have a system libcurl; MinGW/Windows get the xmake package
+-- (the same treatment libpng gets above). The Android NDK has no system
+-- curl and a source build would drag in a whole TLS stack, so RA is
+-- simply compiled out there instead of failing the target.
+local ra_enabled = has_config("ra")
+if ra_enabled and is_plat("android") then
+    ra_enabled = false
+    print("PC port: RetroAchievements disabled on Android (no libcurl in the NDK).")
+end
+if ra_enabled then
+    if is_plat("mingw", "windows") then
+        add_requires("libcurl")
+    else
+        add_requires("libcurl", {system = true, optional = true})
+    end
 end
 
 -- Global -mno-ms-bitfields on MinGW so the entire codebase matches the
@@ -772,6 +799,31 @@ target("tmc_pc")
         add_files("port/shaders/build/ppu_raster.frag.spv")
         -- GLES compute backend: embed the shared core GLSL (built at runtime).
         add_files("port/shaders/ppu_core.glsl")
+    end
+
+    -- RetroAchievements: vendored rcheevos (MIT, libs/rcheevos — libretro and
+    -- RAIntegration backends stripped; the remaining sources need no Lua and
+    -- no zlib) plus the port glue. Compiled out entirely at --ra=n.
+    if ra_enabled then
+        -- RC_CLIENT_SUPPORTS_HASH: exposes rc_client_begin_identify_and_load_game
+        -- + the rhash MD5 path, which is how the loaded ROM buffer gets
+        -- identified. Must be visible to rc_client.c AND port_ra.c, hence
+        -- target-wide.
+        add_defines("TMC_RA", "RC_CLIENT_SUPPORTS_HASH")
+        add_includedirs("libs/rcheevos/include", "libs/rcheevos/src")
+        -- rcheevos uses strdup/strcasecmp, which -std=c11 hides behind a
+        -- feature macro. Scoped to these files so the engine's TUs keep the
+        -- strict-C11 namespace they compile under today.
+        local rc_flags = { defines = "_DEFAULT_SOURCE" }
+        add_files("libs/rcheevos/src/*.c", rc_flags)
+        add_files("libs/rcheevos/src/rcheevos/*.c", rc_flags)
+        add_files("libs/rcheevos/src/rapi/*.c", rc_flags)
+        add_files("libs/rcheevos/src/rhash/*.c", rc_flags)
+        add_files("port/port_ra.c")          -- rc_client host: login, game load, frame tick
+        add_files("port/port_gba_shadow.c")  -- native globals -> GBA-addressed shadow
+        add_files("port/port_ra_net.c")      -- async HTTPS worker (libcurl)
+        add_files("port/port_ra_ui.cpp")     -- ImGui achievement list + toasts
+        add_packages("libcurl")
     end
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/
