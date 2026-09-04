@@ -39,6 +39,8 @@
  */
 
 #include "port_types.h"
+#include "region.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,6 +72,10 @@ static int sSaveTxnDepth = 0;
  * logs once per failure burst instead of once per write. */
 static int sFlushFailedLast = 0;
 static int sEepromInited = 0;
+/* Existing malformed/wrong-region files are readable only as an unavailable
+ * EEPROM. Never let InitSaveData turn them into a fresh save implicitly. The
+ * user can still explicitly clear/switch the profile through the existing UI. */
+static int sEepromWriteBlocked = 0;
 static char sActivePath[SAVE_FILENAME_MAX] = DEFAULT_SAVE_FILENAME;
 /* 1 once the user has explicitly chosen a named profile (config.json), so the
  * per-region default below must NOT override their choice. 0 in the default
@@ -81,6 +87,9 @@ static int sExplicitProfile = 0;
 /* First 8-byte block of every initialized TMC save ("AGBZELDA:..."), in
  * game-RAM order and in on-disk (mGBA wire) order. Same in all regions. */
 #define EEPROM_SIG_RAM "AGBZELDA"
+/* Full 0x20-byte signature record (src/save.c sSignatureLong); USA vs EU/JP. */
+#define EEPROM_SIGNATURE_USA "AGBZELDA:THE MINISH CAP:ZELDA 5"
+#define EEPROM_SIGNATURE_EU_JP "AGBZELDA:THE MINISH CAP:ZELDA 3"
 
 /* Reverse each 8-byte block in place: converts between game-RAM order
  * (in-memory) and mGBA/VBA-M wire order (on-disk). Involution: applying
@@ -93,6 +102,146 @@ static void ReverseEepromBlocks(u8* buf) {
             buf[b + EEPROM_BLOCK - 1 - i] = t;
         }
     }
+}
+
+/* ---- Image classification ------------------------------------------------
+ * Decide what a candidate 8 KiB image is BEFORE the game sees it, so a file we
+ * can't prove is ours (short, oversized, garbage, another region's save) is
+ * never handed to InitSaveData as "blank" and then overwritten. */
+
+static int BufferIsAll(const u8* data, size_t size, u8 value) {
+    for (size_t i = 0; i < size; ++i)
+        if (data[i] != value)
+            return 0;
+    return 1;
+}
+
+/* 1 = USA signature, 2 = EU/JP signature, 0 = neither. */
+static int EepromSignatureKindAt(const u8* ramImage, u32 offset) {
+    if (memcmp(ramImage + offset, EEPROM_SIGNATURE_USA, 0x20) == 0)
+        return 1;
+    if (memcmp(ramImage + offset, EEPROM_SIGNATURE_EU_JP, 0x20) == 0)
+        return 2;
+    return 0;
+}
+
+static u16 ReadU16LE(const u8* data) {
+    return (u16)((u16)data[0] | ((u16)data[1] << 8));
+}
+
+static u32 ReadU32LE(const u8* data) {
+    return (u32)data[0] | ((u32)data[1] << 8) | ((u32)data[2] << 16) | ((u32)data[3] << 24);
+}
+
+/* Mirrors src/save.c CalculateChecksum over a byte image. */
+static u16 CalculateImageChecksum(const u8* data, u32 size) {
+    u32 checksum = 0;
+    while (size != 0) {
+        checksum += ReadU16LE(data) ^ size;
+        data += 2;
+        size -= 2;
+    }
+    return (u16)checksum;
+}
+
+/* A record is valid when either of its two SaveFileStatus copies is an
+ * untouched/deleted marker or an 'MCZ3' status whose checksum covers the data
+ * (src/save.c ReadSaveFileStatus + VerifyChecksum). */
+static int EepromStatusValidForData(const u8* ramImage, u32 statusOffset, u32 dataOffset, u32 dataSize) {
+    for (unsigned copy = 0; copy < 2; ++copy) {
+        const u8* statusBytes = ramImage + statusOffset + copy * 8u;
+        const u16 checksum1 = ReadU16LE(statusBytes);
+        const u16 checksum2 = ReadU16LE(statusBytes + 2);
+        const u32 status = ReadU32LE(statusBytes + 4);
+        if ((status == (u32)'TINI' || status == (u32)'FleD') && checksum1 == 0xFFFF && checksum2 == 0xFFFF)
+            return 1;
+        if (status == (u32)'MCZ3' && checksum2 == (u16)(-checksum1)) {
+            u16 expected = CalculateImageChecksum(statusBytes + 4, 4);
+            expected = (u16)(expected + CalculateImageChecksum(ramImage + dataOffset, dataSize));
+            if (checksum1 == expected)
+                return 1;
+        }
+    }
+    return 0;
+}
+
+/* Number of save records (3 slots, header, misc) with at least one valid
+ * status+data copy. Rows mirror src/save.c gSaveFileEEPROMAddresses. Retail
+ * reads each record independently, so one damaged slot must not hide the
+ * others. */
+static unsigned EepromValidRecordCount(const u8* ramImage) {
+    static const struct {
+        u16 size, status1, status2, data1, data2;
+    } records[] = {
+        { 0x500, 0x30, 0x1030, 0x80, 0x1080 },
+        { 0x500, 0x40, 0x1040, 0x580, 0x1580 },
+        { 0x500, 0x50, 0x1050, 0xA80, 0x1A80 },
+        { 0x10, 0x20, 0x1020, 0x70, 0x1070 },
+        { 0x20, 0x60, 0x1060, 0xF80, 0x1F80 },
+    };
+    unsigned validCount = 0;
+    for (size_t i = 0; i < sizeof(records) / sizeof(records[0]); ++i) {
+        if (EepromStatusValidForData(ramImage, records[i].status1, records[i].data1, records[i].size) ||
+            EepromStatusValidForData(ramImage, records[i].status2, records[i].data2, records[i].size))
+            ++validCount;
+    }
+    return validCount;
+}
+
+typedef enum {
+    EEPROM_IMAGE_INVALID = 0,
+    EEPROM_IMAGE_BLANK,
+    EEPROM_IMAGE_ACTIVE_REGION,
+    EEPROM_IMAGE_OTHER_REGION,
+} EepromImageClass;
+
+static EepromImageClass ClassifyRamEepromImage(const u8* ramImage) {
+    const int signature1 = EepromSignatureKindAt(ramImage, 0);
+    const int signature2 = EepromSignatureKindAt(ramImage, 0x1000);
+    const int activeSignature = (REGION_IS_EU || REGION_IS_JP) ? 2 : 1;
+
+    if (BufferIsAll(ramImage, EEPROM_SIZE, 0xFF))
+        return EEPROM_IMAGE_BLANK;
+    /* Two recognized but different region signatures cannot be repaired
+     * automatically: choosing either one would overwrite the other copy. */
+    if (signature1 != 0 && signature2 != 0 && signature1 != signature2)
+        return EEPROM_IMAGE_INVALID;
+    if (signature1 == activeSignature || signature2 == activeSignature) {
+        /* Require semantic evidence beyond the signature, but accept a partial
+         * image when any record still has a valid duplicated status/checksum. */
+        return EepromValidRecordCount(ramImage) != 0 ? EEPROM_IMAGE_ACTIVE_REGION : EEPROM_IMAGE_INVALID;
+    }
+    if (signature1 != 0 || signature2 != 0)
+        return EEPROM_IMAGE_OTHER_REGION;
+    return EEPROM_IMAGE_INVALID;
+}
+
+/* Load exactly one raw 8 KiB file into ramImage (game-RAM order on return)
+ * and select its byte order only when a known signature (or an all-FF blank
+ * image) proves the interpretation. *legacyRamOrder = 1 when the file was
+ * in legacy port (game-RAM) order and needs the byte-order migration. */
+static EepromImageClass ReadAndClassifyEepromFile(const char* path, u8* ramImage, int* legacyRamOrder) {
+    FILE* file = fopen(path, "rb");
+    if (file == NULL)
+        return EEPROM_IMAGE_INVALID;
+    const size_t got = fread(ramImage, 1, EEPROM_SIZE, file);
+    const int trailing = got == EEPROM_SIZE ? fgetc(file) : EOF;
+    const int readOk = !ferror(file);
+    const int closeOk = fclose(file) == 0;
+    if (got != EEPROM_SIZE || trailing != EOF || !readOk || !closeOk)
+        return EEPROM_IMAGE_INVALID;
+
+    *legacyRamOrder = 0;
+    EepromImageClass cls = ClassifyRamEepromImage(ramImage);
+    if (cls == EEPROM_IMAGE_ACTIVE_REGION || cls == EEPROM_IMAGE_OTHER_REGION) {
+        *legacyRamOrder = 1;
+        return cls;
+    }
+    if (cls == EEPROM_IMAGE_BLANK)
+        return cls;
+
+    ReverseEepromBlocks(ramImage);
+    return ClassifyRamEepromImage(ramImage);
 }
 
 /* Write the in-memory EEPROM to f in on-disk order. 1 on full write. */
@@ -187,24 +336,51 @@ static void ResolveRegionDefaultPath(void) {
 #endif
 
 static void LoadEepromFile(void) {
+    int legacyRamOrder = 0;
 #ifdef MULTI_REGION
     ResolveRegionDefaultPath();
 #endif
-    FILE* f = fopen(sActivePath, "rb");
-    if (!f) {
+    sEepromWriteBlocked = 0;
+    FILE* probe = fopen(sActivePath, "rb");
+    if (!probe) {
+        const int openError = errno;
         memset(sEeprom, 0xFF, EEPROM_SIZE); /* blank EEPROM = 0xFF */
-        fprintf(stderr, "[SAVE] No save file at %s, starting fresh.\n", sActivePath);
+        if (openError == ENOENT) {
+            fprintf(stderr, "[SAVE] No save file at %s, starting fresh.\n", sActivePath);
+        } else {
+            sEepromWriteBlocked = 1;
+            fprintf(stderr, "[SAVE] ERROR: cannot read %s; writes are disabled and the file is untouched.\n",
+                    sActivePath);
+        }
         return;
     }
-    const size_t got = fread(sEeprom, 1, EEPROM_SIZE, f);
-    fclose(f);
-    if (got != EEPROM_SIZE) {
-        fprintf(stderr, "[SAVE] ERROR: short read on %s (%zu/%d bytes), starting fresh.\n", sActivePath, got,
-                EEPROM_SIZE);
-        memset(sEeprom, 0xFF, EEPROM_SIZE); /* blank EEPROM = 0xFF */
+    fclose(probe);
+
+    switch (ReadAndClassifyEepromFile(sActivePath, sEeprom, &legacyRamOrder)) {
+    case EEPROM_IMAGE_INVALID:
+        memset(sEeprom, 0xFF, EEPROM_SIZE);
+        sEepromWriteBlocked = 1;
+        fprintf(stderr,
+                "[SAVE] ERROR: %s is not one exact, recognized 8 KiB EEPROM image; writes are disabled and the "
+                "file is untouched.\n",
+                sActivePath);
         return;
+    case EEPROM_IMAGE_OTHER_REGION:
+        memset(sEeprom, 0xFF, EEPROM_SIZE);
+        sEepromWriteBlocked = 1;
+        fprintf(stderr,
+                "[SAVE] ERROR: %s belongs to another ROM region; writes are disabled so InitSaveData cannot erase "
+                "it.\n",
+                sActivePath);
+        return;
+    case EEPROM_IMAGE_BLANK:
+        fprintf(stderr, "[SAVE] Loaded blank EEPROM image: %s\n", sActivePath);
+        return;
+    case EEPROM_IMAGE_ACTIVE_REGION:
+        break;
     }
-    if (memcmp(sEeprom, EEPROM_SIG_RAM, EEPROM_BLOCK) == 0) {
+
+    if (legacyRamOrder) {
         /* Legacy port-format file (game-RAM order on disk). The buffer
          * is already in the order we keep in memory; keep the original
          * bytes as .bak, then rewrite the file in on-disk order. */
@@ -221,9 +397,8 @@ static void LoadEepromFile(void) {
         sEepromDirty = 1;
         FlushEepromFile();
     } else {
-        /* mGBA/VBA-M order — or blank/uninitialized, where reversal is
-         * inconsequential. Convert to game-RAM order in memory. */
-        ReverseEepromBlocks(sEeprom);
+        /* ReadAndClassifyEepromFile already converted mGBA/VBA-M order to
+         * game-RAM order after validating the active-region signature. */
         fprintf(stderr, "[SAVE] Loaded save file: %s\n", sActivePath);
     }
 }
@@ -258,13 +433,15 @@ void Port_Save_BeginTransaction(void) {
     sSaveTxnDepth++;
 }
 
-/* Returns 1 when everything the transaction wrote is durably on disk. */
+/* Returns 1 when everything the transaction wrote is durably on disk. A
+ * write-blocked profile never reports success: the game must show the
+ * save-failed path instead of believing a save it could not make. */
 int Port_Save_EndTransaction(void) {
     if (sSaveTxnDepth > 0)
         sSaveTxnDepth--;
     if (sSaveTxnDepth == 0)
         FlushEepromFile();
-    return !sEepromDirty;
+    return !sEepromWriteBlocked && !sEepromDirty;
 }
 
 /* ---- EEPROM BIOS API ---------------------------------------------------- */
@@ -298,6 +475,8 @@ u16 EEPROMWrite0_8k_Check(u16 block, const u16* src) {
     }
     if (block >= EEPROM_BLOCKS)
         return 0x80FF; /* EEPROM_OUT_OF_RANGE */
+    if (sEepromWriteBlocked)
+        return 0x8000; /* preserve malformed/wrong-region backing file */
 
     memcpy(&sEeprom[block * EEPROM_BLOCK], src, EEPROM_BLOCK);
     sEepromDirty = 1;
@@ -353,6 +532,7 @@ void Port_Save_SetActivePath(const char* path) {
      * the new file. */
     sEepromInited = 0;
     sEepromDirty = 0;
+    sEepromWriteBlocked = 0;
 }
 
 const char* Port_Save_GetActivePath(void) {

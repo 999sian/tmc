@@ -32,6 +32,7 @@
 
 #include "port_entity_ctx.h"
 #include "port_gba_mem.h"
+#include "port_rom.h"
 #include "port_runtime_config.h"
 #include "port_widescreen.h"
 
@@ -157,15 +158,15 @@ u32 gFrameObjLists[50016];
 
 // gMapData — map data blob, backed by ROM data.
 // On GBA this is a label in .rodata at gAreaRoomMap_None (~14MB region).
-// On PC, we use a large buffer filled from ROM in Port_LoadRom().
-// Source files use &gMapData + offset, so this must be an array (not a pointer).
+// On PC it points into gRomData (set in Port_LoadRom()); source files only
+// compute gMapData + offset, so a pointer is sufficient and avoids a 14 MB copy.
 #ifdef TMC_N64
 /* #N64: the ~14 MB ROM map-data window can't live in 8 MB RDRAM. Temporary 1 MB
  * placeholder so the binary links and boots to the title (which doesn't read map
  * data). Phase 3 backs &gMapData with the embedded cart ROM (PI/DFS), not a RAM copy. */
 u8 gMapData[0x100000] __attribute__((aligned(4))); /* 1 MB placeholder */
 #else
-u8 gMapData[0xE00000] __attribute__((aligned(4))); /* ~14 MB */
+u8* gMapData = NULL;
 #endif
 
 // gCollisionMtx — On GBA, the collision matrix label sits at 0x080B7B74 with
@@ -1705,12 +1706,15 @@ u32 GetActTileRelativeToEntity(Entity* entity, s32 xOffset, s32 yOffset) {
  * tileType >= 0x4000 → gMapSpecialTileToActTile[tileType - 0x4000]
  */
 extern const u8 gMapTileTypeToActTile[];
-extern const u16 gUnk_080B7A3E[]; /* gMapSpecialTileToActTile */
+extern const u8 gMapSpecialTileToActTile[];
+extern const u16 gUnk_080B7A3E[];
 u32 GetActTileForTileType(u32 tileType) {
     if (tileType < 0x4000)
         return GetMapTileTypeToActTile(tileType);
     else
-        return ((const u8*)gUnk_080B7A3E)[tileType - 0x4000];
+        /* arm_GetActTileForTileType ldrb's gMapSpecialTileToActTile; gUnk_080B7A3E
+         * is the separate u16 special-tile property table (see sub_080B1B84). */
+        return gMapSpecialTileToActTile[tileType - 0x4000];
 }
 
 /* ---------- CollisionData family ---------- */
@@ -1841,7 +1845,9 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
  * live on LAYER_TOP while the player walks on LAYER_BOTTOM, so the check
  * silently fails. If the queried layer returns 0 for the masked flag, fall
  * back to the OTHER layer — keeps existing behaviour when the property is
- * already present on the queried layer.
+ * already present on the queried layer. Only for the lantern mask 0x40:
+ * movement, roof priority, climbing and projectile masks must not borrow
+ * properties from a different collision layer.
  */
 u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
     u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
@@ -1853,7 +1859,7 @@ u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
     }
     u32 r = table[tileType & 0x3FFF] & mask;
 #ifdef PC_PORT
-    if (r == 0) {
+    if (r == 0 && mask == 0x40) {
         u32 other = (layer == 2) ? 1 : 2;
         u32 tt2 = GetTileTypeAtTilePos(tilePos, other);
         const u16* t2 = (tt2 < 0x4000) ? (const u16*)&gRomData[0x360] : gUnk_080B7A3E;
@@ -1975,11 +1981,14 @@ void CloneTile(u32 tileType, u32 tilePos, u32 layer) {
 /**
  * Transition tile table entry for layer transitions.
  * (from ARM asm at 0x08016A90 / gTransitionTiles)
+ *
+ * preservedLayer: an entity already on this layer stays put; any other layer
+ * moves to destinationLayer.
  */
 typedef struct {
     u16 actTile;
-    u8 fromLayer;
-    u8 toLayer;
+    u8 preservedLayer;
+    u8 destinationLayer;
 } TransitionTileEntry;
 
 static const TransitionTileEntry sTransitionTiles[] = {
@@ -2012,7 +2021,7 @@ u32 ResolveCollisionLayer(Entity* entity) {
             const TransitionTileEntry* p = sResolveCollisionLayerTiles;
             while (p->actTile != 0) {
                 if (actTile == p->actTile) {
-                    newLayer = p->toLayer;
+                    newLayer = p->destinationLayer;
                     break;
                 }
                 p++;
@@ -2029,14 +2038,20 @@ u32 ResolveCollisionLayer(Entity* entity) {
  * (port of ARM asm at 0x08016A68)
  *
  * Returns the act tile at the entity's position (preserved in r0 in ARM code).
+ *
+ * Retail: `cmp r3, r5; beq not_found` — if the current layer equals byte 2 of
+ * the record the layer is preserved, otherwise byte 3 is written. Records
+ * 0x52/0x27/0x26 are {3,3}: they move an entity from layer 1/2 onto layer 3.
+ * With the comparison reversed (c8dfdb16d) those records could only ever fire
+ * for an entity already on layer 3, making them inert.
  */
 u32 CheckOnLayerTransition(Entity* entity) {
     u32 actTile = GetActTileAtEntity(entity);
     const TransitionTileEntry* p = sTransitionTiles;
     while (p->actTile != 0) {
         if (p->actTile == actTile) {
-            if (entity->collisionLayer == p->fromLayer) {
-                entity->collisionLayer = p->toLayer;
+            if (entity->collisionLayer != p->preservedLayer) {
+                entity->collisionLayer = p->destinationLayer;
             }
             return actTile;
         }
@@ -2048,10 +2063,14 @@ u32 CheckOnLayerTransition(Entity* entity) {
 /**
  * UpdateCollisionLayer — check layer transition and update sprite priority.
  * (port of ARM asm at 0x08016AB4)
+ *
+ * Returns the pre-transition act tile from CheckOnLayerTransition (the asm
+ * pushes r0 around UpdateSpriteForCollisionLayer and pops it back).
  */
-void UpdateCollisionLayer(Entity* entity) {
-    CheckOnLayerTransition(entity);
+u32 UpdateCollisionLayer(Entity* entity) {
+    u32 actTile = CheckOnLayerTransition(entity);
     UpdateSpriteForCollisionLayer(entity);
+    return actTile;
 }
 
 /**
@@ -2078,8 +2097,9 @@ u32 GetTileHazardType(Entity* entity) {
     if (entity->action == 0)
         return 0;
 
-    UpdateCollisionLayer(entity);
-    u32 actTile = GetActTileAtEntity(entity);
+    /* Classify the act tile CheckOnLayerTransition saw, not a re-read after the
+     * layer may have changed — at a boundary that reads a different floor. */
+    u32 actTile = UpdateCollisionLayer(entity);
 
     /* Check z position — if entity is in the air, no hazard */
     if ((s16)entity->z.HALF.HI < 0)
