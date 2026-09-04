@@ -392,6 +392,20 @@ u64 FrameTimeForFps(u32 fps) {
     return 1000000000ULL / fps;
 }
 
+/* nlohmann's value() throws type_error.302 on a wrong-typed key. config.json
+ * is hand-editable and Port_Config_Load() is called from main() in a C
+ * translation unit, so fall back per-field: one mangled key doesn't reset
+ * every other setting (the apply() catch below stays as the backstop). */
+template <typename T>
+T JsonValue(const nlohmann::json& j, const char* key, const T& fallback) {
+    try {
+        return j.value(key, fallback);
+    } catch (const nlohmann::json::exception& e) {
+        fprintf(stderr, "[CONFIG] ignoring bad \"%s\" (%s); using default.\n", key, e.what());
+        return fallback;
+    }
+}
+
 /* Serialize a Bind to the config.json token shape (`SDLK:0x...`,
  * `SDL_GAMEPAD:0x...`, `SDL_AXIS:0x...`). Shared by the capture/persist
  * path and (under launcher) the rebind writers. */
@@ -594,33 +608,41 @@ extern "C" void Port_Config_Load(const char* path) {
     const std::filesystem::path p = path ? path : "config.json";
     sConfigPath = p;
 
-    if (std::filesystem::exists(p)) {
+    std::error_code ec;
+    if (std::filesystem::exists(p, ec)) {
         try {
             std::ifstream(p) >> j;
-        } catch (...) { j = DefaultsJson(); }
+        } catch (const nlohmann::json::exception& e) {
+            fprintf(stderr, "[CONFIG] config.json parse failed (%s); using defaults.\n", e.what());
+            j = DefaultsJson();
+        }
+        if (!j.is_object()) {
+            fprintf(stderr, "[CONFIG] config.json top level is not an object; using defaults.\n");
+            j = DefaultsJson();
+        }
     } else {
         std::ofstream(p) << j.dump(4) << '\n';
     }
 
     sConfigJson = j;
 
-    /* Apply parsed JSON into the runtime statics. j.value(key, default)
-     * throws json::type_error when a key is present with the wrong type
-     * (e.g. a hand-edited "window_scale": "big"). The parse above is
-     * guarded; guard the reads too so a malformed-but-valid-JSON config
-     * degrades to defaults instead of terminating the process. The lambda
-     * param shadows the outer j so it can be re-run against defaults. */
+    /* Apply parsed JSON into the runtime statics. JsonValue() tolerates a
+     * wrong-typed key per field (e.g. a hand-edited "window_scale": "big");
+     * the try/catch around apply() backstops anything else so a
+     * malformed-but-valid-JSON config degrades to defaults instead of
+     * terminating the process. The lambda param shadows the outer j so it
+     * can be re-run against defaults. */
     auto apply = [](const nlohmann::json& j) {
         for (const auto& e : kBoolCfg)
-            *e.var = j.value(e.key, e.def);
+            *e.var = JsonValue(j, e.key, e.def);
         for (const auto& e : kIntCfg)
-            *e.var = j.value(e.key, e.def);
+            *e.var = JsonValue(j, e.key, e.def);
         for (const auto& e : kStrCfg)
-            *e.var = j.value(e.key, std::string(e.def));
+            *e.var = JsonValue(j, e.key, std::string(e.def));
         for (const auto& e : kFloatCfg)
-            *e.var = (float)j.value(e.key, e.def);
+            *e.var = (float)JsonValue(j, e.key, e.def);
         for (const auto& e : kScaleCfg) {
-            int v = j.value(e.key, e.def);
+            int v = JsonValue(j, e.key, e.def);
             *e.var = (v >= e.lo && v <= e.hi) ? (u8)v : (u8)e.def;
         }
         /* frame_time_ns: a MISSING key now defaults to the 60 FPS cap (same as
@@ -629,20 +651,28 @@ extern "C" void Port_Config_Load(const char* path) {
          * disable VSync" (can't sync above the panel), silently defeating it.
          * An explicit frame_time_ns:0 in the config is still honoured as a
          * deliberate uncapped/VSync-off opt-out (the key is present). */
-        sFrameTimeNs = j.value("frame_time_ns", kDefaultFrameTimeNs);
-        sAutosaveIntervalMs = j.value("autosave_interval_ms", 60000u); // ponytail: lone u32, not worth a table
+        sFrameTimeNs = JsonValue(j, "frame_time_ns", kDefaultFrameTimeNs);
+        /* 0 means uncapped; anything else must stay inside FrameTimeForFps()'s
+         * own bounds (1000 fps .. 1 fps). port_bios.c sleeps toward this
+         * deadline without pumping events, so an absurd value wedges the
+         * whole process. */
+        if (sFrameTimeNs != 0 && (sFrameTimeNs < FrameTimeForFps(1000) || sFrameTimeNs > FrameTimeForFps(1))) {
+            fprintf(stderr, "[CONFIG] frame_time_ns out of range; using default.\n");
+            sFrameTimeNs = kDefaultFrameTimeNs;
+        }
+        sAutosaveIntervalMs = JsonValue(j, "autosave_interval_ms", 60000u); // ponytail: lone u32, not worth a table
         {
-            std::string ts = j.value("touch_scheme", std::string("joystick"));
+            std::string ts = JsonValue(j, "touch_scheme", std::string("joystick"));
             for (char& c : ts) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
             }
             sTouchScheme = (ts == "dpad") ? PORT_TOUCH_SCHEME_DPAD : PORT_TOUCH_SCHEME_JOYSTICK;
         }
-        sTouchScale = std::min(1.6f, std::max(0.6f, j.value("touch_scale", 1.0f)));
-        sTouchOpacity = std::min(1.5f, std::max(0.3f, j.value("touch_opacity", 1.0f)));
+        sTouchScale = std::min(1.6f, std::max(0.6f, JsonValue(j, "touch_scale", 1.0f)));
+        sTouchOpacity = std::min(1.5f, std::max(0.3f, JsonValue(j, "touch_opacity", 1.0f)));
         {
-            std::string am = j.value("aspect_mode", std::string("native"));
+            std::string am = JsonValue(j, "aspect_mode", std::string("native"));
             for (char& c : am) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
@@ -656,7 +686,7 @@ extern "C" void Port_Config_Load(const char* path) {
             else
                 sAspectMode = PORT_ASPECT_NATIVE_3_2;
 
-            std::string bf = j.value("bg_fill", std::string("blurred"));
+            std::string bf = JsonValue(j, "bg_fill", std::string("blurred"));
             for (char& c : bf) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
@@ -683,7 +713,7 @@ extern "C" void Port_Config_Load(const char* path) {
             }
         }
         {
-            std::string rb = j.value("render_backend", std::string("auto"));
+            std::string rb = JsonValue(j, "render_backend", std::string("auto"));
             for (char& c : rb) {
                 if (c >= 'A' && c <= 'Z')
                     c = static_cast<char>(c - 'A' + 'a');
@@ -698,7 +728,7 @@ extern "C" void Port_Config_Load(const char* path) {
         /* reborn_features: absent from DefaultsJson on purpose — presence is
          * the signal that the user overrode the compile-time feature mask. */
         sHasRebornFeatures = j.contains("reborn_features");
-        sRebornFeatures = sHasRebornFeatures ? j.value("reborn_features", 0u) : 0u;
+        sRebornFeatures = sHasRebornFeatures ? JsonValue(j, "reborn_features", 0u) : 0u;
 
         for (auto& v : sBinds) {
             v.clear();

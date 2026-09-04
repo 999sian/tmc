@@ -154,7 +154,7 @@ constexpr int kVisibleItemsMax = 18;
 
 std::vector<MenuPage> sPageStack;
 std::string sToast; /* Temporary message shown at bottom of screen. */
-unsigned int sToastUntilTicks = 0;
+Uint64 sToastUntilTicks = 0; /* SDL_GetTicks() is Uint64 in SDL3. */
 
 /* Items in sPageStack store std::function lambdas. Clearing the stack
  * inside one of those lambdas would destroy the std::function whose body

@@ -96,7 +96,10 @@ bool RunEmbeddedAssetExtractor(const std::filesystem::path& root, std::string* e
         return false;
     }
 
-    gRomData = Rom.data();
+    /* Rom is a std::span<const uint8_t> view; gRomData is the engine's mutable
+     * u8*. The extractor only ever reads through it (see assets_extractor.hpp),
+     * so dropping const here is safe and keeps this TU compiling. */
+    gRomData = const_cast<u8*>(Rom.data());
     gRomSize = static_cast<u32>(Rom.size());
 
     std::error_code ec;
