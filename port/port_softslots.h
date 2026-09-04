@@ -32,6 +32,7 @@ void Port_SoftSlots_Update(void);
  * input layer ORs B_BUTTON into KEYINPUT in this case so the engine sees
  * a regular B-press and routes it through CreateItemIfInputMatches. */
 bool Port_SoftSlots_IsBHeld(void);
+int Port_SoftSlots_GetActiveSlot(void);
 
 /* Returns the soft-slot's item if a slot is active, else `saved`. Used by
  * src/playerUtils.c at the B-dispatch site to override the effective
