@@ -238,11 +238,7 @@ void InitSaveHeader(void) {
             case -1:
             default:
                 MemCopy(&sDefaultSettings, gSaveHeader, sizeof(SaveHeader));
-                if (REGION_IS_JP) {
-                    gSaveHeader->language = LANGUAGE_JP;
-                } else if (REGION_IS_EU) {
-                    gSaveHeader->language = 2; // TODO in EU 2 is english?
-                }
+                gSaveHeader->language = RegionDefaultLanguage();
                 WriteSaveHeader(gSaveHeader);
                 break;
         }
@@ -270,15 +266,10 @@ void InitSaveHeader(void) {
         (gSaveHeader->msg_speed >= MAX_MSG_SPEED) ||
         (gSaveHeader->brightness >= MAX_BRIGHTNESS)
         /* The multi-region binary is compiled USA-baseline (GAME_LANGUAGE == EN),
-         * but the loaded ROM's region is only known at runtime. A JP ROM is
-         * Japanese-only: its language-conditional gfx (title, name-entry,
-         * file-select) key off language == 0, so a save still flagged English
-         * (e.g. a USA tmc.sav) loads English gfx the JP ROM lacks. Require JP
-         * language on a JP ROM so an English-flagged header is reset to
-         * LANGUAGE_JP by InitSaveHeader's default path. */
-        || (REGION_IS_EU   ? ((gSaveHeader->language <= GAME_LANGUAGE) || (gSaveHeader->language > NUM_LANGUAGES))
-            : REGION_IS_JP ? (gSaveHeader->language != LANGUAGE_JP)
-                           : (gSaveHeader->language != GAME_LANGUAGE)) ||
+         * but the loaded ROM's region is only known at runtime. Region-specific
+         * language-gated gfx (title, name-entry, file-select) must use the active
+         * ROM's save-header slots: JP=0, USA=1, EU=2..6. */
+        || !RegionSaveLanguageValid(gSaveHeader->language) ||
         (gSaveHeader->invalid))
         return FALSE;
 
