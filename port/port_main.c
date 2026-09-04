@@ -19,6 +19,9 @@
 #include "port_gba_mem.h"
 #include "port_gpu_renderer.h"
 #include "port_icon.h"
+#ifdef TMC_RA
+#include "port_ra.h"
+#endif
 #include "port_ppu.h"
 #include "port_rom.h"
 #include "port_rom_picker.h"
@@ -885,6 +888,19 @@ int main(int argc, char* argv[]) {
         Port_InitAudio();
         fprintf(stderr, "Audio init complete.\n");
     }
+
+    /* RetroAchievements. After Port_LoadRom (rc_client hashes gRomData to
+     * identify the game) and before AgbMain, so the first frame the engine
+     * runs already has a client. No-op unless ra_enabled is set.
+     *
+     * Shutdown goes through atexit rather than a call after AgbMain: the port
+     * normally leaves via exit(0) from VBlankIntrWait's quit path, and the
+     * handler has to run there too so in-flight unlock POSTs are flushed and
+     * the network worker joined. Port_RA_Shutdown is idempotent. */
+#ifdef TMC_RA
+    Port_RA_Init();
+    atexit(Port_RA_Shutdown);
+#endif
 
     /* Last bridging splash before the game's title fade-in takes
      * over. After this the engine drives the frame loop. */
