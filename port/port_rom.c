@@ -15,6 +15,7 @@
 #include "port_runtime_config.h"
 #include "port_gba_mem.h"
 #include "structures.h"
+#include "main.h"
 #include "tileMap.h"
 #ifndef TMC_N64
 #include <SDL3/SDL.h>
