@@ -126,6 +126,10 @@ static void Port_UpdateInput(void) {
         if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen() ||
             Port_RandoFileMenu_IsOpen()) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
+            /* The one-frame edge cache must be cleared on this path too: the
+             * event loop keeps stamping edges for keys/pad buttons the overlays
+             * ignore, and a stale flag would fire the frame the overlay closes. */
+            Port_Config_ClearInputEdges();
             Port_SoftSlots_TickPause();
             sFrameNum++;
             return;
@@ -1275,35 +1279,6 @@ void SoftReset(u32 flags) {
     _Exit(0);
 }
 
-/* BgAffineSet (SWI 0x0E) */
-void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 count) {
-    for (s32 i = 0; i < count; i++) {
-        dst[i].pa = src[i].sx;
-        dst[i].pb = 0;
-        dst[i].pc = 0;
-        dst[i].pd = src[i].sy;
-        dst[i].dx = src[i].texX - src[i].scrX * src[i].sx;
-        dst[i].dy = src[i].texY - src[i].scrY * src[i].sy;
-    }
-}
-
-/* ObjAffineSet (SWI 0x0F)
- *
- * GBA BIOS computes the *inverse* texture-mapping matrix: hardware applies
- * pa/pb/pc/pd to screen-relative coordinates to produce texture coordinates.
- * For a visible scale of sx, the matrix uses 1/sx — so doubling sx halves
- * the sampled-texture step per screen pixel and the sprite *grows*.
- *
- *   pa =  cos(θ) / sx
- *   pb = -sin(θ) / sy
- *   pc =  sin(θ) / sx
- *   pd =  cos(θ) / sy
- *
- * Inputs sx/sy are 8.8 fixed point (0x100 = 1.0). Output pa/pb/pc/pd are
- * also 8.8 fixed point. Each is written as one s16 at `offset`-byte
- * intervals — for OAM (offset=8), that puts the four values in the
- * affineParam field of 4 consecutive OAM entries.
- */
 /* BIOS-accurate sin/cos: the GBA BIOS ObjAffineSet/BgAffineSet quantize the
  * angle to its high 8 bits (256 steps, low byte discarded) and look up a Q1.14
  * (0x4000 = 1.0) sine table, then floor the scaled products with `asr`. The
@@ -1324,6 +1299,62 @@ static void InitBiosSinLut(void) {
     sBiosSinLutInit = 1;
 }
 
+/* BgAffineSet (SWI 0x0E)
+ *
+ * Builds the BG rotation/scaling matrix the hardware applies to screen
+ * coordinates. Only the upper 8 bits of `alpha` are significant (256-step
+ * circle), looked up in the same Q1.14 table as ObjAffineSet:
+ *
+ *   pa =  sx*cos    pb = -sx*sin
+ *   pc =  sy*sin    pd =  sy*cos
+ *   dx = texX - (pa*scrX + pb*scrY)
+ *   dy = texY - (pc*scrX + pd*scrY)
+ *
+ * This previously hardcoded pb = pc = 0 and ignored alpha entirely, which is
+ * only correct for alpha == 0.
+ */
+void BgAffineSet(struct BgAffineSrcData* src, struct BgAffineDstData* dst, s32 count) {
+    if (!sBiosSinLutInit)
+        InitBiosSinLut();
+    for (s32 i = 0; i < count; i++) {
+        u32 idx = ((u16)src[i].alpha >> 8) & 0xFFu;
+        s32 sinv = sBiosSinLut[idx];
+        s32 cosv = sBiosSinLut[(idx + 0x40u) & 0xFFu];
+        s32 pa = (src[i].sx * cosv) >> 14;
+        s32 pb = (-src[i].sx * sinv) >> 14;
+        s32 pc = (src[i].sy * sinv) >> 14;
+        s32 pd = (src[i].sy * cosv) >> 14;
+
+        dst[i].pa = (s16)pa;
+        dst[i].pb = (s16)pb;
+        dst[i].pc = (s16)pc;
+        dst[i].pd = (s16)pd;
+        dst[i].dx = src[i].texX - (pa * src[i].scrX + pb * src[i].scrY);
+        dst[i].dy = src[i].texY - (pc * src[i].scrX + pd * src[i].scrY);
+    }
+}
+
+/* ObjAffineSet (SWI 0x0F)
+ *
+ * Builds the OBJ matrix the hardware applies to screen-relative coordinates to
+ * produce texture coordinates. Because that mapping is screen -> texture, the
+ * matrix is the *inverse* of the visible transform: a larger xScale steps
+ * further through the texture per screen pixel, so the sprite appears SMALLER.
+ * Callers pass the value they want in the matrix, not the visible scale --
+ * e.g. pullableMushroom's stalk lowers xScale from 0x200 to stretch itself.
+ *
+ *   pa =  sx*cos(theta)    pb = -sx*sin(theta)
+ *   pc =  sy*sin(theta)    pd =  sy*cos(theta)
+ *
+ * Inputs sx/sy are 8.8 fixed point (0x100 = 1.0). Output pa/pb/pc/pd are
+ * also 8.8 fixed point. Each is written as one s16 at `offset`-byte
+ * intervals — for OAM (offset=8), that puts the four values in the
+ * affineParam field of 4 consecutive OAM entries.
+ *
+ * NOTE: an earlier version of this comment claimed pa = cos/sx, i.e. the
+ * opposite convention. That contradicted the code below, which is correct --
+ * do not "fix" the code to match a comment again.
+ */
 void ObjAffineSet(struct ObjAffineSrcData* src, void* dst, s32 count, s32 offset) {
     u8* d = (u8*)dst;
     if (!sBiosSinLutInit)

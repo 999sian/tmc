@@ -70,7 +70,9 @@ u8 gUnk_02006F00[0x4000] __attribute__((aligned(4)));                    /* BG t
 u16 gUnk_0200B640;                                                       /* scroll state scalar */
 u16 gUnk_02017830[0x138] __attribute__((aligned(4)));                    /* palette rotation buffer (624 bytes) */
 u16 gUnk_02017AA0[0xA00] __attribute__((aligned(4)));                    /* HBlank DMA double buffer, 2×0xA00 bytes */
-struct BgAffineDstData gUnk_02017BA0[0x140] __attribute__((aligned(4))); /* BG2 affine ref lines */
+/* gUnk_02017BA0 is NOT a separate object: on GBA 0x02017BA0 == 0x02017AA0 + 0x100, entry 16 of the
+ * same BgAffineDstData table. rollingBarrelManager.c (its only reader) indexes gUnk_02017AA0 directly
+ * under PC_PORT, so no standalone (and never-written) definition here. */
 LinkedList2* gUnk_02018EA0 = NULL;
 struct_02018EB0 gUnk_02018EB0;
 s16 gUnk_02018EE0[0x800] __attribute__((aligned(4))); /* window rasterization scratch */
@@ -731,7 +733,7 @@ u32 LinearMoveDirectionOLD(Entity* ent, u32 speed, u32 direction) {
 
     /* X movement */
     if (!(masked & 0xEE00)) {
-        s16 sinVal = gSineTable[direction * 8];
+        s16 sinVal = gSineTable[(direction & 0x1F) * 8];
         if (sinVal != 0) {
             moved |= 1;
             s32 dx = FixedMul(sinVal, (s16)speed) << 8;
@@ -741,7 +743,7 @@ u32 LinearMoveDirectionOLD(Entity* ent, u32 speed, u32 direction) {
 
     /* Y movement */
     if (!(masked & 0x00EE)) {
-        s16 cosVal = gSineTable[direction * 8 + 64];
+        s16 cosVal = gSineTable[(direction & 0x1F) * 8 + 64];
         if (cosVal != 0) {
             moved |= 2;
             s32 dy = FixedMul(cosVal, (s16)speed) << 8;
@@ -785,8 +787,8 @@ void sub_08008AA0(Entity* ent) {
     u8 dir = gPlayerState.direction;
     if (dir == 0xFF)
         return;
-    gPlayerState.vel_x = gSineTable[dir * 8];
-    gPlayerState.vel_y = -gSineTable[dir * 8 + 64];
+    gPlayerState.vel_x = gSineTable[(dir & 0x1F) * 8];
+    gPlayerState.vel_y = -gSineTable[(dir & 0x1F) * 8 + 64];
 }
 
 /*
