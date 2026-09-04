@@ -126,6 +126,10 @@ struct SpritePtrEntryData {
 constexpr size_t kAreaCount = 0x90;
 constexpr size_t kSpritePtrMax = 512;
 constexpr size_t kSpriteAnim322Count = 128;
+/* gPaletteBuffer is u16[0x200] (port_linked_stubs.c) and each palette is
+ * 16 entries, so the destination holds exactly this many palettes. */
+constexpr size_t kPaletteSlotCount = 32;
+constexpr size_t kPaletteByteSize = 32;
 
 struct AssetGroupCache {
     bool initAttempted = false;
@@ -326,7 +330,15 @@ bool LoadJsonFile(const std::filesystem::path& path, nlohmann::json& outJson) {
         return false;
     }
 
-    input >> outJson;
+    /* Callers are reached from extern "C" entry points, so a parse_error
+     * escaping here would unwind into C and terminate. Degrade to false
+     * and let the caller fall back to the ROM. */
+    try {
+        input >> outJson;
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "[ASSET] JSON parse failed in %s: %s\n", PathForLog(path).c_str(), e.what());
+        return false;
+    }
     return true;
 }
 
@@ -1404,7 +1416,14 @@ extern "C" bool32 Port_LoadPaletteGroupFromAssets(u32 group) {
 
         for (const PaletteFileRefData& ref : entry.paletteFiles) {
             const std::vector<u8>* fileData = LoadBinaryFileCached(ref.file);
-            if (fileData == nullptr || ref.byteOffset + ref.size > fileData->size()) {
+            /* Guard the length actually read (numPalettes * 32), not the
+             * unrelated "size" field, and bound the destination: LoadPalettes
+             * copies straight into gPaletteBuffer without clamping. */
+            const size_t need = static_cast<size_t>(ref.numPalettes) * kPaletteByteSize;
+            if (fileData == nullptr || ref.byteOffset > fileData->size() ||
+                need > fileData->size() - ref.byteOffset ||
+                static_cast<size_t>(entry.destPaletteNum) + copiedPalettes + ref.numPalettes >
+                    kPaletteSlotCount) {
                 return FALSE;
             }
 

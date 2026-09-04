@@ -90,7 +90,10 @@ static void Port_LogVideoDiagnostics(void) {
 }
 
 static bool Port_InitVideo(void) {
-    const char* err = NULL;
+    /* SDL_GetError() returns a pointer into SDL's per-thread error buffer,
+     * which SDL_Quit() frees during TLS teardown. Copy it out before the
+     * quit so the diagnostics below don't read freed memory. */
+    char err[256] = "unknown error";
     const char* forcedDriver = getenv("SDL_VIDEODRIVER");
     const char* display = getenv("DISPLAY");
     const char* waylandDisplay = getenv("WAYLAND_DISPLAY");
@@ -108,7 +111,7 @@ static bool Port_InitVideo(void) {
         if (Port_TryInitVideo(NULL, "opengles2,software", false)) {
             return true;
         }
-        err = SDL_GetError();
+        SDL_strlcpy(err, SDL_GetError(), sizeof(err));
         SDL_Quit();
     }
 #endif
@@ -117,7 +120,7 @@ static bool Port_InitVideo(void) {
         if (Port_TryInitVideo(NULL, NULL, false)) {
             return true;
         }
-        err = SDL_GetError();
+        SDL_strlcpy(err, SDL_GetError(), sizeof(err));
         SDL_Quit();
     }
 
@@ -125,7 +128,7 @@ static bool Port_InitVideo(void) {
         if (Port_TryInitVideo("wayland", NULL, false)) {
             return true;
         }
-        err = SDL_GetError();
+        SDL_strlcpy(err, SDL_GetError(), sizeof(err));
         SDL_Quit();
     }
 
@@ -133,34 +136,36 @@ static bool Port_InitVideo(void) {
         if (Port_TryInitVideo("x11", NULL, false)) {
             return true;
         }
-        err = SDL_GetError();
+        SDL_strlcpy(err, SDL_GetError(), sizeof(err));
         SDL_Quit();
     }
 
     if (Port_TryInitVideo(NULL, NULL, false)) {
         return true;
     }
-    err = SDL_GetError();
+    SDL_strlcpy(err, SDL_GetError(), sizeof(err));
 
     SDL_Quit();
     if (Port_TryInitVideo("dummy", "software", true)) {
-        fprintf(stderr, "Initial SDL error: %s\n", err ? err : "unknown error");
+        fprintf(stderr, "Initial SDL error: %s\n", err);
         return true;
     }
 
     Port_LogVideoDiagnostics();
-    fprintf(stderr, "SDL video init failed: normal='%s', fallback='%s'\n", err ? err : "unknown error", SDL_GetError());
+    fprintf(stderr, "SDL video init failed: normal='%s', fallback='%s'\n", err, SDL_GetError());
     return false;
 }
 
 static void Port_InitAudio(void) {
-    const char* err = NULL;
+    /* Same lifetime hazard as Port_InitVideo: SDL_QuitSubSystem() can free
+     * the buffer SDL_GetError() points at, so snapshot it. */
+    char err[256] = "unknown error";
 
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) && Port_Audio_Init()) {
         return;
     }
 
-    err = SDL_GetError();
+    SDL_strlcpy(err, SDL_GetError(), sizeof(err));
     Port_Audio_Shutdown();
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
 
@@ -171,7 +176,7 @@ static void Port_InitAudio(void) {
         return;
     }
 
-    fprintf(stderr, "Audio disabled: normal='%s', fallback='%s'\n", err ? err : "unknown error", SDL_GetError());
+    fprintf(stderr, "Audio disabled: normal='%s', fallback='%s'\n", err, SDL_GetError());
     Port_Audio_Shutdown();
     SDL_QuitSubSystem(SDL_INIT_AUDIO);
     gMain.muteAudio = 1;

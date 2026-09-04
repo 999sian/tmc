@@ -427,8 +427,10 @@ u16* DoTileInteraction(Entity* entity, u32 interaction, u32 worldX, u32 worldY) 
         }
     }
 
-    u32 tileX = ((u16)worldX - gRoomControls.origin_x) >> 4;
-    u32 tileY = ((u16)worldY - gRoomControls.origin_y) >> 4;
+    /* Mask each axis to 6 bits (as WorldToTilePos does for the read above) so the
+       write targets the same tile; worldX/Y left of the room origin wrap otherwise. */
+    u32 tileX = (((u16)worldX - gRoomControls.origin_x) >> 4) & 0x3F;
+    u32 tileY = (((u16)worldY - gRoomControls.origin_y) >> 4) & 0x3F;
     u32 tilePos = tileX + (tileY << 6);
     u32 layer = entity->collisionLayer;
     u16 tileChange = entry->tileChange;

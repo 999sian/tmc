@@ -250,7 +250,7 @@ void sub_08058BC8(RollingBarrelManager* this) {
     } while (++tmp3 < 0xA0u);
 #ifdef PC_PORT
     /* On GBA, gUnk_02017BA0 lives at gUnk_02017AA0 + 0x100 in EWRAM
-     * (documented in port_linked_stubs.c:70) — i.e. 0x10 BgAffineDstData
+     * (see the note in port_linked_stubs.c) — i.e. 0x10 BgAffineDstData
      * entries forward in the SAME buffer that the write loop above just
      * filled. On PC the two arrays are separate host allocations, so
      * gUnk_02017BA0 was never written and reading from it gives zeros,
