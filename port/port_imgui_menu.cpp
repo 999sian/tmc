@@ -3419,6 +3419,31 @@ static void DrawRibbonPracticeTab(void) {
                         "Gamepad:   hold Select + A reload / B set / X pause / Y advance / D-Up reset / D-Down split");
 }
 
+extern "C" bool Port_LevelEditor_IsOpen(void);
+extern "C" void Port_LevelEditor_Toggle(void);
+extern "C" void Port_LevelEditor_Render(void* renderer, int winW, int winH);
+
+static void DrawRibbonMapEditorTab(void) {
+    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Direct Level Editor Mode");
+    ImGui::Separator();
+    bool editorOpen = Port_LevelEditor_IsOpen();
+    if (ImGui::Checkbox("Enable Direct Painting Overlay", &editorOpen)) {
+        Port_LevelEditor_Toggle();
+        if (editorOpen) {
+            extern void Port_DebugMenu_Toggle(void);
+            Port_DebugMenu_Toggle();
+        }
+    }
+    ImGui::Separator();
+    ImGui::TextDisabled("Controls & Hotkeys:");
+    ImGui::BulletText("Left-Click   : Paint selected tile");
+    ImGui::BulletText("Right-Click  : Eyedropper (sample tile)");
+    ImGui::BulletText("Scroll-Wheel : Increment/Decrement active tile ID");
+    ImGui::BulletText("[ / ]        : Switch between Top/Bottom layers");
+    ImGui::BulletText("{ / }        : Cycle Room Lighting");
+    ImGui::BulletText("Esc          : Close Level Editor");
+}
+
 /* Read-only entity viewer (#feature). Snapshots all live entities each frame
  * via the recycled-node-safe walk in port_debug_entities.c and lists them in a
  * scrollable table (clipped, so a full 72-entity room is cheap). */
@@ -3632,6 +3657,10 @@ static void DrawRibbon(void) {
             }
             if (ImGui::BeginTabItem("Practice")) {
                 DrawRibbonPracticeTab();
+                ImGui::EndTabItem();
+            }
+            if (ImGui::BeginTabItem("Map Editor")) {
+                DrawRibbonMapEditorTab();
                 ImGui::EndTabItem();
             }
             ImGui::EndTabBar();
@@ -4398,6 +4427,11 @@ extern "C" bool Port_ImGui_Render(void) {
         return true;
     }
 #endif
+    if (sRenderer) {
+        int w = 0, h = 0;
+        SDL_GetWindowSize(sWindow, &w, &h);
+        Port_LevelEditor_Render(sRenderer, w, h);
+    }
     ImGui_ImplSDLRenderer3_RenderDrawData(ImGui::GetDrawData(), sRenderer);
     return true;
 }
