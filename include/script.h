@@ -65,6 +65,6 @@ ScriptExecutionContext* CreateScriptExecutionContext(void);
 void InitScriptForEntity(Entity* entity, ScriptExecutionContext* context, Script* script);
 
 extern u32 ResolveCollisionLayer(struct Entity_*);
-extern void UpdateCollisionLayer(struct Entity_*);
+extern u32 UpdateCollisionLayer(struct Entity_*);
 
 #endif // SCRIPT_H

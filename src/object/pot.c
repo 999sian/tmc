@@ -78,7 +78,7 @@ void sub_080826FC(PotEntity* this);
 static bool32 Pot_HasJarContact(PotEntity* this);
 
 extern void RegisterCarryEntity(Entity*);
-extern void CheckOnLayerTransition(Entity*);
+extern u32 CheckOnLayerTransition(Entity*);
 
 void Pot(PotEntity* this) {
     static void (*const Pot_Actions[])(PotEntity*) = {
