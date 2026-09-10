@@ -104,7 +104,7 @@ u32 PointInsideRadius(s32, s32, s32);
 
 u32 CalcJumpDirection(Entity*);
 extern u32 sub_08079FD4(Entity*, u32);
-extern void UpdateCollisionLayer(Entity*);
+extern u32 UpdateCollisionLayer(Entity*);
 
 bool32 TryNavRightFromAbove(NPC5Entity*, s32, s32, s32);
 bool32 TryNavUpFromRight(NPC5Entity*, s32, s32, s32);

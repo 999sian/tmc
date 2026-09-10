@@ -97,14 +97,26 @@ void sub_08058034(void) {
     u32 tmp;
     u16 *tmp2, *tmp3;
     tmp2 = gMapDataTopSpecial;
+#ifdef PC_PORT
+    /* On GBA gUnk_02006F00 immediately follows gMapDataTopSpecial in EWRAM
+     * (0x02002F00 + 0x4000), so `gMapDataTopSpecial + 0x2000` (u16) lands in
+     * gUnk_02006F00 — the buffer sub_08058004 reads. PC has separate arrays;
+     * write the alias explicitly. */
+    tmp3 = (u16*)gUnk_02006F00;
+#else
     tmp3 = gMapDataTopSpecial + 0x2000;
+#endif
     for (tmp = 0; tmp < 4; tmp++) {
         sub_08058084(tmp2, tmp3);
         tmp2 += 0x400;
         tmp3 += 0x20;
     }
     tmp2 = gMapDataTopSpecial + 0x1000;
+#ifdef PC_PORT
+    tmp3 = (u16*)(gUnk_02006F00 + 0x2000);
+#else
     tmp3 = gMapDataTopSpecial + 0x3000;
+#endif
     for (tmp = 0; tmp < 4; tmp++) {
         sub_08058084(tmp2, tmp3);
         tmp2 += 0x400;
