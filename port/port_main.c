@@ -2,12 +2,6 @@
 #include "main.h"
 #include <stdbool.h>
 #include "port_config.h"
-#ifdef _WIN32
-#include <windows.h>
-#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
-#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
-#endif
-#endif
 /* Set by xmake (-DMODE1_GBA_WIDTH=N); falls back to GBA-native 240. */
 #ifndef MODE1_GBA_WIDTH
 #define MODE1_GBA_WIDTH 240
@@ -202,6 +196,9 @@ static void Port_InitAudio(void) {
 #define WIN32_LEAN_AND_MEAN
 #include <stdint.h>
 #include <windows.h>
+#ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
+#define ENABLE_VIRTUAL_TERMINAL_PROCESSING 0x0004
+#endif
 
 static int s_gba_va_reserve_done;
 
