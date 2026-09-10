@@ -176,8 +176,8 @@ bool sRandoStartSword = true;
 bool sRandoEarlyCrests = true;
 bool sRandoInstantText = true;
 int sRandoTunicColor = 0;
-/* Session-only (not persisted). When true, every flag activation is printed
- * to the terminal and shown as an on-screen toast. Default false. */
+/* Persisted (debug_flag_notifications). When true, every flag activation is
+ * printed to the terminal and shown as an on-screen toast. Default false. */
 bool sDebugFlagNotifications = false;
 int sRandoHeartColor = 0;
 int sRandoTricks = 0;
@@ -2019,7 +2019,7 @@ extern "C" void Port_Config_SetRandoSettings(bool glitchless, bool obscure, bool
     SaveConfig();
 }
 
-/* ---- Debug flag notifications (session-only toggle) -------------------- */
+/* ---- Debug flag notifications (persisted toggle) ----------------------- */
 extern "C" bool Port_Config_GetDebugFlagNotifications(void) {
     return sDebugFlagNotifications;
 }

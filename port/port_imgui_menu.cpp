@@ -755,7 +755,7 @@ static void DrawRibbonFlagsTab(void) {
         sBank = 0;
     const int cur = Port_DebugQuery_CurrentFlagBank();
 
-    /* Flag notifications toggle — session-only, default off. */
+    /* Flag notifications toggle — persisted, default off. */
     {
         bool notif = Port_Config_GetDebugFlagNotifications();
         if (ImGui::Checkbox("Flag notifications (log + on-screen toast on flag set)", &notif))
