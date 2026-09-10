@@ -6,18 +6,10 @@
  * accessors — rcheevos itself is never touched from here, so this file has
  * no knowledge of runtime addresses, hashes or HTTP.
  *
- * When TMC_RA is undefined both entry points are empty, so the --ra=n build
- * links with no port_ra.o / rcheevos objects at all.
+ * Only compiled when --ra=y (xmake adds this file under ra_enabled).
  */
 
 #include "port_ra_ui.h"
-
-#ifndef TMC_RA
-
-extern "C" void Port_RA_UI_DrawTab(void) {}
-extern "C" void Port_RA_UI_DrawOverlay(void) {}
-
-#else
 
 #include <imgui.h>
 
@@ -194,9 +186,9 @@ static void RA_DrawShadowDiagnostics(void) {
     ImGui::Text("Rejected: %d rows", rejected);
 
     if (rejected > 0) {
-        ImGui::TextWrapped("Rejected ranges read as zero: their native layout differs from "
-                           "retail (64-bit pointers widened the struct), so a condition keyed "
-                           "on them would be wrong rather than merely stale.");
+        ImGui::TextWrapped("Rejected ranges are not served: their native layout differs from "
+                           "retail (64-bit pointers widened the struct), so conditions keyed "
+                           "on them are marked unsupported rather than evaluated wrongly.");
         if (ImGui::BeginChild("##ra_shadow_rejected", ImVec2(0.0f, 140.0f), ImGuiChildFlags_Borders, 0)) {
             const char* reason = nullptr;
             for (int i = 0; i < rejected; ++i) {
@@ -270,7 +262,7 @@ extern "C" void Port_RA_UI_DrawTab(void) {
     }
     if (st == PORT_RA_OFF) {
         ImGui::SameLine();
-        ImGui::TextDisabled("(restart tmc_pc to connect)");
+        ImGui::TextDisabled("(log in below to connect)");
     }
 
     bool notify = Port_Config_GetRaNotifications();
@@ -377,5 +369,3 @@ extern "C" void Port_RA_UI_DrawOverlay(void) {
     }
     sToastCount = keep;
 }
-
-#endif /* TMC_RA */

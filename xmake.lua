@@ -207,21 +207,18 @@ else
 end
 
 -- libcurl backs the RetroAchievements HTTPS worker (port_ra_net.c).
--- Linux/macOS have a system libcurl; MinGW/Windows get the xmake package
--- (the same treatment libpng gets above). The Android NDK has no system
--- curl and a source build would drag in a whole TLS stack, so RA is
--- simply compiled out there instead of failing the target.
+-- xmake's default lookup uses the system libcurl when present (Linux/macOS)
+-- and otherwise builds the package from source (MinGW/Windows, or a Linux
+-- box without libcurl-dev). The Android NDK has no system curl and a source
+-- build would drag in a whole TLS stack, so RA is simply compiled out there
+-- instead of failing the target.
 local ra_enabled = has_config("ra")
 if ra_enabled and is_plat("android") then
     ra_enabled = false
     print("PC port: RetroAchievements disabled on Android (no libcurl in the NDK).")
 end
 if ra_enabled then
-    if is_plat("mingw", "windows") then
-        add_requires("libcurl")
-    else
-        add_requires("libcurl", {system = true, optional = true})
-    end
+    add_requires("libcurl")
 end
 
 -- Global -mno-ms-bitfields on MinGW so the entire codebase matches the
