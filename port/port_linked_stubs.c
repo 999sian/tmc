@@ -66,7 +66,9 @@ u8 gUnk_02000030[0x10]; /* EWRAM marker, 16 bytes gap */
 struct_02000040 gUnk_02000040;
 void* gUnk_020000B0 = NULL; /* Entity* pointer (8 bytes on 64-bit) */
 struct_gUnk_020000C0 gUnk_020000C0[0x30];
-Palette gUnk_02001A3C;
+/* gUnk_02001A3C is NOT a separate object: on GBA 0x02001A3C == gPaletteList
+ * (0x02001A00) + 0xF*4, i.e. gPaletteList[15]. src/color.c aliases it to that
+ * element; a standalone global here silently broke slot 15's release. */
 u8 gUnk_02006F00[0x4000] __attribute__((aligned(4)));                    /* BG tilemap buffer (16 KB) */
 u16 gUnk_0200B640;                                                       /* scroll state scalar */
 u16 gUnk_02017830[0x138] __attribute__((aligned(4)));                    /* palette rotation buffer (624 bytes) */

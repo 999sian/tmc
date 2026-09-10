@@ -11,7 +11,21 @@
 #include "port_offset_remap.h"
 #endif
 
+#ifdef PC_PORT
+/* gUnk_02001A3C IS gPaletteList[15] on GBA: linker.ld places gPaletteList at
+ * 0x1A00 and this symbol at 0x1A3C, and sizeof(Palette) == 4, so 0x3C is
+ * exactly index 15. The port declared it as its own global in
+ * port_linked_stubs.c, which broke the alias: sub_0801D000() reserves slot 15
+ * via sub_0801CFD0(0xf) but its release path clears gUnk_02001A3C, so on the
+ * port the release hit a dead variable and slot 15 stayed reserved forever.
+ * That permanently shrinks the allocatable OBJ palette pool from 10 slots
+ * (6..15) to 9, and in a palette-heavy room FindFreeObjPalette() then fails
+ * and SetEntityObjPalette() clamps the slot to 0 (unassigned) - an NPC drawn
+ * with whatever colours slot 0 happens to hold. */
+#define gUnk_02001A3C (gPaletteList[15])
+#else
 extern Palette gUnk_02001A3C;
+#endif
 
 void LoadObjPaletteAtIndex(u32 a1, u32 paletteIndex);
 void CleanUpObjPalettes();
