@@ -22,7 +22,8 @@
  *     offsetof(first pointer): on LP64 the compiler inserts alignment padding
  *     in front of the pointer (e.g. FuseInfo.entity is at 0x0C on GBA but 0x10
  *     here), and that padding is not retail data.
- *   - Everything else is rejected and reads as zero. See sRejected below.
+ *   - Everything else is rejected and is not served (reads return 0 bytes,
+ *     which rcheevos treats as an unsupported address). See sRejected below.
  *
  * The retail sizes/offsets asserted here were derived by compiling the very
  * same headers with 32-bit pointers and diffing; the numbers agree with the
@@ -76,6 +77,13 @@ typedef struct {
 /* a pointer and must move to the rejected list.                             */
 /* ------------------------------------------------------------------------- */
 PORT_STATIC_ASSERT(sizeof(gMessage) == 0x20, "gMessage layout differs from retail");
+/* Known layout divergence: KinstoneSave is 0x147 bytes, so our SaveFile puts
+ * flags at 0x114 + 0x147 = 0x25B, while save.h's annotation (and the retail
+ * EEPROM image) has it at 0x25C — the struct is missing one pad byte. The
+ * self-test reads flags back at 0x25B; pinned here so any fix to the struct
+ * (which needs a save migration) also updates the shadow expectations, and
+ * so RA sets authored on retail are known to see flags one byte early. */
+PORT_STATIC_ASSERT(offsetof(SaveFile, flags) == 0x25B, "SaveFile.flags moved; update shadow self-test");
 PORT_STATIC_ASSERT(sizeof(gSave) == 0x500, "gSave layout differs from retail");
 PORT_STATIC_ASSERT(sizeof(gSmallChests) == 0x40, "gSmallChests layout differs from retail");
 PORT_STATIC_ASSERT(sizeof(gActiveScriptInfo) == 0x0C, "gActiveScriptInfo layout differs from retail");
@@ -146,7 +154,7 @@ static const ShadowRow sIwramRows[] = {
 
 /* ------------------------------------------------------------------------- */
 /* Rejected symbols. These sit in the achievement-interesting part of RAM but */
-/* their native layout does not match retail, so their ranges read as zero.   */
+/* their native layout does not match retail, so their ranges are not served. */
 /* Reviving one means finding a pointer-free prefix and adding a prefix row.  */
 /* ------------------------------------------------------------------------- */
 typedef struct {
@@ -370,3 +378,4 @@ bool Port_GbaShadow_SelfTest(void) {
 
     return ok;
 }
+

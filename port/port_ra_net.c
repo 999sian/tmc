@@ -141,6 +141,23 @@ static size_t WriteBody(char* data, size_t size, size_t count, void* userdata) {
     return byteCount;
 }
 
+/* Polled by curl during a transfer; a non-zero return aborts it. Makes an
+ * in-flight request bail out promptly when Port_RA_Net_Shutdown sets sQuit
+ * instead of holding exit for up to RA_NET_TIMEOUT_S. */
+static int AbortIfQuitting(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal,
+                           curl_off_t ulnow) {
+    bool quit;
+    (void)clientp;
+    (void)dltotal;
+    (void)dlnow;
+    (void)ultotal;
+    (void)ulnow;
+    SDL_LockMutex(sMutex);
+    quit = sQuit;
+    SDL_UnlockMutex(sMutex);
+    return quit ? 1 : 0;
+}
+
 static void PerformRequest(CURL* curl, RaNetRequest* request) {
     struct curl_slist* headers = NULL;
     char userAgent[96];
@@ -159,6 +176,8 @@ static void PerformRequest(CURL* curl, RaNetRequest* request) {
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, AbortIfQuitting);
 
     if (request->post) {
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request->post);
@@ -385,8 +404,8 @@ void Port_RA_Net_Shutdown(void) {
     sQuit = true;
     SDL_UnlockMutex(sMutex);
 
-    /* The worker may be mid-request; the semaphore post makes it observe
-     * sQuit as soon as it comes back around. */
+    /* The worker may be mid-request; the progress callback aborts that
+     * transfer and the semaphore post makes it observe sQuit right after. */
     SDL_SignalSemaphore(sWakeup);
     SDL_WaitThread(sWorker, NULL);
     sWorker = NULL;
