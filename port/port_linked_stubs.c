@@ -1350,25 +1350,25 @@ void Port_Widescreen_UpdateShadows(void) {
      * frame left the right border outside the shifted copy (overdrawn by the
      * interior) and the bottom border row outside the y-band (torn by the
      * HUD right-anchor remap). Clamp to the native canvas. */
-    if ((gMessage.state & MESSAGE_ACTIVE) != 0) {
-        int x0 = (int)gMessage.textWindowPosX * 8;
-        int x1 = ((int)gMessage.textWindowPosX + (int)gMessage.textWindowWidth + 2) * 8;
-        int y0 = (int)gMessage.textWindowPosY * 8;
-        int y1 = ((int)gMessage.textWindowPosY + (int)gMessage.textWindowHeight + 2) * 8;
-        if (x0 < 0)
-            x0 = 0;
-        if (x1 > 240)
-            x1 = 240;
-        if (y0 < 0)
-            y0 = 0;
-        if (y1 > 160)
-            y1 = 160;
-        if (x1 > x0 && y1 > y0) {
-            virtuappu_mode1_ws_msg_x0 = x0;
-            virtuappu_mode1_ws_msg_x1 = x1;
-            virtuappu_mode1_ws_msg_y0 = y0;
-            virtuappu_mode1_ws_msg_y1 = y1;
-            virtuappu_mode1_ws_msg_shift = (Port_Widescreen_EffectiveViewWidth() - 240) / 2;
+    {
+        extern int Port_Message_WindowRect(int*, int*, int*, int*);
+        int x0, y0, x1, y1;
+        if ((gMessage.state & MESSAGE_ACTIVE) != 0 && Port_Message_WindowRect(&x0, &y0, &x1, &y1)) {
+            if (x0 < 0)
+                x0 = 0;
+            if (x1 > 240)
+                x1 = 240;
+            if (y0 < 0)
+                y0 = 0;
+            if (y1 > 160)
+                y1 = 160;
+            if (x1 > x0 && y1 > y0) {
+                virtuappu_mode1_ws_msg_x0 = x0;
+                virtuappu_mode1_ws_msg_x1 = x1;
+                virtuappu_mode1_ws_msg_y0 = y0;
+                virtuappu_mode1_ws_msg_y1 = y1;
+                virtuappu_mode1_ws_msg_shift = (Port_Widescreen_EffectiveViewWidth() - 240) / 2;
+            }
         }
     }
 
