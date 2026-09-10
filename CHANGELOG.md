@@ -1,5 +1,108 @@
 # Changelog
 
+## v0.9.0 (2026-09-10)
+
+### RetroAchievements (opt-in)
+
+- **RetroAchievements client** built on the vendored rcheevos library
+  (`libs/rcheevos`, MIT). Off by default: set `ra_enabled` in `config.json`
+  or use F8 → Achievements to log in; only the session token is persisted.
+  Unlocks show as corner toasts; rich presence is reported. Hardcore mode is
+  forced off — this port has save states, speed control and practice mode and
+  is not an RA-approved client. `--ra=n` compiles the feature out; Android
+  builds have no libcurl and always compile it out.
+- Achievement conditions read GBA addresses, but this is a decompilation, not
+  an emulator: the engine's state lives in native C globals. A per-frame shadow
+  (`port/port_gba_shadow.c`) mirrors the globals whose layout is proven
+  byte-identical to retail by compile-time size gates back to their
+  `linker.ld` addresses. Anything else reads as **unserved**, so rcheevos marks
+  the achievement *Unsupported* instead of evaluating it against zeros; the
+  F8 tab lists every unserved address the loaded set asked for so the missing
+  row can be added. (PR #189)
+- Linux builds now need `libcurl4-openssl-dev`; `build.py` and the README
+  list it.
+
+### Level editor and flag browser (developer tools)
+
+- **In-game level editor** (F8 → Map Editor → "Enable Direct Painting
+  Overlay"): paint tiles with the mouse, eyedropper, undo/redo, save the room
+  to `edited_levels/area%02X_room%02X.bin`; edited rooms load on entry. SDL
+  renderer backend only — the SDL_GPU backend shows no overlay. (PR #173,
+  @alfonsoalvarohervas-sudo)
+  - Hardened before release: level files are a disk trust boundary, so LZ77
+    assets decompress through a bounded path that checks the declared size
+    against the destination, entity/warp lists must be whole records ending
+    in the terminator, and editor input is ignored while ImGui owns the
+    mouse/keyboard or outside normal gameplay (menus alias the buffers it
+    paints into).
+- **F8 → Flags tab shows flag names and descriptions** instead of raw
+  numbers, with hover tooltips and a case-insensitive search across all
+  banks; optional `debug_flag_notifications` logs and toasts every flag that
+  turns on. Keyboard menu navigation no longer steals Backspace/Escape from
+  ImGui text fields. Names are the USA enum order; EU/JP bank-1 ordinals are
+  remapped at runtime and can show a neighbouring name. (PR #166,
+  @alfonsoalvarohervas-sudo)
+- **Custom map layouts can't read out of bounds**: tile indices past the
+  2048-entry tileset/collision/act-tile tables (or special tiles past 151)
+  resolve to tile 0 instead of indexing off the end. The dungeon-map asset
+  parser skips CR so CRLF checkouts build on Windows. (from PR #167, credit
+  @alfonsoalvarohervas-sudo)
+
+### Gameplay fixes ported from the 3DS fork
+
+Verified subset of [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds)
+(GPL-3.0, branched from v0.8.3), each re-derived against master (PR #188 plus
+the fork's later E11 fixes):
+
+- **Item-get can no longer eat an item.** The location flag was set before the
+  cutscene entities were allocated; under entity pressure the item vanished
+  with its flag already committed. The flag now rides on the LinkHoldingItem
+  entity and is committed after `GiveItem`.
+- **Minish-path leaf backgrounds draw again**, on both layers: the leaf
+  tilemap was written to a buffer nothing read (`gMapDataTopSpecial+0x2000`
+  aliases `gUnk_02006F00` on GBA), and the PC read bound then rejected every
+  nonzero scroll on the second layer.
+- **`{Player}` in figurine-name text was empty** — `gTextVariableSources[0]`
+  aliases `gTextRender.player_name` on GBA; PC now writes it.
+- **Collision-layer transitions**: `CheckOnLayerTransition`'s comparison was
+  reversed (layer-3 records could only fire for entities already on layer 3),
+  `UpdateCollisionLayer` returns the pre-transition act tile like the asm,
+  special tiles index `gMapSpecialTileToActTile` instead of a u16 table read
+  as bytes, and the lantern other-layer fallback is narrowed to its mask.
+- **12 tile-property rows restored** in `data_080046A4` that a v0.8.x change
+  had replaced with 8 bogus pairs.
+- **Entity-pressure guards**: Cloud Tops whirlwind delayed-spawn bit,
+  pullable mushroom child/affine pointers, a NULL target deref, and a UB
+  negative shift in spiked rollers.
+- **Goron Kinstone script callbacks registered** (USA/EU/JP).
+- **Affine sprites survive subtasks**: GBA `0x03000420` aliases the OAM
+  affine table; the PC snapshot/restore around pause/kinstone/map subtasks
+  copied a dead buffer.
+- **GFX-slot compaction** never moves into slot 0 (the "no free slot" result)
+  over the four reserved palette slots; `LoadSwapGFX` bounds its count/slot.
+- **A truncated, oversized, unrecognised or other-region `tmc.sav` is left
+  untouched** instead of being reformatted; writes are blocked.
+- `gMapData` points into the loaded ROM instead of a 14 MB copy.
+
+Not ported: the fork's EU regional-table relocation (still USA-pinned on PC),
+Prof9-style EU backport behaviour changes (Eenie fusion, Stockwell bomb bag,
+Wind Tribe roof warp), and its EU compaction switch.
+
+### Audit fixes and region work
+
+- **43-finding audit ported onto master** (PR #187): `BgAffineSet` applies the
+  real rotation; HBlank-DMA effects run one scanline later to match hardware
+  phase; tile-interaction writes mask coordinates like reads; song map parsed
+  once at init with EU offsets rebased by the nearest preceding block (most EU
+  songs resolved to the wrong offset); ROM sub-table scans bounded; softslot
+  writes are atomic; JSON asset parsing bounds-checked at the C boundary;
+  config tolerates wrong-typed keys.
+- **EU save language slots centralised** — EU English explicitly uses slot 2
+  and slots 2..6 are accepted; text and preferred-language fallbacks share the
+  helpers. (PR #185, @EstebanPdN)
+- **Softslot items can be assigned from the pause menu**, like A/B items.
+  (PR #183, @NoseDevilEugen)
+
 ## v0.8.3 (2026-07-19)
 
 ### Fixed
