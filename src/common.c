@@ -103,7 +103,9 @@ void SortKinstoneBag(void);
 
 extern void* GetRoomProperty(u32, u32, u32);
 
-extern u8 gMapData[];
+#ifndef PC_PORT
+extern u8 gMapData[]; /* PC: u8* declared in port_rom.h */
+#endif
 extern const DungeonLayout* const* const gDungeonLayouts[];
 extern u16 gMapDataBottomSpecial[];
 

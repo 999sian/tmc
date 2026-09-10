@@ -120,6 +120,13 @@ extern u32 GetFacingDirection(Entity*, Entity*);
 
 u32 sub_0800132C(Entity* entity, Entity* target) {
     s32 dx, dy;
+#ifdef PC_PORT
+    /* Enemy targets are temporarily cleared while the player is removed
+     * during some room/hazard transitions; a Leever can still be scheduled
+     * that frame, so treat a missing target as "no direction". */
+    if (entity == NULL || target == NULL)
+        return 0xFF;
+#endif
     if (!(entity->collisionLayer & target->collisionLayer))
         return 0xFF;
     dx = entity->x.HALF.HI - target->x.HALF.HI + 8;

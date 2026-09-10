@@ -96,7 +96,18 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
     while (npcPtr2->id != 0xff) {
         if (!CheckRectOnScreen(npcPtr2->x, npcPtr2->y, 0x18, 0x20)) {
             ClearBit(bitfield, index2);
-        } else if ((npcPtr2->progressBitfield & progressMask) && gEntCount < 0x47 && !WriteBit(bitfield, index2) &&
+        } else if ((npcPtr2->progressBitfield & progressMask) && gEntCount < 0x47 &&
+#ifdef PC_PORT
+                   /* Publish the spawn bit only once the script context and
+                    * entity both exist (WriteBit below). With WriteBit here
+                    * and all 32 script contexts busy, the entity was never
+                    * created but its slot stayed marked as spawned until it
+                    * left the viewport, permanently hiding scripted escape
+                    * objects such as the Cloud Tops whirlwinds. */
+                   !ReadBit(bitfield, index2) &&
+#else
+                   !WriteBit(bitfield, index2) &&
+#endif
                    (npcPtr2->script == NULL || (context = CreateScriptExecutionContext(), context != NULL))) {
             if (super->timer == 0) {
                 entity = CreateNPC(npcPtr2->id, npcPtr2->type, npcPtr2->type2);
@@ -104,6 +115,9 @@ void DelayedEntityLoadManager_Main(DelayedEntityLoadManager* this) {
                 entity = CreateObject(npcPtr2->id, npcPtr2->type, npcPtr2->type2);
             }
             if (entity != NULL) {
+#ifdef PC_PORT
+                WriteBit(bitfield, index2);
+#endif
                 tmp = this->unk_20 + 1;
                 entity->health = index2 + tmp;
                 entity->timer = npcPtr2->timer;
