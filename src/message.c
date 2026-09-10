@@ -267,6 +267,21 @@ Window gNewWindow;
 extern Window gCurrentWindow;
 extern Window gNewWindow;
 #endif
+#ifdef PC_PORT
+/* The widescreen message-centering band has to follow the window that is
+ * actually drawn, not the MessageRequest defaults in gMessage: a position
+ * token moves the box (gTextRender.message) while gMessage keeps posY 12,
+ * which tore the box across the band edge (#190). */
+int Port_Message_WindowRect(int* x0, int* y0, int* x1, int* y1) {
+    if (!gCurrentWindow.active)
+        return 0;
+    *x0 = (int)gCurrentWindow.xPos * 8;
+    *y0 = (int)gCurrentWindow.yPos * 8;
+    *x1 = ((int)gCurrentWindow.xPos + (int)gCurrentWindow.width + 2) * 8;
+    *y1 = ((int)gCurrentWindow.yPos + (int)gCurrentWindow.height + 2) * 8;
+    return 1;
+}
+#endif
 
 typedef struct {
     u8 unk_00;
