@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Animated background tiles no longer draw garbage on a European ROM.**
+  `LoadBgAnimationGfx` indexed `gGlobalGfxAndPalettes` with the raw
+  `offset_bgAnim_*` constant from `assets/gfx_offsets.h`. Those are
+  USA-baseline in the multi-region binary, so on EU every animated BG tile —
+  and every `BG_ANIM_PALETTE` row — was read from the wrong place in the
+  gfx blob. 641 of the game's 645 BG-animation offsets (99.4%) resolved to
+  the wrong bytes. Now remapped with `Port_RemapGfxOffset`, the same
+  translation the other compiled-offset consumers already apply
+  (`hyruleTownTileSetManager.c`, `color.c`).
+
+  Most visible in the Picori Festival, where the balloons, flower boxes and
+  hanging lights are animated BG tiles: they drew as flattened smears and
+  solid purple/orange blocks, and the lanterns took the wrong colours.
+  Verified against the loaded ROMs: all 645 offsets now resolve byte-correct
+  on EU, the festival is pixel-identical to USA apart from animation phase,
+  and USA output is byte-for-byte unchanged (the remap is identity on
+  USA/JP).
+
 ## v0.9.1 (2026-09-10)
 
 Focused on European and Japanese ROM support. A single binary has run all
