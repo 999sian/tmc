@@ -98,7 +98,7 @@ sudo pacman -S xmake sdl3 libpng fmt nlohmann-json git curl
 
 **Linux (Ubuntu / Debian):**
 ```sh
-sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev git curl
+sudo apt install xmake libsdl3-dev libpng-dev libfmt-dev nlohmann-json3-dev libcurl4-openssl-dev git curl
 ```
 
 **macOS (Apple Silicon or Intel):**
