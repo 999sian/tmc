@@ -426,7 +426,10 @@ CollisionResult CollisionNoOp(Entity* org, Entity* tgt, u32 direction, ColSettin
 CollisionResult CollisionGroundItem(Entity* org, Entity* tgt, u32 direction, ColSettings* settings) {
     COLLISION_OFF(tgt);
     tgt->contactFlags = org->hurtType | CONTACT_NOW;
-    if ((tgt->type == 0x5F || tgt->type == 0x60) && sub_08081420(tgt))
+    /* sub_08081420 is tri-state on PC (0 direct, 1 cutscene, 2 retry): only
+     * a started cutscene may zero health, otherwise a failed allocation would
+     * delete the pickup with its flag set and lose the item. */
+    if ((tgt->type == 0x5F || tgt->type == 0x60) && sub_08081420(tgt) == 1)
         tgt->health = 0;
     return RESULT_COLLISION_WITHOUT_SET;
 }
