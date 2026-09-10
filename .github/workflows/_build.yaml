@@ -776,9 +776,9 @@ jobs:
           # Pinned to v3.0.8 — see the desktop Setup xmake step above for why.
           xmake-version: v3.0.8
           actions-cache-folder: '.xmake-cache'
-          actions-cache-key: android-apk
+          actions-cache-key: android-apk-v3
           package-cache: true
-          package-cache-key: android-apk
+          package-cache-key: android-apk-v3
           project-path: '.'
 
       - name: Install pinned Android NDK
