@@ -119,8 +119,19 @@ void CastleMaid_SetDialogFunc(CastleMaidEntity* this, ScriptExecutionContext* co
     /* intVariable holds a raw GBA Thumb address; resolve to native function pointer */
     u32 gba_addr = context->intVariable & ~1u;
     switch (gba_addr) {
-        case 0x0806464C: this->dialogFunc = (void(*)())sub_0806464C; break;
-        case 0x08064688: this->dialogFunc = (void(*)())sub_08064688; break;
+        /* Region-native addresses: the script arg comes from the loaded ROM.
+         * Unmapped meant dialogFunc = NULL, so no message ever opened and
+         * Link stayed stuck in the talk state (#190). */
+        case 0x0806464C: /* USA */
+        case 0x080640D4: /* EU */
+        case 0x0806448C: /* JP */
+            this->dialogFunc = (void(*)())sub_0806464C;
+            break;
+        case 0x08064688: /* USA */
+        case 0x08064110: /* EU */
+        case 0x080644C8: /* JP */
+            this->dialogFunc = (void(*)())sub_08064688;
+            break;
         default:
             fprintf(stderr, "[CastleMaid] Unknown dialogFunc GBA addr: 0x%08X\n", context->intVariable);
             this->dialogFunc = NULL;
