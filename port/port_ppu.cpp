@@ -139,7 +139,7 @@ static size_t sUpscale4xPixels = 0;
  * gameplay can use the live widescreen width; fixed 240px canvases (title,
  * menus, narrow rooms, overlays) intentionally stay native here and are
  * presented aspect-correct (pillarboxed), never stretched. */
-static int Port_PPU_VisibleFrameWidth(void) {
+extern "C" int Port_PPU_VisibleFrameWidth(void) {
     if (MODE1_GBA_WIDTH == 240) {
         return MODE1_GBA_WIDTH;
     }
