@@ -47,6 +47,11 @@ int Port_PPU_VisibleFrameWidth(void);
 void SoundReq(unsigned int sound);
 } // extern "C"
 
+/* Probed once: with neither mod directory present the room-load hook must
+ * cost nothing for players who never touch the editor. */
+static bool sModDirsProbed = false;
+static bool sHaveModDirs = false;
+
 namespace {
 
 bool sOpen = false;
@@ -285,6 +290,7 @@ void SaveCurrentRoom() {
 
     try {
         std::filesystem::create_directories("edited_levels");
+        sHaveModDirs = true;
         char path[256];
         std::snprintf(path, sizeof(path), "edited_levels/area%02X_room%02X.bin", area, room);
 
@@ -663,23 +669,21 @@ extern "C" {
 }
 
 extern "C" void Port_LevelEditor_OnRoomLoad(void) {
-    std::fprintf(stderr, "[LEVEL EDITOR LOG] OnRoomLoad called. task=%d, size=%dx%d, transitioningOut=%d, type=%d, field2d=%d\n", 
-                 gMain.task, gRoomControls.width, gRoomControls.height, gRoomTransition.transitioningOut, gRoomTransition.type, gRoomTransition.field2d);
-    if (gRoomTransition.field2d == 2) {
-        std::fprintf(stderr, "[LEVEL EDITOR LOG] Exiting: field2d is 2 (transition scroll swap)\n");
-        return;
+    if (!sModDirsProbed) {
+        std::error_code ec;
+        sHaveModDirs = std::filesystem::is_directory("edited_levels", ec) || std::filesystem::is_directory("Areas", ec);
+        sModDirsProbed = true;
     }
-    if (gMain.task != TASK_GAME) {
-        std::fprintf(stderr, "[LEVEL EDITOR LOG] Exiting: not TASK_GAME\n");
+    if (!sHaveModDirs)
         return;
-    }
-    if (gRoomControls.width == 0 || gRoomControls.height == 0) {
-        std::fprintf(stderr, "[LEVEL EDITOR LOG] Exiting: room size 0\n");
+    if (gRoomTransition.field2d == 2)
         return;
-    }
+    if (gMain.task != TASK_GAME)
+        return;
+    if (gRoomControls.width == 0 || gRoomControls.height == 0)
+        return;
     unsigned char area = gRoomControls.area;
     unsigned char room = gRoomControls.room;
-    std::fprintf(stderr, "[LEVEL EDITOR LOG] Processing room: area=0x%02X, room=0x%02X\n", area, room);
 
     // Check if there are custom map assets or custom layout binary files for this area/room
     bool hasCustomAreaGfx = false;
@@ -727,7 +731,6 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
     }
 
     bool hasCustomMap = hasCustomAreaGfx || hasCustomRoomLayout;
-    std::fprintf(stderr, "[LEVEL EDITOR LOG] hasCustomMap=%d (gfx=%d, layout=%d)\n", hasCustomMap, hasCustomAreaGfx, hasCustomRoomLayout);
 
     if (hasCustomMap) {
         // ----------------------------------------------------
@@ -890,13 +893,11 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
     // Load custom entities from Minish Maker project files if they exist
     
     // Clear old data first
-    std::fprintf(stderr, "[LEVEL EDITOR LOG] Clearing custom entity vectors...\n");
     sCustomList1Data.clear();
     sCustomList2Data.clear();
     sCustomList3Data.clear();
     sCustomChestData.clear();
     sCustomWarpData.clear();
-    std::fprintf(stderr, "[LEVEL EDITOR LOG] Custom entity vectors cleared. Probing entity files...\n");
 
     bool hasCustomEntities = false;
     char path1[256], path2[256], path3[256], pathChest[256], pathWarp[256];
