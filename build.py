@@ -142,6 +142,7 @@ LINUX_DEPS = [
     ("libpng",        lambda: pkg_config_ok("libpng"),          "libpng",        "libpng-dev"),
     ("fmt",           lambda: pkg_config_ok("fmt"),             "fmt",           "libfmt-dev"),
     ("nlohmann-json", lambda: pkg_config_ok("nlohmann_json"),   "nlohmann-json", "nlohmann-json3-dev"),
+    ("libcurl",       lambda: pkg_config_ok("libcurl"),         "curl",          "libcurl4-openssl-dev"),
 ]
 
 WIN_DEPS = [
