@@ -225,10 +225,22 @@ static EepromImageClass ReadAndClassifyEepromFile(const char* path, u8* ramImage
     if (file == NULL)
         return EEPROM_IMAGE_INVALID;
     const size_t got = fread(ramImage, 1, EEPROM_SIZE, file);
-    const int trailing = got == EEPROM_SIZE ? fgetc(file) : EOF;
+    /* Emulators (libretro mGBA .srm) pad the 8 KiB image to 32/128 KiB with
+     * 0xFF; accept that, but refuse any other trailing data. */
+    int trailingOk = 1;
+    if (got == EEPROM_SIZE) {
+        u8 tail[4096];
+        size_t n;
+        while ((n = fread(tail, 1, sizeof(tail), file)) != 0) {
+            if (!BufferIsAll(tail, n, 0xFF)) {
+                trailingOk = 0;
+                break;
+            }
+        }
+    }
     const int readOk = !ferror(file);
     const int closeOk = fclose(file) == 0;
-    if (got != EEPROM_SIZE || trailing != EOF || !readOk || !closeOk)
+    if (got != EEPROM_SIZE || !trailingOk || !readOk || !closeOk)
         return EEPROM_IMAGE_INVALID;
 
     *legacyRamOrder = 0;
