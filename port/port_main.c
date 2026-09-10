@@ -337,13 +337,14 @@ static void PaintSplash(SDL_Window* window, const char* msg) {
 
 int main(int argc, char* argv[]) {
 #ifdef _WIN32
-    // Enable ANSI escape sequences in Windows console/terminal
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (hOut != INVALID_HANDLE_VALUE) {
-        DWORD dwMode = 0;
-        if (GetConsoleMode(hOut, &dwMode)) {
-            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-            SetConsoleMode(hOut, dwMode);
+    /* Enable ANSI escape sequences on the Windows console for stdout+stderr. */
+    {
+        const DWORD handles[] = { STD_OUTPUT_HANDLE, STD_ERROR_HANDLE };
+        for (size_t i = 0; i < 2; ++i) {
+            HANDLE h = GetStdHandle(handles[i]);
+            DWORD mode = 0;
+            if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode))
+                SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
         }
     }
 #endif

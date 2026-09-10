@@ -75,8 +75,37 @@ which lands on the wrong bytes. This release resolves those per region.
 - An entity whose hitbox pointer is rejected by the safety guard stops
   colliding silently. Bug reports now name that entity instead of leaving
   "I walk through enemies" unattributable.
-- The level editor no longer prints eight lines to the terminal on every room
-  load (`TMC_LEVEL_EDITOR_LOG=1` to restore).
+
+### Engine fixes ported from the 3DS fork (round 2)
+
+- `DispReset` now stops HDMA channel 0 on PC (the `DmaStop(0)` call is a host
+  no-op), so per-scanline affine DMA no longer leaks into the next room; the
+  rolling-barrel exit-handler workaround that papered over it is gone.
+- Camera init tested the preserved-axis bit with `u16 * 0x10000 < 0`
+  (signed-overflow UB); adjacent-room transitions are only probed from inside
+  the current room (unsigned underflow could chain a second transition).
+- The charge bar reads region-remapped art instead of USA offsets;
+  `LoadGfxGroup` DMA into EWRAM lands in the native
+  `gMapTop`/`gMapBottom`/special buffers.
+- Widescreen: rain columns, the cucco-aggression spawn ring and the bomb
+  peahat's right-edge target scale with the live view width.
+
+### Developer tools
+
+- Level editor: hotkeys no longer reach gameplay (S was the default R button);
+  the room-load hook returns immediately when neither `edited_levels/` nor
+  `Areas/` exists (it used to open ~15 files and log every room load for every
+  player); the F8 help lists the real hotkeys and the toggle is disabled on the
+  SDL_GPU backend where the overlay cannot draw.
+- Flag browser: bank-1 names are correct on EU/JP ROMs (the USA-ordered table
+  is inverted through the region remap; region-only flags show `UNKNOWN`);
+  flag notifications fire only on 0→1 and log to stderr; DEMO_JP-only rows
+  removed; the search list no longer reallocates every frame.
+- RetroAchievements: an in-flight transfer is aborted at shutdown instead of
+  blocking exit for up to 30 s; libcurl is a hard requirement on desktop
+  (built from source when the system lacks it); dead `--ra=n` stubs removed.
+  Achievement conditions on save flags now read the right bytes (see the save
+  layout fix above).
 
 ### Known
 
