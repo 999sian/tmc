@@ -211,6 +211,15 @@ bool CopyProcMaps(const std::filesystem::path& dest) {
     return !ec;
 }
 
+/* Set by the collision guard (src/collision.c). Plain scalars, written from the
+ * game thread only; the crash handler reads them without locking. */
+struct BadHitbox {
+    unsigned kind, id, type;
+    unsigned long long ptr;
+    unsigned count;
+};
+BadHitbox g_badHitbox = {};
+
 bool WriteStateText(const std::filesystem::path& path, const PortBugReportState& s, const char* reason) {
     std::ofstream out(path);
     if (!out) {
@@ -228,6 +237,11 @@ bool WriteStateText(const std::filesystem::path& path, const PortBugReportState&
         << "\n";
     out << "Frame:     " << s.frameCount << "\n";
     out << "ROM size:  " << gRomSize << " bytes\n";
+    if (g_badHitbox.count != 0) {
+        out << "BadHitbox: kind=" << g_badHitbox.kind << " id=0x" << std::hex << g_badHitbox.id << std::dec
+            << " type=" << g_badHitbox.type << " hb=0x" << std::hex << g_badHitbox.ptr << std::dec << " (rejected "
+            << g_badHitbox.count << "x; this entity does not collide)\n";
+    }
 
     /* Compact BG-layer dump for triaging "screen-is-black" repros (#108,
      * #103 family). One line per BG with: ctl reg, scroll, char-base byte
@@ -521,6 +535,16 @@ void* g_crashFaultAddr = nullptr;
 #endif
 
 } // namespace
+
+extern "C" void Port_BugReport_NoteBadHitbox(unsigned kind, unsigned id, unsigned type, unsigned long long ptr) {
+    if (g_badHitbox.count == 0) {
+        g_badHitbox.kind = kind;
+        g_badHitbox.id = id;
+        g_badHitbox.type = type;
+        g_badHitbox.ptr = ptr;
+    }
+    g_badHitbox.count++;
+}
 
 extern "C" char* Port_BugReport_Capture(const char* reason) {
     int expected = 0;
