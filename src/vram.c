@@ -242,6 +242,13 @@ bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
 // If slotIndex != 0 the gfx loaded starting from that slot, else in the first fitting free one.
 bool32 LoadSwapGFX(Entity* entity, u32 count, u32 slotIndex) {
     u32 status;
+#ifdef PC_PORT
+    /* count/slotIndex come from sprite metadata; a bad pair walks
+     * ReserveGFXSlots past the 44-entry table (3DS fork E11). */
+    if (count == 0 || count > MAX_GFX_SLOTS - 4 || slotIndex >= MAX_GFX_SLOTS ||
+        count > MAX_GFX_SLOTS - slotIndex)
+        return FALSE;
+#endif
     if ((slotIndex == 0) && (slotIndex = FindFreeGFXSlots(count), slotIndex == 0)) {
         if (!REGION_IS_EU) {
         CleanUpGFXSlots();
@@ -363,7 +370,13 @@ void CleanUpGFXSlots(void) {
     if (gGFXSlots.unk0 != 0) {
         for (occupiedIndex = 4; (occupiedIndex = FindNextOccupiedGFXSlot(occupiedIndex)) != 0; occupiedIndex++) {
             firstFreeIndex = FindFirstFreeGFXSlot();
+#ifdef PC_PORT
+            /* 0 means no free slot, not a destination: moving there
+             * overwrites the four reserved palette slots (3DS fork E11). */
+            if (firstFreeIndex >= 4 && firstFreeIndex < occupiedIndex) {
+#else
             if (firstFreeIndex <= occupiedIndex) {
+#endif
                 sub_080AE218(occupiedIndex, firstFreeIndex);
                 MoveGFXSlots(occupiedIndex, firstFreeIndex);
                 occupiedIndex = firstFreeIndex;
