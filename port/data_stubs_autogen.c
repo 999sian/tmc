@@ -538,6 +538,7 @@ const SongHeader sfxWind3 = { 0 };
 /* ---- ROM data stub initialization ---- */
 #include <stdio.h>
 #include <string.h>
+#include "port_config.h"
 extern u8* gRomData;
 extern u32 gRomSize;
 
@@ -585,7 +586,7 @@ void Port_InitDataStubs(void) {
      * collision handlers with hardcoded indices (like 0x11AA) also work. */
     {
         extern u8 gCollisionMtx[];
-        u32 col_rom_off = 0x000B7B74u;
+        u32 col_rom_off = (gRomOffsets && gRomOffsets->collisionMatrix) ? gRomOffsets->collisionMatrix : 0x000B7B74u;
         u32 col_size = 173u * 34u * 12u; /* 70584 bytes */
         if (col_rom_off + col_size <= gRomSize) {
             memcpy(gCollisionMtx, &gRomData[col_rom_off], col_size);

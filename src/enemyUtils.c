@@ -14,6 +14,7 @@
 #include "color.h"
 
 #ifdef PC_PORT
+#include "port_rom.h"
 /*
  * On 64-bit, Enemy::child (Entity*, 8 bytes) overlaps more GenericEntity extra-area
  * bytes than on GBA (4 bytes).  Enemies that never create FX but use the overlapping
@@ -99,6 +100,28 @@ bool32 EnemyInit(Enemy* this) {
             COLLISION_ON(super);
         }
         super->spriteIndex = definition->spriteIndex;
+#ifdef PC_PORT
+        /* These ids take spriteIndex from a USA Sprites enum name >= 289 (EU-native
+         * numeric entries like MOLDORM/BLADE_TRAP/DUST are left alone). */
+        switch (super->id) {
+            case SPEAR_MOBLIN:
+            case RUPEE_LIKE:
+            case BOW_MOBLIN:
+            case VAATI_TRANSFIGURED:
+            case SLIME:
+            case MINI_SLIME:
+            case FIREBALL_GUY:
+            case MINI_FIREBALL_GUY:
+            case VAATI_TRANSFIGURED_EYE:
+            case CURTAIN:
+            case GYORG_CHILD:
+            case GYORG_FEMALE_EYE:
+            case GYORG_MALE_EYE:
+            case GYORG_FEMALE_MOUTH:
+                super->spriteIndex = Port_RemapSpriteIndex(super->spriteIndex);
+                break;
+        }
+#endif
         if (super->spriteSettings.draw == 0) {
             super->spriteSettings.draw = definition->spriteFlags.draw;
         }

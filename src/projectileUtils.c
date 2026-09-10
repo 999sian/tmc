@@ -3,6 +3,10 @@
 #include "vram.h"
 #include "room.h"
 #include "color.h"
+#include "projectile.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 extern const ProjectileDefinition gProjectileDefinitions[];
 #ifdef MULTI_REGION
@@ -54,6 +58,21 @@ bool32 ProjectileInit(Entity* this) {
             COLLISION_ON(this);
         }
         this->spriteIndex = definition->spriteIndex;
+#ifdef PC_PORT
+        /* These ids take spriteIndex from a USA Sprites enum name >= 289 (EU-native
+         * numeric entries 20/25/34 already come from *_eu twins). */
+        switch (this->id) {
+            case ARROW_PROJECTILE:
+            case V1_DARK_MAGIC_PROJECTILE:
+            case CANNONBALL_PROJECTILE:
+            case V1_EYE_LASER:
+            case SPIKED_ROLLERS:
+            case V2_PROJECTILE:
+            case GYORG_MALE_ENERGY_PROJECTILE:
+                this->spriteIndex = Port_RemapSpriteIndex(this->spriteIndex);
+                break;
+        }
+#endif
         if (this->spriteSettings.draw == 0) {
             this->spriteSettings.draw = definition->spriteFlags.draw;
         }

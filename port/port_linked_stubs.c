@@ -501,7 +501,6 @@ extern const u8 gUnk_080083FC[];
 extern const u8 gUnk_0800845C[];
 extern const u8 gUnk_080084BC[];
 extern const u8 gUnk_0800851C[];
-extern u8 gUnk_0800823C[];
 
 static const u8* sActiveCollisionParams = gUnk_080082DC;
 u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer);
@@ -573,10 +572,7 @@ static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
         return 1;
     }
 
-    u8 idx = sActiveCollisionParams[tileType - 0x10];
-    u32 gbaAddr;
-    memcpy(&gbaAddr, &gUnk_0800823C[(u32)idx << 2], sizeof(gbaAddr));
-    const u16* table = (const u16*)port_resolve_addr((uintptr_t)gbaAddr);
+    const u16* table = (const u16*)Port_GetCollisionShapeData(sActiveCollisionParams[tileType - 0x10]);
     if (table == NULL) {
         return 0;
     }
@@ -1823,16 +1819,12 @@ u32 GetTileTypeRelativeToEntity(Entity* entity, s32 xOffset, s32 yOffset) {
  * Calls GetTileTypeAtTilePos, then indexes into gUnk_08000360 or gUnk_080B7A3E
  * (based on whether tileType < 0x4000 or not) as a u16 array.
  */
+static u32 TileTypeProperty(u32 tileType) {
+    return tileType < 0x4000 ? Port_GetTileTypeProperty(tileType) : gUnk_080B7A3E[tileType & 0x3FFF];
+}
+
 u32 sub_080B1B84(u32 tilePos, u32 layer) {
-    u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
-    const u16* table;
-    if (tileType < 0x4000) {
-        /* gUnk_08000360 is at ROM offset 0x360 */
-        table = (const u16*)&gRomData[0x360];
-    } else {
-        table = gUnk_080B7A3E;
-    }
-    return table[tileType & 0x3FFF];
+    return TileTypeProperty(GetTileTypeAtTilePos(tilePos, layer));
 }
 
 /**
@@ -1850,20 +1842,11 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
  * properties from a different collision layer.
  */
 u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
-    u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
-    const u16* table;
-    if (tileType < 0x4000) {
-        table = (const u16*)&gRomData[0x360];
-    } else {
-        table = gUnk_080B7A3E;
-    }
-    u32 r = table[tileType & 0x3FFF] & mask;
+    u32 r = TileTypeProperty(GetTileTypeAtTilePos(tilePos, layer)) & mask;
 #ifdef PC_PORT
     if (r == 0 && mask == 0x40) {
         u32 other = (layer == 2) ? 1 : 2;
-        u32 tt2 = GetTileTypeAtTilePos(tilePos, other);
-        const u16* t2 = (tt2 < 0x4000) ? (const u16*)&gRomData[0x360] : gUnk_080B7A3E;
-        r = t2[tt2 & 0x3FFF] & mask;
+        r = TileTypeProperty(GetTileTypeAtTilePos(tilePos, other)) & mask;
     }
 #endif
     return r;

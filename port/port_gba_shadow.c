@@ -320,7 +320,7 @@ bool Port_GbaShadow_SelfTest(void) {
     /* Sentinels at known retail offsets inside gSave. */
     gSave.global_progress = 0x5Au;  /* 0x008 */
     gSave.enemies_killed = 0xDEADBEEFu; /* 0x050 */
-    gSave.flags[0x1FF] = 0xA5u;     /* 0x25B + 0x1FF, i.e. the last flag byte */
+    gSave.flags[0x1FF] = 0xA5u;     /* 0x25C + 0x1FF, i.e. the last flag byte */
     gRoomControls.area = 0x33u;     /* 0x004 */
     gRoomControls.room = 0x07u;     /* 0x005 */
 
@@ -336,7 +336,7 @@ bool Port_GbaShadow_SelfTest(void) {
     SHADOW_CHECK(buf[0] == 0xEFu && buf[1] == 0xBEu && buf[2] == 0xADu && buf[3] == 0xDEu);
 
     memset(buf, 0, sizeof(buf));
-    SHADOW_CHECK(Port_GbaShadow_Read(kSaveAddr + 0x25Bu + 0x1FFu, buf, 1) == 1);
+    SHADOW_CHECK(Port_GbaShadow_Read(kSaveAddr + 0x25Cu + 0x1FFu, buf, 1) == 1);
     SHADOW_CHECK(buf[0] == 0xA5u);
 
     memset(buf, 0, sizeof(buf));
