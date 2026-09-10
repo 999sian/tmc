@@ -523,6 +523,7 @@ void sub_08081598(ItemOnGroundEntity* this) {
             /* The item-get cutscene needs both aux entity slots. Keep the
              * pickup intact and collidable so a later frame can retry;
              * setting the location flag first would lose the item. */
+            COLLISION_ON(super);
             return;
         }
     }
