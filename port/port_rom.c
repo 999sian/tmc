@@ -251,7 +251,7 @@ static void ExtractRegion(u32 rom_offset, u32 size) {
         ExtractPage(p);
 }
 
-/* Load rom_data/*.bin files from a specific directory into gRomData.
+/* Load rom_data pages from a specific directory into gRomData.
  * Returns the number of pages loaded. */
 static int LoadExtractedPagesFrom(const char* dir) {
     int loaded = 0;
@@ -1480,13 +1480,13 @@ void Port_LoadRom(const char* path) {
     }
 
     /* gTranslations — resolved from active ROM */
-    memset(gTranslations, 0, sizeof(void*) * 7);
+    memset(gTranslations, 0, sizeof(void*) * LANGUAGE_SLOT_COUNT);
     if (REGION_IS_JP) {
         gTranslations[0] = Port_UnpackRomDataPtr(&gRomData[R->translations], 0);
     } else if (REGION_IS_USA) {
         gTranslations[1] = Port_UnpackRomDataPtr(&gRomData[R->translations], 1);
     } else if (REGION_IS_EU) {
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= EU_LANGUAGE_LAST_SLOT; i++) {
             gTranslations[i] = Port_UnpackRomDataPtr(&gRomData[R->translations], i);
         }
     }
@@ -1629,21 +1629,20 @@ void Port_LoadRom(const char* path) {
 
     /* The extracted assets/ cache is built from the USA ROM (asset baseline is
      * USA). These overrides reseed gTranslations / gSpritePtrs / area tables from
-     * that cache, so applying them against a JP ROM clobbers the region-correct
-     * data resolved above with USA content (JP gTranslations[0] gets NULLed and
-     * English supplied in slot 1 → JP text renders as English, and JP font/area
-     * tables go garbage → file-select font crash). Skip the override for a JP ROM;
-     * Asset overriding for JP ROMs is now gated inside the loader functions. */
-    if (Port_LoadTextsFromAssets()) {
-        fprintf(stderr, "gTranslations overridden from extracted assets.\n");
-    }
+     * that cache, so applying them against non-USA ROMs clobbers the region-correct
+     * data resolved above with USA content. Only override for USA. */
+    if (gRomRegion == ROM_REGION_USA) {
+        if (Port_LoadTextsFromAssets()) {
+            fprintf(stderr, "gTranslations overridden from extracted assets.\n");
+        }
 
-    if (Port_LoadSpritePtrsFromAssets()) {
-        fprintf(stderr, "gSpritePtrs overridden from extracted assets.\n");
-    }
+        if (Port_LoadSpritePtrsFromAssets()) {
+            fprintf(stderr, "gSpritePtrs overridden from extracted assets.\n");
+        }
 
-    if (Port_LoadAreaTablesFromAssets()) {
-        fprintf(stderr, "Area data tables overridden from extracted assets.\n");
+        if (Port_LoadAreaTablesFromAssets()) {
+            fprintf(stderr, "Area data tables overridden from extracted assets.\n");
+        }
     }
 
     fprintf(stderr, "ROM symbols resolved (%s: gGlobalGfxAndPalettes, gFrameObjLists).\n",
