@@ -23,6 +23,12 @@ char* Port_BugReport_Capture(const char* reason);
  * Called once from main(). No-op if invoked twice. */
 void Port_BugReport_InstallCrashHandlers(void);
 
+/* Record a hitbox pointer the collision guard rejected. A rejected pair stops
+ * colliding silently (walk through enemies, no damage either way), so the
+ * report has to name the entity: the guard is the only place that sees it.
+ * Keeps the first rejection; later ones only bump the count. */
+void Port_BugReport_NoteBadHitbox(unsigned kind, unsigned id, unsigned type, unsigned long long ptr);
+
 #ifdef __cplusplus
 }
 #endif
