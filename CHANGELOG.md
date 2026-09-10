@@ -81,7 +81,8 @@ the fork's later E11 fixes):
 - **GFX-slot compaction** never moves into slot 0 (the "no free slot" result)
   over the four reserved palette slots; `LoadSwapGFX` bounds its count/slot.
 - **A truncated, oversized, unrecognised or other-region `tmc.sav` is left
-  untouched** instead of being reformatted; writes are blocked.
+  untouched** instead of being reformatted; writes are blocked. libretro-style
+  0xFF-padded 32/128 KiB images still import.
 - `gMapData` points into the loaded ROM instead of a 14 MB copy.
 
 Not ported: the fork's EU regional-table relocation (still USA-pinned on PC),
