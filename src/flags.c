@@ -4,6 +4,12 @@
 #include "area.h"
 #include "save.h"
 
+#ifdef PC_PORT
+/* Defined in port_debug_actions.c. Called on every SetLocalFlagByBank so the
+ * debug notification system can log / toast when the toggle is enabled. */
+extern void Port_Debug_OnFlagSet(u32 offset, u32 flag);
+#endif
+
 const u16 gLocalFlagBanks[] = {
     FLAG_BANK_G, FLAG_BANK_0, FLAG_BANK_1, FLAG_BANK_2, FLAG_BANK_3,  FLAG_BANK_4,  FLAG_BANK_5,
     FLAG_BANK_6, FLAG_BANK_7, FLAG_BANK_8, FLAG_BANK_9, FLAG_BANK_10, FLAG_BANK_11, FLAG_BANK_12,
@@ -59,6 +65,9 @@ u32 CheckRoomFlags(u32 flag, u32 count) {
 void SetLocalFlagByBank(u32 offset, u32 flag) {
     if (flag != 0) {
         WriteBit(gSave.flags, offset + flag);
+#ifdef PC_PORT
+        Port_Debug_OnFlagSet(offset, flag);
+#endif
     }
 }
 
