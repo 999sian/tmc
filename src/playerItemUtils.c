@@ -15,10 +15,24 @@ static void InitTileMessage(u32, u32);
 void SetPlayerItemGetState(Entity*, u8, u8);
 
 void CreateItemEntity(u32 type, u32 type2, u32 delay) {
+    CreateItemEntityWithFlag(type, type2, delay, 0);
+}
+
+/* Item-get cutscene needs both aux entities. Fails (creating nothing) if
+ * either allocation fails so the caller can keep its pickup and retry;
+ * completionFlag is committed by LinkHoldingItem only after GiveItem. */
+bool32 CreateItemEntityWithFlag(u32 type, u32 type2, u32 delay, u16 completionFlag) {
     Entity* e = GiveItemWithCutscene(type, type2, delay);
-    if (e != NULL) {
-        e->parent = CreateLinkAnimation(e, e->type, 0);
+    if (e == NULL) {
+        return FALSE;
     }
+    e->parent = CreateLinkAnimation(e, e->type, 0);
+    if (e->parent == NULL) {
+        DeleteEntity(e);
+        return FALSE;
+    }
+    ((GenericEntity*)e)->field_0x6a.HWORD = completionFlag;
+    return TRUE;
 }
 
 void InitItemGetSequence(u32 type, u32 type2, u32 delay) {

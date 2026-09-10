@@ -67,7 +67,10 @@ void SpikedRollers_Action1(SpikedRollersEntity* this) {
         unk_0x6c = -unk_0x6c;
     }
 
-    if ((u32)(diff << 0x10) > (unk_0x6c << 0x10)) {
+    /* diff is deliberately negative on a negative-travel roller's first
+     * frame; shift as unsigned to reproduce the ARM `lsls` wraparound
+     * without signed-shift UB under an optimizing host compiler. */
+    if (((u32)diff << 0x10) > ((u32)unk_0x6c << 0x10)) {
         super->direction ^= 0x10;
         if (super->type2 == 0) {
             super->x.HALF.HI = this->x2;
