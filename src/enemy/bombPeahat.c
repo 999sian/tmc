@@ -442,7 +442,8 @@ void sub_0802ACDC(BombPeahatEntity* this, u32 param_2) {
     if (this->unk_80) {
         x = sub_080045B4(super, gRoomControls.scroll_x + 0x20, gRoomControls.scroll_y + 0x60);
     } else {
-        x = sub_080045B4(super, gRoomControls.scroll_x + 0xd0, gRoomControls.scroll_y + 0x60);
+        /* Retail: 32 px from the right edge (240 - 0x20); keep that in widescreen. */
+        x = sub_080045B4(super, gRoomControls.scroll_x + WS_VIEW_W - 0x20, gRoomControls.scroll_y + 0x60);
     }
     sub_08004596(super, x);
     super->subtimer = param_2;

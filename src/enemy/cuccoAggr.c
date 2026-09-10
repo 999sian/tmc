@@ -324,6 +324,15 @@ void sub_080391B4(CuccoAggrEntity* this) {
                 const PosOffset* ptr = &gCuccoAggrSpawnPoints[rand];
                 entity->x.HALF.HI = gRoomControls.scroll_x + ptr->x;
                 entity->y.HALF.HI = gRoomControls.scroll_y + ptr->y;
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+                /* X-only widescreen: keep the ring's y, stretch top/bottom rows
+                 * (24 + i*32 at 240) and the right column (W + 8) to the live view. */
+                if (rand < 14) {
+                    entity->x.HALF.HI = gRoomControls.scroll_x + 24 + (rand % 7) * (WS_VIEW_W - 48) / 6;
+                } else if (rand >= 19) {
+                    entity->x.HALF.HI = gRoomControls.scroll_x + WS_VIEW_W + 8;
+                }
+#endif
                 entity->collisionLayer = super->collisionLayer;
             }
         }

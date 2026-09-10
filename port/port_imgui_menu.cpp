@@ -761,7 +761,7 @@ static void DrawRibbonFlagsTab(void) {
         sBank = 0;
     const int cur = Port_DebugQuery_CurrentFlagBank();
 
-    /* Flag notifications toggle — persisted, default off. */
+    /* Flag notifications toggle — persisted to config.json, default off. */
     {
         bool notif = Port_Config_GetDebugFlagNotifications();
         if (ImGui::Checkbox("Flag notifications (log + on-screen toast on flag set)", &notif))
@@ -813,45 +813,61 @@ static void DrawRibbonFlagsTab(void) {
     ImGui::SameLine();
     ImGui::Checkbox("Show only active", &sShowOnlyActive);
 
-    /* Build the candidate list: always use a vector so the clipper gets
-     * the correct count regardless of which filters are active. */
+    /* Candidate list, rebuilt only when the search text / bank change. "Show
+     * only active" rescans every frame (membership depends on live flag bits
+     * the engine flips behind our back) but reuses the static storage. */
     struct FlagMatch { int bank; int index; };
-    std::vector<FlagMatch> candidates;
+    static std::vector<FlagMatch> candidates;
+    static char sLastSearch[sizeof(sSearchBuf)] = { 1 }; /* never equals "" */
+    static bool sLastOnlyActive = false;
+    static int sLastBank = -1;
 
     bool hasSearch = (sSearchBuf[0] != '\0');
+    if (sShowOnlyActive || strcmp(sLastSearch, sSearchBuf) != 0 || sLastOnlyActive != sShowOnlyActive ||
+        sLastBank != sBank) {
+        strcpy(sLastSearch, sSearchBuf);
+        sLastOnlyActive = sShowOnlyActive;
+        sLastBank = sBank;
+        candidates.clear();
 
-    if (hasSearch) {
-        /* Text search across all banks. */
-        std::string query = sSearchBuf;
-        std::transform(query.begin(), query.end(), query.begin(), [](unsigned char c) {
-            return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c;
-        });
-        int nb = Port_DebugQuery_FlagBankCount();
-        for (int b = 0; b < nb; ++b) {
-            int bankSize = Port_DebugQuery_FlagBankSize(b);
-            for (int i = 0; i < bankSize; ++i) {
-                if (sShowOnlyActive && Port_DebugQuery_Flag(b, i) == 0)
-                    continue;
-                const char* name = Port_DebugQuery_FlagName(b, i);
-                const char* desc = Port_DebugQuery_FlagDesc(b, i);
-                std::string nameStr = name ? name : "";
-                std::string descStr = desc ? desc : "";
-                std::transform(nameStr.begin(), nameStr.end(), nameStr.begin(), [](unsigned char c) {
-                    return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c;
-                });
-                std::transform(descStr.begin(), descStr.end(), descStr.begin(), [](unsigned char c) {
-                    return (c >= 'A' && c <= 'Z') ? (c - 'A' + 'a') : c;
-                });
-                if (nameStr.find(query) != std::string::npos || descStr.find(query) != std::string::npos)
-                    candidates.push_back({b, i});
+        /* Case-insensitive substring test over const char*, no copies. */
+        auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? (char)(c - 'A' + 'a') : c; };
+        auto contains = [&](const char* hay, const char* needle) {
+            if (!hay)
+                return false;
+            for (; *hay; ++hay) {
+                const char* h = hay;
+                const char* n = needle;
+                while (*h && *n && lower(*h) == lower(*n)) {
+                    ++h;
+                    ++n;
+                }
+                if (!*n)
+                    return true;
             }
-        }
-    } else {
-        /* No text search — enumerate the current bank. */
-        for (int i = 0; i < size; ++i) {
-            if (sShowOnlyActive && Port_DebugQuery_Flag(sBank, i) == 0)
-                continue;
-            candidates.push_back({sBank, i});
+            return false;
+        };
+
+        if (hasSearch) {
+            /* Text search across all banks. */
+            int nb = Port_DebugQuery_FlagBankCount();
+            for (int b = 0; b < nb; ++b) {
+                int bankSize = Port_DebugQuery_FlagBankSize(b);
+                for (int i = 0; i < bankSize; ++i) {
+                    if (sShowOnlyActive && Port_DebugQuery_Flag(b, i) == 0)
+                        continue;
+                    if (contains(Port_DebugQuery_FlagName(b, i), sSearchBuf) ||
+                        contains(Port_DebugQuery_FlagDesc(b, i), sSearchBuf))
+                        candidates.push_back({b, i});
+                }
+            }
+        } else {
+            /* No text search — enumerate the current bank. */
+            for (int i = 0; i < size; ++i) {
+                if (sShowOnlyActive && Port_DebugQuery_Flag(sBank, i) == 0)
+                    continue;
+                candidates.push_back({sBank, i});
+            }
         }
     }
 
@@ -3541,6 +3557,14 @@ static void DrawRibbonMapEditorTab(void) {
     ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "Direct Level Editor Mode");
     ImGui::Separator();
     bool editorOpen = Port_LevelEditor_IsOpen();
+#ifdef TMC_GPU_RENDERER
+    /* The overlay draws with SDL_Renderer primitives; there is nothing to
+     * draw it with on the SDL_GPU path, so painting would be blind. */
+    const bool noOverlay = (sRenderer == nullptr);
+#else
+    const bool noOverlay = false;
+#endif
+    ImGui::BeginDisabled(noOverlay);
     if (ImGui::Checkbox("Enable Direct Painting Overlay", &editorOpen)) {
         Port_LevelEditor_Toggle();
         if (editorOpen) {
@@ -3548,13 +3572,18 @@ static void DrawRibbonMapEditorTab(void) {
             Port_DebugMenu_Toggle();
         }
     }
+    ImGui::EndDisabled();
+    if (noOverlay)
+        ImGui::TextDisabled("Unavailable on the SDL_GPU renderer backend.");
     ImGui::Separator();
     ImGui::TextDisabled("Controls & Hotkeys:");
     ImGui::BulletText("Left-Click   : Paint selected tile");
     ImGui::BulletText("Right-Click  : Eyedropper (sample tile)");
-    ImGui::BulletText("Scroll-Wheel : Increment/Decrement active tile ID");
-    ImGui::BulletText("[ / ]        : Switch between Top/Bottom layers");
-    ImGui::BulletText("{ / }        : Cycle Room Lighting");
+    ImGui::BulletText("[ / ]        : Previous/next tile ID (Shift: step 16)");
+    ImGui::BulletText("L            : Switch between Top/Bottom layers");
+    ImGui::BulletText("M / F        : Next BGM / fight BGM (Shift: previous)");
+    ImGui::BulletText("K            : Room lighting up (Shift: down)");
+    ImGui::BulletText("S            : Save room to edited_levels/");
     ImGui::BulletText("Esc          : Close Level Editor");
 }
 

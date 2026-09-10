@@ -345,9 +345,9 @@ void Port_Config_FormatGamepadBindingsLine(PortInput input, char* out, size_t ou
 void Port_Config_SetGamepadBindExclusive(PortInput input, int sdl_gamepad_button);
 #endif
 
-/* Debug flag notifications (persisted to config.json as
- * debug_flag_notifications). When enabled every flag that turns ON prints a
- * line to stdout and fires an on-screen toast.  Default false. */
+/* Debug flag notifications (persisted to config.json as "debug_flag_notifications").
+ * When enabled every flag that flips 0->1 (engine SetLocalFlagByBank or the F8
+ * flag browser) prints a line to stderr and fires an on-screen toast. Default false. */
 bool Port_Config_GetDebugFlagNotifications(void);
 void Port_Config_SetDebugFlagNotifications(bool on);
 

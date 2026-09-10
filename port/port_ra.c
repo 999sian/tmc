@@ -7,85 +7,11 @@
  * (libs/rcheevos/src/rcheevos/consoleinfo.c), so Port_RA_ReadMemory only has
  * to undo that flattening before asking the shadow.
  *
- * The whole translation unit is inert without TMC_RA so an --ra=n build still
- * links, and inert at runtime unless config.json's ra_enabled is true.
+ * Only compiled when --ra=y (xmake adds this file under ra_enabled), and inert
+ * at runtime unless config.json's ra_enabled is true.
  */
 
 #include "port_ra.h"
-
-#include <stddef.h>
-#ifndef TMC_RA
-
-/* --ra=n build: every entry point is a no-op and the state is permanently OFF.
- * Keeps every caller (port_main.c, port_bios.c, port_ra_ui.cpp) unconditional. */
-void Port_RA_Init(void) {
-}
-void Port_RA_Shutdown(void) {
-}
-void Port_RA_FrameTick(void) {
-}
-void Port_RA_Login(const char* username, const char* password) {
-    (void)username;
-    (void)password;
-}
-void Port_RA_LoginWithToken(const char* username, const char* token) {
-    (void)username;
-    (void)token;
-}
-void Port_RA_Logout(void) {
-}
-Port_RA_State Port_RA_GetState(void) {
-    return PORT_RA_OFF;
-}
-const char* Port_RA_GetStatusText(void) {
-    return "RetroAchievements support is not compiled into this build";
-}
-const char* Port_RA_GetUsername(void) {
-    return "";
-}
-const char* Port_RA_GetGameTitle(void) {
-    return "";
-}
-const char* Port_RA_GetRichPresence(void) {
-    return "";
-}
-void Port_RA_GetPoints(int* earned, int* total) {
-    if (earned)
-        *earned = 0;
-    if (total)
-        *total = 0;
-}
-void Port_RA_GetProgress(int* unlocked, int* total) {
-    if (unlocked)
-        *unlocked = 0;
-    if (total)
-        *total = 0;
-}
-int Port_RA_GetAchievementCount(void) {
-    return 0;
-}
-const Port_RA_Achievement* Port_RA_GetAchievement(int index) {
-    (void)index;
-    return NULL;
-}
-bool Port_RA_PopToast(Port_RA_Toast* out) {
-    (void)out;
-    return false;
-}
-int Port_RA_GetUnmappedCount(void) {
-    return 0;
-}
-uint32_t Port_RA_GetUnmappedAddress(int index, uint32_t* gba_addr) {
-    (void)index;
-    if (gba_addr)
-        *gba_addr = 0;
-    return 0;
-}
-uint32_t Port_RA_GetUnmappedDropped(void) {
-    return 0;
-}
-
-#else /* TMC_RA */
 
 #include "port_gba_shadow.h"
 #include "port_ra_net.h"
@@ -703,5 +629,3 @@ bool Port_RA_PopToast(Port_RA_Toast* out) {
     sToastCount--;
     return true;
 }
-
-#endif /* TMC_RA */

@@ -964,8 +964,9 @@ void VaatiRebornEnemyType0PreAction(VaatiRebornEnemyEntity* this) {
 
 #ifdef PC_PORT
     /* v0.8.2 prevents new phase-3 zombies, but older quick/autosaves can
-     * restore one. Phase 3 has no valid combat actions; resume defeat. */
-    if (this->unk_86 > 2 && super->action != 7) {
+     * restore one. Phase 3 has no valid combat actions; resume defeat. Action
+     * 0 is the uninitialised entity: let Init run rather than skip it. */
+    if (this->unk_86 > 2 && super->action != 0 && super->action != 7) {
         super->action = 7;
         super->flags &= ~ENT_COLLIDE;
         super->timer = 128;

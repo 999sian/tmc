@@ -176,8 +176,8 @@ bool sRandoStartSword = true;
 bool sRandoEarlyCrests = true;
 bool sRandoInstantText = true;
 int sRandoTunicColor = 0;
-/* Persisted (debug_flag_notifications). When true, every flag activation is
- * printed to the terminal and shown as an on-screen toast. Default false. */
+/* Persisted to config.json ("debug_flag_notifications"). When true, every flag
+ * that flips 0->1 is printed to stderr and shown as an on-screen toast. */
 bool sDebugFlagNotifications = false;
 int sRandoHeartColor = 0;
 int sRandoTricks = 0;

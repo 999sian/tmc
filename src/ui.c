@@ -13,8 +13,10 @@
 #include "vram.h"
 #include "structures.h"
 #ifdef PC_PORT
+#include "port_offset_remap.h"
 #include "port_rom.h"
 #include "port_widescreen.h"
+extern const u8* gGlobalGfxAndPalettes;
 #endif
 
 extern void sub_0805ECEC(u32, u32, u32, u32);
@@ -546,7 +548,16 @@ void DrawChargeBar(void) {
     gHUD.unk_8 = chargeState;
 
     BufferPos = (u16*)(VRAM + 0xc2c0);
+#ifdef PC_PORT
+    {
+        /* gUnk_080C8F7C is packed USA GBA addresses; resolving them into an EU
+         * ROM reads the wrong bytes. Use the blob offsets + the region remap. */
+        static const u32 usaGfxOffsets[4] = { 0x21F20, 0x21FE0, 0x220A0, 0x22160 };
+        DmaSet(3, gGlobalGfxAndPalettes + Port_RemapGfxOffset(usaGfxOffsets[chargeState]), BufferPos, 0x84000030);
+    }
+#else
     DmaSet(3, gUnk_080C8F7C[chargeState], BufferPos, 0x84000030);
+#endif
 }
 
 void DrawKeys(void) {

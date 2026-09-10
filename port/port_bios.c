@@ -127,7 +127,7 @@ static void Port_UpdateInput(void) {
          * to the overlay. The soft-slot configuration overlay piggybacks
          * on this behaviour while it's the active focus. */
         if (Port_DebugMenu_IsOpen() || Port_SoftSlots_ConfigIsOpen() || Port_InGameSettingsModalIsOpen() ||
-            Port_RandoFileMenu_IsOpen()) {
+            Port_RandoFileMenu_IsOpen() || Port_LevelEditor_IsOpen()) {
             *(vu16*)(gIoMem + REG_OFFSET_KEYINPUT) = keyinput;
             /* The one-frame edge cache must be cleared on this path too: the
              * event loop keeps stamping edges for keys/pad buttons the overlays
