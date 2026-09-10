@@ -369,7 +369,15 @@ u32 UpdatePlayerCollision(void) {
     } else {
         direction = gPlayerState.direction;
     }
-    if (((direction & (DIR_NOT_MOVING_CHECK | 0x3)) == 0) && (gPlayerState.field_0xa == 0)) {
+    if (((direction & (DIR_NOT_MOVING_CHECK | 0x3)) == 0) && (gPlayerState.field_0xa == 0)
+#ifdef PC_PORT
+        /* sub_0807BDB8 compares unsigned room-local coords; a Link left before
+         * the new origin underflows to the opposite edge and chains a second
+         * transition. A point outside the room is never a valid source. */
+        && (u32)(gPlayerEntity.base.x.HALF.HI - gRoomControls.origin_x) < gRoomControls.width &&
+        (u32)(gPlayerEntity.base.y.HALF.HI - gRoomControls.origin_y) < gRoomControls.height
+#endif
+    ) {
         index = sub_0807BDB8(&gPlayerEntity.base, direction >> 2);
         if (index != 0xff && (gRoomControls.scroll_flags & 4) == 0) {
             ptr1 = &gUnk_080B4490[index * 2];

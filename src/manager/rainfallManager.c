@@ -8,6 +8,9 @@
 #include "asm.h"
 #include "room.h"
 #include "enemy.h"
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#endif
 
 void RainfallManager_Init(RainfallManager*);
 void RainfallManager_Action1(RainfallManager*);
@@ -36,7 +39,14 @@ void RainfallManager_Action1(RainfallManager* this) {
         super->timer = 15;
         waterDrop = CreateEnemy(WATER_DROP, 0);
         if (waterDrop != NULL) {
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+            /* Retail: 8 columns 40 px apart from 0x14 (gUnk_08108C6C); stretch
+             * the pitch with the live view width. Identical at 240. */
+            waterDrop->x.HALF.HI = gRoomControls.scroll_x + 0x14 +
+                                   (Random() & 7) * ((Port_Widescreen_EffectiveViewWidth() + 0x50) / 8);
+#else
             waterDrop->x.HALF.HI = gRoomControls.scroll_x + 0x78 + gUnk_08108C6C[Random() & 7];
+#endif
             waterDrop->y.HALF.HI = gRoomControls.scroll_y + 0x50 + gUnk_08108C7C[Random() & 3];
             waterDrop->z.HALF.HI = 0xff38;
         }

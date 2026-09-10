@@ -564,7 +564,19 @@ void LoadGfxGroup(u32 group) {
                     LZ77UnCompWram(src, (void*)dest);
                 }
             } else {
+#ifdef PC_PORT
+                /* Mirror port_asset_loader: gMapTop/gMapBottom/gMapData*Special are
+                 * native globals outside gEwram[], which only Port_ResolveEwramPtr
+                 * knows; DmaSet would write the flat mirror instead. */
+                void* nativeDest = (dest >= 0x02000000u && dest < 0x02040000u) ? Port_ResolveEwramPtr(dest) : NULL;
+                if (nativeDest != NULL) {
+                    memcpy(nativeDest, src, (u32)size & ~1u);
+                } else {
+                    DmaSet(3, src, dest, dmaCtrl | ((u32)size >> 1));
+                }
+#else
                 DmaSet(3, src, dest, dmaCtrl | ((u32)size >> 1));
+#endif
             }
         }
 
@@ -737,6 +749,9 @@ void DispReset(bool32 refresh) {
     gScreen.vBlankDMA.ready = FALSE;
     DmaStop(0);
 #ifdef PC_PORT
+    /* DmaStop(0) is a host no-op; retail stops DMA0 here after the room-exit
+     * fade, so per-scanline affine HDMA must not leak into the next room. */
+    port_hdma_unregister(0);
     gba_write16(REG_ADDR_DISPCNT, 0);
 #else
     REG_DISPCNT = 0;

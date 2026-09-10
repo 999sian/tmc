@@ -24,7 +24,8 @@ extern "C" {
  *
  * Only byte ranges whose native layout is provably identical to retail are
  * shadowed; see the table and the rejected list in port_gba_shadow.c.
- * Everything else reads as zero.
+ * Everything else is not served: reads there return 0 bytes, which rcheevos
+ * treats as an unsupported address rather than evaluating against zero.
  */
 
 /* Refresh the shadow of the engine's native state, addressed by GBA address.
@@ -32,7 +33,8 @@ extern "C" {
 void Port_GbaShadow_Refresh(void);
 
 /* Read n bytes at a GBA address (0x02xxxxxx / 0x03xxxxxx). Returns the number
- * of bytes actually served (0 when the range is not shadowed). */
+ * of bytes actually served: 0 when gba_addr is not inside a shadowed row,
+ * fewer than n when the read runs off the end of one. */
 uint32_t Port_GbaShadow_Read(uint32_t gba_addr, uint8_t* out, uint32_t n);
 
 /* Diagnostics for the UI/F8: how many symbols are shadowed and how many were
