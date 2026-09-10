@@ -41,6 +41,12 @@ which lands on the wrong bytes. This release resolves those per region.
   inn, Simon's Simulation, Lake Hylia, guard patrol, Gust Jar, figurine and
   collision-matrix tables resolve per region.
 - **EU Italian is selectable** — language slot 6 was never loaded.
+- **Extracted-asset overrides no longer clobber EU/JP ROM tables.** The
+  cached gfx groups, texts, sprite pointers, palettes, area tables and sprite
+  animations are USA-baseline, but were applied on top of whatever region was
+  loaded, overwriting the region-correct tables just resolved from the ROM.
+  They are gated to USA now. `GFX_STOP` also no longer reports an unextracted
+  graphics group as missing.
 - Region data and offsets ported from
   [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds)
   (GPL-3.0); JP offsets derived here and checked against clean ROMs by
