@@ -1,5 +1,7 @@
 // Generated file. Do not edit.
 #include <stddef.h>
+#include "region.h"
+#include "flag_remap_generated.h"
 
 struct FlagInfo {
     const char* name;
@@ -365,7 +367,7 @@ static const FlagInfo kBank1Flags[] = {
     { "KS_B18", "Kinstone Fusion World Event (KS_B18)" },
     { "KS_C21", "Kinstone Fusion World Event (KS_C21)" },
     { "KS_C25", "Kinstone Fusion World Event (KS_C25)" },
-    { "KS_WARPUSE", "Unused" },
+    { "END_1", "" },
 };
 
 static const FlagInfo kBank2Flags[] = {
@@ -582,8 +584,6 @@ static const FlagInfo kBank2Flags[] = {
     { "KS_A18", "Get charm from Din / Nayru / Farore in blue house" },
     { "KS_B07", "undocumented" },
     { "KS_B16", "undocumented" },
-    { "MH01_KS_KUSURI", "undocumented" },
-    { "MH09_KS_KUSURI", "undocumented" },
     { "END_2", "" },
 };
 
@@ -1679,20 +1679,34 @@ static const BankInfo kBanks[] = {
     { kBank12Flags, sizeof(kBank12Flags) / sizeof(kBank12Flags[0]) },
 };
 
+/* The tables above are USA-ordered, but gSave.flags bit positions follow the
+ * loaded ROM's region (src/flags.c Port_RemapBaselineLocalFlag). Only bank 1
+ * diverges: invert gFlagRemapEU/JP[0] (baseline -> region ordinal) so a region
+ * ordinal resolves to its USA-baseline row. Region-only ordinals have no
+ * baseline row and fall through to UNKNOWN. ponytail: linear scan, debug UI only. */
+static const FlagInfo* Lookup(int bank, int index) {
+    if (bank < 0 || bank >= 13 || index < 0)
+        return NULL;
+    if (bank == 1 && !REGION_IS_USA && index < FLAG_REMAP_TABLE_WIDTH) {
+        const unsigned char* remap = REGION_IS_EU ? gFlagRemapEU[0] : gFlagRemapJP[0];
+        int base = 0;
+        while (base < FLAG_REMAP_TABLE_WIDTH && remap[base] != index)
+            ++base;
+        index = base;
+    }
+    if ((size_t)index >= kBanks[bank].count)
+        return NULL;
+    return &kBanks[bank].flags[index];
+}
+
 extern "C" {
 const char* Port_DebugQuery_FlagName(int bank, int index) {
-    if (bank < 0 || bank >= 13)
-        return "UNKNOWN";
-    if (index < 0 || (size_t)index >= kBanks[bank].count)
-        return "UNKNOWN";
-    return kBanks[bank].flags[index].name;
+    const FlagInfo* f = Lookup(bank, index);
+    return f ? f->name : "UNKNOWN";
 }
 
 const char* Port_DebugQuery_FlagDesc(int bank, int index) {
-    if (bank < 0 || bank >= 13)
-        return "";
-    if (index < 0 || (size_t)index >= kBanks[bank].count)
-        return "";
-    return kBanks[bank].flags[index].desc;
+    const FlagInfo* f = Lookup(bank, index);
+    return f ? f->desc : "";
 }
 }
