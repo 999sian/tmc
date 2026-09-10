@@ -1,0 +1,100 @@
+#include "port_region_data.h"
+
+#include <stddef.h>
+#include <stdint.h>
+
+#include "port_rom.h"
+#include "port_types.h"
+#include "region.h"
+
+/* Compiled stubs use the USA baserom layout.  Keep this registry intentionally
+ * exact: every EU/JP offset below was byte-verified against the retail ROMs
+ * (tools/verify_eu_region_data.py); only flag ordinals and pointers differ. */
+extern const u8 gUnk_080D8E50[];
+extern const u8 gUnk_080D9328[];
+extern const u8 gUnk_080DD750[];
+extern const u8 gUnk_080DD7E0[];
+extern const u8 gUnk_080DD840[];
+extern const u8 gUnk_080EAE60[];
+extern const u8 gUnk_080EB9F4[];
+extern const u8 gUnk_080F58A8[];
+extern const u8 gUnk_080F5B3C[];
+extern const u8 gUnk_080F78A0[];
+extern const u8 gUnk_080F9BF8[];
+extern const u8 gUnk_080F09A0[];
+extern const u8 gUnk_080FEAC8[];
+extern const u8 gUnk_080FEE58[];
+
+/* 0 = no regional counterpart known: keep the compiled USA blob. */
+#define REGION_DATA_UNAVAILABLE UINT32_MAX
+
+typedef struct {
+    const void* usaData;
+    u32 euOffset;
+    u32 jpOffset;
+    u32 size;
+} RegionDataEntry;
+
+static const RegionDataEntry sRegionDataEntries[] = {
+    /* Six Goron wall-break records contain pointers, not portable tile data.
+     * EU moves the table and all six target patterns by 0x8a4 bytes. */
+    { gUnk_080D8E50, 0x000D85AC, 0x000D8BF0, 6 * 16 },
+    { gUnk_080D9328, 0x000D8A84, 0x000D90C8, 0x10 },
+    /* Entities_CloudTops_Bottom_0 is emitted inside the compiled-USA
+     * gUnk_080DD750 blob at +0x40.  Its two FallingItemManagers carry both
+     * halves of the kill-reward protocol: F3/F4 and F5/F6 in USA, but
+     * F0/F1 and F2/F3 in EU/JP.  Resolving only the later fight lists fixes the
+     * whirlwinds while leaving the golden Kinstones waiting on USA flags. */
+    { gUnk_080DD750 + 0x40, 0x000DCECC, 0x000DD520, 0x50 },
+    { gUnk_080DD7E0, 0x000DCF1C, 0x000DD570, 0x40 },
+    { gUnk_080DD840, 0x000DCF7C, 0x000DD5D0, 0x40 },
+    { gUnk_080EAE60, 0x000EA53C, 0x000EAB90, 0x50 },
+    { gUnk_080EB9F4, 0x000EB0C0, 0x000EB724, 0x70 },
+    /* Stockwell third bomb bag / Rem mushroom lists: absent from EU. */
+    { gUnk_080F58A8, REGION_DATA_UNAVAILABLE, 0x000F55C0, 0x20 },
+    { gUnk_080F5B3C, REGION_DATA_UNAVAILABLE, 0x000F5854, 0x20 },
+    { gUnk_080F78A0, 0x000F6E5C, 0x000F75B8, 0x20 },
+    { gUnk_080F9BF8, 0x000F9144, 0x000F98B0, 0x40 },
+    { gUnk_080F09A0, 0x000EFFD4, 0x000F06C8, 0x60 },
+    { gUnk_080FEAC8, 0x000FE00C, 0x000FE778, 0x120 },
+    { gUnk_080FEE58, 0x000FE39C, 0x000FEB08, 0x20 },
+};
+
+static int Port_IsRomDataPointer(const void* data) {
+    uintptr_t address;
+    uintptr_t rom;
+
+    if (data == NULL || gRomData == NULL) {
+        return 0;
+    }
+    address = (uintptr_t)data;
+    rom = (uintptr_t)gRomData;
+    return address >= rom && address - rom < gRomSize;
+}
+
+const void* Port_ResolveRegionData(const void* data) {
+    size_t i;
+
+    if (data == NULL || Port_IsRomDataPointer(data) || !(REGION_IS_EU || REGION_IS_JP)) {
+        return data;
+    }
+
+    for (i = 0; i < sizeof(sRegionDataEntries) / sizeof(sRegionDataEntries[0]); ++i) {
+        const RegionDataEntry* entry = &sRegionDataEntries[i];
+        u32 offset;
+        if (data != entry->usaData) {
+            continue;
+        }
+        offset = REGION_IS_EU ? entry->euOffset : entry->jpOffset;
+        if (offset == 0) {
+            return data;
+        }
+        if (offset == REGION_DATA_UNAVAILABLE || gRomData == NULL || offset > gRomSize ||
+            entry->size > gRomSize - offset) {
+            return NULL;
+        }
+        return gRomData + offset;
+    }
+
+    return data;
+}

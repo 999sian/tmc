@@ -671,6 +671,9 @@ int main(int argc, char* argv[]) {
      * BEFORE the prelaunch frame loop runs. Idempotent + no-op if no
      * backend is available; never blocks. */
     { Port_TTS_Init(); }
+    /* Quit is exit(0) from VBlankIntrWait; without this the TTS worker is a
+     * joinable std::thread at static destruction -> std::terminate (#184). */
+    atexit(Port_TTS_Shutdown);
 
     /* Load persisted accessibility cue toggles into the cue module. */
     { Port_A11y_Init(); }
@@ -900,6 +903,9 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Audio disabled by --no-audio flag.\n");
     } else {
         Port_InitAudio();
+        /* Stop the SDL audio thread before static destructors free the
+         * MP2K mixer it renders from (#184). Idempotent. */
+        atexit(Port_Audio_Shutdown);
         fprintf(stderr, "Audio init complete.\n");
     }
 
