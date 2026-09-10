@@ -976,6 +976,18 @@ void CheckAreaDiscovery(void) {
         return;
     }
 
+#ifdef PC_PORT
+    /* Festival Town is the intro-only dressing of Hyrule Town and reuses its
+     * location index (areaMetadata area 21 -> location 10), so arriving there
+     * announced "Hyrule Town" before the player has reached the town at all,
+     * AND set areaVisitFlags bit 10 - which then suppressed the banner when
+     * they later entered the real Hyrule Town. Skip both here so the banner
+     * belongs to the actual town. */
+    if (gRoomControls.area == AREA_FESTIVAL_TOWN) {
+        return;
+    }
+#endif
+
     gRoomTransition.location = gArea.locationIndex;
 
     if (!CheckGlobalFlag(ENDING)) {
