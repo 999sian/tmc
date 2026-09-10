@@ -339,8 +339,13 @@ extern "C" void Port_LevelEditor_Toggle(void) {
     }
 }
 
+// In-game, not in a room transition, and no pause/kinstone subtask menu up.
+static bool InGameNoMenu(void) {
+    return gMain.task == TASK_GAME && gMain.state == GAMETASK_MAIN && gMain.substate == GAMEMAIN_UPDATE;
+}
+
 extern "C" bool Port_LevelEditor_HandleKey(int sdlKey, int sdlScancode) {
-    if (!sOpen) return false;
+    if (!sOpen || !InGameNoMenu()) return false;
 
     if (sdlKey == SDLK_LEFTBRACKET || sdlScancode == SDL_SCANCODE_LEFTBRACKET) {
         if (SDL_GetModState() & SDL_KMOD_SHIFT) {
@@ -415,6 +420,7 @@ extern "C" SDL_Window* Port_PPU_ActiveWindow(void);
 
 extern "C" void Port_LevelEditor_HandleMouseButton(int button, int state, float x, float y) {
     if (!sOpen) return;
+    if (!InGameNoMenu()) { sLeftMouseDown = false; return; }
 
     SDL_Window* win = Port_PPU_ActiveWindow();
     if (!win) {
@@ -466,7 +472,7 @@ extern "C" void Port_LevelEditor_HandleMouseButton(int button, int state, float 
 }
 
 extern "C" void Port_LevelEditor_HandleMouseMotion(float x, float y) {
-    if (!sOpen) return;
+    if (!sOpen || !InGameNoMenu()) return;
 
     SDL_Window* win = Port_PPU_ActiveWindow();
     if (!win) {
@@ -651,8 +657,7 @@ extern "C" void Port_LevelEditor_Render(void* renderer, int winW, int winH) {
 }
 
 extern "C" {
-    void LZ77UnCompVram(const void* src, void* dst);
-    void LZ77UnCompWram(const void* src, void* dst);
+    bool Port_LZ77Decompress(const void* src, size_t srcLen, void* dst, size_t dstCap);
     void LoadRoomTileSet(void);
     void LoadRoomGfx(void);
 }
@@ -742,8 +747,8 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
                 std::fprintf(stderr, "[LEVEL EDITOR] Loaded Area %02X custom palette (512 bytes) from %s\n", area, pathPal);
             }
 
-            // Helper lambdas to load and decompress custom LZ77 compressed assets
-            auto loadCustomLZ77Vram = [](const char* filename, unsigned char areaIndex, void* destVramGbaAddr) {
+            // Helper lambda to load and decompress custom LZ77 compressed assets (bounded: the file is untrusted)
+            auto loadCustomLZ77 = [](const char* filename, unsigned char areaIndex, void* dst, size_t dstCap, bool exactSize) {
                 char pathTS[256];
                 std::snprintf(pathTS, sizeof(pathTS), "Areas/Area %02X/%s", areaIndex, filename);
                 std::ifstream fTS(pathTS, std::ios::binary);
@@ -751,49 +756,37 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
                     std::snprintf(pathTS, sizeof(pathTS), "build/pc/Areas/Area %02X/%s", areaIndex, filename);
                     fTS.close(); fTS.open(pathTS, std::ios::binary);
                 }
-                if (fTS.good()) {
-                    std::vector<char> compData((std::istreambuf_iterator<char>(fTS)), std::istreambuf_iterator<char>());
-                    if (compData.size() >= 4) {
-                        LZ77UnCompVram(compData.data(), destVramGbaAddr);
-                        std::fprintf(stderr, "[LEVEL EDITOR] Decompressed Area %02X custom asset %s (%zu compressed bytes) to VRAM at %p\n", areaIndex, filename, compData.size(), destVramGbaAddr);
-                    }
+                if (!fTS.good()) return;
+                std::vector<char> compData((std::istreambuf_iterator<char>(fTS)), std::istreambuf_iterator<char>());
+                if (compData.size() < 4) return;
+                const unsigned char* h = reinterpret_cast<const unsigned char*>(compData.data());
+                size_t decompSize = (h[1] | (h[2] << 8) | (h[3] << 16));
+                bool ok = (exactSize ? decompSize == dstCap : decompSize <= dstCap) &&
+                          Port_LZ77Decompress(compData.data(), compData.size(), dst, dstCap);
+                if (!ok) {
+                    std::fprintf(stderr, "[LEVEL EDITOR] Skipping %s: bad LZ77 header/stream (declared %zu bytes, capacity %zu)\n", pathTS, decompSize, dstCap);
+                    return;
                 }
-            };
-
-            auto loadCustomLZ77Wram = [](const char* filename, unsigned char areaIndex, void* destWramGbaAddr) {
-                char pathTS[256];
-                std::snprintf(pathTS, sizeof(pathTS), "Areas/Area %02X/%s", areaIndex, filename);
-                std::ifstream fTS(pathTS, std::ios::binary);
-                if (!fTS.good()) {
-                    std::snprintf(pathTS, sizeof(pathTS), "build/pc/Areas/Area %02X/%s", areaIndex, filename);
-                    fTS.close(); fTS.open(pathTS, std::ios::binary);
-                }
-                if (fTS.good()) {
-                    std::vector<char> compData((std::istreambuf_iterator<char>(fTS)), std::istreambuf_iterator<char>());
-                    if (compData.size() >= 4) {
-                        LZ77UnCompWram(compData.data(), destWramGbaAddr);
-                        std::fprintf(stderr, "[LEVEL EDITOR] Decompressed Area %02X custom asset %s (%zu compressed bytes) to WRAM at %p\n", areaIndex, filename, compData.size(), destWramGbaAddr);
-                    }
-                }
+                std::fprintf(stderr, "[LEVEL EDITOR] Decompressed Area %02X custom asset %s (%zu compressed bytes) to %p\n", areaIndex, filename, compData.size(), dst);
             };
 
             // 2. Tilesets (BG1, Common, BG2)
-            loadCustomLZ77Vram("bg1TileSetDat.bin", area, (void*)0x06000000);
-            loadCustomLZ77Vram("commonTileSetDat.bin", area, (void*)0x06004000);
-            loadCustomLZ77Vram("bg2TileSetDat.bin", area, (void*)0x06008000);
+            loadCustomLZ77("bg1TileSetDat.bin", area, (void*)0x06000000, 0x4000, false);
+            loadCustomLZ77("commonTileSetDat.bin", area, (void*)0x06004000, 0x4000, false);
+            loadCustomLZ77("bg2TileSetDat.bin", area, (void*)0x06008000, 0x4000, false);
 
             // 3. Metatilesets & Metatile Types (BG1, BG2)
             // Load into native PC structured variables (outside gEwram[])
-            loadCustomLZ77Wram("bg1MetaTileSetDat.bin", area, (void*)&gMapTop.subTiles);
-            loadCustomLZ77Wram("bg2MetaTileSetDat.bin", area, (void*)&gMapBottom.subTiles);
-            loadCustomLZ77Wram("bg1MetaTileTypeDat.bin", area, (void*)&gMapTop.tileTypes);
-            loadCustomLZ77Wram("bg2MetaTileTypeDat.bin", area, (void*)&gMapBottom.tileTypes);
+            loadCustomLZ77("bg1MetaTileSetDat.bin", area, (void*)&gMapTop.subTiles, sizeof(gMapTop.subTiles), true);
+            loadCustomLZ77("bg2MetaTileSetDat.bin", area, (void*)&gMapBottom.subTiles, sizeof(gMapBottom.subTiles), true);
+            loadCustomLZ77("bg1MetaTileTypeDat.bin", area, (void*)&gMapTop.tileTypes, sizeof(gMapTop.tileTypes), true);
+            loadCustomLZ77("bg2MetaTileTypeDat.bin", area, (void*)&gMapBottom.tileTypes, sizeof(gMapBottom.tileTypes), true);
 
             // Also load into emulated GBA EWRAM addresses for absolute safety
-            loadCustomLZ77Wram("bg1MetaTileSetDat.bin", area, (void*)0x02012654);
-            loadCustomLZ77Wram("bg2MetaTileSetDat.bin", area, (void*)0x0202CEB4);
-            loadCustomLZ77Wram("bg1MetaTileTypeDat.bin", area, (void*)0x02010654);
-            loadCustomLZ77Wram("bg2MetaTileTypeDat.bin", area, (void*)0x0202AEB4);
+            loadCustomLZ77("bg1MetaTileSetDat.bin", area, (void*)0x02012654, sizeof(gMapTop.subTiles), true);
+            loadCustomLZ77("bg2MetaTileSetDat.bin", area, (void*)0x0202CEB4, sizeof(gMapBottom.subTiles), true);
+            loadCustomLZ77("bg1MetaTileTypeDat.bin", area, (void*)0x02010654, sizeof(gMapTop.tileTypes), true);
+            loadCustomLZ77("bg2MetaTileTypeDat.bin", area, (void*)0x0202AEB4, sizeof(gMapBottom.tileTypes), true);
         }
 
         // 3. Rebuild the tileIndices helper maps for gMapBottom and gMapTop
@@ -946,35 +939,26 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
         static const char sEmptyList[] = { (char)0xFF };
         static const char sEmptyChest[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
-        // List 1
-        if (f1.good()) {
-            sCustomList1Data.assign(std::istreambuf_iterator<char>(f1), std::istreambuf_iterator<char>());
-            gRoomVars.properties[1] = sCustomList1Data.data();
-            std::fprintf(stderr, "[LEVEL EDITOR] Loaded list1Data (%zu bytes) from %s\n", sCustomList1Data.size(), path1);
-        } else {
-            gRoomVars.properties[1] = (void*)sEmptyList;
-            std::fprintf(stderr, "[LEVEL EDITOR] Cleared list1Data (using empty fallback)\n");
-        }
-
-        // List 2
-        if (f2.good()) {
-            sCustomList2Data.assign(std::istreambuf_iterator<char>(f2), std::istreambuf_iterator<char>());
-            gRoomVars.properties[0] = sCustomList2Data.data();
-            std::fprintf(stderr, "[LEVEL EDITOR] Loaded list2Data (%zu bytes) from %s\n", sCustomList2Data.size(), path2);
-        } else {
-            gRoomVars.properties[0] = (void*)sEmptyList;
-            std::fprintf(stderr, "[LEVEL EDITOR] Cleared list2Data (using empty fallback)\n");
-        }
-
-        // List 3
-        if (f3.good()) {
-            sCustomList3Data.assign(std::istreambuf_iterator<char>(f3), std::istreambuf_iterator<char>());
-            gRoomVars.properties[2] = sCustomList3Data.data();
-            std::fprintf(stderr, "[LEVEL EDITOR] Loaded list3Data (%zu bytes) from %s\n", sCustomList3Data.size(), path3);
-        } else {
-            gRoomVars.properties[2] = (void*)sEmptyList;
-            std::fprintf(stderr, "[LEVEL EDITOR] Cleared list3Data (using empty fallback)\n");
-        }
+        // Entity lists: file bytes are walked until kind==0xFF with no length bound, so
+        // require a nonzero multiple of EntityData with a terminator; else use the empty list.
+        auto loadEntityList = [&](std::ifstream& f, std::vector<char>& buf, int slot, const char* name, const char* path) {
+            if (f.good()) {
+                buf.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+                size_t n = buf.size() / sizeof(EntityData);
+                if (n != 0 && buf.size() % sizeof(EntityData) == 0 &&
+                    reinterpret_cast<const EntityData*>(buf.data())[n - 1].kind == 0xFF) {
+                    gRoomVars.properties[slot] = buf.data();
+                    std::fprintf(stderr, "[LEVEL EDITOR] Loaded %s (%zu bytes) from %s\n", name, buf.size(), path);
+                    return;
+                }
+                std::fprintf(stderr, "[LEVEL EDITOR] Rejected %s: bad size or missing 0xFF terminator\n", path);
+            }
+            gRoomVars.properties[slot] = (void*)sEmptyList;
+            std::fprintf(stderr, "[LEVEL EDITOR] Cleared %s (using empty fallback)\n", name);
+        };
+        loadEntityList(f1, sCustomList1Data, 1, "list1Data", path1);
+        loadEntityList(f2, sCustomList2Data, 0, "list2Data", path2);
+        loadEntityList(f3, sCustomList3Data, 2, "list3Data", path3);
 
         // Chest Data
         if (fc.good()) {
@@ -989,9 +973,14 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
         // Warp Data (Exits)
         if (fw.good()) {
             sCustomWarpData.assign(std::istreambuf_iterator<char>(fw), std::istreambuf_iterator<char>());
+            size_t n = sCustomWarpData.size() / sizeof(Transition);
+            const Transition* warps = reinterpret_cast<const Transition*>(sCustomWarpData.data());
             RoomResInfo* info = GetCurrentRoomInfo();
-            if (info != nullptr) {
-                info->exits = reinterpret_cast<const Transition*>(sCustomWarpData.data());
+            if (n == 0 || sCustomWarpData.size() % sizeof(Transition) != 0 ||
+                warps[n - 1].warp_type != WARP_TYPE_END_OF_LIST) {
+                std::fprintf(stderr, "[LEVEL EDITOR] Rejected %s: bad size or missing end-of-list warp\n", pathWarp);
+            } else if (info != nullptr) {
+                info->exits = warps;
                 std::fprintf(stderr, "[LEVEL EDITOR] Loaded warpData (%zu bytes) from %s\n", sCustomWarpData.size(), pathWarp);
             }
         }

@@ -226,15 +226,16 @@ static void Port_PumpEvents(void) {
          * actively hovered/focused; game input passes through. */
         Port_ImGui_HandleEvent(&e);
         if (Port_LevelEditor_IsOpen()) {
-            if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+            if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat && !Port_ImGui_WantsTextInput()) {
                 if (Port_LevelEditor_HandleKey((int)e.key.key, (int)e.key.scancode)) {
                     continue;
                 }
-            } else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN || e.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+            } else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP ||
+                       (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && !Port_ImGui_WantsMouse())) {
                 int state = (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) ? 1 : 0;
                 Port_LevelEditor_HandleMouseButton((int)e.button.button, state, e.button.x, e.button.y);
                 continue;
-            } else if (e.type == SDL_EVENT_MOUSE_MOTION) {
+            } else if (e.type == SDL_EVENT_MOUSE_MOTION && !Port_ImGui_WantsMouse()) {
                 Port_LevelEditor_HandleMouseMotion(e.motion.x, e.motion.y);
                 continue;
             }
@@ -1091,10 +1092,10 @@ static const u8* Port_RomBufferEnd(const void* src) {
     return Port_LoadedAssetBytesEnd(src);
 }
 
-/* LZ77 decompressor (SWI 0x11/0x12) */
-static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd) {
+/* LZ77 decompressor (SWI 0x11/0x12). Returns bytes written. */
+static u32 lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd) {
     if (srcEnd && src + 4 > srcEnd)
-        return;
+        return 0;
     u32 header = src[0] | (src[1] << 8) | (src[2] << 16) | (src[3] << 24);
     u32 decompSize = header >> 8;
     src += 4;
@@ -1114,7 +1115,7 @@ static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd)
             if (flags & (1 << i)) {
                 /* Compressed block: 2 bytes → length + distance */
                 if (srcEnd && src + 2 > srcEnd)
-                    return;
+                    return written;
                 u8 b1 = *src++;
                 u8 b2 = *src++;
                 u32 length = ((b1 >> 4) & 0xF) + 3;
@@ -1123,7 +1124,7 @@ static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd)
                 /* A back-reference pointing before the output start is
                  * malformed; refuse rather than wild-read host memory. */
                 if (distance > written)
-                    return;
+                    return written;
                 for (u32 j = 0; j < length && written < decompSize; j++) {
                     dst[written] = dst[written - distance];
                     written++;
@@ -1131,11 +1132,28 @@ static void lz77_decomp(const u8* src, u8* dst, size_t dstCap, const u8* srcEnd)
             } else {
                 /* Uncompressed byte */
                 if (srcEnd && src >= srcEnd)
-                    return;
+                    return written;
                 dst[written++] = *src++;
             }
         }
     }
+    return written;
+}
+
+/* Bounded variant for untrusted on-disk blobs: fails unless the declared size
+ * fits dstCap and the whole stream is present. dst may be a host or GBA address. */
+bool Port_LZ77Decompress(const void* src, size_t srcLen, void* dst, size_t dstCap) {
+    if (srcLen < 4)
+        return false;
+    const u8* s = (const u8*)src;
+    u32 decompSize = (s[0] | (s[1] << 8) | (s[2] << 16) | (s[3] << 24)) >> 8;
+    size_t regionCap = Port_GbaRegionBytesLeft((uintptr_t)dst);
+    if (regionCap && regionCap < dstCap)
+        dstCap = regionCap;
+    if (decompSize > dstCap)
+        return false;
+    u8* resolved = (u8*)port_resolve_addr((uintptr_t)dst);
+    return resolved && lz77_decomp(s, resolved, dstCap, s + srcLen) == decompSize;
 }
 
 void LZ77UnCompVram(const void* src, void* dst) {

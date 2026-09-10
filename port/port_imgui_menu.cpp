@@ -330,6 +330,9 @@ extern "C" bool Port_ImGui_WantsTextInput(void) {
         return false;
     return ImGui::GetIO().WantTextInput;
 }
+extern "C" bool Port_ImGui_WantsMouse(void) {
+    return sImGuiInited && ImGui::GetIO().WantCaptureMouse;
+}
 extern "C" void Port_ImGui_HandleEvent(const SDL_Event* event) {
     if (!sImGuiInited)
         return;
