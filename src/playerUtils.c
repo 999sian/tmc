@@ -4210,6 +4210,10 @@ void LoadRoomGfx(void) {
             }
             break;
     }
+#ifdef PC_PORT
+    extern void Port_LevelEditor_OnRoomLoad(void);
+    Port_LevelEditor_OnRoomLoad();
+#endif
 }
 
 void sub_0807C460(void) {

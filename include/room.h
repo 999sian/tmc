@@ -6,7 +6,7 @@
 #include "map.h"
 #include "transitions.h"
 
-enum RoomTransition {
+enum RoomTransitionType {
     TRANSITION_DEFAULT,
     TRANSITION_CUT,
     TRANSITION_FADE_WHITE_SLOW,
