@@ -43,6 +43,17 @@ reproduced/redistributed here under their respective licenses.
 | SDL3 | https://github.com/libsdl-org/SDL | Zlib |
 | zlib | https://zlib.net | Zlib |
 | libpng | http://www.libpng.org/pub/png/libpng.html | libpng (PNG Reference Library) |
+| rcheevos | https://github.com/RetroAchievements/rcheevos | MIT (© 2018 RetroAchievements.org) |
+| libcurl | https://curl.se | curl (MIT/X derivative) |
+
+> **rcheevos** is vendored first-party into `libs/rcheevos` (upstream commit
+> `fef2f83c4508ed99ac89e8105ce44b697291eed5`, recorded in
+> `libs/rcheevos/VENDORED_COMMIT`; license text in `libs/rcheevos/LICENSE`).
+> Only the client, `rapi`, `rcheevos` and `rhash` sources are kept — the
+> libretro and RAIntegration backends are removed. It is compiled into
+> `tmc_pc` for RetroAchievements support (`--ra=y`, the default).
+> **libcurl** is linked (system package on Linux/macOS, xmake package on
+> Windows/MinGW) as the HTTPS transport for that support.
 
 ## Build-time decompilation toolchain (`tools/src/`)
 
