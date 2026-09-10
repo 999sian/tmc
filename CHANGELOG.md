@@ -1,5 +1,93 @@
 # Changelog
 
+## v0.9.1 (2026-09-10)
+
+Focused on European and Japanese ROM support. A single binary has run all
+three regions since v0.8.0, but a lot of data was still read from
+USA-baseline addresses and then resolved inside whichever ROM was loaded —
+which lands on the wrong bytes. This release resolves those per region.
+
+### European and Japanese ROM parity
+
+- **Collision masks and tile properties are read from the loaded ROM's own
+  tables.** Both were reached through compiled USA addresses, so EU got data
+  0x98/0x48 bytes off — wrong collision shapes, including false walls (e.g.
+  Link's house east doorway).
+- **Kinstone fusions work on EU.** The fusion-text, fuser-fusion and
+  enemy/NPC fuser key tables had the same problem: on EU, fuser N read EU
+  fuser N-42, so offers, reward text and world events belonged to a
+  different fuser.
+- **EU HUD and item labels render correctly.** EU deletes sprite index 288,
+  so every index the C code names by enum (>=289) is one too high on EU. The
+  A/B/R button bubbles and item/heart/label sprites (505, 322) are remapped,
+  and so are 14 enemy and 7 projectile definitions — the Gyorg family, Vaati
+  Transfigured and its eye, spear/bow Moblins, slimes, fireball guys, the
+  curtain, rupee-like, arrows, cannonballs, spiked rollers and eye lasers.
+  Previously these drew a neighbouring sprite's frames (Gyorg's eyes showed
+  four unrelated OBJ pieces each).
+- **Sprite, frame and graphics tables are sized per region** (EU 328 sprite
+  pointers / 199561 frame-list bytes / 525 fixed-gfx entries). EU was read
+  with USA sizes, running 481 bytes past the frame-list table; the USA and JP
+  fixed-gfx count was also two entries too high.
+- **JP and EU frame offsets come from their own ROM.** `gExtraFrameOffsets`
+  always used the compiled USA copy; both other regions differ from it.
+- **Region-native room data.** 14 compiled EntityData/TileEntity blobs carry
+  flag ordinals and ROM pointers baked for USA. They now resolve to the
+  loaded region's bytes at the shared room loaders, which covers Cloud Tops,
+  the Sanctuary, Lon Lon Ranch, Veil Falls, Castle Garden, the Goron
+  wall-break events and kinstone world events. The Goron wall table is also
+  bounds-checked and its tile pattern validated before anything is drawn.
+- **Fused lilypads move on EU/JP** (the rails table was USA-only), and the
+  inn, Simon's Simulation, Lake Hylia, guard patrol, Gust Jar, figurine and
+  collision-matrix tables resolve per region.
+- **EU Italian is selectable** — language slot 6 was never loaded.
+- Region data and offsets ported from
+  [EstebanPdN/zelda-tmc-3ds](https://github.com/EstebanPdN/zelda-tmc-3ds)
+  (GPL-3.0); JP offsets derived here and checked against clean ROMs by
+  `tools/verify_eu_region_data.py` (28/28).
+
+### Fixed
+
+- **#190 Talking to a maid left Link uncontrollable (JP, and EU).** The port
+  maps the maid's dialogue-callback address from the script, but only the two
+  USA addresses were listed, so on EU/JP the callback resolved to nothing:
+  no message ever opened and Link stayed in the talk state forever. All three
+  regions' addresses are mapped now.
+- **#190 Torn dialogue box.** The widescreen text-centering band was computed
+  from the message request rather than the box actually on screen. Text that
+  moves its own window (item-get messages) ended up straddling the band edge,
+  so the top of the box shifted sideways and the bottom did not. Affected all
+  regions.
+- **#186 Crash entering the Deepwood Shrine button room from the stairs
+  hallway.** The tilemap source offset for a southward scroll was built
+  unsigned; in widescreen the camera rest sits left of the next room's origin,
+  so a small negative offset became +8 GiB on 64-bit instead of wrapping like
+  the GBA's 32-bit add. Only release (widescreen) builds could reach it.
+- **#184 Crash on quit (macOS arm64, also Linux).** Quitting leaves through
+  `exit(0)`, so audio and TTS shutdown never ran: C++ static destructors freed
+  the music mixer while the audio thread was still rendering from it, and
+  destroyed a still-running speech worker. Both now shut down first. 15
+  consecutive quits crashed before the fix, 15 exit cleanly after.
+- **Save files now use the retail layout.** Flags and the dungeon
+  key/item/warp arrays sat one byte early, so saves shared with emulators
+  were misread in both directions. Existing PC saves are migrated on load
+  (the original is kept as `.bak`; `TMC_SAVE_RETAIL_LAYOUT=1` skips it).
+- An entity whose hitbox pointer is rejected by the safety guard stops
+  colliding silently. Bug reports now name that entity instead of leaving
+  "I walk through enemies" unattributable.
+- The level editor no longer prints eight lines to the terminal on every room
+  load (`TMC_LEVEL_EDITOR_LOG=1` to restore).
+
+### Known
+
+- **#190 walk-through-enemy is not fixed.** The attached save is from the
+  prologue and cannot reach the reported state, and JP collision itself
+  checks out (a spawned Octorok collides normally, and the JP collision
+  tables match USA byte for byte). The most likely cause is a corrupted
+  hitbox pointer being rejected by the guard above — which is exactly why
+  that rejection is now in the bug report. A fresh report captured while it
+  is happening should name the entity.
+
 ## v0.9.0 (2026-09-10)
 
 ### RetroAchievements (opt-in)
