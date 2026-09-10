@@ -209,8 +209,16 @@ void Port_GbaShadow_Refresh(void) {
     RefreshRegion(sIwram, sIwramRows, ARRAY_COUNT(sIwramRows));
 }
 
+static const ShadowRow* FindRow(const ShadowRow* rows, size_t count, uint32_t off) {
+    for (size_t i = 0; i < count; i++)
+        if (off >= rows[i].offset && off - rows[i].offset < rows[i].size)
+            return &rows[i];
+    return NULL;
+}
+
 uint32_t Port_GbaShadow_Read(uint32_t gba_addr, uint8_t* out, uint32_t n) {
     const u8* base;
+    const ShadowRow* row;
     uint32_t offset;
     uint32_t avail;
 
@@ -220,18 +228,24 @@ uint32_t Port_GbaShadow_Read(uint32_t gba_addr, uint8_t* out, uint32_t n) {
     if (gba_addr >= EWRAM_BASE && gba_addr < EWRAM_BASE + EWRAM_SIZE) {
         base = sEwram;
         offset = gba_addr - EWRAM_BASE;
-        avail = EWRAM_SIZE - offset;
+        row = FindRow(sEwramRows, ARRAY_COUNT(sEwramRows), offset);
     } else if (gba_addr >= IWRAM_BASE && gba_addr < IWRAM_BASE + IWRAM_SIZE) {
         base = sIwram;
         offset = gba_addr - IWRAM_BASE;
-        avail = IWRAM_SIZE - offset;
+        row = FindRow(sIwramRows, ARRAY_COUNT(sIwramRows), offset);
     } else {
-        /* Not shadowed (cart SRAM, VRAM, ROM, or the gap between the regions).
-         * EWRAM and IWRAM are not contiguous, so a read that runs off the end
-         * of one is truncated here rather than continuing into the other. */
+        /* Not shadowed (cart SRAM, VRAM, ROM, or the gap between the regions). */
         return 0;
     }
 
+    /* Only bytes a size-gated row covers are served. Anything else returns 0
+     * bytes so rc_client marks the achievement Unsupported (rc_client.c
+     * rc_client_validate_addresses) instead of evaluating it against zeros,
+     * and so the F8 unserved-read list names the missing row. A read is
+     * truncated at its row's end: rows are not contiguous. */
+    if (row == NULL)
+        return 0;
+    avail = row->offset + row->size - offset;
     if (n > avail)
         n = avail;
     memcpy(out, base + offset, n);
@@ -334,14 +348,15 @@ bool Port_GbaShadow_SelfTest(void) {
     SHADOW_CHECK(Port_GbaShadow_Read(kSaveAddr + 0x007u, buf, 1) == 1);
     SHADOW_CHECK(buf[0] != 0x5Au);
 
-    /* Unmapped and rejected ranges read as zero, and never fail. */
+    /* Bytes no row covers are unserved: rc_client must see 0, not zeros. */
     memset(buf, 0xFFu, sizeof(buf));
-    SHADOW_CHECK(Port_GbaShadow_Read(0x02033A90u + 0x3Cu, buf, 4) == 4); /* gArea past its prefix */
-    SHADOW_CHECK(buf[0] == 0 && buf[1] == 0 && buf[2] == 0 && buf[3] == 0);
+    SHADOW_CHECK(Port_GbaShadow_Read(0x02033A90u + 0x3Cu, buf, 4) == 0); /* gArea past its prefix */
+    SHADOW_CHECK(buf[0] == 0xFFu);
 
-    /* Region ends truncate; out-of-region and degenerate reads serve nothing. */
-    SHADOW_CHECK(Port_GbaShadow_Read(EWRAM_BASE + EWRAM_SIZE - 4u, buf, 16) == 4);
-    SHADOW_CHECK(Port_GbaShadow_Read(IWRAM_BASE + IWRAM_SIZE - 4u, buf, 16) == 4);
+    /* Reads truncate at their row's end; out-of-region and degenerate reads serve nothing. */
+    SHADOW_CHECK(Port_GbaShadow_Read(kSaveAddr + 0x500u - 4u, buf, 16) == 4);
+    SHADOW_CHECK(Port_GbaShadow_Read(EWRAM_BASE + EWRAM_SIZE - 4u, buf, 16) == 0);
+    SHADOW_CHECK(Port_GbaShadow_Read(IWRAM_BASE + IWRAM_SIZE - 4u, buf, 16) == 0);
     SHADOW_CHECK(Port_GbaShadow_Read(EWRAM_BASE + EWRAM_SIZE, buf, 4) == 0);
     SHADOW_CHECK(Port_GbaShadow_Read(IWRAM_BASE + IWRAM_SIZE, buf, 4) == 0);
     SHADOW_CHECK(Port_GbaShadow_Read(EWRAM_BASE - 1u, buf, 4) == 0);

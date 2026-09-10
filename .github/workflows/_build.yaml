@@ -178,7 +178,7 @@ jobs:
           # GLES compute PPU rasterizer on Linux (xmake.lua guard). Without the
           # -dev symlinks the link fails with "cannot find -lEGL".
           sudo apt-get install -y \
-            curl libpng-dev libfmt-dev nlohmann-json3-dev \
+            curl libcurl4-openssl-dev libpng-dev libfmt-dev nlohmann-json3-dev \
             libx11-dev libxext-dev libxrender-dev libxcursor-dev \
             libasound2-dev libpulse-dev libpipewire-0.3-dev \
             xutils-dev xorg-dev autoconf automake libtool ninja-build python3-pip \
