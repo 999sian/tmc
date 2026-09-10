@@ -34,6 +34,7 @@
 
 #ifdef PC_PORT
 #include "port_rom.h"
+#include "port_region_data.h"
 #include "port_gba_mem.h"
 #include "object/itemOnGround.h"
 #include "rando/rando.h"
@@ -451,7 +452,7 @@ u32 sub_unk3_HouseInteriors1_InnWestRoom(void) {
         SetLocalFlag(BILL05_YADO1F_MATSU_T0);
     }
 #ifdef PC_PORT
-    gRoomVars.properties[3] = Port_ReadPackedRomPtr(gUnk_080D6A74, index);
+    gRoomVars.properties[3] = (void*)Port_ReadActiveRomPtrTable(gRomOffsets->innWestEntities, index);
 #else
     gRoomVars.properties[3] = gUnk_080D6A74[index];
 #endif
@@ -483,7 +484,7 @@ u32 sub_unk3_HouseInteriors1_InnMiddleRoom(void) {
         SetLocalFlag(BILL06_YADO1F_TAKE_T0);
     }
 #ifdef PC_PORT
-    gRoomVars.properties[3] = Port_ReadPackedRomPtr(gUnk_080D6B18, index);
+    gRoomVars.properties[3] = (void*)Port_ReadActiveRomPtrTable(gRomOffsets->innMiddleEntities, index);
 #else
     gRoomVars.properties[3] = gUnk_080D6B18[index];
 #endif
@@ -513,7 +514,7 @@ u32 sub_unk3_HouseInteriors1_InnEastRoom(void) {
         SetLocalFlag(BILL07_YADO1F_UME_T0);
     }
 #ifdef PC_PORT
-    gRoomVars.properties[3] = Port_ReadPackedRomPtr(gUnk_080D6BB8, index);
+    gRoomVars.properties[3] = (void*)Port_ReadActiveRomPtrTable(gRomOffsets->innEastEntities, (u32)index);
 #else
     gRoomVars.properties[3] = gUnk_080D6BB8[index];
 #endif
@@ -1050,7 +1051,9 @@ void sub_0804BF38(Entity* this, ScriptExecutionContext* context) {
     /* ROM struct_080D8E54 data: 16 bytes on GBA (u16* a = 4 bytes pointer).
      * On 64-bit, native sizeof = 24. Index and read with GBA stride of 16. */
     {
-        const u8* raw = (const u8*)gUnk_080D8E50 + iVar2 * 16;
+        const u8* table = (const u8*)Port_ResolveRegionData(gUnk_080D8E50);
+        if (iVar2 >= 6 || table == NULL) return;
+        const u8* raw = table + iVar2 * 16;
         u32 gba_a = Port_ReadU32(raw + 0);
         a = gba_a ? (u16*)Port_ResolveRomData(gba_a) : NULL;
         u16 p_x = Port_ReadU16(raw + 4);
@@ -1059,6 +1062,18 @@ void sub_0804BF38(Entity* this, ScriptExecutionContext* context) {
         u16 p_shakeTime = Port_ReadU16(raw + 10);
         u16 p_shakeMag = Port_ReadU16(raw + 12);
         u16 p_sfx = Port_ReadU16(raw + 14);
+        /* Validate the whole (tile,pos) pair list before touching tiles; the
+         * largest of the six wall patterns has 39 pairs + 0xffff sentinel. */
+        if (a == NULL || numEnts > 13) return;
+        {
+            size_t remaining = gRomSize - (size_t)((const u8*)a - gRomData);
+            u32 pairs;
+            for (pairs = 0; pairs <= 39; ++pairs) {
+                if (remaining < pairs * 4u + 2u) return;
+                if (Port_ReadU16((const u8*)a + pairs * 4u) == 0xffffu) break;
+            }
+            if (pairs > 39) return;
+        }
         xtile = (p_x >> 4) & 0x3f;
         ytile = ((p_y >> 4) & 0x3f) << 6;
         sub_0807BB68(a, xtile | ytile, 1);
@@ -4777,11 +4792,21 @@ void sub_StateChange_SimonsSimulation_Main(void) {
     }
     r = Random();
 #ifdef PC_PORT
-    index = ((u8*)Port_ReadPackedRomPtr(gUnk_080F0D58, index))[r & 0x1f];
-    LoadRoomEntityList((EntityData*)Port_ReadPackedRomPtr(gUnk_080F0CB8, index & 0xF));
-    index >>= 4;
-    r >>= 8;
-    index = ((u8*)Port_ReadPackedRomPtr(gUnk_080F0E08, index))[r & 0x1F];
+    {
+        const u8* pattern = Port_ReadActiveRomPtrTable(gRomOffsets->simonEnemyPatterns, index);
+        if (pattern == NULL) {
+            return;
+        }
+        index = pattern[r & 0x1f];
+        LoadRoomEntityList((EntityData*)Port_ReadActiveRomPtrTable(gRomOffsets->simonEntityLists, index & 0xF));
+        index >>= 4;
+        r >>= 8;
+        pattern = Port_ReadActiveRomPtrTable(gRomOffsets->simonChestPatterns, index);
+        if (pattern == NULL) {
+            return;
+        }
+        index = pattern[r & 0x1F];
+    }
 #else
     index = gUnk_080F0D58[index][r & 0x1f];
     LoadRoomEntityList((EntityData*)gUnk_080F0CB8[index & 0xF]);
@@ -5200,21 +5225,11 @@ extern u32 gUnk_080F3EA4;
 
 u32 sub_unk3_LakeHylia_Main(void) {
 #ifdef PC_PORT
-    /* On GBA, &Enemies_LakeHylia_Main and &gUnk_080F3EA4 are ROM
-     * addresses (0x080F3D44 and 0x080F3EA4 respectively — see
-     * data/map/entity_headers.s:17713). The port stubbed both as
-     * 4-byte uninitialised globals in port_linked_stubs.c, so taking
-     * their address gives the placeholder, not the ROM data the enemy
-     * loader needs. sub_0804B058 then iterated the 4 zero bytes as
-     * EntityData[], spawning garbage-kind entities and seeding the
-     * cycle/corruption that left Lake Hylia objects unable to spawn
-     * (tree portal etc). Resolve through the ROM widener instead. */
-    extern void* Port_ResolveRomData(u32 gba_addr);
-    if (CheckGlobalFlag(LV4_CLEAR) && !CheckLocalFlag(4)) {
-        gRoomVars.properties[2] = Port_ResolveRomData(0x080F3EA4);
-    } else {
-        gRoomVars.properties[2] = Port_ResolveRomData(0x080F3D44);
-    }
+    /* On GBA these are ROM EntityData lists (data/map/entity_headers.s:17713);
+     * the port stubs are 4-byte placeholders, so resolve from the active ROM. */
+    u32 off = (CheckGlobalFlag(LV4_CLEAR) && !CheckLocalFlag(4)) ? gRomOffsets->lakeHyliaCleared
+                                                                : gRomOffsets->lakeHyliaEnemies;
+    gRoomVars.properties[2] = off != 0 ? Port_ResolveRomData(0x08000000u | off) : NULL;
 #else
     if (CheckGlobalFlag(LV4_CLEAR) && !CheckLocalFlag(4)) {
         gRoomVars.properties[2] = &gUnk_080F3EA4;

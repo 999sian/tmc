@@ -169,6 +169,8 @@ u32 InitSaveData(void) {
 
 u32 WriteSaveFile(u32 index, SaveFile* saveFile) {
 #ifdef PC_PORT
+    /* Retail-layout stamp read by port_save.c's <= v0.9.0 flag migration. */
+    saveFile->filler4ac[sizeof(saveFile->filler4ac) - 1] = 1;
     {
         extern bool Port_RandoSave_SaveActiveSlot(int slot);
         Port_RandoSave_SaveActiveSlot((int)index);
