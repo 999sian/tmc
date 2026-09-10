@@ -571,18 +571,22 @@ bool gPortPaceDecoupled = false;
 
 int Port_Profile_Enabled(void); /* defined below */
 
-/* TMC_TEST_INPUT="420:start,480:a,520:down": fire synthetic input edges at
- * exact engine ticks through the same test-only seam the repro harnesses
- * use (Port_Config_TestForceEdge). Lets scripted test runs drive menus on
+/* TMC_TEST_INPUT="420:start,480:a,520:down:600": fire synthetic input at exact
+ * engine ticks through the same test-only seam the repro harnesses use
+ * (Port_Config_TestForceEdge). Lets scripted test runs drive menus on
  * compositors where no display-server input injection reaches the window
  * (e.g. XWayland under KWin). Buttons: a b select start right left up down
- * r l. */
+ * r l. An optional third field holds the button for that many ticks (default
+ * 1) — the seam stamps the per-frame cache that both edge and held reads
+ * consume, so re-stamping each tick is a hold. Needed to walk the player
+ * through a scene; a single edge only ever nudges one frame. */
 static void Port_TestInputTick(u32 tick) {
     static int parsed = -1;
     static struct {
         u32 tick;
+        u32 until; /* exclusive */
         PortInput input;
-    } seq[32];
+    } seq[256];
     static int n = 0;
     int i;
 
@@ -599,7 +603,7 @@ static void Port_TestInputTick(u32 tick) {
                 { "up", PORT_INPUT_UP },       { "down", PORT_INPUT_DOWN }, { "r", PORT_INPUT_R },
                 { "l", PORT_INPUT_L },
             };
-            char buf[512];
+            char buf[4096];
             char* tok = buf;
             strncpy(buf, e, sizeof(buf) - 1);
             buf[sizeof(buf) - 1] = '\0';
@@ -611,10 +615,20 @@ static void Port_TestInputTick(u32 tick) {
                     *next++ = '\0';
                 colon = strchr(tok, ':');
                 if (colon) {
+                    char* dur;
+                    u32 hold = 1;
                     *colon = '\0';
+                    dur = strchr(colon + 1, ':');
+                    if (dur) {
+                        *dur = '\0';
+                        hold = (u32)strtoul(dur + 1, NULL, 0);
+                        if (hold == 0)
+                            hold = 1;
+                    }
                     for (k = 0; k < sizeof(kMap) / sizeof(kMap[0]); k++) {
                         if (strcmp(colon + 1, kMap[k].name) == 0) {
                             seq[n].tick = (u32)strtoul(tok, NULL, 0);
+                            seq[n].until = seq[n].tick + hold;
                             seq[n].input = kMap[k].input;
                             n++;
                             break;
@@ -626,7 +640,7 @@ static void Port_TestInputTick(u32 tick) {
         }
     }
     for (i = 0; i < n; i++) {
-        if (seq[i].tick == tick) {
+        if (tick >= seq[i].tick && tick < seq[i].until) {
             Port_Config_TestForceEdge(seq[i].input);
         }
     }
