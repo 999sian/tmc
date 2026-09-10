@@ -4,6 +4,24 @@
 
 ### Fixed
 
+- **NPCs no longer draw with the wrong colours in palette-heavy rooms (e.g.
+  the Picori Festival).** One of the 16 OBJ palette slots was permanently
+  lost: `sub_0801D000` reserves slot 15 and releases it through
+  `gUnk_02001A3C`, which on GBA *is* `gPaletteList[15]` (`0x02001A00 +
+  0xF*4`). The port had declared that symbol as its own global, so the
+  release wrote to a dead variable and slot 15 stayed reserved forever —
+  shrinking the allocatable pool from 10 slots to 9. When a room needed
+  every slot, `FindFreeObjPalette` failed and `SetEntityObjPalette` clamped
+  the missing slot to 0, so that NPC rendered with whatever colours slot 0
+  held. The symbol is now the alias it always was; slot 15 is allocated
+  again and the wind-tribe women in the festival get real palette slots
+  instead of the unassigned fallback. Affects all regions.
+- **Entering the Picori Festival no longer announces "Hyrule Town".** The
+  festival area reuses Hyrule Town's location index, so arriving showed the
+  town banner before the player had reached the town — and set the visit
+  flag, which then suppressed the banner on entering the real Hyrule Town
+  later. The banner and flag are now skipped for the festival area, so the
+  announcement belongs to the actual town.
 - **Animated background tiles no longer draw garbage on a European ROM.**
   `LoadBgAnimationGfx` indexed `gGlobalGfxAndPalettes` with the raw
   `offset_bgAnim_*` constant from `assets/gfx_offsets.h`. Those are
