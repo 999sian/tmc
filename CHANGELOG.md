@@ -1,9 +1,20 @@
 # Changelog
 
-## Unreleased
+## v0.9.2 (2026-09-11)
+
+Follow-up to v0.9.1's region work, driven by testing the Picori Festival on
+USA and EU. One EU-only bug turned out to be game-wide (every animated
+background tile), and one "festival" bug turned out to be a lost OBJ palette
+slot that affects every region.
 
 ### Fixed
 
+- **Audio: a non-finite mixer sample can no longer become a platform-dependent
+  pop.** `std::clamp` passes NaN through and `std::lround(NaN)` is
+  implementation-defined, so a corrupt sample from the resampler/envelope
+  path produced different garbage per libm. Such samples are now replaced
+  with silence (and warned once). Defensive hardening prompted by
+  pokeemerald-multiplatform hitting exactly this as loud buzzing.
 - **NPCs no longer draw with the wrong colours in palette-heavy rooms (e.g.
   the Picori Festival).** One of the 16 OBJ palette slots was permanently
   lost: `sub_0801D000` reserves slot 15 and releases it through
