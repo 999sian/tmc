@@ -692,15 +692,34 @@ static void RenderChunkLocked(void) {
         }
 
         const float masterVolume = sState.masterVolume;
+        bool sawNonFinite = false;
         for (size_t sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
             float left = accL[sampleIndex] * masterVolume;
             float right = accR[sampleIndex] * masterVolume;
+
+            /* A NaN from the resampler/envelope path sails straight through
+             * std::clamp (its comparisons are false for NaN) into std::lround,
+             * which is implementation-defined for NaN and raises FE_INVALID —
+             * a different garbage sample on every libm. ±inf is already caught
+             * by the clamp. Replace NaN with silence for that sample only, so a
+             * corrupt sample never becomes a platform-dependent pop or buzz. */
+            if (!std::isfinite(left)) {
+                left = 0.0f;
+                sawNonFinite = true;
+            }
+            if (!std::isfinite(right)) {
+                right = 0.0f;
+                sawNonFinite = true;
+            }
 
             left = std::clamp(left, -1.0f, 1.0f);
             right = std::clamp(right, -1.0f, 1.0f);
 
             sState.pendingSamples[sampleIndex * 2 + 0] = static_cast<int16_t>(std::lround(left * 32767.0f));
             sState.pendingSamples[sampleIndex * 2 + 1] = static_cast<int16_t>(std::lround(right * 32767.0f));
+        }
+        if (sawNonFinite) {
+            AudioGuardWarn("RenderChunkLocked", "non-finite sample from mixer replaced with silence");
         }
     } catch (const std::exception& e) {
         AudioGuardWarn("RenderChunkLocked", e.what());
