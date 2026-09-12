@@ -25,7 +25,9 @@ extern u16 gMapDataTopSpecial[];
  * reads adjacent EWRAM; on PC the buffer's a standalone allocation and
  * the renderer dereferences unmapped memory. gMapDataTopSpecial is
  * 0x8000 bytes; the renderer reads BG_SCREEN_SIZE (0x800) from
- * subTileMap, so clamp the byte delta to [0, 0x7800]. */
+ * subTileMap, so clamp the byte delta to [0, 0x7800]. Apply it to a
+ * byte pointer, just as the room initializer does: adding it to u16*
+ * doubles the page stride and puts BG1 in the wrong half of the buffer. */
 static inline s32 VMP_ClampBgDelta(s32 bgOffset, s32 baseAdd) {
     s32 delta = (bgOffset / 0x40) * 0x200;
     s32 lo = -baseAdd;
@@ -55,7 +57,7 @@ void sub_0805754C(VerticalMinishPathBackgroundManager* this) {
     bgOffset += bgOffset >> 3;
     gScreen.bg3.yOffset = bgOffset & 0x3f;
 #ifdef PC_PORT
-    gScreen.bg3.subTileMap = gMapDataTopSpecial + VMP_ClampBgDelta(bgOffset, 0);
+    gScreen.bg3.subTileMap = (u16*)((u8*)gMapDataTopSpecial + VMP_ClampBgDelta(bgOffset, 0));
 #else
     gScreen.bg3.subTileMap = gMapDataTopSpecial + (bgOffset / 0x40) * 0x200;
 #endif
@@ -67,7 +69,7 @@ void sub_0805754C(VerticalMinishPathBackgroundManager* this) {
     bgOffset += bgOffset >> 2;
     gScreen.bg1.yOffset = bgOffset & 0x3f;
 #ifdef PC_PORT
-    gScreen.bg1.subTileMap = gMapDataTopSpecial + 0x2000 + VMP_ClampBgDelta(bgOffset, 0x2000);
+    gScreen.bg1.subTileMap = (u16*)((u8*)gMapDataTopSpecial + 0x2000 + VMP_ClampBgDelta(bgOffset, 0x2000));
 #else
     gScreen.bg1.subTileMap = gMapDataTopSpecial + 0x2000 + (bgOffset / 0x40) * 0x200;
 #endif

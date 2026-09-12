@@ -731,6 +731,29 @@ static void scene_ws_transparent_bg(Scene* s) {
     s->oam[2] = 0;
 }
 
+/* Repeating Woods BG3 must wrap through every shadow column. */
+static void scene_ws_fog(Scene* s) {
+    scene_clear(s, "ws_fog_wrap");
+    set_io16(s, 0x00, 0x0800);
+    set_io16(s, 0x0e, 0x1e04);
+    set_io16(s, 0x1c, 247);
+    s->bgpal[0] = 0;
+    s->bgpal[1] = 0x001f;
+    s->bgpal[2] = 0x03e0;
+    std::memset(s->vram + 0x4020, 0x11, 32);
+    std::memset(s->vram + 0x4040, 0x22, 32);
+    for (int row = 0; row < 32; ++row) {
+        for (int col = 0; col < 32; ++col) {
+            uint16_t entry = 1 + (col & 1);
+            std::memcpy(s->vram + 0xf000 + (row * 32 + col) * 2, &entry, 2);
+        }
+        for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col)
+            g_ws_shadow0[row * MODE1_WS_SHADOW_COLS + col] = 1 + (col & 1);
+    }
+    virtuappu_mode1_ws_shadow[3] = g_ws_shadow0;
+    virtuappu_mode1_ws_shadow_base_tile[3] = 0;
+}
+
 /* BG0 32-tile with a shadow tilemap revealing tiles past x=240. */
 static void scene_ws_shadow_reveal(Scene* s) {
     scene_clear(s, "ws_shadow_reveal");
@@ -980,6 +1003,7 @@ int main(int argc, char** argv) {
         scene_affine_oob,
 #if MODE1_GBA_WIDTH > 240
         scene_ws_transparent_bg,
+        scene_ws_fog,
         scene_ws_shadow_reveal,
         scene_ws_shadow_sentinel,
         scene_ws_hud_anchor,

@@ -1006,6 +1006,7 @@ void UpdateScrollVram(void) {
  * shadow pointers stay NULL (render falls back to clip-at-240). */
 static u16 sWsShadowBG1[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 static u16 sWsShadowBG2[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
+static u16 sWsShadowOverlay[MODE1_WS_SHADOW_ROWS * MODE1_WS_SHADOW_COLS];
 
 /* ---- Runtime widescreen gate --------------------------------------------
  * `--widescreen_width=N` only reserves a wider framebuffer. True widescreen
@@ -1123,9 +1124,10 @@ int Port_Widescreen_FallbackNative(void) {
     if (Port_Widescreen_TargetViewWidth() <= 240) {
         return 1; /* window is 3:2/4:3 — native view already fills it */
     }
-    /* The digging-cave iris uses an 8-bit, native-width WIN1 rectangle.
-     * Keep its camera and presentation native for the complete transition. */
-    if (gRoomControls.scrollAction == 5) {
+    /* Rolling room transitions stream a 240px VRAM buffer while mapSpecial
+     * already contains the destination room. The iris uses an 8-bit WIN1.
+     * Keep these effects native until their camera/tilemap refresh completes. */
+    if (gRoomControls.scrollAction == 2 || gRoomControls.scrollAction == 4 || gRoomControls.scrollAction == 5) {
         return 1;
     }
     eff = Port_WidescreenEffectiveTarget();
@@ -1300,6 +1302,20 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
     virtuappu_mode1_ws_shadow[bg_index] = shadow;
 }
 
+/* Woods light rays/fog use a repeating 256px texture, not the room map.
+ * Copy its complete screenblock so even HBlank-varying scroll offsets use
+ * the same tiles on both sides of x=240. Existing CPU/GPU shadow sampling
+ * retains the overlay's scroll, wave distortion, priority and alpha blend. */
+static void Port_WidescreenShadow_PopulateOverlay(const u16* screen, u16* shadow) {
+    for (int row = 0; row < MODE1_WS_SHADOW_ROWS; ++row) {
+        for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col) {
+            shadow[row * MODE1_WS_SHADOW_COLS + col] = screen[row * 32 + (col & 31)];
+        }
+    }
+    virtuappu_mode1_ws_shadow_base_tile[3] = 0;
+    virtuappu_mode1_ws_shadow[3] = shadow;
+}
+
 /* Which PPU BG index renders a given map: the PPU selects a BG's tilemap by
  * its BGCNT screen_base, so the map whose bgSettings->control screen_base
  * matches gScreen.bgN.control is rendered as BG N. (In the field this is
@@ -1398,6 +1414,12 @@ void Port_Widescreen_UpdateShadows(void) {
         int bg = Port_WidescreenPpuBgForControl(gMapTop.bgSettings->control);
         if (bg >= 0)
             Port_WidescreenShadow_Populate(bg, gMapDataTopSpecial, sWsShadowBG2);
+    }
+    /* Only the Woods overlay's known repeating layout; fixed BG3 canvases
+     * elsewhere must retain their native clipping. */
+    if (gRoomControls.area == AREA_MINISH_WOODS && gScreen.bg3.control == 0x1e04 &&
+        (gScreen.lcd.displayControl & DISPCNT_BG3_ON) && virtuappu_mode1_ws_shadow[3] == NULL) {
+        Port_WidescreenShadow_PopulateOverlay((const u16*)(gVram + 0xf000), sWsShadowOverlay);
     }
 }
 #else

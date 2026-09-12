@@ -18,7 +18,7 @@ typedef struct {
     /*0x68*/ u8 fusionOffer;
     /*0x69*/ u8 animIndex;
     /*0x6a*/ u8 unused[26];
-    /*0x84*/ u32* unk_84;
+    /*0x84*/ ScriptExecutionContext* unk_84;
 } SittingPersonEntity;
 
 const SpriteLoadData gUnk_0810CB78[] = {
@@ -230,7 +230,9 @@ void sub_0806390C(Entity* this) {
     if (CheckLocalFlagB(MACHI_MES_60) == 0) {
         r5 = 0;
         SetLocalFlagB(MACHI_MES_60);
-        ((SittingPersonEntity*)this)->unk_84[5] = 1;
+        /* The script pointer grows on PC, so condition is no longer
+         * the sixth u32 in the context. */
+        ((SittingPersonEntity*)this)->unk_84->condition = 1;
     }
 
     MessageNoOverlap(gUnk_0810CC04[r5], this);
