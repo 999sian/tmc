@@ -285,6 +285,16 @@ void Scroll2Sub2(RoomControls* controls) {
 
 void sub_0807FEC8(RoomControls* controls) {
     controls->scrollAction = 0;
+#if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
+    /* The last rolling update still contains outgoing-room tiles. Restore
+     * the wide camera and fully refill VRAM before revealing the sides. */
+    {
+        extern int Port_Widescreen_EffectiveViewWidth(void);
+        if (Port_Widescreen_EffectiveViewWidth() > 240) {
+            sub_080809D4();
+        }
+    }
+#endif
     MemFill32(0xffffffff, gPlayerState.path_memory, sizeof(gPlayerState.path_memory));
     gPlayerState.startPosX = controls->camera_target->x.HALF.HI;
     gPlayerState.startPosY = controls->camera_target->y.HALF.HI;
@@ -309,6 +319,14 @@ void Scroll4Sub1(RoomControls* controls) {
         gUpdateVisibleTiles = 3;
         if (++controls->unk_18 > 0x13) {
             controls->scrollAction = 0;
+#if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
+            {
+                extern int Port_Widescreen_EffectiveViewWidth(void);
+                if (Port_Widescreen_EffectiveViewWidth() > 240) {
+                    sub_080809D4();
+                }
+            }
+#endif
             ClearEventPriority();
         }
     }

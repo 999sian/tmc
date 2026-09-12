@@ -184,7 +184,6 @@ bool32 LoadEnemySprite(Entity* entity, const EnemyDefinition* definition) {
 void sub_0804A720(Entity* parent) {
     int iVar2;
     const struct_080D3D94* pbVar3;
-    GenericEntityData* ptr;
     Enemy* this = (Enemy*)parent;
 
     if (this->enemyFlags & EM_FLAG_HAS_HOME) {
@@ -192,21 +191,23 @@ void sub_0804A720(Entity* parent) {
     }
 
     pbVar3 = &gUnk_080D3D94[super->id];
-    ptr = (GenericEntityData*)&this->child;
-    if (ptr->field_0x7c.BYTES.byte2 == 0) {
+    /* Room spawning writes Enemy fields through GE_FIELD. On 64-bit PC,
+     * the widened child pointer shifts field_0x7c relative to GenericEntity;
+     * reading through that layout mistakes the enemy id/type for its ranges. */
+    if (this->field_0x7c.BYTES.byte2 == 0) {
         this->rangeX = pbVar3->unk_0;
     } else {
-        this->rangeX = ptr->field_0x7c.BYTES.byte2;
+        this->rangeX = this->field_0x7c.BYTES.byte2;
     }
 
-    if (ptr->field_0x7c.BYTES.byte3 == 0) {
+    if (this->field_0x7c.BYTES.byte3 == 0) {
         this->rangeY = pbVar3->unk_1;
     } else {
-        this->rangeY = ptr->field_0x7c.BYTES.byte3;
+        this->rangeY = this->field_0x7c.BYTES.byte3;
     }
 
-    if (ptr->cutsceneBeh.HWORD != 0) {
-        this->homeX = ptr->cutsceneBeh.HWORD + gRoomControls.origin_x;
+    if (this->cutsceneBeh.HWORD != 0) {
+        this->homeX = this->cutsceneBeh.HWORD + gRoomControls.origin_x;
     } else {
         iVar2 = this->rangeX * 4;
         if (super->x.HALF.HI >= iVar2) {
@@ -216,8 +217,8 @@ void sub_0804A720(Entity* parent) {
         }
     }
 
-    if (ptr->field_0x86.HWORD != 0) {
-        this->homeY = ptr->field_0x86.HWORD + gRoomControls.origin_y;
+    if (this->field_0x86.HWORD != 0) {
+        this->homeY = this->field_0x86.HWORD + gRoomControls.origin_y;
     } else {
         iVar2 = this->rangeY * 4;
         if (super->y.HALF.HI >= iVar2) {
