@@ -1,6 +1,6 @@
 set_project("tmc")
 -- Keep in sync with port/port_version.h.
-local TMC_PC_VERSION = "0.9.0"
+local TMC_PC_VERSION = "0.9.3"
 set_version(TMC_PC_VERSION)
 set_xmakever("2.7.0")
 
@@ -820,6 +820,7 @@ target("tmc_pc")
     add_files("port/port_icon.cpp")     -- SDL window icon (placeholder, ROM-extracted in future)
     add_files("port/port_mods.cpp")     -- Tier 1 mod loader: asset overrides from <exe>/mods/
     add_files("port/port_rom.c")        -- ROM loading & symbol resolution
+    add_files("port/port_region_data.c") -- Compiled USA blobs -> EU/JP ROM counterparts
         -- PC port stubs for undefined symbols
     add_files("port/port_stubs.c")
     add_files("port/stubs_autogen.c")

@@ -54,7 +54,10 @@ void sub_0807D280(u16* mapspecial, u16* bgbuffer) {
                 DmaSet(3, bgbuffer + 0x40, bgbuffer, 0x800003c0);
             }
 
-            mapspecial = mapspecial + (((unk_18 * 0x10000 >> 0x12) << 8) + ((xdiff >> 4) << 1));
+            /* The offset is a u32 here (unk_18 is u32); a negative xdiff (widescreen camera
+             * rest left of the next room's origin) must wrap like the 32-bit GBA add, not
+             * zero-extend onto a 64-bit pointer (#186). Codegen-neutral on ARM. */
+            mapspecial = mapspecial + (s32)(((unk_18 * 0x10000 >> 0x12) << 8) + ((xdiff >> 4) << 1));
             DmaSet(3, mapspecial, bgbuffer + 0x280, 0x80000020);
             DmaSet(3, mapspecial + 0x80, bgbuffer + 0x2a0, 0x80000020);
             return;

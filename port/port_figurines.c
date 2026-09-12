@@ -116,14 +116,25 @@ static const FigurineRomEntry kFigurineEntries[137] = {
     [135] = { 0x005BD440, 0x008BDB60, 0x2580 }, [136] = { 0x005BD520, 0x008C00E0, 0x18E0 },
 };
 
-/* Resolve every entry's pal/gfx address into &gRomData[gba_addr - 0x08000000]
- * after the ROM is mapped. Caller: port_rom.c::Port_LoadRom. */
+/* Read the active ROM's packed gFigurines table (pal/gfx addresses move per
+ * region); the compiled USA table is the fallback when the region has none. */
 void Port_PopulateFigurines(void) {
+    const u32 tableOff = gRomOffsets ? gRomOffsets->figurines : 0;
+    const int fromRom = tableOff != 0 && tableOff + 137 * 16 <= gRomSize;
     memset(gFigurines, 0, sizeof(gFigurines));
     for (u32 i = 1; i <= 136; i++) {
-        gFigurines[i].pal = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].palAddr);
-        gFigurines[i].gfx = (u8*)Port_ResolveRomData(0x08000000u | kFigurineEntries[i].gfxAddr);
-        gFigurines[i].size = (int)kFigurineEntries[i].size;
+        u32 pal = 0x08000000u | kFigurineEntries[i].palAddr;
+        u32 gfx = 0x08000000u | kFigurineEntries[i].gfxAddr;
+        u32 size = kFigurineEntries[i].size;
+        if (fromRom) {
+            const u8* entry = &gRomData[tableOff + i * 16];
+            pal = Port_ReadU32(entry);
+            gfx = Port_ReadU32(entry + 4);
+            size = Port_ReadU32(entry + 8);
+        }
+        gFigurines[i].pal = (u8*)Port_ResolveRomData(pal);
+        gFigurines[i].gfx = (u8*)Port_ResolveRomData(gfx);
+        gFigurines[i].size = (int)size;
         gFigurines[i].zero = 0;
     }
 }
