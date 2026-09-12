@@ -16,6 +16,13 @@
 #include "script.h"
 #include "physics.h"
 
+#if defined(MODE1_GBA_WIDTH) && (MODE1_GBA_WIDTH > 240)
+extern int Port_Widescreen_EffectiveViewWidth(void);
+#define WS_VIEW_W ((u32)Port_Widescreen_EffectiveViewWidth())
+#else
+#define WS_VIEW_W 240u
+#endif
+
 typedef struct {
     /*0x00*/ Entity base;
     /*0x68*/ u8 fusionOffer;
@@ -116,7 +123,7 @@ void sub_0806BEFC(void) {
 
 void sub_0806BF44(Entity* this, ScriptExecutionContext* context) {
     context->condition = 0;
-    if (((this->x.HALF.HI - gRoomControls.scroll_x) + 0x10U < 0x110) &&
+    if (((this->x.HALF.HI - gRoomControls.scroll_x) + 0x10U < WS_VIEW_W + 0x20U) &&
         ((this->y.HALF.HI - gRoomControls.scroll_y) + 0x18U < 0xD0)) {
         context->condition = 1;
     }

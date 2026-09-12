@@ -166,3 +166,5 @@ android/app/build/
 !tools/sprite_regression_test.py
 !tools/tests/regional_entity_lists.py
 !tools/fuser_regression_test.py
+!tools/widescreen_regression_test.py
+!tools/widescreen_engine_regression_test.py

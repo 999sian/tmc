@@ -86,20 +86,13 @@ option("ra")
     set_description("Compile RetroAchievements support (rcheevos + libcurl; default ON)")
 option_end()
 
--- Widescreen: render the GBA frame at a non-native horizontal width by
--- overriding MODE1_GBA_WIDTH at compile time.
---   240: GBA-native (3:2). No widescreen, no pillarbox, no stretch.
---   >240: ViruaPPU pillarboxes BG/OAM at col 240 (the engine's 32-tile
---         BG buffer holds reliable tile data only in cols 0..29, plus
---         parked off-screen sprites at x>=240). port_ppu.cpp uniformly
---         stretches the 240-px frame to fill the wider window. Real
---         widescreen needs a 64-tile sa2-style BGCNT_TXT512x256 engine
---         extension — Phase 2.
--- Default 240 = clean, no artifacts.
+-- Framebuffer capacity. At >240, the WIP runtime option reveals room-backed
+-- tiles at a width fitted to the window aspect and capped by the room.
+-- Fixed canvases and the digging-cave iris use the native 240px view.
 option("widescreen_width")
     set_default(240)
     set_showmenu(true)
-    set_description("MODE1_GBA_WIDTH (240=native, >240=stretched until Phase 2)")
+    set_description("Framebuffer width capacity (240=native, >240 enables true widescreen)")
 option_end()
 
 -- Build directories
@@ -1168,6 +1161,7 @@ target("ppu_gpu_parity")
     set_kind("binary")
     set_languages("c11", "cxx17")
     set_targetdir("build/pc")
+    add_defines("MODE1_GBA_WIDTH=" .. (get_config("widescreen_width") or 240))
     add_includedirs("port")
     add_includedirs("port/ppu/include")
     add_files("tools/ppu_gpu_parity.cpp")

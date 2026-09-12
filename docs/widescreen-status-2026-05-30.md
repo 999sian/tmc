@@ -1,5 +1,11 @@
 # Dynamic Widescreen — Implementation Status (2026-05-30)
 
+Historical snapshot: the reversion and stretching behavior below no longer
+describe the current tree. True widescreen is implemented with a runtime
+toggle, window-aspect sizing, room-width caps, and native fallback for fixed
+canvases and digging-cave transitions. See
+[the September investigation and fixes](WIDESCREEN_SWARM_2026-09-12.md).
+
 Status: **parked / reverted out of the tree.** Gameplay BG widescreen worked;
 two gameplay artifacts remained (sprite edge flicker, transient transition
 black). The WIP was **backed out** so the default build is clean (the macOS

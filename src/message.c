@@ -268,6 +268,19 @@ extern Window gCurrentWindow;
 extern Window gNewWindow;
 #endif
 
+#ifdef PC_PORT
+bool Message_GetWindowRect(int* x, int* y, int* width, int* height) {
+    if (!gCurrentWindow.active || gCurrentWindow.width == 255 || gCurrentWindow.height == 255) {
+        return false;
+    }
+    *x = gCurrentWindow.xPos * 8;
+    *y = gCurrentWindow.yPos * 8;
+    *width = (gCurrentWindow.width + 2) * 8;
+    *height = (gCurrentWindow.height + 2) * 8;
+    return true;
+}
+#endif
+
 typedef struct {
     u8 unk_00;
     u8 unk_01[1];

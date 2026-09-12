@@ -26,8 +26,8 @@ typedef struct Mode1TilemapEntry {
 
 /* Widescreen Option A — port-side shadow tilemap pointers (declared in
  * include/cpu/mode1.h, populated by the PC port). NULL => no widescreen
- * reveal for that BG; render_text_bg_line then clips at MODE1_GBA_BG_CLIP_X
- * and the composite force-blacks past it. */
+ * reveal for that BG; render_text_bg_line then clips at MODE1_GBA_BG_CLIP_X.
+ * Other layers and the backdrop still composite normally. */
 uint16_t* virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT] = { NULL, NULL, NULL, NULL };
 int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT] = { 0, 0, 0, 0 };
 int virtuappu_mode1_ws_hud_right_anchor = 0;
@@ -1064,25 +1064,9 @@ void virtuappu_mode1_composite_line(int line, uint32_t bg_layers[MODE1_GBA_BG_CO
             }
         }
 
-        /* Widescreen Option A: past MODE1_GBA_BG_CLIP_X (240) the reveal
-         * columns are valid only where render_text_bg_line wrote real tile
-         * data — which happens only when a shadow is registered (gameplay)
-         * and the world tile there is non-transparent. Everywhere else
-         * (native 240, non-gameplay screens, a narrow room's empty edge)
-         * bg_layers stays 0 here, so force-black and let port_ppu.cpp's
-         * non-gameplay path fill the margin. */
-        if (x >= MODE1_GBA_BG_CLIP_X) {
-            bool any_bg_drew_here = false;
-            for (int b = 0; b < MODE1_GBA_BG_COUNT; ++b) {
-                if (bg_enabled[b] && bg_layers[b][x] != 0u) {
-                    any_bg_drew_here = true;
-                    break;
-                }
-            }
-            out_row[x] = any_bg_drew_here ? top_color : 0xFF000000u;
-        } else {
-            out_row[x] = top_color;
-        }
+        /* Transparent BGs reveal OBJ/backdrop in every column. Scene bounds
+         * are enforced by the port's frame width, not by pixel opacity. */
+        out_row[x] = top_color;
     }
 }
 

@@ -606,17 +606,5 @@ vec4 ppu_pixel(int x, int line) {
         }
     }
 
-    /* Widescreen composite: past the clip, force black unless a BG drew a real
-     * pixel there (matches composite_line's any_bg_drew_here gate). Inert at 240
-     * because x never reaches clip. */
-    if (x >= params.ws.x) {
-        bool any_bg_drew = false;
-        for (int b = 0; b < 4; ++b) {
-            if (bg_on[b] && bg_op[b]) { any_bg_drew = true; break; }
-        }
-        if (!any_bg_drew) {
-            return vec4(0.0, 0.0, 0.0, 1.0);
-        }
-    }
     return rgb555_to_rgba(out_col);
 }

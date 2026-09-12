@@ -35,8 +35,9 @@ extern virtuappu_mode1_pre_line_fn virtuappu_mode1_pre_line_callback;
  * port-side shadow tilemap (virtuappu_mode1_ws_shadow[], populated from
  * gMapData*Special) — the 32-tile screenblock only spans 256 px of world
  * and wraps past that, so the reveal columns can't come from VRAM. When
- * no shadow is registered (native 240, or non-gameplay screens) the
- * composite force-blacks past 240.
+ * no shadow is registered, that BG contributes no reveal pixels; other
+ * layers and the backdrop still composite normally. The presenter selects
+ * a native 240px viewport for fixed canvases.
  *
  * MODE1_GBA_VIEWPORT_X is the OAM clip; it tracks MODE1_GBA_WIDTH so
  * sprites render across the full widescreen viewport. Engine-parked
@@ -68,8 +69,7 @@ enum {
 /* Widescreen Option A — port-side shadow tilemap for the reveal region
  * (display cols >= MODE1_GBA_BG_CLIP_X on 32-tile BGs). Populated by
  * port/port_linked_stubs.c::Port_Widescreen_UpdateShadows; a NULL entry
- * means "no shadow" => render_text_bg_line clips at 240 and the composite
- * force-blacks past it (native-240 / non-gameplay behaviour). COLS scales
+ * means "no shadow" => render_text_bg_line clips that BG at 240. COLS scales
  * with the configured width (reveal tiles = (W-240)/8, plus scroll/wrap
  * headroom); ROWS=32 mirrors the engine's mod-32 vertical row rolling. */
 #define MODE1_WS_SHADOW_ROWS 32

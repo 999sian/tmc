@@ -719,6 +719,18 @@ static void scene_affine_oob(Scene* s) {
  * the scene setup call. */
 static uint16_t g_ws_shadow0[32 * MODE1_WS_SHADOW_COLS];
 
+/* Valid OBJ/backdrop must survive transparent BGs across the native edge. */
+static void scene_ws_transparent_bg(Scene* s) {
+    scene_clear(s, "ws_transparent_bg");
+    set_io16(s, 0x00, 0x1000);
+    s->bgpal[0] = 0x03e0;
+    s->objpal[1] = 0x001f;
+    std::memset(s->vram + 0x10000, 0x11, 32);
+    s->oam[0] = 16;
+    s->oam[1] = 236;
+    s->oam[2] = 0;
+}
+
 /* BG0 32-tile with a shadow tilemap revealing tiles past x=240. */
 static void scene_ws_shadow_reveal(Scene* s) {
     scene_clear(s, "ws_shadow_reveal");
@@ -736,7 +748,7 @@ static void scene_ws_shadow_reveal(Scene* s) {
     virtuappu_mode1_ws_shadow[0] = g_ws_shadow0;
     virtuappu_mode1_ws_shadow_base_tile[0] = MODE1_GBA_BG_CLIP_X / 8;
 }
-/* Some reveal columns unloaded (0x7C1F sentinel) -> skipped -> force black. */
+/* Unloaded sentinel pixels are skipped, exposing the normal backdrop. */
 static void scene_ws_shadow_sentinel(Scene* s) {
     scene_ws_shadow_reveal(s);
     s->name = "ws_shadow_sentinel";
@@ -807,6 +819,7 @@ int main(int argc, char** argv) {
     std::printf("GLES backend: %s\n", rgl ? "active" : "unavailable (Vulkan-only run)");
 
     const int W = MODE1_GBA_WIDTH, H = 160;
+    std::printf("PPU parity frame width: %d (widescreen scenes %s)\n", W, W > 240 ? "enabled" : "disabled");
     static Scene scene;
     std::vector<uint32_t> cpu((size_t)W * H), gpu((size_t)W * H), gles((size_t)W * H);
 
@@ -966,6 +979,7 @@ int main(int argc, char** argv) {
         scene_affine_wrap,
         scene_affine_oob,
 #if MODE1_GBA_WIDTH > 240
+        scene_ws_transparent_bg,
         scene_ws_shadow_reveal,
         scene_ws_shadow_sentinel,
         scene_ws_hud_anchor,
@@ -980,6 +994,17 @@ int main(int argc, char** argv) {
         render_vk(r, &scene, gpu.data(), W, H);
         std::snprintf(label, sizeof(label), "%s [vk]", scene.name);
         total_diffs += diff(cpu.data(), gpu.data(), W, H, label);
+#if MODE1_GBA_WIDTH > 240
+        if (fn == scene_ws_transparent_bg) {
+            /* An independent oracle also catches bugs shared by CPU and GPU. */
+            const size_t sprite = (size_t)16 * W + 240;
+            if (cpu[sprite] != 0xff0000f8u || gpu[sprite] != 0xff0000f8u ||
+                cpu[240] != 0xff00f800u || gpu[240] != 0xff00f800u) {
+                std::fprintf(stderr, "ws_transparent_bg: expected red OBJ and green backdrop at x240\n");
+                ++total_diffs;
+            }
+        }
+#endif
         if (rgl) {
             render_gles(rgl, &scene, gles.data(), W, H);
             std::snprintf(label, sizeof(label), "%s [gles]", scene.name);
