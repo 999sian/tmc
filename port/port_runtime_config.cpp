@@ -4,6 +4,9 @@
 #include <SDL3/SDL.h>
 #include <array>
 #include <cstdint>
+#include <cmath>
+#include <limits>
+#include <type_traits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -414,6 +417,30 @@ u64 FrameTimeForFps(u32 fps) {
 template <typename T>
 T JsonValue(const nlohmann::json& j, const char* key, const T& fallback) {
     try {
+        // JSON numeric casts do not check range and float-to-integer overflow
+        // is undefined behavior (it does not throw a json exception).
+        if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+            const auto it = j.find(key);
+            if (it != j.end() && it->is_number()) {
+                const long double value = it->get<long double>();
+                bool inRange;
+                if constexpr (std::is_integral_v<T>) {
+                    // Exclusive power-of-two upper bound remains exact even
+                    // on platforms where long double has double precision.
+                    inRange = std::isfinite(value) &&
+                              value >= std::numeric_limits<T>::lowest() &&
+                              value < std::ldexp(1.0L, std::numeric_limits<T>::digits);
+                } else {
+                    inRange = std::isfinite(value) &&
+                              value >= std::numeric_limits<T>::lowest() &&
+                              value <= std::numeric_limits<T>::max();
+                }
+                if (!inRange) {
+                    fprintf(stderr, "[CONFIG] numeric \"%s\" out of range; using default.\n", key);
+                    return fallback;
+                }
+            }
+        }
         return j.value(key, fallback);
     } catch (const nlohmann::json::exception& e) {
         fprintf(stderr, "[CONFIG] ignoring bad \"%s\" (%s); using default.\n", key, e.what());
@@ -655,7 +682,10 @@ extern "C" void Port_Config_Load(const char* path) {
         for (const auto& e : kStrCfg)
             *e.var = JsonValue(j, e.key, std::string(e.def));
         for (const auto& e : kFloatCfg)
-            *e.var = (float)JsonValue(j, e.key, e.def);
+            *e.var = JsonValue(j, e.key, (float)e.def);
+        // Match the runtime setter: tiny positive factors overflow the BIOS
+        // frame-period conversion or stall the game for hours.
+        sPracticeSlowmo = std::min(1.0f, std::max(0.05f, sPracticeSlowmo));
         for (const auto& e : kScaleCfg) {
             int v = JsonValue(j, e.key, e.def);
             *e.var = (v >= e.lo && v <= e.hi) ? (u8)v : (u8)e.def;
@@ -715,16 +745,16 @@ extern "C" void Port_Config_Load(const char* path) {
 
             const auto& col = j.contains("bg_fill_color") ? j["bg_fill_color"] : nlohmann::json::array();
             if (col.is_array() && col.size() >= 3) {
-                auto clamp_u8 = [](int v) -> u8 {
+                auto clamp_u8 = [](double v) -> u8 {
                     if (v < 0)
                         return 0;
                     if (v > 255)
                         return 255;
                     return (u8)v;
                 };
-                sBgFillR = clamp_u8(col[0].is_number() ? col[0].get<int>() : 0);
-                sBgFillG = clamp_u8(col[1].is_number() ? col[1].get<int>() : 0);
-                sBgFillB = clamp_u8(col[2].is_number() ? col[2].get<int>() : 0);
+                sBgFillR = clamp_u8(col[0].is_number() ? col[0].get<double>() : 0);
+                sBgFillG = clamp_u8(col[1].is_number() ? col[1].get<double>() : 0);
+                sBgFillB = clamp_u8(col[2].is_number() ? col[2].get<double>() : 0);
             }
         }
         {

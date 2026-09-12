@@ -672,6 +672,10 @@ int main(int argc, char* argv[]) {
      * BEFORE the prelaunch frame loop runs. Idempotent + no-op if no
      * backend is available; never blocks. */
     { Port_TTS_Init(); }
+    /* VBlankIntrWait quits with exit(), and the prelaunch screen can return
+     * before the cleanup below AgbMain. Join the speech worker before its
+     * C++ static State (and joinable std::thread) is destroyed. */
+    atexit(Port_TTS_Shutdown);
 
     /* Load persisted accessibility cue toggles into the cue module. */
     { Port_A11y_Init(); }
@@ -901,6 +905,10 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Audio disabled by --no-audio flag.\n");
     } else {
         Port_InitAudio();
+        /* Stop SDL's callback before the backend's C++ statics are destroyed
+         * on exit(). Shutdown also tolerates failed initialization and the
+         * explicit cleanup used if AgbMain ever returns. */
+        atexit(Port_Audio_Shutdown);
         fprintf(stderr, "Audio init complete.\n");
     }
 
