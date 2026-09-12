@@ -1,6 +1,7 @@
 #pragma once
 #include <string.h>
 #include "port_types.h"
+#include "port_config.h"
 #include "structures.h"
 #include "map.h"
 
@@ -91,6 +92,18 @@ void* Port_GetLilypadRail(u32 index);
 u64 Port_GetEntityFuserData(u32 kind, u8 id, u8 type, u8 type2);
 
 void* Port_ReadPackedRomPtr(const void* base, u32 index);
+
+/* ---- Active-ROM table accessors (region-selected via gRomOffsets) ----
+ * All fail closed: NULL / 0 when the region has no offset or bounds fail. */
+u32 Port_RemapSpriteIndex(u32 usaIndex);   /* EU: idx > 288 → idx-1 (USA enum → EU-native) */
+u32 Port_FrameObjCountForRegion(void);     /* 512 USA/JP, 511 EU */
+u32 Port_FrameObjListsSizeForRegion(void); /* bytes: 200045 USA/JP, 199561 EU */
+u32 Port_FixedTypeGfxCountForRegion(void); /* 526 USA/JP, 525 EU */
+/* Entry `index` of a packed u32 GBA-pointer table at ROM offset `romOffset`,
+ * resolved into gRomData. Does NOT clear bit 0 (fuser records may be odd). */
+const u8* Port_ReadActiveRomPtrTable(u32 romOffset, u32 index);
+const u16* Port_GetFusionTextData(u32 fuserId);  /* gUnk_08001A7C[fuserId] */
+u64 Port_FindEntityFuserData(u32 isNpc, u8 id, u8 type, u8 type2); /* textId << 32 | fuserId, 0 = none */
 
 /**
  * Resolve a GBA ROM data address to a native PC pointer.

@@ -13,12 +13,7 @@
 #include "port_rom.h"
 #endif
 
-#ifdef PC_PORT
-enum {
-    GUST_JAR_ANIM_TABLE_GBA = 0x08132714u,
-    GUST_JAR_HITBOX_GBA = 0x08132B28u,
-};
-#else
+#ifndef PC_PORT
 extern const u8* gUnk_08132714[]; // Anim index lists?
 extern const Hitbox gUnk_08132B28;
 #endif
@@ -31,12 +26,7 @@ static Hitbox sGustJarHitbox;
 
 static const u8* GetGustJarAnimData(u32 index) {
 #ifdef PC_PORT
-    const void* base;
-    if (index >= 8) {
-        return NULL;
-    }
-    base = Port_ResolveRomData(GUST_JAR_ANIM_TABLE_GBA);
-    return (const u8*)Port_ReadPackedRomPtr(base, index);
+    return index < 8 ? Port_ReadActiveRomPtrTable(gRomOffsets->gustJarAnimTable, index) : NULL;
 #else
     return gUnk_08132714[index];
 #endif
@@ -44,7 +34,8 @@ static const u8* GetGustJarAnimData(u32 index) {
 
 static const Hitbox* GetGustJarHitboxTemplate(void) {
 #ifdef PC_PORT
-    return (const Hitbox*)Port_ResolveRomData(GUST_JAR_HITBOX_GBA);
+    u32 off = gRomOffsets->gustJarHitbox;
+    return off != 0 ? (const Hitbox*)Port_ResolveRomData(0x08000000u | off) : NULL;
 #else
     return &gUnk_08132B28;
 #endif

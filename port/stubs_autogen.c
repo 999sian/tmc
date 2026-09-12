@@ -11,6 +11,7 @@
 #include "projectile.h"
 #include <stdint.h>
 #include <string.h>
+#include "port_rom.h"
 
 extern u32 PlayerCanBeMoved(void);
 extern u32 GetTileHazardType(Entity* entity);

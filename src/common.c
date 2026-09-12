@@ -1573,9 +1573,9 @@ void UpdateVisibleFusionMapMarkers(void) {
     }
 }
 
-/* This table is packed 4-byte GBA pointers; `gUnk_08001DCC[idx]` would
- * read 8 bytes on x86-64. Use Port_UnpackRomDataPtr instead. */
+#ifndef PC_PORT
 extern const u8 gUnk_08001DCC[];
+#endif
 
 #ifdef PC_PORT
 /* Retail records have a five-byte header, up to six offers and a zero
