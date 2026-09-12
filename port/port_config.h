@@ -44,6 +44,13 @@ typedef struct {
     u32 uiData;           /* UI misc data */
     u32 fadeData;         /* brightness/fade tables */
     u32 overlaySizeTable; /* OBJ size/clipping table */
+    u32 collisionMatrix;  /* gCollisionMtx, including adjacent settings read by the engine */
+    u32 collisionShapePtrs; /* 40 packed pointers to 16-row pixel masks */
+    u32 tileTypeProperties; /* u16 traversal/layer flags */
+    u32 fuserFusionPtrs; /* 120 packed pointers to fusion records */
+    u32 fuserEnemyData; /* six-byte entity-to-fuser records */
+    u32 fuserNpcData;
+    u32 lilypadRails; /* three packed rail command pointers */
     u32 mapDataBase;      /* gAreaRoomMap_None — base of map/asset data section */
 
     /* Area data tables (pointer tables indexed by area ID) */

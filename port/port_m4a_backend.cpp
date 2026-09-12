@@ -356,38 +356,34 @@ static bool ObjectMatchesVariant(const std::string& objectText, const char* vari
 /* Resolves the "offsets" rebase that applies to the entry starting at
  * `objectStart`. sounds.json is a flat array in which `{"offsets": {...}}`
  * objects appear REPEATEDLY and POSITIONALLY — each one re-bases every entry
- * that follows it — so the nearest preceding block wins, not the first one in
- * the document. The variant lookup is bounded to that block's map: an
+ * that follows it for the variants it names. The nearest preceding block
+ * containing the active variant wins; EU-only updates must preserve JP's
+ * earlier offset. The variant lookup is bounded to that block's map: an
  * unbounded search would run past a block that lacks the variant and parse
  * whatever key came next. */
 static long long VariantOffsetForEntry(const std::string& jsonText, size_t objectStart, const char* variantName) {
     size_t offsetsPos = jsonText.rfind("\"offsets\"", objectStart);
-    size_t mapStart;
-    size_t mapEnd;
-    size_t variantPos;
-    long long value = 0;
-
-    if (offsetsPos == std::string::npos) {
-        return 0;
+    while (offsetsPos != std::string::npos) {
+        size_t mapStart = jsonText.find('{', offsetsPos);
+        if (mapStart == std::string::npos) {
+            return 0;
+        }
+        size_t mapEnd = FindObjectEnd(jsonText, mapStart);
+        if (mapEnd == std::string::npos) {
+            return 0;
+        }
+        size_t variantPos = jsonText.find(std::string("\"") + variantName + "\"", mapStart);
+        if (variantPos != std::string::npos && variantPos < mapEnd) {
+            long long value = 0;
+            ParseIntAfterKey(jsonText, variantPos, value);
+            return value;
+        }
+        if (offsetsPos == 0) {
+            break;
+        }
+        offsetsPos = jsonText.rfind("\"offsets\"", offsetsPos - 1);
     }
-
-    mapStart = jsonText.find('{', offsetsPos);
-    if (mapStart == std::string::npos) {
-        return 0;
-    }
-
-    mapEnd = FindObjectEnd(jsonText, mapStart);
-    if (mapEnd == std::string::npos) {
-        return 0;
-    }
-
-    variantPos = jsonText.find(std::string("\"") + variantName + "\"", mapStart);
-    if (variantPos == std::string::npos || variantPos > mapEnd) {
-        return 0;
-    }
-
-    ParseIntAfterKey(jsonText, variantPos, value);
-    return value;
+    return 0;
 }
 
 /* Pure: parses `jsonText` into `outOffsets` and touches no shared state, so it

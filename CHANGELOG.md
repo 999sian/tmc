@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Regional gameplay and widescreen fixes (#191, #193)
+
+- EU and JP ROMs now use their own collision-matrix addresses for enemy
+  contact and damage, including the cached settings used by collision handlers.
+- Japanese sound effects retain their ROM offset when `sounds.json` updates
+  only the EU offset.
+- Location-name banners stay together and centered in widescreen instead of
+  having their final glyphs moved to the HUD's right edge.
+- The Deepwood Shrine barrel hole again requires the original rotation angle
+  before Link can fall through it.
+
+### Regional gameplay audit fixes
+
+- EU cannonballs, Vaati attacks/eyes, and HUD graphics use native sprite
+  indices, including the HUD frame/tile tables.
+- Additional room entity lists and moving lily-pad rails load from verified
+  USA, EU, and JP addresses. Copied lists retain native script addresses.
+- EU tile collision shapes, tile properties, and wall-fusion records use
+  the active ROM's tables instead of compiled USA pointers. Invalid saved
+  fusion cursors are rejected before reading beyond the offer list.
+- Large chests remain available when reward allocation fails and commit
+  collection only after the item grant. Enemy death effects tolerate a full
+  entity pool.
+
 ### Engine fixes ported from the 3DS fork (round 2)
 
 - `DispReset` now stops HDMA channel 0 on PC (the `DmaStop(0)` call is a host

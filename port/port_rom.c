@@ -9,9 +9,11 @@
 
 #include "port_rom.h"
 #include "area.h"
+#include "entity.h"
 #include "map.h"
 #include "port_asset_loader.h"
 #include "port_config.h"
+#include "port_sprite_region.h"
 #include "port_runtime_config.h"
 #include "port_gba_mem.h"
 #include "structures.h"
@@ -446,6 +448,13 @@ const RomOffsets kRomOffsets_USA = {
     .uiData = 0x0C9044,
     .fadeData = 0x000F54,
     .overlaySizeTable = 0x0B2BE8,
+    .collisionMatrix = 0x0B7B74,
+    .collisionShapePtrs = 0x823C,
+    .tileTypeProperties = 0x360,
+    .fuserFusionPtrs = 0x1DCC,
+    .fuserEnemyData = 0x232E,
+    .fuserNpcData = 0x2342,
+    .lilypadRails = 0xFED98,
     .mapDataBase = 0x324AE4,
     .areaRoomHeaders = 0x11E214,
     .areaTileSets = 0x10246C,
@@ -488,6 +497,13 @@ const RomOffsets kRomOffsets_EU = {
     .uiData = 0x0C876C,
     .fadeData = 0x000F9C,
     .overlaySizeTable = 0x0B25E8, /* EU overlay size table (shifted) */
+    .collisionMatrix = 0x0B729C,
+    .collisionShapePtrs = 0x82D4,
+    .tileTypeProperties = 0x3A8,
+    .fuserFusionPtrs = 0x1E74,
+    .fuserEnemyData = 0x23D6,
+    .fuserNpcData = 0x23EA,
+    .lilypadRails = 0xFE2DC,
     .mapDataBase = 0x323FEC,
     .areaRoomHeaders = 0x11D95C,
     .areaTileSets = 0x101BC8,
@@ -546,6 +562,13 @@ const RomOffsets kRomOffsets_JP = {
     .uiData = 0xC8DE4,
     .fadeData = 0xF54,
     .overlaySizeTable = 0xB2988,
+    .collisionMatrix = 0xB7914,
+    .collisionShapePtrs = 0x823C,
+    .tileTypeProperties = 0x360,
+    .fuserFusionPtrs = 0x1DCC,
+    .fuserEnemyData = 0x232E,
+    .fuserNpcData = 0x2342,
+    .lilypadRails = 0xFEA48,
     .mapDataBase = 0x324710,
     .areaRoomHeaders = 0x11DED8,
     .areaTileSets = 0x102134,
@@ -573,6 +596,64 @@ const RomOffsets kRomOffsets_JP = {
  * the USA offset before region detection has run. */
 u32 Port_TownspersonSpriteLoadPtrsOffset(void) {
     return gRomOffsets ? gRomOffsets->townspersonSpriteLoadPtrs : 0x10B6ECu;
+}
+
+/* Read packed data pointers without stripping bit zero: fusion records may
+ * be byte-aligned. Check both the table entry and the complete target span. */
+static void* ResolveActiveDataPointer(u32 table, u32 index, u32 bytes) {
+    u32 address;
+    if (!gRomData || table == 0 || table > gRomSize ||
+        index >= (gRomSize - table) / 4) return NULL;
+    memcpy(&address, gRomData + table + index * 4, 4);
+    if (address < 0x08000000u) return NULL;
+    u32 offset = address - 0x08000000u;
+    if (offset > gRomSize || bytes > gRomSize - offset) return NULL;
+    return gRomData + offset;
+}
+
+const u16* Port_GetCollisionShapeData(u32 index) {
+    if (!gRomOffsets || index >= 40) return NULL;
+    const u16* shape = ResolveActiveDataPointer(gRomOffsets->collisionShapePtrs, index, 32);
+    return ((uintptr_t)shape & 1) ? NULL : shape;
+}
+
+u16 Port_GetTileTypeProperty(u32 tileType) {
+    if (!gRomOffsets || !gRomData || tileType >= 0xAE4 / 2) return 0;
+    u32 base = gRomOffsets->tileTypeProperties;
+    if (base == 0 || base > gRomSize || (tileType + 1) * 2 > gRomSize - base) return 0;
+    const u8* value = gRomData + base + tileType * 2;
+    return value[0] | ((u16)value[1] << 8);
+}
+
+void* Port_GetFuserFusionData(u32 fuserId) {
+    if (!gRomOffsets || fuserId >= 120) return NULL;
+    return ResolveActiveDataPointer(gRomOffsets->fuserFusionPtrs, fuserId, 12);
+}
+
+void* Port_GetLilypadRail(u32 index) {
+    if (!gRomOffsets || index >= 3) return NULL;
+    return ResolveActiveDataPointer(gRomOffsets->lilypadRails, index, 4);
+}
+
+u64 Port_GetEntityFuserData(u32 kind, u8 id, u8 type, u8 type2) {
+    static const u32 masks[] = { 0xFFFFFF, 0xFFFF00, 0xFF00FF, 0xFF0000 };
+    if (!gRomOffsets || !gRomData) return 0;
+    u32 table = kind == ENEMY ? gRomOffsets->fuserEnemyData :
+                kind == NPC ? gRomOffsets->fuserNpcData : 0;
+    if (!table || table > gRomSize) return 0;
+    u32 key = ((u32)id << 16) | ((u32)type << 8) | type2;
+    /* Retail scans skip the leading six-byte sentinel record. */
+    for (u32 i = 1; i < 128 && (i + 1) * 6 <= gRomSize - table; i++) {
+        const u8* entry = gRomData + table + i * 6;
+        if (!entry[0]) break;
+        u32 entryKey = ((u32)entry[0] << 16) | ((u32)entry[1] << 8) | entry[2];
+        u32 mask = masks[(entry[1] == 0xFF ? 2 : 0) | (entry[2] == 0xFF ? 1 : 0)];
+        if ((key & mask) == (entryKey & mask)) {
+            if (entry[3] >= 120) return 0;
+            return ((u64)(entry[4] | ((u16)entry[5] << 8)) << 32) | entry[3];
+        }
+    }
+    return 0;
 }
 
 RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
@@ -1339,23 +1420,10 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "gPalette_549 loaded (%zu bytes from gGlobalGfxAndPalettes + 0x44A0).\n", sizeof(gPalette_549));
     }
 
-    /* gLilypadRails — USA: a 3-entry .4byte pointer table at 0x080FED98 (rail
-     * command lists for type2>=0x80 lilypads and kinstone-fused lilypad rails,
-     * data/const/game_2.s). The port stub (port_linked_stubs.c) is a zero-init
-     * native array, so without this the rails resolve to NULL and those lilypads
-     * never move along their path. Resolve the 3 ROM pointers into it (same
-     * approach as gPalette_549/gFigurines). USA-only absolute address; EU is
-     * left as the NULL stub (status quo — no regression). */
-    if (gRomRegion == ROM_REGION_USA) {
+    /* Resolve native rail pointers for every supported ROM, including JP. */
+    {
         extern void* gLilypadRails[];
-        u8* base = (u8*)Port_ResolveRomData(0x080FED98);
-        if (base != NULL) {
-            int i;
-            for (i = 0; i < 3; i++) {
-                gLilypadRails[i] = Port_UnpackRomDataPtr(base, (u32)i);
-            }
-            fprintf(stderr, "gLilypadRails loaded (3 rail pointers from 0x080FED98).\n");
-        }
+        for (u32 i = 0; i < 3; i++) gLilypadRails[i] = Port_GetLilypadRail(i);
     }
 
     /* Runtime-rendered sprite data must come from the active ROM.
@@ -1427,8 +1495,9 @@ void Port_LoadRom(const char* path) {
         memset(gMoreSpritePtrs, 0, sizeof(gMoreSpritePtrs));
         memset(gSpriteAnimations_322, 0, sizeof(gSpriteAnimations_322));
 
-        if (R->spritePtrsCount > 322) {
-            const SpritePtr* sp322 = &gSpritePtrs[322];
+        const u16 itemSpriteIndex = Port_LogicalSpriteIndex(322);
+        if (R->spritePtrsCount > itemSpriteIndex) {
+            const SpritePtr* sp322 = &gSpritePtrs[itemSpriteIndex];
             gMoreSpritePtrs[0] = (u16*)sp322->animations;
             gMoreSpritePtrs[1] = (u16*)sp322->frames;
             gMoreSpritePtrs[2] = (u16*)sp322->ptr;

@@ -1577,6 +1577,35 @@ void UpdateVisibleFusionMapMarkers(void) {
  * read 8 bytes on x86-64. Use Port_UnpackRomDataPtr instead. */
 extern const u8 gUnk_08001DCC[];
 
+#ifdef PC_PORT
+/* Retail records have a five-byte header, up to six offers and a zero
+ * terminator. Port_GetFuserFusionData guarantees twelve readable bytes. */
+static s32 GetFuserListLength(const u8* data) {
+    for (u32 length = 0; length <= 6; ++length) {
+        u32 offer = data[5 + length];
+        if (offer == KINSTONE_NONE) {
+            return length;
+        }
+        if (offer > 100 && offer != KINSTONE_RANDOM) {
+            return -1;
+        }
+    }
+    return -1;
+}
+
+static bool32 IsFuserCursorValid(u32 progress, u32 offer, u32 length) {
+    if (progress > length) {
+        return FALSE;
+    }
+    if (offer > 100 && offer != KINSTONE_NEEDS_REPLACEMENT && offer != KINSTONE_JUST_FUSED &&
+        offer != KINSTONE_FUSER_DONE && offer != KINSTONE_RANDOM) {
+        return FALSE;
+    }
+    /* These states may advance before reading the next list entry. */
+    return progress < length || (offer != KINSTONE_JUST_FUSED && offer != KINSTONE_RANDOM);
+}
+#endif
+
 KinstoneId GetFusionToOffer(Entity* entity) {
     u8* fuserData;
     u32 fuserId;
@@ -1585,10 +1614,13 @@ KinstoneId GetFusionToOffer(Entity* entity) {
     u8* fuserFusionData;
     s32 randomMood;
     u32 fuserStability;
+#ifdef PC_PORT
+    s32 listLength;
+#endif
     fuserId = GetFuserId(entity);
 
 #ifdef PC_PORT
-    fuserData = (u8*)Port_UnpackRomDataPtr(gUnk_08001DCC, fuserId);
+    fuserData = (u8*)Port_GetFuserFusionData(fuserId);
 #else
     fuserData = (u8*)((u8**)gUnk_08001DCC)[fuserId];
 #endif
@@ -1600,8 +1632,21 @@ KinstoneId GetFusionToOffer(Entity* entity) {
     }
     offeredFusion = gSave.kinstones.fuserOffers[fuserId];
     fuserProgress = gSave.kinstones.fuserProgress[fuserId];
+#ifdef PC_PORT
+    listLength = GetFuserListLength(fuserData);
+    if (listLength < 0 || !IsFuserCursorValid(fuserProgress, offeredFusion, listLength)) {
+        return KINSTONE_NONE;
+    }
+#endif
     fuserFusionData = fuserData + fuserProgress;
     while (TRUE) { // loop through fusions for this fuser
+#ifdef PC_PORT
+        /* Check again after exhausted random offers or completed fusions
+         * advance the local state. Nothing is saved until scanning succeeds. */
+        if (!IsFuserCursorValid(fuserProgress, offeredFusion, listLength)) {
+            return KINSTONE_NONE;
+        }
+#endif
         switch (offeredFusion) {
             case KINSTONE_NEEDS_REPLACEMENT: // offered fusion completed with someone else
             case KINSTONE_NONE:              // no fusion offered yet
