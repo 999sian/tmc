@@ -1123,6 +1123,11 @@ int Port_Widescreen_FallbackNative(void) {
     if (Port_Widescreen_TargetViewWidth() <= 240) {
         return 1; /* window is 3:2/4:3 — native view already fills it */
     }
+    /* The digging-cave iris uses an 8-bit, native-width WIN1 rectangle.
+     * Keep its camera and presentation native for the complete transition. */
+    if (gRoomControls.scrollAction == 5) {
+        return 1;
+    }
     eff = Port_WidescreenEffectiveTarget();
     if (eff <= 240) {
         return 1; /* one-screen room (<=240px): no extra world to reveal */
@@ -1247,8 +1252,8 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
      *       with map row (2*row16 - 1 + sr) — NOT (world_row & 31), which reads
      *       camera-shifted wrong rows.
      *   (b) the consumer base MUST equal the VRAM tile_col of the first reveal
-     *       column (display CLIP_X) = CLIP_X/8 + (BGHOFS>=8 ? 1 : 0), so
-     *       shadow_idx lands on reveal column index d. BGHOFS = (scroll-origin)
+     *       column (display CLIP_X), less one leading padding tile, so
+     *       shadow_idx lands on reveal column index d+1. BGHOFS = (scroll-origin)
      *       & 0xf (UpdateScreenShake); its upper half carries one extra tile.
      * Getting either wrong shifts/wraps the reveal into stale cells — the
      * far-edge garbage. (No residency gate: the area tileset is resident in
@@ -1260,15 +1265,17 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
     s32 row16 = ydiff >> 4;
     /* First reveal world tile col, continuing the native edge:
      * 2*col16 + CLIP/8 + (BGHOFS>=8) == (xdiff>>3) + CLIP/8. */
-    s32 ws_base_world_col = (xdiff >> 3) + (MODE1_GBA_BG_CLIP_X / 8);
-    virtuappu_mode1_ws_shadow_base_tile[bg_index] = (MODE1_GBA_BG_CLIP_X / 8) + (((xdiff & 0xf) >= 8) ? 1 : 0);
+    /* One leading tile covers negative screen shake at the reveal seam.
+     * The existing four spare columns still cover the trailing partial tile. */
+    s32 ws_base_world_col = (xdiff >> 3) + (MODE1_GBA_BG_CLIP_X / 8) - 1;
+    virtuappu_mode1_ws_shadow_base_tile[bg_index] = (MODE1_GBA_BG_CLIP_X / 8) + (((xdiff & 0xf) >= 8) ? 1 : 0) - 1;
 
     enum { kMapStride = 128, kMapRows = 128 };
     /* Clamp to the ROOM rect, not just the 128-tile buffer: the buffers are
      * reused across rooms without clearing, so cells past the current room's
      * extent hold the previous room's tiles — sampling them leaked stale
      * graphics into the reveal near room edges. Outside the room = entry 0
-     * (transparent; composite force-blacks it), same as GBA's void. */
+     * (transparent; the backdrop remains visible), same as GBA's void. */
     s32 room_tiles_w = (s32)gRoomControls.width / 8;
     s32 room_tiles_h = (s32)gRoomControls.height / 8;
     if (room_tiles_w > kMapStride)
@@ -1344,19 +1351,13 @@ void Port_Widescreen_UpdateShadows(void) {
     }
     virtuappu_mode1_ws_hud_right_anchor = Port_Widescreen_HudRightAnchor();
 
-    /* Publish the live textbox rect so the PPU can center it (BG0 composes
-     * the box for a 240-px canvas). The engine frame (DispMessageFrame /
-     * DeleteWindow, src/message.c) spans (W+2) x (H+2) BG0 tiles STARTING at
-     * tile (textWindowPosX, textWindowPosY) — border tiles are drawn inward
-     * from that corner, not around it. Publishing a rect short of the real
-     * frame left the right border outside the shifted copy (overdrawn by the
-     * interior) and the bottom border row outside the y-band (torn by the
-     * HUD right-anchor remap). Clamp to the native canvas. */
-    if ((gMessage.state & MESSAGE_ACTIVE) != 0) {
-        int x0 = (int)gMessage.textWindowPosX * 8;
-        int x1 = ((int)gMessage.textWindowPosX + (int)gMessage.textWindowWidth + 2) * 8;
-        int y0 = (int)gMessage.textWindowPosY * 8;
-        int y1 = ((int)gMessage.textWindowPosY + (int)gMessage.textWindowHeight + 2) * 8;
+    /* Use the window actually drawn into BG0: text tokens may move it,
+     * opening/closing animates its size, and gMessage can already describe
+     * the next pending message. Deleted windows must not remap HUD pixels. */
+    int x0, y0, width, height;
+    if (Message_GetWindowRect(&x0, &y0, &width, &height)) {
+        int x1 = x0 + width;
+        int y1 = y0 + height;
         if (x0 < 0)
             x0 = 0;
         if (x1 > 240)

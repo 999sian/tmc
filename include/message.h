@@ -25,6 +25,10 @@ typedef struct {
     u32 field_0x1c; // unused
 } Message;
 extern Message gMessage;
+#ifdef PC_PORT
+/* Pixel rectangle of the current BG0 frame, including its border. */
+bool Message_GetWindowRect(int* x, int* y, int* width, int* height);
+#endif
 
 typedef struct {
     u8 unk00 : 1;
