@@ -71,9 +71,10 @@ enum {
  * port/port_linked_stubs.c::Port_Widescreen_UpdateShadows; a NULL entry
  * means "no shadow" => render_text_bg_line clips that BG at 240. COLS scales
  * with the configured width (reveal tiles = (W-240)/8, plus scroll/wrap
- * headroom); ROWS=32 mirrors the engine's mod-32 vertical row rolling. */
+ * headroom), with a full 32-column minimum for repeating overlays whose
+ * horizontal offset can vary per scanline. ROWS=32 mirrors vertical rolling. */
 #define MODE1_WS_SHADOW_ROWS 32
-#define MODE1_WS_SHADOW_COLS (((MODE1_GBA_WIDTH - 240) / 8) + 4)
+#define MODE1_WS_SHADOW_COLS ((((MODE1_GBA_WIDTH - 240) / 8) + 4) < 32 ? 32 : (((MODE1_GBA_WIDTH - 240) / 8) + 4))
 extern uint16_t* virtuappu_mode1_ws_shadow[MODE1_GBA_BG_COUNT];
 extern int virtuappu_mode1_ws_shadow_base_tile[MODE1_GBA_BG_COUNT];
 

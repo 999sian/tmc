@@ -15,6 +15,7 @@
 #include "fade.h"
 #ifdef PC_PORT
 #include "port_hdma.h"
+#include "port_widescreen.h"
 #include <setjmp.h>
 #endif
 #include "gba/io_reg.h"
@@ -333,9 +334,16 @@ void SetSleepMode(void) {
 // Convert AABB to screen coordinates and check if it's within the viewport
 u32 CheckRegionOnScreen(u32 x0, u32 y0, u32 x1, u32 y1) {
     u32 result;
-    u32 x = ((gRoomControls.scroll_x - gRoomControls.origin_x) - x0 + DISPLAY_WIDTH);
+#ifdef PC_PORT
+    /* Room-managed objects (including house doors) must spawn throughout
+     * the rendered viewport, including its widescreen margins. */
+    u32 width = Port_Widescreen_EffectiveViewWidth();
+#else
+    u32 width = DISPLAY_WIDTH;
+#endif
+    u32 x = ((gRoomControls.scroll_x - gRoomControls.origin_x) - x0 + width);
     u32 y = ((gRoomControls.scroll_y - gRoomControls.origin_y) - y0 + DISPLAY_HEIGHT);
-    u32 a = x1 + DISPLAY_WIDTH;
+    u32 a = x1 + width;
     u32 b = y1 + DISPLAY_HEIGHT;
     if ((x < a) && (y < b))
         result = TRUE;

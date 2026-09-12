@@ -3903,7 +3903,19 @@ void CreateCollisionDataBorderAroundRoom(void) {
 bool32 sub_0807BD14(Entity* this, u32 scrollDirection) {
     u32 room = sub_0807BEEC(this->x.HALF.HI, this->y.HALF.HI, scrollDirection);
     if (room != 0xff) {
+#if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
+        extern int Port_Widescreen_EffectiveViewWidth(void);
+        const int wasWide = Port_Widescreen_EffectiveViewWidth() > 240;
+#endif
         gRoomControls.scrollAction = 2;
+#if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
+        /* Rolling VRAM transitions carry only 240 pixels. Reframe against
+         * the departing room before its bounds/map are replaced below.
+         * Scroll2Sub0 then fills the native outgoing tilemap. */
+        if (wasWide) {
+            sub_080809D4();
+        }
+#endif
         gRoomControls.scrollSubAction = 0;
         gRoomControls.reload_flags = 1;
         gRoomControls.room = room;

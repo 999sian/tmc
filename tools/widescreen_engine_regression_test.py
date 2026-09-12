@@ -27,6 +27,7 @@ def main():
         'int Port_Widescreen_FallbackNative(void)',
         'int Port_Widescreen_CameraRestX(int target_x)',
         'static void Port_WidescreenShadow_Populate(',
+        'static void Port_WidescreenShadow_PopulateOverlay(',
     )]
     functions.append(function(message, 'bool Message_GetWindowRect('))
     with tempfile.TemporaryDirectory(prefix='tmc-ws-engine-') as directory:

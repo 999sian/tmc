@@ -9,7 +9,7 @@ typedef int32_t s32;
 typedef uint16_t u16;
 typedef uint32_t u32;
 #define MODE1_GBA_BG_CLIP_X 240
-#define MODE1_WS_SHADOW_COLS 22
+#define MODE1_WS_SHADOW_COLS 32
 #define MODE1_WS_SHADOW_ROWS 32
 static struct { int scroll_x, scroll_y, origin_x, origin_y, width, height, scrollAction; } gRoomControls;
 static struct { unsigned active, xPos, yPos, width, height; } gCurrentWindow;
@@ -50,8 +50,8 @@ int main(void) {
     }
     for (int action=0; action<=5; ++action) {
         gRoomControls.scrollAction = action;
-        CHECK(Port_Widescreen_EffectiveViewWidth() == (action==5 ? 240 : 384));
-        CHECK(Port_Widescreen_CameraRestX(1000) == (action==5 ? 784 : 640));
+        CHECK(Port_Widescreen_EffectiveViewWidth() == ((action==2 || action==4 || action==5) ? 240 : 384));
+        CHECK(Port_Widescreen_CameraRestX(1000) == ((action==2 || action==4 || action==5) ? 784 : 640));
     }
     /* Room-edge padding stays transparent even when the backing map is stale. */
     gRoomControls.scroll_x = 0;
@@ -66,6 +66,15 @@ int main(void) {
     enabled = 1;
     gRoomControls.width = 240;
     CHECK(Port_Widescreen_EffectiveViewWidth() == 240);
+    /* Overlay is a complete wrapping screenblock, independent of camera. */
+    static u16 screen[32 * 32];
+    for (int i = 0; i < 32 * 32; ++i) screen[i] = (u16)(i + 7);
+    Port_WidescreenShadow_PopulateOverlay(screen, shadow);
+    CHECK(virtuappu_mode1_ws_shadow[3] == shadow);
+    CHECK(virtuappu_mode1_ws_shadow_base_tile[3] == 0);
+    for (int row = 0; row < 32; ++row)
+        for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col)
+            CHECK(shadow[row * MODE1_WS_SHADOW_COLS + col] == screen[row * 32 + (col & 31)]);
     int x,y,w,h;
     gCurrentWindow.active=0;
     CHECK(!Message_GetWindowRect(&x,&y,&w,&h));

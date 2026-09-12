@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Sitting NPC dialogue updates the intended script condition without
+  overwriting wait-state fields on 64-bit PC builds.
+
+- Green ChuChus in Minish Woods emerge and attack again: enemy activation
+  bounds now read the correct PC entity fields instead of the enemy ID/type.
+
+- Festival doors and other room-managed objects spawn throughout the active
+  widescreen viewport in USA, EU, and JP.
+- Minish path foliage keeps the correct tilemap pages while scrolling and
+  after room re-entry.
+- Minish Woods fog and light rays continue across the full widescreen view.
+- Rolling room transitions temporarily use the native viewport, restoring
+  the wide camera and refreshing the tilemap on completion.
+
 ## v0.9.3 (2026-09-12)
 
 Widescreen rendering and stability fixes, plus additional regional gameplay

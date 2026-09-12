@@ -168,3 +168,11 @@ android/app/build/
 !tools/fuser_regression_test.py
 !tools/widescreen_regression_test.py
 !tools/widescreen_engine_regression_test.py
+
+!tools/minish_foliage_regression_test.py
+!tools/widescreen_scroll_regression_test.py
+
+!tools/door_visibility_regression_test.py
+
+!tools/enemy_home_regression_test.py
+!tools/npc_context_regression_test.py
