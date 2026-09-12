@@ -14,6 +14,7 @@
 #include "color.h"
 
 #ifdef PC_PORT
+#include "port_sprite_region.h"
 /*
  * On 64-bit, Enemy::child (Entity*, 8 bytes) overlaps more GenericEntity extra-area
  * bytes than on GBA (4 bytes).  Enemies that never create FX but use the overlapping
@@ -99,6 +100,15 @@ bool32 EnemyInit(Enemy* this) {
             COLLISION_ON(super);
         }
         super->spriteIndex = definition->spriteIndex;
+#ifdef PC_PORT
+        /* Shared sub-definitions use enum IDs, unlike region-native tables. */
+        if (super->id == SPEAR_MOBLIN || super->id == BOW_MOBLIN ||
+            super->id == VAATI_TRANSFIGURED || super->id == VAATI_TRANSFIGURED_EYE ||
+            super->id == GYORG_CHILD || super->id == GYORG_FEMALE_EYE ||
+            super->id == GYORG_MALE_EYE || super->id == GYORG_FEMALE_MOUTH) {
+            super->spriteIndex = Port_CompiledSpriteIndex(super->spriteIndex);
+        }
+#endif
         if (super->spriteSettings.draw == 0) {
             super->spriteSettings.draw = definition->spriteFlags.draw;
         }
@@ -253,7 +263,9 @@ void EnemyCreateDeathFX(Enemy* parent, u32 parentId, u32 fixedItem) {
                 CopyPosition(&(parent->base), &(deathFx2->base));
             }
             if (parent->enemyFlags & EM_FLAG_NO_DEATH_FX) {
-                deathFx2->unk6c |= 8;
+                if (deathFx2 != NULL) {
+                    deathFx2->unk6c |= 8;
+                }
                 DeleteEntity(&(parent->base));
                 return;
             }
@@ -268,7 +280,9 @@ void EnemyCreateDeathFX(Enemy* parent, u32 parentId, u32 fixedItem) {
                         deathFx2->unk6c |= 4;
                     }
                 }
-                deathFx2->base.parent = NULL;
+                if (deathFx2 != NULL) {
+                    deathFx2->base.parent = NULL;
+                }
                 DeleteThisEntity();
                 return;
             }

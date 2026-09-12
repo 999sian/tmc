@@ -33,6 +33,7 @@ tools/binutils
 *.py
 !tools/extract_include_enum.py
 !tools/generate_sounds_embed.py
+!tools/region_regression_test.py
 *.pl
 
 # graphics
@@ -159,3 +160,9 @@ port/vk_rt_experiment/shaders/*.spv
 android/local.properties
 android/.gradle/
 android/app/build/
+
+# Portable regression runners
+!tools/allocation_regression_test.py
+!tools/sprite_regression_test.py
+!tools/tests/regional_entity_lists.py
+!tools/fuser_regression_test.py

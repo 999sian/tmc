@@ -52,7 +52,7 @@ extern const Hitbox gUnk_0811F8B0;
 void sub_080842D8(ChestSpawnerEntity*);
 void AddInteractableChest(ChestSpawnerEntity*);
 void sub_08083E20(ChestSpawnerEntity*);
-void sub_08084074(u32);
+bool32 sub_08084074(u32);
 void sub_080840A8(s32 x, s32 y);
 void ChestSpawner_Type0(ChestSpawnerEntity*);
 void ChestSpawner_Type2(ChestSpawnerEntity*);
@@ -212,15 +212,27 @@ void ChestSpawner_Type2Action4(ChestSpawnerEntity* this) {
                 super->timer = 8;
                 super->subtimer = 16;
             } else {
-                super->action = 5;
-                sub_08084074(super->type2);
+                if (sub_08084074(super->type2)) {
+                    super->action = 5;
+                } else {
+                    /* Keep the reward available if the item-get pair could
+                     * not be created. The player can retry after slots free. */
+                    super->interactType = INTERACTION_NONE;
+                    sub_08083E20(this);
+                    InitializeAnimation(super, 0);
+                    SoundReq(SFX_MENU_ERROR);
+                }
             }
         }
-        SetLocalFlag(super->type2);
+        /* Ordinary rewards commit in LinkHoldingItem after GiveItem. The
+         * rupee fountain has no item-get entity and commits here instead. */
+        if (super->timer == 24 || super->action == 6) {
+            SetLocalFlag(super->type2);
+        }
     }
 }
 
-void sub_08084074(u32 flag) {
+bool32 sub_08084074(u32 flag) {
     TileEntity* tileEntity = (TileEntity*)GetCurrentRoomProperty(3);
     if (tileEntity != NULL) {
         int chestIndex = 0;
@@ -233,12 +245,12 @@ void sub_08084074(u32 flag) {
                 u32 key = ((u32)gRoomControls.area << 16) | ((u32)gRoomControls.room << 8) | (u32)chestIndex;
                 (void)Rando_OverrideLocationKey(key, &item, &subtype);
 #endif
-                CreateItemEntity(item, subtype, 0);
-                return;
+                return CreateItemEntityWithFlag(item, subtype, 0, flag);
             }
             if (isChest) chestIndex++;
         }
     }
+    return FALSE;
 }
 
 void sub_080840A8(s32 x, s32 y) {
