@@ -145,6 +145,12 @@ struct M4ACommand {
 std::vector<M4ACommand> sCmdQueue;
 std::mutex sCmdMutex;
 
+/* Construct callback scratch buffers before main so their destructors run
+ * after the audio shutdown handler registered there stops the SDL callback. */
+std::vector<float> sMixAccL;
+std::vector<float> sMixAccR;
+std::vector<M4ACommand> sDrainedCommands;
+
 static void PushCommand(const M4ACommand& c) {
     std::lock_guard<std::mutex> lock(sCmdMutex);
     sCmdQueue.push_back(c);
@@ -649,10 +655,8 @@ static void RenderChunkLocked(void) {
         // per sample. Track summation order is preserved, so the float result is
         // bit-identical to the old per-sample loop (pan factor folds to *1.0f when
         // inactive, which is exact in IEEE754).
-        static std::vector<float> accL;
-        static std::vector<float> accR;
-        accL.assign(sampleCount, 0.0f);
-        accR.assign(sampleCount, 0.0f);
+        sMixAccL.assign(sampleCount, 0.0f);
+        sMixAccR.assign(sampleCount, 0.0f);
 
         const uint32_t playerCount =
             std::min<uint32_t>(kPlayerCount, static_cast<uint32_t>(sState.ctx->players.size()));
@@ -681,16 +685,16 @@ static void RenderChunkLocked(void) {
                 const size_t n = std::min(sampleCount, track.audioBuffer.size());
                 const auto* buf = track.audioBuffer.data();
                 for (size_t sampleIndex = 0; sampleIndex < n; sampleIndex++) {
-                    accL[sampleIndex] += buf[sampleIndex].left * gain * panL;
-                    accR[sampleIndex] += buf[sampleIndex].right * gain * panR;
+                    sMixAccL[sampleIndex] += buf[sampleIndex].left * gain * panL;
+                    sMixAccR[sampleIndex] += buf[sampleIndex].right * gain * panR;
                 }
             }
         }
 
         const float masterVolume = sState.masterVolume;
         for (size_t sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
-            float left = accL[sampleIndex] * masterVolume;
-            float right = accR[sampleIndex] * masterVolume;
+            float left = sMixAccL[sampleIndex] * masterVolume;
+            float right = sMixAccR[sampleIndex] * masterVolume;
 
             left = std::clamp(left, -1.0f, 1.0f);
             right = std::clamp(right, -1.0f, 1.0f);
@@ -880,18 +884,17 @@ static void ApplyCommandLocked(const M4ACommand& c) {
  * in order. Always entered with sStateMutex held (audio-thread render, or the
  * main-thread fast path), so the reused static is single-threaded in practice. */
 static void DrainCommandsLocked(void) {
-    static std::vector<M4ACommand> local;
     {
         std::lock_guard<std::mutex> lock(sCmdMutex);
         if (sCmdQueue.empty()) {
             return;
         }
-        local.swap(sCmdQueue);
+        sDrainedCommands.swap(sCmdQueue);
     }
-    for (const M4ACommand& c : local) {
+    for (const M4ACommand& c : sDrainedCommands) {
         ApplyCommandLocked(c);
     }
-    local.clear();
+    sDrainedCommands.clear();
 }
 
 /* Main-thread submit. The item-get freeze was the main thread BLOCKING on

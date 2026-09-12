@@ -13,8 +13,15 @@ void NPCUpdate(Entity* this) {
     u32 temp;
     if ((health & 0x7f) && !ReadBit((u32*)gUnk_020342F8, health - 1))
         DeleteThisEntity();
-    if (this->action == 0 && (this->flags & ENT_DID_INIT) == 0)
+    if (this->action == 0 && (this->flags & ENT_DID_INIT) == 0) {
         NPCInit(this);
+#ifdef PC_PORT
+        /* Graphics capacity can be exhausted temporarily. Retry next frame
+         * before running scripts, animation, or drawing an unready NPC. */
+        if ((this->flags & ENT_DID_INIT) == 0)
+            return;
+#endif
+    }
     if (!EntityDisabled(this))
         gNPCFunctions[this->id][0](this);
     if (this->next != NULL) {

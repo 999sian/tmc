@@ -234,9 +234,10 @@ void Port_ReproNpcTalk_Tick(unsigned int frame) {
                 fprintf(stderr, "[npc-talk] frame %u: adjacent to npc id=0x%02x — stamping R\n", frame,
                         (unsigned)npc->id);
             }
-            /* Give facing one frame to settle, then stamp R every other
-             * frame (a held key fires the edge once per commit anyway). */
-            if ((int)frame > adjacent_since + 2) {
+            /* Give facing time to settle, then release R between presses.
+             * Edge stamps become held GBA keys; consecutive stamps produce
+             * only one newKeys edge, which may occur before we reach the NPC. */
+            if ((int)frame > adjacent_since + 2 && (frame & 1u) != 0) {
                 Port_Config_TestForceEdge(PORT_INPUT_R);
                 if (r_stamped_at == 0)
                     r_stamped_at = (int)frame;

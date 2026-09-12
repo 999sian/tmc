@@ -367,7 +367,7 @@ int Port_DebugAction_WarpSpawnOverride(unsigned char area, unsigned char room, u
  * to DoExitTransition() — the exact path the wallmaster + scripted area
  * exits use, so the player ends up properly initialized (correct spawn
  * type, facing direction, layer, fade type). Returns 0 if it can't fire
- * right now (game not in TASK_GAME, or player dying), 1 if armed.
+ * right now (game not ready, or player dying), 1 if armed.
  *
  * The previous hand-rolled version wrote gRoomTransition fields directly,
  * which (a) didn't run the area-warp transition-type setup so dungeon
@@ -378,6 +378,13 @@ int Port_DebugAction_Warp(unsigned char area, unsigned char room, unsigned short
                           unsigned char layer) {
     Transition t;
     if (gMain.task != TASK_GAME) {
+        return 0;
+    }
+    /* TASK_GAME is set before room/player initialization finishes. A debug
+     * probe can run in that gap; DoExitTransition dereferences the camera
+     * target for preserve-position coordinates (> 0x3ff). Wait for a live
+     * camera target instead of interrupting initialization. */
+    if (gRoomControls.camera_target == NULL) {
         return 0;
     }
     if (gSave.stats.health == 0 || gPlayerState.framestate == PL_STATE_DIE) {

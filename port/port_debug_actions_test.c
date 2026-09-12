@@ -37,8 +37,7 @@ const Wallet gWalletSizes[] = { { 100, 0 }, { 300, 0 }, { 500, 0 }, { 999, 0 } }
 const u8 gBombBagSizes[] = { 10, 30, 50, 99 };  /* mirrors src/itemUtils.c */
 const u8 gQuiverSizes[]  = { 30, 50, 70, 99 };  /* mirrors src/itemUtils.c */
 
-/* ---- symbols pulled in only by the warp/teleport/enumeration functions the
- *      test never calls; zero-init definitions + no-op stubs satisfy the link. */
+/* ---- state/stubs for warp readiness and otherwise unused engine helpers ---- */
 Main gMain;
 PlayerState gPlayerState;
 PlayerEntity gPlayerEntity;
@@ -51,7 +50,8 @@ bool32 SetAffineInfo(Entity* entity, u32 x, u32 y, u32 z) { (void)entity; (void)
 void PlayerSetNormalAndCollide(void) {}
 void LoadItemGfx(void) {}
 void UpdatePlayerSkills(void) {}
-void DoExitTransition(const Transition* data) { (void)data; }
+static int transitionCalls;
+void DoExitTransition(const Transition* data) { (void)data; ++transitionCalls; }
 u32  GetCollisionDataAtTilePos(u32 tilePos, u32 layer) { (void)tilePos; (void)layer; return 0; }
 bool32 Port_IsRoomHeaderPtrReadable(const void* ptr) { (void)ptr; return 0; }
 void Port_RefreshAreaData(unsigned int area) { (void)area; }
@@ -219,6 +219,20 @@ int main(void) {
     Port_DebugAction_SetNoclip(0);
     CHECK(Port_DebugQuery_Noclip() == 0, "noclip query reflects off");
     CHECK(Port_Debug_NoclipEnabled() == 0, "noclip predicate off when toggle off");
+
+    /* TASK_GAME precedes camera initialization. Preserve-position warp
+     * coordinates must not reach the engine's camera dereference yet. */
+    gMain.task = TASK_GAME;
+    gSave.stats.health = 8;
+    gPlayerState.framestate = 0;
+    gRoomControls.camera_target = NULL;
+    CHECK(Port_DebugAction_Warp(0x49, 0, 1084, 1521, 1) == 0,
+          "warp waits for camera initialization");
+    CHECK(transitionCalls == 0, "unready warp never invokes transition");
+    gRoomControls.camera_target = &gPlayerEntity.base;
+    CHECK(Port_DebugAction_Warp(0x49, 0, 1084, 1521, 1) == 1,
+          "warp can retry after camera initialization");
+    CHECK(transitionCalls == 1, "ready warp invokes transition once");
 
     if (g_fails == 0) {
         fprintf(stderr, "DEBUG-ACTIONS REGRESSION OK\n");

@@ -38,6 +38,7 @@ extern Frame* gSpriteAnimations_322[];
 #include <nlohmann/json.hpp>
 
 #include <array>
+#include <charconv>
 #include <cstdarg>
 #include <cstdio>
 #include <filesystem>
@@ -623,8 +624,8 @@ void ParseSpritePtrs(const nlohmann::json& root) {
     gAssetGroupCache.spritePtrs.clear();
 
     if (root.is_array()) {
-        gAssetGroupCache.spritePtrs.resize(root.size());
-        for (size_t i = 0; i < root.size(); ++i) {
+        gAssetGroupCache.spritePtrs.resize(std::min(root.size(), kSpritePtrMax));
+        for (size_t i = 0; i < gAssetGroupCache.spritePtrs.size(); ++i) {
             const auto& jsonEntry = root[i];
             if (!jsonEntry.is_object()) {
                 continue;
@@ -652,16 +653,18 @@ void ParseSpritePtrs(const nlohmann::json& root) {
         return;
     }
 
-    size_t maxIndex = 0;
+    // Sprite IDs index a fixed 512-entry engine table. Validate before resizing:
+    // an unchecked maximum key can overflow maxIndex + 1 or exhaust memory.
     for (auto it = root.begin(); it != root.end(); ++it) {
-        maxIndex = std::max(maxIndex, static_cast<size_t>(std::stoul(it.key())));
-    }
-
-    gAssetGroupCache.spritePtrs.resize(maxIndex + 1);
-    for (auto it = root.begin(); it != root.end(); ++it) {
-        const size_t index = static_cast<size_t>(std::stoul(it.key()));
-        if (!it.value().is_object()) {
+        size_t index = 0;
+        const std::string& key = it.key();
+        const auto parsed = std::from_chars(key.data(), key.data() + key.size(), index);
+        if (parsed.ec != std::errc{} || parsed.ptr != key.data() + key.size() ||
+            index >= kSpritePtrMax || !it.value().is_object()) {
             continue;
+        }
+        if (gAssetGroupCache.spritePtrs.size() <= index) {
+            gAssetGroupCache.spritePtrs.resize(index + 1);
         }
 
         SpritePtrEntryData entry = {};
