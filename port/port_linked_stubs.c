@@ -574,9 +574,7 @@ static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
     }
 
     u8 idx = sActiveCollisionParams[tileType - 0x10];
-    u32 gbaAddr;
-    memcpy(&gbaAddr, &gUnk_0800823C[(u32)idx << 2], sizeof(gbaAddr));
-    const u16* table = (const u16*)port_resolve_addr((uintptr_t)gbaAddr);
+    const u16* table = Port_GetCollisionShapeData(idx);
     if (table == NULL) {
         return 0;
     }
@@ -1374,6 +1372,20 @@ void Port_Widescreen_UpdateShadows(void) {
             virtuappu_mode1_ws_msg_y1 = y1;
             virtuappu_mode1_ws_msg_shift = (Port_Widescreen_EffectiveViewWidth() - 240) / 2;
         }
+    } else {
+        /* Location banners occupy BG0 rows 5 and 6 but do not set
+         * MESSAGE_ACTIVE. Without a published band, the HUD anchor tears
+         * off any glyphs at x >= 176 and moves them to the right edge.
+         * The banner manager lives in list 8 and clears these rows when
+         * it is deleted; use its live state rather than a persistent flag. */
+        Entity* banner = FindEntityByID(MANAGER, ENTER_ROOM_TEXTBOX_MANAGER, 8);
+        if (banner != NULL && banner->action != 0) {
+            virtuappu_mode1_ws_msg_x0 = 0;
+            virtuappu_mode1_ws_msg_x1 = 240;
+            virtuappu_mode1_ws_msg_y0 = 40 - (gScreen.bg0.yOffset & 0x1ff);
+            virtuappu_mode1_ws_msg_y1 = 56 - (gScreen.bg0.yOffset & 0x1ff);
+            virtuappu_mode1_ws_msg_shift = (Port_Widescreen_EffectiveViewWidth() - 240) / 2;
+        }
     }
 
     if (gMapBottom.bgSettings != NULL) {
@@ -1827,8 +1839,7 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
     u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
     const u16* table;
     if (tileType < 0x4000) {
-        /* gUnk_08000360 is at ROM offset 0x360 */
-        table = (const u16*)&gRomData[0x360];
+        return Port_GetTileTypeProperty(tileType);
     } else {
         table = gUnk_080B7A3E;
     }
@@ -1851,19 +1862,13 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
  */
 u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
     u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
-    const u16* table;
-    if (tileType < 0x4000) {
-        table = (const u16*)&gRomData[0x360];
-    } else {
-        table = gUnk_080B7A3E;
-    }
-    u32 r = table[tileType & 0x3FFF] & mask;
+    u32 r = (tileType < 0x4000 ? Port_GetTileTypeProperty(tileType) :
+             gUnk_080B7A3E[tileType & 0x3FFF]) & mask;
 #ifdef PC_PORT
     if (r == 0 && mask == 0x40) {
         u32 other = (layer == 2) ? 1 : 2;
         u32 tt2 = GetTileTypeAtTilePos(tilePos, other);
-        const u16* t2 = (tt2 < 0x4000) ? (const u16*)&gRomData[0x360] : gUnk_080B7A3E;
-        r = t2[tt2 & 0x3FFF] & mask;
+        r = (tt2 < 0x4000 ? Port_GetTileTypeProperty(tt2) : gUnk_080B7A3E[tt2 & 0x3FFF]) & mask;
     }
 #endif
     return r;

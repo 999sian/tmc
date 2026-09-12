@@ -84,6 +84,12 @@ void Port_PrintRomAccessSummary(void);
  * resolves ROM data pointers to native, and returns NULL for GBA Thumb function
  * pointers (bit 0 set) which can't be called on PC.
  */
+const u16* Port_GetCollisionShapeData(u32 index);
+u16 Port_GetTileTypeProperty(u32 tileType);
+void* Port_GetFuserFusionData(u32 fuserId);
+void* Port_GetLilypadRail(u32 index);
+u64 Port_GetEntityFuserData(u32 kind, u8 id, u8 type, u8 type2);
+
 void* Port_ReadPackedRomPtr(const void* base, u32 index);
 
 /**
@@ -124,12 +130,14 @@ static inline void* Port_ResolveScript(u32 gba_addr) {
  * of the loaded ROM — spritePtr is already region-native and translating it
  * MIS-translates whenever a native EU/JP address collides with a different
  * script's USA key (30 EU / 5 JP known collisions). Discriminate by where the
- * EntityData record itself lives.
+ * EntityData record itself lives, including registered copies of ROM lists.
  */
+int Port_IsCopiedRomEntityData(const void* entityData);
+
 static inline void* Port_ResolveEntityScript(const void* entityData, u32 spritePtr) {
     uintptr_t p = (uintptr_t)entityData;
     uintptr_t base = (uintptr_t)gRomData;
-    if (gRomData && p >= base && p < base + gRomSize)
+    if ((gRomData && p >= base && p - base < gRomSize) || Port_IsCopiedRomEntityData(entityData))
         return Port_ResolveRomData(spritePtr); /* ROM-native: no translation */
     return Port_ResolveScript(spritePtr);      /* compiled blob: USA-baseline */
 }
