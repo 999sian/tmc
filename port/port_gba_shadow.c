@@ -77,13 +77,9 @@ typedef struct {
 /* a pointer and must move to the rejected list.                             */
 /* ------------------------------------------------------------------------- */
 PORT_STATIC_ASSERT(sizeof(gMessage) == 0x20, "gMessage layout differs from retail");
-/* Known layout divergence: KinstoneSave is 0x147 bytes, so our SaveFile puts
- * flags at 0x114 + 0x147 = 0x25B, while save.h's annotation (and the retail
- * EEPROM image) has it at 0x25C — the struct is missing one pad byte. The
- * self-test reads flags back at 0x25B; pinned here so any fix to the struct
- * (which needs a save migration) also updates the shadow expectations, and
- * so RA sets authored on retail are known to see flags one byte early. */
-PORT_STATIC_ASSERT(offsetof(SaveFile, flags) == 0x25B, "SaveFile.flags moved; update shadow self-test");
+/* flags sits at retail 0x25C (SaveFile.filler25B); pinned here so any change to
+ * the struct also updates the shadow expectations below. */
+PORT_STATIC_ASSERT(offsetof(SaveFile, flags) == 0x25C, "SaveFile.flags moved; update shadow self-test");
 PORT_STATIC_ASSERT(sizeof(gSave) == 0x500, "gSave layout differs from retail");
 PORT_STATIC_ASSERT(sizeof(gSmallChests) == 0x40, "gSmallChests layout differs from retail");
 PORT_STATIC_ASSERT(sizeof(gActiveScriptInfo) == 0x0C, "gActiveScriptInfo layout differs from retail");
@@ -328,7 +324,7 @@ bool Port_GbaShadow_SelfTest(void) {
     /* Sentinels at known retail offsets inside gSave. */
     gSave.global_progress = 0x5Au;  /* 0x008 */
     gSave.enemies_killed = 0xDEADBEEFu; /* 0x050 */
-    gSave.flags[0x1FF] = 0xA5u;     /* 0x25B + 0x1FF, i.e. the last flag byte */
+    gSave.flags[0x1FF] = 0xA5u;     /* 0x25C + 0x1FF, i.e. the last flag byte */
     gRoomControls.area = 0x33u;     /* 0x004 */
     gRoomControls.room = 0x07u;     /* 0x005 */
 
@@ -344,7 +340,7 @@ bool Port_GbaShadow_SelfTest(void) {
     SHADOW_CHECK(buf[0] == 0xEFu && buf[1] == 0xBEu && buf[2] == 0xADu && buf[3] == 0xDEu);
 
     memset(buf, 0, sizeof(buf));
-    SHADOW_CHECK(Port_GbaShadow_Read(kSaveAddr + 0x25Bu + 0x1FFu, buf, 1) == 1);
+    SHADOW_CHECK(Port_GbaShadow_Read(kSaveAddr + 0x25Cu + 0x1FFu, buf, 1) == 1);
     SHADOW_CHECK(buf[0] == 0xA5u);
 
     memset(buf, 0, sizeof(buf));

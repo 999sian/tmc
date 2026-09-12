@@ -2,6 +2,9 @@
 #include "fileselect.h"
 #include "main.h"
 #include "structures.h"
+#ifdef PC_PORT
+#include "port_rom.h"
+#endif
 
 /* Native compaction fixes from tmc-3ds 396dc7b. Keep retail EU behavior
  * unchanged in GBA builds. */
@@ -236,6 +239,10 @@ static bool32 LoadFixedGFX_baseline(Entity* entity, u32 gfxIndex) {
 
 bool32 LoadFixedGFX(Entity* entity, u32 gfxIndex) {
 #ifdef PC_PORT
+    /* The active ROM table is one entry shorter in EU. */
+    if (gfxIndex >= Port_FixedTypeGfxCountForRegion()) {
+        return FALSE;
+    }
     return LoadFixedGFX_baseline(entity, gfxIndex);
 #elif defined(MULTI_REGION)
     if (REGION_IS_EU) {

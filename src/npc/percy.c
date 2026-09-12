@@ -40,7 +40,6 @@ void sub_0806B540(Entity*);
 
 #ifdef PC_PORT
 #include "port_rom.h"
-extern const u8 gUnk_08001A7C[];
 #else
 extern u16* gUnk_08001A7C[];
 #endif
@@ -102,7 +101,7 @@ void sub_0806B41C(PercyEntity* this) {
                                     GetAnimationStateForDirection4(GetFacingDirection(super, &gPlayerEntity.base)) + 4);
                 idx = GetFuserId(super);
 #ifdef PC_PORT
-                tmp = (u16*)Port_UnpackRomDataPtr(gUnk_08001A7C, idx);
+                tmp = (u16*)Port_GetFusionTextData(idx);
                 if (tmp == NULL) {
                     super->action = 1;
                     break;

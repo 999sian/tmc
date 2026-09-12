@@ -144,6 +144,18 @@ static u16 CalculateImageChecksum(const u8* data, u32 size) {
     return (u16)checksum;
 }
 
+/* 1 when the SaveFileStatus copy at statusBytes is an 'MCZ3' record whose
+ * checksum covers data (src/save.c VerifyChecksum). */
+static int StatusChecksumCoversData(const u8* statusBytes, const u8* data, u32 dataSize) {
+    const u16 checksum1 = ReadU16LE(statusBytes);
+    const u16 checksum2 = ReadU16LE(statusBytes + 2);
+    if (ReadU32LE(statusBytes + 4) != (u32)'MCZ3' || checksum2 != (u16)(-checksum1))
+        return 0;
+    u16 expected = CalculateImageChecksum(statusBytes + 4, 4);
+    expected = (u16)(expected + CalculateImageChecksum(data, dataSize));
+    return checksum1 == expected;
+}
+
 /* A record is valid when either of its two SaveFileStatus copies is an
  * untouched/deleted marker or an 'MCZ3' status whose checksum covers the data
  * (src/save.c ReadSaveFileStatus + VerifyChecksum). */
@@ -155,14 +167,57 @@ static int EepromStatusValidForData(const u8* ramImage, u32 statusOffset, u32 da
         const u32 status = ReadU32LE(statusBytes + 4);
         if ((status == (u32)'TINI' || status == (u32)'FleD') && checksum1 == 0xFFFF && checksum2 == 0xFFFF)
             return 1;
-        if (status == (u32)'MCZ3' && checksum2 == (u16)(-checksum1)) {
-            u16 expected = CalculateImageChecksum(statusBytes + 4, 4);
-            expected = (u16)(expected + CalculateImageChecksum(ramImage + dataOffset, dataSize));
-            if (checksum1 == expected)
-                return 1;
-        }
+        if (StatusChecksumCoversData(statusBytes, ramImage + dataOffset, dataSize))
+            return 1;
     }
     return 0;
+}
+
+/* ---- SaveFile flag-layout migration ----------------------------------------
+ * PC builds <= v0.9.0 lacked SaveFile.filler25B, so flags..dungeonWarps
+ * (0x25B..0x48B) sat one byte before their retail offsets. Byte 0x4FF of a
+ * slot (last byte of filler4ac) == 1 stamps the retail layout; src/save.c
+ * WriteSaveFile sets it on every save. */
+#define SAVE_SLOT_SIZE 0x500u
+#define SAVE_LAYOUT_STAMP_OFFSET 0x4FFu
+#define SAVE_LAYOUT_STAMP_RETAIL 0x01u
+
+/* Shift one unstamped, checksum-valid slot copy to the retail layout and
+ * refresh every status copy that validated the old bytes. 1 when shifted. */
+static int MigrateSlotFlagLayout(u8* ramImage, u32 statusOffset, u32 dataOffset) {
+    u8* data = ramImage + dataOffset;
+    unsigned validMask = 0;
+    for (unsigned copy = 0; copy < 2; ++copy)
+        if (StatusChecksumCoversData(ramImage + statusOffset + copy * 8u, data, SAVE_SLOT_SIZE))
+            validMask |= 1u << copy;
+    if (validMask == 0 || data[SAVE_LAYOUT_STAMP_OFFSET] == SAVE_LAYOUT_STAMP_RETAIL)
+        return 0;
+    memmove(data + 0x25C, data + 0x25B, 0x48B - 0x25B); /* 0x48B was PC padding */
+    data[0x25B] = 0;
+    data[SAVE_LAYOUT_STAMP_OFFSET] = SAVE_LAYOUT_STAMP_RETAIL;
+    for (unsigned copy = 0; copy < 2; ++copy) {
+        if (!(validMask & (1u << copy)))
+            continue;
+        u8* statusBytes = ramImage + statusOffset + copy * 8u;
+        u16 checksum = CalculateImageChecksum(statusBytes + 4, 4);
+        checksum = (u16)(checksum + CalculateImageChecksum(data, SAVE_SLOT_SIZE));
+        statusBytes[0] = (u8)checksum;
+        statusBytes[1] = (u8)(checksum >> 8);
+        statusBytes[2] = (u8)(-checksum);
+        statusBytes[3] = (u8)((u16)(-checksum) >> 8);
+    }
+    return 1;
+}
+
+/* Migrate all 3 slots (both EEPROM copies each; src/save.c
+ * gSaveFileEEPROMAddresses). Returns the number of copies shifted. */
+static int MigrateEepromFlagLayout(u8* ramImage) {
+    int shifted = 0;
+    for (u32 slot = 0; slot < 3; ++slot) {
+        shifted += MigrateSlotFlagLayout(ramImage, 0x30 + slot * 0x10, 0x80 + slot * SAVE_SLOT_SIZE);
+        shifted += MigrateSlotFlagLayout(ramImage, 0x1030 + slot * 0x10, 0x1080 + slot * SAVE_SLOT_SIZE);
+    }
+    return shifted;
 }
 
 /* Number of save records (3 slots, header, misc) with at least one valid
@@ -254,6 +309,24 @@ static EepromImageClass ReadAndClassifyEepromFile(const char* path, u8* ramImage
 
     ReverseEepromBlocks(ramImage);
     return ClassifyRamEepromImage(ramImage);
+}
+
+/* Byte-for-byte copy of src to dst (pre-migration backup). 1 on success. */
+static int CopyFileBytes(const char* src, const char* dst) {
+    FILE* in = fopen(src, "rb");
+    if (!in)
+        return 0;
+    FILE* out = fopen(dst, "wb");
+    int ok = out != NULL;
+    u8 buf[4096];
+    size_t n;
+    while (ok && (n = fread(buf, 1, sizeof(buf), in)) != 0)
+        ok = fwrite(buf, 1, n, out) == n;
+    ok = ok && !ferror(in);
+    if (out)
+        ok &= fclose(out) == 0;
+    fclose(in);
+    return ok;
 }
 
 /* Write the in-memory EEPROM to f in on-disk order. 1 on full write. */
@@ -392,20 +465,21 @@ static void LoadEepromFile(void) {
         break;
     }
 
-    if (legacyRamOrder) {
-        /* Legacy port-format file (game-RAM order on disk). The buffer
-         * is already in the order we keep in memory; keep the original
-         * bytes as .bak, then rewrite the file in on-disk order. */
+    /* TMC_SAVE_RETAIL_LAYOUT=1: the file is a retail/emulator save, never shifted. */
+    const char* retailEnv = getenv("TMC_SAVE_RETAIL_LAYOUT");
+    const int shifted = (retailEnv && *retailEnv && *retailEnv != '0') ? 0 : MigrateEepromFlagLayout(sEeprom);
+
+    if (legacyRamOrder || shifted) {
+        /* Keep the untouched on-disk bytes as .bak, then rewrite the file. */
         char bak[SAVE_FILENAME_MAX + 4];
         snprintf(bak, sizeof(bak), "%s.bak", sActivePath);
-        int backedUp = 0;
-        FILE* bf = fopen(bak, "wb");
-        if (bf) {
-            backedUp = fwrite(sEeprom, 1, EEPROM_SIZE, bf) == EEPROM_SIZE;
-            backedUp &= fclose(bf) == 0;
-        }
-        fprintf(stderr, "[SAVE] Migrating %s to mGBA byte order (backup: %s)%s.\n", sActivePath, bak,
-                backedUp ? "" : " — BACKUP FAILED");
+        const int backedUp = CopyFileBytes(sActivePath, bak);
+        if (legacyRamOrder)
+            fprintf(stderr, "[SAVE] Migrating %s to mGBA byte order (backup: %s)%s.\n", sActivePath, bak,
+                    backedUp ? "" : " — BACKUP FAILED");
+        if (shifted)
+            fprintf(stderr, "[SAVE] migrated legacy flag layout in %d slot copies of %s (backup: %s)%s.\n", shifted,
+                    sActivePath, bak, backedUp ? "" : " — BACKUP FAILED");
         sEepromDirty = 1;
         FlushEepromFile();
     } else {

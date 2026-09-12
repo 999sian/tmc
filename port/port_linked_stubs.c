@@ -66,7 +66,9 @@ u8 gUnk_02000030[0x10]; /* EWRAM marker, 16 bytes gap */
 struct_02000040 gUnk_02000040;
 void* gUnk_020000B0 = NULL; /* Entity* pointer (8 bytes on 64-bit) */
 struct_gUnk_020000C0 gUnk_020000C0[0x30];
-Palette gUnk_02001A3C;
+/* gUnk_02001A3C is NOT a separate object: on GBA 0x02001A3C == gPaletteList
+ * (0x02001A00) + 0xF*4, i.e. gPaletteList[15]. src/color.c aliases it to that
+ * element; a standalone global here silently broke slot 15's release. */
 u8 gUnk_02006F00[0x4000] __attribute__((aligned(4)));                    /* BG tilemap buffer (16 KB) */
 u16 gUnk_0200B640;                                                       /* scroll state scalar */
 u16 gUnk_02017830[0x138] __attribute__((aligned(4)));                    /* palette rotation buffer (624 bytes) */
@@ -501,7 +503,6 @@ extern const u8 gUnk_080083FC[];
 extern const u8 gUnk_0800845C[];
 extern const u8 gUnk_080084BC[];
 extern const u8 gUnk_0800851C[];
-extern u8 gUnk_0800823C[];
 
 static const u8* sActiveCollisionParams = gUnk_080082DC;
 u32 GetCollisionDataAtTilePos(u32 tilePos, u32 layer);
@@ -573,8 +574,7 @@ static u32 TileCollisionLookup(u32 px, u32 py, Entity* entity) {
         return 1;
     }
 
-    u8 idx = sActiveCollisionParams[tileType - 0x10];
-    const u16* table = Port_GetCollisionShapeData(idx);
+    const u16* table = (const u16*)Port_GetCollisionShapeData(sActiveCollisionParams[tileType - 0x10]);
     if (table == NULL) {
         return 0;
     }
@@ -1836,15 +1836,12 @@ u32 GetTileTypeRelativeToEntity(Entity* entity, s32 xOffset, s32 yOffset) {
  * Calls GetTileTypeAtTilePos, then indexes into gUnk_08000360 or gUnk_080B7A3E
  * (based on whether tileType < 0x4000 or not) as a u16 array.
  */
+static u32 TileTypeProperty(u32 tileType) {
+    return tileType < 0x4000 ? Port_GetTileTypeProperty(tileType) : gUnk_080B7A3E[tileType & 0x3FFF];
+}
+
 u32 sub_080B1B84(u32 tilePos, u32 layer) {
-    u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
-    const u16* table;
-    if (tileType < 0x4000) {
-        return Port_GetTileTypeProperty(tileType);
-    } else {
-        table = gUnk_080B7A3E;
-    }
-    return table[tileType & 0x3FFF];
+    return TileTypeProperty(GetTileTypeAtTilePos(tilePos, layer));
 }
 
 /**
@@ -1862,14 +1859,11 @@ u32 sub_080B1B84(u32 tilePos, u32 layer) {
  * properties from a different collision layer.
  */
 u32 sub_080B1BA4(u32 tilePos, u32 layer, u32 mask) {
-    u32 tileType = GetTileTypeAtTilePos(tilePos, layer);
-    u32 r = (tileType < 0x4000 ? Port_GetTileTypeProperty(tileType) :
-             gUnk_080B7A3E[tileType & 0x3FFF]) & mask;
+    u32 r = TileTypeProperty(GetTileTypeAtTilePos(tilePos, layer)) & mask;
 #ifdef PC_PORT
     if (r == 0 && mask == 0x40) {
         u32 other = (layer == 2) ? 1 : 2;
-        u32 tt2 = GetTileTypeAtTilePos(tilePos, other);
-        r = (tt2 < 0x4000 ? Port_GetTileTypeProperty(tt2) : gUnk_080B7A3E[tt2 & 0x3FFF]) & mask;
+        r = TileTypeProperty(GetTileTypeAtTilePos(tilePos, other)) & mask;
     }
 #endif
     return r;

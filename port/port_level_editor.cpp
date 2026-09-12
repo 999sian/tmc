@@ -685,6 +685,7 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
     unsigned char area = gRoomControls.area;
     unsigned char room = gRoomControls.room;
 
+
     // Check if there are custom map assets or custom layout binary files for this area/room
     bool hasCustomAreaGfx = false;
     bool hasCustomRoomLayout = false;
@@ -731,6 +732,7 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
     }
 
     bool hasCustomMap = hasCustomAreaGfx || hasCustomRoomLayout;
+
 
     if (hasCustomMap) {
         // ----------------------------------------------------
@@ -893,11 +895,13 @@ extern "C" void Port_LevelEditor_OnRoomLoad(void) {
     // Load custom entities from Minish Maker project files if they exist
     
     // Clear old data first
+
     sCustomList1Data.clear();
     sCustomList2Data.clear();
     sCustomList3Data.clear();
     sCustomChestData.clear();
     sCustomWarpData.clear();
+
 
     bool hasCustomEntities = false;
     char path1[256], path2[256], path3[256], pathChest[256], pathWarp[256];

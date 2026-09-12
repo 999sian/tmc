@@ -539,6 +539,7 @@ const SongHeader sfxWind3 = { 0 };
 /* ---- ROM data stub initialization ---- */
 #include <stdio.h>
 #include <string.h>
+#include "port_config.h"
 extern u8* gRomData;
 extern u32 gRomSize;
 

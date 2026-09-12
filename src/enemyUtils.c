@@ -101,12 +101,25 @@ bool32 EnemyInit(Enemy* this) {
         }
         super->spriteIndex = definition->spriteIndex;
 #ifdef PC_PORT
-        /* Shared sub-definitions use enum IDs, unlike region-native tables. */
-        if (super->id == SPEAR_MOBLIN || super->id == BOW_MOBLIN ||
-            super->id == VAATI_TRANSFIGURED || super->id == VAATI_TRANSFIGURED_EYE ||
-            super->id == GYORG_CHILD || super->id == GYORG_FEMALE_EYE ||
-            super->id == GYORG_MALE_EYE || super->id == GYORG_FEMALE_MOUTH) {
-            super->spriteIndex = Port_CompiledSpriteIndex(super->spriteIndex);
+        /* These ids take spriteIndex from a compiled Sprites enum name >= 289 (EU-native
+         * numeric entries like MOLDORM/BLADE_TRAP/DUST are left alone). */
+        switch (super->id) {
+            case SPEAR_MOBLIN:
+            case RUPEE_LIKE:
+            case BOW_MOBLIN:
+            case VAATI_TRANSFIGURED:
+            case SLIME:
+            case MINI_SLIME:
+            case FIREBALL_GUY:
+            case MINI_FIREBALL_GUY:
+            case VAATI_TRANSFIGURED_EYE:
+            case CURTAIN:
+            case GYORG_CHILD:
+            case GYORG_FEMALE_EYE:
+            case GYORG_MALE_EYE:
+            case GYORG_FEMALE_MOUTH:
+                super->spriteIndex = Port_CompiledSpriteIndex(super->spriteIndex);
+                break;
         }
 #endif
         if (super->spriteSettings.draw == 0) {

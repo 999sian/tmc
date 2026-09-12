@@ -3,9 +3,9 @@
 #include "vram.h"
 #include "room.h"
 #include "color.h"
+#include "projectile.h"
 #ifdef PC_PORT
 #include "port_sprite_region.h"
-#include "projectile.h"
 #endif
 
 extern const ProjectileDefinition gProjectileDefinitions[];

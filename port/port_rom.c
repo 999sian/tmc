@@ -448,13 +448,6 @@ const RomOffsets kRomOffsets_USA = {
     .uiData = 0x0C9044,
     .fadeData = 0x000F54,
     .overlaySizeTable = 0x0B2BE8,
-    .collisionMatrix = 0x0B7B74,
-    .collisionShapePtrs = 0x823C,
-    .tileTypeProperties = 0x360,
-    .fuserFusionPtrs = 0x1DCC,
-    .fuserEnemyData = 0x232E,
-    .fuserNpcData = 0x2342,
-    .lilypadRails = 0xFED98,
     .mapDataBase = 0x324AE4,
     .areaRoomHeaders = 0x11E214,
     .areaTileSets = 0x10246C,
@@ -466,11 +459,32 @@ const RomOffsets kRomOffsets_USA = {
     .bgAnimTable = 0x0B755C,
     .localFlagBanks = 0x11E454,
     .townspersonSpriteLoadPtrs = 0x10B6EC,
+    .extraFrameOffsets = 0x9FB770,
+    .collisionMatrix = 0x0B7B74,
+    .collisionShapePtrs = 0x00823C,
+    .tileTypeProperties = 0x000360,
+    .figurines = 0x1281A8,
+    .fuserEnemyData = 0x00232E,
+    .fuserNpcData = 0x002342,
+    .fusionTextPtrs = 0x001A7C,
+    .fuserFusionPtrs = 0x001DCC,
+    .lakeHyliaEnemies = 0x0F3D44,
+    .lakeHyliaCleared = 0x0F3EA4,
+    .lilypadRails = 0x0FED98,
+    .guardPatrolData = 0x10F6BC,
+    .innWestEntities = 0x0D6A74,
+    .innMiddleEntities = 0x0D6B18,
+    .innEastEntities = 0x0D6BB8,
+    .simonEntityLists = 0x0F0CB8,
+    .simonEnemyPatterns = 0x0F0D58,
+    .simonChestPatterns = 0x0F0E08,
+    .gustJarAnimTable = 0x132714,
+    .gustJarHitbox = 0x132B28,
     .gfxGroupsCount = 133,
     .paletteGroupsCount = 208,
     .objPalettesCount = 360,
     .frameObjListsSize = 200045,
-    .fixedTypeGfxCount = 527,
+    .fixedTypeGfxCount = 526,
     .spritePtrsCount = 329,
     .expectedRomSize = 0x1000000,
     .gameCode = "BZME",
@@ -496,14 +510,8 @@ const RomOffsets kRomOffsets_EU = {
     .text094CE = 0x108C22,
     .uiData = 0x0C876C,
     .fadeData = 0x000F9C,
-    .overlaySizeTable = 0x0B25E8, /* EU overlay size table (shifted) */
-    .collisionMatrix = 0x0B729C,
-    .collisionShapePtrs = 0x82D4,
-    .tileTypeProperties = 0x3A8,
-    .fuserFusionPtrs = 0x1E74,
-    .fuserEnemyData = 0x23D6,
-    .fuserNpcData = 0x23EA,
-    .lilypadRails = 0xFE2DC,
+    /* 240 bytes, byte-identical to USA. (0x0B25E8 is a function-pointer table.) */
+    .overlaySizeTable = 0x0B2310,
     .mapDataBase = 0x323FEC,
     .areaRoomHeaders = 0x11D95C,
     .areaTileSets = 0x101BC8,
@@ -515,12 +523,35 @@ const RomOffsets kRomOffsets_EU = {
     .bgAnimTable = 0x0B6C84,
     .localFlagBanks = 0x11DB9C,
     .townspersonSpriteLoadPtrs = 0x10AE40,
+    .extraFrameOffsets = 0xB07080,
+    .collisionMatrix = 0x0B729C,
+    .collisionShapePtrs = 0x0082D4,
+    .tileTypeProperties = 0x0003A8,
+    .figurines = 0x1278E0,
+    .fuserEnemyData = 0x0023D6,
+    .fuserNpcData = 0x0023EA,
+    .fusionTextPtrs = 0x001B24,
+    .fuserFusionPtrs = 0x001E74,
+    .lakeHyliaEnemies = 0x0F3368,
+    .lakeHyliaCleared = 0x0F34C8,
+    .lilypadRails = 0x0FE2DC,
+    .guardPatrolData = 0x10EE10,
+    .innWestEntities = 0x0D61D0,
+    .innMiddleEntities = 0x0D6274,
+    .innEastEntities = 0x0D6314,
+    .simonEntityLists = 0x0F02EC,
+    .simonEnemyPatterns = 0x0F038C,
+    .simonChestPatterns = 0x0F043C,
+    .gustJarAnimTable = 0x131D64,
+    .gustJarHitbox = 0x132178,
     .gfxGroupsCount = 133,
     .paletteGroupsCount = 207,
     .objPalettesCount = 360,
-    .frameObjListsSize = 200045,
-    .fixedTypeGfxCount = 527,
-    .spritePtrsCount = 329,
+    /* EU omits USA sprite 288 (SPRITE_OBJECTB4_1) from gSpritePtrs,
+     * gFrameObjLists and gExtraFrameOffsets; fixed gfx omits semantic 519. */
+    .frameObjListsSize = 199561,
+    .fixedTypeGfxCount = 525,
+    .spritePtrsCount = 328,
     .expectedRomSize = 0x1000000,
     .gameCode = "BZMP",
 };
@@ -562,13 +593,6 @@ const RomOffsets kRomOffsets_JP = {
     .uiData = 0xC8DE4,
     .fadeData = 0xF54,
     .overlaySizeTable = 0xB2988,
-    .collisionMatrix = 0xB7914,
-    .collisionShapePtrs = 0x823C,
-    .tileTypeProperties = 0x360,
-    .fuserFusionPtrs = 0x1DCC,
-    .fuserEnemyData = 0x232E,
-    .fuserNpcData = 0x2342,
-    .lilypadRails = 0xFEA48,
     .mapDataBase = 0x324710,
     .areaRoomHeaders = 0x11DED8,
     .areaTileSets = 0x102134,
@@ -580,11 +604,32 @@ const RomOffsets kRomOffsets_JP = {
     .bgAnimTable = 0xB72FC,
     .localFlagBanks = 0x11E118,
     .townspersonSpriteLoadPtrs = 0x10B3B0,
+    .extraFrameOffsets = 0x9DD6F0,
+    .collisionMatrix = 0x0B7914,
+    .collisionShapePtrs = 0x00823C,
+    .tileTypeProperties = 0x000360,
+    .figurines = 0x127E6C,
+    .fuserEnemyData = 0x00232E,
+    .fuserNpcData = 0x002342,
+    .fusionTextPtrs = 0x001A7C,
+    .fuserFusionPtrs = 0x001DCC,
+    .lakeHyliaEnemies = 0x0F3A5C,
+    .lakeHyliaCleared = 0x0F3BBC,
+    .lilypadRails = 0x0FEA48,
+    .guardPatrolData = 0x10F380,
+    .innWestEntities = 0x0D6814,
+    .innMiddleEntities = 0x0D68B8,
+    .innEastEntities = 0x0D6958,
+    .simonEntityLists = 0x0F09E0,
+    .simonEnemyPatterns = 0x0F0A80,
+    .simonChestPatterns = 0x0F0B30,
+    .gustJarAnimTable = 0x132340,
+    .gustJarHitbox = 0x132754,
     .gfxGroupsCount = 133,
     .paletteGroupsCount = 208,
     .objPalettesCount = 360,
     .frameObjListsSize = 200045,
-    .fixedTypeGfxCount = 527,
+    .fixedTypeGfxCount = 526,
     .spritePtrsCount = 329,
     .expectedRomSize = 0x1000000,
     .gameCode = "BZMJ",
@@ -654,6 +699,56 @@ u64 Port_GetEntityFuserData(u32 kind, u8 id, u8 type, u8 type2) {
         }
     }
     return 0;
+}
+
+/* ---- Active-ROM table accessors ----
+ * Every reader bounds-checks against gRomSize and fails closed (NULL / 0)
+ * when the active region has no offset (RomOffsets field == 0). */
+static const u8* RomBytes(u32 table, u32 rel, u32 len) {
+    if (!gRomData || table == 0 || table > gRomSize || rel > gRomSize - table || len > gRomSize - table - rel)
+        return NULL;
+    return &gRomData[table + rel];
+}
+
+enum { FUSER_TABLE_COUNT = 120 }; /* entries in gUnk_08001A7C / gUnk_08001DCC */
+
+/* EU drops USA sprite 288 (SPRITE_OBJECTB4_1), so fat-binary enum values
+ * above it are one too high. 288 itself is returned unchanged; caller decides. */
+u32 Port_RemapSpriteIndex(u32 usaIndex) {
+    return (REGION_IS_EU && usaIndex > 288u) ? usaIndex - 1u : usaIndex;
+}
+
+u32 Port_FrameObjCountForRegion(void) {
+    return REGION_IS_EU ? 511u : 512u;
+}
+
+u32 Port_FrameObjListsSizeForRegion(void) {
+    return gRomOffsets ? gRomOffsets->frameObjListsSize : 200045u;
+}
+
+u32 Port_FixedTypeGfxCountForRegion(void) {
+    return gRomOffsets ? gRomOffsets->fixedTypeGfxCount : 526u;
+}
+
+const u8* Port_ReadActiveRomPtrTable(u32 romOffset, u32 index) {
+    const u8* entry = index < 0x100000u ? RomBytes(romOffset, index * 4u, 4u) : NULL;
+    u32 gba;
+    if (entry == NULL)
+        return NULL;
+    /* Bit 0 is kept: 63 of the 120 EU fuser records live at odd addresses. */
+    gba = Port_ReadU32(entry);
+    return (gba >= 0x08000000u && gba - 0x08000000u < gRomSize) ? &gRomData[gba - 0x08000000u] : NULL;
+}
+
+const u16* Port_GetFusionTextData(u32 fuserId) {
+    if (gRomOffsets == NULL || fuserId >= FUSER_TABLE_COUNT)
+        return NULL;
+    return (const u16*)Port_ReadActiveRomPtrTable(gRomOffsets->fusionTextPtrs, fuserId);
+}
+
+/* Both entry points share the same bounded retail record scanner. */
+u64 Port_FindEntityFuserData(u32 isNpc, u8 id, u8 type, u8 type2) {
+    return Port_GetEntityFuserData(isNpc ? NPC : ENEMY, id, type, type2);
 }
 
 RomRegion Port_DetectRomRegion(const u8* romData, u32 romSize) {
@@ -1438,12 +1533,18 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "WARNING: gFrameObjLists ROM range invalid; using compile-time fallback.\n");
     }
 
-    /* gExtraFrameOffsets — self-relative offset table multi-part sprite positioning */
+    /* gExtraFrameOffsets — self-relative offset table for multi-part sprite
+     * positioning. Differs per region (EU: 1169 bytes, JP: 72 bytes vs USA). */
     {
         extern const u8 kExtraFrameOffsetsData[4352];
         extern u8 gExtraFrameOffsets[4352];
-        memcpy(gExtraFrameOffsets, kExtraFrameOffsetsData, 4352);
-        fprintf(stderr, "gExtraFrameOffsets loaded (4352 bytes from compile-time table).\n");
+        if (R->extraFrameOffsets != 0 && R->extraFrameOffsets + 4352 <= gRomSize) {
+            memcpy(gExtraFrameOffsets, &gRomData[R->extraFrameOffsets], 4352);
+            fprintf(stderr, "gExtraFrameOffsets loaded (4352 bytes from ROM 0x%X).\n", R->extraFrameOffsets);
+        } else {
+            memcpy(gExtraFrameOffsets, kExtraFrameOffsetsData, 4352);
+            fprintf(stderr, "WARNING: gExtraFrameOffsets unavailable; using compile-time fallback.\n");
+        }
     }
 
     /* OBJ palette offset table — now compile-time const src/data/objPalettes.c */
@@ -1517,7 +1618,8 @@ void Port_LoadRom(const char* path) {
                     }
                     resolvedCount++;
                 }
-                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[322]).\n", resolvedCount);
+                fprintf(stderr, "gSpriteAnimations_322 resolved (%u entries via SpritePtr[%u]).\n", resolvedCount,
+                        (unsigned)itemSpriteIndex);
             }
         }
     }
@@ -1555,7 +1657,7 @@ void Port_LoadRom(const char* path) {
     } else if (REGION_IS_USA) {
         gTranslations[1] = Port_UnpackRomDataPtr(&gRomData[R->translations], 1);
     } else if (REGION_IS_EU) {
-        for (int i = 1; i <= EU_LANGUAGE_LAST_SLOT; i++) {
+        for (int i = 1; i <= EU_LANGUAGE_LAST_SLOT; i++) { /* slot 6 = Italian */
             gTranslations[i] = Port_UnpackRomDataPtr(&gRomData[R->translations], i);
         }
     }

@@ -103,7 +103,7 @@ void Port_ReproA11y_Tick(unsigned int frame) {
         Port_A11y_ScanSurroundings();
         fprintf(stderr, "[a11y-repro] PASS - scan survived live entity + exit walk\n");
         fflush(stderr);
-        _Exit(0); /* skip atexit/destructors (pre-existing port_tts teardown abort) */
+        exit(0);
     }
 
     if (frame == 6000) {

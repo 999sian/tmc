@@ -19,6 +19,7 @@ RomRegion gRomRegion;
 static const u8 data[64];
 const u8* gGlobalGfxAndPalettes = data;
 u32 gFixedTypeGfxData[1024];
+u32 Port_FixedTypeGfxCountForRegion(void) { return gRomRegion == ROM_REGION_EU ? 525 : 526; }
 void MemClear(void* d, u32 n) { memset(d, 0, n); }
 void CleanUpGFXSlots(void);
 u32 FindFreeGFXSlots(u32);
@@ -30,6 +31,8 @@ int main(void) {
         gActiveRegion = region == 1 ? TMC_REGION_EU : region == 2 ? TMC_REGION_JP : TMC_REGION_USA;
         gRomRegion = region == 1 ? ROM_REGION_EU : region == 2 ? ROM_REGION_JP : ROM_REGION_USA;
         ResetPalettes();
+        CHECK(!LoadFixedGFX(&request, Port_FixedTypeGfxCountForRegion()));
+        CHECK(!LoadFixedGFX(&request, 0xffffffffu));
         gGFXSlots.unk0 = 1;
         for (unsigned i = 4; i < MAX_GFX_SLOTS; ++i)
             ReserveGFXSlots(i, i, 1);
