@@ -455,6 +455,16 @@ void Scroll5Sub5(RoomControls* controls) {
         gScreen.lcd.displayControl &= ~DISPCNT_WIN1_ON;
         gScreen.controls.windowInsideControl &= 0xff;
         gScreen.controls.windowOutsideControl &= 0xff00;
+#if defined(PC_PORT) && MODE1_GBA_WIDTH > 240
+        /* The iris rendered at native width. Restore the wide camera and
+         * request native tilemap refresh before this frame is presented. */
+        {
+            extern int Port_Widescreen_EffectiveViewWidth(void);
+            if (Port_Widescreen_EffectiveViewWidth() > 240) {
+                sub_080809D4();
+            }
+        }
+#endif
     } else {
         gUpdateVisibleTiles = 4;
         controls->unk_1c = 0;
