@@ -39,6 +39,8 @@ int Port_SoftSlots_GetActiveSlot(void);
  * equipped[SLOT_B] without touching gSave. */
 uint8_t Port_SoftSlots_GetEffectiveBItem(uint8_t saved);
 
+/* Usable assignment in the current save, or zero if invalid/unowned.
+ * Stored preferences and labels are retained when changing saves. */
 uint8_t Port_SoftSlots_GetAssignment(int slot);
 void    Port_SoftSlots_SetAssignment(int slot, uint8_t itemId);
 const char* Port_SoftSlots_SlotName(int slot);

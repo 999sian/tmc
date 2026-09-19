@@ -82,7 +82,7 @@ void Port_SoftSlots_Update(void) {
     int newlyPressed = -1;
 
     for (int i = 0; i < PORT_SOFTSLOT_COUNT; i++) {
-        nowHeld[i] = Port_Config_SoftSlotPressed(i) && sAssignments[i] != 0;
+        nowHeld[i] = Port_Config_SoftSlotPressed(i) && Port_SoftSlots_GetAssignment(i) != 0;
         if (nowHeld[i] && !sPrevHeld[i]) {
             /* Later iterations overwrite, giving last-iterated == highest-
              * index newly-pressed slot priority. */
@@ -109,7 +109,7 @@ void Port_SoftSlots_Update(void) {
 }
 
 bool Port_SoftSlots_IsBHeld(void) {
-    return sActiveSlot >= 0;
+    return Port_SoftSlots_GetAssignment(sActiveSlot) != 0;
 }
 
 int Port_SoftSlots_GetActiveSlot(void) {
@@ -118,13 +118,17 @@ int Port_SoftSlots_GetActiveSlot(void) {
 
 uint8_t Port_SoftSlots_GetEffectiveBItem(uint8_t saved) {
     if (sActiveSlot < 0) return saved;
-    uint8_t a = sAssignments[sActiveSlot];
+    uint8_t a = Port_SoftSlots_GetAssignment(sActiveSlot);
     return a ? a : saved;
 }
 
 uint8_t Port_SoftSlots_GetAssignment(int slot) {
     if (slot < 0 || slot >= PORT_SOFTSLOT_COUNT) return 0;
-    return sAssignments[slot];
+    /* Saved preferences are shared across game slots/profiles. Validate at
+     * dispatch time too, since a load can change inventory after input polling.
+     * Only the item IDs accepted by CreateItemIfInputMatches are usable. */
+    uint8_t item = sAssignments[slot];
+    return item >= 1 && item <= 31 && GetInventoryValue(item) == 1 ? item : 0;
 }
 
 void Port_SoftSlots_SetAssignment(int slot, uint8_t itemId) {
