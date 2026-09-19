@@ -85,6 +85,14 @@
 #define static_assert(...) //_Static_assert(__VA_ARGS__)
 #endif
 
+#ifndef __SIZEOF_POINTER__
+#if defined(_WIN64) || defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || defined(_M_ARM64)
+#define __SIZEOF_POINTER__ 8
+#else
+#define __SIZEOF_POINTER__ 4
+#endif
+#endif
+
 #if defined(PC_PORT) && (__SIZEOF_POINTER__ == 8)
 #define PORT_STATIC_ASSERT_SIZE(type, gba_size, pc_size, msg) static_assert(sizeof(type) == (pc_size), msg)
 #define PORT_STATIC_ASSERT_EXPR(expr, gba_size, pc_size, msg) static_assert((expr) == (pc_size), msg)
