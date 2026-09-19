@@ -1287,6 +1287,10 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
     for (int sr = 0; sr < MODE1_WS_SHADOW_ROWS; sr++) {
         u16* row_dst = shadow + (size_t)sr * MODE1_WS_SHADOW_COLS;
         s32 world_row = 2 * row16 - 1 + sr;
+        /* Match the native fill's duplicated first row at the room top;
+         * negative vertical shake can expose this leading padding row. */
+        if (ydiff >= 0 && ydiff < 8 && sr == 0)
+            world_row = 0;
         if (world_row < 0 || world_row >= room_tiles_h) {
             for (int C = 0; C < MODE1_WS_SHADOW_COLS; C++)
                 row_dst[C] = 0;
@@ -1302,7 +1306,7 @@ static void Port_WidescreenShadow_Populate(int bg_index, u16* mapSpecial, u16* s
     virtuappu_mode1_ws_shadow[bg_index] = shadow;
 }
 
-/* Woods light rays/fog use a repeating 256px texture, not the room map.
+/* Fog, clouds and steam use a repeating 256px texture, not the room map.
  * Copy its complete screenblock so even HBlank-varying scroll offsets use
  * the same tiles on both sides of x=240. Existing CPU/GPU shadow sampling
  * retains the overlay's scroll, wave distortion, priority and alpha blend. */
@@ -1415,9 +1419,11 @@ void Port_Widescreen_UpdateShadows(void) {
         if (bg >= 0)
             Port_WidescreenShadow_Populate(bg, gMapDataTopSpecial, sWsShadowBG2);
     }
-    /* Only the Woods overlay's known repeating layout; fixed BG3 canvases
-     * elsewhere must retain their native clipping. */
-    if (gRoomControls.area == AREA_MINISH_WOODS && gScreen.bg3.control == 0x1e04 &&
+    /* Extend known repeating overlays only; other BG3 canvases stay native.
+     * CloudOverlayManager uses priority 1; Woods and steam use priority 0. */
+    if (((gRoomControls.area == AREA_MINISH_WOODS && gScreen.bg3.control == 0x1e04) ||
+         (gRoomControls.area == AREA_HYRULE_FIELD && gScreen.bg3.control == 0x1e05) ||
+         (gRoomControls.area == AREA_CAVE_OF_FLAMES && gScreen.bg3.control == 0x1e04)) &&
         (gScreen.lcd.displayControl & DISPCNT_BG3_ON) && virtuappu_mode1_ws_shadow[3] == NULL) {
         Port_WidescreenShadow_PopulateOverlay((const u16*)(gVram + 0xf000), sWsShadowOverlay);
     }

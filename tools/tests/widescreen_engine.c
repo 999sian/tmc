@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdlib.h>
 typedef int16_t s16;
 typedef int32_t s32;
 typedef uint16_t u16;
@@ -11,7 +12,7 @@ typedef uint32_t u32;
 #define MODE1_GBA_BG_CLIP_X 240
 #define MODE1_WS_SHADOW_COLS 32
 #define MODE1_WS_SHADOW_ROWS 32
-static struct { int scroll_x, scroll_y, origin_x, origin_y, width, height, scrollAction; } gRoomControls;
+static struct { int scroll_x, scroll_y, origin_x, origin_y, width, height, scrollAction, area, room; } gRoomControls;
 static struct { unsigned active, xPos, yPos, width, height; } gCurrentWindow;
 static int virtuappu_mode1_ws_shadow_base_tile[4];
 static u16* virtuappu_mode1_ws_shadow[4];
@@ -24,6 +25,28 @@ static int Port_WidescreenEffectiveTarget(void) { return gRoomControls.width < 3
 static u32 Port_WidescreenRoomKey(void) { return 1; }
 int Port_Widescreen_FallbackNative(void);
 static int Port_Widescreen_EffectiveViewWidth(void) { return Port_Widescreen_FallbackNative() ? 240 : Port_WidescreenEffectiveTarget(); }
+/* Only unrelated task/HUD dependencies are stubbed; shadow publication runs
+ * the production UpdateShadows body, including its area and BG gates. */
+enum { TASK_GAME = 2, AREA_MINISH_WOODS = 0x0b, AREA_HYRULE_FIELD = 0x0a,
+       AREA_CAVE_OF_FLAMES = 0x60, MANAGER = 9, ENTER_ROOM_TEXTBOX_MANAGER = 1 };
+#define MODE1_GBA_BG_COUNT 4
+#define DISPCNT_BG3_ON 0x800
+static struct { int task; } gMain;
+typedef struct { u32 control; int yOffset; } TestBg;
+static struct { TestBg bg0, bg1, bg2, bg3; struct { int displayControl; } lcd; } gScreen;
+static struct { TestBg* bgSettings; } gMapBottom, gMapTop;
+static u16 gMapDataBottomSpecial[128*128], gMapDataTopSpecial[128*128];
+static u16 sWsShadowBG1[32*32], sWsShadowBG2[32*32], sWsShadowOverlay[32*32];
+static u16 vram[0x18000/2];
+#define gVram ((unsigned char*)vram)
+static int virtuappu_mode1_ws_hud_right_anchor, virtuappu_mode1_ws_msg_shift;
+static int virtuappu_mode1_ws_msg_x0, virtuappu_mode1_ws_msg_x1;
+static int virtuappu_mode1_ws_msg_y0, virtuappu_mode1_ws_msg_y1;
+static int Port_WidescreenScanContentPx(void) { return 1024; }
+static int Port_Widescreen_IsActive(void) { return gMain.task == TASK_GAME && !Port_Widescreen_FallbackNative(); }
+static int Port_Widescreen_HudRightAnchor(void) { return 0; }
+typedef struct { int action; } Entity;
+static Entity* FindEntityByID(int kind, int id, int list) { (void)kind; (void)id; (void)list; return NULL; }
 #include "widescreen_helpers.h"
 static int errors;
 #define CHECK(cond) do { if (!(cond)) { fprintf(stderr, "FAIL line %d: %s\n", __LINE__, #cond); ++errors; } } while (0)
@@ -53,6 +76,18 @@ int main(void) {
         CHECK(Port_Widescreen_EffectiveViewWidth() == ((action==2 || action==4 || action==5) ? 240 : 384));
         CHECK(Port_Widescreen_CameraRestX(1000) == ((action==2 || action==4 || action==5) ? 784 : 640));
     }
+    /* At the top edge the native fill duplicates map row zero into its
+     * leading padding row. Upward shake exposes that row at the seam. */
+    gRoomControls.scroll_x = 0;
+    for (int y = 0; y < 8; ++y) {
+        gRoomControls.scroll_y = y;
+        Port_WidescreenShadow_Populate(1, map, shadow);
+        for (int shake = -3; shake < 0; ++shake) {
+            int row = (8 + y + shake) / 8;
+            CHECK(shadow[row * 32 + 1] == map[30]);
+        }
+    }
+    gRoomControls.scroll_y = 16;
     /* Room-edge padding stays transparent even when the backing map is stale. */
     gRoomControls.scroll_x = 0;
     gRoomControls.width = 256;
@@ -75,6 +110,31 @@ int main(void) {
     for (int row = 0; row < 32; ++row)
         for (int col = 0; col < MODE1_WS_SHADOW_COLS; ++col)
             CHECK(shadow[row * MODE1_WS_SHADOW_COLS + col] == screen[row * 32 + (col & 31)]);
+    /* All three repeating overlays must publish the complete screenblock;
+     * disabled overlays, unrelated canvases and native mode must not. */
+    memcpy(gVram + 0xf000, screen, sizeof(screen));
+    gMain.task = TASK_GAME;
+    gRoomControls.width = 1024;
+    const struct { int area, control, enabled, wide, expected; } overlays[] = {
+        { AREA_MINISH_WOODS, 0x1e04, 1, 1, 1 },
+        { AREA_HYRULE_FIELD, 0x1e05, 1, 1, 1 },
+        { AREA_CAVE_OF_FLAMES, 0x1e04, 1, 1, 1 },
+        { AREA_HYRULE_FIELD, 0x1e05, 0, 1, 0 },
+        { AREA_HYRULE_FIELD, 0x1e05, 1, 0, 0 },
+        { AREA_HYRULE_FIELD, 0x1d05, 1, 1, 0 },
+        { 0, 0x1e04, 1, 1, 0 },
+    };
+    for (unsigned i = 0; i < sizeof(overlays)/sizeof(overlays[0]); ++i) {
+        gRoomControls.area = overlays[i].area;
+        gScreen.bg3.control = overlays[i].control;
+        gScreen.lcd.displayControl = overlays[i].enabled ? DISPCNT_BG3_ON : 0;
+        enabled = overlays[i].wide;
+        Port_Widescreen_UpdateShadows();
+        CHECK((virtuappu_mode1_ws_shadow[3] != NULL) == overlays[i].expected);
+        if (overlays[i].expected && virtuappu_mode1_ws_shadow[3])
+            CHECK(memcmp(virtuappu_mode1_ws_shadow[3], screen, sizeof(screen)) == 0);
+    }
+    enabled = 1;
     int x,y,w,h;
     gCurrentWindow.active=0;
     CHECK(!Message_GetWindowRect(&x,&y,&w,&h));
