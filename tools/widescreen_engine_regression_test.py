@@ -28,8 +28,10 @@ def main():
         'int Port_Widescreen_CameraRestX(int target_x)',
         'static void Port_WidescreenShadow_Populate(',
         'static void Port_WidescreenShadow_PopulateOverlay(',
+        'static int Port_WidescreenPpuBgForControl(',
     )]
     functions.append(function(message, 'bool Message_GetWindowRect('))
+    functions.append(function(stubs, 'void Port_Widescreen_UpdateShadows(void)'))
     with tempfile.TemporaryDirectory(prefix='tmc-ws-engine-') as directory:
         generated = Path(directory) / 'widescreen_helpers.h'
         generated.write_text('\n'.join(functions))
