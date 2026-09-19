@@ -506,11 +506,13 @@ void Port_A11y_Update(void) {
         }
     }
 
-    /* Wall bump: trying to move (speed set) but position didn't change.
-     * Rate-limited so a held direction into a wall ticks, not buzzes. */
+    /* Wall bump: trying to move (directional input held and speed set)
+     * but position didn't change. Rate-limited so a held direction into
+     * a wall ticks, not buzzes. */
     if (sCueWalls) {
         if (sWallTimer > 0) sWallTimer--;
-        if (player->speed > 0 && moved == 0 && sWallTimer == 0) {
+        if ((gPlayerState.playerInput.heldInput & INPUT_ANY_DIRECTION) &&
+            player->speed > 0 && moved == 0 && sWallTimer == 0) {
             float pan = 0.0f;
             int d = player->direction & 0x18;
             if (d == DirectionEast) pan = 0.7f;
