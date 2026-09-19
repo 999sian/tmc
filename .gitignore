@@ -31,6 +31,7 @@ tools/binutils
 
 # scripts
 *.py
+!tools/persistence_regression_test.py
 !tools/extract_include_enum.py
 !tools/generate_sounds_embed.py
 !tools/region_regression_test.py

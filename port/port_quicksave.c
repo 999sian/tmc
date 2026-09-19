@@ -14,6 +14,9 @@
  *   magic    "TMCS"                          (4 bytes)
  *   version  PORT_QUICKSAVE_VERSION          (u32 LE)
  *   total    sum of all region sizes         (u32 LE)
+ *   saved_at timestamp                       (u64 LE)
+ *   bases    saved native addresses          (NUM_REGIONS u64 LE)
+ *   region   ROM region tag                  (u32 LE)
  *   data     concatenated region bytes       (in sRegions[] order)
  *
  * On load, if magic/version/size don't match, the file is rejected
@@ -23,8 +26,9 @@
  *
  * Coverage: emulated GBA memory (EWRAM/IWRAM/VRAM/IO), the save file,
  * the player + state, the room controls + transition, gMain, and the
- * full gEntities array. Anything not in this list (HUD state, OAM, gfx
- * slots, palette buffers) will visually catch up over the next frame.
+ * entity pools, list heads, allocation counts and active item state.
+ * This is not a complete serialization of every host global or heap asset;
+ * HUD, OAM, graphics allocation and script/asset state are not fully covered.
  *
  * Caveats:
  *  - Snapshotting mid-frame is supported but the visible result is
@@ -56,6 +60,9 @@ extern u8 gEwram[];
 extern u8 gIwram[];
 extern u8 gVram[];
 extern u8 gIoMem[];
+extern LinkedList gEntityListsBackup[9];
+extern Entity* gPlayerClones[3];
+extern UpdateContext gUpdateContext;
 
 /* The gameplay PRNG seed. On GBA this lived in IWRAM (0x03001150) and was
  * therefore captured by an IWRAM-snapshotting savestate; in the port it is a
@@ -69,14 +76,15 @@ extern u32 gRand;
 extern u64 gPracticeFrame;
 
 /* Defined in src/player.c — re-resolves the player's .rodata hitbox pointer
-   from the current form after a cross-process quickload (FixupEntityPointers
-   only relocates pointers that land inside gEntities). */
+   from the current form after a cross-process quickload. Static asset data
+   lies outside the captured regions and cannot use their relocation table. */
 void Port_RestorePlayerHitbox(void);
 
 typedef struct {
     void* ptr;
     size_t size;
     const char* name;
+    int hasPointers;
 } StateRegion;
 
 /* List of regions captured by a save-state. The order doesn't matter for
@@ -89,14 +97,23 @@ static StateRegion sRegions[] = {
     { gVram, 0x18000, "gVram" },
     { gIoMem, 0x400, "gIoMem" },
     { &gSave, sizeof(gSave), "gSave" },
-    { &gPlayerEntity, sizeof(gPlayerEntity), "gPlayerEntity" },
-    { &gPlayerState, sizeof(gPlayerState), "gPlayerState" },
+    { &gPlayerEntity, sizeof(gPlayerEntity), "gPlayerEntity", 1 },
+    { &gPlayerState, sizeof(gPlayerState), "gPlayerState", 1 },
     { &gMain, sizeof(gMain), "gMain" },
-    { &gRoomControls, sizeof(gRoomControls), "gRoomControls" },
-    { &gRoomTransition, sizeof(gRoomTransition), "gRoomTransition" },
-    { gEntities, sizeof(gEntities), "gEntities" },
+    { &gRoomControls, sizeof(gRoomControls), "gRoomControls", 1 },
+    { &gRoomTransition, sizeof(gRoomTransition), "gRoomTransition", 1 },
+    { gEntities, sizeof(gEntities), "gEntities", 1 },
     { &gRand, sizeof(gRand), "gRand" },
     { &gPracticeFrame, sizeof(gPracticeFrame), "gPracticeFrame" },
+    { gEntityLists, sizeof(gEntityLists), "gEntityLists", 1 },
+    { gEntityListsBackup, sizeof(gEntityListsBackup), "gEntityListsBackup", 1 },
+    { gAuxPlayerEntities, sizeof(gAuxPlayerEntities), "gAuxPlayerEntities", 1 },
+    { &gCarriedEntity, sizeof(gCarriedEntity), "gCarriedEntity", 1 },
+    { &gEntCount, sizeof(gEntCount), "gEntCount" },
+    { &gManagerCount, sizeof(gManagerCount), "gManagerCount" },
+    { gActiveItems, sizeof(gActiveItems), "gActiveItems", 1 },
+    { gPlayerClones, sizeof(gPlayerClones), "gPlayerClones", 1 },
+    { &gUpdateContext, sizeof(gUpdateContext), "gUpdateContext", 1 },
 };
 
 #define NUM_REGIONS (sizeof(sRegions) / sizeof(sRegions[0]))
@@ -105,7 +122,7 @@ static StateRegion sRegions[] = {
 #define NUM_AUTO_SLOTS 3
 #define MAGIC 0x53434D54u /* "TMCS" little-endian */
 #define VERSION                                         \
-    6u /* v2: header carries gEntities base address for \
+    7u /* v2: header carries gEntities base address for \
         * cross-process pointer-fixup on restore.       \
         * v3: gRand added to region list so RNG         \
         * state round-trips (GBA had it in IWRAM).      \
@@ -115,14 +132,16 @@ static StateRegion sRegions[] = {
         * into a JP session contaminates tmc_jp.sav     \
         * (#21); cross-region loads are refused.        \
         * v6: entity subclass layouts changed; older    \
-        * snapshots are rejected. */
+        * snapshots are rejected.                       \
+        * v7: entity bookkeeping and per-region bases   \
+        * for relocating both nodes and list sentinels. */
 
 typedef struct {
     u8* snapshot; /* heap, NULL if slot empty */
     size_t bytes;
     int valid;
     u64 saved_at_unix;       /* clock_gettime CLOCK_REALTIME seconds */
-    u64 saved_entities_base; /* gEntities address at save time; 0 for in-RAM slots */
+    u64 saved_bases[NUM_REGIONS]; /* native addresses when captured */
 } Slot;
 
 static Slot sSlots[NUM_SLOTS];
@@ -166,6 +185,7 @@ static int Snapshot_Capture(Slot* s) {
     for (size_t i = 0; i < NUM_REGIONS; i++) {
         memcpy(dst, sRegions[i].ptr, sRegions[i].size);
         dst += sRegions[i].size;
+        s->saved_bases[i] = (u64)(uintptr_t)sRegions[i].ptr;
     }
     s->valid = 1;
     s->saved_at_unix = (u64)time(NULL);
@@ -203,43 +223,29 @@ static int Snapshot_MatchesCurrent(const Slot* s, const char** region, size_t* o
     return 1;
 }
 
-/* When a slot was written by a previous process, every pointer captured
- * inside gEntities (prev/next/child/parent and any subclass-specific
- * Entity* fields) refers to the old ASLR base. Walk the restored bytes
- * 8-aligned and rewrite anything that falls in [saved_base, saved_base +
- * sizeof(gEntities)) to the corresponding offset under the new base.
- *
- * This is a heuristic — it can rewrite false positives if some non-
- * pointer field happens to hold a value in the saved range. In practice
- * the saved range is small (~5 MB) and that's vanishingly unlikely; the
- * alternative (parsing every Entity subclass to know which fields are
- * pointers) is unmaintainable. Misses the entity-list heads too —
- * those live in gEntityLists which isn't a saved region. */
-static void FixupEntityPointers(u64 saved_base) {
-    if (saved_base == 0)
-        return;
-    const uintptr_t cur_base = (uintptr_t)gEntities;
-    if ((uintptr_t)saved_base == cur_base)
-        return; /* same address, no-op */
-    const uintptr_t saved_lo = (uintptr_t)saved_base;
-    const uintptr_t saved_hi = saved_lo + sizeof(gEntities);
-    const intptr_t delta = (intptr_t)cur_base - (intptr_t)saved_lo;
-    uintptr_t* p = (uintptr_t*)gEntities;
-    /* Whole-array word scan: total bytes / word size, NOT entity count.
-     * The parens silence -Wsizeof-array-div, which mistakes this for an
-     * element-count division (element type is GenericEntity, not uintptr_t). */
-    const size_t n = sizeof(gEntities) / (sizeof(uintptr_t));
-    size_t fixed = 0;
-    for (size_t i = 0; i < n; ++i) {
-        if (p[i] >= saved_lo && p[i] < saved_hi) {
-            p[i] = (uintptr_t)((intptr_t)p[i] + delta);
-            ++fixed;
+/* Relocate references between captured native regions, including list heads,
+ * sentinels, the player and auxiliary entities. As in the old entity-only
+ * fixup, aligned words in pointer-bearing structs are matched by address
+ * range; raw emulated memory and integer-only globals are never scanned.
+ * This does not serialize arbitrary heap allocations or asset pointers. */
+static void FixupEntityPointers(const Slot* s) {
+    for (size_t i = 0; i < NUM_REGIONS; ++i) {
+        if (!sRegions[i].hasPointers)
+            continue;
+        u8* bytes = sRegions[i].ptr;
+        for (size_t offset = 0; offset + sizeof(uintptr_t) <= sRegions[i].size; offset += sizeof(uintptr_t)) {
+            uintptr_t value;
+            memcpy(&value, bytes + offset, sizeof(value));
+            for (size_t target = 0; target < NUM_REGIONS; ++target) {
+                u64 base = s->saved_bases[target];
+                if (base != 0 && value >= base && value - base < sRegions[target].size) {
+                    value = (uintptr_t)sRegions[target].ptr + (uintptr_t)(value - base);
+                    memcpy(bytes + offset, &value, sizeof(value));
+                    break;
+                }
+            }
         }
     }
-    fprintf(stderr,
-            "[quicksave] pointer-fixup: %zu pointers shifted by %p "
-            "(saved base %p → current %p)\n",
-            fixed, (void*)delta, (void*)saved_lo, (void*)cur_base);
 }
 
 static int Snapshot_Restore(const Slot* s) {
@@ -251,25 +257,11 @@ static int Snapshot_Restore(const Slot* s) {
         memcpy(sRegions[i].ptr, src, sRegions[i].size);
         src += sRegions[i].size;
     }
-    /* gEntities was just overwritten; fix any pointer fields that
-     * point to the saved process's gEntities range. Safe no-op when
-     * the slot was made in this process (same base). */
-    FixupEntityPointers(s->saved_entities_base);
-
-    /* Cross-process restore only: pointers that target fixed globals / .rodata
-     * (not gEntities) are NOT relocated by FixupEntityPointers and are left
-     * pointing into the previous process's address space. Re-establish the two
-     * that are dereferenced unguarded every frame after a load:
-     *   - gRoomControls.camera_target — room restore paths deref it while
-     *     rebuilding scroll. After fixup a usable target is an entity now inside
-     *     the relocated gEntities range; NULL and non-NULL pointers outside
-     *     gEntities both leave the restore path without a safe target, so point
-     *     them at the live player.
-     *   - gPlayerEntity.base.hitbox — a stale .rodata pointer; the player tile-
-     *     probe / interactable scan deref it without the IsColliding guard.
-     * In-process F5/F6 keeps the same base (FixupEntityPointers no-ops), so
-     * these are skipped there to leave the fast path untouched. */
-    if (s->saved_entities_base != 0 && (uintptr_t)s->saved_entities_base != (uintptr_t)gEntities) {
+    /* Same-process snapshots already carry current addresses. */
+    if (s->saved_bases[0] != (u64)(uintptr_t)sRegions[0].ptr) {
+        FixupEntityPointers(s);
+        /* The player's hitbox is static asset data outside the snapshot.
+         * Preserve relocated entity camera targets; replace unknown targets. */
         uintptr_t ct = (uintptr_t)gRoomControls.camera_target;
         uintptr_t lo = (uintptr_t)gEntities;
         uintptr_t hi = lo + sizeof(gEntities);
@@ -404,17 +396,10 @@ static int WriteSlotToDisk(int slot) {
     const u32 version = VERSION;
     const u32 total = (u32)s->bytes;
     const u64 saved_at = s->saved_at_unix;
-    /* gEntities base — needed to fix up internal pointers when the
-     * file is loaded by a later process (different ASLR base). The
-     * captured bytes still contain prev/next/child/parent pointers
-     * into the old process's gEntities[]; without fixup, restoring
-     * them and running the entity-update loop dereferences unmapped
-     * memory. */
-    const u64 entities_base = (u64)(uintptr_t)gEntities;
     const u32 region_tag = ActiveRegionTag();
     if (fwrite(&magic, sizeof(magic), 1, f) != 1 || fwrite(&version, sizeof(version), 1, f) != 1 ||
         fwrite(&total, sizeof(total), 1, f) != 1 || fwrite(&saved_at, sizeof(saved_at), 1, f) != 1 ||
-        fwrite(&entities_base, sizeof(entities_base), 1, f) != 1 ||
+        fwrite(s->saved_bases, sizeof(s->saved_bases), 1, f) != 1 ||
         fwrite(&region_tag, sizeof(region_tag), 1, f) != 1) {
         fprintf(stderr, "[quicksave] header write failed for %s\n", path);
         fclose(f);
@@ -447,7 +432,7 @@ static int ReadSlotFromDisk(int slot) {
         return 0;
     u32 magic = 0, version = 0, total = 0;
     u64 saved_at = 0;
-    u64 saved_entities_base = 0;
+    u64 saved_bases[NUM_REGIONS] = {0};
     if (!ReadSlotHeader(f, &magic, &version, &total, &saved_at)) {
         fprintf(stderr, "[quicksave] short read on %s header, ignoring slot file\n", path);
         fclose(f);
@@ -457,8 +442,8 @@ static int ReadSlotFromDisk(int slot) {
         fclose(f);
         return 0;
     }
-    if (fread(&saved_entities_base, sizeof(saved_entities_base), 1, f) != 1) {
-        fprintf(stderr, "[quicksave] short read on %s entity-base header, ignoring slot file\n", path);
+    if (fread(saved_bases, sizeof(saved_bases), 1, f) != 1) {
+        fprintf(stderr, "[quicksave] short read on %s region-base header, ignoring slot file\n", path);
         fclose(f);
         return 0;
     }
@@ -497,7 +482,7 @@ static int ReadSlotFromDisk(int slot) {
     }
     s->valid = 1;
     s->saved_at_unix = saved_at;
-    s->saved_entities_base = saved_entities_base;
+    memcpy(s->saved_bases, saved_bases, sizeof(saved_bases));
     return 1;
 }
 

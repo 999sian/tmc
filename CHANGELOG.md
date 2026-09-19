@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Retail/emulator saves retain their original flag layout. Old PC flag-layout
+  migration is now opt-in with `TMC_SAVE_MIGRATE_LEGACY_FLAGS=1`; use it only
+  for saves known to come from PC builds through v0.9.0. Migration requires a
+  successful `.bak` backup. `TMC_SAVE_RETAIL_LAYOUT=1` still prevents migration.
+- Profile switches retain pending saves and report failure when disk writes fail.
+- Quicksaves restore entity lists, allocation counts, auxiliary entities and
+  active item state together, including relocation between captured regions
+  after restart. Older quicksave files are incompatible and rejected; normal
+  `.sav` files are unaffected. Quicksaves still do not capture all script,
+  asset and graphics state.
+- Extra item buttons and the L-modifier require ownership in the current save.
+
 - Sitting NPC dialogue updates the intended script condition without
   overwriting wait-state fields on 64-bit PC builds.
 
