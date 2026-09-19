@@ -465,21 +465,34 @@ static void LoadEepromFile(void) {
         break;
     }
 
-    /* TMC_SAVE_RETAIL_LAYOUT=1: the file is a retail/emulator save, never shifted. */
+    /* Retail and legacy PC slots can both lack our layout stamp. Absence
+     * is not proof of the old layout: migrate flags only on explicit opt-in.
+     * Keep the existing retail override as a veto for recovery scripts. */
     const char* retailEnv = getenv("TMC_SAVE_RETAIL_LAYOUT");
-    const int shifted = (retailEnv && *retailEnv && *retailEnv != '0') ? 0 : MigrateEepromFlagLayout(sEeprom);
+    const char* legacyEnv = getenv("TMC_SAVE_MIGRATE_LEGACY_FLAGS");
+    const int migrateFlags = legacyEnv && strcmp(legacyEnv, "1") == 0 &&
+                             !(retailEnv && *retailEnv && *retailEnv != '0');
+    u8 migrated[EEPROM_SIZE];
+    memcpy(migrated, sEeprom, sizeof(migrated));
+    const int shifted = migrateFlags ? MigrateEepromFlagLayout(migrated) : 0;
 
     if (legacyRamOrder || shifted) {
         /* Keep the untouched on-disk bytes as .bak, then rewrite the file. */
         char bak[SAVE_FILENAME_MAX + 4];
         snprintf(bak, sizeof(bak), "%s.bak", sActivePath);
         const int backedUp = CopyFileBytes(sActivePath, bak);
-        if (legacyRamOrder)
-            fprintf(stderr, "[SAVE] Migrating %s to mGBA byte order (backup: %s)%s.\n", sActivePath, bak,
-                    backedUp ? "" : " — BACKUP FAILED");
+        if (!backedUp) {
+            sEepromWriteBlocked = 1;
+            fprintf(stderr, "[SAVE] Cannot back up %s; migration and writes are disabled.\n", sActivePath);
+            return;
+        }
         if (shifted)
-            fprintf(stderr, "[SAVE] migrated legacy flag layout in %d slot copies of %s (backup: %s)%s.\n", shifted,
-                    sActivePath, bak, backedUp ? "" : " — BACKUP FAILED");
+            memcpy(sEeprom, migrated, sizeof(sEeprom));
+        if (legacyRamOrder)
+            fprintf(stderr, "[SAVE] Migrating %s to mGBA byte order (backup: %s).\n", sActivePath, bak);
+        if (shifted)
+            fprintf(stderr, "[SAVE] migrated legacy flag layout in %d slot copies of %s (backup: %s).\n", shifted,
+                    sActivePath, bak);
         sEepromDirty = 1;
         FlushEepromFile();
     } else {
@@ -592,8 +605,9 @@ u16 EEPROMCompare(u16 block, const u16* src) {
 
 /* Public: invoked by port_main.c once at startup to honour the persisted
  * choice from config.json. Quietly no-ops on a missing/null path so the
- * default tmc.sav stays in effect. */
-void Port_Save_SetActivePath(const char* path) {
+ * default tmc.sav stays in effect. Returns 0 without switching if pending
+ * writes cannot be flushed; callers must not persist the requested profile. */
+int Port_Save_SetActivePath(const char* path) {
     if (path == NULL || path[0] == '\0') {
         path = DEFAULT_SAVE_FILENAME;
     } else if (!IsManagedProfilePath(path)) {
@@ -607,6 +621,10 @@ void Port_Save_SetActivePath(const char* path) {
      * first so the user doesn't lose pending writes when switching. */
     if (sEepromInited && sEepromDirty) {
         FlushEepromFile();
+        if (sEepromDirty) {
+            fprintf(stderr, "[SAVE] Profile switch refused: %s still has unsaved changes.\n", sActivePath);
+            return 0;
+        }
     }
     strncpy(sActivePath, path, sizeof(sActivePath) - 1);
     sActivePath[sizeof(sActivePath) - 1] = '\0';
@@ -619,6 +637,7 @@ void Port_Save_SetActivePath(const char* path) {
     sEepromInited = 0;
     sEepromDirty = 0;
     sEepromWriteBlocked = 0;
+    return 1;
 }
 
 const char* Port_Save_GetActivePath(void) {
