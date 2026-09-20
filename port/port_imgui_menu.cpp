@@ -1036,6 +1036,12 @@ static void DrawRibbonSavesTab(void) {
     if (ImGui::Button("Quit to Title (no save)"))
         DoQuitToTitle(false);
     ImGui::PopStyleColor(2);
+    ImGui::SameLine();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.50f, 0.20f, 0.20f, 1.0f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.25f, 0.25f, 1.0f));
+    if (ImGui::Button("Exit Game"))
+        Port_ImGui_RequestQuitModal();
+    ImGui::PopStyleColor(2);
     ImGui::Separator();
 
     /* Console-Parity — run-integrity master switch. Lives here because it
