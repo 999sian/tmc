@@ -228,11 +228,19 @@ static int TestSpoiler(void) {
     }
     if (late == UINT32_MAX)
         goto done;
-    char prefix[256];
-    const int prefix_len = snprintf(prefix, sizeof(prefix), "%-40s : ", RandoLogic_GetLocationName(late));
-    if (prefix_len <= 0 || (size_t)prefix_len >= sizeof(prefix) || strstr(generated, prefix) == NULL) {
+    if (strstr(generated, RandoLogic_GetLocationName(late)) == NULL) {
         fprintf(stderr, "rando_test: late keyed location missing from spoiler: %s\n",
                 RandoLogic_GetLocationName(late));
+        goto done;
+    }
+    char chest_line[128];
+    char ground_line[128];
+    snprintf(chest_line, sizeof(chest_line), "%-40s [area 0x03, room 0x08, chest #1] : ", "Chest_03_08_00");
+    snprintf(ground_line, sizeof(ground_line), "%-40s [area 0x00, room 0x00, ground flag 0x3C] : ",
+             "Ground_00_00_3C");
+    if (strstr(generated, chest_line) == NULL || strstr(generated, ground_line) == NULL ||
+        strstr(generated, "Hyrule Town - Swiftblade's dojo - Spin Attack lesson [Town_Dojo_NPC1] : ") == NULL) {
+        fprintf(stderr, "rando_test: spoiler missing exact physical or scripted check location\n");
         goto done;
     }
 

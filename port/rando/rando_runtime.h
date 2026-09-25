@@ -16,6 +16,7 @@
 #define PORT_RANDO_RANDO_RUNTIME_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,6 +60,9 @@ void Rando_PlayCancelSfx(void);
 /* Query a chest's localFlag by room property 3 (tile entities list).
  * Returns 0xFF if not found. */
 unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestIndex);
+/* Resolve a native chest ordinal or ground-item local flag to room-local
+ * coordinates. Small chests return tiles; big chests and ground items pixels. */
+bool Rando_Runtime_GetCheckPosition(uint32_t key, bool chest, unsigned* x, unsigned* y, bool* tile_coords);
 /* Validate Picori Chest_ ordinals and bind Ground_ flags to the active ROM.
  * Call after parsing, before Rando_Keymap_Apply. Missing pickup keys reject
  * the seed. */

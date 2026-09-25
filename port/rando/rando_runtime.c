@@ -282,6 +282,81 @@ unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestInd
     return 0xFF;
 }
 
+bool Rando_Runtime_GetCheckPosition(uint32_t key, bool chest, unsigned* x, unsigned* y, bool* tile_coords) {
+    if (x == NULL || y == NULL || tile_coords == NULL || (key & 0xFF000000u) != 0)
+        return false;
+
+    unsigned area = (key >> 16) & 0xFFu;
+    unsigned room = (key >> 8) & 0xFFu;
+    unsigned index = key & 0xFFu;
+    if (area >= 0x90u || room >= MAX_ROOMS)
+        return false;
+
+    if (chest) {
+        const TileEntity* tiles = (const TileEntity*)GetRoomProperty(area, room, 3);
+        if (tiles == NULL)
+            return false;
+        unsigned ordinal = 0;
+        for (unsigned i = 0; i < 256 && tiles[i].type != 0; ++i) {
+            if (tiles[i].type != SMALL_CHEST && tiles[i].type != BIG_CHEST)
+                continue;
+            if (ordinal++ == index) {
+                if (tiles[i].type == BIG_CHEST) {
+                    *x = tiles[i].tilePos;
+                    *y = (unsigned)tiles[i]._6 | ((unsigned)tiles[i]._7 << 8);
+                    *tile_coords = false;
+                } else {
+                    *x = tiles[i].tilePos & 0x3Fu;
+                    *y = (tiles[i].tilePos >> 6) & 0x3Fu;
+                    *tile_coords = true;
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (index == 0 || index == 0xFFu)
+        return false;
+    /* Smith's two floor rewards are created at room load, not in ROM data. */
+    if (area == 0x22u && room == 0x11u) {
+        unsigned first_flag = 0xE0u, second_flag = 0xE1u;
+#if defined(PC_PORT) && defined(MULTI_REGION)
+        first_flag = Port_RemapBaselineLocalFlag(GetFlagBankOffset(area), first_flag);
+        second_flag = Port_RemapBaselineLocalFlag(GetFlagBankOffset(area), second_flag);
+#endif
+        if (index == first_flag || index == second_flag) {
+            *x = index == first_flag ? 0x60u : 0x80u;
+            *y = 0x48u;
+            *tile_coords = false;
+            return true;
+        }
+    }
+    bool found = false;
+    unsigned found_x = 0, found_y = 0;
+    for (unsigned property = 0; property < 3; ++property) {
+        const EntityData* entities = (const EntityData*)GetRoomProperty(area, room, property);
+        if (entities == NULL)
+            continue;
+        for (unsigned i = 0; i < 512 && entities[i].kind != 0xFF; ++i) {
+            if ((entities[i].kind & 0x0Fu) != OBJECT || entities[i].id != GROUND_ITEM ||
+                ((entities[i].spritePtr >> 16) & 0xFFu) != index)
+                continue;
+            if (found && (found_x != entities[i].xPos || found_y != entities[i].yPos))
+                return false;
+            found = true;
+            found_x = entities[i].xPos;
+            found_y = entities[i].yPos;
+        }
+    }
+    if (!found)
+        return false;
+    *x = found_x;
+    *y = found_y;
+    *tile_coords = false;
+    return true;
+}
+
 /* Picori location keys use the same chest ordinal / ground flag that the
  * pickup hooks emit. Check them against the active ROM before rolling a seed. */
 bool Rando_Runtime_BindLogicChests(void) {

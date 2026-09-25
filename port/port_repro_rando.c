@@ -172,6 +172,18 @@ static int run_logic_key_path(void) {
         free(reloaded_spoiler);
         return 0;
     }
+    const char* smith_row = strstr(spoiler, "Smith_Floor_Item1");
+    const char* smith_end = smith_row ? strchr(smith_row, '\n') : NULL;
+    const char* smith_position = smith_row ? strstr(smith_row, "room pixel (96,72)") : NULL;
+    if (strstr(spoiler, "Hyrule Field; area 0x03, room 0x08, chest #1") == NULL ||
+        strstr(spoiler, "room tile (") == NULL || strstr(spoiler, "room pixel (") == NULL ||
+        strstr(spoiler, "Hyrule Town - Swiftblade's dojo - Spin Attack lesson") == NULL ||
+        smith_end == NULL || smith_position == NULL || smith_position >= smith_end) {
+        fprintf(stderr, "[rando-repro] FAIL: spoiler lacks exact check locations\n");
+        free(spoiler);
+        free(reloaded_spoiler);
+        return 0;
+    }
     if (!Port_RandoSave_SaveActiveSlot(0)) {
         fprintf(stderr, "[rando-repro] FAIL: Picori sidecar save failed\n");
         free(spoiler);

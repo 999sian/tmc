@@ -38,7 +38,9 @@ To start a seed, press **L** on the file screen, enable **Randomizer Mode**, the
 select an empty save slot. The new-file setup offers **Generate & Start**.
 For an active seed, open **F8 → Randomizer → Spoiler log** to view or copy its
 placements. **Save .txt** writes the full log to a `spoilers/` folder beside
-the active save profile. The log is rebuilt when a randomizer save is loaded.
+the active save profile. Chest and ground entries include the area, room, and
+room-local tile or pixel position; scripted rewards name the NPC, shop, or
+lesson. The log is rebuilt when a randomizer save is loaded.
 
 Progressive sword, bow, boomerang, shield, and scroll awards are disabled in
 this native profile because their upgrade behavior is not implemented. A
