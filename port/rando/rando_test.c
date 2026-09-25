@@ -1,5 +1,6 @@
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
+#include "rando/rando_save.h"
 #include "item_ids.h"
 #include <stdint.h>
 #include <stdio.h>
@@ -17,13 +18,45 @@ static unsigned default_check_count;
 static bool gate_owns_mitts;
 
 const char* Port_Save_GetActivePath(void) {
-    return "rando_test.sav";
+    const char* path = getenv("TMC_RANDO_TEST_SAVE");
+    return path != NULL ? path : "rando_test.sav";
 }
 
 static int IsShuffledReward(RandoLogicLocationType type) {
     return type == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE || type == RANDO_LOGIC_LOCATION_MAJOR ||
            type == RANDO_LOGIC_LOCATION_DUNGEON || type == RANDO_LOGIC_LOCATION_ANY ||
            type == RANDO_LOGIC_LOCATION_MINOR;
+}
+
+static int TestBuiltInRuleCompatibility(void) {
+    struct ExpectedLocation {
+        uint32_t index;
+        const char* name;
+        uint32_t key;
+    } expected[] = {
+        {0, "StartSword", UINT32_MAX},
+        {23, "Chest_03_08_00", 0x030800u},
+        {65, "Chest_19_00_00", 0x190000u},
+        {100, "Chest_30_00_01", 0x300001u},
+        {214, "Ground_00_00_3C", 0x00003cu},
+        {325, "SouthField_Tingle_NPC", UINT32_MAX},
+    };
+    RandoLogic_ClearOverrides();
+    if (!RandoLogic_LoadBuiltIn() || RandoLogic_GetLocationCountRaw() != 326 ||
+        RandoLogic_SourceFingerprint() != UINT64_C(0x37ea4d0a0957c8e4)) {
+        fprintf(stderr, "rando_test: built-in rule version changed\n");
+        return 0;
+    }
+    for (size_t i = 0; i < sizeof(expected) / sizeof(expected[0]); ++i) {
+        const struct ExpectedLocation* loc = &expected[i];
+        if (strcmp(RandoLogic_GetLocationName(loc->index), loc->name) != 0 ||
+            RandoLogic_GetLocationKeyAt(loc->index) != loc->key) {
+            fprintf(stderr, "rando_test: saved rule location %u changed\n", loc->index);
+            return 0;
+        }
+    }
+    RandoLogic_Reset();
+    return 1;
 }
 
 static int TestLogicSeed(void) {
@@ -35,7 +68,7 @@ static int TestLogicSeed(void) {
 
     size_t count = Rando_GetLocationCount();
     uint64_t fingerprint = Rando_GetLogicFingerprint();
-    if (count <= RANDO_LOCATION_COUNT || count > RANDO_LOGIC_MAX_LOCATIONS || fingerprint == 0)
+    if (count != 326 || fingerprint != UINT64_C(0x799dfc903d9bf3fd))
         return 0;
     memcpy(first_items, Rando_GetRandomizedItemTable(), count * sizeof(first_items[0]));
     memcpy(first_subtypes, Rando_GetRandomizedItemSubtypeTable(), count);
@@ -100,7 +133,7 @@ static int TestRestoredOverridesDoNotLeak(void) {
         Rando_GetLocationCount() != count || Rando_GetLogicFingerprint() != clean_fingerprint ||
         memcmp(first_items, Rando_GetRandomizedItemTable(), count * sizeof(first_items[0])) != 0 ||
         memcmp(first_subtypes, Rando_GetRandomizedItemSubtypeTable(), count) != 0) {
-        fprintf(stderr, "rando_test: restored parser overrides leaked into new seed\n");
+        fprintf(stderr, "rando_test: restored rule overrides leaked into new seed\n");
         return 0;
     }
     Rando_Reset();
@@ -274,10 +307,24 @@ static int TestLegacyTable(void) {
 }
 
 int main(void) {
-    if (!TestLogicSeed() || !TestHyliaDigGate() || !TestRestoredOverridesDoNotLeak() || !TestItemPools() ||
+    if (!TestBuiltInRuleCompatibility() || !TestLogicSeed() || !TestHyliaDigGate() || !TestRestoredOverridesDoNotLeak() || !TestItemPools() ||
         !TestObscureLocations() || !TestSpoiler() || !TestUnsupportedModes() || !TestLegacyTable()) {
         fprintf(stderr, "rando_test: FAIL\n");
         return 1;
+    }
+    if (getenv("TMC_RANDO_TEST_SAVE") != NULL) {
+        int loaded = 0;
+        for (int slot = 0; slot < 3; ++slot) {
+            if (Port_RandoSave_LoadSlot(slot)) {
+                ++loaded;
+                Rando_Reset();
+            }
+        }
+        if (loaded == 0) {
+            fprintf(stderr, "rando_test: no saved randomizer slot could be loaded\n");
+            return 1;
+        }
+        fprintf(stderr, "rando_test: loaded %d existing randomizer slot(s)\n", loaded);
     }
     fprintf(stderr, "ALL TESTS PASS\n");
     return 0;

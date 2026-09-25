@@ -2,8 +2,8 @@
  * port/rando/rando.cpp — fixed-array graph randomizer for Project Picori.
  *
  * Derived from the GPL-3.0 Minish Cap randomizer (MinishMaker,
- * minishmaker/randomizer): shares its .logic format and randomization
- * behaviour. Distributed under the GPL-3.0; see THIRD-PARTY-LICENSES.md.
+ * minishmaker/randomizer): placement algorithm provenance is documented in
+ * THIRD-PARTY-LICENSES.md. Distributed under the GPL-3.0.
  */
 
 #include "rando.h"
@@ -3307,7 +3307,7 @@ extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed, const RandomizerSetting
         local.shuffle_dungeon_items || local.accessibility != RANDO_ACCESS_GOAL)
         return RANDO_BAD_SETTINGS;
 
-    /* A loaded save owns its parser overrides. Start a new roll from the
+    /* A loaded save owns its rule overrides. Start a new roll from the
      * selected PC settings, while ordinary rerolls keep deliberate UI edits. */
     if (sRestoredSeed)
         Rando_Reset();
@@ -3325,7 +3325,7 @@ extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed, const RandomizerSetting
     RandoLogic_SetOverride("ITEM_POOL", local.item_difficulty == RANDO_ITEM_POOL_HARD ? "ITEM_POOL_RIP" :
                                         local.item_difficulty == RANDO_ITEM_POOL_CHAOS ? "ITEM_POOL_PLENTIFUL" :
                                                                                           "ITEM_POOL_NORMAL");
-    if (!RandoLogic_LoadDefaultFiles()) {
+    if (!RandoLogic_LoadBuiltIn()) {
         Rando_Reset();
         return RANDO_BAD_SETTINGS;
     }
@@ -3376,7 +3376,7 @@ extern "C" void Rando_Reset(void) {
     sRestoredSeed = false;
     RandoLogic_ClearOverrides();
     if (RandoLogic_IsLoaded())
-        RandoLogic_Reparse();
+        RandoLogic_Rebuild();
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         randomized_item_table[i] = kLocations[i].vanilla_item;
         randomized_item_subtype_table[i] = 0;

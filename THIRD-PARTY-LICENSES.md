@@ -16,7 +16,7 @@ reproduced/redistributed here under their respective licenses.
 > - **agbplay** (LGPL-3.0) is linked into `tmc_pc` in relinkable form.
 > - The in-game randomizer under `port/rando/` is **derived from** the GPL-3.0
 >   Minish Cap randomizer (`minishmaker/randomizer`): it shares that project's
->   `.logic` text format and reproduces its randomization behaviour. It is
+>   placement approach and reproduces its randomization behaviour. It is
 >   treated as a derivative work, distributed here under the GPL-3.0 with
 >   attribution.
 > - The optional *Minish Cap Reborn*-parity quality-of-life features are
@@ -29,7 +29,7 @@ reproduced/redistributed here under their respective licenses.
 | Component | Path | Upstream | License | Linkage |
 |-----------|------|----------|---------|---------|
 | **agbplay** (agbplay_core) | `libs/agbplay_core` | https://github.com/ipatix/agbplay | **LGPL-3.0** | Linked into `tmc_pc` in relinkable form. See `libs/agbplay_core/LICENSE`. |
-| **Minish Cap randomizer** | `port/rando` (derived) | https://github.com/MinishMaker/randomizer | **GPL-3.0** | `port/rando/` derives from it (shared `.logic` format + randomization behaviour); distributed under GPL-3.0 with attribution. |
+| **Minish Cap randomizer** | `port/rando` (derived) | https://github.com/MinishMaker/randomizer | **GPL-3.0** | `port/rando/` retains derived placement behavior; distributed under GPL-3.0 with attribution. |
 | **The Minish Cap Reborn** | QoL parity hooks (derived) | https://github.com/Admentus64/The-Minish-Cap-Reborn | **GPL-3.0** | QoL features ported from it (see `docs/reborn-parity.md`); distributed under GPL-3.0 with attribution. |
 
 ## Permissively-licensed components

@@ -1,7 +1,7 @@
 /*
  * Area-music shuffle runtime (MUSIC_RANDO). See rando_music.h.
  *
- * Id space: the .logic's Items.Music.0xNN subtypes are the engine's own
+ * Id space: the rules' Items.Music.0xNN subtypes are the engine's own
  * Sound-enum song ids (0x01 BGM_CASTLE_TOURNAMENT .. 0x3b BGM_WIND_RUINS,
  * include/sound.h); no translation table is needed. Valid BGM ids are
  * 1..NUM_BGM (the SoundReq BGM block; 0 is SFX_NONE, NUM_BGM+1.. are SFX).
