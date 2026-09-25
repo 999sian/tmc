@@ -41,7 +41,7 @@ void Port_RandoFileMenu_RandomizeSeed(void);
  * post-roll fingerprint). */
 uint32_t Port_RandoFileMenu_Fingerprint(void);
 
-/* Built-in graph mode (no .logic file loaded). */
+/* Fresh Picori profile settings. Unsupported choices are normalized before generation. */
 bool* Port_RandoFileMenu_GlitchlessLogic(void);
 bool* Port_RandoFileMenu_ObscureLocations(void);
 bool* Port_RandoFileMenu_ShuffleKinstones(void);
@@ -63,10 +63,8 @@ int* Port_RandoFileMenu_Accessibility(void); /* RandoAccessibility */
 void Port_RandoFileMenu_CommitAndStart(void);
 void Port_RandoFileMenu_Cancel(void);
 
-/* Persistence (issue #155): settings + .logic overrides survive restarts
- * via config.json. Restore is called once at startup after
- * RandoLogic_LoadDefaultFiles(); Persist is also called by the ImGui
- * override-mutation paths (setting rows, presets, cosmetics). */
+/* UI settings persist to config.json; active seed overrides are kept in the
+ * save sidecar. Restore also reapplies cosmetics for an active seed. */
 void Port_RandoFileMenu_RestorePersistedSettings(void);
 void Port_RandoFileMenu_PersistLogicOverrides(void);
 

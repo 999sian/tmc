@@ -15,6 +15,7 @@
 #include "pauseMenu.h"
 #include "windcrest.h"
 #include "main.h"
+#include "object.h"
 #include "rando/rando.h"
 #include "rando/rando_logic.h"
 #include "rando/rando_runtime.h"
@@ -281,84 +282,90 @@ unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestInd
     return 0xFF;
 }
 
-/* The public .logic format numbers the raw TileEntity records in a room.
- * Pickup hooks instead number only chest records, so resolve every direct
- * three-part key against the active region's room data before generation. */
+/* Picori location keys use the same chest ordinal / ground flag that the
+ * pickup hooks emit. Check them against the active ROM before rolling a seed. */
 bool Rando_Runtime_BindLogicChests(void) {
     if (!RandoLogic_IsLoaded())
         return false;
 
     unsigned bound = 0;
     unsigned failed = 0;
-    /* Chest-only ordinals never exceed the raw TileEntity index. Remap lower
-     * raw indexes first so the parser's duplicate-key guard does not mistake
-     * another chest's still-unconverted raw key for a final-key collision. */
-    for (unsigned rawOrder = 0; rawOrder < 256; ++rawOrder) {
-        for (uint32_t location = 0; location < RandoLogic_GetLocationCountRaw(); ++location) {
-            uint32_t rawKey = RandoLogic_GetLocationKeyAt(location);
-            if (rawKey == UINT32_MAX || (rawKey & 0xFF000000u) != 0 || (rawKey & 0xFFu) != rawOrder)
-                continue;
+    static uint16_t ground_locations[RANDO_LOGIC_MAX_LOCATIONS];
+    static uint32_t ground_keys[RANDO_LOGIC_MAX_LOCATIONS];
+    unsigned ground_count = 0;
+    for (uint32_t location = 0; location < RandoLogic_GetLocationCountRaw(); ++location) {
+        const char* name = RandoLogic_GetLocationName(location);
+        bool chest = strncmp(name, "Chest_", 6) == 0;
+        bool ground = strncmp(name, "Ground_", 7) == 0;
+        if (!chest && !ground)
+            continue;
 
-            const char* name = RandoLogic_GetLocationName(location);
-            RandoLogicLocationType type = RandoLogic_GetLocationType(location);
-            unsigned area = (rawKey >> 16) & 0xFFu;
-            unsigned room = (rawKey >> 8) & 0xFFu;
-            unsigned rawIndex = rawKey & 0xFFu;
-            unsigned targetFlag = 0x100u;
-            unsigned targetTilePos = 0x10000u;
-            int expectedOrdinal = -1;
+        uint32_t key = RandoLogic_GetLocationKeyAt(location);
+        unsigned area = (key >> 16) & 0xFFu;
+        unsigned room = (key >> 8) & 0xFFu;
+        unsigned index = key & 0xFFu;
+        bool valid = key != UINT32_MAX && (key & 0xFF000000u) == 0 && area < 0x90u && room < MAX_ROOMS;
 
-            /* Town's raw positions and local flags vary by region. Identify
-             * these two chests by their map tiles. */
-            if (strcmp(name, "Town_Inn_LedgeChest") == 0)
-                targetTilePos = 0x836u;
-            else if (strcmp(name, "Town_School_Roof_Chest") == 0)
-                targetTilePos = 0x16Du;
-
-            if (area < 0x90u && room < MAX_ROOMS) {
-                const TileEntity* tiles = (const TileEntity*)GetRoomProperty(area, room, 3);
-                if (tiles != NULL) {
-                    int ordinal = 0;
-                    for (unsigned i = 0; i < 256 && tiles[i].type != NONE; ++i) {
-                        bool chest = tiles[i].type == SMALL_CHEST || tiles[i].type == BIG_CHEST;
-                        bool selected = targetTilePos <= 0xFFFFu ?
-                            (chest && tiles[i].tilePos == targetTilePos) : (i == rawIndex && chest);
-                        if (selected) {
-                            /* Duplicate local flags cannot distinguish the two
-                             * pickups in Rando_RoomChestIndex. */
-                            if (expectedOrdinal >= 0) {
-                                expectedOrdinal = -1;
-                                break;
-                            }
-                            expectedOrdinal = ordinal;
-                            targetFlag = tiles[i].localFlag;
+        if (valid && chest) {
+            unsigned flag = Rando_GetChestLocalFlag(area, room, index);
+            valid = flag != 0 && flag != 0xFFu && Rando_RoomChestIndex(area, room, flag) == (int)index;
+        } else if (valid && ground) {
+            unsigned named_area = 0, named_room = 0, baseline_flag = 0;
+            valid = valid && sscanf(name, "Ground_%x_%x_%x", &named_area, &named_room, &baseline_flag) == 3 &&
+                    named_area == area && named_room == room && baseline_flag > 0 && baseline_flag < 0x100u;
+            unsigned flag = baseline_flag;
+#if defined(PC_PORT) && defined(MULTI_REGION)
+            if (valid)
+                flag = Port_RemapBaselineLocalFlag(GetFlagBankOffset(area), flag);
+#endif
+            valid = valid && flag > 0 && flag < 0x100u;
+            if (valid) {
+                bool found = false;
+                for (unsigned property = 0; property < 3 && !found; ++property) {
+                    const EntityData* entities = (const EntityData*)GetRoomProperty(area, room, property);
+                    if (entities == NULL)
+                        continue;
+                    for (unsigned i = 0; i < 512 && entities[i].kind != 0xFF; ++i) {
+                        if ((entities[i].kind & 0x0Fu) == OBJECT && entities[i].id == GROUND_ITEM &&
+                            ((entities[i].spritePtr >> 16) & 0xFFu) == flag) {
+                            found = true;
+                            break;
                         }
-                        if (chest)
-                            ++ordinal;
                     }
                 }
-            }
-
-            int chestOrdinal = expectedOrdinal >= 0 ? Rando_RoomChestIndex(area, room, targetFlag) : -1;
-            if (chestOrdinal == expectedOrdinal && chestOrdinal >= 0 && chestOrdinal <= 0xFF) {
-                uint32_t runtimeKey = (area << 16) | (room << 8) | (unsigned)chestOrdinal;
-                if (RandoLogic_SetRuntimeKeyAt(location, runtimeKey)) {
-                    ++bound;
-                    continue;
+                valid = found && ground_count < RANDO_LOGIC_MAX_LOCATIONS;
+                if (valid) {
+                    ground_locations[ground_count] = (uint16_t)location;
+                    ground_keys[ground_count++] = (area << 16) | (room << 8) | flag;
                 }
             }
-
-            /* An unshuffled location has no generated reward to lose. Every
-             * active shuffled direct chest must bind or generation must stop. */
-            if (type != RANDO_LOGIC_LOCATION_UNSHUFFLED &&
-                type != RANDO_LOGIC_LOCATION_UNSHUFFLED_PRIZE) {
-                fprintf(stderr, "[RANDO] chest key bind failed: %s (raw %02X-%02X-%02X)\n",
-                        name, area, room, rawIndex);
+        }
+        if (valid && chest)
+            ++bound;
+        else if (!valid) {
+            fprintf(stderr, "[RANDO] native check unavailable: %s (%02X-%02X-%02X)\n",
+                    name, area, room, index);
+            ++failed;
+        }
+    }
+    if (failed == 0) {
+        /* Move all ground keys out of the 24-bit namespace first. A regional
+         * flag remap can permute two flags in the same room; replacing them
+         * one at a time would report a false collision. */
+        for (unsigned i = 0; i < ground_count; ++i) {
+            if (!RandoLogic_SetRuntimeKeyAt(ground_locations[i], 0x7F000000u | ground_locations[i]))
                 ++failed;
+        }
+        if (failed == 0) {
+            for (unsigned i = 0; i < ground_count; ++i) {
+                if (RandoLogic_SetRuntimeKeyAt(ground_locations[i], ground_keys[i]))
+                    ++bound;
+                else
+                    ++failed;
             }
         }
     }
-    fprintf(stderr, "[RANDO] chest keys: bound %u, failed %u\n", bound, failed);
+    fprintf(stderr, "[RANDO] native keys: validated %u, failed %u\n", bound, failed);
     return failed == 0;
 }
 

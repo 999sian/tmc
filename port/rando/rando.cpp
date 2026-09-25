@@ -3078,6 +3078,7 @@ static RandoStatus ActivateLogicSeed(uint64_t seed, const RandomizerSettings* se
         fingerprint == 0 || fingerprint != RandoLogic_SourceFingerprint() ||
         count != RandoLogic_GetLocationCountRaw())
         return RANDO_BAD_SETTINGS;
+    size_t shuffled_checks = 0;
     for (size_t i = 0; i < count; ++i) {
         RandoLogicLocationType type = RandoLogic_GetLocationType((uint32_t)i);
         if (type == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE || type == RANDO_LOGIC_LOCATION_MAJOR ||
@@ -3089,7 +3090,13 @@ static RandoStatus ActivateLogicSeed(uint64_t seed, const RandomizerSettings* se
                 fprintf(stderr, "[RANDO] no native award source for %s\n", RandoLogic_GetLocationName((uint32_t)i));
                 return RANDO_BAD_SETTINGS;
             }
+            ++shuffled_checks;
         }
+    }
+    if (shuffled_checks < 259) {
+        fprintf(stderr, "[RANDO] only %zu keyed shuffled checks; Picori rules require at least 259\n",
+                shuffled_checks);
+        return RANDO_BAD_SETTINGS;
     }
     extern void Rando_Music_ClearAssignments(void);
     Rando_Music_ClearAssignments();
@@ -3202,7 +3209,8 @@ extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed, const RandomizerSetting
     if (local.item_difficulty < RANDO_ITEM_POOL_NORMAL || local.item_difficulty >= RANDO_ITEM_POOL_COUNT) {
         return RANDO_BAD_SETTINGS;
     }
-    if (!local.glitchless_logic || !local.shuffle_kinstones)
+    if (!local.glitchless_logic || !local.shuffle_kinstones || local.shuffle_entrances ||
+        local.shuffle_dungeon_items || local.accessibility != RANDO_ACCESS_GOAL)
         return RANDO_BAD_SETTINGS;
 
     /* A loaded save owns its parser overrides. Start a new roll from the
@@ -3213,49 +3221,16 @@ extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed, const RandomizerSetting
     if (seed == 0)
         seed = ChooseAutoSeed();
 
-    /* Native saves keep the old graph; fresh seeds use the bundled upstream
-     * logic. Progressive awards need their own native item behavior, so this
-     * first PC profile explicitly selects upstream's nonprogressive pools. */
-    static const char* const kProgressiveFlags[] = {
-        "YES_SWORD_PROG", "YES_BOW_PROG", "YES_BOOM_PROG", "YES_SHIELD_PROG", "YES_SCROLL_PROG",
-    };
-    for (const char* flag : kProgressiveFlags) {
-        bool set = false;
-        for (uint32_t i = 0; i < RandoLogic_GetOverrideCount(); ++i) {
-            const char* name = NULL;
-            if (RandoLogic_GetOverride(i, &name, NULL) && name != NULL && strcmp(name, flag) == 0) {
-                set = true;
-                break;
-            }
-        }
-        if (!set)
-            RandoLogic_SetOverride(flag, "false");
-    }
-    /* The Obscure control enables four extra pickup pools.
-     * Write all four on every roll so a previous seed cannot leave stale
-     * values behind when this setting changes. */
-    static const char* const kObscureFlags[] = {
-        "RUPEEMANIA", "SPECIALPOTS", "DIGGING", "UNDERWATER",
-    };
-    for (const char* flag : kObscureFlags)
-        RandoLogic_SetOverride(flag, local.obscure_locations ? "true" : "false");
+    /* Fresh seeds use only options declared by Picori's ruleset. */
+    RandoLogic_SetOverride("RUPEEMANIA", local.obscure_locations ? "true" : "false");
     RandoLogic_SetOverride("START_SMITH_SWORD", local.start_sword ? "true" : "false");
     RandoLogic_SetOverride("ACCESSIBILITY", local.accessibility == RANDO_ACCESS_ALL_LOCATIONS ? "ACCESS_LOCATIONS" :
                                                 local.accessibility == RANDO_ACCESS_ALL_NONKEYS ? "ACCESS_INVENTORY" :
                                                                                                   "ACCESS_BEATABLE");
-    RandoLogic_SetOverride("OPENWORLD", local.open_world ? "OPENWORLD_ON" : "OPENWORLD_OFF");
-    RandoLogic_SetOverride("ENTRANCES", local.shuffle_entrances ? "ENTRANCES_COUPLED" : "ENTRANCES_VANILLA");
     RandoLogic_SetOverride("DOJO", local.shuffle_dojos ? "DOJOANY" : "DOJOVANILLA");
     RandoLogic_SetOverride("ITEM_POOL", local.item_difficulty == RANDO_ITEM_POOL_HARD ? "ITEM_POOL_RIP" :
                                         local.item_difficulty == RANDO_ITEM_POOL_CHAOS ? "ITEM_POOL_PLENTIFUL" :
                                                                                           "ITEM_POOL_NORMAL");
-    RandoLogic_SetOverride("SMALL_KEYS_SETTING", local.shuffle_dungeon_items ? "SMALL_KEYSANITY" :
-                                                                         "SMALL_KEYS_STANDARD");
-    RandoLogic_SetOverride("BIG_KEYS_SETTING", local.shuffle_dungeon_items ? "BIG_KEYSANITY" :
-                                                                       "BIG_KEYS_STANDARD");
-    RandoLogic_SetOverride("MAP_SETTING", local.shuffle_dungeon_items ? "MAP_KEYSANITY" : "MAP_STANDARD");
-    RandoLogic_SetOverride("COMPASS_SETTING", local.shuffle_dungeon_items ? "COMPASS_KEYSANITY" :
-                                                                      "COMPASS_STANDARD");
     if (!RandoLogic_LoadDefaultFiles()) {
         Rando_Reset();
         return RANDO_BAD_SETTINGS;

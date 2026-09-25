@@ -50,6 +50,7 @@ static int sEnabledCached = -1;
 static bool sRandoOptionEnabled = false;
 static bool sRandoOptionLoaded = false;
 static bool sShowSidebar = false;
+static bool sSidebarSettingsPrepared = false;
 static uint64_t sQuickSeedCounter = 0x853c49e6748fea9bull;
 static bool sQuickSeedSeeded = false;
 
@@ -175,7 +176,39 @@ static uint64_t CurrentSeedValue(void) {
     return Rando_SeedFromString(sMenu.seed_text);
 }
 
+static void NormalizeSupportedSettings(void) {
+    /* Fresh Picori rules require these choices. Old config.json values can
+     * predate the ruleset, so never pass them to generation or persist them. */
+    sMenu.glitchless_logic = true;
+    sMenu.shuffle_kinstones = true;
+    sMenu.shuffle_entrances = false;
+    sMenu.shuffle_dungeon_items = false;
+    sMenu.tricks = 0;
+    sMenu.accessibility = RANDO_ACCESS_GOAL;
+}
+
+static void LoadMenuSettingsFromConfig(void) {
+    sMenu.glitchless_logic = Port_Config_GetRandoGlitchless();
+    sMenu.obscure_locations = Port_Config_GetRandoObscure();
+    sMenu.shuffle_kinstones = Port_Config_GetRandoKinstones();
+    sMenu.shuffle_entrances = Port_Config_GetRandoEntrances();
+    sMenu.shuffle_dojos = Port_Config_GetRandoDojos();
+    sMenu.open_world = Port_Config_GetRandoOpenWorld();
+    Port_RandoFileMenu_SetDifficulty(Port_Config_GetRandoItemPool());
+    sMenu.homewarp = Port_Config_GetRandoHomewarp();
+    sMenu.start_sword = Port_Config_GetRandoStartSword();
+    sMenu.early_crests = Port_Config_GetRandoEarlyCrests();
+    sMenu.instant_text = Port_Config_GetRandoInstantText();
+    sMenu.tunic_color = Port_Config_GetRandoTunicColor();
+    sMenu.heart_color = Port_Config_GetRandoHeartColor();
+    sMenu.tricks = Port_Config_GetRandoTricks();
+    sMenu.accessibility = Port_Config_GetRandoAccessibility();
+    sMenu.shuffle_dungeon_items = Port_Config_GetRandoDungeonItems();
+    NormalizeSupportedSettings();
+}
+
 static void PersistMenuSettings(void) {
+    NormalizeSupportedSettings();
     Port_Config_SetRandoSettings(sMenu.glitchless_logic, sMenu.obscure_locations, sMenu.shuffle_kinstones,
                                  sMenu.shuffle_entrances, sMenu.shuffle_dojos, sMenu.open_world, (int)sMenu.difficulty,
                                  sMenu.homewarp, sMenu.start_sword, sMenu.early_crests, sMenu.instant_text,
@@ -186,6 +219,7 @@ static void PersistMenuSettings(void) {
 }
 
 static RandomizerSettings BuildMenuSettings(void) {
+    NormalizeSupportedSettings();
     RandomizerSettings settings = Rando_DefaultSettings();
     settings.tricks = (uint32_t)sMenu.tricks;
     settings.accessibility = (RandoAccessibility)sMenu.accessibility;
@@ -227,10 +261,11 @@ void Port_RandoFileMenu_CommitAndStart(void) {
         }
         sMenu.status[0] = '\0';
         sMenu.open = false;
+        sShowSidebar = false;
+        sSidebarSettingsPrepared = false;
         Port_FileSelectRando_StartSlot(sMenu.save_slot);
     } else if (result == RANDO_BAD_SETTINGS) {
-        SDL_snprintf(sMenu.status, sizeof(sMenu.status),
-                     "Unsupported option: use Glitchless logic and Kinstones for this PC profile.");
+        SDL_snprintf(sMenu.status, sizeof(sMenu.status), "Rules unavailable or unsupported settings.");
     } else {
         SDL_snprintf(sMenu.status, sizeof(sMenu.status), "Seed failed logic verification; try another seed.");
     }
@@ -277,6 +312,11 @@ void Port_RandoFileMenu_SetRandoOptionEnabled(bool enabled) {
         Port_Config_SetRandoAccessibility((int)defaults.accessibility);
         Port_Config_SetRandoDungeonItems(defaults.shuffle_dungeon_items);
     }
+    if (sShowSidebar && !sMenu.open) {
+        memset(&sMenu, 0, sizeof(sMenu));
+        LoadMenuSettingsFromConfig();
+        sSidebarSettingsPrepared = true;
+    }
 }
 
 void Port_RandoFileMenu_RestorePersistedSettings(void) {
@@ -289,28 +329,16 @@ void Port_RandoFileMenu_PersistLogicOverrides(void) {
 }
 
 void Port_RandoFileMenu_Open(int save_slot) {
-    memset(&sMenu, 0, sizeof(sMenu));
+    if (!sShowSidebar || !sSidebarSettingsPrepared) {
+        memset(&sMenu, 0, sizeof(sMenu));
+        LoadMenuSettingsFromConfig();
+    }
+    sMenu.status[0] = '\0';
     sMenu.open = true;
     sMenu.save_slot = save_slot;
-    sMenu.glitchless_logic = Port_Config_GetRandoGlitchless();
-    sMenu.obscure_locations = Port_Config_GetRandoObscure();
-    sMenu.shuffle_kinstones = Port_Config_GetRandoKinstones();
-    sMenu.shuffle_entrances = Port_Config_GetRandoEntrances();
-    sMenu.shuffle_dojos = Port_Config_GetRandoDojos();
-    sMenu.open_world = Port_Config_GetRandoOpenWorld();
-    Port_RandoFileMenu_SetDifficulty(Port_Config_GetRandoItemPool());
-    sMenu.homewarp = Port_Config_GetRandoHomewarp();
-    sMenu.start_sword = Port_Config_GetRandoStartSword();
-    sMenu.early_crests = Port_Config_GetRandoEarlyCrests();
-    sMenu.instant_text = Port_Config_GetRandoInstantText();
-    sMenu.tunic_color = Port_Config_GetRandoTunicColor();
-    sMenu.heart_color = Port_Config_GetRandoHeartColor();
-    sMenu.tricks = Port_Config_GetRandoTricks();
-    sMenu.accessibility = Port_Config_GetRandoAccessibility();
-    sMenu.shuffle_dungeon_items = Port_Config_GetRandoDungeonItems();
-    /* Leave the seed empty (zeroed by the memset above) so Generate rolls a
-     * fresh random seed by default, matching the F8 tab. A fixed default made
-     * every untouched file the same world. */
+    NormalizeSupportedSettings();
+    /* A new modal starts with a blank seed unless the player entered one in
+     * the sidebar. An empty seed rolls randomly during Generate. */
 }
 
 void Port_RandoFileMenu_Close(void) {
@@ -331,9 +359,19 @@ bool Port_RandoFileMenu_IsSidebarOpen(void) {
 }
 
 void Port_RandoFileMenu_SetSidebarOpen(bool open) {
+    if (open == sShowSidebar)
+        return;
+    if (open && !sMenu.open) {
+        memset(&sMenu, 0, sizeof(sMenu));
+        LoadMenuSettingsFromConfig();
+        sSidebarSettingsPrepared = true;
+    } else if (!open && !sMenu.open && sSidebarSettingsPrepared) {
+        PersistMenuSettings();
+        sSidebarSettingsPrepared = false;
+    }
     sShowSidebar = open;
 }
 
 void Port_RandoFileMenu_ToggleSidebar(void) {
-    sShowSidebar = !sShowSidebar;
+    Port_RandoFileMenu_SetSidebarOpen(!sShowSidebar);
 }
