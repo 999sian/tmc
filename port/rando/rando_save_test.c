@@ -1,6 +1,7 @@
 /* Run: cc -std=c11 -D_DEFAULT_SOURCE -Iport -Iinclude \
  *      port/rando/rando_save_test.c -o /tmp/rando_save_test && /tmp/rando_save_test
- * Exercises the actual sidecar loader against v6/v7 records and v8 logic seeds. */
+ * Exercises the actual sidecar loader against v6/v7 records and v8 logic seeds,
+ * including rejection of saves from a replaced ruleset. */
 #include <assert.h>
 #include <stdlib.h>
 
@@ -237,7 +238,7 @@ static void CheckLogicSeed(void) {
     assert(sSettings.start_sword && sParserOverrideCount == 205);
     assert(strcmp(sParserOverrides[204].name, "option204") == 0);
     sLogicVersion++;
-    assert(!Port_RandoSave_LoadSlot(1)); /* changed logic must not misindex the seed */
+    assert(!Port_RandoSave_LoadSlot(1)); /* a former parser ruleset must not misindex this seed */
     assert(Port_RandoSave_LastLoadStatus() == PORT_RANDO_SAVE_INCOMPATIBLE);
     sLogicVersion--;
     sLogicAvailable = false;
@@ -356,6 +357,6 @@ int main(void) {
     assert(!Port_RandoSave_LoadSlot(0)); /* truncated padding is also rejected */
     assert(Port_RandoSave_LastLoadStatus() == PORT_RANDO_SAVE_INCOMPATIBLE);
     remove(path);
-    puts("rando_save_test: v6/v7 migration, v8 logic save/reload and length checks passed");
+    puts("rando_save_test: legacy migration, v8 save/reload, old ruleset rejection and length checks passed");
     return 0;
 }

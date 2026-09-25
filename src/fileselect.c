@@ -664,6 +664,8 @@ extern void Rando_Runtime_Refresh(void);                 /* port/rando/rando_run
 extern u32 WriteSaveFile(u32 index, SaveFile* saveFile); /* src/save.c */
 static bool sRandoSidecarIncompatible;
 static bool sRandoNewFileCommit;
+/* HandleSave writes the empty slot before the setup modal opens. */
+static int sPendingRandoNewSlot = -1;
 static void DrawRandoSidecarError(void);
 #endif
 
@@ -856,6 +858,16 @@ void SetActiveSave(u32 idx) {
 }
 
 #ifdef PC_PORT
+static void DiscardPendingRandoNewSlot(int slot) {
+    if ((u32)slot >= NUM_SAVE_SLOTS || sPendingRandoNewSlot != slot)
+        return;
+    sPendingRandoNewSlot = -1;
+    SetFileStatusDeleted((u32)slot);
+    ResetSaveFile((u32)slot);
+    Rando_Reset();
+    sRandoSidecarIncompatible = false;
+}
+
 void Port_FileSelectRando_StartSlot(int slot) {
     if ((u32)slot >= NUM_SAVE_SLOTS)
         return;
@@ -865,18 +877,23 @@ void Port_FileSelectRando_StartSlot(int slot) {
     sRandoNewFileCommit = false;
     if (!Rando_IsActive() || sRandoSidecarIncompatible) {
         fprintf(stderr, "[RANDO] slot %d: generated sidecar could not be reloaded; start cancelled\n", slot);
-        sRandoSidecarIncompatible = true;
+        if (sPendingRandoNewSlot == slot)
+            DiscardPendingRandoNewSlot(slot);
+        else
+            sRandoSidecarIncompatible = true;
         SoundReq(SFX_MENU_ERROR);
         SetFileSelectState(STATE_NONE);
         return;
     }
     /* SetActiveSave applies and persists the first-file grants once. */
+    if (sPendingRandoNewSlot == slot)
+        sPendingRandoNewSlot = -1;
     SoundReq(SONG_VOL_FADE_OUT);
     SetFileSelectState(STATE_START);
 }
 
 void Port_FileSelectRando_CancelSlot(int slot) {
-    (void)slot;
+    DiscardPendingRandoNewSlot(slot);
     SoundReq(SFX_MENU_CANCEL);
     SetFileSelectState(STATE_NONE);
 }
@@ -2137,6 +2154,7 @@ void sub_080513C0(void) {
             gFileSelectState.saveStatus[gFileSelectState.unk6] = 1;
 #ifdef PC_PORT
             if (Port_RandoFileMenu_ShouldOpenForNewFile()) {
+                sPendingRandoNewSlot = (int)gFileSelectState.unk6;
                 SetFileSelectState(STATE_RANDOMIZER_CONFIG);
                 break;
             }

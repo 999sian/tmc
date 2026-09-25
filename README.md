@@ -246,9 +246,10 @@ Notably:
   https://github.com/ipatix/agbplay) is **LGPL-3.0**; those files remain under
   the LGPL and the larger work is not relicensed by linking it.
 
-The in-game randomizer (`port/rando/`) uses a bundled `.logic` file and runs
-inside the PC port. It derives from GPL-3.0 work, as do the Reborn-parity QoL
-features. Both are distributed here under the GPL-3.0, with attribution in
+The in-game randomizer (`port/rando/`) uses Picori's bundled `picori.logic`
+rules and runs inside the PC port. Its engine derives from GPL-3.0 work, as
+do the Reborn-parity QoL features. Both are distributed here under the
+GPL-3.0, with attribution in
 [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md) and
 [`docs/reborn-parity.md`](docs/reborn-parity.md).
 
