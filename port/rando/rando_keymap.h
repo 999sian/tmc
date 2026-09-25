@@ -62,14 +62,11 @@ enum {
     RANDO_SCRUB_KEY_GRIP = 1,
 };
 
-/* Optional `.logic` import step: bind native runtime keys onto the named
- * locations of an imported public-format `.logic` file (whose entries otherwise
- * carry only EU-ROM patch addresses). This includes:
+/* Bind native runtime keys onto `.logic` location names (whose
+ * address-only entries otherwise lack a PC pickup identity). This includes:
  *   - ground items keyed by area-room-flag
  *   - scripted grant sites keyed in the high-bit runtime namespace below
- * No-op unless a `.logic` file is imported (early-returns on !RandoLogic_IsLoaded);
- * the canonical native graph never needs it. Reparse clears bindings; this is
- * rerun after every successful generation while an import is active. */
+ * Reparse clears bindings; call after each successful logic load. */
 void Rando_Keymap_Apply(void);
 
 /* Native scripted-grant runtime namespace (canonical, engine-derived). Vanilla

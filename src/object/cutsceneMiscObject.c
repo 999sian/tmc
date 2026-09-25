@@ -438,12 +438,29 @@ void CutsceneMiscObject_Type6(CutsceneMiscObjectEntity* this) {
             if (gPlayerEntity.base.action != PLAYER_EMPTYBOTTLE) {
                 u8 item = ITEM_BOTTLE1;
                 u8 subtype = 0;
-                super->action = 4;
 #ifdef PC_PORT
+                if (!REGION_IS_EU && CheckGlobalFlag(BIN_DOGFOOD)) {
+                    super->action = 4;
+                    super->timer = 60;
+                    break;
+                }
                 (void)Rando_OverrideLocationKey(
                     Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_DOG_BOTTLE, 0, 0), &item,
                     &subtype);
-#endif
+                /* This reward is one-shot. Give it directly if both aux
+                 * item-get slots are busy, then finish the cutscene. */
+                if (!CreateItemEntityWithFlag(item, subtype, 0, REGION_IS_EU ? 0 : (0x4000 | BIN_DOGFOOD))) {
+                    GiveItem(item, subtype);
+                    if (!REGION_IS_EU) {
+                        SetGlobalFlag(BIN_DOGFOOD);
+                    }
+                }
+                super->action = 4;
+                if (!REGION_IS_EU) {
+                    super->timer = 60;
+                }
+#else
+                super->action = 4;
                 if (!REGION_IS_EU) {
                     if (!CheckGlobalFlag(BIN_DOGFOOD)) {
                         CreateItemEntity(item, subtype, 0);
@@ -453,6 +470,7 @@ void CutsceneMiscObject_Type6(CutsceneMiscObjectEntity* this) {
                 } else {
                     CreateItemEntity(item, subtype, 0);
                 }
+#endif
             }
             break;
 #if !defined(EU) || defined(PC_PORT)

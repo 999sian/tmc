@@ -35,12 +35,13 @@ bool32 CreateItemEntityWithFlag(u32 type, u32 type2, u32 delay, u16 completionFl
     return TRUE;
 }
 
-void InitItemGetSequence(u32 type, u32 type2, u32 delay) {
+bool32 InitItemGetSequence(u32 type, u32 type2, u32 delay) {
     Entity* e = GiveItemWithCutscene(type, type2, delay);
-    if (e != NULL) {
-        e->parent = &gPlayerEntity.base;
-        SetPlayerItemGetState(e, e->type, 0);
-    }
+    if (e == NULL)
+        return FALSE;
+    e->parent = &gPlayerEntity.base;
+    SetPlayerItemGetState(e, e->type, 0);
+    return TRUE;
 }
 
 #ifdef PC_PORT
@@ -96,7 +97,9 @@ void OpenSmallChest(u32 pos, u32 layer) {
     }
     if ((layer >> 1) == ((u32)(t->_6 << 31) >> 31)) {
         if (found) {
+#ifndef PC_PORT
             SetLocalFlag(t->localFlag);
+#endif
             {
                 u8 item = t->_2;
                 u8 subtype = t->_3;
@@ -107,7 +110,11 @@ void OpenSmallChest(u32 pos, u32 layer) {
                     (void)Rando_OverrideLocationKey(key, &item, &subtype);
                 }
 #endif
+#ifdef PC_PORT
+                (void)CreateItemEntityWithFlag(item, subtype, 0, t->localFlag);
+#else
                 CreateItemEntity(item, subtype, 0);
+#endif
             }
         } else {
             CreateItemEntity(ITEM_FAIRY, 0, 0);

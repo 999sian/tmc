@@ -59,6 +59,11 @@ void Rando_PlayCancelSfx(void);
 /* Query a chest's localFlag by room property 3 (tile entities list).
  * Returns 0xFF if not found. */
 unsigned Rando_GetChestLocalFlag(unsigned area, unsigned room, unsigned chestIndex);
+/* Resolve parsed area-room-raw TileEntity chest keys to the chest-only keys
+ * emitted by pickup hooks. Call after each parse, before Rando_Keymap_Apply;
+ * false means a shuffled chest could not be bound and seed generation must
+ * stop. */
+bool Rando_Runtime_BindLogicChests(void);
 unsigned Rando_GetDungeonKeyCount(unsigned dungeon_idx);
 bool Rando_GetDungeonHasBigKey(unsigned dungeon_idx);
 /* GiveItem origin routing for rando-shuffled dungeon items (see rando.h

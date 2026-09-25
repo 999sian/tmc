@@ -980,13 +980,23 @@ void FigurineDevice_LostOrFinishedMessage(void) {
         u8 item = ITEM_QST_CARLOV_MEDAL;
         u8 subtype = 0;
         // GOT ALL THEM FIGURINES (:
+#ifndef PC_PORT
         gSave.stats.hasAllFigurines = 1;
+#endif
 #ifdef PC_PORT
         (void)Rando_OverrideLocationKey(
             Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_CARLOV_MEDAL, 0, 0), &item, &subtype);
-#endif
+        /* The final figurine cannot be drawn again. If the cutscene pool is
+         * full, award directly so this one-shot check is never lost. */
+        if (!CreateItemEntityWithFlag(item, subtype, 0, 0x4000 | FIGURE_ALLCOMP)) {
+            GiveItem(item, subtype);
+            SetGlobalFlag(FIGURE_ALLCOMP);
+            gSave.stats.hasAllFigurines = 1;
+        }
+#else
         CreateItemEntity(item, subtype, 0);
         SetGlobalFlag(FIGURE_ALLCOMP);
+#endif
     }
     ClearRoomFlag(8);
     ClearRoomFlag(7);

@@ -35,25 +35,14 @@ typedef enum {
     RANDO_ITEM_POOL_COUNT,
 } RandoItemPoolDifficulty;
 
-/* Logic tricks (the "glitched beatability" tier). Each bit, when set, tells the
- * placement/verification logic that the corresponding documented speedrun glitch
- * may be REQUIRED to reach a check, so progression items may be placed behind it.
- * When `glitchless_logic` is true these bits are ignored (treated as 0), keeping
- * every seed completable without glitches. This is the on-ramp for mapping the
- * speedrun glitch set into rando logic — add a bit + an edge in EvaluateHelpers.
- * See docs/speedrun-and-rando-port-notes-2026-06-13.md. */
+/* Legacy native-graph trick bits. Fresh parser seeds require glitchless
+ * settings; future trick support must map these to the upstream .logic rules. */
 #define RANDO_TRICK_OCARINA_GLITCH (1u << 0)      /* OG: Temple of Droplets entry without Flippers (needs Ocarina) */
 #define RANDO_TRICK_CRENEL_CLIP (1u << 1)         /* Crenel Clip: reach Castor Wilds from Mt. Crenel (needs a Bottle) */
 #define RANDO_TRICK_PORTAL_JUMP_STORAGE (1u << 2) /* PJS: reach Cloud Tops early without Roc's Cape (needs Ocarina) */
 #define RANDO_TRICK_ALL (RANDO_TRICK_OCARINA_GLITCH | RANDO_TRICK_CRENEL_CLIP | RANDO_TRICK_PORTAL_JUMP_STORAGE)
 
-/* Accessibility guarantee applied by the seed verifier (VerifyTable).
- * GOAL is the historical behaviour: only the goal (Vaati/DHC) must be
- * reachable, so a seed can bury non-progression checks behind items you
- * never need. The stronger modes reject any seed that leaves an enabled
- * check unreachable, matching the upstream randomizer's ACCESSIBILITY
- * dropdown. Strengthening only: a mode above GOAL can reject a seed GOAL
- * would accept, but never accepts a seed GOAL would reject. */
+/* Accessibility maps to upstream ACCESSIBILITY for fresh seeds. */
 typedef enum {
     RANDO_ACCESS_GOAL = 0,      /* only the goal must be reachable (default) */
     RANDO_ACCESS_ALL_NONKEYS,   /* every enabled non-key check reachable */
@@ -364,13 +353,8 @@ extern uint8_t randomized_item_subtype_table[RANDO_LOCATION_COUNT];
 RandomizerSettings Rando_DefaultSettings(void);
 uint64_t Rando_SeedFromString(const char* text);
 
-/* Stable FNV-1a hash over every generation-relevant setting (glitchless,
- * obscure, kinstones, entrances, dojos, open_world, item_difficulty,
- * effective tricks, accessibility, start_sword). Two players with the same
- * seed AND the same fingerprint are generating the identical placement, so
- * it is the shareable "are we on the same seed" check. Pure cosmetics and
- * runtime-only QoL (tunic/heart, homewarp, instant_text, early_crests) are
- * excluded because they never change placement. */
+/* Legacy menu-settings hash. Parser-backed seeds use the 64-bit logic source
+ * fingerprint below, which covers the bundled .logic bytes and overrides. */
 uint32_t Rando_SettingsFingerprint(const RandomizerSettings* settings);
 
 /* Required API for the file-select UI. */
@@ -379,6 +363,8 @@ bool GenerateSeed(uint64_t seed, RandomizerSettings settings);
 RandoStatus Rando_GenerateSeed(uint64_t seed, const RandomizerSettings* settings, uint64_t* out_seed);
 void Rando_Reset(void);
 bool Rando_IsActive(void);
+bool Rando_IsLogicSeed(void);
+uint64_t Rando_GetLogicFingerprint(void);
 uint32_t Rando_GetSeed(void);
 uint64_t Rando_GetSeed64(void);
 RandomizerSettings Rando_GetSettings(void);
@@ -390,6 +376,8 @@ const RandoLocationDef* Rando_GetLocationDef(RandoLocationId id);
 uint16_t Rando_ResolveLocationItem(RandoLocationId location, uint16_t vanilla_item);
 bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
                          const uint8_t* subtype_table, size_t count);
+bool Rando_ActivateLogicTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
+                              const uint8_t* subtype_table, size_t count, uint64_t fingerprint);
 
 bool Rando_VerifyCurrentSeed(void);
 
@@ -397,6 +385,7 @@ bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, uint8_t* su
 
 bool Rando_OverrideItem(uint8_t* type, uint8_t* subtype);
 
+/* Returns the required buffer size including NUL. Pass NULL, 0 to size a copy. */
 size_t Rando_GetSpoiler(char* buf, size_t buflen);
 
 #ifdef __cplusplus

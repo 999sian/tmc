@@ -4,6 +4,7 @@
 
 #include "rando/rando_file_menu.h"
 #include "rando/rando.h"
+#include "rando/rando_logic.h"
 #include "rando/rando_save.h"
 #include "port_runtime_config.h"
 
@@ -213,10 +214,13 @@ uint32_t Port_RandoFileMenu_Fingerprint(void) {
 void Port_RandoFileMenu_CommitAndStart(void) {
     RandomizerSettings settings = BuildMenuSettings();
     uint64_t seed;
+    uint64_t chosen = 0;
     PersistMenuSettings();
 
     seed = CurrentSeedValue();
-    if (GenerateSeed(seed, settings)) {
+    RandoLogic_ClearOverrides();
+    RandoStatus result = Rando_GenerateSeed(seed, &settings, &chosen);
+    if (result == RANDO_OK) {
         if (!Port_RandoSave_SaveActiveSlot(sMenu.save_slot)) {
             SDL_snprintf(sMenu.status, sizeof(sMenu.status), "Generated seed, but sidecar save failed.");
             return;
@@ -224,6 +228,9 @@ void Port_RandoFileMenu_CommitAndStart(void) {
         sMenu.status[0] = '\0';
         sMenu.open = false;
         Port_FileSelectRando_StartSlot(sMenu.save_slot);
+    } else if (result == RANDO_BAD_SETTINGS) {
+        SDL_snprintf(sMenu.status, sizeof(sMenu.status),
+                     "Unsupported option: use Glitchless logic and Kinstones for this PC profile.");
     } else {
         SDL_snprintf(sMenu.status, sizeof(sMenu.status), "Seed failed logic verification; try another seed.");
     }

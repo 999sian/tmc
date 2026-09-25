@@ -10,9 +10,9 @@
  *    each entry is independently verifiable against src/ (e.g.
  *    SOUGEN_06_HASHIGO is the North Hyrule Field ladder, LV1_*_* are
  *    Deepwood room flags);
- *  - flag NUMBERING is region-dependent (flags.h re-numbers several banks
- *    under EU), so a raw USA byte image would corrupt EU saves. Named
- *    enum constants compile to the right bit per region.
+ *  - flag NUMBERING is region-dependent (flags.h re-numbers LocalFlags1
+ *    under EU/JP), so a raw USA byte image would corrupt those saves. The
+ *    compiled USA-baseline ordinals are remapped at runtime on write.
  *
  * kRandoNewFileBaselineFlags mirrors upstream's unconditional
  * `startingFlags` blob (116 bytes at gSave.flags): the "banish story"
@@ -74,7 +74,7 @@ static const uint16_t kRandoNewFileWorldOpenFlags[] = {
     FLAG_BANK_1 + LV1_CLEAR_MES, FLAG_BANK_1 + LV2_CLEAR_MES, FLAG_BANK_1 + LV3_CLEAR_MES, FLAG_BANK_1 + LV4_CLEAR_MES,
     FLAG_BANK_1 + LV5_CLEAR_MES, FLAG_BANK_1 + MIZUUMI_00_BENT, FLAG_BANK_1 + MIZUUMI_00_00, FLAG_BANK_1 + MAENIWA_00_01,
     FLAG_BANK_1 + MAENIWA_00_BENT, FLAG_BANK_1 + MAENIWA_00_WARP, FLAG_BANK_1 + NAKANIWA_00_EZERO, FLAG_BANK_1 + HIKYOU_00_00,
-    FLAG_BANK_1 + HIKYOU_00_01, FLAG_BANK_1 + HIKYOU_00_02, FLAG_BANK_1 + HIKYOU_00_M0, FLAG_BANK_1 + LOST_00_01,
+    FLAG_BANK_1 + HIKYOU_00_01, FLAG_BANK_1 + HIKYOU_00_02, FLAG_BANK_1 + LOST_00_01,
     FLAG_BANK_1 + LOST_02_00, FLAG_BANK_1 + LOST_03_00, FLAG_BANK_1 + LOST_04_SIBA0, FLAG_BANK_1 + LOST_04_SIBA1,
     FLAG_BANK_1 + LOST_04_SIBA2, FLAG_BANK_1 + LOST_04_SIBA3, FLAG_BANK_1 + LOST_04_SIBA4, FLAG_BANK_1 + LOST_05_00,
     FLAG_BANK_1 + LOST_05_01, FLAG_BANK_1 + LOST_05_02, FLAG_BANK_1 + MORI_00_HIBI_1, FLAG_BANK_1 + MORI_00_HIBI_2,

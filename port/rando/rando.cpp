@@ -9,8 +9,12 @@
 #include "rando.h"
 #include "rando_entrance.h"
 #include "rando_music.h"
+#include "rando_logic.h"
 #include "item_ids.h"
 #include "rando_keymap.h"
+#ifdef PC_PORT
+#include "rando_runtime.h"
+#endif
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -18,6 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <string>
+#include <vector>
 
 #define RANDO_ARRAY_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -1979,11 +1985,18 @@ uint8_t randomized_item_subtype_table[RANDO_LOCATION_COUNT];
 }
 
 static uint16_t sCompatibilityRemap[256];
+static uint16_t sLogicItems[RANDO_LOGIC_MAX_LOCATIONS];
+static uint8_t sLogicSubtypes[RANDO_LOGIC_MAX_LOCATIONS];
+static size_t sLogicCount;
+static uint64_t sLogicFingerprint;
+static bool sLogicSeed;
+static bool sRestoredSeed;
 static RandomizerSettings sSettings;
 static uint64_t sSeed = 0;
 static bool sActive = false;
 static bool sInitialized = false;
-static char sSpoiler[8192];
+static std::string sSpoiler;
+static int sSpoilerEntrances[8];
 static uint64_t sAutoSeedCounter = 0x9e3779b97f4a7c15ull;
 
 static uint64_t SplitMix64_Next(SplitMix64* rng) {
@@ -2296,6 +2309,12 @@ static bool IsObscureLocation(const RandoLocationDef* loc) {
     return false;
 }
 static bool LocationEnabled(const RandomizerSettings* settings, const RandoLocationDef* loc) {
+    /* The upstream one-round start is already at Cucco level 10. Earlier
+     * prizes cannot be earned from that save state. */
+    if (loc >= &kLocations[RANDO_LOC_HYRULE_TOWN_CUCCOS_LEVEL_1_REWARD] &&
+        loc < &kLocations[RANDO_LOC_HYRULE_TOWN_CUCCOS_LEVEL_10_REWARD]) {
+        return false;
+    }
     if (!settings->shuffle_dojos && loc->category == RANDO_LOC_CATEGORY_DOJO) {
         return false;
     }
@@ -2371,6 +2390,12 @@ static const char* ItemName(uint16_t item) {
             return "Power Bracelets";
         case ITEM_BOTTLE1:
             return "Bottle";
+        case ITEM_QST_SWORD:
+            return "Smith's Sword (Quest)";
+        case ITEM_QST_BROKEN_SWORD:
+            return "Broken Picori Blade";
+        case ITEM_QST_DOGFOOD:
+            return "Dog Food";
         case ITEM_QST_MUSHROOM:
             return "Mushroom";
         case ITEM_QST_LONLON_KEY:
@@ -2441,21 +2466,87 @@ static const char* ItemName(uint16_t item) {
             return "Heart Piece";
         case ITEM_RUPEE20:
             return "20 Rupees";
+        case ITEM_RUPEE1:
+            return "1 Rupee";
+        case ITEM_RUPEE5:
+            return "5 Rupees";
         case ITEM_RUPEE50:
             return "50 Rupees";
         case ITEM_RUPEE100:
             return "100 Rupees";
+        case ITEM_RUPEE200:
+            return "200 Rupees";
         case ITEM_KINSTONE:
             return "Kinstone";
+        case ITEM_SHELLS:
+            return "Shells";
         case ITEM_SHELLS30:
             return "30 Shells";
+        case ITEM_BOMBS5:
+            return "5 Bombs";
         case ITEM_BOMBS10:
             return "10 Bombs";
+        case ITEM_BOMBS30:
+            return "30 Bombs";
+        case ITEM_ARROWS5:
+            return "5 Arrows";
         case ITEM_ARROWS10:
             return "10 Arrows";
+        case ITEM_ARROWS30:
+            return "30 Arrows";
+        case ITEM_HEART:
+            return "Heart";
+        case ITEM_FAIRY:
+            return "Fairy";
+        case ITEM_BRIOCHE:
+            return "Brioche";
+        case ITEM_CROISSANT:
+            return "Croissant";
+        case ITEM_PIE:
+            return "Pie Slice";
+        case ITEM_CAKE:
+            return "Cake Slice";
+        case ITEM_ARROW_BUTTERFLY:
+            return "Arrow Butterfly";
+        case ITEM_DIG_BUTTERFLY:
+            return "Dig Butterfly";
+        case ITEM_SWIM_BUTTERFLY:
+            return "Swim Butterfly";
+        case ITEM_FIRE_ROD:
+            return "Fire Rod";
+        case ITEM_LANTERN_ON:
+            return "Lantern";
         default:
             return "Item";
     }
+}
+
+static std::string SpoilerItemName(uint16_t item, uint8_t subtype) {
+    static const char* const kDungeonNames[] = {
+        "", "Deepwood Shrine", "Cave of Flames", "Fortress of Winds", "Temple of Droplets",
+        "Palace of Winds", "Dark Hyrule Castle", "Royal Crypt",
+    };
+    const char* name = ItemName(item);
+    char detail[40];
+    if (strcmp(name, "Item") == 0) {
+        snprintf(detail, sizeof(detail), "Item 0x%02X", item);
+        return detail;
+    }
+    std::string result(name);
+    if ((item == ITEM_BIG_KEY || item == ITEM_SMALL_KEY || item == ITEM_DUNGEON_MAP || item == ITEM_COMPASS) &&
+        RANDO_SUBTYPE_HAS_ORIGIN(subtype) && RANDO_SUBTYPE_ORIGIN(subtype) < RANDO_ARRAY_COUNT(kDungeonNames) &&
+        RANDO_SUBTYPE_ORIGIN(subtype) != 0) {
+        result += " (";
+        result += kDungeonNames[RANDO_SUBTYPE_ORIGIN(subtype)];
+        result += ')';
+    } else if (item == ITEM_KINSTONE && subtype != 0) {
+        snprintf(detail, sizeof(detail), " (type 0x%02X)", subtype);
+        result += detail;
+    } else if (item == ITEM_SHELLS && subtype != 0) {
+        snprintf(detail, sizeof(detail), " (%u)", subtype);
+        result += detail;
+    }
+    return result;
 }
 
 static void EnsureInitialized(void) {
@@ -2470,7 +2561,7 @@ static void EnsureInitialized(void) {
         sCompatibilityRemap[i] = (uint16_t)i;
     }
     sSettings = Rando_DefaultSettings();
-    sSpoiler[0] = '\0';
+    sSpoiler.clear();
     sInitialized = true;
 }
 
@@ -2836,22 +2927,19 @@ static void BuildCompatibilityRemap(void) {
     }
 }
 
-static void SpoilerAppend(size_t* pos, const char* fmt, ...) {
-    if (*pos >= sizeof(sSpoiler))
-        return;
+static void SpoilerAppend(const char* fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    int n = vsnprintf(sSpoiler + *pos, sizeof(sSpoiler) - *pos, fmt, ap);
-    va_end(ap);
-    if (n <= 0)
-        return;
-    size_t wrote = (size_t)n;
-    if (wrote >= sizeof(sSpoiler) - *pos) {
-        *pos = sizeof(sSpoiler) - 1;
-        sSpoiler[*pos] = '\0';
-    } else {
-        *pos += wrote;
+    va_list measure;
+    va_copy(measure, ap);
+    int n = vsnprintf(NULL, 0, fmt, measure);
+    va_end(measure);
+    if (n > 0) {
+        std::vector<char> line((size_t)n + 1);
+        vsnprintf(line.data(), line.size(), fmt, ap);
+        sSpoiler.append(line.data(), (size_t)n);
     }
+    va_end(ap);
 }
 
 static const char* DifficultyName(RandoItemPoolDifficulty difficulty) {
@@ -2865,6 +2953,32 @@ static const char* DifficultyName(RandoItemPoolDifficulty difficulty) {
         default:
             return "?";
     }
+}
+
+static void AppendEntranceSpoiler(void) {
+    if (!sSettings.shuffle_entrances)
+        return;
+    static const char* const kNames[] = {
+        "Deepwood Shrine", "Cave of Flames", "Fortress of Winds", "Temple of Droplets",
+        "Royal Crypt", "Palace of Winds", "Dark Hyrule Castle (main)", "Dark Hyrule Castle (side)",
+    };
+    SpoilerAppend("\nEntrances:\n");
+    for (size_t i = 0; i < RANDO_ARRAY_COUNT(kNames); ++i) {
+        int destination = Rando_Entrance_GetAssignment((int)i);
+        sSpoilerEntrances[i] = destination;
+        SpoilerAppend("%-30s -> %s%s\n", kNames[i], kNames[destination < 0 ? i : (size_t)destination],
+                      destination < 0 ? " (vanilla)" : "");
+    }
+}
+
+static bool SpoilerEntrancesChanged(void) {
+    if (!sActive || !sSettings.shuffle_entrances)
+        return false;
+    for (size_t i = 0; i < RANDO_ARRAY_COUNT(sSpoilerEntrances); ++i) {
+        if (sSpoilerEntrances[i] != Rando_Entrance_GetAssignment((int)i))
+            return true;
+    }
+    return false;
 }
 
 /* FNV-1a over placement-affecting settings only (see header). Feeding raw
@@ -2898,24 +3012,40 @@ extern "C" uint32_t Rando_SettingsFingerprint(const RandomizerSettings* settings
 }
 
 static void BuildSpoiler(uint64_t seed, const RandomizerSettings* settings) {
-    size_t pos = 0;
-    SpoilerAppend(&pos, "Seed: %llu\n", (unsigned long long)seed);
-    SpoilerAppend(&pos,
+    sSpoiler.clear();
+    SpoilerAppend("Seed: %llu\n", (unsigned long long)seed);
+    SpoilerAppend(
                   "Settings: Pool=%s Glitchless=%d Tricks=0x%X Kinstones=%d Entrances=%d Dojos=%d "
                   "OpenWorld=%d Access=%d DungeonItems=%d Homewarp=%d\n",
                   DifficultyName(settings->item_difficulty), settings->glitchless_logic,
                   (unsigned)(settings->glitchless_logic ? 0u : settings->tricks), settings->shuffle_kinstones,
                   settings->shuffle_entrances, settings->shuffle_dojos, settings->open_world,
                   (int)settings->accessibility, settings->shuffle_dungeon_items, settings->homewarp);
-    SpoilerAppend(&pos, "Fingerprint: %08X\n\n", Rando_SettingsFingerprint(settings));
+    SpoilerAppend("Fingerprint: %08X\n\n", Rando_SettingsFingerprint(settings));
 
-    SpoilerAppend(&pos, "Locations:\n");
+    SpoilerAppend("Locations:\n");
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         uint16_t item = randomized_item_table[i];
         if (item == ITEM_NONE)
             continue;
-        SpoilerAppend(&pos, "%-40s : %s\n", kLocations[i].name, ItemName(item));
+        const std::string item_name = SpoilerItemName(item, randomized_item_subtype_table[i]);
+        SpoilerAppend("%-40s : %s\n", kLocations[i].name, item_name.c_str());
     }
+    AppendEntranceSpoiler();
+}
+
+static void BuildLogicSpoiler(uint64_t seed) {
+    sSpoiler.clear();
+    SpoilerAppend("Seed: %llu\nLogic: Picori (%zu locations, fingerprint %016llX)\n\n",
+                  (unsigned long long)seed, sLogicCount, (unsigned long long)sLogicFingerprint);
+    for (size_t i = 0; i < sLogicCount; ++i) {
+        if (sLogicItems[i] == ITEM_NONE || RandoLogic_GetLocationKeyAt((uint32_t)i) == UINT32_MAX ||
+            RandoLogic_LocationHasTagName((uint32_t)i, "NoSpoiler"))
+            continue;
+        const std::string item_name = SpoilerItemName(sLogicItems[i], sLogicSubtypes[i]);
+        SpoilerAppend("%-40s : %s\n", RandoLogic_GetLocationName((uint32_t)i), item_name.c_str());
+    }
+    AppendEntranceSpoiler();
 }
 
 static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* settings, const uint16_t* table,
@@ -2930,11 +3060,78 @@ static RandoStatus ActivateSeed(uint64_t seed, const RandomizerSettings* setting
     }
     sSettings = *settings;
     sSeed = seed;
+    sLogicSeed = false;
+    sLogicCount = 0;
+    sLogicFingerprint = 0;
+    sRestoredSeed = false;
     sActive = true;
     BuildCompatibilityRemap();
     BuildSpoiler(seed, settings);
     fprintf(stderr, "[RANDO] seed %llu generated (native logic, %s pool, %zu locations)\n", (unsigned long long)seed,
             DifficultyName(settings->item_difficulty), count);
+    return RANDO_OK;
+}
+
+static RandoStatus ActivateLogicSeed(uint64_t seed, const RandomizerSettings* settings, const uint16_t* table,
+                                     const uint8_t* subtypes, size_t count, uint64_t fingerprint) {
+    if (count == 0 || count > RANDO_LOGIC_MAX_LOCATIONS || table == NULL || subtypes == NULL ||
+        fingerprint == 0 || fingerprint != RandoLogic_SourceFingerprint() ||
+        count != RandoLogic_GetLocationCountRaw())
+        return RANDO_BAD_SETTINGS;
+    for (size_t i = 0; i < count; ++i) {
+        RandoLogicLocationType type = RandoLogic_GetLocationType((uint32_t)i);
+        if (type == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE || type == RANDO_LOGIC_LOCATION_MAJOR ||
+            type == RANDO_LOGIC_LOCATION_DUNGEON || type == RANDO_LOGIC_LOCATION_ANY ||
+            type == RANDO_LOGIC_LOCATION_MINOR) {
+            uint32_t key = RandoLogic_GetLocationKeyAt((uint32_t)i);
+            if (key == UINT32_MAX || table[i] == ITEM_NONE || table[i] > UINT8_MAX ||
+                RandoLogic_FindLocationByKey(key) != (int)i) {
+                fprintf(stderr, "[RANDO] no native award source for %s\n", RandoLogic_GetLocationName((uint32_t)i));
+                return RANDO_BAD_SETTINGS;
+            }
+        }
+    }
+    extern void Rando_Music_ClearAssignments(void);
+    Rando_Music_ClearAssignments();
+    memcpy(sLogicItems, table, count * sizeof(sLogicItems[0]));
+    memcpy(sLogicSubtypes, subtypes, count * sizeof(sLogicSubtypes[0]));
+    sSettings = *settings;
+    sSeed = seed;
+    sLogicCount = count;
+    sLogicFingerprint = fingerprint;
+    sLogicSeed = true;
+    sRestoredSeed = false;
+    sActive = true;
+    for (size_t i = 0; i < RANDO_ARRAY_COUNT(sCompatibilityRemap); ++i)
+        sCompatibilityRemap[i] = (uint16_t)i;
+    extern void Rando_Entrance_ClearAssignments(void);
+    Rando_Entrance_ClearAssignments();
+    if (RandoLogic_GeneratedTableMatches(seed, table, subtypes, count)) {
+        static const char* const kEntrances[] = {
+            "Deepwood_Entrance", "CoF_Entrance", "Fortress_Entrance", "Droplets_Entrance",
+            "Crypt_Entrance", "Palace_Entrance", "DHC_Main_Entrance", "DHC_Side_Entrance",
+        };
+        if (settings->shuffle_entrances) {
+            for (size_t e = 0; e < RANDO_ARRAY_COUNT(kEntrances); ++e) {
+                for (size_t i = 0; i < count; ++i) {
+                    if (strcmp(RandoLogic_GetLocationName((uint32_t)i), kEntrances[e]) != 0)
+                        continue;
+                    int target = RandoLogic_GetEntranceAssignment((uint32_t)i);
+                    if (target >= 1 && target <= 8)
+                        Rando_Entrance_SetAssignment((int)e, target - 1);
+                    break;
+                }
+            }
+        }
+        for (unsigned area = 0; area < 256; ++area) {
+            int song = RandoLogic_GetMusicAssignment(area);
+            if (song >= 0)
+                Rando_Music_SetAssignment(area, song);
+        }
+    }
+    BuildLogicSpoiler(seed);
+    fprintf(stderr, "[RANDO] seed %llu generated (Picori logic, %zu locations)\n",
+            (unsigned long long)seed, count);
     return RANDO_OK;
 }
 
@@ -2991,30 +3188,105 @@ extern "C" uint64_t Rando_SeedFromString(const char* text) {
 
 extern "C" RandoStatus Rando_GenerateSeed(uint64_t seed, const RandomizerSettings* settings, uint64_t* out_seed) {
     RandomizerSettings local;
-    uint16_t candidate[RANDO_LOCATION_COUNT];
-    uint8_t candidate_subtypes[RANDO_LOCATION_COUNT];
+    static uint16_t candidate[RANDO_LOGIC_MAX_LOCATIONS];
+    static uint8_t candidate_subtypes[RANDO_LOGIC_MAX_LOCATIONS];
     RandoStatus last = RANDO_INTERNAL;
 
     EnsureInitialized();
+#ifdef PC_PORT
+    if (Rando_IsInGameplay())
+        return RANDO_BAD_SETTINGS;
+#endif
 
     local = settings ? *settings : Rando_DefaultSettings();
     if (local.item_difficulty < RANDO_ITEM_POOL_NORMAL || local.item_difficulty >= RANDO_ITEM_POOL_COUNT) {
         return RANDO_BAD_SETTINGS;
     }
+    if (!local.glitchless_logic || !local.shuffle_kinstones)
+        return RANDO_BAD_SETTINGS;
+
+    /* A loaded save owns its parser overrides. Start a new roll from the
+     * selected PC settings, while ordinary rerolls keep deliberate UI edits. */
+    if (sRestoredSeed)
+        Rando_Reset();
 
     if (seed == 0)
         seed = ChooseAutoSeed();
 
-    for (uint32_t attempt = 0; attempt < 32; ++attempt) {
-        uint64_t attempt_seed = seed + 0x9e3779b97f4a7c15ull * (uint64_t)attempt;
-        last = BuildSeedAttempt(attempt_seed, &local, candidate, candidate_subtypes);
-        if (last == RANDO_OK) {
-            if (out_seed)
-                *out_seed = seed;
-            return ActivateSeed(seed, &local, candidate, candidate_subtypes, RANDO_LOCATION_COUNT);
+    /* Native saves keep the old graph; fresh seeds use the bundled upstream
+     * logic. Progressive awards need their own native item behavior, so this
+     * first PC profile explicitly selects upstream's nonprogressive pools. */
+    static const char* const kProgressiveFlags[] = {
+        "YES_SWORD_PROG", "YES_BOW_PROG", "YES_BOOM_PROG", "YES_SHIELD_PROG", "YES_SCROLL_PROG",
+    };
+    for (const char* flag : kProgressiveFlags) {
+        bool set = false;
+        for (uint32_t i = 0; i < RandoLogic_GetOverrideCount(); ++i) {
+            const char* name = NULL;
+            if (RandoLogic_GetOverride(i, &name, NULL) && name != NULL && strcmp(name, flag) == 0) {
+                set = true;
+                break;
+            }
         }
+        if (!set)
+            RandoLogic_SetOverride(flag, "false");
+    }
+    /* The Obscure control enables four extra pickup pools.
+     * Write all four on every roll so a previous seed cannot leave stale
+     * values behind when this setting changes. */
+    static const char* const kObscureFlags[] = {
+        "RUPEEMANIA", "SPECIALPOTS", "DIGGING", "UNDERWATER",
+    };
+    for (const char* flag : kObscureFlags)
+        RandoLogic_SetOverride(flag, local.obscure_locations ? "true" : "false");
+    RandoLogic_SetOverride("START_SMITH_SWORD", local.start_sword ? "true" : "false");
+    RandoLogic_SetOverride("ACCESSIBILITY", local.accessibility == RANDO_ACCESS_ALL_LOCATIONS ? "ACCESS_LOCATIONS" :
+                                                local.accessibility == RANDO_ACCESS_ALL_NONKEYS ? "ACCESS_INVENTORY" :
+                                                                                                  "ACCESS_BEATABLE");
+    RandoLogic_SetOverride("OPENWORLD", local.open_world ? "OPENWORLD_ON" : "OPENWORLD_OFF");
+    RandoLogic_SetOverride("ENTRANCES", local.shuffle_entrances ? "ENTRANCES_COUPLED" : "ENTRANCES_VANILLA");
+    RandoLogic_SetOverride("DOJO", local.shuffle_dojos ? "DOJOANY" : "DOJOVANILLA");
+    RandoLogic_SetOverride("ITEM_POOL", local.item_difficulty == RANDO_ITEM_POOL_HARD ? "ITEM_POOL_RIP" :
+                                        local.item_difficulty == RANDO_ITEM_POOL_CHAOS ? "ITEM_POOL_PLENTIFUL" :
+                                                                                          "ITEM_POOL_NORMAL");
+    RandoLogic_SetOverride("SMALL_KEYS_SETTING", local.shuffle_dungeon_items ? "SMALL_KEYSANITY" :
+                                                                         "SMALL_KEYS_STANDARD");
+    RandoLogic_SetOverride("BIG_KEYS_SETTING", local.shuffle_dungeon_items ? "BIG_KEYSANITY" :
+                                                                       "BIG_KEYS_STANDARD");
+    RandoLogic_SetOverride("MAP_SETTING", local.shuffle_dungeon_items ? "MAP_KEYSANITY" : "MAP_STANDARD");
+    RandoLogic_SetOverride("COMPASS_SETTING", local.shuffle_dungeon_items ? "COMPASS_KEYSANITY" :
+                                                                      "COMPASS_STANDARD");
+    if (!RandoLogic_LoadDefaultFiles()) {
+        Rando_Reset();
+        return RANDO_BAD_SETTINGS;
+    }
+#ifdef PC_PORT
+    if (!Rando_Runtime_BindLogicChests()) {
+        Rando_Reset();
+        return RANDO_BAD_SETTINGS;
+    }
+#endif
+    Rando_Keymap_Apply();
+
+    const size_t count = RandoLogic_GetLocationCountRaw();
+    if (count == 0 || count > RANDO_LOGIC_MAX_LOCATIONS) {
+        Rando_Reset();
+        return RANDO_BAD_SETTINGS;
     }
 
+    last = RandoLogic_Generate(seed, &local, candidate, count, NULL);
+    if (last != RANDO_OK) {
+        Rando_Reset();
+        return last;
+    }
+    for (size_t i = 0; i < count; ++i)
+        candidate_subtypes[i] = RandoLogic_GetGeneratedItemSubtype((uint32_t)i);
+    last = ActivateLogicSeed(seed, &local, candidate, candidate_subtypes, count,
+                             RandoLogic_SourceFingerprint());
+    if (last != RANDO_OK)
+        Rando_Reset();
+    if (last == RANDO_OK && out_seed)
+        *out_seed = seed;
     return last;
 }
 
@@ -3029,6 +3301,13 @@ extern "C" void Rando_Reset(void) {
     EnsureInitialized();
     sSeed = 0;
     sActive = false;
+    sLogicSeed = false;
+    sLogicCount = 0;
+    sLogicFingerprint = 0;
+    sRestoredSeed = false;
+    RandoLogic_ClearOverrides();
+    if (RandoLogic_IsLoaded())
+        RandoLogic_Reparse();
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         randomized_item_table[i] = kLocations[i].vanilla_item;
         randomized_item_subtype_table[i] = 0;
@@ -3041,12 +3320,20 @@ extern "C" void Rando_Reset(void) {
     Rando_Entrance_ClearAssignments();
     Rando_Music_ClearAssignments();
     sLocationAwardPending = false;
-    sSpoiler[0] = '\0';
+    sSpoiler.clear();
     fprintf(stderr, "[RANDO] reset to vanilla\n");
 }
 
 extern "C" bool Rando_IsActive(void) {
     return sActive;
+}
+
+extern "C" bool Rando_IsLogicSeed(void) {
+    return sActive && sLogicSeed;
+}
+
+extern "C" uint64_t Rando_GetLogicFingerprint(void) {
+    return sActive && sLogicSeed ? sLogicFingerprint : 0;
 }
 
 extern "C" uint32_t Rando_GetSeed(void) {
@@ -3073,15 +3360,15 @@ extern "C" void Rando_SetCosmetics(int tunic_color, int heart_color) {
 
 extern "C" const uint16_t* Rando_GetRandomizedItemTable(void) {
     EnsureInitialized();
-    return randomized_item_table;
+    return sLogicSeed ? sLogicItems : randomized_item_table;
 }
 extern "C" const uint8_t* Rando_GetRandomizedItemSubtypeTable(void) {
     EnsureInitialized();
-    return randomized_item_subtype_table;
+    return sLogicSeed ? sLogicSubtypes : randomized_item_subtype_table;
 }
 
 extern "C" size_t Rando_GetLocationCount(void) {
-    return RANDO_LOCATION_COUNT;
+    return sLogicSeed ? sLogicCount : RANDO_LOCATION_COUNT;
 }
 
 extern "C" const RandoLocationDef* Rando_GetLocationDef(RandoLocationId id) {
@@ -3092,7 +3379,7 @@ extern "C" const RandoLocationDef* Rando_GetLocationDef(RandoLocationId id) {
 
 extern "C" uint16_t Rando_ResolveLocationItem(RandoLocationId location, uint16_t vanilla_item) {
     EnsureInitialized();
-    if (!sActive)
+    if (!sActive || sLogicSeed)
         return vanilla_item;
     if ((unsigned)location >= RANDO_LOCATION_COUNT)
         return vanilla_item;
@@ -3122,7 +3409,20 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
     if (!sActive || type == NULL)
         return false;
 
-    // Linear search of locations since the count is small (~211)
+    if (sLogicSeed) {
+        int index = RandoLogic_FindLocationByKey(location_key);
+        if (index < 0 || (size_t)index >= sLogicCount || sLogicItems[index] == ITEM_NONE)
+            return false;
+        *type = (uint8_t)sLogicItems[index];
+        if (subtype != NULL)
+            *subtype = sLogicSubtypes[index];
+        sLocationAwardPending = true;
+        sLocationAwardType = *type;
+        sLocationAwardSubtype = sLogicSubtypes[index];
+        return true;
+    }
+
+    // Legacy sidecars retain the original table and key namespace.
     for (size_t i = 0; i < RANDO_LOCATION_COUNT; ++i) {
         if (kLocations[i].key == location_key) {
             uint16_t item = randomized_item_table[i];
@@ -3144,13 +3444,44 @@ extern "C" bool Rando_OverrideLocationKey(uint32_t location_key, uint8_t* type, 
 extern "C" bool Rando_ActivateTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
                                     const uint8_t* subtype_table, size_t count) {
     EnsureInitialized();
-    return ActivateSeed(seed, &settings, table, subtype_table, count) == RANDO_OK;
+    if (ActivateSeed(seed, &settings, table, subtype_table, count) != RANDO_OK)
+        return false;
+    sRestoredSeed = true;
+    return true;
+}
+
+extern "C" bool Rando_ActivateLogicTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
+                                           const uint8_t* subtype_table, size_t count, uint64_t fingerprint) {
+    EnsureInitialized();
+    if (!RandoLogic_IsLoaded() || fingerprint != RandoLogic_SourceFingerprint())
+        return false;
+#ifdef PC_PORT
+    if (!Rando_Runtime_BindLogicChests())
+        return false;
+#endif
+    Rando_Keymap_Apply();
+    if (ActivateLogicSeed(seed, &settings, table, subtype_table, count, fingerprint) != RANDO_OK)
+        return false;
+    sRestoredSeed = true;
+    return true;
 }
 
 extern "C" bool Rando_VerifyCurrentSeed(void) {
     EnsureInitialized();
     if (!sActive)
         return false;
+    if (sLogicSeed) {
+        static uint16_t candidate[RANDO_LOGIC_MAX_LOCATIONS];
+        static uint8_t subtypes[RANDO_LOGIC_MAX_LOCATIONS];
+        if (sLogicFingerprint != RandoLogic_SourceFingerprint() ||
+            RandoLogic_Generate(sSeed, &sSettings, candidate, sLogicCount, NULL) != RANDO_OK)
+            return false;
+        for (size_t i = 0; i < sLogicCount; ++i)
+            subtypes[i] = RandoLogic_GetGeneratedItemSubtype((uint32_t)i);
+        return RandoLogic_GeneratedTableMatches(sSeed, sLogicItems, sLogicSubtypes, sLogicCount) &&
+               memcmp(candidate, sLogicItems, sLogicCount * sizeof(candidate[0])) == 0 &&
+               memcmp(subtypes, sLogicSubtypes, sLogicCount) == 0;
+    }
     return VerifyTable(randomized_item_table, randomized_item_subtype_table, &sSettings);
 }
 
@@ -3176,12 +3507,17 @@ extern "C" bool Rando_OverrideItem(uint8_t* type, uint8_t* subtype) {
 
 extern "C" size_t Rando_GetSpoiler(char* buf, size_t buflen) {
     EnsureInitialized();
-    if (buf == NULL || buflen == 0)
-        return 0;
-    size_t len = strlen(sSpoiler);
-    if (len >= buflen)
-        len = buflen - 1;
-    memcpy(buf, sSpoiler, len);
-    buf[len] = '\0';
-    return len;
+    if (SpoilerEntrancesChanged()) {
+        if (sLogicSeed)
+            BuildLogicSpoiler(sSeed);
+        else
+            BuildSpoiler(sSeed, &sSettings);
+    }
+    const size_t required = sSpoiler.size() + 1;
+    if (buf != NULL && buflen != 0) {
+        size_t copied = sSpoiler.size() < buflen - 1 ? sSpoiler.size() : buflen - 1;
+        memcpy(buf, sSpoiler.data(), copied);
+        buf[copied] = '\0';
+    }
+    return required;
 }

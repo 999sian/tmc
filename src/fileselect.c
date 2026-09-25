@@ -30,8 +30,10 @@
 #include "port_ppu.h"
 #include "port_runtime_config.h"
 #include "port_tts.h"
+#include "rando/rando_save.h"
 #endif
 #include <stdio.h>
+#include <string.h>
 
 // copy, erase, start
 #define NUM_FILE_OPERATIONS 3
@@ -655,12 +657,14 @@ static void sub_08050848(void);
 static void sub_0805086C(void);
 static void sub_08050940(void);
 #ifdef PC_PORT
-extern bool Port_RandoSave_LoadSlot(int slot);
 extern void Rando_Reset(void);
 extern bool Rando_IsActive(void);
 extern void Rando_Runtime_OnNewFile(void);               /* port/rando/rando_runtime.c */
 extern void Rando_Runtime_Refresh(void);                 /* port/rando/rando_runtime.c */
 extern u32 WriteSaveFile(u32 index, SaveFile* saveFile); /* src/save.c */
+static bool sRandoSidecarIncompatible;
+static bool sRandoNewFileCommit;
+static void DrawRandoSidecarError(void);
 #endif
 
 #ifdef PC_PORT
@@ -732,6 +736,8 @@ void sub_080503A8(u32 gfxGroup) {
 }
 
 void SetFileSelectState(FileSelectState mode) {
+    if (mode == STATE_START)
+        SetMenuType(0);
     gUI.state = mode;
     MemClear(&gBG0Buffer, sizeof(gBG0Buffer));
     MemClear(&gBG1Buffer, sizeof(gBG1Buffer));
@@ -812,22 +818,36 @@ void SetActiveSave(u32 idx) {
     if (idx < NUM_SAVE_SLOTS) {
         if (!Port_RandoSave_LoadSlot((int)idx)) {
             Rando_Reset();
-        } else if (Rando_IsActive() && !CheckGlobalFlag(EZERO_1ST)) {
-            /* Crash-window heal: the sidecar was written before the first
-             * EEPROM write of the new-file flow (Port_FileSelectRando_
-             * StartSlot), and a crash in between leaves an ACTIVE seed on a
-             * save that never received its one-shot grants (start inventory,
-             * story-skip globals — a documented softlock). Every granted
-             * rando save has EZERO_1ST set from birth (ApplyStorySkip), so
-             * its absence identifies the torn state; grants are idempotent
-             * flag/inventory writes, safe to re-apply. */
-            fprintf(stderr, "[RANDO] slot %u: active seed without new-file grants (torn commit) — re-applying\n", idx);
-            Rando_Runtime_OnNewFile();
-            MemCopy(&gSave, &gFileSelectState.saves[idx], sizeof(gSave));
-            WriteSaveFile(idx, &gSave);
+            sRandoSidecarIncompatible = memcmp(gSave.filler4ac, PC_RANDO_SAVE_MARKER,
+                                               sizeof(PC_RANDO_SAVE_MARKER)) == 0;
+        } else {
+            bool marked = memcmp(gSave.filler4ac, PC_RANDO_SAVE_MARKER, sizeof(PC_RANDO_SAVE_MARKER)) == 0;
+            u64 savedBinding = 0;
+            if (marked) {
+                memcpy(&savedBinding, gSave.filler4ac + PC_RANDO_SAVE_BINDING_OFFSET,
+                       sizeof(savedBinding));
+            }
+            bool legacy = !marked && Port_RandoSave_LoadedLegacySlot() &&
+                          CheckGlobalFlag(START) && CheckGlobalFlag(EZERO_1ST) && CheckGlobalFlag(TABIDACHI);
+            sRandoSidecarIncompatible = (marked && savedBinding != Port_RandoSave_ActiveBindingHash()) ||
+                                        (!marked && !legacy && !sRandoNewFileCommit) ||
+                                        (!CheckGlobalFlag(EZERO_1ST) && !sRandoNewFileCommit);
+            if (sRandoSidecarIncompatible) {
+                fprintf(stderr, "[RANDO] slot %u: save and sidecar do not match\n", idx);
+            } else if (!CheckGlobalFlag(EZERO_1ST)) {
+                /* Only the in-memory new-file commit may grant story-skip
+                 * flags to an unmarked EEPROM slot. A stale sidecar cannot. */
+                Rando_Runtime_OnNewFile();
+                MemCopy(&gSave, &gFileSelectState.saves[idx], sizeof(gSave));
+                if (!WriteSaveFile(idx, &gSave))
+                    sRandoSidecarIncompatible = true;
+            }
+            if (sRandoSidecarIncompatible)
+                Rando_Reset();
         }
     } else {
         Rando_Reset();
+        sRandoSidecarIncompatible = false;
     }
     /* Recompute eventdefine-driven runtime state (damage multiplier,
      * beep/music mutes) for whichever seed is now active (or none). */
@@ -837,23 +857,20 @@ void SetActiveSave(u32 idx) {
 
 #ifdef PC_PORT
 void Port_FileSelectRando_StartSlot(int slot) {
-    if ((u32)slot < NUM_SAVE_SLOTS) {
-        gFileSelectState.saveStatus[slot] = SAVE_VALID;
-        SetActiveSave((u32)slot);
-        if (Rando_IsActive()) {
-            /* New-rando-file commit point: the slot was initialized and
-             * written by the vanilla new-file flow (sub_080513C0) before
-             * the rando config opened, and SetActiveSave() just loaded it
-             * into gSave + activated the sidecar seed. Apply the seed's
-             * one-shot grants (start inventory, crests, portals, instant
-             * text) and persist them so they survive a quit without an
-             * in-game save. Sidecar reloads of existing saves never pass
-             * through here, so grants apply exactly once per new file. */
-            Rando_Runtime_OnNewFile();
-            MemCopy(&gSave, &gFileSelectState.saves[slot], sizeof(gSave));
-            WriteSaveFile((u32)slot, &gSave);
-        }
+    if ((u32)slot >= NUM_SAVE_SLOTS)
+        return;
+    gFileSelectState.saveStatus[slot] = SAVE_VALID;
+    sRandoNewFileCommit = true;
+    SetActiveSave((u32)slot);
+    sRandoNewFileCommit = false;
+    if (!Rando_IsActive() || sRandoSidecarIncompatible) {
+        fprintf(stderr, "[RANDO] slot %d: generated sidecar could not be reloaded; start cancelled\n", slot);
+        sRandoSidecarIncompatible = true;
+        SoundReq(SFX_MENU_ERROR);
+        SetFileSelectState(STATE_NONE);
+        return;
     }
+    /* SetActiveSave applies and persists the first-file grants once. */
     SoundReq(SONG_VOL_FADE_OUT);
     SetFileSelectState(STATE_START);
 }
@@ -1566,7 +1583,26 @@ void (*const gUnk_080FC93C[])() = {
 void HandleFileView(void) {
     gUnk_080FC93C[gMenu.menuType]();
     sub_08050A64(gFileSelectState.unk6);
+#ifdef PC_PORT
+    if (sRandoSidecarIncompatible && gUI.state == STATE_VIEW)
+        DrawRandoSidecarError();
+#endif
 }
+
+#ifdef PC_PORT
+static void DrawRandoSidecarError(void) {
+    static const u8 text[] = "Rando data missing or changed";
+    Font font;
+    MemCopy(&gUnk_080FC844, &font, sizeof(font));
+    font.dest = &gBG0Buffer[0x222];
+    font.width = 0xD8;
+    font.right_align = 0;
+    font.sm_border = 0;
+    font.draw_border = 0;
+    ShowTextBox((uintptr_t)text, &font);
+    gScreen.bg0.updated = 1;
+}
+#endif
 
 void sub_08050C54(void) {
     s32 column_idx;
@@ -1592,6 +1628,17 @@ void sub_08050C54(void) {
     switch (vkeys) {
         case A_BUTTON:
         case START_BUTTON:
+#ifdef PC_PORT
+            if (column_idx == 0 && sRandoSidecarIncompatible) {
+                PortTtsOptions opts = { 0 };
+                opts.priority = PORT_TTS_PRIO_URGENT;
+                opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+                opts.dedupe = true;
+                Port_TTS_Speak("Randomizer data missing or changed. Restore the matching logic or sidecar file.", &opts);
+                SoundReq(SFX_MENU_ERROR);
+                break;
+            }
+#endif
             if (column_idx == 0) {
                 SoundReq(SONG_VOL_FADE_OUT);
             }
@@ -1630,6 +1677,14 @@ void sub_08050D68(void) {
             default:
             case 0:
                 state = STATE_START;
+#ifdef PC_PORT
+                SetActiveSave(gFileSelectState.unk6);
+                if (sRandoSidecarIncompatible) {
+                    SetMenuType(0);
+                    SoundReq(SFX_MENU_ERROR);
+                    return;
+                }
+#endif
                 break;
             case 1:
                 state = STATE_COPY;
@@ -2389,6 +2444,19 @@ void sub_080517EC(void) {
 
 void sub_08051874(void) {
     s32 temp;
+#ifdef PC_PORT
+    SetActiveSave(gFileSelectState.unk6);
+    if (sRandoSidecarIncompatible) {
+        PortTtsOptions opts = { 0 };
+        opts.priority = PORT_TTS_PRIO_URGENT;
+        opts.rate = opts.pitch = opts.volume = 0.0f / 0.0f;
+        opts.dedupe = true;
+        Port_TTS_Speak("Cannot copy: randomizer data is missing or changed.", &opts);
+        SoundReq(SFX_MENU_ERROR);
+        SetFileSelectState(STATE_NONE);
+        return;
+    }
+#endif
     gSaveHeader->saveFileId = gFileSelectState.unk7;
     temp = HandleSave(0);
     gFileSelectState.saveStatus[gFileSelectState.unk7] = temp;
