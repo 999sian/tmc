@@ -728,8 +728,7 @@ target("tmc_pc")
     add_files("port/port_exe_path.cpp")   -- shared executable-directory query (C++)
     add_files("port/port_debug_verbose.c")  -- per-frame log gate, env-controlled
     add_files("port/port_rom_picker.c")     -- SDL3 file picker when no ROM is found
-    -- In-process randomizer (port/rando/), derived from the GPL-3.0 Minish Cap
-    -- randomizer (minishmaker/randomizer); GPL-3.0, see THIRD-PARTY-LICENSES.md.
+    -- In-process randomizer (port/rando/); GPL-3.0 provenance is in THIRD-PARTY-LICENSES.md.
     add_files("port/rando/rando.cpp")
     add_files("port/rando/rando_logic.cpp")
     add_files("port/rando/rando_file_menu.c")
@@ -1097,6 +1096,7 @@ target("rando_logic_test")
     add_includedirs("include")
     add_files("port/rando/rando.cpp")
     add_files("port/rando/rando_logic.cpp")
+    add_files("port/port_exe_path.cpp")
     add_files("port/rando/rando_save.c")
     add_files("port/rando/rando_entrance.cpp")
     add_files("port/rando/rando_music.c")

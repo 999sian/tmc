@@ -17,8 +17,9 @@
 extern "C" {
 #endif
 
-/* Composed gSave.flags bit ids (FLAG_BANK_x + per-bank flag), apply with
- * WriteBit(gSave.flags, id). Region-correct by construction. */
+/* Composed USA-baseline gSave.flags bit ids (FLAG_BANK_x + per-bank flag).
+ * Remap LocalFlags1 through Port_RemapBaselineLocalFlag before writing them
+ * in a MULTI_REGION build. */
 const uint16_t* Rando_NewFile_BaselineFlags(size_t* count);
 const uint16_t* Rando_NewFile_WorldOpenFlags(size_t* count);
 

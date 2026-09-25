@@ -76,7 +76,7 @@ callable at the Palace-of-Winds entrance on JP/USA but not EU, and JP text is ~2
 saves ~5 s on cart; only mGBA/NanoBoyAdvance respect the delay; flashcarts banned.
 
 ### Randomizer (community + this port)
-Community tool `minishmaker/randomizer` patches the **EU ROM only**; its logic guarantees a glitchless-
+The community tool studied here patches the **EU ROM only**; its logic guarantees a glitchless-
 completable seed, with `Disable glitches` OFF promoting speedrun glitches into logic ("glitched
 beatability") and `Obscure spots` adding knowledge-gated checks. The Google Doc you linked
 ("TMCR Obscure Locations infodump") documents the latter. *This repo ships its own native rando — see
@@ -235,5 +235,5 @@ Default OFF. Touch points: `port/port_runtime_config.{h,cpp}`, `port/port_bios.c
 ## Sources
 - TMC Speedruns Wiki — https://tmcspeedruns.wiki.gg/ · ZeldaSpeedRuns — https://www.zeldaspeedruns.com/tmc/
 - speedrun.com — https://www.speedrun.com/tmc (+ `/tmcce`) · Community hub — https://sites.google.com/view/tmcspeedruns
-- Community randomizer — https://github.com/minishmaker/randomizer · Decomp — https://github.com/zeldaret/tmc
+- Community randomizer provenance — [third-party licenses](../THIRD-PARTY-LICENSES.md) · Decomp — https://github.com/zeldaret/tmc
 - Code citations are to this repo (`/home/sian/tmc`) at the commit checked out 2026-06-13.

@@ -4,6 +4,7 @@
 #include "menu.h"
 #include "main.h"
 #include "fileselect.h"
+#include <string.h>
 
 typedef struct SaveFileStatus {
     u16 checksum1;
@@ -172,8 +173,18 @@ u32 WriteSaveFile(u32 index, SaveFile* saveFile) {
     /* Retail-layout stamp read by port_save.c's <= v0.9.0 flag migration. */
     saveFile->filler4ac[sizeof(saveFile->filler4ac) - 1] = 1;
     {
+        extern bool Rando_IsActive(void);
         extern bool Port_RandoSave_SaveActiveSlot(int slot);
-        Port_RandoSave_SaveActiveSlot((int)index);
+        extern u64 Port_RandoSave_ActiveBindingHash(void);
+        if (Rando_IsActive()) {
+            if (!Port_RandoSave_SaveActiveSlot((int)index))
+                return 0;
+            memcpy(saveFile->filler4ac, PC_RANDO_SAVE_MARKER, sizeof(PC_RANDO_SAVE_MARKER));
+            u64 binding = Port_RandoSave_ActiveBindingHash();
+            if (binding == 0)
+                return 0;
+            memcpy(saveFile->filler4ac + PC_RANDO_SAVE_BINDING_OFFSET, &binding, sizeof(binding));
+        }
     }
 #endif
     return DataDoubleWriteWithStatus(index, saveFile);

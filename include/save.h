@@ -7,6 +7,13 @@
 
 #define FILENAME_LENGTH 6
 
+#ifdef PC_PORT
+/* Native randomizer saves need their matching .randomizer sidecar. Store this
+ * in retail-unused EEPROM padding so a missing sidecar cannot open as vanilla. */
+#define PC_RANDO_SAVE_MARKER "PICORI-RANDO"
+#define PC_RANDO_SAVE_BINDING_OFFSET sizeof(PC_RANDO_SAVE_MARKER)
+#endif
+
 #ifndef SAVE_HEADER_DEFINED
 #define SAVE_HEADER_DEFINED
 typedef struct {

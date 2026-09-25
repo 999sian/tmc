@@ -59,6 +59,11 @@ void LinkHoldingItem_Action1(LinkHoldingItemEntity* this) {
             this->unk_68 = GiveItem(super->type, super->type2);
             if (this->completionFlag != 0) {
                 SetFlag(this->completionFlag);
+#ifdef PC_PORT
+                if (this->completionFlag == (0x4000 | FIGURE_ALLCOMP)) {
+                    gSave.stats.hasAllFigurines = 1;
+                }
+#endif
                 this->completionFlag = 0;
             }
             switch (super->type) {
@@ -76,6 +81,11 @@ void LinkHoldingItem_Action1(LinkHoldingItemEntity* this) {
             GiveItem(super->type, super->type2);
             if (this->completionFlag != 0) {
                 SetFlag(this->completionFlag);
+#ifdef PC_PORT
+                if (this->completionFlag == (0x4000 | FIGURE_ALLCOMP)) {
+                    gSave.stats.hasAllFigurines = 1;
+                }
+#endif
                 this->completionFlag = 0;
             }
 #ifdef MULTI_REGION

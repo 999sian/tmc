@@ -285,6 +285,15 @@ static uint32_t BusinessScrub_RandoKey(const struct SalesOffering* offer) {
             return UINT32_MAX;
     }
 }
+
+static bool32 BusinessScrub_CreateSaleItem(u8 item, u8 subtype, u16 completionFlag) {
+    if (CreateItemEntityWithFlag(item, subtype, 0, completionFlag)) {
+        return TRUE;
+    }
+    SoundReq(SFX_MENU_ERROR);
+    SetPlayerControl(0);
+    return FALSE;
+}
 #endif
 
 void BusinessScrub_Action5(BusinessScrubEntity* this) {
@@ -298,7 +307,9 @@ void BusinessScrub_Action5(BusinessScrubEntity* this) {
                 MessageFromTarget(TEXT_INDEX(TEXT_BUSINESS_SCRUB, 0x04));
                 SetPlayerControl(0);
             } else {
+#ifndef PC_PORT
                 ModRupees(-offer->price);
+#endif
                 switch (offer->field_0x0 >> 2) {
                     case 0: { // random kinstone
                         u8 item = offer->offeredItem;
@@ -314,15 +325,26 @@ void BusinessScrub_Action5(BusinessScrubEntity* this) {
                             }
                         }
 #endif
+#ifdef PC_PORT
+                        /* Keep the sale available if the item-get entities
+                         * cannot be allocated. Commit its flag on GiveItem. */
+                        if (!BusinessScrub_CreateSaleItem(item, subtype, REGION_IS_USA ? KS_B06 : 0)) {
+                            break;
+                        }
+                        ModRupees(-offer->price);
+#else
                         CreateItemEntity(item, subtype, 0);
+#endif
 
                         super->action = 6;
                         super->timer = 4;
                         this->unk_81 = 0;
                         sub_080290E0(this, 3);
+#ifndef PC_PORT
                         if (REGION_IS_USA) {
                             SetLocalFlag(KS_B06);
                         }
+#endif
                         return;
                     }
                     case 1: { // refill, bottle, specific kinstone
@@ -336,7 +358,16 @@ void BusinessScrub_Action5(BusinessScrubEntity* this) {
                             }
                         }
 #endif
+#ifdef PC_PORT
+                        /* SetFlag interprets bit 14 as the global bank. */
+                        u16 completionFlag = offer->offeredItem == ITEM_BOTTLE1 ? (0x4000 | AKINDO_BOTTLE_SELL) : 0;
+                        if (!BusinessScrub_CreateSaleItem(item, itemSubtype, completionFlag)) {
+                            break;
+                        }
+                        ModRupees(-offer->price);
+#else
                         CreateItemEntity(item, itemSubtype, 0);
+#endif
                         super->timer = 4;
                         sub_0802922C(this);
                         return;
@@ -352,7 +383,14 @@ void BusinessScrub_Action5(BusinessScrubEntity* this) {
                             }
                         }
 #endif
+#ifdef PC_PORT
+                        if (!BusinessScrub_CreateSaleItem(item, itemSubtype, 0)) {
+                            break;
+                        }
+                        ModRupees(-offer->price);
+#else
                         CreateItemEntity(item, itemSubtype, 0);
+#endif
                         super->timer = 8;
                         sub_0802922C(this);
                         return;
@@ -624,7 +662,9 @@ void sub_0802922C(BusinessScrubEntity* this) {
 
     switch (offer->offeredItem) {
         case ITEM_BOTTLE1:
+#ifndef PC_PORT
             SetGlobalFlag(AKINDO_BOTTLE_SELL);
+#endif
         // It only matters here that ITEM_BOMBS10 is here and some item that is higher
         // Not sure about the original code
         case ITEM_ARROWS30:

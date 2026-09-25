@@ -11,6 +11,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -465,15 +466,29 @@ def make_env() -> dict:
 
     return env
 
+def stage_rando_logic(dist_dir: Path) -> None:
+    """Ship the editable default logic without overwriting a local copy."""
+    source = REPO_ROOT / "assets" / "rando" / "default.logic"
+    target = dist_dir / "assets" / "rando" / "default.logic"
+    if not source.is_file():
+        warn("assets/rando/default.logic not found — randomizer will use built-in logic")
+        return
+    if target.exists():
+        info(f"Keeping existing {target.relative_to(REPO_ROOT)}")
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    ok(f"default.logic → {target.relative_to(REPO_ROOT)}")
+
 def build_version(version: str, env: dict, non_interactive: bool = False,
                   slim: bool = False, multi_region: bool = True) -> Optional[Path]:
     """Build tmc_pc for `version` and stage it under dist/<version>/.
 
-    `slim=True` produces a minimal dist (just the binary). The
+    `slim=True` produces a minimal dist (the binary and default.logic). The
     embedded extractor + embedded sounds.json fallback in tmc_pc
     handle first-launch asset extraction and audio metadata from a
     bare `tmc_pc + baserom.gba` install, so the dist no longer
-    needs to ship `assets/` or a separate `sounds.json`. Trade-off:
+    needs to ship ROM assets or a separate `sounds.json`. Trade-off:
     first launch takes ~3-5 s with a progress bar instead of being
     instant. After that first run, `assets/` lives next to the
     binary and warm launches are instant either way.
@@ -650,25 +665,36 @@ def build_version(version: str, env: dict, non_interactive: bool = False,
                 ok(f"{src_lib.name} →  dist/{version}/")
 
     if slim:
-        # In slim mode the binary is the entire dist. tmc_pc's
-        # embedded extractor will create assets/ on first run, and
+        # In slim mode only the small editable logic file is staged.
+        # tmc_pc's embedded extractor will create ROM assets/ on first run, and
         # the embedded sounds.json fallback (compiled into the
         # binary by tools/generate_sounds_embed.py) handles audio.
-        info("Slim mode — assets/, assets_src/, and sounds.json are NOT copied.")
+        stage_rando_logic(dist_dir)
+        info("Slim mode — ROM assets/, assets_src/, and sounds.json are NOT copied.")
         info("tmc_pc will self-extract assets on first launch using the embedded extractor.")
         return dst_bin
 
     # Runtime assets (build/<version>/assets/) and editable assets (build/<version>/assets_src/)
-    for src_name in ("assets", "assets_src"):
-        src = REPO_ROOT / "build" / version / src_name
-        dst = dist_dir / src_name
-        if src.exists():
-            if dst.exists():
-                shutil.rmtree(dst)
-            shutil.copytree(src, dst)
-            ok(f"{src_name}/  →  dist/{version}/{src_name}/")
-        else:
-            warn(f"build/{version}/{src_name}/ not found — skipping")
+    # A previous dist may contain a user-edited logic file or additional
+    # randomizer files. Keep that directory across the ROM asset refresh.
+    rando_dst = dist_dir / "assets" / "rando"
+    with tempfile.TemporaryDirectory(prefix="tmc-rando-assets-") as backup_dir:
+        rando_backup = Path(backup_dir) / "rando"
+        if rando_dst.is_dir():
+            shutil.copytree(rando_dst, rando_backup)
+        for src_name in ("assets", "assets_src"):
+            src = REPO_ROOT / "build" / version / src_name
+            dst = dist_dir / src_name
+            if src.exists():
+                if dst.exists():
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+                ok(f"{src_name}/  →  dist/{version}/{src_name}/")
+            else:
+                warn(f"build/{version}/{src_name}/ not found — skipping")
+        if rando_backup.is_dir():
+            shutil.copytree(rando_backup, rando_dst, dirs_exist_ok=True)
+    stage_rando_logic(dist_dir)
 
     sounds_src = REPO_ROOT / "assets" / "sounds.json"
     if sounds_src.exists():
@@ -695,7 +721,7 @@ def parse_args() -> argparse.Namespace:
         "--slim",
         action="store_true",
         help=(
-            "Produce a minimal dist/<version>/ containing only tmc_pc. "
+            "Produce a minimal dist/<version>/ containing tmc_pc and default.logic. "
             "Skips the standalone asset_extractor invocation, the "
             "assets/ + assets_src/ copy, and the on-disk sounds.json copy. "
             "tmc_pc self-extracts assets on first launch (3-5 s) and uses "
