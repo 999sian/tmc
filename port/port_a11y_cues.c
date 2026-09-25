@@ -351,12 +351,12 @@ void Port_A11y_ScanSurroundings(void) {
  * nearby threats. */
 #define A11Y_RADAR_TILES 8
 
-/* Per-category enables — config (Port_Config_*) drives these; default on. */
-static bool sCuePassive   = true;
-static bool sCueFootsteps = true;
-static bool sCueHazards   = true;
-static bool sCueRadar     = true;
-static bool sCueWalls     = true;
+/* Per-category enables — config (Port_Config_*) drives these; default off. */
+static bool sCuePassive   = false;
+static bool sCueFootsteps = false;
+static bool sCueHazards   = false;
+static bool sCueRadar     = false;
+static bool sCueWalls     = false;
 
 /* Frame-to-frame state (game thread only). */
 static int  sLastPx, sLastPy;
