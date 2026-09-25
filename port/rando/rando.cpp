@@ -14,6 +14,7 @@
 #include "rando_keymap.h"
 #ifdef PC_PORT
 #include "rando_runtime.h"
+#include "port_debug_query.h"
 #endif
 
 #include <stdarg.h>
@@ -3034,16 +3035,109 @@ static void BuildSpoiler(uint64_t seed, const RandomizerSettings* settings) {
     AppendEntranceSpoiler();
 }
 
+static const char* SpoilerScriptedSite(const char* name) {
+    static const struct {
+        const char* key;
+        const char* site;
+    } kSites[] = {
+        { "Smith_Floor_Item1", "Smith's house - floor pickup 1" },
+        { "Smith_Floor_Item2", "Smith's house - floor pickup 2" },
+        { "Droplets_Entrance_B2_WestIceblock", "Temple of Droplets - entrance B2 - west ice block" },
+        { "Town_Shop_80Item", "Hyrule Town - Stockwell's shop - 80-rupee item" },
+        { "Town_Shop_300Item", "Hyrule Town - Stockwell's shop - 300-rupee item" },
+        { "Town_Dojo_NPC1", "Hyrule Town - Swiftblade's dojo - Spin Attack lesson" },
+        { "Town_Dojo_NPC2", "Hyrule Town - Swiftblade's dojo - Rock Breaker lesson" },
+        { "Town_Dojo_NPC3", "Hyrule Town - Swiftblade's dojo - Dash Attack lesson" },
+        { "Town_Dojo_NPC4", "Hyrule Town - Swiftblade's dojo - Down Thrust lesson" },
+        { "Crenel_Dojo_NPC", "Mt Crenel - Grayblade's dojo - Roll Attack lesson" },
+        { "Castle_Dojo_NPC", "Hyrule Castle - Grimblade's dojo - Sword Beam lesson" },
+        { "Hylia_Dojo_NPC", "Lake Hylia - Waveblade's dojo - Peril Beam lesson" },
+        { "Swamp_Dojo_NPC", "Castor Wilds - Swiftblade the First - Great Spin lesson" },
+        { "Swamp_WaterfallFusion_DojoNPC", "Castor Wilds waterfall - Scarblade - Fast Spin lesson" },
+        { "FallsLower_WaterfallFusion_DojoNPC", "Veil Falls waterfall - Splitblade - Fast Split lesson" },
+        { "NorthField_WaterfallFusion_DojoNPC", "North Hyrule Field waterfall - Greatblade - Long Spin lesson" },
+        { "Town_Cuccos_Lv_10_NPC", "Hyrule Town - Anju's Cucco game - round 10 reward" },
+        { "Hylia_DogNPC", "Lake Hylia - Stockwell's lake house - feed the dog" },
+        { "MinishVillage_BarrelHouse_Item", "Minish Village - barrel house - Jabber Nut" },
+        { "Town_Jullieta_Item", "Hyrule Town - Julietta's house - Red Book" },
+        { "Town_DrLeft_AtticItem", "Hyrule Town - Dr. Left's attic - Green Book" },
+        { "Hylia_MayorCabin_Item", "Lake Hylia - mayor's cabin - Blue Book" },
+        { "Crenel_Melari_NPC", "Mt Crenel - Melari's mine - Melari reward" },
+        { "Town_ShoeShop_NPC", "Hyrule Town - Rem's shoe shop - wake-up reward" },
+        { "MinishWoods_BombMinish_NPC1", "Minish Woods - Bomb Minish - Bomb Bag reward" },
+        { "MinishWoods_BombMinish_NPC2", "Minish Woods - Bomb Minish - Remote Bombs reward" },
+        { "Minish_GreatFairy_NPC", "Minish Woods - Great Fairy reward" },
+        { "Crenel_GreatFairy_NPC", "Mt Crenel - Great Fairy reward" },
+        { "Valley_GreatFairy_NPC", "Royal Valley - Great Fairy reward" },
+        { "Valley_DampeNPC", "Royal Valley - Dampe's house - Graveyard Key reward" },
+        { "MinishWoods_WitchHut_Item", "Minish Woods - Syrup's witch hut - Mushroom purchase" },
+        { "Falls_Biggoron", "Veil Falls - Biggoron shield exchange" },
+        { "Town_Library_YellowMinish_NPC", "Hyrule Town library bookshelf - yellow Minish reward" },
+        { "Deepwood_Prize", "Deepwood Shrine - post-boss element pickup" },
+        { "CoF_Prize", "Cave of Flames - post-boss element pickup" },
+        { "Droplets_Prize", "Temple of Droplets - post-boss element pickup" },
+        { "Palace_Prize", "Palace of Winds - post-boss element pickup" },
+        { "Town_CafeLady_NPC", "Hyrule Town cafe - seated woman's Kinstone reward" },
+        { "Crypt_Prize", "Royal Crypt - King Gustaf's Kinstone reward" },
+        { "WindTribe_2F_Gregal_NPC1", "Wind Tribe Tower 2F - Gregal's Shells reward" },
+        { "WindTribe_2F_Gregal_NPC2", "Wind Tribe Tower 2F - Gregal's Light Arrows reward" },
+        { "Trilby_Scrub_NPC", "Trilby Highlands - Business Scrub bottle sale" },
+        { "Crenel_Scrub_NPC", "Mt Crenel - Business Scrub Grip Ring sale" },
+        { "Fortress_Prize", "Fortress of Winds - Ocarina bird drop after boss" },
+        { "Town_Bell_HP", "Hyrule Town - bell heart piece" },
+        { "SouthField_Tingle_NPC", "South Hyrule Field - Tingle trophy reward" },
+    };
+    for (const auto& site : kSites) {
+        if (strcmp(name, site.key) == 0)
+            return site.site;
+    }
+    return NULL;
+}
+
 static void BuildLogicSpoiler(uint64_t seed) {
     sSpoiler.clear();
     SpoilerAppend("Seed: %llu\nLogic: Picori (%zu locations, fingerprint %016llX)\n\n",
                   (unsigned long long)seed, sLogicCount, (unsigned long long)sLogicFingerprint);
     for (size_t i = 0; i < sLogicCount; ++i) {
-        if (sLogicItems[i] == ITEM_NONE || RandoLogic_GetLocationKeyAt((uint32_t)i) == UINT32_MAX ||
+        const uint32_t key = RandoLogic_GetLocationKeyAt((uint32_t)i);
+        if (sLogicItems[i] == ITEM_NONE || key == UINT32_MAX ||
             RandoLogic_LocationHasTagName((uint32_t)i, "NoSpoiler"))
             continue;
+        const char* name = RandoLogic_GetLocationName((uint32_t)i);
+        const char* scripted_site = SpoilerScriptedSite(name);
         const std::string item_name = SpoilerItemName(sLogicItems[i], sLogicSubtypes[i]);
-        SpoilerAppend("%-40s : %s\n", RandoLogic_GetLocationName((uint32_t)i), item_name.c_str());
+        if ((key & 0xFF000000u) != 0) {
+            if (scripted_site != NULL)
+                SpoilerAppend("%s [%s] : %s\n", scripted_site, name, item_name.c_str());
+            else
+                SpoilerAppend("%-40s : %s\n", name, item_name.c_str());
+            continue;
+        }
+
+        const unsigned area = (key >> 16) & 0xFFu;
+        const unsigned room = (key >> 8) & 0xFFu;
+        const unsigned check = key & 0xFFu;
+        const bool chest = strncmp(name, "Chest_", 6) == 0;
+        if (scripted_site != NULL)
+            SpoilerAppend("%s ", scripted_site);
+        SpoilerAppend("%-40s [", name);
+#ifdef PC_PORT
+        const char* area_name = Port_DebugQuery_AreaName((uint8_t)area);
+        if (area_name != NULL)
+            SpoilerAppend("%s; ", area_name);
+#endif
+        SpoilerAppend("area 0x%02X, room 0x%02X, ", area, room);
+        if (chest)
+            SpoilerAppend("chest #%u", check + 1);
+        else
+            SpoilerAppend("ground flag 0x%02X", check);
+#ifdef PC_PORT
+        unsigned x, y;
+        bool tile_coords;
+        if (Rando_Runtime_GetCheckPosition(key, chest, &x, &y, &tile_coords))
+            SpoilerAppend(", %s (%u,%u)", tile_coords ? "room tile" : "room pixel", x, y);
+#endif
+        SpoilerAppend("] : %s\n", item_name.c_str());
     }
     AppendEntranceSpoiler();
 }
