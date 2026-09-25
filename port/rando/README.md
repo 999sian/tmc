@@ -1,11 +1,10 @@
 # Native randomizer
 
-Fresh Picori seeds use the Picori-authored `assets/rando/picori.logic` rules
-for item pools, location requirements, placement, and reachability. The
-parser and generator run inside `tmc_pc` without patching the ROM. Picori
-uses its own reproducible seed sequence. `build.py` stages the rules in full
-and slim distributions. The engine's GPL-3.0 provenance and attribution are
-in `LICENSE` and `THIRD-PARTY-LICENSES.md`.
+Fresh Picori seeds use compiled C++ rules in `picori_rules.hpp` for item
+pools, location requirements, placement, and reachability. Generation runs
+inside `tmc_pc` without patching the ROM or loading a separate rules file.
+Picori uses its own reproducible seed sequence. The engine's GPL-3.0
+provenance and attribution are in `LICENSE` and `THIRD-PARTY-LICENSES.md`.
 
 ## Current profile
 
@@ -14,13 +13,13 @@ shuffled check needs a unique in-game award key before a seed can activate.
 Chest rules already use native chest ordinals, which the runtime validates
 against the active ROM. Ground items and scripted rewards use the bindings in
 `rando_keymap.c`. `Rando_OverrideLocationKey` awards the placed item, and
-`Rando_VerifyCurrentSeed` checks the active parser table against the authored
+`Rando_VerifyCurrentSeed` checks the active table against the authored
 item/check reachability graph. This does not prove every check is accessible
 in a full gameplay run.
 
 The three item pool choices are:
 
-| Menu choice | Logic `ITEM_POOL` |
+| Menu choice | Item pool setting |
 | --- | --- |
 | Balanced | `ITEM_POOL_NORMAL` |
 | Reduced | `ITEM_POOL_RIP` |
@@ -28,7 +27,7 @@ The three item pool choices are:
 
 Goal-only reachability is the supported target. The all non-key and all-check
 targets are unavailable until shop, event, and fusion access is modeled in the
-rules. Dojos, starting sword, and item pool choices are passed as `.logic`
+rules. Dojos, starting sword, and item pool choices are passed as rule
 overrides. Open world applies starting flags and runtime shortcuts. Fresh seed
 generation currently rejects entrance shuffle and dungeon-item shuffle. By
 default, a new file starts with the Smith Sword and skips
@@ -49,8 +48,9 @@ kinstone-off generation are also currently rejected.
 
 ## Code and saves
 
-- `rando_logic.cpp` parses `.logic`, places items, evaluates reachability,
-  and checks accessibility. `rando.cpp` activates its table and routes awards.
+- `picori_rules.hpp` defines the compiled rules. `rando_logic.cpp` places
+  items, evaluates reachability, and checks accessibility. `rando.cpp`
+  activates its table and routes awards.
   Its older native location graph remains only for loading legacy saves.
 - `rando_runtime.c` validates native chest ordinals and ground flags against
   the active ROM; `rando_keymap.c` binds scripted awards. New-file flags and story
@@ -59,14 +59,13 @@ kinstone-off generation are also currently rejected.
   settings. `rando_save.c` stores each slot in a profile-local `.randomizer`
   sidecar without changing the vanilla save layout.
 
-Sidecar v8 stores up to 4096 parser entries, their item subtypes, settings,
-`.logic` overrides, and a source fingerprint of the logic bytes plus
-overrides. Loading refuses a parser seed when that source no longer matches.
-Parser seeds created with the removed rules file are not automatically
-migrated to `picori.logic`. Older v6 (211- and 228-entry) and v7 (228-entry)
+Sidecar v8 stores up to 4096 rule entries, their item subtypes, settings,
+rule overrides, and a rules fingerprint. Loading refuses a seed when its
+rules no longer match. The compiled rules retain the Picori v1 fingerprint
+and location order, so existing v8 Picori saves remain loadable with matching
+settings and overrides. Older v6 (211- and 228-entry) and v7 (228-entry)
 sidecars still load through the legacy table and migrate when rewritten.
-Share the seed, settings, and logic file together for matching Picori
-placements. A `PICORI-RANDO` marker in
+Share the seed and settings for matching Picori placements. A `PICORI-RANDO` marker in
 unused save padding prevents a randomizer slot with a missing or incompatible
 sidecar from silently starting as a vanilla game.
 
@@ -88,7 +87,7 @@ TMC_REPRO_RANDO=1 TMC_AUTOPLAY=1 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
   ./tmc_pc --no-audio
 ```
 
-The ROM-backed rules check requires a USA baseline ROM. It verifies active
+The ROM-backed rules check requires a USA baseline ROM. It verifies compiled
 Picori pickup keys against ROM chest ordinals, ground items, and scripted
 bindings. The offline test checks deterministic placement, native reward keys, the
 three pools, Obscure checks, unsupported-setting rejection, spoiler logs,

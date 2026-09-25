@@ -20,8 +20,6 @@ extern "C" {
 #define RANDO_LOGIC_MAX_SETTING_OPTIONS 24
 #define RANDO_LOGIC_MAX_TAGS 256
 #define RANDO_LOGIC_MAX_LOC_TAGS 24
-#define RANDO_LOGIC_MAX_PRIZE_RULES 16
-#define RANDO_LOGIC_MAX_EVENT_DEFINES 512
 #define RANDO_LOGIC_MAX_COLOR_SETS 8
 
 typedef enum RandoSettingType {
@@ -36,16 +34,16 @@ typedef struct RandoLogicSetting {
     char label[48];
     char tab[24];      /* window tab from the directive (e.g. "Main Settings") */
     char group[32];    /* setting group within the tab (e.g. "Dungeon Settings") */
-    char tooltip[1152]; /* upstream description text; \n sequences unescaped */
+    char tooltip[1152];
     RandoSettingType type;
     bool flag_on;                 /* current state (flag) */
-    bool default_flag;            /* file-default state before overrides */
+    bool default_flag;            /* built-in default before overrides */
     int number;                   /* current value (number) */
-    int default_number;           /* file-default value before overrides */
+    int default_number;           /* built-in default before overrides */
     int num_min, num_max;         /* number bounds */
     int option_count;             /* dropdown */
     int option_index;             /* current dropdown option */
-    int default_option;           /* file-default option before overrides */
+    int default_option;           /* built-in default option before overrides */
     char opt_label[RANDO_LOGIC_MAX_SETTING_OPTIONS][40];
     char opt_value[RANDO_LOGIC_MAX_SETTING_OPTIONS][32];
 } RandoLogicSetting;
@@ -90,29 +88,26 @@ typedef struct RandoLogicStats {
     uint32_t define_count;
     uint32_t native_mapped_items;
     uint32_t tag_count;
-    uint32_t prize_rule_count;
-    uint32_t eventdefine_count;
     bool loaded;
     bool native_assignable;
     char error[128];
 } RandoLogicStats;
 
 void RandoLogic_Reset(void);
-bool RandoLogic_LoadText(const char* text, size_t len);
 bool RandoLogic_IsLoaded(void);
 RandoLogicStats RandoLogic_GetStats(void);
-bool RandoLogic_LoadDefaultFiles(void);
+bool RandoLogic_LoadBuiltIn(void);
 RandoStatus RandoLogic_Generate(uint64_t seed, const RandomizerSettings* settings,
                                 uint16_t* out_table, size_t out_table_count,
                                 uint64_t* out_seed);
 uint8_t RandoLogic_GetGeneratedItemSubtype(uint32_t location_index);
-/* Exact match against the last successful parser generation in this process.
+/* Exact match against the last successful built-in generation in this process.
  * Regenerate with the saved seed/settings after reload, then compare before
- * using the parser's retained symbol assignments. */
+ * using the retained symbol assignments. */
 bool RandoLogic_GeneratedTableMatches(uint64_t seed, const uint16_t* items,
                                       const uint8_t* subtypes, size_t count);
-/* FNV-1a of the loaded raw logic bytes and override pairs in insertion order.
- * Returns 0 when no parsed logic is loaded. */
+/* Stable rules version and override pairs in insertion order. Returns 0 when
+ * no rules are loaded. */
 uint64_t RandoLogic_SourceFingerprint(void);
 int RandoLogic_FindLocationByKey(uint32_t key);
 uint32_t RandoLogic_GetLocationKeyAt(uint32_t index);
@@ -129,18 +124,16 @@ void RandoLogic_EvaluateReachability(const uint16_t* active_table,
                                      bool* out_reached,
                                      uint32_t location_count);
 
-/* Declared settings (from !flag/!dropdown/!numberbox). The menu enumerates
- * these, lets the player change them, and the choices are applied as define
- * overrides + a reparse before generation. */
+/* Declared settings. The menu enumerates these; choices are applied as define
+ * overrides before rebuilding the model. */
 uint32_t RandoLogic_GetSettingCount(void);
 const RandoLogicSetting* RandoLogic_GetSetting(uint32_t index);
 void RandoLogic_ClearOverrides(void);
 void RandoLogic_SetOverride(const char* define, const char* value);
-bool RandoLogic_Reparse(void);
+bool RandoLogic_Rebuild(void);
 
-/* UI override enumeration (sidecar persistence): a stored seed must reload
- * with the same define overrides it was generated under, or eventdefine-
- * driven runtime features would evaluate against file defaults. */
+/* UI override enumeration (sidecar persistence): a stored seed reloads with
+ * the same choices it was generated under. */
 uint32_t RandoLogic_GetOverrideCount(void);
 bool RandoLogic_GetOverride(uint32_t index, const char** out_name, const char** out_value);
 
@@ -150,7 +143,7 @@ bool RandoLogic_GetOverride(uint32_t index, const char** out_name, const char** 
  * when `index` is not an entrance location / nothing was assigned. */
 int RandoLogic_GetEntranceAssignment(uint32_t location_index);
 /* Sidecar restore path: entrance assignments are generation-time state, so a
- * reloaded slot re-injects them (guarded by a parse fingerprint upstream). */
+ * reloaded slot re-injects them after its rules fingerprint is checked. */
 void RandoLogic_ClearEntranceAssignments(void);
 bool RandoLogic_RestoreEntranceAssignment(uint32_t location_index, int subtype);
 
@@ -162,26 +155,12 @@ bool RandoLogic_RestoreMusicAssignment(uint32_t area, int song);
 /* True when the location carries the named pool tag (e.g. "NoSpoiler"). */
 bool RandoLogic_LocationHasTagName(uint32_t location_index, const char* tag_name);
 
-/* Bind a native runtime key (e.g. area-room-flag) onto a .logic location that
- * carries only a `.logic`-file precise ROM address. Fills empty keys only. */
+/* Bind a native runtime key (e.g. area-room-flag) onto a compiled location
+ * that has no direct key. Fills empty keys only. */
 bool RandoLogic_BindRuntimeKey(const char* location_name, uint32_t key);
-/* Replace a parsed chest key after converting its TileEntity index to the
+/* Replace a chest key after converting its TileEntity index to the
  * native chest ordinal. Rejects helpers, invalid keys, and collisions. */
 bool RandoLogic_SetRuntimeKeyAt(uint32_t index, uint32_t key);
-
-/* Event defines (`!eventdefine`): the GBA randomizer writes these to the ROM
- * patch assembler; natively they configure runtime features (start inventory,
- * cosmetics, open world, damage multipliers, ...). Values are stored raw and
- * evaluated on demand: every `RAND_INT` occurrence is substituted with a
- * seed-derived hex value (matching the C# text-substitution semantics), then
- * the C-like integer expression is evaluated. */
-uint32_t RandoLogic_GetEventDefineCount(void);
-const char* RandoLogic_GetEventDefineName(uint32_t index);
-/* True if `name` is event-defined. `*out_has_value` false = flag-only. */
-bool RandoLogic_HasEventDefine(const char* name, bool* out_has_value);
-/* Evaluate the define's value expression for `seed`. False if undefined,
- * flag-only, or unparseable. */
-bool RandoLogic_EvalEventDefine(const char* name, uint64_t seed, uint32_t* out_value);
 
 #ifdef __cplusplus
 }

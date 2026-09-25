@@ -181,7 +181,7 @@ void Bird_Type2_Action1(BirdEntity* this) {
         u8 subtype = 0;
 #ifdef PC_PORT
         /* Randomizer: the falling-bird ocarina is the Fortress of Winds
-         * dungeon prize (.logic Fortress_Prize). */
+         * dungeon prize (Fortress_Prize). */
         (void)Rando_OverrideLocationKey(
             Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_FORTRESS_PRIZE, 0, 0), &item,
             &subtype);

@@ -1,7 +1,7 @@
 /*
  * Native pickup keys for scripted and special Picori rule locations.
  *
- * Direct chest and flagged ground-item keys live in picori.logic. These
+ * Direct chest and flagged ground-item keys live in built-in rules. These
  * remaining aliases bind special ground pickups and scripted rewards to
  * the keys emitted by their game hooks. Ground flags are USA baseline IDs;
  * the multi-region build remaps them before seed generation.

@@ -1846,11 +1846,10 @@ static const char* const kRandoPoolTooltip =
     "Balanced uses the standard pool; Reduced removes "
     "some extra items; Plentiful adds extra major items. Every choice uses "
     "the same reachability check before the seed starts.";
-/* ---- Cosmetics (.logic !color settings) ----------------------------------
+/* ---- Randomizer cosmetics -------------------------------------------------
  * A RANDO_SETTING_COLOR setting carries option_count default color sets
- * (RGB555 hex strings in opt_value[]). The override value consumed by
- * ParseColorDirective is comma-separated RGB555 hex, one per set
- * (e.g. "7C1F,03E0"). Per the `.logic` spec, defaults never set defines:
+ * (RGB555 hex strings in opt_value[]). The override value is comma-separated
+ * RGB555 hex, one per set (e.g. "7C1F,03E0"). Defaults never set defines:
  * the override only exists once the player actually edits a color, so an
  * enabled-but-untouched setting still rolls vanilla. */
 extern "C" void Rando_Cosmetic_Apply(void);                           /* rando_cosmetic.cpp — live palette re-apply */
@@ -1880,8 +1879,7 @@ static bool RandoUi_FindOverrideValue(const char* define, const char** out_value
     return false;
 }
 
-/* GBA RGB555 layout: R in the low 5 bits (matches ParseColorDirective's
- * packing and the `0x..._0 & 0x1F` eventdefine extraction in .logic). */
+/* GBA RGB555 layout: R in the low 5 bits. */
 static void RandoUi_Rgb555ToFloat(unsigned v, float out[3]) {
     out[0] = (float)(v & 0x1F) / 31.0f;
     out[1] = (float)((v >> 5) & 0x1F) / 31.0f;
@@ -1940,10 +1938,10 @@ static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
     return st;
 }
 
-/* Parser overrides are edited only before a seed is active. A live seed uses
- * this parser's locations and keys, so reparsing it would change its awards. */
-static void RandoUi_Reparse(void) {
-    RandoLogic_Reparse();
+/* Rule overrides are edited only before a seed is active. Rebuilding the
+ * locations and keys of a live seed would change its awards. */
+static void RandoUi_Rebuild(void) {
+    RandoLogic_Rebuild();
     Port_RandoFileMenu_PersistLogicOverrides();
 }
 
@@ -1964,15 +1962,13 @@ static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
     }
     RandoLogic_SetOverride(st->define, value);
     st->dirty = true;
-    RandoUi_Reparse();
+    RandoUi_Rebuild();
     std::fprintf(stderr, "[RANDO] color override %s = %s\n", st->define, value);
 }
 
 /* The engine only exposes SetOverride + ClearOverrides-all; an empty-value
- * override is NOT vanilla (ParseColorDirective would still define the bare
- * flag and flip !ifdef blocks). So clearing one define = snapshot the other
- * overrides, ClearOverrides, re-set the survivors, reparse — the selective
- * version of rando_file_menu.c's ClearOverrides+Reparse reset. */
+ * override is still an override. Clearing one define snapshots the others,
+ * resets the list, then rebuilds from the survivors. */
 static void RandoUi_RemoveOverride(const char* define) {
     if (Rando_IsActive())
         return;
@@ -1994,7 +1990,7 @@ static void RandoUi_RemoveOverride(const char* define) {
     RandoLogic_ClearOverrides();
     for (uint32_t i = 0; i < kept; ++i)
         RandoLogic_SetOverride(names[i], values[i]);
-    RandoUi_Reparse();
+    RandoUi_Rebuild();
     std::fprintf(stderr, "[RANDO] color override %s cleared (vanilla)\n", define);
 }
 
@@ -2039,18 +2035,18 @@ static void DrawRandoCosmeticsSection(void) {
 }
 
 /* ---- Logic settings browser (shared by the F8 tab + file-select modal) --
- * The `.logic` file declares per-setting window tab, group, and tooltip
- * text; the browser turns the former flat list into OoTR-style progressive
+ * Picori rules declare per-setting window tab, group, and tooltip text;
+ * the browser turns the former flat list into OoTR-style progressive
  * disclosure: collapsing tab sections, group separators, a search filter,
  * per-setting rules tooltips, modified-from-default markers, and
  * right-click reset. Edits route through the same override+reparse path the
- * engine already uses. Active seeds keep their parsed logic and awards. */
+ * engine already uses. Active seeds keep their rules and awards. */
 
 static void RandoUi_ApplyOverride(const char* define, const char* value) {
     if (Rando_IsActive())
         return;
     RandoLogic_SetOverride(define, value);
-    RandoUi_Reparse();
+    RandoUi_Rebuild();
 }
 
 static bool RandoUi_SettingModified(const RandoLogicSetting* s) {
@@ -2122,7 +2118,7 @@ static void RandoUi_ResetSettingsToDefaults(void) {
         RandoUi_SettingDefaultValue(s, value, sizeof(value));
         RandoLogic_SetOverride(s->define, value);
     }
-    RandoUi_Reparse();
+    RandoUi_Rebuild();
 }
 
 /* ---- Presets (OoTR convention: load changes everything except cosmetics).
@@ -2170,7 +2166,7 @@ static const RandoUiPresetPair kRandoPresetOpen[] = {
 
 static const RandoUiPreset kRandoPresets[] = {
     { "File defaults (Beginner)",
-      "Every setting at the .logic file's defaults - chests and hearts "
+      "Every setting at Picori's defaults - chests and hearts "
       "shuffled, progression close to vanilla. Best first seed.",
       NULL, 0 },
     { "Standard shuffle",
@@ -2208,7 +2204,7 @@ static void RandoUi_ApplyPreset(int preset_index) {
     }
     for (int i = 0; i < p->count; ++i)
         RandoLogic_SetOverride(p->pairs[i].define, p->pairs[i].value);
-    RandoUi_Reparse();
+    RandoUi_Rebuild();
     std::fprintf(stderr, "[RANDO] preset applied: %s\n", p->name);
 }
 
@@ -2269,8 +2265,7 @@ static void DrawRandoSettingRow(const RandoLogicSetting* s, int idx) {
             break;
         }
         case RANDO_SETTING_NUMBER: {
-            /* Commit on release - every commit reparses the whole .logic file,
-             * far too heavy per drag pixel. */
+            /* Commit on release - rebuilding the rules is too heavy per drag pixel. */
             static int sNumEditIdx = -1;
             static int sNumEditVal = 0;
             int v = (sNumEditIdx == idx) ? sNumEditVal : s->number;
@@ -2907,7 +2902,7 @@ static void DrawRibbonRandomizerTab(void) {
 
     ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none)");
     ImGui::Text("Region:      %s", region_label);
-    ImGui::Text("Logic:       picori.logic (%u parsed locations)",
+    ImGui::Text("Rules:       Picori built-in (%u locations)",
                 RandoLogic_GetLocationCountRaw());
 
     if (Rando_IsActive()) {
@@ -3090,7 +3085,7 @@ static void DrawRibbonRandomizerTab(void) {
                 break;
             case RANDO_BAD_SETTINGS:
                 std::snprintf(sRandoResult, sizeof(sRandoResult),
-                              "Rejected: logic file unavailable or unsupported native settings.");
+                              "Rejected: randomizer rules unavailable or unsupported settings.");
                 break;
             default:
                 std::snprintf(sRandoResult, sizeof(sRandoResult),
@@ -4303,7 +4298,7 @@ static void DrawRandoFileMenuModal(void) {
                     Port_RandoFileMenu_RandomizeSeed();
 
                 ImGui::Spacing();
-                ImGui::TextDisabled("Logic: picori.logic");
+                ImGui::TextDisabled("Rules: Picori built-in");
                 int difficulty = Port_RandoFileMenu_Difficulty();
                 ImGui::SetNextItemWidth(160);
                 if (ImGui::Combo("Item pool", &difficulty, kRandoPoolCombo, RANDO_ITEM_POOL_COUNT)) {

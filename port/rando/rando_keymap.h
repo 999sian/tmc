@@ -62,11 +62,11 @@ enum {
     RANDO_SCRUB_KEY_GRIP = 1,
 };
 
-/* Bind native runtime keys onto `.logic` location names (whose
- * address-only entries otherwise lack a PC pickup identity). This includes:
+/* Bind native runtime keys onto compiled location names that lack a direct
+ * PC pickup identity. This includes:
  *   - ground items keyed by area-room-flag
  *   - scripted grant sites keyed in the high-bit runtime namespace below
- * Reparse clears bindings; call after each successful logic load. */
+ * Rebuilding clears bindings; call after each successful rule load. */
 void Rando_Keymap_Apply(void);
 
 /* Native scripted-grant runtime namespace (canonical, engine-derived). Vanilla

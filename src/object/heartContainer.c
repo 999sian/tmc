@@ -86,7 +86,7 @@ static void HeartContainer_Action3(HeartContainerEntity* this) {
         u8 subtype = 0;
         SetFlag(this->flag);
 #ifdef PC_PORT
-        /* Randomizer: boss heart containers are .logic locations
+        /* Randomizer: boss heart containers are rule locations
          * (Deepwood/CoF/Fortress/Droplets/Palace _BossItem). Key by the
          * container's room-local persistence flag, same namespace as
          * itemOnGround pickups. */

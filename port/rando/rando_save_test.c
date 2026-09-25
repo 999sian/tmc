@@ -34,7 +34,9 @@ static bool sLogicSeed;
 static uint64_t sLogicFingerprint;
 static bool sLogicAvailable = true;
 static bool sLogicLoaded = true;
-static uint64_t sLogicVersion = 1;
+/* Fingerprint immediately after the removed Picori v1 rules bytes and 0xff.
+ * v8 sidecars use this as the base before hashing ordered define overrides. */
+static uint64_t sLogicVersion = UINT64_C(0x37ea4d0a0957c8e4);
 static uint32_t sParserLocationCount = RANDO_LOGIC_MAX_LOCATIONS;
 static RandoSidecarOverride sParserOverrides[RANDO_SIDECAR_MAX_LOGIC_OVERRIDES];
 static uint32_t sParserOverrideCount;
@@ -86,15 +88,21 @@ bool RandoLogic_GetOverride(uint32_t index, const char** name, const char** valu
     *value = sParserOverrides[index].value;
     return true;
 }
-bool RandoLogic_LoadDefaultFiles(void) { sLogicLoaded = sLogicAvailable; return sLogicLoaded; }
+bool RandoLogic_LoadBuiltIn(void) { sLogicLoaded = sLogicAvailable; return sLogicLoaded; }
 uint64_t RandoLogic_SourceFingerprint(void) {
     if (!sLogicLoaded) return 0;
     uint64_t hash = sLogicVersion;
     for (uint32_t i = 0; i < sParserOverrideCount; ++i) {
-        for (const char* p = sParserOverrides[i].name; *p; ++p) hash = hash * 33 + (unsigned char)*p;
-        for (const char* p = sParserOverrides[i].value; *p; ++p) hash = hash * 33 + (unsigned char)*p;
+        for (const unsigned char* p = (const unsigned char*)sParserOverrides[i].name;; ++p) {
+            hash = (hash ^ *p) * UINT64_C(1099511628211);
+            if (*p == 0) break;
+        }
+        for (const unsigned char* p = (const unsigned char*)sParserOverrides[i].value;; ++p) {
+            hash = (hash ^ *p) * UINT64_C(1099511628211);
+            if (*p == 0) break;
+        }
     }
-    return hash;
+    return hash ? hash : 1;
 }
 uint32_t RandoLogic_GetLocationCountRaw(void) { return sParserLocationCount; }
 bool Rando_ActivateLogicTable(uint64_t seed, RandomizerSettings settings, const uint16_t* table,
@@ -238,7 +246,7 @@ static void CheckLogicSeed(void) {
     assert(sSettings.start_sword && sParserOverrideCount == 205);
     assert(strcmp(sParserOverrides[204].name, "option204") == 0);
     sLogicVersion++;
-    assert(!Port_RandoSave_LoadSlot(1)); /* a former parser ruleset must not misindex this seed */
+    assert(!Port_RandoSave_LoadSlot(1)); /* changed rules must not misindex this seed */
     assert(Port_RandoSave_LastLoadStatus() == PORT_RANDO_SAVE_INCOMPATIBLE);
     sLogicVersion--;
     sLogicAvailable = false;
@@ -254,6 +262,46 @@ static void CheckLogicSeed(void) {
     assert(sTable[4095] == 255 && sSubtype[4095] == 15);
     assert(Port_RandoSave_LoadSlot(0));
     assert(sSeed == 100 && !sLogicSeed);
+}
+
+static void CheckPrecompiledV8Sidecar(void) {
+    /* Mimic a v8 slot written with the former file-based rules. Keep the
+     * historical fingerprint and EEPROM binding hash fixed across the move
+     * to compiled rules, including ordered setting overrides and placements. */
+    char path[512];
+    BuildSidecarPath(path, sizeof(path));
+    memset(&sSidecar, 0, sizeof(sSidecar));
+    RandoSidecarSlot* rec = &sSidecar.slots[0];
+    rec->active = rec->logic_mode = 1;
+    rec->seed = UINT64_C(0x0102030405060708);
+    rec->count = 4;
+    rec->shuffle_dojos = rec->open_world = rec->start_sword = 1;
+    rec->item_difficulty = RANDO_ITEM_POOL_HARD;
+    rec->accessibility = RANDO_ACCESS_ALL_LOCATIONS;
+    rec->logic_fingerprint = UINT64_C(0x887c6e587df8ba2f);
+    rec->logic_override_count = 2;
+    strcpy(rec->logic_overrides[0].name, "START_SMITH_SWORD");
+    strcpy(rec->logic_overrides[0].value, "true");
+    strcpy(rec->logic_overrides[1].name, "ACCESSIBILITY");
+    strcpy(rec->logic_overrides[1].value, "ACCESS_BEATABLE");
+    const uint16_t items[] = {1, 7, 94, 98};
+    const uint8_t subtypes[] = {0, 0, 0x81, 0};
+    memcpy(rec->logic_table, items, sizeof(items));
+    memcpy(rec->logic_subtype_table, subtypes, sizeof(subtypes));
+    for (size_t a = 0; a < RANDO_SIDECAR_MUSIC_AREAS; ++a) rec->music[a] = -1;
+    assert(WriteSidecarFile(path));
+
+    sLogicVersion = UINT64_C(0x37ea4d0a0957c8e4);
+    sParserLocationCount = 4;
+    sLogicAvailable = true;
+    RandoLogic_ClearOverrides();
+    assert(Port_RandoSave_LoadSlot(0));
+    assert(sSeed == UINT64_C(0x0102030405060708));
+    assert(memcmp(sTable, items, sizeof(items)) == 0);
+    assert(memcmp(sSubtype, subtypes, sizeof(subtypes)) == 0);
+    assert(RandoLogic_SourceFingerprint() == rec->logic_fingerprint);
+    assert(Port_RandoSave_ActiveBindingHash() == UINT64_C(0x8c992ec2ae5d181b));
+    sParserLocationCount = RANDO_LOGIC_MAX_LOCATIONS;
 }
 
 static void CheckActiveBinding(void) {
@@ -308,6 +356,7 @@ int main(void) {
     CheckLegacy(6, 211);
     CheckLegacy(6, 228);
     CheckLegacy(7, 228);
+    CheckPrecompiledV8Sidecar();
     CheckLogicSeed();
     CheckActiveBinding();
 
