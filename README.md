@@ -246,11 +246,9 @@ Notably:
   https://github.com/ipatix/agbplay) is **LGPL-3.0**; those files remain under
   the LGPL and the larger work is not relicensed by linking it.
 
-The in-game randomizer (`port/rando/`) is **derived from** the GPL-3.0 Minish
-Cap randomizer (`minishmaker/randomizer`) — it shares that project's `.logic`
-text format and randomization behaviour — and the Reborn-parity QoL features
-are **ported from** Admentus64/The-Minish-Cap-Reborn (GPL-3.0). Both are
-distributed here under the GPL-3.0, with attribution; see
+The in-game randomizer (`port/rando/`) uses a bundled `.logic` file and runs
+inside the PC port. It derives from GPL-3.0 work, as do the Reborn-parity QoL
+features. Both are distributed here under the GPL-3.0, with attribution in
 [`THIRD-PARTY-LICENSES.md`](THIRD-PARTY-LICENSES.md) and
 [`docs/reborn-parity.md`](docs/reborn-parity.md).
 

@@ -79,6 +79,7 @@ const char* Port_DebugQuery_FlagDesc(int bank, int index);
 #include <ctime>
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -1771,7 +1772,7 @@ static void DrawRibbonWarpTab(void) {
 }
 
 /* Randomizer tab — wraps the native in-process engine at port/rando/.
- * No file I/O, no shell-out, no .NET dependency. Pressing "Roll" rolls
+ * Pressing "Roll" rolls
  * a seed; subsequent item-give intercepts (M1: chest rewards) apply
  * the new permutation immediately. */
 extern "C" const char* Port_FindBaseRomPath(void);
@@ -1779,27 +1780,72 @@ extern "C" const char* Port_FindBaseRomPath(void);
 static char sRandoSeedBuf[64] = "";    /* empty/0 = engine picks; text is hashed */
 static char sRandoResult[192] = { 0 }; /* last roll outcome line */
 static bool sRandoResultOk = true;
-static char sRandoSpoiler[4096] = { 0 };
+static std::vector<char> sRandoSpoiler;
 static bool sRandoSpoilerHidden = false;    /* race-seed convention: hide until revealed */
+static uint64_t sRandoSpoilerHiddenSeed = 0;
+static uint64_t sRandoSpoilerHiddenFingerprint = 0;
 static ImGuiTextFilter sRandoSpoilerFilter; /* spoiler log line filter */
+static std::string sRandoSpoilerExportResult;
+static bool sRandoSpoilerExportOk = false;
 static RandomizerSettings sRandoUiSettings;
 static bool sRandoUiSettingsInit = false;
+
+static void RefreshRandoSpoiler() {
+    if (!Rando_IsActive()) {
+        sRandoSpoiler.clear();
+        sRandoSpoilerHidden = false;
+        return;
+    }
+    if (sRandoSpoilerHidden &&
+        (sRandoSpoilerHiddenSeed != Rando_GetSeed64() ||
+         sRandoSpoilerHiddenFingerprint != Rando_GetLogicFingerprint()))
+        sRandoSpoilerHidden = false;
+    const size_t bytes = Rando_GetSpoiler(nullptr, 0);
+    sRandoSpoiler.resize(bytes);
+    if (bytes != 0)
+        Rando_GetSpoiler(sRandoSpoiler.data(), bytes);
+}
+
+static void ExportRandoSpoiler() {
+    const std::filesystem::path directory =
+        std::filesystem::path(Port_Save_GetActivePath()).parent_path() / "spoilers";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (error) {
+        sRandoSpoilerExportResult = error.message();
+        sRandoSpoilerExportOk = false;
+        return;
+    }
+
+    const RandomizerSettings settings = Rando_GetSettings();
+    const unsigned long long fingerprint = (unsigned long long)(Rando_IsLogicSeed()
+        ? Rando_GetLogicFingerprint() : Rando_SettingsFingerprint(&settings));
+    char filename[96];
+    std::snprintf(filename, sizeof(filename), "seed-%llu-%016llX.txt",
+                  (unsigned long long)Rando_GetSeed64(), fingerprint);
+    const std::filesystem::path path = directory / filename;
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (out) {
+        out.write(sRandoSpoiler.data(), (std::streamsize)(sRandoSpoiler.size() - 1));
+        out.close();
+    }
+    sRandoSpoilerExportOk = (bool)out;
+    sRandoSpoilerExportResult = sRandoSpoilerExportOk ? "Saved: " + path.string()
+                                                       : "Could not save: " + path.string();
+}
 
 /* Shared player-facing strings for rando settings, referenced by BOTH the F8
  * tab and the file-select sidebar so the two entry points can never drift
  * apart on labels/wording (a prior UX bug). */
 static const char* const kRandoPoolCombo[RANDO_ITEM_POOL_COUNT] = {
-    "Normal - collectibles only",
-    "Hard - + non-gating majors",
-    "Chaos - + gating progression",
+    "Balanced - standard item pool",
+    "Reduced - smaller item pool",
+    "Plentiful - extra major items",
 };
 static const char* const kRandoPoolTooltip =
-    "Normal: shuffles rupees, hearts, kinstones, ammo, shells, and heart pieces "
-    "- progression untouched.\nHard: also shuffles non-gating majors (bottles, "
-    "upgrades, skills).\nChaos: also shuffles dungeon-gating progression.\n"
-    "Hard/Chaos scrambling of majors and progression applies to story gifts too, "
-    "which cannot be verified beatable - so it requires Glitchless logic OFF. "
-    "With Glitchless ON those items stay vanilla and only collectibles are scrambled.";
+    "Balanced uses the standard pool; Reduced removes "
+    "some extra items; Plentiful adds extra major items. Every choice uses "
+    "the same reachability check before the seed starts.";
 static const char* const kRandoAccessCombo[RANDO_ACCESS_COUNT] = {
     "Goal only (fastest generation)",
     "All non-key checks reachable",
@@ -1825,7 +1871,6 @@ static const char* const kRandoTrickTooltip = "Glitch-logic tier: progression ma
  * the override only exists once the player actually edits a color, so an
  * enabled-but-untouched setting still rolls vanilla. */
 extern "C" void Rando_Cosmetic_Apply(void);                           /* rando_cosmetic.cpp — live palette re-apply */
-extern "C" void Rando_Keymap_Apply(void);                             /* rando_keymap.c — rebind ground-item keys */
 extern "C" void Rando_SetCosmetics(int tunic_color, int heart_color); /* rando.cpp — live cosmetic settings */
 
 typedef struct RandoColorUiState {
@@ -1912,19 +1957,16 @@ static RandoColorUiState* RandoUi_ColorState(const RandoLogicSetting* s) {
     return st;
 }
 
-/* Shared override-mutation tail: reparse the .logic, persist the sidecar, and
- * - while a seed is live - rebind the location keymap + re-evaluate cosmetics
- * so nothing silently desyncs. */
-static void RandoUi_ReparseAndRebind(void) {
+/* Parser overrides are edited only before a seed is active. A live seed uses
+ * this parser's locations and keys, so reparsing it would change its awards. */
+static void RandoUi_Reparse(void) {
     RandoLogic_Reparse();
     Port_RandoFileMenu_PersistLogicOverrides();
-    if (Rando_IsActive()) {
-        Rando_Keymap_Apply();
-        Rando_Cosmetic_Apply();
-    }
 }
 
 static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
+    if (Rando_IsActive())
+        return;
     char value[48]; /* 8 sets x "XXXX," fits; engine caps stored values at 31 */
     size_t len = 0;
     for (int j = 0; j < set_count && j < RANDO_LOGIC_MAX_COLOR_SETS; ++j) {
@@ -1939,10 +1981,7 @@ static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
     }
     RandoLogic_SetOverride(st->define, value);
     st->dirty = true;
-    /* A reparse clears the bound ground-item/scripted location keys that only
-     * seed activation rebinds, so RandoUi_ReparseAndRebind re-binds the keymap
-     * + re-evaluates cosmetics while a seed is active - making the edit live. */
-    RandoUi_ReparseAndRebind();
+    RandoUi_Reparse();
     std::fprintf(stderr, "[RANDO] color override %s = %s\n", st->define, value);
 }
 
@@ -1952,6 +1991,8 @@ static void RandoUi_CommitColorOverride(RandoColorUiState* st, int set_count) {
  * overrides, ClearOverrides, re-set the survivors, reparse — the selective
  * version of rando_file_menu.c's ClearOverrides+Reparse reset. */
 static void RandoUi_RemoveOverride(const char* define) {
+    if (Rando_IsActive())
+        return;
     static char names[RANDO_LOGIC_MAX_SETTINGS][48];
     static char values[RANDO_LOGIC_MAX_SETTINGS][32]; /* engine value cap */
     const uint32_t n = RandoLogic_GetOverrideCount();
@@ -1970,7 +2011,7 @@ static void RandoUi_RemoveOverride(const char* define) {
     RandoLogic_ClearOverrides();
     for (uint32_t i = 0; i < kept; ++i)
         RandoLogic_SetOverride(names[i], values[i]);
-    RandoUi_ReparseAndRebind();
+    RandoUi_Reparse();
     std::fprintf(stderr, "[RANDO] color override %s cleared (vanilla)\n", define);
 }
 
@@ -2020,13 +2061,13 @@ static void DrawRandoCosmeticsSection(void) {
  * disclosure: collapsing tab sections, group separators, a search filter,
  * per-setting upstream tooltips, modified-from-default markers, and
  * right-click reset. Edits route through the same override+reparse path the
- * engine already uses; while a seed is active the location keymap and
- * cosmetics are rebound so nothing silently desyncs (settings affect the
- * NEXT roll, the active item table is untouched). */
+ * engine already uses. Active seeds keep their parsed logic and awards. */
 
 static void RandoUi_ApplyOverride(const char* define, const char* value) {
+    if (Rando_IsActive())
+        return;
     RandoLogic_SetOverride(define, value);
-    RandoUi_ReparseAndRebind();
+    RandoUi_Reparse();
 }
 
 static bool RandoUi_SettingModified(const RandoLogicSetting* s) {
@@ -2087,6 +2128,8 @@ static int RandoUi_ModifiedSettingCount(void) {
 /* Reset every non-color setting to its file default. Color overrides are
  * preserved (they live in the Cosmetics section and are orthogonal). */
 static void RandoUi_ResetSettingsToDefaults(void) {
+    if (Rando_IsActive())
+        return;
     const uint32_t count = RandoLogic_GetSettingCount();
     for (uint32_t i = 0; i < count; ++i) {
         const RandoLogicSetting* s = RandoLogic_GetSetting(i);
@@ -2096,7 +2139,7 @@ static void RandoUi_ResetSettingsToDefaults(void) {
         RandoUi_SettingDefaultValue(s, value, sizeof(value));
         RandoLogic_SetOverride(s->define, value);
     }
-    RandoUi_ReparseAndRebind();
+    RandoUi_Reparse();
 }
 
 /* ---- Presets (OoTR convention: load changes everything except cosmetics).
@@ -2165,6 +2208,8 @@ static const RandoUiPreset kRandoPresets[] = {
 };
 
 static void RandoUi_ApplyPreset(int preset_index) {
+    if (Rando_IsActive())
+        return;
     if (preset_index < 0 || preset_index >= (int)(sizeof(kRandoPresets) / sizeof(kRandoPresets[0])))
         return;
     const RandoUiPreset* p = &kRandoPresets[preset_index];
@@ -2180,7 +2225,7 @@ static void RandoUi_ApplyPreset(int preset_index) {
     }
     for (int i = 0; i < p->count; ++i)
         RandoLogic_SetOverride(p->pairs[i].define, p->pairs[i].value);
-    RandoUi_ReparseAndRebind();
+    RandoUi_Reparse();
     std::fprintf(stderr, "[RANDO] preset applied: %s\n", p->name);
 }
 
@@ -2367,6 +2412,18 @@ static void DrawRandoLogicSettingsBrowser(float height) {
  * propagation solver in the background, and displays owned items/elements,
  * dungeon key status, and a list of reachable checks grouped by area. */
 
+static uint16_t RandoUi_SmallKeyCount(const char* item) {
+    if (std::strncmp(item, "SmallKey.0x", 11) != 0 || std::strlen(item) < 13)
+        return 0;
+    char area_text[5] = { item[9], item[10], item[11], item[12], '\0' };
+    char* end = nullptr;
+    unsigned long area = std::strtoul(area_text, &end, 16);
+    int dungeon = (int)area - 23;
+    if (*end != '\0' || dungeon <= 0 || dungeon >= 16)
+        return 0;
+    return (uint16_t)Rando_GetDungeonKeyCount((unsigned)dungeon);
+}
+
 static bool RandoUi_CheckItemOwned(const char* name) {
     if (name == nullptr || std::strlen(name) < 7)
         return false;
@@ -2450,16 +2507,13 @@ static bool RandoUi_CheckItemOwned(const char* name) {
     if (std::strcmp(item, "CarlovMedal") == 0)
         return GetInventoryValue(ITEM_QST_CARLOV_MEDAL) != 0;
 
-    /* Dungeon Keys: format Items.SmallKey.0x180, Items.SmallKey.0x181... */
-    if (std::strncmp(item, "SmallKey.0x", 11) == 0 && std::strlen(item) >= 14) {
-        char hex[3] = { item[11], item[12], '\0' };
-        unsigned area = (unsigned)std::strtoul(hex, nullptr, 16);
-        int dungeon_idx = (int)area - 23;
-        if (dungeon_idx >= 0 && dungeon_idx < 16) {
-            int key_index = item[13] - '0';
-            int held = (int)Rando_GetDungeonKeyCount(dungeon_idx);
-            return held > key_index;
-        }
+    /* Upstream uses SmallKey.0x18; old tracker rows append a key ordinal. */
+    if (std::strncmp(item, "SmallKey.0x", 11) == 0) {
+        unsigned held = RandoUi_SmallKeyCount(item);
+        size_t len = std::strlen(item);
+        if (len == 14 && item[13] >= '0' && item[13] <= '9')
+            return held > (unsigned)(item[13] - '0');
+        return len == 13 && held > 0;
     }
     if (std::strncmp(item, "BigKey.0x", 9) == 0 && std::strlen(item) >= 11) {
         char hex[3] = { item[9], item[10], '\0' };
@@ -2473,14 +2527,20 @@ static bool RandoUi_CheckItemOwned(const char* name) {
     return false;
 }
 
+static uint16_t RandoUi_GetItemCount(const char* name) {
+    if (name != nullptr && std::strncmp(name, "Items.SmallKey.0x", 17) == 0 && std::strlen(name) == 19)
+        return RandoUi_SmallKeyCount(name + 6);
+    return RandoUi_CheckItemOwned(name) ? 1 : 0;
+}
+
 static bool RandoUi_LocationChecked(uint32_t loc_idx) {
     uint32_t key = RandoLogic_GetLocationKeyAt(loc_idx);
     if (key == UINT32_MAX)
         return false;
 
     if (key & 0x80000000u) {
-        uint32_t group = (key >> 16) & 0x7FFF;
-        uint32_t subkey = key & 0xFFFF;
+        uint32_t group = (key >> 24) & 0x7F;
+        uint32_t subkey = (key >> 16) & 0xFF;
         if (group == RANDO_SCRIPTED_KEY_SPECIAL) {
             switch (subkey) {
                 case RANDO_SPECIAL_KEY_BELL_HP:
@@ -2531,7 +2591,9 @@ static void DrawRandoTrackerOverlay(void) {
     if (++sFrameThrottle >= 15) {
         sFrameThrottle = 0;
         const uint16_t* active_table = Rando_GetRandomizedItemTable();
-        RandoLogic_EvaluateReachability(active_table, RandoUi_CheckItemOwned, sReached, count);
+        RandoLogic_EvaluateReachability(active_table, Rando_GetRandomizedItemSubtypeTable(),
+                                       Rando_GetLocationCount(), Rando_GetSeed64(), RandoUi_GetItemCount,
+                                       sReached, count);
         for (uint32_t i = 0; i < count; ++i) {
             sChecked[i] = RandoUi_LocationChecked(i);
         }
@@ -2846,18 +2908,15 @@ static void DrawRibbonRandomizerTab(void) {
         }
     }
 
-    ImGui::TextUnformatted("Native in-process randomizer");
+    ImGui::TextUnformatted("Native logic randomizer");
     ImGui::SameLine();
     ImGui::TextDisabled("(?)");
     if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted("Rolls a seed and resolves rewards live through a fixed location "
-                               "table - no ROM files written, no restart needed. Progression, "
-                               "major, and junk pools are forward-filled against the "
-                               "reachability graph and a playthrough is simulated before the "
-                               "seed activates, so rolled seeds are always beatable. The active "
-                               "seed persists per save slot in a .randomizer sidecar.");
+        ImGui::TextUnformatted("Rolls rewards from the bundled logic file and "
+                               "resolves them in the PC game. Generation verifies the chosen "
+                               "reachability goal. The seed persists per save slot.");
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
@@ -2865,10 +2924,11 @@ static void DrawRibbonRandomizerTab(void) {
 
     ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none)");
     ImGui::Text("Region:      %s", region_label);
-    ImGui::Text("Logic:       built-in native graph (%d locations)", RANDO_LOCATION_COUNT);
+    ImGui::Text("Logic:       default.logic (%u parsed locations)",
+                RandoLogic_GetLocationCountRaw());
 
     if (Rando_IsActive()) {
-        static const char* kPoolNames[RANDO_ITEM_POOL_COUNT] = { "Normal", "Hard", "Chaos" };
+        static const char* kPoolNames[RANDO_ITEM_POOL_COUNT] = { "Balanced", "Reduced", "Plentiful" };
         const RandomizerSettings active = Rando_GetSettings();
         const int pool = (active.item_difficulty < RANDO_ITEM_POOL_COUNT) ? (int)active.item_difficulty : 0;
         ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f), "Active seed: %llu - %s pool%s",
@@ -2880,11 +2940,14 @@ static void DrawRibbonRandomizerTab(void) {
             std::snprintf(text, sizeof(text), "%llu", (unsigned long long)Rando_GetSeed64());
             ImGui::SetClipboardText(text);
         }
-        char fp[16];
-        std::snprintf(fp, sizeof(fp), "%08X", Rando_SettingsFingerprint(&active));
-        ImGui::Text("Fingerprint: %s", fp);
-        RandoUi_HelpTooltip("Hash of every placement-affecting setting. Two players with the "
-                            "same seed AND the same fingerprint are playing the identical seed.");
+        char fp[20];
+        if (Rando_IsLogicSeed())
+            std::snprintf(fp, sizeof(fp), "%016llX", (unsigned long long)Rando_GetLogicFingerprint());
+        else
+            std::snprintf(fp, sizeof(fp), "%08X", Rando_SettingsFingerprint(&active));
+        ImGui::Text("Logic fingerprint: %s", fp);
+        RandoUi_HelpTooltip("Share the seed and logic fingerprint to reproduce placements "
+                            "with the same Picori version.");
         ImGui::SameLine();
         if (ImGui::SmallButton("Copy fingerprint")) {
             ImGui::SetClipboardText(fp);
@@ -2924,9 +2987,9 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::SameLine();
     if (ImGui::Checkbox("Shuffle dungeon items", &sRandoUiSettings.shuffle_dungeon_items))
         changed = true;
-    RandoUi_HelpTooltip("Off (default): each dungeon's map, compass, and big key stay in "
-                        "their vanilla chests. On: they join the shuffle and can be found in "
-                        "any dungeon - each is credited to its home dungeon when picked up.");
+    RandoUi_HelpTooltip("Off: keys, maps, compasses and big keys shuffle within their own "
+                        "dungeons. On: all four families can appear anywhere (keysanity). "
+                        "Each pickup credits its home dungeon.");
 
     if (ImGui::Checkbox("Open world", &sRandoUiSettings.open_world))
         changed = true;
@@ -2948,12 +3011,6 @@ static void DrawRibbonRandomizerTab(void) {
     ImGui::SameLine();
     if (ImGui::Checkbox("Fast text (instant text)", &sRandoUiSettings.instant_text))
         changed = true;
-
-    if (sRandoUiSettings.glitchless_logic && sRandoUiSettings.item_difficulty > RANDO_ITEM_POOL_NORMAL) {
-        ImGui::TextDisabled("Glitchless ON: %s pool only scrambles collectibles "
-                            "(guaranteed beatable).",
-                            sRandoUiSettings.item_difficulty == RANDO_ITEM_POOL_CHAOS ? "Chaos" : "Hard");
-    }
 
     int access = (int)sRandoUiSettings.accessibility;
     ImGui::SetNextItemWidth(280);
@@ -3027,8 +3084,9 @@ static void DrawRibbonRandomizerTab(void) {
     if (ImGui::Button("Reset to vanilla", ImVec2(140, 0))) {
         Rando_Reset();
         sRandoResult[0] = '\0';
-        sRandoSpoiler[0] = '\0';
+        sRandoSpoiler.clear();
         sRandoSpoilerHidden = false;
+        sRandoSpoilerExportResult.clear();
     }
     ImGui::EndDisabled();
     if (rollInGameplay) {
@@ -3050,16 +3108,19 @@ static void DrawRibbonRandomizerTab(void) {
                 std::snprintf(sRandoResult, sizeof(sRandoResult), "Rolled seed %llu - verified beatable.%s",
                               (unsigned long long)chosen, rolled_race ? " Spoiler log hidden (race)." : "");
                 std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu", (unsigned long long)chosen);
-                Rando_GetSpoiler(sRandoSpoiler, sizeof(sRandoSpoiler));
                 sRandoSpoilerHidden = rolled_race;
+                sRandoSpoilerHiddenSeed = chosen;
+                sRandoSpoilerHiddenFingerprint = Rando_GetLogicFingerprint();
+                sRandoSpoilerExportResult.clear();
                 break;
             case RANDO_UNBEATABLE:
                 std::snprintf(sRandoResult, sizeof(sRandoResult),
-                              "No beatable arrangement found for this seed/settings "
-                              "(32 attempts) - previous state kept.");
+                              "No beatable arrangement found for this seed/settings (32 attempts). "
+                              "No seed is active.");
                 break;
             case RANDO_BAD_SETTINGS:
-                std::snprintf(sRandoResult, sizeof(sRandoResult), "Rejected: invalid settings combination.");
+                std::snprintf(sRandoResult, sizeof(sRandoResult),
+                              "Rejected: logic file unavailable or unsupported native settings.");
                 break;
             default:
                 std::snprintf(sRandoResult, sizeof(sRandoResult),
@@ -3077,7 +3138,8 @@ static void DrawRibbonRandomizerTab(void) {
         }
     }
 
-    if (Rando_IsActive() && sRandoSpoiler[0]) {
+    RefreshRandoSpoiler();
+    if (Rando_IsActive() && !sRandoSpoiler.empty() && sRandoSpoiler[0]) {
         ImGui::Spacing();
         if (sRandoSpoilerHidden) {
             ImGui::TextDisabled("Spoiler log hidden (race seed).");
@@ -3086,16 +3148,24 @@ static void DrawRibbonRandomizerTab(void) {
                 sRandoSpoilerHidden = false;
         } else if (ImGui::CollapsingHeader("Spoiler log")) {
             if (ImGui::SmallButton("Copy to clipboard")) {
-                ImGui::SetClipboardText(sRandoSpoiler);
+                ImGui::SetClipboardText(sRandoSpoiler.data());
             }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Save .txt"))
+                ExportRandoSpoiler();
             ImGui::SameLine();
             sRandoSpoilerFilter.Draw("##spoiler_filter", 180);
             ImGui::SameLine();
             ImGui::TextDisabled("Filter");
+            if (!sRandoSpoilerExportResult.empty()) {
+                ImGui::TextColored(sRandoSpoilerExportOk ? ImVec4(0.4f, 0.85f, 0.4f, 1.0f)
+                                                        : ImVec4(0.9f, 0.45f, 0.3f, 1.0f),
+                                   "%s", sRandoSpoilerExportResult.c_str());
+            }
             ImGui::BeginChild("##rando_spoiler", ImVec2(0, 180), ImGuiChildFlags_Borders,
                               ImGuiWindowFlags_HorizontalScrollbar);
             if (sRandoSpoilerFilter.IsActive()) {
-                const char* p = sRandoSpoiler;
+                const char* p = sRandoSpoiler.data();
                 while (*p) {
                     const char* nl = std::strchr(p, '\n');
                     const size_t len = nl ? (size_t)(nl - p) : std::strlen(p);
@@ -3108,7 +3178,7 @@ static void DrawRibbonRandomizerTab(void) {
                     p += len + (nl ? 1 : 0);
                 }
             } else {
-                ImGui::TextUnformatted(sRandoSpoiler);
+                ImGui::TextUnformatted(sRandoSpoiler.data());
             }
             ImGui::EndChild();
         }
@@ -4263,7 +4333,7 @@ static void DrawRandoFileMenuModal(void) {
                     Port_RandoFileMenu_RandomizeSeed();
 
                 ImGui::Spacing();
-                ImGui::TextDisabled("Logic: built-in native graph (%d locations)", RANDO_LOCATION_COUNT);
+                ImGui::TextDisabled("Logic: default.logic");
                 int difficulty = Port_RandoFileMenu_Difficulty();
                 ImGui::SetNextItemWidth(160);
                 if (ImGui::Combo("Item pool", &difficulty, kRandoPoolCombo, RANDO_ITEM_POOL_COUNT)) {
@@ -4280,9 +4350,8 @@ static void DrawRandoFileMenuModal(void) {
                 ImGui::SameLine();
                 ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
                 ImGui::Checkbox("Dungeon items", Port_RandoFileMenu_ShuffleDungeonItems());
-                RandoUi_HelpTooltip("Off (default): each dungeon's map, compass, and big key stay "
-                                    "in their vanilla chests. On: they join the shuffle and can be "
-                                    "found in any dungeon (each is credited to its home dungeon).");
+                RandoUi_HelpTooltip("Off: dungeon items stay in their own dungeons. On: "
+                                    "keys, maps, compasses and big keys can appear anywhere.");
                 ImGui::Checkbox("Open world", Port_RandoFileMenu_OpenWorld());
                 RandoUi_HelpTooltip("Every permanent obstacle (trees, cracked blocks, bomb "
                                     "walls, switches, non-key doors, ...) starts pre-solved, "
@@ -4313,12 +4382,6 @@ static void DrawRandoFileMenuModal(void) {
                     RandoUi_HelpTooltip(kRandoTrickTooltip);
                 }
 
-                if (*Port_RandoFileMenu_GlitchlessLogic() &&
-                    Port_RandoFileMenu_Difficulty() > (int)RANDO_ITEM_POOL_NORMAL) {
-                    ImGui::TextDisabled("Glitchless ON: pool only scrambles collectibles\n"
-                                        "(guaranteed beatable). Uncheck for full scrambling.");
-                }
-
                 ImGui::Spacing();
                 const char* status = Port_RandoFileMenu_Status();
                 if (status[0]) {
@@ -4328,9 +4391,8 @@ static void DrawRandoFileMenuModal(void) {
                 {
                     char sfp[16];
                     std::snprintf(sfp, sizeof(sfp), "%08X", Port_RandoFileMenu_Fingerprint());
-                    ImGui::Text("Fingerprint: %s", sfp);
-                    RandoUi_HelpTooltip("Hash of every placement-affecting setting. Share it with "
-                                        "a friend: same seed AND same fingerprint = identical world.");
+                    ImGui::Text("Menu settings hash: %s", sfp);
+                    RandoUi_HelpTooltip("The exact logic fingerprint appears after generation.");
                     ImGui::SameLine();
                     if (ImGui::SmallButton("Copy##fpsidebar")) {
                         ImGui::SetClipboardText(sfp);
@@ -4350,7 +4412,7 @@ static void DrawRandoFileMenuModal(void) {
                     }
                     ImGui::TextDisabled("Enter starts   Esc / Gamepad B cancels");
                 } else {
-                    ImGui::TextDisabled("Options will apply to your next new save file.");
+                    ImGui::TextDisabled("Select an empty save slot to generate and start.");
                 }
             }
         } else {

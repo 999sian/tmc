@@ -4431,7 +4431,7 @@ u32 sub_unk3_HyruleTown_0(void) {
     if (gSave.global_progress != 1) {
 #endif
 #ifdef PC_PORT
-        gCurrentRoomProperties = (void**)(((void**)gAreaTable[2])[0]);
+        sub_0804AFB0((void**)(((void**)gAreaTable[2])[0]));
 #else
         gCurrentRoomProperties = (void**)*Area_HyruleTown;
 #endif

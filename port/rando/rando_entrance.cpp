@@ -180,18 +180,38 @@ bool EnsureMapping() {
     }
 
     if (sEnabled) {
+        /* Shuffle seven entrances: either DHC main or side is
+         * deliberately left vanilla. Legacy tables may contain all eight. */
+        int vanilla = -1;
         for (int l = 0; l < kEntranceCount; ++l) {
             if (sAssign[l] < 0) {
-                fprintf(stderr, "[RANDO] entrance shuffle: incomplete assignment (%s empty), disabling\n",
-                        kLocationNames[l]);
+                if (vanilla >= 0 || l < 6) {
+                    fprintf(stderr, "[RANDO] entrance shuffle: incomplete assignment, disabling\n");
+                    sEnabled = false;
+                    return false;
+                }
+                vanilla = l;
+            }
+        }
+        for (int d = 0; d < kEntranceCount; ++d) {
+            if (sInverse[d] < 0 && d != vanilla) {
+                fprintf(stderr, "[RANDO] entrance shuffle: missing dungeon %d, disabling\n", d + 1);
                 sEnabled = false;
                 return false;
             }
         }
+        if (vanilla >= 0 && sInverse[vanilla] >= 0) {
+            fprintf(stderr, "[RANDO] entrance shuffle: vanilla DHC destination reassigned, disabling\n");
+            sEnabled = false;
+            return false;
+        }
         fprintf(stderr, "[RANDO] entrance shuffle active:");
         for (int l = 0; l < kEntranceCount; ++l) {
-            fprintf(stderr, " %d->%d", l + 1, sAssign[l] + 1);
+            if (sAssign[l] >= 0)
+                fprintf(stderr, " %d->%d", l + 1, sAssign[l] + 1);
         }
+        if (vanilla >= 0)
+            fprintf(stderr, " (%s vanilla)", kLocationNames[vanilla]);
         fprintf(stderr, " (location->dungeon, 1=DWS..8=DHCside)\n");
     }
     return sEnabled;

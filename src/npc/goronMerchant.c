@@ -183,7 +183,9 @@ void GoronMerchant_TryToBuyKinstone(Entity* this, ScriptExecutionContext* contex
         if (GetAmountInKinstoneBag(gRoomVars.shopItemType2) < 99) {
             u8 item = ITEM_KINSTONE;
             u8 subtype = gRoomVars.shopItemType2;
+#ifndef PC_PORT
             ModRupees(-salePrice);
+#endif
 #ifdef PC_PORT
             {
                 uint32_t key = Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_GORON_MERCHANT,
@@ -192,7 +194,17 @@ void GoronMerchant_TryToBuyKinstone(Entity* this, ScriptExecutionContext* contex
                 (void)Rando_OverrideLocationKey(key, &item, &subtype);
             }
 #endif
+#ifdef PC_PORT
+            /* A failed item-get allocation must not consume the paid slot. */
+            if (!InitItemGetSequence(item, subtype, 0)) {
+                context->condition = 0;
+                gActiveScriptInfo.flags |= 1;
+                return;
+            }
+            ModRupees(-salePrice);
+#else
             InitItemGetSequence(item, subtype, 0);
+#endif
             gRoomVars.shopItemType = 0;
             gRoomVars.shopItemType2 = 0;
             context->condition = 1;
