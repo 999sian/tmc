@@ -35,14 +35,14 @@ typedef enum {
     RANDO_ITEM_POOL_COUNT,
 } RandoItemPoolDifficulty;
 
-/* Legacy native-graph trick bits. Fresh parser seeds require glitchless
- * settings; future trick support must map these to the upstream .logic rules. */
+/* Legacy native-graph trick bits. Current seeds require glitchless
+ * settings; future trick support must map these to the built-in rules. */
 #define RANDO_TRICK_OCARINA_GLITCH (1u << 0)      /* OG: Temple of Droplets entry without Flippers (needs Ocarina) */
 #define RANDO_TRICK_CRENEL_CLIP (1u << 1)         /* Crenel Clip: reach Castor Wilds from Mt. Crenel (needs a Bottle) */
 #define RANDO_TRICK_PORTAL_JUMP_STORAGE (1u << 2) /* PJS: reach Cloud Tops early without Roc's Cape (needs Ocarina) */
 #define RANDO_TRICK_ALL (RANDO_TRICK_OCARINA_GLITCH | RANDO_TRICK_CRENEL_CLIP | RANDO_TRICK_PORTAL_JUMP_STORAGE)
 
-/* Accessibility maps to upstream ACCESSIBILITY for fresh seeds. */
+/* Accessibility options for fresh seeds. */
 typedef enum {
     RANDO_ACCESS_GOAL = 0,      /* only the goal must be reachable (default) */
     RANDO_ACCESS_ALL_NONKEYS,   /* every enabled non-key check reachable */
@@ -353,8 +353,8 @@ extern uint8_t randomized_item_subtype_table[RANDO_LOCATION_COUNT];
 RandomizerSettings Rando_DefaultSettings(void);
 uint64_t Rando_SeedFromString(const char* text);
 
-/* Legacy menu-settings hash. Parser-backed seeds use the 64-bit logic source
- * fingerprint below, which covers the bundled .logic bytes and overrides. */
+/* Legacy menu-settings hash. Rule-backed seeds use the 64-bit rules
+ * fingerprint below, which covers the built-in rule version and overrides. */
 uint32_t Rando_SettingsFingerprint(const RandomizerSettings* settings);
 
 /* Required API for the file-select UI. */

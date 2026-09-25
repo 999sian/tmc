@@ -39,7 +39,7 @@ extern int fileno(FILE*);
  * item ids) so same-item placements restore exactly across reloads.
  * v5: shuffle_entrances flag (decoupled from shuffle_kinstones) + tricks
  * bitmask (glitch-logic tier) so a seed's logic tier restores exactly.
- * v8: parser-backed tables, source fingerprint, and parser define overrides. */
+ * v8: indexed rule tables, source fingerprint, and rule overrides. */
 #define RANDO_SIDECAR_VERSION 8u
 #define RANDO_SIDECAR_V7_VERSION 7u
 #define RANDO_SIDECAR_V6_FIRST_CAPACITY 211u
@@ -75,7 +75,7 @@ typedef struct RandoSidecarSlot {
     uint8_t shuffle_entrances;     /* v5: was reserved2[0] */
     uint8_t accessibility;         /* v6: was reserved2 (always 0 == RANDO_ACCESS_GOAL, so no bump) */
     uint32_t tricks;               /* v5: RANDO_TRICK_* bitmask (glitch-logic tier) */
-    uint32_t logic_location_count; /* parse fingerprint for index validity */
+    uint32_t logic_location_count; /* rule location count for index validity */
     uint64_t seed;
     uint32_t count;
     RandoSidecarOverride overrides[RANDO_SIDECAR_MAX_OVERRIDES];
@@ -91,7 +91,7 @@ typedef struct RandoSidecarSlot {
     uint8_t tunic_color;
     uint8_t heart_color;
     uint8_t shuffle_dungeon_items; /* v7: v6 reserved byte */
-    uint8_t logic_mode;             /* v8: table is indexed by parser location */
+    uint8_t logic_mode;             /* v8: table is indexed by rule location */
     uint64_t logic_fingerprint;
     uint16_t logic_override_count;
     RandoSidecarOverride logic_overrides[RANDO_SIDECAR_MAX_LOGIC_OVERRIDES];
@@ -535,7 +535,7 @@ bool Port_RandoSave_LoadSlot(int slot) {
         for (uint32_t i = 0; i < rec->logic_override_count; ++i) {
             RandoLogic_SetOverride(rec->logic_overrides[i].name, rec->logic_overrides[i].value);
         }
-        if (!RandoLogic_LoadDefaultFiles() || RandoLogic_SourceFingerprint() != rec->logic_fingerprint ||
+        if (!RandoLogic_LoadBuiltIn() || RandoLogic_SourceFingerprint() != rec->logic_fingerprint ||
             RandoLogic_GetLocationCountRaw() != rec->count ||
             !Rando_ActivateLogicTable(rec->seed, settings, rec->logic_table, rec->logic_subtype_table,
                                       rec->count, rec->logic_fingerprint)) {

@@ -548,7 +548,7 @@ jobs:
         shell: bash
         # Offline randomizer self-test (port/rando/rando_test.c): needs no
         # ROM or assets — it generates seeds against the built-in location
-        # table plus an embedded .logic snippet and exits nonzero (with a
+        # table and exits nonzero (with a
         # "rando_test: ..." line on stderr) on any failure. Reuses the
         # xmake configuration build.py already set up.
         run: |

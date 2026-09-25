@@ -1,8 +1,7 @@
 /*
- * port/rando/rando_runtime.h — `.logic` `!eventdefine` runtime features.
+ * port/rando/rando_runtime.h — native randomizer runtime features.
  *
- * The logic engine (rando_logic) parses `!eventdefine` entries; this module
- * makes the game honor them natively:
+ * This module applies the active seed's runtime settings:
  *  - Rando_Runtime_OnNewFile(): one-shot grants applied when a NEW rando
  *    file is committed (start inventory, wind crests, dungeon portals,
  *    instant text). Mutates gSave only; the caller persists the save.
@@ -25,7 +24,7 @@ extern "C" {
 /* Apply new-file grants to gSave. No-op unless Rando_IsActive(). */
 void Rando_Runtime_OnNewFile(void);
 
-/* Recompute cached eventdefine-driven runtime state for the active seed. */
+/* Recompute cached runtime state for the active seed. */
 void Rando_Runtime_Refresh(void);
 
 /* Incoming-damage multiplier: `dmgMulti` (2/3/4) or `heroMode` (x2);

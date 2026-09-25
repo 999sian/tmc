@@ -18,7 +18,7 @@
  * `startingFlags` blob (116 bytes at gSave.flags): the "banish story"
  * baseline every rando file starts from. It complements (and overlaps)
  * ApplyStorySkip's gDemoSave-mirror; both are OR-applied to a zeroed file.
- * Missing pieces of this baseline were a softlock source: default `.logic`
+ * Missing pieces of this baseline were a softlock source: default rules
  * reachability assumes them (e.g. HAKA_00_BW00, the Royal Valley bomb
  * wall, is open at baseline upstream — a no-bombs seed can otherwise
  * strand a graveyard placement).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check Picori's direct pickup keys against the USA game ROM.
+"""Check Picori's compiled pickup keys against the USA game ROM.
 
 Usage: python3 tools/verify_picori_rules.py build/pc/baserom.gba
 """
@@ -12,7 +12,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 rom = Path(sys.argv[1]).read_bytes()
-logic = (ROOT / "assets/rando/picori.logic").read_text().splitlines()
+native_source = (ROOT / "port/rando/picori_rules.hpp").read_text().split(
+    "static const NativeLocationSpec kNativeLocations[] = {", 1
+)[1].split("\n};", 1)[0]
+native_rows = re.findall(
+    r'^\s*\{\s*"([^"]+)",\s*(RANDO_LOGIC_LOCATION_[A-Z_]+),\s*'
+    r'(UINT32_MAX|0x[0-9A-Fa-f]+u),\s*'
+    r'(?:"[^"]*"|nullptr),\s*(?:"[^"]*"|nullptr),\s*'
+    r'(?:"[^"]*"|nullptr),\s*(NATIVE_[A-Z_]+)\s*\},\s*$',
+    native_source, re.MULTILINE,
+)
+assert len(native_rows) == len(re.findall(r'^\s*\{', native_source, re.MULTILINE)), \
+    "unrecognized compiled location row"
+assert {row[3] for row in native_rows} <= {
+    "NATIVE_ALWAYS", "NATIVE_START_SWORD", "NATIVE_NO_START_SWORD",
+    "NATIVE_DOJO_SHUFFLED", "NATIVE_DOJO_ORIGINAL", "NATIVE_POOL_LEAN",
+    "NATIVE_POOL_NORMAL", "NATIVE_POOL_PLENTIFUL", "NATIVE_RUPEEMANIA",
+}, "new location condition needs a ROM verification profile"
 
 
 def word(pos):
@@ -89,48 +105,28 @@ for name, area, room, flag, _regional_flag in re.findall(
     ground_aliases[name] = (int(area, 16), int(room, 16), int(flag, 16))
 bound_aliases = script_names | set(ground_aliases)
 
-def verify(defines):
+def verify(conditions):
     seen = {}
     direct = 0
-    active = True
-    stack = []
     shuffled = 0
-    for source_line in logic:
-        line = source_line.split("#", 1)[0].strip()
-        if line.startswith("!ifdef - ") or line.startswith("!ifndef - "):
-            name = line.split("-", 1)[1].strip()
-            cond = name in defines
-            if line.startswith("!ifndef"):
-                cond = not cond
-            stack.append((active, cond))
-            active = active and cond
+    for name, kind, key_text, condition in native_rows:
+        if condition not in conditions or kind == "RANDO_LOGIC_LOCATION_HELPER":
             continue
-        if line == "!else":
-            parent, cond = stack[-1]
-            active = parent and not cond
-            stack[-1] = (parent, not cond)
-            continue
-        if line == "!endif":
-            active = stack.pop()[0]
-            continue
-        if not active or not line or line.startswith("!") or line.startswith("Items."):
-            continue
-        fields = [part.strip() for part in line.split(";")]
-        if len(fields) < 2 or fields[1] == "Helper":
-            continue
-        name = fields[0].split(":", 1)[0]
-        if fields[1] in ("Any", "Major", "Minor", "Dungeon", "DungeonPrize"):
+        if kind in ("RANDO_LOGIC_LOCATION_ANY", "RANDO_LOGIC_LOCATION_MAJOR",
+                    "RANDO_LOGIC_LOCATION_MINOR", "RANDO_LOGIC_LOCATION_DUNGEON",
+                    "RANDO_LOGIC_LOCATION_DUNGEON_PRIZE"):
             shuffled += 1
         if name.startswith(("Chest_", "Ground_")):
             match = re.fullmatch(r"(?:Chest|Ground)_([0-9A-F]{2})_([0-9A-F]{2})_([0-9A-F]{2})", name)
             assert match, name
             key = tuple(int(part, 16) for part in match.groups())
-            assert fields[2].upper() == "-".join(f"{part:02X}" for part in key), name
+            assert key_text == f"0x{key[0]:02X}{key[1]:02X}{key[2]:02X}u", name
             physical = (chests if name.startswith("Chest_") else ground).get(key)
             assert physical is not None, f"no ROM pickup for {name}"
             direct += 1
         elif name not in {"StartSword", "StartKinstoneBag", "Goal"}:
             assert name in bound_aliases, f"no native key binding for {name}"
+            assert key_text == "UINT32_MAX", name
             physical = None
             if name in ground_aliases:
                 area, _room, flag = ground_aliases[name]
@@ -140,14 +136,13 @@ def verify(defines):
         if physical is not None:
             assert physical not in seen, f"same persistent check: {seen[physical]} and {name}"
             seen[physical] = name
-    assert not stack, "unclosed conditional"
     return shuffled, direct, sum(name in ground_aliases for name in seen.values())
 
 
-baseline = {"START_SMITH_SWORD", "DOJOANY", "ITEM_POOL_NORMAL", "ACCESS_BEATABLE"}
+baseline = {"NATIVE_ALWAYS", "NATIVE_START_SWORD", "NATIVE_DOJO_SHUFFLED", "NATIVE_POOL_NORMAL"}
 shuffled, direct, aliases = verify(baseline)
-vanilla_shuffled, _, _ = verify(baseline - {"DOJOANY"})
-obscure_shuffled, obscure_direct, _ = verify(baseline | {"RUPEEMANIA"})
+vanilla_shuffled, _, _ = verify((baseline - {"NATIVE_DOJO_SHUFFLED"}) | {"NATIVE_DOJO_ORIGINAL"})
+obscure_shuffled, obscure_direct, _ = verify(baseline | {"NATIVE_RUPEEMANIA"})
 assert shuffled >= 259, f"only {shuffled} shuffled default checks"
 assert vanilla_shuffled >= 259, f"only {vanilla_shuffled} shuffled checks with vanilla dojos"
 assert obscure_shuffled > shuffled

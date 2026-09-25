@@ -530,7 +530,7 @@ void* GetRoomProperty(u32 area, u32 room, u32 property) {
 }
 
 #ifdef PC_PORT
-/* Randomizer chest identity: the `.logic` format addresses chests as
+/* Randomizer chest identity: the compiled rules address chests as
  * area-room-index, where index is the 0-based position of the chest among the
  * room's SMALL_CHEST/BIG_CHEST TileEntities (in property-list order). Map a
  * chest's localFlag to that index so the reward hooks build a matching key.

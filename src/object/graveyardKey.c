@@ -206,7 +206,7 @@ void GraveyardKey_Action3(Entity* this, const struct_gUnk_08123FB0* param_2) {
             u8 subtype = this->type2;
 #ifdef PC_PORT
             /* Randomizer: GraveyardKey type 1 is the Hyrule Town bell heart
-             * piece (.logic Town_Bell_HP) — the only randomized variant. */
+             * piece (Town_Bell_HP) — the only randomized variant. */
             if (this->type == 1) {
                 (void)Rando_OverrideLocationKey(
                     Rando_BuildScriptedKey(RANDO_SCRIPTED_KEY_SPECIAL, RANDO_SPECIAL_KEY_BELL_HP, 0, 0), &item,
