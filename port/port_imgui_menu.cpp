@@ -1846,23 +1846,6 @@ static const char* const kRandoPoolTooltip =
     "Balanced uses the standard pool; Reduced removes "
     "some extra items; Plentiful adds extra major items. Every choice uses "
     "the same reachability check before the seed starts.";
-static const char* const kRandoAccessCombo[RANDO_ACCESS_COUNT] = {
-    "Goal only (fastest generation)",
-    "All non-key checks reachable",
-    "All checks reachable",
-};
-static const char* const kRandoAccessTooltip =
-    "Goal only: just the final boss must be reachable (a seed may bury optional "
-    "checks behind items you never need). All non-key: every check except "
-    "unshuffled small keys must be reachable. All: every check reachable. "
-    "Stronger modes reject more seeds during generation but never make a seed "
-    "unbeatable.";
-static const char* const kRandoTrickOcarina = "Ocarina Glitch - ToD entry without Flippers";
-static const char* const kRandoTrickCrenel = "Crenel Clip - Mt. Crenel to Castor Wilds";
-static const char* const kRandoTrickPjs = "Portal Jump Storage - early Cloud Tops";
-static const char* const kRandoTrickTooltip = "Glitch-logic tier: progression may be placed behind these documented "
-                                              "speedrun glitches. Requires Glitchless logic OFF.";
-
 /* ---- Cosmetics (.logic !color settings) ----------------------------------
  * A RANDO_SETTING_COLOR setting carries option_count default color sets
  * (RGB555 hex strings in opt_value[]). The override value consumed by
@@ -2059,7 +2042,7 @@ static void DrawRandoCosmeticsSection(void) {
  * The `.logic` file declares per-setting window tab, group, and tooltip
  * text; the browser turns the former flat list into OoTR-style progressive
  * disclosure: collapsing tab sections, group separators, a search filter,
- * per-setting upstream tooltips, modified-from-default markers, and
+ * per-setting rules tooltips, modified-from-default markers, and
  * right-click reset. Edits route through the same override+reparse path the
  * engine already uses. Active seeds keep their parsed logic and awards. */
 
@@ -2914,7 +2897,7 @@ static void DrawRibbonRandomizerTab(void) {
     if (ImGui::IsItemHovered()) {
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(360.0f);
-        ImGui::TextUnformatted("Rolls rewards from the bundled logic file and "
+        ImGui::TextUnformatted("Rolls rewards from Picori's bundled rules and "
                                "resolves them in the PC game. Generation verifies the chosen "
                                "reachability goal. The seed persists per save slot.");
         ImGui::PopTextWrapPos();
@@ -2924,7 +2907,7 @@ static void DrawRibbonRandomizerTab(void) {
 
     ImGui::Text("Source ROM:  %s", src_rom ? src_rom : "(none)");
     ImGui::Text("Region:      %s", region_label);
-    ImGui::Text("Logic:       default.logic (%u parsed locations)",
+    ImGui::Text("Logic:       picori.logic (%u parsed locations)",
                 RandoLogic_GetLocationCountRaw());
 
     if (Rando_IsActive()) {
@@ -2962,6 +2945,17 @@ static void DrawRibbonRandomizerTab(void) {
 
     int difficulty = (int)sRandoUiSettings.item_difficulty;
     bool changed = false;
+    if (!sRandoUiSettings.glitchless_logic || !sRandoUiSettings.shuffle_kinstones ||
+        sRandoUiSettings.shuffle_entrances || sRandoUiSettings.shuffle_dungeon_items ||
+        sRandoUiSettings.tricks || sRandoUiSettings.accessibility != RANDO_ACCESS_GOAL) {
+        sRandoUiSettings.glitchless_logic = true;
+        sRandoUiSettings.shuffle_kinstones = true;
+        sRandoUiSettings.shuffle_entrances = false;
+        sRandoUiSettings.shuffle_dungeon_items = false;
+        sRandoUiSettings.tricks = 0;
+        sRandoUiSettings.accessibility = RANDO_ACCESS_GOAL;
+        changed = true;
+    }
 
     ImGui::SetNextItemWidth(280);
     if (ImGui::Combo("Item pool", &difficulty, kRandoPoolCombo, RANDO_ITEM_POOL_COUNT)) {
@@ -2970,34 +2964,26 @@ static void DrawRibbonRandomizerTab(void) {
     }
     RandoUi_HelpTooltip(kRandoPoolTooltip);
 
-    if (ImGui::Checkbox("Glitchless logic", &sRandoUiSettings.glitchless_logic))
-        changed = true;
+    ImGui::TextDisabled("Glitchless logic: required");
     ImGui::SameLine();
     if (ImGui::Checkbox("Obscure spots", &sRandoUiSettings.obscure_locations))
         changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Shuffle kinstones", &sRandoUiSettings.shuffle_kinstones))
-        changed = true;
+    ImGui::TextDisabled("Kinstones: shuffled");
     ImGui::SameLine();
-    if (ImGui::Checkbox("Shuffle entrances", &sRandoUiSettings.shuffle_entrances))
-        changed = true;
+    ImGui::TextDisabled("Entrance shuffle: unavailable in Picori rules");
     ImGui::SameLine();
     if (ImGui::Checkbox("Shuffle dojos", &sRandoUiSettings.shuffle_dojos))
         changed = true;
     ImGui::SameLine();
-    if (ImGui::Checkbox("Shuffle dungeon items", &sRandoUiSettings.shuffle_dungeon_items))
-        changed = true;
-    RandoUi_HelpTooltip("Off: keys, maps, compasses and big keys shuffle within their own "
-                        "dungeons. On: all four families can appear anywhere (keysanity). "
-                        "Each pickup credits its home dungeon.");
+    ImGui::TextDisabled("Dungeon-item shuffle: unavailable in Picori rules");
 
     if (ImGui::Checkbox("Open world", &sRandoUiSettings.open_world))
         changed = true;
     RandoUi_HelpTooltip("Starts with every permanently solvable obstacle pre-solved: cut "
                         "trees, cracked blocks, bomb walls, boulder shortcuts, non-key "
                         "doors, bean vines, switches, levers, chest spawns, and "
-                        "extendable bridges (1:1 with the GBA randomizer's World "
-                        "Settings \"Open\"). Less walking, shorter seeds.");
+                        "extendable bridges. Less walking, shorter seeds.");
 
     ImGui::SameLine();
     if (ImGui::Checkbox("Sleep warp (homewarp)", &sRandoUiSettings.homewarp))
@@ -3012,25 +2998,9 @@ static void DrawRibbonRandomizerTab(void) {
     if (ImGui::Checkbox("Fast text (instant text)", &sRandoUiSettings.instant_text))
         changed = true;
 
-    int access = (int)sRandoUiSettings.accessibility;
-    ImGui::SetNextItemWidth(280);
-    if (ImGui::Combo("Accessibility", &access, kRandoAccessCombo, RANDO_ACCESS_COUNT)) {
-        sRandoUiSettings.accessibility = (RandoAccessibility)access;
-        changed = true;
-    }
-    RandoUi_HelpTooltip(kRandoAccessTooltip);
-
-    if (!sRandoUiSettings.glitchless_logic) {
-        ImGui::SeparatorText("Glitch tricks (progression may be placed behind these)");
-        if (ImGui::CheckboxFlags(kRandoTrickOcarina, &sRandoUiSettings.tricks, RANDO_TRICK_OCARINA_GLITCH))
-            changed = true;
-        if (ImGui::CheckboxFlags(kRandoTrickCrenel, &sRandoUiSettings.tricks, RANDO_TRICK_CRENEL_CLIP))
-            changed = true;
-        if (ImGui::CheckboxFlags(kRandoTrickPjs, &sRandoUiSettings.tricks, RANDO_TRICK_PORTAL_JUMP_STORAGE))
-            changed = true;
-    } else {
-        ImGui::TextDisabled("Glitch tricks are selectable when Glitchless logic is OFF.");
-    }
+    ImGui::TextDisabled("Reachability target: Goal only");
+    RandoUi_HelpTooltip("The authored item/check graph verifies the goal. Optional "
+                        "shop and fusion checks still need gameplay validation.");
 
     if (changed) {
         Port_Config_SetRandoSettings(
@@ -3105,7 +3075,7 @@ static void DrawRibbonRandomizerTab(void) {
         sRandoResultOk = (status == RANDO_OK);
         switch (status) {
             case RANDO_OK:
-                std::snprintf(sRandoResult, sizeof(sRandoResult), "Rolled seed %llu - verified beatable.%s",
+                std::snprintf(sRandoResult, sizeof(sRandoResult), "Rolled seed %llu - goal reachable in rules graph.%s",
                               (unsigned long long)chosen, rolled_race ? " Spoiler log hidden (race)." : "");
                 std::snprintf(sRandoSeedBuf, sizeof(sRandoSeedBuf), "%llu", (unsigned long long)chosen);
                 sRandoSpoilerHidden = rolled_race;
@@ -3115,7 +3085,7 @@ static void DrawRibbonRandomizerTab(void) {
                 break;
             case RANDO_UNBEATABLE:
                 std::snprintf(sRandoResult, sizeof(sRandoResult),
-                              "No beatable arrangement found for this seed/settings (32 attempts). "
+                              "No arrangement passed goal reachability for this seed/settings (32 attempts). "
                               "No seed is active.");
                 break;
             case RANDO_BAD_SETTINGS:
@@ -4333,29 +4303,32 @@ static void DrawRandoFileMenuModal(void) {
                     Port_RandoFileMenu_RandomizeSeed();
 
                 ImGui::Spacing();
-                ImGui::TextDisabled("Logic: default.logic");
+                ImGui::TextDisabled("Logic: picori.logic");
                 int difficulty = Port_RandoFileMenu_Difficulty();
                 ImGui::SetNextItemWidth(160);
                 if (ImGui::Combo("Item pool", &difficulty, kRandoPoolCombo, RANDO_ITEM_POOL_COUNT)) {
                     Port_RandoFileMenu_SetDifficulty(difficulty);
                 }
                 RandoUi_HelpTooltip(kRandoPoolTooltip);
-                ImGui::Checkbox("Glitchless logic", Port_RandoFileMenu_GlitchlessLogic());
+                *Port_RandoFileMenu_GlitchlessLogic() = true;
+                *Port_RandoFileMenu_ShuffleKinstones() = true;
+                *Port_RandoFileMenu_ShuffleEntrances() = false;
+                *Port_RandoFileMenu_ShuffleDungeonItems() = false;
+                *Port_RandoFileMenu_Tricks() = 0;
+                *Port_RandoFileMenu_Accessibility() = RANDO_ACCESS_GOAL;
+                ImGui::TextDisabled("Glitchless logic: required");
                 ImGui::SameLine();
                 ImGui::Checkbox("Obscure spots", Port_RandoFileMenu_ObscureLocations());
                 ImGui::SameLine();
-                ImGui::Checkbox("Kinstones", Port_RandoFileMenu_ShuffleKinstones());
+                ImGui::TextDisabled("Kinstones: shuffled");
                 ImGui::SameLine();
-                ImGui::Checkbox("Entrances", Port_RandoFileMenu_ShuffleEntrances());
+                ImGui::TextDisabled("Entrances: unavailable");
                 ImGui::SameLine();
                 ImGui::Checkbox("Dojos", Port_RandoFileMenu_ShuffleDojos());
-                ImGui::Checkbox("Dungeon items", Port_RandoFileMenu_ShuffleDungeonItems());
-                RandoUi_HelpTooltip("Off: dungeon items stay in their own dungeons. On: "
-                                    "keys, maps, compasses and big keys can appear anywhere.");
+                ImGui::TextDisabled("Dungeon items: unavailable");
                 ImGui::Checkbox("Open world", Port_RandoFileMenu_OpenWorld());
                 RandoUi_HelpTooltip("Every permanent obstacle (trees, cracked blocks, bomb "
-                                    "walls, switches, non-key doors, ...) starts pre-solved, "
-                                    "matching the GBA randomizer's World Settings \"Open\".");
+                                    "walls, switches, non-key doors, ...) starts pre-solved.");
                 ImGui::SameLine();
                 ImGui::Checkbox("Sleep warp", Port_RandoFileMenu_Homewarp());
                 ImGui::Checkbox("Start Sword", Port_RandoFileMenu_StartSword());
@@ -4371,17 +4344,9 @@ static void DrawRandoFileMenuModal(void) {
                 ImGui::SetNextItemWidth(160);
                 ImGui::Combo("Heart color", Port_RandoFileMenu_HeartColor(), kHeartColors, 7);
 
-                ImGui::SetNextItemWidth(160);
-                ImGui::Combo("Accessibility", Port_RandoFileMenu_Accessibility(), kRandoAccessCombo,
-                             RANDO_ACCESS_COUNT);
-                RandoUi_HelpTooltip(kRandoAccessTooltip);
-                if (!*Port_RandoFileMenu_GlitchlessLogic()) {
-                    ImGui::CheckboxFlags(kRandoTrickOcarina, Port_RandoFileMenu_Tricks(), RANDO_TRICK_OCARINA_GLITCH);
-                    ImGui::CheckboxFlags(kRandoTrickCrenel, Port_RandoFileMenu_Tricks(), RANDO_TRICK_CRENEL_CLIP);
-                    ImGui::CheckboxFlags(kRandoTrickPjs, Port_RandoFileMenu_Tricks(), RANDO_TRICK_PORTAL_JUMP_STORAGE);
-                    RandoUi_HelpTooltip(kRandoTrickTooltip);
-                }
-
+                ImGui::TextDisabled("Reachability target: Goal only");
+                RandoUi_HelpTooltip("The authored item/check graph verifies the goal. Optional "
+                                    "shop and fusion checks still need gameplay validation.");
                 ImGui::Spacing();
                 const char* status = Port_RandoFileMenu_Status();
                 if (status[0]) {

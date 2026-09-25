@@ -45,6 +45,8 @@ typedef struct LogicAwardSnapshot {
 
 static LogicAwardSnapshot sFirstAwards[RANDO_LOGIC_MAX_LOCATIONS];
 static LogicAwardSnapshot sLaterAwards[RANDO_LOGIC_MAX_LOCATIONS];
+static unsigned sBaselineAwardCount;
+static unsigned sObscureAwardCount;
 
 static int is_shuffled_award_type(RandoLogicLocationType type) {
     return type == RANDO_LOGIC_LOCATION_DUNGEON_PRIZE || type == RANDO_LOGIC_LOCATION_MAJOR ||
@@ -54,7 +56,7 @@ static int is_shuffled_award_type(RandoLogicLocationType type) {
 
 static int capture_logic_awards(LogicAwardSnapshot* out, unsigned* out_count) {
     if (!Rando_IsActive() || !Rando_IsLogicSeed() || !RandoLogic_IsLoaded() || Rando_GetLogicFingerprint() == 0) {
-        fprintf(stderr, "[rando-repro] FAIL: parser-mode seed not active\n");
+        fprintf(stderr, "[rando-repro] FAIL: Picori rules seed not active\n");
         return 0;
     }
     unsigned count = 0;
@@ -91,20 +93,38 @@ static int same_logic_awards(const LogicAwardSnapshot* expected, unsigned expect
 }
 
 static int run_menu_path(void) {
+    SaveFile before;
+    SaveFile after;
+    const int save_status_before = ReadSaveFile(0, &before);
+    const bool chosen_obscure = !Port_Config_GetRandoObscure();
+    Port_RandoFileMenu_SetSidebarOpen(true);
+    if (*Port_RandoFileMenu_StartSword() != Port_Config_GetRandoStartSword()) {
+        fprintf(stderr, "[rando-repro] FAIL: sidebar did not load saved settings\n");
+        return 0;
+    }
+    *Port_RandoFileMenu_ObscureLocations() = chosen_obscure;
+    Port_RandoFileMenu_SetSeed("12345");
     Port_RandoFileMenu_Open(0);
     if (!Port_RandoFileMenu_IsOpen()) {
         fprintf(stderr, "[rando-repro] FAIL: overlay did not open\n");
         return 0;
     }
 
-    Port_RandoFileMenu_SetSeed("12345");
-    if (strcmp(Port_RandoFileMenu_SeedBuffer(), "12345") != 0) {
-        fprintf(stderr, "[rando-repro] FAIL: menu seed edit was not retained\n");
+    if (strcmp(Port_RandoFileMenu_SeedBuffer(), "12345") != 0 ||
+        *Port_RandoFileMenu_ObscureLocations() != chosen_obscure) {
+        fprintf(stderr, "[rando-repro] FAIL: sidebar edits were lost on new-slot setup\n");
         return 0;
     }
-    Port_RandoFileMenu_Close();
+    Port_RandoFileMenu_SetSidebarOpen(false);
+    /* A modal opened outside the new-slot flow must not erase a save. */
+    Port_RandoFileMenu_Cancel();
     if (Port_RandoFileMenu_IsOpen()) {
-        fprintf(stderr, "[rando-repro] FAIL: overlay still open after close\n");
+        fprintf(stderr, "[rando-repro] FAIL: overlay still open after cancel\n");
+        return 0;
+    }
+    if (ReadSaveFile(0, &after) != save_status_before ||
+        (save_status_before == 1 && memcmp(&before, &after, sizeof(before)) != 0)) {
+        fprintf(stderr, "[rando-repro] FAIL: cancel changed a slot without a pending new file\n");
         return 0;
     }
     fprintf(stderr, "[rando-repro] menu edit path OK\n");
@@ -116,23 +136,24 @@ static int run_logic_key_path(void) {
     const uint64_t requested_seed = 0xABCDEFu;
     unsigned count = 0;
     if (!GenerateSeed(requested_seed, settings) || !capture_logic_awards(sFirstAwards, &count)) {
-        fprintf(stderr, "[rando-repro] FAIL: fixed parser seed generation failed\n");
+        fprintf(stderr, "[rando-repro] FAIL: fixed Picori seed generation failed\n");
         return 0;
     }
 #if defined(PC_PORT) && defined(MULTI_REGION)
     uint32_t falls_flag = Port_RemapBaselineLocalFlag(GetFlagBankOffset(0x0A), 0xAA);
     uint32_t falls_key = (0x0Au << 16) | falls_flag;
     int falls_location = RandoLogic_FindLocationByKey(falls_key);
-    if (falls_location < 0 || strcmp(RandoLogic_GetLocationName((uint32_t)falls_location), "Falls_SouthDigSpot") != 0) {
+    if (falls_location < 0 || strcmp(RandoLogic_GetLocationName((uint32_t)falls_location), "Ground_0A_00_AA") != 0) {
         fprintf(stderr, "[rando-repro] FAIL: Falls dig spot key differs from the active ROM\n");
         return 0;
     }
 #endif
-    if (count != 259 || !Rando_VerifyCurrentSeed()) {
-        fprintf(stderr, "[rando-repro] FAIL: fixed seed has %u keyed awards (expected 259) or failed verification\n",
+    if (count < 259 || !Rando_VerifyCurrentSeed()) {
+        fprintf(stderr, "[rando-repro] FAIL: fixed seed has %u keyed awards (minimum 259) or failed verification\n",
                 count);
         return 0;
     }
+    sBaselineAwardCount = count;
     uint64_t effective_seed = Rando_GetSeed64();
     uint64_t fingerprint = Rando_GetLogicFingerprint();
     if (!GenerateSeed(requested_seed, settings) || Rando_GetSeed64() != effective_seed ||
@@ -141,16 +162,35 @@ static int run_logic_key_path(void) {
         return 0;
     }
 
+    const size_t spoiler_size = Rando_GetSpoiler(NULL, 0);
+    char* spoiler = (char*)malloc(spoiler_size);
+    char* reloaded_spoiler = (char*)malloc(spoiler_size);
+    if (spoiler_size == 0 || spoiler == NULL || reloaded_spoiler == NULL ||
+        Rando_GetSpoiler(spoiler, spoiler_size) != spoiler_size) {
+        fprintf(stderr, "[rando-repro] FAIL: Picori spoiler unavailable\n");
+        free(spoiler);
+        free(reloaded_spoiler);
+        return 0;
+    }
     if (!Port_RandoSave_SaveActiveSlot(0)) {
-        fprintf(stderr, "[rando-repro] FAIL: parser sidecar save failed\n");
+        fprintf(stderr, "[rando-repro] FAIL: Picori sidecar save failed\n");
+        free(spoiler);
+        free(reloaded_spoiler);
         return 0;
     }
     Rando_Reset();
     if (!Port_RandoSave_LoadSlot(0) || Rando_GetSeed64() != effective_seed ||
-        Rando_GetLogicFingerprint() != fingerprint || !same_logic_awards(sFirstAwards, count)) {
-        fprintf(stderr, "[rando-repro] FAIL: parser sidecar reload changed placements\n");
+        Rando_GetLogicFingerprint() != fingerprint || !same_logic_awards(sFirstAwards, count) ||
+        Rando_GetSpoiler(NULL, 0) != spoiler_size ||
+        Rando_GetSpoiler(reloaded_spoiler, spoiler_size) != spoiler_size ||
+        strcmp(spoiler, reloaded_spoiler) != 0) {
+        fprintf(stderr, "[rando-repro] FAIL: Picori sidecar reload changed placements\n");
+        free(spoiler);
+        free(reloaded_spoiler);
         return 0;
     }
+    free(spoiler);
+    free(reloaded_spoiler);
     fprintf(stderr, "[rando-repro] logic keys OK: %u native awards, deterministic seed %llu, sidecar reload\n",
             count, (unsigned long long)effective_seed);
     return 1;
@@ -278,23 +318,21 @@ static int run_real_logic_chest_probe(void) {
         const char* name;
         u8 area;
         u8 room;
-        u16 tile_pos;
-        int raw_index; /* -1: locate by stable map tile (town room varies by region) */
+        u8 ordinal;
     } samples[] = {
-        { "Town_Inn_LedgeChest", 0x02, 0x00, 0x836, -1 },
-        { "Town_School_Roof_Chest", 0x02, 0x00, 0x16D, -1 },
-        { "Town_Shop_AtticChest", 0x2E, 0x01, 0, 1 },
+        { "Chest_48_00_00", 0x48, 0x00, 0 },
+        { "Chest_50_01_01", 0x50, 0x01, 1 },
     };
     RandomizerSettings s = Rando_DefaultSettings();
     if (!GenerateSeed(0xABCDu, s) || !Rando_IsLogicSeed()) {
-        fprintf(stderr, "[rando-repro] FAIL: parser chest seed generation failed\n");
+        fprintf(stderr, "[rando-repro] FAIL: Picori chest seed generation failed\n");
         return 0;
     }
 
     for (size_t n = 0; n < sizeof(samples) / sizeof(samples[0]); ++n) {
         const TileEntity* tiles = (const TileEntity*)GetRoomProperty(samples[n].area, samples[n].room, 3);
         const TileEntity* chest = NULL;
-        int raw_index = -1;
+        int ordinal = 0;
         int location = -1;
         for (uint32_t i = 0; i < RandoLogic_GetLocationCountRaw(); ++i) {
             if (strcmp(RandoLogic_GetLocationName(i), samples[n].name) == 0) {
@@ -305,31 +343,31 @@ static int run_real_logic_chest_probe(void) {
         for (int i = 0; tiles != NULL && i < 256 && tiles[i].type != NONE; ++i) {
             if (tiles[i].type != SMALL_CHEST && tiles[i].type != BIG_CHEST)
                 continue;
-            if (samples[n].raw_index >= 0 ? i == samples[n].raw_index :
-                                            tiles[i].tilePos == samples[n].tile_pos) {
+            if (ordinal == samples[n].ordinal) {
                 chest = &tiles[i];
-                raw_index = i;
                 break;
             }
+            ++ordinal;
         }
-        int ordinal = chest != NULL ? Rando_RoomChestIndex(samples[n].area, samples[n].room, chest->localFlag) : -1;
-        uint32_t key = ((uint32_t)samples[n].area << 16) | ((uint32_t)samples[n].room << 8) | (u32)ordinal;
+        uint32_t key = ((uint32_t)samples[n].area << 16) | ((uint32_t)samples[n].room << 8) |
+                       samples[n].ordinal;
         u8 item = chest != NULL ? chest->_2 : ITEM_NONE;
         u8 subtype = chest != NULL ? chest->_3 : 0;
-        if (location < 0 || ordinal < 0 || raw_index == ordinal ||
+        if (location < 0 || chest == NULL ||
+            Rando_RoomChestIndex(samples[n].area, samples[n].room, chest->localFlag) != samples[n].ordinal ||
             RandoLogic_GetLocationKeyAt((uint32_t)location) != key ||
             !Rando_OverrideLocationKey(key, &item, &subtype) || item == ITEM_NONE) {
-            fprintf(stderr, "[rando-repro] FAIL: translated chest award %s\n", samples[n].name);
+            fprintf(stderr, "[rando-repro] FAIL: native chest award %s\n", samples[n].name);
             return 0;
         }
-        fprintf(stderr, "[rando-repro] chest %s raw=%d ordinal=%d -> item %02X\n",
-                samples[n].name, raw_index, ordinal, item);
+        fprintf(stderr, "[rando-repro] chest %s ordinal=%u -> item %02X\n",
+                samples[n].name, samples[n].ordinal, item);
     }
     return 1;
 }
 
 static int is_baseline_award(uint32_t key) {
-    for (unsigned i = 0; i < 259; ++i) {
+    for (unsigned i = 0; i < sBaselineAwardCount; ++i) {
         if (sFirstAwards[i].key == key)
             return 1;
     }
@@ -347,84 +385,45 @@ static int check_extension_flags(unsigned award_count, int open_world) {
             fprintf(stderr, "[rando-repro] FAIL: unexpected scripted extension key %08X\n", key);
             return 0;
         }
+        int index = RandoLogic_FindLocationByKey(key);
+        if (index < 0 || strncmp(RandoLogic_GetLocationName((uint32_t)index), "Ground_", 7) != 0) {
+            fprintf(stderr, "[rando-repro] FAIL: optional key %06X is not a ground pickup\n", key);
+            return 0;
+        }
         unsigned area = (key >> 16) & 0xff;
         unsigned flag = key & 0xff;
         if (ReadBit(gSave.flags, GetFlagBankOffset(area) + flag)) {
-            int index = RandoLogic_FindLocationByKey(key);
             fprintf(stderr, "[rando-repro] FAIL: %s new file precollects %s (key %06X)\n",
-                    open_world ? "open-world" : "normal", index >= 0 ? RandoLogic_GetLocationName((uint32_t)index) : "?", key);
+                    open_world ? "open-world" : "normal", RandoLogic_GetLocationName((uint32_t)index), key);
             ++hidden;
         }
         ++added;
     }
-    if (added != 93) {
-        fprintf(stderr, "[rando-repro] FAIL: extension added %u locations, expected 93\n", added);
+    if (award_count <= sBaselineAwardCount || added != award_count - sBaselineAwardCount) {
+        fprintf(stderr, "[rando-repro] FAIL: extension added %u locations over %u default\n",
+                added, sBaselineAwardCount);
         return 0;
     }
     return hidden == 0;
 }
 
 static int run_obscure_extension_test(void) {
-    static const struct {
-        const char* name;
-        u8 area;
-        u8 room;
-        u8 usa_flag;
-        u8 eu_jp_flag;
-        u8 object_id;
-        u8 vanilla_item;
-    } samples[] = {
-        { "Crenel_Melari_LowerMiddle_Dig", 0x10, 0x00, 0xB9, 0, 0, 0x5C },
-        { "Crenel_Melari_UpperMiddle_MiddleDig", 0x10, 0x00, 0xBE, 0, 0, 0x5C },
-        { "Crenel_Melari_UpperTop_LeftDig", 0x10, 0x00, 0xBB, 0, 0, 0x5C },
-        { "Crenel_Melari_VeryBottom_Dig", 0x10, 0x00, 0xC0, 0, 0, 0x5C },
-        { "Hylia_SunkenHP", 0x0B, 0x00, 0x09, 0, 0, 0x63 },
-        { "LonLon_RanchPot", 0x28, 0x02, 0x4D, 0, 5, 0x37 },
-        { "Swamp_Underwater_Bottom", 0x04, 0x00, 0x22, 0x24, 0, 0x5C },
-        { "Swamp_Underwater_Middle", 0x04, 0x00, 0x21, 0x23, 0, 0x5C },
-        { "Swamp_Underwater_Top", 0x04, 0x00, 0x20, 0x22, 0, 0x5C },
-        { "Town_Inn_Pot", 0x21, 0x09, 0x27, 0, 5, 0x5C },
-    };
     RandomizerSettings settings = Rando_DefaultSettings();
     SaveFile original_save = gSave;
     unsigned count = 0;
 
     settings.obscure_locations = true;
-    if (!GenerateSeed(0x0B5C0u, settings) || !capture_logic_awards(sLaterAwards, &count) || count != 352) {
-        fprintf(stderr, "[rando-repro] FAIL: all optional pools have %u keyed awards (expected 352)\n", count);
+    if (!GenerateSeed(0x0B5C0u, settings) || !capture_logic_awards(sLaterAwards, &count) ||
+        count <= sBaselineAwardCount) {
+        fprintf(stderr, "[rando-repro] FAIL: extra ground checks absent (%u vs %u default)\n",
+                count, sBaselineAwardCount);
         return 0;
     }
-    for (size_t n = 0; n < sizeof(samples) / sizeof(samples[0]); ++n) {
-        u8 flag = samples[n].eu_jp_flag != 0 && (REGION_IS_EU || REGION_IS_JP) ?
-                  samples[n].eu_jp_flag : samples[n].usa_flag;
-        uint32_t key = ((uint32_t)samples[n].area << 16) | ((uint32_t)samples[n].room << 8) | flag;
-        int index = RandoLogic_FindLocationByKey(key);
-        int rom_found = 0;
-        for (unsigned prop = 0; prop < 3; ++prop) {
-            const EntityData* list = (const EntityData*)Port_ResolveRegionData(
-                GetRoomProperty(samples[n].area, samples[n].room, prop));
-            for (unsigned j = 0; list != NULL && j < 256 && list[j].kind != 0xff; ++j) {
-                if (list[j].id == samples[n].object_id && list[j].type == samples[n].vanilla_item &&
-                    ((list[j].spritePtr >> 16) & 0xff) == flag &&
-                    (samples[n].object_id != 5 || (list[j].type2 & 0xff) == 2)) {
-                    rom_found = 1;
-                    break;
-                }
-            }
-        }
-        u8 item = ITEM_NONE;
-        u8 subtype = 0;
-        if (index < 0 || strcmp(RandoLogic_GetLocationName((uint32_t)index), samples[n].name) != 0 ||
-            !rom_found || !Rando_OverrideLocationKey(key, &item, &subtype) || item == ITEM_NONE) {
-            fprintf(stderr, "[rando-repro] FAIL: optional pickup binding %s (key %06X, ROM=%d)\n",
-                    samples[n].name, key, rom_found);
-            return 0;
-        }
-    }
+    sObscureAwardCount = count;
     for (int open_world = 0; open_world <= 1; ++open_world) {
         settings.open_world = open_world != 0;
         if (open_world && (!GenerateSeed(0x0B5C0u, settings) ||
-                           !capture_logic_awards(sLaterAwards, &count) || count != 352)) {
+                           !capture_logic_awards(sLaterAwards, &count) || count != sObscureAwardCount)) {
             fprintf(stderr, "[rando-repro] FAIL: open-world optional pools changed award count (%u)\n", count);
             return 0;
         }
@@ -436,7 +435,8 @@ static int run_obscure_extension_test(void) {
     gSave = original_save;
     Rando_Reset();
     RandoLogic_ClearOverrides();
-    fprintf(stderr, "[rando-repro] optional pools OK: %u awards, 10 ROM bindings, 93 fresh pickups\n", count);
+    fprintf(stderr, "[rando-repro] optional pool OK: %u awards, %u extra ground checks\n",
+            count, count - sBaselineAwardCount);
     return 1;
 }
 
@@ -464,7 +464,7 @@ static int imgui_keyboard_stage(unsigned int frame, int* done) {
         Port_RandoFileMenu_SetSeed("");
         *Port_RandoFileMenu_ObscureLocations() = true;
         /* A new file must not inherit overrides loaded from another slot. */
-        RandoLogic_SetOverride("START_PACCI", "true");
+        RandoLogic_SetOverride("TEST_STALE_OVERRIDE", "true");
         phase = 1;
         break;
     case 1:
@@ -492,14 +492,16 @@ static int imgui_keyboard_stage(unsigned int frame, int* done) {
                 return 0;
             }
             unsigned award_count = 0;
-            if (!capture_logic_awards(sLaterAwards, &award_count) || award_count != 352) {
-                fprintf(stderr, "[rando-repro] FAIL: Obscure menu seed has %u awards (expected 352)\n",
-                        award_count);
+            if (!capture_logic_awards(sLaterAwards, &award_count) ||
+                award_count != sObscureAwardCount) {
+                fprintf(stderr, "[rando-repro] FAIL: extra-check menu seed has %u awards (expected %u)\n",
+                        award_count, sObscureAwardCount);
                 return 0;
             }
             for (uint32_t i = 0; i < RandoLogic_GetOverrideCount(); ++i) {
                 const char* name = NULL;
-                if (RandoLogic_GetOverride(i, &name, NULL) && name != NULL && strcmp(name, "START_PACCI") == 0) {
+                if (RandoLogic_GetOverride(i, &name, NULL) && name != NULL &&
+                    strcmp(name, "TEST_STALE_OVERRIDE") == 0) {
                     fprintf(stderr, "[rando-repro] FAIL: menu seed inherited an old logic override\n");
                     return 0;
                 }

@@ -1575,17 +1575,17 @@ extern "C" bool RandoLogic_LoadDefaultFiles(void) {
     if (LoadLogicFilePath(env_path)) return true;
 
     if (auto exe_dir = port::ExecutableDir()) {
-        const std::filesystem::path path = *exe_dir / "assets/rando/default.logic";
+        const std::filesystem::path path = *exe_dir / "assets/rando/picori.logic";
         if (LoadLogicFilePath(path.string().c_str())) return true;
     }
 
     static const char* const kCandidates[] = {
-        "assets/rando/default.logic",
+        "assets/rando/picori.logic",
 
-        "dist/USA/assets/rando/default.logic",
-        "dist/EU/assets/rando/default.logic",
-        "rando/default.logic",
-        "default.logic",
+        "dist/USA/assets/rando/picori.logic",
+        "dist/EU/assets/rando/picori.logic",
+        "rando/picori.logic",
+        "picori.logic",
     };
     for (size_t i = 0; i < ARRAY_COUNT(kCandidates); ++i) {
         if (LoadLogicFilePath(kCandidates[i])) return true;

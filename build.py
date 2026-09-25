@@ -467,24 +467,22 @@ def make_env() -> dict:
     return env
 
 def stage_rando_logic(dist_dir: Path) -> None:
-    """Ship the editable default logic without overwriting a local copy."""
-    source = REPO_ROOT / "assets" / "rando" / "default.logic"
-    target = dist_dir / "assets" / "rando" / "default.logic"
+    """Stage the current bundled Picori rules."""
+    source = REPO_ROOT / "assets" / "rando" / "picori.logic"
+    target = dist_dir / "assets" / "rando" / "picori.logic"
+    (target.parent / "default.logic").unlink(missing_ok=True)
     if not source.is_file():
-        warn("assets/rando/default.logic not found — randomizer will use built-in logic")
-        return
-    if target.exists():
-        info(f"Keeping existing {target.relative_to(REPO_ROOT)}")
+        warn("assets/rando/picori.logic not found — randomizer logic is unavailable")
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
-    ok(f"default.logic → {target.relative_to(REPO_ROOT)}")
+    ok(f"picori.logic → {target.relative_to(REPO_ROOT)}")
 
 def build_version(version: str, env: dict, non_interactive: bool = False,
                   slim: bool = False, multi_region: bool = True) -> Optional[Path]:
     """Build tmc_pc for `version` and stage it under dist/<version>/.
 
-    `slim=True` produces a minimal dist (the binary and default.logic). The
+    `slim=True` produces a minimal dist (the binary and picori.logic). The
     embedded extractor + embedded sounds.json fallback in tmc_pc
     handle first-launch asset extraction and audio metadata from a
     bare `tmc_pc + baserom.gba` install, so the dist no longer
@@ -721,7 +719,7 @@ def parse_args() -> argparse.Namespace:
         "--slim",
         action="store_true",
         help=(
-            "Produce a minimal dist/<version>/ containing tmc_pc and default.logic. "
+            "Produce a minimal dist/<version>/ containing tmc_pc and picori.logic. "
             "Skips the standalone asset_extractor invocation, the "
             "assets/ + assets_src/ copy, and the on-disk sounds.json copy. "
             "tmc_pc self-extracts assets on first launch (3-5 s) and uses "
