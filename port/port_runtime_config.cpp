@@ -115,17 +115,17 @@ u8 sBgFillR = 0, sBgFillG = 0, sBgFillB = 0;
  * here but a restart is needed to apply because the window's
  * swapchain owner is set once and is not live-switchable. */
 PortRenderBackend sRenderBackend = PORT_RENDER_BACKEND_AUTO;
-bool sTtsEnabled = true;
+bool sTtsEnabled = false;
 float sTtsRate = 0.5f;
 float sTtsPitch = 0.5f;
 float sTtsVolume = 0.8f;
 std::string sTtsVoice;
 std::string sTtsLanguage;
-bool sA11yCues = true;
-bool sA11yFootsteps = true;
-bool sA11yHazards = true;
-bool sA11yRadar = true;
-bool sA11yWalls = true;
+bool sA11yCues = false;
+bool sA11yFootsteps = false;
+bool sA11yHazards = false;
+bool sA11yRadar = false;
+bool sA11yWalls = false;
 /* Speedrun practice mode (port_practice.c). Overlays default off so normal
  * play stays uncluttered; slow-mo defaults to 1.0 (normal speed). */
 bool sPracticeShowTimer = false;
@@ -266,12 +266,12 @@ const BoolCfg kBoolCfg[] = {
     { "console_parity", &sConsoleParity, false },
     { "decouple_render", &sDecoupleRender, true },
     { "show_fps", &sShowFps, false },
-    { "tts_enabled", &sTtsEnabled, true },
-    { "a11y_cues", &sA11yCues, true },
-    { "a11y_footsteps", &sA11yFootsteps, true },
-    { "a11y_hazards", &sA11yHazards, true },
-    { "a11y_radar", &sA11yRadar, true },
-    { "a11y_walls", &sA11yWalls, true },
+    { "tts_enabled", &sTtsEnabled, false },
+    { "a11y_cues", &sA11yCues, false },
+    { "a11y_footsteps", &sA11yFootsteps, false },
+    { "a11y_hazards", &sA11yHazards, false },
+    { "a11y_radar", &sA11yRadar, false },
+    { "a11y_walls", &sA11yWalls, false },
     { "practice_show_timer", &sPracticeShowTimer, false },
     { "practice_show_inputs", &sPracticeShowInputs, false },
     { "practice_show_history", &sPracticeShowHistory, false },
