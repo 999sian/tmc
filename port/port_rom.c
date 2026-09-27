@@ -19,6 +19,7 @@
 #include "structures.h"
 #include "main.h"
 #include "tileMap.h"
+#include "port_rom_stubs.h"
 #ifndef TMC_N64
 #include <SDL3/SDL.h>
 #endif
@@ -818,28 +819,8 @@ extern u16* gMoreSpritePtrs[MORE_SPRITE_PTRS_COUNT];
 extern Frame* gSpriteAnimations_322[SPRITE_ANIM_322_COUNT];
 extern void Port_LoadOverlayData(const u8* romData, u32 romSize, u32 overlayOffset);
 
-/* ---- Compile-time ROM tables (port_rom_tables.c) ---- */
-extern const u8 kFrameObjListsData[];
-extern const u8 kFixedTypeGfxInitData[];
-extern const u8 kOverlaySizeData[];
-extern const u8 kFontText09244Data[];
-extern const u8 kFontText0926CData[];
-extern const u8 kFontText092D4Data[];
-extern const u8 kFontText0942EData[];
-extern const u8 kFontText094CEData[];
-extern const u8 kUiInitData[];
-extern const u32 kSpritePtrEntries[][4];
-extern const u32 kAreaRoomHeaderOffsets[];
-extern const u32 kAreaTileSetOffsets[];
-extern const u32 kAreaRoomMapOffsets[];
-extern const u32 kAreaTableOffsets[];
-extern const u32 kAreaTilesOffsets[];
-extern const u32 kTranslationOffsets[];
-extern const u32 kUnk09230Offsets[];
-extern const u32 kUnk09248Offsets[];
-extern const u32 kUnk092ACOffsets[];
-
 /* Area / room data tables (port_linked_stubs.c) */
+
 extern RoomHeader* gAreaRoomHeaders[];
 extern void* gAreaRoomMaps[];
 extern void* gAreaTable[];
@@ -1492,6 +1473,9 @@ void Port_LoadRom(const char* path) {
     /* gGlobalGfxAndPalettes — huge palette/gfx blob (still points into gRomData) */
     gGlobalGfxAndPalettes = &gRomData[R->gfxAndPalettes];
 
+    /* Initialize GBA ROM data stubs from active ROM */
+    Port_InitRomStubs(gRomData, gRomSize);
+
     /* gGfxGroups / gPaletteGroups — resolve the ROM pointer tables (arrays of
      * GBA pointers to GfxItem / PaletteGroup descriptors). On PC these come from
      * the asset pipeline; on N64 (assets stubbed) they MUST be resolved from the
@@ -1529,21 +1513,16 @@ void Port_LoadRom(const char* path) {
         memcpy(gFrameObjLists, &gRomData[R->frameObjLists], R->frameObjListsSize);
         fprintf(stderr, "gFrameObjLists loaded (%u bytes from ROM 0x%X).\n", R->frameObjListsSize, R->frameObjLists);
     } else {
-        memcpy(gFrameObjLists, kFrameObjListsData, R->frameObjListsSize);
-        fprintf(stderr, "WARNING: gFrameObjLists ROM range invalid; using compile-time fallback.\n");
+        fprintf(stderr, "WARNING: gFrameObjLists ROM range invalid.\n");
     }
 
     /* gExtraFrameOffsets — self-relative offset table for multi-part sprite
      * positioning. Differs per region (EU: 1169 bytes, JP: 72 bytes vs USA). */
     {
-        extern const u8 kExtraFrameOffsetsData[4352];
         extern u8 gExtraFrameOffsets[4352];
         if (R->extraFrameOffsets != 0 && R->extraFrameOffsets + 4352 <= gRomSize) {
             memcpy(gExtraFrameOffsets, &gRomData[R->extraFrameOffsets], 4352);
             fprintf(stderr, "gExtraFrameOffsets loaded (4352 bytes from ROM 0x%X).\n", R->extraFrameOffsets);
-        } else {
-            memcpy(gExtraFrameOffsets, kExtraFrameOffsetsData, 4352);
-            fprintf(stderr, "WARNING: gExtraFrameOffsets unavailable; using compile-time fallback.\n");
         }
     }
 
@@ -1554,8 +1533,7 @@ void Port_LoadRom(const char* path) {
         fprintf(stderr, "gFixedTypeGfxData loaded (%u entries from ROM 0x%X).\n", R->fixedTypeGfxCount,
                 R->fixedTypeGfx);
     } else {
-        memcpy(gFixedTypeGfxData, kFixedTypeGfxInitData, R->fixedTypeGfxCount * 4);
-        fprintf(stderr, "WARNING: gFixedTypeGfxData ROM range invalid; using compile-time fallback.\n");
+        fprintf(stderr, "WARNING: gFixedTypeGfxData ROM range invalid.\n");
     }
 
     /* gSpritePtrs — resolve every entry from the active ROM table. */
@@ -1631,10 +1609,12 @@ void Port_LoadRom(const char* path) {
     memcpy(gUnk_0810942E, &gRomData[R->text0942E], 160);
     memcpy(gUnk_081094CE, &gRomData[R->text094CE], 1378);
 
-    /* UI data — from compile-time const data */
+    /* UI data — 8 bytes from ROM 0xC9044 */
     {
         extern u8 gUnk_080C9044[];
-        memcpy(gUnk_080C9044, kUiInitData, 8);
+        if (gRomSize >= 0xC9044 + 8) {
+            memcpy(gUnk_080C9044, &gRomData[0xC9044], 8);
+        }
     }
 
     /* UI element definitions (native function pointers) */
@@ -1688,11 +1668,8 @@ void Port_LoadRom(const char* path) {
     }
     fprintf(stderr, "gUnk_081092AC border tables loaded (10 entries from active ROM).\n");
 
-    /* Load overlay data from compile-time const (no ROM read needed) */
-    {
-        extern void Port_LoadOverlayDataFromConst(const u8* data, u32 size);
-        Port_LoadOverlayDataFromConst(kOverlaySizeData, 240);
-    }
+    /* Load overlay data from ROM */
+    Port_LoadOverlayData(gRomData, gRomSize, 0x0B2BE8);
 
     /* gMapData — map data blob. On GBA a ROM label; on PC a pointer into the
      * loaded ROM (no 14 MB copy). The expectedRomSize check above already
