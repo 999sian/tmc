@@ -1,7 +1,26 @@
 # Changelog
 
-## Unreleased
+## v0.9.4 (2026-09-27)
 
+- Engine and runtime data loader modernization: all ROM symbol tables and
+  assets stream dynamically from the base ROM at startup.
+
+- Experimental 3D room view (F8 → Display → "3D view", GPU/Vulkan renderer
+  only). Walls, cliffs, buildings and tree masses rise from the collision map
+  with their art 1:1 on tops and sides; one-row ledges are low steps; water
+  and pits sit below ground; lone props (stumps, pots, signs) stand as
+  per-pixel cutouts, and characters stand as sprites. Skies, clouds and
+  other backdrop layers fill the void past the room, foreground layers
+  (giant leaves on Minish paths) overlay it, the Minish rafters look down on
+  the room below, rotating/scaled sprites draw with their transform, and
+  colour correction matches the 2D view. F8 also sets the camera angle and
+  per-area wall height, and fixes misread tiles (Floor/Block/Prop, saved to
+  `voxel_shapes.json`). Menus, cutscenes and rooms not drawn from a room map
+  (e.g. the shoemaker's workshop) stay 2D.
+- Enhanced audio uses agbplay's band-limited BLEP/BLAMP resampling, mixes in
+  float and quantizes once (loud passages soft-clip instead of hard-clipping),
+  and no longer applies a 16 kHz low-pass.
+- Text-to-speech is off by default for new configs.
 - Retail/emulator saves retain their original flag layout. Old PC flag-layout
   migration is now opt-in with `TMC_SAVE_MIGRATE_LEGACY_FLAGS=1`; use it only
   for saves known to come from PC builds through v0.9.0. Migration requires a
@@ -1186,7 +1205,7 @@ Wind Tribe roof warp), and its EU compaction switch.
   (previously the Anti-Capitalist Software License v1.4). See `LICENSE`.
 - **The randomizer (`port/rando/`) and the "Reborn"-parity QoL features are now
   attributed as derivatives of their GPL-3.0 upstreams** — the Minish Cap
-  randomizer (`minishmaker/randomizer`) and Admentus64/The-Minish-Cap-Reborn —
+  randomizer and Admentus64/The-Minish-Cap-Reborn —
   and are distributed under the GPL-3.0. See `THIRD-PARTY-LICENSES.md` and
   `docs/reborn-parity.md`.
 - **Removed the earlier "first-party / clean-room / no GPL-3.0 obligation"
@@ -1308,7 +1327,7 @@ Wind Tribe roof warp), and its EU compaction switch.
   baserom + decompilation).
 - Provenance language across `port/rando/README.md`, source headers, `LICENSE`,
   `README.md`, and `THIRD-PARTY-LICENSES.md` now describes the randomizer as
-  **derived from the GPL-3.0 Minish Cap randomizer (`minishmaker/randomizer`),
+  **derived from a GPL-3.0 randomizer,
   distributed under the GPL-3.0 with attribution** (superseding earlier
   "independent reimplementation / clean-room" wording).
 - No generation behaviour change: `rando_logic_test` and the native graph
@@ -1364,7 +1383,7 @@ Wind Tribe roof warp), and its EU compaction switch.
 
 ### Licensing — remove GPL-3.0 randomizer dependency
 
-- Removed the `libs/randomizer` submodule (GPL-3.0 minishmaker/randomizer)
+- Removed the `libs/randomizer` submodule (GPL-3.0)
   and everything that built or invoked it: the `randomizer_cli` xmake target,
   the `port/port_randomizer.{cpp,h}` shell-out, the F8 → Randomizer debug-menu
   page, the `build.py` dist staging, and the now-orphaned `tools/randomizer_usa/`
@@ -1393,9 +1412,9 @@ Wind Tribe roof warp), and its EU compaction switch.
   warps into a room, spawns known points of interest, and asserts the scan
   classifies and locates them (`TMC_A11Y_DEBUG=1` echoes the spoken phrase).
 
-### Randomizer — MinishMaker 1:1 parity pass
+### Randomizer — logic and location parity pass
 
-- **Full per-location coverage**: every reward location in MinishMaker's
+- **Full per-location coverage**: every reward location in the bundled
   `default.logic` now has a native keyed identity (331 keyed locations at
   default settings, up from 244). New `rando_keymap.c` rows — all
   triple-verified against USA ROM room entity data and the per-block EU→USA
@@ -1416,7 +1435,7 @@ Wind Tribe roof warp), and its EU compaction switch.
 - `TMC_RANDO_DEBUG=1` logs keymap binder misses by location name; the real
   `default.logic` diagnostic now asserts the new boss-container, fight-drop,
   ice-block, and one-off bindings.
-- **Generation parity with the MinishMaker shuffler** (clean-room, from the
+- **Generation parity with the logic shuffler** (clean-room, from the
   public `.logic` spec — no GPL code read): dungeon-id tag binding now drives
   the full keysanity matrix (Own Dungeon / Own Region / Vanilla pins / Removed
   for keys, maps, compasses, prizes — all expressed as data in the logic
@@ -1647,7 +1666,7 @@ renderer, CI, and portability fixes.
   collectibles only (always beatable — progression untouched), `Hard` adds
   non-gating majors, `Chaos` also shuffles dungeon-gating progression (may be
   unbeatable without logic). For true per-location logic, a clean-room
-  MinishMaker-style `.logic` engine (written from the public format spec, not
+  `.logic` engine (written from the public format spec, not
   the GPL C# source) parses the documented grammar and runs an **assumed-fill**
   placer with typed item/location pools + fallbacks, `~Items.X` placement
   guards, weighted count logic, accessibility modes, and graceful handling of
@@ -1665,10 +1684,10 @@ renderer, CI, and portability fixes.
   enum (extracted to `include/item_ids.h` and shared by the C engine and the
   C++ randomizer, replacing drift-prone hardcoded id copies), and writes
   per-location rewards at small chests, big chests, and freestanding ground
-  items; chests use MinishMaker's `area-room-chestIndex` identity (resolved via
+  items; chests use the logic file's `area-room-chestIndex` identity (resolved via
   `Rando_RoomChestIndex`) so real `.logic` placements land on the correct
   in-game chest, while all other reward sources use the global item bijection.
-  The engine is validated against the real MinishMaker `default.logic` (via
+  The engine is validated against the bundled `default.logic` (via
   `TMC_RANDO_LOGIC`): it parses the full file (882 locations / 176 items),
   generates a deterministic seed end-to-end with **all 365 real locations
   verified reachable** (executing `!ensurereachability`), and the headless
